@@ -221,6 +221,7 @@
     const status = a.status || "proposed";
     const cls = "cp-action-card " + status;
     const dataPretty = JSON.stringify(a.data || {}, null, 2);
+    const summary = renderActionSummary(a);
     let actions = "";
     if (status === "proposed") {
       actions = `
@@ -232,12 +233,142 @@
       <div class="${cls}" data-action-id="${a.id}">
         <div class="cp-action-type">${actionTypeLabel(a.action_type)}</div>
         <div class="cp-action-title">${escapeHtml(a.title || "")}</div>
-        <div class="cp-action-data">${escapeHtml(dataPretty)}</div>
+        <div class="cp-action-summary">${summary}</div>
         <div class="cp-action-actions">${actions}</div>
         <div class="cp-action-status">Stato: ${status}${a.result ? " · " + escapeHtml(typeof a.result === "string" ? a.result : JSON.stringify(a.result)) : ""}</div>
+        <button class="cp-debug-toggle" type="button" onclick="copilotToggleJSON(this)">&lt;/&gt; Mostra dati grezzi</button>
+        <pre class="cp-action-data" hidden>${escapeHtml(dataPretty)}</pre>
       </div>
     `;
   }
+
+  // ── Renderer human-readable per type ─────────────────────
+  function renderActionSummary(a) {
+    const d = a.data || {};
+    switch (a.action_type) {
+      case "propose_client": return summaryClient(d);
+      case "propose_project": return summaryProject(d);
+      case "propose_project_metadata": return summaryProjectMeta(d);
+      case "propose_quote": return summaryQuote(d);
+      case "propose_quote_line": return summaryQuoteLine(d);
+      case "propose_price_item": return summaryPriceItem(d);
+      case "web_search": return `<div>Cerca: <b>${escapeHtml(d.query || "—")}</b></div>`;
+      default: return `<span class="cp-muted">Nessun renderer per questo tipo. Apri "dati grezzi".</span>`;
+    }
+  }
+
+  function fmtCur(n) {
+    if (n == null || n === "") return "—";
+    const num = Number(n);
+    if (isNaN(num)) return escapeHtml(String(n));
+    return "€ " + num.toLocaleString("it-IT", { minimumFractionDigits: 0, maximumFractionDigits: 2 });
+  }
+
+  function summaryClient(d) {
+    const lines = [];
+    if (d.name) lines.push(`<b>${escapeHtml(d.name)}</b>`);
+    const meta = [d.legal_form, d.industry].filter(Boolean).map(escapeHtml).join(" · ");
+    if (meta) lines.push(`<span class="cp-muted">${meta}</span>`);
+    const loc = [d.city, d.country].filter(Boolean).map(escapeHtml).join(", ");
+    if (loc) lines.push(loc);
+    if (d.vat_number) lines.push(`P.IVA <span class="mono">${escapeHtml(d.vat_number)}</span>`);
+    if (d.contact_email) lines.push(`<span class="cp-muted">${escapeHtml(d.contact_email)}</span>`);
+    return lines.join("<br>") || `<span class="cp-muted">Nessun campo</span>`;
+  }
+
+  function summaryProject(d) {
+    const lines = [];
+    const head = `${d.code ? `<b>${escapeHtml(d.code)}</b> · ` : ""}${escapeHtml(d.title || "")}`;
+    if (head.trim() && head.trim() !== "·") lines.push(head);
+    if (d.client_name) lines.push(`Cliente: ${escapeHtml(d.client_name)}`);
+    else if (d.client_id) lines.push(`<span class="cp-muted">Cliente #${d.client_id}</span>`);
+    const tech = [
+      d.length_minutes ? `${d.length_minutes} min` : null,
+      d.production_material,
+      d.fps ? `${d.fps} fps` : null,
+    ].filter(Boolean).map(escapeHtml).join(" · ");
+    if (tech) lines.push(`<span class="cp-muted">${tech}</span>`);
+    return lines.join("<br>") || `<span class="cp-muted">Nessun campo</span>`;
+  }
+
+  function summaryProjectMeta(d) {
+    const items = Object.entries(d).filter(([k]) => k !== "project_id" && k !== "id");
+    if (!items.length) return `<span class="cp-muted">Nessun campo</span>`;
+    return items.map(([k, v]) =>
+      `<div><span class="cp-muted">${escapeHtml(k)}:</span> ${escapeHtml(String(v))}</div>`
+    ).join("");
+  }
+
+  function summaryQuote(d) {
+    const head = [];
+    if (d.number) head.push(`<b>${escapeHtml(d.number)}</b>`);
+    if (d.title) head.push(escapeHtml(d.title));
+    if (d.project_id && !d.title) head.push(`<span class="cp-muted">progetto #${d.project_id}</span>`);
+    let body = head.length ? head.join(" · ") : "";
+    const meta = [];
+    if (d.issue_date) meta.push(`Emessa ${escapeHtml(d.issue_date)}`);
+    if (d.valid_until) meta.push(`valida fino ${escapeHtml(d.valid_until)}`);
+    if (d.vat_rate != null) meta.push(`IVA ${d.vat_rate}%`);
+    if (meta.length) body += `<br><span class="cp-muted">${meta.join(" · ")}</span>`;
+    const arr = d.lines || [];
+    if (arr.length) {
+      const rows = arr.slice(0, 8).map(l => `
+        <tr>
+          <td>${escapeHtml(l.description || "")}</td>
+          <td>${l.quantity ?? ""}</td>
+          <td>${escapeHtml(l.unit || "")}</td>
+          <td>${l.unit_price != null ? fmtCur(l.unit_price) : ""}</td>
+        </tr>`).join("");
+      body += `
+        <table class="cp-mini-table">
+          <thead><tr><th>Descrizione</th><th>Q.tà</th><th>Unità</th><th>€</th></tr></thead>
+          <tbody>${rows}</tbody>
+        </table>`;
+      if (arr.length > 8) body += `<div class="cp-muted">+${arr.length - 8} altre righe…</div>`;
+    }
+    return body || `<span class="cp-muted">Nessun campo</span>`;
+  }
+
+  function summaryQuoteLine(d) {
+    const lines = [];
+    lines.push(`<b>${escapeHtml(d.description || "")}</b>`);
+    const qty = `${d.quantity ?? "?"} ${escapeHtml(d.unit || "")}`;
+    const price = d.unit_price != null ? `× ${fmtCur(d.unit_price)}` : "";
+    lines.push(`<span class="cp-muted">${qty} ${price}</span>`);
+    if (d.quote_id) lines.push(`<span class="cp-muted">in quote #${d.quote_id}</span>`);
+    if (d.price_item_id) lines.push(`<span class="cp-muted">listino #${d.price_item_id}</span>`);
+    if (d.category_override) lines.push(`<span class="cp-muted">categoria: ${escapeHtml(d.category_override)}</span>`);
+    return lines.join("<br>");
+  }
+
+  function summaryPriceItem(d) {
+    const lines = [];
+    lines.push(`<b>${escapeHtml(d.description || d.name || "")}</b>`);
+    const meta = [d.category, d.unit].filter(Boolean).map(escapeHtml).join(" · ");
+    if (meta) lines.push(`<span class="cp-muted">${meta}</span>`);
+    const prices = [];
+    if (d.price_list != null) prices.push(`Listino: ${fmtCur(d.price_list)}`);
+    if (d.price_average != null) prices.push(`Medio: ${fmtCur(d.price_average)}`);
+    if (d.price_low != null) prices.push(`Basso: ${fmtCur(d.price_low)}`);
+    if (prices.length) lines.push(prices.join(" · "));
+    if (d.keywords) {
+      const kws = Array.isArray(d.keywords) ? d.keywords : String(d.keywords).split(",");
+      lines.push(`<span class="cp-muted">keywords: ${kws.map(k => escapeHtml(k.trim())).join(", ")}</span>`);
+    }
+    return lines.join("<br>");
+  }
+
+  window.copilotToggleJSON = function (btn) {
+    const pre = btn.nextElementSibling;
+    if (!pre) return;
+    if (pre.hasAttribute("hidden")) {
+      pre.removeAttribute("hidden");
+      btn.innerHTML = "&lt;/&gt; Nascondi dati grezzi";
+    } else {
+      pre.setAttribute("hidden", "");
+      btn.innerHTML = "&lt;/&gt; Mostra dati grezzi";
+    }
+  };
 
   // ── Apply / Reject ───────────────────────────────────────
   window.copilotApply = async function (actionId) {

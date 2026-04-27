@@ -1,5 +1,38 @@
 # MediaFlow — Changelog
 
+## v3.4.3 — Card copilot human-readable (27 aprile 2026, sera tardi)
+
+Refactor UX delle card di proposta AI nel drawer copilot. Prima si vedeva solo il payload JSON crudo escapato, ora ogni `action_type` ha un renderer dedicato che mostra solo i campi rilevanti in formato leggibile, con un toggle `</> Mostra dati grezzi` per chi vuole vedere il JSON completo (utile per debug).
+
+### Renderer per type
+- **propose_client** → nome (bold) + forma giuridica · industry + città/paese + P.IVA + email
+- **propose_project** → codice (bold) · titolo + cliente + minuti/material/fps
+- **propose_project_metadata** → coppie `chiave: valore` per ogni campo passato
+- **propose_quote** → numero · titolo · date/IVA + tabella mini con righe (descrizione, q.tà, unità, €), tronca dopo 8 righe con "+N altre"
+- **propose_quote_line** → descrizione (bold) + quantità × prezzo + riferimenti (quote#, listino#, categoria override)
+- **propose_price_item** → descrizione (bold) + categoria · unità + 3 livelli prezzo + keywords
+- **web_search** → "Cerca: <query>"
+- **fallback** → messaggio "Nessun renderer per questo tipo. Apri 'dati grezzi'."
+
+### Toggle JSON
+Bottone `</> Mostra dati grezzi` sotto la card; al click rivela un `<pre>` con il JSON completo della `data` (con scroll, max-height 200px). Stato chiuso di default.
+
+### Stile
+Box summary con bordo sinistro indaco e sfondo semi-trasparente (lo stesso accento del resto dell'app). Mini-tabelle con header maiuscoletto, valori monospace allineati a destra. Niente impatto sulle `applied/rejected/failed` card storiche: il summary si genera dal `data` salvato come al solito.
+
+### File toccati
+- `app/static/js/copilot.js` — `renderActionCard` riscritta, nuove `renderActionSummary` + 6 funzioni `summary*` + helper `fmtCur` + `copilotToggleJSON`
+- `app/templates/components/copilot.html` — CSS per `.cp-action-summary`, `.cp-mini-table`, `.cp-debug-toggle`, `.cp-muted`
+- `app/main.py` — bump 3.4.2 → 3.4.3
+
+### Smoke test
+- `/health` → 3.4.3 ✓
+- copilot.js: 148 braces matched, 319 parens matched, HTTP 200 ✓
+- `/quotes/`, `/assignments/` → 200 ✓
+- Test E2E browser: rinviato a Matteo (richiede provider AI attivo per generare card)
+
+---
+
 ## v3.4.2 — Quick wins copilot + categoria libera quote (27 aprile 2026, sera tardi)
 
 Quattro micro-feature richieste in batch dopo il test del copilot.
