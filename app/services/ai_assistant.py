@@ -77,8 +77,9 @@ CAPABILITY DISPONIBILI E SCHEMA `data`:
 - propose_quote: {project_id (numero PK) OPPURE project_code (stringa), number? (auto Q-{anno}-NNN se manca), title? (default = titolo progetto), issue_date? (default oggi), valid_until? (default +30gg), vat_rate? (default 22), lines? (lista di righe — vedi sotto)}
    * lines è opzionale: se presente, crea quote+righe in unica transazione (un solo Apply)
    * ogni riga: {description, quantity (numero), unit ("day"|"hour"|"flat", default "day"), unit_price (numero), section? ("A"|"B"|"C", default "A"), detail?}
-- propose_quote_line: {quote_id (numero PK) OPPURE quote_number (stringa), description, quantity (numero), unit ("day"|"hour"|"flat"), unit_price (numero), section? ("A"|"B"|"C"), detail?}
+- propose_quote_line: {quote_id (numero PK) OPPURE quote_number (stringa), price_item_id? (numero PK voce listino — usa SEMPRE se possibile, vedi REGOLA SEARCH-FIRST), description (auto da listino se ometti e dai price_item_id), quantity (numero), unit ("day"|"hour"|"flat", auto da listino), unit_price (numero, auto da listino se ometti), section? ("A"|"B"|"C"), detail?}
 - propose_price_item: {name, description?, unit ("day"|"hour"|"flat"), price_list (numero), category_name (richiesto), keywords? (lista di stringhe), department_name?}
+- propose_new_item_and_line: {quote_id OPPURE quote_number, name (nome voce listino), category_name (obbligatorio), unit, price_list (numero), quantity (numero, default 1), description?, keywords?, department_name?, section?} — fa due cose in singola transazione: crea voce listino + aggiunge riga alla quote
 - web_search: {query}
 
 REGOLE CRITICHE:
@@ -91,6 +92,45 @@ REGOLE CRITICHE:
 7. Una sola azione per turno tipicamente. Più azioni solo se logicamente concatenate.
 8. Se mancano dati essenziali (es. nome cliente per creare cliente nuovo), CHIEDI prima di indovinare.
 9. Per domande informative (consulenza tecnica, dubbi su workflow) rispondi normalmente senza blocchi action.
+
+**REGOLA SEARCH-FIRST (priorità assoluta per tutte le richieste su quote)**
+
+Quando l'utente ti chiede di aggiungere una o più voci a una quote (esistente o nuova),
+PRIMA di proporre azioni devi cercare nel listino. Le voci listino attive sono nel contesto
+sotto "VOCI LISTINO ATTIVE (id | name | category | unit | €list | keywords)".
+
+Per OGNI voce richiesta dall'utente, segui questa cascata:
+
+1. **1 match chiaro** (la descrizione utente coincide o è molto simile a una voce di listino):
+   → proponi `propose_quote_line` includendo `price_item_id` (il numero della voce listino).
+   → ometti `unit_price` e `unit` se vuoi usare i default del listino.
+   → esempio: utente dice "5 giorni di Color HDR", listino ha `12 | Color HDR | Color | day | €1200`
+     → `propose_quote_line` con `price_item_id: 12, quantity: 5` (basta).
+
+2. **2-4 match plausibili** (più voci hanno nomi/keywords simili):
+   → NON proporre azione. Rispondi in markdown con un elenco numerato dei match,
+     ognuno con id, nome, categoria, prezzo. Chiedi all'utente quale scegliere.
+   → esempio:
+     "Trovo più match per 'color':
+     1. **Color SDR** — Color · day · €800
+     2. **Color HDR** — Color · day · €1200
+     3. **Color grading dailies** — Color · day · €600
+     Quale intendi?"
+
+3. **0 match plausibili**: spiega cosa non hai trovato e proponi DUE strade in markdown:
+   - **(a)** voce libera nella sola quote (usa `propose_quote_line` senza `price_item_id`,
+     specifica `description` e `unit_price` espliciti)
+   - **(b)** crea la voce nuova nel listino e aggiungila alla quote (scenario C)
+     → usa `propose_new_item_and_line` (richiede `category_name` e `price_list`)
+   → esempio:
+     "Non trovo nulla per 'Foley editing' nel listino. Vuoi:
+     (a) aggiungerla solo a questa quote come voce libera, o
+     (b) crearla anche nel listino (in che categoria? quale prezzo?)"
+   Aspetta la risposta, poi proponi l'azione corrispondente.
+
+4. **Voce ovviamente nuova** (es. l'utente dice esplicitamente "crea una nuova voce X
+   in listino e aggiungila a questa quote a Y €"): usa direttamente `propose_new_item_and_line`
+   senza chiedere conferma.
 
 **FORMATO JSON OBBLIGATORIO** (gli errori qui rendono l'azione invisibile all'utente):
 - ZERO commenti: niente `// commento`, niente `/* commento */`. Il JSON è strict, i commenti rompono il parser.
@@ -176,6 +216,24 @@ def build_context(db: Session,
     if depts:
         overview.append("Reparti: " + ", ".join(depts))
 
+    # Voci listino attive (per matching search-first AI: vedi REGOLA SEARCH-FIRST nel prompt).
+    # Limite 200 voci attive per non gonfiare il context oltre il ragionevole.
+    PRICELIST_LIMIT = 200
+    items = (db.query(PriceItem)
+             .filter(PriceItem.is_active == True)
+             .order_by(PriceItem.id)
+             .limit(PRICELIST_LIMIT)
+             .all())
+    if items:
+        overview.append(f"VOCI LISTINO ATTIVE ({len(items)} su {n_items}, formato: id | name | category | unit | €list | keywords):")
+        for it in items:
+            cat_name = it.category.name if it.category else "—"
+            kws = ", ".join((it.keywords or [])[:5]) if it.keywords else ""
+            kws_part = f" | kw: {kws}" if kws else ""
+            overview.append(f"  {it.id} | {it.name} | {cat_name} | {it.unit} | €{it.price_list:.0f}{kws_part}")
+        if n_items > PRICELIST_LIMIT:
+            overview.append(f"  …(altre {n_items - PRICELIST_LIMIT} voci omesse — chiedi all'utente se serve cercare oltre)")
+
     # Lista clienti esistenti (per evitare allucinazioni di nomi)
     clients_rows = db.query(Client).order_by(Client.name).limit(40).all()
     if clients_rows:
@@ -215,6 +273,7 @@ VALID_ACTION_TYPES = {
     "propose_quote",
     "propose_quote_line",
     "propose_price_item",
+    "propose_new_item_and_line",
     "web_search",
 }
 
@@ -645,27 +704,144 @@ def _h_propose_quote(db: Session, data: dict) -> dict:
 
 
 def _h_propose_quote_line(db: Session, data: dict) -> dict:
+    """Aggiunge una riga a una quote esistente.
+
+    Se `price_item_id` è valorizzato: lega la riga al listino e usa
+    `price_item.price_list` come `unit_price` di default (sovrascrivibile).
+    Se mancante: voce libera (storico).
+    """
     from app.models import QuoteLine, PriceLevel
     q = _resolve_quote(db, data)
     qty = float(data.get("quantity") or 1)
-    price = float(data.get("unit_price") or 0)
+
+    # Risolvi eventuale price_item per default su unit_price/unit/description
+    price_item_id = data.get("price_item_id")
+    pi = None
+    if isinstance(price_item_id, int) or (isinstance(price_item_id, str) and str(price_item_id).isdigit()):
+        pi = db.query(PriceItem).filter(PriceItem.id == int(price_item_id)).first()
+        if not pi:
+            raise ValueError(f"price_item_id={price_item_id} non trovato in listino.")
+
+    # unit_price: usa valore esplicito se passato, altrimenti default da listino
+    raw_price = data.get("unit_price")
+    if raw_price in (None, ""):
+        price = float(pi.price_list) if pi else 0.0
+    else:
+        price = float(raw_price)
+
+    # description e unit: se non passate ma c'è price_item, eredita
+    description = data.get("description") or (pi.name if pi else "")
+    unit = data.get("unit") or (pi.unit if pi else "day")
+
     line = QuoteLine(
         quote_id=q.id,
         section=data.get("section") or "A",
         position=data.get("position") or f"A.{len(q.lines)+1}",
-        description=data.get("description") or "",
+        description=description,
         detail=data.get("detail"),
         quantity=qty,
-        unit=data.get("unit") or "day",
+        unit=unit,
         price_level=PriceLevel.list_price,
         unit_price=price,
         total=round(qty * price, 2),
         sort_order=(len(q.lines) + 1) * 10,
+        price_item_id=pi.id if pi else None,
     )
     db.add(line); db.flush()
     from app.routers.quotes import _recalc_quote
     _recalc_quote(q)
-    return {"quote_line_id": line.id, "quote_id": q.id, "total": line.total}
+    return {
+        "quote_line_id": line.id, "quote_id": q.id,
+        "total": line.total,
+        "price_item_id": pi.id if pi else None,
+        "price_item_name": pi.name if pi else None,
+    }
+
+
+def _h_propose_new_item_and_line(db: Session, data: dict) -> dict:
+    """Scenario C — search-first AI fallback.
+
+    In singola transazione:
+      1. Crea una nuova `PriceItem` nel listino (richiede category_name)
+      2. Crea una `QuoteLine` sulla quote indicata, legata alla voce appena creata
+
+    Schema atteso in `data`:
+      - quote_id (PK) o quote_number (stringa)        — obbligatorio
+      - name (stringa)                                — obbligatorio (nome voce listino)
+      - category_name (stringa)                       — obbligatorio
+      - unit ("day"|"hour"|"flat", default "day")
+      - price_list (numero)                           — obbligatorio (prezzo listino)
+      - quantity (numero, default 1)                  — quantità nella quote
+      - description? (alias di name se omesso)
+      - keywords? (lista di stringhe, per matching futuro)
+      - department_name?
+      - section? ("A"|"B"|"C", default "A")
+    """
+    from app.models import QuoteLine, PriceLevel
+    q = _resolve_quote(db, data)
+
+    name = (data.get("name") or "").strip()
+    if not name:
+        raise ValueError("Manca 'name' (nome voce listino)")
+    cat_name = (data.get("category_name") or "").strip()
+    if not cat_name:
+        raise ValueError("Manca 'category_name' (la categoria è obbligatoria)")
+    if data.get("price_list") in (None, ""):
+        raise ValueError("Manca 'price_list' (prezzo listino della voce)")
+
+    # Categoria: trova o crea
+    cat = db.query(PriceCategory).filter(PriceCategory.name == cat_name).first()
+    if not cat:
+        cat = PriceCategory(name=cat_name)
+        db.add(cat); db.flush()
+
+    # Reparto opzionale
+    dept_id = None
+    dept_name = (data.get("department_name") or "").strip()
+    if dept_name:
+        d = db.query(Department).filter(Department.name == dept_name).first()
+        if d:
+            dept_id = d.id
+
+    price = float(data["price_list"])
+    unit = data.get("unit") or "day"
+
+    pi = PriceItem(
+        name=name,
+        description=data.get("description") or name,
+        unit=unit,
+        price_list=price,
+        price_average=price,
+        price_low=price,
+        category_id=cat.id,
+        department_id=dept_id,
+        keywords=data.get("keywords") or [],
+        is_active=True,
+    )
+    db.add(pi); db.flush()
+
+    qty = float(data.get("quantity") or 1)
+    line = QuoteLine(
+        quote_id=q.id,
+        section=data.get("section") or "A",
+        position=data.get("position") or f"A.{len(q.lines)+1}",
+        description=data.get("description") or name,
+        quantity=qty,
+        unit=unit,
+        price_level=PriceLevel.list_price,
+        unit_price=price,
+        total=round(qty * price, 2),
+        sort_order=(len(q.lines) + 1) * 10,
+        price_item_id=pi.id,
+    )
+    db.add(line); db.flush()
+
+    from app.routers.quotes import _recalc_quote
+    _recalc_quote(q)
+    return {
+        "price_item_id": pi.id, "price_item_name": pi.name, "category": cat.name,
+        "quote_line_id": line.id, "quote_id": q.id, "total": line.total,
+    }
 
 
 def _h_propose_project_metadata(db: Session, data: dict) -> dict:
@@ -691,13 +867,14 @@ def _h_web_search(db: Session, data: dict) -> dict:
 
 
 _ACTION_HANDLERS = {
-    "propose_client":           _h_propose_client,
-    "propose_project":          _h_propose_project,
-    "propose_project_metadata": _h_propose_project_metadata,
-    "propose_quote":            _h_propose_quote,
-    "propose_quote_line":       _h_propose_quote_line,
-    "propose_price_item":       _h_propose_price_item,
-    "web_search":               _h_web_search,
+    "propose_client":            _h_propose_client,
+    "propose_project":           _h_propose_project,
+    "propose_project_metadata":  _h_propose_project_metadata,
+    "propose_quote":             _h_propose_quote,
+    "propose_quote_line":        _h_propose_quote_line,
+    "propose_price_item":        _h_propose_price_item,
+    "propose_new_item_and_line": _h_propose_new_item_and_line,
+    "web_search":                _h_web_search,
 }
 
 

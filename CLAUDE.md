@@ -76,7 +76,8 @@ MediaFlow si propone come **impalcatura flessibile su cui l'AI costruisce conosc
 - Context auto-detection da URL: `/projects/{id}`, `/quotes#{id}`, `/jobs/{id}`
 - `build_context()` esteso: vista d'insieme DB (clienti/progetti/listino/quote/risorse/asset, categorie, reparti) + dettaglio entità in canvas
 - AI risponde in markdown + opzionalmente blocchi ```` ```action ... ``` ```` JSON estratti server-side e salvati come `AIAction` status=`proposed`. Niente esecuzione senza conferma.
-- 7 capability disponibili: `propose_client`, `propose_project`, `propose_project_metadata`, `propose_quote` (con `lines` opzionali → quote+righe in singolo Apply, auto-numero `Q-{anno}-NNN`, default date oggi/+30gg), `propose_quote_line`, `propose_price_item`, `web_search` (Tavily read-only)
+- 8 capability disponibili: `propose_client`, `propose_project`, `propose_project_metadata`, `propose_quote` (con `lines` opzionali → quote+righe in singolo Apply, auto-numero `Q-{anno}-NNN`, default date oggi/+30gg), `propose_quote_line` (con `price_item_id` opzionale per linkare al listino — eredita unit_price/unit/description dal listino), `propose_price_item`, `propose_new_item_and_line` (scenario C — singola transazione: crea voce listino + aggiunge a quote), `web_search` (Tavily read-only)
+- **REGOLA SEARCH-FIRST**: per ogni richiesta di aggiungere voci a quote, l'AI cerca prima nel listino (`VOCI LISTINO ATTIVE` nel context, fino a 200 voci attive). 1 match → `propose_quote_line` con `price_item_id`. 2-4 match → markdown numerato per scelta. 0 match → chiedi voce libera vs scenario C.
 - System prompt rinforzato: distinzione `id` (PK numerico) vs `code` (stringa), divieto di inventare date passate, una sola azione per turno se non concatenate logicamente
 - Card di conferma nel drawer con bottoni Applica/Rifiuta. Storia conversazioni cliccabile.
 - Endpoint nuovi: `POST /ai/api/actions/{id}/apply`, `POST /ai/api/actions/{id}/reject`
@@ -209,4 +210,4 @@ Da verificare/sistemare:
 
 ---
 
-*Ultimo aggiornamento: 27 aprile 2026 sera tardi — v3.4.2: quick wins copilot (textarea + a capo, stop client-side, parser JSON tollera commenti `#`/`//`/`/* */`) + categoria libera per riga in quote (override) + export PDF/CSV/XLSX rispettano override. Aggiunti `docs/STATO.md` operativo e git inizializzato.*
+*Ultimo aggiornamento: 27 aprile 2026 sera tardi — v3.4.4: AI search-first nel listino + scenario C (`propose_new_item_and_line`), `propose_quote_line` accetta `price_item_id`, voci listino nel context AI, system prompt con regola SEARCH-FIRST. v3.4.3: card copilot human-readable + toggle JSON. v3.4.2: quick wins copilot + categoria libera per riga in quote.*

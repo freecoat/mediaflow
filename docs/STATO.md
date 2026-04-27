@@ -8,7 +8,7 @@
 
 ## Versione corrente
 
-**v3.4.3** — 27 aprile 2026 sera tardi
+**v3.4.4** — 27 aprile 2026 sera tardi
 
 ## In corso
 
@@ -16,25 +16,24 @@ Nessun lavoro a metà.
 
 ## Prossimo step concordato
 
-**#5 — Search-first nel listino**
+**Test E2E #5 (search-first) sul Mac di Matteo**, poi **#4 server-side abort**.
 
-L'AI, quando deve aggiungere righe a una quote, deve prima cercare tra le voci di listino esistenti, presentare i match (con punteggio o ordine di rilevanza), e chiedere all'utente quale selezionare. Solo se l'utente conferma che nessuna voce è valida, fallback su scenario "C": singola transazione che crea voce listino + linea quote.
+Per testare #5 servono prompt reali al copilot con provider AI attivo (Sonnet 4.6 consigliato, ma anche Ollama 8b dovrebbe funzionare grazie a SEARCH-FIRST esplicito nel system prompt).
 
-Chiude anche **bug #6** (copilot non aggiunge righe a quote esistente: oggi mette tutto in una flat con `unit_price=0` invece di matchare il listino).
+Casi suggeriti:
+1. **1 match chiaro** → `"aggiungi a Q-2026-001 due giorni di Color HDR"` deve produrre `propose_quote_line` con `price_item_id` e prezzo ereditato dal listino
+2. **Match multipli** → `"aggiungi a Q-2026-001 del color"` deve elencare in markdown le 3+ voci color (SDR/HDR/dailies) e chiedere quale
+3. **Voce esplicitamente nuova** → `"aggiungi a Q-2026-001 una nuova voce Foley editing, listino 350/giorno categoria Audio"` deve produrre `propose_new_item_and_line`
+4. **0 match con domanda** → `"aggiungi a Q-2026-001 un Beauty fix"` (voce inesistente) deve elencare in markdown opzioni (a) voce libera vs (b) scenario C
 
-Implementazione attesa:
-- nuovo helper di matching nel servizio AI (es. `app/services/pricelist_matcher.py`) — già esistono utility in `client_enrichment.py` come pattern
-- nuova capability `propose_match_pricelist` (proposta multi-opzione: l'AI elenca i 3-5 match migliori e chiede conferma)
-- nuova capability `propose_quote_line_with_new_item` (transazione: crea price_item + aggiunge a quote)
-- system prompt aggiornato con regola "search-first"
+Dopo conferma test sul Mac, passare a **#4 server-side abort**.
 
 ## Backlog (in ordine concordato)
 
-1. **#5** Search-first nel listino + scenario C (next)
-2. **#4 server-side** Abort lato server per Ollama/Claude (oggi è solo client-side `AbortController`).
-3. **#1** Multi-valuta con cambio automatico ECB. Migrazione DB + servizio `app/services/fx.py` + UI dropdown valuta + capability AI `propose_quote_currency`. Conversione solo a display/PDF/export, EUR canonico in DB.
-4. **F2** Gestione utenti + RBAC configurabile + link Resource→User con email password temp.
-5. **F3** Cestino per-tenant con retention configurabile.
+1. **#4 server-side** Abort lato server per Ollama/Claude (oggi è solo client-side `AbortController`). Ollama supporta `client.abort()` best-effort. Anthropic SDK richiede una `Cancelable` request.
+2. **#1** Multi-valuta con cambio automatico ECB. Migrazione DB (`Quote.currency`, `exchange_rate`, `currency_locked`, `exchange_rate_date`) + servizio `app/services/fx.py` con cache JSON + UI dropdown valuta + capability AI `propose_quote_currency`. Conversione solo a display/PDF/export, EUR canonico in DB.
+3. **F2** Gestione utenti + RBAC configurabile + link Resource→User con email password temp.
+4. **F3** Cestino per-tenant con retention configurabile.
 
 ## Decisioni prese
 
@@ -45,7 +44,7 @@ Implementazione attesa:
 
 ## Bug aperti
 
-- **#6 LLM matching listino**: il copilot, quando aggiunge righe a quote esistente, mette tutto in una `flat unit_price=0` invece di matchare voci listino. Risolto da #5 search-first.
+- ✅ **#6 LLM matching listino** risolto in v3.4.4 (voci listino nel context AI + REGOLA SEARCH-FIRST nel system prompt). Da verificare con test E2E sul Mac.
 - Nessun altro bug noto.
 
 ## Procedura riavvio (se la sessione muore)
@@ -60,4 +59,4 @@ Implementazione attesa:
 
 ---
 
-*Ultimo aggiornamento: 27 aprile 2026 sera tardi — v3.4.3 chiusa (card copilot human-readable + toggle JSON), in standby prima di #5.*
+*Ultimo aggiornamento: 27 aprile 2026 sera tardi — v3.4.4 chiusa: AI search-first nel listino + scenario C. Aspetta test E2E sul Mac prima di #4 server-side abort.*

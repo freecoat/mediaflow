@@ -1,5 +1,62 @@
 # MediaFlow — Changelog
 
+## v3.4.4 — AI search-first nel listino + scenario C (27 aprile 2026, sera tardi)
+
+Risponde alla nota originale **#5** di Matteo e al bug **#6** (copilot non aggiunge righe a quote esistente). Tre cambi sostanziali al copilot AI.
+
+### A. Voci listino nel context AI
+`build_context()` ora include un blocco `VOCI LISTINO ATTIVE (id | name | category | unit | €list | keywords)` con tutte le voci attive (limite 200, oggi 75 voci × ~2KB = trascurabile sui token). Senza questo blocco il modello non aveva modo di sapere quali voci esistono → spiegava perché le righe AI venivano sempre messe come "voci libere" con `unit_price=0`. Il blocco viene rigenerato live ad ogni turno (nessuna cache, niente da invalidare).
+
+### B. `propose_quote_line` esteso con `price_item_id`
+Schema accetta nuovo campo opzionale `price_item_id` (numero PK voce listino). Quando passato:
+- la riga viene legata al listino (`QuoteLine.price_item_id` valorizzato)
+- `unit_price`, `unit`, `description` vengono ereditati dalla voce listino se non specificati esplicitamente dall'AI
+- in v3.4.3 le righe AI erano sempre "voci libere" → ora possono essere "voci dal listino"
+
+### C. Nuova capability `propose_new_item_and_line` (scenario C)
+Quando l'utente conferma "non c'è in listino, creala", l'AI propone questa azione che in **singola transazione**:
+1. Crea la `PriceItem` (richiede `category_name`, `name`, `unit`, `price_list`)
+2. Crea la `QuoteLine` collegata (con `quantity` e prezzo del listino appena creato)
+
+Una sola conferma utente, niente "doppio click" come scenario B. Categoria autocreata se nuova.
+
+### D. System prompt: REGOLA SEARCH-FIRST
+Nuova sezione esplicita prima di "FORMATO JSON OBBLIGATORIO". Cascata su 3 livelli per ogni richiesta di aggiunta voce a quote:
+
+| Caso | Comportamento atteso AI |
+|---|---|
+| **1 match chiaro** in listino | `propose_quote_line` con `price_item_id` (basta `quantity`) |
+| **2-4 match plausibili** | NON azione, risposta in **markdown numerato** che chiede quale scegliere |
+| **0 match** | Markdown con due opzioni: (a) voce libera o (b) scenario C, e attesa risposta |
+| **Voce esplicitamente nuova** | `propose_new_item_and_line` direttamente |
+
+Esempio nel prompt: utente "5 giorni di Color HDR", listino ha `12 | Color HDR | Color | day | €1200` → AI propone `{"price_item_id": 12, "quantity": 5}`, e il backend completa con `unit_price=1200`, `unit="day"`, `description="Color HDR"`.
+
+### E. UI copilot
+- `actionTypeLabel` e `renderActionSummary` aggiornati per il nuovo type
+- `summaryQuoteLine` ora mostra `✓ legata a voce listino #N` o `⚠ voce libera (non legata al listino)` per dare feedback visivo immediato
+- Nuovo `summaryNewItemAndLine` con anteprima totale (`qty × price = subtotale`)
+
+### Smoke test
+- Sintassi Python OK, copilot.js 162/347 braces/parens matched, HTTP 200
+- `/health` → 3.4.4 ✓
+- 8 capability totali registrate (era 7)
+- `build_context()` include 75 voci listino, ~2140 token totali (era ~600)
+- Test E2E con prompt reali: rinviato a Matteo (richiede provider AI attivo). Suggeriti:
+  - `"aggiungi a Q-2026-001 due giorni di Color HDR"` → match chiaro, `propose_quote_line` con `price_item_id`
+  - `"aggiungi del color"` → match multipli, AI elenca opzioni in markdown
+  - `"aggiungi a Q-2026-001 una nuova voce Foley editing, listino 350/giorno categoria Audio"` → `propose_new_item_and_line`
+
+### Promemoria backlog
+- Aggiornamento context al cambio listino: oggi è già live (rigenerato ad ogni turno). Se in futuro le voci listino superano ~500 e il context diventa pesante, valutare cache + invalidazione su create/update/delete `PriceItem`.
+
+### File toccati
+- `app/services/ai_assistant.py` — context esteso + REGOLA SEARCH-FIRST + nuovo handler + dispatch + schema in prompt
+- `app/static/js/copilot.js` — label e renderer per `propose_new_item_and_line`, `summaryQuoteLine` riscritto con feedback listino
+- `app/main.py` — bump 3.4.3 → 3.4.4
+
+---
+
 ## v3.4.3 — Card copilot human-readable (27 aprile 2026, sera tardi)
 
 Refactor UX delle card di proposta AI nel drawer copilot. Prima si vedeva solo il payload JSON crudo escapato, ora ogni `action_type` ha un renderer dedicato che mostra solo i campi rilevanti in formato leggibile, con un toggle `</> Mostra dati grezzi` per chi vuole vedere il JSON completo (utile per debug).

@@ -190,6 +190,7 @@
       "propose_quote": "Quote (nuova)",
       "propose_quote_line": "Riga quote",
       "propose_price_item": "Voce listino",
+      "propose_new_item_and_line": "Nuova voce listino + riga quote",
       "web_search": "Ricerca web",
     })[t] || t;
   }
@@ -252,6 +253,7 @@
       case "propose_quote": return summaryQuote(d);
       case "propose_quote_line": return summaryQuoteLine(d);
       case "propose_price_item": return summaryPriceItem(d);
+      case "propose_new_item_and_line": return summaryNewItemAndLine(d);
       case "web_search": return `<div>Cerca: <b>${escapeHtml(d.query || "—")}</b></div>`;
       default: return `<span class="cp-muted">Nessun renderer per questo tipo. Apri "dati grezzi".</span>`;
     }
@@ -331,13 +333,34 @@
 
   function summaryQuoteLine(d) {
     const lines = [];
-    lines.push(`<b>${escapeHtml(d.description || "")}</b>`);
+    const desc = d.description || (d.price_item_id ? `(da listino #${d.price_item_id})` : "—");
+    lines.push(`<b>${escapeHtml(desc)}</b>`);
     const qty = `${d.quantity ?? "?"} ${escapeHtml(d.unit || "")}`;
     const price = d.unit_price != null ? `× ${fmtCur(d.unit_price)}` : "";
     lines.push(`<span class="cp-muted">${qty} ${price}</span>`);
     if (d.quote_id) lines.push(`<span class="cp-muted">in quote #${d.quote_id}</span>`);
-    if (d.price_item_id) lines.push(`<span class="cp-muted">listino #${d.price_item_id}</span>`);
+    if (d.price_item_id) {
+      lines.push(`<span class="cp-muted">✓ legata a voce listino #${d.price_item_id}</span>`);
+    } else {
+      lines.push(`<span class="cp-muted">⚠ voce libera (non legata al listino)</span>`);
+    }
     if (d.category_override) lines.push(`<span class="cp-muted">categoria: ${escapeHtml(d.category_override)}</span>`);
+    return lines.join("<br>");
+  }
+
+  function summaryNewItemAndLine(d) {
+    const lines = [];
+    lines.push(`<b>${escapeHtml(d.name || d.description || "—")}</b>`);
+    const meta = [d.category_name, d.unit].filter(Boolean).map(escapeHtml).join(" · ");
+    if (meta) lines.push(`<span class="cp-muted">${meta}</span>`);
+    if (d.price_list != null) lines.push(`Listino: <b>${fmtCur(d.price_list)}</b>`);
+    const qty = d.quantity ?? 1;
+    if (d.price_list != null) {
+      const tot = qty * Number(d.price_list);
+      lines.push(`<span class="cp-muted">→ ${qty} ${escapeHtml(d.unit || "")} × ${fmtCur(d.price_list)} = ${fmtCur(tot)}</span>`);
+    }
+    if (d.quote_id) lines.push(`<span class="cp-muted">in quote #${d.quote_id}</span>`);
+    if (d.quote_number) lines.push(`<span class="cp-muted">in quote ${escapeHtml(d.quote_number)}</span>`);
     return lines.join("<br>");
   }
 
