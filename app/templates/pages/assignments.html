@@ -1,0 +1,204 @@
+{% extends "base.html" %}
+{% set active_page = "assignments" %}
+{% block title %}Assegnazioni — MediaFlow{% endblock %}
+{% block topbar_title %}Assegnazioni risorse → job{% endblock %}
+{% block topbar_actions %}
+  <input type="text" id="kb-search" placeholder="🔍 cerca risorsa…" class="form-input" style="width:220px;font-size:13px;">
+  <select id="kb-dept-filter" class="form-select" style="width:180px;font-size:13px;"><option value="">Tutti i reparti</option></select>
+  <button class="btn btn-secondary btn-sm" onclick="loadBoard()">↻</button>
+{% endblock %}
+
+{% block content %}
+<div class="text-xs text-muted mb-3" style="padding:8px 12px;background:var(--indigo-bg);border:1px solid var(--indigo-border);border-radius:var(--radius);">
+  Trascina una risorsa dalla colonna sinistra a un job per assegnarla. Trascina una risorsa già assegnata su un altro job per spostarla. Click ✕ per rimuovere.
+</div>
+
+<div class="kb-wrap" style="display:grid;grid-template-columns:280px 1fr;gap:14px;align-items:start;">
+  <!-- Sorgente: risorse disponibili -->
+  <div class="card" style="position:sticky;top:14px;max-height:calc(100vh - 100px);overflow:hidden;display:flex;flex-direction:column;">
+    <div class="card-title mb-3">Risorse disponibili</div>
+    <div id="kb-source" class="kb-list" style="flex:1;overflow-y:auto;"></div>
+  </div>
+
+  <!-- Job columns -->
+  <div id="kb-jobs" style="display:flex;gap:12px;overflow-x:auto;padding-bottom:14px;align-items:flex-start;"></div>
+</div>
+
+<style>
+  .kb-list { display:flex; flex-direction:column; gap:6px; padding-right:4px; }
+  .kb-chip {
+    display:flex; align-items:center; gap:8px; padding:6px 10px;
+    background: var(--bg3); border:1px solid var(--border); border-radius:8px;
+    cursor:grab; user-select:none; font-size:13px;
+  }
+  .kb-chip:hover { border-color: var(--indigo-border); }
+  .kb-chip:active { cursor:grabbing; }
+  .kb-chip.sortable-ghost { opacity:0.4; }
+  .kb-chip-dot { width:10px; height:10px; border-radius:50%; flex-shrink:0; }
+  .kb-chip-name { font-weight:500; flex:1; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .kb-chip-meta { font-size:11px; color:var(--text2); }
+  .kb-chip-x { background:none; border:0; color:var(--text2); cursor:pointer; padding:0 4px; font-size:14px; line-height:1; }
+  .kb-chip-x:hover { color:#ef4444; }
+  .kb-job-col {
+    flex: 0 0 280px;
+    background: var(--bg2); border:1px solid var(--border); border-radius:var(--radius);
+    padding:10px; display:flex; flex-direction:column; max-height:calc(100vh - 120px);
+  }
+  .kb-job-head { padding-bottom:8px; border-bottom:1px solid var(--border); margin-bottom:8px; }
+  .kb-drop {
+    flex:1; min-height:60px; padding:6px;
+    border:2px dashed transparent; border-radius:8px;
+    overflow-y:auto; display:flex; flex-direction:column; gap:6px;
+    transition: border-color 120ms;
+  }
+  .kb-drop.empty { border-color: var(--border); align-items:center; justify-content:center; color:var(--text2); font-size:12px; font-style:italic; min-height:80px; }
+  .kb-empty-state { text-align:center; padding:40px 16px; color:var(--text2); font-size:13px; }
+</style>
+
+{% endblock %}
+
+{% block scripts %}
+<script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.2/Sortable.min.js"></script>
+<script>
+let board = null;
+let q = '';
+let deptFilter = '';
+
+async function loadBoard() {
+  try {
+    board = await api('GET', '/assignments/api/board');
+    populateDeptFilter();
+    render();
+  } catch(e) {
+    toast('Errore caricamento: ' + e.message, 'error');
+  }
+}
+
+function populateDeptFilter() {
+  const sel = document.getElementById('kb-dept-filter');
+  if (sel.options.length > 1) return; // già popolato
+  const seen = new Set();
+  (board.available_resources || []).forEach(r => {
+    if (r.department_id && !seen.has(r.department_id)) {
+      seen.add(r.department_id);
+      const o = document.createElement('option');
+      o.value = r.department_id;
+      o.textContent = r.department_name;
+      sel.appendChild(o);
+    }
+  });
+}
+
+function _matches(r) {
+  if (deptFilter && String(r.department_id) !== deptFilter) return false;
+  if (!q) return true;
+  const ql = q.toLowerCase();
+  return (r.name || '').toLowerCase().includes(ql)
+      || (r.role || '').toLowerCase().includes(ql)
+      || (r.department_name || '').toLowerCase().includes(ql);
+}
+
+function _chip(r, opts) {
+  const id = opts && opts.assignmentId;
+  const meta = (opts && opts.role) || r.role || '';
+  return `
+    <div class="kb-chip" data-resource-id="${r.resource_id || r.id}" ${id ? `data-assignment-id="${id}"` : ''}>
+      <span class="kb-chip-dot" style="background:${r.color || r.resource_color || '#6272f5'};"></span>
+      <span class="kb-chip-name">${(r.name || r.resource_name || '').replace(/</g,'&lt;')}</span>
+      ${meta ? `<span class="kb-chip-meta">${meta.replace(/</g,'&lt;')}</span>` : ''}
+      ${id ? `<button class="kb-chip-x" title="Rimuovi" onclick="event.stopPropagation(); removeAssignment(${id})">✕</button>` : ''}
+    </div>`;
+}
+
+function render() {
+  // Sorgente
+  const src = document.getElementById('kb-source');
+  const visible = (board.available_resources || []).filter(_matches);
+  src.innerHTML = visible.length
+    ? visible.map(r => _chip(r, {})).join('')
+    : '<div class="text-muted text-sm" style="padding:18px;text-align:center;">Nessuna risorsa</div>';
+
+  // Job columns
+  const cols = document.getElementById('kb-jobs');
+  if (!board.jobs || !board.jobs.length) {
+    cols.innerHTML = `<div class="kb-empty-state" style="flex:1;">
+      Nessun job attivo.<br><span class="text-xs">I job nascono dall'approvazione di una quotazione.</span>
+    </div>`;
+    return;
+  }
+  cols.innerHTML = board.jobs.map(j => `
+    <div class="kb-job-col" data-job-id="${j.job_id}">
+      <div class="kb-job-head">
+        <div style="font-size:11px;color:var(--text2);">${(j.client_name||'').replace(/</g,'&lt;')}</div>
+        <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;">
+          <span class="mono text-xs text-muted">${j.code}</span>
+          <strong style="font-size:13px;">${(j.title||'').replace(/</g,'&lt;')}</strong>
+        </div>
+        <div style="margin-top:4px;display:flex;align-items:center;gap:6px;font-size:11px;">
+          ${statusBadge(j.status)}
+          <a href="/projects/${j.project_id}" class="text-xs text-muted" style="text-decoration:none;">${j.project_code||''} →</a>
+        </div>
+      </div>
+      <div class="kb-drop ${j.assignments.length === 0 ? 'empty' : ''}" data-job-id="${j.job_id}">
+        ${j.assignments.length === 0
+          ? 'Trascina qui una risorsa'
+          : j.assignments.map(a => _chip(a, {assignmentId: a.id, role: a.role_in_project})).join('')}
+      </div>
+    </div>`).join('');
+
+  wireSortable();
+}
+
+function wireSortable() {
+  if (typeof Sortable === 'undefined') {
+    console.warn('SortableJS non caricato');
+    return;
+  }
+  Sortable.create(document.getElementById('kb-source'), {
+    group: { name: 'kb-resources', pull: 'clone', put: false },
+    sort: false,
+    ghostClass: 'sortable-ghost',
+  });
+  document.querySelectorAll('.kb-drop').forEach(el => {
+    Sortable.create(el, {
+      group: { name: 'kb-resources', pull: true, put: true },
+      ghostClass: 'sortable-ghost',
+      onAdd: async (evt) => {
+        const targetJobId = parseInt(evt.to.dataset.jobId, 10);
+        const resourceId = parseInt(evt.item.dataset.resourceId, 10);
+        const sourceAssignmentId = evt.item.dataset.assignmentId
+          ? parseInt(evt.item.dataset.assignmentId, 10) : null;
+        evt.item.remove();
+        try {
+          // Se la risorsa veniva da un altro job (assignment esistente), rimuoviamo prima
+          if (sourceAssignmentId) {
+            await api('DELETE', `/assignments/api/${sourceAssignmentId}`);
+          }
+          const fd = new FormData();
+          fd.append('job_id', targetJobId);
+          fd.append('resource_id', resourceId);
+          const res = await api('POST', '/assignments/api/move', fd);
+          if (res.duplicate) toast('Già assegnata a questo job', 'info');
+          else toast('Assegnata', 'success');
+          loadBoard();
+        } catch(e) { toast(e.message, 'error'); loadBoard(); }
+      },
+    });
+  });
+}
+
+async function removeAssignment(id) {
+  if (!confirm('Rimuovere?')) return;
+  try {
+    await api('DELETE', `/assignments/api/${id}`);
+    toast('Rimossa', 'success');
+    loadBoard();
+  } catch(e) { toast(e.message, 'error'); }
+}
+
+document.getElementById('kb-search').addEventListener('input', (e) => { q = e.target.value; render(); });
+document.getElementById('kb-dept-filter').addEventListener('change', (e) => { deptFilter = e.target.value; render(); });
+
+loadBoard();
+</script>
+{% endblock %}

@@ -1,0 +1,844 @@
+ 
+ 
+ 
+ 
+Sky Italia srl | UFFICI E SEDE LEGALE: Via Monte Penice, 7 | 20138 Milano | T +39 02 30801 | F +39 
+02 30801 7600  
+www.sky.it | REA 1726765 | Cod. Fisc./P. Iva e Reg. Imprese Milano: 04619241005 | Cap. Soc. euro 
+261.507.000,00 i.v. 
+Società con socio unico, soggetta alla attività di direzione e coordinamento esercitata da Comcast 
+Corporation 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+Specifiche tecniche per la consegna di 
+contenuti audio/video  
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+Per qualsiasi informazione di natura tecnica inviare una mail all’indirizzo: 
+BROADCAST - Contents 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+
+
+ 
+ 
+ 
+   
+ 
+1) Qualità del prodotto 
+2) Consegna file 
+a) XML accompagnatorio 
+3) Specifiche video 
+a) Video HD 
+b) Formato HD 
+c) Video UHD – 4K 
+d) Formato UHD – 4K 
+4) Specifiche audio 
+a) Livelli 
+b) Produzione multicanale 
+c) Allocazione tracce audio 
+d) Specifiche Dolby E 
+e) Configurazione tracce audio 
+f) Materiali HD 
+g) Materiali UHD – 4K 
+h) Prodotti senza commento italiano (da doppiare) 
+5) Appendici 
+a) Metadata XML 
+b) Elenco parametri metadata Dolby E 
+c) Program maximum short loudness level 
+d) Livelli audio (tabella) 
+e) Allineamento Dolby E - frame 
+f) Identificazione 
+  
+
+ 
+ 
+ 
+   
+ 
+1. Qualità del prodotto 
+ 
+ 
+Tutti i materiali devono essere prodotti in linea con i migliori standard qualitativi. SKY ITALIA si 
+riserva il diritto di rifiutare materiale che non corrisponda ai requisiti tecnici stabiliti da  
+SKY ITALIA Media Management Area. 
+ 
+2. Consegna file 
+ 
+L’essenza video ed il relativo audio devono essere realizzate dal primo frame utile all’ultimo 
+frame utile. Non saranno accettati materiali con elementi non trasmissibili in testa ed in coda. 
+Eventuali elementi aggiuntivi (i.e.Textless, EPK ecc.) dovranno essere contenute in un altro file. 
+ 
+Tutte le tracce (audio e video), anche se su files diversi devono essere contenute in un’unica 
+cartella, facilmente riconoscibili e di lunghezza identica; per poter procedere ad un Controllo 
+Qualità efficace le suddette essenze devono essere consegnate a SKY nello stesso momento. 
+ 
+Per qualsiasi informazione per la consegna inviare una mail ai seguenti indirizzi: 
+BROADCAST - Contents e DL-ITA-PBC - CM - Senior 
+ 
+Per essere accettato un file deve corrispondere alle specifiche seguenti. 
+ 
+a) XML accompagnatorio 
+ 
+Insieme al file di trasmissione potrà essere spedito anche un file contenente tutte le informazioni 
+necessarie al riconoscimento del file stesso ed all’eventuale divisione in parti. Tali informazioni 
+possono essere contenute in un file “.xml”. Per ogni altro formato di consegna delle informazioni, 
+gli accordi devono essere presi con la Direzione Broadcast SKY. 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+
+ 
+ 
+ 
+   
+ 
+3. Specifiche video 
+ 
+a) Video HD 
+ 
+SKY ITALIA utilizza gli standard ITU-R BT.709, ossia 1080/50i 4:2:2. Qualsiasi altro formato HD 
+sarà accettato solo previa autorizzazione scritta di SKY ITALIA. Tutti i materiali ricavati da 
+Standard Definition o da 720 linee non saranno accettati. 
+ 
+b) Formato HD 
+ 
+XDCAM Mpeg 2 HD 4:2:2 wrapper Mxf Op1A 
+50 Mbit Long Gop (Gop15, SubGop3) Profile@High Level 
+Risoluzione: 1920x1080i Top Field First 
+Chroma: 4:2:2 – 8 bit 
+24 Bit Audio, formato BWAV, 48 KHz, 8 canali audio, accoppiati in 4 tracce stereo AES [4pcm(2)] 
+ 
+In assenza sarà accettabile il seguente formato (elencate solo le differenze) previo esplicito 
+accordo con la Direzione Broadcast SKY: 
+XDCAM Mpeg 2 HD 4:2:2 wrapper Mxf RDD9 
+50 Mbit Long Gop (Gop12, SubGop3) 
+24 Bit Audio, formato BWAV, 48 KHz, 8 tracce audio, [8pcm(1)] 
+ 
+Per la modalità di distribuzione dei files e per ogni altro formato di consegna accordi dovranno 
+essere presi con la Direzione Broadcast SKY. 
+ 
+ 
+ 
+c) Video UHD – 4K 
+ 
+SKY ITALIA utilizza gli standard ITU-R BT.2020 - UHDTV HDR HLG, ossia 2160/50p 4:2:2 10 bit. 
+In alternativa, qualora il materiale fosse UHD SDR nativo, può essere accettato purché venga 
+consegnato in questo standard senza effettuare alcuna upconversion (HDR). 
+Tutti i materiali ricavati da Standard Definition, 720 linee o 1080 linee non saranno accettati. 
+ 
+ 
+ 
+ 
+ 
+ 
+
+ 
+ 
+ 
+   
+ 
+d) Formato UHD – 4K 
+ 
+XAVC Intra 
+UHD HDR Formato TV UHD Broadcast e Consumer 
+Risoluzione 3840 pixel orizzontali per 2160 pixel verticali. 
+Scansione Progressivo 
+Wrapper MXF Op1A 
+Formato di 
+Consegna 
+XAVC Intra Class 300: 
+• 50fps: 500Mb/s bitrate constante (preferibilmente) 
+• 25fps: 250Mb/s bitrate constante 
+• 23.976fps:  240Mb/s bitrate constante 
+Dynamic Range e 
+Colour Space 
+High Dynamic Range (preferibilmente):  
+• HLG (preferibilmente, basato su BBC variable curve LUT tables) 
+• PQ (SMPTE ST 2084) Colour Space 
+• Rec. 2020 Wide Colour Gamut (WCG), Extended colours space 
+ 
+Standard Dynamic Range: 
+• Rec. 709 
+Colour Sampling 4:2:2 
+Bit Depth 10 Bit 
+Scene Textless Laddove SKY ITALIA debba localizzare i contenuti in italiano, i materiali devono 
+contenere le scene Textless alla fine del file. 
+ 
+  
+
+ 
+ 
+ 
+   
+ 
+IMF 
+VIDEO 
+UHD HDR Formato TV UHD Broadcast e Consumer 
+Risoluzione 3840 pixel orizzontali per 2160 pixel verticali. 
+Scansione Progressivo 
+Wrapper MXF Op1A 
+Formato di 
+Consegna 
+JPEG2000 
+• 50fps (preferibilmente) 
+• 25fps 
+• 23.976fp 
+Dynamic Range e 
+Colour Space 
+High Dynamic Range (preferibilmente):  
+• HLG (preferibilmente, basato su BBC variable curve LUT tables) 
+• PQ (SMPTE ST 2084) 
+ 
+Colour Space 
+Rec. 2020 Wide Colour Gamut (WCG), Extended colours space 
+ 
+Standard Dynamic Range: 
+• Rec. 709 
+Colour Sampling 4:2:2 
+Bit Depth 10 Bit o 12 Bit 
+Scene Textless Laddove SKY ITALIA  debba localizzare i contenuti in italiano, i materiali 
+devono contenere le scene Textless alla fine del file. 
+Metadata 
+Asset Map Richiesto 
+Packing List Richiesto 
+Volume Index Richiesto 
+Composition 
+Playlist 
+Richiesto 
+ 
+1 CPL che contenga  la localizzazione italiana e la localizzazione 
+originale (preferibilmente) 
+2 CPL così ripartiti 
+• CPL contenente la localizzazione italiana 
+• CPL contenente la localizzazione originale 
+ 
+I file CPL devono includere i Locale metadata 
+ 
+Sono accettati CPL sia semplici che complessi (contenenti tagli e sostituzioni 
+di contenuto) 
+Forced Text 
+Subtitle 
+Laddove richiesto 
+OPL Opzionale 
+ 
+Per la modalità di distribuzione dei files e per ogni altro formato di consegna accordi dovranno 
+essere presi con la Direzione Broadcast SKY. 
+ 
+ 
+ 
+ 
+ 
+
+ 
+ 
+ 
+   
+ 
+ 
+Pro-Res 
+VIDEO 
+UHD HDR Formato TV UHD Broadcast e Consumer 
+Risoluzione 3840 pixel orizzontali per 2160 pixel verticali. 
+Scansione Progressivo 
+Wrapper MOV Quick Time 
+Formato di 
+Consegna 
+• ProRes 422 LT 
+24 fps 328 Mb/s 
+25 fps 342 Mb/s 
+50 fps 684 Mb/s 
+ 
+• ProRes 422 
+24 fps 471 Mb/s 
+25 fps 492 Mb/s 
+50 fps 983 Mb/s 
+ 
+• ProRes 422 HQ 
+24 fps 707 Mb/s 
+25 fps 737 Mb/s 
+50 fps 1475 Mb/s 
+Dynamic Range e 
+Colour Space 
+High Dynamic Range (Preferred): 
+• HLG (preferred, based on BBC variable curve LUT tables) 
+• PQ (SMPTE ST 
+2084) Colour Space 
+• Rec. 2020 Wide Colour Gamut (WCG), Extended colour space 
+ 
+Standard Dynamic Range: 
+• Rec. 709 
+Colour Sampling 4:2:2 
+Bit Depth 10 Bit or 12 Bit 
+Scene Textless Laddove SKY ITALIA debba localizzare i contenuti in italiano, i materiali devono 
+contenere le scene Textless alla fine del file 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+
+ 
+ 
+ 
+   
+ 
+4. Specifiche audio 
+ 
+a) Livelli 
+ 
+I livelli audio del programma devono essere misurati con loudness meter conformi ad una delle 
+seguenti specifiche: 
+ITU-R.BS1770 
+ITU-R.BS1771 
+EBU-TECH 3341 
+ 
+I parametri misurati sono: Maximum Permitted True Peak Level (MPTPL) e Programme Loudness 
+Level. 
+ 
+Ogni colonna audio del programma deve rispettare le seguenti specifiche: 
+ 
+Maximum Permitted True Peak level (MPTPL): Rappresenta il livello audio massimo 
+trasmettibile e viene valutato tramite meter digitale True Peak con un tempo di risposta 
+(rise response) pari a 0 millisecondi in scala TP. Il livello di True Peak digitale non può 
+superare i –2 dBTP in nessun punto del programma. 
+ 
+Programme Loudness Level: Rappresenta il livello ordinario del programma risultante dalla 
+misurazione integrale dell’intero contenuto analizzato (dall’inizio alla fine, e per tutti i 
+canali audio componenti la colonna sonora). Il Programme Loudness deve essere 
+conforme ad una delle seguenti raccomandazioni: EBU-R128, ITU-R.BS1864, ATSC A/85. 
+ 
+Se si utilizzano loudness meter Dolby (Dolby LM100 e Dolby Media Meter) si deve abilitare la 
+funzione Dialogue Intelligence (DI). Su questi strumenti il valore di Programme Loudness Level 
+corrisponde al valore finale di Infinite Term misurata in modalità “channel ALL”. (Si raccomanda di 
+premere Reset all’inizio della misurazione). 
+ 
+Il valore di Programme Loudness Level di ogni colonna sonora deve essere pari a -24LUFS o LKFS 
+(-23LUFS per i contenuti sportivi e/o musicali), con una tolleranza di ± 1.0 LU. N.B. La tolleranza 
+concessa al Programme Loudness Level di contenuti interstiziali (se il loro inserimento è 
+previsto/consentito dal Contratto) è ridotta a ± 0.5 LU. 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+
+ 
+ 
+ 
+   
+ 
+b)  Produzione multicanale 
+ 
+Il fornitore dei programmi deve garantire che la codifica del segnale Dolby E sia effettuata in una 
+sala mix 5.1 correttamente allineata. Il collocamento degli altoparlanti deve rispettare la 
+raccomandazione ITU BS.775-1. Le apparecchiature Dolby devono essere configurate 
+correttamente e tutti i parametri Metadata devono rispecchiare fedelmente i valori del 
+programma codificato (es: DialNorm, Audio Processing, Dynamic Range, etc.). 
+ 
+c) Allocazione tracce audio (SMPTE 320M) 
+ 
+ 
+1 Left 
+2 Right 
+3 Centre 
+4 LFE 
+5 Left Surround 
+6 Right Surround 
+7 Lt- M&E (Optional) 
+8 Rt- M&E(Optional) 
+ 
+d)  Specifiche Dolby E 
+ 
+• Il sync Audio/Video deve essere pari a 0 Fotogrammi, ovvero SYNC ON TAPE. In altre parole, 
+durante il Playout del programma, per compensare la latenza introdotta dalla decodifica 
+Dolby E, è necessario introdurre un delay sul segnale video pari ad 1 frame. Una vol ta che 
+questo viene applicato, Audio e Video devono sempre essere perfettamente in sync lungo 
+tutta la durata del programma. 
+• Il frame-rate del Dolby E deve essere uguale a quello del video. 
+• Il bit-depth del segnale Dolby E deve essere pari a 20 bits e la configurazione dei programmi 
+devono essere corrispondenti al contenuto. 
+• I Metadati devono essere settati correttamente. In particolare, seguite per favore i 
+seguenti requisiti: 
+- I parametri Channel Mode e LFE devono rispecchiare il numero di canali audio 
+- Il valore DialNorm deve corrispondere al valore Programme Loudness Level 
+misurato su tutti i canali come indicato al punto 7.1 
+- Tutti i parametri Downmix, inclusi i profili della modalità di compressione di Linea e 
+di RF, devono essere correttamente impostati in modo da ottimizzare la fruibilità 
+del mix in tutti i formati audio quali 5.1 e stereo.  Ad eccezione di quelli indicati c on 
+* i valori indicati in tabella sono da ritenersi solamente come punti di riferimento 
+iniziali non obbligatori. Ognuno di questi parametri va ottimizzato in base alla resa 
+acustica del down mix emulata in fase di Authoring Dolby E. 
+ 
+ 
+ 
+ 
+ 
+
+ 
+ 
+ 
+   
+ 
+e) Configurazione tracce audio 
+ 
+In assenza di Colonne Sonore in formato Dolby E e previa accettazione scritta di SKY ITALIA 
+saranno accettate anche Colonne Sonore Stereo PCM non codificate Dolby E e contenuti audio 
+multicanale in formato audio discreto. Le tracce audio non devono essere vuote; in assenza di 
+Colonna Sonora Originale, si replicherà la Colonna Sonora Italiana. 
+ 
+f) Materiali HD 
+ 
+Audio incorporato nel file (Embedded In Wrapper) 
+ 
+▪ Audio Traccia 1 (AES1) Canale 1 & 2 = Dolby E Mix Italiano (in assenza Stereo Mix Italiano) 
+▪ Audio Traccia 2 (AES2) Canale 3 & 4= Dolby E Mix Originale (in assenza Stereo Mix Originale) 
+▪ Audio Traccia 3 (AES3) Canale 5 & 6 = Stereo Mix Italiano 
+▪ Audio Traccia 4 (AES4) Canale 7 & 8= Stereo Mix Originale 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+
+ 
+ 
+ 
+   
+ 
+g) Materiali UHD – 4K 
+ 
+XAVC Intra 
+Bit Depth 24-bit 
+Sample Rate 48 kHz 
+Formato di 
+Consegna 
+Audio incorporato nel Wrapper (Embedded in wrapper): 
+• Audio bilingua, 16 tracce audio discrete: 
+- Tracce 1 -6: Missaggio italiano  5.1: Left, Right, Centre, LFE, Left 
+Surround, Right Surround 
+- Tracce 7-8: Missaggio italiano Stereo: Left, Right o Muto 
+- Tracce 9-14: Missaggio originale 5.1: Left, Right, Centre, LFE, Left 
+Surround, Right Surround 
+- Tracce 15-16: Missaggio originale Stereo: Left, Right o Muto 
+ 
+• Audio solamente in italiano, 16 tracce audio discrete: 
+- Tracce 1 -6: Missaggio italiano 5.1: Left, Right, Centre, LFE, Left 
+Surround, Right Surround 
+- Tracce 7-8: Missaggio italiano Stereo: Left, Right o Muto 
+- Tracce 9-16: Muto 
+ 
+• Audio solamente in lingua originale, 16 tracce audio discrete: 
+- Tracce 1-6: Missaggio originale 5.1: Left, Right, Centre, LFE, Left 
+Surround, Right Surround 
+- Tracce 7-8: Missaggio originale Stereo: Left, Right o Muto 
+- Tracce 9 -14: Solo musica e effetti 5.1: Left, Right, Centre, LFE, 
+Left Surround, Right Surround 
+- Tracce 15-16: Solo musica e effetti Stereo: Left, Right o Muto 
+ 
+Audio scorporato: 
+• 1 file per lingua: 
+- Singolo file audio wave composto da 6 canali: Left, Right, 
+Centre, LFE, Left Surround, Right Surround 
+• 6 file per lingua: 
+- 6 file wave mono così suddivisi: 
+1) Left 
+2) Right 
+3) Centre 
+4) LFE 
+5) Left Surround 
+6) Right Surround 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+
+ 
+ 
+ 
+   
+ 
+IMF 
+Bit Depth 24-bit 
+Sample Rate 48 kHz 
+Formato di 
+Consegna 
+• Localizzazione italiana - 2 file wave MXF Op1A: 
+- Singolo file audio composto da 6 canali: Left, Right, Centre, LFE, 
+Left Surround, Right Surround 
+- Singolo file audio composto da 2 canali: Left, Right 
+• Localizzazione originale - 2 file wave MXF Op1A: 
+- Singolo file audio composto da 6 canali: Left, Right, Centre, LFE, 
+Left Surround, Right Surround 
+- Singolo file audio composto da 2 canali: Left, Right 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+Pro-Res 
+AUDIO 
+Bit Depth 24-bit 
+Sample Rate 48khz 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+Formato di 
+Consegna 
+Audio incorporato nel Wrapper (Embedded in wrapper): 
+• Audio bilingua, 16 tracce audio discrete: 
+- Tracce 1 -6: Missaggio italiano 5.1: Left, Right, Centre, LFE, Left 
+Surround, Right Surround 
+- Tracce 7-8: Missaggio italiano Stereo: Left, Right o Muto 
+- Tracce 9 -14: Missaggio originale 5.1: Left, Right, Centre, LFE, Left 
+Surround, Right Surround 
+- Tracce 15-16: Missaggio originale Stereo: Left, Right o Muto 
+ 
+• Audio solamente in italiano, 16 tracce audio discrete: 
+- Tracce 1 -6: Missaggio italiano 5.1: Left, Right, Centre, LFE, Left 
+Surround, Right Surround 
+- Tracce 7-8: Missaggio italiano Stereo: Left, Right o Muto 
+- Tracce 9-16: Muto 
+ 
+• Audio solamente in lingua originale, 16 tracce audio discrete: 
+- Tracce 1 -6: Missaggio originale 5.1: Left, Right, Centre, LFE, Left 
+Surround, Right Surround 
+- Tracce 7-8: Missaggio originale Stereo: Left, Right o Muto 
+- Tracce 9-14: Solo musica e effetti 5.1: Left, Right, Centre, LFE, Left 
+Surround, Right Surround 
+- Tracce 15-16: Solo musica e effetti Stereo: Left, Right o Muto 
+ 
+ 
+ 
+
+ 
+ 
+ 
+   
+ 
+Audio scorporato: 
+• 1 file per lingua: 
+- Singolo file audio wave composto da 6 canali: Left, Right, Centre, 
+LFE, Left Surround, Right Surround 
+• 6 file per lingua: 
+- 6 file wave mono così suddivisi: 
+1) Left 
+2) Right 
+3) Centre 
+4) LFE 
+5) Left Surround 
+6) Right Surround 
+ 
+ 
+ 
+ 
+h) Prodotti senza commento italiano (da doppiare) 
+ 
+In caso di materiali senza colonna sonora italiana (sia in formato 5.1 sia stereo PCM) e quindi 
+necessari di doppiaggio, verranno inserite tracce audio solo “Music & Effects” senza narratore al 
+posto del “Mix Italiano” seguendo, quindi il seguente schema: 
+ 
+ Audio Multicanale * Audio stereo 
+AES 1 (ch 1 & 2) Dolby E 
+5.1 Music & Effects 
+AES 2 (ch 3 & 4) Dolby E MIX 5.1 
+ORIGINAL LANGUAGE 
++ Lt-Rt ORIGINAL  LANGUAGE 
+ 
+AES 1 (ch 1 & 2) 
+ 
+AES 2 (ch 3 & 4) 
+1 Left (senza commento) Left Left Music & Effects Left Mix Original Lang. 
+2 Right (senza commento) Right Right Music & 
+Effects 
+Left Mix Original Lang. 
+3 Centre (senza commento) Centre  
+4 LFE LFE 
+5 Left Surround Left Surround 
+6 Right Surround Right Surround 
+7 Lt- M&E Lt- Mix Original language 
+8 Rt- M&E Rt- Mix Original language 
+
+ 
+ 
+ 
+   
+ 
+ 
+(*)In assenza di Colonne Sonore in formato Dolby E saranno accettate, previo accordo scritto con a 
+SKY ITALIA, contenuti audio multicanale in formato audio discreto. 
+ 
+Tutte le tracce devono essere a 48 kHz 24-bit. 
+  
+
+ 
+ 
+ 
+   
+ 
+5) Appendici 
+ 
+a) Elenco metadata eXtensible Markup Language 
+ 
+(I parametri inseriti nella tabella sottostante sono puramente indicativi) 
+ 
+  
+
+
+ 
+ 
+ 
+   
+ 
+b) Elenco parametri metadata Dolby E 
+ 
+La seguente tabella indica la lista di parametri Dolby Metadata relativi al Program 1 contenente 
+l’audio multicanale. Quelli indicati con * sono obbligatori. 
+ 
+Parameter 
+ Cinema 
+Production  Drama Documentary Music Live Sporting 
+Dialogue Level -24 * -24 * -24 * -23 * -23 * 
+Channel Mode 3/2 * 3/2 * 3/2 * 3/2 * 3/2 * 
+LFE Channel Enable * Enable * Enable * Enable * Enable * 
+Bitstream Mode  Main Complete * Main Complete * Main Complete * Main Complete * Main Complete * 
+Line Mode Pro Film Standard Film Light Film Light Music Light Film Light* 
+RF Mode Pro Film Standard Film Light Film Light Music Light Film Light* 
+RF Overmd Protect Disable Disable Disable Disable Disable* 
+Center Dwnmix Lev 0.707 (- 3 dB) 0.707 (- 3 dB) 0.707 (- 3 dB) 0.707 (- 3 dB) 0.707 (- 3 dB)* 
+Srnd Dwnmix Lev 0.707 (- 3 dB) 0.707 (- 3 dB) 0.707 (- 3 dB) 0.707 (- 3 dB) 0.707 (- 3 dB)* 
+Dolby Srnd Mode N/A N/A N/A N/A N/A 
+Audio Prod Info YES YES YES YES NO 
+Mix Level 105 dB 85 dB 85 dB 95 dB N/A 
+Room type Large Small Small Small N/A 
+Copyright Yes Yes Yes Yes Yes 
+Original Bitstream  Yes Yes Yes Yes Yes 
+Preferred Stereo Downmix Lo/Ro Lo/Ro Lo/Ro Lo/Ro Lt/Rt* 
+Lt/Rt CenterDownmix Level 0.707 (- 3 dB) 0.707 (- 3 dB) 0.707 (- 3 dB) 0.707 (- 3 dB) 0.707 (- 3 dB)* 
+Lt/Rt Surround Downmix Level 0.707 (- 3 dB) 0.707 (- 3 dB) 0.707 (- 3 dB) 0.707 (- 3 dB) 0.707 (- 3 dB)* 
+Lo/Ro CenterDownmix Level 0.707 (- 3 dB) 0.707 (- 3 dB) 0.707 (- 3 dB) 0.707 (- 3 dB) 0.707 (- 3 dB)* 
+Lo/Ro Surround Downmix Level 0.707 (- 3 dB) 0.707 (- 3 dB) 0.707 (- 3 dB) 0.707 (- 3 dB) 0.707 (- 3 dB)* 
+Dolby Surround EX Mode Not Indicated Not Indicated Not Indicated Not Indicated Not Indicated* 
+A/D Converter Type Standard Standard Standard Standard Standard* 
+DC Filter Enable Enable Enable Enable Enable* 
+Lowpass Filter Enable Enable Enable Enable Enable* 
+LFE Lowpass Filter Enable Enable Enable Enable Enable* 
+Surround 3 dB Attenuation Enable Disable Disable Disable Disable* 
+Srnd Phase Shift Disable Disable Disable Disable Disable* 
+ 
+  
+
+ 
+ 
+ 
+   
+ 
+c) Program Maximum Short Loudness Level 
+ 
+Rappresenta il livello massimo Short Term del programma entro il quale devono modulare i 
+Foreground Sounds. Per Foreground Sounds si intendono tutti gli elementi sonori essenziali al 
+racconto del contenuto. Questi includono soprattutto voci, ma anche music he (quando non di 
+sottofondo) ed effetti.  Sono esclusi i parlati sussurrati, i silenzi, le musiche di sottofondo e gli 
+effetti non principali. 
+La conformità con i valori di Max Short Loudness Level indicati non è obbligatoria.  Tuttavia, per 
+offrire la migliore fruizione acustica ai propri utenti, SKY ITALIA suggerisce che il livello dei 
+Foreground Sounds sia mantenuto entro i valori indicati nella tabella sottostante. 
+Per i contenuti interstiziali (se il loro inserimento è previsto/consentito dal Contratto) la 
+conformità con i valori di Max Short Loudness Level è obbligatoria.  La misura viene eseguita in 
+modalità Short Term con sliding Window pari a 3 secondi. 
+Alla misurazione viene applicata una tolleranza pari a ± 1.0 LU. 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+d) Livelli audio (tabella) 
+ 
+PARAMETRO VALORE 
+MAXIMUM PERMITTED TRUE PEAK * -2.0 dBTP 
+PROGRAMME LOUDNESS * -24.0 LUFS (±1.0) (-23 Musica e Sport) 
+PROGRAMME LOUDNESS Interstiziali * -24.0 LUFS (±0.5) 
+MAX SHORT LOUDNESS PCM -20.0 LUFS (±1.0) 
+MAX SHORT LOUDNESS 5.1 -16.0 LUFS (±1.0)  
+MAX SHORT LOUDNESS Interstiziali * -22.0 LUFS (±1.0) 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+TIPOLOGIA DEL CONTENUTO Maximum Short LKFS 
+PROGRAMMA stereo -20.0 
+PROGRAMMA 5.1 -16.0 
+INTERSTIZIALE (promo, ident, pubblicità, etc.) -22.0 
+
+ 
+ 
+ 
+   
+ 
+ 
+ 
+ 
+e) Allineamento Dolby E 
+ 
+Per assicurare un corretto editing e switching di segnali Dolby E è necessario allineare 
+correttamente la posizione Dolby E rispetto al frame video. E’ raccomandabile, quindi, allinearsi alla 
+seguente tabella nella parte evidenziata in verde:  
+ 
+ 
+ 
+ 
+f) Identificazione 
+ 
+Il Programma deve essere identificato da un file log sheet che dovrà essere nella stessa cartella 
+del file. Questa deve riportare le informazioni essenziali relative al Programma: 
+ 
+• Titolo • Durata del Programma: HH:MM:SS:II 
+• Sotto-titolo • Formato Audio: Mono; Stereo; Dolby E … 
+• Numero episodio e/o numero della serie • Aspect Ratio: 4:3 o 16:9 
+ • Formato Video: 1,77; 1,85; 2,35 … 
+ 
+ Potentially 
+earliest valid DE 
+position 
+Ideal DE position 
+-80µS 
+Ideal DE position 
+± 80µS 
+Ideal DE position 
++80µS 
+Potentially latest 
+valid DE position 
+ 625/25 
+PAL SD 
+1080i/50i 
+PAL HD 
+625/25 
+PAL SD 
+1080i/50i 
+PAL HD 
+625/25 
+PAL SD 
+1080i/50i 
+PAL HD 
+625/25 
+PAL SD 
+1080i/50i 
+PAL HD 
+625/25 
+PAL SD 
+1080i/50i 
+PAL HD 
+TV line 8 13 11 19 12 21 13 23 30 53 
+µS* 450 650 730 810 1860 
+48 KHz AES sample ** 22 32 36 39 90 
+ 
+*In relation to SMPTE RP168 reference point, and approximate values  
+** where the start of AES sample number 1 is approximately aligned to SMPTE RP168 reference point  

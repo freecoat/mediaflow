@@ -1,0 +1,30 @@
+.env
+*.db
+*.sqlite
+__pycache__/
+*.pyc
+.venv/
+venv/
+uploads/assets/
+uploads/thumbnails/
+.DS_Store
+Thumbs.db
+*.egg-info/
+dist/
+build/
+.pytest_cache/
+htmlcov/
+.claude/recall-context.md
+.claude/settings.local.json
+.idea/
+.vscode/
+*.log
+
+# Log temporanei copilot AI (incollati a mano da Matteo per debug)
+docs/Logs-temp/
+
+# File generati durante smoke test
+q_test.*
+q3.csv
+q3.pdf
+q3.xlsx

@@ -1,0 +1,271 @@
+{% extends "base.html" %}
+{% set active_page = "resources" %}
+
+{% block title %}Risorse — MediaFlow{% endblock %}
+{% block topbar_title %}Gestione Risorse{% endblock %}
+
+{% block topbar_actions %}
+  <button class="btn btn-primary btn-sm" onclick="openNewResource()">+ Nuova risorsa</button>
+{% endblock %}
+
+{% block content %}
+
+<!-- Filtri -->
+<div class="flex items-center gap-3 mb-3" style="flex-wrap:wrap;">
+  <div class="form-group" style="margin:0;">
+    <select class="form-select" id="filter-dept" onchange="applyFilters()" style="min-width:180px;">
+      <option value="">Tutti i reparti</option>
+      {% for d in departments %}
+      <option value="{{ d.id }}" {% if selected_dept_id == d.id %}selected{% endif %}>{{ d.name }}</option>
+      {% endfor %}
+    </select>
+  </div>
+  <div class="tabs" style="margin:0;">
+    <div class="tab {% if not selected_type %}active{% endif %}" onclick="setTypeFilter('')">Tutte</div>
+    <div class="tab {% if selected_type == 'person_internal,person_freelance,person' %}active{% endif %}" onclick="setTypeFilter('person_internal,person_freelance,person')">👤 Personale</div>
+    <div class="tab {% if selected_type == 'studio' %}active{% endif %}" onclick="setTypeFilter('studio')">🏠 Studi/Sale</div>
+    <div class="tab {% if selected_type == 'equipment' %}active{% endif %}" onclick="setTypeFilter('equipment')">🎥 Attrezzature</div>
+    <div class="tab {% if selected_type == 'software' %}active{% endif %}" onclick="setTypeFilter('software')">💾 Software</div>
+    <div class="tab {% if selected_type == 'vehicle' %}active{% endif %}" onclick="setTypeFilter('vehicle')">🚐 Veicoli</div>
+  </div>
+  <span class="text-xs text-muted">{{ resources|length }} risors{% if resources|length == 1 %}a{% else %}e{% endif %}</span>
+</div>
+
+<div class="card">
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th style="width:32px;"></th>
+          <th>Nome</th>
+          <th>Reparto</th>
+          <th>Tipo</th>
+          <th>Ruolo</th>
+          <th>Tariffa/g</th>
+          <th>Tariffa/h</th>
+          <th>Contatti</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for r in resources %}
+        <tr style="cursor:pointer;" onclick="editResource({{ r.id }})">
+          <td><span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:{{ r.color }};"></span></td>
+          <td><strong>{{ r.name }}</strong></td>
+          <td>
+            {% if r.department %}
+              <span style="display:inline-flex;align-items:center;gap:6px;font-size:12px;">
+                <span style="width:8px;height:8px;border-radius:2px;background:{{ r.department.color }};"></span>
+                {{ r.department.name }}
+              </span>
+            {% else %}<span class="text-muted">—</span>{% endif %}
+          </td>
+          <td><span class="text-xs text-muted">{{ TYPE_LABEL[r.type.value] if r.type else '—' }}</span></td>
+          <td>{{ r.role or '—' }}</td>
+          <td class="mono text-sm">{% if r.daily_rate %}€ {{ '{:,.0f}'.format(r.daily_rate) }}{% else %}—{% endif %}</td>
+          <td class="mono text-sm">{% if r.hourly_rate %}€ {{ '{:,.0f}'.format(r.hourly_rate) }}{% else %}—{% endif %}</td>
+          <td class="text-xs text-muted">
+            {% if r.email %}{{ r.email }}{% endif %}
+            {% if r.internal_phone %}<br>int. {{ r.internal_phone }}{% endif %}
+            {% if r.phone and not r.internal_phone %}<br>{{ r.phone }}{% endif %}
+          </td>
+          <td class="text-right" onclick="event.stopPropagation();">
+            <button class="btn btn-ghost btn-icon btn-sm" onclick="toggleActive({{ r.id }}, false)" title="Disattiva">🗑️</button>
+          </td>
+        </tr>
+        {% else %}
+        <tr><td colspan="9" class="text-muted" style="text-align:center;padding:24px;">Nessuna risorsa</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<!-- Modal nuova/modifica risorsa -->
+<div class="modal-overlay" id="modal-resource">
+  <div class="modal" style="max-width:640px;">
+    <div class="modal-header">
+      <span class="modal-title" id="modal-title">Nuova risorsa</span>
+      <button class="btn btn-ghost btn-icon" onclick="closeModal('modal-resource')">✕</button>
+    </div>
+    <div class="modal-body">
+      <input type="hidden" id="rs-id">
+      <div class="form-row">
+        <div class="form-group">
+          <label class="form-label">Nome *</label>
+          <input class="form-input" id="rs-name" placeholder="es. Mario Rossi / Studio A / Camera Sony FX6">
+        </div>
+        <div class="form-group" style="max-width:140px;">
+          <label class="form-label">Colore</label>
+          <input class="form-input" id="rs-color" type="color" value="#6272f5" style="height:38px;padding:2px;">
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label class="form-label">Tipo *</label>
+          <select class="form-select" id="rs-type">
+            <option value="person_internal">👤 Personale interno</option>
+            <option value="person_freelance">👤 Freelance</option>
+            <option value="studio">🏠 Studio / Sala</option>
+            <option value="equipment">🎥 Attrezzatura</option>
+            <option value="software">💾 Software / Licenza</option>
+            <option value="vehicle">🚐 Veicolo</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Reparto</label>
+          <select class="form-select" id="rs-dept">
+            <option value="">— nessuno —</option>
+            {% for d in departments %}
+            <option value="{{ d.id }}">{{ d.name }}</option>
+            {% endfor %}
+          </select>
+        </div>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Ruolo / Specializzazione</label>
+        <input class="form-input" id="rs-role" placeholder="es. Senior Colorist, Re-recording Mixer, Sala Mix Atmos…">
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label class="form-label">Tariffa giornaliera (€)</label>
+          <input class="form-input" id="rs-daily" type="number" step="0.01" placeholder="0.00">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Tariffa oraria (€)</label>
+          <input class="form-input" id="rs-hourly" type="number" step="0.01" placeholder="0.00">
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label class="form-label">Email</label>
+          <input class="form-input" id="rs-email" type="email" placeholder="opzionale">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Telefono</label>
+          <input class="form-input" id="rs-phone" placeholder="es. +39 333 1234567">
+        </div>
+        <div class="form-group" style="max-width:120px;">
+          <label class="form-label">Interno</label>
+          <input class="form-input" id="rs-iphone" placeholder="201">
+        </div>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Note / Descrizione</label>
+        <textarea class="form-textarea" id="rs-desc" rows="2" placeholder="Skill, marca/modello attrezzatura, configurazione studio…"></textarea>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeModal('modal-resource')">Annulla</button>
+      <button class="btn btn-primary" onclick="saveResource()">Salva</button>
+    </div>
+  </div>
+</div>
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+const TYPE_LABEL = {
+  person_internal: 'Personale interno',
+  person_freelance: 'Freelance',
+  person: 'Personale',
+  studio: 'Studio/Sala',
+  equipment: 'Attrezzatura',
+  software: 'Software',
+  vehicle: 'Veicolo',
+};
+
+function applyFilters() {
+  const dept = document.getElementById('filter-dept').value;
+  const params = new URLSearchParams();
+  if (dept) params.set('department_id', dept);
+  const currentType = new URLSearchParams(location.search).get('type');
+  if (currentType) params.set('type', currentType);
+  location.href = '/resources' + (params.toString() ? '?' + params.toString() : '');
+}
+
+function setTypeFilter(t) {
+  const params = new URLSearchParams(location.search);
+  if (t) params.set('type', t); else params.delete('type');
+  location.href = '/resources' + (params.toString() ? '?' + params.toString() : '');
+}
+
+function openNewResource() {
+  document.getElementById('modal-title').textContent = 'Nuova risorsa';
+  document.getElementById('rs-id').value = '';
+  document.getElementById('rs-name').value = '';
+  document.getElementById('rs-type').value = 'person_internal';
+  document.getElementById('rs-dept').value = '';
+  document.getElementById('rs-role').value = '';
+  document.getElementById('rs-daily').value = '';
+  document.getElementById('rs-hourly').value = '';
+  document.getElementById('rs-email').value = '';
+  document.getElementById('rs-phone').value = '';
+  document.getElementById('rs-iphone').value = '';
+  document.getElementById('rs-desc').value = '';
+  document.getElementById('rs-color').value = '#6272f5';
+  openModal('modal-resource');
+}
+
+async function editResource(id) {
+  try {
+    const r = await fetch(`/resources/api/${id}`).then(r => r.json());
+    document.getElementById('modal-title').textContent = 'Modifica risorsa';
+    document.getElementById('rs-id').value = r.id;
+    document.getElementById('rs-name').value = r.name || '';
+    document.getElementById('rs-type').value = r.type || 'person_internal';
+    document.getElementById('rs-dept').value = r.department_id || '';
+    document.getElementById('rs-role').value = r.role || '';
+    document.getElementById('rs-daily').value = r.daily_rate || '';
+    document.getElementById('rs-hourly').value = r.hourly_rate || '';
+    document.getElementById('rs-email').value = r.email || '';
+    document.getElementById('rs-phone').value = r.phone || '';
+    document.getElementById('rs-iphone').value = r.internal_phone || '';
+    document.getElementById('rs-desc').value = r.description || '';
+    document.getElementById('rs-color').value = r.color || '#6272f5';
+    openModal('modal-resource');
+  } catch (e) { alert(e.message); }
+}
+
+async function saveResource() {
+  const id = document.getElementById('rs-id').value;
+  const name = document.getElementById('rs-name').value.trim();
+  if (!name) { alert('Nome obbligatorio'); return; }
+
+  const fd = new FormData();
+  fd.append('name', name);
+  fd.append('type', document.getElementById('rs-type').value);
+  const dept = document.getElementById('rs-dept').value;
+  if (dept) fd.append('department_id', dept);
+  fd.append('role', document.getElementById('rs-role').value);
+  fd.append('description', document.getElementById('rs-desc').value);
+  const daily = document.getElementById('rs-daily').value;
+  if (daily) fd.append('daily_rate', daily);
+  const hourly = document.getElementById('rs-hourly').value;
+  if (hourly) fd.append('hourly_rate', hourly);
+  fd.append('email', document.getElementById('rs-email').value);
+  fd.append('phone', document.getElementById('rs-phone').value);
+  fd.append('internal_phone', document.getElementById('rs-iphone').value);
+  fd.append('color', document.getElementById('rs-color').value);
+
+  try {
+    const url = id ? `/resources/api/${id}` : '/resources/api';
+    const method = id ? 'PUT' : 'POST';
+    const r = await fetch(url, { method, body: fd });
+    if (!r.ok) { const e = await r.json(); throw new Error(e.detail || 'Errore'); }
+    location.reload();
+  } catch (e) { alert(e.message); }
+}
+
+async function toggleActive(id, newState) {
+  if (!confirm(newState ? 'Riattivare la risorsa?' : 'Disattivare la risorsa?')) return;
+  try {
+    const fd = new FormData(); fd.append('is_active', newState);
+    const r = await fetch(`/resources/api/${id}`, { method: 'PUT', body: fd });
+    if (!r.ok) throw new Error('Errore');
+    location.reload();
+  } catch (e) { alert(e.message); }
+}
+</script>
+{% endblock %}

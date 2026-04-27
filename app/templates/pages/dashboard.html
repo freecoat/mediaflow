@@ -1,0 +1,205 @@
+{% extends "base.html" %}
+{% set active_page = "dashboard" %}
+
+{% block title %}Dashboard — MediaFlow{% endblock %}
+{% block topbar_title %}Dashboard{% endblock %}
+
+{% block topbar_actions %}
+  <span class="text-xs" id="clock"></span>
+{% endblock %}
+
+{% block content %}
+
+<!-- ── Stat cards ─────────────────────────────────────────── -->
+<div class="stat-grid" id="stat-grid">
+  <div class="stat-card">
+    <div class="stat-label">Job attivi</div>
+    <div class="stat-value stat-accent" id="stat-jobs">—</div>
+    <div class="stat-sub">in corso questo mese</div>
+  </div>
+  <div class="stat-card">
+    <div class="stat-label">Risorse</div>
+    <div class="stat-value" id="stat-resources">—</div>
+    <div class="stat-sub">persone e attrezzature</div>
+  </div>
+  <div class="stat-card">
+    <div class="stat-label">Fatturato (anno)</div>
+    <div class="stat-value" id="stat-revenue">—</div>
+    <div class="stat-sub">fatture emesse/pagate</div>
+  </div>
+  <div class="stat-card">
+    <div class="stat-label">Asset in libreria</div>
+    <div class="stat-value" id="stat-assets">—</div>
+    <div class="stat-sub">video, audio, immagini</div>
+  </div>
+</div>
+
+<!-- ── Grid principale ────────────────────────────────────── -->
+<div class="grid-2" style="align-items:start;">
+
+  <!-- Job recenti -->
+  <div class="card">
+    <div class="card-header">
+      <span class="card-title">Job recenti</span>
+      <a href="/planning" class="btn btn-ghost btn-sm">Vedi tutti</a>
+    </div>
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>Codice</th>
+            <th>Titolo</th>
+            <th>Cliente</th>
+            <th>Stato</th>
+          </tr>
+        </thead>
+        <tbody id="jobs-tbody">
+          <tr><td colspan="4" class="text-muted" style="text-align:center;padding:20px;">Caricamento…</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- P&L anno corrente -->
+  <div class="card">
+    <div class="card-header">
+      <span class="card-title">P&amp;L <span id="pl-year"></span></span>
+      <a href="/finance" class="btn btn-ghost btn-sm">Dettaglio</a>
+    </div>
+    <div id="pl-content" style="padding:8px 0;">
+      <div class="text-muted text-sm">Caricamento…</div>
+    </div>
+  </div>
+
+</div>
+
+<!-- ── Prenotazioni di oggi ────────────────────────────────── -->
+<div class="card mt-3">
+  <div class="card-header">
+    <span class="card-title">Booking di oggi</span>
+    <a href="/planning/calendar" class="btn btn-ghost btn-sm">Vai al calendario</a>
+  </div>
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th>Orario</th>
+          <th>Risorsa</th>
+          <th>Job</th>
+          <th>Stato</th>
+        </tr>
+      </thead>
+      <tbody id="bookings-tbody">
+        <tr><td colspan="4" class="text-muted" style="text-align:center;padding:20px;">Caricamento…</td></tr>
+      </tbody>
+    </table>
+  </div>
+</div>
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+// Clock
+function updateClock() {
+  const now = new Date();
+  document.getElementById('clock').textContent =
+    now.toLocaleDateString('it-IT', { weekday:'long', day:'2-digit', month:'long' }) +
+    ' — ' + now.toLocaleTimeString('it-IT', { hour:'2-digit', minute:'2-digit' });
+}
+updateClock();
+setInterval(updateClock, 60000);
+
+const year = new Date().getFullYear();
+document.getElementById('pl-year').textContent = year;
+
+// ── Load stats ──────────────────────────────────────────────
+async function loadDashboard() {
+  try {
+    // Jobs
+    const jobs = await api('GET', '/planning/api/jobs');
+    const active = jobs.filter(j => j.status === 'active');
+    document.getElementById('stat-jobs').textContent = active.length;
+
+    // Ultime 5 job
+    const tbody = document.getElementById('jobs-tbody');
+    const recent = jobs.slice(0, 5);
+    if (recent.length === 0) {
+      tbody.innerHTML = '<tr><td colspan="4" class="text-muted" style="text-align:center;padding:20px;">Nessun job</td></tr>';
+    } else {
+      tbody.innerHTML = recent.map(j => `
+        <tr>
+          <td class="mono" style="font-size:12px;color:var(--text2);">${j.code}</td>
+          <td>${j.title}</td>
+          <td style="color:var(--text2);">${j.client || '—'}</td>
+          <td>${statusBadge(j.status)}</td>
+        </tr>`).join('');
+    }
+  } catch(e) { console.error(e); }
+
+  try {
+    // Resources
+    const res = await api('GET', '/resources/api');
+    document.getElementById('stat-resources').textContent = res.length;
+  } catch(e) {}
+
+  try {
+    // P&L
+    const pl = await api('GET', `/finance/api/report/pl/${year}`);
+    document.getElementById('stat-revenue').textContent = fmtCurrency(pl.revenue);
+    document.getElementById('pl-content').innerHTML = `
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;">
+        <div class="stat-card" style="background:var(--bg3);">
+          <div class="stat-label">Ricavi</div>
+          <div class="stat-value color-green mono" style="font-size:20px;">${fmtCurrency(pl.revenue)}</div>
+        </div>
+        <div class="stat-card" style="background:var(--bg3);">
+          <div class="stat-label">Costi</div>
+          <div class="stat-value color-rose mono" style="font-size:20px;">${fmtCurrency(pl.costs)}</div>
+        </div>
+        <div class="stat-card" style="background:var(--bg3);">
+          <div class="stat-label">Margine lordo</div>
+          <div class="stat-value mono" style="font-size:20px;color:${pl.gross_margin>=0?'var(--green)':'var(--rose)'};">${fmtCurrency(pl.gross_margin)}</div>
+        </div>
+        <div class="stat-card" style="background:var(--bg3);">
+          <div class="stat-label">Ore lavorate</div>
+          <div class="stat-value color-indigo mono" style="font-size:20px;">${pl.total_hours}h</div>
+        </div>
+      </div>`;
+  } catch(e) {}
+
+  try {
+    // Assets count
+    const assets = await api('GET', '/dam/api/assets');
+    document.getElementById('stat-assets').textContent = assets.length;
+  } catch(e) {}
+
+  try {
+    // Bookings today
+    const today = new Date();
+    today.setHours(0,0,0,0);
+    const tomorrow = new Date(today); tomorrow.setDate(tomorrow.getDate()+1);
+    const bookings = await api('GET',
+      `/planning/api/bookings?from_date=${today.toISOString()}&to_date=${tomorrow.toISOString()}`);
+    const btbody = document.getElementById('bookings-tbody');
+    if (bookings.length === 0) {
+      btbody.innerHTML = '<tr><td colspan="4" class="text-muted" style="text-align:center;padding:20px;">Nessun booking oggi</td></tr>';
+    } else {
+      btbody.innerHTML = bookings.map(b => {
+        const s = new Date(b.start); const e = new Date(b.end);
+        const time = `${s.toLocaleTimeString('it-IT',{hour:'2-digit',minute:'2-digit'})} – ${e.toLocaleTimeString('it-IT',{hour:'2-digit',minute:'2-digit'})}`;
+        const parts = b.title.split(' — ');
+        return `<tr>
+          <td class="mono text-sm">${time}</td>
+          <td>${parts[1] || '—'}</td>
+          <td>${parts[0] || '—'}</td>
+          <td>${statusBadge(b.extendedProps.status)}</td>
+        </tr>`;
+      }).join('');
+    }
+  } catch(e) {}
+}
+
+loadDashboard();
+</script>
+{% endblock %}

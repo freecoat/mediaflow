@@ -1,0 +1,103 @@
+ALLEGATO A – MATERIALI DEL FILM E SPECIFICHE TECNICHE
+Di seguito le linee guida per la consegna dei materiali audio-visivi a VISION DISTRIBUTION, da effettuarsi, salvo diverse indicazioni, presso il nostro laboratorio di riferimento Reel One.
+Per le consegne in formato elettronico va utilizzato Mediashuttle. Siete pregati di comunicarci l’indirizzo email a cui inviare il link per il caricamento dei materiali.
+Per le consegne fisiche dei materiali inviare a Reel One Srl, Via Marcello Prestinari, 15 - 00195 Roma
+c.a. Gianmarco Vittori
+Per eventuali problemi contattare come referenti per Vision Distribution barbara.bladier@visiondistribution.it; trafficmanager.vision@reelone.it
+MATERIALI PROMOZIONALI
+Inviare a:  alessia.schettini@visiondistribution.it;  marinella.dirosa@visiondistribution.it;
+Press-book (in Italiano e in Inglese)
+Sinossi e cast tecnico-artistico
+Biografia del Regista (in Italiano e in Inglese)
+Cast Artistico Definitivo
+Cast Tecnico Definitivo
+Fotografie di scena in alta risoluzione
+Fotografia del regista in alta risoluzione
+Billing Pubblicitario ( in italiano e in inglese )
+DOCUMENTI PER DISTRIBUZIONE ITALIANA
+Inviare a: barbara.bladier@visiondistribution.it; trafficmanager.vision@reelone.it;
+Elenco Titoli Testa e Coda
+© Copyright (Anno di Produzione e Formula Produttiva)
+Visto censura/Classificazione Ministero
+Certificato di espressione di origine italiana ( EOI)
+Elenco Musiche (Music Cue Sheet) del film e del trailer
+Dichiarazione di Nazionalità italiana
+Lista Dialoghi italiana, e originale per i film in inglese o altre lingue, definitiva del film e del trailer ( spotting list con timecode).
+Codice ISAN
+DOCUMENTI PER DISTRIBUZIONE ESTERA
+Inviare a: marco.rizzetto@visiondistribution.it; alessandro.caccamo.cons@visiondistribution.it;
+Elenco Musiche (Music Cue Sheet) del film e del trailer
+Piano finanziario – su carta intestata del produttore con timbro e firma
+Dichiarazione di Nazionalità italiana
+Codice ISAN
+Dichiarazione di Eleggibilità Culturale
+Chain of title (Catena di diritti)
+Billing Pubblicitario ( in inglese )
+Press-book ( in Inglese)
+CONSEGNA MATERIALI PER USCITA THEATRICAL
+(non oltre 15 giorni prima della data di uscita al cinema)
+Digidelivery via Mediashuttle. Si prega di fornire l’indirizzo email a cui inviare il link per il caricamento dei materiali.
+DCP FEATURE 24FPS ( INTEROP) - Se nativo 25 FPS ( SOLO STANDARD SMPTE) consegnare
+anche il DCP 24FPS INTEROP - della versione italiana per il cinema. Se il film non è in lingua italiana il DCP dovrà essere consegnato in versione originale con sottotitoli italiani ( non imprimere i sottotitoli a video ) con le specifiche tecniche sopra indicate
+FEATURE H264 con TIMECODE visivo a rulli (uguale al dcp)
+FEATURE H264 STEREO + SOTTOTITOLI ( .mov h264 – bitrate 15mbps – audio stereo mix –
+non imprimere i sottotitoli a video – video uguale al DCP- File .stl e .srt sincroni)
+DKDM valida per la durata dei diritti prevista nel presente contratto
+ISO DVD e ISO BLURAY conformi al DCP di distribuzione
+DCP Festival. Qualora il film partecipi ad un Festival, le specifiche del DCP differiranno dal DCP per la distribuzione cinema. I dettagli verranno forniti successivamente.
+SPECIFICHE TECNICHE PER USCITA THEATRICAL
+I canali audio devono essere: L-R-C-LFE-LS-RS
+CPL, PKL , ANNOTATION TEXT devono rispettare la DIGITAL NAMING CONVENTION
+La sequenza dei loghi e titoli di testa del film deve essere divisa in rulli separati. Un Logo
+= un Rullo. Dal primo all’ultimo titolo di testa = un Rullo. Se i titoli di testa sono su scena
+fornire sempre anche il tiff xyz textless.
+I sottotitoli forzati non vanno “burnati”, ma consegnati anche separatamente in xml interop o smpte
+CONSEGNA MATERIALI PER PIATTAFORME E HOME VIDEO
+(non oltre 15 giorni successivi alla data di uscita al cinema)
+Da consegnare su supporto Hard Disk (2TB) USB autoalimentato formattato NTFS o exfat:
+PRORES FEATURE original film speed (vedi specifiche di consegna dei prores)
+H264 del film monorullo senza TIMECODE visivo e senza watermark, conforme al prores
+Fondini in TIFF XYZ del film e Fondini Prores
+5.1 printmaster, 5.1 M+E. 5.1 DME stems a 24 fps a rulli conformi al dcp e monorullo. Printmaster e M+E anche a 25 fps
+File STL/SRT/DOC dei sottotitoli italiani per non udenti sincrono al prores
+Audiodescrizione in lingua italiana sincrona al prores e mixata
+FILE STL/SRT/DOC dei sottotitoli forzati
+Backstage, scene tagliate, interviste a cast & crew – se disponibili - in PRORES 422HQ original aspect ratio e original speed
+Commento del regista al film – se disponibile e in tutti i formati prodotti
+SPECIFICHE TECNICHE PER PIATTAFORME E HOME VIDEO
+FEATURE PRORES
+PRORES 422 HQ 1920X1080 ( se disponibile anche il PRORES 422HQ UHD SDR) original film speed (la sequenza dei loghi e dei titoli di testa è diversa dal DCP e va preventivamente inviata attraverso link vimeo a Vision Distribution per approvazione)
+I sottotitoli forzati non devono essere impressi ma consegnati separati in STL e SRT
+sincroni
+AUDIO 8 CANALI (L R C LFE LS RS LT RT)
+TC START 59:59:00 – 1 SECONDO DI NERO
+01:00:00:00 PROGRAMMA – 1 SECONDO DI NERO ALLA FINE
+PRORES dei TEXTLESS consegnato a parte
+CONSEGNA MATERIALI PER DISTRIBUZIONE ESTERA (se prevista da contratto)
+Digidelivery via Mediashuttle. Si prega di fornire l’indirizzo email a cui inviare il link per il caricamento dei materiali.
+PRORES FEATURE original film speed (vedi specifiche di consegna dei PRORES PER VENDITE ESTERE)
+DCP FEATURE 24FPS ( INTEROP) - Se nativo 25 FPS ( SOLO STANDARD SMPTE) e
+consegnare anche il DCP 24FPS INTEROP - della versione internazionale (con loghi e cartelli in testa diversi dalla versione italiana cinema). Richiesto se il DCP versione italiana non è stato consegnato con la sequenza di testa ( loghi e cartelli ) divisa in rulli separati.
+File STL/SRT/DOC/XML INTEROP-SMPTE dei sottotitoli inglesi
+File STL/SRT/DOC/XML INTEROP-SMPTE dei sottotitoli di ogni altra lingua
+FILE STL/SRT/DOC dei sottotitoli forzati italiani
+Wav o mp3 della Colonna sonora libera da diritti del film
+SPECIFICHE TECNICHE PER VENDITE ESTERE
+FEATURE PRORES HD e UHD
+PRORES 422 HQ 1920X1080 ( se disponibile anche il PRORES 422HQ UHD SDR) original film speed (la sequenza dei loghi e dei titoli di testa è diversa dal DCP di distribuzione italiana e va preventivamente inviata attraverso link vimeo a VISION DISTRIBUTION per approvazione )
+I sottotitoli forzati non devono essere impressi ma consegnati separati in STL e SRT
+sincroni
+AUDIO 16 CANALI:
+1)  L
+2)  R
+3)  C
+4)  LFE
+5)  LS
+6)  RS
+7-8) LT-RT
+9-14) M/E 5.1
+15-16) M/E 2.0
+TC START 59:59:00 – 1 SECONDO DI NERO
+01:00:00:00 PROGRAMMA – 1 SECONDO DI NERO ALLA FINE
+PRORES dei TEXTLESS
+DME separata sincrona al PRORES

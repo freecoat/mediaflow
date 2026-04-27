@@ -1,0 +1,91 @@
+THEATRICAL DCP CHECKLIST 
+July 2022
+Supplemental to International Broadcast Deliverables List
+For questions please contact: Luke.Harman@fremantle.com
+All material must be technically assessed by the production company prior to delivery which is a contractual obligation. Any material found to be non-compliant with our technical delivery standards will be rejected at the point of delivery
+Deliveries must be made as electronic transfers to a Signiant Media Shuttle portal designated by Fremantle
+PROMOTIONAL AND MARKETING SUPPORT ASSETS
+Press-book (in Italian and in English)
+Synopsis and above-the-line crew
+Final and approved cast List
+Director’s biography (in Italian and English)
+Definitive below-the-line crew
+High resolution set photographs
+High resolution photograph of the director
+Billing Block for advertising material
+Final Italian film dialogue list (spotting list with timecodes)
+DOCUMENTS FOR ITALIAN THEATRICAL RELEASE
+List of opening and closing credits
+© Copyright (Production Year and Production Formula)
+Italian Censorship visa
+Certificate of Expression of Italian Origin (EOI)
+DELIVERY OF MATERIALS FOR ITALIAN THEATRICAL RELEASE
+DCP FEATURE 24fps (INTEROP)
+If this is native 25fps content;
+DCP FEATURE 25fps (STANDARD SMPTE) and also deliver DCP 24fps (INTEROP)
+FEATURE H.264 STEREO + SUBTITLES (.mov wrapper, H.264 codec at 15mbps, stereo audio mix, no subtitles burnt into video, synchronised .STL and .SRT files) this file must conform exactly to the DCP FEATURE
+Distribution KDM (DKDM) VALID FOR 5 YEARS (expiration on 31st December of the 5th year)
+DVD and BLURAY ISOs conforming to the distribution DCP
+TECHNICAL SPECIFICATIONS FOR ITALIAN THEATRICAL RELEASE
+CPL, PKL , ANNOTATION TEXT must comply with the DIGITAL NAMING CONVENTION
+Required audio channels are: L-R-C-LFE-LS-RS 
+The opening sequence of the film must be divided into separate reels. One Logo = one Reel. First to last opening credit = one Reel. If the opening credits are over scenes, always also provide the textless TIFF XYZ
+If forced subtitles are present in the film, these must not be burnt into the image and must be delivered separately in .xml INTEROP or SMPTE subtitle formats
+
+DELIVERY OF MATERIALS FOR HOME ENTERTAINMENT
+H.264 of the film with visual TIMECODES in reels (same as DCP) 
+ProRes FEATURE original film speed (see ProRes delivery specifications)
+H.264 single-reel film with no visual TIMECODES and no watermark, conforming to ProRes
+TIFF XYZ Film and ProRes Backgrounds 
+5.1 printmaster, 5.1 M&E. 5.1 DME stems at 24 fps DCP with reels conforming to the DCP and single reel. Printmaster and M&E also at 25 fps
+STL/SRT/DOC file of Italian subtitles for the deaf synchronised with ProRes
+Audio description in Italian synchronised with ProRes
+STL/SRT/DOC FILE of forced subtitles if applicable
+Backstage, deleted scenes, cast & crew interviews - if available - in ProRes 422HQ original aspect ratio and original speed
+Director's commentary on the film - if available and in all formats produced
+TECHNICAL SPECIFICATIONS FOR HOME ENTERTAINMENT
+PRORES FEATURES
+PRORES 422 HQ 1920X1080 (if available, also PRORES 422HQ UHD SDR&HDR) original film speed (the logo and opening credits sequence is different from DCP and must be sent via Vimeo link to VISION for approval)
+Any forced subtitles must not be imprinted but delivered separately as synchronised STL and SRT files
+8-CHANNEL AUDIO (L R C LFE LS RS LT RT) 
+TC START 59:59:00 - 1 SECOND OF BLACK SCREEN 
+01:00:00 PROGRAMME - 1 SECOND OF BLACK SCREEN AT THE END
+TEXTLESS PRORES to be delivered separately
+MATERIAL DELIVERY FOR INTERNATIONAL DISTRIBUTION 
+
+∙ TIFF XYZ TEXTLESS (already present in normal deliveries)
+∙ MIX 5.1, M&E 5.1 and DME STEMS in compliance with the DCP (already present in normal deliveries)
+∙ Feature MOV H.264 in compliance with the DCP visual timecode burn in TC (please keep the division in reels of the DCP) no burnt-in subtitles
+∙ File STL/SRT/DOC/XML INTEROP-SMPTE of the Italian subtitles for hearing impaired synchronized with the ProRes 
+∙ File STL/SRT/DOC/XML INTEROP-SMPTE of english subtitles
+∙ File STL/SRT/DOC/XML INTEROP-SMPTE of every other language (if available)
+∙ If applicable FILE STL/SRT/DOC of Italian forced subtitles
+∙ WAV of the soundtrack free of rights
+TECHNICAL SPECIFICATIONS FOR FOREIGN THEATRICAL SALES
+DCP FEATURE
+- The opening logos sequence of the film must be divided into a separate reel according to the specific instructions that will be provided: 
+- If the film features forced Italian subtitles, they should not be burnt into the image
+FEATURE PRORES HD and UHD
+PRORES 1920X1080 4444 original film speed / Any separate forced Italian subtitles must be in STL and SRT format
+PRORES 4444 UHD original film speed / Any separate forced Italian subtitles must be in STL and SRT format
+AUDIO 16 CHANNELS:
+1) L
+2) R
+3) C
+4) LFE
+5) LS
+6) RS
+7) LT
+8) RT
+9) M&E 5.1 L
+10) M&E 5.1 R
+11) M&E 5.1 C
+12) M&E 5.1 LFE
+13) M&E 5.1 LS
+14) M&E 5.1 RS
+15) M&E 2.0 L
+16) M&E 2.0 R
+TC START 59:59:00 – 1 SECOND OF BLACK SCREEN 
+01:00:00:00 PROGRAMME – 1 SECOND OF BLACK SCREEN AT THE END
+PRORES of TEXTLESS elements
+separate DME synchronised with the PRORES

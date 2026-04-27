@@ -1,0 +1,36 @@
+{
+  "hooks": {
+    "PreCompact": [
+      {
+        "matcher": "auto|manual",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash -c 'exec \"$(ls -d ~/.claude/plugins/cache/FlineDev/recall/*/skills/session/scripts 2>/dev/null | sort -V | tail -1)/pre-compact.sh\"'",
+            "timeout": 300
+          }
+        ]
+      }
+    ],
+    "SessionStart": [
+      {
+        "matcher": "compact",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash -c 'exec \"$(ls -d ~/.claude/plugins/cache/FlineDev/recall/*/skills/session/scripts 2>/dev/null | sort -V | tail -1)/post-compact.sh\"'"
+          }
+        ]
+      },
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash -c 'exec \"$(ls -d ~/.claude/plugins/cache/FlineDev/recall/*/skills/session/scripts 2>/dev/null | sort -V | tail -1)/session-start.sh\"'"
+          }
+        ]
+      }
+    ]
+  }
+}

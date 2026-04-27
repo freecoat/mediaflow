@@ -1,0 +1,517 @@
+"""
+MediaFlow — AI Provider layer
+
+Astrazione che supporta Anthropic Claude, OpenAI GPT, Google Gemini, Perplexity
+e Ollama locale.
+
+In v3.2 la configurazione principale è per-utente nel DB (UserAISettings).
+La configurazione globale via .env resta come fallback se l'utente non ha
+nulla salvato.
+
+Uso tipico:
+    provider = get_provider_for_user(user_id, db)
+    if provider:
+        provider.complete(system, user)
+"""
+from __future__ import annotations
+import json
+import logging
+import re
+from abc import ABC, abstractmethod
+from dataclasses import dataclass
+from typing import Optional
+
+import httpx
+
+from app.config import settings
+
+logger = logging.getLogger(__name__)
+
+
+# ── Modelli supportati per-provider (Apr 2026) ────────────────
+
+PROVIDER_MODELS: dict[str, list[dict]] = {
+    "claude": [
+        {"id": "claude-opus-4-7",      "label": "Opus 4.7 (top)"},
+        {"id": "claude-sonnet-4-6",    "label": "Sonnet 4.6 (default)"},
+        {"id": "claude-haiku-4-5",     "label": "Haiku 4.5 (rapido)"},
+    ],
+    "openai": [
+        {"id": "gpt-4o",        "label": "GPT-4o (default)"},
+        {"id": "o1",            "label": "o1 (ragionamento)"},
+        {"id": "o3-mini",       "label": "o3-mini (rapido/ragionamento)"},
+    ],
+    "gemini": [
+        {"id": "gemini-2.0-flash",        "label": "Gemini 2.0 Flash (default)"},
+        {"id": "gemini-2.0-flash-thinking", "label": "Gemini 2.0 Flash Thinking"},
+        {"id": "gemini-1.5-pro",          "label": "Gemini 1.5 Pro"},
+    ],
+    "perplexity": [
+        {"id": "sonar-pro",     "label": "Sonar Pro (default, con citazioni)"},
+        {"id": "sonar",         "label": "Sonar (rapido)"},
+        {"id": "sonar-reasoning", "label": "Sonar Reasoning"},
+    ],
+    "ollama": [
+        {"id": "llama3.1:70b",  "label": "Llama 3.1 70B"},
+        {"id": "llama3.1:8b",   "label": "Llama 3.1 8B (leggero)"},
+        {"id": "qwen2.5:32b",   "label": "Qwen 2.5 32B"},
+    ],
+}
+
+PROVIDER_LABELS: dict[str, str] = {
+    "claude":     "Anthropic Claude",
+    "openai":     "OpenAI",
+    "gemini":     "Google Gemini",
+    "perplexity": "Perplexity",
+    "ollama":     "Ollama (locale)",
+}
+
+
+# ── Config dataclass ──────────────────────────────────────────
+
+@dataclass
+class ProviderConfig:
+    """Config concreta per istanziare un provider, indipendente da .env vs DB."""
+    provider: str
+    api_key: Optional[str] = None
+    model: Optional[str] = None
+    base_url: Optional[str] = None
+
+
+# ── Interfaccia ───────────────────────────────────────────────
+
+class AIProvider(ABC):
+    @abstractmethod
+    def complete(self, system: str, user: str, max_tokens: int = 2000,
+                 temperature: float = 0.3) -> str: ...
+
+    @abstractmethod
+    def chat(self, messages: list[dict], system: Optional[str] = None,
+             max_tokens: int = 2000, temperature: float = 0.5) -> str: ...
+
+    @property
+    @abstractmethod
+    def name(self) -> str: ...
+
+    def extract_json(self, system: str, user: str, max_tokens: int = 3000) -> Optional[dict]:
+        system_with_json = (
+            system + "\n\nIMPORTANTE: Rispondi SOLO con un oggetto JSON valido, "
+            "senza testo prima o dopo, senza markdown, senza backtick."
+        )
+        try:
+            response = self.complete(system_with_json, user, max_tokens=max_tokens, temperature=0.1)
+            return safe_json_parse(response)
+        except Exception as e:
+            logger.error(f"AI extract_json failed: {e}")
+            return None
+
+    def supports_web_search(self) -> bool:
+        """True se il provider espone un tool web_search server-side nativo."""
+        return False
+
+    def extract_json_with_web_search(self, system: str, user: str,
+                                     max_tokens: int = 4000,
+                                     max_searches: int = 5) -> Optional[dict]:
+        """
+        Esegue una ricerca web autonoma (multi-step) e ritorna un JSON strutturato.
+        Default: non supportato. Override in ClaudeProvider.
+        """
+        return None
+
+
+# ── Provider concreti ─────────────────────────────────────────
+
+class ClaudeProvider(AIProvider):
+    def __init__(self, cfg: ProviderConfig):
+        try:
+            from anthropic import Anthropic
+        except ImportError:
+            raise RuntimeError("anthropic package not installed")
+        if not cfg.api_key:
+            raise RuntimeError("ANTHROPIC_API_KEY mancante")
+        self.client = Anthropic(api_key=cfg.api_key)
+        self.model = cfg.model or settings.anthropic_model
+
+    @property
+    def name(self) -> str: return f"Claude ({self.model})"
+
+    def complete(self, system, user, max_tokens=2000, temperature=0.3):
+        resp = self.client.messages.create(
+            model=self.model, max_tokens=max_tokens, temperature=temperature,
+            system=system, messages=[{"role": "user", "content": user}])
+        return resp.content[0].text
+
+    def chat(self, messages, system=None, max_tokens=2000, temperature=0.5):
+        kwargs = {"model": self.model, "max_tokens": max_tokens,
+                  "temperature": temperature, "messages": messages}
+        if system: kwargs["system"] = system
+        return self.client.messages.create(**kwargs).content[0].text
+
+    def supports_web_search(self) -> bool:
+        return True
+
+    def extract_json_with_web_search(self, system, user, max_tokens=4000, max_searches=5):
+        """
+        Usa il tool server-side `web_search_20250305` di Anthropic.
+        Il modello decide autonomamente quante ricerche fare (cap = max_searches),
+        legge i risultati lato server, e produce il JSON finale.
+        """
+        system_with_json = (
+            system + "\n\nProcedura obbligatoria: 1) Cerca sul web tutte le informazioni "
+            "necessarie usando il tool web_search (puoi farlo più volte con query diverse: "
+            "sito ufficiale, P.IVA + nome, filmografia recente, sede legale). "
+            "2) Solo dopo aver completato la ricerca, rispondi con UN SOLO oggetto JSON "
+            "valido secondo lo schema, senza testo prima o dopo, senza markdown, senza backtick."
+        )
+        try:
+            resp = self.client.messages.create(
+                model=self.model,
+                max_tokens=max_tokens,
+                system=system_with_json,
+                tools=[{
+                    "type": "web_search_20250305",
+                    "name": "web_search",
+                    "max_uses": max_searches,
+                }],
+                messages=[{"role": "user", "content": user}],
+            )
+            text_parts = []
+            for block in resp.content:
+                if getattr(block, "type", "") == "text":
+                    text_parts.append(getattr(block, "text", "") or "")
+            full_text = "\n".join(p for p in text_parts if p).strip()
+            if not full_text:
+                logger.warning("Anthropic web_search: nessun blocco text in risposta")
+                return None
+            return safe_json_parse(full_text)
+        except Exception as e:
+            logger.error(f"Anthropic web_search extract_json failed: {e}")
+            return None
+
+
+class OpenAIProvider(AIProvider):
+    def __init__(self, cfg: ProviderConfig):
+        try:
+            from openai import OpenAI
+        except ImportError:
+            raise RuntimeError("openai package not installed")
+        if not cfg.api_key:
+            raise RuntimeError("OPENAI_API_KEY mancante")
+        self.client = OpenAI(api_key=cfg.api_key)
+        self.model = cfg.model or settings.openai_model
+
+    @property
+    def name(self) -> str: return f"OpenAI ({self.model})"
+
+    def complete(self, system, user, max_tokens=2000, temperature=0.3):
+        resp = self.client.chat.completions.create(
+            model=self.model, max_tokens=max_tokens, temperature=temperature,
+            messages=[{"role": "system", "content": system},
+                      {"role": "user", "content": user}])
+        return resp.choices[0].message.content or ""
+
+    def chat(self, messages, system=None, max_tokens=2000, temperature=0.5):
+        msgs = [{"role": "system", "content": system}] if system else []
+        msgs.extend(messages)
+        resp = self.client.chat.completions.create(
+            model=self.model, max_tokens=max_tokens, temperature=temperature, messages=msgs)
+        return resp.choices[0].message.content or ""
+
+
+class GeminiProvider(AIProvider):
+    """
+    Google Gemini via google-generativeai SDK.
+    Mapping: usiamo il system prompt come `system_instruction`, e i messaggi
+    come content list (user/model roles).
+    """
+    def __init__(self, cfg: ProviderConfig):
+        try:
+            import google.generativeai as genai
+        except ImportError:
+            raise RuntimeError("google-generativeai package not installed")
+        if not cfg.api_key:
+            raise RuntimeError("GOOGLE_API_KEY mancante")
+        genai.configure(api_key=cfg.api_key)
+        self._genai = genai
+        self.model_name = cfg.model or settings.google_model
+
+    @property
+    def name(self) -> str: return f"Gemini ({self.model_name})"
+
+    def _model(self, system: Optional[str] = None):
+        return self._genai.GenerativeModel(
+            model_name=self.model_name,
+            system_instruction=system,
+        )
+
+    def complete(self, system, user, max_tokens=2000, temperature=0.3):
+        cfg = self._genai.types.GenerationConfig(
+            max_output_tokens=max_tokens, temperature=temperature)
+        resp = self._model(system).generate_content(user, generation_config=cfg)
+        return resp.text or ""
+
+    def chat(self, messages, system=None, max_tokens=2000, temperature=0.5):
+        cfg = self._genai.types.GenerationConfig(
+            max_output_tokens=max_tokens, temperature=temperature)
+        # Mapping: openai-style messages → gemini "contents"
+        contents = []
+        for m in messages:
+            role = "model" if m.get("role") == "assistant" else "user"
+            contents.append({"role": role, "parts": [m.get("content", "")]})
+        resp = self._model(system).generate_content(contents, generation_config=cfg)
+        return resp.text or ""
+
+
+class PerplexityProvider(AIProvider):
+    """
+    Perplexity API via httpx (OpenAI-compatible chat completions).
+    Endpoint: https://api.perplexity.ai/chat/completions
+    """
+    BASE_URL = "https://api.perplexity.ai"
+
+    def __init__(self, cfg: ProviderConfig):
+        if not cfg.api_key:
+            raise RuntimeError("PERPLEXITY_API_KEY mancante")
+        self.api_key = cfg.api_key
+        self.model = cfg.model or settings.perplexity_model
+
+    @property
+    def name(self) -> str: return f"Perplexity ({self.model})"
+
+    def _post(self, payload: dict) -> str:
+        headers = {"Authorization": f"Bearer {self.api_key}",
+                   "Content-Type": "application/json"}
+        with httpx.Client(timeout=120) as client:
+            r = client.post(f"{self.BASE_URL}/chat/completions",
+                            headers=headers, json=payload)
+            r.raise_for_status()
+            data = r.json()
+        return data.get("choices", [{}])[0].get("message", {}).get("content", "") or ""
+
+    def complete(self, system, user, max_tokens=2000, temperature=0.3):
+        return self._post({
+            "model": self.model, "max_tokens": max_tokens, "temperature": temperature,
+            "messages": [{"role": "system", "content": system},
+                         {"role": "user", "content": user}]})
+
+    def chat(self, messages, system=None, max_tokens=2000, temperature=0.5):
+        msgs = [{"role": "system", "content": system}] if system else []
+        msgs.extend(messages)
+        return self._post({"model": self.model, "max_tokens": max_tokens,
+                           "temperature": temperature, "messages": msgs})
+
+
+class OllamaProvider(AIProvider):
+    def __init__(self, cfg: ProviderConfig):
+        self.base_url = (cfg.base_url or settings.ollama_base_url).rstrip("/")
+        self.model = cfg.model or settings.ollama_model
+
+    @property
+    def name(self) -> str: return f"Ollama ({self.model})"
+
+    def _call(self, payload):
+        try:
+            with httpx.Client(timeout=120) as client:
+                r = client.post(f"{self.base_url}/api/chat", json=payload)
+                r.raise_for_status()
+                return r.json().get("message", {}).get("content", "")
+        except httpx.HTTPError as e:
+            raise RuntimeError(f"Ollama non raggiungibile su {self.base_url}: {e}")
+
+    def complete(self, system, user, max_tokens=2000, temperature=0.3):
+        return self._call({
+            "model": self.model, "stream": False,
+            "messages": [{"role": "system", "content": system},
+                         {"role": "user", "content": user}],
+            "options": {"num_predict": max_tokens, "temperature": temperature}})
+
+    def chat(self, messages, system=None, max_tokens=2000, temperature=0.5):
+        msgs = [{"role": "system", "content": system}] if system else []
+        msgs.extend(messages)
+        return self._call({
+            "model": self.model, "stream": False, "messages": msgs,
+            "options": {"num_predict": max_tokens, "temperature": temperature}})
+
+
+# ── Factory ───────────────────────────────────────────────────
+
+PROVIDER_CLASSES = {
+    "claude":     ClaudeProvider,
+    "openai":     OpenAIProvider,
+    "gemini":     GeminiProvider,
+    "perplexity": PerplexityProvider,
+    "ollama":     OllamaProvider,
+}
+
+
+def build_provider(cfg: ProviderConfig) -> AIProvider:
+    """Costruisce un provider da una config esplicita. Solleva RuntimeError se invalida."""
+    cls = PROVIDER_CLASSES.get(cfg.provider)
+    if cls is None:
+        raise RuntimeError(f"Provider sconosciuto: {cfg.provider}")
+    return cls(cfg)
+
+
+def _global_config() -> Optional[ProviderConfig]:
+    """Fallback dalla configurazione .env globale."""
+    if settings.ai_provider == "disabled":
+        return None
+    p = settings.ai_provider
+    if p == "claude":
+        return ProviderConfig("claude", settings.anthropic_api_key, settings.anthropic_model)
+    if p == "openai":
+        return ProviderConfig("openai", settings.openai_api_key, settings.openai_model)
+    if p == "gemini":
+        return ProviderConfig("gemini", settings.google_api_key, settings.google_model)
+    if p == "perplexity":
+        return ProviderConfig("perplexity", settings.perplexity_api_key, settings.perplexity_model)
+    if p == "ollama":
+        return ProviderConfig("ollama", None, settings.ollama_model, settings.ollama_base_url)
+    return None
+
+
+def _user_config(user_id: int, db) -> Optional[ProviderConfig]:
+    """Legge la config attiva per l'utente dal DB. Decifra la api_key."""
+    from app.models.models import User, UserAISettings
+    from app.services.crypto import decrypt_secret
+
+    user = db.query(User).filter(User.id == user_id).first()
+    if not user or not user.active_ai_provider:
+        return None
+    row = db.query(UserAISettings).filter(
+        UserAISettings.user_id == user_id,
+        UserAISettings.provider == user.active_ai_provider,
+    ).first()
+    if not row:
+        return None
+    api_key = decrypt_secret(row.api_key_encrypted) if row.api_key_encrypted else None
+    return ProviderConfig(
+        provider=row.provider,
+        api_key=api_key,
+        model=row.model,
+        base_url=row.base_url,
+    )
+
+
+def get_provider_for_user(user_id: Optional[int], db) -> Optional[AIProvider]:
+    """
+    Risolve il provider AI da usare per uno specifico utente.
+    Ordine: config DB per-user → fallback config globale .env.
+    Ritorna None se nessuna config valida.
+    """
+    cfg: Optional[ProviderConfig] = None
+    if user_id and db is not None:
+        try:
+            cfg = _user_config(user_id, db)
+        except Exception as e:
+            logger.warning(f"Lettura config AI utente {user_id} fallita: {e}")
+    if cfg is None:
+        cfg = _global_config()
+    if cfg is None:
+        return None
+    try:
+        return build_provider(cfg)
+    except Exception as e:
+        logger.error(f"Init AI provider {cfg.provider} fallito: {e}")
+        return None
+
+
+# Legacy: funzione globale singleton per il codice che ancora la chiama.
+# Da rimuovere quando tutti i call-site saranno migrati a get_provider_for_user.
+_legacy_instance: Optional[AIProvider] = None
+
+
+def get_provider() -> Optional[AIProvider]:
+    global _legacy_instance
+    if _legacy_instance is not None:
+        return _legacy_instance
+    cfg = _global_config()
+    if cfg is None:
+        return None
+    try:
+        _legacy_instance = build_provider(cfg)
+        logger.info(f"AI provider globale: {_legacy_instance.name}")
+        return _legacy_instance
+    except Exception as e:
+        logger.error(f"Init AI provider globale fallito: {e}")
+        return None
+
+
+def reset_provider():
+    global _legacy_instance
+    _legacy_instance = None
+
+
+# ── Utility ───────────────────────────────────────────────────
+
+def _strip_json_comments_and_trailing_commas(text: str) -> str:
+    """
+    Tollera tre abitudini comuni dei modelli (specie open-source <30B):
+    - commenti `// ...` (JS-style) e `# ...` (Python-style) a fine riga
+    - commenti `/* ... */` block
+    - virgole finali prima di `}` o `]`
+    Stato-aware sulle stringhe e sugli escape per non toccare URL, stringhe con `//`,
+    o stringhe contenenti `#` (es. CSS color, hashtag, ancore URL).
+    """
+    out = []
+    i = 0
+    n = len(text)
+    in_string = False
+    escape = False
+    while i < n:
+        ch = text[i]
+        if in_string:
+            out.append(ch)
+            if escape:
+                escape = False
+            elif ch == "\\":
+                escape = True
+            elif ch == '"':
+                in_string = False
+            i += 1
+            continue
+        # Fuori dalle stringhe
+        if ch == '"':
+            in_string = True
+            out.append(ch); i += 1; continue
+        # Commento a fine riga (// stile JS o # stile Python)
+        if ch == "#" or (ch == "/" and i + 1 < n and text[i + 1] == "/"):
+            j = text.find("\n", i + 1)
+            i = j if j != -1 else n
+            continue
+        # Commento a blocco
+        if ch == "/" and i + 1 < n and text[i + 1] == "*":
+            j = text.find("*/", i + 2)
+            i = (j + 2) if j != -1 else n
+            continue
+        out.append(ch); i += 1
+    cleaned = "".join(out)
+    # Virgole finali prima di } o ]
+    cleaned = re.sub(r",(\s*[}\]])", r"\1", cleaned)
+    return cleaned
+
+
+def safe_json_parse(text: str) -> Optional[dict]:
+    if not text: return None
+    text = re.sub(r"^```(?:json)?\s*", "", text.strip())
+    text = re.sub(r"\s*```$", "", text.strip())
+    # Primo tentativo: JSON puro
+    try:
+        return json.loads(text)
+    except json.JSONDecodeError:
+        pass
+    # Secondo tentativo: dopo aver rimosso commenti e trailing commas
+    cleaned = _strip_json_comments_and_trailing_commas(text)
+    if cleaned != text:
+        try:
+            return json.loads(cleaned)
+        except json.JSONDecodeError:
+            pass
+    # Terzo tentativo: cerca il primo blocco {…} o […] dentro il testo
+    m = re.search(r"(\{.*\}|\[.*\])", cleaned, re.DOTALL)
+    if m:
+        try:
+            return json.loads(m.group(1))
+        except json.JSONDecodeError:
+            pass
+    return None

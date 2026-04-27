@@ -1,0 +1,244 @@
+{% extends "base.html" %}
+{% set active_page = "planning" %}
+
+{% block title %}Pianificazione — MediaFlow{% endblock %}
+{% block topbar_title %}Pianificazione Job{% endblock %}
+
+{% block topbar_actions %}
+  <button class="btn btn-primary btn-sm" onclick="openModal('modal-new-job')">+ Nuovo job</button>
+{% endblock %}
+
+{% block content %}
+
+<!-- ── Filtri ──────────────────────────────────────────────── -->
+<div class="flex items-center gap-3 mb-4" style="flex-wrap:wrap;">
+  <div class="search-bar">
+    <span>🔍</span>
+    <input type="text" id="search-input" placeholder="Cerca job…" oninput="filterJobs()">
+  </div>
+  <select class="form-select" style="width:auto;" id="filter-status" onchange="filterJobs()">
+    <option value="">Tutti gli stati</option>
+    <option value="draft">Bozza</option>
+    <option value="active">Attivo</option>
+    <option value="on_hold">In pausa</option>
+    <option value="completed">Completato</option>
+    <option value="invoiced">Fatturato</option>
+  </select>
+  <select class="form-select" style="width:auto;" id="filter-client" onchange="filterJobs()">
+    <option value="">Tutti i clienti</option>
+    {% for client in clients %}
+    <option value="{{ client.id }}">{{ client.name }}</option>
+    {% endfor %}
+  </select>
+</div>
+
+<!-- ── Tabella job ─────────────────────────────────────────── -->
+<div class="card">
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th>Codice</th>
+          <th>Titolo</th>
+          <th>Cliente</th>
+          <th>Periodo</th>
+          <th>Budget</th>
+          <th>Stato</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody id="jobs-table">
+        <tr><td colspan="7" class="text-muted" style="text-align:center;padding:24px;">Caricamento…</td></tr>
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<!-- ── Modal nuovo job ─────────────────────────────────────── -->
+<div class="modal-overlay" id="modal-new-job">
+  <div class="modal">
+    <div class="modal-header">
+      <span class="modal-title">Nuovo job</span>
+      <button class="btn btn-ghost btn-icon" onclick="closeModal('modal-new-job')">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-row">
+        <div class="form-group">
+          <label class="form-label">Codice job *</label>
+          <input class="form-input" id="job-code" placeholder="es. 2024-0042" required>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Cliente *</label>
+          <select class="form-select" id="job-client">
+            <option value="">— seleziona —</option>
+            {% for client in clients %}
+            <option value="{{ client.id }}">{{ client.name }}</option>
+            {% endfor %}
+          </select>
+        </div>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Titolo *</label>
+        <input class="form-input" id="job-title" placeholder="Nome del progetto">
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label class="form-label">Data inizio</label>
+          <input class="form-input" id="job-start" type="date">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Data fine</label>
+          <input class="form-input" id="job-end" type="date">
+        </div>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Budget (€)</label>
+        <input class="form-input" id="job-budget" type="number" step="0.01" placeholder="0.00">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Descrizione</label>
+        <textarea class="form-textarea" id="job-desc" placeholder="Note sul progetto…"></textarea>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeModal('modal-new-job')">Annulla</button>
+      <button class="btn btn-primary" onclick="createJob()">Crea job</button>
+    </div>
+  </div>
+</div>
+
+<!-- ── Modal dettaglio job ─────────────────────────────────── -->
+<div class="modal-overlay" id="modal-job-detail">
+  <div class="modal" style="max-width:640px;">
+    <div class="modal-header">
+      <span class="modal-title" id="detail-title">Dettaglio job</span>
+      <button class="btn btn-ghost btn-icon" onclick="closeModal('modal-job-detail')">✕</button>
+    </div>
+    <div class="modal-body" id="detail-body">
+    </div>
+  </div>
+</div>
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+let allJobs = [];
+
+async function loadJobs() {
+  allJobs = await api('GET', '/planning/api/jobs');
+  renderJobs(allJobs);
+}
+
+function renderJobs(jobs) {
+  const tbody = document.getElementById('jobs-table');
+  if (!jobs.length) {
+    tbody.innerHTML = '<tr><td colspan="7" class="text-muted" style="text-align:center;padding:24px;">Nessun job trovato</td></tr>';
+    return;
+  }
+  tbody.innerHTML = jobs.map(j => `
+    <tr>
+      <td class="mono" style="font-size:12px;color:var(--text2);">${j.code}</td>
+      <td style="font-weight:500;">${j.title}</td>
+      <td style="color:var(--text2);">${j.client || '—'}</td>
+      <td class="text-sm text-muted">${fmtDate(j.start_date)} ${j.end_date ? '→ '+fmtDate(j.end_date) : ''}</td>
+      <td class="mono text-sm">${j.budget ? fmtCurrency(j.budget) : '—'}</td>
+      <td>${statusBadge(j.status)}</td>
+      <td>
+        <button class="btn btn-ghost btn-sm" onclick="showJobDetail(${j.id})">Dettaglio</button>
+      </td>
+    </tr>`).join('');
+}
+
+function filterJobs() {
+  const q = document.getElementById('search-input').value.toLowerCase();
+  const status = document.getElementById('filter-status').value;
+  const client = document.getElementById('filter-client').value;
+  const filtered = allJobs.filter(j => {
+    const matchQ = !q || j.title.toLowerCase().includes(q) || j.code.toLowerCase().includes(q);
+    const matchS = !status || j.status === status;
+    const matchC = !client || String(j.client_id) === client;
+    return matchQ && matchS && matchC;
+  });
+  renderJobs(filtered);
+}
+
+async function createJob() {
+  const code  = document.getElementById('job-code').value.trim();
+  const title = document.getElementById('job-title').value.trim();
+  const client_id = document.getElementById('job-client').value;
+  if (!code || !title || !client_id) { toast('Compila i campi obbligatori', 'error'); return; }
+  try {
+    const fd = new FormData();
+    fd.append('code', code);
+    fd.append('title', title);
+    fd.append('client_id', client_id);
+    fd.append('start_date', document.getElementById('job-start').value || '');
+    fd.append('end_date',   document.getElementById('job-end').value || '');
+    fd.append('budget',     document.getElementById('job-budget').value || '');
+    fd.append('description',document.getElementById('job-desc').value);
+    await api('POST', '/planning/api/jobs', fd);
+    closeModal('modal-new-job');
+    toast('Job creato con successo', 'success');
+    loadJobs();
+  } catch(e) { toast(e.message, 'error'); }
+}
+
+async function showJobDetail(jobId) {
+  try {
+    const [job, report] = await Promise.all([
+      api('GET', `/planning/api/jobs/${jobId}`),
+      api('GET', `/finance/api/report/job/${jobId}`),
+    ]);
+    document.getElementById('detail-title').textContent = `${job.code} — ${job.title}`;
+    document.getElementById('detail-body').innerHTML = `
+      <div class="flex gap-3 mb-4" style="flex-wrap:wrap;">
+        <div class="stat-card" style="flex:1;min-width:120px;background:var(--bg3);">
+          <div class="stat-label">Budget</div>
+          <div class="stat-value mono" style="font-size:18px;">${fmtCurrency(report.budget)}</div>
+        </div>
+        <div class="stat-card" style="flex:1;min-width:120px;background:var(--bg3);">
+          <div class="stat-label">Costi</div>
+          <div class="stat-value color-rose mono" style="font-size:18px;">${fmtCurrency(report.total_costs)}</div>
+        </div>
+        <div class="stat-card" style="flex:1;min-width:120px;background:var(--bg3);">
+          <div class="stat-label">Margine</div>
+          <div class="stat-value mono" style="font-size:18px;color:${report.margin>=0?'var(--green)':'var(--rose)'};">
+            ${fmtCurrency(report.margin)} (${report.margin_pct}%)
+          </div>
+        </div>
+        <div class="stat-card" style="flex:1;min-width:120px;background:var(--bg3);">
+          <div class="stat-label">Ore</div>
+          <div class="stat-value color-indigo mono" style="font-size:18px;">${report.total_hours}h</div>
+        </div>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Cambia stato</label>
+        <div class="flex gap-2">
+          ${['draft','active','on_hold','completed','invoiced'].map(s =>
+            `<button class="btn btn-secondary btn-sm" onclick="changeStatus(${jobId},'${s}')">${STATUS_LABEL[s]}</button>`
+          ).join('')}
+        </div>
+      </div>`;
+    openModal('modal-job-detail');
+  } catch(e) { toast(e.message, 'error'); }
+}
+
+async function changeStatus(jobId, status) {
+  try {
+    const fd = new FormData(); fd.append('status', status);
+    await api('PUT', `/planning/api/jobs/${jobId}/status`, fd);
+    toast('Stato aggiornato', 'success');
+    closeModal('modal-job-detail');
+    loadJobs();
+  } catch(e) { toast(e.message, 'error'); }
+}
+
+const STATUS_LABEL = {
+  draft:'Bozza', active:'Attivo', on_hold:'In pausa',
+  completed:'Completato', invoiced:'Fatturato', cancelled:'Annullato',
+};
+
+loadJobs();
+</script>
+{% endblock %}

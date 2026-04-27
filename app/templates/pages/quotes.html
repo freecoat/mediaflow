@@ -1,0 +1,981 @@
+{% extends "base.html" %}
+{% set active_page = "quotes" %}
+{% block title %}Quotazioni — MediaFlow{% endblock %}
+{% block topbar_title %}Quotazioni{% endblock %}
+{% block topbar_actions %}
+  <button class="btn btn-primary btn-sm" onclick="openModal('modal-new-quote')">+ Nuova quotazione</button>
+{% endblock %}
+
+{% block head %}
+<script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.2/Sortable.min.js"></script>
+<style>
+  .ql-row.dragging { opacity: 0.4; }
+  .ql-row .ghost { background: var(--indigo-bg); }
+  .ql-cat-header {
+    background: var(--bg3);
+    font-weight: 600;
+    font-size: 12px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    color: var(--indigo2);
+  }
+  .ql-cat-disc-row { background: rgba(98,114,245,0.04); }
+  .ql-cat-disc-row td { padding: 6px 12px; font-size: 12px; color: var(--text2); }
+  .ql-cat-sub-row { background: rgba(98,114,245,0.02); border-top: 1px dashed var(--border); }
+  .ql-cat-sub-row td { padding: 4px 12px; }
+  .inline-edit {
+    background: transparent; border: 1px solid transparent; padding: 4px 6px;
+    width: 100%; color: var(--text); font-size: 13px; border-radius: 4px;
+    font-family: inherit;
+  }
+  .inline-edit:hover { border-color: var(--border); background: var(--bg2); }
+  .inline-edit:focus { outline: none; border-color: var(--indigo); background: var(--bg2); }
+  .inline-edit.mono { font-family: 'DM Mono', monospace; }
+  .inline-edit.text-right { text-align: right; }
+  .drag-handle { cursor: grab; color: var(--text3); font-size: 14px; user-select: none; }
+  .drag-handle:active { cursor: grabbing; }
+  .pricelist-search {
+    position: sticky; top: 0; background: var(--bg2); padding: 8px;
+    border-bottom: 1px solid var(--border); z-index: 1;
+  }
+  .pricelist-result {
+    padding: 8px 10px; cursor: pointer; border-radius: 4px; font-size: 13px;
+  }
+  .pricelist-result:hover { background: var(--indigo-bg); }
+  .pricelist-result .cat-tag {
+    font-size: 10px; color: var(--indigo2);
+    background: rgba(98,114,245,0.12); padding: 1px 6px; border-radius: 3px;
+    margin-right: 6px;
+  }
+  .totals-line { display:flex; justify-content:space-between; align-items:center; padding:6px 0; }
+  .totals-line.gross { font-size: 13px; color: var(--text2); }
+  .totals-line.disc { color: var(--rose); font-size: 13px; }
+  .totals-line.net { font-weight: 600; padding-top: 8px; border-top: 1px solid var(--border); margin-top: 4px; }
+  .totals-line.final {
+    font-size: 18px; font-weight: 700; color: var(--indigo2);
+    padding-top: 10px; border-top: 1px solid var(--indigo-border); margin-top: 6px;
+  }
+  .pkg-discount-input {
+    width: 60px; text-align: right; padding: 2px 4px;
+    background: transparent; border: 1px solid var(--border); border-radius: 3px;
+    font-family: 'DM Mono', monospace; font-size: 12px; color: var(--text);
+  }
+</style>
+{% endblock %}
+
+{% block content %}
+
+<!-- Lista quotazioni -->
+<div class="card" id="quotes-list-card">
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr><th>Numero</th><th>Progetto</th><th>Cliente</th><th>Data</th>
+            <th>Scadenza</th><th class="text-right">Totale</th><th>Stato</th><th></th></tr>
+      </thead>
+      <tbody id="quotes-table">
+        <tr><td colspan="8" class="text-muted" style="text-align:center;padding:24px;">Caricamento…</td></tr>
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<!-- ── Editor quotazione ───────────────────────────────────── -->
+<div id="quote-editor" class="hidden" style="margin-top:24px;">
+  <div class="flex items-center justify-between mb-4">
+    <div>
+      <h2 id="editor-title" style="font-size:18px;font-weight:600;"></h2>
+      <span class="text-xs" id="editor-status"></span>
+    </div>
+    <div class="flex gap-2">
+      <button class="btn btn-secondary btn-sm" onclick="closeEditor()">← Lista</button>
+      <div class="dropdown" style="position:relative;display:inline-block;">
+        <button class="btn btn-secondary btn-sm" onclick="this.nextElementSibling.classList.toggle('open')">⬇ Esporta ▾</button>
+        <div class="dropdown-menu" style="position:absolute;right:0;top:100%;margin-top:4px;background:var(--bg2);border:1px solid var(--border);border-radius:6px;display:none;flex-direction:column;min-width:160px;z-index:10;box-shadow:0 4px 12px rgba(0,0,0,0.2);">
+          <a id="btn-pdf" class="dropdown-item" href="#" target="_blank" style="padding:8px 12px;font-size:13px;text-decoration:none;color:var(--text);">📄 PDF</a>
+          <a id="btn-csv" class="dropdown-item" href="#" style="padding:8px 12px;font-size:13px;text-decoration:none;color:var(--text);">📊 CSV</a>
+          <a id="btn-xlsx" class="dropdown-item" href="#" style="padding:8px 12px;font-size:13px;text-decoration:none;color:var(--text);">📈 Excel (.xlsx)</a>
+        </div>
+      </div>
+      <button class="btn btn-primary btn-sm" onclick="openModal('modal-convert')">▶ Converti in Job</button>
+    </div>
+  </div>
+  <style>
+    .dropdown-menu.open { display:flex !important; }
+    .dropdown-item:hover { background: var(--bg3); }
+  </style>
+
+  <div class="grid-2" style="align-items:start;gap:20px;">
+    <!-- Pannello sinistro: info + righe -->
+    <div>
+      <div class="card mb-4" id="assumptions-card" style="background:var(--indigo-bg);border-color:var(--indigo-border);">
+        <div class="card-title mb-2">Critical Assumptions</div>
+        <div class="form-row">
+          <div class="form-group"><label class="form-label">Production Material</label>
+            <input class="form-input" id="qa-material" placeholder="es. ARRI Alexa 2.8K ProRes"></div>
+          <div class="form-group"><label class="form-label">Delivery Format</label>
+            <input class="form-input" id="qa-delivery" placeholder="es. 4K-DCI-Scope"></div>
+        </div>
+        <div class="form-row">
+          <div class="form-group"><label class="form-label">Durata (min)</label>
+            <input class="form-input" id="qa-length" type="number" step="0.5"></div>
+          <div class="form-group"><label class="form-label">FPS</label>
+            <input class="form-input" id="qa-fps" placeholder="24 / 25"></div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-header">
+          <span class="card-title">Voci preventivo</span>
+          <button class="btn btn-primary btn-sm" onclick="openAddLine()">+ Aggiungi voce</button>
+        </div>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th style="width:24px;"></th>
+                <th>Descrizione</th>
+                <th style="width:80px;">Q.tà</th>
+                <th style="width:70px;">Unità</th>
+                <th class="text-right" style="width:100px;">Prezzo €</th>
+                <th class="text-right" style="width:80px;">Sconto %</th>
+                <th class="text-right" style="width:110px;">Totale €</th>
+                <th style="width:32px;"></th>
+              </tr>
+            </thead>
+            <tbody id="lines-body">
+              <tr><td colspan="8" class="text-muted" style="text-align:center;padding:16px;">Nessuna voce</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <div class="text-xs text-muted" style="padding:8px 12px;border-top:1px solid var(--border);">
+          Modifica i campi: si salva automaticamente al blur. Trascina la maniglia ⠿ per riordinare entro la categoria.
+        </div>
+      </div>
+    </div>
+
+    <!-- Pannello destro: totali + stato -->
+    <div>
+      <div class="card mb-4">
+        <div class="card-title mb-3">Riepilogo economico</div>
+        <div id="totals-panel"></div>
+      </div>
+
+      <div class="card">
+        <div class="card-title mb-2">Stato & azioni</div>
+        <div class="flex gap-2" style="flex-wrap:wrap;">
+          <button class="btn btn-secondary btn-sm" onclick="setQuoteStatus('sent')">📤 Inviata</button>
+          <button class="btn btn-secondary btn-sm" onclick="setQuoteStatus('approved')">✅ Approvata</button>
+          <button class="btn btn-secondary btn-sm" onclick="setQuoteStatus('rejected')">❌ Rifiutata</button>
+          <button class="btn btn-secondary btn-sm" onclick="setQuoteStatus('expired')">⏰ Scaduta</button>
+        </div>
+        <div class="form-group mt-3"><label class="form-label">IVA (%)</label>
+          <input class="form-input" id="q-vat" type="number" step="0.1" placeholder="22" onchange="saveQuoteMeta()"></div>
+        <div class="form-group"><label class="form-label">Note</label>
+          <textarea class="form-textarea" id="q-notes" rows="3" onchange="saveQuoteMeta()"></textarea></div>
+        <div class="form-group"><label class="form-label">Termini di pagamento</label>
+          <textarea class="form-textarea" id="q-payment" rows="3"
+            placeholder="es. 20% Project Start / 40% Grading / 40% Mix" onchange="saveQuoteMeta()"></textarea></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Modal nuova quotazione -->
+<div class="modal-overlay" id="modal-new-quote">
+  <div class="modal">
+    <div class="modal-header"><span class="modal-title">Nuova quotazione</span>
+      <button class="btn btn-ghost btn-icon" onclick="closeModal('modal-new-quote')">✕</button></div>
+    <div class="modal-body">
+      <div class="form-group"><label class="form-label">Progetto *</label>
+        <select class="form-select" id="nq-project" onchange="onProjectSelect()">
+          <option value="">— seleziona progetto —</option>
+          {% for p in projects %}
+          <option value="{{ p.id }}" data-title="{{ p.title }}" data-client="{{ p.client.name if p.client else '' }}" data-length="{{ p.length_minutes or '' }}" data-fps="{{ p.fps or '' }}" data-delivery="{{ p.delivery_format or '' }}">
+            [{{ p.code }}] {{ p.title }}{% if p.client %} — {{ p.client.name }}{% endif %}
+          </option>
+          {% endfor %}
+        </select>
+        <div class="text-xs text-muted mt-1">Se il progetto non esiste ancora, <a href="/projects" style="color:var(--indigo2);">crealo qui</a> prima di fare la quotazione.</div>
+      </div>
+      <div class="form-row">
+        <div class="form-group"><label class="form-label">Numero *</label>
+          <input class="form-input" id="nq-number" placeholder="Q-2025-0001-v1"></div>
+        <div class="form-group"><label class="form-label">Titolo quotazione</label>
+          <input class="form-input" id="nq-title" placeholder="(default: titolo progetto)"></div>
+      </div>
+      <div class="form-row">
+        <div class="form-group"><label class="form-label">Data emissione *</label>
+          <input class="form-input" id="nq-date" type="date"></div>
+        <div class="form-group"><label class="form-label">Valida fino al</label>
+          <input class="form-input" id="nq-valid" type="date"></div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeModal('modal-new-quote')">Annulla</button>
+      <button class="btn btn-primary" onclick="createQuote()">Crea</button>
+    </div>
+  </div>
+</div>
+
+<!-- Modal aggiungi riga (con ricerca + sidebar categorie) -->
+<div class="modal-overlay" id="modal-add-line">
+  <div class="modal" style="max-width:980px;width:96vw;">
+    <div class="modal-header"><span class="modal-title">Aggiungi voce alla quotazione</span>
+      <button class="btn btn-ghost btn-icon" onclick="closeModal('modal-add-line')">✕</button></div>
+    <div class="modal-body" style="padding:0;">
+      <!-- Search top -->
+      <div style="padding:14px 18px;border-bottom:1px solid var(--border);background:var(--bg2);">
+        <input class="form-input" id="al-search" placeholder="🔍 Cerca per nome, descrizione, keyword o categoria..." oninput="filterPricelist()" autofocus style="font-size:14px;">
+      </div>
+      <!-- Sidebar categorie + risultati -->
+      <div style="display:grid;grid-template-columns:200px 1fr;min-height:340px;max-height:50vh;">
+        <div id="al-cat-sidebar" style="border-right:1px solid var(--border);background:var(--bg2);overflow-y:auto;padding:8px 6px;"></div>
+        <div id="al-results" style="overflow-y:auto;padding:8px 12px;"></div>
+      </div>
+      <!-- Form voce -->
+      <div style="padding:14px 18px;border-top:1px solid var(--border);background:var(--bg2);">
+        <div class="text-xs text-muted mb-2">Voce selezionata (modificabile prima di aggiungere)</div>
+        <div class="form-group"><label class="form-label">Descrizione *</label>
+          <input class="form-input" id="al-desc" placeholder="Seleziona dal listino o scrivi descrizione custom"></div>
+        <div class="form-group"><label class="form-label">Dettaglio</label>
+          <input class="form-input" id="al-detail" placeholder="es. incl. full QC, naming DCNC"></div>
+        <div class="form-row" style="grid-template-columns:1fr 1fr 1fr;">
+          <div class="form-group"><label class="form-label">Quantità</label>
+            <input class="form-input" id="al-qty" type="number" step="0.5" value="1"></div>
+          <div class="form-group"><label class="form-label">Unità</label>
+            <select class="form-select" id="al-unit" onchange="convertPriceOnUnitChange()">
+              <option value="day">day (turno 8h)</option>
+              <option value="hr">hr (ora)</option>
+              <option value="pc">pc (pezzo)</option>
+              <option value="min">min (minuto prodotto)</option>
+              <option value="TB">TB</option>
+              <option value="GB">GB</option>
+              <option value="shot">shot</option>
+              <option value="version">version</option>
+              <option value="allow">allowance</option>
+            </select></div>
+          <div class="form-group"><label class="form-label">Prezzo unitario (€)</label>
+            <input class="form-input" id="al-price" type="number" step="0.01"></div>
+        </div>
+        <input type="hidden" id="al-price-item-id">
+        <input type="hidden" id="al-base-unit">
+        <input type="hidden" id="al-base-price">
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeModal('modal-add-line')">Annulla</button>
+      <button class="btn btn-primary" onclick="addLine()">Aggiungi alla quotazione</button>
+    </div>
+  </div>
+</div>
+
+<style>
+  #al-cat-sidebar .al-cat {
+    padding:7px 10px; cursor:pointer; border-radius:5px; font-size:12px;
+    color:var(--text2); display:flex; justify-content:space-between; align-items:center; gap:6px;
+    transition: background var(--t), color var(--t);
+  }
+  #al-cat-sidebar .al-cat:hover { background:var(--surface); color:var(--text); }
+  #al-cat-sidebar .al-cat.active { background:var(--indigo-bg); color:var(--indigo2); font-weight:500; }
+  #al-cat-sidebar .al-cat .count { font-size:10px; color:var(--text3); font-family:'DM Mono',monospace; }
+  .al-result {
+    padding:10px 12px; cursor:pointer; border-radius:6px; margin-bottom:4px;
+    border:1px solid transparent; transition: background var(--t), border-color var(--t);
+  }
+  .al-result:hover { background:var(--bg3); border-color:var(--border); }
+  .al-result.selected { background:var(--indigo-bg); border-color:var(--indigo-border); }
+  .al-result .head { display:flex; justify-content:space-between; gap:10px; align-items:baseline; }
+  .al-result .name { font-weight:500; font-size:13.5px; color:var(--text); }
+  .al-result .price { font-family:'DM Mono',monospace; font-size:13px; color:var(--indigo2); white-space:nowrap; }
+  .al-result .meta { font-size:11px; color:var(--text3); display:flex; gap:8px; margin-top:3px; flex-wrap:wrap; }
+  .al-result .desc { font-size:11.5px; color:var(--text2); margin-top:4px; line-height:1.4; }
+  .al-result .keys { display:flex; gap:3px; flex-wrap:wrap; margin-top:5px; }
+  .al-result .keys .k { background:var(--bg3); color:var(--text3); padding:1px 6px; border-radius:3px; font-size:10px; font-family:'DM Mono',monospace; }
+</style>
+
+<!-- Modal converti in job -->
+<div class="modal-overlay" id="modal-convert">
+  <div class="modal" style="max-width:400px;">
+    <div class="modal-header"><span class="modal-title">Converti in Job</span>
+      <button class="btn btn-ghost btn-icon" onclick="closeModal('modal-convert')">✕</button></div>
+    <div class="modal-body">
+      <p class="text-sm text-muted mb-3">La quotazione verrà approvata e sarà creato un job con le voci di costo corrispondenti.</p>
+      <div class="form-group"><label class="form-label">Codice job *</label>
+        <input class="form-input" id="cv-code" placeholder="es. 2024-0042"></div>
+      <div class="form-row">
+        <div class="form-group"><label class="form-label">Data inizio</label>
+          <input class="form-input" id="cv-start" type="date"></div>
+        <div class="form-group"><label class="form-label">Data fine</label>
+          <input class="form-input" id="cv-end" type="date"></div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeModal('modal-convert')">Annulla</button>
+      <button class="btn btn-primary" onclick="convertToJob()">Crea Job</button>
+    </div>
+  </div>
+</div>
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+let currentQuoteId = null;
+let currentQuote = null;
+let priceItems = [];
+const SL = { draft:'Bozza', sent:'Inviata', approved:'Approvata', rejected:'Rifiutata', expired:'Scaduta' };
+const HOURS_PER_DAY = 8;
+
+// ── List view ─────────────────────────────────────────────────
+async function loadQuotes() {
+  const qs = await api('GET', '/quotes/api');
+  const tbody = document.getElementById('quotes-table');
+  if (!qs.length) {
+    tbody.innerHTML = '<tr><td colspan="8" class="text-muted" style="text-align:center;padding:24px;">Nessuna quotazione</td></tr>'; return;
+  }
+  tbody.innerHTML = qs.map(q => `
+    <tr style="cursor:pointer;" onclick="openEditor(${q.id})">
+      <td class="mono" style="font-size:12px;">${q.number}</td>
+      <td style="font-weight:500;">${q.project_title || q.title}</td>
+      <td class="text-muted text-sm">${q.client || '—'}</td>
+      <td class="text-sm">${fmtDate(q.issue_date)}</td>
+      <td class="text-sm ${q.valid_until && new Date(q.valid_until) < new Date() ? 'color-rose' : ''}">${fmtDate(q.valid_until)}</td>
+      <td class="mono text-right">${fmtCurrency(q.total_with_vat)}</td>
+      <td>${statusBadge(q.status)}</td>
+      <td class="text-xs text-muted" style="text-align:right;">
+        ${q.has_job ? '<span class="badge badge-active" style="font-size:10px;">Job ✓</span>' : '→'}
+      </td>
+    </tr>`).join('');
+}
+
+// ── Editor ────────────────────────────────────────────────────
+async function openEditor(id) {
+  currentQuoteId = id;
+  await reloadQuote();
+  priceItems = await api('GET', '/pricelist/api/items');
+  document.getElementById('quotes-list-card').classList.add('hidden');
+  document.getElementById('quote-editor').classList.remove('hidden');
+}
+
+async function reloadQuote() {
+  currentQuote = await api('GET', `/quotes/api/${currentQuoteId}`);
+  document.getElementById('editor-title').textContent = `${currentQuote.number} — ${currentQuote.title}`;
+  document.getElementById('editor-status').textContent = SL[currentQuote.status] || currentQuote.status;
+  document.getElementById('btn-pdf').href = `/quotes/api/${currentQuoteId}/pdf`;
+  document.getElementById('btn-csv').href = `/quotes/api/${currentQuoteId}/export.csv`;
+  document.getElementById('btn-xlsx').href = `/quotes/api/${currentQuoteId}/export.xlsx`;
+  document.getElementById('q-vat').value = currentQuote.vat_rate || 22;
+  document.getElementById('q-notes').value = currentQuote.notes || '';
+  document.getElementById('q-payment').value = currentQuote.payment_terms || '';
+  document.getElementById('qa-material').value = currentQuote.production_material || '';
+  document.getElementById('qa-delivery').value = currentQuote.delivery_format || '';
+  document.getElementById('qa-length').value = currentQuote.length_minutes || '';
+  document.getElementById('qa-fps').value = currentQuote.fps || '';
+  renderLines();
+  renderTotals();
+}
+
+function closeEditor() {
+  currentQuoteId = null; currentQuote = null;
+  document.getElementById('quotes-list-card').classList.remove('hidden');
+  document.getElementById('quote-editor').classList.add('hidden');
+  loadQuotes();
+}
+
+// ── Render righe raggruppate per categoria ────────────────────
+function renderLines() {
+  const tbody = document.getElementById('lines-body');
+  const lines = currentQuote.lines || [];
+  if (!lines.length) {
+    tbody.innerHTML = '<tr><td colspan="8" class="text-muted" style="text-align:center;padding:16px;">Nessuna voce — clicca "+ Aggiungi voce"</td></tr>';
+    return;
+  }
+
+  // Raggruppa per categoria, mantenendo ordine voci
+  const groups = {};
+  const groupOrder = [];
+  for (const l of lines) {
+    const cat = l.category || 'Altro';
+    if (!groups[cat]) { groups[cat] = []; groupOrder.push(cat); }
+    groups[cat].push(l);
+  }
+
+  const cd = currentQuote.category_discounts || {};
+  let html = '';
+  for (const cat of groupOrder) {
+    const catLines = groups[cat];
+    const catDisc = cd[cat] || 0;
+    const catSubtotal = catLines.reduce((s, l) => s + (l.total || 0), 0);
+    html += `<tr class="ql-cat-header"><td colspan="8" style="padding:10px 12px;">${cat}</td></tr>`;
+    for (const l of catLines) {
+      html += renderLineRow(l);
+    }
+    // Riga subtotale (lettura sola)
+    html += `
+      <tr class="ql-cat-sub-row">
+        <td colspan="6" style="text-align:right;color:var(--text2);font-size:12px;padding:4px 12px;">
+          Subtotale <strong>${cat}</strong>:
+        </td>
+        <td class="mono text-right" style="font-size:12px;font-weight:600;padding:4px 12px;">
+          ${fmtCurrency(catSubtotal)}
+        </td>
+        <td></td>
+      </tr>`;
+    // Riga sconto categoria editabile
+    html += `
+      <tr class="ql-cat-disc-row">
+        <td colspan="5" style="text-align:right;">Sconto categoria <strong>${cat}</strong>:</td>
+        <td class="text-right">
+          <input type="number" class="inline-edit text-right mono" step="0.5" min="0" max="100"
+                 value="${(catDisc * 100).toFixed(1)}" data-cat="${cat.replace(/"/g, '&quot;')}"
+                 onblur="saveCategoryDiscount(this)" style="width:60px;font-size:12px;">
+        </td>
+        <td class="mono text-right" style="font-size:12px;">
+          ${catDisc > 0 ? '−' + fmtCurrency(catDisc * catSubtotal) : '—'}
+        </td>
+        <td></td>
+      </tr>`;
+  }
+  tbody.innerHTML = html;
+
+  // SortableJS su tutto il tbody — accetta cross-category
+  if (tbody._sortable) tbody._sortable.destroy();
+  tbody._sortable = Sortable.create(tbody, {
+    handle: '.drag-handle',
+    draggable: 'tr.ql-row',
+    ghostClass: 'ghost',
+    onEnd: persistOrder,
+  });
+}
+
+function renderLineRow(l) {
+  const desc = (l.description || '').replace(/"/g, '&quot;');
+  const detail = (l.detail || '').replace(/"/g, '&quot;');
+  return `
+    <tr class="ql-row" data-line-id="${l.id}">
+      <td><span class="drag-handle" title="Trascina per riordinare">⠿</span></td>
+      <td>
+        <input class="inline-edit" data-field="description" value="${desc}" onblur="saveLineField(this)">
+        <input class="inline-edit" data-field="detail" value="${detail}" placeholder="dettaglio…"
+               onblur="saveLineField(this)" style="font-size:11px;color:var(--text2);margin-top:2px;">
+      </td>
+      <td><input class="inline-edit mono text-right" data-field="quantity" type="number" step="0.5"
+                 value="${l.quantity}" onblur="saveLineField(this)"></td>
+      <td>
+        <select class="inline-edit mono" data-field="unit" onchange="saveLineField(this)" style="font-size:12px;padding:2px 4px;">
+          <option value="day"${l.unit==='day'?' selected':''}>day</option>
+          <option value="hr"${l.unit==='hr'?' selected':''}>hr</option>
+          <option value="pc"${l.unit==='pc'?' selected':''}>pc</option>
+          <option value="min"${l.unit==='min'?' selected':''}>min</option>
+          <option value="TB"${l.unit==='TB'?' selected':''}>TB</option>
+          <option value="GB"${l.unit==='GB'?' selected':''}>GB</option>
+          <option value="shot"${l.unit==='shot'?' selected':''}>shot</option>
+          <option value="version"${l.unit==='version'?' selected':''}>ver</option>
+          <option value="allow"${l.unit==='allow'?' selected':''}>allow</option>
+        </select>
+      </td>
+      <td><input class="inline-edit mono text-right" data-field="unit_price" type="number" step="0.01"
+                 value="${l.unit_price}" onblur="saveLineField(this)"></td>
+      <td><input class="inline-edit mono text-right" data-field="line_discount_pct" type="number" step="0.5" min="0" max="100"
+                 value="${(l.line_discount_pct * 100).toFixed(1)}" onblur="saveLineDiscount(this)"></td>
+      <td class="mono text-right" style="font-weight:600;" data-line-total="${l.id}">${fmtCurrency(l.total)}</td>
+      <td style="white-space:nowrap;">
+        <button class="btn btn-ghost btn-sm" onclick="changeLineCategory(${l.id})" title="Sposta in altra categoria">📁</button>
+        <button class="btn btn-ghost btn-sm color-rose" onclick="deleteLine(${l.id})" title="Rimuovi">✕</button>
+      </td>
+    </tr>`;
+}
+
+// ── Render totali ─────────────────────────────────────────────
+function renderTotals() {
+  const q = currentQuote;
+  const grossDiscountTotal = (q.subtotal_gross || 0) - (q.subtotal || 0);
+  const pkgPct = -(q.package_discount || 0) * 100; // mostra positivo
+  const pkgAmount = (q.subtotal || 0) - (q.total_after_discount || 0);
+  const vatAmount = (q.total_with_vat || 0) - (q.total_after_discount || 0);
+
+  document.getElementById('totals-panel').innerHTML = `
+    <div class="totals-line gross">
+      <span>Totale lordo (no sconti)</span>
+      <span class="mono">${fmtCurrency(q.subtotal_gross)}</span>
+    </div>
+    ${grossDiscountTotal > 0.005 ? `
+    <div class="totals-line disc">
+      <span>Sconti voci + categoria</span>
+      <span class="mono">−${fmtCurrency(grossDiscountTotal)}</span>
+    </div>` : ''}
+    <div class="totals-line">
+      <span class="text-muted">Subtotale</span>
+      <span class="mono">${fmtCurrency(q.subtotal)}</span>
+    </div>
+    <div class="totals-line">
+      <span class="text-muted">Sconto pacchetto
+        <input class="pkg-discount-input" type="number" step="0.5" min="0" max="100"
+               value="${pkgPct.toFixed(1)}" onblur="savePackageDiscount(this)" id="pkg-disc-input">%
+      </span>
+      <span class="mono ${pkgAmount > 0.005 ? 'color-rose' : 'text-muted'}">${pkgAmount > 0.005 ? '−' + fmtCurrency(pkgAmount) : '—'}</span>
+    </div>
+    <div class="totals-line net">
+      <span>Totale netto (base IVA)</span>
+      <span class="mono">${fmtCurrency(q.total_after_discount)}</span>
+    </div>
+    <div class="totals-line">
+      <span class="text-muted">IVA ${q.vat_rate || 0}%</span>
+      <span class="mono">${fmtCurrency(vatAmount)}</span>
+    </div>
+    <div class="totals-line final">
+      <span>TOTALE</span>
+      <span class="mono">${fmtCurrency(q.total_with_vat)}</span>
+    </div>
+  `;
+}
+
+// ── Save handlers ─────────────────────────────────────────────
+async function saveLineField(el) {
+  const tr = el.closest('tr');
+  const lineId = tr.dataset.lineId;
+  const field = el.dataset.field;
+  let value = el.value;
+
+  // Conversione automatica day↔hr: cambiando unit, qty e unit_price si convertono
+  // simmetricamente (1 giornata = 8 ore) così il totale resta invariato. Esempio:
+  // 2 day × €1500 = €3000  →  16 hr × €187.50 = €3000.
+  let extraUpdates = {};
+  if (field === 'unit') {
+    const line = currentQuote.lines.find(l => l.id == lineId);
+    if (line) {
+      const oldUnit = line.unit;
+      const newUnit = value;
+      let factor = null; // qty *= factor, price /= factor
+      if (oldUnit === 'day' && newUnit === 'hr') factor = HOURS_PER_DAY;
+      else if (oldUnit === 'hr' && newUnit === 'day') factor = 1 / HOURS_PER_DAY;
+      if (factor !== null) {
+        const oldQty = parseFloat(line.quantity || 0);
+        const oldPrice = parseFloat(line.unit_price || 0);
+        extraUpdates.quantity = +(oldQty * factor).toFixed(4);
+        extraUpdates.unit_price = +(oldPrice / factor).toFixed(2);
+      }
+    }
+  }
+
+  try {
+    const fd = new FormData();
+    fd.append(field, value);
+    for (const [k, v] of Object.entries(extraUpdates)) fd.append(k, v);
+    const res = await api('PUT', `/quotes/api/${currentQuoteId}/lines/${lineId}`, fd);
+    document.querySelector(`[data-line-total="${lineId}"]`).textContent = fmtCurrency(res.total);
+    Object.assign(currentQuote, {
+      subtotal_gross: res.subtotal_gross, subtotal: res.subtotal,
+      total_after_discount: res.total_after_discount, total_with_vat: res.total_with_vat,
+    });
+    const line = currentQuote.lines.find(l => l.id == lineId);
+    if (line) {
+      line[field] = (field === 'description' || field === 'detail' || field === 'unit') ? value : parseFloat(value);
+      if (extraUpdates.unit_price != null) {
+        line.unit_price = extraUpdates.unit_price;
+        const priceInput = tr.querySelector('input[data-field="unit_price"]');
+        if (priceInput) priceInput.value = extraUpdates.unit_price;
+      }
+      if (extraUpdates.quantity != null) {
+        line.quantity = extraUpdates.quantity;
+        const qtyInput = tr.querySelector('input[data-field="quantity"]');
+        if (qtyInput) qtyInput.value = extraUpdates.quantity;
+      }
+      line.total = res.total;
+    }
+    renderTotals();
+    refreshCategoryDiscountAmounts();
+  } catch(e) { toast(e.message, 'error'); }
+}
+
+async function saveLineDiscount(el) {
+  const tr = el.closest('tr');
+  const lineId = tr.dataset.lineId;
+  const pct = parseFloat(el.value || 0) / 100;
+  try {
+    const fd = new FormData();
+    fd.append('line_discount_pct', pct);
+    const res = await api('PUT', `/quotes/api/${currentQuoteId}/lines/${lineId}`, fd);
+    document.querySelector(`[data-line-total="${lineId}"]`).textContent = fmtCurrency(res.total);
+    Object.assign(currentQuote, {
+      subtotal_gross: res.subtotal_gross, subtotal: res.subtotal,
+      total_after_discount: res.total_after_discount, total_with_vat: res.total_with_vat,
+    });
+    const line = currentQuote.lines.find(l => l.id == lineId);
+    if (line) { line.line_discount_pct = pct; line.total = res.total; }
+    renderTotals();
+    refreshCategoryDiscountAmounts();
+  } catch(e) { toast(e.message, 'error'); }
+}
+
+async function saveCategoryDiscount(el) {
+  const cat = el.dataset.cat;
+  const pct = parseFloat(el.value || 0) / 100;
+  try {
+    const fd = new FormData();
+    fd.append('category', cat);
+    fd.append('pct', pct);
+    const res = await api('PUT', `/quotes/api/${currentQuoteId}/category-discount`, fd);
+    Object.assign(currentQuote, {
+      category_discounts: res.category_discounts,
+      subtotal_gross: res.subtotal_gross, subtotal: res.subtotal,
+      total_after_discount: res.total_after_discount, total_with_vat: res.total_with_vat,
+    });
+    renderTotals();
+    refreshCategoryDiscountAmounts();
+  } catch(e) { toast(e.message, 'error'); }
+}
+
+async function savePackageDiscount(el) {
+  const pct = parseFloat(el.value || 0) / 100;
+  // Convenzione: package_discount è negativo nel DB
+  const packageNeg = -pct;
+  try {
+    const fd = new FormData();
+    fd.append('package_discount', packageNeg);
+    const res = await api('PUT', `/quotes/api/${currentQuoteId}`, fd);
+    Object.assign(currentQuote, {
+      package_discount: packageNeg,
+      subtotal_gross: res.subtotal_gross, subtotal: res.subtotal,
+      total_after_discount: res.total_after_discount, total_with_vat: res.total_with_vat,
+    });
+    renderTotals();
+  } catch(e) { toast(e.message, 'error'); }
+}
+
+async function saveQuoteMeta() {
+  const fd = new FormData();
+  fd.append('vat_rate', document.getElementById('q-vat').value || '22');
+  fd.append('notes', document.getElementById('q-notes').value);
+  fd.append('payment_terms', document.getElementById('q-payment').value);
+  try {
+    const res = await api('PUT', `/quotes/api/${currentQuoteId}`, fd);
+    Object.assign(currentQuote, {
+      subtotal_gross: res.subtotal_gross, subtotal: res.subtotal,
+      total_after_discount: res.total_after_discount, total_with_vat: res.total_with_vat,
+      vat_rate: parseFloat(document.getElementById('q-vat').value || 22),
+      notes: document.getElementById('q-notes').value,
+      payment_terms: document.getElementById('q-payment').value,
+    });
+    renderTotals();
+  } catch(e) { toast(e.message, 'error'); }
+}
+
+function refreshCategoryDiscountAmounts() {
+  // Aggiorna gli importi mostrati nelle righe "Sconto categoria"
+  const cd = currentQuote.category_discounts || {};
+  const groups = {};
+  for (const l of currentQuote.lines) {
+    const cat = l.category || 'Altro';
+    groups[cat] = (groups[cat] || 0) + l.total;
+  }
+  document.querySelectorAll('.ql-cat-disc-row').forEach(row => {
+    const input = row.querySelector('input[data-cat]');
+    if (!input) return;
+    const cat = input.dataset.cat;
+    const disc = cd[cat] || 0;
+    const cell = row.querySelector('td.mono.text-right');
+    if (cell) {
+      cell.textContent = disc > 0 ? '−' + fmtCurrency(disc * (groups[cat] || 0)) : '—';
+    }
+  });
+}
+
+// ── Drag-drop persistence ─────────────────────────────────────
+async function persistOrder() {
+  const order = [...document.querySelectorAll('tr.ql-row')].map(tr => parseInt(tr.dataset.lineId));
+  try {
+    const resp = await fetch(`/quotes/api/${currentQuoteId}/lines-reorder`, {
+      method: 'PUT',
+      headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({order}),
+    });
+    if (!resp.ok) throw new Error('Errore riordino');
+    await reloadQuote();
+  } catch(e) { toast(e.message, 'error'); }
+}
+
+// ── Add line modal ────────────────────────────────────────────
+let alActiveCat = null;
+let alSelectedId = null;
+
+function openAddLine() {
+  document.getElementById('al-search').value = '';
+  document.getElementById('al-desc').value = '';
+  document.getElementById('al-detail').value = '';
+  document.getElementById('al-qty').value = '1';
+  document.getElementById('al-unit').value = 'day';
+  document.getElementById('al-price').value = '';
+  document.getElementById('al-price-item-id').value = '';
+  document.getElementById('al-base-unit').value = '';
+  document.getElementById('al-base-price').value = '';
+  alActiveCat = null;
+  alSelectedId = null;
+  renderAlSidebar();
+  filterPricelist();
+  openModal('modal-add-line');
+}
+
+function renderAlSidebar() {
+  // Conta voci per categoria considerando il filtro testo corrente
+  const q = document.getElementById('al-search').value.toLowerCase().trim();
+  const matchesText = (i) => !q || (i.name || '').toLowerCase().includes(q)
+    || (i.description || '').toLowerCase().includes(q)
+    || (i.category || '').toLowerCase().includes(q)
+    || (i.keywords || []).some(k => k.toLowerCase().includes(q));
+  const counts = {};
+  for (const i of priceItems) {
+    if (i.is_active === false) continue;
+    if (!matchesText(i)) continue;
+    const c = i.category || 'Altro';
+    counts[c] = (counts[c] || 0) + 1;
+  }
+  const cats = Object.keys(counts).sort();
+  const total = Object.values(counts).reduce((a,b)=>a+b, 0);
+  const div = document.getElementById('al-cat-sidebar');
+  div.innerHTML = `
+    <div class="al-cat ${alActiveCat === null ? 'active' : ''}" onclick="setAlCat(null)">
+      <span>Tutte</span><span class="count">${total}</span>
+    </div>
+    ${cats.map(c => {
+      const safe = c.replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/'/g, '&#39;').replace(/</g, '&lt;');
+      return `
+      <div class="al-cat ${alActiveCat === c ? 'active' : ''}" data-cat="${safe}" onclick="setAlCat(this.dataset.cat)">
+        <span>${safe}</span><span class="count">${counts[c]}</span>
+      </div>`;
+    }).join('')}
+  `;
+}
+
+function setAlCat(cat) {
+  alActiveCat = cat;
+  renderAlSidebar();
+  filterPricelist();
+}
+
+function filterPricelist() {
+  const q = document.getElementById('al-search').value.toLowerCase().trim();
+  let filtered = priceItems.filter(i => i.is_active !== false);
+  if (q) {
+    filtered = filtered.filter(i =>
+      (i.name || '').toLowerCase().includes(q) ||
+      (i.description || '').toLowerCase().includes(q) ||
+      (i.category || '').toLowerCase().includes(q) ||
+      (i.keywords || []).some(k => k.toLowerCase().includes(q))
+    );
+  }
+  if (alActiveCat) {
+    filtered = filtered.filter(i => (i.category || 'Altro') === alActiveCat);
+  }
+  filtered = filtered.slice(0, 80);
+  renderAlSidebar();
+  const div = document.getElementById('al-results');
+  if (!filtered.length) {
+    div.innerHTML = `<div class="text-muted" style="padding:24px;text-align:center;font-size:13px;">${q || alActiveCat ? 'Nessun risultato' : 'Digita per cercare o seleziona una categoria'}</div>`;
+    return;
+  }
+  div.innerHTML = filtered.map(i => {
+    const sel = alSelectedId === i.id ? 'selected' : '';
+    return `
+    <div class="al-result ${sel}" onclick="pickPriceItem(${i.id})">
+      <div class="head">
+        <span class="name">${i.name}</span>
+        <span class="price">${i.price_list ? fmtCurrency(i.price_list) : '—'}<span style="color:var(--text3);font-size:11px;"> / ${i.unit}</span></span>
+      </div>
+      <div class="meta">
+        <span style="color:var(--indigo2);">${i.category || '—'}</span>
+        ${i.department ? `<span>· ${i.department}</span>` : ''}
+      </div>
+      ${i.description ? `<div class="desc">${i.description}</div>` : ''}
+      ${(i.keywords && i.keywords.length) ? `<div class="keys">${i.keywords.slice(0,6).map(k => `<span class="k">${k}</span>`).join('')}</div>` : ''}
+    </div>`;
+  }).join('');
+}
+
+function pickPriceItem(id) {
+  const item = priceItems.find(i => i.id === id);
+  if (!item) return;
+  alSelectedId = id;
+  document.getElementById('al-price-item-id').value = id;
+  document.getElementById('al-desc').value = item.name;
+  document.getElementById('al-detail').value = item.description || '';
+  document.getElementById('al-base-unit').value = item.unit;
+  document.getElementById('al-base-price').value = item.price_list || '';
+  document.getElementById('al-unit').value = item.unit;
+  document.getElementById('al-price').value = item.price_list || '';
+  // Re-render risultati per evidenziare la selezione
+  filterPricelist();
+}
+
+function convertPriceOnUnitChange() {
+  // Converte day↔hour mantenendo il prezzo equivalente a 8h. Per altre unità no-op.
+  const baseUnit = document.getElementById('al-base-unit').value;
+  const basePrice = parseFloat(document.getElementById('al-base-price').value || 0);
+  if (!basePrice) return;
+  const newUnit = document.getElementById('al-unit').value;
+  if (baseUnit === 'day' && newUnit === 'hr') {
+    document.getElementById('al-price').value = (basePrice / HOURS_PER_DAY).toFixed(2);
+  } else if (baseUnit === 'hr' && newUnit === 'day') {
+    document.getElementById('al-price').value = (basePrice * HOURS_PER_DAY).toFixed(2);
+  } else if (baseUnit === newUnit) {
+    document.getElementById('al-price').value = basePrice.toFixed(2);
+  }
+  // se cambio ad altre unità, lascio il prezzo manuale
+}
+
+async function addLine() {
+  const desc = document.getElementById('al-desc').value.trim();
+  if (!desc) { toast('Inserisci la descrizione', 'error'); return; }
+  try {
+    const fd = new FormData();
+    fd.append('description', desc);
+    fd.append('detail', document.getElementById('al-detail').value);
+    fd.append('quantity', document.getElementById('al-qty').value || '1');
+    fd.append('unit', document.getElementById('al-unit').value || 'day');
+    fd.append('unit_price', document.getElementById('al-price').value || '0');
+    const piId = document.getElementById('al-price-item-id').value;
+    if (piId) fd.append('price_item_id', piId);
+    await api('POST', `/quotes/api/${currentQuoteId}/lines`, fd);
+    closeModal('modal-add-line');
+    toast('Voce aggiunta', 'success');
+    await reloadQuote();
+  } catch(e) { toast(e.message, 'error'); }
+}
+
+async function deleteLine(lineId) {
+  if (!confirm('Rimuovere questa voce?')) return;
+  try {
+    await api('DELETE', `/quotes/api/${currentQuoteId}/lines/${lineId}`);
+    toast('Voce rimossa', 'success');
+    await reloadQuote();
+  } catch(e) { toast(e.message, 'error'); }
+}
+
+// ── Cambio categoria voce (override) ──────────────────────────
+async function changeLineCategory(lineId) {
+  const line = (currentQuote.lines || []).find(x => x.id === lineId);
+  if (!line) return;
+  // Categorie note: dalle voci della quote + listino se caricato
+  const fromLines = (currentQuote.lines || []).map(l => l.category).filter(Boolean);
+  const fromPriceItems = (typeof priceItems !== 'undefined' ? priceItems : []).map(i => i.category).filter(Boolean);
+  const cats = [...new Set([...fromLines, ...fromPriceItems])].sort((a,b) => a.localeCompare(b));
+  const lines = ['Sposta voce in categoria:', ''];
+  cats.forEach((c, i) => lines.push(`${i+1}. ${c}${c === line.category ? ' ←' : ''}`));
+  lines.push(`${cats.length+1}. + Nuova categoria…`);
+  if (line.category_override) lines.push(`0. Ripristina categoria del listino`);
+  lines.push('', 'Numero o nome libero:');
+  const choice = prompt(lines.join('\n'), '');
+  if (choice === null) return;
+  const trimmed = choice.trim();
+  if (!trimmed) return;
+  let target;
+  const num = parseInt(trimmed, 10);
+  if (!isNaN(num) && String(num) === trimmed) {
+    if (num === 0) target = '__CLEAR__';
+    else if (num >= 1 && num <= cats.length) target = cats[num-1];
+    else if (num === cats.length+1) {
+      const fresh = prompt('Nome nuova categoria:', '');
+      if (fresh === null || !fresh.trim()) return;
+      target = fresh.trim();
+    } else return;
+  } else {
+    target = trimmed;
+  }
+  try {
+    const fd = new FormData();
+    fd.append('category_override', target);
+    await api('PUT', `/quotes/api/${currentQuoteId}/lines/${lineId}`, fd);
+    toast('Categoria aggiornata', 'success');
+    await reloadQuote();
+  } catch(e) { toast(e.message, 'error'); }
+}
+
+async function setQuoteStatus(status) {
+  try {
+    const fd = new FormData(); fd.append('status', status);
+    await api('PUT', `/quotes/api/${currentQuoteId}/status`, fd);
+    document.getElementById('editor-status').textContent = SL[status] || status;
+    toast('Stato aggiornato', 'success');
+  } catch(e) { toast(e.message, 'error'); }
+}
+
+async function convertToJob() {
+  const code = document.getElementById('cv-code').value.trim();
+  if (!code) { toast('Inserisci il codice job', 'error'); return; }
+  try {
+    const fd = new FormData();
+    fd.append('job_code', code);
+    fd.append('start_date', document.getElementById('cv-start').value || '');
+    fd.append('end_date', document.getElementById('cv-end').value || '');
+    const res = await api('POST', `/quotes/api/${currentQuoteId}/convert-to-job`, fd);
+    closeModal('modal-convert');
+    toast(`Job ${res.job_code} creato con successo!`, 'success');
+    setTimeout(() => { window.location.href = '/planning'; }, 1500);
+  } catch(e) { toast(e.message, 'error'); }
+}
+
+function onProjectSelect() {
+  const sel = document.getElementById('nq-project');
+  const opt = sel.options[sel.selectedIndex];
+  if (!opt || !opt.value) return;
+  const titleInput = document.getElementById('nq-title');
+  if (!titleInput.value.trim()) {
+    titleInput.value = opt.dataset.title || '';
+  }
+  const numInput = document.getElementById('nq-number');
+  if (!numInput.value.trim()) {
+    const projectCode = opt.textContent.match(/\[([^\]]+)\]/);
+    if (projectCode) {
+      numInput.value = `Q-${projectCode[1]}-v1`;
+    }
+  }
+}
+
+async function createQuote() {
+  const num = document.getElementById('nq-number').value.trim();
+  const project_id = document.getElementById('nq-project').value;
+  const date_v = document.getElementById('nq-date').value;
+  if (!num || !project_id || !date_v) {
+    toast('Seleziona progetto, numero e data', 'error');
+    return;
+  }
+  const sel = document.getElementById('nq-project');
+  const opt = sel.options[sel.selectedIndex];
+  const defaultTitle = opt.dataset.title || '';
+  let title = document.getElementById('nq-title').value.trim() || defaultTitle;
+  try {
+    const fd = new FormData();
+    fd.append('number', num);
+    fd.append('project_id', project_id);
+    fd.append('title', title);
+    fd.append('issue_date', date_v);
+    fd.append('valid_until', document.getElementById('nq-valid').value || '');
+    if (opt.dataset.length) fd.append('length_minutes', opt.dataset.length);
+    if (opt.dataset.fps) fd.append('fps', opt.dataset.fps);
+    if (opt.dataset.delivery) fd.append('delivery_format', opt.dataset.delivery);
+    const res = await api('POST', '/quotes/api', fd);
+    closeModal('modal-new-quote');
+    toast('Quotazione creata', 'success');
+    openEditor(res.id);
+  } catch(e) { toast(e.message, 'error'); }
+}
+
+// Init
+document.getElementById('nq-date').value = new Date().toISOString().slice(0,10);
+
+(async () => {
+  await loadQuotes();
+  // Auto-apri quote se hash presente (es. arrivo da /projects/{id} → /quotes#42)
+  const hashId = parseInt((window.location.hash || '').replace('#', ''), 10);
+  if (hashId && !isNaN(hashId)) {
+    openEditor(hashId);
+  }
+})();
+
+window.addEventListener('hashchange', () => {
+  const hashId = parseInt((window.location.hash || '').replace('#', ''), 10);
+  if (hashId && !isNaN(hashId) && hashId !== currentQuoteId) openEditor(hashId);
+});
+</script>
+{% endblock %}

@@ -1,0 +1,132 @@
+@echo off
+title MediaFlow — Utilità
+
+:menu
+cls
+echo.
+echo  MediaFlow — Strumenti
+echo  ─────────────────────────────────────────────────────
+echo.
+echo  [1] Avvia server
+echo  [2] Resetta database (ATTENZIONE: cancella tutti i dati)
+echo  [3] Ricarica dati demo
+echo  [4] Aggiorna dipendenze Python
+echo  [5] Migra database esistente (v1 -^> v2 con Progetti)
+echo  [6] Migra database esistente (v2 -^> v3 con Reparti e Tenant) [Fase 1-bis]
+echo  [7] Migra database esistente (sconti multilivello quotazioni)
+echo  [8] Migra database esistente (AI per-utente, tab Impostazioni AI) [v3.2]
+echo  [9] Migra database esistente (categoria override sulle righe quote) [v3.4.2]
+echo  [A] Apri cartella upload
+echo  [0] Esci
+echo.
+set /p scelta="Scegli un'opzione (0-9, A): "
+
+if "%scelta%"=="1" goto avvia
+if "%scelta%"=="2" goto reset_db
+if "%scelta%"=="3" goto seed
+if "%scelta%"=="4" goto update
+if "%scelta%"=="5" goto migrate
+if "%scelta%"=="6" goto migrate_1bis
+if "%scelta%"=="7" goto migrate_discounts
+if "%scelta%"=="8" goto migrate_ai
+if "%scelta%"=="9" goto migrate_cat_override
+if /i "%scelta%"=="A" goto uploads
+if "%scelta%"=="0" exit /b
+
+goto menu
+
+:avvia
+call .venv\Scripts\activate.bat
+start "" /b cmd /c "timeout /t 2 /nobreak >nul && start http://localhost:8000"
+python run.py
+goto menu
+
+:reset_db
+echo.
+set /p conferma="Sei sicuro? Tutti i dati saranno eliminati (s/n): "
+if /i "%conferma%"=="s" (
+    if exist "mediaflow.db" del "mediaflow.db"
+    echo [OK] Database eliminato
+    call .venv\Scripts\activate.bat
+    python scripts\seed_demo.py
+    echo [OK] Database ricreato con dati demo
+)
+pause & goto menu
+
+:seed
+call .venv\Scripts\activate.bat
+python scripts\seed_demo.py
+pause & goto menu
+
+:update
+call .venv\Scripts\activate.bat
+pip install -r requirements.txt --upgrade --quiet
+echo [OK] Dipendenze aggiornate
+pause & goto menu
+
+:migrate
+echo.
+echo Questo script aggiunge la struttura Progetti al database esistente,
+echo preservando tutti i dati. Esegui una sola volta dopo l'aggiornamento.
+echo.
+set /p conferma="Procedo con la migrazione? (s/n): "
+if /i "%conferma%"=="s" (
+    call .venv\Scripts\activate.bat
+    python scripts\migrate_to_projects.py
+)
+pause & goto menu
+
+:migrate_1bis
+echo.
+echo Migrazione Fase 1-bis: aggiunge Tenant, Reparti e DeliveryTemplate.
+echo Aggiorna anche il listino con le keywords AI e collega le voci ai reparti.
+echo Operazione non distruttiva: i dati esistenti sono preservati.
+echo.
+set /p conferma="Procedo? (s/n): "
+if /i "%conferma%"=="s" (
+    call .venv\Scripts\activate.bat
+    python scripts\migrate_phase1bis.py
+)
+pause & goto menu
+
+:migrate_discounts
+echo.
+echo Migrazione sconti multilivello: aggiunge sconto su singola voce, su categorie
+echo dinamiche e subtotal_gross per visibilita' cliente. Operazione non distruttiva.
+echo.
+set /p conferma="Procedo? (s/n): "
+if /i "%conferma%"=="s" (
+    call .venv\Scripts\activate.bat
+    python scripts\migrate_quote_discounts.py
+)
+pause & goto menu
+
+:migrate_ai
+echo.
+echo Migrazione AI per-utente: aggiunge tabelle user_ai_settings + ai_actions
+echo e la colonna users.active_ai_provider. Genera AI_KEY_ENCRYPTION_KEY in .env
+echo se mancante. Operazione non distruttiva.
+echo.
+set /p conferma="Procedo? (s/n): "
+if /i "%conferma%"=="s" (
+    call .venv\Scripts\activate.bat
+    python scripts\migrate_ai_per_user.py
+)
+pause & goto menu
+
+:migrate_cat_override
+echo.
+echo Migrazione: aggiunge la colonna `category_override` a `quote_lines`.
+echo Permette di spostare voci tra categorie senza cambiare la voce listino.
+echo Operazione non distruttiva e idempotente.
+echo.
+set /p conferma="Procedo? (s/n): "
+if /i "%conferma%"=="s" (
+    call .venv\Scripts\activate.bat
+    python scripts\migrate_quote_category_override.py
+)
+pause & goto menu
+
+:uploads
+explorer uploads
+goto menu

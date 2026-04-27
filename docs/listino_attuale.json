@@ -1,0 +1,1525 @@
+{
+  "version": "1.0",
+  "exported_at": "2026-04-25T16:18:45.875959Z",
+  "tenant_id": 1,
+  "categories": [
+    {
+      "name": "PICTURE",
+      "description": null,
+      "sort_order": 0
+    },
+    {
+      "name": "MASTERING",
+      "description": null,
+      "sort_order": 10
+    },
+    {
+      "name": "DELIVERABLES DCI",
+      "description": null,
+      "sort_order": 20
+    },
+    {
+      "name": "SOUND",
+      "description": null,
+      "sort_order": 30
+    },
+    {
+      "name": "DELIVERABLES SOUND",
+      "description": null,
+      "sort_order": 40
+    },
+    {
+      "name": "VFX",
+      "description": null,
+      "sort_order": 50
+    },
+    {
+      "name": "DAILIES",
+      "description": null,
+      "sort_order": 60
+    },
+    {
+      "name": "ARCHIVE",
+      "description": null,
+      "sort_order": 70
+    },
+    {
+      "name": "TRANSFER",
+      "description": null,
+      "sort_order": 80
+    },
+    {
+      "name": "MATERIALS",
+      "description": null,
+      "sort_order": 90
+    }
+  ],
+  "items": [
+    {
+      "category": "PICTURE",
+      "department_code": "DI-VIDEO",
+      "name": "2K Picture Conform",
+      "description": "Conform 2K da EDL con riferimento QuickTime",
+      "unit_pre": "per",
+      "unit": "day",
+      "price_list": 1180.0,
+      "price_average": 980.0,
+      "price_low": 800.0,
+      "hardcosts": null,
+      "keywords": [
+        "conform",
+        "2k",
+        "edl",
+        "montaggio"
+      ],
+      "is_active": true
+    },
+    {
+      "category": "PICTURE",
+      "department_code": "DI-VIDEO",
+      "name": "4K Picture Conform",
+      "description": "Conform 4K da EDL con riferimento QuickTime",
+      "unit_pre": "per",
+      "unit": "day",
+      "price_list": 1380.0,
+      "price_average": 1200.0,
+      "price_low": 1080.0,
+      "hardcosts": null,
+      "keywords": [
+        "conform",
+        "4k",
+        "edl",
+        "montaggio"
+      ],
+      "is_active": true
+    },
+    {
+      "category": "PICTURE",
+      "department_code": "DI-VIDEO",
+      "name": "2K Colour Grading",
+      "description": "Color grading 2K incluso colorist e sala",
+      "unit_pre": "per",
+      "unit": "day",
+      "price_list": 2600.0,
+      "price_average": 2400.0,
+      "price_low": 1800.0,
+      "hardcosts": null,
+      "keywords": [
+        "color",
+        "grading",
+        "2k",
+        "colorist",
+        "d.i.",
+        "di"
+      ],
+      "is_active": true
+    },
+    {
+      "category": "PICTURE",
+      "department_code": "DI-VIDEO",
+      "name": "4K Colour Grading",
+      "description": "Color grading 4K incluso colorist e sala",
+      "unit_pre": "per",
+      "unit": "day",
+      "price_list": 3000.0,
+      "price_average": 2700.0,
+      "price_low": 2500.0,
+      "hardcosts": null,
+      "keywords": [
+        "color",
+        "grading",
+        "4k",
+        "colorist",
+        "d.i.",
+        "di"
+      ],
+      "is_active": true
+    },
+    {
+      "category": "PICTURE",
+      "department_code": "DI-VIDEO",
+      "name": "Pull VFX Plates (over 10 shots)",
+      "description": "Estrazione plates da EDL per lavorazioni VFX",
+      "unit_pre": "per",
+      "unit": "day",
+      "price_list": 1180.0,
+      "price_average": 980.0,
+      "price_low": 800.0,
+      "hardcosts": null,
+      "keywords": [
+        "vfx",
+        "plates",
+        "pull",
+        "shots"
+      ],
+      "is_active": true
+    },
+    {
+      "category": "PICTURE",
+      "department_code": "DI-VIDEO",
+      "name": "QT H264 da DI Data",
+      "description": "Generazione QuickTime H264",
+      "unit_pre": "per",
+      "unit": "min",
+      "price_list": 3.0,
+      "price_average": 2.0,
+      "price_low": 1.8,
+      "hardcosts": null,
+      "keywords": [
+        "h264",
+        "quicktime",
+        "mov",
+        "screener",
+        "preview"
+      ],
+      "is_active": true
+    },
+    {
+      "category": "PICTURE",
+      "department_code": "DI-VIDEO",
+      "name": "QT H264 watermarked da DI Data",
+      "description": "QuickTime H264 con watermark",
+      "unit_pre": "per",
+      "unit": "min",
+      "price_list": 3.5,
+      "price_average": 2.5,
+      "price_low": 2.0,
+      "hardcosts": null,
+      "keywords": [
+        "h264",
+        "watermark",
+        "screener",
+        "preview"
+      ],
+      "is_active": true
+    },
+    {
+      "category": "PICTURE",
+      "department_code": "DI-VIDEO",
+      "name": "QT ProRes HD 444/422 da DI Data",
+      "description": "QuickTime ProRes HD",
+      "unit_pre": "per",
+      "unit": "min",
+      "price_list": 6.0,
+      "price_average": 5.0,
+      "price_low": 4.0,
+      "hardcosts": null,
+      "keywords": [
+        "prores",
+        "quicktime",
+        "hd",
+        "mov"
+      ],
+      "is_active": true
+    },
+    {
+      "category": "MASTERING",
+      "department_code": "DI-VIDEO",
+      "name": "4K DCP Mastering VF",
+      "description": "DCP 4K versione italiana con QC completo",
+      "unit_pre": "per",
+      "unit": "pc",
+      "price_list": 780.0,
+      "price_average": 650.0,
+      "price_low": 550.0,
+      "hardcosts": null,
+      "keywords": [
+        "dcp",
+        "4k",
+        "mastering",
+        "cinema",
+        "interop",
+        "smpte"
+      ],
+      "is_active": true
+    },
+    {
+      "category": "MASTERING",
+      "department_code": "DI-VIDEO",
+      "name": "2K DCP Mastering VF",
+      "description": "DCP 2K versione italiana con QC completo",
+      "unit_pre": "per",
+      "unit": "pc",
+      "price_list": 600.0,
+      "price_average": 500.0,
+      "price_low": 420.0,
+      "hardcosts": null,
+      "keywords": [
+        "dcp",
+        "2k",
+        "mastering",
+        "cinema",
+        "interop",
+        "smpte"
+      ],
+      "is_active": true
+    },
+    {
+      "category": "MASTERING",
+      "department_code": "DI-VIDEO",
+      "name": "4K DCDM Mastering da 2K DPX",
+      "description": "DCDM 4K con soundmaster e sottotitoli",
+      "unit_pre": "per",
+      "unit": "min",
+      "price_list": 48.0,
+      "price_average": 36.0,
+      "price_low": 30.0,
+      "hardcosts": null,
+      "keywords": [
+        "dcdm",
+        "4k",
+        "dpx",
+        "archive",
+        "master"
+      ],
+      "is_active": true
+    },
+    {
+      "category": "MASTERING",
+      "department_code": "DI-VIDEO",
+      "name": "2K DCDM Mastering da 2K DPX",
+      "description": "DCDM 2K con soundmaster e sottotitoli",
+      "unit_pre": "per",
+      "unit": "min",
+      "price_list": 26.0,
+      "price_average": 19.0,
+      "price_low": 16.0,
+      "hardcosts": null,
+      "keywords": [
+        "dcdm",
+        "2k",
+        "dpx",
+        "archive",
+        "master"
+      ],
+      "is_active": true
+    },
+    {
+      "category": "MASTERING",
+      "department_code": "DI-VIDEO",
+      "name": "Generazione DKDM",
+      "description": "Distribution KDM per apertura DCP",
+      "unit_pre": "per",
+      "unit": "pc",
+      "price_list": 70.0,
+      "price_average": 70.0,
+      "price_low": 70.0,
+      "hardcosts": null,
+      "keywords": [
+        "dkdm",
+        "key",
+        "cinema"
+      ],
+      "is_active": true
+    },
+    {
+      "category": "MASTERING",
+      "department_code": "DI-VIDEO",
+      "name": "Generazione KDM",
+      "description": "Key Delivery Message per singola sala/periodo",
+      "unit_pre": "per",
+      "unit": "pc",
+      "price_list": 18.0,
+      "price_average": 18.0,
+      "price_low": 18.0,
+      "hardcosts": null,
+      "keywords": [
+        "kdm",
+        "key",
+        "cinema"
+      ],
+      "is_active": true
+    },
+    {
+      "category": "MASTERING",
+      "department_code": "DI-VIDEO",
+      "name": "4K DCP Mastering da 2K DPX",
+      "description": "DCP 4K da sorgente 2K DPX",
+      "unit_pre": "per",
+      "unit": "min",
+      "price_list": 40.0,
+      "price_average": 30.0,
+      "price_low": 25.0,
+      "hardcosts": null,
+      "keywords": [
+        "dcp",
+        "4k",
+        "dpx",
+        "mastering",
+        "cinema"
+      ],
+      "is_active": true
+    },
+    {
+      "category": "MASTERING",
+      "department_code": "DI-VIDEO",
+      "name": "2K DCP Mastering da 2K DPX",
+      "description": "DCP 2K da sorgente DPX",
+      "unit_pre": "per",
+      "unit": "min",
+      "price_list": 23.0,
+      "price_average": 21.0,
+      "price_low": 18.0,
+      "hardcosts": null,
+      "keywords": [
+        "dcp",
+        "2k",
+        "dpx",
+        "mastering",
+        "cinema"
+      ],
+      "is_active": true
+    },
+    {
+      "category": "DELIVERABLES DCI",
+      "department_code": "DI-VIDEO",
+      "name": "DCP Copy con CRU Drive & Pelicase",
+      "description": "Copia DCP su drive CRU in pelicase",
+      "unit_pre": "per",
+      "unit": "pc",
+      "price_list": 420.0,
+      "price_average": 330.0,
+      "price_low": 280.0,
+      "hardcosts": 320.0,
+      "keywords": [
+        "dcp",
+        "copy",
+        "cru",
+        "delivery",
+        "cinema"
+      ],
+      "is_active": true
+    },
+    {
+      "category": "DELIVERABLES DCI",
+      "department_code": "DI-VIDEO",
+      "name": "DCP Copy con USB HDD 500GB",
+      "description": "Copia DCP su hard disk USB 500GB",
+      "unit_pre": "per",
+      "unit": "pc",
+      "price_list": 200.0,
+      "price_average": 170.0,
+      "price_low": 150.0,
+      "hardcosts": null,
+      "keywords": [
+        "dcp",
+        "copy",
+        "usb",
+        "hdd",
+        "delivery"
+      ],
+      "is_active": true
+    },
+    {
+      "category": "DELIVERABLES DCI",
+      "department_code": "DI-VIDEO",
+      "name": "DCP Upload via FTP",
+      "description": "Upload DCP su server FTP",
+      "unit_pre": "per",
+      "unit": "pc",
+      "price_list": 70.0,
+      "price_average": 70.0,
+      "price_low": 50.0,
+      "hardcosts": null,
+      "keywords": [
+        "dcp",
+        "ftp",
+        "upload",
+        "delivery"
+      ],
+      "is_active": true
+    },
+    {
+      "category": "DELIVERABLES DCI",
+      "department_code": "DI-VIDEO",
+      "name": "2K DCDM Copy con HDD",
+      "description": "Copia DCDM 2K su hard disk",
+      "unit_pre": "per",
+      "unit": "pc",
+      "price_list": 720.0,
+      "price_average": 600.0,
+      "price_low": 500.0,
+      "hardcosts": null,
+      "keywords": [
+        "dcdm",
+        "copy",
+        "hdd",
+        "archive"
+      ],
+      "is_active": true
+    },
+    {
+      "category": "DELIVERABLES DCI",
+      "department_code": "DI-VIDEO",
+      "name": "4K DCDM Copy con HDD",
+      "description": "Copia DCDM 4K su hard disk",
+      "unit_pre": "per",
+      "unit": "pc",
+      "price_list": 840.0,
+      "price_average": 700.0,
+      "price_low": 600.0,
+      "hardcosts": null,
+      "keywords": [
+        "dcdm",
+        "copy",
+        "hdd",
+        "archive"
+      ],
+      "is_active": true
+    },
+    {
+      "category": "DELIVERABLES DCI",
+      "department_code": "DI-VIDEO",
+      "name": "2K DCP Rewrap da DCP esistente",
+      "description": "Rewrap con generazione nuovo CPL",
+      "unit_pre": "per",
+      "unit": "pc",
+      "price_list": 720.0,
+      "price_average": 450.0,
+      "price_low": 400.0,
+      "hardcosts": null,
+      "keywords": [
+        "dcp",
+        "rewrap",
+        "cpl"
+      ],
+      "is_active": true
+    },
+    {
+      "category": "DELIVERABLES DCI",
+      "department_code": "DI-VIDEO",
+      "name": "Pan & Scan Session 16:9/4:3",
+      "description": "Sessione operatore per riquadratura",
+      "unit_pre": "per",
+      "unit": "day",
+      "price_list": 1200.0,
+      "price_average": 1200.0,
+      "price_low": null,
+      "hardcosts": null,
+      "keywords": [
+        "pan",
+        "scan",
+        "aspect",
+        "reformat"
+      ],
+      "is_active": true
+    },
+    {
+      "category": "SOUND",
+      "department_code": "AUDIO",
+      "name": "Original Sound Check",
+      "description": "Verifica audio originale in sala mix con rerecording mixer e dialog editor",
+      "unit_pre": "per",
+      "unit": "day",
+      "price_list": 1800.0,
+      "price_average": 1800.0,
+      "price_low": 950.0,
+      "hardcosts": null,
+      "keywords": [
+        "sound",
+        "check",
+        "dialog",
+        "rerecording",
+        "mixer"
+      ],
+      "is_active": true
+    },
+    {
+      "category": "SOUND",
+      "department_code": "AUDIO",
+      "name": "Foley Recording",
+      "description": "Registrazione foley con artist, engineer e sala foley",
+      "unit_pre": "per",
+      "unit": "day",
+      "price_list": 1300.0,
+      "price_average": 1100.0,
+      "price_low": 1000.0,
+      "hardcosts": null,
+      "keywords": [
+        "foley",
+        "recording",
+        "sound",
+        "sfx"
+      ],
+      "is_active": true
+    },
+    {
+      "category": "SOUND",
+      "department_code": "AUDIO",
+      "name": "Foley Editing",
+      "description": "Editing foley in postazione Pro Tools",
+      "unit_pre": "per",
+      "unit": "day",
+      "price_list": 450.0,
+      "price_average": 400.0,
+      "price_low": 350.0,
+      "hardcosts": null,
+      "keywords": [
+        "foley",
+        "editing",
+        "protools"
+      ],
+      "is_active": true
+    },
+    {
+      "category": "SOUND",
+      "department_code": "AUDIO",
+      "name": "Dialog / ADR Editing",
+      "description": "Editing dialogo e ADR in postazione Pro Tools",
+      "unit_pre": "per",
+      "unit": "day",
+      "price_list": 500.0,
+      "price_average": 450.0,
+      "price_low": 400.0,
+      "hardcosts": null,
+      "keywords": [
+        "dialog",
+        "adr",
+        "editing",
+        "protools"
+      ],
+      "is_active": true
+    },
+    {
+      "category": "SOUND",
+      "department_code": "AUDIO",
+      "name": "Supervising Sound Design / FX Editing",
+      "description": "Sound design supervisionato ed editing effetti",
+      "unit_pre": "per",
+      "unit": "day",
+      "price_list": 550.0,
+      "price_average": 500.0,
+      "price_low": 450.0,
+      "hardcosts": null,
+      "keywords": [
+        "sounddesign",
+        "sfx",
+        "supervising",
+        "protools"
+      ],
+      "is_active": true
+    },
+    {
+      "category": "SOUND",
+      "department_code": "AUDIO",
+      "name": "Pre-mix e Main-mix 7.1 o 5.1, M&E — Day Shift",
+      "description": "Mix theatrical con sala certificata e rerecording mixer, turno diurno",
+      "unit_pre": "per",
+      "unit": "day",
+      "price_list": 2400.0,
+      "price_average": 2100.0,
+      "price_low": 1800.0,
+      "hardcosts": 500.0,
+      "keywords": [
+        "mix",
+        "mainmix",
+        "premix",
+        "7.1",
+        "5.1",
+        "m&e",
+        "theatrical"
+      ],
+      "is_active": true
+    },
+    {
+      "category": "SOUND",
+      "department_code": "AUDIO",
+      "name": "Pre-mix e Main-mix 7.1 o 5.1, M&E — Late Shift",
+      "description": "Mix theatrical con sala certificata, turno serale",
+      "unit_pre": "per",
+      "unit": "day",
+      "price_list": 2100.0,
+      "price_average": 1900.0,
+      "price_low": 1600.0,
+      "hardcosts": 500.0,
+      "keywords": [
+        "mix",
+        "mainmix",
+        "premix",
+        "7.1",
+        "5.1",
+        "m&e",
+        "theatrical",
+        "late"
+      ],
+      "is_active": true
+    },
+    {
+      "category": "SOUND",
+      "department_code": "AUDIO",
+      "name": "Pre-mix e Main-mix Dolby Atmos, M&E — Day Shift",
+      "description": "Mix Dolby Atmos con sala certificata, turno diurno",
+      "unit_pre": "per",
+      "unit": "day",
+      "price_list": 2800.0,
+      "price_average": 2400.0,
+      "price_low": 2200.0,
+      "hardcosts": 500.0,
+      "keywords": [
+        "atmos",
+        "dolby",
+        "mix",
+        "mainmix",
+        "theatrical"
+      ],
+      "is_active": true
+    },
+    {
+      "category": "SOUND",
+      "department_code": "AUDIO",
+      "name": "Pre-mix 5.1, M&E — Day Shift",
+      "description": "Pre-mix 5.1 con rerecording mixer, turno diurno",
+      "unit_pre": "per",
+      "unit": "day",
+      "price_list": 1800.0,
+      "price_average": 1600.0,
+      "price_low": 1200.0,
+      "hardcosts": 500.0,
+      "keywords": [
+        "premix",
+        "5.1",
+        "m&e",
+        "theatrical"
+      ],
+      "is_active": true
+    },
+    {
+      "category": "SOUND",
+      "department_code": "AUDIO",
+      "name": "Pre-mix 5.1, M&E — Late Shift",
+      "description": "Pre-mix 5.1, turno serale",
+      "unit_pre": "per",
+      "unit": "day",
+      "price_list": 1600.0,
+      "price_average": 1400.0,
+      "price_low": 1000.0,
+      "hardcosts": 500.0,
+      "keywords": [
+        "premix",
+        "5.1",
+        "m&e",
+        "theatrical",
+        "late"
+      ],
+      "is_active": true
+    },
+    {
+      "category": "SOUND",
+      "department_code": "AUDIO",
+      "name": "TV Mix 5.1 o 2.0",
+      "description": "Mix broadcast secondo EBU-R128",
+      "unit_pre": "per",
+      "unit": "day",
+      "price_list": 1100.0,
+      "price_average": 980.0,
+      "price_low": 800.0,
+      "hardcosts": null,
+      "keywords": [
+        "mix",
+        "tv",
+        "broadcast",
+        "5.1",
+        "stereo",
+        "ebu"
+      ],
+      "is_active": true
+    },
+    {
+      "category": "SOUND",
+      "department_code": "AUDIO",
+      "name": "TV M&E/IT Mix 5.1 o 2.0",
+      "description": "Music & Effects o International Track secondo EBU-R128",
+      "unit_pre": "per",
+      "unit": "day",
+      "price_list": 1100.0,
+      "price_average": 980.0,
+      "price_low": 800.0,
+      "hardcosts": null,
+      "keywords": [
+        "mix",
+        "tv",
+        "m&e",
+        "broadcast",
+        "ebu"
+      ],
+      "is_active": true
+    },
+    {
+      "category": "SOUND",
+      "department_code": "AUDIO",
+      "name": "Editor presenti al mix",
+      "description": "Assistenza editor durante sessione di mix",
+      "unit_pre": "per",
+      "unit": "day",
+      "price_list": 300.0,
+      "price_average": 250.0,
+      "price_low": 200.0,
+      "hardcosts": null,
+      "keywords": [
+        "editor",
+        "mix",
+        "assistance"
+      ],
+      "is_active": true
+    },
+    {
+      "category": "SOUND",
+      "department_code": "AUDIO",
+      "name": "Dolby Atmos Home Mastering per BluRay, M&E",
+      "description": "Mastering Dolby Atmos home per BluRay",
+      "unit_pre": "per",
+      "unit": "day",
+      "price_list": 2000.0,
+      "price_average": 1800.0,
+      "price_low": null,
+      "hardcosts": 500.0,
+      "keywords": [
+        "atmos",
+        "dolby",
+        "bluray",
+        "home",
+        "mastering"
+      ],
+      "is_active": true
+    },
+    {
+      "category": "SOUND",
+      "department_code": "AUDIO",
+      "name": "ADR Recording",
+      "description": "Registrazione ADR con sound engineer e sala ADR",
+      "unit_pre": "per",
+      "unit": "day",
+      "price_list": 880.0,
+      "price_average": 880.0,
+      "price_low": 850.0,
+      "hardcosts": null,
+      "keywords": [
+        "adr",
+        "recording",
+        "studio",
+        "dialog"
+      ],
+      "is_active": true
+    },
+    {
+      "category": "SOUND",
+      "department_code": "AUDIO",
+      "name": "ADR Edit",
+      "description": "Editing ADR in postazione Pro Tools",
+      "unit_pre": "per",
+      "unit": "day",
+      "price_list": 400.0,
+      "price_average": 400.0,
+      "price_low": null,
+      "hardcosts": null,
+      "keywords": [
+        "adr",
+        "editing",
+        "protools"
+      ],
+      "is_active": true
+    },
+    {
+      "category": "DELIVERABLES SOUND",
+      "department_code": "AUDIO",
+      "name": "Printmaster 2-track OV 24fps",
+      "description": "Printmaster stereo versione originale",
+      "unit_pre": "per",
+      "unit": "min",
+      "price_list": 2.5,
+      "price_average": null,
+      "price_low": null,
+      "hardcosts": null,
+      "keywords": [
+        "printmaster",
+        "stereo",
+        "ov",
+        "delivery"
+      ],
+      "is_active": true
+    },
+    {
+      "category": "DELIVERABLES SOUND",
+      "department_code": "AUDIO",
+      "name": "Printmaster 6-track 24fps",
+      "description": "Printmaster 5.1 theatrical",
+      "unit_pre": "per",
+      "unit": "min",
+      "price_list": 2.5,
+      "price_average": null,
+      "price_low": null,
+      "hardcosts": null,
+      "keywords": [
+        "printmaster",
+        "5.1",
+        "6-track",
+        "delivery"
+      ],
+      "is_active": true
+    },
+    {
+      "category": "DELIVERABLES SOUND",
+      "department_code": "AUDIO",
+      "name": "Stems 6-track 24fps",
+      "description": "Stems D/M/E 5.1",
+      "unit_pre": "per",
+      "unit": "min",
+      "price_list": 2.5,
+      "price_average": null,
+      "price_low": null,
+      "hardcosts": null,
+      "keywords": [
+        "stems",
+        "6-track",
+        "5.1",
+        "dme",
+        "delivery"
+      ],
+      "is_active": true
+    },
+    {
+      "category": "DELIVERABLES SOUND",
+      "department_code": "AUDIO",
+      "name": "TV Mix 6-track 25fps EBU128",
+      "description": "Mix TV 5.1 secondo EBU-R128",
+      "unit_pre": "per",
+      "unit": "min",
+      "price_list": 2.5,
+      "price_average": null,
+      "price_low": null,
+      "hardcosts": null,
+      "keywords": [
+        "tv",
+        "mix",
+        "6-track",
+        "ebu",
+        "broadcast",
+        "25fps"
+      ],
+      "is_active": true
+    },
+    {
+      "category": "DELIVERABLES SOUND",
+      "department_code": "AUDIO",
+      "name": "TV M&E Mix 6-track 25fps EBU128",
+      "description": "M&E TV 5.1 secondo EBU-R128",
+      "unit_pre": "per",
+      "unit": "min",
+      "price_list": 2.5,
+      "price_average": null,
+      "price_low": null,
+      "hardcosts": null,
+      "keywords": [
+        "tv",
+        "m&e",
+        "mix",
+        "6-track",
+        "ebu",
+        "broadcast"
+      ],
+      "is_active": true
+    },
+    {
+      "category": "DELIVERABLES SOUND",
+      "department_code": "AUDIO",
+      "name": "Downmix Stereo DME da 6-track DME Stems",
+      "description": "Downmix stereo da stems 5.1 (durata x3)",
+      "unit_pre": "per",
+      "unit": "min",
+      "price_list": 6.0,
+      "price_average": 4.0,
+      "price_low": 3.0,
+      "hardcosts": null,
+      "keywords": [
+        "downmix",
+        "stereo",
+        "dme",
+        "stems"
+      ],
+      "is_active": true
+    },
+    {
+      "category": "DELIVERABLES SOUND",
+      "department_code": "AUDIO",
+      "name": "Pro Tools Session D/M/E Stems/6-track Master/LtRt",
+      "description": "Pacchetto session Pro Tools completo",
+      "unit_pre": "per",
+      "unit": "min",
+      "price_list": 3.0,
+      "price_average": 2.0,
+      "price_low": 1.6,
+      "hardcosts": null,
+      "keywords": [
+        "protools",
+        "session",
+        "stems",
+        "ltrt",
+        "dme"
+      ],
+      "is_active": true
+    },
+    {
+      "category": "DELIVERABLES SOUND",
+      "department_code": "AUDIO",
+      "name": "Time Base Conversion",
+      "description": "Conversione framerate 25/24/23.97 fps",
+      "unit_pre": "per",
+      "unit": "min",
+      "price_list": 4.0,
+      "price_average": 3.0,
+      "price_low": 2.0,
+      "hardcosts": null,
+      "keywords": [
+        "timebase",
+        "conversion",
+        "framerate",
+        "25fps",
+        "24fps"
+      ],
+      "is_active": true
+    },
+    {
+      "category": "DELIVERABLES SOUND",
+      "department_code": "AUDIO",
+      "name": "Dolby E Encoding da 6-track esistente",
+      "description": "Encoding Dolby E per broadcast",
+      "unit_pre": "per",
+      "unit": "min",
+      "price_list": 5.0,
+      "price_average": 4.0,
+      "price_low": 3.5,
+      "hardcosts": null,
+      "keywords": [
+        "dolby e",
+        "encoding",
+        "6-track",
+        "broadcast"
+      ],
+      "is_active": true
+    },
+    {
+      "category": "VFX",
+      "department_code": "VFX",
+      "name": "VFX Supervisor On Set",
+      "description": "Supervisione VFX sul set",
+      "unit_pre": "per",
+      "unit": "day",
+      "price_list": 600.0,
+      "price_average": 500.0,
+      "price_low": 400.0,
+      "hardcosts": null,
+      "keywords": [
+        "vfx",
+        "supervisor",
+        "on set",
+        "shooting"
+      ],
+      "is_active": true
+    },
+    {
+      "category": "VFX",
+      "department_code": "VFX",
+      "name": "3D Artist",
+      "description": "Artist 3D con workstation (Maya / Cinema 4D)",
+      "unit_pre": "per",
+      "unit": "day",
+      "price_list": 700.0,
+      "price_average": 600.0,
+      "price_low": 450.0,
+      "hardcosts": null,
+      "keywords": [
+        "3d",
+        "artist",
+        "maya",
+        "cinema4d"
+      ],
+      "is_active": true
+    },
+    {
+      "category": "VFX",
+      "department_code": "VFX",
+      "name": "2D Artist / Compositor",
+      "description": "Artist 2D compositing (Nuke / After Effects)",
+      "unit_pre": "per",
+      "unit": "day",
+      "price_list": 600.0,
+      "price_average": 450.0,
+      "price_low": 350.0,
+      "hardcosts": null,
+      "keywords": [
+        "2d",
+        "nuke",
+        "afterfx",
+        "compositing"
+      ],
+      "is_active": true
+    },
+    {
+      "category": "VFX",
+      "department_code": "VFX",
+      "name": "3D Animator",
+      "description": "Animator 3D con workstation",
+      "unit_pre": "per",
+      "unit": "day",
+      "price_list": 750.0,
+      "price_average": 650.0,
+      "price_low": 450.0,
+      "hardcosts": null,
+      "keywords": [
+        "3d",
+        "animator",
+        "maya",
+        "animation"
+      ],
+      "is_active": true
+    },
+    {
+      "category": "VFX",
+      "department_code": "VFX",
+      "name": "Matte Painter",
+      "description": "Matte painting con tavoletta grafica",
+      "unit_pre": "per",
+      "unit": "day",
+      "price_list": 600.0,
+      "price_average": 450.0,
+      "price_low": 350.0,
+      "hardcosts": null,
+      "keywords": [
+        "matte",
+        "painting",
+        "painter",
+        "digital"
+      ],
+      "is_active": true
+    },
+    {
+      "category": "VFX",
+      "department_code": "VFX",
+      "name": "Rotoscoping",
+      "description": "Rotoscoping in postazione dedicata",
+      "unit_pre": "per",
+      "unit": "day",
+      "price_list": 350.0,
+      "price_average": 250.0,
+      "price_low": 200.0,
+      "hardcosts": null,
+      "keywords": [
+        "roto",
+        "rotoscoping"
+      ],
+      "is_active": true
+    },
+    {
+      "category": "VFX",
+      "department_code": "VFX",
+      "name": "Title Artist",
+      "description": "Creazione titoli in After Effects",
+      "unit_pre": "per",
+      "unit": "day",
+      "price_list": 500.0,
+      "price_average": 450.0,
+      "price_low": 400.0,
+      "hardcosts": null,
+      "keywords": [
+        "title",
+        "titling",
+        "afterfx",
+        "motion"
+      ],
+      "is_active": true
+    },
+    {
+      "category": "VFX",
+      "department_code": "VFX",
+      "name": "VFX Producer",
+      "description": "Coordinamento produzione VFX",
+      "unit_pre": "per",
+      "unit": "day",
+      "price_list": 450.0,
+      "price_average": 300.0,
+      "price_low": 250.0,
+      "hardcosts": null,
+      "keywords": [
+        "vfx",
+        "producer",
+        "supervisor"
+      ],
+      "is_active": true
+    },
+    {
+      "category": "VFX",
+      "department_code": "VFX",
+      "name": "Sequenza titoli testa & end roller",
+      "description": "Titoli completi di testa e coda a pacchetto",
+      "unit_pre": "just",
+      "unit": "allow",
+      "price_list": 5000.0,
+      "price_average": null,
+      "price_low": null,
+      "hardcosts": null,
+      "keywords": [
+        "titles",
+        "end roller",
+        "front title",
+        "credits"
+      ],
+      "is_active": true
+    },
+    {
+      "category": "DAILIES",
+      "department_code": "DI-VIDEO",
+      "name": "Postazione Dailies con DaVinci Resolve",
+      "description": "Postazione completa: workstation color, QC monitor, storage Thunderbolt, LTO deck",
+      "unit_pre": "per",
+      "unit": "day",
+      "price_list": 200.0,
+      "price_average": 180.0,
+      "price_low": 150.0,
+      "hardcosts": null,
+      "keywords": [
+        "dailies",
+        "davinci",
+        "resolve",
+        "on set"
+      ],
+      "is_active": true
+    },
+    {
+      "category": "DAILIES",
+      "department_code": "DI-VIDEO",
+      "name": "Digital Image Technician / Rushes Grader",
+      "description": "DIT con color correction dei rushes",
+      "unit_pre": "per",
+      "unit": "day",
+      "price_list": 320.0,
+      "price_average": 280.0,
+      "price_low": 250.0,
+      "hardcosts": null,
+      "keywords": [
+        "dit",
+        "rushes",
+        "grader",
+        "on set",
+        "dailies"
+      ],
+      "is_active": true
+    },
+    {
+      "category": "DAILIES",
+      "department_code": "DI-VIDEO",
+      "name": "Upload Dailies su MediaHub",
+      "description": "Pubblicazione giornaliera dailies",
+      "unit_pre": "per",
+      "unit": "week",
+      "price_list": 180.0,
+      "price_average": 160.0,
+      "price_low": 130.0,
+      "hardcosts": null,
+      "keywords": [
+        "dailies",
+        "upload",
+        "mediahub",
+        "delivery"
+      ],
+      "is_active": true
+    },
+    {
+      "category": "DAILIES",
+      "department_code": "DI-VIDEO",
+      "name": "Sala di montaggio Avid",
+      "description": "Postazione Avid con monitor preview",
+      "unit_pre": "per",
+      "unit": "week",
+      "price_list": 700.0,
+      "price_average": 500.0,
+      "price_low": 400.0,
+      "hardcosts": null,
+      "keywords": [
+        "avid",
+        "editing",
+        "suite",
+        "edit"
+      ],
+      "is_active": true
+    },
+    {
+      "category": "DAILIES",
+      "department_code": "DI-VIDEO",
+      "name": "Avid Assistant (giornata)",
+      "description": "Assistente al montaggio: sync rushes, data wrangling",
+      "unit_pre": "per",
+      "unit": "day",
+      "price_list": 270.0,
+      "price_average": 240.0,
+      "price_low": 200.0,
+      "hardcosts": null,
+      "keywords": [
+        "avid",
+        "assistant",
+        "day",
+        "dailies"
+      ],
+      "is_active": true
+    },
+    {
+      "category": "DAILIES",
+      "department_code": "DI-VIDEO",
+      "name": "Avid Assistant (ora)",
+      "description": "Assistente al montaggio a ore",
+      "unit_pre": "per",
+      "unit": "hr",
+      "price_list": 35.0,
+      "price_average": 25.0,
+      "price_low": 20.0,
+      "hardcosts": null,
+      "keywords": [
+        "avid",
+        "assistant",
+        "hourly"
+      ],
+      "is_active": true
+    },
+    {
+      "category": "ARCHIVE",
+      "department_code": "DI-VIDEO",
+      "name": "Data Backup su LTO (fino a 10 TB)",
+      "description": "Archiviazione dati su nastri LTO",
+      "unit_pre": "per",
+      "unit": "TB",
+      "price_list": 500.0,
+      "price_average": null,
+      "price_low": null,
+      "hardcosts": null,
+      "keywords": [
+        "lto",
+        "backup",
+        "archive",
+        "storage"
+      ],
+      "is_active": true
+    },
+    {
+      "category": "ARCHIVE",
+      "department_code": "DI-VIDEO",
+      "name": "Data Backup su LTO (oltre 10 TB)",
+      "description": "Archiviazione grandi volumi su LTO",
+      "unit_pre": "per",
+      "unit": "TB",
+      "price_list": 550.0,
+      "price_average": null,
+      "price_low": null,
+      "hardcosts": null,
+      "keywords": [
+        "lto",
+        "backup",
+        "archive",
+        "storage",
+        "large"
+      ],
+      "is_active": true
+    },
+    {
+      "category": "TRANSFER",
+      "department_code": "DI-VIDEO",
+      "name": "Servizio FTP (fino a 500GB)",
+      "description": "Area FTP riservata fino a 500GB di traffico",
+      "unit_pre": "per",
+      "unit": "GB",
+      "price_list": 0.15,
+      "price_average": null,
+      "price_low": null,
+      "hardcosts": null,
+      "keywords": [
+        "ftp",
+        "transfer",
+        "upload",
+        "delivery"
+      ],
+      "is_active": true
+    },
+    {
+      "category": "TRANSFER",
+      "department_code": "DI-VIDEO",
+      "name": "Signiant MediaShuttle (fino a 1TB)",
+      "description": "Trasferimento via Signiant fino a 1TB",
+      "unit_pre": "per",
+      "unit": "GB",
+      "price_list": 0.2,
+      "price_average": null,
+      "price_low": null,
+      "hardcosts": null,
+      "keywords": [
+        "signiant",
+        "mediashuttle",
+        "transfer",
+        "delivery"
+      ],
+      "is_active": true
+    },
+    {
+      "category": "TRANSFER",
+      "department_code": "DI-VIDEO",
+      "name": "Data Transfer / Upload allowance",
+      "description": "Forfait per upload di materiali vari",
+      "unit_pre": "just",
+      "unit": "allow",
+      "price_list": 50.0,
+      "price_average": null,
+      "price_low": null,
+      "hardcosts": null,
+      "keywords": [
+        "transfer",
+        "upload",
+        "allowance"
+      ],
+      "is_active": true
+    },
+    {
+      "category": "MATERIALS",
+      "department_code": "DI-VIDEO",
+      "name": "USB Hard Drive 3.0 500GB",
+      "description": "HDD USB 3.0 da 500GB",
+      "unit_pre": "per",
+      "unit": "pc",
+      "price_list": 100.0,
+      "price_average": null,
+      "price_low": null,
+      "hardcosts": 31.7,
+      "keywords": [
+        "usb",
+        "hdd",
+        "500gb",
+        "drive"
+      ],
+      "is_active": true
+    },
+    {
+      "category": "MATERIALS",
+      "department_code": "DI-VIDEO",
+      "name": "USB Hard Drive 3.0 1TB",
+      "description": "HDD USB 3.0 da 1TB",
+      "unit_pre": "per",
+      "unit": "pc",
+      "price_list": 120.0,
+      "price_average": null,
+      "price_low": null,
+      "hardcosts": 36.65,
+      "keywords": [
+        "usb",
+        "hdd",
+        "1tb",
+        "drive"
+      ],
+      "is_active": true
+    },
+    {
+      "category": "MATERIALS",
+      "department_code": "DI-VIDEO",
+      "name": "USB Hard Drive 3.0 2TB",
+      "description": "HDD USB 3.0 da 2TB",
+      "unit_pre": "per",
+      "unit": "pc",
+      "price_list": 135.0,
+      "price_average": null,
+      "price_low": null,
+      "hardcosts": 55.7,
+      "keywords": [
+        "usb",
+        "hdd",
+        "2tb",
+        "drive"
+      ],
+      "is_active": true
+    },
+    {
+      "category": "MATERIALS",
+      "department_code": "DI-VIDEO",
+      "name": "CRU Drive 500GB",
+      "description": "Cartuccia CRU per DCP",
+      "unit_pre": "per",
+      "unit": "pc",
+      "price_list": 240.0,
+      "price_average": null,
+      "price_low": null,
+      "hardcosts": 124.2,
+      "keywords": [
+        "cru",
+        "drive",
+        "dcp"
+      ],
+      "is_active": true
+    },
+    {
+      "category": "MATERIALS",
+      "department_code": "DI-VIDEO",
+      "name": "Pelicase",
+      "description": "Valigetta rigida per spedizione",
+      "unit_pre": "per",
+      "unit": "pc",
+      "price_list": 30.0,
+      "price_average": null,
+      "price_low": null,
+      "hardcosts": 31.0,
+      "keywords": [
+        "pelicase",
+        "case",
+        "shipping"
+      ],
+      "is_active": true
+    },
+    {
+      "category": "MATERIALS",
+      "department_code": "DI-VIDEO",
+      "name": "Nastri LTO",
+      "description": "Nastro LTO per archiviazione",
+      "unit_pre": "per",
+      "unit": "pc",
+      "price_list": 100.0,
+      "price_average": null,
+      "price_low": null,
+      "hardcosts": 19.03,
+      "keywords": [
+        "lto",
+        "tape",
+        "archive",
+        "media"
+      ],
+      "is_active": true
+    },
+    {
+      "category": "MATERIALS",
+      "department_code": "DI-VIDEO",
+      "name": "DVD double layer",
+      "description": "DVD dual layer vergine",
+      "unit_pre": "per",
+      "unit": "pc",
+      "price_list": 5.0,
+      "price_average": null,
+      "price_low": null,
+      "hardcosts": 2.94,
+      "keywords": [
+        "dvd",
+        "media"
+      ],
+      "is_active": true
+    },
+    {
+      "category": "MATERIALS",
+      "department_code": "DI-VIDEO",
+      "name": "BluRay Disc",
+      "description": "BluRay vergine",
+      "unit_pre": "per",
+      "unit": "pc",
+      "price_list": 8.0,
+      "price_average": null,
+      "price_low": null,
+      "hardcosts": 2.37,
+      "keywords": [
+        "bluray",
+        "media",
+        "disc"
+      ],
+      "is_active": true
+    }
+  ]
+}

@@ -1,0 +1,407 @@
+{% extends "base.html" %}
+{% set active_page = "settings" %}
+{% block title %}Impostazioni — MediaFlow{% endblock %}
+{% block topbar_title %}Impostazioni{% endblock %}
+
+{% block head %}
+<script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.2/Sortable.min.js"></script>
+<style>
+  .settings-grid { display:grid; grid-template-columns:200px 1fr; gap:24px; align-items:flex-start; }
+  .settings-tabs { display:flex; flex-direction:column; gap:4px; position:sticky; top:80px; }
+  .settings-tab {
+    padding:10px 12px; cursor:pointer; border-radius:6px;
+    color:var(--text2); font-size:13px; transition: background var(--t), color var(--t);
+  }
+  .settings-tab:hover { background:var(--surface); color:var(--text); }
+  .settings-tab.active { background:var(--indigo-bg); color:var(--indigo2); font-weight:500; }
+  .settings-pane { display:none; }
+  .settings-pane.active { display:block; }
+  .theme-card {
+    cursor:pointer; padding:14px; border-radius:var(--radius);
+    border:2px solid var(--border); transition: border-color var(--t);
+    display:flex; flex-direction:column; gap:8px;
+  }
+  .theme-card:hover { border-color:var(--border2); }
+  .theme-card.active { border-color:var(--indigo); }
+  .theme-swatches { display:flex; gap:6px; }
+  .theme-swatches .sw { width:24px; height:24px; border-radius:5px; border:1px solid rgba(255,255,255,.1); }
+  .theme-name { font-weight:500; font-size:13px; }
+  .theme-desc { font-size:11px; color:var(--text3); }
+  .nav-reorder-list { display:flex; flex-direction:column; gap:4px; max-width:380px; }
+  .nav-reorder-list .nav-row {
+    display:flex; align-items:center; gap:10px; padding:8px 12px;
+    background:var(--bg3); border:1px solid var(--border); border-radius:var(--radius);
+    cursor:grab; user-select:none;
+  }
+  .nav-reorder-list .nav-row:active { cursor:grabbing; }
+  .nav-reorder-list .ghost { opacity:0.4; }
+  .nav-reorder-list .handle { color:var(--text3); font-family:'DM Mono',monospace; }
+  .nav-reorder-list .label { flex:1; font-size:13px; }
+  .nav-reorder-list .section-tag { font-size:10px; color:var(--text3); }
+
+  .ai-card {
+    border:1px solid var(--border); border-radius:var(--radius);
+    padding:16px; margin-bottom:12px; background:var(--bg3);
+  }
+  .ai-card.active-provider { border-color:var(--indigo); }
+  .ai-card-head { display:flex; align-items:center; gap:10px; margin-bottom:10px; }
+  .ai-card-title { font-size:14px; font-weight:600; flex:1; }
+  .ai-status-dot { width:10px; height:10px; border-radius:50%; }
+  .ai-status-dot.ok { background:#4ade80; }
+  .ai-status-dot.warn { background:#fbbf24; }
+  .ai-status-dot.off { background:var(--text3); }
+  .ai-status-dot.err { background:#ef4444; }
+  .ai-card-body { display:grid; grid-template-columns: 1fr 1fr; gap:10px; }
+  .ai-card-body .full { grid-column: 1 / -1; }
+  .ai-card-actions { display:flex; gap:8px; margin-top:12px; flex-wrap:wrap; }
+  .ai-card-meta { font-size:11px; color:var(--text3); margin-top:6px; }
+  .ai-card-error { font-size:11px; color:#ef4444; margin-top:6px; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="settings-grid">
+  <div class="settings-tabs">
+    <div class="settings-tab active" data-pane="aspect" onclick="showPane('aspect')">🎨 Aspetto</div>
+    <div class="settings-tab" data-pane="sidebar" onclick="showPane('sidebar')">📐 Sidebar</div>
+    <div class="settings-tab" data-pane="ai" onclick="showPane('ai')">🤖 AI</div>
+    <div class="settings-tab" data-pane="account" onclick="showPane('account')">👤 Account</div>
+  </div>
+
+  <div>
+    <!-- ── Pannello Aspetto ───────────────────────────────────── -->
+    <div class="settings-pane active" id="pane-aspect">
+      <div class="card">
+        <div class="card-title mb-3">Tema colori</div>
+        <p class="text-sm text-muted mb-3">La scelta è memorizzata nel browser corrente. Si applica subito a tutte le pagine.</p>
+        <div class="grid-2" style="gap:12px;" id="theme-grid">
+          <!-- generato da JS -->
+        </div>
+      </div>
+    </div>
+
+    <!-- ── Pannello Sidebar ───────────────────────────────────── -->
+    <div class="settings-pane" id="pane-sidebar">
+      <div class="card">
+        <div class="card-title mb-2">Ordine voci sidebar</div>
+        <p class="text-sm text-muted mb-3">Trascina per riordinare. L'ordine si applica subito a tutte le pagine. Quando personalizzi l'ordine, le sezioni (Anagrafica, Operativo…) vengono unificate in un'unica lista.</p>
+        <div class="nav-reorder-list" id="nav-reorder-list"></div>
+        <div class="flex gap-2 mt-3">
+          <button class="btn btn-secondary btn-sm" onclick="resetSidebarOrder()">Ripristina ordine default</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── Pannello AI ───────────────────────────────────── -->
+    <div class="settings-pane" id="pane-ai">
+      <div class="card mb-4">
+        <div class="flex items-center justify-between mb-3">
+          <div>
+            <div class="card-title">Provider AI</div>
+            <p class="text-sm text-muted" style="margin:4px 0 0;">
+              Le chiavi API sono salvate cifrate sul server.
+              Solo il provider <b>attivo</b> viene utilizzato dal copilot.
+            </p>
+          </div>
+          <div id="ai-active-badge" class="text-sm" style="text-align:right;"></div>
+        </div>
+        <div id="ai-providers"></div>
+        <div class="flex gap-2 mt-3">
+          <button class="btn btn-secondary btn-sm" onclick="aiDisableAll()">Disabilita AI</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── Pannello Account ───────────────────────────────────── -->
+    <div class="settings-pane" id="pane-account">
+      <div class="card mb-4">
+        <div class="card-title mb-3">Profilo utente</div>
+        {% if user %}
+        <div class="form-group"><label class="form-label">Nome completo</label>
+          <input class="form-input" id="ac-name" value="{{ user.full_name }}"></div>
+        <div class="form-group"><label class="form-label">Email</label>
+          <input class="form-input" id="ac-email" type="email" value="{{ user.email }}"></div>
+        <div class="form-group"><label class="form-label">Ruolo</label>
+          <input class="form-input" value="{{ user.role.value if user.role else '—' }}" disabled style="opacity:0.6;"></div>
+        <button class="btn btn-primary btn-sm" onclick="saveProfile()">Salva profilo</button>
+        {% else %}
+        <p class="text-sm text-muted">Nessun utente disponibile. Crea un utente da auth API.</p>
+        {% endif %}
+      </div>
+
+      {% if user %}
+      <div class="card">
+        <div class="card-title mb-3">Cambia password</div>
+        <div class="form-group"><label class="form-label">Password attuale</label>
+          <input class="form-input" id="ac-pwd-old" type="password" autocomplete="current-password"></div>
+        <div class="form-group"><label class="form-label">Nuova password (min 6 caratteri)</label>
+          <input class="form-input" id="ac-pwd-new" type="password" autocomplete="new-password"></div>
+        <div class="form-group"><label class="form-label">Conferma nuova password</label>
+          <input class="form-input" id="ac-pwd-conf" type="password" autocomplete="new-password"></div>
+        <button class="btn btn-primary btn-sm" onclick="changePassword()">Cambia password</button>
+      </div>
+      {% endif %}
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+const THEMES = [
+  { id:'indigo', name:'Indigo Dark', desc:'Dark indaco — default',
+    swatches:['#0f1117','#1f2436','#6272f5','#7e8ef7','#e8ecf5'] },
+  { id:'slate',  name:'Slate Dark', desc:'Grigio freddo — sobrio',
+    swatches:['#11141a','#232730','#5b8def','#7aa3f5','#e6e9ef'] },
+  { id:'forest', name:'Forest', desc:'Verde scuro — naturale',
+    swatches:['#0c1410','#1a261f','#4ade80','#6ee7a4','#e7f0e9'] },
+  { id:'sand',   name:'Sand', desc:'Caldo chiaro — contrasto',
+    swatches:['#f5f1e8','#e1dac5','#a0522d','#b97350','#2b2620'] },
+];
+
+function showPane(id) {
+  document.querySelectorAll('.settings-tab').forEach(t => t.classList.toggle('active', t.dataset.pane === id));
+  document.querySelectorAll('.settings-pane').forEach(p => p.classList.toggle('active', p.id === 'pane-' + id));
+}
+
+// ── Aspetto ──────────────────────────────────────────────────
+function renderThemes() {
+  const current = localStorage.getItem('mf_theme') || 'indigo';
+  document.getElementById('theme-grid').innerHTML = THEMES.map(t => `
+    <div class="theme-card ${t.id === current ? 'active' : ''}" onclick="pickTheme('${t.id}')">
+      <div class="theme-swatches">
+        ${t.swatches.map(s => `<div class="sw" style="background:${s};"></div>`).join('')}
+      </div>
+      <div class="theme-name">${t.name}</div>
+      <div class="theme-desc">${t.desc}</div>
+    </div>
+  `).join('');
+}
+function pickTheme(id) {
+  setTheme(id);
+  renderThemes();
+  toast(`Tema impostato: ${THEMES.find(t=>t.id===id).name}`, 'success');
+}
+
+// ── Sidebar reorder ──────────────────────────────────────────
+const NAV_ITEMS_DEF = [
+  { id:'dashboard',   label:'Dashboard',         section:'Principale',    icon:'⬛' },
+  { id:'clients',     label:'Clienti',           section:'Anagrafica',    icon:'🏢' },
+  { id:'projects',    label:'Progetti',          section:'Anagrafica',    icon:'🎞' },
+  { id:'planning',    label:'Pianificazione',    section:'Operativo',     icon:'📋' },
+  { id:'calendar',    label:'Calendario',        section:'Operativo',     icon:'📅' },
+  { id:'resources',   label:'Risorse',           section:'Operativo',     icon:'👥' },
+  { id:'pricelist',   label:'Listino Prezzi',    section:'Preventivi',    icon:'📋' },
+  { id:'quotes',      label:'Quotazioni',        section:'Preventivi',    icon:'💬' },
+  { id:'cost_report', label:'Cost Report',       section:'Finanza',       icon:'📊' },
+  { id:'finance',     label:'Fatturazione',      section:'Finanza',       icon:'💶' },
+  { id:'dam',         label:'Asset Library',     section:'Media',         icon:'🎬' },
+  { id:'departments', label:'Reparti',           section:'Configurazione',icon:'🏛️' },
+  { id:'settings',    label:'Impostazioni',      section:'Configurazione',icon:'⚙' },
+];
+
+function renderNavReorder() {
+  const saved = JSON.parse(localStorage.getItem('mf_sidebar_order') || 'null');
+  let order = saved && Array.isArray(saved) ? saved : NAV_ITEMS_DEF.map(i => i.id);
+  // Filtra eventuali id non più presenti + aggiungi nuovi in coda
+  order = order.filter(id => NAV_ITEMS_DEF.find(i => i.id === id));
+  for (const it of NAV_ITEMS_DEF) {
+    if (!order.includes(it.id)) order.push(it.id);
+  }
+  const list = document.getElementById('nav-reorder-list');
+  list.innerHTML = order.map(id => {
+    const item = NAV_ITEMS_DEF.find(i => i.id === id);
+    return `
+      <div class="nav-row" data-nav-id="${id}">
+        <span class="handle">⠿</span>
+        <span style="font-size:14px;">${item.icon}</span>
+        <span class="label">${item.label}</span>
+        <span class="section-tag">${item.section}</span>
+      </div>`;
+  }).join('');
+  if (list._sortable) list._sortable.destroy();
+  list._sortable = Sortable.create(list, {
+    animation: 150, ghostClass: 'ghost',
+    onEnd: () => {
+      const newOrder = [...list.querySelectorAll('.nav-row')].map(el => el.dataset.navId);
+      localStorage.setItem('mf_sidebar_order', JSON.stringify(newOrder));
+      if (typeof applySidebarOrder === 'function') applySidebarOrder();
+      toast('Ordine sidebar applicato', 'success');
+    },
+  });
+}
+function resetSidebarOrder() {
+  localStorage.removeItem('mf_sidebar_order');
+  renderNavReorder();
+  toast('Ordine ripristinato. Ricarica la pagina per rivedere le sezioni originali.', 'info');
+}
+
+// ── Account ──────────────────────────────────────────────────
+async function saveProfile() {
+  const fd = new FormData();
+  fd.append('full_name', document.getElementById('ac-name').value);
+  fd.append('email', document.getElementById('ac-email').value);
+  try {
+    await api('PUT', '/settings/api/me', fd);
+    toast('Profilo aggiornato', 'success');
+  } catch(e) { toast(e.message, 'error'); }
+}
+
+async function changePassword() {
+  const oldP = document.getElementById('ac-pwd-old').value;
+  const newP = document.getElementById('ac-pwd-new').value;
+  const conf = document.getElementById('ac-pwd-conf').value;
+  if (!oldP || !newP) { toast('Compila tutti i campi password', 'error'); return; }
+  if (newP !== conf) { toast('La conferma non coincide con la nuova password', 'error'); return; }
+  if (newP.length < 6) { toast('La nuova password deve avere almeno 6 caratteri', 'error'); return; }
+  try {
+    const fd = new FormData();
+    fd.append('old_password', oldP);
+    fd.append('new_password', newP);
+    await api('PUT', '/settings/api/me/password', fd);
+    document.getElementById('ac-pwd-old').value = '';
+    document.getElementById('ac-pwd-new').value = '';
+    document.getElementById('ac-pwd-conf').value = '';
+    toast('Password aggiornata', 'success');
+  } catch(e) { toast(e.message, 'error'); }
+}
+
+renderThemes();
+renderNavReorder();
+
+// ── AI providers ─────────────────────────────────────────────
+let _aiState = null;
+
+async function loadAISettings() {
+  try {
+    const data = await api('GET', '/settings/api/ai');
+    _aiState = data;
+    renderAISettings();
+  } catch (e) { toast('Errore caricamento config AI: ' + e.message, 'error'); }
+}
+
+function statusFor(p) {
+  if (!p.config || !p.config.has_key && p.needs_api_key) return { dot: 'off', label: 'Non configurato' };
+  if (p.config.last_error) return { dot: 'err', label: 'Errore test' };
+  if (p.config.verified_at) return { dot: 'ok', label: 'Verificato' };
+  return { dot: 'warn', label: 'Salvato, da testare' };
+}
+
+function renderAISettings() {
+  const s = _aiState;
+  if (!s) return;
+  const active = s.active_provider;
+  const badge = document.getElementById('ai-active-badge');
+  if (active) {
+    const lbl = (s.providers.find(p => p.id === active) || {}).label || active;
+    badge.innerHTML = `<span style="color:var(--indigo2);">● Attivo:</span> <b>${lbl}</b>`;
+  } else {
+    badge.innerHTML = `<span style="color:var(--text3);">● AI disabilitata</span>`;
+  }
+
+  const wrap = document.getElementById('ai-providers');
+  wrap.innerHTML = s.providers.map(p => {
+    const st = statusFor(p);
+    const cfg = p.config || {};
+    const isActive = p.id === active;
+    const modelOpts = (p.models || []).map(m =>
+      `<option value="${m.id}" ${cfg.model === m.id ? 'selected' : ''}>${m.label}</option>`
+    ).join('');
+    const placeholder = cfg.has_key ? '••••••••  (lascia vuoto per non modificare)' : 'incolla API key';
+    return `
+      <div class="ai-card ${isActive ? 'active-provider' : ''}" data-provider="${p.id}">
+        <div class="ai-card-head">
+          <span class="ai-status-dot ${st.dot}" title="${st.label}"></span>
+          <span class="ai-card-title">${p.label}</span>
+          <span class="text-sm text-muted">${st.label}</span>
+        </div>
+        <div class="ai-card-body">
+          ${p.needs_api_key ? `
+          <div class="full">
+            <label class="form-label">API key</label>
+            <input class="form-input" type="password" id="ai-key-${p.id}" placeholder="${placeholder}" autocomplete="off">
+          </div>` : ''}
+          <div>
+            <label class="form-label">Modello</label>
+            <select class="form-input" id="ai-model-${p.id}">
+              <option value="">(default)</option>
+              ${modelOpts}
+            </select>
+          </div>
+          ${p.id === 'ollama' ? `
+          <div>
+            <label class="form-label">Base URL</label>
+            <input class="form-input" id="ai-baseurl-${p.id}" value="${cfg.base_url || ''}" placeholder="http://localhost:11434">
+          </div>` : '<div></div>'}
+        </div>
+        <div class="ai-card-actions">
+          <button class="btn btn-primary btn-sm" onclick="aiSave('${p.id}')">Salva</button>
+          <button class="btn btn-secondary btn-sm" onclick="aiTest('${p.id}')" ${!cfg.has_key && p.needs_api_key ? 'disabled' : ''}>Test connessione</button>
+          ${isActive
+            ? '<button class="btn btn-secondary btn-sm" disabled>Provider attivo ✓</button>'
+            : `<button class="btn btn-secondary btn-sm" onclick="aiActivate('${p.id}')" ${!cfg.has_key && p.needs_api_key ? 'disabled' : ''}>Attiva</button>`}
+          ${cfg.has_key || cfg.model || cfg.base_url
+            ? `<button class="btn btn-ghost btn-sm" onclick="aiDelete('${p.id}')">Rimuovi</button>` : ''}
+        </div>
+        ${cfg.verified_at ? `<div class="ai-card-meta">Ultimo test ok: ${new Date(cfg.verified_at).toLocaleString('it-IT')}</div>` : ''}
+        ${cfg.last_error ? `<div class="ai-card-error">⚠ ${cfg.last_error}</div>` : ''}
+      </div>`;
+  }).join('');
+}
+
+async function aiSave(provider) {
+  const fd = new FormData();
+  fd.append('provider', provider);
+  const keyInput = document.getElementById('ai-key-' + provider);
+  if (keyInput && keyInput.value) fd.append('api_key', keyInput.value);
+  const model = document.getElementById('ai-model-' + provider).value;
+  if (model) fd.append('model', model);
+  const baseUrl = document.getElementById('ai-baseurl-' + provider);
+  if (baseUrl && baseUrl.value) fd.append('base_url', baseUrl.value);
+  try {
+    await api('POST', '/settings/api/ai/save', fd);
+    toast('Configurazione salvata', 'success');
+    await loadAISettings();
+  } catch (e) { toast(e.message, 'error'); }
+}
+
+async function aiTest(provider) {
+  const fd = new FormData();
+  fd.append('provider', provider);
+  try {
+    const res = await api('POST', '/settings/api/ai/test', fd);
+    toast(`Test ok: ${res.provider_name}`, 'success');
+    await loadAISettings();
+  } catch (e) { toast(e.message, 'error'); await loadAISettings(); }
+}
+
+async function aiActivate(provider) {
+  const fd = new FormData();
+  fd.append('provider', provider);
+  try {
+    await api('POST', '/settings/api/ai/activate', fd);
+    toast('Provider attivato', 'success');
+    await loadAISettings();
+  } catch (e) { toast(e.message, 'error'); }
+}
+
+async function aiDisableAll() {
+  try {
+    await api('POST', '/settings/api/ai/activate', new FormData());
+    toast('AI disabilitata', 'info');
+    await loadAISettings();
+  } catch (e) { toast(e.message, 'error'); }
+}
+
+async function aiDelete(provider) {
+  if (!confirm(`Rimuovere la configurazione di ${provider}?`)) return;
+  try {
+    await api('DELETE', '/settings/api/ai/' + provider);
+    toast('Configurazione rimossa', 'info');
+    await loadAISettings();
+  } catch (e) { toast(e.message, 'error'); }
+}
+
+loadAISettings();
+</script>
+{% endblock %}

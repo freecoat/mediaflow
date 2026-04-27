@@ -1,0 +1,237 @@
+{% extends "base.html" %}
+{% set active_page = "dam" %}
+
+{% block title %}Asset Library — MediaFlow{% endblock %}
+{% block topbar_title %}Asset Library (DAM){% endblock %}
+
+{% block topbar_actions %}
+  <button class="btn btn-primary btn-sm" onclick="openModal('modal-upload')">⬆ Upload</button>
+{% endblock %}
+
+{% block content %}
+
+<!-- ── Filtri ──────────────────────────────────────────────── -->
+<div class="flex gap-3 mb-4" style="flex-wrap:wrap;align-items:center;">
+  <div class="search-bar">
+    <span>🔍</span>
+    <input type="text" id="dam-search" placeholder="Cerca asset…" oninput="loadAssets()">
+  </div>
+  <select class="form-select" style="width:auto;" id="dam-type" onchange="loadAssets()">
+    <option value="">Tutti i tipi</option>
+    <option value="video">🎬 Video</option>
+    <option value="audio">🎵 Audio</option>
+    <option value="image">🖼 Immagini</option>
+    <option value="document">📄 Documenti</option>
+  </select>
+  <div class="flex gap-2" style="flex-wrap:wrap;" id="tag-filters">
+    {% for tag in tags %}
+    <button class="btn btn-ghost btn-sm tag-btn" data-tag="{{ tag.name }}" onclick="toggleTag(this)">
+      # {{ tag.name }}
+    </button>
+    {% endfor %}
+  </div>
+</div>
+
+<!-- ── Griglia asset ───────────────────────────────────────── -->
+<div id="asset-grid" class="asset-grid">
+  <div class="text-muted text-sm">Caricamento…</div>
+</div>
+
+<!-- ── Modal upload ────────────────────────────────────────── -->
+<div class="modal-overlay" id="modal-upload">
+  <div class="modal">
+    <div class="modal-header">
+      <span class="modal-title">Carica asset</span>
+      <button class="btn btn-ghost btn-icon" onclick="closeModal('modal-upload')">✕</button>
+    </div>
+    <div class="modal-body">
+      <!-- Drop zone -->
+      <div class="upload-zone" id="drop-zone"
+           ondragover="event.preventDefault();this.classList.add('drag-over')"
+           ondragleave="this.classList.remove('drag-over')"
+           ondrop="handleDrop(event)"
+           onclick="document.getElementById('file-input').click()">
+        <div class="upload-icon">📂</div>
+        <div class="upload-text">Trascina i file qui o clicca per selezionare</div>
+        <div class="upload-sub">Video, audio, immagini, PDF — max 200 MB</div>
+        <input type="file" id="file-input" style="display:none;" multiple onchange="handleFiles(this.files)">
+      </div>
+
+      <!-- File selezionati -->
+      <div id="file-list" style="margin-top:12px;"></div>
+
+      <div class="form-row mt-2">
+        <div class="form-group">
+          <label class="form-label">Collega a job</label>
+          <select class="form-select" id="up-job">
+            <option value="">— nessuno —</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Tag (separati da virgola)</label>
+          <input class="form-input" id="up-tags" placeholder="es. raw, finale, client">
+        </div>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Descrizione</label>
+        <textarea class="form-textarea" id="up-desc" rows="2" placeholder="Note opzionali…"></textarea>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeModal('modal-upload')">Annulla</button>
+      <button class="btn btn-primary" onclick="uploadFiles()">Carica</button>
+    </div>
+  </div>
+</div>
+
+<!-- ── Modal dettaglio asset ───────────────────────────────── -->
+<div class="modal-overlay" id="modal-asset-detail">
+  <div class="modal" style="max-width:560px;">
+    <div class="modal-header">
+      <span class="modal-title" id="ad-title">Dettaglio asset</span>
+      <button class="btn btn-ghost btn-icon" onclick="closeModal('modal-asset-detail')">✕</button>
+    </div>
+    <div class="modal-body" id="ad-body"></div>
+    <div class="modal-footer">
+      <button class="btn btn-danger btn-sm" id="ad-delete">Elimina</button>
+      <a class="btn btn-primary" id="ad-download" href="#" target="_blank" download>⬇ Scarica</a>
+    </div>
+  </div>
+</div>
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+let pendingFiles = [];
+let activeTag = null;
+
+// ── Carica asset ─────────────────────────────────────────────
+async function loadAssets() {
+  const q    = document.getElementById('dam-search').value;
+  const type = document.getElementById('dam-type').value;
+  let url = '/dam/api/assets?';
+  if (q)    url += `q=${encodeURIComponent(q)}&`;
+  if (type) url += `asset_type=${type}&`;
+  if (activeTag) url += `tag=${encodeURIComponent(activeTag)}&`;
+
+  const assets = await api('GET', url);
+  const grid = document.getElementById('asset-grid');
+  if (!assets.length) {
+    grid.innerHTML = '<div class="text-muted text-sm">Nessun asset trovato</div>';
+    return;
+  }
+  grid.innerHTML = assets.map(a => `
+    <div class="asset-card" onclick="showAssetDetail(${JSON.stringify(a).replace(/"/g,'&quot;')})">
+      <div class="asset-thumb">
+        ${a.thumbnail_url
+          ? `<img src="${a.thumbnail_url}" alt="${a.original_name}" loading="lazy">`
+          : `<span style="font-size:32px;">${assetIcon(a.asset_type)}</span>`}
+      </div>
+      <div class="asset-info">
+        <div class="asset-name" title="${a.original_name}">${a.original_name}</div>
+        <div class="asset-meta">${fmtSize(a.file_size)} · ${a.asset_type}</div>
+        ${a.tags.length ? `<div style="margin-top:4px;display:flex;gap:4px;flex-wrap:wrap;">
+          ${a.tags.map(t=>`<span style="font-size:10px;background:var(--indigo-bg);color:var(--indigo2);border-radius:3px;padding:1px 5px;">#${t}</span>`).join('')}
+        </div>` : ''}
+      </div>
+    </div>`).join('');
+}
+
+function toggleTag(btn) {
+  const tag = btn.dataset.tag;
+  if (activeTag === tag) {
+    activeTag = null;
+    document.querySelectorAll('.tag-btn').forEach(b => b.classList.remove('active'));
+  } else {
+    activeTag = tag;
+    document.querySelectorAll('.tag-btn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+  }
+  loadAssets();
+}
+
+// ── Upload ───────────────────────────────────────────────────
+function handleDrop(e) {
+  e.preventDefault();
+  document.getElementById('drop-zone').classList.remove('drag-over');
+  handleFiles(e.dataTransfer.files);
+}
+
+function handleFiles(files) {
+  pendingFiles = [...files];
+  const list = document.getElementById('file-list');
+  list.innerHTML = pendingFiles.map((f, i) => `
+    <div class="flex items-center gap-2 mb-1 text-sm">
+      <span>${assetIcon(f.type.split('/')[0])}</span>
+      <span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${f.name}</span>
+      <span class="text-muted">${fmtSize(f.size)}</span>
+    </div>`).join('');
+}
+
+async function uploadFiles() {
+  if (!pendingFiles.length) { toast('Seleziona almeno un file', 'error'); return; }
+  const jobId = document.getElementById('up-job').value;
+  const tags  = document.getElementById('up-tags').value;
+  const desc  = document.getElementById('up-desc').value;
+
+  let ok = 0;
+  for (const file of pendingFiles) {
+    try {
+      const fd = new FormData();
+      fd.append('file', file);
+      fd.append('uploaded_by', 1);   // TODO: utente corrente dalla sessione
+      if (jobId) fd.append('job_id', jobId);
+      if (tags)  fd.append('tags', tags);
+      if (desc)  fd.append('description', desc);
+      await fetch('/dam/api/assets/upload', { method: 'POST', body: fd });
+      ok++;
+    } catch(e) { toast(`Errore su ${file.name}: ${e.message}`, 'error'); }
+  }
+  closeModal('modal-upload');
+  toast(`${ok} file caricati`, 'success');
+  pendingFiles = [];
+  loadAssets();
+}
+
+// ── Dettaglio asset ──────────────────────────────────────────
+function showAssetDetail(a) {
+  document.getElementById('ad-title').textContent = a.original_name;
+  document.getElementById('ad-download').href = a.download_url;
+  document.getElementById('ad-delete').onclick = () => deleteAsset(a.id);
+  document.getElementById('ad-body').innerHTML = `
+    ${a.thumbnail_url
+      ? `<img src="${a.thumbnail_url}" style="width:100%;border-radius:var(--radius);margin-bottom:16px;object-fit:cover;max-height:220px;">`
+      : `<div style="text-align:center;font-size:48px;margin-bottom:16px;">${assetIcon(a.asset_type)}</div>`}
+    <table style="width:100%;font-size:13px;">
+      <tr><td class="text-muted" style="padding:5px 0;width:35%;">Tipo</td><td>${a.asset_type} (${a.mime_type})</td></tr>
+      <tr><td class="text-muted" style="padding:5px 0;">Dimensione</td><td>${fmtSize(a.file_size)}</td></tr>
+      <tr><td class="text-muted" style="padding:5px 0;">Caricato</td><td>${fmtDate(a.created_at)}</td></tr>
+      <tr><td class="text-muted" style="padding:5px 0;">Versione</td><td>v${a.version}</td></tr>
+      ${a.tags.length ? `<tr><td class="text-muted" style="padding:5px 0;">Tag</td><td>${a.tags.map(t=>'#'+t).join(', ')}</td></tr>` : ''}
+    </table>`;
+  openModal('modal-asset-detail');
+}
+
+async function deleteAsset(id) {
+  if (!confirm('Eliminare questo asset definitivamente?')) return;
+  try {
+    await api('DELETE', `/dam/api/assets/${id}`);
+    closeModal('modal-asset-detail');
+    toast('Asset eliminato', 'success');
+    loadAssets();
+  } catch(e) { toast(e.message, 'error'); }
+}
+
+// Init
+async function init() {
+  const jobs = await api('GET', '/planning/api/jobs');
+  document.getElementById('up-job').innerHTML =
+    '<option value="">— nessuno —</option>' +
+    jobs.map(j => `<option value="${j.id}">${j.code} — ${j.title}</option>`).join('');
+  loadAssets();
+}
+
+init();
+</script>
+{% endblock %}

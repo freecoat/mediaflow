@@ -1,0 +1,132 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <!-- Disabilita cache HTML in dev: il browser scarica ogni volta la pagina aggiornata.
+       I JS/CSS hanno query string ?v=X.Y.Z per bust mirato. -->
+  <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+  <meta http-equiv="Pragma" content="no-cache">
+  <meta http-equiv="Expires" content="0">
+  <title>{% block title %}MediaFlow{% endblock %}</title>
+  <link rel="stylesheet" href="/static/css/main.css">
+  <!-- FullCalendar (per il modulo pianificazione) -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/fullcalendar/6.1.11/main.min.css">
+  {% block head %}{% endblock %}
+</head>
+<body>
+<div class="app-shell">
+
+  <!-- ── Sidebar ──────────────────────────────────────────── -->
+  <aside class="sidebar" id="sidebar">
+    <div class="sidebar-logo">
+      <div class="logo-mark">MF</div>
+      <span class="logo-text">MediaFlow</span>
+    </div>
+
+    <nav class="sidebar-nav">
+      <div class="nav-section">
+        <div class="nav-section-label">Principale</div>
+        <a href="/dashboard" data-nav-id="dashboard" class="nav-item {% if active_page == 'dashboard' %}active{% endif %}">
+          <span class="nav-icon">⬛</span> Dashboard
+        </a>
+      </div>
+
+      <div class="nav-section">
+        <div class="nav-section-label">Anagrafica</div>
+        <a href="/clients" data-nav-id="clients" class="nav-item {% if active_page == 'clients' %}active{% endif %}">
+          <span class="nav-icon">🏢</span> Clienti
+        </a>
+        <a href="/projects" data-nav-id="projects" class="nav-item {% if active_page == 'projects' %}active{% endif %}">
+          <span class="nav-icon">🎞</span> Progetti
+        </a>
+      </div>
+
+      <div class="nav-section">
+        <div class="nav-section-label">Operativo</div>
+        <a href="/planning" data-nav-id="planning" class="nav-item {% if active_page == 'planning' %}active{% endif %}">
+          <span class="nav-icon">📋</span> Pianificazione
+        </a>
+        <a href="/planning/calendar" data-nav-id="calendar" class="nav-item {% if active_page == 'calendar' %}active{% endif %}">
+          <span class="nav-icon">📅</span> Calendario
+        </a>
+        <a href="/resources" data-nav-id="resources" class="nav-item {% if active_page == 'resources' %}active{% endif %}">
+          <span class="nav-icon">👥</span> Risorse
+        </a>
+        <a href="/assignments" data-nav-id="assignments" class="nav-item {% if active_page == 'assignments' %}active{% endif %}">
+          <span class="nav-icon">🧩</span> Assegnazioni
+        </a>
+      </div>
+
+      <div class="nav-section">
+        <div class="nav-section-label">Preventivi</div>
+        <a href="/pricelist" data-nav-id="pricelist" class="nav-item {% if active_page == 'pricelist' %}active{% endif %}">
+          <span class="nav-icon">📋</span> Listino Prezzi
+        </a>
+        <a href="/quotes" data-nav-id="quotes" class="nav-item {% if active_page == 'quotes' %}active{% endif %}">
+          <span class="nav-icon">💬</span> Quotazioni
+        </a>
+      </div>
+
+      <div class="nav-section">
+        <div class="nav-section-label">Finanza</div>
+        <a href="/cost-report" data-nav-id="cost_report" class="nav-item {% if active_page == 'cost_report' %}active{% endif %}">
+          <span class="nav-icon">📊</span> Cost Report
+        </a>
+        <a href="/finance" data-nav-id="finance" class="nav-item {% if active_page == 'finance' %}active{% endif %}">
+          <span class="nav-icon">💶</span> Fatturazione
+        </a>
+      </div>
+
+      <div class="nav-section">
+        <div class="nav-section-label">Media</div>
+        <a href="/dam" data-nav-id="dam" class="nav-item {% if active_page == 'dam' %}active{% endif %}">
+          <span class="nav-icon">🎬</span> Asset Library
+        </a>
+      </div>
+
+      <div class="nav-section">
+        <div class="nav-section-label">Configurazione</div>
+        <a href="/departments" data-nav-id="departments" class="nav-item {% if active_page == 'departments' %}active{% endif %}">
+          <span class="nav-icon">🏛️</span> Reparti
+        </a>
+        <a href="/settings" data-nav-id="settings" class="nav-item {% if active_page == 'settings' %}active{% endif %}">
+          <span class="nav-icon">⚙</span> Impostazioni
+        </a>
+      </div>
+    </nav>
+
+    <div class="sidebar-footer">
+      <a href="/auth/logout" class="nav-item">
+        <span class="nav-icon">↩</span> Logout
+      </a>
+    </div>
+  </aside>
+
+  <!-- ── Main area ─────────────────────────────────────────── -->
+  <div class="main-area">
+    <header class="topbar">
+      <span class="topbar-title">{% block topbar_title %}{% endblock %}</span>
+      <div class="topbar-actions">
+        {% block topbar_actions %}{% endblock %}
+      </div>
+    </header>
+
+    <main class="page-content">
+      {% block content %}{% endblock %}
+    </main>
+  </div>
+
+</div>
+
+<!-- Toast container -->
+<div id="toast-container"></div>
+
+<!-- Copilot AI drawer (sempre montato, attivabile via FAB) -->
+{% include "components/copilot.html" %}
+
+<script src="/static/js/global.js?v=3.2.1"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/fullcalendar/6.1.11/index.global.min.js"></script>
+{% block scripts %}{% endblock %}
+</body>
+</html>

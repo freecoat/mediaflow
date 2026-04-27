@@ -1,0 +1,315 @@
+SCHEDULE “A” 
+DELIVERY SCHEDULE
+QUEER
+These Delivery Requirements shall be deemed incorporated into that Agreement dated as of [date] between A24 Distribution, LLC (“A24”) and [LLC] (“Licensor”). Licensor’s obligations in connection with the Picture shall not be complete until Licensor has physically delivered, except as otherwise noted therein, each and every item and element listed below. All publicity materials and documentation are to be provided along with English translations if the original versions are in a foreign language. All Digital, Video and Sound Material shall be of commercially acceptable quality. When Delivery of the Digital, Video and/or Sound Materials is by access and loan, such material shall be available on loan to A24 for an initial loan period of ninety (90) days and subsequent loan as needed, and Licensor shall use the form laboratory access letter provided by A24. Licensor will make delivery to A24 or its designees in New York or elsewhere as A24 may designate. Licensor shall be responsible for maintaining its own set of materials at its own lab or storage facility. Unless otherwise set forth in the Distribution Agreement, (i) Upon Licensor’s delivery of all items below, A24 shall have forty-five (45) days in which to evaluate the elements and determine their technical acceptance; and (ii) Failure by Licensor to correct any defects within twenty (20) days shall be considered a material breach of the Agreement. Materials marked with a “**” are Essential Delivery Materials.
+A. THEATRICAL MATERIALS ....................................... pg. 2
+B. HOME ENTERTAINMENT MATERIALS ...... pg. 3-7
+C. SOUND MATERIALS ............................................. pg. 8 - 11
+D. ARCHIVE MATERIALS ...................................... pg. 12 - 13
+E. LOCALIZATION MATERIALS ............................... pg. 14
+F. POST & PUBLICITY MATERIALS ....................... pg. 15
+G. LEGAL DOCUMENTATION ............................. pg. 16-21
+THEATRICAL MATERIALS
+7 second A24 logo is required at the head and tail of the feature.
+Ask your post/delivery contact for the correct aspect ratio logo.
+Digital Cinema Packages
+Electronic delivery (if physical, on an EXT3 formatted CRU DCP) of one encrypted multi-reel DCP with a single CPL adhering to the DCI specification for INTEROP and SMPTE DCPs. Your delivery contact can loop you in with Deluxe for Aspera upload link. Guidelines for Digital Cinema Source and DCP can be found here: Deluxe_Source-and-DCP_Delivery_Specifications_v5-11_20220314 2022.pdf
+ DCI Compliant Digital Cinema Package (DCP) shall be created from the Digital Cinema Distribution Master (DCDM)
+ The DCP must be in reels and must match the DCDM.
+ PLEASE NOTE: Film reel maximum length = 20 minutes and 50 frames.
+ A DKDM open for the Term must also be provided.
+ If 2K image, must be encoded with a guardbit value of 1. 
+ If 4K image, must be encoded with a guardbit value of 2.
+ Studio code is “A24”
+ Digital Cinema Naming Convention (DCNC): https://registry-page.isdcf.com/ 
+INTEROP Digital Cinema Package (5.1/7.1)**
+Physical delivery of one (1) INTEROP DCI Compliant 5.1 OV Digital Cinema Package (DCP) which shall be created from the Digital Cinema Distribution Master. 
+ The DCP must be in reels and must match the DCDM.
+ If 7.1 audio is available, an additional 7.1 VF DCP that points to the 5.1 OV ‘parent’ DCP should be provided.
+ A DKDM must also be provided for all DCPs.
+SMPTE Bv2.1 Digital Cinema Package (Dolby Atmos/7.1)**
+Physical delivery of one (1) SMPTE Bv2.1 DCI Compliant Digital Cinema Package on a CRU drive which shall be created from the Digital Cinema Distribution Master. 
+The SMPTE DCP must be in reels and must match the DCDM. 
+Audio MXF shall utilize the “Configuration 4” Channel Assignment UL as noted in SMPTE ST 429-2:2020 [see: https://doi.org/10.5594/SMPTE.ST429-2.2020], commonly referred to as “WTF” or “Wild TrackFormat”. No other channel formats, including “Undefined” or “0” (IOP), nor other formats described in SMTPE ST 429-2:2020, will be accepted. 
+If 7.1 is available, please include 7.1 track. 
+A DKDM must also be provided for all DCPs.
+Theatrical Timed Text Files
+Interop DCP utilized Timed Text XML and any ancillary files must be delivered compliant to Texas Instruments DCinema Subtitle Specification V1.1 available at: http://www.deluxecdn.com/dcinema/reference/ti_subtitling_spec_v1_1.pdf
+SMPTE DCP utilized (OR) 3D (for use in 3D subtitle compositing) Timed Text XML and any ancillary files must be delivered compliant to SMPTE ST 428-7:2014 DCDM Subtitle specification. See https://www.smpte.org/
+Theatrical Subtitling Files (If Applicable)**
+Physical delivery of one (1) electronic copy of the filmmaker-approved English subtitles as XML and TTF files in reels that are synced with the final DCP.
+ Subtitle standard is 42 characters per line.
+ English subtitling files are required if subtitles are present in the OV feature.
+Theatrical Closed Caption Files (If Available)**
+Physical delivery of one (1) electronic copy of the filmmaker-approved English SDH closed captions as XML and TTF files in reels that are synced with the final DCP. 
+ Please note that a limit of 30 characters per line is a theatrical CC standard.
+ English caption files are optional but should be delivered if previously available for festival screenings, etc.
+HOME ENTERTAINMENT MATERIALS
+7 second A24 logo is required at the head and tail of the feature. 
+Ask your post/delivery contact for the correct aspect ratio logo.
+Digital Dolby Vision UHD HDR Video Master (Original Aspect Ratio)**
+Physical delivery of one (1) UHD Dolby Vision HDR ProRes 4444 XQ QuickTime File with Dolby Vision v2.9 xml (v4.0 xml Optional) and HDR10 metadata, reflecting the original aspect ratio, of finished film, fully synced and timed to all delivered near field audio, on a hard drive or delivered electronically.
+Video Requirements:
+Audio Requirements: 
+UHD HDR Naming Convention: 
+[Film Title]_UHD_HDR_FTR_2398fps_3840x2160_OAR_[Aspect Ratio]_P3D65_[Creation Date in YYYYMMDD format].mov
+Additional UHD HDR Video Master Requirements: 
+Must include textless backgrounds to the main and end titles of the Picture, and anywhere else text appears over Picture. If the Picture includes a language other than English, textless should also be included at the tail for the instances of subtitles.
+Please reference SMPTE standards: 93% Action Safe / 90% Title Safe. 
+All versions MUST have matching time codes.
+Dolby Vision Sidecar Metadata XML v2.9 and HDR10 metadata must be provided, CM v4.0 optional.
+When providing Dolby Vision, ensure that the proper trims are included in the Dolby Vision metadata so an approved SDR file from the Dolby Vision source can be created.
+Accompanying Dolby Vision XML:
+Must be exported from the same color grading system being used to create the Dolby Vision TIFF deliverables and must cover the below trim passes:
+4000nit 
+This is only required if the finishing house has access to a 4000nit (or higher) capable monitor, such as a Dolby Pulsar monitor.
+1000nit Layer* 
+If 1000nit is peak brightness, then only 600nit and 100nit trim passes are required. Please do not also include a 1000nit trim pass.
+600nit Layer*
+100nit Layer* 
+Rec709, SDR
+*All subsequent color grades should be trim passes derived from the original 4000nit (if applicable) or 1000nit color grade.
+Digital UHD SDR Video Master (Original Aspect Ratio)**
+Physical delivery of one (1) UHD SDR ProRes 4444 XQ QuickTime File, reflecting the original aspect ratio, of finished film, fully synced and timed to all delivered near field audio, on a hard drive or delivered electronically.
+Video Requirements:
+Audio Requirements: 
+UHD SDR Naming Convention: 
+[Film Title]_UHD_SDR_FTR_2398fps_3840x2160_OAR_[Aspect Ratio]_REC709_[Creation Date in YYYYMMDD format].mov
+Additional UHD SDR Video Master Requirements: 
+This must include textless backgrounds to the main and end titles of the Picture, and anywhere else text appears over Picture. If the Picture includes a language other than English, textless should also be included at the tail for the instances of subtitles.
+Color Bars at head should be full field 75% color bars.
+Blacks should not be below 0mV (millivolts).
+Luminance value not to exceed 700mV (millivolts) - although 720mV is acceptable.
+Please reference SMPTE standards: 93% Action Safe / 90% Title Safe. 
+All versions MUST have matching time codes.
+Digital High Definition Video Master (Original Aspect Ratio)** 
+Physical delivery of one (1) ProRes 4444 XQ QuickTime file as 1080p at a rate of 23.98fps and reflecting the original aspect ratio in Rec. 709 color space, delivered electronically or on a hard drive of finished film, fully synced and timed to all delivered audio. 
+Video Requirements:
+Audio Requirements: 
+HD OAR Naming Convention: 
+[Film Title]_HD_FTR_2398fps_1920x1080_OAR_[Aspect Ratio]_REC709_[Creation Date in YYYYMMDD format].mov
+Additional HD OAR Video Master Requirements: 
+This must include textless backgrounds to the main and end titles of the Picture, and anywhere else text appears over Picture. If the Picture includes a language other than English, textless should also be included at the tail for the instances of subtitles.
+Color Bars at head should be full field 75% color bars.
+Blacks should not be below 0mV (millivolts).
+Luminance value not to exceed 700mV (millivolts) - although 720mV is acceptable.
+Please reference SMPTE standards: 93% Action Safe / 90% Title Safe. 
+All versions MUST have matching time codes.
+Digital UHD 1.78 FF (Pan and Scan) Video Master (check se si può fare HD)
+Physical delivery of one (1) ProRes 4444 XQ QuickTime file as 2160p at a rate of 23.98fps as an approved 16x9 full frame (aspect ratio 1.78) in Rec. 709 color space, delivered electronically or on hard drive of finished film, fully synced and timed to all delivered audio. 
+Video Requirements:
+Audio Requirements: 
+UHD 1.78 Naming Convention: 
+[Film Title]_UHD_178FF_FTR_2398fps_3840x2160_REC709_[Creation Date in YYYYMMDD format].mov
+Additional UHD 1.78 Video Master Requirements: 
+This must include textless backgrounds to the main and end titles of the Picture, and anywhere else text appears over Picture. If the Picture includes a language other than English, textless should also be included at the tail for the instances of subtitles.
+Color Bars at head should be full field 75% color bars.
+Blacks should not be below 0mV (millivolts).
+Luminance value not to exceed 700mV (millivolts) - although 720mV is acceptable.
+Please reference SMPTE standards: 93% Action Safe / 90% Title Safe. 
+All versions MUST have matching time codes.
+Home Entertainment Subtitling Files (If Applicable)**
+Physical delivery of the filmmaker-approved English subtitles as a longplay .itt or .stl file synced with the final OAR digital high definition video file.
+D. ARCHIVE MATERIALS
+PLEASE READ: Physical Delivery Requirements for Archival LTOs and/or Hard Drives
+LTO Archives:
+Once content is written to tape, please send your A24 delivery contact an .md5 checksum and either a photo of the final labelled tape or a .txt file of the final label information that will be included on the tape (label information can be found below).
+Deliverables via Hard Drive:
+Please send your A24 delivery contact screenshots of file structure and/or a full manifest of drive contents, .md5 checksum, and either a photo of the final labelled hard drive or a .txt file of the final label information that will be included on the drive (label information can be found below).
+Your A24 delivery contact will review the information requested above and provide a shipping address for physical deliverables.
+Digital Cinema Distribution Master 
+Digital Cinema Distribution Master
+Physical delivery of one (1) Digital Cinema Distribution Master of 16-bit XYZ TIFF files in reels and 24fps wav files written in TAR or LTFS format on LTO7 or LTO8. Each reel, including textless, should be written on a separate LTO.
+This should include textless backgrounds to the main and end titles of the Picture, and anywhere else text appears over Picture.
+Picture archival deliveries must include a checksum at the same level as the picture file sequence.
+Textless Material Only Digital Cinema Distribution Master**
+Physical delivery of one (1) Textless Material Only Digital Cinema Distribution Master of 16-bit XYZ TIFF files in 24fps delivered electronically to A24. 
+This should include textless backgrounds to the main and end titles of the Picture, and anywhere else text appears over Picture. 
+Textless background files should be provided in the order in which they appear in the film. Please provide cutting notes containing description, reel number, foot and frame or timecode for where text appears.
+Graded Archival Master
+Physical delivery of the P3 DCI 4K color corrected 16-bit DPX files in reels on LTO tape, written in LTFS format on LTO7 or LTO8. Each reel, including textless, should be written on a separate LTO. Picture archival deliveries must include a checksum at the same level as the picture file sequence.
+Non-Graded Archival Master
+Physical delivery of the 4K non-color corrected conformed 16-bit DPX files in reels on LTO tape, written in LTFS format on LTO7 or LTO8. Each reel, including textless, should be written on a separate LTO. Picture archival deliveries must include a checksum at the same level as the picture file sequence.
+Dolby Vision Archival Master
+Physical delivery of the UHD Dolby Vision Master as a 16-bit DPX, EXR or TIFF longplay sequence (TIFF preferred) written in LTFS format on LTO7 or LTO8. This must include textless backgrounds to the main and end titles of the Picture, and anywhere else text appears over Picture. Dolby Vision Sidecar Metadata XML must also be provided. Picture archival deliveries must include a checksum at the same level as the picture file sequence.
+Digital Video Archival Master
+Physical delivery of all QC approved master ProRes QuickTime files on LTO7 or LTO8. Picture archival deliveries must include a checksum at the same level as the picture file sequence.
+. 
+F. POST & PUBLICITY MATERIALS
+QC Reports**
+Physical delivery of approved quality control reports from an accepted lab in connection with first hero file delivered to A24. Please discuss with your A24 delivery contact.
+Music Cue Sheet**
+Physical delivery of the Music Cue Sheet in a form accepted by International Performing Rights Societies stating for each composition in the Picture the title, the composers, publishers, copyright owners, usage, performing rights society, as well as the film footage and running time. Producer must outline which cues are cleared for in-context and out-of-context usage and what percentage of score is original.
+Codec | Apple ProRes 4444 XQ
+Transfer Function | SMPTE 2084 (PQ)
+Color Space | P3 D65
+Length & Frame Rate | Longplay | 23.98fps
+Dimension & Aspect Ratio | 3840x2160 | Original Aspect Ratio
+Head Format | Minimum :60 of Black & Silence
+00:57:50:00 Bars & Tone (:60)
+00:58:50:00 Slate (:10)
+00:59:00:00 Black (:60)
+01:00:00:00 First Audio/Frame of Program
+Textless Format | Textless Material :60 after end of Program
+1 second of black between each textless element
+1 second of black after LFOA
+Slate Info | A24
+Full Title 
+Dolby Vision UHD HDR Master File
+ProRes 4444 XQ 23.98 
+16x9 (Aspect Ratio) OAR
+TRT: ______:_____
+(Textless section :60 after Program) 
+Audio Information (Ch1-10)
+Post Facility 
+Date
+Codec | PCM
+Bit Depth | 24bit
+Frequency | 48khz
+Configuration | Channel 1: Stereo Left Total
+Channel 2: Stereo Right Total
+Channel 3: M&E Left
+Channel 4: M&E Right 
+Channel 5: 5.1 Left 
+Channel 6: 5.1 Right 
+Channel 7: 5.1 Center
+Channel 8: 5.1 LFE
+Channel 9: 5.1 Left Surround
+Channel 10: 5.1 Right Surround
+*Each channel must be clearly labeled.
+*Each channel should be +20dbvu (0dbFS)
+*Levels must be measured at True Peak
+*This audio should be Near Field audio, if created.
+Codec | Apple ProRes 4444 XQ
+Color Space | Rec. 709
+Length & Frame Rate | Longplay | 23.98fps
+Dimension & Aspect Ratio | 3840x2160 | Original Aspect Ratio
+Head Format | Minimum :60 of Black & Silence
+00:57:50:00 Bars & Tone (:60)
+00:58:50:00 Slate (:10)
+00:59:00:00 Black (:60)
+01:00:00:00 First Audio/Frame of Program
+Textless Format | Textless Material :60 after end of Program
+1 second of black between each textless element
+1 second of black after LFOA
+Slate Info | A24
+Full Title 
+UHD SDR Master File
+ProRes 4444 XQ 23.98 
+16x9 (Aspect Ratio) OAR
+TRT: ______:_____
+(Textless section :60 after Program) 
+Audio Information (Ch1-10)
+Post Facility 
+Date
+Codec | PCM
+Bit Depth | 24bit
+Frequency | 48khz
+Configuration | Channel 1: Stereo Left Total
+Channel 2: Stereo Right Total
+Channel 3: M&E Left
+Channel 4: M&E Right 
+Channel 5: 5.1 Left 
+Channel 6: 5.1 Right 
+Channel 7: 5.1 Center
+Channel 8: 5.1 LFE
+Channel 9: 5.1 Left Surround
+Channel 10: 5.1 Right Surround
+*Each channel must be clearly labeled.
+*Each channel should be +20dbvu (0dbFS)
+*Levels must be measured at True Peak
+*This audio should be Near Field audio, if created.
+Codec | Apple ProRes 4444 XQ
+Color Space | Rec. 709
+Length & Frame Rate | Longplay | 23.98fps
+Dimension & Aspect Ratio | 1920x1080 | Original Aspect Ratio
+Head Format | Minimum :60 of Black & Silence
+00:57:50:00 Bars & Tone (:60)
+00:58:50:00 Slate (:10)
+00:59:00:00 Black (:60)
+01:00:00:00 First Audio/Frame of Program
+Textless Format | Textless Material :60 after end of Program
+1 second of black between each textless element
+1 second of black after LFOA
+Slate Info | A24
+Full Title 
+HD OAR Master File
+ProRes 4444 XQ 23.98 
+16x9 (Aspect Ratio) OAR
+TRT: ______:_____
+(Textless section :60 after Program) 
+Audio Information (Ch1-10)
+Post Facility 
+Date
+Codec | PCM
+Bit Depth | 24bit
+Frequency | 48khz
+Configuration | Channel 1: Stereo Left Total
+Channel 2: Stereo Right Total
+Channel 3: M&E Left
+Channel 4: M&E Right 
+Channel 5: 5.1 Left 
+Channel 6: 5.1 Right 
+Channel 7: 5.1 Center
+Channel 8: 5.1 LFE
+Channel 9: 5.1 Left Surround
+Channel 10: 5.1 Right Surround
+*Each channel must be clearly labeled.
+*Each channel should be +20dbvu (0dbFS)
+*Levels must be measured at True Peak
+*This audio should be Near Field audio, if created.
+Codec | Apple ProRes 4444 XQ
+Color Space | Rec. 709
+Length & Frame Rate | Longplay | 23.98fps
+Dimension & Aspect Ratio | 3840x2160 | 1.78
+Head Format | Minimum :60 of Black & Silence
+00:57:50:00 Bars & Tone (:60)
+00:58:50:00 Slate (:10)
+00:59:00:00 Black (:60)
+01:00:00:00 First Audio/Frame of Program
+Textless Format | Textless Material :60 after end of Program
+1 second of black between each textless element
+1 second of black after LFOA
+Slate Info | A24
+Full Title 
+UHD 1.78 FF Pan and Scan Master File
+ProRes 4444 XQ 23.98 
+16x9 (1.78) Full Frame
+TRT: ______:_____
+(Textless section :60 after Program) 
+Audio Information (Ch1-10)
+Post Facility 
+Date
+Codec | PCM
+Bit Depth | 24bit
+Frequency | 48khz
+Configuration | Channel 1: Stereo Left Total
+Channel 2: Stereo Right Total
+Channel 3: M&E Left
+Channel 4: M&E Right 
+Channel 5: 5.1 Left 
+Channel 6: 5.1 Right 
+Channel 7: 5.1 Center
+Channel 8: 5.1 LFE
+Channel 9: 5.1 Left Surround
+Channel 10: 5.1 Right Surround
+*Each channel must be clearly labeled.
+*Each channel should be +20dbvu (0dbFS)
+*Levels must be measured at True Peak
+*This audio should be Near Field audio, if created.
+Label TEMPLATE | EXAMPLE LABEL (DOLBY VISION MASTER ARCHIVE)
+A24 | A24
+project title: | PROJECT TITLE: Project Title
+asset: | ASSET: Dolby Vision Master Archive
+bit rate: | BIT RATE: 16-bit
+color space: | COLOR SPACE: P3 D65
+file type: | FILE TYPE: TIFF
+length (REEL # OR LONGPLAY): | LENGTH: Longplay
+TEXTED OR TEXTLESS: | TEXTED OR TEXTLESS: Texted (Textless Sections :60 after Program)
+ASPECT RATIO: | ASPECT RATIO:  Project's Aspect Ratio
+RESOLUTION: | RESOLUTION:  3840x2160
+FRAME RATE: | FRAME RATE:  23.98fps
+TAPE VERSION & FORMAT: | TAPE VERSION & FORMAT:  LTO8 LTFS
+TRT: | TRT:  Project's Total Runtime
+FACILITY: | FACILITY:  Facility Creating LTO Archive
+CREATION DATE: | CREATION DATE:  MM/DD/YYYY

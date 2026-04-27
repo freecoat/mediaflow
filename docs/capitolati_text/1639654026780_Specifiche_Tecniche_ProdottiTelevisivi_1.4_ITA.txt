@@ -1,0 +1,3120 @@
+  
+ 
+ 
+ 
+ 
+ 
+S
+pecifiche Tecniche per la 
+consegna di prodotti televisivi nei 
+formati SD/HD/3D/UHD 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+Versione 1.4 (Dicembre 2021) 
+ 
+
+
+Rai Radiotelevisione Italiana 
+Specifiche Tecniche per la consegna di prodotti televisivi nei formati SD/HD/3D/UHD 
+2 
+ 
+Dati documento 
+ 
+Titolo Specifiche Tecniche per la consegna di prodotti 
+televisivi nei formati SD/HD/3D/UHD 
+Oggetto  
+ 
+Classifica Documento Pubblico 
+ 
+Struttura/Ente emittente Rai Radiotelevisione Italiana S.p.A. 
+ 
+Contatti  
+ 
+Revisione Data Note 
+1.1 Aprile 2016  
+1.2 Dicembre 2016 Pubblicazione Ufficiale 
+1.3 Luglio 2017 Aggiornamento 
+1.4 Dicembre 2021 Aggiornamento 
+  
+
+Rai Radiotelevisione Italiana 
+Specifiche Tecniche per la consegna di prodotti televisivi nei formati SD/HD/3D/UHD 
+3 
+ 
+Indice 
+1. Premessa .......................................................................................... 6 
+2. Formati Video .................................................................................... 7 
+2.1 Definizione Standard (SDTV) ..................................................................... 7 
+2.2 Alta Definizione (HDTV) ............................................................................. 7 
+2.3 Alta Definizione 3D (3DTV) ........................................................................ 8 
+2.4 Ultra Alta Definizione (UHDTV) .................................................................. 9 
+2.4.1 High Dynamic Range ............................................................................................... 10 
+3. Specifiche Tecniche - Video .......................................................... 11 
+3.1 Requisiti di qualità dell’immagine........................................................... 11 
+3.2 Livelli Video, errori di gamut e segnali non permessi .......................... 12 
+3.3 Titoli in movimento e grafica ................................................................... 12 
+3.4 Anti-PSE .................................................................................................... 12 
+3.5 Safe area ................................................................................................... 13 
+3.6 Presenza di materiale con caratteristiche non omogenee ................... 13 
+3.7 Materiale di archivio ................................................................................. 13 
+3.7.1 Qualità generale ....................................................................................................... 13 
+3.7.2 Aspect Ratio ............................................................................................................. 13 
+3.7.3 Testi e sottotitoli ...................................................................................................... 14 
+3.8 Conversioni da altri formati ..................................................................... 14 
+3.9 Contenuto della cancellazione verticale nei supporti video ................ 14 
+3.10 Field dominance ..................................................................................... 14 
+4. Specifiche Tecniche – Audio ......................................................... 15 
+4.1 Requisiti di qualità ................................................................................... 15 
+4.2 Audio multicanale .................................................................................... 15 
+4.3 Assegnazione delle tracce audio ............................................................ 16 
+4.4 Toni di allineamento ed identificazione dei canali audio ...................... 16 
+4.5 Livello audio massimo ............................................................................. 17 
+4.6 Program Loudness Level ........................................................................ 18 
+4.7 Loudness Range ...................................................................................... 18 
+4.8 Traccia Music & Effects ........................................................................... 18 
+4.9 Sincronizzazione audio/video ................................................................. 18 
+4.10 Specifiche Dolby E ................................................................................. 19 
+5. Sottotitoli ......................................................................................... 20 
+6. Struttura del programma ............................................................... 21 
+6.1 Coda di allineamento ............................................................................... 21 
+6.2 Coda di identificazione ............................................................................ 21 
+6.3 Coda di partenza ...................................................................................... 22 
+6.4 Coda di fine ............................................................................................... 22 
+
+Rai Radiotelevisione Italiana 
+Specifiche Tecniche per la consegna di prodotti televisivi nei formati SD/HD/3D/UHD 
+4 
+ 
+6.5 Timecode ................................................................................................... 22 
+7. Formati di consegna ...................................................................... 24 
+7.1 Consegna tramite trasferimento telematico .......................................... 24 
+7.2 Consegna tramite supporto informatico - nomenclatura file ............... 24 
+7.3 Consegna tramite supporto informatico - organizzazione file ............. 25 
+7.4 Consegna tramite supporti video professionali .................................... 26 
+7.4.1 Programmi consegnati su più supporti ..................................................................... 26 
+7.5 Documentazione di accompagnamento ed etichettatura ..................... 27 
+7.6 Sottotitoli ................................................................................................... 27 
+8. Formato file - Specifiche tecniche ................................................ 28 
+8.1 Strumenti e profili di conformità file ....................................................... 29 
+8.2 Aspect Ratio, Active Format Description e Bar Data ............................ 29 
+8.3 Timecode ................................................................................................... 29 
+8.4 Durata delle tracce ................................................................................... 30 
+8.5 Segmentazione file ................................................................................... 30 
+8.6 Profilo SDTV MXF/D10 ............................................................................. 31 
+8.7 Profilo HDTV MXF/XDCAM HD422 1080i25 ............................................ 31 
+8.8 Profilo HDTV MXF/XAVC 1080p25 Class 100 ......................................... 32 
+8.9 Profilo HDTV MXF/XAVC 1080p50 Class 100 ......................................... 32 
+8.10 Profilo UHDTV MXF/XAVC 2160p25 Class 300 .................................... 33 
+8.11 Profilo UHDTV MXF/XAVC 2160p50 Class 300 .................................... 33 
+8.12 Profilo UHDTV MXF/XAVC 2160p25 Class 480 .................................... 34 
+8.13 Profilo UHDTV MXF/XAVC 2160p50 Class 480 .................................... 34 
+8.14 Profilo HDTV MOV/ProRes4444 1080p24 ............................................. 35 
+8.15 Profilo HDTV MOV/ProRes4444 1080p25 ............................................. 35 
+8.16 Profilo UHDTV MOV/ProRes4444 2160p24 ........................................... 35 
+8.17 Profilo UHDTV MOV/ProRes4444 2160p25 ........................................... 36 
+8.18 Profilo UHDTV MOV/ProRes4444 2160p50 ........................................... 36 
+8.19 Profilo HDTV MOV/ProRes422HQ 1080p24 .......................................... 36 
+8.20 Profilo HDTV MOV/ProRes422HQ 1080p25 .......................................... 37 
+8.21 Profilo UHDTV MOV/ProRes422HQ 2160p24 ....................................... 37 
+8.22 Profilo UHDTV MOV/ProRes422HQ 2160p25 ....................................... 37 
+8.23 Profilo UHDTV MOV/ProRes422HQ 2160p50 ....................................... 38 
+9. Metadati e Scheda Tecnica ............................................................ 39 
+9.1 Scheda Tecnica cartacea ......................................................................... 39 
+9.2 Scheda Tecnica in formato elettronico .................................................. 41 
+9.3 Metadati Dolby E ...................................................................................... 41 
+10. Assegnazione delle tracce audio .................................................. 43 
+10.1 Configurazioni audio consentite su 8 tracce ....................................... 43 
+
+Rai Radiotelevisione Italiana 
+Specifiche Tecniche per la consegna di prodotti televisivi nei formati SD/HD/3D/UHD 
+5 
+ 
+10.2 Configurazioni audio consentite su 16 tracce ..................................... 44 
+11. Codice Identificatore di formato .................................................... 45 
+12. Allegato A – Identificatore di formato – valori previsti ................ 46 
+13. Standard, Raccomandazioni e Normativa Tecnica ...................... 48 
+14. Glossario ......................................................................................... 50 
+  
+
+Rai Radiotelevisione Italiana 
+Specifiche Tecniche per la consegna di prodotti televisivi nei formati SD/HD/3D/UHD 
+6 
+ 
+1. Premessa 
+Il presente documento di Specifiche Tecniche descrive le caratteristiche per la 
+consegna a RAI Radiotelevisione Italiana di prodotti televisivi in Definizione Standard, 
+Alta Definizione, Alta Definizione 3D e Ultra Alta Definizione (da questo momento 
+identificati rispettivamente con gli acronimi SDTV, HDTV, 3DTV e UHDTV).  
+In linea generale R AI si attende che tutte le fasi di produzione dei prodotti siano 
+effettuate a regola d’arte e con apparati in perfetto stato di funzionamento e 
+manutenzione.  
+Si assume per principio che le principali norme tecniche e gli standard internazionali 
+relativi ai segnali audio- video siano  noti e la loro eventuale mancata citazione nel 
+presente documento non costituisce omissione, restando sottointeso che le 
+lavorazioni saranno realizzate nel rispetto degli stessi. 
+Per comodità, nel Capitolo 13 si riportano i riferimenti alle normative e 
+raccomandazioni menzionate in questo documento. 
+Si raccomanda di consultare il sito RAI  https://www.rai.it/specifiche-tecniche-prodotti-
+tv al fine di utilizzare la versione più recente di questo documento. 
+  
+
+Rai Radiotelevisione Italiana 
+Specifiche Tecniche per la consegna di prodotti televisivi nei formati SD/HD/3D/UHD 
+7 
+ 
+2. Formati Video 
+Nei successivi paragrafi vengono descritte le principali caratteristiche tecniche degli 
+standard televisivi accettati da RAI. 
+2.1 Definizione Standard (SDTV) 
+La RAI accetta contenuti SDTV prodotti in conformità con lo standard ITU -R BT.601 
+aventi le seguenti caratteristiche: 
+• Risoluzione: 720x576 pixel attivi  
+• Aspect Ratio: 16:9 FHA (Full Height Anamorphic) 
+• Frame rate: 25 frame al secondo,  scansione interlacciata (50 semiquadri al 
+secondo) 
+• Schema di sottocampionamento delle crominanze: 4:2:2 
+Nel caso in cui venga fornito un programma proveniente da master a 525 linee, 30 
+frame al secondo, interlacciato , la conversione di standard deve essere fatta 
+utilizzando convertitori dotati di algoritmi di compensazione del movimento1  
+In caso di contenuti provenienti da master  SDTV con rapporto di aspetto 4:3 si 
+richiede che il cambio del rapporto di aspetto venga effettuato in accordo con il 
+paragrafo 3.8 e la consegna avvenga, previa conversione di formato, nel formato 
+HDTV 1080i25. 
+2.2 Alta Definizione (HDTV) 
+RAI accetta contenuti HDTV prodotti con una filiera di produzione che, per scelta delle 
+camere, sia conforme alla raccomandazione EBU R118 v2 (paragrafo 2.7 “HD Tier 
+1”) e che, per s celta degli  algoritmi di compressione e dei bitrate di codifica delle 
+successive fasi di lavorazione , garantisca una qualità visualmente indistinguibile dal 
+segnale acquisito. Per particolari tipologie di programmi, previo accordo con Rai, 
+possono essere a ccettati contenuti prodotti con filiere di produzione con 
+caratteristiche qualitative diverse da quelle indicate. 
+RAI accetta contenuti HDTV nei seguenti formati: 
+formato HDTV 1080i252 
+• Risoluzione: 1920x1080 pixel  
+• Aspect ratio: 16:9 
+• Frame rate: 25 frame al secondo, scansione interlacciata  
+• Schema di sottocampionamento delle crominanze: 4:2:2 
+ 
+formato HDTV 1080p24 
+• Risoluzione: 1920x1080 pixel  
+• Aspect ratio: 16:9 
+ 
+ 
+1 Si veda in  letteratura “motion compensation” https://en.wikipedia.org/wiki/Motion_compensation  
+ 
+2 Il formato 1080i25 viene anche identificato con la sigla 1080i50 facendo riferimento alla frequenza di semiquadro (50 Hz) 
+anziché alla frequenza di quadro (25Hz).  La notazione 1080i25 è da preferire pe r uniformità di descrizione dei formati 
+progressivi e interlacciati. 
+
+Rai Radiotelevisione Italiana 
+Specifiche Tecniche per la consegna di prodotti televisivi nei formati SD/HD/3D/UHD 
+8 
+ 
+• Frame rate: 24 frame al secondo, scansione progressiva  
+• Schema di sottocampionamento delle crominanze: 4:2:2 
+ 
+formato HDTV 1080p25 
+• Risoluzione: 1920x1080 pixel  
+• Aspect ratio: 16:9 
+• Frame rate: 25 frame al secondo, scansione progressiva  
+• Schema di sottocampionamento delle crominanze: 4:2:2 
+ 
+formato HDTV 1080p50 
+• Risoluzione: 1920x1080 pixel 
+• Aspect ratio: 16:9 
+• Frame rate: 50 frame al secondo, scansione progressiva  
+• Schema di sottocampionamento delle crominanze: 4:2:2 
+ 
+La normativa di riferimento per i  formati basati sul formato 1920x1080 pixel è la 
+raccomandazione ITU-R BT.709  
+La colorimetria di riferimento per i formati HDTV è specificata nella raccomandazione 
+ITU-R BT.709. 
+Se l’acquisizione originale è effettuata in pellicola, deve essere utilizzato il supporto 
+Super 35mm o superiore con rapporto di forma preferibilmente pari a 1,78 (16:9).  
+In nessun punto della filiera di produzione il materiale deve essere codificato con 
+risoluzione orizzontale e verticale inferiore a quella richiesta da RAI, fatto salvo quanto 
+indicato nel paragrafo 3.6. 
+2.3 Alta Definizione 3D (3DTV) 
+Il formato 3DTV consiste in una coppia stereoscopica composta da 2 segnali coerenti 
+in formato HDTV corrispondenti rispettivamente al segnale presentato all’occhio 
+sinistro e all’occhio destro da un’apposita catena di riproduzione. Pertanto ciascun 
+flusso HDTV dovrà rispondere ai requisiti espressi nel paragrafo 0 
+RAI accetta contenuti 3DTV nei seguenti formati:  
+formato 1080i25 
+• Risoluzione: 1920x1080 pixel  
+• Aspect ratio: 16:9 
+• Frame rate: 25 frame al secondo, scansione interlacciata  
+• Schema di sottocampionamento delle crominanze: 4:2:2 
+ 
+formato 1080p25  
+• Risoluzione: 1920x1080 pixel  
+• Aspect ratio: 16:9 
+• Frame rate: 25 frame al secondo, scansione progressiva  
+
+Rai Radiotelevisione Italiana 
+Specifiche Tecniche per la consegna di prodotti televisivi nei formati SD/HD/3D/UHD 
+9 
+ 
+• Schema di sottocampionamento delle crominanze: 4:2:2 
+ 
+In accordo con specifiche esigenze editoriali, particolari produzioni potranno essere 
+effettuate anche nei formati: 
+• HDTV 1080p50 (vedi paragrafo 0) 
+• UHDTV (vedi paragrafo 0) 
+  
+La produzione dovrà essere effettuata in conformità alle linee guida descritte nella 
+Raccomandazione EBU R135.                                                                                                                                                    
+In nessun punto della filiera, comunque, il materiale deve essere codificato con 
+risoluzione orizzontale e verticale inferiore a quella richiesta da RAI, fatto salvo quanto 
+indicato nel paragrafo 3.6. 
+2.4 Ultra Alta Definizione (UHDTV) 
+RAI accetta contenuti UHDTV prodotti con una filiera di produzione che per scelta 
+delle camere sia conforme alla raccomandazione EBU R118 v2 (paragrafo 2.4 “UHD-
+1 Tier 1)”. Per particolari tipologie di programmi, previo accordo con Rai , possono 
+essere accettati contenuti prodotti con filier e di produzione con caratteristiche 
+qualitative diverse da quelle indicate. 
+Nelle fasi successive alla ripresa la scelta degli algoritmi di compressione e dei bitrate 
+dovrà essere tale da garantire la più elevata qualità possibile. 
+RAI accetta contenuti UHDTV nei seguenti formati:  
+formato 2160p24 
+• Risoluzione: 3840×2160 pixel 
+• Aspect ratio: 16:9  
+• Profondità di colore: 10 bit/campione o superiore 
+• Frame rate: 24 frame al secondo, scansione progressiva  
+• Schema di sottocampionamento delle crominanze: 4:2:2 o 4:4:4 
+ 
+formato 2160p25 
+• Risoluzione: 3840×2160 pixel  
+• Aspect ratio: 16:9  
+• Profondità di colore: 10 bit/campione o superiore 
+• Frame rate: 25 frame al secondo, scansione progressiva  
+• Schema di sottocampionamento delle crominanze: 4:2:2 o 4:4:4 
+ 
+formato 2160p50 
+• Risoluzione: 3840×2160 pixel 
+• Aspect ratio: 16:9  
+• Profondità di colore: 10 bit/campione o superiore 
+• Frame rate: 50 frame al secondo, scansione progressiva  
+
+Rai Radiotelevisione Italiana 
+Specifiche Tecniche per la consegna di prodotti televisivi nei formati SD/HD/3D/UHD 
+10 
+ 
+• Schema di sottocampionamento delle crominanze: 4:2:2 o 4:4:4 
+ 
+La normativa di riferimento per i formati basati sul formato 3 840x2160 pixel è la 
+raccomandazione ITU-R BT.2020. 
+Eventuali contenuti prodotti nativamente con spazio colore secondo la normativa ITU-
+R BT 709 dovranno essere convertiti nello spazio colore previsto dalla normativa ITU-
+R BT 2020 (rif. Paragrafo 3.6). 
+Se l’acquisizione originale è effettuata in pellicola, deve essere utilizzato il formato 
+Super 35mm o superiori e per la conversione in digitale deve essere utilizzato uno  
+scanner 4K allo stato dell’arte.  
+In nessun punto della filiera, comunque, il materiale deve essere codificato con 
+risoluzione orizzontale e verticale inferiore a quella richiesta da RAI, fatto salvo quanto 
+indicato nel paragrafo 3.6. 
+2.4.1 High Dynamic Range 
+Rai accetta contenuti UHDTV  High Dynamic Range (HDR) con funzione di 
+trasferimento Hybrid Log-Gamma (HLG) secondo quanto previsto dalla 
+raccomandazione ITU-R BT 2100. 
+
+Rai Radiotelevisione Italiana 
+Specifiche Tecniche per la consegna di prodotti televisivi nei formati SD/HD/3D/UHD 
+11 
+ 
+3. Specifiche Tecniche - Video 
+3.1 Requisiti di qualità dell’immagine 
+ 
+RAI richiede che l'immagine abbia qualità pari al grado 5 "ottimo" sulla scala di 
+valutazione della Raccomandazione ITU-R BT 500. 
+ 
+Tenendo conto delle specifiche esigenze artistiche ed editoriali, RAI richiede che: 
+• L’immagine sia ragionevolmente ma non artificialmente nitida 
+• L’immagine sia esente da eccessivo rumore, grana, o artefatti dovuti a 
+tecniche di compressione digitali 
+• L’immagine sia esente, per quanto possibile, da difetti causati dalle ottiche 
+utilizzate (es. riflessioni, aberrazioni monocromatiche, aberrazioni cromatiche, 
+etc.)  
+• I movimenti di camera appaiano ragionevolmente morbidi e continui 
+• L’immagine sia priva di eccessiva compressione delle basse e delle alte luci  
+• Il taglio delle alte luci (clipping) non causi artefatti visibili 
+• Non siano percepibili aliasing o seghettature su bordi o linee 
+• La resa delle tinte, in special modo dell’incarnato, sia consistente durante tutta 
+la durata del programma e sia realistica della scena r ipresa a meno che sia 
+volutamente alterata per ottenere uno specifico effetto visuale 
+• Non siano percepibili artefatti causati da processing digitale (es. contouring, 
+banding, rumore di quantizzazione) o da segnali spuri (es. ringing, smear, 
+echoes, overshoots, moiré, hum, cross-talk)   
+Nel caso di contenuti 3DTV è inoltre necessario fare riferimento ai seguenti parametri: 
+• Disparità verticale residua. La disparità verticale denota il disallineamento 
+verticale delle due telecamere in fase di ripresa. Nel centro del programma il 
+valore assoluto della disparità verticale deve essere inferiore ad un pixel. È 
+accettabile un valore inferiore a 1/100 dell’altezza dell’immagine misurato agli 
+angoli del fotogramma 
+• Rotazione dei sensori . La rotazione denota la non complanarità degli assi 
+orizzontali dei sensori delle due camere. La rotazione deve essere 
+nominalmente nulla: una linea posta lungo l’asse orizzontale dei sensori deve 
+risultare visualmente coincidente, ossia dare origine a disparità verticale di 
+valore assoluto minore ad un pixel lungo tutto l’asse orizzontale dell’immagine  
+• Lunghezza focale. La lunghezza focale impostata sugli obiettivi delle due 
+camere deve essere nominalmente identica, ovvero gli obiettivi devono avere 
+la stessa configurazione ottica nominale. È accettabile un valore inferiore a 
+3/1000 dell’altezza dell’immagine misurato in senso orizzontale e/o verticale 
+agli angoli del fotogramma 
+• Distanza di messa a fuoco. La distanza di messa a fuoco impostata sugli 
+obiettivi delle due camere deve essere nominalmente identica, ovvero gli 
+obiettivi devono avere le stesse caratteristiche nominali 
+• Il sistema di ripresa deve essere predisposto in modo tale da ridurre il più 
+possibile gli effetti delle distorsioni non lineari che possono indurre ad una 
+percezione alterata dello spazio reale 
+
+Rai Radiotelevisione Italiana 
+Specifiche Tecniche per la consegna di prodotti televisivi nei formati SD/HD/3D/UHD 
+12 
+ 
+• Per facilitare le operazioni di riproduzione e collaudo del materiale 
+stereoscopico si richiede che esso sia ottimizzato per schermi di 
+visualizzazione in formato 16:9 con lunghezza della diagonale nell’intervallo 
+40”- 60” 
+3.2 Livelli Video, errori di gamut e segnali non permessi 
+I segnali SDTV, HDTV e UHDTV saranno valutati in accordo con le raccomandazioni 
+ITU-R BT.601, ITU-R BT.709, ITU-R BT.2020, ITU-R BT.2100 e con il report ITU-R 
+BT.2408. 
+I livelli video devono ricadere entro dei limiti specifici in modo che il programma possa 
+essere utilizzato senza ulteriori lavorazioni. 
+Ogni segnale al di fuori dei limiti specificati è considerato come errore di gamut3. 
+Utilizzando le tradizionali rappresentazioni per segnali SDR codificati a 10 bit dove il 
+livello nominale del nero è rappresentato come 64 Digital Samples Values (o 0%) e il 
+livello nominale del bianco è rappresentato come  940 Digital Samples Values  (o 
+100%), si richiede che le componenti RGB rispettino la raccomandazione EBU R 103, 
+cioè: 
+• Le componenti R, G, e B ricadano tra 20 e 984 Digital Samples Values  
+(rispettivamente -5% e 105%) 
+• La componente di Luma (Y) ricada tra 55 e 966 Digital Samples Values  
+(rispettivamente -1% e 103%) 
+Per i segnali HDR il livello d i riferimento per il  bianco deve seguire le indicazioni 
+riportate nel report ITU-R BT. 2408 per le produzioni realizzate con funzione di 
+trasferimento HLG. 
+Considerata la difficoltà nel controllare i transienti è ammesso un margine di errore 
+quantificato nell’1% del numero di pixel. Saranno quindi considerati come errori di 
+gamut solamente i frame aventi più dell’1% dei pixel al di fuori dei limiti specificati.  
+3.3 Titoli in movimento e grafica 
+I titoli in movimento e la grafica devono essere inseriti lavorando sul formato nativo, 
+verificando che l’eventuale successiva conversione nei formati interlacciati o a 
+risoluzione più bassa ne mantenga la leggibilità. 
+3.4 Anti-PSE 
+Lampi di luce, luci intermittenti ed alcuni tipi di schemi visuali ripetitivi possono  
+causare problemi ai telespettatori affetti da epilessia fotosensitiva ( PSE -
+“PhotoSensitive Epilepsy”). La televisione è, per sua natura, una sorgente luminosa 
+intermittente e quindi non è possibile eliminare completamente il rischio di causare 
+convulsioni in soggetti che soffrono di  tale forma di epilessia,  tuttavia alcune 
+precauzioni sono possibili per ridurne il rischio. Si consiglia pertanto di seguire le 
+indicazioni fornite dal sito web della Commissione Televisiva Indipendente inglese 
+(“Independent Television Commission” – www.ofcom.org.uk) per alcune linee guida 
+fondamentali su questa tematica. 
+ 
+ 
+3 https://it.wikipedia.org/wiki/Gamut  
+
+Rai Radiotelevisione Italiana 
+Specifiche Tecniche per la consegna di prodotti televisivi nei formati SD/HD/3D/UHD 
+13 
+ 
+3.5 Safe area 
+Per i prodotti in SDTV, HDTV, 3DTV e UHDTV deve essere rispettata una safe area4 
+come prescritto nella raccomandazione EBU R95 rev. 1.1. 
+La raccomandazione EBU prevede che: 
+• l’azione principale sia contenuta nella zona centrale fino al 93% della altezza 
+e al 93% della larghezza dell’immagine  
+• i titoli e la grafica siano contenuti nella zona centrale fino al 90% della altezza 
+e al 80% della larghezza dell’immagine.  
+3.6 Presenza di materiale con caratteristiche non omogenee 
+Il prodotto può contenere una parte di materiale originario a definizione o qualità 
+tecnica inferiore se giustificato da esigenze editoriali.  
+In questo caso la quantità di materiale originale in definizione inferiore non dovrà 
+superare il 25% della durata del programma e non dovrà essere utilizzata per lunghi 
+ed ininterrotti periodi salvo specifico accordo con RAI. 
+Il materiale originario a definizione inferiore dovrà essere convertito con tecnologia 
+allo stato dell’arte.  
+Nel caso di materiale in formato 16:9 nativo, l’operazione di conversion e non deve 
+alterare le proporzioni geometriche. 
+Nel caso di sequenze in formato 4:3 deve esserne effettuata la conversione in 16:9 
+con modalità conformi alle esigenze di car attere editoriale senza alterare le 
+proporzioni geometriche del contenuto, facendo attenzione a che siano mantenuti i 
+principali elementi del contenuto nativo 4:3 (grafica, azione).  
+Nel caso di materiale SDR  incluso in contenuti HDR  la conversione dovrà essere 
+eseguita secondo le linee guida indicate nel report ITU-R BT 2408. 
+3.7 Materiale di archivio 
+Il materiale di archivio eventualmente inserito nel prodotto fornito deve rispettare tutti 
+i requisiti tecnici indicati in questo documento ad eccezione degli as petti descritti nei 
+paragrafi sottostanti. 
+3.7.1 Qualità generale   
+Il materiale di archivio dovrà essere acquisito dalla miglior sorgente possibile e RAI si 
+attende che venga eseguita ogni attività di restauro o miglioramento ragionevolmente 
+fattibile.  
+3.7.2 Aspect Ratio 
+Il materiale di archivio dovrebbe essere riquadrato in modo da riempire, ove possibile, 
+il frame 16:9, senza tuttavia compromettere la qualità dell’immagine, la sua 
+proporzione geometrica e la composizione. 
+In alternativa il materiale può essere presentato in pillarbox
+5 (vedi paragrafo 3.8)  
+avente le seguenti caratteristiche: 
+• rapporto di aspetto costante ed intermedio tra 4:3 e 16:9 
+ 
+ 
+4 Si veda https://it.wikipedia.org/wiki/Safe_area  
+ 
+5 Si veda https://en.wikipedia.org/wiki/Pillarbox 
+ 
+
+Rai Radiotelevisione Italiana 
+Specifiche Tecniche per la consegna di prodotti televisivi nei formati SD/HD/3D/UHD 
+14 
+ 
+• immagine centrata nel frame 16:9 
+• assenza di distorsioni geometriche visibili 
+• bordi dell’immagine netti e le barre a livello del nero  
+3.7.3 Testi e sottotitoli 
+Qualunque sottotitolo o testo deve essere mantenuto all’interno della safe area 
+(vedere paragrafo 3.5). 
+3.8 Conversioni da altri formati 
+Per i programmi la cui produzione non sia stata effettuata con il rapporto di aspetto 
+16:9, la conversione di aspetto dovrà essere comunque effettuata mantenendo i 
+principali elementi del contenuto nativo e senza alterare le proporzioni geometriche. 
+A titolo di esempio nella seguente figura sono rappresentate le conversioni in 16:9 di 
+alcuni formati (1.33:1, 1,66:1, 1.85:1 e 2.35:1) consistenti unicamente nell’aggiunta di 
+bande nere senza eliminare alcuna parte dell’immagine video originaria. 
+ 
+ 
+Fig. 1 - Esempi di conversione di formato 
+ 
+3.9 Contenuto della cancellazione verticale nei supporti video 
+L'intervallo di cancellazione verticale può essere usato per l’inserzione di dati. 
+Si precisa che RAI riserva l'uso dell'intervallo di cancellazione verticale per questi 
+scopi, e non accetta, salvo accordi specifici, che l'intervallo di cancellazione verticale 
+contenga segnali di inserzione (es. Video Index, Active Format Descriptor o Wi de 
+Screen Signalling).  
+Un eventuale timecode inserito nell'intervallo di cancellazione verticale (VITC) deve 
+coincidere con il timecode lineare (LTC).  
+3.10 Field dominance 
+Al fine di mantenere la corretta visualizzazione, i tagli su materiale con scansione 
+interlacciata devono sempre avvenire tra field 2 e field 1.  
+I tagli su materiale con scansione progressiva e trasporto interlacciato (cioè 
+Progressive Segmented Frame) devono sempre avvenire tra field 2 e field 1. 
+
+
+Rai Radiotelevisione Italiana 
+Specifiche Tecniche per la consegna di prodotti televisivi nei formati SD/HD/3D/UHD 
+15 
+ 
+4. Specifiche Tecniche – Audio 
+4.1 Requisiti di qualità 
+RAI richiede che la parte audio del contenuto fornito sia prodotto allo stato dell’arte e 
+in modo conforme agli standard dell’industria audiovisiva.  
+Tenendo conto delle specifiche esigenze artistiche ed editoriali, RAI richiede che: 
+• La ripresa audio sia effettuata con le necessarie precauzioni affinché non 
+siano presenti rumore, radiodisturbi, interruzioni o distorsioni 
+• La ripresa audio sia effettuata almeno a 48kHz di frequenza di 
+campionamento e 24 bit di profondità. 
+• Le tracce audio non presentino alterazioni della dinamica e/o dell’estensione 
+in frequenza dovute all’azione di sistemi di riduzione del rumore (o del fruscio) 
+o di sistemi di codifica/decodifica con un numero insufficiente di bit. 
+• Le tracce audio siano prive di segnali s puri (es. click, rumore, hum),  
+distorsioni analogiche e artefatti dovuti a sistemi di compressione digitale 
+• Le tracce audio, siano esse stereofonica o multicanale, riflettano le 
+caratteristiche spaziali delle immagini (sinistra/destra, fronte/retro) 
+• L’intelligibilità del parlato sia sempre e costantemente garantita, 
+indipendentemente dal sistema di ascolto domestico utilizzato  
+• L’intensità sonora sia coerente lungo tutto il programma, sia appropriata alla 
+scena riprodotta e la dinamica sonora non sia eccess iva in modo da poter 
+essere fruite nell’intera gamma di condizioni di ascolto domestiche 
+• Il fronte sonoro sia opportunamente bilanciato ed esente da differenze di fase 
+che possano causare evidenti cancellazioni qualora, in caso di audio 
+stereofonico venga fruito in monofonico, oppure, in caso di audio multicanale, 
+venga fruito tramite processo di down mix 
+• Le tracce audio monofoniche siano opportunamente convertite in dual-mono, 
+in modo che possano essere trattate esattamente come tracce stereofoniche. 
+È inoltre richiesto che la traccia dual -mono risultante rispetti tutti i requisiti 
+della traccia stereofonica  
+ 
+Salvo diverse esigenze editoriali, RAI raccomanda che: 
+• i programmi in SDTV siano prodotti con audio stereofonico (2.0) 
+• i programmi in HDTV , 3DTV e UHDTV siano prodotti con audio multicanale 
+(3/2 per ITU-R BS.775) 
+4.2 Audio multicanale 
+La traccia audio multicanale è trasmessa nel formato 5.1 ( code 3/2 per ITU -R 
+BS.775). 
+Il canale LFE (Low Frequency Effect) è opzionale. L’uso del suddetto canale di effetti 
+deve essere conforme alla raccomandazione ITU-R BS.775 
+
+Rai Radiotelevisione Italiana 
+Specifiche Tecniche per la consegna di prodotti televisivi nei formati SD/HD/3D/UHD 
+16 
+ 
+Una particolare attenzione va posta nel mixaggio tra le componenti di bassa 
+frequenza ed il contenuto del canale LFE, tenendo in conto che quest’ultimo potrebbe 
+essere escluso durante i processi di down-mix6. 
+In caso la traccia stereofonica di down-mix venga generata in modo automatico, i 
+coefficienti di down-mix utilizzati devono coincidere con i metadati di down-mix 
+associati alla traccia multicanale. 
+A prescindere dalla tipologia di down-mix uti lizzato per la generazione della traccia 
+stereofonica, essa dovrà comunque essere normalizzata in termini di loudness in 
+accordo con quanto prescritto al paragrafo 4.6  
+In caso di presenza di contenuti monofonici all’interno della traccia multicanale è 
+importante mantenere la consistenza del fronte sonoro evitando il passaggio tra 
+“Center Only” (contenuto presente solo sul canale centrale) e “Phantom Center” 
+(contenuto presente solo sui canali Left/Right)   
+In caso di audio multicanale ottenuto tramite algoritmi di upmixing
+7, si richiede che tali 
+contenuti siano esenti da artefatti e da fenomeni di cancellazione quando fruiti tramite 
+successivo down-mix stereofonico o monofonico. 
+In caso di consegna della traccia audio multicanale come canali discreti, i metadati 
+utilizzati da RAI per la codifica di emissione della suddetta traccia sono indicati nel 
+paragrafo 9.3. 
+ 
+4.3 Assegnazione delle tracce audio  
+Nel capitolo 10 sono raccolte le differenti assegnazioni delle tracce audio previste da 
+RAI in funzione del numero di tracce audio supportate.  
+Nel caso di prodotti 3D TV le tracce audio devono essere present i sia sui supporti 
+relativi all’occhio sinistro che all’occhio destro. Il contenuto audio e l’assegnazione 
+delle tracce devono essere gli stessi.  
+4.4 Toni di allineamento ed identificazione dei canali audio 
+I toni di allineamento devono essere al Livello di Allineamento (AL) pari a – 18 dBFS 
+(PPM4 su uno strumento PPM BBC –  IEC type IIa), con una tolleranza in ampiezza 
+non superiore a +/- 0,3 dB. 
+La frequenza dei toni di allineamento deve essere pari ad 1 kHz  per i canali principali 
+e pari a 80 Hz  per il canale LFE.  
+Nel caso in cui un programma venga creato in un sistema con livello di allineamento 
+pari a – 20 dBFS, il fornitore del programma deve provvedere ad adeguare il livello 
+dei toni di allineamento a -18 dBFS avendo cura che il programma continui a 
+rispettare quanto prescritto nei paragrafi 4.5 (Livello audio massimo) e 4.6 (Program 
+Loudness Level).     
+I toni di allineamento devono essere sinusoidali, privi di distorsioni e garantire la 
+coerenza in fase tra i canali. 
+ 
+ 
+6 Downmix: Tipologia di elaborazione che riduce consente la riproduzione di un fronte sonoro su un numero inferiore di 
+diffusori   
+7 Upmix: Tipologia di elaborazione che simula un fronte sonoro più ampio (es. da fronte monofonico a fronte stereofonico, 
+o da fronte stereofonico a surround)  
+ 
+
+Rai Radiotelevisione Italiana 
+Specifiche Tecniche per la consegna di prodotti televisivi nei formati SD/HD/3D/UHD 
+17 
+ 
+Si ricorda che i toni di allineamento devono risultare ai livelli indicati con gli apparati 
+in configurazione PRESET8. 
+Il segnale di identificazione dei canali deve essere conforme all’EBU multichannel 
+ident signal (vedi immagine sotto) descritto nella specifica EBU Tech 3304: su tutti i 
+canali principali, 3 secondi di tono ad 1 kHz sono seguiti da 0,5 secondi di silenzio, 
+poi i canali sono identificati in senso orario, a partire dal canale frontale sinistro  
+(sequenza Front Left, Centre, Front Right, Right Surround, Left Surround). Il segnale 
+di identificazione consiste in un tono ad 1 kHz lungo 0,5 secondi seguito da 0,5 
+secondi di silenzio prima del tono sul canale successivo; dopo una pausa finale di 0,5 
+secondi, la sequenza si ripete a partire dai 3 secondi di tono continuo e coerente su 
+tutti i canali.Il tempo necessario per ciascuna sequenza di identificazione dipende dal 
+numero dei canali del formato scelto (ad esempio, 6 secondi per audio in 5.1 o 5.0), 
+e quindi rivela indirettamente il formato multicanale scelto. 
+L’intera sequenza di identificazione deve essere ripetuta almeno 4 volte; nell’intervallo 
+fra la fine dell’ultima sequenza ed il termine delle barre colore, il tono ad 1 kHz deve 
+essere mantenuto attivo su tutti i canali principali. 
+Il tono ad 80 Hz sul canale dell’LFE è continuo per tutta la durata della sequenza. 
+Sebbene il tono sia registrato al livello di allineamento, il canale LFE è per 
+convenzione riprodotto ad un livello superiore di 10 dB rispetto ai canali principali, e 
+di conseguenza viene rispettato un certo grado di bilanciamento nell’intensità sonora 
+percepita.   
+ 
+Figura 1. Multichannel ident signal 
+ 
+4.5 Livello audio massimo  
+Con livello audio massimo si fa riferimento al concetto di “True-Peak Audio Level” 
+definito nella raccomandazione ITU-R BS.1770. 
+La misura del Maximum True Peak Audio Level deve essere effettuata con uno 
+strumento conforme alla metodologia definita nella raccomandazione ITU-R BS.1770. 
+Il Maximum True Peak Audio Level consentito è -2.0 dBTP. 
+ 
+ 
+8 La configurazione di PRESET prevede un guadagno di 0 dB  
+ 
+
+
+Rai Radiotelevisione Italiana 
+Specifiche Tecniche per la consegna di prodotti televisivi nei formati SD/HD/3D/UHD 
+18 
+ 
+4.6 Program Loudness Level  
+Il Program Loudness Level - valor medio della loudness del programma – è definito 
+nella raccomandazione EBU R128 e deve essere misurato con strumentazione 
+conforme alla metodologia di misurazione descritta nella raccomandazione ITU -R 
+BS.1770.  
+La misura del Program Loudness Level deve essere relativa all’intera durata del 
+programma a partire dal primo fotogramma escludendo i segnali tecnici di testa e di 
+coda. 
+Il Program Loudness Level misurato deve rispettare il Target Level -23 LUFS +/- 0.2 
+LU come prescritto nella raccomandazione EBU R128-2020. 
+Deve essere garantito lo stesso Program Loudness  Level tra le diverse colonne 
+sonore presenti (es. colonna sonora stereo e colonna sonora multicanale). 
+4.7 Loudness Range  
+Il Loudness Range - LRA - è un parametro definito dal documento tecnico EBU Tech 
+3342 che fornisce una misura della variazione di loudness basandosi sul la sua 
+distribuzione statistica durante tutta la durata del programma. All'aumentare del 
+valore di LRA aumenterà probabilmente in fase di fruizione  l'esigenza di modificare 
+il livello di ascolto in modo da mantenere l'udibilità dei contenuti sonori, soprattutto in 
+ambienti domestici rumorosi. 
+Per questo motivo RAI richiede che il Loudness Range dei prodotti consegnati sia di 
+norma inferiore a 18 LU e che comunque non superi il valore limite di 20 LU. 
+4.8 Traccia Music & Effects  
+Qualora debba essere fornito un prodotto che preveda la presenza della traccia M&E, 
+il produttore dovrà avere cura che, salvo differenti accordi con RAI, la suddetta traccia 
+presenti le seguenti caratteristiche: 
+1. Per film , fiction ed in generale per programmi destinati al doppiaggio,  
+contenere esclusivamente musica ed effetti; nessun dialogo o elementi 
+parlanti provenienti da sorgenti sonore presenti nella scena (es. radio, tv, etc..) 
+o riproduzioni verbali dovranno essere presenti; 
+2. Per documentari  o altri programmi destinati a lavorazioni di ‘ oversound’, 
+contenere l’audio originale in presa diretta; 
+3. Suoni di ambiente e ‘foley’ devono essere inclusi in modo da corrispondere 
+con quanto presente nel mix originale; 
+4. I livelli devono corrispondere con i livelli presenti nel mix originale; 
+5. Essere ‘undipped’, cioè non contenere le attenuazioni funzionali al mix dei 
+dialoghi. 
+Considerato che la traccia M&E non è trasmettibile, non è richiesto che venga 
+rispettato il Target Level indicato dalla raccomandazione EBU R128. 
+4.9 Sincronizzazione audio/video 
+La relazione temporale (sincronizzazione) fra sonoro e immagine non deve mostrare 
+errori percettibili.       
+Il sonoro e l’immagine devono essere sincronizzati secondo la raccomandazione EBU 
+R37: il sonoro non dev e anticipare più di 5 millisecondi o posticipare l’immagine per 
+più di 15 millisecondi. 
+
+Rai Radiotelevisione Italiana 
+Specifiche Tecniche per la consegna di prodotti televisivi nei formati SD/HD/3D/UHD 
+19 
+ 
+4.10 Specifiche Dolby E  
+Dolby E è un formato proprietario di compressione audio destinato all’uso 
+professionale.  
+Per la consegna di contenuti audio multicanale codificati in Dolby E RAI richiede che: 
+• La traccia Dolby E usi una word-size a 16 bit (trasporto di una configurazione 
+5.1). La word-size a 20 bit è accettata solo a fronte di specifico accordo con 
+RAI. 
+• In presenza di traccia stereofonica ottenuta tramite processo automatico di 
+down mix dalla traccia Dolby E, tale down-mix sia prodotto in maniera 
+automatica nella modalità Lo/Ro9 utilizzando i metadati di down-mix presenti 
+nella traccia Dolby E. 
+• La traccia Dolby E s ia opportunamente anticipata in modo da compensare 
+esclusivamente la latenza di codifica del Dolby E.  
+• La traccia Dolby E  rispetti le specifiche Dolby in merito all’allineamento 
+temporale rispetto al segnale video con particolare attenzione agli intervalli di 
+guardia10. 
+• I metadati presenti nella traccia Dolby E siano coerenti con il contenuto della 
+traccia, con particolare attenzione al valore di Dialogue Level.  
+• I metadati Dolby rimangano costanti durante tutta la durata del programma. 
+ 
+Nel paragrafo 9.3 sono riportati i metadati Dolby richiesti da RAI. 
+  
+ 
+ 
+9 La modalità di downmix Lo/Ro (Left Only/Right Only) consiste nella somma dei canali posteriori Ls e Rs rispettivamente 
+con i frontali L ed R. Il canale centrale C viene suddiviso in parti uguali tra i due canali risultanti. L’eventuale canale LFE 
+viene escluso. 
+10 Per maggiori informazioni http://www.dolby.com/us/en/technologies/dolby-e-preferred-alignment.html  
+
+Rai Radiotelevisione Italiana 
+Specifiche Tecniche per la consegna di prodotti televisivi nei formati SD/HD/3D/UHD 
+20 
+ 
+5. Sottotitoli 
+Se è prevista la presenza di sottotitoli in italiano e/o in inglese, questi dovranno essere 
+codificati in modo conforme alla raccomandazione EBU Tech 3264. In linea generale 
+non si prevede l’utilizzo di sottotitoli in chiaro (stampati) sul segnale video. Nel caso 
+in cui siano presenti, la loro posizione deve rispettare quanto indicato nel paragrafo 
+3.5 per la “safe area”. 
+Nel caso di contenuti 3DTV, il sottotitolo deve essere percepito di norma sul piano 
+dello schermo. La posizione nel senso della profondità deve risultare più vicino allo 
+spettatore della parte di immagine occlusa dal sottotitolo.  
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+  
+
+Rai Radiotelevisione Italiana 
+Specifiche Tecniche per la consegna di prodotti televisivi nei formati SD/HD/3D/UHD 
+21 
+ 
+6. Struttura del programma  
+RAI richiede che il prodotto consegnato rispetti la struttura riassunta in Tabella 1 
+Nei paragrafi successivi è descritto in dettaglio il contenuto di ciascuna sezione. 
+Una struttura del programma diversa da quanto descritto nel seguito può essere 
+concordata con Rai sulla base di esigenze specifiche. 
+RAI richiede inoltre  che tale struttura sia rispettata senza soluzione di continuità, 
+ovvero che non siano presenti interruzioni tra le diverse sezioni della struttura. 
+ 
+Sezione Durata (sec.) 
+ 
+Video Audio 
+coda di 
+allineamento 
+30" (minimo) barre colore (vedi 
+NOTA)  
+1 kHz a livello di 
+riferimento 
+coda di 
+identificazione 
+5’’ (minimo) 
+15" (massimo) 
+identificazione visiva 
+programma 
+identificazione 
+sonora o silenzio 
+coda di partenza 10" conta alla rovescia silenzio 
+Programma durata del 
+programma 
+video del 
+programma 
+audio del 
+programma 
+coda di fine 
+ 
+30" (minimo) nero silenzio 
+Fondini (se 
+presenti) 
+NA   
+Tabella 1 - Struttura del programma 
+ 
+NOTA 
+Per formati HDTV si richiede che le barre colore siano conformi a quanto descritto 
+nel documento SMPTE RP 219-2002 
+Per formati UHDTV/HDR , si richiede che le barre colore siano conformi a quanto 
+descritto nella raccomandazione EBU Tech 337311. 
+Per i formati UHDTV/SDR si richiede che le barre colore siano conformi a quanto 
+descritto nello standard ARIB STD-B6612. 
+6.1 Coda di allineamento 
+La coda di allineamento contiene i segnali di riferimento.  In corrispondenza dell’inizio 
+della coda di allineamento ha anche inizio la traccia timecode.  
+I segnali di riferimento sono: 
+• video: barre colore in formato conforme a quanto indicato nel paragrafo 
+precedente, con gli apparati in configurazione PRESET 
+• audio: vedere paragrafo 4.4 
+6.2 Coda di identificazione 
+Il programma deve essere identificato da un’immagine statica registrata della durata 
+di 15 sec ondi al massimo; l’immagine deve mostrare le informazioni essenziali del 
+programma (coerenti con quelle riportate sul foglio di accompagnamento e 
+sull’etichetta). Le informazioni essenziali sono riportate nella Tabella 2: 
+ 
+ 
+11 https://tech.ebu.ch/docs/tech/tech3373.pdf 
+12 http://www.arib.or.jp/english/html/overview/doc/6-STD-B66v1_2-E1.pdf 
+
+Rai Radiotelevisione Italiana 
+Specifiche Tecniche per la consegna di prodotti televisivi nei formati SD/HD/3D/UHD 
+22 
+ 
+ 
+ 
+Campo Note 
+Nome casa di produzione  
+Titolo 
+ 
+In caso di serialità indicare il numero della 
+stagione 
+Codice ISAN Acronimo di International Standard 
+Audiovisual Number  
+ http://www.isan.org/  
+Numero del supporto video Solo nel caso di consegna di un supporto 
+fisico, indicare 1/N, 2/N etc. dove N è il 
+numero totale dei supporti fisici sui quali è 
+suddiviso il programma qualora il 
+programma ecceda la durata massima del 
+supporto stesso. 
+Struttura tracce audio Identifica la struttura utilizzando l’indice 
+RAI-ID codificato nelle tabelle del Capitolo 
+10   
+Formato dell’immagine video  
+Formato dell’immagine originale  
+Durata Espressa in hh:mm:ss:ff 
+Fondini titoli Indicare SI/NO a seconda se i fondini 
+grafici per i titoli sono presenti o meno nel 
+file. 
+Tabella 2 - Contenuto della coda di Identificazione 
+6.3 Coda di partenza  
+Ha una durata tassativa di 10 secondi e deve contenere il conto alla rovescia con 
+orologio circolare. Il conto è interrotto 2 secondi prima della partenza del programma. 
+Il formato di aspetto deve essere 1,78 (16:9). L’audio deve essere silente per tutta la 
+durata della coda. Deve comunque essere presente il timecode coerente con i valori 
+delle parti precedenti. 
+6.4 Coda di fine 
+Dopo il programma sono presenti almeno 30 secondi di nero e silenzio con il timecode 
+comunque presente e coerente con il programma.  
+6.5 Timecode 
+Tutti i supporti video e i file devono essere forniti con timecode. 
+Si richiede che il timecode sia continuo, monotono crescente e non presenti salti o 
+interruzioni per tutta la durata del programma. 
+Il segnale di timecode deve essere conforme allo standard SMPTE 12M-1.  
+Il timecode corrispondente al primo frame del programma deve essere 10:00:00:00  
+Nella Tabella 3 si riporta un esempio dei valori di timecode nel caso di primo frame 
+del programma con timecode 10:00:00:00. Si fa riferimento alla struttura della 
+registrazione descritta nella Tabella 1Tabella 2. 
+
+Rai Radiotelevisione Italiana 
+Specifiche Tecniche per la consegna di prodotti televisivi nei formati SD/HD/3D/UHD 
+23 
+ 
+ 
+Timecode Inizio  
+Supporto 1 
+Sezione Durata 
+ 
+09:59:05:00 coda di allineamento 30"  
+09:59:35:00 coda di identificazione 15" 
+09:59:50:00 coda di partenza 10" 
+10:00:00:00 Programma 90’  
+11:30:00:00 coda di fine 30"  
+Tabella 3 - Esempio di timecode per un programma della durata di 90 minuti 
+ 
+Valori diversi del timecode potranno essere ammessi previo accordo con le strutture 
+RAI.  
+In ogni caso il timecode lungo tutto il programma all’interno del singolo supporto deve 
+essere continuo, coerente e senza errori e non deve mai passare per lo zero in 
+nessun punto dell’intera registrazione (code comprese).  
+Nel caso di contenuti 3DTV distribuiti su supporti o file diversi per canale sinistro e 
+destro, il timecode deve essere uguale su entrambi per permettere il corretto 
+allineamento in fase di riproduzione. 
+ 
+ 
+ 
+
+Rai Radiotelevisione Italiana 
+Specifiche Tecniche per la consegna di prodotti televisivi nei formati SD/HD/3D/UHD 
+24 
+ 
+7. Formati di consegna 
+La consegna del materiale deve avvenire preferibilmente tramite trasferimento 
+telematico di file audio/video. In casi particolari la consegna può avvenire anche 
+tramite supporto fisico. 
+Nel caso di supporti fisici è preferibile utilizzare supporti informatici contenenti file 
+conformi alle specifiche definite nel paragrafo 8 oppure supporti video professionali. 
+La modalità di consegna sarà indicata da RAI nel contratto di acquisto. 
+7.1 Consegna tramite trasferimento telematico  
+La consegna del prodotto tramite trasferimento telematico può avvenire secondo le 
+seguenti modalità: 
+• Web services e FTP 
+• Web App e sistema di movimentazione file di RAI 
+Per entrambe le due modalità di consegna il processo prevede i seguenti passi: 
+• Indicazione del numero di contratto con RAI da parte del fornitore sul sistema 
+di consegna 
+• Selezione del file del programma da consegnare tra quelli associati al 
+contratto di acquisto visualizzati dal sistema di consegna 
+• Rilascio di un ticket (codice) identificativo della consegna 
+• Invio del singolo file con riferimento al ticket rilasciato di cui al punto 
+precedente 
+Previa comunicazione al fornitore, RAI si riserva di indicare e modificare i riferimenti 
+alle applicazioni web da utilizzare per la consegna del prodotto. 
+ 
+Le informazioni operative sono disponibili online al seguente indirizzo: 
+ https://www.rai.it/specifiche-tecniche-prodotti-tv/
+ 
+7.2 Consegna tramite supporto informatico - nomenclatura file 
+RAI accetta come supporto informatico unicamente Hard Disk Drive dotati di 
+interfaccia USB 3 formattato con file system NTFS13. 
+I file consegnati su supporto informatico devono risultare leggibili senza errori, ovvero 
+l’hash14 MD515,  calcolato tramite lettura di ciascun file ricevuto deve corrispondere 
+con l’hash MD5 riportato dal fornitore nei file con estensione “.MD5”   
+RAI richiede che i file consegnati tramite supporto informatico rispettino la seguente 
+nomenclatura:  
+<Titolo>_s<NumStagione>_ep<NumeroEpisodio>_<TitoloEpisodio1>_<FORMAT> 
+ 
+Dove il <FORMAT> può assumere, coerentemente con il profilo del file, uno dei 
+seguenti valori: 1080i25, 1080p24, 1080p25, 1080p50, 2160p24, 2160p25, 2160p50. 
+ 
+ 
+13 https://en.wikipedia.org/wiki/NTFS  
+14 https://en.wikipedia.org/wiki/Hash_function  
+15 https://en.wikipedia.org/wiki/Md5sum 
+ 
+
+Rai Radiotelevisione Italiana 
+Specifiche Tecniche per la consegna di prodotti televisivi nei formati SD/HD/3D/UHD 
+25 
+ 
+Esempi:  
+• LoremIpsum_s09_ep001_DolorSitAmet_1080i25.MXF  
+• LoremIpsum_s09_ep001_DolorSitAmet_2160p25.MXF  
+ 
+In caso di consegna di prodotti 3DTV, i file consegnati devono utilizzare la seguente 
+nomenclatura: 
+<Titolo>_s<NumStagione>_ep<NumEpisodio>_<TitoloEpisodio>_<FORMAT>_<SX|DX> 
+Esempio:  
+• LoremIpsum_s09_ep001_DolorSitAmet_1080i25_SX.MXF 
+• LoremIpsum_s09_ep001_DolorSitAmet_1080i25_DX.MXF 
+ 
+Su specifica richiesta di RAI posso no essere consegnati file che contengono più 
+episodi (“assemblati”). 
+In questo caso la nomenclatura dei file consegnali deve essere: 
+<Titolo>_s<NumStagione>_ep<NumEpisodio>_<TitoloEp1>_<TitoloEp2>_<FORMAT> 
+ 
+Esempio: 
+• LoremIpsum_s09_ep001_DolorSitAmet_ConsecteturAdipisciElit_1080i25.MXF 
+ 
+In caso di consegna di prodotti 3DTV, i file che contengono più episodi devono 
+utilizzare la seguente nomenclatura: 
+<Titolo>_s<NumStagione>_ep<NumEpisodio>_<TitoloEp1>_<TitoloEp2>_<FORMAT>_<SX|DX> 
+ 
+Esempio: 
+• LoremIpsum_s09_ep001_DolorSitAmet_ConsecteturAdipisciElit_1080i25_SX.MXF 
+• LoremIpsum_s09_ep001_DolorSitAmet_ConsecteturAdipisciElit_1080i25_DX.MXF 
+7.3 Consegna tramite supporto informatico - organizzazione file  
+L’organizzazione dei file nel supporto informatico deve prevedere l’utilizzo di cartelle. 
+È richiesto che ciascun file audio/video, anche consegnato in diverse versioni 
+tecniche, sia contenuto in una specifica cartella avente lo stesso nome del file (senza 
+estensione), con l’eccezione dei prodotti 3DTV i n cui devono essere presenti 2 file 
+audio/video ed i rispettivi file di hash MD5. 
+Nella stessa cartella dovranno essere presenti: 
+• la scheda tecnica in XML 
+• il file di hash MD5 
+Esempio: 
+ <LoremIpsum_s09_ep001_DolorSitAmet_1080i25> (cartella) 
+ LoremIpsum_s09_ep001_DolorSitAmet_1080i25.MXF (file audio/video) 
+ LoremIpsum_s09_ep001_DolorSitAmet_1080i25.XML(scheda tecnica elettronica) 
+ LoremIpsum_s09_ep001_DolorSitAmet_1080i25.MD5 (file di hash) 
+ 
+
+Rai Radiotelevisione Italiana 
+Specifiche Tecniche per la consegna di prodotti televisivi nei formati SD/HD/3D/UHD 
+26 
+ 
+In caso di consegna di prodotti 3DTV RAI richiede: 
+• la consegna di coppie di file contenenti rispettivamente il segnale relativo 
+all’occhio sinistro e all’occhio destro (canale sinistro e canale destro). Per la 
+nomenclatura file il paragrafo di riferimento è il 7.2. 
+• che su entrambi i file vengano applicate le norme relative al materiale di 
+identico formato (es. HDTV, UHDTV) contenute nel presente documento 
+• che entrambi i file contengano la stessa struttura di tracce audio, sincrone con 
+il video 
+7.4 Consegna tramite supporti video professionali 
+Nel caso di consegna tramite supporto fisico: 
+• I prodotti in SDTV devono essere consegnati a RAI esclusivamente tramite 
+supporto ottico riscrivibile Sony Professional Disc XDCAM. 
+• I contenuti HDTV consegnati a RAI tramite supporto ottico riscrivibile Sony 
+Professional Disc XDCAM  devono obbligatoriamente essere nel formato 
+1080i25. 
+• I contenuti 3DTV devono essere consegnati a  RAI tramite coppia di supporti 
+ottici riscrivibili Sony Professional Disc XDCAM  contenenti rispettivamente il 
+segnale relativo all’occhio sinistro e all’occhio destro (canale sinistro e canale 
+destro), opportunamente identificati da etichette come descritto a seguito e 
+contenenti informazioni di timecode coerenti. 
+ 
+I contenuti in formati diversi dai precedenti prevedono esclusivamente la consegna 
+tramite formato file. 
+In ogni caso, il prodotto consegnato dovrà essere originato a partire dal master alla 
+qualità più alta disponibile, minimizzando il numero di transcodifiche. 
+Il supporto video deve risultare integro (privo di abrasioni, rotture o difetti meccanici) 
+e deve essere esente da qualunque imperfezione tale da causare un difetto percettivo 
+del contenuto audio/video. 
+7.4.1 Programmi consegnati su più supporti 
+Qualora la durata di un programma ecceda la capacità massima del supporto fisico 
+di consegna, il programma dovrà essere consegnato su più supporti. 
+In questo caso, le immagini del programma alla fine di un supporto devono legarsi 
+senza sovrapposizione e senza mancanze con quelle all'inizio del supporto 
+successivo.  
+I supporti sono numerati in sequenza a partire da 1.  
+Il timecode del programma deve essere progressivo tra i vari supporti, in modo che 
+non presenti discontinuità tra l’ultimo frame utile della parte di programma registrata 
+su un supporto e il primo frame della parte di programma del successivo (paragrafo 
+6.5).  
+La struttura della registrazione su ciascun supporto deve comunque rispettare quanto 
+indicato nel paragrafo 6. 
+Ciascun supporto fisico non deve contenere più di un programma, salvo il caso di 
+compilazioni di programmi omogenei e molto brevi. 
+ 
+
+Rai Radiotelevisione Italiana 
+Specifiche Tecniche per la consegna di prodotti televisivi nei formati SD/HD/3D/UHD 
+27 
+ 
+7.5 Documentazione di accompagnamento ed etichettatura 
+Ciascun prodotto consegnato su supporto video professionale o supporto informatico 
+deve:  
+• essere dotato di un’etichetta che riporti l’insieme minimale di informazioni 
+elencate in Tabella 4 necessarie alla sua identificazione  
+• essere accompagnato da una scheda tecnica secondo quanto indicato nel 
+capitolo 9 
+ 
+Campo Note 
+Numero contratto RAI  
+Codice Identificatore di formato Vedi Capitolo 11 
+Titolo completo del programma In caso di serialità  indicare anche il 
+numero della stagione 
+Numero episodio   
+Titolo episodio  
+Codice ISAN Acronimo di International Standard 
+Audiovisual Number  
+ http://www.isan.org/  
+Formato dell'immagine/Aspect Ratio  
+Struttura tracce audio Identificare la struttura utilizzando 
+l’indice RAI-ID codificato nelle tabelle 
+del Capitolo 10   
+Fondini titoli Indicare SI/NO a seconda se i fondini 
+grafici per i titoli sono presenti o meno 
+nel file. 
+Tabella 4 - Etichettatura del supporto 
+ 
+Le Informazioni presenti sull’etichetta del supporto devono essere presenti anche 
+sull’etichetta apposta sulla custodia del supporto (contenitore). 
+7.6 Sottotitoli 
+Le modalità di consegna per i file contenenti i sottotitoli variano in funzione del formato 
+o metodo di consegna del prodotto e sono concordate con Rai in fase di appalto del 
+servizio. 
+I file contenenti i sottotitoli devono rispettare la seguente nomenclatura (coerente con 
+quanto già indicato nel paragrafo 7.2). 
+Nomenclatura: 
+<Titolo>_s<NumStagione>_ep<NumEpisodio>_<TitoloEpisodio1>_<FORMAT>_sub<LANG> 
+Esempio: 
+file audio/video 
+LoremIpsum_s09_ep001_DolorSitAmet_1080i25.MXF  
+file sottotitoli in lingua italiana 
+LoremIpsum_s09_ep001_DolorSitAmet_1080i25_subIT.STL  
+file sottotitoli in lingua Inglese  
+
+Rai Radiotelevisione Italiana 
+Specifiche Tecniche per la consegna di prodotti televisivi nei formati SD/HD/3D/UHD 
+28 
+ 
+LoremIpsum_s09_ep001_DolorSitAmet_1080i25_subEN.STL  
+ 
+In caso di consegna di prodotti 3DTV, i file contenenti i sottoti toli devono utilizzare la 
+seguente nomenclatura: 
+<Titolo>_s<NumStagione>_ep<NumEpisodio>_<TitoloEpisodio>_<FORMAT>_<SX|DX>_sub<LA
+NG> 
+Esempio:  
+file audio/video 
+LoremIpsum_s09_ep001_DolorSitAmet_1080i25_SX.MXF  
+LoremIpsum_s09_ep001_DolorSitAmet_1080i25_DX.MXF  
+file sottotitoli in lingua italiana 
+LoremIpsum_s09_ep001_DolorSitAmet_1080i25_SX_subIT.STL 
+LoremIpsum_s09_ep001_DolorSitAmet_1080i25_DX_subIT.STL 
+8. Formato file - Specifiche tecniche  
+In questo capitolo vengono descritte sia le specifiche tecniche previste per la consegna 
+di prodotti a RAI tramite formato file sia i Profili, intesi come insiemi di specifiche tecniche 
+che caratterizzano i file audio/video utilizzati in ambito professionale. 
+I formati contenitore accettati da RAI sono: 
+• Material Exchange Format (estensione file .MXF ) per i profili descritti nei 
+paragrafi 8.6, 8.7, 8.8, 8.9, 8.10, 8.11, 8.12, 8.13 
+• Apple Quicktime16 (estensione file .MOV) per i profili descritti nei paragrafi 8.14, 
+8.15, 8.16, 8.17, 8.18, 8.19, 8.20, 8.21, 8.22, 8.23 
+La Tabella 5 riporta la normativa SMPTE rilevante riguardo il contenitore MXF. 
+ 
+ 
+16 https://developer.apple.com/library/mac/documentation/QuickTime/QTFF/QTFFPreface/qtffPreface.html 
+
+Rai Radiotelevisione Italiana 
+Specifiche Tecniche per la consegna di prodotti televisivi nei formati SD/HD/3D/UHD 
+29 
+ 
+Tabella 5 - Standard SMPTE relativi a MXF 
+8.1 Strumenti e profili di conformità file  
+Il fornitore è tenuto a verificare preventivamente la conformità dei file audio/video 
+consegnati rispetto al presente documento, è inoltre tenuto ad utilizzare le metodologie 
+e gli strumenti di controllo che RAI si riserva di indicare durante la stipula del contratto. 
+8.2 Aspect Ratio, Active Format Description e Bar Data 
+In caso di consegna di file MXF si richiede:  
+• la presenza e la corretta segnalazione nell’header MXF dell’Aspect Ratio   
+• la presenza e la corretta segnalazione dell’Active Format Description (AFD) in 
+base alla regione attiva dell’immagine (al netto di barre nere ai bordi) 
+La normativa di riferimento per l’AFD è lo standard SMPTE 2016-1. 
+Nel caso in cui l’AFD non riesca a descrivere il rapporto di forma dell’immagine si richiede 
+vengano utilizzati i Bar Data in accordo con lo standard SMPTE 2016-1. 
+8.3 Timecode 
+Si richiede nel file la presenza del timecode monotono crescente nei metadati in accordo 
+con lo standard SMPTE 12M -1. In particolare, per i file MXF si richiede che (rif. 
+raccomandazione EBU R122): 
+Riferimento SMPTE Titolo 
+SMPTE 326 SMPTE Standard -  for Television —  SDTI Content Package Format 
+(SDTI-CP) 
+SMPTE 356 SMPTE Standard - Type D-10 Stream Specifications —  MPEG-2 4:2:2P 
+@ ML for 525/60 and 625/50 
+SMPTE 377 SMPTE Standard - Material Exchange Format (MXF) - File Format 
+Specification 
+SMPTE 378 SMPTE Standard - Material Exchange Format (MXF) —  Operational 
+pattern 1A (Single Item, Single Package) 
+SMPTE 379-1 SMPTE Standard - Material Exchange Format (MXF) —  MXF 
+Constrained Generic Container 
+SMPTE 379-2 SMPTE Standard - Material Exchange Format (MXF) —  MXF Generic 
+Container 
+SMPTE 381-1 SMPTE Standard -  Material Exchange Format (MXF) —  Mapping 
+MPEG Streams into the MXF Generic Container 
+SMPTE 381-2 SMPTE Standard - Material Exchange Format (MXF) - Mapping MPEG 
+Streams into the MXF Constrained Generic Container 
+SMPTE 381-3 SMPTE Standard - Material Exchange Format— Mapping AVC Streams 
+into the MXF Generic Container 
+SMPTE 382 SMPTE Standard - Material Exchange Format —  Mapping AES3 and 
+Broadcast Wave Audio into the MXF Generic Container 
+SMPTE 385 SMPTE Standard - for Television - Material Exchange Format (MXF) 
+Mapping SDTI-CP Essence and Metadata into the MXF Generic 
+Container 
+SMPTE 386 SMPTE Standard - for Television —  Material Exchange Format (MXF) 
+Mapping Type D-10 Essence Data to the MXF Generic Container 
+
+Rai Radiotelevisione Italiana 
+Specifiche Tecniche per la consegna di prodotti televisivi nei formati SD/HD/3D/UHD 
+30 
+ 
+• Il timecode sia presente come track indipendente e monotono crescente nel 
+Material Package 
+• In presenza di timecode in altre locazioni (es. Source Package e/o nel System 
+Item) si richiede che sia coincidente con il timecode del Material Package. 
+8.4 Durata delle tracce 
+La durata delle tracce video, audio e timecode deve essere coincidente.  
+8.5 Segmentazione file 
+Salvo esplicito accordo con RAI non è prevista la consegna di prodotti segmentati su più 
+file. 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+SPAZIO LASCIATO INTENZIONALMENTE BIANCO 
+  
+
+Rai Radiotelevisione Italiana 
+Specifiche Tecniche per la consegna di prodotti televisivi nei formati SD/HD/3D/UHD 
+31 
+ 
+8.6 Profilo SDTV MXF/D10  
+La Tabella 6 riassume le caratteristiche principali del profilo SDTV MXF/D10. 
+Caratteristiche Profilo SDTV MXF/D10 
+MXF Operational Pattern  OP-1a 
+Essence Container  SMPTE D10 Mapping 
+Video 720x608 (immagine in 720x576) 25 frame al secondo, scansione 
+interlacciata, YCbCr, 4:2:2, 8 bit 
+MPEG-2, INTRA Only, 50Mbit/s 
+Audio 1 traccia con 8 canali mono PCM, 48KHz, 16 bit  
+Riferimenti normativi specifici 
+SMPTE ST386:2004 Material Exchange Format (MXF) —  Mapping Type D -10 Essence 
+Data to the MXF Generic Container 
+SMPTE ST356:2001 Material Exchange Format (MXF) —  MPEG-2 4:2:2P @ ML for 525/60 
+and 625/50 
+ISO/IEC 13818-2 Generic coding of moving pictures and associated audio – Part 2: 
+Video 
+Tabella 6 - Profilo SDTV MXF/D10 
+Nota: l’uso di MPEG2 in SMPTE356 prescrive il Profilo 4:2:2 con uso della sola codifica 
+INTRA, restrizioni ai valori e alla costanza del bit-rate e altre restrizioni. 
+8.7 Profilo HDTV MXF/XDCAM HD422 1080i25 
+ La Tabella 7 riassume le caratteristiche principali del profilo HDTV MXF/XDCAM HD422 
+1080i25 basato sulle specifiche indicate nel documento SMPTE RDD9:2013.   
+Caratteristiche Profilo HDTV MXF/XDCAM HD422 1080i25  
+MXF Operational Pattern OP-1a 
+Essence Container  MPEG ES Mapping, AES-BWF Mapping  
+Generic Essence Multiple Mapping  
+Video 1920x1080 pixel, 25 frame al secondo, scansione interlacciata , 
+YCbCr, 4:2:2, 8 bit 
+MPEG-2 Long GOP, 50Mbit/s  
+Audio 8 tracce mono PCM,  48KHz, 24 bit  
+Riferimenti normativi specifici 
+SMPTE RDD 9:2013 MXF Interoperability Specification of Sony MPEG Long GOP 
+Products 
+ISO/IEC 13818-2 Generic coding of moving pictures and associated audio – Part 2: 
+Video 
+Tabella 7 - Profilo HDTV MXF/XDCAM HD422 1080i25 
+  
+
+Rai Radiotelevisione Italiana 
+Specifiche Tecniche per la consegna di prodotti televisivi nei formati SD/HD/3D/UHD 
+32 
+ 
+8.8 Profilo HDTV MXF/XAVC 1080p25 Class 100 
+ La Tabella 8 riassume le caratteristiche principali del profilo HDTV MXF/AVC 1080p25 
+basato sulle specifiche indicate nel documento SMPTE RDD 32:2014. 
+ 
+Caratteristiche profilo HDTV MXF/XAVC 1080p25 
+MXF Operational Pattern  OP-1a 
+Essence Container  AVC ES Mapping, AES-BWF Mapping  
+Generic Essence Multiple Mapping  
+Video 1920x1080 pixel, 25 frame al secondo, scansione progressiva, 
+YCbCr, 4:2:2, 10 bit 
+XAVC HD Intra CBG Profile Class 10017 
+Audio 16 tracce mono PCM, 48KHz, 24 bit  
+Riferimenti normativi specifici 
+SMPTE RDD32:2014 XAVC  MXF Mapping and Operating Points 
+ISO/IEC 14496-10:2012 Coding of audio-visual objects – Part 10: Advanced Video Coding 
+Tabella 8 – Profilo HDTV MXF/AVC 1080p25 
+8.9 Profilo HDTV MXF/XAVC 1080p50 Class 100  
+La Tabella 9 riassume le caratteristiche principali del profilo HDTV MXF/AVC 1080p50  
+basato sulle specifiche indicate nel documento SMPTE RDD 32:2014. 
+Caratteristiche Profilo HDTV MXF/AVC 1080p50 
+MXF Operational Pattern  OP-1a 
+Essence Container  AVC ES Mapping, AES-BWF Mapping,  
+Generic Essence Multiple Mapping  
+Video 1920x1080 pixel, 50 frame al secondo, scansione progressiva, 
+YCbCr, 4:2:2, 10 bit 
+XAVC HD Intra CBG Profile Class 10018  
+Audio 16 tracce mono PCM,  48KHz, 24 bit  
+Riferimenti normativi specifici 
+SMPTE RDD32:2014 XAVC  MXF Mapping and Operating Points 
+ISO/IEC 14496-10:2012 Coding of audio-visual objects – Part 10: Advanced Video Coding 
+Tabella 9 – Profilo HDTV MXF/AVC 1080p50 
+  
+ 
+ 
+17 Vedi SMPTE RP2027:2012 
+18 Vedi SMPTE RP2027:2012 
+
+Rai Radiotelevisione Italiana 
+Specifiche Tecniche per la consegna di prodotti televisivi nei formati SD/HD/3D/UHD 
+33 
+ 
+8.10 Profilo UHDTV MXF/XAVC 2160p25 Class 300 
+La Tabella 10 riassume le caratteristiche principali del profilo UHDTV MXF/XAVC 
+2160p25 Class 300 basato sulle specifiche indicate nel documento SMPTE RDD 
+32:2014. 
+Caratteristiche Profilo UHDTV MXF/XAVC 2160p25 
+MXF Operational Pattern  OP-1a  
+Essence Container  
+ 
+AVC ES Mapping, AES-BWF Mapping  
+Generic Essence Multiple Mapping  
+Video 3840x2160 pixel, 25 frame al secondo, scansione progressiva, 
+YCbCr, 4:2:2, 10 bit 
+XAVC 4K Intra CBG Profile  Class 30019  
+Audio 16 tracce mono PCM, 48KHz, 24 bit  
+Riferimenti normativi specifici 
+SMPTE RDD32:2014 XAVC MXF Mapping and Operating Points 
+ISO/IEC 14496-10:2012 Coding of audio-visual objects – Part 10: Advanced Video Coding 
+Tabella 10 - Profilo UHDTV MXF/AVC 2160p25 
+8.11 Profilo UHDTV MXF/XAVC 2160p50 Class 300 
+La Tabella 11 riassume le caratteristiche principali del profilo UHDTV MXF/XAVC 
+2160p50 Class 300 basato sulle specifiche indicate nel documento SMPTE RDD 
+32:2014. 
+Caratteristiche Profilo UHDTV MXF/XAVC 2160p50 
+MXF Operational Pattern  OP-1a  
+Essence Container  
+ 
+AVC ES Mapping, AES-BWF Mapping  
+Generic Essence Multiple Mapping  
+Video 3840x2160 pixel, 50 frame al secondo, scansione progressiva, 
+YCbCr, 4:2:2, 10 bit 
+XAVC 4K Intra CBG Profile Class 300 
+Audio 16 tracce mono PCM, 48KHz, 24 bit  
+Riferimenti normativi specifici 
+SMPTE RDD32:2014 XAVC MXF Mapping and Operating Points 
+ISO/IEC 14496-10:2012 Coding of audio-visual objects – Part 10: Advanced Video Coding 
+Tabella 11 - Profilo UHDTV MXF/AVC 2160p50 
+ 
+ 
+19 Vedi SMPTE RDD32:2014 
+
+Rai Radiotelevisione Italiana 
+Specifiche Tecniche per la consegna di prodotti televisivi nei formati SD/HD/3D/UHD 
+34 
+ 
+8.12 Profilo UHDTV MXF/XAVC 2160p25 Class 480 
+La Tabella 12 riassume le caratteristiche principali del profilo UHDTV MXF/XAVC 
+2160p25 basato sulle specifiche indicate nel documento SMPTE RDD 32:2014  
+Caratteristiche Profilo UHDTV MXF/AVC 2160p25 
+MXF Operational Pattern  OP-1a  
+Essence Container  AVC ES Mapping, AES-BWF Mapping,  
+Generic Essence Multiple Mapping  
+Video 3840x2160 pixel, 25 frame al secondo, scansione progressiva, 
+YCbCr, 4:2:2,10 bit  
+XAVC 4K Intra CBG Profile  Class 48020 
+Audio 16 tracce mono PCM,  48KHz, 24 bit  
+Riferimenti normativi specifici 
+SMPTE RDD32:2014 XAVC  MXF Mapping and Operating Points 
+ISO/IEC 14496-10:2012 Coding of audio-visual objects – Part 10: Advanced Video Coding  
+Tabella 12 - Profilo UHDTV MXF/AVC 2160p25 
+8.13 Profilo UHDTV MXF/XAVC 2160p50 Class 480 
+La Tabella 13 riassume le caratteristiche principali del profilo UHDTV MXF/XAVC Tabella 
+13 2160p50 basato sulle specifiche indicate nel documento SMPTE RDD 32:2014. 
+Caratteristiche Profilo UHDTV MXF/AVC 2160p50 
+MXF Operational Pattern  OP-1a  
+Essence Container  
+ 
+AVC ES Mapping, AES-BWF Mapping  
+Generic Essence Multiple Mapping  
+Video 3840x2160 pixel, 50 frame al secondo, scansione progressiva, 
+YCbCr, 4:2:2, 10 bit 
+XAVC 4K Intra CBG Profile  Class 480  
+Audio 16 tracce mono PCM,  48KHz, 24 bit  
+Riferimenti normativi specifici 
+SMPTE RDD32:2014 XAVC  MXF Mapping and Operating Points 
+ISO/IEC 14496-10:2012 Coding of audio-visual objects – Part 10: Advanced Video Coding 
+Tabella 13 - Profilo UHDTV MXF/AVC 2160p50 
+  
+ 
+ 
+20 Vedi SMPTE RDD32:2014 
+ 
+
+Rai Radiotelevisione Italiana 
+Specifiche Tecniche per la consegna di prodotti televisivi nei formati SD/HD/3D/UHD 
+35 
+ 
+8.14 Profilo HDTV MOV/ProRes4444 1080p24 
+La Tabella 14 riassume le caratteristiche principali  del profilo UHDTV 
+MOV/ProRes422HQ 2160p24 basato sul formato di compressione Apple ProRes21  
+Caratteristiche Profilo UHDTV MOV/ProRes422HQ 2160p24 
+Essence Container  Apple Quicktime  
+Video 3840x2160 pixel, 24 frame al secondo, scansione progressiva,  RGB, 
+4:2:2, 10 bit 
+Apple ProRes 4444 
+Audio 16 tracce mono PCM,  48KHz, 24 bit  
+Tabella 14 - Profilo UHDTV MOV/ProRes422HQ 2160p24 
+8.15 Profilo HDTV MOV/ProRes4444 1080p25 
+La Tabella 15 riassume le caratteristiche principali del profilo HDTV MOV/ProRes 
+1080p25 basato sul formato di compressione Apple ProRes21. 
+Caratteristiche Profilo HDTV MOV/ProRes4444 1080p25 
+Essence Container  Apple Quicktime   
+Video 1920x1080 pixel, 25 frame al secondo, scansione progressiva, RGB, 
+4:4:4, 10 bit 
+Apple ProRes 4444 
+Audio 16 tracce mono PCM,  48KHz, 24 bit  
+Tabella 15 - Profilo HDTV MOV/ProRes4444 1080p25 
+8.16 Profilo UHDTV MOV/ProRes4444 2160p24  
+La Tabella 16 riassume le caratteristiche principali del profilo UHDTV MOV/ProRes4444 
+2160p24 basato sul formato di compressione Apple ProRes  
+Caratteristiche Profilo UHDTV MOV/ProRes4444 2160p25  
+Essence Container  Apple Quicktime  
+Video 3840x2160 pixel, 25 frame al secondo, scansione progressiva,  RGB, 
+4:4:4, 12 bit 
+Apple ProRes 4444 
+Audio 16 tracce mono PCM,  48KHz, 24 bit  
+Tabella 16 - Profilo UHDTV MOV/ProRes4444 2160p25 
+ 
+ 
+21 https://www.apple.com/final-cut-pro/docs/Apple_ProRes_White_Paper.pdf 
+ 
+
+Rai Radiotelevisione Italiana 
+Specifiche Tecniche per la consegna di prodotti televisivi nei formati SD/HD/3D/UHD 
+36 
+ 
+8.17 Profilo UHDTV MOV/ProRes4444 2160p25 
+La Tabella 17 riassume le caratteristiche principali del profilo UHDTV MOV/ProRes4444 
+2160p25 basato sul formato di compressione Apple ProRes  
+Caratteristiche Profilo UHDTV MOV/ProRes4444 2160p25  
+Essence Container  Apple Quicktime  
+Video 3840x2160 pixel, 25 frame al secondo, scansione progressiva,  RGB, 
+4:4:4, 12 bit 
+Apple ProRes 4444 
+Audio 16 tracce mono PCM,  48KHz, 24 bit  
+Tabella 17 - Profilo UHDTV MOV/ProRes4444 2160p25 
+8.18 Profilo UHDTV MOV/ProRes4444 2160p50  
+La Tabella 18 riassume le caratteristiche principali del profilo UHDTV MOV/ProRes4444 
+2160p50 basato sul formato di compressione Apple ProRes21  
+Caratteristiche Profilo UHDTV MOV/ProRes4444 2160p50  
+Essence Container  Apple Quicktime   
+Video 3840x2160 pixel, 50 frame al secondo, scansione progressiva,  RGB, 
+4:4:4, 12 bit  
+Apple ProRes 4444 
+Audio 16 canali mono PCM,  48KHz, 24 bit  
+Tabella 18 - Profilo UHDTV MOV/ProRes4444 2160p50 
+8.19 Profilo HDTV MOV/ProRes422HQ 1080p24 
+La Tabella 19 riassume le caratteristiche principali del profilo HDTV MOV/ProRes 
+1080p24 basato sul formato di compressione Apple ProRes21. 
+Caratteristiche Profilo HDTV MOV/ProRes422HQ 1080p24 
+Essence Container  Apple Quicktime   
+Video 1920x1080 pixel, 24 frame al secondo, scansione progressiva, RGB, 
+4:2:2, 10 bit 
+Apple ProRes 422HQ 
+ 
+Audio 16 canali mono PCM,  48KHz, 24 bit  
+Tabella 19 - Profilo HDTV MOV/ProRes422HQ 1080p24 
+  
+
+Rai Radiotelevisione Italiana 
+Specifiche Tecniche per la consegna di prodotti televisivi nei formati SD/HD/3D/UHD 
+37 
+ 
+8.20 Profilo HDTV MOV/ProRes422HQ 1080p25 
+La Tabella 20 riassume le caratteristiche principali del profilo HDTV MOV/ProRes 
+1080p25 basato sul formato di compressione Apple ProRes21. 
+Caratteristiche Profilo HDTV MOV/ProRes422HQ 1080p25 
+Essence Container  Apple Quicktime   
+Video 1920x1080 pixel, 25 frame al secondo, scansione progressiva, RGB, 
+4:2:2, 10 bit 
+Apple ProRes 422HQ 
+ 
+Audio 16 canali mono PCM,  48KHz, 24 bit  
+Tabella 20 - Profilo HDTV MOV/ProRes422HQ 1080p25 
+8.21 Profilo UHDTV MOV/ProRes422HQ 2160p24  
+La Tabella 21 riassume le caratteristiche principali del profilo UHDTV 
+MOV/ProRes422HQ 2160p24 basato sul formato di compressione Apple ProRes21  
+Caratteristiche Profilo UHDTV MOV/ProRes422HQ 2160p24 
+Essence Container  Apple Quicktime  
+Video 3840x2160 pixel, 24 frame al secondo, scansione progressiva,  RGB, 
+4:2:2, 10 bit 
+Apple ProRes 422HQ 
+Audio 16 canali mono PCM,  48KHz, 24 bit  
+Tabella 21 - Profilo UHDTV MOV/ProRes422HQ 2160p24 
+8.22 Profilo UHDTV MOV/ProRes422HQ 2160p25  
+La Tabella 22 riassume le caratteristiche principali del profilo UHDTV 
+MOV/ProRes422HQ 2160p25 basato sul formato di compressione Apple ProRes21  
+Caratteristiche Profilo UHDTV MOV/ProRes422HQ 2160p25 
+Essence Container  Apple Quicktime  
+Video 3840x2160 pixel, 25 frame al secondo, scansione progressiva,  RGB, 
+4:2:2, 10 bit 
+Apple ProRes 422HQ 
+Audio 16 canali mono PCM,  48KHz, 24 bit  
+Tabella 22 - Profilo UHDTV MOV/ProRes422HQ 2160p25 
+  
+
+Rai Radiotelevisione Italiana 
+Specifiche Tecniche per la consegna di prodotti televisivi nei formati SD/HD/3D/UHD 
+38 
+ 
+8.23 Profilo UHDTV MOV/ProRes422HQ 2160p50  
+La Tabella 23 riassume le caratteristiche principali del profilo UHDTV 
+MOV/ProRes422HQ 2160p50 basato sul formato di compressione Apple ProRes21  
+Caratteristiche Profilo UHDTV MOV/ProRes422HQ 2160p50  
+Essence Container  Apple Quicktime   
+Video 3840x2160 pixel, 50 frame al secondo, scansione progressiva,  RGB, 
+4:2:2, 10 bit 
+Apple ProRes 422HQ 
+Audio 16 canali mono PCM, 48KHz, 24 bit  
+Tabella 23 - Profilo UHDTV MOV/ProRes422HQ 2160p50 
+ 
+ 
+
+Rai Radiotelevisione Italiana 
+Specifiche Tecniche per la consegna di prodotti televisivi nei formati SD/HD/3D/UHD 
+39 
+ 
+9.  Metadati e Scheda Tecnica 
+Contestualmente alla consegna del prodotto,  RAI richiede la consegna di una specifica 
+documentazione tecnica come indicato in Tabella 24.   
+ 
+Modalità di consegna  
+del prodotto audio/video 
+Modalità di consegna  
+della documentazione tecnica 
+ 
+ 
+Supporto Sony 
+Professional Disc 
+ 
+Scheda tecnica cartacea 
+e 
+Scheda tecnica in formato elettronico inserita 
+nello spazio dati del supporto 
+ 
+ 
+Supporto informatico 
+(hard disk drive) 
+ 
+ 
+Scheda tecnica in formato elettronico inserita nel 
+supporto informatico contenente il prodotto 
+ 
+ 
+trasferimento telematico 
+ 
+ 
+Trasferimento telematico della scheda tecnica in 
+formato elettronico tramite le procedure previste 
+ 
+Tabella 24 - Modalità di consegna documentazione tecnica 
+9.1 Scheda Tecnica cartacea 
+La scheda tecnica cartacea da allegare al pr odotto deve contenere i metadati indicati in  
+Tabella 25. 
+Metadati Note 
+Casa di Produzione   
+Contatto di riferimento  
+Numero di contratto RAI  
+Codice Identificatore di formato Vedi Capitolo 11 
+Codice ISAN Acronimo di International Standard 
+Audiovisual Number  
+ http://www.isan.org/  
+Titolo completo   
+Numero della Stagione in caso di “serialità” indicare il numero della 
+stagione 
+Numero Episodio  in caso di “serialità” indicare il numero 
+dell'episodio 
+Titolo Episodio in caso di “serialità” indicare il titolo 
+dell'episodio 
+Durata complessiva del programma Nel formato hh:mm:ss:ff 
+
+Rai Radiotelevisione Italiana 
+Specifiche Tecniche per la consegna di prodotti televisivi nei formati SD/HD/3D/UHD 
+40 
+ 
+Metadati Note 
+Timecode di inizio programma Nel formato hh:mm:ss:ff 
+Timecode di fine programma Nel formato hh:mm:ss:ff 
+Formato dell'immagine / Aspect Ratio  
+Formato dell’immagine originale  
+Segnalazione di presenza di materiale 
+upconvertito 
+Indicare SI/NO 
+Segnalazione di presenza di materiale di 
+qualità inferiore 
+Indicare  SI/NO 
+Fondini titoli Indicare SI/NO a seconda se i fondini 
+grafici per i titoli sono presenti o meno nel 
+file. 
+Per ogni supporto/media consegnato 
+Numerazione del supporto Per prodotti SD, HD e UHD il numero 
+supporto deve essere scritto nel formato 1/N, 
+2/N, ecc., dove N è il numero totale dei 
+supporti componenti il programma; nel caso 
+singolo supporto è opportuna la dicitura “1/1”. 
+ 
+Per materiali 3DTV il numero del supporto 
+deve essere scritto nel formato 1/N- SX, 2/N-
+SX, ecc., per il canale sinistro e 1/N-DX, 2/N-
+DX, ecc., per il canale destro, dove N è il 
+numero totale dei supporti componenti il 
+programma e SX/DX identifica il canale; nel 
+caso di singola coppia di supporti è 
+opportuna la dicitura “1/1-SX e 1/1-DX” 
+Durata del supporto Durata del supporto nel formato hh:mm:ss:ff 
+Identificativo del Box Indicare nel caso il supporto venga 
+consegnato su supporto fisico (XDCAM o 
+HDD) 
+Filename Indicare nel caso la consegna avvenga a 
+mezzo file. 
+Filesize Dimensione del file in byte 
+MD5CheckSum Algoritmo Message-Digest 5- hash a 128 bit 
+Tabella 25 - Scheda Tecnica cartacea 
+
+Rai Radiotelevisione Italiana 
+Specifiche Tecniche per la consegna di prodotti televisivi nei formati SD/HD/3D/UHD 
+41 
+ 
+9.2 Scheda Tecnica in formato elettronico  
+Per la consegna della scheda tecnica in formato elettronico RAI richiede sostanzialmente 
+le medesime informazioni presenti nella scheda cartacea ma secondo i seguenti formati: 
+1. File XML22 conforme allo schema “TechnicalSheet.xsd”. In caso di supporto 
+informatico, il suddetto file dovrà essere collocato nella stessa cartella del file 
+audio/video, avere lo stesso nome ma con estensione file “.XML ”. Nel caso di 
+supporto XDCAM il file dovrà essere collocato nell’area dati del supporto ed 
+avere lo stesso nome del file audio/video ma con estensione “XML”. 
+Vedi il riquadro NOTE per maggiori informazioni. 
+2. File XLS(X) nel formato Microsoft Excel (versione Office 2007 o più recente). 
+Tale file deve riprodurre fedelmente il formato tabellare indicato in apposito 
+documento di riferimento fornito all’indirizzo web:  
+https://www.rai.it/specifiche-tecniche-prodotti-tv/. 
+ 
+Nomenclatura di esempio: 
+file audio/video 
+LoremIpsum_s09_ep001_DolorSitAmet_1080i25.MXF  
+Scheda tecnica in XML 
+LoremIpsum_s09_ep001_DolorSitAmet_1080i25.XML  
+Scheda tecnica in XLS 
+LoremIpsum_s09_ep001_DolorSitAmet_1080i25.XLS  
+ 
+ 
+NOTE 
+supporto del presente documento di pecifiche ecniche sono forniti da specifici documenti che descrivono ed esemplificano la mappatura dei metadati richiesti da , verso la denominazione e collocazione xml.
+I suddetti docum enti sono disponibili online all’indirizzo https://www.rai.it/specifiche-
+tecniche-prodotti-tv/.  
+ 
+9.3 Metadati Dolby E 
+In caso di colonna sonora codificata in Dolby E, RAI richiede che alcuni metadati24 Dolby 
+siano vincolati a valori specifici.  
+I metadati Dolby vincolati sono elencati nella  Tabella 26 
+ 
+ 
+ 
+22 https://it.wikipedia.org/wiki/XML 
+24 http://www.dolby.com/us/en/technologies/a-guide-to-dolby-metadata.pdf 
+ 
+
+Rai Radiotelevisione Italiana 
+Specifiche Tecniche per la consegna di prodotti televisivi nei formati SD/HD/3D/UHD 
+42 
+ 
+Dolby Metadata valori richiesti da RAI 
+PROGRAMME CONFIG 5.1 
+BIT DEPTH 16 
+DIALOGUE LEVEL (DIALNORM) -23 dBFS 
+CHANNEL MODE 3/2 
+LFE CHANNEL ENABLED 
+RF OVER MODULATION PROTECTION DISABLED 
+DOLBY SURROUND MODE DISABLED 
+PREFERRED STEREO DOWN MIX Lo/Ro 
+DOLBY SURROUND EX MODE NOT SURROUND EX 
+A/D CONVERTER TYPE STANDARD 
+DC FILTER ENABLED 
+LOW PASS FILTER ENABLED 
+LFE LOW PASS FILTER ENABLED 
+SURROUND 3 dB ATTENUATION DISABLED 
+Tabella 26 - Metadati Dolby richiesti 
+ 
+Nella Tabella 27 è riportato l’elenco di metadati Dolby i cui valor i devono essere definiti 
+dal fornitore in funzione del prodotto consegnato.  
+ 
+Dolby Metadata Note RAI 
+LINE MODE COMPRESSION Valori accettati: 
+• FILM STANDARD 
+• FILM LIGHT 
+RF MODE COMPRESSION Valori accettati: 
+• FILM STANDARD 
+• FILM LIGHT 
+CENTRE DOWN MIX LEVEL Valore tipico: -3dB 
+SURROUND DOWN MIX LEVEL Valore tipico: -3dB 
+LT/RT CENTRE DOWN MIX LEVEL Valore tipico: -3dB 
+LT/RT SURROUND DOWN MIX LEVEL Valore tipico: -3dB 
+LO/RO CENTRE DOWN MIX LEVEL Valore tipico: -3dB 
+LO/RO SURROUND DOWN MIX LEVEL Valore tipico: -3dB 
+Tabella 27 - Metadati Dolby a cura del fornitore
+
+Rai Radiotelevisione Italiana 
+Specifiche Tecniche per la consegna di prodotti televisivi nei formati SD/HD/3D/UHD 
+43 
+ 
+10. Assegnazione delle tracce audio 
+10.1 Configurazioni audio consentite su 8 tracce  
+ 
+RAI-ID 
+ 
+Configuration 
+ 
+Tracks 
+Audio Track Number 
+1 2 3 4 5 6 7 8 
+ 
+8T01 
+ 
+Dual Mono/ITA 
+ 
+8 
+Complete mix 
+Dual Mono (ITA) 
+Complete mix 
+Dual Mono (ITA) 
+ 
+mute 
+ 
+mute 
+ 
+mute 
+ 
+mute 
+ 
+mute 
+ 
+mute 
+ 
+8T02 
+ 
+Stereo/ITA 
+ 
+8 
+Complete mix 
+Left (ITA) 
+Complete mix 
+Right (ITA) 
+ 
+mute 
+ 
+mute 
+ 
+mute 
+ 
+mute 
+ 
+mute 
+ 
+mute 
+ 
+8T03 
+ 
+Stereo/ITA+ Stereo/OTH 
+ 
+8 
+Complete mix 
+Left (ITA) 
+Complete mix 
+Right (ITA) 
+Complete mix 
+Left (OTH) 
+Complete mix 
+Right (OTH) 
+ 
+mute 
+ 
+mute 
+ 
+mute 
+ 
+mute 
+ 
+8T04 
+ 
+Dual Mono/OTH+ M&E 
+ 
+8 
+Complete mix 
+Dual Mono (OTH) 
+Complete mix 
+Dual mono (OTH) 
+Music&Effects 
+Dual mono 
+Music&Effects 
+Dual mono 
+ 
+mute 
+ 
+mute 
+ 
+mute 
+ 
+mute 
+ 
+8T05 
+ 
+Stereo/ITA+ M&E 
+ 
+8 
+Complete mix 
+Left (ITA) 
+Complete mix 
+Right (ITA) 
+Music&Effects 
+Left 
+Music&Effects 
+Right 
+ 
+mute 
+ 
+mute 
+ 
+mute 
+ 
+mute 
+ 
+8T06 
+ 
+Stereo/OTH+ M&E 
+ 
+8 
+Complete mix 
+Left (OTH) 
+Complete mix 
+Right (OTH) 
+Music&Effects 
+Left 
+Music&Effects 
+Right 
+ 
+mute 
+ 
+mute 
+ 
+mute 
+ 
+mute 
+ 
+8T07 
+ 
+Stereo/ITA + M&E + 
+MCA/ITA + AD/ITA 
+ 
+8 
+Complete mix 
+Left (ITA) 
+Complete mix 
+Right (ITA) 
+Music&Effects 
+Left 
+Music&Effects 
+Right 
+MCA 
+Dolby E 
+(ITA) 
+MCA 
+Dolby E 
+(ITA) 
+AD 
+Left 
+(ITA) 
+AD 
+Right 
+(ITA) 
+ 
+8T08 
+ 
+Stereo/ITA + Stereo/OTH + 
+MCA/ITA +  AD/ITA 
+ 
+8 
+Complete mix 
+Left (ITA) 
+Complete mix 
+Right (ITA) 
+Complete mix 
+Left (OTH) 
+ 
+Complete mix 
+Right (OTH) 
+ 
+MCA 
+Dolby E 
+(ITA) 
+MCA 
+Dolby E 
+(ITA) 
+AD 
+Left 
+(ITA) 
+AD 
+Right 
+(ITA) 
+ 
+8T09 
+ 
+Stereo/ITA + Stereo/OTH+ MCA/ITA 
+ 
+8 
+Complete mix 
+Left (ITA) 
+Complete mix 
+Right (ITA) 
+Complete mix 
+Left (OTH) 
+Complete mix 
+Right (OTH) 
+MCA 
+Dolby E 
+(ITA) 
+MCA 
+Dolby E 
+(ITA) 
+ 
+mute 
+ 
+mute 
+ 
+8T10 
+ 
+Stereo/ITA + MCA/ITA 
+ 
+8 
+Complete mix 
+Left (ITA) 
+Complete mix 
+Right (ITA) 
+ 
+mute 
+ 
+mute 
+MCA 
+Dolby E 
+(ITA) 
+MCA 
+Dolby E 
+(ITA) 
+ 
+mute 
+ 
+mute 
+ 
+8T11 
+ 
+Stereo/ITA +  AD/ITA 
+ 
+8 
+Complete mix 
+Left (ITA) 
+Complete mix 
+Right (ITA) 
+ 
+Mute 
+ 
+Mute 
+ 
+Mute 
+ 
+Mute 
+AD 
+Left (ITA) 
+AD 
+Right (ITA) 
+ 
+8T12 
+ 
+Stereo/ITA+ MCA/ITA 
+ 
+8 
+Complete mix 
+Left (ITA) 
+Complete mix 
+Right (ITA) 
+MCA 
+L 
+                    (ITA) 
+                      MCA 
+R 
+(ITA) 
+MCA 
+C 
+(ITA) 
+MCA 
+LFE 
+(ITA) 
+MCA 
+Ls 
+(ITA) 
+MCA 
+Rs 
+(ITA) 
+ 
+8T13 
+ 
+Stereo/OTH+MCA/OTH 
+ 
+8 
+Complete mix 
+Left (OTH) 
+Complete mix 
+Right (OTH) 
+MCA 
+L 
+(OTH) 
+MCA 
+R 
+(OTH) 
+MCA 
+C 
+(OTH) 
+MCA 
+LFE 
+(OTH) 
+MCA 
+Ls 
+(OTH) 
+MCA 
+Rs 
+(OTH) 
+ 
+8T14 
+ 
+Stereo/ITA+ MCA/M&E 
+ 
+8 
+Complete mix 
+Left 
+(ITA) 
+Complete mix 
+Right 
+(ITA) 
+MCA 
+L 
+(M&E) 
+MCA 
+R 
+(M&E) 
+MCA 
+C 
+(M&E) 
+MCA 
+LFE 
+(M&E) 
+MCA 
+Ls 
+(M&E) 
+MCA 
+Rs 
+(M&E) 
+ 
+8T15 
+ 
+Stereo/OTH+MCA/M&E 
+ 
+8 
+Complete mix 
+Left (OTH) 
+Complete mix 
+Right (OTH) 
+MCA 
+L (M&E) 
+MCA 
+R (M&E) 
+MCA 
+C (M&E) 
+MCA 
+LFE (M&E) 
+MCA 
+Ls (M&E) 
+MCA 
+Rs (M&E) 
+Tabella 28 - Configurazioni audio consentite su 8 tracce 
+Tabella 28 - Configurazioni audio consentite su 8 tracce - LEGENDA 
+ITA= Lingua Italiana OTH= Lingua Originale 
+MCA= colonna sonora multicanale  
+mute = silenzio  
+AD = Audio Descrizione - TeleAudio  
+M&E=Music&Effects - Musica & Effetti (priva di dialoghi) 
+Dual mono = canale mono replicato su due tracce 
+
+Rai Radiotelevisione Italiana 
+Specifiche Tecniche per la consegna di prodotti televisivi nei formati SD/HD/3D/UHD 
+44 
+ 
+10.2 Configurazioni audio consentite su 16 tracce  
+ 
+RAI-ID 
+ 
+Descrizione 
+ 
+Tracks 
+Audio Track Number 
+1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 
+ 
+16T01 
+ 
+Stereo/ITA 
+ 
+16 
+Complete mix 
+Left 
+(ITA) 
+Complete mix 
+Right 
+(ITA) 
+ 
+mute 
+ 
+mute 
+ 
+mute 
+ 
+mute 
+ 
+mute 
+ 
+mute mute mute mute mute mute 
+ 
+mute 
+ 
+mute 
+ 
+mute 
+ 
+16T02 
+ 
+Stereo/ITA +  
+Stereo/OTH 
+ 
+16 
+Complete mix 
+Left 
+(ITA) 
+Complete mix 
+Right 
+(ITA) 
+Complete mix 
+Left 
+(OTH) 
+Complete mix 
+Right 
+(OTH) 
+ 
+mute 
+ 
+mute 
+ 
+mute 
+ 
+mute 
+ 
+mute 
+ 
+mute 
+ 
+mute 
+ 
+mute 
+ 
+mute 
+ 
+mute 
+ 
+mute 
+ 
+mute 
+ 
+16T03 
+ 
+Stereo/ITA +  
+M&E 
+ 
+16 
+Complete mix 
+Left 
+(ITA) 
+Complete mix 
+Right 
+(ITA) 
+ 
+M&E 
+Left 
+ 
+M&E 
+Right 
+ 
+mute 
+ 
+mute 
+ 
+mute 
+ 
+mute 
+ 
+mute 
+ 
+mute 
+ 
+mute 
+ 
+mute 
+ 
+mute 
+ 
+mute 
+ 
+mute 
+ 
+mute 
+ 
+16T04 
+ 
+Stereo/OTH + 
+M&E 
+ 
+16 
+Complete mix 
+Left 
+(OTH) 
+Complete mix 
+Right 
+(OTH) 
+ 
+M&E 
+Left 
+ 
+M&E 
+Right 
+ 
+mute 
+ 
+mute 
+ 
+mute 
+ 
+mute 
+ 
+mute 
+ 
+mute 
+ 
+mute 
+ 
+mute 
+ 
+mute 
+ 
+mute 
+ 
+mute 
+ 
+mute 
+ 
+ 
+16T05 
+ 
+Stereo/ITA + 
+M&E + 
+MCA/ITA   
+ 
+ 
+16 
+ 
+Complete mix 
+Left 
+(ITA) 
+ 
+Complete mix 
+Right 
+(ITA) 
+ 
+M&E 
+Left  
+ 
+M&E 
+Right 
+ 
+ 
+mute 
+ 
+ 
+mute 
+ 
+ 
+mute 
+ 
+ 
+mute 
+ 
+MCA 
+L 
+(ITA) 
+ 
+MCA 
+R 
+(ITA) 
+ 
+MCA 
+C 
+(ITA) 
+ 
+MCA 
+LFE 
+(ITA) 
+ 
+MCA 
+Ls 
+(ITA) 
+ 
+MCA 
+Rs 
+(ITA) 
+ 
+ 
+mute 
+ 
+ 
+mute 
+ 
+ 
+ 
+16T06 
+Stereo/ITA + 
+Stereo/OTH + 
+AD/ITA+ 
+MCA/ITA  
+ 
+ 
+16 
+ 
+Complete mix  
+Left 
+(ITA) 
+ 
+Complete mix  
+Right 
+(ITA) 
+ 
+Complete mix  
+Left 
+(OTH) 
+ 
+Complete mix  
+Right 
+(OTH)  
+ 
+ 
+mute 
+ 
+ 
+mute 
+ 
+AD 
+Left 
+(ITA) 
+ 
+AD 
+Right 
+(ITA) 
+ 
+MCA 
+L 
+(ITA) 
+ 
+MCA 
+R 
+(ITA) 
+ 
+MCA 
+C 
+(ITA) 
+ 
+MCA 
+LFE 
+(ITA) 
+ 
+MCA 
+Ls 
+(ITA) 
+ 
+MCA 
+Rs 
+(ITA) 
+ 
+ 
+mute 
+ 
+ 
+mute 
+ 
+ 
+16T07 
+ 
+Stereo/ITA + 
+Stereo/OTH + 
+MCA/ITA  
+ 
+ 
+16 
+ 
+Complete mix  
+Left 
+(ITA) 
+ 
+Complete mix  
+Right 
+(ITA) 
+ 
+Complete mix  
+Left 
+(OTH)  
+ 
+Complete mix  
+Right 
+(OTH)  
+ 
+ 
+ 
+ 
+mute 
+ 
+ 
+ 
+mute 
+ 
+ 
+ 
+mute 
+ 
+ 
+ 
+mute 
+ 
+MCA 
+L 
+(ITA) 
+ 
+MCA 
+R 
+(ITA) 
+ 
+MCA 
+C 
+(ITA) 
+ 
+MCA 
+LFE 
+(ITA) 
+ 
+MCA 
+Ls 
+(ITA) 
+ 
+MCA 
+Rs 
+(ITA) 
+ 
+ 
+mute 
+ 
+ 
+mute 
+ 
+ 
+16T08 
+ 
+Stereo/ITA + 
+AD/ITA 
+ 
+16 
+ 
+Complete mix 
+Left 
+(ITA) 
+ 
+Complete mix 
+Right 
+(ITA) 
+ 
+mute 
+ 
+mute 
+ 
+mute 
+ 
+mute 
+AD 
+Left 
+(ITA) 
+AD 
+Right 
+(ITA) 
+ 
+mute 
+ 
+mute 
+ 
+mute 
+ 
+mute 
+ 
+mute 
+ 
+mute 
+ 
+mute 
+ 
+mute 
+ 
+ 
+ 
+16T09 
+Stereo/ITA + 
+AD/ITA + 
+MCA/ITA 
+ 
+ 
+16 
+ 
+Complete mix  
+Left 
+(ITA) 
+ 
+Complete mix  
+Right 
+(ITA) 
+ 
+ 
+mute 
+ 
+ 
+mute 
+ 
+ 
+mute 
+ 
+ 
+mute 
+ 
+AD 
+Left 
+(ITA) 
+ 
+AD 
+Right 
+(ITA) 
+ 
+MCA 
+L 
+(ITA) 
+ 
+MCA 
+R 
+(ITA) 
+ 
+MCA 
+C 
+(ITA) 
+ 
+MCA 
+LFE 
+(ITA) 
+ 
+MCA 
+Ls 
+(ITA) 
+ 
+MCA 
+Rs 
+(ITA) 
+ 
+ 
+mute 
+ 
+ 
+mute 
+ 
+ 
+16T10 
+Stereo/ITA + 
+MCA/ITA + 
+Stereo/OTH + 
+MCA/OTH 
+ 
+ 
+16 
+ 
+Complete mix 
+Left 
+(ITA) 
+ 
+Complete mix  
+Right 
+(ITA) 
+ 
+MCA 
+L 
+(ITA) 
+ 
+MCA 
+R 
+(ITA) 
+ 
+MCA 
+C 
+(ITA) 
+ 
+MCA 
+LFE 
+(ITA) 
+ 
+MCA 
+Ls 
+(ITA) 
+ 
+MCA 
+Rs 
+(ITA) 
+ 
+Complete mix  
+Left 
+(OTH)  
+ 
+Complete mix  
+Right 
+(OTH)  
+ 
+MCA 
+L 
+(OTH) 
+ 
+MCA 
+R 
+(OTH) 
+ 
+MCA 
+C 
+(OTH) 
+ 
+MCA 
+LFE 
+(OTH) 
+ 
+MCA 
+Ls 
+(OTH) 
+ 
+MCA 
+Rs 
+(OTH) 
+ 
+ 
+16T11 
+MCA/ITA + 
+AD/ITA + 
+MCA/OTH + 
+AD/OTH 
+ 
+ 
+16 
+ 
+MCA 
+L 
+(ITA) 
+ 
+ 
+MCA 
+R 
+(ITA) 
+ 
+MCA 
+C 
+(ITA) 
+ 
+MCA 
+LFE 
+(ITA) 
+ 
+MCA 
+Ls 
+(ITA) 
+ 
+MCA 
+Rs 
+(ITA) 
+ 
+AD 
+Left 
+(ITA) 
+ 
+AD 
+Right 
+(ITA) 
+ 
+MCA 
+L 
+(OTH) 
+ 
+MCA 
+R 
+(OTH) 
+ 
+MCA 
+C 
+(OTH) 
+ 
+MCA 
+LFE 
+(OTH) 
+ 
+MCA 
+Ls 
+(OTH) 
+ 
+MCA 
+Rs 
+(OTH) 
+ 
+AD 
+Left 
+(OTH) 
+ 
+AD 
+Right 
+(OTH) 
+ 
+ 
+16T12 
+Stereo/ITA + 
+MCA/ITA + 
+Stereo/M&E + 
+MCA/M&E 
+ 
+ 
+16 
+ 
+Complete mix 
+Left 
+(ITA) 
+ 
+Complete mix  
+Right 
+(ITA) 
+ 
+MCA 
+L 
+(ITA) 
+ 
+MCA 
+R 
+(ITA) 
+ 
+MCA 
+C 
+(ITA) 
+ 
+MCA 
+LFE 
+(ITA) 
+ 
+MCA 
+Ls 
+(ITA) 
+ 
+MCA 
+Rs 
+(ITA) 
+ 
+M&E 
+Left 
+ 
+M&E 
+Right 
+ 
+MCA 
+L 
+(M&E) 
+ 
+MCA 
+R 
+(M&E) 
+ 
+MCA 
+C 
+(M&E) 
+ 
+MCA 
+LFE 
+(M&E) 
+ 
+MCA 
+Ls 
+(M&E) 
+ 
+MCA 
+Rs 
+(M&E) 
+ 
+ 
+16T13 
+Stereo/OTH + 
+MCA/OTH + 
+Stereo/M&E + 
+MCA/M&E 
+ 
+ 
+16 
+ 
+Complete mix 
+Left 
+         (OTH) 
+ 
+Complete mix  
+Right 
+(OTH) 
+ 
+MCA 
+L 
+(OTH) 
+ 
+MCA 
+R 
+(OTH) 
+ 
+MCA 
+C 
+(OTH) 
+ 
+MCA 
+LFE 
+(OTH) 
+ 
+MCA 
+Ls 
+(OTH) 
+ 
+MCA 
+Rs 
+(OTH) 
+ 
+M&E 
+Left 
+ 
+M&E 
+Right 
+ 
+MCA 
+L 
+(M&E) 
+ 
+MCA 
+R 
+(M&E) 
+ 
+MCA 
+C 
+(M&E) 
+ 
+MCA 
+LFE 
+(M&E) 
+ 
+MCA 
+Ls 
+(M&E) 
+ 
+MCA 
+Rs 
+(M&E) 
+Tabella 29 - Configurazioni audio consentite su 16 tracce 
+Tabella 29 - Configurazioni audio consentite su 16 tracce - LEGENDA  
+ITA= Lingua Italiana; OTH= Lingua Originale MCA= multicanale, mute = silenzio AD = Audio Descrizione - TeleAudio M&E=Music&Effects - Musica & Effetti (priva di dialoghi);L=Left; R=Right; C=Center; LFE=Low 
+Frequency Effects; Ls= Left Surround; Rs=Right Surround 
+Dual mono = canale mono replicato su due tracce  
+
+Rai Radiotelevisione Italiana 
+Specifiche Tecniche per la consegna di prodotti televisivi nei formati SD/HD/3D/UHD 
+45 
+ 
+11.   Codice Identificatore di formato 
+ 
+Al fine di semplificare l’individuazione del formato richiesto, è stato predisposto un 
+codice denominato “Identificatore di formato”  che RAI inserisce nel testo del 
+contratto di acquisto.  
+L’Identificatore di formato individua univocamente le combinazioni possibili dei valori 
+<ID Formato>, <ID Profilo Video> e <ID Profilo Audio>, tra quelle definite nel 
+presente documento. 
+Il codice Identificatore di formato è composto dalla concatenazione dei  tre 
+identificativi così come riportati nelle tabelle dell’Allegato A (vedi capitolo 12): 
+<ID Formato>-<ID Profilo Video>-<ID Profilo Audio> 
+dove: 
+• <ID Formato> identifica il formato/supporto di consegna così come riportato 
+nella tabella A1 dell’Allegato A  
+• <ID Profilo Video> identifica il profilo video così come riportato nella tabella 
+A2 dell’Allegato A  
+• <ID Profilo Audio> identifica il profilo audio così come riportato nelle tabelle 
+A3 ed A4 dell’Allegato A  
+ 
+NOTA: L’utilizzo delle tabelle A3 e A4 per l’identificazione del profilo audio è 
+strettamente vincolata al profilo video utilizzato 
+ 
+ESEMPIO: 
+Per la consegna telematica di un file nel formato MXF/XDCAM HD422 1080i25 con 
+configurazione audio Stereo/ITA+M&E (M&E significa Musica&Effetti) sul contratto si 
+troverà l’identificatore di formato FILE-HD1-8T05.  
+Al fine di individuare il formato di consegna, il profilo video e il profilo audio richiesti si 
+procede come segue: 
+ 
+1. consultando la tabella A1 si individua l’ID di riferimento per la consegna 
+telematica (in questo esempio l’ID è FILE) 
+2. consultando la tabella A2 s i individua sia l’ID di riferimento per il formato video 
+(in questo esempio l’ID è HD1) che la tabella di riferimento per l’identificazione 
+del codice <ID Profilo Audio> (in questo esempio tabella A3) 
+3. consultando la tabella identificata al punto precedente si individua l’ID di 
+riferimento per la struttura di tracce audio (in questo esempio l’ID è 8T05) 
+
+Rai Radiotelevisione Italiana 
+Specifiche Tecniche per la consegna di prodotti televisivi nei formati SD/HD/3D/UHD 
+46 
+ 
+12. Allegato A – Identificatore di formato – valori previsti 
+Nelle seguenti tabelle sono elencati i codici consentiti nella costruzione 
+dell’identificatore di formato descritto nel capitolo 11. 
+ 
+Tabella A1 – Formati/supporti di consegna 
+<ID Formato> Formato/supporto di consegna 
+XDCAM SONY XDCAM 
+FILE FILE 
+ 
+Tabella A2 – Identificazione dei Profili Video 
+<ID Profilo Video>  
+Profilo Video 
+ 
+identificazione 
+Tabella  
+profili audio 
+SD1 SDTV MXF/D10  A3 
+HD1 HDTV MXF/XDCAM HD422 1080i25  A3 
+HD2 HDTV MXF/XAVC 1080p25  A4 
+HD3 HDTV MOV/ProRes422HQ 1080p25  A4 
+HD4 HDTV MOV/ProRes4444 1080p25  A4 
+HD5 HDTV MXF/XAVC 1080p50   A4 
+HD6 HDTV MOV/ProRes422HQ 1080p24     A4 
+HD7 HDTV MOV/ProRes4444 1080p24 A4 
+UHD1 UHDTV MXF/XAVC 2160p25 Class 480 A4 
+UHD2 UHDTV MXF/XAVC 2160p50 Class 480 A4 
+UHD3 UHDTV MOV/ProRes4444 2160p25  A4 
+UHD4 UHDTV MOV/ProRes4444 2160p50 A4 
+UHD5 UHDTV MXF/XAVC 2160p25 Class 300   A4 
+UHD6 UHDTV MXF/XAVC 2160p50 Class 300   A4 
+UHD7 UHDTV MOV/ProRes422HQ 2160p25 A4 
+UHD8 UHDTV MOV/ProRes422HQ 2160p50  A4 
+UHD9 UHDTV MOV/ProRes4444 2160p24 A4 
+UHD10 UHDTV MOV/ProRes422HQ 2160p24 A4 
+  
+
+Rai Radiotelevisione Italiana 
+Specifiche Tecniche per la consegna di prodotti televisivi nei formati SD/HD/3D/UHD 
+47 
+ 
+ 
+Tabella A3 – Identificazione dei Profili Audio con 8 tracce 
+<ID Profilo Audio> Configurazione / Profilo Audio 
+8T01 Dual Mono/ITA 
+8T02 Stereo/ITA 
+8T03 Stereo/ITA + Stereo/OTH 
+8T04 Dual Mono/OTH + Music&Effects 
+8T05 Stereo/ITA + Music&Effects 
+8T06 Stereo/OTH + Music&Effects 
+8T07 Stereo/ITA + Music&Effects + MCA/ITA Dolby E + AD/ITA 
+8T08 Stereo/ITA + Stereo/OTH + MCA/ITA Dolby E+ AD/ITA 
+8T09 Stereo/ITA + Stereo/OTH + MCA/ITA Dolby E 
+8T10 Stereo/ITA + MCA/ITA Dolby E 
+8T11 Stereo/ITA + AD/ITA 
+8T12 Stereo/ITA+ MCA/ITA 
+8T13 Stereo/OTH+MCA/OTH 
+8T14 Stereo/ITA+ MCA/M&E 
+8T15 Stereo/OTH+MCA/M&E 
+ 
+Tabella A4 – Identificazione dei Profili Audio con 16 tracce 
+<ID Profilo Audio> Configurazione / Profilo Audio 
+16T01 Stereo/ITA 
+16T02 Stereo/ITA + Stereo/OTH 
+16T03 Stereo/ITA + M&E 
+16T04 Stereo/OTH +M&E 
+16T05 Stereo/ITA +M&E +MCA/ITA   
+16T06 Stereo/ITA + Stereo/OTH + AD/ITA + MCA/ITA  
+16T07 Stereo/ITA + Stereo/OTH + MCA/ITA  
+16T08 Stereo/ITA + AD/ITA 
+16T09 Stereo/ITA + AD/ITA + MCA/ITA 
+16T10 Stereo/ITA + MCA/ITA + Stereo/OTH + MCA/OTH 
+16T11 MCA/ITA + AD/ITA + MCA/OTH + AD/OTH 
+16T12 Stereo/ITA + MCA/ITA + Stereo/M&E + MCA/M&E 
+16T13 Stereo/OTH + MCA/OTH + Stereo/M&E + MCA/M&E 
+LEGENDA  
+ITA = Lingua Italiana 
+OTH = Lingua Originale 
+Stereo = Colonna sonora stereo 
+MCA = Colonna sonora multicanale 
+AD = Audio Descrizione - TeleAudio 
+M&E = Music&Effects - Musica & Effetti (priva di dialoghi) 
+Dual mono = segnale monofonico replicato su due tracce 
+ 
+
+Rai Radiotelevisione Italiana 
+Specifiche Tecniche per la consegna di prodotti televisivi nei formati SD/HD/3D/UHD 
+48 
+ 
+13. Standard, Raccomandazioni e Normativa Tecnica  
+ 
+ 
+ 
+Riferimento 
+ 
+Titolo 
+ITU-R BT.500 Methodology for the subjective assessment of the quality of television 
+pictures 
+ITU-R BT.601 Studio encoding parameters of digital television for standard 4:3 
+and wide-screen 16:9 aspect ratios 
+ITU-R BT.709 Parameter values for the HDTV standards for production and international 
+programme exchange 
+ITU-R BT.1702 Guidance for the reduction of photosensitive epileptic seizures caused by 
+television 
+ITU-R BT.2020 Parameter values for ultra-high definition television systems for production 
+and international programme exchange 
+ITU-R BT.2390 High dynamic range television for production and international programme 
+exchange 
+ ITU-R BT.2100 Image parameter values for high dynamic range television for use in 
+production and international programme exchange 
+ITU-R BT.2111 Specification of colour bar test pattern for high dynamic range television 
+systems   
+ITU-R Rep BT.2408 Guidance for operational practices in HDR television production 
+ITU-R BS.775 Multichannel stereophonic sound system with and without accompanying 
+picture 
+ITU-R BS.1770 Algorithms to measure audio programme loudness and true-peak audio 
+level 
+SMPTE 12-1 SMPTE Standard - For Television —  Time and Control Code 
+SMPTE 12-2 SMPTE Standard - Transmission of Time Code in the Ancillary Data 
+Space 
+SMPTE 274 SMPTE Standard - For Television —  1920 × 1080 Image Sample 
+Structure, Digital Representation and Digital Timing Reference Sequences 
+for Multiple Picture Rates 
+SMPTE 292 SMPTE Standard - 1.5 Gb/s Signal/Data Serial Interface 
+SMPTE 326 SMPTE STANDARD -  for Television —  SDTI Content Package Format 
+(SDTI-CP) 
+SMPTE 356 SMPTE Standard - Type D-10 Stream Specifications —  MPEG-2 4:2:2P @ 
+ML for 525/60 and 625/50 
+SMPTE 377 SMPTE Standard - Material Exchange Format (MXF) - File Format 
+Specification 
+SMPTE 378 SMPTE Standard - Material Exchange Format (MXF) —  Operational 
+pattern 1A (Single Item, Single Package) 
+SMPTE 379-1 SMPTE Standard - Material Exchange Format (MXF) —  MXF Constrained 
+Generic Container 
+SMPTE 379-2 SMPTE Standard - Material Exchange Format (MXF) —  MXF Generic 
+Container 
+
+Rai Radiotelevisione Italiana 
+Specifiche Tecniche per la consegna di prodotti televisivi nei formati SD/HD/3D/UHD 
+49 
+ 
+SMPTE 381-1 SMPTE Standard -  Material Exchange Format (MXF) —  Mapping MPEG 
+Streams into the MXF Generic Container 
+SMPTE 381-2 SMPTE Standard - Material Exchange Format (MXF) - Mapping MPEG 
+Streams into the MXF Constrained Generic Container 
+SMPTE 381-3 SMPTE Standard - Material Exchange Format— Mapping AVC Streams 
+into the MXF Generic Container 
+SMPTE 382 SMPTE Standard - Material Exchange Format —  Mapping AES3 and 
+Broadcast Wave Audio into the MXF Generic Container 
+SMPTE 385 SMPTE STANDARD - for Television - Material Exchange Format (MXF)  
+Mapping SDTI-CP Essence and Metadata into the MXF Generic Container 
+SMPTE 386 SMPTE Standard - for Television —  Material Exchange Format (MXF) 
+Mapping Type D-10 Essence Data to the MXF Generic Container 
+SMPTE 2016-1 SMPTE Standard - Format for Active Format Description and Bar Data 
+SMPTE 2019-4 Mapping VC-3 Coding Units into the MXF Generic Container  
+ 
+SMPTE 2020-3 SMPTE Standard - Vertical Ancillary Data Mapping of Audio Metadata —  
+Method B 
+SMPTE RDD9 SMPTE Registered Disclosure Document  - MXF Interoperability 
+Specification of Sony MPEG Long GOP Products 
+SMPTE RDD32 SMPTE Registered Disclosure Document  - XAVC™ MXF Mapping and 
+Operating Points 
+SMPTE RP2027 SMPTE Recommended Practice - AVC Intra-Frame Coding Specification 
+for SSM Card Applications 
+SMPTE RP219-2002 High-Definition, Standard-Definition Compatible Color Bar Signal 
+EBU R37 The relative timing of the sound and vision components of a television 
+signal 
+EBU R95 Safe areas for 16:9 television production 
+EBU R103 Tolerances on "Illegal" colours in television 
+EBU R118 Tiering of High Definition Cameras 
+EBU R122 Material Exchange Format. Timecode Implementation 
+EBU R124 Choice of HDTV Compression Algorithm and Bitrate for Acquisition, 
+Production & Distribution 
+EBU R128 Loudness normalisation and permitted maximum level of audio signals 
+EBU R135  Production & Exchange Formats for 3DTV Programmes 
+EBU Tech 3304 Multichannel audio line-up tones 
+EBU Tech 3342 -  LOUDNESS RANGE: A MEASURE TO SUPPLEMENT EBU R 128 
+LOUDNESS NORMALIZATION 
+EBU Tech 3264 Specification of the EBU Subtitling data exchange format 
+EBU Tech 3293 EBU CORE METADATA SET (EBUCore) 
+EBU Tech 3342 Loudness Range: A measure to supplement EBU R128 Loudness 
+Normalization 
+MPEG ISO/IEC 
+13818-2 
+Generic coding of moving pictures and associated audio– Part 2: Video 
+MPEG ISO/IEC 
+14496-10:2012 
+Coding of audio-visual objects – Part 10: Advanced Video Coding 
+
+Rai Radiotelevisione Italiana 
+Specifiche Tecniche per la consegna di prodotti televisivi nei formati SD/HD/3D/UHD 
+50 
+ 
+14. Glossario 
+ 
+EBU – European Broadcasting Union 
+ITU - International Telecommunication Union 
+SMPTE - Society of Motion Picture and Television Engineers 
+HDTV– High Definition Television – Televisione ad Alta Definizione 
+SDTV – Standard Definition Television – Televisione a Definizione Standard 
+UHDTV – Ultra High Definition Television – Televisione a Ultra Alta Definizione  
+3DTV – 3D High Definition Television – Televisione ad  Alta Definizione 3D 
+2K – Formato Digital Cinema con risoluzione 2048x1080 pixel 
+4K – Formato Digital Cinema con risoluzione 4096x2160 pixel 
+  HDR – High Dynamic Range 
+  HLG – Hybrid Log Gamma 
+XDCAM®  HD422 - formato di registrazione introdotto da Sony basato su MPEG-2 
+Dolby E®: Tecnologia di codifica sviluppata da  Dolby® 
+XAVC® - formato di registrazione introdotto da Sony basato su MPEG-4 AVC 
+ProRes® - Tecnologia di codifica sviluppata da Apple® 
+DNxHR® - Tecnologia di codifica sviluppata da AVID® 
+ISAN - International Standard Audiovisual Number  
+ 
+ 

@@ -1,0 +1,170 @@
+{% extends "base.html" %}
+{% set active_page = "calendar" %}
+
+{% block title %}Calendario — MediaFlow{% endblock %}
+{% block topbar_title %}Calendario Booking{% endblock %}
+
+{% block topbar_actions %}
+  <button class="btn btn-primary btn-sm" onclick="openModal('modal-new-booking')">+ Booking</button>
+{% endblock %}
+
+{% block content %}
+
+<div class="flex gap-4" style="align-items:flex-start;">
+  <!-- Legenda risorse -->
+  <div class="card" style="min-width:190px;max-width:210px;">
+    <div class="card-title mb-2">Risorse</div>
+    <div id="resource-legend">
+      {% for r in resources %}
+      <label class="flex items-center gap-2 mb-1" style="cursor:pointer;font-size:13px;">
+        <input type="checkbox" class="res-toggle" value="{{ r.id }}" data-color="{{ r.color }}" checked onchange="reloadCalendar()">
+        <span style="width:10px;height:10px;border-radius:50%;background:{{ r.color }};flex-shrink:0;"></span>
+        {{ r.name }}
+      </label>
+      {% endfor %}
+    </div>
+  </div>
+
+  <!-- Calendario -->
+  <div class="card" style="flex:1;">
+    <div id="calendar"></div>
+  </div>
+</div>
+
+<!-- ── Modal nuovo booking ─────────────────────────────────── -->
+<div class="modal-overlay" id="modal-new-booking">
+  <div class="modal">
+    <div class="modal-header">
+      <span class="modal-title">Nuovo booking</span>
+      <button class="btn btn-ghost btn-icon" onclick="closeModal('modal-new-booking')">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-group">
+        <label class="form-label">Job *</label>
+        <select class="form-select" id="bk-job" required></select>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Risorsa *</label>
+        <select class="form-select" id="bk-resource">
+          {% for r in resources %}
+          <option value="{{ r.id }}">{{ r.name }} ({{ r.type }})</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label class="form-label">Inizio *</label>
+          <input class="form-input" id="bk-start" type="datetime-local" required>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Fine *</label>
+          <input class="form-input" id="bk-end" type="datetime-local" required>
+        </div>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Stato</label>
+        <select class="form-select" id="bk-status">
+          <option value="tentative">Provvisorio</option>
+          <option value="confirmed">Confermato</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Note</label>
+        <textarea class="form-textarea" id="bk-notes" placeholder="Note opzionali…"></textarea>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeModal('modal-new-booking')">Annulla</button>
+      <button class="btn btn-primary" onclick="createBooking()">Salva booking</button>
+    </div>
+  </div>
+</div>
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+let calendar;
+
+async function initCalendar() {
+  // Carica job per la select
+  const jobs = await api('GET', '/planning/api/jobs');
+  const sel = document.getElementById('bk-job');
+  sel.innerHTML = '<option value="">— seleziona job —</option>' +
+    jobs.map(j => `<option value="${j.id}">${j.code} — ${j.title}</option>`).join('');
+
+  const calEl = document.getElementById('calendar');
+  calendar = new FullCalendar.Calendar(calEl, {
+    locale: 'it',
+    initialView: 'timeGridWeek',
+    headerToolbar: {
+      left: 'prev,next today',
+      center: 'title',
+      right: 'dayGridMonth,timeGridWeek,timeGridDay',
+    },
+    height: 680,
+    slotMinTime: '07:00',
+    slotMaxTime: '22:00',
+    allDaySlot: false,
+    nowIndicator: true,
+    editable: false,
+    eventSources: [{
+      url: '/planning/api/bookings',
+      method: 'GET',
+      extraParams: () => {
+        const checked = [...document.querySelectorAll('.res-toggle:checked')].map(c => c.value);
+        return {};   // filtra lato client dopo fetch
+      },
+      failure: () => toast('Errore caricamento booking', 'error'),
+    }],
+    eventClick: (info) => {
+      const p = info.event.extendedProps;
+      const start = info.event.start.toLocaleTimeString('it-IT', {hour:'2-digit',minute:'2-digit'});
+      const end   = info.event.end ? info.event.end.toLocaleTimeString('it-IT', {hour:'2-digit',minute:'2-digit'}) : '';
+      toast(`${info.event.title} | ${start}–${end} | ${STATUS_LABEL[p.status] || p.status}`, 'info', 5000);
+    },
+    dateClick: (info) => {
+      // Pre-compila datetime nel modal
+      const dt = info.dateStr + 'T09:00';
+      document.getElementById('bk-start').value = dt.substring(0,16);
+      document.getElementById('bk-end').value = dt.substring(0,11) + '18:00';
+      openModal('modal-new-booking');
+    },
+  });
+  calendar.render();
+}
+
+function reloadCalendar() {
+  if (calendar) calendar.refetchEvents();
+}
+
+async function createBooking() {
+  const job_id      = document.getElementById('bk-job').value;
+  const resource_id = document.getElementById('bk-resource').value;
+  const start       = document.getElementById('bk-start').value;
+  const end         = document.getElementById('bk-end').value;
+  if (!job_id || !resource_id || !start || !end) {
+    toast('Compila tutti i campi obbligatori', 'error'); return;
+  }
+  try {
+    const fd = new FormData();
+    fd.append('job_id', job_id);
+    fd.append('resource_id', resource_id);
+    fd.append('start_datetime', new Date(start).toISOString());
+    fd.append('end_datetime',   new Date(end).toISOString());
+    fd.append('status', document.getElementById('bk-status').value);
+    fd.append('notes',  document.getElementById('bk-notes').value);
+    await api('POST', '/planning/api/bookings', fd);
+    closeModal('modal-new-booking');
+    toast('Booking salvato', 'success');
+    calendar.refetchEvents();
+  } catch(e) { toast(e.message, 'error'); }
+}
+
+const STATUS_LABEL = {
+  tentative:'Provvisorio', confirmed:'Confermato', cancelled:'Annullato', completed:'Completato',
+};
+
+initCalendar();
+</script>
+{% endblock %}

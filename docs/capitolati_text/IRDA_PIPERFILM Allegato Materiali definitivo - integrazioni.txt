@@ -1,0 +1,255 @@
+ALLEGATO D – MATERIALI DEL FILM E SPECIFICHE TECNICHE 
+ 
+ 
+LISTA PER LA CONSEGNA DEI MATERIALI DEI FILM PIPERFILM  
+(inclusi materiali per vendite estere) 
+ 
+ 
+Di seguito sono specificate le linee guida per la consegna dei materiali audio -visivi a 
+PIPERFILM da effettuarsi, salvo diverse indicazioni, presso il nostro laboratorio di 
+riferimento: REEL ONE. 
+ 
+- In formato elettronico si accetta esclusivamente la consegna dei DCP riportati in questo 
+documento. Il DCP deve essere corredato di scheda tecnica. 
+- Per le consegne in formato elettronico va utilizzato il Mediashuttle di PIPERFILM. 
+Indicare il referente del laboratorio che effettuerà l’upload dei materiali a cui verrà inviato 
+il link di accesso a Mediashuttle. 
+ 
+- Le consegne fisiche dei materiali vanno effettuate in Via Marcello Prestinari, 15 - 00195 
+Roma - c.a. Gianmarco Vittori 
+- Per effettuare la consegna fisica va inviata una mail a gianmarco@reelone.it, 
+dcp@reelone.it,  g.longo.cons@piper.film indicando il peso complessivo dei materiali, l’ 
+indirizzo e il contatto del referente del laboratorio di post produzione al quale REEL ONE 
+invierà un supporto adeguato per l’archiviazione. PIPERFILM accetta solo hard disk 
+WESTERN DIGITAL WD ELEMENTS PORTABLE taglio minimo 2TB formattato exfat 
+ 
+Per eventuali problemi contattare come referente per Piper g.longo.cons@piper.film 
+ 
+ 
+MATERIALI PROMOZIONALI/ EDITORIALI  
+Da caricare sul Mediashuttle di PiperFilm  
+ 
+• Press-book (in italiano e in inglese se già esistente) 
+• Sinossi e cast tecnico-artistico 
+• Biografia del Regista (in italiano e in inglese se già esistente) 
+• Fotografie di scena e di backstage in alta risoluzione ( approvate ) 
+• Fotografia del regista in alta risoluzione (approvate ) 
+• EPK, interviste e backstage ( approvati ) 
+• Billing Pubblicitario 
+• Lista Dialoghi italiana definitiva del film spotting list con timecode 
+• Brani della colonna sonora originale (in mp3 o .wav) 
+• Lista musiche con crediti 
+• Obblighi contrattuali 
+• Scene tagliate 
+• Errori e papere 
+
+• obblighi contrattuali rispetto a servizi da osservare in promozione (trucchi e parrucchi, 
+classe viaggi e hotel, accompagnatori) e rispetto ai materiali pubblicitari per il cast 
+ 
+ 
+DOCUMENTI PER DISTRIBUZIONE ITALIANA  
+Inviare a g.longo.cons@piper.film 
+ 
+• Elenco Titoli Testa e Coda 
+• © Copyright (Anno di Produzione e Formula Produttiva) 
+• Classificazione del Ministero  
+• Dichiarazione di nazionalità provvisoria e definitiva  
+• Certificato di espressione di origine italiana ( EOI) 
+• Eleggibilità culturale del Film 
+• Elenco Musiche (Music Cue Sheet, Mod 109 SIAE) del film e del trailer  
+• Codice ISAN 
+ 
+ 
+DOCUMENTI PER DISTRIBUZIONE ESTERA  
+Inviare a g.longo.cons@piper.film 
+ 
+• Piano finanziario – su carta intestata del produttore con timbro e firma  
+• Chain of title (Catena di diritti)  
+• Billing Pubblicitario ( in inglese )  
+• Press-book ( in Inglese) 
+ 
+ 
+CONSEGNA MATERIALI PER USCITA THEATRICAL  
+( 15 gg prima dell’uscita cinema ) 
+Da caricare sul Mediashuttle di PiperFilm  
+ 
+• DCP FEATURE 4K standard SMPTE 
+o SPECIFICHE TECNICHE: 
+▪ CPL, PKL , ANNOTATION TEXT devono rispettare la DIGITAL NAMING 
+CONVENTION 
+▪ I canali audio devono essere L-R-C-LFE-LS-RS 
+▪ La sequenza loghi in testa e cartelli deve essere quella concordata con  
+PIPERFILM, inseriti su rulli separati, senza alcuna manipolazione lato 
+video e audio. 
+▪ Se i titoli di testa sono su scena fornire sempre anche il TIFF XYZ textless 
+- Qualora ci fossero dei sottotitoli forced narrative NON devono essere 
+burnati sulla timeline principale, ma consegnati separatamente in xml 
+interop o smpte 
+▪  NON si accettano version file per i forced narrative. 
+
+▪ La masterizzazione deve essere limitata in overall a 200 Mbit/s 
+ 
+• DCP FEATURE 24FPS ( INTEROP/SMPTE 429)  /  Se nativo 25 FPS ( SOLO STANDARD 
+SMPTE 429) consegnare anche il DCP 24FPS INTEROP/SMPTE 429 
+ 
+• FEATURE H264 pari al DCP 
+o SPECIFICHE TECNICHE: 
+▪ Quicktime .mov H264 stereo monorullo 
+▪ 1920x1080 frame rate originale, aspect ratio originale 
+▪ Bitrate 15000 Kb/s 
+▪ Encoding Profile: High 
+▪ Eventuale traccia sottotitoli impressa a video 
+• DKDM a favore di REEL ONE valida fino al 13/6/2031 ore 23.59 
+• File XML SMPTE di eventuali sottotitoli completi o forced narrative 
+• File XML SMPTE dei sottotitoli per NON UDENTI sincrono al DCP 
+• Mix audiodescrizione wav a canali separati 5.1 sincrona al DCP 
+• Mix Audiodescrizione wav mono only della traccia narrativa sincrona al DCP 
+• ISO DVD e ISO BLURAY conformi al DCP di distribuzione 
+ 
+ 
+CONSEGNA MATERIALI PER PIATTAFORME E HOME VIDEO  
+( entro 15 gg dall’uscita cinema ) 
+Da consegnare su supporto WESTERN DIGITAL WD ELEMENTS PORTABLE che fornirà 
+direttamente REEL ONE SRL formattato exfat 
+ 
+• FEATURE PRORES UHD 4444 SDR HOMEVIDEO 
+o SPECIFICHE TECNICHE: 
+▪ Apple Prores 4444 UHD frame rate originale, aspect ratio originale 
+▪ Embedded Audio 5.1 italiano + 2.0 italiano. / eventuale 5.1 italiano + 2.0 
+lingua straniera 
+▪ La sequenza loghi in testa e cartelli deve essere concorata con PIPER 
+FILM 
+▪ Qualora ci fossero dei sottotitoli forced narrative NON devono essere 
+burnati, ma consegnati in file sincrono srt con eventuale nota word per 
+le posizioni speciali degli spot. 
+▪ AUDIO 8 CANALI (L R C LFE LS RS LT RT ) 
+▪ TC START 59:59:00 – 1 SECONDO DI NERO  - 01:00:00:00 PROGRAMMA 
+– 1 SECONDO DI NERO ALLA FINE 
+▪ Se disponibile va consegnato anche il formato UHD Dolby Vision con 
+xml 
+ 
+• FEATURE PRORES HD 4444 HOMEVIDEO 
+o SPECIFICHE TECNICHE: 
+▪ Apple Prores 4444 HD SDR frame rate originale, aspect ratio originale 
+▪ Embedded Audio 5.1 italiano + 2.0 italiano. / eventuale 5.1 italiano + 2.0 
+
+lingua straniera 
+▪ La sequenza loghi in testa e cartelli deve essere concordata con PIPER 
+FILM 
+▪ Qualora ci fossero dei sottotitoli forced narrative NON devono essere 
+burnati, ma consegnati in file sincrono srt con eventuale nota word per 
+le posizioni speciali degli spot. 
+▪ AUDIO 8 CANALI (L R C LFE LS RS LT RT ) 
+▪ TC START 59:59:00 – 1 SECONDO DI NERO  - 01:00:00:00 PROGRAMMA 
+– 1 SECONDO DI NERO ALLA FINE 
+ 
+• FEATURE H264 pari al PRORES con velocità 25fps ( qualora il film fosse nativo 24fps) 
+o SPECIFICHE TECNICHE: 
+▪ Quicktime .mov H264 stereo monorullo 
+▪ 1920x1080 frame rate 25fps, aspect ratio originale 
+▪ Bitrate 3500 Kb/s 
+▪ Encoding Profile: High 
+▪ Eventuale traccia sottotitoli impressa a video 
+▪ Watermark : NFCU – PIPERFILM -25fps  
+▪ Il watermark deve avere size 55 e opacity 35 posizionato a centro/destra 
+dell’immagine 
+ 
+• PRORES UHD delle sezioni Textless con cartello 3sec di indicazione di Insert Timecode 
+in testa a ogni sezione. 
+• PRORES HD delle sezioni Textless con cartello 3sec di indicazione di Insert Timecode 
+in testa a ogni sezione. 
+• 5.1+2.0  printmaster, 5.1+2.0 M/E,  5.1 +2.0 DME stems original film speed 24 fps a rulli 
+conformi al dcp e monorullo 
+• Colonna Mix 5.1 + 2.0 25fps sincrona al file H264 25fps 
+• File STL/SRT/DOC dei sottotitoli italiani per non udenti sincrono al Prores Homevideo 
+• Audiodescrizione stereo Mix in lingua italiana sincrona al Prores Homevideo. 
+• Eventuale FILE STL/SRT/DOC dei sottotitoli narrative forced sincrono al Prores 
+Homevideo. 
+• Backstage, scene tagliate, interviste a cast & crew – se disponibili - in PRORES 422HQ 
+original aspect ratio e original speed 
+• Commento del regista al film – se disponibile e in tutti i formati prodotti 
+ 
+ 
+CONSEGNA MATERIALI PER DISTRIBUZIONE ESTERA  
+Il DCP versione internazionale da caricare sul Mediashuttle di PiperFilm. Il resto dei materiali 
+da consegnare su supporto WESTERN DIGITAL WD ELEMENTS PORTABLE che fornirà 
+direttamente REEL ONE SRL formattato exfat 
+ 
+ 
+• DCP FEATURE 4K standard SMPTE VERSIONE INTERNAZIONALE 
+o SPECIFICHE TECNICHE: 
+▪ CPL, PKL , ANNOTATION TEXT devono rispettare la DIGITAL NAMING 
+CONVENTION ( nella nazionalità va inserito “INT” e nei versioning “OV”) 
+
+▪ La sequenza loghi in testa e cartelli deve essere concordata con PIPER 
+FILM, inseriti su rulli separati, senza alcuna manipolazione lato video e 
+audio. 
+▪ Qualora ci fossero dei sottotitoli forced narrative NON devono essere 
+burnati sulla timeline principale, NON si accettano version file per i 
+forced narrative. 
+▪ La masterizzazione deve essere limitata in overall a 200 Mbit/s 
+ 
+• DCP FEATURE 4K standard SMPTE VERSION FILE CON SOTTOTITOLI INGLESI 
+o SPECIFICHE TECNICHE: 
+▪ CPL, PKL , ANNOTATION TEXT devono rispettare la DIGITAL NAMING 
+CONVENTION ( nella nazionalità va inserito “INT” e nei versioning “VF”) 
+▪ I sottotioli NON devono essere burned  
+ 
+ 
+• FEATURE PRORES UHD 4444 SDR INTERNAZIONALE 
+o SPECIFICHE TECNICHE: 
+▪ Apple Prores 4444 UHD frame rate originale, aspect ratio originale 
+▪ 16 channel Embedded Audio 5.1 lingua originale + 2.0 lingua originale +  
+M/E 5.1 + M/E 2.0 
+▪ La sequenza loghi in testa e cartelli deve essere concordata con PIPER 
+FILM.  
+▪ Qualora ci fossero dei sottotitoli forced narrative NON devono essere 
+burnati, ma consegnati in file sincrono srt con eventuale nota word per 
+le posizioni speciali degli spot. 
+▪ TC START 59:59:00 – 1 SECONDO DI NERO  - 01:00:00:00 PROGRAMMA 
+– 1 SECONDO DI NERO ALLA FINE 
+▪ Se disponibile va consegnato anche il formato UHD Dolby Vision con 
+xml 
+ 
+• FEATURE PRORES HD 4444 INTERNAZIONALE 
+o SPECIFICHE TECNICHE: 
+▪ Apple Prores 4444 HD SDR frame rate originale, aspect ratio originale 
+▪ 16 channel Embedded Audio 5.1 lingua originale + 2.0 lingua originale +  
+M/E 5.1 + M/E 2.0 
+▪ La sequenza loghi in testa e cartelli deve essere concordata con PIPER 
+FILM.  
+▪ Qualora ci fossero dei sottotitoli forced narrative NON devono essere 
+burnati, ma consegnati in file sincrono srt con eventuale nota word per 
+le posizioni speciali degli spot. 
+▪ TC START 59:59:00 – 1 SECONDO DI NERO  - 01:00:00:00 PROGRAMMA 
+– 1 SECONDO DI NERO ALLA FINE 
+ 
+• FEATURE H264 pari al DCP con sottotitoli inglesi impressi 
+
+o SPECIFICHE TECNICHE: 
+▪ Quicktime .mov H264 stereo monorullo 
+▪ 1920x1080 frame rate originale, aspect ratio originale 
+▪ Bitrate 15000 Kb/s 
+▪ Encoding Profile: High 
+▪ Traccia sottotitoli inglese impressa a video 
+ 
+• PRORES UHD delle sezioni Textless con cartello 3sec di indicazione di Insert Timecode 
+in testa a ogni sezione. 
+• PRORES HD delle sezioni Textless con cartello 3sec di indicazione di Insert Timecode 
+in testa a ogni sezione. 
+• 5.1+2.0  printmaster, 5.1+2.0 M/E,  5.1 +2.0 DME stems original film speed  
+• File STL/SRT/DOC dei sottotitoli inglesi sincrono al Prores Internazionale 
+• File XML SMPTE dei sottotitoli inglesi sincrono al DCP Internazionale 
+• Wav o mp3 della Colonna sonora libera da diritti del film anche per utilizzo out of 
+context ( per la realizzazione del trailer internazionale ) 
+ 
+• AUDIO 16 CANALI: 
+1) L  
+2) R  
+3) C  
+4) LFE  
+5) LS  
+6) RS  
+7-8) LT-RT  
+9-14) M/E 5.1 1 
+5-16) M/E 2.0  

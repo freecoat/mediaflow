@@ -1,0 +1,46 @@
+Technical Metadata Cheat Sheet
+F: OB#
+This number will be provided to you by your Content Acquisitions rep 
+G: Material ID#
+This column is blank & should be left as such.
+H: GTM Production #
+These IDs will be provided to you by your Content Acquisitions rep. It is specific to your content & is the Ingest identifier for each episode/feature/special.
+I: Revision #
+If we need a re-delivery of the master, please fill out this column with “R1-R10” suffix. 
+J: Master Type
+If delivering Texted with Textless at Tail (texted content, followed by corresponding textless elements prior to the end of the master), please select TXM. 
+If delivering only Texted (texted content only on the master), please select TXM. 
+If delivering Textless (textless content only on the master), please select TLM. We usually ask for Textless masters when there are more than 25 instances of text present throughout content.
+L: Video Definition
+Please select the resolution content is being delivered as.
+M: Aspect Ratio 
+Please select the aspect ratio content is being delivered as. We generally ask for the original aspect ratio content was shot in.
+N: Original Aspect Ratio
+Please select the original aspect ratio content was shot in.
+O: Frame Size
+Please select the frame size content is being delivered as.
+P: File Frame Rate 
+Please select the frame rate content is being delivered as. We generally ask for the original frame rate content was shot in. To note, we can only accept 23.98 FPS, 25 FPS, or 29.97 FPS.
+Q: Original Frame Rate
+Please select the original frame rate content was shot in.
+R: Scan Type
+Please select the scan type content is being delivered as. 23.98 & 25 FPS is generally Progressive. 29.97 FPS is generally Interlaced.
+S: Primary Audio Language
+Please select the language content is being delivered as.
+T: Audio Configuration
+Please select the audio configuration content is being delivered with. The dropdown options are written out (ex. Surround;Stereo;M&E), so please select the option that is written out in the order of the channels being mapped out on content.
+NOTE: The columns listed below require timings respective to what each column is asking for.
+U: Program Runtime Start of Media-End of Media
+V: Program Segments In-Out
+W: Generic Main Title
+X: End Credits
+Y: Textless Material
+Please enter the IN-OUT of all necessary timings with NO spaces & utilizing colons or semi-colons between seconds & frames, depending on the frame rate of content. For example, 23.98 & 25 FPS require colons (01:00:10:15), while 29.97 FPS require semi-colons (01:00:10;15).
+If there is more than one set of an IN-OUT (likely for V: Program Segments In-Out), please separate each IN-OUT with a comma. Please do not enter spaces anywhere. 
+Specific to X: End Credits, please only utilize this column if credits are over black. If credits are over content, please enter those timings into AO: Living Credits. 
+Lastly, for Y: Textless Material, if you are delivering a Textless master, no need to enter timings. Please leave it blank. This is specific to Textless at Tail.
+Additional Notes
+The remaining columns are fairly straightforward & either require additional timings, formatted with the same guidelines as previously mentioned, or are “Yes” or “No” questions.
+You may notice a section of columns that refer to UHD HDR content, Columns AB - AG. These are required if delivering UHD HDR masters. Please ensure the entries in this column are formatted correctly.
+Once complete, all information entered should ultimately auto-generate the .mov naming convention, in Column AP. Please label your masters with the naming that auto-generates in this column. We will reject the files if they do not have the auto-generated naming.
+As the sheet is being filled out, we also suggest referring to the tab labeled, “Example_Sheet,” at the bottom to see a clean example of how the sheet should be filled out. Please let us know if there are any questions or concerns. Happy to help along the way!

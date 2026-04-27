@@ -1,0 +1,325 @@
+{% extends "base.html" %}
+{% set active_page = "finance" %}
+
+{% block title %}Finanza — MediaFlow{% endblock %}
+{% block topbar_title %}Fatturazione & Report{% endblock %}
+
+{% block topbar_actions %}
+  <button class="btn btn-primary btn-sm" onclick="openModal('modal-new-invoice')">+ Nuova fattura</button>
+{% endblock %}
+
+{% block content %}
+
+<!-- ── Tabs ──────────────────────────────────────────────────── -->
+<div class="tabs">
+  <div class="tab active" onclick="showSection('invoices',this)">Fatture</div>
+  <div class="tab" onclick="showSection('timesheets',this)">Timesheet</div>
+  <div class="tab" onclick="showSection('report',this)">Report P&amp;L</div>
+</div>
+
+<!-- ── Sezione fatture ─────────────────────────────────────── -->
+<div id="section-invoices">
+  <!-- Filtri -->
+  <div class="flex gap-3 mb-4">
+    <select class="form-select" style="width:auto;" id="inv-filter" onchange="loadInvoices()">
+      <option value="">Tutti gli stati</option>
+      <option value="draft">Bozza</option>
+      <option value="sent">Inviata</option>
+      <option value="paid">Pagata</option>
+      <option value="overdue">Scaduta</option>
+    </select>
+  </div>
+  <div class="card">
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>Numero</th>
+            <th>Cliente</th>
+            <th>Data</th>
+            <th>Scadenza</th>
+            <th>Totale</th>
+            <th>Stato</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody id="inv-table">
+          <tr><td colspan="7" class="text-muted" style="text-align:center;padding:24px;">Caricamento…</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<!-- ── Sezione timesheet ───────────────────────────────────── -->
+<div id="section-timesheets" class="hidden">
+  <div class="flex gap-3 mb-4">
+    <button class="btn btn-primary btn-sm" onclick="openModal('modal-log-hours')">+ Registra ore</button>
+  </div>
+  <div class="card">
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr><th>Data</th><th>Utente</th><th>Job</th><th>Ore</th><th>Tariffa</th><th>Totale</th><th>Fatturabile</th></tr>
+        </thead>
+        <tbody id="ts-table">
+          <tr><td colspan="7" class="text-muted" style="text-align:center;padding:24px;">Caricamento…</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<!-- ── Sezione P&L ─────────────────────────────────────────── -->
+<div id="section-report" class="hidden">
+  <div class="flex gap-3 mb-4 items-center">
+    <select class="form-select" style="width:auto;" id="pl-year-sel" onchange="loadPL()">
+      {% for y in range(2022, 2028) %}
+      <option value="{{ y }}" {% if y == 2025 %}selected{% endif %}>{{ y }}</option>
+      {% endfor %}
+    </select>
+  </div>
+  <div id="pl-grid" class="stat-grid" style="margin-bottom:20px;"></div>
+  <div class="card">
+    <div class="card-title mb-2">Report per job</div>
+    <div id="pl-jobs-list" class="text-muted text-sm">Seleziona un job per vedere il dettaglio P&L</div>
+  </div>
+</div>
+
+<!-- ── Modali ──────────────────────────────────────────────── -->
+
+<!-- Nuova fattura -->
+<div class="modal-overlay" id="modal-new-invoice">
+  <div class="modal">
+    <div class="modal-header">
+      <span class="modal-title">Nuova fattura</span>
+      <button class="btn btn-ghost btn-icon" onclick="closeModal('modal-new-invoice')">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-row">
+        <div class="form-group">
+          <label class="form-label">Numero *</label>
+          <input class="form-input" id="inv-number" placeholder="es. 2024-001">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Cliente *</label>
+          <select class="form-select" id="inv-client"></select>
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label class="form-label">Data emissione *</label>
+          <input class="form-input" id="inv-issue" type="date">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Scadenza</label>
+          <input class="form-input" id="inv-due" type="date">
+        </div>
+      </div>
+      <div class="form-group">
+        <label class="form-label">IVA %</label>
+        <input class="form-input" id="inv-vat" type="number" value="22" step="0.1">
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeModal('modal-new-invoice')">Annulla</button>
+      <button class="btn btn-primary" onclick="createInvoice()">Crea fattura</button>
+    </div>
+  </div>
+</div>
+
+<!-- Log ore -->
+<div class="modal-overlay" id="modal-log-hours">
+  <div class="modal">
+    <div class="modal-header">
+      <span class="modal-title">Registra ore</span>
+      <button class="btn btn-ghost btn-icon" onclick="closeModal('modal-log-hours')">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-row">
+        <div class="form-group">
+          <label class="form-label">Utente ID *</label>
+          <input class="form-input" id="ts-user" type="number" placeholder="ID utente">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Job *</label>
+          <select class="form-select" id="ts-job"></select>
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label class="form-label">Data *</label>
+          <input class="form-input" id="ts-date" type="date">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Ore *</label>
+          <input class="form-input" id="ts-hours" type="number" step="0.5" placeholder="8.0">
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label class="form-label">Tariffa oraria (€)</label>
+          <input class="form-input" id="ts-rate" type="number" step="0.01">
+        </div>
+        <div class="form-group" style="display:flex;align-items:flex-end;padding-bottom:4px;">
+          <label class="flex items-center gap-2" style="cursor:pointer;">
+            <input type="checkbox" id="ts-billable" checked> Fatturabile
+          </label>
+        </div>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Descrizione</label>
+        <textarea class="form-textarea" id="ts-desc" placeholder="Attività svolta…"></textarea>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeModal('modal-log-hours')">Annulla</button>
+      <button class="btn btn-primary" onclick="logHours()">Salva ore</button>
+    </div>
+  </div>
+</div>
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+function showSection(name, el) {
+  ['invoices','timesheets','report'].forEach(s => {
+    document.getElementById('section-'+s).classList.add('hidden');
+  });
+  document.getElementById('section-'+name).classList.remove('hidden');
+  document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+  el.classList.add('active');
+  if (name === 'report') loadPL();
+  if (name === 'timesheets') loadTimesheets();
+}
+
+// ── Fatture ──────────────────────────────────────────────────
+async function loadInvoices() {
+  const status = document.getElementById('inv-filter').value;
+  const url = '/finance/api/invoices' + (status ? `?status=${status}` : '');
+  const invs = await api('GET', url);
+  const tbody = document.getElementById('inv-table');
+  if (!invs.length) {
+    tbody.innerHTML = '<tr><td colspan="7" class="text-muted" style="text-align:center;padding:24px;">Nessuna fattura</td></tr>';
+    return;
+  }
+  tbody.innerHTML = invs.map(i => `
+    <tr>
+      <td class="mono" style="font-size:12px;">${i.number}</td>
+      <td>${i.client?.name || '—'}</td>
+      <td class="text-sm">${fmtDate(i.issue_date)}</td>
+      <td class="text-sm ${isOverdue(i) ? 'color-rose' : ''}">${fmtDate(i.due_date)}</td>
+      <td class="mono font-weight:600;">${fmtCurrency(i.total)}</td>
+      <td>${statusBadge(i.status)}</td>
+      <td>
+        <select class="form-select" style="width:auto;font-size:12px;padding:4px 8px;" onchange="changeInvStatus(${i.id}, this.value)">
+          <option value="">Cambia…</option>
+          ${['draft','sent','paid','overdue','cancelled'].map(s=>`<option value="${s}">${s}</option>`).join('')}
+        </select>
+      </td>
+    </tr>`).join('');
+}
+
+function isOverdue(inv) {
+  return inv.due_date && new Date(inv.due_date) < new Date() && inv.status !== 'paid';
+}
+
+async function changeInvStatus(id, status) {
+  if (!status) return;
+  try {
+    const fd = new FormData(); fd.append('status', status);
+    await api('PUT', `/finance/api/invoices/${id}/status`, fd);
+    toast('Stato fattura aggiornato', 'success');
+    loadInvoices();
+  } catch(e) { toast(e.message, 'error'); }
+}
+
+async function createInvoice() {
+  const number = document.getElementById('inv-number').value.trim();
+  const client_id = document.getElementById('inv-client').value;
+  const issue = document.getElementById('inv-issue').value;
+  if (!number || !client_id || !issue) { toast('Compila i campi obbligatori', 'error'); return; }
+  try {
+    const fd = new FormData();
+    fd.append('number', number); fd.append('client_id', client_id);
+    fd.append('issue_date', issue); fd.append('due_date', document.getElementById('inv-due').value || '');
+    fd.append('vat_rate', document.getElementById('inv-vat').value || '22');
+    await api('POST', '/finance/api/invoices', fd);
+    closeModal('modal-new-invoice');
+    toast('Fattura creata', 'success');
+    loadInvoices();
+  } catch(e) { toast(e.message, 'error'); }
+}
+
+// ── Timesheet ────────────────────────────────────────────────
+async function loadTimesheets() {
+  const ts = await api('GET', '/finance/api/timesheets');
+  const tbody = document.getElementById('ts-table');
+  if (!ts.length) {
+    tbody.innerHTML = '<tr><td colspan="7" class="text-muted" style="text-align:center;padding:24px;">Nessuna registrazione</td></tr>';
+    return;
+  }
+  tbody.innerHTML = ts.map(t => {
+    const total = (t.hours * (t.hourly_rate || 0));
+    return `<tr>
+      <td class="text-sm">${fmtDate(t.work_date)}</td>
+      <td class="text-sm">ID ${t.user_id}</td>
+      <td class="text-sm">Job #${t.job_id}</td>
+      <td class="mono">${t.hours}h</td>
+      <td class="mono text-sm">${t.hourly_rate ? fmtCurrency(t.hourly_rate) : '—'}</td>
+      <td class="mono">${total ? fmtCurrency(total) : '—'}</td>
+      <td>${t.is_billable ? '<span class="badge badge-active">Sì</span>' : '<span class="badge badge-draft">No</span>'}</td>
+    </tr>`;
+  }).join('');
+}
+
+async function logHours() {
+  const fd = new FormData();
+  fd.append('user_id', document.getElementById('ts-user').value);
+  fd.append('job_id', document.getElementById('ts-job').value);
+  fd.append('work_date', document.getElementById('ts-date').value);
+  fd.append('hours', document.getElementById('ts-hours').value);
+  fd.append('hourly_rate', document.getElementById('ts-rate').value || '');
+  fd.append('description', document.getElementById('ts-desc').value);
+  fd.append('is_billable', document.getElementById('ts-billable').checked);
+  try {
+    await api('POST', '/finance/api/timesheets', fd);
+    closeModal('modal-log-hours');
+    toast('Ore registrate', 'success');
+    loadTimesheets();
+  } catch(e) { toast(e.message, 'error'); }
+}
+
+// ── P&L ──────────────────────────────────────────────────────
+async function loadPL() {
+  const year = document.getElementById('pl-year-sel').value;
+  const pl = await api('GET', `/finance/api/report/pl/${year}`);
+  document.getElementById('pl-grid').innerHTML = `
+    <div class="stat-card"><div class="stat-label">Ricavi</div><div class="stat-value color-green mono" style="font-size:22px;">${fmtCurrency(pl.revenue)}</div></div>
+    <div class="stat-card"><div class="stat-label">Costi</div><div class="stat-value color-rose mono" style="font-size:22px;">${fmtCurrency(pl.costs)}</div></div>
+    <div class="stat-card"><div class="stat-label">Margine lordo</div><div class="stat-value mono" style="font-size:22px;color:${pl.gross_margin>=0?'var(--green)':'var(--rose)'};">${fmtCurrency(pl.gross_margin)}</div></div>
+    <div class="stat-card"><div class="stat-label">Ore totali</div><div class="stat-value color-indigo mono" style="font-size:22px;">${pl.total_hours}h</div></div>`;
+}
+
+// Init
+async function init() {
+  // Carica clienti per select
+  const clients = await api('GET', '/planning/api/clients');
+  document.getElementById('inv-client').innerHTML =
+    '<option value="">— cliente —</option>' + clients.map(c => `<option value="${c.id}">${c.name}</option>`).join('');
+
+  const jobs = await api('GET', '/planning/api/jobs');
+  document.getElementById('ts-job').innerHTML =
+    '<option value="">— job —</option>' + jobs.map(j => `<option value="${j.id}">${j.code} — ${j.title}</option>`).join('');
+
+  // Data di default per timesheet
+  document.getElementById('ts-date').value = new Date().toISOString().slice(0,10);
+  document.getElementById('inv-issue').value = new Date().toISOString().slice(0,10);
+
+  loadInvoices();
+}
+
+init();
+</script>
+{% endblock %}

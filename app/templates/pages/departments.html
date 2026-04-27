@@ -1,0 +1,209 @@
+{% extends "base.html" %}
+{% set active_page = "departments" %}
+{% block title %}Reparti — MediaFlow{% endblock %}
+{% block topbar_title %}Reparti{% endblock %}
+{% block topbar_actions %}
+  <button class="btn btn-primary btn-sm" onclick="openModal('modal-new-dept')">+ Nuovo reparto</button>
+{% endblock %}
+
+{% block content %}
+
+<div class="card mb-4" style="background:rgba(98,114,245,0.06);border-color:rgba(98,114,245,0.18);">
+  <div style="padding:14px 16px;font-size:13px;line-height:1.55;color:var(--text-2);">
+    I <strong>reparti</strong> raggruppano risorse e voci listino in macro-aree organizzative
+    e finanziarie (DI/Video, VFX, Audio, Commercial…). Ogni risorsa e ogni voce listino appartiene a
+    un reparto. Le risorse possono lavorare in <em>prestito</em> a un altro reparto, ma la responsabilità
+    finanziaria rimane sempre quella del reparto di appartenenza.
+  </div>
+</div>
+
+<div class="card">
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th style="width:40px;"></th>
+          <th>Codice</th>
+          <th>Nome</th>
+          <th>Descrizione</th>
+          <th class="text-right">Risorse</th>
+          <th class="text-right">Voci listino</th>
+          <th class="text-right">Budget annuo</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for d in departments %}
+        <tr style="cursor:pointer;"
+            onclick='editDept({{ d.id }}, {{ d.code|tojson }}, {{ d.name|tojson }}, {{ (d.description or "")|tojson }}, {{ d.color|tojson }}, {{ d.sort_order }}, {{ d.annual_budget if d.annual_budget else "null" }})'>
+          <td><span style="display:inline-block;width:14px;height:14px;border-radius:4px;background:{{ d.color }};"></span></td>
+          <td><code style="background:var(--bg-2);padding:2px 6px;border-radius:4px;font-size:12px;">{{ d.code }}</code></td>
+          <td><strong>{{ d.name }}</strong></td>
+          <td class="text-muted" style="font-size:12px;max-width:340px;">{{ d.description or '—' }}</td>
+          <td class="text-right">{{ d._resources_count }}</td>
+          <td class="text-right">{{ d._price_items_count }}</td>
+          <td class="text-right">{% if d.annual_budget %}€ {{ '{:,.0f}'.format(d.annual_budget).replace(',','.') }}{% else %}—{% endif %}</td>
+          <td class="text-right" onclick="event.stopPropagation()">
+            {% if d._resources_count == 0 and d._price_items_count == 0 %}
+            <button class="btn btn-ghost btn-icon btn-sm" title="Elimina"
+                    onclick="deleteDept({{ d.id }}, '{{ d.name }}')">🗑️</button>
+            {% else %}
+            <span class="text-xs text-muted">→</span>
+            {% endif %}
+          </td>
+        </tr>
+        {% else %}
+        <tr><td colspan="8" class="text-muted" style="text-align:center;padding:24px;">Nessun reparto. Creane uno per iniziare.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<!-- Modal nuovo reparto -->
+<div class="modal-overlay" id="modal-new-dept">
+  <div class="modal">
+    <div class="modal-header">
+      <span class="modal-title">Nuovo reparto</span>
+      <button class="btn btn-ghost btn-icon" onclick="closeModal('modal-new-dept')">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-row">
+        <div class="form-group">
+          <label class="form-label">Codice *</label>
+          <input class="form-input" id="nd-code" placeholder="es. DI-VIDEO" style="text-transform:uppercase;">
+          <div class="form-hint">Identificativo univoco. Solo lettere, numeri e trattini.</div>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Nome *</label>
+          <input class="form-input" id="nd-name" placeholder="es. DI / Video">
+        </div>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Descrizione</label>
+        <textarea class="form-textarea" id="nd-desc" rows="2" placeholder="A cosa si occupa questo reparto…"></textarea>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label class="form-label">Colore</label>
+          <input class="form-input" id="nd-color" type="color" value="#6272f5" style="height:38px;padding:2px;">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Ordine</label>
+          <input class="form-input" id="nd-order" type="number" value="50" min="0">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Budget annuo (€)</label>
+          <input class="form-input" id="nd-budget" type="number" step="1000" placeholder="opzionale">
+        </div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeModal('modal-new-dept')">Annulla</button>
+      <button class="btn btn-primary" onclick="createDept()">Crea reparto</button>
+    </div>
+  </div>
+</div>
+
+<!-- Modal modifica reparto -->
+<div class="modal-overlay" id="modal-edit-dept">
+  <div class="modal">
+    <div class="modal-header">
+      <span class="modal-title">Modifica reparto</span>
+      <button class="btn btn-ghost btn-icon" onclick="closeModal('modal-edit-dept')">✕</button>
+    </div>
+    <div class="modal-body">
+      <input type="hidden" id="ed-id">
+      <div class="form-group">
+        <label class="form-label">Codice</label>
+        <input class="form-input" id="ed-code" disabled>
+        <div class="form-hint">Il codice non è modificabile dopo la creazione.</div>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Nome *</label>
+        <input class="form-input" id="ed-name">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Descrizione</label>
+        <textarea class="form-textarea" id="ed-desc" rows="2"></textarea>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label class="form-label">Colore</label>
+          <input class="form-input" id="ed-color" type="color" style="height:38px;padding:2px;">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Ordine</label>
+          <input class="form-input" id="ed-order" type="number" min="0">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Budget annuo (€)</label>
+          <input class="form-input" id="ed-budget" type="number" step="1000">
+        </div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeModal('modal-edit-dept')">Annulla</button>
+      <button class="btn btn-primary" onclick="saveDept()">Salva</button>
+    </div>
+  </div>
+</div>
+
+<script>
+async function createDept() {
+  const code = document.getElementById('nd-code').value.trim().toUpperCase();
+  const name = document.getElementById('nd-name').value.trim();
+  if (!code || !name) { alert('Codice e nome sono obbligatori'); return; }
+  const fd = new FormData();
+  fd.append('code', code);
+  fd.append('name', name);
+  fd.append('description', document.getElementById('nd-desc').value);
+  fd.append('color', document.getElementById('nd-color').value);
+  fd.append('sort_order', document.getElementById('nd-order').value || 0);
+  const budget = document.getElementById('nd-budget').value;
+  if (budget) fd.append('annual_budget', budget);
+  try {
+    const r = await fetch('/departments/api', { method: 'POST', body: fd });
+    if (!r.ok) { const e = await r.json(); throw new Error(e.detail || 'Errore'); }
+    location.reload();
+  } catch (e) { alert(e.message); }
+}
+
+function editDept(id, code, name, desc, color, order, budget) {
+  document.getElementById('ed-id').value = id;
+  document.getElementById('ed-code').value = code;
+  document.getElementById('ed-name').value = name;
+  document.getElementById('ed-desc').value = desc;
+  document.getElementById('ed-color').value = color;
+  document.getElementById('ed-order').value = order;
+  document.getElementById('ed-budget').value = budget !== null ? budget : '';
+  openModal('modal-edit-dept');
+}
+
+async function saveDept() {
+  const id = document.getElementById('ed-id').value;
+  const fd = new FormData();
+  fd.append('name', document.getElementById('ed-name').value);
+  fd.append('description', document.getElementById('ed-desc').value);
+  fd.append('color', document.getElementById('ed-color').value);
+  fd.append('sort_order', document.getElementById('ed-order').value || 0);
+  const budget = document.getElementById('ed-budget').value;
+  if (budget) fd.append('annual_budget', budget);
+  try {
+    const r = await fetch(`/departments/api/${id}`, { method: 'PUT', body: fd });
+    if (!r.ok) { const e = await r.json(); throw new Error(e.detail || 'Errore'); }
+    location.reload();
+  } catch (e) { alert(e.message); }
+}
+
+async function deleteDept(id, name) {
+  if (!confirm(`Eliminare il reparto "${name}"?`)) return;
+  try {
+    const r = await fetch(`/departments/api/${id}`, { method: 'DELETE' });
+    if (!r.ok) { const e = await r.json(); throw new Error(e.detail || 'Errore'); }
+    location.reload();
+  } catch (e) { alert(e.message); }
+}
+</script>
+
+{% endblock %}

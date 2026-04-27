@@ -1,0 +1,260 @@
+{% extends "base.html" %}
+{% set active_page = "projects" %}
+
+{% block title %}Progetti — MediaFlow{% endblock %}
+{% block topbar_title %}Progetti{% endblock %}
+
+{% block topbar_actions %}
+  <button class="btn btn-primary btn-sm" onclick="openModal('modal-new-project')">+ Nuovo progetto</button>
+{% endblock %}
+
+{% block content %}
+
+<!-- Filtri -->
+<div class="flex items-center gap-3 mb-4" style="flex-wrap:wrap;">
+  <div class="search-bar" style="flex:1;max-width:320px;">
+    <span>🔍</span>
+    <input type="text" id="search-input" placeholder="Cerca progetto…" oninput="filterProjects()">
+  </div>
+  <select class="form-select" style="width:auto;" id="filter-status" onchange="filterProjects()">
+    <option value="">Tutti gli stati</option>
+    <option value="prospect">Prospect</option>
+    <option value="quoting">In quotazione</option>
+    <option value="active">Attivo</option>
+    <option value="completed">Completato</option>
+    <option value="archived">Archiviato</option>
+  </select>
+  <select class="form-select" style="width:auto;" id="filter-client" onchange="filterProjects()">
+    <option value="">Tutti i clienti</option>
+    {% for c in clients %}
+    <option value="{{ c.id }}">{{ c.name }}</option>
+    {% endfor %}
+  </select>
+  <select class="form-select" style="width:auto;" id="filter-type" onchange="filterProjects()">
+    <option value="">Tutti i tipi</option>
+    <option value="feature_film">Lungometraggio</option>
+    <option value="short_film">Cortometraggio</option>
+    <option value="series">Serie TV</option>
+    <option value="documentary">Documentario</option>
+    <option value="spot">Spot / pubblicità</option>
+    <option value="music_video">Video musicale</option>
+    <option value="corporate">Aziendale</option>
+  </select>
+</div>
+
+<!-- Tabella progetti -->
+<div class="card">
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th>Codice</th>
+          <th>Titolo</th>
+          <th>Cliente</th>
+          <th>Tipo</th>
+          <th class="text-right">Durata</th>
+          <th>Consegna</th>
+          <th>Quote / Job</th>
+          <th>Stato</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody id="projects-table">
+        <tr><td colspan="9" class="text-muted" style="text-align:center;padding:24px;">Caricamento…</td></tr>
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<!-- Modal nuovo progetto -->
+<div class="modal-overlay" id="modal-new-project">
+  <div class="modal" style="max-width:640px;">
+    <div class="modal-header">
+      <span class="modal-title">Nuovo progetto</span>
+      <button class="btn btn-ghost btn-icon" onclick="closeModal('modal-new-project')">✕</button>
+    </div>
+    <div class="modal-body">
+
+      <div class="form-row">
+        <div class="form-group">
+          <label class="form-label">Codice progetto *</label>
+          <input class="form-input" id="p-code" placeholder="es. P-2025-001">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Cliente *</label>
+          <select class="form-select" id="p-client">
+            <option value="">— seleziona —</option>
+            {% for c in clients %}
+            <option value="{{ c.id }}">{{ c.name }}</option>
+            {% endfor %}
+          </select>
+        </div>
+      </div>
+
+      <div class="form-group">
+        <label class="form-label">Titolo opera *</label>
+        <input class="form-input" id="p-title" placeholder="es. Romanzo Criminale">
+      </div>
+
+      <div class="form-row">
+        <div class="form-group">
+          <label class="form-label">Tipo progetto</label>
+          <select class="form-select" id="p-type">
+            <option value="">—</option>
+            <option value="feature_film">Lungometraggio</option>
+            <option value="short_film">Cortometraggio</option>
+            <option value="series">Serie TV</option>
+            <option value="documentary">Documentario</option>
+            <option value="spot">Spot / pubblicità</option>
+            <option value="music_video">Video musicale</option>
+            <option value="corporate">Aziendale</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Durata (minuti)</label>
+          <input class="form-input" id="p-length" type="number" step="0.5" placeholder="90">
+        </div>
+      </div>
+
+      <div class="form-row">
+        <div class="form-group">
+          <label class="form-label">FPS</label>
+          <input class="form-input" id="p-fps" placeholder="24 / 25">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Formato consegna</label>
+          <input class="form-input" id="p-delivery" placeholder="4K-DCI-Scope">
+        </div>
+      </div>
+
+      <div class="form-row">
+        <div class="form-group">
+          <label class="form-label">Regia</label>
+          <input class="form-input" id="p-director">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Produzione</label>
+          <input class="form-input" id="p-producer">
+        </div>
+      </div>
+
+      <div class="form-row">
+        <div class="form-group">
+          <label class="form-label">Inizio riprese</label>
+          <input class="form-input" id="p-shoot-start" type="date">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Deadline consegna</label>
+          <input class="form-input" id="p-delivery-date" type="date">
+        </div>
+      </div>
+
+      <div class="form-group">
+        <label class="form-label">Descrizione</label>
+        <textarea class="form-textarea" id="p-desc" rows="2" placeholder="Sinossi o note sul progetto…"></textarea>
+      </div>
+
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeModal('modal-new-project')">Annulla</button>
+      <button class="btn btn-primary" onclick="createProject()">Crea progetto</button>
+    </div>
+  </div>
+</div>
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+let allProjects = [];
+
+const TYPE_LABELS = {
+  feature_film: "Lungometraggio", short_film: "Corto",
+  series: "Serie TV", documentary: "Documentario",
+  spot: "Spot", music_video: "Videoclip", corporate: "Aziendale",
+};
+
+const STATUS_LABELS = {
+  prospect: "Prospect", quoting: "In quotazione", active: "Attivo",
+  completed: "Completato", archived: "Archiviato",
+};
+
+async function loadProjects() {
+  allProjects = await api('GET', '/projects/api');
+  renderProjects(allProjects);
+}
+
+function renderProjects(projects) {
+  const tbody = document.getElementById('projects-table');
+  if (!projects.length) {
+    tbody.innerHTML = '<tr><td colspan="9" class="text-muted" style="text-align:center;padding:24px;">Nessun progetto</td></tr>';
+    return;
+  }
+  tbody.innerHTML = projects.map(p => `
+    <tr style="cursor:pointer;" onclick="window.location.href='/projects/${p.id}'">
+      <td class="mono" style="font-size:12px;color:var(--text2);">${p.code}</td>
+      <td style="font-weight:500;">${p.title}</td>
+      <td style="color:var(--text2);">${p.client_name || '—'}</td>
+      <td class="text-sm text-muted">${TYPE_LABELS[p.project_type] || '—'}</td>
+      <td class="mono text-sm text-right">${p.length_minutes ? p.length_minutes + "'" : '—'}</td>
+      <td class="text-sm text-muted">${fmtDate(p.delivery_deadline)}</td>
+      <td class="text-sm">
+        <span class="text-xs">${p.quotes_count} quote</span>
+        <span class="text-xs text-muted"> · ${p.jobs_count} job</span>
+      </td>
+      <td>${statusBadge(p.status)}</td>
+      <td>
+        <button class="btn btn-ghost btn-sm" onclick="event.stopPropagation(); window.location.href='/projects/${p.id}'">Apri →</button>
+      </td>
+    </tr>`).join('');
+}
+
+function filterProjects() {
+  const q = document.getElementById('search-input').value.toLowerCase();
+  const status = document.getElementById('filter-status').value;
+  const client = document.getElementById('filter-client').value;
+  const type = document.getElementById('filter-type').value;
+  const filtered = allProjects.filter(p => {
+    const matchQ = !q || p.title.toLowerCase().includes(q) || p.code.toLowerCase().includes(q);
+    const matchS = !status || p.status === status;
+    const matchC = !client || String(p.client_id) === client;
+    const matchT = !type || p.project_type === type;
+    return matchQ && matchS && matchC && matchT;
+  });
+  renderProjects(filtered);
+}
+
+async function createProject() {
+  const code = document.getElementById('p-code').value.trim();
+  const title = document.getElementById('p-title').value.trim();
+  const client_id = document.getElementById('p-client').value;
+  if (!code || !title || !client_id) {
+    toast('Compila i campi obbligatori', 'error');
+    return;
+  }
+  try {
+    const fd = new FormData();
+    fd.append('code', code);
+    fd.append('title', title);
+    fd.append('client_id', client_id);
+    const optionals = {
+      'project_type': 'p-type', 'length_minutes': 'p-length',
+      'fps': 'p-fps', 'delivery_format': 'p-delivery',
+      'director': 'p-director', 'producer': 'p-producer',
+      'shoot_start': 'p-shoot-start', 'delivery_deadline': 'p-delivery-date',
+      'description': 'p-desc',
+    };
+    for (const [field, elId] of Object.entries(optionals)) {
+      const val = document.getElementById(elId).value;
+      if (val) fd.append(field, val);
+    }
+    const result = await api('POST', '/projects/api', fd);
+    closeModal('modal-new-project');
+    toast('Progetto creato', 'success');
+    setTimeout(() => { window.location.href = `/projects/${result.id}`; }, 400);
+  } catch(e) { toast(e.message, 'error'); }
+}
+
+loadProjects();
+</script>
+{% endblock %}

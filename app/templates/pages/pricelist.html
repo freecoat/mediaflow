@@ -1,0 +1,448 @@
+{% extends "base.html" %}
+{% set active_page = "pricelist" %}
+{% block title %}Listino Prezzi — MediaFlow{% endblock %}
+{% block topbar_title %}Listino Prezzi{% endblock %}
+{% block topbar_actions %}
+  <div class="dropdown" style="position:relative;display:inline-block;">
+    <button class="btn btn-secondary btn-sm" onclick="this.nextElementSibling.classList.toggle('open')">⬇ Esporta ▾</button>
+    <div class="dropdown-menu" style="position:absolute;right:0;top:100%;margin-top:4px;background:var(--bg2);border:1px solid var(--border);border-radius:6px;display:none;flex-direction:column;min-width:160px;z-index:10;box-shadow:0 4px 12px rgba(0,0,0,0.2);">
+      <a href="/pricelist/api/export" class="dropdown-item" style="padding:8px 12px;font-size:13px;text-decoration:none;color:var(--text);" title="Backup completo, importabile">📄 JSON (backup)</a>
+      <a href="/pricelist/api/export.csv" class="dropdown-item" style="padding:8px 12px;font-size:13px;text-decoration:none;color:var(--text);">📊 CSV</a>
+      <a href="/pricelist/api/export.xlsx" class="dropdown-item" style="padding:8px 12px;font-size:13px;text-decoration:none;color:var(--text);">📈 Excel (.xlsx)</a>
+    </div>
+  </div>
+  <button class="btn btn-secondary btn-sm" onclick="openModal('modal-import')" title="Importa listino da JSON">⬆ Importa</button>
+  <button class="btn btn-secondary btn-sm" onclick="openModal('modal-new-cat')">+ Categoria</button>
+  <button class="btn btn-primary btn-sm" onclick="openNewItem()">+ Voce</button>
+  <style>
+    .dropdown-menu.open { display:flex !important; }
+    .dropdown-item:hover { background: var(--bg3); }
+  </style>
+{% endblock %}
+
+{% block content %}
+<div class="flex gap-4" style="align-items:flex-start;">
+  <!-- Sidebar categorie -->
+  <div class="card" style="min-width:200px;max-width:220px;position:sticky;top:80px;">
+    <div class="card-title mb-2">Categorie</div>
+    <div id="cat-list"></div>
+  </div>
+
+  <!-- Tabella voci -->
+  <div style="flex:1;min-width:0;">
+    <div class="flex items-center gap-3 mb-3" style="flex-wrap:wrap;">
+      <div class="search-bar" style="flex:1;min-width:200px;">
+        <span>🔍</span>
+        <input type="text" id="search-items" placeholder="Cerca per nome, descrizione o keyword…" oninput="renderItems()">
+      </div>
+      <div class="tabs" style="margin:0;" title="1 turno = 8 ore. Cambia solo la visualizzazione, il prezzo memorizzato resta invariato.">
+        <div class="tab active" id="view-day" onclick="setViewMode('day')">€/Giorno</div>
+        <div class="tab" id="view-hour" onclick="setViewMode('hour')">€/Ora</div>
+      </div>
+      <span class="text-xs text-muted" id="items-count"></span>
+    </div>
+    <div class="card">
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Categoria</th>
+              <th>Voce</th>
+              <th>Unità</th>
+              <th class="text-right">Prezzo €</th>
+              <th class="text-right">Hardcost €</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody id="items-table">
+            <tr><td colspan="6" class="text-muted" style="text-align:center;padding:24px;">Caricamento…</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Modal nuova categoria -->
+<div class="modal-overlay" id="modal-new-cat">
+  <div class="modal" style="max-width:420px;">
+    <div class="modal-header"><span class="modal-title">Nuova categoria</span>
+      <button class="btn btn-ghost btn-icon" onclick="closeModal('modal-new-cat')">✕</button></div>
+    <div class="modal-body">
+      <div class="form-group"><label class="form-label">Nome *</label>
+        <input class="form-input" id="cat-name" placeholder="es. PICTURE, SOUND, VFX…"></div>
+      <div class="form-group"><label class="form-label">Descrizione</label>
+        <textarea class="form-textarea" id="cat-desc" rows="2"></textarea></div>
+      <div class="form-group"><label class="form-label">Ordine</label>
+        <input class="form-input" id="cat-order" type="number" value="100" min="0"></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeModal('modal-new-cat')">Annulla</button>
+      <button class="btn btn-primary" onclick="createCategory()">Crea</button>
+    </div>
+  </div>
+</div>
+
+<!-- Modal modifica categoria -->
+<div class="modal-overlay" id="modal-edit-cat">
+  <div class="modal" style="max-width:420px;">
+    <div class="modal-header"><span class="modal-title">Modifica categoria</span>
+      <button class="btn btn-ghost btn-icon" onclick="closeModal('modal-edit-cat')">✕</button></div>
+    <div class="modal-body">
+      <input type="hidden" id="cat-edit-id">
+      <div class="form-group"><label class="form-label">Nome *</label>
+        <input class="form-input" id="cat-edit-name"></div>
+      <div class="form-group"><label class="form-label">Descrizione</label>
+        <textarea class="form-textarea" id="cat-edit-desc" rows="2"></textarea></div>
+      <div class="form-group"><label class="form-label">Ordine</label>
+        <input class="form-input" id="cat-edit-order" type="number" min="0"></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost btn-sm" id="cat-edit-delete" style="color:#ef4444;margin-right:auto;"
+              onclick="deleteCategoryFromEdit()">Elimina</button>
+      <button class="btn btn-secondary" onclick="closeModal('modal-edit-cat')">Annulla</button>
+      <button class="btn btn-primary" onclick="saveCategoryEdit()">Salva</button>
+    </div>
+  </div>
+</div>
+
+<!-- Modal import listino -->
+<div class="modal-overlay" id="modal-import">
+  <div class="modal" style="max-width:500px;">
+    <div class="modal-header"><span class="modal-title">Importa listino</span>
+      <button class="btn btn-ghost btn-icon" onclick="closeModal('modal-import')">✕</button></div>
+    <div class="modal-body">
+      <p class="text-sm text-muted mb-3">
+        Carica un file JSON esportato da MediaFlow per ripristinare o aggiornare il listino.
+      </p>
+      <div class="form-group">
+        <label class="form-label">File JSON *</label>
+        <input class="form-input" type="file" id="import-file" accept="application/json,.json">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Modalità</label>
+        <select class="form-select" id="import-mode">
+          <option value="merge">Merge — aggiorna voci esistenti, aggiunge nuove (i dati attuali non in import sono preservati)</option>
+          <option value="replace">Replace — CANCELLA tutto il listino corrente e ricarica dal file</option>
+        </select>
+      </div>
+      <div id="import-warning" class="hidden" style="padding:10px;background:rgba(225,29,72,0.08);border:1px solid var(--rose);border-radius:var(--radius);font-size:13px;color:var(--rose);">
+        ⚠ Modalità Replace: tutte le voci e categorie correnti verranno eliminate prima dell'import.
+        Le quotazioni esistenti restano integre (i totali sono già calcolati nel DB), ma le righe perderanno il riferimento al listino.
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeModal('modal-import')">Annulla</button>
+      <button class="btn btn-primary" onclick="doImport()">Importa</button>
+    </div>
+  </div>
+</div>
+
+<!-- Modal nuova/modifica voce -->
+<div class="modal-overlay" id="modal-item">
+  <div class="modal" style="max-width:680px;">
+    <div class="modal-header">
+      <span class="modal-title" id="modal-title">Nuova voce</span>
+      <button class="btn btn-ghost btn-icon" onclick="closeModal('modal-item')">✕</button>
+    </div>
+    <div class="modal-body">
+      <input type="hidden" id="it-id">
+      <div class="form-row">
+        <div class="form-group"><label class="form-label">Categoria *</label>
+          <select class="form-select" id="it-cat"></select></div>
+        <div class="form-group" style="max-width:130px;">
+          <label class="form-label">Unità *</label>
+          <select class="form-select" id="it-unit">
+            <option value="day">day</option><option value="hr">hr</option>
+            <option value="min">min</option><option value="pc">pc</option>
+            <option value="TB">TB</option><option value="GB">GB</option>
+            <option value="shot">shot</option><option value="version">version</option>
+            <option value="allow">allowance</option>
+          </select>
+        </div>
+      </div>
+      <div class="form-group"><label class="form-label">Nome voce *</label>
+        <input class="form-input" id="it-name" placeholder="es. DCP INTEROP 4K"></div>
+      <div class="form-group"><label class="form-label">Descrizione / dettaglio</label>
+        <textarea class="form-textarea" id="it-desc" rows="2" placeholder="es. incl. full QC, naming DCNC"></textarea></div>
+      <div class="form-row">
+        <div class="form-group"><label class="form-label">Prezzo € *</label>
+          <input class="form-input" id="it-list" type="number" step="0.01">
+          <div class="form-hint">Lo sconto si applica via voce/categoria/pacchetto in quotazione.</div></div>
+        <div class="form-group"><label class="form-label">Hardcosts €</label>
+          <input class="form-input" id="it-hard" type="number" step="0.01"></div>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Keywords (separate da virgola)</label>
+        <input class="form-input" id="it-keywords" placeholder="es. dcp, 4k, mastering, cinema, smpte">
+        <div class="form-hint">
+          Le keywords aiutano l'AI a riconoscere questa voce dai capitolati e dalle richieste in linguaggio naturale.
+          Inserisci 3-8 termini in italiano e/o inglese.
+        </div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeModal('modal-item')">Annulla</button>
+      <button class="btn btn-primary" onclick="saveItem()">Salva</button>
+    </div>
+  </div>
+</div>
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+let allItems = [], allCats = [], activeCat = null;
+let viewMode = 'day'; // 'day' | 'hour'  — 1 turno = 8 ore
+const HOURS_PER_DAY = 8;
+
+function fmtCurrency(n) {
+  return '€ ' + Number(n).toLocaleString('it-IT', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
+
+function displayPrice(item) {
+  // Restituisce {price, unitLabel} per la visualizzazione corrente.
+  // Solo voci con unit="day" sono convertibili a "hour"; altre unità invariate.
+  const base = item.price_list;
+  if (base == null) return { price: null, unitLabel: `${item.unit_pre} ${item.unit}` };
+  if (viewMode === 'hour' && item.unit === 'day') {
+    return { price: base / HOURS_PER_DAY, unitLabel: 'per hr' };
+  }
+  return { price: base, unitLabel: `${item.unit_pre} ${item.unit}` };
+}
+
+function setViewMode(mode) {
+  viewMode = mode;
+  document.getElementById('view-day').classList.toggle('active', mode === 'day');
+  document.getElementById('view-hour').classList.toggle('active', mode === 'hour');
+  renderItems();
+}
+
+async function loadAll() {
+  const [cats, items] = await Promise.all([
+    fetch('/pricelist/api/categories').then(r => r.json()),
+    fetch('/pricelist/api/items?active_only=false').then(r => r.json()),
+  ]);
+  allCats = cats; allItems = items;
+  renderCats();
+  // popola select categoria nel modal voce
+  document.getElementById('it-cat').innerHTML =
+    allCats.map(c => `<option value="${c.id}">${c.name}</option>`).join('');
+  renderItems();
+}
+
+function renderCats() {
+  document.getElementById('cat-list').innerHTML = allCats.map(c => `
+    <div class="nav-item ${activeCat === c.id ? 'active' : ''}" style="cursor:pointer;display:flex;align-items:center;gap:6px;">
+      <span style="flex:1;font-size:13px;" onclick="filterByCat(${c.id})">${c.name.replace(/</g,'&lt;')}</span>
+      <span class="text-xs" onclick="filterByCat(${c.id})">${c.item_count}</span>
+      <button class="btn btn-ghost btn-icon btn-sm" title="Modifica categoria"
+              onclick="event.stopPropagation(); editCategory(${c.id})"
+              style="opacity:0.5;padding:2px 4px;">✏️</button>
+    </div>`).join('');
+}
+
+async function editCategory(id) {
+  const c = allCats.find(x => x.id === id);
+  if (!c) return;
+  document.getElementById('cat-edit-id').value = c.id;
+  document.getElementById('cat-edit-name').value = c.name || '';
+  document.getElementById('cat-edit-desc').value = c.description || '';
+  document.getElementById('cat-edit-order').value = c.sort_order || 0;
+  document.getElementById('cat-edit-delete').style.display = (c.item_count > 0) ? 'none' : '';
+  openModal('modal-edit-cat');
+}
+
+async function saveCategoryEdit() {
+  const id = document.getElementById('cat-edit-id').value;
+  const name = document.getElementById('cat-edit-name').value.trim();
+  if (!name) { toast('Inserisci il nome', 'error'); return; }
+  const fd = new FormData();
+  fd.append('name', name);
+  fd.append('description', document.getElementById('cat-edit-desc').value);
+  fd.append('sort_order', document.getElementById('cat-edit-order').value || 0);
+  try {
+    const r = await fetch(`/pricelist/api/categories/${id}`, { method: 'PUT', body: fd });
+    if (!r.ok) {
+      const err = await r.json().catch(() => ({}));
+      throw new Error(err.detail || 'Errore');
+    }
+    closeModal('modal-edit-cat');
+    toast('Categoria aggiornata', 'success');
+    loadAll();
+  } catch(e) { toast(e.message, 'error'); }
+}
+
+async function deleteCategoryFromEdit() {
+  const id = document.getElementById('cat-edit-id').value;
+  const name = document.getElementById('cat-edit-name').value;
+  if (!confirm(`Eliminare la categoria "${name}"?`)) return;
+  try {
+    const r = await fetch(`/pricelist/api/categories/${id}`, { method: 'DELETE' });
+    if (!r.ok) {
+      const err = await r.json().catch(() => ({}));
+      throw new Error(err.detail || 'Errore');
+    }
+    closeModal('modal-edit-cat');
+    toast('Categoria eliminata', 'success');
+    if (activeCat == id) activeCat = null;
+    loadAll();
+  } catch(e) { toast(e.message, 'error'); }
+}
+
+function filterByCat(id) {
+  activeCat = activeCat === id ? null : id;
+  renderCats(); renderItems();
+}
+
+function renderItems() {
+  const q = document.getElementById('search-items').value.toLowerCase();
+  const filtered = allItems.filter(i => {
+    let matchQ = !q;
+    if (q) {
+      matchQ = i.name.toLowerCase().includes(q)
+            || (i.description || '').toLowerCase().includes(q)
+            || (i.keywords || []).some(k => k.toLowerCase().includes(q));
+    }
+    const matchC = !activeCat || i.category_id === activeCat;
+    return matchQ && matchC;
+  });
+  document.getElementById('items-count').textContent = `${filtered.length} voci`;
+  const tbody = document.getElementById('items-table');
+  if (!filtered.length) {
+    tbody.innerHTML = '<tr><td colspan="6" class="text-muted" style="text-align:center;padding:24px;">Nessuna voce</td></tr>';
+    return;
+  }
+  tbody.innerHTML = filtered.map(i => {
+    const dp = displayPrice(i);
+    return `
+    <tr style="cursor:pointer;" onclick="editItem(${i.id})">
+      <td><span class="badge badge-draft" style="font-size:10px;">${i.category || '—'}</span></td>
+      <td>
+        <div style="font-weight:500;font-size:13px;">${i.name}</div>
+        ${i.description ? `<div class="text-xs text-muted mt-1" style="font-size:11px;">${i.description}</div>` : ''}
+        ${(i.keywords && i.keywords.length) ? `<div style="margin-top:4px;display:flex;gap:3px;flex-wrap:wrap;">
+          ${i.keywords.slice(0,5).map(k => `<span style="background:rgba(98,114,245,0.12);color:var(--indigo2);padding:1px 6px;border-radius:4px;font-size:10px;font-family:'DM Mono',monospace;">${k}</span>`).join('')}
+          ${i.keywords.length > 5 ? `<span class="text-xs text-muted">+${i.keywords.length - 5}</span>` : ''}
+        </div>` : ''}
+      </td>
+      <td class="text-sm text-muted">${dp.unitLabel}</td>
+      <td class="mono text-right">${dp.price != null ? fmtCurrency(dp.price) : '—'}</td>
+      <td class="mono text-right text-muted">${i.hardcosts ? fmtCurrency(i.hardcosts) : '—'}</td>
+      <td class="text-right" style="white-space:nowrap;" onclick="event.stopPropagation()">
+        <button class="btn btn-ghost btn-icon btn-sm" onclick="deleteItem(${i.id})" title="Disattiva">🗑️</button>
+      </td>
+    </tr>`;
+  }).join('');
+}
+
+async function createCategory() {
+  const name = document.getElementById('cat-name').value.trim();
+  if (!name) { alert('Inserisci il nome'); return; }
+  const fd = new FormData();
+  fd.append('name', name);
+  fd.append('description', document.getElementById('cat-desc').value);
+  fd.append('sort_order', document.getElementById('cat-order').value || 100);
+  try {
+    const r = await fetch('/pricelist/api/categories', { method: 'POST', body: fd });
+    if (!r.ok) throw new Error('Errore creazione');
+    closeModal('modal-new-cat');
+    loadAll();
+  } catch(e) { alert(e.message); }
+}
+
+function openNewItem() {
+  document.getElementById('modal-title').textContent = 'Nuova voce';
+  document.getElementById('it-id').value = '';
+  document.getElementById('it-name').value = '';
+  document.getElementById('it-desc').value = '';
+  document.getElementById('it-cat').value = activeCat || '';
+  document.getElementById('it-unit').value = 'day';
+  document.getElementById('it-list').value = '';
+  document.getElementById('it-hard').value = '';
+  document.getElementById('it-keywords').value = '';
+  openModal('modal-item');
+}
+
+async function editItem(id) {
+  try {
+    const i = await fetch(`/pricelist/api/items/${id}`).then(r => r.json());
+    document.getElementById('modal-title').textContent = 'Modifica voce';
+    document.getElementById('it-id').value = i.id;
+    document.getElementById('it-cat').value = i.category_id;
+    document.getElementById('it-name').value = i.name;
+    document.getElementById('it-desc').value = i.description || '';
+    document.getElementById('it-unit').value = i.unit;
+    document.getElementById('it-list').value = i.price_list || '';
+    document.getElementById('it-hard').value = i.hardcosts || '';
+    document.getElementById('it-keywords').value = (i.keywords || []).join(', ');
+    openModal('modal-item');
+  } catch(e) { alert(e.message); }
+}
+
+async function saveItem() {
+  const id = document.getElementById('it-id').value;
+  const name = document.getElementById('it-name').value.trim();
+  const cat = document.getElementById('it-cat').value;
+  if (!name || !cat) { alert('Compila i campi obbligatori (nome e categoria)'); return; }
+
+  const fd = new FormData();
+  fd.append('category_id', cat);
+  fd.append('name', name);
+  fd.append('description', document.getElementById('it-desc').value);
+  fd.append('unit', document.getElementById('it-unit').value);
+  const list = document.getElementById('it-list').value;
+  if (list) fd.append('price_list', list);
+  const hc = document.getElementById('it-hard').value;
+  if (hc) fd.append('hardcosts', hc);
+  fd.append('keywords', document.getElementById('it-keywords').value);
+
+  try {
+    const url = id ? `/pricelist/api/items/${id}` : '/pricelist/api/items';
+    const method = id ? 'PUT' : 'POST';
+    const r = await fetch(url, { method, body: fd });
+    if (!r.ok) { const e = await r.json(); throw new Error(e.detail || 'Errore'); }
+    closeModal('modal-item');
+    loadAll();
+  } catch(e) { alert(e.message); }
+}
+
+async function deleteItem(id) {
+  if (!confirm('Disattivare questa voce?')) return;
+  try {
+    const r = await fetch(`/pricelist/api/items/${id}`, { method: 'DELETE' });
+    if (!r.ok) throw new Error('Errore');
+    loadAll();
+  } catch(e) { alert(e.message); }
+}
+
+document.addEventListener('change', (e) => {
+  if (e.target && e.target.id === 'import-mode') {
+    document.getElementById('import-warning').classList.toggle('hidden', e.target.value !== 'replace');
+  }
+});
+
+async function doImport() {
+  const fileInput = document.getElementById('import-file');
+  if (!fileInput.files.length) { alert('Seleziona un file JSON'); return; }
+  const mode = document.getElementById('import-mode').value;
+  if (mode === 'replace' && !confirm('Confermi l\'eliminazione totale del listino corrente?')) return;
+  try {
+    const fd = new FormData();
+    fd.append('file', fileInput.files[0]);
+    fd.append('mode', mode);
+    const resp = await fetch('/pricelist/api/import', { method: 'POST', body: fd });
+    if (!resp.ok) {
+      const err = await resp.json().catch(() => ({ detail: resp.statusText }));
+      throw new Error(err.detail || 'Errore import');
+    }
+    const res = await resp.json();
+    closeModal('modal-import');
+    alert(`Import completato.\nVoci create: ${res.items_created}\nVoci aggiornate: ${res.items_updated}\nVoci scartate: ${res.items_skipped}`);
+    loadAll();
+  } catch(e) { alert(e.message); }
+}
+
+loadAll();
+</script>
+{% endblock %}

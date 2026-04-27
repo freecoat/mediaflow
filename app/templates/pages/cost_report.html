@@ -1,0 +1,275 @@
+{% extends "base.html" %}
+{% set active_page = "cost_report" %}
+{% block title %}Cost Report — MediaFlow{% endblock %}
+{% block topbar_title %}Cost Report & Rendicontazione{% endblock %}
+
+{% block content %}
+
+<!-- Selettore job -->
+<div class="flex gap-3 mb-4 items-center">
+  <select class="form-select" style="width:auto;min-width:280px;" id="job-select" onchange="loadReport()">
+    <option value="">— seleziona un job —</option>
+    {% for job in jobs %}
+    <option value="{{ job.id }}">{{ job.code }} — {{ job.title }}</option>
+    {% endfor %}
+  </select>
+  <button class="btn btn-secondary btn-sm" onclick="openModal('modal-assign-resource')" id="btn-assign" disabled>
+    + Assegna risorsa
+  </button>
+</div>
+
+<div id="report-area" class="hidden">
+  <!-- KPI row -->
+  <div class="stat-grid mb-4" id="kpi-grid"></div>
+
+  <div class="grid-2" style="align-items:start;gap:20px;">
+
+    <!-- Cost lines table -->
+    <div class="card">
+      <div class="card-title mb-3">Voci di costo: Quotazione vs Reale</div>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Voce</th><th>Unità</th>
+              <th class="text-right">Quotato</th>
+              <th class="text-right">Maturato</th>
+              <th class="text-right">Stimato</th>
+              <th class="text-right">Over/Under</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody id="cost-lines-table"></tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- Risorse assegnate -->
+    <div>
+      <div class="card mb-4">
+        <div class="card-title mb-3">Risorse assegnate al progetto</div>
+        <div id="resources-panel" class="text-muted text-sm">Nessuna risorsa assegnata</div>
+      </div>
+
+      <!-- Timesheet summary -->
+      <div class="card">
+        <div class="card-title mb-3">Ore lavorate (consuntivo)</div>
+        <div id="timesheet-panel" class="text-muted text-sm">Nessuna ora registrata</div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<!-- Placeholder vuoto -->
+<div id="no-report" class="card" style="text-align:center;padding:60px 20px;">
+  <div style="font-size:40px;margin-bottom:16px;opacity:0.3;">📊</div>
+  <div class="text-muted">Seleziona un job per visualizzare il cost report</div>
+</div>
+
+<!-- Modal aggiorna riga costo -->
+<div class="modal-overlay" id="modal-update-line">
+  <div class="modal" style="max-width:400px;">
+    <div class="modal-header"><span class="modal-title">Aggiorna riga costo</span>
+      <button class="btn btn-ghost btn-icon" onclick="closeModal('modal-update-line')">✕</button></div>
+    <div class="modal-body">
+      <input type="hidden" id="ul-id">
+      <div class="form-group"><label class="form-label">Quantità effettiva</label>
+        <input class="form-input" id="ul-qty" type="number" step="0.5"></div>
+      <div class="form-group"><label class="form-label">Totale maturato (€)</label>
+        <input class="form-input" id="ul-accrued" type="number" step="0.01"></div>
+      <div class="form-group"><label class="form-label">Totale stimato a finire (€)</label>
+        <input class="form-input" id="ul-expected" type="number" step="0.01"></div>
+      <div class="form-group"><label class="form-label">Note</label>
+        <textarea class="form-textarea" id="ul-notes" rows="2"></textarea></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeModal('modal-update-line')">Annulla</button>
+      <button class="btn btn-primary" onclick="updateLine()">Salva</button>
+    </div>
+  </div>
+</div>
+
+<!-- Modal assegna risorsa -->
+<div class="modal-overlay" id="modal-assign-resource">
+  <div class="modal">
+    <div class="modal-header"><span class="modal-title">Assegna risorsa al job</span>
+      <button class="btn btn-ghost btn-icon" onclick="closeModal('modal-assign-resource')">✕</button></div>
+    <div class="modal-body">
+      <div class="form-group"><label class="form-label">Risorsa *</label>
+        <select class="form-select" id="ar-resource" required></select></div>
+      <div class="form-group"><label class="form-label">Ruolo nel progetto</label>
+        <input class="form-input" id="ar-role" placeholder="es. Colorist, Sound Editor…"></div>
+      <div class="form-row">
+        <div class="form-group"><label class="form-label">Giorni pianificati</label>
+          <input class="form-input" id="ar-days" type="number" step="0.5"></div>
+        <div class="form-group"><label class="form-label">Ore pianificate</label>
+          <input class="form-input" id="ar-hours" type="number" step="0.5"></div>
+      </div>
+      <div class="form-row">
+        <div class="form-group"><label class="form-label">Tariffa/giorno (€)</label>
+          <input class="form-input" id="ar-daily" type="number" step="0.01"></div>
+        <div class="form-group"><label class="form-label">Tariffa/ora (€)</label>
+          <input class="form-input" id="ar-hourly" type="number" step="0.01"></div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeModal('modal-assign-resource')">Annulla</button>
+      <button class="btn btn-primary" onclick="assignResource()">Assegna</button>
+    </div>
+  </div>
+</div>
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+let currentJobId = null;
+let currentReport = null;
+let allResources = [];
+
+async function init() {
+  allResources = await api('GET', '/resources/api');
+  document.getElementById('ar-resource').innerHTML =
+    '<option value="">— seleziona —</option>' +
+    allResources.map(r => `<option value="${r.id}">${r.name} (${r.type})</option>`).join('');
+}
+
+async function loadReport() {
+  const id = document.getElementById('job-select').value;
+  if (!id) { document.getElementById('report-area').classList.add('hidden'); document.getElementById('no-report').classList.remove('hidden'); return; }
+  currentJobId = id;
+  document.getElementById('btn-assign').disabled = false;
+  currentReport = await api('GET', `/cost-report/api/job/${id}`);
+  document.getElementById('report-area').classList.remove('hidden');
+  document.getElementById('no-report').classList.add('hidden');
+  renderKPIs(); renderCostLines(); renderResources(); renderTimesheets();
+}
+
+function renderKPIs() {
+  const s = currentReport.summary;
+  const ov = s.over_under;
+  document.getElementById('kpi-grid').innerHTML = `
+    <div class="stat-card"><div class="stat-label">Budget quotato</div>
+      <div class="stat-value color-indigo mono" style="font-size:20px;">${fmtCurrency(s.budget_quoted)}</div></div>
+    <div class="stat-card"><div class="stat-label">Stimato a finire</div>
+      <div class="stat-value mono" style="font-size:20px;">${fmtCurrency(s.total_expected)}</div></div>
+    <div class="stat-card"><div class="stat-label">Over / Under</div>
+      <div class="stat-value mono" style="font-size:20px;color:${ov>=0?'var(--green)':'var(--rose)'};">${fmtCurrency(ov)}</div>
+      <div class="stat-sub">${ov >= 0 ? 'In budget' : 'Sforamento'}</div></div>
+    <div class="stat-card"><div class="stat-label">Maturato</div>
+      <div class="stat-value mono" style="font-size:20px;">${fmtCurrency(s.total_accrued)}</div></div>
+    <div class="stat-card"><div class="stat-label">Fatturato</div>
+      <div class="stat-value color-green mono" style="font-size:20px;">${fmtCurrency(s.invoiced)}</div></div>
+    <div class="stat-card"><div class="stat-label">Pagato</div>
+      <div class="stat-value color-green mono" style="font-size:20px;">${fmtCurrency(s.paid)}</div></div>`;
+}
+
+function renderCostLines() {
+  const tbody = document.getElementById('cost-lines-table');
+  if (!currentReport.cost_lines.length) {
+    tbody.innerHTML = '<tr><td colspan="7" class="text-muted" style="text-align:center;padding:20px;">Nessuna voce di costo</td></tr>'; return;
+  }
+  tbody.innerHTML = currentReport.cost_lines.map(l => {
+    const ov = l.over_under;
+    const pct = l.total_quoted > 0 ? Math.round((l.total_expected / l.total_quoted) * 100) : 0;
+    return `<tr>
+      <td>
+        <div style="font-weight:500;font-size:13px;">${l.description}</div>
+        ${l.category ? `<div class="text-xs text-muted">${l.category}</div>` : ''}
+      </td>
+      <td class="text-sm text-muted">${l.unit}</td>
+      <td class="mono text-right">${fmtCurrency(l.total_quoted)}</td>
+      <td class="mono text-right color-amber">${fmtCurrency(l.total_accrued)}</td>
+      <td class="mono text-right">${fmtCurrency(l.total_expected)}
+        <div style="height:3px;background:var(--bg3);border-radius:2px;margin-top:3px;">
+          <div style="height:3px;border-radius:2px;width:${Math.min(pct,100)}%;background:${pct>100?'var(--rose)':'var(--indigo)'}"></div>
+        </div>
+      </td>
+      <td class="mono text-right" style="color:${ov>=0?'var(--green)':'var(--rose)'};">${fmtCurrency(ov)}</td>
+      <td><button class="btn btn-ghost btn-sm" onclick="openUpdateLine(${JSON.stringify(l).replace(/"/g,'&quot;')})">✎</button></td>
+    </tr>`;
+  }).join('');
+}
+
+function renderResources() {
+  const panel = document.getElementById('resources-panel');
+  const ra = currentReport.resource_assignments;
+  if (!ra.length) { panel.innerHTML = '<div class="text-muted text-sm">Nessuna risorsa assegnata</div>'; return; }
+  panel.innerHTML = ra.map(a => `
+    <div class="flex items-center gap-3 mb-3 pb-3" style="border-bottom:1px solid var(--border);">
+      <div style="width:36px;height:36px;border-radius:50%;background:var(--indigo-bg);display:flex;align-items:center;justify-content:center;font-size:14px;color:var(--indigo2);">
+        ${(a.resource || '?')[0].toUpperCase()}
+      </div>
+      <div style="flex:1;">
+        <div style="font-weight:500;font-size:13px;">${a.resource || '—'}</div>
+        <div class="text-xs text-muted">${a.role || a.type || ''}</div>
+      </div>
+      <div class="text-right">
+        <div class="mono text-sm">${a.planned_days ? a.planned_days+'g' : ''} ${a.planned_hours ? a.planned_hours+'h' : ''}</div>
+        <div class="text-xs text-muted">${a.agreed_daily_rate ? fmtCurrency(a.agreed_daily_rate)+'/g' : ''}</div>
+      </div>
+    </div>`).join('');
+}
+
+function renderTimesheets() {
+  const panel = document.getElementById('timesheet-panel');
+  const ts = currentReport.timesheet_summary;
+  if (!ts.length) { panel.innerHTML = '<div class="text-muted text-sm">Nessuna ora registrata</div>'; return; }
+  const totalH = ts.reduce((s,r) => s + r.hours, 0);
+  const totalC = ts.reduce((s,r) => s + r.cost, 0);
+  panel.innerHTML = ts.map(r => `
+    <div class="flex justify-between text-sm mb-2">
+      <span>Utente #${r.user_id}</span>
+      <span class="mono">${r.hours}h — ${fmtCurrency(r.cost)}</span>
+    </div>`).join('') +
+    `<div class="flex justify-between text-sm" style="border-top:1px solid var(--border);padding-top:8px;margin-top:4px;font-weight:600;">
+      <span>Totale</span><span class="mono">${totalH.toFixed(1)}h — ${fmtCurrency(totalC)}</span>
+    </div>`;
+}
+
+function openUpdateLine(line) {
+  document.getElementById('ul-id').value = line.id;
+  document.getElementById('ul-qty').value = line.quantity_actual || '';
+  document.getElementById('ul-accrued').value = line.total_accrued || '';
+  document.getElementById('ul-expected').value = line.total_expected || '';
+  document.getElementById('ul-notes').value = line.notes || '';
+  openModal('modal-update-line');
+}
+
+async function updateLine() {
+  const id = document.getElementById('ul-id').value;
+  try {
+    const fd = new FormData();
+    fd.append('quantity_actual', document.getElementById('ul-qty').value || '');
+    fd.append('total_accrued', document.getElementById('ul-accrued').value || '');
+    fd.append('total_expected', document.getElementById('ul-expected').value || '');
+    fd.append('notes', document.getElementById('ul-notes').value);
+    await api('PUT', `/cost-report/api/job/${currentJobId}/cost-lines/${id}`, fd);
+    closeModal('modal-update-line');
+    toast('Dati aggiornati', 'success');
+    await loadReport();
+  } catch(e) { toast(e.message, 'error'); }
+}
+
+async function assignResource() {
+  const resourceId = document.getElementById('ar-resource').value;
+  if (!resourceId) { toast('Seleziona una risorsa', 'error'); return; }
+  try {
+    const fd = new FormData();
+    fd.append('resource_id', resourceId);
+    fd.append('role_in_project', document.getElementById('ar-role').value);
+    fd.append('planned_days', document.getElementById('ar-days').value || '');
+    fd.append('planned_hours', document.getElementById('ar-hours').value || '');
+    fd.append('agreed_daily_rate', document.getElementById('ar-daily').value || '');
+    fd.append('agreed_hourly_rate', document.getElementById('ar-hourly').value || '');
+    await api('POST', `/cost-report/api/job/${currentJobId}/assign-resource`, fd);
+    closeModal('modal-assign-resource');
+    toast('Risorsa assegnata', 'success');
+    await loadReport();
+  } catch(e) { toast(e.message, 'error'); }
+}
+
+init();
+</script>
+{% endblock %}

@@ -1,0 +1,68 @@
+For technical questions, please contact:
+Lindsey.Langin@nbcuni.com
+Cell: (818)319-1875
+NBCUniversal Technical Specification
+Audio Delivery Requirement items for 5.1
+Please include one ProTools session (per episode) containing the following required audio tracks:
+5.1 Dialogue Stem, complete with ADR
+5.1 Music Stem
+5.1 Effects Stem
+5.1 Filled Effects Stem 
+5.1 Foley Stem (if not included in the Filled Effects Stem)
+5.1 Backgrounds Stem (if not included in the Filled Effects Stem)
+5.1 Domestic (Original Language) Printmaster Mix
+5.1 Fully Filled M&E Mix
+As applicable please also include the below tracks:
+5.1 M&E Optional/Helper stem (includes: any TV/Radio tracks, musical performance vocals/ singing, vocal efforts)  
+5.1 Foreign Dialogue Optional/Helper Stem 
+5.1 Laugh Track Stem
+5.1 Bleep stem 
+5.1 Voice Over / Narration
+5.1 Mix minus Narration
+If available please also deliver Split Tracks:
+Mono Dialogue
+Mono Effects
+Stereo Music
+M&E AUDIO MIXING SPECIFICATIONS 
+Music & Effects (Foreign/Fully Filled M&E mix) 
+The following guidelines pertain to the creation of filled Music & Effects (herein referred to as “M&E”). It is understood that situations will vary within a series and limitations from source material may prohibit all desired results, it is asked that each show be delivered as close to these guidelines as possible. 
+The Foreign M&E must be completely filled, minus any English (or Original Language) dialogue or narration. 
+Any on-screen musical instrument performances should be included in the M&E mix. 
+All production sound effects must either be included or replaced in the M&E mix, please include kissing and babies. 
+All background must be completely filled and all movement must be included or enhanced. 
+All non-production sound effects must be included and any walla or background voices must not contain distinguishable English.  If necessary, background walla that does contain distinguishable English must be replaced by non-descript walla. 
+Any TV/Radio sound tracks that contain discernible language (English or foreign language) should be isolated from the 5.1 M&E to an optional track or stem. 
+Any on-screen musical performances (vocals) should be isolated from the 5.1 M&E to an optional track or stem. Please keep all singing vocals separate from dialogue (as possible).  
+Any primary or secondary character spoken foreign dialogue should be isolated from the 5.1 M&E to an optional track or stem. 
+Any censor bleeps should be provided in an optional track 
+Vocalized effects such as laughs, grunts, gasps are not required in the M&E mix, but can be included on an optional track or stem, if desired. 
+Laugh Tracks (where applicable) should be excluded from the M&E to facilitate foreign comedy timing. A separate Laugh stem should be included within the domestic stem delivery. 
+Generally, when played alone, the foreign M&E track should be complete with regards to Music and Sound Effects and should stand on its own. The enhancement of effects, even those not present in the domestic mix is required. The only element missing from M&E should be dialogue. The M&E should not be compared to anything, particularly the domestic mix, except for sync. 
+Detailed Specification
+Audio File and Session Specifications
+Pro Tools Sessions with associated audio files
+Audio Codec: WAV - Broadcast Wave Format (.wav) – fully rendered and flattened, not requiring any additional plug-ins or external hardware
+A ProTools session version 2018 or above, formatted with Mac OSX compatibility formatted materials 
+Audio Bit Depth: 24 bit
+Audio Sample Rate: 48 kHz
+Timecode: Native Framerate (24, 25, or 23.98); if content is in reels, use hour= reel timecode placement
+Session and file start time should begin at 00:58:30:00 (or native start time, if video guide is different)
+Audio File Name Requirements
+All file delivery must meet the following naming criteria
+Session File (.ptx) may only include letters, numbers, dashes “-“, and underscores “_” with no blank spaces “  “
+Audio Files folder remains unchanged in name as “Audio Files”
+Individual channel wav files may only include letters, numbers, dashes “-“, and underscores “_”, and periods”.”, with no blank spaces “  “
+Remove all unnecessary files and folders from the session root folder (delete “WaveCache.wfm”, “Session File Backups”, “Clip Groups”, “Bounced Files”, “Video Files”, “Fade Files”, blank or unnecessary audio channels, video tracks, etc.
+Must include series title, episode number and stem type
+EX: 30Rock_Ep103_ENG_DIASTEM.wav
+Delivery Instructions for All Files
+Audio File Delivery
+Please supply Lindsey Langin (Lindsey.Langin@nbcuni.com) with the email addresses of those who will be uploading audio and an Aspera dropbox link will be provided. 
+Send deliveries and passphrase notifications to: 
+bluwave.io@nbcuni.com
+Lindsey.Langin@nbcuni.com
+JenniferA.Johnson@nbcuni.com
+
+Please note, we can only accept via secure Aspera/Faspex deliveries. Other services (FTP, WeTransfer, OneDrive Hightail, etc.) will not be accepted.
+
+All audio needs to be delivered at the same time as the video files are uploaded; as soon as each episode completes. The 5.1 M&E and Optional tracks will be going through a priority QC within 24 hours of receiving the material.

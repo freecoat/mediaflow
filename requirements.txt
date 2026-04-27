@@ -1,0 +1,61 @@
+# ═══════════════════════════════════════════════════════════════════
+# MediaFlow — requirements compatibili Python 3.14
+# Versioni aggiornate con wheel precompilate (no build da sorgente)
+# Testato su Python 3.11, 3.12, 3.13, 3.14
+# ═══════════════════════════════════════════════════════════════════
+
+# Core web framework
+fastapi>=0.115.0
+# Starlette 1.0.0 (Mar 2026) ha una breaking change che rompe Jinja2Templates
+# con FastAPI. Pinniamo alla serie 0.x finché FastAPI non aggiorna.
+starlette<1.0.0
+uvicorn[standard]>=0.32.0
+python-multipart>=0.0.12
+# Jinja2 3.1.x ha un bug di cache su Python 3.14 — serve 3.1.5+ o 3.2+
+jinja2>=3.1.5
+
+# Database
+sqlalchemy>=2.0.36
+alembic>=1.14.0
+
+# Validation & config
+pydantic>=2.10.0
+pydantic-settings>=2.6.0
+
+# Auth
+# python-jose sostituito con PyJWT (più leggero, wheel native, no compilazione)
+pyjwt>=2.10.0
+# bcrypt diretto invece di passlib[bcrypt] (passlib non aggiornato per 3.14)
+bcrypt>=4.2.0
+
+# File handling
+aiofiles>=24.1.0
+# Pillow 11+ ha wheel per Python 3.14
+pillow>=11.0.0
+
+# PDF & Excel
+reportlab>=4.2.5
+openpyxl>=3.1.5
+
+# Utilities
+python-dateutil>=2.9.0
+httpx>=0.28.0
+
+# Testing (opzionale)
+pytest>=8.3.0
+pytest-asyncio>=0.24.0
+
+# ── AI providers (Fase 2) ──────────────────────────────────────────
+anthropic>=0.39.0
+openai>=1.54.0
+google-generativeai>=0.8.3
+# Perplexity: chiamato via httpx, no SDK ufficiale
+# Cifratura api_key salvate in DB (per-utente)
+cryptography>=43.0.0
+
+# ── Web search (Fase 3) ─────────────────────────────────────────────
+tavily-python>=0.5.1
+
+# ── Document parsing (Fase 5) ──────────────────────────────────────
+pypdf>=5.1.0
+python-docx>=1.1.2
