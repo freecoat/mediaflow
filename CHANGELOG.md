@@ -1,5 +1,15 @@
 # MediaFlow — Changelog
 
+## v3.4.9.1 — Hotfix: stesso bug `j.budget` in finance service (28 aprile 2026)
+
+Stesso pattern del bug v3.4.8 ma in un altro file. Il modal "dettaglio job" in `/planning` fa due chiamate in parallelo: `/planning/api/jobs/{id}` (fixato in v3.4.8) e `/finance/api/report/job/{id}` (questo). Il secondo restituiva 500 → modal vuoto/rotto → bottone "→ Vai al dettaglio job" mai visibile.
+
+`app/services/finance.py:46,51,59` mappava `job.budget` ma il modello ha `budget_quoted`. Tre occorrenze sostituite tutte insieme.
+
+Fix verificato: `GET /finance/api/report/job/1` ora 200 con `{"budget":64917.0,"margin":61917.0,"margin_pct":95.4,...}`.
+
+---
+
 ## v3.4.9 — Lavorazioni come prima class + extra (28 aprile 2026)
 
 Secondo step del re-design del flusso operativo. Le `JobCostLine` (lavorazioni) ora hanno una vita propria nella pagina dettaglio job: ore quotate, lavorate, extra calcolate per riga, con possibilità di aggiungere lavorazioni "extra puro" post-approvazione (caso "il cliente chiede un upres in più").

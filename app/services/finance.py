@@ -43,12 +43,12 @@ def job_financial_summary(db: Session, job_id: int) -> dict:
     ).scalar() or 0.0
 
     costs = hours_cost + total_expenses
-    margin = (job.budget or 0) - costs
+    margin = (job.budget_quoted or 0) - costs
 
     return {
         "job_id": job_id,
         "title": job.title,
-        "budget": job.budget or 0,
+        "budget": job.budget_quoted or 0,
         "total_hours": round(total_hours, 2),
         "hours_cost": round(hours_cost, 2),
         "total_expenses": round(total_expenses, 2),
@@ -56,7 +56,7 @@ def job_financial_summary(db: Session, job_id: int) -> dict:
         "invoiced": round(invoiced, 2),
         "paid": round(paid, 2),
         "margin": round(margin, 2),
-        "margin_pct": round((margin / job.budget * 100) if job.budget else 0, 1),
+        "margin_pct": round((margin / job.budget_quoted * 100) if job.budget_quoted else 0, 1),
     }
 
 
