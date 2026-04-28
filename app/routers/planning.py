@@ -9,6 +9,8 @@ from app.models import Job, JobStatus, Client, Booking, BookingStatus, Resource
 
 router = APIRouter(prefix="/planning", tags=["planning"])
 
+CURRENT_TENANT = 1
+
 
 def _tpl():
     from app.main import templates
@@ -143,7 +145,7 @@ async def list_bookings(
 ):
     q = db.query(Booking).options(
         joinedload(Booking.resource), joinedload(Booking.job)
-    )
+    ).filter(Booking.tenant_id == CURRENT_TENANT)
     if job_id:
         q = q.filter(Booking.job_id == job_id)
     if resource_id:
@@ -182,6 +184,7 @@ async def create_booking(
 ):
     # Controllo conflitti
     conflict = db.query(Booking).filter(
+        Booking.tenant_id == CURRENT_TENANT,
         Booking.resource_id == resource_id,
         Booking.status != BookingStatus.cancelled,
         Booking.start_datetime < end_datetime,
@@ -191,6 +194,7 @@ async def create_booking(
         raise HTTPException(409, f"Conflitto con booking #{conflict.id}")
 
     b = Booking(
+        tenant_id=CURRENT_TENANT,
         job_id=job_id, resource_id=resource_id,
         start_datetime=start_datetime, end_datetime=end_datetime,
         status=status, notes=notes,
@@ -203,7 +207,10 @@ async def create_booking(
 
 @router.delete("/api/bookings/{booking_id}")
 async def delete_booking(booking_id: int, db: Session = Depends(get_db)):
-    b = db.query(Booking).filter(Booking.id == booking_id).first()
+    b = db.query(Booking).filter(
+        Booking.id == booking_id,
+        Booking.tenant_id == CURRENT_TENANT,
+    ).first()
     if not b:
         raise HTTPException(404, "Booking non trovato")
     b.status = BookingStatus.cancelled

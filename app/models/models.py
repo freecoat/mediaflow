@@ -523,6 +523,7 @@ class JobCostLine(Base):
 class Booking(Base):
     __tablename__ = "bookings"
     id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    tenant_id: Mapped[int] = mapped_column(ForeignKey("tenants.id"), default=1, index=True)
     job_id: Mapped[int] = mapped_column(ForeignKey("jobs.id"))
     resource_id: Mapped[int] = mapped_column(ForeignKey("resources.id"))
     start_datetime: Mapped[datetime] = mapped_column(DateTime)

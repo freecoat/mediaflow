@@ -1,5 +1,47 @@
 # MediaFlow — Changelog
 
+## v3.4.6 — Booking multi-tenant (28 aprile 2026)
+
+Fix di coerenza con la convenzione Fase 1-bis: il modello `Booking` era l'unica entità di business senza `tenant_id`. Tutti i restanti modelli (Resource, PriceItem, Client, Project, Department…) lo avevano già da v3.0.
+
+Primo passo del cantiere "calendario e pianificazione" — propedeutico a tutto il resto (UX calendario, ferie/indisponibilità, riconciliazione assignment↔booking, capability AI, timbrature/idle).
+
+### Modello
+
+- `Booking.tenant_id` (FK `tenants.id`, default 1, indicizzato)
+- Convenzione: ogni query nel router parte con `Booking.tenant_id == CURRENT_TENANT`
+
+### Router `/planning`
+
+- `CURRENT_TENANT = 1` in cima al file (pattern allineato a `resources.py` / `pricelist.py`)
+- `GET /api/bookings` filtra per tenant
+- `POST /api/bookings` imposta `tenant_id=CURRENT_TENANT` sul nuovo record + il check di conflitto risorsa è anch'esso tenant-scoped (in multi-tenant hard, due tenant possono avere booking sovrapposti senza falsi conflitti)
+- `DELETE /api/bookings/{id}` filtra per tenant prima del soft-cancel
+
+### Migrazione
+
+- `scripts/migrate_booking_tenant.py` (idempotente): `ALTER TABLE bookings ADD COLUMN tenant_id INTEGER NOT NULL DEFAULT 1`. Tutti i booking esistenti vengono backfillati a `tenant_id=1`.
+- Voce **[B]/[b]** in `strumenti.bat` / `strumenti.sh`.
+
+### Smoke test
+
+- AST OK su `models.py`, `routers/planning.py`, script di migrazione
+- Migrazione applicata sul DB locale: 5 booking esistenti backfillati a tenant 1
+- Re-run idempotente (`tenant_id già presente`)
+- `/health` 200 v3.4.6
+- `/planning/calendar` 200, `/planning/api/bookings` 200 con i 5 booking seed visibili
+- `POST /planning/api/bookings` validazione corretta (422 sui campi obbligatori mancanti)
+
+### File toccati
+
+- `app/main.py` — bump 3.4.5 → 3.4.6 (FastAPI version + `/health` hardcoded)
+- `app/models/models.py` — `Booking.tenant_id`
+- `app/routers/planning.py` — `CURRENT_TENANT` + filtri/set tenant
+- `scripts/migrate_booking_tenant.py` — nuovo
+- `strumenti.bat` / `strumenti.sh` — voce B
+
+---
+
 ## v3.4.5 — Modal "Aggiungi voce" ridisegnato (28 aprile 2026)
 
 Il modal di selezione voce nella quotazione era confuso: form sempre visibile con i campi vuoti prima della scelta, sidebar piatta senza raggruppamento, risultati con metadata scarna e separatore "·" poco leggibile.

@@ -16,10 +16,11 @@ echo  [6] Migra database esistente (v2 -^> v3 con Reparti e Tenant) [Fase 1-bis]
 echo  [7] Migra database esistente (sconti multilivello quotazioni)
 echo  [8] Migra database esistente (AI per-utente, tab Impostazioni AI) [v3.2]
 echo  [9] Migra database esistente (categoria override sulle righe quote) [v3.4.2]
+echo  [B] Migra database esistente (tenant_id su bookings) [v3.4.6]
 echo  [A] Apri cartella upload
 echo  [0] Esci
 echo.
-set /p scelta="Scegli un'opzione (0-9, A): "
+set /p scelta="Scegli un'opzione (0-9, A, B): "
 
 if "%scelta%"=="1" goto avvia
 if "%scelta%"=="2" goto reset_db
@@ -30,6 +31,7 @@ if "%scelta%"=="6" goto migrate_1bis
 if "%scelta%"=="7" goto migrate_discounts
 if "%scelta%"=="8" goto migrate_ai
 if "%scelta%"=="9" goto migrate_cat_override
+if /i "%scelta%"=="B" goto migrate_booking_tenant
 if /i "%scelta%"=="A" goto uploads
 if "%scelta%"=="0" exit /b
 
@@ -124,6 +126,19 @@ set /p conferma="Procedo? (s/n): "
 if /i "%conferma%"=="s" (
     call .venv\Scripts\activate.bat
     python scripts\migrate_quote_category_override.py
+)
+pause & goto menu
+
+:migrate_booking_tenant
+echo.
+echo Migrazione: aggiunge tenant_id su bookings (default 1).
+echo Allinea Booking alla convenzione multi-tenant soft Fase 1-bis.
+echo Operazione non distruttiva e idempotente.
+echo.
+set /p conferma="Procedo? (s/n): "
+if /i "%conferma%"=="s" (
+    call .venv\Scripts\activate.bat
+    python scripts\migrate_booking_tenant.py
 )
 pause & goto menu
 

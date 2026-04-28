@@ -35,10 +35,11 @@ while true; do
     echo "  [7] Migra database esistente (sconti multilivello quotazioni)"
     echo "  [8] Migra database esistente (AI per-utente, tab Impostazioni AI) [v3.2]"
     echo "  [9] Migra database esistente (categoria override righe quote) [v3.4.2]"
+    echo "  [b] Migra database esistente (tenant_id su bookings) [v3.4.6]"
     echo "  [a] Apri cartella upload"
     echo "  [0] Esci"
     echo ""
-    read -p "Scegli un'opzione (0-9, a): " scelta
+    read -p "Scegli un'opzione (0-9, a, b): " scelta
 
     case $scelta in
         1)
@@ -112,6 +113,17 @@ while true; do
             read -p "Procedo? (s/n): " conferma
             if [ "$conferma" = "s" ] || [ "$conferma" = "S" ]; then
                 python scripts/migrate_quote_category_override.py
+            fi
+            read -p "Premi INVIO per continuare..."
+            ;;
+        b|B)
+            echo ""
+            echo "Migrazione: aggiunge tenant_id su bookings (default 1)."
+            echo "Allinea Booking alla convenzione multi-tenant soft Fase 1-bis."
+            echo "Operazione NON distruttiva e idempotente."
+            read -p "Procedo? (s/n): " conferma
+            if [ "$conferma" = "s" ] || [ "$conferma" = "S" ]; then
+                python scripts/migrate_booking_tenant.py
             fi
             read -p "Premi INVIO per continuare..."
             ;;
