@@ -17,7 +17,7 @@ from sqlalchemy.orm import Session, joinedload
 
 from app.database import get_db
 from app.models import (
-    Resource, ResourceType, TimePunch, PunchKind, Job, User,
+    Resource, ResourceType, TimePunch, PunchKind, Job, JobCostLine, User,
 )
 from app.services.auth import get_current_user_from_token
 
@@ -90,6 +90,7 @@ def _punch_dict(p: TimePunch, *, fullcalendar: bool = False) -> dict:
                 "punch_id": p.id,
                 "resource_id": p.resource_id,
                 "job_id": p.job_id,
+                "job_cost_line_id": p.job_cost_line_id,
                 "kind": p.kind.value if hasattr(p.kind, "value") else p.kind,
                 "notes": p.notes,
                 "duration_h": duration_h,
@@ -105,6 +106,8 @@ def _punch_dict(p: TimePunch, *, fullcalendar: bool = False) -> dict:
         "job_id": p.job_id,
         "job_title": p.job.title if p.job else None,
         "job_code": p.job.code if p.job else None,
+        "job_cost_line_id": p.job_cost_line_id,
+        "cost_line_description": p.cost_line.description if p.cost_line else None,
         "start_datetime": p.start_datetime.isoformat(),
         "end_datetime": p.end_datetime.isoformat() if p.end_datetime else None,
         "duration_h": duration_h,
@@ -187,6 +190,7 @@ async def create_punch(
     end_datetime: Optional[datetime] = Form(None),
     kind: PunchKind = Form(PunchKind.shift),
     job_id: Optional[int] = Form(None),
+    job_cost_line_id: Optional[int] = Form(None),
     notes: Optional[str] = Form(None),
     access_token: Optional[str] = Cookie(None),
     db: Session = Depends(get_db),
@@ -207,12 +211,22 @@ async def create_punch(
         j = db.query(Job).filter(Job.id == job_id).first()
         if not j:
             raise HTTPException(404, "Job non trovato")
+    if job_cost_line_id:
+        line = db.query(JobCostLine).filter(JobCostLine.id == job_cost_line_id).first()
+        if not line:
+            raise HTTPException(404, "Lavorazione non trovata")
+        if job_id and line.job_id != job_id:
+            raise HTTPException(400, f"Lavorazione #{job_cost_line_id} non appartiene al job #{job_id}")
+        # Se non c'è job_id ma c'è cost_line, deduco il job dalla riga
+        if not job_id:
+            job_id = line.job_id
 
     u = _resolve_current_user(db, access_token)
     p = TimePunch(
         tenant_id=CURRENT_TENANT,
         resource_id=resource_id,
         job_id=job_id,
+        job_cost_line_id=job_cost_line_id,
         start_datetime=start_datetime,
         end_datetime=end_datetime,
         kind=kind,
@@ -232,9 +246,11 @@ async def update_punch(
     end_datetime: Optional[datetime] = Form(None),
     kind: Optional[PunchKind] = Form(None),
     job_id: Optional[int] = Form(None),
+    job_cost_line_id: Optional[int] = Form(None),
     notes: Optional[str] = Form(None),
     clear_end: bool = Form(False),
     clear_job: bool = Form(False),
+    clear_cost_line: bool = Form(False),
     db: Session = Depends(get_db),
 ):
     p = db.query(TimePunch).filter(
@@ -256,6 +272,11 @@ async def update_punch(
         p.job_id = job_id
     elif clear_job:
         p.job_id = None
+        p.job_cost_line_id = None  # cancellando job, cancello anche la lavorazione
+    if job_cost_line_id is not None:
+        p.job_cost_line_id = job_cost_line_id
+    elif clear_cost_line:
+        p.job_cost_line_id = None
     if notes is not None:
         p.notes = notes
 

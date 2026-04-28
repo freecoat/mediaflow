@@ -35,6 +35,17 @@ class BookingStatus(str, enum.Enum):
     tentative = "tentative"; confirmed = "confirmed"
     cancelled = "cancelled"; completed = "completed"
 
+class BookingKind(str, enum.Enum):
+    # Pianificazione di una lavorazione su un job (default — comportamento storico).
+    # job_id richiesto, job_cost_line_id opzionale (preferito quando si pianifica
+    # una lavorazione specifica della quote).
+    project = "project"
+    # Booking interni: senza job, generano costo (ore risorsa) ma non profitto.
+    # Vanno in cost report interno come spese, NON nel cost report cliente.
+    internal_maintenance = "internal_maintenance"  # manutenzione attrezzature/sale
+    internal_research = "internal_research"        # R&D, demo, prove
+    internal_training = "internal_training"        # formazione personale
+
 class PunchKind(str, enum.Enum):
     # Tipologie di timbratura/presenza per la sezione HR.
     # `shift` con job_id valorizzato = ore lavorate su progetto.
@@ -541,15 +552,22 @@ class Booking(Base):
     __tablename__ = "bookings"
     id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
     tenant_id: Mapped[int] = mapped_column(ForeignKey("tenants.id"), default=1, index=True)
-    job_id: Mapped[int] = mapped_column(ForeignKey("jobs.id"))
+    # job_id nullable: NULL per booking interni (manutenzione, R&D, training)
+    job_id: Mapped[Optional[int]] = mapped_column(ForeignKey("jobs.id"), nullable=True, index=True)
+    # Riferimento alla lavorazione specifica (riga del job): permette di sapere
+    # quali ore della pianificazione consumano quale monte ore (es. "Sara · Color HDR").
+    # NULL = booking generico sul job (vecchio comportamento).
+    job_cost_line_id: Mapped[Optional[int]] = mapped_column(ForeignKey("job_cost_lines.id"), nullable=True, index=True)
     resource_id: Mapped[int] = mapped_column(ForeignKey("resources.id"))
     start_datetime: Mapped[datetime] = mapped_column(DateTime)
     end_datetime: Mapped[datetime] = mapped_column(DateTime)
     status: Mapped[BookingStatus] = mapped_column(SAEnum(BookingStatus), default=BookingStatus.tentative)
+    kind: Mapped[BookingKind] = mapped_column(SAEnum(BookingKind), default=BookingKind.project)
     notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
-    job: Mapped["Job"] = relationship(back_populates="bookings")
+    job: Mapped[Optional["Job"]] = relationship(back_populates="bookings")
     resource: Mapped["Resource"] = relationship(back_populates="bookings")
+    cost_line: Mapped[Optional["JobCostLine"]] = relationship()
 
 
 # ── TIMBRATURE / PRESENZE (HR) ─────────────────────────────────
@@ -565,6 +583,9 @@ class TimePunch(Base):
     resource_id: Mapped[int] = mapped_column(ForeignKey("resources.id"), index=True)
     # Job opzionale: solo per kind=shift quando si lavora su un progetto specifico.
     job_id: Mapped[Optional[int]] = mapped_column(ForeignKey("jobs.id"), nullable=True, index=True)
+    # Riferimento alla lavorazione specifica: permette di consuntivare ore reali
+    # contro il monte ore di una specifica JobCostLine (extra calcolato per riga).
+    job_cost_line_id: Mapped[Optional[int]] = mapped_column(ForeignKey("job_cost_lines.id"), nullable=True, index=True)
     start_datetime: Mapped[datetime] = mapped_column(DateTime)
     # end_datetime nullable = "in corso" (timbratura ingresso senza ancora uscita).
     end_datetime: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
@@ -575,6 +596,7 @@ class TimePunch(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
     resource: Mapped["Resource"] = relationship(back_populates="time_punches")
     job: Mapped[Optional["Job"]] = relationship()
+    cost_line: Mapped[Optional["JobCostLine"]] = relationship()
 
 
 # ── TIMESHEET & SPESE ────────────────────────────────────────

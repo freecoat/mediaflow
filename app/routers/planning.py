@@ -5,7 +5,10 @@ from typing import Optional
 from datetime import date, datetime
 from sqlalchemy.orm import Session, joinedload
 from app.database import get_db
-from app.models import Job, JobStatus, Client, Booking, BookingStatus, Resource
+from app.models import (
+    Job, JobStatus, Client, Booking, BookingStatus, BookingKind,
+    Resource, JobCostLine,
+)
 
 router = APIRouter(prefix="/planning", tags=["planning"])
 
@@ -138,6 +141,28 @@ async def update_job_status(
 
 # ── Booking API ───────────────────────────────────────────────────────
 
+_KIND_LABEL = {
+    BookingKind.project: "Progetto",
+    BookingKind.internal_maintenance: "Manutenzione",
+    BookingKind.internal_research: "R&D",
+    BookingKind.internal_training: "Formazione",
+}
+
+
+def _booking_title(b: Booking) -> str:
+    """Titolo umano per il calendario.
+    project: 'Job · [Lavorazione] · Risorsa'
+    internal_*: '[Tipo] · Risorsa'"""
+    res_name = b.resource.name if b.resource else "?"
+    if b.kind == BookingKind.project and b.job:
+        parts = [b.job.title]
+        if b.cost_line:
+            parts.append(b.cost_line.description)
+        parts.append(res_name)
+        return " · ".join(parts)
+    return f"{_KIND_LABEL.get(b.kind, str(b.kind))} · {res_name}"
+
+
 @router.get("/api/bookings")
 async def list_bookings(
     job_id: Optional[int] = None,
@@ -147,7 +172,9 @@ async def list_bookings(
     db: Session = Depends(get_db),
 ):
     q = db.query(Booking).options(
-        joinedload(Booking.resource), joinedload(Booking.job)
+        joinedload(Booking.resource),
+        joinedload(Booking.job),
+        joinedload(Booking.cost_line),
     ).filter(Booking.tenant_id == CURRENT_TENANT)
     if job_id:
         q = q.filter(Booking.job_id == job_id)
@@ -162,13 +189,19 @@ async def list_bookings(
     return [
         {
             "id": b.id,
-            "title": f"{b.job.title} — {b.resource.name}",
+            "title": _booking_title(b),
             "start": b.start_datetime.isoformat(),
             "end": b.end_datetime.isoformat(),
-            "color": b.resource.color,
+            "color": b.resource.color if b.resource else "#6272f5",
             "extendedProps": {
-                "job_id": b.job_id, "resource_id": b.resource_id,
-                "status": b.status, "notes": b.notes,
+                "source": "booking",
+                "kind": b.kind.value if hasattr(b.kind, "value") else b.kind,
+                "job_id": b.job_id,
+                "job_cost_line_id": b.job_cost_line_id,
+                "cost_line_description": b.cost_line.description if b.cost_line else None,
+                "resource_id": b.resource_id,
+                "status": b.status.value if hasattr(b.status, "value") else b.status,
+                "notes": b.notes,
             }
         }
         for b in bookings
@@ -177,14 +210,37 @@ async def list_bookings(
 
 @router.post("/api/bookings")
 async def create_booking(
-    job_id: int = Form(...),
     resource_id: int = Form(...),
     start_datetime: datetime = Form(...),
     end_datetime: datetime = Form(...),
+    job_id: Optional[int] = Form(None),
+    job_cost_line_id: Optional[int] = Form(None),
+    kind: BookingKind = Form(BookingKind.project),
     status: BookingStatus = Form(BookingStatus.tentative),
     notes: Optional[str] = Form(None),
     db: Session = Depends(get_db),
 ):
+    """Crea un booking. Tre scenari validati:
+    - kind=project: job_id richiesto, job_cost_line_id opzionale (deve appartenere al job)
+    - kind=internal_*: job_id e job_cost_line_id devono essere NULL (ignorati se passati)
+    """
+    if end_datetime <= start_datetime:
+        raise HTTPException(400, "end_datetime deve essere > start_datetime")
+
+    if kind == BookingKind.project:
+        if not job_id:
+            raise HTTPException(400, "Per kind=project serve job_id")
+        if job_cost_line_id:
+            line = db.query(JobCostLine).filter(JobCostLine.id == job_cost_line_id).first()
+            if not line:
+                raise HTTPException(404, "Lavorazione non trovata")
+            if line.job_id != job_id:
+                raise HTTPException(400, f"La lavorazione #{job_cost_line_id} non appartiene al job #{job_id}")
+    else:
+        # Booking interno: niente job/lavorazione
+        job_id = None
+        job_cost_line_id = None
+
     # Controllo conflitti
     conflict = db.query(Booking).filter(
         Booking.tenant_id == CURRENT_TENANT,
@@ -198,14 +254,24 @@ async def create_booking(
 
     b = Booking(
         tenant_id=CURRENT_TENANT,
-        job_id=job_id, resource_id=resource_id,
+        job_id=job_id,
+        job_cost_line_id=job_cost_line_id,
+        resource_id=resource_id,
         start_datetime=start_datetime, end_datetime=end_datetime,
-        status=status, notes=notes,
+        status=status, kind=kind, notes=notes,
     )
     db.add(b)
     db.commit()
     db.refresh(b)
-    return b
+    return {
+        "id": b.id, "kind": b.kind.value if hasattr(b.kind, "value") else b.kind,
+        "job_id": b.job_id, "job_cost_line_id": b.job_cost_line_id,
+        "resource_id": b.resource_id,
+        "start_datetime": b.start_datetime.isoformat(),
+        "end_datetime": b.end_datetime.isoformat(),
+        "status": b.status.value if hasattr(b.status, "value") else b.status,
+        "notes": b.notes,
+    }
 
 
 @router.delete("/api/bookings/{booking_id}")

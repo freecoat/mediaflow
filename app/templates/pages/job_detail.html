@@ -120,16 +120,18 @@
           <th>Unità</th>
           <th style="text-align:right;">€ unitario</th>
           <th style="text-align:right;">Quotate</th>
-          <th style="text-align:right;">Lavorate</th>
+          <th style="text-align:right;" title="Ore pianificate via Booking legati a questa lavorazione">Pian.</th>
+          <th style="text-align:right;" title="Ore lavorate via TimePunch legate a questa lavorazione">Lavor.</th>
           <th style="text-align:right;">Extra</th>
           <th style="text-align:right;">Tot. previsto</th>
           <th></th>
         </tr>
       </thead>
       <tbody id="lines-tbody">
-        <tr><td colspan="8" class="text-muted" style="text-align:center;padding:24px;">Caricamento…</td></tr>
+        <tr><td colspan="9" class="text-muted" style="text-align:center;padding:24px;">Caricamento…</td></tr>
       </tbody>
     </table>
+    <div id="unassigned-warning" style="display:none;margin-top:10px;font-size:12px;color:var(--text3,#888);"></div>
   </div>
 </div>
 
@@ -254,6 +256,7 @@ async function loadJob() {
     currentJob = await api('GET', `/jobs/api/${JOB_ID}`);
     renderTotals(currentJob.totals);
     renderLines(currentJob.cost_lines);
+    renderUnassigned(currentJob.totals);
   } catch(e) {
     toast(e.message || 'Errore caricamento job', 'error');
   }
@@ -266,19 +269,33 @@ function renderTotals(t) {
   document.getElementById('h-extra').innerHTML = `${fmtH(t.extra_hours_lines)}<span class="unit">h</span>`;
 }
 
+function renderUnassigned(t) {
+  const w = document.getElementById('unassigned-warning');
+  if (!w) return;
+  const planned = t.unassigned_planned_hours || 0;
+  const actual = t.unassigned_actual_hours || 0;
+  if (planned > 0 || actual > 0) {
+    w.style.display = '';
+    w.innerHTML = `⚠ Ore registrate sul job ma <strong>non legate a una lavorazione specifica</strong>: ${planned.toFixed(2)}h pianificate · ${actual.toFixed(2)}h lavorate. Da assegnare manualmente.`;
+  } else {
+    w.style.display = 'none';
+  }
+}
+
 function renderLines(lines) {
   const tbody = document.getElementById('lines-tbody');
   if (!lines.length) {
-    tbody.innerHTML = '<tr><td colspan="8" class="text-muted" style="text-align:center;padding:24px;">Nessuna lavorazione</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="9" class="text-muted" style="text-align:center;padding:24px;">Nessuna lavorazione</td></tr>';
     return;
   }
   tbody.innerHTML = lines.map(l => {
     const overBudget = !l.is_extra && l.quantity_actual > l.quantity_quoted;
-    const pct = l.quantity_quoted > 0 ? Math.min(100, (l.quantity_actual / l.quantity_quoted) * 100) : 0;
     const pctOver = l.quantity_quoted > 0 ? (l.quantity_actual / l.quantity_quoted) * 100 : 0;
     const progress = !l.is_extra && l.quantity_quoted > 0
       ? `<span class="progress"><span class="progress-fill ${pctOver > 100 ? 'over' : ''}" style="width:${Math.min(100, pctOver)}%;"></span></span>`
       : '';
+    const planned = l.planned_hours != null ? fmtH(l.planned_hours) : '—';
+    const actualBooked = l.actual_hours != null ? fmtH(l.actual_hours) : '—';
     return `<tr class="${l.is_extra ? 'line-extra' : ''} ${overBudget ? 'over-budget' : ''}" onclick='openEditLine(${l.id})' style="cursor:pointer;">
       <td>
         ${escapeHtml(l.description)}${l.is_extra ? '<span class="extra-badge">EXTRA</span>' : ''}
@@ -287,7 +304,8 @@ function renderLines(lines) {
       <td>${escapeHtml(l.unit)}</td>
       <td class="col-money">${fmtEur(l.unit_price)}</td>
       <td class="col-hours">${l.is_extra ? '—' : fmtH(l.quantity_quoted)}${progress}</td>
-      <td class="col-hours col-actual">${fmtH(l.quantity_actual)}</td>
+      <td class="col-hours" style="color:var(--text3,#888);">${planned}</td>
+      <td class="col-hours" style="color:var(--text3,#888);">${actualBooked}</td>
       <td class="col-hours">${l.quantity_extra > 0 ? fmtH(l.quantity_extra) : '—'}</td>
       <td class="col-money">${fmtEur(l.total_expected)}</td>
       <td></td>

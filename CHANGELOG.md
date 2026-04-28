@@ -1,5 +1,98 @@
 # MediaFlow — Changelog
 
+## v3.4.10 — Booking legati a lavorazione + booking interni (28 aprile 2026)
+
+Terzo step del re-design del flusso operativo. Il calendario diventa granulare: pianifico "Sara · Color HDR · Mare Nostrum" invece di "Sara · Mare Nostrum". Aggregazione ore pianificate/lavorate **per singola lavorazione**, non più solo a livello job.
+
+Inoltre apre la categoria "booking interni" (manutenzione, R&D, formazione): ore senza job, generano costo senza profitto, traceabili nel cost report interno.
+
+### Modello
+
+**`BookingKind`** enum nuovo:
+- `project` (default, comportamento storico): job_id richiesto, job_cost_line_id opzionale
+- `internal_maintenance` / `internal_research` / `internal_training`: senza job, senza lavorazione
+
+**`Booking`**:
+- `kind: BookingKind` default `project`
+- `job_cost_line_id: int?` FK opzionale a `job_cost_lines.id` (indicizzato): pianifica una lavorazione specifica
+- `job_id` ora **nullable** (era NOT NULL): richiede recreate-table su SQLite
+- Relationship `Booking.cost_line`
+
+**`TimePunch`**:
+- `job_cost_line_id: int?` FK opzionale: consuntiva ore reali contro il monte ore di una specifica lavorazione (calcolo extra per riga)
+- Relationship `TimePunch.cost_line`
+
+### Migrazione
+
+`scripts/migrate_booking_cost_line_kind.py` (idempotente): 4 step distinti
+1. ALTER ADD `bookings.kind TEXT DEFAULT 'project'`
+2. ALTER ADD `bookings.job_cost_line_id INTEGER NULL`
+3. ALTER ADD `time_punches.job_cost_line_id INTEGER NULL`
+4. **Recreate-table dance** per rilassare `bookings.job_id` da NOT NULL → NULL (SQLite non supporta ALTER COLUMN per nullabilità). Disabilita FK durante, ricrea schema, copia dati con intersezione colonne, ricrea indici.
+
+Voce **[E]/[e]** in `strumenti.bat` / `strumenti.sh`.
+
+### Router /planning
+
+`POST /api/bookings`: nuova firma con validazione coerenza:
+- `kind=project`: `job_id` obbligatorio (errore 400 altrimenti); `job_cost_line_id` deve appartenere al job (errore 400 altrimenti)
+- `kind=internal_*`: `job_id` e `job_cost_line_id` forzati a NULL
+- Helper `_booking_title(b)` produce titolo umano: "Job · Lavorazione · Risorsa" per `project`, "[Tipo] · Risorsa" per interni
+
+`GET /api/bookings`: response include ora `kind`, `job_cost_line_id`, `cost_line_description` in `extendedProps`. Source marker `"source": "booking"`.
+
+### Router /hr
+
+`POST/PUT /api/punches` accetta `job_cost_line_id`. Validazione: la lavorazione deve esistere, e se `job_id` è valorizzato deve appartenere allo stesso job. Se non c'è `job_id` ma c'è `job_cost_line_id`, il `job_id` viene dedotto dalla riga.
+
+Sentinel `clear_cost_line=true` per cancellare l'associazione su PUT (analogo a `clear_end`/`clear_job` esistenti).
+
+### Router /jobs (aggregazione per riga)
+
+- `_aggregate_planned_hours(db, job_id, cost_line_id=None)` ora opzionalmente filtra su riga
+- `_aggregate_actual_hours(db, job_id, cost_line_id=None)` idem
+- Nuovo `_aggregate_unassigned(db, job_id)`: ore registrate sul job ma con `job_cost_line_id IS NULL` — esposte come `unassigned_planned_hours` / `unassigned_actual_hours` nei totali, mostrate come avviso UI ("⚠ Da assegnare manualmente")
+- `_line_dict(line, db=...)` ora include `planned_hours` e `actual_hours` per riga
+
+### UI /jobs/{id}
+
+Tabella lavorazioni: 2 colonne nuove tra "Quotate" e "Extra":
+- **Pian.** (ore pianificate via Booking legati a questa riga)
+- **Lavor.** (ore lavorate via TimePunch legati a questa riga)
+
+Avviso sotto la tabella se ci sono ore non assegnate a una lavorazione specifica (backward compat per booking/punch creati prima di v3.4.10).
+
+### Smoke test E2E
+
+- AST OK su tutti i file modificati
+- T1 GET payload con `planned_hours`/`actual_hours` per riga (default 0 prima di test)
+- T2 POST `kind=project` + `job_cost_line_id=15` → ok, booking #7
+- T3 POST `kind=internal_maintenance` senza job → ok, `job_id=null`, `job_cost_line_id=null`
+- T4 POST `kind=project` senza `job_id` → 400 "Per kind=project serve job_id"
+- T5 POST `kind=project` con cost_line di altro job → 400 "non appartiene al job"
+- T6 GET dopo T2: line 15 `planned_hours=4`, `unassigned=0`
+- T7 POST punch su line 15 + 5h → response include `cost_line_description`
+- T8 GET dopo T7: line 15 `planned=4 actual=5`
+
+### File toccati
+
+- `app/main.py` — bump 3.4.9.1 → 3.4.10
+- `app/models/models.py` — `BookingKind` enum, `Booking.kind/job_cost_line_id/cost_line`, `Booking.job_id` nullable, `TimePunch.job_cost_line_id/cost_line`
+- `app/models/__init__.py` — export `BookingKind`
+- `app/routers/planning.py` — POST/GET bookings con validazione kind, helper `_booking_title`
+- `app/routers/hr.py` — POST/PUT punches con `job_cost_line_id` + sentinel `clear_cost_line`
+- `app/routers/jobs.py` — aggregazione per riga + unassigned, `_line_dict` con planned/actual_hours
+- `app/templates/pages/job_detail.html` — colonne Pian./Lavor., avviso unassigned
+- `scripts/migrate_booking_cost_line_kind.py` — nuovo (4 step idempotenti + SQLite recreate-table)
+- `strumenti.bat` / `strumenti.sh` — voce E
+
+### Limitazioni note (deferite a v3.4.11)
+
+- UI calendario non ha ancora modal aggiornato per scegliere `kind` o `job_cost_line_id` (Matteo: "calendario è davvero brutto, ci lavoriamo poi"). Per ora la creazione di booking interni o legati a lavorazione passa solo da API. Il calendario li **mostra** correttamente con il titolo distinto, ma il modal "+ Booking" mostra il vecchio form con `job_id` obbligatorio.
+- L'aggregazione cost-line specifica funziona solo per booking/punch creati con `job_cost_line_id`. I record storici senza il riferimento appaiono nel totale "unassigned" (avviso UI).
+
+---
+
 ## v3.4.9.1 — Hotfix: stesso bug `j.budget` in finance service (28 aprile 2026)
 
 Stesso pattern del bug v3.4.8 ma in un altro file. Il modal "dettaglio job" in `/planning` fa due chiamate in parallelo: `/planning/api/jobs/{id}` (fixato in v3.4.8) e `/finance/api/report/job/{id}` (questo). Il secondo restituiva 500 → modal vuoto/rotto → bottone "→ Vai al dettaglio job" mai visibile.

@@ -38,45 +38,78 @@ def _tpl():
     return templates
 
 
-def _aggregate_planned_hours(db: Session, job_id: int) -> float:
-    """Ore pianificate: somma di (end - start) sui Booking attivi del job."""
-    bookings = db.query(Booking).filter(
+def _aggregate_planned_hours(db: Session, job_id: int, cost_line_id: Optional[int] = None) -> float:
+    """Ore pianificate: somma di (end - start) sui Booking attivi.
+    Se `cost_line_id` è valorizzato → solo i booking legati a quella riga.
+    Altrimenti → tutti i booking del job (anche senza cost_line_id assegnato)."""
+    q = db.query(Booking).filter(
         Booking.job_id == job_id,
         Booking.status != BookingStatus.cancelled,
-    ).all()
+    )
+    if cost_line_id is not None:
+        q = q.filter(Booking.job_cost_line_id == cost_line_id)
     total = 0.0
-    for b in bookings:
+    for b in q.all():
         if b.start_datetime and b.end_datetime:
             total += (b.end_datetime - b.start_datetime).total_seconds() / 3600.0
     return round(total, 2)
 
 
-def _aggregate_actual_hours(db: Session, job_id: int) -> float:
-    """Ore lavorate: somma di (end - start) sui TimePunch chiusi sul job."""
-    punches = db.query(TimePunch).filter(
+def _aggregate_actual_hours(db: Session, job_id: int, cost_line_id: Optional[int] = None) -> float:
+    """Ore lavorate: somma di (end - start) sui TimePunch chiusi.
+    Se `cost_line_id` è valorizzato → solo i punch legati a quella riga."""
+    q = db.query(TimePunch).filter(
         TimePunch.job_id == job_id,
         TimePunch.end_datetime.isnot(None),
-    ).all()
+    )
+    if cost_line_id is not None:
+        q = q.filter(TimePunch.job_cost_line_id == cost_line_id)
     total = 0.0
-    for p in punches:
+    for p in q.all():
         total += (p.end_datetime - p.start_datetime).total_seconds() / 3600.0
     return round(total, 2)
 
 
-def _line_dict(line: JobCostLine) -> dict:
-    """Serializza una lavorazione. Il calcolo extra è per riga (non per job).
-    Per ora non abbiamo Booking.job_cost_line_id (arriva v3.4.10), quindi le
-    ore pianificate/lavorate per riga sono None — viene esposto solo l'aggregato
-    al livello job. Quando il link arriverà, qui leggeremo le ore per riga.
+def _aggregate_unassigned(db: Session, job_id: int) -> dict:
+    """Ore pianificate/lavorate sul job ma NON legate a una specifica lavorazione
+    (job_cost_line_id IS NULL). Utili per visualizzare un avviso "ore non assegnate"."""
+    planned_q = db.query(Booking).filter(
+        Booking.job_id == job_id,
+        Booking.status != BookingStatus.cancelled,
+        Booking.job_cost_line_id.is_(None),
+    ).all()
+    planned = sum(
+        (b.end_datetime - b.start_datetime).total_seconds() / 3600.0
+        for b in planned_q if b.start_datetime and b.end_datetime
+    )
+    actual_q = db.query(TimePunch).filter(
+        TimePunch.job_id == job_id,
+        TimePunch.end_datetime.isnot(None),
+        TimePunch.job_cost_line_id.is_(None),
+    ).all()
+    actual = sum(
+        (p.end_datetime - p.start_datetime).total_seconds() / 3600.0 for p in actual_q
+    )
+    return {"planned_h": round(planned, 2), "actual_h": round(actual, 2)}
+
+
+def _line_dict(line: JobCostLine, db: Optional[Session] = None) -> dict:
+    """Serializza una lavorazione con ore per riga (se db fornito).
+
+    `quantity_extra` regola di calcolo:
+    - is_extra=True → tutte le ore consuntivate sono extra
+    - altrimenti → max(0, quantity_actual - quantity_quoted)
+
+    Se `db` è fornito, calcola anche `planned_hours` e `actual_hours` legate a
+    questa riga via `Booking.job_cost_line_id` / `TimePunch.job_cost_line_id`.
     """
     extra = 0.0
     if line.is_extra:
-        # Extra puro: tutte le ore consuntivate sono "extra"
         extra = round(line.quantity_actual, 2)
     elif line.quantity_actual > line.quantity_quoted:
         extra = round(line.quantity_actual - line.quantity_quoted, 2)
 
-    return {
+    out = {
         "id": line.id,
         "description": line.description,
         "quote_line_id": line.quote_line_id,
@@ -93,18 +126,23 @@ def _line_dict(line: JobCostLine) -> dict:
         "total_expected": line.total_expected,
         "notes": line.notes,
     }
+    if db is not None:
+        out["planned_hours"] = _aggregate_planned_hours(db, line.job_id, line.id)
+        out["actual_hours"] = _aggregate_actual_hours(db, line.job_id, line.id)
+    return out
 
 
 def _job_payload(db: Session, job: Job) -> dict:
     """Payload completo del job con lavorazioni + aggregazioni ore."""
     lines = sorted(job.cost_lines, key=lambda l: (l.is_extra, l.id))
-    line_dicts = [_line_dict(l) for l in lines]
+    line_dicts = [_line_dict(l, db) for l in lines]
 
     total_quoted_h = sum(l.quantity_quoted for l in lines if not l.is_extra)
     total_actual_h = sum(l.quantity_actual for l in lines)
     total_extra_h = sum(d["quantity_extra"] for d in line_dicts)
     planned_h = _aggregate_planned_hours(db, job.id)
     actual_h = _aggregate_actual_hours(db, job.id)
+    unassigned = _aggregate_unassigned(db, job.id)
 
     return {
         "id": job.id,
@@ -137,6 +175,9 @@ def _job_payload(db: Session, job: Job) -> dict:
             # Ore aggregate dal calendario / consuntivo (su job complessivo)
             "planned_hours_calendar": planned_h,
             "actual_hours_punch": actual_h,
+            # Ore registrate sul job ma non legate a una specifica lavorazione
+            "unassigned_planned_hours": unassigned["planned_h"],
+            "unassigned_actual_hours": unassigned["actual_h"],
         },
     }
 
