@@ -218,49 +218,82 @@
   </div>
 </div>
 
-<!-- Modal aggiungi riga (con ricerca + sidebar categorie) -->
+<!-- Modal aggiungi riga (ricerca + sidebar categorie raggruppate per reparto) -->
 <div class="modal-overlay" id="modal-add-line">
-  <div class="modal" style="max-width:980px;width:96vw;">
-    <div class="modal-header"><span class="modal-title">Aggiungi voce alla quotazione</span>
-      <button class="btn btn-ghost btn-icon" onclick="closeModal('modal-add-line')">✕</button></div>
-    <div class="modal-body" style="padding:0;">
-      <!-- Search top -->
-      <div style="padding:14px 18px;border-bottom:1px solid var(--border);background:var(--bg2);">
-        <input class="form-input" id="al-search" placeholder="🔍 Cerca per nome, descrizione, keyword o categoria..." oninput="filterPricelist()" autofocus style="font-size:14px;">
+  <div class="modal al-modal">
+    <div class="modal-header">
+      <span class="modal-title">Aggiungi voce alla quotazione</span>
+      <button class="btn btn-ghost btn-icon" onclick="closeModal('modal-add-line')">✕</button>
+    </div>
+    <div class="modal-body al-body">
+      <!-- Ricerca -->
+      <div class="al-searchbar">
+        <input class="al-search-input" id="al-search"
+               placeholder="🔍 Cerca per nome, descrizione, keyword o categoria…"
+               oninput="filterPricelist()" autofocus>
+        <span class="al-result-count" id="al-result-count"></span>
       </div>
-      <!-- Sidebar categorie + risultati -->
-      <div style="display:grid;grid-template-columns:200px 1fr;min-height:340px;max-height:50vh;">
-        <div id="al-cat-sidebar" style="border-right:1px solid var(--border);background:var(--bg2);overflow-y:auto;padding:8px 6px;"></div>
-        <div id="al-results" style="overflow-y:auto;padding:8px 12px;"></div>
+
+      <!-- Sidebar + risultati -->
+      <div class="al-main">
+        <div class="al-sidebar" id="al-cat-sidebar"></div>
+        <div class="al-results" id="al-results"></div>
       </div>
-      <!-- Form voce -->
-      <div style="padding:14px 18px;border-top:1px solid var(--border);background:var(--bg2);">
-        <div class="text-xs text-muted mb-2">Voce selezionata (modificabile prima di aggiungere)</div>
-        <div class="form-group"><label class="form-label">Descrizione *</label>
-          <input class="form-input" id="al-desc" placeholder="Seleziona dal listino o scrivi descrizione custom"></div>
-        <div class="form-group"><label class="form-label">Dettaglio</label>
-          <input class="form-input" id="al-detail" placeholder="es. incl. full QC, naming DCNC"></div>
-        <div class="form-row" style="grid-template-columns:1fr 1fr 1fr;">
-          <div class="form-group"><label class="form-label">Quantità</label>
-            <input class="form-input" id="al-qty" type="number" step="0.5" value="1"></div>
-          <div class="form-group"><label class="form-label">Unità</label>
-            <select class="form-select" id="al-unit" onchange="convertPriceOnUnitChange()">
-              <option value="day">day (turno 8h)</option>
-              <option value="hr">hr (ora)</option>
-              <option value="pc">pc (pezzo)</option>
-              <option value="min">min (minuto prodotto)</option>
-              <option value="TB">TB</option>
-              <option value="GB">GB</option>
-              <option value="shot">shot</option>
-              <option value="version">version</option>
-              <option value="allow">allowance</option>
-            </select></div>
-          <div class="form-group"><label class="form-label">Prezzo unitario (€)</label>
-            <input class="form-input" id="al-price" type="number" step="0.01"></div>
+
+      <!-- Pannello selezione (vuoto prima di scegliere) -->
+      <div class="al-selpanel">
+        <div class="al-empty-hint" id="al-empty-hint">
+          Seleziona una voce dal listino a sinistra, oppure
+          <button type="button" class="al-link-btn" onclick="enableFreeLine()">+ crea una voce libera (non in listino)</button>
         </div>
-        <input type="hidden" id="al-price-item-id">
-        <input type="hidden" id="al-base-unit">
-        <input type="hidden" id="al-base-price">
+        <div class="al-selected hidden" id="al-selected">
+          <div class="al-sel-header">
+            <div class="al-sel-info">
+              <div class="al-sel-name" id="al-sel-name-text"></div>
+              <div class="al-sel-meta">
+                <span class="al-tag al-tag-cat" id="al-sel-cat"></span>
+                <span class="al-tag al-tag-dept" id="al-sel-dept"></span>
+                <span class="al-sel-baseprice" id="al-sel-baseprice"></span>
+              </div>
+            </div>
+            <button class="btn btn-ghost btn-sm" onclick="clearSelection()" title="Annulla la scelta">↺ Deseleziona</button>
+          </div>
+          <div class="al-edit-grid">
+            <div class="form-group al-fg-desc">
+              <label class="form-label">Descrizione *</label>
+              <input class="form-input" id="al-desc">
+            </div>
+            <div class="form-group al-fg-detail">
+              <label class="form-label">Dettaglio</label>
+              <input class="form-input" id="al-detail" placeholder="es. incl. full QC, naming DCNC">
+            </div>
+            <div class="form-group al-fg-qty">
+              <label class="form-label">Quantità</label>
+              <input class="form-input" id="al-qty" type="number" step="0.5" value="1">
+            </div>
+            <div class="form-group al-fg-unit">
+              <label class="form-label">Unità</label>
+              <select class="form-select" id="al-unit" onchange="convertPriceOnUnitChange()">
+                <option value="day">day (turno 8h)</option>
+                <option value="hr">hr (ora)</option>
+                <option value="pc">pc (pezzo)</option>
+                <option value="min">min (minuto prodotto)</option>
+                <option value="TB">TB</option>
+                <option value="GB">GB</option>
+                <option value="shot">shot</option>
+                <option value="version">version</option>
+                <option value="allow">allowance</option>
+              </select>
+            </div>
+            <div class="form-group al-fg-price">
+              <label class="form-label">Prezzo unitario (€)</label>
+              <input class="form-input" id="al-price" type="number" step="0.01">
+            </div>
+          </div>
+          <input type="hidden" id="al-price-item-id">
+          <input type="hidden" id="al-base-unit">
+          <input type="hidden" id="al-base-price">
+        </div>
       </div>
     </div>
     <div class="modal-footer">
@@ -271,27 +304,143 @@
 </div>
 
 <style>
-  #al-cat-sidebar .al-cat {
-    padding:7px 10px; cursor:pointer; border-radius:5px; font-size:12px;
+  /* Modal contenitore */
+  .al-modal { max-width:1080px; width:96vw; max-height:88vh; display:flex; flex-direction:column; }
+  .al-body { padding:0; display:flex; flex-direction:column; flex:1; min-height:0; overflow:hidden; }
+
+  /* Search bar */
+  .al-searchbar {
+    display:flex; align-items:center; gap:12px;
+    padding:14px 18px; border-bottom:1px solid var(--border); background:var(--bg2);
+  }
+  .al-search-input {
+    flex:1; padding:10px 14px; background:var(--bg); border:1px solid var(--border);
+    border-radius:6px; color:var(--text); font-size:14px; outline:none;
+    transition: border-color var(--t);
+  }
+  .al-search-input:focus { border-color:var(--indigo); }
+  .al-result-count { font-size:11px; color:var(--text3); font-family:'DM Mono',monospace; white-space:nowrap; }
+
+  /* Layout principale: sidebar + lista */
+  .al-main { display:grid; grid-template-columns:240px 1fr; flex:1; min-height:240px; max-height:48vh; }
+  .al-sidebar {
+    border-right:1px solid var(--border); background:var(--bg2);
+    overflow-y:auto; padding:8px 6px;
+  }
+  .al-results {
+    overflow-y:auto; padding:10px 14px; background:var(--bg);
+  }
+
+  /* Sidebar — pulsanti */
+  .al-cat {
+    padding:7px 10px; cursor:pointer; border-radius:5px; font-size:12.5px;
     color:var(--text2); display:flex; justify-content:space-between; align-items:center; gap:6px;
-    transition: background var(--t), color var(--t);
+    border-left:3px solid transparent;
+    transition: background var(--t), color var(--t), border-color var(--t);
   }
-  #al-cat-sidebar .al-cat:hover { background:var(--surface); color:var(--text); }
-  #al-cat-sidebar .al-cat.active { background:var(--indigo-bg); color:var(--indigo2); font-weight:500; }
-  #al-cat-sidebar .al-cat .count { font-size:10px; color:var(--text3); font-family:'DM Mono',monospace; }
+  .al-cat:hover { background:var(--bg3); color:var(--text); }
+  .al-cat.active { background:var(--indigo-bg); color:var(--indigo2); font-weight:500; border-left-color:var(--dept-color, var(--indigo)); }
+  .al-cat .count {
+    font-size:10px; color:var(--text3); font-family:'DM Mono',monospace;
+    background:var(--bg); padding:1px 7px; border-radius:8px; font-weight:500;
+  }
+  .al-cat-all { font-weight:500; color:var(--text); margin-bottom:6px; }
+  .al-cat-all.active { background:var(--indigo-bg); color:var(--indigo2); border-left-color:var(--indigo); }
+  .al-free-btn {
+    width:100%; padding:8px 10px; background:transparent;
+    border:1px dashed var(--border); border-radius:5px;
+    color:var(--text2); font-size:11.5px; cursor:pointer; margin:4px 0 12px;
+    transition: background var(--t), color var(--t), border-color var(--t);
+    text-align:center;
+  }
+  .al-free-btn:hover { background:var(--bg3); color:var(--indigo2); border-color:var(--indigo); border-style:solid; }
+
+  /* Sidebar — gruppi reparto */
+  .al-dept-group { margin:6px 0 10px; }
+  .al-dept-label {
+    font-size:10px; text-transform:uppercase; letter-spacing:0.6px;
+    color:var(--text3); padding:6px 10px 4px; display:flex; align-items:center; gap:7px;
+    font-weight:600;
+  }
+  .al-dept-dot { display:inline-block; width:8px; height:8px; border-radius:50%; flex-shrink:0; }
+
+  /* Risultati listino */
   .al-result {
-    padding:10px 12px; cursor:pointer; border-radius:6px; margin-bottom:4px;
-    border:1px solid transparent; transition: background var(--t), border-color var(--t);
+    display:flex; gap:0; padding:0; cursor:pointer; border-radius:6px; margin-bottom:6px;
+    border:1px solid var(--border); background:var(--bg2);
+    transition: background var(--t), border-color var(--t);
+    position:relative; overflow:hidden;
   }
-  .al-result:hover { background:var(--bg3); border-color:var(--border); }
-  .al-result.selected { background:var(--indigo-bg); border-color:var(--indigo-border); }
-  .al-result .head { display:flex; justify-content:space-between; gap:10px; align-items:baseline; }
-  .al-result .name { font-weight:500; font-size:13.5px; color:var(--text); }
-  .al-result .price { font-family:'DM Mono',monospace; font-size:13px; color:var(--indigo2); white-space:nowrap; }
-  .al-result .meta { font-size:11px; color:var(--text3); display:flex; gap:8px; margin-top:3px; flex-wrap:wrap; }
-  .al-result .desc { font-size:11.5px; color:var(--text2); margin-top:4px; line-height:1.4; }
-  .al-result .keys { display:flex; gap:3px; flex-wrap:wrap; margin-top:5px; }
-  .al-result .keys .k { background:var(--bg3); color:var(--text3); padding:1px 6px; border-radius:3px; font-size:10px; font-family:'DM Mono',monospace; }
+  .al-result::before {
+    content:''; position:absolute; left:0; top:0; bottom:0; width:3px;
+    background:var(--dept-color, var(--indigo));
+  }
+  .al-result:hover { background:var(--bg3); border-color:var(--indigo-border); }
+  .al-result.selected {
+    background:var(--indigo-bg); border-color:var(--indigo);
+    box-shadow:0 0 0 1px var(--indigo) inset;
+  }
+  .al-result-body { flex:1; min-width:0; padding:10px 12px 10px 14px; }
+  .al-result-head { display:flex; justify-content:space-between; gap:10px; align-items:baseline; margin-bottom:5px; }
+  .al-result-head .name { font-weight:500; font-size:13.5px; color:var(--text); }
+  .al-result-head .price {
+    font-family:'DM Mono',monospace; font-size:13px; color:var(--indigo2);
+    white-space:nowrap; font-weight:500;
+  }
+  .al-result-head .price .unit { color:var(--text3); font-size:11px; font-weight:400; }
+  .al-result .meta { display:flex; gap:5px; flex-wrap:wrap; margin-bottom:4px; }
+  .al-result .desc { font-size:11.5px; color:var(--text2); line-height:1.4; }
+  .al-result .keys { display:flex; gap:3px; flex-wrap:wrap; margin-top:6px; }
+  .al-result .keys .k {
+    background:var(--bg3); color:var(--text3); padding:1px 6px; border-radius:3px;
+    font-size:10px; font-family:'DM Mono',monospace;
+  }
+
+  /* Tag generici */
+  .al-tag {
+    display:inline-block; padding:2px 7px; border-radius:3px;
+    font-size:10.5px; font-weight:500; line-height:1.4;
+  }
+  .al-tag-cat { background:rgba(98,114,245,0.12); color:var(--indigo2); }
+  .al-tag-dept { background:var(--bg3); color:var(--text2); }
+
+  .al-more-hint { padding:10px; text-align:center; font-size:11.5px; color:var(--text3); font-style:italic; }
+  .al-empty-results { padding:36px 16px; text-align:center; color:var(--text3); font-size:13px; }
+
+  /* Pannello selezione */
+  .al-selpanel {
+    border-top:1px solid var(--border); background:var(--bg2);
+    padding:12px 18px; flex-shrink:0;
+  }
+  .al-empty-hint {
+    color:var(--text3); font-size:12.5px; text-align:center; padding:8px 0;
+  }
+  .al-link-btn {
+    background:none; border:none; color:var(--indigo2); cursor:pointer;
+    font-size:12.5px; padding:0 2px; text-decoration:underline;
+    font-family:inherit;
+  }
+  .al-link-btn:hover { color:var(--indigo); }
+  .al-selected.hidden { display:none; }
+  .al-sel-header {
+    display:flex; justify-content:space-between; align-items:flex-start;
+    gap:10px; margin-bottom:10px; padding-bottom:10px; border-bottom:1px solid var(--border);
+  }
+  .al-sel-info { flex:1; min-width:0; }
+  .al-sel-name { font-size:14px; font-weight:600; color:var(--text); margin-bottom:5px; }
+  .al-sel-meta { display:flex; gap:6px; flex-wrap:wrap; align-items:center; }
+  .al-sel-baseprice { font-size:11px; color:var(--text3); font-family:'DM Mono',monospace; }
+  .al-edit-grid { display:grid; grid-template-columns: repeat(8, 1fr); gap:10px; }
+  .al-edit-grid .form-group { margin-bottom:0; }
+  .al-fg-desc { grid-column: span 4; }
+  .al-fg-detail { grid-column: span 4; }
+  .al-fg-qty { grid-column: span 2; }
+  .al-fg-unit { grid-column: span 2; }
+  .al-fg-price { grid-column: span 4; }
+  @media (max-width: 800px) {
+    .al-main { grid-template-columns: 180px 1fr; }
+    .al-fg-desc, .al-fg-detail, .al-fg-qty, .al-fg-unit, .al-fg-price { grid-column: span 8; }
+  }
 </style>
 
 <!-- Modal converti in job -->
@@ -700,97 +849,173 @@ async function persistOrder() {
 let alActiveCat = null;
 let alSelectedId = null;
 
+function alEscape(s) {
+  return String(s == null ? '' : s)
+    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+}
+
+function alMatchesText(i, q) {
+  if (!q) return true;
+  return (i.name || '').toLowerCase().includes(q)
+    || (i.description || '').toLowerCase().includes(q)
+    || (i.category || '').toLowerCase().includes(q)
+    || (i.department || '').toLowerCase().includes(q)
+    || (i.keywords || []).some(k => k.toLowerCase().includes(q));
+}
+
 function openAddLine() {
   document.getElementById('al-search').value = '';
+  alActiveCat = null;
+  clearSelection();
+  openModal('modal-add-line');
+}
+
+function clearSelection() {
+  alSelectedId = null;
+  document.getElementById('al-price-item-id').value = '';
+  document.getElementById('al-base-unit').value = '';
+  document.getElementById('al-base-price').value = '';
   document.getElementById('al-desc').value = '';
   document.getElementById('al-detail').value = '';
   document.getElementById('al-qty').value = '1';
   document.getElementById('al-unit').value = 'day';
   document.getElementById('al-price').value = '';
+  document.getElementById('al-empty-hint').classList.remove('hidden');
+  document.getElementById('al-selected').classList.add('hidden');
+  filterPricelist();
+}
+
+function enableFreeLine() {
+  alSelectedId = null;
   document.getElementById('al-price-item-id').value = '';
   document.getElementById('al-base-unit').value = '';
   document.getElementById('al-base-price').value = '';
-  alActiveCat = null;
-  alSelectedId = null;
-  renderAlSidebar();
+  document.getElementById('al-desc').value = '';
+  document.getElementById('al-detail').value = '';
+  document.getElementById('al-qty').value = '1';
+  document.getElementById('al-unit').value = 'day';
+  document.getElementById('al-price').value = '';
+
+  document.getElementById('al-sel-name-text').textContent = '✏️ Voce libera (non in listino)';
+  document.getElementById('al-sel-cat').textContent = 'Altro';
+  document.getElementById('al-sel-cat').style.display = '';
+  const deptEl = document.getElementById('al-sel-dept');
+  deptEl.style.display = 'none';
+  document.getElementById('al-sel-baseprice').textContent = '— scrivi descrizione e prezzo —';
+
+  document.getElementById('al-empty-hint').classList.add('hidden');
+  document.getElementById('al-selected').classList.remove('hidden');
+  setTimeout(() => document.getElementById('al-desc').focus(), 50);
   filterPricelist();
-  openModal('modal-add-line');
 }
 
-function renderAlSidebar() {
-  // Conta voci per categoria considerando il filtro testo corrente
-  const q = document.getElementById('al-search').value.toLowerCase().trim();
-  const matchesText = (i) => !q || (i.name || '').toLowerCase().includes(q)
-    || (i.description || '').toLowerCase().includes(q)
-    || (i.category || '').toLowerCase().includes(q)
-    || (i.keywords || []).some(k => k.toLowerCase().includes(q));
-  const counts = {};
-  for (const i of priceItems) {
-    if (i.is_active === false) continue;
-    if (!matchesText(i)) continue;
-    const c = i.category || 'Altro';
-    counts[c] = (counts[c] || 0) + 1;
+function renderAlSidebar(filteredItems) {
+  // Costruisce la sidebar a partire dagli items già filtrati per testo (NON per categoria attiva).
+  const total = filteredItems.length;
+  const deptMap = new Map();
+  for (const i of filteredItems) {
+    const cat = i.category || 'Altro';
+    const dept = i.department || '— Senza reparto —';
+    const color = i.department_color || '#6272f5';
+    if (!deptMap.has(dept)) deptMap.set(dept, { color, cats: new Map() });
+    const cats = deptMap.get(dept).cats;
+    cats.set(cat, (cats.get(cat) || 0) + 1);
   }
-  const cats = Object.keys(counts).sort();
-  const total = Object.values(counts).reduce((a,b)=>a+b, 0);
-  const div = document.getElementById('al-cat-sidebar');
-  div.innerHTML = `
-    <div class="al-cat ${alActiveCat === null ? 'active' : ''}" onclick="setAlCat(null)">
-      <span>Tutte</span><span class="count">${total}</span>
+
+  let html = `
+    <div class="al-cat al-cat-all ${alActiveCat === null ? 'active' : ''}" onclick="setAlCat(null)">
+      <span>📋 Tutte le voci</span>
+      <span class="count">${total}</span>
     </div>
-    ${cats.map(c => {
-      const safe = c.replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/'/g, '&#39;').replace(/</g, '&lt;');
-      return `
-      <div class="al-cat ${alActiveCat === c ? 'active' : ''}" data-cat="${safe}" onclick="setAlCat(this.dataset.cat)">
-        <span>${safe}</span><span class="count">${counts[c]}</span>
-      </div>`;
-    }).join('')}
+    <button type="button" class="al-free-btn" onclick="enableFreeLine()">+ voce libera (non in listino)</button>
   `;
+
+  const depts = [...deptMap.keys()].sort((a, b) => a.localeCompare(b));
+  for (const dept of depts) {
+    const { color, cats } = deptMap.get(dept);
+    const catList = [...cats.keys()].sort((a, b) => a.localeCompare(b));
+    html += `
+      <div class="al-dept-group">
+        <div class="al-dept-label">
+          <span class="al-dept-dot" style="background:${alEscape(color)};"></span>${alEscape(dept)}
+        </div>`;
+    for (const c of catList) {
+      const safe = alEscape(c);
+      const active = alActiveCat === c ? 'active' : '';
+      html += `
+        <div class="al-cat ${active}" data-cat="${safe}"
+             style="--dept-color:${alEscape(color)};"
+             onclick="setAlCat(this.dataset.cat)">
+          <span>${safe}</span><span class="count">${cats.get(c)}</span>
+        </div>`;
+    }
+    html += `</div>`;
+  }
+
+  document.getElementById('al-cat-sidebar').innerHTML = html;
 }
 
 function setAlCat(cat) {
   alActiveCat = cat;
-  renderAlSidebar();
   filterPricelist();
 }
 
 function filterPricelist() {
   const q = document.getElementById('al-search').value.toLowerCase().trim();
-  let filtered = priceItems.filter(i => i.is_active !== false);
-  if (q) {
-    filtered = filtered.filter(i =>
-      (i.name || '').toLowerCase().includes(q) ||
-      (i.description || '').toLowerCase().includes(q) ||
-      (i.category || '').toLowerCase().includes(q) ||
-      (i.keywords || []).some(k => k.toLowerCase().includes(q))
-    );
-  }
+  const baseActive = priceItems.filter(i => i.is_active !== false);
+  // Filtro testo (sidebar conta su questo)
+  const byText = q ? baseActive.filter(i => alMatchesText(i, q)) : baseActive;
+  // Filtro categoria (solo lista)
+  let filtered = byText;
   if (alActiveCat) {
     filtered = filtered.filter(i => (i.category || 'Altro') === alActiveCat);
   }
-  filtered = filtered.slice(0, 80);
-  renderAlSidebar();
+  const total = filtered.length;
+  const limited = filtered.slice(0, 80);
+
+  // Sidebar usa byText (così i conteggi seguono solo il testo, non la categoria attiva)
+  renderAlSidebar(byText);
+
+  // Badge conteggio
+  const countEl = document.getElementById('al-result-count');
+  if (countEl) {
+    countEl.textContent = total === 0 ? 'nessun risultato' :
+      total === 1 ? '1 voce' :
+      total <= limited.length ? `${total} voci` : `${limited.length} di ${total} voci`;
+  }
+
   const div = document.getElementById('al-results');
-  if (!filtered.length) {
-    div.innerHTML = `<div class="text-muted" style="padding:24px;text-align:center;font-size:13px;">${q || alActiveCat ? 'Nessun risultato' : 'Digita per cercare o seleziona una categoria'}</div>`;
+  if (!limited.length) {
+    const msg = (q || alActiveCat)
+      ? 'Nessuna voce nel listino con questi filtri.<br><span style="font-size:12px;">Pulisci la ricerca o crea una <a class="al-link-btn" onclick="enableFreeLine()" style="cursor:pointer;">voce libera</a>.</span>'
+      : 'Il listino è vuoto. Aggiungi voci dalla pagina Listino oppure crea una <a class="al-link-btn" onclick="enableFreeLine()" style="cursor:pointer;">voce libera</a>.';
+    div.innerHTML = `<div class="al-empty-results">${msg}</div>`;
     return;
   }
-  div.innerHTML = filtered.map(i => {
+
+  div.innerHTML = limited.map(i => {
     const sel = alSelectedId === i.id ? 'selected' : '';
+    const color = i.department_color || '#6272f5';
+    const priceTxt = i.price_list ? fmtCurrency(i.price_list) : '—';
     return `
-    <div class="al-result ${sel}" onclick="pickPriceItem(${i.id})">
-      <div class="head">
-        <span class="name">${i.name}</span>
-        <span class="price">${i.price_list ? fmtCurrency(i.price_list) : '—'}<span style="color:var(--text3);font-size:11px;"> / ${i.unit}</span></span>
+    <div class="al-result ${sel}" style="--dept-color:${alEscape(color)};" onclick="pickPriceItem(${i.id})">
+      <div class="al-result-body">
+        <div class="al-result-head">
+          <span class="name">${alEscape(i.name)}</span>
+          <span class="price">${priceTxt}<span class="unit"> / ${alEscape(i.unit)}</span></span>
+        </div>
+        <div class="meta">
+          ${i.category ? `<span class="al-tag al-tag-cat">${alEscape(i.category)}</span>` : ''}
+          ${i.department ? `<span class="al-tag" style="background:${alEscape(color)}22;color:${alEscape(color)};">${alEscape(i.department)}</span>` : ''}
+        </div>
+        ${i.description ? `<div class="desc">${alEscape(i.description)}</div>` : ''}
+        ${(i.keywords && i.keywords.length) ? `<div class="keys">${i.keywords.slice(0,8).map(k => `<span class="k">${alEscape(k)}</span>`).join('')}</div>` : ''}
       </div>
-      <div class="meta">
-        <span style="color:var(--indigo2);">${i.category || '—'}</span>
-        ${i.department ? `<span>· ${i.department}</span>` : ''}
-      </div>
-      ${i.description ? `<div class="desc">${i.description}</div>` : ''}
-      ${(i.keywords && i.keywords.length) ? `<div class="keys">${i.keywords.slice(0,6).map(k => `<span class="k">${k}</span>`).join('')}</div>` : ''}
     </div>`;
-  }).join('');
+  }).join('') + (total > limited.length
+    ? `<div class="al-more-hint">Mostro le prime ${limited.length} di ${total}. Affina la ricerca per vedere il resto.</div>`
+    : '');
 }
 
 function pickPriceItem(id) {
@@ -804,6 +1029,29 @@ function pickPriceItem(id) {
   document.getElementById('al-base-price').value = item.price_list || '';
   document.getElementById('al-unit').value = item.unit;
   document.getElementById('al-price').value = item.price_list || '';
+  document.getElementById('al-qty').value = '1';
+
+  // Aggiorna pannello selezione
+  document.getElementById('al-sel-name-text').textContent = item.name;
+  const catEl = document.getElementById('al-sel-cat');
+  if (item.category) { catEl.textContent = item.category; catEl.style.display = ''; }
+  else catEl.style.display = 'none';
+  const deptEl = document.getElementById('al-sel-dept');
+  if (item.department) {
+    const color = item.department_color || '#6272f5';
+    deptEl.textContent = item.department;
+    deptEl.style.display = '';
+    deptEl.style.background = color + '22';
+    deptEl.style.color = color;
+  } else {
+    deptEl.style.display = 'none';
+  }
+  document.getElementById('al-sel-baseprice').textContent =
+    item.price_list ? `Listino: ${fmtCurrency(item.price_list)} / ${item.unit}` : '';
+
+  document.getElementById('al-empty-hint').classList.add('hidden');
+  document.getElementById('al-selected').classList.remove('hidden');
+
   // Re-render risultati per evidenziare la selezione
   filterPricelist();
 }

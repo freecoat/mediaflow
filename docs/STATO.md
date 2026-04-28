@@ -8,7 +8,7 @@
 
 ## Versione corrente
 
-**v3.4.4** — 27 aprile 2026 sera tardi
+**v3.4.5** — 28 aprile 2026
 
 ## In corso
 
@@ -16,7 +16,9 @@ Nessun lavoro a metà.
 
 ## Prossimo step concordato
 
-**Test E2E #5 (search-first) sul Mac di Matteo**, poi **#4 server-side abort**.
+**Verifica visiva del modal "Aggiungi voce" ridisegnato sul Mac di Matteo**: aprire una quote, cliccare "+ Aggiungi voce", controllare che la sidebar mostri categorie raggruppate per reparto con dot colorato, che la lista listino sia leggibile (striscia reparto, badge, prezzo a destra), che il pannello selezione appaia solo dopo scelta e che il bottone "+ voce libera" funzioni.
+
+Poi: **Test E2E #5 (AI search-first)** sul Mac, infine **#4 server-side abort**.
 
 Per testare #5 servono prompt reali al copilot con provider AI attivo (Sonnet 4.6 consigliato, ma anche Ollama 8b dovrebbe funzionare grazie a SEARCH-FIRST esplicito nel system prompt).
 
@@ -59,4 +61,4 @@ Dopo conferma test sul Mac, passare a **#4 server-side abort**.
 
 ---
 
-*Ultimo aggiornamento: 27 aprile 2026 sera tardi — v3.4.4 chiusa: AI search-first nel listino + scenario C. Aspetta test E2E sul Mac prima di #4 server-side abort.*
+*Ultimo aggiornamento: 28 aprile 2026 — v3.4.5 chiusa: modal "Aggiungi voce" ridisegnato (sidebar per reparto, lista listino leggibile, pannello selezione condizionale, voce libera scorciatoiata). Aspetta verifica visiva sul Mac, poi test E2E #5 e #4 server-side abort.*
