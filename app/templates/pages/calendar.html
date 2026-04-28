@@ -201,9 +201,7 @@ async function createBooking() {
   } catch(e) { toast(e.message, 'error'); }
 }
 
-const STATUS_LABEL = {
-  tentative:'Provvisorio', confirmed:'Confermato', cancelled:'Annullato', completed:'Completato',
-};
+// STATUS_LABEL è globale in /static/js/global.js — non ridichiararlo qui.
 
 initCalendar();
 </script>

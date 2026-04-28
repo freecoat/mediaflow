@@ -1,5 +1,30 @@
 # MediaFlow — Changelog
 
+## v3.4.8.1 — Hotfix: STATUS_LABEL redeclaration + FullCalendar CSS 404 (28 aprile 2026)
+
+Due bug front-end che bloccavano `/planning` e generavano warning console: la pagina mostrava "nulla" anche dopo il fix v3.4.8 perché lo script JS falliva alla prima riga di parsing.
+
+### Bug 1 — `SyntaxError: redeclaration of const STATUS_LABEL`
+
+`/static/js/global.js` dichiara `const STATUS_LABEL` come globale (caricato in `base.html`). Le pagine `planning.html` e `calendar.html` lo ri-dichiaravano localmente con `const`, causando SyntaxError → l'intero script di pagina non veniva mai parsato → `loadJobs()` mai chiamata → tabella job vuota.
+
+Fix: rimosse le ridichiarazioni locali. Il `STATUS_LABEL` globale ha già tutti i valori necessari (`tentative`, `confirmed`, `cancelled`, `completed`, ecc.).
+
+### Bug 2 — FullCalendar CSS 404 → MIME type block
+
+`base.html` linkava `https://cdnjs.cloudflare.com/ajax/libs/fullcalendar/6.1.11/main.min.css`. Quel file non esiste in FullCalendar 6.x: il CDN restituiva una pagina HTML 404 con `Content-Type: text/html`, e il browser bloccava il caricamento per `X-Content-Type-Options: nosniff` su tutte le pagine. In v6 lo stylesheet è incorporato in `index.global.min.js`, niente CSS separato.
+
+Fix: rimosso il `<link rel="stylesheet">` da `base.html`.
+
+### File toccati
+
+- `app/main.py` — bump 3.4.8 → 3.4.8.1
+- `app/templates/base.html` — rimosso link `fullcalendar/main.min.css`
+- `app/templates/pages/planning.html` — rimossa redeclaration `STATUS_LABEL`
+- `app/templates/pages/calendar.html` — rimossa redeclaration `STATUS_LABEL`
+
+---
+
 ## v3.4.8 — Quote → Job automatico + bug "non vedo nessun job" (28 aprile 2026)
 
 Primo passo del re-design del flusso operativo discusso con Matteo. Cambia la natura del Job: non è più un'entità da creare a mano, è la materializzazione operativa automatica di una quote approvata. Eredita identità dal progetto.

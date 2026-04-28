@@ -160,10 +160,8 @@ async function changeStatus(jobId, status) {
   } catch(e) { toast(e.message, 'error'); }
 }
 
-const STATUS_LABEL = {
-  draft:'Bozza', active:'Attivo', on_hold:'In pausa',
-  completed:'Completato', invoiced:'Fatturato', cancelled:'Annullato',
-};
+// STATUS_LABEL è globale in /static/js/global.js — non ridichiararlo qui
+// (ridichiarazione causerebbe SyntaxError e bloccherebbe l'intero script).
 
 loadJobs();
 </script>
