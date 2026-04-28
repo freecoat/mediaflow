@@ -18,10 +18,11 @@ echo  [8] Migra database esistente (AI per-utente, tab Impostazioni AI) [v3.2]
 echo  [9] Migra database esistente (categoria override sulle righe quote) [v3.4.2]
 echo  [B] Migra database esistente (tenant_id su bookings) [v3.4.6]
 echo  [C] Migra database esistente (tabella time_punches HR) [v3.4.7]
+echo  [D] Migra database esistente (is_extra su job_cost_lines) [v3.4.9]
 echo  [A] Apri cartella upload
 echo  [0] Esci
 echo.
-set /p scelta="Scegli un'opzione (0-9, A, B, C): "
+set /p scelta="Scegli un'opzione (0-9, A, B, C, D): "
 
 if "%scelta%"=="1" goto avvia
 if "%scelta%"=="2" goto reset_db
@@ -34,6 +35,7 @@ if "%scelta%"=="8" goto migrate_ai
 if "%scelta%"=="9" goto migrate_cat_override
 if /i "%scelta%"=="B" goto migrate_booking_tenant
 if /i "%scelta%"=="C" goto migrate_time_punches
+if /i "%scelta%"=="D" goto migrate_jobcostline_extra
 if /i "%scelta%"=="A" goto uploads
 if "%scelta%"=="0" exit /b
 
@@ -154,6 +156,19 @@ set /p conferma="Procedo? (s/n): "
 if /i "%conferma%"=="s" (
     call .venv\Scripts\activate.bat
     python scripts\migrate_time_punches.py
+)
+pause & goto menu
+
+:migrate_jobcostline_extra
+echo.
+echo Migrazione: aggiunge is_extra su job_cost_lines.
+echo Marca lavorazioni aggiunte dopo l'approvazione della quote.
+echo Operazione non distruttiva e idempotente.
+echo.
+set /p conferma="Procedo? (s/n): "
+if /i "%conferma%"=="s" (
+    call .venv\Scripts\activate.bat
+    python scripts\migrate_jobcostline_extra.py
 )
 pause & goto menu
 

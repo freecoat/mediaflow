@@ -145,6 +145,9 @@ async function showJobDetail(jobId) {
             `<button class="btn btn-secondary btn-sm" onclick="changeStatus(${jobId},'${s}')">${STATUS_LABEL[s]}</button>`
           ).join('')}
         </div>
+      </div>
+      <div class="form-group" style="margin-top:14px;">
+        <a href="/jobs/${jobId}" class="btn btn-primary btn-sm">→ Vai al dettaglio job (lavorazioni e ore)</a>
       </div>`;
     openModal('modal-job-detail');
   } catch(e) { toast(e.message, 'error'); }

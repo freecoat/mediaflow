@@ -1,5 +1,69 @@
 # MediaFlow — Changelog
 
+## v3.4.9 — Lavorazioni come prima class + extra (28 aprile 2026)
+
+Secondo step del re-design del flusso operativo. Le `JobCostLine` (lavorazioni) ora hanno una vita propria nella pagina dettaglio job: ore quotate, lavorate, extra calcolate per riga, con possibilità di aggiungere lavorazioni "extra puro" post-approvazione (caso "il cliente chiede un upres in più").
+
+### Modello
+
+- `JobCostLine.is_extra: bool = False` — marca lavorazioni aggiunte dopo l'approvazione della quote (`quote_line_id` solitamente NULL). Distinto dallo "sforamento monte ore" su lavorazione standard, che si calcola come `quantity_actual > quantity_quoted`.
+- Migrazione idempotente `scripts/migrate_jobcostline_extra.py`, voce **[D]/[d]** in `strumenti.bat` / `strumenti.sh`.
+
+### Router /jobs (nuovo)
+
+- `GET /jobs/{id}` — pagina dettaglio
+- `GET /jobs/api/{id}` — payload completo con lavorazioni + aggregazioni:
+  - `quoted_hours_lines` somma `quantity_quoted` (escluse extra)
+  - `actual_hours_lines` somma `quantity_actual` (tutte)
+  - `extra_hours_lines` somma per riga: `quantity_actual` se `is_extra`, oppure `max(0, actual - quoted)` per riga standard sforata
+  - `planned_hours_calendar` somma durate Booking attivi sul job
+  - `actual_hours_punch` somma durate TimePunch chiusi sul job
+- `POST /jobs/api/{id}/cost-lines` — crea lavorazione (default `is_extra=true`)
+- `PUT /jobs/api/{id}/cost-lines/{line_id}` — modifica con ricalcolo automatico totali
+- `DELETE /jobs/api/{id}/cost-lines/{line_id}` — solo se `is_extra=true`. Le lavorazioni ereditate dalla quote possono essere solo modificate (o marcate non-fatturabili)
+
+Helper interni: `_aggregate_planned_hours`, `_aggregate_actual_hours`, `_line_dict`, `_job_payload`.
+
+### Pagina /jobs/{id}
+
+- Header con meta (cliente, progetto, quote, stato, budget quotato)
+- 4 cards riepilogo ore: Quotate (indaco), Pianificate calendario (verde menta), Lavorate timbrature (lime), Extra (arancione, sfondo evidenziato)
+- Tabella lavorazioni con colonne: descrizione + badge `EXTRA` se applicabile, unità, € unitario, ore quotate (con barra progresso `actual/quoted` arancione se sfora 100%), ore lavorate (in arancione se > quotate), ore extra, totale previsto
+- Click riga → modal modifica (per le ereditate, `quantity_quoted` non editabile; bottone elimina visibile solo per extra)
+- Bottone topbar "+ Aggiungi lavorazione extra" → modal con descrizione, qty, unit, prezzo, note, fatturabile
+
+### Link da /planning
+
+Modal dettaglio job ora ha bottone "→ Vai al dettaglio job (lavorazioni e ore)" che linka a `/jobs/{id}`.
+
+### Smoke test E2E
+
+- AST OK su tutti i file modificati
+- T1 GET `/jobs/api/3` ritorna 4 lavorazioni Gomorra (Conforming, Color HDR, QC, Deliverables) con `quoted_hours_lines=72`
+- T2 POST extra "Upres 2K → 4K episodio 5" 8h × €120: id 23, `is_extra=true`, `quoted=0`, `total_expected=960`
+- T3 PUT line 15 (Conforming, quoted 30h) con `actual=35` → `extra=5` calcolato, `total_expected=8750` (35×250)
+- T4 totali job aggiornati: `actual_hours_lines=35`, `extra_hours_lines=5`
+- T5 DELETE riga non-extra (Color HDR) → 400 con messaggio "Le lavorazioni ereditate non possono essere eliminate"
+- T6 DELETE riga extra (id 23) → ok
+- T7 GET `/jobs/3` HTML → 200
+
+### File toccati
+
+- `app/main.py` — bump 3.4.8.1 → 3.4.9, registrato router `jobs`
+- `app/models/models.py` — `JobCostLine.is_extra`
+- `app/routers/jobs.py` — nuovo, ~250 righe
+- `app/templates/pages/job_detail.html` — nuovo
+- `app/templates/pages/planning.html` — link "→ Vai al dettaglio job"
+- `scripts/migrate_jobcostline_extra.py` — nuovo
+- `strumenti.bat` / `strumenti.sh` — voce D
+
+### Limitazioni note (deferite a v3.4.10)
+
+- Ore pianificate/lavorate sono aggregate **al livello job**, non per singola lavorazione. Per granularità per-lavorazione serve `Booking.job_cost_line_id` (FK opzionale, in v3.4.10) e `TimePunch.job_cost_line_id` (analogo).
+- La modifica di una quote dopo l'approvazione non si propaga al job: serve una "sync" esplicita (UI in v3.4.10 o v3.4.11).
+
+---
+
 ## v3.4.8.1 — Hotfix: STATUS_LABEL redeclaration + FullCalendar CSS 404 (28 aprile 2026)
 
 Due bug front-end che bloccavano `/planning` e generavano warning console: la pagina mostrava "nulla" anche dopo il fix v3.4.8 perché lo script JS falliva alla prima riga di parsing.

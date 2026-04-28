@@ -8,23 +8,30 @@
 
 ## Versione corrente
 
-**v3.4.8** — 28 aprile 2026
+**v3.4.9** — 28 aprile 2026
 
 ## In corso
 
-Re-design del flusso `Quote → Job → Booking → Consuntivo → Cost Report` discusso e confermato con Matteo. Il Job non si crea più a mano: nasce automaticamente quando una quote passa a `approved`, eredita identità dal progetto, contiene le lavorazioni come monte ore. Booking pianificano risorse sulle lavorazioni (v3.4.10), TimePunch consuntivano. Sforamento monte ore = extra. Cost report doppio (interno con costi/margini, esterno per cliente con sole ore).
+Re-design del flusso `Quote → Job → Booking → Consuntivo → Cost Report`. Step **v3.4.8** (auto-promote) e **v3.4.9** (lavorazioni come prima class) chiusi. Il Job ora ha pagina dettaglio dedicata con monte ore, lavorate, extra. Lavorazioni extra puro aggiungibili via UI.
 
-Roadmap completa in 6 step (v3.4.8 → v3.4.13). Step v3.4.8 chiuso.
+Calendario brutto graficamente — Matteo lo confermerà nello step UX (rinviato post v3.4.13).
 
 ## Prossimo step concordato
 
-**v3.4.9 — Lavorazioni come prima class**: pagina dettaglio job con tabella lavorazioni (ore quotate / pianificate / lavorate / extra). `JobCostLine.is_extra` flag per nuove lavorazioni post-quote. Calcolo automatico extra da `TimePunch.job_id`.
+**v3.4.10 — Booking legati a lavorazione + booking interni**:
+- `Booking.job_cost_line_id` (FK opzionale): pianificare "Sara · Color HDR · Mare Nostrum" invece di "Sara · Mare Nostrum"
+- `BookingKind` enum: `project | internal_maintenance | internal_research | internal_training`. Per i `internal_*` `job_id` resta NULL → costo senza profitto, visibili in cost report interno
+- Suggerimento risorse del reparto della lavorazione quando si crea booking (non bloccante)
+- Quando aggiungo Booking.job_cost_line_id, le ore pianificate per riga diventano calcolabili → aggiornamento `_aggregate_planned_hours` per riga (oggi è solo job-level)
+- Stessa cosa per `TimePunch.job_cost_line_id` (così `actual_hours_punch` può essere distribuito per lavorazione)
 
-Verifiche sul Mac sospese da chiarire:
-- v3.4.5 modal "Aggiungi voce" ridisegnato
+Verifiche sul Mac sospese:
+- v3.4.5 modal "Aggiungi voce"
 - v3.4.6 booking multi-tenant
-- v3.4.7 sezione HR + integrazione calendario
-- v3.4.8 flusso Quote → Job: aprire una quote draft, cliccare "✓ Approva quote → Job", verificare creazione automatica con codice `{project.code}-J{N}` e titolo dal progetto, verificare che `/planning` mostri tutti i job (era 500)
+- v3.4.7 sezione HR + calendario integrato
+- v3.4.8 flusso Quote → Job auto
+- v3.4.8.1 hotfix STATUS_LABEL e FullCalendar CSS
+- v3.4.9 dettaglio job (`/jobs/{id}`) — accessibile cliccando un job in `/planning` poi "→ Vai al dettaglio job"
 - Test E2E AI search-first (v3.4.4)
 
 Per testare #5 servono prompt reali al copilot con provider AI attivo (Sonnet 4.6 consigliato, ma anche Ollama 8b dovrebbe funzionare grazie a SEARCH-FIRST esplicito nel system prompt).
@@ -50,11 +57,12 @@ Dopo conferma test sul Mac, passare a **#4 server-side abort**.
 
 **Cantiere Quote → Job → Cost Report (in corso)**:
 - ✅ **v3.4.8** Auto-promote Quote → Job + bug fix planning + rimosso job manuale
-- 🔜 **v3.4.9** Lavorazioni come prima class su `/jobs/{id}` (ore quotate/pianificate/lavorate/extra), `is_extra` flag
-- 🔜 **v3.4.10** `Booking.job_cost_line_id` + `BookingKind` per booking interni (manutenzione/training/research, no job)
+- ✅ **v3.4.8.1** Hotfix STATUS_LABEL + FullCalendar CSS
+- ✅ **v3.4.9** Pagina `/jobs/{id}` con lavorazioni first-class (ore quotate/pianificate/lavorate/extra) + `is_extra` flag + CRUD lavorazioni extra
+- 🔜 **v3.4.10** `Booking.job_cost_line_id` + `BookingKind` per booking interni; aggregazione ore pianificate/lavorate per lavorazione
 - 🔜 **v3.4.11** `ResourceUnavailability`/`TimePunch.kind=leave` ben visibili nel calendario come fasce bloccanti
-- 🔜 **v3.4.12** Cost report interno arricchito (costi risorse rate × ore TimePunch + hardcost da `PriceItem.hardcosts` + booking interni)
-- 🔜 **v3.4.13** Cost report esterno (consuntivo cliente: solo ore lavorate per lavorazione + extra; bottone "→ Genera quote v2")
+- 🔜 **v3.4.12** Cost report interno arricchito (costi risorse rate × ore TimePunch + hardcost + booking interni)
+- 🔜 **v3.4.13** Cost report esterno (consuntivo cliente: solo ore lavorate + extra; bottone "→ Genera quote v2")
 
 **Sezione HR — sviluppo successivo**:
 - Aggregazioni avanzate (ore per progetto/risorsa/mese, export CSV/PDF cedolino)
@@ -91,4 +99,4 @@ Dopo conferma test sul Mac, passare a **#4 server-side abort**.
 
 ---
 
-*Ultimo aggiornamento: 28 aprile 2026 — v3.4.8 chiusa: re-design Quote→Job. Bug fix critico (`/planning/api/jobs` 500 su `j.budget`/`j.budget_quoted`), auto-promote Quote→Job su `approved` con codice `{project.code}-J{N}` e titolo da progetto, rollback con cancellazione job se senza attività (bloccato altrimenti), riapprovazione riattiva job cancelled (no duplicati), rimossa creazione manuale job + modal "Converti in Job". Nuovo `JobStatus.cancelled`. Prossimo: v3.4.9 lavorazioni come prima class.*
+*Ultimo aggiornamento: 28 aprile 2026 — v3.4.9 chiusa: pagina `/jobs/{id}` con lavorazioni first-class (ore quotate/pianificate calendario/lavorate timbrature/extra), `JobCostLine.is_extra` flag con CRUD limitato (modifica sempre, elimina solo se extra), aggregazione ore al livello job, link da modal `/planning`. Smoke test E2E completo. Prossimo: v3.4.10 (booking legati a lavorazione + booking interni).*

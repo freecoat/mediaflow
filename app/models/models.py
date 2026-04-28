@@ -525,6 +525,11 @@ class JobCostLine(Base):
     total_accrued: Mapped[float] = mapped_column(Float, default=0.0)
     total_expected: Mapped[float] = mapped_column(Float, default=0.0)
     is_billable: Mapped[bool] = mapped_column(Boolean, default=True)
+    # Lavorazione "extra": aggiunta dopo l'approvazione della quote (es. cliente
+    # chiede un upres in più). quote_line_id è NULL per gli extra puri.
+    # Una riga ereditata dalla quote può comunque generare extra senza is_extra=True
+    # se quantity_actual > quantity_quoted (sforamento monte ore).
+    is_extra: Mapped[bool] = mapped_column(Boolean, default=False)
     work_date: Mapped[Optional[date]] = mapped_column(Date, nullable=True)
     notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     job: Mapped["Job"] = relationship(back_populates="cost_lines")

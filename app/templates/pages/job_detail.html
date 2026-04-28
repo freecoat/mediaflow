@@ -1,0 +1,379 @@
+{% extends "base.html" %}
+{% set active_page = "planning" %}
+
+{% block title %}Job {{ job.code }} — MediaFlow{% endblock %}
+{% block topbar_title %}Job · {{ job.code }} — {{ job.title }}{% endblock %}
+
+{% block topbar_actions %}
+  <a href="/planning" class="btn btn-ghost btn-sm">← Tutti i job</a>
+  {% if job.quote %}
+  <a href="/quotes#{{ job.quote.id }}" class="btn btn-ghost btn-sm">→ Quote {{ job.quote.number }}</a>
+  {% endif %}
+  {% if job.project %}
+  <a href="/projects/{{ job.project.id }}" class="btn btn-ghost btn-sm">→ Progetto {{ job.project.code }}</a>
+  {% endif %}
+  <button class="btn btn-primary btn-sm" onclick="openAddExtra()">+ Aggiungi lavorazione extra</button>
+{% endblock %}
+
+{% block head %}
+<style>
+  .job-meta {
+    display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 12px; margin-bottom: 16px;
+  }
+  .job-meta-card {
+    background: var(--bg-elev, #1a1d29);
+    border: 1px solid var(--border, #2a2e3d);
+    border-radius: 6px; padding: 10px 14px;
+  }
+  .job-meta-card .lbl { font-size: 11px; text-transform: uppercase; opacity: .7; letter-spacing: .5px; }
+  .job-meta-card .val { font-size: 16px; font-weight: 500; margin-top: 2px; }
+  .hours-cards {
+    display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 16px;
+  }
+  .hours-card {
+    background: var(--bg-elev, #1a1d29);
+    border: 1px solid var(--border, #2a2e3d);
+    border-left: 4px solid #6272f5;
+    border-radius: 6px; padding: 10px 14px; min-width: 150px;
+  }
+  .hours-card.quoted { border-left-color: #6272f5; }
+  .hours-card.planned { border-left-color: #2ec4b6; }
+  .hours-card.actual { border-left-color: #84cc16; }
+  .hours-card.extra { border-left-color: #fb923c; background: rgba(251,146,60,0.06); }
+  .hours-card .lbl { font-size: 11px; text-transform: uppercase; opacity: .7; }
+  .hours-card .val { font-size: 22px; font-weight: 600; font-variant-numeric: tabular-nums; }
+  .hours-card .unit { font-size: 12px; opacity: .6; margin-left: 3px; }
+  .lines-table td.col-hours { text-align: right; font-variant-numeric: tabular-nums; }
+  .lines-table td.col-money { text-align: right; font-variant-numeric: tabular-nums; }
+  .lines-table tr.line-extra { background: rgba(251,146,60,0.05); }
+  .lines-table tr.over-budget td.col-actual { color: #fb923c; font-weight: 600; }
+  .extra-badge {
+    display: inline-block; padding: 1px 6px; border-radius: 8px;
+    font-size: 10px; font-weight: 600; text-transform: uppercase;
+    background: rgba(251,146,60,0.2); color: #fb923c; margin-left: 6px;
+  }
+  .progress {
+    display: inline-block; height: 4px; width: 50px;
+    background: var(--bg3, #2a2e3d); border-radius: 2px; overflow: hidden;
+    margin-left: 6px; vertical-align: middle;
+  }
+  .progress-fill { height: 100%; background: #6272f5; }
+  .progress-fill.over { background: #fb923c; }
+</style>
+{% endblock %}
+
+{% block content %}
+
+<!-- ── Meta job ────────────────────────────────────────────── -->
+<div class="job-meta">
+  <div class="job-meta-card">
+    <div class="lbl">Cliente</div>
+    <div class="val">{% if job.client %}{{ job.client.name }}{% else %}—{% endif %}</div>
+  </div>
+  <div class="job-meta-card">
+    <div class="lbl">Progetto</div>
+    <div class="val">{% if job.project %}{{ job.project.code }} — {{ job.project.title }}{% else %}—{% endif %}</div>
+  </div>
+  <div class="job-meta-card">
+    <div class="lbl">Quote</div>
+    <div class="val">{% if job.quote %}{{ job.quote.number }}{% else %}—{% endif %}</div>
+  </div>
+  <div class="job-meta-card">
+    <div class="lbl">Stato</div>
+    <div class="val" id="job-status">{{ job.status.value if job.status.value else job.status }}</div>
+  </div>
+  <div class="job-meta-card">
+    <div class="lbl">Budget quotato</div>
+    <div class="val mono">€ {{ '{:,.2f}'.format(job.budget_quoted or 0).replace(',', '_').replace('.', ',').replace('_', '.') }}</div>
+  </div>
+</div>
+
+<!-- ── Riepilogo ore ───────────────────────────────────────── -->
+<div class="hours-cards" id="hours-cards">
+  <div class="hours-card quoted">
+    <div class="lbl">Quotate</div>
+    <div class="val" id="h-quoted">—<span class="unit"></span></div>
+  </div>
+  <div class="hours-card planned">
+    <div class="lbl">Pianificate (calendario)</div>
+    <div class="val" id="h-planned">—<span class="unit"></span></div>
+  </div>
+  <div class="hours-card actual">
+    <div class="lbl">Lavorate (timbrature)</div>
+    <div class="val" id="h-actual">—<span class="unit"></span></div>
+  </div>
+  <div class="hours-card extra">
+    <div class="lbl">Extra</div>
+    <div class="val" id="h-extra">—<span class="unit"></span></div>
+  </div>
+</div>
+
+<!-- ── Tabella lavorazioni ─────────────────────────────────── -->
+<div class="card">
+  <div class="card-title mb-3">Lavorazioni</div>
+  <div class="table-wrap">
+    <table class="lines-table">
+      <thead>
+        <tr>
+          <th>Descrizione</th>
+          <th>Unità</th>
+          <th style="text-align:right;">€ unitario</th>
+          <th style="text-align:right;">Quotate</th>
+          <th style="text-align:right;">Lavorate</th>
+          <th style="text-align:right;">Extra</th>
+          <th style="text-align:right;">Tot. previsto</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody id="lines-tbody">
+        <tr><td colspan="8" class="text-muted" style="text-align:center;padding:24px;">Caricamento…</td></tr>
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<!-- ── Modal aggiungi lavorazione extra ────────────────────── -->
+<div class="modal-overlay" id="modal-add-extra">
+  <div class="modal">
+    <div class="modal-header">
+      <span class="modal-title">+ Lavorazione extra</span>
+      <button class="btn btn-ghost btn-icon" onclick="closeModal('modal-add-extra')">✕</button>
+    </div>
+    <div class="modal-body">
+      <p class="text-sm text-muted mb-3">Lavorazione aggiunta dopo l'approvazione della quote (es. "il cliente chiede un upres in più"). Verrà marcata <code>is_extra=true</code> e contabilizzata nel cost report come extra.</p>
+      <div class="form-group">
+        <label class="form-label">Descrizione *</label>
+        <input class="form-input" id="ex-desc" placeholder="Es: Upres 2K → 4K">
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label class="form-label">Quantità *</label>
+          <input class="form-input" id="ex-qty" type="number" step="0.5" min="0.5" value="1">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Unità</label>
+          <select class="form-select" id="ex-unit">
+            <option value="day">giorno</option>
+            <option value="hour" selected>ora</option>
+            <option value="piece">cad</option>
+            <option value="lump">forfait</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label class="form-label">€ unitario</label>
+          <input class="form-input" id="ex-price" type="number" step="0.01" value="0">
+        </div>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Note</label>
+        <textarea class="form-textarea" id="ex-notes" rows="2"></textarea>
+      </div>
+      <label class="flex items-center gap-2 mb-2" style="cursor:pointer;font-size:13px;">
+        <input type="checkbox" id="ex-billable" checked>
+        <span>Fatturabile</span>
+      </label>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeModal('modal-add-extra')">Annulla</button>
+      <button class="btn btn-primary" onclick="saveExtra()">Aggiungi</button>
+    </div>
+  </div>
+</div>
+
+<!-- ── Modal modifica lavorazione ──────────────────────────── -->
+<div class="modal-overlay" id="modal-edit-line">
+  <div class="modal">
+    <div class="modal-header">
+      <span class="modal-title" id="edit-line-title">Modifica lavorazione</span>
+      <button class="btn btn-ghost btn-icon" onclick="closeModal('modal-edit-line')">✕</button>
+    </div>
+    <div class="modal-body">
+      <input type="hidden" id="ed-id">
+      <div class="form-group">
+        <label class="form-label">Descrizione</label>
+        <input class="form-input" id="ed-desc">
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label class="form-label">Ore quotate</label>
+          <input class="form-input" id="ed-quoted" type="number" step="0.5" disabled>
+          <small class="text-muted">Non modificabile da qui se ereditata da quote</small>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Ore lavorate</label>
+          <input class="form-input" id="ed-actual" type="number" step="0.5">
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label class="form-label">Unità</label>
+          <input class="form-input" id="ed-unit">
+        </div>
+        <div class="form-group">
+          <label class="form-label">€ unitario</label>
+          <input class="form-input" id="ed-price" type="number" step="0.01">
+        </div>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Note</label>
+        <textarea class="form-textarea" id="ed-notes" rows="2"></textarea>
+      </div>
+      <label class="flex items-center gap-2 mb-2" style="cursor:pointer;font-size:13px;">
+        <input type="checkbox" id="ed-billable">
+        <span>Fatturabile</span>
+      </label>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeModal('modal-edit-line')">Annulla</button>
+      <button class="btn btn-danger" id="ed-delete-btn" onclick="deleteLine()" style="display:none;margin-right:auto;">Elimina</button>
+      <button class="btn btn-primary" onclick="saveLine()">Salva</button>
+    </div>
+  </div>
+</div>
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+const JOB_ID = {{ job.id }};
+let currentJob = null;
+
+function fmtH(n) { return (n == null) ? '—' : Number(n).toFixed(2); }
+function fmtEur(n) {
+  if (n == null) return '—';
+  return new Intl.NumberFormat('it-IT', {style:'currency', currency:'EUR'}).format(n);
+}
+function escapeHtml(s) {
+  if (s == null) return '';
+  return String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+
+async function loadJob() {
+  try {
+    currentJob = await api('GET', `/jobs/api/${JOB_ID}`);
+    renderTotals(currentJob.totals);
+    renderLines(currentJob.cost_lines);
+  } catch(e) {
+    toast(e.message || 'Errore caricamento job', 'error');
+  }
+}
+
+function renderTotals(t) {
+  document.getElementById('h-quoted').innerHTML = `${fmtH(t.quoted_hours_lines)}<span class="unit">h</span>`;
+  document.getElementById('h-planned').innerHTML = `${fmtH(t.planned_hours_calendar)}<span class="unit">h</span>`;
+  document.getElementById('h-actual').innerHTML = `${fmtH(t.actual_hours_punch)}<span class="unit">h</span>`;
+  document.getElementById('h-extra').innerHTML = `${fmtH(t.extra_hours_lines)}<span class="unit">h</span>`;
+}
+
+function renderLines(lines) {
+  const tbody = document.getElementById('lines-tbody');
+  if (!lines.length) {
+    tbody.innerHTML = '<tr><td colspan="8" class="text-muted" style="text-align:center;padding:24px;">Nessuna lavorazione</td></tr>';
+    return;
+  }
+  tbody.innerHTML = lines.map(l => {
+    const overBudget = !l.is_extra && l.quantity_actual > l.quantity_quoted;
+    const pct = l.quantity_quoted > 0 ? Math.min(100, (l.quantity_actual / l.quantity_quoted) * 100) : 0;
+    const pctOver = l.quantity_quoted > 0 ? (l.quantity_actual / l.quantity_quoted) * 100 : 0;
+    const progress = !l.is_extra && l.quantity_quoted > 0
+      ? `<span class="progress"><span class="progress-fill ${pctOver > 100 ? 'over' : ''}" style="width:${Math.min(100, pctOver)}%;"></span></span>`
+      : '';
+    return `<tr class="${l.is_extra ? 'line-extra' : ''} ${overBudget ? 'over-budget' : ''}" onclick='openEditLine(${l.id})' style="cursor:pointer;">
+      <td>
+        ${escapeHtml(l.description)}${l.is_extra ? '<span class="extra-badge">EXTRA</span>' : ''}
+        ${!l.is_billable ? '<span class="extra-badge" style="background:rgba(150,150,150,0.2);color:#999;">no fatt.</span>' : ''}
+      </td>
+      <td>${escapeHtml(l.unit)}</td>
+      <td class="col-money">${fmtEur(l.unit_price)}</td>
+      <td class="col-hours">${l.is_extra ? '—' : fmtH(l.quantity_quoted)}${progress}</td>
+      <td class="col-hours col-actual">${fmtH(l.quantity_actual)}</td>
+      <td class="col-hours">${l.quantity_extra > 0 ? fmtH(l.quantity_extra) : '—'}</td>
+      <td class="col-money">${fmtEur(l.total_expected)}</td>
+      <td></td>
+    </tr>`;
+  }).join('');
+}
+
+function openAddExtra() {
+  document.getElementById('ex-desc').value = '';
+  document.getElementById('ex-qty').value = '1';
+  document.getElementById('ex-unit').value = 'hour';
+  document.getElementById('ex-price').value = '0';
+  document.getElementById('ex-notes').value = '';
+  document.getElementById('ex-billable').checked = true;
+  openModal('modal-add-extra');
+}
+
+async function saveExtra() {
+  const desc = document.getElementById('ex-desc').value.trim();
+  const qty  = parseFloat(document.getElementById('ex-qty').value);
+  if (!desc || !qty || qty <= 0) { toast('Descrizione e quantità obbligatorie', 'error'); return; }
+  try {
+    const fd = new FormData();
+    fd.append('description', desc);
+    fd.append('quantity', qty);
+    fd.append('unit', document.getElementById('ex-unit').value);
+    fd.append('unit_price', document.getElementById('ex-price').value || '0');
+    fd.append('notes', document.getElementById('ex-notes').value);
+    fd.append('is_extra', 'true');
+    fd.append('is_billable', document.getElementById('ex-billable').checked ? 'true' : 'false');
+    await api('POST', `/jobs/api/${JOB_ID}/cost-lines`, fd);
+    closeModal('modal-add-extra');
+    toast('Lavorazione extra aggiunta', 'success');
+    loadJob();
+  } catch(e) { toast(e.message || 'Errore', 'error'); }
+}
+
+function openEditLine(lineId) {
+  const l = currentJob.cost_lines.find(x => x.id === lineId);
+  if (!l) return;
+  document.getElementById('edit-line-title').textContent = l.is_extra ? `Lavorazione extra #${l.id}` : `Lavorazione #${l.id} (da quote)`;
+  document.getElementById('ed-id').value = l.id;
+  document.getElementById('ed-desc').value = l.description;
+  document.getElementById('ed-quoted').value = l.quantity_quoted;
+  document.getElementById('ed-quoted').disabled = !l.is_extra;
+  document.getElementById('ed-actual').value = l.quantity_actual;
+  document.getElementById('ed-unit').value = l.unit;
+  document.getElementById('ed-price').value = l.unit_price;
+  document.getElementById('ed-notes').value = l.notes || '';
+  document.getElementById('ed-billable').checked = l.is_billable;
+  // Solo gli extra possono essere eliminati
+  document.getElementById('ed-delete-btn').style.display = l.is_extra ? '' : 'none';
+  openModal('modal-edit-line');
+}
+
+async function saveLine() {
+  const id = document.getElementById('ed-id').value;
+  const fd = new FormData();
+  fd.append('description', document.getElementById('ed-desc').value);
+  fd.append('quantity_actual', document.getElementById('ed-actual').value || '0');
+  if (!document.getElementById('ed-quoted').disabled) {
+    fd.append('quantity_quoted', document.getElementById('ed-quoted').value || '0');
+  }
+  fd.append('unit', document.getElementById('ed-unit').value);
+  fd.append('unit_price', document.getElementById('ed-price').value || '0');
+  fd.append('notes', document.getElementById('ed-notes').value);
+  fd.append('is_billable', document.getElementById('ed-billable').checked ? 'true' : 'false');
+  try {
+    await api('PUT', `/jobs/api/${JOB_ID}/cost-lines/${id}`, fd);
+    closeModal('modal-edit-line');
+    toast('Lavorazione aggiornata', 'success');
+    loadJob();
+  } catch(e) { toast(e.message || 'Errore', 'error'); }
+}
+
+async function deleteLine() {
+  const id = document.getElementById('ed-id').value;
+  if (!confirm('Eliminare questa lavorazione extra?')) return;
+  try {
+    await api('DELETE', `/jobs/api/${JOB_ID}/cost-lines/${id}`);
+    closeModal('modal-edit-line');
+    toast('Lavorazione eliminata', 'success');
+    loadJob();
+  } catch(e) { toast(e.message || 'Errore', 'error'); }
+}
+
+loadJob();
+</script>
+{% endblock %}
