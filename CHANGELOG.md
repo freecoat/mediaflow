@@ -1,5 +1,74 @@
 # MediaFlow — Changelog
 
+## v3.4.11 — Hub Pianificazione con 5 viste + filtri trasversali (28 aprile 2026)
+
+`/planning/` diventa un hub con **5 viste** selezionabili da tab e **9 filtri trasversali** applicabili a tutte. Architettura C: una sola entry sidebar, switcher in topbar dell'area main. URL-state (`?view=…&filtro=…`) bookmarkable.
+
+Risponde alla richiesta di flessibilità nelle visualizzazioni del calendario e di poter vedere fino al trimestre.
+
+### Viste implementate (parte 1/2 — top 6 split)
+
+1. **📋 Tabella** — la vecchia lista job, ora filtrata server-side via API
+2. **📅 Calendario** — FullCalendar timeGridWeek/dayGridMonth/timeGridDay (era `/planning/calendar`, ora hostato qui)
+3. **🗓️ Trimestre** — `multiMonthYear` con `multiMonthMaxColumns: 3`, mostra 3 mesi affiancati
+4. **📑 Agenda** — lista cronologica raggruppata per giorno, con badge sorgente (Booking / Timbratura)
+5. **✓ Le mie attività** — filtrata sulla resource collegata al `current_user`. Card con label "In ritardo" / "Oggi" / "[giorno]" colorate
+
+Top 6 priorità — viste rinviate a v3.4.12: **Resource Timeline (vis-timeline)**, **Kanban stato job**, **Gantt per job**.
+
+### Filtri trasversali (sidebar fissa)
+
+9 filtri applicati su **tutte** le viste live, server-side:
+- search testuale (`q` su code/title)
+- reparto (`department_id` — su jobs filtra via cost_lines, su booking via resource)
+- cliente (`client_id`)
+- progetto (`project_id`)
+- job (`job_id`)
+- risorsa (`resource_id`)
+- stato job (`status`)
+- tipo booking (`kind` — project / internal_*)
+- periodo da/a (`from_date` / `to_date`)
+
+Ogni filtro è riflesso nella query string → URL bookmarkable. Pulsante "Reset filtri" pulisce tutti.
+
+### Backend
+
+`/planning/api/jobs` esteso: `project_id`, `department_id` (subquery EXISTS via JobCostLine.price_item.department), `q` (LIKE su code/title), `from_date`/`to_date`. Response include `client_id`, `project_id`, `project_code`.
+
+`/planning/api/bookings` esteso: `kind`, `client_id` (join Job), `project_id` (join Job), `department_id` (join Resource), `status`.
+
+`/hr/api/punches` esteso: `client_id`, `project_id`, `department_id` (join analoghi).
+
+### Backward-compat
+
+`/planning/calendar` redirige 302 → `/planning/?view=calendar`. Vecchio template `pages/calendar.html` resta on-disk ma non più routato (rimovibile in futuro).
+
+### Dipendenze
+
+`vis-timeline@7.7.3` caricato via CDN nel template (preparazione v3.4.12 — Resource Timeline). FullCalendar 6.1.11 già caricato include `multiMonth` plugin in core.
+
+### Smoke test E2E
+
+- AST OK
+- HTTP 200 su tutte le 5 viste: `?view=jobs|calendar|trimester|agenda|todo`
+- `/planning/calendar` → 302 → 200 (redirect)
+- Filtri API: `?status=approved` → 1 job, `?client_id=1` → 2 job, `?q=mare` → match Mare Nostrum, `?kind=project` → 7 booking
+
+### File toccati
+
+- `app/main.py` — bump 3.4.10 → 3.4.11
+- `app/routers/planning.py` — `/` riscritto come hub con `?view=`, filtri estesi su `/api/jobs` e `/api/bookings`, `_resolve_current_user` aggiunto, `/calendar` → redirect
+- `app/routers/hr.py` — `/api/punches` esteso con `client_id`/`project_id`/`department_id`
+- `app/templates/pages/planning.html` — riscritto come hub con sidebar filtri + 5 viste tab + URL-state JS
+
+### Limitazioni note
+
+- "Le mie attività" è vuota se l'utente loggato non ha `Resource.user_id` collegato → mostra messaggio guida
+- Il `/planning/api/jobs` filtro `from_date`/`to_date` è permissivo (job con date NULL passano sempre): è il comportamento desiderato per non perdere job senza scadenza
+- Il vecchio `pages/calendar.html` resta on-disk; rimovibile dopo verifica sul Mac
+
+---
+
 ## v3.4.10 — Booking legati a lavorazione + booking interni (28 aprile 2026)
 
 Terzo step del re-design del flusso operativo. Il calendario diventa granulare: pianifico "Sara · Color HDR · Mare Nostrum" invece di "Sara · Mare Nostrum". Aggregazione ore pianificate/lavorate **per singola lavorazione**, non più solo a livello job.

@@ -2,114 +2,488 @@
 {% set active_page = "planning" %}
 
 {% block title %}Pianificazione — MediaFlow{% endblock %}
-{% block topbar_title %}Pianificazione Job{% endblock %}
+{% block topbar_title %}Pianificazione{% endblock %}
 
 {% block topbar_actions %}
   <a href="/quotes" class="btn btn-secondary btn-sm">→ Vai a quotazioni</a>
 {% endblock %}
 
+{% block head %}
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/vis-timeline@7.7.3/styles/vis-timeline-graph2d.min.css">
+<style>
+  .pl-shell { display: grid; grid-template-columns: 240px 1fr; gap: 16px; align-items: flex-start; }
+  .pl-filters { background: var(--bg-elev,#1a1d29); border: 1px solid var(--border,#2a2e3d); border-radius: 8px; padding: 14px; position: sticky; top: 12px; }
+  .pl-filters h4 { font-size: 11px; text-transform: uppercase; letter-spacing: .8px; color: var(--text3,#888); margin: 0 0 8px; }
+  .pl-filters .form-group { margin-bottom: 10px; }
+  .pl-filters .form-group label { font-size: 11px; color: var(--text3,#888); margin-bottom: 3px; display: block; }
+  .pl-filters select, .pl-filters input { width: 100%; }
+  .pl-tabs { display: flex; gap: 2px; margin-bottom: 14px; flex-wrap: wrap; border-bottom: 1px solid var(--border,#2a2e3d); }
+  .pl-tab { padding: 8px 14px; cursor: pointer; font-size: 13px; color: var(--text2,#aaa); border-bottom: 2px solid transparent; user-select: none; }
+  .pl-tab:hover { color: var(--text,#eee); }
+  .pl-tab.active { color: var(--text,#eee); border-bottom-color: #6272f5; font-weight: 500; }
+  .pl-view { display: none; }
+  .pl-view.active { display: block; }
+  .pl-empty { padding: 32px; text-align: center; color: var(--text3,#888); }
+  .agenda-day { margin-bottom: 18px; }
+  .agenda-day-header { font-size: 12px; text-transform: uppercase; color: var(--text3); letter-spacing: 1px; padding: 6px 10px; background: var(--bg3,#22253a); border-radius: 4px 4px 0 0; }
+  .agenda-evt { display: grid; grid-template-columns: 80px 1fr auto; gap: 12px; padding: 8px 10px; border-bottom: 1px solid var(--border); align-items: center; }
+  .agenda-evt:hover { background: rgba(98,114,245,0.05); }
+  .agenda-evt .time { color: var(--text3); font-size: 12px; font-variant-numeric: tabular-nums; }
+  .agenda-evt .title { font-size: 13px; }
+  .agenda-evt .badge-src { font-size: 10px; padding: 2px 6px; border-radius: 8px; font-weight: 600; }
+  .badge-src.booking { background: rgba(98,114,245,0.2); color: #6272f5; }
+  .badge-src.punch { background: rgba(156,163,175,0.2); color: #aaa; }
+  .todo-card { background: var(--bg-elev); border: 1px solid var(--border); border-left: 4px solid #6272f5; border-radius: 6px; padding: 10px 14px; margin-bottom: 8px; }
+  .todo-card.late { border-left-color: #ef4444; }
+  .todo-card.today { border-left-color: #fb923c; }
+  .todo-card.upcoming { border-left-color: #2ec4b6; }
+  .todo-card .when { font-size: 11px; text-transform: uppercase; color: var(--text3); }
+  .todo-card .what { font-size: 14px; font-weight: 500; margin-top: 2px; }
+  .todo-card .meta { font-size: 12px; color: var(--text3); margin-top: 4px; }
+  #cal-host, #tri-host, #ag-host, #todo-host { min-height: 600px; }
+  .cal-bar { display:flex; gap:6px; margin-bottom:8px; flex-wrap: wrap; }
+  .pl-active-filters-bar { font-size: 12px; color: var(--text3); margin-bottom: 8px; }
+  .pl-active-filters-bar .chip { display: inline-block; background: rgba(98,114,245,0.15); color: #6272f5; padding: 2px 8px; border-radius: 10px; margin-right: 6px; font-weight: 500; }
+</style>
+{% endblock %}
+
 {% block content %}
 
-<!-- ── Filtri ──────────────────────────────────────────────── -->
-<div class="flex items-center gap-3 mb-4" style="flex-wrap:wrap;">
-  <div class="search-bar">
-    <span>🔍</span>
-    <input type="text" id="search-input" placeholder="Cerca job…" oninput="filterJobs()">
+<div class="pl-shell">
+
+  <!-- ── Sidebar filtri ──────────────────────────────────────── -->
+  <aside class="pl-filters">
+    <h4>Filtri</h4>
+
+    <div class="form-group">
+      <label>Cerca</label>
+      <input type="text" id="f-q" class="form-input" placeholder="codice, titolo…" oninput="onFilterChange()">
+    </div>
+
+    <div class="form-group">
+      <label>Reparto</label>
+      <select id="f-dept" class="form-select" onchange="onFilterChange()">
+        <option value="">— tutti —</option>
+        {% for d in departments %}
+        <option value="{{ d.id }}">{{ d.name }}</option>
+        {% endfor %}
+      </select>
+    </div>
+
+    <div class="form-group">
+      <label>Cliente</label>
+      <select id="f-client" class="form-select" onchange="onFilterChange()">
+        <option value="">— tutti —</option>
+        {% for c in clients %}
+        <option value="{{ c.id }}">{{ c.name }}</option>
+        {% endfor %}
+      </select>
+    </div>
+
+    <div class="form-group">
+      <label>Progetto</label>
+      <select id="f-project" class="form-select" onchange="onFilterChange()">
+        <option value="">— tutti —</option>
+        {% for p in projects %}
+        <option value="{{ p.id }}">{{ p.code }} — {{ p.title[:40] }}</option>
+        {% endfor %}
+      </select>
+    </div>
+
+    <div class="form-group">
+      <label>Job</label>
+      <select id="f-job" class="form-select" onchange="onFilterChange()">
+        <option value="">— tutti —</option>
+        {% for j in jobs %}
+        <option value="{{ j.id }}">{{ j.code }} — {{ j.title[:35] }}</option>
+        {% endfor %}
+      </select>
+    </div>
+
+    <div class="form-group">
+      <label>Risorsa</label>
+      <select id="f-resource" class="form-select" onchange="onFilterChange()">
+        <option value="">— tutte —</option>
+        {% for r in resources %}
+        <option value="{{ r.id }}">{{ r.name }}</option>
+        {% endfor %}
+      </select>
+    </div>
+
+    <div class="form-group">
+      <label>Stato job</label>
+      <select id="f-status" class="form-select" onchange="onFilterChange()">
+        <option value="">— tutti —</option>
+        <option value="draft">Bozza</option>
+        <option value="quoting">In quotazione</option>
+        <option value="approved">Approvato</option>
+        <option value="active">Attivo</option>
+        <option value="on_hold">In pausa</option>
+        <option value="completed">Completato</option>
+        <option value="invoiced">Fatturato</option>
+      </select>
+    </div>
+
+    <div class="form-group">
+      <label>Tipo booking</label>
+      <select id="f-kind" class="form-select" onchange="onFilterChange()">
+        <option value="">— tutti —</option>
+        <option value="project">Progetto</option>
+        <option value="internal_maintenance">Manutenzione</option>
+        <option value="internal_research">R&amp;D</option>
+        <option value="internal_training">Formazione</option>
+      </select>
+    </div>
+
+    <div class="form-group">
+      <label>Da</label>
+      <input type="date" id="f-from" class="form-input" onchange="onFilterChange()">
+    </div>
+
+    <div class="form-group">
+      <label>A</label>
+      <input type="date" id="f-to" class="form-input" onchange="onFilterChange()">
+    </div>
+
+    <button class="btn btn-ghost btn-sm" onclick="resetFilters()" style="width:100%;">Reset filtri</button>
+  </aside>
+
+  <!-- ── Main area ────────────────────────────────────────────── -->
+  <div>
+    <div class="pl-tabs" id="pl-tabs">
+      <div class="pl-tab" data-view="jobs">📋 Tabella</div>
+      <div class="pl-tab" data-view="calendar">📅 Calendario</div>
+      <div class="pl-tab" data-view="trimester">🗓️ Trimestre</div>
+      <div class="pl-tab" data-view="agenda">📑 Agenda</div>
+      <div class="pl-tab" data-view="todo">✓ Le mie</div>
+    </div>
+
+    <div id="active-filters" class="pl-active-filters-bar"></div>
+
+    <!-- Jobs table -->
+    <div class="pl-view" id="view-jobs">
+      <div class="card">
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Codice</th>
+                <th>Titolo</th>
+                <th>Cliente</th>
+                <th>Progetto</th>
+                <th>Periodo</th>
+                <th>Budget</th>
+                <th>Stato</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody id="jobs-table">
+              <tr><td colspan="8" class="pl-empty">Caricamento…</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- Calendar (FullCalendar week/month) -->
+    <div class="pl-view" id="view-calendar">
+      <div class="card"><div id="cal-host"></div></div>
+    </div>
+
+    <!-- Trimester (multiMonth) -->
+    <div class="pl-view" id="view-trimester">
+      <div class="card"><div id="tri-host"></div></div>
+    </div>
+
+    <!-- Agenda list -->
+    <div class="pl-view" id="view-agenda">
+      <div class="card"><div id="ag-host"><div class="pl-empty">Caricamento…</div></div></div>
+    </div>
+
+    <!-- Todo (le mie) -->
+    <div class="pl-view" id="view-todo">
+      <div class="card"><div id="todo-host"><div class="pl-empty">Caricamento…</div></div></div>
+    </div>
+
   </div>
-  <select class="form-select" style="width:auto;" id="filter-status" onchange="filterJobs()">
-    <option value="">Tutti gli stati</option>
-    <option value="draft">Bozza</option>
-    <option value="active">Attivo</option>
-    <option value="on_hold">In pausa</option>
-    <option value="completed">Completato</option>
-    <option value="invoiced">Fatturato</option>
-  </select>
-  <select class="form-select" style="width:auto;" id="filter-client" onchange="filterJobs()">
-    <option value="">Tutti i clienti</option>
-    {% for client in clients %}
-    <option value="{{ client.id }}">{{ client.name }}</option>
-    {% endfor %}
-  </select>
 </div>
 
-<!-- ── Tabella job ─────────────────────────────────────────── -->
-<div class="card">
-  <div class="table-wrap">
-    <table>
-      <thead>
-        <tr>
-          <th>Codice</th>
-          <th>Titolo</th>
-          <th>Cliente</th>
-          <th>Periodo</th>
-          <th>Budget</th>
-          <th>Stato</th>
-          <th></th>
-        </tr>
-      </thead>
-      <tbody id="jobs-table">
-        <tr><td colspan="7" class="text-muted" style="text-align:center;padding:24px;">Caricamento…</td></tr>
-      </tbody>
-    </table>
-  </div>
-</div>
-
-<!-- ── Modal dettaglio job ─────────────────────────────────── -->
+<!-- Modal dettaglio job -->
 <div class="modal-overlay" id="modal-job-detail">
   <div class="modal" style="max-width:640px;">
     <div class="modal-header">
       <span class="modal-title" id="detail-title">Dettaglio job</span>
       <button class="btn btn-ghost btn-icon" onclick="closeModal('modal-job-detail')">✕</button>
     </div>
-    <div class="modal-body" id="detail-body">
-    </div>
+    <div class="modal-body" id="detail-body"></div>
   </div>
 </div>
 
 {% endblock %}
 
 {% block scripts %}
+<script src="https://cdn.jsdelivr.net/npm/vis-timeline@7.7.3/standalone/umd/vis-timeline-graph2d.min.js"></script>
 <script>
-let allJobs = [];
+const ACTIVE_VIEW = {{ ('"' + active_view + '"')|safe }};
+const CURRENT_RESOURCE_ID = {{ current_resource_id if current_resource_id else 'null' }};
+const VALID_VIEWS = ['jobs','calendar','trimester','agenda','todo'];
+let calInstance = null;
+let triInstance = null;
 
-async function loadJobs() {
-  allJobs = await api('GET', '/planning/api/jobs');
-  renderJobs(allJobs);
+// ── URL state ───────────────────────────────────────────────
+function readFiltersFromURL() {
+  const p = new URLSearchParams(location.search);
+  ['q','dept','client','project','job','resource','status','kind','from','to'].forEach(k => {
+    const el = document.getElementById('f-' + k);
+    if (el && p.get(k)) el.value = p.get(k);
+  });
+}
+function writeFiltersToURL(view) {
+  const p = new URLSearchParams();
+  p.set('view', view);
+  ['q','dept','client','project','job','resource','status','kind','from','to'].forEach(k => {
+    const v = document.getElementById('f-' + k).value;
+    if (v) p.set(k, v);
+  });
+  history.replaceState(null, '', '/planning/?' + p.toString());
+}
+function getFilterParams() {
+  const p = {};
+  const map = {q:'q', dept:'department_id', client:'client_id', project:'project_id', job:'job_id', resource:'resource_id', status:'status', kind:'kind', from:'from_date', to:'to_date'};
+  for (const [k, key] of Object.entries(map)) {
+    const v = document.getElementById('f-'+k).value;
+    if (v) p[key] = v;
+  }
+  return p;
+}
+function buildQS(extra={}) {
+  const p = {...getFilterParams(), ...extra};
+  return new URLSearchParams(p).toString();
 }
 
-function renderJobs(jobs) {
+// ── Tabs ───────────────────────────────────────────────────
+function setView(view) {
+  if (!VALID_VIEWS.includes(view)) view = 'jobs';
+  document.querySelectorAll('.pl-tab').forEach(t => {
+    t.classList.toggle('active', t.dataset.view === view);
+  });
+  document.querySelectorAll('.pl-view').forEach(v => {
+    v.classList.toggle('active', v.id === 'view-' + view);
+  });
+  writeFiltersToURL(view);
+  renderView(view);
+}
+document.getElementById('pl-tabs').addEventListener('click', e => {
+  const t = e.target.closest('.pl-tab');
+  if (t) setView(t.dataset.view);
+});
+
+function renderActiveFiltersBar() {
+  const labels = {
+    q: 'Cerca', dept: 'Reparto', client: 'Cliente', project: 'Progetto',
+    job: 'Job', resource: 'Risorsa', status: 'Stato', kind: 'Tipo',
+    from: 'Dal', to: 'Al',
+  };
+  const chips = [];
+  for (const k of Object.keys(labels)) {
+    const el = document.getElementById('f-'+k);
+    if (!el || !el.value) continue;
+    let val = el.value;
+    if (el.tagName === 'SELECT') {
+      val = el.options[el.selectedIndex].text;
+    }
+    chips.push(`<span class="chip">${labels[k]}: ${escapeHtml(val)}</span>`);
+  }
+  document.getElementById('active-filters').innerHTML = chips.join('');
+}
+
+function escapeHtml(s) {
+  if (s == null) return '';
+  return String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+
+function onFilterChange() {
+  renderActiveFiltersBar();
+  // Re-render vista attiva
+  const active = document.querySelector('.pl-tab.active');
+  if (active) setView(active.dataset.view);
+}
+
+function resetFilters() {
+  ['q','dept','client','project','job','resource','status','kind','from','to'].forEach(k => {
+    document.getElementById('f-'+k).value = '';
+  });
+  onFilterChange();
+}
+
+// ── Renderer per vista ─────────────────────────────────────
+async function renderView(view) {
+  if (view === 'jobs') return renderJobs();
+  if (view === 'calendar') return renderCalendar();
+  if (view === 'trimester') return renderTrimester();
+  if (view === 'agenda') return renderAgenda();
+  if (view === 'todo') return renderTodo();
+}
+
+// ── Jobs table ─────────────────────────────────────────────
+async function renderJobs() {
+  const qs = buildQS();
+  const jobs = await api('GET', '/planning/api/jobs' + (qs ? '?'+qs : ''));
   const tbody = document.getElementById('jobs-table');
   if (!jobs.length) {
-    tbody.innerHTML = '<tr><td colspan="7" class="text-muted" style="text-align:center;padding:24px;">Nessun job trovato</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="8" class="pl-empty">Nessun job</td></tr>';
     return;
   }
   tbody.innerHTML = jobs.map(j => `
-    <tr>
-      <td class="mono" style="font-size:12px;color:var(--text2);">${j.code}</td>
-      <td style="font-weight:500;">${j.title}</td>
-      <td style="color:var(--text2);">${j.client || '—'}</td>
+    <tr onclick='showJobDetail(${j.id})' style="cursor:pointer;">
+      <td class="mono" style="font-size:12px;color:var(--text2);">${escapeHtml(j.code)}</td>
+      <td style="font-weight:500;">${escapeHtml(j.title||'')}</td>
+      <td style="color:var(--text2);">${escapeHtml(j.client||'—')}</td>
+      <td class="mono text-sm">${escapeHtml(j.project_code||'—')}</td>
       <td class="text-sm text-muted">${fmtDate(j.start_date)} ${j.end_date ? '→ '+fmtDate(j.end_date) : ''}</td>
       <td class="mono text-sm">${j.budget ? fmtCurrency(j.budget) : '—'}</td>
       <td>${statusBadge(j.status)}</td>
-      <td>
-        <button class="btn btn-ghost btn-sm" onclick="showJobDetail(${j.id})">Dettaglio</button>
-      </td>
+      <td onclick="event.stopPropagation()"><a class="btn btn-ghost btn-sm" href="/jobs/${j.id}">Apri</a></td>
     </tr>`).join('');
 }
 
-function filterJobs() {
-  const q = document.getElementById('search-input').value.toLowerCase();
-  const status = document.getElementById('filter-status').value;
-  const client = document.getElementById('filter-client').value;
-  const filtered = allJobs.filter(j => {
-    const matchQ = !q || j.title.toLowerCase().includes(q) || j.code.toLowerCase().includes(q);
-    const matchS = !status || j.status === status;
-    const matchC = !client || String(j.client_id) === client;
-    return matchQ && matchS && matchC;
+// ── Calendar (week/month) ──────────────────────────────────
+function renderCalendar() {
+  const host = document.getElementById('cal-host');
+  if (calInstance) { calInstance.destroy(); calInstance = null; }
+  host.innerHTML = '';
+  const qs = buildQS();
+  calInstance = new FullCalendar.Calendar(host, {
+    locale: 'it',
+    initialView: 'timeGridWeek',
+    headerToolbar: { left: 'prev,next today', center: 'title', right: 'dayGridMonth,timeGridWeek,timeGridDay' },
+    height: 720, slotMinTime: '07:00', slotMaxTime: '22:00',
+    allDaySlot: false, nowIndicator: true,
+    eventSources: [
+      { id:'bookings', url:'/planning/api/bookings?'+qs, method:'GET' },
+      { id:'punches', url:'/hr/api/punches?format=fullcalendar&'+qs, method:'GET' },
+    ],
+    eventClick: (info) => {
+      const p = info.event.extendedProps;
+      const start = info.event.start ? info.event.start.toLocaleString('it-IT') : '';
+      const end = info.event.end ? info.event.end.toLocaleString('it-IT') : '';
+      toast(`${info.event.title} | ${start}${end?' – '+end:''}`, 'info', 5000);
+    },
   });
-  renderJobs(filtered);
+  calInstance.render();
 }
 
+// ── Trimestre (multiMonth) ─────────────────────────────────
+function renderTrimester() {
+  const host = document.getElementById('tri-host');
+  if (triInstance) { triInstance.destroy(); triInstance = null; }
+  host.innerHTML = '';
+  const qs = buildQS();
+  triInstance = new FullCalendar.Calendar(host, {
+    locale: 'it',
+    initialView: 'multiMonthYear',
+    multiMonthMaxColumns: 3,
+    multiMonthMinWidth: 280,
+    headerToolbar: { left: 'prev,next today', center: 'title', right: '' },
+    height: 800,
+    eventSources: [
+      { id:'bookings', url:'/planning/api/bookings?'+qs, method:'GET' },
+      { id:'punches', url:'/hr/api/punches?format=fullcalendar&'+qs, method:'GET' },
+    ],
+    visibleRange: () => {
+      const start = new Date();
+      start.setDate(1);
+      const end = new Date(start);
+      end.setMonth(end.getMonth() + 3);
+      return { start, end };
+    },
+    eventClick: (info) => {
+      const start = info.event.start ? info.event.start.toLocaleDateString('it-IT') : '';
+      toast(`${info.event.title} | ${start}`, 'info', 4000);
+    },
+  });
+  triInstance.render();
+}
+
+// ── Agenda list ────────────────────────────────────────────
+async function renderAgenda() {
+  const qs = buildQS();
+  const [bookings, punches] = await Promise.all([
+    api('GET', '/planning/api/bookings'+(qs?'?'+qs:'')),
+    api('GET', '/hr/api/punches?format=fullcalendar'+(qs?'&'+qs:'')),
+  ]);
+  const all = [...bookings, ...punches].filter(e => e.start);
+  all.sort((a,b) => new Date(a.start) - new Date(b.start));
+  const host = document.getElementById('ag-host');
+  if (!all.length) { host.innerHTML = '<div class="pl-empty">Nessun evento nel periodo</div>'; return; }
+
+  // Raggruppa per giorno
+  const byDay = {};
+  for (const e of all) {
+    const d = new Date(e.start);
+    const key = d.toISOString().substring(0,10);
+    if (!byDay[key]) byDay[key] = [];
+    byDay[key].push(e);
+  }
+  const html = Object.keys(byDay).sort().map(day => {
+    const dt = new Date(day+'T00:00:00');
+    const head = dt.toLocaleDateString('it-IT', {weekday:'long', day:'numeric', month:'long', year:'numeric'});
+    const evs = byDay[day].map(e => {
+      const s = new Date(e.start);
+      const e_ = e.end ? new Date(e.end) : null;
+      const time = s.toLocaleTimeString('it-IT',{hour:'2-digit',minute:'2-digit'}) + (e_ ? ' – '+e_.toLocaleTimeString('it-IT',{hour:'2-digit',minute:'2-digit'}) : '');
+      const src = (e.extendedProps && e.extendedProps.source) || (e.id && String(e.id).startsWith('punch-') ? 'punch' : 'booking');
+      const srcLbl = src === 'punch' ? 'Timbratura' : 'Booking';
+      return `<div class="agenda-evt">
+        <div class="time">${time}</div>
+        <div class="title">${escapeHtml(e.title || '')}</div>
+        <div><span class="badge-src ${src}">${srcLbl}</span></div>
+      </div>`;
+    }).join('');
+    return `<div class="agenda-day">
+      <div class="agenda-day-header">${head}</div>
+      ${evs}
+    </div>`;
+  }).join('');
+  host.innerHTML = html;
+}
+
+// ── Todo "Le mie" ──────────────────────────────────────────
+async function renderTodo() {
+  const host = document.getElementById('todo-host');
+  if (!CURRENT_RESOURCE_ID) {
+    host.innerHTML = '<div class="pl-empty">Nessuna risorsa associata al tuo utente. Imposta un Resource collegato in Impostazioni → Utenti.</div>';
+    return;
+  }
+  const fp = getFilterParams();
+  fp.resource_id = CURRENT_RESOURCE_ID;
+  const qs = new URLSearchParams(fp).toString();
+  const [bookings, punches] = await Promise.all([
+    api('GET', '/planning/api/bookings?'+qs),
+    api('GET', '/hr/api/punches?format=fullcalendar&'+qs),
+  ]);
+  const all = [...bookings, ...punches].filter(e => e.start);
+  all.sort((a,b) => new Date(a.start) - new Date(b.start));
+  if (!all.length) { host.innerHTML = '<div class="pl-empty">Nessuna attività programmata per te</div>'; return; }
+  const today = new Date(); today.setHours(0,0,0,0);
+  const tomorrow = new Date(today); tomorrow.setDate(today.getDate()+1);
+  host.innerHTML = all.map(e => {
+    const s = new Date(e.start);
+    let cls = 'upcoming', when = s.toLocaleDateString('it-IT',{weekday:'short',day:'numeric',month:'short'});
+    if (s < today) { cls = 'late'; when = 'In ritardo · ' + when; }
+    else if (s < tomorrow) { cls = 'today'; when = 'Oggi · ' + s.toLocaleTimeString('it-IT',{hour:'2-digit',minute:'2-digit'}); }
+    const meta = (e.extendedProps && e.extendedProps.cost_line_description)
+      ? e.extendedProps.cost_line_description
+      : ((e.extendedProps && e.extendedProps.kind) || '');
+    return `<div class="todo-card ${cls}">
+      <div class="when">${when}</div>
+      <div class="what">${escapeHtml(e.title || '')}</div>
+      ${meta ? '<div class="meta">'+escapeHtml(meta)+'</div>' : ''}
+    </div>`;
+  }).join('');
+}
+
+// ── Job detail modal ───────────────────────────────────────
 async function showJobDetail(jobId) {
   try {
     const [job, report] = await Promise.all([
@@ -140,7 +514,7 @@ async function showJobDetail(jobId) {
       </div>
       <div class="form-group">
         <label class="form-label">Cambia stato</label>
-        <div class="flex gap-2">
+        <div class="flex gap-2" style="flex-wrap:wrap;">
           ${['draft','active','on_hold','completed','invoiced'].map(s =>
             `<button class="btn btn-secondary btn-sm" onclick="changeStatus(${jobId},'${s}')">${STATUS_LABEL[s]}</button>`
           ).join('')}
@@ -159,13 +533,13 @@ async function changeStatus(jobId, status) {
     await api('PUT', `/planning/api/jobs/${jobId}/status`, fd);
     toast('Stato aggiornato', 'success');
     closeModal('modal-job-detail');
-    loadJobs();
+    onFilterChange();
   } catch(e) { toast(e.message, 'error'); }
 }
 
-// STATUS_LABEL è globale in /static/js/global.js — non ridichiararlo qui
-// (ridichiarazione causerebbe SyntaxError e bloccherebbe l'intero script).
-
-loadJobs();
+// ── Init ───────────────────────────────────────────────────
+readFiltersFromURL();
+renderActiveFiltersBar();
+setView(ACTIVE_VIEW);
 </script>
 {% endblock %}

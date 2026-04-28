@@ -155,6 +155,9 @@ async def list_punches(
     kind: Optional[PunchKind] = None,
     from_date: Optional[datetime] = None,
     to_date: Optional[datetime] = None,
+    client_id: Optional[int] = None,
+    project_id: Optional[int] = None,
+    department_id: Optional[int] = None,
     format: str = "json",
     db: Session = Depends(get_db),
 ):
@@ -170,12 +173,21 @@ async def list_punches(
     if kind:
         q = q.filter(TimePunch.kind == kind)
     if from_date:
-        # Prendi anche punches in corso che si sovrappongono al range
         q = q.filter(
             (TimePunch.end_datetime.is_(None)) | (TimePunch.end_datetime >= from_date)
         )
     if to_date:
         q = q.filter(TimePunch.start_datetime <= to_date)
+    if client_id or project_id:
+        q = q.join(Job, TimePunch.job_id == Job.id)
+        if client_id:
+            q = q.filter(Job.client_id == client_id)
+        if project_id:
+            q = q.filter(Job.project_id == project_id)
+    if department_id:
+        q = q.join(Resource, TimePunch.resource_id == Resource.id).filter(
+            Resource.department_id == department_id
+        )
     q = q.order_by(TimePunch.start_datetime.desc())
     punches = q.all()
 

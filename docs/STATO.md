@@ -8,22 +8,24 @@
 
 ## Versione corrente
 
-**v3.4.10** — 28 aprile 2026
+**v3.4.11** — 28 aprile 2026
 
 ## In corso
 
-Re-design del flusso `Quote → Job → Booking → Consuntivo → Cost Report`. Tre step su sei chiusi (v3.4.8 auto-promote, v3.4.9 lavorazioni first-class, v3.4.10 booking legati a lavorazione + booking interni). Le ore pianificate/lavorate ora si aggregano per **singola lavorazione**, non più solo per job. Categoria booking interni (manutenzione/R&D/training) modellata.
+Cantiere **Visualizzazioni Pianificazione** (split in 2 versioni). v3.4.11 chiusa = parte 1: hub `/planning/` con 5 viste e 9 filtri trasversali. v3.4.12 = parte 2 (resource timeline vis-timeline + kanban stato + gantt per job).
 
-Calendario brutto graficamente + il modal "+ Booking" non sa ancora scegliere `kind` o lavorazione → modale verrà rifatto in step UX dedicato.
+Cantiere ferie/malattia visibili come fasce bloccanti rinviato post v3.4.12. Cost report doppio (interno/esterno cliente) post v3.4.12.
 
 ## Prossimo step concordato
 
-**v3.4.11 — Ferie/malattia visibili nel calendario come fasce bloccanti**:
-- `ResourceUnavailability` (modello esiste già, no UI) → CRUD via UI in `/resources/{id}` o sezione HR
-- `TimePunch.kind=leave|sick` già nel calendario come secondo eventSource (v3.4.7), da rendere visibilmente "bloccante" — fascia grigio/lavanda con icona
-- Alert preventivo nel modal "+ Booking" se la risorsa selezionata è in ferie/malattia/permesso nel range scelto
-- (Eventuale) bottone rapido in `/hr` per creare "ferie" che proietti nel calendario di tutti i pianificatori
+**v3.4.12 — Viste pesanti (parte 2 split)**:
+- **Resource Timeline** con vis-timeline: risorse in righe verticali (raggruppate per reparto), tempo orizzontale, settimana/giorno/trimestre selezionabili. Open source MIT.
+- **Kanban per stato job**: colonne `draft|active|on_hold|completed|invoiced`, card draggable (riusa SortableJS già in uso)
+- **Gantt per job** dentro `/jobs/{id}`: barre orizzontali per le lavorazioni, possibili dipendenze. Frappe Gantt o DHTMLX community.
+- Stessi 9 filtri trasversali del v3.4.11 applicati a queste viste
 
+Cantiere successivo (post v3.4.12):
+- **v3.4.13** Ferie/malattia visibili nel calendario come fasce bloccanti
 Verifiche sul Mac sospese (cumulative):
 - v3.4.5 modal "Aggiungi voce"
 - v3.4.6 booking multi-tenant
@@ -32,7 +34,8 @@ Verifiche sul Mac sospese (cumulative):
 - v3.4.8.1 hotfix STATUS_LABEL e FullCalendar CSS
 - v3.4.9 dettaglio job
 - v3.4.9.1 hotfix finance budget
-- v3.4.10 aggregazione ore per lavorazione (visibile in `/jobs/{id}` con colonne Pian./Lavor.)
+- v3.4.10 aggregazione ore per lavorazione (colonne Pian./Lavor. in `/jobs/{id}`)
+- v3.4.11 hub `/planning/` con 5 viste (Tabella, Calendario, Trimestre, Agenda, Le mie) + 9 filtri trasversali
 - Test E2E AI search-first (v3.4.4)
 
 Per testare #5 servono prompt reali al copilot con provider AI attivo (Sonnet 4.6 consigliato, ma anche Ollama 8b dovrebbe funzionare grazie a SEARCH-FIRST esplicito nel system prompt).
@@ -56,16 +59,20 @@ Dopo conferma test sul Mac, passare a **#4 server-side abort**.
 - 🔜 **E** Capability AI `propose_booking` + `propose_time_punch`
 - 🔜 **F** Gantt per job
 
-**Cantiere Quote → Job → Cost Report (in corso)**:
+**Cantiere Quote → Job → Cost Report (sospeso)**:
 - ✅ **v3.4.8** Auto-promote Quote → Job + bug fix planning + rimosso job manuale
 - ✅ **v3.4.8.1** Hotfix STATUS_LABEL + FullCalendar CSS
 - ✅ **v3.4.9** Pagina `/jobs/{id}` con lavorazioni first-class
 - ✅ **v3.4.9.1** Hotfix finance.budget → finance.budget_quoted
-- ✅ **v3.4.10** `Booking.kind` + `Booking.job_cost_line_id` + `TimePunch.job_cost_line_id`; booking interni; aggregazione ore per lavorazione (colonne Pian./Lavor. in `/jobs/{id}`)
-- 🔜 **v3.4.11** `ResourceUnavailability`/`TimePunch.kind=leave` ben visibili nel calendario come fasce bloccanti
-- 🔜 **v3.4.12** Cost report interno arricchito (costi risorse rate × ore TimePunch + hardcost + booking interni)
-- 🔜 **v3.4.13** Cost report esterno (consuntivo cliente: solo ore lavorate + extra; bottone "→ Genera quote v2")
-- 🔜 **UX calendario** (modal "+ Booking" aggiornato per `kind` + scelta lavorazione, redesign visuale) — separato dal cantiere, dopo v3.4.13
+- ✅ **v3.4.10** Booking legati a lavorazione + booking interni
+- 🔜 **v3.4.13** Ferie/malattia come fasce bloccanti nel calendario
+- 🔜 **v3.4.14** Cost report interno arricchito (rate × ore + hardcost + booking interni)
+- 🔜 **v3.4.15** Cost report esterno cliente (solo ore + extra, bottone "→ Genera quote v2")
+- 🔜 **UX calendario** (modal "+ Booking" aggiornato, redesign visuale)
+
+**Cantiere Visualizzazioni Pianificazione (in corso)**:
+- ✅ **v3.4.11** Hub `/planning/` 5 viste + 9 filtri trasversali (Tabella, Calendario, Trimestre, Agenda, Le mie)
+- 🔜 **v3.4.12** Resource Timeline (vis-timeline, righe verticali risorse + reparto) + Kanban per stato job + Gantt per job
 
 **Sezione HR — sviluppo successivo**:
 - Aggregazioni avanzate (ore per progetto/risorsa/mese, export CSV/PDF cedolino)
@@ -102,4 +109,4 @@ Dopo conferma test sul Mac, passare a **#4 server-side abort**.
 
 ---
 
-*Ultimo aggiornamento: 28 aprile 2026 — v3.4.10 chiusa: BookingKind enum (project + 3 internal_*), Booking.job_cost_line_id e TimePunch.job_cost_line_id (FK opzionali), bookings.job_id rilassato a NULL via SQLite recreate-table, aggregazione ore per riga in /jobs/{id} con colonne Pian./Lavor. e avviso ore unassigned. Smoke E2E completo (8 test). UI modal calendario ancora vecchio — verrà rifatto post v3.4.13.*
+*Ultimo aggiornamento: 28 aprile 2026 — v3.4.11 chiusa: hub `/planning/` con 5 viste tab (Tabella, Calendario, Trimestre 3-mesi, Agenda lista, Le mie attività) + 9 filtri trasversali server-side (search, reparto, cliente, progetto, job, risorsa, stato, kind, periodo). URL-state bookmarkable. `/planning/calendar` redirige all'hub. vis-timeline pre-caricato per v3.4.12. Smoke 200 su tutte le viste, filtri API verificati.*

@@ -1,14 +1,16 @@
-"""Router pianificazione — job, clienti, prenotazioni risorse."""
-from fastapi import APIRouter, Depends, HTTPException, Request, Form
-from fastapi.responses import HTMLResponse
+"""Router pianificazione — hub viste + job, clienti, booking."""
+from fastapi import APIRouter, Cookie, Depends, HTTPException, Request, Form
+from fastapi.responses import HTMLResponse, RedirectResponse
 from typing import Optional
 from datetime import date, datetime
 from sqlalchemy.orm import Session, joinedload
+from sqlalchemy import or_
 from app.database import get_db
 from app.models import (
-    Job, JobStatus, Client, Booking, BookingStatus, BookingKind,
-    Resource, JobCostLine,
+    Job, JobStatus, Client, Project, Booking, BookingStatus, BookingKind,
+    Resource, ResourceType, JobCostLine, Department, User,
 )
+from app.services.auth import get_current_user_from_token
 
 router = APIRouter(prefix="/planning", tags=["planning"])
 
@@ -22,21 +24,72 @@ def _tpl():
 
 # ── Pagine HTML ───────────────────────────────────────────────────────
 
+VALID_VIEWS = ("jobs", "calendar", "trimester", "agenda", "todo")
+
+
+def _resolve_current_user(db: Session, token: Optional[str]) -> Optional[User]:
+    if token:
+        u = get_current_user_from_token(db, token)
+        if u:
+            return u
+    return db.query(User).filter(User.is_active == True).order_by(User.id).first()
+
+
 @router.get("/", response_class=HTMLResponse)
-async def planning_page(request: Request, db: Session = Depends(get_db)):
-    jobs = db.query(Job).options(joinedload(Job.client)).all()
-    clients = db.query(Client).all()
+async def planning_hub(
+    request: Request,
+    view: str = "jobs",
+    access_token: Optional[str] = Cookie(None),
+    db: Session = Depends(get_db),
+):
+    if view not in VALID_VIEWS:
+        view = "jobs"
+    # Dati per i filtri trasversali
+    clients = db.query(Client).filter(Client.tenant_id == CURRENT_TENANT).order_by(Client.name).all()
+    projects = (
+        db.query(Project).filter(Project.tenant_id == CURRENT_TENANT)
+        .order_by(Project.code).all()
+    )
+    departments = (
+        db.query(Department).filter(
+            Department.tenant_id == CURRENT_TENANT, Department.is_active == True
+        ).order_by(Department.sort_order, Department.name).all()
+    )
+    resources = (
+        db.query(Resource).filter(
+            Resource.tenant_id == CURRENT_TENANT, Resource.is_active == True
+        ).order_by(Resource.name).all()
+    )
+    jobs = (
+        db.query(Job).options(joinedload(Job.client), joinedload(Job.project))
+        .filter(Job.status != JobStatus.cancelled)
+        .order_by(Job.created_at.desc()).all()
+    )
+    cur_user = _resolve_current_user(db, access_token)
+    cur_resource_id = None
+    if cur_user:
+        my_res = db.query(Resource).filter(Resource.user_id == cur_user.id).first()
+        if my_res:
+            cur_resource_id = my_res.id
     return _tpl().TemplateResponse(
-        "pages/planning.html", {"request": request, "jobs": jobs, "clients": clients}
+        "pages/planning.html",
+        {
+            "request": request,
+            "active_view": view,
+            "clients": clients,
+            "projects": projects,
+            "departments": departments,
+            "resources": resources,
+            "jobs": jobs,
+            "current_resource_id": cur_resource_id,
+        },
     )
 
 
 @router.get("/calendar", response_class=HTMLResponse)
-async def calendar_page(request: Request, db: Session = Depends(get_db)):
-    resources = db.query(Resource).filter(Resource.is_active == True).all()
-    return _tpl().TemplateResponse(
-        "pages/calendar.html", {"request": request, "resources": resources}
-    )
+async def calendar_redirect():
+    """Compat v3.4.10−: ora il calendario è una vista dell'hub."""
+    return RedirectResponse(url="/planning/?view=calendar", status_code=302)
 
 
 # ── Clienti API ───────────────────────────────────────────────────────
@@ -71,18 +124,47 @@ async def create_client(
 async def list_jobs(
     status: Optional[JobStatus] = None,
     client_id: Optional[int] = None,
+    project_id: Optional[int] = None,
+    department_id: Optional[int] = None,
+    q: Optional[str] = None,
+    from_date: Optional[date] = None,
+    to_date: Optional[date] = None,
     db: Session = Depends(get_db),
 ):
-    q = db.query(Job).options(joinedload(Job.client))
+    """Lista job con filtri. Tenant filter implicito via project/client."""
+    qs = db.query(Job).options(joinedload(Job.client), joinedload(Job.project))
     if status:
-        q = q.filter(Job.status == status)
+        qs = qs.filter(Job.status == status)
     if client_id:
-        q = q.filter(Job.client_id == client_id)
-    jobs = q.all()
+        qs = qs.filter(Job.client_id == client_id)
+    if project_id:
+        qs = qs.filter(Job.project_id == project_id)
+    if department_id:
+        # Job tocca dipartimento se almeno una sua JobCostLine ha price_item
+        # del reparto. Filtro grossolano: subquery EXISTS.
+        from app.models import PriceItem
+        sub = (
+            db.query(JobCostLine.job_id)
+            .join(PriceItem, JobCostLine.price_item_id == PriceItem.id)
+            .filter(PriceItem.department_id == department_id)
+        )
+        qs = qs.filter(Job.id.in_(sub))
+    if q:
+        like = f"%{q.strip()}%"
+        qs = qs.filter(or_(Job.code.ilike(like), Job.title.ilike(like)))
+    if from_date:
+        qs = qs.filter(or_(Job.end_date.is_(None), Job.end_date >= from_date))
+    if to_date:
+        qs = qs.filter(or_(Job.start_date.is_(None), Job.start_date <= to_date))
+    jobs = qs.order_by(Job.created_at.desc()).all()
     return [
         {
             "id": j.id, "code": j.code, "title": j.title,
-            "status": j.status, "client": j.client.name if j.client else None,
+            "status": j.status.value if hasattr(j.status, "value") else j.status,
+            "client_id": j.client_id,
+            "client": j.client.name if j.client else None,
+            "project_id": j.project_id,
+            "project_code": j.project.code if j.project else None,
             "start_date": j.start_date, "end_date": j.end_date,
             "budget": j.budget_quoted,
         }
@@ -169,6 +251,11 @@ async def list_bookings(
     resource_id: Optional[int] = None,
     from_date: Optional[datetime] = None,
     to_date: Optional[datetime] = None,
+    kind: Optional[BookingKind] = None,
+    client_id: Optional[int] = None,
+    project_id: Optional[int] = None,
+    department_id: Optional[int] = None,
+    status: Optional[BookingStatus] = None,
     db: Session = Depends(get_db),
 ):
     q = db.query(Booking).options(
@@ -180,10 +267,26 @@ async def list_bookings(
         q = q.filter(Booking.job_id == job_id)
     if resource_id:
         q = q.filter(Booking.resource_id == resource_id)
+    if kind:
+        q = q.filter(Booking.kind == kind)
+    if status:
+        q = q.filter(Booking.status == status)
     if from_date:
         q = q.filter(Booking.end_datetime >= from_date)
     if to_date:
         q = q.filter(Booking.start_datetime <= to_date)
+    # Filtri via job → client/project
+    if client_id or project_id:
+        q = q.join(Job, Booking.job_id == Job.id)
+        if client_id:
+            q = q.filter(Job.client_id == client_id)
+        if project_id:
+            q = q.filter(Job.project_id == project_id)
+    # Filtro reparto via resource
+    if department_id:
+        q = q.join(Resource, Booking.resource_id == Resource.id).filter(
+            Resource.department_id == department_id
+        )
     bookings = q.all()
     # Formato FullCalendar-compatible
     return [
