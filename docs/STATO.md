@@ -8,27 +8,24 @@
 
 ## Versione corrente
 
-**v3.4.7** — 28 aprile 2026
+**v3.4.8** — 28 aprile 2026
 
 ## In corso
 
-Cantiere **"Calendario e Pianificazione"** aperto. Chiusi: **D** (Booking multi-tenant, v3.4.6) e **timbrature/idle Opzione 2** (sezione HR `/hr` con `TimePunch`, v3.4.7). Prossimi: **A** UX calendario, **B** UI ferie/indisponibilità, **C** riconciliare Assignment↔Booking, **E** capability AI booking, **F** gantt per job. + sviluppo HR avanzato (aggregazioni, auto-timbratura login, costo orario nel cost report).
+Re-design del flusso `Quote → Job → Booking → Consuntivo → Cost Report` discusso e confermato con Matteo. Il Job non si crea più a mano: nasce automaticamente quando una quote passa a `approved`, eredita identità dal progetto, contiene le lavorazioni come monte ore. Booking pianificano risorse sulle lavorazioni (v3.4.10), TimePunch consuntivano. Sforamento monte ore = extra. Cost report doppio (interno con costi/margini, esterno per cliente con sole ore).
+
+Roadmap completa in 6 step (v3.4.8 → v3.4.13). Step v3.4.8 chiuso.
 
 ## Prossimo step concordato
 
-**Verifica visiva sul Mac di Matteo** della sezione HR + integrazione calendario:
-1. Aprire `/hr` → vedere filtri funzionanti, totali per kind, modal "+ Nuova timbratura" che salva e modal modifica via click su riga
-2. Creare 2-3 timbrature di test (shift con job, idle, leave) per Luca/Sara
-3. Aprire `/planning/calendar` → vedere i 2 eventSources sovrapposti (bookings + timbrature), toggle "Sorgenti" funzionante, toggle risorse funzionante (prima era no-op)
-4. Click su un punch nel calendario → toast con durata o "in corso"
+**v3.4.9 — Lavorazioni come prima class**: pagina dettaglio job con tabella lavorazioni (ore quotate / pianificate / lavorate / extra). `JobCostLine.is_extra` flag per nuove lavorazioni post-quote. Calcolo automatico extra da `TimePunch.job_id`.
 
-Dopo conferma, partire con **step A — UX calendario**:
-- `editable: true` su FullCalendar + handler drag/resize → PUT `/planning/api/bookings/{id}` (endpoint da aggiungere) e PUT `/hr/api/punches/{id}` (esistente)
-- Click su evento → modal di modifica/cancellazione (oggi è solo toast)
-- Mostrare `ResourceUnavailability` come banded events grigi non cliccabili
-- Filtro server-side su `from_date`/`to_date` (oggi FullCalendar passa start/end ma noi non li usiamo)
-
-In parallelo, restano sospesi sul Mac: **verifica visiva v3.4.5** (modal "Aggiungi voce") e **test E2E #5** (AI search-first).
+Verifiche sul Mac sospese da chiarire:
+- v3.4.5 modal "Aggiungi voce" ridisegnato
+- v3.4.6 booking multi-tenant
+- v3.4.7 sezione HR + integrazione calendario
+- v3.4.8 flusso Quote → Job: aprire una quote draft, cliccare "✓ Approva quote → Job", verificare creazione automatica con codice `{project.code}-J{N}` e titolo dal progetto, verificare che `/planning` mostri tutti i job (era 500)
+- Test E2E AI search-first (v3.4.4)
 
 Per testare #5 servono prompt reali al copilot con provider AI attivo (Sonnet 4.6 consigliato, ma anche Ollama 8b dovrebbe funzionare grazie a SEARCH-FIRST esplicito nel system prompt).
 
@@ -42,17 +39,25 @@ Dopo conferma test sul Mac, passare a **#4 server-side abort**.
 
 ## Backlog (in ordine concordato)
 
-**Cantiere Calendario / Pianificazione (in corso)**:
-- ✅ **D** Booking multi-tenant (chiuso v3.4.6)
-- ✅ **Timbrature/idle (Opzione 2)** sezione HR `/hr` con `TimePunch` separato + integrazione calendario come secondo eventSource (chiuso v3.4.7)
-- 🔜 **A** UX calendario: drag/resize/move (editable:true), click evento → modal edit/cancel, mostrare `ResourceUnavailability` come banded grigi, filtro server-side su date range
+**Cantiere Calendario / Pianificazione (chiuso parzialmente)**:
+- ✅ **D** Booking multi-tenant (v3.4.6)
+- ✅ **Timbrature/idle Opzione 2** — sezione HR `/hr` con `TimePunch` separato + integrazione calendario (v3.4.7)
+- 🔜 **A** UX calendario (editable, drag/resize, click→modal edit/cancel, banded unavailability, filtro server-side) — rinviato dopo il re-design Quote→Job
 - 🔜 **B** UI `/resources/{id}` tab Disponibilità (CRUD `ResourceUnavailability`)
-- 🔜 **C** Riconciliare `JobResourceAssignment` (kanban `/assignments`) ↔ `Booking` (calendario): assegnare risorsa a job propone booking sulle date job; oppure rendere kanban una vista alternativa stesso modello
-- 🔜 **E** Capability AI `propose_booking` + `propose_time_punch` (conflict-check booking già esistente lato server)
-- 🔜 **F** Vista gantt per job (start_date → end_date) sovrapposto a booking risorse
+- 🔜 **C** Riconciliare Assignment kanban ↔ Booking (potrebbe sparire del tutto in favore del flusso quote→job→booking)
+- 🔜 **E** Capability AI `propose_booking` + `propose_time_punch`
+- 🔜 **F** Gantt per job
+
+**Cantiere Quote → Job → Cost Report (in corso)**:
+- ✅ **v3.4.8** Auto-promote Quote → Job + bug fix planning + rimosso job manuale
+- 🔜 **v3.4.9** Lavorazioni come prima class su `/jobs/{id}` (ore quotate/pianificate/lavorate/extra), `is_extra` flag
+- 🔜 **v3.4.10** `Booking.job_cost_line_id` + `BookingKind` per booking interni (manutenzione/training/research, no job)
+- 🔜 **v3.4.11** `ResourceUnavailability`/`TimePunch.kind=leave` ben visibili nel calendario come fasce bloccanti
+- 🔜 **v3.4.12** Cost report interno arricchito (costi risorse rate × ore TimePunch + hardcost da `PriceItem.hardcosts` + booking interni)
+- 🔜 **v3.4.13** Cost report esterno (consuntivo cliente: solo ore lavorate per lavorazione + extra; bottone "→ Genera quote v2")
 
 **Sezione HR — sviluppo successivo**:
-- Aggregazioni avanzate (ore per progetto/risorsa/mese, costo orario × ore in cost report, export CSV/PDF cedolino)
+- Aggregazioni avanzate (ore per progetto/risorsa/mese, export CSV/PDF cedolino)
 - Auto-timbratura via topbar per chi è loggato ("🟢 Inizio turno" / "🔴 Fine turno")
 - Orari standard per tipo risorsa (full-time / part-time / freelance) per calcolo straordinari automatici
 
@@ -86,4 +91,4 @@ Dopo conferma test sul Mac, passare a **#4 server-side abort**.
 
 ---
 
-*Ultimo aggiornamento: 28 aprile 2026 — v3.4.7 chiusa: nuova sezione HR `/hr` con modello `TimePunch` separato (Opzione 2 scelta da Matteo), CRUD completo via API + UI con filtri/totali/modal, integrazione calendario come secondo eventSource con toggle sorgenti e filtro risorse server-side. CRUD smoke-tested E2E. Prossimo: verifica visiva sul Mac e poi step A (UX calendario drag/edit/unavailability).*
+*Ultimo aggiornamento: 28 aprile 2026 — v3.4.8 chiusa: re-design Quote→Job. Bug fix critico (`/planning/api/jobs` 500 su `j.budget`/`j.budget_quoted`), auto-promote Quote→Job su `approved` con codice `{project.code}-J{N}` e titolo da progetto, rollback con cancellazione job se senza attività (bloccato altrimenti), riapprovazione riattiva job cancelled (no duplicati), rimossa creazione manuale job + modal "Converti in Job". Nuovo `JobStatus.cancelled`. Prossimo: v3.4.9 lavorazioni come prima class.*

@@ -60,7 +60,7 @@ class ProjectStatus(str, enum.Enum):
 class JobStatus(str, enum.Enum):
     draft = "draft"; quoting = "quoting"; approved = "approved"
     active = "active"; on_hold = "on_hold"; completed = "completed"
-    invoiced = "invoiced"
+    invoiced = "invoiced"; cancelled = "cancelled"
 
 class AssetType(str, enum.Enum):
     video = "video"; audio = "audio"; image = "image"

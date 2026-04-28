@@ -5,11 +5,81 @@ from typing import Optional
 from datetime import date
 from sqlalchemy.orm import Session, joinedload
 from app.database import get_db
-from app.models import Quote, QuoteLine, Job, JobStatus, QuoteStatus, PriceItem, PriceCategory, PriceLevel, Project
+from app.models import (
+    Quote, QuoteLine, Job, JobStatus, QuoteStatus,
+    PriceItem, PriceCategory, PriceLevel, Project,
+    Booking, BookingStatus, JobCostLine, TimePunch,
+)
 
 router = APIRouter(prefix="/quotes", tags=["quotes"])
 
 CATEGORY_FALLBACK = "Altro"
+
+
+def _next_job_code(db: Session, project: Project) -> str:
+    """Genera codice job '{PROJECT_CODE}-J{N}' progressivo per quel progetto."""
+    base = (project.code or f"P{project.id}").strip()
+    existing = db.query(Job).filter(Job.project_id == project.id).all()
+    n = 1
+    used = {j.code for j in existing if j.code}
+    while f"{base}-J{n}" in used:
+        n += 1
+    return f"{base}-J{n}"
+
+
+def _create_job_from_quote(db: Session, q: Quote) -> Job:
+    """Crea il Job dalla Quote approvata + JobCostLine da ogni QuoteLine.
+
+    Eredita titolo dal progetto (non dalla quote: spesso coincidono ma il
+    riferimento canonico è il progetto). Codice auto-generato {PROJECT}-J{N}.
+    Idempotenza: se la quote ha già `q.job` ritorna quello.
+    """
+    if q.job:
+        # Job già collegato: se cancelled lo ri-attivo (riapprovazione della stessa quote
+        # dopo un rollback). Se in qualunque altro stato lo ritorno così com'è.
+        if q.job.status == JobStatus.cancelled:
+            q.job.status = JobStatus.approved
+        return q.job
+    project = q.project
+    if not project:
+        raise HTTPException(400, "Quote senza progetto: impossibile promuovere a job")
+
+    job = Job(
+        code=_next_job_code(db, project),
+        title=project.title,
+        project_id=q.project_id,
+        client_id=q.client_id,
+        quote_id=q.id,
+        status=JobStatus.approved,
+        budget_quoted=q.total_after_discount,
+    )
+    db.add(job)
+    db.flush()
+    for line in q.lines:
+        db.add(JobCostLine(
+            job_id=job.id,
+            quote_line_id=line.id,
+            price_item_id=line.price_item_id,
+            description=line.description,
+            quantity_quoted=line.quantity,
+            unit=line.unit,
+            unit_price=line.unit_price,
+            total_quoted=line.total,
+            total_expected=line.total,
+        ))
+    return job
+
+
+def _job_has_activity(db: Session, job: Job) -> bool:
+    """True se il job ha booking non-cancelled o TimePunch effettivi."""
+    active_bk = db.query(Booking).filter(
+        Booking.job_id == job.id,
+        Booking.status != BookingStatus.cancelled,
+    ).first()
+    if active_bk:
+        return True
+    punch = db.query(TimePunch).filter(TimePunch.job_id == job.id).first()
+    return punch is not None
 
 
 def _tpl():
@@ -195,10 +265,56 @@ async def get_quote(quote_id: int, db: Session = Depends(get_db)):
 async def update_quote_status(
     quote_id: int, status: QuoteStatus = Form(...), db: Session = Depends(get_db),
 ):
-    q = db.query(Quote).filter(Quote.id == quote_id).first()
-    if not q: raise HTTPException(404)
-    q.status = status; db.commit()
-    return {"id": q.id, "status": q.status}
+    """Aggiorna lo stato della quote.
+
+    Side-effect: la transizione di stato gestisce automaticamente il Job collegato.
+    - draft/sent → approved: crea il Job + JobCostLine (idempotente se già esiste)
+    - approved → altro stato: cancella il Job se non ha attività; blocca con 400
+      se ha booking attivi o TimePunch (preserva storico operativo).
+    """
+    q = (
+        db.query(Quote)
+        .options(joinedload(Quote.lines), joinedload(Quote.project), joinedload(Quote.job))
+        .filter(Quote.id == quote_id)
+        .first()
+    )
+    if not q:
+        raise HTTPException(404)
+
+    prev = q.status
+    new = status
+    promoted_job = None
+    cancelled_job_id = None
+
+    if new == QuoteStatus.approved and prev != QuoteStatus.approved:
+        # Approvazione: crea il job se non esiste
+        promoted_job = _create_job_from_quote(db, q)
+    elif prev == QuoteStatus.approved and new != QuoteStatus.approved and q.job:
+        # Disapprovazione: cancella il job se senza attività, altrimenti blocca
+        if _job_has_activity(db, q.job):
+            raise HTTPException(
+                400,
+                f"Impossibile riportare la quote a '{new.value}': il job {q.job.code} "
+                "ha attività (booking o timbrature). Cancella prima le attività."
+            )
+        cancelled_job_id = q.job.id
+        q.job.status = JobStatus.cancelled
+
+    q.status = new
+    db.commit()
+
+    resp = {"id": q.id, "status": q.status}
+    if promoted_job:
+        db.refresh(promoted_job)
+        resp["job_created"] = {
+            "id": promoted_job.id,
+            "code": promoted_job.code,
+            "title": promoted_job.title,
+            "lines_count": len(q.lines),
+        }
+    if cancelled_job_id:
+        resp["job_cancelled_id"] = cancelled_job_id
+    return resp
 
 
 @router.put("/api/{quote_id}")
@@ -384,37 +500,33 @@ async def delete_quote_line(quote_id: int, line_id: int, db: Session = Depends(g
 
 
 @router.post("/api/{quote_id}/convert-to-job")
-async def convert_to_job(
+async def convert_to_job_legacy(
     quote_id: int,
-    job_code: str = Form(...),
+    job_code: Optional[str] = Form(None),
     start_date: Optional[date] = Form(None),
     end_date: Optional[date] = Form(None),
     db: Session = Depends(get_db),
 ):
-    from app.models import JobCostLine
-    q = db.query(Quote).options(joinedload(Quote.lines)).filter(Quote.id == quote_id).first()
-    if not q: raise HTTPException(404)
-    if q.job: raise HTTPException(400, "Job già esistente")
-    existing = db.query(Job).filter(Job.code == job_code).first()
-    if existing: raise HTTPException(400, f"Codice job '{job_code}' già esistente")
-    q.status = QuoteStatus.approved
-    job = Job(
-        code=job_code, title=q.title,
-        project_id=q.project_id, client_id=q.client_id, quote_id=q.id,
-        status=JobStatus.approved,
-        start_date=start_date, end_date=end_date,
-        budget_quoted=q.total_after_discount,
+    """DEPRECATED dal v3.4.8 — usare PUT /api/{quote_id}/status con status=approved.
+
+    Mantenuto come wrapper per retrocompatibilità: ignora `job_code`/`start_date`/
+    `end_date` e delega alla nuova logica auto-promote (codice auto-generato
+    {project.code}-J{N}, title da project.title, no date hardcoded).
+    """
+    q = (
+        db.query(Quote)
+        .options(joinedload(Quote.lines), joinedload(Quote.project), joinedload(Quote.job))
+        .filter(Quote.id == quote_id)
+        .first()
     )
-    db.add(job); db.flush()
-    for line in q.lines:
-        db.add(JobCostLine(
-            job_id=job.id, quote_line_id=line.id, price_item_id=line.price_item_id,
-            description=line.description, quantity_quoted=line.quantity,
-            unit=line.unit, unit_price=line.unit_price,
-            total_quoted=line.total, total_expected=line.total,
-        ))
+    if not q:
+        raise HTTPException(404)
+    if q.job:
+        raise HTTPException(400, "Job già esistente")
+    job = _create_job_from_quote(db, q)
+    q.status = QuoteStatus.approved
     db.commit()
-    return {"job_id": job.id, "job_code": job.code}
+    return {"job_id": job.id, "job_code": job.code, "deprecated": True}
 
 
 @router.get("/api/{quote_id}/pdf")

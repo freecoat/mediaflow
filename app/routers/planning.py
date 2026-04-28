@@ -80,13 +80,14 @@ async def list_jobs(
         {
             "id": j.id, "code": j.code, "title": j.title,
             "status": j.status, "client": j.client.name if j.client else None,
-            "start_date": j.start_date, "end_date": j.end_date, "budget": j.budget,
+            "start_date": j.start_date, "end_date": j.end_date,
+            "budget": j.budget_quoted,
         }
         for j in jobs
     ]
 
 
-@router.post("/api/jobs")
+@router.post("/api/jobs", deprecated=True)
 async def create_job(
     code: str = Form(...),
     title: str = Form(...),
@@ -98,6 +99,8 @@ async def create_job(
     description: Optional[str] = Form(None),
     db: Session = Depends(get_db),
 ):
+    """DEPRECATED dal v3.4.8. I job nascono solo da quote approvate.
+    Mantenuto per scenari di import/migrazione legacy."""
     existing = db.query(Job).filter(Job.code == code).first()
     if existing:
         raise HTTPException(400, f"Codice job '{code}' già esistente")

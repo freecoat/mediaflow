@@ -1,5 +1,65 @@
 # MediaFlow — Changelog
 
+## v3.4.8 — Quote → Job automatico + bug "non vedo nessun job" (28 aprile 2026)
+
+Primo passo del re-design del flusso operativo discusso con Matteo. Cambia la natura del Job: non è più un'entità da creare a mano, è la materializzazione operativa automatica di una quote approvata. Eredita identità dal progetto.
+
+### Bug fix critico
+
+`/planning/api/jobs` restituiva 500 (`AttributeError: 'Job' object has no attribute 'budget'`). Il codice mappava `j.budget` ma il modello ha `budget_quoted`. Effetto: l'app non mostrava nessun job, anche se in DB c'erano. Una riga di fix in `routers/planning.py:81`.
+
+### Auto-promote Quote → Job
+
+Riscritto `PUT /quotes/api/{id}/status` con side-effect deterministici:
+
+- **draft|sent → approved**: crea il `Job` collegato + `JobCostLine` da ogni `QuoteLine`. Idempotente: se il job esiste già lo ritorna così com'è. Se esiste ma è `cancelled` (riapprovazione dopo rollback), lo ri-attiva senza duplicare lavorazioni.
+- **approved → altro**: cancella il job (status=`cancelled`, preserva storico) se non ha attività operative; **blocca con 400** se ci sono booking non-cancelled o TimePunch sul job.
+- Codice job auto-generato `{project.code}-J{N}` (es. `MARE-J1`, `MARE-J2`). Decisione: leggibile + chiaro a colpo d'occhio quale progetto + nessun registro globale di numerazione.
+- Titolo job ereditato da `project.title` (non da `quote.title` come prima — il riferimento canonico è il progetto).
+- Helper `_create_job_from_quote()` + `_job_has_activity()` + `_next_job_code()` esposti per riuso (anche AI capability futura).
+
+Risposta API arricchita: `{"id", "status", "job_created": {id, code, title, lines_count}}` su approve, `{..., "job_cancelled_id"}` su rollback.
+
+### Nuovo stato `JobStatus.cancelled`
+
+Aggiunto valore `cancelled` all'enum `JobStatus`. SQLAlchemy `SAEnum` su SQLite non crea constraint a livello DB → niente migrazione struttura necessaria. Per Postgres in futuro servirà un ALTER TYPE.
+
+### Rimossa creazione job manuale
+
+- Bottone "+ Nuovo job" rimosso da `/planning` (sostituito da link "→ Vai a quotazioni")
+- Modal "Nuovo job" rimosso, funzione `createJob()` JS rimossa
+- Bottone "▶ Converti in Job" nell'editor quote sostituito con "✓ Approva quote → Job" che fa direttamente `PUT /status?status=approved` con conferma → toast con codice job → redirect `/planning`
+- Modal "modal-convert" rimosso, funzione `convertToJob()` rimpiazzata da `approveAndCreateJob()`
+- Endpoint `POST /quotes/api/{id}/convert-to-job` marcato deprecated, ora ignora `job_code`/`start_date`/`end_date` e delega a `_create_job_from_quote`
+- Endpoint `POST /planning/api/jobs` marcato deprecated (mantenuto per scenari import/migrazione legacy)
+
+### Smoke test E2E
+
+- AST OK su `quotes.py`, `planning.py`, `models.py`
+- T1 — `/planning/api/jobs` ora 200, ritorna 4 job esistenti con `budget` corretto
+- T2 — PUT quote 2 (draft, project_code="sada") → approved: crea Job 5 `sada-J1` con `title="awdad"` (da project.title), 2 lavorazioni, `budget=2180.8`
+- T3 — PUT quote 2 → draft: Job 5 → cancelled (nessuna attività)
+- T4 — PUT quote 2 → approved (di nuovo): Job 5 ri-attivato (no duplicazione)
+- T5 — POST booking su job 5 + PUT quote 2 → draft: 400 con messaggio "il job sada-J1 ha attività…"
+
+### File toccati
+
+- `app/main.py` — bump 3.4.7 → 3.4.8 (FastAPI + /health hardcoded)
+- `app/models/models.py` — `JobStatus.cancelled`
+- `app/routers/quotes.py` — `_next_job_code` + `_create_job_from_quote` + `_job_has_activity` helper, `update_quote_status` riscritto, `convert_to_job` deprecato
+- `app/routers/planning.py` — fix bug budget, `POST /api/jobs` deprecated
+- `app/templates/pages/quotes.html` — bottone "Approva → Job" + modal-convert rimosso + `approveAndCreateJob()`
+- `app/templates/pages/planning.html` — modal nuovo job rimosso + bottone topbar sostituito + `createJob()` JS rimossa
+
+### Decisioni non prese (deferite a v3.4.9+)
+
+- Modifica quote dopo approvazione: oggi NON propaga al job. Serve un meccanismo "ricarica monte ore" o richiesta esplicita di ri-sincronizzazione (in v3.4.9 con la pagina dettaglio job)
+- `JobCostLine.is_extra` flag per nuove lavorazioni post-quote (v3.4.9)
+- `Booking.job_cost_line_id` FK opzionale per legare booking a lavorazione specifica (v3.4.10)
+- `BookingKind` per booking interni senza job (manutenzione/training/research) (v3.4.10)
+
+---
+
 ## v3.4.7 — Sezione HR e timbrature (28 aprile 2026)
 
 Apre il dominio amministrativo/HR per la rendicontazione delle ore di lavoro. Tutte le risorse umane (interne + freelance) rendicontano qui — i freelance senza login possono essere "timbrati" da un manager.
