@@ -35,6 +35,17 @@ class BookingStatus(str, enum.Enum):
     tentative = "tentative"; confirmed = "confirmed"
     cancelled = "cancelled"; completed = "completed"
 
+class PunchKind(str, enum.Enum):
+    # Tipologie di timbratura/presenza per la sezione HR.
+    # `shift` con job_id valorizzato = ore lavorate su progetto.
+    # `shift` senza job_id = presenza generica al lavoro.
+    shift = "shift"
+    idle = "idle"          # presente, non allocato a progetto
+    leave = "leave"        # ferie/permesso retribuito
+    sick = "sick"          # malattia
+    break_ = "break"       # pausa (non retribuita)
+    overtime = "overtime"  # straordinario
+
 class PriceLevel(str, enum.Enum):
     list_price = "list"; average = "average"; low = "low"; custom = "custom"
 
@@ -353,6 +364,7 @@ class Resource(Base):
     bookings: Mapped[List["Booking"]] = relationship(back_populates="resource")
     unavailabilities: Mapped[List["ResourceUnavailability"]] = relationship(back_populates="resource")
     job_assignments: Mapped[List["JobResourceAssignment"]] = relationship(back_populates="resource")
+    time_punches: Mapped[List["TimePunch"]] = relationship(back_populates="resource")
 
 
 class ResourceUnavailability(Base):
@@ -533,6 +545,31 @@ class Booking(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
     job: Mapped["Job"] = relationship(back_populates="bookings")
     resource: Mapped["Resource"] = relationship(back_populates="bookings")
+
+
+# ── TIMBRATURE / PRESENZE (HR) ─────────────────────────────────
+# Dominio separato dal Booking: il booking esprime un'intenzione di pianificazione
+# (chi sarà su quale job e quando), il TimePunch registra una presenza effettiva
+# (chi è stato a lavoro e per quanto). Tutte le risorse umane (interne + freelance)
+# rendicontano qui. Lavorare su un job = TimePunch con kind=shift e job_id valorizzato.
+
+class TimePunch(Base):
+    __tablename__ = "time_punches"
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    tenant_id: Mapped[int] = mapped_column(ForeignKey("tenants.id"), default=1, index=True)
+    resource_id: Mapped[int] = mapped_column(ForeignKey("resources.id"), index=True)
+    # Job opzionale: solo per kind=shift quando si lavora su un progetto specifico.
+    job_id: Mapped[Optional[int]] = mapped_column(ForeignKey("jobs.id"), nullable=True, index=True)
+    start_datetime: Mapped[datetime] = mapped_column(DateTime)
+    # end_datetime nullable = "in corso" (timbratura ingresso senza ancora uscita).
+    end_datetime: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+    kind: Mapped[PunchKind] = mapped_column(SAEnum(PunchKind), default=PunchKind.shift)
+    notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    # Chi ha registrato la timbratura (manager/HR per freelance senza login).
+    created_by_user_id: Mapped[Optional[int]] = mapped_column(ForeignKey("users.id"), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    resource: Mapped["Resource"] = relationship(back_populates="time_punches")
+    job: Mapped[Optional["Job"]] = relationship()
 
 
 # ── TIMESHEET & SPESE ────────────────────────────────────────

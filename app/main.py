@@ -11,7 +11,7 @@ from app.routers import (
     auth, resources, planning, finance, dam,
     pricelist, quotes, cost_report as cr,
     clients, projects, ai, departments, settings as settings_router,
-    assignments,
+    assignments, hr,
 )
 
 
@@ -24,7 +24,7 @@ async def lifespan(app: FastAPI):
     yield
 
 
-app = FastAPI(title="MediaFlow", version="3.4.6", lifespan=lifespan)
+app = FastAPI(title="MediaFlow", version="3.4.7", lifespan=lifespan)
 
 BASE_DIR = Path(__file__).parent
 app.mount("/static", StaticFiles(directory=BASE_DIR / "static"), name="static")
@@ -58,6 +58,7 @@ app.include_router(ai.router)
 app.include_router(departments.router)
 app.include_router(settings_router.router)
 app.include_router(assignments.router)
+app.include_router(hr.router)
 
 
 @app.get("/", response_class=HTMLResponse)
@@ -77,5 +78,5 @@ async def dashboard(request: Request):
 async def health():
     from app.services.ai_provider import get_provider
     p = get_provider()
-    return {"status": "ok", "app": settings.app_name, "version": "3.4.6",
+    return {"status": "ok", "app": settings.app_name, "version": "3.4.7",
             "ai": {"configured": p is not None, "provider": p.name if p else None}}

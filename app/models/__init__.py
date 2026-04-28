@@ -6,6 +6,7 @@ from app.models.models import (
     Resource, ResourceType, ResourceUnavailability,
     Client, Project, ProjectStatus,
     Job, JobStatus, Booking, BookingStatus, JobResourceAssignment, JobCostLine,
+    TimePunch, PunchKind,
     Timesheet, Expense, Invoice, InvoiceLine, InvoiceStatus,
     Asset, AssetType, Tag, AssetTag,
     PriceCategory, PriceItem, PriceLevel,

@@ -11,8 +11,20 @@
 {% block content %}
 
 <div class="flex gap-4" style="align-items:flex-start;">
-  <!-- Legenda risorse -->
-  <div class="card" style="min-width:190px;max-width:210px;">
+  <!-- Legenda risorse + sorgenti -->
+  <div class="card" style="min-width:200px;max-width:220px;">
+    <div class="card-title mb-2">Sorgenti</div>
+    <label class="flex items-center gap-2 mb-1" style="cursor:pointer;font-size:13px;">
+      <input type="checkbox" class="src-toggle" value="bookings" checked onchange="reloadCalendar()">
+      <span style="width:10px;height:10px;border-radius:2px;background:#6272f5;flex-shrink:0;"></span>
+      Booking (job)
+    </label>
+    <label class="flex items-center gap-2 mb-3" style="cursor:pointer;font-size:13px;">
+      <input type="checkbox" class="src-toggle" value="punches" checked onchange="reloadCalendar()">
+      <span style="width:10px;height:10px;border-radius:2px;background:#9ca3af;flex-shrink:0;"></span>
+      Timbrature (HR)
+    </label>
+
     <div class="card-title mb-2">Risorse</div>
     <div id="resource-legend">
       {% for r in resources %}
@@ -108,20 +120,48 @@ async function initCalendar() {
     allDaySlot: false,
     nowIndicator: true,
     editable: false,
-    eventSources: [{
-      url: '/planning/api/bookings',
-      method: 'GET',
-      extraParams: () => {
-        const checked = [...document.querySelectorAll('.res-toggle:checked')].map(c => c.value);
-        return {};   // filtra lato client dopo fetch
+    eventSources: [
+      {
+        id: 'bookings',
+        url: '/planning/api/bookings',
+        method: 'GET',
+        failure: () => toast('Errore caricamento booking', 'error'),
       },
-      failure: () => toast('Errore caricamento booking', 'error'),
-    }],
+      {
+        id: 'punches',
+        url: '/hr/api/punches',
+        method: 'GET',
+        extraParams: () => ({ format: 'fullcalendar' }),
+        failure: () => toast('Errore caricamento timbrature', 'error'),
+      },
+    ],
+    eventDidMount: (info) => {
+      // Filtro client-side per risorsa selezionata e per sorgente
+      const p = info.event.extendedProps;
+      const resourceChecked = [...document.querySelectorAll('.res-toggle:checked')].map(c => c.value);
+      const sourcesChecked = [...document.querySelectorAll('.src-toggle:checked')].map(c => c.value);
+      const isPunch = p.source === 'punch';
+      const sourceKey = isPunch ? 'punches' : 'bookings';
+      if (!sourcesChecked.includes(sourceKey)) {
+        info.event.setProp('display', 'none');
+        return;
+      }
+      if (resourceChecked.length && p.resource_id != null) {
+        if (!resourceChecked.includes(String(p.resource_id))) {
+          info.event.setProp('display', 'none');
+        }
+      }
+    },
     eventClick: (info) => {
       const p = info.event.extendedProps;
-      const start = info.event.start.toLocaleTimeString('it-IT', {hour:'2-digit',minute:'2-digit'});
+      const start = info.event.start ? info.event.start.toLocaleTimeString('it-IT', {hour:'2-digit',minute:'2-digit'}) : '';
       const end   = info.event.end ? info.event.end.toLocaleTimeString('it-IT', {hour:'2-digit',minute:'2-digit'}) : '';
-      toast(`${info.event.title} | ${start}–${end} | ${STATUS_LABEL[p.status] || p.status}`, 'info', 5000);
+      if (p.source === 'punch') {
+        const dur = p.duration_h != null ? ` · ${p.duration_h.toFixed(2)}h` : ' · in corso';
+        toast(`${info.event.title} | ${start}${end ? '–'+end : ''}${dur}`, 'info', 5000);
+      } else {
+        toast(`${info.event.title} | ${start}–${end} | ${STATUS_LABEL[p.status] || p.status}`, 'info', 5000);
+      }
     },
     dateClick: (info) => {
       // Pre-compila datetime nel modal

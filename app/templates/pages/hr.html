@@ -1,0 +1,388 @@
+{% extends "base.html" %}
+{% set active_page = "hr" %}
+
+{% block title %}Ore lavoro — MediaFlow{% endblock %}
+{% block topbar_title %}Ore di lavoro · HR{% endblock %}
+
+{% block topbar_actions %}
+  <button class="btn btn-primary btn-sm" onclick="openNewPunch()">+ Nuova timbratura</button>
+{% endblock %}
+
+{% block head %}
+<style>
+  .hr-filters {
+    display: flex; flex-wrap: wrap; gap: 12px; align-items: flex-end;
+    margin-bottom: 16px;
+  }
+  .hr-filters .form-group { margin: 0; }
+  .hr-filters .form-input, .hr-filters .form-select { min-width: 160px; }
+  .hr-totals {
+    display: flex; flex-wrap: wrap; gap: 10px;
+    margin-bottom: 16px;
+  }
+  .hr-tot-card {
+    background: var(--bg-elev, #1a1d29);
+    border: 1px solid var(--border, #2a2e3d);
+    border-left: 4px solid #6272f5;
+    border-radius: 6px;
+    padding: 10px 14px;
+    min-width: 140px;
+  }
+  .hr-tot-card .lbl { font-size: 11px; text-transform: uppercase; opacity: .7; letter-spacing: .5px; }
+  .hr-tot-card .val { font-size: 22px; font-weight: 600; font-variant-numeric: tabular-nums; }
+  .hr-tot-card .unit { font-size: 12px; opacity: .6; margin-left: 3px; }
+  .hr-tot-grand { border-left-color: #6272f5; background: rgba(98,114,245,0.12); }
+  .kind-badge {
+    display: inline-block; padding: 2px 8px; border-radius: 12px;
+    font-size: 11px; font-weight: 600;
+    background: rgba(255,255,255,0.05);
+  }
+  .punch-row td.col-dur { font-variant-numeric: tabular-nums; text-align: right; }
+  .punch-row td.col-time { font-variant-numeric: tabular-nums; }
+  .punch-row.in-progress { background: rgba(98,114,245,0.04); }
+  .in-progress-tag {
+    color: #6272f5; font-size: 11px; font-weight: 600;
+    text-transform: uppercase; letter-spacing: .5px;
+  }
+</style>
+{% endblock %}
+
+{% block content %}
+
+<!-- ── Filtri ──────────────────────────────────────────────── -->
+<div class="hr-filters">
+  <div class="form-group">
+    <label class="form-label" style="font-size:11px;">Risorsa</label>
+    <select class="form-select" id="f-resource" onchange="reloadHR()">
+      <option value="">— tutte —</option>
+      {% for r in persons %}
+      <option value="{{ r.id }}">{{ r.name }}{% if r.role %} · {{ r.role }}{% endif %}</option>
+      {% endfor %}
+    </select>
+  </div>
+  <div class="form-group">
+    <label class="form-label" style="font-size:11px;">Da</label>
+    <input class="form-input" type="date" id="f-from" onchange="reloadHR()">
+  </div>
+  <div class="form-group">
+    <label class="form-label" style="font-size:11px;">A</label>
+    <input class="form-input" type="date" id="f-to" onchange="reloadHR()">
+  </div>
+  <div class="form-group">
+    <label class="form-label" style="font-size:11px;">Tipo</label>
+    <select class="form-select" id="f-kind" onchange="reloadHR()">
+      <option value="">— tutti —</option>
+      {% for k in kinds %}
+      <option value="{{ k.value }}">{{ k.label }}</option>
+      {% endfor %}
+    </select>
+  </div>
+  <div class="form-group">
+    <button class="btn btn-secondary btn-sm" onclick="setQuickRange('week')">Settimana corrente</button>
+    <button class="btn btn-secondary btn-sm" onclick="setQuickRange('month')">Mese corrente</button>
+    <button class="btn btn-ghost btn-sm" onclick="resetFilters()">Reset</button>
+  </div>
+</div>
+
+<!-- ── Totali per tipo ─────────────────────────────────────── -->
+<div class="hr-totals" id="hr-totals">
+  <div class="hr-tot-card">
+    <div class="lbl">Caricamento…</div>
+    <div class="val">—</div>
+  </div>
+</div>
+
+<!-- ── Tabella timbrature ──────────────────────────────────── -->
+<div class="card">
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th>Data</th>
+          <th>Risorsa</th>
+          <th>Inizio</th>
+          <th>Fine</th>
+          <th style="text-align:right;">Durata (h)</th>
+          <th>Tipo</th>
+          <th>Job</th>
+          <th>Note</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody id="punches-tbody">
+        <tr><td colspan="9" class="text-muted" style="text-align:center;padding:24px;">Caricamento…</td></tr>
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<!-- ── Modal nuova / modifica timbratura ──────────────────── -->
+<div class="modal-overlay" id="modal-punch">
+  <div class="modal">
+    <div class="modal-header">
+      <span class="modal-title" id="modal-punch-title">Nuova timbratura</span>
+      <button class="btn btn-ghost btn-icon" onclick="closeModal('modal-punch')">✕</button>
+    </div>
+    <div class="modal-body">
+      <input type="hidden" id="p-id" value="">
+      <div class="form-row">
+        <div class="form-group">
+          <label class="form-label">Risorsa *</label>
+          <select class="form-select" id="p-resource" required>
+            <option value="">— seleziona —</option>
+            {% for r in persons %}
+            <option value="{{ r.id }}">{{ r.name }}{% if r.role %} · {{ r.role }}{% endif %}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Tipo *</label>
+          <select class="form-select" id="p-kind" required>
+            {% for k in kinds %}
+            <option value="{{ k.value }}">{{ k.label }}</option>
+            {% endfor %}
+          </select>
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label class="form-label">Inizio *</label>
+          <input class="form-input" id="p-start" type="datetime-local" required>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Fine</label>
+          <input class="form-input" id="p-end" type="datetime-local">
+          <small class="form-help text-muted">Vuoto = timbratura in corso</small>
+        </div>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Job (opzionale)</label>
+        <select class="form-select" id="p-job">
+          <option value="">— nessun job —</option>
+          {% for j in jobs %}
+          <option value="{{ j.id }}">{{ j.code }} — {{ j.title }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Note</label>
+        <textarea class="form-textarea" id="p-notes" placeholder="Note opzionali…"></textarea>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeModal('modal-punch')">Annulla</button>
+      <button class="btn btn-danger" id="p-delete-btn" onclick="deletePunch()" style="display:none;margin-right:auto;">Elimina</button>
+      <button class="btn btn-primary" onclick="savePunch()">Salva</button>
+    </div>
+  </div>
+</div>
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+const KIND_LABEL = {
+  {% for k in kinds %}"{{ k.value }}": "{{ k.label }}",{% endfor %}
+};
+const KIND_COLOR = {
+  {% for k in kinds %}"{{ k.value }}": {% if k.color %}"{{ k.color }}"{% else %}null{% endif %},{% endfor %}
+};
+
+function fmtDate(iso) {
+  if (!iso) return '';
+  const d = new Date(iso);
+  return d.toLocaleDateString('it-IT', { day: '2-digit', month: '2-digit', year: 'numeric' });
+}
+function fmtTime(iso) {
+  if (!iso) return '';
+  const d = new Date(iso);
+  return d.toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' });
+}
+function fmtDateTimeLocal(iso) {
+  if (!iso) return '';
+  const d = new Date(iso);
+  const pad = n => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
+function escapeHtml(s) {
+  if (s == null) return '';
+  return String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+
+function buildQuery() {
+  const params = new URLSearchParams();
+  const r = document.getElementById('f-resource').value;
+  const f = document.getElementById('f-from').value;
+  const t = document.getElementById('f-to').value;
+  const k = document.getElementById('f-kind').value;
+  if (r) params.set('resource_id', r);
+  if (f) params.set('from_date', f + 'T00:00:00');
+  if (t) params.set('to_date', t + 'T23:59:59');
+  if (k) params.set('kind', k);
+  return params.toString();
+}
+
+async function reloadHR() {
+  const qs = buildQuery();
+  const [punches, summary] = await Promise.all([
+    api('GET', `/hr/api/punches${qs ? '?' + qs : ''}`),
+    api('GET', `/hr/api/summary${qs ? '?' + qs : ''}`),
+  ]);
+  renderTotals(summary);
+  renderTable(punches);
+}
+
+function renderTotals(s) {
+  const el = document.getElementById('hr-totals');
+  const cards = [];
+  cards.push(`<div class="hr-tot-card hr-tot-grand">
+    <div class="lbl">Totale ore</div>
+    <div class="val">${s.grand_total.toFixed(2)}<span class="unit">h</span></div>
+  </div>`);
+  for (const [kind, hours] of Object.entries(s.totals)) {
+    if (hours <= 0) continue;
+    const color = s.colors[kind] || '#6272f5';
+    cards.push(`<div class="hr-tot-card" style="border-left-color:${color};">
+      <div class="lbl">${escapeHtml(s.labels[kind])}</div>
+      <div class="val">${hours.toFixed(2)}<span class="unit">h</span></div>
+    </div>`);
+  }
+  el.innerHTML = cards.join('');
+}
+
+function renderTable(punches) {
+  const tbody = document.getElementById('punches-tbody');
+  if (!punches.length) {
+    tbody.innerHTML = '<tr><td colspan="9" class="text-muted" style="text-align:center;padding:24px;">Nessuna timbratura nel periodo</td></tr>';
+    return;
+  }
+  tbody.innerHTML = punches.map(p => {
+    const inProgress = !p.end_datetime;
+    const color = KIND_COLOR[p.kind] || p.resource_color || '#6272f5';
+    return `<tr class="punch-row ${inProgress ? 'in-progress' : ''}" onclick='openEditPunch(${p.id})' style="cursor:pointer;">
+      <td>${fmtDate(p.start_datetime)}</td>
+      <td>
+        <span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:${p.resource_color || '#888'};margin-right:6px;"></span>
+        ${escapeHtml(p.resource_name)}
+      </td>
+      <td class="col-time">${fmtTime(p.start_datetime)}</td>
+      <td class="col-time">${inProgress ? '<span class="in-progress-tag">in corso</span>' : fmtTime(p.end_datetime)}</td>
+      <td class="col-dur">${p.duration_h != null ? p.duration_h.toFixed(2) : '—'}</td>
+      <td><span class="kind-badge" style="border-left:3px solid ${color};padding-left:6px;">${escapeHtml(p.kind_label)}</span></td>
+      <td>${p.job_id ? `<span class="text-muted">${escapeHtml(p.job_code || '')}</span> ${escapeHtml(p.job_title || '')}` : '<span class="text-muted">—</span>'}</td>
+      <td>${escapeHtml(p.notes || '')}</td>
+      <td></td>
+    </tr>`;
+  }).join('');
+}
+
+function setQuickRange(kind) {
+  const now = new Date();
+  let from, to;
+  if (kind === 'week') {
+    const day = now.getDay() || 7;
+    from = new Date(now); from.setDate(now.getDate() - day + 1);
+    to = new Date(from); to.setDate(from.getDate() + 6);
+  } else { // month
+    from = new Date(now.getFullYear(), now.getMonth(), 1);
+    to = new Date(now.getFullYear(), now.getMonth() + 1, 0);
+  }
+  const iso = d => d.toISOString().substring(0,10);
+  document.getElementById('f-from').value = iso(from);
+  document.getElementById('f-to').value = iso(to);
+  reloadHR();
+}
+
+function resetFilters() {
+  document.getElementById('f-resource').value = '';
+  document.getElementById('f-from').value = '';
+  document.getElementById('f-to').value = '';
+  document.getElementById('f-kind').value = '';
+  reloadHR();
+}
+
+function openNewPunch() {
+  document.getElementById('modal-punch-title').textContent = 'Nuova timbratura';
+  document.getElementById('p-id').value = '';
+  document.getElementById('p-resource').value = document.getElementById('f-resource').value || '';
+  document.getElementById('p-kind').value = 'shift';
+  document.getElementById('p-start').value = '';
+  document.getElementById('p-end').value = '';
+  document.getElementById('p-job').value = '';
+  document.getElementById('p-notes').value = '';
+  document.getElementById('p-delete-btn').style.display = 'none';
+  // Default: oggi 09:00
+  const today = new Date();
+  today.setHours(9, 0, 0, 0);
+  document.getElementById('p-start').value = fmtDateTimeLocal(today.toISOString());
+  openModal('modal-punch');
+}
+
+async function openEditPunch(punchId) {
+  const punches = await api('GET', `/hr/api/punches`);
+  const p = punches.find(x => x.id === punchId);
+  if (!p) { toast('Timbratura non trovata', 'error'); return; }
+  document.getElementById('modal-punch-title').textContent = `Timbratura #${p.id}`;
+  document.getElementById('p-id').value = p.id;
+  document.getElementById('p-resource').value = p.resource_id;
+  document.getElementById('p-kind').value = p.kind;
+  document.getElementById('p-start').value = fmtDateTimeLocal(p.start_datetime);
+  document.getElementById('p-end').value = p.end_datetime ? fmtDateTimeLocal(p.end_datetime) : '';
+  document.getElementById('p-job').value = p.job_id || '';
+  document.getElementById('p-notes').value = p.notes || '';
+  document.getElementById('p-delete-btn').style.display = '';
+  openModal('modal-punch');
+}
+
+async function savePunch() {
+  const id = document.getElementById('p-id').value;
+  const fd = new FormData();
+  fd.append('resource_id', document.getElementById('p-resource').value);
+  fd.append('kind', document.getElementById('p-kind').value);
+  const start = document.getElementById('p-start').value;
+  const end = document.getElementById('p-end').value;
+  if (!start || !document.getElementById('p-resource').value) {
+    toast('Risorsa e inizio obbligatori', 'error'); return;
+  }
+  fd.append('start_datetime', new Date(start).toISOString());
+  if (end) {
+    fd.append('end_datetime', new Date(end).toISOString());
+  } else if (id) {
+    fd.append('clear_end', 'true');
+  }
+  const job = document.getElementById('p-job').value;
+  if (job) {
+    fd.append('job_id', job);
+  } else if (id) {
+    fd.append('clear_job', 'true');
+  }
+  fd.append('notes', document.getElementById('p-notes').value);
+
+  try {
+    if (id) {
+      await api('PUT', `/hr/api/punches/${id}`, fd);
+      toast('Timbratura aggiornata', 'success');
+    } else {
+      await api('POST', '/hr/api/punches', fd);
+      toast('Timbratura creata', 'success');
+    }
+    closeModal('modal-punch');
+    reloadHR();
+  } catch(e) { toast(e.message || 'Errore', 'error'); }
+}
+
+async function deletePunch() {
+  const id = document.getElementById('p-id').value;
+  if (!id) return;
+  if (!confirm('Eliminare questa timbratura?')) return;
+  try {
+    await api('DELETE', `/hr/api/punches/${id}`);
+    toast('Timbratura eliminata', 'success');
+    closeModal('modal-punch');
+    reloadHR();
+  } catch(e) { toast(e.message || 'Errore', 'error'); }
+}
+
+reloadHR();
+</script>
+{% endblock %}

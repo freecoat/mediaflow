@@ -8,28 +8,27 @@
 
 ## Versione corrente
 
-**v3.4.6** — 28 aprile 2026
+**v3.4.7** — 28 aprile 2026
 
 ## In corso
 
-Cantiere **"Calendario e Pianificazione"** aperto. Step **D** (Booking multi-tenant) chiuso. Prossimi step in cascata: A (UX calendario drag/edit/filtro), B (UI ferie/indisponibilità), C (riconciliare Assignment↔Booking), E (capability AI booking), F (vista gantt job), + nuovo dominio **timbrature/idle** (entrata-uscita user, attività non legate a progetto) da modellare prima di B.
+Cantiere **"Calendario e Pianificazione"** aperto. Chiusi: **D** (Booking multi-tenant, v3.4.6) e **timbrature/idle Opzione 2** (sezione HR `/hr` con `TimePunch`, v3.4.7). Prossimi: **A** UX calendario, **B** UI ferie/indisponibilità, **C** riconciliare Assignment↔Booking, **E** capability AI booking, **F** gantt per job. + sviluppo HR avanzato (aggregazioni, auto-timbratura login, costo orario nel cost report).
 
 ## Prossimo step concordato
 
-**Decisione architetturale timbrature/idle** (prima di proseguire con A): Matteo vuole usare il calendario anche per timbrature user (entrata/uscita) e attività idle (non legate a un progetto). Tre opzioni:
+**Verifica visiva sul Mac di Matteo** della sezione HR + integrazione calendario:
+1. Aprire `/hr` → vedere filtri funzionanti, totali per kind, modal "+ Nuova timbratura" che salva e modal modifica via click su riga
+2. Creare 2-3 timbrature di test (shift con job, idle, leave) per Luca/Sara
+3. Aprire `/planning/calendar` → vedere i 2 eventSources sovrapposti (bookings + timbrature), toggle "Sorgenti" funzionante, toggle risorse funzionante (prima era no-op)
+4. Click su un punch nel calendario → toast con durata o "in corso"
 
-1. **Booking con `job_id` nullable** + tipologia (`shift_in_out`, `idle`, `project`). Unifica tutto nel calendario, ma rompe il vincolo "Booking sempre legato a un job".
-2. **Nuovo modello `TimePunch`** separato (user_id, start, end, type, note) + Booking resta com'è. Cleaner ma due viste da fondere lato UI calendario.
-3. **Estendere `Timesheet` esistente** rendendo `job_id` nullable, con vista calendario sopra. Riusa modello esistente (timbratura ≈ timesheet di durata).
+Dopo conferma, partire con **step A — UX calendario**:
+- `editable: true` su FullCalendar + handler drag/resize → PUT `/planning/api/bookings/{id}` (endpoint da aggiungere) e PUT `/hr/api/punches/{id}` (esistente)
+- Click su evento → modal di modifica/cancellazione (oggi è solo toast)
+- Mostrare `ResourceUnavailability` come banded events grigi non cliccabili
+- Filtro server-side su `from_date`/`to_date` (oggi FullCalendar passa start/end ma noi non li usiamo)
 
-Da scegliere prima di partire con A. Successivamente:
-- **A** UX calendario: drag/resize/sposta booking, filtro risorse server-side, click→modal modifica, mostrare unavailability come fascia grigia
-- **B** UI ferie/indisponibilità su `/resources/{id}`
-- **C** Riconciliare Assignment kanban ↔ Booking calendario
-- **E** Capability AI `propose_booking`
-- **F** Vista gantt per job
-
-In parallelo, **verifica visiva v3.4.5** sul Mac (modal "Aggiungi voce" ridisegnato) e **test E2E #5 (AI search-first)** restano sospesi, da ricaricare quando Matteo apre il Mac.
+In parallelo, restano sospesi sul Mac: **verifica visiva v3.4.5** (modal "Aggiungi voce") e **test E2E #5** (AI search-first).
 
 Per testare #5 servono prompt reali al copilot con provider AI attivo (Sonnet 4.6 consigliato, ma anche Ollama 8b dovrebbe funzionare grazie a SEARCH-FIRST esplicito nel system prompt).
 
@@ -43,14 +42,19 @@ Dopo conferma test sul Mac, passare a **#4 server-side abort**.
 
 ## Backlog (in ordine concordato)
 
-**Cantiere Calendario / Pianificazione (in corso, ordine D→A→B→C→E→F)**:
+**Cantiere Calendario / Pianificazione (in corso)**:
 - ✅ **D** Booking multi-tenant (chiuso v3.4.6)
-- 🔜 **Decisione architetturale timbrature/idle** (vedi sopra) prima di A
-- 🔜 **A** UX calendario: drag/resize/move, filtro legenda funzionante (oggi è no-op), click evento → modal edit, mostrare `ResourceUnavailability` come banded events grigi
-- 🔜 **B** UI `/resources/{id}` tab Disponibilità (CRUD `ResourceUnavailability`) + integrazione timbrature/idle
+- ✅ **Timbrature/idle (Opzione 2)** sezione HR `/hr` con `TimePunch` separato + integrazione calendario come secondo eventSource (chiuso v3.4.7)
+- 🔜 **A** UX calendario: drag/resize/move (editable:true), click evento → modal edit/cancel, mostrare `ResourceUnavailability` come banded grigi, filtro server-side su date range
+- 🔜 **B** UI `/resources/{id}` tab Disponibilità (CRUD `ResourceUnavailability`)
 - 🔜 **C** Riconciliare `JobResourceAssignment` (kanban `/assignments`) ↔ `Booking` (calendario): assegnare risorsa a job propone booking sulle date job; oppure rendere kanban una vista alternativa stesso modello
-- 🔜 **E** Capability AI `propose_booking` (conflict-check già esistente lato server)
+- 🔜 **E** Capability AI `propose_booking` + `propose_time_punch` (conflict-check booking già esistente lato server)
 - 🔜 **F** Vista gantt per job (start_date → end_date) sovrapposto a booking risorse
+
+**Sezione HR — sviluppo successivo**:
+- Aggregazioni avanzate (ore per progetto/risorsa/mese, costo orario × ore in cost report, export CSV/PDF cedolino)
+- Auto-timbratura via topbar per chi è loggato ("🟢 Inizio turno" / "🔴 Fine turno")
+- Orari standard per tipo risorsa (full-time / part-time / freelance) per calcolo straordinari automatici
 
 **Backlog "altri"**:
 1. **#4 server-side** Abort lato server per Ollama/Claude (oggi è solo client-side `AbortController`). Ollama supporta `client.abort()` best-effort. Anthropic SDK richiede una `Cancelable` request.
@@ -82,4 +86,4 @@ Dopo conferma test sul Mac, passare a **#4 server-side abort**.
 
 ---
 
-*Ultimo aggiornamento: 28 aprile 2026 — v3.4.6 chiusa: Booking ora ha `tenant_id` (fix coerenza Fase 1-bis), router `/planning` filtra per CURRENT_TENANT, migrazione idempotente `migrate_booking_tenant.py` voce [B]. Cantiere Calendario aperto: prossimo step decisione su modello timbrature/idle (3 opzioni in "Prossimo step concordato"), poi cascata A→B→C→E→F.*
+*Ultimo aggiornamento: 28 aprile 2026 — v3.4.7 chiusa: nuova sezione HR `/hr` con modello `TimePunch` separato (Opzione 2 scelta da Matteo), CRUD completo via API + UI con filtri/totali/modal, integrazione calendario come secondo eventSource con toggle sorgenti e filtro risorse server-side. CRUD smoke-tested E2E. Prossimo: verifica visiva sul Mac e poi step A (UX calendario drag/edit/unavailability).*

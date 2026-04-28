@@ -36,10 +36,11 @@ while true; do
     echo "  [8] Migra database esistente (AI per-utente, tab Impostazioni AI) [v3.2]"
     echo "  [9] Migra database esistente (categoria override righe quote) [v3.4.2]"
     echo "  [b] Migra database esistente (tenant_id su bookings) [v3.4.6]"
+    echo "  [c] Migra database esistente (tabella time_punches HR) [v3.4.7]"
     echo "  [a] Apri cartella upload"
     echo "  [0] Esci"
     echo ""
-    read -p "Scegli un'opzione (0-9, a, b): " scelta
+    read -p "Scegli un'opzione (0-9, a, b, c): " scelta
 
     case $scelta in
         1)
@@ -124,6 +125,17 @@ while true; do
             read -p "Procedo? (s/n): " conferma
             if [ "$conferma" = "s" ] || [ "$conferma" = "S" ]; then
                 python scripts/migrate_booking_tenant.py
+            fi
+            read -p "Premi INVIO per continuare..."
+            ;;
+        c|C)
+            echo ""
+            echo "Migrazione: crea tabella time_punches per la sezione HR."
+            echo "Timbrature/presenze separate dai Booking (intenzione vs consuntivo)."
+            echo "Operazione NON distruttiva e idempotente."
+            read -p "Procedo? (s/n): " conferma
+            if [ "$conferma" = "s" ] || [ "$conferma" = "S" ]; then
+                python scripts/migrate_time_punches.py
             fi
             read -p "Premi INVIO per continuare..."
             ;;

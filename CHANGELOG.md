@@ -1,5 +1,85 @@
 # MediaFlow — Changelog
 
+## v3.4.7 — Sezione HR e timbrature (28 aprile 2026)
+
+Apre il dominio amministrativo/HR per la rendicontazione delle ore di lavoro. Tutte le risorse umane (interne + freelance) rendicontano qui — i freelance senza login possono essere "timbrati" da un manager.
+
+Step "timbrature/idle" del cantiere calendario, scelta architetturale: **Opzione 2 — modello `TimePunch` separato**. Booking resta dominio della pianificazione (intenzione: chi sarà su quale job e quando), TimePunch è il consuntivo di presenza (chi è stato a lavoro e per quanto). Niente over-loading del modello Booking.
+
+### Modello
+
+- `TimePunch(tenant_id, resource_id, job_id?, start_datetime, end_datetime?, kind, notes, created_by_user_id?)`
+- `end_datetime` nullable = "in corso" (ingresso senza ancora uscita)
+- `job_id` nullable = ore non legate a progetto specifico
+- `created_by_user_id` nullable = chi ha registrato (manager/HR per freelance senza login)
+- Enum `PunchKind`: `shift` (turno, con o senza job), `idle` (presente non allocato), `leave` (ferie/permesso), `sick` (malattia), `break_` (pausa), `overtime` (straordinario)
+- Relationship: `Resource.time_punches` (back_populates)
+
+### Router `/hr`
+
+- `GET /hr` — pagina HR: filtri (risorsa, periodo, tipo) + tabella + footer totali
+- `GET /hr/api/punches` con filtri `resource_id`, `job_id`, `kind`, `from_date`, `to_date`, `format=json|fullcalendar`
+- `POST /hr/api/punches` — crea (validazione: risorsa esistente + tipo person, end > start, job esiste se presente)
+- `PUT /hr/api/punches/{id}` — modifica (sentinel `clear_end=true` / `clear_job=true` per cancellare; `Form(None)` non distinguibile da assente)
+- `DELETE /hr/api/punches/{id}` — elimina (hard delete, non soft — le timbrature errate vanno tolte)
+- `GET /hr/api/summary` — totali ore per kind nel periodo (esclude le in-progress); ritorna `totals`, `grand_total`, `labels`, `colors`
+
+### UI sezione HR `/hr`
+
+- Filtri: dropdown risorse persona, range date (con shortcut "settimana corrente" / "mese corrente"), kind, reset
+- Cards totali in alto con accent-color per kind + card grand-total indaco
+- Tabella: data, risorsa (con dot colore), inizio/fine (in corso → tag indaco), durata (h), kind (badge col bordo colore kind), job (codice + titolo), note
+- Click riga → modal modifica con bottone Elimina; "+ Nuova timbratura" in topbar
+- Modal: risorsa, kind, datetime-local start/end (vuoto = in corso), job opzionale, note
+
+### Integrazione calendario
+
+- `/planning/calendar` ora ha **2 eventSources** (FullCalendar): bookings + punches (`format=fullcalendar`)
+- Legenda riorganizzata: sezione "Sorgenti" (toggle bookings/punches) + sezione "Risorse" (toggle per risorsa)
+- Filtri ora **funzionanti server-side via render-time hide** (`eventDidMount` setProp display:none) — prima il filtro risorsa era no-op
+- Eventi punch hanno colore per kind (idle grigio, leave lavanda, sick rosso, break giallo, overtime arancione, shift = colore risorsa)
+- Click su punch mostra durata + "in corso" se end null
+
+### Sidebar
+
+Voce **🕐 Ore lavoro** sotto Operativo (dopo Assegnazioni, prima della sezione Preventivi).
+
+### Migrazione
+
+- `scripts/migrate_time_punches.py` — crea tabella `time_punches` via `Base.metadata.create_all` (idempotente: skip se già esiste)
+- Voce **[C]/[c]** in `strumenti.bat` / `strumenti.sh`
+
+### Smoke test E2E
+
+- AST OK su `models.py`, `routers/hr.py`, `main.py`, migration script
+- Migration: tabella creata, re-run idempotente
+- `/health` 3.4.7, `/hr/` 200, `/hr/api/punches` 200, `/hr/api/summary` 200, `/planning/calendar` 200
+- POST punch chiusa: durata 9.00h calcolata, kind=shift colore risorsa
+- POST punch in-progress (end null): duration_h null, summary lo esclude correttamente
+- PUT chiude la in-progress: end aggiornato, duration ricalcolata 1.5h
+- DELETE: hard delete, lista finale vuota
+- Format `fullcalendar`: title `risorsa · kind`, colore per kind, extendedProps con `source=punch`
+
+### File toccati
+
+- `app/main.py` — bump 3.4.6 → 3.4.7, registrazione router `hr`
+- `app/models/models.py` — `PunchKind` enum, `TimePunch` class, `Resource.time_punches` relationship
+- `app/models/__init__.py` — export `TimePunch`, `PunchKind`
+- `app/routers/hr.py` — nuovo, ~280 righe
+- `app/templates/pages/hr.html` — nuovo
+- `app/templates/pages/calendar.html` — secondo eventSource, legenda sorgenti, filtro client-side via `eventDidMount`
+- `app/templates/base.html` — voce sidebar 🕐
+- `scripts/migrate_time_punches.py` — nuovo
+- `strumenti.bat` / `strumenti.sh` — voce C
+
+### Promemoria backlog
+
+- **Aggregazioni HR avanzate** (rinviate): report ore lavorate per progetto e per risorsa nel mese, costo orario × ore in cost report, esportazione CSV/PDF cedolino, integrazione con `JobCostLine` consuntivo
+- **Auto-timbratura per utenti con login**: bottone "🟢 Inizio turno" / "🔴 Fine turno" nella topbar per chi è collegato (oggi: solo creazione manuale via modal)
+- **Mancano gli orari standard** per tipo risorsa (full-time / part-time / freelance senza vincolo) per calcolare straordinari automaticamente
+
+---
+
 ## v3.4.6 — Booking multi-tenant (28 aprile 2026)
 
 Fix di coerenza con la convenzione Fase 1-bis: il modello `Booking` era l'unica entità di business senza `tenant_id`. Tutti i restanti modelli (Resource, PriceItem, Client, Project, Department…) lo avevano già da v3.0.
