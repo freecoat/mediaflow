@@ -372,7 +372,7 @@ class Resource(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
     user: Mapped[Optional["User"]] = relationship(back_populates="resources")
     department: Mapped[Optional["Department"]] = relationship(back_populates="resources")
-    bookings: Mapped[List["Booking"]] = relationship(back_populates="resource")
+    booking_assignments: Mapped[List["BookingAssignment"]] = relationship(back_populates="resource", cascade="all, delete-orphan")
     unavailabilities: Mapped[List["ResourceUnavailability"]] = relationship(back_populates="resource")
     job_assignments: Mapped[List["JobResourceAssignment"]] = relationship(back_populates="resource")
     time_punches: Mapped[List["TimePunch"]] = relationship(back_populates="resource")
@@ -549,16 +549,16 @@ class JobCostLine(Base):
 # ── PLANNING ─────────────────────────────────────────────────
 
 class Booking(Base):
+    """Booking = contenitore di N risorse impegnate sullo stesso job/lavorazione,
+    ognuna con il suo intervallo. Le assegnazioni vivono in BookingAssignment.
+    `start_datetime`/`end_datetime` sono l'envelope (min/max degli assignments)."""
     __tablename__ = "bookings"
     id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
     tenant_id: Mapped[int] = mapped_column(ForeignKey("tenants.id"), default=1, index=True)
     # job_id nullable: NULL per booking interni (manutenzione, R&D, training)
     job_id: Mapped[Optional[int]] = mapped_column(ForeignKey("jobs.id"), nullable=True, index=True)
-    # Riferimento alla lavorazione specifica (riga del job): permette di sapere
-    # quali ore della pianificazione consumano quale monte ore (es. "Sara · Color HDR").
-    # NULL = booking generico sul job (vecchio comportamento).
     job_cost_line_id: Mapped[Optional[int]] = mapped_column(ForeignKey("job_cost_lines.id"), nullable=True, index=True)
-    resource_id: Mapped[int] = mapped_column(ForeignKey("resources.id"))
+    # Envelope min/max degli assignments. Auto-calcolato dal router al save.
     start_datetime: Mapped[datetime] = mapped_column(DateTime)
     end_datetime: Mapped[datetime] = mapped_column(DateTime)
     status: Mapped[BookingStatus] = mapped_column(SAEnum(BookingStatus), default=BookingStatus.tentative)
@@ -566,8 +566,22 @@ class Booking(Base):
     notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
     job: Mapped[Optional["Job"]] = relationship(back_populates="bookings")
-    resource: Mapped["Resource"] = relationship(back_populates="bookings")
     cost_line: Mapped[Optional["JobCostLine"]] = relationship()
+    assignments: Mapped[List["BookingAssignment"]] = relationship(
+        back_populates="booking", cascade="all, delete-orphan", order_by="BookingAssignment.start_datetime"
+    )
+
+
+class BookingAssignment(Base):
+    """N risorse per booking, ognuna con il suo intervallo (può differire dal padre)."""
+    __tablename__ = "booking_assignments"
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    booking_id: Mapped[int] = mapped_column(ForeignKey("bookings.id", ondelete="CASCADE"), index=True)
+    resource_id: Mapped[int] = mapped_column(ForeignKey("resources.id"), index=True)
+    start_datetime: Mapped[datetime] = mapped_column(DateTime)
+    end_datetime: Mapped[datetime] = mapped_column(DateTime)
+    booking: Mapped["Booking"] = relationship(back_populates="assignments")
+    resource: Mapped["Resource"] = relationship(back_populates="booking_assignments")
 
 
 # ── TIMBRATURE / PRESENZE (HR) ─────────────────────────────────

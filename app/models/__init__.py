@@ -5,7 +5,7 @@ from app.models.models import (
     DeliveryTemplate,
     Resource, ResourceType, ResourceUnavailability,
     Client, Project, ProjectStatus,
-    Job, JobStatus, Booking, BookingStatus, BookingKind, JobResourceAssignment, JobCostLine,
+    Job, JobStatus, Booking, BookingAssignment, BookingStatus, BookingKind, JobResourceAssignment, JobCostLine,
     TimePunch, PunchKind,
     Timesheet, Expense, Invoice, InvoiceLine, InvoiceStatus,
     Asset, AssetType, Tag, AssetTag,

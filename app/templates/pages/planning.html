@@ -732,13 +732,20 @@ function tlBuildGroups(bookings, rangeStart, rangeEnd) {
 }
 
 function tlBookingToItem(b) {
+  // Multi-resource v3.4.16: backend ritorna 1 item per assignment.
+  // b.id = 'a{assignment_id}', b.assignment_id e b.booking_id presenti.
   const p = b.extendedProps || {};
   const isInternal = p.kind && p.kind.startsWith('internal_');
   const color = b.color || '#6272f5';
+  // Badge "1/N" se booking con multi-risorsa
+  const groupSize = p.group_size || 1;
+  const groupBadge = groupSize > 1 ? ` <span style="background:rgba(0,0,0,.35); padding:0 4px; border-radius:3px; font-size:10px;">${p.group_position}/${groupSize}</span>` : '';
   return {
-    id: 'b'+b.id,
+    id: b.id,                  // 'a{assignment_id}' dal backend
+    assignment_id: b.assignment_id,
+    booking_id: b.booking_id,
     group: p.resource_id,
-    content: escapeHtml(b.title || ''),
+    content: escapeHtml(b.title || '') + groupBadge,
     start: b.start,
     end: b.end,
     style: 'background-color:'+color+'; border-color:'+color+';',
@@ -857,16 +864,19 @@ async function tlPerformUndo() {
   tlDismissUndoToast();
   if (!action) return;
   try {
-    if (action.type === 'update') {
+    if (action.type === 'update_assignment') {
       const fd = new FormData();
       fd.append('start_datetime', _toLocalDtInput(new Date(action.prev.start)));
       fd.append('end_datetime', _toLocalDtInput(new Date(action.prev.end)));
       fd.append('resource_id', action.prev.resource_id);
-      await api('PUT', `/planning/api/bookings/${action.id}`, fd);
+      await api('PUT', `/planning/api/booking-assignments/${action.assignment_id}`, fd);
+    } else if (action.type === 'remove_assignment') {
+      // Restore di un assignment cancellato non è semplice (backend non ha restore per assignment singolo).
+      // Avviso: undo per cancellazione assignment richiede che il booking-padre sia ancora attivo.
+      toast('Undo cancellazione assignment non ancora implementato', 'warning');
     } else if (action.type === 'remove') {
       await api('POST', `/planning/api/bookings/${action.id}/restore`);
     } else if (action.type === 'create') {
-      // Annulla un create: cancella il booking appena creato
       await api('DELETE', `/planning/api/bookings/${action.id}`);
     }
     toast('Operazione annullata', 'success');
@@ -917,22 +927,30 @@ function tlContextMenu(x, y, choices) {
   });
 }
 
-// ── Helpers azioni booking riutilizzabili ──────────────────
-async function _tlDoMove(item, orig, id) {
+// ── Helpers azioni assignment (multi-resource v3.4.16) ─────
+async function _tlDoMove(item, orig, assignmentId) {
+  // Sposta UN singolo assignment (drag/resize/reassign del singolo item timeline)
   const fd = new FormData();
   fd.append('start_datetime', _toLocalDtInput(new Date(item.start)));
   fd.append('end_datetime', _toLocalDtInput(new Date(item.end)));
   fd.append('resource_id', item.group);
-  await api('PUT', `/planning/api/bookings/${id}`, fd);
-  tlPushUndo({type:'update', id, prev:{start:orig.start, end:orig.end, resource_id:orig.group}}, 'Booking spostato');
+  await api('PUT', `/planning/api/booking-assignments/${assignmentId}`, fd);
+  tlPushUndo({
+    type:'update_assignment', assignment_id: assignmentId,
+    prev:{start:orig.start, end:orig.end, resource_id:orig.group}
+  }, 'Assegnazione spostata');
 }
 
 async function _tlDoDuplicate(item, origBooking) {
+  // Crea un nuovo Booking con 1 assignment, copiando metadata dal booking originale
   const p = origBooking.extendedProps || {};
   const fd = new FormData();
-  fd.append('resource_id', item.group);
-  fd.append('start_datetime', _toLocalDtInput(new Date(item.start)));
-  fd.append('end_datetime', _toLocalDtInput(new Date(item.end)));
+  const assignments = [{
+    resource_id: item.group,
+    start_datetime: _toLocalDtInput(new Date(item.start)),
+    end_datetime: _toLocalDtInput(new Date(item.end)),
+  }];
+  fd.append('assignments', JSON.stringify(assignments));
   fd.append('kind', p.kind || 'project');
   if (p.job_id) fd.append('job_id', p.job_id);
   if (p.job_cost_line_id) fd.append('job_cost_line_id', p.job_cost_line_id);
@@ -1021,12 +1039,12 @@ async function renderTimeline(preserveWindow=false) {
         callback(null);
         return;
       }
-      const id = String(item.id).startsWith('b') ? String(item.id).substring(1) : item.id;
+      // item.id = 'a{assignment_id}' (multi-resource v3.4.16)
+      const assignmentId = String(item.id).startsWith('a') ? String(item.id).substring(1) : item.id;
       const orig = items.find(x => x.id === item.id);
-      const origBooking = bookings.find(b => 'b'+b.id === item.id);
+      const origBooking = bookings.find(b => b.id === item.id);
       const altDup = window._tlAltDown;
       const crossResource = orig && item.group !== orig.group;
-      // Decisione azione: alt sempre = duplica; cross-resource = menu; same = move
       let action;
       if (altDup) action = 'duplicate';
       else if (crossResource) {
@@ -1043,14 +1061,13 @@ async function renderTimeline(preserveWindow=false) {
         if (action === 'duplicate') {
           if (!origBooking) throw new Error('Originale non trovato');
           await _tlDoDuplicate(item, origBooking);
-          callback(null); // originale resta
+          callback(null);
           renderTimeline(true);
         } else if (action === 'move') {
-          await _tlDoMove(item, orig, id);
+          await _tlDoMove(item, orig, assignmentId);
           item.className = (item.className || '').replace(/\s*tl-conflict/g, '');
           callback(item);
         } else {
-          // null = annullato
           callback(null);
         }
       } catch(e) {
@@ -1059,11 +1076,12 @@ async function renderTimeline(preserveWindow=false) {
       }
     },
     onRemove: async function(item, callback) {
-      const id = String(item.id).startsWith('b') ? String(item.id).substring(1) : item.id;
+      // Cancella il singolo assignment. Backend cancella il booking se ultimo.
+      const assignmentId = String(item.id).startsWith('a') ? String(item.id).substring(1) : item.id;
       try {
-        await api('DELETE', `/planning/api/bookings/${id}`);
+        const r = await api('DELETE', `/planning/api/booking-assignments/${assignmentId}`);
         callback(item);
-        tlPushUndo({type: 'remove', id}, 'Booking eliminato');
+        tlPushUndo({type: 'remove_assignment', assignment_id: assignmentId}, 'Assegnazione eliminata');
       } catch(e) {
         toast(e.message || 'Errore eliminazione', 'error');
         callback(null);
@@ -1090,15 +1108,15 @@ async function renderTimeline(preserveWindow=false) {
     const x = props.event.clientX;
     const y = props.event.clientY;
     if (props.item) {
-      // Click destro su un booking
-      const id = String(props.item).startsWith('b') ? String(props.item).substring(1) : props.item;
+      // Click destro su un assignment (id = 'a{N}')
+      const assignmentId = String(props.item).startsWith('a') ? String(props.item).substring(1) : props.item;
       const it = items.find(x => x.id === props.item);
-      const origBooking = bookings.find(b => 'b'+b.id === props.item);
+      const origBooking = bookings.find(b => b.id === props.item);
       const choice = await tlContextMenu(x, y, [
         {label: '✎  Modifica…', value: 'edit'},
         {label: '⊕  Duplica qui', value: 'duplicate'},
         {label: '↪  Sposta su altra risorsa…', value: 'reassign'},
-        {label: '🗑  Elimina', value: 'delete'},
+        {label: '🗑  Elimina assegnazione', value: 'delete'},
         {label: '✕  Annulla', value: null},
       ]);
       if (!choice) return;
@@ -1115,17 +1133,16 @@ async function renderTimeline(preserveWindow=false) {
           await _tlDoDuplicate(itemCopy, origBooking);
           renderTimeline(true);
         } else if (choice === 'reassign') {
-          // Sub-menu: scelta risorsa
           const choices = RESOURCES_SEED.map(r => ({label: r.name, value: r.id}));
           const newRes = await tlContextMenu(x, y, choices);
           if (newRes && newRes !== it.group) {
             const fakeItem = {id: props.item, group: newRes, start: it.start, end: it.end};
-            await _tlDoMove(fakeItem, it, id);
+            await _tlDoMove(fakeItem, it, assignmentId);
             renderTimeline(true);
           }
         } else if (choice === 'delete') {
-          await api('DELETE', `/planning/api/bookings/${id}`);
-          tlPushUndo({type:'remove', id}, 'Booking eliminato');
+          await api('DELETE', `/planning/api/booking-assignments/${assignmentId}`);
+          tlPushUndo({type:'remove_assignment', assignment_id: assignmentId}, 'Assegnazione eliminata');
           renderTimeline(true);
         }
       } catch(e) { toast(e.message || 'Errore', 'error'); }
@@ -1434,17 +1451,24 @@ function tlbUpdateDurationDisplay() {
 }
 
 async function tlbSubmit() {
-  // Sincronizza hidden da date+time fields prima del submit
+  // Multi-resource v3.4.16: invia assignments[] JSON con (resource_id, start, end).
+  // UI mono-risorsa per ora: 1 sola riga assignment con risorsa+start+end del modal.
+  // (UI multi-row in v3.4.16.1)
   tlbSyncStart();
   tlbSyncEnd();
   const startVal = document.getElementById('tlb-start').value;
   const endVal = document.getElementById('tlb-end').value;
   if (!startVal || !endVal) { toast('Compila inizio e fine', 'warning'); return; }
+  const resId = document.getElementById('tlb-resource-id').value;
+  if (!resId) { toast('Risorsa mancante', 'warning'); return; }
   const btn = document.getElementById('tlb-submit');
   const fd = new FormData();
-  fd.append('resource_id', document.getElementById('tlb-resource-id').value);
-  fd.append('start_datetime', startVal);
-  fd.append('end_datetime', endVal);
+  const assignments = [{
+    resource_id: Number(resId),
+    start_datetime: startVal,
+    end_datetime: endVal,
+  }];
+  fd.append('assignments', JSON.stringify(assignments));
   fd.append('kind', document.getElementById('tlb-kind').value);
   const jobId = document.getElementById('tlb-job-id').value;
   const lineId = document.getElementById('tlb-line').value;

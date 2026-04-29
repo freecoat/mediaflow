@@ -20,10 +20,11 @@ echo  [B] Migra database esistente (tenant_id su bookings) [v3.4.6]
 echo  [C] Migra database esistente (tabella time_punches HR) [v3.4.7]
 echo  [D] Migra database esistente (is_extra su job_cost_lines) [v3.4.9]
 echo  [E] Migra database esistente (Booking.kind/cost_line + job_id nullable) [v3.4.10]
+echo  [F] Migra database esistente (multi-resource booking_assignments) [v3.4.16]
 echo  [A] Apri cartella upload
 echo  [0] Esci
 echo.
-set /p scelta="Scegli un'opzione (0-9, A, B, C, D, E): "
+set /p scelta="Scegli un'opzione (0-9, A, B, C, D, E, F): "
 
 if "%scelta%"=="1" goto avvia
 if "%scelta%"=="2" goto reset_db
@@ -38,6 +39,7 @@ if /i "%scelta%"=="B" goto migrate_booking_tenant
 if /i "%scelta%"=="C" goto migrate_time_punches
 if /i "%scelta%"=="D" goto migrate_jobcostline_extra
 if /i "%scelta%"=="E" goto migrate_booking_cost_line_kind
+if /i "%scelta%"=="F" goto migrate_multi_resource
 if /i "%scelta%"=="A" goto uploads
 if "%scelta%"=="0" exit /b
 
@@ -184,6 +186,19 @@ set /p conferma="Procedo? (s/n): "
 if /i "%conferma%"=="s" (
     call .venv\Scripts\activate.bat
     python scripts\migrate_booking_cost_line_kind.py
+)
+pause & goto menu
+
+:migrate_multi_resource
+echo.
+echo Migrazione: multi-resource booking. Nuova tabella booking_assignments,
+echo popolata da Booking esistenti (1:1). Booking.resource_id rimosso.
+echo Richiede recreate-table SQLite, operazione idempotente.
+echo.
+set /p conferma="Procedo? (s/n): "
+if /i "%conferma%"=="s" (
+    call .venv\Scripts\activate.bat
+    python scripts\migrate_multi_resource.py
 )
 pause & goto menu
 

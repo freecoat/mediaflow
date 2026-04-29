@@ -24,7 +24,7 @@ from sqlalchemy import func
 
 from app.database import get_db
 from app.models import (
-    Job, JobStatus, JobCostLine, Booking, BookingStatus,
+    Job, JobStatus, JobCostLine, Booking, BookingAssignment, BookingStatus,
     TimePunch, Project, Client, PriceItem, PriceCategory,
 )
 
@@ -39,19 +39,18 @@ def _tpl():
 
 
 def _aggregate_planned_hours(db: Session, job_id: int, cost_line_id: Optional[int] = None) -> float:
-    """Ore pianificate: somma di (end - start) sui Booking attivi.
-    Se `cost_line_id` è valorizzato → solo i booking legati a quella riga.
-    Altrimenti → tutti i booking del job (anche senza cost_line_id assegnato)."""
-    q = db.query(Booking).filter(
+    """Ore pianificate: somma di (end - start) sugli assignments dei booking attivi.
+    Multi-resource v3.4.16: somma per assignment (1 booking N risorse → ore × N).
+    Se `cost_line_id` è valorizzato → solo i booking legati a quella riga."""
+    q = db.query(BookingAssignment).join(Booking, BookingAssignment.booking_id == Booking.id).filter(
         Booking.job_id == job_id,
         Booking.status != BookingStatus.cancelled,
     )
     if cost_line_id is not None:
         q = q.filter(Booking.job_cost_line_id == cost_line_id)
     total = 0.0
-    for b in q.all():
-        if b.start_datetime and b.end_datetime:
-            total += (b.end_datetime - b.start_datetime).total_seconds() / 3600.0
+    for a in q.all():
+        total += (a.end_datetime - a.start_datetime).total_seconds() / 3600.0
     return round(total, 2)
 
 
@@ -72,15 +71,16 @@ def _aggregate_actual_hours(db: Session, job_id: int, cost_line_id: Optional[int
 
 def _aggregate_unassigned(db: Session, job_id: int) -> dict:
     """Ore pianificate/lavorate sul job ma NON legate a una specifica lavorazione
-    (job_cost_line_id IS NULL). Utili per visualizzare un avviso "ore non assegnate"."""
-    planned_q = db.query(Booking).filter(
+    (job_cost_line_id IS NULL). Utili per visualizzare un avviso "ore non assegnate".
+    Multi-resource v3.4.16: somma per assignment."""
+    planned_q = db.query(BookingAssignment).join(Booking, BookingAssignment.booking_id == Booking.id).filter(
         Booking.job_id == job_id,
         Booking.status != BookingStatus.cancelled,
         Booking.job_cost_line_id.is_(None),
     ).all()
     planned = sum(
-        (b.end_datetime - b.start_datetime).total_seconds() / 3600.0
-        for b in planned_q if b.start_datetime and b.end_datetime
+        (a.end_datetime - a.start_datetime).total_seconds() / 3600.0
+        for a in planned_q
     )
     actual_q = db.query(TimePunch).filter(
         TimePunch.job_id == job_id,

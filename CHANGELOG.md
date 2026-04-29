@@ -1,5 +1,82 @@
 # MediaFlow — Changelog
 
+## v3.4.16 — Multi-resource booking (parte 1: backend + adattamento frontend) (29 aprile 2026)
+
+Cambio architetturale: un Booking può avere **N risorse**, ognuna con il proprio intervallo (anche differenti tra loro). Riferimento: cinema/post-production dove uno stesso turno può vedere colorist + assistant + producer presenti con orari diversi.
+
+### Modello
+
+- **Nuova tabella `booking_assignments`** — `id, booking_id, resource_id, start_datetime, end_datetime`. Cascade delete dal booking padre.
+- **Rimosso `Booking.resource_id`**: Booking ora è un contenitore puro.
+- **`Booking.start_datetime` / `end_datetime` diventano envelope** auto-calcolati come `min/max` degli `assignments`.
+- **Relazione**: `Booking.assignments` ↔ `BookingAssignment.booking`. `Resource.booking_assignments` (era `Resource.bookings`).
+
+### Migration `scripts/migrate_multi_resource.py`
+
+1. Crea tabella `booking_assignments`
+2. Per ogni Booking esistente → 1 assignment con `(resource_id, start, end)` (1:1 con il vecchio comportamento)
+3. Drop column `bookings.resource_id` via recreate-table dance SQLite (idempotente)
+4. Disponibile dal menu strumenti `[F]` (.bat e .sh)
+
+### Backend (`app/routers/planning.py`)
+
+- **GET `/api/bookings`** — restituisce **1 item per assignment** (non più 1 per booking). Item id `a{N}`. ExtendedProps include `group_size`, `group_position` per badge "1/3".
+- **POST `/api/bookings`** — accetta `assignments` come stringa JSON (lista di `{resource_id, start_datetime, end_datetime}`). Almeno 1 assignment richiesto. Conflict check su tutti.
+- **PUT `/api/bookings/{id}`** — aggiorna metadata (kind/job/status/notes) + opzionale replace-all `assignments`.
+- **NUOVO `PUT /api/booking-assignments/{aid}`** — aggiorna un singolo assignment (drag/resize/reassign del singolo item timeline).
+- **NUOVO `DELETE /api/booking-assignments/{aid}`** — cancella singolo assignment. Se è l'ultimo del booking → cancella (soft) il booking intero.
+- **POST `/api/bookings/{id}/restore`** — conflict check ora su tutti gli assignments del booking.
+- Helper riusabili: `_check_assignment_conflict`, `_recalc_booking_envelope`, `_validate_kind_job`.
+
+### Refactor downstream
+
+- `app/routers/jobs.py` — `_aggregate_planned_hours` e `_aggregate_unassigned` ora aggregano `BookingAssignment` invece di `Booking` (un booking N risorse = somma per assignment, non envelope).
+
+### Frontend (planning.html, adattamenti minimi)
+
+- **`tlBookingToItem`** — usa `id="a{N}"` dal backend, badge "N/M" se booking multi-risorsa.
+- **`onMove`** — chiama `PUT /api/booking-assignments/{aid}` (singolo assignment) invece di PUT booking.
+- **`onRemove`** — chiama `DELETE /api/booking-assignments/{aid}`.
+- **Right-click "Elimina"** — etichetta "Elimina assegnazione" + endpoint assignment.
+- **`_tlDoMove` / `_tlDoDuplicate`** — sui nuovi endpoint. Duplica crea sempre 1 nuovo Booking con 1 assignment.
+- **`tlbSubmit` (modal "Nuovo")** — invia `assignments=[{resource_id,start,end}]` come JSON nel form. UI mono-row per ora (multi-row in v3.4.16.1).
+- **`tlPerformUndo`** — gestisce `update_assignment` e `remove_assignment` types.
+
+### Smoke E2E backend
+
+- GET `/api/bookings` → 9 items, formato `a{N}`, `group_size=1`, `group_position=1`
+- POST con 2 assignments → booking con env start=09:00, end=18:00, 2 assignments distinti
+- PUT singolo assignment → start/end aggiornati, envelope ricalcolato
+- DELETE 1 assignment di booking con 2 → booking_cancelled=false
+- DELETE ultimo assignment → booking_cancelled=true
+
+### Restano per v3.4.16.1
+
+- **Modal multi-resource UI**: righe dinamiche (`+ Aggiungi risorsa`), ognuna con resource select + start + end + remove
+- **Warning visivo** booking senza risorse
+- **Cancel-fissaggio**: undo per assignment cancellato (richiede `POST /restore-assignment` o approach diverso)
+
+### File toccati
+
+- `app/main.py` — version 3.4.16
+- `app/models/models.py` — `BookingAssignment`, rimosso `Booking.resource_id`, `Resource.booking_assignments`
+- `app/models/__init__.py` — export `BookingAssignment`
+- `scripts/migrate_multi_resource.py` — nuovo
+- `strumenti.bat` / `strumenti.sh` — voce `[F]` migrazione
+- `app/routers/planning.py` — refactor completo endpoint booking
+- `app/routers/jobs.py` — aggregazioni via assignments
+- `app/templates/pages/planning.html` — adattamento item id, helpers, modal submit, undo
+
+### Da testare sul Mac
+
+1. `./strumenti.sh` → `[f]` per migrare DB
+2. Verificare che nessun booking esistente sia "perso" (dovrebbero apparire tutti)
+3. Drag/resize/delete su timeline (ora opera su singolo assignment)
+4. Modal nuovo booking → crea
+5. Multi-row assignment ancora **non disponibile** in UI (backend lo supporta, UI in v3.4.16.1)
+
+---
+
 ## v3.4.15.6 — Rimosso Shift + time picker custom (29 aprile 2026)
 
 ### Shift+drag rimosso

@@ -7,7 +7,8 @@ from sqlalchemy.orm import Session, joinedload
 from sqlalchemy import or_
 from app.database import get_db
 from app.models import (
-    Job, JobStatus, Client, Project, Booking, BookingStatus, BookingKind,
+    Job, JobStatus, Client, Project, Booking, BookingAssignment,
+    BookingStatus, BookingKind,
     Resource, ResourceType, JobCostLine, Department, User,
 )
 from app.services.auth import get_current_user_from_token
@@ -221,7 +222,9 @@ async def update_job_status(
     return {"id": j.id, "status": j.status}
 
 
-# ── Booking API ───────────────────────────────────────────────────────
+# ── Booking API (multi-resource v3.4.16) ───────────────────────────────
+
+import json as _json
 
 _KIND_LABEL = {
     BookingKind.project: "Progetto",
@@ -231,18 +234,54 @@ _KIND_LABEL = {
 }
 
 
-def _booking_title(b: Booking) -> str:
-    """Titolo umano per il calendario.
-    project: 'Job · [Lavorazione] · Risorsa'
-    internal_*: '[Tipo] · Risorsa'"""
-    res_name = b.resource.name if b.resource else "?"
+def _booking_title_for_assignment(b: Booking, resource_name: str) -> str:
+    """Titolo umano per un singolo assignment all'interno di un booking."""
     if b.kind == BookingKind.project and b.job:
         parts = [b.job.title]
         if b.cost_line:
             parts.append(b.cost_line.description)
-        parts.append(res_name)
+        parts.append(resource_name or "?")
         return " · ".join(parts)
-    return f"{_KIND_LABEL.get(b.kind, str(b.kind))} · {res_name}"
+    return f"{_KIND_LABEL.get(b.kind, str(b.kind))} · {resource_name or '?'}"
+
+
+def _check_assignment_conflict(db: Session, resource_id: int, start: datetime, end: datetime,
+                                exclude_assignment_id: Optional[int] = None) -> Optional[BookingAssignment]:
+    """Verifica se esiste un altro assignment in conflitto sulla stessa risorsa."""
+    q = db.query(BookingAssignment).join(Booking, BookingAssignment.booking_id == Booking.id).filter(
+        Booking.tenant_id == CURRENT_TENANT,
+        Booking.status != BookingStatus.cancelled,
+        BookingAssignment.resource_id == resource_id,
+        BookingAssignment.start_datetime < end,
+        BookingAssignment.end_datetime > start,
+    )
+    if exclude_assignment_id:
+        q = q.filter(BookingAssignment.id != exclude_assignment_id)
+    return q.first()
+
+
+def _recalc_booking_envelope(b: Booking):
+    """Ricalcola Booking.start_datetime/end_datetime come min/max dei suoi assignments."""
+    if not b.assignments:
+        return
+    b.start_datetime = min(a.start_datetime for a in b.assignments)
+    b.end_datetime = max(a.end_datetime for a in b.assignments)
+
+
+def _validate_kind_job(kind: BookingKind, job_id: Optional[int],
+                       job_cost_line_id: Optional[int], db: Session):
+    """Valida coerenza kind / job_id / cost_line_id. Ritorna (job_id_clean, line_id_clean)."""
+    if kind == BookingKind.project:
+        if not job_id:
+            raise HTTPException(400, "Per kind=project serve job_id")
+        if job_cost_line_id:
+            line = db.query(JobCostLine).filter(JobCostLine.id == job_cost_line_id).first()
+            if not line:
+                raise HTTPException(404, "Lavorazione non trovata")
+            if line.job_id != job_id:
+                raise HTTPException(400, f"La lavorazione #{job_cost_line_id} non appartiene al job #{job_id}")
+        return job_id, job_cost_line_id
+    return None, None
 
 
 @router.get("/api/bookings")
@@ -258,67 +297,100 @@ async def list_bookings(
     status: Optional[BookingStatus] = None,
     db: Session = Depends(get_db),
 ):
-    q = db.query(Booking).options(
-        joinedload(Booking.resource),
-        joinedload(Booking.job),
-        joinedload(Booking.cost_line),
-    ).filter(Booking.tenant_id == CURRENT_TENANT)
+    """Lista assignments come items per la timeline.
+    Ogni booking con N risorse → N items distinti (group=resource_id),
+    legati allo stesso booking_id via extendedProps."""
+    q = db.query(BookingAssignment).options(
+        joinedload(BookingAssignment.resource),
+        joinedload(BookingAssignment.booking).joinedload(Booking.job),
+        joinedload(BookingAssignment.booking).joinedload(Booking.cost_line),
+    ).join(Booking, BookingAssignment.booking_id == Booking.id).filter(
+        Booking.tenant_id == CURRENT_TENANT,
+    )
     if job_id:
         q = q.filter(Booking.job_id == job_id)
     if resource_id:
-        q = q.filter(Booking.resource_id == resource_id)
+        q = q.filter(BookingAssignment.resource_id == resource_id)
     if kind:
         q = q.filter(Booking.kind == kind)
     if status:
         q = q.filter(Booking.status == status)
     else:
-        # Default: nascondi cancellati (E1 v3.4.14)
         q = q.filter(Booking.status != BookingStatus.cancelled)
     if from_date:
-        q = q.filter(Booking.end_datetime >= from_date)
+        q = q.filter(BookingAssignment.end_datetime >= from_date)
     if to_date:
-        q = q.filter(Booking.start_datetime <= to_date)
-    # Filtri via job → client/project
+        q = q.filter(BookingAssignment.start_datetime <= to_date)
     if client_id or project_id:
-        q = q.join(Job, Booking.job_id == Job.id)
+        q = q.join(Job, Booking.job_id == Job.id, isouter=True)
         if client_id:
             q = q.filter(Job.client_id == client_id)
         if project_id:
             q = q.filter(Job.project_id == project_id)
-    # Filtro reparto via resource
     if department_id:
-        q = q.join(Resource, Booking.resource_id == Resource.id).filter(
+        q = q.join(Resource, BookingAssignment.resource_id == Resource.id).filter(
             Resource.department_id == department_id
         )
-    bookings = q.all()
-    # Formato FullCalendar-compatible
-    return [
-        {
-            "id": b.id,
-            "title": _booking_title(b),
-            "start": b.start_datetime.isoformat(),
-            "end": b.end_datetime.isoformat(),
-            "color": b.resource.color if b.resource else "#6272f5",
+    assignments = q.all()
+    # Cardinalità gruppo per ciascun booking_id (per badge "1/N")
+    booking_ids = list({a.booking_id for a in assignments})
+    if booking_ids:
+        sizes = dict(
+            db.query(BookingAssignment.booking_id, db.query(BookingAssignment.id).filter(
+                BookingAssignment.booking_id.in_(booking_ids)
+            ).count())
+            .filter(BookingAssignment.booking_id.in_(booking_ids))
+            .group_by(BookingAssignment.booking_id).all()
+        )
+        # SQLAlchemy non supporta sub-query inline per count gruppo, ricalcolo manuale
+        from collections import Counter
+        sizes = Counter()
+        for a in db.query(BookingAssignment).filter(BookingAssignment.booking_id.in_(booking_ids)).all():
+            sizes[a.booking_id] += 1
+    else:
+        sizes = {}
+
+    # Posizione (1-N) per ordinamento per booking
+    by_booking: dict[int, list[BookingAssignment]] = {}
+    for a in assignments:
+        by_booking.setdefault(a.booking_id, []).append(a)
+    pos_map = {}
+    for bid, lst in by_booking.items():
+        lst_sorted = sorted(lst, key=lambda x: x.start_datetime)
+        for i, a in enumerate(lst_sorted, 1):
+            pos_map[a.id] = i
+
+    out = []
+    for a in assignments:
+        b = a.booking
+        res_name = a.resource.name if a.resource else "?"
+        out.append({
+            "id": f"a{a.id}",
+            "assignment_id": a.id,
+            "booking_id": b.id,
+            "title": _booking_title_for_assignment(b, res_name),
+            "start": a.start_datetime.isoformat(),
+            "end": a.end_datetime.isoformat(),
+            "color": a.resource.color if a.resource else "#6272f5",
             "extendedProps": {
                 "source": "booking",
                 "kind": b.kind.value if hasattr(b.kind, "value") else b.kind,
                 "job_id": b.job_id,
                 "job_cost_line_id": b.job_cost_line_id,
                 "cost_line_description": b.cost_line.description if b.cost_line else None,
-                "resource_id": b.resource_id,
+                "resource_id": a.resource_id,
                 "status": b.status.value if hasattr(b.status, "value") else b.status,
                 "notes": b.notes,
+                "group_size": sizes.get(b.id, 1),
+                "group_position": pos_map.get(a.id, 1),
             }
-        }
-        for b in bookings
-    ]
+        })
+    return out
 
 
 @router.post("/api/bookings")
 async def create_booking(
-    resource_id: int = Form(...),
-    start_datetime: datetime = Form(...),
-    end_datetime: datetime = Form(...),
+    assignments: str = Form(...),  # JSON: [{"resource_id":1,"start_datetime":"...","end_datetime":"..."}, ...]
     job_id: Optional[int] = Form(None),
     job_cost_line_id: Optional[int] = Form(None),
     kind: BookingKind = Form(BookingKind.project),
@@ -326,74 +398,99 @@ async def create_booking(
     notes: Optional[str] = Form(None),
     db: Session = Depends(get_db),
 ):
-    """Crea un booking. Tre scenari validati:
-    - kind=project: job_id richiesto, job_cost_line_id opzionale (deve appartenere al job)
-    - kind=internal_*: job_id e job_cost_line_id devono essere NULL (ignorati se passati)
+    """Crea un booking con N assignments (multi-risorsa).
+
+    `assignments` è una stringa JSON con la lista delle assegnazioni.
+    Ogni elemento: {"resource_id": int, "start_datetime": ISO, "end_datetime": ISO}.
+    Almeno 1 assignment richiesto (warning per 0).
     """
-    if end_datetime <= start_datetime:
-        raise HTTPException(400, "end_datetime deve essere > start_datetime")
+    try:
+        ass_list = _json.loads(assignments)
+    except Exception:
+        raise HTTPException(400, "assignments deve essere JSON valido (lista di oggetti)")
+    if not isinstance(ass_list, list) or not ass_list:
+        raise HTTPException(400, "Servono almeno 1 risorsa assegnata al booking")
 
-    if kind == BookingKind.project:
-        if not job_id:
-            raise HTTPException(400, "Per kind=project serve job_id")
-        if job_cost_line_id:
-            line = db.query(JobCostLine).filter(JobCostLine.id == job_cost_line_id).first()
-            if not line:
-                raise HTTPException(404, "Lavorazione non trovata")
-            if line.job_id != job_id:
-                raise HTTPException(400, f"La lavorazione #{job_cost_line_id} non appartiene al job #{job_id}")
-    else:
-        # Booking interno: niente job/lavorazione
-        job_id = None
-        job_cost_line_id = None
+    # Validation kind/job
+    job_id, job_cost_line_id = _validate_kind_job(kind, job_id, job_cost_line_id, db)
 
-    # Controllo conflitti
-    conflict = db.query(Booking).filter(
-        Booking.tenant_id == CURRENT_TENANT,
-        Booking.resource_id == resource_id,
-        Booking.status != BookingStatus.cancelled,
-        Booking.start_datetime < end_datetime,
-        Booking.end_datetime > start_datetime,
-    ).first()
-    if conflict:
-        raise HTTPException(409, f"Conflitto con booking #{conflict.id}")
+    # Parse + valida ogni assignment
+    parsed_ass = []
+    for i, a in enumerate(ass_list):
+        if not isinstance(a, dict):
+            raise HTTPException(400, f"assignments[{i}] deve essere un oggetto")
+        rid = a.get("resource_id")
+        s = a.get("start_datetime")
+        e = a.get("end_datetime")
+        if not rid or not s or not e:
+            raise HTTPException(400, f"assignments[{i}]: resource_id, start_datetime, end_datetime richiesti")
+        try:
+            sd = datetime.fromisoformat(s) if isinstance(s, str) else s
+            ed = datetime.fromisoformat(e) if isinstance(e, str) else e
+        except Exception:
+            raise HTTPException(400, f"assignments[{i}]: date non valide")
+        if ed <= sd:
+            raise HTTPException(400, f"assignments[{i}]: end_datetime deve essere > start_datetime")
+        parsed_ass.append({"resource_id": int(rid), "start_datetime": sd, "end_datetime": ed})
 
+    # Conflict check su tutti gli assignments (vs altri booking attivi)
+    for i, pa in enumerate(parsed_ass):
+        c = _check_assignment_conflict(db, pa["resource_id"], pa["start_datetime"], pa["end_datetime"])
+        if c:
+            raise HTTPException(409, f"Conflitto su risorsa per assignments[{i}] (vs assignment #{c.id})")
+
+    # Crea Booking + assignments
+    env_start = min(pa["start_datetime"] for pa in parsed_ass)
+    env_end = max(pa["end_datetime"] for pa in parsed_ass)
     b = Booking(
         tenant_id=CURRENT_TENANT,
         job_id=job_id,
         job_cost_line_id=job_cost_line_id,
-        resource_id=resource_id,
-        start_datetime=start_datetime, end_datetime=end_datetime,
+        start_datetime=env_start, end_datetime=env_end,
         status=status, kind=kind, notes=notes,
     )
     db.add(b)
+    db.flush()  # serve b.id
+    for pa in parsed_ass:
+        db.add(BookingAssignment(
+            booking_id=b.id,
+            resource_id=pa["resource_id"],
+            start_datetime=pa["start_datetime"],
+            end_datetime=pa["end_datetime"],
+        ))
     db.commit()
     db.refresh(b)
     return {
         "id": b.id, "kind": b.kind.value if hasattr(b.kind, "value") else b.kind,
         "job_id": b.job_id, "job_cost_line_id": b.job_cost_line_id,
-        "resource_id": b.resource_id,
         "start_datetime": b.start_datetime.isoformat(),
         "end_datetime": b.end_datetime.isoformat(),
         "status": b.status.value if hasattr(b.status, "value") else b.status,
         "notes": b.notes,
+        "assignments": [
+            {"id": a.id, "resource_id": a.resource_id,
+             "start_datetime": a.start_datetime.isoformat(),
+             "end_datetime": a.end_datetime.isoformat()}
+            for a in b.assignments
+        ],
     }
 
 
 @router.put("/api/bookings/{booking_id}")
 async def update_booking(
     booking_id: int,
-    resource_id: Optional[int] = Form(None),
-    start_datetime: Optional[datetime] = Form(None),
-    end_datetime: Optional[datetime] = Form(None),
     job_id: Optional[int] = Form(None),
     job_cost_line_id: Optional[int] = Form(None),
     kind: Optional[BookingKind] = Form(None),
     status: Optional[BookingStatus] = Form(None),
     notes: Optional[str] = Form(None),
+    assignments: Optional[str] = Form(None),  # se passato, replace-all
     db: Session = Depends(get_db),
 ):
-    """Aggiorna un booking. Tutti i campi opzionali (PATCH semantics ma metodo PUT per coerenza form-based)."""
+    """Aggiorna metadata booking (kind/job/status/notes) e/o sostituisce assignments.
+
+    Per drag/resize di un singolo item della timeline → usare PUT /api/booking-assignments/{aid}.
+    """
     b = db.query(Booking).filter(
         Booking.id == booking_id,
         Booking.tenant_id == CURRENT_TENANT,
@@ -401,46 +498,57 @@ async def update_booking(
     if not b:
         raise HTTPException(404, "Booking non trovato")
 
-    # Calcolo nuovi valori effettivi
-    new_resource_id = resource_id if resource_id is not None else b.resource_id
-    new_start = start_datetime if start_datetime is not None else b.start_datetime
-    new_end = end_datetime if end_datetime is not None else b.end_datetime
     new_kind = kind if kind is not None else b.kind
     new_job_id = job_id if job_id is not None else b.job_id
     new_line_id = job_cost_line_id if job_cost_line_id is not None else b.job_cost_line_id
+    new_job_id, new_line_id = _validate_kind_job(new_kind, new_job_id, new_line_id, db)
 
-    if new_end <= new_start:
-        raise HTTPException(400, "end_datetime deve essere > start_datetime")
+    # Replace-all assignments se passato
+    if assignments is not None:
+        try:
+            ass_list = _json.loads(assignments)
+        except Exception:
+            raise HTTPException(400, "assignments JSON non valido")
+        if not isinstance(ass_list, list) or not ass_list:
+            raise HTTPException(400, "Servono almeno 1 risorsa assegnata")
+        parsed_ass = []
+        for i, a in enumerate(ass_list):
+            rid = a.get("resource_id"); s = a.get("start_datetime"); e = a.get("end_datetime")
+            try:
+                sd = datetime.fromisoformat(s) if isinstance(s, str) else s
+                ed = datetime.fromisoformat(e) if isinstance(e, str) else e
+            except Exception:
+                raise HTTPException(400, f"assignments[{i}]: date non valide")
+            if ed <= sd:
+                raise HTTPException(400, f"assignments[{i}]: fine deve essere > inizio")
+            parsed_ass.append({"resource_id": int(rid), "start_datetime": sd, "end_datetime": ed})
+        # Conflict check (escludendo gli assignment attuali del booking, che sostituiremo)
+        existing_ids = [a.id for a in b.assignments]
+        for i, pa in enumerate(parsed_ass):
+            q = db.query(BookingAssignment).join(Booking).filter(
+                Booking.tenant_id == CURRENT_TENANT,
+                Booking.status != BookingStatus.cancelled,
+                BookingAssignment.resource_id == pa["resource_id"],
+                BookingAssignment.start_datetime < pa["end_datetime"],
+                BookingAssignment.end_datetime > pa["start_datetime"],
+            )
+            if existing_ids:
+                q = q.filter(~BookingAssignment.id.in_(existing_ids))
+            c = q.first()
+            if c:
+                raise HTTPException(409, f"Conflitto su risorsa per assignments[{i}] (vs assignment #{c.id})")
+        # Replace
+        for old in list(b.assignments):
+            db.delete(old)
+        db.flush()
+        for pa in parsed_ass:
+            db.add(BookingAssignment(
+                booking_id=b.id,
+                resource_id=pa["resource_id"],
+                start_datetime=pa["start_datetime"],
+                end_datetime=pa["end_datetime"],
+            ))
 
-    if new_kind == BookingKind.project:
-        if not new_job_id:
-            raise HTTPException(400, "Per kind=project serve job_id")
-        if new_line_id:
-            line = db.query(JobCostLine).filter(JobCostLine.id == new_line_id).first()
-            if not line:
-                raise HTTPException(404, "Lavorazione non trovata")
-            if line.job_id != new_job_id:
-                raise HTTPException(400, f"La lavorazione #{new_line_id} non appartiene al job #{new_job_id}")
-    else:
-        new_job_id = None
-        new_line_id = None
-
-    # Controllo conflitti escludendo se stesso
-    conflict = db.query(Booking).filter(
-        Booking.tenant_id == CURRENT_TENANT,
-        Booking.resource_id == new_resource_id,
-        Booking.id != booking_id,
-        Booking.status != BookingStatus.cancelled,
-        Booking.start_datetime < new_end,
-        Booking.end_datetime > new_start,
-    ).first()
-    if conflict:
-        raise HTTPException(409, f"Conflitto con booking #{conflict.id}")
-
-    # Apply
-    b.resource_id = new_resource_id
-    b.start_datetime = new_start
-    b.end_datetime = new_end
     b.kind = new_kind
     b.job_id = new_job_id
     b.job_cost_line_id = new_line_id
@@ -448,17 +556,82 @@ async def update_booking(
         b.status = status
     if notes is not None:
         b.notes = notes
-    db.commit()
+
+    db.flush()
     db.refresh(b)
+    _recalc_booking_envelope(b)
+    db.commit()
     return {
         "id": b.id, "kind": b.kind.value if hasattr(b.kind, "value") else b.kind,
         "job_id": b.job_id, "job_cost_line_id": b.job_cost_line_id,
-        "resource_id": b.resource_id,
         "start_datetime": b.start_datetime.isoformat(),
         "end_datetime": b.end_datetime.isoformat(),
         "status": b.status.value if hasattr(b.status, "value") else b.status,
         "notes": b.notes,
+        "assignments": [
+            {"id": a.id, "resource_id": a.resource_id,
+             "start_datetime": a.start_datetime.isoformat(),
+             "end_datetime": a.end_datetime.isoformat()}
+            for a in b.assignments
+        ],
     }
+
+
+@router.put("/api/booking-assignments/{assignment_id}")
+async def update_assignment(
+    assignment_id: int,
+    resource_id: Optional[int] = Form(None),
+    start_datetime: Optional[datetime] = Form(None),
+    end_datetime: Optional[datetime] = Form(None),
+    db: Session = Depends(get_db),
+):
+    """Aggiorna un singolo assignment (drag/resize/reassign del singolo item timeline)."""
+    a = db.query(BookingAssignment).join(Booking).filter(
+        BookingAssignment.id == assignment_id,
+        Booking.tenant_id == CURRENT_TENANT,
+    ).first()
+    if not a:
+        raise HTTPException(404, "Assignment non trovato")
+    new_rid = resource_id if resource_id is not None else a.resource_id
+    new_s = start_datetime if start_datetime is not None else a.start_datetime
+    new_e = end_datetime if end_datetime is not None else a.end_datetime
+    if new_e <= new_s:
+        raise HTTPException(400, "end_datetime deve essere > start_datetime")
+    c = _check_assignment_conflict(db, new_rid, new_s, new_e, exclude_assignment_id=assignment_id)
+    if c:
+        raise HTTPException(409, f"Conflitto con assignment #{c.id}")
+    a.resource_id = new_rid
+    a.start_datetime = new_s
+    a.end_datetime = new_e
+    db.flush()
+    _recalc_booking_envelope(a.booking)
+    db.commit()
+    return {
+        "id": a.id, "booking_id": a.booking_id, "resource_id": a.resource_id,
+        "start_datetime": a.start_datetime.isoformat(),
+        "end_datetime": a.end_datetime.isoformat(),
+    }
+
+
+@router.delete("/api/booking-assignments/{assignment_id}")
+async def delete_assignment(assignment_id: int, db: Session = Depends(get_db)):
+    """Cancella un singolo assignment. Se è l'ultimo del booking, cancella il booking intero."""
+    a = db.query(BookingAssignment).join(Booking).filter(
+        BookingAssignment.id == assignment_id,
+        Booking.tenant_id == CURRENT_TENANT,
+    ).first()
+    if not a:
+        raise HTTPException(404, "Assignment non trovato")
+    booking = a.booking
+    db.delete(a)
+    db.flush()
+    db.refresh(booking)
+    if not booking.assignments:
+        booking.status = BookingStatus.cancelled
+    else:
+        _recalc_booking_envelope(booking)
+    db.commit()
+    return {"ok": True, "booking_cancelled": not bool(booking.assignments)}
 
 
 @router.delete("/api/bookings/{booking_id}")
@@ -483,17 +656,12 @@ async def restore_booking(booking_id: int, db: Session = Depends(get_db)):
     ).first()
     if not b:
         raise HTTPException(404, "Booking non trovato")
-    # Conflict check sul ripristino
-    conflict = db.query(Booking).filter(
-        Booking.tenant_id == CURRENT_TENANT,
-        Booking.resource_id == b.resource_id,
-        Booking.id != booking_id,
-        Booking.status != BookingStatus.cancelled,
-        Booking.start_datetime < b.end_datetime,
-        Booking.end_datetime > b.start_datetime,
-    ).first()
-    if conflict:
-        raise HTTPException(409, f"Conflitto con booking #{conflict.id}")
+    # Conflict check sul ripristino: ogni assignment vs altri booking attivi
+    for a in b.assignments:
+        c = _check_assignment_conflict(db, a.resource_id, a.start_datetime, a.end_datetime,
+                                        exclude_assignment_id=a.id)
+        if c:
+            raise HTTPException(409, f"Conflitto al ripristino: assignment #{a.id} vs #{c.id}")
     b.status = BookingStatus.tentative
     db.commit()
     return {"ok": True, "id": b.id}

@@ -39,10 +39,11 @@ while true; do
     echo "  [c] Migra database esistente (tabella time_punches HR) [v3.4.7]"
     echo "  [d] Migra database esistente (is_extra su job_cost_lines) [v3.4.9]"
     echo "  [e] Migra database esistente (Booking.kind/cost_line + job_id nullable) [v3.4.10]"
+    echo "  [f] Migra database esistente (multi-resource booking_assignments) [v3.4.16]"
     echo "  [a] Apri cartella upload"
     echo "  [0] Esci"
     echo ""
-    read -p "Scegli un'opzione (0-9, a, b, c, d, e): " scelta
+    read -p "Scegli un'opzione (0-9, a, b, c, d, e, f): " scelta
 
     case $scelta in
         1)
@@ -160,6 +161,17 @@ while true; do
             read -p "Procedo? (s/n): " conferma
             if [ "$conferma" = "s" ] || [ "$conferma" = "S" ]; then
                 python scripts/migrate_booking_cost_line_kind.py
+            fi
+            read -p "Premi INVIO per continuare..."
+            ;;
+        f|F)
+            echo ""
+            echo "Migrazione: multi-resource booking. Nuova tabella booking_assignments,"
+            echo "popolata da Booking esistenti (1:1). Booking.resource_id rimosso."
+            echo "Richiede recreate-table SQLite, operazione idempotente."
+            read -p "Procedo? (s/n): " conferma
+            if [ "$conferma" = "s" ] || [ "$conferma" = "S" ]; then
+                python scripts/migrate_multi_resource.py
             fi
             read -p "Premi INVIO per continuare..."
             ;;
