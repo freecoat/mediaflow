@@ -24,7 +24,7 @@ def _tpl():
 
 # ── Pagine HTML ───────────────────────────────────────────────────────
 
-VALID_VIEWS = ("jobs", "calendar", "trimester", "agenda", "todo")
+VALID_VIEWS = ("jobs", "calendar", "trimester", "agenda", "todo", "timeline")
 
 
 def _resolve_current_user(db: Session, token: Optional[str]) -> Optional[User]:

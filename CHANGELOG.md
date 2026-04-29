@@ -1,5 +1,44 @@
 # MediaFlow — Changelog
 
+## v3.4.12 — Resource Timeline (vis-timeline) (29 aprile 2026)
+
+Sesta vista dell'hub `/planning/`: **🧭 Timeline risorse** basata su vis-timeline 7.7.3 (CSS+JS già caricati dal v3.4.11).
+
+### Cosa fa
+
+- **Righe verticali** = risorse, raggruppate per **reparto** (nested groups, padre = nome reparto in grassetto, figli = risorse). Risorse senza reparto in gruppo "Senza reparto".
+- **Tempo orizzontale** con zoom **Giorno / Settimana / Mese / Trimestre** (default settimana corrente, lunedì → domenica).
+- Bottoni **◀ / Oggi / ▶** per spostarsi avanti-indietro di una finestra alla volta.
+- Etichetta range visibile in alto a destra (es. `28 apr 2026 → 5 mag 2026`).
+
+### Dati e filtri
+
+- Riusa endpoint `GET /planning/api/bookings` (già supporta tutti i 9 filtri trasversali). Zero nuovi endpoint server-side.
+- Filtri client-side anche sui groups: filtro **reparto** nasconde gli altri reparti, filtro **risorsa** mostra solo quella riga.
+- Items vis-timeline: id `b{booking_id}`, group = `resource_id`, colore = `resource.color`, classe `kind-internal` (grigio) per booking interni (manutenzione/R&D/formazione).
+- Tooltip nativo vis-timeline su hover, click su item → toast con titolo + range orario formattato.
+
+### Tema dark
+
+- Override CSS coerenti con palette indaco MediaFlow (`#6272f5`): bordi `var(--border)`, sfondo `var(--bg-elev)`, testo `var(--text)`. Item interni colore `#6b7280` (grigio neutro).
+
+### File toccati
+
+- `app/routers/planning.py` — `VALID_VIEWS` esteso con `"timeline"`
+- `app/templates/pages/planning.html` — tab #6, container `#tl-host`, barra zoom/nav, seed JSON `RESOURCES_SEED`/`DEPARTMENTS_SEED`, ~150 righe JS (`renderTimeline`, `tlBuildGroups`, `tlBookingToItem`, `tlWindowFor`, `tlMove`, `tlUpdateRangeLabel`)
+
+### Smoke test
+
+- `/health` 200 v3.4.12
+- `/planning/?view=timeline` 200, HTML contiene markup atteso e seed JSON ben formato
+
+### Prossimi step
+
+- v3.4.12.1 — **Kanban per stato job** (SortableJS già in uso)
+- v3.4.12.2 — **Gantt per job** dentro `/jobs/{id}` (Frappe Gantt MIT)
+
+---
+
 ## v3.4.11 — Hub Pianificazione con 5 viste + filtri trasversali (28 aprile 2026)
 
 `/planning/` diventa un hub con **5 viste** selezionabili da tab e **9 filtri trasversali** applicabili a tutte. Architettura C: una sola entry sidebar, switcher in topbar dell'area main. URL-state (`?view=…&filtro=…`) bookmarkable.

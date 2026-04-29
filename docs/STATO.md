@@ -8,23 +8,26 @@
 
 ## Versione corrente
 
-**v3.4.11** — 28 aprile 2026
+**v3.4.12** — 29 aprile 2026
 
 ## In corso
 
-Cantiere **Visualizzazioni Pianificazione** (split in 2 versioni). v3.4.11 chiusa = parte 1: hub `/planning/` con 5 viste e 9 filtri trasversali. v3.4.12 = parte 2 (resource timeline vis-timeline + kanban stato + gantt per job).
+Cantiere **Visualizzazioni Pianificazione** (split in 4 sotto-versioni dopo conferma di Matteo). v3.4.11 = parte 1 (5 viste + filtri). v3.4.12 = parte 2/A (Resource Timeline vis-timeline). Restano 2/B Kanban e 2/C Gantt.
 
-Cantiere ferie/malattia visibili come fasce bloccanti rinviato post v3.4.12. Cost report doppio (interno/esterno cliente) post v3.4.12.
+Cantiere ferie/malattia visibili come fasce bloccanti rinviato. Cost report doppio (interno/esterno cliente) anche dopo.
 
 ## Prossimo step concordato
 
-**v3.4.12 — Viste pesanti (parte 2 split)**:
-- **Resource Timeline** con vis-timeline: risorse in righe verticali (raggruppate per reparto), tempo orizzontale, settimana/giorno/trimestre selezionabili. Open source MIT.
-- **Kanban per stato job**: colonne `draft|active|on_hold|completed|invoiced`, card draggable (riusa SortableJS già in uso)
-- **Gantt per job** dentro `/jobs/{id}`: barre orizzontali per le lavorazioni, possibili dipendenze. Frappe Gantt o DHTMLX community.
-- Stessi 9 filtri trasversali del v3.4.11 applicati a queste viste
+**v3.4.12.1 — Kanban per stato job**:
+- Colonne `draft|active|on_hold|completed|invoiced`, card draggable (riusa SortableJS già in uso)
+- Drop su colonna → PUT `/planning/api/jobs/{id}/status`
+- Tab #7 nell'hub `/planning/`, riusa filtri trasversali
 
-Cantiere successivo (post v3.4.12):
+**v3.4.12.2 — Gantt per job** dentro `/jobs/{id}`:
+- Frappe Gantt MIT (~30KB CDN)
+- Barre orizzontali per le lavorazioni del job, possibili dipendenze base
+
+Cantiere successivo (post v3.4.12.x):
 - **v3.4.13** Ferie/malattia visibili nel calendario come fasce bloccanti
 Verifiche sul Mac sospese (cumulative):
 - v3.4.5 modal "Aggiungi voce"
@@ -36,6 +39,7 @@ Verifiche sul Mac sospese (cumulative):
 - v3.4.9.1 hotfix finance budget
 - v3.4.10 aggregazione ore per lavorazione (colonne Pian./Lavor. in `/jobs/{id}`)
 - v3.4.11 hub `/planning/` con 5 viste (Tabella, Calendario, Trimestre, Agenda, Le mie) + 9 filtri trasversali
+- v3.4.12 Resource Timeline vis-timeline (tab #6, zoom Giorno/Sett/Mese/Trim, raggruppata per reparto, riusa filtri)
 - Test E2E AI search-first (v3.4.4)
 
 Per testare #5 servono prompt reali al copilot con provider AI attivo (Sonnet 4.6 consigliato, ma anche Ollama 8b dovrebbe funzionare grazie a SEARCH-FIRST esplicito nel system prompt).
@@ -72,7 +76,9 @@ Dopo conferma test sul Mac, passare a **#4 server-side abort**.
 
 **Cantiere Visualizzazioni Pianificazione (in corso)**:
 - ✅ **v3.4.11** Hub `/planning/` 5 viste + 9 filtri trasversali (Tabella, Calendario, Trimestre, Agenda, Le mie)
-- 🔜 **v3.4.12** Resource Timeline (vis-timeline, righe verticali risorse + reparto) + Kanban per stato job + Gantt per job
+- ✅ **v3.4.12** Resource Timeline (vis-timeline, righe verticali risorse raggruppate per reparto, zoom giorno/sett/mese/trim)
+- 🔜 **v3.4.12.1** Kanban per stato job (SortableJS, drag tra colonne `draft|active|on_hold|completed|invoiced`)
+- 🔜 **v3.4.12.2** Gantt per job dentro `/jobs/{id}` (Frappe Gantt MIT)
 
 **Sezione HR — sviluppo successivo**:
 - Aggregazioni avanzate (ore per progetto/risorsa/mese, export CSV/PDF cedolino)
@@ -109,4 +115,4 @@ Dopo conferma test sul Mac, passare a **#4 server-side abort**.
 
 ---
 
-*Ultimo aggiornamento: 28 aprile 2026 — v3.4.11 chiusa: hub `/planning/` con 5 viste tab (Tabella, Calendario, Trimestre 3-mesi, Agenda lista, Le mie attività) + 9 filtri trasversali server-side (search, reparto, cliente, progetto, job, risorsa, stato, kind, periodo). URL-state bookmarkable. `/planning/calendar` redirige all'hub. vis-timeline pre-caricato per v3.4.12. Smoke 200 su tutte le viste, filtri API verificati.*
+*Ultimo aggiornamento: 29 aprile 2026 — v3.4.12 chiusa: Resource Timeline vis-timeline come 6° tab di `/planning/`. Righe = risorse, raggruppate per reparto (nested groups). Zoom Giorno/Settimana/Mese/Trimestre + nav ◀/Oggi/▶. Riusa `/planning/api/bookings` con tutti i 9 filtri. Item interni in grigio. Tema dark coerente (palette indaco). Smoke 200 + HTML verificato. Repo GitHub privato `freecoat/mediaflow` creato (push solo a major bump).*
