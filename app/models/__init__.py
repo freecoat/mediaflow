@@ -3,7 +3,7 @@ from app.models.models import (
     Tenant,
     Department,
     DeliveryTemplate,
-    Resource, ResourceType, ResourceUnavailability,
+    Resource, ResourceType, ResourceUnavailability, UnavailabilityKind, WorkingHoursPolicy,
     Client, Project, ProjectStatus,
     Job, JobStatus, Booking, BookingAssignment, BookingStatus, BookingKind, JobResourceAssignment, JobCostLine,
     TimePunch, PunchKind,

@@ -6,10 +6,10 @@ Fase 1-bis: aggiunti Tenant, Department, DeliveryTemplate, PriceItem.keywords
 from __future__ import annotations
 import enum
 import json
-from datetime import datetime, date
+from datetime import datetime, date, time
 from typing import Optional, List, Any
 from sqlalchemy import (
-    String, Integer, Float, Boolean, Text, Date, DateTime, JSON,
+    String, Integer, Float, Boolean, Text, Date, DateTime, Time, JSON,
     ForeignKey, Enum as SAEnum, UniqueConstraint
 )
 from sqlalchemy.orm import Mapped, mapped_column, relationship
@@ -369,13 +369,23 @@ class Resource(Base):
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
     color: Mapped[str] = mapped_column(String(7), default="#6272f5")
     user_id: Mapped[Optional[int]] = mapped_column(ForeignKey("users.id"), nullable=True)
+    # Override policy orario lavorativo (NULL = usa il default tenant)
+    working_hours_policy_id: Mapped[Optional[int]] = mapped_column(ForeignKey("working_hours_policies.id"), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
     user: Mapped[Optional["User"]] = relationship(back_populates="resources")
     department: Mapped[Optional["Department"]] = relationship(back_populates="resources")
     booking_assignments: Mapped[List["BookingAssignment"]] = relationship(back_populates="resource", cascade="all, delete-orphan")
     unavailabilities: Mapped[List["ResourceUnavailability"]] = relationship(back_populates="resource")
+    working_hours_policy: Mapped[Optional["WorkingHoursPolicy"]] = relationship(foreign_keys=[working_hours_policy_id])
     job_assignments: Mapped[List["JobResourceAssignment"]] = relationship(back_populates="resource")
     time_punches: Mapped[List["TimePunch"]] = relationship(back_populates="resource")
+
+
+class UnavailabilityKind(str, enum.Enum):
+    vacation = "vacation"     # ferie
+    sick = "sick"             # malattia
+    holiday = "holiday"        # festività (auto-generata da policy)
+    other = "other"
 
 
 class ResourceUnavailability(Base):
@@ -384,8 +394,34 @@ class ResourceUnavailability(Base):
     resource_id: Mapped[int] = mapped_column(ForeignKey("resources.id"))
     start_date: Mapped[date] = mapped_column(Date)
     end_date: Mapped[date] = mapped_column(Date)
+    kind: Mapped[UnavailabilityKind] = mapped_column(SAEnum(UnavailabilityKind), default=UnavailabilityKind.vacation)
     reason: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
     resource: Mapped["Resource"] = relationship(back_populates="unavailabilities")
+
+
+# ── ORARIO LAVORATIVO (E3 v3.4.17) ────────────────────────────
+# Definisce quando una risorsa è disponibile a essere prenotata.
+# Una policy "globale" (is_default=True) per il tenant + override
+# per-risorsa via Resource.working_hours_policy_id.
+
+class WorkingHoursPolicy(Base):
+    __tablename__ = "working_hours_policies"
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    tenant_id: Mapped[int] = mapped_column(ForeignKey("tenants.id"), default=1, index=True)
+    name: Mapped[str] = mapped_column(String(80))
+    is_default: Mapped[bool] = mapped_column(Boolean, default=False, index=True)
+    # Mattina (sempre presente)
+    morning_start: Mapped[time] = mapped_column(Time)  # es. 09:00
+    morning_end: Mapped[time] = mapped_column(Time)    # es. 13:00
+    # Pomeriggio (opzionale: NULL = orario continuato senza pausa)
+    afternoon_start: Mapped[Optional[time]] = mapped_column(Time, nullable=True)
+    afternoon_end: Mapped[Optional[time]] = mapped_column(Time, nullable=True)
+    # Giorni lavorativi come bitmask: bit 0 = lun, bit 1 = mar, ..., bit 6 = dom
+    # Default 0b0011111 = 31 = lun-ven
+    working_days: Mapped[int] = mapped_column(Integer, default=31)
+    # Festività auto-importate: paese ISO (es. "IT") o NULL per disabilitare
+    holidays_country: Mapped[Optional[str]] = mapped_column(String(8), nullable=True, default="IT")
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
 
 
 # ── QUOTAZIONE (collegata a Progetto, non più direttamente a Cliente) ──

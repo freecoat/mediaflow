@@ -1,5 +1,82 @@
 # MediaFlow — Changelog
 
+## v3.4.17 — E3: Working hours policy + ferie/festività bloccanti + smart split (29 aprile 2026)
+
+Terza fase del piano core-planning. Tre feature integrate:
+
+### 1. Modello WorkingHoursPolicy
+
+- **Nuova tabella `working_hours_policies`** con: `name`, `is_default`, `morning_start/end`, `afternoon_start/end` (NULL = orario continuato), `working_days` (bitmask lun=bit0..dom=bit6, default 31=lun-ven), `holidays_country` (ISO, default "IT").
+- **Resource.working_hours_policy_id** override opzionale per risorsa.
+- **Default tenant**: "Italia standard" 09:00-13:00 / 14:00-18:00 lun-ven, festività `IT`.
+- **ResourceUnavailability.kind** enum (`vacation` / `sick` / `holiday` / `other`).
+- Migration `scripts/migrate_working_hours.py` idempotente, voce `[G]` su strumenti.
+
+### 2. Engine `split_booking_smart` (`app/services/working_hours.py`)
+
+- Dato `(start, end, policy, unavailabilities)` ritorna lista `TimeSlot` ritagliati su:
+  - giorni lavorativi (skip weekend)
+  - mattina + pomeriggio (split su pausa pranzo)
+  - festività nazionali (libreria Python `holidays` — `holidays.IT(years=...)`)
+  - ferie/malattia (date escluse)
+- Esempio: lun 4 mag 08:00 → mer 6 mag 22:00 → 6 slot (mat+pom × 3gg).
+
+### 3. Backend planning API
+
+- **`GET /planning/api/unavailabilities`**: ritorna ferie/malattia espliciti + festività auto + weekend (opzionali) per il range. Aggregazione run consecutivi per ridurre payload. `resource_id` opzionale.
+- **`POST /planning/api/unavailabilities`**: crea ferie/malattia (validazione date).
+- **`DELETE /planning/api/unavailabilities/{id}`**: cancellazione.
+- **`POST /planning/api/bookings`** ora accetta flag `smart_split=true`: server espande gli assignments con l'engine prima di salvare.
+- **`GET /settings/api/working-hours`** + **`PUT /settings/api/working-hours/{id}`** per gestione policy (UI dedicata in v3.4.17.1).
+
+### 4. Frontend timeline
+
+- **Background items** per ferie/malattia/festività: pattern striato indaco (vacation), rosso (sick), arancio (holiday). Render via vis-timeline `type: 'background'`, classe `tl-bg-{kind}`.
+- **Hard block durante drag**: `onMoving` rileva overlap con item bloccante (`vacation`/`sick`/`holiday`), applica classe `tl-conflict-hard` (sfondo rosso scuro pieno + animazione shake). `onMove` rifiuta drop con toast `Risorsa non disponibile in questo periodo (ferie/festività)`.
+- **Skip drag su background items**: i bg-items non sono trascinabili.
+
+### 5. Modal smart split
+
+- **Checkbox "Smart split"** sotto le note (sfondo verde). Default off.
+- Quando attivo (e non in edit mode), invia `smart_split=true` al POST. Server splitta ogni assignment del payload in N sub-slot rispettando policy + unavailabilities della risorsa.
+- In edit mode il toggle è disabilitato (replace-all assignments diretti).
+
+### File toccati
+
+- `app/main.py` — version 3.4.17
+- `app/models/models.py` — `UnavailabilityKind`, `WorkingHoursPolicy`, `Resource.working_hours_policy_id`, `ResourceUnavailability.kind`
+- `app/models/__init__.py` — export
+- `scripts/migrate_working_hours.py` — nuovo
+- `app/services/working_hours.py` — nuovo (engine split)
+- `app/routers/planning.py` — endpoint unavailabilities CRUD, smart_split flag su POST, helper `_resolve_policy_for_resource` e `_expand_assignments_smart`
+- `app/routers/settings.py` — endpoint policy GET/PUT
+- `app/templates/pages/planning.html` — fetch unavailabilities, render bg-items, hard block onMoving/onMove, checkbox smart split, CSS `tl-bg-*` e `tl-conflict-hard`
+- `requirements.txt` — `holidays>=0.60`
+- `strumenti.bat` / `strumenti.sh` — voce `[G]`
+
+### Smoke E2E
+
+- `/health` 200
+- `GET /planning/api/unavailabilities` ritorna festività italiane (25 apr Liberazione, 1 mag Lavoratori) + weekend riconosciuti
+- `POST /planning/api/bookings` con `smart_split=true` su range lun-mer 8-22 → 6 assignments (mat/pom × 3gg, 9-13 + 14-18)
+- `GET /settings/api/working-hours` ritorna policy default
+
+### Da testare sul Mac
+
+1. `[G]` su strumenti per migrare DB
+2. Su timeline: weekend e festività italiane (es. 25 apr) appaiono striati
+3. Drag booking sopra una festività → bordo rosso animato + drop rifiutato
+4. Modal nuovo booking → checkbox "Smart split" → range multi-day → 1 booking ma con N assignments rispettosi di pausa/weekend/festa
+5. `pip install -r requirements.txt --upgrade` per ottenere `holidays`
+
+### Restano per v3.4.17.1
+
+- UI settings page con form policy modificabile
+- Override policy per-risorsa (UI in `/resources` page)
+- Form ferie/malattia in `/resources/{id}` (oggi solo via API)
+
+---
+
 ## v3.4.16.1 — Multi-resource UI completa (modal multi-row + edit) (29 aprile 2026)
 
 Frontend completo per multi-resource. Modal "Nuovo/Modifica booking" ora supporta **N risorse con orari distinti** in un unica operazione.

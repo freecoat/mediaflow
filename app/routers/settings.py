@@ -8,8 +8,9 @@ from fastapi.responses import HTMLResponse
 from typing import Optional
 from sqlalchemy.orm import Session
 from app.database import get_db
-from app.models import User
+from app.models import User, WorkingHoursPolicy
 from app.models.models import UserAISettings
+from datetime import time
 from app.services.auth import get_current_user_from_token, hash_password, verify_password
 from app.services.ai_provider import (
     PROVIDER_LABELS, PROVIDER_MODELS, ProviderConfig, build_provider,
@@ -271,3 +272,71 @@ async def ai_settings_delete(
             u.active_ai_provider = None
         db.commit()
     return {"ok": True}
+
+
+# ── Working hours policy (E3 v3.4.17) ──────────────────────────────
+
+CURRENT_TENANT_FALLBACK = 1
+
+
+def _serialize_policy(p: WorkingHoursPolicy) -> dict:
+    return {
+        "id": p.id, "name": p.name, "is_default": p.is_default,
+        "morning_start": p.morning_start.strftime("%H:%M") if p.morning_start else None,
+        "morning_end": p.morning_end.strftime("%H:%M") if p.morning_end else None,
+        "afternoon_start": p.afternoon_start.strftime("%H:%M") if p.afternoon_start else None,
+        "afternoon_end": p.afternoon_end.strftime("%H:%M") if p.afternoon_end else None,
+        "working_days": p.working_days,
+        "holidays_country": p.holidays_country,
+    }
+
+
+def _parse_time(s: Optional[str]) -> Optional[time]:
+    if not s:
+        return None
+    try:
+        h, m = s.split(":")
+        return time(int(h), int(m))
+    except Exception:
+        raise HTTPException(400, f"Orario non valido: {s}")
+
+
+@router.get("/api/working-hours")
+async def get_working_hours(db: Session = Depends(get_db)):
+    """Ritorna tutte le policy del tenant (di default 1: la 'Italia standard')."""
+    pols = db.query(WorkingHoursPolicy).filter(
+        WorkingHoursPolicy.tenant_id == CURRENT_TENANT_FALLBACK,
+    ).order_by(WorkingHoursPolicy.is_default.desc(), WorkingHoursPolicy.id).all()
+    return [_serialize_policy(p) for p in pols]
+
+
+@router.put("/api/working-hours/{policy_id}")
+async def update_working_hours(
+    policy_id: int,
+    name: Optional[str] = Form(None),
+    morning_start: Optional[str] = Form(None),
+    morning_end: Optional[str] = Form(None),
+    afternoon_start: Optional[str] = Form(None),
+    afternoon_end: Optional[str] = Form(None),
+    working_days: Optional[int] = Form(None),
+    holidays_country: Optional[str] = Form(None),
+    db: Session = Depends(get_db),
+):
+    p = db.query(WorkingHoursPolicy).filter(
+        WorkingHoursPolicy.id == policy_id,
+        WorkingHoursPolicy.tenant_id == CURRENT_TENANT_FALLBACK,
+    ).first()
+    if not p:
+        raise HTTPException(404, "Policy non trovata")
+    if name is not None: p.name = name
+    if morning_start is not None: p.morning_start = _parse_time(morning_start)
+    if morning_end is not None: p.morning_end = _parse_time(morning_end)
+    if afternoon_start is not None: p.afternoon_start = _parse_time(afternoon_start) if afternoon_start else None
+    if afternoon_end is not None: p.afternoon_end = _parse_time(afternoon_end) if afternoon_end else None
+    if working_days is not None: p.working_days = working_days
+    if holidays_country is not None: p.holidays_country = (holidays_country or None)
+    if p.morning_end <= p.morning_start:
+        raise HTTPException(400, "morning_end deve essere > morning_start")
+    db.commit()
+    db.refresh(p)
+    return _serialize_policy(p)

@@ -8,7 +8,7 @@
 
 ## Versione corrente
 
-**v3.4.16.1** — 29 aprile 2026 — Multi-resource UI completa (modal multi-row + edit mode)
+**v3.4.17** — 29 aprile 2026 — E3 Working hours + ferie/festività bloccanti + smart split
 
 ## In corso
 
@@ -27,7 +27,12 @@ Cantiere "overlay prenotato vs effettivo + adeguamento" (era v3.4.15 nel plan pr
 
 ## Prossimo step concordato
 
-**E3 — v3.4.17 — WorkingHoursPolicy + split smart + ferie bloccanti**:
+**v3.4.17.1 — UI settings working hours + form ferie**:
+- Pagina `/settings#working-hours` con form policy editabile (mattina, pomeriggio, giorni, paese festività)
+- Override policy per-risorsa nella pagina `/resources/{id}`
+- Form ferie/malattia in `/resources/{id}` (oggi solo via API)
+
+**E4 — v3.4.18 — Polish + multi-select**:
 - Modello `WorkingHoursPolicy` (globale + per-risorsa override): start_time, end_time, lunch_start, lunch_end, working_days
 - Engine `split_booking_smart(start, end, policy) → list[Slot]` che ritaglia weekend, orario non-lavorativo, pausa pranzo rigida (es. 13-14)
 - Modello `ResourceUnavailability` evoluto: ferie/malattia come fasce bloccanti, drag/drop su quelle = HARD block (popup, no warning)
@@ -118,7 +123,7 @@ Dopo conferma test sul Mac, passare a **#4 server-side abort**.
 ## Bug aperti
 
 - ✅ **#6 LLM matching listino** risolto in v3.4.4 (voci listino nel context AI + REGOLA SEARCH-FIRST nel system prompt). Da verificare con test E2E sul Mac.
-- Nessun altro bug noto.
+- ⚠️ **Modal multi-risorsa: leggibilità >5 risorse** (v3.4.16.1) — quando si aggiungono molte righe assignment (>5), la finestra modale diventa troppo affollata. Da affrontare con: scroll interno alla sezione, collapse/expand, oppure tabella più compatta. Annotato per dopo, non bloccante.
 
 ## Procedura riavvio (se la sessione muore)
 

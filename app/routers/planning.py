@@ -10,7 +10,9 @@ from app.models import (
     Job, JobStatus, Client, Project, Booking, BookingAssignment,
     BookingStatus, BookingKind,
     Resource, ResourceType, JobCostLine, Department, User,
+    WorkingHoursPolicy, ResourceUnavailability, UnavailabilityKind,
 )
+from datetime import date as _date, timedelta as _td
 from app.services.auth import get_current_user_from_token
 
 router = APIRouter(prefix="/planning", tags=["planning"])
@@ -388,6 +390,43 @@ async def list_bookings(
     return out
 
 
+def _resolve_policy_for_resource(db: Session, resource_id: int) -> Optional[WorkingHoursPolicy]:
+    """Ritorna la policy override per la risorsa, oppure la default del tenant."""
+    r = db.query(Resource).filter(Resource.id == resource_id).first()
+    if r and r.working_hours_policy_id:
+        p = db.query(WorkingHoursPolicy).filter(WorkingHoursPolicy.id == r.working_hours_policy_id).first()
+        if p:
+            return p
+    return db.query(WorkingHoursPolicy).filter(
+        WorkingHoursPolicy.tenant_id == CURRENT_TENANT,
+        WorkingHoursPolicy.is_default == True,
+    ).first()
+
+
+def _expand_assignments_smart(db: Session, parsed_ass: list[dict]) -> list[dict]:
+    """Per ogni assignment richiesto, applica `split_booking_smart` con la policy
+    della risorsa + le sue ferie/malattie. Ritorna la nuova lista espansa."""
+    from app.services.working_hours import split_booking_smart
+    out = []
+    for pa in parsed_ass:
+        rid = pa["resource_id"]
+        policy = _resolve_policy_for_resource(db, rid)
+        if not policy:
+            # Nessuna policy → fallback: passa l'assignment intero senza modifiche
+            out.append(pa)
+            continue
+        unavs = db.query(ResourceUnavailability).filter(
+            ResourceUnavailability.resource_id == rid,
+        ).all()
+        slots = split_booking_smart(pa["start_datetime"], pa["end_datetime"], policy, unavs)
+        if not slots:
+            # Range completamente fuori orario → niente da creare
+            continue
+        for sl in slots:
+            out.append({"resource_id": rid, "start_datetime": sl.start, "end_datetime": sl.end})
+    return out
+
+
 @router.post("/api/bookings")
 async def create_booking(
     assignments: str = Form(...),  # JSON: [{"resource_id":1,"start_datetime":"...","end_datetime":"..."}, ...]
@@ -396,6 +435,7 @@ async def create_booking(
     kind: BookingKind = Form(BookingKind.project),
     status: BookingStatus = Form(BookingStatus.tentative),
     notes: Optional[str] = Form(None),
+    smart_split: bool = Form(False),  # E3 v3.4.17: server-side split su weekend/pausa/festivi
     db: Session = Depends(get_db),
 ):
     """Crea un booking con N assignments (multi-risorsa).
@@ -432,6 +472,12 @@ async def create_booking(
         if ed <= sd:
             raise HTTPException(400, f"assignments[{i}]: end_datetime deve essere > start_datetime")
         parsed_ass.append({"resource_id": int(rid), "start_datetime": sd, "end_datetime": ed})
+
+    # E3 v3.4.17: Smart split server-side se richiesto
+    if smart_split:
+        parsed_ass = _expand_assignments_smart(db, parsed_ass)
+        if not parsed_ass:
+            raise HTTPException(400, "Smart split: il range richiesto non contiene orario lavorativo (tutto fuori orario, weekend, ferie o festivi)")
 
     # Conflict check su tutti gli assignments (vs altri booking attivi)
     for i, pa in enumerate(parsed_ass):
@@ -643,6 +689,148 @@ async def delete_booking(booking_id: int, db: Session = Depends(get_db)):
     if not b:
         raise HTTPException(404, "Booking non trovato")
     b.status = BookingStatus.cancelled
+    db.commit()
+    return {"ok": True}
+
+
+# ── Ferie/malattie + festività auto (E3 v3.4.17) ──────────────────────
+
+@router.get("/api/unavailabilities")
+async def list_unavailabilities(
+    from_date: Optional[_date] = None,
+    to_date: Optional[_date] = None,
+    resource_id: Optional[int] = None,
+    include_holidays: bool = True,
+    include_weekends: bool = True,
+    db: Session = Depends(get_db),
+):
+    """Ritorna le fasce non lavorative per la timeline (background items).
+    Combina:
+      - ResourceUnavailability esplicite (vacation/sick/other)
+      - Festività nazionali auto-derivate dalla policy (kind=holiday)
+      - Weekend in base alla policy (kind=weekend, opzionale)
+    """
+    if not from_date:
+        from_date = _date.today() - _td(days=30)
+    if not to_date:
+        to_date = _date.today() + _td(days=180)
+
+    out = []
+    # Ferie/malattie esplicite
+    q = db.query(ResourceUnavailability).join(Resource).filter(
+        Resource.tenant_id == CURRENT_TENANT,
+        ResourceUnavailability.end_date >= from_date,
+        ResourceUnavailability.start_date <= to_date,
+    )
+    if resource_id:
+        q = q.filter(ResourceUnavailability.resource_id == resource_id)
+    for u in q.all():
+        out.append({
+            "id": f"u{u.id}",
+            "resource_id": u.resource_id,
+            "start_date": u.start_date.isoformat(),
+            "end_date": u.end_date.isoformat(),
+            "kind": u.kind.value if hasattr(u.kind, "value") else u.kind,
+            "reason": u.reason,
+        })
+
+    if include_holidays or include_weekends:
+        # Per ogni risorsa filtrata (o tutte) genera festivi/weekend dalla sua policy
+        resources_q = db.query(Resource).filter(
+            Resource.tenant_id == CURRENT_TENANT,
+            Resource.is_active == True,
+        )
+        if resource_id:
+            resources_q = resources_q.filter(Resource.id == resource_id)
+        all_res = resources_q.all()
+
+        # Cache policy per ridurre query
+        default_policy = db.query(WorkingHoursPolicy).filter(
+            WorkingHoursPolicy.tenant_id == CURRENT_TENANT,
+            WorkingHoursPolicy.is_default == True,
+        ).first()
+        policies_by_id = {default_policy.id: default_policy} if default_policy else {}
+        for r in all_res:
+            if r.working_hours_policy_id and r.working_hours_policy_id not in policies_by_id:
+                p = db.query(WorkingHoursPolicy).filter(WorkingHoursPolicy.id == r.working_hours_policy_id).first()
+                if p:
+                    policies_by_id[p.id] = p
+
+        # Holidays cache per country/year-range
+        holidays_set = set()
+        if include_holidays and default_policy and default_policy.holidays_country:
+            from app.services.working_hours import get_holidays
+            holidays_set = get_holidays(default_policy, from_date.year, to_date.year)
+
+        # Per ogni risorsa, emit holidays + weekend come 1 entry per giorno (compatto: aggreghiamo run consecutivi)
+        for r in all_res:
+            policy = policies_by_id.get(r.working_hours_policy_id) or default_policy
+            if not policy:
+                continue
+            cur = from_date
+            run_start = None
+            run_kind = None
+            while cur <= to_date:
+                is_holiday = include_holidays and cur in holidays_set
+                is_weekend = include_weekends and not (policy.working_days & (1 << cur.weekday()))
+                kind = "holiday" if is_holiday else ("weekend" if is_weekend else None)
+                if kind != run_kind:
+                    if run_kind:
+                        out.append({
+                            "id": f"auto-{r.id}-{run_start.isoformat()}",
+                            "resource_id": r.id,
+                            "start_date": run_start.isoformat(),
+                            "end_date": (cur - _td(days=1)).isoformat(),
+                            "kind": run_kind,
+                            "reason": None,
+                        })
+                    run_kind = kind
+                    run_start = cur
+                cur += _td(days=1)
+            if run_kind:
+                out.append({
+                    "id": f"auto-{r.id}-{run_start.isoformat()}",
+                    "resource_id": r.id,
+                    "start_date": run_start.isoformat(),
+                    "end_date": to_date.isoformat(),
+                    "kind": run_kind,
+                    "reason": None,
+                })
+    return out
+
+
+@router.post("/api/unavailabilities")
+async def create_unavailability(
+    resource_id: int = Form(...),
+    start_date: _date = Form(...),
+    end_date: _date = Form(...),
+    kind: UnavailabilityKind = Form(UnavailabilityKind.vacation),
+    reason: Optional[str] = Form(None),
+    db: Session = Depends(get_db),
+):
+    if end_date < start_date:
+        raise HTTPException(400, "end_date deve essere >= start_date")
+    u = ResourceUnavailability(
+        resource_id=resource_id, start_date=start_date, end_date=end_date,
+        kind=kind, reason=reason,
+    )
+    db.add(u)
+    db.commit()
+    db.refresh(u)
+    return {"id": u.id, "resource_id": u.resource_id,
+            "start_date": u.start_date.isoformat(), "end_date": u.end_date.isoformat(),
+            "kind": u.kind.value if hasattr(u.kind, "value") else u.kind, "reason": u.reason}
+
+
+@router.delete("/api/unavailabilities/{u_id}")
+async def delete_unavailability(u_id: int, db: Session = Depends(get_db)):
+    u = db.query(ResourceUnavailability).join(Resource).filter(
+        ResourceUnavailability.id == u_id,
+        Resource.tenant_id == CURRENT_TENANT,
+    ).first()
+    if not u:
+        raise HTTPException(404, "Unavailability non trovata")
+    db.delete(u)
     db.commit()
     return {"ok": True}
 

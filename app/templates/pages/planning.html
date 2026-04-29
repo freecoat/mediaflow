@@ -89,6 +89,17 @@
   .vis-item .vis-item-content { padding: 2px 4px; }
   /* Linea oggi più visibile */
   .vis-current-time { background-color: #fb923c; width: 2px; }
+  /* Background items: ferie/malattia/festività/weekend (E3 v3.4.17) */
+  .vis-item.tl-bg-vacation { background: rgba(99,102,241,0.15) !important; border: none !important; box-shadow: none; }
+  .vis-item.tl-bg-vacation::before { content: ''; position: absolute; inset: 0; background: repeating-linear-gradient(45deg, transparent 0 4px, rgba(99,102,241,0.25) 4px 8px); }
+  .vis-item.tl-bg-sick { background: rgba(239,68,68,0.12) !important; border: none !important; }
+  .vis-item.tl-bg-sick::before { content: ''; position: absolute; inset: 0; background: repeating-linear-gradient(45deg, transparent 0 4px, rgba(239,68,68,0.22) 4px 8px); }
+  .vis-item.tl-bg-holiday { background: rgba(251,146,60,0.12) !important; border: none !important; }
+  .vis-item.tl-bg-holiday::before { content: ''; position: absolute; inset: 0; background: repeating-linear-gradient(45deg, transparent 0 4px, rgba(251,146,60,0.20) 4px 8px); }
+  .vis-item.tl-bg-weekend { background: rgba(255,255,255,0.025) !important; border: none !important; }
+  /* Hard conflict (drop su ferie/festa) */
+  .vis-item.tl-conflict-hard { background: #991b1b !important; border-color: #7f1d1d !important; box-shadow: 0 0 0 3px rgba(220,38,38,.6) !important; animation: tl-shake .25s; }
+  @keyframes tl-shake { 0%,100% { transform: translateX(0); } 25% { transform: translateX(-2px); } 75% { transform: translateX(2px); } }
   .tlb-job-item:hover { background: rgba(98,114,245,0.12); }
   .tlb-job-item:last-child { border-bottom: none; }
   /* Multi-row assignment rows */
@@ -354,6 +365,19 @@
         <div class="form-group">
           <label class="form-label">Note</label>
           <textarea id="tlb-notes" class="form-input" rows="3" style="resize:vertical; font-family:inherit;" placeholder="Annotazioni libere, riferimenti, contatti…"></textarea>
+        </div>
+
+        <!-- ─── Smart split (E3) ────────────────────── -->
+        <div class="form-group" style="background:rgba(34,197,94,0.06); border:1px solid rgba(34,197,94,0.3); border-radius:6px; padding:8px 12px;">
+          <label style="display:flex; align-items:center; gap:8px; cursor:pointer; margin:0;">
+            <input type="checkbox" id="tlb-smart-split" style="margin:0;">
+            <span style="font-size:13px;">
+              <b>Smart split</b>
+              <span style="color:var(--text3,#888); font-weight:normal; font-size:12px;">
+                — server splitta su pausa pranzo, weekend, ferie e festività italiane
+              </span>
+            </span>
+          </label>
         </div>
       </form>
     </div>
@@ -969,7 +993,31 @@ async function renderTimeline(preserveWindow=false) {
   const bookings = await api('GET', '/planning/api/bookings'+(qs?'?'+qs:''));
   window._tlBookings = bookings; // espongo per tlbOpenEdit (multi-row precarica)
   const items = bookings.map(tlBookingToItem).filter(i => i.group);
-  const itemsDS = new vis.DataSet(items);
+
+  // E3 v3.4.17: fetch ferie/festività/weekend come background items
+  const _winForUnav = savedWin || tlWindowFor(tlZoom, new Date());
+  const winFrom = new Date(_winForUnav.start); winFrom.setDate(winFrom.getDate() - 30);
+  const winTo = new Date(_winForUnav.end); winTo.setDate(winTo.getDate() + 60);
+  const fmtD = d => d.toISOString().substring(0,10);
+  let unavParams = `from_date=${fmtD(winFrom)}&to_date=${fmtD(winTo)}&include_holidays=true&include_weekends=false`;
+  const fp = getFilterParams();
+  if (fp.resource_id) unavParams += `&resource_id=${fp.resource_id}`;
+  let unavailabilities = [];
+  try { unavailabilities = await api('GET', '/planning/api/unavailabilities?'+unavParams); } catch(_) {}
+  window._tlUnavailabilities = unavailabilities;
+  const bgItems = unavailabilities.map(u => ({
+    id: 'u-' + u.id,
+    group: u.resource_id,
+    start: u.start_date + 'T00:00:00',
+    end: u.end_date + 'T23:59:59',
+    type: 'background',
+    className: 'tl-bg-' + u.kind,
+    title: ({vacation:'Ferie', sick:'Malattia', holiday:'Festività', weekend:'Weekend', other:'Non disponibile'}[u.kind] || u.kind) + (u.reason ? ' · '+u.reason : ''),
+    _kind: u.kind,
+  }));
+  // Conserva flag "blocking" per onMoving (hard block su vacation/sick/holiday, weekend è soft)
+  bgItems.forEach(b => { b._blocking = ['vacation','sick','holiday'].includes(b._kind); });
+  const itemsDS = new vis.DataSet([...items, ...bgItems]);
 
   const win = savedWin || tlWindowFor(tlZoom, new Date());
   const groups = tlBuildGroups(bookings, win.start, win.end);
@@ -1001,18 +1049,39 @@ async function renderTimeline(preserveWindow=false) {
         const orig = items.find(x => x.id === item.id);
         if (orig) item.group = orig.group;
       }
-      const all = itemsDS.get();
-      if (tlHasConflict(item, all)) {
-        item.className = (item.className || '').replace(/\s*tl-conflict/g, '') + ' tl-conflict';
-      } else {
-        item.className = (item.className || '').replace(/\s*tl-conflict/g, '');
+      // Skip background items (ferie/festa) — non si possono trascinare
+      if (typeof item.id === 'string' && item.id.startsWith('u-')) {
+        callback(null);
+        return;
       }
+      // E3 v3.4.17: HARD block su ferie/malattia/festività della risorsa target
+      const hardBlock = bgItems.some(b => {
+        if (!b._blocking) return false;
+        if (b.group !== item.group) return false;
+        const bs = new Date(b.start).getTime();
+        const be = new Date(b.end).getTime();
+        const is = new Date(item.start).getTime();
+        const ie = new Date(item.end).getTime();
+        return bs < ie && be > is;
+      });
+      let cls = (item.className || '').replace(/\s*tl-conflict(-hard)?/g, '');
+      const all = itemsDS.get();
+      if (hardBlock) cls += ' tl-conflict-hard';
+      else if (tlHasConflict(item, all.filter(x => !String(x.id).startsWith('u-')))) cls += ' tl-conflict';
+      item.className = cls.trim();
+      item._hardBlock = hardBlock; // flag per onMove
       callback(item);
     },
     onMove: async function(item, callback) {
       // Guard: rifiuta drop su gruppi reparto
       if (typeof item.group !== 'number') {
         toast('Sposta su una risorsa, non su un reparto', 'warning');
+        callback(null);
+        return;
+      }
+      // E3: hard block su ferie/festività
+      if (item._hardBlock) {
+        toast('Risorsa non disponibile in questo periodo (ferie/festività)', 'error');
         callback(null);
         return;
       }
@@ -1271,6 +1340,8 @@ function _tlbReset() {
   document.getElementById('tlb-line-group').style.display = 'none';
   document.getElementById('tlb-notes').value = '';
   document.getElementById('tlb-assignments').innerHTML = '';
+  const ss = document.getElementById('tlb-smart-split');
+  if (ss) ss.checked = false;
   const tpp = document.getElementById('tlb-tp-popup');
   if (tpp) tpp.style.display = 'none';
 }
@@ -1607,6 +1678,9 @@ async function tlbSubmit() {
   if (lineId) fd.append('job_cost_line_id', lineId);
   const notes = document.getElementById('tlb-notes').value;
   if (notes) fd.append('notes', notes);
+  // E3 v3.4.17: smart split server-side (solo per nuovo, non in edit)
+  const smartSplit = document.getElementById('tlb-smart-split');
+  if (smartSplit && smartSplit.checked && !editingId) fd.append('smart_split', 'true');
   btn.disabled = true; btn.textContent = 'Salvataggio…';
   try {
     if (editingId) {

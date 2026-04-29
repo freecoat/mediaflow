@@ -40,6 +40,8 @@ openpyxl>=3.1.5
 # Utilities
 python-dateutil>=2.9.0
 httpx>=0.28.0
+# Festività nazionali (E3 v3.4.17 — auto-blocco giorni festivi italiani)
+holidays>=0.60
 
 # Testing (opzionale)
 pytest>=8.3.0

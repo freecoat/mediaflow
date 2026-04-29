@@ -40,10 +40,11 @@ while true; do
     echo "  [d] Migra database esistente (is_extra su job_cost_lines) [v3.4.9]"
     echo "  [e] Migra database esistente (Booking.kind/cost_line + job_id nullable) [v3.4.10]"
     echo "  [f] Migra database esistente (multi-resource booking_assignments) [v3.4.16]"
+    echo "  [g] Migra database esistente (working hours + ferie tipizzate) [v3.4.17]"
     echo "  [a] Apri cartella upload"
     echo "  [0] Esci"
     echo ""
-    read -p "Scegli un'opzione (0-9, a, b, c, d, e, f): " scelta
+    read -p "Scegli un'opzione (0-9, a, b, c, d, e, f, g): " scelta
 
     case $scelta in
         1)
@@ -172,6 +173,18 @@ while true; do
             read -p "Procedo? (s/n): " conferma
             if [ "$conferma" = "s" ] || [ "$conferma" = "S" ]; then
                 python scripts/migrate_multi_resource.py
+            fi
+            read -p "Premi INVIO per continuare..."
+            ;;
+        g|G)
+            echo ""
+            echo "Migrazione: WorkingHoursPolicy + ferie tipizzate."
+            echo "Crea policy default 'Italia 9-13/14-18 lun-ven', aggiunge"
+            echo "Resource.working_hours_policy_id e ResourceUnavailability.kind."
+            echo "Idempotente."
+            read -p "Procedo? (s/n): " conferma
+            if [ "$conferma" = "s" ] || [ "$conferma" = "S" ]; then
+                python scripts/migrate_working_hours.py
             fi
             read -p "Premi INVIO per continuare..."
             ;;
