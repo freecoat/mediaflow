@@ -8,7 +8,7 @@
 
 ## Versione corrente
 
-**v3.4.20.2** — 29 aprile 2026 — Modal multi-row leggibilità + cambio status veloce
+**v3.4.20.3** — 29 aprile 2026 — UI settings tab "Orari lavorativi"
 
 ## In corso
 

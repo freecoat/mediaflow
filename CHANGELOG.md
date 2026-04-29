@@ -1,5 +1,37 @@
 # MediaFlow — Changelog
 
+## v3.4.20.3 — UI settings: tab "Orari lavorativi" (29 aprile 2026)
+
+Nuova tab in `/settings` per modificare la `WorkingHoursPolicy` default senza dover passare per le API.
+
+### Form
+
+- **Nome policy**
+- **Mattina · Inizio / Fine** (input `time` step 15min)
+- **Pomeriggio · Inizio / Fine** (opzionali — vuoto = orario continuato senza pausa)
+- **Giorni lavorativi**: 7 checkbox (Lun-Dom)
+- **Festività nazionali**: select country code (IT default + 5 altri paesi comuni, "—" disabilita auto-import)
+- **Salva** chiama `PUT /settings/api/working-hours/{id}` esistente
+- **Annulla modifiche**: ricarica via GET
+
+`showPane('hours')` triggera auto-load della policy default.
+
+### File toccati
+
+- `app/main.py` — version 3.4.20.3
+- `app/templates/pages/settings.html`:
+  - Nuova tab "🕐 Orari lavorativi"
+  - Pannello `pane-hours` con form completo
+  - Funzioni `whReload()`, `whSave()` (working_days bitmask)
+  - `showPane` chiama `whReload()` quando si apre il tab
+
+### Smoke
+
+- `/settings/` 200, contiene `pane-hours`, `whReload`, `whSave`, `wh-morning-start`
+- `GET /settings/api/working-hours` 200
+
+---
+
 ## v3.4.20.2 — Modal multi-row leggibilità + cambio status veloce (29 aprile 2026)
 
 ### Modal multi-row (fix leggibilità >5 righe)

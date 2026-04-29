@@ -65,6 +65,7 @@
     <div class="settings-tab active" data-pane="aspect" onclick="showPane('aspect')">🎨 Aspetto</div>
     <div class="settings-tab" data-pane="sidebar" onclick="showPane('sidebar')">📐 Sidebar</div>
     <div class="settings-tab" data-pane="ai" onclick="showPane('ai')">🤖 AI</div>
+    <div class="settings-tab" data-pane="hours" onclick="showPane('hours')">🕐 Orari lavorativi</div>
     <div class="settings-tab" data-pane="account" onclick="showPane('account')">👤 Account</div>
   </div>
 
@@ -109,6 +110,72 @@
         <div class="flex gap-2 mt-3">
           <button class="btn btn-secondary btn-sm" onclick="aiDisableAll()">Disabilita AI</button>
         </div>
+      </div>
+    </div>
+
+    <!-- ── Pannello Orari lavorativi ──────────────────────────── -->
+    <div class="settings-pane" id="pane-hours">
+      <div class="card mb-4">
+        <div class="card-title mb-2">Policy "Italia standard"</div>
+        <p class="text-sm text-muted mb-3">
+          Definisce quando le risorse sono disponibili a essere prenotate.
+          Si applica come default a tutte le risorse del tenant.
+          Smart split nei booking rispetta questi orari.
+        </p>
+        <form id="form-wh">
+          <input type="hidden" id="wh-id">
+          <div class="form-group">
+            <label class="form-label">Nome policy</label>
+            <input type="text" id="wh-name" class="form-input" required>
+          </div>
+          <div class="grid-2" style="gap:12px;">
+            <div class="form-group">
+              <label class="form-label">Mattina · Inizio</label>
+              <input type="time" id="wh-morning-start" class="form-input" step="900" required>
+            </div>
+            <div class="form-group">
+              <label class="form-label">Mattina · Fine</label>
+              <input type="time" id="wh-morning-end" class="form-input" step="900" required>
+            </div>
+            <div class="form-group">
+              <label class="form-label">Pomeriggio · Inizio <span class="text-muted">(opzionale)</span></label>
+              <input type="time" id="wh-afternoon-start" class="form-input" step="900">
+            </div>
+            <div class="form-group">
+              <label class="form-label">Pomeriggio · Fine</label>
+              <input type="time" id="wh-afternoon-end" class="form-input" step="900">
+            </div>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Giorni lavorativi</label>
+            <div style="display:flex; gap:6px; flex-wrap:wrap;">
+              <label class="text-sm" style="display:flex; align-items:center; gap:4px;"><input type="checkbox" data-wh-day="0"> Lun</label>
+              <label class="text-sm" style="display:flex; align-items:center; gap:4px;"><input type="checkbox" data-wh-day="1"> Mar</label>
+              <label class="text-sm" style="display:flex; align-items:center; gap:4px;"><input type="checkbox" data-wh-day="2"> Mer</label>
+              <label class="text-sm" style="display:flex; align-items:center; gap:4px;"><input type="checkbox" data-wh-day="3"> Gio</label>
+              <label class="text-sm" style="display:flex; align-items:center; gap:4px;"><input type="checkbox" data-wh-day="4"> Ven</label>
+              <label class="text-sm" style="display:flex; align-items:center; gap:4px;"><input type="checkbox" data-wh-day="5"> Sab</label>
+              <label class="text-sm" style="display:flex; align-items:center; gap:4px;"><input type="checkbox" data-wh-day="6"> Dom</label>
+            </div>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Festività nazionali</label>
+            <select id="wh-country" class="form-select" style="max-width:240px;">
+              <option value="">— disabilita auto-import —</option>
+              <option value="IT">Italia (IT)</option>
+              <option value="DE">Germania (DE)</option>
+              <option value="FR">Francia (FR)</option>
+              <option value="ES">Spagna (ES)</option>
+              <option value="GB">Regno Unito (GB)</option>
+              <option value="US">Stati Uniti (US)</option>
+            </select>
+            <p class="text-sm text-muted" style="margin-top:4px;">Le festività vengono auto-bloccate sulla timeline (pattern arancio).</p>
+          </div>
+          <div class="flex gap-2 mt-3">
+            <button type="button" class="btn btn-primary" onclick="whSave()">Salva</button>
+            <button type="button" class="btn btn-ghost" onclick="whReload()">Annulla modifiche</button>
+          </div>
+        </form>
       </div>
     </div>
 
@@ -162,6 +229,48 @@ const THEMES = [
 function showPane(id) {
   document.querySelectorAll('.settings-tab').forEach(t => t.classList.toggle('active', t.dataset.pane === id));
   document.querySelectorAll('.settings-pane').forEach(p => p.classList.toggle('active', p.id === 'pane-' + id));
+  if (id === 'hours') whReload();
+}
+
+// ── Working hours (v3.4.20.3) ────────────────────────────────
+async function whReload() {
+  try {
+    const list = await api('GET', '/settings/api/working-hours');
+    const p = (list || []).find(x => x.is_default) || (list || [])[0];
+    if (!p) return;
+    document.getElementById('wh-id').value = p.id;
+    document.getElementById('wh-name').value = p.name || '';
+    document.getElementById('wh-morning-start').value = p.morning_start || '';
+    document.getElementById('wh-morning-end').value = p.morning_end || '';
+    document.getElementById('wh-afternoon-start').value = p.afternoon_start || '';
+    document.getElementById('wh-afternoon-end').value = p.afternoon_end || '';
+    document.getElementById('wh-country').value = p.holidays_country || '';
+    const days = p.working_days || 0;
+    document.querySelectorAll('[data-wh-day]').forEach(cb => {
+      cb.checked = !!(days & (1 << Number(cb.dataset.whDay)));
+    });
+  } catch(e) { toast(e.message || 'Errore caricamento policy', 'error'); }
+}
+
+async function whSave() {
+  const id = document.getElementById('wh-id').value;
+  if (!id) return;
+  let bits = 0;
+  document.querySelectorAll('[data-wh-day]').forEach(cb => {
+    if (cb.checked) bits |= (1 << Number(cb.dataset.whDay));
+  });
+  const fd = new FormData();
+  fd.append('name', document.getElementById('wh-name').value);
+  fd.append('morning_start', document.getElementById('wh-morning-start').value);
+  fd.append('morning_end', document.getElementById('wh-morning-end').value);
+  fd.append('afternoon_start', document.getElementById('wh-afternoon-start').value);
+  fd.append('afternoon_end', document.getElementById('wh-afternoon-end').value);
+  fd.append('working_days', String(bits));
+  fd.append('holidays_country', document.getElementById('wh-country').value);
+  try {
+    await api('PUT', `/settings/api/working-hours/${id}`, fd);
+    toast('Policy salvata', 'success');
+  } catch(e) { toast(e.message || 'Errore salvataggio', 'error'); }
 }
 
 // ── Aspetto ──────────────────────────────────────────────────
