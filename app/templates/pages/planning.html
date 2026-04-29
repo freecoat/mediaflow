@@ -806,7 +806,7 @@ async function tlPerformUndo() {
       await api('DELETE', `/planning/api/bookings/${action.id}`);
     }
     toast('Operazione annullata', 'success');
-    renderTimeline();
+    renderTimeline(true);
   } catch(e) {
     toast(e.message || 'Errore undo', 'error');
   }
@@ -892,8 +892,9 @@ function tlHasConflict(item, allItems) {
   });
 }
 
-async function renderTimeline() {
+async function renderTimeline(preserveWindow=false) {
   const host = document.getElementById('tl-host');
+  const savedWin = (preserveWindow && tlInstance) ? tlInstance.getWindow() : null;
   if (tlInstance) { tlInstance.destroy(); tlInstance = null; }
   host.innerHTML = '';
   // Track mouse per posizionare context menu
@@ -902,13 +903,16 @@ async function renderTimeline() {
   });
 
   // ── Shift+drag su background = crea booking (E2.1) ────────
+  // Listener su document in capture phase per anticipare vis-timeline (che cattura su sub-elementi)
   let creating = null;
-  host.addEventListener('mousedown', (e) => {
+  function tlCreateMouseDown(e) {
     if (e.button !== 0) return;
     if (!e.shiftKey) return; // Shift richiesto per non interferire con drag pan
     if (!tlInstance) return;
+    // Solo se il target è dentro il host della timeline corrente
+    if (!host.contains(e.target)) return;
     const props = tlInstance.getEventProperties(e);
-    if (props.what !== 'background' && props.what !== 'group-label') return;
+    if (!props || (props.what !== 'background' && props.what !== 'group-label' && props.what !== 'axis')) return;
     if (typeof props.group !== 'number') return;
     if (!props.time) return;
     creating = {
@@ -920,7 +924,12 @@ async function renderTimeline() {
     };
     e.preventDefault();
     e.stopPropagation();
-  }, true); // capture per anticipare vis-timeline
+    e.stopImmediatePropagation();
+  }
+  // Cleanup listener precedente se esiste
+  if (window._tlCreateHandler) document.removeEventListener('mousedown', window._tlCreateHandler, true);
+  window._tlCreateHandler = tlCreateMouseDown;
+  document.addEventListener('mousedown', tlCreateMouseDown, true);
   host.addEventListener('mousemove', (e) => {
     if (!creating) return;
     const dx = e.clientX - creating.mouseStartX;
@@ -969,7 +978,7 @@ async function renderTimeline() {
   const items = bookings.map(tlBookingToItem).filter(i => i.group);
   const itemsDS = new vis.DataSet(items);
 
-  const win = tlWindowFor(tlZoom, new Date());
+  const win = savedWin || tlWindowFor(tlZoom, new Date());
   const groups = tlBuildGroups(bookings, win.start, win.end);
   if (!groups.length) {
     host.innerHTML = '<div class="pl-empty">Nessuna risorsa con i filtri attuali</div>';
@@ -1037,7 +1046,7 @@ async function renderTimeline() {
           if (!origBooking) throw new Error('Originale non trovato');
           await _tlDoDuplicate(item, origBooking);
           callback(null); // originale resta
-          renderTimeline();
+          renderTimeline(true);
         } else if (action === 'move') {
           await _tlDoMove(item, orig, id);
           item.className = (item.className || '').replace(/\s*tl-conflict/g, '');
@@ -1106,7 +1115,7 @@ async function renderTimeline() {
             end: new Date(new Date(it.end).getTime() + 2*60*60*1000),
           };
           await _tlDoDuplicate(itemCopy, origBooking);
-          renderTimeline();
+          renderTimeline(true);
         } else if (choice === 'reassign') {
           // Sub-menu: scelta risorsa
           const choices = RESOURCES_SEED.map(r => ({label: r.name, value: r.id}));
@@ -1114,12 +1123,12 @@ async function renderTimeline() {
           if (newRes && newRes !== it.group) {
             const fakeItem = {id: props.item, group: newRes, start: it.start, end: it.end};
             await _tlDoMove(fakeItem, it, id);
-            renderTimeline();
+            renderTimeline(true);
           }
         } else if (choice === 'delete') {
           await api('DELETE', `/planning/api/bookings/${id}`);
           tlPushUndo({type:'remove', id}, 'Booking eliminato');
-          renderTimeline();
+          renderTimeline(true);
         }
       } catch(e) { toast(e.message || 'Errore', 'error'); }
     } else if (typeof props.group === 'number' && props.time) {
@@ -1247,7 +1256,7 @@ async function tlbSubmit() {
     await api('POST', '/planning/api/bookings', fd);
     toast('Booking creato', 'success');
     closeModal('modal-tl-booking');
-    renderTimeline(); // refresh
+    renderTimeline(true); // refresh preservando finestra corrente
   } catch(e) {
     toast(e.message || 'Errore', 'error');
   } finally {

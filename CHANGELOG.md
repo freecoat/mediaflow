@@ -1,5 +1,33 @@
 # MediaFlow — Changelog
 
+## v3.4.15.3 — Hotfix: Shift+drag affidabile + preserve window (29 aprile 2026)
+
+Due bug:
+
+### Bug 1 — Shift+drag non scattava
+
+vis-timeline catturava `mousedown` sui suoi sub-elementi prima del listener su `host` (anche con capture phase). Risultato: lo shift+drag non avviava la creazione.
+
+**Fix**: listener spostato su `document` in capture phase. Filtro per `host.contains(e.target)` per limitare alla timeline corrente. Aggiunto `e.stopImmediatePropagation()` oltre a `stopPropagation()` per fermare definitivamente vis-timeline. Cleanup del listener precedente via `window._tlCreateHandler` riferimento globale per evitare doppi handler dopo re-render.
+
+### Bug 2 — Refresh tornava a oggi
+
+Dopo creazione/modifica/elimina un booking, `renderTimeline()` veniva chiamato per refresh. Re-buildava la finestra a `tlWindowFor(tlZoom, new Date())` = "oggi → +N giorni". Se l'utente stava lavorando su una settimana futura, la vista saltava indietro.
+
+**Fix**: `renderTimeline(preserveWindow=false)` accetta un flag. Se true, `tlInstance.getWindow()` viene salvato prima del destroy e usato come `win` nel re-render. Tutte le chiamate post-action (`tlbSubmit`, undo, onMove duplicate, right-click duplicate/reassign/delete) passano `true`. Solo le chiamate di prima inizializzazione (setView, init) restano default.
+
+### File toccati
+
+- `app/main.py` — version 3.4.15.3
+- `app/templates/pages/planning.html` — `tlCreateMouseDown` su document capture, `renderTimeline(preserveWindow)` con savedWin, 6 chiamate aggiornate a `renderTimeline(true)`
+
+### Smoke
+
+- HTML contiene `tlCreateMouseDown`, `preserveWindow`, `savedWin`, `renderTimeline(true)`
+- `/planning/?view=timeline` 200
+
+---
+
 ## v3.4.15.2 — Hotfix: blocca drop booking su gruppo reparto (29 aprile 2026)
 
 Bug: era possibile droppare un booking su un'intestazione di reparto (DI/Video, Audio, ...) invece che su una risorsa specifica. I reparti sono `nestedGroups` con `id` stringa (`'d1'`, `'d2'`, `'d0'`), le risorse foglia hanno `id` numerico.
