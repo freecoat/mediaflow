@@ -271,6 +271,9 @@ async def list_bookings(
         q = q.filter(Booking.kind == kind)
     if status:
         q = q.filter(Booking.status == status)
+    else:
+        # Default: nascondi cancellati (E1 v3.4.14)
+        q = q.filter(Booking.status != BookingStatus.cancelled)
     if from_date:
         q = q.filter(Booking.end_datetime >= from_date)
     if to_date:
@@ -377,6 +380,87 @@ async def create_booking(
     }
 
 
+@router.put("/api/bookings/{booking_id}")
+async def update_booking(
+    booking_id: int,
+    resource_id: Optional[int] = Form(None),
+    start_datetime: Optional[datetime] = Form(None),
+    end_datetime: Optional[datetime] = Form(None),
+    job_id: Optional[int] = Form(None),
+    job_cost_line_id: Optional[int] = Form(None),
+    kind: Optional[BookingKind] = Form(None),
+    status: Optional[BookingStatus] = Form(None),
+    notes: Optional[str] = Form(None),
+    db: Session = Depends(get_db),
+):
+    """Aggiorna un booking. Tutti i campi opzionali (PATCH semantics ma metodo PUT per coerenza form-based)."""
+    b = db.query(Booking).filter(
+        Booking.id == booking_id,
+        Booking.tenant_id == CURRENT_TENANT,
+    ).first()
+    if not b:
+        raise HTTPException(404, "Booking non trovato")
+
+    # Calcolo nuovi valori effettivi
+    new_resource_id = resource_id if resource_id is not None else b.resource_id
+    new_start = start_datetime if start_datetime is not None else b.start_datetime
+    new_end = end_datetime if end_datetime is not None else b.end_datetime
+    new_kind = kind if kind is not None else b.kind
+    new_job_id = job_id if job_id is not None else b.job_id
+    new_line_id = job_cost_line_id if job_cost_line_id is not None else b.job_cost_line_id
+
+    if new_end <= new_start:
+        raise HTTPException(400, "end_datetime deve essere > start_datetime")
+
+    if new_kind == BookingKind.project:
+        if not new_job_id:
+            raise HTTPException(400, "Per kind=project serve job_id")
+        if new_line_id:
+            line = db.query(JobCostLine).filter(JobCostLine.id == new_line_id).first()
+            if not line:
+                raise HTTPException(404, "Lavorazione non trovata")
+            if line.job_id != new_job_id:
+                raise HTTPException(400, f"La lavorazione #{new_line_id} non appartiene al job #{new_job_id}")
+    else:
+        new_job_id = None
+        new_line_id = None
+
+    # Controllo conflitti escludendo se stesso
+    conflict = db.query(Booking).filter(
+        Booking.tenant_id == CURRENT_TENANT,
+        Booking.resource_id == new_resource_id,
+        Booking.id != booking_id,
+        Booking.status != BookingStatus.cancelled,
+        Booking.start_datetime < new_end,
+        Booking.end_datetime > new_start,
+    ).first()
+    if conflict:
+        raise HTTPException(409, f"Conflitto con booking #{conflict.id}")
+
+    # Apply
+    b.resource_id = new_resource_id
+    b.start_datetime = new_start
+    b.end_datetime = new_end
+    b.kind = new_kind
+    b.job_id = new_job_id
+    b.job_cost_line_id = new_line_id
+    if status is not None:
+        b.status = status
+    if notes is not None:
+        b.notes = notes
+    db.commit()
+    db.refresh(b)
+    return {
+        "id": b.id, "kind": b.kind.value if hasattr(b.kind, "value") else b.kind,
+        "job_id": b.job_id, "job_cost_line_id": b.job_cost_line_id,
+        "resource_id": b.resource_id,
+        "start_datetime": b.start_datetime.isoformat(),
+        "end_datetime": b.end_datetime.isoformat(),
+        "status": b.status.value if hasattr(b.status, "value") else b.status,
+        "notes": b.notes,
+    }
+
+
 @router.delete("/api/bookings/{booking_id}")
 async def delete_booking(booking_id: int, db: Session = Depends(get_db)):
     b = db.query(Booking).filter(
@@ -388,3 +472,28 @@ async def delete_booking(booking_id: int, db: Session = Depends(get_db)):
     b.status = BookingStatus.cancelled
     db.commit()
     return {"ok": True}
+
+
+@router.post("/api/bookings/{booking_id}/restore")
+async def restore_booking(booking_id: int, db: Session = Depends(get_db)):
+    """Ripristina un booking cancellato (per undo)."""
+    b = db.query(Booking).filter(
+        Booking.id == booking_id,
+        Booking.tenant_id == CURRENT_TENANT,
+    ).first()
+    if not b:
+        raise HTTPException(404, "Booking non trovato")
+    # Conflict check sul ripristino
+    conflict = db.query(Booking).filter(
+        Booking.tenant_id == CURRENT_TENANT,
+        Booking.resource_id == b.resource_id,
+        Booking.id != booking_id,
+        Booking.status != BookingStatus.cancelled,
+        Booking.start_datetime < b.end_datetime,
+        Booking.end_datetime > b.start_datetime,
+    ).first()
+    if conflict:
+        raise HTTPException(409, f"Conflitto con booking #{conflict.id}")
+    b.status = BookingStatus.tentative
+    db.commit()
+    return {"ok": True, "id": b.id}

@@ -1,5 +1,70 @@
 # MediaFlow — Changelog
 
+## v3.4.14 — E1 — Editing diretto sulla timeline (29 aprile 2026)
+
+Prima fase del piano "core planning" in 6 step. Drag/resize/delete dei booking direttamente sulla Resource Timeline, con undo + conflict viz live + duplica via Alt+drag.
+
+### Backend
+
+- **Nuovo `PUT /planning/api/bookings/{id}`** con conflict check che esclude se stesso. Tutti i campi opzionali, semantica PATCH ma metodo PUT (coerenza form-based con il resto dei router). Validazioni: `kind=project` richiede `job_id`, `kind=internal_*` azzera job/cost_line.
+- **Nuovo `POST /planning/api/bookings/{id}/restore`** per undo di cancellazioni. Conflict check sul ripristino (può fallire se nel frattempo è stato creato un booking sopra).
+- **Fix `GET /planning/api/bookings`**: di default ora esclude `status=cancelled` (bug pre-esistente che mostrava cancellati nelle viste). Il filtro esplicito `?status=cancelled` continua a funzionare.
+
+### Frontend (vis-timeline)
+
+- `editable: {updateTime, updateGroup, remove, overrideItems}` attivi.
+- **Snap adattivo allo zoom**: 15min in Giorno, 30min in Settimana, 60min in Mese/Trimestre. Funzione `tlSnap(date, scale, step)`.
+- **Drag**: sposta booking nello stesso giorno o su altra risorsa (cross-group). Bordo aggiornato live, snap durante il drag.
+- **Resize**: handle laterali sui bordi, cursor `ew-resize`. Ghost durante resize.
+- **Conflict viz live**: durante drag/resize, se l'item collide con un altro stesso resource → classe `.tl-conflict` (sfondo rosso `#dc2626`, ring `rgba(220,38,38,.4)`). Solo viz, drop comunque permesso → backend fa il vero check.
+- **Alt+drag = duplica**: se Alt è premuto durante il drag, al drop viene fatto POST di nuovo booking (con stessa risorsa/job/cost_line ma posizione nuova) invece di PUT update. L'originale resta dov'era. Tracking `window._tlAltDown` via keydown/keyup globali.
+- **Delete**: tasto Canc su item selezionato. vis-timeline `editable.remove: true` gestisce il prompt nativo, callback chiama DELETE.
+- **Doppio click su area vuota**: apre modal "Nuovo booking" pre-popolato (era click in v3.4.13.1, andava in conflitto con drag pan). Click singolo su area vuota = niente, drag pan funziona normalmente.
+- **Hint UI**: riga sotto il label settimana con `Drag = sposta · Bordo = durata · Alt+drag = duplica · Canc = elimina · doppio-click su vuoto = nuovo`.
+
+### Undo toast (5s)
+
+- Stack `window._tlUndoStack` (max 20 elementi).
+- Dopo update/delete/duplica: toast custom in basso al centro `Booking aggiornato | [Annulla] | 5s` con countdown live.
+- Clic Annulla → ripristino: per `update` chiama PUT con valori precedenti, per `remove` chiama POST `/restore`, per `create` chiama DELETE.
+- Errore ripristino → toast errore.
+
+### CSS
+
+- `.tl-conflict` rosso pieno con shadow ring durante drag.
+- `.vis-drag-left` / `.vis-drag-right` (handle resize) leggermente più visibili su hover.
+- `.vis-item.vis-editable { cursor: move; }`.
+
+### File toccati
+
+- `app/main.py` — version 3.4.14
+- `app/routers/planning.py` — `update_booking`, `restore_booking`, fix list cancelled
+- `app/templates/pages/planning.html` — `tlSnap`, `tlPushUndo/Show/Dismiss/Perform`, `tlHasConflict`, editable + onMoving + onMove + onRemove, doubleClick handler, Alt tracking, hint UI
+
+### Smoke test
+
+- `/planning/api/bookings/{id}` PUT con start/end → response OK con valori aggiornati
+- DELETE poi GET → cancellato non più in lista
+- POST restore → ok, ricompare in lista
+- Conflict check escludendo self funziona
+- HTML contiene `tlSnap`, `tlPushUndo`, `_tlAltDown`, `tl-conflict`
+
+### Da testare sul Mac
+
+- Drag booking su altra risorsa → riassegnato
+- Drag con Alt premuto → originale resta + nuovo creato
+- Resize bordo → durata cambia con snap
+- Bordo rosso live durante drag su collisione
+- Tasto Canc su selezione → cancella + toast Undo
+- Click Undo entro 5s → ripristina
+- Doppio click su area vuota → modal nuovo booking
+
+### Prossimo step
+
+- v3.4.15 — E2 — Click&drag su vuoto crea booking con ghost + tooltip durata + capacity heatmap (anticipata da E4)
+
+---
+
 ## v3.4.13.1 — Hotfix: filtri + click-to-add timeline (29 aprile 2026)
 
 ### Bug fix: nascondi filtri rompeva il layout

@@ -8,33 +8,31 @@
 
 ## Versione corrente
 
-**v3.4.13.1** — 29 aprile 2026
+**v3.4.14** — 29 aprile 2026 (E1 del piano "core planning" 6-fasi)
 
 ## In corso
 
-Cantiere **Visualizzazioni Pianificazione**: v3.4.11 (5 viste + filtri) → v3.4.12 (Resource Timeline) → v3.4.13 (UX cleanup post feedback). Vista Trimestre rimossa, voce sidebar Calendario rimossa (è dentro pianificazione).
+Cantiere **Core Planning** (6 fasi confermate dopo analisi top vendor — Float/Runn/Resource Guru/Productive/Mosaic/Ftrack):
 
-Prossimi step concordati con Matteo:
-- v3.4.14 booking editabili
-- v3.4.15 overlay prenotato vs effettivo + funzione adeguamento + report delta producer
+- ✅ E1 — v3.4.14 — Editing diretto (drag/resize/delete + PUT API + snap adattivo + conflict viz + undo + Alt=duplica)
+- 🔜 E2 — v3.4.15 — Click&drag crea booking + ghost item + tooltip durata + capacity heatmap (anticipata da E4)
+- 🔜 E3 — v3.4.16 — WorkingHoursPolicy globale+override + split smart + pausa rigida + ferie/malattia bloccanti + holiday Italia auto (lib `holidays`)
+- 🔜 E4 — v3.4.17 — Multi-select + modifier keys completi + saved views + conflict viz live evoluto + bulk paste + snap line
+- 🔜 E5 — v3.4.18 — Booking ricorrenti + tentative bookings (legati a quote draft/sent → committed quando approved) + audit log
+- 🔜 E6 — v3.4.19 — AI auto-suggest assegnazione (capability `propose_booking`)
 
-Kanban e Gantt rimandati post v3.4.15.
+Cancellati dalla roadmap (gold plating o ridondante con altri vendor del mercato): cursori real-time, GraphQL, full-Gantt+critical-path, review/approval workflow Ftrack-style.
+
+Cantiere "overlay prenotato vs effettivo + adeguamento" (era v3.4.15 nel plan precedente) → riassorbito in E5/E6 dopo E3 ferie e con tentative status.
 
 ## Prossimo step concordato
 
-**v3.4.14 — Booking editabili dalla timeline**:
-- vis-timeline `editable: {updateTime, updateGroup, remove, add}` attivo
-- Nuovo `PUT /planning/api/bookings/{id}` (oggi solo POST + DELETE) con conflict check
-- Drag = sposta inizio. Resize bordo = cambia durata. Delete = soft delete (status=cancelled, già esistente).
-- Toast feedback su ogni azione.
-
-**v3.4.15 — Prenotato vs effettivo (overlay) + adeguamento + report delta**:
-- Sovrapposto: barra grigia di sfondo (booking = prenotato) + barra colorata stretta sopra (TimePunch = effettivo). Delta extra-time visivo.
-- Funzione "Adeguamento" nel planning: bottone per accettare l'extra-time e renderlo effettivo (aggiorna booking end_datetime al TimePunch end).
-- Report producer: aggregazione delta (prenotato - effettivo) per cost_line/job. Probabile estensione finance.
-
-Cantiere successivo (post v3.4.15):
-- **v3.4.16** Ferie/malattia visibili nel calendario come fasce bloccanti
+**E2 — v3.4.15 — Click&drag crea booking + capacity heatmap**:
+- Mousedown su area vuota timeline → tracking → mouseup → calcola intervallo
+- Ghost item visivo durante drag (rettangolo semi-trasparente)
+- Tooltip live durata `09:00 → 13:00 · 4h`
+- Mouseup → modal pre-popolato (default) o create veloce (Shift+drag)
+- Capacity heatmap sotto nome risorsa (% occupazione/giorno) — anticipato da E4 dopo analisi vendor (#2 raccomandazione, ROI alto)
 Verifiche sul Mac sospese (cumulative):
 - v3.4.5 modal "Aggiungi voce"
 - v3.4.6 booking multi-tenant
@@ -48,6 +46,7 @@ Verifiche sul Mac sospese (cumulative):
 - v3.4.12 Resource Timeline vis-timeline (tab #6, zoom Giorno/Sett/Mese/Trim, raggruppata per reparto, riusa filtri)
 - v3.4.13 UX cleanup: tasto Oggi parte da oggi, selettore data Vai-a, label settimana/mese, zebra rows, filtri collassabili, vista Trimestre rimossa, voce sidebar Calendario rimossa
 - v3.4.13.1 hotfix: filtri collassabili stabili (flex+min-width:0), click su timeline → modal nuovo booking pre-popolato (risorsa+ora+job+lavorazione)
+- v3.4.14 E1 editing diretto: drag/resize/delete, snap adattivo 15/30/60min, conflict border rosso live, undo toast 5s, Alt+drag duplica, doppio click vuoto = nuovo
 - Test E2E AI search-first (v3.4.4)
 
 Per testare #5 servono prompt reali al copilot con provider AI attivo (Sonnet 4.6 consigliato, ma anche Ollama 8b dovrebbe funzionare grazie a SEARCH-FIRST esplicito nel system prompt).
@@ -87,7 +86,8 @@ Dopo conferma test sul Mac, passare a **#4 server-side abort**.
 - ✅ **v3.4.12** Resource Timeline (vis-timeline, righe verticali risorse raggruppate per reparto, zoom giorno/sett/mese/trim)
 - ✅ **v3.4.13** UX cleanup: Oggi=da-oggi, Vai-a, label sett/mese, zebra rows, filtri collassabili, drop Trimestre + voce sidebar Calendario
 - ✅ **v3.4.13.1** Hotfix filtri (flex+min-width:0) + click vuoto timeline → modal nuovo booking pre-popolato
-- 🔜 **v3.4.14** Booking editabili dalla timeline (drag/resize/delete + PUT API)
+- ✅ **v3.4.14** E1: editing diretto timeline (drag/resize/delete + PUT/restore API + snap 15/30/60min adattivo + conflict viz live + undo toast 5s + Alt+drag duplica + doubleClick vuoto = nuovo)
+- 🔜 **v3.4.15** E2: click&drag crea + ghost + tooltip durata + capacity heatmap %/giorno (anticipata da E4)
 - 🔜 **v3.4.15** Prenotato vs effettivo overlay + adeguamento + report delta producer
 - 🔜 **post-15** Kanban per stato job (SortableJS) + Gantt per job (`/jobs/{id}`, Frappe Gantt)
 
@@ -126,4 +126,4 @@ Dopo conferma test sul Mac, passare a **#4 server-side abort**.
 
 ---
 
-*Ultimo aggiornamento: 29 aprile 2026 — v3.4.13.1 hotfix: collasso filtri stabilizzato (refactor flex con `min-width:0` sul main, era grid `0 1fr` che dava overflow imprevedibile con vis-timeline). Aggiunto click su area vuota timeline → modal "Nuovo booking" pre-popolato (risorsa locked dalla riga, ora arrotondata all'ora cliccata, kind/job/lavorazione/note, submit POST `/planning/api/bookings`). Smoke 200, HTML verificato. Repo GitHub privato `freecoat/mediaflow` (push solo a major).*
+*Ultimo aggiornamento: 29 aprile 2026 — v3.4.14 chiusa: E1 del piano core-planning 6-fasi. Editing diretto timeline (drag/resize/delete) con `PUT /planning/api/bookings/{id}` + `POST /restore`. Snap adattivo allo zoom (15/30/60min). Conflict border rosso live durante drag/resize. Undo toast 5s con stack 20 azioni (update/remove/create). Alt+drag duplica invece di muovere. Doppio click su area vuota apre modal nuovo booking (sostituisce single click che andava in conflitto con drag pan). Hint UI sotto label settimana. Fix pre-esistente: `/api/bookings` di default esclude cancellati. Smoke E2E PUT+DELETE+restore OK. Plan rivisto post analisi top vendor (Float gold standard, Productive simile filosofia, raccomandazioni #1-#10 in ROI). Repo GitHub privato `freecoat/mediaflow` (push solo a major).*

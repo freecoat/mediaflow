@@ -75,6 +75,12 @@
   .vis-item { border-color: rgba(0,0,0,.25); color: #fff; font-size: 11px; border-radius: 4px; padding: 1px 4px; box-shadow: 0 1px 2px rgba(0,0,0,.25); }
   .vis-item.vis-selected { box-shadow: 0 0 0 2px #fff; }
   .vis-item.kind-internal { background: #6b7280; border-color: #4b5563; }
+  /* Conflict highlight live durante drag/resize */
+  .vis-item.tl-conflict { background: #dc2626 !important; border-color: #991b1b !important; box-shadow: 0 0 0 2px rgba(220,38,38,.4); }
+  /* Cursor edit hints */
+  .vis-item .vis-drag-left, .vis-item .vis-drag-right { background: rgba(255,255,255,.15); width: 4px; }
+  .vis-item:hover .vis-drag-left, .vis-item:hover .vis-drag-right { background: rgba(255,255,255,.4); }
+  .vis-item.vis-editable { cursor: move; }
   .vis-item .vis-item-content { padding: 2px 4px; }
   /* Linea oggi più visibile */
   .vis-current-time { background-color: #fb923c; width: 2px; }
@@ -261,6 +267,9 @@
           <span class="text-sm text-muted" id="tl-range" style="margin-left:auto;"></span>
         </div>
         <div id="tl-week-label" style="font-size:13px; font-weight:500; color:var(--text2,#aaa); padding:6px 14px; background:var(--bg3,#22253a); border-radius:6px 6px 0 0; border-bottom:1px solid var(--border,#2a2e3d);"></div>
+        <div style="font-size:11px; color:var(--text3,#888); padding:4px 14px 0;">
+          Drag = sposta · Bordo = durata · <kbd style="background:rgba(255,255,255,.05); border:1px solid var(--border); border-radius:3px; padding:0 4px; font-size:10px;">Alt</kbd>+drag = duplica · <kbd style="background:rgba(255,255,255,.05); border:1px solid var(--border); border-radius:3px; padding:0 4px; font-size:10px;">Canc</kbd> = elimina · doppio-click su vuoto = nuovo
+        </div>
         <div id="tl-host"></div>
       </div>
     </div>
@@ -682,6 +691,92 @@ function tlGoTo() {
   tlUpdateRangeLabel();
 }
 
+// Track Alt key globalmente per drag = copy
+window._tlAltDown = false;
+window.addEventListener('keydown', e => { if (e.key === 'Alt') window._tlAltDown = true; });
+window.addEventListener('keyup', e => { if (e.key === 'Alt') window._tlAltDown = false; });
+window.addEventListener('blur', () => { window._tlAltDown = false; });
+
+// Snap adattivo allo zoom (15min day, 30min week, 60min month/quarter)
+function tlSnap(date, scale, step) {
+  const stepMin = {day:15, week:30, month:60, quarter:60}[tlZoom] || 30;
+  const ms = stepMin * 60 * 1000;
+  return new Date(Math.round(date.getTime() / ms) * ms);
+}
+
+// ── Undo stack ─────────────────────────────────────────────
+window._tlUndoStack = [];
+function tlPushUndo(action, label) {
+  window._tlUndoStack.push(action);
+  if (window._tlUndoStack.length > 20) window._tlUndoStack.shift();
+  tlShowUndoToast(label);
+}
+function tlShowUndoToast(label) {
+  // Custom toast con bottone Annulla. Riusa elemento esistente o crea.
+  let host = document.getElementById('tl-undo-toast');
+  if (!host) {
+    host = document.createElement('div');
+    host.id = 'tl-undo-toast';
+    host.style.cssText = 'position:fixed; bottom:20px; left:50%; transform:translateX(-50%); background:#1f2937; color:#fff; border:1px solid #374151; border-radius:8px; padding:10px 16px; font-size:13px; box-shadow:0 4px 12px rgba(0,0,0,.4); z-index:9999; display:flex; gap:12px; align-items:center;';
+    document.body.appendChild(host);
+  }
+  host.innerHTML = `<span>${escapeHtml(label)}</span>
+    <button class="btn btn-ghost btn-sm" id="tl-undo-btn" style="color:#fb923c;">Annulla</button>
+    <span id="tl-undo-count" style="color:var(--text3); font-size:11px;">5s</span>`;
+  host.style.display = 'flex';
+  let countdown = 5;
+  if (window._tlUndoTimer) clearInterval(window._tlUndoTimer);
+  window._tlUndoTimer = setInterval(() => {
+    countdown--;
+    const el = document.getElementById('tl-undo-count');
+    if (el) el.textContent = countdown + 's';
+    if (countdown <= 0) tlDismissUndoToast();
+  }, 1000);
+  document.getElementById('tl-undo-btn').onclick = () => tlPerformUndo();
+}
+function tlDismissUndoToast() {
+  if (window._tlUndoTimer) clearInterval(window._tlUndoTimer);
+  const host = document.getElementById('tl-undo-toast');
+  if (host) host.style.display = 'none';
+}
+async function tlPerformUndo() {
+  const action = window._tlUndoStack.pop();
+  tlDismissUndoToast();
+  if (!action) return;
+  try {
+    if (action.type === 'update') {
+      const fd = new FormData();
+      fd.append('start_datetime', _toLocalDtInput(new Date(action.prev.start)));
+      fd.append('end_datetime', _toLocalDtInput(new Date(action.prev.end)));
+      fd.append('resource_id', action.prev.resource_id);
+      await api('PUT', `/planning/api/bookings/${action.id}`, fd);
+    } else if (action.type === 'remove') {
+      await api('POST', `/planning/api/bookings/${action.id}/restore`);
+    } else if (action.type === 'create') {
+      // Annulla un create: cancella il booking appena creato
+      await api('DELETE', `/planning/api/bookings/${action.id}`);
+    }
+    toast('Operazione annullata', 'success');
+    renderTimeline();
+  } catch(e) {
+    toast(e.message || 'Errore undo', 'error');
+  }
+}
+
+// ── Conflict check client-side (live durante drag) ─────────
+function tlHasConflict(item, allItems) {
+  if (typeof item.group !== 'number') return false;
+  const start = new Date(item.start).getTime();
+  const end = new Date(item.end).getTime();
+  return allItems.some(x => {
+    if (x.id === item.id) return false;
+    if (x.group !== item.group) return false;
+    const xs = new Date(x.start).getTime();
+    const xe = new Date(x.end).getTime();
+    return xs < end && xe > start;
+  });
+}
+
 async function renderTimeline() {
   const host = document.getElementById('tl-host');
   if (tlInstance) { tlInstance.destroy(); tlInstance = null; }
@@ -694,9 +789,10 @@ async function renderTimeline() {
   const qs = buildQS();
   const bookings = await api('GET', '/planning/api/bookings'+(qs?'?'+qs:''));
   const items = bookings.map(tlBookingToItem).filter(i => i.group);
+  const itemsDS = new vis.DataSet(items);
 
   const win = tlWindowFor(tlZoom, new Date());
-  tlInstance = new vis.Timeline(host, new vis.DataSet(items), new vis.DataSet(groups), {
+  tlInstance = new vis.Timeline(host, itemsDS, new vis.DataSet(groups), {
     locale: 'it',
     stack: true,
     showCurrentTime: true,
@@ -709,6 +805,71 @@ async function renderTimeline() {
     end: win.end,
     groupOrder: 'id',
     tooltip: {followMouse: true, overflowMethod: 'flip'},
+    editable: {updateTime: true, updateGroup: true, remove: true, add: false, overrideItems: true},
+    snap: tlSnap,
+    // onMoving live: durante drag/resize, valida conflict client-side e applica style
+    onMoving: function(item, callback) {
+      const all = itemsDS.get();
+      if (tlHasConflict(item, all)) {
+        item.className = (item.className || '').replace(/\s*tl-conflict/g, '') + ' tl-conflict';
+      } else {
+        item.className = (item.className || '').replace(/\s*tl-conflict/g, '');
+      }
+      callback(item);
+    },
+    onMove: async function(item, callback) {
+      const id = String(item.id).startsWith('b') ? String(item.id).substring(1) : item.id;
+      const orig = items.find(x => x.id === item.id);
+      const altDup = window._tlAltDown;
+      try {
+        if (altDup) {
+          // Duplica: POST nuovo booking con stessi attributi ma resource/orari nuovi
+          const origBooking = bookings.find(b => 'b'+b.id === item.id);
+          if (!origBooking) throw new Error('Originale non trovato');
+          const p = origBooking.extendedProps || {};
+          const fd = new FormData();
+          fd.append('resource_id', item.group);
+          fd.append('start_datetime', _toLocalDtInput(new Date(item.start)));
+          fd.append('end_datetime', _toLocalDtInput(new Date(item.end)));
+          fd.append('kind', p.kind || 'project');
+          if (p.job_id) fd.append('job_id', p.job_id);
+          if (p.job_cost_line_id) fd.append('job_cost_line_id', p.job_cost_line_id);
+          if (p.notes) fd.append('notes', p.notes);
+          const r = await api('POST', '/planning/api/bookings', fd);
+          tlPushUndo({type: 'create', id: r.id}, `Booking duplicato (Alt+drag)`);
+          callback(null); // annulla move dell'originale
+          renderTimeline();
+        } else {
+          // Update: PUT
+          const fd = new FormData();
+          fd.append('start_datetime', _toLocalDtInput(new Date(item.start)));
+          fd.append('end_datetime', _toLocalDtInput(new Date(item.end)));
+          fd.append('resource_id', item.group);
+          await api('PUT', `/planning/api/bookings/${id}`, fd);
+          item.className = (item.className || '').replace(/\s*tl-conflict/g, '');
+          callback(item);
+          tlPushUndo({
+            type: 'update',
+            id,
+            prev: {start: orig.start, end: orig.end, resource_id: orig.group}
+          }, 'Booking aggiornato');
+        }
+      } catch(e) {
+        toast(e.message || 'Errore aggiornamento', 'error');
+        callback(null); // ripristina posizione originale
+      }
+    },
+    onRemove: async function(item, callback) {
+      const id = String(item.id).startsWith('b') ? String(item.id).substring(1) : item.id;
+      try {
+        await api('DELETE', `/planning/api/bookings/${id}`);
+        callback(item);
+        tlPushUndo({type: 'remove', id}, 'Booking eliminato');
+      } catch(e) {
+        toast(e.message || 'Errore eliminazione', 'error');
+        callback(null);
+      }
+    },
   });
   tlInstance.on('select', (props) => {
     if (!props.items.length) return;
@@ -717,11 +878,10 @@ async function renderTimeline() {
     const fmt = d => new Date(d).toLocaleString('it-IT', {day:'numeric', month:'short', hour:'2-digit', minute:'2-digit'});
     toast(`${it.content} | ${fmt(it.start)} – ${fmt(it.end)}`, 'info', 5000);
   });
-  // Click su area vuota (no item) → modal nuovo booking pre-popolato
-  tlInstance.on('click', (props) => {
-    if (props.item) return; // click su item gestito da 'select'
-    if (props.what !== 'background' && props.what !== 'group-label' && props.what !== 'axis') return;
-    if (!props.group || typeof props.group !== 'number') return; // serve una resource_id numerica
+  // Doppio click su area vuota → modal nuovo booking (fallback E1, sostituito da click&drag in E2)
+  tlInstance.on('doubleClick', (props) => {
+    if (props.item) return;
+    if (!props.group || typeof props.group !== 'number') return;
     if (!props.time) return;
     tlbOpen(props.group, props.time);
   });
