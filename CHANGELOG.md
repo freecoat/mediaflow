@@ -1,5 +1,37 @@
 # MediaFlow — Changelog
 
+## v3.4.20.2 — Modal multi-row leggibilità + cambio status veloce (29 aprile 2026)
+
+### Modal multi-row (fix leggibilità >5 righe)
+
+- Container `#tlb-assignments` ora ha **`max-height: 380px` + `overflow-y: auto`** → con molte risorse appare scrollbar interno
+- Scrollbar custom indaco (Chromium)
+- **Badge `Risorsa #N`** posizionato in alto-sinistra di ogni riga (negative top, rounded pill)
+- **Counter `(N)`** indaco vicino al titolo "Risorse" si aggiorna a ogni add/remove
+- Funzione `_tlbUpdateRemoveButtons` estesa per renumerare automaticamente le righe rimanenti dopo remove
+
+### Cambio status veloce dal right-click
+
+Voce dinamica nel context menu su item:
+- Se booking è `tentative` → **`✓ Conferma booking`** (chiama PUT con status=confirmed)
+- Se booking è `confirmed` → **`⏳ Rendi tentative`** (PUT con status=tentative)
+
+Riusa endpoint `PUT /api/bookings/{id}` esistente (passa solo `status`). Toast feedback. Refresh timeline. Timeline visivamente aggiorna il bordo (tratteggiato/solido) automaticamente.
+
+### File toccati
+
+- `app/main.py` — version 3.4.20.2
+- `app/templates/pages/planning.html`:
+  - CSS: `#tlb-assignments { max-height/overflow }`, scrollbar custom, `.ass-num` pill
+  - HTML: `<span class="ass-num">` in row template, counter in label
+  - JS: `_tlbUpdateRemoveButtons` rinumera + counter, voce status nel context menu
+
+### Smoke
+
+- HTML contiene `ass-num`, `tlb-ass-counter`, `Conferma booking`, `Rendi tentative`, `max-height: 380px`
+
+---
+
 ## v3.4.20.1 — Filtri sidebar con autocomplete (29 aprile 2026)
 
 I 4 filtri "lunghi" della sidebar pianificazione (Cliente / Progetto / Job / Risorsa) erano `<select>` lunghi e poco scalabili. Ora sono **input search con dropdown autocomplete**, stesso pattern del modal "Nuovo booking".

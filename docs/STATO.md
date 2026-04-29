@@ -8,7 +8,7 @@
 
 ## Versione corrente
 
-**v3.4.20.1** — 29 aprile 2026 — Filtri sidebar con autocomplete (Cliente/Progetto/Job/Risorsa)
+**v3.4.20.2** — 29 aprile 2026 — Modal multi-row leggibilità + cambio status veloce
 
 ## In corso
 
@@ -145,7 +145,7 @@ Dopo conferma test sul Mac, passare a **#4 server-side abort**.
 ## Bug aperti
 
 - ✅ **#6 LLM matching listino** risolto in v3.4.4 (voci listino nel context AI + REGOLA SEARCH-FIRST nel system prompt). Da verificare con test E2E sul Mac.
-- ⚠️ **Modal multi-risorsa: leggibilità >5 risorse** (v3.4.16.1) — quando si aggiungono molte righe assignment (>5), la finestra modale diventa troppo affollata. Da affrontare con: scroll interno alla sezione, collapse/expand, oppure tabella più compatta. Annotato per dopo, non bloccante.
+- ✅ ~~**Modal multi-risorsa: leggibilità >5 risorse**~~ risolto in v3.4.20.2 (scroll interno + badge numerazione + counter).
 
 ## Procedura riavvio (se la sessione muore)
 

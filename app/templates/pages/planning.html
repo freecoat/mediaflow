@@ -105,7 +105,11 @@
   .tlb-job-item:hover { background: rgba(98,114,245,0.12); }
   .tlb-job-item:last-child { border-bottom: none; }
   /* Multi-row assignment rows */
-  .tlb-ass-row { border:1px solid var(--border,#2a2e3d); border-radius:6px; padding:10px; margin-bottom:8px; background:rgba(98,114,245,0.04); }
+  #tlb-assignments { max-height: 380px; overflow-y: auto; padding-right: 4px; }
+  #tlb-assignments::-webkit-scrollbar { width: 6px; }
+  #tlb-assignments::-webkit-scrollbar-thumb { background: rgba(98,114,245,0.4); border-radius: 3px; }
+  .tlb-ass-row { border:1px solid var(--border,#2a2e3d); border-radius:6px; padding:10px; margin-bottom:8px; background:rgba(98,114,245,0.04); position:relative; }
+  .tlb-ass-row .ass-num { position:absolute; top:-8px; left:8px; background:var(--bg-elev,#1a1d29); border:1px solid var(--border,#2a2e3d); color:#6272f5; font-size:10px; font-weight:600; padding:1px 8px; border-radius:10px; }
   .tlb-ass-row .ass-grid { display:grid; grid-template-columns: 2fr 1fr 2fr 1fr; gap:6px; align-items:center; }
   .tlb-ass-row .ass-labels { display:grid; grid-template-columns: 2fr 1fr 2fr 1fr; gap:6px; font-size:11px; color:var(--text3,#888); margin-bottom:4px; }
   .tlb-ass-row .ass-footer { display:flex; gap:6px; align-items:center; margin-top:8px; flex-wrap:wrap; }
@@ -332,7 +336,7 @@
         <!-- ─── Risorse assegnate (multi-row) ────────── -->
         <div class="form-group">
           <label class="form-label" style="display:flex; justify-content:space-between; align-items:center;">
-            <span>Risorse <span style="color:var(--text3,#888); font-weight:normal;">(almeno 1, anche con orari diversi)</span></span>
+            <span>Risorse <span id="tlb-ass-counter" style="color:#6272f5; font-weight:600;">(0)</span> <span style="color:var(--text3,#888); font-weight:normal;">— almeno 1, anche orari diversi</span></span>
             <button type="button" class="btn btn-secondary btn-sm" onclick="tlbAddAssignmentRow()">+ Aggiungi risorsa</button>
           </label>
           <div id="tlb-assignments"></div>
@@ -1442,8 +1446,13 @@ async function renderTimeline(preserveWindow=false) {
       const assignmentId = String(props.item).startsWith('a') ? String(props.item).substring(1) : props.item;
       const it = items.find(x => x.id === props.item);
       const origBooking = bookings.find(b => b.id === props.item);
+      const isTentative = origBooking && origBooking.extendedProps && origBooking.extendedProps.status === 'tentative';
+      const statusItem = isTentative
+        ? {label: '✓  Conferma booking', value: 'confirm'}
+        : {label: '⏳  Rendi tentative', value: 'tentative'};
       const choice = await tlContextMenu(x, y, [
         {label: '✎  Modifica…', value: 'edit'},
+        statusItem,
         {label: '⊕  Duplica qui', value: 'duplicate'},
         {label: '↪  Sposta su altra risorsa…', value: 'reassign'},
         {label: '🗑  Elimina assegnazione', value: 'delete'},
@@ -1452,10 +1461,18 @@ async function renderTimeline(preserveWindow=false) {
       if (!choice) return;
       try {
         if (choice === 'edit') {
-          // Apri in edit mode: precarica TUTTE le risorse del booking (multi-row)
           const bid = origBooking ? origBooking.booking_id : null;
           if (bid) await tlbOpenEdit(bid);
           else if (it) tlbOpenWithRange(it.group, new Date(it.start), new Date(it.end));
+        } else if (choice === 'confirm' || choice === 'tentative') {
+          const newStatus = choice === 'confirm' ? 'confirmed' : 'tentative';
+          const bid = origBooking ? origBooking.booking_id : null;
+          if (!bid) throw new Error('Booking non trovato');
+          const fd = new FormData();
+          fd.append('status', newStatus);
+          await api('PUT', `/planning/api/bookings/${bid}`, fd);
+          toast(`Booking ${newStatus === 'confirmed' ? 'confermato' : 'reso tentative'}`, 'success');
+          renderTimeline(true);
         } else if (choice === 'duplicate') {
           const itemCopy = {
             id: props.item,
@@ -1671,6 +1688,7 @@ function tlbAddAssignmentRow(preset) {
   const ed = preset && preset.end ? _splitDate(new Date(preset.end)) : {date:'', time:'18:00'};
   const resId = preset ? preset.resource_id : null;
   row.innerHTML = `
+    <span class="ass-num">Risorsa #?</span>
     <div style="display:flex; gap:8px; align-items:center; margin-bottom:8px;">
       <select class="tlb-ass-resource form-select" style="flex:1;" onchange="tlbAssOnChange(this)">${_resourceOptionsHTML(resId)}</select>
       <button type="button" class="btn btn-ghost btn-sm tlb-ass-remove" title="Rimuovi" onclick="tlbRemoveAssignmentRow(this)">✕</button>
@@ -1717,10 +1735,15 @@ function tlbRemoveAssignmentRow(btn) {
 
 function _tlbUpdateRemoveButtons() {
   const rows = document.querySelectorAll('#tlb-assignments .tlb-ass-row');
-  rows.forEach(r => {
+  rows.forEach((r, idx) => {
     const btn = r.querySelector('.tlb-ass-remove');
     if (btn) btn.disabled = rows.length <= 1;
+    const num = r.querySelector('.ass-num');
+    if (num) num.textContent = `Risorsa #${idx + 1}`;
   });
+  // Aggiorna counter nella label
+  const counter = document.getElementById('tlb-ass-counter');
+  if (counter) counter.textContent = `(${rows.length})`;
 }
 
 function tlbAssOnChange(el) {
