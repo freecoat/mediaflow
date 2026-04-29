@@ -8,7 +8,7 @@
 
 ## Versione corrente
 
-**v3.4.16** — 29 aprile 2026 — Multi-resource booking parte 1/2 (backend + adattamento timeline)
+**v3.4.16.1** — 29 aprile 2026 — Multi-resource UI completa (modal multi-row + edit mode)
 
 ## In corso
 
@@ -27,13 +27,7 @@ Cantiere "overlay prenotato vs effettivo + adeguamento" (era v3.4.15 nel plan pr
 
 ## Prossimo step concordato
 
-**v3.4.16.1 — Multi-resource UI completa**:
-- Modal "Nuovo booking" con righe dinamiche assignments (resource select + start + end + remove)
-- Bottone "+ Aggiungi risorsa"
-- Warning visivo booking senza risorse (icona ⚠️ sull'item, toast warning, validation server-side già attiva)
-- Edit booking mostra tutte le risorse attualmente assegnate
-
-**E3 — v3.4.17 — WorkingHoursPolicy + split smart + ferie bloccanti** (slittato dopo multi-resource):
+**E3 — v3.4.17 — WorkingHoursPolicy + split smart + ferie bloccanti**:
 - Modello `WorkingHoursPolicy` (globale + per-risorsa override): start_time, end_time, lunch_start, lunch_end, working_days
 - Engine `split_booking_smart(start, end, policy) → list[Slot]` che ritaglia weekend, orario non-lavorativo, pausa pranzo rigida (es. 13-14)
 - Modello `ResourceUnavailability` evoluto: ferie/malattia come fasce bloccanti, drag/drop su quelle = HARD block (popup, no warning)

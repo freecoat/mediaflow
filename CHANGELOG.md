@@ -1,5 +1,76 @@
 # MediaFlow — Changelog
 
+## v3.4.16.1 — Multi-resource UI completa (modal multi-row + edit) (29 aprile 2026)
+
+Frontend completo per multi-resource. Modal "Nuovo/Modifica booking" ora supporta **N risorse con orari distinti** in un unica operazione.
+
+### Modal multi-row
+
+- **Sezione "Risorse"** sostituisce la vecchia "Orari + Risorsa" globale
+- **Bottone `+ Aggiungi risorsa`** in alto a destra: aggiunge una nuova riga
+- Ogni riga assignment contiene:
+  - **Select risorsa** raggruppato per reparto (`<optgroup>` per ogni Department + "Senza reparto")
+  - **Inizio**: data + ora separati (input nativi + step 15min)
+  - **Fine**: data + ora separati
+  - **Display durata** live (`Xh` / `Yg Zh`, rosso se invalida)
+  - **Preset rapidi**: 1h, 2h, 4h, 8h, 2gg, 1sett (applicati alla SOLA riga del bottone)
+  - **Bottone × Rimuovi** (disabilitato se è l'unica riga, almeno 1 sempre richiesta)
+- Container `#tlb-assignments` popolato dinamicamente da `tlbAddAssignmentRow(preset)`
+- Helper `_readRow(row)`, `_setRow(row, data)`, `_tlbCollectAssignments()` per raccolta + validazione
+
+### Edit mode (nuova feature)
+
+- Right-click su booking → **"Modifica…"** ora chiama `tlbOpenEdit(bookingId)` invece di aprire modal con range singolo
+- `tlbOpenEdit`:
+  1. Reset modal, set `tlb-editing-booking-id`, cambia titolo a `Modifica booking #N`, bottone a `Aggiorna`
+  2. Filtra `window._tlBookings` per booking_id selezionato → array di items (1 per assignment)
+  3. Pre-popola metadata (kind, job, lavorazione, notes) dal primo item
+  4. Crea **N righe**, una per ogni assignment esistente
+- Submit fa **PUT `/api/bookings/{id}`** (replace-all assignments) invece di POST nuovo
+
+### tlbSubmit unificato
+
+- Detect editing via hidden `tlb-editing-booking-id`
+- `_tlbCollectAssignments()` valida ogni riga (resource_id, start, end, end > start)
+- Form data invia `assignments` JSON, kind, job_id, line_id, notes
+- POST se nuovo, PUT se editing
+- Toast "Booking creato" o "Booking aggiornato"
+
+### File toccati
+
+- `app/main.py` — version 3.4.16.1
+- `app/templates/pages/planning.html`:
+  - Modal HTML rifatto (sezione Risorse multi-row)
+  - CSS `.tlb-ass-row`, `.ass-grid`, `.ass-labels`, `.ass-footer`
+  - Funzioni JS: `_resourceOptionsHTML`, `tlbAddAssignmentRow`, `tlbRemoveAssignmentRow`, `_tlbUpdateRemoveButtons`, `tlbAssOnChange`, `_readRow`, `_setRow`, `tlbAssUpdateDuration`, `tlbAssSetDur`, `tlbAssSetDurDays`, `_tlbCollectAssignments`, `tlbOpenEdit`
+  - Refactor `tlbOpen` / `tlbOpenWithRange` (creano 1 riga preset)
+  - Refactor `tlbSubmit` (POST vs PUT in base a edit mode)
+  - Rimosse funzioni obsolete `tlbSetDuration`, `tlbSetDurationDays`, `tlbUpdateDurationDisplay`, `_setDtFields`, `_readDtFields`, `tlbSyncStart`, `tlbSyncEnd`
+  - Right-click "Modifica…" usa `tlbOpenEdit(bookingId)`
+  - `window._tlBookings = bookings` esposto per edit mode
+
+### Smoke
+
+- `/planning/?view=timeline` 200, HTML contiene `tlbAddAssignmentRow`, `tlbOpenEdit`, `_tlbCollectAssignments`, `tlb-assignments` container, `tlb-editing-booking-id` hidden
+
+### Da testare sul Mac
+
+1. Doppio click su area vuota → modal con 1 riga preset
+2. Click `+ Aggiungi risorsa` → seconda riga
+3. Cambia risorsa, orari (data + ora separati), preset durata
+4. Submit → booking creato con 2 assignments
+5. Right-click su un booking esistente → `Modifica…` → modal precaricato con tutte le risorse del booking
+6. Modifica una riga, aggiungi una risorsa, salva → PUT funziona, timeline aggiornata
+7. Bottone × disabilitato se 1 sola riga; toast "Almeno 1 risorsa richiesta" se provi a rimuovere l'ultima
+
+### Restano per dopo
+
+- Warning visivo booking senza assignments (improbabile in UI normale, backend rifiuta già)
+- Undo cancellazione assignment singolo (richiede soft-delete o redux pattern)
+- Raggruppamento visivo timeline degli assignments dello stesso booking (collega visibilmente con linea/badge)
+
+---
+
 ## v3.4.16 — Multi-resource booking (parte 1: backend + adattamento frontend) (29 aprile 2026)
 
 Cambio architetturale: un Booking può avere **N risorse**, ognuna con il proprio intervallo (anche differenti tra loro). Riferimento: cinema/post-production dove uno stesso turno può vedere colorist + assistant + producer presenti con orari diversi.

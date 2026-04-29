@@ -91,6 +91,16 @@
   .vis-current-time { background-color: #fb923c; width: 2px; }
   .tlb-job-item:hover { background: rgba(98,114,245,0.12); }
   .tlb-job-item:last-child { border-bottom: none; }
+  /* Multi-row assignment rows */
+  .tlb-ass-row { border:1px solid var(--border,#2a2e3d); border-radius:6px; padding:10px; margin-bottom:8px; background:rgba(98,114,245,0.04); }
+  .tlb-ass-row .ass-grid { display:grid; grid-template-columns: 2fr 1fr 2fr 1fr; gap:6px; align-items:center; }
+  .tlb-ass-row .ass-labels { display:grid; grid-template-columns: 2fr 1fr 2fr 1fr; gap:6px; font-size:11px; color:var(--text3,#888); margin-bottom:4px; }
+  .tlb-ass-row .ass-footer { display:flex; gap:6px; align-items:center; margin-top:8px; flex-wrap:wrap; }
+  .tlb-ass-row .ass-footer .duration { font-size:12px; color:var(--text2,#aaa); }
+  .tlb-ass-row .ass-footer .duration b { color:#6272f5; font-weight:500; }
+  .tlb-ass-row .ass-footer .presets { display:flex; gap:3px; margin-left:auto; flex-wrap:wrap; }
+  .tlb-ass-row .ass-footer .presets button { font-size:10px; padding:2px 6px; }
+  .tlb-ass-row.has-conflict { border-color:#dc2626; background:rgba(220,38,38,0.08); }
   /* Time picker custom */
   .tlb-tp-trigger { background: var(--bg-elev,#1a1d29); border: 1px solid var(--border,#2a2e3d); color: var(--text,#eee); padding: 8px 12px; border-radius: 4px; font-family: monospace; font-size: 14px; cursor: pointer; width: 100%; text-align: center; }
   .tlb-tp-trigger:hover { border-color: #6272f5; }
@@ -296,58 +306,24 @@
   </div>
 </div>
 
-<!-- Modal nuovo booking dalla timeline -->
+<!-- Modal nuovo booking / edit dalla timeline -->
 <div class="modal-overlay" id="modal-tl-booking">
-  <div class="modal" style="max-width:640px;">
+  <div class="modal" style="max-width:720px;">
     <div class="modal-header">
-      <span class="modal-title">Nuovo booking</span>
+      <span class="modal-title" id="tlb-modal-title">Nuovo booking</span>
       <button class="btn btn-ghost btn-icon" onclick="closeModal('modal-tl-booking')">✕</button>
     </div>
     <div class="modal-body">
       <form id="form-tl-booking">
-        <div class="form-group">
-          <label class="form-label">Risorsa</label>
-          <input type="text" id="tlb-resource-name" class="form-input" disabled>
-          <input type="hidden" id="tlb-resource-id">
-        </div>
+        <input type="hidden" id="tlb-editing-booking-id">
 
-        <!-- ─── Sezione orari ─────────────────────────── -->
-        <div style="background:rgba(98,114,245,0.05); border:1px solid var(--border,#2a2e3d); border-radius:6px; padding:10px; margin-bottom:14px;">
-          <div style="font-size:11px; text-transform:uppercase; color:var(--text3,#888); letter-spacing:.5px; margin-bottom:8px;">Orari</div>
-          <div style="font-size:11px; color:var(--text3,#888); margin:6px 0 4px;">Inizio</div>
-          <div class="flex gap-2">
-            <div class="form-group" style="flex:2; margin-bottom:6px;">
-              <input type="date" id="tlb-start-date" class="form-input" required oninput="tlbSyncStart(); tlbUpdateDurationDisplay()">
-            </div>
-            <div class="form-group" style="flex:1; margin-bottom:6px;">
-              <button type="button" class="tlb-tp-trigger" data-tp="tlb-start-time" onclick="tlbOpenTimePicker('tlb-start-time')">--:--</button>
-              <input type="hidden" id="tlb-start-time">
-            </div>
-          </div>
-          <div style="font-size:11px; color:var(--text3,#888); margin:6px 0 4px;">Fine</div>
-          <div class="flex gap-2">
-            <div class="form-group" style="flex:2; margin-bottom:6px;">
-              <input type="date" id="tlb-end-date" class="form-input" required oninput="tlbSyncEnd(); tlbUpdateDurationDisplay()">
-            </div>
-            <div class="form-group" style="flex:1; margin-bottom:6px;">
-              <button type="button" class="tlb-tp-trigger" data-tp="tlb-end-time" onclick="tlbOpenTimePicker('tlb-end-time')">--:--</button>
-              <input type="hidden" id="tlb-end-time">
-            </div>
-          </div>
-          <input type="hidden" id="tlb-start">
-          <input type="hidden" id="tlb-end">
-          <div style="font-size:12px; color:var(--text2,#aaa); margin:8px 0;">
-            Durata: <span id="tlb-duration-display" style="font-weight:500; color:#6272f5;">—</span>
-          </div>
-          <div style="font-size:11px; color:var(--text3,#888); margin-bottom:4px;">Preset durata</div>
-          <div style="display:flex; gap:4px; flex-wrap:wrap;">
-            <button type="button" class="btn btn-ghost btn-sm" onclick="tlbSetDuration(1)">1h</button>
-            <button type="button" class="btn btn-ghost btn-sm" onclick="tlbSetDuration(2)">2h</button>
-            <button type="button" class="btn btn-ghost btn-sm" onclick="tlbSetDuration(4)">4h</button>
-            <button type="button" class="btn btn-ghost btn-sm" onclick="tlbSetDuration(8)">8h (giornata)</button>
-            <button type="button" class="btn btn-ghost btn-sm" onclick="tlbSetDurationDays(2)">2 giorni</button>
-            <button type="button" class="btn btn-ghost btn-sm" onclick="tlbSetDurationDays(5)">1 settimana</button>
-          </div>
+        <!-- ─── Risorse assegnate (multi-row) ────────── -->
+        <div class="form-group">
+          <label class="form-label" style="display:flex; justify-content:space-between; align-items:center;">
+            <span>Risorse <span style="color:var(--text3,#888); font-weight:normal;">(almeno 1, anche con orari diversi)</span></span>
+            <button type="button" class="btn btn-secondary btn-sm" onclick="tlbAddAssignmentRow()">+ Aggiungi risorsa</button>
+          </label>
+          <div id="tlb-assignments"></div>
         </div>
 
         <div class="form-group">
@@ -383,7 +359,7 @@
     </div>
     <div class="modal-footer">
       <button class="btn btn-secondary" onclick="closeModal('modal-tl-booking')">Annulla</button>
-      <button class="btn btn-primary" id="tlb-submit" onclick="tlbSubmit()">Crea booking</button>
+      <button class="btn btn-primary" id="tlb-submit" onclick="tlbSubmit()">Salva</button>
     </div>
   </div>
 </div>
@@ -991,6 +967,7 @@ async function renderTimeline(preserveWindow=false) {
   }
   const qs = buildQS();
   const bookings = await api('GET', '/planning/api/bookings'+(qs?'?'+qs:''));
+  window._tlBookings = bookings; // espongo per tlbOpenEdit (multi-row precarica)
   const items = bookings.map(tlBookingToItem).filter(i => i.group);
   const itemsDS = new vis.DataSet(items);
 
@@ -1122,7 +1099,10 @@ async function renderTimeline(preserveWindow=false) {
       if (!choice) return;
       try {
         if (choice === 'edit') {
-          if (it) tlbOpenWithRange(it.group, new Date(it.start), new Date(it.end));
+          // Apri in edit mode: precarica TUTTE le risorse del booking (multi-row)
+          const bid = origBooking ? origBooking.booking_id : null;
+          if (bid) await tlbOpenEdit(bid);
+          else if (it) tlbOpenWithRange(it.group, new Date(it.start), new Date(it.end));
         } else if (choice === 'duplicate') {
           const itemCopy = {
             id: props.item,
@@ -1176,36 +1156,21 @@ async function renderTimeline(preserveWindow=false) {
   tlUpdateRangeLabel();
 }
 
-// ── Modal "Nuovo booking" da click timeline ────────────────
+// ── Modal "Nuovo/Edit booking" — multi-row assignments (v3.4.16.1) ─
 function _toLocalDtInput(d) {
-  // Format yyyy-MM-ddTHH:mm in fuso locale per <input type="datetime-local">
   const pad = n => String(n).padStart(2,'0');
   return d.getFullYear()+'-'+pad(d.getMonth()+1)+'-'+pad(d.getDate())+'T'+pad(d.getHours())+':'+pad(d.getMinutes());
 }
-function _setDtFields(prefix, date) {
-  // prefix: 'tlb-start' o 'tlb-end'. Compila <date>, hidden time + trigger display, e hidden combinato.
+function _splitDate(d) {
   const pad = n => String(n).padStart(2,'0');
-  document.getElementById(prefix+'-date').value = date.getFullYear()+'-'+pad(date.getMonth()+1)+'-'+pad(date.getDate());
-  const t = pad(date.getHours())+':'+pad(date.getMinutes());
-  document.getElementById(prefix+'-time').value = t;
-  // Aggiorna trigger button display
-  const trigger = document.querySelector(`[data-tp="${prefix}-time"]`);
-  if (trigger) trigger.textContent = t;
-  document.getElementById(prefix).value = _toLocalDtInput(date);
+  return {
+    date: d.getFullYear()+'-'+pad(d.getMonth()+1)+'-'+pad(d.getDate()),
+    time: pad(d.getHours())+':'+pad(d.getMinutes()),
+  };
 }
-function _readDtFields(prefix) {
-  const d = document.getElementById(prefix+'-date').value;
-  const t = document.getElementById(prefix+'-time').value;
-  if (!d || !t) return null;
-  return new Date(d + 'T' + t);
-}
-function tlbSyncStart() {
-  const d = _readDtFields('tlb-start');
-  if (d) document.getElementById('tlb-start').value = _toLocalDtInput(d);
-}
-function tlbSyncEnd() {
-  const d = _readDtFields('tlb-end');
-  if (d) document.getElementById('tlb-end').value = _toLocalDtInput(d);
+function _combineDt(dateStr, timeStr) {
+  if (!dateStr || !timeStr) return null;
+  return new Date(dateStr + 'T' + timeStr);
 }
 
 // ── Time picker custom ─────────────────────────────────────
@@ -1295,6 +1260,9 @@ function tlbSetTimePart(part, value) {
 }
 
 function _tlbReset() {
+  document.getElementById('tlb-editing-booking-id').value = '';
+  document.getElementById('tlb-modal-title').textContent = 'Nuovo booking';
+  document.getElementById('tlb-submit').textContent = 'Crea booking';
   document.getElementById('tlb-kind').value = 'project';
   document.getElementById('tlb-job-search').value = '';
   document.getElementById('tlb-job-id').value = '';
@@ -1302,38 +1270,244 @@ function _tlbReset() {
   document.getElementById('tlb-line').innerHTML = '<option value="">— nessuna —</option>';
   document.getElementById('tlb-line-group').style.display = 'none';
   document.getElementById('tlb-notes').value = '';
-  // Chiudi eventuale time picker aperto
+  document.getElementById('tlb-assignments').innerHTML = '';
   const tpp = document.getElementById('tlb-tp-popup');
   if (tpp) tpp.style.display = 'none';
 }
 
+// ── Multi-row assignments ──────────────────────────────────
+function _resourceOptionsHTML(selectedId) {
+  // Raggruppate per reparto
+  const byDept = {};
+  for (const r of RESOURCES_SEED) {
+    const k = r.dept || 0;
+    (byDept[k] = byDept[k] || []).push(r);
+  }
+  let html = '<option value="">— scegli risorsa —</option>';
+  for (const d of DEPARTMENTS_SEED) {
+    if (!byDept[d.id]) continue;
+    html += `<optgroup label="${escapeHtml(d.name)}">`;
+    for (const r of byDept[d.id]) {
+      const sel = r.id === selectedId ? ' selected' : '';
+      html += `<option value="${r.id}"${sel}>${escapeHtml(r.name)}</option>`;
+    }
+    html += '</optgroup>';
+  }
+  if (byDept[0]) {
+    html += '<optgroup label="Senza reparto">';
+    for (const r of byDept[0]) {
+      const sel = r.id === selectedId ? ' selected' : '';
+      html += `<option value="${r.id}"${sel}>${escapeHtml(r.name)}</option>`;
+    }
+    html += '</optgroup>';
+  }
+  return html;
+}
+
+function tlbAddAssignmentRow(preset) {
+  // preset: {resource_id, start, end} opzionali
+  const row = document.createElement('div');
+  row.className = 'tlb-ass-row';
+  const sd = preset && preset.start ? _splitDate(new Date(preset.start)) : {date:'', time:'09:00'};
+  const ed = preset && preset.end ? _splitDate(new Date(preset.end)) : {date:'', time:'18:00'};
+  const resId = preset ? preset.resource_id : null;
+  row.innerHTML = `
+    <div style="display:flex; gap:8px; align-items:center; margin-bottom:8px;">
+      <select class="tlb-ass-resource form-select" style="flex:1;" onchange="tlbAssOnChange(this)">${_resourceOptionsHTML(resId)}</select>
+      <button type="button" class="btn btn-ghost btn-sm tlb-ass-remove" title="Rimuovi" onclick="tlbRemoveAssignmentRow(this)">✕</button>
+    </div>
+    <div class="ass-labels">
+      <div>Inizio · Data</div>
+      <div>Ora</div>
+      <div>Fine · Data</div>
+      <div>Ora</div>
+    </div>
+    <div class="ass-grid">
+      <input type="date" class="tlb-ass-start-date form-input" value="${sd.date}" oninput="tlbAssOnChange(this)">
+      <input type="time" class="tlb-ass-start-time form-input" step="900" value="${sd.time}" oninput="tlbAssOnChange(this)">
+      <input type="date" class="tlb-ass-end-date form-input" value="${ed.date}" oninput="tlbAssOnChange(this)">
+      <input type="time" class="tlb-ass-end-time form-input" step="900" value="${ed.time}" oninput="tlbAssOnChange(this)">
+    </div>
+    <div class="ass-footer">
+      <span class="duration">Durata: <b class="tlb-ass-duration">—</b></span>
+      <span class="presets">
+        <button type="button" class="btn btn-ghost btn-sm" onclick="tlbAssSetDur(this,1)">1h</button>
+        <button type="button" class="btn btn-ghost btn-sm" onclick="tlbAssSetDur(this,2)">2h</button>
+        <button type="button" class="btn btn-ghost btn-sm" onclick="tlbAssSetDur(this,4)">4h</button>
+        <button type="button" class="btn btn-ghost btn-sm" onclick="tlbAssSetDur(this,8)">8h</button>
+        <button type="button" class="btn btn-ghost btn-sm" onclick="tlbAssSetDurDays(this,2)">2gg</button>
+        <button type="button" class="btn btn-ghost btn-sm" onclick="tlbAssSetDurDays(this,5)">1sett</button>
+      </span>
+    </div>
+  `;
+  document.getElementById('tlb-assignments').appendChild(row);
+  tlbAssUpdateDuration(row);
+  _tlbUpdateRemoveButtons();
+}
+
+function tlbRemoveAssignmentRow(btn) {
+  const rows = document.querySelectorAll('#tlb-assignments .tlb-ass-row');
+  if (rows.length <= 1) {
+    toast('Almeno 1 risorsa richiesta', 'warning');
+    return;
+  }
+  const row = btn.closest('.tlb-ass-row');
+  if (row) row.remove();
+  _tlbUpdateRemoveButtons();
+}
+
+function _tlbUpdateRemoveButtons() {
+  const rows = document.querySelectorAll('#tlb-assignments .tlb-ass-row');
+  rows.forEach(r => {
+    const btn = r.querySelector('.tlb-ass-remove');
+    if (btn) btn.disabled = rows.length <= 1;
+  });
+}
+
+function tlbAssOnChange(el) {
+  const row = el.closest('.tlb-ass-row');
+  if (row) tlbAssUpdateDuration(row);
+}
+
+function _readRow(row) {
+  const sd = row.querySelector('.tlb-ass-start-date').value;
+  const st = row.querySelector('.tlb-ass-start-time').value;
+  const ed = row.querySelector('.tlb-ass-end-date').value;
+  const et = row.querySelector('.tlb-ass-end-time').value;
+  const rid = row.querySelector('.tlb-ass-resource').value;
+  return {
+    resource_id: rid ? Number(rid) : null,
+    start: _combineDt(sd, st),
+    end: _combineDt(ed, et),
+  };
+}
+
+function _setRow(row, r) {
+  if (r.resource_id) row.querySelector('.tlb-ass-resource').value = r.resource_id;
+  if (r.start) {
+    const s = _splitDate(r.start);
+    row.querySelector('.tlb-ass-start-date').value = s.date;
+    row.querySelector('.tlb-ass-start-time').value = s.time;
+  }
+  if (r.end) {
+    const e = _splitDate(r.end);
+    row.querySelector('.tlb-ass-end-date').value = e.date;
+    row.querySelector('.tlb-ass-end-time').value = e.time;
+  }
+  tlbAssUpdateDuration(row);
+}
+
+function tlbAssUpdateDuration(row) {
+  const r = _readRow(row);
+  const out = row.querySelector('.tlb-ass-duration');
+  if (!r.start || !r.end) { out.textContent = '—'; out.style.color = ''; return; }
+  const ms = r.end - r.start;
+  if (ms <= 0) { out.textContent = 'fine ≤ inizio'; out.style.color = '#ef4444'; return; }
+  out.style.color = '#6272f5';
+  const h = ms / 3600000;
+  if (h < 24) out.textContent = h.toFixed(1) + 'h';
+  else {
+    const days = Math.floor(h / 24);
+    const remH = h - days * 24;
+    out.textContent = days + 'g' + (remH > 0 ? ' ' + remH.toFixed(0) + 'h' : '');
+  }
+}
+
+function tlbAssSetDur(btn, hours) {
+  const row = btn.closest('.tlb-ass-row');
+  const r = _readRow(row);
+  if (!r.start) { toast('Imposta prima inizio', 'warning'); return; }
+  _setRow(row, {end: new Date(r.start.getTime() + hours * 3600000)});
+}
+
+function tlbAssSetDurDays(btn, days) {
+  const row = btn.closest('.tlb-ass-row');
+  const r = _readRow(row);
+  if (!r.start) { toast('Imposta prima inizio', 'warning'); return; }
+  const end = new Date(r.start);
+  end.setDate(end.getDate() + days);
+  _setRow(row, {end});
+}
+
+function _tlbCollectAssignments() {
+  const rows = document.querySelectorAll('#tlb-assignments .tlb-ass-row');
+  const out = [];
+  for (const row of rows) {
+    const r = _readRow(row);
+    if (!r.resource_id) throw new Error('Manca la risorsa in una riga');
+    if (!r.start || !r.end) throw new Error('Manca data/ora in una riga');
+    if (r.end <= r.start) throw new Error('Fine deve essere > inizio in una riga');
+    out.push({
+      resource_id: r.resource_id,
+      start_datetime: _toLocalDtInput(r.start),
+      end_datetime: _toLocalDtInput(r.end),
+    });
+  }
+  return out;
+}
+
+// ── Apertura modal ────────────────────────────────────────
 function tlbOpenWithRange(resourceId, startDate, endDate) {
-  const r = RESOURCES_SEED.find(x => x.id === resourceId);
-  if (!r) { toast('Risorsa non trovata', 'error'); return; }
-  document.getElementById('tlb-resource-id').value = r.id;
-  document.getElementById('tlb-resource-name').value = r.name;
-  _setDtFields('tlb-start', startDate);
-  _setDtFields('tlb-end', endDate);
   _tlbReset();
+  tlbAddAssignmentRow({resource_id: resourceId, start: startDate, end: endDate});
   tlbOnKindChange();
-  tlbUpdateDurationDisplay();
   openModal('modal-tl-booking');
 }
 
 function tlbOpen(resourceId, timeClicked) {
-  const r = RESOURCES_SEED.find(x => x.id === resourceId);
-  if (!r) { toast('Risorsa non trovata', 'error'); return; }
-  document.getElementById('tlb-resource-id').value = r.id;
-  document.getElementById('tlb-resource-name').value = r.name;
-  // Arrotonda all'ora cliccata
+  _tlbReset();
   const start = new Date(timeClicked);
   start.setMinutes(0, 0, 0);
   const end = new Date(start.getTime() + 60*60*1000);
-  _setDtFields('tlb-start', start);
-  _setDtFields('tlb-end', end);
-  _tlbReset();
+  tlbAddAssignmentRow({resource_id: resourceId, start, end});
   tlbOnKindChange();
-  tlbUpdateDurationDisplay();
+  openModal('modal-tl-booking');
+}
+
+async function tlbOpenEdit(bookingId) {
+  // Precarica TUTTI gli assignments del booking selezionato
+  _tlbReset();
+  document.getElementById('tlb-editing-booking-id').value = bookingId;
+  document.getElementById('tlb-modal-title').textContent = `Modifica booking #${bookingId}`;
+  document.getElementById('tlb-submit').textContent = 'Aggiorna';
+  // Raccolgo assignments dagli items correnti che hanno stesso booking_id
+  const items = (window._tlBookings || []).filter(b => b.booking_id === bookingId);
+  if (!items.length) { toast('Booking non trovato', 'error'); return; }
+  // Metadata dal primo item
+  const first = items[0];
+  const p = first.extendedProps || {};
+  document.getElementById('tlb-kind').value = p.kind || 'project';
+  if (p.notes) document.getElementById('tlb-notes').value = p.notes;
+  if (p.job_id) {
+    const j = JOBS_SEED.find(x => x.id === p.job_id);
+    if (j) {
+      document.getElementById('tlb-job-id').value = j.id;
+      document.getElementById('tlb-job-search').value = `${j.code} — ${j.title}`;
+      // Carica lavorazioni
+      try {
+        const jdata = await api('GET', `/jobs/api/${j.id}`);
+        const lines = jdata.cost_lines || [];
+        const lineSel = document.getElementById('tlb-line');
+        lineSel.innerHTML = '<option value="">— nessuna —</option>' +
+          lines.map(l => `<option value="${l.id}"${l.id === p.job_cost_line_id ? ' selected':''}>${escapeHtml(l.description||('Lavorazione #'+l.id))}</option>`).join('');
+        document.getElementById('tlb-line-group').style.display = lines.length ? '' : 'none';
+      } catch(_) {}
+    }
+  }
+  // Aggiungo 1 riga per ogni assignment
+  for (const it of items) {
+    tlbAddAssignmentRow({
+      resource_id: p.resource_id ? p.resource_id : (it.extendedProps && it.extendedProps.resource_id),
+      start: new Date(it.start),
+      end: new Date(it.end),
+    });
+    // Sovrascrivi resource_id corretto per ogni item (può differire tra items dello stesso booking)
+    const lastRow = document.querySelector('#tlb-assignments .tlb-ass-row:last-child');
+    if (lastRow && it.extendedProps) {
+      lastRow.querySelector('.tlb-ass-resource').value = it.extendedProps.resource_id;
+    }
+  }
+  tlbOnKindChange();
   openModal('modal-tl-booking');
 }
 
@@ -1415,59 +1589,16 @@ document.addEventListener('click', (e) => {
   box.style.display = 'none';
 });
 
-// ── Preset durata ────────────────────────────────────────
-function tlbSetDuration(hours) {
-  const start = _readDtFields('tlb-start');
-  if (!start) { toast('Imposta prima inizio (data + ora)', 'warning'); return; }
-  const end = new Date(start.getTime() + hours * 3600000);
-  _setDtFields('tlb-end', end);
-  tlbUpdateDurationDisplay();
-}
-
-function tlbSetDurationDays(days) {
-  const start = _readDtFields('tlb-start');
-  if (!start) { toast('Imposta prima inizio (data + ora)', 'warning'); return; }
-  const end = new Date(start);
-  end.setDate(end.getDate() + days);
-  _setDtFields('tlb-end', end);
-  tlbUpdateDurationDisplay();
-}
-
-function tlbUpdateDurationDisplay() {
-  const s = _readDtFields('tlb-start');
-  const e = _readDtFields('tlb-end');
-  const out = document.getElementById('tlb-duration-display');
-  if (!s || !e) { out.textContent = '—'; out.style.color = ''; return; }
-  const ms = e - s;
-  if (ms <= 0) { out.textContent = 'fine ≤ inizio'; out.style.color = '#ef4444'; return; }
-  out.style.color = '#6272f5';
-  const h = ms / 3600000;
-  if (h < 24) out.textContent = h.toFixed(1) + 'h';
-  else {
-    const days = Math.floor(h / 24);
-    const remH = h - days * 24;
-    out.textContent = days + 'g' + (remH > 0 ? ' ' + remH.toFixed(0) + 'h' : '');
-  }
-}
-
 async function tlbSubmit() {
-  // Multi-resource v3.4.16: invia assignments[] JSON con (resource_id, start, end).
-  // UI mono-risorsa per ora: 1 sola riga assignment con risorsa+start+end del modal.
-  // (UI multi-row in v3.4.16.1)
-  tlbSyncStart();
-  tlbSyncEnd();
-  const startVal = document.getElementById('tlb-start').value;
-  const endVal = document.getElementById('tlb-end').value;
-  if (!startVal || !endVal) { toast('Compila inizio e fine', 'warning'); return; }
-  const resId = document.getElementById('tlb-resource-id').value;
-  if (!resId) { toast('Risorsa mancante', 'warning'); return; }
+  // Multi-row v3.4.16.1: raccoglie tutti gli assignments dalle row.
+  // POST se nuovo, PUT se editing.
+  const editingId = document.getElementById('tlb-editing-booking-id').value;
+  let assignments;
+  try { assignments = _tlbCollectAssignments(); }
+  catch(e) { toast(e.message || 'Dati non validi', 'warning'); return; }
+  if (!assignments.length) { toast('Aggiungi almeno 1 risorsa', 'warning'); return; }
   const btn = document.getElementById('tlb-submit');
   const fd = new FormData();
-  const assignments = [{
-    resource_id: Number(resId),
-    start_datetime: startVal,
-    end_datetime: endVal,
-  }];
   fd.append('assignments', JSON.stringify(assignments));
   fd.append('kind', document.getElementById('tlb-kind').value);
   const jobId = document.getElementById('tlb-job-id').value;
@@ -1476,16 +1607,21 @@ async function tlbSubmit() {
   if (lineId) fd.append('job_cost_line_id', lineId);
   const notes = document.getElementById('tlb-notes').value;
   if (notes) fd.append('notes', notes);
-  btn.disabled = true; btn.textContent = 'Creazione…';
+  btn.disabled = true; btn.textContent = 'Salvataggio…';
   try {
-    await api('POST', '/planning/api/bookings', fd);
-    toast('Booking creato', 'success');
+    if (editingId) {
+      await api('PUT', `/planning/api/bookings/${editingId}`, fd);
+      toast('Booking aggiornato', 'success');
+    } else {
+      await api('POST', '/planning/api/bookings', fd);
+      toast('Booking creato', 'success');
+    }
     closeModal('modal-tl-booking');
     renderTimeline(true);
   } catch(e) {
     toast(e.message || 'Errore', 'error');
   } finally {
-    btn.disabled = false; btn.textContent = 'Crea booking';
+    btn.disabled = false; btn.textContent = editingId ? 'Aggiorna' : 'Crea booking';
   }
 }
 
