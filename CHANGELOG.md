@@ -1,5 +1,53 @@
 # MediaFlow — Changelog
 
+## v3.4.15.4 — Hotfix Shift via toggle moveable + modal "Nuovo booking" espanso (29 aprile 2026)
+
+### Fix Shift+drag definitivo
+
+Il listener su document capture fase non bastava: vis-timeline cattura mousedown sui suoi sub-elementi prima di rilasciare il bubble. Approccio invertito: invece di intercettare l'evento, **disabilito `moveable` quando Shift è premuto**.
+
+- `keydown` Shift → `tlInstance.setOptions({moveable: false})` + cursor `crosshair`
+- `keyup` Shift / blur → `tlInstance.setOptions({moveable: true})` + cursor reset
+- `tlInstance` esposto come `window._tlInstance` per accesso dai listener globali
+- Con `moveable: false` durante shift, vis-timeline non intercetta più mousedown per pan, e il listener custom su `document` capture parte regolarmente
+
+### Modal "Nuovo booking" espanso
+
+**Sezione Orari evidenziata** (sfondo indaco):
+- Input `datetime-local` con `step="900"` (15 minuti precisione)
+- Display "Durata: Xh / Yg Zh" calcolato live, color indaco se valido / rosso se fine ≤ inizio
+- **Preset durata rapidi**: bottoni `1h / 2h / 4h / 8h (giornata) / 2 giorni / 1 settimana` — click setta `end = start + N`
+
+**Job search autocomplete cross-progetto**:
+- Input testuale con dropdown suggerimenti sotto (max 12 risultati)
+- Filtro su 5 campi: code, title, client, project_code, project_title
+- Suggestion mostra: `[CODE] Title — Cliente · Progetto-code Progetto-title`
+- Click suggestion → riempie input visibile, popola `tlb-job-id` (hidden), carica lavorazioni del job
+- Click outside o focus loss → chiude dropdown
+- Seed `JOBS_SEED` aggiunto al template con campi arricchiti (project + client tramite joinedload già presente)
+
+**Note → textarea** (resize verticale, 3 righe iniziali, font monospace come i campi).
+
+**Modal width** allargato 560 → 640px per il nuovo contenuto.
+
+### File toccati
+
+- `app/main.py` — version 3.4.15.4
+- `app/templates/pages/planning.html` — `_tlShiftDown` + setOptions toggle, `JOBS_SEED` seed, modal HTML rifatto, `tlbJobSearch`, `tlbSelectJob`, `tlbSetDuration`, `tlbSetDurationDays`, `tlbUpdateDurationDisplay`, `_tlbReset`, `tlbSubmit` aggiornato per `tlb-job-id` hidden, click-outside per dropdown, CSS `.tlb-job-item:hover`
+
+### Smoke
+
+- `/planning/?view=timeline` 200, HTML contiene `JOBS_SEED`, `tlbJobSearch`, `tlbSetDuration`, `_tlShiftDown`, `window._tlInstance`
+
+### Da testare sul Mac
+
+- Tieni premuto Shift mentre sei sulla timeline → cursor diventa crosshair
+- Shift+drag su area vuota di una risorsa → ghost rectangle + tooltip durata → modal pre-popolato
+- Modal: digita "ma" → vedi job che matchano, click → si compila tutto, lavorazioni popolate
+- Click presets durata → end aggiornato, display sotto si aggiorna
+
+---
+
 ## v3.4.15.3 — Hotfix: Shift+drag affidabile + preserve window (29 aprile 2026)
 
 Due bug:

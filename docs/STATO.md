@@ -8,7 +8,7 @@
 
 ## Versione corrente
 
-**v3.4.15.3** — 29 aprile 2026 (hotfix E2: Shift+drag affidabile + preserve window)
+**v3.4.15.4** — 29 aprile 2026 (hotfix E2: Shift via toggle moveable + modal espanso)
 
 ## In corso
 

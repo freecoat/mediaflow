@@ -89,6 +89,8 @@
   .vis-item .vis-item-content { padding: 2px 4px; }
   /* Linea oggi più visibile */
   .vis-current-time { background-color: #fb923c; width: 2px; }
+  .tlb-job-item:hover { background: rgba(98,114,245,0.12); }
+  .tlb-job-item:last-child { border-bottom: none; }
   .pl-active-filters-bar { font-size: 12px; color: var(--text3); margin-bottom: 8px; }
   .pl-active-filters-bar .chip { display: inline-block; background: rgba(98,114,245,0.15); color: #6272f5; padding: 2px 8px; border-radius: 10px; margin-right: 6px; font-weight: 500; }
 </style>
@@ -284,7 +286,7 @@
 
 <!-- Modal nuovo booking dalla timeline -->
 <div class="modal-overlay" id="modal-tl-booking">
-  <div class="modal" style="max-width:560px;">
+  <div class="modal" style="max-width:640px;">
     <div class="modal-header">
       <span class="modal-title">Nuovo booking</span>
       <button class="btn btn-ghost btn-icon" onclick="closeModal('modal-tl-booking')">✕</button>
@@ -296,16 +298,34 @@
           <input type="text" id="tlb-resource-name" class="form-input" disabled>
           <input type="hidden" id="tlb-resource-id">
         </div>
-        <div class="flex gap-2">
-          <div class="form-group" style="flex:1;">
-            <label class="form-label">Inizio</label>
-            <input type="datetime-local" id="tlb-start" class="form-input" required>
+
+        <!-- ─── Sezione orari ─────────────────────────── -->
+        <div style="background:rgba(98,114,245,0.05); border:1px solid var(--border,#2a2e3d); border-radius:6px; padding:10px; margin-bottom:14px;">
+          <div style="font-size:11px; text-transform:uppercase; color:var(--text3,#888); letter-spacing:.5px; margin-bottom:8px;">Orari</div>
+          <div class="flex gap-2">
+            <div class="form-group" style="flex:1; margin-bottom:8px;">
+              <label class="form-label" style="font-size:11px;">Inizio</label>
+              <input type="datetime-local" id="tlb-start" class="form-input" required step="900" oninput="tlbUpdateDurationDisplay()">
+            </div>
+            <div class="form-group" style="flex:1; margin-bottom:8px;">
+              <label class="form-label" style="font-size:11px;">Fine</label>
+              <input type="datetime-local" id="tlb-end" class="form-input" required step="900" oninput="tlbUpdateDurationDisplay()">
+            </div>
           </div>
-          <div class="form-group" style="flex:1;">
-            <label class="form-label">Fine</label>
-            <input type="datetime-local" id="tlb-end" class="form-input" required>
+          <div style="font-size:12px; color:var(--text2,#aaa); margin-bottom:8px;">
+            Durata: <span id="tlb-duration-display" style="font-weight:500; color:#6272f5;">—</span>
+          </div>
+          <div style="font-size:11px; color:var(--text3,#888); margin-bottom:4px;">Preset durata</div>
+          <div style="display:flex; gap:4px; flex-wrap:wrap;">
+            <button type="button" class="btn btn-ghost btn-sm" onclick="tlbSetDuration(1)">1h</button>
+            <button type="button" class="btn btn-ghost btn-sm" onclick="tlbSetDuration(2)">2h</button>
+            <button type="button" class="btn btn-ghost btn-sm" onclick="tlbSetDuration(4)">4h</button>
+            <button type="button" class="btn btn-ghost btn-sm" onclick="tlbSetDuration(8)">8h (giornata)</button>
+            <button type="button" class="btn btn-ghost btn-sm" onclick="tlbSetDurationDays(2)">2 giorni</button>
+            <button type="button" class="btn btn-ghost btn-sm" onclick="tlbSetDurationDays(5)">1 settimana</button>
           </div>
         </div>
+
         <div class="form-group">
           <label class="form-label">Tipo</label>
           <select id="tlb-kind" class="form-select" onchange="tlbOnKindChange()">
@@ -315,24 +335,25 @@
             <option value="internal_training">Formazione</option>
           </select>
         </div>
-        <div class="form-group" id="tlb-job-group">
-          <label class="form-label">Job</label>
-          <select id="tlb-job" class="form-select" onchange="tlbOnJobChange()">
-            <option value="">— seleziona —</option>
-            {% for j in jobs %}
-            <option value="{{ j.id }}">{{ j.code }} — {{ j.title[:40] }}</option>
-            {% endfor %}
-          </select>
+
+        <!-- ─── Job: search autocomplete cross-project ────── -->
+        <div class="form-group" id="tlb-job-group" style="position:relative;">
+          <label class="form-label">Job <span style="color:var(--text3); font-weight:normal;">(cerca per codice, titolo, cliente o progetto)</span></label>
+          <input type="text" id="tlb-job-search" class="form-input" placeholder="es. Q-2026-001, Mare Nostrum, Lucky Red…" autocomplete="off" oninput="tlbJobSearch()" onfocus="tlbJobSearch()">
+          <input type="hidden" id="tlb-job-id">
+          <div id="tlb-job-suggestions" style="display:none; position:absolute; top:100%; left:0; right:0; background:var(--bg-elev,#1a1d29); border:1px solid var(--border,#2a2e3d); border-radius:6px; max-height:240px; overflow-y:auto; z-index:100; box-shadow:0 4px 12px rgba(0,0,0,.3); margin-top:2px;"></div>
         </div>
+
         <div class="form-group" id="tlb-line-group" style="display:none;">
           <label class="form-label">Lavorazione (opzionale)</label>
           <select id="tlb-line" class="form-select">
             <option value="">— nessuna —</option>
           </select>
         </div>
+
         <div class="form-group">
           <label class="form-label">Note</label>
-          <input type="text" id="tlb-notes" class="form-input">
+          <textarea id="tlb-notes" class="form-input" rows="3" style="resize:vertical; font-family:inherit;" placeholder="Annotazioni libere, riferimenti, contatti…"></textarea>
         </div>
       </form>
     </div>
@@ -367,6 +388,9 @@ const RESOURCES_SEED = [
 {% endfor %}];
 const DEPARTMENTS_SEED = [
 {% for d in departments %}  {id:{{ d.id }}, name:{{ d.name|tojson }}}{{ "," if not loop.last else "" }}
+{% endfor %}];
+const JOBS_SEED = [
+{% for j in jobs %}  {id:{{ j.id }}, code:{{ j.code|tojson }}, title:{{ (j.title or '')|tojson }}, client:{{ (j.client.name if j.client else '')|tojson }}, project_code:{{ (j.project.code if j.project else '')|tojson }}, project_title:{{ (j.project.title if j.project else '')|tojson }}}{{ "," if not loop.last else "" }}
 {% endfor %}];
 let calInstance = null;
 let tlInstance = null;
@@ -746,6 +770,38 @@ window.addEventListener('keydown', e => { if (e.key === 'Alt') window._tlAltDown
 window.addEventListener('keyup', e => { if (e.key === 'Alt') window._tlAltDown = false; });
 window.addEventListener('blur', () => { window._tlAltDown = false; });
 
+// Track Shift: quando premuto, DISABILITA moveable di vis-timeline così il
+// mio listener mousedown intercetta libero (senza che vis-timeline catturi per pan).
+window._tlShiftDown = false;
+window.addEventListener('keydown', e => {
+  if (e.key === 'Shift' && !window._tlShiftDown) {
+    window._tlShiftDown = true;
+    if (window._tlInstance) {
+      try { window._tlInstance.setOptions({moveable: false}); } catch(_) {}
+    }
+    const host = document.getElementById('tl-host');
+    if (host) host.style.cursor = 'crosshair';
+  }
+});
+window.addEventListener('keyup', e => {
+  if (e.key === 'Shift') {
+    window._tlShiftDown = false;
+    if (window._tlInstance) {
+      try { window._tlInstance.setOptions({moveable: true}); } catch(_) {}
+    }
+    const host = document.getElementById('tl-host');
+    if (host) host.style.cursor = '';
+  }
+});
+window.addEventListener('blur', () => {
+  if (window._tlShiftDown) {
+    window._tlShiftDown = false;
+    if (window._tlInstance) try { window._tlInstance.setOptions({moveable: true}); } catch(_) {}
+    const host = document.getElementById('tl-host');
+    if (host) host.style.cursor = '';
+  }
+});
+
 // Snap adattivo allo zoom (15min day, 30min week, 60min month/quarter)
 function tlSnap(date, scale, step) {
   const stepMin = {day:15, week:30, month:60, quarter:60}[tlZoom] || 30;
@@ -985,7 +1041,7 @@ async function renderTimeline(preserveWindow=false) {
     return;
   }
   const groupsDS = new vis.DataSet(groups);
-  tlInstance = new vis.Timeline(host, itemsDS, groupsDS, {
+  tlInstance = window._tlInstance = new vis.Timeline(host, itemsDS, groupsDS, {
     locale: 'it',
     stack: true,
     showCurrentTime: true,
@@ -1168,6 +1224,16 @@ function _toLocalDtInput(d) {
   return d.getFullYear()+'-'+pad(d.getMonth()+1)+'-'+pad(d.getDate())+'T'+pad(d.getHours())+':'+pad(d.getMinutes());
 }
 
+function _tlbReset() {
+  document.getElementById('tlb-kind').value = 'project';
+  document.getElementById('tlb-job-search').value = '';
+  document.getElementById('tlb-job-id').value = '';
+  document.getElementById('tlb-job-suggestions').style.display = 'none';
+  document.getElementById('tlb-line').innerHTML = '<option value="">— nessuna —</option>';
+  document.getElementById('tlb-line-group').style.display = 'none';
+  document.getElementById('tlb-notes').value = '';
+}
+
 function tlbOpenWithRange(resourceId, startDate, endDate) {
   const r = RESOURCES_SEED.find(x => x.id === resourceId);
   if (!r) { toast('Risorsa non trovata', 'error'); return; }
@@ -1175,12 +1241,9 @@ function tlbOpenWithRange(resourceId, startDate, endDate) {
   document.getElementById('tlb-resource-name').value = r.name;
   document.getElementById('tlb-start').value = _toLocalDtInput(startDate);
   document.getElementById('tlb-end').value = _toLocalDtInput(endDate);
-  document.getElementById('tlb-kind').value = 'project';
-  document.getElementById('tlb-job').value = '';
-  document.getElementById('tlb-line').innerHTML = '<option value="">— nessuna —</option>';
-  document.getElementById('tlb-line-group').style.display = 'none';
-  document.getElementById('tlb-notes').value = '';
+  _tlbReset();
   tlbOnKindChange();
+  tlbUpdateDurationDisplay();
   openModal('modal-tl-booking');
 }
 
@@ -1195,12 +1258,9 @@ function tlbOpen(resourceId, timeClicked) {
   const end = new Date(start.getTime() + 60*60*1000);
   document.getElementById('tlb-start').value = _toLocalDtInput(start);
   document.getElementById('tlb-end').value = _toLocalDtInput(end);
-  document.getElementById('tlb-kind').value = 'project';
-  document.getElementById('tlb-job').value = '';
-  document.getElementById('tlb-line').innerHTML = '<option value="">— nessuna —</option>';
-  document.getElementById('tlb-line-group').style.display = 'none';
-  document.getElementById('tlb-notes').value = '';
+  _tlbReset();
   tlbOnKindChange();
+  tlbUpdateDurationDisplay();
   openModal('modal-tl-booking');
 }
 
@@ -1213,28 +1273,109 @@ function tlbOnKindChange() {
   } else {
     jobGrp.style.display = 'none';
     lineGrp.style.display = 'none';
-    document.getElementById('tlb-job').value = '';
+    document.getElementById('tlb-job-id').value = '';
+    document.getElementById('tlb-job-search').value = '';
   }
 }
 
-async function tlbOnJobChange() {
-  const jobId = document.getElementById('tlb-job').value;
-  const lineSel = document.getElementById('tlb-line');
-  const lineGrp = document.getElementById('tlb-line-group');
-  if (!jobId) {
-    lineSel.innerHTML = '<option value="">— nessuna —</option>';
-    lineGrp.style.display = 'none';
+// ── Job search autocomplete (cross-progetto) ───────────────
+function tlbJobSearch() {
+  const q = (document.getElementById('tlb-job-search').value || '').toLowerCase().trim();
+  const box = document.getElementById('tlb-job-suggestions');
+  let candidates = JOBS_SEED;
+  if (q) {
+    candidates = JOBS_SEED.filter(j =>
+      (j.code||'').toLowerCase().includes(q) ||
+      (j.title||'').toLowerCase().includes(q) ||
+      (j.client||'').toLowerCase().includes(q) ||
+      (j.project_code||'').toLowerCase().includes(q) ||
+      (j.project_title||'').toLowerCase().includes(q)
+    );
+  }
+  candidates = candidates.slice(0, 12);
+  if (!candidates.length) {
+    box.innerHTML = '<div style="padding:10px; color:var(--text3); font-size:12px;">Nessun job trovato</div>';
+    box.style.display = '';
     return;
   }
+  box.innerHTML = candidates.map(j => {
+    const proj = j.project_code ? `${j.project_code}${j.project_title ? ' · '+j.project_title : ''}` : '—';
+    return `<div class="tlb-job-item" onmousedown="tlbSelectJob(${j.id})" style="padding:8px 10px; cursor:pointer; border-bottom:1px solid var(--border,#2a2e3d); font-size:12px;">
+      <div style="font-weight:500; color:var(--text,#eee);">
+        <span class="mono" style="color:#6272f5;">${escapeHtml(j.code)}</span> — ${escapeHtml(j.title)}
+      </div>
+      <div style="color:var(--text3,#888); font-size:11px; margin-top:2px;">
+        ${escapeHtml(j.client||'—')} · ${escapeHtml(proj)}
+      </div>
+    </div>`;
+  }).join('');
+  box.style.display = '';
+}
+
+async function tlbSelectJob(jobId) {
+  const j = JOBS_SEED.find(x => x.id === jobId);
+  if (!j) return;
+  document.getElementById('tlb-job-id').value = j.id;
+  document.getElementById('tlb-job-search').value = `${j.code} — ${j.title}`;
+  document.getElementById('tlb-job-suggestions').style.display = 'none';
+  // Popola lavorazioni
+  const lineSel = document.getElementById('tlb-line');
+  const lineGrp = document.getElementById('tlb-line-group');
   try {
-    const j = await api('GET', `/jobs/api/${jobId}`);
-    const lines = j.cost_lines || j.lines || [];
+    const jdata = await api('GET', `/jobs/api/${jobId}`);
+    const lines = jdata.cost_lines || jdata.lines || [];
     lineSel.innerHTML = '<option value="">— nessuna (booking generico sul job) —</option>' +
       lines.map(l => `<option value="${l.id}">${escapeHtml(l.description||('Lavorazione #'+l.id))}</option>`).join('');
     lineGrp.style.display = lines.length ? '' : 'none';
   } catch(e) {
     lineSel.innerHTML = '<option value="">— nessuna —</option>';
     lineGrp.style.display = 'none';
+  }
+}
+
+// Click outside chiude il dropdown suggerimenti
+document.addEventListener('click', (e) => {
+  const box = document.getElementById('tlb-job-suggestions');
+  const inp = document.getElementById('tlb-job-search');
+  if (!box || !inp) return;
+  if (box.contains(e.target) || inp.contains(e.target)) return;
+  box.style.display = 'none';
+});
+
+// ── Preset durata ────────────────────────────────────────
+function tlbSetDuration(hours) {
+  const startVal = document.getElementById('tlb-start').value;
+  if (!startVal) { toast('Imposta prima l\'inizio', 'warning'); return; }
+  const start = new Date(startVal);
+  const end = new Date(start.getTime() + hours * 3600000);
+  document.getElementById('tlb-end').value = _toLocalDtInput(end);
+  tlbUpdateDurationDisplay();
+}
+
+function tlbSetDurationDays(days) {
+  const startVal = document.getElementById('tlb-start').value;
+  if (!startVal) { toast('Imposta prima l\'inizio', 'warning'); return; }
+  const start = new Date(startVal);
+  const end = new Date(start);
+  end.setDate(end.getDate() + days);
+  document.getElementById('tlb-end').value = _toLocalDtInput(end);
+  tlbUpdateDurationDisplay();
+}
+
+function tlbUpdateDurationDisplay() {
+  const s = document.getElementById('tlb-start').value;
+  const e = document.getElementById('tlb-end').value;
+  const out = document.getElementById('tlb-duration-display');
+  if (!s || !e) { out.textContent = '—'; return; }
+  const ms = new Date(e) - new Date(s);
+  if (ms <= 0) { out.textContent = 'fine ≤ inizio'; out.style.color = '#ef4444'; return; }
+  out.style.color = '#6272f5';
+  const h = ms / 3600000;
+  if (h < 24) out.textContent = h.toFixed(1) + 'h';
+  else {
+    const days = Math.floor(h / 24);
+    const remH = h - days * 24;
+    out.textContent = days + 'g' + (remH > 0 ? ' ' + remH.toFixed(0) + 'h' : '');
   }
 }
 
@@ -1245,7 +1386,7 @@ async function tlbSubmit() {
   fd.append('start_datetime', document.getElementById('tlb-start').value);
   fd.append('end_datetime', document.getElementById('tlb-end').value);
   fd.append('kind', document.getElementById('tlb-kind').value);
-  const jobId = document.getElementById('tlb-job').value;
+  const jobId = document.getElementById('tlb-job-id').value;
   const lineId = document.getElementById('tlb-line').value;
   if (jobId) fd.append('job_id', jobId);
   if (lineId) fd.append('job_cost_line_id', lineId);
@@ -1256,7 +1397,7 @@ async function tlbSubmit() {
     await api('POST', '/planning/api/bookings', fd);
     toast('Booking creato', 'success');
     closeModal('modal-tl-booking');
-    renderTimeline(true); // refresh preservando finestra corrente
+    renderTimeline(true);
   } catch(e) {
     toast(e.message || 'Errore', 'error');
   } finally {
