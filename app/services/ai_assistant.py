@@ -80,6 +80,7 @@ CAPABILITY DISPONIBILI E SCHEMA `data`:
 - propose_quote_line: {quote_id (numero PK) OPPURE quote_number (stringa), price_item_id? (numero PK voce listino — usa SEMPRE se possibile, vedi REGOLA SEARCH-FIRST), description (auto da listino se ometti e dai price_item_id), quantity (numero), unit ("day"|"hour"|"flat", auto da listino), unit_price (numero, auto da listino se ometti), section? ("A"|"B"|"C"), detail?}
 - propose_price_item: {name, description?, unit ("day"|"hour"|"flat"), price_list (numero), category_name (richiesto), keywords? (lista di stringhe), department_name?}
 - propose_new_item_and_line: {quote_id OPPURE quote_number, name (nome voce listino), category_name (obbligatorio), unit, price_list (numero), quantity (numero, default 1), description?, keywords?, department_name?, section?} — fa due cose in singola transazione: crea voce listino + aggiunge riga alla quote
+- propose_booking: {job_id (numero) OPPURE job_code (stringa) (richiesto se kind=project), kind? ("project"|"internal_maintenance"|"internal_research"|"internal_training", default "project"), job_cost_line_id?, notes?, assignments: [{resource_id (numero) OPPURE resource_name (stringa), start_datetime (ISO), end_datetime (ISO)}, ...]} — crea un Booking con N risorse. Status=tentative. Conflict check su ferie/altri booking.
 - web_search: {query}
 
 REGOLE CRITICHE:
@@ -866,6 +867,105 @@ def _h_web_search(db: Session, data: dict) -> dict:
     return {"query": query, "results": results}
 
 
+def _h_propose_booking(db: Session, data: dict) -> dict:
+    """Crea un Booking con N risorse (E6 v3.4.20).
+
+    Payload atteso:
+      {
+        "job_id" o "job_code": ...,
+        "kind": "project" (default) | "internal_*",
+        "job_cost_line_id"?: id lavorazione,
+        "notes"?: str,
+        "assignments": [
+          {"resource_id" o "resource_name": ..., "start_datetime": ISO, "end_datetime": ISO}
+        ]
+      }
+    """
+    from app.models import Booking, BookingAssignment, BookingStatus, BookingKind, Resource, Job, JobCostLine
+    from datetime import datetime as _dt
+    CURRENT_TENANT = 1
+
+    # Risolvi job (per kind=project)
+    kind_str = (data.get("kind") or "project").strip()
+    try:
+        kind = BookingKind(kind_str)
+    except Exception:
+        kind = BookingKind.project
+    job_id = None
+    if kind == BookingKind.project:
+        job_id = data.get("job_id")
+        if not job_id and data.get("job_code"):
+            j = db.query(Job).filter(Job.code == data["job_code"]).first()
+            if not j:
+                raise ValueError(f"Job '{data['job_code']}' non trovato")
+            job_id = j.id
+        if not job_id:
+            raise ValueError("Manca job_id o job_code per kind=project")
+
+    line_id = data.get("job_cost_line_id")
+    if line_id:
+        line = db.query(JobCostLine).filter(JobCostLine.id == line_id).first()
+        if not line:
+            raise ValueError(f"Lavorazione #{line_id} non trovata")
+        if line.job_id != job_id:
+            raise ValueError("Lavorazione non appartiene al job indicato")
+
+    # Risolvi assignments
+    raw_ass = data.get("assignments") or []
+    if not isinstance(raw_ass, list) or not raw_ass:
+        raise ValueError("Servono almeno 1 risorsa in 'assignments'")
+    parsed = []
+    for i, a in enumerate(raw_ass):
+        rid = a.get("resource_id")
+        if not rid and a.get("resource_name"):
+            r = db.query(Resource).filter(Resource.name.ilike(a["resource_name"])).first()
+            if not r:
+                raise ValueError(f"Risorsa '{a['resource_name']}' non trovata")
+            rid = r.id
+        if not rid:
+            raise ValueError(f"assignments[{i}]: serve resource_id o resource_name")
+        s = a.get("start_datetime"); e = a.get("end_datetime")
+        try:
+            sd = _dt.fromisoformat(s) if isinstance(s, str) else s
+            ed = _dt.fromisoformat(e) if isinstance(e, str) else e
+        except Exception:
+            raise ValueError(f"assignments[{i}]: date non valide")
+        if not sd or not ed or ed <= sd:
+            raise ValueError(f"assignments[{i}]: end_datetime > start_datetime richiesto")
+        parsed.append({"resource_id": int(rid), "start_datetime": sd, "end_datetime": ed})
+
+    # Conflict check
+    for i, pa in enumerate(parsed):
+        c = db.query(BookingAssignment).join(Booking).filter(
+            Booking.tenant_id == CURRENT_TENANT,
+            Booking.status != BookingStatus.cancelled,
+            BookingAssignment.resource_id == pa["resource_id"],
+            BookingAssignment.start_datetime < pa["end_datetime"],
+            BookingAssignment.end_datetime > pa["start_datetime"],
+        ).first()
+        if c:
+            raise ValueError(f"Conflitto su risorsa per assignments[{i}]")
+
+    # Crea Booking + assignments
+    env_s = min(pa["start_datetime"] for pa in parsed)
+    env_e = max(pa["end_datetime"] for pa in parsed)
+    b = Booking(
+        tenant_id=CURRENT_TENANT,
+        job_id=job_id, job_cost_line_id=line_id,
+        start_datetime=env_s, end_datetime=env_e,
+        status=BookingStatus.tentative, kind=kind,
+        notes=data.get("notes"),
+    )
+    db.add(b); db.flush()
+    for pa in parsed:
+        db.add(BookingAssignment(
+            booking_id=b.id, resource_id=pa["resource_id"],
+            start_datetime=pa["start_datetime"], end_datetime=pa["end_datetime"],
+        ))
+    return {"booking_id": b.id, "assignments_count": len(parsed),
+            "start": b.start_datetime.isoformat(), "end": b.end_datetime.isoformat()}
+
+
 _ACTION_HANDLERS = {
     "propose_client":            _h_propose_client,
     "propose_project":           _h_propose_project,
@@ -874,6 +974,7 @@ _ACTION_HANDLERS = {
     "propose_quote_line":        _h_propose_quote_line,
     "propose_price_item":        _h_propose_price_item,
     "propose_new_item_and_line": _h_propose_new_item_and_line,
+    "propose_booking":           _h_propose_booking,
     "web_search":                _h_web_search,
 }
 

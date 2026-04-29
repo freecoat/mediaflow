@@ -1,5 +1,98 @@
 # MediaFlow — Changelog
 
+## v3.4.20 — E6: AI propose_booking + suggest-resources (29 aprile 2026)
+
+Sesta e ultima fase del piano core-planning. AI può ora proporre booking direttamente.
+
+### Capability AI `propose_booking`
+
+Aggiunta a `app/services/ai_assistant.py`:
+
+```json
+{
+  "action": "propose_booking",
+  "data": {
+    "job_id": 42,           // oppure "job_code": "J-2026-001"
+    "kind": "project",      // o internal_*
+    "job_cost_line_id": 7,  // opzionale
+    "notes": "Sessione color HDR",
+    "assignments": [
+      {"resource_id": 3, "start_datetime": "2026-05-04T09:00", "end_datetime": "2026-05-04T13:00"},
+      {"resource_name": "Luca Bianchi", "start_datetime": "2026-05-04T10:00", "end_datetime": "2026-05-04T18:00"}
+    ]
+  }
+}
+```
+
+- Risolve `job_code` → `job_id` se necessario
+- Risolve `resource_name` → `resource_id` (case-insensitive)
+- Conflict check per ogni assignment vs altri booking attivi
+- Crea Booking + N BookingAssignment in singola transazione
+- Status default `tentative`
+
+System prompt aggiornato con la doc capability.
+
+### Endpoint `GET /planning/api/suggest-resources`
+
+Nuovo endpoint per AI auto-suggest e UI futura:
+- `from_datetime`, `to_datetime`, `department_id?`, `type?`
+- Per ogni risorsa attiva del tenant, ritorna due liste:
+  - `available`: nessun conflitto in quel range
+  - `busy`: con `conflict_assignment_id` o `unavailability_kind`
+- Permette al copilot di rispondere "chi è libero il X" e proporre `propose_booking`
+
+### File toccati
+
+- `app/main.py` — version 3.4.20
+- `app/services/ai_assistant.py` — `_h_propose_booking` handler, registrato in `_ACTION_HANDLERS`, doc nel system prompt
+- `app/routers/planning.py` — `GET /api/suggest-resources`
+
+### Smoke
+
+- `GET /api/suggest-resources` con range 2026-05-04 09:00-13:00 dept=1 → 2 disponibili, 0 occupate
+- `propose_booking` capability registrata in `_ACTION_HANDLERS`
+
+### Esempio uso copilot (dopo questa versione)
+
+> Utente: "Chi è libero giovedì 7 maggio dalle 14 per fare audio mix?"
+> AI: chiama internamente `suggest-resources` (o riusa context), risponde:
+> "Sono libere: **Mario Rossi** (Audio mixer, dept Audio) e **Luca Verdi** (Audio engineer). Vuoi assegnare uno?"
+>
+> Utente: "Sì, Mario, 14-18 sul job J-2026-005"
+> AI:
+> ```action
+> {"action": "propose_booking", "data": {
+>   "job_code": "J-2026-005",
+>   "assignments": [{"resource_name": "Mario Rossi",
+>     "start_datetime": "2026-05-07T14:00", "end_datetime": "2026-05-07T18:00"}]
+> }}
+> ```
+> User clicca "Applica" → booking creato.
+
+### Roadmap completata
+
+E1→E6 di "Core planning" tutte chiuse:
+
+| Fase | Versione | Tema |
+|---|---|---|
+| E1 | v3.4.14 | Editing diretto (drag/resize/delete) |
+| E2 | v3.4.15 | Click&drag create + capacity heatmap + menu contestuale |
+| E3 | v3.4.17 | Working hours + ferie/festività + smart split |
+| E4 | v3.4.18 | Multi-select + keyboard + bulk paste |
+| E5 | v3.4.19 | Ricorrenti + tentative + audit log |
+| E6 | v3.4.20 | AI propose_booking + suggest-resources |
+
+E2 ha incluso anche multi-resource (v3.4.16/16.1).
+
+### Restano (backlog)
+
+- v3.4.20.1 UI settings working hours editabile
+- v3.4.20.2 Multi-row >5 leggibilità (collapse, scroll)
+- v3.4.20.3 Snap line visiva durante drag
+- v3.4.20.4 Endpoint POST/PUT cambio status tentative↔confirmed dal modal
+
+---
+
 ## v3.4.19 — E5: ricorrenti + tentative visivo + audit log (29 aprile 2026)
 
 ### Booking ricorrenti

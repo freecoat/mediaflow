@@ -814,6 +814,65 @@ async def delete_booking(booking_id: int, db: Session = Depends(get_db)):
     return {"ok": True}
 
 
+@router.get("/api/suggest-resources")
+async def suggest_resources(
+    from_datetime: datetime,
+    to_datetime: datetime,
+    department_id: Optional[int] = None,
+    type: Optional[ResourceType] = None,
+    db: Session = Depends(get_db),
+):
+    """Suggerisce risorse libere nel range richiesto.
+    Filtra eventualmente per reparto e tipo. Usato anche da AI auto-suggest (E6).
+    """
+    if to_datetime <= from_datetime:
+        raise HTTPException(400, "to_datetime deve essere > from_datetime")
+    q = db.query(Resource).filter(
+        Resource.tenant_id == CURRENT_TENANT,
+        Resource.is_active == True,
+    )
+    if department_id:
+        q = q.filter(Resource.department_id == department_id)
+    if type:
+        q = q.filter(Resource.type == type)
+    candidates = q.all()
+    out_free, out_busy = [], []
+    range_date_set = set()
+    cur = from_datetime.date()
+    while cur <= to_datetime.date():
+        range_date_set.add(cur); cur += _td(days=1)
+    for r in candidates:
+        # Conflict booking
+        conflict = db.query(BookingAssignment).join(Booking).filter(
+            Booking.tenant_id == CURRENT_TENANT,
+            Booking.status != BookingStatus.cancelled,
+            BookingAssignment.resource_id == r.id,
+            BookingAssignment.start_datetime < to_datetime,
+            BookingAssignment.end_datetime > from_datetime,
+        ).first()
+        # Ferie/malattia overlap
+        unav = db.query(ResourceUnavailability).filter(
+            ResourceUnavailability.resource_id == r.id,
+            ResourceUnavailability.end_date >= from_datetime.date(),
+            ResourceUnavailability.start_date <= to_datetime.date(),
+        ).first()
+        info = {
+            "id": r.id, "name": r.name, "role": r.role,
+            "department_id": r.department_id, "color": r.color,
+            "type": r.type.value if hasattr(r.type, "value") else r.type,
+        }
+        if conflict:
+            info["conflict_assignment_id"] = conflict.id
+            out_busy.append(info)
+        elif unav:
+            info["unavailability_kind"] = unav.kind.value if hasattr(unav.kind, "value") else unav.kind
+            out_busy.append(info)
+        else:
+            out_free.append(info)
+    return {"available": out_free, "busy": out_busy,
+            "range": {"from": from_datetime.isoformat(), "to": to_datetime.isoformat()}}
+
+
 @router.get("/api/bookings/{booking_id}/audit")
 async def booking_audit_log(booking_id: int, db: Session = Depends(get_db)):
     """Cronologia modifiche al booking. Ordine: più recenti prima."""

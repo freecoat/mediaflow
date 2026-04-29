@@ -8,7 +8,7 @@
 
 ## Versione corrente
 
-**v3.4.19** — 29 aprile 2026 — E5 Ricorrenti + tentative + audit log
+**v3.4.20** — 29 aprile 2026 — E6 AI propose_booking + suggest-resources (roadmap E1→E6 completa!)
 
 ## In corso
 
@@ -27,7 +27,20 @@ Cantiere "overlay prenotato vs effettivo + adeguamento" (era v3.4.15 nel plan pr
 
 ## Prossimo step concordato
 
-**E5 — v3.4.19 — Booking ricorrenti + tentative + audit log**:
+**Roadmap core-planning E1→E6 COMPLETA.** Backlog rifiniture e UI:
+
+- v3.4.20.1 UI settings working hours editabile (form policy in /settings)
+- v3.4.20.2 Modal multi-row leggibilità >5 (scroll/collapse)
+- v3.4.20.3 Snap line visiva durante drag
+- v3.4.20.4 Endpoint cambio status tentative↔confirmed dal modal
+- v3.4.20.5 UI form ferie/malattia in /resources/{id}
+
+Poi cantieri rinviati:
+- Cost report doppio (interno/esterno cliente)
+- Overlay "prenotato vs effettivo" (booking vs TimePunch)
+
+**Vecchio backlog (legacy):**
+- ~~E5 v3.4.19~~:
 - Booking ricorrenti minimi: every weekday, every Mon, every Tue, ecc.
 - Tentative bookings (`is_tentative` flag, viz tratteggiata) legati a quote draft/sent → committed quando approved
 - Audit log su modifiche booking (estende pattern AIAction)
