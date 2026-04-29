@@ -8,7 +8,7 @@
 
 ## Versione corrente
 
-**v3.4.13** — 29 aprile 2026
+**v3.4.13.1** — 29 aprile 2026
 
 ## In corso
 
@@ -47,6 +47,7 @@ Verifiche sul Mac sospese (cumulative):
 - v3.4.11 hub `/planning/` con 5 viste (Tabella, Calendario, Trimestre, Agenda, Le mie) + 9 filtri trasversali
 - v3.4.12 Resource Timeline vis-timeline (tab #6, zoom Giorno/Sett/Mese/Trim, raggruppata per reparto, riusa filtri)
 - v3.4.13 UX cleanup: tasto Oggi parte da oggi, selettore data Vai-a, label settimana/mese, zebra rows, filtri collassabili, vista Trimestre rimossa, voce sidebar Calendario rimossa
+- v3.4.13.1 hotfix: filtri collassabili stabili (flex+min-width:0), click su timeline → modal nuovo booking pre-popolato (risorsa+ora+job+lavorazione)
 - Test E2E AI search-first (v3.4.4)
 
 Per testare #5 servono prompt reali al copilot con provider AI attivo (Sonnet 4.6 consigliato, ma anche Ollama 8b dovrebbe funzionare grazie a SEARCH-FIRST esplicito nel system prompt).
@@ -85,6 +86,7 @@ Dopo conferma test sul Mac, passare a **#4 server-side abort**.
 - ✅ **v3.4.11** Hub `/planning/` 5 viste + 9 filtri trasversali (Tabella, Calendario, Trimestre, Agenda, Le mie)
 - ✅ **v3.4.12** Resource Timeline (vis-timeline, righe verticali risorse raggruppate per reparto, zoom giorno/sett/mese/trim)
 - ✅ **v3.4.13** UX cleanup: Oggi=da-oggi, Vai-a, label sett/mese, zebra rows, filtri collassabili, drop Trimestre + voce sidebar Calendario
+- ✅ **v3.4.13.1** Hotfix filtri (flex+min-width:0) + click vuoto timeline → modal nuovo booking pre-popolato
 - 🔜 **v3.4.14** Booking editabili dalla timeline (drag/resize/delete + PUT API)
 - 🔜 **v3.4.15** Prenotato vs effettivo overlay + adeguamento + report delta producer
 - 🔜 **post-15** Kanban per stato job (SortableJS) + Gantt per job (`/jobs/{id}`, Frappe Gantt)
@@ -124,4 +126,4 @@ Dopo conferma test sul Mac, passare a **#4 server-side abort**.
 
 ---
 
-*Ultimo aggiornamento: 29 aprile 2026 — v3.4.13 chiusa: UX cleanup hub `/planning/`. Tasto Oggi ora parte da oggi (non più centra settimana). Selettore data Vai-a + label `Settimana N — Mese Anno` ISO sopra la timeline. Zebra rows + bordi smussati + reparto in grassetto/uppercase indaco. Filtri sidebar collassabili (toggle persistito localStorage, badge contatore filtri attivi). Vista Trimestre rimossa. Voce sidebar Calendario rimossa (calendario solo dentro pianificazione). `/planning/calendar` → 302 redirect mantenuto. Smoke 200 + verifica HTML. Repo GitHub privato `freecoat/mediaflow` (push solo a major).*
+*Ultimo aggiornamento: 29 aprile 2026 — v3.4.13.1 hotfix: collasso filtri stabilizzato (refactor flex con `min-width:0` sul main, era grid `0 1fr` che dava overflow imprevedibile con vis-timeline). Aggiunto click su area vuota timeline → modal "Nuovo booking" pre-popolato (risorsa locked dalla riga, ora arrotondata all'ora cliccata, kind/job/lavorazione/note, submit POST `/planning/api/bookings`). Smoke 200, HTML verificato. Repo GitHub privato `freecoat/mediaflow` (push solo a major).*

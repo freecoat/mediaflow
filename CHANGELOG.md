@@ -1,5 +1,45 @@
 # MediaFlow — Changelog
 
+## v3.4.13.1 — Hotfix: filtri + click-to-add timeline (29 aprile 2026)
+
+### Bug fix: nascondi filtri rompeva il layout
+
+Il refactor in v3.4.13 usava `grid-template-columns: 0 1fr` per collassare la sidebar. Il `1fr` con vis-timeline dentro non si comportava in modo prevedibile (probabilmente `min-content` del widget forzava overflow).
+
+**Fix**: passato a `display: flex` con `flex: 1 1 auto; min-width: 0` sul main item. Più robusto: il flex item può ora effettivamente comprimersi sotto la sua content-width, e vis-timeline ha sempre la larghezza giusta sia con sidebar aperta che chiusa.
+
+### Click su timeline → modal nuovo booking pre-popolato
+
+Click su area vuota della Resource Timeline (background, group-label o asse) apre un modal "Nuovo booking" con:
+- **Risorsa locked** (è la riga cliccata)
+- **Inizio** = ora cliccata, arrotondata all'ora (minuti=0)
+- **Fine** = inizio + 1h (default editabile)
+- **Tipo** dropdown (project / internal_*)
+- **Job** dropdown (visibile solo se kind=project, popolato da `jobs` template-side)
+- **Lavorazione** dropdown opzionale (popolato dinamicamente da `GET /jobs/api/{job_id}` quando il job viene scelto)
+- **Note** libere
+
+Submit → `POST /planning/api/bookings` (endpoint esistente, validazione conflitti già lì) → toast success → refresh timeline.
+
+### File toccati
+
+- `app/main.py` — version 3.4.13.1
+- `app/templates/pages/planning.html` — refactor pl-shell a flex, modal `#modal-tl-booking`, handlers `tlbOpen/tlbOnKindChange/tlbOnJobChange/tlbSubmit`, listener `click` su `tlInstance`
+
+### Smoke
+
+- `/planning/?view=timeline` 200, contiene `pl-main`, `min-width: 0`, `modal-tl-booking`, `tlbOpen`
+
+### Da verificare sul Mac
+
+- Click su area vuota di una riga risorsa apre il modal
+- Inizio = ora cliccata arrotondata
+- Cambio kind nasconde job/lavorazione
+- Selezione job popola lavorazione
+- Submit crea booking + appare in timeline
+
+---
+
 ## v3.4.13 — Pulizia UX hub Pianificazione (29 aprile 2026)
 
 Iterazione di rifinitura su `/planning/` dopo feedback uso reale della Resource Timeline.
