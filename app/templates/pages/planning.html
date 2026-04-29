@@ -128,6 +128,13 @@
   #tlb-tp-popup .tp-cell.selected { background: #6272f5; color: #fff; font-weight: 600; }
   .pl-active-filters-bar { font-size: 12px; color: var(--text3); margin-bottom: 8px; }
   .pl-active-filters-bar .chip { display: inline-block; background: rgba(98,114,245,0.15); color: #6272f5; padding: 2px 8px; border-radius: 10px; margin-right: 6px; font-weight: 500; }
+  /* Filter autocomplete dropdown */
+  .fa-suggestions { display: none; position: absolute; left: 0; right: 0; top: 100%; background: var(--bg-elev,#1a1d29); border: 1px solid var(--border,#2a2e3d); border-radius: 6px; max-height: 220px; overflow-y: auto; z-index: 200; box-shadow: 0 4px 12px rgba(0,0,0,.35); margin-top: 2px; }
+  .fa-suggestions .fa-item { padding: 7px 10px; cursor: pointer; font-size: 12px; border-bottom: 1px solid rgba(255,255,255,.04); color: var(--text,#eee); }
+  .fa-suggestions .fa-item:last-child { border-bottom: none; }
+  .fa-suggestions .fa-item:hover, .fa-suggestions .fa-item.active { background: rgba(98,114,245,0.18); }
+  .fa-suggestions .fa-item .fa-meta { color: var(--text3,#888); font-size: 11px; }
+  .fa-input.has-value { background: rgba(98,114,245,0.10); }
 </style>
 {% endblock %}
 
@@ -154,44 +161,36 @@
       </select>
     </div>
 
-    <div class="form-group">
+    <div class="form-group" style="position:relative;">
       <label>Cliente</label>
-      <select id="f-client" class="form-select" onchange="onFilterChange()">
-        <option value="">— tutti —</option>
-        {% for c in clients %}
-        <option value="{{ c.id }}">{{ c.name }}</option>
-        {% endfor %}
-      </select>
+      <input type="text" class="form-input fa-input" data-fa="client" placeholder="Cerca cliente…" autocomplete="off">
+      <input type="hidden" id="f-client">
+      <button type="button" class="fa-clear" data-fa-clear="client" title="Cancella" style="position:absolute; right:6px; top:24px; background:transparent; border:none; color:var(--text3); cursor:pointer; display:none;">✕</button>
+      <div class="fa-suggestions" data-fa-suggestions="client"></div>
     </div>
 
-    <div class="form-group">
+    <div class="form-group" style="position:relative;">
       <label>Progetto</label>
-      <select id="f-project" class="form-select" onchange="onFilterChange()">
-        <option value="">— tutti —</option>
-        {% for p in projects %}
-        <option value="{{ p.id }}">{{ p.code }} — {{ p.title[:40] }}</option>
-        {% endfor %}
-      </select>
+      <input type="text" class="form-input fa-input" data-fa="project" placeholder="Cerca progetto…" autocomplete="off">
+      <input type="hidden" id="f-project">
+      <button type="button" class="fa-clear" data-fa-clear="project" title="Cancella" style="position:absolute; right:6px; top:24px; background:transparent; border:none; color:var(--text3); cursor:pointer; display:none;">✕</button>
+      <div class="fa-suggestions" data-fa-suggestions="project"></div>
     </div>
 
-    <div class="form-group">
+    <div class="form-group" style="position:relative;">
       <label>Job</label>
-      <select id="f-job" class="form-select" onchange="onFilterChange()">
-        <option value="">— tutti —</option>
-        {% for j in jobs %}
-        <option value="{{ j.id }}">{{ j.code }} — {{ j.title[:35] }}</option>
-        {% endfor %}
-      </select>
+      <input type="text" class="form-input fa-input" data-fa="job" placeholder="Cerca job (codice, titolo, cliente, progetto)…" autocomplete="off">
+      <input type="hidden" id="f-job">
+      <button type="button" class="fa-clear" data-fa-clear="job" title="Cancella" style="position:absolute; right:6px; top:24px; background:transparent; border:none; color:var(--text3); cursor:pointer; display:none;">✕</button>
+      <div class="fa-suggestions" data-fa-suggestions="job"></div>
     </div>
 
-    <div class="form-group">
+    <div class="form-group" style="position:relative;">
       <label>Risorsa</label>
-      <select id="f-resource" class="form-select" onchange="onFilterChange()">
-        <option value="">— tutte —</option>
-        {% for r in resources %}
-        <option value="{{ r.id }}">{{ r.name }}</option>
-        {% endfor %}
-      </select>
+      <input type="text" class="form-input fa-input" data-fa="resource" placeholder="Cerca risorsa…" autocomplete="off">
+      <input type="hidden" id="f-resource">
+      <button type="button" class="fa-clear" data-fa-clear="resource" title="Cancella" style="position:absolute; right:6px; top:24px; background:transparent; border:none; color:var(--text3); cursor:pointer; display:none;">✕</button>
+      <div class="fa-suggestions" data-fa-suggestions="resource"></div>
     </div>
 
     <div class="form-group">
@@ -461,9 +460,127 @@ const DEPARTMENTS_SEED = [
 const JOBS_SEED = [
 {% for j in jobs %}  {id:{{ j.id }}, code:{{ j.code|tojson }}, title:{{ (j.title or '')|tojson }}, client:{{ (j.client.name if j.client else '')|tojson }}, project_code:{{ (j.project.code if j.project else '')|tojson }}, project_title:{{ (j.project.title if j.project else '')|tojson }}}{{ "," if not loop.last else "" }}
 {% endfor %}];
+const CLIENTS_SEED = [
+{% for c in clients %}  {id:{{ c.id }}, name:{{ c.name|tojson }}}{{ "," if not loop.last else "" }}
+{% endfor %}];
+const PROJECTS_SEED = [
+{% for p in projects %}  {id:{{ p.id }}, code:{{ p.code|tojson }}, title:{{ (p.title or '')|tojson }}, client_name:{{ (p.client.name if p.client else '')|tojson }}}{{ "," if not loop.last else "" }}
+{% endfor %}];
 let calInstance = null;
 let tlInstance = null;
 let tlZoom = 'week';
+
+// ── Filter autocomplete (v3.4.20.1) ────────────────────────
+// Configurazione per ogni filtro autocomplete: data seed + campi search + display
+const FA_CONFIG = {
+  client: {
+    data: () => CLIENTS_SEED,
+    search: (it, q) => (it.name||'').toLowerCase().includes(q),
+    display: it => it.name,
+    render: it => `<div style="font-weight:500;">${escapeHtml(it.name)}</div>`,
+  },
+  project: {
+    data: () => PROJECTS_SEED,
+    search: (it, q) => ((it.code||'').toLowerCase().includes(q) || (it.title||'').toLowerCase().includes(q) || (it.client_name||'').toLowerCase().includes(q)),
+    display: it => `${it.code} — ${it.title}`,
+    render: it => `<div><span class="mono" style="color:#6272f5;">${escapeHtml(it.code)}</span> — ${escapeHtml(it.title||'')}</div><div class="fa-meta">${escapeHtml(it.client_name||'—')}</div>`,
+  },
+  job: {
+    data: () => JOBS_SEED,
+    search: (it, q) => ((it.code||'').toLowerCase().includes(q) || (it.title||'').toLowerCase().includes(q) || (it.client||'').toLowerCase().includes(q) || (it.project_code||'').toLowerCase().includes(q) || (it.project_title||'').toLowerCase().includes(q)),
+    display: it => `${it.code} — ${it.title}`,
+    render: it => `<div><span class="mono" style="color:#6272f5;">${escapeHtml(it.code)}</span> — ${escapeHtml(it.title||'')}</div><div class="fa-meta">${escapeHtml(it.client||'—')} · ${escapeHtml(it.project_code||'—')}</div>`,
+  },
+  resource: {
+    data: () => RESOURCES_SEED,
+    search: (it, q) => (it.name||'').toLowerCase().includes(q),
+    display: it => it.name,
+    render: it => {
+      const dept = DEPARTMENTS_SEED.find(d => d.id === it.dept);
+      return `<div style="display:flex; align-items:center; gap:6px;"><span style="display:inline-block; width:8px; height:8px; border-radius:50%; background:${it.color};"></span>${escapeHtml(it.name)}</div>${dept ? '<div class="fa-meta">'+escapeHtml(dept.name)+'</div>' : ''}`;
+    },
+  },
+};
+
+function _faSetVisible(faKey, item) {
+  const inp = document.querySelector(`[data-fa="${faKey}"]`);
+  const hidden = document.getElementById('f-' + faKey);
+  const clearBtn = document.querySelector(`[data-fa-clear="${faKey}"]`);
+  if (item) {
+    inp.value = FA_CONFIG[faKey].display(item);
+    hidden.value = item.id;
+    inp.classList.add('has-value');
+    if (clearBtn) clearBtn.style.display = '';
+  } else {
+    inp.value = '';
+    hidden.value = '';
+    inp.classList.remove('has-value');
+    if (clearBtn) clearBtn.style.display = 'none';
+  }
+}
+
+function _faSearch(faKey) {
+  const cfg = FA_CONFIG[faKey];
+  if (!cfg) return;
+  const inp = document.querySelector(`[data-fa="${faKey}"]`);
+  const box = document.querySelector(`[data-fa-suggestions="${faKey}"]`);
+  const q = (inp.value || '').toLowerCase().trim();
+  let items = cfg.data();
+  if (q) items = items.filter(it => cfg.search(it, q));
+  items = items.slice(0, 12);
+  if (!items.length) {
+    box.innerHTML = '<div class="fa-item" style="color:var(--text3); cursor:default;">Nessun risultato</div>';
+    box.style.display = 'block';
+    return;
+  }
+  box.innerHTML = items.map(it => `<div class="fa-item" data-fa-id="${it.id}">${cfg.render(it)}</div>`).join('');
+  box.style.display = 'block';
+  box.querySelectorAll('.fa-item').forEach(el => {
+    el.addEventListener('mousedown', (ev) => {
+      ev.preventDefault();
+      const id = Number(el.dataset.faId);
+      const item = cfg.data().find(x => x.id === id);
+      if (item) {
+        _faSetVisible(faKey, item);
+        box.style.display = 'none';
+        onFilterChange();
+      }
+    });
+  });
+}
+
+function _faClear(faKey) {
+  _faSetVisible(faKey, null);
+  onFilterChange();
+}
+
+function _faSetFromId(faKey, idStr) {
+  const id = Number(idStr);
+  if (!id) return;
+  const item = FA_CONFIG[faKey].data().find(x => x.id === id);
+  if (item) _faSetVisible(faKey, item);
+}
+
+// Setup listeners (eseguito una volta al load)
+['client','project','job','resource'].forEach(faKey => {
+  const inp = document.querySelector(`[data-fa="${faKey}"]`);
+  const box = document.querySelector(`[data-fa-suggestions="${faKey}"]`);
+  const clearBtn = document.querySelector(`[data-fa-clear="${faKey}"]`);
+  if (!inp || !box) return;
+  inp.addEventListener('input', () => {
+    // Se l'utente sta digitando → resetta hidden
+    document.getElementById('f-' + faKey).value = '';
+    inp.classList.remove('has-value');
+    if (clearBtn) clearBtn.style.display = '';
+    _faSearch(faKey);
+  });
+  inp.addEventListener('focus', () => _faSearch(faKey));
+  inp.addEventListener('blur', () => setTimeout(() => box.style.display = 'none', 150));
+  inp.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') { box.style.display = 'none'; inp.blur(); }
+  });
+  if (clearBtn) clearBtn.addEventListener('click', () => _faClear(faKey));
+});
 
 // ── URL state ───────────────────────────────────────────────
 function readFiltersFromURL() {
@@ -471,6 +588,11 @@ function readFiltersFromURL() {
   ['q','dept','client','project','job','resource','status','kind','from','to'].forEach(k => {
     const el = document.getElementById('f-' + k);
     if (el && p.get(k)) el.value = p.get(k);
+  });
+  // Riapplica display autocomplete dai hidden caricati
+  ['client','project','job','resource'].forEach(faKey => {
+    const v = document.getElementById('f-' + faKey).value;
+    if (v) _faSetFromId(faKey, v);
   });
 }
 function writeFiltersToURL(view) {
@@ -526,6 +648,10 @@ function renderActiveFiltersBar() {
     let val = el.value;
     if (el.tagName === 'SELECT') {
       val = el.options[el.selectedIndex].text;
+    } else if (FA_CONFIG[k]) {
+      // Per autocomplete: usa display dell'item dal seed
+      const it = FA_CONFIG[k].data().find(x => x.id === Number(el.value));
+      if (it) val = FA_CONFIG[k].display(it);
     }
     chips.push(`<span class="chip">${labels[k]}: ${escapeHtml(val)}</span>`);
   }
@@ -547,6 +673,13 @@ function onFilterChange() {
 function resetFilters() {
   ['q','dept','client','project','job','resource','status','kind','from','to'].forEach(k => {
     document.getElementById('f-'+k).value = '';
+  });
+  // Reset display autocomplete
+  ['client','project','job','resource'].forEach(faKey => {
+    const inp = document.querySelector(`[data-fa="${faKey}"]`);
+    const clearBtn = document.querySelector(`[data-fa-clear="${faKey}"]`);
+    if (inp) { inp.value = ''; inp.classList.remove('has-value'); }
+    if (clearBtn) clearBtn.style.display = 'none';
   });
   onFilterChange();
 }

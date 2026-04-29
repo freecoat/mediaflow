@@ -8,7 +8,7 @@
 
 ## Versione corrente
 
-**v3.4.20** — 29 aprile 2026 — E6 AI propose_booking + suggest-resources (roadmap E1→E6 completa!)
+**v3.4.20.1** — 29 aprile 2026 — Filtri sidebar con autocomplete (Cliente/Progetto/Job/Risorsa)
 
 ## In corso
 

@@ -1,5 +1,74 @@
 # MediaFlow — Changelog
 
+## v3.4.20.1 — Filtri sidebar con autocomplete (29 aprile 2026)
+
+I 4 filtri "lunghi" della sidebar pianificazione (Cliente / Progetto / Job / Risorsa) erano `<select>` lunghi e poco scalabili. Ora sono **input search con dropdown autocomplete**, stesso pattern del modal "Nuovo booking".
+
+### Pattern uniforme
+
+- Helper riusabile **`FA_CONFIG`**: oggetto `{client, project, job, resource}` con `data` (seed), `search` (predicato match), `display` (testo input), `render` (HTML suggestion).
+- Per ogni filtro:
+  - Input testuale `<input data-fa="...">` per la ricerca live
+  - Hidden `<input id="f-{key}">` per il valore (id) compatibile col flow esistente (`getFilterParams`, URL state)
+  - Bottone `✕` per cancellare la selezione
+  - Dropdown `.fa-suggestions` posizionato sotto l'input
+- Click su suggestion → riempie input visibile + setta hidden + triggera `onFilterChange()`.
+
+### Filtri specifici
+
+| Filtro | Cerca su | Suggestion |
+|---|---|---|
+| **Cliente** | `name` | nome cliente |
+| **Progetto** | `code`, `title`, `client_name` | `[CODE] title` + cliente come meta |
+| **Job** | `code`, `title`, `client`, `project_code`, `project_title` | `[CODE] title` + cliente · progetto |
+| **Risorsa** | `name` | dot color + nome + reparto come meta |
+
+Reparto, Stato, Tipo restano `<select>` (pochi valori, fissi).
+
+### Seed JSON aggiunti
+
+- `CLIENTS_SEED`: `{id, name}`
+- `PROJECTS_SEED`: `{id, code, title, client_name}`
+- (`JOBS_SEED` e `RESOURCES_SEED` già presenti dal modal)
+
+### Compatibilità
+
+- URL state (`?client=N`): all'`readFiltersFromURL` ricarica display dall'id via `_faSetFromId`
+- `renderActiveFiltersBar`: per gli autocomplete usa `FA_CONFIG[k].display(item)` invece del valore raw
+- `resetFilters`: reset display + classe `has-value` + bottoni clear
+- Niente cambi backend, solo riformattazione frontend dei filtri esistenti
+
+### CSS
+
+- `.fa-suggestions` dropdown indaco, hover indaco
+- `.fa-input.has-value` sfondo leggermente indaco per indicare filtro attivo
+- `.fa-meta` per riga secondaria (cliente/reparto)
+
+### File toccati
+
+- `app/main.py` — version 3.4.20.1
+- `app/templates/pages/planning.html`:
+  - HTML: 4 filtri convertiti in input + hidden + dropdown
+  - JS: `FA_CONFIG`, `_faSearch`, `_faSetVisible`, `_faClear`, `_faSetFromId`, listener init
+  - CSS: `.fa-suggestions`, `.fa-item`, `.fa-input.has-value`
+  - Seed `CLIENTS_SEED`, `PROJECTS_SEED`
+  - `readFiltersFromURL`, `renderActiveFiltersBar`, `resetFilters` aggiornati
+
+### Smoke
+
+- `/planning/?view=timeline` 200, HTML contiene `FA_CONFIG`, `CLIENTS_SEED`, `PROJECTS_SEED`, `data-fa`, `fa-suggestions`
+
+### Test sul Mac
+
+1. Click su input "Cliente" → vedi tutti i clienti
+2. Digita "TPR" → filtra
+3. Click suggestion → riempie input + filtri timeline aggiornati
+4. ✕ → cancella
+5. Stesso flow per Progetto, Job (cross-search), Risorsa
+6. URL `?client=3` → display popolato in input
+
+---
+
 ## v3.4.20 — E6: AI propose_booking + suggest-resources (29 aprile 2026)
 
 Sesta e ultima fase del piano core-planning. AI può ora proporre booking direttamente.
