@@ -99,6 +99,8 @@
   .vis-item.tl-bg-weekend { background: rgba(255,255,255,0.025) !important; border: none !important; }
   /* Hard conflict (drop su ferie/festa) */
   .vis-item.tl-conflict-hard { background: #991b1b !important; border-color: #7f1d1d !important; box-shadow: 0 0 0 3px rgba(220,38,38,.6) !important; animation: tl-shake .25s; }
+  /* E5: Tentative bookings — bordo tratteggiato, opacità ridotta */
+  .vis-item.tl-tentative { opacity: 0.7; border-style: dashed !important; border-width: 2px !important; }
   @keyframes tl-shake { 0%,100% { transform: translateX(0); } 25% { transform: translateX(-2px); } 75% { transform: translateX(2px); } }
   .tlb-job-item:hover { background: rgba(98,114,245,0.12); }
   .tlb-job-item:last-child { border-bottom: none; }
@@ -378,6 +380,35 @@
               </span>
             </span>
           </label>
+        </div>
+
+        <!-- ─── Ricorrenza (E5) ──────────────────────── -->
+        <div class="form-group" style="background:rgba(168,85,247,0.06); border:1px solid rgba(168,85,247,0.3); border-radius:6px; padding:8px 12px;">
+          <label style="display:flex; align-items:center; gap:8px; cursor:pointer; margin:0;">
+            <input type="checkbox" id="tlb-recur-enabled" onchange="document.getElementById('tlb-recur-fields').style.display = this.checked ? 'flex' : 'none';" style="margin:0;">
+            <span style="font-size:13px;">
+              <b>Ricorri</b>
+              <span style="color:var(--text3,#888); font-weight:normal; font-size:12px;">
+                — crea N booking distinti su giorni ricorrenti (es. ogni martedì)
+              </span>
+            </span>
+          </label>
+          <div id="tlb-recur-fields" style="display:none; gap:8px; margin-top:8px; flex-wrap:wrap; align-items:center;">
+            <select id="tlb-recur-rule" class="form-select" style="flex:1; min-width:180px;">
+              <option value="WEEKDAYS">Lun-Ven (giorni lavorativi)</option>
+              <option value="DAILY">Tutti i giorni</option>
+              <option value="MON">Solo lunedì</option>
+              <option value="TUE">Solo martedì</option>
+              <option value="WED">Solo mercoledì</option>
+              <option value="THU">Solo giovedì</option>
+              <option value="FRI">Solo venerdì</option>
+              <option value="MON,WED,FRI">Lun/Mer/Ven</option>
+              <option value="TUE,THU">Mar/Gio</option>
+              <option value="WEEKENDS">Sab-Dom</option>
+            </select>
+            <span style="font-size:12px; color:var(--text3,#888);">fino al</span>
+            <input type="date" id="tlb-recur-until" class="form-input" style="flex:1; min-width:140px;">
+          </div>
         </div>
       </form>
     </div>
@@ -736,12 +767,15 @@ function tlBookingToItem(b) {
   // b.id = 'a{assignment_id}', b.assignment_id e b.booking_id presenti.
   const p = b.extendedProps || {};
   const isInternal = p.kind && p.kind.startsWith('internal_');
+  const isTentative = p.status === 'tentative'; // E5: viz tratteggiato
   const color = b.color || '#6272f5';
-  // Badge "1/N" se booking con multi-risorsa
   const groupSize = p.group_size || 1;
   const groupBadge = groupSize > 1 ? ` <span style="background:rgba(0,0,0,.35); padding:0 4px; border-radius:3px; font-size:10px;">${p.group_position}/${groupSize}</span>` : '';
+  let classes = '';
+  if (isInternal) classes += 'kind-internal ';
+  if (isTentative) classes += 'tl-tentative ';
   return {
-    id: b.id,                  // 'a{assignment_id}' dal backend
+    id: b.id,
     assignment_id: b.assignment_id,
     booking_id: b.booking_id,
     group: p.resource_id,
@@ -749,8 +783,8 @@ function tlBookingToItem(b) {
     start: b.start,
     end: b.end,
     style: 'background-color:'+color+'; border-color:'+color+';',
-    className: isInternal ? 'kind-internal' : '',
-    title: escapeHtml(b.title || ''),
+    className: classes.trim(),
+    title: escapeHtml(b.title || '') + (isTentative ? ' (tentative)' : ''),
   };
 }
 
@@ -1459,6 +1493,10 @@ function _tlbReset() {
   document.getElementById('tlb-assignments').innerHTML = '';
   const ss = document.getElementById('tlb-smart-split');
   if (ss) ss.checked = false;
+  const re = document.getElementById('tlb-recur-enabled');
+  if (re) { re.checked = false; document.getElementById('tlb-recur-fields').style.display = 'none'; }
+  const ru = document.getElementById('tlb-recur-until');
+  if (ru) ru.value = '';
   const tpp = document.getElementById('tlb-tp-popup');
   if (tpp) tpp.style.display = 'none';
 }
@@ -1798,6 +1836,15 @@ async function tlbSubmit() {
   // E3 v3.4.17: smart split server-side (solo per nuovo, non in edit)
   const smartSplit = document.getElementById('tlb-smart-split');
   if (smartSplit && smartSplit.checked && !editingId) fd.append('smart_split', 'true');
+  // E5 v3.4.19: ricorrenza
+  const recurEnabled = document.getElementById('tlb-recur-enabled');
+  if (recurEnabled && recurEnabled.checked && !editingId) {
+    const rule = document.getElementById('tlb-recur-rule').value;
+    const until = document.getElementById('tlb-recur-until').value;
+    if (!until) { toast('Imposta data fine ricorrenza', 'warning'); return; }
+    fd.append('recurrence_rule', rule);
+    fd.append('recurrence_until', until);
+  }
   btn.disabled = true; btn.textContent = 'Salvataggio…';
   try {
     if (editingId) {

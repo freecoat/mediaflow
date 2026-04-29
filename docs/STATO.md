@@ -8,7 +8,7 @@
 
 ## Versione corrente
 
-**v3.4.18** — 29 aprile 2026 — E4 Multi-select + keyboard shortcuts + bulk paste
+**v3.4.19** — 29 aprile 2026 — E5 Ricorrenti + tentative + audit log
 
 ## In corso
 

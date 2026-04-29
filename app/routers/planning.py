@@ -7,7 +7,7 @@ from sqlalchemy.orm import Session, joinedload
 from sqlalchemy import or_
 from app.database import get_db
 from app.models import (
-    Job, JobStatus, Client, Project, Booking, BookingAssignment,
+    Job, JobStatus, Client, Project, Booking, BookingAssignment, BookingChange,
     BookingStatus, BookingKind,
     Resource, ResourceType, JobCostLine, Department, User,
     WorkingHoursPolicy, ResourceUnavailability, UnavailabilityKind,
@@ -390,6 +390,52 @@ async def list_bookings(
     return out
 
 
+def _log_change(db: Session, booking_id: int, kind: str, summary: str, payload: Optional[dict] = None):
+    """Aggiunge una entry al booking_changes audit log (E5 v3.4.19)."""
+    try:
+        db.add(BookingChange(booking_id=booking_id, kind=kind, summary=summary, payload=payload or {}))
+    except Exception:
+        pass  # audit log non blocca operazioni
+
+
+def _expand_recurrence(start: datetime, end: datetime, rule: str, until: _date) -> list[tuple[datetime, datetime]]:
+    """Espande una regola di ricorrenza in una lista di (start, end) per occorrenza.
+
+    `rule` accetta: 'DAILY' (tutti i giorni), 'WEEKDAYS' (lun-ven),
+    'WEEKENDS' (sab-dom), oppure CSV di nomi giorno (es. 'MON,WED,FRI').
+    Le occorrenze partono da `start.date()` (inclusa) fino a `until` (inclusa).
+    Mantengono lo stesso orario start/end del primo.
+    """
+    rule = (rule or "").upper().strip()
+    if not rule:
+        return [(start, end)]
+    DAYS = {"MON":0, "TUE":1, "WED":2, "THU":3, "FRI":4, "SAT":5, "SUN":6}
+    if rule == "DAILY":
+        days = set(range(7))
+    elif rule == "WEEKDAYS":
+        days = {0,1,2,3,4}
+    elif rule == "WEEKENDS":
+        days = {5,6}
+    else:
+        days = set()
+        for tok in rule.split(","):
+            t = tok.strip()
+            if t in DAYS:
+                days.add(DAYS[t])
+    if not days:
+        return [(start, end)]
+    cur_date = start.date()
+    duration = end - start
+    out: list[tuple[datetime, datetime]] = []
+    last = until or cur_date
+    while cur_date <= last:
+        if cur_date.weekday() in days:
+            slot_start = datetime.combine(cur_date, start.time())
+            out.append((slot_start, slot_start + duration))
+        cur_date += _td(days=1)
+    return out
+
+
 def _resolve_policy_for_resource(db: Session, resource_id: int) -> Optional[WorkingHoursPolicy]:
     """Ritorna la policy override per la risorsa, oppure la default del tenant."""
     r = db.query(Resource).filter(Resource.id == resource_id).first()
@@ -435,7 +481,9 @@ async def create_booking(
     kind: BookingKind = Form(BookingKind.project),
     status: BookingStatus = Form(BookingStatus.tentative),
     notes: Optional[str] = Form(None),
-    smart_split: bool = Form(False),  # E3 v3.4.17: server-side split su weekend/pausa/festivi
+    smart_split: bool = Form(False),  # E3 v3.4.17
+    recurrence_rule: Optional[str] = Form(None),  # E5 v3.4.19: WEEKDAYS, MON, TUE,THU, DAILY...
+    recurrence_until: Optional[_date] = Form(None),
     db: Session = Depends(get_db),
 ):
     """Crea un booking con N assignments (multi-risorsa).
@@ -473,6 +521,19 @@ async def create_booking(
             raise HTTPException(400, f"assignments[{i}]: end_datetime deve essere > start_datetime")
         parsed_ass.append({"resource_id": int(rid), "start_datetime": sd, "end_datetime": ed})
 
+    # E5 v3.4.19: Recurrence — espande il range originale in N occorrenze (indipendenti dalla policy)
+    # Crea un Booking distinct per ogni occorrenza, poi return solo il primo per coerenza payload.
+    occurrence_offsets: list[tuple[datetime, datetime]] = []
+    if recurrence_rule:
+        if not recurrence_until:
+            raise HTTPException(400, "recurrence_rule richiede recurrence_until")
+        # Usa il PRIMO assignment come pattern: ricorrenza moltiplica gli assignments giornalieri
+        first = parsed_ass[0]
+        occurrence_offsets = _expand_recurrence(first["start_datetime"], first["end_datetime"],
+                                                 recurrence_rule, recurrence_until)
+        if not occurrence_offsets:
+            raise HTTPException(400, "recurrence_rule non genera occorrenze nel range")
+
     # E3 v3.4.17: Smart split server-side se richiesto
     if smart_split:
         parsed_ass = _expand_assignments_smart(db, parsed_ass)
@@ -485,7 +546,64 @@ async def create_booking(
         if c:
             raise HTTPException(409, f"Conflitto su risorsa per assignments[{i}] (vs assignment #{c.id})")
 
-    # Crea Booking + assignments
+    # Crea Booking + assignments. Se recurrence → 1 Booking per occorrenza.
+    primary_booking: Optional[Booking] = None
+    booking_count = 0
+    if occurrence_offsets:
+        # Per ogni occorrenza, replica il pattern parsed_ass shiftato sul giorno target
+        first_pattern_start = parsed_ass[0]["start_datetime"]
+        for occ_start, _occ_end in occurrence_offsets:
+            day_offset = (occ_start.date() - first_pattern_start.date()).days
+            shifted_ass = []
+            for pa in parsed_ass:
+                shifted_ass.append({
+                    "resource_id": pa["resource_id"],
+                    "start_datetime": pa["start_datetime"] + _td(days=day_offset),
+                    "end_datetime": pa["end_datetime"] + _td(days=day_offset),
+                })
+            # Conflict check per ogni occorrenza
+            for i, pa in enumerate(shifted_ass):
+                c = _check_assignment_conflict(db, pa["resource_id"], pa["start_datetime"], pa["end_datetime"])
+                if c:
+                    raise HTTPException(409, f"Conflitto su occorrenza {occ_start.date()} (vs assignment #{c.id})")
+            env_s = min(pa["start_datetime"] for pa in shifted_ass)
+            env_e = max(pa["end_datetime"] for pa in shifted_ass)
+            b = Booking(
+                tenant_id=CURRENT_TENANT,
+                job_id=job_id, job_cost_line_id=job_cost_line_id,
+                start_datetime=env_s, end_datetime=env_e,
+                status=status, kind=kind, notes=notes,
+            )
+            db.add(b); db.flush()
+            for pa in shifted_ass:
+                db.add(BookingAssignment(
+                    booking_id=b.id, resource_id=pa["resource_id"],
+                    start_datetime=pa["start_datetime"], end_datetime=pa["end_datetime"],
+                ))
+            _log_change(db, b.id, "create", f"Booking ricorrente {recurrence_rule} (occ {occ_start.date()})", {"recurrence": recurrence_rule, "until": str(recurrence_until)})
+            if primary_booking is None:
+                primary_booking = b
+            booking_count += 1
+        db.commit()
+        db.refresh(primary_booking)
+        return {
+            "id": primary_booking.id,
+            "kind": primary_booking.kind.value if hasattr(primary_booking.kind, "value") else primary_booking.kind,
+            "job_id": primary_booking.job_id, "job_cost_line_id": primary_booking.job_cost_line_id,
+            "start_datetime": primary_booking.start_datetime.isoformat(),
+            "end_datetime": primary_booking.end_datetime.isoformat(),
+            "status": primary_booking.status.value if hasattr(primary_booking.status, "value") else primary_booking.status,
+            "notes": primary_booking.notes,
+            "assignments": [
+                {"id": a.id, "resource_id": a.resource_id,
+                 "start_datetime": a.start_datetime.isoformat(),
+                 "end_datetime": a.end_datetime.isoformat()}
+                for a in primary_booking.assignments
+            ],
+            "recurrence_count": booking_count,
+        }
+
+    # Caso semplice: 1 booking
     env_start = min(pa["start_datetime"] for pa in parsed_ass)
     env_end = max(pa["end_datetime"] for pa in parsed_ass)
     b = Booking(
@@ -504,6 +622,7 @@ async def create_booking(
             start_datetime=pa["start_datetime"],
             end_datetime=pa["end_datetime"],
         ))
+    _log_change(db, b.id, "create", f"Booking creato ({len(parsed_ass)} risorse)", None)
     db.commit()
     db.refresh(b)
     return {
@@ -606,6 +725,7 @@ async def update_booking(
     db.flush()
     db.refresh(b)
     _recalc_booking_envelope(b)
+    _log_change(db, b.id, "update", "Booking aggiornato", None)
     db.commit()
     return {
         "id": b.id, "kind": b.kind.value if hasattr(b.kind, "value") else b.kind,
@@ -689,8 +809,29 @@ async def delete_booking(booking_id: int, db: Session = Depends(get_db)):
     if not b:
         raise HTTPException(404, "Booking non trovato")
     b.status = BookingStatus.cancelled
+    _log_change(db, b.id, "delete", "Booking eliminato (soft)", None)
     db.commit()
     return {"ok": True}
+
+
+@router.get("/api/bookings/{booking_id}/audit")
+async def booking_audit_log(booking_id: int, db: Session = Depends(get_db)):
+    """Cronologia modifiche al booking. Ordine: più recenti prima."""
+    b = db.query(Booking).filter(
+        Booking.id == booking_id,
+        Booking.tenant_id == CURRENT_TENANT,
+    ).first()
+    if not b:
+        raise HTTPException(404, "Booking non trovato")
+    rows = db.query(BookingChange).filter(
+        BookingChange.booking_id == booking_id,
+    ).order_by(BookingChange.created_at.desc()).all()
+    return [
+        {"id": r.id, "kind": r.kind, "summary": r.summary,
+         "payload": r.payload or {}, "user_id": r.user_id,
+         "created_at": r.created_at.isoformat()}
+        for r in rows
+    ]
 
 
 # ── Ferie/malattie + festività auto (E3 v3.4.17) ──────────────────────
@@ -851,5 +992,6 @@ async def restore_booking(booking_id: int, db: Session = Depends(get_db)):
         if c:
             raise HTTPException(409, f"Conflitto al ripristino: assignment #{a.id} vs #{c.id}")
     b.status = BookingStatus.tentative
+    _log_change(db, b.id, "restore", "Booking ripristinato", None)
     db.commit()
     return {"ok": True, "id": b.id}

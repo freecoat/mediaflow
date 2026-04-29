@@ -620,6 +620,19 @@ class BookingAssignment(Base):
     resource: Mapped["Resource"] = relationship(back_populates="booking_assignments")
 
 
+class BookingChange(Base):
+    """Audit log delle modifiche ai booking (E5 v3.4.19).
+    `kind` = create/update/delete/restore. `payload` = JSON snapshot di cosa è cambiato."""
+    __tablename__ = "booking_changes"
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    booking_id: Mapped[int] = mapped_column(ForeignKey("bookings.id", ondelete="CASCADE"), index=True)
+    user_id: Mapped[Optional[int]] = mapped_column(ForeignKey("users.id"), nullable=True)
+    kind: Mapped[str] = mapped_column(String(16))  # create/update/delete/restore/assignment_*
+    summary: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
+    payload: Mapped[Optional[dict]] = mapped_column(JSON, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, index=True)
+
+
 # ── TIMBRATURE / PRESENZE (HR) ─────────────────────────────────
 # Dominio separato dal Booking: il booking esprime un'intenzione di pianificazione
 # (chi sarà su quale job e quando), il TimePunch registra una presenza effettiva

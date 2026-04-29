@@ -1,5 +1,68 @@
 # MediaFlow — Changelog
 
+## v3.4.19 — E5: ricorrenti + tentative visivo + audit log (29 aprile 2026)
+
+### Booking ricorrenti
+
+POST `/planning/api/bookings` ora accetta `recurrence_rule` + `recurrence_until`:
+
+| Rule | Significato |
+|---|---|
+| `DAILY` | Tutti i giorni |
+| `WEEKDAYS` | Lun-Ven |
+| `WEEKENDS` | Sab-Dom |
+| `MON` / `TUE` / `WED` / `THU` / `FRI` / `SAT` / `SUN` | Singolo giorno |
+| `MON,WED,FRI` (CSV) | Combinazione custom |
+
+Server espande in **N booking distinti**, uno per occorrenza, mantenendo orari + risorse + job. Conflict check su ogni occorrenza. Esempio: MON/WED/FRI dal 4 al 22 mag = **9 booking** creati.
+
+UI nel modal: checkbox "Ricorri" → dropdown regola + date "fino al". Disabilitato in edit mode.
+
+### Tentative bookings (visivo)
+
+- `Booking.status` esistente già supportava `tentative` / `confirmed` / `cancelled`. Aggiunta solo viz.
+- CSS `.vis-item.tl-tentative`: bordo tratteggiato 2px, opacità 70%
+- Tooltip include " (tentative)"
+- `tlBookingToItem` setta classe in base a `status === 'tentative'`
+
+### Audit log (`booking_changes` table)
+
+- **Nuovo modello `BookingChange`**: `id, booking_id, user_id, kind, summary, payload (JSON), created_at`
+- Hook `_log_change(db, booking_id, kind, summary, payload)` chiamato in:
+  - POST create (1 entry per ogni booking creato, anche in caso di ricorrenza)
+  - PUT update
+  - DELETE (soft → kind=delete)
+  - POST restore
+- **Nuovo endpoint `GET /planning/api/bookings/{id}/audit`** ritorna cronologia ordinata desc
+- Nessuna migration esplicita (Base.metadata.create_all crea la tabella al boot)
+
+### File toccati
+
+- `app/main.py` — version 3.4.19
+- `app/models/models.py` — `BookingChange`
+- `app/models/__init__.py` — export
+- `app/routers/planning.py` — `_log_change`, `_expand_recurrence`, parametri POST, audit hooks su update/delete/restore, endpoint audit GET
+- `app/templates/pages/planning.html` — CSS `tl-tentative`, classe in `tlBookingToItem`, modal sezione "Ricorri" con dropdown + date until, reset/submit aggiornati
+
+### Smoke E2E
+
+- POST recurrence MON/WED/FRI 04→22 mag → 9 booking, audit log scritto
+- GET audit log → entries con summary "Booking ricorrente MON,WED,FRI (occ 2026-05-04)"
+
+### Da testare sul Mac
+
+1. Modal nuovo → spunta "Ricorri" → dropdown "Lun/Mer/Ven" + data fine → crea
+2. Verifica N booking creati nei giorni giusti
+3. Booking con `status=tentative` (default in alcuni flussi) appare tratteggiato
+4. `GET /planning/api/bookings/{id}/audit` ritorna cronologia
+
+### Restano
+
+- v3.4.19.1 endpoint POST/PUT change tentative↔confirmed dal modal
+- v3.4.20 E6 AI auto-suggest assegnazione
+
+---
+
 ## v3.4.18 — E4: Multi-select + keyboard shortcuts + bulk paste (29 aprile 2026)
 
 Quarta fase del piano core-planning. Polish power-user senza nuove dipendenze backend.
