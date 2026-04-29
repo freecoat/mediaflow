@@ -994,6 +994,11 @@ async function renderTimeline() {
     snap: tlSnap,
     // onMoving live: durante drag/resize, valida conflict client-side e applica style
     onMoving: function(item, callback) {
+      // Blocca drop su gruppi reparto (id stringa 'dN'). Solo risorse foglia (id numerico) consentite.
+      if (typeof item.group !== 'number') {
+        const orig = items.find(x => x.id === item.id);
+        if (orig) item.group = orig.group;
+      }
       const all = itemsDS.get();
       if (tlHasConflict(item, all)) {
         item.className = (item.className || '').replace(/\s*tl-conflict/g, '') + ' tl-conflict';
@@ -1003,6 +1008,12 @@ async function renderTimeline() {
       callback(item);
     },
     onMove: async function(item, callback) {
+      // Guard: rifiuta drop su gruppi reparto
+      if (typeof item.group !== 'number') {
+        toast('Sposta su una risorsa, non su un reparto', 'warning');
+        callback(null);
+        return;
+      }
       const id = String(item.id).startsWith('b') ? String(item.id).substring(1) : item.id;
       const orig = items.find(x => x.id === item.id);
       const origBooking = bookings.find(b => 'b'+b.id === item.id);

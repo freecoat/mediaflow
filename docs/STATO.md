@@ -8,7 +8,7 @@
 
 ## Versione corrente
 
-**v3.4.15.1** — 29 aprile 2026 (hotfix E2)
+**v3.4.15.2** — 29 aprile 2026 (hotfix E2: blocca drop su reparto)
 
 ## In corso
 

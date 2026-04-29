@@ -1,5 +1,21 @@
 # MediaFlow — Changelog
 
+## v3.4.15.2 — Hotfix: blocca drop booking su gruppo reparto (29 aprile 2026)
+
+Bug: era possibile droppare un booking su un'intestazione di reparto (DI/Video, Audio, ...) invece che su una risorsa specifica. I reparti sono `nestedGroups` con `id` stringa (`'d1'`, `'d2'`, `'d0'`), le risorse foglia hanno `id` numerico.
+
+### Fix doppia protezione
+
+1. **`onMoving` live**: durante il drag, se `typeof item.group !== 'number'` (cioè si trascina sopra un'intestazione reparto), forzo `item.group` indietro al group originale → l'item visivamente non si sposta sul reparto.
+2. **`onMove` al drop**: guard finale che rifiuta il commit con `callback(null)` + toast warning `Sposta su una risorsa, non su un reparto`.
+
+### File toccati
+
+- `app/main.py` — version 3.4.15.2
+- `app/templates/pages/planning.html` — guard in `onMoving` + `onMove`
+
+---
+
 ## v3.4.15.1 — Hotfix E2: drag pan + Shift+drag create + right-click menu (29 aprile 2026)
 
 Feedback Matteo: "Non funzionano i punti da 1 a 6. Scoll wheel funziona ma preferivo il trascinamento. Inserisci menù tramite click mouse destro per operazioni su task."
