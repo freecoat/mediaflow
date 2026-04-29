@@ -1,5 +1,74 @@
 # MediaFlow — Changelog
 
+## v3.4.18 — E4: Multi-select + keyboard shortcuts + bulk paste (29 aprile 2026)
+
+Quarta fase del piano core-planning. Polish power-user senza nuove dipendenze backend.
+
+### Multi-select
+
+- vis-timeline `multiselect: true`, `multiselectPerGroup: false`
+- **Ctrl+click** (Cmd su Mac) aggiunge/rimuove item dalla selezione
+- **Shift+click** seleziona range (nativo vis-timeline)
+- Items selezionati restano evidenziati col bordo bianco standard
+
+### Keyboard shortcuts su timeline
+
+Listener `keydown` globale, attivo solo se vista timeline è la corrente e nessun input ha focus.
+
+| Tasto | Azione |
+|---|---|
+| **Ctrl+Z** | Undo dell'ultima azione (riusa stack già esistente) |
+| **Ctrl+C** | Copia gli items selezionati nel clipboard interno (`window._tlClipboard`). Toast `Copiati N booking…` |
+| **Ctrl+V** | Incolla il clipboard ad oggi (preserva offset relativo dal primo) |
+| **Delete** | Bulk delete di TUTTI gli items selezionati. Conferma `Eliminare N assegnazioni?`. Mostra contatore success/fail. |
+| **←  / →** | Nudge ±15min di un singolo item selezionato (PUT su assignment singolo, undo abilitato) |
+| **Esc** | Pulisce la selezione |
+
+Skip su background items (ferie/festa, id `u-*`).
+
+### Bulk paste
+
+- `tlBulkPaste()`: per ogni item nel clipboard, calcola offset rispetto al primo
+- Crea N nuovi booking (1 assignment ognuno) ad oggi alla stessa ora
+- Toast finale `N incollati a oggi` o warning se errori (es. conflitti)
+- Conserva job_id, kind, cost_line_id, notes dell'originale
+
+### Hint UI
+
+`Drag = pan · Drag item = sposta · Bordi = durata · Alt+drag = duplica · Ctrl+click = multi-select · Canc/←→/⌘C/V/⌘Z · doppio click vuoto = nuovo`
+
+### File toccati
+
+- `app/main.py` — version 3.4.18
+- `app/templates/pages/planning.html`:
+  - Opzioni `multiselect: true` + `multiselectPerGroup: false`
+  - Listener `keydown` con shortcuts
+  - Funzione `tlBulkPaste`
+  - `window._tlClipboard` state
+  - Hint UI aggiornato
+
+### Smoke
+
+- `/planning/?view=timeline` 200, HTML contiene `multiselect`, `_tlClipboard`, `tlBulkPaste`, `ArrowLeft/Right`
+
+### Da testare sul Mac
+
+1. Ctrl+click su 2 items diversi → entrambi selezionati
+2. Ctrl+C → toast `Copiati 2 booking`
+3. Ctrl+V → 2 booking creati ad oggi alla stessa ora dell'originale
+4. Selezione + Canc → conferma + bulk delete
+5. Selezione singola + freccia ← / → → nudge ±15min
+6. Esc → pulisce selezione
+7. Ctrl+Z → undo dopo nudge
+
+### Restano (E5/E6)
+
+- v3.4.18.1: snap line visiva durante drag, multi-row >5 leggibilità
+- v3.4.19 E5: ricorrenti + tentative bookings + audit log
+- v3.4.20 E6: AI auto-suggest assegnazione
+
+---
+
 ## v3.4.17 — E3: Working hours policy + ferie/festività bloccanti + smart split (29 aprile 2026)
 
 Terza fase del piano core-planning. Tre feature integrate:

@@ -8,7 +8,7 @@
 
 ## Versione corrente
 
-**v3.4.17** — 29 aprile 2026 — E3 Working hours + ferie/festività bloccanti + smart split
+**v3.4.18** — 29 aprile 2026 — E4 Multi-select + keyboard shortcuts + bulk paste
 
 ## In corso
 
@@ -27,12 +27,21 @@ Cantiere "overlay prenotato vs effettivo + adeguamento" (era v3.4.15 nel plan pr
 
 ## Prossimo step concordato
 
-**v3.4.17.1 — UI settings working hours + form ferie**:
+**E5 — v3.4.19 — Booking ricorrenti + tentative + audit log**:
+- Booking ricorrenti minimi: every weekday, every Mon, every Tue, ecc.
+- Tentative bookings (`is_tentative` flag, viz tratteggiata) legati a quote draft/sent → committed quando approved
+- Audit log su modifiche booking (estende pattern AIAction)
+
+**E6 — v3.4.20 — AI auto-suggest assegnazione**:
+- Capability `propose_booking` nel copilot
+- Skill match + availability + storico
+
+**Backlog UI**:
 - Pagina `/settings#working-hours` con form policy editabile (mattina, pomeriggio, giorni, paese festività)
 - Override policy per-risorsa nella pagina `/resources/{id}`
 - Form ferie/malattia in `/resources/{id}` (oggi solo via API)
 
-**E4 — v3.4.18 — Polish + multi-select**:
+**Vecchio E4 — v3.4.18 — Polish + multi-select**:
 - Modello `WorkingHoursPolicy` (globale + per-risorsa override): start_time, end_time, lunch_start, lunch_end, working_days
 - Engine `split_booking_smart(start, end, policy) → list[Slot]` che ritaglia weekend, orario non-lavorativo, pausa pranzo rigida (es. 13-14)
 - Modello `ResourceUnavailability` evoluto: ferie/malattia come fasce bloccanti, drag/drop su quelle = HARD block (popup, no warning)

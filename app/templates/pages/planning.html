@@ -308,7 +308,7 @@
         </div>
         <div id="tl-week-label" style="font-size:13px; font-weight:500; color:var(--text2,#aaa); padding:6px 14px; background:var(--bg3,#22253a); border-radius:6px 6px 0 0; border-bottom:1px solid var(--border,#2a2e3d);"></div>
         <div style="font-size:11px; color:var(--text3,#888); padding:4px 14px 0;">
-          Drag = pan · Drag item = sposta (menu cross-resource) · Bordi item = durata · <kbd style="background:rgba(255,255,255,.05); border:1px solid var(--border); border-radius:3px; padding:0 4px; font-size:10px;">Alt</kbd>+drag = duplica · <kbd style="background:rgba(255,255,255,.05); border:1px solid var(--border); border-radius:3px; padding:0 4px; font-size:10px;">click destro</kbd> = menu · doppio click vuoto = nuovo
+          Drag = pan · Drag item = sposta · Bordi = durata · <kbd style="background:rgba(255,255,255,.05); border:1px solid var(--border); border-radius:3px; padding:0 4px; font-size:10px;">Alt</kbd>+drag = duplica · <kbd style="background:rgba(255,255,255,.05); border:1px solid var(--border); border-radius:3px; padding:0 4px; font-size:10px;">Ctrl</kbd>+click = multi-select · <kbd style="background:rgba(255,255,255,.05); border:1px solid var(--border); border-radius:3px; padding:0 4px; font-size:10px;">Canc</kbd>/<kbd style="background:rgba(255,255,255,.05); border:1px solid var(--border); border-radius:3px; padding:0 4px; font-size:10px;">←→</kbd>/<kbd style="background:rgba(255,255,255,.05); border:1px solid var(--border); border-radius:3px; padding:0 4px; font-size:10px;">⌘C/V</kbd>/<kbd style="background:rgba(255,255,255,.05); border:1px solid var(--border); border-radius:3px; padding:0 4px; font-size:10px;">⌘Z</kbd> · doppio click vuoto = nuovo
         </div>
         <div id="tl-host"></div>
       </div>
@@ -817,6 +817,121 @@ window.addEventListener('blur', () => { window._tlAltDown = false; });
 
 // (Shift+drag rimosso in v3.4.15.6 per instabilità. Use right-click "Nuovo qui" o doppio-click su vuoto.)
 
+// E4 v3.4.18: clipboard interno per bulk copy/paste
+window._tlClipboard = []; // array di booking duplicabili (snapshot di items + bookings refs)
+
+// E4 v3.4.18: keyboard shortcuts su timeline (attivi solo se vista timeline è la attiva)
+window.addEventListener('keydown', async (e) => {
+  const view = document.querySelector('.pl-tab.active');
+  if (!view || view.dataset.view !== 'timeline') return;
+  if (!window._tlInstance) return;
+  // Ignora se focus è su un input/textarea/select
+  const ae = document.activeElement;
+  if (ae && /^(INPUT|TEXTAREA|SELECT)$/.test(ae.tagName)) return;
+  const sel = window._tlInstance.getSelection() || [];
+  // Solo item booking (id 'aN'), non background (id 'u-N')
+  const selBookings = sel.filter(id => typeof id === 'string' && id.startsWith('a'));
+
+  // Ctrl+Z = undo
+  if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z') {
+    e.preventDefault();
+    tlPerformUndo();
+    return;
+  }
+  // Ctrl+C = copia selezione
+  if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'c' && selBookings.length) {
+    e.preventDefault();
+    const bookings = window._tlBookings || [];
+    window._tlClipboard = selBookings.map(id => bookings.find(b => b.id === id)).filter(Boolean);
+    toast(`Copiati ${window._tlClipboard.length} booking. Ctrl+V per incollare.`, 'info', 3000);
+    return;
+  }
+  // Ctrl+V = incolla (preserva offset relativo dal primo)
+  if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'v' && window._tlClipboard.length) {
+    e.preventDefault();
+    await tlBulkPaste();
+    return;
+  }
+  // Delete = bulk delete
+  if (e.key === 'Delete' && selBookings.length) {
+    e.preventDefault();
+    if (!confirm(`Eliminare ${selBookings.length} assegnazion${selBookings.length === 1 ? 'e' : 'i'}?`)) return;
+    let ok = 0, fail = 0;
+    for (const id of selBookings) {
+      const aid = id.startsWith('a') ? id.substring(1) : id;
+      try {
+        await api('DELETE', `/planning/api/booking-assignments/${aid}`);
+        ok++;
+      } catch(_) { fail++; }
+    }
+    toast(`${ok} eliminat${ok === 1 ? 'a' : 'e'}${fail ? `, ${fail} errori` : ''}`, fail ? 'warning' : 'success');
+    renderTimeline(true);
+    return;
+  }
+  // Frecce: nudge ±15min su selezione (solo su 1 item per ora — multi-nudge complesso)
+  if (selBookings.length === 1 && (e.key === 'ArrowLeft' || e.key === 'ArrowRight')) {
+    e.preventDefault();
+    const id = selBookings[0];
+    const aid = id.startsWith('a') ? id.substring(1) : id;
+    const bookings = window._tlBookings || [];
+    const b = bookings.find(x => x.id === id);
+    if (!b) return;
+    const delta = (e.key === 'ArrowRight' ? 15 : -15) * 60000;
+    const ns = new Date(new Date(b.start).getTime() + delta);
+    const ne = new Date(new Date(b.end).getTime() + delta);
+    const fd = new FormData();
+    fd.append('start_datetime', _toLocalDtInput(ns));
+    fd.append('end_datetime', _toLocalDtInput(ne));
+    try {
+      await api('PUT', `/planning/api/booking-assignments/${aid}`, fd);
+      tlPushUndo({type:'update_assignment', assignment_id: aid,
+        prev:{start:b.start, end:b.end, resource_id:b.extendedProps.resource_id}}, 'Nudge ±15min');
+      renderTimeline(true);
+    } catch(err) { toast(err.message || 'Errore', 'error'); }
+    return;
+  }
+  // Esc = cancel selezione
+  if (e.key === 'Escape') {
+    if (selBookings.length) {
+      window._tlInstance.setSelection([]);
+      e.preventDefault();
+    }
+  }
+});
+
+async function tlBulkPaste() {
+  const items = window._tlClipboard || [];
+  if (!items.length) return;
+  // Calcola offset per incollare ad oggi alla stessa ora
+  const baseStart = new Date(items[0].start);
+  const today = new Date();
+  today.setHours(baseStart.getHours(), baseStart.getMinutes(), 0, 0);
+  const offsetMs = today - baseStart;
+  let ok = 0, fail = 0;
+  for (const it of items) {
+    const p = it.extendedProps || {};
+    const newStart = new Date(new Date(it.start).getTime() + offsetMs);
+    const newEnd = new Date(new Date(it.end).getTime() + offsetMs);
+    const fd = new FormData();
+    fd.append('assignments', JSON.stringify([{
+      resource_id: p.resource_id,
+      start_datetime: _toLocalDtInput(newStart),
+      end_datetime: _toLocalDtInput(newEnd),
+    }]));
+    fd.append('kind', p.kind || 'project');
+    if (p.job_id) fd.append('job_id', p.job_id);
+    if (p.job_cost_line_id) fd.append('job_cost_line_id', p.job_cost_line_id);
+    if (p.notes) fd.append('notes', p.notes);
+    try {
+      await api('POST', '/planning/api/bookings', fd);
+      ok++;
+    } catch(_) { fail++; }
+  }
+  toast(`${ok} incollat${ok === 1 ? 'o' : 'i'} a oggi${fail ? `, ${fail} errori (conflitti?)` : ''}`,
+        fail ? 'warning' : 'success', 4000);
+  renderTimeline(true);
+}
+
 // Snap adattivo allo zoom (15min day, 30min week, 60min month/quarter)
 function tlSnap(date, scale, step) {
   const stepMin = {day:15, week:30, month:60, quarter:60}[tlZoom] || 30;
@@ -1033,6 +1148,8 @@ async function renderTimeline(preserveWindow=false) {
     zoomable: true,
     moveable: true, // drag pan abilitato (preferenza Matteo). Create via Shift+drag.
     horizontalScroll: true,
+    multiselect: true, // E4: Ctrl+click per multi-select
+    multiselectPerGroup: false, // permette selezionare item in gruppi diversi
     orientation: {axis: 'top'},
     margin: {item: 4, axis: 8},
     height: 600,
