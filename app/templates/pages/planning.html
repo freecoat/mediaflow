@@ -302,17 +302,27 @@
         <!-- ─── Sezione orari ─────────────────────────── -->
         <div style="background:rgba(98,114,245,0.05); border:1px solid var(--border,#2a2e3d); border-radius:6px; padding:10px; margin-bottom:14px;">
           <div style="font-size:11px; text-transform:uppercase; color:var(--text3,#888); letter-spacing:.5px; margin-bottom:8px;">Orari</div>
+          <div style="font-size:11px; color:var(--text3,#888); margin:6px 0 4px;">Inizio</div>
           <div class="flex gap-2">
-            <div class="form-group" style="flex:1; margin-bottom:8px;">
-              <label class="form-label" style="font-size:11px;">Inizio</label>
-              <input type="datetime-local" id="tlb-start" class="form-input" required step="900" oninput="tlbUpdateDurationDisplay()">
+            <div class="form-group" style="flex:2; margin-bottom:6px;">
+              <input type="date" id="tlb-start-date" class="form-input" required oninput="tlbSyncStart(); tlbUpdateDurationDisplay()">
             </div>
-            <div class="form-group" style="flex:1; margin-bottom:8px;">
-              <label class="form-label" style="font-size:11px;">Fine</label>
-              <input type="datetime-local" id="tlb-end" class="form-input" required step="900" oninput="tlbUpdateDurationDisplay()">
+            <div class="form-group" style="flex:1; margin-bottom:6px;">
+              <input type="time" id="tlb-start-time" class="form-input" required step="900" oninput="tlbSyncStart(); tlbUpdateDurationDisplay()">
             </div>
           </div>
-          <div style="font-size:12px; color:var(--text2,#aaa); margin-bottom:8px;">
+          <div style="font-size:11px; color:var(--text3,#888); margin:6px 0 4px;">Fine</div>
+          <div class="flex gap-2">
+            <div class="form-group" style="flex:2; margin-bottom:6px;">
+              <input type="date" id="tlb-end-date" class="form-input" required oninput="tlbSyncEnd(); tlbUpdateDurationDisplay()">
+            </div>
+            <div class="form-group" style="flex:1; margin-bottom:6px;">
+              <input type="time" id="tlb-end-time" class="form-input" required step="900" oninput="tlbSyncEnd(); tlbUpdateDurationDisplay()">
+            </div>
+          </div>
+          <input type="hidden" id="tlb-start">
+          <input type="hidden" id="tlb-end">
+          <div style="font-size:12px; color:var(--text2,#aaa); margin:8px 0;">
             Durata: <span id="tlb-duration-display" style="font-weight:500; color:#6272f5;">—</span>
           </div>
           <div style="font-size:11px; color:var(--text3,#888); margin-bottom:4px;">Preset durata</div>
@@ -772,35 +782,32 @@ window.addEventListener('blur', () => { window._tlAltDown = false; });
 
 // Track Shift: quando premuto, DISABILITA moveable di vis-timeline così il
 // mio listener mousedown intercetta libero (senza che vis-timeline catturi per pan).
+// Reset ridondanti per evitare "stuck" state quando keyup non scatta (es. modal apre).
 window._tlShiftDown = false;
-window.addEventListener('keydown', e => {
-  if (e.key === 'Shift' && !window._tlShiftDown) {
-    window._tlShiftDown = true;
-    if (window._tlInstance) {
-      try { window._tlInstance.setOptions({moveable: false}); } catch(_) {}
-    }
-    const host = document.getElementById('tl-host');
-    if (host) host.style.cursor = 'crosshair';
+function _tlSetShiftMode(on) {
+  window._tlShiftDown = on;
+  if (window._tlInstance) {
+    try { window._tlInstance.setOptions({moveable: !on}); } catch(_) {}
   }
+  const host = document.getElementById('tl-host');
+  if (host) host.style.cursor = on ? 'crosshair' : '';
+}
+function _tlSyncShiftFromEvent(e) {
+  // Sincronizza stato Shift con quello reale dell'evento (più robusto)
+  const isDown = !!(e && e.shiftKey);
+  if (isDown !== window._tlShiftDown) _tlSetShiftMode(isDown);
+}
+window.addEventListener('keydown', e => {
+  if (e.key === 'Shift' && !window._tlShiftDown) _tlSetShiftMode(true);
 });
 window.addEventListener('keyup', e => {
-  if (e.key === 'Shift') {
-    window._tlShiftDown = false;
-    if (window._tlInstance) {
-      try { window._tlInstance.setOptions({moveable: true}); } catch(_) {}
-    }
-    const host = document.getElementById('tl-host');
-    if (host) host.style.cursor = '';
-  }
+  if (e.key === 'Shift' && window._tlShiftDown) _tlSetShiftMode(false);
 });
-window.addEventListener('blur', () => {
-  if (window._tlShiftDown) {
-    window._tlShiftDown = false;
-    if (window._tlInstance) try { window._tlInstance.setOptions({moveable: true}); } catch(_) {}
-    const host = document.getElementById('tl-host');
-    if (host) host.style.cursor = '';
-  }
-});
+// Reset ridondanti per casi di "stuck"
+window.addEventListener('blur', () => { if (window._tlShiftDown) _tlSetShiftMode(false); });
+window.addEventListener('mouseup', e => { _tlSyncShiftFromEvent(e); });
+window.addEventListener('mousemove', e => { _tlSyncShiftFromEvent(e); });
+document.addEventListener('visibilitychange', () => { if (document.hidden && window._tlShiftDown) _tlSetShiftMode(false); });
 
 // Snap adattivo allo zoom (15min day, 30min week, 60min month/quarter)
 function tlSnap(date, scale, step) {
@@ -1223,6 +1230,27 @@ function _toLocalDtInput(d) {
   const pad = n => String(n).padStart(2,'0');
   return d.getFullYear()+'-'+pad(d.getMonth()+1)+'-'+pad(d.getDate())+'T'+pad(d.getHours())+':'+pad(d.getMinutes());
 }
+function _setDtFields(prefix, date) {
+  // prefix: 'tlb-start' o 'tlb-end'. Compila <date>, <time> e hidden combinato.
+  const pad = n => String(n).padStart(2,'0');
+  document.getElementById(prefix+'-date').value = date.getFullYear()+'-'+pad(date.getMonth()+1)+'-'+pad(date.getDate());
+  document.getElementById(prefix+'-time').value = pad(date.getHours())+':'+pad(date.getMinutes());
+  document.getElementById(prefix).value = _toLocalDtInput(date);
+}
+function _readDtFields(prefix) {
+  const d = document.getElementById(prefix+'-date').value;
+  const t = document.getElementById(prefix+'-time').value;
+  if (!d || !t) return null;
+  return new Date(d + 'T' + t);
+}
+function tlbSyncStart() {
+  const d = _readDtFields('tlb-start');
+  if (d) document.getElementById('tlb-start').value = _toLocalDtInput(d);
+}
+function tlbSyncEnd() {
+  const d = _readDtFields('tlb-end');
+  if (d) document.getElementById('tlb-end').value = _toLocalDtInput(d);
+}
 
 function _tlbReset() {
   document.getElementById('tlb-kind').value = 'project';
@@ -1237,10 +1265,12 @@ function _tlbReset() {
 function tlbOpenWithRange(resourceId, startDate, endDate) {
   const r = RESOURCES_SEED.find(x => x.id === resourceId);
   if (!r) { toast('Risorsa non trovata', 'error'); return; }
+  // Reset Shift mode (modal apre = focus va al modal, keyup Shift potrebbe non scattare)
+  if (window._tlShiftDown) _tlSetShiftMode(false);
   document.getElementById('tlb-resource-id').value = r.id;
   document.getElementById('tlb-resource-name').value = r.name;
-  document.getElementById('tlb-start').value = _toLocalDtInput(startDate);
-  document.getElementById('tlb-end').value = _toLocalDtInput(endDate);
+  _setDtFields('tlb-start', startDate);
+  _setDtFields('tlb-end', endDate);
   _tlbReset();
   tlbOnKindChange();
   tlbUpdateDurationDisplay();
@@ -1250,14 +1280,15 @@ function tlbOpenWithRange(resourceId, startDate, endDate) {
 function tlbOpen(resourceId, timeClicked) {
   const r = RESOURCES_SEED.find(x => x.id === resourceId);
   if (!r) { toast('Risorsa non trovata', 'error'); return; }
+  if (window._tlShiftDown) _tlSetShiftMode(false);
   document.getElementById('tlb-resource-id').value = r.id;
   document.getElementById('tlb-resource-name').value = r.name;
   // Arrotonda all'ora cliccata
   const start = new Date(timeClicked);
   start.setMinutes(0, 0, 0);
   const end = new Date(start.getTime() + 60*60*1000);
-  document.getElementById('tlb-start').value = _toLocalDtInput(start);
-  document.getElementById('tlb-end').value = _toLocalDtInput(end);
+  _setDtFields('tlb-start', start);
+  _setDtFields('tlb-end', end);
   _tlbReset();
   tlbOnKindChange();
   tlbUpdateDurationDisplay();
@@ -1344,30 +1375,28 @@ document.addEventListener('click', (e) => {
 
 // ── Preset durata ────────────────────────────────────────
 function tlbSetDuration(hours) {
-  const startVal = document.getElementById('tlb-start').value;
-  if (!startVal) { toast('Imposta prima l\'inizio', 'warning'); return; }
-  const start = new Date(startVal);
+  const start = _readDtFields('tlb-start');
+  if (!start) { toast('Imposta prima inizio (data + ora)', 'warning'); return; }
   const end = new Date(start.getTime() + hours * 3600000);
-  document.getElementById('tlb-end').value = _toLocalDtInput(end);
+  _setDtFields('tlb-end', end);
   tlbUpdateDurationDisplay();
 }
 
 function tlbSetDurationDays(days) {
-  const startVal = document.getElementById('tlb-start').value;
-  if (!startVal) { toast('Imposta prima l\'inizio', 'warning'); return; }
-  const start = new Date(startVal);
+  const start = _readDtFields('tlb-start');
+  if (!start) { toast('Imposta prima inizio (data + ora)', 'warning'); return; }
   const end = new Date(start);
   end.setDate(end.getDate() + days);
-  document.getElementById('tlb-end').value = _toLocalDtInput(end);
+  _setDtFields('tlb-end', end);
   tlbUpdateDurationDisplay();
 }
 
 function tlbUpdateDurationDisplay() {
-  const s = document.getElementById('tlb-start').value;
-  const e = document.getElementById('tlb-end').value;
+  const s = _readDtFields('tlb-start');
+  const e = _readDtFields('tlb-end');
   const out = document.getElementById('tlb-duration-display');
-  if (!s || !e) { out.textContent = '—'; return; }
-  const ms = new Date(e) - new Date(s);
+  if (!s || !e) { out.textContent = '—'; out.style.color = ''; return; }
+  const ms = e - s;
   if (ms <= 0) { out.textContent = 'fine ≤ inizio'; out.style.color = '#ef4444'; return; }
   out.style.color = '#6272f5';
   const h = ms / 3600000;
@@ -1380,11 +1409,17 @@ function tlbUpdateDurationDisplay() {
 }
 
 async function tlbSubmit() {
+  // Sincronizza hidden da date+time fields prima del submit
+  tlbSyncStart();
+  tlbSyncEnd();
+  const startVal = document.getElementById('tlb-start').value;
+  const endVal = document.getElementById('tlb-end').value;
+  if (!startVal || !endVal) { toast('Compila inizio e fine', 'warning'); return; }
   const btn = document.getElementById('tlb-submit');
   const fd = new FormData();
   fd.append('resource_id', document.getElementById('tlb-resource-id').value);
-  fd.append('start_datetime', document.getElementById('tlb-start').value);
-  fd.append('end_datetime', document.getElementById('tlb-end').value);
+  fd.append('start_datetime', startVal);
+  fd.append('end_datetime', endVal);
   fd.append('kind', document.getElementById('tlb-kind').value);
   const jobId = document.getElementById('tlb-job-id').value;
   const lineId = document.getElementById('tlb-line').value;

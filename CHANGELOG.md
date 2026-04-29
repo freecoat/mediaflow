@@ -1,5 +1,43 @@
 # MediaFlow — Changelog
 
+## v3.4.15.5 — Hotfix: Shift robusto + split data/ora nel modal (29 aprile 2026)
+
+### Bug 1 — Shift sticky
+
+Lo stato `_tlShiftDown` poteva restare bloccato a `true` quando keyup non scattava (es. apertura modal cambia focus, switch tab, alt-tab).
+
+**Fix multipli ridondanti**:
+- Funzione `_tlSetShiftMode(on)` centralizzata
+- `_tlSyncShiftFromEvent(e)` riallinea stato con `e.shiftKey` reale a OGNI mousemove e mouseup
+- Reset esplicito su `blur`, `visibilitychange` (tab nascosta), e all'apertura del modal (`tlbOpen`/`tlbOpenWithRange`)
+
+In pratica: anche se keyup non scatta, alla prima `mousemove` post-modal lo stato si auto-corregge dal valore di `e.shiftKey`.
+
+### Bug 2 — Orari poco precisi nel pop-up
+
+`<input type="datetime-local">` mostra un picker che varia molto tra browser e talvolta non espone bene l'ora. Soluzione: **split in 4 input**.
+
+- `<input type="date" id="tlb-start-date">` + `<input type="time" id="tlb-start-time" step="900">`
+- Stesso per fine
+- Hidden `tlb-start` / `tlb-end` combinano i due in `yyyy-MM-ddTHH:mm` per il submit
+- Helper `_setDtFields(prefix, date)` / `_readDtFields(prefix)` per scrittura/lettura
+- Sync automatico via `oninput="tlbSyncStart(); tlbUpdateDurationDisplay()"` su entrambi i sub-input
+- `tlbSubmit` fa sync esplicito + guard "Compila inizio e fine"
+- Preset durata e display durata aggiornati per usare i nuovi helper
+
+UX: ora data e ora sono input separati e visibili, picker browser nativo per ognuno è più affidabile, time input ha step 15min esplicito.
+
+### File toccati
+
+- `app/main.py` — version 3.4.15.5
+- `app/templates/pages/planning.html` — `_tlSetShiftMode`, `_tlSyncShiftFromEvent`, listener `mousemove/mouseup/visibilitychange`, modal HTML rifatto con 4 sub-input + 2 hidden, `_setDtFields`/`_readDtFields`/`tlbSyncStart`/`tlbSyncEnd`, refactor `tlbOpen`, `tlbOpenWithRange`, `tlbSetDuration`, `tlbSetDurationDays`, `tlbUpdateDurationDisplay`, `tlbSubmit`
+
+### Smoke
+
+- `/planning/?view=timeline` 200, HTML contiene `_tlSetShiftMode`, `_tlSyncShiftFromEvent`, `visibilitychange`, `tlb-start-date`, `tlb-start-time`, `tlbSyncStart`
+
+---
+
 ## v3.4.15.4 — Hotfix Shift via toggle moveable + modal "Nuovo booking" espanso (29 aprile 2026)
 
 ### Fix Shift+drag definitivo

@@ -8,7 +8,7 @@
 
 ## Versione corrente
 
-**v3.4.15.4** — 29 aprile 2026 (hotfix E2: Shift via toggle moveable + modal espanso)
+**v3.4.15.5** — 29 aprile 2026 (hotfix E2: Shift robusto + split data/ora)
 
 ## In corso
 
