@@ -1,5 +1,49 @@
 # MediaFlow — Changelog
 
+## v3.4.15.1 — Hotfix E2: drag pan + Shift+drag create + right-click menu (29 aprile 2026)
+
+Feedback Matteo: "Non funzionano i punti da 1 a 6. Scoll wheel funziona ma preferivo il trascinamento. Inserisci menù tramite click mouse destro per operazioni su task."
+
+### Cosa cambia rispetto a v3.4.15
+
+- **`moveable: true` ripristinato**: drag pan funziona di nuovo (preferenza utente). Era stato disabilitato in v3.4.15 per liberare drag su background. Trade-off invertito.
+- **Click&drag create → Shift+drag**: per non interferire col drag pan, l'attivazione del nuovo booking è ora `Shift+drag` (modifier convenzione standard). Listener registrato in fase di **capture** (`useCapture: true`) per anticipare vis-timeline.
+- **Right-click context menu** introdotto:
+  - Su un **booking esistente**: `Modifica… / Duplica qui / Sposta su altra risorsa… / Elimina / Annulla`. "Sposta" apre sub-menu con elenco risorse.
+  - Su **area vuota**: `+ Nuovo booking qui… / Annulla`.
+  - Listener `tlInstance.on('contextmenu')` con `event.preventDefault()` per sopprimere menu nativo browser.
+
+### Heatmap robustezza
+
+- Bug potenziale fix: `groupsDS.clear() + add()` veniva chiamato su `rangechanged` e poteva rompere `nestedGroups` dei reparti. Ora aggiorna **solo le foglie risorsa** (`id` numerico) via `groupsDS.update(g)`, preserva la gerarchia.
+- CSS espliciti per visibilità heatmap dentro le label vis-timeline (`width`, `height`, `display:flex`, padding-bottom su label foglia).
+- Guard su `props.start || tlInstance.getWindow().start`.
+
+### Hint UI
+
+`Drag = pan · Shift+drag su vuoto = nuovo · Drag item = sposta (menu cross-resource) · Bordi item = durata · Alt+drag = duplica · click destro = menu`
+
+### File toccati
+
+- `app/main.py` — version 3.4.15.1
+- `app/templates/pages/planning.html` — `moveable: true`, `e.shiftKey` guard nel mousedown create + capture, `tlInstance.on('contextmenu')` con submenu per Sposta, `groupsDS.update(g)` per heatmap, CSS visibilità heatmap
+
+### Smoke
+
+- HTML contiene: `moveable: true`, `e.shiftKey`, `tlInstance.on('contextmenu')`, `tl-heat` CSS
+- `/planning/?view=timeline` 200
+
+### Da testare sul Mac
+
+- Drag normale → pan finestra (come scroll wheel ma più fluido)
+- Shift+drag su vuoto → ghost item + tooltip + modal
+- Click destro su booking → menu Modifica/Duplica/Sposta/Elimina
+- Click destro su vuoto → "Nuovo booking qui"
+- Heatmap visibile sotto ogni nome risorsa
+- Cambio zoom → heatmap si aggiorna senza rompere nesting reparti
+
+---
+
 ## v3.4.15 — E2 — Click&drag create + capacity heatmap + menu contestuale (29 aprile 2026)
 
 Seconda fase del piano "core planning". Tre feature in una versione.

@@ -8,7 +8,7 @@
 
 ## Versione corrente
 
-**v3.4.15** — 29 aprile 2026 (E2 del piano "core planning" 6-fasi)
+**v3.4.15.1** — 29 aprile 2026 (hotfix E2)
 
 ## In corso
 
@@ -50,6 +50,7 @@ Verifiche sul Mac sospese (cumulative):
 - v3.4.13.1 hotfix: filtri collassabili stabili (flex+min-width:0), click su timeline → modal nuovo booking pre-popolato (risorsa+ora+job+lavorazione)
 - v3.4.14 E1 editing diretto: drag/resize/delete, snap adattivo 15/30/60min, conflict border rosso live, undo toast 5s, Alt+drag duplica, doppio click vuoto = nuovo
 - v3.4.15 E2: click&drag crea con ghost+durata, capacity heatmap %/giorno, menu contestuale Sposta/Duplica/Annulla cross-resource, pan disabilitato (scroll/bottoni)
+- v3.4.15.1 hotfix: drag pan ripristinato, Shift+drag = nuovo booking, right-click menu su item (Modifica/Duplica/Sposta/Elimina) e vuoto, heatmap robusto (update foglie)
 - Test E2E AI search-first (v3.4.4)
 
 Per testare #5 servono prompt reali al copilot con provider AI attivo (Sonnet 4.6 consigliato, ma anche Ollama 8b dovrebbe funzionare grazie a SEARCH-FIRST esplicito nel system prompt).
@@ -91,6 +92,7 @@ Dopo conferma test sul Mac, passare a **#4 server-side abort**.
 - ✅ **v3.4.13.1** Hotfix filtri (flex+min-width:0) + click vuoto timeline → modal nuovo booking pre-popolato
 - ✅ **v3.4.14** E1: editing diretto timeline (drag/resize/delete + PUT/restore API + snap 15/30/60min adattivo + conflict viz live + undo toast 5s + Alt+drag duplica + doubleClick vuoto = nuovo)
 - ✅ **v3.4.15** E2: click&drag crea + ghost rect + tooltip durata + capacity heatmap %/giorno (live update con zoom) + menu contestuale Sposta/Duplica/Annulla cross-resource
+- ✅ **v3.4.15.1** Hotfix: drag pan ripristinato (era preferenza utente) → Shift+drag per nuovo. Right-click menu su item e vuoto. Heatmap update solo foglie (preserva nesting).
 - 🔜 **v3.4.16** E3: WorkingHoursPolicy + split smart + pausa pranzo rigida + ferie hard-block + holiday Italia auto
 - 🔜 **v3.4.15** Prenotato vs effettivo overlay + adeguamento + report delta producer
 - 🔜 **post-15** Kanban per stato job (SortableJS) + Gantt per job (`/jobs/{id}`, Frappe Gantt)
@@ -130,4 +132,4 @@ Dopo conferma test sul Mac, passare a **#4 server-side abort**.
 
 ---
 
-*Ultimo aggiornamento: 29 aprile 2026 — v3.4.15 chiusa: E2 del piano core-planning 6-fasi. Click&drag su area vuota crea booking (ghost rectangle floating con tooltip live `Lun 4 mag · 09:00 → 13:00 · 4h`, mouseup → modal pre-popolato `tlbOpenWithRange`). Capacity heatmap sotto nome risorsa (calcolo client-side ore/giorno, segmenti colorati verde/arancio/rosso, live update su rangechanged debounced 150ms). Menu contestuale al drop cross-resource (Sposta default / Duplica / Annulla, posizionato dal mouse, Promise-based, click outside o Escape per chiudere). Alt+drag scorciatoia diretta a duplica. Pan via drag disabilitato (`moveable:false`), pan ora via bottoni e scroll wheel. Smoke 200, HTML verificato. Repo GitHub privato `freecoat/mediaflow` (push solo a major).*
+*Ultimo aggiornamento: 29 aprile 2026 — v3.4.15.1 hotfix: drag pan ripristinato (preferenza utente) tramite `moveable: true`. Click&drag create spostato su `Shift+drag` (modifier che non confligge col pan, listener registrato in capture phase). Right-click context menu nuovo: su booking esistente Modifica/Duplica/Sposta su altra risorsa (sub-menu)/Elimina, su area vuota "Nuovo booking qui". Heatmap update reso robusto via `groupsDS.update()` solo sulle foglie risorsa (preserva nestedGroups dei reparti). CSS espliciti per visibilità barra. Hint UI aggiornato. Smoke 200, HTML verificato.*
