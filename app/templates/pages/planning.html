@@ -91,6 +91,18 @@
   .vis-current-time { background-color: #fb923c; width: 2px; }
   .tlb-job-item:hover { background: rgba(98,114,245,0.12); }
   .tlb-job-item:last-child { border-bottom: none; }
+  /* Time picker custom */
+  .tlb-tp-trigger { background: var(--bg-elev,#1a1d29); border: 1px solid var(--border,#2a2e3d); color: var(--text,#eee); padding: 8px 12px; border-radius: 4px; font-family: monospace; font-size: 14px; cursor: pointer; width: 100%; text-align: center; }
+  .tlb-tp-trigger:hover { border-color: #6272f5; }
+  .tlb-tp-trigger:focus { outline: none; border-color: #6272f5; box-shadow: 0 0 0 2px rgba(98,114,245,.25); }
+  #tlb-tp-popup { position: fixed; background: var(--bg-elev,#1a1d29); border: 1px solid var(--border,#2a2e3d); border-radius: 8px; box-shadow: 0 8px 24px rgba(0,0,0,.5); z-index: 99999; padding: 10px; min-width: 200px; display: none; }
+  #tlb-tp-popup .tp-cols { display: flex; gap: 8px; }
+  #tlb-tp-popup .tp-col { flex: 1; }
+  #tlb-tp-popup .tp-header { font-size: 11px; text-transform: uppercase; color: var(--text3,#888); margin-bottom: 6px; text-align: center; letter-spacing: .5px; }
+  #tlb-tp-popup .tp-list { max-height: 200px; overflow-y: auto; border: 1px solid var(--border,#2a2e3d); border-radius: 4px; }
+  #tlb-tp-popup .tp-cell { padding: 8px 14px; cursor: pointer; text-align: center; font-family: monospace; font-size: 14px; color: var(--text,#eee); }
+  #tlb-tp-popup .tp-cell:hover { background: rgba(98,114,245,0.15); }
+  #tlb-tp-popup .tp-cell.selected { background: #6272f5; color: #fff; font-weight: 600; }
   .pl-active-filters-bar { font-size: 12px; color: var(--text3); margin-bottom: 8px; }
   .pl-active-filters-bar .chip { display: inline-block; background: rgba(98,114,245,0.15); color: #6272f5; padding: 2px 8px; border-radius: 10px; margin-right: 6px; font-weight: 500; }
 </style>
@@ -275,7 +287,7 @@
         </div>
         <div id="tl-week-label" style="font-size:13px; font-weight:500; color:var(--text2,#aaa); padding:6px 14px; background:var(--bg3,#22253a); border-radius:6px 6px 0 0; border-bottom:1px solid var(--border,#2a2e3d);"></div>
         <div style="font-size:11px; color:var(--text3,#888); padding:4px 14px 0;">
-          Drag = pan · <kbd style="background:rgba(255,255,255,.05); border:1px solid var(--border); border-radius:3px; padding:0 4px; font-size:10px;">Shift</kbd>+drag su vuoto = nuovo · Drag item = sposta (menu cross-resource) · Bordi item = durata · <kbd style="background:rgba(255,255,255,.05); border:1px solid var(--border); border-radius:3px; padding:0 4px; font-size:10px;">Alt</kbd>+drag = duplica · <kbd style="background:rgba(255,255,255,.05); border:1px solid var(--border); border-radius:3px; padding:0 4px; font-size:10px;">click destro</kbd> = menu
+          Drag = pan · Drag item = sposta (menu cross-resource) · Bordi item = durata · <kbd style="background:rgba(255,255,255,.05); border:1px solid var(--border); border-radius:3px; padding:0 4px; font-size:10px;">Alt</kbd>+drag = duplica · <kbd style="background:rgba(255,255,255,.05); border:1px solid var(--border); border-radius:3px; padding:0 4px; font-size:10px;">click destro</kbd> = menu · doppio click vuoto = nuovo
         </div>
         <div id="tl-host"></div>
       </div>
@@ -308,7 +320,8 @@
               <input type="date" id="tlb-start-date" class="form-input" required oninput="tlbSyncStart(); tlbUpdateDurationDisplay()">
             </div>
             <div class="form-group" style="flex:1; margin-bottom:6px;">
-              <input type="time" id="tlb-start-time" class="form-input" required step="900" oninput="tlbSyncStart(); tlbUpdateDurationDisplay()">
+              <button type="button" class="tlb-tp-trigger" data-tp="tlb-start-time" onclick="tlbOpenTimePicker('tlb-start-time')">--:--</button>
+              <input type="hidden" id="tlb-start-time">
             </div>
           </div>
           <div style="font-size:11px; color:var(--text3,#888); margin:6px 0 4px;">Fine</div>
@@ -317,7 +330,8 @@
               <input type="date" id="tlb-end-date" class="form-input" required oninput="tlbSyncEnd(); tlbUpdateDurationDisplay()">
             </div>
             <div class="form-group" style="flex:1; margin-bottom:6px;">
-              <input type="time" id="tlb-end-time" class="form-input" required step="900" oninput="tlbSyncEnd(); tlbUpdateDurationDisplay()">
+              <button type="button" class="tlb-tp-trigger" data-tp="tlb-end-time" onclick="tlbOpenTimePicker('tlb-end-time')">--:--</button>
+              <input type="hidden" id="tlb-end-time">
             </div>
           </div>
           <input type="hidden" id="tlb-start">
@@ -370,6 +384,20 @@
     <div class="modal-footer">
       <button class="btn btn-secondary" onclick="closeModal('modal-tl-booking')">Annulla</button>
       <button class="btn btn-primary" id="tlb-submit" onclick="tlbSubmit()">Crea booking</button>
+    </div>
+  </div>
+</div>
+
+<!-- Time picker custom (riusabile per tutti i campi time) -->
+<div id="tlb-tp-popup">
+  <div class="tp-cols">
+    <div class="tp-col">
+      <div class="tp-header">Ore</div>
+      <div id="tlb-tp-hours" class="tp-list"></div>
+    </div>
+    <div class="tp-col">
+      <div class="tp-header">Min</div>
+      <div id="tlb-tp-mins" class="tp-list"></div>
     </div>
   </div>
 </div>
@@ -780,34 +808,7 @@ window.addEventListener('keydown', e => { if (e.key === 'Alt') window._tlAltDown
 window.addEventListener('keyup', e => { if (e.key === 'Alt') window._tlAltDown = false; });
 window.addEventListener('blur', () => { window._tlAltDown = false; });
 
-// Track Shift: quando premuto, DISABILITA moveable di vis-timeline così il
-// mio listener mousedown intercetta libero (senza che vis-timeline catturi per pan).
-// Reset ridondanti per evitare "stuck" state quando keyup non scatta (es. modal apre).
-window._tlShiftDown = false;
-function _tlSetShiftMode(on) {
-  window._tlShiftDown = on;
-  if (window._tlInstance) {
-    try { window._tlInstance.setOptions({moveable: !on}); } catch(_) {}
-  }
-  const host = document.getElementById('tl-host');
-  if (host) host.style.cursor = on ? 'crosshair' : '';
-}
-function _tlSyncShiftFromEvent(e) {
-  // Sincronizza stato Shift con quello reale dell'evento (più robusto)
-  const isDown = !!(e && e.shiftKey);
-  if (isDown !== window._tlShiftDown) _tlSetShiftMode(isDown);
-}
-window.addEventListener('keydown', e => {
-  if (e.key === 'Shift' && !window._tlShiftDown) _tlSetShiftMode(true);
-});
-window.addEventListener('keyup', e => {
-  if (e.key === 'Shift' && window._tlShiftDown) _tlSetShiftMode(false);
-});
-// Reset ridondanti per casi di "stuck"
-window.addEventListener('blur', () => { if (window._tlShiftDown) _tlSetShiftMode(false); });
-window.addEventListener('mouseup', e => { _tlSyncShiftFromEvent(e); });
-window.addEventListener('mousemove', e => { _tlSyncShiftFromEvent(e); });
-document.addEventListener('visibilitychange', () => { if (document.hidden && window._tlShiftDown) _tlSetShiftMode(false); });
+// (Shift+drag rimosso in v3.4.15.6 per instabilità. Use right-click "Nuovo qui" o doppio-click su vuoto.)
 
 // Snap adattivo allo zoom (15min day, 30min week, 60min month/quarter)
 function tlSnap(date, scale, step) {
@@ -965,77 +966,11 @@ async function renderTimeline(preserveWindow=false) {
     window._tlLastMouse = {x: e.clientX, y: e.clientY};
   });
 
-  // ── Shift+drag su background = crea booking (E2.1) ────────
-  // Listener su document in capture phase per anticipare vis-timeline (che cattura su sub-elementi)
-  let creating = null;
-  function tlCreateMouseDown(e) {
-    if (e.button !== 0) return;
-    if (!e.shiftKey) return; // Shift richiesto per non interferire con drag pan
-    if (!tlInstance) return;
-    // Solo se il target è dentro il host della timeline corrente
-    if (!host.contains(e.target)) return;
-    const props = tlInstance.getEventProperties(e);
-    if (!props || (props.what !== 'background' && props.what !== 'group-label' && props.what !== 'axis')) return;
-    if (typeof props.group !== 'number') return;
-    if (!props.time) return;
-    creating = {
-      startTime: tlSnap(new Date(props.time), null, null),
-      startGroup: props.group,
-      mouseStartX: e.clientX,
-      ghostEl: null,
-      endTime: null,
-    };
-    e.preventDefault();
-    e.stopPropagation();
-    e.stopImmediatePropagation();
+  // Cleanup listener Shift+drag precedente (versioni passate)
+  if (window._tlCreateHandler) {
+    document.removeEventListener('mousedown', window._tlCreateHandler, true);
+    window._tlCreateHandler = null;
   }
-  // Cleanup listener precedente se esiste
-  if (window._tlCreateHandler) document.removeEventListener('mousedown', window._tlCreateHandler, true);
-  window._tlCreateHandler = tlCreateMouseDown;
-  document.addEventListener('mousedown', tlCreateMouseDown, true);
-  host.addEventListener('mousemove', (e) => {
-    if (!creating) return;
-    const dx = e.clientX - creating.mouseStartX;
-    if (!creating.ghostEl && Math.abs(dx) < 5) return; // soglia per evitare ghost su click puro
-    const props = tlInstance.getEventProperties(e);
-    if (!props.time) return;
-    const endTime = tlSnap(new Date(props.time), null, null);
-    creating.endTime = endTime;
-    if (!creating.ghostEl) {
-      const g = document.createElement('div');
-      g.className = 'tl-ghost-create';
-      g.style.cssText = 'position:fixed; background:rgba(98,114,245,0.3); border:2px dashed #6272f5; border-radius:4px; pointer-events:none; z-index:50; padding:3px 8px; color:#fff; font-size:11px; font-weight:500; white-space:nowrap; height:26px; line-height:20px;';
-      document.body.appendChild(g);
-      creating.ghostEl = g;
-    }
-    const left = Math.min(creating.mouseStartX, e.clientX);
-    const width = Math.abs(e.clientX - creating.mouseStartX);
-    creating.ghostEl.style.left = left + 'px';
-    creating.ghostEl.style.top = (e.clientY - 36) + 'px';
-    creating.ghostEl.style.width = Math.max(width, 60) + 'px';
-    const s = creating.startTime, en = endTime;
-    const lo = s < en ? s : en;
-    const hi = s < en ? en : s;
-    const durH = (hi - lo) / 3600000;
-    const fmtT = d => d.toLocaleTimeString('it-IT',{hour:'2-digit',minute:'2-digit'});
-    const fmtD = d => d.toLocaleDateString('it-IT',{weekday:'short',day:'numeric',month:'short'});
-    const sameDay = lo.toDateString() === hi.toDateString();
-    const range = sameDay
-      ? `${fmtD(lo)} · ${fmtT(lo)} → ${fmtT(hi)}`
-      : `${fmtD(lo)} ${fmtT(lo)} → ${fmtD(hi)} ${fmtT(hi)}`;
-    creating.ghostEl.textContent = `${range} · ${durH.toFixed(1)}h`;
-  });
-  document.addEventListener('mouseup', (e) => {
-    if (!creating) return;
-    const c = creating;
-    creating = null;
-    if (c.ghostEl) c.ghostEl.remove();
-    if (!c.endTime) return;
-    const lo = c.startTime < c.endTime ? c.startTime : c.endTime;
-    const hi = c.startTime < c.endTime ? c.endTime : c.startTime;
-    if ((hi - lo) < 60000) return; // <1min = scarta (era click puro)
-    tlbOpenWithRange(c.startGroup, lo, hi);
-  });
   const qs = buildQS();
   const bookings = await api('GET', '/planning/api/bookings'+(qs?'?'+qs:''));
   const items = bookings.map(tlBookingToItem).filter(i => i.group);
@@ -1231,10 +1166,14 @@ function _toLocalDtInput(d) {
   return d.getFullYear()+'-'+pad(d.getMonth()+1)+'-'+pad(d.getDate())+'T'+pad(d.getHours())+':'+pad(d.getMinutes());
 }
 function _setDtFields(prefix, date) {
-  // prefix: 'tlb-start' o 'tlb-end'. Compila <date>, <time> e hidden combinato.
+  // prefix: 'tlb-start' o 'tlb-end'. Compila <date>, hidden time + trigger display, e hidden combinato.
   const pad = n => String(n).padStart(2,'0');
   document.getElementById(prefix+'-date').value = date.getFullYear()+'-'+pad(date.getMonth()+1)+'-'+pad(date.getDate());
-  document.getElementById(prefix+'-time').value = pad(date.getHours())+':'+pad(date.getMinutes());
+  const t = pad(date.getHours())+':'+pad(date.getMinutes());
+  document.getElementById(prefix+'-time').value = t;
+  // Aggiorna trigger button display
+  const trigger = document.querySelector(`[data-tp="${prefix}-time"]`);
+  if (trigger) trigger.textContent = t;
   document.getElementById(prefix).value = _toLocalDtInput(date);
 }
 function _readDtFields(prefix) {
@@ -1252,6 +1191,92 @@ function tlbSyncEnd() {
   if (d) document.getElementById('tlb-end').value = _toLocalDtInput(d);
 }
 
+// ── Time picker custom ─────────────────────────────────────
+function _initTimePicker() {
+  const hours = document.getElementById('tlb-tp-hours');
+  const mins = document.getElementById('tlb-tp-mins');
+  if (!hours || !mins || hours.children.length) return; // già fatto
+  const pad = n => String(n).padStart(2,'0');
+  for (let h = 0; h < 24; h++) {
+    const c = document.createElement('div');
+    c.className = 'tp-cell';
+    c.dataset.h = h;
+    c.textContent = pad(h);
+    c.addEventListener('click', () => tlbSetTimePart('h', h));
+    hours.appendChild(c);
+  }
+  for (const m of [0, 15, 30, 45]) {
+    const c = document.createElement('div');
+    c.className = 'tp-cell';
+    c.dataset.m = m;
+    c.textContent = pad(m);
+    c.addEventListener('click', () => tlbSetTimePart('m', m));
+    mins.appendChild(c);
+  }
+}
+
+function tlbOpenTimePicker(targetId) {
+  _initTimePicker();
+  const trigger = document.querySelector(`[data-tp="${targetId}"]`);
+  const popup = document.getElementById('tlb-tp-popup');
+  if (!trigger || !popup) return;
+  popup.dataset.target = targetId;
+  const rect = trigger.getBoundingClientRect();
+  popup.style.left = rect.left + 'px';
+  popup.style.top = (rect.bottom + 4) + 'px';
+  popup.style.display = 'block';
+  // Riposiziona se sfora
+  const pr = popup.getBoundingClientRect();
+  if (pr.right > window.innerWidth) popup.style.left = (window.innerWidth - pr.width - 10) + 'px';
+  if (pr.bottom > window.innerHeight) popup.style.top = (rect.top - pr.height - 4) + 'px';
+  // Highlight selezione corrente + scrollIntoView
+  const cur = document.getElementById(targetId).value || '00:00';
+  const [hStr, mStr] = cur.split(':');
+  const h = Number(hStr), m = Number(mStr);
+  document.querySelectorAll('#tlb-tp-hours .tp-cell').forEach(c => {
+    const sel = Number(c.dataset.h) === h;
+    c.classList.toggle('selected', sel);
+    if (sel) c.scrollIntoView({block: 'center'});
+  });
+  document.querySelectorAll('#tlb-tp-mins .tp-cell').forEach(c => {
+    const sel = Number(c.dataset.m) === m;
+    c.classList.toggle('selected', sel);
+    if (sel) c.scrollIntoView({block: 'center'});
+  });
+  // Click outside chiude
+  setTimeout(() => {
+    document.addEventListener('mousedown', _tlbTpOutside, true);
+  }, 50);
+}
+function _tlbTpOutside(e) {
+  const popup = document.getElementById('tlb-tp-popup');
+  if (popup.contains(e.target)) return;
+  if (e.target.matches('[data-tp]')) return; // click su altro trigger
+  popup.style.display = 'none';
+  document.removeEventListener('mousedown', _tlbTpOutside, true);
+}
+function tlbSetTimePart(part, value) {
+  const popup = document.getElementById('tlb-tp-popup');
+  const target = popup.dataset.target;
+  if (!target) return;
+  const inp = document.getElementById(target);
+  const pad = n => String(n).padStart(2,'0');
+  let [h, m] = (inp.value || '00:00').split(':');
+  if (part === 'h') h = pad(value);
+  if (part === 'm') m = pad(value);
+  const newVal = `${h}:${m}`;
+  inp.value = newVal;
+  const trigger = document.querySelector(`[data-tp="${target}"]`);
+  if (trigger) trigger.textContent = newVal;
+  // Highlight
+  document.querySelectorAll('#tlb-tp-hours .tp-cell').forEach(c => c.classList.toggle('selected', Number(c.dataset.h) === Number(h)));
+  document.querySelectorAll('#tlb-tp-mins .tp-cell').forEach(c => c.classList.toggle('selected', Number(c.dataset.m) === Number(m)));
+  // Sync hidden combinato e duration display
+  if (target === 'tlb-start-time') tlbSyncStart();
+  else if (target === 'tlb-end-time') tlbSyncEnd();
+  tlbUpdateDurationDisplay();
+}
+
 function _tlbReset() {
   document.getElementById('tlb-kind').value = 'project';
   document.getElementById('tlb-job-search').value = '';
@@ -1260,13 +1285,14 @@ function _tlbReset() {
   document.getElementById('tlb-line').innerHTML = '<option value="">— nessuna —</option>';
   document.getElementById('tlb-line-group').style.display = 'none';
   document.getElementById('tlb-notes').value = '';
+  // Chiudi eventuale time picker aperto
+  const tpp = document.getElementById('tlb-tp-popup');
+  if (tpp) tpp.style.display = 'none';
 }
 
 function tlbOpenWithRange(resourceId, startDate, endDate) {
   const r = RESOURCES_SEED.find(x => x.id === resourceId);
   if (!r) { toast('Risorsa non trovata', 'error'); return; }
-  // Reset Shift mode (modal apre = focus va al modal, keyup Shift potrebbe non scattare)
-  if (window._tlShiftDown) _tlSetShiftMode(false);
   document.getElementById('tlb-resource-id').value = r.id;
   document.getElementById('tlb-resource-name').value = r.name;
   _setDtFields('tlb-start', startDate);
@@ -1280,7 +1306,6 @@ function tlbOpenWithRange(resourceId, startDate, endDate) {
 function tlbOpen(resourceId, timeClicked) {
   const r = RESOURCES_SEED.find(x => x.id === resourceId);
   if (!r) { toast('Risorsa non trovata', 'error'); return; }
-  if (window._tlShiftDown) _tlSetShiftMode(false);
   document.getElementById('tlb-resource-id').value = r.id;
   document.getElementById('tlb-resource-name').value = r.name;
   // Arrotonda all'ora cliccata

@@ -1,5 +1,43 @@
 # MediaFlow — Changelog
 
+## v3.4.15.6 — Rimosso Shift + time picker custom (29 aprile 2026)
+
+### Shift+drag rimosso
+
+Dopo 3 tentativi di stabilizzazione (capture phase, setOptions toggle, sync da event), Shift+drag continuava a essere instabile (cursor crosshair "appendeva", il drag non sempre catturato). Tolto del tutto. Tutti i listener `_tlSetShiftMode`/`_tlSyncShiftFromEvent`/`tlCreateMouseDown` rimossi insieme alle ghost rectangle handlers e mouseup globali.
+
+**Metodi nuovo booking residui** (entrambi affidabili):
+- **Doppio click** su area vuota timeline
+- **Click destro** su area vuota → "Nuovo booking qui"
+
+Hint UI aggiornato: `Drag = pan · Drag item = sposta · Bordi item = durata · Alt+drag = duplica · click destro = menu · doppio click vuoto = nuovo`.
+
+### Time picker custom
+
+`<input type="time">` browser nativo era poco preciso/incoerente tra browser. Sostituito con:
+
+- **Trigger button** `<button class="tlb-tp-trigger">` mostra `HH:MM`, click apre popup
+- **Popup** `#tlb-tp-popup` (riusabile per entrambi i campi inizio/fine) con due colonne scrollabili:
+  - Ore: 00–23 (24 celle)
+  - Minuti: 00, 15, 30, 45 (4 celle)
+- Click su cella → setta valore, evidenzia selezione, sync hidden + duration display
+- Auto-scroll alla selezione corrente all'apertura
+- Click fuori chiude popup, riposiziona se sfora viewport
+- Hidden `<input type="hidden" id="tlb-start-time">` mantiene formato `HH:MM` per submit
+
+CSS coerente con palette indaco MediaFlow (selected = `#6272f5` background + bianco bold).
+
+### File toccati
+
+- `app/main.py` — version 3.4.15.6
+- `app/templates/pages/planning.html` — rimossi listener Shift e ghost rectangle, rimosso `tlCreateMouseDown`, sostituito `<input type="time">` con trigger + popup, aggiunte `_initTimePicker`, `tlbOpenTimePicker`, `_tlbTpOutside`, `tlbSetTimePart`, `_setDtFields` aggiornato per scrivere su trigger + hidden, `_tlbReset` chiude eventuale popup, hint UI aggiornato
+
+### Smoke
+
+- `/planning/?view=timeline` 200, HTML contiene `_initTimePicker`, `tlbOpenTimePicker`, `tlb-tp-trigger`, `tlb-tp-popup`. Niente residui `_tlShiftDown`/`_tlSetShiftMode`.
+
+---
+
 ## v3.4.15.5 — Hotfix: Shift robusto + split data/ora nel modal (29 aprile 2026)
 
 ### Bug 1 — Shift sticky

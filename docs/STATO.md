@@ -8,7 +8,7 @@
 
 ## Versione corrente
 
-**v3.4.15.5** — 29 aprile 2026 (hotfix E2: Shift robusto + split data/ora)
+**v3.4.15.6** — 29 aprile 2026 (Shift rimosso + time picker custom)
 
 ## In corso
 
