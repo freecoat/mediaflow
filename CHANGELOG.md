@@ -1,5 +1,71 @@
 # MediaFlow — Changelog
 
+## v3.4.15 — E2 — Click&drag create + capacity heatmap + menu contestuale (29 aprile 2026)
+
+Seconda fase del piano "core planning". Tre feature in una versione.
+
+### Click&drag su area vuota crea booking
+
+- Mousedown su background o group-label → tracking → mouseup
+- **Ghost rectangle** floating sopra il cursore, semitrasparente con bordo dashed indaco
+- **Tooltip live durata** dentro il ghost: `Lun 4 mag · 09:00 → 13:00 · 4h` (single-day) o `Lun 4 mag 09:00 → Mer 6 mag 18:00 · …` (multi-day)
+- Snap adattivo già attivo (15/30/60min)
+- Mouseup → modal pre-popolato con risorsa locked + start/end calcolati. Funzione nuova `tlbOpenWithRange(resourceId, startDate, endDate)` parallela a `tlbOpen`.
+- Soglia minima drag 5px per evitare ghost spurio su click puro; durata minima 1 minuto per scartare click accidentali.
+- **Disabilitato pan via drag** (`moveable: false`) per liberare il drag sul background. Pan resta via bottoni ◀/Oggi/▶ + scroll wheel + selettore Vai a.
+
+### Capacity heatmap sotto nome risorsa
+
+- Calcolo client-side dai booking attivi nella finestra visibile.
+- Per ogni risorsa, una **barra orizzontale** sotto il nome con un segmento per ogni giorno del range.
+- Colorazione per ratio occupazione (8h = piena giornata):
+  - 0% → trasparente
+  - 0-50% → verde chiaro `rgba(34,197,94,.45)`
+  - 50-100% → verde pieno
+  - 100-150% → arancio `#fb923c`
+  - 150%+ → rosso `#dc2626`
+- Tooltip nativo per cella: `Lun 4 mag · 6.5h`.
+- Skip render se range > 100 giorni (zoom Trimestre con span estesi).
+- **Live update** su `rangechanged` (debounced 150ms): cambia zoom o sposta finestra → heatmap si ricalcola e si ridisegna.
+
+### Menu contestuale al drop cross-resource
+
+- Drag entro stessa risorsa = move silente (PUT diretto).
+- Drag su altra risorsa **senza** Alt = popover fluttuante con 3 voci:
+  - `↪  Sposta su altra risorsa` (default azione)
+  - `⊕  Duplica su altra risorsa` (POST nuovo, originale resta)
+  - `✕  Annulla` (callback null, item torna in posizione)
+- Posizionamento del menu: ultime coordinate mouse tracciate via `mousemove` su host, riposizionato se sfora viewport.
+- Chiusura: click outside, Escape, o scelta. Implementato come Promise.
+- Alt+drag (cross-resource o stessa risorsa) = scorciatoia diretta a duplica senza menu — preserva pattern E1 per power user.
+- Refactor `_tlDoMove(item, orig, id)` e `_tlDoDuplicate(item, origBooking)` come helper riutilizzabili.
+
+### File toccati
+
+- `app/main.py` — version 3.4.15
+- `app/templates/pages/planning.html` — `tlContextMenu`, `_tlDoMove`, `_tlDoDuplicate`, `tlComputeHeatmap`, `tlHeatmapHTML`, `tlBuildGroups(bookings, rangeStart, rangeEnd)`, `tlbOpenWithRange`, mousedown/move/up handlers per click&drag create, listener rangechanged con debounce per rebuild heatmap, `moveable: false` + `horizontalScroll: true`, hint UI aggiornato.
+
+### Smoke test
+
+- `/planning/?view=timeline` 200
+- HTML contiene: `tlComputeHeatmap`, `tlContextMenu`, `tlbOpenWithRange`, `tl-ghost-create`, `moveable: false`
+
+### Da testare sul Mac
+
+- Click&drag su area vuota → ghost item con tooltip durata → modal pre-popolato
+- Trim drag (<5px) o durata <1min → scartato
+- Heatmap visibile sotto ogni risorsa, colori coerenti con carico
+- Cambio zoom → heatmap si aggiorna
+- Drag booking su altra risorsa → menu Sposta/Duplica/Annulla
+- Alt+drag su altra risorsa → duplica diretto (no menu)
+- Scroll wheel → pan orizzontale (sostituisce drag pan disabilitato)
+
+### Prossimo step
+
+- v3.4.16 — E3 — WorkingHoursPolicy globale+override + split smart + pausa rigida + ferie/malattia bloccanti + holiday Italia auto
+
+---
+
 ## v3.4.14 — E1 — Editing diretto sulla timeline (29 aprile 2026)
 
 Prima fase del piano "core planning" in 6 step. Drag/resize/delete dei booking direttamente sulla Resource Timeline, con undo + conflict viz live + duplica via Alt+drag.

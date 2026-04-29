@@ -8,14 +8,14 @@
 
 ## Versione corrente
 
-**v3.4.14** — 29 aprile 2026 (E1 del piano "core planning" 6-fasi)
+**v3.4.15** — 29 aprile 2026 (E2 del piano "core planning" 6-fasi)
 
 ## In corso
 
 Cantiere **Core Planning** (6 fasi confermate dopo analisi top vendor — Float/Runn/Resource Guru/Productive/Mosaic/Ftrack):
 
 - ✅ E1 — v3.4.14 — Editing diretto (drag/resize/delete + PUT API + snap adattivo + conflict viz + undo + Alt=duplica)
-- 🔜 E2 — v3.4.15 — Click&drag crea booking + ghost item + tooltip durata + capacity heatmap (anticipata da E4)
+- ✅ E2 — v3.4.15 — Click&drag crea + ghost + tooltip durata + capacity heatmap + menu contestuale Sposta/Duplica/Annulla cross-resource
 - 🔜 E3 — v3.4.16 — WorkingHoursPolicy globale+override + split smart + pausa rigida + ferie/malattia bloccanti + holiday Italia auto (lib `holidays`)
 - 🔜 E4 — v3.4.17 — Multi-select + modifier keys completi + saved views + conflict viz live evoluto + bulk paste + snap line
 - 🔜 E5 — v3.4.18 — Booking ricorrenti + tentative bookings (legati a quote draft/sent → committed quando approved) + audit log
@@ -27,12 +27,14 @@ Cantiere "overlay prenotato vs effettivo + adeguamento" (era v3.4.15 nel plan pr
 
 ## Prossimo step concordato
 
-**E2 — v3.4.15 — Click&drag crea booking + capacity heatmap**:
-- Mousedown su area vuota timeline → tracking → mouseup → calcola intervallo
-- Ghost item visivo durante drag (rettangolo semi-trasparente)
-- Tooltip live durata `09:00 → 13:00 · 4h`
-- Mouseup → modal pre-popolato (default) o create veloce (Shift+drag)
-- Capacity heatmap sotto nome risorsa (% occupazione/giorno) — anticipato da E4 dopo analisi vendor (#2 raccomandazione, ROI alto)
+**E3 — v3.4.16 — WorkingHoursPolicy + split smart + ferie bloccanti**:
+- Modello `WorkingHoursPolicy` (globale + per-risorsa override): start_time, end_time, lunch_start, lunch_end, working_days
+- Engine `split_booking_smart(start, end, policy) → list[Slot]` che ritaglia weekend, orario non-lavorativo, pausa pranzo rigida (es. 13-14)
+- Modello `ResourceUnavailability` evoluto: ferie/malattia come fasce bloccanti, drag/drop su quelle = HARD block (popup, no warning)
+- Holiday calendar Italia predefinito (libreria Python `holidays.IT()`) + custom holidays
+- Pagina `/settings#working-hours` per configurare policy
+- Toggle "Smart split" nel modal create (default ON), preview "creerà N booking"
+- Migration script idempotente
 Verifiche sul Mac sospese (cumulative):
 - v3.4.5 modal "Aggiungi voce"
 - v3.4.6 booking multi-tenant
@@ -47,6 +49,7 @@ Verifiche sul Mac sospese (cumulative):
 - v3.4.13 UX cleanup: tasto Oggi parte da oggi, selettore data Vai-a, label settimana/mese, zebra rows, filtri collassabili, vista Trimestre rimossa, voce sidebar Calendario rimossa
 - v3.4.13.1 hotfix: filtri collassabili stabili (flex+min-width:0), click su timeline → modal nuovo booking pre-popolato (risorsa+ora+job+lavorazione)
 - v3.4.14 E1 editing diretto: drag/resize/delete, snap adattivo 15/30/60min, conflict border rosso live, undo toast 5s, Alt+drag duplica, doppio click vuoto = nuovo
+- v3.4.15 E2: click&drag crea con ghost+durata, capacity heatmap %/giorno, menu contestuale Sposta/Duplica/Annulla cross-resource, pan disabilitato (scroll/bottoni)
 - Test E2E AI search-first (v3.4.4)
 
 Per testare #5 servono prompt reali al copilot con provider AI attivo (Sonnet 4.6 consigliato, ma anche Ollama 8b dovrebbe funzionare grazie a SEARCH-FIRST esplicito nel system prompt).
@@ -87,7 +90,8 @@ Dopo conferma test sul Mac, passare a **#4 server-side abort**.
 - ✅ **v3.4.13** UX cleanup: Oggi=da-oggi, Vai-a, label sett/mese, zebra rows, filtri collassabili, drop Trimestre + voce sidebar Calendario
 - ✅ **v3.4.13.1** Hotfix filtri (flex+min-width:0) + click vuoto timeline → modal nuovo booking pre-popolato
 - ✅ **v3.4.14** E1: editing diretto timeline (drag/resize/delete + PUT/restore API + snap 15/30/60min adattivo + conflict viz live + undo toast 5s + Alt+drag duplica + doubleClick vuoto = nuovo)
-- 🔜 **v3.4.15** E2: click&drag crea + ghost + tooltip durata + capacity heatmap %/giorno (anticipata da E4)
+- ✅ **v3.4.15** E2: click&drag crea + ghost rect + tooltip durata + capacity heatmap %/giorno (live update con zoom) + menu contestuale Sposta/Duplica/Annulla cross-resource
+- 🔜 **v3.4.16** E3: WorkingHoursPolicy + split smart + pausa pranzo rigida + ferie hard-block + holiday Italia auto
 - 🔜 **v3.4.15** Prenotato vs effettivo overlay + adeguamento + report delta producer
 - 🔜 **post-15** Kanban per stato job (SortableJS) + Gantt per job (`/jobs/{id}`, Frappe Gantt)
 
@@ -126,4 +130,4 @@ Dopo conferma test sul Mac, passare a **#4 server-side abort**.
 
 ---
 
-*Ultimo aggiornamento: 29 aprile 2026 — v3.4.14 chiusa: E1 del piano core-planning 6-fasi. Editing diretto timeline (drag/resize/delete) con `PUT /planning/api/bookings/{id}` + `POST /restore`. Snap adattivo allo zoom (15/30/60min). Conflict border rosso live durante drag/resize. Undo toast 5s con stack 20 azioni (update/remove/create). Alt+drag duplica invece di muovere. Doppio click su area vuota apre modal nuovo booking (sostituisce single click che andava in conflitto con drag pan). Hint UI sotto label settimana. Fix pre-esistente: `/api/bookings` di default esclude cancellati. Smoke E2E PUT+DELETE+restore OK. Plan rivisto post analisi top vendor (Float gold standard, Productive simile filosofia, raccomandazioni #1-#10 in ROI). Repo GitHub privato `freecoat/mediaflow` (push solo a major).*
+*Ultimo aggiornamento: 29 aprile 2026 — v3.4.15 chiusa: E2 del piano core-planning 6-fasi. Click&drag su area vuota crea booking (ghost rectangle floating con tooltip live `Lun 4 mag · 09:00 → 13:00 · 4h`, mouseup → modal pre-popolato `tlbOpenWithRange`). Capacity heatmap sotto nome risorsa (calcolo client-side ore/giorno, segmenti colorati verde/arancio/rosso, live update su rangechanged debounced 150ms). Menu contestuale al drop cross-resource (Sposta default / Duplica / Annulla, posizionato dal mouse, Promise-based, click outside o Escape per chiudere). Alt+drag scorciatoia diretta a duplica. Pan via drag disabilitato (`moveable:false`), pan ora via bottoni e scroll wheel. Smoke 200, HTML verificato. Repo GitHub privato `freecoat/mediaflow` (push solo a major).*

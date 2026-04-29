@@ -268,7 +268,7 @@
         </div>
         <div id="tl-week-label" style="font-size:13px; font-weight:500; color:var(--text2,#aaa); padding:6px 14px; background:var(--bg3,#22253a); border-radius:6px 6px 0 0; border-bottom:1px solid var(--border,#2a2e3d);"></div>
         <div style="font-size:11px; color:var(--text3,#888); padding:4px 14px 0;">
-          Drag = sposta · Bordo = durata · <kbd style="background:rgba(255,255,255,.05); border:1px solid var(--border); border-radius:3px; padding:0 4px; font-size:10px;">Alt</kbd>+drag = duplica · <kbd style="background:rgba(255,255,255,.05); border:1px solid var(--border); border-radius:3px; padding:0 4px; font-size:10px;">Canc</kbd> = elimina · doppio-click su vuoto = nuovo
+          Drag su vuoto = nuovo booking · Drag su item = sposta (menu su altra risorsa) · Bordi = durata · <kbd style="background:rgba(255,255,255,.05); border:1px solid var(--border); border-radius:3px; padding:0 4px; font-size:10px;">Alt</kbd>+drag = duplica · <kbd style="background:rgba(255,255,255,.05); border:1px solid var(--border); border-radius:3px; padding:0 4px; font-size:10px;">Canc</kbd> = elimina
         </div>
         <div id="tl-host"></div>
       </div>
@@ -589,7 +589,46 @@ async function renderTodo() {
 }
 
 // ── Resource Timeline (vis-timeline) ───────────────────────
-function tlBuildGroups() {
+// Capacity heatmap: ore prenotate per giorno per risorsa nel range visibile
+function tlComputeHeatmap(resourceId, bookings, rangeStart, rangeEnd) {
+  const days = [];
+  const start = new Date(rangeStart); start.setHours(0,0,0,0);
+  const end = new Date(rangeEnd); end.setHours(0,0,0,0);
+  const dayMs = 24*60*60*1000;
+  for (let t = start.getTime(); t <= end.getTime(); t += dayMs) {
+    const dayStart = t, dayEnd = t + dayMs;
+    let hours = 0;
+    for (const b of bookings) {
+      const rid = (b.extendedProps && b.extendedProps.resource_id);
+      if (rid !== resourceId) continue;
+      const bs = new Date(b.start).getTime();
+      const be = new Date(b.end).getTime();
+      const ovStart = Math.max(bs, dayStart);
+      const ovEnd = Math.min(be, dayEnd);
+      if (ovEnd > ovStart) hours += (ovEnd - ovStart) / 3600000;
+    }
+    days.push({date: new Date(t), hours});
+  }
+  return days;
+}
+
+function tlHeatmapHTML(days) {
+  // 8h = piena giornata. Soglie: 0=trasparente, 0-50%=verde chiaro, 50-100%=verde, 100-150%=arancio, 150%+=rosso
+  if (days.length > 100) return ''; // troppi giorni, salta render
+  const segs = days.map(d => {
+    const ratio = d.hours / 8;
+    let bg = 'rgba(255,255,255,0.04)';
+    if (ratio > 0 && ratio <= 0.5) bg = 'rgba(34,197,94,0.45)';
+    else if (ratio > 0.5 && ratio <= 1) bg = 'rgba(34,197,94,0.85)';
+    else if (ratio > 1 && ratio <= 1.5) bg = 'rgba(251,146,60,0.9)';
+    else if (ratio > 1.5) bg = 'rgba(220,38,38,0.95)';
+    const t = `${d.date.toLocaleDateString('it-IT',{weekday:'short',day:'numeric',month:'short'})} · ${d.hours.toFixed(1)}h`;
+    return `<div class="tl-heat-cell" style="flex:1; min-width:2px; background:${bg}; border-radius:1px;" title="${t}"></div>`;
+  }).join('');
+  return `<div class="tl-heat" style="display:flex; gap:1px; margin-top:4px; height:5px;">${segs}</div>`;
+}
+
+function tlBuildGroups(bookings, rangeStart, rangeEnd) {
   // Filtri: dept e resource limitano cosa mostriamo
   const fp = getFilterParams();
   const deptFilter = fp.department_id ? Number(fp.department_id) : null;
@@ -613,9 +652,14 @@ function tlBuildGroups() {
     const children = resources.filter(r => r.dept === 0).map(r => r.id);
     if (children.length) groups.push({id: 'd0', content: '<i>Senza reparto</i>', nestedGroups: children, treeLevel: 1});
   }
-  // Risorse foglia
+  // Risorse foglia con heatmap se range fornito
   for (const r of resources) {
-    groups.push({id: r.id, content: escapeHtml(r.name), treeLevel: 2});
+    let content = escapeHtml(r.name);
+    if (bookings && rangeStart && rangeEnd) {
+      const days = tlComputeHeatmap(r.id, bookings, rangeStart, rangeEnd);
+      content += tlHeatmapHTML(days);
+    }
+    groups.push({id: r.id, content, treeLevel: 2});
   }
   return groups;
 }
@@ -763,6 +807,72 @@ async function tlPerformUndo() {
   }
 }
 
+// ── Context menu fluttuante (posizionato dal mouse) ────────
+window._tlLastMouse = {x: 200, y: 200};
+function tlContextMenu(x, y, choices) {
+  return new Promise(resolve => {
+    // Rimuovi menu precedenti
+    document.querySelectorAll('.tl-ctx-menu').forEach(el => el.remove());
+    const m = document.createElement('div');
+    m.className = 'tl-ctx-menu';
+    m.style.cssText = `position:fixed; left:${x}px; top:${y}px; background:var(--bg-elev,#1a1d29); border:1px solid var(--border,#2a2e3d); border-radius:8px; padding:4px; box-shadow:0 8px 24px rgba(0,0,0,.5); z-index:99999; display:flex; flex-direction:column; gap:2px; min-width:200px;`;
+    choices.forEach(c => {
+      const b = document.createElement('button');
+      b.textContent = c.label;
+      b.style.cssText = `text-align:left; padding:8px 12px; border-radius:4px; background:transparent; border:none; color:var(--text,#eee); font-size:13px; cursor:pointer; font-family:inherit;`;
+      b.onmouseenter = () => b.style.background = 'rgba(98,114,245,0.15)';
+      b.onmouseleave = () => b.style.background = 'transparent';
+      b.onclick = (ev) => { ev.stopPropagation(); cleanup(); resolve(c.value); };
+      m.appendChild(b);
+    });
+    function cleanup() {
+      m.remove();
+      document.removeEventListener('mousedown', onOutside, true);
+      document.removeEventListener('keydown', onEsc, true);
+    }
+    function onOutside(e) {
+      if (!m.contains(e.target)) { cleanup(); resolve(null); }
+    }
+    function onEsc(e) {
+      if (e.key === 'Escape') { cleanup(); resolve(null); }
+    }
+    document.body.appendChild(m);
+    // Reposiziona se sfora viewport
+    const rect = m.getBoundingClientRect();
+    if (rect.right > window.innerWidth) m.style.left = (window.innerWidth - rect.width - 10) + 'px';
+    if (rect.bottom > window.innerHeight) m.style.top = (window.innerHeight - rect.height - 10) + 'px';
+    setTimeout(() => {
+      document.addEventListener('mousedown', onOutside, true);
+      document.addEventListener('keydown', onEsc, true);
+    }, 50);
+  });
+}
+
+// ── Helpers azioni booking riutilizzabili ──────────────────
+async function _tlDoMove(item, orig, id) {
+  const fd = new FormData();
+  fd.append('start_datetime', _toLocalDtInput(new Date(item.start)));
+  fd.append('end_datetime', _toLocalDtInput(new Date(item.end)));
+  fd.append('resource_id', item.group);
+  await api('PUT', `/planning/api/bookings/${id}`, fd);
+  tlPushUndo({type:'update', id, prev:{start:orig.start, end:orig.end, resource_id:orig.group}}, 'Booking spostato');
+}
+
+async function _tlDoDuplicate(item, origBooking) {
+  const p = origBooking.extendedProps || {};
+  const fd = new FormData();
+  fd.append('resource_id', item.group);
+  fd.append('start_datetime', _toLocalDtInput(new Date(item.start)));
+  fd.append('end_datetime', _toLocalDtInput(new Date(item.end)));
+  fd.append('kind', p.kind || 'project');
+  if (p.job_id) fd.append('job_id', p.job_id);
+  if (p.job_cost_line_id) fd.append('job_cost_line_id', p.job_cost_line_id);
+  if (p.notes) fd.append('notes', p.notes);
+  const r = await api('POST', '/planning/api/bookings', fd);
+  tlPushUndo({type:'create', id: r.id}, 'Booking duplicato');
+  return r;
+}
+
 // ── Conflict check client-side (live durante drag) ─────────
 function tlHasConflict(item, allItems) {
   if (typeof item.group !== 'number') return false;
@@ -781,23 +891,93 @@ async function renderTimeline() {
   const host = document.getElementById('tl-host');
   if (tlInstance) { tlInstance.destroy(); tlInstance = null; }
   host.innerHTML = '';
-  const groups = tlBuildGroups();
-  if (!groups.length) {
-    host.innerHTML = '<div class="pl-empty">Nessuna risorsa con i filtri attuali</div>';
-    return;
-  }
+  // Track mouse per posizionare context menu
+  host.addEventListener('mousemove', e => {
+    window._tlLastMouse = {x: e.clientX, y: e.clientY};
+  });
+
+  // ── Click&drag su background = crea booking (E2) ──────────
+  let creating = null;
+  host.addEventListener('mousedown', (e) => {
+    if (e.button !== 0) return;
+    if (window._tlAltDown) return; // Alt = altri behaviors
+    // getEventProperties richiede tlInstance pronto — guard
+    if (!tlInstance) return;
+    const props = tlInstance.getEventProperties(e);
+    if (props.what !== 'background' && props.what !== 'group-label') return;
+    if (typeof props.group !== 'number') return;
+    if (!props.time) return;
+    creating = {
+      startTime: tlSnap(new Date(props.time), null, null),
+      startGroup: props.group,
+      mouseStartX: e.clientX,
+      ghostEl: null,
+      endTime: null,
+    };
+    e.preventDefault();
+  });
+  host.addEventListener('mousemove', (e) => {
+    if (!creating) return;
+    const dx = e.clientX - creating.mouseStartX;
+    if (!creating.ghostEl && Math.abs(dx) < 5) return; // soglia per evitare ghost su click puro
+    const props = tlInstance.getEventProperties(e);
+    if (!props.time) return;
+    const endTime = tlSnap(new Date(props.time), null, null);
+    creating.endTime = endTime;
+    if (!creating.ghostEl) {
+      const g = document.createElement('div');
+      g.className = 'tl-ghost-create';
+      g.style.cssText = 'position:fixed; background:rgba(98,114,245,0.3); border:2px dashed #6272f5; border-radius:4px; pointer-events:none; z-index:50; padding:3px 8px; color:#fff; font-size:11px; font-weight:500; white-space:nowrap; height:26px; line-height:20px;';
+      document.body.appendChild(g);
+      creating.ghostEl = g;
+    }
+    const left = Math.min(creating.mouseStartX, e.clientX);
+    const width = Math.abs(e.clientX - creating.mouseStartX);
+    creating.ghostEl.style.left = left + 'px';
+    creating.ghostEl.style.top = (e.clientY - 36) + 'px';
+    creating.ghostEl.style.width = Math.max(width, 60) + 'px';
+    const s = creating.startTime, en = endTime;
+    const lo = s < en ? s : en;
+    const hi = s < en ? en : s;
+    const durH = (hi - lo) / 3600000;
+    const fmtT = d => d.toLocaleTimeString('it-IT',{hour:'2-digit',minute:'2-digit'});
+    const fmtD = d => d.toLocaleDateString('it-IT',{weekday:'short',day:'numeric',month:'short'});
+    const sameDay = lo.toDateString() === hi.toDateString();
+    const range = sameDay
+      ? `${fmtD(lo)} · ${fmtT(lo)} → ${fmtT(hi)}`
+      : `${fmtD(lo)} ${fmtT(lo)} → ${fmtD(hi)} ${fmtT(hi)}`;
+    creating.ghostEl.textContent = `${range} · ${durH.toFixed(1)}h`;
+  });
+  document.addEventListener('mouseup', (e) => {
+    if (!creating) return;
+    const c = creating;
+    creating = null;
+    if (c.ghostEl) c.ghostEl.remove();
+    if (!c.endTime) return;
+    const lo = c.startTime < c.endTime ? c.startTime : c.endTime;
+    const hi = c.startTime < c.endTime ? c.endTime : c.startTime;
+    if ((hi - lo) < 60000) return; // <1min = scarta (era click puro)
+    tlbOpenWithRange(c.startGroup, lo, hi);
+  });
   const qs = buildQS();
   const bookings = await api('GET', '/planning/api/bookings'+(qs?'?'+qs:''));
   const items = bookings.map(tlBookingToItem).filter(i => i.group);
   const itemsDS = new vis.DataSet(items);
 
   const win = tlWindowFor(tlZoom, new Date());
-  tlInstance = new vis.Timeline(host, itemsDS, new vis.DataSet(groups), {
+  const groups = tlBuildGroups(bookings, win.start, win.end);
+  if (!groups.length) {
+    host.innerHTML = '<div class="pl-empty">Nessuna risorsa con i filtri attuali</div>';
+    return;
+  }
+  const groupsDS = new vis.DataSet(groups);
+  tlInstance = new vis.Timeline(host, itemsDS, groupsDS, {
     locale: 'it',
     stack: true,
     showCurrentTime: true,
     zoomable: true,
-    moveable: true,
+    moveable: false, // drag su background = create booking (E2). Pan via bottoni ◀/Oggi/▶/scroll.
+    horizontalScroll: true,
     orientation: {axis: 'top'},
     margin: {item: 4, axis: 8},
     height: 600,
@@ -820,43 +1000,39 @@ async function renderTimeline() {
     onMove: async function(item, callback) {
       const id = String(item.id).startsWith('b') ? String(item.id).substring(1) : item.id;
       const orig = items.find(x => x.id === item.id);
+      const origBooking = bookings.find(b => 'b'+b.id === item.id);
       const altDup = window._tlAltDown;
+      const crossResource = orig && item.group !== orig.group;
+      // Decisione azione: alt sempre = duplica; cross-resource = menu; same = move
+      let action;
+      if (altDup) action = 'duplicate';
+      else if (crossResource) {
+        const pos = window._tlLastMouse;
+        action = await tlContextMenu(pos.x, pos.y, [
+          {label: '↪  Sposta su altra risorsa', value: 'move'},
+          {label: '⊕  Duplica su altra risorsa', value: 'duplicate'},
+          {label: '✕  Annulla', value: null},
+        ]);
+      } else {
+        action = 'move';
+      }
       try {
-        if (altDup) {
-          // Duplica: POST nuovo booking con stessi attributi ma resource/orari nuovi
-          const origBooking = bookings.find(b => 'b'+b.id === item.id);
+        if (action === 'duplicate') {
           if (!origBooking) throw new Error('Originale non trovato');
-          const p = origBooking.extendedProps || {};
-          const fd = new FormData();
-          fd.append('resource_id', item.group);
-          fd.append('start_datetime', _toLocalDtInput(new Date(item.start)));
-          fd.append('end_datetime', _toLocalDtInput(new Date(item.end)));
-          fd.append('kind', p.kind || 'project');
-          if (p.job_id) fd.append('job_id', p.job_id);
-          if (p.job_cost_line_id) fd.append('job_cost_line_id', p.job_cost_line_id);
-          if (p.notes) fd.append('notes', p.notes);
-          const r = await api('POST', '/planning/api/bookings', fd);
-          tlPushUndo({type: 'create', id: r.id}, `Booking duplicato (Alt+drag)`);
-          callback(null); // annulla move dell'originale
+          await _tlDoDuplicate(item, origBooking);
+          callback(null); // originale resta
           renderTimeline();
-        } else {
-          // Update: PUT
-          const fd = new FormData();
-          fd.append('start_datetime', _toLocalDtInput(new Date(item.start)));
-          fd.append('end_datetime', _toLocalDtInput(new Date(item.end)));
-          fd.append('resource_id', item.group);
-          await api('PUT', `/planning/api/bookings/${id}`, fd);
+        } else if (action === 'move') {
+          await _tlDoMove(item, orig, id);
           item.className = (item.className || '').replace(/\s*tl-conflict/g, '');
           callback(item);
-          tlPushUndo({
-            type: 'update',
-            id,
-            prev: {start: orig.start, end: orig.end, resource_id: orig.group}
-          }, 'Booking aggiornato');
+        } else {
+          // null = annullato
+          callback(null);
         }
       } catch(e) {
         toast(e.message || 'Errore aggiornamento', 'error');
-        callback(null); // ripristina posizione originale
+        callback(null);
       }
     },
     onRemove: async function(item, callback) {
@@ -885,7 +1061,16 @@ async function renderTimeline() {
     if (!props.time) return;
     tlbOpen(props.group, props.time);
   });
-  tlInstance.on('rangechanged', tlUpdateRangeLabel);
+  tlInstance.on('rangechanged', (props) => {
+    tlUpdateRangeLabel();
+    // Rebuild heatmap groups con il range corrente (debounced)
+    clearTimeout(window._tlHeatTimer);
+    window._tlHeatTimer = setTimeout(() => {
+      const newGroups = tlBuildGroups(bookings, props.start, props.end);
+      groupsDS.clear();
+      groupsDS.add(newGroups);
+    }, 150);
+  });
   tlUpdateRangeLabel();
 }
 
@@ -894,6 +1079,22 @@ function _toLocalDtInput(d) {
   // Format yyyy-MM-ddTHH:mm in fuso locale per <input type="datetime-local">
   const pad = n => String(n).padStart(2,'0');
   return d.getFullYear()+'-'+pad(d.getMonth()+1)+'-'+pad(d.getDate())+'T'+pad(d.getHours())+':'+pad(d.getMinutes());
+}
+
+function tlbOpenWithRange(resourceId, startDate, endDate) {
+  const r = RESOURCES_SEED.find(x => x.id === resourceId);
+  if (!r) { toast('Risorsa non trovata', 'error'); return; }
+  document.getElementById('tlb-resource-id').value = r.id;
+  document.getElementById('tlb-resource-name').value = r.name;
+  document.getElementById('tlb-start').value = _toLocalDtInput(startDate);
+  document.getElementById('tlb-end').value = _toLocalDtInput(endDate);
+  document.getElementById('tlb-kind').value = 'project';
+  document.getElementById('tlb-job').value = '';
+  document.getElementById('tlb-line').innerHTML = '<option value="">— nessuna —</option>';
+  document.getElementById('tlb-line-group').style.display = 'none';
+  document.getElementById('tlb-notes').value = '';
+  tlbOnKindChange();
+  openModal('modal-tl-booking');
 }
 
 function tlbOpen(resourceId, timeClicked) {
