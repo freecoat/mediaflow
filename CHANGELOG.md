@@ -1,5 +1,62 @@
 # MediaFlow — Changelog
 
+## v3.4.13 — Pulizia UX hub Pianificazione (29 aprile 2026)
+
+Iterazione di rifinitura su `/planning/` dopo feedback uso reale della Resource Timeline.
+
+### Timeline risorse — controlli più chiari
+
+- **Tasto "Oggi"**: ora la finestra parte da OGGI (oggi → fine periodo selezionato). Non centra più la settimana corrente.
+- **Selettore data + bottone "Vai a"**: input `<date>` per saltare a una data precisa. La finestra si estende per N giorni dopo quella data secondo lo zoom corrente (1/7/30/90).
+- **Etichetta sopra la timeline**: `Settimana N — Mese Anno` calcolata sul punto medio della finestra. ISO week numbering.
+- **Linea "ora"** più visibile (arancio `#fb923c`, 2px).
+
+### Timeline — visualizzazione risorse più curata
+
+- **Zebra rows** alternate (sfondo `rgba(255,255,255,.015)`) sia nelle label sia nel foreground.
+- **Reparto padre** = grassetto, uppercase, color indaco `#6272f5` con sfondo accent.
+- **Risorsa figlia** = padding-left 18px per gerarchia chiara, peso normale.
+- **Hover row** highlight indaco.
+- Items con border-radius 4px e ombra sottile, padding interno.
+
+### Filtri collassabili
+
+- Bottone "Nascondi filtri / Mostra filtri" sopra le tab. Stato persistito in `localStorage['pl-filters-collapsed']`.
+- Sidebar collassa a `0` con grid-template-columns animato (transizione 180ms). Main area si espande full-width.
+- **Badge contatore** sul bottone toggle: numero di filtri attivi visibile anche a sidebar chiusa.
+- Su collapse/expand, vis-timeline `redraw()` e FullCalendar `updateSize()` per riadattarsi.
+
+### Pulizia ridondanze
+
+- **Vista Trimestre rimossa** dall'hub (poco utile coi filtri trasversali, copre già il mese × 3 mesi). Codice + CSS + JS rimossi. View parameter `trimester` cade su `jobs` default.
+- **Voce sidebar "Calendario" rimossa** (`base.html`, `settings.html` config). Calendario ora accessibile solo dentro `/planning/?view=calendar`. Redirect `/planning/calendar` mantenuto per backward compat.
+- Template `pages/calendar.html` legacy eliminato (dead code, nessun router lo serviva più).
+- Link "Vai al calendario" della dashboard puntano ora a `/planning/?view=calendar`.
+
+### File toccati
+
+- `app/main.py` — version 3.4.13
+- `app/routers/planning.py` — `VALID_VIEWS` senza `trimester`
+- `app/templates/base.html` — rimossa voce sidebar Calendario
+- `app/templates/pages/dashboard.html` — link al calendario aggiornato
+- `app/templates/pages/settings.html` — rimosso `calendar` da `NAV_ITEMS_DEF`
+- `app/templates/pages/planning.html` — toggle filtri, controlli timeline (Oggi/Vai-a/label), zebra+radius+hover, drop renderTrimester
+- `app/templates/pages/calendar.html` — eliminato
+
+### Smoke test
+
+- `/health` 200 v3.4.13
+- `/planning/?view=timeline` 200, contiene `pl-toggle-filters`, `tl-week-label`, `tl-goto-date`, `isoWeekNum`, `filters-collapsed`
+- `/planning/calendar` 302 → redirect compat
+- Nessun riferimento `trimester` residuo nell'HTML
+
+### Prossimi step
+
+- v3.4.14 — Booking editabili (drag/resize/delete + PUT API)
+- v3.4.15 — Overlay prenotato vs effettivo + funzione "adeguamento" + report delta per producer
+
+---
+
 ## v3.4.12 — Resource Timeline (vis-timeline) (29 aprile 2026)
 
 Sesta vista dell'hub `/planning/`: **🧭 Timeline risorse** basata su vis-timeline 7.7.3 (CSS+JS già caricati dal v3.4.11).

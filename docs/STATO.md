@@ -8,27 +8,33 @@
 
 ## Versione corrente
 
-**v3.4.12** — 29 aprile 2026
+**v3.4.13** — 29 aprile 2026
 
 ## In corso
 
-Cantiere **Visualizzazioni Pianificazione** (split in 4 sotto-versioni dopo conferma di Matteo). v3.4.11 = parte 1 (5 viste + filtri). v3.4.12 = parte 2/A (Resource Timeline vis-timeline). Restano 2/B Kanban e 2/C Gantt.
+Cantiere **Visualizzazioni Pianificazione**: v3.4.11 (5 viste + filtri) → v3.4.12 (Resource Timeline) → v3.4.13 (UX cleanup post feedback). Vista Trimestre rimossa, voce sidebar Calendario rimossa (è dentro pianificazione).
 
-Cantiere ferie/malattia visibili come fasce bloccanti rinviato. Cost report doppio (interno/esterno cliente) anche dopo.
+Prossimi step concordati con Matteo:
+- v3.4.14 booking editabili
+- v3.4.15 overlay prenotato vs effettivo + funzione adeguamento + report delta producer
+
+Kanban e Gantt rimandati post v3.4.15.
 
 ## Prossimo step concordato
 
-**v3.4.12.1 — Kanban per stato job**:
-- Colonne `draft|active|on_hold|completed|invoiced`, card draggable (riusa SortableJS già in uso)
-- Drop su colonna → PUT `/planning/api/jobs/{id}/status`
-- Tab #7 nell'hub `/planning/`, riusa filtri trasversali
+**v3.4.14 — Booking editabili dalla timeline**:
+- vis-timeline `editable: {updateTime, updateGroup, remove, add}` attivo
+- Nuovo `PUT /planning/api/bookings/{id}` (oggi solo POST + DELETE) con conflict check
+- Drag = sposta inizio. Resize bordo = cambia durata. Delete = soft delete (status=cancelled, già esistente).
+- Toast feedback su ogni azione.
 
-**v3.4.12.2 — Gantt per job** dentro `/jobs/{id}`:
-- Frappe Gantt MIT (~30KB CDN)
-- Barre orizzontali per le lavorazioni del job, possibili dipendenze base
+**v3.4.15 — Prenotato vs effettivo (overlay) + adeguamento + report delta**:
+- Sovrapposto: barra grigia di sfondo (booking = prenotato) + barra colorata stretta sopra (TimePunch = effettivo). Delta extra-time visivo.
+- Funzione "Adeguamento" nel planning: bottone per accettare l'extra-time e renderlo effettivo (aggiorna booking end_datetime al TimePunch end).
+- Report producer: aggregazione delta (prenotato - effettivo) per cost_line/job. Probabile estensione finance.
 
-Cantiere successivo (post v3.4.12.x):
-- **v3.4.13** Ferie/malattia visibili nel calendario come fasce bloccanti
+Cantiere successivo (post v3.4.15):
+- **v3.4.16** Ferie/malattia visibili nel calendario come fasce bloccanti
 Verifiche sul Mac sospese (cumulative):
 - v3.4.5 modal "Aggiungi voce"
 - v3.4.6 booking multi-tenant
@@ -40,6 +46,7 @@ Verifiche sul Mac sospese (cumulative):
 - v3.4.10 aggregazione ore per lavorazione (colonne Pian./Lavor. in `/jobs/{id}`)
 - v3.4.11 hub `/planning/` con 5 viste (Tabella, Calendario, Trimestre, Agenda, Le mie) + 9 filtri trasversali
 - v3.4.12 Resource Timeline vis-timeline (tab #6, zoom Giorno/Sett/Mese/Trim, raggruppata per reparto, riusa filtri)
+- v3.4.13 UX cleanup: tasto Oggi parte da oggi, selettore data Vai-a, label settimana/mese, zebra rows, filtri collassabili, vista Trimestre rimossa, voce sidebar Calendario rimossa
 - Test E2E AI search-first (v3.4.4)
 
 Per testare #5 servono prompt reali al copilot con provider AI attivo (Sonnet 4.6 consigliato, ma anche Ollama 8b dovrebbe funzionare grazie a SEARCH-FIRST esplicito nel system prompt).
@@ -77,8 +84,10 @@ Dopo conferma test sul Mac, passare a **#4 server-side abort**.
 **Cantiere Visualizzazioni Pianificazione (in corso)**:
 - ✅ **v3.4.11** Hub `/planning/` 5 viste + 9 filtri trasversali (Tabella, Calendario, Trimestre, Agenda, Le mie)
 - ✅ **v3.4.12** Resource Timeline (vis-timeline, righe verticali risorse raggruppate per reparto, zoom giorno/sett/mese/trim)
-- 🔜 **v3.4.12.1** Kanban per stato job (SortableJS, drag tra colonne `draft|active|on_hold|completed|invoiced`)
-- 🔜 **v3.4.12.2** Gantt per job dentro `/jobs/{id}` (Frappe Gantt MIT)
+- ✅ **v3.4.13** UX cleanup: Oggi=da-oggi, Vai-a, label sett/mese, zebra rows, filtri collassabili, drop Trimestre + voce sidebar Calendario
+- 🔜 **v3.4.14** Booking editabili dalla timeline (drag/resize/delete + PUT API)
+- 🔜 **v3.4.15** Prenotato vs effettivo overlay + adeguamento + report delta producer
+- 🔜 **post-15** Kanban per stato job (SortableJS) + Gantt per job (`/jobs/{id}`, Frappe Gantt)
 
 **Sezione HR — sviluppo successivo**:
 - Aggregazioni avanzate (ore per progetto/risorsa/mese, export CSV/PDF cedolino)
@@ -115,4 +124,4 @@ Dopo conferma test sul Mac, passare a **#4 server-side abort**.
 
 ---
 
-*Ultimo aggiornamento: 29 aprile 2026 — v3.4.12 chiusa: Resource Timeline vis-timeline come 6° tab di `/planning/`. Righe = risorse, raggruppate per reparto (nested groups). Zoom Giorno/Settimana/Mese/Trimestre + nav ◀/Oggi/▶. Riusa `/planning/api/bookings` con tutti i 9 filtri. Item interni in grigio. Tema dark coerente (palette indaco). Smoke 200 + HTML verificato. Repo GitHub privato `freecoat/mediaflow` creato (push solo a major bump).*
+*Ultimo aggiornamento: 29 aprile 2026 — v3.4.13 chiusa: UX cleanup hub `/planning/`. Tasto Oggi ora parte da oggi (non più centra settimana). Selettore data Vai-a + label `Settimana N — Mese Anno` ISO sopra la timeline. Zebra rows + bordi smussati + reparto in grassetto/uppercase indaco. Filtri sidebar collassabili (toggle persistito localStorage, badge contatore filtri attivi). Vista Trimestre rimossa. Voce sidebar Calendario rimossa (calendario solo dentro pianificazione). `/planning/calendar` → 302 redirect mantenuto. Smoke 200 + verifica HTML. Repo GitHub privato `freecoat/mediaflow` (push solo a major).*

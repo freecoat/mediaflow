@@ -11,8 +11,13 @@
 {% block head %}
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/vis-timeline@7.7.3/styles/vis-timeline-graph2d.min.css">
 <style>
-  .pl-shell { display: grid; grid-template-columns: 240px 1fr; gap: 16px; align-items: flex-start; }
+  .pl-shell { display: grid; grid-template-columns: 240px 1fr; gap: 16px; align-items: flex-start; transition: grid-template-columns .18s ease; }
+  .pl-shell.filters-collapsed { grid-template-columns: 0 1fr; gap: 0; }
+  .pl-shell.filters-collapsed .pl-filters { display: none; }
   .pl-filters { background: var(--bg-elev,#1a1d29); border: 1px solid var(--border,#2a2e3d); border-radius: 8px; padding: 14px; position: sticky; top: 12px; }
+  .pl-toggle-filters { background: var(--bg-elev,#1a1d29); border: 1px solid var(--border,#2a2e3d); color: var(--text2,#aaa); border-radius: 6px; padding: 6px 10px; font-size: 12px; cursor: pointer; margin-bottom: 10px; display: inline-flex; align-items: center; gap: 6px; }
+  .pl-toggle-filters:hover { color: var(--text,#eee); border-color: #6272f5; }
+  .pl-toggle-filters .badge-n { background: #6272f5; color: #fff; padding: 1px 6px; border-radius: 8px; font-size: 10px; font-weight: 600; }
   .pl-filters h4 { font-size: 11px; text-transform: uppercase; letter-spacing: .8px; color: var(--text3,#888); margin: 0 0 8px; }
   .pl-filters .form-group { margin-bottom: 10px; }
   .pl-filters .form-group label { font-size: 11px; color: var(--text3,#888); margin-bottom: 3px; display: block; }
@@ -40,7 +45,7 @@
   .todo-card .when { font-size: 11px; text-transform: uppercase; color: var(--text3); }
   .todo-card .what { font-size: 14px; font-weight: 500; margin-top: 2px; }
   .todo-card .meta { font-size: 12px; color: var(--text3); margin-top: 4px; }
-  #cal-host, #tri-host, #ag-host, #todo-host { min-height: 600px; }
+  #cal-host, #ag-host, #todo-host { min-height: 600px; }
   #tl-host { min-height: 600px; }
   .cal-bar { display:flex; gap:6px; margin-bottom:8px; flex-wrap: wrap; }
   .tl-bar { display:flex; gap:6px; margin-bottom:8px; flex-wrap: wrap; align-items:center; }
@@ -50,14 +55,28 @@
   .tl-bar .btn-group .btn:last-child { border-radius: 0 4px 4px 0; }
   .tl-bar .btn-group .btn.active { background: #6272f5; color: #fff; }
   /* Override vis-timeline tema dark */
-  .vis-timeline { border-color: var(--border,#2a2e3d); background: var(--bg-elev,#1a1d29); }
-  .vis-time-axis .vis-text { color: var(--text2,#aaa); }
+  .vis-timeline { border: 1px solid var(--border,#2a2e3d); border-radius: 0 0 8px 8px; background: var(--bg-elev,#1a1d29); }
+  .vis-time-axis .vis-text { color: var(--text2,#aaa); font-size: 11px; }
   .vis-time-axis .vis-grid { border-color: var(--border,#2a2e3d); }
-  .vis-labelset .vis-label { color: var(--text,#eee); border-color: var(--border,#2a2e3d); }
+  .vis-labelset .vis-label { color: var(--text,#eee); border-color: var(--border,#2a2e3d); padding: 6px 10px; font-size: 12px; box-sizing: border-box; }
+  /* Zebra rows (alternate) */
+  .vis-labelset .vis-label:nth-child(odd) { background: rgba(255,255,255,0.015); }
+  .vis-foreground .vis-group:nth-child(odd) { background: rgba(255,255,255,0.015); }
   .vis-foreground .vis-group { border-color: var(--border,#2a2e3d); }
-  .vis-item { border-color: rgba(0,0,0,.25); color: #fff; font-size: 11px; }
+  /* Reparto padre = grassetto, sfondo accentuato */
+  .vis-labelset .vis-label.vis-nesting-group { background: rgba(98,114,245,0.08); font-weight: 600; color: #6272f5; text-transform: uppercase; letter-spacing: .5px; font-size: 11px; }
+  .vis-labelset .vis-label.vis-nesting-group:nth-child(odd) { background: rgba(98,114,245,0.08); }
+  /* Risorsa figlia = padding extra a sx, weight normale */
+  .vis-labelset .vis-label:not(.vis-nesting-group) { padding-left: 18px; }
+  /* Hover row */
+  .vis-labelset .vis-label:hover { background: rgba(98,114,245,0.06); }
+  /* Items */
+  .vis-item { border-color: rgba(0,0,0,.25); color: #fff; font-size: 11px; border-radius: 4px; padding: 1px 4px; box-shadow: 0 1px 2px rgba(0,0,0,.25); }
   .vis-item.vis-selected { box-shadow: 0 0 0 2px #fff; }
   .vis-item.kind-internal { background: #6b7280; border-color: #4b5563; }
+  .vis-item .vis-item-content { padding: 2px 4px; }
+  /* Linea oggi più visibile */
+  .vis-current-time { background-color: #fb923c; width: 2px; }
   .pl-active-filters-bar { font-size: 12px; color: var(--text3); margin-bottom: 8px; }
   .pl-active-filters-bar .chip { display: inline-block; background: rgba(98,114,245,0.15); color: #6272f5; padding: 2px 8px; border-radius: 10px; margin-right: 6px; font-weight: 500; }
 </style>
@@ -65,7 +84,7 @@
 
 {% block content %}
 
-<div class="pl-shell">
+<div class="pl-shell" id="pl-shell">
 
   <!-- ── Sidebar filtri ──────────────────────────────────────── -->
   <aside class="pl-filters">
@@ -166,10 +185,14 @@
 
   <!-- ── Main area ────────────────────────────────────────────── -->
   <div>
+    <button class="pl-toggle-filters" id="pl-toggle-filters" type="button">
+      <span id="pl-toggle-arrow">◀</span>
+      <span id="pl-toggle-label">Nascondi filtri</span>
+      <span id="pl-toggle-badge" class="badge-n" style="display:none;">0</span>
+    </button>
     <div class="pl-tabs" id="pl-tabs">
       <div class="pl-tab" data-view="jobs">📋 Tabella</div>
       <div class="pl-tab" data-view="calendar">📅 Calendario</div>
-      <div class="pl-tab" data-view="trimester">🗓️ Trimestre</div>
       <div class="pl-tab" data-view="agenda">📑 Agenda</div>
       <div class="pl-tab" data-view="todo">✓ Le mie</div>
       <div class="pl-tab" data-view="timeline">🧭 Timeline risorse</div>
@@ -207,11 +230,6 @@
       <div class="card"><div id="cal-host"></div></div>
     </div>
 
-    <!-- Trimester (multiMonth) -->
-    <div class="pl-view" id="view-trimester">
-      <div class="card"><div id="tri-host"></div></div>
-    </div>
-
     <!-- Agenda list -->
     <div class="pl-view" id="view-agenda">
       <div class="card"><div id="ag-host"><div class="pl-empty">Caricamento…</div></div></div>
@@ -235,8 +253,13 @@
           <button class="btn btn-ghost btn-sm" onclick="tlMove(-1)">◀</button>
           <button class="btn btn-ghost btn-sm" onclick="tlMove(0)">Oggi</button>
           <button class="btn btn-ghost btn-sm" onclick="tlMove(1)">▶</button>
+          <span style="display:inline-flex; gap:4px; align-items:center; margin-left:10px;">
+            <input type="date" id="tl-goto-date" class="form-input" style="height:30px; padding:2px 8px; font-size:12px; width:auto;">
+            <button class="btn btn-ghost btn-sm" onclick="tlGoTo()">Vai a</button>
+          </span>
           <span class="text-sm text-muted" id="tl-range" style="margin-left:auto;"></span>
         </div>
+        <div id="tl-week-label" style="font-size:13px; font-weight:500; color:var(--text2,#aaa); padding:6px 14px; background:var(--bg3,#22253a); border-radius:6px 6px 0 0; border-bottom:1px solid var(--border,#2a2e3d);"></div>
         <div id="tl-host"></div>
       </div>
     </div>
@@ -262,7 +285,7 @@
 <script>
 const ACTIVE_VIEW = {{ ('"' + active_view + '"')|safe }};
 const CURRENT_RESOURCE_ID = {{ current_resource_id if current_resource_id else 'null' }};
-const VALID_VIEWS = ['jobs','calendar','trimester','agenda','todo','timeline'];
+const VALID_VIEWS = ['jobs','calendar','agenda','todo','timeline'];
 const RESOURCES_SEED = [
 {% for r in resources %}  {id:{{ r.id }}, name:{{ r.name|tojson }}, dept:{{ (r.department_id or 0) }}, color:{{ (r.color or '#6272f5')|tojson }}}{{ "," if not loop.last else "" }}
 {% endfor %}];
@@ -270,7 +293,6 @@ const DEPARTMENTS_SEED = [
 {% for d in departments %}  {id:{{ d.id }}, name:{{ d.name|tojson }}}{{ "," if not loop.last else "" }}
 {% endfor %}];
 let calInstance = null;
-let triInstance = null;
 let tlInstance = null;
 let tlZoom = 'week';
 
@@ -364,7 +386,6 @@ function resetFilters() {
 async function renderView(view) {
   if (view === 'jobs') return renderJobs();
   if (view === 'calendar') return renderCalendar();
-  if (view === 'trimester') return renderTrimester();
   if (view === 'agenda') return renderAgenda();
   if (view === 'todo') return renderTodo();
   if (view === 'timeline') return renderTimeline();
@@ -416,38 +437,6 @@ function renderCalendar() {
     },
   });
   calInstance.render();
-}
-
-// ── Trimestre (multiMonth) ─────────────────────────────────
-function renderTrimester() {
-  const host = document.getElementById('tri-host');
-  if (triInstance) { triInstance.destroy(); triInstance = null; }
-  host.innerHTML = '';
-  const qs = buildQS();
-  triInstance = new FullCalendar.Calendar(host, {
-    locale: 'it',
-    initialView: 'multiMonthYear',
-    multiMonthMaxColumns: 3,
-    multiMonthMinWidth: 280,
-    headerToolbar: { left: 'prev,next today', center: 'title', right: '' },
-    height: 800,
-    eventSources: [
-      { id:'bookings', url:'/planning/api/bookings?'+qs, method:'GET' },
-      { id:'punches', url:'/hr/api/punches?format=fullcalendar&'+qs, method:'GET' },
-    ],
-    visibleRange: () => {
-      const start = new Date();
-      start.setDate(1);
-      const end = new Date(start);
-      end.setMonth(end.getMonth() + 3);
-      return { start, end };
-    },
-    eventClick: (info) => {
-      const start = info.event.start ? info.event.start.toLocaleDateString('it-IT') : '';
-      toast(`${info.event.title} | ${start}`, 'info', 4000);
-    },
-  });
-  triInstance.render();
 }
 
 // ── Agenda list ────────────────────────────────────────────
@@ -576,33 +565,35 @@ function tlBookingToItem(b) {
   };
 }
 
+// Finestra parte SEMPRE dall'anchor (oggi di default) e si estende in avanti.
 function tlWindowFor(zoom, anchor) {
   const a = anchor ? new Date(anchor) : new Date();
   a.setHours(0,0,0,0);
-  let start, end;
-  if (zoom === 'day') {
-    start = new Date(a); end = new Date(a); end.setDate(end.getDate()+1);
-  } else if (zoom === 'week') {
-    start = new Date(a);
-    const dow = (start.getDay()+6) % 7; // lun=0
-    start.setDate(start.getDate()-dow);
-    end = new Date(start); end.setDate(end.getDate()+7);
-  } else if (zoom === 'month') {
-    start = new Date(a.getFullYear(), a.getMonth(), 1);
-    end = new Date(a.getFullYear(), a.getMonth()+1, 1);
-  } else { // quarter
-    const qm = Math.floor(a.getMonth()/3)*3;
-    start = new Date(a.getFullYear(), qm, 1);
-    end = new Date(a.getFullYear(), qm+3, 1);
-  }
+  const days = {day:1, week:7, month:30, quarter:90}[zoom] || 7;
+  const start = new Date(a);
+  const end = new Date(a); end.setDate(end.getDate() + days);
   return {start, end};
+}
+
+function isoWeekNum(d) {
+  const x = new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()));
+  const dayNum = x.getUTCDay() || 7;
+  x.setUTCDate(x.getUTCDate() + 4 - dayNum);
+  const yearStart = new Date(Date.UTC(x.getUTCFullYear(), 0, 1));
+  return Math.ceil(((x - yearStart) / 86400000 + 1) / 7);
 }
 
 function tlUpdateRangeLabel() {
   if (!tlInstance) return;
   const win = tlInstance.getWindow();
-  const fmt = d => new Date(d).toLocaleDateString('it-IT', {day:'numeric', month:'short', year:'numeric'});
-  document.getElementById('tl-range').textContent = fmt(win.start) + ' → ' + fmt(win.end);
+  const start = new Date(win.start), end = new Date(win.end);
+  const fmt = d => d.toLocaleDateString('it-IT', {day:'numeric', month:'short', year:'numeric'});
+  document.getElementById('tl-range').textContent = fmt(start) + ' → ' + fmt(end);
+  // Label settimana/mese sopra
+  const mid = new Date((start.getTime() + end.getTime()) / 2);
+  const weekN = isoWeekNum(mid);
+  const monthY = mid.toLocaleDateString('it-IT', {month:'long', year:'numeric'});
+  document.getElementById('tl-week-label').textContent = `Settimana ${weekN} — ${monthY.charAt(0).toUpperCase() + monthY.slice(1)}`;
 }
 
 function tlMove(dir) {
@@ -617,6 +608,15 @@ function tlMove(dir) {
     const ne = new Date(new Date(win.end).getTime() + dir * span);
     tlInstance.setWindow(ns, ne);
   }
+  tlUpdateRangeLabel();
+}
+
+function tlGoTo() {
+  if (!tlInstance) return;
+  const v = document.getElementById('tl-goto-date').value;
+  if (!v) return;
+  const w = tlWindowFor(tlZoom, new Date(v + 'T00:00:00'));
+  tlInstance.setWindow(w.start, w.end);
   tlUpdateRangeLabel();
 }
 
@@ -725,8 +725,35 @@ async function changeStatus(jobId, status) {
   } catch(e) { toast(e.message, 'error'); }
 }
 
+// ── Toggle filtri ──────────────────────────────────────────
+const FILTERS_LS_KEY = 'pl-filters-collapsed';
+function setFiltersCollapsed(collapsed, persist=true) {
+  const shell = document.getElementById('pl-shell');
+  shell.classList.toggle('filters-collapsed', collapsed);
+  document.getElementById('pl-toggle-arrow').textContent = collapsed ? '▶' : '◀';
+  document.getElementById('pl-toggle-label').textContent = collapsed ? 'Mostra filtri' : 'Nascondi filtri';
+  if (persist) localStorage.setItem(FILTERS_LS_KEY, collapsed ? '1' : '0');
+  // Refresh timeline se attiva (cambio largo richiede redisegno)
+  if (tlInstance) setTimeout(() => tlInstance.redraw(), 200);
+  if (calInstance) setTimeout(() => calInstance.updateSize(), 200);
+}
+document.getElementById('pl-toggle-filters').addEventListener('click', () => {
+  const collapsed = !document.getElementById('pl-shell').classList.contains('filters-collapsed');
+  setFiltersCollapsed(collapsed);
+});
+function updateActiveFiltersBadge() {
+  const n = ['q','dept','client','project','job','resource','status','kind','from','to']
+    .filter(k => document.getElementById('f-'+k).value).length;
+  const badge = document.getElementById('pl-toggle-badge');
+  if (n > 0) { badge.textContent = n; badge.style.display = ''; }
+  else { badge.style.display = 'none'; }
+}
+const _origRenderBar = renderActiveFiltersBar;
+renderActiveFiltersBar = function() { _origRenderBar(); updateActiveFiltersBadge(); };
+
 // ── Init ───────────────────────────────────────────────────
 readFiltersFromURL();
+setFiltersCollapsed(localStorage.getItem(FILTERS_LS_KEY) === '1', false);
 renderActiveFiltersBar();
 setView(ACTIVE_VIEW);
 </script>
