@@ -1,5 +1,60 @@
 # MediaFlow — Changelog
 
+## v3.4.20.4 — Form ferie/malattia + override policy nel modal risorsa (29 aprile 2026)
+
+Modal `/resources` esteso con due nuove sezioni di gestione disponibilità.
+
+### Override policy orari per-risorsa
+
+- **Dropdown "Orario lavorativo"** sotto le note
+- Vuoto = usa default tenant (la "Italia standard")
+- Lista popolata da `wh_policies` (passati al template dal router)
+- Salva via `working_hours_policy_id` su `PUT /resources/api/{id}` (campo aggiunto già al backend)
+
+### Sezione ferie/malattie (solo in edit mode)
+
+- **Lista esistenti** in scroll-y (max-height 160px) con dot color, kind label, range date, eventuale note, bottone × per eliminare
+- **Form aggiungi** inline: Dal / Al / Tipo (Ferie/Malattia/Altro) / Note + bottone "+ Aggiungi"
+- Counter `(N)` accanto al titolo
+- Hidden in create mode (serve prima salvare la risorsa)
+
+### Backend
+
+Nuovi endpoint in `app/routers/resources.py`:
+- `GET /resources/api/{id}/unavailabilities` — lista ferie esistenti per risorsa
+- `POST /resources/api/{id}/unavailability` — esteso con `kind` (vacation/sick/holiday/other)
+- `DELETE /resources/api/unavailability/{u_id}` — soft delete (hard delete sul DB)
+- `PUT /resources/api/{id}` accetta `working_hours_policy_id`
+- `GET /resources/api/{id}` ritorna anche `working_hours_policy_id`
+
+### Integrazione downstream
+
+Le ferie aggiunte qui appaiono **automaticamente** sulla timeline `/planning/?view=timeline` come fasce striate indaco/rosse (logica già implementata in v3.4.17). Smart split rispetta queste date. Hard block drag su ferie attivo.
+
+### File toccati
+
+- `app/main.py` — version 3.4.20.4
+- `app/routers/resources.py` — `wh_policies` nel context, GET/POST/DELETE unavailabilities, PUT con policy_id, GET con policy_id
+- `app/templates/pages/resources.html`:
+  - Modal: dropdown policy + sezione ferie collapsible
+  - JS: `rsUnavLoad`, `rsUnavAdd`, `rsUnavDelete`, integrate in `editResource`/`openNewResource`
+  - `saveResource` invia `working_hours_policy_id`
+
+### Smoke
+
+- `/resources/` 200, contiene `rs-wh-policy`, `rs-unav-list`, `rsUnavLoad`, `rsUnavAdd`
+- `GET /resources/api/1/unavailabilities` 200
+
+### Test sul Mac
+
+1. `/resources/` → click su una risorsa
+2. Modal mostra dropdown policy + sezione "Ferie e malattie"
+3. Aggiungi periodo Vac/Mal/Altro con date e note
+4. Verifica che timeline (`/planning/?view=timeline`) mostri lo strip nei giorni
+5. Drag booking sopra ferie → hard block
+
+---
+
 ## v3.4.20.3 — UI settings: tab "Orari lavorativi" (29 aprile 2026)
 
 Nuova tab in `/settings` per modificare la `WorkingHoursPolicy` default senza dover passare per le API.

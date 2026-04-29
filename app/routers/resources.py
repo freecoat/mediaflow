@@ -6,7 +6,7 @@ from fastapi.responses import HTMLResponse
 from typing import Optional
 from sqlalchemy.orm import Session
 from app.database import get_db
-from app.models import Resource, ResourceType, ResourceUnavailability, Department
+from app.models import Resource, ResourceType, ResourceUnavailability, Department, WorkingHoursPolicy
 from datetime import date
 
 router = APIRouter(prefix="/resources", tags=["resources"])
@@ -56,6 +56,12 @@ async def resources_list(
         .order_by(Department.sort_order, Department.name)
         .all()
     )
+    wh_policies = (
+        db.query(WorkingHoursPolicy)
+        .filter(WorkingHoursPolicy.tenant_id == CURRENT_TENANT)
+        .order_by(WorkingHoursPolicy.is_default.desc(), WorkingHoursPolicy.name)
+        .all()
+    )
 
     return _get_templates().TemplateResponse(
         "pages/resources.html",
@@ -63,6 +69,7 @@ async def resources_list(
             "request": request,
             "resources": resources,
             "departments": departments,
+            "wh_policies": wh_policies,
             "selected_dept_id": department_id,
             "selected_type": type,
             "TYPE_LABEL": TYPE_LABEL,
@@ -138,6 +145,7 @@ async def get_resource(resource_id: int, db: Session = Depends(get_db)):
         "daily_rate": r.daily_rate, "hourly_rate": r.hourly_rate,
         "email": r.email, "phone": r.phone, "internal_phone": r.internal_phone,
         "color": r.color, "is_active": r.is_active,
+        "working_hours_policy_id": r.working_hours_policy_id,
     }
 
 
@@ -156,6 +164,7 @@ async def update_resource(
     internal_phone: Optional[str] = Form(None),
     color: Optional[str] = Form(None),
     is_active: Optional[bool] = Form(None),
+    working_hours_policy_id: Optional[int] = Form(None),
     db: Session = Depends(get_db),
 ):
     r = db.query(Resource).filter(
@@ -176,6 +185,8 @@ async def update_resource(
     if internal_phone is not None: r.internal_phone = internal_phone.strip() or None
     if color is not None: r.color = color
     if is_active is not None: r.is_active = is_active
+    if working_hours_policy_id is not None:
+        r.working_hours_policy_id = working_hours_policy_id or None
     db.commit()
     return {"ok": True, "id": r.id}
 
@@ -193,19 +204,58 @@ async def delete_resource(resource_id: int, db: Session = Depends(get_db)):
     return {"ok": True}
 
 
+@router.get("/api/{resource_id}/unavailabilities")
+async def list_unavailabilities_for_resource(resource_id: int, db: Session = Depends(get_db)):
+    """Lista ferie/malattia di una risorsa (esplicite, no festività auto)."""
+    rows = db.query(ResourceUnavailability).filter(
+        ResourceUnavailability.resource_id == resource_id,
+    ).order_by(ResourceUnavailability.start_date.desc()).all()
+    return [
+        {"id": u.id, "start_date": u.start_date.isoformat(),
+         "end_date": u.end_date.isoformat(),
+         "kind": u.kind.value if hasattr(u.kind, "value") else u.kind,
+         "reason": u.reason}
+        for u in rows
+    ]
+
+
 @router.post("/api/{resource_id}/unavailability")
 async def add_unavailability(
     resource_id: int,
     start_date: date = Form(...),
     end_date: date = Form(...),
+    kind: Optional[str] = Form("vacation"),
     reason: Optional[str] = Form(None),
     db: Session = Depends(get_db),
 ):
+    from app.models import UnavailabilityKind
+    if end_date < start_date:
+        raise HTTPException(400, "end_date deve essere >= start_date")
+    try:
+        k = UnavailabilityKind(kind or "vacation")
+    except Exception:
+        k = UnavailabilityKind.vacation
     u = ResourceUnavailability(
         resource_id=resource_id,
         start_date=start_date,
         end_date=end_date,
+        kind=k,
         reason=reason,
     )
-    db.add(u); db.commit()
-    return {"id": u.id}
+    db.add(u); db.commit(); db.refresh(u)
+    return {"id": u.id, "start_date": u.start_date.isoformat(),
+            "end_date": u.end_date.isoformat(),
+            "kind": u.kind.value if hasattr(u.kind, "value") else u.kind,
+            "reason": u.reason}
+
+
+@router.delete("/api/unavailability/{u_id}")
+async def delete_unavailability(u_id: int, db: Session = Depends(get_db)):
+    u = db.query(ResourceUnavailability).join(Resource).filter(
+        ResourceUnavailability.id == u_id,
+        Resource.tenant_id == CURRENT_TENANT,
+    ).first()
+    if not u:
+        raise HTTPException(404, "Unavailability non trovata")
+    db.delete(u); db.commit()
+    return {"ok": True}

@@ -8,7 +8,7 @@
 
 ## Versione corrente
 
-**v3.4.20.3** — 29 aprile 2026 — UI settings tab "Orari lavorativi"
+**v3.4.20.4** — 29 aprile 2026 — Form ferie/malattia + override policy in modal risorsa
 
 ## In corso
 
