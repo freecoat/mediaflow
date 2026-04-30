@@ -1118,6 +1118,26 @@ async def create_unavailability(
     db.add(u)
     db.commit()
     db.refresh(u)
+
+    # v3.4.27: notify managers se la richiesta è pending
+    if status == UnavailabilityStatus.pending:
+        from app.services import notifications as notif_svc
+        kind_lbl = {"vacation": "Ferie", "sick": "Malattia", "other": "Permesso"}.get(
+            kind.value if hasattr(kind, "value") else str(kind), "Richiesta"
+        )
+        resource_name = u.resource.name if u.resource else f"risorsa #{resource_id}"
+        notif_svc.notify_permission(
+            db,
+            permission="approve_unavailability",
+            exclude_user_ids=[user.id] if user else None,
+            kind="unavailability_pending",
+            severity="action_required",
+            title=f"{kind_lbl} da approvare — {resource_name}",
+            body=f"{start_date.strftime('%d/%m/%Y')} → {end_date.strftime('%d/%m/%Y')}" + (f" · {reason}" if reason else ""),
+            link="/hr/",
+            payload={"unavailability_id": u.id, "resource_id": resource_id, "kind": kind.value if hasattr(kind, "value") else str(kind)},
+            actor_user_id=user.id if user else None,
+        )
     return _u_dict(u)
 
 
@@ -1166,6 +1186,24 @@ async def approve_unavailability(
     u.rejection_reason = None
     db.commit()
     db.refresh(u)
+
+    # v3.4.27: notify il richiedente
+    if u.requested_by_user_id and u.requested_by_user_id != user.id:
+        from app.services import notifications as notif_svc
+        kind_lbl = {"vacation": "Ferie", "sick": "Malattia", "other": "Permesso"}.get(
+            u.kind.value if hasattr(u.kind, "value") else str(u.kind), "Richiesta"
+        )
+        notif_svc.notify(
+            db,
+            user_ids=[u.requested_by_user_id],
+            kind="unavailability_approved",
+            severity="info",
+            title=f"{kind_lbl} approvata",
+            body=f"{u.start_date.strftime('%d/%m/%Y')} → {u.end_date.strftime('%d/%m/%Y')}",
+            link="/hr/",
+            payload={"unavailability_id": u.id},
+            actor_user_id=user.id,
+        )
     return _u_dict(u)
 
 
@@ -1192,6 +1230,24 @@ async def reject_unavailability(
     u.rejection_reason = rejection_reason
     db.commit()
     db.refresh(u)
+
+    # v3.4.27: notify il richiedente
+    if u.requested_by_user_id and u.requested_by_user_id != user.id:
+        from app.services import notifications as notif_svc
+        kind_lbl = {"vacation": "Ferie", "sick": "Malattia", "other": "Permesso"}.get(
+            u.kind.value if hasattr(u.kind, "value") else str(u.kind), "Richiesta"
+        )
+        notif_svc.notify(
+            db,
+            user_ids=[u.requested_by_user_id],
+            kind="unavailability_rejected",
+            severity="action_required",
+            title=f"{kind_lbl} rifiutata",
+            body=(rejection_reason or "Nessun motivo specificato") + f" · {u.start_date.strftime('%d/%m/%Y')} → {u.end_date.strftime('%d/%m/%Y')}",
+            link="/hr/",
+            payload={"unavailability_id": u.id, "rejection_reason": rejection_reason},
+            actor_user_id=user.id,
+        )
     return _u_dict(u)
 
 

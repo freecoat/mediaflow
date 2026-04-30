@@ -11,7 +11,7 @@ from app.routers import (
     auth, resources, planning, finance, dam,
     pricelist, quotes, cost_report as cr,
     clients, projects, ai, departments, settings as settings_router,
-    assignments, hr, jobs, admin,
+    assignments, hr, jobs, admin, notifications as notifications_router,
 )
 
 
@@ -21,7 +21,9 @@ def _auto_migrate_columns():
     Idempotente. Evita crash se l'utente ha pull-ato il codice senza
     eseguire la migrazione corrispondente (caso reale single-user dev DB).
     Per cambi maggiori (nuove tabelle, FK pesanti) preferisci sempre lo
-    script `scripts/migrate_*.py` esplicito.
+    script `scripts/migrate_*.py` esplicito. Le NUOVE tabelle introdotte
+    da Base.metadata.create_all() vengono create automaticamente da
+    create_tables() prima di questa funzione.
     """
     from sqlalchemy import inspect, text
     from app.database import engine
@@ -37,7 +39,7 @@ def _auto_migrate_columns():
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     create_tables()
-    # Auto-fix colonne aggiunte di recente (v3.4.26.1) — evita crash se
+    # Auto-fix colonne aggiunte di recente (v3.4.27.1) — evita crash se
     # l'utente ha pull-ato senza lanciare la migrazione [K]
     try:
         _auto_migrate_columns()
@@ -46,7 +48,7 @@ async def lifespan(app: FastAPI):
     settings.upload_dir.mkdir(parents=True, exist_ok=True)
     (settings.upload_dir / "assets").mkdir(exist_ok=True)
     (settings.upload_dir / "thumbnails").mkdir(exist_ok=True)
-    # Bootstrap ruoli built-in (v3.4.26)
+    # Bootstrap ruoli built-in (v3.4.27)
     try:
         from app.database import SessionLocal
         from app.services.rbac import ensure_built_in_roles
@@ -60,7 +62,7 @@ async def lifespan(app: FastAPI):
     yield
 
 
-app = FastAPI(title="MediaFlow", version="3.4.26", lifespan=lifespan)
+app = FastAPI(title="MediaFlow", version="3.4.27", lifespan=lifespan)
 
 BASE_DIR = Path(__file__).parent
 app.mount("/static", StaticFiles(directory=BASE_DIR / "static"), name="static")
@@ -97,7 +99,7 @@ async def no_cache_html(request: Request, call_next):
     return response
 
 
-# ── Auth guard (v3.4.26.1) ─────────────────────────────────────
+# ── Auth guard (v3.4.27.1) ─────────────────────────────────────
 # Redirect a /auth/login se cookie access_token mancante/invalido per
 # pagine HTML. API (path /api/* o accept JSON) ricevono 401 JSON.
 PUBLIC_PATHS = ("/auth/", "/static/", "/health", "/docs", "/openapi.json", "/favicon.ico", "/redoc")
@@ -225,6 +227,7 @@ app.include_router(assignments.router)
 app.include_router(hr.router)
 app.include_router(jobs.router)
 app.include_router(admin.router)
+app.include_router(notifications_router.router)
 
 
 @app.get("/", response_class=HTMLResponse)
@@ -244,5 +247,5 @@ async def dashboard(request: Request):
 async def health():
     from app.services.ai_provider import get_provider
     p = get_provider()
-    return {"status": "ok", "app": settings.app_name, "version": "3.4.26",
+    return {"status": "ok", "app": settings.app_name, "version": "3.4.27",
             "ai": {"configured": p is not None, "provider": p.name if p else None}}

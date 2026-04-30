@@ -8,7 +8,7 @@
 
 ## Versione corrente
 
-**v3.4.26** — 30 aprile 2026 notte — Richiesta ferie spostata da planning a /hr "Le mie ore"
+**v3.4.27** — 30 aprile 2026 notte tarda — Sistema notifiche generico (campanella topbar + drawer + polling 30s + workflow ferie integrato)
 
 ## In corso
 

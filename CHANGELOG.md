@@ -1,5 +1,64 @@
 # MediaFlow — Changelog
 
+## v3.4.27 — Sistema notifiche generico + UI approvazione ferie (30 aprile 2026 notte tarda)
+
+Cantiere generico riusabile per qualsiasi futura notifica (workflow ferie, conflitti booking, deadline, alert sistema, ecc.). Pattern AI propone / utente dispone esteso a "sistema notifica / utente apre".
+
+### Modello
+
+- `Notification(id, tenant_id, user_id, actor_user_id, kind, severity, title, body, link, payload JSON, is_read, is_archived, created_at, read_at)`
+- Pattern una-row-per-destinatario (multi-recipient = N rows). Più semplice per `unread_count` e `mark_read` per-utente.
+- Enum `NotificationKind` con 7 valori iniziali (3 per workflow ferie + 4 riservati per cantieri futuri: booking_conflict, quote_status_changed, job_deadline_approaching, custom).
+- Enum `NotificationSeverity`: info / action_required / alert.
+- Indici su `(user_id, is_read, created_at desc)` per query veloci sul polling.
+
+### Servizio centrale (`app/services/notifications.py`)
+
+Single point per emit:
+- `notify(db, user_ids=[...], kind, title, severity, body, link, payload, actor)` — base
+- `notify_permission(db, permission="approve_unavailability", ...)` — broadcast a chi ha quel permesso
+- `notify_role(db, role_codes=[...], ...)` — broadcast a ruoli
+- `mark_read(db, user, ids)` / `mark_all_read(db, user)`
+- `unread_count(db, user) → {total, action_required}`
+- `list_for_user(db, user, only_unread, include_archived, limit, offset)`
+- `archive(db, user, id)` (soft)
+- `cleanup_old(db, days=90)` — soft-archive notifiche lette > 90gg
+
+### Endpoint REST (`/notifications/api/*`)
+
+- `GET /unread-count` — lightweight per polling 30s (ritorna `{total, action_required}`)
+- `GET /list?only_unread=&include_archived=&limit=&offset=`
+- `POST /{id}/read`
+- `POST /mark-all-read`
+- `DELETE /{id}` (soft archive)
+
+### Hook iniziali (workflow ferie/malattia)
+
+| Evento | Destinatari | Severity |
+|---|---|---|
+| `create_unavailability(status=pending)` | tutti con `approve_unavailability` (escluso il richiedente) | action_required |
+| `approve_unavailability` | richiedente | info |
+| `reject_unavailability` | richiedente (con `rejection_reason` nel body) | action_required |
+
+### UI
+
+- **Topbar campanella 🔔** in `base.html` (sempre visibile per utenti loggati): badge counter rosso (giallo se ci sono `action_required`).
+- **Drawer notifiche** laterale destra (`components/notifications.html`): lista con icona-per-kind, titolo, body, tempo relativo (Ora / N min fa / Nh fa / data). Click su notifica = mark_read + redirect al `link`.
+- **Polling 30s** automatico su `/unread-count` (basso costo).
+- **Bottone "Tutte lette"** in header drawer.
+- **Card "🔔 Richieste in attesa"** in `/hr/` per chi ha `approve_unavailability`: lista pending con bottoni Approva / Rifiuta (con motivo opzionale via prompt). Auto-refresh post-azione + ping `notifFetchUnread()`.
+
+### Conseguenze e interazioni
+
+- **Multi-tenant hard (Fase 7)**: `tenant_id` già pronto.
+- **Portale cliente futuro**: stesso modello, basta filtrare per `client_id` (richiederà piccola estensione).
+- **Cantieri futuri**: emit di `booking_conflict` quando si crea un booking sovrapposto, `job_deadline_approaching` come cron (cantiere /schedule), `quote_status_changed` quando il client accetta/rifiuta. Tutti già supportati lato modello.
+- **Audit**: ogni notification è una traccia di chi-quando-cosa, utile per workflow di approvazione.
+
+### Migrazione
+
+Nessuno script: la tabella `notifications` viene creata automaticamente da `Base.metadata.create_all()` al boot tramite `create_tables()`. Idempotente.
+
 ## v3.4.26 — Spostamento richiesta ferie da planning a /hr ("Le mie ore") (30 aprile 2026 notte)
 
 In v3.4.24 avevo messo la card richiesta ferie + riepilogo ore nel tab "✓ Le mie" del planning. Matteo: la voce sidebar "Le mie ore" è la pagina `/hr/`, non quella → spostato lì.

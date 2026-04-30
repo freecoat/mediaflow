@@ -12,4 +12,6 @@ from app.models.models import (
     PriceCategory, PriceItem, PriceLevel,
     Quote, QuoteLine, QuoteStatus,
     AIConversation, AIMessage,
+    UserAISettings, AIAction,
+    Notification, NotificationKind, NotificationSeverity,
 )

@@ -138,6 +138,10 @@
       <div class="topbar-actions">
         {% block topbar_actions %}{% endblock %}
         {% if request.state.current_user %}
+        <button id="notif-bell-btn" class="topbar-bell" title="Notifiche" onclick="notifToggleDrawer()">
+          <span class="topbar-bell-icon">🔔</span>
+          <span id="notif-badge" class="topbar-bell-badge" style="display:none;">0</span>
+        </button>
         <div class="topbar-user" title="{{ request.state.current_user.email }}">
           <span class="topbar-user-name">{{ request.state.current_user.full_name or request.state.current_user.email }}</span>
           <span class="topbar-user-role">{{ request.state.current_user.role.value if request.state.current_user.role else '' }}</span>
@@ -160,7 +164,12 @@
 <!-- Copilot AI drawer (sempre montato, attivabile via FAB) -->
 {% include "components/copilot.html" %}
 
-<script src="/static/js/global.js?v=3.4.26"></script>
+<!-- Notifiche drawer (v3.4.27) -->
+{% if request.state.current_user %}
+{% include "components/notifications.html" %}
+{% endif %}
+
+<script src="/static/js/global.js?v=3.4.27"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/fullcalendar/6.1.11/index.global.min.js"></script>
 {% block scripts %}{% endblock %}
 </body>

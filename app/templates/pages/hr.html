@@ -92,6 +92,16 @@
   </div>
 </div>
 
+{% if can_approve_unavailability(_user) %}
+<!-- ── Richieste ferie/malattia in attesa (v3.4.27) ────────── -->
+<div class="card" id="pending-unav-card" style="margin-bottom:16px; display:none;">
+  <div class="flex items-center justify-between" style="margin-bottom:10px;">
+    <h3 style="font-size:14px; margin:0;">🔔 Richieste in attesa di approvazione <span id="pending-unav-count" class="text-muted text-sm" style="font-weight:normal;">(0)</span></h3>
+  </div>
+  <div id="pending-unav-list"></div>
+</div>
+{% endif %}
+
 {% if scoped_resource_id %}
 <!-- ── Riepilogo ore + richieste ferie/malattia (v3.4.26) ──── -->
 <!-- Visibile solo a chi ha una Resource collegata (staff con propria scheda HR) -->
@@ -454,6 +464,72 @@ async function deletePunch() {
 }
 
 reloadHR();
+
+{% if can_approve_unavailability(_user) %}
+// ── v3.4.27: Pannello approvazione ferie pending ─────────────────
+async function reloadPendingUnav() {
+  const card = document.getElementById('pending-unav-card');
+  const host = document.getElementById('pending-unav-list');
+  const counter = document.getElementById('pending-unav-count');
+  try {
+    const rows = await api('GET', '/planning/api/unavailabilities/pending');
+    if (!rows || !rows.length) {
+      card.style.display = 'none';
+      return;
+    }
+    card.style.display = '';
+    counter.textContent = `(${rows.length})`;
+    const KIND_LBL = {vacation:'Ferie', sick:'Malattia', other:'Permesso'};
+    const KIND_COL = {vacation:'#6272f5', sick:'#ef4444', other:'#9ca3af'};
+    const fmt = d => new Date(d+'T00:00').toLocaleDateString('it-IT', {day:'numeric', month:'short', year:'numeric'});
+    host.innerHTML = '<div style="border:1px solid var(--border); border-radius:6px; overflow:hidden;">' + rows.map(u => {
+      const lbl = KIND_LBL[u.kind] || u.kind;
+      const col = KIND_COL[u.kind] || '#9ca3af';
+      const reason = u.reason ? `<div style="font-size:12px; color:var(--text2); margin-top:3px;">${escapeHtml(u.reason)}</div>` : '';
+      return `<div style="padding:10px 14px; border-bottom:1px solid var(--border); display:flex; align-items:center; justify-content:space-between; gap:10px; flex-wrap:wrap;">
+        <div style="flex:1; min-width:200px;">
+          <div style="font-size:13px;">
+            <span style="display:inline-block; width:8px; height:8px; border-radius:50%; background:${col}; margin-right:6px;"></span>
+            <b>${escapeHtml(u.resource_name || '')}</b> · ${lbl} · ${fmt(u.start_date)} → ${fmt(u.end_date)}
+          </div>
+          ${reason}
+        </div>
+        <div style="display:flex; gap:6px;">
+          <button class="btn btn-secondary btn-sm" onclick="rejectUnav(${u.id})">Rifiuta</button>
+          <button class="btn btn-primary btn-sm" onclick="approveUnav(${u.id})">✓ Approva</button>
+        </div>
+      </div>`;
+    }).join('') + '</div>';
+  } catch(e) {
+    host.innerHTML = '<div class="text-muted" style="padding:10px; font-size:12px; color:#ef4444;">Errore: ' + (e.message||'') + '</div>';
+    card.style.display = '';
+  }
+}
+
+async function approveUnav(id) {
+  try {
+    await api('POST', `/planning/api/unavailabilities/${id}/approve`);
+    toast('Richiesta approvata', 'success');
+    await reloadPendingUnav();
+    if (typeof notifFetchUnread === 'function') notifFetchUnread();
+  } catch(e) { toast(e.message || 'Errore', 'error'); }
+}
+
+async function rejectUnav(id) {
+  const motivo = prompt('Motivo del rifiuto (opzionale):', '');
+  if (motivo === null) return;
+  try {
+    const fd = new FormData();
+    if (motivo) fd.append('rejection_reason', motivo);
+    await api('POST', `/planning/api/unavailabilities/${id}/reject`, fd);
+    toast('Richiesta rifiutata', 'success');
+    await reloadPendingUnav();
+    if (typeof notifFetchUnread === 'function') notifFetchUnread();
+  } catch(e) { toast(e.message || 'Errore', 'error'); }
+}
+
+reloadPendingUnav();
+{% endif %}
 
 {% if scoped_resource_id %}
 // ── v3.4.26: Le mie ore (riepilogo + richieste ferie/malattia) ──────────

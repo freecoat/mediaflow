@@ -86,6 +86,29 @@ class InvoiceStatus(str, enum.Enum):
     overdue = "overdue"; cancelled = "cancelled"
 
 
+class NotificationKind(str, enum.Enum):
+    """Tipologia di notifica (v3.4.27).
+
+    Estendibile: nuovo kind = aggiungi qui + emit con `notifications.notify(...)`.
+    Il client UI può mappare kind → icona/colore custom.
+    """
+    # Workflow ferie/malattia/permessi
+    unavailability_pending = "unavailability_pending"      # → manager (approvazione)
+    unavailability_approved = "unavailability_approved"    # → richiedente
+    unavailability_rejected = "unavailability_rejected"    # → richiedente
+    # Cantieri futuri (riservati, già supportati lato modello):
+    booking_conflict = "booking_conflict"
+    quote_status_changed = "quote_status_changed"
+    job_deadline_approaching = "job_deadline_approaching"
+    custom = "custom"
+
+
+class NotificationSeverity(str, enum.Enum):
+    info = "info"                     # blu, informativa
+    action_required = "action_required"   # giallo, richiede attenzione
+    alert = "alert"                   # rosso, critica
+
+
 # ── UTENTI ───────────────────────────────────────────────────
 
 class Role(Base):
@@ -901,3 +924,35 @@ class AIAction(Base):
     result: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
     applied_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+
+
+# ── NOTIFICATIONS (v3.4.27) ──────────────────────────────────
+#
+# Sistema generico di notifiche utente. Ogni evento "interessante" del
+# sistema (richiesta ferie pending, conflitto booking, deadline progetto, ecc.)
+# emette una Notification per ciascun destinatario. Il client UI le mostra
+# con un badge counter sulla campanella in topbar e un drawer laterale.
+#
+# Pattern: una row per destinatario (multi-recipient = N rows). Più semplice
+# per unread_count e mark_read. Il payload JSON contiene riferimenti
+# strutturati all'entità (es. {"unavailability_id": 42}).
+
+class Notification(Base):
+    __tablename__ = "notifications"
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    tenant_id: Mapped[int] = mapped_column(Integer, default=1, index=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), index=True)
+    actor_user_id: Mapped[Optional[int]] = mapped_column(
+        ForeignKey("users.id"), nullable=True)
+    kind: Mapped[str] = mapped_column(String(64), index=True)
+    severity: Mapped[str] = mapped_column(String(20), default="info")
+    title: Mapped[str] = mapped_column(String(255))
+    body: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    link: Mapped[Optional[str]] = mapped_column(String(500), nullable=True)
+    payload: Mapped[Optional[dict]] = mapped_column(JSON, nullable=True)
+    is_read: Mapped[bool] = mapped_column(Boolean, default=False, index=True)
+    is_archived: Mapped[bool] = mapped_column(Boolean, default=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, index=True)
+    read_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+    user: Mapped["User"] = relationship(foreign_keys=[user_id])
+    actor: Mapped[Optional["User"]] = relationship(foreign_keys=[actor_user_id])
