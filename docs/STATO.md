@@ -8,7 +8,7 @@
 
 ## Versione corrente
 
-**v3.4.21** — 30 aprile 2026 — Soglie + moltiplicatori straordinari (fondamenta cost report)
+**v3.4.21.1** — 30 aprile 2026 — Auth guard + UX login + badge topbar utente
 
 ## In corso
 

@@ -1,5 +1,5 @@
 """Router autenticazione — login, logout, profilo utente."""
-from fastapi import APIRouter, Depends, HTTPException, Request, Response, Form
+from fastapi import APIRouter, Depends, HTTPException, Request, Response, Form, Query
 from fastapi.responses import HTMLResponse, RedirectResponse
 from sqlalchemy.orm import Session
 from app.database import get_db
@@ -11,23 +11,35 @@ router = APIRouter(prefix="/auth", tags=["auth"])
 
 
 @router.get("/login", response_class=HTMLResponse)
-async def login_page(request: Request):
+async def login_page(request: Request, next_url: str = Query("/dashboard", alias="next")):
     from app.main import templates
-    return templates.TemplateResponse("pages/login.html", {"request": request})
+    return templates.TemplateResponse("pages/login.html", {"request": request, "next": next_url})
 
 
 @router.post("/login")
 async def login(
-    response: Response,
+    request: Request,
     email: str = Form(...),
     password: str = Form(...),
     db: Session = Depends(get_db),
 ):
+    from app.main import templates
+    # Leggiamo `next` direttamente dal form: in FastAPI usare Form(alias="next")
+    # con un parametro Python rinominato non sempre funziona se il nome desiderato
+    # collide con un builtin. Il path è pochi byte di body, lo prendiamo a mano.
+    form = await request.form()
+    next_url = (form.get("next") or "/dashboard").strip()
+
     user = authenticate_user(db, email, password)
     if not user:
-        raise HTTPException(status_code=401, detail="Credenziali non valide")
+        return templates.TemplateResponse(
+            "pages/login.html",
+            {"request": request, "error": "Email o password non corretti", "next": next_url, "email": email},
+            status_code=401,
+        )
     token = create_access_token({"sub": user.email})
-    resp = RedirectResponse(url="/dashboard", status_code=303)
+    target = next_url if next_url.startswith("/") and not next_url.startswith("//") else "/dashboard"
+    resp = RedirectResponse(url=target, status_code=303)
     resp.set_cookie(
         key="access_token",
         value=token,

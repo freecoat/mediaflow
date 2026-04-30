@@ -108,6 +108,13 @@
       <span class="topbar-title">{% block topbar_title %}{% endblock %}</span>
       <div class="topbar-actions">
         {% block topbar_actions %}{% endblock %}
+        {% if request.state.current_user %}
+        <div class="topbar-user" title="{{ request.state.current_user.email }}">
+          <span class="topbar-user-name">{{ request.state.current_user.full_name or request.state.current_user.email }}</span>
+          <span class="topbar-user-role">{{ request.state.current_user.role.value if request.state.current_user.role else '' }}</span>
+          <a href="/auth/logout" class="topbar-user-logout" title="Logout">↩</a>
+        </div>
+        {% endif %}
       </div>
     </header>
 

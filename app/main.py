@@ -24,7 +24,7 @@ async def lifespan(app: FastAPI):
     yield
 
 
-app = FastAPI(title="MediaFlow", version="3.4.21", lifespan=lifespan)
+app = FastAPI(title="MediaFlow", version="3.4.21.1", lifespan=lifespan)
 
 BASE_DIR = Path(__file__).parent
 app.mount("/static", StaticFiles(directory=BASE_DIR / "static"), name="static")
@@ -43,6 +43,61 @@ async def no_cache_html(request: Request, call_next):
         response.headers["Pragma"] = "no-cache"
         response.headers["Expires"] = "0"
     return response
+
+
+# ── Auth guard (v3.4.21.1.1) ─────────────────────────────────────
+# Redirect a /auth/login se cookie access_token mancante/invalido per
+# pagine HTML. API (path /api/* o accept JSON) ricevono 401 JSON.
+PUBLIC_PATHS = ("/auth/", "/static/", "/health", "/docs", "/openapi.json", "/favicon.ico", "/redoc")
+
+
+def _resolve_user_from_token(token: str):
+    """Apre una sessione DB minima e ritorna l'utente. None se token invalido o utente disabilitato."""
+    if not token:
+        return None
+    from app.services.auth import decode_token
+    payload = decode_token(token)
+    if not payload:
+        return None
+    email = payload.get("sub")
+    if not email:
+        return None
+    from app.database import SessionLocal
+    from app.models import User
+    db = SessionLocal()
+    try:
+        return db.query(User).filter(User.email == email, User.is_active == True).first()  # noqa: E712
+    finally:
+        db.close()
+
+
+@app.middleware("http")
+async def auth_guard(request: Request, call_next):
+    path = request.url.path
+    request.state.current_user = None
+
+    user = _resolve_user_from_token(request.cookies.get("access_token"))
+    request.state.current_user = user
+
+    if any(path == p.rstrip("/") or path.startswith(p) for p in PUBLIC_PATHS):
+        return await call_next(request)
+
+    if not user:
+        return _unauthorized(request, path)
+
+    return await call_next(request)
+
+
+def _unauthorized(request: Request, path: str):
+    accept = request.headers.get("accept", "")
+    is_api = path.startswith("/api/") or "/api/" in path or "application/json" in accept
+    if is_api:
+        from fastapi.responses import JSONResponse
+        return JSONResponse({"detail": "Non autenticato"}, status_code=401)
+    next_url = path
+    if request.url.query:
+        next_url += f"?{request.url.query}"
+    return RedirectResponse(url=f"/auth/login?next={next_url}", status_code=303)
 
 app.include_router(auth.router)
 app.include_router(clients.router)
@@ -79,5 +134,5 @@ async def dashboard(request: Request):
 async def health():
     from app.services.ai_provider import get_provider
     p = get_provider()
-    return {"status": "ok", "app": settings.app_name, "version": "3.4.21",
+    return {"status": "ok", "app": settings.app_name, "version": "3.4.21.1",
             "ai": {"configured": p is not None, "provider": p.name if p else None}}

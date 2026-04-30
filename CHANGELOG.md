@@ -1,5 +1,31 @@
 # MediaFlow — Changelog
 
+## v3.4.21.1 — Auth guard + UX login (30 aprile 2026)
+
+Pagina login esisteva già ma non proteggeva niente: si entrava in `/dashboard` anche
+senza cookie. Patch UX per testare il flusso punch in/out come Luca Bianchi.
+
+### Auth guard middleware
+
+- Nuovo middleware `auth_guard` in `app/main.py`
+- Cookie `access_token` mancante o JWT invalido su path protetto → redirect 303 a `/auth/login?next=<path>`
+- Whitelist: `/auth/*`, `/static/*`, `/health`, `/docs`, `/openapi.json`, `/favicon.ico`, `/redoc`
+- API (path con `/api/`) ricevono 401 JSON invece di redirect
+- `request.state.current_user` popolato a ogni request con l'oggetto User (hit DB minimo)
+
+### UX login
+
+- POST `/auth/login` con credenziali sbagliate ora **rerender** il template con `{{ error }}` (era 401 JSON crudo)
+- Email pre-compilata se sbagli password (UX)
+- Hidden input `next` nel form per redirect smart post-login (lettura via `request.form()` per evitare collision col builtin Python `next`)
+- Card "Account demo" in fondo al login con credenziali pre-popolate per i 2 utenti seed (`admin@mediaflow.it` / `editor@mediaflow.it`)
+
+### Topbar utente loggato
+
+- Badge `topbar-user` con nome + ruolo + bottone logout veloce
+- Visibile su tutte le pagine via `base.html`
+- CSS dedicato in `main.css`: surface elevata, role uppercase 10px, logout hover rosa
+
 ## v3.4.21 — Soglie e moltiplicatori straordinari (30 aprile 2026)
 
 Fondamenta del cost report doppio: la `WorkingHoursPolicy` impara a distinguere

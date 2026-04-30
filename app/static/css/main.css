@@ -245,6 +245,34 @@ a:hover { text-decoration: underline; }
   color: var(--text);
 }
 .topbar-actions { display: flex; align-items: center; gap: 10px; }
+.topbar-user {
+  display: flex; align-items: center; gap: 8px;
+  padding: 6px 10px;
+  background: var(--surface2, rgba(255,255,255,.04));
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  font-size: 12px;
+}
+.topbar-user-name { color: var(--text); font-weight: 600; }
+.topbar-user-role {
+  color: var(--text2);
+  text-transform: uppercase;
+  font-size: 10px;
+  letter-spacing: 0.5px;
+  padding: 2px 6px;
+  background: var(--bg);
+  border-radius: 4px;
+}
+.topbar-user-logout {
+  color: var(--text2);
+  text-decoration: none;
+  font-size: 14px;
+  padding: 0 4px;
+  border-left: 1px solid var(--border);
+  margin-left: 2px;
+  transition: color .15s;
+}
+.topbar-user-logout:hover { color: var(--rose); }
 
 /* ── Page content ─────────────────────────────────────────── */
 .page-content {
