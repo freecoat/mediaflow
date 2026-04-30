@@ -8,7 +8,7 @@
 
 ## Versione corrente
 
-**v3.4.23** — 30 aprile 2026 — Permessi configurabili + pannello admin utenti/ruoli + auto-User da Resource
+**v3.4.24** — 30 aprile 2026 — Bug `escapeHtml` globale + ferie/malattia in "Le mie ore" + overtime cleanup + anteprima permessi modal
 
 ## In corso
 
@@ -20,14 +20,15 @@ Tre cantieri attivi in parallelo (sessione 30 aprile sera):
 - 🔜 Cost report **esterno cliente**: solo ore + extra, bottone "→ Genera quote v2"
 - 🔜 Pagina HR riepilogo sett/mese per risorsa + export CSV
 
-### B) RBAC + UX (chiuso v3.4.22 → v3.4.23)
+### B) RBAC + UX (chiuso v3.4.22 → v3.4.24)
 - ✅ v3.4.21.1 — Auth guard + UX login + topbar utente
 - ✅ v3.4.22 — RBAC base + workflow ferie + timbratura semplificata + login centrato + look timeline polish
 - ✅ v3.4.23 — Permessi configurabili + pannello admin utenti/ruoli + auto-User da Resource
+- ✅ v3.4.24 — Fix `escapeHtml` globale (sblocca /admin/users + /admin/roles), rimozione scelta manuale overtime, ferie/malattia in "Le mie ore" + nel conteggio ore, anteprima permessi nel modal utente
 
 ### C) Backlog feedback Matteo (in attesa)
 - ⏸ **Scheda tecnica progetti + link pubblico cliente** — Matteo allegherà PDF (quello del 30/04 era erroneamente `quote_Q-LFSB-1.pdf`, una quotazione)
-- 🔜 Dove fa staff le richieste ferie? `/resources` blocked. Soluzioni: (a) endpoint `/me/leaves`, (b) sblocco `/resources/{own_id}`, (c) sezione dedicata in `/hr`
+- ✅ ~~Dove fa staff le richieste ferie?~~ Risolto in v3.4.24: form inline in `/planning/` tab "Le mie".
 
 Cantiere **Core Planning** (6 fasi confermate dopo analisi top vendor — Float/Runn/Resource Guru/Productive/Mosaic/Ftrack):
 
@@ -176,4 +177,10 @@ Dopo conferma test sul Mac, passare a **#4 server-side abort**.
 
 ---
 
-*Ultimo aggiornamento: 30 aprile 2026 sera — sessione lunghissima 5 commit (v3.4.21 → v3.4.21.1 → v3.4.22 → v3.4.23). 26 commit ahead origin/main. Aperto cantiere Cost Report (overtime engine), poi pivot su feedback Matteo → RBAC pesante. v3.4.22: ruolo producer + service rbac + sidebar conditional + auth guard blacklist + scope HR/planning + workflow approvazione ferie + timbratura semplificata (no job per staff) + overlay timbrature timeline + bug fix booking modal + login centrato + look timeline polish. v3.4.23: sistema permessi configurabili (modello Role + 23 permessi granulari + 6 preset built-in admin/manager/producer/accounting/operator/viewer), pannello /admin/users e /admin/roles con matrix permessi, auto-User da Resource personale, fix bug /hr/ 500 + drag inerziale timeline + nuovo progetto staff. Migrazioni nuove [I][J] in strumenti. Working tree pulito. Prossima sessione: testare RBAC + permessi sul Mac, poi proseguire cost report O scheda tecnica progetti (manca doc).*
+*Ultimo aggiornamento: 30 aprile 2026 notte — riapertura post-test sul Mac, chiuso v3.4.24 con i 4 punti emersi (3 dei quali collassati su un singolo bug `escapeHtml` non globale). 27 commit ahead origin/main.
+
+**v3.4.24**: (1) `escapeHtml` spostato in `global.js` → /admin/users e /admin/roles tornano funzionanti, l'auto-User da Resource era già OK ma sembrava rotto a causa del crash render lista; (2) modal timbratura senza scelta manuale "straordinario" (calcolo deterministico via policy); (3) "Le mie ore" planning ora ha card riepilogo ore (regolari+straordinari+notturne+ferie+malattia+totale) + form richiesta ferie/malattia + lista delle proprie con stato; `/hr/api/overtime` esteso con campi `unavailability` e `grand_total_hours` per la rendicontazione amministrativa; nuovo endpoint `/planning/api/my-unavailabilities`; (4) anteprima badge permessi sotto dropdown ruolo nel modal `/admin/users`.
+
+---
+
+*Versione precedente: 30 aprile 2026 sera — sessione lunghissima 5 commit (v3.4.21 → v3.4.21.1 → v3.4.22 → v3.4.23). 26 commit ahead origin/main. Aperto cantiere Cost Report (overtime engine), poi pivot su feedback Matteo → RBAC pesante. v3.4.22: ruolo producer + service rbac + sidebar conditional + auth guard blacklist + scope HR/planning + workflow approvazione ferie + timbratura semplificata (no job per staff) + overlay timbrature timeline + bug fix booking modal + login centrato + look timeline polish. v3.4.23: sistema permessi configurabili (modello Role + 23 permessi granulari + 6 preset built-in admin/manager/producer/accounting/operator/viewer), pannello /admin/users e /admin/roles con matrix permessi, auto-User da Resource personale, fix bug /hr/ 500 + drag inerziale timeline + nuovo progetto staff. Migrazioni nuove [I][J] in strumenti. Working tree pulito. Prossima sessione: testare RBAC + permessi sul Mac, poi proseguire cost report O scheda tecnica progetti (manca doc).*

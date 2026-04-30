@@ -21,7 +21,7 @@ async def lifespan(app: FastAPI):
     settings.upload_dir.mkdir(parents=True, exist_ok=True)
     (settings.upload_dir / "assets").mkdir(exist_ok=True)
     (settings.upload_dir / "thumbnails").mkdir(exist_ok=True)
-    # Bootstrap ruoli built-in (v3.4.23)
+    # Bootstrap ruoli built-in (v3.4.24)
     try:
         from app.database import SessionLocal
         from app.services.rbac import ensure_built_in_roles
@@ -35,7 +35,7 @@ async def lifespan(app: FastAPI):
     yield
 
 
-app = FastAPI(title="MediaFlow", version="3.4.23", lifespan=lifespan)
+app = FastAPI(title="MediaFlow", version="3.4.24", lifespan=lifespan)
 
 BASE_DIR = Path(__file__).parent
 app.mount("/static", StaticFiles(directory=BASE_DIR / "static"), name="static")
@@ -72,7 +72,7 @@ async def no_cache_html(request: Request, call_next):
     return response
 
 
-# ── Auth guard (v3.4.23.1) ─────────────────────────────────────
+# ── Auth guard (v3.4.24.1) ─────────────────────────────────────
 # Redirect a /auth/login se cookie access_token mancante/invalido per
 # pagine HTML. API (path /api/* o accept JSON) ricevono 401 JSON.
 PUBLIC_PATHS = ("/auth/", "/static/", "/health", "/docs", "/openapi.json", "/favicon.ico", "/redoc")
@@ -219,5 +219,5 @@ async def dashboard(request: Request):
 async def health():
     from app.services.ai_provider import get_provider
     p = get_provider()
-    return {"status": "ok", "app": settings.app_name, "version": "3.4.23",
+    return {"status": "ok", "app": settings.app_name, "version": "3.4.24",
             "ai": {"configured": p is not None, "provider": p.name if p else None}}

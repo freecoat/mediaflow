@@ -1047,6 +1047,35 @@ def _u_dict(u: "ResourceUnavailability") -> dict:
     }
 
 
+@router.get("/api/my-unavailabilities")
+async def list_my_unavailabilities(
+    request: Request,
+    from_date: Optional[_date] = None,
+    to_date: Optional[_date] = None,
+    db: Session = Depends(get_db),
+):
+    """Lista ferie/malattie della risorsa associata all'utente loggato (tutti gli status).
+
+    Usata dalla vista "Le mie" del planning per mostrare le proprie richieste
+    con il loro stato (pending/approved/rejected).
+    """
+    user = current_user_optional(request)
+    if not user:
+        raise HTTPException(401, "Non autenticato")
+    own = scope_resource_id(db, user)
+    if own is None:
+        return []
+    q = db.query(ResourceUnavailability).filter(
+        ResourceUnavailability.resource_id == own,
+    )
+    if from_date:
+        q = q.filter(ResourceUnavailability.end_date >= from_date)
+    if to_date:
+        q = q.filter(ResourceUnavailability.start_date <= to_date)
+    items = q.order_by(ResourceUnavailability.start_date.desc()).all()
+    return [_u_dict(u) for u in items]
+
+
 @router.post("/api/unavailabilities")
 async def create_unavailability(
     request: Request,

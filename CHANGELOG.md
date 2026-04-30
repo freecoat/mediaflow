@@ -1,5 +1,43 @@
 # MediaFlow — Changelog
 
+## v3.4.24 — UX feedback Matteo: bug escapeHtml + ferie/malattia in Le mie ore + cleanup overtime (30 aprile 2026)
+
+Bump dedicato ai 4 punti emersi nei test sul Mac di v3.4.23.
+
+### Bug fix critico — `escapeHtml` non definito globalmente
+
+`/admin/users` e `/admin/roles` crashavano al caricamento con `ReferenceError: escapeHtml is not defined`. La funzione era ridefinita localmente in 5 template ma non in `global.js`, e i due template admin nuovi non avevano la copia locale.
+
+- Aggiunto `escapeHtml(s)` in `app/static/js/global.js` (helper globale).
+- Rimosse le 4 definizioni locali ridondanti (resources, hr, planning, job_detail).
+- **Conseguenza**: l'auto-User da Resource funzionava già correttamente (l'utente *veniva* creato), ma la pagina `/admin/users` crashava su `loadUsers()` e l'utente sembrava sparito. Stesso bug anche su `/admin/roles`.
+
+### Modal timbratura — rimossa scelta manuale "Straordinario"
+
+Lo straordinario è un calcolo deterministico (no AI) basato su `WorkingHoursPolicy` + `compute_overtime()`. La voce `overtime` nel dropdown del modal timbratura era ridondante e fuorviante.
+
+- `hr.html` modal punch: solo **Turno** e **Pausa** come opzioni manuali.
+- Aggiunto helper text esplicito: "Lo straordinario viene calcolato automaticamente in base alla policy oraria".
+- Edit di record storici con `kind=overtime`: vengono aperti come `shift` (mini-migrazione opportunistica al primo salvataggio).
+
+### Ferie/malattia in "Le mie ore" + conteggio rendicontazione
+
+La vista `/planning/` tab "✓ Le mie" ora include 3 sezioni:
+
+1. **Riepilogo ore** del mese corrente (o periodo filtrato): regolari · straordinari · notturne · ferie · malattia · **totale**. Card a 6 KPI con colori distinti.
+2. **Le mie ferie e malattie**: form richiesta inline (kind, da/al, motivo) + lista delle proprie richieste con stato (⏳ in attesa / ✅ approvata / ❌ rifiutata) + bottone annulla per richieste pending.
+3. **Attività programmate** (booking + timbrature): comportamento precedente, invariato.
+
+Endpoint nuovi/estesi:
+- `GET /planning/api/my-unavailabilities` — lista delle proprie richieste con tutti gli status (vs `/api/unavailabilities` che ritorna solo approvate per la timeline).
+- `GET /hr/api/overtime` esteso con campi `unavailability` (vacation_days/hours, sick_days/hours, other_days/hours) e `grand_total_hours` (lavorate + ferie + malattia + altro). Conversione giorni→ore con `daily_hours_threshold` della policy.
+
+### Anteprima permessi nel modal utente
+
+Sotto la dropdown Ruolo in `/admin/users`, badge dei permessi inclusi nel ruolo selezionato, raggruppati per categoria. Aggiornato live al cambio di selezione e mostrato in apertura modal (sia create che edit). Link "Modifica permessi →" punta a `/admin/roles`.
+
+---
+
 ## v3.4.23 — Permessi configurabili + pannello admin utenti/ruoli + auto-User da Resource (30 aprile 2026)
 
 Sistema RBAC v2: 6 preset built-in + ruoli custom configurabili dall'admin.

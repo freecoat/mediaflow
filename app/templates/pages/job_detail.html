@@ -246,11 +246,6 @@ function fmtEur(n) {
   if (n == null) return '—';
   return new Intl.NumberFormat('it-IT', {style:'currency', currency:'EUR'}).format(n);
 }
-function escapeHtml(s) {
-  if (s == null) return '';
-  return String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-}
-
 async function loadJob() {
   try {
     currentJob = await api('GET', `/jobs/api/${JOB_ID}`);

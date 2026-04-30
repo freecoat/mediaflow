@@ -379,11 +379,6 @@ async function rsUnavDelete(uId, resourceId) {
   } catch(e) { alert(e.message); }
 }
 
-function escapeHtml(s) {
-  if (s == null) return '';
-  return String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-}
-
 async function saveResource() {
   const id = document.getElementById('rs-id').value;
   const name = document.getElementById('rs-name').value.trim();

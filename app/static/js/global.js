@@ -101,6 +101,12 @@ async function api(method, url, formData) {
   return resp.json();
 }
 
+// ── HTML escape ───────────────────────────────────────────────
+function escapeHtml(s) {
+  if (s == null) return '';
+  return String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+
 // ── Format helpers ────────────────────────────────────────────
 function fmtCurrency(n) {
   return new Intl.NumberFormat('it-IT', { style: 'currency', currency: 'EUR' }).format(n || 0);

@@ -139,14 +139,12 @@
           <label class="form-label">Tipo *</label>
           <select class="form-select" id="p-kind" required>
             {% for k in kinds %}
-              {% if user_is_elevated or k.value in ('shift', 'overtime', 'break') %}
+              {% if k.value in ('shift', 'break') %}
               <option value="{{ k.value }}">{{ k.label }}</option>
               {% endif %}
             {% endfor %}
           </select>
-          {% if not user_is_elevated %}
-          <small class="form-help text-muted">Per ferie/malattia/permessi → "Le mie richieste" su /resources/{{ scoped_resource_id }}</small>
-          {% endif %}
+          <small class="form-help text-muted">Lo straordinario viene calcolato automaticamente in base alla policy oraria. Per ferie/malattia → "Le mie ore" nel planning.</small>
         </div>
       </div>
       <div class="form-row">
@@ -220,11 +218,6 @@ function fmtDateTimeLocal(iso) {
   const pad = n => String(n).padStart(2, '0');
   return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
 }
-function escapeHtml(s) {
-  if (s == null) return '';
-  return String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-}
-
 function buildQuery() {
   const params = new URLSearchParams();
   const r = document.getElementById('f-resource').value;
@@ -369,7 +362,8 @@ async function openEditPunch(punchId) {
   document.getElementById('modal-punch-title').textContent = `Timbratura #${p.id}`;
   document.getElementById('p-id').value = p.id;
   document.getElementById('p-resource').value = p.resource_id;
-  document.getElementById('p-kind').value = p.kind;
+  // v3.4.24: kind=overtime non è più scelto manualmente → record storici aperti come shift
+  document.getElementById('p-kind').value = (p.kind === 'overtime') ? 'shift' : p.kind;
   document.getElementById('p-start').value = fmtDateTimeLocal(p.start_datetime);
   document.getElementById('p-end').value = p.end_datetime ? fmtDateTimeLocal(p.end_datetime) : '';
   document.getElementById('p-job').value = p.job_id || '';

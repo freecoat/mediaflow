@@ -18,7 +18,7 @@ from sqlalchemy.orm import Session, joinedload
 from app.database import get_db
 from app.models import (
     Resource, ResourceType, TimePunch, PunchKind, Job, JobCostLine, User,
-    WorkingHoursPolicy,
+    WorkingHoursPolicy, ResourceUnavailability, UnavailabilityKind, UnavailabilityStatus,
 )
 from app.services.auth import get_current_user_from_token
 from app.services.overtime import compute_overtime
@@ -438,6 +438,46 @@ async def overtime_breakdown(
     ).all()
 
     breakdown = compute_overtime(punches, policy)
+
+    # Conteggio ore ferie/malattia/altro nel periodo (per la rendicontazione amministrativa).
+    # Convertiamo i giorni di unavailability approvata in ore usando daily_hours_threshold della policy.
+    daily_h = policy.daily_hours_threshold or 8.0
+    unav = db.query(ResourceUnavailability).filter(
+        ResourceUnavailability.resource_id == resource_id,
+        ResourceUnavailability.status == UnavailabilityStatus.approved,
+        ResourceUnavailability.end_date >= from_date,
+        ResourceUnavailability.start_date <= to_date,
+    ).all()
+    vacation_days = sick_days = other_days = 0
+    for u in unav:
+        s = max(u.start_date, from_date)
+        e = min(u.end_date, to_date)
+        if e < s:
+            continue
+        ndays = (e - s).days + 1
+        k = u.kind.value if hasattr(u.kind, "value") else u.kind
+        if k == "vacation":
+            vacation_days += ndays
+        elif k == "sick":
+            sick_days += ndays
+        else:
+            other_days += ndays
+    unavailability = {
+        "vacation_days": vacation_days,
+        "sick_days": sick_days,
+        "other_days": other_days,
+        "vacation_hours": round(vacation_days * daily_h, 2),
+        "sick_hours": round(sick_days * daily_h, 2),
+        "other_hours": round(other_days * daily_h, 2),
+    }
+    grand_total = round(
+        breakdown.total_hours
+        + unavailability["vacation_hours"]
+        + unavailability["sick_hours"]
+        + unavailability["other_hours"],
+        2,
+    )
+
     return {
         "resource_id": resource_id,
         "resource_name": res.name,
@@ -456,4 +496,6 @@ async def overtime_breakdown(
             "night_end": policy.night_end.strftime("%H:%M") if policy.night_end else None,
         },
         "breakdown": breakdown.as_dict(),
+        "unavailability": unavailability,
+        "grand_total_hours": grand_total,
     }

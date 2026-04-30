@@ -50,10 +50,11 @@
       </div>
       <div class="form-group">
         <label class="form-label">Ruolo *</label>
-        <select class="form-select" id="u-role" required>
+        <select class="form-select" id="u-role" required onchange="renderRolePreview()">
           <option value="">— seleziona —</option>
         </select>
-        <small class="text-muted text-sm">I permessi sono definiti dal ruolo. Gestisci ruoli da <a href="/admin/roles">Ruoli e permessi</a>.</small>
+        <small class="text-muted text-sm">I permessi sono definiti dal ruolo. <a href="/admin/roles">Modifica permessi →</a></small>
+        <div id="u-role-preview" style="margin-top:10px; display:none;"></div>
       </div>
       <div class="form-group" id="u-pwd-group">
         <label class="form-label">Password</label>
@@ -104,8 +105,40 @@
 
 {% block scripts %}
 <script>
+const PERMS_CATALOG = {{ permissions_catalog|tojson }};
 let ROLES = [];
 let USERS = [];
+
+function renderRolePreview() {
+  const sel = document.getElementById('u-role');
+  const host = document.getElementById('u-role-preview');
+  const roleId = sel.value;
+  if (!roleId) { host.style.display = 'none'; host.innerHTML = ''; return; }
+  const role = ROLES.find(r => String(r.id) === String(roleId));
+  if (!role) { host.style.display = 'none'; return; }
+  const have = new Set(role.permissions || []);
+  // Costruisci lookup label per key
+  const labelByKey = {};
+  for (const cat of Object.values(PERMS_CATALOG)) {
+    for (const [key, [label]] of Object.entries(cat)) labelByKey[key] = label;
+  }
+  let html = `<div style="padding:10px 12px; background:rgba(98,114,245,0.06); border:1px solid var(--border); border-radius:6px;">
+    <div style="font-size:11px; text-transform:uppercase; letter-spacing:0.5px; color:var(--text2); margin-bottom:6px;">
+      Permessi inclusi in <b>${escapeHtml(role.name)}</b> · ${have.size} attivi
+    </div>`;
+  for (const [cat, perms] of Object.entries(PERMS_CATALOG)) {
+    const enabled = Object.keys(perms).filter(k => have.has(k));
+    if (!enabled.length) continue;
+    html += `<div style="margin-top:6px;"><div style="font-size:10px; color:var(--text3); font-weight:600;">${escapeHtml(cat)}</div>
+      <div style="display:flex; flex-wrap:wrap; gap:4px; margin-top:3px;">
+        ${enabled.map(k => `<span style="display:inline-block; padding:2px 7px; background:rgba(98,114,245,0.15); color:#a5b0ff; border-radius:10px; font-size:11px;">${escapeHtml(labelByKey[k]||k)}</span>`).join('')}
+      </div></div>`;
+  }
+  if (!have.size) html += '<div style="font-size:11px; color:var(--text3);">Nessun permesso assegnato.</div>';
+  html += '</div>';
+  host.innerHTML = html;
+  host.style.display = '';
+}
 
 async function loadRoles() {
   ROLES = await api('GET', '/admin/api/roles');
@@ -145,6 +178,7 @@ function openNewUser() {
   document.getElementById('u-active').checked = true;
   document.getElementById('u-pwd-group').style.display = '';
   document.getElementById('u-reset-btn').style.display = 'none';
+  renderRolePreview();
   openModal('modal-user');
 }
 
@@ -161,6 +195,7 @@ function openEditUser(uid) {
   document.getElementById('u-active').checked = !!u.is_active;
   document.getElementById('u-pwd-group').style.display = 'none'; // edit: non gestiamo password qui
   document.getElementById('u-reset-btn').style.display = '';
+  renderRolePreview();
   openModal('modal-user');
 }
 
