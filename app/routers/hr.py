@@ -155,7 +155,7 @@ async def hr_page(request: Request, db: Session = Depends(get_db)):
     return _tpl().TemplateResponse(
         "pages/hr.html",
         {"request": request, "persons": persons, "jobs": jobs, "kinds": kinds,
-         "is_elevated": elevated, "scoped_resource_id": scoped_rid},
+         "user_is_elevated": elevated, "scoped_resource_id": scoped_rid},
     )
 
 

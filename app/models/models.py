@@ -88,13 +88,39 @@ class InvoiceStatus(str, enum.Enum):
 
 # ── UTENTI ───────────────────────────────────────────────────
 
+class Role(Base):
+    """Ruolo configurabile con lista di permessi (v3.4.23).
+
+    I preset built-in (admin, manager, producer, accounting, operator, viewer)
+    sono creati al boot via seed `_ensure_built_in_roles()` e flagged is_system=True.
+    L'admin può creare ruoli custom oltre a quelli preset.
+    """
+    __tablename__ = "roles"
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    tenant_id: Mapped[int] = mapped_column(ForeignKey("tenants.id"), default=1, index=True)
+    code: Mapped[str] = mapped_column(String(40), unique=True, index=True)
+    name: Mapped[str] = mapped_column(String(120))
+    description: Mapped[Optional[str]] = mapped_column(String(500), nullable=True)
+    # Lista permessi (vedi rbac.PERMISSIONS per i key validi)
+    permissions: Mapped[list] = mapped_column(JSON, default=list)
+    # is_system=True: preset built-in, non eliminabili. Permessi però sono editabili
+    # tranne 'admin' che resta sempre con tutti i permessi.
+    is_system: Mapped[bool] = mapped_column(Boolean, default=False, index=True)
+    is_active: Mapped[bool] = mapped_column(Boolean, default=True, index=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+
+
 class User(Base):
     __tablename__ = "users"
     id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
     email: Mapped[str] = mapped_column(String(255), unique=True, index=True)
     full_name: Mapped[str] = mapped_column(String(255))
     hashed_password: Mapped[str] = mapped_column(String(255))
+    # Legacy enum role (kept per backward compat). Il sistema permessi v3.4.23
+    # legge da Role (FK role_id). Quando role_id è popolato, ha priorità.
     role: Mapped[UserRole] = mapped_column(SAEnum(UserRole), default=UserRole.staff)
+    role_id: Mapped[Optional[int]] = mapped_column(ForeignKey("roles.id"), nullable=True, index=True)
+    role_obj: Mapped[Optional["Role"]] = relationship(foreign_keys=[role_id])
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
     last_login: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)

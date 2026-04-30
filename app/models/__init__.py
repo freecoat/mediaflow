@@ -1,5 +1,5 @@
 from app.models.models import (
-    User, UserRole,
+    User, UserRole, Role,
     Tenant,
     Department,
     DeliveryTemplate,

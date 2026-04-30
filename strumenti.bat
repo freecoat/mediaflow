@@ -24,10 +24,11 @@ echo  [F] Migra database esistente (multi-resource booking_assignments) [v3.4.16
 echo  [G] Migra database esistente (working hours + ferie tipizzate) [v3.4.17]
 echo  [H] Migra database esistente (soglie/moltiplicatori straordinari) [v3.4.21]
 echo  [I] Migra database esistente (workflow approvazione ferie/malattia) [v3.4.22]
+echo  [J] Migra database esistente (sistema permessi configurabili Role) [v3.4.23]
 echo  [A] Apri cartella upload
 echo  [0] Esci
 echo.
-set /p scelta="Scegli un'opzione (0-9, A, B, C, D, E, F, G, H, I): "
+set /p scelta="Scegli un'opzione (0-9, A, B, C, D, E, F, G, H, I, J): "
 
 if "%scelta%"=="1" goto avvia
 if "%scelta%"=="2" goto reset_db
@@ -46,6 +47,7 @@ if /i "%scelta%"=="F" goto migrate_multi_resource
 if /i "%scelta%"=="G" goto migrate_working_hours
 if /i "%scelta%"=="H" goto migrate_overtime
 if /i "%scelta%"=="I" goto migrate_unav_approval
+if /i "%scelta%"=="J" goto migrate_roles_v2
 if /i "%scelta%"=="A" goto uploads
 if "%scelta%"=="0" exit /b
 
@@ -249,6 +251,20 @@ set /p conferma="Procedo? (s/n): "
 if /i "%conferma%"=="s" (
     call .venv\Scripts\activate.bat
     python scripts\migrate_unavailability_approval.py
+)
+pause & goto menu
+
+:migrate_roles_v2
+echo.
+echo Migrazione: sistema permessi configurabili Role.
+echo Crea tabella roles con 6 preset (admin/manager/producer/accounting/operator/viewer)
+echo Aggiunge users.role_id e mappa utenti esistenti dall'enum legacy.
+echo Idempotente.
+echo.
+set /p conferma="Procedo? (s/n): "
+if /i "%conferma%"=="s" (
+    call .venv\Scripts\activate.bat
+    python scripts\migrate_roles_v2.py
 )
 pause & goto menu
 

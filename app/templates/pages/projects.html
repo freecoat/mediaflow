@@ -5,7 +5,9 @@
 {% block topbar_title %}Progetti{% endblock %}
 
 {% block topbar_actions %}
+  {% if can_view_finance(request.state.current_user) %}
   <button class="btn btn-primary btn-sm" onclick="openModal('modal-new-project')">+ Nuovo progetto</button>
+  {% endif %}
 {% endblock %}
 
 {% block content %}

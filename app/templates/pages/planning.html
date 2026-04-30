@@ -110,7 +110,9 @@
   .vis-labelset .vis-label:not(.vis-nesting-group) { padding-left: 22px; }
   .vis-labelset .vis-label:hover { background: rgba(98,114,245,0.10); }
   .vis-foreground .vis-group:hover { background: rgba(98,114,245,0.04); }
-  /* Items: shape morbida, glassy, hover lift */
+  /* Items: shape morbida, glassy. NB: niente transition su transform/position
+     altrimenti durante drag vis-timeline applica position via transform e
+     l'item "scivola" con effetto inerziale. */
   .vis-item {
     border: 1px solid rgba(0,0,0,.35);
     color: #fff;
@@ -119,9 +121,9 @@
     padding: 2px 6px;
     box-shadow: 0 1px 3px rgba(0,0,0,.35), inset 0 1px 0 rgba(255,255,255,.08);
     backdrop-filter: saturate(110%);
-    transition: transform .12s ease, box-shadow .12s ease, filter .12s ease;
+    transition: box-shadow .12s ease, filter .12s ease;
   }
-  .vis-item:hover { filter: brightness(1.08); box-shadow: 0 3px 8px rgba(0,0,0,.45), inset 0 1px 0 rgba(255,255,255,.12); transform: translateY(-1px); }
+  .vis-item:hover { filter: brightness(1.08); box-shadow: 0 3px 8px rgba(0,0,0,.45), inset 0 1px 0 rgba(255,255,255,.12); }
   .vis-item.vis-selected {
     box-shadow:
       0 0 0 2px #fff,

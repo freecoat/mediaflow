@@ -11,7 +11,7 @@ from app.routers import (
     auth, resources, planning, finance, dam,
     pricelist, quotes, cost_report as cr,
     clients, projects, ai, departments, settings as settings_router,
-    assignments, hr, jobs,
+    assignments, hr, jobs, admin,
 )
 
 
@@ -21,10 +21,21 @@ async def lifespan(app: FastAPI):
     settings.upload_dir.mkdir(parents=True, exist_ok=True)
     (settings.upload_dir / "assets").mkdir(exist_ok=True)
     (settings.upload_dir / "thumbnails").mkdir(exist_ok=True)
+    # Bootstrap ruoli built-in (v3.4.23)
+    try:
+        from app.database import SessionLocal
+        from app.services.rbac import ensure_built_in_roles
+        _db = SessionLocal()
+        try:
+            ensure_built_in_roles(_db)
+        finally:
+            _db.close()
+    except Exception as e:
+        print(f"[lifespan] ensure_built_in_roles failed: {e}")
     yield
 
 
-app = FastAPI(title="MediaFlow", version="3.4.22", lifespan=lifespan)
+app = FastAPI(title="MediaFlow", version="3.4.23", lifespan=lifespan)
 
 BASE_DIR = Path(__file__).parent
 app.mount("/static", StaticFiles(directory=BASE_DIR / "static"), name="static")
@@ -42,6 +53,9 @@ templates.env.globals["can_edit_settings"] = _rbac.can_edit_settings
 templates.env.globals["can_edit_pricelist"] = _rbac.can_edit_pricelist
 templates.env.globals["can_assign_resources"] = _rbac.can_assign_resources
 templates.env.globals["can_approve_unavailability"] = _rbac.can_approve_unavailability
+templates.env.globals["can_manage_users"] = _rbac.can_manage_users
+templates.env.globals["can_manage_roles"] = _rbac.can_manage_roles
+templates.env.globals["has_permission"] = _rbac.has_permission
 
 
 # Middleware: forza no-cache sulle risposte HTML.
@@ -58,7 +72,7 @@ async def no_cache_html(request: Request, call_next):
     return response
 
 
-# ── Auth guard (v3.4.22.1) ─────────────────────────────────────
+# ── Auth guard (v3.4.23.1) ─────────────────────────────────────
 # Redirect a /auth/login se cookie access_token mancante/invalido per
 # pagine HTML. API (path /api/* o accept JSON) ricevono 401 JSON.
 PUBLIC_PATHS = ("/auth/", "/static/", "/health", "/docs", "/openapi.json", "/favicon.ico", "/redoc")
@@ -77,9 +91,16 @@ def _resolve_user_from_token(token: str):
         return None
     from app.database import SessionLocal
     from app.models import User
+    from sqlalchemy.orm import joinedload
     db = SessionLocal()
     try:
-        return db.query(User).filter(User.email == email, User.is_active == True).first()  # noqa: E712
+        u = db.query(User).options(joinedload(User.role_obj)).filter(
+            User.email == email, User.is_active == True  # noqa: E712
+        ).first()
+        if u:
+            # Forza il caricamento dei permessi prima del detach
+            _ = u.role_obj.permissions if u.role_obj else None
+        return u
     finally:
         db.close()
 
@@ -178,6 +199,7 @@ app.include_router(settings_router.router)
 app.include_router(assignments.router)
 app.include_router(hr.router)
 app.include_router(jobs.router)
+app.include_router(admin.router)
 
 
 @app.get("/", response_class=HTMLResponse)
@@ -197,5 +219,5 @@ async def dashboard(request: Request):
 async def health():
     from app.services.ai_provider import get_provider
     p = get_provider()
-    return {"status": "ok", "app": settings.app_name, "version": "3.4.22",
+    return {"status": "ok", "app": settings.app_name, "version": "3.4.23",
             "ai": {"configured": p is not None, "provider": p.name if p else None}}

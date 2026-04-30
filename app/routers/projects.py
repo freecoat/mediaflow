@@ -9,6 +9,7 @@ from sqlalchemy.orm import Session, joinedload
 from app.database import get_db
 from app.models import Project, Client, Quote, Job, ProjectStatus, Resource
 from app.models.models import JobResourceAssignment
+from app.services.rbac import can_view_finance, current_user_optional
 
 router = APIRouter(prefix="/projects", tags=["projects"])
 
@@ -62,6 +63,7 @@ async def list_projects(
 
 @router.post("/api")
 async def create_project(
+    request: Request,
     code: str = Form(...),
     title: str = Form(...),
     client_id: int = Form(...),
@@ -78,6 +80,8 @@ async def create_project(
     description: Optional[str] = Form(None),
     db: Session = Depends(get_db),
 ):
+    if not can_view_finance(current_user_optional(request)):
+        raise HTTPException(403, "Permesso negato")
     existing = db.query(Project).filter(Project.code == code).first()
     if existing:
         raise HTTPException(400, f"Codice progetto '{code}' già esistente")

@@ -43,10 +43,11 @@ while true; do
     echo "  [g] Migra database esistente (working hours + ferie tipizzate) [v3.4.17]"
     echo "  [h] Migra database esistente (soglie/moltiplicatori straordinari) [v3.4.21]"
     echo "  [i] Migra database esistente (workflow approvazione ferie/malattia) [v3.4.22]"
+    echo "  [j] Migra database esistente (sistema permessi configurabili Role) [v3.4.23]"
     echo "  [a] Apri cartella upload"
     echo "  [0] Esci"
     echo ""
-    read -p "Scegli un'opzione (0-9, a, b, c, d, e, f, g, h, i): " scelta
+    read -p "Scegli un'opzione (0-9, a, b, c, d, e, f, g, h, i, j): " scelta
 
     case $scelta in
         1)
@@ -213,6 +214,17 @@ while true; do
             read -p "Procedo? (s/n): " conferma
             if [ "$conferma" = "s" ] || [ "$conferma" = "S" ]; then
                 python scripts/migrate_unavailability_approval.py
+            fi
+            read -p "Premi INVIO per continuare..."
+            ;;
+        j|J)
+            echo ""
+            echo "Migrazione: sistema permessi configurabili Role."
+            echo "Crea tabella roles con 6 preset, users.role_id, mapping utenti."
+            echo "Idempotente."
+            read -p "Procedo? (s/n): " conferma
+            if [ "$conferma" = "s" ] || [ "$conferma" = "S" ]; then
+                python scripts/migrate_roles_v2.py
             fi
             read -p "Premi INVIO per continuare..."
             ;;

@@ -109,6 +109,8 @@ async def create_resource(
     phone: Optional[str] = Form(None),
     internal_phone: Optional[str] = Form(None),
     color: str = Form("#6272f5"),
+    create_user: bool = Form(False),
+    user_role_code: Optional[str] = Form(None),  # default: operator
     db: Session = Depends(get_db),
 ):
     r = Resource(
@@ -125,8 +127,44 @@ async def create_resource(
         internal_phone=internal_phone.strip() if internal_phone else None,
         color=color,
     )
-    db.add(r); db.commit(); db.refresh(r)
-    return {"id": r.id, "name": r.name}
+    db.add(r); db.flush()
+
+    # v3.4.23: opzionale auto-create User se è una persona
+    temp_password = None
+    user_email = None
+    PERSON_TYPES_LOCAL = (ResourceType.person_internal, ResourceType.person_freelance, ResourceType.person)
+    if create_user and type in PERSON_TYPES_LOCAL:
+        if not r.email:
+            db.rollback()
+            raise HTTPException(400, "Email obbligatoria per creare un utente collegato")
+        from app.models import User, UserRole, Role
+        from app.services.auth import hash_password
+        from app.routers.admin import _gen_temp_password, _role_code_to_enum
+        if db.query(User).filter(User.email == r.email).first():
+            db.rollback()
+            raise HTTPException(400, f"Esiste già un utente con email {r.email}")
+        target_code = (user_role_code or "operator").lower()
+        target_role = db.query(Role).filter(Role.code == target_code, Role.is_active == True).first()  # noqa: E712
+        if not target_role:
+            target_role = db.query(Role).filter(Role.code == "operator").first()
+        temp_password = _gen_temp_password()
+        u = User(
+            email=r.email,
+            full_name=r.name,
+            hashed_password=hash_password(temp_password),
+            role=_role_code_to_enum(target_role.code) if target_role else UserRole.staff,
+            role_id=target_role.id if target_role else None,
+            is_active=True,
+        )
+        db.add(u); db.flush()
+        r.user_id = u.id
+        user_email = u.email
+
+    db.commit(); db.refresh(r)
+    out = {"id": r.id, "name": r.name}
+    if temp_password:
+        out["created_user"] = {"email": user_email, "temp_password": temp_password}
+    return out
 
 
 @router.get("/api/{resource_id}")

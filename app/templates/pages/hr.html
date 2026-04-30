@@ -139,12 +139,12 @@
           <label class="form-label">Tipo *</label>
           <select class="form-select" id="p-kind" required>
             {% for k in kinds %}
-              {% if is_elevated or k.value in ('shift', 'overtime', 'break') %}
+              {% if user_is_elevated or k.value in ('shift', 'overtime', 'break') %}
               <option value="{{ k.value }}">{{ k.label }}</option>
               {% endif %}
             {% endfor %}
           </select>
-          {% if not is_elevated %}
+          {% if not user_is_elevated %}
           <small class="form-help text-muted">Per ferie/malattia/permessi → "Le mie richieste" su /resources/{{ scoped_resource_id }}</small>
           {% endif %}
         </div>
@@ -160,7 +160,7 @@
           <small class="form-help text-muted">Vuoto = timbratura in corso</small>
         </div>
       </div>
-      {% if is_elevated %}
+      {% if user_is_elevated %}
       <!-- Job legato alla timbratura: solo per admin/manager/producer.
            Il flusso normale è: pianifichi un booking sul job → la timbratura
            registra solo il TURNO effettivo (kind=shift). Il legame al job

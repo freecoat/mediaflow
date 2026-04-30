@@ -1,0 +1,249 @@
+{% extends "base.html" %}
+{% set active_page = "admin_roles" %}
+
+{% block title %}Ruoli e permessi — MediaFlow{% endblock %}
+{% block topbar_title %}Amministrazione <span class="text-muted">/</span> Ruoli e permessi{% endblock %}
+{% block topbar_actions %}
+  <a href="/admin/users" class="btn btn-secondary btn-sm">← Utenti</a>
+  <button class="btn btn-primary btn-sm" onclick="openNewRole()">+ Nuovo ruolo</button>
+{% endblock %}
+
+{% block content %}
+
+<div class="grid" style="grid-template-columns: 320px 1fr; gap: 16px;">
+
+  <!-- Lista ruoli -->
+  <div class="card" style="padding:0; overflow:hidden;">
+    <div style="padding:14px 16px; border-bottom:1px solid var(--border); font-weight:600; font-size:13px; text-transform:uppercase; letter-spacing:0.5px; color:var(--text2);">Ruoli</div>
+    <div id="roles-list">
+      <div class="text-muted text-sm" style="padding:20px; text-align:center;">Caricamento…</div>
+    </div>
+  </div>
+
+  <!-- Editor permessi -->
+  <div class="card" id="role-editor" style="display:none;">
+    <div class="flex items-center justify-between mb-3" style="flex-wrap:wrap; gap:10px;">
+      <div>
+        <div class="flex items-center gap-2">
+          <span class="mono text-sm text-muted">[<span id="re-code">—</span>]</span>
+          <h2 id="re-name" style="font-size:18px; font-weight:600;">—</h2>
+          <span id="re-system-badge" style="display:none; background:rgba(98,114,245,0.15); color:#6272f5; padding:2px 8px; border-radius:10px; font-size:10px; text-transform:uppercase; letter-spacing:0.5px;">Built-in</span>
+        </div>
+        <p id="re-desc" class="text-sm text-muted" style="margin-top:4px;">—</p>
+        <p class="text-sm text-muted" style="margin-top:4px;"><span id="re-user-count">0</span> utenti con questo ruolo</p>
+      </div>
+      <div class="flex gap-2">
+        <button class="btn btn-danger btn-sm" id="re-delete-btn" onclick="deleteRole()" style="display:none;">Elimina</button>
+        <button class="btn btn-primary btn-sm" onclick="saveRole()">Salva modifiche</button>
+      </div>
+    </div>
+
+    <div class="form-group" id="re-meta-group">
+      <div class="grid-2" style="gap:10px;">
+        <div>
+          <label class="form-label">Nome</label>
+          <input class="form-input" id="re-name-input">
+        </div>
+        <div>
+          <label class="form-label">Stato</label>
+          <select class="form-select" id="re-active">
+            <option value="true">Attivo</option>
+            <option value="false">Disattivato</option>
+          </select>
+        </div>
+      </div>
+      <label class="form-label" style="margin-top:8px;">Descrizione</label>
+      <textarea class="form-textarea" id="re-desc-input" rows="2"></textarea>
+    </div>
+
+    <div style="margin-top:16px;">
+      <div class="flex items-center justify-between mb-2">
+        <h3 style="font-size:14px; font-weight:600; margin:0;">Permessi</h3>
+        <div class="flex gap-2 text-sm">
+          <button class="btn btn-ghost btn-sm" onclick="togglePerms(true)">Seleziona tutto</button>
+          <button class="btn btn-ghost btn-sm" onclick="togglePerms(false)">Deseleziona tutto</button>
+        </div>
+      </div>
+      <p class="text-sm text-muted" id="re-admin-warn" style="display:none; padding:8px 12px; background:rgba(251,146,60,0.08); border:1px solid rgba(251,146,60,0.3); border-radius:6px; margin-bottom:10px;">
+        ⚠ Il ruolo <strong>admin</strong> ha sempre tutti i permessi e non è modificabile.
+      </p>
+      <div id="permissions-matrix"></div>
+    </div>
+  </div>
+
+</div>
+
+<!-- Modal nuovo ruolo -->
+<div class="modal-overlay" id="modal-new-role">
+  <div class="modal">
+    <div class="modal-header">
+      <span class="modal-title">Nuovo ruolo</span>
+      <button class="btn btn-ghost btn-icon" onclick="closeModal('modal-new-role')">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-group">
+        <label class="form-label">Codice * <span class="text-muted text-sm">(lowercase, no spazi — es. "freelance")</span></label>
+        <input class="form-input mono" id="nr-code" required pattern="[a-z_][a-z0-9_]*">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Nome *</label>
+        <input class="form-input" id="nr-name" required>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Descrizione</label>
+        <textarea class="form-textarea" id="nr-desc" rows="2"></textarea>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Clona permessi da</label>
+        <select class="form-select" id="nr-clone-from">
+          <option value="">— ruolo vuoto —</option>
+        </select>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeModal('modal-new-role')">Annulla</button>
+      <button class="btn btn-primary" onclick="createRole()">Crea</button>
+    </div>
+  </div>
+</div>
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+const PERMS_CATALOG = {{ permissions_catalog|tojson }};
+let ROLES = [];
+let CURRENT_ROLE = null;
+
+async function loadRoles() {
+  ROLES = await api('GET', '/admin/api/roles');
+  const list = document.getElementById('roles-list');
+  list.innerHTML = ROLES.map(r => `
+    <div class="role-list-item" data-id="${r.id}" onclick='selectRole(${r.id})' style="padding:12px 16px; border-bottom:1px solid var(--border); cursor:pointer; transition:background 0.12s;">
+      <div class="flex items-center justify-between">
+        <div>
+          <div style="font-weight:600;">${escapeHtml(r.name)} ${r.is_system ? '<span style="color:#6272f5; font-size:10px; text-transform:uppercase; letter-spacing:0.5px; margin-left:4px;">preset</span>' : ''}</div>
+          <div class="mono text-xs text-muted">${escapeHtml(r.code)} · ${r.permissions.length} permessi · ${r.user_count} utenti</div>
+        </div>
+        ${r.is_active ? '' : '<span class="text-xs text-muted">○ disattivato</span>'}
+      </div>
+    </div>`).join('');
+
+  // Clone-from select
+  const cloneSel = document.getElementById('nr-clone-from');
+  cloneSel.innerHTML = '<option value="">— ruolo vuoto —</option>' + ROLES.map(r => `<option value="${r.id}">${escapeHtml(r.name)}</option>`).join('');
+}
+
+function selectRole(id) {
+  CURRENT_ROLE = ROLES.find(r => r.id === id);
+  if (!CURRENT_ROLE) return;
+  document.querySelectorAll('.role-list-item').forEach(el => {
+    el.style.background = Number(el.dataset.id) === id ? 'rgba(98,114,245,0.10)' : '';
+  });
+  document.getElementById('role-editor').style.display = '';
+  document.getElementById('re-code').textContent = CURRENT_ROLE.code;
+  document.getElementById('re-name').textContent = CURRENT_ROLE.name;
+  document.getElementById('re-desc').textContent = CURRENT_ROLE.description || '—';
+  document.getElementById('re-user-count').textContent = CURRENT_ROLE.user_count;
+  document.getElementById('re-system-badge').style.display = CURRENT_ROLE.is_system ? '' : 'none';
+  document.getElementById('re-name-input').value = CURRENT_ROLE.name;
+  document.getElementById('re-desc-input').value = CURRENT_ROLE.description || '';
+  document.getElementById('re-active').value = String(CURRENT_ROLE.is_active);
+  document.getElementById('re-active').disabled = CURRENT_ROLE.is_system;
+  document.getElementById('re-delete-btn').style.display = CURRENT_ROLE.is_system ? 'none' : '';
+  document.getElementById('re-admin-warn').style.display = CURRENT_ROLE.code === 'admin' ? '' : 'none';
+  renderMatrix();
+}
+
+function renderMatrix() {
+  const isAdmin = CURRENT_ROLE.code === 'admin';
+  const has = new Set(CURRENT_ROLE.permissions);
+  let html = '';
+  for (const [cat, perms] of Object.entries(PERMS_CATALOG)) {
+    html += `<div style="margin-bottom:14px;"><div style="font-weight:600; font-size:11px; text-transform:uppercase; letter-spacing:0.5px; color:var(--text2); margin-bottom:6px; padding:4px 8px; background:rgba(98,114,245,0.08); border-radius:4px;">${escapeHtml(cat)}</div>`;
+    for (const [key, [label]] of Object.entries(perms)) {
+      const checked = isAdmin || has.has(key) ? 'checked' : '';
+      html += `<label style="display:flex; align-items:center; gap:10px; padding:6px 8px; cursor:${isAdmin ? 'not-allowed' : 'pointer'}; border-radius:4px;" onmouseenter="this.style.background='rgba(98,114,245,0.05)'" onmouseleave="this.style.background=''">
+        <input type="checkbox" data-perm="${escapeHtml(key)}" ${checked} ${isAdmin ? 'disabled' : ''}>
+        <span style="flex:1;">${escapeHtml(label)}</span>
+        <span class="mono text-xs text-muted">${escapeHtml(key)}</span>
+      </label>`;
+    }
+    html += '</div>';
+  }
+  document.getElementById('permissions-matrix').innerHTML = html;
+}
+
+function togglePerms(on) {
+  if (CURRENT_ROLE.code === 'admin') return;
+  document.querySelectorAll('#permissions-matrix [data-perm]').forEach(cb => cb.checked = on);
+}
+
+async function saveRole() {
+  if (!CURRENT_ROLE) return;
+  const fd = new FormData();
+  fd.append('name', document.getElementById('re-name-input').value);
+  fd.append('description', document.getElementById('re-desc-input').value);
+  if (CURRENT_ROLE.code !== 'admin') {
+    const perms = Array.from(document.querySelectorAll('#permissions-matrix [data-perm]:checked')).map(cb => cb.dataset.perm);
+    fd.append('permissions', perms.join(','));
+  }
+  if (!CURRENT_ROLE.is_system) {
+    fd.append('is_active', document.getElementById('re-active').value);
+  }
+  try {
+    await api('PUT', `/admin/api/roles/${CURRENT_ROLE.id}`, fd);
+    toast('Ruolo aggiornato', 'success');
+    await loadRoles();
+    selectRole(CURRENT_ROLE.id);
+  } catch(e) { toast(e.message, 'error'); }
+}
+
+async function deleteRole() {
+  if (!CURRENT_ROLE || CURRENT_ROLE.is_system) return;
+  if (!confirm(`Eliminare il ruolo "${CURRENT_ROLE.name}"?`)) return;
+  try {
+    await api('DELETE', `/admin/api/roles/${CURRENT_ROLE.id}`);
+    document.getElementById('role-editor').style.display = 'none';
+    CURRENT_ROLE = null;
+    await loadRoles();
+    toast('Ruolo eliminato', 'success');
+  } catch(e) { toast(e.message, 'error'); }
+}
+
+function openNewRole() {
+  document.getElementById('nr-code').value = '';
+  document.getElementById('nr-name').value = '';
+  document.getElementById('nr-desc').value = '';
+  document.getElementById('nr-clone-from').value = '';
+  openModal('modal-new-role');
+}
+
+async function createRole() {
+  const code = document.getElementById('nr-code').value.trim();
+  const name = document.getElementById('nr-name').value.trim();
+  const desc = document.getElementById('nr-desc').value.trim();
+  const cloneId = document.getElementById('nr-clone-from').value;
+  if (!code || !name) { toast('Codice e nome obbligatori', 'error'); return; }
+  let perms = [];
+  if (cloneId) {
+    const src = ROLES.find(r => r.id == cloneId);
+    if (src) perms = [...src.permissions];
+  }
+  const fd = new FormData();
+  fd.append('code', code);
+  fd.append('name', name);
+  fd.append('description', desc);
+  fd.append('permissions', perms.join(','));
+  try {
+    const r = await api('POST', '/admin/api/roles', fd);
+    closeModal('modal-new-role');
+    await loadRoles();
+    selectRole(r.id);
+    toast('Ruolo creato', 'success');
+  } catch(e) { toast(e.message, 'error'); }
+}
+
+(async function init() { await loadRoles(); })();
+</script>
+{% endblock %}

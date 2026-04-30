@@ -1,0 +1,222 @@
+{% extends "base.html" %}
+{% set active_page = "admin_users" %}
+
+{% block title %}Utenti — MediaFlow{% endblock %}
+{% block topbar_title %}Amministrazione <span class="text-muted">/</span> Utenti{% endblock %}
+{% block topbar_actions %}
+  <a href="/admin/roles" class="btn btn-secondary btn-sm">Ruoli e permessi →</a>
+  <button class="btn btn-primary btn-sm" onclick="openNewUser()">+ Nuovo utente</button>
+{% endblock %}
+
+{% block content %}
+
+<div class="card">
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th>Nome</th>
+          <th>Email</th>
+          <th>Ruolo</th>
+          <th>Risorsa collegata</th>
+          <th>Stato</th>
+          <th>Ultimo accesso</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody id="users-tbody">
+        <tr><td colspan="7" class="text-muted" style="text-align:center;padding:24px;">Caricamento…</td></tr>
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<!-- Modal nuovo/modifica utente -->
+<div class="modal-overlay" id="modal-user">
+  <div class="modal">
+    <div class="modal-header">
+      <span class="modal-title" id="modal-user-title">Nuovo utente</span>
+      <button class="btn btn-ghost btn-icon" onclick="closeModal('modal-user')">✕</button>
+    </div>
+    <div class="modal-body">
+      <input type="hidden" id="u-id" value="">
+      <div class="form-group">
+        <label class="form-label">Nome completo *</label>
+        <input class="form-input" id="u-name" required>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Email *</label>
+        <input class="form-input" id="u-email" type="email" required>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Ruolo *</label>
+        <select class="form-select" id="u-role" required>
+          <option value="">— seleziona —</option>
+        </select>
+        <small class="text-muted text-sm">I permessi sono definiti dal ruolo. Gestisci ruoli da <a href="/admin/roles">Ruoli e permessi</a>.</small>
+      </div>
+      <div class="form-group" id="u-pwd-group">
+        <label class="form-label">Password</label>
+        <input class="form-input" id="u-password" type="text" placeholder="Lascia vuoto per generarla automaticamente">
+        <small class="text-muted text-sm">Se vuota, sarà generata e mostrata una sola volta.</small>
+      </div>
+      <div class="form-group">
+        <label style="display:flex; gap:8px; align-items:center; cursor:pointer;">
+          <input type="checkbox" id="u-active" checked>
+          <span>Utente attivo (può fare login)</span>
+        </label>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-danger" id="u-reset-btn" onclick="resetPassword()" style="display:none;margin-right:auto;">Reset password</button>
+      <button class="btn btn-secondary" onclick="closeModal('modal-user')">Annulla</button>
+      <button class="btn btn-primary" onclick="saveUser()">Salva</button>
+    </div>
+  </div>
+</div>
+
+<!-- Modal credenziali generate (one-shot) -->
+<div class="modal-overlay" id="modal-creds">
+  <div class="modal">
+    <div class="modal-header">
+      <span class="modal-title">Credenziali generate</span>
+      <button class="btn btn-ghost btn-icon" onclick="closeModal('modal-creds')">✕</button>
+    </div>
+    <div class="modal-body">
+      <p class="text-sm text-muted">Comunica queste credenziali all'utente. Non saranno più visibili dopo la chiusura.</p>
+      <div class="form-group">
+        <label class="form-label">Email</label>
+        <input class="form-input mono" id="creds-email" readonly>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Password temporanea</label>
+        <input class="form-input mono" id="creds-pwd" readonly style="font-size:14px;">
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-primary" onclick="copyCreds()">Copia</button>
+      <button class="btn btn-secondary" onclick="closeModal('modal-creds')">Chiudi</button>
+    </div>
+  </div>
+</div>
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+let ROLES = [];
+let USERS = [];
+
+async function loadRoles() {
+  ROLES = await api('GET', '/admin/api/roles');
+  const sel = document.getElementById('u-role');
+  sel.innerHTML = '<option value="">— seleziona —</option>' + ROLES.filter(r => r.is_active).map(r =>
+    `<option value="${r.id}">${escapeHtml(r.name)} <span class="text-muted">${r.is_system ? '(preset)' : '(custom)'}</span></option>`
+  ).join('');
+}
+
+async function loadUsers() {
+  USERS = await api('GET', '/admin/api/users');
+  const tbody = document.getElementById('users-tbody');
+  if (!USERS.length) {
+    tbody.innerHTML = '<tr><td colspan="7" class="text-muted" style="text-align:center;padding:24px;">Nessun utente</td></tr>';
+    return;
+  }
+  tbody.innerHTML = USERS.map(u => `
+    <tr style="cursor:pointer;" onclick='openEditUser(${u.id})'>
+      <td style="font-weight:500;">${escapeHtml(u.full_name || '')}</td>
+      <td class="mono text-sm">${escapeHtml(u.email)}</td>
+      <td>${u.role_name ? `<span class="kind-badge" style="border-left:3px solid #6272f5;padding-left:6px;">${escapeHtml(u.role_name)}</span>` : '<span class="text-muted">—</span>'}</td>
+      <td>${u.linked_resource_name ? `<span class="text-sm">${escapeHtml(u.linked_resource_name)}</span>` : '<span class="text-muted text-sm">—</span>'}</td>
+      <td>${u.is_active ? '<span style="color:#22c55e;">● Attivo</span>' : '<span style="color:var(--text3);">○ Disattivato</span>'}</td>
+      <td class="text-sm text-muted">${u.last_login ? new Date(u.last_login).toLocaleString('it-IT') : '—'}</td>
+      <td></td>
+    </tr>`).join('');
+}
+
+function openNewUser() {
+  document.getElementById('modal-user-title').textContent = 'Nuovo utente';
+  document.getElementById('u-id').value = '';
+  document.getElementById('u-name').value = '';
+  document.getElementById('u-email').value = '';
+  document.getElementById('u-email').readOnly = false;
+  document.getElementById('u-role').value = '';
+  document.getElementById('u-password').value = '';
+  document.getElementById('u-active').checked = true;
+  document.getElementById('u-pwd-group').style.display = '';
+  document.getElementById('u-reset-btn').style.display = 'none';
+  openModal('modal-user');
+}
+
+function openEditUser(uid) {
+  const u = USERS.find(x => x.id === uid);
+  if (!u) return;
+  document.getElementById('modal-user-title').textContent = `Utente #${u.id}`;
+  document.getElementById('u-id').value = u.id;
+  document.getElementById('u-name').value = u.full_name || '';
+  document.getElementById('u-email').value = u.email;
+  document.getElementById('u-email').readOnly = true; // email non modificabile
+  document.getElementById('u-role').value = u.role_id || '';
+  document.getElementById('u-password').value = '';
+  document.getElementById('u-active').checked = !!u.is_active;
+  document.getElementById('u-pwd-group').style.display = 'none'; // edit: non gestiamo password qui
+  document.getElementById('u-reset-btn').style.display = '';
+  openModal('modal-user');
+}
+
+async function saveUser() {
+  const id = document.getElementById('u-id').value;
+  const fd = new FormData();
+  fd.append('full_name', document.getElementById('u-name').value);
+  fd.append('role_id', document.getElementById('u-role').value);
+  fd.append('is_active', document.getElementById('u-active').checked);
+  if (!id) {
+    fd.append('email', document.getElementById('u-email').value);
+    const pwd = document.getElementById('u-password').value;
+    if (pwd) fd.append('password', pwd);
+  }
+  try {
+    const url = id ? `/admin/api/users/${id}` : '/admin/api/users';
+    const method = id ? 'PUT' : 'POST';
+    const r = await api(method, url, fd);
+    closeModal('modal-user');
+    if (!id && r.temp_password) {
+      document.getElementById('creds-email').value = r.email;
+      document.getElementById('creds-pwd').value = r.temp_password;
+      openModal('modal-creds');
+    } else {
+      toast('Utente salvato', 'success');
+    }
+    await loadUsers();
+  } catch(e) {
+    toast(e.message || 'Errore salvataggio', 'error');
+  }
+}
+
+async function resetPassword() {
+  const id = document.getElementById('u-id').value;
+  if (!id) return;
+  if (!confirm('Reset password di questo utente? Verrà generata una nuova password temporanea.')) return;
+  try {
+    const r = await api('POST', `/admin/api/users/${id}/reset-password`);
+    closeModal('modal-user');
+    document.getElementById('creds-email').value = r.email;
+    document.getElementById('creds-pwd').value = r.temp_password;
+    openModal('modal-creds');
+  } catch(e) { toast(e.message, 'error'); }
+}
+
+function copyCreds() {
+  const email = document.getElementById('creds-email').value;
+  const pwd = document.getElementById('creds-pwd').value;
+  navigator.clipboard.writeText(`Email: ${email}\nPassword: ${pwd}`)
+    .then(() => toast('Credenziali copiate', 'success'))
+    .catch(() => toast('Copia non riuscita', 'error'));
+}
+
+(async function init() {
+  await loadRoles();
+  await loadUsers();
+})();
+</script>
+{% endblock %}

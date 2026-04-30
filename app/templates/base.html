@@ -106,6 +106,22 @@
         </a>
       </div>
       {% endif %}
+
+      {% if can_manage_users(_user) or can_manage_roles(_user) %}
+      <div class="nav-section">
+        <div class="nav-section-label">Amministrazione</div>
+        {% if can_manage_users(_user) %}
+        <a href="/admin/users" data-nav-id="admin_users" class="nav-item {% if active_page == 'admin_users' %}active{% endif %}">
+          <span class="nav-icon">👤</span> Utenti
+        </a>
+        {% endif %}
+        {% if can_manage_roles(_user) %}
+        <a href="/admin/roles" data-nav-id="admin_roles" class="nav-item {% if active_page == 'admin_roles' %}active{% endif %}">
+          <span class="nav-icon">🔐</span> Ruoli e permessi
+        </a>
+        {% endif %}
+      </div>
+      {% endif %}
     </nav>
 
     <div class="sidebar-footer">

@@ -155,6 +155,26 @@
         <textarea class="form-textarea" id="rs-desc" rows="2" placeholder="Skill, marca/modello attrezzatura, configurazione studio…"></textarea>
       </div>
 
+      <!-- ─── Crea utente collegato (v3.4.23) ──────────────── -->
+      <div class="form-group" id="rs-create-user-section" style="display:none; padding:12px; background:rgba(98,114,245,0.06); border:1px solid var(--border); border-radius:6px;">
+        <label style="display:flex; gap:8px; align-items:center; cursor:pointer; font-weight:600;">
+          <input type="checkbox" id="rs-create-user">
+          <span>Crea utenza con accesso al sistema</span>
+        </label>
+        <div id="rs-user-fields" style="display:none; margin-top:10px;">
+          <p class="text-sm text-muted" style="margin-bottom:8px;">Email obbligatoria sopra. Una password temporanea sarà mostrata una sola volta.</p>
+          <label class="form-label">Ruolo iniziale</label>
+          <select class="form-select" id="rs-user-role">
+            <option value="operator">Operator (default — solo info tecniche + propria pianificazione)</option>
+            <option value="producer">Producer</option>
+            <option value="accounting">Accounting</option>
+            <option value="viewer">Viewer (sola lettura)</option>
+            <option value="manager">Manager</option>
+          </select>
+          <p class="text-sm text-muted" style="margin-top:4px;">Modificabile in seguito da <a href="/admin/users">Amministrazione → Utenti</a>.</p>
+        </div>
+      </div>
+
       <!-- ─── Orario lavorativo override (v3.4.20.4) ──────────── -->
       <div class="form-group">
         <label class="form-label">Orario lavorativo</label>
@@ -250,8 +270,30 @@ function openNewResource() {
   document.getElementById('rs-color').value = '#6272f5';
   document.getElementById('rs-wh-policy').value = '';
   document.getElementById('rs-unav-section').style.display = 'none'; // solo in edit
+  // Reset toggle utente
+  const cb = document.getElementById('rs-create-user');
+  if (cb) { cb.checked = false; document.getElementById('rs-user-fields').style.display = 'none'; }
+  rsToggleCreateUserSection();
   openModal('modal-resource');
 }
+
+function rsToggleCreateUserSection() {
+  // Mostra sezione "crea utente" solo per persone (interno/freelance) e in create mode
+  const isCreate = !document.getElementById('rs-id').value;
+  const t = document.getElementById('rs-type').value;
+  const isPerson = ['person_internal', 'person_freelance'].includes(t);
+  const sec = document.getElementById('rs-create-user-section');
+  if (sec) sec.style.display = (isCreate && isPerson) ? '' : 'none';
+}
+
+document.addEventListener('DOMContentLoaded', () => {
+  const t = document.getElementById('rs-type');
+  if (t) t.addEventListener('change', rsToggleCreateUserSection);
+  const cu = document.getElementById('rs-create-user');
+  if (cu) cu.addEventListener('change', () => {
+    document.getElementById('rs-user-fields').style.display = cu.checked ? '' : 'none';
+  });
+});
 
 async function editResource(id) {
   try {
@@ -365,11 +407,25 @@ async function saveResource() {
   // Override policy orari (vuoto = usa default tenant)
   fd.append('working_hours_policy_id', document.getElementById('rs-wh-policy').value || '0');
 
+  // v3.4.23: Auto-create User in create mode se attivato
+  if (!id) {
+    const cu = document.getElementById('rs-create-user');
+    if (cu && cu.checked) {
+      fd.append('create_user', 'true');
+      fd.append('user_role_code', document.getElementById('rs-user-role').value);
+    }
+  }
+
   try {
     const url = id ? `/resources/api/${id}` : '/resources/api';
     const method = id ? 'PUT' : 'POST';
     const r = await fetch(url, { method, body: fd });
     if (!r.ok) { const e = await r.json(); throw new Error(e.detail || 'Errore'); }
+    const data = await r.json();
+    if (data && data.created_user) {
+      const c = data.created_user;
+      alert(`Utente creato per ${c.email}\n\nPassword temporanea: ${c.temp_password}\n\nComunicagliela ora: non sarà più visibile.`);
+    }
     location.reload();
   } catch (e) { alert(e.message); }
 }

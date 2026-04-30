@@ -8,7 +8,7 @@
 
 ## Versione corrente
 
-**v3.4.22** — 30 aprile 2026 — RBAC + workflow ferie + timbratura semplificata + UX/timeline polish
+**v3.4.23** — 30 aprile 2026 — Permessi configurabili + pannello admin utenti/ruoli + auto-User da Resource
 
 ## In corso
 

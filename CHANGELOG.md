@@ -1,5 +1,62 @@
 # MediaFlow — Changelog
 
+## v3.4.23 — Permessi configurabili + pannello admin utenti/ruoli + auto-User da Resource (30 aprile 2026)
+
+Sistema RBAC v2: 6 preset built-in + ruoli custom configurabili dall'admin.
+
+### Modello
+
+- Nuovo modello `Role` (tabella `roles`):
+  - `code`, `name`, `description`
+  - `permissions: JSON` lista di stringhe (chiavi granulari)
+  - `is_system: bool` (preset built-in non eliminabili)
+  - `is_active`
+- `User.role_id` FK opzionale a `roles` (legacy enum `User.role` mantenuto per back-compat)
+- 6 **preset built-in** creati automaticamente al boot via `ensure_built_in_roles()`:
+  - **admin**: tutti i 23 permessi (matrice non modificabile)
+  - **manager**: tutto tranne `manage_users`/`manage_roles`/`manage_settings_global`
+  - **producer**: full progetto + finanza view, no editing listino, no fatture
+  - **accounting**: solo view finanziaria + fatturazione
+  - **operator**: scope auto su Resource (planning/punches own), info tecniche progetti
+  - **viewer**: sola lettura
+
+### Permessi
+
+23 chiavi granulari in 6 categorie (Anagrafica, Pianificazione, HR/Timbrature, Finanza, Risorse, Configurazione). Aggiungerne uno in `app/services/rbac.py:PERMISSIONS` lo rende automaticamente disponibile nella UI matrix.
+
+### Pannello admin
+
+- **`/admin/users`**: lista utenti, edit ruolo, attiva/disattiva, reset password con credenziali one-shot, soft-delete. Solo `manage_users`.
+- **`/admin/roles`**: split-pane lista ruoli + editor permessi a checkbox per categoria. CRUD ruoli custom (clone da preset). Built-in non eliminabili. Admin role permessi non modificabili. Solo `manage_roles`.
+- Voce sidebar "Amministrazione" con icone 👤 Utenti / 🔐 Ruoli e permessi.
+
+### Auto-User da Resource personale
+
+- Modal `/resources` person_internal/freelance: toggle "Crea utenza con accesso al sistema"
+- Quando attivo: email obbligatoria, password temp generata (12 char alfanumerici readable), ruolo iniziale scelto da dropdown (default operator), User collegato via `Resource.user_id`
+- Credenziali mostrate UNA SOLA VOLTA dopo creazione
+
+### rbac.py riscritto
+
+- `has_permission(user, "key") -> bool` legge da `User.role_obj.permissions` (JSON), fallback a preset enum legacy
+- Tutti i `can_*` legacy (can_view_finance, can_edit_settings, …) ora chiamano `has_permission`
+- Nuovo `requires_permission(*perms)` dependency per protezione fine
+- Eager-load `User.role_obj` in `_resolve_user_from_token` (auth_guard) per evitare DetachedInstanceError nei template
+
+### Bug fix
+
+- **`/hr/` 500**: conflitto context Jinja `is_elevated` (chiave bool) shadowsa il global function. Rinominato a `user_is_elevated`
+- **Drag inerziale timeline**: `transition: transform .12s` su `.vis-item` faceva scivolare gli item durante drag. Rimosso `transform` dalla transition (resta solo box-shadow + filter per hover)
+- **"Nuovo progetto"** hidden a staff/operator (sia bottone UI che endpoint POST `/projects/api`)
+
+### Migrazione
+
+`scripts/migrate_roles_v2.py` (opzione `[J]` su `strumenti.bat/sh`):
+- CREATE TABLE `roles` via Base.metadata
+- ALTER TABLE users ADD COLUMN role_id
+- Bootstrap 6 preset
+- Mappa utenti esistenti dall'enum legacy (`admin`→admin, `staff`→operator, ecc.)
+
 ## v3.4.22 — RBAC + workflow ferie + timbratura semplificata + UX (30 aprile 2026)
 
 Sessione lunga: 6 cantieri E/D/C/B/A/F in una passata.
