@@ -19,7 +19,11 @@ from app.database import Base
 # ── ENUMS ────────────────────────────────────────────────────
 
 class UserRole(str, enum.Enum):
-    admin = "admin"; manager = "manager"; staff = "staff"; viewer = "viewer"
+    admin = "admin"
+    manager = "manager"
+    producer = "producer"   # producer/PM: full progetto, no impostazioni globali
+    staff = "staff"         # tecnico/risorsa: vede solo info tecniche + propria pianificazione/timbrature
+    viewer = "viewer"       # sola lettura
 
 class ResourceType(str, enum.Enum):
     person_internal = "person_internal"  # dipendente della casa di post
@@ -388,6 +392,12 @@ class UnavailabilityKind(str, enum.Enum):
     other = "other"
 
 
+class UnavailabilityStatus(str, enum.Enum):
+    pending = "pending"        # creata da staff, in attesa di approvazione
+    approved = "approved"      # approvata da admin/manager/producer → blocca planning
+    rejected = "rejected"      # rifiutata, non blocca
+
+
 class ResourceUnavailability(Base):
     __tablename__ = "resource_unavailabilities"
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
@@ -396,6 +406,15 @@ class ResourceUnavailability(Base):
     end_date: Mapped[date] = mapped_column(Date)
     kind: Mapped[UnavailabilityKind] = mapped_column(SAEnum(UnavailabilityKind), default=UnavailabilityKind.vacation)
     reason: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
+    # Workflow approvazione (v3.4.22 cantiere D)
+    status: Mapped[UnavailabilityStatus] = mapped_column(
+        SAEnum(UnavailabilityStatus), default=UnavailabilityStatus.approved, index=True,
+    )
+    requested_by_user_id: Mapped[Optional[int]] = mapped_column(ForeignKey("users.id"), nullable=True)
+    approved_by_user_id: Mapped[Optional[int]] = mapped_column(ForeignKey("users.id"), nullable=True)
+    approved_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+    rejection_reason: Mapped[Optional[str]] = mapped_column(String(500), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
     resource: Mapped["Resource"] = relationship(back_populates="unavailabilities")
 
 

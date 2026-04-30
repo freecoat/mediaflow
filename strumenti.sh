@@ -42,10 +42,11 @@ while true; do
     echo "  [f] Migra database esistente (multi-resource booking_assignments) [v3.4.16]"
     echo "  [g] Migra database esistente (working hours + ferie tipizzate) [v3.4.17]"
     echo "  [h] Migra database esistente (soglie/moltiplicatori straordinari) [v3.4.21]"
+    echo "  [i] Migra database esistente (workflow approvazione ferie/malattia) [v3.4.22]"
     echo "  [a] Apri cartella upload"
     echo "  [0] Esci"
     echo ""
-    read -p "Scegli un'opzione (0-9, a, b, c, d, e, f, g, h): " scelta
+    read -p "Scegli un'opzione (0-9, a, b, c, d, e, f, g, h, i): " scelta
 
     case $scelta in
         1)
@@ -199,6 +200,19 @@ while true; do
             read -p "Procedo? (s/n): " conferma
             if [ "$conferma" = "s" ] || [ "$conferma" = "S" ]; then
                 python scripts/migrate_overtime_thresholds.py
+            fi
+            read -p "Premi INVIO per continuare..."
+            ;;
+        i|I)
+            echo ""
+            echo "Migrazione: workflow approvazione ferie/malattia/permessi."
+            echo "Aggiunge status, requested_by_user_id, approved_by_user_id,"
+            echo "approved_at, rejection_reason, created_at a resource_unavailabilities."
+            echo "Backfill record esistenti come 'approved'."
+            echo "Idempotente."
+            read -p "Procedo? (s/n): " conferma
+            if [ "$conferma" = "s" ] || [ "$conferma" = "S" ]; then
+                python scripts/migrate_unavailability_approval.py
             fi
             read -p "Premi INVIO per continuare..."
             ;;

@@ -31,11 +31,14 @@
         </a>
       </div>
 
+      {% set _user = request.state.current_user %}
       <div class="nav-section">
         <div class="nav-section-label">Anagrafica</div>
+        {% if can_view_finance(_user) %}
         <a href="/clients" data-nav-id="clients" class="nav-item {% if active_page == 'clients' %}active{% endif %}">
           <span class="nav-icon">🏢</span> Clienti
         </a>
+        {% endif %}
         <a href="/projects" data-nav-id="projects" class="nav-item {% if active_page == 'projects' %}active{% endif %}">
           <span class="nav-icon">🎞</span> Progetti
         </a>
@@ -46,22 +49,27 @@
         <a href="/planning" data-nav-id="planning" class="nav-item {% if active_page == 'planning' %}active{% endif %}">
           <span class="nav-icon">📋</span> Pianificazione
         </a>
+        {% if can_assign_resources(_user) %}
         <a href="/resources" data-nav-id="resources" class="nav-item {% if active_page == 'resources' %}active{% endif %}">
           <span class="nav-icon">👥</span> Risorse
         </a>
         <a href="/assignments" data-nav-id="assignments" class="nav-item {% if active_page == 'assignments' %}active{% endif %}">
           <span class="nav-icon">🧩</span> Assegnazioni
         </a>
+        {% endif %}
         <a href="/hr" data-nav-id="hr" class="nav-item {% if active_page == 'hr' %}active{% endif %}">
-          <span class="nav-icon">🕐</span> Ore lavoro
+          <span class="nav-icon">🕐</span> {% if is_staff(_user) %}Le mie ore{% else %}Ore lavoro{% endif %}
         </a>
       </div>
 
+      {% if can_view_finance(_user) %}
       <div class="nav-section">
         <div class="nav-section-label">Preventivi</div>
+        {% if can_edit_pricelist(_user) %}
         <a href="/pricelist" data-nav-id="pricelist" class="nav-item {% if active_page == 'pricelist' %}active{% endif %}">
           <span class="nav-icon">📋</span> Listino Prezzi
         </a>
+        {% endif %}
         <a href="/quotes" data-nav-id="quotes" class="nav-item {% if active_page == 'quotes' %}active{% endif %}">
           <span class="nav-icon">💬</span> Quotazioni
         </a>
@@ -76,6 +84,7 @@
           <span class="nav-icon">💶</span> Fatturazione
         </a>
       </div>
+      {% endif %}
 
       <div class="nav-section">
         <div class="nav-section-label">Media</div>
@@ -84,15 +93,19 @@
         </a>
       </div>
 
+      {% if is_elevated(_user) %}
       <div class="nav-section">
         <div class="nav-section-label">Configurazione</div>
+        {% if can_edit_settings(_user) %}
         <a href="/departments" data-nav-id="departments" class="nav-item {% if active_page == 'departments' %}active{% endif %}">
           <span class="nav-icon">🏛️</span> Reparti
         </a>
+        {% endif %}
         <a href="/settings" data-nav-id="settings" class="nav-item {% if active_page == 'settings' %}active{% endif %}">
           <span class="nav-icon">⚙</span> Impostazioni
         </a>
       </div>
+      {% endif %}
     </nav>
 
     <div class="sidebar-footer">

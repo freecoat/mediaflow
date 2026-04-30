@@ -8,7 +8,7 @@
 
 ## Versione corrente
 
-**v3.4.21.1** — 30 aprile 2026 — Auth guard + UX login + badge topbar utente
+**v3.4.22** — 30 aprile 2026 — RBAC + workflow ferie + timbratura semplificata + UX/timeline polish
 
 ## In corso
 

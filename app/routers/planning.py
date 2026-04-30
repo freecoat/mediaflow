@@ -10,10 +10,11 @@ from app.models import (
     Job, JobStatus, Client, Project, Booking, BookingAssignment, BookingChange,
     BookingStatus, BookingKind,
     Resource, ResourceType, JobCostLine, Department, User,
-    WorkingHoursPolicy, ResourceUnavailability, UnavailabilityKind,
+    WorkingHoursPolicy, ResourceUnavailability, UnavailabilityKind, UnavailabilityStatus,
 )
 from datetime import date as _date, timedelta as _td
 from app.services.auth import get_current_user_from_token
+from app.services.rbac import is_elevated, scope_resource_id, current_user_optional
 
 router = APIRouter(prefix="/planning", tags=["planning"])
 
@@ -463,6 +464,7 @@ def _expand_assignments_smart(db: Session, parsed_ass: list[dict]) -> list[dict]
             continue
         unavs = db.query(ResourceUnavailability).filter(
             ResourceUnavailability.resource_id == rid,
+            ResourceUnavailability.status == UnavailabilityStatus.approved,
         ).all()
         slots = split_booking_smart(pa["start_datetime"], pa["end_datetime"], policy, unavs)
         if not slots:
@@ -473,8 +475,22 @@ def _expand_assignments_smart(db: Session, parsed_ass: list[dict]) -> list[dict]
     return out
 
 
+def _enforce_planning_scope(request: Request, db: Session, resource_ids):
+    """Per staff/viewer ammette solo booking sulla propria risorsa."""
+    user = current_user_optional(request)
+    if is_elevated(user):
+        return
+    own = scope_resource_id(db, user)
+    if own is None:
+        raise HTTPException(403, "Nessuna risorsa associata al tuo utente")
+    for rid in resource_ids:
+        if rid != own:
+            raise HTTPException(403, "Puoi pianificare solo la tua risorsa")
+
+
 @router.post("/api/bookings")
 async def create_booking(
+    request: Request,
     assignments: str = Form(...),  # JSON: [{"resource_id":1,"start_datetime":"...","end_datetime":"..."}, ...]
     job_id: Optional[int] = Form(None),
     job_cost_line_id: Optional[int] = Form(None),
@@ -520,6 +536,9 @@ async def create_booking(
         if ed <= sd:
             raise HTTPException(400, f"assignments[{i}]: end_datetime deve essere > start_datetime")
         parsed_ass.append({"resource_id": int(rid), "start_datetime": sd, "end_datetime": ed})
+
+    # RBAC: staff può creare booking solo per la propria risorsa
+    _enforce_planning_scope(request, db, {pa["resource_id"] for pa in parsed_ass})
 
     # E5 v3.4.19: Recurrence — espande il range originale in N occorrenze (indipendenti dalla policy)
     # Crea un Booking distinct per ogni occorrenza, poi return solo il primo per coerenza payload.
@@ -644,6 +663,7 @@ async def create_booking(
 @router.put("/api/bookings/{booking_id}")
 async def update_booking(
     booking_id: int,
+    request: Request,
     job_id: Optional[int] = Form(None),
     job_cost_line_id: Optional[int] = Form(None),
     kind: Optional[BookingKind] = Form(None),
@@ -662,6 +682,7 @@ async def update_booking(
     ).first()
     if not b:
         raise HTTPException(404, "Booking non trovato")
+    _enforce_planning_scope(request, db, {a.resource_id for a in b.assignments})
 
     new_kind = kind if kind is not None else b.kind
     new_job_id = job_id if job_id is not None else b.job_id
@@ -746,6 +767,7 @@ async def update_booking(
 @router.put("/api/booking-assignments/{assignment_id}")
 async def update_assignment(
     assignment_id: int,
+    request: Request,
     resource_id: Optional[int] = Form(None),
     start_datetime: Optional[datetime] = Form(None),
     end_datetime: Optional[datetime] = Form(None),
@@ -759,6 +781,7 @@ async def update_assignment(
     if not a:
         raise HTTPException(404, "Assignment non trovato")
     new_rid = resource_id if resource_id is not None else a.resource_id
+    _enforce_planning_scope(request, db, {a.resource_id, new_rid})
     new_s = start_datetime if start_datetime is not None else a.start_datetime
     new_e = end_datetime if end_datetime is not None else a.end_datetime
     if new_e <= new_s:
@@ -780,7 +803,7 @@ async def update_assignment(
 
 
 @router.delete("/api/booking-assignments/{assignment_id}")
-async def delete_assignment(assignment_id: int, db: Session = Depends(get_db)):
+async def delete_assignment(assignment_id: int, request: Request, db: Session = Depends(get_db)):
     """Cancella un singolo assignment. Se è l'ultimo del booking, cancella il booking intero."""
     a = db.query(BookingAssignment).join(Booking).filter(
         BookingAssignment.id == assignment_id,
@@ -788,6 +811,7 @@ async def delete_assignment(assignment_id: int, db: Session = Depends(get_db)):
     ).first()
     if not a:
         raise HTTPException(404, "Assignment non trovato")
+    _enforce_planning_scope(request, db, {a.resource_id})
     booking = a.booking
     db.delete(a)
     db.flush()
@@ -801,13 +825,14 @@ async def delete_assignment(assignment_id: int, db: Session = Depends(get_db)):
 
 
 @router.delete("/api/bookings/{booking_id}")
-async def delete_booking(booking_id: int, db: Session = Depends(get_db)):
+async def delete_booking(booking_id: int, request: Request, db: Session = Depends(get_db)):
     b = db.query(Booking).filter(
         Booking.id == booking_id,
         Booking.tenant_id == CURRENT_TENANT,
     ).first()
     if not b:
         raise HTTPException(404, "Booking non trovato")
+    _enforce_planning_scope(request, db, {a.resource_id for a in b.assignments})
     b.status = BookingStatus.cancelled
     _log_change(db, b.id, "delete", "Booking eliminato (soft)", None)
     db.commit()
@@ -853,6 +878,7 @@ async def suggest_resources(
         # Ferie/malattia overlap
         unav = db.query(ResourceUnavailability).filter(
             ResourceUnavailability.resource_id == r.id,
+            ResourceUnavailability.status == UnavailabilityStatus.approved,
             ResourceUnavailability.end_date >= from_datetime.date(),
             ResourceUnavailability.start_date <= to_datetime.date(),
         ).first()
@@ -925,6 +951,9 @@ async def list_unavailabilities(
     if resource_id:
         q = q.filter(ResourceUnavailability.resource_id == resource_id)
     for u in q.all():
+        # Solo approved blocca timeline. Pending = soft (non blocca, non mostriamo a non-elevated).
+        if u.status != UnavailabilityStatus.approved:
+            continue
         out.append({
             "id": f"u{u.id}",
             "resource_id": u.resource_id,
@@ -932,6 +961,7 @@ async def list_unavailabilities(
             "end_date": u.end_date.isoformat(),
             "kind": u.kind.value if hasattr(u.kind, "value") else u.kind,
             "reason": u.reason,
+            "status": u.status.value if hasattr(u.status, "value") else u.status,
         })
 
     if include_holidays or include_weekends:
@@ -999,8 +1029,27 @@ async def list_unavailabilities(
     return out
 
 
+def _u_dict(u: "ResourceUnavailability") -> dict:
+    return {
+        "id": u.id,
+        "resource_id": u.resource_id,
+        "resource_name": u.resource.name if u.resource else None,
+        "start_date": u.start_date.isoformat(),
+        "end_date": u.end_date.isoformat(),
+        "kind": u.kind.value if hasattr(u.kind, "value") else u.kind,
+        "reason": u.reason,
+        "status": u.status.value if hasattr(u.status, "value") else u.status,
+        "requested_by_user_id": u.requested_by_user_id,
+        "approved_by_user_id": u.approved_by_user_id,
+        "approved_at": u.approved_at.isoformat() if u.approved_at else None,
+        "rejection_reason": u.rejection_reason,
+        "created_at": u.created_at.isoformat() if u.created_at else None,
+    }
+
+
 @router.post("/api/unavailabilities")
 async def create_unavailability(
+    request: Request,
     resource_id: int = Form(...),
     start_date: _date = Form(...),
     end_date: _date = Form(...),
@@ -1008,28 +1057,132 @@ async def create_unavailability(
     reason: Optional[str] = Form(None),
     db: Session = Depends(get_db),
 ):
+    """Crea una richiesta di ferie/malattia/permesso.
+
+    - Staff/viewer: scope forzato sulla propria risorsa, status=pending
+    - Admin/manager/producer: può creare per qualsiasi risorsa, status=approved
+      di default (saltano il workflow visto che sono già autorizzati).
+    """
+    from app.services.rbac import is_elevated, current_user_optional, scope_resource_id
+    user = current_user_optional(request)
     if end_date < start_date:
         raise HTTPException(400, "end_date deve essere >= start_date")
+
+    if not is_elevated(user):
+        own = scope_resource_id(db, user)
+        if own is None:
+            raise HTTPException(403, "Nessuna risorsa associata al tuo utente")
+        if resource_id != own:
+            raise HTTPException(403, "Puoi richiedere ferie solo per la tua risorsa")
+        status = UnavailabilityStatus.pending
+    else:
+        status = UnavailabilityStatus.approved
+
     u = ResourceUnavailability(
         resource_id=resource_id, start_date=start_date, end_date=end_date,
         kind=kind, reason=reason,
+        status=status,
+        requested_by_user_id=user.id if user else None,
+        approved_by_user_id=user.id if (user and is_elevated(user)) else None,
+        approved_at=datetime.utcnow() if status == UnavailabilityStatus.approved else None,
     )
     db.add(u)
     db.commit()
     db.refresh(u)
-    return {"id": u.id, "resource_id": u.resource_id,
-            "start_date": u.start_date.isoformat(), "end_date": u.end_date.isoformat(),
-            "kind": u.kind.value if hasattr(u.kind, "value") else u.kind, "reason": u.reason}
+    return _u_dict(u)
+
+
+@router.get("/api/unavailabilities/pending")
+async def list_pending_unavailabilities(
+    request: Request,
+    db: Session = Depends(get_db),
+):
+    """Lista richieste in attesa di approvazione (admin/manager/producer)."""
+    from app.services.rbac import can_approve_unavailability, current_user_optional
+    user = current_user_optional(request)
+    if not can_approve_unavailability(user):
+        raise HTTPException(403, "Solo manager/producer/admin possono visualizzare le richieste pendenti")
+    items = (
+        db.query(ResourceUnavailability)
+        .join(Resource, ResourceUnavailability.resource_id == Resource.id)
+        .filter(
+            Resource.tenant_id == CURRENT_TENANT,
+            ResourceUnavailability.status == UnavailabilityStatus.pending,
+        )
+        .order_by(ResourceUnavailability.created_at.desc())
+        .all()
+    )
+    return [_u_dict(u) for u in items]
+
+
+@router.post("/api/unavailabilities/{u_id}/approve")
+async def approve_unavailability(
+    u_id: int,
+    request: Request,
+    db: Session = Depends(get_db),
+):
+    from app.services.rbac import can_approve_unavailability, current_user_optional
+    user = current_user_optional(request)
+    if not can_approve_unavailability(user):
+        raise HTTPException(403, "Permesso negato")
+    u = db.query(ResourceUnavailability).join(Resource).filter(
+        ResourceUnavailability.id == u_id,
+        Resource.tenant_id == CURRENT_TENANT,
+    ).first()
+    if not u:
+        raise HTTPException(404, "Richiesta non trovata")
+    u.status = UnavailabilityStatus.approved
+    u.approved_by_user_id = user.id
+    u.approved_at = datetime.utcnow()
+    u.rejection_reason = None
+    db.commit()
+    db.refresh(u)
+    return _u_dict(u)
+
+
+@router.post("/api/unavailabilities/{u_id}/reject")
+async def reject_unavailability(
+    u_id: int,
+    request: Request,
+    rejection_reason: Optional[str] = Form(None),
+    db: Session = Depends(get_db),
+):
+    from app.services.rbac import can_approve_unavailability, current_user_optional
+    user = current_user_optional(request)
+    if not can_approve_unavailability(user):
+        raise HTTPException(403, "Permesso negato")
+    u = db.query(ResourceUnavailability).join(Resource).filter(
+        ResourceUnavailability.id == u_id,
+        Resource.tenant_id == CURRENT_TENANT,
+    ).first()
+    if not u:
+        raise HTTPException(404, "Richiesta non trovata")
+    u.status = UnavailabilityStatus.rejected
+    u.approved_by_user_id = user.id
+    u.approved_at = datetime.utcnow()
+    u.rejection_reason = rejection_reason
+    db.commit()
+    db.refresh(u)
+    return _u_dict(u)
 
 
 @router.delete("/api/unavailabilities/{u_id}")
-async def delete_unavailability(u_id: int, db: Session = Depends(get_db)):
+async def delete_unavailability(u_id: int, request: Request, db: Session = Depends(get_db)):
+    from app.services.rbac import is_elevated, current_user_optional, scope_resource_id
+    user = current_user_optional(request)
     u = db.query(ResourceUnavailability).join(Resource).filter(
         ResourceUnavailability.id == u_id,
         Resource.tenant_id == CURRENT_TENANT,
     ).first()
     if not u:
         raise HTTPException(404, "Unavailability non trovata")
+    # Staff può cancellare solo le proprie richieste in pending
+    if not is_elevated(user):
+        own = scope_resource_id(db, user)
+        if u.resource_id != own:
+            raise HTTPException(403, "Permesso negato")
+        if u.status != UnavailabilityStatus.pending:
+            raise HTTPException(403, "Solo richieste pending possono essere cancellate dall'utente")
     db.delete(u)
     db.commit()
     return {"ok": True}

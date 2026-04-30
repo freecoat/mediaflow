@@ -55,32 +55,99 @@
   .tl-bar .btn-group .btn:first-child { border-radius: 4px 0 0 4px; }
   .tl-bar .btn-group .btn:last-child { border-radius: 0 4px 4px 0; }
   .tl-bar .btn-group .btn.active { background: #6272f5; color: #fff; }
-  /* Override vis-timeline tema dark */
-  .vis-timeline { border: 1px solid var(--border,#2a2e3d); border-radius: 0 0 8px 8px; background: var(--bg-elev,#1a1d29); }
-  .vis-time-axis .vis-text { color: var(--text2,#aaa); font-size: 11px; }
-  .vis-time-axis .vis-grid { border-color: var(--border,#2a2e3d); }
-  .vis-labelset .vis-label { color: var(--text,#eee); border-color: var(--border,#2a2e3d); padding: 6px 10px; font-size: 12px; box-sizing: border-box; }
-  /* Zebra rows (alternate) */
-  .vis-labelset .vis-label:nth-child(odd) { background: rgba(255,255,255,0.015); }
-  .vis-foreground .vis-group:nth-child(odd) { background: rgba(255,255,255,0.015); }
-  .vis-foreground .vis-group { border-color: var(--border,#2a2e3d); }
-  /* Reparto padre = grassetto, sfondo accentuato */
-  .vis-labelset .vis-label.vis-nesting-group { background: rgba(98,114,245,0.08); font-weight: 600; color: #6272f5; text-transform: uppercase; letter-spacing: .5px; font-size: 11px; }
-  .vis-labelset .vis-label.vis-nesting-group:nth-child(odd) { background: rgba(98,114,245,0.08); }
-  /* Risorsa figlia = padding extra a sx, weight normale */
-  .vis-labelset .vis-label:not(.vis-nesting-group) { padding-left: 18px; }
-  /* Hover row */
-  .vis-labelset .vis-label:hover { background: rgba(98,114,245,0.06); }
-  /* Items */
-  .vis-item { border-color: rgba(0,0,0,.25); color: #fff; font-size: 11px; border-radius: 4px; padding: 1px 4px; box-shadow: 0 1px 2px rgba(0,0,0,.25); }
-  .vis-item.vis-selected { box-shadow: 0 0 0 2px #fff; }
-  .vis-item.kind-internal { background: #6b7280; border-color: #4b5563; }
+  /* ─── Vis-timeline polish (v3.4.22 cantiere F) ─────────────── */
+  .vis-timeline {
+    border: 1px solid var(--border,#2a2e3d);
+    border-radius: 0 0 12px 12px;
+    background:
+      linear-gradient(180deg, rgba(98,114,245,0.025) 0%, transparent 30%),
+      var(--bg-elev,#1a1d29);
+    box-shadow: 0 4px 16px -4px rgba(0,0,0,.3), inset 0 1px 0 rgba(255,255,255,0.02);
+    overflow: hidden;
+  }
+  /* Time axis */
+  .vis-time-axis { background: linear-gradient(180deg, rgba(255,255,255,0.02) 0%, transparent 100%); }
+  .vis-time-axis .vis-text {
+    color: var(--text2,#aaa);
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 0.4px;
+    font-weight: 500;
+  }
+  .vis-time-axis .vis-text.vis-major { color: var(--text,#eee); font-weight: 600; font-size: 11px; }
+  .vis-time-axis .vis-grid { border-color: rgba(255,255,255,0.04); }
+  .vis-time-axis .vis-grid.vis-major { border-color: rgba(255,255,255,0.08); }
+  .vis-time-axis .vis-grid.vis-saturday,
+  .vis-time-axis .vis-grid.vis-sunday { background: rgba(98,114,245,0.025); }
+  /* Labels (left col) */
+  .vis-labelset .vis-label {
+    color: var(--text,#eee);
+    border-color: rgba(255,255,255,0.04);
+    padding: 8px 12px;
+    font-size: 12.5px;
+    box-sizing: border-box;
+    transition: background .12s ease;
+  }
+  /* Zebra rows (alternate) — più sottile e simmetrico */
+  .vis-labelset .vis-label:nth-child(odd) { background: rgba(255,255,255,0.012); }
+  .vis-foreground .vis-group:nth-child(odd) { background: rgba(255,255,255,0.012); }
+  .vis-foreground .vis-group { border-color: rgba(255,255,255,0.04); transition: background .12s ease; }
+  /* Reparto padre — barra colorata sottile + label tipo header */
+  .vis-labelset .vis-label.vis-nesting-group {
+    background: linear-gradient(90deg, rgba(98,114,245,0.18) 0%, rgba(98,114,245,0.06) 60%, transparent 100%);
+    font-weight: 700;
+    color: #8a9bff;
+    text-transform: uppercase;
+    letter-spacing: 0.6px;
+    font-size: 10.5px;
+    border-left: 3px solid #6272f5;
+    padding-left: 12px;
+  }
+  .vis-labelset .vis-label.vis-nesting-group:nth-child(odd) {
+    background: linear-gradient(90deg, rgba(98,114,245,0.18) 0%, rgba(98,114,245,0.06) 60%, transparent 100%);
+  }
+  /* Risorsa figlia */
+  .vis-labelset .vis-label:not(.vis-nesting-group) { padding-left: 22px; }
+  .vis-labelset .vis-label:hover { background: rgba(98,114,245,0.10); }
+  .vis-foreground .vis-group:hover { background: rgba(98,114,245,0.04); }
+  /* Items: shape morbida, glassy, hover lift */
+  .vis-item {
+    border: 1px solid rgba(0,0,0,.35);
+    color: #fff;
+    font-size: 11px;
+    border-radius: 5px;
+    padding: 2px 6px;
+    box-shadow: 0 1px 3px rgba(0,0,0,.35), inset 0 1px 0 rgba(255,255,255,.08);
+    backdrop-filter: saturate(110%);
+    transition: transform .12s ease, box-shadow .12s ease, filter .12s ease;
+  }
+  .vis-item:hover { filter: brightness(1.08); box-shadow: 0 3px 8px rgba(0,0,0,.45), inset 0 1px 0 rgba(255,255,255,.12); transform: translateY(-1px); }
+  .vis-item.vis-selected {
+    box-shadow:
+      0 0 0 2px #fff,
+      0 0 0 4px rgba(98,114,245,.35),
+      0 4px 14px rgba(0,0,0,.5),
+      inset 0 1px 0 rgba(255,255,255,.18);
+  }
+  .vis-item.kind-internal { background: linear-gradient(180deg, #7a8290 0%, #5a6272 100%); border-color: #4b5563; }
   /* Conflict highlight live durante drag/resize */
-  .vis-item.tl-conflict { background: #dc2626 !important; border-color: #991b1b !important; box-shadow: 0 0 0 2px rgba(220,38,38,.4); }
+  .vis-item.tl-conflict {
+    background: linear-gradient(180deg, #dc2626 0%, #b91c1c 100%) !important;
+    border-color: #991b1b !important;
+    box-shadow: 0 0 0 2px rgba(220,38,38,.45), 0 4px 12px rgba(220,38,38,.3) !important;
+  }
   /* Cursor edit hints */
-  .vis-item .vis-drag-left, .vis-item .vis-drag-right { background: rgba(255,255,255,.15); width: 4px; }
-  .vis-item:hover .vis-drag-left, .vis-item:hover .vis-drag-right { background: rgba(255,255,255,.4); }
+  .vis-item .vis-drag-left, .vis-item .vis-drag-right {
+    background: linear-gradient(90deg, transparent 0%, rgba(255,255,255,.18) 50%, transparent 100%);
+    width: 6px;
+  }
+  .vis-item:hover .vis-drag-left, .vis-item:hover .vis-drag-right {
+    background: linear-gradient(90deg, transparent 0%, rgba(255,255,255,.45) 50%, transparent 100%);
+  }
   .vis-item.vis-editable { cursor: move; }
+  /* Punch overlay (timbrature reali — sotto i booking) */
+  .vis-item.tl-bg-punch { border: none !important; box-shadow: none !important; opacity: 0.85; }
+  .vis-item.tl-bg-punch:hover { opacity: 1; }
   /* Heatmap visibile dentro le label risorse */
   .vis-labelset .vis-label .tl-heat { width: calc(100% - 4px); margin: 4px 2px 0; height: 6px !important; display: flex !important; }
   .vis-labelset .vis-label .tl-heat-cell { display: block; }
@@ -337,7 +404,7 @@
         <div class="form-group">
           <label class="form-label" style="display:flex; justify-content:space-between; align-items:center;">
             <span>Risorse <span id="tlb-ass-counter" style="color:#6272f5; font-weight:600;">(0)</span> <span style="color:var(--text3,#888); font-weight:normal;">— almeno 1, anche orari diversi</span></span>
-            <button type="button" class="btn btn-secondary btn-sm" onclick="tlbAddAssignmentRow()">+ Aggiungi risorsa</button>
+            <button type="button" class="btn btn-secondary btn-sm" onclick="tlbAddAssignmentRowFromFirst()">+ Aggiungi risorsa</button>
           </label>
           <div id="tlb-assignments"></div>
         </div>
@@ -1303,7 +1370,31 @@ async function renderTimeline(preserveWindow=false) {
   }));
   // Conserva flag "blocking" per onMoving (hard block su vacation/sick/holiday, weekend è soft)
   bgItems.forEach(b => { b._blocking = ['vacation','sick','holiday'].includes(b._kind); });
-  const itemsDS = new vis.DataSet([...items, ...bgItems]);
+
+  // v3.4.22 cantiere C: overlay timbrature TimePunch sopra le righe risorsa.
+  // Visibile in modo sottile per non disturbare i booking pianificati.
+  let punchItems = [];
+  try {
+    const pParams = `from_date=${fmtD(winFrom)}&to_date=${fmtD(winTo)}`;
+    const punches = await api('GET', '/hr/api/punches?' + pParams);
+    punchItems = (punches || []).filter(p => p.end_datetime).map(p => {
+      const kind = p.kind || 'shift';
+      const colorMap = {shift:'#10b981', overtime:'#fb923c', break:'#fbbf24', sick:'#f87171', leave:'#c084fc', idle:'#9ca3af'};
+      const color = colorMap[kind] || '#10b981';
+      return {
+        id: 'tp-' + p.id,
+        group: p.resource_id,
+        start: p.start_datetime,
+        end: p.end_datetime,
+        type: 'background',
+        className: 'tl-bg-punch tl-bg-punch-' + kind,
+        title: `Timbratura · ${p.kind_label || kind}\n${new Date(p.start_datetime).toLocaleString('it-IT', {dateStyle:'short', timeStyle:'short'})} → ${new Date(p.end_datetime).toLocaleString('it-IT', {dateStyle:'short', timeStyle:'short'})}\n⏱ ${p.duration_h}h`,
+        style: `background:linear-gradient(180deg, ${color}1a 0%, ${color}33 100%); border-bottom:2px solid ${color};`,
+      };
+    });
+  } catch(_) {}
+
+  const itemsDS = new vis.DataSet([...items, ...bgItems, ...punchItems]);
 
   const win = savedWin || tlWindowFor(tlZoom, new Date());
   const groups = tlBuildGroups(bookings, win.start, win.end);
@@ -1337,8 +1428,8 @@ async function renderTimeline(preserveWindow=false) {
         const orig = items.find(x => x.id === item.id);
         if (orig) item.group = orig.group;
       }
-      // Skip background items (ferie/festa) — non si possono trascinare
-      if (typeof item.id === 'string' && item.id.startsWith('u-')) {
+      // Skip background items (ferie/festa/timbrature) — non si possono trascinare
+      if (typeof item.id === 'string' && (item.id.startsWith('u-') || item.id.startsWith('tp-'))) {
         callback(null);
         return;
       }
@@ -1358,6 +1449,15 @@ async function renderTimeline(preserveWindow=false) {
       else if (tlHasConflict(item, all.filter(x => !String(x.id).startsWith('u-')))) cls += ' tl-conflict';
       item.className = cls.trim();
       item._hardBlock = hardBlock; // flag per onMove
+      // v3.4.22: popup ore durante drag/resize
+      const dms = new Date(item.end) - new Date(item.start);
+      const hh = dms / 3600000;
+      const dd = Math.floor(hh / 24);
+      const remH = hh - dd * 24;
+      const durLabel = dd > 0 ? (dd + 'g' + (remH > 0 ? ' ' + remH.toFixed(1) + 'h' : '')) : (hh.toFixed(1) + 'h');
+      const sLab = new Date(item.start).toLocaleString('it-IT', {day:'2-digit', month:'2-digit', hour:'2-digit', minute:'2-digit'});
+      const eLab = new Date(item.end).toLocaleString('it-IT', {day:'2-digit', month:'2-digit', hour:'2-digit', minute:'2-digit'});
+      item.title = `${sLab} → ${eLab}\n⏱ ${durLabel}`;
       callback(item);
     },
     onMove: async function(item, callback) {
@@ -1678,6 +1778,24 @@ function _resourceOptionsHTML(selectedId) {
     html += '</optgroup>';
   }
   return html;
+}
+
+// v3.4.22: nuova riga eredita data/orari dalla prima (UX fix)
+function tlbAddAssignmentRowFromFirst() {
+  const firstRow = document.querySelector('#tlb-assignments .tlb-ass-row');
+  if (!firstRow) {
+    tlbAddAssignmentRow();
+    return;
+  }
+  const sd = firstRow.querySelector('.tlb-ass-start-date').value;
+  const st = firstRow.querySelector('.tlb-ass-start-time').value;
+  const ed = firstRow.querySelector('.tlb-ass-end-date').value;
+  const et = firstRow.querySelector('.tlb-ass-end-time').value;
+  // Costruiamo ISO solo se entrambi i campi data+ora ci sono
+  let startIso = null, endIso = null;
+  if (sd && st) startIso = new Date(sd + 'T' + st).toISOString();
+  if (ed && et) endIso = new Date(ed + 'T' + et).toISOString();
+  tlbAddAssignmentRow({start: startIso, end: endIso});
 }
 
 function tlbAddAssignmentRow(preset) {

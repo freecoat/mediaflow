@@ -23,10 +23,11 @@ echo  [E] Migra database esistente (Booking.kind/cost_line + job_id nullable) [v
 echo  [F] Migra database esistente (multi-resource booking_assignments) [v3.4.16]
 echo  [G] Migra database esistente (working hours + ferie tipizzate) [v3.4.17]
 echo  [H] Migra database esistente (soglie/moltiplicatori straordinari) [v3.4.21]
+echo  [I] Migra database esistente (workflow approvazione ferie/malattia) [v3.4.22]
 echo  [A] Apri cartella upload
 echo  [0] Esci
 echo.
-set /p scelta="Scegli un'opzione (0-9, A, B, C, D, E, F, G, H): "
+set /p scelta="Scegli un'opzione (0-9, A, B, C, D, E, F, G, H, I): "
 
 if "%scelta%"=="1" goto avvia
 if "%scelta%"=="2" goto reset_db
@@ -44,6 +45,7 @@ if /i "%scelta%"=="E" goto migrate_booking_cost_line_kind
 if /i "%scelta%"=="F" goto migrate_multi_resource
 if /i "%scelta%"=="G" goto migrate_working_hours
 if /i "%scelta%"=="H" goto migrate_overtime
+if /i "%scelta%"=="I" goto migrate_unav_approval
 if /i "%scelta%"=="A" goto uploads
 if "%scelta%"=="0" exit /b
 
@@ -232,6 +234,21 @@ set /p conferma="Procedo? (s/n): "
 if /i "%conferma%"=="s" (
     call .venv\Scripts\activate.bat
     python scripts\migrate_overtime_thresholds.py
+)
+pause & goto menu
+
+:migrate_unav_approval
+echo.
+echo Migrazione: workflow approvazione ferie/malattia/permessi.
+echo Aggiunge status, requested_by_user_id, approved_by_user_id,
+echo approved_at, rejection_reason, created_at a resource_unavailabilities.
+echo Backfill record esistenti come 'approved'.
+echo Idempotente.
+echo.
+set /p conferma="Procedo? (s/n): "
+if /i "%conferma%"=="s" (
+    call .venv\Scripts\activate.bat
+    python scripts\migrate_unavailability_approval.py
 )
 pause & goto menu
 

@@ -1,5 +1,70 @@
 # MediaFlow — Changelog
 
+## v3.4.22 — RBAC + workflow ferie + timbratura semplificata + UX (30 aprile 2026)
+
+Sessione lunga: 6 cantieri E/D/C/B/A/F in una passata.
+
+### E — RBAC ruoli e permessi
+
+- Nuovo ruolo **`producer`** (oltre admin/manager/staff/viewer)
+- `app/services/rbac.py`: helpers `is_admin/manager/producer/staff/elevated`, `can_view_finance`, `can_edit_settings`, `can_assign_resources`, `can_approve_unavailability`, dependency `current_user(request)`, `requires_role(*roles)`, `scope_resource_id(db, user)` (link User↔Resource via `Resource.user_id`)
+- Helpers esposti come globals Jinja per condizionali UI (`{% if can_view_finance(user) %}`)
+- **Auth guard** middleware esteso con blacklist path/role:
+  - Staff/viewer: niente `/quotes`, `/cost-report`, `/finance`, `/pricelist`, `/clients`, `/assignments`, `/resources`
+  - Solo admin: `/departments`, `/settings/api/working-hours`, `/settings/api/ai`
+  - 403 con pagina HTML pulita (no JSON crudo)
+- **Sidebar conditional**: nasconde Quotazioni/Cost Report/Fatturazione/Listino/Reparti/Impostazioni a non-elevated; mostra "Le mie ore" invece di "Ore lavoro" per staff
+- **HR scope auto** (`/hr/*`): staff vede e modifica solo le proprie timbrature. Helper `_enforce_scope(request, db, requested_resource_id)` usato in tutti gli endpoint API
+- **Planning scope** (`/planning/api/bookings`, `/planning/api/booking-assignments`): staff può creare/modificare/cancellare booking solo per la propria risorsa
+- **Project detail**: tab Quotazioni nascosto a staff, colonna Budget rimossa nei job, bottone "+ Nuova quotazione" hidden
+- Robustezza JS: `getElementById` null-safe per evitare errori sulle sezioni nascoste
+
+### D — Workflow approvazione ferie/malattia/permessi
+
+- `ResourceUnavailability` esteso con: `status` (pending/approved/rejected), `requested_by_user_id`, `approved_by_user_id`, `approved_at`, `rejection_reason`, `created_at`
+- Nuovo enum `UnavailabilityStatus`
+- **POST `/api/unavailabilities`**: staff → status=pending (richiesta), elevated → status=approved (azione diretta)
+- **GET `/api/unavailabilities/pending`**: lista richieste in attesa (solo elevated)
+- **POST `/api/unavailabilities/{id}/approve`** + **`/reject`** (elevated only)
+- **DELETE `/api/unavailabilities/{id}`**: staff può cancellare solo le proprie richieste pending
+- Solo `status=approved` blocca planning (smart split, suggest-resources, timeline overlay)
+- Migrazione `[I]` `migrate_unavailability_approval.py` (idempotente, backfill record esistenti come 'approved' per back-compat)
+
+### C — Timbrature semplificate + visibility timeline
+
+- Modal `/hr` Nuova timbratura:
+  - Job/lavorazione **rimossi** per staff (legame inferito dai booking pianificati)
+  - Job opzionale solo per elevated (manager/producer/admin) per ricostruzioni manuali
+  - Per staff: solo `kind` shift/overtime/break — ferie/malattia vanno via richiesta approvazione
+  - Box durata live con preview overtime (`>8h` → highlight arancione)
+- **Overlay timbrature in `/planning` Resource Timeline**:
+  - Background items `tl-bg-punch` con bordo verde (shift) / arancio (overtime) / giallo (break) / rosso (sick) / lavanda (leave) / grigio (idle)
+  - Tooltip con data, durata, kind label
+  - Solo timbrature chiuse (con `end_datetime`) visualizzate
+  - Nessun drag/resize sugli overlay (skip in `onMoving`)
+
+### B — Bug fix booking modal
+
+- **Popup ore (tooltip durata) ripristinato** durante drag/resize di un item: titolo dinamico in onMoving con `start → end` + durata formattata (h o gg+h)
+- **"+ Aggiungi risorsa"** ora copia data/orari della prima riga (nuovo `tlbAddAssignmentRowFromFirst()`) — la risorsa va comunque scelta dall'utente
+
+### A — Login centrato
+
+- Fix `.login-page`: `body` è `display:flex` (per app-shell), prima la card finiva a sinistra
+- Aggiunto `width:100%; flex:1` per espandere il container al viewport
+- Background con radial gradient indaco subtle (estetica)
+
+### F — Look refined timeline risorse
+
+- `/planning` Resource Timeline polish CSS:
+  - Container con shadow elevata + inset highlight + radius
+  - Time axis: maiuscolo letter-spacing, gradient header, weekend tint indaco
+  - Labels: zebra simmetrica, transition .12s, hover indaco
+  - Reparti header: gradient orizzontale + bordo sx 3px indaco + uppercase 700
+  - Items: shape morbida con shadow + inset highlight, hover lift e brightness +8%, selected con doppio glow indaco
+  - Drag handles: gradient rampa che si rivela in hover
+  - Punch overlay: opacity 0.85 → 1 in hover, no border/shadow per non disturbare booking sopra
+
 ## v3.4.21.1 — Auth guard + UX login (30 aprile 2026)
 
 Pagina login esisteva già ma non proteggeva niente: si entrava in `/dashboard` anche

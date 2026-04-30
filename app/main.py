@@ -24,11 +24,24 @@ async def lifespan(app: FastAPI):
     yield
 
 
-app = FastAPI(title="MediaFlow", version="3.4.21.1", lifespan=lifespan)
+app = FastAPI(title="MediaFlow", version="3.4.22", lifespan=lifespan)
 
 BASE_DIR = Path(__file__).parent
 app.mount("/static", StaticFiles(directory=BASE_DIR / "static"), name="static")
 templates = Jinja2Templates(directory=BASE_DIR / "templates")
+
+# Espone helpers RBAC ai template Jinja per condizionali UI
+from app.services import rbac as _rbac
+templates.env.globals["is_admin"] = _rbac.is_admin
+templates.env.globals["is_manager"] = _rbac.is_manager
+templates.env.globals["is_producer"] = _rbac.is_producer
+templates.env.globals["is_staff"] = _rbac.is_staff
+templates.env.globals["is_elevated"] = _rbac.is_elevated
+templates.env.globals["can_view_finance"] = _rbac.can_view_finance
+templates.env.globals["can_edit_settings"] = _rbac.can_edit_settings
+templates.env.globals["can_edit_pricelist"] = _rbac.can_edit_pricelist
+templates.env.globals["can_assign_resources"] = _rbac.can_assign_resources
+templates.env.globals["can_approve_unavailability"] = _rbac.can_approve_unavailability
 
 
 # Middleware: forza no-cache sulle risposte HTML.
@@ -45,7 +58,7 @@ async def no_cache_html(request: Request, call_next):
     return response
 
 
-# ── Auth guard (v3.4.21.1.1) ─────────────────────────────────────
+# ── Auth guard (v3.4.22.1) ─────────────────────────────────────
 # Redirect a /auth/login se cookie access_token mancante/invalido per
 # pagine HTML. API (path /api/* o accept JSON) ricevono 401 JSON.
 PUBLIC_PATHS = ("/auth/", "/static/", "/health", "/docs", "/openapi.json", "/favicon.ico", "/redoc")
@@ -85,7 +98,57 @@ async def auth_guard(request: Request, call_next):
     if not user:
         return _unauthorized(request, path)
 
+    # ── RBAC: blacklist path/prefix per ruolo ────────────────────
+    forbidden = _is_forbidden_for_role(path, user)
+    if forbidden:
+        return _forbidden(request, path)
+
     return await call_next(request)
+
+
+# Path/prefix vietati a staff/viewer (non vedono finanza, listino, quote, settings, reparti).
+# I router HR e planning gestiscono internamente lo scoping fine (vedi rbac.scope_resource_id).
+_FINANCE_BLOCKED_PREFIXES = ("/quotes", "/cost-report", "/finance", "/pricelist", "/clients")
+_NON_ELEVATED_BLOCKED_PREFIXES = ("/assignments", "/resources")  # kanban + anagrafica risorse
+_ADMIN_ONLY_PREFIXES = ("/departments", "/settings/api/working-hours", "/settings/api/ai")
+
+
+def _is_forbidden_for_role(path: str, user) -> bool:
+    from app.services.rbac import is_admin, is_elevated, can_view_finance
+    # Staff/viewer: niente finanza/quote/listino/clienti
+    if not can_view_finance(user):
+        for pref in _FINANCE_BLOCKED_PREFIXES:
+            if path == pref or path.startswith(pref + "/"):
+                return True
+    # Staff/viewer: niente kanban assegnazioni e anagrafica risorse globale
+    if not is_elevated(user):
+        for pref in _NON_ELEVATED_BLOCKED_PREFIXES:
+            if path == pref or path.startswith(pref + "/"):
+                return True
+    # Solo admin tocca le impostazioni globali (orari, AI, reparti)
+    if not is_admin(user):
+        for pref in _ADMIN_ONLY_PREFIXES:
+            if path == pref or path.startswith(pref + "/"):
+                return True
+    return False
+
+
+def _forbidden(request: Request, path: str):
+    accept = request.headers.get("accept", "")
+    is_api = path.startswith("/api/") or "/api/" in path or "application/json" in accept
+    if is_api:
+        from fastapi.responses import JSONResponse
+        return JSONResponse({"detail": "Accesso non autorizzato per questo ruolo"}, status_code=403)
+    from fastapi.responses import HTMLResponse
+    html = """<!DOCTYPE html><html lang="it"><head><meta charset="utf-8">
+<title>403 — Accesso negato</title><link rel="stylesheet" href="/static/css/main.css"></head>
+<body><div style="display:flex;align-items:center;justify-content:center;min-height:100vh;flex-direction:column;gap:16px;padding:24px;text-align:center;">
+<div style="font-size:64px;">🔒</div>
+<h1 style="margin:0;font-size:24px;">Accesso negato</h1>
+<p style="color:var(--text2);max-width:480px;">Il tuo ruolo non ha i permessi per accedere a questa sezione.</p>
+<a href="/dashboard" class="btn btn-primary">Torna alla Dashboard</a>
+</div></body></html>"""
+    return HTMLResponse(html, status_code=403)
 
 
 def _unauthorized(request: Request, path: str):
@@ -134,5 +197,5 @@ async def dashboard(request: Request):
 async def health():
     from app.services.ai_provider import get_provider
     p = get_provider()
-    return {"status": "ok", "app": settings.app_name, "version": "3.4.21.1",
+    return {"status": "ok", "app": settings.app_name, "version": "3.4.22",
             "ai": {"configured": p is not None, "provider": p.name if p else None}}

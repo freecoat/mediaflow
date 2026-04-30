@@ -139,34 +139,50 @@
           <label class="form-label">Tipo *</label>
           <select class="form-select" id="p-kind" required>
             {% for k in kinds %}
-            <option value="{{ k.value }}">{{ k.label }}</option>
+              {% if is_elevated or k.value in ('shift', 'overtime', 'break') %}
+              <option value="{{ k.value }}">{{ k.label }}</option>
+              {% endif %}
             {% endfor %}
           </select>
+          {% if not is_elevated %}
+          <small class="form-help text-muted">Per ferie/malattia/permessi → "Le mie richieste" su /resources/{{ scoped_resource_id }}</small>
+          {% endif %}
         </div>
       </div>
       <div class="form-row">
         <div class="form-group">
           <label class="form-label">Inizio *</label>
-          <input class="form-input" id="p-start" type="datetime-local" required>
+          <input class="form-input" id="p-start" type="datetime-local" required oninput="updatePunchDuration()">
         </div>
         <div class="form-group">
           <label class="form-label">Fine</label>
-          <input class="form-input" id="p-end" type="datetime-local">
+          <input class="form-input" id="p-end" type="datetime-local" oninput="updatePunchDuration()">
           <small class="form-help text-muted">Vuoto = timbratura in corso</small>
         </div>
       </div>
+      {% if is_elevated %}
+      <!-- Job legato alla timbratura: solo per admin/manager/producer.
+           Il flusso normale è: pianifichi un booking sul job → la timbratura
+           registra solo il TURNO effettivo (kind=shift). Il legame al job
+           viene desunto dai booking pianificati che si sovrappongono. -->
       <div class="form-group">
-        <label class="form-label">Job (opzionale)</label>
+        <label class="form-label">Job <span class="text-muted text-sm">(facoltativo, solo per ricostruzioni manuali)</span></label>
         <select class="form-select" id="p-job">
-          <option value="">— nessun job —</option>
+          <option value="">— nessun job (turno generico) —</option>
           {% for j in jobs %}
           <option value="{{ j.id }}">{{ j.code }} — {{ j.title }}</option>
           {% endfor %}
         </select>
       </div>
+      {% else %}
+      <input type="hidden" id="p-job" value="">
+      {% endif %}
       <div class="form-group">
         <label class="form-label">Note</label>
         <textarea class="form-textarea" id="p-notes" placeholder="Note opzionali…"></textarea>
+      </div>
+      <div id="p-duration-info" class="text-sm text-muted" style="margin-top:8px;padding:10px;background:var(--bg);border-radius:8px;display:none;">
+        <strong style="color:var(--indigo2);">⏱ Durata:</strong> <span id="p-duration-value">—</span>
       </div>
     </div>
     <div class="modal-footer">
@@ -315,7 +331,35 @@ function openNewPunch() {
   const today = new Date();
   today.setHours(9, 0, 0, 0);
   document.getElementById('p-start').value = fmtDateTimeLocal(today.toISOString());
+  updatePunchDuration();
   openModal('modal-punch');
+}
+
+function updatePunchDuration() {
+  const start = document.getElementById('p-start').value;
+  const end = document.getElementById('p-end').value;
+  const box = document.getElementById('p-duration-info');
+  const out = document.getElementById('p-duration-value');
+  if (!box || !out) return;
+  if (!start || !end) { box.style.display = 'none'; return; }
+  const ms = new Date(end) - new Date(start);
+  if (ms <= 0) {
+    box.style.display = 'block';
+    out.innerHTML = '<span style="color:var(--rose);">Fine ≤ Inizio</span>';
+    return;
+  }
+  const h = ms / 3600000;
+  const dd = Math.floor(h / 24);
+  const remH = h - dd * 24;
+  const lab = dd > 0 ? (dd + 'g ' + remH.toFixed(1) + 'h') : (h.toFixed(2) + 'h');
+  // Calcolo overtime preview se >8h
+  let extra = '';
+  if (h > 8) {
+    const ot = h - 8;
+    extra = ` <span style="color:#fb923c;">(${ot.toFixed(1)}h straordinario)</span>`;
+  }
+  box.style.display = 'block';
+  out.innerHTML = lab + extra;
 }
 
 async function openEditPunch(punchId) {
@@ -331,6 +375,7 @@ async function openEditPunch(punchId) {
   document.getElementById('p-job').value = p.job_id || '';
   document.getElementById('p-notes').value = p.notes || '';
   document.getElementById('p-delete-btn').style.display = '';
+  updatePunchDuration();
   openModal('modal-punch');
 }
 

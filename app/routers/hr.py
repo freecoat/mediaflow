@@ -22,6 +22,7 @@ from app.models import (
 )
 from app.services.auth import get_current_user_from_token
 from app.services.overtime import compute_overtime
+from app.services.rbac import is_elevated, scope_resource_id, current_user_optional
 
 router = APIRouter(prefix="/hr", tags=["hr"])
 
@@ -124,16 +125,25 @@ def _punch_dict(p: TimePunch, *, fullcalendar: bool = False) -> dict:
 
 @router.get("/", response_class=HTMLResponse)
 async def hr_page(request: Request, db: Session = Depends(get_db)):
-    persons = (
+    user = current_user_optional(request)
+    elevated = is_elevated(user)
+    scoped_rid = None if elevated else scope_resource_id(db, user)
+
+    persons_q = (
         db.query(Resource)
         .filter(
             Resource.tenant_id == CURRENT_TENANT,
             Resource.is_active == True,
             Resource.type.in_(PERSON_TYPES),
         )
-        .order_by(Resource.name)
-        .all()
     )
+    if not elevated:
+        if scoped_rid is None:
+            persons_q = persons_q.filter(Resource.id == -1)  # nessuna risorsa visibile
+        else:
+            persons_q = persons_q.filter(Resource.id == scoped_rid)
+    persons = persons_q.order_by(Resource.name).all()
+
     jobs = (
         db.query(Job)
         .filter(Job.client_id.isnot(None))
@@ -144,14 +154,34 @@ async def hr_page(request: Request, db: Session = Depends(get_db)):
     kinds = [{"value": k.value, "label": KIND_LABEL[k], "color": KIND_COLOR.get(k)} for k in PunchKind]
     return _tpl().TemplateResponse(
         "pages/hr.html",
-        {"request": request, "persons": persons, "jobs": jobs, "kinds": kinds},
+        {"request": request, "persons": persons, "jobs": jobs, "kinds": kinds,
+         "is_elevated": elevated, "scoped_resource_id": scoped_rid},
     )
 
 
 # ── API ──────────────────────────────────────────────────────
 
+def _enforce_scope(request: Request, db: Session, requested_resource_id: Optional[int]) -> Optional[int]:
+    """Per staff/viewer forza il filtro sulla propria risorsa.
+
+    Ritorna l'ID risorsa effettivo da usare nelle query. Solleva 403 se l'utente
+    non-elevated tenta di accedere a una risorsa diversa dalla sua. Se è un
+    elevato, lascia passare il valore richiesto (anche None = nessun filtro).
+    """
+    user = current_user_optional(request)
+    if is_elevated(user):
+        return requested_resource_id
+    own = scope_resource_id(db, user)
+    if own is None:
+        raise HTTPException(403, "Nessuna risorsa associata a questo utente")
+    if requested_resource_id and requested_resource_id != own:
+        raise HTTPException(403, "Permesso negato sulla risorsa richiesta")
+    return own
+
+
 @router.get("/api/punches")
 async def list_punches(
+    request: Request,
     resource_id: Optional[int] = None,
     job_id: Optional[int] = None,
     kind: Optional[PunchKind] = None,
@@ -163,6 +193,7 @@ async def list_punches(
     format: str = "json",
     db: Session = Depends(get_db),
 ):
+    resource_id = _enforce_scope(request, db, resource_id)
     q = (
         db.query(TimePunch)
         .options(joinedload(TimePunch.resource), joinedload(TimePunch.job))
@@ -199,6 +230,7 @@ async def list_punches(
 
 @router.post("/api/punches")
 async def create_punch(
+    request: Request,
     resource_id: int = Form(...),
     start_datetime: datetime = Form(...),
     end_datetime: Optional[datetime] = Form(None),
@@ -209,6 +241,7 @@ async def create_punch(
     access_token: Optional[str] = Cookie(None),
     db: Session = Depends(get_db),
 ):
+    resource_id = _enforce_scope(request, db, resource_id)
     r = db.query(Resource).filter(
         Resource.id == resource_id,
         Resource.tenant_id == CURRENT_TENANT,
@@ -255,6 +288,7 @@ async def create_punch(
 
 @router.put("/api/punches/{punch_id}")
 async def update_punch(
+    request: Request,
     punch_id: int,
     start_datetime: Optional[datetime] = Form(None),
     end_datetime: Optional[datetime] = Form(None),
@@ -273,6 +307,7 @@ async def update_punch(
     ).first()
     if not p:
         raise HTTPException(404, "Timbratura non trovata")
+    _enforce_scope(request, db, p.resource_id)
 
     if start_datetime is not None:
         p.start_datetime = start_datetime
@@ -303,13 +338,14 @@ async def update_punch(
 
 
 @router.delete("/api/punches/{punch_id}")
-async def delete_punch(punch_id: int, db: Session = Depends(get_db)):
+async def delete_punch(punch_id: int, request: Request, db: Session = Depends(get_db)):
     p = db.query(TimePunch).filter(
         TimePunch.id == punch_id,
         TimePunch.tenant_id == CURRENT_TENANT,
     ).first()
     if not p:
         raise HTTPException(404, "Timbratura non trovata")
+    _enforce_scope(request, db, p.resource_id)
     db.delete(p)
     db.commit()
     return {"ok": True}
@@ -317,12 +353,14 @@ async def delete_punch(punch_id: int, db: Session = Depends(get_db)):
 
 @router.get("/api/summary")
 async def punches_summary(
+    request: Request,
     resource_id: Optional[int] = None,
     from_date: Optional[date] = None,
     to_date: Optional[date] = None,
     db: Session = Depends(get_db),
 ):
     """Totali ore per kind nel periodo. Esclude timbrature in corso (end NULL)."""
+    resource_id = _enforce_scope(request, db, resource_id)
     q = db.query(TimePunch).filter(
         TimePunch.tenant_id == CURRENT_TENANT,
         TimePunch.end_datetime.isnot(None),
@@ -367,11 +405,13 @@ def _resolve_policy_for_resource(db: Session, resource: Optional[Resource]) -> O
 
 @router.get("/api/overtime")
 async def overtime_breakdown(
+    request: Request,
     resource_id: int,
     from_date: date,
     to_date: date,
     db: Session = Depends(get_db),
 ):
+    resource_id = _enforce_scope(request, db, resource_id)
     """Breakdown auto-straordinari per una risorsa nel periodo.
 
     Calcola ore regolari, overtime giornaliero/settimanale, fascia notturna,

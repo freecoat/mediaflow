@@ -5,8 +5,10 @@
 {% block topbar_title %}<a href="/projects" class="text-muted" style="text-decoration:none;">Progetti</a> <span class="text-muted">/</span> <span id="breadcrumb-title">—</span>{% endblock %}
 
 {% block topbar_actions %}
+  {% if can_view_finance(request.state.current_user) %}
   <button class="btn btn-secondary btn-sm" onclick="openModal('modal-edit-project')">✎ Modifica</button>
   <button class="btn btn-primary btn-sm" onclick="openModal('modal-new-quote')">+ Nuova quotazione</button>
+  {% endif %}
 {% endblock %}
 
 {% block content %}
@@ -31,14 +33,18 @@
 </div>
 
 <!-- Tabs -->
+{% set _can_finance = can_view_finance(request.state.current_user) %}
 <div class="tabs">
+  {% if _can_finance %}
   <div class="tab active" onclick="showTab('quotes', this)">Quotazioni <span id="tab-count-quotes" class="text-xs text-muted"></span></div>
-  <div class="tab" onclick="showTab('jobs', this)">Job / lavorazioni <span id="tab-count-jobs" class="text-xs text-muted"></span></div>
+  {% endif %}
+  <div class="tab {% if not _can_finance %}active{% endif %}" onclick="showTab('jobs', this)">Job / lavorazioni <span id="tab-count-jobs" class="text-xs text-muted"></span></div>
   <div class="tab" onclick="showTab('resources', this)">Risorse <span id="tab-count-resources" class="text-xs text-muted"></span></div>
   <div class="tab" onclick="showTab('details', this)">Dettagli progetto</div>
 </div>
 
-<!-- Sezione Quotazioni -->
+<!-- Sezione Quotazioni (admin/manager/producer only) -->
+{% if _can_finance %}
 <div id="section-quotes">
   <div class="card">
     <div class="table-wrap">
@@ -59,15 +65,16 @@
     </div>
   </div>
 </div>
+{% endif %}
 
 <!-- Sezione Job -->
-<div id="section-jobs" class="hidden">
+<div id="section-jobs" class="{% if _can_finance %}hidden{% endif %}">
   <div class="card">
     <div class="table-wrap">
       <table>
         <thead>
           <tr>
-            <th>Codice</th><th>Titolo</th><th class="text-right">Budget</th><th>Stato</th><th></th>
+            <th>Codice</th><th>Titolo</th>{% if _can_finance %}<th class="text-right">Budget</th>{% endif %}<th>Stato</th><th></th>
           </tr>
         </thead>
         <tbody id="jobs-table"></tbody>
@@ -321,13 +328,15 @@ function renderProject() {
     document.getElementById('p-desc-block').style.display = 'block';
   }
 
-  renderQuotes(p.quotes || []);
+  if (document.getElementById('quotes-table')) renderQuotes(p.quotes || []);
   renderJobs(p.jobs || []);
   renderDetails(p);
 
-  document.getElementById('tab-count-quotes').textContent = `(${(p.quotes || []).length})`;
+  const qCount = document.getElementById('tab-count-quotes');
+  if (qCount) qCount.textContent = `(${(p.quotes || []).length})`;
   document.getElementById('tab-count-jobs').textContent = `(${(p.jobs || []).length})`;
-  document.getElementById('nq-project-name').textContent = `${p.code} — ${p.title}`;
+  const nqEl = document.getElementById('nq-project-name');
+  if (nqEl) nqEl.textContent = `${p.code} — ${p.title}`;
 
   // Prefill edit
   document.getElementById('e-title').value = p.title || '';
@@ -378,14 +387,15 @@ function renderJobs(jobs) {
   }
   tbody.closest('.table-wrap').style.display = '';
   noJ.classList.add('hidden');
+  const canFinance = {{ 'true' if _can_finance else 'false' }};
   tbody.innerHTML = jobs.map(j => `
     <tr>
       <td class="mono" style="font-size:12px;">${j.code}</td>
       <td style="font-weight:500;">${j.title}</td>
-      <td class="mono text-right">${fmtCurrency(j.budget_quoted)}</td>
+      ${canFinance ? `<td class="mono text-right">${fmtCurrency(j.budget_quoted)}</td>` : ''}
       <td>${statusBadge(j.status)}</td>
       <td>
-        <a class="btn btn-ghost btn-sm" href="/cost-report?job=${j.id}">Cost report →</a>
+        ${canFinance ? `<a class="btn btn-ghost btn-sm" href="/cost-report?job=${j.id}">Cost report →</a>` : `<a class="btn btn-ghost btn-sm" href="/jobs/${j.id}">Apri →</a>`}
       </td>
     </tr>`).join('');
 }
@@ -417,9 +427,11 @@ function showTab(name, el) {
   document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
   el.classList.add('active');
   ['quotes', 'jobs', 'resources', 'details'].forEach(s => {
-    document.getElementById('section-' + s).classList.add('hidden');
+    const sec = document.getElementById('section-' + s);
+    if (sec) sec.classList.add('hidden');
   });
-  document.getElementById('section-' + name).classList.remove('hidden');
+  const target = document.getElementById('section-' + name);
+  if (target) target.classList.remove('hidden');
   if (name === 'resources') loadAssignments();
 }
 
