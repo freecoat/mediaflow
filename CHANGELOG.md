@@ -1,5 +1,12 @@
 # MediaFlow — Changelog
 
+## v3.4.24.1 — Hotfix cache-buster global.js (30 aprile 2026 notte)
+
+In v3.4.24 ho aggiunto `escapeHtml` a `app/static/js/global.js` ma ho dimenticato di bumpare il querystring `?v=` in `base.html`. Il browser continuava a servire la versione cached (`?v=3.2.1`) → bug `escapeHtml is not defined` persisteva su `/admin/users`, `/admin/roles`, `/hr`, ecc.
+
+- `base.html`: `global.js?v=3.2.1` → `?v=3.4.24.1`.
+- **Regola**: ogni volta che modifico `static/js/global.js` o `static/css/main.css`, devo bumpare il cache-buster nel template che li include.
+
 ## v3.4.24 — UX feedback Matteo: bug escapeHtml + ferie/malattia in Le mie ore + cleanup overtime (30 aprile 2026)
 
 Bump dedicato ai 4 punti emersi nei test sul Mac di v3.4.23.
