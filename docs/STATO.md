@@ -177,7 +177,15 @@ Dopo conferma test sul Mac, passare a **#4 server-side abort**.
 
 ---
 
-*Ultimo aggiornamento: 30 aprile 2026 notte — riapertura post-test sul Mac, chiuso v3.4.24 con i 4 punti emersi (3 dei quali collassati su un singolo bug `escapeHtml` non globale). 27 commit ahead origin/main.
+*Ultimo aggiornamento: 30 aprile 2026 notte tarda — sessione maratona 12 commit (v3.4.21→v3.4.27). **Push eseguito**: tutto su origin/main su richiesta esplicita di Matteo. Aggiunto sistema notifiche generico (cantiere riusabile per booking_conflict, quote_status_changed, job_deadline_approaching, ecc.).
+
+**v3.4.27** (ultimo): modello Notification + servizio notifications.py + router /notifications/api/* + 3 hook ferie (create pending → manager, approve/reject → richiedente) + UI campanella topbar con badge + drawer laterale + polling 30s + card "Richieste in attesa" in /hr/. Pattern una-row-per-destinatario. NotificationKind estendibile (4 valori riservati per cantieri futuri).
+
+**Direttiva strategica Matteo (memorizzata)**: sempre approccio generico riusabile, mai tappare buchi singoli. Esplorare in-depth conseguenze. Proposte ampie. Domande quando servono.
+
+---
+
+*Versione precedente: 30 aprile 2026 notte — riapertura post-test sul Mac, chiuso v3.4.24 con i 4 punti emersi (3 dei quali collassati su un singolo bug `escapeHtml` non globale). 27 commit ahead origin/main.
 
 **v3.4.24**: (1) `escapeHtml` spostato in `global.js` → /admin/users e /admin/roles tornano funzionanti, l'auto-User da Resource era già OK ma sembrava rotto a causa del crash render lista; (2) modal timbratura senza scelta manuale "straordinario" (calcolo deterministico via policy); (3) "Le mie ore" planning ora ha card riepilogo ore (regolari+straordinari+notturne+ferie+malattia+totale) + form richiesta ferie/malattia + lista delle proprie con stato; `/hr/api/overtime` esteso con campi `unavailability` e `grand_total_hours` per la rendicontazione amministrativa; nuovo endpoint `/planning/api/my-unavailabilities`; (4) anteprima badge permessi sotto dropdown ruolo nel modal `/admin/users`.
 
