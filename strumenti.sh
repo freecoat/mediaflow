@@ -44,10 +44,11 @@ while true; do
     echo "  [h] Migra database esistente (soglie/moltiplicatori straordinari) [v3.4.21]"
     echo "  [i] Migra database esistente (workflow approvazione ferie/malattia) [v3.4.22]"
     echo "  [j] Migra database esistente (sistema permessi configurabili Role) [v3.4.23]"
+    echo "  [k] Migra database esistente (permessi extra per-utente) [v3.4.25]"
     echo "  [a] Apri cartella upload"
     echo "  [0] Esci"
     echo ""
-    read -p "Scegli un'opzione (0-9, a, b, c, d, e, f, g, h, i, j): " scelta
+    read -p "Scegli un'opzione (0-9, a, b, c, d, e, f, g, h, i, j, k): " scelta
 
     case $scelta in
         1)
@@ -225,6 +226,16 @@ while true; do
             read -p "Procedo? (s/n): " conferma
             if [ "$conferma" = "s" ] || [ "$conferma" = "S" ]; then
                 python scripts/migrate_roles_v2.py
+            fi
+            read -p "Premi INVIO per continuare..."
+            ;;
+        k|K)
+            echo ""
+            echo "Migrazione: permessi extra per-utente (additivi sopra il ruolo)."
+            echo "Aggiunge users.extra_permissions JSON NULL. Idempotente."
+            read -p "Procedo? (s/n): " conferma
+            if [ "$conferma" = "s" ] || [ "$conferma" = "S" ]; then
+                python scripts/migrate_user_extra_permissions.py
             fi
             read -p "Premi INVIO per continuare..."
             ;;

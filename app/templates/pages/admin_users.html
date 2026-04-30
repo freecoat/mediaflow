@@ -50,11 +50,23 @@
       </div>
       <div class="form-group">
         <label class="form-label">Ruolo *</label>
-        <select class="form-select" id="u-role" required onchange="renderRolePreview()">
+        <select class="form-select" id="u-role" required onchange="renderRolePreview(); renderExtraPermsMatrix();">
           <option value="">— seleziona —</option>
         </select>
         <small class="text-muted text-sm">I permessi sono definiti dal ruolo. <a href="/admin/roles">Modifica permessi →</a></small>
         <div id="u-role-preview" style="margin-top:10px; display:none;"></div>
+      </div>
+
+      <!-- Permessi extra (additivi sul ruolo) — solo in edit mode -->
+      <div class="form-group" id="u-extra-perms-group" style="display:none;">
+        <label class="form-label" style="display:flex; justify-content:space-between; align-items:center;">
+          <span>Permessi extra <span class="text-muted text-sm" style="font-weight:normal;">(additivi al ruolo)</span></span>
+          <span class="text-muted text-sm" id="u-extra-count">0 attivi</span>
+        </label>
+        <p class="text-sm text-muted" style="margin-top:0;">
+          Sono permessi concessi solo a questo utente, in aggiunta a quelli del ruolo. I permessi già coperti dal ruolo (in grigio) non sono modificabili da qui.
+        </p>
+        <div id="u-extra-perms-matrix" style="margin-top:8px; max-height:240px; overflow-y:auto; border:1px solid var(--border); border-radius:6px; padding:8px;"></div>
       </div>
       <div class="form-group" id="u-pwd-group">
         <label class="form-label">Password</label>
@@ -108,6 +120,55 @@
 const PERMS_CATALOG = {{ permissions_catalog|tojson }};
 let ROLES = [];
 let USERS = [];
+
+// v3.4.25: Matrix permessi extra (additivi) — solo in edit mode
+function renderExtraPermsMatrix() {
+  const host = document.getElementById('u-extra-perms-matrix');
+  const wrap = document.getElementById('u-extra-perms-group');
+  const id = document.getElementById('u-id').value;
+  if (!id) { wrap.style.display = 'none'; return; }
+  wrap.style.display = '';
+  const u = USERS.find(x => x.id == id);
+  if (!u) return;
+  const role = ROLES.find(r => r.id == document.getElementById('u-role').value);
+  const rolePerms = new Set((role && role.permissions) || []);
+  const userExtras = new Set(u.extra_permissions || []);
+  let html = '';
+  let count = 0;
+  for (const [cat, perms] of Object.entries(PERMS_CATALOG)) {
+    html += `<div style="margin-bottom:10px;"><div style="font-weight:600; font-size:11px; text-transform:uppercase; letter-spacing:0.5px; color:var(--text2); margin-bottom:4px; padding:3px 6px; background:rgba(98,114,245,0.06); border-radius:3px;">${escapeHtml(cat)}</div>`;
+    for (const [key, [label]] of Object.entries(perms)) {
+      const inRole = rolePerms.has(key);
+      const isExtra = userExtras.has(key);
+      if (isExtra) count++;
+      const checked = inRole || isExtra ? 'checked' : '';
+      const disabled = inRole ? 'disabled' : '';
+      const lblColor = inRole ? 'var(--text3)' : 'var(--text)';
+      const note = inRole ? ' <span class="text-xs text-muted">(da ruolo)</span>' : '';
+      html += `<label style="display:flex; align-items:center; gap:8px; padding:4px 6px; cursor:${inRole ? 'not-allowed' : 'pointer'}; border-radius:3px;" onmouseenter="this.style.background='${inRole ? '' : 'rgba(98,114,245,0.05)'}'" onmouseleave="this.style.background=''">
+        <input type="checkbox" data-extra-perm="${escapeHtml(key)}" ${checked} ${disabled} onchange="updateExtraCount()">
+        <span style="flex:1; color:${lblColor};">${escapeHtml(label)}${note}</span>
+        <span class="mono text-xs text-muted">${escapeHtml(key)}</span>
+      </label>`;
+    }
+    html += '</div>';
+  }
+  host.innerHTML = html;
+  document.getElementById('u-extra-count').textContent = `${count} attivi`;
+}
+
+function updateExtraCount() {
+  const checked = document.querySelectorAll('#u-extra-perms-matrix [data-extra-perm]:checked:not(:disabled)');
+  document.getElementById('u-extra-count').textContent = `${checked.length} attivi`;
+}
+
+async function saveExtraPermissions(userId) {
+  const checked = document.querySelectorAll('#u-extra-perms-matrix [data-extra-perm]:checked:not(:disabled)');
+  const perms = Array.from(checked).map(cb => cb.dataset.extraPerm);
+  const fd = new FormData();
+  fd.append('extra_permissions', perms.join(','));
+  await api('PUT', `/admin/api/users/${userId}/permissions`, fd);
+}
 
 function renderRolePreview() {
   const sel = document.getElementById('u-role');
@@ -196,6 +257,7 @@ function openEditUser(uid) {
   document.getElementById('u-pwd-group').style.display = 'none'; // edit: non gestiamo password qui
   document.getElementById('u-reset-btn').style.display = '';
   renderRolePreview();
+  renderExtraPermsMatrix();
   openModal('modal-user');
 }
 
@@ -214,6 +276,11 @@ async function saveUser() {
     const url = id ? `/admin/api/users/${id}` : '/admin/api/users';
     const method = id ? 'PUT' : 'POST';
     const r = await api(method, url, fd);
+    // In edit mode salva anche extra permissions (richiede user_id già esistente)
+    if (id) {
+      try { await saveExtraPermissions(id); }
+      catch(e) { toast('Salvato utente, ma permessi extra: '+e.message, 'error'); }
+    }
     closeModal('modal-user');
     if (!id && r.temp_password) {
       document.getElementById('creds-email').value = r.email;

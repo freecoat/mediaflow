@@ -121,6 +121,9 @@ class User(Base):
     role: Mapped[UserRole] = mapped_column(SAEnum(UserRole), default=UserRole.staff)
     role_id: Mapped[Optional[int]] = mapped_column(ForeignKey("roles.id"), nullable=True, index=True)
     role_obj: Mapped[Optional["Role"]] = relationship(foreign_keys=[role_id])
+    # Permessi extra (additivi sopra il ruolo) — v3.4.25.
+    # Lista di chiavi PERMISSIONS aggiunte al singolo utente sopra quelle del ruolo.
+    extra_permissions: Mapped[Optional[list]] = mapped_column(JSON, nullable=True, default=None)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
     last_login: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)

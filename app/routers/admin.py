@@ -63,6 +63,7 @@ def _user_dict(u: User) -> dict:
         "role_id": u.role_id,
         "role_code": role_obj.code if role_obj else (u.role.value if hasattr(u.role, "value") else None),
         "role_name": role_obj.name if role_obj else None,
+        "extra_permissions": u.extra_permissions or [],
         "created_at": u.created_at.isoformat() if u.created_at else None,
         "last_login": u.last_login.isoformat() if u.last_login else None,
         "linked_resource_id": next((r.id for r in u.resources), None) if u.resources else None,
@@ -128,6 +129,36 @@ async def update_user(
         u.role = _role_code_to_enum(role.code)
     if is_active is not None:
         u.is_active = is_active
+    db.commit(); db.refresh(u)
+    return _user_dict(u)
+
+
+@router.put("/api/users/{user_id}/permissions")
+async def update_user_extra_permissions(
+    user_id: int, request: Request,
+    extra_permissions: str = Form(""),  # CSV
+    db: Session = Depends(get_db),
+    _: User = Depends(requires_permission("manage_users")),
+):
+    """Aggiorna i permessi extra (additivi) per un utente specifico.
+
+    I permessi base sono dati dal ruolo. Questa lista è ADDITIVA: chiavi
+    qui presenti vengono concesse al singolo utente in aggiunta a quelle
+    del ruolo. Non è possibile sottrarre permessi del ruolo da qui.
+    """
+    u = db.query(User).filter(User.id == user_id).first()
+    if not u:
+        raise HTTPException(404, "Utente non trovato")
+    perms = [p.strip() for p in extra_permissions.split(",") if p.strip()]
+    invalid = [p for p in perms if p not in ALL_PERMISSION_KEYS]
+    if invalid:
+        raise HTTPException(400, f"Permessi non validi: {', '.join(invalid)}")
+    # Pulizia: scarta quelli già presenti nel ruolo (ridondanti)
+    role_perms: set = set()
+    if u.role_obj and u.role_obj.permissions:
+        role_perms = set(u.role_obj.permissions)
+    cleaned = sorted(set(perms) - role_perms)
+    u.extra_permissions = cleaned if cleaned else None
     db.commit(); db.refresh(u)
     return _user_dict(u)
 

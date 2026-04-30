@@ -1,5 +1,32 @@
 # MediaFlow — Changelog
 
+## v3.4.25 — Permessi extra per-utente (30 aprile 2026 notte)
+
+Permessi del singolo utente ora = permessi del ruolo + extra individuali (additivi).
+
+### Modello
+
+- Nuova colonna `users.extra_permissions: JSON NULL` (lista di chiavi `PERMISSIONS`).
+- `_user_permissions(user)` in `rbac.py` ora unisce: ruolo + `extra_permissions`.
+- Solo additivi: non è possibile sottrarre permessi del ruolo dal singolo utente. Per sottrazioni serve un ruolo custom dedicato.
+
+### API
+
+- Nuovo `PUT /admin/api/users/{id}/permissions` con form `extra_permissions=csv`.
+- Validazione: solo chiavi presenti in `ALL_PERMISSION_KEYS`.
+- Pulizia automatica: chiavi già coperte dal ruolo vengono scartate per evitare ridondanza.
+
+### UI modal `/admin/users` (edit mode)
+
+- Sezione "Permessi extra" sotto l'anteprima del ruolo.
+- Matrix per categoria: i permessi del ruolo appaiono già checked + disabled (etichetta "(da ruolo)" + grigio), gli altri sono toggle attivabili.
+- Counter "N attivi" live.
+- Salvataggio integrato nel flusso `Salva utente`.
+
+### Migrazione
+
+- `scripts/migrate_user_extra_permissions.py` — opzione `[K]` su `strumenti.bat/sh`. Idempotente.
+
 ## v3.4.24.1 — Hotfix cache-buster global.js (30 aprile 2026 notte)
 
 In v3.4.24 ho aggiunto `escapeHtml` a `app/static/js/global.js` ma ho dimenticato di bumpare il querystring `?v=` in `base.html`. Il browser continuava a servire la versione cached (`?v=3.2.1`) → bug `escapeHtml is not defined` persisteva su `/admin/users`, `/admin/roles`, `/hr`, ecc.

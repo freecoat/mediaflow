@@ -25,10 +25,11 @@ echo  [G] Migra database esistente (working hours + ferie tipizzate) [v3.4.17]
 echo  [H] Migra database esistente (soglie/moltiplicatori straordinari) [v3.4.21]
 echo  [I] Migra database esistente (workflow approvazione ferie/malattia) [v3.4.22]
 echo  [J] Migra database esistente (sistema permessi configurabili Role) [v3.4.23]
+echo  [K] Migra database esistente (permessi extra per-utente) [v3.4.25]
 echo  [A] Apri cartella upload
 echo  [0] Esci
 echo.
-set /p scelta="Scegli un'opzione (0-9, A, B, C, D, E, F, G, H, I, J): "
+set /p scelta="Scegli un'opzione (0-9, A, B, C, D, E, F, G, H, I, J, K): "
 
 if "%scelta%"=="1" goto avvia
 if "%scelta%"=="2" goto reset_db
@@ -48,6 +49,7 @@ if /i "%scelta%"=="G" goto migrate_working_hours
 if /i "%scelta%"=="H" goto migrate_overtime
 if /i "%scelta%"=="I" goto migrate_unav_approval
 if /i "%scelta%"=="J" goto migrate_roles_v2
+if /i "%scelta%"=="K" goto migrate_user_extra_perms
 if /i "%scelta%"=="A" goto uploads
 if "%scelta%"=="0" exit /b
 
@@ -265,6 +267,18 @@ set /p conferma="Procedo? (s/n): "
 if /i "%conferma%"=="s" (
     call .venv\Scripts\activate.bat
     python scripts\migrate_roles_v2.py
+)
+pause & goto menu
+
+:migrate_user_extra_perms
+echo.
+echo Migrazione: permessi extra per-utente (additivi sopra il ruolo).
+echo Aggiunge users.extra_permissions JSON NULL. Idempotente.
+echo.
+set /p conferma="Procedo? (s/n): "
+if /i "%conferma%"=="s" (
+    call .venv\Scripts\activate.bat
+    python scripts\migrate_user_extra_permissions.py
 )
 pause & goto menu
 

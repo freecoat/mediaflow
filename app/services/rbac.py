@@ -140,20 +140,28 @@ ELEVATED_ROLE_CODES: Set[str] = {"admin", "manager", "producer"}
 def _user_permissions(user: Optional[User]) -> Set[str]:
     """Set permessi attivi per l'utente.
 
-    Priorità: User.role_obj.permissions (se popolato) > preset enum legacy.
+    = permessi del Role attivo (o preset enum legacy come fallback)
+    + permessi extra individuali (User.extra_permissions, additivi).
     """
     if not user:
         return set()
-    # 1. Role personalizzato
+    # 1. Permessi base dal ruolo
+    base: Set[str] = set()
     if user.role_id and user.role_obj and user.role_obj.is_active:
         perms = user.role_obj.permissions or []
         if isinstance(perms, list):
-            return set(perms)
-    # 2. Fallback su enum legacy → preset built-in matchando il code
-    role_code = (user.role.value if hasattr(user.role, "value") else str(user.role or "")).lower()
-    if role_code == "staff":
-        role_code = "operator"  # mapping: staff legacy = operator nel nuovo sistema
-    return set(PRESET_PERMISSIONS.get(role_code, []))
+            base = set(perms)
+    else:
+        # Fallback su enum legacy → preset built-in
+        role_code = (user.role.value if hasattr(user.role, "value") else str(user.role or "")).lower()
+        if role_code == "staff":
+            role_code = "operator"
+        base = set(PRESET_PERMISSIONS.get(role_code, []))
+    # 2. Extra additivi per-utente
+    extra = getattr(user, "extra_permissions", None) or []
+    if isinstance(extra, list):
+        base = base | set(extra)
+    return base
 
 
 def has_permission(user: Optional[User], permission: str) -> bool:

@@ -8,7 +8,7 @@
 
 ## Versione corrente
 
-**v3.4.24** — 30 aprile 2026 — Bug `escapeHtml` globale + ferie/malattia in "Le mie ore" + overtime cleanup + anteprima permessi modal
+**v3.4.25** — 30 aprile 2026 notte — Permessi extra per-utente (additivi sopra il ruolo)
 
 ## In corso
 
