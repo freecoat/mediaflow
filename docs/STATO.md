@@ -8,7 +8,7 @@
 
 ## Versione corrente
 
-**v3.4.25** — 30 aprile 2026 notte — Permessi extra per-utente (additivi sopra il ruolo)
+**v3.4.26** — 30 aprile 2026 notte — Richiesta ferie spostata da planning a /hr "Le mie ore"
 
 ## In corso
 

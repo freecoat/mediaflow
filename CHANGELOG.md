@@ -1,5 +1,15 @@
 # MediaFlow — Changelog
 
+## v3.4.26 — Spostamento richiesta ferie da planning a /hr ("Le mie ore") (30 aprile 2026 notte)
+
+In v3.4.24 avevo messo la card richiesta ferie + riepilogo ore nel tab "✓ Le mie" del planning. Matteo: la voce sidebar "Le mie ore" è la pagina `/hr/`, non quella → spostato lì.
+
+- `/hr/` ora mostra (solo per utenti con Resource collegata):
+  - **Riepilogo ore** del periodo filtrato (regolari · straordinari · notturne · ferie · malattia · totale)
+  - **Form richiesta ferie/malattia/permesso** + lista delle proprie con stato pending/approved/rejected
+- `/planning/` tab "✓ Le mie" torna a contenere SOLO la lista attività programmate, con un piccolo banner che linka a `/hr/`
+- Modal timbratura: helper text aggiornato ("→ sezione qui sotto" invece di "→ planning").
+
 ## v3.4.25.1 — Hotfix auto-bootstrap users.extra_permissions (30 aprile 2026 notte)
 
 In v3.4.25 ho aggiunto la colonna `users.extra_permissions` ma se l'utente fa pull e riavvia il server senza lanciare la migrazione `[K]`, il login crasha con `OperationalError: no such column: users.extra_permissions`.

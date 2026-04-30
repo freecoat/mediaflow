@@ -92,6 +92,35 @@
   </div>
 </div>
 
+{% if scoped_resource_id %}
+<!-- ── Riepilogo ore + richieste ferie/malattia (v3.4.26) ──── -->
+<!-- Visibile solo a chi ha una Resource collegata (staff con propria scheda HR) -->
+<div id="my-hours-block" style="margin-bottom:16px;">
+  <div id="my-hours-summary"></div>
+  <div class="card" style="margin-top:12px;">
+    <h3 style="font-size:14px; margin:0 0 10px;">🏖 Le mie ferie e malattie</h3>
+    <div style="display:flex; gap:6px; flex-wrap:wrap; align-items:flex-end; margin-bottom:10px;">
+      <div style="min-width:130px;"><label class="text-sm" style="font-size:11px; color:var(--text3);">Tipo</label>
+        <select id="myunav-kind" class="form-select">
+          <option value="vacation">Ferie</option>
+          <option value="sick">Malattia</option>
+          <option value="other">Permesso</option>
+        </select></div>
+      <div style="flex:1; min-width:130px;"><label class="text-sm" style="font-size:11px; color:var(--text3);">Dal</label>
+        <input type="date" id="myunav-start" class="form-input"></div>
+      <div style="flex:1; min-width:130px;"><label class="text-sm" style="font-size:11px; color:var(--text3);">Al</label>
+        <input type="date" id="myunav-end" class="form-input"></div>
+      <div style="flex:2; min-width:160px;"><label class="text-sm" style="font-size:11px; color:var(--text3);">Motivo (opz.)</label>
+        <input type="text" id="myunav-reason" class="form-input" placeholder="es. visita medica"></div>
+      <button class="btn btn-primary btn-sm" onclick="myUnavSubmit()">+ Invia richiesta</button>
+    </div>
+    <div id="myunav-list">
+      <div style="padding:8px; color:var(--text3); font-size:12px; text-align:center;">Caricamento…</div>
+    </div>
+  </div>
+</div>
+{% endif %}
+
 <!-- ── Tabella timbrature ──────────────────────────────────── -->
 <div class="card">
   <div class="table-wrap">
@@ -144,7 +173,7 @@
               {% endif %}
             {% endfor %}
           </select>
-          <small class="form-help text-muted">Lo straordinario viene calcolato automaticamente in base alla policy oraria. Per ferie/malattia → "Le mie ore" nel planning.</small>
+          <small class="form-help text-muted">Lo straordinario viene calcolato automaticamente in base alla policy oraria. Per ferie/malattia → sezione "Le mie ferie e malattie" qui sotto.</small>
         </div>
       </div>
       <div class="form-row">
@@ -239,6 +268,8 @@ async function reloadHR() {
   ]);
   renderTotals(summary);
   renderTable(punches);
+  // Aggiorna anche il riepilogo "Le mie ore" se il blocco è presente
+  if (typeof reloadMyHours === 'function') reloadMyHours();
 }
 
 function renderTotals(s) {
@@ -423,5 +454,110 @@ async function deletePunch() {
 }
 
 reloadHR();
+
+{% if scoped_resource_id %}
+// ── v3.4.26: Le mie ore (riepilogo + richieste ferie/malattia) ──────────
+const MY_RESOURCE_ID = {{ scoped_resource_id }};
+
+async function reloadMyHours() {
+  // Periodo: usa filtri f-from/f-to se presenti, altrimenti mese corrente
+  let fromIso = document.getElementById('f-from').value;
+  let toIso = document.getElementById('f-to').value;
+  if (!fromIso || !toIso) {
+    const now = new Date();
+    fromIso = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().slice(0, 10);
+    toIso = new Date(now.getFullYear(), now.getMonth() + 1, 0).toISOString().slice(0, 10);
+  }
+  const [summary, mineUnav] = await Promise.all([
+    api('GET', `/hr/api/overtime?resource_id=${MY_RESOURCE_ID}&from_date=${fromIso}&to_date=${toIso}`).catch(() => null),
+    api('GET', `/planning/api/my-unavailabilities?from_date=${fromIso}&to_date=${toIso}`).catch(() => []),
+  ]);
+  renderMyHoursSummary(summary, fromIso, toIso);
+  document.getElementById('myunav-list').innerHTML = renderMyUnavList(mineUnav);
+}
+
+function renderMyHoursSummary(summary, fromIso, toIso) {
+  const host = document.getElementById('my-hours-summary');
+  if (!summary || !summary.breakdown) { host.innerHTML = ''; return; }
+  const b = summary.breakdown, u = summary.unavailability || {};
+  const periodLabel = `${new Date(fromIso).toLocaleDateString('it-IT',{day:'numeric',month:'short'})} → ${new Date(toIso).toLocaleDateString('it-IT',{day:'numeric',month:'short',year:'numeric'})}`;
+  const cell = (lbl, val, color, highlight) => `<div style="padding:10px 12px; background:${highlight ? 'rgba(98,114,245,0.10)' : 'var(--bg2,#1a1d2e)'}; border:1px solid ${highlight ? 'rgba(98,114,245,0.3)' : 'var(--border,#2a2e3d)'}; border-radius:6px; min-width:0;">
+    <div style="font-size:10px; text-transform:uppercase; letter-spacing:0.5px; color:var(--text3,#888); margin-bottom:4px;">${lbl}</div>
+    <div style="font-size:18px; font-weight:${highlight ? 600 : 500}; color:${color || 'var(--text,#fff)'};">${val}</div>
+  </div>`;
+  host.innerHTML = `<div class="card">
+    <h3 style="font-size:14px; margin:0 0 10px;">📊 Riepilogo ore — ${escapeHtml(periodLabel)}</h3>
+    <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(110px, 1fr)); gap:8px;">
+      ${cell('Regolari', b.regular_hours.toFixed(1)+'h')}
+      ${cell('Straordinari', (b.overtime_daily_hours + b.overtime_weekly_hours).toFixed(1)+'h', '#fb923c')}
+      ${cell('Notturne', b.night_hours.toFixed(1)+'h', '#a78bfa')}
+      ${cell('Ferie', (u.vacation_hours||0).toFixed(1)+'h', '#6272f5')}
+      ${cell('Malattia', (u.sick_hours||0).toFixed(1)+'h', '#ef4444')}
+      ${cell('Totale', (summary.grand_total_hours||0).toFixed(1)+'h', null, true)}
+    </div>
+  </div>`;
+}
+
+function renderMyUnavList(rows) {
+  if (!rows || !rows.length) {
+    return '<div style="padding:8px; color:var(--text3); font-size:12px; text-align:center;">Nessuna richiesta</div>';
+  }
+  const KIND_LBL = {vacation:'Ferie', sick:'Malattia', other:'Permesso'};
+  const KIND_COL = {vacation:'#6272f5', sick:'#ef4444', other:'#9ca3af'};
+  const STATUS_LBL = {pending:'⏳ In attesa', approved:'✅ Approvata', rejected:'❌ Rifiutata'};
+  const STATUS_COL = {pending:'#fbbf24', approved:'#22c55e', rejected:'#ef4444'};
+  const fmt = d => new Date(d+'T00:00').toLocaleDateString('it-IT', {day:'numeric', month:'short', year:'numeric'});
+  return '<div style="border:1px solid var(--border,#2a2e3d); border-radius:6px; max-height:200px; overflow-y:auto;">' +
+    rows.map(u => {
+      const lbl = KIND_LBL[u.kind] || u.kind;
+      const col = KIND_COL[u.kind] || '#9ca3af';
+      const stLbl = STATUS_LBL[u.status] || u.status;
+      const stCol = STATUS_COL[u.status] || '#9ca3af';
+      const reason = u.reason ? ` <span style="color:var(--text3);">· ${escapeHtml(u.reason)}</span>` : '';
+      const reject = u.rejection_reason ? `<div style="font-size:11px; color:#ef4444; margin-top:2px;">Motivo rifiuto: ${escapeHtml(u.rejection_reason)}</div>` : '';
+      const canDelete = u.status === 'pending';
+      return `<div style="padding:6px 10px; border-bottom:1px solid var(--border); font-size:12px; display:flex; justify-content:space-between; align-items:center; gap:8px;">
+        <div style="flex:1;">
+          <span style="display:inline-block; width:8px; height:8px; border-radius:50%; background:${col}; margin-right:6px;"></span>
+          <b>${lbl}</b> · ${fmt(u.start_date)} → ${fmt(u.end_date)}${reason}
+          ${reject}
+        </div>
+        <span style="color:${stCol}; font-weight:500; font-size:11px; white-space:nowrap;">${stLbl}</span>
+        ${canDelete ? `<button class="btn btn-ghost btn-sm" title="Annulla richiesta" onclick="myUnavDelete(${u.id})">✕</button>` : ''}
+      </div>`;
+    }).join('') + '</div>';
+}
+
+async function myUnavSubmit() {
+  const start = document.getElementById('myunav-start').value;
+  const end = document.getElementById('myunav-end').value;
+  if (!start || !end) { toast('Imposta date inizio e fine', 'error'); return; }
+  const fd = new FormData();
+  fd.append('resource_id', MY_RESOURCE_ID);
+  fd.append('start_date', start);
+  fd.append('end_date', end);
+  fd.append('kind', document.getElementById('myunav-kind').value);
+  fd.append('reason', document.getElementById('myunav-reason').value);
+  try {
+    await api('POST', '/planning/api/unavailabilities', fd);
+    toast('Richiesta inviata', 'success');
+    document.getElementById('myunav-start').value = '';
+    document.getElementById('myunav-end').value = '';
+    document.getElementById('myunav-reason').value = '';
+    await reloadMyHours();
+  } catch(e) { toast(e.message || 'Errore', 'error'); }
+}
+
+async function myUnavDelete(id) {
+  if (!confirm('Annullare questa richiesta?')) return;
+  try {
+    const r = await fetch(`/planning/api/unavailabilities/${id}`, { method: 'DELETE' });
+    if (!r.ok) { const e = await r.json().catch(() => ({})); throw new Error(e.detail || 'Errore'); }
+    await reloadMyHours();
+  } catch(e) { toast(e.message, 'error'); }
+}
+
+reloadMyHours();
+{% endif %}
 </script>
 {% endblock %}

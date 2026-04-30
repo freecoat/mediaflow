@@ -853,6 +853,8 @@ async function renderAgenda() {
 }
 
 // ── Todo "Le mie" ──────────────────────────────────────────
+// Lista attività programmate (booking + timbrature) per la risorsa loggata.
+// Riepilogo ore + richiesta ferie/malattia stanno in /hr/ "Le mie ore".
 async function renderTodo() {
   const host = document.getElementById('todo-host');
   if (!CURRENT_RESOURCE_ID) {
@@ -862,76 +864,17 @@ async function renderTodo() {
   const fp = getFilterParams();
   fp.resource_id = CURRENT_RESOURCE_ID;
   const qs = new URLSearchParams(fp).toString();
-
-  // Periodo per il riepilogo ore: usa filtri se presenti, altrimenti mese corrente
-  let fromIso = fp.from_date, toIso = fp.to_date;
-  if (!fromIso || !toIso) {
-    const now = new Date();
-    fromIso = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().slice(0, 10);
-    toIso = new Date(now.getFullYear(), now.getMonth() + 1, 0).toISOString().slice(0, 10);
-  }
-
-  const [bookings, punches, mineUnav, summary] = await Promise.all([
+  const [bookings, punches] = await Promise.all([
     api('GET', '/planning/api/bookings?'+qs),
     api('GET', '/hr/api/punches?format=fullcalendar&'+qs),
-    api('GET', `/planning/api/my-unavailabilities?from_date=${fromIso}&to_date=${toIso}`).catch(() => []),
-    api('GET', `/hr/api/overtime?resource_id=${CURRENT_RESOURCE_ID}&from_date=${fromIso}&to_date=${toIso}`).catch(() => null),
   ]);
-
-  const periodLabel = `${new Date(fromIso).toLocaleDateString('it-IT',{day:'numeric',month:'short'})} → ${new Date(toIso).toLocaleDateString('it-IT',{day:'numeric',month:'short',year:'numeric'})}`;
-
-  // Sezione 1: riepilogo ore
-  let summaryHtml = '';
-  if (summary && summary.breakdown) {
-    const b = summary.breakdown, u = summary.unavailability || {};
-    const cell = (lbl, val, color, highlight) => `<div style="padding:10px 12px; background:${highlight ? 'rgba(98,114,245,0.10)' : 'var(--bg2,#1a1d2e)'}; border:1px solid ${highlight ? 'rgba(98,114,245,0.3)' : 'var(--border,#2a2e3d)'}; border-radius:6px; min-width:0;">
-      <div style="font-size:10px; text-transform:uppercase; letter-spacing:0.5px; color:var(--text3,#888); margin-bottom:4px;">${lbl}</div>
-      <div style="font-size:18px; font-weight:${highlight ? 600 : 500}; color:${color || 'var(--text,#fff)'};">${val}</div>
-    </div>`;
-    summaryHtml = `<div class="card" style="margin-bottom:14px;">
-      <h3 style="font-size:14px; margin:0 0 10px;">📊 Riepilogo ore — ${escapeHtml(periodLabel)}</h3>
-      <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(110px, 1fr)); gap:8px;">
-        ${cell('Regolari', b.regular_hours.toFixed(1)+'h')}
-        ${cell('Straordinari', (b.overtime_daily_hours + b.overtime_weekly_hours).toFixed(1)+'h', '#fb923c')}
-        ${cell('Notturne', b.night_hours.toFixed(1)+'h', '#a78bfa')}
-        ${cell('Ferie', (u.vacation_hours||0).toFixed(1)+'h', '#6272f5')}
-        ${cell('Malattia', (u.sick_hours||0).toFixed(1)+'h', '#ef4444')}
-        ${cell('Totale', (summary.grand_total_hours||0).toFixed(1)+'h', null, true)}
-      </div>
-    </div>`;
-  }
-
-  // Sezione 2: form ferie/malattia
-  const unavFormHtml = `<div class="card" style="margin-bottom:14px;">
-    <h3 style="font-size:14px; margin:0 0 10px;">🏖 Le mie ferie e malattie</h3>
-    <div style="display:flex; gap:6px; flex-wrap:wrap; align-items:flex-end; margin-bottom:10px;">
-      <div style="min-width:120px;"><label class="text-sm" style="font-size:11px; color:var(--text3);">Tipo</label>
-        <select id="myunav-kind" class="form-select">
-          <option value="vacation">Ferie</option>
-          <option value="sick">Malattia</option>
-          <option value="other">Permesso</option>
-        </select></div>
-      <div style="flex:1; min-width:120px;"><label class="text-sm" style="font-size:11px; color:var(--text3);">Dal</label>
-        <input type="date" id="myunav-start" class="form-input"></div>
-      <div style="flex:1; min-width:120px;"><label class="text-sm" style="font-size:11px; color:var(--text3);">Al</label>
-        <input type="date" id="myunav-end" class="form-input"></div>
-      <div style="flex:2; min-width:160px;"><label class="text-sm" style="font-size:11px; color:var(--text3);">Motivo (opz.)</label>
-        <input type="text" id="myunav-reason" class="form-input" placeholder="es. visita medica"></div>
-      <button class="btn btn-primary btn-sm" onclick="myUnavSubmit()">+ Invia richiesta</button>
-    </div>
-    <div id="myunav-list">${renderMyUnavList(mineUnav)}</div>
-  </div>`;
-
-  // Sezione 3: attività programmate
   const all = [...bookings, ...punches].filter(e => e.start);
   all.sort((a,b) => new Date(a.start) - new Date(b.start));
+  if (!all.length) { host.innerHTML = '<div class="pl-empty">Nessuna attività programmata per te. Per richieste ferie/malattia → <a href="/hr/">Le mie ore</a>.</div>'; return; }
   const today = new Date(); today.setHours(0,0,0,0);
   const tomorrow = new Date(today); tomorrow.setDate(today.getDate()+1);
-  let activitiesHtml;
-  if (!all.length) {
-    activitiesHtml = '<div class="pl-empty">Nessuna attività programmata per te</div>';
-  } else {
-    activitiesHtml = all.map(e => {
+  host.innerHTML = '<div style="padding:8px 12px; background:rgba(98,114,245,0.06); border-radius:6px; margin-bottom:10px; font-size:12px; color:var(--text2);">💡 Per richieste ferie/malattia e riepilogo ore → <a href="/hr/">Le mie ore</a></div>' +
+    all.map(e => {
       const s = new Date(e.start);
       let cls = 'upcoming', when = s.toLocaleDateString('it-IT',{weekday:'short',day:'numeric',month:'short'});
       if (s < today) { cls = 'late'; when = 'In ritardo · ' + when; }
@@ -945,69 +888,6 @@ async function renderTodo() {
         ${meta ? '<div class="meta">'+escapeHtml(meta)+'</div>' : ''}
       </div>`;
     }).join('');
-  }
-
-  host.innerHTML = summaryHtml + unavFormHtml +
-    `<div class="card"><h3 style="font-size:14px; margin:0 0 10px;">📅 Attività programmate</h3>${activitiesHtml}</div>`;
-}
-
-function renderMyUnavList(rows) {
-  if (!rows || !rows.length) {
-    return '<div style="padding:8px; color:var(--text3); font-size:12px; text-align:center;">Nessuna richiesta</div>';
-  }
-  const KIND_LBL = {vacation:'Ferie', sick:'Malattia', other:'Permesso'};
-  const KIND_COL = {vacation:'#6272f5', sick:'#ef4444', other:'#9ca3af'};
-  const STATUS_LBL = {pending:'⏳ In attesa', approved:'✅ Approvata', rejected:'❌ Rifiutata'};
-  const STATUS_COL = {pending:'#fbbf24', approved:'#22c55e', rejected:'#ef4444'};
-  const fmt = d => new Date(d+'T00:00').toLocaleDateString('it-IT', {day:'numeric', month:'short', year:'numeric'});
-  return '<div style="border:1px solid var(--border,#2a2e3d); border-radius:6px; max-height:200px; overflow-y:auto;">' +
-    rows.map(u => {
-      const lbl = KIND_LBL[u.kind] || u.kind;
-      const col = KIND_COL[u.kind] || '#9ca3af';
-      const stLbl = STATUS_LBL[u.status] || u.status;
-      const stCol = STATUS_COL[u.status] || '#9ca3af';
-      const reason = u.reason ? ` <span style="color:var(--text3);">· ${escapeHtml(u.reason)}</span>` : '';
-      const reject = u.rejection_reason ? `<div style="font-size:11px; color:#ef4444; margin-top:2px;">Motivo rifiuto: ${escapeHtml(u.rejection_reason)}</div>` : '';
-      const canDelete = u.status === 'pending';
-      return `<div style="padding:6px 10px; border-bottom:1px solid var(--border); font-size:12px; display:flex; justify-content:space-between; align-items:center; gap:8px;">
-        <div style="flex:1;">
-          <span style="display:inline-block; width:8px; height:8px; border-radius:50%; background:${col}; margin-right:6px;"></span>
-          <b>${lbl}</b> · ${fmt(u.start_date)} → ${fmt(u.end_date)}${reason}
-          ${reject}
-        </div>
-        <span style="color:${stCol}; font-weight:500; font-size:11px; white-space:nowrap;">${stLbl}</span>
-        ${canDelete ? `<button class="btn btn-ghost btn-sm" title="Annulla richiesta" onclick="myUnavDelete(${u.id})">✕</button>` : ''}
-      </div>`;
-    }).join('') + '</div>';
-}
-
-async function myUnavSubmit() {
-  const start = document.getElementById('myunav-start').value;
-  const end = document.getElementById('myunav-end').value;
-  if (!start || !end) { toast('Imposta date inizio e fine', 'error'); return; }
-  const fd = new FormData();
-  fd.append('resource_id', CURRENT_RESOURCE_ID);
-  fd.append('start_date', start);
-  fd.append('end_date', end);
-  fd.append('kind', document.getElementById('myunav-kind').value);
-  fd.append('reason', document.getElementById('myunav-reason').value);
-  try {
-    await api('POST', '/planning/api/unavailabilities', fd);
-    toast('Richiesta inviata', 'success');
-    document.getElementById('myunav-start').value = '';
-    document.getElementById('myunav-end').value = '';
-    document.getElementById('myunav-reason').value = '';
-    await renderTodo();
-  } catch(e) { toast(e.message || 'Errore', 'error'); }
-}
-
-async function myUnavDelete(id) {
-  if (!confirm('Annullare questa richiesta?')) return;
-  try {
-    const r = await fetch(`/planning/api/unavailabilities/${id}`, { method: 'DELETE' });
-    if (!r.ok) { const e = await r.json().catch(() => ({})); throw new Error(e.detail || 'Errore'); }
-    await renderTodo();
-  } catch(e) { toast(e.message, 'error'); }
 }
 
 // ── Resource Timeline (vis-timeline) ───────────────────────
