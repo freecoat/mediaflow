@@ -1,5 +1,12 @@
 # MediaFlow — Changelog
 
+## v3.4.25.1 — Hotfix auto-bootstrap users.extra_permissions (30 aprile 2026 notte)
+
+In v3.4.25 ho aggiunto la colonna `users.extra_permissions` ma se l'utente fa pull e riavvia il server senza lanciare la migrazione `[K]`, il login crasha con `OperationalError: no such column: users.extra_permissions`.
+
+- Aggiunto `_auto_migrate_columns()` nel lifespan di `app/main.py`: al boot fa `ALTER TABLE users ADD COLUMN extra_permissions TEXT NULL` se la colonna manca. Idempotente.
+- Lo script `scripts/migrate_user_extra_permissions.py` resta utile (esplicito + visibile nei log), ma non è più strettamente obbligatorio per single-user dev DB.
+
 ## v3.4.25 — Permessi extra per-utente (30 aprile 2026 notte)
 
 Permessi del singolo utente ora = permessi del ruolo + extra individuali (additivi).

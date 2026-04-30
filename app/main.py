@@ -15,13 +15,38 @@ from app.routers import (
 )
 
 
+def _auto_migrate_columns():
+    """Auto-fix difensivo per colonne aggiunte di recente al modello.
+
+    Idempotente. Evita crash se l'utente ha pull-ato il codice senza
+    eseguire la migrazione corrispondente (caso reale single-user dev DB).
+    Per cambi maggiori (nuove tabelle, FK pesanti) preferisci sempre lo
+    script `scripts/migrate_*.py` esplicito.
+    """
+    from sqlalchemy import inspect, text
+    from app.database import engine
+    insp = inspect(engine)
+    if "users" in insp.get_table_names():
+        cols = {c["name"] for c in insp.get_columns("users")}
+        if "extra_permissions" not in cols:
+            print("[auto-migrate] users.extra_permissions mancante → ALTER TABLE")
+            with engine.begin() as conn:
+                conn.execute(text("ALTER TABLE users ADD COLUMN extra_permissions TEXT NULL"))
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     create_tables()
+    # Auto-fix colonne aggiunte di recente (v3.4.25.1.1) — evita crash se
+    # l'utente ha pull-ato senza lanciare la migrazione [K]
+    try:
+        _auto_migrate_columns()
+    except Exception as e:
+        print(f"[lifespan] _auto_migrate_columns failed: {e}")
     settings.upload_dir.mkdir(parents=True, exist_ok=True)
     (settings.upload_dir / "assets").mkdir(exist_ok=True)
     (settings.upload_dir / "thumbnails").mkdir(exist_ok=True)
-    # Bootstrap ruoli built-in (v3.4.25)
+    # Bootstrap ruoli built-in (v3.4.25.1)
     try:
         from app.database import SessionLocal
         from app.services.rbac import ensure_built_in_roles
@@ -35,7 +60,7 @@ async def lifespan(app: FastAPI):
     yield
 
 
-app = FastAPI(title="MediaFlow", version="3.4.25", lifespan=lifespan)
+app = FastAPI(title="MediaFlow", version="3.4.25.1", lifespan=lifespan)
 
 BASE_DIR = Path(__file__).parent
 app.mount("/static", StaticFiles(directory=BASE_DIR / "static"), name="static")
@@ -72,7 +97,7 @@ async def no_cache_html(request: Request, call_next):
     return response
 
 
-# ── Auth guard (v3.4.25.1) ─────────────────────────────────────
+# ── Auth guard (v3.4.25.1.1) ─────────────────────────────────────
 # Redirect a /auth/login se cookie access_token mancante/invalido per
 # pagine HTML. API (path /api/* o accept JSON) ricevono 401 JSON.
 PUBLIC_PATHS = ("/auth/", "/static/", "/health", "/docs", "/openapi.json", "/favicon.ico", "/redoc")
@@ -219,5 +244,5 @@ async def dashboard(request: Request):
 async def health():
     from app.services.ai_provider import get_provider
     p = get_provider()
-    return {"status": "ok", "app": settings.app_name, "version": "3.4.25",
+    return {"status": "ok", "app": settings.app_name, "version": "3.4.25.1",
             "ai": {"configured": p is not None, "provider": p.name if p else None}}
