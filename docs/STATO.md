@@ -12,12 +12,22 @@
 
 ## In corso
 
-Cantiere **Cost Report doppio** — fondamenta per valorizzare ore reali (TimePunch × rate × maggiorazioni) prima di costruire i due report (interno gestionale + esterno cliente).
+Tre cantieri attivi in parallelo (sessione 30 aprile sera):
 
-- ✅ v3.4.21 — Soglie overtime + moltiplicatori (daily/weekly threshold, overtime/night/sunday/holiday multiplier, fascia notturna) in `WorkingHoursPolicy`. Engine `compute_overtime()`. Endpoint `/hr/api/overtime`. UI settings.
-- 🔜 v3.4.22 — Cost report **interno** (`/jobs/{id}/cost-report`): rate × (regular + overtime×mult) + hardcost + booking interni
-- 🔜 v3.4.23 — Cost report **esterno cliente**: solo ore + extra, bottone "→ Genera quote v2"
-- 🔜 v3.4.24 — Pagina HR riepilogo settimana/mese per risorsa (regular/overtime/ferie/banca ore) + export CSV
+### A) Cost Report doppio — sospeso a v3.4.21
+- ✅ v3.4.21 — Soglie overtime + moltiplicatori in `WorkingHoursPolicy`, engine `compute_overtime()`, endpoint `/hr/api/overtime`, UI settings
+- 🔜 Cost report **interno** `/jobs/{id}/cost-report`: rate × (regular + overtime×mult) + hardcost + booking interni
+- 🔜 Cost report **esterno cliente**: solo ore + extra, bottone "→ Genera quote v2"
+- 🔜 Pagina HR riepilogo sett/mese per risorsa + export CSV
+
+### B) RBAC + UX (chiuso v3.4.22 → v3.4.23)
+- ✅ v3.4.21.1 — Auth guard + UX login + topbar utente
+- ✅ v3.4.22 — RBAC base + workflow ferie + timbratura semplificata + login centrato + look timeline polish
+- ✅ v3.4.23 — Permessi configurabili + pannello admin utenti/ruoli + auto-User da Resource
+
+### C) Backlog feedback Matteo (in attesa)
+- ⏸ **Scheda tecnica progetti + link pubblico cliente** — Matteo allegherà PDF (quello del 30/04 era erroneamente `quote_Q-LFSB-1.pdf`, una quotazione)
+- 🔜 Dove fa staff le richieste ferie? `/resources` blocked. Soluzioni: (a) endpoint `/me/leaves`, (b) sblocco `/resources/{own_id}`, (c) sezione dedicata in `/hr`
 
 Cantiere **Core Planning** (6 fasi confermate dopo analisi top vendor — Float/Runn/Resource Guru/Productive/Mosaic/Ftrack):
 
@@ -166,4 +176,4 @@ Dopo conferma test sul Mac, passare a **#4 server-side abort**.
 
 ---
 
-*Ultimo aggiornamento: 30 aprile 2026 — apertura cantiere Cost Report. v3.4.21: estesa `WorkingHoursPolicy` con soglie ore/giorno e ore/settimana + 4 moltiplicatori (overtime/night/sunday/holiday) + fascia notturna start/end. Nuovo engine `app/services/overtime.py` calcola breakdown auto-straordinari per set di TimePunch. Endpoint `GET /hr/api/overtime` ritorna {regular, overtime_daily, overtime_weekly, night, sunday, holiday, weighted_factor}. UI settings → tab Orari lavorativi → sezione "Straordinari · soglie e maggiorazioni" con 8 campi. Migrazione `[H]` in strumenti.bat/sh. Prossimo: v3.4.22 cost report interno `/jobs/{id}/cost-report`.*
+*Ultimo aggiornamento: 30 aprile 2026 sera — sessione lunghissima 5 commit (v3.4.21 → v3.4.21.1 → v3.4.22 → v3.4.23). 26 commit ahead origin/main. Aperto cantiere Cost Report (overtime engine), poi pivot su feedback Matteo → RBAC pesante. v3.4.22: ruolo producer + service rbac + sidebar conditional + auth guard blacklist + scope HR/planning + workflow approvazione ferie + timbratura semplificata (no job per staff) + overlay timbrature timeline + bug fix booking modal + login centrato + look timeline polish. v3.4.23: sistema permessi configurabili (modello Role + 23 permessi granulari + 6 preset built-in admin/manager/producer/accounting/operator/viewer), pannello /admin/users e /admin/roles con matrix permessi, auto-User da Resource personale, fix bug /hr/ 500 + drag inerziale timeline + nuovo progetto staff. Migrazioni nuove [I][J] in strumenti. Working tree pulito. Prossima sessione: testare RBAC + permessi sul Mac, poi proseguire cost report O scheda tecnica progetti (manca doc).*
