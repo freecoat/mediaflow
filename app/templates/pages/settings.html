@@ -171,6 +171,55 @@
             </select>
             <p class="text-sm text-muted" style="margin-top:4px;">Le festività vengono auto-bloccate sulla timeline (pattern arancio).</p>
           </div>
+
+          <hr style="border-color:var(--border); margin:16px 0;">
+          <div class="card-title" style="margin-bottom:8px;">Straordinari · soglie e maggiorazioni</div>
+          <p class="text-sm text-muted mb-3">
+            Le ore eccedenti la soglia giornaliera o settimanale registrate via timbratura
+            vengono classificate come overtime e maggiorate. Domenica e festività hanno una
+            propria maggiorazione (si applica sempre il moltiplicatore più alto, no cumulo).
+          </p>
+          <div class="grid-2" style="gap:12px;">
+            <div class="form-group">
+              <label class="form-label">Soglia ore/giorno</label>
+              <input type="number" step="0.5" min="1" id="wh-daily-thr" class="form-input">
+              <p class="text-sm text-muted" style="margin-top:4px;">Default 8h. Oltre = overtime.</p>
+            </div>
+            <div class="form-group">
+              <label class="form-label">Soglia ore/settimana</label>
+              <input type="number" step="0.5" min="1" id="wh-weekly-thr" class="form-input">
+              <p class="text-sm text-muted" style="margin-top:4px;">Default 40h.</p>
+            </div>
+            <div class="form-group">
+              <label class="form-label">Moltiplicatore overtime</label>
+              <input type="number" step="0.05" min="1" id="wh-ot-mult" class="form-input">
+              <p class="text-sm text-muted" style="margin-top:4px;">Es. 1.25 = +25%.</p>
+            </div>
+            <div class="form-group">
+              <label class="form-label">Moltiplicatore notturno</label>
+              <input type="number" step="0.05" min="1" id="wh-night-mult" class="form-input">
+              <p class="text-sm text-muted" style="margin-top:4px;">Es. 1.50 = +50%.</p>
+            </div>
+            <div class="form-group">
+              <label class="form-label">Moltiplicatore domenica</label>
+              <input type="number" step="0.05" min="1" id="wh-sun-mult" class="form-input">
+              <p class="text-sm text-muted" style="margin-top:4px;">Es. 1.50 = +50%.</p>
+            </div>
+            <div class="form-group">
+              <label class="form-label">Moltiplicatore festività</label>
+              <input type="number" step="0.05" min="1" id="wh-hol-mult" class="form-input">
+              <p class="text-sm text-muted" style="margin-top:4px;">Es. 2.00 = raddoppio.</p>
+            </div>
+            <div class="form-group">
+              <label class="form-label">Notturno · da</label>
+              <input type="time" id="wh-night-start" class="form-input" step="900">
+            </div>
+            <div class="form-group">
+              <label class="form-label">Notturno · a</label>
+              <input type="time" id="wh-night-end" class="form-input" step="900">
+            </div>
+          </div>
+
           <div class="flex gap-2 mt-3">
             <button type="button" class="btn btn-primary" onclick="whSave()">Salva</button>
             <button type="button" class="btn btn-ghost" onclick="whReload()">Annulla modifiche</button>
@@ -249,6 +298,14 @@ async function whReload() {
     document.querySelectorAll('[data-wh-day]').forEach(cb => {
       cb.checked = !!(days & (1 << Number(cb.dataset.whDay)));
     });
+    document.getElementById('wh-daily-thr').value = p.daily_hours_threshold ?? 8;
+    document.getElementById('wh-weekly-thr').value = p.weekly_hours_threshold ?? 40;
+    document.getElementById('wh-ot-mult').value = p.overtime_multiplier ?? 1.25;
+    document.getElementById('wh-night-mult').value = p.night_multiplier ?? 1.5;
+    document.getElementById('wh-sun-mult').value = p.sunday_multiplier ?? 1.5;
+    document.getElementById('wh-hol-mult').value = p.holiday_multiplier ?? 2.0;
+    document.getElementById('wh-night-start').value = p.night_start || '22:00';
+    document.getElementById('wh-night-end').value = p.night_end || '06:00';
   } catch(e) { toast(e.message || 'Errore caricamento policy', 'error'); }
 }
 
@@ -267,6 +324,14 @@ async function whSave() {
   fd.append('afternoon_end', document.getElementById('wh-afternoon-end').value);
   fd.append('working_days', String(bits));
   fd.append('holidays_country', document.getElementById('wh-country').value);
+  fd.append('daily_hours_threshold', document.getElementById('wh-daily-thr').value);
+  fd.append('weekly_hours_threshold', document.getElementById('wh-weekly-thr').value);
+  fd.append('overtime_multiplier', document.getElementById('wh-ot-mult').value);
+  fd.append('night_multiplier', document.getElementById('wh-night-mult').value);
+  fd.append('sunday_multiplier', document.getElementById('wh-sun-mult').value);
+  fd.append('holiday_multiplier', document.getElementById('wh-hol-mult').value);
+  fd.append('night_start', document.getElementById('wh-night-start').value);
+  fd.append('night_end', document.getElementById('wh-night-end').value);
   try {
     await api('PUT', `/settings/api/working-hours/${id}`, fd);
     toast('Policy salvata', 'success');

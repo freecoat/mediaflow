@@ -421,6 +421,22 @@ class WorkingHoursPolicy(Base):
     working_days: Mapped[int] = mapped_column(Integer, default=31)
     # Festività auto-importate: paese ISO (es. "IT") o NULL per disabilitare
     holidays_country: Mapped[Optional[str]] = mapped_column(String(8), nullable=True, default="IT")
+    # ── Soglie e moltiplicatori straordinari (v3.4.21) ──
+    # Oltre questa soglia giornaliera (sommando tutti i punch shift del giorno)
+    # le ore eccedenti contano come overtime.
+    daily_hours_threshold: Mapped[float] = mapped_column(Float, default=8.0)
+    # Limite settimanale: ore extra oltre questa soglia (anche se sotto soglia
+    # giornaliera) contano come overtime settimanale.
+    weekly_hours_threshold: Mapped[float] = mapped_column(Float, default=40.0)
+    # Moltiplicatori applicati alle ore eccedenti per il calcolo del costo.
+    overtime_multiplier: Mapped[float] = mapped_column(Float, default=1.25)
+    night_multiplier: Mapped[float] = mapped_column(Float, default=1.50)
+    sunday_multiplier: Mapped[float] = mapped_column(Float, default=1.50)
+    holiday_multiplier: Mapped[float] = mapped_column(Float, default=2.00)
+    # Fascia notturna: ore tra night_start e night_end del giorno dopo
+    # ricevono il night_multiplier (anche se non eccedono soglia diurna).
+    night_start: Mapped[Optional[time]] = mapped_column(Time, nullable=True, default=time(22, 0))
+    night_end: Mapped[Optional[time]] = mapped_column(Time, nullable=True, default=time(6, 0))
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
 
 

@@ -41,10 +41,11 @@ while true; do
     echo "  [e] Migra database esistente (Booking.kind/cost_line + job_id nullable) [v3.4.10]"
     echo "  [f] Migra database esistente (multi-resource booking_assignments) [v3.4.16]"
     echo "  [g] Migra database esistente (working hours + ferie tipizzate) [v3.4.17]"
+    echo "  [h] Migra database esistente (soglie/moltiplicatori straordinari) [v3.4.21]"
     echo "  [a] Apri cartella upload"
     echo "  [0] Esci"
     echo ""
-    read -p "Scegli un'opzione (0-9, a, b, c, d, e, f, g): " scelta
+    read -p "Scegli un'opzione (0-9, a, b, c, d, e, f, g, h): " scelta
 
     case $scelta in
         1)
@@ -185,6 +186,19 @@ while true; do
             read -p "Procedo? (s/n): " conferma
             if [ "$conferma" = "s" ] || [ "$conferma" = "S" ]; then
                 python scripts/migrate_working_hours.py
+            fi
+            read -p "Premi INVIO per continuare..."
+            ;;
+        h|H)
+            echo ""
+            echo "Migrazione: soglie ore + moltiplicatori straordinari."
+            echo "Aggiunge daily_hours_threshold, weekly_hours_threshold,"
+            echo "overtime/night/sunday/holiday_multiplier, night_start/night_end"
+            echo "a working_hours_policies. Default Italia (8h/40h, +25%/+50%/+50%/x2)."
+            echo "Idempotente."
+            read -p "Procedo? (s/n): " conferma
+            if [ "$conferma" = "s" ] || [ "$conferma" = "S" ]; then
+                python scripts/migrate_overtime_thresholds.py
             fi
             read -p "Premi INVIO per continuare..."
             ;;

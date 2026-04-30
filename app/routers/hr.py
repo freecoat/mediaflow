@@ -18,8 +18,10 @@ from sqlalchemy.orm import Session, joinedload
 from app.database import get_db
 from app.models import (
     Resource, ResourceType, TimePunch, PunchKind, Job, JobCostLine, User,
+    WorkingHoursPolicy,
 )
 from app.services.auth import get_current_user_from_token
+from app.services.overtime import compute_overtime
 
 router = APIRouter(prefix="/hr", tags=["hr"])
 
@@ -345,4 +347,73 @@ async def punches_summary(
         "grand_total": round(grand_total, 2),
         "labels": {k.value: KIND_LABEL[k] for k in PunchKind},
         "colors": {k.value: KIND_COLOR.get(k) for k in PunchKind},
+    }
+
+
+def _resolve_policy_for_resource(db: Session, resource: Optional[Resource]) -> Optional[WorkingHoursPolicy]:
+    """Override per-risorsa, fallback alla policy default del tenant."""
+    if resource and resource.working_hours_policy_id:
+        p = db.query(WorkingHoursPolicy).filter(
+            WorkingHoursPolicy.id == resource.working_hours_policy_id,
+            WorkingHoursPolicy.tenant_id == CURRENT_TENANT,
+        ).first()
+        if p:
+            return p
+    return db.query(WorkingHoursPolicy).filter(
+        WorkingHoursPolicy.tenant_id == CURRENT_TENANT,
+        WorkingHoursPolicy.is_default == True,  # noqa: E712
+    ).first()
+
+
+@router.get("/api/overtime")
+async def overtime_breakdown(
+    resource_id: int,
+    from_date: date,
+    to_date: date,
+    db: Session = Depends(get_db),
+):
+    """Breakdown auto-straordinari per una risorsa nel periodo.
+
+    Calcola ore regolari, overtime giornaliero/settimanale, fascia notturna,
+    domenica e festivi a partire dai TimePunch chiusi (kind shift+overtime),
+    applicando la policy della risorsa (override) o quella default del tenant.
+    """
+    res = db.query(Resource).filter(
+        Resource.id == resource_id,
+        Resource.tenant_id == CURRENT_TENANT,
+    ).first()
+    if not res:
+        raise HTTPException(404, "Risorsa non trovata")
+
+    policy = _resolve_policy_for_resource(db, res)
+    if not policy:
+        raise HTTPException(400, "Nessuna WorkingHoursPolicy disponibile (default mancante)")
+
+    punches = db.query(TimePunch).filter(
+        TimePunch.tenant_id == CURRENT_TENANT,
+        TimePunch.resource_id == resource_id,
+        TimePunch.end_datetime.isnot(None),
+        TimePunch.start_datetime >= datetime.combine(from_date, datetime.min.time()),
+        TimePunch.start_datetime <= datetime.combine(to_date, datetime.max.time()),
+    ).all()
+
+    breakdown = compute_overtime(punches, policy)
+    return {
+        "resource_id": resource_id,
+        "resource_name": res.name,
+        "from_date": from_date.isoformat(),
+        "to_date": to_date.isoformat(),
+        "policy": {
+            "id": policy.id,
+            "name": policy.name,
+            "daily_hours_threshold": policy.daily_hours_threshold,
+            "weekly_hours_threshold": policy.weekly_hours_threshold,
+            "overtime_multiplier": policy.overtime_multiplier,
+            "night_multiplier": policy.night_multiplier,
+            "sunday_multiplier": policy.sunday_multiplier,
+            "holiday_multiplier": policy.holiday_multiplier,
+            "night_start": policy.night_start.strftime("%H:%M") if policy.night_start else None,
+            "night_end": policy.night_end.strftime("%H:%M") if policy.night_end else None,
+        },
+        "breakdown": breakdown.as_dict(),
     }

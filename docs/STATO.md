@@ -8,9 +8,16 @@
 
 ## Versione corrente
 
-**v3.4.20.4** — 29 aprile 2026 — Form ferie/malattia + override policy in modal risorsa
+**v3.4.21** — 30 aprile 2026 — Soglie + moltiplicatori straordinari (fondamenta cost report)
 
 ## In corso
+
+Cantiere **Cost Report doppio** — fondamenta per valorizzare ore reali (TimePunch × rate × maggiorazioni) prima di costruire i due report (interno gestionale + esterno cliente).
+
+- ✅ v3.4.21 — Soglie overtime + moltiplicatori (daily/weekly threshold, overtime/night/sunday/holiday multiplier, fascia notturna) in `WorkingHoursPolicy`. Engine `compute_overtime()`. Endpoint `/hr/api/overtime`. UI settings.
+- 🔜 v3.4.22 — Cost report **interno** (`/jobs/{id}/cost-report`): rate × (regular + overtime×mult) + hardcost + booking interni
+- 🔜 v3.4.23 — Cost report **esterno cliente**: solo ore + extra, bottone "→ Genera quote v2"
+- 🔜 v3.4.24 — Pagina HR riepilogo settimana/mese per risorsa (regular/overtime/ferie/banca ore) + export CSV
 
 Cantiere **Core Planning** (6 fasi confermate dopo analisi top vendor — Float/Runn/Resource Guru/Productive/Mosaic/Ftrack):
 
@@ -159,4 +166,4 @@ Dopo conferma test sul Mac, passare a **#4 server-side abort**.
 
 ---
 
-*Ultimo aggiornamento: 29 aprile 2026 sera — chiusura sessione lunghissima (21 commit). Roadmap "Core Planning" E1→E6 completata in giornata (v3.4.14→v3.4.20), poi 4 patch UX di rifinitura (v3.4.20.1→v3.4.20.4): autocomplete filtri sidebar, modal multi-row scroll+counter, right-click status tentative↔confirmed, UI settings tab "Orari lavorativi", form ferie/policy override nel modal risorsa. Tutte le migrazioni necessarie disponibili da strumenti.bat/sh `[F]` e `[G]`. Repo GitHub privato `freecoat/mediaflow` creato in apertura sessione, 21 commit ahead (push solo a major bump = quando si va a v4.0.0). Sessione chiusa con working tree pulito, nessun server orfano, memoria aggiornata. Riapertura: leggere `project_session_29apr2026.md` per riassunto e parole chiave per ripartire.*
+*Ultimo aggiornamento: 30 aprile 2026 — apertura cantiere Cost Report. v3.4.21: estesa `WorkingHoursPolicy` con soglie ore/giorno e ore/settimana + 4 moltiplicatori (overtime/night/sunday/holiday) + fascia notturna start/end. Nuovo engine `app/services/overtime.py` calcola breakdown auto-straordinari per set di TimePunch. Endpoint `GET /hr/api/overtime` ritorna {regular, overtime_daily, overtime_weekly, night, sunday, holiday, weighted_factor}. UI settings → tab Orari lavorativi → sezione "Straordinari · soglie e maggiorazioni" con 8 campi. Migrazione `[H]` in strumenti.bat/sh. Prossimo: v3.4.22 cost report interno `/jobs/{id}/cost-report`.*

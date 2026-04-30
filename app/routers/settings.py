@@ -288,6 +288,14 @@ def _serialize_policy(p: WorkingHoursPolicy) -> dict:
         "afternoon_end": p.afternoon_end.strftime("%H:%M") if p.afternoon_end else None,
         "working_days": p.working_days,
         "holidays_country": p.holidays_country,
+        "daily_hours_threshold": p.daily_hours_threshold,
+        "weekly_hours_threshold": p.weekly_hours_threshold,
+        "overtime_multiplier": p.overtime_multiplier,
+        "night_multiplier": p.night_multiplier,
+        "sunday_multiplier": p.sunday_multiplier,
+        "holiday_multiplier": p.holiday_multiplier,
+        "night_start": p.night_start.strftime("%H:%M") if p.night_start else None,
+        "night_end": p.night_end.strftime("%H:%M") if p.night_end else None,
     }
 
 
@@ -320,6 +328,14 @@ async def update_working_hours(
     afternoon_end: Optional[str] = Form(None),
     working_days: Optional[int] = Form(None),
     holidays_country: Optional[str] = Form(None),
+    daily_hours_threshold: Optional[float] = Form(None),
+    weekly_hours_threshold: Optional[float] = Form(None),
+    overtime_multiplier: Optional[float] = Form(None),
+    night_multiplier: Optional[float] = Form(None),
+    sunday_multiplier: Optional[float] = Form(None),
+    holiday_multiplier: Optional[float] = Form(None),
+    night_start: Optional[str] = Form(None),
+    night_end: Optional[str] = Form(None),
     db: Session = Depends(get_db),
 ):
     p = db.query(WorkingHoursPolicy).filter(
@@ -335,8 +351,21 @@ async def update_working_hours(
     if afternoon_end is not None: p.afternoon_end = _parse_time(afternoon_end) if afternoon_end else None
     if working_days is not None: p.working_days = working_days
     if holidays_country is not None: p.holidays_country = (holidays_country or None)
+    if daily_hours_threshold is not None: p.daily_hours_threshold = daily_hours_threshold
+    if weekly_hours_threshold is not None: p.weekly_hours_threshold = weekly_hours_threshold
+    if overtime_multiplier is not None: p.overtime_multiplier = overtime_multiplier
+    if night_multiplier is not None: p.night_multiplier = night_multiplier
+    if sunday_multiplier is not None: p.sunday_multiplier = sunday_multiplier
+    if holiday_multiplier is not None: p.holiday_multiplier = holiday_multiplier
+    if night_start is not None: p.night_start = _parse_time(night_start) if night_start else None
+    if night_end is not None: p.night_end = _parse_time(night_end) if night_end else None
     if p.morning_end <= p.morning_start:
         raise HTTPException(400, "morning_end deve essere > morning_start")
+    if p.daily_hours_threshold <= 0 or p.weekly_hours_threshold <= 0:
+        raise HTTPException(400, "Soglie ore devono essere > 0")
+    for f in ("overtime_multiplier", "night_multiplier", "sunday_multiplier", "holiday_multiplier"):
+        if getattr(p, f) < 1.0:
+            raise HTTPException(400, f"{f} deve essere ≥ 1.0")
     db.commit()
     db.refresh(p)
     return _serialize_policy(p)

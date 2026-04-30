@@ -1,5 +1,56 @@
 # MediaFlow — Changelog
 
+## v3.4.21 — Soglie e moltiplicatori straordinari (30 aprile 2026)
+
+Fondamenta del cost report doppio: la `WorkingHoursPolicy` impara a distinguere
+ore regolari da overtime e applicare maggiorazioni economiche. Senza questo
+livello le ore TimePunch finiscono nel cost report tutte allo stesso peso e i
+numeri sulle risorse interne sono sballati.
+
+### Modello
+
+`WorkingHoursPolicy` esteso con 8 campi nuovi:
+- `daily_hours_threshold` — default 8.0 (oltre = overtime giornaliero)
+- `weekly_hours_threshold` — default 40.0 (oltre = overtime settimanale, no doppio conteggio col daily)
+- `overtime_multiplier` — default 1.25 (+25%)
+- `night_multiplier` — default 1.50 (+50%, fascia 22-06)
+- `sunday_multiplier` — default 1.50
+- `holiday_multiplier` — default 2.00
+- `night_start` / `night_end` — default 22:00 / 06:00
+
+### Engine
+
+Nuovo `app/services/overtime.py` con `compute_overtime(punches, policy) → OvertimeBreakdown`:
+- Considera solo `kind` shift + overtime; ferie/malattia/pausa/idle escluse
+- Splitta TimePunch che attraversano mezzanotte
+- Calcola per giorno: total, night overlap, is_sunday, is_holiday
+- Aggrega per settimana ISO per overtime settimanale
+- Applica priorità MAX moltiplicatore (no cumulo): festivo > domenica > overtime > notturno > regolare
+- Output: `regular_hours`, `overtime_daily_hours`, `overtime_weekly_hours`, `night_hours`, `sunday_hours`, `holiday_hours`, `weighted_factor` (ore equivalenti per costo), `total_hours`, `daily` dettaglio
+
+### Endpoint
+
+- `GET /hr/api/overtime?resource_id=X&from_date=Y&to_date=Z` ritorna breakdown completo + policy applicata
+- Override per-risorsa onorato: `Resource.working_hours_policy_id` ha precedenza, fallback su default tenant
+
+### UI
+
+- `/settings` tab "Orari lavorativi" → nuova sezione "Straordinari · soglie e maggiorazioni" con 8 input (soglie giornaliera/settimanale, 4 moltiplicatori, fascia notturna start/end)
+- Validazione: soglie > 0, moltiplicatori ≥ 1.0
+- Caricamento e salvataggio integrati al form esistente
+
+### Migrazione
+
+`scripts/migrate_overtime_thresholds.py` (opzione `[H]` su `strumenti.bat/sh`):
+- ALTER TABLE working_hours_policies con 8 colonne nuove (idempotente)
+- Default backfill per `night_start=22:00` / `night_end=06:00` su policy esistenti
+
+### Cosa NON fa ancora
+
+- Niente UI per visualizzare il breakdown su `/hr` (arriverà nel cost report v3.4.22)
+- Niente cost report `/jobs/{id}/cost-report` (prossimo step)
+- Niente banca ore / quadratura mensile / export cedolino
+
 ## v3.4.20.4 — Form ferie/malattia + override policy nel modal risorsa (29 aprile 2026)
 
 Modal `/resources` esteso con due nuove sezioni di gestione disponibilità.
