@@ -27,17 +27,22 @@
   .theme-swatches .sw { width:24px; height:24px; border-radius:5px; border:1px solid rgba(255,255,255,.1); }
   .theme-name { font-weight:500; font-size:13px; }
   .theme-desc { font-size:11px; color:var(--text3); }
-  .nav-reorder-list { display:flex; flex-direction:column; gap:4px; max-width:380px; }
-  .nav-reorder-list .nav-row {
+  .nav-reorder-list { display:flex; flex-direction:column; gap:14px; max-width:380px; }
+  .nav-reorder-section-block { }
+  .nav-reorder-section-label {
+    font-size:10px; text-transform:uppercase; letter-spacing:0.6px;
+    color:var(--text3); padding:0 4px 6px; font-weight:600;
+  }
+  .nav-reorder-section { display:flex; flex-direction:column; gap:4px; min-height:8px; }
+  .nav-reorder-section .nav-row {
     display:flex; align-items:center; gap:10px; padding:8px 12px;
     background:var(--bg3); border:1px solid var(--border); border-radius:var(--radius);
     cursor:grab; user-select:none;
   }
-  .nav-reorder-list .nav-row:active { cursor:grabbing; }
-  .nav-reorder-list .ghost { opacity:0.4; }
-  .nav-reorder-list .handle { color:var(--text3); font-family:'DM Mono',monospace; }
-  .nav-reorder-list .label { flex:1; font-size:13px; }
-  .nav-reorder-list .section-tag { font-size:10px; color:var(--text3); }
+  .nav-reorder-section .nav-row:active { cursor:grabbing; }
+  .nav-reorder-section .ghost { opacity:0.4; }
+  .nav-reorder-section .handle { color:var(--text3); font-family:'DM Mono',monospace; }
+  .nav-reorder-section .label { flex:1; font-size:13px; }
 
   .ai-card {
     border:1px solid var(--border); border-radius:var(--radius);
@@ -85,7 +90,7 @@
     <div class="settings-pane" id="pane-sidebar">
       <div class="card">
         <div class="card-title mb-2">Ordine voci sidebar</div>
-        <p class="text-sm text-muted mb-3">Trascina per riordinare. L'ordine si applica subito a tutte le pagine. Quando personalizzi l'ordine, le sezioni (Anagrafica, Operativo…) vengono unificate in un'unica lista.</p>
+        <p class="text-sm text-muted mb-3">Trascina per riordinare le voci dentro ciascuna sezione. L'ordine si applica subito a tutte le pagine. Le voci visibili dipendono dai permessi del tuo utente.</p>
         <div class="nav-reorder-list" id="nav-reorder-list"></div>
         <div class="flex gap-2 mt-3">
           <button class="btn btn-secondary btn-sm" onclick="resetSidebarOrder()">Ripristina ordine default</button>
@@ -357,56 +362,85 @@ function pickTheme(id) {
   toast(`Tema impostato: ${THEMES.find(t=>t.id===id).name}`, 'success');
 }
 
-// ── Sidebar reorder ──────────────────────────────────────────
-const NAV_ITEMS_DEF = [
-  { id:'dashboard',   label:'Dashboard',         section:'Principale',    icon:'⬛' },
-  { id:'clients',     label:'Clienti',           section:'Anagrafica',    icon:'🏢' },
-  { id:'projects',    label:'Progetti',          section:'Anagrafica',    icon:'🎞' },
-  { id:'planning',    label:'Pianificazione',    section:'Operativo',     icon:'📋' },
-  { id:'resources',   label:'Risorse',           section:'Operativo',     icon:'👥' },
-  { id:'pricelist',   label:'Listino Prezzi',    section:'Preventivi',    icon:'📋' },
-  { id:'quotes',      label:'Quotazioni',        section:'Preventivi',    icon:'💬' },
-  { id:'cost_report', label:'Cost Report',       section:'Finanza',       icon:'📊' },
-  { id:'finance',     label:'Fatturazione',      section:'Finanza',       icon:'💶' },
-  { id:'dam',         label:'Asset Library',     section:'Media',         icon:'🎬' },
-  { id:'departments', label:'Reparti',           section:'Configurazione',icon:'🏛️' },
-  { id:'settings',    label:'Impostazioni',      section:'Configurazione',icon:'⚙' },
-];
-
+// ── Sidebar reorder (auto-discovery dal DOM) ─────────────────
+// Niente lista hardcoded: leggiamo la sidebar reale così il pannello mostra
+// solo le voci che il tuo ruolo può vedere e resta sincronizzato quando si
+// aggiunge/rimuove una voce in base.html.
 function renderNavReorder() {
-  const saved = JSON.parse(localStorage.getItem('mf_sidebar_order') || 'null');
-  let order = saved && Array.isArray(saved) ? saved : NAV_ITEMS_DEF.map(i => i.id);
-  // Filtra eventuali id non più presenti + aggiungi nuovi in coda
-  order = order.filter(id => NAV_ITEMS_DEF.find(i => i.id === id));
-  for (const it of NAV_ITEMS_DEF) {
-    if (!order.includes(it.id)) order.push(it.id);
-  }
   const list = document.getElementById('nav-reorder-list');
-  list.innerHTML = order.map(id => {
-    const item = NAV_ITEMS_DEF.find(i => i.id === id);
-    return `
-      <div class="nav-row" data-nav-id="${id}">
+  const sidebarNav = document.querySelector('.sidebar-nav');
+  if (!sidebarNav) {
+    list.innerHTML = '<div class="text-muted text-sm">Sidebar non disponibile in questa pagina.</div>';
+    return;
+  }
+  const sections = [...sidebarNav.querySelectorAll('.nav-section')];
+  let saved;
+  try { saved = JSON.parse(localStorage.getItem('mf_sidebar_order') || 'null'); }
+  catch (e) { saved = null; }
+  const orderMap = (saved && !Array.isArray(saved) && typeof saved === 'object') ? saved : {};
+
+  let html = '';
+  for (const sec of sections) {
+    const labelEl = sec.querySelector('.nav-section-label');
+    if (!labelEl) continue;
+    const sectionName = labelEl.textContent.trim();
+    const items = [...sec.querySelectorAll('.nav-item[data-nav-id]')];
+    if (!items.length) continue;
+
+    const savedIds = orderMap[sectionName] || [];
+    const itemMap = {};
+    items.forEach(it => itemMap[it.dataset.navId] = it);
+    const ordered = [];
+    for (const id of savedIds) { if (itemMap[id]) { ordered.push(itemMap[id]); delete itemMap[id]; } }
+    for (const it of items) { if (itemMap[it.dataset.navId]) ordered.push(it); }
+
+    const safeName = sectionName.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/"/g,'&quot;');
+    let body = '';
+    for (const it of ordered) {
+      const id = it.dataset.navId;
+      const iconEl = it.querySelector('.nav-icon');
+      const icon = iconEl ? iconEl.textContent.trim() : '';
+      let label = it.textContent.replace(icon, '').trim();
+      body += `<div class="nav-row" data-nav-id="${id}">
         <span class="handle">⠿</span>
-        <span style="font-size:14px;">${item.icon}</span>
-        <span class="label">${item.label}</span>
-        <span class="section-tag">${item.section}</span>
+        <span style="font-size:14px;">${icon}</span>
+        <span class="label">${label.replace(/&/g,'&amp;').replace(/</g,'&lt;')}</span>
       </div>`;
-  }).join('');
-  if (list._sortable) list._sortable.destroy();
-  list._sortable = Sortable.create(list, {
-    animation: 150, ghostClass: 'ghost',
-    onEnd: () => {
-      const newOrder = [...list.querySelectorAll('.nav-row')].map(el => el.dataset.navId);
-      localStorage.setItem('mf_sidebar_order', JSON.stringify(newOrder));
-      if (typeof applySidebarOrder === 'function') applySidebarOrder();
-      toast('Ordine sidebar applicato', 'success');
-    },
+    }
+    html += `<div class="nav-reorder-section-block">
+      <div class="nav-reorder-section-label">${safeName}</div>
+      <div class="nav-reorder-section" data-section="${safeName}">${body}</div>
+    </div>`;
+  }
+  list.innerHTML = html;
+
+  list.querySelectorAll('.nav-reorder-section').forEach(secEl => {
+    if (secEl._sortable) secEl._sortable.destroy();
+    secEl._sortable = Sortable.create(secEl, {
+      animation: 150,
+      ghostClass: 'ghost',
+      onEnd: persistSidebarOrder,
+    });
   });
 }
+
+function persistSidebarOrder() {
+  const map = {};
+  document.querySelectorAll('.nav-reorder-section').forEach(secEl => {
+    const name = secEl.dataset.section;
+    map[name] = [...secEl.querySelectorAll('.nav-row')].map(r => r.dataset.navId);
+  });
+  localStorage.setItem('mf_sidebar_order', JSON.stringify(map));
+  if (typeof applySidebarOrder === 'function') applySidebarOrder();
+  toast('Ordine sidebar applicato', 'success');
+}
+
 function resetSidebarOrder() {
   localStorage.removeItem('mf_sidebar_order');
+  // Ricostruisci sidebar reale dal server: la pagina è già renderizzata come default,
+  // basta ri-renderizzare il pannello e non applicare nessun ordine custom.
   renderNavReorder();
-  toast('Ordine ripristinato. Ricarica la pagina per rivedere le sezioni originali.', 'info');
+  toast('Ordine ripristinato. Ricarica una pagina qualsiasi per vedere le sezioni originali.', 'info');
 }
 
 // ── Account ──────────────────────────────────────────────────

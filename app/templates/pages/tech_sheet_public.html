@@ -1,0 +1,304 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+  <title>Scheda tecnica — {{ project.title }}</title>
+  <link rel="stylesheet" href="/static/css/main.css">
+  <style>
+    body { background: var(--bg, #0d1117); }
+    .ts-page {
+      max-width: 1080px; margin: 0 auto; padding: 28px 24px 80px;
+    }
+    .ts-header {
+      background: linear-gradient(135deg, rgba(98,114,245,0.12), rgba(98,114,245,0.04));
+      border: 1px solid var(--indigo-border);
+      border-radius: 10px; padding: 22px 26px; margin-bottom: 20px;
+    }
+    .ts-h-eye { font-size: 11px; text-transform: uppercase; letter-spacing: 1.2px; color: var(--indigo2); font-weight: 600; }
+    .ts-h-title { font-size: 26px; font-weight: 700; margin: 6px 0 4px; color: var(--text); }
+    .ts-h-sub { color: var(--text2); font-size: 14px; }
+    .ts-h-meta {
+      display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+      gap: 14px; margin-top: 18px; padding-top: 16px; border-top: 1px solid var(--border);
+    }
+    .ts-h-meta .lbl { font-size: 10px; text-transform: uppercase; color: var(--text3); letter-spacing: 0.6px; }
+    .ts-h-meta .val { font-size: 14px; color: var(--text); margin-top: 2px; }
+    .ts-section {
+      background: var(--bg2, #1a1d2e); border: 1px solid var(--border);
+      border-radius: 8px; padding: 20px 22px; margin-bottom: 16px;
+    }
+    .ts-section h2 {
+      font-size: 14px; text-transform: uppercase; letter-spacing: 1px;
+      color: var(--indigo2); margin: 0 0 14px; font-weight: 700;
+      padding-bottom: 8px; border-bottom: 1px solid var(--border);
+    }
+    .ts-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 14px 24px; }
+    .ts-field .lbl { font-size: 10.5px; text-transform: uppercase; letter-spacing: 0.5px; color: var(--text3); margin-bottom: 3px; }
+    .ts-field .val { font-size: 13.5px; color: var(--text); word-break: break-word; }
+    .ts-field .val.empty { color: var(--text3); font-style: italic; }
+    .ts-camera, .ts-look, .ts-contact {
+      background: var(--bg, #0d1117); border: 1px solid var(--border);
+      border-radius: 6px; padding: 14px 16px; margin-bottom: 12px;
+    }
+    .ts-camera-header {
+      display: flex; align-items: center; gap: 10px; margin-bottom: 12px;
+      padding-bottom: 10px; border-bottom: 1px solid var(--border);
+    }
+    .ts-camera-letter {
+      display: inline-flex; align-items: center; justify-content: center;
+      width: 30px; height: 30px; border-radius: 6px;
+      background: rgba(98,114,245,0.18); color: var(--indigo2);
+      font-weight: 700; font-size: 14px;
+    }
+    .ts-camera-name { font-weight: 600; font-size: 14px; }
+    .ts-empty { color: var(--text3); font-style: italic; padding: 8px 0; }
+    .ts-list-item { font-size: 13px; padding: 4px 0; color: var(--text2); }
+    .ts-status-pill {
+      display: inline-block; padding: 3px 10px; border-radius: 12px;
+      font-size: 10.5px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px;
+    }
+    .ts-status-draft    { background: rgba(156,163,175,0.18); color: #9ca3af; }
+    .ts-status-preview  { background: rgba(251,191,36,0.18); color: #fbbf24; }
+    .ts-status-approved { background: rgba(34,197,94,0.18); color: #22c55e; }
+    .ts-foot {
+      text-align: center; margin-top: 32px; padding-top: 16px;
+      border-top: 1px solid var(--border); color: var(--text3); font-size: 11px;
+    }
+    pre.ts-notes {
+      white-space: pre-wrap; font-family: inherit; font-size: 13px; color: var(--text);
+      margin: 0; line-height: 1.6;
+    }
+  </style>
+</head>
+<body class="theme-indigo">
+{% set d = ts.data %}
+{% set p = project %}
+{% macro field(label, value) -%}
+  <div class="ts-field">
+    <div class="lbl">{{ label }}</div>
+    <div class="val {% if not value %}empty{% endif %}">{{ value if value else '—' }}</div>
+  </div>
+{%- endmacro %}
+
+<div class="ts-page">
+  <!-- Header -->
+  <div class="ts-header">
+    <div class="ts-h-eye">Workflow Sheet · v{{ ts.version }}</div>
+    <h1 class="ts-h-title">{{ p.title }}</h1>
+    <div class="ts-h-sub">
+      <span style="font-family:'DM Mono',monospace;">[{{ p.code }}]</span>
+      {% if p.client_name %} · {{ p.client_name }}{% endif %}
+      {% if p.project_type %} · {{ p.project_type }}{% endif %}
+      <span class="ts-status-pill ts-status-{{ ts.status }}" style="margin-left:10px;">{{ ts.status }}</span>
+    </div>
+    <div class="ts-h-meta">
+      {{ field('Regia', p.director) }}
+      {{ field('Produzione', d.general.production_company or p.producer) }}
+      {{ field('DoP', p.dop) }}
+      {{ field('Riprese', (p.shoot_start ~ ' → ' ~ p.shoot_end) if p.shoot_start and p.shoot_end else (p.shoot_start or '')) }}
+      {{ field('Giorni di lavorazione', d.general.shoot_days) }}
+      {{ field('Consegna prevista', p.delivery_deadline) }}
+      {{ field('Durata (min)', p.length_minutes) }}
+      {{ field('FPS progetto', p.fps) }}
+    </div>
+  </div>
+
+  <!-- Camere -->
+  <div class="ts-section">
+    <h2>Camere</h2>
+    {% if d.cameras %}
+      {% for c in d.cameras %}
+      <div class="ts-camera">
+        <div class="ts-camera-header">
+          <span class="ts-camera-letter">{{ c.id_letter or '?' }}</span>
+          <span class="ts-camera-name">{{ c.model or 'Modello non specificato' }}</span>
+        </div>
+        <div class="ts-grid">
+          {{ field('Codec', c.codec) }}
+          {{ field('Risoluzione sensore', c.sensor_res) }}
+          {{ field('Format aspect', c.format_aspect) }}
+          {{ field('Framing aspect', c.framing_aspect) }}
+          {{ field('FPS standard', c.fps) }}
+          {{ field('Hi-speed max', c.hi_speed_max_fps) }}
+          {{ field('Shutter', c.shutter) }}
+          {{ field('Color space input', c.color_space_in) }}
+          {{ field('Working color space', c.working_color_space) }}
+          {{ field('ODT', c.odt) }}
+          {{ field('Squeeze', c.squeeze) }}
+          {{ field('Safety / extraction', c.safety_pct) }}
+          {{ field('Tipo magazzino', c.mag_type) }}
+          {{ field('Min per mag', c.min_per_mag) }}
+          {{ field('Datarate (MB/s)', c.datarate_mbs) }}
+        </div>
+        {% if c.lenses %}
+        <div style="margin-top:10px;">
+          <div class="lbl" style="font-size:10.5px; color:var(--text3); margin-bottom:4px;">Ottiche</div>
+          {% for l in c.lenses %}<div class="ts-list-item">• {{ l }}</div>{% endfor %}
+        </div>
+        {% endif %}
+      </div>
+      {% endfor %}
+    {% else %}
+      <div class="ts-empty">Nessuna camera configurata.</div>
+    {% endif %}
+  </div>
+
+  <!-- Audio -->
+  <div class="ts-section">
+    <h2>Audio</h2>
+    <div class="ts-grid">
+      {{ field('Recorder', d.audio.recorder) }}
+      {{ field('Formato file', d.audio.file_format) }}
+      {{ field('Sample rate', d.audio.sample_rate) }}
+      {{ field('Bit depth', d.audio.bit_depth) }}
+      {{ field('TC frame rate', d.audio.tc_fps) }}
+      {{ field('Sync method', d.audio.sync_method) }}
+      {{ field('Track layout', d.audio.track_layout) }}
+    </div>
+  </div>
+
+  <!-- Look / Color -->
+  <div class="ts-section">
+    <h2>Look / Color</h2>
+    {% if d.looks %}
+      {% for lk in d.looks %}
+      <div class="ts-look">
+        <div style="font-weight:600; margin-bottom:8px;">
+          {{ lk.name or 'Look' }}
+          {% if lk.scope %}<span class="text-muted text-sm" style="margin-left:8px; color:var(--text3);">({{ lk.scope }})</span>{% endif %}
+        </div>
+        <div class="ts-grid">
+          {{ field('Tipo', lk.type) }}
+          {{ field('LUT/LMT file', lk.lut_file) }}
+          {{ field('3DLUT size', lk.size_3d) }}
+          {{ field('Range transform', lk.range_transform) }}
+        </div>
+      </div>
+      {% endfor %}
+    {% else %}
+      <div class="ts-empty">Nessun look definito.</div>
+    {% endif %}
+  </div>
+
+  <!-- Storage / Archiving -->
+  <div class="ts-section">
+    <h2>Storage / Archiving</h2>
+    <div class="ts-grid">
+      {{ field('Master', d.storage.master) }}
+      {{ field('Backup', d.storage.backup) }}
+      {{ field('Shuttle', d.storage.shuttle) }}
+      {{ field('Checksum on-set', d.storage.checksum_onset) }}
+      {{ field('Checksum lab', d.storage.checksum_lab) }}
+      {{ field('LTO copies', d.storage.lto_count) }}
+      {{ field('LTO type', d.storage.lto_type) }}
+      {{ field('Frequenza shuttle', d.storage.shuttle_freq) }}
+      {{ field('Mags riusabili', 'Sì' if d.storage.mags_reusable else 'No') }}
+      {{ field('TB stimati totali', d.storage.total_tb_estimated) }}
+    </div>
+  </div>
+
+  <!-- Dailies / Editorial -->
+  <div class="ts-section">
+    <h2>Dailies / Editorial</h2>
+    <div class="ts-grid">
+      {{ field('Editorial format', d.dailies.editorial_format) }}
+      {{ field('Editorial container', d.dailies.editorial_container) }}
+      {{ field('Online format', d.dailies.online_format) }}
+      {{ field('Online bitrate', d.dailies.online_bitrate) }}
+      {{ field('Naming convention', d.dailies.naming_convention) }}
+      {{ field('NLE', d.dailies.nle) }}
+      {{ field('Review platform', d.dailies.review_platform) }}
+      {{ field('Exchange format', d.dailies.exchange_format) }}
+    </div>
+    {% if d.dailies.burnins %}
+    <div style="margin-top:12px;">
+      <div class="lbl" style="font-size:10.5px; color:var(--text3); margin-bottom:4px;">Burn-ins</div>
+      {% for b in d.dailies.burnins %}<div class="ts-list-item">• {{ b }}</div>{% endfor %}
+    </div>
+    {% endif %}
+  </div>
+
+  <!-- Folder structure -->
+  {% if d.folder_struct.volume_naming or d.folder_struct.daily_template %}
+  <div class="ts-section">
+    <h2>Folder structure</h2>
+    <div class="ts-grid">
+      {{ field('Naming volume', d.folder_struct.volume_naming) }}
+      {{ field('Daily template', d.folder_struct.daily_template) }}
+    </div>
+  </div>
+  {% endif %}
+
+  <!-- Contatti / Crew tecnica -->
+  <div class="ts-section">
+    <h2>Crew tecnica / Contatti</h2>
+    {% if d.contacts %}
+      {% for c in d.contacts %}
+      <div class="ts-contact">
+        <div style="font-weight:600;">{{ c.name_text or '—' }}</div>
+        <div class="text-sm" style="color:var(--text3); margin-top:2px;">
+          {{ c.role or 'Ruolo non specificato' }}
+          {% if c.email %} · ✉ {{ c.email }}{% endif %}
+          {% if c.phone %} · ☎ {{ c.phone }}{% endif %}
+        </div>
+      </div>
+      {% endfor %}
+    {% else %}
+      <div class="ts-empty">Nessun contatto.</div>
+    {% endif %}
+  </div>
+
+  <!-- Process -->
+  {% if d.process.qc_onset or d.process.qc_lab or d.process.clearance_sla or d.process.report_recipients or d.process.notify_emails %}
+  <div class="ts-section">
+    <h2>Process / QC / Reporting</h2>
+    <div class="ts-grid">
+      {{ field('QC on-set', d.process.qc_onset) }}
+      {{ field('QC lab', d.process.qc_lab) }}
+      {{ field('Clearance SLA', d.process.clearance_sla) }}
+    </div>
+    {% if d.process.report_recipients %}
+    <div style="margin-top:12px;">
+      <div class="lbl" style="font-size:10.5px; color:var(--text3); margin-bottom:4px;">Destinatari report giornalieri</div>
+      {% for r in d.process.report_recipients %}<div class="ts-list-item">• {{ r }}</div>{% endfor %}
+    </div>
+    {% endif %}
+    {% if d.process.notify_emails %}
+    <div style="margin-top:12px;">
+      <div class="lbl" style="font-size:10.5px; color:var(--text3); margin-bottom:4px;">Email notifications</div>
+      {% for e in d.process.notify_emails %}<div class="ts-list-item">• {{ e }}</div>{% endfor %}
+    </div>
+    {% endif %}
+  </div>
+  {% endif %}
+
+  <!-- Note libere -->
+  {% if d.notes %}
+  <div class="ts-section">
+    <h2>Note</h2>
+    <pre class="ts-notes">{{ d.notes }}</pre>
+  </div>
+  {% endif %}
+
+  <!-- Delivery template referenziato -->
+  {% if delivery_template %}
+  <div class="ts-section">
+    <h2>Specifiche di consegna applicate</h2>
+    <div style="font-size:13.5px;">
+      <strong>{{ delivery_template.name }}</strong>
+      {% if delivery_template.description %}
+      <div class="text-sm text-muted" style="color:var(--text3); margin-top:4px;">{{ delivery_template.description }}</div>
+      {% endif %}
+    </div>
+  </div>
+  {% endif %}
+
+  <div class="ts-foot">
+    Documento generato da MediaFlow · ultima modifica {{ ts.updated_at[:10] if ts.updated_at else '—' }}
+    {% if ts.expires_at %} · validità link fino al {{ ts.expires_at[:10] }}{% endif %}
+  </div>
+</div>
+</body>
+</html>

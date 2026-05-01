@@ -97,15 +97,76 @@
           <a id="btn-xlsx" class="dropdown-item" href="#" style="padding:8px 12px;font-size:13px;text-decoration:none;color:var(--text);">📈 Excel (.xlsx)</a>
         </div>
       </div>
+      <button class="btn btn-secondary btn-sm" id="btn-toggle-side-pricelist" onclick="toggleSidePricelist()">📋 Listino</button>
       <button class="btn btn-primary btn-sm" onclick="approveAndCreateJob()">✓ Approva quote → Job</button>
     </div>
   </div>
   <style>
     .dropdown-menu.open { display:flex !important; }
     .dropdown-item:hover { background: var(--bg3); }
+    /* Layout: 2 colonne default (editor + riepilogo), 3 colonne con listino aperto */
+    #quote-editor-body { display:grid; grid-template-columns: 1fr 320px; gap:20px; align-items:start; }
+    #quote-editor-body.with-pricelist { grid-template-columns: 1fr 300px 340px; }
+    @media (max-width: 1280px) {
+      #quote-editor-body.with-pricelist { grid-template-columns: 1fr 280px 320px; }
+    }
+    @media (max-width: 1024px) {
+      #quote-editor-body, #quote-editor-body.with-pricelist { grid-template-columns: 1fr; }
+    }
+    /* Pannello listino laterale */
+    .side-pl-card {
+      position:sticky; top:80px;
+      max-height: calc(100vh - 100px);
+      display:flex; flex-direction:column;
+      padding:0; overflow:hidden;
+    }
+    .side-pl-head {
+      padding:12px 14px; border-bottom:1px solid var(--border); background:var(--bg2);
+      display:flex; align-items:center; justify-content:space-between; gap:10px;
+    }
+    .side-pl-title { font-weight:600; font-size:13px; }
+    .side-pl-search-wrap { padding:10px 12px; border-bottom:1px solid var(--border); }
+    .side-pl-search {
+      width:100%; padding:7px 10px; background:var(--bg); border:1px solid var(--border);
+      border-radius:5px; color:var(--text); font-size:12.5px; outline:none;
+    }
+    .side-pl-search:focus { border-color:var(--indigo); }
+    .side-pl-results { flex:1; overflow-y:auto; padding:6px; }
+    .side-pl-item {
+      padding:8px 10px; margin-bottom:4px; border-radius:5px;
+      background:var(--bg2); border:1px solid var(--border);
+      cursor:grab; user-select:none; position:relative;
+      transition: background var(--t), border-color var(--t);
+    }
+    .side-pl-item:hover { background:var(--bg3); border-color:var(--indigo-border); }
+    .side-pl-item:active { cursor:grabbing; }
+    .side-pl-item.dragging { opacity:0.4; }
+    .side-pl-item::before {
+      content:''; position:absolute; left:0; top:0; bottom:0; width:3px;
+      background: var(--dept-color, var(--indigo)); border-radius:5px 0 0 5px;
+    }
+    .side-pl-name { font-size:12.5px; font-weight:500; color:var(--text); margin-bottom:3px; padding-left:6px; }
+    .side-pl-meta {
+      display:flex; gap:6px; align-items:center; padding-left:6px;
+      flex-wrap:wrap; font-size:10.5px;
+    }
+    .side-pl-price { font-family:'DM Mono',monospace; color:var(--indigo2); white-space:nowrap; }
+    .side-pl-price .unit { color:var(--text3); }
+    .side-pl-foot {
+      padding:8px 12px; border-top:1px solid var(--border); background:var(--bg2);
+      font-size:10.5px; color:var(--text3); text-align:center;
+    }
+    /* Drop zone evidenziata */
+    #lines-body.drop-active {
+      box-shadow: inset 0 0 0 2px var(--indigo);
+    }
+    #lines-body.drop-active::after {
+      /* niente, lo stile è sufficiente */
+    }
+    .quote-editor-card.drop-hint { border-color: var(--indigo) !important; }
   </style>
 
-  <div class="grid-2" style="align-items:start;gap:20px;">
+  <div id="quote-editor-body">
     <!-- Pannello sinistro: info + righe -->
     <div>
       <div class="card mb-4" id="assumptions-card" style="background:var(--indigo-bg);border-color:var(--indigo-border);">
@@ -124,7 +185,10 @@
         </div>
       </div>
 
-      <div class="card">
+      <div class="card quote-editor-card" id="lines-card"
+           ondragover="onLinesDragOver(event)"
+           ondragleave="onLinesDragLeave(event)"
+           ondrop="onLinesDrop(event)">
         <div class="card-header">
           <span class="card-title">Voci preventivo</span>
           <button class="btn btn-primary btn-sm" onclick="openAddLine()">+ Aggiungi voce</button>
@@ -149,7 +213,7 @@
           </table>
         </div>
         <div class="text-xs text-muted" style="padding:8px 12px;border-top:1px solid var(--border);">
-          Modifica i campi: si salva automaticamente al blur. Trascina la maniglia ⠿ per riordinare entro la categoria.
+          Modifica i campi: si salva automaticamente al blur. Trascina la maniglia ⠿ per riordinare entro la categoria. Apri il pannello <strong>Listino</strong> in alto a destra e trascina una voce qui per aggiungerla.
         </div>
       </div>
     </div>
@@ -178,6 +242,21 @@
             placeholder="es. 20% Project Start / 40% Grading / 40% Mix" onchange="saveQuoteMeta()"></textarea></div>
       </div>
     </div>
+
+    <!-- ── Pannello laterale Listino (toggle "📋 Listino") ─── -->
+    <aside class="card side-pl-card" id="side-pricelist" style="display:none;">
+      <div class="side-pl-head">
+        <span class="side-pl-title">📋 Listino</span>
+        <button class="btn btn-ghost btn-icon btn-sm" onclick="toggleSidePricelist()" title="Chiudi">✕</button>
+      </div>
+      <div class="side-pl-search-wrap">
+        <input class="side-pl-search" id="sp-search" placeholder="🔍 Cerca voce, keyword, reparto…" oninput="renderSidePricelist()">
+      </div>
+      <div class="side-pl-results" id="sp-results">
+        <div class="text-muted text-sm" style="padding:12px;text-align:center;">Caricamento…</div>
+      </div>
+      <div class="side-pl-foot">Trascina una voce nelle voci preventivo a sinistra per aggiungerla.</div>
+    </aside>
   </div>
 </div>
 
@@ -482,6 +561,10 @@ async function openEditor(id) {
   priceItems = await api('GET', '/pricelist/api/items');
   document.getElementById('quotes-list-card').classList.add('hidden');
   document.getElementById('quote-editor').classList.remove('hidden');
+  // Riapri pannello listino se l'utente l'aveva attivato
+  if (localStorage.getItem('mf_side_pricelist_open') === '1') {
+    openSidePricelist();
+  }
 }
 
 async function reloadQuote() {
@@ -1185,6 +1268,119 @@ async function createQuote() {
     toast('Quotazione creata', 'success');
     openEditor(res.id);
   } catch(e) { toast(e.message, 'error'); }
+}
+
+// ── Listino laterale + drag&drop (v3.4.29) ────────────────────
+function openSidePricelist() {
+  const pane = document.getElementById('side-pricelist');
+  const body = document.getElementById('quote-editor-body');
+  if (!pane || !body) return;
+  pane.style.display = '';
+  body.classList.add('with-pricelist');
+  localStorage.setItem('mf_side_pricelist_open', '1');
+  renderSidePricelist();
+  setTimeout(() => { const s = document.getElementById('sp-search'); if (s) s.focus(); }, 60);
+}
+
+function closeSidePricelist() {
+  const pane = document.getElementById('side-pricelist');
+  const body = document.getElementById('quote-editor-body');
+  if (pane) pane.style.display = 'none';
+  if (body) body.classList.remove('with-pricelist');
+  localStorage.setItem('mf_side_pricelist_open', '0');
+}
+
+function toggleSidePricelist() {
+  const pane = document.getElementById('side-pricelist');
+  if (!pane) return;
+  if (pane.style.display === 'none' || !pane.style.display) openSidePricelist();
+  else closeSidePricelist();
+}
+
+function renderSidePricelist() {
+  const host = document.getElementById('sp-results');
+  if (!host) return;
+  const q = (document.getElementById('sp-search')?.value || '').toLowerCase().trim();
+  const base = (priceItems || []).filter(i => i.is_active !== false);
+  const filtered = q ? base.filter(i => alMatchesText(i, q)) : base;
+  const limited = filtered.slice(0, 80);
+  if (!limited.length) {
+    host.innerHTML = '<div class="text-muted text-sm" style="padding:18px;text-align:center;">Nessun risultato</div>';
+    return;
+  }
+  host.innerHTML = limited.map(i => {
+    const color = i.department_color || '#6272f5';
+    const priceTxt = i.price_list ? fmtCurrency(i.price_list) : '—';
+    const unit = i.unit ? ` / ${alEscape(i.unit)}` : '';
+    const cat = i.category ? `<span class="al-tag al-tag-cat">${alEscape(i.category)}</span>` : '';
+    const dept = i.department ? `<span class="al-tag" style="background:${alEscape(color)}22;color:${alEscape(color)};">${alEscape(i.department)}</span>` : '';
+    return `
+      <div class="side-pl-item" draggable="true" data-pi="${i.id}"
+           style="--dept-color:${alEscape(color)};"
+           ondragstart="onSpDragStart(event, ${i.id})"
+           ondragend="onSpDragEnd(event)"
+           title="Trascina nelle voci preventivo a sinistra">
+        <div class="side-pl-name">${alEscape(i.name)}</div>
+        <div class="side-pl-meta">
+          ${cat}${dept}
+          <span class="side-pl-price">${priceTxt}<span class="unit">${unit}</span></span>
+        </div>
+      </div>`;
+  }).join('') + (filtered.length > limited.length
+    ? `<div class="text-muted text-sm" style="padding:10px;text-align:center;font-style:italic;">${limited.length} di ${filtered.length}. Affina la ricerca.</div>`
+    : '');
+}
+
+function onSpDragStart(ev, id) {
+  ev.dataTransfer.setData('application/x-mf-priceitem', String(id));
+  ev.dataTransfer.setData('text/plain', String(id));
+  ev.dataTransfer.effectAllowed = 'copy';
+  ev.currentTarget.classList.add('dragging');
+}
+function onSpDragEnd(ev) {
+  ev.currentTarget.classList.remove('dragging');
+}
+function _isPiDrag(ev) {
+  const types = ev.dataTransfer && ev.dataTransfer.types;
+  if (!types) return false;
+  return Array.from(types).includes('application/x-mf-priceitem');
+}
+function onLinesDragOver(ev) {
+  if (!_isPiDrag(ev)) return;
+  ev.preventDefault();
+  ev.dataTransfer.dropEffect = 'copy';
+  document.getElementById('lines-body').classList.add('drop-active');
+  document.getElementById('lines-card').classList.add('drop-hint');
+}
+function onLinesDragLeave(ev) {
+  // Evita flicker mentre il cursore attraversa figli
+  const card = document.getElementById('lines-card');
+  if (!card.contains(ev.relatedTarget)) {
+    document.getElementById('lines-body').classList.remove('drop-active');
+    card.classList.remove('drop-hint');
+  }
+}
+async function onLinesDrop(ev) {
+  document.getElementById('lines-body').classList.remove('drop-active');
+  document.getElementById('lines-card').classList.remove('drop-hint');
+  const pid = ev.dataTransfer.getData('application/x-mf-priceitem') || ev.dataTransfer.getData('text/plain');
+  if (!pid) return;
+  ev.preventDefault();
+  const item = (priceItems || []).find(i => String(i.id) === String(pid));
+  if (!item) { toast('Voce listino non trovata', 'error'); return; }
+  if (!currentQuoteId) return;
+  try {
+    const fd = new FormData();
+    fd.append('description', item.name);
+    fd.append('detail', item.description || '');
+    fd.append('quantity', '1');
+    fd.append('unit', item.unit || 'day');
+    fd.append('unit_price', item.price_list || '0');
+    fd.append('price_item_id', item.id);
+    await api('POST', `/quotes/api/${currentQuoteId}/lines`, fd);
+    toast(`Voce «${item.name}» aggiunta`, 'success');
+    await reloadQuote();
+  } catch(e) { toast(e.message || 'Errore aggiunta voce', 'error'); }
 }
 
 // Init

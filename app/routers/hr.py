@@ -388,6 +388,169 @@ async def punches_summary(
     }
 
 
+@router.get("/api/calendar")
+async def calendar_summary(
+    request: Request,
+    from_date: date,
+    to_date: date,
+    resource_id: Optional[int] = None,
+    db: Session = Depends(get_db),
+):
+    """Riepilogo giorno-per-giorno per la vista calendario complessiva (v3.4.30).
+
+    Ritorna per ogni giorno del periodo:
+    - regular_h, overtime_h, night_h: split delle ore lavorate (timbrature shift/overtime)
+    - vacation_h, sick_h, other_h: ore da ResourceUnavailability approvate (calcolate
+      come daily_hours_threshold della policy applicabile)
+    - has_unavailability, unav_kinds: marker per evidenziazione celle
+    - resource_count: quanti utenti hanno timbrato/erano in ferie/malattia in quel giorno
+
+    Se `resource_id` è specificato, il calcolo split overtime usa la policy della
+    risorsa via `compute_overtime`. Senza resource_id, somma cross-risorsa (ore
+    totali shift+overtime, niente split notturno fine).
+    """
+    resource_id = _enforce_scope(request, db, resource_id)
+    if to_date < from_date:
+        raise HTTPException(400, "to_date < from_date")
+
+    # Singola risorsa: usa compute_overtime per il breakdown preciso
+    days_map: dict[str, dict] = {}
+    cur = from_date
+    while cur <= to_date:
+        days_map[cur.isoformat()] = {
+            "date": cur.isoformat(),
+            "regular_h": 0.0, "overtime_h": 0.0, "night_h": 0.0,
+            "vacation_h": 0.0, "sick_h": 0.0, "other_h": 0.0,
+            "resource_ids": set(),
+            "unav_kinds": set(),
+        }
+        cur += timedelta(days=1)
+
+    pq = db.query(TimePunch).options(joinedload(TimePunch.resource)).filter(
+        TimePunch.tenant_id == CURRENT_TENANT,
+        TimePunch.end_datetime.isnot(None),
+        TimePunch.start_datetime >= datetime.combine(from_date, datetime.min.time()),
+        TimePunch.start_datetime <= datetime.combine(to_date, datetime.max.time()),
+    )
+    if resource_id:
+        pq = pq.filter(TimePunch.resource_id == resource_id)
+    punches = pq.all()
+
+    if resource_id:
+        # Single resource → breakdown via compute_overtime per giorno
+        res = db.query(Resource).filter(Resource.id == resource_id).first()
+        policy = _resolve_policy_for_resource(db, res)
+        if policy:
+            # Raggruppa punch per giorno
+            from collections import defaultdict
+            by_day = defaultdict(list)
+            for p in punches:
+                by_day[p.start_datetime.date().isoformat()].append(p)
+            for day_iso, day_punches in by_day.items():
+                if day_iso not in days_map:
+                    continue
+                bd = compute_overtime(day_punches, policy)
+                days_map[day_iso]["regular_h"] = round(bd.regular_hours, 2)
+                # somma overtime giornaliero+settimanale per la cella
+                ot = (getattr(bd, "overtime_daily_hours", 0.0) or 0.0) + \
+                     (getattr(bd, "overtime_weekly_hours", 0.0) or 0.0)
+                days_map[day_iso]["overtime_h"] = round(ot, 2)
+                days_map[day_iso]["night_h"] = round(getattr(bd, "night_hours", 0.0) or 0.0, 2)
+                days_map[day_iso]["resource_ids"].add(resource_id)
+        else:
+            # No policy: somma tutto come regular
+            for p in punches:
+                d = p.start_datetime.date().isoformat()
+                if d not in days_map:
+                    continue
+                hrs = (p.end_datetime - p.start_datetime).total_seconds() / 3600.0
+                days_map[d]["regular_h"] += hrs
+                days_map[d]["resource_ids"].add(p.resource_id)
+    else:
+        # All resources → aggregato semplice (no split overtime preciso cross-policy)
+        for p in punches:
+            d = p.start_datetime.date().isoformat()
+            if d not in days_map:
+                continue
+            hrs = (p.end_datetime - p.start_datetime).total_seconds() / 3600.0
+            kv = p.kind.value if hasattr(p.kind, "value") else p.kind
+            if kv == "overtime":
+                days_map[d]["overtime_h"] += hrs
+            else:
+                days_map[d]["regular_h"] += hrs
+            days_map[d]["resource_ids"].add(p.resource_id)
+
+    # Ferie/malattia/permessi: ResourceUnavailability approvate
+    uq = db.query(ResourceUnavailability).options(joinedload(ResourceUnavailability.resource)).filter(
+        ResourceUnavailability.status == UnavailabilityStatus.approved,
+        ResourceUnavailability.end_date >= from_date,
+        ResourceUnavailability.start_date <= to_date,
+    )
+    if resource_id:
+        uq = uq.filter(ResourceUnavailability.resource_id == resource_id)
+    # Default daily hours per assenze: usa policy della risorsa o fallback 8
+    default_policy = db.query(WorkingHoursPolicy).filter(
+        WorkingHoursPolicy.tenant_id == CURRENT_TENANT,
+        WorkingHoursPolicy.is_default == True,  # noqa: E712
+    ).first()
+    fallback_daily = (default_policy.daily_hours_threshold if default_policy else 8.0) or 8.0
+
+    for u in uq.all():
+        # daily hours specifici alla risorsa
+        rp = _resolve_policy_for_resource(db, u.resource) if u.resource else default_policy
+        daily_h = (rp.daily_hours_threshold if rp else fallback_daily) or fallback_daily
+        kind_v = u.kind.value if hasattr(u.kind, "value") else u.kind
+        s = max(u.start_date, from_date)
+        e = min(u.end_date, to_date)
+        cur = s
+        while cur <= e:
+            iso = cur.isoformat()
+            if iso in days_map:
+                if kind_v == "vacation":
+                    days_map[iso]["vacation_h"] += daily_h
+                elif kind_v == "sick":
+                    days_map[iso]["sick_h"] += daily_h
+                else:
+                    days_map[iso]["other_h"] += daily_h
+                days_map[iso]["resource_ids"].add(u.resource_id)
+                days_map[iso]["unav_kinds"].add(kind_v)
+            cur += timedelta(days=1)
+
+    # Round + serializzazione + totali periodo
+    days_out = []
+    period_totals = {
+        "regular_h": 0.0, "overtime_h": 0.0, "night_h": 0.0,
+        "vacation_h": 0.0, "sick_h": 0.0, "other_h": 0.0,
+        "total_h": 0.0,
+    }
+    for iso in sorted(days_map.keys()):
+        d = days_map[iso]
+        for k in ("regular_h", "overtime_h", "night_h", "vacation_h", "sick_h", "other_h"):
+            d[k] = round(d[k], 2)
+            period_totals[k] += d[k]
+        d["total_h"] = round(
+            d["regular_h"] + d["overtime_h"] + d["vacation_h"] + d["sick_h"] + d["other_h"], 2
+        )
+        d["resource_count"] = len(d.pop("resource_ids"))
+        d["unav_kinds"] = sorted(d["unav_kinds"])
+        days_out.append(d)
+    period_totals["total_h"] = round(
+        period_totals["regular_h"] + period_totals["overtime_h"]
+        + period_totals["vacation_h"] + period_totals["sick_h"] + period_totals["other_h"],
+        2,
+    )
+    for k in period_totals:
+        period_totals[k] = round(period_totals[k], 2)
+
+    return {
+        "from_date": from_date.isoformat(),
+        "to_date": to_date.isoformat(),
+        "resource_id": resource_id,
+        "days": days_out,
+        "totals": period_totals,
+    }
+
+
 def _resolve_policy_for_resource(db: Session, resource: Optional[Resource]) -> Optional[WorkingHoursPolicy]:
     """Override per-risorsa, fallback alla policy default del tenant."""
     if resource and resource.working_hours_policy_id:

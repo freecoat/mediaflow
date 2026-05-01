@@ -41,6 +41,7 @@
   <div class="tab {% if not _can_finance %}active{% endif %}" onclick="showTab('jobs', this)">Job / lavorazioni <span id="tab-count-jobs" class="text-xs text-muted"></span></div>
   <div class="tab" onclick="showTab('resources', this)">Risorse <span id="tab-count-resources" class="text-xs text-muted"></span></div>
   <div class="tab" onclick="showTab('details', this)">Dettagli progetto</div>
+  <div class="tab" onclick="showTab('techsheet', this)">🛠 Scheda tecnica</div>
 </div>
 
 <!-- Sezione Quotazioni (admin/manager/producer only) -->
@@ -121,6 +122,261 @@
       <table style="width:100%;font-size:13px;">
         <tbody id="crew-table"></tbody>
       </table>
+    </div>
+  </div>
+</div>
+
+<!-- ── Sezione Scheda tecnica (v3.4.31) ─────────────────────── -->
+<div id="section-techsheet" class="hidden">
+  <div id="ts-loading" style="padding:40px;text-align:center;color:var(--text3);">Caricamento scheda tecnica…</div>
+  <div id="ts-editor" style="display:none;">
+    <!-- Toolbar: stato + versione + pubblicazione -->
+    <div class="card mb-3" style="display:flex;flex-wrap:wrap;align-items:center;gap:14px;">
+      <div style="flex:1;min-width:240px;">
+        <div class="text-xs text-muted">Versione documento</div>
+        <input class="form-input" id="ts-version" style="max-width:140px;" onchange="tsSaveMeta()">
+      </div>
+      <div>
+        <div class="text-xs text-muted">Stato</div>
+        <select class="form-select" id="ts-status" onchange="tsSaveMeta()" style="min-width:140px;">
+          <option value="draft">📝 Bozza</option>
+          <option value="preview">👁 Preview</option>
+          <option value="approved">✅ Approvata</option>
+        </select>
+      </div>
+      <div>
+        <div class="text-xs text-muted">Delivery template (opz.)</div>
+        <select class="form-select" id="ts-delivery-template" onchange="tsSaveMeta()" style="min-width:200px;">
+          <option value="">— nessuno —</option>
+        </select>
+      </div>
+      <div style="margin-left:auto;display:flex;gap:8px;flex-wrap:wrap;align-items:flex-end;">
+        <button class="btn btn-secondary btn-sm" onclick="tsOpenPublish()">🔗 Link pubblico</button>
+      </div>
+    </div>
+
+    <!-- Sub-tabs editor -->
+    <div class="tabs" id="ts-subtabs" style="margin-bottom:0;">
+      <div class="tab active" data-ts-pane="general"  onclick="tsShowPane('general',this)">Generale</div>
+      <div class="tab" data-ts-pane="cameras"  onclick="tsShowPane('cameras',this)">Camere</div>
+      <div class="tab" data-ts-pane="audio"    onclick="tsShowPane('audio',this)">Audio</div>
+      <div class="tab" data-ts-pane="looks"    onclick="tsShowPane('looks',this)">Look</div>
+      <div class="tab" data-ts-pane="storage"  onclick="tsShowPane('storage',this)">Storage</div>
+      <div class="tab" data-ts-pane="dailies"  onclick="tsShowPane('dailies',this)">Dailies</div>
+      <div class="tab" data-ts-pane="contacts" onclick="tsShowPane('contacts',this)">Crew</div>
+      <div class="tab" data-ts-pane="process"  onclick="tsShowPane('process',this)">Process</div>
+      <div class="tab" data-ts-pane="notes"    onclick="tsShowPane('notes',this)">Note</div>
+    </div>
+
+    <!-- Pane Generale -->
+    <div class="card ts-pane" id="ts-pane-general">
+      <p class="text-xs text-muted mb-3">Le info principali (Regia, DoP, riprese, durata, FPS) sono già su <a href="#" onclick="showTab('details', document.querySelector('[onclick*=details]'));return false;" style="color:var(--indigo2);">Dettagli progetto</a>. Qui completi solo i dati che non ci sono.</p>
+      <div class="form-row">
+        <div class="form-group">
+          <label class="form-label">Casa di produzione</label>
+          <input class="form-input" data-ts-path="general.production_company" oninput="tsDirty()">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Giorni di lavorazione</label>
+          <input class="form-input" type="number" data-ts-path="general.shoot_days" oninput="tsDirty()">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Numero camere</label>
+          <input class="form-input" type="number" data-ts-path="general.num_cameras" oninput="tsDirty()">
+        </div>
+      </div>
+    </div>
+
+    <!-- Pane Camere -->
+    <div class="card ts-pane hidden" id="ts-pane-cameras">
+      <div class="flex items-center justify-between mb-3">
+        <div class="card-title">Camere (configurazioni indipendenti)</div>
+        <button class="btn btn-primary btn-sm" onclick="tsAddCamera()">+ Aggiungi camera</button>
+      </div>
+      <div id="ts-cameras-list"></div>
+    </div>
+
+    <!-- Pane Audio -->
+    <div class="card ts-pane hidden" id="ts-pane-audio">
+      <div class="form-row">
+        <div class="form-group"><label class="form-label">Recorder</label>
+          <input class="form-input" data-ts-path="audio.recorder" oninput="tsDirty()" placeholder="es. Sound Devices 688"></div>
+        <div class="form-group"><label class="form-label">Formato file</label>
+          <input class="form-input" data-ts-path="audio.file_format" oninput="tsDirty()" placeholder="es. Polyphonic BWF"></div>
+      </div>
+      <div class="form-row">
+        <div class="form-group"><label class="form-label">Sample rate</label>
+          <input class="form-input" data-ts-path="audio.sample_rate" oninput="tsDirty()" placeholder="48 kHz"></div>
+        <div class="form-group"><label class="form-label">Bit depth</label>
+          <input class="form-input" data-ts-path="audio.bit_depth" oninput="tsDirty()" placeholder="24 bit"></div>
+        <div class="form-group"><label class="form-label">TC frame rate</label>
+          <input class="form-input" data-ts-path="audio.tc_fps" oninput="tsDirty()"></div>
+      </div>
+      <div class="form-row">
+        <div class="form-group"><label class="form-label">Sync method</label>
+          <input class="form-input" data-ts-path="audio.sync_method" oninput="tsDirty()" placeholder="JAM SYNC / TC embedded"></div>
+        <div class="form-group" style="flex:2;"><label class="form-label">Track layout</label>
+          <input class="form-input" data-ts-path="audio.track_layout" oninput="tsDirty()" placeholder="L:Boom / R:Radio / 1-15:Plant"></div>
+      </div>
+    </div>
+
+    <!-- Pane Look / Color -->
+    <div class="card ts-pane hidden" id="ts-pane-looks">
+      <div class="flex items-center justify-between mb-3">
+        <div class="card-title">LUT / LMT (multipli per scena)</div>
+        <button class="btn btn-primary btn-sm" onclick="tsAddLook()">+ Aggiungi look</button>
+      </div>
+      <div id="ts-looks-list"></div>
+    </div>
+
+    <!-- Pane Storage -->
+    <div class="card ts-pane hidden" id="ts-pane-storage">
+      <div class="form-row">
+        <div class="form-group"><label class="form-label">Master</label>
+          <input class="form-input" data-ts-path="storage.master" oninput="tsDirty()" placeholder="G-RAID Shuttle 8, 192TB RAID5"></div>
+        <div class="form-group"><label class="form-label">Backup</label>
+          <input class="form-input" data-ts-path="storage.backup" oninput="tsDirty()"></div>
+        <div class="form-group"><label class="form-label">Shuttle</label>
+          <input class="form-input" data-ts-path="storage.shuttle" oninput="tsDirty()"></div>
+      </div>
+      <div class="form-row">
+        <div class="form-group"><label class="form-label">Checksum on-set</label>
+          <input class="form-input" data-ts-path="storage.checksum_onset" oninput="tsDirty()" placeholder="xxHash64BE"></div>
+        <div class="form-group"><label class="form-label">Checksum lab</label>
+          <input class="form-input" data-ts-path="storage.checksum_lab" oninput="tsDirty()" placeholder="MD5"></div>
+        <div class="form-group"><label class="form-label">Frequenza shuttle</label>
+          <input class="form-input" data-ts-path="storage.shuttle_freq" oninput="tsDirty()" placeholder="ogni 2 giorni"></div>
+      </div>
+      <div class="form-row">
+        <div class="form-group"><label class="form-label">Numero copie LTO</label>
+          <input class="form-input" type="number" data-ts-path="storage.lto_count" oninput="tsDirty()"></div>
+        <div class="form-group"><label class="form-label">Tipo LTO</label>
+          <input class="form-input" data-ts-path="storage.lto_type" oninput="tsDirty()" placeholder="LTO-8 12TB"></div>
+        <div class="form-group"><label class="form-label">TB stimati totali</label>
+          <input class="form-input" type="number" step="0.1" data-ts-path="storage.total_tb_estimated" oninput="tsDirty()"></div>
+      </div>
+      <div class="form-group">
+        <label class="form-label" style="display:flex;align-items:center;gap:8px;">
+          <input type="checkbox" data-ts-path="storage.mags_reusable" oninput="tsDirty()">
+          Magazzini riusabili dopo copia
+        </label>
+      </div>
+    </div>
+
+    <!-- Pane Dailies -->
+    <div class="card ts-pane hidden" id="ts-pane-dailies">
+      <div class="form-row">
+        <div class="form-group"><label class="form-label">Editorial format</label>
+          <input class="form-input" data-ts-path="dailies.editorial_format" oninput="tsDirty()" placeholder="MXF DNxHD 36"></div>
+        <div class="form-group"><label class="form-label">Editorial container</label>
+          <input class="form-input" data-ts-path="dailies.editorial_container" oninput="tsDirty()" placeholder="1920x1080 Full"></div>
+      </div>
+      <div class="form-row">
+        <div class="form-group"><label class="form-label">Online format</label>
+          <input class="form-input" data-ts-path="dailies.online_format" oninput="tsDirty()" placeholder="H.264"></div>
+        <div class="form-group"><label class="form-label">Online bitrate</label>
+          <input class="form-input" data-ts-path="dailies.online_bitrate" oninput="tsDirty()" placeholder="4000 kb/s"></div>
+        <div class="form-group"><label class="form-label">Naming convention</label>
+          <input class="form-input" data-ts-path="dailies.naming_convention" oninput="tsDirty()" placeholder="Scene-Shot-Take"></div>
+      </div>
+      <div class="form-row">
+        <div class="form-group"><label class="form-label">NLE</label>
+          <input class="form-input" data-ts-path="dailies.nle" oninput="tsDirty()" placeholder="Avid Media Composer"></div>
+        <div class="form-group"><label class="form-label">Review platform</label>
+          <input class="form-input" data-ts-path="dailies.review_platform" oninput="tsDirty()" placeholder="PIX / Frame.io"></div>
+        <div class="form-group"><label class="form-label">Exchange format</label>
+          <input class="form-input" data-ts-path="dailies.exchange_format" oninput="tsDirty()" placeholder="ALE / ColorTrace XML"></div>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Burn-ins (uno per riga)</label>
+        <textarea class="form-textarea" rows="3" data-ts-path-list="dailies.burnins" oninput="tsDirty()" placeholder="Source Name BL\nTC BR\nDay TC"></textarea>
+      </div>
+    </div>
+
+    <!-- Pane Crew/Contatti -->
+    <div class="card ts-pane hidden" id="ts-pane-contacts">
+      <div class="flex items-center justify-between mb-3">
+        <div class="card-title">Crew tecnica e contatti</div>
+        <button class="btn btn-primary btn-sm" onclick="tsAddContact()">+ Aggiungi contatto</button>
+      </div>
+      <div id="ts-contacts-list"></div>
+    </div>
+
+    <!-- Pane Process -->
+    <div class="card ts-pane hidden" id="ts-pane-process">
+      <div class="form-row">
+        <div class="form-group"><label class="form-label">QC on-set</label>
+          <input class="form-input" data-ts-path="process.qc_onset" oninput="tsDirty()" placeholder="campione clip per magazzino"></div>
+        <div class="form-group"><label class="form-label">QC lab</label>
+          <input class="form-input" data-ts-path="process.qc_lab" oninput="tsDirty()" placeholder="full QC + report"></div>
+        <div class="form-group"><label class="form-label">Clearance SLA</label>
+          <input class="form-input" data-ts-path="process.clearance_sla" oninput="tsDirty()" placeholder="mail clearance da lab"></div>
+      </div>
+      <div class="form-row">
+        <div class="form-group" style="flex:1;">
+          <label class="form-label">Destinatari report giornalieri (uno per riga)</label>
+          <textarea class="form-textarea" rows="3" data-ts-path-list="process.report_recipients" oninput="tsDirty()" placeholder="Montaggio\nRegia\nDoP"></textarea>
+        </div>
+        <div class="form-group" style="flex:1;">
+          <label class="form-label">Email notification list (una per riga)</label>
+          <textarea class="form-textarea" rows="3" data-ts-path-list="process.notify_emails" oninput="tsDirty()" placeholder="dit@..\nlab@.."></textarea>
+        </div>
+      </div>
+    </div>
+
+    <!-- Pane Note -->
+    <div class="card ts-pane hidden" id="ts-pane-notes">
+      <label class="form-label">Note libere</label>
+      <textarea class="form-textarea" rows="14" data-ts-path="notes" oninput="tsDirty()" placeholder="Tutto quello che non rientra nelle altre sezioni…"></textarea>
+    </div>
+
+    <!-- Salvataggio -->
+    <div class="card mt-3" style="display:flex;align-items:center;gap:12px;">
+      <span id="ts-dirty-tag" class="text-xs text-muted">Salvato.</span>
+      <span style="flex:1;"></span>
+      <button class="btn btn-primary btn-sm" onclick="tsSaveAll()">💾 Salva modifiche</button>
+    </div>
+  </div>
+</div>
+
+<!-- Modal pubblicazione link -->
+<div class="modal-overlay" id="modal-ts-publish">
+  <div class="modal">
+    <div class="modal-header">
+      <span class="modal-title">🔗 Link pubblico scheda tecnica</span>
+      <button class="btn btn-ghost btn-icon" onclick="closeModal('modal-ts-publish')">✕</button>
+    </div>
+    <div class="modal-body">
+      <div id="ts-pub-current" style="margin-bottom:14px;display:none;">
+        <div class="text-sm text-muted mb-2">Link attivo:</div>
+        <div style="display:flex;gap:6px;align-items:center;background:var(--bg);border:1px solid var(--border);border-radius:6px;padding:8px;">
+          <input class="form-input" id="ts-pub-url" readonly style="flex:1;font-family:'DM Mono',monospace;font-size:12px;background:transparent;border:0;">
+          <button class="btn btn-secondary btn-sm" onclick="tsCopyUrl()">📋 Copia</button>
+        </div>
+        <div class="text-xs text-muted mt-2" id="ts-pub-expires"></div>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Scadenza link</label>
+        <select class="form-select" id="ts-pub-expires-sel">
+          <option value="30">30 giorni</option>
+          <option value="60">60 giorni</option>
+          <option value="90" selected>90 giorni</option>
+          <option value="180">180 giorni</option>
+          <option value="365">1 anno</option>
+          <option value="0">Senza scadenza (sconsigliato)</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label style="display:flex;align-items:center;gap:8px;font-size:13px;">
+          <input type="checkbox" id="ts-pub-rotate"> Rigenera token (invalida il link precedente)
+        </label>
+      </div>
+      <div class="text-xs text-muted">Il link è readonly: chi lo apre vede una pagina pulita senza login. Tu puoi disattivarlo o rigenerarlo in qualsiasi momento.</div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" id="ts-pub-disable-btn" onclick="tsDisablePublic()" style="margin-right:auto;display:none;">Disattiva link</button>
+      <button class="btn btn-secondary" onclick="closeModal('modal-ts-publish')">Annulla</button>
+      <button class="btn btn-primary" onclick="tsDoPublish()">Pubblica / Aggiorna</button>
     </div>
   </div>
 </div>
@@ -425,14 +681,15 @@ function renderDetails(p) {
 
 function showTab(name, el) {
   document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
-  el.classList.add('active');
-  ['quotes', 'jobs', 'resources', 'details'].forEach(s => {
+  if (el) el.classList.add('active');
+  ['quotes', 'jobs', 'resources', 'details', 'techsheet'].forEach(s => {
     const sec = document.getElementById('section-' + s);
     if (sec) sec.classList.add('hidden');
   });
   const target = document.getElementById('section-' + name);
   if (target) target.classList.remove('hidden');
   if (name === 'resources') loadAssignments();
+  if (name === 'techsheet') tsLoad();
 }
 
 // ── Risorse: drag&drop ───────────────────────────────────────
@@ -612,5 +869,361 @@ async function saveProject() {
 
 document.getElementById('nq-date').value = new Date().toISOString().slice(0,10);
 loadProject();
+
+// ── Scheda tecnica (v3.4.31) ─────────────────────────────────
+let tsState = null;
+let tsDirtyFlag = false;
+
+function tsDirty() {
+  tsDirtyFlag = true;
+  const tag = document.getElementById('ts-dirty-tag');
+  if (tag) { tag.textContent = '● Modifiche non salvate'; tag.style.color = '#fbbf24'; }
+}
+function tsClean() {
+  tsDirtyFlag = false;
+  const tag = document.getElementById('ts-dirty-tag');
+  if (tag) { tag.textContent = '✓ Salvato.'; tag.style.color = ''; }
+}
+
+function tsShowPane(name, el) {
+  document.querySelectorAll('#ts-subtabs .tab').forEach(t => t.classList.remove('active'));
+  if (el) el.classList.add('active');
+  document.querySelectorAll('.ts-pane').forEach(p => p.classList.add('hidden'));
+  const target = document.getElementById('ts-pane-' + name);
+  if (target) target.classList.remove('hidden');
+}
+
+function _setByPath(obj, path, value) {
+  const parts = path.split('.');
+  let cur = obj;
+  for (let i = 0; i < parts.length - 1; i++) {
+    if (typeof cur[parts[i]] !== 'object' || cur[parts[i]] === null) cur[parts[i]] = {};
+    cur = cur[parts[i]];
+  }
+  cur[parts[parts.length - 1]] = value;
+}
+function _getByPath(obj, path) {
+  return path.split('.').reduce((c, k) => (c == null ? c : c[k]), obj);
+}
+
+async function tsLoad() {
+  document.getElementById('ts-loading').style.display = '';
+  document.getElementById('ts-editor').style.display = 'none';
+  try {
+    tsState = await api('GET', `/projects/api/${PROJECT_ID}/tech-sheet`);
+    // Carica delivery templates per il select
+    let dts = [];
+    try { dts = await api('GET', '/dam/api/delivery-templates').catch(() => []); } catch(e) {}
+    if (!Array.isArray(dts) || !dts.length) {
+      try { dts = await api('GET', '/api/delivery-templates'); } catch(e) { dts = []; }
+    }
+    const dtSel = document.getElementById('ts-delivery-template');
+    dtSel.innerHTML = '<option value="">— nessuno —</option>' +
+      (dts || []).map(t => `<option value="${t.id}">${escapeHtml(t.name || ('#'+t.id))}</option>`).join('');
+    if (tsState.delivery_template_id) dtSel.value = String(tsState.delivery_template_id);
+    tsRender();
+    document.getElementById('ts-loading').style.display = 'none';
+    document.getElementById('ts-editor').style.display = '';
+  } catch(e) {
+    document.getElementById('ts-loading').textContent = 'Errore: ' + (e.message || 'caricamento fallito');
+  }
+}
+
+function tsRender() {
+  if (!tsState) return;
+  document.getElementById('ts-version').value = tsState.version || '0.1';
+  document.getElementById('ts-status').value = tsState.status || 'draft';
+  // Riempi tutti gli input data-ts-path
+  document.querySelectorAll('[data-ts-path]').forEach(el => {
+    const path = el.dataset.tsPath;
+    const val = _getByPath(tsState.data, path);
+    if (el.type === 'checkbox') el.checked = !!val;
+    else el.value = (val == null) ? '' : val;
+  });
+  document.querySelectorAll('[data-ts-path-list]').forEach(el => {
+    const path = el.dataset.tsPathList;
+    const arr = _getByPath(tsState.data, path) || [];
+    el.value = Array.isArray(arr) ? arr.join('\n') : '';
+  });
+  tsRenderCameras();
+  tsRenderLooks();
+  tsRenderContacts();
+  tsClean();
+}
+
+function _collectFormToData() {
+  if (!tsState) return null;
+  const d = JSON.parse(JSON.stringify(tsState.data || {}));
+  document.querySelectorAll('[data-ts-path]').forEach(el => {
+    const path = el.dataset.tsPath;
+    let val;
+    if (el.type === 'checkbox') val = el.checked;
+    else if (el.type === 'number') val = el.value === '' ? null : parseFloat(el.value);
+    else val = el.value;
+    _setByPath(d, path, val);
+  });
+  document.querySelectorAll('[data-ts-path-list]').forEach(el => {
+    const path = el.dataset.tsPathList;
+    const lines = (el.value || '').split('\n').map(s => s.trim()).filter(Boolean);
+    _setByPath(d, path, lines);
+  });
+  // Camere/looks/contacts sono già aggiornati nel tsState.data via i loro handler
+  d.cameras = tsState.data.cameras || [];
+  d.looks = tsState.data.looks || [];
+  d.contacts = tsState.data.contacts || [];
+  return d;
+}
+
+async function tsSaveAll() {
+  if (!tsState) return;
+  const data = _collectFormToData();
+  const payload = {
+    version: document.getElementById('ts-version').value,
+    status: document.getElementById('ts-status').value,
+    delivery_template_id: document.getElementById('ts-delivery-template').value || null,
+    data,
+  };
+  try {
+    tsState = await api('PUT', `/projects/api/${PROJECT_ID}/tech-sheet`, payload, { json: true });
+    tsClean();
+    toast('Scheda tecnica salvata', 'success');
+  } catch(e) { toast(e.message || 'Errore salvataggio', 'error'); }
+}
+
+async function tsSaveMeta() {
+  // Salva subito version/status/delivery_template
+  if (!tsState) return;
+  const payload = {
+    version: document.getElementById('ts-version').value,
+    status: document.getElementById('ts-status').value,
+    delivery_template_id: document.getElementById('ts-delivery-template').value || null,
+  };
+  try {
+    tsState = await api('PUT', `/projects/api/${PROJECT_ID}/tech-sheet`, payload, { json: true });
+    toast('Stato/versione aggiornati', 'success', 1500);
+  } catch(e) { toast(e.message, 'error'); }
+}
+
+// ── Camere ─────────────────────────────────────────────────────
+function tsAddCamera() {
+  if (!tsState) return;
+  const arr = tsState.data.cameras || [];
+  const next_letter = String.fromCharCode(65 + arr.length); // A, B, C…
+  arr.push({
+    id_letter: next_letter, model: '', codec: '', sensor_res: '',
+    format_aspect: '', framing_aspect: '', fps: '', hi_speed_max_fps: '',
+    shutter: '', color_space_in: '', working_color_space: '', odt: '',
+    squeeze: '', safety_pct: '', lenses: [], mag_type: '', min_per_mag: '', datarate_mbs: '',
+  });
+  tsState.data.cameras = arr;
+  tsRenderCameras();
+  tsDirty();
+}
+function tsRemoveCamera(idx) {
+  if (!confirm('Rimuovere questa camera?')) return;
+  tsState.data.cameras.splice(idx, 1);
+  tsRenderCameras();
+  tsDirty();
+}
+function tsCameraChange(idx, field, value) {
+  tsState.data.cameras[idx][field] = value;
+  tsDirty();
+}
+function tsCameraLensesChange(idx, value) {
+  tsState.data.cameras[idx].lenses = (value || '').split('\n').map(s => s.trim()).filter(Boolean);
+  tsDirty();
+}
+function tsRenderCameras() {
+  const host = document.getElementById('ts-cameras-list');
+  const arr = (tsState.data && tsState.data.cameras) || [];
+  if (!arr.length) {
+    host.innerHTML = '<div class="text-muted text-sm" style="padding:12px;text-align:center;">Nessuna camera. Clicca "+ Aggiungi camera".</div>';
+    return;
+  }
+  host.innerHTML = arr.map((c, i) => `
+    <div class="card mb-3" style="background:var(--bg);">
+      <div class="flex items-center justify-between mb-2">
+        <div style="display:flex;align-items:center;gap:10px;">
+          <input class="form-input" style="width:50px;text-align:center;font-weight:600;" value="${escapeHtml(c.id_letter || '')}" onchange="tsCameraChange(${i},'id_letter',this.value)" placeholder="A">
+          <input class="form-input" style="min-width:200px;" value="${escapeHtml(c.model || '')}" onchange="tsCameraChange(${i},'model',this.value)" placeholder="Modello camera (es. ARRI Alexa 35)">
+        </div>
+        <button class="btn btn-ghost btn-sm color-rose" onclick="tsRemoveCamera(${i})" title="Rimuovi">✕</button>
+      </div>
+      <div class="form-row">
+        <div class="form-group"><label class="form-label">Codec</label><input class="form-input" value="${escapeHtml(c.codec||'')}" onchange="tsCameraChange(${i},'codec',this.value)" placeholder="ARRIRAW"></div>
+        <div class="form-group"><label class="form-label">Risoluzione sensore</label><input class="form-input" value="${escapeHtml(c.sensor_res||'')}" onchange="tsCameraChange(${i},'sensor_res',this.value)" placeholder="4608x2592"></div>
+        <div class="form-group"><label class="form-label">FPS</label><input class="form-input" value="${escapeHtml(c.fps||'')}" onchange="tsCameraChange(${i},'fps',this.value)" placeholder="25"></div>
+      </div>
+      <div class="form-row">
+        <div class="form-group"><label class="form-label">Format aspect</label><input class="form-input" value="${escapeHtml(c.format_aspect||'')}" onchange="tsCameraChange(${i},'format_aspect',this.value)" placeholder="3:2 Open Gate"></div>
+        <div class="form-group"><label class="form-label">Framing aspect</label><input class="form-input" value="${escapeHtml(c.framing_aspect||'')}" onchange="tsCameraChange(${i},'framing_aspect',this.value)" placeholder="2.39:1"></div>
+        <div class="form-group"><label class="form-label">Squeeze</label><input class="form-input" value="${escapeHtml(c.squeeze||'')}" onchange="tsCameraChange(${i},'squeeze',this.value)" placeholder="1x / 2x"></div>
+      </div>
+      <div class="form-row">
+        <div class="form-group"><label class="form-label">Color space input</label><input class="form-input" value="${escapeHtml(c.color_space_in||'')}" onchange="tsCameraChange(${i},'color_space_in',this.value)" placeholder="ARRI Wide Gamut 4 / LogC4"></div>
+        <div class="form-group"><label class="form-label">Working color</label><input class="form-input" value="${escapeHtml(c.working_color_space||'')}" onchange="tsCameraChange(${i},'working_color_space',this.value)" placeholder="ACEScct AP1"></div>
+        <div class="form-group"><label class="form-label">ODT</label><input class="form-input" value="${escapeHtml(c.odt||'')}" onchange="tsCameraChange(${i},'odt',this.value)" placeholder="Rec.709 γ2.4 D65"></div>
+      </div>
+      <div class="form-row">
+        <div class="form-group"><label class="form-label">Hi-speed max</label><input class="form-input" value="${escapeHtml(c.hi_speed_max_fps||'')}" onchange="tsCameraChange(${i},'hi_speed_max_fps',this.value)" placeholder="660 fps"></div>
+        <div class="form-group"><label class="form-label">Shutter</label><input class="form-input" value="${escapeHtml(c.shutter||'')}" onchange="tsCameraChange(${i},'shutter',this.value)" placeholder="180°"></div>
+        <div class="form-group"><label class="form-label">Safety / extraction</label><input class="form-input" value="${escapeHtml(c.safety_pct||'')}" onchange="tsCameraChange(${i},'safety_pct',this.value)" placeholder="5% scaling"></div>
+      </div>
+      <div class="form-row">
+        <div class="form-group"><label class="form-label">Tipo magazzino</label><input class="form-input" value="${escapeHtml(c.mag_type||'')}" onchange="tsCameraChange(${i},'mag_type',this.value)" placeholder="Codex Compact 2TB"></div>
+        <div class="form-group"><label class="form-label">Min per mag</label><input class="form-input" value="${escapeHtml(c.min_per_mag||'')}" onchange="tsCameraChange(${i},'min_per_mag',this.value)" placeholder="65 min @ 4.6K"></div>
+        <div class="form-group"><label class="form-label">Datarate (MB/s)</label><input class="form-input" value="${escapeHtml(c.datarate_mbs||'')}" onchange="tsCameraChange(${i},'datarate_mbs',this.value)" placeholder="456.75"></div>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Ottiche (una per riga)</label>
+        <textarea class="form-textarea" rows="3" oninput="tsCameraLensesChange(${i},this.value)" placeholder="Cooke Anamorphic/i\nCanon 15.5-45">${escapeHtml((c.lenses||[]).join('\n'))}</textarea>
+      </div>
+    </div>
+  `).join('');
+}
+
+// ── Looks ─────────────────────────────────────────────────────
+function tsAddLook() {
+  if (!tsState) return;
+  const arr = tsState.data.looks || [];
+  arr.push({ name: '', scope: '', lut_file: '', size_3d: '', type: '', range_transform: '' });
+  tsState.data.looks = arr;
+  tsRenderLooks();
+  tsDirty();
+}
+function tsRemoveLook(idx) {
+  if (!confirm('Rimuovere questo look?')) return;
+  tsState.data.looks.splice(idx, 1);
+  tsRenderLooks();
+  tsDirty();
+}
+function tsLookChange(idx, field, value) {
+  tsState.data.looks[idx][field] = value;
+  tsDirty();
+}
+function tsRenderLooks() {
+  const host = document.getElementById('ts-looks-list');
+  const arr = (tsState.data && tsState.data.looks) || [];
+  if (!arr.length) {
+    host.innerHTML = '<div class="text-muted text-sm" style="padding:12px;text-align:center;">Nessun look. Clicca "+ Aggiungi look".</div>';
+    return;
+  }
+  host.innerHTML = arr.map((l, i) => `
+    <div class="card mb-3" style="background:var(--bg);">
+      <div class="flex items-center justify-between mb-2">
+        <input class="form-input" style="flex:1;font-weight:600;" value="${escapeHtml(l.name||'')}" onchange="tsLookChange(${i},'name',this.value)" placeholder="Nome look (MAIN, FLASHBACK_WARM…)">
+        <button class="btn btn-ghost btn-sm color-rose" onclick="tsRemoveLook(${i})" style="margin-left:8px;">✕</button>
+      </div>
+      <div class="form-row">
+        <div class="form-group"><label class="form-label">Scope</label><input class="form-input" value="${escapeHtml(l.scope||'')}" onchange="tsLookChange(${i},'scope',this.value)" placeholder="all / scene 1-5 / flashback"></div>
+        <div class="form-group"><label class="form-label">Tipo</label><input class="form-input" value="${escapeHtml(l.type||'')}" onchange="tsLookChange(${i},'type',this.value)" placeholder="ASC-CDL / Powergrade"></div>
+        <div class="form-group"><label class="form-label">3DLUT size</label><input class="form-input" value="${escapeHtml(l.size_3d||'')}" onchange="tsLookChange(${i},'size_3d',this.value)" placeholder="33x33"></div>
+      </div>
+      <div class="form-row">
+        <div class="form-group" style="flex:2;"><label class="form-label">LUT/LMT file</label><input class="form-input" value="${escapeHtml(l.lut_file||'')}" onchange="tsLookChange(${i},'lut_file',this.value)" placeholder="FM_LMT_ACEScct_v01.cube"></div>
+        <div class="form-group" style="flex:2;"><label class="form-label">Range transform</label><input class="form-input" value="${escapeHtml(l.range_transform||'')}" onchange="tsLookChange(${i},'range_transform',this.value)" placeholder="Camera OUT LEGAL → Monitor LEGAL"></div>
+      </div>
+    </div>
+  `).join('');
+}
+
+// ── Contatti / Crew ───────────────────────────────────────────
+function tsAddContact() {
+  if (!tsState) return;
+  const arr = tsState.data.contacts || [];
+  arr.push({ role: '', resource_id: null, name_text: '', email: '', phone: '' });
+  tsState.data.contacts = arr;
+  tsRenderContacts();
+  tsDirty();
+}
+function tsRemoveContact(idx) {
+  if (!confirm('Rimuovere questo contatto?')) return;
+  tsState.data.contacts.splice(idx, 1);
+  tsRenderContacts();
+  tsDirty();
+}
+function tsContactChange(idx, field, value) {
+  tsState.data.contacts[idx][field] = value;
+  tsDirty();
+}
+function tsRenderContacts() {
+  const host = document.getElementById('ts-contacts-list');
+  const arr = (tsState.data && tsState.data.contacts) || [];
+  if (!arr.length) {
+    host.innerHTML = '<div class="text-muted text-sm" style="padding:12px;text-align:center;">Nessun contatto. Clicca "+ Aggiungi contatto".</div>';
+    return;
+  }
+  host.innerHTML = arr.map((c, i) => `
+    <div class="card mb-3" style="background:var(--bg);">
+      <div class="form-row">
+        <div class="form-group"><label class="form-label">Ruolo</label><input class="form-input" value="${escapeHtml(c.role||'')}" onchange="tsContactChange(${i},'role',this.value)" placeholder="DIT / Colorist / DMT…"></div>
+        <div class="form-group" style="flex:2;"><label class="form-label">Nome</label><input class="form-input" value="${escapeHtml(c.name_text||'')}" onchange="tsContactChange(${i},'name_text',this.value)" placeholder="Nome (o TBD)"></div>
+        <button class="btn btn-ghost btn-sm color-rose" onclick="tsRemoveContact(${i})" style="align-self:flex-end;">✕</button>
+      </div>
+      <div class="form-row">
+        <div class="form-group" style="flex:2;"><label class="form-label">Email</label><input class="form-input" type="email" value="${escapeHtml(c.email||'')}" onchange="tsContactChange(${i},'email',this.value)"></div>
+        <div class="form-group"><label class="form-label">Telefono</label><input class="form-input" value="${escapeHtml(c.phone||'')}" onchange="tsContactChange(${i},'phone',this.value)"></div>
+      </div>
+    </div>
+  `).join('');
+}
+
+// ── Pubblicazione ─────────────────────────────────────────────
+function tsOpenPublish() {
+  if (!tsState) return;
+  const cur = document.getElementById('ts-pub-current');
+  if (tsState.is_public_enabled && tsState.public_token) {
+    cur.style.display = '';
+    document.getElementById('ts-pub-url').value = window.location.origin + '/public/tech-sheet/' + tsState.public_token;
+    document.getElementById('ts-pub-expires').textContent = tsState.expires_at
+      ? `Scadenza: ${new Date(tsState.expires_at).toLocaleString('it-IT')}`
+      : 'Senza scadenza.';
+    document.getElementById('ts-pub-disable-btn').style.display = '';
+  } else {
+    cur.style.display = 'none';
+    document.getElementById('ts-pub-disable-btn').style.display = 'none';
+  }
+  document.getElementById('ts-pub-rotate').checked = false;
+  openModal('modal-ts-publish');
+}
+
+async function tsDoPublish() {
+  const fd = new FormData();
+  fd.append('expires_days', document.getElementById('ts-pub-expires-sel').value || '90');
+  fd.append('rotate_token', document.getElementById('ts-pub-rotate').checked ? 'true' : 'false');
+  try {
+    const res = await api('POST', `/projects/api/${PROJECT_ID}/tech-sheet/publish`, fd);
+    tsState.is_public_enabled = res.is_public_enabled;
+    tsState.public_token = res.public_token;
+    tsState.expires_at = res.expires_at;
+    tsState.published_at = res.published_at;
+    toast('Link pubblico aggiornato', 'success');
+    closeModal('modal-ts-publish');
+    setTimeout(tsOpenPublish, 100);
+  } catch(e) { toast(e.message, 'error'); }
+}
+
+async function tsDisablePublic() {
+  if (!confirm('Disattivare il link pubblico? L\'URL non sarà più accessibile.')) return;
+  try {
+    await api('DELETE', `/projects/api/${PROJECT_ID}/tech-sheet/public`);
+    tsState.is_public_enabled = false;
+    tsState.public_token = null;
+    tsState.expires_at = null;
+    toast('Link disattivato', 'info');
+    closeModal('modal-ts-publish');
+  } catch(e) { toast(e.message, 'error'); }
+}
+
+function tsCopyUrl() {
+  const inp = document.getElementById('ts-pub-url');
+  inp.select();
+  try {
+    document.execCommand('copy');
+    toast('URL copiato', 'success', 1500);
+  } catch(e) {
+    navigator.clipboard.writeText(inp.value).then(() => toast('URL copiato', 'success', 1500));
+  }
+}
 </script>
 {% endblock %}

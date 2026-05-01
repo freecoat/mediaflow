@@ -16,36 +16,39 @@ function setTheme(theme) {
 }
 
 // ── Riordino sidebar (drag-drop, salvato in localStorage) ──────
-// Riordino flat cross-section: quando l'utente personalizza l'ordine,
-// le sezioni originali (Anagrafica, Operativo…) vengono nascoste e tutte
-// le voci appaiono in un'unica lista nell'ordine scelto.
+// v3.4.28: riordino DENTRO ciascuna sezione (preserva i raggruppamenti
+// "Anagrafica", "Operativo", … di base.html). Formato saved: object
+// {sectionName: [navId, navId, …]}. Il vecchio formato array piatto viene
+// ignorato silenziosamente (l'utente vede l'ordine default e può ripersonalizzare).
 function applySidebarOrder() {
   const sidebar = document.querySelector('.sidebar-nav');
   if (!sidebar) return;
-  const order = JSON.parse(localStorage.getItem('mf_sidebar_order') || 'null');
-  if (!order || !Array.isArray(order) || !order.length) {
-    // Nessun ordine custom: lascia struttura server (sezioni come da base.html)
-    return;
+  let saved;
+  try { saved = JSON.parse(localStorage.getItem('mf_sidebar_order') || 'null'); }
+  catch (e) { saved = null; }
+  if (!saved || Array.isArray(saved) || typeof saved !== 'object') return;
+
+  const sections = [...sidebar.querySelectorAll('.nav-section')];
+  for (const sec of sections) {
+    const labelEl = sec.querySelector('.nav-section-label');
+    if (!labelEl) continue;
+    const sectionName = labelEl.textContent.trim();
+    const order = saved[sectionName];
+    if (!order || !Array.isArray(order) || !order.length) continue;
+
+    const items = [...sec.querySelectorAll('.nav-item[data-nav-id]')];
+    if (!items.length) continue;
+    const itemMap = {};
+    items.forEach(it => itemMap[it.dataset.navId] = it);
+
+    items.forEach(it => it.remove());
+    for (const id of order) {
+      if (itemMap[id]) { sec.appendChild(itemMap[id]); delete itemMap[id]; }
+    }
+    for (const it of items) {
+      if (itemMap[it.dataset.navId]) sec.appendChild(it);
+    }
   }
-  // Raccogli tutti i nav-item esistenti
-  const allItems = {};
-  sidebar.querySelectorAll('.nav-item[data-nav-id]').forEach(el => {
-    allItems[el.dataset.navId] = el;
-  });
-  // Costruisci nuovo container flat
-  const flat = document.createElement('div');
-  flat.className = 'nav-section nav-section-custom';
-  for (const id of order) {
-    const el = allItems[id];
-    if (el) flat.appendChild(el);
-  }
-  // Aggiungi eventuali item nuovi non presenti nell'ordine salvato (in fondo)
-  for (const [id, el] of Object.entries(allItems)) {
-    if (!order.includes(id)) flat.appendChild(el);
-  }
-  // Rimpiazza tutto il contenuto nav con il flat
-  sidebar.innerHTML = '';
-  sidebar.appendChild(flat);
 }
 
 // Applica subito (prima del rendering completo) per evitare flash di stile
@@ -85,13 +88,19 @@ document.addEventListener('click', (e) => {
 });
 
 // ── API helper ────────────────────────────────────────────────
-async function api(method, url, formData) {
+async function api(method, url, body, options) {
+  // body: FormData (multipart) | plain object (urlencoded by default,
+  //       or JSON if options.json === true) | undefined.
   const opts = { method };
-  if (formData instanceof FormData) {
-    opts.body = formData;
-  } else if (formData) {
+  const useJson = options && options.json === true;
+  if (body instanceof FormData) {
+    opts.body = body;
+  } else if (useJson && body && typeof body === 'object') {
+    opts.headers = { 'Content-Type': 'application/json' };
+    opts.body = JSON.stringify(body);
+  } else if (body) {
     opts.headers = { 'Content-Type': 'application/x-www-form-urlencoded' };
-    opts.body = new URLSearchParams(formData).toString();
+    opts.body = new URLSearchParams(body).toString();
   }
   const resp = await fetch(url, opts);
   if (!resp.ok) {

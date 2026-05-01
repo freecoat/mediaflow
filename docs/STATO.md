@@ -8,7 +8,14 @@
 
 ## Versione corrente
 
-**v3.4.27** — 30 aprile 2026 notte tarda — Sistema notifiche generico (campanella topbar + drawer + polling 30s + workflow ferie integrato)
+**v3.4.31** — 1 maggio 2026 — Scheda tecnica progetto + link pubblico readonly con scadenza
+
+Sessione 1 maggio: 4 versioni chiuse in fila (v3.4.28→v3.4.31):
+
+- **v3.4.28** Fix riordino sidebar (auto-discovery DOM + per-sezione) + engine notifica `job_deadline_approaching` (lifespan boot check + endpoint admin trigger + `seed_test_deadline.py`).
+- **v3.4.29** Pannello listino laterale + drag&drop in editor `/quotes` (toggle persistito, layout grid 2→3 col, ricerca, drop su #lines-card).
+- **v3.4.30** Vista calendario complessiva in `/hr` (toggle Tabella/Calendario, endpoint `GET /hr/api/calendar`, KPI compatti per categoria, griglia 7×6 con barre per giorno, click giorno → drill-down tabella).
+- **v3.4.31** `ProjectTechSheet` 1:1 con Project, schema JSON flessibile (cameras[], audio, looks[], storage, dailies, contacts[], process, notes), tab editor in `/projects/{id}` con sub-tabs, link pubblico `/public/tech-sheet/{token}` readonly con scadenza configurabile.
 
 ## In corso
 

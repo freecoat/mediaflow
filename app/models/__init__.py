@@ -14,4 +14,5 @@ from app.models.models import (
     AIConversation, AIMessage,
     UserAISettings, AIAction,
     Notification, NotificationKind, NotificationSeverity,
+    ProjectTechSheet,
 )

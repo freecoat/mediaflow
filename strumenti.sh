@@ -45,10 +45,11 @@ while true; do
     echo "  [i] Migra database esistente (workflow approvazione ferie/malattia) [v3.4.22]"
     echo "  [j] Migra database esistente (sistema permessi configurabili Role) [v3.4.23]"
     echo "  [k] Migra database esistente (permessi extra per-utente) [v3.4.25]"
+    echo "  [t] Seed Job di test per notifica deadline (scadenza fra 2 giorni) [v3.4.28]"
     echo "  [a] Apri cartella upload"
     echo "  [0] Esci"
     echo ""
-    read -p "Scegli un'opzione (0-9, a, b, c, d, e, f, g, h, i, j, k): " scelta
+    read -p "Scegli un'opzione (0-9, a, b, c, d, e, f, g, h, i, j, k, t): " scelta
 
     case $scelta in
         1)
@@ -236,6 +237,17 @@ while true; do
             read -p "Procedo? (s/n): " conferma
             if [ "$conferma" = "s" ] || [ "$conferma" = "S" ]; then
                 python scripts/migrate_user_extra_permissions.py
+            fi
+            read -p "Premi INVIO per continuare..."
+            ;;
+        t|T)
+            echo ""
+            echo "Crea (o aggiorna) un job 'JOB-TEST-DEADLINE' con scadenza fra 2 giorni."
+            echo "La notifica job_deadline_approaching verrà emessa al prossimo riavvio server"
+            echo "(check al boot) o via POST /admin/api/check-deadlines (admin)."
+            read -p "Procedo? (s/n): " conferma
+            if [ "$conferma" = "s" ] || [ "$conferma" = "S" ]; then
+                python scripts/seed_test_deadline.py
             fi
             read -p "Premi INVIO per continuare..."
             ;;

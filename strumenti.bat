@@ -26,10 +26,11 @@ echo  [H] Migra database esistente (soglie/moltiplicatori straordinari) [v3.4.21
 echo  [I] Migra database esistente (workflow approvazione ferie/malattia) [v3.4.22]
 echo  [J] Migra database esistente (sistema permessi configurabili Role) [v3.4.23]
 echo  [K] Migra database esistente (permessi extra per-utente) [v3.4.25]
+echo  [T] Seed Job di test per notifica deadline (scadenza fra 2 giorni) [v3.4.28]
 echo  [A] Apri cartella upload
 echo  [0] Esci
 echo.
-set /p scelta="Scegli un'opzione (0-9, A, B, C, D, E, F, G, H, I, J, K): "
+set /p scelta="Scegli un'opzione (0-9, A, B, C, D, E, F, G, H, I, J, K, T): "
 
 if "%scelta%"=="1" goto avvia
 if "%scelta%"=="2" goto reset_db
@@ -50,6 +51,7 @@ if /i "%scelta%"=="H" goto migrate_overtime
 if /i "%scelta%"=="I" goto migrate_unav_approval
 if /i "%scelta%"=="J" goto migrate_roles_v2
 if /i "%scelta%"=="K" goto migrate_user_extra_perms
+if /i "%scelta%"=="T" goto seed_test_deadline
 if /i "%scelta%"=="A" goto uploads
 if "%scelta%"=="0" exit /b
 
@@ -279,6 +281,19 @@ set /p conferma="Procedo? (s/n): "
 if /i "%conferma%"=="s" (
     call .venv\Scripts\activate.bat
     python scripts\migrate_user_extra_permissions.py
+)
+pause & goto menu
+
+:seed_test_deadline
+echo.
+echo Crea (o aggiorna) un job 'JOB-TEST-DEADLINE' con scadenza fra 2 giorni.
+echo La notifica job_deadline_approaching verra emessa al prossimo riavvio server
+echo (check al boot) o via POST /admin/api/check-deadlines (admin).
+echo.
+set /p conferma="Procedo? (s/n): "
+if /i "%conferma%"=="s" (
+    call .venv\Scripts\activate.bat
+    python scripts\seed_test_deadline.py
 )
 pause & goto menu
 

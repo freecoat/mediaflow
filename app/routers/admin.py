@@ -52,6 +52,22 @@ async def admin_roles_page(request: Request, db: Session = Depends(get_db),
     })
 
 
+# ── API system maintenance ─────────────────────────────────────
+@router.post("/api/check-deadlines")
+async def trigger_deadline_check(
+    db: Session = Depends(get_db),
+    _: User = Depends(requires_permission("manage_settings_global")),
+):
+    """Trigger on-demand del check job_deadline_approaching.
+
+    Idempotente: se le notifiche per i job in scadenza sono già state emesse
+    nelle ultime DEDUP_WINDOW_DAYS, ritorna 0.
+    """
+    from app.services.job_deadline_check import check_job_deadlines
+    n = check_job_deadlines(db)
+    return {"emitted": n, "checked_at": datetime.utcnow().isoformat()}
+
+
 # ── API utenti ─────────────────────────────────────────────────
 def _user_dict(u: User) -> dict:
     role_obj = u.role_obj

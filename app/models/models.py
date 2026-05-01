@@ -956,3 +956,45 @@ class Notification(Base):
     read_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
     user: Mapped["User"] = relationship(foreign_keys=[user_id])
     actor: Mapped[Optional["User"]] = relationship(foreign_keys=[actor_user_id])
+
+
+# ── SCHEDA TECNICA PROGETTO (v3.4.31) ────────────────────────
+#
+# Scheda tecnica/workflow sheet di un progetto: catena di lavorazione
+# (camere, audio, look, storage, dailies, crew, process). Schema flessibile
+# JSON per gestire varianti tra case di post diverse senza rigidare lo schema.
+# 1:1 con Project. Pubblicabile come link readonly con token UUID + scadenza.
+# Distinguere da DeliveryTemplate: questa è la *catena di produzione*, l'altro
+# è la *spec di consegna* (Netflix/A24/ecc.).
+
+class ProjectTechSheet(Base):
+    __tablename__ = "project_tech_sheets"
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    tenant_id: Mapped[int] = mapped_column(Integer, default=1, index=True)
+    project_id: Mapped[int] = mapped_column(
+        ForeignKey("projects.id"), unique=True, index=True)
+    delivery_template_id: Mapped[Optional[int]] = mapped_column(
+        ForeignKey("delivery_templates.id"), nullable=True)
+
+    # Stato e versionamento
+    version: Mapped[str] = mapped_column(String(50), default="0.1")
+    status: Mapped[str] = mapped_column(String(20), default="draft")  # draft|preview|approved
+    approved_by_user_id: Mapped[Optional[int]] = mapped_column(
+        ForeignKey("users.id"), nullable=True)
+    approved_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+
+    # Pubblicazione readonly via link
+    public_token: Mapped[Optional[str]] = mapped_column(String(64), unique=True, nullable=True, index=True)
+    is_public_enabled: Mapped[bool] = mapped_column(Boolean, default=False)
+    expires_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+    published_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+
+    # Dati strutturati (vedi tech_sheet_schema docstring per layout)
+    # general / cameras / audio / looks / storage / dailies / folder_struct / contacts / process / notes
+    data: Mapped[dict] = mapped_column(JSON, default=dict)
+
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    project: Mapped["Project"] = relationship()
+    delivery_template: Mapped[Optional["DeliveryTemplate"]] = relationship()

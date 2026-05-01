@@ -44,10 +44,91 @@
     color: #6272f5; font-size: 11px; font-weight: 600;
     text-transform: uppercase; letter-spacing: .5px;
   }
+  /* ── View toggle (v3.4.30) ───────────────────────────────────── */
+  .hr-view-toggle {
+    display: inline-flex; gap: 0; margin-bottom: 12px;
+    background: var(--bg2,#1a1d2e); border: 1px solid var(--border,#2a2e3d);
+    border-radius: 6px; padding: 2px;
+  }
+  .hr-view-toggle button {
+    background: transparent; border: 0; padding: 6px 14px;
+    color: var(--text2,#9ca3af); font-size: 12px; cursor: pointer;
+    border-radius: 4px; transition: background var(--t,.18s), color var(--t,.18s);
+  }
+  .hr-view-toggle button.active {
+    background: rgba(98,114,245,0.15); color: var(--indigo2,#7e8ef7);
+    font-weight: 500;
+  }
+  /* ── Vista calendario ───────────────────────────────────────── */
+  .cal-toolbar {
+    display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+    margin-bottom: 12px;
+  }
+  .cal-toolbar .cal-month-label {
+    font-size: 16px; font-weight: 600; min-width: 180px; text-transform: capitalize;
+  }
+  .cal-grid {
+    display: grid; grid-template-columns: repeat(7, 1fr); gap: 1px;
+    background: var(--border,#2a2e3d); border: 1px solid var(--border,#2a2e3d);
+    border-radius: 6px; overflow: hidden;
+  }
+  .cal-dow {
+    background: var(--bg2,#1a1d2e); padding: 6px 8px;
+    font-size: 10px; text-transform: uppercase; letter-spacing: 0.6px;
+    color: var(--text3,#888); font-weight: 600;
+  }
+  .cal-day {
+    background: var(--bg,#0d1117); min-height: 92px; padding: 6px;
+    display: flex; flex-direction: column; gap: 4px;
+    cursor: pointer; transition: background var(--t,.18s);
+    position: relative;
+  }
+  .cal-day:hover { background: var(--bg2,#1a1d2e); }
+  .cal-day.other-month { opacity: 0.35; }
+  .cal-day.today { background: rgba(98,114,245,0.10); border-left: 3px solid var(--indigo,#6272f5); }
+  .cal-day.weekend { background: rgba(255,255,255,0.02); }
+  .cal-day.has-vacation { background: rgba(98,114,245,0.06); }
+  .cal-day.has-sick { background: rgba(239,68,68,0.06); }
+  .cal-day-num { font-size: 12px; font-weight: 500; color: var(--text2,#9ca3af); }
+  .cal-day.today .cal-day-num {
+    color: var(--indigo2,#7e8ef7); font-weight: 700;
+  }
+  .cal-bar {
+    display: flex; align-items: center; gap: 5px;
+    font-size: 10.5px; line-height: 1.2;
+  }
+  .cal-bar .dot {
+    width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0;
+  }
+  .cal-bar .lbl { color: var(--text2,#9ca3af); }
+  .cal-bar .val {
+    margin-left: auto; font-family: 'DM Mono',monospace;
+    color: var(--text,#fff); font-weight: 500;
+  }
+  .cal-empty { color: var(--text3,#666); font-size: 10.5px; font-style: italic; }
+  .cal-totals {
+    display: flex; flex-wrap: wrap; gap: 8px;
+    margin-bottom: 12px;
+  }
+  .cal-tot {
+    background: var(--bg-elev,#1a1d29); border: 1px solid var(--border,#2a2e3d);
+    border-left: 4px solid var(--indigo,#6272f5);
+    border-radius: 6px; padding: 8px 12px; min-width: 110px;
+  }
+  .cal-tot.grand { border-left-color: var(--indigo,#6272f5); background: rgba(98,114,245,0.10); }
+  .cal-tot .lbl { font-size: 10px; text-transform: uppercase; opacity: .7; letter-spacing: .5px; }
+  .cal-tot .val { font-size: 18px; font-weight: 600; font-variant-numeric: tabular-nums; margin-top: 2px; }
+  .cal-tot .unit { font-size: 11px; opacity: .6; margin-left: 2px; }
 </style>
 {% endblock %}
 
 {% block content %}
+
+<!-- ── View toggle (Tabella / Calendario) — v3.4.30 ─────────── -->
+<div class="hr-view-toggle" role="tablist">
+  <button id="view-tab-table" class="active" onclick="setHRView('table')">📋 Tabella timbrature</button>
+  <button id="view-tab-calendar" onclick="setHRView('calendar')">📅 Calendario complessivo</button>
+</div>
 
 <!-- ── Filtri ──────────────────────────────────────────────── -->
 <div class="hr-filters">
@@ -131,8 +212,37 @@
 </div>
 {% endif %}
 
+<!-- ── Vista calendario (v3.4.30) ──────────────────────────── -->
+<div id="view-calendar" style="display:none;">
+  <div class="cal-toolbar">
+    <button class="btn btn-secondary btn-sm" onclick="calNavMonth(-1)">‹</button>
+    <span class="cal-month-label" id="cal-month-label">—</span>
+    <button class="btn btn-secondary btn-sm" onclick="calNavMonth(1)">›</button>
+    <button class="btn btn-ghost btn-sm" onclick="calGoToday()">Oggi</button>
+    <span class="text-sm text-muted" style="margin-left:8px;">
+      Filtro risorsa attivo: <span id="cal-resource-label" style="font-weight:500;">tutte</span>
+    </span>
+  </div>
+
+  <div class="cal-totals" id="cal-totals">
+    <div class="cal-tot"><div class="lbl">Caricamento…</div><div class="val">—</div></div>
+  </div>
+
+  <div class="card" style="padding:0; overflow:hidden;">
+    <div class="cal-grid" id="cal-grid">
+      <div class="cal-dow">Lun</div>
+      <div class="cal-dow">Mar</div>
+      <div class="cal-dow">Mer</div>
+      <div class="cal-dow">Gio</div>
+      <div class="cal-dow">Ven</div>
+      <div class="cal-dow">Sab</div>
+      <div class="cal-dow">Dom</div>
+    </div>
+  </div>
+</div>
+
 <!-- ── Tabella timbrature ──────────────────────────────────── -->
-<div class="card">
+<div class="card" id="view-table">
   <div class="table-wrap">
     <table>
       <thead>
@@ -464,6 +574,140 @@ async function deletePunch() {
 }
 
 reloadHR();
+
+// ── View toggle (Tabella / Calendario) — v3.4.30 ─────────────
+let HR_VIEW = 'table';
+function setHRView(view) {
+  HR_VIEW = view;
+  document.getElementById('view-tab-table').classList.toggle('active', view === 'table');
+  document.getElementById('view-tab-calendar').classList.toggle('active', view === 'calendar');
+  document.getElementById('view-table').style.display = view === 'table' ? '' : 'none';
+  document.getElementById('view-calendar').style.display = view === 'calendar' ? '' : 'none';
+  if (view === 'calendar') reloadCalendar();
+  try { localStorage.setItem('mf_hr_view', view); } catch(e) {}
+}
+try {
+  const v = localStorage.getItem('mf_hr_view');
+  if (v === 'calendar') setHRView('calendar');
+} catch(e) {}
+
+// ── Calendario (vista mensile complessiva) ───────────────────
+let CAL_MONTH = (() => { const d = new Date(); d.setDate(1); return d; })();
+
+function calNavMonth(delta) {
+  CAL_MONTH = new Date(CAL_MONTH.getFullYear(), CAL_MONTH.getMonth() + delta, 1);
+  reloadCalendar();
+}
+function calGoToday() {
+  const d = new Date(); d.setDate(1);
+  CAL_MONTH = d;
+  reloadCalendar();
+}
+
+function _calMonthRange() {
+  const y = CAL_MONTH.getFullYear(), m = CAL_MONTH.getMonth();
+  const first = new Date(y, m, 1);
+  const last = new Date(y, m + 1, 0);
+  const startDow = (first.getDay() + 6) % 7; // 0 = Lun
+  const grid_start = new Date(y, m, 1 - startDow);
+  const endDow = (last.getDay() + 6) % 7;
+  const grid_end = new Date(y, m, last.getDate() + (6 - endDow));
+  const iso = d => `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+  return { first, last, grid_start, grid_end, iso };
+}
+
+async function reloadCalendar() {
+  const { first, grid_start, grid_end, iso } = _calMonthRange();
+  document.getElementById('cal-month-label').textContent = first.toLocaleDateString('it-IT', { month: 'long', year: 'numeric' });
+  const rid = document.getElementById('f-resource').value;
+  const rlbl = rid ? (document.querySelector(`#f-resource option[value="${rid}"]`)?.textContent || '#'+rid) : 'tutte';
+  document.getElementById('cal-resource-label').textContent = rlbl;
+  const params = new URLSearchParams({ from_date: iso(grid_start), to_date: iso(grid_end) });
+  if (rid) params.set('resource_id', rid);
+  let data;
+  try {
+    data = await api('GET', `/hr/api/calendar?${params.toString()}`);
+  } catch(e) {
+    document.getElementById('cal-grid').innerHTML = `<div style="grid-column:1/-1; padding:24px; color:#ef4444; text-align:center;">${escapeHtml(e.message || 'Errore caricamento calendario')}</div>`;
+    return;
+  }
+  renderCalendarTotals(data.totals);
+  renderCalendarGrid(data.days);
+}
+
+function renderCalendarTotals(t) {
+  if (!t) return;
+  const host = document.getElementById('cal-totals');
+  const c = (lbl, val, color, grand) => `
+    <div class="cal-tot ${grand ? 'grand' : ''}" ${color ? `style="border-left-color:${color};"` : ''}>
+      <div class="lbl">${lbl}</div>
+      <div class="val">${val.toFixed(1)}<span class="unit">h</span></div>
+    </div>`;
+  host.innerHTML = [
+    c('Regolari',     t.regular_h),
+    c('Straordinari', t.overtime_h, '#fb923c'),
+    c('Notturne',     t.night_h,    '#a78bfa'),
+    c('Ferie',        t.vacation_h, '#6272f5'),
+    c('Malattia',     t.sick_h,     '#ef4444'),
+    c('Permessi',     t.other_h,    '#9ca3af'),
+    c('Totale',       t.total_h,    null, true),
+  ].join('');
+}
+
+function renderCalendarGrid(days) {
+  const { first, grid_start, iso } = _calMonthRange();
+  const monthIdx = first.getMonth();
+  const todayIso = (() => { const d = new Date(); return iso(d); })();
+  const map = {};
+  (days || []).forEach(d => map[d.date] = d);
+  const grid = document.getElementById('cal-grid');
+  const cells = [];
+  for (let i = 0; i < 42; i++) {
+    const d = new Date(grid_start); d.setDate(grid_start.getDate() + i);
+    const di = iso(d);
+    const otherMonth = d.getMonth() !== monthIdx;
+    const isWeekend = d.getDay() === 0 || d.getDay() === 6;
+    const today = di === todayIso;
+    const data = map[di];
+    const hasVacation = data && data.vacation_h > 0;
+    const hasSick = data && data.sick_h > 0;
+    const cls = ['cal-day'];
+    if (otherMonth) cls.push('other-month');
+    if (isWeekend) cls.push('weekend');
+    if (today) cls.push('today');
+    if (hasVacation && !hasSick) cls.push('has-vacation');
+    if (hasSick) cls.push('has-sick');
+    let bars = '';
+    if (data && (data.regular_h || data.overtime_h || data.vacation_h || data.sick_h || data.other_h)) {
+      const row = (lbl, val, color) => val > 0 ? `
+        <div class="cal-bar"><span class="dot" style="background:${color};"></span><span class="lbl">${lbl}</span><span class="val">${val.toFixed(1)}h</span></div>` : '';
+      bars += row('Reg.',   data.regular_h, '#6272f5');
+      bars += row('Str.',   data.overtime_h, '#fb923c');
+      bars += row('Ferie',  data.vacation_h, '#6272f5');
+      bars += row('Mal.',   data.sick_h, '#ef4444');
+      bars += row('Perm.',  data.other_h, '#9ca3af');
+    } else if (!otherMonth) {
+      bars = '<div class="cal-empty">—</div>';
+    }
+    cells.push(`<div class="${cls.join(' ')}" data-date="${di}" onclick="calOnDayClick('${di}')">
+      <div class="cal-day-num">${d.getDate()}</div>
+      ${bars}
+    </div>`);
+  }
+  grid.innerHTML = ['Lun','Mar','Mer','Gio','Ven','Sab','Dom'].map(x => `<div class="cal-dow">${x}</div>`).join('') + cells.join('');
+}
+
+function calOnDayClick(dateIso) {
+  const f = document.getElementById('f-from');
+  const t = document.getElementById('f-to');
+  if (f && t) { f.value = dateIso; t.value = dateIso; }
+  setHRView('table');
+  reloadHR();
+}
+
+document.getElementById('f-resource').addEventListener('change', () => {
+  if (HR_VIEW === 'calendar') reloadCalendar();
+});
 
 {% if can_approve_unavailability(_user) %}
 // ── v3.4.27: Pannello approvazione ferie pending ─────────────────

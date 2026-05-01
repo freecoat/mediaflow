@@ -1,5 +1,148 @@
 # MediaFlow — Changelog
 
+## v3.4.31 — Scheda tecnica progetto + link pubblico (1 maggio 2026)
+
+Cantiere "scheda tecnica" (G nel backlog). Workflow sheet di un progetto: catena di lavorazione (camere, audio, look, storage, dailies, crew, process). Schema flessibile JSON per varianti tra case di post diverse.
+
+> **Distinzione netta** dal modello esistente `DeliveryTemplate`: il `ProjectTechSheet` descrive la *catena di produzione* (3 PDF di esempio in `docs/workflow_esempio/`: ISIDE, Gomorra, FUME). Il `DeliveryTemplate` resta per le *specs di consegna* (Netflix, A24, Vision…). Il primo può linkare al secondo via `delivery_template_id` opzionale.
+
+### Modello `ProjectTechSheet` (1:1 con Project)
+
+```
+id, tenant_id, project_id (UNIQUE), delivery_template_id (FK opt)
+version (str), status (draft|preview|approved)
+approved_by_user_id, approved_at
+public_token (UUID-safe nullable), is_public_enabled, expires_at, published_at
+data (JSON) ─ sezioni: general, cameras[], audio, looks[], storage, dailies,
+             folder_struct, contacts[], process, notes
+created_at, updated_at
+```
+
+Tabella creata automaticamente da `Base.metadata.create_all()` al boot (no migration script).
+
+### Endpoint
+
+- `GET /projects/api/{pid}/tech-sheet` — auto-crea draft se manca (auth: `view_projects` o `edit_projects`)
+- `PUT /projects/api/{pid}/tech-sheet` — accetta JSON body `{version, status, delivery_template_id, data}` (auth: `edit_projects`)
+- `POST /projects/api/{pid}/tech-sheet/publish` — Form `expires_days` (default 90, 0=senza scadenza), `rotate_token` (bool)
+- `DELETE /projects/api/{pid}/tech-sheet/public` — disattiva link
+- `GET /public/tech-sheet/{token}` — vista readonly **no auth**, ritorna 410 Gone se scaduto, 404 se token revocato
+
+`PUBLIC_PATHS` in `main.py` esteso con `/public/` per saltare auth guard.
+
+### UI editor — tab "🛠 Scheda tecnica" in `/projects/{id}`
+
+- Sub-tabs: Generale · Camere · Audio · Look · Storage · Dailies · Crew · Process · Note.
+- **Camere come array**: aggiungi/rimuovi camere (A/B/C/D…) con specs indipendenti (FUME-style: A≠B). Ottiche come lista per camera.
+- **Look multipli**: array di LUT/LMT con scope (main/flashback/etc), tipo (ASC-CDL/Powergrade), 3DLUT size, range transform.
+- **Crew**: lista contatti free-form (ruolo + nome + email + telefono). Resource link rinviato a iter successiva (per ora `name_text`).
+- Lista campi (burnins, report recipients, notify emails) come textarea "uno per riga" → array.
+- Toolbar: version + status + delivery_template dropdown + bottone "🔗 Link pubblico". Indicatore dirty/saved.
+- Salvataggio esplicito tramite "💾 Salva modifiche" (non auto-save).
+
+### Vista pubblica `/public/tech-sheet/{token}`
+
+- Template `pages/tech_sheet_public.html` standalone (no sidebar, no topbar).
+- Layout pulito: header con titolo/codice/regista + sezioni espanse con tutti i campi compilati.
+- Pagina errore `tech_sheet_public_error.html` per token scaduto/revocato.
+- Footer con data ultima modifica + scadenza link.
+
+### Pubblicazione
+
+- Modal con dropdown scadenza (30/60/90/180/365 giorni o senza scadenza).
+- Bottone "Rigenera token" per invalidare il link precedente (security best practice).
+- Display URL completa con copy-to-clipboard.
+- Bottone "Disattiva link" dal modal stesso se già pubblicato.
+
+### Estensione `api()` in `global.js`
+
+`api(method, url, body, options)` ora accetta opzioni: `{json: true}` invia il body come JSON (`Content-Type: application/json`). Compatibile con tutte le chiamate esistenti FormData/urlencoded. Cache-buster `?v=3.4.31`.
+
+### Cosa è esplicitamente fuori da questa versione
+
+- Import auto-popolazione campi da capitolato (Netflix Specs / A24 / ecc.) via AI: cantiere a sé per v3.4.32+.
+- Crew come FK Resource (oggi solo `name_text`): rinviato a quando serve query incrociate.
+- Storage policy come oggetto separato riusabile: oggi inline, da estrarre se ricorrenza concreta.
+- Datarate auto-calcolato da camera+formato+fps: oggi manuale.
+
+File toccati: `app/models/models.py`, `app/models/__init__.py`, `app/routers/tech_sheets.py` (nuovo), `app/main.py`, `app/static/js/global.js`, `app/templates/pages/project_detail.html`, `app/templates/pages/tech_sheet_public.html` (nuovo), `app/templates/pages/tech_sheet_public_error.html` (nuovo), `app/templates/base.html`.
+
+## v3.4.30 — Vista calendario complessiva in /hr (1 maggio 2026)
+
+In `/hr` toggle "📋 Tabella timbrature | 📅 Calendario complessivo". Vista calendario mensile con sommario per categoria, ferie/malattia/permessi inclusi.
+
+### Backend
+
+- Endpoint **`GET /hr/api/calendar?from_date&to_date&resource_id`**:
+  - Per ogni giorno restituisce `{date, regular_h, overtime_h, night_h, vacation_h, sick_h, other_h, total_h, resource_count, unav_kinds}`.
+  - **Single-resource**: usa `compute_overtime` con la policy della risorsa per il breakdown preciso (regolari/overtime/notturne).
+  - **All-resources**: somma cross-tenant le timbrature shift+overtime e raggruppa per giorno (no split per policy diverse).
+  - **Ferie/malattia/permessi** da `ResourceUnavailability.status=approved` → ore = `daily_hours_threshold` × giorni nel range, attribuiti per `kind`.
+  - Rispetta `_enforce_scope`: staff vede solo le proprie ore, manager vedono tutto.
+  - Restituisce anche `totals` aggregati di periodo per i KPI cards.
+
+### UI
+
+- Toggle `Tabella | Calendario` sopra i filtri (preferenza salvata in `localStorage` → `mf_hr_view`).
+- Vista calendario:
+  - Toolbar con navigazione mese (prev/next/oggi) + label "Maggio 2026".
+  - 7 KPI compatti: Regolari · Straordinari · Notturne · Ferie · Malattia · Permessi · Totale.
+  - Griglia 7×6 (Lun-Dom × 6 settimane) con celle giorno mostranti barre per categoria > 0.
+  - Evidenziazioni: oggi (bordo indaco), weekend (sfondo tenue), giorni con ferie (sfondo viola), malattia (sfondo rosso), giorni di altri mesi opacizzati.
+  - **Click su giorno** → switch a vista Tabella con filtro `from=to=quel giorno` per dettaglio.
+- Cambio del filtro Risorsa nei filtri principali aggiorna anche il calendario se aperto.
+
+File toccati: `app/routers/hr.py` (nuovo endpoint), `app/templates/pages/hr.html` (CSS + UI + JS).
+
+## v3.4.29 — Listino laterale + drag&drop in editor quote (1 maggio 2026)
+
+In `/quotes` editor: bottone "📋 Listino" in topbar apre/chiude un pannello laterale destro fisso accanto al riepilogo economico. Le voci di listino sono draggable e si possono trascinare direttamente nella tabella "Voci preventivo" per aggiungerle alla quote.
+
+- **Toggle pannello** persistito in `localStorage` (`mf_side_pricelist_open`): se l'avevi attivato, riapre automaticamente alla prossima quote.
+- **Layout grid**: 2 colonne default (editor + riepilogo) → 3 colonne con listino aperto. Responsive: collassa in stack su <1024px.
+- **Ricerca**: stesso match di `alMatchesText` (nome, descrizione, categoria, reparto, keywords). Limite render 80 voci per fluidità.
+- **Drag&drop**: HTML5 native API con MIME custom `application/x-mf-priceitem`. Drop target = tutta la card "Voci preventivo" (`#lines-card`), evidenziata con bordo indaco durante hover.
+- **Drop = POST** `/quotes/api/{id}/lines` con `price_item_id` + `quantity=1`, prezzo/unità ereditati dal listino, descrizione = `name`. Reload quote per vedere subtotali/sconti aggiornati.
+- Modal "+ Aggiungi voce" mantenuto come alternativa (utile per voce libera o input rapido tastiera-only).
+
+File toccati: `app/templates/pages/quotes.html`. Nessun cambio backend (riusa endpoint esistenti).
+
+## v3.4.28 — Fix sidebar + engine notifica job_deadline_approaching (1 maggio 2026)
+
+Due cantieri in una versione.
+
+### A — Fix riordino sidebar (auto-discovery + per-sezione)
+
+Sintomo: dopo aver toccato il drag&drop in `/settings#sidebar`, la sidebar nelle altre pagine veniva "compromessa" — voci impilate senza separatori, con voci come `hr`, `assignments`, `admin_users`, `admin_roles` che apparivano in fondo o sparivano dall'elenco di riordino.
+
+Causa doppia:
+1. `NAV_ITEMS_DEF` in `settings.html` era una lista hardcoded di 12 voci, mentre `base.html` ne ha 14 (più condizionali per ruolo). Le voci mancanti non comparivano nel pannello di riordino e venivano relegate in coda dall'`applySidebarOrder`.
+2. `applySidebarOrder()` faceva flatten di tutte le sezioni in un unico container `.nav-section nav-section-custom`, perdendo le label "Anagrafica", "Operativo", … e l'identità visiva dei raggruppamenti.
+
+Fix generico (no patchwork):
+- **Auto-discovery**: il pannello di `/settings#sidebar` ora legge la sidebar reale dal DOM (`.sidebar-nav .nav-item[data-nav-id]` raggruppati per `.nav-section`). Niente più liste duplicate da mantenere — quando si aggiunge una voce in `base.html` appare automaticamente.
+- **Riordino per-sezione**: drag&drop opera dentro ciascun gruppo (Principale, Anagrafica, Operativo, Preventivi, Finanza, Media, Configurazione, Amministrazione). Le label di sezione restano intatte.
+- **Format salvato**: object `{sectionName: [navId, …]}` invece di array piatto. Il vecchio formato viene ignorato silenziosamente (default torna ad applicarsi).
+- Reset disponibile via "Ripristina ordine default".
+
+File toccati: `app/templates/pages/settings.html`, `app/static/js/global.js`. Cache-buster `?v=3.4.28` su `base.html`.
+
+### B — Engine notifica `job_deadline_approaching`
+
+Cantiere riusabile dal pattern v3.4.27 (sistema notifiche). Emette `kind=job_deadline_approaching` quando un Job ha `end_date` imminente.
+
+- **Servizio** `app/services/job_deadline_check.py` — `check_job_deadlines(db)`:
+  - Soglie: 1 giorno (`action_required`), 3 giorni (`action_required`), 7 giorni (`info`).
+  - Esclude job in stati `completed`, `cancelled`, `invoiced`.
+  - **Idempotente**: prima di emettere verifica `Notification.payload->>'job_id'+'threshold_days'` nelle ultime 14 giorni; se già emesso skippa.
+  - Notifica via `notify_permission("assign_resources")` → producer/manager/admin/operator (chi gestisce davvero pianificazione job).
+  - Payload contiene `job_id`, `job_code`, `end_date`, `days_left`, `threshold_days` per dedup e link.
+- **Lifespan startup** in `main.py`: chiama `check_job_deadlines()` al boot. Riavvio server = check immediato, zero-config.
+- **Endpoint trigger** `POST /admin/api/check-deadlines` (richiede `manage_settings_global`) per eseguire on-demand.
+- **Job di test**: `scripts/seed_test_deadline.py` (idempotente) crea/aggiorna `JOB-TEST-DEADLINE` con `end_date = today + 2`. Voce `[T]` aggiunta a `strumenti.bat`/`strumenti.sh`.
+
+Estendibilità: futuri eventi periodici (cron via /schedule) chiamano `check_job_deadlines()` o servizi simili. Gli stessi pattern di soglie + dedup-by-payload sono riusabili per `quote_status_changed`, `booking_conflict`, ecc.
+
 ## v3.4.27 — Sistema notifiche generico + UI approvazione ferie (30 aprile 2026 notte tarda)
 
 Cantiere generico riusabile per qualsiasi futura notifica (workflow ferie, conflitti booking, deadline, alert sistema, ecc.). Pattern AI propone / utente dispone esteso a "sistema notifica / utente apre".

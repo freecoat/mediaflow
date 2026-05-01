@@ -12,6 +12,7 @@ from app.routers import (
     pricelist, quotes, cost_report as cr,
     clients, projects, ai, departments, settings as settings_router,
     assignments, hr, jobs, admin, notifications as notifications_router,
+    tech_sheets,
 )
 
 
@@ -59,10 +60,24 @@ async def lifespan(app: FastAPI):
             _db.close()
     except Exception as e:
         print(f"[lifespan] ensure_built_in_roles failed: {e}")
+    # Check deadline job al boot (v3.4.28) — emette notifiche per job con
+    # end_date imminente, idempotente (dedup 14 giorni)
+    try:
+        from app.database import SessionLocal
+        from app.services.job_deadline_check import check_job_deadlines
+        _db = SessionLocal()
+        try:
+            n = check_job_deadlines(_db)
+            if n:
+                print(f"[lifespan] check_job_deadlines: {n} notifiche emesse")
+        finally:
+            _db.close()
+    except Exception as e:
+        print(f"[lifespan] check_job_deadlines failed: {e}")
     yield
 
 
-app = FastAPI(title="MediaFlow", version="3.4.27", lifespan=lifespan)
+app = FastAPI(title="MediaFlow", version="3.4.31", lifespan=lifespan)
 
 BASE_DIR = Path(__file__).parent
 app.mount("/static", StaticFiles(directory=BASE_DIR / "static"), name="static")
@@ -102,7 +117,7 @@ async def no_cache_html(request: Request, call_next):
 # ── Auth guard (v3.4.27.1) ─────────────────────────────────────
 # Redirect a /auth/login se cookie access_token mancante/invalido per
 # pagine HTML. API (path /api/* o accept JSON) ricevono 401 JSON.
-PUBLIC_PATHS = ("/auth/", "/static/", "/health", "/docs", "/openapi.json", "/favicon.ico", "/redoc")
+PUBLIC_PATHS = ("/auth/", "/static/", "/health", "/docs", "/openapi.json", "/favicon.ico", "/redoc", "/public/")
 
 
 def _resolve_user_from_token(token: str):
@@ -228,6 +243,7 @@ app.include_router(hr.router)
 app.include_router(jobs.router)
 app.include_router(admin.router)
 app.include_router(notifications_router.router)
+app.include_router(tech_sheets.router)
 
 
 @app.get("/", response_class=HTMLResponse)
@@ -247,5 +263,5 @@ async def dashboard(request: Request):
 async def health():
     from app.services.ai_provider import get_provider
     p = get_provider()
-    return {"status": "ok", "app": settings.app_name, "version": "3.4.27",
+    return {"status": "ok", "app": settings.app_name, "version": "3.4.31",
             "ai": {"configured": p is not None, "provider": p.name if p else None}}
