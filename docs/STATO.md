@@ -8,6 +8,10 @@
 
 ## Versione corrente
 
+**v3.4.33** — 1 maggio 2026 notte — Cost report v2 (fonte Booking) + PDF cliente + listino /quotes default open
+
+Cantiere "Cost Report doppio" avviato dopo conferme strategiche (Q1 fonte=Booking, Q2 una pagina + bottone export, Q3 ReportLab, Q4 fuori scope).
+
 **v3.4.32.2** — 1 maggio 2026 notte — Patch v3.4.32.1 (timeline align + paste GUI + governance overtime + scaglioni CCNL)
 
 Quattro fix raggruppati: (1) allineamento timeline label↔group ripristinato (rimossi min-height conflittuali); (2) paste GUI con click-to-paste + right-click "Incolla qui" + barra arancione in modalità incolla + Esc per annullare; (3) auto-approve overtime ammesso solo a manager+admin (NO producer) + notifica info agli altri manager per visibilità governance; (4) scaglioni overtime CCNL configurabili (`overtime_brackets` JSON + `ccnl_label`) — engine già pronto, UI in `/settings#hours`, compilazione preset via AI è iter successiva (capability `propose_working_hours_policy`).
@@ -28,18 +32,23 @@ Sessione 1 maggio sera (commit unico): chiusa v3.4.32 dopo discussione completa 
 
 ## In corso
 
-**Sessione 1 maggio sera chiusa.** v3.4.32 + .1 da testare sul Mac al prossimo pull (o continua il test locale).
+**Sessione 1 maggio notte chiusa.** v3.4.32→.32.2 + .33 da testare sul Mac al prossimo pull (o continua il test locale).
 
-Da testare:
+Da testare per **v3.4.33**:
+- `/quotes`: pannello listino aperto di default quando entri nell'editor di una quote (prima nascosto)
+- `/cost-report`: 8 KPI (compresi "Costo ore (booking)" e "Margine stimato")
+- `/cost-report`: bottone "📄 Esporta PDF cliente" → apre PDF ReportLab con lavorazioni quote + extra + ore breakdown, niente hardcost/margine/rate
+- Verifica numeri: ore nel cost report ora vengono dai Booking, NON più dai Timesheet (HR resta separato)
+
+Da testare per **v3.4.32→.32.2** (carry-over):
 - Migrazione `[L]` (solo se DB esistente) — già auto-applicata al boot
 - `/planning` tab "Le mie": card interattive con bordo priorità, bottoni `−30/−15/+15/+30`, `▶ Inizia / ✓ Fatto / ✗ Non fatto`
-- Booking multi-risorsa: l'operatore può estendere; cascade non spinge le altre risorse del cascade (test: 2 risorse nello stesso booking, 1 ha booking adiacente)
-- Drop su giorno festivo nella timeline → confirm dialog "Sarà richiesta approvazione straordinario" → al drop, booking entra `overtime_pending` (o auto-approved se admin/manager)
-- Estensione che fa entrare in fascia overtime: se sei manager/producer/admin → auto-approved; se sei operatore → notifica agli altri approvatori
-- Dashboard `/`: card "I miei booking di oggi" + colonne stato in tabella generica
-- `/cost-report` → seleziona job: card "Ore booking per fascia" + (se ci sono not_done) "Pozzo ore non maturate"
-- `/settings#aspect`: 9 temi colori (5 nuovi: Midnight/Copper/Plum/Teal/Mono) + 6 varianti font (Inter/Roboto/IBM Plex/Source Sans/System UI)
-- Look timeline: altezza riga uniforme, font risorse +1px e centrato, niente "barra alta in testa"
+- Booking multi-risorsa: l'operatore può estendere; cascade non spinge le altre risorse del cascade
+- Drop su giorno festivo nella timeline → confirm dialog "Sarà richiesta approvazione straordinario"
+- Estensione overtime: producer → sempre pending; manager/admin → auto-approved con notifica info agli altri admin/manager
+- Paste GUI: Ctrl+C poi Ctrl+V → barra arancione "Modalità incolla" → click sulla timeline incolla. O right-click area vuota → "Incolla qui (N)"
+- `/settings#aspect`: 9 temi colori + 6 varianti font
+- `/settings#hours`: scaglioni overtime (test: prime 2h al 1.30, oltre al 1.60)
 
 Da testare ancora dalla v3.4.31 (carry-over):
 - Fix sidebar `/settings#sidebar`

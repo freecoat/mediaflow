@@ -1,5 +1,66 @@
 # MediaFlow — Changelog
 
+## v3.4.33 — Cost report v2 (fonte ore = Booking) + PDF cliente + listino /quotes default open (1 maggio 2026 notte)
+
+Cantiere "Cost Report doppio" sospeso da v3.4.21 ora avviato. Step A+B+C consegnati; "Genera quote v2 dagli scostamenti" (Step D) volutamente fuori scope, ribadito.
+
+### Step A — Refactor `/cost-report/api/job/{id}` con fonte ore = Booking
+
+Coerente con la decisione architetturale "cost report (quote+booking+hardcost) ≠ timesheet (HR/buste paga)" salvata in memoria.
+
+**Calcolo nuovo**: `_bookings_hours_cost(job_id, db)` aggrega gli `BookingAssignment` del job tramite `compute_assignment_breakdown()` (engine v3.4.32) e li pesa con il `rate_per_hour` derivato da `Resource.hourly_rate` (fallback `daily_rate / 8`). Ritorna `total_hours`, `total_cost`, `breakdown_total` (regular/overtime/night/sunday/holiday/pending/pool), `by_resource` (lista per-risorsa con costo stimato).
+
+**Nuovi campi del response `summary`** (canonici v3.4.33):
+- `bookings_hours` — ore totali pianificate dai booking
+- `bookings_hours_cost` — costo equivalente delle ore (weighted_factor × rate)
+- `estimated_cost` — booking_cost + total_expenses
+- `margin` — quotato − estimated_cost
+
+**Campi legacy** (deprecati, mantenuti per back-compat):
+- `hours_cost_legacy_timesheet` — vecchio calcolo da Timesheet
+- `hours_cost` — alias storico (= legacy_timesheet, NON usato nel calcolo cost report)
+
+**Nuove sezioni del response**:
+- `bookings_breakdown` — breakdown totale ore per fascia
+- `bookings_by_resource` — array per-risorsa con rate, breakdown, cost_estimated
+
+### Step B — PDF cliente
+
+Nuovo endpoint `GET /cost-report/api/job/{id}/client-pdf` ritorna un PDF ReportLab della **rendicontazione cliente** che include:
+- Header con job code/title/cliente/periodo
+- **Lavorazioni preventivate**: descrizione, unità, q.tà preventivo→consuntivo, stato (Da fare/In corso/Completata/Sforamento)
+- **Lavorazioni extra** (is_extra=True): descrizione, unità, q.tà — header arancione per distinguere
+- **Riepilogo ore lavorate**: regolari + straordinarie + notturne + dom + festive + totale (ottenute dal breakdown booking)
+
+Esplicitamente **escluse**: hardcost, rate risorsa, costi-margine, fatturato/pagato. Il documento è di rendicontazione, non fatturazione.
+
+Funzione `app/services/pdf_export.py::generate_client_cost_report_pdf(report, company)` riusa pattern di `generate_invoice_pdf` (header, palette, font Helvetica, A4).
+
+### Step C — UI bottone export + KPI estesi
+
+Pagina `/cost-report`:
+- Nuovo bottone "📄 Esporta PDF cliente" accanto al selettore job (link diretto, target=_blank).
+- Stat-grid esteso a 8 KPI: aggiunte card **"Costo ore (booking)"** e **"Margine stimato"** (margine = quotato − costo_booking − spese, verde/rosso).
+
+### Bug fix correlati
+
+- `JobCostLine` mancava la relationship `price_item` esplicita: il `joinedload(JobCostLine.price_item)` falliva con `AttributeError` in SQLAlchemy 2.0. Aggiunta relationship lazy nel modello.
+
+### Listino /quotes default aperto
+
+Pannello laterale "📋 Listino" in `/quotes` ora **aperto di default** (prima era nascosto fino al primo click toggle). `localStorage.getItem('mf_side_pricelist_open')` interpretato così: `'0'` = chiuso (chiusura esplicita utente), qualsiasi altro valore o assente = aperto. La X del pannello memorizza la chiusura.
+
+Modal "Aggiungi voce" con ricerca listino + sidebar categorie + click-to-select era già presente (`#al-search` / `#al-cat-sidebar` / `#al-results` / pannello selezione editabile + bottone "voce libera"): nessun cambio richiesto, la (D) era già implementata.
+
+### Limiti riconosciuti / cantieri seguenti
+
+- **Brand & PDF customization** segnato come cantiere a parte (capitolo "configurabilità PDF" — nuova entità `BrandSettings` per-tenant con logo/legal/colors/font).
+- **Step D — "Genera quote v2 dagli scostamenti"** fuori scope confermato.
+- Il cost report attuale assume rate orario costante per risorsa. La gestione di **rate diversi per progetto** (vedi `JobResourceAssignment.agreed_hourly_rate`) non è ancora applicata al calcolo booking_cost.
+- **Capability AI `propose_working_hours_policy`** per popolare i preset CCNL Cinema (Distribuzione/Doppiaggio/Teatri di posa) restano da implementare. La struttura dati è già pronta da v3.4.32.2.
+
+---
+
 ## v3.4.32.2 — Patch v3.4.32.1: timeline align + paste GUI + governance overtime + scaglioni CCNL (1 maggio 2026 notte)
 
 Patch dopo test locale di v3.4.32.1. 4 fix raggruppati.

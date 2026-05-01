@@ -561,8 +561,12 @@ async function openEditor(id) {
   priceItems = await api('GET', '/pricelist/api/items');
   document.getElementById('quotes-list-card').classList.add('hidden');
   document.getElementById('quote-editor').classList.remove('hidden');
-  // Riapri pannello listino se l'utente l'aveva attivato
-  if (localStorage.getItem('mf_side_pricelist_open') === '1') {
+  // v3.4.33: pannello listino aperto di DEFAULT. L'utente può ancora
+  // chiuderlo con la ✕ — la chiusura viene memorizzata in localStorage.
+  // mf_side_pricelist_open vale: '0' = chiuso (esplicita chiusura utente),
+  // qualsiasi altro valore o assente = aperto (default).
+  const saved = localStorage.getItem('mf_side_pricelist_open');
+  if (saved !== '0') {
     openSidePricelist();
   }
 }

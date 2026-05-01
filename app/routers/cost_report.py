@@ -15,6 +15,7 @@ from app.models import (
 )
 from app.services.booking_cost import compute_assignment_breakdown, BookingBreakdown
 from app.services.working_hours import get_holidays
+from app.services.pdf_export import generate_client_cost_report_pdf
 
 router = APIRouter(prefix="/cost-report", tags=["cost_report"])
 
@@ -30,9 +31,98 @@ async def cost_report_page(request: Request, db: Session = Depends(get_db)):
     return _tpl().TemplateResponse("pages/cost_report.html", {"request": request, "jobs": jobs})
 
 
+def _resource_policy_for_cost(resource: Resource, db: Session) -> Optional[WorkingHoursPolicy]:
+    """Helper duplicato volutamente: la versione in planning router non è
+    importabile direttamente. Logica triviale, mantieniamo separato."""
+    if resource.working_hours_policy_id and resource.working_hours_policy:
+        return resource.working_hours_policy
+    return db.query(WorkingHoursPolicy).filter(
+        WorkingHoursPolicy.is_default == True  # noqa: E712
+    ).first()
+
+
+def _bookings_hours_cost(job_id: int, db: Session) -> dict:
+    """v3.4.33 — ore + costo derivati dai BOOKING del job (non più Timesheet).
+
+    Ritorna:
+      - total_hours: ore totali pianificate (escluse cancellate e pool not_done)
+      - total_cost: costo equivalente = weighted_factor × rate giornaliero/8 (per ora)
+      - breakdown_total: BookingBreakdown aggregato
+      - by_resource: lista breakdown per-risorsa con rate e costo
+    """
+    bookings = (
+        db.query(Booking).options(
+            joinedload(Booking.assignments).joinedload(BookingAssignment.resource),
+        )
+        .filter(
+            Booking.job_id == job_id,
+            Booking.status != BookingStatus.cancelled,
+        )
+        .all()
+    )
+    totals = BookingBreakdown()
+    by_resource: dict[int, dict] = {}
+    holidays_cache: dict = {}
+
+    def _hols(policy, y0, y1):
+        key = (id(policy), y0, y1)
+        if key not in holidays_cache:
+            holidays_cache[key] = get_holidays(policy, y0, y1)
+        return holidays_cache[key]
+
+    for b in bookings:
+        for a in b.assignments:
+            if not a.resource:
+                continue
+            policy = _resource_policy_for_cost(a.resource, db)
+            if not policy:
+                continue
+            hols = _hols(policy, a.start_datetime.year, a.end_datetime.year)
+            br = compute_assignment_breakdown(a, policy, hols, b)
+            totals.add(br)
+            rmap = by_resource.setdefault(a.resource.id, {
+                "resource_id": a.resource.id,
+                "resource_name": a.resource.name,
+                "daily_rate": a.resource.daily_rate or 0,
+                "hourly_rate": a.resource.hourly_rate or 0,
+                "breakdown": BookingBreakdown(),
+            })
+            rmap["breakdown"].add(br)
+
+    total_cost = 0.0
+    by_res_list = []
+    for r in by_resource.values():
+        b = r["breakdown"]
+        # rate orario: se hourly_rate noto, usa quello; altrimenti daily/8
+        rate_h = r["hourly_rate"] or (r["daily_rate"] / 8 if r["daily_rate"] else 0)
+        cost = b.weighted_factor * rate_h
+        total_cost += cost
+        by_res_list.append({
+            "resource_id": r["resource_id"],
+            "resource_name": r["resource_name"],
+            "daily_rate": r["daily_rate"],
+            "hourly_rate": r["hourly_rate"],
+            "rate_used_per_hour": round(rate_h, 2),
+            "breakdown": b.as_dict(),
+            "cost_estimated": round(cost, 2),
+        })
+    return {
+        "total_hours": round(totals.total_hours, 2),
+        "total_cost": round(total_cost, 2),
+        "breakdown_total": totals.as_dict(),
+        "by_resource": by_res_list,
+    }
+
+
 @router.get("/api/job/{job_id}")
 async def job_cost_report(job_id: int, db: Session = Depends(get_db)):
-    """Report completo: quotazione vs reale (accrued/expected), Over/Under."""
+    """Report completo: quotazione vs reale (accrued/expected), Over/Under.
+
+    v3.4.33: la fonte ore lavorate è ora **Booking** (non più Timesheet).
+    Il campo legacy `hours_cost` (da Timesheet) è ancora esposto per back-compat
+    ma rinominato `hours_cost_legacy_timesheet` per esplicitarne la deprecazione.
+    Nuovo campo `bookings_hours_cost` è quello canonico.
+    """
     job = db.query(Job).options(
         joinedload(Job.client),
         joinedload(Job.quote),
@@ -40,18 +130,22 @@ async def job_cost_report(job_id: int, db: Session = Depends(get_db)):
         joinedload(Job.resource_assignments).joinedload(JobResourceAssignment.resource),
     ).filter(Job.id == job_id).first()
     if not job: raise HTTPException(404, "Job non trovato")
-    
-    # Ore lavorate per risorsa
+
+    # v3.4.33 — Ore + costo derivati dai BOOKING (canonico)
+    bk_data = _bookings_hours_cost(job_id, db)
+
+    # Legacy: Timesheet aggregati (kept for back-compat). NON usato per cost_report
+    # ma riportato per debug/migrazione, non più visualizzato in UI.
     ts_data = db.query(
         Timesheet.user_id,
         func.sum(Timesheet.hours).label("hours"),
         func.sum(Timesheet.hours * Timesheet.hourly_rate).label("cost"),
     ).filter(Timesheet.job_id == job_id).group_by(Timesheet.user_id).all()
-    
+
     # Spese
     total_expenses = db.query(func.sum(Expense.amount)).filter(
         Expense.job_id == job_id).scalar() or 0
-    
+
     # Fatturato
     invoiced = db.query(func.sum(Invoice.total)).filter(
         Invoice.job_id == job_id,
@@ -60,13 +154,17 @@ async def job_cost_report(job_id: int, db: Session = Depends(get_db)):
     paid = db.query(func.sum(Invoice.total)).filter(
         Invoice.job_id == job_id, Invoice.status == InvoiceStatus.paid
     ).scalar() or 0
-    
+
     # Totali cost lines
     total_quoted = sum(l.total_quoted for l in job.cost_lines)
     total_accrued = sum(l.total_accrued for l in job.cost_lines)
     total_expected = sum(l.total_expected for l in job.cost_lines)
     total_actual_hours_cost = sum(r.cost or 0 for r in ts_data)
-    
+
+    # Margine = quotato - (costo booking + spese)
+    estimated_cost = bk_data["total_cost"] + (total_expenses or 0)
+    margin = total_quoted - estimated_cost
+
     return {
         "job": {
             "id": job.id, "code": job.code, "title": job.title,
@@ -83,10 +181,20 @@ async def job_cost_report(job_id: int, db: Session = Depends(get_db)):
             "total_expected": round(total_expected, 2),
             "over_under": round(job.budget_quoted - total_expected, 2),
             "total_expenses": round(total_expenses, 2),
-            "hours_cost": round(total_actual_hours_cost, 2),
+            # Canonico v3.4.33
+            "bookings_hours": bk_data["total_hours"],
+            "bookings_hours_cost": bk_data["total_cost"],
+            "estimated_cost": round(estimated_cost, 2),
+            "margin": round(margin, 2),
+            # Back-compat (deprecato, sarà rimosso in 4.x)
+            "hours_cost_legacy_timesheet": round(total_actual_hours_cost, 2),
+            "hours_cost": round(total_actual_hours_cost, 2),  # alias storico
             "invoiced": round(invoiced, 2),
             "paid": round(paid, 2),
         },
+        # v3.4.33 — Breakdown per fascia + per-risorsa dai booking
+        "bookings_breakdown": bk_data["breakdown_total"],
+        "bookings_by_resource": bk_data["by_resource"],
         "cost_lines": [
             {
                 "id": l.id, "description": l.description, "unit": l.unit,
@@ -319,3 +427,27 @@ async def discard_not_done_pool_booking(
     b.status = BookingStatus.cancelled
     db.commit()
     return {"ok": True, "id": b.id, "status": "cancelled"}
+
+
+# ── PDF cliente (v3.4.33) ─────────────────────────────────────────
+# Esporta una versione del cost report **filtrata per il cliente**: solo
+# lavorazioni quote + extra, ore previste vs consuntivate, NIENTE hardcost,
+# NIENTE rate risorsa, NIENTE costi/margine. Solo cosa serve al cliente per
+# verificare l'avanzamento del lavoro.
+
+@router.get("/api/job/{job_id}/client-pdf")
+async def cost_report_client_pdf(job_id: int, db: Session = Depends(get_db)):
+    """Genera il PDF cliente del cost report. Riusa `job_cost_report` per
+    raccogliere i dati e poi li passa a `generate_client_cost_report_pdf`
+    filtrando i campi sensibili (hardcost/rate/margine NON vengono mai
+    serializzati nel PDF — vedi pdf_export.py)."""
+    # Riusa il calcolo esistente
+    report = await job_cost_report(job_id, db)
+    pdf_bytes = generate_client_cost_report_pdf(report)
+    job_code = (report.get("job") or {}).get("code") or f"job-{job_id}"
+    filename = f"rendicontazione_{job_code}.pdf"
+    return Response(
+        content=pdf_bytes,
+        media_type="application/pdf",
+        headers={"Content-Disposition": f'inline; filename="{filename}"'},
+    )

@@ -16,6 +16,9 @@
   <button class="btn btn-secondary btn-sm" onclick="openModal('modal-assign-resource')" id="btn-assign" disabled>
     + Assegna risorsa
   </button>
+  <a id="btn-client-pdf" class="btn btn-secondary btn-sm" style="display:none;" target="_blank" rel="noopener">
+    📄 Esporta PDF cliente
+  </a>
 </div>
 
 <div id="report-area" class="hidden">
@@ -152,12 +155,21 @@ async function init() {
 
 async function loadReport() {
   const id = document.getElementById('job-select').value;
-  if (!id) { document.getElementById('report-area').classList.add('hidden'); document.getElementById('no-report').classList.remove('hidden'); return; }
+  if (!id) {
+    document.getElementById('report-area').classList.add('hidden');
+    document.getElementById('no-report').classList.remove('hidden');
+    document.getElementById('btn-client-pdf').style.display = 'none';
+    return;
+  }
   currentJobId = id;
   document.getElementById('btn-assign').disabled = false;
   currentReport = await api('GET', `/cost-report/api/job/${id}`);
   document.getElementById('report-area').classList.remove('hidden');
   document.getElementById('no-report').classList.add('hidden');
+  // v3.4.33 — bottone export PDF cliente attivo
+  const btn = document.getElementById('btn-client-pdf');
+  btn.href = `/cost-report/api/job/${id}/client-pdf`;
+  btn.style.display = '';
   renderKPIs(); renderCostLines(); renderResources(); renderTimesheets();
   renderBookingSummary(id);
 }
@@ -321,6 +333,8 @@ async function poolDiscard(bid) {
 function renderKPIs() {
   const s = currentReport.summary;
   const ov = s.over_under;
+  const margin = s.margin || 0;
+  // v3.4.33: 8 KPI inclusi i nuovi "Costo booking" e "Margine stimato"
   document.getElementById('kpi-grid').innerHTML = `
     <div class="stat-card"><div class="stat-label">Budget quotato</div>
       <div class="stat-value color-indigo mono" style="font-size:20px;">${fmtCurrency(s.budget_quoted)}</div></div>
@@ -331,6 +345,12 @@ function renderKPIs() {
       <div class="stat-sub">${ov >= 0 ? 'In budget' : 'Sforamento'}</div></div>
     <div class="stat-card"><div class="stat-label">Maturato</div>
       <div class="stat-value mono" style="font-size:20px;">${fmtCurrency(s.total_accrued)}</div></div>
+    <div class="stat-card"><div class="stat-label">Costo ore (booking)</div>
+      <div class="stat-value mono" style="font-size:20px;">${fmtCurrency(s.bookings_hours_cost || 0)}</div>
+      <div class="stat-sub">${(s.bookings_hours || 0).toFixed(1)}h pianificate</div></div>
+    <div class="stat-card"><div class="stat-label">Margine stimato</div>
+      <div class="stat-value mono" style="font-size:20px;color:${margin>=0?'var(--green)':'var(--rose)'};">${fmtCurrency(margin)}</div>
+      <div class="stat-sub">quotato − (costo ore + spese)</div></div>
     <div class="stat-card"><div class="stat-label">Fatturato</div>
       <div class="stat-value color-green mono" style="font-size:20px;">${fmtCurrency(s.invoiced)}</div></div>
     <div class="stat-card"><div class="stat-label">Pagato</div>

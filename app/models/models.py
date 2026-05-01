@@ -707,6 +707,9 @@ class JobCostLine(Base):
     work_date: Mapped[Optional[date]] = mapped_column(Date, nullable=True)
     notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     job: Mapped["Job"] = relationship(back_populates="cost_lines")
+    # v3.4.33 — relazione opzionale a PriceItem (mancava, causava AttributeError
+    # quando il cost_report tentava joinedload(JobCostLine.price_item)).
+    price_item: Mapped[Optional["PriceItem"]] = relationship(foreign_keys=[price_item_id])
 
 
 # ── PLANNING ─────────────────────────────────────────────────

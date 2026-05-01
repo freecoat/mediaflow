@@ -169,3 +169,207 @@ def generate_invoice_pdf(invoice: dict, lines: list[dict], company: dict = None)
 
     doc.build(story)
     return buf.getvalue()
+
+
+def generate_client_cost_report_pdf(report: dict, company: dict = None) -> bytes:
+    """v3.4.33 — Cost report **vista cliente** in PDF.
+
+    A differenza di `generate_invoice_pdf` (fatturazione), questo è un report
+    di rendicontazione: mostra solo cosa è stato fatto, niente importi finali
+    né margini interni. Solo lavorazioni quote + extra con ore previste/lavorate
+    e scostamento. NIENTE hardcost, NIENTE rate risorsa, NIENTE costi-margine.
+
+    `report` è il dict ritornato da `/cost-report/api/job/{id}` arricchito con:
+      - cost_lines: list of {description, unit, quantity_quoted, quantity_actual,
+                              unit_price, total_quoted, total_accrued, is_extra,
+                              category, notes}
+      - bookings_breakdown: dict con regular/overtime/night/sunday/holiday
+      - job: {code, title, client, start_date, end_date}
+    """
+    buf = BytesIO()
+    doc = SimpleDocTemplate(
+        buf, pagesize=A4,
+        leftMargin=20*mm, rightMargin=20*mm,
+        topMargin=20*mm, bottomMargin=20*mm,
+    )
+    styles = getSampleStyleSheet()
+    story = []
+
+    h1 = ParagraphStyle("h1", fontSize=22, textColor=INDIGO,
+                        fontName="Helvetica-Bold", spaceAfter=2*mm)
+    h2 = ParagraphStyle("h2", fontSize=11, textColor=BLACK,
+                        fontName="Helvetica-Bold", spaceAfter=1*mm)
+    body = ParagraphStyle("body", fontSize=9, textColor=BLACK,
+                          fontName="Helvetica", leading=13)
+    muted = ParagraphStyle("muted", fontSize=8, textColor=GRAY,
+                           fontName="Helvetica", leading=12)
+    right = ParagraphStyle("right", fontSize=9, textColor=BLACK,
+                           fontName="Helvetica", alignment=TA_RIGHT)
+
+    company_name = (company or {}).get("name", "MediaFlow")
+    company_info = (company or {}).get("info", "")
+
+    job = report.get("job", {})
+    job_code = job.get("code", "—")
+    job_title = job.get("title", "—")
+    client_name = job.get("client") or "—"
+    start = job.get("start_date") or "—"
+    end = job.get("end_date") or "—"
+
+    # ── Header ───────────────────────────────────────────────
+    header_data = [
+        [Paragraph(f"<b>{company_name}</b>", h1),
+         Paragraph("RENDICONTAZIONE",
+                   ParagraphStyle("title_label", fontSize=18,
+                                  textColor=INDIGO, fontName="Helvetica-Bold",
+                                  alignment=TA_RIGHT))],
+        [Paragraph(company_info.replace("\n", "<br/>") if company_info else "", muted),
+         Paragraph(
+             f"<b>Job: {job_code}</b><br/>"
+             f"{job_title}<br/>"
+             f"Periodo: {start} → {end}",
+             ParagraphStyle("meta", fontSize=9, textColor=BLACK,
+                            fontName="Helvetica", alignment=TA_RIGHT, leading=14)
+         )],
+    ]
+    header_table = Table(header_data, colWidths=[95*mm, 75*mm])
+    header_table.setStyle(TableStyle([
+        ("VALIGN", (0,0), (-1,-1), "TOP"),
+        ("BOTTOMPADDING", (0,0), (-1,-1), 4*mm),
+    ]))
+    story.append(header_table)
+    story.append(HRFlowable(width="100%", thickness=1, color=INDIGO, spaceAfter=4*mm))
+
+    # ── Cliente ──────────────────────────────────────────────
+    story.append(Paragraph("Cliente", muted))
+    story.append(Paragraph(f"<b>{client_name}</b>", h2))
+    story.append(Spacer(1, 6*mm))
+
+    # ── Lavorazioni quotate ──────────────────────────────────
+    quoted_lines = [l for l in (report.get("cost_lines") or []) if not l.get("is_extra")]
+    extra_lines = [l for l in (report.get("cost_lines") or []) if l.get("is_extra")]
+
+    def _row_qty(l):
+        qq = l.get("quantity_quoted") or 0
+        qa = l.get("quantity_actual") or 0
+        delta = qa - qq
+        sign = "+" if delta > 0 else ""
+        return f"{qq} → {qa} ({sign}{delta:.1f})" if delta else f"{qq}"
+
+    if quoted_lines:
+        story.append(Paragraph("<b>Lavorazioni preventivate</b>", h2))
+        col_w = [80*mm, 18*mm, 35*mm, 37*mm]
+        table_data = [[
+            Paragraph("<b>Descrizione</b>", ParagraphStyle("th", fontSize=8, fontName="Helvetica-Bold", textColor=WHITE)),
+            Paragraph("<b>Unità</b>",       ParagraphStyle("th", fontSize=8, fontName="Helvetica-Bold", textColor=WHITE, alignment=TA_CENTER)),
+            Paragraph("<b>Q.tà preventivo → consuntivo</b>", ParagraphStyle("th", fontSize=8, fontName="Helvetica-Bold", textColor=WHITE, alignment=TA_RIGHT)),
+            Paragraph("<b>Stato</b>",       ParagraphStyle("th", fontSize=8, fontName="Helvetica-Bold", textColor=WHITE, alignment=TA_CENTER)),
+        ]]
+        for l in quoted_lines:
+            qq = l.get("quantity_quoted") or 0
+            qa = l.get("quantity_actual") or 0
+            if qa == 0 and qq > 0:
+                stato = "Da fare"
+            elif qa < qq:
+                stato = "In corso"
+            elif qa == qq:
+                stato = "Completata"
+            else:
+                stato = "Sforamento"
+            cat = l.get("category") or ""
+            desc_html = f"{l.get('description', '')}"
+            if cat:
+                desc_html += f"<br/><font size=7 color='#888'>{cat}</font>"
+            table_data.append([
+                Paragraph(desc_html, body),
+                Paragraph(l.get("unit", ""), ParagraphStyle("c", fontSize=9, fontName="Helvetica", alignment=TA_CENTER)),
+                Paragraph(_row_qty(l), right),
+                Paragraph(stato, ParagraphStyle("c", fontSize=9, fontName="Helvetica", alignment=TA_CENTER)),
+            ])
+        line_table = Table(table_data, colWidths=col_w, repeatRows=1)
+        line_table.setStyle(TableStyle([
+            ("BACKGROUND",     (0,0), (-1,0), INDIGO),
+            ("ROWBACKGROUNDS", (0,1), (-1,-1), [WHITE, LIGHT]),
+            ("GRID",           (0,0), (-1,-1), 0.3, colors.HexColor("#e0e3f0")),
+            ("TOPPADDING",     (0,0), (-1,-1), 3*mm),
+            ("BOTTOMPADDING",  (0,0), (-1,-1), 3*mm),
+            ("LEFTPADDING",    (0,0), (-1,-1), 2*mm),
+            ("RIGHTPADDING",   (0,0), (-1,-1), 2*mm),
+            ("VALIGN",         (0,0), (-1,-1), "MIDDLE"),
+        ]))
+        story.append(line_table)
+        story.append(Spacer(1, 5*mm))
+
+    if extra_lines:
+        story.append(Paragraph("<b>Lavorazioni extra</b> <font color='#888'>(richieste oltre il preventivo originale)</font>", h2))
+        col_w = [110*mm, 22*mm, 38*mm]
+        ed = [[
+            Paragraph("<b>Descrizione</b>", ParagraphStyle("th", fontSize=8, fontName="Helvetica-Bold", textColor=WHITE)),
+            Paragraph("<b>Unità</b>",       ParagraphStyle("th", fontSize=8, fontName="Helvetica-Bold", textColor=WHITE, alignment=TA_CENTER)),
+            Paragraph("<b>Q.tà</b>",        ParagraphStyle("th", fontSize=8, fontName="Helvetica-Bold", textColor=WHITE, alignment=TA_RIGHT)),
+        ]]
+        for l in extra_lines:
+            ed.append([
+                Paragraph(str(l.get("description", "")), body),
+                Paragraph(l.get("unit", ""), ParagraphStyle("c", fontSize=9, fontName="Helvetica", alignment=TA_CENTER)),
+                Paragraph(str(l.get("quantity_actual") or l.get("quantity_quoted") or 0), right),
+            ])
+        et = Table(ed, colWidths=col_w, repeatRows=1)
+        et.setStyle(TableStyle([
+            ("BACKGROUND",     (0,0), (-1,0), colors.HexColor("#fb923c")),
+            ("ROWBACKGROUNDS", (0,1), (-1,-1), [WHITE, LIGHT]),
+            ("GRID",           (0,0), (-1,-1), 0.3, colors.HexColor("#e0e3f0")),
+            ("TOPPADDING",     (0,0), (-1,-1), 3*mm),
+            ("BOTTOMPADDING",  (0,0), (-1,-1), 3*mm),
+            ("LEFTPADDING",    (0,0), (-1,-1), 2*mm),
+            ("RIGHTPADDING",   (0,0), (-1,-1), 2*mm),
+        ]))
+        story.append(et)
+        story.append(Spacer(1, 5*mm))
+
+    # ── Riepilogo ore lavorate (da bookings) ─────────────────
+    bd = report.get("bookings_breakdown") or {}
+    summary = report.get("summary") or {}
+    bk_hours = summary.get("bookings_hours", 0)
+    if bk_hours and bk_hours > 0:
+        story.append(Paragraph("<b>Riepilogo ore lavorate</b>", h2))
+        rows = []
+        if bd.get("regular_hours"):
+            rows.append(("Ore regolari", f"{bd.get('regular_hours'):.2f}h"))
+        if bd.get("overtime_hours"):
+            rows.append(("Ore straordinarie", f"{bd.get('overtime_hours'):.2f}h"))
+        if bd.get("night_hours"):
+            rows.append(("Ore notturne", f"{bd.get('night_hours'):.2f}h"))
+        if bd.get("sunday_hours"):
+            rows.append(("Ore domenicali", f"{bd.get('sunday_hours'):.2f}h"))
+        if bd.get("holiday_hours"):
+            rows.append(("Ore festive", f"{bd.get('holiday_hours'):.2f}h"))
+        rows.append(("Totale", f"{bk_hours:.2f}h"))
+        td = []
+        for label, val in rows:
+            is_total = (label == "Totale")
+            td.append([
+                Paragraph(f"<b>{label}</b>" if is_total else label, body),
+                Paragraph(f"<b>{val}</b>" if is_total else val, right),
+            ])
+        ott = Table(td, colWidths=[120*mm, 50*mm])
+        ott.setStyle(TableStyle([
+            ("ALIGN",        (1,0), (1,-1), "RIGHT"),
+            ("LINEABOVE",    (0,-1), (-1,-1), 0.8, INDIGO),
+            ("TOPPADDING",   (0,0), (-1,-1), 2*mm),
+            ("BOTTOMPADDING",(0,0), (-1,-1), 2*mm),
+        ]))
+        story.append(ott)
+
+    # ── Footer ───────────────────────────────────────────────
+    story.append(Spacer(1, 12*mm))
+    story.append(HRFlowable(width="100%", thickness=0.5, color=GRAY, spaceAfter=2*mm))
+    story.append(Paragraph(
+        f"Documento generato da MediaFlow · {company_name} · "
+        f"Rendicontazione lavorazioni — non è una fattura",
+        ParagraphStyle("footer", fontSize=7, textColor=GRAY,
+                       fontName="Helvetica", alignment=TA_CENTER)
+    ))
+
+    doc.build(story)
+    return buf.getvalue()
