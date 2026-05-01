@@ -1,5 +1,11 @@
 # MediaFlow — Changelog
 
+## v3.4.34.4 — Listino allargato +35% (1 maggio 2026 notte tarda)
+
+`.al-side`: width 480→650px (>1400) e 440→600px (1024–1400). `#quote-editor.with-pricelist` padding-right 500→670px e 460→620px in proporzione. Più spazio per i risultati listino con drag handle e meta tags.
+
+---
+
 ## v3.4.34.3 — Critical Assumptions reagisce al toggle Listino (1 maggio 2026 notte tarda)
 
 Fix: la topbar editor (con Critical Assumptions inline) non si stringeva quando il pannello Listino flottante veniva aperto, sovrapponendosi visualmente al pannello.

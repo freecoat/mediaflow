@@ -121,9 +121,10 @@
        (topbar + body) via #quote-editor.with-pricelist, così anche
        Critical Assumptions in topbar non finisce sotto al pannello. */
     #quote-editor-body { display:grid; grid-template-columns: 1fr; gap:20px; align-items:start; }
-    #quote-editor.with-pricelist { padding-right: 500px; }
+    /* v3.4.34.4: pannello listino allargato +35% (480→650px @1024+, 440→600px @1024-1400) */
+    #quote-editor.with-pricelist { padding-right: 670px; }
     @media (max-width: 1400px) {
-      #quote-editor.with-pricelist { padding-right: 460px; }
+      #quote-editor.with-pricelist { padding-right: 620px; }
     }
     @media (max-width: 1024px) {
       /* Mobile: niente flottante, pannello in colonna naturale sotto */
@@ -434,7 +435,7 @@
     position: fixed;
     top: 80px;
     right: 20px;
-    width: 480px;
+    width: 650px;
     max-height: calc(100vh - 100px);
     display:flex; flex-direction:column;
     padding:0; overflow:hidden;
@@ -442,7 +443,7 @@
     box-shadow: 0 8px 32px rgba(0,0,0,.45);
   }
   @media (max-width: 1400px) {
-    .al-side { width: 440px; }
+    .al-side { width: 600px; }
   }
   @media (max-width: 1024px) {
     /* Mobile: torna a posizione naturale (in colonna sotto), non flottante */
