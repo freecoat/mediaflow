@@ -1,5 +1,37 @@
 # MediaFlow — Changelog
 
+## v3.4.37 — Round 2 Audit: barra avanzamento job (1 maggio 2026 notte profonda)
+
+Risposta alla richiesta diretta di Matteo: "barra progressi nei job in pianificazione in base a quanto è stato svolto nei booking".
+
+### Algoritmo
+
+`_compute_job_progress(db, job_id)` in `app/routers/planning.py`:
+- Itera su `BookingAssignment` join `Booking` con `Booking.job_id == job_id` e `status != cancelled`.
+- Calcola ore per assignment: `(end - start) / 3600`.
+- Esclude pool `not_done` non maturato (`execution_status=not_done` AND `count_in_costs=False`).
+- Somma `total_hours` (tutti i validi) e `done_hours` (solo `execution_status=done`).
+- `progress_pct = done_hours / total_hours * 100` (0 se nessun booking).
+
+### Endpoint
+
+- `GET /planning/api/jobs/{job_id}/progress` → `{progress_pct, done_hours, total_hours}`
+- `GET /planning/api/jobs?include_progress=true` aggiunge i 3 campi a ogni riga della lista (più lento, opt-in).
+
+### UI
+
+Tabella `/planning?view=jobs` ha nuova colonna **"Avanzamento"** tra "Stato" e "Apri":
+- Per ogni job, etichetta `pct%` + dettaglio `done_h / total_h`
+- Barra CSS larga `pct%`, color-coded: ≥100% verde, ≥50% indigo, >0 ambra, =0 grigio
+- Se nessun booking valido (total_hours=0), mostra "—"
+
+### Limitazioni note (Round 2)
+
+- Job con cost_lines orfane pre-v3.4.36 potrebbero dare progresso falso. Ora che v3.4.36 ha sistemato il lifecycle e v3.4.36 cleanup `[M]` è stato eseguito, il calcolo è coerente con i booking realmente attivi.
+- Il calcolo è **on-the-fly** (no cache). Per liste con molti job potrebbe essere lento — il flag `include_progress` è opt-in proprio per non rallentare la lista quando non serve.
+
+---
+
 ## v3.4.36 — Round 1 Audit: lifecycle Quote↔Job sano (1 maggio 2026 notte profonda)
 
 Risposta all'audit logico richiesto: il primo dei 3 round chiude i bug critici sul ciclo di vita Quote→Job→JobCostLine→Booking. Prima di questo bump, cancellare/modificare/aggiungere righe quote dopo l'approvazione del job lasciava JobCostLine orfani o disallineati. Ora il sync è automatico, con guardrail per job in stato terminale.

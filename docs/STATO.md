@@ -8,6 +8,10 @@
 
 ## Versione corrente
 
+**v3.4.37** — 1 maggio 2026 notte profonda — Round 2 Audit: barra avanzamento job
+
+Round 2 di 3 dell'audit. Endpoint `/planning/api/jobs/{id}/progress` + flag `?include_progress=true` su lista jobs. Colonna "Avanzamento" in `/planning?view=jobs` con barra CSS color-coded. Algoritmo: ore booking `done` / ore booking totali (esclusi cancelled e pool not_done).
+
 **v3.4.36** — 1 maggio 2026 notte profonda — Round 1 Audit: lifecycle Quote↔Job sano
 
 Round 1 di 3 dell'audit logico richiesto. Chiude i bug critici lifecycle (B1, B3, B4, B5, C2): cancellare/modificare/aggiungere righe quote dopo approvazione del job ora sincronizza correttamente JobCostLine. Soft-detach Booking/TimePunch su delete JobCostLine. Migrazione cleanup `[M]` per orfani esistenti. Round 2 (job progress bar) e Round 3 (hardening RBAC/FSM/invariants) restano da fare.

@@ -405,11 +405,12 @@
                 <th>Periodo</th>
                 <th>Budget</th>
                 <th>Stato</th>
+                <th style="width:140px;">Avanzamento</th>
                 <th></th>
               </tr>
             </thead>
             <tbody id="jobs-table">
-              <tr><td colspan="8" class="pl-empty">Caricamento…</td></tr>
+              <tr><td colspan="9" class="pl-empty">Caricamento…</td></tr>
             </tbody>
           </table>
         </div>
@@ -834,13 +835,32 @@ async function renderView(view) {
 // ── Jobs table ─────────────────────────────────────────────
 async function renderJobs() {
   const qs = buildQS();
-  const jobs = await api('GET', '/planning/api/jobs' + (qs ? '?'+qs : ''));
+  // v3.4.37: include_progress=true per la barra avanzamento
+  const sep = qs ? '&' : '?';
+  const jobs = await api('GET', '/planning/api/jobs' + (qs ? '?'+qs+'&include_progress=true' : '?include_progress=true'));
   const tbody = document.getElementById('jobs-table');
   if (!jobs.length) {
-    tbody.innerHTML = '<tr><td colspan="8" class="pl-empty">Nessun job</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="9" class="pl-empty">Nessun job</td></tr>';
     return;
   }
-  tbody.innerHTML = jobs.map(j => `
+  tbody.innerHTML = jobs.map(j => {
+    const pct = j.progress_pct != null ? j.progress_pct : 0;
+    const totH = j.total_hours || 0;
+    const doneH = j.done_hours || 0;
+    const barColor = pct >= 100 ? 'var(--green)' :
+                     pct >= 50 ? 'var(--indigo)' :
+                     pct > 0 ? 'var(--amber)' : 'var(--text3)';
+    const progressCell = totH > 0 ? `
+      <div style="display:flex;flex-direction:column;gap:3px;">
+        <div style="display:flex;justify-content:space-between;font-size:11px;color:var(--text2);">
+          <span class="mono">${pct}%</span>
+          <span class="mono" style="color:var(--text3);">${doneH}h / ${totH}h</span>
+        </div>
+        <div style="height:6px;background:var(--bg3);border-radius:3px;overflow:hidden;">
+          <div style="height:100%;width:${Math.min(pct, 100)}%;background:${barColor};transition:width .25s ease;"></div>
+        </div>
+      </div>` : '<span class="text-xs text-muted">—</span>';
+    return `
     <tr onclick='showJobDetail(${j.id})' style="cursor:pointer;">
       <td class="mono" style="font-size:12px;color:var(--text2);">${escapeHtml(j.code)}</td>
       <td style="font-weight:500;">${escapeHtml(j.title||'')}</td>
@@ -849,8 +869,10 @@ async function renderJobs() {
       <td class="text-sm text-muted">${fmtDate(j.start_date)} ${j.end_date ? '→ '+fmtDate(j.end_date) : ''}</td>
       <td class="mono text-sm">${j.budget ? fmtCurrency(j.budget) : '—'}</td>
       <td>${statusBadge(j.status)}</td>
+      <td>${progressCell}</td>
       <td onclick="event.stopPropagation()"><a class="btn btn-ghost btn-sm" href="/jobs/${j.id}">Apri</a></td>
-    </tr>`).join('');
+    </tr>`;
+  }).join('');
 }
 
 // ── Calendar (week/month) ──────────────────────────────────

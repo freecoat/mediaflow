@@ -8,7 +8,7 @@ from sqlalchemy import or_
 from app.database import get_db
 from app.models import (
     Job, JobStatus, Client, Project, Booking, BookingAssignment, BookingChange,
-    BookingStatus, BookingKind,
+    BookingStatus, BookingKind, BookingExecutionStatus,
     Resource, ResourceType, JobCostLine, Department, User,
     WorkingHoursPolicy, ResourceUnavailability, UnavailabilityKind, UnavailabilityStatus,
 )
@@ -124,6 +124,53 @@ async def create_client(
 
 # ── Job API ───────────────────────────────────────────────────────────
 
+def _compute_job_progress(db: Session, job_id: int) -> dict:
+    """v3.4.37 — Progresso job calcolato dai Booking.
+    progress_pct = ore execution_status='done' / ore totali (escluse cancelled
+    e not_done con count_in_costs=False). Ritorna 0 se nessun booking valido.
+    """
+    rows = (
+        db.query(BookingAssignment, Booking)
+        .join(Booking, BookingAssignment.booking_id == Booking.id)
+        .filter(
+            Booking.job_id == job_id,
+            Booking.status != BookingStatus.cancelled,
+        )
+        .all()
+    )
+    done_h = 0.0
+    total_h = 0.0
+    for a, b in rows:
+        if a.start_datetime and a.end_datetime and a.end_datetime > a.start_datetime:
+            h = (a.end_datetime - a.start_datetime).total_seconds() / 3600.0
+        else:
+            continue
+        # Salta pool not_done non conteggiato
+        is_pool = (
+            b.execution_status == BookingExecutionStatus.not_done and not b.count_in_costs
+        )
+        if is_pool:
+            continue
+        total_h += h
+        if b.execution_status == BookingExecutionStatus.done:
+            done_h += h
+    pct = round((done_h / total_h * 100) if total_h > 0 else 0, 1)
+    return {
+        "progress_pct": pct,
+        "done_hours": round(done_h, 2),
+        "total_hours": round(total_h, 2),
+    }
+
+
+@router.get("/api/jobs/{job_id}/progress")
+async def job_progress(job_id: int, db: Session = Depends(get_db)):
+    """v3.4.37 — Avanzamento del job calcolato sui Booking."""
+    j = db.query(Job).filter(Job.id == job_id).first()
+    if not j:
+        raise HTTPException(404, "Job non trovato")
+    return _compute_job_progress(db, job_id)
+
+
 @router.get("/api/jobs")
 async def list_jobs(
     status: Optional[JobStatus] = None,
@@ -133,9 +180,12 @@ async def list_jobs(
     q: Optional[str] = None,
     from_date: Optional[date] = None,
     to_date: Optional[date] = None,
+    include_progress: bool = False,
     db: Session = Depends(get_db),
 ):
-    """Lista job con filtri. Tenant filter implicito via project/client."""
+    """Lista job con filtri. Tenant filter implicito via project/client.
+    `include_progress=true` aggrega le ore booking per ogni job (più lento).
+    """
     qs = db.query(Job).options(joinedload(Job.client), joinedload(Job.project))
     if status:
         qs = qs.filter(Job.status == status)
@@ -161,8 +211,9 @@ async def list_jobs(
     if to_date:
         qs = qs.filter(or_(Job.start_date.is_(None), Job.start_date <= to_date))
     jobs = qs.order_by(Job.created_at.desc()).all()
-    return [
-        {
+    out = []
+    for j in jobs:
+        row = {
             "id": j.id, "code": j.code, "title": j.title,
             "status": j.status.value if hasattr(j.status, "value") else j.status,
             "client_id": j.client_id,
@@ -172,8 +223,10 @@ async def list_jobs(
             "start_date": j.start_date, "end_date": j.end_date,
             "budget": j.budget_quoted,
         }
-        for j in jobs
-    ]
+        if include_progress:
+            row.update(_compute_job_progress(db, j.id))
+        out.append(row)
+    return out
 
 
 @router.post("/api/jobs", deprecated=True)
