@@ -19,7 +19,16 @@ Sessione 1 maggio: 4 versioni chiuse in fila (v3.4.28→v3.4.31):
 
 ## In corso
 
-Tre cantieri attivi in parallelo (sessione 30 aprile sera):
+**Sessione 1 maggio chiusa.** Commit `9cd606f` non pushato (Matteo deve confermare push per pull-are sul Mac).
+
+Da testare sul Mac al prossimo pull:
+- Fix sidebar `/settings#sidebar` (auto-discovery + per-sezione)
+- Notifica `job_deadline_approaching` (strumenti `[T]` → riavvio server → 🔔)
+- Listino laterale + drag&drop in `/quotes`
+- Calendario complessivo in `/hr` (toggle "📅 Calendario complessivo")
+- Scheda tecnica progetto in `/projects/{id}` tab "🛠 Scheda tecnica" + link pubblico `/public/tech-sheet/{token}` con scadenza
+
+Cantieri rimasti aperti (precedenti):
 
 ### A) Cost Report doppio — sospeso a v3.4.21
 - ✅ v3.4.21 — Soglie overtime + moltiplicatori in `WorkingHoursPolicy`, engine `compute_overtime()`, endpoint `/hr/api/overtime`, UI settings
