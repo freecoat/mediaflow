@@ -27,6 +27,7 @@ echo  [I] Migra database esistente (workflow approvazione ferie/malattia) [v3.4.
 echo  [J] Migra database esistente (sistema permessi configurabili Role) [v3.4.23]
 echo  [K] Migra database esistente (permessi extra per-utente) [v3.4.25]
 echo  [L] Migra database esistente (Booking esecutivo: priorita+stato+overtime) [v3.4.32]
+echo  [M] Cleanup orfani lifecycle Quote/Job/Booking [v3.4.36]
 echo  [T] Seed Job di test per notifica deadline (scadenza fra 2 giorni) [v3.4.28]
 echo  [A] Apri cartella upload
 echo  [0] Esci
@@ -53,6 +54,7 @@ if /i "%scelta%"=="I" goto migrate_unav_approval
 if /i "%scelta%"=="J" goto migrate_roles_v2
 if /i "%scelta%"=="K" goto migrate_user_extra_perms
 if /i "%scelta%"=="L" goto migrate_booking_executive
+if /i "%scelta%"=="M" goto migrate_lifecycle_cleanup
 if /i "%scelta%"=="T" goto seed_test_deadline
 if /i "%scelta%"=="A" goto uploads
 if "%scelta%"=="0" exit /b
@@ -297,6 +299,21 @@ set /p conferma="Procedo? (s/n): "
 if /i "%conferma%"=="s" (
     call .venv\Scripts\activate.bat
     python scripts\migrate_booking_executive.py
+)
+pause & goto menu
+
+:migrate_lifecycle_cleanup
+echo.
+echo Cleanup orfani lifecycle:
+echo  [1] JobCostLine con quote_line_id che punta a riga quote inesistente
+echo  [2] Booking.job_cost_line_id che punta a JobCostLine inesistente -^> NULL
+echo  [3] TimePunch.job_cost_line_id che punta a JobCostLine inesistente -^> NULL
+echo Idempotente.
+echo.
+set /p conferma="Procedo? (s/n): "
+if /i "%conferma%"=="s" (
+    call .venv\Scripts\activate.bat
+    python scripts\migrate_lifecycle_cleanup.py
 )
 pause & goto menu
 

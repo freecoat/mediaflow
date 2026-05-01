@@ -1,5 +1,53 @@
 # MediaFlow — Changelog
 
+## v3.4.36 — Round 1 Audit: lifecycle Quote↔Job sano (1 maggio 2026 notte profonda)
+
+Risposta all'audit logico richiesto: il primo dei 3 round chiude i bug critici sul ciclo di vita Quote→Job→JobCostLine→Booking. Prima di questo bump, cancellare/modificare/aggiungere righe quote dopo l'approvazione del job lasciava JobCostLine orfani o disallineati. Ora il sync è automatico, con guardrail per job in stato terminale.
+
+### B1 — DELETE QuoteLine ora cascata a JobCostLine (+ soft-detach Booking/TimePunch)
+
+`DELETE /quotes/api/{quote_id}/lines/{line_id}` (`app/routers/quotes.py:514`):
+1. Trova tutte le `JobCostLine` con `quote_line_id=line_id`.
+2. Per ogni JobCostLine, blocca con 409 se `job.status` è `completed` o `invoiced` (no retroattive su lavorazioni consuntivate).
+3. Soft-detach: `Booking.job_cost_line_id` e `TimePunch.job_cost_line_id` → `NULL` (no FK rotti).
+4. Cancella la JobCostLine.
+5. Cancella la QuoteLine.
+
+`DELETE /jobs/api/{job_id}/cost-lines/{line_id}` (`app/routers/jobs.py:316`): stesso soft-detach Booking/TimePunch prima della cancellazione.
+
+### B3 — Auto-create JobCostLine su add QuoteLine post-Job
+
+`POST /quotes/api/{quote_id}/lines` (`app/routers/quotes.py:424`): dopo aver creato la nuova QuoteLine, se la quote ha `q.job` valorizzato e il job è in stato non terminale (`approved/active/on_hold/draft/quoting`), crea automaticamente la JobCostLine corrispondente con `quote_line_id=line.id`, `is_extra=False`, qty/unit/price clonati. Idempotente (skip se esiste già). Risposta arricchita con `job_cost_line_created: bool`.
+
+### B4 — Auto-sync update QuoteLine → JobCostLine
+
+`PUT /quotes/api/{quote_id}/lines/{line_id}` (`app/routers/quotes.py:502`): dopo recalc quote, se esiste JobCostLine collegata e job in stato non terminale, aggiorna `description`, `quantity_quoted`, `unit`, `unit_price`, `total_quoted`. Se job è `completed/invoiced/cancelled`, blocca con 409 + messaggio chiaro. `total_expected` NON viene sovrascritto (può essere stato modificato manualmente per stima a finire più aggressiva).
+
+### C2 — Margin cost report dinamico
+
+`cost_report.py`: il margine era già calcolato come `total_quoted - estimated_cost` (corretto), ma c'era confusione tra `Job.budget_quoted` (snapshot all'approvazione, statico) e il `total_quoted` vivo. Aggiornato il commento esplicativo nel codice e la sub-label UI: "Σ quotato vivo − (costo ore + spese)".
+
+### Migrazione cleanup `[M]`
+
+`scripts/migrate_lifecycle_cleanup.py`: pulizia orfani esistenti pre-v3.4.36 in 3 step idempotenti:
+1. JobCostLine con `quote_line_id` che punta a riga inesistente → cancellate (skip se `is_extra=True`).
+2. Booking con `job_cost_line_id` orfano → `NULL`.
+3. TimePunch con `job_cost_line_id` orfano → `NULL`.
+
+Voce `[M]` aggiunta a `strumenti.bat` e `strumenti.sh`.
+
+### B5 — Out of scope (sufficientemente coperto)
+
+L'altra strategia (FK `ondelete` SQL fisici) richiederebbe ricreazione tabelle SQLite. Lasciata per Round 3 (M1) se serve hardening DB-level. La logica applicativa attuale copre già tutti i casi noti.
+
+### Note edge case
+
+- **Round trip**: cancello QuoteLine → JobCostLine cancellata → Booking che la puntava ha `job_cost_line_id=NULL` ma `job_id` resta. Il booking è ancora valido come "ore generiche del job". Il cost report `_bookings_hours_cost` aggrega sempre dal `Booking.job_id`, quindi le ore continuano a contare.
+- **Aggiungo poi modifico**: aggiungo riga quote → JobCostLine creata (qty=X). Modifico la riga → JobCostLine aggiornata. Cancello → tutto pulito.
+- **Job in `completed`**: tentativi di modifica/cancellazione bloccati con 409. L'admin può duplicare il job o riaprirlo (rimanendo in `cancelled` → `approved` flow esistente in `quotes.py:40`).
+
+---
+
 ## v3.4.35 — Undo stack + Salva su /quotes editor (1 maggio 2026 notte tarda)
 
 Rete di sicurezza per le modifiche alla quotazione. L'auto-save al blur resta attivo, ma ora c'è un sistema undo + bottone Salva esplicito.

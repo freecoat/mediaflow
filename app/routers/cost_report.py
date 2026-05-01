@@ -161,7 +161,10 @@ async def job_cost_report(job_id: int, db: Session = Depends(get_db)):
     total_expected = sum(l.total_expected for l in job.cost_lines)
     total_actual_hours_cost = sum(r.cost or 0 for r in ts_data)
 
-    # Margine = quotato - (costo booking + spese)
+    # v3.4.36 (R1.4): margine dinamico = Σ JobCostLine.total_quoted (vivo)
+    # − (costo booking + spese). Non più contro Job.budget_quoted statico
+    # (quello resta come riferimento "originale" all'approvazione, ma può
+    # divergere da total_quoted quando si aggiungono extra cost lines).
     estimated_cost = bk_data["total_cost"] + (total_expenses or 0)
     margin = total_quoted - estimated_cost
 

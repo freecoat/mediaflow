@@ -464,8 +464,39 @@ async def add_quote_line(
     )
     db.add(line); db.flush()
     db.refresh(q)
-    _recalc_quote(q); db.commit()
-    return {"id": line.id, "total": line.total, "quote_total": q.total_with_vat}
+    _recalc_quote(q)
+
+    # v3.4.36 (R1.2): se la quote ha già un job approvato (post-conversione),
+    # auto-crea JobCostLine corrispondente per mantenere job e quote allineati.
+    # Idempotente: skip se esiste già JobCostLine con quote_line_id=line.id.
+    job_cost_line_created = False
+    if q.job and q.job.status not in (JobStatus.completed, JobStatus.invoiced, JobStatus.cancelled):
+        existing = db.query(JobCostLine).filter(
+            JobCostLine.quote_line_id == line.id
+        ).first()
+        if not existing:
+            db.add(JobCostLine(
+                job_id=q.job.id,
+                quote_line_id=line.id,
+                price_item_id=line.price_item_id,
+                description=line.description,
+                quantity_quoted=line.quantity,
+                quantity_actual=0.0,
+                unit=line.unit,
+                unit_price=line.unit_price,
+                total_quoted=line.total or 0.0,
+                total_accrued=0.0,
+                total_expected=line.total or 0.0,
+                is_billable=True,
+                is_extra=False,
+            ))
+            job_cost_line_created = True
+
+    db.commit()
+    return {
+        "id": line.id, "total": line.total, "quote_total": q.total_with_vat,
+        "job_cost_line_created": job_cost_line_created,
+    }
 
 
 @router.put("/api/{quote_id}/lines/{line_id}")
@@ -501,26 +532,78 @@ async def update_quote_line(
     q = db.query(Quote).options(
         joinedload(Quote.lines).joinedload(QuoteLine.price_item).joinedload(PriceItem.category)
     ).filter(Quote.id == quote_id).first()
-    _recalc_quote(q); db.commit()
+    _recalc_quote(q)
+
+    # v3.4.36 (R1.3): sync verso JobCostLine collegata, se presente.
+    # Blocca se job in stato terminale (completed/invoiced/cancelled).
+    job_cost_line_synced = False
+    jcl = db.query(JobCostLine).filter(JobCostLine.quote_line_id == line.id).first()
+    if jcl:
+        if jcl.job and jcl.job.status in (JobStatus.completed, JobStatus.invoiced, JobStatus.cancelled):
+            raise HTTPException(
+                409,
+                f"Modifica bloccata: il job {jcl.job.code} è in stato "
+                f"{jcl.job.status.value}. Riapri/duplica il job per modificare."
+            )
+        jcl.description = line.description
+        jcl.quantity_quoted = line.quantity
+        jcl.unit = line.unit
+        jcl.unit_price = line.unit_price
+        jcl.total_quoted = line.total or 0.0
+        # total_expected si aggiorna se non è ancora stato sovrascritto manualmente
+        # (heuristica: se total_expected == previous total_quoted, segue).
+        # Per sicurezza: lo lasciamo come riferimento iniziale (no sovrascrittura).
+        job_cost_line_synced = True
+
+    db.commit()
     return {
         "id": line.id, "total": line.total,
         "subtotal_gross": q.subtotal_gross, "subtotal": q.subtotal,
         "total_after_discount": q.total_after_discount,
         "total_with_vat": q.total_with_vat,
+        "job_cost_line_synced": job_cost_line_synced,
     }
 
 
 @router.delete("/api/{quote_id}/lines/{line_id}")
 async def delete_quote_line(quote_id: int, line_id: int, db: Session = Depends(get_db)):
+    """v3.4.36 (R1.1): cascade ai JobCostLine collegati. Per ogni JobCostLine
+    con quote_line_id=line_id, soft-detach i Booking/TimePunch (job_cost_line_id
+    → NULL) e poi cancella la JobCostLine. Blocca se job in stato terminale."""
     line = db.query(QuoteLine).filter(QuoteLine.id == line_id).first()
-    if not line: raise HTTPException(404)
+    if not line:
+        raise HTTPException(404)
+
+    # Trova JobCostLine collegate
+    cost_lines = db.query(JobCostLine).filter(
+        JobCostLine.quote_line_id == line_id
+    ).all()
+    for jcl in cost_lines:
+        # Blocca se il job è in stato terminale (no retroattive)
+        if jcl.job and jcl.job.status in (JobStatus.completed, JobStatus.invoiced):
+            raise HTTPException(
+                409,
+                f"Impossibile cancellare: il job {jcl.job.code} è in stato "
+                f"{jcl.job.status.value} e ha già consuntivato questa lavorazione."
+            )
+        # Soft-detach: Booking → SET NULL job_cost_line_id
+        db.query(Booking).filter(
+            Booking.job_cost_line_id == jcl.id
+        ).update({"job_cost_line_id": None}, synchronize_session=False)
+        # Soft-detach: TimePunch → SET NULL job_cost_line_id
+        db.query(TimePunch).filter(
+            TimePunch.job_cost_line_id == jcl.id
+        ).update({"job_cost_line_id": None}, synchronize_session=False)
+        db.delete(jcl)
+
     db.delete(line)
     q = db.query(Quote).options(
         joinedload(Quote.lines).joinedload(QuoteLine.price_item).joinedload(PriceItem.category)
     ).filter(Quote.id == quote_id).first()
     q.lines = [l for l in q.lines if l.id != line_id]
-    _recalc_quote(q); db.commit()
-    return {"ok": True}
+    _recalc_quote(q)
+    db.commit()
+    return {"ok": True, "cost_lines_deleted": len(cost_lines)}
 
 
 @router.post("/api/{quote_id}/convert-to-job")

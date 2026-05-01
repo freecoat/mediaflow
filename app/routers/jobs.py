@@ -315,6 +315,8 @@ async def update_cost_line(
 
 @router.delete("/api/{job_id}/cost-lines/{line_id}")
 async def delete_cost_line(job_id: int, line_id: int, db: Session = Depends(get_db)):
+    """v3.4.36 (R1.1): soft-detach Booking/TimePunch (SET NULL job_cost_line_id)
+    prima di cancellare per evitare FK orfani."""
     line = db.query(JobCostLine).filter(
         JobCostLine.id == line_id, JobCostLine.job_id == job_id
     ).first()
@@ -326,6 +328,13 @@ async def delete_cost_line(job_id: int, line_id: int, db: Session = Depends(get_
             "Le lavorazioni ereditate dalla quote non possono essere eliminate. "
             "Rimuovi prima la riga dalla quotazione, oppure marca questa come non fatturabile."
         )
+    # Soft-detach: Booking/TimePunch → SET NULL job_cost_line_id
+    db.query(Booking).filter(
+        Booking.job_cost_line_id == line_id
+    ).update({"job_cost_line_id": None}, synchronize_session=False)
+    db.query(TimePunch).filter(
+        TimePunch.job_cost_line_id == line_id
+    ).update({"job_cost_line_id": None}, synchronize_session=False)
     db.delete(line)
     db.commit()
     return {"ok": True}

@@ -350,7 +350,7 @@ function renderKPIs() {
       <div class="stat-sub">${(s.bookings_hours || 0).toFixed(1)}h pianificate</div></div>
     <div class="stat-card"><div class="stat-label">Margine stimato</div>
       <div class="stat-value mono" style="font-size:20px;color:${margin>=0?'var(--green)':'var(--rose)'};">${fmtCurrency(margin)}</div>
-      <div class="stat-sub">quotato − (costo ore + spese)</div></div>
+      <div class="stat-sub">Σ quotato vivo − (costo ore + spese)</div></div>
     <div class="stat-card"><div class="stat-label">Fatturato</div>
       <div class="stat-value color-green mono" style="font-size:20px;">${fmtCurrency(s.invoiced)}</div></div>
     <div class="stat-card"><div class="stat-label">Pagato</div>

@@ -8,6 +8,10 @@
 
 ## Versione corrente
 
+**v3.4.36** — 1 maggio 2026 notte profonda — Round 1 Audit: lifecycle Quote↔Job sano
+
+Round 1 di 3 dell'audit logico richiesto. Chiude i bug critici lifecycle (B1, B3, B4, B5, C2): cancellare/modificare/aggiungere righe quote dopo approvazione del job ora sincronizza correttamente JobCostLine. Soft-detach Booking/TimePunch su delete JobCostLine. Migrazione cleanup `[M]` per orfani esistenti. Round 2 (job progress bar) e Round 3 (hardening RBAC/FSM/invariants) restano da fare.
+
 **v3.4.35** — 1 maggio 2026 notte tarda — Undo stack + Salva su /quotes editor
 
 Stack undo client-side per add/delete/reorder voci e reorder categorie. Bottone "↺ Annulla" in topbar + toast post-azione con annulla cliccabile (5s). Bottone "💾 Salva" cosmetico (auto-save resta attivo).

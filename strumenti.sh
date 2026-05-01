@@ -46,6 +46,7 @@ while true; do
     echo "  [j] Migra database esistente (sistema permessi configurabili Role) [v3.4.23]"
     echo "  [k] Migra database esistente (permessi extra per-utente) [v3.4.25]"
     echo "  [l] Migra database esistente (Booking esecutivo: priorità+stato+overtime) [v3.4.32]"
+    echo "  [m] Cleanup orfani lifecycle Quote/Job/Booking [v3.4.36]"
     echo "  [t] Seed Job di test per notifica deadline (scadenza fra 2 giorni) [v3.4.28]"
     echo "  [a] Apri cartella upload"
     echo "  [0] Esci"
@@ -238,6 +239,18 @@ while true; do
             read -p "Procedo? (s/n): " conferma
             if [ "$conferma" = "s" ] || [ "$conferma" = "S" ]; then
                 python scripts/migrate_user_extra_permissions.py
+            fi
+            read -p "Premi INVIO per continuare..."
+            ;;
+        m|M)
+            echo ""
+            echo "Cleanup orfani lifecycle:"
+            echo " [1] JobCostLine con quote_line_id orfano"
+            echo " [2] Booking.job_cost_line_id orfano → NULL"
+            echo " [3] TimePunch.job_cost_line_id orfano → NULL"
+            read -p "Procedo? (s/n): " conferma
+            if [ "$conferma" = "s" ] || [ "$conferma" = "S" ]; then
+                python scripts/migrate_lifecycle_cleanup.py
             fi
             read -p "Premi INVIO per continuare..."
             ;;
