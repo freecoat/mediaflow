@@ -39,6 +39,7 @@ PERMISSIONS: Dict[str, Dict[str, List[str]]] = {
         "edit_planning_own":     ["Modifica i propri booking"],
         "edit_planning_all":     ["Modifica booking di tutti"],
         "assign_resources":      ["Assegna risorse a job (kanban)"],
+        "approve_overtime":      ["Approva straordinari sui booking"],
     },
     "HR / Timbrature": {
         "view_punches_own":       ["Visualizza proprie timbrature"],
@@ -85,6 +86,7 @@ PRESET_PERMISSIONS: Dict[str, List[str]] = {
         "view_clients", "edit_clients",
         "view_projects", "edit_projects", "create_projects",
         "view_planning", "edit_planning_own", "edit_planning_all", "assign_resources",
+        "approve_overtime",
         "view_punches_own", "view_punches_all", "edit_punches_own", "edit_punches_all",
         "approve_unavailability",
         "view_finance", "view_quotes", "edit_quotes", "view_pricelist", "edit_pricelist",
@@ -96,6 +98,7 @@ PRESET_PERMISSIONS: Dict[str, List[str]] = {
         "view_clients",
         "view_projects", "edit_projects", "create_projects",
         "view_planning", "edit_planning_own", "edit_planning_all", "assign_resources",
+        "approve_overtime",
         "view_punches_own", "view_punches_all", "edit_punches_own", "edit_punches_all",
         "approve_unavailability",
         "view_finance", "view_quotes", "edit_quotes", "view_pricelist",

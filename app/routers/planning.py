@@ -386,6 +386,12 @@ async def list_bookings(
                 "notes": b.notes,
                 "group_size": sizes.get(b.id, 1),
                 "group_position": pos_map.get(a.id, 1),
+                # v3.4.32 — booking esecutivo
+                "priority": b.priority.value if hasattr(b.priority, "value") else (b.priority or "normal"),
+                "execution_status": b.execution_status.value if hasattr(b.execution_status, "value") else (b.execution_status or "planned"),
+                "overtime_status": b.overtime_status.value if hasattr(b.overtime_status, "value") else (b.overtime_status or "none"),
+                "not_done_reason": b.not_done_reason,
+                "count_in_costs": bool(b.count_in_costs),
             }
         })
     return out
@@ -1292,3 +1298,390 @@ async def restore_booking(booking_id: int, db: Session = Depends(get_db)):
     _log_change(db, b.id, "restore", "Booking ripristinato", None)
     db.commit()
     return {"ok": True, "id": b.id}
+
+
+# ── Booking esecutivo (v3.4.32) ─────────────────────────────────────
+# Cambio priorità, cambio stato esecuzione (planned/in_progress/done/not_done),
+# estensione durata adattiva con cascade + detection overtime, approvazione
+# overtime con split-su-rifiuto.
+
+from app.models import (
+    BookingPriority, BookingExecutionStatus, BookingOvertimeStatus,
+    NotificationKind, NotificationSeverity,
+)
+from app.services import notifications as notif_svc
+from app.services.booking_cascade import (
+    extend_booking_adaptive, split_overtime_to_next_day,
+)
+from app.services.rbac import has_permission
+
+
+def _booking_short_label(b: Booking) -> str:
+    """Etichetta breve per titoli notifica."""
+    parts = []
+    if b.job and b.job.code:
+        parts.append(b.job.code)
+    if b.cost_line and b.cost_line.description:
+        parts.append(b.cost_line.description)
+    if not parts:
+        parts.append(f"#{b.id}")
+    when = b.start_datetime.strftime("%d/%m %H:%M") if b.start_datetime else ""
+    return " · ".join(parts) + (f" — {when}" if when else "")
+
+
+def _can_edit_booking_execution(request: Request, db: Session, booking: Booking) -> bool:
+    """Operatore può cambiare stato dei suoi booking; manager/producer/admin
+    di tutti."""
+    user = current_user_optional(request)
+    if is_elevated(user):
+        return True
+    own = scope_resource_id(db, user)
+    if own is None:
+        return False
+    return any(a.resource_id == own for a in booking.assignments)
+
+
+@router.patch("/api/bookings/{booking_id}/priority")
+async def update_booking_priority(
+    booking_id: int,
+    request: Request,
+    priority: BookingPriority = Form(...),
+    db: Session = Depends(get_db),
+):
+    b = db.query(Booking).filter(
+        Booking.id == booking_id,
+        Booking.tenant_id == CURRENT_TENANT,
+    ).first()
+    if not b:
+        raise HTTPException(404, "Booking non trovato")
+    _enforce_planning_scope(request, db, {a.resource_id for a in b.assignments})
+    old = b.priority.value if hasattr(b.priority, "value") else (b.priority or "normal")
+    b.priority = priority
+    _log_change(db, b.id, "priority", f"Priorità {old} → {priority.value}",
+                {"old": old, "new": priority.value})
+    db.commit()
+    return {"id": b.id, "priority": priority.value}
+
+
+@router.patch("/api/bookings/{booking_id}/execution")
+async def update_booking_execution(
+    booking_id: int,
+    request: Request,
+    execution_status: BookingExecutionStatus = Form(...),
+    not_done_reason: Optional[str] = Form(None),
+    db: Session = Depends(get_db),
+):
+    """Cambio stato esecuzione del booking. Su not_done richiede motivazione.
+    Su transizione → done o → not_done emette notifica a producer/manager.
+    Su → in_progress: silenzio (rumore)."""
+    b = db.query(Booking).options(joinedload(Booking.job)).filter(
+        Booking.id == booking_id,
+        Booking.tenant_id == CURRENT_TENANT,
+    ).first()
+    if not b:
+        raise HTTPException(404, "Booking non trovato")
+    if not _can_edit_booking_execution(request, db, b):
+        raise HTTPException(403, "Non puoi modificare lo stato di questo booking")
+    if execution_status == BookingExecutionStatus.not_done and not (not_done_reason or "").strip():
+        raise HTTPException(400, "Motivazione obbligatoria per stato 'Non fatto'")
+
+    user = current_user_optional(request)
+    old_status = b.execution_status
+    b.execution_status = execution_status
+    if execution_status == BookingExecutionStatus.not_done:
+        b.not_done_reason = (not_done_reason or "").strip()
+    else:
+        b.not_done_reason = None
+
+    summary_text = (
+        f"Esecuzione: {old_status.value if hasattr(old_status, 'value') else old_status}"
+        f" → {execution_status.value}"
+    )
+    _log_change(db, b.id, "execution", summary_text,
+                {"old": old_status.value if hasattr(old_status, "value") else old_status,
+                 "new": execution_status.value,
+                 "not_done_reason": b.not_done_reason})
+    db.commit()
+    db.refresh(b)
+
+    # Notifiche selettive
+    if execution_status in (BookingExecutionStatus.done, BookingExecutionStatus.not_done):
+        is_not_done = (execution_status == BookingExecutionStatus.not_done)
+        title = (
+            f"❌ Booking non fatto: {_booking_short_label(b)}"
+            if is_not_done
+            else f"✅ Booking completato: {_booking_short_label(b)}"
+        )
+        body = (
+            f"Motivazione: {b.not_done_reason}"
+            if is_not_done and b.not_done_reason else None
+        )
+        link = f"/jobs/{b.job_id}" if b.job_id else "/planning?view=jobs"
+        try:
+            notif_svc.notify_role(
+                db,
+                role_codes=["producer", "manager", "admin"],
+                exclude_user_ids=[user.id] if user else None,
+                kind=NotificationKind.booking_status_changed.value,
+                severity=(
+                    NotificationSeverity.action_required.value
+                    if is_not_done
+                    else NotificationSeverity.info.value
+                ),
+                title=title,
+                body=body,
+                link=link,
+                actor_user_id=user.id if user else None,
+                payload={
+                    "booking_id": b.id, "execution_status": execution_status.value,
+                    "not_done_reason": b.not_done_reason,
+                },
+            )
+        except Exception as e:
+            print(f"[booking_execution] notify failed: {e}")
+
+    return {
+        "id": b.id,
+        "execution_status": execution_status.value,
+        "not_done_reason": b.not_done_reason,
+    }
+
+
+@router.patch("/api/bookings/{booking_id}/extend")
+async def extend_booking(
+    booking_id: int,
+    request: Request,
+    delta_minutes: int = Form(...),
+    db: Session = Depends(get_db),
+):
+    """Estensione adattiva: cascade sui booking adiacenti dello stesso giorno
+    (stessa risorsa). Se il cascade fa entrare uno o più booking in fascia
+    overtime, quelli vengono marcati `overtime_status=pending` e gli
+    approvatori (permesso approve_overtime) ricevono notifica."""
+    b = db.query(Booking).options(
+        joinedload(Booking.assignments).joinedload(BookingAssignment.resource),
+        joinedload(Booking.job),
+    ).filter(
+        Booking.id == booking_id,
+        Booking.tenant_id == CURRENT_TENANT,
+    ).first()
+    if not b:
+        raise HTTPException(404, "Booking non trovato")
+    _enforce_planning_scope(request, db, {a.resource_id for a in b.assignments})
+
+    if abs(delta_minutes) < 1:
+        raise HTTPException(400, "delta_minutes troppo piccolo")
+    if abs(delta_minutes) > 24 * 60:
+        raise HTTPException(400, "delta_minutes oltre 24 ore non ammesso")
+
+    result = extend_booking_adaptive(b, delta_minutes, db)
+    if result.rejected:
+        raise HTTPException(409, result.reject_reason or "Estensione rifiutata")
+
+    # Notifiche overtime per i booking entrati in pending
+    user = current_user_optional(request)
+    for bid in result.overtime_pending_booking_ids:
+        bk = db.query(Booking).options(joinedload(Booking.job)).filter(Booking.id == bid).first()
+        if not bk:
+            continue
+        try:
+            notif_svc.notify(
+                db,
+                user_ids=_overtime_approver_ids(db, exclude=user.id if user else None),
+                kind=NotificationKind.booking_overtime_pending.value,
+                severity=NotificationSeverity.action_required.value,
+                title=f"⚠ Straordinario da approvare: {_booking_short_label(bk)}",
+                body=(
+                    "Un booking è stato esteso (cascade adattivo) ed è ora in fascia "
+                    "straordinaria. Approva o rifiuta dalla pagina del booking."
+                ),
+                link=f"/jobs/{bk.job_id}" if bk.job_id else "/planning?view=jobs",
+                actor_user_id=user.id if user else None,
+                payload={"booking_id": bk.id},
+            )
+        except Exception as e:
+            print(f"[extend_booking] notify overtime failed: {e}")
+
+    return result.as_dict()
+
+
+def _overtime_approver_ids(db: Session, exclude: Optional[int] = None) -> list[int]:
+    """Ritorna user_id di chi può approvare overtime (permesso approve_overtime)."""
+    users = db.query(User).filter(User.is_active == True).all()  # noqa: E712
+    return [u.id for u in users
+            if has_permission(u, "approve_overtime") and u.id != exclude]
+
+
+@router.post("/api/bookings/{booking_id}/overtime")
+async def decide_booking_overtime(
+    booking_id: int,
+    request: Request,
+    decision: str = Form(...),  # "approved" | "rejected"
+    reason: Optional[str] = Form(None),
+    db: Session = Depends(get_db),
+):
+    """Decisione approvatore overtime. Su rifiuto: split del booking → la parte
+    overtime diventa nuovo booking il giorno successivo (D1)."""
+    b = db.query(Booking).options(
+        joinedload(Booking.assignments).joinedload(BookingAssignment.resource),
+        joinedload(Booking.job),
+    ).filter(
+        Booking.id == booking_id,
+        Booking.tenant_id == CURRENT_TENANT,
+    ).first()
+    if not b:
+        raise HTTPException(404, "Booking non trovato")
+    user = current_user_optional(request)
+    if not has_permission(user, "approve_overtime"):
+        raise HTTPException(403, "Non hai il permesso di approvare straordinari")
+    if b.overtime_status != BookingOvertimeStatus.pending:
+        raise HTTPException(409, "Booking non in attesa di approvazione overtime")
+
+    decision = (decision or "").lower().strip()
+    if decision not in ("approved", "rejected"):
+        raise HTTPException(400, "decision deve essere 'approved' o 'rejected'")
+
+    new_booking_id: Optional[int] = None
+    if decision == "approved":
+        b.overtime_status = BookingOvertimeStatus.approved
+        _log_change(db, b.id, "overtime_approved",
+                    "Straordinario approvato",
+                    {"by_user_id": user.id if user else None, "reason": reason})
+        db.commit()
+    else:
+        # Split: la parte regolare resta, la parte overtime → nuovo booking domani
+        b.overtime_status = BookingOvertimeStatus.rejected
+        _log_change(db, b.id, "overtime_rejected",
+                    "Straordinario rifiutato — split al giorno successivo",
+                    {"by_user_id": user.id if user else None, "reason": reason})
+        db.commit()
+        db.refresh(b)
+        new_booking = split_overtime_to_next_day(b, db)
+        if new_booking:
+            new_booking_id = new_booking.id
+
+    # Notifica all'operatore (assegnatari) del booking
+    try:
+        operator_user_ids = []
+        for a in b.assignments:
+            if a.resource and a.resource.user_id:
+                operator_user_ids.append(a.resource.user_id)
+        if operator_user_ids:
+            outcome = "approvato" if decision == "approved" else "rifiutato"
+            extra = ""
+            if new_booking_id:
+                extra = f" — è stato creato un nuovo booking il giorno successivo (#{new_booking_id})"
+            notif_svc.notify(
+                db,
+                user_ids=operator_user_ids,
+                kind=NotificationKind.booking_overtime_resolved.value,
+                severity=NotificationSeverity.info.value,
+                title=f"Straordinario {outcome}: {_booking_short_label(b)}",
+                body=(reason or "") + extra,
+                link=f"/jobs/{b.job_id}" if b.job_id else "/planning?view=jobs",
+                actor_user_id=user.id if user else None,
+                payload={"booking_id": b.id, "decision": decision,
+                         "new_booking_id": new_booking_id},
+            )
+    except Exception as e:
+        print(f"[decide_overtime] notify operator failed: {e}")
+
+    return {
+        "id": b.id,
+        "overtime_status": b.overtime_status.value,
+        "new_booking_id": new_booking_id,
+    }
+
+
+@router.patch("/api/bookings/{booking_id}/count-in-costs")
+async def update_booking_count_in_costs(
+    booking_id: int,
+    request: Request,
+    count_in_costs: bool = Form(...),
+    db: Session = Depends(get_db),
+):
+    """Manager/producer decide se un booking not_done conta comunque nei costi
+    (pool not_done → recuperate). Cambia solo il flag count_in_costs.
+    Permesso: edit_planning_all."""
+    user = current_user_optional(request)
+    if not has_permission(user, "edit_planning_all"):
+        raise HTTPException(403, "Solo manager/producer possono gestire il pool not_done")
+    b = db.query(Booking).filter(
+        Booking.id == booking_id,
+        Booking.tenant_id == CURRENT_TENANT,
+    ).first()
+    if not b:
+        raise HTTPException(404, "Booking non trovato")
+    b.count_in_costs = bool(count_in_costs)
+    _log_change(db, b.id, "count_in_costs",
+                f"Pool not_done: count_in_costs → {b.count_in_costs}",
+                {"count_in_costs": b.count_in_costs})
+    db.commit()
+    return {"id": b.id, "count_in_costs": b.count_in_costs}
+
+
+# ── Endpoint "Le mie" arricchito (v3.4.32) ──────────────────────────
+# Restituisce solo i booking dell'utente loggato con tutto il contesto
+# necessario per la card interattiva (priority/execution_status/overtime/...).
+
+@router.get("/api/my-bookings")
+async def my_bookings(
+    request: Request,
+    from_date: Optional[datetime] = None,
+    to_date: Optional[datetime] = None,
+    today_only: bool = False,
+    db: Session = Depends(get_db),
+):
+    """Booking dell'utente loggato (via Resource collegata).
+
+    Restituisce dati arricchiti (priority/execution_status/overtime_status/notes/job)
+    pronti per la card "Le mie" e per la dashboard "I miei booking di oggi".
+    """
+    user = current_user_optional(request)
+    rid = scope_resource_id(db, user)
+    if rid is None:
+        return []
+    if today_only:
+        from datetime import date as _d, datetime as _dt
+        d = _d.today()
+        from_date = _dt.combine(d, datetime.min.time())
+        to_date = _dt.combine(d, datetime.max.time())
+
+    q = db.query(BookingAssignment).options(
+        joinedload(BookingAssignment.resource),
+        joinedload(BookingAssignment.booking).joinedload(Booking.job),
+        joinedload(BookingAssignment.booking).joinedload(Booking.cost_line),
+    ).join(Booking, BookingAssignment.booking_id == Booking.id).filter(
+        Booking.tenant_id == CURRENT_TENANT,
+        BookingAssignment.resource_id == rid,
+        Booking.status != BookingStatus.cancelled,
+    )
+    if from_date:
+        q = q.filter(BookingAssignment.end_datetime >= from_date)
+    if to_date:
+        q = q.filter(BookingAssignment.start_datetime <= to_date)
+    rows = q.order_by(BookingAssignment.start_datetime.asc()).all()
+
+    out = []
+    for a in rows:
+        b = a.booking
+        out.append({
+            "assignment_id": a.id,
+            "booking_id": b.id,
+            "title": _booking_title_for_assignment(b, a.resource.name if a.resource else "?"),
+            "start": a.start_datetime.isoformat(),
+            "end": a.end_datetime.isoformat(),
+            "duration_minutes": int(round((a.end_datetime - a.start_datetime).total_seconds() / 60)),
+            "job_id": b.job_id,
+            "job_code": b.job.code if b.job else None,
+            "job_title": b.job.title if b.job else None,
+            "cost_line_description": b.cost_line.description if b.cost_line else None,
+            "kind": b.kind.value if hasattr(b.kind, "value") else b.kind,
+            "status": b.status.value if hasattr(b.status, "value") else b.status,
+            "priority": b.priority.value if hasattr(b.priority, "value") else (b.priority or "normal"),
+            "execution_status": b.execution_status.value if hasattr(b.execution_status, "value") else (b.execution_status or "planned"),
+            "overtime_status": b.overtime_status.value if hasattr(b.overtime_status, "value") else (b.overtime_status or "none"),
+            "not_done_reason": b.not_done_reason,
+            "notes": b.notes,
+        })
+    return out

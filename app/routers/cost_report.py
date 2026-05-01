@@ -8,7 +8,13 @@ from datetime import date
 from sqlalchemy.orm import Session, joinedload
 from sqlalchemy import func
 from app.database import get_db
-from app.models import Job, JobCostLine, Timesheet, Expense, Invoice, InvoiceStatus, JobResourceAssignment
+from app.models import (
+    Job, JobCostLine, Timesheet, Expense, Invoice, InvoiceStatus, JobResourceAssignment,
+    Booking, BookingAssignment, BookingExecutionStatus, BookingOvertimeStatus, BookingStatus,
+    Resource, WorkingHoursPolicy,
+)
+from app.services.booking_cost import compute_assignment_breakdown, BookingBreakdown
+from app.services.working_hours import get_holidays
 
 router = APIRouter(prefix="/cost-report", tags=["cost_report"])
 
@@ -172,3 +178,144 @@ async def remove_resource_assignment(
     if not a: raise HTTPException(404)
     db.delete(a); db.commit()
     return {"ok": True}
+
+
+# ── Booking executive cost report (v3.4.32) ─────────────────────────
+# Aggrega i booking di un job per fascia (regular / overtime / pending /
+# notturno / festivo / domenica) + pool not_done (booking con
+# execution_status=not_done & count_in_costs=False, escluse dai totali).
+#
+# Nota strategica (vedi memoria project_costreport_vs_timesheet.md):
+# il cost report parte dai BOOKING, non dai TimePunch. Le timbrature sono
+# binario HR separato. Questo endpoint è il primo passo verso il rifacimento
+# del cost report; per ora coabita con il vecchio /api/job/{id} basato
+# su Timesheet.
+
+def _resource_policy(resource: Resource, db: Session) -> Optional[WorkingHoursPolicy]:
+    if resource.working_hours_policy_id and resource.working_hours_policy:
+        return resource.working_hours_policy
+    return db.query(WorkingHoursPolicy).filter(
+        WorkingHoursPolicy.is_default == True  # noqa: E712
+    ).first()
+
+
+@router.get("/api/job/{job_id}/booking-summary")
+async def job_booking_summary(job_id: int, db: Session = Depends(get_db)):
+    """Aggrega i booking del job per fascia oraria + pool not_done.
+
+    Ritorna:
+      - totals: BookingBreakdown cumulato per booking conteggiati
+      - pending_overtime: lista booking con overtime_status=pending (azione richiesta)
+      - not_done_pool: lista booking not_done con count_in_costs=False (pool)
+      - by_resource: breakdown per risorsa (per riga finanziaria)
+    """
+    job = db.query(Job).filter(Job.id == job_id).first()
+    if not job:
+        raise HTTPException(404, "Job non trovato")
+
+    bookings = (
+        db.query(Booking)
+        .options(
+            joinedload(Booking.assignments).joinedload(BookingAssignment.resource),
+            joinedload(Booking.cost_line),
+        )
+        .filter(
+            Booking.job_id == job_id,
+            Booking.status != BookingStatus.cancelled,
+        )
+        .all()
+    )
+
+    totals = BookingBreakdown()
+    by_resource: dict[int, dict] = {}
+    pending_overtime = []
+    not_done_pool = []
+
+    # holidays cache per anno (compute una sola volta)
+    holidays_cache: dict[tuple[int, int], set] = {}
+
+    def _get_hol(policy, y0, y1):
+        key = (id(policy), y0, y1)
+        if key not in holidays_cache:
+            holidays_cache[key] = get_holidays(policy, y0, y1)
+        return holidays_cache[key]
+
+    for b in bookings:
+        # Pending overtime: tracciato a parte (mostra ore stimate ma non sommate)
+        if b.overtime_status == BookingOvertimeStatus.pending:
+            pending_overtime.append({
+                "booking_id": b.id,
+                "start": b.start_datetime.isoformat() if b.start_datetime else None,
+                "end": b.end_datetime.isoformat() if b.end_datetime else None,
+                "cost_line": b.cost_line.description if b.cost_line else None,
+                "resources": [a.resource.name for a in b.assignments if a.resource],
+                "notes": b.notes,
+            })
+
+        # Pool not_done: tracciato a parte
+        if (b.execution_status == BookingExecutionStatus.not_done
+            and not b.count_in_costs):
+            tot_h = sum(
+                (a.end_datetime - a.start_datetime).total_seconds() / 3600.0
+                for a in b.assignments
+            )
+            not_done_pool.append({
+                "booking_id": b.id,
+                "start": b.start_datetime.isoformat() if b.start_datetime else None,
+                "end": b.end_datetime.isoformat() if b.end_datetime else None,
+                "cost_line": b.cost_line.description if b.cost_line else None,
+                "resources": [a.resource.name for a in b.assignments if a.resource],
+                "reason": b.not_done_reason,
+                "total_hours": round(tot_h, 2),
+            })
+            # Saltato dal totals (vedi compute_assignment_breakdown che riconosce il pool)
+
+        # Aggrega comunque tramite breakdown (gestisce internamente pool/pending)
+        for a in b.assignments:
+            if not a.resource:
+                continue
+            policy = _resource_policy(a.resource, db)
+            if not policy:
+                continue
+            hols = _get_hol(policy, a.start_datetime.year, a.end_datetime.year)
+            br = compute_assignment_breakdown(a, policy, hols, b)
+            totals.add(br)
+            rmap = by_resource.setdefault(a.resource.id, {
+                "resource_id": a.resource.id,
+                "resource_name": a.resource.name,
+                "rate": a.resource.daily_rate or a.resource.hourly_rate or 0,
+                "breakdown": BookingBreakdown(),
+            })
+            rmap["breakdown"].add(br)
+
+    return {
+        "job": {"id": job.id, "code": job.code, "title": job.title},
+        "totals": totals.as_dict(),
+        "by_resource": [
+            {
+                "resource_id": r["resource_id"],
+                "resource_name": r["resource_name"],
+                "rate": r["rate"],
+                "breakdown": r["breakdown"].as_dict(),
+            }
+            for r in by_resource.values()
+        ],
+        "pending_overtime": pending_overtime,
+        "not_done_pool": not_done_pool,
+    }
+
+
+@router.post("/api/job/{job_id}/not-done-pool/{booking_id}/discard")
+async def discard_not_done_pool_booking(
+    job_id: int, booking_id: int, db: Session = Depends(get_db),
+):
+    """Scarta definitivamente un booking not_done dal pool: cancella il booking
+    (status=cancelled). Le ore non risulteranno mai conteggiate."""
+    b = db.query(Booking).filter(
+        Booking.id == booking_id, Booking.job_id == job_id,
+    ).first()
+    if not b:
+        raise HTTPException(404, "Booking non trovato")
+    b.status = BookingStatus.cancelled
+    db.commit()
+    return {"ok": True, "id": b.id, "status": "cancelled"}

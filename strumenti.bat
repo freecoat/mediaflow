@@ -26,11 +26,12 @@ echo  [H] Migra database esistente (soglie/moltiplicatori straordinari) [v3.4.21
 echo  [I] Migra database esistente (workflow approvazione ferie/malattia) [v3.4.22]
 echo  [J] Migra database esistente (sistema permessi configurabili Role) [v3.4.23]
 echo  [K] Migra database esistente (permessi extra per-utente) [v3.4.25]
+echo  [L] Migra database esistente (Booking esecutivo: priorita+stato+overtime) [v3.4.32]
 echo  [T] Seed Job di test per notifica deadline (scadenza fra 2 giorni) [v3.4.28]
 echo  [A] Apri cartella upload
 echo  [0] Esci
 echo.
-set /p scelta="Scegli un'opzione (0-9, A, B, C, D, E, F, G, H, I, J, K, T): "
+set /p scelta="Scegli un'opzione (0-9, A, B, C, D, E, F, G, H, I, J, K, L, T): "
 
 if "%scelta%"=="1" goto avvia
 if "%scelta%"=="2" goto reset_db
@@ -51,6 +52,7 @@ if /i "%scelta%"=="H" goto migrate_overtime
 if /i "%scelta%"=="I" goto migrate_unav_approval
 if /i "%scelta%"=="J" goto migrate_roles_v2
 if /i "%scelta%"=="K" goto migrate_user_extra_perms
+if /i "%scelta%"=="L" goto migrate_booking_executive
 if /i "%scelta%"=="T" goto seed_test_deadline
 if /i "%scelta%"=="A" goto uploads
 if "%scelta%"=="0" exit /b
@@ -281,6 +283,20 @@ set /p conferma="Procedo? (s/n): "
 if /i "%conferma%"=="s" (
     call .venv\Scripts\activate.bat
     python scripts\migrate_user_extra_permissions.py
+)
+pause & goto menu
+
+:migrate_booking_executive
+echo.
+echo Migrazione: Booking esecutivo. Aggiunge a `bookings` priority,
+echo execution_status, not_done_reason, count_in_costs, overtime_status,
+echo original_end_datetime. Mappa permesso approve_overtime su admin/manager/producer.
+echo Idempotente.
+echo.
+set /p conferma="Procedo? (s/n): "
+if /i "%conferma%"=="s" (
+    call .venv\Scripts\activate.bat
+    python scripts\migrate_booking_executive.py
 )
 pause & goto menu
 

@@ -73,10 +73,19 @@
 
 </div>
 
-<!-- ── Prenotazioni di oggi ────────────────────────────────── -->
+<!-- ── I miei booking di oggi (v3.4.32, visibile se utente ha resource) ── -->
+<div class="card mt-3" id="my-bookings-card" style="display:none;">
+  <div class="card-header">
+    <span class="card-title">I miei booking di oggi</span>
+    <a href="/planning/?view=todo" class="btn btn-ghost btn-sm">Vai a "Le mie"</a>
+  </div>
+  <div id="my-bookings-host" style="padding:8px;"></div>
+</div>
+
+<!-- ── Booking di oggi (overview manager/admin) ──────────────── -->
 <div class="card mt-3">
   <div class="card-header">
-    <span class="card-title">Booking di oggi</span>
+    <span class="card-title">Booking di oggi · tutti</span>
     <a href="/planning/?view=calendar" class="btn btn-ghost btn-sm">Vai al calendario</a>
   </div>
   <div class="table-wrap">
@@ -86,15 +95,62 @@
           <th>Orario</th>
           <th>Risorsa</th>
           <th>Job</th>
-          <th>Stato</th>
+          <th>Priorità</th>
+          <th>Esecuzione</th>
+          <th>Straord.</th>
         </tr>
       </thead>
       <tbody id="bookings-tbody">
-        <tr><td colspan="4" class="text-muted" style="text-align:center;padding:20px;">Caricamento…</td></tr>
+        <tr><td colspan="6" class="text-muted" style="text-align:center;padding:20px;">Caricamento…</td></tr>
       </tbody>
     </table>
   </div>
 </div>
+
+<style>
+  /* Card "I miei booking di oggi" — riusa stili .todo-card del planning */
+  #my-bookings-host .todo-card { background: var(--bg-elev); border: 1px solid var(--border); border-left: 4px solid #6272f5; border-radius: 6px; padding: 10px 14px; margin-bottom: 8px; position: relative; }
+  #my-bookings-host .todo-card.prio-low    { border-left-color: #6b7280; }
+  #my-bookings-host .todo-card.prio-normal { border-left-color: #6272f5; }
+  #my-bookings-host .todo-card.prio-high   { border-left-color: #ef4444; }
+  #my-bookings-host .todo-card.exec-in_progress { box-shadow: 0 0 0 1px rgba(98,114,245,.4) inset; }
+  #my-bookings-host .todo-card.exec-done { opacity: .6; }
+  #my-bookings-host .todo-card.exec-not_done { opacity: .55; background: rgba(239,68,68,.04); }
+  #my-bookings-host .todo-card.ot-pending { box-shadow: 0 0 0 2px rgba(251,146,60,.55) inset; }
+  #my-bookings-host .when { font-size: 11px; text-transform: uppercase; color: var(--text3); font-variant-numeric: tabular-nums; }
+  #my-bookings-host .when.today { color: #fb923c; font-weight: 600; }
+  #my-bookings-host .what { font-size: 14px; font-weight: 500; margin-top: 2px; }
+  #my-bookings-host .meta { font-size: 12px; color: var(--text3); margin-top: 4px; }
+  #my-bookings-host .duration-strip { display:flex; align-items:center; gap:6px; margin-top:8px; padding:6px 8px; background: rgba(255,255,255,.02); border-radius: 4px; font-size: 12px; }
+  #my-bookings-host .dur-handle { background: rgba(98,114,245,.12); color: #6272f5; border: none; padding: 2px 8px; border-radius: 3px; font-size: 12px; font-weight: 700; cursor: pointer; }
+  #my-bookings-host .dur-handle:hover { background: rgba(98,114,245,.25); }
+  #my-bookings-host .actions { display:flex; gap:6px; margin-top:8px; flex-wrap:wrap; }
+  #my-bookings-host .act-btn { padding: 4px 10px; border-radius: 4px; border: 1px solid var(--border); background: transparent; color: var(--text2); font-size: 12px; cursor: pointer; }
+  #my-bookings-host .act-btn:hover { background: rgba(255,255,255,.04); color: var(--text); }
+  #my-bookings-host .act-btn.primary { background: #6272f5; color: #fff; border-color: #6272f5; }
+  #my-bookings-host .act-btn.success { background: #10b981; color: #fff; border-color: #10b981; }
+  #my-bookings-host .act-btn.danger { color: #ef4444; border-color: rgba(239,68,68,.4); }
+  #my-bookings-host .badges { display:flex; gap:6px; flex-wrap:wrap; margin-top:6px; }
+  #my-bookings-host .badge-prio, #my-bookings-host .badge-exec, #my-bookings-host .badge-ot { font-size: 10px; padding: 2px 8px; border-radius: 8px; font-weight: 700; text-transform: uppercase; }
+  #my-bookings-host .badge-prio.low    { background: rgba(107,114,128,.18); color: #9ca3af; }
+  #my-bookings-host .badge-prio.normal { background: rgba(98,114,245,.18); color: #8b9aff; }
+  #my-bookings-host .badge-prio.high   { background: rgba(239,68,68,.18); color: #fca5a5; }
+  #my-bookings-host .badge-exec.planned { background: rgba(98,114,245,.12); color: #8b9aff; }
+  #my-bookings-host .badge-exec.in_progress { background: rgba(251,146,60,.18); color: #fcd34d; }
+  #my-bookings-host .badge-exec.done { background: rgba(16,185,129,.18); color: #6ee7b7; }
+  #my-bookings-host .badge-exec.not_done { background: rgba(239,68,68,.18); color: #fca5a5; }
+  #my-bookings-host .badge-ot { background: rgba(251,146,60,.25); color: #fb923c; }
+  /* Badge stato esecuzione nella tabella generica */
+  .exec-badge { font-size: 10px; padding: 2px 8px; border-radius: 8px; font-weight: 700; text-transform: uppercase; }
+  .exec-badge.planned { background: rgba(98,114,245,.12); color: #8b9aff; }
+  .exec-badge.in_progress { background: rgba(251,146,60,.18); color: #fcd34d; }
+  .exec-badge.done { background: rgba(16,185,129,.18); color: #6ee7b7; }
+  .exec-badge.not_done { background: rgba(239,68,68,.18); color: #fca5a5; }
+  .prio-badge { font-size: 10px; padding: 2px 8px; border-radius: 8px; font-weight: 700; text-transform: uppercase; }
+  .prio-badge.low    { background: rgba(107,114,128,.18); color: #9ca3af; }
+  .prio-badge.normal { background: rgba(98,114,245,.18); color: #8b9aff; }
+  .prio-badge.high   { background: rgba(239,68,68,.18); color: #fca5a5; }
+</style>
 
 {% endblock %}
 
@@ -175,7 +231,7 @@ async function loadDashboard() {
   } catch(e) {}
 
   try {
-    // Bookings today
+    // Bookings today (overview generica) — con priority + execution_status + overtime
     const today = new Date();
     today.setHours(0,0,0,0);
     const tomorrow = new Date(today); tomorrow.setDate(tomorrow.getDate()+1);
@@ -183,21 +239,121 @@ async function loadDashboard() {
       `/planning/api/bookings?from_date=${today.toISOString()}&to_date=${tomorrow.toISOString()}`);
     const btbody = document.getElementById('bookings-tbody');
     if (bookings.length === 0) {
-      btbody.innerHTML = '<tr><td colspan="4" class="text-muted" style="text-align:center;padding:20px;">Nessun booking oggi</td></tr>';
+      btbody.innerHTML = '<tr><td colspan="6" class="text-muted" style="text-align:center;padding:20px;">Nessun booking oggi</td></tr>';
     } else {
+      const PL = { low:'Bassa', normal:'Normale', high:'Alta' };
+      const EL = { planned:'Pianificato', in_progress:'In corso', done:'Fatto', not_done:'Non fatto' };
       btbody.innerHTML = bookings.map(b => {
         const s = new Date(b.start); const e = new Date(b.end);
         const time = `${s.toLocaleTimeString('it-IT',{hour:'2-digit',minute:'2-digit'})} – ${e.toLocaleTimeString('it-IT',{hour:'2-digit',minute:'2-digit'})}`;
         const parts = b.title.split(' — ');
+        const ep = b.extendedProps || {};
+        const prio = ep.priority || 'normal';
+        const exec = ep.execution_status || 'planned';
+        const ot = ep.overtime_status || 'none';
+        const otCell = ot === 'pending' ? '<span class="exec-badge not_done">⚠ pending</span>' :
+                       ot === 'approved' ? '<span class="exec-badge done">approvato</span>' :
+                       ot === 'rejected' ? '<span class="exec-badge planned">rifiutato</span>' :
+                       '<span style="color:var(--text3); font-size:11px;">—</span>';
         return `<tr>
           <td class="mono text-sm">${time}</td>
-          <td>${parts[1] || '—'}</td>
-          <td>${parts[0] || '—'}</td>
-          <td>${statusBadge(b.extendedProps.status)}</td>
+          <td>${escapeHtml(parts[1] || '—')}</td>
+          <td>${escapeHtml(parts[0] || '—')}</td>
+          <td><span class="prio-badge ${prio}">${PL[prio]}</span></td>
+          <td><span class="exec-badge ${exec}">${EL[exec]}</span></td>
+          <td>${otCell}</td>
         </tr>`;
       }).join('');
     }
   } catch(e) {}
+
+  // ── I miei booking di oggi (v3.4.32) ────────────────────────
+  try {
+    const my = await api('GET', '/planning/api/my-bookings?today_only=true');
+    if (my && my.length) {
+      document.getElementById('my-bookings-card').style.display = '';
+      const host = document.getElementById('my-bookings-host');
+      host.innerHTML = my.map(it => renderMyBookingCard(it)).join('');
+    }
+  } catch(e) { /* nessuna resource collegata = ignore */ }
+}
+
+const _PL = { low:'Bassa', normal:'Normale', high:'Alta' };
+const _EL = { planned:'Pianificato', in_progress:'In corso', done:'Fatto', not_done:'Non fatto' };
+
+function _fmtDur(min) {
+  if (min < 60) return `${min}m`;
+  const h = Math.floor(min/60), m = min%60;
+  return m === 0 ? `${h}h` : `${h}h ${m}m`;
+}
+
+function renderMyBookingCard(it) {
+  const s = new Date(it.start), e = new Date(it.end);
+  const t = (d) => d.toLocaleTimeString('it-IT',{hour:'2-digit',minute:'2-digit'});
+  const prio = it.priority || 'normal';
+  const exec = it.execution_status || 'planned';
+  const ot = it.overtime_status || 'none';
+  const cls = ['todo-card', `prio-${prio}`, `exec-${exec}`];
+  if (ot === 'pending') cls.push('ot-pending');
+  const editable = (exec !== 'done' && exec !== 'not_done');
+  const meta = it.cost_line_description || it.job_code || '';
+  return `<div class="${cls.join(' ')}" data-bid="${it.booking_id}">
+    <div class="when today">Oggi · ${t(s)}–${t(e)}</div>
+    <div class="what">${escapeHtml(it.title || '')}</div>
+    ${meta ? '<div class="meta">'+escapeHtml(meta)+'</div>' : ''}
+    <div class="badges">
+      <span class="badge-prio ${prio}">⚑ ${_PL[prio]}</span>
+      <span class="badge-exec ${exec}">${_EL[exec]}</span>
+      ${ot === 'pending' ? '<span class="badge-ot">⚠ Straordinario in attesa</span>' : ''}
+    </div>
+    <div class="duration-strip">
+      <span style="color:var(--text3);">Durata</span>
+      <span style="font-weight:600; min-width:60px;">${_fmtDur(it.duration_minutes)}</span>
+      ${editable ? `
+        <button class="dur-handle" onclick="myExtend(${it.booking_id}, -30)">−30</button>
+        <button class="dur-handle" onclick="myExtend(${it.booking_id}, +30)">+30</button>
+        <button class="dur-handle" onclick="myExtend(${it.booking_id}, +60)">+60</button>
+      ` : ''}
+    </div>
+    <div class="actions">
+      ${exec !== 'in_progress' && editable ? `<button class="act-btn primary" onclick="mySetExec(${it.booking_id}, 'in_progress')">▶ Inizia</button>` : ''}
+      ${editable ? `<button class="act-btn success" onclick="mySetExec(${it.booking_id}, 'done')">✓ Fatto</button>` : ''}
+      ${editable ? `<button class="act-btn danger" onclick="myNotDone(${it.booking_id})">✗ Non fatto</button>` : ''}
+      ${(exec === 'done' || exec === 'not_done') ? `<button class="act-btn" onclick="mySetExec(${it.booking_id}, 'planned')">↺ Riapri</button>` : ''}
+    </div>
+  </div>`;
+}
+
+async function mySetExec(bid, status, reason) {
+  const fd = new FormData();
+  fd.append('execution_status', status);
+  if (reason) fd.append('not_done_reason', reason);
+  try {
+    await api('PATCH', `/planning/api/bookings/${bid}/execution`, fd);
+    toast('Stato aggiornato', 'success');
+    loadDashboard();
+  } catch(e) { toast(e.message || 'Errore', 'error'); }
+}
+
+async function myExtend(bid, delta) {
+  const fd = new FormData();
+  fd.append('delta_minutes', String(delta));
+  try {
+    const res = await api('PATCH', `/planning/api/bookings/${bid}/extend`, fd);
+    let msg = `Durata ${delta>0?'+':''}${delta}m`;
+    if (res.overtime_pending_booking_ids && res.overtime_pending_booking_ids.length) {
+      msg += ' — straordinario in attesa di approvazione';
+    }
+    toast(msg, 'success');
+    loadDashboard();
+  } catch(e) { toast(e.message || 'Errore', 'error'); }
+}
+
+function myNotDone(bid) {
+  const reason = prompt('Motivazione "Non fatto":');
+  if (reason && reason.trim()) {
+    mySetExec(bid, 'not_done', reason.trim());
+  }
 }
 
 loadDashboard();

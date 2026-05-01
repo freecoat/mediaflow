@@ -1,5 +1,99 @@
 # MediaFlow — Changelog
 
+## v3.4.32 — Booking esecutivo: priorità + stato esecuzione + workflow overtime + pozzo not_done (1 maggio 2026)
+
+Cantiere "booking come unità operativa". Trasforma il booking da pura intenzione di pianificazione a oggetto governabile dall'operatore: priorità visibile per colore, ciclo di vita planned→in_progress→done|not_done con motivazione, modifica durata adattiva con cascade intra-day, workflow approvazione straordinari basato su `WorkingHoursPolicy`, sezione cost report dedicata + pozzo ore non maturate.
+
+> **Distinzione strategica chiarita** (memoria `project_costreport_vs_timesheet.md`): cost report = quotazioni + booking + hardcost (lente cliente/finance/fatturazione). Timesheet/TimePunch = HR + amministrazione (lente consulente del lavoro/buste paga). Due binari separati comunicanti solo nel planning per disponibilità risorse. v3.4.32 è il primo passo del rifacimento del cost report verso questa visione.
+
+### Modello — 5 colonne nuove su `bookings`
+
+```
+priority               ENUM (low|normal|high)         default 'normal'
+execution_status       ENUM (planned|in_progress|     default 'planned'
+                              done|not_done)
+not_done_reason        TEXT NULL
+count_in_costs         BOOLEAN                        default 0
+overtime_status        ENUM (none|pending|            default 'none'
+                              approved|rejected)
+original_end_datetime  DATETIME NULL    (snapshot per supportare split overtime)
+```
+
+`execution_status` è **ortogonale** a `status` (tentative/confirmed/cancelled/completed): il primo è la lente operatore, il secondo l'intenzione di pianificazione.
+
+### NotificationKind nuovi
+
+- `booking_status_changed` → producer/manager/admin quando un operatore marca `done` (info) o `not_done` (action_required, motivazione nel body)
+- `booking_overtime_pending` → chi ha permesso `approve_overtime` quando un cascade extend porta booking in fascia overtime
+- `booking_overtime_resolved` → operatore (autori del booking) quando il manager approva/rifiuta lo straordinario
+
+### Permesso nuovo: `approve_overtime`
+
+Mappato sui ruoli built-in admin/manager/producer (operator/viewer no). Configurabile in `/admin/roles` come tutti gli altri permessi. La migrazione idempotente `[L]` aggiunge il permesso ai 3 ruoli esistenti senza toccare i ruoli custom.
+
+### Servizi nuovi
+
+**`app/services/booking_cost.py`** — engine costo per booking. Contrariamente a `overtime.py` (che opera sui TimePunch HR e usa la soglia giornaliera), qui l'overtime è basato sulla **fascia oraria** della policy: ore fuori da `morning_start..morning_end` + `afternoon_start..afternoon_end` sono overtime indipendentemente dal totale giornaliero. Più adatto al booking: l'operatore sa subito se sta lavorando in straordinario in base all'orario.
+
+`compute_assignment_breakdown(assignment, policy, holidays_set, booking)` ritorna `BookingBreakdown` con: `regular_hours`, `overtime_hours`, `night_hours` (sotto-quota di overtime), `sunday_hours`, `holiday_hours`, `pending_overtime_hours` (mostrate ma non pesate finché approved), `not_done_pool_hours` (escluse dal weighted), `weighted_factor` (ore equivalenti dopo coefficienti CCNL).
+
+Helper: `has_overtime_window(start, end, policy)`, `working_day_end(date, policy)`, `absolute_day_limit(date, policy)` (=`night_end` del giorno dopo, default 06:00 — D2=c).
+
+**`app/services/booking_cascade.py`** — cascade adattivo intra-day.
+- `extend_booking_adaptive(booking, delta_min, db)`: estende `booking.assignments` di Δ. Per ogni risorsa coinvolta, sposta in avanti i booking adiacenti dello stesso giorno (start ≥ vecchio_end). Mai slittamento al giorno successivo (D3). Se il cascade fa entrare uno o più booking in fascia overtime → `overtime_status=pending` automatico + audit log. Limite assoluto: nessun booking sfora `absolute_day_limit` (= `night_end` giorno dopo) → reject con messaggio.
+- `split_overtime_to_next_day(booking, db)`: usato su rifiuto overtime. La parte regolare (≤ `working_day_end`) resta sul giorno corrente, la coda overtime diventa nuovo Booking il giorno successivo da `morning_start` (D1).
+
+### Endpoint API
+
+- `PATCH /planning/api/bookings/{id}/priority` Form `priority` (low|normal|high)
+- `PATCH /planning/api/bookings/{id}/execution` Form `execution_status` + opzionale `not_done_reason` (obbligatoria se → not_done). Notifica producer/manager/admin sui passaggi → done | not_done. → in_progress: silenzioso.
+- `PATCH /planning/api/bookings/{id}/extend` Form `delta_minutes` (max ±1440). Ritorna `CascadeResult` con `moved_assignments`, `overtime_pending_booking_ids`, `rejected`, `reject_reason`. Notifica gli approvatori overtime per ogni booking entrato in pending.
+- `POST /planning/api/bookings/{id}/overtime` Form `decision` (approved|rejected) + opzionale `reason`. Approvato → ore conteggiate con `overtime_multiplier`. Rifiutato → split + nuovo booking giorno successivo. Notifica operatore con esito.
+- `PATCH /planning/api/bookings/{id}/count-in-costs` Form bool. Manager/producer flag pool not_done → True per recuperare le ore nei costi.
+- `GET /planning/api/my-bookings` (`today_only=true|false`) — endpoint dedicato per la card "Le mie" + dashboard "I miei booking di oggi". Arricchito con priority/execution_status/overtime_status/duration_minutes/job_code/cost_line_description.
+
+`GET /planning/api/bookings` (esistente) ora include `priority`, `execution_status`, `overtime_status`, `not_done_reason`, `count_in_costs` in `extendedProps`.
+
+### UI
+
+**`/planning` tab "Le mie"** — completamente riscritta. Card con bordo sinistro per priorità (grigio/blu/rosso), badge stato esecuzione, badge straordinario pending (bordo arancione pulsato), riga durata con bottoni `−30 / +30 / +60` (drag handle ± richiesto), select priorità inline, bottoni azione `▶ Inizia / ✓ Fatto / ✗ Non fatto / ↺ Riapri`. Modal motivazione su "Non fatto". Stati `done/not_done` mostrano opacità ridotta + lock azioni di cambio durata.
+
+**Dashboard `/`** — nuova card "I miei booking di oggi" sopra la tabella generica, visibile solo se utente ha `Resource` collegata. Stesse azioni di "Le mie". Tabella generica "Booking di oggi · tutti" estesa con colonne **Priorità**, **Esecuzione**, **Straord.** (richiesta esplicita: "Mostra gli stati di tutti i bookings nella dashboard dei manager").
+
+**Cost report `/cost-report` → sezione progetto** — due card nuove sotto i KPI:
+- **"⏱ Ore booking per fascia"** — KPI cards (Regolari, Straordinario approvato, Pending, Notturno, Domenica, Festivo, Ore equivalenti dopo coefficienti). Tabella per risorsa con costo stimato.
+- **"⏳ Pozzo ore non maturate"** — elenca booking `not_done` con `count_in_costs=False`. Per riga: "✓ Maturate" (flag count_in_costs=True → entra nei costi) / "🗑 Scarta" (booking → cancelled, ore mai conteggiate).
+
+Endpoint cost report: `GET /cost-report/api/job/{id}/booking-summary`, `POST /cost-report/api/job/{id}/not-done-pool/{bid}/discard`.
+
+### Migrazione `[L]` (idempotente)
+
+`scripts/migrate_booking_executive.py` aggiunge le 6 colonne via ALTER TABLE + mappa `approve_overtime` ai ruoli built-in admin/manager/producer (additivo, non sovrascrive). Voce `[L]` in `strumenti.bat`/`.sh`.
+
+Auto-migrate al boot: `_auto_migrate_columns()` in `main.py` controlla la presenza delle 6 colonne e le aggiunge se mancanti (lezione v3.4.25.1 — evita crash se utente fa pull senza lanciare migration). Nota: il default su SQLite richiede valori espliciti per le colonne enum (`'normal'`, `'planned'`, `'none'`).
+
+### Comportamento atteso
+
+| Azione operatore | Notifica | Audit log |
+|---|---|---|
+| Cambia priorità | nessuna | priority |
+| → in_progress | nessuna (rumore evitato) | execution |
+| → done | producer+manager+admin (info) | execution |
+| → not_done | producer+manager+admin (action_required, motivazione) | execution |
+| Estende +Δmin → cascade entra in overtime | approvatori overtime (action_required) | adaptive_extend + overtime_pending |
+| Estende +Δmin → sforerebbe night_end+1d | rifiutato 409 | nessun cambio |
+| Producer/Manager approva overtime | operatore (info) | overtime_approved |
+| Producer/Manager rifiuta overtime | operatore (info, +new_booking_id) | overtime_rejected + overtime_split |
+
+### Limiti riconosciuti / cantieri seguenti
+
+- Cost report `legacy` `/cost-report/api/job/{id}` ancora basato su `Timesheet` per le ore. Coabita con `/booking-summary`. Rifacimento completo del cost report (tutto da `Booking` + `Expense`) è cantiere a sé, da pianificare.
+- Coefficienti CCNL: oggi `WorkingHoursPolicy` ha valori "tipici Italia" (overtime 1.25, notte/dom 1.50, festivo 2.00). I CCNL specifici post-prod (Cinema, Pubblicità, ecc.) saranno seedabili come preset di policy in iterazione successiva. Memoria `project_normativa_ccnl.md` salvata.
+- Cascade: solo "stessa risorsa". Booking multi-risorsa con assignment di durata diversa: il cascade processa ogni assignment singolarmente. Conflitti tra risorse non gestiti (mantenuto comportamento esistente di `extend` che non fa conflict-check tra adjacenti già esistenti).
+- Pool not_done azione "↻ Riprogramma" non implementata in v3.4.32 (creazione nuovo booking sostitutivo). Per ora "Maturate" (count nei costi) o "Scarta" (cancellato).
+
+---
+
 ## v3.4.31 — Scheda tecnica progetto + link pubblico (1 maggio 2026)
 
 Cantiere "scheda tecnica" (G nel backlog). Workflow sheet di un progetto: catena di lavorazione (camere, audio, look, storage, dailies, crew, process). Schema flessibile JSON per varianti tra case di post diverse.

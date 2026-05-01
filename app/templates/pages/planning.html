@@ -39,13 +39,53 @@
   .agenda-evt .badge-src { font-size: 10px; padding: 2px 6px; border-radius: 8px; font-weight: 600; }
   .badge-src.booking { background: rgba(98,114,245,0.2); color: #6272f5; }
   .badge-src.punch { background: rgba(156,163,175,0.2); color: #aaa; }
-  .todo-card { background: var(--bg-elev); border: 1px solid var(--border); border-left: 4px solid #6272f5; border-radius: 6px; padding: 10px 14px; margin-bottom: 8px; }
-  .todo-card.late { border-left-color: #ef4444; }
-  .todo-card.today { border-left-color: #fb923c; }
-  .todo-card.upcoming { border-left-color: #2ec4b6; }
-  .todo-card .when { font-size: 11px; text-transform: uppercase; color: var(--text3); }
+  /* ── Card "Le mie" (booking esecutivo, v3.4.32) ─────────────── */
+  .todo-card { background: var(--bg-elev); border: 1px solid var(--border); border-left: 4px solid #6272f5; border-radius: 6px; padding: 10px 14px; margin-bottom: 8px; position: relative; }
+  /* Priorità: bordo sinistro */
+  .todo-card.prio-low    { border-left-color: #6b7280; }
+  .todo-card.prio-normal { border-left-color: #6272f5; }
+  .todo-card.prio-high   { border-left-color: #ef4444; }
+  /* Stato esecuzione: opacità + accent */
+  .todo-card.exec-in_progress { box-shadow: 0 0 0 1px rgba(98,114,245,.4) inset; }
+  .todo-card.exec-done { opacity: .6; }
+  .todo-card.exec-not_done { opacity: .55; background: rgba(239,68,68,.04); }
+  /* Overtime pending = pulse warning */
+  .todo-card.ot-pending { box-shadow: 0 0 0 2px rgba(251,146,60,.55) inset; }
+  .todo-card .when { font-size: 11px; text-transform: uppercase; color: var(--text3); font-variant-numeric: tabular-nums; }
+  .todo-card .when.late { color: #ef4444; font-weight: 600; }
+  .todo-card .when.today { color: #fb923c; font-weight: 600; }
   .todo-card .what { font-size: 14px; font-weight: 500; margin-top: 2px; }
   .todo-card .meta { font-size: 12px; color: var(--text3); margin-top: 4px; }
+  .todo-card .duration-strip { display:flex; align-items:center; gap:6px; margin-top:8px; padding:6px 8px; background: rgba(255,255,255,.02); border-radius: 4px; font-size: 12px; }
+  .todo-card .duration-strip .dur-label { color: var(--text3); }
+  .todo-card .duration-strip .dur-value { font-weight: 600; color: var(--text); font-variant-numeric: tabular-nums; min-width: 80px; }
+  .todo-card .duration-strip .dur-handle { background: rgba(98,114,245,.12); color: #6272f5; border: none; padding: 2px 8px; border-radius: 3px; font-size: 12px; font-weight: 700; cursor: pointer; }
+  .todo-card .duration-strip .dur-handle:hover:not(:disabled) { background: rgba(98,114,245,.25); }
+  .todo-card .duration-strip .dur-handle:disabled { opacity: .35; cursor: not-allowed; }
+  .todo-card .actions { display:flex; gap:6px; margin-top:8px; flex-wrap:wrap; }
+  .todo-card .act-btn { padding: 4px 10px; border-radius: 4px; border: 1px solid var(--border); background: transparent; color: var(--text2); font-size: 12px; cursor: pointer; transition: all .12s ease; }
+  .todo-card .act-btn:hover { background: rgba(255,255,255,.04); color: var(--text); }
+  .todo-card .act-btn.primary { background: #6272f5; color: #fff; border-color: #6272f5; }
+  .todo-card .act-btn.primary:hover { background: #7585ff; }
+  .todo-card .act-btn.success { background: #10b981; color: #fff; border-color: #10b981; }
+  .todo-card .act-btn.success:hover { background: #34d399; }
+  .todo-card .act-btn.danger { color: #ef4444; border-color: rgba(239,68,68,.4); }
+  .todo-card .act-btn.danger:hover { background: rgba(239,68,68,.1); }
+  .todo-card .act-btn.active { box-shadow: 0 0 0 2px rgba(98,114,245,.4); }
+  .todo-card .badges { display:flex; gap:6px; align-items:center; flex-wrap:wrap; margin-top:6px; }
+  .todo-card .badge-prio { font-size: 10px; padding: 2px 8px; border-radius: 8px; font-weight: 700; text-transform: uppercase; letter-spacing: .3px; }
+  .todo-card .badge-prio.low    { background: rgba(107,114,128,.18); color: #9ca3af; }
+  .todo-card .badge-prio.normal { background: rgba(98,114,245,.18); color: #8b9aff; }
+  .todo-card .badge-prio.high   { background: rgba(239,68,68,.18); color: #fca5a5; }
+  .todo-card .badge-exec { font-size: 10px; padding: 2px 8px; border-radius: 8px; font-weight: 700; text-transform: uppercase; }
+  .todo-card .badge-exec.planned { background: rgba(98,114,245,.12); color: #8b9aff; }
+  .todo-card .badge-exec.in_progress { background: rgba(251,146,60,.18); color: #fcd34d; }
+  .todo-card .badge-exec.done { background: rgba(16,185,129,.18); color: #6ee7b7; }
+  .todo-card .badge-exec.not_done { background: rgba(239,68,68,.18); color: #fca5a5; }
+  .todo-card .badge-ot { font-size: 10px; padding: 2px 8px; border-radius: 8px; font-weight: 700; background: rgba(251,146,60,.25); color: #fb923c; }
+  .todo-card .badge-ot.approved { background: rgba(16,185,129,.18); color: #6ee7b7; }
+  .todo-card .badge-ot.rejected { background: rgba(107,114,128,.18); color: #9ca3af; }
+  .todo-card .not-done-reason { margin-top: 6px; padding: 6px 10px; background: rgba(239,68,68,.06); border-left: 2px solid #ef4444; border-radius: 3px; font-size: 12px; color: #fca5a5; }
   #cal-host, #ag-host, #todo-host { min-height: 600px; }
   #tl-host { min-height: 600px; }
   .cal-bar { display:flex; gap:6px; margin-bottom:8px; flex-wrap: wrap; }
@@ -852,42 +892,179 @@ async function renderAgenda() {
   host.innerHTML = html;
 }
 
-// ── Todo "Le mie" ──────────────────────────────────────────
-// Lista attività programmate (booking + timbrature) per la risorsa loggata.
-// Riepilogo ore + richiesta ferie/malattia stanno in /hr/ "Le mie ore".
+// ── Todo "Le mie" (booking esecutivo, v3.4.32) ─────────────
+// Card interattiva per i propri booking: priorità (bordo colorato),
+// stato esecuzione (planned/in_progress/done/not_done), drag handle ±
+// durata con cascade adattivo, badge overtime pending.
+const PRIO_LABEL = { low: 'Bassa', normal: 'Normale', high: 'Alta' };
+const EXEC_LABEL = { planned: 'Pianificato', in_progress: 'In corso', done: 'Fatto', not_done: 'Non fatto' };
+
+function tdFmtDuration(min) {
+  if (min < 60) return `${min}m`;
+  const h = Math.floor(min / 60), m = min % 60;
+  return m === 0 ? `${h}h` : `${h}h ${m}m`;
+}
+
+function tdTimeLabel(startIso, endIso) {
+  const s = new Date(startIso), e = new Date(endIso);
+  const t = (d) => d.toLocaleTimeString('it-IT', {hour:'2-digit', minute:'2-digit'});
+  return `${t(s)}–${t(e)}`;
+}
+
 async function renderTodo() {
   const host = document.getElementById('todo-host');
   if (!CURRENT_RESOURCE_ID) {
     host.innerHTML = '<div class="pl-empty">Nessuna risorsa associata al tuo utente. Chiedi a un admin di collegare un Resource al tuo utente in <code>/admin/users</code>.</div>';
     return;
   }
+  // Endpoint dedicato: arricchito con priority/execution_status/overtime_status.
   const fp = getFilterParams();
-  fp.resource_id = CURRENT_RESOURCE_ID;
+  // Filtri date eventuali, ma mostriamo di default tutto il range (passato+futuro)
   const qs = new URLSearchParams(fp).toString();
-  const [bookings, punches] = await Promise.all([
-    api('GET', '/planning/api/bookings?'+qs),
-    api('GET', '/hr/api/punches?format=fullcalendar&'+qs),
-  ]);
-  const all = [...bookings, ...punches].filter(e => e.start);
-  all.sort((a,b) => new Date(a.start) - new Date(b.start));
-  if (!all.length) { host.innerHTML = '<div class="pl-empty">Nessuna attività programmata per te. Per richieste ferie/malattia → <a href="/hr/">Le mie ore</a>.</div>'; return; }
+  const items = await api('GET', '/planning/api/my-bookings' + (qs ? '?'+qs : ''));
+  if (!items || !items.length) {
+    host.innerHTML = '<div class="pl-empty">Nessun booking per te. Per richieste ferie/malattia → <a href="/hr/">Le mie ore</a>.</div>';
+    return;
+  }
   const today = new Date(); today.setHours(0,0,0,0);
   const tomorrow = new Date(today); tomorrow.setDate(today.getDate()+1);
+
   host.innerHTML = '<div style="padding:8px 12px; background:rgba(98,114,245,0.06); border-radius:6px; margin-bottom:10px; font-size:12px; color:var(--text2);">💡 Per richieste ferie/malattia e riepilogo ore → <a href="/hr/">Le mie ore</a></div>' +
-    all.map(e => {
-      const s = new Date(e.start);
-      let cls = 'upcoming', when = s.toLocaleDateString('it-IT',{weekday:'short',day:'numeric',month:'short'});
-      if (s < today) { cls = 'late'; when = 'In ritardo · ' + when; }
-      else if (s < tomorrow) { cls = 'today'; when = 'Oggi · ' + s.toLocaleTimeString('it-IT',{hour:'2-digit',minute:'2-digit'}); }
-      const meta = (e.extendedProps && e.extendedProps.cost_line_description)
-        ? e.extendedProps.cost_line_description
-        : ((e.extendedProps && e.extendedProps.kind) || '');
-      return `<div class="todo-card ${cls}">
-        <div class="when">${when}</div>
-        <div class="what">${escapeHtml(e.title || '')}</div>
-        ${meta ? '<div class="meta">'+escapeHtml(meta)+'</div>' : ''}
-      </div>`;
-    }).join('');
+    items.map(it => renderTodoCard(it, today, tomorrow)).join('');
+}
+
+function renderTodoCard(it, today, tomorrow) {
+  const s = new Date(it.start);
+  let whenCls = '', when = s.toLocaleDateString('it-IT',{weekday:'short', day:'numeric', month:'short'});
+  if (s < today) { whenCls = 'late'; when = 'In ritardo · ' + when; }
+  else if (s < tomorrow) { whenCls = 'today'; when = 'Oggi · ' + tdTimeLabel(it.start, it.end); }
+  else { when = when + ' · ' + tdTimeLabel(it.start, it.end); }
+
+  const prio = it.priority || 'normal';
+  const exec = it.execution_status || 'planned';
+  const ot = it.overtime_status || 'none';
+  const cls = ['todo-card', `prio-${prio}`, `exec-${exec}`];
+  if (ot === 'pending') cls.push('ot-pending');
+
+  const dur = it.duration_minutes;
+  const otBadge = ot === 'pending'
+    ? '<span class="badge-ot" title="Straordinario in attesa di approvazione">⚠ Straordinario in attesa</span>'
+    : (ot === 'approved'
+      ? '<span class="badge-ot approved">✓ Straordinario approvato</span>'
+      : (ot === 'rejected'
+        ? '<span class="badge-ot rejected">Straordinario rifiutato</span>'
+        : ''));
+
+  const meta = it.cost_line_description || it.job_code || '';
+  const editable = (exec !== 'done' && exec !== 'not_done');
+
+  return `<div class="todo-card ${cls.join(' ')}" data-bid="${it.booking_id}">
+    <div class="when ${whenCls}">${escapeHtml(when)}</div>
+    <div class="what">${escapeHtml(it.title || '')}</div>
+    ${meta ? '<div class="meta">'+escapeHtml(meta)+'</div>' : ''}
+    <div class="badges">
+      <span class="badge-prio ${prio}">⚑ ${PRIO_LABEL[prio]}</span>
+      <span class="badge-exec ${exec}">${EXEC_LABEL[exec]}</span>
+      ${otBadge}
+    </div>
+    ${exec === 'not_done' && it.not_done_reason ? '<div class="not-done-reason">📝 '+escapeHtml(it.not_done_reason)+'</div>' : ''}
+    <div class="duration-strip">
+      <span class="dur-label">Durata</span>
+      <span class="dur-value">${tdFmtDuration(dur)}</span>
+      ${editable ? `
+        <button class="dur-handle" onclick="todoExtend(${it.booking_id}, -30)" title="Accorcia 30 min">−30</button>
+        <button class="dur-handle" onclick="todoExtend(${it.booking_id}, +30)" title="Estendi 30 min">+30</button>
+        <button class="dur-handle" onclick="todoExtend(${it.booking_id}, +60)" title="Estendi 1 ora">+60</button>
+      ` : ''}
+      <span style="margin-left:auto; font-size:11px; color:var(--text3);">Priorità:
+        <select onchange="todoSetPriority(${it.booking_id}, this.value)" style="background:transparent; color:var(--text2); border:1px solid var(--border); border-radius:3px; padding:2px 4px; font-size:11px;">
+          <option value="low" ${prio==='low'?'selected':''}>Bassa</option>
+          <option value="normal" ${prio==='normal'?'selected':''}>Normale</option>
+          <option value="high" ${prio==='high'?'selected':''}>Alta</option>
+        </select>
+      </span>
+    </div>
+    <div class="actions">
+      ${exec !== 'in_progress' && editable ? `<button class="act-btn primary" onclick="todoSetExec(${it.booking_id}, 'in_progress')">▶ Inizia</button>` : ''}
+      ${exec === 'in_progress' ? `<button class="act-btn" disabled>● In corso</button>` : ''}
+      ${editable ? `<button class="act-btn success" onclick="todoSetExec(${it.booking_id}, 'done')">✓ Fatto</button>` : ''}
+      ${editable ? `<button class="act-btn danger" onclick="todoNotDoneModal(${it.booking_id})">✗ Non fatto</button>` : ''}
+      ${(exec === 'done' || exec === 'not_done') ? `<button class="act-btn" onclick="todoSetExec(${it.booking_id}, 'planned')">↺ Riapri</button>` : ''}
+    </div>
+  </div>`;
+}
+
+async function todoSetExec(bookingId, newStatus, reason) {
+  try {
+    const fd = new FormData();
+    fd.append('execution_status', newStatus);
+    if (reason) fd.append('not_done_reason', reason);
+    await api('PATCH', `/planning/api/bookings/${bookingId}/execution`, fd);
+    toast(newStatus === 'done' ? 'Booking completato' :
+          newStatus === 'not_done' ? 'Booking marcato come non fatto' :
+          newStatus === 'in_progress' ? 'Iniziato' : 'Riportato a pianificato', 'success');
+    renderTodo();
+  } catch(e) {
+    toast(e.message || 'Errore aggiornamento stato', 'error');
+  }
+}
+
+async function todoExtend(bookingId, deltaMin) {
+  try {
+    const fd = new FormData();
+    fd.append('delta_minutes', String(deltaMin));
+    const res = await api('PATCH', `/planning/api/bookings/${bookingId}/extend`, fd);
+    let msg = `Durata aggiornata (${deltaMin > 0 ? '+' : ''}${deltaMin}m)`;
+    if (res && res.overtime_pending_booking_ids && res.overtime_pending_booking_ids.length) {
+      msg += ` — ${res.overtime_pending_booking_ids.length} booking in attesa di approvazione straordinario`;
+    }
+    toast(msg, 'success');
+    renderTodo();
+  } catch(e) {
+    toast(e.message || 'Estensione rifiutata', 'error');
+  }
+}
+
+async function todoSetPriority(bookingId, prio) {
+  try {
+    const fd = new FormData();
+    fd.append('priority', prio);
+    await api('PATCH', `/planning/api/bookings/${bookingId}/priority`, fd);
+    renderTodo();
+  } catch(e) {
+    toast(e.message || 'Errore priorità', 'error');
+  }
+}
+
+function todoNotDoneModal(bookingId) {
+  const overlay = document.createElement('div');
+  overlay.className = 'modal-overlay';
+  overlay.style.display = 'flex';
+  overlay.innerHTML = `
+    <div class="modal" style="max-width:480px;">
+      <div class="modal-header">
+        <span class="modal-title">Booking non fatto — motivazione</span>
+        <button class="btn btn-ghost btn-icon" onclick="this.closest('.modal-overlay').remove()">✕</button>
+      </div>
+      <div class="modal-body">
+        <p style="font-size:12px; color:var(--text2); margin-bottom:10px;">Producer/manager riceveranno una notifica con la motivazione. Sii sintetico.</p>
+        <textarea id="ndr-text" class="form-input" rows="4" placeholder="Es: cliente ha cancellato la sessione, attrezzatura guasta, ..." style="width:100%;"></textarea>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary" onclick="this.closest('.modal-overlay').remove()">Annulla</button>
+        <button class="btn btn-danger" onclick="todoNotDoneConfirm(${bookingId}, this)">Conferma "Non fatto"</button>
+      </div>
+    </div>`;
+  document.body.appendChild(overlay);
+  setTimeout(() => overlay.querySelector('#ndr-text').focus(), 50);
+}
+
+async function todoNotDoneConfirm(bookingId, btn) {
+  const overlay = btn.closest('.modal-overlay');
+  const reason = overlay.querySelector('#ndr-text').value.trim();
+  if (!reason) { toast('Motivazione richiesta', 'error'); return; }
+  await todoSetExec(bookingId, 'not_done', reason);
+  overlay.remove();
 }
 
 // ── Resource Timeline (vis-timeline) ───────────────────────

@@ -39,6 +39,33 @@ class BookingStatus(str, enum.Enum):
     tentative = "tentative"; confirmed = "confirmed"
     cancelled = "cancelled"; completed = "completed"
 
+class BookingPriority(str, enum.Enum):
+    """Priorità booking (v3.4.32). Visualizzata via colore bordo card.
+    `low` = informativa, `normal` = default, `high` = urgente."""
+    low = "low"
+    normal = "normal"
+    high = "high"
+
+class BookingExecutionStatus(str, enum.Enum):
+    """Stato di esecuzione del booking dal punto di vista dell'operatore (v3.4.32).
+    Ortogonale a `status` (che esprime intenzione di pianificazione).
+    `not_done` richiede `not_done_reason` valorizzato."""
+    planned = "planned"
+    in_progress = "in_progress"
+    done = "done"
+    not_done = "not_done"
+
+class BookingOvertimeStatus(str, enum.Enum):
+    """Workflow approvazione straordinari (v3.4.32).
+    Booking che cade (anche solo parzialmente) oltre la fascia regolare della
+    WorkingHoursPolicy della risorsa entra in `pending` e attende approvazione
+    da chi ha permesso `approve_overtime`. Su rifiuto: split intra-day + nuovo
+    booking giorno successivo per le ore eccedenti."""
+    none = "none"
+    pending = "pending"
+    approved = "approved"
+    rejected = "rejected"
+
 class BookingKind(str, enum.Enum):
     # Pianificazione di una lavorazione su un job (default — comportamento storico).
     # job_id richiesto, job_cost_line_id opzionale (preferito quando si pianifica
@@ -100,6 +127,10 @@ class NotificationKind(str, enum.Enum):
     booking_conflict = "booking_conflict"
     quote_status_changed = "quote_status_changed"
     job_deadline_approaching = "job_deadline_approaching"
+    # Workflow booking esecutivo (v3.4.32)
+    booking_status_changed = "booking_status_changed"        # → producer/manager su done/not_done
+    booking_overtime_pending = "booking_overtime_pending"    # → approvatori overtime
+    booking_overtime_resolved = "booking_overtime_resolved"  # → operatore (esito approvazione)
     custom = "custom"
 
 
@@ -687,6 +718,23 @@ class Booking(Base):
     status: Mapped[BookingStatus] = mapped_column(SAEnum(BookingStatus), default=BookingStatus.tentative)
     kind: Mapped[BookingKind] = mapped_column(SAEnum(BookingKind), default=BookingKind.project)
     notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    # ── Booking esecutivo (v3.4.32) ─────────────────────────────
+    priority: Mapped[BookingPriority] = mapped_column(
+        SAEnum(BookingPriority), default=BookingPriority.normal, index=True
+    )
+    execution_status: Mapped[BookingExecutionStatus] = mapped_column(
+        SAEnum(BookingExecutionStatus), default=BookingExecutionStatus.planned, index=True
+    )
+    not_done_reason: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    # Pool not_done: default False = NON entra nei costi del cost report.
+    # Manager/producer può flippare a True per far conteggiare comunque le ore.
+    count_in_costs: Mapped[bool] = mapped_column(Boolean, default=False)
+    overtime_status: Mapped[BookingOvertimeStatus] = mapped_column(
+        SAEnum(BookingOvertimeStatus), default=BookingOvertimeStatus.none, index=True
+    )
+    # Snapshot dell'envelope originale prima di adaptive extend, per supportare
+    # revert/split su rifiuto overtime (D1).
+    original_end_datetime: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
     job: Mapped[Optional["Job"]] = relationship(back_populates="bookings")
     cost_line: Mapped[Optional["JobCostLine"]] = relationship()

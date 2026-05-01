@@ -22,6 +22,21 @@
   <!-- KPI row -->
   <div class="stat-grid mb-4" id="kpi-grid"></div>
 
+  <!-- ── Booking esecutivo (v3.4.32) ───────────────────────── -->
+  <!-- Aggrega ore booking per fascia (regular/overtime/notturno/festivo)
+       + pool not_done (booking marcati "non fatto", esclusi dai costi
+       finché manager non decide di conteggiarli). -->
+  <div class="card mb-4" id="booking-summary-card" style="display:none;">
+    <div class="card-title mb-3">⏱ Ore booking per fascia <span style="font-size:11px; color:var(--text3); font-weight:normal;">(specchio quote · cost report cliente)</span></div>
+    <div id="booking-summary-host"></div>
+  </div>
+
+  <!-- ── Pozzo ore non maturate (v3.4.32) ─────────────────── -->
+  <div class="card mb-4" id="not-done-pool-card" style="display:none;">
+    <div class="card-title mb-3">⏳ Pozzo ore non maturate <span style="font-size:11px; color:var(--text3); font-weight:normal;">(booking marcati "non fatto" — non conteggiati nei costi)</span></div>
+    <div id="not-done-pool-host"></div>
+  </div>
+
   <div class="grid-2" style="align-items:start;gap:20px;">
 
     <!-- Cost lines table -->
@@ -144,6 +159,163 @@ async function loadReport() {
   document.getElementById('report-area').classList.remove('hidden');
   document.getElementById('no-report').classList.add('hidden');
   renderKPIs(); renderCostLines(); renderResources(); renderTimesheets();
+  renderBookingSummary(id);
+}
+
+// ── Booking executive summary + pool not_done (v3.4.32) ─────
+async function renderBookingSummary(jobId) {
+  let data;
+  try {
+    data = await api('GET', `/cost-report/api/job/${jobId}/booking-summary`);
+  } catch(e) { return; }
+
+  const sumHost = document.getElementById('booking-summary-host');
+  const sumCard = document.getElementById('booking-summary-card');
+  const t = data.totals;
+  const totalHours = (t.regular_hours + t.overtime_hours + t.sunday_hours + t.holiday_hours);
+  const hasData = (totalHours > 0 || t.pending_overtime_hours > 0 || data.by_resource.length > 0);
+  sumCard.style.display = hasData ? '' : 'none';
+  if (hasData) {
+    const fmtH = (h) => (h || 0).toFixed(2) + 'h';
+    sumHost.innerHTML = `
+      <div style="display:grid; grid-template-columns:repeat(auto-fill, minmax(140px, 1fr)); gap:10px; margin-bottom:14px;">
+        <div class="stat-card" style="background:var(--bg3);">
+          <div class="stat-label">Ore regolari</div>
+          <div class="stat-value mono" style="font-size:18px;">${fmtH(t.regular_hours)}</div>
+        </div>
+        <div class="stat-card" style="background:rgba(251,146,60,.08);">
+          <div class="stat-label">🌙 Straord. approvato</div>
+          <div class="stat-value mono" style="font-size:18px; color:#fb923c;">${fmtH(t.overtime_hours)}</div>
+        </div>
+        <div class="stat-card" style="background:rgba(251,146,60,.04); border:1px dashed rgba(251,146,60,.4);">
+          <div class="stat-label">⚠ Straord. pending</div>
+          <div class="stat-value mono" style="font-size:18px; color:#fcd34d;">${fmtH(t.pending_overtime_hours)}</div>
+          <div class="stat-sub" style="font-size:10px;">non conteggiate</div>
+        </div>
+        <div class="stat-card" style="background:rgba(167,139,250,.06);">
+          <div class="stat-label">Notturno</div>
+          <div class="stat-value mono" style="font-size:18px; color:#a78bfa;">${fmtH(t.night_hours)}</div>
+        </div>
+        <div class="stat-card" style="background:rgba(244,114,182,.06);">
+          <div class="stat-label">Domenica</div>
+          <div class="stat-value mono" style="font-size:18px; color:#f472b6;">${fmtH(t.sunday_hours)}</div>
+        </div>
+        <div class="stat-card" style="background:rgba(239,68,68,.06);">
+          <div class="stat-label">Festivo</div>
+          <div class="stat-value mono" style="font-size:18px; color:#ef4444;">${fmtH(t.holiday_hours)}</div>
+        </div>
+        <div class="stat-card" style="background:var(--bg3);">
+          <div class="stat-label">Ore equivalenti</div>
+          <div class="stat-value mono" style="font-size:18px;">${(t.weighted_factor||0).toFixed(2)}h</div>
+          <div class="stat-sub" style="font-size:10px;">dopo coefficienti CCNL</div>
+        </div>
+      </div>
+      ${data.by_resource.length ? `
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Risorsa</th>
+              <th class="text-right">Regolari</th>
+              <th class="text-right">Straord.</th>
+              <th class="text-right">Pending</th>
+              <th class="text-right">Notturno</th>
+              <th class="text-right">Festivo/Dom.</th>
+              <th class="text-right">Equiv.</th>
+              <th class="text-right">Costo stimato</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${data.by_resource.map(r => {
+              const b = r.breakdown;
+              const cost = (b.weighted_factor || 0) * (r.rate || 0) / 8; // assume rate giornaliero ÷ 8h
+              return `<tr>
+                <td>${escapeHtml(r.resource_name)}</td>
+                <td class="mono text-right">${fmtH(b.regular_hours)}</td>
+                <td class="mono text-right" style="color:#fb923c;">${fmtH(b.overtime_hours)}</td>
+                <td class="mono text-right" style="color:#fcd34d;">${fmtH(b.pending_overtime_hours)}</td>
+                <td class="mono text-right" style="color:#a78bfa;">${fmtH(b.night_hours)}</td>
+                <td class="mono text-right" style="color:#f472b6;">${fmtH(b.sunday_hours + b.holiday_hours)}</td>
+                <td class="mono text-right">${(b.weighted_factor||0).toFixed(2)}h</td>
+                <td class="mono text-right">${r.rate ? fmtCurrency(cost) : '—'}</td>
+              </tr>`;
+            }).join('')}
+          </tbody>
+        </table>
+      </div>` : ''}
+      ${data.pending_overtime.length ? `
+      <div style="margin-top:14px; padding:10px 14px; background:rgba(251,146,60,.08); border-radius:6px; border-left: 3px solid #fb923c;">
+        <div style="font-size:13px; font-weight:600; color:#fcd34d; margin-bottom:6px;">⚠ ${data.pending_overtime.length} booking con straordinario in attesa di approvazione</div>
+        <div style="font-size:12px; color:var(--text2);">
+          Vai in <a href="/planning?view=jobs">Pianificazione → ${data.job.code}</a> per approvare/rifiutare.
+        </div>
+      </div>` : ''}`;
+  }
+
+  // Pool not_done
+  const poolCard = document.getElementById('not-done-pool-card');
+  const poolHost = document.getElementById('not-done-pool-host');
+  if (data.not_done_pool && data.not_done_pool.length) {
+    poolCard.style.display = '';
+    poolHost.innerHTML = `
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Quando</th>
+              <th>Risorse</th>
+              <th>Lavorazione</th>
+              <th class="text-right">Ore</th>
+              <th>Motivazione</th>
+              <th>Azioni</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${data.not_done_pool.map(p => {
+              const s = new Date(p.start);
+              const when = s.toLocaleDateString('it-IT', {day:'2-digit',month:'short',year:'2-digit'}) + ' ' +
+                           s.toLocaleTimeString('it-IT', {hour:'2-digit',minute:'2-digit'});
+              return `<tr>
+                <td class="mono text-sm">${when}</td>
+                <td class="text-sm">${escapeHtml((p.resources||[]).join(', '))}</td>
+                <td class="text-sm">${escapeHtml(p.cost_line || '—')}</td>
+                <td class="mono text-right">${p.total_hours.toFixed(1)}h</td>
+                <td class="text-sm" style="color:var(--text2);">${escapeHtml(p.reason || '—')}</td>
+                <td>
+                  <button class="btn btn-ghost btn-sm" onclick="poolCountInCosts(${p.booking_id}, true)" title="Conta queste ore comunque">✓ Maturate</button>
+                  <button class="btn btn-ghost btn-sm" onclick="poolDiscard(${p.booking_id})" title="Scarta dal pool (cancella booking)">🗑 Scarta</button>
+                </td>
+              </tr>`;
+            }).join('')}
+          </tbody>
+        </table>
+      </div>
+      <div style="margin-top:8px; padding:8px 12px; font-size:11px; color:var(--text3);">
+        💡 "Maturate" = ore conteggiate nei costi (booking marcato count_in_costs).
+        "Scarta" = booking cancellato definitivamente, ore mai contate.
+      </div>`;
+  } else {
+    poolCard.style.display = 'none';
+  }
+}
+
+async function poolCountInCosts(bid, val) {
+  const fd = new FormData();
+  fd.append('count_in_costs', val ? 'true' : 'false');
+  try {
+    await api('PATCH', `/planning/api/bookings/${bid}/count-in-costs`, fd);
+    toast('Pool aggiornato', 'success');
+    loadReport();
+  } catch(e) { toast(e.message || 'Errore', 'error'); }
+}
+
+async function poolDiscard(bid) {
+  if (!confirm('Scartare definitivamente questo booking dal pool? Le ore non saranno mai conteggiate.')) return;
+  try {
+    await api('POST', `/cost-report/api/job/${currentJobId}/not-done-pool/${bid}/discard`);
+    toast('Booking scartato', 'success');
+    loadReport();
+  } catch(e) { toast(e.message || 'Errore', 'error'); }
 }
 
 function renderKPIs() {

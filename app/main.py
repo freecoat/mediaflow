@@ -35,6 +35,22 @@ def _auto_migrate_columns():
             print("[auto-migrate] users.extra_permissions mancante → ALTER TABLE")
             with engine.begin() as conn:
                 conn.execute(text("ALTER TABLE users ADD COLUMN extra_permissions TEXT NULL"))
+    # v3.4.32 — Booking esecutivo (priority/execution_status/overtime_status/...)
+    if "bookings" in insp.get_table_names():
+        bcols = {c["name"] for c in insp.get_columns("bookings")}
+        booking_alter = [
+            ("priority", "VARCHAR(16) NOT NULL DEFAULT 'normal'"),
+            ("execution_status", "VARCHAR(16) NOT NULL DEFAULT 'planned'"),
+            ("not_done_reason", "TEXT NULL"),
+            ("count_in_costs", "BOOLEAN NOT NULL DEFAULT 0"),
+            ("overtime_status", "VARCHAR(16) NOT NULL DEFAULT 'none'"),
+            ("original_end_datetime", "DATETIME NULL"),
+        ]
+        with engine.begin() as conn:
+            for col, ddl in booking_alter:
+                if col not in bcols:
+                    print(f"[auto-migrate] bookings.{col} mancante → ALTER TABLE")
+                    conn.execute(text(f"ALTER TABLE bookings ADD COLUMN {col} {ddl}"))
 
 
 @asynccontextmanager
@@ -77,7 +93,7 @@ async def lifespan(app: FastAPI):
     yield
 
 
-app = FastAPI(title="MediaFlow", version="3.4.31", lifespan=lifespan)
+app = FastAPI(title="MediaFlow", version="3.4.32", lifespan=lifespan)
 
 BASE_DIR = Path(__file__).parent
 app.mount("/static", StaticFiles(directory=BASE_DIR / "static"), name="static")
@@ -263,5 +279,5 @@ async def dashboard(request: Request):
 async def health():
     from app.services.ai_provider import get_provider
     p = get_provider()
-    return {"status": "ok", "app": settings.app_name, "version": "3.4.31",
+    return {"status": "ok", "app": settings.app_name, "version": "3.4.32",
             "ai": {"configured": p is not None, "provider": p.name if p else None}}

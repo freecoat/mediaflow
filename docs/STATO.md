@@ -8,25 +8,34 @@
 
 ## Versione corrente
 
-**v3.4.31** — 1 maggio 2026 — Scheda tecnica progetto + link pubblico readonly con scadenza
+**v3.4.32** — 1 maggio 2026 — Booking esecutivo (priorità + stato + workflow overtime + pozzo not_done)
 
-Sessione 1 maggio: 4 versioni chiuse in fila (v3.4.28→v3.4.31):
+Cantiere "booking come unità operativa". Trasformato il booking da pura intenzione di pianificazione a oggetto governabile dall'operatore: priorità (3 livelli low/normal/high) visibile per colore, ciclo di vita planned→in_progress→done|not_done con motivazione, modifica durata adattiva con cascade intra-day, workflow approvazione straordinari basato su WorkingHoursPolicy, sezione cost report dedicata + pozzo ore non maturate.
 
-- **v3.4.28** Fix riordino sidebar (auto-discovery DOM + per-sezione) + engine notifica `job_deadline_approaching` (lifespan boot check + endpoint admin trigger + `seed_test_deadline.py`).
-- **v3.4.29** Pannello listino laterale + drag&drop in editor `/quotes` (toggle persistito, layout grid 2→3 col, ricerca, drop su #lines-card).
-- **v3.4.30** Vista calendario complessiva in `/hr` (toggle Tabella/Calendario, endpoint `GET /hr/api/calendar`, KPI compatti per categoria, griglia 7×6 con barre per giorno, click giorno → drill-down tabella).
-- **v3.4.31** `ProjectTechSheet` 1:1 con Project, schema JSON flessibile (cameras[], audio, looks[], storage, dailies, contacts[], process, notes), tab editor in `/projects/{id}` con sub-tabs, link pubblico `/public/tech-sheet/{token}` readonly con scadenza configurabile.
+**Decisione architetturale chiarita** (memoria `project_costreport_vs_timesheet.md`): cost report = quotazioni + booking + hardcost (lente cliente/finance/fatturazione). Timesheet = HR + amministrazione (lente consulente del lavoro/buste paga). Due binari separati comunicanti solo nel planning per disponibilità risorse.
+
+**Decisione strategica** (memoria `project_normativa_ccnl.md`): ferie/malattia → normativa italiana per ora. Straordinari → CCNL caricabili in impostazioni (Matteo cerca i CCNL applicabili al post-prod).
+
+Sessione 1 maggio sera (commit unico): chiusa v3.4.32 dopo discussione completa di scope + 4 domande chiave (priorità a 3 livelli ✓, default normal/planned ✓, cascade intra-day con workflow overtime su sforamento ✓, pozzo come sezione del cost report progetto ✓).
 
 ## In corso
 
-**Sessione 1 maggio chiusa.** Commit `9cd606f` non pushato (Matteo deve confermare push per pull-are sul Mac).
+**Sessione 1 maggio sera chiusa.** v3.4.32 da testare sul Mac al prossimo pull.
 
-Da testare sul Mac al prossimo pull:
-- Fix sidebar `/settings#sidebar` (auto-discovery + per-sezione)
-- Notifica `job_deadline_approaching` (strumenti `[T]` → riavvio server → 🔔)
+Da testare sul Mac:
+- Migrazione `[L]` (`./strumenti.sh` → `l`) — aggiunge 6 colonne a `bookings` + permesso `approve_overtime` su admin/manager/producer
+- `/planning` tab "Le mie": card interattive con bordo priorità, bottoni `−30/+30/+60`, `▶ Inizia / ✓ Fatto / ✗ Non fatto`
+- Dashboard `/`: card "I miei booking di oggi" (se utente ha resource) + colonne **Priorità/Esecuzione/Straord.** nella tabella generica
+- `/cost-report` → seleziona job: due card nuove "⏱ Ore booking per fascia" + "⏳ Pozzo ore non maturate" (visibile solo se ci sono booking not_done)
+- Estendere un booking che sfora orario regolare → notifica `booking_overtime_pending` agli approvatori
+- Approvare/rifiutare overtime → notifica `booking_overtime_resolved` all'operatore (rifiuto → split + nuovo booking giorno dopo)
+
+Da testare ancora dalla v3.4.31 (carry-over):
+- Fix sidebar `/settings#sidebar`
+- Notifica `job_deadline_approaching` (strumenti `[T]`)
 - Listino laterale + drag&drop in `/quotes`
-- Calendario complessivo in `/hr` (toggle "📅 Calendario complessivo")
-- Scheda tecnica progetto in `/projects/{id}` tab "🛠 Scheda tecnica" + link pubblico `/public/tech-sheet/{token}` con scadenza
+- Calendario complessivo in `/hr`
+- Scheda tecnica progetto + link pubblico
 
 Cantieri rimasti aperti (precedenti):
 
@@ -193,7 +202,15 @@ Dopo conferma test sul Mac, passare a **#4 server-side abort**.
 
 ---
 
-*Ultimo aggiornamento: 30 aprile 2026 notte tarda — sessione maratona 12 commit (v3.4.21→v3.4.27). **Push eseguito**: tutto su origin/main su richiesta esplicita di Matteo. Aggiunto sistema notifiche generico (cantiere riusabile per booking_conflict, quote_status_changed, job_deadline_approaching, ecc.).
+*Ultimo aggiornamento: 1 maggio 2026 sera — chiusa v3.4.32 (Booking esecutivo). 37 commit ahead origin/main. Push da concordare.
+
+**v3.4.32**: 5 colonne nuove su `bookings` (priority/execution_status/not_done_reason/count_in_costs/overtime_status/original_end_datetime) + 3 NotificationKind nuovi (`booking_status_changed`, `booking_overtime_pending`, `booking_overtime_resolved`) + permesso `approve_overtime` su admin/manager/producer. Servizi nuovi `app/services/booking_cost.py` (engine costo per fascia oraria) + `app/services/booking_cascade.py` (cascade intra-day + split overtime giorno successivo). 6 endpoint nuovi su `/planning/api/`: priority, execution, extend, overtime, count-in-costs, my-bookings. 2 endpoint nuovi su `/cost-report/api/job/{id}/`: booking-summary, not-done-pool/{bid}/discard. UI: `/planning` "Le mie" card interattive (bordo priorità, drag handle ±, bottoni stato, modal motivazione), Dashboard "I miei booking di oggi" + colonne stato in tabella generica, Cost report sezione "Ore booking per fascia" + "Pozzo ore non maturate".
+
+**Distinzione architetturale fissata in memoria**: Cost report (quote+booking+hardcost) ≠ Timesheet (HR/buste paga). Due binari separati. Il vecchio cost_report.py basato su Timesheet resta come legacy, conviverà col nuovo finché si farà rifacimento completo.
+
+---
+
+*Versione precedente: 30 aprile 2026 notte tarda — sessione maratona 12 commit (v3.4.21→v3.4.27). **Push eseguito**: tutto su origin/main su richiesta esplicita di Matteo. Aggiunto sistema notifiche generico (cantiere riusabile per booking_conflict, quote_status_changed, job_deadline_approaching, ecc.).
 
 **v3.4.27** (ultimo): modello Notification + servizio notifications.py + router /notifications/api/* + 3 hook ferie (create pending → manager, approve/reject → richiedente) + UI campanella topbar con badge + drawer laterale + polling 30s + card "Richieste in attesa" in /hr/. Pattern una-row-per-destinatario. NotificationKind estendibile (4 valori riservati per cantieri futuri).
 
