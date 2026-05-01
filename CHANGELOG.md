@@ -1,5 +1,31 @@
 # MediaFlow — Changelog
 
+## v3.4.35 — Undo stack + Salva su /quotes editor (1 maggio 2026 notte tarda)
+
+Rete di sicurezza per le modifiche alla quotazione. L'auto-save al blur resta attivo, ma ora c'è un sistema undo + bottone Salva esplicito.
+
+### Stack undo client-side
+
+`window._quoteUndoStack` (max 20 op). Ogni operazione tracciabile è invertibile:
+- `line_add` (drag&drop o "Aggiungi alla quotazione" nel pannello listino) → undo = `DELETE` riga
+- `line_delete` (cancellazione voce con conferma) → undo = `POST` ricreazione con stessi dati (snapshot prima del delete)
+- `lines_reorder` (drag voci entro/tra categorie) → undo = `PUT lines-reorder` con previous_order
+- `category_reorder` (drag handle ⋮⋮ su header categoria) → undo = `PUT category-order` con previous_order
+
+Lo stack si resetta quando si apre una quote diversa (`openEditor` clear).
+
+### UI
+
+- Bottone **"↺ Annulla"** in topbar editor accanto a "← Lista". Disabilitato quando lo stack è vuoto. Tooltip mostra l'ultima operazione annullabile.
+- **Toast post-azione** con bottone "↺ Annulla" cliccabile (timeout 5s). Posizionato in basso al centro, bordo indigo. Pattern riusato da timeline planning v3.4.14 (`tlPushUndo`).
+- Bottone **"💾 Salva"** in topbar: l'auto-save è già attivo, ma il bottone forza `blur()` su tutti gli input/textarea pending e mostra toast "✓ Tutto salvato" — reassurance UX, non strettamente necessario.
+
+### Modello
+
+Nessuna modifica al backend: gli endpoint esistenti (`POST/DELETE/PUT lines`, `PUT lines-reorder`, `PUT category-order`) sono già idempotenti e supportano l'undo riapplicando inversa. Lo stack è solo client-side: si perde se la pagina viene ricaricata.
+
+---
+
 ## v3.4.34.5 — Fix drag&drop listino → voci (1 maggio 2026 notte tarda)
 
 Bug introdotto in v3.4.34 (refactor multi-tbody categorie): gli handler `onLinesDragOver`/`onLinesDragLeave`/`onLinesDrop` cercavano ancora `document.getElementById('lines-body')`, che non esisteva più dopo che il tbody era stato rinominato in `lines-tbody-empty` e sostituito con tbody dinamici per categoria.

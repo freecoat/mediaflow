@@ -8,6 +8,10 @@
 
 ## Versione corrente
 
+**v3.4.35** — 1 maggio 2026 notte tarda — Undo stack + Salva su /quotes editor
+
+Stack undo client-side per add/delete/reorder voci e reorder categorie. Bottone "↺ Annulla" in topbar + toast post-azione con annulla cliccabile (5s). Bottone "💾 Salva" cosmetico (auto-save resta attivo).
+
 **v3.4.34.5** — 1 maggio 2026 notte tarda — Fix drag&drop listino→voci (regressione v3.4.34 multi-tbody)
 
 **v3.4.34.4** — 1 maggio 2026 notte tarda — Listino allargato +35% (480→650px, 440→600px sotto 1400)

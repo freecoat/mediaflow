@@ -92,6 +92,9 @@
       </div>
       <div class="flex gap-2">
         <button class="btn btn-secondary btn-sm" onclick="closeEditor()">← Lista</button>
+        <!-- v3.4.35: undo + salva -->
+        <button class="btn btn-secondary btn-sm" id="btn-quote-undo" onclick="quoteUndo()" disabled title="Niente da annullare">↺ Annulla</button>
+        <button class="btn btn-secondary btn-sm" onclick="quoteSaveConfirm()" title="Conferma salvataggio (auto-save attivo)">💾 Salva</button>
         <div class="dropdown" style="position:relative;display:inline-block;">
           <button class="btn btn-secondary btn-sm" onclick="this.nextElementSibling.classList.toggle('open')">⬇ Esporta ▾</button>
           <div class="dropdown-menu" style="position:absolute;right:0;top:100%;margin-top:4px;background:var(--bg2);border:1px solid var(--border);border-radius:6px;display:none;flex-direction:column;min-width:160px;z-index:10;box-shadow:0 4px 12px rgba(0,0,0,0.2);">
@@ -641,6 +644,9 @@ async function loadQuotes() {
 // ── Editor ────────────────────────────────────────────────────
 async function openEditor(id) {
   currentQuoteId = id;
+  // v3.4.35: reset undo stack quando si apre una quote diversa
+  window._quoteUndoStack = [];
+  if (typeof quoteUpdateUndoButton === 'function') quoteUpdateUndoButton();
   await reloadQuote();
   priceItems = await api('GET', '/pricelist/api/items');
   document.getElementById('quotes-list-card').classList.add('hidden');
@@ -784,10 +790,14 @@ async function persistCategoryOrder() {
   const table = document.getElementById('lines-table');
   const tbodies = table.querySelectorAll('tbody.ql-cat-tbody');
   const order = Array.from(tbodies).map(t => t.dataset.cat);
+  // v3.4.35: snapshot ordine precedente per undo
+  const previousOrder = [...(currentQuote.category_order || [])];
+  if (JSON.stringify(previousOrder) === JSON.stringify(order)) return;
   try {
     await api('PUT', `/quotes/api/${currentQuoteId}/category-order`,
               {order}, {json: true});
-    // Aggiorno currentQuote.category_order localmente per coerenza al prossimo render
+    quotePushUndo({kind: 'category_reorder', previous_order: previousOrder, label: 'Riordino categorie'},
+                  'Categorie riordinate');
     currentQuote.category_order = order;
   } catch(e) {
     toast('Errore salvataggio ordine categorie', 'error');
@@ -1033,7 +1043,13 @@ function refreshCategoryDiscountAmounts() {
 
 // ── Drag-drop persistence ─────────────────────────────────────
 async function persistOrder() {
+  // v3.4.35: snapshot ordine precedente per undo
+  const previousOrder = (currentQuote.lines || [])
+    .slice().sort((a,b) => (a.sort_order||0) - (b.sort_order||0))
+    .map(l => l.id);
   const order = [...document.querySelectorAll('tr.ql-row')].map(tr => parseInt(tr.dataset.lineId));
+  // Skip se ordine identico
+  if (JSON.stringify(previousOrder) === JSON.stringify(order)) return;
   try {
     const resp = await fetch(`/quotes/api/${currentQuoteId}/lines-reorder`, {
       method: 'PUT',
@@ -1041,6 +1057,8 @@ async function persistOrder() {
       body: JSON.stringify({order}),
     });
     if (!resp.ok) throw new Error('Errore riordino');
+    quotePushUndo({kind: 'lines_reorder', previous_order: previousOrder, label: 'Riordino voci'},
+                  'Voci riordinate');
     await reloadQuote();
   } catch(e) { toast(e.message, 'error'); }
 }
@@ -1329,20 +1347,34 @@ async function addLine() {
     fd.append('unit_price', document.getElementById('al-price').value || '0');
     const piId = document.getElementById('al-price-item-id').value;
     if (piId) fd.append('price_item_id', piId);
-    await api('POST', `/quotes/api/${currentQuoteId}/lines`, fd);
+    const res = await api('POST', `/quotes/api/${currentQuoteId}/lines`, fd);
+    // v3.4.35: undo stack
+    quotePushUndo({kind: 'line_add', line_id: res.id, label: `Voce «${desc}»`},
+                  `Voce «${desc}» aggiunta`);
     // v3.4.33.1: il pannello laterale resta aperto per aggiunte multiple in fila.
-    // Reset selezione per essere subito pronto al prossimo click.
     clearSelection();
-    toast('Voce aggiunta · pannello pronto per la prossima', 'success');
     await reloadQuote();
   } catch(e) { toast(e.message, 'error'); }
 }
 
 async function deleteLine(lineId) {
   if (!confirm('Rimuovere questa voce?')) return;
+  // v3.4.35: snapshot dati riga PRIMA del delete per supportare undo
+  const line = (currentQuote.lines || []).find(l => l.id == lineId);
+  const snapshot = line ? {
+    description: line.description,
+    detail: line.detail,
+    quantity: line.quantity,
+    unit: line.unit,
+    unit_price: line.unit_price,
+    price_item_id: line.price_item_id,
+  } : null;
   try {
     await api('DELETE', `/quotes/api/${currentQuoteId}/lines/${lineId}`);
-    toast('Voce rimossa', 'success');
+    if (snapshot) {
+      quotePushUndo({kind: 'line_delete', line_data: snapshot, label: `Voce «${snapshot.description}»`},
+                    `Voce «${snapshot.description}» rimossa`);
+    }
     await reloadQuote();
   } catch(e) { toast(e.message, 'error'); }
 }
@@ -1498,6 +1530,7 @@ function onLinesDragLeave(ev) {
 async function onLinesDrop(ev) {
   const card = document.getElementById('lines-card');
   if (card) { card.classList.remove('drop-active'); card.classList.remove('drop-hint'); }
+  // v3.4.35: il flusso prosegue sotto e produce un push undo line_add.
   const pid = ev.dataTransfer.getData('application/x-mf-priceitem') || ev.dataTransfer.getData('text/plain');
   if (!pid) return;
   ev.preventDefault();
@@ -1512,8 +1545,9 @@ async function onLinesDrop(ev) {
     fd.append('unit', item.unit || 'day');
     fd.append('unit_price', item.price_list || '0');
     fd.append('price_item_id', item.id);
-    await api('POST', `/quotes/api/${currentQuoteId}/lines`, fd);
-    toast(`Voce «${item.name}» aggiunta`, 'success');
+    const res = await api('POST', `/quotes/api/${currentQuoteId}/lines`, fd);
+    quotePushUndo({kind: 'line_add', line_id: res.id, label: `Voce «${item.name}»`},
+                  `Voce «${item.name}» aggiunta`);
     await reloadQuote();
   } catch(e) { toast(e.message || 'Errore aggiunta voce', 'error'); }
 }
@@ -1534,5 +1568,108 @@ window.addEventListener('hashchange', () => {
   const hashId = parseInt((window.location.hash || '').replace('#', ''), 10);
   if (hashId && !isNaN(hashId) && hashId !== currentQuoteId) openEditor(hashId);
 });
+
+// ── Undo stack quote editor (v3.4.35) ─────────────────────────
+// Stack di operazioni invertibili. Ogni op è un dict con `kind` + dati
+// per l'undo. Il bottone "↺ Annulla" pop l'ultima e applica l'inverso.
+// Toast post-azione mostra "Annulla" cliccabile (5 sec).
+window._quoteUndoStack = [];
+const QUOTE_UNDO_MAX = 20;
+
+function quotePushUndo(op, label) {
+  window._quoteUndoStack.push(op);
+  if (window._quoteUndoStack.length > QUOTE_UNDO_MAX) window._quoteUndoStack.shift();
+  quoteUpdateUndoButton();
+  if (label) quoteShowUndoToast(label);
+}
+
+function quoteUpdateUndoButton() {
+  const btn = document.getElementById('btn-quote-undo');
+  if (!btn) return;
+  const stack = window._quoteUndoStack || [];
+  if (stack.length) {
+    btn.disabled = false;
+    const last = stack[stack.length - 1];
+    btn.title = `Annulla: ${last.label || last.kind}`;
+  } else {
+    btn.disabled = true;
+    btn.title = 'Niente da annullare';
+  }
+}
+
+function quoteShowUndoToast(label) {
+  let host = document.getElementById('q-undo-toast');
+  if (!host) {
+    host = document.createElement('div');
+    host.id = 'q-undo-toast';
+    host.style.cssText = 'position:fixed; bottom:24px; left:50%; transform:translateX(-50%); background:var(--bg2); color:var(--text); border:1px solid var(--indigo); border-radius:8px; padding:10px 16px; font-size:13px; box-shadow:0 6px 20px rgba(0,0,0,.5); z-index:9999; display:flex; gap:14px; align-items:center;';
+    document.body.appendChild(host);
+  }
+  host.innerHTML = `<span>${escapeHtml(label)}</span>
+    <button class="btn btn-ghost btn-sm" id="q-undo-toast-btn" style="color:#fb923c;font-weight:600;">↺ Annulla</button>`;
+  host.style.display = 'flex';
+  document.getElementById('q-undo-toast-btn').onclick = () => { quoteUndo(); host.style.display = 'none'; };
+  clearTimeout(window._quoteUndoToastTimer);
+  window._quoteUndoToastTimer = setTimeout(() => { host.style.display = 'none'; }, 5000);
+}
+
+async function quoteUndo() {
+  const stack = window._quoteUndoStack || [];
+  if (!stack.length) return;
+  const op = stack.pop();
+  quoteUpdateUndoButton();
+  try {
+    if (op.kind === 'line_add') {
+      // Annulla aggiunta → DELETE quella riga
+      await api('DELETE', `/quotes/api/${currentQuoteId}/lines/${op.line_id}`);
+      toast('Aggiunta annullata', 'success');
+      await reloadQuote();
+    } else if (op.kind === 'line_delete') {
+      // Annulla eliminazione → ricrea la riga con stessi dati
+      const fd = new FormData();
+      const d = op.line_data || {};
+      fd.append('description', d.description || '');
+      if (d.detail) fd.append('detail', d.detail);
+      fd.append('quantity', String(d.quantity || 1));
+      fd.append('unit', d.unit || 'day');
+      fd.append('unit_price', String(d.unit_price || 0));
+      if (d.price_item_id) fd.append('price_item_id', d.price_item_id);
+      await api('POST', `/quotes/api/${currentQuoteId}/lines`, fd);
+      toast('Eliminazione annullata', 'success');
+      await reloadQuote();
+    } else if (op.kind === 'category_reorder') {
+      await api('PUT', `/quotes/api/${currentQuoteId}/category-order`,
+                {order: op.previous_order || []}, {json: true});
+      currentQuote.category_order = op.previous_order || [];
+      toast('Ordine categorie ripristinato', 'success');
+      await reloadQuote();
+    } else if (op.kind === 'lines_reorder') {
+      const fd2 = await fetch(`/quotes/api/${currentQuoteId}/lines-reorder`, {
+        method: 'PUT', headers: {'Content-Type':'application/json'},
+        body: JSON.stringify({order: op.previous_order || []}),
+      });
+      if (!fd2.ok) throw new Error('Errore ripristino ordine');
+      toast('Ordine voci ripristinato', 'success');
+      await reloadQuote();
+    }
+  } catch(e) {
+    toast(e.message || 'Errore undo', 'error');
+    // Rimetti l'op nello stack per riprovare
+    window._quoteUndoStack.push(op);
+    quoteUpdateUndoButton();
+  }
+}
+
+// "Salva" esplicito: l'auto-save al blur è già attivo; questo bottone
+// fa flush dei textarea pending (se l'utente non ha ancora blurato) e
+// dà conferma visiva all'utente.
+async function quoteSaveConfirm() {
+  // Trigger blur su tutti i textarea/input editabili per forzare onchange
+  document.querySelectorAll('#quote-editor input, #quote-editor textarea').forEach(el => {
+    if (el === document.activeElement) el.blur();
+  });
+  await new Promise(r => setTimeout(r, 200));
+  toast('✓ Tutto salvato', 'success');
+}
 </script>
 {% endblock %}
