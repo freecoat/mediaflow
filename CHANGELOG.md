@@ -1,5 +1,42 @@
 # MediaFlow — Changelog
 
+## v3.4.32.2 — Patch v3.4.32.1: timeline align + paste GUI + governance overtime + scaglioni CCNL (1 maggio 2026 notte)
+
+Patch dopo test locale di v3.4.32.1. 4 fix raggruppati.
+
+### Fix #1 — Allineamento timeline label↔group ripristinato
+La v3.4.32.1 aveva aggiunto `min-height: 38px` sulla label foglia E `min-height: 38px` sui group foreground separatamente. Ma vis-timeline calcola le altezze dei due in coppia runtime e fissarle da CSS rompe l'allineamento. Tolti tutti i `min-height/max-height` su `.vis-label` e `.vis-foreground .vis-group`. Lasciato solo padding+font-size per la leggibilità.
+
+### Fix #2 — Paste GUI: click-to-paste + right-click "Incolla qui"
+Sostituito il vecchio Ctrl+V che incollava sempre "ad oggi alla stessa ora".
+
+- **Ctrl+C** → copia (come prima)
+- **Ctrl+V** → entra in **paste mode**: barra arancione fissa in basso ("Modalità incolla — Click sulla timeline per incollare N booking · Esc per annullare"), cursor `copy`, outline tratteggiato sulla timeline. Il prossimo click su area vuota incolla con il primo booking che atterra alla posizione cliccata, gli altri shiftati di pari offset preservando la spaziatura. Se clicchi su una risorsa diversa, il primo booking va sulla nuova risorsa, gli altri restano sulle proprie.
+- **Right-click su area vuota** → menu con voce "📋 Incolla qui (N)" se clipboard non vuoto.
+- **Esc** → esce da paste mode.
+
+Snap automatico al passo zoom (15min day, 30min week/month, 60min quarter).
+
+### Fix #3 — Governance overtime: auto-approve solo manager+admin
+Decisione strategica: "approvazione straordinari deve darla il manager, non l'operatore. Se non è possibile, manager/producer deve ricevere notifica."
+
+- **Auto-approve self** ammesso ora **solo per manager+admin** (NON producer). Producer ha ancora `approve_overtime` ma estendendo va sempre in pending → dev'essere il manager a confermare esplicitamente.
+- Quando manager/admin auto-approva, **gli ALTRI manager+admin ricevono notifica** kind=`booking_overtime_resolved` severity=`info` (no action_required, solo audit/awareness).
+- Logica replicata sia in `/extend` (estensione adattiva) sia in `_maybe_flag_overtime_on_assignment_change` (drop su festivo/notturno via PUT assignment).
+
+### Fix #4 — Scaglioni overtime configurabili (preparazione CCNL)
+Aggiunti due campi a `WorkingHoursPolicy`:
+- `overtime_brackets` JSON nullable: lista `[{"from_hour": float, "multiplier": float}, ...]` per gestire CCNL con maggiorazioni a fasce (es. CCNL Cinema · Doppiaggio: prime 2h al +30%, dalla 2ª al +60%).
+- `ccnl_label` String(120) nullable: etichetta libera del preset (es. "CCNL Cinema · Doppiaggio").
+
+**Engine** `compute_assignment_breakdown`: se `overtime_brackets` valorizzato, le ore overtime non-night vengono distribuite negli scaglioni e pesate; altrimenti fallback al singolo `overtime_multiplier` (back-compat completa). Le ore notturne mantengono `night_multiplier` come prima.
+
+**UI** `/settings#hours`: nuova sezione "Scaglioni overtime" con righe editabili (`from_hour` + `multiplier` + ✕), bottoni "+ Aggiungi scaglione" e "Rimuovi tutti". Campo `ccnl_label` come testo libero in alto. La compilazione manuale resta a carico dell'amministrazione; iter successiva: capability AI `propose_working_hours_policy` per popolare i preset CCNL via copilot.
+
+Auto-migrate al boot per le 2 colonne nuove (`overtime_brackets TEXT`, `ccnl_label VARCHAR(120)`).
+
+---
+
 ## v3.4.32.1 — Fix multi-risorsa + workflow overtime su drop + look timeline + temi/font (1 maggio 2026 sera)
 
 Patch dopo test locale di v3.4.32. 6 fix raggruppati in un singolo bump.

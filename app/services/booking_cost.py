@@ -221,13 +221,64 @@ def compute_assignment_breakdown(
     weighted = 0.0
     weighted += out.holiday_hours * h_mult
     weighted += out.sunday_hours * s_mult
-    # overtime: di queste, le night vengono pesate con night_mult invece di overtime_mult
+    # v3.4.32.2: scaglioni overtime se policy.overtime_brackets è valorizzato
+    # (es. CCNL Cinema Doppiaggio: prime 2h +30%, poi +60%). Le ore notturne
+    # mantengono comunque il night_multiplier, sostituendolo a quello dello
+    # scaglione: night = "fuori orario notte profonda", non sub-overtime.
     overtime_non_night = max(0.0, out.overtime_hours - out.night_hours)
-    weighted += overtime_non_night * o_mult
+    if policy.overtime_brackets:
+        weighted += _weighted_overtime_with_brackets(
+            overtime_non_night, policy.overtime_brackets, o_mult,
+        )
+    else:
+        weighted += overtime_non_night * o_mult
     weighted += out.night_hours * n_mult
     weighted += out.regular_hours * 1.0
     out.weighted_factor = weighted
     return out
+
+
+def _weighted_overtime_with_brackets(
+    hours: float, brackets: list, fallback_mult: float,
+) -> float:
+    """Distribuisce `hours` di overtime sui scaglioni e somma il weighted.
+
+    `brackets` = [{"from_hour": float, "multiplier": float}, ...] ordinato.
+    Le ore vengono distribuite in ordine: scaglione 0..from_hour_1 con
+    multiplier_0, scaglione from_hour_1..from_hour_2 con multiplier_1, ecc.
+    L'ultimo scaglione assorbe tutte le ore residue.
+
+    Se `brackets` è malformato o vuoto, usa `fallback_mult` su tutte le ore.
+    """
+    if not brackets or not isinstance(brackets, list):
+        return hours * fallback_mult
+    try:
+        sorted_b = sorted(
+            [{"from_hour": float(b.get("from_hour", 0)), "multiplier": float(b.get("multiplier", 1.0))}
+             for b in brackets],
+            key=lambda x: x["from_hour"],
+        )
+    except (TypeError, ValueError):
+        return hours * fallback_mult
+    if not sorted_b:
+        return hours * fallback_mult
+
+    weighted = 0.0
+    remaining = hours
+    for i, bk in enumerate(sorted_b):
+        if remaining <= 0:
+            break
+        next_from = sorted_b[i + 1]["from_hour"] if i + 1 < len(sorted_b) else None
+        if next_from is None:
+            # Ultimo scaglione assorbe tutto
+            weighted += remaining * bk["multiplier"]
+            remaining = 0.0
+        else:
+            slot_hours = max(0.0, next_from - bk["from_hour"])
+            take = min(remaining, slot_hours)
+            weighted += take * bk["multiplier"]
+            remaining -= take
+    return weighted
 
 
 def has_overtime_window(

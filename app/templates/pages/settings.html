@@ -232,6 +232,20 @@
             </div>
           </div>
 
+          <!-- v3.4.32.2 — Scaglioni overtime CCNL ─────────────────────── -->
+          <div class="form-group" style="margin-top:18px; padding-top:14px; border-top:1px solid var(--border);">
+            <label class="form-label" style="display:flex; justify-content:space-between; align-items:center;">
+              <span>Scaglioni overtime <span style="font-weight:normal; color:var(--text3); font-size:11px;">(opzionale, per CCNL con maggiorazioni a fasce)</span></span>
+              <input type="text" id="wh-ccnl-label" placeholder="Es: CCNL Cinema · Doppiaggio" class="form-input" style="width:auto; min-width:240px; height:30px; font-size:12px;">
+            </label>
+            <p class="text-sm text-muted" style="margin:4px 0 8px;">
+              Esempio: <b>CCNL Cinema Doppiaggio</b> = prime 2h al +30%, dalle 2h al +60% (apri 2 righe: <code>0h → 1.30</code> + <code>2h → 1.60</code>). Se vuoto, viene usato il moltiplicatore singolo sopra.
+            </p>
+            <div id="wh-brackets-host"></div>
+            <button type="button" class="btn btn-secondary btn-sm" onclick="whAddBracket()" style="margin-top:8px;">+ Aggiungi scaglione</button>
+            <button type="button" class="btn btn-ghost btn-sm" onclick="whClearBrackets()" style="margin-top:8px; margin-left:6px;">Rimuovi tutti</button>
+          </div>
+
           <div class="flex gap-2 mt-3">
             <button type="button" class="btn btn-primary" onclick="whSave()">Salva</button>
             <button type="button" class="btn btn-ghost" onclick="whReload()">Annulla modifiche</button>
@@ -343,7 +357,61 @@ async function whReload() {
     document.getElementById('wh-hol-mult').value = p.holiday_multiplier ?? 2.0;
     document.getElementById('wh-night-start').value = p.night_start || '22:00';
     document.getElementById('wh-night-end').value = p.night_end || '06:00';
+    // v3.4.32.2 — scaglioni overtime + ccnl label
+    document.getElementById('wh-ccnl-label').value = p.ccnl_label || '';
+    whRenderBrackets(p.overtime_brackets || []);
   } catch(e) { toast(e.message || 'Errore caricamento policy', 'error'); }
+}
+
+// v3.4.32.2 — Scaglioni overtime: render + add/remove
+function whRenderBrackets(brackets) {
+  const host = document.getElementById('wh-brackets-host');
+  if (!brackets || !brackets.length) {
+    host.innerHTML = '<div class="text-sm text-muted" style="padding:8px 12px; background:var(--bg3); border-radius:4px;">Nessuno scaglione configurato — viene usato il moltiplicatore singolo.</div>';
+    return;
+  }
+  host.innerHTML = brackets.map((b, i) => `
+    <div class="flex gap-2 items-center" style="margin-bottom:6px;" data-bracket-row="${i}">
+      <span style="color:var(--text3); font-size:11px; min-width:20px; text-align:right;">${i+1}.</span>
+      <span class="text-sm">Da</span>
+      <input type="number" step="0.5" min="0" class="form-input" data-b-from value="${b.from_hour ?? 0}" style="width:90px;">
+      <span class="text-sm">h →</span>
+      <span class="text-sm">moltiplicatore</span>
+      <input type="number" step="0.05" min="1" class="form-input" data-b-mult value="${b.multiplier ?? 1.0}" style="width:90px;">
+      <button type="button" class="btn btn-ghost btn-sm" onclick="whRemoveBracket(${i})" title="Rimuovi">✕</button>
+    </div>
+  `).join('');
+}
+
+function whReadBrackets() {
+  const rows = document.querySelectorAll('[data-bracket-row]');
+  const out = [];
+  rows.forEach(r => {
+    const fromHour = parseFloat(r.querySelector('[data-b-from]').value);
+    const mult = parseFloat(r.querySelector('[data-b-mult]').value);
+    if (!isNaN(fromHour) && !isNaN(mult)) {
+      out.push({from_hour: fromHour, multiplier: mult});
+    }
+  });
+  out.sort((a,b) => a.from_hour - b.from_hour);
+  return out;
+}
+
+function whAddBracket() {
+  const current = whReadBrackets();
+  const lastFrom = current.length ? current[current.length-1].from_hour : 0;
+  current.push({from_hour: lastFrom + 2, multiplier: 1.30});
+  whRenderBrackets(current);
+}
+
+function whRemoveBracket(idx) {
+  const current = whReadBrackets();
+  current.splice(idx, 1);
+  whRenderBrackets(current);
+}
+
+function whClearBrackets() {
+  whRenderBrackets([]);
 }
 
 async function whSave() {
@@ -369,6 +437,9 @@ async function whSave() {
   fd.append('holiday_multiplier', document.getElementById('wh-hol-mult').value);
   fd.append('night_start', document.getElementById('wh-night-start').value);
   fd.append('night_end', document.getElementById('wh-night-end').value);
+  // v3.4.32.2: scaglioni + ccnl_label
+  fd.append('ccnl_label', document.getElementById('wh-ccnl-label').value);
+  fd.append('overtime_brackets', JSON.stringify(whReadBrackets()));
   try {
     await api('PUT', `/settings/api/working-hours/${id}`, fd);
     toast('Policy salvata', 'success');

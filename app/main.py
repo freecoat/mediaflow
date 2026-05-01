@@ -51,6 +51,18 @@ def _auto_migrate_columns():
                 if col not in bcols:
                     print(f"[auto-migrate] bookings.{col} mancante → ALTER TABLE")
                     conn.execute(text(f"ALTER TABLE bookings ADD COLUMN {col} {ddl}"))
+    # v3.4.32.2 — WorkingHoursPolicy: overtime_brackets JSON + ccnl_label
+    if "working_hours_policies" in insp.get_table_names():
+        wcols = {c["name"] for c in insp.get_columns("working_hours_policies")}
+        whp_alter = [
+            ("overtime_brackets", "TEXT NULL"),
+            ("ccnl_label", "VARCHAR(120) NULL"),
+        ]
+        with engine.begin() as conn:
+            for col, ddl in whp_alter:
+                if col not in wcols:
+                    print(f"[auto-migrate] working_hours_policies.{col} mancante → ALTER TABLE")
+                    conn.execute(text(f"ALTER TABLE working_hours_policies ADD COLUMN {col} {ddl}"))
 
 
 @asynccontextmanager
@@ -93,7 +105,7 @@ async def lifespan(app: FastAPI):
     yield
 
 
-app = FastAPI(title="MediaFlow", version="3.4.32.1", lifespan=lifespan)
+app = FastAPI(title="MediaFlow", version="3.4.32.2", lifespan=lifespan)
 
 BASE_DIR = Path(__file__).parent
 app.mount("/static", StaticFiles(directory=BASE_DIR / "static"), name="static")
@@ -279,5 +291,5 @@ async def dashboard(request: Request):
 async def health():
     from app.services.ai_provider import get_provider
     p = get_provider()
-    return {"status": "ok", "app": settings.app_name, "version": "3.4.32.1",
+    return {"status": "ok", "app": settings.app_name, "version": "3.4.32.2",
             "ai": {"configured": p is not None, "provider": p.name if p else None}}

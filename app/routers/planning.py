@@ -855,13 +855,37 @@ def _maybe_flag_overtime_on_assignment_change(
         return None
 
     user = current_user_optional(request)
-    self_approves = has_permission(user, "approve_overtime")
-    if self_approves:
+    # v3.4.32.2: auto-approve solo manager/admin (non producer). Vedi commento
+    # in extend_booking per la motivazione governance.
+    from app.services.rbac import is_manager, is_admin
+    can_auto_approve = is_manager(user) or is_admin(user)
+    if can_auto_approve:
         b.overtime_status = BookingOvertimeStatus.approved
         _log_change(db, b.id, "overtime_auto_approved",
-                    "Auto-approvato: drop in fascia speciale + approvatore stesso utente",
+                    "Auto-approvato: drop in fascia speciale + manager/admin",
                     {"by_user_id": user.id if user else None})
         db.commit()
+        # Notifica info agli altri manager+admin per visibilità governance
+        try:
+            other_admins = [
+                u.id for u in db.query(User).filter(User.is_active == True).all()  # noqa: E712
+                if (is_manager(u) or is_admin(u)) and u.id != (user.id if user else -1)
+            ]
+            if other_admins:
+                notif_svc.notify(
+                    db,
+                    user_ids=other_admins,
+                    kind=NotificationKind.booking_overtime_resolved.value,
+                    severity=NotificationSeverity.info.value,
+                    title=f"ℹ Straordinario auto-approvato (drop): {_booking_short_label(b)}",
+                    body=f"{user.full_name if user else '?'} ha spostato un booking in "
+                         f"fascia speciale e l'ha auto-approvato.",
+                    link=f"/jobs/{b.job_id}" if b.job_id else "/planning?view=jobs",
+                    actor_user_id=user.id if user else None,
+                    payload={"booking_id": b.id, "auto_approved": True},
+                )
+        except Exception as e:
+            print(f"[overtime auto-approve drop] governance notify failed: {e}")
         return {"overtime_status": "approved", "auto_approved": True}
 
     b.overtime_status = BookingOvertimeStatus.pending
@@ -1577,21 +1601,50 @@ async def extend_booking(
     if result.rejected:
         raise HTTPException(409, result.reject_reason or "Estensione rifiutata")
 
-    # v3.4.32.1: se chi estende ha già `approve_overtime`, l'overtime risultante
-    # è auto-approvato (siamo noi stessi i decisori — niente self-notify spurious).
-    self_approves_overtime = has_permission(user, "approve_overtime")
+    # v3.4.32.2: auto-approve è ammesso SOLO per manager+admin (non producer).
+    # Producer ha permesso `approve_overtime` ma estendendo va sempre in pending
+    # → dev'essere il manager a confermare. Questo riflette la decisione
+    # governance: "approvazione straordinari deve darla il manager".
+    from app.services.rbac import is_manager, is_admin
+    can_auto_approve = is_manager(user) or is_admin(user)
     auto_approved_ids: list[int] = []
-    if self_approves_overtime and result.overtime_pending_booking_ids:
+    if can_auto_approve and result.overtime_pending_booking_ids:
         for bid in result.overtime_pending_booking_ids:
             bk = db.query(Booking).filter(Booking.id == bid).first()
             if bk and bk.overtime_status == BookingOvertimeStatus.pending:
                 bk.overtime_status = BookingOvertimeStatus.approved
                 _log_change(db, bk.id, "overtime_auto_approved",
                             f"Auto-approvato da {user.full_name if user else '?'} "
-                            "(stesso utente ha permesso approve_overtime)",
+                            "(manager/admin con approve_overtime)",
                             {"by_user_id": user.id if user else None})
                 auto_approved_ids.append(bid)
         db.commit()
+        # Notifica info agli ALTRI manager+admin per visibilità governance
+        # (severity=info, no action_required: è solo per audit/awareness).
+        try:
+            other_admins = [
+                u.id for u in db.query(User).filter(User.is_active == True).all()  # noqa: E712
+                if (is_manager(u) or is_admin(u)) and u.id != (user.id if user else -1)
+            ]
+            if other_admins and auto_approved_ids:
+                for bid in auto_approved_ids:
+                    bk = db.query(Booking).options(joinedload(Booking.job)).filter(Booking.id == bid).first()
+                    if not bk:
+                        continue
+                    notif_svc.notify(
+                        db,
+                        user_ids=other_admins,
+                        kind=NotificationKind.booking_overtime_resolved.value,
+                        severity=NotificationSeverity.info.value,
+                        title=f"ℹ Straordinario auto-approvato: {_booking_short_label(bk)}",
+                        body=f"{user.full_name if user else '?'} ha esteso un booking in fascia "
+                             f"straordinaria e l'ha auto-approvato.",
+                        link=f"/jobs/{bk.job_id}" if bk.job_id else "/planning?view=jobs",
+                        actor_user_id=user.id if user else None,
+                        payload={"booking_id": bk.id, "auto_approved": True},
+                    )
+        except Exception as e:
+            print(f"[extend_booking] governance notify failed: {e}")
 
     # Notifiche overtime per i booking ancora in pending (NON auto-approvati)
     pending_to_notify = [bid for bid in result.overtime_pending_booking_ids

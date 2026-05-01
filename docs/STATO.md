@@ -8,6 +8,10 @@
 
 ## Versione corrente
 
+**v3.4.32.2** — 1 maggio 2026 notte — Patch v3.4.32.1 (timeline align + paste GUI + governance overtime + scaglioni CCNL)
+
+Quattro fix raggruppati: (1) allineamento timeline label↔group ripristinato (rimossi min-height conflittuali); (2) paste GUI con click-to-paste + right-click "Incolla qui" + barra arancione in modalità incolla + Esc per annullare; (3) auto-approve overtime ammesso solo a manager+admin (NO producer) + notifica info agli altri manager per visibilità governance; (4) scaglioni overtime CCNL configurabili (`overtime_brackets` JSON + `ccnl_label`) — engine già pronto, UI in `/settings#hours`, compilazione preset via AI è iter successiva (capability `propose_working_hours_policy`).
+
 **v3.4.32.1** — 1 maggio 2026 sera — Patch v3.4.32 dopo test locale (multi-risorsa, drop festivo, look timeline, temi/font)
 
 Sei fix raggruppati: (1) override permessi su booking multi-risorsa con cascade ristretto; (2) bottoni durata `−30/−15/+15/+30`; (3) auto-approve overtime se chi estende ha permesso + 3 icone notifica nuove; (4) drop su festivo → soft block + workflow overtime invece di hard block; (5) timeline altezza riga uniforme + font label più chiari; (6) 5 temi colori nuovi + 6 varianti font.

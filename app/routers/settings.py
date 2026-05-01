@@ -296,6 +296,8 @@ def _serialize_policy(p: WorkingHoursPolicy) -> dict:
         "holiday_multiplier": p.holiday_multiplier,
         "night_start": p.night_start.strftime("%H:%M") if p.night_start else None,
         "night_end": p.night_end.strftime("%H:%M") if p.night_end else None,
+        "overtime_brackets": p.overtime_brackets or [],
+        "ccnl_label": p.ccnl_label,
     }
 
 
@@ -336,6 +338,8 @@ async def update_working_hours(
     holiday_multiplier: Optional[float] = Form(None),
     night_start: Optional[str] = Form(None),
     night_end: Optional[str] = Form(None),
+    overtime_brackets: Optional[str] = Form(None),  # JSON string
+    ccnl_label: Optional[str] = Form(None),
     db: Session = Depends(get_db),
 ):
     p = db.query(WorkingHoursPolicy).filter(
@@ -359,6 +363,31 @@ async def update_working_hours(
     if holiday_multiplier is not None: p.holiday_multiplier = holiday_multiplier
     if night_start is not None: p.night_start = _parse_time(night_start) if night_start else None
     if night_end is not None: p.night_end = _parse_time(night_end) if night_end else None
+    # v3.4.32.2 — scaglioni overtime + ccnl label
+    if overtime_brackets is not None:
+        if not overtime_brackets.strip() or overtime_brackets.strip() == "[]":
+            p.overtime_brackets = None
+        else:
+            import json as _json
+            try:
+                parsed = _json.loads(overtime_brackets)
+                if not isinstance(parsed, list):
+                    raise HTTPException(400, "overtime_brackets deve essere una lista JSON")
+                # Validazione minima: from_hour numerico, multiplier ≥ 1
+                cleaned = []
+                for b in parsed:
+                    if not isinstance(b, dict): continue
+                    fh = float(b.get("from_hour", 0))
+                    mu = float(b.get("multiplier", 1.0))
+                    if mu < 1.0:
+                        raise HTTPException(400, "multiplier in overtime_brackets deve essere ≥ 1.0")
+                    cleaned.append({"from_hour": fh, "multiplier": mu})
+                cleaned.sort(key=lambda x: x["from_hour"])
+                p.overtime_brackets = cleaned if cleaned else None
+            except (ValueError, TypeError) as e:
+                raise HTTPException(400, f"overtime_brackets JSON non valido: {e}")
+    if ccnl_label is not None:
+        p.ccnl_label = (ccnl_label.strip() or None)
     if p.morning_end <= p.morning_start:
         raise HTTPException(400, "morning_end deve essere > morning_start")
     if p.daily_hours_threshold <= 0 or p.weekly_hours_threshold <= 0:

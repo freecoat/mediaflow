@@ -119,7 +119,8 @@
   .vis-time-axis .vis-grid.vis-major { border-color: rgba(255,255,255,0.08); }
   .vis-time-axis .vis-grid.vis-saturday,
   .vis-time-axis .vis-grid.vis-sunday { background: rgba(98,114,245,0.025); }
-  /* Labels (left col) — v3.4.32.1: leggermente più grandi, più chiari, centrati */
+  /* Labels (left col) — v3.4.32.2: senza min-height (rompeva allineamento
+     con le righe foreground). Font più grande e chiaro, padding leggero. */
   .vis-labelset .vis-label {
     color: #f5f5f5;
     border-color: rgba(255,255,255,0.04);
@@ -128,18 +129,20 @@
     font-weight: 500;
     box-sizing: border-box;
     transition: background .12s ease;
-    display: flex;
-    align-items: center;
-    min-height: 38px;
   }
-  .vis-labelset .vis-label .vis-inner { display: flex; align-items: center; flex: 1; min-height: 28px; }
+  /* Centratura verticale del contenuto della label senza forzare l'altezza */
+  .vis-labelset .vis-label .vis-inner {
+    display: flex; align-items: center;
+  }
   /* Zebra rows (alternate) — più sottile e simmetrico */
   .vis-labelset .vis-label:nth-child(odd) { background: rgba(255,255,255,0.012); }
   .vis-foreground .vis-group:nth-child(odd) { background: rgba(255,255,255,0.012); }
   .vis-foreground .vis-group { border-color: rgba(255,255,255,0.04); transition: background .12s ease; }
-  /* Reparto padre — barra colorata sottile + label tipo header */
-  /* v3.4.32.1: altezza fissa per evitare la "barra alta in testa" che si
-     ridimensiona quando il gruppo è espanso e contiene/no contiene item. */
+  /* Reparto padre — barra colorata sottile + label tipo header.
+     v3.4.32.2: niente più min-height/max-height su .vis-label e .vis-group.
+     Vis-timeline calcola le altezze runtime in coppia label↔group e fissarle
+     da CSS rompe l'allineamento. Lasciamo che vis le calcoli e diamo solo
+     style cosmetico. La compattezza si ottiene via padding e font-size. */
   .vis-labelset .vis-label.vis-nesting-group {
     background: linear-gradient(90deg, rgba(98,114,245,0.18) 0%, rgba(98,114,245,0.06) 60%, transparent 100%);
     font-weight: 700;
@@ -149,25 +152,15 @@
     font-size: 11px;
     border-left: 3px solid #6272f5;
     padding-left: 12px;
-    min-height: 28px !important;
-    max-height: 32px !important;
-  }
-  /* Allinea anche la riga del foreground del gruppo padre alla stessa altezza */
-  .vis-foreground .vis-group.vis-nesting-group {
-    min-height: 28px !important;
-    max-height: 32px !important;
   }
   .vis-labelset .vis-label.vis-nesting-group:nth-child(odd) {
     background: linear-gradient(90deg, rgba(98,114,245,0.18) 0%, rgba(98,114,245,0.06) 60%, transparent 100%);
   }
-  /* Risorsa figlia — v3.4.32.1: min-height stabile per altezza riga uniforme
-     anche quando non ci sono item nella riga */
+  /* Risorsa figlia — v3.4.32.2: niente min-height qui, vis calcola in coppia
+     label↔group e mismatch CSS rompe l'allineamento. La leggibilità si ottiene
+     con padding + font-size, non forzando altezze. */
   .vis-labelset .vis-label:not(.vis-nesting-group) {
     padding-left: 22px;
-    min-height: 38px !important;
-  }
-  .vis-foreground .vis-group:not(.vis-nesting-group) {
-    min-height: 38px !important;
   }
   .vis-labelset .vis-label:hover { background: rgba(98,114,245,0.10); }
   .vis-foreground .vis-group:hover { background: rgba(98,114,245,0.04); }
@@ -231,6 +224,10 @@
   .vis-item .vis-item-content { padding: 2px 4px; }
   /* Linea oggi più visibile */
   .vis-current-time { background-color: #fb923c; width: 2px; }
+  /* v3.4.32.2: paste mode — cursor copy + outline arancione sulla timeline */
+  #tl-host.tl-paste-mode { outline: 2px dashed #fb923c; outline-offset: -2px; cursor: copy; }
+  #tl-host.tl-paste-mode .vis-foreground .vis-group { cursor: copy; }
+  #tl-host.tl-paste-mode .vis-item { cursor: not-allowed; }
   /* Background items: ferie/malattia/festività/weekend (E3 v3.4.17) */
   .vis-item.tl-bg-vacation { background: rgba(99,102,241,0.15) !important; border: none !important; box-shadow: none; }
   .vis-item.tl-bg-vacation::before { content: ''; position: absolute; inset: 0; background: repeating-linear-gradient(45deg, transparent 0 4px, rgba(99,102,241,0.25) 4px 8px); }
@@ -1351,22 +1348,75 @@ window.addEventListener('keydown', async (e) => {
   }
 });
 
+// v3.4.32.2: Ctrl+V → entra in "paste mode": prossimo click su area vuota
+// della timeline incolla il clipboard a quella posizione (primo elemento al
+// click, gli altri shiftati di pari offset). Esc esce dalla mode.
 async function tlBulkPaste() {
+  if (!(window._tlClipboard || []).length) return;
+  tlEnterPasteMode();
+}
+
+function tlEnterPasteMode() {
+  if (window._tlPasteMode) return;
+  window._tlPasteMode = true;
+  const host = document.getElementById('tl-host');
+  if (host) host.classList.add('tl-paste-mode');
+  // Bar persistente con istruzioni + bottone Annulla
+  let bar = document.getElementById('tl-paste-bar');
+  if (!bar) {
+    bar = document.createElement('div');
+    bar.id = 'tl-paste-bar';
+    bar.style.cssText = 'position:fixed; bottom:20px; left:50%; transform:translateX(-50%); background:#fb923c; color:#1a1d29; border-radius:8px; padding:10px 16px; font-size:13px; box-shadow:0 4px 16px rgba(251,146,60,.5); z-index:10000; display:flex; gap:12px; align-items:center; font-weight:500;';
+    document.body.appendChild(bar);
+  }
+  const n = window._tlClipboard.length;
+  bar.innerHTML = `<span>📋 Modalità incolla — Click sulla timeline per incollare ${n} booking</span>
+    <button id="tl-paste-cancel" style="background:rgba(0,0,0,.15); border:none; color:#1a1d29; padding:4px 10px; border-radius:4px; cursor:pointer; font-weight:600;">Esc · Annulla</button>`;
+  bar.style.display = 'flex';
+  document.getElementById('tl-paste-cancel').onclick = tlExitPasteMode;
+  // Esc handler
+  window._tlPasteEscHandler = (e) => {
+    if (e.key === 'Escape') tlExitPasteMode();
+  };
+  document.addEventListener('keydown', window._tlPasteEscHandler);
+}
+
+function tlExitPasteMode() {
+  window._tlPasteMode = false;
+  const host = document.getElementById('tl-host');
+  if (host) host.classList.remove('tl-paste-mode');
+  const bar = document.getElementById('tl-paste-bar');
+  if (bar) bar.style.display = 'none';
+  if (window._tlPasteEscHandler) {
+    document.removeEventListener('keydown', window._tlPasteEscHandler);
+    window._tlPasteEscHandler = null;
+  }
+}
+
+// Incolla il clipboard al `targetTime` (primo elemento atterra qui, gli altri
+// shiftati di pari offset preservando spaziature originali). Se `targetGroup`
+// è valorizzato, primo elemento va su quella risorsa; gli altri restano sulla
+// loro risorsa originale.
+async function tlPasteAt(targetTime, targetGroup) {
   const items = window._tlClipboard || [];
   if (!items.length) return;
-  // Calcola offset per incollare ad oggi alla stessa ora
   const baseStart = new Date(items[0].start);
-  const today = new Date();
-  today.setHours(baseStart.getHours(), baseStart.getMinutes(), 0, 0);
-  const offsetMs = today - baseStart;
+  const target = new Date(targetTime);
+  // Snap al minuto della modalità zoom corrente
+  const stepMin = {day:15, week:30, month:60, quarter:60}[tlZoom] || 30;
+  const ms = stepMin * 60 * 1000;
+  target.setTime(Math.round(target.getTime() / ms) * ms);
+  const offsetMs = target - baseStart;
   let ok = 0, fail = 0;
-  for (const it of items) {
+  for (let i = 0; i < items.length; i++) {
+    const it = items[i];
     const p = it.extendedProps || {};
     const newStart = new Date(new Date(it.start).getTime() + offsetMs);
     const newEnd = new Date(new Date(it.end).getTime() + offsetMs);
+    const ridForFirst = (i === 0 && typeof targetGroup === 'number') ? targetGroup : p.resource_id;
     const fd = new FormData();
     fd.append('assignments', JSON.stringify([{
-      resource_id: p.resource_id,
+      resource_id: ridForFirst,
       start_datetime: _toLocalDtInput(newStart),
       end_datetime: _toLocalDtInput(newEnd),
     }]));
@@ -1379,7 +1429,7 @@ async function tlBulkPaste() {
       ok++;
     } catch(_) { fail++; }
   }
-  toast(`${ok} incollat${ok === 1 ? 'o' : 'i'} a oggi${fail ? `, ${fail} errori (conflitti?)` : ''}`,
+  toast(`${ok} incollat${ok === 1 ? 'o' : 'i'}${fail ? `, ${fail} errori (conflitti?)` : ''}`,
         fail ? 'warning' : 'success', 4000);
   renderTimeline(true);
 }
@@ -1833,16 +1883,33 @@ async function renderTimeline(preserveWindow=false) {
       } catch(e) { toast(e.message || 'Errore', 'error'); }
     } else if (typeof props.group === 'number' && props.time) {
       // Click destro su area vuota
-      const choice = await tlContextMenu(x, y, [
+      const hasClipboard = (window._tlClipboard || []).length > 0;
+      const menu = [
         {label: '+ Nuovo booking qui…', value: 'new'},
-        {label: '✕ Annulla', value: null},
-      ]);
+      ];
+      if (hasClipboard) {
+        menu.push({label: `📋  Incolla qui (${window._tlClipboard.length})`, value: 'paste'});
+      }
+      menu.push({label: '✕ Annulla', value: null});
+      const choice = await tlContextMenu(x, y, menu);
       if (choice === 'new') {
         const start = new Date(props.time); start.setMinutes(0,0,0);
         const end = new Date(start.getTime() + 60*60*1000);
         tlbOpenWithRange(props.group, start, end);
+      } else if (choice === 'paste') {
+        await tlPasteAt(props.time, props.group);
       }
     }
+  });
+
+  // v3.4.32.2: click-to-paste mode. Quando attiva, il prossimo click su area
+  // vuota della timeline incolla il clipboard a quella posizione.
+  tlInstance.on('click', async (props) => {
+    if (!window._tlPasteMode) return;
+    if (props.item) return; // ignora click su item
+    if (typeof props.group !== 'number' || !props.time) return;
+    await tlPasteAt(props.time, props.group);
+    tlExitPasteMode();
   });
   tlInstance.on('rangechanged', (props) => {
     tlUpdateRangeLabel();

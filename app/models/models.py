@@ -539,6 +539,15 @@ class WorkingHoursPolicy(Base):
     # ricevono il night_multiplier (anche se non eccedono soglia diurna).
     night_start: Mapped[Optional[time]] = mapped_column(Time, nullable=True, default=time(22, 0))
     night_end: Mapped[Optional[time]] = mapped_column(Time, nullable=True, default=time(6, 0))
+    # v3.4.32.2 — Scaglioni overtime per CCNL.
+    # JSON list: [{"from_hour": 0, "multiplier": 1.0}, {"from_hour": 2, "multiplier": 1.30}, ...]
+    # Interpretazione: ordinato per from_hour. Le ore overtime di una giornata
+    # sono distribuite secondo gli scaglioni: ore 0..2 → 1.0 (base), ore 2..4 → 1.30, ...
+    # Se NULL, l'engine usa il singolo `overtime_multiplier`. Configurazione
+    # tipica per CCNL Cinema Doppiaggio: prime 2 ore al 30%, poi 60%.
+    overtime_brackets: Mapped[Optional[list]] = mapped_column(JSON, nullable=True, default=None)
+    # Etichetta opzionale del CCNL/preset (es. "Italia base", "CCNL Cinema · Doppiaggio")
+    ccnl_label: Mapped[Optional[str]] = mapped_column(String(120), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
 
 
