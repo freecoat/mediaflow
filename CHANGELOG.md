@@ -1,5 +1,13 @@
 # MediaFlow — Changelog
 
+## v3.4.34.5 — Fix drag&drop listino → voci (1 maggio 2026 notte tarda)
+
+Bug introdotto in v3.4.34 (refactor multi-tbody categorie): gli handler `onLinesDragOver`/`onLinesDragLeave`/`onLinesDrop` cercavano ancora `document.getElementById('lines-body')`, che non esisteva più dopo che il tbody era stato rinominato in `lines-tbody-empty` e sostituito con tbody dinamici per categoria.
+
+Fix: target unificato su `#lines-card` (la card sempre presente). Aggiunte le classi `.drop-active` e `.drop-hint` lì. Aggiornato CSS `#lines-card.drop-active` (era `#lines-body.drop-active`).
+
+---
+
 ## v3.4.34.4 — Listino allargato +35% (1 maggio 2026 notte tarda)
 
 `.al-side`: width 480→650px (>1400) e 440→600px (1024–1400). `#quote-editor.with-pricelist` padding-right 500→670px e 460→620px in proporzione. Più spazio per i risultati listino con drag handle e meta tags.

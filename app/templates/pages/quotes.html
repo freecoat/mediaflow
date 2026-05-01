@@ -230,11 +230,10 @@
       font-size:10.5px; color:var(--text3); text-align:center;
     }
     /* Drop zone evidenziata */
-    #lines-body.drop-active {
+    /* v3.4.34.5: drop hint sulla card stessa (non più sul tbody, che ora
+       è dinamico per categoria). */
+    #lines-card.drop-active {
       box-shadow: inset 0 0 0 2px var(--indigo);
-    }
-    #lines-body.drop-active::after {
-      /* niente, lo stile è sufficiente */
     }
     .quote-editor-card.drop-hint { border-color: var(--indigo) !important; }
   </style>
@@ -1478,24 +1477,27 @@ function _isPiDrag(ev) {
   if (!types) return false;
   return Array.from(types).includes('application/x-mf-priceitem');
 }
+// v3.4.34.5: target unificato su #lines-card. Il vecchio #lines-body non
+// esiste più dopo il refactor multi-tbody (v3.4.34): le voci ora sono in
+// tbody.ql-cat-tbody dinamici dentro #lines-table.
 function onLinesDragOver(ev) {
   if (!_isPiDrag(ev)) return;
   ev.preventDefault();
   ev.dataTransfer.dropEffect = 'copy';
-  document.getElementById('lines-body').classList.add('drop-active');
-  document.getElementById('lines-card').classList.add('drop-hint');
+  const card = document.getElementById('lines-card');
+  if (card) { card.classList.add('drop-active'); card.classList.add('drop-hint'); }
 }
 function onLinesDragLeave(ev) {
-  // Evita flicker mentre il cursore attraversa figli
   const card = document.getElementById('lines-card');
+  if (!card) return;
   if (!card.contains(ev.relatedTarget)) {
-    document.getElementById('lines-body').classList.remove('drop-active');
+    card.classList.remove('drop-active');
     card.classList.remove('drop-hint');
   }
 }
 async function onLinesDrop(ev) {
-  document.getElementById('lines-body').classList.remove('drop-active');
-  document.getElementById('lines-card').classList.remove('drop-hint');
+  const card = document.getElementById('lines-card');
+  if (card) { card.classList.remove('drop-active'); card.classList.remove('drop-hint'); }
   const pid = ev.dataTransfer.getData('application/x-mf-priceitem') || ev.dataTransfer.getData('text/plain');
   if (!pid) return;
   ev.preventDefault();
