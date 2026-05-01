@@ -72,6 +72,8 @@ Sessione 1 maggio sera (commit unico): chiusa v3.4.32 dopo discussione completa 
 
 ## In corso
 
+**Sessione 1 maggio notte profonda chiusa — 17 versioni v3.4.32→v3.4.38 + push su origin/main `60b2e09..e735495`.** Working tree pulito, audit logico completo (3 round). Riapertura: "Riprendi da v3.4.38 — apri con ultimo commento".
+
 **Sessione 1 maggio notte chiusa.** v3.4.32→.32.2 + .33 da testare sul Mac al prossimo pull (o continua il test locale).
 
 Da testare per **v3.4.33**:
