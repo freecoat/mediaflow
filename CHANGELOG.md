@@ -1,5 +1,41 @@
 # MediaFlow — Changelog
 
+## v3.4.33.1 — Pannello "Aggiungi voce" laterale persistente (1 maggio 2026 notte tarda)
+
+Patch di v3.4.33 per chiarimento UX listino in /quotes. La richiesta di Matteo era: il **modal "Aggiungi voce"** (con sidebar categorie + ricerca + risultati grandi) deve diventare un **pannello laterale persistente** con drag&drop, NON un mini-pannello compatto.
+
+### Cambio strutturale
+
+- **Rimosso** il `#modal-add-line` (overlay centrale modal-style) e il `#side-pricelist` mini introdotto in v3.4.29.
+- **Aggiunto** il pannello `#side-add-line` (`<aside class="al-side">`) che riusa la GUI ricca del vecchio modal (`al-searchbar` + `al-main` con `al-cat-sidebar` + `al-results` + `al-selpanel`) ma è persistente (non overlay, no backdrop) e resta aperto fino al click ✕.
+- **Larghezza** colonna pannello: 480px (era 340px del mini), responsive con breakpoint a 1400/1200/1024px.
+- **Drag handle** sui `.al-result`: ogni voce ha `draggable="true"` + `ondragstart="onSpDragStart()"`. Hint visibile in hover ("⋮⋮ trascina"). Drop su `#lines-card` (handler già esistente da v3.4.29).
+- **Click su una voce** → la seleziona e attiva il pannello editor (`al-selpanel`) con descrizione/qty/unit/prezzo modificabili. Bottone "Aggiungi alla quotazione" aggiunge la voce e **resetta la selezione**: il pannello resta aperto pronto per la prossima.
+- **Toggle "📋 Listino"** e click "+ Aggiungi voce" aprono entrambi lo stesso pannello (deduplicato).
+- **Default aperto** all'apertura dell'editor di una quote (preserva il default introdotto in v3.4.33). Click ✕ chiude e memorizza in localStorage `mf_side_pricelist_open='0'`.
+
+### Layout grid
+
+```
+#quote-editor-body                 → 1fr + 320px (editor + meta)
+#quote-editor-body.with-pricelist  → 1fr + 280px + 480px (editor + meta + pannello)
+< 1200px                          → 1fr + 420px (meta nascosta)
+< 1024px                          → 1 colonna (mobile)
+```
+
+### CSS / JS rimossi (deprecati)
+
+- Funzioni `openSidePricelist`, `closeSidePricelist`, `renderSidePricelist`: il mini-pannello v3.4.29 non esiste più.
+- Selettori `.side-pl-*`: dead code (lasciato in CSS per ora, ripulibile in cleanup).
+
+### Funzioni nuove
+
+- `openSideAddLine(resetSearch)` — apre il pannello, focus sulla ricerca; se `resetSearch=true` (chiamato da "+ Aggiungi voce") svuota search e selezione, altrimenti (chiamato da toggle "📋") preserva lo stato.
+- `closeSideAddLine()` — chiude e salva preferenza.
+- `toggleSidePricelist()` — alias di toggle sul nuovo pannello (mantenuto per back-compat con il bottone in topbar).
+
+---
+
 ## v3.4.33 — Cost report v2 (fonte ore = Booking) + PDF cliente + listino /quotes default open (1 maggio 2026 notte)
 
 Cantiere "Cost Report doppio" sospeso da v3.4.21 ora avviato. Step A+B+C consegnati; "Genera quote v2 dagli scostamenti" (Step D) volutamente fuori scope, ribadito.
