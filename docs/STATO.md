@@ -8,6 +8,10 @@
 
 ## Versione corrente
 
+**v3.4.38** — 1 maggio 2026 notte profonda — Round 3 Audit: hardening logico (3 round completati)
+
+Audit logico completo (R1+R2+R3). R3.1 invariante count_in_costs↔execution_status. R3.2 RBAC edit_quotes su update_quote. R3.3 reset original_end_datetime su shortening (booking accorciato sotto soglia → overtime_status=none). R3.4 FSM transizioni JobStatus con matrice esplicita. R3.5 cleanup Timesheet legacy nel cost report (rimossi hours_cost/hours_cost_legacy_timesheet/timesheet_summary, fonte canonica = Booking).
+
 **v3.4.37** — 1 maggio 2026 notte profonda — Round 2 Audit: barra avanzamento job
 
 Round 2 di 3 dell'audit. Endpoint `/planning/api/jobs/{id}/progress` + flag `?include_progress=true` su lista jobs. Colonna "Avanzamento" in `/planning?view=jobs` con barra CSS color-coded. Algoritmo: ore booking `done` / ore booking totali (esclusi cancelled e pool not_done).

@@ -9,7 +9,7 @@ from sqlalchemy.orm import Session, joinedload
 from sqlalchemy import func
 from app.database import get_db
 from app.models import (
-    Job, JobCostLine, Timesheet, Expense, Invoice, InvoiceStatus, JobResourceAssignment,
+    Job, JobCostLine, Expense, Invoice, InvoiceStatus, JobResourceAssignment,
     Booking, BookingAssignment, BookingExecutionStatus, BookingOvertimeStatus, BookingStatus,
     Resource, WorkingHoursPolicy,
 )
@@ -134,13 +134,11 @@ async def job_cost_report(job_id: int, db: Session = Depends(get_db)):
     # v3.4.33 — Ore + costo derivati dai BOOKING (canonico)
     bk_data = _bookings_hours_cost(job_id, db)
 
-    # Legacy: Timesheet aggregati (kept for back-compat). NON usato per cost_report
-    # ma riportato per debug/migrazione, non più visualizzato in UI.
-    ts_data = db.query(
-        Timesheet.user_id,
-        func.sum(Timesheet.hours).label("hours"),
-        func.sum(Timesheet.hours * Timesheet.hourly_rate).label("cost"),
-    ).filter(Timesheet.job_id == job_id).group_by(Timesheet.user_id).all()
+    # v3.4.38 (R3.5): Timesheet legacy DROPPATO dal cost report.
+    # Memoria architetturale: cost report = quote+booking+hardcost (binario
+    # cliente/finance), Timesheet/TimePunch = HR (binario consulente del lavoro).
+    # I campi `hours_cost_legacy_timesheet` e `hours_cost` non sono più
+    # esposti nel response da v3.4.38.
 
     # Spese
     total_expenses = db.query(func.sum(Expense.amount)).filter(
@@ -159,7 +157,6 @@ async def job_cost_report(job_id: int, db: Session = Depends(get_db)):
     total_quoted = sum(l.total_quoted for l in job.cost_lines)
     total_accrued = sum(l.total_accrued for l in job.cost_lines)
     total_expected = sum(l.total_expected for l in job.cost_lines)
-    total_actual_hours_cost = sum(r.cost or 0 for r in ts_data)
 
     # v3.4.36 (R1.4): margine dinamico = Σ JobCostLine.total_quoted (vivo)
     # − (costo booking + spese). Non più contro Job.budget_quoted statico
@@ -189,9 +186,6 @@ async def job_cost_report(job_id: int, db: Session = Depends(get_db)):
             "bookings_hours_cost": bk_data["total_cost"],
             "estimated_cost": round(estimated_cost, 2),
             "margin": round(margin, 2),
-            # Back-compat (deprecato, sarà rimosso in 4.x)
-            "hours_cost_legacy_timesheet": round(total_actual_hours_cost, 2),
-            "hours_cost": round(total_actual_hours_cost, 2),  # alias storico
             "invoiced": round(invoiced, 2),
             "paid": round(paid, 2),
         },
@@ -225,14 +219,8 @@ async def job_cost_report(job_id: int, db: Session = Depends(get_db)):
             }
             for a in job.resource_assignments
         ],
-        "timesheet_summary": [
-            {
-                "user_id": r.user_id,
-                "hours": round(r.hours, 2),
-                "cost": round(r.cost or 0, 2),
-            }
-            for r in ts_data
-        ],
+        # v3.4.38 (R3.5): timesheet_summary rimosso. Le ore lavorate sono in
+        # bookings_breakdown e bookings_by_resource (canonico Booking).
     }
 
 

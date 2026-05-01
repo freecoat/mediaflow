@@ -405,19 +405,13 @@ function renderResources() {
 }
 
 function renderTimesheets() {
+  // v3.4.38 (R3.5): timesheet_summary rimosso dal cost report (binario HR
+  // separato). Il pannello "Ore lavorate" ora rimanda alla sezione booking
+  // per fascia (v3.4.32) che mostra le ore canoniche da Booking.
   const panel = document.getElementById('timesheet-panel');
-  const ts = currentReport.timesheet_summary;
-  if (!ts.length) { panel.innerHTML = '<div class="text-muted text-sm">Nessuna ora registrata</div>'; return; }
-  const totalH = ts.reduce((s,r) => s + r.hours, 0);
-  const totalC = ts.reduce((s,r) => s + r.cost, 0);
-  panel.innerHTML = ts.map(r => `
-    <div class="flex justify-between text-sm mb-2">
-      <span>Utente #${r.user_id}</span>
-      <span class="mono">${r.hours}h — ${fmtCurrency(r.cost)}</span>
-    </div>`).join('') +
-    `<div class="flex justify-between text-sm" style="border-top:1px solid var(--border);padding-top:8px;margin-top:4px;font-weight:600;">
-      <span>Totale</span><span class="mono">${totalH.toFixed(1)}h — ${fmtCurrency(totalC)}</span>
-    </div>`;
+  if (panel) {
+    panel.innerHTML = '<div class="text-muted text-sm">Le ore lavorate sono ora visualizzate nella sezione "⏱ Ore booking per fascia" sopra (fonte canonica: Booking, non Timesheet).</div>';
+  }
 }
 
 function openUpdateLine(line) {

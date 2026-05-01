@@ -321,12 +321,18 @@ async def update_quote_status(
 @router.put("/api/{quote_id}")
 async def update_quote(
     quote_id: int,
+    request: Request,
     package_discount: Optional[float] = Form(None),
     vat_rate: Optional[float] = Form(None),
     notes: Optional[str] = Form(None),
     payment_terms: Optional[str] = Form(None),
     db: Session = Depends(get_db),
 ):
+    # v3.4.38 (R3.2): guard permission edit_quotes
+    from app.services.rbac import current_user_optional, has_permission
+    user = current_user_optional(request)
+    if not has_permission(user, "edit_quotes"):
+        raise HTTPException(403, "Non hai il permesso di modificare le quotazioni")
     q = db.query(Quote).options(
         joinedload(Quote.lines).joinedload(QuoteLine.price_item).joinedload(PriceItem.category)
     ).filter(Quote.id == quote_id).first()

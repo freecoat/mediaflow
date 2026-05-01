@@ -264,18 +264,48 @@ async def get_job(job_id: int, db: Session = Depends(get_db)):
     return j
 
 
+# v3.4.38 (R3.4): FSM transizioni JobStatus. Matrice esplicita di
+# transizioni legali. Una transizione non listata viene rifiutata con 400.
+# `cancelled` può essere riportato a `approved` (riapertura), ma da `completed`/
+# `invoiced` non si torna indietro (chiusura definitiva, salvo intervento DB).
+JOB_STATUS_TRANSITIONS = {
+    JobStatus.draft:     {JobStatus.quoting, JobStatus.approved, JobStatus.cancelled},
+    JobStatus.quoting:   {JobStatus.draft, JobStatus.approved, JobStatus.cancelled},
+    JobStatus.approved:  {JobStatus.active, JobStatus.on_hold, JobStatus.cancelled, JobStatus.completed},
+    JobStatus.active:    {JobStatus.on_hold, JobStatus.completed, JobStatus.cancelled},
+    JobStatus.on_hold:   {JobStatus.active, JobStatus.cancelled, JobStatus.completed},
+    JobStatus.completed: {JobStatus.invoiced, JobStatus.active},  # active = riapertura
+    JobStatus.invoiced:  set(),  # terminale: nessuna transizione admissible (solo via DB op)
+    JobStatus.cancelled: {JobStatus.approved},  # riapertura legacy via quotes.py:40
+}
+
+
 @router.put("/api/jobs/{job_id}/status")
 async def update_job_status(
     job_id: int,
+    request: Request,
     status: JobStatus = Form(...),
     db: Session = Depends(get_db),
 ):
     j = db.query(Job).filter(Job.id == job_id).first()
     if not j:
         raise HTTPException(404, "Job non trovato")
+    # v3.4.38 (R3.4): valida transizione contro FSM
+    current = j.status
+    allowed = JOB_STATUS_TRANSITIONS.get(current, set())
+    if status != current and status not in allowed:
+        allowed_str = ", ".join(s.value for s in sorted(allowed, key=lambda x: x.value)) or "nessuna"
+        raise HTTPException(
+            400,
+            f"Transizione non ammessa: {current.value} → {status.value}. "
+            f"Da '{current.value}' sono consentite: {allowed_str}."
+        )
+    user = current_user_optional(request)
     j.status = status
     db.commit()
-    return {"id": j.id, "status": j.status}
+    print(f"[job_status] #{j.id} ({j.code}): {current.value} → {status.value} "
+          f"by user_id={user.id if user else 'system'}")
+    return {"id": j.id, "status": j.status.value}
 
 
 # ── Booking API (multi-resource v3.4.16) ───────────────────────────────
@@ -853,6 +883,34 @@ async def update_assignment(
     a.end_datetime = new_e
     db.flush()
     _recalc_booking_envelope(a.booking)
+    # v3.4.38 (R3.3): se booking aveva overtime_status=approved e ora il
+    # nuovo end_datetime è dentro la fascia regolare (non più overtime),
+    # resetto overtime_status=none e original_end_datetime=None — non c'è
+    # più ragione di tracciare l'estensione storica.
+    b_for_check = a.booking
+    if b_for_check and b_for_check.overtime_status == BookingOvertimeStatus.approved:
+        from app.services.booking_cost import has_overtime_window
+        from app.services.working_hours import get_holidays
+        from app.models import WorkingHoursPolicy
+        res = a.resource
+        if res:
+            policy = res.working_hours_policy or db.query(WorkingHoursPolicy).filter(
+                WorkingHoursPolicy.is_default == True  # noqa: E712
+            ).first()
+            if policy:
+                hols = get_holidays(policy, a.start_datetime.year, a.end_datetime.year)
+                still_overtime = any(
+                    has_overtime_window(x.start_datetime, x.end_datetime, policy, hols)
+                    for x in b_for_check.assignments
+                )
+                if not still_overtime:
+                    b_for_check.overtime_status = BookingOvertimeStatus.none
+                    b_for_check.original_end_datetime = None
+                    _log_change(
+                        db, b_for_check.id, "overtime_revert",
+                        "Booking riportato in fascia regolare → overtime_status azzerato",
+                        None,
+                    )
     db.commit()
 
     # v3.4.32.1: dopo il drop, se l'assignment ora cade in fascia overtime
@@ -1553,6 +1611,12 @@ async def update_booking_execution(
         b.not_done_reason = (not_done_reason or "").strip()
     else:
         b.not_done_reason = None
+        # v3.4.38 (R3.1): invariante count_in_costs ↔ execution_status.
+        # count_in_costs ha senso SOLO con execution_status=not_done (pool).
+        # Se torno a planned/in_progress/done, il flag va resettato a False
+        # (le ore tornano nel calcolo standard del cost report).
+        if b.count_in_costs:
+            b.count_in_costs = False
 
     summary_text = (
         f"Esecuzione: {old_status.value if hasattr(old_status, 'value') else old_status}"
@@ -1844,6 +1908,14 @@ async def update_booking_count_in_costs(
     ).first()
     if not b:
         raise HTTPException(404, "Booking non trovato")
+    # v3.4.38 (R3.1): invariante. count_in_costs True ha senso SOLO se il
+    # booking è in stato not_done (pool ore non maturate ma da contare).
+    if count_in_costs and b.execution_status != BookingExecutionStatus.not_done:
+        raise HTTPException(
+            400,
+            "Il flag 'conta nei costi' è applicabile solo a booking in stato "
+            "'Non fatto' (pool not_done). Cambia prima lo stato esecuzione."
+        )
     b.count_in_costs = bool(count_in_costs)
     _log_change(db, b.id, "count_in_costs",
                 f"Pool not_done: count_in_costs → {b.count_in_costs}",

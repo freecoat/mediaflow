@@ -1,5 +1,63 @@
 # MediaFlow — Changelog
 
+## v3.4.38 — Round 3 Audit: hardening logico (1 maggio 2026 notte profonda)
+
+Round 3 di 3 dell'audit logico. Cinque fix di robustezza.
+
+### R3.1 — Invariante `count_in_costs` ↔ `execution_status`
+
+`count_in_costs=True` ha senso SOLO con `execution_status=not_done` (pool ore non maturate ma da contare comunque).
+
+- `PATCH /planning/api/bookings/{id}/execution`: se nuovo stato ≠ `not_done`, force `count_in_costs=False`.
+- `PATCH /planning/api/bookings/{id}/count-in-costs`: rifiuta con 400 se `execution_status ≠ not_done` (messaggio chiaro: "Cambia prima lo stato esecuzione").
+
+Elimina lo stato incoerente "booking done con count_in_costs=True" che potrebbe confondere il calcolo del cost report.
+
+### R3.2 — RBAC guard su `update_quote`
+
+`PUT /quotes/api/{quote_id}` ora richiede permesso `edit_quotes` esplicito (`app/routers/quotes.py:322`). Prima qualunque utente autenticato poteva modificare i totali della quotazione.
+
+### R3.3 — Reset `original_end_datetime` su shortening
+
+`PUT /api/booking-assignments/{id}` ora controlla post-update: se il booking aveva `overtime_status=approved` e il nuovo end-time riporta tutti gli assignment dentro la fascia regolare, `overtime_status` torna a `none` e `original_end_datetime` torna a `NULL`. Audit log con kind `overtime_revert`.
+
+Edge case: l'admin/manager accorcia un booking precedentemente approvato come straordinario → il sistema rileva che non è più overtime e azzera lo status (no più "approved" residuo che non corrisponde alla realtà delle ore).
+
+### R3.4 — FSM transizioni `JobStatus`
+
+Matrice esplicita `JOB_STATUS_TRANSITIONS` in `planning.py`:
+
+| Da | A consentite |
+|---|---|
+| `draft` | quoting, approved, cancelled |
+| `quoting` | draft, approved, cancelled |
+| `approved` | active, on_hold, cancelled, completed |
+| `active` | on_hold, completed, cancelled |
+| `on_hold` | active, cancelled, completed |
+| `completed` | invoiced, active (riapertura) |
+| `invoiced` | (terminale, solo via DB op) |
+| `cancelled` | approved (riapertura legacy) |
+
+`PUT /api/jobs/{id}/status` valida e rifiuta con 400 + messaggio chiaro se la transizione non è ammessa. Log della transizione su stdout (poi audit-loggato in iter successiva).
+
+### R3.5 — Cleanup Timesheet legacy nel cost report
+
+Memoria architetturale: cost report = quote+booking+hardcost (cliente/finance), Timesheet/TimePunch = HR (consulente lavoro). Il cost report continuava a esporre `summary.hours_cost`, `summary.hours_cost_legacy_timesheet`, `timesheet_summary` da Timesheet — confondendo le due fonti.
+
+Rimossi dal response:
+- `summary.hours_cost` e `summary.hours_cost_legacy_timesheet`
+- `timesheet_summary` (lista per-user)
+
+Rimossa anche la query `Timesheet` dal router cost_report e l'import non più necessario. UI `renderTimesheets()` ora mostra un banner che rimanda alla sezione "⏱ Ore booking per fascia".
+
+### Limiti riconosciuti
+
+- FSM Job non controlla i side-effect (es. transizione `completed → active` non riapre i booking cancellati, non ricrea cost lines): gestione side-effect rimandata a v3.5+ se servirà.
+- RBAC guard su `update_quote_line`/`delete_quote_line`/`add_quote_line` (lifecycle Quote) non ancora aggiunto in Round 3 — prossima iterazione.
+- Cleanup ulteriori (ProjectTechSheet.data Pydantic, Notification.payload schema, Asset acycity, dead CSS .side-pl-*) restano in backlog.
+
+---
+
 ## v3.4.37 — Round 2 Audit: barra avanzamento job (1 maggio 2026 notte profonda)
 
 Risposta alla richiesta diretta di Matteo: "barra progressi nei job in pianificazione in base a quanto è stato svolto nei booking".
