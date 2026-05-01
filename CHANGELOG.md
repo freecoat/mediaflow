@@ -1,5 +1,46 @@
 # MediaFlow — Changelog
 
+## v3.4.34 — Refactor layout editor /quotes (1 maggio 2026 notte tarda)
+
+Riorganizzazione editor quotazione su richiesta UX di Matteo. 6 punti.
+
+### 1. Critical Assumptions compatto in topbar
+Il blocco "Critical Assumptions" non è più una card a tutta larghezza nella colonna sinistra. È ora una **bar inline compatta** tra il titolo e il body editor: 4 input affiancati (`Material / Delivery / min / FPS`) con sfondo indigo-bg, label uppercase laterale. Riduce drasticamente lo spazio verticale occupato.
+
+### 2. Bottone "+ Aggiungi voce" rimosso
+Tolto dalla card "Voci preventivo". Ora c'è un'unica entrypoint per aggiungere voci: il toggle **"📋 Listino"** in topbar che apre il pannello laterale persistente.
+
+### 3. Riepilogo economico SOPRA Voci preventivo
+Nella colonna sinistra (editor), il "Riepilogo economico" è ora la prima card, sopra a "Voci preventivo". Visibilità immediata dei totali appena entri.
+
+### 4. Listino allineato alle Voci preventivo
+Il pannello "Listino & aggiungi voce" è spostato dentro la **colonna destra** (era 3a colonna del grid). La colonna destra contiene "Stato & azioni" sopra al pannello listino. Il top del pannello è naturalmente allineato al top di "Voci preventivo" (entrambe le colonne partono da `align-items: start`).
+
+### 5. Stato & azioni sopra il Listino
+Spostata sopra al pannello listino nella colonna destra. Il bottone "✓ Approva quote → Job" è stato spostato qui (era in topbar).
+
+### 6. Riordino categorie via drag&drop
+Le voci preventivo sono ora renderizzate in **multi-tbody** dentro la stessa `<table>` (un `<tbody class="ql-cat-tbody">` per categoria). Header categoria ha maniglia ⋮⋮ a sinistra: SortableJS sul livello tbody permette di trascinare un intero blocco categoria sopra/sotto un altro.
+
+L'ordine è persistito in `Quote.category_order` (JSON nullable, auto-migrate al boot). Endpoint `PUT /quotes/api/{id}/category-order` body JSON `{order: ["PICTURE","SOUND",...]}`. Categorie non listate appaiono dopo nell'ordine naturale.
+
+Drag voci dentro/tra categorie funziona ancora (gruppo `quote-lines` su SortableJS).
+
+### Layout grid
+
+```
+#quote-editor-body                  → 1fr (singola, no listino)
+#quote-editor-body.with-pricelist  → 1fr 480px (editor + col destra)
+< 1400px                          → 1fr 440px
+< 1024px                          → 1 colonna (mobile, listino in fondo)
+```
+
+### Modello
+
+`Quote.category_order: Mapped[Optional[list]]` JSON nullable. Auto-migrate al boot aggiunge `quotes.category_order TEXT NULL` se mancante.
+
+---
+
 ## v3.4.33.1 — Pannello "Aggiungi voce" laterale persistente (1 maggio 2026 notte tarda)
 
 Patch di v3.4.33 per chiarimento UX listino in /quotes. La richiesta di Matteo era: il **modal "Aggiungi voce"** (con sidebar categorie + ricerca + risultati grandi) deve diventare un **pannello laterale persistente** con drag&drop, NON un mini-pannello compatto.

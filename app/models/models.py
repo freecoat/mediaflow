@@ -580,6 +580,11 @@ class Quote(Base):
     # Mappa {nome_categoria: pct_sconto}, dove pct è positivo (es. 0.15 = 15% sconto).
     # Esempio: {"PICTURE": 0.10, "SOUND": 0.05, "Altro": 0.0}
     category_discounts: Mapped[Optional[dict]] = mapped_column(JSON, nullable=True)
+    # v3.4.34 — Ordine custom delle categorie (drag&drop in editor).
+    # Lista di nomi categoria nell'ordine voluto. Le categorie non listate
+    # appaiono dopo nell'ordine naturale (prima riga di una nuova categoria).
+    # Esempio: ["PICTURE", "SOUND", "Altro"]
+    category_order: Mapped[Optional[list]] = mapped_column(JSON, nullable=True)
     vat_rate: Mapped[float] = mapped_column(Float, default=22.0)
     notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     payment_terms: Mapped[Optional[str]] = mapped_column(Text, nullable=True)

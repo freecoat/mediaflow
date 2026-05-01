@@ -8,6 +8,10 @@
 
 ## Versione corrente
 
+**v3.4.34** — 1 maggio 2026 notte tarda — Refactor layout editor /quotes (Critical Assumptions compatto, riepilogo sopra, riordino categorie)
+
+Riorganizzazione UX dell'editor quotazione su richiesta Matteo: Critical Assumptions in topbar inline, bottone "+ Aggiungi voce" rimosso (lascia solo "📋 Listino"), Riepilogo economico sopra le voci, Stato & azioni sopra il Listino, riordino categorie con drag&drop (multi-tbody + SortableJS, persistito in `Quote.category_order` JSON nuovo).
+
 **v3.4.33.1** — 1 maggio 2026 notte tarda — Pannello "Aggiungi voce" laterale persistente
 
 Chiarimento UX listino /quotes. Il vecchio modal `#modal-add-line` e il mini-pannello `#side-pricelist` (v3.4.29) sostituiti da un singolo pannello laterale persistente `#side-add-line` (480px, GUI ricca con sidebar categorie + ricerca + risultati grandi cliccabili E draggable). Resta aperto fino click ✕. Aggiunta voce non chiude il pannello (multi-aggiunta in fila).

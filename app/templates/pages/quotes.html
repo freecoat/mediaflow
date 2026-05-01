@@ -82,43 +82,81 @@
 
 <!-- ── Editor quotazione ───────────────────────────────────── -->
 <div id="quote-editor" class="hidden" style="margin-top:24px;">
-  <div class="flex items-center justify-between mb-4">
-    <div>
-      <h2 id="editor-title" style="font-size:18px;font-weight:600;"></h2>
-      <span class="text-xs" id="editor-status"></span>
-    </div>
-    <div class="flex gap-2">
-      <button class="btn btn-secondary btn-sm" onclick="closeEditor()">← Lista</button>
-      <div class="dropdown" style="position:relative;display:inline-block;">
-        <button class="btn btn-secondary btn-sm" onclick="this.nextElementSibling.classList.toggle('open')">⬇ Esporta ▾</button>
-        <div class="dropdown-menu" style="position:absolute;right:0;top:100%;margin-top:4px;background:var(--bg2);border:1px solid var(--border);border-radius:6px;display:none;flex-direction:column;min-width:160px;z-index:10;box-shadow:0 4px 12px rgba(0,0,0,0.2);">
-          <a id="btn-pdf" class="dropdown-item" href="#" target="_blank" style="padding:8px 12px;font-size:13px;text-decoration:none;color:var(--text);">📄 PDF</a>
-          <a id="btn-csv" class="dropdown-item" href="#" style="padding:8px 12px;font-size:13px;text-decoration:none;color:var(--text);">📊 CSV</a>
-          <a id="btn-xlsx" class="dropdown-item" href="#" style="padding:8px 12px;font-size:13px;text-decoration:none;color:var(--text);">📈 Excel (.xlsx)</a>
-        </div>
+  <!-- v3.4.34: topbar editor su 2 righe — riga 1 (titolo + bottoni),
+       riga 2 (Critical Assumptions compatto inline) -->
+  <div class="quote-editor-topbar">
+    <div class="quote-editor-topbar-row">
+      <div class="quote-editor-title-block">
+        <h2 id="editor-title" style="font-size:18px;font-weight:600;"></h2>
+        <span class="text-xs" id="editor-status"></span>
       </div>
-      <button class="btn btn-secondary btn-sm" id="btn-toggle-side-pricelist" onclick="toggleSidePricelist()">📋 Listino</button>
-      <button class="btn btn-primary btn-sm" onclick="approveAndCreateJob()">✓ Approva quote → Job</button>
+      <div class="flex gap-2">
+        <button class="btn btn-secondary btn-sm" onclick="closeEditor()">← Lista</button>
+        <div class="dropdown" style="position:relative;display:inline-block;">
+          <button class="btn btn-secondary btn-sm" onclick="this.nextElementSibling.classList.toggle('open')">⬇ Esporta ▾</button>
+          <div class="dropdown-menu" style="position:absolute;right:0;top:100%;margin-top:4px;background:var(--bg2);border:1px solid var(--border);border-radius:6px;display:none;flex-direction:column;min-width:160px;z-index:10;box-shadow:0 4px 12px rgba(0,0,0,0.2);">
+            <a id="btn-pdf" class="dropdown-item" href="#" target="_blank" style="padding:8px 12px;font-size:13px;text-decoration:none;color:var(--text);">📄 PDF</a>
+            <a id="btn-csv" class="dropdown-item" href="#" style="padding:8px 12px;font-size:13px;text-decoration:none;color:var(--text);">📊 CSV</a>
+            <a id="btn-xlsx" class="dropdown-item" href="#" style="padding:8px 12px;font-size:13px;text-decoration:none;color:var(--text);">📈 Excel (.xlsx)</a>
+          </div>
+        </div>
+        <button class="btn btn-secondary btn-sm" id="btn-toggle-side-pricelist" onclick="toggleSidePricelist()">📋 Listino</button>
+      </div>
+    </div>
+    <!-- v3.4.34: Critical Assumptions compatto inline tra titolo e body -->
+    <div class="quote-editor-assumptions" id="assumptions-card">
+      <span class="qa-label">Critical Assumptions</span>
+      <input class="qa-input" id="qa-material" placeholder="Material" title="Production Material">
+      <input class="qa-input" id="qa-delivery" placeholder="Delivery" title="Delivery Format">
+      <input class="qa-input qa-num" id="qa-length" type="number" step="0.5" placeholder="min" title="Durata in minuti">
+      <input class="qa-input qa-num" id="qa-fps" placeholder="FPS" title="Frame per secondo (24/25)">
     </div>
   </div>
   <style>
     .dropdown-menu.open { display:flex !important; }
     .dropdown-item:hover { background: var(--bg3); }
-    /* Layout: 2 colonne default (editor + riepilogo), 3 colonne con listino aperto */
-    #quote-editor-body { display:grid; grid-template-columns: 1fr 320px; gap:20px; align-items:start; }
-    /* v3.4.33.1: pannello laterale "Aggiungi voce" più largo (480px) per
-       contenere ricerca + sidebar categorie + risultati con drag handle. */
-    #quote-editor-body.with-pricelist { grid-template-columns: 1fr 280px 480px; }
+    /* v3.4.34: Layout editor riorganizzato.
+       - Senza pannello listino: 1 colonna piena (editor)
+       - Con pannello listino: 2 colonne (editor + side panel). Stato&azioni
+         e Listino vivono entrambi nella colonna destra. */
+    #quote-editor-body { display:grid; grid-template-columns: 1fr; gap:20px; align-items:start; }
+    #quote-editor-body.with-pricelist { grid-template-columns: 1fr 480px; }
     @media (max-width: 1400px) {
-      #quote-editor-body.with-pricelist { grid-template-columns: 1fr 260px 440px; }
-    }
-    @media (max-width: 1200px) {
-      #quote-editor-body.with-pricelist { grid-template-columns: 1fr 420px; }
-      #quote-editor-body.with-pricelist > .quote-meta-card { display:none; }
+      #quote-editor-body.with-pricelist { grid-template-columns: 1fr 440px; }
     }
     @media (max-width: 1024px) {
       #quote-editor-body, #quote-editor-body.with-pricelist { grid-template-columns: 1fr; }
     }
+    /* Topbar editor */
+    .quote-editor-topbar { margin-bottom: 16px; display:flex; flex-direction:column; gap:10px; }
+    .quote-editor-topbar-row { display:flex; align-items:center; justify-content:space-between; gap:14px; flex-wrap:wrap; }
+    .quote-editor-title-block { min-width:0; }
+    /* Critical Assumptions compatto: bar con input piccoli affiancati */
+    .quote-editor-assumptions {
+      display:flex; align-items:center; gap:8px; flex-wrap:wrap;
+      background: var(--indigo-bg); border: 1px solid var(--indigo-border);
+      border-radius: 6px; padding: 6px 10px;
+    }
+    .quote-editor-assumptions .qa-label {
+      font-size: 10.5px; text-transform:uppercase; letter-spacing:.6px;
+      color: var(--indigo2); font-weight: 600; padding: 0 4px 0 2px;
+      flex-shrink:0;
+    }
+    .quote-editor-assumptions .qa-input {
+      background: var(--bg); border: 1px solid var(--border); border-radius: 4px;
+      padding: 4px 8px; font-size: 12px; color: var(--text);
+      min-width: 120px; max-width: 200px; flex: 1;
+    }
+    .quote-editor-assumptions .qa-input:focus { border-color: var(--indigo); outline: none; }
+    .quote-editor-assumptions .qa-input.qa-num { max-width: 80px; flex:none; font-family: var(--font-mono); }
+    /* Categoria draggable */
+    table .cat-drag-handle {
+      cursor: grab; color: var(--text3); padding: 0 6px;
+      user-select: none;
+    }
+    table .cat-drag-handle:active { cursor: grabbing; }
+    tbody.ql-cat-tbody.ghost { opacity: .35; }
+    tbody.ql-cat-tbody.dragging { opacity: .55; background: rgba(98,114,245,.05); }
     /* Pannello listino laterale */
     .side-pl-card {
       position:sticky; top:80px;
@@ -173,22 +211,11 @@
   </style>
 
   <div id="quote-editor-body">
-    <!-- Pannello sinistro: info + righe -->
+    <!-- v3.4.34: Colonna sinistra (editor) — Riepilogo economico SOPRA Voci preventivo -->
     <div>
-      <div class="card mb-4" id="assumptions-card" style="background:var(--indigo-bg);border-color:var(--indigo-border);">
-        <div class="card-title mb-2">Critical Assumptions</div>
-        <div class="form-row">
-          <div class="form-group"><label class="form-label">Production Material</label>
-            <input class="form-input" id="qa-material" placeholder="es. ARRI Alexa 2.8K ProRes"></div>
-          <div class="form-group"><label class="form-label">Delivery Format</label>
-            <input class="form-input" id="qa-delivery" placeholder="es. 4K-DCI-Scope"></div>
-        </div>
-        <div class="form-row">
-          <div class="form-group"><label class="form-label">Durata (min)</label>
-            <input class="form-input" id="qa-length" type="number" step="0.5"></div>
-          <div class="form-group"><label class="form-label">FPS</label>
-            <input class="form-input" id="qa-fps" placeholder="24 / 25"></div>
-        </div>
+      <div class="card mb-4">
+        <div class="card-title mb-3">Riepilogo economico</div>
+        <div id="totals-panel"></div>
       </div>
 
       <div class="card quote-editor-card" id="lines-card"
@@ -197,10 +224,9 @@
            ondrop="onLinesDrop(event)">
         <div class="card-header">
           <span class="card-title">Voci preventivo</span>
-          <button class="btn btn-primary btn-sm" onclick="openAddLine()">+ Aggiungi voce</button>
         </div>
         <div class="table-wrap">
-          <table>
+          <table id="lines-table">
             <thead>
               <tr>
                 <th style="width:24px;"></th>
@@ -213,48 +239,43 @@
                 <th style="width:32px;"></th>
               </tr>
             </thead>
-            <tbody id="lines-body">
-              <tr><td colspan="8" class="text-muted" style="text-align:center;padding:16px;">Nessuna voce</td></tr>
+            <!-- v3.4.34: corpo dinamico, multi-tbody per categoria (uno per categoria → riordino drag&drop). -->
+            <!-- L'empty state è renderizzato in #lines-tbody-empty se non ci sono voci. -->
+            <tbody id="lines-tbody-empty">
+              <tr><td colspan="8" class="text-muted" style="text-align:center;padding:16px;">Nessuna voce — apri il <strong>📋 Listino</strong> e trascina una voce qui</td></tr>
             </tbody>
           </table>
         </div>
         <div class="text-xs text-muted" style="padding:8px 12px;border-top:1px solid var(--border);">
-          Modifica i campi: si salva automaticamente al blur. Trascina la maniglia ⠿ per riordinare entro la categoria. Apri il pannello <strong>Listino</strong> in alto a destra e trascina una voce qui per aggiungerla.
+          Modifica i campi: si salva automaticamente al blur. Maniglia ⠿ riordina voci · maniglia ⋮⋮ sull'header categoria riordina i blocchi. Apri il pannello <strong>📋 Listino</strong> e trascina una voce qui per aggiungerla.
         </div>
       </div>
     </div>
 
-    <!-- Pannello destro: totali + stato -->
+    <!-- v3.4.34: Colonna destra (sempre visibile insieme al pannello Listino).
+         Stato & azioni SOPRA il pannello Listino come richiesto. -->
     <div>
-      <div class="card mb-4">
-        <div class="card-title mb-3">Riepilogo economico</div>
-        <div id="totals-panel"></div>
-      </div>
-
-      <div class="card">
-        <div class="card-title mb-2">Stato & azioni</div>
+      <div class="card mb-3">
+        <div class="card-title mb-2">Stato &amp; azioni</div>
         <div class="flex gap-2" style="flex-wrap:wrap;">
           <button class="btn btn-secondary btn-sm" onclick="setQuoteStatus('sent')">📤 Inviata</button>
           <button class="btn btn-secondary btn-sm" onclick="setQuoteStatus('approved')">✅ Approvata</button>
           <button class="btn btn-secondary btn-sm" onclick="setQuoteStatus('rejected')">❌ Rifiutata</button>
           <button class="btn btn-secondary btn-sm" onclick="setQuoteStatus('expired')">⏰ Scaduta</button>
         </div>
+        <button class="btn btn-primary btn-sm mt-3" style="width:100%;" onclick="approveAndCreateJob()">✓ Approva quote → Job</button>
         <div class="form-group mt-3"><label class="form-label">IVA (%)</label>
           <input class="form-input" id="q-vat" type="number" step="0.1" placeholder="22" onchange="saveQuoteMeta()"></div>
         <div class="form-group"><label class="form-label">Note</label>
-          <textarea class="form-textarea" id="q-notes" rows="3" onchange="saveQuoteMeta()"></textarea></div>
+          <textarea class="form-textarea" id="q-notes" rows="2" onchange="saveQuoteMeta()"></textarea></div>
         <div class="form-group"><label class="form-label">Termini di pagamento</label>
-          <textarea class="form-textarea" id="q-payment" rows="3"
+          <textarea class="form-textarea" id="q-payment" rows="2"
             placeholder="es. 20% Project Start / 40% Grading / 40% Mix" onchange="saveQuoteMeta()"></textarea></div>
       </div>
-    </div>
 
-    <!-- ── Pannello "Aggiungi voce" laterale persistente (v3.4.33.1) ─── -->
-    <!-- Riusa la GUI ricca del vecchio modal: ricerca + sidebar categorie
-         + risultati cliccabili e draggable + pannello selezione editabile.
-         Persistente: resta aperto fino click ✕. Toggle "📋 Listino" e
-         pulsante "+ Aggiungi voce" aprono lo stesso pannello. -->
-    <aside class="al-side card" id="side-add-line" style="display:none;">
+      <!-- ── Pannello "Aggiungi voce" laterale persistente (v3.4.33.1+) ─ -->
+      <!-- Posizionato DENTRO la colonna destra dopo "Stato & azioni" (v3.4.34). -->
+      <aside class="al-side card" id="side-add-line" style="display:none;">
       <div class="al-side-head">
         <span class="al-side-title">📋 Listino &amp; aggiungi voce</span>
         <button class="btn btn-ghost btn-icon btn-sm" onclick="closeSideAddLine()" title="Chiudi">✕</button>
@@ -333,7 +354,8 @@
         <button class="btn btn-primary btn-sm" onclick="addLine()">Aggiungi alla quotazione</button>
       </div>
     </aside>
-  </div>
+    </div><!-- /col dx -->
+  </div><!-- /#quote-editor-body -->
 </div>
 
 <!-- Modal nuova quotazione -->
@@ -611,50 +633,71 @@ function closeEditor() {
 
 // ── Render righe raggruppate per categoria ────────────────────
 function renderLines() {
-  const tbody = document.getElementById('lines-body');
+  // v3.4.34: multi-tbody per categoria → drag&drop sui blocchi categoria.
+  const table = document.getElementById('lines-table');
+  const emptyTbody = document.getElementById('lines-tbody-empty');
   const lines = currentQuote.lines || [];
+  // Rimuovi tbody categoria precedenti (lascia solo lines-tbody-empty)
+  table.querySelectorAll('tbody.ql-cat-tbody').forEach(t => t.remove());
+
   if (!lines.length) {
-    tbody.innerHTML = '<tr><td colspan="8" class="text-muted" style="text-align:center;padding:16px;">Nessuna voce — clicca "+ Aggiungi voce"</td></tr>';
+    emptyTbody.style.display = '';
     return;
   }
+  emptyTbody.style.display = 'none';
 
-  // Raggruppa per categoria, mantenendo ordine voci
+  // Raggruppa per categoria
   const groups = {};
-  const groupOrder = [];
+  const naturalOrder = [];
   for (const l of lines) {
     const cat = l.category || 'Altro';
-    if (!groups[cat]) { groups[cat] = []; groupOrder.push(cat); }
+    if (!groups[cat]) { groups[cat] = []; naturalOrder.push(cat); }
     groups[cat].push(l);
   }
 
+  // Ordine: prima quelle in category_order (se presenti tra i gruppi),
+  // poi le rimanenti nell'ordine naturale (prima riga per categoria).
+  const savedOrder = (currentQuote.category_order || []).filter(c => groups[c]);
+  const remaining = naturalOrder.filter(c => !savedOrder.includes(c));
+  const finalOrder = [...savedOrder, ...remaining];
+
   const cd = currentQuote.category_discounts || {};
-  let html = '';
-  for (const cat of groupOrder) {
+  for (const cat of finalOrder) {
     const catLines = groups[cat];
     const catDisc = cd[cat] || 0;
     const catSubtotal = catLines.reduce((s, l) => s + (l.total || 0), 0);
-    html += `<tr class="ql-cat-header"><td colspan="8" style="padding:10px 12px;">${cat}</td></tr>`;
+    const safeCat = cat.replace(/"/g, '&quot;');
+
+    const tbody = document.createElement('tbody');
+    tbody.className = 'ql-cat-tbody';
+    tbody.dataset.cat = cat;
+
+    let html = `
+      <tr class="ql-cat-header">
+        <td style="padding:10px 8px;">
+          <span class="cat-drag-handle" title="Trascina per riordinare la categoria">⋮⋮</span>
+        </td>
+        <td colspan="7" style="padding:10px 4px;">${escapeHtml(cat)}</td>
+      </tr>`;
     for (const l of catLines) {
       html += renderLineRow(l);
     }
-    // Riga subtotale (lettura sola)
     html += `
       <tr class="ql-cat-sub-row">
         <td colspan="6" style="text-align:right;color:var(--text2);font-size:12px;padding:4px 12px;">
-          Subtotale <strong>${cat}</strong>:
+          Subtotale <strong>${escapeHtml(cat)}</strong>:
         </td>
         <td class="mono text-right" style="font-size:12px;font-weight:600;padding:4px 12px;">
           ${fmtCurrency(catSubtotal)}
         </td>
         <td></td>
       </tr>`;
-    // Riga sconto categoria editabile
     html += `
       <tr class="ql-cat-disc-row">
-        <td colspan="5" style="text-align:right;">Sconto categoria <strong>${cat}</strong>:</td>
+        <td colspan="5" style="text-align:right;">Sconto categoria <strong>${escapeHtml(cat)}</strong>:</td>
         <td class="text-right">
           <input type="number" class="inline-edit text-right mono" step="0.5" min="0" max="100"
-                 value="${(catDisc * 100).toFixed(1)}" data-cat="${cat.replace(/"/g, '&quot;')}"
+                 value="${(catDisc * 100).toFixed(1)}" data-cat="${safeCat}"
                  onblur="saveCategoryDiscount(this)" style="width:60px;font-size:12px;">
         </td>
         <td class="mono text-right" style="font-size:12px;">
@@ -662,17 +705,46 @@ function renderLines() {
         </td>
         <td></td>
       </tr>`;
+    tbody.innerHTML = html;
+    table.appendChild(tbody);
   }
-  tbody.innerHTML = html;
 
-  // SortableJS su tutto il tbody — accetta cross-category
-  if (tbody._sortable) tbody._sortable.destroy();
-  tbody._sortable = Sortable.create(tbody, {
-    handle: '.drag-handle',
-    draggable: 'tr.ql-row',
-    ghostClass: 'ghost',
-    onEnd: persistOrder,
+  // Sortable per riordinare voci dentro/tra categorie (gruppo "lines"
+   // comune: drag cross-category supportato).
+  table.querySelectorAll('tbody.ql-cat-tbody').forEach(tb => {
+    if (tb._sortable) tb._sortable.destroy();
+    tb._sortable = Sortable.create(tb, {
+      group: 'quote-lines',
+      handle: '.drag-handle',
+      draggable: 'tr.ql-row',
+      ghostClass: 'ghost',
+      onEnd: persistOrder,
+    });
   });
+
+  // v3.4.34: Sortable sul livello tbody → riordino blocchi categoria
+  if (table._catSortable) table._catSortable.destroy();
+  table._catSortable = Sortable.create(table, {
+    handle: '.cat-drag-handle',
+    draggable: 'tbody.ql-cat-tbody',
+    ghostClass: 'ghost',
+    onEnd: persistCategoryOrder,
+  });
+}
+
+async function persistCategoryOrder() {
+  const table = document.getElementById('lines-table');
+  const tbodies = table.querySelectorAll('tbody.ql-cat-tbody');
+  const order = Array.from(tbodies).map(t => t.dataset.cat);
+  try {
+    await api('PUT', `/quotes/api/${currentQuoteId}/category-order`,
+              {order}, {json: true});
+    // Aggiorno currentQuote.category_order localmente per coerenza al prossimo render
+    currentQuote.category_order = order;
+  } catch(e) {
+    toast('Errore salvataggio ordine categorie', 'error');
+    await reloadQuote();
+  }
 }
 
 function renderLineRow(l) {

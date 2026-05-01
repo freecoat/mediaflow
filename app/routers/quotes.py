@@ -235,6 +235,7 @@ async def get_quote(quote_id: int, db: Session = Depends(get_db)):
         "delivery_format": q.delivery_format, "shooting_days": q.shooting_days,
         "package_discount": q.package_discount, "vat_rate": q.vat_rate,
         "category_discounts": q.category_discounts or {},
+        "category_order": q.category_order or [],
         "subtotal_gross": q.subtotal_gross,
         "subtotal": q.subtotal,
         "total_after_discount": q.total_after_discount,
@@ -368,6 +369,7 @@ async def update_category_discount(
     db.commit()
     return {
         "category_discounts": q.category_discounts or {},
+        "category_order": q.category_order or [],
         "subtotal_gross": q.subtotal_gross,
         "subtotal": q.subtotal,
         "total_after_discount": q.total_after_discount,
@@ -395,6 +397,28 @@ async def reorder_quote_lines(
             line.sort_order = (idx + 1) * 10
     db.commit()
     return {"ok": True, "count": len(order)}
+
+
+@router.put("/api/{quote_id}/category-order")
+async def reorder_quote_categories(
+    quote_id: int,
+    request: Request,
+    db: Session = Depends(get_db),
+):
+    """v3.4.34 — Persiste l'ordine delle categorie nelle voci preventivo.
+    Body JSON: {order: ["PICTURE", "SOUND", "Altro"]}.
+    Le categorie non listate appaiono dopo nell'ordine naturale."""
+    data = await request.json()
+    order = data.get("order", [])
+    if not isinstance(order, list):
+        raise HTTPException(400, "Campo 'order' deve essere una lista di nomi categoria")
+    q = db.query(Quote).filter(Quote.id == quote_id).first()
+    if not q:
+        raise HTTPException(404, "Quotazione non trovata")
+    cleaned = [str(c) for c in order if c]
+    q.category_order = cleaned or None
+    db.commit()
+    return {"ok": True, "category_order": q.category_order or []}
 
 
 @router.post("/api/{quote_id}/lines")
