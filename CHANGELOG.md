@@ -1,5 +1,22 @@
 # MediaFlow — Changelog
 
+## v3.4.34.2 — Listino flottante + same-height top row + IVA in Riepilogo (1 maggio 2026 notte tarda)
+
+3 fix di precisazione layout v3.4.34.1.
+
+### 1. Listino flottante (`position:fixed`)
+La v3.4.34.1 usava `position:sticky` che funziona solo finché il parent ha scroll. Quando il content sotto si esauriva, il pannello scrollava fuori vista. Ora `.al-side` è `position:fixed; top:80px; right:20px; width:480px; max-height:calc(100vh-100px)`: rimane SEMPRE visibile alla stessa altezza viewport durante qualsiasi scroll della pagina. Solo scroll interno alla lista risultati (`.al-results { overflow-y:auto }`).
+
+Layout: con pannello aperto, `#quote-editor-body.with-pricelist` aggiunge `padding-right:500px` (460px a <1400) per riservare spazio. Sotto 1024px (mobile) il pannello torna a `position:static` in colonna naturale.
+
+### 2. Riepilogo + Stato stessa altezza
+`.quote-top-row` ora ha `align-items:stretch` + `height:100%` su entrambe le card. Le card hanno `display:flex; flex-direction:column` per distribuire il contenuto verticalmente.
+
+### 3. IVA in Riepilogo (rimossa da Stato)
+L'`<input id="q-vat">` è ora dentro `#totals-panel` (rigenerato da `renderTotals()`) come campo editabile inline accanto alla riga "IVA". Stato & azioni perde il campo IVA, guadagnando spazio per i textarea di Note e Termini di pagamento, ridotti a `rows="1"` con classe `.qe-compact-ta` che espande min-height al focus (28→60px).
+
+---
+
 ## v3.4.34.1 — Layout editor /quotes: Stato a sinistra, Listino sticky (1 maggio 2026 notte tarda)
 
 Correzione layout v3.4.34 su richiesta:

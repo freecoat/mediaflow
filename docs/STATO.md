@@ -8,6 +8,10 @@
 
 ## Versione corrente
 
+**v3.4.34.2** — 1 maggio 2026 notte tarda — Listino flottante + same-height top + IVA in Riepilogo
+
+Listino ora `position:fixed` (sempre visibile durante scroll, non più sticky). Riepilogo e Stato&azioni hanno stessa altezza (align-items:stretch). IVA spostata da Stato a Riepilogo (editabile inline). Note/Termini compatti rows=1 espandibili al focus.
+
 **v3.4.34.1** — 1 maggio 2026 notte tarda — Layout editor /quotes: Stato a sinistra, Listino sticky
 
 "Stato & azioni" spostato nella colonna sinistra accanto a "Riepilogo economico" (grid 2 col). Colonna destra = solo pannello Listino sticky che resta a posizione fissa durante lo scroll della pagina (scroll interno alla lista risultati).

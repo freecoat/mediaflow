@@ -115,17 +115,19 @@
   <style>
     .dropdown-menu.open { display:flex !important; }
     .dropdown-item:hover { background: var(--bg3); }
-    /* v3.4.34: Layout editor riorganizzato.
-       - Senza pannello listino: 1 colonna piena (editor)
-       - Con pannello listino: 2 colonne (editor + side panel). Stato&azioni
-         e Listino vivono entrambi nella colonna destra. */
+    /* v3.4.34.2: Listino flottante (position:fixed) — sempre visibile,
+       non scorre con la pagina. Solo scroll interno alla lista risultati.
+       Quando aperto: il body usa singola colonna ma riserva uno spazio
+       a destra (padding-right) per non sovrapporre il pannello fisso. */
     #quote-editor-body { display:grid; grid-template-columns: 1fr; gap:20px; align-items:start; }
-    #quote-editor-body.with-pricelist { grid-template-columns: 1fr 480px; }
+    #quote-editor-body.with-pricelist { padding-right: 500px; }
     @media (max-width: 1400px) {
-      #quote-editor-body.with-pricelist { grid-template-columns: 1fr 440px; }
+      #quote-editor-body.with-pricelist { padding-right: 460px; }
     }
     @media (max-width: 1024px) {
-      #quote-editor-body, #quote-editor-body.with-pricelist { grid-template-columns: 1fr; }
+      /* Mobile: niente flottante, pannello in colonna naturale sotto */
+      #quote-editor-body.with-pricelist { padding-right: 0; }
+      #quote-editor-body.with-pricelist .quote-side-col { display: block; }
     }
     /* Topbar editor */
     .quote-editor-topbar { margin-bottom: 16px; display:flex; flex-direction:column; gap:10px; }
@@ -157,17 +159,31 @@
     table .cat-drag-handle:active { cursor: grabbing; }
     tbody.ql-cat-tbody.ghost { opacity: .35; }
     tbody.ql-cat-tbody.dragging { opacity: .55; background: rgba(98,114,245,.05); }
-    /* v3.4.34.1: top row con Riepilogo + Stato&azioni affiancati,
-       Voci preventivo sotto a tutta larghezza. */
+    /* v3.4.34.2: top row con Riepilogo + Stato&azioni affiancati,
+       STESSA ALTEZZA (align-items:stretch + h:100% sulle card). */
     .quote-top-row {
-      display:grid; grid-template-columns: 1fr 1fr; gap: 16px; align-items: start;
+      display:grid; grid-template-columns: 1fr 1fr; gap: 16px;
+      align-items: stretch;
+    }
+    .quote-top-row > .card {
+      display: flex; flex-direction: column; height: 100%;
+      margin-bottom: 0;
     }
     @media (max-width: 900px) {
       .quote-top-row { grid-template-columns: 1fr; }
     }
-    /* Colonna destra: contenitore del solo pannello Listino. Lo sticky è sul
-       .al-side direttamente (la colonna stessa non si trasforma). */
-    .quote-side-col { min-width: 0; }
+    /* Textarea compatte: 1 riga di base, espande al focus */
+    .qe-compact-ta {
+      min-height: 28px; resize: vertical;
+      transition: min-height .12s ease;
+    }
+    .qe-compact-ta:focus { min-height: 60px; }
+    /* Colonna destra: oggi non più necessaria (pannello flottante).
+       Lasciata per back-compat layout mobile (<1024px). */
+    .quote-side-col { min-width: 0; display: contents; }
+    @media (max-width: 1024px) {
+      .quote-side-col { display: block; }
+    }
     /* Pannello listino laterale */
     .side-pl-card {
       position:sticky; top:80px;
@@ -239,12 +255,13 @@
             <button class="btn btn-secondary btn-sm" onclick="setQuoteStatus('expired')">⏰ Scaduta</button>
           </div>
           <button class="btn btn-primary btn-sm mt-3" style="width:100%;" onclick="approveAndCreateJob()">✓ Approva quote → Job</button>
-          <div class="form-group mt-3"><label class="form-label">IVA (%)</label>
-            <input class="form-input" id="q-vat" type="number" step="0.1" placeholder="22" onchange="saveQuoteMeta()"></div>
-          <div class="form-group"><label class="form-label">Note</label>
-            <textarea class="form-textarea" id="q-notes" rows="2" onchange="saveQuoteMeta()"></textarea></div>
+          <!-- v3.4.34.2: IVA spostata in Riepilogo economico (editabile inline).
+               Note e Termini compatti rows=1, espandibili al focus. -->
+          <div class="form-group mt-3"><label class="form-label">Note</label>
+            <textarea class="form-textarea qe-compact-ta" id="q-notes" rows="1" onchange="saveQuoteMeta()"
+                      placeholder="Note interne / per cliente"></textarea></div>
           <div class="form-group"><label class="form-label">Termini di pagamento</label>
-            <textarea class="form-textarea" id="q-payment" rows="2"
+            <textarea class="form-textarea qe-compact-ta" id="q-payment" rows="1"
               placeholder="es. 20% Project Start / 40% Grading / 40% Mix" onchange="saveQuoteMeta()"></textarea></div>
         </div>
       </div>
@@ -409,12 +426,29 @@
 </div>
 
 <style>
-  /* v3.4.33.1 — Pannello laterale persistente "Aggiungi voce" (ex modal) */
+  /* v3.4.34.2 — Pannello laterale FLOTTANTE: sempre visibile, NON scorre
+     con la pagina. position:fixed, allineato a destra del viewport.
+     Scroll interno alla lista risultati via .al-results overflow-y:auto. */
   .al-side {
-    position:sticky; top:80px;
+    position: fixed;
+    top: 80px;
+    right: 20px;
+    width: 480px;
     max-height: calc(100vh - 100px);
     display:flex; flex-direction:column;
     padding:0; overflow:hidden;
+    z-index: 50;
+    box-shadow: 0 8px 32px rgba(0,0,0,.45);
+  }
+  @media (max-width: 1400px) {
+    .al-side { width: 440px; }
+  }
+  @media (max-width: 1024px) {
+    /* Mobile: torna a posizione naturale (in colonna sotto), non flottante */
+    .al-side {
+      position: static; width: auto; max-height: none;
+      box-shadow: none; z-index: auto;
+    }
   }
   .al-side-head {
     padding:12px 14px; border-bottom:1px solid var(--border); background:var(--bg2);
@@ -626,7 +660,7 @@ async function reloadQuote() {
   document.getElementById('btn-pdf').href = `/quotes/api/${currentQuoteId}/pdf`;
   document.getElementById('btn-csv').href = `/quotes/api/${currentQuoteId}/export.csv`;
   document.getElementById('btn-xlsx').href = `/quotes/api/${currentQuoteId}/export.xlsx`;
-  document.getElementById('q-vat').value = currentQuote.vat_rate || 22;
+  // q-vat ora è dentro #totals-panel (rigenerato da renderTotals). Saltiamo qui.
   document.getElementById('q-notes').value = currentQuote.notes || '';
   document.getElementById('q-payment').value = currentQuote.payment_terms || '';
   document.getElementById('qa-material').value = currentQuote.production_material || '';
@@ -832,7 +866,10 @@ function renderTotals() {
       <span class="mono">${fmtCurrency(q.total_after_discount)}</span>
     </div>
     <div class="totals-line">
-      <span class="text-muted">IVA ${q.vat_rate || 0}%</span>
+      <span class="text-muted">IVA
+        <input class="pkg-discount-input" type="number" step="0.1" min="0" max="100"
+               value="${(q.vat_rate || 0).toFixed(1)}" id="q-vat" onblur="saveQuoteMeta()">%
+      </span>
       <span class="mono">${fmtCurrency(vatAmount)}</span>
     </div>
     <div class="totals-line final">
