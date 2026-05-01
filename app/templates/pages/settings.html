@@ -77,10 +77,17 @@
   <div>
     <!-- ── Pannello Aspetto ───────────────────────────────────── -->
     <div class="settings-pane active" id="pane-aspect">
-      <div class="card">
+      <div class="card mb-4">
         <div class="card-title mb-3">Tema colori</div>
         <p class="text-sm text-muted mb-3">La scelta è memorizzata nel browser corrente. Si applica subito a tutte le pagine.</p>
-        <div class="grid-2" style="gap:12px;" id="theme-grid">
+        <div style="display:grid; grid-template-columns:repeat(auto-fill, minmax(220px, 1fr)); gap:12px;" id="theme-grid">
+          <!-- generato da JS -->
+        </div>
+      </div>
+      <div class="card">
+        <div class="card-title mb-3">Tipografia</div>
+        <p class="text-sm text-muted mb-3">Famiglia di caratteri usata in tutta l'interfaccia. Anche questa è salvata nel browser corrente.</p>
+        <div style="display:grid; grid-template-columns:repeat(auto-fill, minmax(220px, 1fr)); gap:12px;" id="font-grid">
           <!-- generato da JS -->
         </div>
       </div>
@@ -276,8 +283,33 @@ const THEMES = [
     swatches:['#11141a','#232730','#5b8def','#7aa3f5','#e6e9ef'] },
   { id:'forest', name:'Forest', desc:'Verde scuro — naturale',
     swatches:['#0c1410','#1a261f','#4ade80','#6ee7a4','#e7f0e9'] },
+  { id:'midnight', name:'Midnight', desc:'Blu profondo — focus',
+    swatches:['#0a0d1a','#161c39','#818cf8','#a5afff','#e4e9f5'] },
+  { id:'copper', name:'Copper', desc:'Rame caldo — caldo studio',
+    swatches:['#1a1310','#2d201d','#ea8a5b','#f5a37b','#f0e4dc'] },
+  { id:'plum', name:'Plum', desc:'Viola scuro — creativo',
+    swatches:['#14101a','#271f33','#c084fc','#d8b4fe','#ede5f5'] },
+  { id:'teal', name:'Teal', desc:'Verde acqua — calma',
+    swatches:['#0a1418','#182b32','#2dd4bf','#5eead4','#e1f0f0'] },
+  { id:'mono', name:'Mono', desc:'Grigi neutri — contrast first',
+    swatches:['#0d0d0d','#1f1f1f','#d4d4d4','#ededed','#f0f0f0'] },
   { id:'sand',   name:'Sand', desc:'Caldo chiaro — contrasto',
     swatches:['#f5f1e8','#e1dac5','#a0522d','#b97350','#2b2620'] },
+];
+
+const FONTS = [
+  { id:'dmsans',  name:'DM Sans',     desc:'Default — geometrico moderno',
+    sample:'AaBbGgQq · 0123', cssFamily:"'DM Sans', sans-serif" },
+  { id:'inter',   name:'Inter',       desc:'High-density UI · Figma-like',
+    sample:'AaBbGgQq · 0123', cssFamily:"'Inter', sans-serif" },
+  { id:'roboto',  name:'Roboto',      desc:'Material classico',
+    sample:'AaBbGgQq · 0123', cssFamily:"'Roboto', sans-serif" },
+  { id:'ibmplex', name:'IBM Plex',    desc:'Tecnico, neutro',
+    sample:'AaBbGgQq · 0123', cssFamily:"'IBM Plex Sans', sans-serif" },
+  { id:'source',  name:'Source Sans', desc:'Adobe — leggibilità lunghi testi',
+    sample:'AaBbGgQq · 0123', cssFamily:"'Source Sans 3', sans-serif" },
+  { id:'system',  name:'System UI',   desc:'Font OS-native — performance',
+    sample:'AaBbGgQq · 0123', cssFamily:"-apple-system, 'Segoe UI', sans-serif" },
 ];
 
 function showPane(id) {
@@ -360,6 +392,25 @@ function pickTheme(id) {
   setTheme(id);
   renderThemes();
   toast(`Tema impostato: ${THEMES.find(t=>t.id===id).name}`, 'success');
+}
+
+// v3.4.32.1: scelta font (apply via classe .font-X su <html>)
+function renderFonts() {
+  const current = localStorage.getItem('mf_font') || 'dmsans';
+  const grid = document.getElementById('font-grid');
+  if (!grid) return;
+  grid.innerHTML = FONTS.map(f => `
+    <div class="theme-card ${f.id === current ? 'active' : ''}" onclick="pickFont('${f.id}')" style="font-family:${f.cssFamily};">
+      <div style="font-size:22px; font-weight:500; line-height:1.1;">${f.sample}</div>
+      <div class="theme-name">${f.name}</div>
+      <div class="theme-desc" style="font-family:'DM Sans', sans-serif;">${f.desc}</div>
+    </div>
+  `).join('');
+}
+function pickFont(id) {
+  setFont(id);
+  renderFonts();
+  toast(`Font impostato: ${FONTS.find(f=>f.id===id).name}`, 'success');
 }
 
 // ── Sidebar reorder (auto-discovery dal DOM) ─────────────────
@@ -474,6 +525,7 @@ async function changePassword() {
 }
 
 renderThemes();
+renderFonts();
 renderNavReorder();
 
 // ── AI providers ─────────────────────────────────────────────

@@ -4,7 +4,7 @@
    Palette: Slate scuro + accento Indaco
 ═══════════════════════════════════════════════════════════════ */
 
-@import url('https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;0,9..40,600;1,9..40,400&family=DM+Mono:wght@400;500&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;0,9..40,600;1,9..40,400&family=DM+Mono:wght@400;500&family=Inter:wght@300;400;500;600&family=Roboto:wght@300;400;500;700&family=Source+Sans+3:wght@300;400;500;600&family=JetBrains+Mono:wght@400;500&family=IBM+Plex+Sans:wght@300;400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap');
 
 /* ── Reset & base ─────────────────────────────────────────── */
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
@@ -116,9 +116,124 @@
   --indigo-border: rgba(160,82,45,.35);
 }
 
+/* ── Tema: Midnight (blu profondo) — v3.4.32.1 ─────────────────── */
+.theme-midnight {
+  --bg:        #0a0d1a;
+  --bg2:       #0f1428;
+  --bg3:       #161c39;
+  --surface:   #1c2347;
+  --surface2:  #242c54;
+  --border:    #2a325e;
+  --border2:   #3a4374;
+
+  --text:      #e4e9f5;
+  --text2:     #93a0c0;
+  --text3:     #5b6789;
+
+  --indigo:    #818cf8;
+  --indigo2:   #a5afff;
+  --indigo-bg: rgba(129,140,248,.14);
+  --indigo-border: rgba(129,140,248,.4);
+}
+
+/* ── Tema: Copper (rame caldo) — v3.4.32.1 ─────────────────────── */
+.theme-copper {
+  --bg:        #1a1310;
+  --bg2:       #221816;
+  --bg3:       #2d201d;
+  --surface:   #382925;
+  --surface2:  #44322d;
+  --border:    #4a352f;
+  --border2:   #5e433a;
+
+  --text:      #f0e4dc;
+  --text2:     #b8a394;
+  --text3:     #80695a;
+
+  --indigo:    #ea8a5b;
+  --indigo2:   #f5a37b;
+  --indigo-bg: rgba(234,138,91,.14);
+  --indigo-border: rgba(234,138,91,.4);
+}
+
+/* ── Tema: Plum (viola scuro) — v3.4.32.1 ──────────────────────── */
+.theme-plum {
+  --bg:        #14101a;
+  --bg2:       #1c1626;
+  --bg3:       #271f33;
+  --surface:   #312844;
+  --surface2:  #3c3253;
+  --border:    #3f344f;
+  --border2:   #524466;
+
+  --text:      #ede5f5;
+  --text2:     #a99bbf;
+  --text3:     #6f6280;
+
+  --indigo:    #c084fc;
+  --indigo2:   #d8b4fe;
+  --indigo-bg: rgba(192,132,252,.14);
+  --indigo-border: rgba(192,132,252,.4);
+}
+
+/* ── Tema: Teal (verde acqua) — v3.4.32.1 ──────────────────────── */
+.theme-teal {
+  --bg:        #0a1418;
+  --bg2:       #101e23;
+  --bg3:       #182b32;
+  --surface:   #1f3942;
+  --surface2:  #284752;
+  --border:    #2a4651;
+  --border2:   #3b5e6c;
+
+  --text:      #e1f0f0;
+  --text2:     #95b3b3;
+  --text3:     #5a7a7a;
+
+  --indigo:    #2dd4bf;
+  --indigo2:   #5eead4;
+  --indigo-bg: rgba(45,212,191,.14);
+  --indigo-border: rgba(45,212,191,.4);
+}
+
+/* ── Tema: Mono (grigi neutri B/N) — v3.4.32.1 ─────────────────── */
+.theme-mono {
+  --bg:        #0d0d0d;
+  --bg2:       #161616;
+  --bg3:       #1f1f1f;
+  --surface:   #2a2a2a;
+  --surface2:  #353535;
+  --border:    #353535;
+  --border2:   #4a4a4a;
+
+  --text:      #f0f0f0;
+  --text2:     #9e9e9e;
+  --text3:     #6b6b6b;
+
+  --indigo:    #d4d4d4;
+  --indigo2:   #ededed;
+  --indigo-bg: rgba(212,212,212,.10);
+  --indigo-border: rgba(212,212,212,.32);
+}
+
+/* ── Varianti font (v3.4.32.1) ───────────────────────────────── */
+/* Default body = DM Sans (definito in body sotto). Le classi .font-X
+   sovrascrivono i CSS custom property --font-body / --font-mono che il
+   body legge. */
+:root {
+  --font-body: 'DM Sans', sans-serif;
+  --font-mono: 'DM Mono', monospace;
+}
+.font-dmsans { --font-body: 'DM Sans', sans-serif; --font-mono: 'DM Mono', monospace; }
+.font-inter  { --font-body: 'Inter', sans-serif;   --font-mono: 'JetBrains Mono', monospace; }
+.font-roboto { --font-body: 'Roboto', sans-serif;  --font-mono: 'Roboto Mono', monospace; }
+.font-ibmplex { --font-body: 'IBM Plex Sans', sans-serif; --font-mono: 'IBM Plex Mono', monospace; }
+.font-source { --font-body: 'Source Sans 3', sans-serif; --font-mono: 'JetBrains Mono', monospace; }
+.font-system { --font-body: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; --font-mono: 'Consolas', 'Menlo', monospace; }
+
 html { font-size: 15px; }
 body {
-  font-family: 'DM Sans', sans-serif;
+  font-family: var(--font-body);
   background: var(--bg);
   color: var(--text);
   line-height: 1.6;
@@ -324,7 +439,7 @@ a:hover { text-decoration: underline; }
   font-size: 26px;
   font-weight: 600;
   color: var(--text);
-  font-family: 'DM Mono', monospace;
+  font-family: var(--font-mono);
   letter-spacing: -1px;
 }
 .stat-sub {
@@ -473,7 +588,7 @@ input[type="number"]::-webkit-inner-spin-button {
 .num-stepper .step-btn {
   background: var(--bg3); border: 1px solid var(--border);
   color: var(--text2); width: 26px; cursor: pointer;
-  font-family: 'DM Mono', monospace; font-size: 14px; line-height: 1;
+  font-family: var(--font-mono); font-size: 14px; line-height: 1;
   transition: background var(--t), color var(--t);
   user-select: none;
 }
@@ -630,7 +745,7 @@ input[type="number"]::-webkit-inner-spin-button {
 #calendar { min-height: 600px; }
 
 /* ── Mono numbers ─────────────────────────────────────────── */
-.mono { font-family: 'DM Mono', monospace; }
+.mono { font-family: var(--font-mono); }
 
 /* ── Utilities ────────────────────────────────────────────── */
 .flex         { display: flex; }
@@ -649,7 +764,7 @@ input[type="number"]::-webkit-inner-spin-button {
 .text-muted { color: var(--text2); }
 .text-xs { font-size: 11px; color: var(--text3); }
 .text-right { text-align: right; }
-.font-mono { font-family: 'DM Mono', monospace; }
+.font-mono { font-family: var(--font-mono); }
 .color-green  { color: var(--green); }
 .color-rose   { color: var(--rose); }
 .color-amber  { color: var(--amber); }

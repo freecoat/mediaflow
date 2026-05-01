@@ -8,6 +8,10 @@
 
 ## Versione corrente
 
+**v3.4.32.1** — 1 maggio 2026 sera — Patch v3.4.32 dopo test locale (multi-risorsa, drop festivo, look timeline, temi/font)
+
+Sei fix raggruppati: (1) override permessi su booking multi-risorsa con cascade ristretto; (2) bottoni durata `−30/−15/+15/+30`; (3) auto-approve overtime se chi estende ha permesso + 3 icone notifica nuove; (4) drop su festivo → soft block + workflow overtime invece di hard block; (5) timeline altezza riga uniforme + font label più chiari; (6) 5 temi colori nuovi + 6 varianti font.
+
 **v3.4.32** — 1 maggio 2026 — Booking esecutivo (priorità + stato + workflow overtime + pozzo not_done)
 
 Cantiere "booking come unità operativa". Trasformato il booking da pura intenzione di pianificazione a oggetto governabile dall'operatore: priorità (3 livelli low/normal/high) visibile per colore, ciclo di vita planned→in_progress→done|not_done con motivazione, modifica durata adattiva con cascade intra-day, workflow approvazione straordinari basato su WorkingHoursPolicy, sezione cost report dedicata + pozzo ore non maturate.
@@ -20,15 +24,18 @@ Sessione 1 maggio sera (commit unico): chiusa v3.4.32 dopo discussione completa 
 
 ## In corso
 
-**Sessione 1 maggio sera chiusa.** v3.4.32 da testare sul Mac al prossimo pull.
+**Sessione 1 maggio sera chiusa.** v3.4.32 + .1 da testare sul Mac al prossimo pull (o continua il test locale).
 
-Da testare sul Mac:
-- Migrazione `[L]` (`./strumenti.sh` → `l`) — aggiunge 6 colonne a `bookings` + permesso `approve_overtime` su admin/manager/producer
-- `/planning` tab "Le mie": card interattive con bordo priorità, bottoni `−30/+30/+60`, `▶ Inizia / ✓ Fatto / ✗ Non fatto`
-- Dashboard `/`: card "I miei booking di oggi" (se utente ha resource) + colonne **Priorità/Esecuzione/Straord.** nella tabella generica
-- `/cost-report` → seleziona job: due card nuove "⏱ Ore booking per fascia" + "⏳ Pozzo ore non maturate" (visibile solo se ci sono booking not_done)
-- Estendere un booking che sfora orario regolare → notifica `booking_overtime_pending` agli approvatori
-- Approvare/rifiutare overtime → notifica `booking_overtime_resolved` all'operatore (rifiuto → split + nuovo booking giorno dopo)
+Da testare:
+- Migrazione `[L]` (solo se DB esistente) — già auto-applicata al boot
+- `/planning` tab "Le mie": card interattive con bordo priorità, bottoni `−30/−15/+15/+30`, `▶ Inizia / ✓ Fatto / ✗ Non fatto`
+- Booking multi-risorsa: l'operatore può estendere; cascade non spinge le altre risorse del cascade (test: 2 risorse nello stesso booking, 1 ha booking adiacente)
+- Drop su giorno festivo nella timeline → confirm dialog "Sarà richiesta approvazione straordinario" → al drop, booking entra `overtime_pending` (o auto-approved se admin/manager)
+- Estensione che fa entrare in fascia overtime: se sei manager/producer/admin → auto-approved; se sei operatore → notifica agli altri approvatori
+- Dashboard `/`: card "I miei booking di oggi" + colonne stato in tabella generica
+- `/cost-report` → seleziona job: card "Ore booking per fascia" + (se ci sono not_done) "Pozzo ore non maturate"
+- `/settings#aspect`: 9 temi colori (5 nuovi: Midnight/Copper/Plum/Teal/Mono) + 6 varianti font (Inter/Roboto/IBM Plex/Source Sans/System UI)
+- Look timeline: altezza riga uniforme, font risorse +1px e centrato, niente "barra alta in testa"
 
 Da testare ancora dalla v3.4.31 (carry-over):
 - Fix sidebar `/settings#sidebar`

@@ -119,35 +119,56 @@
   .vis-time-axis .vis-grid.vis-major { border-color: rgba(255,255,255,0.08); }
   .vis-time-axis .vis-grid.vis-saturday,
   .vis-time-axis .vis-grid.vis-sunday { background: rgba(98,114,245,0.025); }
-  /* Labels (left col) */
+  /* Labels (left col) — v3.4.32.1: leggermente più grandi, più chiari, centrati */
   .vis-labelset .vis-label {
-    color: var(--text,#eee);
+    color: #f5f5f5;
     border-color: rgba(255,255,255,0.04);
-    padding: 8px 12px;
-    font-size: 12.5px;
+    padding: 6px 12px;
+    font-size: 13.5px;
+    font-weight: 500;
     box-sizing: border-box;
     transition: background .12s ease;
+    display: flex;
+    align-items: center;
+    min-height: 38px;
   }
+  .vis-labelset .vis-label .vis-inner { display: flex; align-items: center; flex: 1; min-height: 28px; }
   /* Zebra rows (alternate) — più sottile e simmetrico */
   .vis-labelset .vis-label:nth-child(odd) { background: rgba(255,255,255,0.012); }
   .vis-foreground .vis-group:nth-child(odd) { background: rgba(255,255,255,0.012); }
   .vis-foreground .vis-group { border-color: rgba(255,255,255,0.04); transition: background .12s ease; }
   /* Reparto padre — barra colorata sottile + label tipo header */
+  /* v3.4.32.1: altezza fissa per evitare la "barra alta in testa" che si
+     ridimensiona quando il gruppo è espanso e contiene/no contiene item. */
   .vis-labelset .vis-label.vis-nesting-group {
     background: linear-gradient(90deg, rgba(98,114,245,0.18) 0%, rgba(98,114,245,0.06) 60%, transparent 100%);
     font-weight: 700;
-    color: #8a9bff;
+    color: #a8b3ff;
     text-transform: uppercase;
     letter-spacing: 0.6px;
-    font-size: 10.5px;
+    font-size: 11px;
     border-left: 3px solid #6272f5;
     padding-left: 12px;
+    min-height: 28px !important;
+    max-height: 32px !important;
+  }
+  /* Allinea anche la riga del foreground del gruppo padre alla stessa altezza */
+  .vis-foreground .vis-group.vis-nesting-group {
+    min-height: 28px !important;
+    max-height: 32px !important;
   }
   .vis-labelset .vis-label.vis-nesting-group:nth-child(odd) {
     background: linear-gradient(90deg, rgba(98,114,245,0.18) 0%, rgba(98,114,245,0.06) 60%, transparent 100%);
   }
-  /* Risorsa figlia */
-  .vis-labelset .vis-label:not(.vis-nesting-group) { padding-left: 22px; }
+  /* Risorsa figlia — v3.4.32.1: min-height stabile per altezza riga uniforme
+     anche quando non ci sono item nella riga */
+  .vis-labelset .vis-label:not(.vis-nesting-group) {
+    padding-left: 22px;
+    min-height: 38px !important;
+  }
+  .vis-foreground .vis-group:not(.vis-nesting-group) {
+    min-height: 38px !important;
+  }
   .vis-labelset .vis-label:hover { background: rgba(98,114,245,0.10); }
   .vis-foreground .vis-group:hover { background: rgba(98,114,245,0.04); }
   /* Items: shape morbida, glassy. NB: niente transition su transform/position
@@ -177,6 +198,18 @@
     background: linear-gradient(180deg, #dc2626 0%, #b91c1c 100%) !important;
     border-color: #991b1b !important;
     box-shadow: 0 0 0 2px rgba(220,38,38,.45), 0 4px 12px rgba(220,38,38,.3) !important;
+  }
+  /* Soft conflict festività: overlay arancione, conferma al drop (v3.4.32.1) */
+  .vis-item.tl-conflict-overtime {
+    background: linear-gradient(180deg, #ea580c 0%, #c2410c 100%) !important;
+    border-color: #9a3412 !important;
+    box-shadow: 0 0 0 2px rgba(234,88,12,.45), 0 4px 12px rgba(234,88,12,.3) !important;
+  }
+  .vis-item.tl-conflict-hard {
+    background: linear-gradient(180deg, #6b7280 0%, #4b5563 100%) !important;
+    border-color: #374151 !important;
+    box-shadow: 0 0 0 2px rgba(107,114,128,.6) !important;
+    opacity: .7;
   }
   /* Cursor edit hints */
   .vis-item .vis-drag-left, .vis-item .vis-drag-right {
@@ -973,8 +1006,9 @@ function renderTodoCard(it, today, tomorrow) {
       <span class="dur-value">${tdFmtDuration(dur)}</span>
       ${editable ? `
         <button class="dur-handle" onclick="todoExtend(${it.booking_id}, -30)" title="Accorcia 30 min">−30</button>
+        <button class="dur-handle" onclick="todoExtend(${it.booking_id}, -15)" title="Accorcia 15 min">−15</button>
+        <button class="dur-handle" onclick="todoExtend(${it.booking_id}, +15)" title="Estendi 15 min">+15</button>
         <button class="dur-handle" onclick="todoExtend(${it.booking_id}, +30)" title="Estendi 30 min">+30</button>
-        <button class="dur-handle" onclick="todoExtend(${it.booking_id}, +60)" title="Estendi 1 ora">+60</button>
       ` : ''}
       <span style="margin-left:auto; font-size:11px; color:var(--text3);">Priorità:
         <select onchange="todoSetPriority(${it.booking_id}, this.value)" style="background:transparent; color:var(--text2); border:1px solid var(--border); border-radius:3px; padding:2px 4px; font-size:11px;">
@@ -1015,9 +1049,12 @@ async function todoExtend(bookingId, deltaMin) {
     fd.append('delta_minutes', String(deltaMin));
     const res = await api('PATCH', `/planning/api/bookings/${bookingId}/extend`, fd);
     let msg = `Durata aggiornata (${deltaMin > 0 ? '+' : ''}${deltaMin}m)`;
-    if (res && res.overtime_pending_booking_ids && res.overtime_pending_booking_ids.length) {
-      msg += ` — ${res.overtime_pending_booking_ids.length} booking in attesa di approvazione straordinario`;
-    }
+    const auto = (res.overtime_auto_approved_ids||[]).length;
+    const pending = (res.overtime_pending_booking_ids||[]).filter(id => !(res.overtime_auto_approved_ids||[]).includes(id)).length;
+    const notified = res.overtime_notified_count || 0;
+    if (auto) msg += ` — straordinario auto-approvato (sei abilitato)`;
+    if (pending && notified) msg += ` — ${notified} approvatore/i notificati`;
+    else if (pending && !notified) msg += ` — straordinario in attesa (nessun altro approvatore)`;
     toast(msg, 'success');
     renderTodo();
   } catch(e) {
@@ -1545,8 +1582,16 @@ async function renderTimeline(preserveWindow=false) {
     title: ({vacation:'Ferie', sick:'Malattia', holiday:'Festività', weekend:'Weekend', other:'Non disponibile'}[u.kind] || u.kind) + (u.reason ? ' · '+u.reason : ''),
     _kind: u.kind,
   }));
-  // Conserva flag "blocking" per onMoving (hard block su vacation/sick/holiday, weekend è soft)
-  bgItems.forEach(b => { b._blocking = ['vacation','sick','holiday'].includes(b._kind); });
+  // v3.4.32.1: distinzione tra hard block (ferie/malattia operatore = persona
+  // non disponibile) e soft block festività (giorno festivo nazionale = lavoro
+  // possibile ma con maggiorazione → workflow overtime + approvazione).
+  // Weekend resta soft (passa direttamente con maggiorazione).
+  bgItems.forEach(b => {
+    b._blocking_hard = ['vacation','sick'].includes(b._kind);
+    b._blocking_soft = (b._kind === 'holiday');
+    // Manteniamo _blocking per back-compat con codice esistente che lo legge
+    b._blocking = b._blocking_hard;
+  });
 
   // v3.4.22 cantiere C: overlay timbrature TimePunch sopra le righe risorsa.
   // Visibile in modo sottile per non disturbare i booking pianificati.
@@ -1590,7 +1635,12 @@ async function renderTimeline(preserveWindow=false) {
     multiselect: true, // E4: Ctrl+click per multi-select
     multiselectPerGroup: false, // permette selezionare item in gruppi diversi
     orientation: {axis: 'top'},
-    margin: {item: 4, axis: 8},
+    // v3.4.32.1: stack offset più contenuto (overlap leggero invece che totale),
+    // margin axis ridotto. Min height groups uniforme per evitare "barre alte"
+    // sparse e il salto in testa.
+    margin: {item: {horizontal: 0, vertical: 3}, axis: 6},
+    stackSubgroups: true,
+    groupHeightMode: 'fixed',
     height: 600,
     start: win.start,
     end: win.end,
@@ -1610,22 +1660,25 @@ async function renderTimeline(preserveWindow=false) {
         callback(null);
         return;
       }
-      // E3 v3.4.17: HARD block su ferie/malattia/festività della risorsa target
-      const hardBlock = bgItems.some(b => {
-        if (!b._blocking) return false;
+      // v3.4.32.1: distinguo hard block (ferie/malattia) da soft block (festivo)
+      const overlap = (b) => {
         if (b.group !== item.group) return false;
         const bs = new Date(b.start).getTime();
         const be = new Date(b.end).getTime();
         const is = new Date(item.start).getTime();
         const ie = new Date(item.end).getTime();
         return bs < ie && be > is;
-      });
-      let cls = (item.className || '').replace(/\s*tl-conflict(-hard)?/g, '');
+      };
+      const hardBlock = bgItems.some(b => b._blocking_hard && overlap(b));
+      const softBlockHoliday = !hardBlock && bgItems.some(b => b._blocking_soft && overlap(b));
+      let cls = (item.className || '').replace(/\s*tl-conflict(-hard|-overtime)?/g, '');
       const all = itemsDS.get();
       if (hardBlock) cls += ' tl-conflict-hard';
+      else if (softBlockHoliday) cls += ' tl-conflict-overtime';
       else if (tlHasConflict(item, all.filter(x => !String(x.id).startsWith('u-')))) cls += ' tl-conflict';
       item.className = cls.trim();
-      item._hardBlock = hardBlock; // flag per onMove
+      item._hardBlock = hardBlock;
+      item._softBlockHoliday = softBlockHoliday;
       // v3.4.22: popup ore durante drag/resize
       const dms = new Date(item.end) - new Date(item.start);
       const hh = dms / 3600000;
@@ -1644,11 +1697,16 @@ async function renderTimeline(preserveWindow=false) {
         callback(null);
         return;
       }
-      // E3: hard block su ferie/festività
+      // v3.4.32.1: hard block solo su ferie/malattia (operatore non disponibile)
       if (item._hardBlock) {
-        toast('Risorsa non disponibile in questo periodo (ferie/festività)', 'error');
+        toast('Risorsa non disponibile in questo periodo (ferie/malattia)', 'error');
         callback(null);
         return;
+      }
+      // Soft block festività: chiede conferma + workflow overtime
+      if (item._softBlockHoliday) {
+        const ok = confirm('Questo periodo cade in un giorno festivo.\nIl booking richiederà approvazione straordinario e sarà conteggiato con maggiorazione festiva.\n\nProcedere?');
+        if (!ok) { callback(null); return; }
       }
       // item.id = 'a{assignment_id}' (multi-resource v3.4.16)
       const assignmentId = String(item.id).startsWith('a') ? String(item.id).substring(1) : item.id;

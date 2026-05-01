@@ -801,11 +801,95 @@ async def update_assignment(
     db.flush()
     _recalc_booking_envelope(a.booking)
     db.commit()
-    return {
+
+    # v3.4.32.1: dopo il drop, se l'assignment ora cade in fascia overtime
+    # (fuori orario regolare, sabato/domenica, festivo) → flag overtime_pending
+    # e notifica approvatori. Idempotente: non ri-notifica se già pending/approved.
+    overtime_payload = _maybe_flag_overtime_on_assignment_change(a, request, db)
+
+    out = {
         "id": a.id, "booking_id": a.booking_id, "resource_id": a.resource_id,
         "start_datetime": a.start_datetime.isoformat(),
         "end_datetime": a.end_datetime.isoformat(),
     }
+    if overtime_payload:
+        out.update(overtime_payload)
+    return out
+
+
+def _maybe_flag_overtime_on_assignment_change(
+    a: BookingAssignment, request: Request, db: Session,
+) -> Optional[dict]:
+    """Verifica se l'assignment, dopo modifica, è ora in fascia overtime.
+    Se sì e booking non è già pending/approved, marca overtime_status=pending
+    e notifica gli approvatori. Ritorna info diagnostiche per il client."""
+    from app.services.booking_cost import has_overtime_window
+    from app.services.working_hours import get_holidays
+    b = a.booking
+    if not b:
+        return None
+    if b.overtime_status in (BookingOvertimeStatus.pending, BookingOvertimeStatus.approved):
+        return {"overtime_status": b.overtime_status.value}
+
+    res = a.resource
+    if not res:
+        return None
+    policy = res.working_hours_policy or db.query(WorkingHoursPolicy).filter(
+        WorkingHoursPolicy.is_default == True  # noqa: E712
+    ).first()
+    if not policy:
+        return None
+    holidays = get_holidays(policy, a.start_datetime.year, a.end_datetime.year)
+    needs_ot = has_overtime_window(a.start_datetime, a.end_datetime, policy, holidays)
+    # Verifica anche festivi/sabato/domenica
+    from datetime import timedelta as _ttd
+    cur = a.start_datetime.date()
+    end_d = a.end_datetime.date()
+    is_special = False
+    while cur <= end_d:
+        if cur.weekday() == 6 or cur in holidays:
+            is_special = True
+            break
+        cur = cur + _ttd(days=1)
+    if not (needs_ot or is_special):
+        return None
+
+    user = current_user_optional(request)
+    self_approves = has_permission(user, "approve_overtime")
+    if self_approves:
+        b.overtime_status = BookingOvertimeStatus.approved
+        _log_change(db, b.id, "overtime_auto_approved",
+                    "Auto-approvato: drop in fascia speciale + approvatore stesso utente",
+                    {"by_user_id": user.id if user else None})
+        db.commit()
+        return {"overtime_status": "approved", "auto_approved": True}
+
+    b.overtime_status = BookingOvertimeStatus.pending
+    _log_change(db, b.id, "overtime_pending",
+                "Auto-flag pending: drop in fascia speciale (overtime/festivo/domenica)",
+                None)
+    db.commit()
+
+    notified = 0
+    try:
+        approver_ids = _overtime_approver_ids(db, exclude=user.id if user else None)
+        if approver_ids:
+            ns = notif_svc.notify(
+                db,
+                user_ids=approver_ids,
+                kind=NotificationKind.booking_overtime_pending.value,
+                severity=NotificationSeverity.action_required.value,
+                title=f"⚠ Straordinario da approvare: {_booking_short_label(b)}",
+                body="Un booking è stato spostato in fascia straordinaria/festiva. "
+                     "Approva o rifiuta dalla pagina del booking.",
+                link=f"/jobs/{b.job_id}" if b.job_id else "/planning?view=jobs",
+                actor_user_id=user.id if user else None,
+                payload={"booking_id": b.id},
+            )
+            notified = len(ns)
+    except Exception as e:
+        print(f"[overtime auto-flag] notify failed: {e}")
+    return {"overtime_status": "pending", "notified_count": notified}
 
 
 @router.delete("/api/booking-assignments/{assignment_id}")
@@ -1467,27 +1551,65 @@ async def extend_booking(
     ).first()
     if not b:
         raise HTTPException(404, "Booking non trovato")
-    _enforce_planning_scope(request, db, {a.resource_id for a in b.assignments})
+
+    # v3.4.32.1: l'operatore membro del booking può estendere anche se ci sono
+    # altre risorse coinvolte. In quel caso il cascade è ristretto alla sua
+    # risorsa (non spinge i booking dei colleghi).
+    user = current_user_optional(request)
+    own_rid = scope_resource_id(db, user)
+    restrict_cascade = None
+    if not is_elevated(user):
+        if own_rid is None:
+            raise HTTPException(403, "Nessuna risorsa associata al tuo utente")
+        booking_resource_ids = {a.resource_id for a in b.assignments}
+        if own_rid not in booking_resource_ids:
+            raise HTTPException(403, "Puoi modificare solo booking in cui sei assegnato")
+        if len(booking_resource_ids) > 1:
+            restrict_cascade = own_rid
 
     if abs(delta_minutes) < 1:
         raise HTTPException(400, "delta_minutes troppo piccolo")
     if abs(delta_minutes) > 24 * 60:
         raise HTTPException(400, "delta_minutes oltre 24 ore non ammesso")
 
-    result = extend_booking_adaptive(b, delta_minutes, db)
+    result = extend_booking_adaptive(b, delta_minutes, db,
+                                      restrict_cascade_to_resource_id=restrict_cascade)
     if result.rejected:
         raise HTTPException(409, result.reject_reason or "Estensione rifiutata")
 
-    # Notifiche overtime per i booking entrati in pending
-    user = current_user_optional(request)
-    for bid in result.overtime_pending_booking_ids:
+    # v3.4.32.1: se chi estende ha già `approve_overtime`, l'overtime risultante
+    # è auto-approvato (siamo noi stessi i decisori — niente self-notify spurious).
+    self_approves_overtime = has_permission(user, "approve_overtime")
+    auto_approved_ids: list[int] = []
+    if self_approves_overtime and result.overtime_pending_booking_ids:
+        for bid in result.overtime_pending_booking_ids:
+            bk = db.query(Booking).filter(Booking.id == bid).first()
+            if bk and bk.overtime_status == BookingOvertimeStatus.pending:
+                bk.overtime_status = BookingOvertimeStatus.approved
+                _log_change(db, bk.id, "overtime_auto_approved",
+                            f"Auto-approvato da {user.full_name if user else '?'} "
+                            "(stesso utente ha permesso approve_overtime)",
+                            {"by_user_id": user.id if user else None})
+                auto_approved_ids.append(bid)
+        db.commit()
+
+    # Notifiche overtime per i booking ancora in pending (NON auto-approvati)
+    pending_to_notify = [bid for bid in result.overtime_pending_booking_ids
+                         if bid not in auto_approved_ids]
+    notified_count = 0
+    for bid in pending_to_notify:
         bk = db.query(Booking).options(joinedload(Booking.job)).filter(Booking.id == bid).first()
         if not bk:
             continue
         try:
-            notif_svc.notify(
+            target_user_ids = _overtime_approver_ids(db, exclude=user.id if user else None)
+            if not target_user_ids:
+                # Nessun altro approvatore disponibile → resta pending. Log avvertenza.
+                print(f"[extend_booking] overtime pending #{bk.id}: nessun approvatore diverso da chi ha esteso")
+                continue
+            ns = notif_svc.notify(
                 db,
-                user_ids=_overtime_approver_ids(db, exclude=user.id if user else None),
+                user_ids=target_user_ids,
                 kind=NotificationKind.booking_overtime_pending.value,
                 severity=NotificationSeverity.action_required.value,
                 title=f"⚠ Straordinario da approvare: {_booking_short_label(bk)}",
@@ -1499,10 +1621,14 @@ async def extend_booking(
                 actor_user_id=user.id if user else None,
                 payload={"booking_id": bk.id},
             )
+            notified_count += len(ns)
         except Exception as e:
             print(f"[extend_booking] notify overtime failed: {e}")
 
-    return result.as_dict()
+    payload = result.as_dict()
+    payload["overtime_auto_approved_ids"] = auto_approved_ids
+    payload["overtime_notified_count"] = notified_count
+    return payload
 
 
 def _overtime_approver_ids(db: Session, exclude: Optional[int] = None) -> list[int]:

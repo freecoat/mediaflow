@@ -3,7 +3,9 @@
 */
 
 // ── Tema (preset CSS variables) ────────────────────────────────
-const MF_THEMES = ['indigo', 'slate', 'forest', 'sand'];
+const MF_THEMES = ['indigo', 'slate', 'forest', 'sand', 'midnight', 'copper', 'plum', 'teal', 'mono'];
+const MF_FONTS = ['dmsans', 'inter', 'roboto', 'ibmplex', 'source', 'system'];
+
 function applyTheme() {
   const theme = localStorage.getItem('mf_theme') || 'indigo';
   document.documentElement.classList.remove(...MF_THEMES.map(t => 'theme-' + t));
@@ -13,6 +15,18 @@ function setTheme(theme) {
   if (!MF_THEMES.includes(theme)) return;
   localStorage.setItem('mf_theme', theme);
   applyTheme();
+}
+
+// v3.4.32.1: variante font opzionale (default = dmsans)
+function applyFont() {
+  const f = localStorage.getItem('mf_font') || 'dmsans';
+  document.documentElement.classList.remove(...MF_FONTS.map(x => 'font-' + x));
+  document.documentElement.classList.add('font-' + (MF_FONTS.includes(f) ? f : 'dmsans'));
+}
+function setFont(font) {
+  if (!MF_FONTS.includes(font)) return;
+  localStorage.setItem('mf_font', font);
+  applyFont();
 }
 
 // ── Riordino sidebar (drag-drop, salvato in localStorage) ──────
@@ -53,6 +67,7 @@ function applySidebarOrder() {
 
 // Applica subito (prima del rendering completo) per evitare flash di stile
 applyTheme();
+applyFont();
 document.addEventListener('DOMContentLoaded', applySidebarOrder);
 
 

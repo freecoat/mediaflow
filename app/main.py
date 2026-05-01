@@ -93,7 +93,7 @@ async def lifespan(app: FastAPI):
     yield
 
 
-app = FastAPI(title="MediaFlow", version="3.4.32", lifespan=lifespan)
+app = FastAPI(title="MediaFlow", version="3.4.32.1", lifespan=lifespan)
 
 BASE_DIR = Path(__file__).parent
 app.mount("/static", StaticFiles(directory=BASE_DIR / "static"), name="static")
@@ -279,5 +279,5 @@ async def dashboard(request: Request):
 async def health():
     from app.services.ai_provider import get_provider
     p = get_provider()
-    return {"status": "ok", "app": settings.app_name, "version": "3.4.32",
+    return {"status": "ok", "app": settings.app_name, "version": "3.4.32.1",
             "ai": {"configured": p is not None, "provider": p.name if p else None}}

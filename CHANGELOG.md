@@ -1,5 +1,44 @@
 # MediaFlow — Changelog
 
+## v3.4.32.1 — Fix multi-risorsa + workflow overtime su drop + look timeline + temi/font (1 maggio 2026 sera)
+
+Patch dopo test locale di v3.4.32. 6 fix raggruppati in un singolo bump.
+
+### Fix #1 — Permessi multi-risorsa: override ben definito
+L'operatore membro di un booking multi-risorsa ora può modificare il booking. `_enforce_planning_scope` riconosce il caso "operatore in `b.assignments`": permette la modifica e il cascade è ristretto alla SUA risorsa (non spinge i booking dei colleghi). Se il cascade ristretto produce conflitti su altre risorse, reject chiaro: "L'altra risorsa coinvolta ha un booking confliggente in quell'ora. Chiedi al manager/producer di gestire la modifica."
+
+`extend_booking_adaptive` accetta nuovo parametro `restrict_cascade_to_resource_id`. Manager/producer/admin: cascade completo (come prima). Operatore singolo: cascade limitato.
+
+### Fix #2 — Bottoni durata: 4 step ±15/±30
+Card "Le mie" e dashboard "I miei booking di oggi": bottoni in ordine `−30 / −15 / +15 / +30`. Rimosso `+60` (richiesta esplicita).
+
+### Fix #3 — Notifiche overtime: auto-approve self + diagnostiche client
+Se chi estende ha già il permesso `approve_overtime`, l'overtime risultante viene auto-approvato (no self-notify spurious). Endpoint `/extend` ritorna `overtime_auto_approved_ids` e `overtime_notified_count`. Toast nella UI specifica esito: "auto-approvato (sei abilitato)" / "N approvatore/i notificati" / "in attesa (nessun altro approvatore)".
+
+Aggiunte 3 icone al drawer notifiche: `🎬 booking_status_changed`, `🌙 booking_overtime_pending`, `🔔 booking_overtime_resolved`.
+
+### Fix #4 — Drop su festivo → workflow overtime invece di hard block
+Distinzione netta nel `bgItems` della timeline:
+- **Hard block** (resta): `vacation` (ferie) + `sick` (malattia) → operatore non disponibile, drop rifiutato.
+- **Soft block festività** (nuovo): `holiday` → drop ammesso con conferma. Visual: bordo arancione (classe `tl-conflict-overtime`). Confirm dialog: "Questo periodo cade in un giorno festivo. Il booking richiederà approvazione straordinario e sarà conteggiato con maggiorazione festiva. Procedere?".
+
+Nuova logica server: `PUT /api/booking-assignments/{id}` dopo modifica chiama `_maybe_flag_overtime_on_assignment_change()`. Se l'assignment ora cade in fascia overtime / sabato / domenica / festivo, il booking riceve `overtime_status=pending` automaticamente + notifica agli approvatori. Idempotente: non ri-flagga se già pending/approved. Auto-approve se l'utente ha permesso `approve_overtime`.
+
+### Fix #5 — Look timeline più ordinato
+Vis-timeline options:
+- `margin: {item: {horizontal: 0, vertical: 3}, axis: 6}` — overlap orizzontale completo (job consecutivi affiancati senza gap), spacing verticale ridotto.
+- `groupHeightMode: 'fixed'` + `min-height: 38px` su `.vis-label` foglia + `28px` su `vis-nesting-group` → altezza riga uniforme indipendente dal contenuto, eliminata la "barra alta in testa".
+- Font label risorse: `13.5px` (era 12.5), color `#f5f5f5`, `font-weight: 500`, allineamento verticale center via `display: flex; align-items: center`.
+
+### Fix #6 — Aspetto: 5 temi nuovi + 6 varianti font
+Temi colori (totale 9): aggiunti **Midnight** (blu profondo), **Copper** (rame caldo), **Plum** (viola creativo), **Teal** (verde acqua), **Mono** (grigi neutri B/N).
+
+Tipografia (nuovo): variabili CSS `--font-body` / `--font-mono` con override per classe `.font-X` su `<html>`. 6 preset: **DM Sans** (default), **Inter**, **Roboto**, **IBM Plex**, **Source Sans**, **System UI**. Persistenza in `localStorage` (`mf_font`). Pannello "🎨 Aspetto" → sezione "Tipografia" con preview live di ogni font.
+
+Tutti gli usi diretti di `font-family: 'DM Mono', monospace` in `main.css` sostituiti con `var(--font-mono)` per propagare la scelta a numeri/codici.
+
+---
+
 ## v3.4.32 — Booking esecutivo: priorità + stato esecuzione + workflow overtime + pozzo not_done (1 maggio 2026)
 
 Cantiere "booking come unità operativa". Trasforma il booking da pura intenzione di pianificazione a oggetto governabile dall'operatore: priorità visibile per colore, ciclo di vita planned→in_progress→done|not_done con motivazione, modifica durata adattiva con cascade intra-day, workflow approvazione straordinari basato su `WorkingHoursPolicy`, sezione cost report dedicata + pozzo ore non maturate.

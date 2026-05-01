@@ -73,6 +73,7 @@ def extend_booking_adaptive(
     booking: Booking,
     delta_minutes: int,
     db: Session,
+    restrict_cascade_to_resource_id: Optional[int] = None,
 ) -> CascadeResult:
     """Estende il booking di delta_minutes (può essere negativo per accorciare).
 
@@ -84,6 +85,15 @@ def extend_booking_adaptive(
       4. Se OK, applica shift +delta a tutti gli adiacenti + estende il booking.
       5. Marca `overtime_status=pending` su ogni booking che (dopo shift)
          cade fuori dalla fascia regolare della policy.
+
+    `restrict_cascade_to_resource_id`: se valorizzato, il cascade dei booking
+    adiacenti è limitato a quella sola risorsa. Le altre risorse coinvolte
+    nel booking vengono comunque estese (è lo stesso booking, durata uniforme),
+    ma i loro booking adiacenti NON vengono spostati. Se ne deriva un conflitto
+    su un'altra risorsa, l'operazione viene rifiutata.
+
+    Use-case operatore: l'operatore membro del booking estende e cascade
+    sposta SOLO i suoi booking adiacenti, non quelli dei colleghi.
     """
     res = CascadeResult(booking_id=booking.id, delta_minutes=delta_minutes)
     if delta_minutes == 0:
@@ -131,8 +141,36 @@ def extend_booking_adaptive(
         bookings_in_overtime_check.add(own_a.booking_id)
 
         if delta_minutes > 0:
-            # Trova booking adiacenti (stessa risorsa, stessa giornata,
-            # start ≥ old_end). Ordinati per start crescente.
+            # Cascade: cerca booking adiacenti della stessa risorsa nello
+            # stesso giorno. Se restrict_cascade_to_resource_id è valorizzato,
+            # non far cascade sulle altre risorse del booking.
+            do_cascade = (
+                restrict_cascade_to_resource_id is None
+                or restrict_cascade_to_resource_id == resource.id
+            )
+            if not do_cascade:
+                # Estendiamo comunque l'assignment del booking (durata uniforme),
+                # ma controlliamo che non ci siano conflitti con booking
+                # adiacenti dell'altra risorsa.
+                conflict = (
+                    db.query(BookingAssignment)
+                    .filter(
+                        BookingAssignment.resource_id == resource.id,
+                        BookingAssignment.id != own_a.id,
+                        BookingAssignment.start_datetime < new_end,
+                        BookingAssignment.end_datetime > own_a.start_datetime,
+                    )
+                    .first()
+                )
+                if conflict:
+                    res.rejected = True
+                    res.reject_reason = (
+                        f"Estensione bloccata: l'altra risorsa coinvolta ({resource.name}) "
+                        f"ha un booking confliggente in quell'ora. "
+                        f"Chiedi al manager/producer di gestire la modifica."
+                    )
+                    return res
+                continue
             day_start = datetime.combine(old_end.date(), time(0, 0))
             day_end = day_start + timedelta(days=1)
             adjacents = (

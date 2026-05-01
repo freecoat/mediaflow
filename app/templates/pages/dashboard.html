@@ -311,8 +311,9 @@ function renderMyBookingCard(it) {
       <span style="font-weight:600; min-width:60px;">${_fmtDur(it.duration_minutes)}</span>
       ${editable ? `
         <button class="dur-handle" onclick="myExtend(${it.booking_id}, -30)">−30</button>
+        <button class="dur-handle" onclick="myExtend(${it.booking_id}, -15)">−15</button>
+        <button class="dur-handle" onclick="myExtend(${it.booking_id}, +15)">+15</button>
         <button class="dur-handle" onclick="myExtend(${it.booking_id}, +30)">+30</button>
-        <button class="dur-handle" onclick="myExtend(${it.booking_id}, +60)">+60</button>
       ` : ''}
     </div>
     <div class="actions">
@@ -341,9 +342,10 @@ async function myExtend(bid, delta) {
   try {
     const res = await api('PATCH', `/planning/api/bookings/${bid}/extend`, fd);
     let msg = `Durata ${delta>0?'+':''}${delta}m`;
-    if (res.overtime_pending_booking_ids && res.overtime_pending_booking_ids.length) {
-      msg += ' — straordinario in attesa di approvazione';
-    }
+    const auto = (res.overtime_auto_approved_ids||[]).length;
+    const notified = res.overtime_notified_count || 0;
+    if (auto) msg += ' — straordinario auto-approvato';
+    else if (notified) msg += ` — ${notified} approvatore/i notificati`;
     toast(msg, 'success');
     loadDashboard();
   } catch(e) { toast(e.message || 'Errore', 'error'); }
