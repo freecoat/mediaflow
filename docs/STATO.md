@@ -8,6 +8,10 @@
 
 ## Versione corrente
 
+**v3.4.34.3** — 1 maggio 2026 notte tarda — Critical Assumptions reagisce al toggle Listino
+
+Fix: la topbar (con Critical Assumptions inline) ora si stringe correttamente quando il pannello Listino flottante è aperto. Classe `.with-pricelist` applicata sull'intero wrapper `#quote-editor` (non solo sul body).
+
 **v3.4.34.2** — 1 maggio 2026 notte tarda — Listino flottante + same-height top + IVA in Riepilogo
 
 Listino ora `position:fixed` (sempre visibile durante scroll, non più sticky). Riepilogo e Stato&azioni hanno stessa altezza (align-items:stretch). IVA spostata da Stato a Riepilogo (editabile inline). Note/Termini compatti rows=1 espandibili al focus.

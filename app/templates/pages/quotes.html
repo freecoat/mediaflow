@@ -117,16 +117,17 @@
     .dropdown-item:hover { background: var(--bg3); }
     /* v3.4.34.2: Listino flottante (position:fixed) — sempre visibile,
        non scorre con la pagina. Solo scroll interno alla lista risultati.
-       Quando aperto: il body usa singola colonna ma riserva uno spazio
-       a destra (padding-right) per non sovrapporre il pannello fisso. */
+       v3.4.34.3: il padding-right è applicato all'INTERO wrapper editor
+       (topbar + body) via #quote-editor.with-pricelist, così anche
+       Critical Assumptions in topbar non finisce sotto al pannello. */
     #quote-editor-body { display:grid; grid-template-columns: 1fr; gap:20px; align-items:start; }
-    #quote-editor-body.with-pricelist { padding-right: 500px; }
+    #quote-editor.with-pricelist { padding-right: 500px; }
     @media (max-width: 1400px) {
-      #quote-editor-body.with-pricelist { padding-right: 460px; }
+      #quote-editor.with-pricelist { padding-right: 460px; }
     }
     @media (max-width: 1024px) {
       /* Mobile: niente flottante, pannello in colonna naturale sotto */
-      #quote-editor-body.with-pricelist { padding-right: 0; }
+      #quote-editor.with-pricelist { padding-right: 0; }
       #quote-editor-body.with-pricelist .quote-side-col { display: block; }
     }
     /* Topbar editor */
@@ -1071,9 +1072,14 @@ function openAddLine() {
 function openSideAddLine(resetSearch = false) {
   const pane = document.getElementById('side-add-line');
   const body = document.getElementById('quote-editor-body');
+  const editor = document.getElementById('quote-editor');
   if (!pane) return;
   pane.style.display = 'flex';
+  // v3.4.34.3: classe sul wrapper editor (topbar + body insieme), non solo
+  // sul body — così anche Critical Assumptions in topbar riserva spazio
+  // per il pannello flottante.
   body.classList.add('with-pricelist');
+  if (editor) editor.classList.add('with-pricelist');
   localStorage.setItem('mf_side_pricelist_open', '1');
   if (resetSearch) {
     document.getElementById('al-search').value = '';
@@ -1088,8 +1094,10 @@ function openSideAddLine(resetSearch = false) {
 function closeSideAddLine() {
   const pane = document.getElementById('side-add-line');
   const body = document.getElementById('quote-editor-body');
+  const editor = document.getElementById('quote-editor');
   if (pane) pane.style.display = 'none';
   if (body) body.classList.remove('with-pricelist');
+  if (editor) editor.classList.remove('with-pricelist');
   localStorage.setItem('mf_side_pricelist_open', '0');
 }
 

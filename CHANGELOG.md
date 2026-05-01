@@ -1,5 +1,15 @@
 # MediaFlow — Changelog
 
+## v3.4.34.3 — Critical Assumptions reagisce al toggle Listino (1 maggio 2026 notte tarda)
+
+Fix: la topbar editor (con Critical Assumptions inline) non si stringeva quando il pannello Listino flottante veniva aperto, sovrapponendosi visualmente al pannello.
+
+Soluzione: la classe `.with-pricelist` ora è applicata anche al wrapper `#quote-editor` (non solo a `#quote-editor-body`). Il CSS `#quote-editor.with-pricelist { padding-right: 500px }` (460 a <1400, 0 a <1024) riserva spazio per l'intero blocco editor — topbar inclusa.
+
+JS: `openSideAddLine()` e `closeSideAddLine()` aggiungono/rimuovono la classe su entrambi gli elementi.
+
+---
+
 ## v3.4.34.2 — Listino flottante + same-height top row + IVA in Riepilogo (1 maggio 2026 notte tarda)
 
 3 fix di precisazione layout v3.4.34.1.
