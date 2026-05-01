@@ -1,5 +1,19 @@
 # MediaFlow — Changelog
 
+## v3.4.34.1 — Layout editor /quotes: Stato a sinistra, Listino sticky (1 maggio 2026 notte tarda)
+
+Correzione layout v3.4.34 su richiesta:
+
+1. **"Stato & azioni" spostato nella colonna sinistra**, in cima accanto a "Riepilogo economico" (grid 2 colonne `.quote-top-row`, su mobile collassa in singola colonna a `<900px`). "Voci preventivo" sotto a tutta larghezza.
+
+2. **Colonna destra = solo pannello Listino** (`.quote-side-col`). Quando il listino si chiude, la colonna sinistra si riespande naturalmente perché `#quote-editor-body` torna a `grid-template-columns: 1fr`.
+
+3. **Listino sticky**: il pannello `.al-side` è già `position:sticky; top:80px; max-height: calc(100vh - 100px); overflow:hidden` (da v3.4.33.1). Quando l'utente scrolla la pagina, il pannello rimane visibile alla stessa altezza viewport. Lo scroll interno alla lista risultati funziona via `.al-results { overflow-y:auto }`.
+
+CSS aggiunti: `.quote-top-row` (grid 2 colonne con responsive), `.quote-side-col` (wrapper colonna destra, no transformazioni).
+
+---
+
 ## v3.4.34 — Refactor layout editor /quotes (1 maggio 2026 notte tarda)
 
 Riorganizzazione editor quotazione su richiesta UX di Matteo. 6 punti.

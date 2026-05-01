@@ -8,6 +8,10 @@
 
 ## Versione corrente
 
+**v3.4.34.1** — 1 maggio 2026 notte tarda — Layout editor /quotes: Stato a sinistra, Listino sticky
+
+"Stato & azioni" spostato nella colonna sinistra accanto a "Riepilogo economico" (grid 2 col). Colonna destra = solo pannello Listino sticky che resta a posizione fissa durante lo scroll della pagina (scroll interno alla lista risultati).
+
 **v3.4.34** — 1 maggio 2026 notte tarda — Refactor layout editor /quotes (Critical Assumptions compatto, riepilogo sopra, riordino categorie)
 
 Riorganizzazione UX dell'editor quotazione su richiesta Matteo: Critical Assumptions in topbar inline, bottone "+ Aggiungi voce" rimosso (lascia solo "📋 Listino"), Riepilogo economico sopra le voci, Stato & azioni sopra il Listino, riordino categorie con drag&drop (multi-tbody + SortableJS, persistito in `Quote.category_order` JSON nuovo).

@@ -157,6 +157,17 @@
     table .cat-drag-handle:active { cursor: grabbing; }
     tbody.ql-cat-tbody.ghost { opacity: .35; }
     tbody.ql-cat-tbody.dragging { opacity: .55; background: rgba(98,114,245,.05); }
+    /* v3.4.34.1: top row con Riepilogo + Stato&azioni affiancati,
+       Voci preventivo sotto a tutta larghezza. */
+    .quote-top-row {
+      display:grid; grid-template-columns: 1fr 1fr; gap: 16px; align-items: start;
+    }
+    @media (max-width: 900px) {
+      .quote-top-row { grid-template-columns: 1fr; }
+    }
+    /* Colonna destra: contenitore del solo pannello Listino. Lo sticky è sul
+       .al-side direttamente (la colonna stessa non si trasforma). */
+    .quote-side-col { min-width: 0; }
     /* Pannello listino laterale */
     .side-pl-card {
       position:sticky; top:80px;
@@ -211,14 +222,34 @@
   </style>
 
   <div id="quote-editor-body">
-    <!-- v3.4.34: Colonna sinistra (editor) — Riepilogo economico SOPRA Voci preventivo -->
+    <!-- v3.4.34.1: Colonna sinistra. Top: Riepilogo + Stato & azioni
+         affiancati. Sotto: Voci preventivo. -->
     <div>
-      <div class="card mb-4">
-        <div class="card-title mb-3">Riepilogo economico</div>
-        <div id="totals-panel"></div>
+      <div class="quote-top-row">
+        <div class="card">
+          <div class="card-title mb-3">Riepilogo economico</div>
+          <div id="totals-panel"></div>
+        </div>
+        <div class="card">
+          <div class="card-title mb-2">Stato &amp; azioni</div>
+          <div class="flex gap-2" style="flex-wrap:wrap;">
+            <button class="btn btn-secondary btn-sm" onclick="setQuoteStatus('sent')">📤 Inviata</button>
+            <button class="btn btn-secondary btn-sm" onclick="setQuoteStatus('approved')">✅ Approvata</button>
+            <button class="btn btn-secondary btn-sm" onclick="setQuoteStatus('rejected')">❌ Rifiutata</button>
+            <button class="btn btn-secondary btn-sm" onclick="setQuoteStatus('expired')">⏰ Scaduta</button>
+          </div>
+          <button class="btn btn-primary btn-sm mt-3" style="width:100%;" onclick="approveAndCreateJob()">✓ Approva quote → Job</button>
+          <div class="form-group mt-3"><label class="form-label">IVA (%)</label>
+            <input class="form-input" id="q-vat" type="number" step="0.1" placeholder="22" onchange="saveQuoteMeta()"></div>
+          <div class="form-group"><label class="form-label">Note</label>
+            <textarea class="form-textarea" id="q-notes" rows="2" onchange="saveQuoteMeta()"></textarea></div>
+          <div class="form-group"><label class="form-label">Termini di pagamento</label>
+            <textarea class="form-textarea" id="q-payment" rows="2"
+              placeholder="es. 20% Project Start / 40% Grading / 40% Mix" onchange="saveQuoteMeta()"></textarea></div>
+        </div>
       </div>
 
-      <div class="card quote-editor-card" id="lines-card"
+      <div class="card quote-editor-card" style="margin-top:18px;" id="lines-card"
            ondragover="onLinesDragOver(event)"
            ondragleave="onLinesDragLeave(event)"
            ondrop="onLinesDrop(event)">
@@ -252,29 +283,11 @@
       </div>
     </div>
 
-    <!-- v3.4.34: Colonna destra (sempre visibile insieme al pannello Listino).
-         Stato & azioni SOPRA il pannello Listino come richiesto. -->
-    <div>
-      <div class="card mb-3">
-        <div class="card-title mb-2">Stato &amp; azioni</div>
-        <div class="flex gap-2" style="flex-wrap:wrap;">
-          <button class="btn btn-secondary btn-sm" onclick="setQuoteStatus('sent')">📤 Inviata</button>
-          <button class="btn btn-secondary btn-sm" onclick="setQuoteStatus('approved')">✅ Approvata</button>
-          <button class="btn btn-secondary btn-sm" onclick="setQuoteStatus('rejected')">❌ Rifiutata</button>
-          <button class="btn btn-secondary btn-sm" onclick="setQuoteStatus('expired')">⏰ Scaduta</button>
-        </div>
-        <button class="btn btn-primary btn-sm mt-3" style="width:100%;" onclick="approveAndCreateJob()">✓ Approva quote → Job</button>
-        <div class="form-group mt-3"><label class="form-label">IVA (%)</label>
-          <input class="form-input" id="q-vat" type="number" step="0.1" placeholder="22" onchange="saveQuoteMeta()"></div>
-        <div class="form-group"><label class="form-label">Note</label>
-          <textarea class="form-textarea" id="q-notes" rows="2" onchange="saveQuoteMeta()"></textarea></div>
-        <div class="form-group"><label class="form-label">Termini di pagamento</label>
-          <textarea class="form-textarea" id="q-payment" rows="2"
-            placeholder="es. 20% Project Start / 40% Grading / 40% Mix" onchange="saveQuoteMeta()"></textarea></div>
-      </div>
-
-      <!-- ── Pannello "Aggiungi voce" laterale persistente (v3.4.33.1+) ─ -->
-      <!-- Posizionato DENTRO la colonna destra dopo "Stato & azioni" (v3.4.34). -->
+    <!-- v3.4.34.1: Colonna destra = SOLO pannello Listino. Stato&azioni
+         spostato nella colonna sinistra (top, accanto al Riepilogo). -->
+    <div class="quote-side-col">
+      <!-- Pannello "Aggiungi voce" sticky (non scrolla con la pagina,
+           solo scroll interno alla lista risultati). -->
       <aside class="al-side card" id="side-add-line" style="display:none;">
       <div class="al-side-head">
         <span class="al-side-title">📋 Listino &amp; aggiungi voce</span>
