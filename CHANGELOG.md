@@ -1,5 +1,14 @@
 # MediaFlow — Changelog
 
+## v3.4.48.2 — Look timeline: famiglia font + colore testo (2 maggio 2026)
+
+Pannello ⚙ esteso con due nuovi controlli per coerenza visiva con bg/tema:
+
+- **Famiglia font** — Auto (tema globale) / DM Sans / Inter / System UI / Serif / Monospace
+- **Colore testo** — Auto (segue bg) / Bianco / Bianco soft / Ambra / Nero / Indigo
+
+Apply via `data-font-family` e `data-text-color` su `#tl-host`, override su `.vis-item`, `.vis-labelset .vis-label`, `.vis-time-axis .vis-text`. Default "auto" = nessuna regola (eredita dal bg variant o dal tema globale).
+
 ## v3.4.48.1 — Hotfix colore sfondo timeline (2 maggio 2026)
 
 Il `data-bg` su `#tl-host` non aveva effetto perché `.vis-timeline` (figlio diretto, libreria) ha background hardcoded `linear-gradient(...) + var(--bg-elev)` che sovrasta l'host. Spostato il selettore: `#tl-host[data-bg="..."] .vis-timeline { background: ... !important }`. Aggiunto reset trasparente su `.vis-panel/.vis-foreground/.vis-background` interni per evitare overlay residui. Variant "paper" (chiaro) ora inverte testo/grid/label per leggibilità.

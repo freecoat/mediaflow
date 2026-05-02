@@ -417,6 +417,43 @@
     border-left-color: #9aa1b8 !important;
     color: #cdd5e8 !important;
   }
+  /* v3.4.48.2: Famiglia font (override locale rispetto al tema globale).
+     'auto' = nessuna regola (eredita). Le altre opzioni applicano famiglia
+     a items + label + time-axis text per coerenza visiva. */
+  #tl-host[data-font-family="dm-sans"] .vis-item,
+  #tl-host[data-font-family="dm-sans"] .vis-labelset .vis-label,
+  #tl-host[data-font-family="dm-sans"] .vis-time-axis .vis-text { font-family: 'DM Sans', sans-serif !important; }
+  #tl-host[data-font-family="inter"] .vis-item,
+  #tl-host[data-font-family="inter"] .vis-labelset .vis-label,
+  #tl-host[data-font-family="inter"] .vis-time-axis .vis-text { font-family: 'Inter', system-ui, sans-serif !important; }
+  #tl-host[data-font-family="system"] .vis-item,
+  #tl-host[data-font-family="system"] .vis-labelset .vis-label,
+  #tl-host[data-font-family="system"] .vis-time-axis .vis-text { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif !important; }
+  #tl-host[data-font-family="serif"] .vis-item,
+  #tl-host[data-font-family="serif"] .vis-labelset .vis-label,
+  #tl-host[data-font-family="serif"] .vis-time-axis .vis-text { font-family: Georgia, 'Times New Roman', serif !important; }
+  #tl-host[data-font-family="mono"] .vis-item,
+  #tl-host[data-font-family="mono"] .vis-labelset .vis-label,
+  #tl-host[data-font-family="mono"] .vis-time-axis .vis-text { font-family: 'DM Mono', 'JetBrains Mono', Consolas, monospace !important; }
+
+  /* v3.4.48.2: Colore testo (override locale).
+     'auto' = nessuna regola (eredita dal bg variant CSS). */
+  #tl-host[data-text-color="white"] .vis-item,
+  #tl-host[data-text-color="white"] .vis-labelset .vis-label,
+  #tl-host[data-text-color="white"] .vis-time-axis .vis-text { color: #ffffff !important; }
+  #tl-host[data-text-color="soft"] .vis-item,
+  #tl-host[data-text-color="soft"] .vis-labelset .vis-label,
+  #tl-host[data-text-color="soft"] .vis-time-axis .vis-text { color: #e8eaf3 !important; }
+  #tl-host[data-text-color="amber"] .vis-item,
+  #tl-host[data-text-color="amber"] .vis-labelset .vis-label,
+  #tl-host[data-text-color="amber"] .vis-time-axis .vis-text { color: #fbbf24 !important; }
+  #tl-host[data-text-color="dark"] .vis-item,
+  #tl-host[data-text-color="dark"] .vis-labelset .vis-label,
+  #tl-host[data-text-color="dark"] .vis-time-axis .vis-text { color: #1a1d2c !important; }
+  #tl-host[data-text-color="indigo"] .vis-item,
+  #tl-host[data-text-color="indigo"] .vis-labelset .vis-label,
+  #tl-host[data-text-color="indigo"] .vis-time-axis .vis-text { color: #a8b3ff !important; }
+
   /* v3.4.48.1: Colore sfondo timeline.
      Va applicato a `.vis-timeline` dentro #tl-host (non a #tl-host stesso),
      perché .vis-timeline ha un background hardcoded gradient+bg-elev che
@@ -710,6 +747,24 @@
               <option value="11.5" selected>11.5</option>
               <option value="12">12</option>
               <option value="13">13</option>
+            </select></div>
+          <div class="tl-pref-row"><label>Famiglia font</label>
+            <select id="tlp-font-family" class="form-select" data-no-search="true">
+              <option value="auto" selected>Auto (tema)</option>
+              <option value="dm-sans">DM Sans</option>
+              <option value="inter">Inter</option>
+              <option value="system">System UI</option>
+              <option value="serif">Serif</option>
+              <option value="mono">Monospace</option>
+            </select></div>
+          <div class="tl-pref-row"><label>Colore testo</label>
+            <select id="tlp-text-color" class="form-select" data-no-search="true">
+              <option value="auto" selected>Auto (segue sfondo)</option>
+              <option value="white">Bianco</option>
+              <option value="soft">Bianco soft</option>
+              <option value="amber">Ambra</option>
+              <option value="dark">Nero</option>
+              <option value="indigo">Indigo</option>
             </select></div>
           <div class="tl-pref-row"><label>Colore sfondo</label>
             <select id="tlp-bg" class="form-select" data-no-search="true">
@@ -1262,6 +1317,8 @@ async function renderJobs() {
 const TL_PREFS_KEY = 'mf_tl_prefs';
 const TL_PREFS_DEFAULTS = {
   font: '11.5',
+  font_family: 'auto',
+  text_color: 'auto',
   bg: 'default',
   accent: 'indigo',
   sb_density: 'normal',
@@ -1295,6 +1352,8 @@ function tlPrefsApply(p) {
     host.dataset.weekendBg = p.weekend_bg ? 'on' : 'off';
     host.dataset.accent = p.accent || 'indigo';
     host.dataset.bg = p.bg || 'default';
+    host.dataset.textColor = p.text_color || 'auto';
+    host.dataset.fontFamily = p.font_family || 'auto';
     host.style.setProperty('--vis-item-font-size', (p.font || '11.5') + 'px');
   }
   const sbHost = document.getElementById('sb-host');
@@ -1330,6 +1389,8 @@ function tlPrefsToggle(ev) {
     // Sync UI con prefs correnti
     const p = tlPrefsLoad();
     document.getElementById('tlp-font').value = String(p.font);
+    document.getElementById('tlp-font-family').value = p.font_family || 'auto';
+    document.getElementById('tlp-text-color').value = p.text_color || 'auto';
     document.getElementById('tlp-bg').value = p.bg || 'default';
     document.getElementById('tlp-accent').value = p.accent;
     document.getElementById('tlp-sb-density').value = p.sb_density;
@@ -1350,7 +1411,7 @@ function tlPrefsToggle(ev) {
   if (ev) ev.stopPropagation();
 }
 function tlPrefsBindHandlers() {
-  const ids = ['font','bg','accent','sb-density','anim','heatmap','today-glow','weekend-bg'];
+  const ids = ['font','font-family','text-color','bg','accent','sb-density','anim','heatmap','today-glow','weekend-bg'];
   for (const id of ids) {
     const el = document.getElementById('tlp-' + id);
     if (!el || el._mfBound) continue;
@@ -1358,6 +1419,8 @@ function tlPrefsBindHandlers() {
     el.addEventListener('change', () => {
       const p = tlPrefsLoad();
       p.font = document.getElementById('tlp-font').value;
+      p.font_family = document.getElementById('tlp-font-family').value;
+      p.text_color = document.getElementById('tlp-text-color').value;
       p.bg = document.getElementById('tlp-bg').value;
       p.accent = document.getElementById('tlp-accent').value;
       p.sb_density = document.getElementById('tlp-sb-density').value;

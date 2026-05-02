@@ -8,6 +8,10 @@
 
 ## Versione corrente
 
+**v3.4.48.2** — 2 maggio 2026 — Look timeline: famiglia font + colore testo
+
+Pannello ⚙ esteso: "Famiglia font" (auto/DM Sans/Inter/System/Serif/Mono) e "Colore testo" (auto/white/soft/amber/dark/indigo). Apply via `data-font-family` e `data-text-color` su `#tl-host` su items+label+time-axis. Auto eredita dal tema globale o dal bg variant.
+
 **v3.4.48.1** — 2 maggio 2026 — Hotfix colore sfondo timeline
 
 `data-bg` ora applicato a `.vis-timeline` (figlio dell'host) per superare il gradient hardcoded della libreria. Reset trasparente su `.vis-panel/.vis-foreground/.vis-background`. Variant "paper" con palette chiara (testo/grid/label invertiti).
