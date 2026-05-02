@@ -98,6 +98,8 @@
         <!-- v3.4.39: duplicazione + versioning -->
         <button class="btn btn-secondary btn-sm" onclick="duplicateQuote()" title="Crea una copia indipendente (scenario / template)">📋 Duplica</button>
         <button class="btn btn-secondary btn-sm" onclick="newVersionQuote()" title="Crea una nuova versione legata (-v2, -v3...)">📐 Versione</button>
+        <!-- v3.4.43: sposta a un altro progetto, solo draft -->
+        <button class="btn btn-secondary btn-sm" id="btn-move-quote" onclick="moveQuote()" style="display:none;" title="Sposta questa quote a un altro progetto (solo bozza)">🚚 Sposta</button>
         <div class="dropdown" style="position:relative;display:inline-block;">
           <button class="btn btn-secondary btn-sm" onclick="this.nextElementSibling.classList.toggle('open')">⬇ Esporta ▾</button>
           <div class="dropdown-menu" style="position:absolute;right:0;top:100%;margin-top:4px;background:var(--bg2);border:1px solid var(--border);border-radius:6px;display:none;flex-direction:column;min-width:160px;z-index:10;box-shadow:0 4px 12px rgba(0,0,0,0.2);">
@@ -399,6 +401,59 @@
     </aside>
     </div><!-- /col dx -->
   </div><!-- /#quote-editor-body -->
+</div>
+
+<!-- v3.4.43: Modal duplica con scelta progetto -->
+<div class="modal-overlay" id="modal-duplicate-quote">
+  <div class="modal" style="max-width:520px;">
+    <div class="modal-header">
+      <span class="modal-title">📋 Duplica quotazione</span>
+      <button class="btn btn-ghost btn-icon" onclick="closeModal('modal-duplicate-quote')">✕</button>
+    </div>
+    <div class="modal-body">
+      <p class="text-sm text-muted mb-3">Crea una copia <b>indipendente</b> (no versioning). Per scenari paralleli o template di nuovi progetti.</p>
+      <div class="form-group">
+        <label class="form-label">Progetto di destinazione</label>
+        <select class="form-select" id="dup-project">
+          <option value="">— stesso progetto della quote sorgente —</option>
+          {% for p in projects %}
+          <option value="{{ p.id }}">[{{ p.code }}] {{ p.title }}{% if p.client %} — {{ p.client.name }}{% endif %}</option>
+          {% endfor %}
+        </select>
+        <small class="form-help text-muted">Vuoto = duplicato nello stesso progetto. Se cambi progetto, anche il cliente si aggiorna.</small>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeModal('modal-duplicate-quote')">Annulla</button>
+      <button class="btn btn-primary" onclick="confirmDuplicate()">Duplica</button>
+    </div>
+  </div>
+</div>
+
+<!-- v3.4.43: Modal sposta quote (solo draft) -->
+<div class="modal-overlay" id="modal-move-quote">
+  <div class="modal" style="max-width:520px;">
+    <div class="modal-header">
+      <span class="modal-title">🚚 Sposta quotazione a un altro progetto</span>
+      <button class="btn btn-ghost btn-icon" onclick="closeModal('modal-move-quote')">✕</button>
+    </div>
+    <div class="modal-body">
+      <p class="text-sm text-muted mb-3">Disponibile <b>solo per quote in bozza</b> e senza job collegato. Il cliente verrà riallineato al cliente del progetto target.</p>
+      <div class="form-group">
+        <label class="form-label">Nuovo progetto *</label>
+        <select class="form-select" id="mv-project">
+          <option value="">— seleziona progetto —</option>
+          {% for p in projects %}
+          <option value="{{ p.id }}">[{{ p.code }}] {{ p.title }}{% if p.client %} — {{ p.client.name }}{% endif %}</option>
+          {% endfor %}
+        </select>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeModal('modal-move-quote')">Annulla</button>
+      <button class="btn btn-primary" onclick="confirmMoveQuote()">Sposta</button>
+    </div>
+  </div>
 </div>
 
 <!-- v3.4.39: Modal preview migrazione job V_old → V_new -->
@@ -718,6 +773,10 @@ async function reloadQuote() {
   renderLines();
   renderTotals();
   loadVersionsArea();
+  // v3.4.43: visibilità "Sposta progetto" — solo draft. La verifica
+  // "no job" viene fatta server-side al click, qui basta il flag draft.
+  const btnMove = document.getElementById('btn-move-quote');
+  if (btnMove) btnMove.style.display = (currentQuote.status === 'draft') ? '' : 'none';
 }
 
 // ── v3.4.39: Versioni / Duplicazione / Migrazione ─────────────
@@ -755,14 +814,52 @@ async function loadVersionsArea() {
   } catch(e) { /* silent: area resta nascosta */ }
 }
 
-async function duplicateQuote() {
+// v3.4.43: duplicate ora apre un modal per scegliere il progetto destinazione.
+window._duplicateSourceId = null;
+function duplicateQuote() {
   if (!currentQuoteId) return;
-  if (!confirm('Duplica questa quotazione come copia INDIPENDENTE (nessun legame versioning)?\n\nUtile per scenari paralleli o template di nuovi progetti.')) return;
+  window._duplicateSourceId = currentQuoteId;
+  document.getElementById('dup-project').value = '';
+  if (typeof mfApplySearchable === 'function') mfApplySearchable(document);
+  openModal('modal-duplicate-quote');
+}
+
+async function confirmDuplicate() {
+  const srcId = window._duplicateSourceId;
+  if (!srcId) { closeModal('modal-duplicate-quote'); return; }
+  const projectId = document.getElementById('dup-project').value;
+  const fd = new FormData();
+  if (projectId) fd.append('project_id', projectId);
   try {
-    const r = await api('POST', `/quotes/api/${currentQuoteId}/duplicate`);
+    const r = await api('POST', `/quotes/api/${srcId}/duplicate`, fd);
+    closeModal('modal-duplicate-quote');
     toast(`Duplicata come ${r.number}`, 'success');
     openEditor(r.id);
   } catch(e) { toast(e.message || 'Errore duplicazione', 'error'); }
+}
+
+// v3.4.43: sposta la quote corrente a un altro progetto (solo draft).
+function moveQuote() {
+  if (!currentQuoteId) return;
+  if (!currentQuote || currentQuote.status !== 'draft') {
+    toast('Lo spostamento di progetto è ammesso solo su quote in bozza', 'warning');
+    return;
+  }
+  document.getElementById('mv-project').value = '';
+  if (typeof mfApplySearchable === 'function') mfApplySearchable(document);
+  openModal('modal-move-quote');
+}
+
+async function confirmMoveQuote() {
+  const projectId = document.getElementById('mv-project').value;
+  if (!projectId) { toast('Seleziona un progetto', 'warning'); return; }
+  const fd = new FormData(); fd.append('project_id', projectId);
+  try {
+    const r = await api('PUT', `/quotes/api/${currentQuoteId}/move-to-project`, fd);
+    closeModal('modal-move-quote');
+    toast(`Quote spostata al progetto #${r.new_project_id}`, 'success');
+    await reloadQuote();
+  } catch(e) { toast(e.message || 'Errore spostamento', 'error'); }
 }
 
 async function newVersionQuote() {
@@ -775,13 +872,12 @@ async function newVersionQuote() {
   } catch(e) { toast(e.message || 'Errore creazione versione', 'error'); }
 }
 
-async function duplicateQuoteFromList(id) {
-  if (!confirm('Duplica come copia indipendente?')) return;
-  try {
-    const r = await api('POST', `/quotes/api/${id}/duplicate`);
-    toast(`Duplicata come ${r.number}`, 'success');
-    loadQuotes();
-  } catch(e) { toast(e.message || 'Errore', 'error'); }
+function duplicateQuoteFromList(id) {
+  // v3.4.43: stesso modal del duplicate dentro l'editor (scelta progetto).
+  window._duplicateSourceId = id;
+  document.getElementById('dup-project').value = '';
+  if (typeof mfApplySearchable === 'function') mfApplySearchable(document);
+  openModal('modal-duplicate-quote');
 }
 
 async function newVersionQuoteFromList(id) {

@@ -922,11 +922,17 @@ def _copy_quote_lines(src_lines: list, dest_quote_id: int, track_parent: bool) -
 async def duplicate_quote(
     quote_id: int,
     request: Request,
+    project_id: Optional[int] = Form(None),
     db: Session = Depends(get_db),
 ):
     """Duplica una quote in modo INDIPENDENTE (no parent_quote_id).
     Use case: scenario alternativo, template per un nuovo progetto.
-    Numero auto-progressivo `Q-{anno}-NNN`. Status=draft."""
+    Numero auto-progressivo `Q-{anno}-NNN`. Status=draft.
+
+    v3.4.43 — `project_id` opzionale: se valorizzato, la copia viene
+    associata a un progetto diverso da quello sorgente (use case template
+    per nuovo progetto). Il `client_id` viene riallineato al cliente del
+    nuovo progetto."""
     from app.services.rbac import current_user_optional, has_permission
     user = current_user_optional(request)
     if not has_permission(user, "edit_quotes"):
@@ -940,11 +946,20 @@ async def duplicate_quote(
     if not src:
         raise HTTPException(404, "Quotazione sorgente non trovata")
 
+    # v3.4.43 — Risolvi project + client target
+    target_project_id = project_id if project_id else src.project_id
+    target_client_id = src.client_id
+    if project_id and project_id != src.project_id:
+        target_project = db.query(Project).filter(Project.id == project_id).first()
+        if not target_project:
+            raise HTTPException(404, f"Progetto target #{project_id} non trovato")
+        target_client_id = target_project.client_id
+
     new_q = Quote(
         number=_next_quote_number_progressive(db),
         version=1,
-        project_id=src.project_id,
-        client_id=src.client_id,
+        project_id=target_project_id,
+        client_id=target_client_id,
         title=src.title,
         status=QuoteStatus.draft,
         issue_date=date.today(),
@@ -976,8 +991,61 @@ async def duplicate_quote(
         "id": new_q.id,
         "number": new_q.number,
         "title": new_q.title,
+        "project_id": new_q.project_id,
+        "client_id": new_q.client_id,
         "lines_count": len(new_lines),
         "kind": "duplicate",
+    }
+
+
+@router.put("/api/{quote_id}/move-to-project")
+async def move_quote_to_project(
+    quote_id: int,
+    request: Request,
+    project_id: int = Form(...),
+    db: Session = Depends(get_db),
+):
+    """v3.4.43 — Sposta una quote esistente a un altro progetto.
+    Vincoli:
+      - Solo quote in stato `draft` (una quote già inviata/approvata/etc
+        non può cambiare progetto: è un cambio di scope vincolante).
+      - La quote NON deve avere un Job collegato (incoerenza grave).
+      - Il cliente viene riallineato al cliente del progetto target.
+    """
+    from app.services.rbac import current_user_optional, has_permission
+    user = current_user_optional(request)
+    if not has_permission(user, "edit_quotes"):
+        raise HTTPException(403, "Non hai il permesso di spostare le quotazioni")
+
+    q = db.query(Quote).options(joinedload(Quote.job)).filter(Quote.id == quote_id).first()
+    if not q:
+        raise HTTPException(404, "Quotazione non trovata")
+    if q.status != QuoteStatus.draft:
+        raise HTTPException(
+            400,
+            f"Lo spostamento di progetto è ammesso solo su quote in bozza. "
+            f"Stato corrente: {q.status.value}."
+        )
+    if q.job:
+        raise HTTPException(
+            400,
+            f"Quote ha un job collegato ({q.job.code}): impossibile spostare di progetto. "
+            "Annulla il job o crea una nuova versione."
+        )
+    target = db.query(Project).filter(Project.id == project_id).first()
+    if not target:
+        raise HTTPException(404, f"Progetto target #{project_id} non trovato")
+
+    old_project_id = q.project_id
+    q.project_id = project_id
+    q.client_id = target.client_id
+    db.commit()
+    return {
+        "id": q.id,
+        "number": q.number,
+        "old_project_id": old_project_id,
+        "new_project_id": project_id,
+        "new_client_id": target.client_id,
     }
 
 

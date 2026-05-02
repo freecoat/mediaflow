@@ -8,6 +8,10 @@
 
 ## Versione corrente
 
+**v3.4.43** — 2 maggio 2026 — Duplica quote con scelta progetto + Sposta progetto
+
+#4: `POST /quotes/api/{id}/duplicate` accetta `project_id` opzionale (riallinea client_id al progetto target). UI: modal `Duplica quotazione` con dropdown searchable progetti (vuoto = stesso progetto). Nuovo endpoint `PUT /quotes/api/{id}/move-to-project` per spostare una quote `draft` senza job a un altro progetto. Bottone "🚚 Sposta" nell'editor, visibile solo per draft.
+
 **v3.4.42** — 2 maggio 2026 — Undo paste timeline + Le mie con dettaglio booking + note
 
 #1: `tlPasteAt` ora pusha undo `paste_batch` con gli id dei booking creati → annullamento bulk via DELETE. #8: card "Le mie" e dashboard "I miei booking di oggi" cliccabili (su title/meta) → modal `Dettaglio booking` con Quando/Job/Lavorazione/Stato/Risorse/Note/Motivazione. Note del booking ora visibili inline sulla card. Endpoint nuovo `GET /planning/api/bookings/{id}/detail`.

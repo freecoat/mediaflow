@@ -1,5 +1,23 @@
 # MediaFlow — Changelog
 
+## v3.4.43 — Duplica quote con scelta progetto + Sposta progetto (2 maggio 2026)
+
+### #4 — Duplica con scelta progetto
+
+`POST /quotes/api/{id}/duplicate` ora accetta `project_id` opzionale (Form). Se valorizzato, la copia viene associata al progetto target e il `client_id` viene riallineato al cliente del progetto.
+
+UI: il bottone "📋 Duplica" (lista + editor) ora apre un modal `Duplica quotazione` con dropdown searchable progetti. Dropdown vuoto = stesso progetto sorgente.
+
+### #4 — Sposta quote a un altro progetto
+
+Nuovo endpoint `PUT /quotes/api/{id}/move-to-project` con due vincoli rigidi:
+- Stato deve essere `draft` (cambio scope su quote sent/approved/etc è incoerente).
+- La quote NON deve avere un Job collegato (incoerenza grave: il job si lega al progetto via la quote).
+
+UI: bottone "🚚 Sposta" nell'editor, visibile solo se quote in `draft`. Apre modal `Sposta quotazione` con dropdown progetti. RBAC `edit_quotes`.
+
+---
+
 ## v3.4.42 — Undo paste + Le mie con dettaglio booking + note (2 maggio 2026)
 
 ### #1 — Undo per copy/paste timeline planning
