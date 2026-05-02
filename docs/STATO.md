@@ -8,6 +8,10 @@
 
 ## Versione corrente
 
+**v3.4.50.1** — 2 maggio 2026 — Audit pre-push: 3 micro-fix
+
+Bug fix emersi durante audit completo: (1) `seed_demo` tenant idempotente (`reset_business_data` preserva tenants → seed_demo doveva fare upsert); (2) `seed_demo` Booking ora crea `Booking + BookingAssignment` coerenti col modello multi-risorsa v3.4.16+; (3) `new_version_quote` ora pulisce suffisso `-vN` finale dal root number (no più `-v1-v2`).
+
 **v3.4.50** — 2 maggio 2026 — Resource presets + sync orario tra risorse
 
 Modal multi-risorsa booking: (1) preset di selezione `ResourcePreset(name, resource_ids JSON, …)` — CRUD su `/planning/api/resource-presets`, dropdown "📁 Carica preset…" + bottone "💾 Salva preset" (nome via prompt), apply con dedup + riempimento righe vuote + ereditarietà start/end dalla 1ª riga; (2) checkbox "🔗 Stesso orario per tutte le risorse" — propaga start/end della 1ª riga alle altre, preferenza in localStorage `mf_tlb_sync_times`. Tabella `resource_presets` auto-creata al boot.
@@ -132,13 +136,39 @@ Sessione 1 maggio sera (commit unico): chiusa v3.4.32 dopo discussione completa 
 
 ## In corso
 
-**Sessione 2 maggio aperta — v3.4.39 chiusa** (Quote duplica + versioning + Floating Jobs). Working tree con commit unico in attesa.
+**Sessione 2 maggio chiusa — 17 commit (v3.4.39 → v3.4.50.1) push su origin/main**. Working tree pulito. Matteo avvia test estensivo locale sul Mac.
 
-Cantieri pianificati per la sessione corrente (in ordine):
-1. ✅ **C1** — Quote duplica + versioning (v3.4.39)
+### Cantieri chiusi nella sessione
+
+1. ✅ **C1** — Quote duplica + versioning + Floating Jobs (v3.4.39)
 2. ✅ **C2** — Searchable dropdowns globali (v3.4.40)
-3. ✅ **C3** — Time picker integrato (v3.4.40 incluso)
-4. 🔜 **C4** — Look timeline risorse (deep restyle vis-timeline + storyboard view)
+3. ✅ **C3** — Time picker integrato + datetime split (v3.4.40)
+4. ✅ **C4** — Look timeline restyle + Storyboard view (v3.4.45) + customization pannello (v3.4.46/.48/.48.1/.48.2)
+5. ✅ **Bug fix Matteo (8 punti)** — paste su ferie / Chrome timbratura / cost report ore done / undo paste / Le mie dettaglio / duplica con progetto / overlay execution timeline / drilldown + view per progetto (v3.4.41 → v3.4.44)
+6. ✅ **Filtri planning multi-select** (v3.4.47)
+7. ✅ **Reset business data script** [O] strumenti (v3.4.49)
+8. ✅ **Resource presets + sync orario** modal multi-risorsa (v3.4.50)
+9. ✅ **Audit pre-push** — 3 micro-fix (seed idempotente, Booking+Assignment, version number) (v3.4.50.1)
+
+### Da testare sul Mac (priorità)
+
+Setup pulito con `[O] reset_business_data`:
+1. Crea clienti, progetti, risorse, listino già pronto (preservato)
+2. Quote → cambio progetto / duplica con progetto / nuova versione / migrate-job
+3. Booking multi-risorsa con preset + sync orario
+4. Booking done → cost report mostra ore maturate
+5. Filtri multi (cliente/progetto/job/risorsa) sulla timeline
+6. Storyboard week view
+7. Pannello ⚙ look timeline (bg/font/colore testo/accent reparto)
+8. Anomalie in /finance (job orfani / sforamenti / extra)
+9. Le mie + dettaglio booking
+10. Tab "Per progetto" (manager+)
+
+### Riapertura
+
+Parola chiave: **"Riprendi da v3.4.50.1 — apri con il tuo ultimo commento"**.
+
+### Cantieri proposti, non avviati (backlog)
 
 Da testare per **v3.4.40**:
 - Ogni `<select>` non-multiple → click apre dropdown con input "Cerca…" + lista filtrabile. ↑↓ Enter Esc.

@@ -1074,7 +1074,11 @@ async def new_version_quote(
     root = _quote_root(db, src)
     chain = _quote_chain(db, root)
     next_version = max(q.version for q in chain) + 1
-    new_number = f"{root.number}-v{next_version}"
+    # v3.4.50.1: pulisci eventuale suffisso `-vN` dal root.number per evitare
+    # numeri duplicati come `Q-2026-001-v1-v2`. Pattern: rstrip al match -v\d+
+    import re
+    base_number = re.sub(r"-v\d+$", "", root.number)
+    new_number = f"{base_number}-v{next_version}"
 
     # Conflitto improbabile ma garantiamo unicità
     if db.query(Quote).filter(Quote.number == new_number).first():

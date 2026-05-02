@@ -1,5 +1,15 @@
 # MediaFlow — Changelog
 
+## v3.4.50.1 — Audit pre-push: 3 micro-fix (2 maggio 2026)
+
+Bug fix emersi durante audit completo prima del push:
+
+1. **`seed_demo.py` tenant idempotente** — il seed prova a inserire `Tenant(id=1)` con violazione UNIQUE se la tabella esiste già (caso post `reset_business_data` opzione [O]). Sostituito con `db.query(Tenant).filter(id==1).first()` + insert solo se mancante.
+
+2. **`seed_demo.py` Booking ↔ BookingAssignment** — il seed creava `Booking(resource_id=...)` ma da v3.4.16 i booking hanno solo l'envelope (`start/end`) e la risorsa è in `BookingAssignment`. Aggiornato `bk()` helper per creare entrambi.
+
+3. **Numero versione quote `-v1-v2` duplicato** — `new_version_quote` concatenava `-v{N}` al `root.number` senza pulire eventuali suffissi `-vN` preesistenti. Aggiunto `re.sub(r"-v\d+$", "", root.number)` prima della concat. Risultato: `Q-P-2024-001-v1` → versione successiva = `Q-P-2024-001-v2` (non più `-v1-v2`).
+
 ## v3.4.50 — Resource presets + sync orario tra risorse (2 maggio 2026)
 
 Due quick-win UX nel modal multi-risorsa booking timeline.

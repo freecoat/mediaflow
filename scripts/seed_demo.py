@@ -23,7 +23,7 @@ from datetime import date, datetime, timedelta
 from app.database import SessionLocal, create_tables
 from app.models import (
     User, UserRole, Resource, ResourceType, Client, Job, JobStatus,
-    Booking, BookingStatus, Timesheet, Invoice, InvoiceLine, InvoiceStatus,
+    Booking, BookingAssignment, BookingStatus, Timesheet, Invoice, InvoiceLine, InvoiceStatus,
     Tag, PriceCategory, PriceItem, PriceLevel, Quote, QuoteLine, QuoteStatus,
     JobResourceAssignment, JobCostLine,
     Project, ProjectStatus,
@@ -279,18 +279,20 @@ def seed():
     create_tables()
     db = SessionLocal()
 
-    # ── 1. TENANT DEFAULT ─────────────────────────────────────
-    tenant = Tenant(
-        id=1,
-        name="Default",
-        slug="default",
-        legal_name="Casa di Post-Produzione Demo S.r.l.",
-        default_currency="EUR",
-        default_vat_rate=22.0,
-        default_language="it",
-        onboarding_completed=False,
-    )
-    db.add(tenant); db.flush()
+    # ── 1. TENANT DEFAULT (idempotente — può esistere già da migrazioni) ──
+    tenant = db.query(Tenant).filter(Tenant.id == 1).first()
+    if tenant is None:
+        tenant = Tenant(
+            id=1,
+            name="Default",
+            slug="default",
+            legal_name="Casa di Post-Produzione Demo S.r.l.",
+            default_currency="EUR",
+            default_vat_rate=22.0,
+            default_language="it",
+            onboarding_completed=False,
+        )
+        db.add(tenant); db.flush()
 
     # ── 2. UTENTI ─────────────────────────────────────────────
     admin = User(email="admin@mediaflow.it", full_name="Admin MediaFlow",
@@ -570,10 +572,21 @@ def seed():
         ))
 
     def bk(resource, days_offset, hours=8):
+        # v3.4.16+: Booking ha solo `start/end` di envelope; le risorse sono
+        # tracciate in BookingAssignment. Genera entrambi.
         start = datetime.combine(today + timedelta(days=days_offset), datetime.min.time()).replace(hour=9)
-        return Booking(job_id=job.id, resource_id=resource.id, start_datetime=start,
-                       end_datetime=start + timedelta(hours=hours), status=BookingStatus.confirmed)
-    for b in [bk(sara,0), bk(sara,1), bk(davide,2,10), bk(studio_a,2,12), bk(davide,3,10)]: db.add(b)
+        end = start + timedelta(hours=hours)
+        b = Booking(
+            job_id=job.id, start_datetime=start, end_datetime=end,
+            status=BookingStatus.confirmed, tenant_id=1,
+        )
+        db.add(b); db.flush()
+        db.add(BookingAssignment(
+            booking_id=b.id, resource_id=resource.id,
+            start_datetime=start, end_datetime=end,
+        ))
+        return b
+    for b in [bk(sara,0), bk(sara,1), bk(davide,2,10), bk(studio_a,2,12), bk(davide,3,10)]: pass
 
     for i in range(1, 6):
         db.add(Timesheet(user_id=editor.id, job_id=job.id, work_date=today - timedelta(days=i),
