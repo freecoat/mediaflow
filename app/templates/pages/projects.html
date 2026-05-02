@@ -205,10 +205,29 @@ function renderProjects(projects) {
         <span class="text-xs text-muted"> · ${p.jobs_count} job</span>
       </td>
       <td>${statusBadge(p.status)}</td>
-      <td>
+      <td style="white-space:nowrap;">
         <button class="btn btn-ghost btn-sm" onclick="event.stopPropagation(); window.location.href='/projects/${p.id}'">Apri →</button>
+        {% if can_view_finance(request.state.current_user) %}
+        ${p.quotes_count > 0
+          ? `<button class="btn btn-ghost btn-sm" disabled title="Non eliminabile: ${p.quotes_count} quotazion${p.quotes_count===1?'e':'i'} collegat${p.quotes_count===1?'a':'e'}" style="color:var(--text2);opacity:.5;cursor:not-allowed;">🗑</button>`
+          : `<button class="btn btn-ghost btn-sm" data-pid="${p.id}" data-plabel="${escapeHtml(p.title || p.code)}" onclick="event.stopPropagation(); deleteProject(this);" title="Elimina progetto" style="color:#ef4444;">🗑</button>`
+        }
+        {% endif %}
       </td>
     </tr>`).join('');
+}
+
+async function deleteProject(btn) {
+  const id = btn.dataset.pid;
+  const label = btn.dataset.plabel || 'questo progetto';
+  if (!confirm(`Eliminare definitivamente il progetto "${label}"? L'azione non è reversibile.`)) return;
+  try {
+    await api('DELETE', `/projects/api/${id}`);
+    toast('Progetto eliminato', 'success');
+    await loadProjects();
+  } catch(e) {
+    toast(e.message, 'error');
+  }
 }
 
 function filterProjects() {

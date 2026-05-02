@@ -1,5 +1,20 @@
 # MediaFlow — Changelog
 
+## v3.4.50.3 — Elimina progetto (solo se senza quotazioni) (2 maggio 2026)
+
+Tasto 🗑 nella riga progetto in `/projects` (colonna azioni, accanto a "Apri →"). Visibile solo a chi ha `can_view_finance` (admin/manager/producer/accounting).
+
+Stato del bottone deciso lato client da `quotes_count`:
+- `0 quote` → bottone attivo rosso, conferma + DELETE
+- `>0 quote` → bottone disabilitato grigio con tooltip "Non eliminabile: N quotazioni collegate"
+
+Backend `DELETE /projects/api/{id}` rinforzato:
+- Permesso negato se non `can_view_finance` (era pubblico)
+- Block se `p.quotes` con messaggio chiaro (era solo `p.jobs`)
+- Block conservato anche su `p.jobs` come safety net (un progetto senza quote non può avere job, ma se la catena è incoerente per qualche motivo blocchiamo lo stesso)
+
+Pattern `data-pid` + `data-plabel` invece di interpolazione complessa nell'`onclick` (memory `feedback_no_jsonstringify_in_onclick.md`). Cache-buster bumpato a `3.4.50.3`.
+
 ## v3.4.50.2 — Modal scrollabile con header/footer fissi (2 maggio 2026)
 
 Fix UX globale: i modal (es. dettaglio cliente con molti campi) ora si capano all'altezza viewport (`max-height: calc(100vh - 40px)`), header e footer restano fissi e visibili, body scorre internamente (`overflow-y: auto`). Risolve l'issue Matteo "le schede clienti non si aprono completamente" su schermi piccoli o quando la scheda è molto piena (anagrafica + dati fiscali + sede + referente + note + filmografia + progetti collegati + fonti AI). Approccio generico: vale per tutti i modal del progetto, niente toppe per-pagina.

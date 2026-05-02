@@ -166,10 +166,18 @@ async def update_project(
 
 
 @router.delete("/api/{project_id}")
-async def delete_project(project_id: int, db: Session = Depends(get_db)):
+async def delete_project(project_id: int, request: Request, db: Session = Depends(get_db)):
+    if not can_view_finance(current_user_optional(request)):
+        raise HTTPException(403, "Permesso negato")
     p = db.query(Project).filter(Project.id == project_id).first()
     if not p:
         raise HTTPException(404)
+    if p.quotes:
+        raise HTTPException(
+            400,
+            f"Progetto ha {len(p.quotes)} quotazion{'e' if len(p.quotes)==1 else 'i'} — "
+            "eliminale prima di rimuovere il progetto."
+        )
     if p.jobs:
         raise HTTPException(400, f"Progetto ha {len(p.jobs)} job associati")
     db.delete(p); db.commit()

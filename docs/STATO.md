@@ -8,6 +8,10 @@
 
 ## Versione corrente
 
+**v3.4.50.3** — 2 maggio 2026 — Elimina progetto (solo se senza quotazioni)
+
+Tasto 🗑 in colonna azioni `/projects` accanto a "Apri →". Visibile a `can_view_finance`. Disabilitato + tooltip se `quotes_count > 0`. Backend `DELETE /projects/api/{id}` ora richiede permesso e blocca se `p.quotes` (oltre al pre-esistente check su `p.jobs`).
+
 **v3.4.50.2** — 2 maggio 2026 — Modal scrollabile con header/footer fissi
 
 Fix UX globale: i `.modal` ora si capano all'altezza viewport (`max-height: calc(100vh - 40px)` + flex column), header/footer fissi, body interno scrollabile. Risolve scheda cliente troppo alta (anagrafica+dati fiscali+sede+referente+note+filmografia+progetti+fonti AI) e tutti i modal con tanti campi. Approccio generico — niente toppe per-pagina.
