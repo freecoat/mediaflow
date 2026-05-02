@@ -78,10 +78,9 @@ async def planning_hub(
     # v3.4.44: tab "Per progetto" visibile solo a admin/manager/producer
     user_is_elevated = False
     if cur_user:
-        from app.services.rbac import is_admin, is_manager, has_permission
-        is_producer = bool(cur_user.role and cur_user.role.code == "producer")
+        from app.services.rbac import is_admin, is_manager, is_producer, has_permission
         user_is_elevated = (
-            is_admin(cur_user) or is_manager(cur_user) or is_producer
+            is_admin(cur_user) or is_manager(cur_user) or is_producer(cur_user)
             or has_permission(cur_user, "edit_planning")
         )
     return _tpl().TemplateResponse(
@@ -1977,9 +1976,8 @@ async def project_bookings(
     user = current_user_optional(request)
     if not user:
         raise HTTPException(401, "Non autenticato")
-    from app.services.rbac import is_admin, is_manager, has_permission
-    is_producer = bool(user.role and user.role.code == "producer")
-    if not (is_admin(user) or is_manager(user) or is_producer or has_permission(user, "edit_planning")):
+    from app.services.rbac import is_admin, is_manager, is_producer, has_permission
+    if not (is_admin(user) or is_manager(user) or is_producer(user) or has_permission(user, "edit_planning")):
         raise HTTPException(403, "Vista riservata a manager / producer / admin")
 
     q = db.query(BookingAssignment).options(

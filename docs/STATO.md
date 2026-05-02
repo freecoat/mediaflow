@@ -8,6 +8,10 @@
 
 ## Versione corrente
 
+**v3.4.45.1** — 2 maggio 2026 — Hotfix `/planning` 500 (UserRole.code)
+
+Fix critico: `cur_user.role.code` non esisteva (User.role è l'enum legacy UserRole). Sostituito con `is_producer(user)` da `app.services.rbac` in `planning_hub` e `project_bookings`. /planning/ ora 200.
+
 **v3.4.45** — 2 maggio 2026 — Look timeline: deep restyle + Storyboard view
 
 C4a: pass CSS su vis-timeline (time axis tipografato, items radius/padding/glow, drag handles fade-in, today line con dot+glow, group nesting più contrastato, heatmap container con radius). C4b: nuova tab `🎬 Storyboard` settimanale, 7 colonne giorno (Lun→Dom), navigazione settimana, cards booking ordinate per ora con badge risorsa colorato, click → modal dettaglio. Responsive (1100px → 4 col, 720px → 1 col).

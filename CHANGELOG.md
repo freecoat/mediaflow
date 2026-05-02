@@ -1,5 +1,9 @@
 # MediaFlow — Changelog
 
+## v3.4.45.1 — Hotfix /planning 500 (`UserRole.code`) (2 maggio 2026)
+
+`/planning/` e `/planning/api/project-bookings` rompevano con `AttributeError: 'UserRole' object has no attribute 'code'`. La detection del producer era stata scritta accedendo a `cur_user.role.code` ma `User.role` è l'enum legacy `UserRole` (non il modello `Role` configurabile, che vive su `User.role_obj`). Sostituito con `is_producer(user)` da `app.services.rbac` che usa correttamente `_resolve_role_code()` (priorità a `role_obj` se presente, fallback a enum). Stessa fix in entrambi i punti (`planning_hub` + `project_bookings`).
+
 ## v3.4.45 — Look timeline: deep restyle + Storyboard view (2 maggio 2026)
 
 ### C4a — Deep restyle vis-timeline
