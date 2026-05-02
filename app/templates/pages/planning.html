@@ -417,16 +417,32 @@
     border-left-color: #9aa1b8 !important;
     color: #cdd5e8 !important;
   }
-  /* v3.4.48: Colore sfondo timeline. Apply a #tl-host (background-color
-     diretto sul container vis-timeline + override label/grid). */
-  #tl-host[data-bg="dark"]    { background-color: #14171f; }
-  #tl-host[data-bg="darker"]  { background-color: #0a0c12; }
-  #tl-host[data-bg="warm"]    { background-color: #221c14; }
-  #tl-host[data-bg="cool"]    { background-color: #11162a; }
-  #tl-host[data-bg="forest"]  { background-color: #0f1a13; }
-  #tl-host[data-bg="paper"]   { background-color: #2a2d36; }
-  #tl-host[data-bg="paper"] .vis-labelset .vis-label,
-  #tl-host[data-bg="paper"] .vis-time-axis .vis-text { color: #d8dceb; }
+  /* v3.4.48.1: Colore sfondo timeline.
+     Va applicato a `.vis-timeline` dentro #tl-host (non a #tl-host stesso),
+     perché .vis-timeline ha un background hardcoded gradient+bg-elev che
+     sovrascriverebbe l'host. Scriviamo over il background completo. */
+  #tl-host[data-bg="dark"]    .vis-timeline { background: #14171f !important; }
+  #tl-host[data-bg="darker"]  .vis-timeline { background: #0a0c12 !important; }
+  #tl-host[data-bg="warm"]    .vis-timeline { background: #221c14 !important; }
+  #tl-host[data-bg="cool"]    .vis-timeline { background: #11162a !important; }
+  #tl-host[data-bg="forest"]  .vis-timeline { background: #0f1a13 !important; }
+  #tl-host[data-bg="paper"]   .vis-timeline { background: #e6e9f0 !important; }
+  /* Anche i pannelli interni (vis-panel) possono avere bg: lasciamo trasparente
+     così ereditano dal container. */
+  #tl-host[data-bg]:not([data-bg="default"]) .vis-panel,
+  #tl-host[data-bg]:not([data-bg="default"]) .vis-foreground,
+  #tl-host[data-bg]:not([data-bg="default"]) .vis-background { background: transparent !important; }
+  /* Variant "paper" (chiaro): inverti testo per leggibilità */
+  #tl-host[data-bg="paper"] .vis-labelset .vis-label { color: #1a1d2c; border-color: rgba(0,0,0,.06); }
+  #tl-host[data-bg="paper"] .vis-time-axis .vis-text { color: #2a2e44; }
+  #tl-host[data-bg="paper"] .vis-time-axis .vis-text.vis-major { color: #4a55b8; }
+  #tl-host[data-bg="paper"] .vis-time-axis { background: linear-gradient(180deg, rgba(98,114,245,0.10) 0%, transparent 60%); border-bottom-color: rgba(0,0,0,.08); }
+  #tl-host[data-bg="paper"] .vis-foreground .vis-group:nth-child(odd) { background: rgba(0,0,0,.025); }
+  #tl-host[data-bg="paper"] .vis-foreground .vis-group { border-color: rgba(0,0,0,.07); }
+  #tl-host[data-bg="paper"] .vis-time-axis .vis-grid { border-color: rgba(0,0,0,.06); }
+  #tl-host[data-bg="paper"] .vis-time-axis .vis-grid.vis-major { border-color: rgba(0,0,0,.10); }
+  #tl-host[data-bg="paper"] .vis-labelset .vis-label.vis-nesting-group { color: #2a2e44; }
+  #tl-host[data-bg="paper"] .vis-labelset .vis-label:hover { background: rgba(98,114,245,0.08); }
   /* Storyboard density */
   #sb-host[data-density="compact"] .sb-card { padding: 4px 6px; font-size: 10.5px; }
   #sb-host[data-density="compact"] .sb-card-time { font-size: 9px; margin-bottom: 1px; }

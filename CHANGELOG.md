@@ -1,5 +1,9 @@
 # MediaFlow — Changelog
 
+## v3.4.48.1 — Hotfix colore sfondo timeline (2 maggio 2026)
+
+Il `data-bg` su `#tl-host` non aveva effetto perché `.vis-timeline` (figlio diretto, libreria) ha background hardcoded `linear-gradient(...) + var(--bg-elev)` che sovrasta l'host. Spostato il selettore: `#tl-host[data-bg="..."] .vis-timeline { background: ... !important }`. Aggiunto reset trasparente su `.vis-panel/.vis-foreground/.vis-background` interni per evitare overlay residui. Variant "paper" (chiaro) ora inverte testo/grid/label per leggibilità.
+
 ## v3.4.48 — Look timeline tweaks: bg + 3D items + dept fix (2 maggio 2026)
 
 ### Pannello ⚙

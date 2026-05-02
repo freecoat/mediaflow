@@ -8,6 +8,10 @@
 
 ## Versione corrente
 
+**v3.4.48.1** — 2 maggio 2026 — Hotfix colore sfondo timeline
+
+`data-bg` ora applicato a `.vis-timeline` (figlio dell'host) per superare il gradient hardcoded della libreria. Reset trasparente su `.vis-panel/.vis-foreground/.vis-background`. Variant "paper" con palette chiara (testo/grid/label invertiti).
+
 **v3.4.48** — 2 maggio 2026 — Look timeline tweaks (bg + 3D items + dept fix)
 
 Pannello ⚙: rimossa "Densità", aggiunta "Colore sfondo" (7 preset: default/dark/darker/warm/cool/forest/paper). Items: radius 7→9 + box-shadow multi-layer per effetto 3D bevel (inset highlight top + inset depth bottom + drop close+ambient). Fix accent "Per reparto": `DEPARTMENTS_SEED` ora include `color`, `tlBuildGroups` aggiunge className `tl-dept-{id}`, `tlPrefsApply` genera CSS dinamico per ogni reparto (gradient + border + filter brightness). Helper `_hexToRgba`.
