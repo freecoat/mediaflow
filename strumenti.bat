@@ -32,7 +32,7 @@ echo  [T] Seed Job di test per notifica deadline (scadenza fra 2 giorni) [v3.4.2
 echo  [A] Apri cartella upload
 echo  [0] Esci
 echo.
-set /p scelta="Scegli un'opzione (0-9, A, B, C, D, E, F, G, H, I, J, K, L, T): "
+set /p scelta="Scegli un'opzione (0-9, A, B, C, D, E, F, G, H, I, J, K, L, M, N, T): "
 
 if "%scelta%"=="1" goto avvia
 if "%scelta%"=="2" goto reset_db
@@ -55,6 +55,7 @@ if /i "%scelta%"=="J" goto migrate_roles_v2
 if /i "%scelta%"=="K" goto migrate_user_extra_perms
 if /i "%scelta%"=="L" goto migrate_booking_executive
 if /i "%scelta%"=="M" goto migrate_lifecycle_cleanup
+if /i "%scelta%"=="N" goto migrate_quote_versioning
 if /i "%scelta%"=="T" goto seed_test_deadline
 if /i "%scelta%"=="A" goto uploads
 if "%scelta%"=="0" exit /b
@@ -316,6 +317,21 @@ if /i "%conferma%"=="s" (
     python scripts\migrate_lifecycle_cleanup.py
 )
 pause & goto menu
+
+:migrate_quote_versioning
+echo.
+echo Migrazione versioning quote (v3.4.39):
+echo  [1] quotes.parent_quote_id (catena versioni)
+echo  [2] quotes.superseded_by_id (puntatore al successore approvato)
+echo  [3] quote_lines.parent_line_id (eredita riga in V_n+1)
+echo Idempotente. Auto-applicata anche al boot.
+echo.
+set /p conferma="Procedo? (s/n): "
+if /i "%conferma%"=="s" (
+    call .venv\Scripts\activate.bat
+    python scripts\migrate_quote_versioning.py
+)
+pause ^& goto menu
 
 :seed_test_deadline
 echo.

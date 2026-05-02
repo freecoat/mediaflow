@@ -1,5 +1,72 @@
 # MediaFlow — Changelog
 
+## v3.4.39 — Quote: duplica + versioning + Floating Jobs (2 maggio 2026)
+
+Due funzioni distinte per gestire varianti della stessa quotazione + sezione anomalie in /finance.
+
+### Duplicazione semplice — `POST /quotes/api/{id}/duplicate`
+
+Bottone "📋 Duplica" in lista `/quotes` e nell'editor. Crea una copia INDIPENDENTE con numero auto-progressivo `Q-{anno}-NNN`, status=draft, righe + sconti + category_order copiati, project/client uguali. **Nessun parent_quote_id.** Use case: scenario alternativo, template per nuovo progetto.
+
+### Versioning — `POST /quotes/api/{id}/new-version`
+
+Bottone "📐 Versione" in lista e nell'editor. Crea V_n+1 con `parent_quote_id` valorizzato, numero `{root}-v{N}` (es. `Q-2026-007-v2`), `version` monotonamente crescente nella catena. Le righe ereditano `QuoteLine.parent_line_id` per re-bind preciso al migrate-job.
+
+### Sezione "Versioni" nell'editor
+
+Visibile quando la quote ha parent o figli. Mostra la catena completa con stato di ognuna, badge Job ✓ se collegata, link cliccabili. La versione corrente è evidenziata in indigo.
+
+### Migrazione Job — `POST /quotes/api/{new_id}/migrate-job`
+
+Bottone "↪ Migra Job a questa versione" appare quando la V_new è draft/sent e la V_old (parent) ha un Job. Workflow:
+
+1. **Preview** (`GET /migrate-preview`): elenca righe ereditate, nuove (presenti solo in V_new), orfane (presenti solo in V_old, evidenziate in rosso se hanno `quantity_actual > 0`), sforamenti (V_new pianifica meno di quanto già lavorato).
+2. **Apply**: V_new.status=approved + V_old.status=`superseded` + V_old.superseded_by_id=V_new. JobCostLine ribindate via `parent_line_id`. Righe nuove → JobCostLine creati. Per le orfane scelta `orphan_strategy`:
+   - `keep_as_extra` (default): JobCostLine resta sul job marcato `is_extra=True` (lavoro tracciato, evidenziato in /finance > Anomalie).
+   - `floating_job`: il Job viene scollegato (`quote_id=NULL`) → entra nella sezione "Job orfani" di /finance per riassegnazione manuale.
+
+Nuovo enum `QuoteStatus.superseded` (distinto da `rejected`: la quote non è stata rifiutata, è stata sostituita).
+
+### `/finance` → tab "⚠ Anomalie" (nuova)
+
+Tre card:
+- **Job orfani**: lista job con `quote_id IS NULL` (da migrazione `floating_job` o cancellazioni). Mostra budget, consuntivo, link al job.
+- **Sforamenti**: JobCostLine con `quantity_actual > quantity_quoted` (non extra). Δ + valore extra in mono.
+- **Extra**: JobCostLine con `is_extra=True` (lavorazioni fuori quote).
+
+Endpoint:
+- `GET /finance/api/anomalies/floating-jobs`
+- `GET /finance/api/anomalies/discrepancies`
+- `GET /finance/api/anomalies/summary` (counter aggregato per badge topbar)
+
+Badge rosso sulla tab quando ci sono job orfani o extra.
+
+### Modello
+
+```python
+Quote:
+  parent_quote_id: FK quotes.id NULL          # catena versioni
+  superseded_by_id: FK quotes.id NULL         # successore approvato
+
+QuoteLine:
+  parent_line_id: FK quote_lines.id NULL      # eredità riga in V_n+1
+
+QuoteStatus.superseded                         # nuovo enum value
+
+NotificationKind.job_floating_alert           # → admin/accounting
+NotificationKind.quote_discrepancy_alert      # (riservato per cantieri futuri)
+```
+
+### Migrazione
+
+Script `scripts/migrate_quote_versioning.py` (opzione `[N]` su `strumenti.bat/sh`). Auto-applicata anche al boot via `_auto_migrate_columns()`. Idempotente.
+
+### Permessi
+
+`duplicate`, `new-version`, `migrate-job` richiedono permesso `edit_quotes`.
+
+---
+
 ## v3.4.38 — Round 3 Audit: hardening logico (1 maggio 2026 notte profonda)
 
 Round 3 di 3 dell'audit logico. Cinque fix di robustezza.

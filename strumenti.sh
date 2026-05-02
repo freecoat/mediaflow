@@ -51,7 +51,7 @@ while true; do
     echo "  [a] Apri cartella upload"
     echo "  [0] Esci"
     echo ""
-    read -p "Scegli un'opzione (0-9, a, b, c, d, e, f, g, h, i, j, k, l, t): " scelta
+    read -p "Scegli un'opzione (0-9, a, b, c, d, e, f, g, h, i, j, k, l, m, n, t): " scelta
 
     case $scelta in
         1)
@@ -263,6 +263,19 @@ while true; do
             read -p "Procedo? (s/n): " conferma
             if [ "$conferma" = "s" ] || [ "$conferma" = "S" ]; then
                 python scripts/migrate_booking_executive.py
+            fi
+            read -p "Premi INVIO per continuare..."
+            ;;
+        n|N)
+            echo ""
+            echo "Migrazione versioning quote (v3.4.39):"
+            echo " [1] quotes.parent_quote_id (catena versioni)"
+            echo " [2] quotes.superseded_by_id (puntatore al successore approvato)"
+            echo " [3] quote_lines.parent_line_id (eredità riga in V_n+1)"
+            echo "Idempotente. Auto-applicata anche al boot."
+            read -p "Procedo? (s/n): " conferma
+            if [ "$conferma" = "s" ] || [ "$conferma" = "S" ]; then
+                python scripts/migrate_quote_versioning.py
             fi
             read -p "Premi INVIO per continuare..."
             ;;

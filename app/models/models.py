@@ -94,6 +94,9 @@ class PriceLevel(str, enum.Enum):
 class QuoteStatus(str, enum.Enum):
     draft = "draft"; sent = "sent"; approved = "approved"
     rejected = "rejected"; expired = "expired"
+    # v3.4.39 — quote sostituita da una versione successiva approvata
+    # (distinta da rejected: non rifiutata dal cliente, è stata superata)
+    superseded = "superseded"
 
 class ProjectStatus(str, enum.Enum):
     prospect = "prospect"; quoting = "quoting"; active = "active"
@@ -131,6 +134,9 @@ class NotificationKind(str, enum.Enum):
     booking_status_changed = "booking_status_changed"        # → producer/manager su done/not_done
     booking_overtime_pending = "booking_overtime_pending"    # → approvatori overtime
     booking_overtime_resolved = "booking_overtime_resolved"  # → operatore (esito approvazione)
+    # Anomalie financial (v3.4.39) — Job orfani, discrepanze quote/consuntivo
+    job_floating_alert = "job_floating_alert"                # → admin/accounting (job senza quote)
+    quote_discrepancy_alert = "quote_discrepancy_alert"      # → admin/accounting (sforamenti / extra)
     custom = "custom"
 
 
@@ -604,10 +610,21 @@ class Quote(Base):
     
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
     
+    # v3.4.39 — Versioning. Una catena di versioni condivide lo stesso "lineage":
+    # V1 (root) → V2 (parent_quote_id=V1) → V3 (parent_quote_id=V2). `version` è
+    # monotono nella catena. Quando una nuova versione viene approvata e prende il
+    # posto della precedente, V_old.status=superseded + V_old.superseded_by_id=V_new.
+    parent_quote_id: Mapped[Optional[int]] = mapped_column(ForeignKey("quotes.id"), nullable=True)
+    superseded_by_id: Mapped[Optional[int]] = mapped_column(ForeignKey("quotes.id"), nullable=True)
+
     project: Mapped["Project"] = relationship(back_populates="quotes")
     client: Mapped["Client"] = relationship(back_populates="quotes")
     lines: Mapped[List["QuoteLine"]] = relationship(back_populates="quote", cascade="all, delete-orphan")
     job: Mapped[Optional["Job"]] = relationship(back_populates="quote", uselist=False)
+    parent_quote: Mapped[Optional["Quote"]] = relationship(
+        foreign_keys=[parent_quote_id], remote_side=[id], post_update=True)
+    superseded_by: Mapped[Optional["Quote"]] = relationship(
+        foreign_keys=[superseded_by_id], remote_side=[id], post_update=True)
 
 
 class QuoteLine(Base):
@@ -637,8 +654,15 @@ class QuoteLine(Base):
     category_override: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
     # Per tracking AI matching (quale voce del capitolato ha generato questa riga)
     source_hint: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    # v3.4.39 — Eredità riga-per-riga nelle nuove versioni di quote.
+    # Quando una Quote V2 è creata da V1 (new-version), ogni riga di V2 ha
+    # parent_line_id = id della riga sorgente in V1. Permette il re-bind preciso
+    # dei JobCostLine durante migrate-job, anche se descrizione/quantity cambiano.
+    parent_line_id: Mapped[Optional[int]] = mapped_column(ForeignKey("quote_lines.id"), nullable=True)
     quote: Mapped["Quote"] = relationship(back_populates="lines")
     price_item: Mapped[Optional["PriceItem"]] = relationship()
+    parent_line: Mapped[Optional["QuoteLine"]] = relationship(
+        foreign_keys=[parent_line_id], remote_side=[id], post_update=True)
 
 
 # ── JOB (collegato a Progetto) ───────────────────────────────

@@ -832,3 +832,487 @@ async def quote_export_xlsx(quote_id: int, db: Session = Depends(get_db)):
     return Response(content=buf.getvalue(),
         media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
         headers={"Content-Disposition": f'attachment; filename="{filename}"'})
+
+
+# ── DUPLICAZIONE / VERSIONING (v3.4.39) ──────────────────────
+
+
+def _quote_root(db: Session, q: Quote) -> Quote:
+    """Risale la catena delle versioni fino alla radice (parent_quote_id IS NULL)."""
+    seen = {q.id}
+    while q.parent_quote_id is not None:
+        parent = db.query(Quote).filter(Quote.id == q.parent_quote_id).first()
+        if not parent or parent.id in seen:
+            break
+        seen.add(parent.id)
+        q = parent
+    return q
+
+
+def _quote_chain(db: Session, root: Quote) -> list[Quote]:
+    """Ritorna root + tutti i discendenti (BFS sui parent_quote_id)."""
+    visited = {root.id}
+    chain = [root]
+    frontier = [root.id]
+    while frontier:
+        children = db.query(Quote).filter(Quote.parent_quote_id.in_(frontier)).all()
+        frontier = []
+        for c in children:
+            if c.id not in visited:
+                visited.add(c.id)
+                chain.append(c)
+                frontier.append(c.id)
+    return chain
+
+
+def _next_quote_number_progressive(db: Session) -> str:
+    """Wrapper su _next_quote_number di ai_assistant. Inline per evitare circular import."""
+    from datetime import date as date_type
+    year = date_type.today().year
+    prefix = f"Q-{year}-"
+    last = (
+        db.query(Quote).filter(Quote.number.like(f"{prefix}%"))
+        .order_by(Quote.id.desc()).first()
+    )
+    n = 1
+    if last:
+        try:
+            tail = last.number.rsplit("-", 1)[1]
+            # Se tail è "vNN" (versioning), non è il progressivo: salta indietro
+            if tail.startswith("v") and tail[1:].isdigit():
+                # Pesca il base
+                base = last.number.rsplit("-", 1)[0]
+                tail = base.rsplit("-", 1)[1]
+            n = int(tail) + 1
+        except (ValueError, IndexError):
+            n = 1
+    return f"{prefix}{n:03d}"
+
+
+def _copy_quote_lines(src_lines: list, dest_quote_id: int, track_parent: bool) -> list[QuoteLine]:
+    """Crea copie delle QuoteLine. Se track_parent, valorizza parent_line_id (versioning).
+    Ritorna la lista delle nuove righe (non ancora flushate)."""
+    new_lines = []
+    for sl in sorted(src_lines, key=lambda x: x.sort_order):
+        nl = QuoteLine(
+            quote_id=dest_quote_id,
+            price_item_id=sl.price_item_id,
+            section=sl.section,
+            position=sl.position,
+            description=sl.description,
+            detail=sl.detail,
+            quantity=sl.quantity,
+            unit=sl.unit,
+            price_level=sl.price_level,
+            unit_price=sl.unit_price,
+            allowance=sl.allowance,
+            line_discount_pct=sl.line_discount_pct,
+            total=sl.total,
+            hardcosts=sl.hardcosts,
+            sort_order=sl.sort_order,
+            category_override=sl.category_override,
+            source_hint=sl.source_hint,
+            parent_line_id=sl.id if track_parent else None,
+        )
+        new_lines.append(nl)
+    return new_lines
+
+
+@router.post("/api/{quote_id}/duplicate")
+async def duplicate_quote(
+    quote_id: int,
+    request: Request,
+    db: Session = Depends(get_db),
+):
+    """Duplica una quote in modo INDIPENDENTE (no parent_quote_id).
+    Use case: scenario alternativo, template per un nuovo progetto.
+    Numero auto-progressivo `Q-{anno}-NNN`. Status=draft."""
+    from app.services.rbac import current_user_optional, has_permission
+    user = current_user_optional(request)
+    if not has_permission(user, "edit_quotes"):
+        raise HTTPException(403, "Non hai il permesso di duplicare le quotazioni")
+
+    src = (
+        db.query(Quote)
+        .options(joinedload(Quote.lines))
+        .filter(Quote.id == quote_id).first()
+    )
+    if not src:
+        raise HTTPException(404, "Quotazione sorgente non trovata")
+
+    new_q = Quote(
+        number=_next_quote_number_progressive(db),
+        version=1,
+        project_id=src.project_id,
+        client_id=src.client_id,
+        title=src.title,
+        status=QuoteStatus.draft,
+        issue_date=date.today(),
+        valid_until=src.valid_until,
+        production_material=src.production_material,
+        length_minutes=src.length_minutes,
+        fps=src.fps,
+        delivery_format=src.delivery_format,
+        shooting_days=src.shooting_days,
+        shooting_format=src.shooting_format,
+        package_discount=src.package_discount,
+        category_discounts=dict(src.category_discounts) if src.category_discounts else None,
+        category_order=list(src.category_order) if src.category_order else None,
+        vat_rate=src.vat_rate,
+        notes=src.notes,
+        payment_terms=src.payment_terms,
+        # NESSUN parent_quote_id: duplicato indipendente.
+    )
+    db.add(new_q); db.flush()
+
+    new_lines = _copy_quote_lines(src.lines, new_q.id, track_parent=False)
+    db.add_all(new_lines)
+    db.flush()
+
+    _recalc_quote(new_q)
+    db.commit()
+    db.refresh(new_q)
+    return {
+        "id": new_q.id,
+        "number": new_q.number,
+        "title": new_q.title,
+        "lines_count": len(new_lines),
+        "kind": "duplicate",
+    }
+
+
+@router.post("/api/{quote_id}/new-version")
+async def new_version_quote(
+    quote_id: int,
+    request: Request,
+    db: Session = Depends(get_db),
+):
+    """Crea una nuova versione della quote (parent_quote_id valorizzato).
+    Numero `{root_number}-v{N}` dove N = max(version) + 1 nella catena.
+    Le righe ereditano `parent_line_id` per re-bind preciso al migrate-job."""
+    from app.services.rbac import current_user_optional, has_permission
+    user = current_user_optional(request)
+    if not has_permission(user, "edit_quotes"):
+        raise HTTPException(403, "Non hai il permesso di creare nuove versioni")
+
+    src = (
+        db.query(Quote)
+        .options(joinedload(Quote.lines))
+        .filter(Quote.id == quote_id).first()
+    )
+    if not src:
+        raise HTTPException(404, "Quotazione sorgente non trovata")
+
+    root = _quote_root(db, src)
+    chain = _quote_chain(db, root)
+    next_version = max(q.version for q in chain) + 1
+    new_number = f"{root.number}-v{next_version}"
+
+    # Conflitto improbabile ma garantiamo unicità
+    if db.query(Quote).filter(Quote.number == new_number).first():
+        raise HTTPException(409, f"Numero quotazione '{new_number}' già esistente")
+
+    new_q = Quote(
+        number=new_number,
+        version=next_version,
+        parent_quote_id=src.id,
+        project_id=src.project_id,
+        client_id=src.client_id,
+        title=src.title,
+        status=QuoteStatus.draft,
+        issue_date=date.today(),
+        valid_until=src.valid_until,
+        production_material=src.production_material,
+        length_minutes=src.length_minutes,
+        fps=src.fps,
+        delivery_format=src.delivery_format,
+        shooting_days=src.shooting_days,
+        shooting_format=src.shooting_format,
+        package_discount=src.package_discount,
+        category_discounts=dict(src.category_discounts) if src.category_discounts else None,
+        category_order=list(src.category_order) if src.category_order else None,
+        vat_rate=src.vat_rate,
+        notes=src.notes,
+        payment_terms=src.payment_terms,
+    )
+    db.add(new_q); db.flush()
+
+    new_lines = _copy_quote_lines(src.lines, new_q.id, track_parent=True)
+    db.add_all(new_lines)
+    db.flush()
+
+    _recalc_quote(new_q)
+    db.commit()
+    db.refresh(new_q)
+    return {
+        "id": new_q.id,
+        "number": new_q.number,
+        "version": new_q.version,
+        "parent_quote_id": new_q.parent_quote_id,
+        "title": new_q.title,
+        "lines_count": len(new_lines),
+        "kind": "version",
+    }
+
+
+@router.get("/api/{quote_id}/versions")
+async def list_quote_versions(quote_id: int, db: Session = Depends(get_db)):
+    """Catena versioni completa (root + discendenti, ordinata per version)."""
+    q = db.query(Quote).filter(Quote.id == quote_id).first()
+    if not q:
+        raise HTTPException(404)
+    root = _quote_root(db, q)
+    chain = _quote_chain(db, root)
+    chain_sorted = sorted(chain, key=lambda x: (x.version, x.id))
+    return {
+        "root_id": root.id,
+        "current_id": q.id,
+        "versions": [
+            {
+                "id": c.id, "number": c.number, "version": c.version,
+                "status": c.status, "title": c.title,
+                "parent_quote_id": c.parent_quote_id,
+                "superseded_by_id": c.superseded_by_id,
+                "has_job": c.job is not None,
+                "job_id": c.job.id if c.job else None,
+                "job_code": c.job.code if c.job else None,
+                "issue_date": str(c.issue_date),
+                "total_after_discount": c.total_after_discount,
+            }
+            for c in chain_sorted
+        ],
+    }
+
+
+def _build_migration_preview(db: Session, new_q: Quote) -> dict:
+    """Analisi pre-migrazione tra V_old (= new_q.parent_quote) e V_new (= new_q).
+    Identifica righe nuove, modificate, orfane. Evidenzia righe orfane con
+    quantity_actual > 0 o booking done (lavoro registrato).
+    """
+    if not new_q.parent_quote_id:
+        raise HTTPException(400, "Quote senza parent: niente da migrare")
+    old_q = db.query(Quote).options(
+        joinedload(Quote.lines), joinedload(Quote.job)
+    ).filter(Quote.id == new_q.parent_quote_id).first()
+    if not old_q:
+        raise HTTPException(400, "Parent quote non trovata")
+
+    job = old_q.job
+    # Costline mappato per quote_line_id sorgente
+    cost_by_old_line = {}
+    if job:
+        for jcl in job.cost_lines:
+            if jcl.quote_line_id:
+                cost_by_old_line[jcl.quote_line_id] = jcl
+
+    new_lines_by_parent = {l.parent_line_id: l for l in new_q.lines if l.parent_line_id}
+    orphans = []        # righe presenti in V_old ma non più in V_new
+    inherited = []      # righe V_new con parent → re-bind ok
+    fresh = []          # righe V_new senza parent → nuove pure
+    overruns = []       # righe V_new con quantity_quoted < quantity_actual già registrato
+
+    for ol in old_q.lines:
+        if ol.id not in new_lines_by_parent:
+            jcl = cost_by_old_line.get(ol.id)
+            has_actual = bool(jcl and (jcl.quantity_actual or 0) > 0)
+            orphans.append({
+                "old_line_id": ol.id,
+                "description": ol.description,
+                "quantity": ol.quantity,
+                "unit": ol.unit,
+                "total": ol.total,
+                "has_jobcostline": jcl is not None,
+                "jobcostline_id": jcl.id if jcl else None,
+                "quantity_actual": (jcl.quantity_actual if jcl else 0) or 0,
+                "has_actual_work": has_actual,
+            })
+
+    for nl in new_q.lines:
+        if nl.parent_line_id:
+            inherited.append({
+                "new_line_id": nl.id,
+                "old_line_id": nl.parent_line_id,
+                "description": nl.description,
+            })
+            jcl = cost_by_old_line.get(nl.parent_line_id)
+            if jcl and (jcl.quantity_actual or 0) > (nl.quantity or 0):
+                overruns.append({
+                    "new_line_id": nl.id,
+                    "description": nl.description,
+                    "quantity_quoted_new": nl.quantity,
+                    "quantity_actual": jcl.quantity_actual,
+                    "delta": (jcl.quantity_actual or 0) - (nl.quantity or 0),
+                })
+        else:
+            fresh.append({
+                "new_line_id": nl.id,
+                "description": nl.description,
+                "quantity": nl.quantity,
+            })
+
+    return {
+        "old_quote_id": old_q.id,
+        "old_quote_number": old_q.number,
+        "new_quote_id": new_q.id,
+        "new_quote_number": new_q.number,
+        "has_job": job is not None,
+        "job_id": job.id if job else None,
+        "job_code": job.code if job else None,
+        "inherited": inherited,
+        "fresh": fresh,
+        "orphans": orphans,
+        "overruns": overruns,
+        "has_blockers": False,  # per ora nessun blocker hard, solo avvisi
+    }
+
+
+@router.get("/api/{quote_id}/migrate-preview")
+async def migrate_preview(quote_id: int, db: Session = Depends(get_db)):
+    """Anteprima della migrazione job da V_old a V_new (questo quote_id)."""
+    new_q = (
+        db.query(Quote)
+        .options(joinedload(Quote.lines))
+        .filter(Quote.id == quote_id).first()
+    )
+    if not new_q:
+        raise HTTPException(404)
+    return _build_migration_preview(db, new_q)
+
+
+@router.post("/api/{quote_id}/migrate-job")
+async def migrate_job(
+    quote_id: int,
+    request: Request,
+    orphan_strategy: str = Form("keep_as_extra"),
+    db: Session = Depends(get_db),
+):
+    """Applica la migrazione del Job da V_old a V_new (= quote_id).
+
+    `orphan_strategy`:
+      - `keep_as_extra` (default): le JobCostLine orfane restano sul Job ma
+        vengono marcate `is_extra=True` e perdono `quote_line_id` (SET NULL).
+        Il Job rimane legato a V_new; le righe orfane producono extra in
+        consuntivo per riconciliazione finance.
+      - `floating_job`: il Job viene scollegato (quote_id=NULL) e diventa un
+        "Floating Job" gestito in `/financial`. La V_new resta non legata; il
+        ciclo di vita del Job va riconciliato manualmente (riassegnazione a un
+        nuovo progetto/quote o chiusura).
+
+    Effetti:
+      - V_new.status = approved
+      - V_old.status = superseded; V_old.superseded_by_id = V_new.id
+      - Job.quote_id = V_new.id (a meno di floating_job)
+      - JobCostLine: re-bind via QuoteLine.parent_line_id; quote_line_id rimappato
+        sull'id della riga V_new corrispondente.
+    """
+    from app.services.rbac import current_user_optional, has_permission
+    user = current_user_optional(request)
+    if not has_permission(user, "edit_quotes"):
+        raise HTTPException(403, "Non hai il permesso di migrare le quotazioni")
+
+    if orphan_strategy not in ("keep_as_extra", "floating_job"):
+        raise HTTPException(400, f"orphan_strategy non valido: {orphan_strategy}")
+
+    new_q = (
+        db.query(Quote)
+        .options(joinedload(Quote.lines), joinedload(Quote.parent_quote))
+        .filter(Quote.id == quote_id).first()
+    )
+    if not new_q:
+        raise HTTPException(404)
+    if not new_q.parent_quote_id:
+        raise HTTPException(400, "Quote senza parent: nessuna migrazione possibile")
+    if new_q.status not in (QuoteStatus.draft, QuoteStatus.sent):
+        raise HTTPException(400, f"V_new in stato {new_q.status.value}: non migrabile")
+
+    old_q = (
+        db.query(Quote)
+        .options(joinedload(Quote.lines), joinedload(Quote.job))
+        .filter(Quote.id == new_q.parent_quote_id).first()
+    )
+    if not old_q:
+        raise HTTPException(400, "Parent quote non trovata")
+
+    job = old_q.job
+    # Map old_line_id → new_line per re-bind
+    new_line_by_parent = {l.parent_line_id: l for l in new_q.lines if l.parent_line_id}
+
+    job_action = None
+    cost_lines_rebound = 0
+    cost_lines_orphaned = 0
+    cost_lines_created = 0
+
+    if job:
+        # Re-bind dei JobCostLine via parent_line_id
+        for jcl in list(job.cost_lines):
+            if jcl.is_extra:
+                continue  # extra puri non toccati
+            if jcl.quote_line_id and jcl.quote_line_id in new_line_by_parent:
+                # Re-bind: punta alla riga V_new corrispondente
+                new_line = new_line_by_parent[jcl.quote_line_id]
+                jcl.quote_line_id = new_line.id
+                # Aggiorna i campi "pianificati" da V_new (descrizione, quantity_quoted, ecc.)
+                jcl.description = new_line.description
+                jcl.price_item_id = new_line.price_item_id
+                jcl.quantity_quoted = new_line.quantity
+                jcl.unit = new_line.unit
+                jcl.unit_price = new_line.unit_price
+                jcl.total_quoted = new_line.total
+                # quantity_actual NON tocco (è effettivo registrato)
+                cost_lines_rebound += 1
+            else:
+                # Orfano: la riga V_old non esiste più in V_new
+                if orphan_strategy == "keep_as_extra":
+                    jcl.quote_line_id = None
+                    jcl.is_extra = True
+                cost_lines_orphaned += 1
+
+        # Crea JobCostLine per righe nuove (presenti in V_new ma non in V_old)
+        existing_new_line_ids = {jcl.quote_line_id for jcl in job.cost_lines if jcl.quote_line_id}
+        for nl in new_q.lines:
+            if nl.id not in existing_new_line_ids:
+                # È una riga "fresh" (nuova in V_new): crea JobCostLine
+                db.add(JobCostLine(
+                    job_id=job.id,
+                    quote_line_id=nl.id,
+                    price_item_id=nl.price_item_id,
+                    description=nl.description,
+                    quantity_quoted=nl.quantity,
+                    unit=nl.unit,
+                    unit_price=nl.unit_price,
+                    total_quoted=nl.total,
+                    total_expected=nl.total,
+                ))
+                cost_lines_created += 1
+
+        if orphan_strategy == "floating_job":
+            job.quote_id = None
+            job_action = "floated"
+        else:
+            job.quote_id = new_q.id
+            job_action = "rebound"
+        # Aggiorna budget_quoted al nuovo totale
+        job.budget_quoted = new_q.total_after_discount
+
+    # Aggiorna stati delle quote
+    new_q.status = QuoteStatus.approved
+    old_q.status = QuoteStatus.superseded
+    old_q.superseded_by_id = new_q.id
+
+    db.commit()
+
+    return {
+        "ok": True,
+        "old_quote_id": old_q.id,
+        "old_quote_number": old_q.number,
+        "old_quote_status": old_q.status,
+        "new_quote_id": new_q.id,
+        "new_quote_number": new_q.number,
+        "new_quote_status": new_q.status,
+        "job_action": job_action,  # "rebound" | "floated" | None
+        "job_id": job.id if job else None,
+        "cost_lines_rebound": cost_lines_rebound,
+        "cost_lines_orphaned": cost_lines_orphaned,
+        "cost_lines_created": cost_lines_created,
+        "orphan_strategy": orphan_strategy,
+    }

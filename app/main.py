@@ -70,6 +70,25 @@ def _auto_migrate_columns():
             print("[auto-migrate] quotes.category_order mancante → ALTER TABLE")
             with engine.begin() as conn:
                 conn.execute(text("ALTER TABLE quotes ADD COLUMN category_order TEXT NULL"))
+        # v3.4.39 — Versioning quote
+        quote_alter = [
+            ("parent_quote_id", "INTEGER NULL REFERENCES quotes(id)"),
+            ("superseded_by_id", "INTEGER NULL REFERENCES quotes(id)"),
+        ]
+        with engine.begin() as conn:
+            for col, ddl in quote_alter:
+                if col not in qcols:
+                    print(f"[auto-migrate] quotes.{col} mancante → ALTER TABLE")
+                    conn.execute(text(f"ALTER TABLE quotes ADD COLUMN {col} {ddl}"))
+    # v3.4.39 — QuoteLine: parent_line_id per eredità righe in versioning
+    if "quote_lines" in insp.get_table_names():
+        qlcols = {c["name"] for c in insp.get_columns("quote_lines")}
+        if "parent_line_id" not in qlcols:
+            print("[auto-migrate] quote_lines.parent_line_id mancante → ALTER TABLE")
+            with engine.begin() as conn:
+                conn.execute(text(
+                    "ALTER TABLE quote_lines ADD COLUMN parent_line_id "
+                    "INTEGER NULL REFERENCES quote_lines(id)"))
 
 
 @asynccontextmanager
@@ -112,7 +131,7 @@ async def lifespan(app: FastAPI):
     yield
 
 
-app = FastAPI(title="MediaFlow", version="3.4.38", lifespan=lifespan)
+app = FastAPI(title="MediaFlow", version="3.4.39", lifespan=lifespan)
 
 BASE_DIR = Path(__file__).parent
 app.mount("/static", StaticFiles(directory=BASE_DIR / "static"), name="static")
@@ -298,5 +317,5 @@ async def dashboard(request: Request):
 async def health():
     from app.services.ai_provider import get_provider
     p = get_provider()
-    return {"status": "ok", "app": settings.app_name, "version": "3.4.38",
+    return {"status": "ok", "app": settings.app_name, "version": "3.4.39",
             "ai": {"configured": p is not None, "provider": p.name if p else None}}

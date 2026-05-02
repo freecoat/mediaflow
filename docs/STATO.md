@@ -8,6 +8,10 @@
 
 ## Versione corrente
 
+**v3.4.39** — 2 maggio 2026 — Quote: duplica + versioning + Floating Jobs
+
+Due funzioni distinte: (1) `📋 Duplica` semplice (clone indipendente, scenari/template), (2) `📐 Versione` (legata via `parent_quote_id`, numero `-v2`/`-v3`, eredità righe via `QuoteLine.parent_line_id`). Endpoint `migrate-job` per migrazione del Job tra versioni con preview righe orfane/sforamenti e scelta `orphan_strategy` (`keep_as_extra` o `floating_job`). Nuovo enum `QuoteStatus.superseded`. Sezione "⚠ Anomalie" in `/finance` con 3 card (Job orfani, Sforamenti, Extra) + badge counter sulla tab. Migrazione `[N]` idempotente, auto-applicata al boot.
+
 **v3.4.38** — 1 maggio 2026 notte profonda — Round 3 Audit: hardening logico (3 round completati)
 
 Audit logico completo (R1+R2+R3). R3.1 invariante count_in_costs↔execution_status. R3.2 RBAC edit_quotes su update_quote. R3.3 reset original_end_datetime su shortening (booking accorciato sotto soglia → overtime_status=none). R3.4 FSM transizioni JobStatus con matrice esplicita. R3.5 cleanup Timesheet legacy nel cost report (rimossi hours_cost/hours_cost_legacy_timesheet/timesheet_summary, fonte canonica = Booking).
@@ -72,7 +76,25 @@ Sessione 1 maggio sera (commit unico): chiusa v3.4.32 dopo discussione completa 
 
 ## In corso
 
-**Sessione 1 maggio notte profonda chiusa — 17 versioni v3.4.32→v3.4.38 + push su origin/main `60b2e09..e735495`.** Working tree pulito, audit logico completo (3 round). Riapertura: "Riprendi da v3.4.38 — apri con ultimo commento".
+**Sessione 2 maggio aperta — v3.4.39 chiusa** (Quote duplica + versioning + Floating Jobs). Working tree con commit unico in attesa.
+
+Cantieri pianificati per la sessione corrente (in ordine):
+1. ✅ **C1** — Quote duplica + versioning (v3.4.39 fatta)
+2. 🔜 **C2** — Searchable dropdowns globali (helper in `global.js` + rollout su `<select>`)
+3. 🔜 **C3** — Time picker integrato per data entry con orario (timbratura, booking)
+4. 🔜 **C4** — Look timeline risorse (deep restyle vis-timeline + storyboard view)
+
+Da testare per **v3.4.39**:
+- Migrazione `[N]` (auto al boot, opzione strumenti per fallback esplicito)
+- `/quotes` lista: bottoni `📋` e `📐` accanto a "Job ✓"
+- Editor: "📋 Duplica" e "📐 Versione" in topbar; sezione "Versioni" appare quando catena > 1
+- Crea V2 di una quote approvata con job → vai su V2, modificala (rimuovi una riga, modifica una quantità sotto consuntivo) → "↪ Migra Job a questa versione"
+- Preview deve elencare orfane con badge ⚠ (se hanno quantity_actual), sforamenti, fresh
+- Conferma con `keep_as_extra` → vecchia diventa "superseded", nuova "approved", job ribindato. JobCostLine orfane diventano extra.
+- Conferma con `floating_job` → job.quote_id=NULL → appare in `/finance > Anomalie > Job orfani`
+- `/finance` tab "⚠ Anomalie": 3 card popolate, badge rosso sulla tab
+
+**Sessione 1 maggio notte profonda chiusa — 17 versioni v3.4.32→v3.4.38 + push su origin/main `60b2e09..e735495`.** Working tree pulito, audit logico completo (3 round).
 
 **Sessione 1 maggio notte chiusa.** v3.4.32→.32.2 + .33 da testare sul Mac al prossimo pull (o continua il test locale).
 

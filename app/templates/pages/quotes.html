@@ -95,6 +95,9 @@
         <!-- v3.4.35: undo + salva -->
         <button class="btn btn-secondary btn-sm" id="btn-quote-undo" onclick="quoteUndo()" disabled title="Niente da annullare">↺ Annulla</button>
         <button class="btn btn-secondary btn-sm" onclick="quoteSaveConfirm()" title="Conferma salvataggio (auto-save attivo)">💾 Salva</button>
+        <!-- v3.4.39: duplicazione + versioning -->
+        <button class="btn btn-secondary btn-sm" onclick="duplicateQuote()" title="Crea una copia indipendente (scenario / template)">📋 Duplica</button>
+        <button class="btn btn-secondary btn-sm" onclick="newVersionQuote()" title="Crea una nuova versione legata (-v2, -v3...)">📐 Versione</button>
         <div class="dropdown" style="position:relative;display:inline-block;">
           <button class="btn btn-secondary btn-sm" onclick="this.nextElementSibling.classList.toggle('open')">⬇ Esporta ▾</button>
           <div class="dropdown-menu" style="position:absolute;right:0;top:100%;margin-top:4px;background:var(--bg2);border:1px solid var(--border);border-radius:6px;display:none;flex-direction:column;min-width:160px;z-index:10;box-shadow:0 4px 12px rgba(0,0,0,0.2);">
@@ -259,6 +262,12 @@
             <button class="btn btn-secondary btn-sm" onclick="setQuoteStatus('expired')">⏰ Scaduta</button>
           </div>
           <button class="btn btn-primary btn-sm mt-3" style="width:100%;" onclick="approveAndCreateJob()">✓ Approva quote → Job</button>
+          <!-- v3.4.39: sezione Versioni (catena) -->
+          <div id="versions-area" class="mt-3" style="display:none;">
+            <div class="card-title" style="font-size:11px;text-transform:uppercase;letter-spacing:.6px;color:var(--text-muted);margin-bottom:6px;">Versioni</div>
+            <div id="versions-list" style="display:flex;flex-direction:column;gap:4px;font-size:12px;"></div>
+            <button id="btn-migrate-job" class="btn btn-primary btn-sm mt-2" style="width:100%;display:none;" onclick="openMigratePreview()">↪ Migra Job a questa versione</button>
+          </div>
           <!-- v3.4.34.2: IVA spostata in Riepilogo economico (editabile inline).
                Note e Termini compatti rows=1, espandibili al focus. -->
           <div class="form-group mt-3"><label class="form-label">Note</label>
@@ -390,6 +399,36 @@
     </aside>
     </div><!-- /col dx -->
   </div><!-- /#quote-editor-body -->
+</div>
+
+<!-- v3.4.39: Modal preview migrazione job V_old → V_new -->
+<div class="modal-overlay" id="modal-migrate-preview">
+  <div class="modal" style="max-width:760px;">
+    <div class="modal-header">
+      <span class="modal-title">↪ Migra Job alla versione corrente</span>
+      <button class="btn btn-ghost btn-icon" onclick="closeModal('modal-migrate-preview')">✕</button>
+    </div>
+    <div class="modal-body" id="migrate-preview-body" style="max-height:60vh;overflow-y:auto;">
+      <div class="text-muted text-sm">Caricamento anteprima…</div>
+    </div>
+    <div class="modal-footer" style="flex-direction:column;align-items:stretch;gap:10px;">
+      <div id="migrate-orphan-strategy" style="display:none;flex-direction:column;gap:6px;background:var(--bg2);padding:10px;border-radius:6px;border:1px solid var(--border);">
+        <div style="font-size:12px;font-weight:600;">Cosa fare delle righe rimosse / sforate?</div>
+        <label class="text-sm" style="display:flex;gap:8px;align-items:flex-start;cursor:pointer;">
+          <input type="radio" name="orphan-strat" value="keep_as_extra" checked>
+          <span><b>Tieni nel job come extra</b> — le lavorazioni effettuate restano sul job (is_extra=True), evidenziate in /finance &gt; Anomalie. Il job resta legato alla nuova versione.</span>
+        </label>
+        <label class="text-sm" style="display:flex;gap:8px;align-items:flex-start;cursor:pointer;">
+          <input type="radio" name="orphan-strat" value="floating_job">
+          <span><b>Floating Job</b> — il job viene scollegato (quote_id=NULL) ed entra nella sezione "Job orfani" di /finance per riassegnazione manuale.</span>
+        </label>
+      </div>
+      <div class="flex gap-2" style="justify-content:flex-end;">
+        <button class="btn btn-secondary" onclick="closeModal('modal-migrate-preview')">Annulla</button>
+        <button class="btn btn-primary" id="btn-confirm-migrate" onclick="confirmMigrate()">Conferma migrazione</button>
+      </div>
+    </div>
+  </div>
 </div>
 
 <!-- Modal nuova quotazione -->
@@ -616,7 +655,7 @@
 let currentQuoteId = null;
 let currentQuote = null;
 let priceItems = [];
-const SL = { draft:'Bozza', sent:'Inviata', approved:'Approvata', rejected:'Rifiutata', expired:'Scaduta' };
+const SL = { draft:'Bozza', sent:'Inviata', approved:'Approvata', rejected:'Rifiutata', expired:'Scaduta', superseded:'Sostituita' };
 const HOURS_PER_DAY = 8;
 
 // ── List view ─────────────────────────────────────────────────
@@ -627,16 +666,18 @@ async function loadQuotes() {
     tbody.innerHTML = '<tr><td colspan="8" class="text-muted" style="text-align:center;padding:24px;">Nessuna quotazione</td></tr>'; return;
   }
   tbody.innerHTML = qs.map(q => `
-    <tr style="cursor:pointer;" onclick="openEditor(${q.id})">
-      <td class="mono" style="font-size:12px;">${q.number}</td>
-      <td style="font-weight:500;">${q.project_title || q.title}</td>
-      <td class="text-muted text-sm">${q.client || '—'}</td>
-      <td class="text-sm">${fmtDate(q.issue_date)}</td>
-      <td class="text-sm ${q.valid_until && new Date(q.valid_until) < new Date() ? 'color-rose' : ''}">${fmtDate(q.valid_until)}</td>
-      <td class="mono text-right">${fmtCurrency(q.total_with_vat)}</td>
-      <td>${statusBadge(q.status)}</td>
-      <td class="text-xs text-muted" style="text-align:right;">
-        ${q.has_job ? '<span class="badge badge-active" style="font-size:10px;">Job ✓</span>' : '→'}
+    <tr style="cursor:pointer;">
+      <td class="mono" style="font-size:12px;" onclick="openEditor(${q.id})">${q.number}</td>
+      <td style="font-weight:500;" onclick="openEditor(${q.id})">${q.project_title || q.title}</td>
+      <td class="text-muted text-sm" onclick="openEditor(${q.id})">${q.client || '—'}</td>
+      <td class="text-sm" onclick="openEditor(${q.id})">${fmtDate(q.issue_date)}</td>
+      <td class="text-sm ${q.valid_until && new Date(q.valid_until) < new Date() ? 'color-rose' : ''}" onclick="openEditor(${q.id})">${fmtDate(q.valid_until)}</td>
+      <td class="mono text-right" onclick="openEditor(${q.id})">${fmtCurrency(q.total_with_vat)}</td>
+      <td onclick="openEditor(${q.id})">${statusBadge(q.status)}</td>
+      <td class="text-xs text-muted" style="text-align:right;white-space:nowrap;">
+        ${q.has_job ? '<span class="badge badge-active" style="font-size:10px;">Job ✓</span>' : ''}
+        <button class="btn btn-ghost btn-sm" onclick="event.stopPropagation();duplicateQuoteFromList(${q.id});" title="Duplica (scenario / template)">📋</button>
+        <button class="btn btn-ghost btn-sm" onclick="event.stopPropagation();newVersionQuoteFromList(${q.id});" title="Nuova versione (legata)">📐</button>
       </td>
     </tr>`).join('');
 }
@@ -676,6 +717,154 @@ async function reloadQuote() {
   document.getElementById('qa-fps').value = currentQuote.fps || '';
   renderLines();
   renderTotals();
+  loadVersionsArea();
+}
+
+// ── v3.4.39: Versioni / Duplicazione / Migrazione ─────────────
+async function loadVersionsArea() {
+  try {
+    const data = await api('GET', `/quotes/api/${currentQuoteId}/versions`);
+    const area = document.getElementById('versions-area');
+    const list = document.getElementById('versions-list');
+    const btnMigrate = document.getElementById('btn-migrate-job');
+    if (!data.versions || data.versions.length <= 1) {
+      // Nessun parent e nessun figlio → niente catena, area nascosta
+      area.style.display = 'none';
+      btnMigrate.style.display = 'none';
+      return;
+    }
+    area.style.display = '';
+    list.innerHTML = data.versions.map(v => {
+      const isCurrent = v.id === data.current_id;
+      const job = v.has_job ? ` <span class="badge badge-active" style="font-size:9px;">Job ${escapeHtml(v.job_code || '')}</span>` : '';
+      const link = isCurrent
+        ? `<b>v${v.version} · ${escapeHtml(v.number)}</b>`
+        : `<a href="#" onclick="event.preventDefault();openEditor(${v.id});" style="color:var(--indigo2);">v${v.version} · ${escapeHtml(v.number)}</a>`;
+      return `<div style="display:flex;justify-content:space-between;gap:6px;align-items:center;${isCurrent ? 'background:var(--indigo-bg);padding:3px 6px;border-radius:4px;' : ''}">
+        <span>${link}${job}</span>
+        <span class="text-xs text-muted">${SL[v.status] || v.status}</span>
+      </div>`;
+    }).join('');
+    // Mostra "Migra Job" solo se: io ho parent_quote_id, parent ha job, io sono draft/sent
+    const me = data.versions.find(v => v.id === data.current_id);
+    const parent = me && me.parent_quote_id
+      ? data.versions.find(v => v.id === me.parent_quote_id) : null;
+    const canMigrate = parent && parent.has_job
+      && (currentQuote.status === 'draft' || currentQuote.status === 'sent');
+    btnMigrate.style.display = canMigrate ? '' : 'none';
+  } catch(e) { /* silent: area resta nascosta */ }
+}
+
+async function duplicateQuote() {
+  if (!currentQuoteId) return;
+  if (!confirm('Duplica questa quotazione come copia INDIPENDENTE (nessun legame versioning)?\n\nUtile per scenari paralleli o template di nuovi progetti.')) return;
+  try {
+    const r = await api('POST', `/quotes/api/${currentQuoteId}/duplicate`);
+    toast(`Duplicata come ${r.number}`, 'success');
+    openEditor(r.id);
+  } catch(e) { toast(e.message || 'Errore duplicazione', 'error'); }
+}
+
+async function newVersionQuote() {
+  if (!currentQuoteId) return;
+  if (!confirm('Crea una nuova VERSIONE legata di questa quotazione?\n\nLa versione corrente resta. Quando approvi la nuova versione potrai migrare automaticamente il Job (se presente).')) return;
+  try {
+    const r = await api('POST', `/quotes/api/${currentQuoteId}/new-version`);
+    toast(`Creata ${r.number} (v${r.version})`, 'success');
+    openEditor(r.id);
+  } catch(e) { toast(e.message || 'Errore creazione versione', 'error'); }
+}
+
+async function duplicateQuoteFromList(id) {
+  if (!confirm('Duplica come copia indipendente?')) return;
+  try {
+    const r = await api('POST', `/quotes/api/${id}/duplicate`);
+    toast(`Duplicata come ${r.number}`, 'success');
+    loadQuotes();
+  } catch(e) { toast(e.message || 'Errore', 'error'); }
+}
+
+async function newVersionQuoteFromList(id) {
+  if (!confirm('Crea nuova versione legata?')) return;
+  try {
+    const r = await api('POST', `/quotes/api/${id}/new-version`);
+    toast(`Creata ${r.number} (v${r.version})`, 'success');
+    openEditor(r.id);
+  } catch(e) { toast(e.message || 'Errore', 'error'); }
+}
+
+async function openMigratePreview() {
+  openModal('modal-migrate-preview');
+  const body = document.getElementById('migrate-preview-body');
+  const stratBox = document.getElementById('migrate-orphan-strategy');
+  const btn = document.getElementById('btn-confirm-migrate');
+  body.innerHTML = '<div class="text-muted text-sm">Caricamento anteprima…</div>';
+  stratBox.style.display = 'none';
+  btn.disabled = true;
+  try {
+    const p = await api('GET', `/quotes/api/${currentQuoteId}/migrate-preview`);
+    body.innerHTML = renderMigratePreview(p);
+    stratBox.style.display = (p.orphans.length > 0) ? 'flex' : 'none';
+    btn.disabled = false;
+  } catch(e) {
+    body.innerHTML = `<div class="color-rose">${escapeHtml(e.message || 'Errore preview')}</div>`;
+  }
+}
+
+function renderMigratePreview(p) {
+  const orphans = p.orphans.map(o => {
+    const warn = o.has_actual_work
+      ? `<span class="badge" style="background:#dc2626;color:#fff;font-size:10px;">⚠ ${o.quantity_actual} ${escapeHtml(o.unit)} effett.</span>` : '';
+    return `<tr><td>${escapeHtml(o.description)}</td><td class="mono text-sm">${o.quantity} ${escapeHtml(o.unit)}</td><td>${warn}</td></tr>`;
+  }).join('');
+  const overruns = p.overruns.map(o =>
+    `<tr><td>${escapeHtml(o.description)}</td>
+         <td class="mono text-sm">${o.quantity_quoted_new} (effett. <b>${o.quantity_actual}</b>, Δ +${o.delta})</td></tr>`
+  ).join('');
+  const fresh = p.fresh.map(f => `<tr><td>${escapeHtml(f.description)}</td><td class="mono text-sm">${f.quantity}</td></tr>`).join('');
+
+  let html = `
+    <div class="text-sm mb-3">
+      Migrazione job <b>${escapeHtml(p.job_code || '—')}</b> da
+      <b>${escapeHtml(p.old_quote_number)}</b> → <b>${escapeHtml(p.new_quote_number)}</b>.
+    </div>`;
+  html += `<div class="text-sm mb-3" style="color:var(--text-muted);">
+    Riepilogo: ${p.inherited.length} righe ereditate, ${p.fresh.length} nuove, ${p.orphans.length} rimosse, ${p.overruns.length} sforamenti.</div>`;
+
+  if (p.orphans.length) {
+    html += `<div style="margin-bottom:12px;">
+      <div style="font-weight:600;font-size:13px;margin-bottom:6px;">🛟 Righe rimosse in V_new (${p.orphans.length})</div>
+      <table style="width:100%;font-size:12px;"><thead><tr><th style="text-align:left;">Voce</th><th style="text-align:left;">Pianificato V_old</th><th></th></tr></thead><tbody>${orphans}</tbody></table>
+    </div>`;
+  }
+  if (p.overruns.length) {
+    html += `<div style="margin-bottom:12px;">
+      <div style="font-weight:600;font-size:13px;margin-bottom:6px;color:var(--amber, #f59e0b);">📈 Sforamenti (effettivo &gt; nuovo pianificato)</div>
+      <table style="width:100%;font-size:12px;"><thead><tr><th style="text-align:left;">Voce</th><th style="text-align:left;">V_new vs effettivo</th></tr></thead><tbody>${overruns}</tbody></table>
+      <div class="text-xs text-muted mt-1">Le ore già lavorate restano nel job. Lo sforamento sarà evidenziato in /finance &gt; Anomalie.</div>
+    </div>`;
+  }
+  if (p.fresh.length) {
+    html += `<div style="margin-bottom:12px;">
+      <div style="font-weight:600;font-size:13px;margin-bottom:6px;">➕ Righe nuove in V_new (${p.fresh.length})</div>
+      <table style="width:100%;font-size:12px;"><thead><tr><th style="text-align:left;">Voce</th><th style="text-align:left;">Quantità</th></tr></thead><tbody>${fresh}</tbody></table>
+    </div>`;
+  }
+  if (!p.orphans.length && !p.fresh.length && !p.overruns.length) {
+    html += `<div class="text-sm" style="color:var(--green);">✓ Le righe sono identiche: rebind pulito.</div>`;
+  }
+  return html;
+}
+
+async function confirmMigrate() {
+  const strat = document.querySelector('input[name="orphan-strat"]:checked')?.value || 'keep_as_extra';
+  const fd = new FormData(); fd.append('orphan_strategy', strat);
+  try {
+    const r = await api('POST', `/quotes/api/${currentQuoteId}/migrate-job`, fd);
+    closeModal('modal-migrate-preview');
+    toast(`Job ${r.job_action === 'floated' ? 'floating' : 'migrato'}: ${r.cost_lines_rebound} ribindate, ${r.cost_lines_created} nuove, ${r.cost_lines_orphaned} orfane`, 'success');
+    await reloadQuote();
+  } catch(e) { toast(e.message || 'Errore migrazione', 'error'); }
 }
 
 function closeEditor() {

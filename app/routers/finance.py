@@ -4,8 +4,12 @@ from fastapi.responses import HTMLResponse
 from typing import Optional
 from datetime import date
 from sqlalchemy.orm import Session, joinedload
+from sqlalchemy import func
 from app.database import get_db
-from app.models import Timesheet, Expense, Invoice, InvoiceLine, InvoiceStatus
+from app.models import (
+    Timesheet, Expense, Invoice, InvoiceLine, InvoiceStatus,
+    Job, JobStatus, JobCostLine, Quote, QuoteStatus, Project,
+)
 from app.services.finance import job_financial_summary, company_pl_summary
 
 router = APIRouter(prefix="/finance", tags=["finance"])
@@ -172,6 +176,142 @@ async def job_report(job_id: int, db: Session = Depends(get_db)):
 @router.get("/api/report/pl/{year}")
 async def annual_pl(year: int, db: Session = Depends(get_db)):
     return company_pl_summary(db, year)
+
+
+# ── Anomalie financial (v3.4.39) ──────────────────────────────────────
+
+
+@router.get("/api/anomalies/floating-jobs")
+async def list_floating_jobs(db: Session = Depends(get_db)):
+    """Job senza quote_id (orfani). Possono nascere da migrazione versioning con
+    `orphan_strategy=floating_job`, o da cancellazione manuale della quote.
+
+    Ritorna la lista per la sezione Anomalie di /finance, e per generare
+    notifiche `job_floating_alert` periodiche."""
+    jobs = (
+        db.query(Job)
+        .options(joinedload(Job.project), joinedload(Job.client), joinedload(Job.cost_lines))
+        .filter(Job.quote_id.is_(None))
+        .filter(Job.status != JobStatus.cancelled)
+        .order_by(Job.created_at.desc()).all()
+    )
+    return [
+        {
+            "id": j.id, "code": j.code, "title": j.title,
+            "status": j.status,
+            "project_id": j.project_id,
+            "project_title": j.project.title if j.project else None,
+            "project_code": j.project.code if j.project else None,
+            "client": j.client.name if j.client else None,
+            "budget_quoted": j.budget_quoted,
+            "cost_lines_count": len(j.cost_lines),
+            "actual_total": sum(
+                (jcl.quantity_actual or 0) * (jcl.unit_price or 0)
+                for jcl in j.cost_lines
+            ),
+            "created_at": str(j.created_at)[:10] if j.created_at else None,
+            "start_date": str(j.start_date) if j.start_date else None,
+            "end_date": str(j.end_date) if j.end_date else None,
+        }
+        for j in jobs
+    ]
+
+
+@router.get("/api/anomalies/discrepancies")
+async def list_discrepancies(db: Session = Depends(get_db)):
+    """Discrepanze quote/consuntivo. Tre tipi:
+
+    1. Sforamenti monte ore: JobCostLine con quantity_actual > quantity_quoted
+       (su righe non-extra). Indica che il consuntivo ha superato il preventivo.
+    2. Extra puri: JobCostLine con is_extra=True. Lavorazioni aggiunte dopo
+       l'approvazione, non coperte dalla quote ufficiale.
+    3. JobCostLine con quote_line_id NULL ma is_extra=False (anomalia derivata
+       da migrazione orfani con keep_as_extra: il flag is_extra dovrebbe essere
+       True; questo identifica eventuali errori di data integrity)."""
+    overruns = []
+    extras = []
+    inconsistent = []
+
+    cost_lines = (
+        db.query(JobCostLine)
+        .options(joinedload(JobCostLine.job).joinedload(Job.project))
+        .filter(JobCostLine.job_id.isnot(None))
+        .all()
+    )
+    for jcl in cost_lines:
+        if not jcl.job or jcl.job.status == JobStatus.cancelled:
+            continue
+        actual = jcl.quantity_actual or 0
+        quoted = jcl.quantity_quoted or 0
+        delta = actual - quoted
+        if not jcl.is_extra and delta > 0.001:
+            overruns.append({
+                "jobcostline_id": jcl.id,
+                "job_id": jcl.job_id,
+                "job_code": jcl.job.code,
+                "project_title": jcl.job.project.title if jcl.job.project else None,
+                "description": jcl.description,
+                "quantity_quoted": quoted,
+                "quantity_actual": actual,
+                "delta": round(delta, 2),
+                "unit": jcl.unit,
+                "extra_value": round(delta * (jcl.unit_price or 0), 2),
+            })
+        if jcl.is_extra:
+            extras.append({
+                "jobcostline_id": jcl.id,
+                "job_id": jcl.job_id,
+                "job_code": jcl.job.code,
+                "project_title": jcl.job.project.title if jcl.job.project else None,
+                "description": jcl.description,
+                "quantity_actual": actual,
+                "unit": jcl.unit,
+                "total_value": round(actual * (jcl.unit_price or 0), 2),
+            })
+        if not jcl.is_extra and not jcl.quote_line_id:
+            inconsistent.append({
+                "jobcostline_id": jcl.id,
+                "job_id": jcl.job_id,
+                "job_code": jcl.job.code,
+                "description": jcl.description,
+                "issue": "is_extra=False ma quote_line_id=NULL",
+            })
+
+    return {
+        "overruns": overruns,
+        "extras": extras,
+        "inconsistent": inconsistent,
+        "total_overrun_value": round(sum(o["extra_value"] for o in overruns), 2),
+        "total_extras_value": round(sum(e["total_value"] for e in extras), 2),
+    }
+
+
+@router.get("/api/anomalies/summary")
+async def anomalies_summary(db: Session = Depends(get_db)):
+    """Counter aggregato per badge / topbar / dashboard."""
+    floating_count = (
+        db.query(func.count(Job.id))
+        .filter(Job.quote_id.is_(None))
+        .filter(Job.status != JobStatus.cancelled)
+        .scalar() or 0
+    )
+    extras_count = (
+        db.query(func.count(JobCostLine.id))
+        .join(Job, JobCostLine.job_id == Job.id)
+        .filter(JobCostLine.is_extra.is_(True))
+        .filter(Job.status != JobStatus.cancelled)
+        .scalar() or 0
+    )
+    superseded_count = (
+        db.query(func.count(Quote.id))
+        .filter(Quote.status == QuoteStatus.superseded)
+        .scalar() or 0
+    )
+    return {
+        "floating_jobs": floating_count,
+        "extras": extras_count,
+        "superseded_quotes": superseded_count,
+    }
 
 
 # ── PDF Export ────────────────────────────────────────────────────────

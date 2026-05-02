@@ -15,6 +15,7 @@
   <div class="tab active" onclick="showSection('invoices',this)">Fatture</div>
   <div class="tab" onclick="showSection('timesheets',this)">Timesheet</div>
   <div class="tab" onclick="showSection('report',this)">Report P&amp;L</div>
+  <div class="tab" onclick="showSection('anomalies',this)">⚠ Anomalie <span id="anomalies-badge" class="badge" style="display:none;background:#dc2626;color:#fff;margin-left:6px;"></span></div>
 </div>
 
 <!-- ── Sezione fatture ─────────────────────────────────────── -->
@@ -84,6 +85,54 @@
     <div class="card-title mb-2">Report per job</div>
     <div id="pl-jobs-list" class="text-muted text-sm">Seleziona un job per vedere il dettaglio P&L</div>
   </div>
+</div>
+
+<!-- ── Sezione Anomalie (v3.4.39) ──────────────────────────── -->
+<div id="section-anomalies" class="hidden">
+
+  <div id="an-summary" class="stat-grid" style="margin-bottom:16px;"></div>
+
+  <div class="card mb-3">
+    <div class="card-title mb-2">🛟 Job orfani <span class="text-muted text-sm">(senza quotazione)</span></div>
+    <div id="an-floating-empty" class="text-muted text-sm" style="display:none;">Nessun job orfano. ✅</div>
+    <div class="table-wrap">
+      <table id="an-floating-table" style="display:none;">
+        <thead><tr>
+          <th>Codice</th><th>Titolo</th><th>Progetto</th><th>Cliente</th>
+          <th>Stato</th><th>Budget</th><th>Consuntivo</th><th>Inizio</th><th></th>
+        </tr></thead>
+        <tbody id="an-floating-body"></tbody>
+      </table>
+    </div>
+  </div>
+
+  <div class="card mb-3">
+    <div class="card-title mb-2">📈 Sforamenti <span class="text-muted text-sm">(quantity_actual &gt; quantity_quoted)</span></div>
+    <div id="an-overruns-empty" class="text-muted text-sm" style="display:none;">Nessuno sforamento. ✅</div>
+    <div class="table-wrap">
+      <table id="an-overruns-table" style="display:none;">
+        <thead><tr>
+          <th>Job</th><th>Progetto</th><th>Voce</th><th>Pianif.</th><th>Effett.</th>
+          <th>Δ</th><th>Valore extra</th>
+        </tr></thead>
+        <tbody id="an-overruns-body"></tbody>
+      </table>
+    </div>
+  </div>
+
+  <div class="card mb-3">
+    <div class="card-title mb-2">➕ Extra <span class="text-muted text-sm">(lavorazioni aggiunte fuori quote)</span></div>
+    <div id="an-extras-empty" class="text-muted text-sm" style="display:none;">Nessun extra. ✅</div>
+    <div class="table-wrap">
+      <table id="an-extras-table" style="display:none;">
+        <thead><tr>
+          <th>Job</th><th>Progetto</th><th>Voce</th><th>Quantità</th><th>Valore</th>
+        </tr></thead>
+        <tbody id="an-extras-body"></tbody>
+      </table>
+    </div>
+  </div>
+
 </div>
 
 <!-- ── Modali ──────────────────────────────────────────────── -->
@@ -184,7 +233,7 @@
 {% block scripts %}
 <script>
 function showSection(name, el) {
-  ['invoices','timesheets','report'].forEach(s => {
+  ['invoices','timesheets','report','anomalies'].forEach(s => {
     document.getElementById('section-'+s).classList.add('hidden');
   });
   document.getElementById('section-'+name).classList.remove('hidden');
@@ -192,6 +241,7 @@ function showSection(name, el) {
   el.classList.add('active');
   if (name === 'report') loadPL();
   if (name === 'timesheets') loadTimesheets();
+  if (name === 'anomalies') loadAnomalies();
 }
 
 // ── Fatture ──────────────────────────────────────────────────
@@ -302,6 +352,95 @@ async function loadPL() {
     <div class="stat-card"><div class="stat-label">Ore totali</div><div class="stat-value color-indigo mono" style="font-size:22px;">${pl.total_hours}h</div></div>`;
 }
 
+// ── Anomalie (v3.4.39) ────────────────────────────────────────
+async function loadAnomalies() {
+  try {
+    const [floating, disc] = await Promise.all([
+      api('GET', '/finance/api/anomalies/floating-jobs'),
+      api('GET', '/finance/api/anomalies/discrepancies'),
+    ]);
+    renderFloating(floating);
+    renderDiscrepancies(disc);
+    renderAnomaliesSummary(floating.length, disc.overruns.length, disc.extras.length,
+                           disc.total_overrun_value, disc.total_extras_value);
+  } catch(e) { toast(e.message || 'Errore caricamento anomalie', 'error'); }
+}
+
+function renderAnomaliesSummary(nFloating, nOver, nExtra, valOver, valExtra) {
+  document.getElementById('an-summary').innerHTML = `
+    <div class="stat-card"><div class="stat-label">Job orfani</div><div class="stat-value mono" style="font-size:22px;color:${nFloating?'var(--rose)':'var(--text-muted)'};">${nFloating}</div></div>
+    <div class="stat-card"><div class="stat-label">Sforamenti</div><div class="stat-value mono" style="font-size:22px;color:${nOver?'var(--amber, #f59e0b)':'var(--text-muted)'};">${nOver}</div><div class="text-sm text-muted mono">${fmtCurrency(valOver)}</div></div>
+    <div class="stat-card"><div class="stat-label">Extra</div><div class="stat-value mono" style="font-size:22px;color:${nExtra?'var(--indigo, #6272f5)':'var(--text-muted)'};">${nExtra}</div><div class="text-sm text-muted mono">${fmtCurrency(valExtra)}</div></div>
+  `;
+}
+
+function renderFloating(rows) {
+  const empty = document.getElementById('an-floating-empty');
+  const table = document.getElementById('an-floating-table');
+  const body = document.getElementById('an-floating-body');
+  if (!rows.length) { empty.style.display='block'; table.style.display='none'; return; }
+  empty.style.display='none'; table.style.display='';
+  body.innerHTML = rows.map(j => `
+    <tr>
+      <td class="mono text-sm">${escapeHtml(j.code)}</td>
+      <td>${escapeHtml(j.title || '—')}</td>
+      <td class="text-sm">${escapeHtml(j.project_title || '—')}</td>
+      <td class="text-sm">${escapeHtml(j.client || '—')}</td>
+      <td>${statusBadge(j.status)}</td>
+      <td class="mono text-sm">${fmtCurrency(j.budget_quoted || 0)}</td>
+      <td class="mono text-sm">${fmtCurrency(j.actual_total || 0)}</td>
+      <td class="text-sm">${j.start_date ? fmtDate(j.start_date) : '—'}</td>
+      <td><a href="/jobs/${j.id}" class="btn btn-ghost btn-sm">Apri</a></td>
+    </tr>`).join('');
+}
+
+function renderDiscrepancies(d) {
+  // Overruns
+  const oEmpty = document.getElementById('an-overruns-empty');
+  const oTable = document.getElementById('an-overruns-table');
+  const oBody = document.getElementById('an-overruns-body');
+  if (!d.overruns.length) { oEmpty.style.display='block'; oTable.style.display='none'; }
+  else {
+    oEmpty.style.display='none'; oTable.style.display='';
+    oBody.innerHTML = d.overruns.map(o => `
+      <tr>
+        <td class="mono text-sm"><a href="/jobs/${o.job_id}">${escapeHtml(o.job_code)}</a></td>
+        <td class="text-sm">${escapeHtml(o.project_title || '—')}</td>
+        <td>${escapeHtml(o.description)}</td>
+        <td class="mono text-sm">${o.quantity_quoted} ${escapeHtml(o.unit)}</td>
+        <td class="mono text-sm">${o.quantity_actual} ${escapeHtml(o.unit)}</td>
+        <td class="mono text-sm color-amber">+${o.delta}</td>
+        <td class="mono text-sm color-amber">${fmtCurrency(o.extra_value)}</td>
+      </tr>`).join('');
+  }
+  // Extras
+  const eEmpty = document.getElementById('an-extras-empty');
+  const eTable = document.getElementById('an-extras-table');
+  const eBody = document.getElementById('an-extras-body');
+  if (!d.extras.length) { eEmpty.style.display='block'; eTable.style.display='none'; }
+  else {
+    eEmpty.style.display='none'; eTable.style.display='';
+    eBody.innerHTML = d.extras.map(x => `
+      <tr>
+        <td class="mono text-sm"><a href="/jobs/${x.job_id}">${escapeHtml(x.job_code)}</a></td>
+        <td class="text-sm">${escapeHtml(x.project_title || '—')}</td>
+        <td>${escapeHtml(x.description)}</td>
+        <td class="mono text-sm">${x.quantity_actual} ${escapeHtml(x.unit)}</td>
+        <td class="mono text-sm">${fmtCurrency(x.total_value)}</td>
+      </tr>`).join('');
+  }
+}
+
+async function refreshAnomaliesBadge() {
+  try {
+    const s = await api('GET', '/finance/api/anomalies/summary');
+    const total = (s.floating_jobs || 0) + (s.extras || 0);
+    const badge = document.getElementById('anomalies-badge');
+    if (total > 0) { badge.textContent = total; badge.style.display = 'inline-block'; }
+    else { badge.style.display = 'none'; }
+  } catch(e) { /* silent */ }
+}
+
 // Init
 async function init() {
   // Carica clienti per select
@@ -318,6 +457,7 @@ async function init() {
   document.getElementById('inv-issue').value = new Date().toISOString().slice(0,10);
 
   loadInvoices();
+  refreshAnomaliesBadge();
 }
 
 init();
