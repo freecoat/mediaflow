@@ -1626,6 +1626,14 @@ async def update_booking_execution(
                 {"old": old_status.value if hasattr(old_status, "value") else old_status,
                  "new": execution_status.value,
                  "not_done_reason": b.not_done_reason})
+    # v3.4.41: sync JobCostLine.quantity_actual + total_accrued. Ogni
+    # cambio di stato esecuzione di/da `done` ricomputa l'aggregato dai
+    # booking done della cost line associata. Idempotente.
+    try:
+        from app.services.cost_line_sync import recompute_for_booking
+        recompute_for_booking(db, b)
+    except Exception as e:
+        print(f"[update_booking_execution] cost line sync failed: {e}")
     db.commit()
     db.refresh(b)
 
@@ -1794,6 +1802,21 @@ async def extend_booking(
             notified_count += len(ns)
         except Exception as e:
             print(f"[extend_booking] notify overtime failed: {e}")
+
+    # v3.4.41: se il booking esteso era già done, ricomputa la JobCostLine
+    # actual (la durata cambiata cambia le ore "fatte"). Idempotente.
+    try:
+        from app.services.cost_line_sync import recompute_for_booking
+        affected_ids = list(set(
+            [b.id] + list(result.overtime_pending_booking_ids or [])
+        ))
+        for bid in affected_ids:
+            bk = db.query(Booking).filter(Booking.id == bid).first()
+            if bk and bk.execution_status == BookingExecutionStatus.done:
+                recompute_for_booking(db, bk)
+        db.commit()
+    except Exception as e:
+        print(f"[extend_booking] cost line sync failed: {e}")
 
     payload = result.as_dict()
     payload["overtime_auto_approved_ids"] = auto_approved_ids

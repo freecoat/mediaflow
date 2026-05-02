@@ -1415,6 +1415,19 @@ function tlExitPasteMode() {
   }
 }
 
+// v3.4.41: hard block paste su ferie/malattia della risorsa target.
+// Usa _tlUnavailabilities popolato in renderTimeline. Coerente con drag block.
+function tlIsResourceBlockedHard(resourceId, startMs, endMs) {
+  const unavs = window._tlUnavailabilities || [];
+  return unavs.some(u => {
+    if (!['vacation','sick'].includes(u.kind)) return false;
+    if (u.resource_id !== resourceId) return false;
+    const us = new Date(u.start_date + 'T00:00:00').getTime();
+    const ue = new Date(u.end_date + 'T23:59:59').getTime();
+    return startMs < ue && endMs > us;
+  });
+}
+
 // Incolla il clipboard al `targetTime` (primo elemento atterra qui, gli altri
 // shiftati di pari offset preservando spaziature originali). Se `targetGroup`
 // è valorizzato, primo elemento va su quella risorsa; gli altri restano sulla
@@ -1429,13 +1442,18 @@ async function tlPasteAt(targetTime, targetGroup) {
   const ms = stepMin * 60 * 1000;
   target.setTime(Math.round(target.getTime() / ms) * ms);
   const offsetMs = target - baseStart;
-  let ok = 0, fail = 0;
+  let ok = 0, fail = 0, blocked = 0;
   for (let i = 0; i < items.length; i++) {
     const it = items[i];
     const p = it.extendedProps || {};
     const newStart = new Date(new Date(it.start).getTime() + offsetMs);
     const newEnd = new Date(new Date(it.end).getTime() + offsetMs);
     const ridForFirst = (i === 0 && typeof targetGroup === 'number') ? targetGroup : p.resource_id;
+    // v3.4.41: hard block se la risorsa è in ferie/malattia nel range target.
+    if (tlIsResourceBlockedHard(ridForFirst, newStart.getTime(), newEnd.getTime())) {
+      blocked++;
+      continue;
+    }
     const fd = new FormData();
     fd.append('assignments', JSON.stringify([{
       resource_id: ridForFirst,
@@ -1451,8 +1469,10 @@ async function tlPasteAt(targetTime, targetGroup) {
       ok++;
     } catch(_) { fail++; }
   }
-  toast(`${ok} incollat${ok === 1 ? 'o' : 'i'}${fail ? `, ${fail} errori (conflitti?)` : ''}`,
-        fail ? 'warning' : 'success', 4000);
+  let msg = `${ok} incollat${ok === 1 ? 'o' : 'i'}`;
+  if (blocked) msg += `, ${blocked} bloccat${blocked === 1 ? 'o' : 'i'} (ferie/malattia)`;
+  if (fail) msg += `, ${fail} errori (conflitti?)`;
+  toast(msg, (blocked || fail) ? 'warning' : 'success', 4500);
   renderTimeline(true);
 }
 

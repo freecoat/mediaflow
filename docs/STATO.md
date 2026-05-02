@@ -8,6 +8,10 @@
 
 ## Versione corrente
 
+**v3.4.41** — 2 maggio 2026 — Bug fix triplo (paste su ferie + Chrome timbratura + cost report ore done)
+
+#2: paste timeline planning ora hard-block su risorse in ferie/malattia (toast con counter bloccati). #3: Chrome `::-webkit-calendar-picker-indicator` soppresso su input time non-opt-out + `.mf-dt` grid con `minmax(0, …)` per layout robusto in modali stretti. #5: nuovo servizio `cost_line_sync.py` aggancia `JobCostLine.quantity_actual` + `total_accrued` ai booking `done` (hook in execution/extend + endpoint `POST /cost-report/api/job/{id}/reconcile-actuals` per fix retroattivo).
+
 **v3.4.40** — 2 maggio 2026 — Searchable dropdowns + Time picker popup
 
 Helper trasversali in `global.js`: ogni `<select>` non-multiple e senza `data-no-search` viene trasformato in combobox cercabile (input ricerca + dropdown filtrabile, keyboard ↑↓EnterEsc, sync programmatico via `select._mfSsRefresh()`). Ogni `<input type="time">` riceve popup HH:MM step 15min con quick-pick row. Ogni `<input type="datetime-local">` viene splittato in due input affiancati (date + time) con il time-picker custom applicato al sub-time. Stile coerente con palette indigo. Cache-buster `?v=3.4.40`.

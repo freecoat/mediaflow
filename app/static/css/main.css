@@ -925,11 +925,25 @@ input[type="number"]::-webkit-inner-spin-button {
 /* ── v3.4.40 — Wrapper datetime-local splittato (date + time) ── */
 .mf-dt {
   display: grid;
-  grid-template-columns: 1.5fr 1fr;
+  grid-template-columns: minmax(0, 1.5fr) minmax(0, 1fr);
   gap: 6px;
   width: 100%;
 }
-.mf-dt > .mf-dt-date, .mf-dt > .mf-dt-time { width: 100%; }
+.mf-dt > .mf-dt-date, .mf-dt > .mf-dt-time { width: 100%; min-width: 0; }
+/* v3.4.41: Chrome mostra una clock icon nativa su input[type=time] che
+   apre un picker proprio. Coesisterebbe col nostro popup custom (doppio
+   widget visivo). Sopprimiamo l'icona nativa solo dentro .mf-dt e su
+   tutti gli input[type=time] gestiti da mfTimePicker (escluso opt-out
+   data-no-time-picker che resta nativo). */
+input[type="time"]:not([data-no-time-picker="true"])::-webkit-calendar-picker-indicator {
+  display: none;
+  -webkit-appearance: none;
+}
+.mf-dt-date::-webkit-calendar-picker-indicator {
+  /* date picker nativo OK su Chrome (è solo il calendario, non doppia
+     col nostro), ma rimpiccioliamo lo spacing per restare in colonna. */
+  margin-left: 2px;
+}
 
 
 /* ── v3.4.40 — Time picker popup ──────────────────────────────── */

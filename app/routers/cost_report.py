@@ -224,6 +224,25 @@ async def job_cost_report(job_id: int, db: Session = Depends(get_db)):
     }
 
 
+@router.post("/api/job/{job_id}/reconcile-actuals")
+async def reconcile_actuals(job_id: int, db: Session = Depends(get_db)):
+    """v3.4.41 — Ricomputa quantity_actual + total_accrued di tutte le
+    JobCostLine del job aggregando i Booking con execution_status=done.
+    Utile per:
+      - Fix retroattivo su DB esistenti (booking marcati done prima della
+        v3.4.41 quando il sync non era ancora hookato).
+      - Riconciliazione manuale da UI ("Aggiorna ore") quando si vuole
+        sincronizzare il consuntivo dal flusso operativo.
+    Idempotente."""
+    from app.services.cost_line_sync import recompute_for_job
+    job = db.query(Job).filter(Job.id == job_id).first()
+    if not job:
+        raise HTTPException(404, "Job non trovato")
+    result = recompute_for_job(db, job_id)
+    db.commit()
+    return result
+
+
 @router.put("/api/job/{job_id}/cost-lines/{line_id}")
 async def update_cost_line(
     job_id: int, line_id: int,

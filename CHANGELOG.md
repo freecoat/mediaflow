@@ -1,5 +1,39 @@
 # MediaFlow — Changelog
 
+## v3.4.41 — Bug fix triplo (2 maggio 2026)
+
+### #2 — Hard block paste timeline su ferie/malattia
+
+`tlPasteAt` ora verifica `_tlUnavailabilities` per la risorsa target prima di creare il booking. Se la risorsa è in `vacation`/`sick` nel range di destinazione, il paste viene saltato e contato come bloccato. Toast: "N incollati, M bloccati (ferie/malattia), K errori".
+
+Coerente con il drag block: ferie/malattia sono `_blocking_hard`, festività restano `_blocking_soft` (workflow overtime).
+
+### #3 — Chrome: layout timbratura + clock icon nativa
+
+Due fix CSS in `main.css`:
+
+- `.mf-dt` ora usa `grid-template-columns: minmax(0, 1.5fr) minmax(0, 1fr)` invece di `1.5fr 1fr` → previene overflow e shrinking errato in modali stretti (Chrome era più aggressivo nel layout).
+- `input[type="time"]:not([data-no-time-picker="true"])::-webkit-calendar-picker-indicator { display: none; }` → sopprime l'icona clock nativa Chrome (apriva un secondo popup oltre al nostro custom).
+
+### #5 — Cost report: ore done ora maturate
+
+Bug: `JobCostLine.quantity_actual` e `total_accrued` non venivano aggiornati quando un booking veniva marcato `execution_status=done`. Risultato: il consuntivo restava a 0 nel cost report anche se gli operatori segnavano "fatto" nelle card "Le mie".
+
+Nuovo servizio `app/services/cost_line_sync.py`:
+- `recompute_cost_line_actual(db, jcl)`: aggrega tutti i booking `done` della cost line, calcola ore totali, converte all'unità della cost line (`hr`/`day` → conversione automatica con HOURS_PER_DAY=8) e aggiorna `quantity_actual` + `total_accrued`. Idempotente.
+- `recompute_for_booking(db, b)`: helper per gli hook negli endpoint planning.
+- `recompute_for_job(db, job_id)`: ricomputa tutte le cost lines di un job (per riconciliazione retroattiva).
+
+Hook in:
+- `PATCH /planning/api/bookings/{id}/execution` — su ogni cambio stato (done/not_done/planned/in_progress)
+- `PATCH /planning/api/bookings/{id}/extend` — su estensione durata di booking già done
+
+Endpoint nuovo: `POST /cost-report/api/job/{id}/reconcile-actuals` per fix retroattivo via UI o curl. Necessario su DB esistenti dove i booking erano stati marcati `done` prima di questa fix.
+
+Unità non temporali (`fix`, `lot`, ecc.): non aggiornate automaticamente, vanno editate manualmente.
+
+---
+
 ## v3.4.40 — Searchable dropdowns + Time picker popup (2 maggio 2026)
 
 Trasversale UI: ogni `<select>` diventa cercabile, ogni `<input type="time">` (e ogni `datetime-local`) ha un popup HH:MM con quick-pick.
