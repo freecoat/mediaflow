@@ -1,5 +1,34 @@
 # MediaFlow — Changelog
 
+## v3.4.51 — Reverse-flow: job extra da booking su progetto senza quote (3 maggio 2026)
+
+Cambio architetturale richiesto da Matteo dopo audit del job orfano "Spot istituzionale Sky" con `budget_quoted=18000` arbitrario nel seed.
+
+**Principio fissato**: un Job non nasce mai dal nulla con un valore commerciale arbitrario. Solo due genesi legittime:
+- **Forward (canonica)**: Quote.approved → Job auto-creato, `budget_quoted` = totale quote, `JobCostLine` da `QuoteLine`
+- **Reverse (eccezione)**: booking su progetto senza quote → modal blocking → utente sceglie "Nuovo job extra" o "Aggiungi al job extra esistente" + voce listino + qty/prezzo. Job nasce con `budget_quoted=0`; ogni `JobCostLine(is_extra=True)` ricalcola `budget_quoted = sum(extras.total_expected)`. Job appare in `/finance > Anomalie > Job orfani` finché non viene gestito.
+
+Casi d'uso target: progetti interni di manutenzione/test/R&D, lavorazioni straordinarie su progetti normalmente non quotati (es. sale-rooms ricorrenti con job per "manutenzione ordinaria mese N" + job a parte per "manutenzione straordinaria").
+
+**Cosa è stato aggiunto**:
+- `app/services/job_extras.py` — helpers `next_job_code`, `recompute_budget_from_extras`, `create_extra_job_for_project`, `add_extra_cost_line`, `hydrate_from_price_item`. `recompute_budget_from_extras` è no-op se il job ha `quote_id` (intoccabile per job quote-driven).
+- `GET /projects/api/{id}/job-context` — ritorna `has_active_quote`, `is_internal`, `extra_jobs`, `quoted_jobs`. Usato dal client per popolare il sub-modal.
+- `POST /jobs/api/reverse-extra` — accetta `mode=new|existing`, crea/riusa Job + JobCostLine extra in singola transazione. `mode=existing` richiede che il job target sia reverse-flow (no `quote_id`); altrimenti errore esplicito ("usa l'editor della quote").
+- `ProjectType` "Interno (test/manutenzione/R&D) — niente quote" come label esplicita nel form `/projects` + filter. Resta una convenzione (qualsiasi progetto senza quote può accedere al reverse-flow), il tipo `internal` serve solo a etichettare.
+
+**UI** in `/planning` modal booking:
+- CTA persistente "+ Crea **job extra** (progetto senza quotazione)…" sempre in fondo a `tlb-job-suggestions` (anche se ci sono già match)
+- Sub-modal `modal-tlb-extra-job` con form: progetto + modalità (new/existing) + titolo job + voce listino (autocomplete con cache `_exjPriceItems` lazy-loaded da `/pricelist/api/items`) + qty + unità + prezzo + note
+- Warning arancione automatico se il progetto scelto ha quote attive ("usa l'editor della quote piuttosto")
+- Disabilita radio "existing" se il progetto non ha già job extra
+- Salva → push del nuovo job in `JOBS_SEED` (senza reload pagina) + auto-seleziona job + cost line nel modal booking principale
+
+**Bonifica seed** (`scripts/seed_demo.py`):
+- Rimosso Job 2024-0042 "Spot istituzionale Sky" con `budget_quoted=18000` arbitrario. Il progetto Sky resta deliberatamente senza Job per testare il reverse-flow.
+- `print` finale aggiornato: "1 quotazione approvata, 1 job (Mare Nostrum)".
+
+Cache-buster bumpato a `3.4.51`. Niente migrazione DB necessaria (no nuove colonne).
+
 ## v3.4.50.3 — Elimina progetto (solo se senza quotazioni) (2 maggio 2026)
 
 Tasto 🗑 nella riga progetto in `/projects` (colonna azioni, accanto a "Apri →"). Visibile solo a chi ha `can_view_finance` (admin/manager/producer/accounting).

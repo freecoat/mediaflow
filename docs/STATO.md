@@ -8,6 +8,10 @@
 
 ## Versione corrente
 
+**v3.4.51** — 3 maggio 2026 — Reverse-flow: job extra da booking su progetto senza quote
+
+Cambio architetturale: un Job non nasce mai dal nulla con valore commerciale arbitrario. Forward (Quote.approved → Job) o Reverse (Booking su progetto senza quote → modal blocking → Job extra creato/riusato + JobCostLine extra + price_item). Service `app/services/job_extras.py`. Endpoint `GET /projects/api/{id}/job-context` + `POST /jobs/api/reverse-extra`. Sub-modal `modal-tlb-extra-job` in /planning con CTA in fondo al job-search. ProjectType `internal` come label. Bonifica seed: rimosso Job Sky orfano con budget arbitrario. Niente migrazione DB.
+
 **v3.4.50.3** — 2 maggio 2026 — Elimina progetto (solo se senza quotazioni)
 
 Tasto 🗑 in colonna azioni `/projects` accanto a "Apri →". Visibile a `can_view_finance`. Disabilitato + tooltip se `quotes_count > 0`. Backend `DELETE /projects/api/{id}` ora richiede permesso e blocca se `p.quotes` (oltre al pre-esistente check su `p.jobs`).

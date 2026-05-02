@@ -600,10 +600,12 @@ def seed():
     db.add(InvoiceLine(invoice_id=inv.id, description="Acconto 20% Project Start",
                        quantity=1, unit_price=inv.subtotal, total=inv.subtotal))
 
-    db.add(Job(code="2024-0042", title="Spot istituzionale Sky",
-               client_id=sky.id, project_id=project_sky.id,
-               status=JobStatus.invoiced, start_date=today - timedelta(days=90),
-               end_date=today - timedelta(days=10), budget_quoted=18000))
+    # NB: il progetto Sky resta deliberatamente senza Job — è scenario di test
+    # per il flusso "reverse" (v3.4.51): un booking sul progetto attiva il modal
+    # "Crea job extra (progetto senza quotazione)". Prima della v3.4.51 c'era qui
+    # un Job 2024-0042 con budget arbitrario 18000€: non più ammesso (un Job
+    # senza quote non può avere valore commerciale dal nulla, deve nascere da
+    # un booking che genera un JobCostLine extra).
 
     for t in ["raw","finale","client-delivery","broll","interview","dailies","grade","mix","dcp","vfx"]:
         db.add(Tag(name=t))
@@ -615,7 +617,8 @@ def seed():
     print(f"  - {len(DEFAULT_DEPARTMENTS)} reparti: DI-Video, VFX, Audio, Commercial")
     print(f"  - {items_count} voci listino in {len(LISTINO_GENERICO)} categorie (prezzi mercato IT 2026)")
     print(f"  - 1 delivery template di esempio")
-    print(f"  - 3 progetti, 1 quotazione approvata, 1 job attivo")
+    print(f"  - 3 progetti (1 con quote→job, 1 senza job — scenario reverse-flow)")
+    print(f"  - 1 quotazione approvata, 1 job (Mare Nostrum)")
     print()
     print("Credenziali:")
     print("  admin@mediaflow.it / admin123")

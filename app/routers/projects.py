@@ -165,6 +165,33 @@ async def update_project(
     return {"id": p.id}
 
 
+@router.get("/api/{project_id}/job-context")
+async def get_project_job_context(project_id: int, db: Session = Depends(get_db)):
+    """Contesto job di un progetto per il flusso 'reverse' (booking → extra job).
+
+    Usato dal modal booking quando l'utente vuole creare un booking ma il
+    progetto non ha quote attive: il client mostra le opzioni disponibili.
+    """
+    p = db.query(Project).options(
+        joinedload(Project.quotes), joinedload(Project.jobs)
+    ).filter(Project.id == project_id).first()
+    if not p:
+        raise HTTPException(404, "Progetto non trovato")
+    has_active_quote = any(
+        (q.status or "") in ("draft", "sent", "approved") for q in p.quotes
+    )
+    extra_jobs = [j for j in p.jobs if j.quote_id is None]
+    quoted_jobs = [j for j in p.jobs if j.quote_id is not None]
+    return {
+        "project_id": p.id, "project_code": p.code, "project_title": p.title,
+        "project_type": p.project_type,
+        "is_internal": (p.project_type or "") == "internal",
+        "has_active_quote": has_active_quote,
+        "extra_jobs": [{"id": j.id, "code": j.code, "title": j.title} for j in extra_jobs],
+        "quoted_jobs": [{"id": j.id, "code": j.code, "title": j.title} for j in quoted_jobs],
+    }
+
+
 @router.delete("/api/{project_id}")
 async def delete_project(project_id: int, request: Request, db: Session = Depends(get_db)):
     if not can_view_finance(current_user_optional(request)):

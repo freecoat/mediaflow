@@ -917,6 +917,90 @@
   </div>
 </div>
 
+<!-- Sub-modal: crea job extra (reverse-flow) v3.4.51 -->
+<div class="modal-overlay" id="modal-tlb-extra-job" style="z-index:300;">
+  <div class="modal" style="max-width:560px;">
+    <div class="modal-header">
+      <span class="modal-title">⚠ Crea job extra (progetto senza quotazione)</span>
+      <button class="btn btn-ghost btn-icon" onclick="closeModal('modal-tlb-extra-job')">✕</button>
+    </div>
+    <div class="modal-body">
+      <div style="background:rgba(245,158,11,0.08); border:1px solid rgba(245,158,11,0.3); border-radius:6px; padding:10px 12px; font-size:12px; color:var(--text2); margin-bottom:12px;">
+        Stai per creare un <b>Job extra</b> su un progetto senza quotazione. Il valore commerciale del job nasce dalle voci di listino che inserisci qui (no budget arbitrario). Apparirà in <b>/finance → Anomalie → Job orfani</b> finché non verrà gestito (fattura extra o scrematura nel cost report).
+      </div>
+
+      <div class="form-group">
+        <label class="form-label">Progetto *</label>
+        <select id="exj-project" class="form-select" onchange="exjOnProjectChange()">
+          <option value="">— scegli progetto —</option>
+        </select>
+        <div id="exj-project-meta" style="font-size:11px; color:var(--text3); margin-top:4px;"></div>
+      </div>
+
+      <div class="form-group">
+        <label class="form-label">Modalità *</label>
+        <div style="display:flex; gap:14px; align-items:center; flex-wrap:wrap;">
+          <label style="display:flex; align-items:center; gap:6px; cursor:pointer; font-size:13px;">
+            <input type="radio" name="exj-mode" value="new" checked onchange="exjOnModeChange()"> Nuovo job extra
+          </label>
+          <label style="display:flex; align-items:center; gap:6px; cursor:pointer; font-size:13px;">
+            <input type="radio" name="exj-mode" value="existing" onchange="exjOnModeChange()"> Aggiungi a job esistente
+          </label>
+        </div>
+      </div>
+
+      <div class="form-group" id="exj-new-group">
+        <label class="form-label">Titolo nuovo job</label>
+        <input type="text" id="exj-new-title" class="form-input" placeholder="es. Manutenzione ordinaria — Maggio 2026">
+        <div style="font-size:11px; color:var(--text3); margin-top:4px;">Lascia vuoto per default "Extra — {progetto}"</div>
+      </div>
+
+      <div class="form-group" id="exj-existing-group" style="display:none;">
+        <label class="form-label">Job extra esistente *</label>
+        <select id="exj-existing-job" class="form-select">
+          <option value="">— scegli job —</option>
+        </select>
+      </div>
+
+      <hr style="border:none; border-top:1px solid var(--border,#2a2e3d); margin:14px 0;">
+
+      <div style="font-weight:600; font-size:13px; margin-bottom:8px;">Voce di listino (lavorazione extra)</div>
+
+      <div class="form-group" style="position:relative;">
+        <label class="form-label">Cerca voce listino *</label>
+        <input type="text" id="exj-pi-search" class="form-input" placeholder="es. Color HDR, Foley editing…" autocomplete="off" oninput="exjPISearch()" onfocus="exjPISearch()">
+        <input type="hidden" id="exj-pi-id">
+        <div id="exj-pi-suggestions" style="display:none; position:absolute; top:100%; left:0; right:0; background:var(--bg-elev,#1a1d29); border:1px solid var(--border,#2a2e3d); border-radius:6px; max-height:200px; overflow-y:auto; z-index:100; box-shadow:0 4px 12px rgba(0,0,0,.3); margin-top:2px;"></div>
+        <div style="font-size:11px; color:var(--text3); margin-top:4px;">Necessaria: serve a dare valore al job. Se non c'è la voce giusta, creala prima in /pricelist.</div>
+      </div>
+
+      <div class="form-row">
+        <div class="form-group">
+          <label class="form-label">Quantità *</label>
+          <input type="number" id="exj-qty" class="form-input" step="0.5" min="0.5" value="1">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Unità</label>
+          <input type="text" id="exj-unit" class="form-input" placeholder="day / hour / pcs">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Prezzo unitario (€)</label>
+          <input type="number" id="exj-unit-price" class="form-input" step="0.01" min="0">
+        </div>
+      </div>
+
+      <div class="form-group">
+        <label class="form-label">Note (opzionale)</label>
+        <textarea id="exj-notes" class="form-input" rows="2" style="resize:vertical;" placeholder="es. richiesta urgente cliente, R&D interno…"></textarea>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeModal('modal-tlb-extra-job')">Annulla</button>
+      <button class="btn btn-primary" id="exj-save" onclick="exjSave()">Crea job extra + lavorazione</button>
+    </div>
+  </div>
+</div>
+
 <!-- Time picker custom (riusabile per tutti i campi time) -->
 <div id="tlb-tp-popup">
   <div class="tp-cols">
@@ -3378,8 +3462,12 @@ function tlbJobSearch() {
     );
   }
   candidates = candidates.slice(0, 12);
+  // CTA reverse-flow sempre in fondo (v3.4.51)
+  const extraCTA = `<div onmousedown="exjOpen()" style="padding:9px 10px; cursor:pointer; font-size:12px; background:rgba(245,158,11,0.06); border-top:1px solid var(--border,#2a2e3d); color:#f59e0b; font-weight:500;">
+    + Crea <b>job extra</b> (progetto senza quotazione)…
+  </div>`;
   if (!candidates.length) {
-    box.innerHTML = '<div style="padding:10px; color:var(--text3); font-size:12px;">Nessun job trovato</div>';
+    box.innerHTML = '<div style="padding:10px; color:var(--text3); font-size:12px;">Nessun job trovato</div>' + extraCTA;
     box.style.display = '';
     return;
   }
@@ -3393,8 +3481,180 @@ function tlbJobSearch() {
         ${escapeHtml(j.client||'—')} · ${escapeHtml(proj)}
       </div>
     </div>`;
-  }).join('');
+  }).join('') + extraCTA;
   box.style.display = '';
+}
+
+// ── Reverse-flow: crea job extra da booking (v3.4.51) ─────────
+async function exjOpen() {
+  document.getElementById('tlb-job-suggestions').style.display = 'none';
+  const sel = document.getElementById('exj-project');
+  sel.innerHTML = '<option value="">— scegli progetto —</option>' +
+    PROJECTS_SEED.map(p =>
+      `<option value="${p.id}">${escapeHtml(p.code)} — ${escapeHtml(p.title||'')}${p.client_name?' · '+escapeHtml(p.client_name):''}</option>`
+    ).join('');
+  document.getElementById('exj-project-meta').textContent = '';
+  document.getElementById('exj-new-title').value = '';
+  document.getElementById('exj-pi-search').value = '';
+  document.getElementById('exj-pi-id').value = '';
+  document.getElementById('exj-qty').value = '1';
+  document.getElementById('exj-unit').value = '';
+  document.getElementById('exj-unit-price').value = '';
+  document.getElementById('exj-notes').value = '';
+  document.querySelector('input[name="exj-mode"][value="new"]').checked = true;
+  exjOnModeChange();
+  // Lazy-load price items
+  if (!window._exjPriceItems) {
+    try {
+      window._exjPriceItems = await api('GET', '/pricelist/api/items?active_only=true');
+    } catch(e) {
+      window._exjPriceItems = [];
+    }
+  }
+  openModal('modal-tlb-extra-job');
+}
+
+function exjOnModeChange() {
+  const mode = document.querySelector('input[name="exj-mode"]:checked').value;
+  document.getElementById('exj-new-group').style.display = mode === 'new' ? '' : 'none';
+  document.getElementById('exj-existing-group').style.display = mode === 'existing' ? '' : 'none';
+}
+
+async function exjOnProjectChange() {
+  const pid = document.getElementById('exj-project').value;
+  const meta = document.getElementById('exj-project-meta');
+  const existSel = document.getElementById('exj-existing-job');
+  existSel.innerHTML = '<option value="">— scegli job —</option>';
+  if (!pid) { meta.textContent = ''; return; }
+  try {
+    const ctx = await api('GET', `/projects/api/${pid}/job-context`);
+    let bits = [];
+    if (ctx.has_active_quote) bits.push('⚠ ATTENZIONE: questo progetto HA quote attive — il flusso reverse non è raccomandato (usa l\'editor della quote)');
+    if (ctx.is_internal) bits.push('✓ Progetto interno');
+    if (ctx.extra_jobs.length) bits.push(`${ctx.extra_jobs.length} job extra esistente${ctx.extra_jobs.length===1?'':'i'}`);
+    meta.textContent = bits.join(' · ');
+    meta.style.color = ctx.has_active_quote ? '#f59e0b' : 'var(--text3)';
+    if (ctx.extra_jobs.length) {
+      existSel.innerHTML = '<option value="">— scegli job —</option>' + ctx.extra_jobs.map(j =>
+        `<option value="${j.id}">${escapeHtml(j.code)} — ${escapeHtml(j.title)}</option>`
+      ).join('');
+    } else {
+      // Forza modalità "new" se non ci sono job esistenti
+      document.querySelector('input[name="exj-mode"][value="existing"]').disabled = true;
+      document.querySelector('input[name="exj-mode"][value="new"]').checked = true;
+      exjOnModeChange();
+      return;
+    }
+    document.querySelector('input[name="exj-mode"][value="existing"]').disabled = false;
+  } catch(e) {
+    meta.textContent = 'Errore caricamento contesto: ' + e.message;
+    meta.style.color = '#ef4444';
+  }
+}
+
+function exjPISearch() {
+  const q = (document.getElementById('exj-pi-search').value || '').toLowerCase().trim();
+  const box = document.getElementById('exj-pi-suggestions');
+  const items = window._exjPriceItems || [];
+  let candidates = items;
+  if (q) {
+    candidates = items.filter(it =>
+      (it.name||'').toLowerCase().includes(q) ||
+      (it.category||'').toLowerCase().includes(q) ||
+      (it.description||'').toLowerCase().includes(q) ||
+      (it.keywords||[]).some(k => (k||'').toLowerCase().includes(q))
+    );
+  }
+  candidates = candidates.slice(0, 12);
+  if (!candidates.length) {
+    box.innerHTML = '<div style="padding:10px; color:var(--text3); font-size:12px;">Nessuna voce trovata</div>';
+    box.style.display = '';
+    return;
+  }
+  box.innerHTML = candidates.map(it =>
+    `<div onmousedown="exjSelectPI(${it.id})" style="padding:8px 10px; cursor:pointer; border-bottom:1px solid var(--border,#2a2e3d); font-size:12px;">
+      <div style="font-weight:500; color:var(--text,#eee);">${escapeHtml(it.name)}</div>
+      <div style="color:var(--text3,#888); font-size:11px; margin-top:2px;">
+        ${escapeHtml(it.category||'—')} · ${(it.price_list||0).toFixed(2)} €/${escapeHtml(it.unit||'day')}
+      </div>
+    </div>`
+  ).join('');
+  box.style.display = '';
+}
+
+function exjSelectPI(itemId) {
+  const it = (window._exjPriceItems || []).find(x => x.id === itemId);
+  if (!it) return;
+  document.getElementById('exj-pi-id').value = it.id;
+  document.getElementById('exj-pi-search').value = it.name;
+  document.getElementById('exj-pi-suggestions').style.display = 'none';
+  if (!document.getElementById('exj-unit').value) document.getElementById('exj-unit').value = it.unit || 'day';
+  if (!document.getElementById('exj-unit-price').value) document.getElementById('exj-unit-price').value = it.price_list || 0;
+}
+
+async function exjSave() {
+  const pid = document.getElementById('exj-project').value;
+  if (!pid) { toast('Scegli un progetto', 'error'); return; }
+  const mode = document.querySelector('input[name="exj-mode"]:checked').value;
+  const piId = document.getElementById('exj-pi-id').value;
+  const search = document.getElementById('exj-pi-search').value.trim();
+  if (!piId && !search) { toast('Scegli una voce di listino', 'error'); return; }
+  const qty = parseFloat(document.getElementById('exj-qty').value || '0');
+  if (qty <= 0) { toast('Quantità deve essere > 0', 'error'); return; }
+
+  const fd = new FormData();
+  fd.append('project_id', pid);
+  fd.append('mode', mode);
+  if (mode === 'existing') {
+    const jid = document.getElementById('exj-existing-job').value;
+    if (!jid) { toast('Scegli un job esistente', 'error'); return; }
+    fd.append('job_id', jid);
+  } else {
+    const newTitle = document.getElementById('exj-new-title').value.trim();
+    if (newTitle) fd.append('new_job_title', newTitle);
+  }
+  if (piId) fd.append('price_item_id', piId);
+  fd.append('description', search || '');
+  fd.append('quantity', qty);
+  const unit = document.getElementById('exj-unit').value.trim();
+  if (unit) fd.append('unit', unit);
+  const up = document.getElementById('exj-unit-price').value;
+  if (up) fd.append('unit_price', up);
+  const notes = document.getElementById('exj-notes').value.trim();
+  if (notes) fd.append('notes', notes);
+
+  const btn = document.getElementById('exj-save');
+  btn.disabled = true; const orig = btn.textContent;
+  btn.textContent = 'Creazione…';
+  try {
+    const r = await api('POST', '/jobs/api/reverse-extra', fd);
+    toast(`${r.is_new_job ? 'Job extra creato' : 'Lavorazione aggiunta a job esistente'}: ${r.job_code}`, 'success');
+    // Push nuovo job in JOBS_SEED se nuovo, così l'autocomplete lo trova
+    if (r.is_new_job && !JOBS_SEED.find(j => j.id === r.job_id)) {
+      JOBS_SEED.push({
+        id: r.job_id, code: r.job_code, title: r.job_title,
+        client: r.client_name || '', project_code: r.project_code || '', project_title: r.project_title || '',
+      });
+    }
+    closeModal('modal-tlb-extra-job');
+    // Auto-seleziona il job nel modal booking + cost line
+    document.getElementById('tlb-job-id').value = r.job_id;
+    document.getElementById('tlb-job-search').value = `${r.job_code} — ${r.job_title}`;
+    // Ricarica cost lines del job e seleziona quella nuova
+    try {
+      const jdata = await api('GET', `/jobs/api/${r.job_id}`);
+      const lines = jdata.cost_lines || jdata.lines || [];
+      const lineSel = document.getElementById('tlb-line');
+      const lineGrp = document.getElementById('tlb-line-group');
+      lineSel.innerHTML = '<option value="">— nessuna —</option>' +
+        lines.map(l => `<option value="${l.id}">${escapeHtml(l.description||('Lavorazione #'+l.id))}</option>`).join('');
+      lineSel.value = String(r.cost_line_id);
+      lineGrp.style.display = '';
+    } catch(e) {}
+  } catch(e) {
+    toast(e.message, 'error');
+    btn.disabled = false; btn.textContent = orig;
+  }
 }
 
 async function tlbSelectJob(jobId) {
