@@ -169,3 +169,341 @@ const ASSET_ICONS = {
   video: '🎬', audio: '🎵', image: '🖼️', document: '📄', other: '📦',
 };
 function assetIcon(type) { return ASSET_ICONS[type] || '📦'; }
+
+
+// ── v3.4.40 — Searchable select (autocomplete) ────────────────
+//
+// Trasforma ogni <select> in un combobox cercabile. Il <select> originale
+// resta nel DOM (display:none), in modo che form/api lo leggano normalmente.
+// Auto-attach su DOMContentLoaded a tutti i <select> NON `multiple` e
+// senza attributo `data-no-search`. Per select popolati dinamicamente,
+// chiamare `mfApplySearchable(parentEl)` dopo aver settato innerHTML.
+
+const _MF_SS_INSTANCES = new WeakMap();
+
+function mfMakeSearchableSelect(selectEl) {
+  if (_MF_SS_INSTANCES.has(selectEl)) return _MF_SS_INSTANCES.get(selectEl);
+  if (selectEl.multiple) return null;
+  if (selectEl.dataset.noSearch === 'true') return null;
+
+  const wrap = document.createElement('div');
+  wrap.className = 'mf-ss';
+  if (selectEl.style.width) wrap.style.width = selectEl.style.width;
+
+  const display = document.createElement('button');
+  display.type = 'button';
+  display.className = 'mf-ss-display form-select';
+  display.setAttribute('aria-haspopup', 'listbox');
+  display.setAttribute('aria-expanded', 'false');
+
+  const dropdown = document.createElement('div');
+  dropdown.className = 'mf-ss-dropdown';
+  dropdown.setAttribute('role', 'listbox');
+
+  const search = document.createElement('input');
+  search.type = 'text';
+  search.className = 'mf-ss-search';
+  search.placeholder = 'Cerca…';
+  search.setAttribute('autocomplete', 'off');
+
+  const list = document.createElement('div');
+  list.className = 'mf-ss-list';
+
+  dropdown.appendChild(search);
+  dropdown.appendChild(list);
+  wrap.appendChild(display);
+  wrap.appendChild(dropdown);
+
+  selectEl.parentNode.insertBefore(wrap, selectEl);
+  wrap.insertBefore(selectEl, wrap.firstChild);
+  selectEl.classList.add('mf-ss-native');
+
+  let activeIdx = -1;
+
+  function refreshDisplay() {
+    const opt = selectEl.options[selectEl.selectedIndex];
+    const txt = opt ? (opt.textContent || '').trim() : '';
+    if (!txt || (opt && !opt.value && opt.textContent.trim().startsWith('—'))) {
+      display.classList.add('mf-ss-placeholder');
+      display.textContent = txt || '— seleziona —';
+    } else {
+      display.classList.remove('mf-ss-placeholder');
+      display.textContent = txt;
+    }
+  }
+
+  function buildList(filter) {
+    list.innerHTML = '';
+    activeIdx = -1;
+    const f = (filter || '').toLowerCase().trim();
+    const opts = Array.from(selectEl.options);
+    const matches = opts.map((o, i) => ({ o, i })).filter(({ o }) => {
+      const t = (o.textContent || '').toLowerCase();
+      return !f || t.includes(f);
+    });
+    if (!matches.length) {
+      const empty = document.createElement('div');
+      empty.className = 'mf-ss-empty';
+      empty.textContent = 'Nessun risultato';
+      list.appendChild(empty);
+      return;
+    }
+    matches.forEach(({ o, i }) => {
+      const item = document.createElement('div');
+      item.className = 'mf-ss-item' + (i === selectEl.selectedIndex ? ' mf-ss-selected' : '');
+      item.setAttribute('role', 'option');
+      item.dataset.idx = i;
+      item.textContent = o.textContent;
+      if (o.disabled) item.classList.add('mf-ss-disabled');
+      item.addEventListener('mousedown', (ev) => {
+        ev.preventDefault();
+        if (o.disabled) return;
+        pick(i);
+      });
+      list.appendChild(item);
+    });
+  }
+
+  function pick(idx) {
+    selectEl.selectedIndex = idx;
+    selectEl.dispatchEvent(new Event('change', { bubbles: true }));
+    refreshDisplay();
+    close();
+  }
+
+  function open() {
+    buildList('');
+    wrap.classList.add('open');
+    display.setAttribute('aria-expanded', 'true');
+    const rect = wrap.getBoundingClientRect();
+    const below = window.innerHeight - rect.bottom;
+    dropdown.classList.toggle('mf-ss-up', below < 220 && rect.top > 220);
+    setTimeout(() => search.focus(), 0);
+  }
+
+  function close() {
+    wrap.classList.remove('open');
+    display.setAttribute('aria-expanded', 'false');
+    search.value = '';
+  }
+
+  display.addEventListener('click', (e) => {
+    e.preventDefault();
+    if (selectEl.disabled) return;
+    if (wrap.classList.contains('open')) close();
+    else open();
+  });
+
+  search.addEventListener('input', () => buildList(search.value));
+  search.addEventListener('keydown', (e) => {
+    const items = list.querySelectorAll('.mf-ss-item:not(.mf-ss-disabled)');
+    if (e.key === 'ArrowDown') {
+      e.preventDefault();
+      activeIdx = Math.min(items.length - 1, activeIdx + 1);
+      items.forEach((el, k) => el.classList.toggle('mf-ss-active', k === activeIdx));
+      if (items[activeIdx]) items[activeIdx].scrollIntoView({ block: 'nearest' });
+    } else if (e.key === 'ArrowUp') {
+      e.preventDefault();
+      activeIdx = Math.max(0, activeIdx - 1);
+      items.forEach((el, k) => el.classList.toggle('mf-ss-active', k === activeIdx));
+      if (items[activeIdx]) items[activeIdx].scrollIntoView({ block: 'nearest' });
+    } else if (e.key === 'Enter') {
+      e.preventDefault();
+      if (activeIdx >= 0 && items[activeIdx]) {
+        pick(parseInt(items[activeIdx].dataset.idx, 10));
+      } else if (items.length === 1) {
+        pick(parseInt(items[0].dataset.idx, 10));
+      }
+    } else if (e.key === 'Escape') {
+      e.preventDefault();
+      close(); display.focus();
+    }
+  });
+
+  document.addEventListener('mousedown', (e) => {
+    if (!wrap.contains(e.target) && wrap.classList.contains('open')) close();
+  });
+
+  // Sync display quando il select viene ripopolato dinamicamente
+  const observer = new MutationObserver(() => refreshDisplay());
+  observer.observe(selectEl, { childList: true, attributes: true, attributeFilter: ['value'] });
+  selectEl.addEventListener('change', refreshDisplay);
+  // API esterna: chi setta `select.value = ...` programmaticamente
+  // (senza dispatch change) può chiamare select._mfSsRefresh() per
+  // riallineare il display, oppure mfApplySearchable() che lo fa per tutti.
+  selectEl._mfSsRefresh = refreshDisplay;
+
+  refreshDisplay();
+  _MF_SS_INSTANCES.set(selectEl, wrap);
+  return wrap;
+}
+
+function mfApplySearchable(root) {
+  root = root || document;
+  const sels = root.querySelectorAll('select');
+  sels.forEach(sel => {
+    if (sel.classList.contains('mf-ss-native')) {
+      // già wrappato: rinfrescà il display per riflettere `value=` programmatico
+      if (sel._mfSsRefresh) sel._mfSsRefresh();
+    } else {
+      mfMakeSearchableSelect(sel);
+    }
+  });
+}
+
+
+// ── v3.4.40 — Time picker popup ───────────────────────────────
+//
+// Popup HH:MM grid che si attacca a ogni <input type="time"> non
+// `data-no-time-picker`. Step 15min default (override `data-time-step`).
+// Quick row con orari frequenti. Coesiste col native (typing manuale OK).
+
+const _MF_TP_QUICK = ['08:00','09:00','12:00','13:00','14:00','17:00','18:00','20:00'];
+let _mfTpHost = null;
+
+function _mfTpEnsureHost() {
+  if (_mfTpHost) return _mfTpHost;
+  const el = document.createElement('div');
+  el.className = 'mf-tp-popup';
+  el.style.display = 'none';
+  document.body.appendChild(el);
+  _mfTpHost = el;
+  document.addEventListener('mousedown', (e) => {
+    if (_mfTpHost.style.display === 'none') return;
+    if (!_mfTpHost.contains(e.target) && !e.target.matches('input[type="time"]')) {
+      _mfTpHost.style.display = 'none';
+    }
+  });
+  return el;
+}
+
+function _mfTpRender(input) {
+  const host = _mfTpEnsureHost();
+  const step = parseInt(input.dataset.timeStep || '15', 10);
+  const cur = input.value || '';
+  let html = '<div class="mf-tp-quick">';
+  _MF_TP_QUICK.forEach(t => {
+    html += `<button type="button" class="mf-tp-q ${t === cur ? 'active' : ''}" data-t="${t}">${t}</button>`;
+  });
+  html += '</div><div class="mf-tp-grid">';
+  for (let h = 0; h < 24; h++) {
+    for (let m = 0; m < 60; m += step) {
+      const t = `${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}`;
+      html += `<button type="button" class="mf-tp-cell ${t === cur ? 'active' : ''}" data-t="${t}">${t}</button>`;
+    }
+  }
+  html += '</div>';
+  host.innerHTML = html;
+  host.querySelectorAll('button[data-t]').forEach(b => {
+    b.addEventListener('mousedown', (ev) => {
+      ev.preventDefault();
+      input.value = b.dataset.t;
+      input.dispatchEvent(new Event('change', { bubbles: true }));
+      input.dispatchEvent(new Event('input', { bubbles: true }));
+      host.style.display = 'none';
+    });
+  });
+  const r = input.getBoundingClientRect();
+  host.style.display = 'block';
+  const ph = host.offsetHeight;
+  const below = window.innerHeight - r.bottom;
+  host.style.left = `${Math.max(8, Math.min(window.innerWidth - host.offsetWidth - 8, r.left)) + window.scrollX}px`;
+  host.style.top = (below < ph + 12 && r.top > ph + 12)
+    ? `${r.top - ph - 4 + window.scrollY}px`
+    : `${r.bottom + 4 + window.scrollY}px`;
+}
+
+function mfAttachTimePicker(input) {
+  if (input._mfTpAttached) return;
+  if (input.dataset.noTimePicker === 'true') return;
+  input._mfTpAttached = true;
+  input.addEventListener('focus', () => _mfTpRender(input));
+  input.addEventListener('click', () => _mfTpRender(input));
+}
+
+function mfApplyTimePickers(root) {
+  root = root || document;
+  root.querySelectorAll('input[type="time"]').forEach(mfAttachTimePicker);
+  root.querySelectorAll('input[type="datetime-local"]').forEach(mfWrapDateTimeLocal);
+}
+
+
+// Wrappa <input type="datetime-local"> in due input affiancati (date + time)
+// per permettere al time-picker custom di operare sul time. Mantiene
+// l'originale (hidden) come "verità" che riceve i value combinati e dispatcha
+// `input`/`change` come prima → handlers oninput="..." continuano a funzionare.
+function mfWrapDateTimeLocal(input) {
+  if (input._mfDtAttached) {
+    // Già wrappato → ri-allinea i sub-input al value corrente del nascosto
+    if (input._mfDtReparse) input._mfDtReparse();
+    return;
+  }
+  if (input.dataset.noMfDt === 'true') return;
+  input._mfDtAttached = true;
+
+  const wrap = document.createElement('div');
+  wrap.className = 'mf-dt';
+  const dateInp = document.createElement('input');
+  dateInp.type = 'date';
+  dateInp.className = 'form-input mf-dt-date';
+  const timeInp = document.createElement('input');
+  timeInp.type = 'time';
+  timeInp.className = 'form-input mf-dt-time';
+  timeInp.step = input.step || '900';
+
+  input.parentNode.insertBefore(wrap, input);
+  wrap.appendChild(dateInp);
+  wrap.appendChild(timeInp);
+  wrap.appendChild(input);
+  input.style.display = 'none';
+
+  function parseValue() {
+    const v = input.value || '';
+    // Formato YYYY-MM-DDTHH:MM[:SS]
+    const m = v.match(/^(\d{4}-\d{2}-\d{2})T(\d{2}:\d{2})/);
+    if (m) { dateInp.value = m[1]; timeInp.value = m[2]; }
+    else { dateInp.value = ''; timeInp.value = ''; }
+  }
+  function syncBack() {
+    if (dateInp.value && timeInp.value) {
+      input.value = `${dateInp.value}T${timeInp.value}`;
+    } else {
+      input.value = '';
+    }
+    input.dispatchEvent(new Event('input', { bubbles: true }));
+    input.dispatchEvent(new Event('change', { bubbles: true }));
+  }
+
+  input._mfDtReparse = parseValue;
+  parseValue();
+  dateInp.addEventListener('change', syncBack);
+  dateInp.addEventListener('input', syncBack);
+  timeInp.addEventListener('change', syncBack);
+  timeInp.addEventListener('input', syncBack);
+  // Quando il template setta input.value programmaticamente
+  const obs = new MutationObserver(parseValue);
+  obs.observe(input, { attributes: true, attributeFilter: ['value'] });
+  // value setter non triggera attribute change → polling leggero su focus tab
+  // alternativo: hook su Object.defineProperty del prototype. Compromesso:
+  // re-parse a ogni focus dei sub-input.
+  dateInp.addEventListener('focus', parseValue);
+  timeInp.addEventListener('focus', parseValue);
+
+  // Attacca il time-picker custom sul time wrapper
+  mfAttachTimePicker(timeInp);
+}
+
+
+// ── Auto-init ────────────────────────────────────────────────
+document.addEventListener('DOMContentLoaded', () => {
+  mfApplySearchable(document);
+  mfApplyTimePickers(document);
+  // Quando si apre un modal i select interni potrebbero essere stati ri-popolati
+  // dopo il DOMContentLoaded; li ricontrolliamo (idempotente).
+  document.addEventListener('click', (e) => {
+    const t = e.target;
+    if (t && t.matches && (t.matches('[onclick*="openModal"]') || t.closest && t.closest('[onclick*="openModal"]'))) {
+      setTimeout(() => { mfApplySearchable(document); mfApplyTimePickers(document); }, 80);
+    }
+  }, true);
+});

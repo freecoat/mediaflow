@@ -847,3 +847,151 @@ input[type="number"]::-webkit-inner-spin-button {
   .grid-2, .grid-3 { grid-template-columns: 1fr; }
   .form-row { grid-template-columns: 1fr; }
 }
+
+
+/* ── v3.4.40 — Searchable select ─────────────────────────────── */
+.mf-ss { position: relative; display: inline-block; width: 100%; }
+.mf-ss .mf-ss-native { display: none !important; }
+.mf-ss-display {
+  width: 100%;
+  text-align: left;
+  cursor: pointer;
+  display: flex; align-items: center; justify-content: space-between;
+  gap: 8px;
+}
+.mf-ss-display::after {
+  content: '▾';
+  color: var(--text-muted, #94a3b8);
+  font-size: 11px;
+  flex-shrink: 0;
+}
+.mf-ss-display.mf-ss-placeholder { color: var(--text-muted, #94a3b8); }
+.mf-ss-dropdown {
+  position: absolute;
+  top: calc(100% + 4px); left: 0; right: 0;
+  background: var(--bg2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: 0 8px 24px rgba(0,0,0,.32);
+  z-index: 1000;
+  display: none;
+  flex-direction: column;
+  max-height: 280px;
+  min-width: 220px;
+}
+.mf-ss-dropdown.mf-ss-up { top: auto; bottom: calc(100% + 4px); }
+.mf-ss.open .mf-ss-dropdown { display: flex; }
+.mf-ss-search {
+  background: var(--bg3);
+  border: none;
+  border-bottom: 1px solid var(--border);
+  color: var(--text);
+  font-size: 13px;
+  padding: 9px 12px;
+  outline: none;
+  font-family: inherit;
+}
+.mf-ss-list { overflow-y: auto; max-height: 240px; padding: 4px 0; }
+.mf-ss-item {
+  padding: 7px 12px;
+  font-size: 13px;
+  cursor: pointer;
+  color: var(--text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.mf-ss-item:hover, .mf-ss-item.mf-ss-active {
+  background: var(--indigo-bg);
+  color: var(--indigo2);
+}
+.mf-ss-item.mf-ss-selected {
+  background: var(--indigo-bg);
+  color: var(--indigo2);
+  font-weight: 500;
+}
+.mf-ss-item.mf-ss-disabled {
+  opacity: .45;
+  cursor: not-allowed;
+}
+.mf-ss-empty {
+  padding: 10px 12px;
+  font-size: 12px;
+  color: var(--text-muted);
+  font-style: italic;
+}
+
+
+/* ── v3.4.40 — Wrapper datetime-local splittato (date + time) ── */
+.mf-dt {
+  display: grid;
+  grid-template-columns: 1.5fr 1fr;
+  gap: 6px;
+  width: 100%;
+}
+.mf-dt > .mf-dt-date, .mf-dt > .mf-dt-time { width: 100%; }
+
+
+/* ── v3.4.40 — Time picker popup ──────────────────────────────── */
+.mf-tp-popup {
+  position: absolute;
+  z-index: 10000;
+  background: var(--bg2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: 0 12px 30px rgba(0,0,0,.42);
+  padding: 8px;
+  min-width: 280px; max-width: 360px;
+  font-family: 'DM Sans', sans-serif;
+}
+.mf-tp-quick {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 4px;
+  margin-bottom: 8px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--border);
+}
+.mf-tp-q {
+  background: var(--bg3);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 6px 8px;
+  font-size: 12px;
+  font-family: 'DM Mono', monospace;
+  cursor: pointer;
+}
+.mf-tp-q:hover, .mf-tp-q.active {
+  background: var(--indigo-bg);
+  color: var(--indigo2);
+  border-color: var(--indigo);
+}
+.mf-tp-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 2px;
+  max-height: 240px;
+  overflow-y: auto;
+}
+.mf-tp-cell {
+  background: transparent;
+  color: var(--text-muted);
+  border: 1px solid transparent;
+  border-radius: 3px;
+  padding: 5px 4px;
+  font-size: 11.5px;
+  font-family: 'DM Mono', monospace;
+  cursor: pointer;
+}
+.mf-tp-cell:hover {
+  background: var(--bg3);
+  color: var(--text);
+  border-color: var(--border);
+}
+.mf-tp-cell.active {
+  background: var(--indigo-bg);
+  color: var(--indigo2);
+  border-color: var(--indigo);
+  font-weight: 600;
+}

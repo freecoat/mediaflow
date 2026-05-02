@@ -8,6 +8,10 @@
 
 ## Versione corrente
 
+**v3.4.40** — 2 maggio 2026 — Searchable dropdowns + Time picker popup
+
+Helper trasversali in `global.js`: ogni `<select>` non-multiple e senza `data-no-search` viene trasformato in combobox cercabile (input ricerca + dropdown filtrabile, keyboard ↑↓EnterEsc, sync programmatico via `select._mfSsRefresh()`). Ogni `<input type="time">` riceve popup HH:MM step 15min con quick-pick row. Ogni `<input type="datetime-local">` viene splittato in due input affiancati (date + time) con il time-picker custom applicato al sub-time. Stile coerente con palette indigo. Cache-buster `?v=3.4.40`.
+
 **v3.4.39** — 2 maggio 2026 — Quote: duplica + versioning + Floating Jobs
 
 Due funzioni distinte: (1) `📋 Duplica` semplice (clone indipendente, scenari/template), (2) `📐 Versione` (legata via `parent_quote_id`, numero `-v2`/`-v3`, eredità righe via `QuoteLine.parent_line_id`). Endpoint `migrate-job` per migrazione del Job tra versioni con preview righe orfane/sforamenti e scelta `orphan_strategy` (`keep_as_extra` o `floating_job`). Nuovo enum `QuoteStatus.superseded`. Sezione "⚠ Anomalie" in `/finance` con 3 card (Job orfani, Sforamenti, Extra) + badge counter sulla tab. Migrazione `[N]` idempotente, auto-applicata al boot.
@@ -79,10 +83,17 @@ Sessione 1 maggio sera (commit unico): chiusa v3.4.32 dopo discussione completa 
 **Sessione 2 maggio aperta — v3.4.39 chiusa** (Quote duplica + versioning + Floating Jobs). Working tree con commit unico in attesa.
 
 Cantieri pianificati per la sessione corrente (in ordine):
-1. ✅ **C1** — Quote duplica + versioning (v3.4.39 fatta)
-2. 🔜 **C2** — Searchable dropdowns globali (helper in `global.js` + rollout su `<select>`)
-3. 🔜 **C3** — Time picker integrato per data entry con orario (timbratura, booking)
+1. ✅ **C1** — Quote duplica + versioning (v3.4.39)
+2. ✅ **C2** — Searchable dropdowns globali (v3.4.40)
+3. ✅ **C3** — Time picker integrato (v3.4.40 incluso)
 4. 🔜 **C4** — Look timeline risorse (deep restyle vis-timeline + storyboard view)
+
+Da testare per **v3.4.40**:
+- Ogni `<select>` non-multiple → click apre dropdown con input "Cerca…" + lista filtrabile. ↑↓ Enter Esc.
+- Modali (es. nuova fattura, nuovo booking, nuova quote, modifica utente) con select popolati async → display deve aggiornarsi al value (auto-refresh su click `[onclick*="openModal"]` con setTimeout 80ms).
+- `<input type="time">` (es. /settings#hours, modal multi-risorsa /planning) → click apre popup grid HH:MM con quick-pick.
+- `<input type="datetime-local">` (es. nuova timbratura /hr) → splittato in `[date] [time]` affiancati. Il time apre il popup custom. Submit deve continuare a inviare il datetime composto.
+- Nessun layout shift / regressione su select esistenti.
 
 Da testare per **v3.4.39**:
 - Migrazione `[N]` (auto al boot, opzione strumenti per fallback esplicito)

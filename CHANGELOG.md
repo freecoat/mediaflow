@@ -1,5 +1,39 @@
 # MediaFlow — Changelog
 
+## v3.4.40 — Searchable dropdowns + Time picker popup (2 maggio 2026)
+
+Trasversale UI: ogni `<select>` diventa cercabile, ogni `<input type="time">` (e ogni `datetime-local`) ha un popup HH:MM con quick-pick.
+
+### Searchable select (autocomplete)
+
+Helper `mfMakeSearchableSelect(selectEl)` in `global.js`. Trasforma un `<select>` in combobox con input ricerca + dropdown filtrabile. Il `<select>` originale resta nel DOM (hidden, classe `.mf-ss-native`) per submit/api.
+
+- **Auto-attach**: `DOMContentLoaded` → `mfApplySearchable(document)`. Esclude `multiple` e `data-no-search="true"`.
+- **Re-attach**: delegato su click `[onclick*="openModal"]` (modali con select popolati async).
+- **Sync programmatico**: `select._mfSsRefresh()` per ri-allineare il display dopo `select.value = X` senza dispatch change.
+- **Keyboard**: ↑↓ Enter Esc.
+- **Posizionamento**: apertura sopra se non c'è spazio sotto.
+
+### Time picker popup
+
+Helper `mfAttachTimePicker(input)` in `global.js`. Popup grid HH:MM step 15min default (override `data-time-step`). Quick-pick row con orari frequenti (08:00, 09:00, 12:00, 13:00, 14:00, 17:00, 18:00, 20:00). Coesiste con il typing manuale e con il picker nativo.
+
+### Datetime-local splittato
+
+Helper `mfWrapDateTimeLocal(input)` automatico su tutti gli `<input type="datetime-local">`. Splitta in due input affiancati `<date> <time>` e nasconde l'originale (resta come "verità" sincronizzata via change/input). Il time picker custom si applica al sub-time.
+
+Reason: il widget nativo `datetime-local` non si presta a un popup orario custom; lo splittiamo per uniformare l'UX dei due cantieri (timbratura, booking).
+
+### CSS
+
+`.mf-ss`, `.mf-ss-display`, `.mf-ss-dropdown`, `.mf-ss-list`, `.mf-ss-item`, `.mf-tp-popup`, `.mf-tp-grid`, `.mf-tp-cell`, `.mf-dt` in `main.css`. Coerenza palette indigo (CSS variables esistenti).
+
+### Cache buster
+
+`base.html` → `?v=3.4.40` su `main.css` e `global.js` (lezione `feedback_cache_buster_static.md`).
+
+---
+
 ## v3.4.39 — Quote: duplica + versioning + Floating Jobs (2 maggio 2026)
 
 Due funzioni distinte per gestire varianti della stessa quotazione + sezione anomalie in /finance.
