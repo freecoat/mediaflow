@@ -1,5 +1,36 @@
 # MediaFlow — Changelog
 
+## v3.4.49 — Reset business data script (2 maggio 2026)
+
+Nuovo script `scripts/reset_business_data.py` per ripartire con setup pulito mantenendo solo dati di configurazione.
+
+### Cancella
+
+clienti, progetti, quotazioni (+ righe), job (+ cost lines + assegnazioni), booking (+ assignments + audit log), risorse (+ ferie/malattia), timbrature, timesheet, fatture (+ righe), asset (+ tag), notifiche, conversazioni AI (+ messaggi), AI actions, project tech sheets, expenses.
+
+### Preserva
+
+users, roles, tenants, departments, price_categories, price_items, delivery_templates, working_hours_policies, user_ai_settings, tags.
+
+### Comportamento
+
+- Idempotente, in transazione (rollback su errore)
+- Reset `sqlite_sequence` per le tabelle pulite (ID ripartono da 1)
+- Counter prima/dopo stampati a video
+- Conferma esplicita richiesta da CLI (`--yes` / `-y` per skip su strumenti)
+- Voce `[O]` su `strumenti.bat` e `strumenti.sh`
+- Non rimuove le tabelle (solo le righe), nessuna migrazione necessaria
+
+### Uso
+
+```
+./strumenti.sh → o
+# oppure
+python scripts/reset_business_data.py
+```
+
+---
+
 ## v3.4.48.2 — Look timeline: famiglia font + colore testo (2 maggio 2026)
 
 Pannello ⚙ esteso con due nuovi controlli per coerenza visiva con bg/tema:

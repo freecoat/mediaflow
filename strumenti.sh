@@ -51,7 +51,7 @@ while true; do
     echo "  [a] Apri cartella upload"
     echo "  [0] Esci"
     echo ""
-    read -p "Scegli un'opzione (0-9, a, b, c, d, e, f, g, h, i, j, k, l, m, n, t): " scelta
+    read -p "Scegli un'opzione (0-9, a, b, c, d, e, f, g, h, i, j, k, l, m, n, o, t): " scelta
 
     case $scelta in
         1)
@@ -276,6 +276,20 @@ while true; do
             read -p "Procedo? (s/n): " conferma
             if [ "$conferma" = "s" ] || [ "$conferma" = "S" ]; then
                 python scripts/migrate_quote_versioning.py
+            fi
+            read -p "Premi INVIO per continuare..."
+            ;;
+        o|O)
+            echo ""
+            echo "RESET BUSINESS DATA (v3.4.49):"
+            echo "Cancella: clienti, progetti, quotazioni, job, booking, risorse,"
+            echo "timbrature, fatture, asset, notifiche, conversazioni AI."
+            echo "Preserva: listino, utenti, ruoli, reparti, tenant, policy ore, AI settings."
+            echo ""
+            echo "ATTENZIONE: operazione non reversibile (no soft-delete)."
+            read -p "Procedo? (s/n): " conferma
+            if [ "$conferma" = "s" ] || [ "$conferma" = "S" ]; then
+                python scripts/reset_business_data.py --yes
             fi
             read -p "Premi INVIO per continuare..."
             ;;

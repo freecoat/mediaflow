@@ -8,6 +8,10 @@
 
 ## Versione corrente
 
+**v3.4.49** — 2 maggio 2026 — Reset business data script
+
+Nuovo `scripts/reset_business_data.py` (voce `[O]` su strumenti). Cancella tutte le entità "business" (clienti/progetti/quote/job/booking/risorse/timbrature/fatture/asset/notifiche/AI conversazioni) preservando configurazione (utenti/ruoli/reparti/listino/policy/AI settings/tenant/delivery_templates/tags). Idempotente in transazione, reset sqlite_sequence. Per il giro di test cumulativo del setup aziendale da scratch.
+
 **v3.4.48.2** — 2 maggio 2026 — Look timeline: famiglia font + colore testo
 
 Pannello ⚙ esteso: "Famiglia font" (auto/DM Sans/Inter/System/Serif/Mono) e "Colore testo" (auto/white/soft/amber/dark/indigo). Apply via `data-font-family` e `data-text-color` su `#tl-host` su items+label+time-axis. Auto eredita dal tema globale o dal bg variant.

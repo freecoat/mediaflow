@@ -32,7 +32,7 @@ echo  [T] Seed Job di test per notifica deadline (scadenza fra 2 giorni) [v3.4.2
 echo  [A] Apri cartella upload
 echo  [0] Esci
 echo.
-set /p scelta="Scegli un'opzione (0-9, A, B, C, D, E, F, G, H, I, J, K, L, M, N, T): "
+set /p scelta="Scegli un'opzione (0-9, A, B, C, D, E, F, G, H, I, J, K, L, M, N, O, T): "
 
 if "%scelta%"=="1" goto avvia
 if "%scelta%"=="2" goto reset_db
@@ -56,6 +56,7 @@ if /i "%scelta%"=="K" goto migrate_user_extra_perms
 if /i "%scelta%"=="L" goto migrate_booking_executive
 if /i "%scelta%"=="M" goto migrate_lifecycle_cleanup
 if /i "%scelta%"=="N" goto migrate_quote_versioning
+if /i "%scelta%"=="O" goto reset_business_data
 if /i "%scelta%"=="T" goto seed_test_deadline
 if /i "%scelta%"=="A" goto uploads
 if "%scelta%"=="0" exit /b
@@ -330,6 +331,22 @@ set /p conferma="Procedo? (s/n): "
 if /i "%conferma%"=="s" (
     call .venv\Scripts\activate.bat
     python scripts\migrate_quote_versioning.py
+)
+pause ^& goto menu
+
+:reset_business_data
+echo.
+echo RESET BUSINESS DATA (v3.4.49):
+echo Cancella: clienti, progetti, quotazioni, job, booking, risorse,
+echo timbrature, fatture, asset, notifiche, conversazioni AI.
+echo Preserva: listino, utenti, ruoli, reparti, tenant, policy ore, AI settings.
+echo.
+echo ATTENZIONE: operazione non reversibile (no soft-delete).
+echo.
+set /p conferma="Procedo? (s/n): "
+if /i "%conferma%"=="s" (
+    call .venv\Scripts\activate.bat
+    python scripts\reset_business_data.py --yes
 )
 pause ^& goto menu
 
