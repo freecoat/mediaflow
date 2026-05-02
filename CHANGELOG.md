@@ -1,5 +1,28 @@
 # MediaFlow — Changelog
 
+## v3.4.46 — Look timeline customization (preferenze locali) (2 maggio 2026)
+
+Pannello ⚙ in topbar `/planning?view=timeline` per personalizzare il look senza toccare il tema globale. Settings persistite in `localStorage` (`mf_tl_prefs`), per-utente per-browser, immediate.
+
+### Settings disponibili
+
+- **Densità**: Compatta / Normale / Comoda → cambia padding e radius items (`data-density="..."` su `#tl-host`)
+- **Font items**: 11 / 11.5 / 12 / 13 → override `font-size` via `<style id="tl-prefs-dynamic">` dinamico
+- **Accent reparto**: Indigo (default) / Mono (grigio) / Per reparto (CSS variable `--dept-accent` riservato a estensione futura)
+- **Storyboard density**: Compatta / Normale → cards più ridotte
+- **Toggle**: Animazioni / Heatmap capacity / Linea oggi con glow / Sfondo weekend
+
+### Come funziona
+
+- `tlPrefsLoad()` legge `localStorage`, fallback a `TL_PREFS_DEFAULTS`.
+- `tlPrefsApply(p)` setta `data-*` su `#tl-host` + inietta `<style id="tl-prefs-dynamic">` per override dinamici (font-size).
+- CSS reactive con selettori `#tl-host[data-density="compact"] .vis-item { ... }` ecc.
+- Auto-apply al load. Bottone ⚙ apre/chiude popover (chiusura su click esterno). Bottone "↺ Ripristina default" resetta.
+
+Nessun cambio backend. Nessuna migrazione. Nessuna dipendenza nuova.
+
+---
+
 ## v3.4.45.1 — Hotfix /planning 500 (`UserRole.code`) (2 maggio 2026)
 
 `/planning/` e `/planning/api/project-bookings` rompevano con `AttributeError: 'UserRole' object has no attribute 'code'`. La detection del producer era stata scritta accedendo a `cur_user.role.code` ma `User.role` è l'enum legacy `UserRole` (non il modello `Role` configurabile, che vive su `User.role_obj`). Sostituito con `is_producer(user)` da `app.services.rbac` che usa correttamente `_resolve_role_code()` (priorità a `role_obj` se presente, fallback a enum). Stessa fix in entrambi i punti (`planning_hub` + `project_bookings`).

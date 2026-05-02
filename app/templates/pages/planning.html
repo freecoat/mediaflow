@@ -362,6 +362,37 @@
   .fa-suggestions .fa-item:hover, .fa-suggestions .fa-item.active { background: rgba(98,114,245,0.18); }
   .fa-suggestions .fa-item .fa-meta { color: var(--text3,#888); font-size: 11px; }
   .fa-input.has-value { background: rgba(98,114,245,0.10); }
+  /* v3.4.46: Pannello preferenze timeline */
+  #view-timeline > .card { position: relative; }
+  .tl-pref-row { display:flex; justify-content:space-between; align-items:center; gap:8px; margin-bottom:8px; }
+  .tl-pref-row > label { color: var(--text2); font-size: 11.5px; }
+  .tl-pref-row > select { width: 130px; height: 28px; font-size: 11.5px; padding: 2px 6px; }
+  .tl-pref-check { display:flex; align-items:center; gap:8px; margin-bottom:6px; color:var(--text2); cursor:pointer; user-select:none; }
+  .tl-pref-check input { margin:0; }
+  /* Reactive data-attributes su #tl-host */
+  #tl-host[data-density="compact"] .vis-item { padding: 1px 5px; border-radius: 4px; }
+  #tl-host[data-density="comfort"] .vis-item { padding: 5px 10px; border-radius: 9px; }
+  #tl-host[data-anim="off"] .vis-item, #tl-host[data-anim="off"] * { transition: none !important; animation: none !important; }
+  #tl-host[data-heatmap="off"] .vis-labelset .vis-label .tl-heat { display:none !important; }
+  #tl-host[data-today-glow="off"] .vis-current-time { box-shadow:none !important; }
+  #tl-host[data-today-glow="off"] .vis-current-time::before { display:none; }
+  #tl-host[data-weekend-bg="off"] .vis-time-axis .vis-grid.vis-saturday,
+  #tl-host[data-weekend-bg="off"] .vis-time-axis .vis-grid.vis-sunday,
+  #tl-host[data-weekend-bg="off"] .vis-foreground .vis-group .vis-saturday,
+  #tl-host[data-weekend-bg="off"] .vis-foreground .vis-group .vis-sunday { background: transparent !important; }
+  #tl-host[data-accent="mono"] .vis-labelset .vis-label.vis-nesting-group {
+    background: linear-gradient(90deg, rgba(160,170,200,0.18) 0%, rgba(160,170,200,0.05) 70%, transparent 100%) !important;
+    border-left-color: #9aa1b8 !important;
+    color: #cdd5e8 !important;
+  }
+  #tl-host[data-accent="dept"] .vis-labelset .vis-label.vis-nesting-group {
+    /* CSS variable settata da JS in renderTimeline */
+    background: linear-gradient(90deg, var(--dept-accent, rgba(98,114,245,0.18)) 0%, transparent 100%) !important;
+    border-left-color: var(--dept-accent-solid, #6272f5) !important;
+  }
+  /* Storyboard density */
+  #sb-host[data-density="compact"] .sb-card { padding: 4px 6px; font-size: 10.5px; }
+  #sb-host[data-density="compact"] .sb-card-time { font-size: 9px; margin-bottom: 1px; }
   /* v3.4.45: Storyboard view — 7 colonne giorno (responsive collapse <960px) */
   .sb-grid { display: grid; grid-template-columns: repeat(7, minmax(140px, 1fr)); gap: 8px; }
   @media (max-width: 1100px) { .sb-grid { grid-template-columns: repeat(4, minmax(160px, 1fr)); } }
@@ -607,6 +638,46 @@
             <button class="btn btn-ghost btn-sm" onclick="tlGoTo()">Vai a</button>
           </span>
           <span class="text-sm text-muted" id="tl-range" style="margin-left:auto;"></span>
+          <button class="btn btn-ghost btn-sm" onclick="tlPrefsToggle(event)" title="Personalizza look timeline" style="margin-left:6px;">⚙</button>
+        </div>
+
+        <!-- v3.4.46: pannello preferenze look timeline (popover) -->
+        <div id="tl-prefs-pop" style="display:none; position:absolute; right:18px; z-index:1100; background:var(--bg2); border:1px solid var(--border); border-radius:8px; padding:14px; width:280px; box-shadow:0 12px 32px rgba(0,0,0,.45); font-size:12px;">
+          <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
+            <strong style="color:var(--text); font-size:13px;">⚙ Look timeline</strong>
+            <button class="btn btn-ghost btn-icon btn-sm" onclick="tlPrefsToggle(event)">✕</button>
+          </div>
+          <div class="tl-pref-row"><label>Densità</label>
+            <select id="tlp-density" class="form-select" data-no-search="true">
+              <option value="compact">Compatta</option>
+              <option value="normal" selected>Normale</option>
+              <option value="comfort">Comoda</option>
+            </select></div>
+          <div class="tl-pref-row"><label>Font items</label>
+            <select id="tlp-font" class="form-select" data-no-search="true">
+              <option value="11">11</option>
+              <option value="11.5" selected>11.5</option>
+              <option value="12">12</option>
+              <option value="13">13</option>
+            </select></div>
+          <div class="tl-pref-row"><label>Accent reparto</label>
+            <select id="tlp-accent" class="form-select" data-no-search="true">
+              <option value="indigo" selected>Indigo (default)</option>
+              <option value="mono">Mono (grigio)</option>
+              <option value="dept">Per reparto</option>
+            </select></div>
+          <div class="tl-pref-row"><label>Storyboard</label>
+            <select id="tlp-sb-density" class="form-select" data-no-search="true">
+              <option value="compact">Compatta</option>
+              <option value="normal" selected>Normale</option>
+            </select></div>
+          <hr style="border:none; border-top:1px solid var(--border); margin:10px 0;">
+          <label class="tl-pref-check"><input type="checkbox" id="tlp-anim" checked> Animazioni</label>
+          <label class="tl-pref-check"><input type="checkbox" id="tlp-heatmap" checked> Heatmap capacity</label>
+          <label class="tl-pref-check"><input type="checkbox" id="tlp-today-glow" checked> Linea oggi con glow</label>
+          <label class="tl-pref-check"><input type="checkbox" id="tlp-weekend-bg" checked> Sfondo weekend</label>
+          <hr style="border:none; border-top:1px solid var(--border); margin:10px 0;">
+          <button class="btn btn-ghost btn-sm" onclick="tlPrefsReset()" style="width:100%;">↺ Ripristina default</button>
         </div>
         <div id="tl-week-label" style="font-size:13px; font-weight:500; color:var(--text2,#aaa); padding:6px 14px; background:var(--bg3,#22253a); border-radius:6px 6px 0 0; border-bottom:1px solid var(--border,#2a2e3d);"></div>
         <div style="font-size:11px; color:var(--text3,#888); padding:4px 14px 0;">
@@ -1106,6 +1177,111 @@ async function renderJobs() {
     </tr>`;
   }).join('');
 }
+
+// v3.4.46: Preferenze look timeline (per-utente, persisted in localStorage).
+const TL_PREFS_KEY = 'mf_tl_prefs';
+const TL_PREFS_DEFAULTS = {
+  density: 'normal',
+  font: '11.5',
+  accent: 'indigo',
+  sb_density: 'normal',
+  anim: true,
+  heatmap: true,
+  today_glow: true,
+  weekend_bg: true,
+};
+function tlPrefsLoad() {
+  try {
+    const raw = localStorage.getItem(TL_PREFS_KEY);
+    return raw ? { ...TL_PREFS_DEFAULTS, ...JSON.parse(raw) } : { ...TL_PREFS_DEFAULTS };
+  } catch(_) { return { ...TL_PREFS_DEFAULTS }; }
+}
+function tlPrefsSave(p) {
+  try { localStorage.setItem(TL_PREFS_KEY, JSON.stringify(p)); } catch(_) {}
+}
+function tlPrefsApply(p) {
+  const host = document.getElementById('tl-host');
+  if (host) {
+    host.dataset.density = p.density || 'normal';
+    host.dataset.anim = p.anim ? 'on' : 'off';
+    host.dataset.heatmap = p.heatmap ? 'on' : 'off';
+    host.dataset.todayGlow = p.today_glow ? 'on' : 'off';
+    host.dataset.weekendBg = p.weekend_bg ? 'on' : 'off';
+    host.dataset.accent = p.accent || 'indigo';
+    host.style.setProperty('--vis-item-font-size', (p.font || '11.5') + 'px');
+  }
+  const sbHost = document.getElementById('sb-host');
+  if (sbHost) sbHost.dataset.density = p.sb_density || 'normal';
+  // Font size inline override via inline style sui vis-item
+  const styleId = 'tl-prefs-dynamic';
+  let s = document.getElementById(styleId);
+  if (!s) { s = document.createElement('style'); s.id = styleId; document.head.appendChild(s); }
+  s.textContent = `#tl-host .vis-item { font-size: ${parseFloat(p.font || '11.5')}px !important; }`;
+}
+function tlPrefsToggle(ev) {
+  const pop = document.getElementById('tl-prefs-pop');
+  if (!pop) return;
+  if (pop.style.display === 'none' || !pop.style.display) {
+    pop.style.display = 'block';
+    // Posiziona vicino al bottone (top:topbar height)
+    pop.style.top = '40px';
+    // Sync UI con prefs correnti
+    const p = tlPrefsLoad();
+    document.getElementById('tlp-density').value = p.density;
+    document.getElementById('tlp-font').value = String(p.font);
+    document.getElementById('tlp-accent').value = p.accent;
+    document.getElementById('tlp-sb-density').value = p.sb_density;
+    document.getElementById('tlp-anim').checked = !!p.anim;
+    document.getElementById('tlp-heatmap').checked = !!p.heatmap;
+    document.getElementById('tlp-today-glow').checked = !!p.today_glow;
+    document.getElementById('tlp-weekend-bg').checked = !!p.weekend_bg;
+    if (typeof mfApplySearchable === 'function') mfApplySearchable(pop);
+    setTimeout(() => {
+      const off = e => { if (!pop.contains(e.target) && !e.target.closest('[onclick*="tlPrefsToggle"]')) {
+        pop.style.display = 'none'; document.removeEventListener('mousedown', off);
+      }};
+      document.addEventListener('mousedown', off);
+    }, 50);
+  } else {
+    pop.style.display = 'none';
+  }
+  if (ev) ev.stopPropagation();
+}
+function tlPrefsBindHandlers() {
+  const ids = ['density','font','accent','sb-density','anim','heatmap','today-glow','weekend-bg'];
+  for (const id of ids) {
+    const el = document.getElementById('tlp-' + id);
+    if (!el || el._mfBound) continue;
+    el._mfBound = true;
+    el.addEventListener('change', () => {
+      const p = tlPrefsLoad();
+      p.density = document.getElementById('tlp-density').value;
+      p.font = document.getElementById('tlp-font').value;
+      p.accent = document.getElementById('tlp-accent').value;
+      p.sb_density = document.getElementById('tlp-sb-density').value;
+      p.anim = document.getElementById('tlp-anim').checked;
+      p.heatmap = document.getElementById('tlp-heatmap').checked;
+      p.today_glow = document.getElementById('tlp-today-glow').checked;
+      p.weekend_bg = document.getElementById('tlp-weekend-bg').checked;
+      tlPrefsSave(p);
+      tlPrefsApply(p);
+    });
+  }
+}
+function tlPrefsReset() {
+  tlPrefsSave({ ...TL_PREFS_DEFAULTS });
+  tlPrefsApply({ ...TL_PREFS_DEFAULTS });
+  // Refresh popover values
+  tlPrefsToggle();
+  tlPrefsToggle();
+}
+// Auto-apply on load + bind handlers (eseguito una volta)
+(function() {
+  const p = tlPrefsLoad();
+  // Defer: il #tl-host esiste ma renderTimeline non è ancora chiamato, OK
+  setTimeout(() => { tlPrefsApply(p); tlPrefsBindHandlers(); }, 100);
+})();
+
 
 // v3.4.45: Storyboard view — vista settimanale a 7 colonne giorno con cards.
 window._sbWeekStart = null; // monday della settimana visualizzata

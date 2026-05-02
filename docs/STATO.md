@@ -8,6 +8,10 @@
 
 ## Versione corrente
 
+**v3.4.46** — 2 maggio 2026 — Look timeline customization (preferenze locali)
+
+Pannello ⚙ in topbar `/planning?view=timeline`. Settings: densità (compact/normal/comfort), font items (11/11.5/12/13), accent reparto (indigo/mono/dept), storyboard density, toggle animazioni/heatmap/today-glow/weekend-bg. Persisted in `localStorage` `mf_tl_prefs`. Applicati via `data-*` su `#tl-host` + CSS reactive + `<style id="tl-prefs-dynamic">` per font-size. Niente backend, niente migrazione.
+
 **v3.4.45.1** — 2 maggio 2026 — Hotfix `/planning` 500 (UserRole.code)
 
 Fix critico: `cur_user.role.code` non esisteva (User.role è l'enum legacy UserRole). Sostituito con `is_producer(user)` da `app.services.rbac` in `planning_hub` e `project_bookings`. /planning/ ora 200.
