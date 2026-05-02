@@ -183,9 +183,9 @@ async def job_progress(job_id: int, db: Session = Depends(get_db)):
 @router.get("/api/jobs")
 async def list_jobs(
     status: Optional[JobStatus] = None,
-    client_id: Optional[int] = None,
-    project_id: Optional[int] = None,
-    department_id: Optional[int] = None,
+    client_id: Optional[str] = None,
+    project_id: Optional[str] = None,
+    department_id: Optional[str] = None,
     q: Optional[str] = None,
     from_date: Optional[date] = None,
     to_date: Optional[date] = None,
@@ -194,22 +194,28 @@ async def list_jobs(
 ):
     """Lista job con filtri. Tenant filter implicito via project/client.
     `include_progress=true` aggrega le ore booking per ogni job (più lento).
+
+    v3.4.47 — `client_id`/`project_id`/`department_id` accettano comma-separated
+    (es. `?client_id=1,5,7`). Compatibile con single-id pre-multi.
     """
     qs = db.query(Job).options(joinedload(Job.client), joinedload(Job.project))
     if status:
         qs = qs.filter(Job.status == status)
-    if client_id:
-        qs = qs.filter(Job.client_id == client_id)
-    if project_id:
-        qs = qs.filter(Job.project_id == project_id)
-    if department_id:
+    client_ids = _parse_id_list(client_id)
+    project_ids = _parse_id_list(project_id)
+    department_ids = _parse_id_list(department_id)
+    if client_ids:
+        qs = qs.filter(Job.client_id.in_(client_ids))
+    if project_ids:
+        qs = qs.filter(Job.project_id.in_(project_ids))
+    if department_ids:
         # Job tocca dipartimento se almeno una sua JobCostLine ha price_item
         # del reparto. Filtro grossolano: subquery EXISTS.
         from app.models import PriceItem
         sub = (
             db.query(JobCostLine.job_id)
             .join(PriceItem, JobCostLine.price_item_id == PriceItem.id)
-            .filter(PriceItem.department_id == department_id)
+            .filter(PriceItem.department_id.in_(department_ids))
         )
         qs = qs.filter(Job.id.in_(sub))
     if q:
@@ -363,6 +369,33 @@ def _recalc_booking_envelope(b: Booking):
     b.end_datetime = max(a.end_datetime for a in b.assignments)
 
 
+def _parse_id_list(value) -> Optional[list[int]]:
+    """v3.4.47 — Parser tollerante per filtri multi-id: accetta None, int,
+    "1", "1,5,7", o list[int|str]. Ritorna None se vuoto, lista pulita altrimenti.
+    Compatibile con i filtri pre-multi: una sola id "1" → [1]."""
+    if value is None or value == "":
+        return None
+    if isinstance(value, int):
+        return [value]
+    if isinstance(value, (list, tuple)):
+        out = []
+        for v in value:
+            r = _parse_id_list(v)
+            if r:
+                out.extend(r)
+        return out or None
+    out = []
+    for part in str(value).split(','):
+        part = part.strip()
+        if not part:
+            continue
+        try:
+            out.append(int(part))
+        except ValueError:
+            continue
+    return out or None
+
+
 def _validate_kind_job(kind: BookingKind, job_id: Optional[int],
                        job_cost_line_id: Optional[int], db: Session):
     """Valida coerenza kind / job_id / cost_line_id. Ritorna (job_id_clean, line_id_clean)."""
@@ -381,20 +414,23 @@ def _validate_kind_job(kind: BookingKind, job_id: Optional[int],
 
 @router.get("/api/bookings")
 async def list_bookings(
-    job_id: Optional[int] = None,
-    resource_id: Optional[int] = None,
+    job_id: Optional[str] = None,
+    resource_id: Optional[str] = None,
     from_date: Optional[datetime] = None,
     to_date: Optional[datetime] = None,
     kind: Optional[BookingKind] = None,
-    client_id: Optional[int] = None,
-    project_id: Optional[int] = None,
-    department_id: Optional[int] = None,
+    client_id: Optional[str] = None,
+    project_id: Optional[str] = None,
+    department_id: Optional[str] = None,
     status: Optional[BookingStatus] = None,
     db: Session = Depends(get_db),
 ):
     """Lista assignments come items per la timeline.
     Ogni booking con N risorse → N items distinti (group=resource_id),
-    legati allo stesso booking_id via extendedProps."""
+    legati allo stesso booking_id via extendedProps.
+
+    v3.4.47 — Tutti i filtri id (job/resource/client/project/department)
+    accettano comma-separated (`?resource_id=1,3,5`). Compatibile single."""
     q = db.query(BookingAssignment).options(
         joinedload(BookingAssignment.resource),
         joinedload(BookingAssignment.booking).joinedload(Booking.job),
@@ -402,10 +438,15 @@ async def list_bookings(
     ).join(Booking, BookingAssignment.booking_id == Booking.id).filter(
         Booking.tenant_id == CURRENT_TENANT,
     )
-    if job_id:
-        q = q.filter(Booking.job_id == job_id)
-    if resource_id:
-        q = q.filter(BookingAssignment.resource_id == resource_id)
+    job_ids = _parse_id_list(job_id)
+    resource_ids = _parse_id_list(resource_id)
+    client_ids = _parse_id_list(client_id)
+    project_ids = _parse_id_list(project_id)
+    department_ids = _parse_id_list(department_id)
+    if job_ids:
+        q = q.filter(Booking.job_id.in_(job_ids))
+    if resource_ids:
+        q = q.filter(BookingAssignment.resource_id.in_(resource_ids))
     if kind:
         q = q.filter(Booking.kind == kind)
     if status:
@@ -416,15 +457,15 @@ async def list_bookings(
         q = q.filter(BookingAssignment.end_datetime >= from_date)
     if to_date:
         q = q.filter(BookingAssignment.start_datetime <= to_date)
-    if client_id or project_id:
+    if client_ids or project_ids:
         q = q.join(Job, Booking.job_id == Job.id, isouter=True)
-        if client_id:
-            q = q.filter(Job.client_id == client_id)
-        if project_id:
-            q = q.filter(Job.project_id == project_id)
-    if department_id:
+        if client_ids:
+            q = q.filter(Job.client_id.in_(client_ids))
+        if project_ids:
+            q = q.filter(Job.project_id.in_(project_ids))
+    if department_ids:
         q = q.join(Resource, BookingAssignment.resource_id == Resource.id).filter(
-            Resource.department_id == department_id
+            Resource.department_id.in_(department_ids)
         )
     assignments = q.all()
     # Cardinalità gruppo per ciascun booking_id (per badge "1/N")
@@ -1159,7 +1200,7 @@ async def booking_audit_log(booking_id: int, db: Session = Depends(get_db)):
 async def list_unavailabilities(
     from_date: Optional[_date] = None,
     to_date: Optional[_date] = None,
-    resource_id: Optional[int] = None,
+    resource_id: Optional[str] = None,
     include_holidays: bool = True,
     include_weekends: bool = True,
     db: Session = Depends(get_db),
@@ -1169,12 +1210,15 @@ async def list_unavailabilities(
       - ResourceUnavailability esplicite (vacation/sick/other)
       - Festività nazionali auto-derivate dalla policy (kind=holiday)
       - Weekend in base alla policy (kind=weekend, opzionale)
+
+    v3.4.47 — `resource_id` accetta comma-separated.
     """
     if not from_date:
         from_date = _date.today() - _td(days=30)
     if not to_date:
         to_date = _date.today() + _td(days=180)
 
+    resource_ids = _parse_id_list(resource_id)
     out = []
     # Ferie/malattie esplicite
     q = db.query(ResourceUnavailability).join(Resource).filter(
@@ -1182,8 +1226,8 @@ async def list_unavailabilities(
         ResourceUnavailability.end_date >= from_date,
         ResourceUnavailability.start_date <= to_date,
     )
-    if resource_id:
-        q = q.filter(ResourceUnavailability.resource_id == resource_id)
+    if resource_ids:
+        q = q.filter(ResourceUnavailability.resource_id.in_(resource_ids))
     for u in q.all():
         # Solo approved blocca timeline. Pending = soft (non blocca, non mostriamo a non-elevated).
         if u.status != UnavailabilityStatus.approved:
@@ -1204,8 +1248,8 @@ async def list_unavailabilities(
             Resource.tenant_id == CURRENT_TENANT,
             Resource.is_active == True,
         )
-        if resource_id:
-            resources_q = resources_q.filter(Resource.id == resource_id)
+        if resource_ids:
+            resources_q = resources_q.filter(Resource.id.in_(resource_ids))
         all_res = resources_q.all()
 
         # Cache policy per ridurre query

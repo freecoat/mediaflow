@@ -1,5 +1,37 @@
 # MediaFlow — Changelog
 
+## v3.4.47 — Filtri planning multi-select (2 maggio 2026)
+
+I 4 filtri autocomplete della sidebar `/planning` (Cliente, Progetto, Job, Risorsa) ora sono multi-select via chip.
+
+### UI
+
+- Wrapper `.fa-multi` (chips inline + input ricerca al fondo, focus-within highlight indigo).
+- Click su un risultato dell'autocomplete → aggiunge una `fa-chip` (background indigo, ✕ per rimuovere).
+- Backspace su input vuoto rimuove l'ultimo chip.
+- Risultati già selezionati non riappaiono nei suggerimenti.
+- "Reset filtri" pulisce tutti i chips.
+
+### Hidden value
+
+`#f-{client,project,job,resource}` ora contiene comma-separated ids (es. `1,5,7`). `getFilterParams()` lo passa intatto al backend (stesso campo `client_id`/`project_id`/`job_id`/`resource_id`).
+
+### Backend
+
+Helper `_parse_id_list(value)` in `app/routers/planning.py` accetta `None`, `int`, stringa singola, comma-separated, o lista. Endpoint aggiornati:
+
+- `GET /planning/api/jobs` — `client_id`, `project_id`, `department_id` multi
+- `GET /planning/api/bookings` — `job_id`, `resource_id`, `client_id`, `project_id`, `department_id` multi
+- `GET /planning/api/unavailabilities` — `resource_id` multi
+
+Tutti applicano `IN(...)` quando comma-separated. Compatibile con single-id pre-multi (un solo valore funziona come prima). Type hints da `Optional[int]` a `Optional[str]`.
+
+### Active filters bar
+
+Quando un filtro multi ha N>1 selezioni, mostra `Cliente: 3 selezionati` invece del display singolo.
+
+---
+
 ## v3.4.46 — Look timeline customization (preferenze locali) (2 maggio 2026)
 
 Pannello ⚙ in topbar `/planning?view=timeline` per personalizzare il look senza toccare il tema globale. Settings persistite in `localStorage` (`mf_tl_prefs`), per-utente per-browser, immediate.

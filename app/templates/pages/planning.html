@@ -362,6 +362,31 @@
   .fa-suggestions .fa-item:hover, .fa-suggestions .fa-item.active { background: rgba(98,114,245,0.18); }
   .fa-suggestions .fa-item .fa-meta { color: var(--text3,#888); font-size: 11px; }
   .fa-input.has-value { background: rgba(98,114,245,0.10); }
+  /* v3.4.47: filtri multi-select (chips + autocomplete inline) */
+  .fa-multi {
+    display: flex; flex-wrap: wrap; gap: 4px; align-items: center;
+    border: 1px solid var(--border); border-radius: var(--radius);
+    padding: 4px 6px; background: var(--bg3,#22253a);
+    min-height: 36px; transition: border-color .12s ease;
+  }
+  .fa-multi:focus-within { border-color: var(--indigo); box-shadow: 0 0 0 3px rgba(98,114,245,.12); }
+  .fa-multi .fa-input {
+    border: none !important; background: transparent !important; flex: 1; min-width: 100px;
+    padding: 4px 6px; font-size: 12.5px; color: var(--text); outline: none;
+    font-family: inherit;
+  }
+  .fa-chip {
+    display: inline-flex; align-items: center; gap: 4px;
+    background: rgba(98,114,245,0.18); color: #a8b3ff;
+    border-radius: 4px; padding: 2px 4px 2px 8px; font-size: 11.5px;
+    font-weight: 500; line-height: 1.4;
+    border: 1px solid rgba(98,114,245,0.32);
+  }
+  .fa-chip-x {
+    background: transparent; border: none; color: var(--text2); cursor: pointer;
+    padding: 0 4px; font-size: 13px; line-height: 1; border-radius: 3px;
+  }
+  .fa-chip-x:hover { color: #ef4444; background: rgba(239,68,68,.12); }
   /* v3.4.46: Pannello preferenze timeline */
   #view-timeline > .card { position: relative; }
   .tl-pref-row { display:flex; justify-content:space-between; align-items:center; gap:8px; margin-bottom:8px; }
@@ -460,34 +485,38 @@
     </div>
 
     <div class="form-group" style="position:relative;">
-      <label>Cliente</label>
-      <input type="text" class="form-input fa-input" data-fa="client" placeholder="Cerca cliente…" autocomplete="off">
+      <label>Cliente <span class="text-xs text-muted">(multi)</span></label>
+      <div class="fa-multi" data-fa-wrap="client">
+        <input type="text" class="fa-input" data-fa="client" placeholder="Cerca cliente…" autocomplete="off">
+      </div>
       <input type="hidden" id="f-client">
-      <button type="button" class="fa-clear" data-fa-clear="client" title="Cancella" style="position:absolute; right:6px; top:24px; background:transparent; border:none; color:var(--text3); cursor:pointer; display:none;">✕</button>
       <div class="fa-suggestions" data-fa-suggestions="client"></div>
     </div>
 
     <div class="form-group" style="position:relative;">
-      <label>Progetto</label>
-      <input type="text" class="form-input fa-input" data-fa="project" placeholder="Cerca progetto…" autocomplete="off">
+      <label>Progetto <span class="text-xs text-muted">(multi)</span></label>
+      <div class="fa-multi" data-fa-wrap="project">
+        <input type="text" class="fa-input" data-fa="project" placeholder="Cerca progetto…" autocomplete="off">
+      </div>
       <input type="hidden" id="f-project">
-      <button type="button" class="fa-clear" data-fa-clear="project" title="Cancella" style="position:absolute; right:6px; top:24px; background:transparent; border:none; color:var(--text3); cursor:pointer; display:none;">✕</button>
       <div class="fa-suggestions" data-fa-suggestions="project"></div>
     </div>
 
     <div class="form-group" style="position:relative;">
-      <label>Job</label>
-      <input type="text" class="form-input fa-input" data-fa="job" placeholder="Cerca job (codice, titolo, cliente, progetto)…" autocomplete="off">
+      <label>Job <span class="text-xs text-muted">(multi)</span></label>
+      <div class="fa-multi" data-fa-wrap="job">
+        <input type="text" class="fa-input" data-fa="job" placeholder="Cerca job (codice, titolo, cliente, progetto)…" autocomplete="off">
+      </div>
       <input type="hidden" id="f-job">
-      <button type="button" class="fa-clear" data-fa-clear="job" title="Cancella" style="position:absolute; right:6px; top:24px; background:transparent; border:none; color:var(--text3); cursor:pointer; display:none;">✕</button>
       <div class="fa-suggestions" data-fa-suggestions="job"></div>
     </div>
 
     <div class="form-group" style="position:relative;">
-      <label>Risorsa</label>
-      <input type="text" class="form-input fa-input" data-fa="resource" placeholder="Cerca risorsa…" autocomplete="off">
+      <label>Risorsa <span class="text-xs text-muted">(multi)</span></label>
+      <div class="fa-multi" data-fa-wrap="resource">
+        <input type="text" class="fa-input" data-fa="resource" placeholder="Cerca risorsa…" autocomplete="off">
+      </div>
       <input type="hidden" id="f-resource">
-      <button type="button" class="fa-clear" data-fa-clear="resource" title="Cancella" style="position:absolute; right:6px; top:24px; background:transparent; border:none; color:var(--text3); cursor:pointer; display:none;">✕</button>
       <div class="fa-suggestions" data-fa-suggestions="resource"></div>
     </div>
 
@@ -891,21 +920,53 @@ const FA_CONFIG = {
   },
 };
 
-function _faSetVisible(faKey, item) {
-  const inp = document.querySelector(`[data-fa="${faKey}"]`);
-  const hidden = document.getElementById('f-' + faKey);
-  const clearBtn = document.querySelector(`[data-fa-clear="${faKey}"]`);
-  if (item) {
-    inp.value = FA_CONFIG[faKey].display(item);
-    hidden.value = item.id;
-    inp.classList.add('has-value');
-    if (clearBtn) clearBtn.style.display = '';
-  } else {
-    inp.value = '';
-    hidden.value = '';
-    inp.classList.remove('has-value');
-    if (clearBtn) clearBtn.style.display = 'none';
+// v3.4.47: helpers multi-select. Hidden value = comma-separated ids.
+function _faGetIds(faKey) {
+  const v = (document.getElementById('f-' + faKey).value || '').trim();
+  if (!v) return [];
+  return v.split(',').map(s => Number(s.trim())).filter(n => Number.isFinite(n) && n > 0);
+}
+function _faSetIds(faKey, ids) {
+  const cleaned = (ids || []).filter((v, i, arr) => arr.indexOf(v) === i);
+  document.getElementById('f-' + faKey).value = cleaned.join(',');
+  _faRenderChips(faKey);
+}
+function _faRenderChips(faKey) {
+  const wrap = document.querySelector(`[data-fa-wrap="${faKey}"]`);
+  if (!wrap) return;
+  const cfg = FA_CONFIG[faKey];
+  const ids = _faGetIds(faKey);
+  // Rimuovi chips esistenti, mantieni solo l'input
+  wrap.querySelectorAll('.fa-chip').forEach(c => c.remove());
+  const inp = wrap.querySelector('.fa-input');
+  for (const id of ids) {
+    const item = cfg.data().find(x => x.id === id);
+    if (!item) continue;
+    const chip = document.createElement('span');
+    chip.className = 'fa-chip';
+    chip.dataset.id = id;
+    chip.innerHTML = `<span>${escapeHtml(cfg.display(item))}</span><button type="button" class="fa-chip-x" title="Rimuovi">✕</button>`;
+    chip.querySelector('.fa-chip-x').addEventListener('click', (ev) => {
+      ev.preventDefault();
+      _faRemoveId(faKey, id);
+    });
+    wrap.insertBefore(chip, inp);
   }
+}
+function _faAddId(faKey, id) {
+  const ids = _faGetIds(faKey);
+  if (ids.includes(id)) return;
+  ids.push(id);
+  _faSetIds(faKey, ids);
+  // Pulisce input ricerca per la prossima selezione
+  const inp = document.querySelector(`[data-fa="${faKey}"]`);
+  if (inp) inp.value = '';
+  onFilterChange();
+}
+function _faRemoveId(faKey, id) {
+  const ids = _faGetIds(faKey).filter(x => x !== id);
+  _faSetIds(faKey, ids);
+  onFilterChange();
 }
 
 function _faSearch(faKey) {
@@ -914,7 +975,8 @@ function _faSearch(faKey) {
   const inp = document.querySelector(`[data-fa="${faKey}"]`);
   const box = document.querySelector(`[data-fa-suggestions="${faKey}"]`);
   const q = (inp.value || '').toLowerCase().trim();
-  let items = cfg.data();
+  const selected = new Set(_faGetIds(faKey));
+  let items = cfg.data().filter(it => !selected.has(it.id));
   if (q) items = items.filter(it => cfg.search(it, q));
   items = items.slice(0, 12);
   if (!items.length) {
@@ -928,47 +990,30 @@ function _faSearch(faKey) {
     el.addEventListener('mousedown', (ev) => {
       ev.preventDefault();
       const id = Number(el.dataset.faId);
-      const item = cfg.data().find(x => x.id === id);
-      if (item) {
-        _faSetVisible(faKey, item);
-        box.style.display = 'none';
-        onFilterChange();
-      }
+      _faAddId(faKey, id);
+      box.style.display = 'none';
     });
   });
-}
-
-function _faClear(faKey) {
-  _faSetVisible(faKey, null);
-  onFilterChange();
-}
-
-function _faSetFromId(faKey, idStr) {
-  const id = Number(idStr);
-  if (!id) return;
-  const item = FA_CONFIG[faKey].data().find(x => x.id === id);
-  if (item) _faSetVisible(faKey, item);
 }
 
 // Setup listeners (eseguito una volta al load)
 ['client','project','job','resource'].forEach(faKey => {
   const inp = document.querySelector(`[data-fa="${faKey}"]`);
   const box = document.querySelector(`[data-fa-suggestions="${faKey}"]`);
-  const clearBtn = document.querySelector(`[data-fa-clear="${faKey}"]`);
   if (!inp || !box) return;
-  inp.addEventListener('input', () => {
-    // Se l'utente sta digitando → resetta hidden
-    document.getElementById('f-' + faKey).value = '';
-    inp.classList.remove('has-value');
-    if (clearBtn) clearBtn.style.display = '';
-    _faSearch(faKey);
-  });
+  inp.addEventListener('input', () => _faSearch(faKey));
   inp.addEventListener('focus', () => _faSearch(faKey));
   inp.addEventListener('blur', () => setTimeout(() => box.style.display = 'none', 150));
   inp.addEventListener('keydown', (e) => {
     if (e.key === 'Escape') { box.style.display = 'none'; inp.blur(); }
+    // Backspace su input vuoto rimuove l'ultimo chip
+    if (e.key === 'Backspace' && !inp.value) {
+      const ids = _faGetIds(faKey);
+      if (ids.length) {
+        _faRemoveId(faKey, ids[ids.length - 1]);
+      }
+    }
   });
-  if (clearBtn) clearBtn.addEventListener('click', () => _faClear(faKey));
 });
 
 // ── URL state ───────────────────────────────────────────────
@@ -978,10 +1023,9 @@ function readFiltersFromURL() {
     const el = document.getElementById('f-' + k);
     if (el && p.get(k)) el.value = p.get(k);
   });
-  // Riapplica display autocomplete dai hidden caricati
+  // v3.4.47: render chips multi per ogni filtro autocomplete
   ['client','project','job','resource'].forEach(faKey => {
-    const v = document.getElementById('f-' + faKey).value;
-    if (v) _faSetFromId(faKey, v);
+    _faRenderChips(faKey);
   });
 }
 function writeFiltersToURL(view) {
@@ -1039,15 +1083,20 @@ function renderActiveFiltersBar() {
   for (const k of Object.keys(labels)) {
     const el = document.getElementById('f-'+k);
     if (!el || !el.value) continue;
-    let val = el.value;
-    if (el.tagName === 'SELECT') {
-      val = el.options[el.selectedIndex].text;
-    } else if (FA_CONFIG[k]) {
-      // Per autocomplete: usa display dell'item dal seed
-      const it = FA_CONFIG[k].data().find(x => x.id === Number(el.value));
-      if (it) val = FA_CONFIG[k].display(it);
+    if (FA_CONFIG[k]) {
+      // v3.4.47: multi-id (comma-separated) → chip separato per ogni id
+      const ids = el.value.split(',').map(s => Number(s.trim())).filter(Boolean);
+      const items = ids.map(id => FA_CONFIG[k].data().find(x => x.id === id)).filter(Boolean);
+      if (!items.length) continue;
+      const display = items.length === 1
+        ? FA_CONFIG[k].display(items[0])
+        : `${items.length} selezionati`;
+      chips.push(`<span class="chip">${labels[k]}: ${escapeHtml(display)}</span>`);
+    } else if (el.tagName === 'SELECT') {
+      chips.push(`<span class="chip">${labels[k]}: ${escapeHtml(el.options[el.selectedIndex].text)}</span>`);
+    } else {
+      chips.push(`<span class="chip">${labels[k]}: ${escapeHtml(el.value)}</span>`);
     }
-    chips.push(`<span class="chip">${labels[k]}: ${escapeHtml(val)}</span>`);
   }
   document.getElementById('active-filters').innerHTML = chips.join('');
 }
@@ -1063,12 +1112,11 @@ function resetFilters() {
   ['q','dept','client','project','job','resource','status','kind','from','to'].forEach(k => {
     document.getElementById('f-'+k).value = '';
   });
-  // Reset display autocomplete
+  // v3.4.47: pulisce input ricerca + chips multi
   ['client','project','job','resource'].forEach(faKey => {
     const inp = document.querySelector(`[data-fa="${faKey}"]`);
-    const clearBtn = document.querySelector(`[data-fa-clear="${faKey}"]`);
-    if (inp) { inp.value = ''; inp.classList.remove('has-value'); }
-    if (clearBtn) clearBtn.style.display = 'none';
+    if (inp) inp.value = '';
+    _faRenderChips(faKey);
   });
   onFilterChange();
 }

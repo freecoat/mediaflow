@@ -8,6 +8,10 @@
 
 ## Versione corrente
 
+**v3.4.47** — 2 maggio 2026 — Filtri planning multi-select
+
+I 4 filtri autocomplete (Cliente, Progetto, Job, Risorsa) ora multi-tag con chips. Hidden value `comma-separated` ids. Backend helper `_parse_id_list` su `/planning/api/jobs|bookings|unavailabilities` accetta single, comma-separated, list. Active filters bar: "N selezionati" se >1. Backspace su input vuoto rimuove l'ultimo chip.
+
 **v3.4.46** — 2 maggio 2026 — Look timeline customization (preferenze locali)
 
 Pannello ⚙ in topbar `/planning?view=timeline`. Settings: densità (compact/normal/comfort), font items (11/11.5/12/13), accent reparto (indigo/mono/dept), storyboard density, toggle animazioni/heatmap/today-glow/weekend-bg. Persisted in `localStorage` `mf_tl_prefs`. Applicati via `data-*` su `#tl-host` + CSS reactive + `<style id="tl-prefs-dynamic">` per font-size. Niente backend, niente migrazione.
