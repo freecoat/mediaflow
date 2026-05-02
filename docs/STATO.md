@@ -8,6 +8,10 @@
 
 ## Versione corrente
 
+**v3.4.50.2** — 2 maggio 2026 — Modal scrollabile con header/footer fissi
+
+Fix UX globale: i `.modal` ora si capano all'altezza viewport (`max-height: calc(100vh - 40px)` + flex column), header/footer fissi, body interno scrollabile. Risolve scheda cliente troppo alta (anagrafica+dati fiscali+sede+referente+note+filmografia+progetti+fonti AI) e tutti i modal con tanti campi. Approccio generico — niente toppe per-pagina.
+
 **v3.4.50.1** — 2 maggio 2026 — Audit pre-push: 3 micro-fix
 
 Bug fix emersi durante audit completo: (1) `seed_demo` tenant idempotente (`reset_business_data` preserva tenants → seed_demo doveva fare upsert); (2) `seed_demo` Booking ora crea `Booking + BookingAssignment` coerenti col modello multi-risorsa v3.4.16+; (3) `new_version_quote` ora pulisce suffisso `-vN` finale dal root number (no più `-v1-v2`).

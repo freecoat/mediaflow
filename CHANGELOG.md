@@ -1,5 +1,9 @@
 # MediaFlow — Changelog
 
+## v3.4.50.2 — Modal scrollabile con header/footer fissi (2 maggio 2026)
+
+Fix UX globale: i modal (es. dettaglio cliente con molti campi) ora si capano all'altezza viewport (`max-height: calc(100vh - 40px)`), header e footer restano fissi e visibili, body scorre internamente (`overflow-y: auto`). Risolve l'issue Matteo "le schede clienti non si aprono completamente" su schermi piccoli o quando la scheda è molto piena (anagrafica + dati fiscali + sede + referente + note + filmografia + progetti collegati + fonti AI). Approccio generico: vale per tutti i modal del progetto, niente toppe per-pagina.
+
 ## v3.4.50.1 — Audit pre-push: 3 micro-fix (2 maggio 2026)
 
 Bug fix emersi durante audit completo prima del push:
