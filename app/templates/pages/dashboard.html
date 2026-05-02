@@ -297,10 +297,13 @@ function renderMyBookingCard(it) {
   if (ot === 'pending') cls.push('ot-pending');
   const editable = (exec !== 'done' && exec !== 'not_done');
   const meta = it.cost_line_description || it.job_code || '';
+  // v3.4.42: notes inline + click area apre dettaglio booking
+  const notesBlock = it.notes ? `<div style="margin-top:6px;padding:6px 10px;background:rgba(98,114,245,.05);border-left:2px solid #6272f5;border-radius:3px;font-size:12px;white-space:pre-wrap;color:var(--text2);">📝 ${escapeHtml(it.notes)}</div>` : '';
   return `<div class="${cls.join(' ')}" data-bid="${it.booking_id}">
     <div class="when today">Oggi · ${t(s)}–${t(e)}</div>
-    <div class="what">${escapeHtml(it.title || '')}</div>
-    ${meta ? '<div class="meta">'+escapeHtml(meta)+'</div>' : ''}
+    <div class="what" style="cursor:pointer;" onclick="myOpenDetail(${it.booking_id})" title="Vedi dettagli">${escapeHtml(it.title || '')} <span style="font-size:11px;color:var(--text3);">›</span></div>
+    ${meta ? '<div class="meta" style="cursor:pointer;" onclick="myOpenDetail('+it.booking_id+')">'+escapeHtml(meta)+'</div>' : ''}
+    ${notesBlock}
     <div class="badges">
       <span class="badge-prio ${prio}">⚑ ${_PL[prio]}</span>
       <span class="badge-exec ${exec}">${_EL[exec]}</span>
@@ -355,6 +358,70 @@ function myNotDone(bid) {
   const reason = prompt('Motivazione "Non fatto":');
   if (reason && reason.trim()) {
     mySetExec(bid, 'not_done', reason.trim());
+  }
+}
+
+// v3.4.42: Modal dettaglio booking, riusato anche dalla card "Le mie" planning.
+async function myOpenDetail(bookingId) {
+  // Costruisce un overlay al volo (niente modal HTML in dashboard.html).
+  let overlay = document.getElementById('modal-my-detail');
+  if (!overlay) {
+    overlay = document.createElement('div');
+    overlay.id = 'modal-my-detail';
+    overlay.className = 'modal-overlay';
+    overlay.innerHTML = `<div class="modal" style="max-width:560px;">
+      <div class="modal-header"><span class="modal-title">📋 Dettaglio booking</span>
+        <button class="btn btn-ghost btn-icon" onclick="closeModal('modal-my-detail')">✕</button></div>
+      <div class="modal-body" id="my-detail-body" style="font-size:13px;"><div class="text-muted text-sm">Caricamento…</div></div>
+      <div class="modal-footer">
+        <a id="my-detail-job-link" class="btn btn-secondary" href="#" style="display:none;">→ Apri job</a>
+        <button class="btn btn-primary" onclick="closeModal('modal-my-detail')">Chiudi</button>
+      </div></div>`;
+    document.body.appendChild(overlay);
+  }
+  openModal('modal-my-detail');
+  const body = document.getElementById('my-detail-body');
+  const jobLink = document.getElementById('my-detail-job-link');
+  body.innerHTML = '<div class="text-muted text-sm">Caricamento…</div>';
+  jobLink.style.display = 'none';
+  try {
+    const d = await api('GET', `/planning/api/bookings/${bookingId}/detail`);
+    const start = new Date(d.start_datetime), end = new Date(d.end_datetime);
+    const fmt = dt => dt.toLocaleString('it-IT', {dateStyle:'medium', timeStyle:'short'});
+    const prio = d.priority || 'normal', exec = d.execution_status || 'planned', ot = d.overtime_status || 'none';
+    const otBadge = ot === 'pending' ? '<span class="badge-ot">⚠ Straordinario in attesa</span>'
+      : ot === 'approved' ? '<span class="badge-ot approved">✓ Straordinario approvato</span>'
+      : ot === 'rejected' ? '<span class="badge-ot rejected">Straordinario rifiutato</span>' : '';
+    let html = `<div style="display:grid;grid-template-columns:max-content 1fr;gap:6px 12px;align-items:start;">
+      <div class="text-muted text-sm">Quando</div>
+      <div>${escapeHtml(fmt(start))} → ${escapeHtml(fmt(end))} <span class="text-muted text-sm">(${d.duration_hours}h)</span></div>`;
+    if (d.job) {
+      html += `<div class="text-muted text-sm">Job</div>
+      <div><b>${escapeHtml(d.job.code)}</b> — ${escapeHtml(d.job.title || '')}</div>`;
+      jobLink.href = '/jobs/' + d.job.id; jobLink.style.display = '';
+    }
+    if (d.cost_line) {
+      html += `<div class="text-muted text-sm">Lavorazione</div>
+      <div>${escapeHtml(d.cost_line.description || '—')} <span class="text-muted text-sm">(${d.cost_line.quantity_actual||0}/${d.cost_line.quantity_quoted||0} ${escapeHtml(d.cost_line.unit||'')})</span></div>`;
+    }
+    html += `<div class="text-muted text-sm">Stato</div>
+    <div style="display:flex;gap:6px;flex-wrap:wrap;">
+      <span class="badge-prio ${prio}">⚑ ${_PL[prio]||prio}</span>
+      <span class="badge-exec ${exec}">${_EL[exec]||exec}</span>
+      ${otBadge}
+    </div>`;
+    if (d.notes) {
+      html += `<div class="text-muted text-sm">Note</div>
+      <div style="white-space:pre-wrap;background:rgba(98,114,245,.05);padding:6px 10px;border-left:2px solid #6272f5;border-radius:3px;">${escapeHtml(d.notes)}</div>`;
+    }
+    if (d.not_done_reason) {
+      html += `<div class="text-muted text-sm">Motivazione &laquo;non fatto&raquo;</div>
+      <div style="white-space:pre-wrap;color:#fca5a5;background:rgba(239,68,68,.06);padding:6px 10px;border-left:2px solid #ef4444;border-radius:3px;">${escapeHtml(d.not_done_reason)}</div>`;
+    }
+    html += '</div>';
+    body.innerHTML = html;
+  } catch(e) {
+    body.innerHTML = `<div class="color-rose">${escapeHtml(e.message || 'Errore')}</div>`;
   }
 }
 

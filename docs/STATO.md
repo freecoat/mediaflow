@@ -8,6 +8,10 @@
 
 ## Versione corrente
 
+**v3.4.42** — 2 maggio 2026 — Undo paste timeline + Le mie con dettaglio booking + note
+
+#1: `tlPasteAt` ora pusha undo `paste_batch` con gli id dei booking creati → annullamento bulk via DELETE. #8: card "Le mie" e dashboard "I miei booking di oggi" cliccabili (su title/meta) → modal `Dettaglio booking` con Quando/Job/Lavorazione/Stato/Risorse/Note/Motivazione. Note del booking ora visibili inline sulla card. Endpoint nuovo `GET /planning/api/bookings/{id}/detail`.
+
 **v3.4.41** — 2 maggio 2026 — Bug fix triplo (paste su ferie + Chrome timbratura + cost report ore done)
 
 #2: paste timeline planning ora hard-block su risorse in ferie/malattia (toast con counter bloccati). #3: Chrome `::-webkit-calendar-picker-indicator` soppresso su input time non-opt-out + `.mf-dt` grid con `minmax(0, …)` per layout robusto in modali stretti. #5: nuovo servizio `cost_line_sync.py` aggancia `JobCostLine.quantity_actual` + `total_accrued` ai booking `done` (hook in execution/extend + endpoint `POST /cost-report/api/job/{id}/reconcile-actuals` per fix retroattivo).

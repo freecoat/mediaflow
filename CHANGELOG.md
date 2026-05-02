@@ -1,5 +1,21 @@
 # MediaFlow — Changelog
 
+## v3.4.42 — Undo paste + Le mie con dettaglio booking + note (2 maggio 2026)
+
+### #1 — Undo per copy/paste timeline planning
+
+`tlPasteAt` ora ritorna gli id dei booking creati e fa push undo con `type='paste_batch'`. Il toast undo standard (5s) annulla in batch tutti i booking incollati con DELETE successivi. Coerente col pattern undo esistente per drag/resize/delete/create/duplicate.
+
+### #8 — Le mie / Dashboard: dettaglio booking + note
+
+- **Card cliccabili** in `/planning?view=todo` e nella card "I miei booking di oggi" della Dashboard. Click su title o meta apre modal `📋 Dettaglio booking`.
+- **Note inline** sulla card: se `Booking.notes` è valorizzato, viene mostrato in un blocco discreto (sfondo indigo lieve, simile alla `not-done-reason`).
+- **Modal dettaglio**: mostra Quando, Job (con link "→ Apri job"), Lavorazione (con `quantity_actual/quantity_quoted`), Stato (priorità + esecuzione + overtime badge), Risorse (se multi-risorsa), Note, Motivazione "non fatto".
+
+Endpoint nuovo: `GET /planning/api/bookings/{booking_id}/detail` — dati estesi del booking per il modal.
+
+---
+
 ## v3.4.41 — Bug fix triplo (2 maggio 2026)
 
 ### #2 — Hard block paste timeline su ferie/malattia

@@ -86,6 +86,10 @@
   .todo-card .badge-ot.approved { background: rgba(16,185,129,.18); color: #6ee7b7; }
   .todo-card .badge-ot.rejected { background: rgba(107,114,128,.18); color: #9ca3af; }
   .todo-card .not-done-reason { margin-top: 6px; padding: 6px 10px; background: rgba(239,68,68,.06); border-left: 2px solid #ef4444; border-radius: 3px; font-size: 12px; color: #fca5a5; }
+  /* v3.4.42: notes inline + click-to-detail hover */
+  .todo-card .todo-notes { margin-top: 6px; padding: 6px 10px; background: rgba(98,114,245,.05); border-left: 2px solid #6272f5; border-radius: 3px; font-size: 12px; color: var(--text2); white-space: pre-wrap; }
+  .todo-card .what:hover { color: var(--indigo2); }
+  .todo-card .meta:hover { color: var(--text); }
   #cal-host, #ag-host, #todo-host { min-height: 600px; }
   #tl-host { min-height: 600px; }
   .cal-bar { display:flex; gap:6px; margin-bottom:8px; flex-wrap: wrap; }
@@ -587,6 +591,23 @@
   </div>
 </div>
 
+<!-- v3.4.42: Modal dettaglio booking ("Le mie" + dashboard) -->
+<div class="modal-overlay" id="modal-todo-detail">
+  <div class="modal" style="max-width:560px;">
+    <div class="modal-header">
+      <span class="modal-title">📋 Dettaglio booking</span>
+      <button class="btn btn-ghost btn-icon" onclick="closeModal('modal-todo-detail')">✕</button>
+    </div>
+    <div class="modal-body" id="todo-detail-body" style="font-size:13px;">
+      <div class="text-muted text-sm">Caricamento…</div>
+    </div>
+    <div class="modal-footer">
+      <a id="todo-detail-job-link" class="btn btn-secondary" href="#" style="display:none;">→ Apri job</a>
+      <button class="btn btn-primary" onclick="closeModal('modal-todo-detail')">Chiudi</button>
+    </div>
+  </div>
+</div>
+
 {% endblock %}
 
 {% block scripts %}
@@ -1010,10 +1031,13 @@ function renderTodoCard(it, today, tomorrow) {
   const meta = it.cost_line_description || it.job_code || '';
   const editable = (exec !== 'done' && exec !== 'not_done');
 
+  // v3.4.42: notes inline + click area opens detail modal
+  const notesBlock = it.notes ? `<div class="todo-notes" title="Note booking">📝 ${escapeHtml(it.notes)}</div>` : '';
   return `<div class="todo-card ${cls.join(' ')}" data-bid="${it.booking_id}">
     <div class="when ${whenCls}">${escapeHtml(when)}</div>
-    <div class="what">${escapeHtml(it.title || '')}</div>
-    ${meta ? '<div class="meta">'+escapeHtml(meta)+'</div>' : ''}
+    <div class="what" style="cursor:pointer;" onclick="todoOpenDetail(${it.booking_id})" title="Vedi dettagli">${escapeHtml(it.title || '')} <span style="font-size:11px;color:var(--text3);">›</span></div>
+    ${meta ? '<div class="meta" style="cursor:pointer;" onclick="todoOpenDetail('+it.booking_id+')">'+escapeHtml(meta)+'</div>' : ''}
+    ${notesBlock}
     <div class="badges">
       <span class="badge-prio ${prio}">⚑ ${PRIO_LABEL[prio]}</span>
       <span class="badge-exec ${exec}">${EXEC_LABEL[exec]}</span>
@@ -1045,6 +1069,70 @@ function renderTodoCard(it, today, tomorrow) {
       ${(exec === 'done' || exec === 'not_done') ? `<button class="act-btn" onclick="todoSetExec(${it.booking_id}, 'planned')">↺ Riapri</button>` : ''}
     </div>
   </div>`;
+}
+
+// v3.4.42: Modal dettaglio booking dalla card "Le mie" (e riusabile da
+// dashboard "I miei booking di oggi" + da link drilldown timeline planning).
+async function todoOpenDetail(bookingId) {
+  openModal('modal-todo-detail');
+  const body = document.getElementById('todo-detail-body');
+  const jobLink = document.getElementById('todo-detail-job-link');
+  body.innerHTML = '<div class="text-muted text-sm">Caricamento…</div>';
+  jobLink.style.display = 'none';
+  try {
+    const d = await api('GET', `/planning/api/bookings/${bookingId}/detail`);
+    const start = new Date(d.start_datetime);
+    const end = new Date(d.end_datetime);
+    const fmt = dt => dt.toLocaleString('it-IT', {dateStyle:'medium', timeStyle:'short'});
+    const prio = d.priority || 'normal';
+    const exec = d.execution_status || 'planned';
+    const ot = d.overtime_status || 'none';
+    const otBadge = ot === 'pending' ? '<span class="badge-ot">⚠ Straordinario in attesa</span>'
+      : ot === 'approved' ? '<span class="badge-ot approved">✓ Straordinario approvato</span>'
+      : ot === 'rejected' ? '<span class="badge-ot rejected">Straordinario rifiutato</span>' : '';
+    let html = `
+      <div style="display:grid;grid-template-columns:max-content 1fr;gap:6px 12px;align-items:start;">
+        <div class="text-muted text-sm">Quando</div>
+        <div>${escapeHtml(fmt(start))} → ${escapeHtml(fmt(end))} <span class="text-muted text-sm">(${d.duration_hours}h)</span></div>`;
+    if (d.job) {
+      html += `
+        <div class="text-muted text-sm">Job</div>
+        <div><b>${escapeHtml(d.job.code)}</b> — ${escapeHtml(d.job.title || '')}${d.job.project_code ? ' <span class="text-muted text-sm">· '+escapeHtml(d.job.project_code)+'</span>' : ''}</div>`;
+      jobLink.href = '/jobs/' + d.job.id;
+      jobLink.style.display = '';
+    }
+    if (d.cost_line) {
+      html += `
+        <div class="text-muted text-sm">Lavorazione</div>
+        <div>${escapeHtml(d.cost_line.description || '—')} <span class="text-muted text-sm">(${d.cost_line.quantity_actual || 0}/${d.cost_line.quantity_quoted || 0} ${escapeHtml(d.cost_line.unit || '')})</span></div>`;
+    }
+    html += `
+        <div class="text-muted text-sm">Stato</div>
+        <div style="display:flex;gap:6px;flex-wrap:wrap;">
+          <span class="badge-prio ${prio}">⚑ ${PRIO_LABEL[prio] || prio}</span>
+          <span class="badge-exec ${exec}">${EXEC_LABEL[exec] || exec}</span>
+          ${otBadge}
+        </div>`;
+    if (d.assignments && d.assignments.length > 1) {
+      html += `
+        <div class="text-muted text-sm">Risorse</div>
+        <div>${d.assignments.map(a => '<span class="badge badge-draft" style="margin-right:4px;">'+escapeHtml(a.resource_name || ('#'+a.resource_id))+'</span>').join('')}</div>`;
+    }
+    if (d.notes) {
+      html += `
+        <div class="text-muted text-sm">Note</div>
+        <div style="white-space:pre-wrap;background:rgba(98,114,245,.05);padding:6px 10px;border-left:2px solid #6272f5;border-radius:3px;">${escapeHtml(d.notes)}</div>`;
+    }
+    if (d.not_done_reason) {
+      html += `
+        <div class="text-muted text-sm">Motivazione &laquo;non fatto&raquo;</div>
+        <div style="white-space:pre-wrap;color:#fca5a5;background:rgba(239,68,68,.06);padding:6px 10px;border-left:2px solid #ef4444;border-radius:3px;">${escapeHtml(d.not_done_reason)}</div>`;
+    }
+    html += '</div>';
+    body.innerHTML = html;
+  } catch(e) {
+    body.innerHTML = `<div class="color-rose">${escapeHtml(e.message || 'Errore caricamento dettaglio')}</div>`;
+  }
 }
 
 async function todoSetExec(bookingId, newStatus, reason) {
@@ -1443,6 +1531,7 @@ async function tlPasteAt(targetTime, targetGroup) {
   target.setTime(Math.round(target.getTime() / ms) * ms);
   const offsetMs = target - baseStart;
   let ok = 0, fail = 0, blocked = 0;
+  const createdIds = []; // v3.4.42: accumulati per undo batch
   for (let i = 0; i < items.length; i++) {
     const it = items[i];
     const p = it.extendedProps || {};
@@ -1465,14 +1554,24 @@ async function tlPasteAt(targetTime, targetGroup) {
     if (p.job_cost_line_id) fd.append('job_cost_line_id', p.job_cost_line_id);
     if (p.notes) fd.append('notes', p.notes);
     try {
-      await api('POST', '/planning/api/bookings', fd);
+      const r = await api('POST', '/planning/api/bookings', fd);
       ok++;
+      // v3.4.42: id del booking principale appena creato per undo batch
+      if (r && r.id) createdIds.push(r.id);
     } catch(_) { fail++; }
   }
   let msg = `${ok} incollat${ok === 1 ? 'o' : 'i'}`;
   if (blocked) msg += `, ${blocked} bloccat${blocked === 1 ? 'o' : 'i'} (ferie/malattia)`;
   if (fail) msg += `, ${fail} errori (conflitti?)`;
-  toast(msg, (blocked || fail) ? 'warning' : 'success', 4500);
+  // v3.4.42: push undo batch se almeno un booking è stato creato
+  if (createdIds.length) {
+    tlPushUndo(
+      { type: 'paste_batch', ids: createdIds },
+      `${msg} · annullabile`
+    );
+  } else {
+    toast(msg, (blocked || fail) ? 'warning' : 'success', 4500);
+  }
   renderTimeline(true);
 }
 
@@ -1537,6 +1636,17 @@ async function tlPerformUndo() {
       await api('POST', `/planning/api/bookings/${action.id}/restore`);
     } else if (action.type === 'create') {
       await api('DELETE', `/planning/api/bookings/${action.id}`);
+    } else if (action.type === 'paste_batch') {
+      // v3.4.42: undo bulk paste — cancella tutti i booking creati
+      let undone = 0, errs = 0;
+      for (const id of action.ids || []) {
+        try { await api('DELETE', `/planning/api/bookings/${id}`); undone++; }
+        catch(_) { errs++; }
+      }
+      toast(`Paste annullato: ${undone} cancellat${undone === 1 ? 'o' : 'i'}${errs ? `, ${errs} err.` : ''}`,
+            errs ? 'warning' : 'success');
+      renderTimeline(true);
+      return;
     }
     toast('Operazione annullata', 'success');
     renderTimeline(true);

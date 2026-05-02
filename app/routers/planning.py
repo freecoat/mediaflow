@@ -1951,6 +1951,59 @@ async def update_booking_count_in_costs(
 # Restituisce solo i booking dell'utente loggato con tutto il contesto
 # necessario per la card interattiva (priority/execution_status/overtime/...).
 
+@router.get("/api/bookings/{booking_id}/detail")
+async def booking_detail(booking_id: int, db: Session = Depends(get_db)):
+    """v3.4.42 — dettaglio booking per modal "Le mie" / dashboard / drilldown.
+    Ritorna info estese: assegnatari, job/lavorazione, priorità/stato/overtime,
+    notes, motivazione not_done, timestamps."""
+    b = db.query(Booking).options(
+        joinedload(Booking.job).joinedload(Job.project),
+        joinedload(Booking.cost_line),
+        joinedload(Booking.assignments).joinedload(BookingAssignment.resource),
+    ).filter(Booking.id == booking_id, Booking.tenant_id == CURRENT_TENANT).first()
+    if not b:
+        raise HTTPException(404, "Booking non trovato")
+    duration_min = int(round((b.end_datetime - b.start_datetime).total_seconds() / 60)) if b.start_datetime and b.end_datetime else 0
+    return {
+        "id": b.id,
+        "kind": b.kind.value if hasattr(b.kind, "value") else b.kind,
+        "status": b.status.value if hasattr(b.status, "value") else b.status,
+        "priority": b.priority.value if hasattr(b.priority, "value") else (b.priority or "normal"),
+        "execution_status": b.execution_status.value if hasattr(b.execution_status, "value") else (b.execution_status or "planned"),
+        "overtime_status": b.overtime_status.value if hasattr(b.overtime_status, "value") else (b.overtime_status or "none"),
+        "start_datetime": b.start_datetime.isoformat() if b.start_datetime else None,
+        "end_datetime": b.end_datetime.isoformat() if b.end_datetime else None,
+        "duration_minutes": duration_min,
+        "duration_hours": round(duration_min / 60, 2),
+        "notes": b.notes,
+        "not_done_reason": b.not_done_reason,
+        "count_in_costs": b.count_in_costs,
+        "job": {
+            "id": b.job.id, "code": b.job.code, "title": b.job.title,
+            "project_id": b.job.project_id,
+            "project_code": b.job.project.code if b.job.project else None,
+            "project_title": b.job.project.title if b.job.project else None,
+        } if b.job else None,
+        "cost_line": {
+            "id": b.cost_line.id,
+            "description": b.cost_line.description,
+            "unit": b.cost_line.unit,
+            "quantity_quoted": b.cost_line.quantity_quoted,
+            "quantity_actual": b.cost_line.quantity_actual,
+        } if b.cost_line else None,
+        "assignments": [
+            {
+                "id": a.id,
+                "resource_id": a.resource_id,
+                "resource_name": a.resource.name if a.resource else None,
+                "start_datetime": a.start_datetime.isoformat(),
+                "end_datetime": a.end_datetime.isoformat(),
+            } for a in b.assignments
+        ],
+        "created_at": b.created_at.isoformat() if b.created_at else None,
+    }
+
+
 @router.get("/api/my-bookings")
 async def my_bookings(
     request: Request,
