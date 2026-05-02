@@ -474,6 +474,22 @@ class Resource(Base):
     time_punches: Mapped[List["TimePunch"]] = relationship(back_populates="resource")
 
 
+# v3.4.50 — Preset di selezione multipla di risorse (es. "Crew base color HDR",
+# "Mix audio standard"). Usato dal modal multi-risorsa per caricare in un click
+# un set di risorse ricorrenti. Tenant-scoped, condiviso tra utenti dello stesso
+# tenant. Visibile a tutti, modificabile solo dal creatore o admin/manager.
+class ResourcePreset(Base):
+    __tablename__ = "resource_presets"
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    tenant_id: Mapped[int] = mapped_column(ForeignKey("tenants.id"), default=1, index=True)
+    name: Mapped[str] = mapped_column(String(120))
+    description: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    # Lista di Resource.id (JSON). L'ordine viene preservato all'apply.
+    resource_ids: Mapped[list] = mapped_column(JSON, default=list)
+    created_by: Mapped[Optional[int]] = mapped_column(ForeignKey("users.id"), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+
+
 class UnavailabilityKind(str, enum.Enum):
     vacation = "vacation"     # ferie
     sick = "sick"             # malattia

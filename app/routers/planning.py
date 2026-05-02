@@ -4,13 +4,14 @@ from fastapi.responses import HTMLResponse, RedirectResponse
 from typing import Optional
 from datetime import date, datetime
 from sqlalchemy.orm import Session, joinedload
-from sqlalchemy import or_
+from sqlalchemy import or_, func
 from app.database import get_db
 from app.models import (
     Job, JobStatus, Client, Project, Booking, BookingAssignment, BookingChange,
     BookingStatus, BookingKind, BookingExecutionStatus,
     Resource, ResourceType, JobCostLine, Department, User,
     WorkingHoursPolicy, ResourceUnavailability, UnavailabilityKind, UnavailabilityStatus,
+    ResourcePreset,
 )
 from datetime import date as _date, timedelta as _td
 from app.services.auth import get_current_user_from_token
@@ -394,6 +395,142 @@ def _parse_id_list(value) -> Optional[list[int]]:
         except ValueError:
             continue
     return out or None
+
+
+# ── v3.4.50 — Resource presets (selezioni multiple) ─────────────────
+
+
+@router.get("/api/resource-presets")
+async def list_resource_presets(db: Session = Depends(get_db)):
+    """Lista presets risorse del tenant. Ritorna anche resource_count e
+    quali risorse sono ancora attive (per UI: alert su risorse rimosse)."""
+    presets = (
+        db.query(ResourcePreset)
+        .filter(ResourcePreset.tenant_id == CURRENT_TENANT)
+        .order_by(ResourcePreset.name).all()
+    )
+    # Cache nomi risorse attive per il counter "valid"
+    active_ids = {
+        r.id for r in db.query(Resource).filter(
+            Resource.tenant_id == CURRENT_TENANT, Resource.is_active == True  # noqa: E712
+        ).all()
+    }
+    out = []
+    for p in presets:
+        ids = list(p.resource_ids or [])
+        valid = [rid for rid in ids if rid in active_ids]
+        out.append({
+            "id": p.id,
+            "name": p.name,
+            "description": p.description,
+            "resource_ids": ids,
+            "resource_count": len(ids),
+            "valid_count": len(valid),
+            "created_by": p.created_by,
+            "created_at": p.created_at.isoformat() if p.created_at else None,
+        })
+    return out
+
+
+@router.post("/api/resource-presets")
+async def create_resource_preset(
+    request: Request,
+    name: str = Form(...),
+    resource_ids: str = Form(...),
+    description: Optional[str] = Form(None),
+    db: Session = Depends(get_db),
+):
+    """Crea un preset. resource_ids comma-separated. RBAC: tutti gli utenti
+    autenticati possono creare (è un'utility personale/condivisa)."""
+    user = current_user_optional(request)
+    if not user:
+        raise HTTPException(401, "Non autenticato")
+    name_clean = (name or "").strip()
+    if not name_clean:
+        raise HTTPException(400, "Nome obbligatorio")
+    ids = _parse_id_list(resource_ids) or []
+    if not ids:
+        raise HTTPException(400, "Specifica almeno una risorsa")
+    # Conflitto nome (case-insensitive nel tenant)
+    existing = (
+        db.query(ResourcePreset)
+        .filter(
+            ResourcePreset.tenant_id == CURRENT_TENANT,
+            func.lower(ResourcePreset.name) == name_clean.lower(),
+        ).first()
+    )
+    if existing:
+        raise HTTPException(409, f"Esiste già un preset con nome '{name_clean}'")
+    p = ResourcePreset(
+        tenant_id=CURRENT_TENANT,
+        name=name_clean,
+        description=(description or "").strip() or None,
+        resource_ids=ids,
+        created_by=user.id,
+    )
+    db.add(p); db.commit(); db.refresh(p)
+    return {
+        "id": p.id, "name": p.name, "description": p.description,
+        "resource_ids": p.resource_ids, "resource_count": len(p.resource_ids or []),
+    }
+
+
+@router.put("/api/resource-presets/{preset_id}")
+async def update_resource_preset(
+    preset_id: int,
+    request: Request,
+    name: Optional[str] = Form(None),
+    resource_ids: Optional[str] = Form(None),
+    description: Optional[str] = Form(None),
+    db: Session = Depends(get_db),
+):
+    """Aggiorna preset. Il creatore o admin/manager possono modificare."""
+    user = current_user_optional(request)
+    if not user:
+        raise HTTPException(401)
+    p = db.query(ResourcePreset).filter(
+        ResourcePreset.id == preset_id,
+        ResourcePreset.tenant_id == CURRENT_TENANT,
+    ).first()
+    if not p:
+        raise HTTPException(404, "Preset non trovato")
+    from app.services.rbac import is_admin, is_manager
+    if p.created_by != user.id and not (is_admin(user) or is_manager(user)):
+        raise HTTPException(403, "Solo il creatore o admin/manager può modificare")
+    if name is not None and name.strip():
+        p.name = name.strip()
+    if resource_ids is not None:
+        ids = _parse_id_list(resource_ids) or []
+        if not ids:
+            raise HTTPException(400, "Almeno una risorsa")
+        p.resource_ids = ids
+    if description is not None:
+        p.description = description.strip() or None
+    db.commit(); db.refresh(p)
+    return {
+        "id": p.id, "name": p.name, "description": p.description,
+        "resource_ids": p.resource_ids, "resource_count": len(p.resource_ids or []),
+    }
+
+
+@router.delete("/api/resource-presets/{preset_id}")
+async def delete_resource_preset(
+    preset_id: int, request: Request, db: Session = Depends(get_db),
+):
+    user = current_user_optional(request)
+    if not user:
+        raise HTTPException(401)
+    p = db.query(ResourcePreset).filter(
+        ResourcePreset.id == preset_id,
+        ResourcePreset.tenant_id == CURRENT_TENANT,
+    ).first()
+    if not p:
+        raise HTTPException(404)
+    from app.services.rbac import is_admin, is_manager
+    if p.created_by != user.id and not (is_admin(user) or is_manager(user)):
+        raise HTTPException(403, "Solo il creatore o admin/manager può eliminare")
+    db.delete(p); db.commit()
+    return {"ok": True}
 
 
 def _validate_kind_job(kind: BookingKind, job_id: Optional[int],

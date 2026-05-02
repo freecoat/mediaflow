@@ -819,9 +819,20 @@
 
         <!-- ─── Risorse assegnate (multi-row) ────────── -->
         <div class="form-group">
-          <label class="form-label" style="display:flex; justify-content:space-between; align-items:center;">
-            <span>Risorse <span id="tlb-ass-counter" style="color:#6272f5; font-weight:600;">(0)</span> <span style="color:var(--text3,#888); font-weight:normal;">— almeno 1, anche orari diversi</span></span>
-            <button type="button" class="btn btn-secondary btn-sm" onclick="tlbAddAssignmentRowFromFirst()">+ Aggiungi risorsa</button>
+          <label class="form-label" style="display:flex; justify-content:space-between; align-items:center; gap:8px; flex-wrap:wrap;">
+            <span>Risorse <span id="tlb-ass-counter" style="color:#6272f5; font-weight:600;">(0)</span> <span style="color:var(--text3,#888); font-weight:normal;">— almeno 1</span></span>
+            <span style="display:flex; gap:6px; align-items:center; flex-wrap:wrap;">
+              <!-- v3.4.50: preset dropdown + sync orario -->
+              <select id="tlb-preset-load" class="form-select" data-no-search="true" style="width:auto; min-width:180px; height:30px; padding:2px 8px; font-size:12px;" onchange="tlbApplyPreset(this.value)">
+                <option value="">📁 Carica preset…</option>
+              </select>
+              <button type="button" class="btn btn-ghost btn-sm" onclick="tlbSavePreset()" title="Salva la selezione corrente come preset">💾 Salva preset</button>
+              <button type="button" class="btn btn-secondary btn-sm" onclick="tlbAddAssignmentRowFromFirst()">+ Risorsa</button>
+            </span>
+          </label>
+          <label style="display:flex; align-items:center; gap:6px; font-size:12px; color:var(--text2); margin-bottom:8px; cursor:pointer; user-select:none;">
+            <input type="checkbox" id="tlb-sync-times" onchange="tlbToggleSyncTimes()" style="margin:0;">
+            🔗 Stesso orario per tutte le risorse <span style="color:var(--text3,#888);">(applica start/end della 1ª riga al cambio)</span>
           </label>
           <div id="tlb-assignments"></div>
         </div>
@@ -2937,6 +2948,13 @@ function _tlbReset() {
   if (ru) ru.value = '';
   const tpp = document.getElementById('tlb-tp-popup');
   if (tpp) tpp.style.display = 'none';
+  // v3.4.50: ripristina preferenza sync orario + aggiorna lista preset
+  const syncCb = document.getElementById('tlb-sync-times');
+  if (syncCb) {
+    try { syncCb.checked = localStorage.getItem('mf_tlb_sync_times') === '1'; } catch(_) {}
+  }
+  // Carica preset in background (non bloccante)
+  if (typeof tlbLoadPresets === 'function') tlbLoadPresets();
 }
 
 // ── Multi-row assignments ──────────────────────────────────
@@ -3055,6 +3073,138 @@ function _tlbUpdateRemoveButtons() {
 function tlbAssOnChange(el) {
   const row = el.closest('.tlb-ass-row');
   if (row) tlbAssUpdateDuration(row);
+  // v3.4.50: sync orario tra risorse se la spunta è ON e la riga toccata
+  // è la prima. Propaga start/end (date+time) a tutte le altre.
+  const syncOn = document.getElementById('tlb-sync-times')?.checked;
+  if (syncOn && row) {
+    const rows = document.querySelectorAll('#tlb-assignments .tlb-ass-row');
+    if (rows[0] === row) {
+      const sd = row.querySelector('.tlb-ass-start-date').value;
+      const st = row.querySelector('.tlb-ass-start-time').value;
+      const ed = row.querySelector('.tlb-ass-end-date').value;
+      const et = row.querySelector('.tlb-ass-end-time').value;
+      for (let i = 1; i < rows.length; i++) {
+        rows[i].querySelector('.tlb-ass-start-date').value = sd;
+        rows[i].querySelector('.tlb-ass-start-time').value = st;
+        rows[i].querySelector('.tlb-ass-end-date').value = ed;
+        rows[i].querySelector('.tlb-ass-end-time').value = et;
+        tlbAssUpdateDuration(rows[i]);
+      }
+    }
+  }
+}
+
+// v3.4.50: sync orario — quando si attiva, allinea subito le righe
+// dalla prima. Preferenza salvata in localStorage.
+function tlbToggleSyncTimes() {
+  const cb = document.getElementById('tlb-sync-times');
+  try { localStorage.setItem('mf_tlb_sync_times', cb.checked ? '1' : '0'); } catch(_) {}
+  if (cb.checked) {
+    const rows = document.querySelectorAll('#tlb-assignments .tlb-ass-row');
+    if (rows.length < 2) return;
+    const first = rows[0];
+    const sd = first.querySelector('.tlb-ass-start-date').value;
+    const st = first.querySelector('.tlb-ass-start-time').value;
+    const ed = first.querySelector('.tlb-ass-end-date').value;
+    const et = first.querySelector('.tlb-ass-end-time').value;
+    for (let i = 1; i < rows.length; i++) {
+      rows[i].querySelector('.tlb-ass-start-date').value = sd;
+      rows[i].querySelector('.tlb-ass-start-time').value = st;
+      rows[i].querySelector('.tlb-ass-end-date').value = ed;
+      rows[i].querySelector('.tlb-ass-end-time').value = et;
+      tlbAssUpdateDuration(rows[i]);
+    }
+    toast('Orari allineati alla prima riga', 'info', 2000);
+  }
+}
+
+// v3.4.50: Resource presets ──────────────────────────────────
+window._tlbPresets = [];
+async function tlbLoadPresets() {
+  try {
+    window._tlbPresets = await api('GET', '/planning/api/resource-presets');
+  } catch(_) { window._tlbPresets = []; }
+  const sel = document.getElementById('tlb-preset-load');
+  if (!sel) return;
+  if (!window._tlbPresets.length) {
+    sel.innerHTML = '<option value="">📁 Nessun preset salvato</option>';
+  } else {
+    sel.innerHTML = '<option value="">📁 Carica preset…</option>'
+      + window._tlbPresets.map(p =>
+          `<option value="${p.id}">${escapeHtml(p.name)} (${p.resource_count}${p.valid_count < p.resource_count ? ' — ⚠ '+(p.resource_count-p.valid_count)+' risorse non più attive' : ''})</option>`
+        ).join('');
+  }
+  if (typeof mfApplySearchable === 'function') mfApplySearchable(sel.parentElement);
+}
+
+function tlbApplyPreset(presetId) {
+  if (!presetId) return;
+  const p = (window._tlbPresets || []).find(x => String(x.id) === String(presetId));
+  if (!p) return;
+  const ids = (p.resource_ids || []).filter(Boolean);
+  if (!ids.length) return;
+  // Pesca start/end dalla prima riga esistente, replicandoli per le nuove righe
+  const first = document.querySelector('#tlb-assignments .tlb-ass-row');
+  let firstStart = null, firstEnd = null;
+  if (first) {
+    const sd = first.querySelector('.tlb-ass-start-date').value;
+    const st = first.querySelector('.tlb-ass-start-time').value;
+    const ed = first.querySelector('.tlb-ass-end-date').value;
+    const et = first.querySelector('.tlb-ass-end-time').value;
+    if (sd && st) firstStart = new Date(sd + 'T' + st).toISOString();
+    if (ed && et) firstEnd = new Date(ed + 'T' + et).toISOString();
+  }
+  // Risorse già selezionate (per evitare duplicati)
+  const existing = new Set(
+    Array.from(document.querySelectorAll('#tlb-assignments .tlb-ass-resource'))
+      .map(s => Number(s.value)).filter(Boolean)
+  );
+  let added = 0, skipped = 0;
+  for (const rid of ids) {
+    if (existing.has(rid)) { skipped++; continue; }
+    // Se la prima riga è "vuota" (no risorsa selezionata), usala come slot iniziale
+    const empties = Array.from(document.querySelectorAll('#tlb-assignments .tlb-ass-resource'))
+      .map(s => s.closest('.tlb-ass-row')).filter(r => !r.querySelector('.tlb-ass-resource').value);
+    if (empties.length) {
+      empties[0].querySelector('.tlb-ass-resource').value = String(rid);
+      added++;
+    } else {
+      tlbAddAssignmentRow({ resource_id: rid, start: firstStart, end: firstEnd });
+      added++;
+    }
+    existing.add(rid);
+  }
+  // Reset dropdown a placeholder
+  document.getElementById('tlb-preset-load').value = '';
+  if (typeof document.getElementById('tlb-preset-load')._mfSsRefresh === 'function') {
+    document.getElementById('tlb-preset-load')._mfSsRefresh();
+  }
+  let msg = `Preset "${p.name}" applicato: ${added} risors${added===1?'a':'e'} aggiunt${added===1?'a':'e'}`;
+  if (skipped) msg += `, ${skipped} già present${skipped===1?'e':'i'}`;
+  toast(msg, 'success', 3000);
+}
+
+async function tlbSavePreset() {
+  // Raccogli risorse selezionate
+  const ids = Array.from(document.querySelectorAll('#tlb-assignments .tlb-ass-resource'))
+    .map(s => Number(s.value)).filter(Boolean);
+  if (!ids.length) {
+    toast('Seleziona almeno una risorsa prima di salvare un preset', 'warning');
+    return;
+  }
+  // Dedupa preservando ordine
+  const seen = new Set(); const uniqIds = [];
+  for (const id of ids) { if (!seen.has(id)) { seen.add(id); uniqIds.push(id); } }
+  const name = (prompt(`Nome del preset (${uniqIds.length} risorse):`, '') || '').trim();
+  if (!name) return;
+  const fd = new FormData();
+  fd.append('name', name);
+  fd.append('resource_ids', uniqIds.join(','));
+  try {
+    await api('POST', '/planning/api/resource-presets', fd);
+    toast(`Preset "${name}" salvato`, 'success');
+    await tlbLoadPresets();
+  } catch(e) { toast(e.message || 'Errore salvataggio preset', 'error'); }
 }
 
 function _readRow(row) {

@@ -8,6 +8,10 @@
 
 ## Versione corrente
 
+**v3.4.50** — 2 maggio 2026 — Resource presets + sync orario tra risorse
+
+Modal multi-risorsa booking: (1) preset di selezione `ResourcePreset(name, resource_ids JSON, …)` — CRUD su `/planning/api/resource-presets`, dropdown "📁 Carica preset…" + bottone "💾 Salva preset" (nome via prompt), apply con dedup + riempimento righe vuote + ereditarietà start/end dalla 1ª riga; (2) checkbox "🔗 Stesso orario per tutte le risorse" — propaga start/end della 1ª riga alle altre, preferenza in localStorage `mf_tlb_sync_times`. Tabella `resource_presets` auto-creata al boot.
+
 **v3.4.49** — 2 maggio 2026 — Reset business data script
 
 Nuovo `scripts/reset_business_data.py` (voce `[O]` su strumenti). Cancella tutte le entità "business" (clienti/progetti/quote/job/booking/risorse/timbrature/fatture/asset/notifiche/AI conversazioni) preservando configurazione (utenti/ruoli/reparti/listino/policy/AI settings/tenant/delivery_templates/tags). Idempotente in transazione, reset sqlite_sequence. Per il giro di test cumulativo del setup aziendale da scratch.

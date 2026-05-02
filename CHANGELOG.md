@@ -1,5 +1,33 @@
 # MediaFlow — Changelog
 
+## v3.4.50 — Resource presets + sync orario tra risorse (2 maggio 2026)
+
+Due quick-win UX nel modal multi-risorsa booking timeline.
+
+### Resource presets (selezioni multiple ricorrenti)
+
+Nuovo modello `ResourcePreset(id, tenant_id, name, description, resource_ids JSON, created_by, created_at)`. Tabella creata automaticamente al boot via `Base.metadata.create_all()`.
+
+API CRUD:
+- `GET /planning/api/resource-presets` — lista (include `valid_count` per evidenziare risorse non più attive)
+- `POST /planning/api/resource-presets` — crea (RBAC: tutti gli autenticati)
+- `PUT /planning/api/resource-presets/{id}` — modifica (creatore o admin/manager)
+- `DELETE /planning/api/resource-presets/{id}` — elimina (creatore o admin/manager)
+
+UI nel modal "Nuovo/Edit booking":
+- Dropdown "📁 Carica preset…" con nome + counter risorse + warning ⚠ se preset contiene risorse non più attive
+- Bottone "💾 Salva preset" (chiede nome via prompt)
+- Apply: aggiunge le risorse del preset alle righe esistenti, riempie le righe vuote prima di crearne di nuove, evita duplicati. Eredita start/end dalla prima riga corrente.
+
+### Sync orario tra risorse
+
+Spunta `🔗 Stesso orario per tutte le risorse` sopra le righe assignment. Quando ON:
+- Cambio start/end della 1ª riga → propaga alle altre (data + ora)
+- Toggle ON con righe già presenti → allineamento immediato + toast info
+- Preferenza salvata in `localStorage` (`mf_tlb_sync_times`), ricaricata all'apertura del modal
+
+---
+
 ## v3.4.49 — Reset business data script (2 maggio 2026)
 
 Nuovo script `scripts/reset_business_data.py` per ripartire con setup pulito mantenendo solo dati di configurazione.
