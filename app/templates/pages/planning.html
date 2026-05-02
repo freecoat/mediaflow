@@ -220,6 +220,27 @@
   /* Punch overlay (timbrature reali — sotto i booking) */
   .vis-item.tl-bg-punch { border: none !important; box-shadow: none !important; opacity: 0.85; }
   .vis-item.tl-bg-punch:hover { opacity: 1; }
+  /* v3.4.44: indicatori execution_status sui booking timeline */
+  .vis-item.tl-exec-in_progress {
+    box-shadow: inset 0 0 0 2px rgba(251,146,60,.85), 0 2px 6px rgba(0,0,0,.35) !important;
+    animation: tl-pulse 1.6s ease-in-out infinite;
+  }
+  .vis-item.tl-exec-done { opacity: .82; box-shadow: inset 0 0 0 2px rgba(16,185,129,.65) !important; }
+  .vis-item.tl-exec-done::after {
+    content: '✓'; position: absolute; right: 4px; top: 0; bottom: 0;
+    display: flex; align-items: center; color: #6ee7b7; font-weight: 700; font-size: 11px;
+    text-shadow: 0 0 4px rgba(0,0,0,.55); pointer-events: none;
+  }
+  .vis-item.tl-exec-not_done {
+    opacity: .55;
+    background: repeating-linear-gradient(45deg, rgba(239,68,68,.3) 0 4px, rgba(0,0,0,.05) 4px 10px) !important;
+    border-color: #ef4444 !important;
+  }
+  .vis-item .tl-exec-icon { margin-left: 4px; opacity: 0.9; font-weight: 700; }
+  @keyframes tl-pulse {
+    0%, 100% { box-shadow: inset 0 0 0 2px rgba(251,146,60,.55), 0 2px 6px rgba(0,0,0,.25); }
+    50% { box-shadow: inset 0 0 0 2px rgba(251,146,60,1), 0 2px 10px rgba(251,146,60,.4); }
+  }
   /* Heatmap visibile dentro le label risorse */
   .vis-labelset .vis-label .tl-heat { width: calc(100% - 4px); margin: 4px 2px 0; height: 6px !important; display: flex !important; }
   .vis-labelset .vis-label .tl-heat-cell { display: block; }
@@ -390,6 +411,7 @@
       <div class="pl-tab" data-view="calendar">📅 Calendario</div>
       <div class="pl-tab" data-view="agenda">📑 Agenda</div>
       <div class="pl-tab" data-view="todo">✓ Le mie</div>
+      {% if user_is_elevated %}<div class="pl-tab" data-view="project">📂 Per progetto</div>{% endif %}
       <div class="pl-tab" data-view="timeline">🧭 Timeline risorse</div>
     </div>
 
@@ -434,6 +456,23 @@
     <!-- Todo (le mie) -->
     <div class="pl-view" id="view-todo">
       <div class="card"><div id="todo-host"><div class="pl-empty">Caricamento…</div></div></div>
+    </div>
+
+    <!-- v3.4.44: Per progetto (manager+) -->
+    <div class="pl-view" id="view-project">
+      <div class="card">
+        <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px;flex-wrap:wrap;">
+          <label class="form-label" style="margin:0;">Progetto</label>
+          <select id="proj-view-select" class="form-select" style="max-width:420px;">
+            <option value="">— seleziona progetto —</option>
+            {% for p in projects %}
+            <option value="{{ p.id }}">[{{ p.code }}] {{ p.title }}{% if p.client %} — {{ p.client.name }}{% endif %}</option>
+            {% endfor %}
+          </select>
+          <span id="proj-view-counter" class="text-sm text-muted"></span>
+        </div>
+        <div id="proj-view-host"><div class="pl-empty">Seleziona un progetto per vederne i booking.</div></div>
+      </div>
     </div>
 
     <!-- Resource Timeline (vis-timeline) -->
@@ -615,7 +654,7 @@
 <script>
 const ACTIVE_VIEW = {{ ('"' + active_view + '"')|safe }};
 const CURRENT_RESOURCE_ID = {{ current_resource_id if current_resource_id else 'null' }};
-const VALID_VIEWS = ['jobs','calendar','agenda','todo','timeline'];
+const VALID_VIEWS = ['jobs','calendar','agenda','todo','project','timeline'];
 const RESOURCES_SEED = [
 {% for r in resources %}  {id:{{ r.id }}, name:{{ r.name|tojson }}, dept:{{ (r.department_id or 0) }}, color:{{ (r.color or '#6272f5')|tojson }}}{{ "," if not loop.last else "" }}
 {% endfor %}];
@@ -799,6 +838,11 @@ document.getElementById('pl-tabs').addEventListener('click', e => {
   const t = e.target.closest('.pl-tab');
   if (t) setView(t.dataset.view);
 });
+// v3.4.44: dropdown "per progetto" → ricarica su change
+const pvSel = document.getElementById('proj-view-select');
+if (pvSel) pvSel.addEventListener('change', () => {
+  if (document.querySelector('.pl-tab.active')?.dataset.view === 'project') renderProjectView();
+});
 
 function renderActiveFiltersBar() {
   const labels = {
@@ -850,7 +894,55 @@ async function renderView(view) {
   if (view === 'calendar') return renderCalendar();
   if (view === 'agenda') return renderAgenda();
   if (view === 'todo') return renderTodo();
+  if (view === 'project') return renderProjectView();
   if (view === 'timeline') return renderTimeline();
+}
+
+// v3.4.44: Per progetto (manager+) — riusa renderTodoCard ma con header
+// risorsa visibile. Endpoint /planning/api/project-bookings (RBAC backend).
+async function renderProjectView() {
+  const sel = document.getElementById('proj-view-select');
+  const host = document.getElementById('proj-view-host');
+  const counter = document.getElementById('proj-view-counter');
+  const projectId = sel.value;
+  if (!projectId) {
+    host.innerHTML = '<div class="pl-empty">Seleziona un progetto per vederne i booking.</div>';
+    counter.textContent = '';
+    return;
+  }
+  host.innerHTML = '<div class="pl-empty">Caricamento…</div>';
+  try {
+    const items = await api('GET', `/planning/api/project-bookings?project_id=${projectId}`);
+    counter.textContent = `${items.length} booking`;
+    if (!items.length) {
+      host.innerHTML = '<div class="pl-empty">Nessun booking per questo progetto.</div>';
+      return;
+    }
+    const today = new Date(); today.setHours(0,0,0,0);
+    const tomorrow = new Date(today); tomorrow.setDate(today.getDate()+1);
+    // Group by resource_id per leggibilità
+    const byRes = {};
+    for (const it of items) {
+      const k = it.resource_id;
+      if (!byRes[k]) byRes[k] = { name: it.resource_name, color: it.resource_color, items: [] };
+      byRes[k].items.push(it);
+    }
+    let html = '';
+    for (const rid of Object.keys(byRes)) {
+      const g = byRes[rid];
+      html += `<div style="margin-bottom:18px;">
+        <div style="display:flex;align-items:center;gap:8px;font-size:14px;font-weight:600;margin-bottom:6px;color:var(--text);">
+          <span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:${escapeHtml(g.color || '#6272f5')};"></span>
+          ${escapeHtml(g.name || ('Risorsa #'+rid))}
+          <span class="text-sm text-muted" style="font-weight:400;">${g.items.length} booking</span>
+        </div>`;
+      html += g.items.map(it => renderTodoCard(it, today, tomorrow)).join('');
+      html += '</div>';
+    }
+    host.innerHTML = html;
+  } catch(e) {
+    host.innerHTML = `<div class="pl-empty color-rose">${escapeHtml(e.message || 'Errore')}</div>`;
+  }
 }
 
 // ── Jobs table ─────────────────────────────────────────────
@@ -871,11 +963,15 @@ async function renderJobs() {
     const barColor = pct >= 100 ? 'var(--green)' :
                      pct >= 50 ? 'var(--indigo)' :
                      pct > 0 ? 'var(--amber)' : 'var(--text3)';
+    // v3.4.44: ore (planned) → click apre drilldown bookings del job
+    const hoursLink = totH > 0
+      ? `<a href="#" onclick='event.stopPropagation();openJobBookingsDrilldown(${j.id});return false;' class="mono" style="color:var(--text3);text-decoration:underline;text-decoration-style:dotted;cursor:pointer;" title="Vedi prenotazioni">${doneH}h / ${totH}h</a>`
+      : `<span class="mono" style="color:var(--text3);">${doneH}h / ${totH}h</span>`;
     const progressCell = totH > 0 ? `
       <div style="display:flex;flex-direction:column;gap:3px;">
         <div style="display:flex;justify-content:space-between;font-size:11px;color:var(--text2);">
           <span class="mono">${pct}%</span>
-          <span class="mono" style="color:var(--text3);">${doneH}h / ${totH}h</span>
+          ${hoursLink}
         </div>
         <div style="height:6px;background:var(--bg3);border-radius:3px;overflow:hidden;">
           <div style="height:100%;width:${Math.min(pct, 100)}%;background:${barColor};transition:width .25s ease;"></div>
@@ -894,6 +990,54 @@ async function renderJobs() {
       <td onclick="event.stopPropagation()"><a class="btn btn-ghost btn-sm" href="/jobs/${j.id}">Apri</a></td>
     </tr>`;
   }).join('');
+}
+
+// v3.4.44: drilldown booking di un job. Riusa modal-todo-detail come container,
+// ma con HTML lista. Coerente con altri modal del file.
+async function openJobBookingsDrilldown(jobId) {
+  openModal('modal-todo-detail');
+  const body = document.getElementById('todo-detail-body');
+  const jobLink = document.getElementById('todo-detail-job-link');
+  body.innerHTML = '<div class="text-muted text-sm">Caricamento booking…</div>';
+  jobLink.href = '/jobs/' + jobId; jobLink.style.display = '';
+  try {
+    const items = await api('GET', `/planning/api/bookings?job=${jobId}`);
+    if (!items || !items.length) {
+      body.innerHTML = '<div class="text-muted text-sm">Nessuna prenotazione per questo job.</div>';
+      return;
+    }
+    // Modifica titolo modal (niente assignee, vista flat ordinata per data)
+    document.querySelector('#modal-todo-detail .modal-title').textContent = `📅 Prenotazioni job (${items.length})`;
+    items.sort((a,b) => new Date(a.start) - new Date(b.start));
+    let totH = 0, doneH = 0;
+    const rows = items.map(it => {
+      const p = it.extendedProps || {};
+      const s = new Date(it.start), e = new Date(it.end);
+      const dur = (e - s) / 3600000;
+      totH += dur;
+      const exec = p.execution_status || 'planned';
+      if (exec === 'done') doneH += dur;
+      const fmt = dt => dt.toLocaleString('it-IT', {dateStyle:'short', timeStyle:'short'});
+      const execLbl = {planned:'Pianif.', in_progress:'In corso', done:'Fatto', not_done:'Non fatto'}[exec] || exec;
+      return `<tr>
+        <td class="text-xs mono">${escapeHtml(fmt(s))}</td>
+        <td class="text-xs mono">${dur.toFixed(1)}h</td>
+        <td class="text-xs">${escapeHtml(it.title||'')}</td>
+        <td><span class="badge-exec ${exec}" style="font-size:10px;padding:1px 6px;">${execLbl}</span></td>
+        <td><a class="btn btn-ghost btn-sm" href="#" onclick="event.preventDefault();closeModal('modal-todo-detail');todoOpenDetail(${p.booking_id || it.booking_id});">›</a></td>
+      </tr>`;
+    }).join('');
+    body.innerHTML = `
+      <div class="text-sm mb-2">${doneH.toFixed(1)}h fatte / ${totH.toFixed(1)}h pianificate (${items.length} prenotazioni)</div>
+      <div style="max-height:50vh;overflow-y:auto;">
+        <table style="width:100%;font-size:12px;">
+          <thead><tr><th style="text-align:left;">Quando</th><th style="text-align:left;">Durata</th><th style="text-align:left;">Voce</th><th style="text-align:left;">Stato</th><th></th></tr></thead>
+          <tbody>${rows}</tbody>
+        </table>
+      </div>`;
+  } catch(e) {
+    body.innerHTML = `<div class="color-rose">${escapeHtml(e.message || 'Errore')}</div>`;
+  }
 }
 
 // ── Calendar (week/month) ──────────────────────────────────
@@ -1075,6 +1219,9 @@ function renderTodoCard(it, today, tomorrow) {
 // dashboard "I miei booking di oggi" + da link drilldown timeline planning).
 async function todoOpenDetail(bookingId) {
   openModal('modal-todo-detail');
+  // v3.4.44: reset title (drilldown lo cambia in "Prenotazioni job (N)")
+  const titleEl = document.querySelector('#modal-todo-detail .modal-title');
+  if (titleEl) titleEl.textContent = '📋 Dettaglio booking';
   const body = document.getElementById('todo-detail-body');
   const jobLink = document.getElementById('todo-detail-job-link');
   body.innerHTML = '<div class="text-muted text-sm">Caricamento…</div>';
@@ -1296,7 +1443,15 @@ function tlBookingToItem(b) {
   const color = b.color || '#6272f5';
   const groupSize = p.group_size || 1;
   const groupBadge = groupSize > 1 ? ` <span style="background:rgba(0,0,0,.35); padding:0 4px; border-radius:3px; font-size:10px;">${p.group_position}/${groupSize}</span>` : '';
-  let classes = '';
+  // v3.4.44: indicator inline execution_status sui booking timeline.
+  const exec = p.execution_status || 'planned';
+  const execIcon = {
+    planned: '',
+    in_progress: ' <span class="tl-exec-icon" title="In corso">▶</span>',
+    done: ' <span class="tl-exec-icon" title="Fatto">✓</span>',
+    not_done: ' <span class="tl-exec-icon" title="Non fatto">✗</span>',
+  }[exec] || '';
+  let classes = `tl-exec-${exec} `;
   if (isInternal) classes += 'kind-internal ';
   if (isTentative) classes += 'tl-tentative ';
   return {
@@ -1304,12 +1459,12 @@ function tlBookingToItem(b) {
     assignment_id: b.assignment_id,
     booking_id: b.booking_id,
     group: p.resource_id,
-    content: escapeHtml(b.title || '') + groupBadge,
+    content: escapeHtml(b.title || '') + groupBadge + execIcon,
     start: b.start,
     end: b.end,
     style: 'background-color:'+color+'; border-color:'+color+';',
     className: classes.trim(),
-    title: escapeHtml(b.title || '') + (isTentative ? ' (tentative)' : ''),
+    title: escapeHtml(b.title || '') + (isTentative ? ' (tentative)' : '') + ` · ${exec}`,
   };
 }
 

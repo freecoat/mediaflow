@@ -1,5 +1,33 @@
 # MediaFlow — Changelog
 
+## v3.4.44 — Ore lavorate + drilldown + view per progetto (2 maggio 2026)
+
+### #6 — Indicatori execution_status sui booking timeline
+
+Ogni item booking della timeline planning ora ha indicatore visuale dello stato esecuzione:
+- **planned**: standard
+- **in_progress**: bordo arancione pulsante (animation `tl-pulse`)
+- **done**: bordo verde + icona `✓` a destra dell'item, opacity ridotta
+- **not_done**: pattern tratteggiato rosso, opacity 0.55
+
+Tooltip arricchito con `· {execution_status}`. Le classi CSS `tl-exec-*` sono applicate via `tlBookingToItem`.
+
+### #7a — Drilldown ore pianificate
+
+Nella tabella `/planning?view=jobs` la cella ore (es. `5h / 80h`) è ora un link che apre un modal con la lista delle prenotazioni del job: data/ora, durata, voce, stato esecuzione, link al dettaglio booking.
+
+Il modal riusa `modal-todo-detail` con titolo dinamico `📅 Prenotazioni job (N)`. Lista ordinata per `start`. Header con totale `done h / total h`.
+
+### #7b — Vista "Per progetto" (manager+)
+
+Nuova tab `📂 Per progetto` in `/planning` visibile solo a admin/manager/producer (o utenti con permesso `edit_planning`). Dropdown searchable progetti → mostra le card stile "Le mie" raggruppate per risorsa, ognuna con badge colorato.
+
+Endpoint nuovo: `GET /planning/api/project-bookings?project_id=X`. RBAC: 403 se non admin/manager/producer/edit_planning.
+
+UI lato server: `user_is_elevated` passato al template per gating della tab. `VALID_VIEWS` esteso con `'project'`.
+
+---
+
 ## v3.4.43 — Duplica quote con scelta progetto + Sposta progetto (2 maggio 2026)
 
 ### #4 — Duplica con scelta progetto

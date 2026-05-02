@@ -28,7 +28,7 @@ def _tpl():
 
 # ── Pagine HTML ───────────────────────────────────────────────────────
 
-VALID_VIEWS = ("jobs", "calendar", "agenda", "todo", "timeline")
+VALID_VIEWS = ("jobs", "calendar", "agenda", "todo", "project", "timeline")
 
 
 def _resolve_current_user(db: Session, token: Optional[str]) -> Optional[User]:
@@ -75,6 +75,15 @@ async def planning_hub(
         my_res = db.query(Resource).filter(Resource.user_id == cur_user.id).first()
         if my_res:
             cur_resource_id = my_res.id
+    # v3.4.44: tab "Per progetto" visibile solo a admin/manager/producer
+    user_is_elevated = False
+    if cur_user:
+        from app.services.rbac import is_admin, is_manager, has_permission
+        is_producer = bool(cur_user.role and cur_user.role.code == "producer")
+        user_is_elevated = (
+            is_admin(cur_user) or is_manager(cur_user) or is_producer
+            or has_permission(cur_user, "edit_planning")
+        )
     return _tpl().TemplateResponse(
         "pages/planning.html",
         {
@@ -86,6 +95,7 @@ async def planning_hub(
             "resources": resources,
             "jobs": jobs,
             "current_resource_id": cur_resource_id,
+            "user_is_elevated": user_is_elevated,
         },
     )
 
@@ -1950,6 +1960,72 @@ async def update_booking_count_in_costs(
 # ── Endpoint "Le mie" arricchito (v3.4.32) ──────────────────────────
 # Restituisce solo i booking dell'utente loggato con tutto il contesto
 # necessario per la card interattiva (priority/execution_status/overtime/...).
+
+@router.get("/api/project-bookings")
+async def project_bookings(
+    request: Request,
+    project_id: int,
+    from_date: Optional[datetime] = None,
+    to_date: Optional[datetime] = None,
+    db: Session = Depends(get_db),
+):
+    """v3.4.44 — Booking di un progetto, formato come "Le mie" ma con info
+    risorsa visibile. Per manager+admin+producer (vista trasversale di tutte
+    le risorse del progetto). RBAC: nessun permesso esplicito definito ancora,
+    ma scopo manager+: blocco se l'utente non ha 'view_all_planning' (alias
+    edit_planning) o uno dei ruoli admin/manager/producer."""
+    user = current_user_optional(request)
+    if not user:
+        raise HTTPException(401, "Non autenticato")
+    from app.services.rbac import is_admin, is_manager, has_permission
+    is_producer = bool(user.role and user.role.code == "producer")
+    if not (is_admin(user) or is_manager(user) or is_producer or has_permission(user, "edit_planning")):
+        raise HTTPException(403, "Vista riservata a manager / producer / admin")
+
+    q = db.query(BookingAssignment).options(
+        joinedload(BookingAssignment.resource),
+        joinedload(BookingAssignment.booking).joinedload(Booking.job).joinedload(Job.project),
+        joinedload(BookingAssignment.booking).joinedload(Booking.cost_line),
+    ).join(Booking, BookingAssignment.booking_id == Booking.id).join(
+        Job, Booking.job_id == Job.id
+    ).filter(
+        Booking.tenant_id == CURRENT_TENANT,
+        Job.project_id == project_id,
+        Booking.status != BookingStatus.cancelled,
+    )
+    if from_date:
+        q = q.filter(BookingAssignment.end_datetime >= from_date)
+    if to_date:
+        q = q.filter(BookingAssignment.start_datetime <= to_date)
+    rows = q.order_by(BookingAssignment.start_datetime.asc()).all()
+
+    out = []
+    for a in rows:
+        b = a.booking
+        out.append({
+            "assignment_id": a.id,
+            "booking_id": b.id,
+            "title": _booking_title_for_assignment(b, a.resource.name if a.resource else "?"),
+            "start": a.start_datetime.isoformat(),
+            "end": a.end_datetime.isoformat(),
+            "duration_minutes": int(round((a.end_datetime - a.start_datetime).total_seconds() / 60)),
+            "resource_id": a.resource_id,
+            "resource_name": a.resource.name if a.resource else None,
+            "resource_color": a.resource.color if a.resource else "#6272f5",
+            "job_id": b.job_id,
+            "job_code": b.job.code if b.job else None,
+            "job_title": b.job.title if b.job else None,
+            "cost_line_description": b.cost_line.description if b.cost_line else None,
+            "kind": b.kind.value if hasattr(b.kind, "value") else b.kind,
+            "status": b.status.value if hasattr(b.status, "value") else b.status,
+            "priority": b.priority.value if hasattr(b.priority, "value") else (b.priority or "normal"),
+            "execution_status": b.execution_status.value if hasattr(b.execution_status, "value") else (b.execution_status or "planned"),
+            "overtime_status": b.overtime_status.value if hasattr(b.overtime_status, "value") else (b.overtime_status or "none"),
+            "not_done_reason": b.not_done_reason,
+            "notes": b.notes,
+        })
+    return out
+
 
 @router.get("/api/bookings/{booking_id}/detail")
 async def booking_detail(booking_id: int, db: Session = Depends(get_db)):

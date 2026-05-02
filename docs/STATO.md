@@ -8,6 +8,10 @@
 
 ## Versione corrente
 
+**v3.4.44** — 2 maggio 2026 — Ore lavorate + drilldown + view per progetto
+
+#6: indicatori execution_status sui booking timeline (in_progress=pulse arancione, done=bordo verde+✓, not_done=tratteggiato rosso) via classi `tl-exec-*` in `tlBookingToItem`. #7a: cell ore in `/planning?view=jobs` cliccabile → modal drilldown con lista prenotazioni del job. #7b: tab "📂 Per progetto" in `/planning` visibile a admin/manager/producer/edit_planning, dropdown progetti + cards "Le mie" raggruppate per risorsa. Endpoint `GET /planning/api/project-bookings?project_id=X`.
+
 **v3.4.43** — 2 maggio 2026 — Duplica quote con scelta progetto + Sposta progetto
 
 #4: `POST /quotes/api/{id}/duplicate` accetta `project_id` opzionale (riallinea client_id al progetto target). UI: modal `Duplica quotazione` con dropdown searchable progetti (vuoto = stesso progetto). Nuovo endpoint `PUT /quotes/api/{id}/move-to-project` per spostare una quote `draft` senza job a un altro progetto. Bottone "🚚 Sposta" nell'editor, visibile solo per draft.
