@@ -1,5 +1,42 @@
 # MediaFlow — Changelog
 
+## v3.4.48 — Look timeline tweaks: bg + 3D items + dept fix (2 maggio 2026)
+
+### Pannello ⚙
+
+- **Rimossa**: opzione "Densità" (poco utile in pratica, padding default ok)
+- **Aggiunta**: opzione "Colore sfondo" con 7 preset:
+  - Default (tema), Scuro, Molto scuro, Caldo (seppia), Freddo (notte), Verde foresta, Carta (chiaro)
+  - Apply via `[data-bg="..."]` su `#tl-host`
+
+### Items 3D
+
+- Border-radius 7 → **9px** (spigoli più morbidi)
+- Box-shadow multi-layer per effetto bevel:
+  - `inset 0 1px 0 rgba(255,255,255,.22)` (highlight superiore)
+  - `inset 0 -2px 3px rgba(0,0,0,.20)` (depth inferiore)
+  - `0 1px 2px + 0 4px 10px` (drop close + ambient)
+- Hover: shadow rinforzata + glow leggero
+- Selected: stessi inset + ring bianco esterno
+
+### Fix accent "Per reparto"
+
+Prima il selettore CSS usava una `--dept-accent` non valorizzata → fallback indigo (visivamente identico al default). **Ora funziona davvero**:
+
+- `Department.color` esposto in `DEPARTMENTS_SEED` (template + JS)
+- `tlBuildGroups` aggiunge `className: 'tl-dept-{id}'` ai gruppi reparto
+- `tlPrefsApply` genera CSS dinamico (`<style id="tl-prefs-dynamic">`) con una regola per ogni reparto:
+  ```
+  #tl-host[data-accent="dept"] .tl-dept-3.vis-nesting-group {
+    background: linear-gradient(90deg, rgba(R,G,B,.25) 0%, rgba(R,G,B,.05) 70%, transparent);
+    border-left-color: <color>;
+    color: <color>; filter: brightness(1.25);
+  }
+  ```
+- Helper `_hexToRgba(hex, alpha)` per derivare il wash semitrasparente.
+
+---
+
 ## v3.4.47 — Filtri planning multi-select (2 maggio 2026)
 
 I 4 filtri autocomplete della sidebar `/planning` (Cliente, Progetto, Job, Risorsa) ora sono multi-select via chip.

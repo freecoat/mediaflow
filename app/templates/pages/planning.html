@@ -184,33 +184,42 @@
   }
   .vis-labelset .vis-label:hover { background: rgba(98,114,245,0.10); }
   .vis-foreground .vis-group:hover { background: rgba(98,114,245,0.04); }
-  /* v3.4.45: Items deep restyle. Shape più morbida (radius 7), padding
-     verticale aumentato per leggibilità, ombra più sostenuta, glow indigo
-     su hover. NB: niente transition su transform/position altrimenti durante
-     drag vis-timeline applica position via transform e l'item scivola. */
+  /* v3.4.48: Items con bordi più arrotondati + effetto 3D bevel.
+     Multi-layer shadow: highlight inset top + ombra inset bottom (depth) +
+     drop shadow esterna doppia (close + ambient). Niente transition su
+     transform/position (vis-timeline usa transform per drag). */
   .vis-item {
-    border: 1px solid rgba(0,0,0,.4);
+    border: 1px solid rgba(0,0,0,.45);
     color: #fff;
     font-size: 11.5px;
     font-weight: 500;
-    border-radius: 7px;
-    padding: 3px 8px;
-    box-shadow: 0 1px 4px rgba(0,0,0,.42), inset 0 1px 0 rgba(255,255,255,.1);
+    border-radius: 9px;
+    padding: 3px 9px;
+    box-shadow:
+      inset 0 1px 0 rgba(255,255,255,.22),
+      inset 0 -2px 3px rgba(0,0,0,.20),
+      0 1px 2px rgba(0,0,0,.30),
+      0 4px 10px rgba(0,0,0,.22);
     backdrop-filter: saturate(115%);
     transition: box-shadow .14s ease, filter .14s ease, border-color .14s ease;
   }
   .vis-item:hover {
     filter: brightness(1.10) saturate(1.05);
-    box-shadow: 0 4px 12px rgba(0,0,0,.5), inset 0 1px 0 rgba(255,255,255,.16),
-                0 0 0 1px rgba(255,255,255,.08);
-    border-color: rgba(255,255,255,.18);
+    box-shadow:
+      inset 0 1px 0 rgba(255,255,255,.30),
+      inset 0 -2px 3px rgba(0,0,0,.18),
+      0 2px 4px rgba(0,0,0,.35),
+      0 8px 18px rgba(0,0,0,.28),
+      0 0 0 1px rgba(255,255,255,.10);
+    border-color: rgba(255,255,255,.22);
   }
   .vis-item.vis-selected {
     box-shadow:
       0 0 0 2px #fff,
       0 0 0 4px rgba(98,114,245,.45),
       0 6px 20px rgba(98,114,245,.35),
-      inset 0 1px 0 rgba(255,255,255,.22);
+      inset 0 1px 0 rgba(255,255,255,.30),
+      inset 0 -2px 3px rgba(0,0,0,.18);
   }
   .vis-item .vis-item-content {
     padding: 0 2px;
@@ -394,9 +403,7 @@
   .tl-pref-row > select { width: 130px; height: 28px; font-size: 11.5px; padding: 2px 6px; }
   .tl-pref-check { display:flex; align-items:center; gap:8px; margin-bottom:6px; color:var(--text2); cursor:pointer; user-select:none; }
   .tl-pref-check input { margin:0; }
-  /* Reactive data-attributes su #tl-host */
-  #tl-host[data-density="compact"] .vis-item { padding: 1px 5px; border-radius: 4px; }
-  #tl-host[data-density="comfort"] .vis-item { padding: 5px 10px; border-radius: 9px; }
+  /* v3.4.48: Reactive data-attributes su #tl-host */
   #tl-host[data-anim="off"] .vis-item, #tl-host[data-anim="off"] * { transition: none !important; animation: none !important; }
   #tl-host[data-heatmap="off"] .vis-labelset .vis-label .tl-heat { display:none !important; }
   #tl-host[data-today-glow="off"] .vis-current-time { box-shadow:none !important; }
@@ -410,11 +417,16 @@
     border-left-color: #9aa1b8 !important;
     color: #cdd5e8 !important;
   }
-  #tl-host[data-accent="dept"] .vis-labelset .vis-label.vis-nesting-group {
-    /* CSS variable settata da JS in renderTimeline */
-    background: linear-gradient(90deg, var(--dept-accent, rgba(98,114,245,0.18)) 0%, transparent 100%) !important;
-    border-left-color: var(--dept-accent-solid, #6272f5) !important;
-  }
+  /* v3.4.48: Colore sfondo timeline. Apply a #tl-host (background-color
+     diretto sul container vis-timeline + override label/grid). */
+  #tl-host[data-bg="dark"]    { background-color: #14171f; }
+  #tl-host[data-bg="darker"]  { background-color: #0a0c12; }
+  #tl-host[data-bg="warm"]    { background-color: #221c14; }
+  #tl-host[data-bg="cool"]    { background-color: #11162a; }
+  #tl-host[data-bg="forest"]  { background-color: #0f1a13; }
+  #tl-host[data-bg="paper"]   { background-color: #2a2d36; }
+  #tl-host[data-bg="paper"] .vis-labelset .vis-label,
+  #tl-host[data-bg="paper"] .vis-time-axis .vis-text { color: #d8dceb; }
   /* Storyboard density */
   #sb-host[data-density="compact"] .sb-card { padding: 4px 6px; font-size: 10.5px; }
   #sb-host[data-density="compact"] .sb-card-time { font-size: 9px; margin-bottom: 1px; }
@@ -676,18 +688,22 @@
             <strong style="color:var(--text); font-size:13px;">⚙ Look timeline</strong>
             <button class="btn btn-ghost btn-icon btn-sm" onclick="tlPrefsToggle(event)">✕</button>
           </div>
-          <div class="tl-pref-row"><label>Densità</label>
-            <select id="tlp-density" class="form-select" data-no-search="true">
-              <option value="compact">Compatta</option>
-              <option value="normal" selected>Normale</option>
-              <option value="comfort">Comoda</option>
-            </select></div>
           <div class="tl-pref-row"><label>Font items</label>
             <select id="tlp-font" class="form-select" data-no-search="true">
               <option value="11">11</option>
               <option value="11.5" selected>11.5</option>
               <option value="12">12</option>
               <option value="13">13</option>
+            </select></div>
+          <div class="tl-pref-row"><label>Colore sfondo</label>
+            <select id="tlp-bg" class="form-select" data-no-search="true">
+              <option value="default" selected>Default (tema)</option>
+              <option value="dark">Scuro</option>
+              <option value="darker">Molto scuro</option>
+              <option value="warm">Caldo (seppia)</option>
+              <option value="cool">Freddo (notte)</option>
+              <option value="forest">Verde foresta</option>
+              <option value="paper">Carta (chiaro)</option>
             </select></div>
           <div class="tl-pref-row"><label>Accent reparto</label>
             <select id="tlp-accent" class="form-select" data-no-search="true">
@@ -873,7 +889,7 @@ const RESOURCES_SEED = [
 {% for r in resources %}  {id:{{ r.id }}, name:{{ r.name|tojson }}, dept:{{ (r.department_id or 0) }}, color:{{ (r.color or '#6272f5')|tojson }}}{{ "," if not loop.last else "" }}
 {% endfor %}];
 const DEPARTMENTS_SEED = [
-{% for d in departments %}  {id:{{ d.id }}, name:{{ d.name|tojson }}}{{ "," if not loop.last else "" }}
+{% for d in departments %}  {id:{{ d.id }}, name:{{ d.name|tojson }}, color:{{ (d.color or '#6272f5')|tojson }}}{{ "," if not loop.last else "" }}
 {% endfor %}];
 const JOBS_SEED = [
 {% for j in jobs %}  {id:{{ j.id }}, code:{{ j.code|tojson }}, title:{{ (j.title or '')|tojson }}, client:{{ (j.client.name if j.client else '')|tojson }}, project_code:{{ (j.project.code if j.project else '')|tojson }}, project_title:{{ (j.project.title if j.project else '')|tojson }}}{{ "," if not loop.last else "" }}
@@ -1229,8 +1245,8 @@ async function renderJobs() {
 // v3.4.46: Preferenze look timeline (per-utente, persisted in localStorage).
 const TL_PREFS_KEY = 'mf_tl_prefs';
 const TL_PREFS_DEFAULTS = {
-  density: 'normal',
   font: '11.5',
+  bg: 'default',
   accent: 'indigo',
   sb_density: 'normal',
   anim: true,
@@ -1247,24 +1263,46 @@ function tlPrefsLoad() {
 function tlPrefsSave(p) {
   try { localStorage.setItem(TL_PREFS_KEY, JSON.stringify(p)); } catch(_) {}
 }
+// v3.4.48: utility per derivare un colore "wash" semitrasparente da un hex
+function _hexToRgba(hex, alpha) {
+  const m = (hex || '#6272f5').replace('#','').match(/.{1,2}/g);
+  if (!m || m.length < 3) return `rgba(98,114,245,${alpha})`;
+  const r = parseInt(m[0],16), g = parseInt(m[1],16), b = parseInt(m[2],16);
+  return `rgba(${r},${g},${b},${alpha})`;
+}
 function tlPrefsApply(p) {
   const host = document.getElementById('tl-host');
   if (host) {
-    host.dataset.density = p.density || 'normal';
     host.dataset.anim = p.anim ? 'on' : 'off';
     host.dataset.heatmap = p.heatmap ? 'on' : 'off';
     host.dataset.todayGlow = p.today_glow ? 'on' : 'off';
     host.dataset.weekendBg = p.weekend_bg ? 'on' : 'off';
     host.dataset.accent = p.accent || 'indigo';
+    host.dataset.bg = p.bg || 'default';
     host.style.setProperty('--vis-item-font-size', (p.font || '11.5') + 'px');
   }
   const sbHost = document.getElementById('sb-host');
   if (sbHost) sbHost.dataset.density = p.sb_density || 'normal';
-  // Font size inline override via inline style sui vis-item
+  // Font size + dept accent CSS dinamico
   const styleId = 'tl-prefs-dynamic';
   let s = document.getElementById(styleId);
   if (!s) { s = document.createElement('style'); s.id = styleId; document.head.appendChild(s); }
-  s.textContent = `#tl-host .vis-item { font-size: ${parseFloat(p.font || '11.5')}px !important; }`;
+  let css = `#tl-host .vis-item { font-size: ${parseFloat(p.font || '11.5')}px !important; }\n`;
+  // v3.4.48: per ogni reparto del seed genera la regola con il colore reale.
+  // Le label vis-timeline per group con className `tl-dept-{id}` ricevono lo stile.
+  // Funziona solo quando accent="dept" (gating via [data-accent="dept"]).
+  if (typeof DEPARTMENTS_SEED !== 'undefined') {
+    for (const d of DEPARTMENTS_SEED) {
+      const c = d.color || '#6272f5';
+      css += `#tl-host[data-accent="dept"] .vis-labelset .vis-label.tl-dept-${d.id}.vis-nesting-group {`
+           + ` background: linear-gradient(90deg, ${_hexToRgba(c, .25)} 0%, ${_hexToRgba(c, .05)} 70%, transparent 100%) !important;`
+           + ` border-left-color: ${c} !important;`
+           + ` color: ${c} !important;`
+           + ` filter: brightness(1.25);`
+           + ` }\n`;
+    }
+  }
+  s.textContent = css;
 }
 function tlPrefsToggle(ev) {
   const pop = document.getElementById('tl-prefs-pop');
@@ -1275,8 +1313,8 @@ function tlPrefsToggle(ev) {
     pop.style.top = '40px';
     // Sync UI con prefs correnti
     const p = tlPrefsLoad();
-    document.getElementById('tlp-density').value = p.density;
     document.getElementById('tlp-font').value = String(p.font);
+    document.getElementById('tlp-bg').value = p.bg || 'default';
     document.getElementById('tlp-accent').value = p.accent;
     document.getElementById('tlp-sb-density').value = p.sb_density;
     document.getElementById('tlp-anim').checked = !!p.anim;
@@ -1296,15 +1334,15 @@ function tlPrefsToggle(ev) {
   if (ev) ev.stopPropagation();
 }
 function tlPrefsBindHandlers() {
-  const ids = ['density','font','accent','sb-density','anim','heatmap','today-glow','weekend-bg'];
+  const ids = ['font','bg','accent','sb-density','anim','heatmap','today-glow','weekend-bg'];
   for (const id of ids) {
     const el = document.getElementById('tlp-' + id);
     if (!el || el._mfBound) continue;
     el._mfBound = true;
     el.addEventListener('change', () => {
       const p = tlPrefsLoad();
-      p.density = document.getElementById('tlp-density').value;
       p.font = document.getElementById('tlp-font').value;
+      p.bg = document.getElementById('tlp-bg').value;
       p.accent = document.getElementById('tlp-accent').value;
       p.sb_density = document.getElementById('tlp-sb-density').value;
       p.anim = document.getElementById('tlp-anim').checked;
@@ -1866,12 +1904,18 @@ function tlBuildGroups(bookings, rangeStart, rangeEnd) {
   // Raggruppa per dept usato dalle risorse filtrate
   const usedDepts = new Set(resources.map(r => r.dept));
   const groups = [];
-  // Reparti
+  // Reparti — v3.4.48: className `tl-dept-{id}` per supportare accent "Per reparto"
   for (const d of DEPARTMENTS_SEED) {
     if (!usedDepts.has(d.id)) continue;
     const children = resources.filter(r => r.dept === d.id).map(r => r.id);
     if (!children.length) continue;
-    groups.push({id: 'd'+d.id, content: '<b>'+escapeHtml(d.name)+'</b>', nestedGroups: children, treeLevel: 1});
+    groups.push({
+      id: 'd'+d.id,
+      content: '<b>'+escapeHtml(d.name)+'</b>',
+      nestedGroups: children,
+      treeLevel: 1,
+      className: 'tl-dept-' + d.id,
+    });
   }
   // Reparto "Senza" per dept=0
   if (usedDepts.has(0)) {

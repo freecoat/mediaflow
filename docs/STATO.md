@@ -8,6 +8,10 @@
 
 ## Versione corrente
 
+**v3.4.48** — 2 maggio 2026 — Look timeline tweaks (bg + 3D items + dept fix)
+
+Pannello ⚙: rimossa "Densità", aggiunta "Colore sfondo" (7 preset: default/dark/darker/warm/cool/forest/paper). Items: radius 7→9 + box-shadow multi-layer per effetto 3D bevel (inset highlight top + inset depth bottom + drop close+ambient). Fix accent "Per reparto": `DEPARTMENTS_SEED` ora include `color`, `tlBuildGroups` aggiunge className `tl-dept-{id}`, `tlPrefsApply` genera CSS dinamico per ogni reparto (gradient + border + filter brightness). Helper `_hexToRgba`.
+
 **v3.4.47** — 2 maggio 2026 — Filtri planning multi-select
 
 I 4 filtri autocomplete (Cliente, Progetto, Job, Risorsa) ora multi-tag con chips. Hidden value `comma-separated` ids. Backend helper `_parse_id_list` su `/planning/api/jobs|bookings|unavailabilities` accetta single, comma-separated, list. Active filters bar: "N selezionati" se >1. Backspace su input vuoto rimuove l'ultimo chip.
