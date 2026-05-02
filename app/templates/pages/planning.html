@@ -109,20 +109,39 @@
     box-shadow: 0 4px 16px -4px rgba(0,0,0,.3), inset 0 1px 0 rgba(255,255,255,0.02);
     overflow: hidden;
   }
-  /* Time axis */
-  .vis-time-axis { background: linear-gradient(180deg, rgba(255,255,255,0.02) 0%, transparent 100%); }
+  /* v3.4.45: Time axis più tipografato. Major (giorni/mesi) ora pill-style,
+     minor (ore/giorni) compatto. Gradient di fondo accentuato. */
+  .vis-time-axis {
+    background: linear-gradient(180deg, rgba(98,114,245,0.06) 0%, rgba(255,255,255,0.015) 60%, transparent 100%);
+    border-bottom: 1px solid rgba(255,255,255,0.07);
+  }
   .vis-time-axis .vis-text {
     color: var(--text2,#aaa);
-    font-size: 10px;
+    font-size: 10.5px;
     text-transform: uppercase;
-    letter-spacing: 0.4px;
+    letter-spacing: 0.5px;
     font-weight: 500;
+    padding: 2px 6px;
   }
-  .vis-time-axis .vis-text.vis-major { color: var(--text,#eee); font-weight: 600; font-size: 11px; }
-  .vis-time-axis .vis-grid { border-color: rgba(255,255,255,0.04); }
-  .vis-time-axis .vis-grid.vis-major { border-color: rgba(255,255,255,0.08); }
+  .vis-time-axis .vis-text.vis-major {
+    color: #cdd5ff;
+    font-weight: 700;
+    font-size: 11.5px;
+    letter-spacing: 0.6px;
+  }
+  .vis-time-axis .vis-grid { border-color: rgba(255,255,255,0.05); }
+  .vis-time-axis .vis-grid.vis-major { border-color: rgba(98,114,245,0.18); }
+  /* v3.4.45: weekend evidenziato su tutta la timeline (axis + foreground) */
   .vis-time-axis .vis-grid.vis-saturday,
-  .vis-time-axis .vis-grid.vis-sunday { background: rgba(98,114,245,0.025); }
+  .vis-time-axis .vis-grid.vis-sunday {
+    background: rgba(98,114,245,0.05);
+  }
+  .vis-foreground .vis-group .vis-saturday,
+  .vis-foreground .vis-group .vis-sunday {
+    background: rgba(98,114,245,0.04);
+  }
+  /* v3.4.45: oggi (vis-today) con sfondo lieve indigo */
+  .vis-time-axis .vis-grid.vis-today { background: rgba(251,146,60,0.05); }
   /* Labels (left col) — v3.4.32.2: senza min-height (rompeva allineamento
      con le righe foreground). Font più grande e chiaro, padding leggero. */
   .vis-labelset .vis-label {
@@ -142,20 +161,17 @@
   .vis-labelset .vis-label:nth-child(odd) { background: rgba(255,255,255,0.012); }
   .vis-foreground .vis-group:nth-child(odd) { background: rgba(255,255,255,0.012); }
   .vis-foreground .vis-group { border-color: rgba(255,255,255,0.04); transition: background .12s ease; }
-  /* Reparto padre — barra colorata sottile + label tipo header.
-     v3.4.32.2: niente più min-height/max-height su .vis-label e .vis-group.
-     Vis-timeline calcola le altezze runtime in coppia label↔group e fissarle
-     da CSS rompe l'allineamento. Lasciamo che vis le calcoli e diamo solo
-     style cosmetico. La compattezza si ottiene via padding e font-size. */
+  /* Reparto padre — header sticky più contrastato (v3.4.45). */
   .vis-labelset .vis-label.vis-nesting-group {
-    background: linear-gradient(90deg, rgba(98,114,245,0.18) 0%, rgba(98,114,245,0.06) 60%, transparent 100%);
+    background: linear-gradient(90deg, rgba(98,114,245,0.25) 0%, rgba(98,114,245,0.08) 70%, transparent 100%);
     font-weight: 700;
-    color: #a8b3ff;
+    color: #c0c8ff;
     text-transform: uppercase;
-    letter-spacing: 0.6px;
+    letter-spacing: 0.7px;
     font-size: 11px;
-    border-left: 3px solid #6272f5;
+    border-left: 4px solid #6272f5;
     padding-left: 12px;
+    box-shadow: inset 0 -1px 0 rgba(98,114,245,0.15);
   }
   .vis-labelset .vis-label.vis-nesting-group:nth-child(odd) {
     background: linear-gradient(90deg, rgba(98,114,245,0.18) 0%, rgba(98,114,245,0.06) 60%, transparent 100%);
@@ -168,26 +184,37 @@
   }
   .vis-labelset .vis-label:hover { background: rgba(98,114,245,0.10); }
   .vis-foreground .vis-group:hover { background: rgba(98,114,245,0.04); }
-  /* Items: shape morbida, glassy. NB: niente transition su transform/position
-     altrimenti durante drag vis-timeline applica position via transform e
-     l'item "scivola" con effetto inerziale. */
+  /* v3.4.45: Items deep restyle. Shape più morbida (radius 7), padding
+     verticale aumentato per leggibilità, ombra più sostenuta, glow indigo
+     su hover. NB: niente transition su transform/position altrimenti durante
+     drag vis-timeline applica position via transform e l'item scivola. */
   .vis-item {
-    border: 1px solid rgba(0,0,0,.35);
+    border: 1px solid rgba(0,0,0,.4);
     color: #fff;
-    font-size: 11px;
-    border-radius: 5px;
-    padding: 2px 6px;
-    box-shadow: 0 1px 3px rgba(0,0,0,.35), inset 0 1px 0 rgba(255,255,255,.08);
-    backdrop-filter: saturate(110%);
-    transition: box-shadow .12s ease, filter .12s ease;
+    font-size: 11.5px;
+    font-weight: 500;
+    border-radius: 7px;
+    padding: 3px 8px;
+    box-shadow: 0 1px 4px rgba(0,0,0,.42), inset 0 1px 0 rgba(255,255,255,.1);
+    backdrop-filter: saturate(115%);
+    transition: box-shadow .14s ease, filter .14s ease, border-color .14s ease;
   }
-  .vis-item:hover { filter: brightness(1.08); box-shadow: 0 3px 8px rgba(0,0,0,.45), inset 0 1px 0 rgba(255,255,255,.12); }
+  .vis-item:hover {
+    filter: brightness(1.10) saturate(1.05);
+    box-shadow: 0 4px 12px rgba(0,0,0,.5), inset 0 1px 0 rgba(255,255,255,.16),
+                0 0 0 1px rgba(255,255,255,.08);
+    border-color: rgba(255,255,255,.18);
+  }
   .vis-item.vis-selected {
     box-shadow:
       0 0 0 2px #fff,
-      0 0 0 4px rgba(98,114,245,.35),
-      0 4px 14px rgba(0,0,0,.5),
-      inset 0 1px 0 rgba(255,255,255,.18);
+      0 0 0 4px rgba(98,114,245,.45),
+      0 6px 20px rgba(98,114,245,.35),
+      inset 0 1px 0 rgba(255,255,255,.22);
+  }
+  .vis-item .vis-item-content {
+    padding: 0 2px;
+    line-height: 1.35;
   }
   .vis-item.kind-internal { background: linear-gradient(180deg, #7a8290 0%, #5a6272 100%); border-color: #4b5563; }
   /* Conflict highlight live durante drag/resize */
@@ -208,13 +235,16 @@
     box-shadow: 0 0 0 2px rgba(107,114,128,.6) !important;
     opacity: .7;
   }
-  /* Cursor edit hints */
+  /* v3.4.45: Drag handles più visibili anche senza hover (chiarezza affordance) */
   .vis-item .vis-drag-left, .vis-item .vis-drag-right {
-    background: linear-gradient(90deg, transparent 0%, rgba(255,255,255,.18) 50%, transparent 100%);
-    width: 6px;
+    background: linear-gradient(90deg, rgba(0,0,0,.18) 0%, rgba(255,255,255,.22) 50%, rgba(0,0,0,.18) 100%);
+    width: 8px;
+    opacity: 0;
+    transition: opacity .12s ease;
   }
   .vis-item:hover .vis-drag-left, .vis-item:hover .vis-drag-right {
-    background: linear-gradient(90deg, transparent 0%, rgba(255,255,255,.45) 50%, transparent 100%);
+    opacity: 1;
+    background: linear-gradient(90deg, rgba(0,0,0,.18) 0%, rgba(255,255,255,.55) 50%, rgba(0,0,0,.18) 100%);
   }
   .vis-item.vis-editable { cursor: move; }
   /* Punch overlay (timbrature reali — sotto i booking) */
@@ -241,14 +271,43 @@
     0%, 100% { box-shadow: inset 0 0 0 2px rgba(251,146,60,.55), 0 2px 6px rgba(0,0,0,.25); }
     50% { box-shadow: inset 0 0 0 2px rgba(251,146,60,1), 0 2px 10px rgba(251,146,60,.4); }
   }
-  /* Heatmap visibile dentro le label risorse */
-  .vis-labelset .vis-label .tl-heat { width: calc(100% - 4px); margin: 4px 2px 0; height: 6px !important; display: flex !important; }
-  .vis-labelset .vis-label .tl-heat-cell { display: block; }
+  /* v3.4.45: Heatmap capacity più curato. Round corners, separatori sottili,
+     hover preview con tooltip standard via title attribute. */
+  .vis-labelset .vis-label .tl-heat {
+    width: calc(100% - 6px);
+    margin: 5px 3px 0;
+    height: 7px !important;
+    display: flex !important;
+    border-radius: 3px;
+    overflow: hidden;
+    background: rgba(255,255,255,0.03);
+    box-shadow: inset 0 0 0 1px rgba(255,255,255,0.03);
+  }
+  .vis-labelset .vis-label .tl-heat-cell {
+    display: block;
+    transition: opacity .12s ease;
+  }
+  .vis-labelset .vis-label .tl-heat-cell:hover { opacity: .75; }
   /* Spazio verticale extra per le label foglia */
   .vis-labelset .vis-label:not(.vis-nesting-group) .vis-inner { padding-bottom: 4px; }
   .vis-item .vis-item-content { padding: 2px 4px; }
-  /* Linea oggi più visibile */
-  .vis-current-time { background-color: #fb923c; width: 2px; }
+  /* v3.4.45: Linea oggi più prominente con glow */
+  .vis-current-time {
+    background-color: #fb923c !important;
+    width: 2px;
+    box-shadow: 0 0 8px rgba(251,146,60,.6), 0 0 14px rgba(251,146,60,.3);
+  }
+  .vis-current-time::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: -4px;
+    width: 10px;
+    height: 10px;
+    background: #fb923c;
+    border-radius: 50%;
+    box-shadow: 0 0 8px rgba(251,146,60,.7);
+  }
   /* v3.4.32.2: paste mode — cursor copy + outline arancione sulla timeline */
   #tl-host.tl-paste-mode { outline: 2px dashed #fb923c; outline-offset: -2px; cursor: copy; }
   #tl-host.tl-paste-mode .vis-foreground .vis-group { cursor: copy; }
@@ -303,6 +362,46 @@
   .fa-suggestions .fa-item:hover, .fa-suggestions .fa-item.active { background: rgba(98,114,245,0.18); }
   .fa-suggestions .fa-item .fa-meta { color: var(--text3,#888); font-size: 11px; }
   .fa-input.has-value { background: rgba(98,114,245,0.10); }
+  /* v3.4.45: Storyboard view — 7 colonne giorno (responsive collapse <960px) */
+  .sb-grid { display: grid; grid-template-columns: repeat(7, minmax(140px, 1fr)); gap: 8px; }
+  @media (max-width: 1100px) { .sb-grid { grid-template-columns: repeat(4, minmax(160px, 1fr)); } }
+  @media (max-width: 720px) { .sb-grid { grid-template-columns: 1fr; } }
+  .sb-col {
+    display: flex; flex-direction: column; gap: 6px;
+    background: var(--bg2, rgba(0,0,0,.12)); border-radius: 8px; padding: 8px;
+    border: 1px solid var(--border, rgba(255,255,255,.06));
+    min-height: 180px;
+  }
+  .sb-col.is-today { border-color: rgba(251,146,60,.55); box-shadow: 0 0 0 1px rgba(251,146,60,.25); }
+  .sb-col.is-weekend { background: rgba(98,114,245,.04); }
+  .sb-col-head {
+    display: flex; align-items: baseline; justify-content: space-between;
+    padding-bottom: 6px; border-bottom: 1px solid rgba(255,255,255,.06); margin-bottom: 4px;
+  }
+  .sb-col-day { font-size: 11px; text-transform: uppercase; letter-spacing: .6px; color: var(--text2); font-weight: 600; }
+  .sb-col-date { font-size: 16px; font-weight: 700; color: var(--text); margin-left: 6px; }
+  .sb-col.is-today .sb-col-date { color: #fb923c; }
+  .sb-col-hours { font-size: 11px; color: var(--text3); font-family: var(--font-mono, monospace); }
+  .sb-card {
+    background: var(--bg-elev, #1a1d29);
+    border-left: 3px solid #6272f5; border-radius: 5px;
+    padding: 6px 8px; font-size: 11.5px; cursor: pointer;
+    border: 1px solid rgba(255,255,255,.04); border-left-width: 3px;
+    transition: transform .12s ease, box-shadow .12s ease, border-color .12s ease;
+  }
+  .sb-card:hover { transform: translateX(2px); box-shadow: 0 4px 10px rgba(0,0,0,.3); border-left-color: #8b9aff; }
+  .sb-card.exec-done { opacity: .65; border-left-color: #10b981; }
+  .sb-card.exec-in_progress { border-left-color: #fb923c; box-shadow: inset 0 0 0 1px rgba(251,146,60,.3); }
+  .sb-card.exec-not_done {
+    opacity: .55; border-left-color: #ef4444;
+    background: repeating-linear-gradient(45deg, rgba(239,68,68,.04) 0 4px, transparent 4px 10px), var(--bg-elev, #1a1d29);
+  }
+  .sb-card-time { font-size: 10px; font-family: var(--font-mono, monospace); color: var(--text3); margin-bottom: 2px; }
+  .sb-card-title { font-weight: 500; color: var(--text); line-height: 1.3; }
+  .sb-card-meta { font-size: 10.5px; color: var(--text2); margin-top: 3px; }
+  .sb-card-resource { display: inline-flex; align-items: center; gap: 4px; font-size: 10px; color: var(--text2); margin-top: 4px; }
+  .sb-card-resource::before { content: ''; display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: var(--res-color, #6272f5); }
+  .sb-empty { font-size: 10.5px; color: var(--text3); font-style: italic; padding: 6px 4px; }
 </style>
 {% endblock %}
 
@@ -412,6 +511,7 @@
       <div class="pl-tab" data-view="agenda">📑 Agenda</div>
       <div class="pl-tab" data-view="todo">✓ Le mie</div>
       {% if user_is_elevated %}<div class="pl-tab" data-view="project">📂 Per progetto</div>{% endif %}
+      <div class="pl-tab" data-view="storyboard">🎬 Storyboard</div>
       <div class="pl-tab" data-view="timeline">🧭 Timeline risorse</div>
     </div>
 
@@ -456,6 +556,20 @@
     <!-- Todo (le mie) -->
     <div class="pl-view" id="view-todo">
       <div class="card"><div id="todo-host"><div class="pl-empty">Caricamento…</div></div></div>
+    </div>
+
+    <!-- v3.4.45: Storyboard view (settimanale) -->
+    <div class="pl-view" id="view-storyboard">
+      <div class="card">
+        <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px;flex-wrap:wrap;">
+          <button class="btn btn-secondary btn-sm" onclick="storyboardWeek(-7)">← Settimana</button>
+          <button class="btn btn-secondary btn-sm" onclick="storyboardWeek(0)">Oggi</button>
+          <button class="btn btn-secondary btn-sm" onclick="storyboardWeek(+7)">Settimana →</button>
+          <span id="sb-week-label" class="text-sm" style="font-weight:600;margin-left:8px;"></span>
+          <span id="sb-week-totals" class="text-sm text-muted" style="margin-left:auto;"></span>
+        </div>
+        <div id="sb-host"><div class="pl-empty">Caricamento storyboard…</div></div>
+      </div>
     </div>
 
     <!-- v3.4.44: Per progetto (manager+) -->
@@ -654,7 +768,7 @@
 <script>
 const ACTIVE_VIEW = {{ ('"' + active_view + '"')|safe }};
 const CURRENT_RESOURCE_ID = {{ current_resource_id if current_resource_id else 'null' }};
-const VALID_VIEWS = ['jobs','calendar','agenda','todo','project','timeline'];
+const VALID_VIEWS = ['jobs','calendar','agenda','todo','project','storyboard','timeline'];
 const RESOURCES_SEED = [
 {% for r in resources %}  {id:{{ r.id }}, name:{{ r.name|tojson }}, dept:{{ (r.department_id or 0) }}, color:{{ (r.color or '#6272f5')|tojson }}}{{ "," if not loop.last else "" }}
 {% endfor %}];
@@ -895,6 +1009,7 @@ async function renderView(view) {
   if (view === 'agenda') return renderAgenda();
   if (view === 'todo') return renderTodo();
   if (view === 'project') return renderProjectView();
+  if (view === 'storyboard') return renderStoryboard();
   if (view === 'timeline') return renderTimeline();
 }
 
@@ -991,6 +1106,123 @@ async function renderJobs() {
     </tr>`;
   }).join('');
 }
+
+// v3.4.45: Storyboard view — vista settimanale a 7 colonne giorno con cards.
+window._sbWeekStart = null; // monday della settimana visualizzata
+
+function _sbStartOfWeek(d) {
+  const x = new Date(d); x.setHours(0,0,0,0);
+  const dow = x.getDay(); // 0=dom...6=sab
+  const diff = dow === 0 ? -6 : 1 - dow; // ISO: lunedi
+  x.setDate(x.getDate() + diff);
+  return x;
+}
+
+function storyboardWeek(deltaDays) {
+  if (deltaDays === 0 || !window._sbWeekStart) {
+    window._sbWeekStart = _sbStartOfWeek(new Date());
+  } else {
+    const w = new Date(window._sbWeekStart);
+    w.setDate(w.getDate() + deltaDays);
+    window._sbWeekStart = _sbStartOfWeek(w);
+  }
+  renderStoryboard();
+}
+
+async function renderStoryboard() {
+  if (!window._sbWeekStart) window._sbWeekStart = _sbStartOfWeek(new Date());
+  const start = new Date(window._sbWeekStart);
+  const end = new Date(start); end.setDate(end.getDate() + 7);
+  const fmtD = d => d.toISOString().substring(0,10);
+  // Label header
+  const fmtLong = d => d.toLocaleDateString('it-IT', {day:'numeric', month:'long', year:'numeric'});
+  const lblStart = new Date(start);
+  const lblEnd = new Date(start); lblEnd.setDate(lblEnd.getDate() + 6);
+  document.getElementById('sb-week-label').textContent =
+    `Settimana del ${fmtLong(lblStart)} → ${fmtLong(lblEnd)}`;
+
+  const host = document.getElementById('sb-host');
+  host.innerHTML = '<div class="pl-empty">Caricamento…</div>';
+
+  const fp = getFilterParams();
+  fp.from = fmtD(start);
+  fp.to = fmtD(end);
+  const qs = new URLSearchParams(fp).toString();
+
+  let bookings;
+  try {
+    bookings = await api('GET', '/planning/api/bookings?' + qs);
+  } catch(e) {
+    host.innerHTML = `<div class="pl-empty color-rose">${escapeHtml(e.message || 'Errore')}</div>`;
+    return;
+  }
+
+  // Group per giorno (chiave YYYY-MM-DD locale)
+  const days = [];
+  for (let i = 0; i < 7; i++) {
+    const d = new Date(start); d.setDate(d.getDate() + i);
+    days.push({ date: d, key: fmtD(d), items: [], totalH: 0 });
+  }
+  const today = fmtD(new Date());
+  let weekTotalH = 0;
+
+  for (const b of (bookings || [])) {
+    const s = new Date(b.start);
+    const e = new Date(b.end);
+    const k = fmtD(s);
+    const day = days.find(d => d.key === k);
+    if (!day) continue; // booking fuori finestra (capita per booking multi-giorno)
+    const durH = (e - s) / 3600000;
+    day.items.push({ b, s, e, durH });
+    day.totalH += durH;
+    weekTotalH += durH;
+  }
+
+  document.getElementById('sb-week-totals').textContent =
+    `${weekTotalH.toFixed(1)}h totali · ${(bookings||[]).length} booking`;
+
+  const dayNames = ['Lun','Mar','Mer','Gio','Ven','Sab','Dom'];
+  const html = ['<div class="sb-grid">'];
+  for (let i = 0; i < 7; i++) {
+    const d = days[i];
+    const isToday = d.key === today;
+    const isWeekend = i >= 5;
+    const colCls = ['sb-col'];
+    if (isToday) colCls.push('is-today');
+    if (isWeekend) colCls.push('is-weekend');
+    html.push(`<div class="${colCls.join(' ')}">`);
+    html.push(`<div class="sb-col-head">
+      <div><span class="sb-col-day">${dayNames[i]}</span><span class="sb-col-date">${d.date.getDate()}</span></div>
+      <div class="sb-col-hours">${d.totalH > 0 ? d.totalH.toFixed(1)+'h' : ''}</div>
+    </div>`);
+    if (!d.items.length) {
+      html.push('<div class="sb-empty">—</div>');
+    } else {
+      d.items.sort((a,b) => a.s - b.s);
+      for (const it of d.items) {
+        const p = it.b.extendedProps || {};
+        const exec = p.execution_status || 'planned';
+        const tStart = it.s.toLocaleTimeString('it-IT',{hour:'2-digit',minute:'2-digit'});
+        const tEnd = it.e.toLocaleTimeString('it-IT',{hour:'2-digit',minute:'2-digit'});
+        const meta = p.cost_line_description || '';
+        // Trova nome+colore risorsa nel seed
+        const r = RESOURCES_SEED.find(x => x.id === p.resource_id);
+        const rName = r ? r.name : ('Risorsa #' + p.resource_id);
+        const rColor = r ? r.color : '#6272f5';
+        html.push(`<div class="sb-card exec-${exec}" style="--res-color:${escapeHtml(rColor)};" onclick="todoOpenDetail(${p.booking_id || it.b.booking_id})" title="Apri dettaglio">
+          <div class="sb-card-time">${tStart}–${tEnd} · ${it.durH.toFixed(1)}h</div>
+          <div class="sb-card-title">${escapeHtml(it.b.title || '')}</div>
+          ${meta ? '<div class="sb-card-meta">'+escapeHtml(meta)+'</div>' : ''}
+          <div class="sb-card-resource">${escapeHtml(rName)}</div>
+        </div>`);
+      }
+    }
+    html.push('</div>');
+  }
+  html.push('</div>');
+  host.innerHTML = html.join('');
+}
+
 
 // v3.4.44: drilldown booking di un job. Riusa modal-todo-detail come container,
 // ma con HTML lista. Coerente con altri modal del file.

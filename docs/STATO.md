@@ -8,6 +8,10 @@
 
 ## Versione corrente
 
+**v3.4.45** — 2 maggio 2026 — Look timeline: deep restyle + Storyboard view
+
+C4a: pass CSS su vis-timeline (time axis tipografato, items radius/padding/glow, drag handles fade-in, today line con dot+glow, group nesting più contrastato, heatmap container con radius). C4b: nuova tab `🎬 Storyboard` settimanale, 7 colonne giorno (Lun→Dom), navigazione settimana, cards booking ordinate per ora con badge risorsa colorato, click → modal dettaglio. Responsive (1100px → 4 col, 720px → 1 col).
+
 **v3.4.44** — 2 maggio 2026 — Ore lavorate + drilldown + view per progetto
 
 #6: indicatori execution_status sui booking timeline (in_progress=pulse arancione, done=bordo verde+✓, not_done=tratteggiato rosso) via classi `tl-exec-*` in `tlBookingToItem`. #7a: cell ore in `/planning?view=jobs` cliccabile → modal drilldown con lista prenotazioni del job. #7b: tab "📂 Per progetto" in `/planning` visibile a admin/manager/producer/edit_planning, dropdown progetti + cards "Le mie" raggruppate per risorsa. Endpoint `GET /planning/api/project-bookings?project_id=X`.

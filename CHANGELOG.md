@@ -1,5 +1,34 @@
 # MediaFlow — Changelog
 
+## v3.4.45 — Look timeline: deep restyle + Storyboard view (2 maggio 2026)
+
+### C4a — Deep restyle vis-timeline
+
+Pass mirato di CSS sul planning timeline (zero cambi logici):
+
+- **Time axis**: gradient indigo accentuato, separatore inferiore, major label pill-style (color `#cdd5ff`, font-weight 700, letter-spacing 0.6px).
+- **Items**: radius 5→7, padding 2/6→3/8, font-size 11→11.5 + weight 500, ombra più sostenuta, glow indigo su hover, transition curate.
+- **Drag handles**: opacity 0 di base → 1 su hover (clean), gradient più contrastato.
+- **Linea oggi**: color glow arancione + dot in cima.
+- **Group nesting (reparto)**: gradient più scuro, border-left 3→4px, color `#c0c8ff` (più contrastato).
+- **Heatmap capacity label**: container con radius + bg subtle, hover preview.
+- **Weekend** evidenziato anche sul foreground (non solo nell'axis), `vis-today` con sfondo arancione lieve.
+
+### C4b — Storyboard view
+
+Nuova tab `🎬 Storyboard` in `/planning`. Vista settimanale a 7 colonne (Lun→Dom):
+
+- Navigazione: `← Settimana` / `Oggi` / `Settimana →`.
+- Ogni colonna giorno mostra header (giorno + numero) + totale ore + cards booking ordinate per ora.
+- Card storyboard: time slot mono, titolo, voce, badge risorsa colorato. Stato esecuzione: bordo verde (done), arancione pulse (in_progress), tratteggiato rosso (not_done).
+- Click card → modal `todoOpenDetail` (riusato).
+- Header settimana con totale ore + counter booking. Filtri trasversali applicati (incluso `from`/`to` derivati dalla settimana).
+- Responsive: 7 colonne ≥1100px, 4 colonne ≥720px, 1 colonna mobile.
+
+`VALID_VIEWS` esteso con `'storyboard'` (sia template che router).
+
+---
+
 ## v3.4.44 — Ore lavorate + drilldown + view per progetto (2 maggio 2026)
 
 ### #6 — Indicatori execution_status sui booking timeline
