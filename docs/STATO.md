@@ -8,6 +8,19 @@
 
 ## Versione corrente
 
+**v3.4.56** — 3 maggio 2026 — Conferma assegnazione risorse + warning quote approved senza risorse + workflow docs
+
+Completati i 2 TODO della v3.4.55:
+1. **Pre-save confirm** in modal booking: prima del save, GET `/planning/api/jobs/{id}/resource-coverage` → se ci sono risorse non ancora in `JobResourceAssignment`, dialog di conferma. Cancel = abort.
+2. **Notify `quote_approved_no_resources`** (non bloccante): hook in PUT status → approved, se job ha 0 assignment notify a `assign_resources` (admin/manager/producer).
+
+Aggiunti **3 documenti workflow** in `docs/`:
+- `workflow.md` — 5 diagrammi Mermaid (state Quote, state Booking, flow forward/reverse/phantom, fonti Maturato, vincoli HARD-BLOCK)
+- `data-model.md` — erDiagram entità + classDiagram con flag/stati + tabella decisioni
+- `permissions-matrix.md` — matrice permesso × ruolo + permessi gate-keeper
+
+Niente migrazione DB.
+
 **v3.4.55** — 3 maggio 2026 — Fix sistemico: integrità Quote↔JobCostLine↔Booking, vista lavorazione read-only, auto-assignment risorse, allineamento man-hours
 
 Cambio strutturale dopo 5 paradossi segnalati da Matteo. Sintesi:

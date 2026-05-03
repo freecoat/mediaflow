@@ -3967,6 +3967,26 @@ async function tlbSubmit() {
       btn.disabled = false; btn.textContent = editingId ? 'Aggiorna' : 'Crea booking';
       return;
     }
+
+    // v3.4.56 — pre-save check: avvisa l'utente se l'auto-assignment sta per
+    // aggiungere risorse non ancora coperte sul progetto. Conferma richiesta.
+    if (jobIdResolved && !editingId) {
+      const rids = assignments.map(a => a.resource_id).join(',');
+      try {
+        const cov = await api('GET', `/planning/api/jobs/${jobIdResolved}/resource-coverage?resource_ids=${rids}`);
+        if (cov.missing && cov.missing.length) {
+          const names = cov.missing.map(r => `• ${r.name}${r.role?' ('+r.role+')':''}${r.department_name?' — '+r.department_name:''}`).join('\n');
+          const msg = `Le seguenti risorse NON sono ancora assegnate al progetto e verranno aggiunte automaticamente:\n\n${names}\n\nConfermi?`;
+          if (!confirm(msg)) {
+            btn.disabled = false; btn.textContent = editingId ? 'Aggiorna' : 'Crea booking';
+            return;
+          }
+        }
+      } catch(e) {
+        // Non bloccante: se il check fallisce, procedi col save (l'hook server-side gestisce comunque)
+        console.warn('resource-coverage check failed:', e);
+      }
+    }
   }
 
   const fd = new FormData();

@@ -139,6 +139,8 @@ class NotificationKind(str, enum.Enum):
     quote_discrepancy_alert = "quote_discrepancy_alert"      # → admin/accounting (sforamenti / extra)
     # Reverse-flow (v3.4.52) — booking ha forzato approvazione implicita o creato phantom
     quote_reverse_approval = "quote_reverse_approval"        # → edit_quotes (account managers)
+    # v3.4.56 — quote approvata ma il job risultante non ha ancora risorse assegnate
+    quote_approved_no_resources = "quote_approved_no_resources"  # → assign_resources (producer/manager)
     custom = "custom"
 
 

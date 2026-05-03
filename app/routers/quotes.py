@@ -556,6 +556,36 @@ async def update_quote_status(
     if new == QuoteStatus.approved and prev != QuoteStatus.approved:
         # Approvazione: crea il job se non esiste
         promoted_job = _create_job_from_quote(db, q)
+        # v3.4.56 — warning non bloccante: se il job non ha JobResourceAssignment,
+        # notifica chi può assegnare (producer/manager). Auto-assignment via booking
+        # resta disponibile (richiesta conferma client-side).
+        try:
+            from app.models import JobResourceAssignment, NotificationKind, NotificationSeverity
+            from app.services.notifications import notify_permission
+            ass_count = db.query(JobResourceAssignment).filter(
+                JobResourceAssignment.job_id == promoted_job.id
+            ).count()
+            if ass_count == 0:
+                notify_permission(
+                    db, permission="assign_resources",
+                    kind=NotificationKind.quote_approved_no_resources.value,
+                    severity=NotificationSeverity.action_required.value,
+                    title=f"Quote {q.number} approvata: nessuna risorsa assegnata",
+                    body=(
+                        f"Il job {promoted_job.code} ({promoted_job.title}) è stato creato "
+                        f"ma non ha ancora risorse assegnate. Aggiungile manualmente in "
+                        f"/projects/{q.project_id} oppure scattano in automatico al primo "
+                        f"booking (con richiesta di conferma)."
+                    ),
+                    link=f"/projects/{q.project_id}",
+                    payload={
+                        "quote_id": q.id, "quote_number": q.number,
+                        "job_id": promoted_job.id, "job_code": promoted_job.code,
+                        "project_id": q.project_id,
+                    },
+                )
+        except Exception as e:
+            print(f"[quote-approve] notify no_resources failed: {e}")
     elif prev == QuoteStatus.approved and new != QuoteStatus.approved and q.job:
         # Disapprovazione: cancella il job se senza attività, altrimenti blocca
         if _job_has_activity(db, q.job):

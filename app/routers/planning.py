@@ -193,6 +193,45 @@ async def job_progress(job_id: int, db: Session = Depends(get_db)):
     return _compute_job_progress(db, job_id)
 
 
+@router.get("/api/jobs/{job_id}/resource-coverage")
+async def job_resource_coverage(
+    job_id: int,
+    resource_ids: str,  # CSV "1,2,3"
+    db: Session = Depends(get_db),
+):
+    """v3.4.56 — Verifica quali risorse sono già assegnate al job e quali no.
+    Usato dal modal booking PRIMA del save per chiedere conferma all'utente
+    se l'auto-assignment sta per aggiungere nuove risorse al progetto.
+
+    Ritorna `{covered: [{id, name}], missing: [{id, name, role, dept_name}]}`.
+    """
+    from app.models import JobResourceAssignment, Resource
+    try:
+        rids = [int(x) for x in resource_ids.split(",") if x.strip()]
+    except ValueError:
+        raise HTTPException(400, "resource_ids deve essere CSV di interi")
+    if not rids:
+        return {"covered": [], "missing": []}
+    j = db.query(Job).filter(Job.id == job_id).first()
+    if not j:
+        raise HTTPException(404, "Job non trovato")
+    assigned = {
+        a.resource_id for a in db.query(JobResourceAssignment).filter(
+            JobResourceAssignment.job_id == job_id
+        ).all()
+    }
+    resources = db.query(Resource).filter(Resource.id.in_(rids)).all()
+    covered, missing = [], []
+    for r in resources:
+        info = {
+            "id": r.id, "name": r.name, "role": r.role,
+            "department_id": r.department_id,
+            "department_name": r.department.name if r.department else None,
+        }
+        (covered if r.id in assigned else missing).append(info)
+    return {"job_id": job_id, "job_code": j.code, "covered": covered, "missing": missing}
+
+
 @router.get("/api/jobs")
 async def list_jobs(
     status: Optional[JobStatus] = None,

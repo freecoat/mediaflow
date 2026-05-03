@@ -1,5 +1,29 @@
 # MediaFlow — Changelog
 
+## v3.4.56 — Conferma assegnazione risorse + warning quote approved senza risorse + workflow docs (3 maggio 2026)
+
+Completati i due TODO non risolti in v3.4.55 + 3 documenti di mappatura processi.
+
+**1) Pre-save confirm per risorse non ancora assegnate** (booking modal)
+- Nuovo endpoint `GET /planning/api/jobs/{job_id}/resource-coverage?resource_ids=1,2` ritorna `{covered, missing}`.
+- `tlbSubmit`: dopo aver risolto `job_id` (forward o reverse), se ci sono `missing` mostra `confirm()` con elenco "le seguenti risorse non sono ancora assegnate al progetto e verranno aggiunte automaticamente". Cancel → abort save.
+- L'auto-assignment server-side (v3.4.55 hook in POST booking) è confermato; il client aggiunge solo lo step di conferma esplicita richiesto da Matteo.
+
+**2) Notifica `quote_approved_no_resources` (non bloccante)**
+- Nuovo `NotificationKind.quote_approved_no_resources`.
+- Hook in `PUT /quotes/api/{id}/status` quando `status → approved`: dopo `_create_job_from_quote`, se il job ha 0 `JobResourceAssignment`, notify a chi ha permesso `assign_resources` (admin/manager/producer) con severity `action_required`.
+- Body: "Quote {N} approvata, ma nessuna risorsa assegnata al progetto. Aggiungile manualmente in /projects/{id} oppure scattano in automatico al primo booking (con richiesta di conferma)."
+- Non bloccante: la quote è approvata regolarmente, è solo un alert.
+
+**3) Workflow docs** (`docs/workflow.md`, `docs/data-model.md`, `docs/permissions-matrix.md`)
+- `workflow.md`: 5 diagrammi Mermaid (state Quote, state Booking, flow Booking→Job forward+reverse+phantom, fonti Maturato cost report, vincoli HARD-BLOCK)
+- `data-model.md`: erDiagram entità chiave + classDiagram con flag/stati + tabella decisioni architetturali fissate
+- `permissions-matrix.md`: matrice permesso × ruolo built-in (per ogni categoria) + tabella permessi gate-keeper per azioni critiche
+- Mermaid renderizza nativamente in GitHub. Per export: `npx -p @mermaid-js/mermaid-cli mmdc`.
+- Non sono "fonte di verità", sono snapshot del codice. La fonte resta `app/services/rbac.py` + `app/models/models.py`.
+
+Niente migrazione DB. Cache-buster bumpato a `3.4.56`.
+
 ## v3.4.55 — Fix sistemico: integrità Quote↔JobCostLine↔Booking, vista lavorazione read-only, auto-assignment risorse, allineamento man-hours (3 maggio 2026)
 
 Cambio strutturale dopo 5 problemi gravi segnalati da Matteo:
