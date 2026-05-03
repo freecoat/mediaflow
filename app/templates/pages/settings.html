@@ -28,11 +28,23 @@
   .theme-name { font-weight:500; font-size:13px; }
   .theme-desc { font-size:11px; color:var(--text3); }
   .nav-reorder-list { display:flex; flex-direction:column; gap:14px; max-width:380px; }
-  .nav-reorder-section-block { }
+  .nav-reorder-list > .ghost { opacity:0.4; }
+  .nav-reorder-section-block {
+    border:1px dashed transparent; border-radius:var(--radius); padding:2px;
+    transition:border-color 120ms;
+  }
+  .nav-reorder-section-block:hover { border-color:var(--border); }
   .nav-reorder-section-label {
     font-size:10px; text-transform:uppercase; letter-spacing:0.6px;
     color:var(--text3); padding:0 4px 6px; font-weight:600;
+    display:flex; align-items:center; gap:8px;
   }
+  .nav-reorder-section-label .section-handle {
+    cursor:grab; user-select:none; color:var(--text3); font-family:'DM Mono',monospace;
+    font-size:13px; padding:2px 4px; border-radius:4px;
+  }
+  .nav-reorder-section-label .section-handle:hover { background:var(--bg3); color:var(--text2); }
+  .nav-reorder-section-label .section-handle:active { cursor:grabbing; }
   .nav-reorder-section { display:flex; flex-direction:column; gap:4px; min-height:8px; }
   .nav-reorder-section .nav-row {
     display:flex; align-items:center; gap:10px; padding:8px 12px;
@@ -96,8 +108,12 @@
     <!-- ── Pannello Sidebar ───────────────────────────────────── -->
     <div class="settings-pane" id="pane-sidebar">
       <div class="card">
-        <div class="card-title mb-2">Ordine voci sidebar</div>
-        <p class="text-sm text-muted mb-3">Trascina per riordinare le voci dentro ciascuna sezione. L'ordine si applica subito a tutte le pagine. Le voci visibili dipendono dai permessi del tuo utente.</p>
+        <div class="card-title mb-2">Ordine sidebar</div>
+        <p class="text-sm text-muted mb-3">
+          Trascina la maniglia <span class="mono">⠿</span> sul titolo di una sezione per spostare l'intera sezione,
+          oppure la maniglia di una voce per riordinarla dentro la propria sezione.
+          L'ordine si applica subito a tutte le pagine. Le voci visibili dipendono dai permessi del tuo utente.
+        </p>
         <div class="nav-reorder-list" id="nav-reorder-list"></div>
         <div class="flex gap-2 mt-3">
           <button class="btn btn-secondary btn-sm" onclick="resetSidebarOrder()">Ripristina ordine default</button>
@@ -485,6 +501,12 @@ function pickFont(id) {
 }
 
 // ── Sidebar reorder (auto-discovery dal DOM) ─────────────────
+// Due livelli di Sortable:
+//  - lista esterna `nav-reorder-list` con handle ⠿ sul label sezione →
+//    riordina i blocchi-sezione (persist `mf_sidebar_section_order`)
+//  - liste interne `nav-reorder-section` con handle ⠿ sulla riga voce →
+//    riordina le voci dentro la sezione (persist `mf_sidebar_order`)
+//
 // Niente lista hardcoded: leggiamo la sidebar reale così il pannello mostra
 // solo le voci che il tuo ruolo può vedere e resta sincronizzato quando si
 // aggiunge/rimuove una voce in base.html.
@@ -501,6 +523,8 @@ function renderNavReorder() {
   catch (e) { saved = null; }
   const orderMap = (saved && !Array.isArray(saved) && typeof saved === 'object') ? saved : {};
 
+  // Costruisco i blocchi sezione nell'ordine in cui appaiono nella sidebar
+  // (già riordinata da applySidebarOrder al DOMContentLoaded).
   let html = '';
   for (const sec of sections) {
     const labelEl = sec.querySelector('.nav-section-label');
@@ -529,20 +553,30 @@ function renderNavReorder() {
         <span class="label">${label.replace(/&/g,'&amp;').replace(/</g,'&lt;')}</span>
       </div>`;
     }
-    html += `<div class="nav-reorder-section-block">
-      <div class="nav-reorder-section-label">${safeName}</div>
+    html += `<div class="nav-reorder-section-block" data-section-name="${safeName}">
+      <div class="nav-reorder-section-label"><span class="handle section-handle">⠿</span> ${safeName}</div>
       <div class="nav-reorder-section" data-section="${safeName}">${body}</div>
     </div>`;
   }
   list.innerHTML = html;
 
+  // Sortable interni (voci dentro la sezione)
   list.querySelectorAll('.nav-reorder-section').forEach(secEl => {
     if (secEl._sortable) secEl._sortable.destroy();
     secEl._sortable = Sortable.create(secEl, {
       animation: 150,
       ghostClass: 'ghost',
+      handle: '.handle',
       onEnd: persistSidebarOrder,
     });
+  });
+  // Sortable esterno (blocchi sezione)
+  if (list._sortable) list._sortable.destroy();
+  list._sortable = Sortable.create(list, {
+    animation: 150,
+    ghostClass: 'ghost',
+    handle: '.section-handle',
+    onEnd: persistSidebarSectionOrder,
   });
 }
 
@@ -554,15 +588,25 @@ function persistSidebarOrder() {
   });
   localStorage.setItem('mf_sidebar_order', JSON.stringify(map));
   if (typeof applySidebarOrder === 'function') applySidebarOrder();
-  toast('Ordine sidebar applicato', 'success');
+  toast('Ordine voci applicato', 'success');
+}
+
+function persistSidebarSectionOrder() {
+  const order = [...document.querySelectorAll('.nav-reorder-section-block')]
+    .map(b => b.dataset.sectionName);
+  localStorage.setItem('mf_sidebar_section_order', JSON.stringify(order));
+  if (typeof applySidebarOrder === 'function') applySidebarOrder();
+  toast('Ordine sezioni applicato', 'success');
 }
 
 function resetSidebarOrder() {
   localStorage.removeItem('mf_sidebar_order');
-  // Ricostruisci sidebar reale dal server: la pagina è già renderizzata come default,
-  // basta ri-renderizzare il pannello e non applicare nessun ordine custom.
-  renderNavReorder();
-  toast('Ordine ripristinato. Ricarica una pagina qualsiasi per vedere le sezioni originali.', 'info');
+  localStorage.removeItem('mf_sidebar_section_order');
+  // Ricarico la pagina: il modo più affidabile per ricostruire la sidebar
+  // dal default server-side (l'ordine sezioni applicato dipende dall'HTML
+  // di base.html, non possiamo "annullare" il riordino in-place).
+  toast('Ordine ripristinato — ricarico la pagina…', 'info');
+  setTimeout(() => location.reload(), 600);
 }
 
 // ── Account ──────────────────────────────────────────────────

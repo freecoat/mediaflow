@@ -1,5 +1,23 @@
 # MediaFlow — Changelog
 
+## v3.5.0-alpha.5 — Riordino delle sezioni della sidebar (3 maggio 2026)
+
+`/settings#sidebar` ora consente di spostare anche i blocchi-sezione (es. mettere "Operativo" sopra "Anagrafica"), oltre al riordino delle voci dentro ciascuna sezione che esisteva già.
+
+**Cambiamenti**:
+- `app/static/js/global.js` `applySidebarOrder()`: ora ha due step. (1) Legge `mf_sidebar_section_order` (lista nomi sezione) e riordina i `.nav-section` dentro `.sidebar-nav`; sezioni nuove non in lista restano in coda nell'ordine sorgente di `base.html`. (2) Riordino voci per sezione come prima (`mf_sidebar_order` invariato, retrocompat completa).
+- `app/templates/pages/settings.html`:
+  - Pannello "Ordine sidebar" rinominato (era "Ordine voci sidebar").
+  - Maniglia ⠿ aggiunta sull'header di ogni blocco sezione.
+  - Secondo Sortable applicato al container `nav-reorder-list` (handle: `.section-handle`) → drag delle sezioni.
+  - I Sortable interni delle voci ora usano `handle: '.handle'` esplicito così la maniglia sezione non li attiva per errore.
+  - `persistSidebarSectionOrder()` nuovo: salva l'ordine sezioni e re-applica subito.
+  - `resetSidebarOrder()` ora pulisce ENTRAMBE le chiavi e ricarica la pagina (modo affidabile per ricostruire l'ordine default sezioni server-side).
+  - CSS: section-handle visibile con cursor grab + hover bg, blocchi sezione con bordo dashed in hover.
+- Cache-buster `global.js` bumpato a `3.5.0-alpha.5`.
+
+Niente migrazione DB. Le preferenze restano client-side in `localStorage` come tutte le altre customizzazioni di look.
+
 ## v3.5.0-alpha.4 — propose_quote.lines con price_item_id (3 maggio 2026)
 
 `propose_quote` ora accetta `price_item_id` per ogni riga in `lines`, eredità completa dal listino come già faceva `propose_quote_line`. Sblocca il flusso "voci nuove + quote nuova":

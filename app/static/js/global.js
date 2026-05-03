@@ -30,13 +30,45 @@ function setFont(font) {
 }
 
 // ── Riordino sidebar (drag-drop, salvato in localStorage) ──────
-// v3.4.28: riordino DENTRO ciascuna sezione (preserva i raggruppamenti
-// "Anagrafica", "Operativo", … di base.html). Formato saved: object
-// {sectionName: [navId, navId, …]}. Il vecchio formato array piatto viene
-// ignorato silenziosamente (l'utente vede l'ordine default e può ripersonalizzare).
+// Due livelli indipendenti, persistiti in chiavi distinte:
+//
+// - `mf_sidebar_section_order` (v3.5.0-alpha.5): lista ordinata di nomi
+//   sezione (es. ["Operativo","Anagrafica","Amministrazione",…]). Riordina
+//   i `.nav-section` dentro `.sidebar-nav`. Sezioni nuove non in lista
+//   restano in coda nell'ordine sorgente di base.html.
+//
+// - `mf_sidebar_order` (v3.4.28): mappa {sectionName: [navId, navId, …]}.
+//   Riordina le voci DENTRO ciascuna sezione. Il vecchio formato array
+//   piatto viene ignorato (utente vede default e può ripersonalizzare).
 function applySidebarOrder() {
   const sidebar = document.querySelector('.sidebar-nav');
   if (!sidebar) return;
+
+  // 1) Riordino sezioni
+  let secOrder;
+  try { secOrder = JSON.parse(localStorage.getItem('mf_sidebar_section_order') || 'null'); }
+  catch (e) { secOrder = null; }
+  if (Array.isArray(secOrder) && secOrder.length) {
+    const sections = [...sidebar.querySelectorAll('.nav-section')];
+    const byName = {};
+    for (const sec of sections) {
+      const labelEl = sec.querySelector('.nav-section-label');
+      if (!labelEl) continue;
+      byName[labelEl.textContent.trim()] = sec;
+    }
+    sections.forEach(sec => sec.remove());
+    for (const name of secOrder) {
+      if (byName[name]) { sidebar.appendChild(byName[name]); delete byName[name]; }
+    }
+    // Sezioni rimaste (non presenti nel saved order) tornano in coda nell'ordine originale.
+    for (const sec of sections) {
+      const labelEl = sec.querySelector('.nav-section-label');
+      const name = labelEl ? labelEl.textContent.trim() : null;
+      if (name && byName[name]) sidebar.appendChild(byName[name]);
+    }
+  }
+
+  // 2) Riordino voci dentro ciascuna sezione
   let saved;
   try { saved = JSON.parse(localStorage.getItem('mf_sidebar_order') || 'null'); }
   catch (e) { saved = null; }
