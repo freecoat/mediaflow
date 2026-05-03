@@ -1,5 +1,15 @@
 # MediaFlow — Changelog
 
+## v3.5.0-alpha.7.2 — Hotfix: escapeHtml is not defined in /admin/cestino (3 maggio 2026)
+
+> Uncaught ReferenceError: escapeHtml is not defined — cestino:206
+
+`admin_trash.html`: avevo messo lo `<script>` dentro `{% block content %}` che è renderizzato a metà di `base.html` (riga 160), ma `global.js` (dove vive `escapeHtml`) viene caricato a fine pagina (riga 177). Quindi al primo run dello script `escapeHtml` non esiste ancora.
+
+Pattern corretto in tutte le altre pagine: `{% block scripts %}` viene piazzato DOPO `global.js` da `base.html`. Spostato lo script lì.
+
+Memoria `feedback_global_helpers_centralizzati.md` ricorda proprio questo: ridefinire helper localmente è anti-pattern, ma usarli prima del caricamento di global.js produce lo stesso sintomo.
+
 ## v3.5.0-alpha.7.1 — Hotfix: SyntaxError JS in /quotes (3 maggio 2026)
 
 > Uncaught SyntaxError: expected expression, got '}' quotes:2:1
