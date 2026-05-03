@@ -1,5 +1,19 @@
 # MediaFlow — Changelog
 
+## v3.5.0-alpha.7.1 — Hotfix: SyntaxError JS in /quotes (3 maggio 2026)
+
+> Uncaught SyntaxError: expected expression, got '}' quotes:2:1
+
+Bug introdotto in alpha.7: avevo usato `JSON.stringify(q.number)` come argomento di un `onclick="..."` HTML attribute. Quando il numero contiene `"` (e JSON.stringify ne aggiunge sempre), l'attributo HTML si chiude prematuramente:
+
+```html
+<button onclick="...deleteQuoteFromList(123, "Q-2026-001");">  ← rotto
+```
+
+Memoria `feedback_no_jsonstringify_in_onclick.md` mi aveva avvertito di questo antipattern. Pattern corretto in altri 3 file del progetto: `.replace(/"/g, '&quot;')` su `JSON.stringify(...)`.
+
+Fix: passo solo `id` come argomento, recupero label dai dati locali (`_quotesIndex` in quotes.html, `trashData[type].find()` in admin_trash.html). Pattern più robusto che non richiede escape.
+
 ## v3.5.0-alpha.7 — Cestino quote (Slice 1+2+3) (3 maggio 2026)
 
 Soft-delete framework + cestino UI per le quotazioni. Risolve il caso "Non posso più eliminare i preventivi" (l'endpoint DELETE intera quote non era mai esistito).

@@ -94,7 +94,7 @@ function renderQuotesTrash() {
         <div class="meta">Eliminata il ${deletedHuman}${q.deleted_by ? ' da ' + escapeHtml(q.deleted_by) : ''}</div>
       </div>
       <button class="btn btn-secondary btn-sm" onclick="trashRestore('quote', ${q.id})">↩ Ripristina</button>
-      <button class="btn btn-ghost btn-sm color-rose" onclick="trashPurge('quote', ${q.id}, ${JSON.stringify(q.label)})">🗑 Elimina definitivamente</button>
+      <button class="btn btn-ghost btn-sm color-rose" onclick="trashPurge('quote', ${q.id})">🗑 Elimina definitivamente</button>
     </div>`;
   }).join('');
   pane.innerHTML = html;
@@ -111,8 +111,11 @@ async function trashRestore(type, id) {
   }
 }
 
-async function trashPurge(type, id, label) {
-  const human = label || `#${id}`;
+async function trashPurge(type, id) {
+  // Recupera label dall'ultima loadTrash, evita escaping in onclick attribute
+  const list = trashData[type] || [];
+  const entry = list.find(x => x.id === id);
+  const human = (entry && entry.label) || `#${id}`;
   if (!confirm(`Eliminare DEFINITIVAMENTE "${human}" e tutto il suo strascico (job, lavorazioni, booking)?\n\n⚠ Operazione IRREVERSIBILE. Solo admin con permesso 'purge_total'.`)) return;
   try {
     const r = await fetch(`/admin/api/trash/${type}/${id}`, {method: 'DELETE'});
