@@ -1,5 +1,25 @@
 # MediaFlow — Changelog
 
+## v3.5.0-alpha.2 — Hotfix: persistenza storia conversazione fra turni (3 maggio 2026)
+
+Bug critico in v3.5.0-alpha.1 emerso al primo test reale (Matteo, conversazione su quote Gomorra):
+
+**Sintomo**: turno 1 il copilot risponde con tabella matching listino + 5 domande. Turno 2 l'utente risponde "1. ... 2. ... 3. OK 4. ... 5. ...". Turno 3 il copilot dice "Non ho conversazioni precedenti da cui recuperare il contesto — questa è la prima interazione della sessione".
+
+**Causa**: `ai_loop._save_state(conv, None)` veniva chiamato a ogni `end_turn` e azzerava completamente il `tool_state`, perdendo la storia messages. Il prossimo turno il modello vedeva solo l'ultimo user message senza il contesto.
+
+**Errore di design mio**: avevo conflato due concetti distinti:
+- "loop tool_use sospeso vs concluso" (= presenza di pending_results)
+- "storia conversazione presente vs assente" (= esistenza dello stato)
+
+**Fix**: `tool_state` ora resta sempre popolato con la storia messages canonica. Il flag "loop sospeso in attesa di Apply" è la presenza di `pending_results` non vuoti. Lo stato si svuota solo quando l'utente apre una nuova conversazione (nuova row AIConversation).
+
+- Modificato `_save_state(conv, state: dict)`: non accetta più None, salva sempre.
+- Tutti i 4 punti di "loop concluso" in `advance_loop` ora salvano `{messages, pending_results: []}` invece di None.
+- `resume_after_action` con stato incoerente conserva la storia, non la cancella.
+
+Niente migrazione DB. `tool_state` esistenti vecchio formato sono backward-compatible (chiavi mancanti default a vuote in `_load_state`).
+
 ## v3.5.0-alpha.1 — AI tool-use nativo (Anthropic) — Slice 1 foundation (3 maggio 2026)
 
 Avviato il refactor strutturale del copilot da blocchi markdown ```action``` a tool-use nativo dei provider AI. Cantiere "feedback non torna al modello": dopo che l'utente clicca Applica su una proposta, il risultato (ad es. i risultati di Tavily, l'`id` di un cliente creato) deve rientrare nella conversazione perché il modello possa proseguire — cosa che il vecchio path non faceva (Slice 1 risolve esattamente questo).

@@ -8,6 +8,10 @@
 
 ## Versione corrente
 
+**v3.5.0-alpha.2** — 3 maggio 2026 — Hotfix: persistenza storia conversazione fra turni
+
+Bug emerso al primo test (conversazione Gomorra): dopo end_turn il loop azzerava `tool_state` perdendo la storia. Risultato: il modello al turno 2 diceva "non ho conversazioni precedenti". Fix: `tool_state` ora resta sempre popolato; il flag "loop sospeso" è `pending_results` non vuoto, non l'esistenza dello stato.
+
 **v3.5.0-alpha.1** — 3 maggio 2026 — AI tool-use nativo (Anthropic) — Slice 1 foundation
 
 Avviato il refactor del copilot da blocchi markdown ```action``` a **tool-use nativo** dei provider AI. Cantiere "feedback non torna al modello": Tavily girava ma i risultati restavano in UI senza rientrare nel modello → l'AI non poteva proseguire dopo le azioni applicate.

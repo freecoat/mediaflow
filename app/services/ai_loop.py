@@ -33,19 +33,34 @@ MAX_LOOP_ITERATIONS = 10
 # ── Persistenza stato ──────────────────────────────────────────
 
 def _load_state(conv: AIConversation) -> dict:
-    """Decodifica il tool_state, oppure ritorna uno stato vuoto."""
+    """Decodifica il tool_state, oppure ritorna uno stato vuoto.
+
+    Lo stato è la STORIA persistente della conversazione in formato Anthropic
+    (lista di messages con content blocks misti). Non si svuota fra un turno
+    e l'altro: solo quando l'utente apre una nuova conversazione (nuova row
+    AIConversation con tool_state=NULL).
+    """
     if not conv.tool_state:
         return {"messages": [], "pending_results": []}
     try:
-        return json.loads(conv.tool_state)
+        s = json.loads(conv.tool_state)
+        # backward-compat: garantisci entrambe le chiavi
+        s.setdefault("messages", [])
+        s.setdefault("pending_results", [])
+        return s
     except json.JSONDecodeError:
         logger.warning(f"AIConversation #{conv.id}: tool_state corrotto, reset")
         return {"messages": [], "pending_results": []}
 
 
-def _save_state(conv: AIConversation, state: Optional[dict]) -> None:
-    """Salva (o pulisce) il tool_state. None = loop concluso."""
-    conv.tool_state = json.dumps(state, ensure_ascii=False) if state else None
+def _save_state(conv: AIConversation, state: dict) -> None:
+    """Salva sempre lo state (mai None tra turni: la storia messages persiste).
+
+    `state["pending_results"]` vuoto = loop concluso, possiamo proseguire la
+    chat al prossimo /chat. `state["pending_results"]` popolato = loop sospeso
+    in attesa di Apply utente.
+    """
+    conv.tool_state = json.dumps(state, ensure_ascii=False)
 
 
 # ── Esecuzione tool readonly ───────────────────────────────────
@@ -164,7 +179,9 @@ def advance_loop(db: Session, conv: AIConversation, provider: AIProvider,
             resp = provider.chat_with_tools(messages, system, tools)
         except Exception as e:
             logger.exception("chat_with_tools failed")
-            _save_state(conv, None)
+            # Salva i messages raccolti finora con pending_results vuoto: la
+            # storia precedente non va persa per un errore di rete temporaneo.
+            _save_state(conv, {"messages": messages, "pending_results": []})
             return {
                 "done":    True,
                 "text":    f"Errore comunicazione con l'AI: {str(e)[:200]}",
@@ -177,8 +194,8 @@ def advance_loop(db: Session, conv: AIConversation, provider: AIProvider,
         final_text = resp.text or final_text
 
         if not resp.tool_uses:
-            # end_turn pulito.
-            _save_state(conv, None)
+            # end_turn pulito → conserva la storia per il prossimo turno.
+            _save_state(conv, {"messages": messages, "pending_results": []})
             return {
                 "done":    True,
                 "text":    final_text,
@@ -226,8 +243,8 @@ def advance_loop(db: Session, conv: AIConversation, provider: AIProvider,
         # Solo readonly → append user block con tutti i tool_result, prosegui.
         messages.append(_build_tool_result_user_block(tool_results))
 
-    # Limite iterazioni — interrompi forzatamente.
-    _save_state(conv, None)
+    # Limite iterazioni — interrompi forzatamente, ma conserva la storia.
+    _save_state(conv, {"messages": messages, "pending_results": []})
     return {
         "done":    True,
         "text":    final_text or "(loop tool_use interrotto: limite iterazioni)",
@@ -285,8 +302,8 @@ def resume_after_action(db: Session, conv: AIConversation, provider: AIProvider,
 
     if not found:
         logger.warning(f"resume_after_action: action {action.id} non trovata in pending state")
-        # Stato incoerente — pulisci e termina, l'utente continuerà via chat normale.
-        _save_state(conv, None)
+        # Stato incoerente — azzera solo i pending, conserva la storia messages.
+        _save_state(conv, {"messages": messages, "pending_results": []})
         return {"done": True, "text": "", "actions": [], "error": "state_mismatch"}
 
     # Verifica se tutti i pending sono ora pronti.
