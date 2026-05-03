@@ -1,5 +1,40 @@
 # MediaFlow — Changelog
 
+## v3.5.0-alpha.8 — Cestino Project (Slice 4) + Retention auto (Slice 5) (3 maggio 2026)
+
+Estende il framework soft-delete da Quote a Project + aggiunge retention configurabile con purge cascade dei record scaduti.
+
+**Slice 4 — Project soft-delete**
+
+Backend
+- `Project.deleted_at` + `Project.deleted_by_user_id` (auto-migrate idempotente, generalizzato il loop per applicare lo stesso schema a quotes+projects).
+- `Project` aggiunto a `_SOFT_DELETE_MODELS` → filter automatico via event listener (le query default vedono solo progetti vivi; bypass con `execution_options(include_deleted=True)`).
+- `app/services/soft_delete.py`: `soft_delete_project(force)`, `restore_project()`, `fetch_project_including_trash()`. Regole:
+  - Quote ATTIVE (non in cestino) sul progetto → HARD-BLOCK 409 con elenco bloccanti. Quote già cestinate non bloccano (puoi cestinare il progetto sopra).
+  - `force=True` (perm `purge_total`): cascade hard-delete su Project + Quote + Job + JobCostLine + Booking + assignments + JobResourceAssignment.
+- `DELETE /projects/api/{id}?force=` riscritto sulla nuova logica (sostituisce il vecchio HARD-BLOCK 400 grezzo). Permesso `delete_projects`.
+- `POST /projects/api/{id}/restore` (perm `restore_trash`).
+- `/admin/api/trash` esteso con sezione `project`. `/admin/api/trash/{type}/{id}/restore|delete` supporta `entity_type=project`.
+
+RBAC nuovo permesso `delete_projects` → admin/manager/producer.
+
+UI
+- `/projects` lista: tasto 🗑 sempre attivo (era disabilitato se quotes_count>0). Backend gestisce il 409 con elenco quote bloccanti + bottone "Pulizia totale" se admin.
+- `/admin/cestino`: tab "Progetti" accanto a "Quotazioni", count counter, card con badge cliente/status/quotes_count, bottoni Ripristina/Elimina definitivamente.
+
+**Slice 5 — Retention configurabile + purge auto**
+
+- `app/config.py`: setting nuovo `trash_retention_days` (default 30, da `.env` `TRASH_RETENTION_DAYS`). 0 = disabilitato (cestino infinito, gestione manuale).
+- `app/services/soft_delete.py`: `purge_expired_trash(dry_run, retention_days)` cancella cascade i record con `deleted_at < now - N giorni`. Per ciascun record applica la stessa logica di `soft_delete_*(force=True)` (cascade aggressivo).
+- Endpoints admin (perm `view_trash` per info, `purge_total` per esecuzione):
+  - `GET /admin/api/trash/expiry-info`: dry-run con elenco record che verrebbero purgati + retention_days configurato.
+  - `POST /admin/api/trash/purge-expired`: esegue il purge.
+- UI `/admin/cestino`: banner header con stato retention + count scaduti + bottone "⏱ Purga scaduti" (solo admin con `purge_total`). Dialog di conferma con preview dei numeri.
+
+Niente cron al boot per ora: il purge resta manuale via bottone admin. Hook al boot opzionale è banale da aggiungere se serve (call diretta a `purge_expired_trash` in `lifespan`); non lo mettiamo di default per non sorprendere l'utente al primo avvio.
+
+Smoke test verde: project soft-delete cascade quote, filter ON nasconde progetto cestinato, restore ripristina, dry-run retention 30gg ritorna 0 record (giusto, niente di vecchio in DB di test).
+
 ## v3.5.0-alpha.7.5 — Rinomina inline di title e number quote (3 maggio 2026)
 
 Editor `/quotes`: header (riga 1 della topbar) ora inline-editable.

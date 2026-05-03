@@ -436,10 +436,14 @@ class Project(Base):
     status: Mapped[ProjectStatus] = mapped_column(SAEnum(ProjectStatus), default=ProjectStatus.prospect)
     description: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
-    
+
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
-    
+
+    # v3.5.0-alpha.8 — Soft-delete (cestino).
+    deleted_at:         Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True, index=True)
+    deleted_by_user_id: Mapped[Optional[int]]      = mapped_column(ForeignKey("users.id"), nullable=True)
+
     client: Mapped["Client"] = relationship(back_populates="projects")
     quotes: Mapped[List["Quote"]] = relationship(back_populates="project", cascade="all, delete-orphan")
     jobs: Mapped[List["Job"]] = relationship(back_populates="project")

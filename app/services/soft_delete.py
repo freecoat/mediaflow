@@ -32,7 +32,7 @@ from sqlalchemy.orm import Session, with_loader_criteria
 
 from app.models.models import (
     Quote, QuoteLine, Job, JobCostLine, Booking, BookingAssignment,
-    BookingStatus, User,
+    BookingStatus, JobResourceAssignment, Project, User,
 )
 
 logger = logging.getLogger(__name__)
@@ -41,7 +41,7 @@ logger = logging.getLogger(__name__)
 # ── Modelli soggetti al filter automatico ──────────────────────
 
 # Aggiungere qui per estendere il pattern. Il modello deve avere `deleted_at`.
-_SOFT_DELETE_MODELS = (Quote,)
+_SOFT_DELETE_MODELS = (Quote, Project)
 
 
 # ── Event listener: filtra di default ──────────────────────────
@@ -242,3 +242,234 @@ def restore_quote(db: Session, quote: Quote) -> dict:
     quote.deleted_at         = None
     quote.deleted_by_user_id = None
     return {"ok": True, "quote_id": quote.id}
+
+
+# ── Service: regole di delete/restore Project (v3.5.0-alpha.8) ─
+
+def fetch_project_including_trash(db: Session, project_id: int) -> Optional[Project]:
+    return (db.query(Project)
+              .execution_options(include_deleted=True)
+              .filter(Project.id == project_id)
+              .first())
+
+
+def _collect_active_quotes_on_project(db: Session, project: Project) -> list[dict]:
+    """Quote ATTIVE (non in cestino) sul progetto. Lista vuota = niente
+    bloccanti, soft-delete progetto sicuro.
+
+    Le quote già in cestino non sono bloccanti: il progetto può essere
+    cestinato sopra di esse, le ritrovi entrambe in /admin/cestino e
+    decidi cosa ripristinare/purgare.
+    """
+    rows = (db.query(Quote)
+              .filter(Quote.project_id == project.id, Quote.deleted_at.is_(None))
+              .all())
+    return [{
+        "quote_id":  q.id,
+        "number":    q.number,
+        "title":     q.title,
+        "status":    q.status.value if hasattr(q.status, "value") else str(q.status),
+    } for q in rows]
+
+
+def soft_delete_project(db: Session, project: Project, *, user: User,
+                        force: bool = False) -> dict:
+    """Soft-delete di un Project. Regole:
+
+    Caso 1 — `force=False` (delete normale, perm `delete_projects`):
+      - Quote attive sul progetto → `DeleteBlocked` con elenco. L'utente
+        deve cestinarle prima (oppure chiede pulizia totale a un admin).
+      - Altrimenti: `project.deleted_at = now()`. Le quote già nel cestino
+        rimangono nel cestino, le job/resource_assignment rimangono in DB
+        accessibili tramite la relationship Project.jobs (filtrate solo se
+        avranno il proprio soft-delete in slice future).
+
+    Caso 2 — `force=True` (purge_total, solo admin):
+      - HARD-DELETE atomico cascade: assignments + bookings + cost_lines +
+        jobs + quote_lines + quotes + project. Bypassa il cestino,
+        irreversibile.
+
+    Ritorna dict statistiche per response/log.
+    """
+    if project.deleted_at is not None and not force:
+        return {"ok": True, "already_deleted": True, "project_id": project.id}
+
+    blocking_quotes = _collect_active_quotes_on_project(db, project)
+
+    if not force:
+        if blocking_quotes:
+            raise DeleteBlocked(
+                f"Progetto ha {len(blocking_quotes)} quotazion"
+                + ("e attiva" if len(blocking_quotes) == 1 else "i attive") + ". "
+                "Cestinale prima oppure chiedi a un admin di fare 'pulizia totale'.",
+                bookings=[],
+                jobs=[{"label": f"{q['number']} — {q['title']}",
+                        "id":    q["quote_id"]} for q in blocking_quotes],
+            )
+        project.deleted_at         = datetime.utcnow()
+        project.deleted_by_user_id = user.id if user else None
+        return {
+            "ok":         True,
+            "mode":       "soft",
+            "project_id": project.id,
+            "code":       project.code,
+        }
+
+    # ── force=True: hard-delete cascade ────────────────────────
+    # Prendi anche quote in cestino (bypass filter)
+    quotes_all = (db.query(Quote)
+                    .execution_options(include_deleted=True)
+                    .filter(Quote.project_id == project.id)
+                    .all())
+    quotes_count = 0
+    jobs_count = 0
+    cost_lines_count = 0
+    bookings_count = 0
+    assignments_count = 0
+    job_assignments_count = 0
+    for q in quotes_all:
+        quotes_count += 1
+        job = q.job
+        if job:
+            jobs_count += 1
+            cost_lines = list(job.cost_lines)
+            cost_lines_count += len(cost_lines)
+            for cl in cost_lines:
+                bks = (db.query(Booking)
+                         .filter(Booking.job_cost_line_id == cl.id)
+                         .all())
+                for b in bks:
+                    bookings_count += 1
+                    ass = (db.query(BookingAssignment)
+                             .filter(BookingAssignment.booking_id == b.id).all())
+                    assignments_count += len(ass)
+                    for a in ass:
+                        db.delete(a)
+                    db.delete(b)
+            # Booking orfani senza cost_line
+            orphan_bks = (db.query(Booking)
+                            .filter(Booking.job_id == job.id,
+                                    Booking.job_cost_line_id.is_(None))
+                            .all())
+            for b in orphan_bks:
+                bookings_count += 1
+                ass = (db.query(BookingAssignment)
+                         .filter(BookingAssignment.booking_id == b.id).all())
+                assignments_count += len(ass)
+                for a in ass:
+                    db.delete(a)
+                db.delete(b)
+            # Resource assignments del job
+            jra = (db.query(JobResourceAssignment)
+                     .filter(JobResourceAssignment.job_id == job.id).all())
+            job_assignments_count += len(jra)
+            for x in jra:
+                db.delete(x)
+            for cl in cost_lines:
+                db.delete(cl)
+            db.delete(job)
+        for ln in list(q.lines):
+            db.delete(ln)
+        db.delete(q)
+    db.delete(project)
+    db.flush()
+    return {
+        "ok":                    True,
+        "mode":                  "purge_total",
+        "project_id":            project.id,
+        "quotes_count":          quotes_count,
+        "jobs_count":            jobs_count,
+        "cost_lines_count":      cost_lines_count,
+        "bookings_count":        bookings_count,
+        "assignments_count":     assignments_count,
+        "job_assignments_count": job_assignments_count,
+    }
+
+
+def restore_project(db: Session, project: Project) -> dict:
+    """Ripristina un Project dal cestino. Idempotente."""
+    if project.deleted_at is None:
+        return {"ok": True, "already_active": True, "project_id": project.id}
+    project.deleted_at         = None
+    project.deleted_by_user_id = None
+    return {"ok": True, "project_id": project.id}
+
+
+# ── Retention: purge automatico (v3.5.0-alpha.8) ───────────────
+
+def purge_expired_trash(db: Session, *, retention_days: Optional[int] = None,
+                        dry_run: bool = False) -> dict:
+    """Cancella definitivamente i record nel cestino più vecchi di
+    `retention_days` giorni.
+
+    - `retention_days=None` legge da `settings.trash_retention_days` (default 30).
+    - `retention_days=0` = mai (no-op): l'utente vuole gestire il cestino
+      manualmente, niente auto-purge.
+    - `dry_run=True` ritorna solo il conto senza cancellare.
+
+    Ritorna `{quotes_purged, projects_purged, retention_days, cutoff}`.
+    Per ogni record cancellato applica la stessa logica cascade di
+    `soft_delete_*(force=True)` (hard-delete totale di quote+job+booking
+    o project+quote+job+booking).
+    """
+    from datetime import timedelta
+    from app.config import settings
+
+    if retention_days is None:
+        retention_days = int(getattr(settings, "trash_retention_days", 30) or 0)
+    if retention_days <= 0:
+        return {"skipped": True, "reason": "retention_days_zero",
+                "retention_days": retention_days}
+
+    cutoff = datetime.utcnow() - timedelta(days=retention_days)
+
+    # Quote scadute
+    expired_quotes = (db.query(Quote)
+                        .execution_options(include_deleted=True)
+                        .filter(Quote.deleted_at.isnot(None),
+                                Quote.deleted_at < cutoff)
+                        .all())
+    quotes_to_purge = [(q.id, q.number, q.title) for q in expired_quotes]
+
+    # Project scaduti
+    expired_projects = (db.query(Project)
+                          .execution_options(include_deleted=True)
+                          .filter(Project.deleted_at.isnot(None),
+                                  Project.deleted_at < cutoff)
+                          .all())
+    projects_to_purge = [(p.id, p.code, p.title) for p in expired_projects]
+
+    if dry_run:
+        return {
+            "dry_run":         True,
+            "retention_days":  retention_days,
+            "cutoff":          cutoff.isoformat(),
+            "quotes_to_purge":   [{"id": qid, "number": n, "title": t}
+                                  for qid, n, t in quotes_to_purge],
+            "projects_to_purge": [{"id": pid, "code": c, "title": t}
+                                  for pid, c, t in projects_to_purge],
+        }
+
+    # Eseguo purge in due passate. Project per primo (cascade pulisce le
+    # quote sue), poi le quote rimaste (potrebbe avercene di "nude" senza
+    # progetto cestinato).
+    for p in expired_projects:
+        soft_delete_project(db, p, user=None, force=True)
+    # Ricarica le quote scadute rimaste (alcune potrebbero essere già state
+    # cancellate dal cascade del project sopra).
+    expired_quotes = (db.query(Quote)
+                        .execution_options(include_deleted=True)
+                        .filter(Quote.deleted_at.isnot(None),
+                                Quote.deleted_at < cutoff)
+                        .all())
+    for q in expired_quotes:
+        soft_delete_quote(db, q, user=None, force=True)
+    db.flush()
+
+    return {
+        "ok":              True,
+        "retention_days":  retention_days,
+        "cutoff":          cutoff.isoformat(),
+        "quotes_purged":   len(quotes_to_purge),
+        "projects_purged": len(projects_to_purge),
+    }

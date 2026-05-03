@@ -217,22 +217,69 @@ async def get_project_job_context(project_id: int, db: Session = Depends(get_db)
 
 
 @router.delete("/api/{project_id}")
-async def delete_project(project_id: int, request: Request, db: Session = Depends(get_db)):
-    if not can_view_finance(current_user_optional(request)):
-        raise HTTPException(403, "Permesso negato")
-    p = db.query(Project).filter(Project.id == project_id).first()
+async def delete_project(
+    project_id: int,
+    request: Request,
+    force: bool = False,
+    db: Session = Depends(get_db),
+):
+    """Soft-delete del progetto (sposta nel cestino) o pulizia totale (admin).
+
+    - `delete_projects` (admin/manager/producer): soft-delete. HARD-BLOCK
+      409 se ha quote ATTIVE (non in cestino), con elenco. Le quote già
+      cestinate non bloccano: il progetto può essere cestinato sopra.
+    - `purge_total` (solo admin): `?force=true` → cascade hard-delete su
+      Project + Quote + Job + JobCostLine + Booking + assignments.
+      Bypassa cestino, irreversibile.
+    """
+    from app.services.rbac import has_permission
+    from app.services.soft_delete import (
+        soft_delete_project, fetch_project_including_trash, DeleteBlocked,
+    )
+    from fastapi.responses import JSONResponse
+
+    user = current_user_optional(request)
+    if not has_permission(user, "delete_projects"):
+        raise HTTPException(403, "Permesso negato (delete_projects)")
+    if force and not has_permission(user, "purge_total"):
+        raise HTTPException(403, "Solo un admin con permesso 'purge_total' può forzare la pulizia totale")
+
+    p = fetch_project_including_trash(db, project_id)
+    if not p:
+        raise HTTPException(404, "Progetto non trovato")
+
+    try:
+        result = soft_delete_project(db, p, user=user, force=force)
+    except DeleteBlocked as e:
+        return JSONResponse(
+            status_code=409,
+            content={
+                "detail":    e.message,
+                # Riuso campo `jobs` di DeleteBlocked per quote bloccanti
+                # (lato project il "blocking" sono le quote attive).
+                "blocking":  {"quotes": e.jobs},
+                "can_force": has_permission(user, "purge_total"),
+            },
+        )
+    db.commit()
+    return result
+
+
+@router.post("/api/{project_id}/restore")
+async def restore_project_endpoint(project_id: int, request: Request,
+                                    db: Session = Depends(get_db)):
+    """Ripristina un progetto dal cestino. Permesso `restore_trash`."""
+    from app.services.rbac import has_permission
+    from app.services.soft_delete import fetch_project_including_trash, restore_project
+    user = current_user_optional(request)
+    if not has_permission(user, "restore_trash"):
+        raise HTTPException(403, "Permesso negato (restore_trash)")
+    p = fetch_project_including_trash(db, project_id)
     if not p:
         raise HTTPException(404)
-    if p.quotes:
-        raise HTTPException(
-            400,
-            f"Progetto ha {len(p.quotes)} quotazion{'e' if len(p.quotes)==1 else 'i'} — "
-            "eliminale prima di rimuovere il progetto."
-        )
-    if p.jobs:
-        raise HTTPException(400, f"Progetto ha {len(p.jobs)} job associati")
-    db.delete(p); db.commit()
-    return {"ok": True}
+    result = restore_project(db, p)
+    db.commit()
+    return result
 
 
 # ── Resource assignments (drag&drop su pagina progetto) ─────

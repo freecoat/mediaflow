@@ -106,18 +106,20 @@ def _auto_migrate_columns():
             with engine.begin() as conn:
                 conn.execute(text("ALTER TABLE ai_actions ADD COLUMN tool_use_id VARCHAR(128) NULL"))
     # v3.5.0-alpha.7 — Soft-delete cestino: deleted_at + deleted_by_user_id
-    # su Quote (più entità verranno aggiunte in slice successive).
-    if "quotes" in insp.get_table_names():
-        qcols = {c["name"] for c in insp.get_columns("quotes")}
-        soft_alter = [
-            ("deleted_at",         "DATETIME NULL"),
-            ("deleted_by_user_id", "INTEGER NULL REFERENCES users(id)"),
-        ]
+    # su Quote. v3.5.0-alpha.8 estende a Project.
+    soft_alter = [
+        ("deleted_at",         "DATETIME NULL"),
+        ("deleted_by_user_id", "INTEGER NULL REFERENCES users(id)"),
+    ]
+    for table_name in ("quotes", "projects"):
+        if table_name not in insp.get_table_names():
+            continue
+        cols = {c["name"] for c in insp.get_columns(table_name)}
         with engine.begin() as conn:
             for col, ddl in soft_alter:
-                if col not in qcols:
-                    print(f"[auto-migrate] quotes.{col} mancante → ALTER TABLE")
-                    conn.execute(text(f"ALTER TABLE quotes ADD COLUMN {col} {ddl}"))
+                if col not in cols:
+                    print(f"[auto-migrate] {table_name}.{col} mancante → ALTER TABLE")
+                    conn.execute(text(f"ALTER TABLE {table_name} ADD COLUMN {col} {ddl}"))
 
 
 @asynccontextmanager
@@ -168,7 +170,7 @@ async def lifespan(app: FastAPI):
     yield
 
 
-app = FastAPI(title="MediaFlow", version="3.5.0-alpha.7.5", lifespan=lifespan)
+app = FastAPI(title="MediaFlow", version="3.5.0-alpha.8", lifespan=lifespan)
 
 BASE_DIR = Path(__file__).parent
 app.mount("/static", StaticFiles(directory=BASE_DIR / "static"), name="static")

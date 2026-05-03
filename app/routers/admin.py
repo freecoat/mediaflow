@@ -65,11 +65,11 @@ async def list_trash(
     request: Request, db: Session = Depends(get_db),
     _: User = Depends(requires_permission("view_trash")),
 ):
-    """Lista record nel cestino, raggruppati per entity_type.
-    Per ora copre solo `quote`. Estendibile con nuove entità."""
-    from app.models.models import Quote, JobCostLine, Booking, BookingStatus
-    out: dict[str, list[dict]] = {"quote": []}
+    """Lista record nel cestino, raggruppati per entity_type."""
+    from app.models.models import Quote, Project, JobCostLine, Booking, BookingStatus
+    out: dict[str, list[dict]] = {"quote": [], "project": []}
 
+    # ── Quote ──
     deleted_quotes = (db.query(Quote)
                         .execution_options(include_deleted=True)
                         .filter(Quote.deleted_at.isnot(None))
@@ -78,7 +78,6 @@ async def list_trash(
     for q in deleted_quotes:
         deleter = (db.query(User).filter(User.id == q.deleted_by_user_id).first()
                    if q.deleted_by_user_id else None)
-        # Conta entità "danneggiate collateralmente" se restoreggiamo
         active_bookings = 0
         if q.job:
             active_bookings = (db.query(Booking)
@@ -99,6 +98,29 @@ async def list_trash(
             "active_bookings_on_job": active_bookings,
             "status":        q.status.value if hasattr(q.status, "value") else str(q.status),
         })
+
+    # ── Project ──
+    deleted_projects = (db.query(Project)
+                          .execution_options(include_deleted=True)
+                          .filter(Project.deleted_at.isnot(None))
+                          .order_by(Project.deleted_at.desc())
+                          .all())
+    for p in deleted_projects:
+        deleter = (db.query(User).filter(User.id == p.deleted_by_user_id).first()
+                   if p.deleted_by_user_id else None)
+        # quote totali (anche cestinate)
+        all_quotes = (db.query(Quote)
+                        .execution_options(include_deleted=True)
+                        .filter(Quote.project_id == p.id).count())
+        out["project"].append({
+            "id":           p.id,
+            "label":        f"{p.code} — {p.title}",
+            "client_name":  p.client.name if p.client else None,
+            "deleted_at":   p.deleted_at.isoformat() if p.deleted_at else None,
+            "deleted_by":   deleter.full_name if deleter else (deleter.email if deleter else None),
+            "quotes_count": all_quotes,
+            "status":       p.status.value if hasattr(p.status, "value") else str(p.status),
+        })
     return out
 
 
@@ -116,7 +138,46 @@ async def trash_restore(
         result = restore_quote(db, q)
         db.commit()
         return result
+    if entity_type == "project":
+        from app.services.soft_delete import fetch_project_including_trash, restore_project
+        p = fetch_project_including_trash(db, entity_id)
+        if not p:
+            raise HTTPException(404)
+        result = restore_project(db, p)
+        db.commit()
+        return result
     raise HTTPException(400, f"entity_type sconosciuto: {entity_type}")
+
+
+@router.get("/api/trash/expiry-info")
+async def trash_expiry_info(
+    db: Session = Depends(get_db),
+    _: User = Depends(requires_permission("view_trash")),
+):
+    """Ritorna (a) retention_days configurato; (b) preview dry-run dei
+    record che verrebbero purgati ora. Usato dalla UI per il banner header
+    e il dialog di conferma del bottone 'Purga scaduti'."""
+    from app.services.soft_delete import purge_expired_trash
+    from app.config import settings as cfg
+    info = purge_expired_trash(db, dry_run=True)
+    info["retention_days_configured"] = int(getattr(cfg, "trash_retention_days", 30) or 0)
+    return info
+
+
+@router.post("/api/trash/purge-expired")
+async def trash_purge_expired(
+    db: Session = Depends(get_db),
+    _: User = Depends(requires_permission("purge_total")),
+):
+    """Esegue purge cascade dei record con `deleted_at < now - retention_days`.
+
+    Idempotente: se nessun record scaduto, ritorna `{quotes_purged: 0, ...}`.
+    Se `retention_days=0` (cestino infinito) skippa tutto.
+    """
+    from app.services.soft_delete import purge_expired_trash
+    result = purge_expired_trash(db, dry_run=False)
+    db.commit()
+    return result
 
 
 @router.delete("/api/trash/{entity_type}/{entity_id}")
@@ -126,21 +187,30 @@ async def trash_purge(
     db: Session = Depends(get_db),
     _: User = Depends(requires_permission("purge_total")),
 ):
-    """Hard-delete definitivo dal cestino. Per Quote usa lo stesso engine
-    `soft_delete_quote(force=True)` perché la logica cascade su Job + Booking
-    è la stessa: se il record è già nel cestino, l'engine fa hard-delete
-    cascade come per la pulizia totale.
+    """Hard-delete definitivo dal cestino. Riusa lo stesso engine
+    `soft_delete_*(force=True)` con cascade completo.
     """
+    from app.services.rbac import current_user_optional
+    user = current_user_optional(request)
+
     if entity_type == "quote":
         from app.services.soft_delete import (
             fetch_quote_including_trash, soft_delete_quote,
         )
-        from app.services.rbac import current_user_optional
         q = fetch_quote_including_trash(db, entity_id)
         if not q:
             raise HTTPException(404)
-        user = current_user_optional(request)
         result = soft_delete_quote(db, q, user=user, force=True)
+        db.commit()
+        return result
+    if entity_type == "project":
+        from app.services.soft_delete import (
+            fetch_project_including_trash, soft_delete_project,
+        )
+        p = fetch_project_including_trash(db, entity_id)
+        if not p:
+            raise HTTPException(404)
+        result = soft_delete_project(db, p, user=user, force=True)
         db.commit()
         return result
     raise HTTPException(400, f"entity_type sconosciuto: {entity_type}")

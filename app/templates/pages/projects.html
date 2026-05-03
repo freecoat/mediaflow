@@ -210,27 +210,65 @@ function renderProjects(projects) {
       <td>${statusBadge(p.status)}</td>
       <td style="white-space:nowrap;">
         <button class="btn btn-ghost btn-sm" onclick="event.stopPropagation(); window.location.href='/projects/${p.id}'">Apri →</button>
-        {% if can_view_finance(request.state.current_user) %}
-        ${p.quotes_count > 0
-          ? `<button class="btn btn-ghost btn-sm" disabled title="Non eliminabile: ${p.quotes_count} quotazion${p.quotes_count===1?'e':'i'} collegat${p.quotes_count===1?'a':'e'}" style="color:var(--text2);opacity:.5;cursor:not-allowed;">🗑</button>`
-          : `<button class="btn btn-ghost btn-sm" data-pid="${p.id}" data-plabel="${escapeHtml(p.title || p.code)}" onclick="event.stopPropagation(); deleteProject(this);" title="Elimina progetto" style="color:#ef4444;">🗑</button>`
-        }
+        {% if has_permission(request.state.current_user, 'delete_projects') %}
+        <!-- v3.5.0-alpha.8: tasto sempre attivo, il backend (409+can_force)
+             gestisce quote attive bloccanti e pulizia totale admin. -->
+        <button class="btn btn-ghost btn-sm" data-pid="${p.id}" data-plabel="${escapeHtml(p.title || p.code)}" onclick="event.stopPropagation(); deleteProject(this);" title="Sposta nel cestino" style="color:#ef4444;">🗑</button>
         {% endif %}
       </td>
     </tr>`).join('');
 }
 
 async function deleteProject(btn) {
+  // v3.5.0-alpha.8: soft-delete framework (cestino).
+  //  - HTTP 200 con {ok:true, mode:'soft'}: andato nel cestino
+  //  - HTTP 409: quote attive bloccanti; se can_force=true (admin),
+  //    secondo dialog per "Pulizia totale" cascade hard-delete.
   const id = btn.dataset.pid;
   const label = btn.dataset.plabel || 'questo progetto';
-  if (!confirm(`Eliminare definitivamente il progetto "${label}"? L'azione non è reversibile.`)) return;
+  if (!confirm(`Spostare il progetto "${label}" nel cestino?`)) return;
+  let res;
   try {
-    await api('DELETE', `/projects/api/${id}`);
-    toast('Progetto eliminato', 'success');
-    await loadProjects();
-  } catch(e) {
-    toast(e.message, 'error');
+    res = await fetch(`/projects/api/${id}`, {method: 'DELETE'});
+  } catch (e) {
+    toast('Errore di rete: ' + e.message, 'error'); return;
   }
+  if (res.ok) {
+    toast(`Progetto ${label} spostato nel cestino`, 'success');
+    await loadProjects();
+    return;
+  }
+  if (res.status === 409) {
+    const body = await res.json().catch(() => ({}));
+    const quotes = (body.blocking && body.blocking.quotes) || [];
+    const canForce = !!body.can_force;
+    const lines = [
+      body.detail || `Impossibile eliminare ${label}.`,
+      '',
+      `Quotazioni attive bloccanti: ${quotes.length}`,
+      ...quotes.slice(0, 5).map(q => ` · ${q.label || ('#' + q.id)}`),
+      quotes.length > 5 ? ` … e altre ${quotes.length - 5}` : '',
+    ].filter(Boolean).join('\n');
+    if (canForce) {
+      const ok = confirm(lines + '\n\n⚠ PULIZIA TOTALE (admin): cancellerà DEFINITIVAMENTE progetto + tutte le quote + job + lavorazioni + booking. Irreversibile.\n\nProcedere?');
+      if (!ok) return;
+      try {
+        const r2 = await fetch(`/projects/api/${id}?force=true`, {method: 'DELETE'});
+        if (!r2.ok) throw new Error((await r2.json()).detail || 'Errore');
+        const data = await r2.json();
+        toast(`Pulizia totale: ${data.quotes_count || 0} quote, ${data.jobs_count || 0} job, ${data.bookings_count || 0} booking cancellati`, 'success');
+        await loadProjects();
+      } catch (e) {
+        toast('Errore pulizia totale: ' + e.message, 'error');
+      }
+      return;
+    } else {
+      alert(lines + '\n\nCestina prima le quotazioni, oppure chiedi a un admin di fare la pulizia totale.');
+      return;
+    }
+  }
+  const body = await res.json().catch(() => ({}));
+  toast('Errore: ' + (body.detail || res.statusText), 'error');
 }
 
 function filterProjects() {

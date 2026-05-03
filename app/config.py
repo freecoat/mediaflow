@@ -45,6 +45,11 @@ class Settings(BaseSettings):
     tavily_api_key: Optional[str] = None
     use_tavily: bool = True
 
+    # v3.5.0-alpha.8 — Cestino: dopo quanti giorni i record nel trash vengono
+    # purgati definitivamente. 0 = mai (cestino infinito, l'utente decide
+    # manualmente). Default 30 giorni.
+    trash_retention_days: int = 30
+
     class Config:
         env_file = ".env"
         env_file_encoding = "utf-8"

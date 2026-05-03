@@ -5,6 +5,9 @@
 {% block topbar_title %}Amministrazione <span class="text-muted">/</span> Cestino{% endblock %}
 {% block topbar_actions %}
   <a href="/admin/users" class="btn btn-secondary btn-sm">← Utenti</a>
+  {% if has_permission(_user, 'purge_total') %}
+  <button class="btn btn-secondary btn-sm color-rose" onclick="purgeExpired()" title="Cancella definitivamente i record scaduti (oltre il retention)">⏱ Purga scaduti</button>
+  {% endif %}
 {% endblock %}
 
 {% block content %}
@@ -32,13 +35,20 @@
 </style>
 
 <div class="card">
+  <div id="trash-expiry-banner" class="text-sm text-muted" style="margin-bottom:12px; padding:8px 12px; background:var(--bg3); border-radius:var(--radius);"></div>
   <div class="trash-tabs" id="trash-tabs">
     <div class="trash-tab active" data-type="quote" onclick="trashSwitch('quote')">
       Quotazioni <span class="count" id="trash-count-quote">…</span>
     </div>
-    <!-- Future: project, client, ... -->
+    <div class="trash-tab" data-type="project" onclick="trashSwitch('project')">
+      Progetti <span class="count" id="trash-count-project">…</span>
+    </div>
+    <!-- Future: client, resource, ... -->
   </div>
   <div id="trash-pane-quote">
+    <div class="text-muted text-sm" style="padding:8px 0;">Caricamento…</div>
+  </div>
+  <div id="trash-pane-project" style="display:none;">
     <div class="text-muted text-sm" style="padding:8px 0;">Caricamento…</div>
   </div>
 </div>
@@ -59,17 +69,66 @@ async function loadTrash() {
   }
   renderTrashTabs();
   trashSwitch('quote');
+  loadExpiryInfo();
+}
+
+async function loadExpiryInfo() {
+  const banner = document.getElementById('trash-expiry-banner');
+  if (!banner) return;
+  try {
+    const info = await api('GET', '/admin/api/trash/expiry-info');
+    const retention = info.retention_days_configured || 0;
+    if (retention === 0) {
+      banner.innerHTML = `⏱ <b>Retention disattivato</b> (trash_retention_days=0): i record nel cestino restano per sempre fino a purge manuale.`;
+      return;
+    }
+    const expQ = (info.quotes_to_purge || []).length;
+    const expP = (info.projects_to_purge || []).length;
+    const total = expQ + expP;
+    const cutoff = info.cutoff ? new Date(info.cutoff).toLocaleDateString('it-IT') : '?';
+    if (total === 0) {
+      banner.innerHTML = `⏱ Retention <b>${retention} giorni</b>. Niente da purgare (cutoff: ${cutoff}).`;
+    } else {
+      banner.innerHTML = `⏱ Retention <b>${retention} giorni</b> · cutoff ${cutoff} · <b style="color:var(--rose, #ef4444)">${total} record scaduti</b> (${expQ} quote, ${expP} progetti). Usa "⏱ Purga scaduti" per cancellarli definitivamente.`;
+    }
+  } catch (e) { /* silent */ }
+}
+
+async function purgeExpired() {
+  let info;
+  try {
+    info = await api('GET', '/admin/api/trash/expiry-info');
+  } catch (e) {
+    toast('Errore: ' + e.message, 'error'); return;
+  }
+  const expQ = (info.quotes_to_purge || []).length;
+  const expP = (info.projects_to_purge || []).length;
+  if (expQ + expP === 0) {
+    toast('Niente da purgare', 'info'); return;
+  }
+  if (!confirm(`Cancellare DEFINITIVAMENTE ${expQ} quotazion${expQ===1?'e':'i'} e ${expP} progett${expP===1?'o':'i'} scaduti (>${info.retention_days_configured} giorni nel cestino)?\n\n⚠ Operazione IRREVERSIBILE. Cascade su tutto lo strascico (job, lavorazioni, booking).`)) return;
+  try {
+    const r = await api('POST', '/admin/api/trash/purge-expired');
+    toast(`Purgati: ${r.quotes_purged || 0} quote, ${r.projects_purged || 0} progetti`, 'success');
+    await loadTrash();
+  } catch (e) {
+    toast('Errore: ' + e.message, 'error');
+  }
 }
 
 function renderTrashTabs() {
   document.getElementById('trash-count-quote').textContent = (trashData.quote || []).length;
+  document.getElementById('trash-count-project').textContent = (trashData.project || []).length;
 }
 
 function trashSwitch(type) {
   document.querySelectorAll('.trash-tab').forEach(t => {
     t.classList.toggle('active', t.dataset.type === type);
   });
+  document.getElementById('trash-pane-quote').style.display = (type === 'quote') ? '' : 'none';
+  document.getElementById('trash-pane-project').style.display = (type === 'project') ? '' : 'none';
   if (type === 'quote') renderQuotesTrash();
+  if (type === 'project') renderProjectsTrash();
 }
 
 function renderQuotesTrash() {
@@ -98,6 +157,32 @@ function renderQuotesTrash() {
       </div>
       <button class="btn btn-secondary btn-sm" onclick="trashRestore('quote', ${q.id})">↩ Ripristina</button>
       <button class="btn btn-ghost btn-sm color-rose" onclick="trashPurge('quote', ${q.id})">🗑 Elimina definitivamente</button>
+    </div>`;
+  }).join('');
+  pane.innerHTML = html;
+}
+
+function renderProjectsTrash() {
+  const pane = document.getElementById('trash-pane-project');
+  const list = trashData.project || [];
+  if (!list.length) {
+    pane.innerHTML = `<div class="trash-empty">🗑 Nessun progetto nel cestino.</div>`;
+    return;
+  }
+  const html = list.map(p => {
+    const badges = [];
+    if (p.client_name) badges.push(`<span class="b">${escapeHtml(p.client_name)}</span>`);
+    badges.push(`<span class="b">${escapeHtml(p.status)}</span>`);
+    if (p.quotes_count) badges.push(`<span class="b">${p.quotes_count} quotazion${p.quotes_count === 1 ? 'e' : 'i'} legate (anche cestinate)</span>`);
+    const deletedHuman = p.deleted_at ? new Date(p.deleted_at).toLocaleString('it-IT') : '?';
+    return `<div class="trash-row">
+      <div>
+        <div class="label">${escapeHtml(p.label)}</div>
+        <div class="badges">${badges.join('')}</div>
+        <div class="meta">Eliminato il ${deletedHuman}${p.deleted_by ? ' da ' + escapeHtml(p.deleted_by) : ''}</div>
+      </div>
+      <button class="btn btn-secondary btn-sm" onclick="trashRestore('project', ${p.id})">↩ Ripristina</button>
+      <button class="btn btn-ghost btn-sm color-rose" onclick="trashPurge('project', ${p.id})">🗑 Elimina definitivamente</button>
     </div>`;
   }).join('');
   pane.innerHTML = html;

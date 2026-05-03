@@ -33,6 +33,7 @@ PERMISSIONS: Dict[str, Dict[str, List[str]]] = {
         "view_projects":    ["Visualizza progetti (info tecniche)"],
         "edit_projects":    ["Modifica progetti"],
         "create_projects":  ["Crea nuovi progetti"],
+        "delete_projects":  ["Elimina progetti (cestino)"],
     },
     "Pianificazione": {
         "view_planning":         ["Visualizza pianificazione"],
@@ -99,7 +100,7 @@ PRESET_PERMISSIONS: Dict[str, List[str]] = {
     "admin": list(ALL_PERMISSION_KEYS),  # tutto
     "manager": [
         "view_clients", "edit_clients",
-        "view_projects", "edit_projects", "create_projects",
+        "view_projects", "edit_projects", "create_projects", "delete_projects",
         "view_planning", "edit_planning_own", "edit_planning_all", "assign_resources",
         "approve_overtime",
         "view_punches_own", "view_punches_all", "edit_punches_own", "edit_punches_all",
@@ -113,7 +114,7 @@ PRESET_PERMISSIONS: Dict[str, List[str]] = {
     ],
     "producer": [
         "view_clients",
-        "view_projects", "edit_projects", "create_projects",
+        "view_projects", "edit_projects", "create_projects", "delete_projects",
         "view_planning", "edit_planning_own", "edit_planning_all", "assign_resources",
         "approve_overtime",
         "view_punches_own", "view_punches_all", "edit_punches_own", "edit_punches_all",
