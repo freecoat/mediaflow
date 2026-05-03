@@ -86,6 +86,27 @@ def _exec_readonly(db: Session, tu: ToolUse) -> str:
 
 # ── Save AIAction per mutation ─────────────────────────────────
 
+def _abandon_pending(db: Session, conv: AIConversation, pending: list[dict]) -> None:
+    """Quando l'utente cambia direzione mentre delle mutation pendono,
+    marchiamo le relative AIAction come `rejected` (abbandonate) così non
+    restano "proposed" all'infinito nello storico.
+    """
+    from datetime import datetime as _dt
+    pending_action_ids = [s["_pending_action_id"] for s in pending if "_pending_action_id" in s]
+    if not pending_action_ids:
+        return
+    rows = db.query(AIAction).filter(AIAction.id.in_(pending_action_ids),
+                                      AIAction.status == "proposed").all()
+    for act in rows:
+        act.status = "rejected"
+        act.applied_at = _dt.utcnow()
+        act.result = json.dumps({
+            "abandoned": True,
+            "reason": "user_changed_direction",
+        }, ensure_ascii=False)
+    db.flush()
+
+
 def _save_pending_action(db: Session, conv: AIConversation, tu: ToolUse) -> AIAction:
     """Persiste una mutation come AIAction in stato proposed, legandola al
     tool_use_id così che al successivo /apply potremo costruire il tool_result
@@ -118,6 +139,86 @@ def _serialize_action(act: AIAction, tu: Optional[ToolUse] = None) -> dict:
 
 
 # ── Costruzione user block tool_result ─────────────────────────
+
+def _sanitize_messages(messages: list[Any]) -> list[Any]:
+    """Difensivo: ripara la storia messages se contiene assistant blocks con
+    tool_use non seguiti da tool_result.
+
+    Cause possibili:
+    - state corrotto da bug precedenti (es. assistant_with_tool_use seguito
+      da user_text senza tool_result, ai_loop pre-alpha.6)
+    - migrazione da formato vecchio
+    - qualunque divergenza accidentale
+
+    Strategia: per ogni assistant block con tool_use_X non seguito da
+    tool_result_X, fonde un tool_result placeholder "context_lost" nel
+    next user block (oppure inserisce un user block dedicato se il next
+    non è user). Anthropic NON accetta due user consecutivi, quindi il
+    merge è obbligatorio.
+    """
+    n = len(messages)
+    out: list[Any] = []
+    i = 0
+    while i < n:
+        m = messages[i]
+        if not (isinstance(m, dict) and m.get("role") == "assistant"
+                and isinstance(m.get("content"), list)):
+            out.append(m)
+            i += 1
+            continue
+
+        tool_use_ids = [b.get("id") for b in m["content"]
+                        if isinstance(b, dict) and b.get("type") == "tool_use"]
+        out.append(m)
+        if not tool_use_ids:
+            i += 1
+            continue
+
+        nxt = messages[i + 1] if i + 1 < n else None
+        nxt_is_user = isinstance(nxt, dict) and nxt.get("role") == "user"
+        nxt_results: set[str] = set()
+        if nxt_is_user and isinstance(nxt.get("content"), list):
+            for b in nxt["content"]:
+                if isinstance(b, dict) and b.get("type") == "tool_result":
+                    nxt_results.add(b.get("tool_use_id"))
+
+        missing = [tid for tid in tool_use_ids if tid not in nxt_results]
+        if not missing:
+            i += 1
+            continue
+
+        repair_blocks = [
+            {
+                "type":         "tool_result",
+                "tool_use_id":  tid,
+                "content":      json.dumps({
+                    "status":  "context_lost",
+                    "message": "tool_result perso da bug precedente; ignora questo turno e prosegui.",
+                }, ensure_ascii=False),
+                "is_error":     True,
+            }
+            for tid in missing
+        ]
+        logger.warning(f"_sanitize_messages: repair {len(missing)} tool_use_id orfani al turno {i}")
+
+        if nxt_is_user:
+            # Fonde i tool_result placeholder all'inizio del content del
+            # next user (string → list-with-text, list → prepend).
+            nxt_content = nxt.get("content", "")
+            if isinstance(nxt_content, str):
+                merged = repair_blocks + ([{"type": "text", "text": nxt_content}] if nxt_content else [])
+            elif isinstance(nxt_content, list):
+                merged = repair_blocks + nxt_content
+            else:
+                merged = repair_blocks
+            out.append({"role": "user", "content": merged})
+            i += 2  # ho già consumato anche nxt
+        else:
+            # next è assistant o end: inserisco un user block dedicato
+            out.append({"role": "user", "content": repair_blocks})
+            i += 1
+    return out
+
 
 def _build_tool_result_user_block(results: list[dict]) -> dict:
     """Anthropic richiede che il turno user successivo a un assistant con
@@ -161,14 +262,41 @@ def advance_loop(db: Session, conv: AIConversation, provider: AIProvider,
     """
     state = _load_state(conv)
     messages: list[Any] = state.get("messages") or []
+    pending: list[dict] = state.get("pending_results") or []
 
     # Se non c'è ancora storia, partiamo dai initial_messages forniti dal caller.
     if not messages and initial_messages:
         messages = list(initial_messages)
 
-    # Append del messaggio utente nuovo (se chiamato dal /chat normale).
     if user_message is not None:
-        messages.append({"role": "user", "content": user_message})
+        if pending:
+            # Caso edge: l'utente ha scritto un nuovo messaggio mentre il loop
+            # era sospeso in attesa di Apply su una mutation precedente.
+            # Anthropic richiede strict: ogni tool_use va seguito da un tool_result.
+            # Fix: chiudo i placeholder pending con uno "user_changed_direction"
+            # tool_result + il nuovo testo, in un singolo user block misto.
+            # Le AIAction associate vengono marcate come rejected (abbandonate).
+            _abandon_pending(db, conv, pending)
+            user_block = {
+                "role": "user",
+                "content": [
+                    {
+                        "type":         "tool_result",
+                        "tool_use_id":  s["tool_use_id"],
+                        "content":      s["content"] if s.get("content") is not None else json.dumps({
+                            "status":  "user_changed_direction",
+                            "message": "L'utente ha continuato la conversazione invece di applicare. Considera la richiesta successiva.",
+                        }, ensure_ascii=False),
+                        "is_error":     True,
+                    }
+                    for s in pending
+                ],
+            }
+            user_block["content"].append({"type": "text", "text": user_message})
+            messages.append(user_block)
+            pending = []  # niente più pending, abbiamo chiuso il turno
+        else:
+            messages.append({"role": "user", "content": user_message})
 
     tools = to_anthropic_tools()
     final_text = ""
@@ -176,7 +304,7 @@ def advance_loop(db: Session, conv: AIConversation, provider: AIProvider,
 
     for iteration in range(MAX_LOOP_ITERATIONS):
         try:
-            resp = provider.chat_with_tools(messages, system, tools)
+            resp = provider.chat_with_tools(_sanitize_messages(messages), system, tools)
         except Exception as e:
             logger.exception("chat_with_tools failed")
             # Salva i messages raccolti finora con pending_results vuoto: la

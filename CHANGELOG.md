@@ -1,5 +1,24 @@
 # MediaFlow — Changelog
 
+## v3.5.0-alpha.6 — Hotfix: tool_use orphans + sanitizer difensivo (3 maggio 2026)
+
+Errore Anthropic 400 emerso al test Gomorra:
+> messages.4: tool_use ids were found without tool_result blocks immediately after: toolu_011Ud34A...
+
+**Causa**: Anthropic richiede strict che ogni `tool_use` in un assistant message sia seguito da un `tool_result` nel turno user successivo. Quando l'utente scriveva un nuovo messaggio MENTRE il loop era sospeso (con AIAction `proposed` non ancora applicate/rifiutate), il server appendeva un `user{role,content:text}` direttamente, lasciando i tool_use orfani.
+
+**Fix**:
+
+1. **`advance_loop` con pending non vuoti + nuovo user_message**: ora costruisce un user block misto `[tool_result × N, text]`. Le AIAction pending vengono marcate `rejected` con `result.abandoned=True, reason="user_changed_direction"` (helper nuova `_abandon_pending`).
+
+2. **Sanitizer difensivo `_sanitize_messages`**: chiamato prima di ogni `provider.chat_with_tools()`, ripara la storia messages se trova assistant blocks con tool_use non seguiti da tool_result. Strategie:
+   - Next è user → fonde `tool_result` placeholder all'inizio del content (no due user consecutivi)
+   - Next è assistant o end → inserisce un user block dedicato
+   - Placeholder content = `{"status": "context_lost"}` con `is_error: true`
+   Permette il recupero anche delle conversazioni già "avvelenate" da bug precedenti.
+
+3. Smoke test 3 scenari (string user, no repair, next assistant) tutti verdi.
+
 ## v3.5.0-alpha.5 — Riordino delle sezioni della sidebar (3 maggio 2026)
 
 `/settings#sidebar` ora consente di spostare anche i blocchi-sezione (es. mettere "Operativo" sopra "Anagrafica"), oltre al riordino delle voci dentro ciascuna sezione che esisteva già.
