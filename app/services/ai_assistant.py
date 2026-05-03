@@ -503,7 +503,9 @@ def _h_propose_price_item(db: Session, data: dict) -> dict:
         is_active=True,
     )
     db.add(item); db.flush()
-    return {"price_item_id": item.id, "name": item.name, "category": cat.name}
+    return {"created": True, "price_item_id": item.id, "name": item.name,
+            "category": cat.name, "unit": item.unit, "price_list": item.price_list,
+            "message": f"Voce listino '{item.name}' creata con id={item.id} (categoria {cat.name}, {item.unit}, €{item.price_list})."}
 
 
 def _h_propose_client(db: Session, data: dict) -> dict:
@@ -526,7 +528,8 @@ def _h_propose_client(db: Session, data: dict) -> dict:
         notes=data.get("notes"),
     )
     db.add(c); db.flush()
-    return {"client_id": c.id, "name": c.name}
+    return {"created": True, "client_id": c.id, "name": c.name,
+            "message": f"Cliente '{c.name}' creato con id={c.id}."}
 
 
 def _resolve_project(db: Session, data: dict) -> Project:
@@ -595,7 +598,9 @@ def _h_propose_project(db: Session, data: dict) -> dict:
         description=data.get("description"),
     )
     db.add(p); db.flush()
-    return {"project_id": p.id, "code": p.code, "title": p.title, "client": client.name}
+    return {"created": True, "project_id": p.id, "code": p.code, "title": p.title,
+            "client": client.name,
+            "message": f"Progetto '{p.code}' ({p.title}) creato con id={p.id} per cliente {client.name}."}
 
 
 def _next_quote_number(db: Session) -> str:
@@ -749,6 +754,7 @@ def _h_propose_quote(db: Session, data: dict) -> dict:
         _recalc_quote(q)
 
     return {
+        "created": True,
         "quote_id": q.id,
         "number": q.number,
         "title": q.title,
@@ -757,6 +763,7 @@ def _h_propose_quote(db: Session, data: dict) -> dict:
         "lines_count": len(created_lines),
         "lines": created_lines,
         "total_after_discount": q.total_after_discount,
+        "message": f"Quotazione {q.number} creata con id={q.id} per progetto {project.code} ({len(created_lines)} righe, totale netto €{q.total_after_discount:.2f}).",
     }
 
 
@@ -808,10 +815,13 @@ def _h_propose_quote_line(db: Session, data: dict) -> dict:
     from app.routers.quotes import _recalc_quote
     _recalc_quote(q)
     return {
+        "created": True,
         "quote_line_id": line.id, "quote_id": q.id,
         "total": line.total,
         "price_item_id": pi.id if pi else None,
         "price_item_name": pi.name if pi else None,
+        "message": (f"Riga aggiunta alla quote #{q.id}: {line.description}, "
+                    f"qty={line.quantity} {line.unit}, total €{line.total:.2f}."),
     }
 
 
@@ -896,8 +906,11 @@ def _h_propose_new_item_and_line(db: Session, data: dict) -> dict:
     from app.routers.quotes import _recalc_quote
     _recalc_quote(q)
     return {
+        "created": True,
         "price_item_id": pi.id, "price_item_name": pi.name, "category": cat.name,
         "quote_line_id": line.id, "quote_id": q.id, "total": line.total,
+        "message": (f"Voce listino '{pi.name}' creata e aggiunta alla quote #{q.id} "
+                    f"(qty={line.quantity}, total €{line.total:.2f})."),
     }
 
 

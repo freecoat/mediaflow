@@ -1,5 +1,25 @@
 # MediaFlow — Changelog
 
+## v3.5.0-alpha.7.4 — Tool result più espliciti per evitare allucinazioni AI (3 maggio 2026)
+
+Bug osservato (Matteo, ISIDE): dopo `propose_project ISIDE` con status=applied (creato OK con id=5), Sonnet nel turno successivo ha detto "Il progetto ISIDE esiste già in DB". Lettura sbagliata del tool_result, che era solo `{project_id: 5, code: "ISIDE", title: "ISIDE", client: "Cattleya"}` — ambiguo: poteva essere un record creato O trovato.
+
+Fix: i 5 handler mutation principali ora ritornano un payload più esplicito:
+- `created: true` come flag chiaro
+- `message: "..."` con frase descrittiva in italiano
+
+Handler aggiornati:
+- `_h_propose_client` → `"Cliente 'X' creato con id=N."`
+- `_h_propose_project` → `"Progetto 'CODE' (Title) creato con id=N per cliente Y."`
+- `_h_propose_price_item` → `"Voce listino 'X' creata con id=N (categoria, unit, €price)."`
+- `_h_propose_quote` → `"Quotazione Q-... creata con id=N per progetto CODE (M righe, totale netto €X)."`
+- `_h_propose_quote_line` → `"Riga aggiunta alla quote #N: descrizione, qty K unit, total €X."`
+- `_h_propose_new_item_and_line` → idem.
+
+L'AI ora riceve un tool_result inequivocabile e produce text response coerente.
+
+**Memoria di sistema** (per chiarezza): il purge totale di una Quote (`?force=true`) cancella SOLO `Quote + Job + JobCostLine + Booking + assignments`. NON tocca `Project`, `Client`, `PriceItem` (anagrafica). Per resettare l'anagrafica usare `[O] reset_business_data` da `strumenti.bat`. By design: cestino è per quote/lavorazioni, non per anagrafica (memoria `project_costreport_vs_timesheet.md`).
+
 ## v3.5.0-alpha.7.3 — Hotfix: collisione numero quote dopo soft-delete (3 maggio 2026)
 
 > propose_quote → 500 Internal Server Error
