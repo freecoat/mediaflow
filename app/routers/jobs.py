@@ -236,6 +236,7 @@ async def get_job(job_id: int, db: Session = Depends(get_db)):
 @router.post("/api/{job_id}/cost-lines")
 async def add_cost_line(
     job_id: int,
+    request: Request,
     description: str = Form(...),
     quantity: float = Form(...),
     unit: str = Form("day"),
@@ -248,6 +249,9 @@ async def add_cost_line(
     """Aggiunge una lavorazione al job. Default `is_extra=True` perché lo use case
     primario è "il cliente chiede un upres in più" dopo l'approvazione della quote.
     Per lavorazioni di scope normale si usa il flusso quote → approve → auto job."""
+    from app.services.rbac import can_view_finance, current_user_optional
+    if not can_view_finance(current_user_optional(request)):
+        raise HTTPException(403, "Permesso negato (richiede view_finance)")
     job = db.query(Job).filter(Job.id == job_id).first()
     if not job:
         raise HTTPException(404, "Job non trovato")
@@ -278,6 +282,7 @@ async def add_cost_line(
 async def update_cost_line(
     job_id: int,
     line_id: int,
+    request: Request,
     description: Optional[str] = Form(None),
     quantity_quoted: Optional[float] = Form(None),
     quantity_actual: Optional[float] = Form(None),
@@ -288,6 +293,24 @@ async def update_cost_line(
     notes: Optional[str] = Form(None),
     db: Session = Depends(get_db),
 ):
+    """v3.4.54 — RBAC:
+    - `view_finance` per qualsiasi modifica (no producer/operator senza permesso)
+    - `edit_cost_actuals` aggiuntivo per modificare `quantity_actual` (override
+      manuale del maturato). Default = sync da Booking done (cost_line_sync).
+      Solo admin/manager/accounting per evitare che producer/editor sballino il
+      cost report (es. "100h conforming → 90.000€ inventati nel maturato").
+    """
+    from app.services.rbac import can_edit_cost_actuals, can_view_finance, current_user_optional
+    user = current_user_optional(request)
+    if not can_view_finance(user):
+        raise HTTPException(403, "Permesso negato (richiede view_finance)")
+    if quantity_actual is not None and not can_edit_cost_actuals(user):
+        raise HTTPException(
+            403,
+            "Override del maturato (ore lavorate) richiede permesso edit_cost_actuals "
+            "(admin/manager/accounting). Default: deriva dai booking marcati `done`."
+        )
+
     line = db.query(JobCostLine).filter(
         JobCostLine.id == line_id, JobCostLine.job_id == job_id
     ).first()
@@ -314,9 +337,13 @@ async def update_cost_line(
 
 
 @router.delete("/api/{job_id}/cost-lines/{line_id}")
-async def delete_cost_line(job_id: int, line_id: int, db: Session = Depends(get_db)):
+async def delete_cost_line(job_id: int, line_id: int, request: Request, db: Session = Depends(get_db)):
     """v3.4.36 (R1.1): soft-detach Booking/TimePunch (SET NULL job_cost_line_id)
-    prima di cancellare per evitare FK orfani."""
+    prima di cancellare per evitare FK orfani.
+    v3.4.54: gate view_finance."""
+    from app.services.rbac import can_view_finance, current_user_optional
+    if not can_view_finance(current_user_optional(request)):
+        raise HTTPException(403, "Permesso negato (richiede view_finance)")
     line = db.query(JobCostLine).filter(
         JobCostLine.id == line_id, JobCostLine.job_id == job_id
     ).first()

@@ -57,6 +57,10 @@ PERMISSIONS: Dict[str, Dict[str, List[str]]] = {
         "view_cost_report": ["Visualizza cost report"],
         "view_invoices":    ["Visualizza fatture"],
         "edit_invoices":    ["Crea/modifica fatture"],
+        # v3.4.54 — override manuale del maturato (ore lavorate). Default
+        # deriva dai booking marcati `done` (cost_line_sync). Solo admin /
+        # accounting / manager possono fare override in fase di verifica.
+        "edit_cost_actuals": ["Override manuale ore lavorate (cost line)"],
     },
     "Risorse": {
         "view_resources":   ["Visualizza anagrafica risorse"],
@@ -90,7 +94,7 @@ PRESET_PERMISSIONS: Dict[str, List[str]] = {
         "view_punches_own", "view_punches_all", "edit_punches_own", "edit_punches_all",
         "approve_unavailability",
         "view_finance", "view_quotes", "edit_quotes", "view_pricelist", "edit_pricelist",
-        "view_cost_report", "view_invoices", "edit_invoices",
+        "view_cost_report", "view_invoices", "edit_invoices", "edit_cost_actuals",
         "view_resources", "edit_resources",
         "manage_departments",
     ],
@@ -111,7 +115,7 @@ PRESET_PERMISSIONS: Dict[str, List[str]] = {
         "view_planning",
         "view_punches_all",
         "view_finance", "view_quotes", "edit_quotes", "view_pricelist",
-        "view_cost_report", "view_invoices", "edit_invoices",
+        "view_cost_report", "view_invoices", "edit_invoices", "edit_cost_actuals",
     ],
     "operator": [
         "view_projects",
@@ -232,6 +236,12 @@ def is_elevated(user: Optional[User]) -> bool:
 
 def can_view_finance(user: Optional[User]) -> bool:
     return has_permission(user, "view_finance")
+
+
+def can_edit_cost_actuals(user: Optional[User]) -> bool:
+    """Override manuale di JobCostLine.quantity_actual (ore lavorate).
+    v3.4.54 — admin/manager/accounting; producer/operator/viewer no."""
+    return has_permission(user, "edit_cost_actuals")
 
 
 def can_edit_settings(user: Optional[User]) -> bool:

@@ -1,5 +1,26 @@
 # MediaFlow — Changelog
 
+## v3.4.54 — Project filter nel booking + cost-line RBAC (no override maturato per editor) (3 maggio 2026)
+
+Due fix critici emersi dal test di Matteo sulla v3.4.53:
+
+**1) Project filter prima della Quote (modal booking)**: in caso di nomi quote ambigui o omonimie tra progetti, il producer non aveva modo di restringere l'ambito. Aggiunto un picker progetto **sopra** la quote (`tlb-project-search`/`tlb-project-id`). Il picker quote ora filtra `QUOTES_SEED` per `project_id` selezionato. Cambio progetto → reset automatico di quote+lavorazione se non appartiene al nuovo. Edit di booking esistente: pre-popola anche progetto da `/jobs/api/{id}.project`. Sub-modal phantom: pre-popola progetto coerente.
+
+**2) Cost-line RBAC + lock del maturato manuale**: bug strutturale grave segnalato da Matteo — un utente editor (non finance) poteva aprire `/jobs/{id}` e modificare `quantity_actual` (ore lavorate) di una lavorazione, sballando il cost report (es. "100 ore conforming a 900€/h = €90.000 inventati nel maturato"). Il maturato deve **derivare dai booking marcati `done`** (cost_line_sync v3.4.41), non da input manuale. Override consentito solo a manager/accounting in fase di verifica.
+
+Soluzione:
+- Nuovo permesso `edit_cost_actuals` (preset admin/manager/accounting). **Producer e operator NO**.
+- `POST/PUT/DELETE /jobs/api/{id}/cost-lines[/{line_id}]` ora gate su `view_finance` (era pubblico). 403 per chi non ha il permesso.
+- `PUT cost-lines`: se passato `quantity_actual`, gate aggiuntivo su `edit_cost_actuals` con messaggio esplicito ("default deriva dai booking done").
+- Frontend `/jobs/{id}`:
+  - Bottone "+ Aggiungi lavorazione extra" nascosto a non-finance
+  - Click su riga lavorazione → modal aperto solo se `view_finance`, altrimenti toast "permesso negato"
+  - Modal edit: `quantity_actual` input `disabled` se non `edit_cost_actuals`, badge "(read-only — deriva dai booking ✓)" + helper text spiegativo
+  - `saveLine()` non invia `quantity_actual` se l'utente non ha permesso (evita 403 che perderebbe le altre modifiche)
+- `Jinja globals`: aggiunto `can_edit_cost_actuals` accessibile dai template
+
+Niente migrazione DB. Cache-buster bumpato a `3.4.54`.
+
 ## v3.4.53 — Booking parla quote+lavorazione (Job nascosto), filtro reparto risorse (3 maggio 2026)
 
 UX critica del modal booking ricostruita su feedback Matteo: "non voglio scegliere il job, voglio scegliere la quotazione e la lavorazione filtrata per reparto delle risorse". Il Job resta nel DB come puntatore interno, ma sparisce dall'UI booking.

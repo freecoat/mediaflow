@@ -847,10 +847,18 @@
           </select>
         </div>
 
+        <!-- ─── Progetto: filtro a monte della quote (v3.4.54) ────── -->
+        <div class="form-group" id="tlb-project-group-picker" style="position:relative;">
+          <label class="form-label">Progetto * <span style="color:var(--text3); font-weight:normal;">(restringe le quotazioni disponibili)</span></label>
+          <input type="text" id="tlb-project-search" class="form-input" placeholder="es. Mare Nostrum, Spot Sky…" autocomplete="off" oninput="tlbProjectSearch()" onfocus="tlbProjectSearch()">
+          <input type="hidden" id="tlb-project-id">
+          <div id="tlb-project-suggestions" style="display:none; position:absolute; top:100%; left:0; right:0; background:var(--bg-elev,#1a1d29); border:1px solid var(--border,#2a2e3d); border-radius:6px; max-height:240px; overflow-y:auto; z-index:100; box-shadow:0 4px 12px rgba(0,0,0,.3); margin-top:2px;"></div>
+        </div>
+
         <!-- ─── Quotazione: search autocomplete (v3.4.53, sostituisce Job) ────── -->
         <div class="form-group" id="tlb-job-group" style="position:relative;">
-          <label class="form-label">Quotazione <span style="color:var(--text3); font-weight:normal;">(cerca per numero, titolo, progetto o cliente)</span></label>
-          <input type="text" id="tlb-job-search" class="form-input" placeholder="es. Q-2026-001, Mare Nostrum, RAI…" autocomplete="off" oninput="tlbJobSearch()" onfocus="tlbJobSearch()">
+          <label class="form-label">Quotazione <span style="color:var(--text3); font-weight:normal;">(filtrate per progetto selezionato)</span></label>
+          <input type="text" id="tlb-job-search" class="form-input" placeholder="scegli prima il progetto…" autocomplete="off" oninput="tlbJobSearch()" onfocus="tlbJobSearch()">
           <input type="hidden" id="tlb-job-id">          <!-- v3.4.53 contiene quote_id (non job_id) -->
           <input type="hidden" id="tlb-quote-status">  <!-- v3.4.53: draft|sent|approved -->
           <div id="tlb-job-suggestions" style="display:none; position:absolute; top:100%; left:0; right:0; background:var(--bg-elev,#1a1d29); border:1px solid var(--border,#2a2e3d); border-radius:6px; max-height:240px; overflow-y:auto; z-index:100; box-shadow:0 4px 12px rgba(0,0,0,.3); margin-top:2px;"></div>
@@ -3011,8 +3019,13 @@ function _tlbReset() {
   document.getElementById('tlb-submit').textContent = 'Crea booking';
   document.getElementById('tlb-kind').value = 'project';
   document.getElementById('tlb-job-search').value = '';
+  document.getElementById('tlb-job-search').placeholder = 'scegli prima il progetto…';
   document.getElementById('tlb-job-id').value = '';
   document.getElementById('tlb-job-suggestions').style.display = 'none';
+  // v3.4.54 — project picker
+  const ps = document.getElementById('tlb-project-search'); if (ps) ps.value = '';
+  const pi = document.getElementById('tlb-project-id'); if (pi) pi.value = '';
+  const psg = document.getElementById('tlb-project-suggestions'); if (psg) psg.style.display = 'none';
   // v3.4.53 — pulizia campi nuovi
   const qs = document.getElementById('tlb-quote-status'); if (qs) qs.value = '';
   const lk = document.getElementById('tlb-line-kind'); if (lk) lk.value = '';
@@ -3475,9 +3488,15 @@ async function tlbOpenEdit(bookingId) {
     // v3.4.53: dal Job risaliamo alla Quote (job_id resta come puntatore interno)
     try {
       const jdata = await api('GET', `/jobs/api/${p.job_id}`);
+      // v3.4.54: pre-popola anche progetto (utile per cambio quote successivo)
+      if (jdata.project) {
+        document.getElementById('tlb-project-id').value = jdata.project.id;
+        document.getElementById('tlb-project-search').value = `${jdata.project.code} — ${jdata.project.title || ''}`;
+      }
       if (jdata.quote && jdata.quote.id) {
         document.getElementById('tlb-job-id').value = jdata.quote.id;  // ora è quote_id
         document.getElementById('tlb-job-search').value = `${jdata.quote.number} — ${jdata.title || ''}`;
+        document.getElementById('tlb-job-search').placeholder = 'es. Q-2026-001…';
         document.getElementById('tlb-quote-status').value = 'approved';
         // Carica lavorazioni filtrate per dept (ma le risorse non sono ancora popolate
         // a questo punto: faccio fetch SENZA filtro reparto per ora, poi lo riapplica
@@ -3529,18 +3548,83 @@ function tlbOnKindChange() {
   }
 }
 
+// ── Project autocomplete (v3.4.54: a monte della quote per restringere ambito) ──
+function tlbProjectSearch() {
+  const q = (document.getElementById('tlb-project-search').value || '').toLowerCase().trim();
+  const box = document.getElementById('tlb-project-suggestions');
+  let candidates = PROJECTS_SEED;
+  if (q) {
+    candidates = PROJECTS_SEED.filter(p =>
+      (p.code||'').toLowerCase().includes(q) ||
+      (p.title||'').toLowerCase().includes(q) ||
+      (p.client_name||'').toLowerCase().includes(q)
+    );
+  }
+  candidates = candidates.slice(0, 12);
+  if (!candidates.length) {
+    box.innerHTML = '<div style="padding:10px; color:var(--text3); font-size:12px;">Nessun progetto trovato</div>';
+    box.style.display = '';
+    return;
+  }
+  box.innerHTML = candidates.map(p =>
+    `<div onmousedown="tlbSelectProject(${p.id})" style="padding:8px 10px; cursor:pointer; border-bottom:1px solid var(--border,#2a2e3d); font-size:12px;">
+      <div style="font-weight:500; color:var(--text,#eee);">
+        <span class="mono" style="color:#6272f5;">${escapeHtml(p.code)}</span> — ${escapeHtml(p.title||'')}
+      </div>
+      <div style="color:var(--text3,#888); font-size:11px; margin-top:2px;">${escapeHtml(p.client_name||'—')}</div>
+    </div>`
+  ).join('');
+  box.style.display = '';
+}
+
+function tlbSelectProject(projectId) {
+  const p = PROJECTS_SEED.find(x => x.id === projectId);
+  if (!p) return;
+  const prevPid = document.getElementById('tlb-project-id').value;
+  document.getElementById('tlb-project-id').value = p.id;
+  document.getElementById('tlb-project-search').value = `${p.code} — ${p.title || ''}`;
+  document.getElementById('tlb-project-suggestions').style.display = 'none';
+  // Cambio progetto → reset quote+lavorazione (se la quote scelta non appartiene a questo progetto)
+  if (String(prevPid) !== String(projectId)) {
+    const qsel = document.getElementById('tlb-job-id').value;
+    if (qsel) {
+      const curQuote = QUOTES_SEED.find(qt => qt.id === Number(qsel));
+      if (!curQuote || curQuote.project_id !== projectId) {
+        document.getElementById('tlb-job-id').value = '';
+        document.getElementById('tlb-job-search').value = '';
+        document.getElementById('tlb-quote-status').value = '';
+        const lineSel = document.getElementById('tlb-line');
+        lineSel.innerHTML = '<option value="">— scegli quotazione prima —</option>';
+        document.getElementById('tlb-line-meta').textContent = '';
+        document.getElementById('tlb-line-kind').value = '';
+      }
+    }
+  }
+  // Suggerisci subito le quote del progetto
+  document.getElementById('tlb-job-search').placeholder = 'es. Q-2026-001…';
+  document.getElementById('tlb-job-search').focus();
+}
+
 // ── Quote search autocomplete (v3.4.53, sostituisce job autocomplete) ─
 function tlbJobSearch() {
   const q = (document.getElementById('tlb-job-search').value || '').toLowerCase().trim();
   const box = document.getElementById('tlb-job-suggestions');
-  let candidates = QUOTES_SEED;
+  const projectId = Number(document.getElementById('tlb-project-id').value || 0);
+  // v3.4.54: ambito ristretto al progetto selezionato (eliminazione ambiguità nomi)
+  let candidates = projectId ? QUOTES_SEED.filter(qt => qt.project_id === projectId) : [];
+  if (!projectId) {
+    box.innerHTML = '<div style="padding:10px; color:#f59e0b; font-size:12px;">⚠ Scegli prima un progetto</div>' +
+      `<div onmousedown="rvqOpen()" style="padding:9px 10px; cursor:pointer; font-size:12px; background:rgba(245,158,11,0.06); border-top:1px solid var(--border,#2a2e3d); color:#f59e0b; font-weight:500;">
+        + Genera <b>phantom quote</b> da questo booking…
+      </div>`;
+    box.style.display = '';
+    return;
+  }
   if (q) {
-    candidates = QUOTES_SEED.filter(qt =>
+    candidates = candidates.filter(qt =>
       (qt.number||'').toLowerCase().includes(q) ||
       (qt.title||'').toLowerCase().includes(q) ||
-      (qt.client||'').toLowerCase().includes(q) ||
-      (qt.project_code||'').toLowerCase().includes(q) ||
-      (qt.project_title||'').toLowerCase().includes(q)
+      (qt.client||'').toLowerCase().includes(q)
     );
   }
   candidates = candidates.slice(0, 12);
@@ -3775,9 +3859,14 @@ async function rvqSave() {
       });
     }
     closeModal('modal-tlb-reverse-quote');
+    // v3.4.54: pre-popola anche il progetto picker (coerenza UI)
+    document.getElementById('tlb-project-id').value = pid;
+    const proj = PROJECTS_SEED.find(x => x.id === Number(pid));
+    if (proj) document.getElementById('tlb-project-search').value = `${proj.code} — ${proj.title || ''}`;
     // Auto-seleziona quote + lavorazione nel modal booking principale
     document.getElementById('tlb-job-id').value = r.quote_id;  // semantica v3.4.53: quote_id
     document.getElementById('tlb-job-search').value = `${r.quote_number} — ${r.cost_line_description}`;
+    document.getElementById('tlb-job-search').placeholder = 'es. Q-2026-001…';
     document.getElementById('tlb-quote-status').value = r.quote_status || 'approved';
     // Carica le booking-lines della nuova quote (filtrate per dept) + auto-seleziona la nuova
     await tlbLoadBookingLines(r.quote_id);

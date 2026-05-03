@@ -8,6 +8,14 @@
 
 ## Versione corrente
 
+**v3.4.54** — 3 maggio 2026 — Project filter nel booking + cost-line RBAC (no override maturato per editor)
+
+Due fix critici post-test v3.4.53:
+1. **Project filter prima della Quote** nel modal booking (restringe ambito, evita ambiguità nomi). Picker progetto sopra il picker quote, filtro automatico QUOTES_SEED.
+2. **Cost-line RBAC + lock del maturato**: editor non può più modificare `quantity_actual` (sballava cost report). Permesso nuovo `edit_cost_actuals` (admin/manager/accounting; producer/operator NO). Backend gate POST/PUT/DELETE cost-lines su `view_finance`; PUT extra-gate su `edit_cost_actuals` per `quantity_actual`. Frontend job_detail.html: input read-only + badge se non autorizzato; bottone "Aggiungi extra" nascosto a non-finance.
+
+Maturato canonico = sync dai booking `done` (cost_line_sync v3.4.41). Override manuale è eccezione gestita da finance, non default.
+
 **v3.4.53** — 3 maggio 2026 — Booking parla quote+lavorazione (Job nascosto), filtro reparto risorse
 
 Modal booking riscritto: il campo "Job" diventa "Quotazione" (autocomplete `QUOTES_SEED` con stati draft|sent|approved). La lavorazione è obbligatoria e filtrata per dipartimento delle risorse selezionate (ricarico automatico al cambio risorse). Job resta nel DB ma invisibile.
