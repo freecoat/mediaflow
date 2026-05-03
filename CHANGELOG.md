@@ -1,5 +1,44 @@
 # MediaFlow — Changelog
 
+## v3.4.55 — Fix sistemico: integrità Quote↔JobCostLine↔Booking, vista lavorazione read-only, auto-assignment risorse, allineamento man-hours (3 maggio 2026)
+
+Cambio strutturale dopo 5 problemi gravi segnalati da Matteo:
+
+**1) DELETE QuoteLine/JobCostLine con booking attivi → HARD-BLOCK (no più soft-detach)**
+Bug paradossale: cancellando una voce di quotazione, il sistema (v3.4.36) faceva soft-detach `Booking.job_cost_line_id → NULL`, lasciando booking orfani senza lavorazione. Risultato: cost report vuoto pur essendoci booking nel planning. Ora:
+- `DELETE /quotes/api/{id}/lines/{line_id}` rifiuta con HTTP 409 se ci sono booking attivi (status != cancelled). Elenco booking ostativi nel messaggio.
+- `DELETE /jobs/api/{job_id}/cost-lines/{line_id}` stessa policy. Soft-detach abolito.
+- Modifica resta consentita (la riga si può sempre rinominare/correggere). Solo eliminazione bloccata.
+- TimePunch (HR, separato): soft-detach OK perché non impatta cost report.
+
+**2) Vista lavorazione read-only (`modal-line-detail`)**
+Editor che cliccava su una riga si trovava modal di edit con prezzi/ore lavorate modificabili (sballava cost report). Ora click → modal informativo con:
+- KPI Quotato vs Maturato (entrambi con qty × unit_price = total)
+- Origine quote line (descrizione, posizione, link)
+- Risorse coinvolte dedotte dai booking
+- Booking attivi (ID, data, status execution, risorse + durata per assignment)
+- Bottone "Modifica" appare in footer SOLO se `view_finance`. Altrimenti solo Chiudi.
+- Endpoint nuovo `GET /jobs/api/{job_id}/cost-lines/{line_id}/detail`.
+
+**3) Auto-assignment Resource → Job al booking save**
+Bookings creavano linkati al job ma le risorse non finivano in `JobResourceAssignment` → impossibile generare report ore-per-risorsa-su-progetto. Ora:
+- Service nuovo `app/services/resource_assignment_sync.py` con `ensure_resources_assigned_to_job()` (idempotente, eredita role/rate da `Resource`).
+- Hook in `POST /planning/api/bookings` (sia singolo che ricorrente): dopo creazione booking, garantisce assignment per tutte le risorse coinvolte se il booking ha `job_id`.
+- Reverse-flow + promote-line: il booking viene creato DOPO il promote, quindi l'hook copre anche quei casi (non serve duplicare).
+
+**4) Allineamento giorni/ore (man-hours canonico)**
+Bug subdolo: `cost_line_sync._booking_hours` usava shell-duration (start→end del booking), `reverse_quote.compute_quantity_from_hours` usava man-hours (somma assignments). Risultato: per booking multi-risorsa il maturato era sottostimato. Es. 2 colorist × 8h → reverse quotava 2 giornate, sync maturava 1 giornata → cost report sballato. Ora:
+- `_booking_hours(b)` ritorna `sum(assignments durations)` (man-hours) coerente con il flusso reverse.
+- Fallback a shell-duration solo se assignments non caricati.
+
+**5) Vincolo ribadito** (già v3.4.54): editor non può modificare `quantity_actual`. Mantenuto.
+
+### TODO non risolti in questa versione
+- Notifica "quote approved senza risorse assegnate" al producer (warning attivo): rimandato (pattern complesso, vale la pena chiarire UX prima).
+- Multi-risorsa shell-vs-man-hours: assunto man-hours come canonico — se Matteo vuole shell-hours per alcune voci (es. "una giornata di Color HDR" indipendente da quanti operatori), si aggiunge un flag `PriceItem.aggregate_hours_per_resource: bool` in futuro.
+
+Niente migrazione DB. Cache-buster bumpato a `3.4.55`.
+
 ## v3.4.54 — Project filter nel booking + cost-line RBAC (no override maturato per editor) (3 maggio 2026)
 
 Due fix critici emersi dal test di Matteo sulla v3.4.53:

@@ -233,6 +233,95 @@ async def get_job(job_id: int, db: Session = Depends(get_db)):
     return _job_payload(db, job)
 
 
+@router.get("/api/{job_id}/cost-lines/{line_id}/detail")
+async def get_cost_line_detail(job_id: int, line_id: int, db: Session = Depends(get_db)):
+    """v3.4.55 — Vista dettaglio (read-only) di una lavorazione: info + booking
+    associati + risorse coinvolte + quote line di origine. Sostituisce il modal
+    di edit per la maggior parte dei casi (l'edit resta accessibile a finance).
+    """
+    from app.models import (
+        BookingAssignment, BookingExecutionStatus, BookingStatus,
+        QuoteLine, Resource,
+    )
+    line = db.query(JobCostLine).filter(
+        JobCostLine.id == line_id, JobCostLine.job_id == job_id
+    ).first()
+    if not line:
+        raise HTTPException(404, "Lavorazione non trovata")
+
+    # Booking attivi sulla linea + assignments + risorse
+    bks = db.query(Booking).filter(
+        Booking.job_cost_line_id == line.id,
+        Booking.status != BookingStatus.cancelled,
+    ).order_by(Booking.start_datetime.desc()).all()
+
+    bookings_out = []
+    resources_seen: dict[int, dict] = {}
+    for b in bks:
+        ass_out = []
+        for a in b.assignments:
+            r = a.resource
+            if r and r.id not in resources_seen:
+                resources_seen[r.id] = {
+                    "id": r.id, "name": r.name,
+                    "role": r.role,
+                    "department_id": r.department_id,
+                    "department_name": r.department.name if r.department else None,
+                }
+            ass_out.append({
+                "id": a.id,
+                "resource_id": a.resource_id,
+                "resource_name": r.name if r else "?",
+                "start": a.start_datetime.isoformat() if a.start_datetime else None,
+                "end": a.end_datetime.isoformat() if a.end_datetime else None,
+                "duration_h": round((a.end_datetime - a.start_datetime).total_seconds() / 3600.0, 2)
+                              if (a.start_datetime and a.end_datetime) else 0.0,
+            })
+        exec_st = b.execution_status.value if hasattr(b.execution_status, "value") else str(b.execution_status)
+        bookings_out.append({
+            "id": b.id,
+            "start": b.start_datetime.isoformat() if b.start_datetime else None,
+            "end": b.end_datetime.isoformat() if b.end_datetime else None,
+            "status": b.status.value if hasattr(b.status, "value") else str(b.status),
+            "execution_status": exec_st,
+            "notes": b.notes,
+            "assignments": ass_out,
+        })
+
+    # Origine quote line
+    quote_origin = None
+    if line.quote_line_id:
+        ql = db.query(QuoteLine).filter(QuoteLine.id == line.quote_line_id).first()
+        if ql:
+            quote_origin = {
+                "quote_line_id": ql.id,
+                "quote_id": ql.quote_id,
+                "position": ql.position,
+                "description": ql.description,
+                "quantity": ql.quantity,
+                "unit": ql.unit,
+                "unit_price": ql.unit_price,
+                "total": ql.total,
+            }
+
+    return {
+        "line": {
+            "id": line.id, "description": line.description,
+            "is_extra": line.is_extra, "is_billable": line.is_billable,
+            "unit": line.unit, "unit_price": line.unit_price,
+            "quantity_quoted": line.quantity_quoted,
+            "quantity_actual": line.quantity_actual,
+            "total_quoted": line.total_quoted,
+            "total_accrued": line.total_accrued,
+            "total_expected": line.total_expected,
+            "notes": line.notes,
+        },
+        "bookings": bookings_out,
+        "resources": list(resources_seen.values()),
+        "quote_origin": quote_origin,
+    }
+
+
 @router.post("/api/{job_id}/cost-lines")
 async def add_cost_line(
     job_id: int,
@@ -338,9 +427,11 @@ async def update_cost_line(
 
 @router.delete("/api/{job_id}/cost-lines/{line_id}")
 async def delete_cost_line(job_id: int, line_id: int, request: Request, db: Session = Depends(get_db)):
-    """v3.4.36 (R1.1): soft-detach Booking/TimePunch (SET NULL job_cost_line_id)
-    prima di cancellare per evitare FK orfani.
-    v3.4.54: gate view_finance."""
+    """v3.4.55 — HARD-BLOCK se la lavorazione ha booking attivi. Sostituisce
+    il soft-detach del v3.4.36 (che rendeva il cost report incoerente).
+
+    v3.4.54: gate view_finance.
+    """
     from app.services.rbac import can_view_finance, current_user_optional
     if not can_view_finance(current_user_optional(request)):
         raise HTTPException(403, "Permesso negato (richiede view_finance)")
@@ -353,12 +444,23 @@ async def delete_cost_line(job_id: int, line_id: int, request: Request, db: Sess
         raise HTTPException(
             400,
             "Le lavorazioni ereditate dalla quote non possono essere eliminate. "
-            "Rimuovi prima la riga dalla quotazione, oppure marca questa come non fatturabile."
+            "Rimuovi prima la riga dalla quotazione (DELETE /quotes/api/.../lines/...), "
+            "oppure marca questa come non fatturabile."
         )
-    # Soft-detach: Booking/TimePunch → SET NULL job_cost_line_id
-    db.query(Booking).filter(
-        Booking.job_cost_line_id == line_id
-    ).update({"job_cost_line_id": None}, synchronize_session=False)
+    # v3.4.55 — HARD-BLOCK su booking attivi
+    active_bk = db.query(Booking).filter(
+        Booking.job_cost_line_id == line_id,
+        Booking.status != BookingStatus.cancelled,
+    ).all()
+    if active_bk:
+        raise HTTPException(
+            409,
+            f"Impossibile eliminare: lavorazione collegata a {len(active_bk)} "
+            f"booking attivi. Cancella o annulla prima i booking. "
+            f"Booking ostativi: {[b.id for b in active_bk[:5]]}"
+            + (f" e altri {len(active_bk)-5}" if len(active_bk) > 5 else "")
+        )
+    # TimePunch (HR, separato): soft-detach OK
     db.query(TimePunch).filter(
         TimePunch.job_cost_line_id == line_id
     ).update({"job_cost_line_id": None}, synchronize_session=False)

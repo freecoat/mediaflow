@@ -185,6 +185,22 @@
   </div>
 </div>
 
+<!-- ── Modal dettaglio lavorazione (read-only, v3.4.55) ────── -->
+<div class="modal-overlay" id="modal-line-detail">
+  <div class="modal" style="max-width:760px;">
+    <div class="modal-header">
+      <span class="modal-title" id="ld-title">Dettaglio lavorazione</span>
+      <button class="btn btn-ghost btn-icon" onclick="closeModal('modal-line-detail')">✕</button>
+    </div>
+    <div class="modal-body" id="ld-body">
+      <div class="text-muted">Caricamento…</div>
+    </div>
+    <div class="modal-footer" id="ld-footer">
+      <button class="btn btn-secondary" onclick="closeModal('modal-line-detail')">Chiudi</button>
+    </div>
+  </div>
+</div>
+
 <!-- ── Modal modifica lavorazione ──────────────────────────── -->
 <div class="modal-overlay" id="modal-edit-line">
   <div class="modal">
@@ -297,9 +313,10 @@ function renderLines(lines) {
       : '';
     const planned = l.planned_hours != null ? fmtH(l.planned_hours) : '—';
     const actualBooked = l.actual_hours != null ? fmtH(l.actual_hours) : '—';
-    // v3.4.54: click su riga apre il modal SOLO se utente ha view_finance
-    const clickAttr = CAN_VIEW_FINANCE ? `onclick='openEditLine(${l.id})' style="cursor:pointer;"` : '';
-    return `<tr class="${l.is_extra ? 'line-extra' : ''} ${overBudget ? 'over-budget' : ''}" ${clickAttr}>
+    // v3.4.55: click su riga → vista dettaglio read-only (booking, risorse,
+    // origine quote line). La modifica resta per chi ha view_finance e si apre
+    // dal bottone "Modifica" dentro al modal dettaglio.
+    return `<tr class="${l.is_extra ? 'line-extra' : ''} ${overBudget ? 'over-budget' : ''}" onclick='openLineDetail(${l.id})' style="cursor:pointer;">
       <td>
         ${escapeHtml(l.description)}${l.is_extra ? '<span class="extra-badge">EXTRA</span>' : ''}
         ${!l.is_billable ? '<span class="extra-badge" style="background:rgba(150,150,150,0.2);color:#999;">no fatt.</span>' : ''}
@@ -344,6 +361,105 @@ async function saveExtra() {
     toast('Lavorazione extra aggiunta', 'success');
     loadJob();
   } catch(e) { toast(e.message || 'Errore', 'error'); }
+}
+
+// v3.4.55 — vista dettaglio lavorazione (read-only, accessibile a tutti)
+async function openLineDetail(lineId) {
+  document.getElementById('ld-title').textContent = `Lavorazione #${lineId}`;
+  document.getElementById('ld-body').innerHTML = '<div class="text-muted">Caricamento…</div>';
+  document.getElementById('ld-footer').innerHTML = '<button class="btn btn-secondary" onclick="closeModal(\'modal-line-detail\')">Chiudi</button>';
+  openModal('modal-line-detail');
+  let data;
+  try {
+    data = await api('GET', `/jobs/api/${JOB_ID}/cost-lines/${lineId}/detail`);
+  } catch(e) {
+    document.getElementById('ld-body').innerHTML = `<div style="color:#ef4444;">Errore: ${escapeHtml(e.message||'')}</div>`;
+    return;
+  }
+  const l = data.line;
+  const fmtH2 = n => (n == null) ? '—' : Number(n).toFixed(2);
+  const fmtE = n => (n == null) ? '—' : new Intl.NumberFormat('it-IT', {style:'currency', currency:'EUR'}).format(n);
+  const extraBadge = l.is_extra ? '<span class="extra-badge">EXTRA</span>' : '';
+  const billBadge = !l.is_billable ? '<span class="extra-badge" style="background:rgba(150,150,150,0.2);color:#999;">non fatturabile</span>' : '';
+  document.getElementById('ld-title').innerHTML = `${escapeHtml(l.description)} ${extraBadge}${billBadge}`;
+
+  let bookingsHtml = '';
+  if (data.bookings.length) {
+    bookingsHtml = data.bookings.map(b => {
+      const ass = b.assignments.map(a =>
+        `<div style="font-size:11px; color:var(--text2); margin-left:12px;">↳ ${escapeHtml(a.resource_name)} · ${new Date(a.start).toLocaleString('it-IT', {dateStyle:'short', timeStyle:'short'})} → ${new Date(a.end).toLocaleString('it-IT', {timeStyle:'short'})} · ${a.duration_h}h</div>`
+      ).join('');
+      const exColor = b.execution_status === 'done' ? '#22c55e' : b.execution_status === 'in_progress' ? '#f59e0b' : b.execution_status === 'not_done' ? '#ef4444' : 'var(--text3)';
+      return `<div style="padding:8px 10px; border:1px solid var(--border,#2a2e3d); border-radius:6px; margin-bottom:6px; background:var(--bg3,rgba(255,255,255,0.02));">
+        <div style="display:flex; justify-content:space-between; align-items:center;">
+          <span style="font-size:12px; font-weight:500;">Booking #${b.id}</span>
+          <span style="font-size:11px; color:${exColor}; text-transform:uppercase; font-weight:600;">${b.execution_status}</span>
+        </div>
+        ${ass}
+      </div>`;
+    }).join('');
+  } else {
+    bookingsHtml = '<div class="text-muted" style="font-size:12px; font-style:italic;">Nessun booking attivo collegato a questa lavorazione.</div>';
+  }
+
+  let resourcesHtml = '';
+  if (data.resources.length) {
+    resourcesHtml = '<div style="display:flex; gap:6px; flex-wrap:wrap;">' +
+      data.resources.map(r =>
+        `<span style="padding:3px 9px; background:var(--bg3,rgba(255,255,255,0.05)); border-radius:12px; font-size:11px;">${escapeHtml(r.name)}${r.role?` · <span style="color:var(--text3);">${escapeHtml(r.role)}</span>`:''}${r.department_name?` <span style="color:#6272f5;">[${escapeHtml(r.department_name)}]</span>`:''}</span>`
+      ).join('') + '</div>';
+  } else {
+    resourcesHtml = '<div class="text-muted" style="font-size:12px; font-style:italic;">Nessuna risorsa coinvolta (dedotta dai booking).</div>';
+  }
+
+  let originHtml = '';
+  if (data.quote_origin) {
+    const o = data.quote_origin;
+    originHtml = `<div style="font-size:12px;">
+      <span class="mono" style="color:#6272f5;">${escapeHtml(o.position||'')}</span>
+      ${escapeHtml(o.description)} · ${o.quantity} ${escapeHtml(o.unit)} × ${fmtE(o.unit_price)} = <b>${fmtE(o.total)}</b>
+      <br><a href="/quotes#${o.quote_id}" style="font-size:11px; color:#6272f5;">→ apri quote</a>
+    </div>`;
+  } else if (l.is_extra) {
+    originHtml = '<div class="text-muted" style="font-size:12px; font-style:italic;">Lavorazione extra (no quote line di origine).</div>';
+  } else {
+    originHtml = '<div class="text-muted" style="font-size:12px; font-style:italic;">Origine quote non risolta.</div>';
+  }
+
+  document.getElementById('ld-body').innerHTML = `
+    <div style="display:grid; grid-template-columns:1fr 1fr; gap:12px; margin-bottom:14px;">
+      <div style="padding:8px 10px; background:var(--bg3,rgba(255,255,255,0.03)); border-radius:6px;">
+        <div style="font-size:11px; color:var(--text3); text-transform:uppercase; margin-bottom:4px;">Quotato</div>
+        <div style="font-size:14px;">${fmtH2(l.quantity_quoted)} ${escapeHtml(l.unit||'')} × ${fmtE(l.unit_price)} = <b>${fmtE(l.total_quoted)}</b></div>
+      </div>
+      <div style="padding:8px 10px; background:rgba(34,197,94,0.06); border:1px solid rgba(34,197,94,0.2); border-radius:6px;">
+        <div style="font-size:11px; color:var(--text3); text-transform:uppercase; margin-bottom:4px;">Maturato (da booking done)</div>
+        <div style="font-size:14px;">${fmtH2(l.quantity_actual)} ${escapeHtml(l.unit||'')} × ${fmtE(l.unit_price)} = <b style="color:#22c55e;">${fmtE(l.total_accrued)}</b></div>
+      </div>
+    </div>
+
+    <div style="margin-bottom:14px;">
+      <div style="font-size:11px; color:var(--text3); text-transform:uppercase; margin-bottom:6px;">Origine quote line</div>
+      ${originHtml}
+    </div>
+
+    <div style="margin-bottom:14px;">
+      <div style="font-size:11px; color:var(--text3); text-transform:uppercase; margin-bottom:6px;">Risorse coinvolte (${data.resources.length})</div>
+      ${resourcesHtml}
+    </div>
+
+    <div>
+      <div style="font-size:11px; color:var(--text3); text-transform:uppercase; margin-bottom:6px;">Booking attivi (${data.bookings.length})</div>
+      ${bookingsHtml}
+    </div>
+  `;
+
+  // Footer: Modifica solo per view_finance
+  let footerHtml = '<button class="btn btn-secondary" onclick="closeModal(\'modal-line-detail\')">Chiudi</button>';
+  if (CAN_VIEW_FINANCE) {
+    footerHtml += `<button class="btn btn-primary" onclick="closeModal('modal-line-detail'); setTimeout(()=>openEditLine(${l.id}),60);">Modifica</button>`;
+  }
+  document.getElementById('ld-footer').innerHTML = footerHtml;
 }
 
 function openEditLine(lineId) {

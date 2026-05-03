@@ -839,9 +839,16 @@ async def update_quote_line(
 
 @router.delete("/api/{quote_id}/lines/{line_id}")
 async def delete_quote_line(quote_id: int, line_id: int, db: Session = Depends(get_db)):
-    """v3.4.36 (R1.1): cascade ai JobCostLine collegati. Per ogni JobCostLine
-    con quote_line_id=line_id, soft-detach i Booking/TimePunch (job_cost_line_id
-    → NULL) e poi cancella la JobCostLine. Blocca se job in stato terminale."""
+    """v3.4.55 — cancellazione QuoteLine: HARD-BLOCK se ha JobCostLine con
+    booking attivi (status != cancelled). Fino a v3.4.54 facevamo soft-detach
+    (SET NULL job_cost_line_id sui Booking) → produceva booking orfani senza
+    lavorazione → cost report vuoto → paradosso segnalato da Matteo.
+
+    Nuova policy: la riga di quote NON può essere cancellata finché esistono
+    booking attivi sulla JobCostLine collegata. Modifica resta consentita.
+    Per togliere la riga: cancella prima i booking (o marcali cancelled),
+    oppure modifica la riga (descrizione, qty, prezzo) senza eliminarla.
+    """
     line = db.query(QuoteLine).filter(QuoteLine.id == line_id).first()
     if not line:
         raise HTTPException(404)
@@ -850,19 +857,40 @@ async def delete_quote_line(quote_id: int, line_id: int, db: Session = Depends(g
     cost_lines = db.query(JobCostLine).filter(
         JobCostLine.quote_line_id == line_id
     ).all()
+
+    # v3.4.55 — HARD-BLOCK su booking attivi
+    blocking_bookings = []
     for jcl in cost_lines:
-        # Blocca se il job è in stato terminale (no retroattive)
+        active_bk = db.query(Booking).filter(
+            Booking.job_cost_line_id == jcl.id,
+            Booking.status != BookingStatus.cancelled,
+        ).all()
+        for b in active_bk:
+            blocking_bookings.append({
+                "booking_id": b.id,
+                "start": b.start_datetime.isoformat() if b.start_datetime else None,
+                "execution_status": b.execution_status.value if hasattr(b.execution_status, "value") else str(b.execution_status),
+            })
+    if blocking_bookings:
+        raise HTTPException(
+            409,
+            f"Impossibile eliminare: questa riga ha {len(blocking_bookings)} "
+            f"booking attivi collegati. Cancella o annulla prima i booking, "
+            f"oppure modifica la riga senza eliminarla. "
+            f"Booking ostativi: {[b['booking_id'] for b in blocking_bookings[:5]]}"
+            + (f" e altri {len(blocking_bookings)-5}" if len(blocking_bookings) > 5 else "")
+        )
+
+    # Cascade su JobCostLine "pulite" (senza booking attivi): rimosse insieme
+    for jcl in cost_lines:
+        # Blocca anche se il job è in stato terminale
         if jcl.job and jcl.job.status in (JobStatus.completed, JobStatus.invoiced):
             raise HTTPException(
                 409,
                 f"Impossibile cancellare: il job {jcl.job.code} è in stato "
                 f"{jcl.job.status.value} e ha già consuntivato questa lavorazione."
             )
-        # Soft-detach: Booking → SET NULL job_cost_line_id
-        db.query(Booking).filter(
-            Booking.job_cost_line_id == jcl.id
-        ).update({"job_cost_line_id": None}, synchronize_session=False)
-        # Soft-detach: TimePunch → SET NULL job_cost_line_id
+        # Per TimePunch (HR, separato dal cost report): soft-detach OK
         db.query(TimePunch).filter(
             TimePunch.job_cost_line_id == jcl.id
         ).update({"job_cost_line_id": None}, synchronize_session=False)

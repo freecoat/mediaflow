@@ -891,6 +891,15 @@ async def create_booking(
             if primary_booking is None:
                 primary_booking = b
             booking_count += 1
+        # v3.4.55: auto-assignment Resource → Job (idempotente)
+        if primary_booking and primary_booking.job_id:
+            from app.services.resource_assignment_sync import ensure_resources_assigned_to_job
+            try:
+                ensure_resources_assigned_to_job(
+                    db, primary_booking.job_id, [pa["resource_id"] for pa in parsed_ass]
+                )
+            except Exception as e:
+                print(f"[booking-create] auto-assignment failed: {e}")
         db.commit()
         db.refresh(primary_booking)
         return {
@@ -930,6 +939,17 @@ async def create_booking(
             end_datetime=pa["end_datetime"],
         ))
     _log_change(db, b.id, "create", f"Booking creato ({len(parsed_ass)} risorse)", None)
+    # v3.4.55: auto-assignment Resource → Job (idempotente).
+    # Se il booking è legato a un job, le risorse coinvolte vengono auto-aggiunte
+    # al JobResourceAssignment per consentire il report ore-per-risorsa.
+    if b.job_id:
+        from app.services.resource_assignment_sync import ensure_resources_assigned_to_job
+        try:
+            ensure_resources_assigned_to_job(
+                db, b.job_id, [pa["resource_id"] for pa in parsed_ass]
+            )
+        except Exception as e:
+            print(f"[booking-create] auto-assignment failed: {e}")
     db.commit()
     db.refresh(b)
     return {

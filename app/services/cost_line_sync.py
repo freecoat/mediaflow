@@ -27,15 +27,24 @@ TIME_UNITS_DAY = {"day", "giorno", "giornate", "giornata", "d"}
 
 
 def _booking_hours(b) -> float:
-    """Durata booking in ore. Se ha assignments multi-risorsa, considera
-    la durata della shell (start_datetime → end_datetime) — il costo è
-    moltiplicato per ogni risorsa, ma le ore "lavoro" della cost line
-    sono le ore-lavorazione, non le ore-uomo. Se serve cambiare in
-    ore-uomo, sommare le durate degli assignment."""
-    if not b.start_datetime or not b.end_datetime:
-        return 0.0
-    delta = (b.end_datetime - b.start_datetime).total_seconds() / 3600.0
-    return max(0.0, delta)
+    """Ore-uomo del booking = somma delle durate degli assignment (man-hours).
+
+    v3.4.55 fix: prima usavamo shell-duration (start→end del booking),
+    sottostimando il maturato per booking multi-risorsa. Es: 2 colorist su
+    8h → shell 8h → maturato 1 giornata; ma il costo cost-report è 2
+    giornate-colorist (ognuno conta come unità di lavoro). Allineato con
+    `reverse_quote.compute_quantity_from_hours` che già usa man-hours.
+    """
+    if not getattr(b, "assignments", None):
+        # Fallback: nessun assignment caricato → usa shell-duration
+        if not b.start_datetime or not b.end_datetime:
+            return 0.0
+        return max(0.0, (b.end_datetime - b.start_datetime).total_seconds() / 3600.0)
+    total = 0.0
+    for a in b.assignments:
+        if a.start_datetime and a.end_datetime:
+            total += max(0.0, (a.end_datetime - a.start_datetime).total_seconds() / 3600.0)
+    return total
 
 
 def recompute_cost_line_actual(db: Session, jcl) -> dict:

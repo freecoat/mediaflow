@@ -8,6 +8,17 @@
 
 ## Versione corrente
 
+**v3.4.55** — 3 maggio 2026 — Fix sistemico: integrità Quote↔JobCostLine↔Booking, vista lavorazione read-only, auto-assignment risorse, allineamento man-hours
+
+Cambio strutturale dopo 5 paradossi segnalati da Matteo. Sintesi:
+1. **HARD-BLOCK** sulla delete di QuoteLine/JobCostLine se booking attivi (no più soft-detach silenzioso che produceva booking orfani senza lavorazione)
+2. **Vista lavorazione read-only** (`modal-line-detail` + `GET .../detail`): KPI Quotato/Maturato + Origine quote + Risorse + Booking. Bottone "Modifica" solo per `view_finance`.
+3. **Auto-assignment Resource → Job** via hook in POST booking (`app/services/resource_assignment_sync.py`, idempotente)
+4. **Man-hours canonico**: `cost_line_sync._booking_hours` ora somma durate assignments (era shell-duration), allineato con `reverse_quote`. Fix maturato sottostimato per booking multi-risorsa.
+5. Mantenuto lock `quantity_actual` per non `edit_cost_actuals` (v3.4.54).
+
+Niente migrazione DB.
+
 **v3.4.54** — 3 maggio 2026 — Project filter nel booking + cost-line RBAC (no override maturato per editor)
 
 Due fix critici post-test v3.4.53:
