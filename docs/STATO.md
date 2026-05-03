@@ -8,11 +8,26 @@
 
 ## Versione corrente
 
-**v3.5.0-alpha.2** — 3 maggio 2026 — Hotfix: persistenza storia conversazione fra turni
+**v3.5.0-alpha.8** — 3 maggio 2026 — Cestino Project (Slice 4) + Retention auto (Slice 5)
 
-Bug emerso al primo test (conversazione Gomorra): dopo end_turn il loop azzerava `tool_state` perdendo la storia. Risultato: il modello al turno 2 diceva "non ho conversazioni precedenti". Fix: `tool_state` ora resta sempre popolato; il flag "loop sospeso" è `pending_results` non vuoto, non l'esistenza dello stato.
+Cantiere "cestino" chiuso completamente. Soft-delete framework esteso da Quote a Project con stesso pattern (`_SOFT_DELETE_MODELS` + filter automatico via SQLAlchemy event listener). Retention configurabile (`trash_retention_days`, default 30, env `TRASH_RETENTION_DAYS`); 0 = disabilitato. Bottone "⏱ Purga scaduti" in `/admin/cestino` (solo admin).
 
-**v3.5.0-alpha.1** — 3 maggio 2026 — AI tool-use nativo (Anthropic) — Slice 1 foundation
+**Versioni intermedie 3.5.0-alpha.x** (tutte 3 maggio 2026):
+- alpha.1: AI tool-use nativo Anthropic — Slice 1 foundation (loop tool_use, mutation gated da Apply, readonly inline)
+- alpha.2: hotfix persistenza storia conversazione (tool_state non azzerato a ogni end_turn)
+- alpha.3: hotfix errore Apply visibile (api() helper cerca `detail`) + ordine azioni AI
+- alpha.4: `propose_quote.lines` accetta `price_item_id` (eredità da listino)
+- alpha.5: riordino sezioni sidebar (drag&drop maniglia ⠿ sull'header)
+- alpha.6: hotfix tool_use orfani + sanitizer difensivo (`_sanitize_messages`)
+- alpha.7: cestino quote Slice 1+2+3 (soft-delete framework, UI quotes, admin trash)
+  - alpha.7.1: hotfix SyntaxError JS in /quotes (no JSON.stringify in onclick)
+  - alpha.7.2: hotfix escapeHtml not defined (script in `block scripts` non `block content`)
+  - alpha.7.3: hotfix collisione numero quote dopo soft-delete (bypass UNIQUE)
+  - alpha.7.4: tool result più espliciti (created/message) per evitare allucinazioni AI
+  - alpha.7.5: rinomina inline di title e number quote nell'editor
+- alpha.8: cestino Project + retention auto (Slice 4+5)
+
+Da testare sul Mac: copilot end-to-end con Sonnet (Cattleya/Gomorra/ISIDE flow); cestino quote con HARD-BLOCK booking; cestino progetto con HARD-BLOCK quote attive; pulizia totale admin per quote e progetti; retention banner in /admin/cestino.
 
 Avviato il refactor del copilot da blocchi markdown ```action``` a **tool-use nativo** dei provider AI. Cantiere "feedback non torna al modello": Tavily girava ma i risultati restavano in UI senza rientrare nel modello → l'AI non poteva proseguire dopo le azioni applicate.
 
@@ -254,7 +269,14 @@ Setup pulito con `[O] reset_business_data`:
 
 ### Riapertura
 
-Parola chiave: **"Riprendi da v3.4.56 — apri con il tuo ultimo commento"**.
+Parola chiave: **"Riprendi da v3.5.0-alpha.8 — apri con il tuo ultimo commento"**.
+
+### Sessione 3 maggio 2026 — push completato
+
+21 commit ahead origin/main → push eseguito su richiesta esplicita di Matteo.
+Sequenze:
+- Mattino: v3.4.51→v3.4.56 (reverse-flow, invarianti integrità Quote↔Job↔Booking, workflow docs Mermaid)
+- Pomeriggio/sera: v3.5.0-alpha.1→alpha.8 (AI tool-use nativo Anthropic + Cestino quote+project con retention auto)
 
 ### Carry-over sessione 2 maggio (test ancora non eseguiti)
 
