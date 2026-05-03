@@ -399,6 +399,7 @@
       const res = await api("POST", `/ai/api/actions/${actionId}/apply`);
       updateActionStatus(actionId, "applied", res.result);
       toast("Azione applicata", "success");
+      handleContinuation(res.continuation);
     } catch (e) {
       updateActionStatus(actionId, "failed", e.message);
       toast("Applicazione fallita: " + e.message, "error");
@@ -407,12 +408,28 @@
 
   window.copilotReject = async function (actionId) {
     try {
-      await api("POST", `/ai/api/actions/${actionId}/reject`);
+      const res = await api("POST", `/ai/api/actions/${actionId}/reject`);
       updateActionStatus(actionId, "rejected", null);
+      handleContinuation(res && res.continuation);
     } catch (e) {
       toast(e.message, "error");
     }
   };
+
+  // Quando il backend ha riavviato il loop tool_use dopo un Apply/Reject,
+  // restituisce `continuation = {text, actions, done, still_pending}`.
+  // Mostriamo testo e nuove card come una nuova bubble assistant.
+  function handleContinuation(c) {
+    if (!c) return;
+    if (!c.text && !(c.actions && c.actions.length)) return;
+    state.messages.push({
+      role: "assistant",
+      content: c.text || "",
+      actions: c.actions || [],
+    });
+    render();
+    loadConversations();
+  }
 
   function updateActionStatus(actionId, status, result) {
     for (const m of state.messages) {

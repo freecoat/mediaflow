@@ -384,6 +384,27 @@ def extract_proposed_actions(reply_text: str) -> tuple[str, list[dict]]:
 
 # ── Chat principale ─────────────────────────────────────────
 
+def build_system_prompt(db: Session, *, use_tools: bool,
+                        project_id: Optional[int] = None,
+                        quote_id: Optional[int] = None,
+                        job_id: Optional[int] = None,
+                        page: Optional[str] = None) -> str:
+    """Costruisce il system prompt + sezione contesto.
+
+    Quando `use_tools=True` (provider con tool_use nativo) usa la versione slim
+    `ASSISTANT_SYSTEM_PROMPT_TOOLS` di `ai_tools` (niente schema action inline).
+    Altrimenti usa `ASSISTANT_SYSTEM_PROMPT` legacy con tutto lo schema.
+    """
+    if use_tools:
+        from app.services.ai_tools import ASSISTANT_SYSTEM_PROMPT_TOOLS as base
+    else:
+        base = ASSISTANT_SYSTEM_PROMPT
+    context = build_context(db, project_id, quote_id, job_id, page=page)
+    if context:
+        return base + f"\n\n━━━ CONTESTO ATTUALE ━━━\n{context}"
+    return base
+
+
 def chat_with_assistant(db: Session,
                         messages: list[dict],
                         user_id: Optional[int] = None,
@@ -392,7 +413,10 @@ def chat_with_assistant(db: Session,
                         job_id: Optional[int] = None,
                         page: Optional[str] = None) -> dict:
     """
-    Chat multi-turn con l'assistente.
+    Chat multi-turn con l'assistente — path LEGACY (markdown ```action```).
+    Usato per provider che non supportano tool_use nativo (Ollama/Perplexity)
+    o come fallback.
+
     Ritorna dict {reply, actions, error}.
     Le azioni proposte NON sono ancora salvate nel DB: lo fa il router.
     """
@@ -404,10 +428,8 @@ def chat_with_assistant(db: Session,
             "error": "provider_disabled",
         }
 
-    system = ASSISTANT_SYSTEM_PROMPT
-    context = build_context(db, project_id, quote_id, job_id, page=page)
-    if context:
-        system += f"\n\n━━━ CONTESTO ATTUALE ━━━\n{context}"
+    system = build_system_prompt(db, use_tools=False, project_id=project_id,
+                                 quote_id=quote_id, job_id=job_id, page=page)
 
     try:
         raw_reply = provider.chat(messages, system=system, max_tokens=2000, temperature=0.5) or ""

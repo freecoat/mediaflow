@@ -18,8 +18,8 @@ import json
 import logging
 import re
 from abc import ABC, abstractmethod
-from dataclasses import dataclass
-from typing import Optional
+from dataclasses import dataclass, field
+from typing import Any, Optional
 
 import httpx
 
@@ -78,6 +78,36 @@ class ProviderConfig:
     base_url: Optional[str] = None
 
 
+# ── Tool-use response ─────────────────────────────────────────
+
+@dataclass
+class ToolUse:
+    """Una richiesta del modello di invocare un tool. `id` è opaco al backend
+    (Anthropic genera 'toolu_xxx', OpenAI genera UUID, Gemini genera index str)
+    e DEVE essere riportato pari pari nel tool_result corrispondente."""
+    id: str
+    name: str
+    input: dict[str, Any]
+
+
+@dataclass
+class ToolUseResponse:
+    """Risposta di un turno chat_with_tools, normalizzata cross-provider.
+
+    - `text`: testo libero emesso dal modello (può essere vuoto se il modello
+      ha solo prodotto tool_use senza commento).
+    - `tool_uses`: tool che il modello vuole invocare in questo turno.
+    - `stop_reason`: 'end_turn' | 'tool_use' | 'max_tokens' | 'stop_sequence' | 'other'.
+    - `raw_assistant_message`: payload assistant da rimettere intero in `messages`
+      al prossimo turno (Anthropic: lista di content blocks; OpenAI: dict
+      message; Gemini: dict). Opaco — non interpretare.
+    """
+    text: str
+    tool_uses: list[ToolUse] = field(default_factory=list)
+    stop_reason: str = "end_turn"
+    raw_assistant_message: Any = None
+
+
 # ── Interfaccia ───────────────────────────────────────────────
 
 class AIProvider(ABC):
@@ -108,6 +138,31 @@ class AIProvider(ABC):
     def supports_web_search(self) -> bool:
         """True se il provider espone un tool web_search server-side nativo."""
         return False
+
+    def supports_tools(self) -> bool:
+        """True se il provider supporta il loop tool_use (Claude/OpenAI/Gemini).
+        Provider che ritornano False (Ollama, Perplexity) usano il fallback
+        markdown ```action``` legacy.
+        """
+        return False
+
+    def chat_with_tools(self, messages: list[Any], system: Optional[str],
+                        tools: list[dict], max_tokens: int = 4000,
+                        temperature: float = 0.3) -> ToolUseResponse:
+        """Esegue UN turno di chat con tool-use abilitato.
+
+        - `messages`: storico conversazione in formato canonico Anthropic
+          (lista di {role, content}, dove content può essere stringa o lista
+          di blocks misti text/tool_use/tool_result).
+        - `system`: system prompt (può essere None).
+        - `tools`: lista di tool descriptors in formato Anthropic
+          ({name, description, input_schema}). Il provider concreto le converte
+          al proprio formato interno.
+
+        Default: solleva NotImplementedError. Provider che supportano tool-use
+        (Claude/OpenAI/Gemini) override.
+        """
+        raise NotImplementedError(f"{self.name} non supporta tool_use")
 
     def extract_json_with_web_search(self, system: str, user: str,
                                      max_tokens: int = 4000,
@@ -149,6 +204,60 @@ class ClaudeProvider(AIProvider):
 
     def supports_web_search(self) -> bool:
         return True
+
+    def supports_tools(self) -> bool:
+        return True
+
+    def chat_with_tools(self, messages, system, tools, max_tokens=4000, temperature=0.3):
+        """Loop tool_use Anthropic. Ritorna UN turno (un singolo round-trip API).
+        Il caller decide se proseguire (eseguire i tool, append tool_result,
+        richiamare chat_with_tools) o fermarsi (mutation in attesa di Apply).
+        """
+        kwargs: dict = {
+            "model":       self.model,
+            "max_tokens":  max_tokens,
+            "temperature": temperature,
+            "messages":    messages,
+            "tools":       tools,
+        }
+        if system:
+            kwargs["system"] = system
+        resp = self.client.messages.create(**kwargs)
+
+        text_parts: list[str] = []
+        tool_uses: list[ToolUse] = []
+        # Salviamo il content blocks completo per rimetterlo in messages al prossimo turno.
+        # Anthropic vuole gli oggetti TextBlock/ToolUseBlock; ma accetta anche dict equivalenti.
+        raw_blocks: list[dict] = []
+        for block in resp.content:
+            btype = getattr(block, "type", "")
+            if btype == "text":
+                txt = getattr(block, "text", "") or ""
+                text_parts.append(txt)
+                raw_blocks.append({"type": "text", "text": txt})
+            elif btype == "tool_use":
+                tu = ToolUse(
+                    id=getattr(block, "id", ""),
+                    name=getattr(block, "name", ""),
+                    input=dict(getattr(block, "input", {}) or {}),
+                )
+                tool_uses.append(tu)
+                raw_blocks.append({
+                    "type":  "tool_use",
+                    "id":    tu.id,
+                    "name":  tu.name,
+                    "input": tu.input,
+                })
+            else:
+                # Future-proof: ignora blocks sconosciuti ma logga.
+                logger.warning(f"Anthropic content block sconosciuto: type={btype!r}")
+
+        return ToolUseResponse(
+            text="\n".join(p for p in text_parts if p).strip(),
+            tool_uses=tool_uses,
+            stop_reason=getattr(resp, "stop_reason", "end_turn") or "end_turn",
+            raw_assistant_message={"role": "assistant", "content": raw_blocks},
+        )
 
     def extract_json_with_web_search(self, system, user, max_tokens=4000, max_searches=5):
         """

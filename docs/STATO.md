@@ -8,6 +8,22 @@
 
 ## Versione corrente
 
+**v3.5.0-alpha.1** — 3 maggio 2026 — AI tool-use nativo (Anthropic) — Slice 1 foundation
+
+Avviato il refactor del copilot da blocchi markdown ```action``` a **tool-use nativo** dei provider AI. Cantiere "feedback non torna al modello": Tavily girava ma i risultati restavano in UI senza rientrare nel modello → l'AI non poteva proseguire dopo le azioni applicate.
+
+**Decisione architetturale (Matteo)**: Anthropic + OpenAI + Gemini con tool-use nativo (Slice 1+4); Ollama + Perplexity restano sul path legacy markdown. Tool readonly per DB lookup in Slice 5. Streaming in Slice 6.
+
+**Slice 1 chiusa in questo bump** (solo Claude end-to-end):
+- `app/services/ai_tools.py` nuovo — registry 9 capability con JSON Schema canonico + converter per i 3 formati provider
+- `AIProvider.chat_with_tools()` astratto + implementato su `ClaudeProvider` (Messages API tool_use)
+- `app/services/ai_loop.py` nuovo — `advance_loop()` (mutation gated da Apply, readonly eseguite inline) + `resume_after_action()` (riprende dopo Apply/Reject)
+- `AIConversation.tool_state` + `AIAction.tool_use_id` (auto-migrate)
+- Router `/api/chat`, `/apply`, `/reject` cabolati al nuovo loop con fallback legacy
+- Frontend: `copilotApply` mostra la `continuation` come nuova bubble assistant
+
+**Slice rimanenti**: 2 (test E2E), 3 (rifinitura UI), 4 (OpenAI + Gemini), 5 (readonly DB tools), 6 (streaming), 7 (cleanup legacy).
+
 **v3.4.56** — 3 maggio 2026 — Conferma assegnazione risorse + warning quote approved senza risorse + workflow docs
 
 Completati i 2 TODO della v3.4.55:
@@ -194,19 +210,29 @@ Sessione 1 maggio sera (commit unico): chiusa v3.4.32 dopo discussione completa 
 
 ## In corso
 
-**Sessione 2 maggio chiusa — 17 commit (v3.4.39 → v3.4.50.1) push su origin/main**. Working tree pulito. Matteo avvia test estensivo locale sul Mac.
+**Sessione 3 maggio chiusa — 6 commit (v3.4.51 → v3.4.56) NON ancora pushati su origin/main** (8 commit ahead totali). Working tree pulito.
 
 ### Cantieri chiusi nella sessione
 
-1. ✅ **C1** — Quote duplica + versioning + Floating Jobs (v3.4.39)
-2. ✅ **C2** — Searchable dropdowns globali (v3.4.40)
-3. ✅ **C3** — Time picker integrato + datetime split (v3.4.40)
-4. ✅ **C4** — Look timeline restyle + Storyboard view (v3.4.45) + customization pannello (v3.4.46/.48/.48.1/.48.2)
-5. ✅ **Bug fix Matteo (8 punti)** — paste su ferie / Chrome timbratura / cost report ore done / undo paste / Le mie dettaglio / duplica con progetto / overlay execution timeline / drilldown + view per progetto (v3.4.41 → v3.4.44)
-6. ✅ **Filtri planning multi-select** (v3.4.47)
-7. ✅ **Reset business data script** [O] strumenti (v3.4.49)
-8. ✅ **Resource presets + sync orario** modal multi-risorsa (v3.4.50)
-9. ✅ **Audit pre-push** — 3 micro-fix (seed idempotente, Booking+Assignment, version number) (v3.4.50.1)
+1. ✅ **Reverse-flow v1** — job extra da booking su progetto senza quote (v3.4.51)
+2. ✅ **Reverse-flow v2** — booking → QuoteLine + approvazione implicita / phantom quote (v3.4.52)
+3. ✅ **Booking parla quote+lavorazione** (Job nascosto), filtro reparto risorse (v3.4.53)
+4. ✅ **Project filter nel booking** + cost-line RBAC (`edit_cost_actuals`, lock `quantity_actual` per non finance) (v3.4.54)
+5. ✅ **Fix sistemico integrità Quote↔Job↔Booking** — HARD-BLOCK delete con booking attivi, vista lavorazione read-only, auto-assignment Resource→Job, man-hours canonico (v3.4.55)
+6. ✅ **Conferma assegnazione risorse + warning quote approved senza risorse** + 3 docs Mermaid `workflow.md`/`data-model.md`/`permissions-matrix.md` (v3.4.56)
+
+### Da testare sul Mac (priorità sessione 3 maggio)
+
+1. **Reverse-attach quote draft/sent**: booking su progetto con quote in trattativa → modal `modal-tlb-reverse-quote` → sceglie attach_existing → quote diventa `approved` (implicit), job creato, `JobCostLine` allineata, AM riceve notifica `quote_reverse_approval`
+2. **Phantom quote**: booking su progetto senza quote → modal → sceglie `create_phantom` → nuova `Quote(is_phantom=True, status=approved)` + job + JobCostLine
+3. **Booking parla quote+lavorazione**: modal mostra "Quotazione" non "Job"; ricerca filtra per departments delle risorse; promote-line-to-cost-line transparent al save
+4. **HARD-BLOCK delete QuoteLine**: prova a cancellare riga con booking attivo → 409 con elenco; cancella i booking, poi riprova → 204
+5. **Vista lavorazione read-only**: editor/operator clicca riga in `/jobs/{id}` → vede KPI + booking + risorse, nessun bottone Modifica. Con view_finance vede bottone.
+6. **Auto-assignment**: crea booking di una risorsa nuova su un job → `JobResourceAssignment` apparso (controlla in `/jobs/{id}` tab risorse); pre-save dialog conferma se ci sono missing.
+7. **Man-hours**: 2 colorist × 8h booking done → JobCostLine.quantity_actual = 2 (giornate-colorist), non 1.
+8. **Cost-line RBAC**: editor/operator entra in PUT cost-line → `quantity_actual` read-only badge "richiede edit_cost_actuals"; admin/manager/accounting può editare.
+9. **Notifica quote_approved_no_resources**: approva quote senza assignment → admin/manager/producer ricevono notifica `severity=action_required`.
+10. **Workflow docs**: apri `docs/workflow.md` su GitHub o IDE con preview Mermaid → 5 diagrammi renderizzati (state Quote, state Booking, flow forward/reverse/phantom, fonti Maturato, vincoli HARD-BLOCK).
 
 ### Da testare sul Mac (priorità)
 
@@ -224,7 +250,11 @@ Setup pulito con `[O] reset_business_data`:
 
 ### Riapertura
 
-Parola chiave: **"Riprendi da v3.4.50.1 — apri con il tuo ultimo commento"**.
+Parola chiave: **"Riprendi da v3.4.56 — apri con il tuo ultimo commento"**.
+
+### Carry-over sessione 2 maggio (test ancora non eseguiti)
+
+Setup pulito con `[O] reset_business_data` e batteria test descritta nelle versioni v3.4.39→v3.4.50.1 (vedi storico più sotto).
 
 ### Cantieri proposti, non avviati (backlog)
 
@@ -305,17 +335,19 @@ Cantiere "overlay prenotato vs effettivo + adeguamento" (era v3.4.15 nel plan pr
 
 ## Prossimo step concordato
 
-**Roadmap core-planning E1→E6 COMPLETA.** Backlog rifiniture e UI:
+**Sessione 3 maggio**: chiusi tutti gli invarianti d'integrità (v3.4.55) + i 2 TODO + workflow docs (v3.4.56). 8 commit ahead di origin/main.
 
-- v3.4.20.1 UI settings working hours editabile (form policy in /settings)
-- v3.4.20.2 Modal multi-row leggibilità >5 (scroll/collapse)
-- v3.4.20.3 Snap line visiva durante drag
-- v3.4.20.4 Endpoint cambio status tentative↔confirmed dal modal
-- v3.4.20.5 UI form ferie/malattia in /resources/{id}
+Le opzioni naturali per la prossima sessione, in ordine di valore:
 
-Poi cantieri rinviati:
-- Cost report doppio (interno/esterno cliente)
-- Overlay "prenotato vs effettivo" (booking vs TimePunch)
+1. **Test estensivo sul Mac** sulla batteria sopra elencata (sessione 3 maggio + carry-over sessione 2 maggio). Se Matteo trova bug, hotfix.
+2. **Push su origin/main** dopo green light dei test (criterio: push solo a major bump per memoria, ma 8 commit con cambio strutturale può giustificare un v3.5.0 se i test passano).
+3. **Cantieri ancora rinviati** (in ordine di backlog):
+   - Cost report doppio (interno con rate × ore + hardcost; esterno cliente con solo ore + extra + bottone "→ Genera quote v2")
+   - Overlay "prenotato vs effettivo" (booking vs TimePunch) + report delta producer
+   - E5 booking ricorrenti + tentative bookings (legati a quote draft/sent → committed quando approved) + audit log
+   - E6 capability AI `propose_booking` (skill match + availability + storico)
+   - Multi-valuta con cambio automatico ECB
+   - Cestino per-tenant con retention configurabile
 
 **Vecchio backlog (legacy):**
 - ~~E5 v3.4.19~~:
@@ -437,7 +469,15 @@ Dopo conferma test sul Mac, passare a **#4 server-side abort**.
 
 ---
 
-*Ultimo aggiornamento: 1 maggio 2026 sera — chiusa v3.4.32 (Booking esecutivo). 37 commit ahead origin/main. Push da concordare.
+*Ultimo aggiornamento: 3 maggio 2026 — chiusa v3.4.56 (conferma assegnazione + warning quote-no-resources + 3 docs Mermaid). Sessione 3 maggio: 6 commit (v3.4.51→v3.4.56). 8 commit ahead origin/main, push solo dopo green light test sul Mac (eventuale v3.5.0).*
+
+**v3.4.55+v3.4.56**: chiusi 5 invarianti sistemici (eliminazione HARD-BLOCK con booking attivi, vista lavorazione read-only, auto-assignment Resource→Job, man-hours canonico, Job nascosto in booking) + 2 TODO (pre-save confirm risorse non assegnate, notifica `quote_approved_no_resources`). Aggiunti `app/services/resource_assignment_sync.py` + 3 docs Mermaid in `docs/` (workflow / data-model / permissions-matrix). Niente migrazione DB.
+
+**v3.4.51→v3.4.54**: cantiere reverse-flow (job extra da booking su progetto senza quote → reverse v2 con QuoteLine + approvazione implicita / phantom quote → booking parla quote+lavorazione con Job nascosto → project filter + cost-line RBAC con permesso `edit_cost_actuals`).
+
+---
+
+*Versione precedente: 1 maggio 2026 sera — chiusa v3.4.32 (Booking esecutivo). 37 commit ahead origin/main. Push da concordare.
 
 **v3.4.32**: 5 colonne nuove su `bookings` (priority/execution_status/not_done_reason/count_in_costs/overtime_status/original_end_datetime) + 3 NotificationKind nuovi (`booking_status_changed`, `booking_overtime_pending`, `booking_overtime_resolved`) + permesso `approve_overtime` su admin/manager/producer. Servizi nuovi `app/services/booking_cost.py` (engine costo per fascia oraria) + `app/services/booking_cascade.py` (cascade intra-day + split overtime giorno successivo). 6 endpoint nuovi su `/planning/api/`: priority, execution, extend, overtime, count-in-costs, my-bookings. 2 endpoint nuovi su `/cost-report/api/job/{id}/`: booking-summary, not-done-pool/{bid}/discard. UI: `/planning` "Le mie" card interattive (bordo priorità, drag handle ±, bottoni stato, modal motivazione), Dashboard "I miei booking di oggi" + colonne stato in tabella generica, Cost report sezione "Ore booking per fascia" + "Pozzo ore non maturate".
 

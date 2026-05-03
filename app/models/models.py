@@ -980,6 +980,11 @@ class AIConversation(Base):
     job_id: Mapped[Optional[int]] = mapped_column(ForeignKey("jobs.id"), nullable=True)
     title: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    # v3.5.0 — stato del loop tool_use serializzato (lista messages canonica
+    # formato Anthropic: blocks misti text/tool_use/tool_result). Persistito
+    # SOLO quando il loop si è interrotto in attesa che l'utente applichi una
+    # mutation; ripreso al successivo /apply per continuare il ragionamento.
+    tool_state: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     messages: Mapped[List["AIMessage"]] = relationship(back_populates="conversation", cascade="all, delete-orphan")
 
 
@@ -1038,6 +1043,11 @@ class AIAction(Base):
     result: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
     applied_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+    # v3.5.0 — id del tool_use Anthropic/OpenAI/Gemini che ha generato questa
+    # azione, necessario per costruire il tool_result al momento dell'Apply
+    # e riprendere correttamente il loop tool_use. NULL per le azioni create
+    # via il vecchio path markdown ```action``` (Ollama/Perplexity legacy).
+    tool_use_id: Mapped[Optional[str]] = mapped_column(String(128), nullable=True)
 
 
 # ── NOTIFICATIONS (v3.4.27) ──────────────────────────────────

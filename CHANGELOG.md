@@ -1,5 +1,49 @@
 # MediaFlow — Changelog
 
+## v3.5.0-alpha.1 — AI tool-use nativo (Anthropic) — Slice 1 foundation (3 maggio 2026)
+
+Avviato il refactor strutturale del copilot da blocchi markdown ```action``` a tool-use nativo dei provider AI. Cantiere "feedback non torna al modello": dopo che l'utente clicca Applica su una proposta, il risultato (ad es. i risultati di Tavily, l'`id` di un cliente creato) deve rientrare nella conversazione perché il modello possa proseguire — cosa che il vecchio path non faceva (Slice 1 risolve esattamente questo).
+
+**Decisione architetturale (Matteo, 3 mag 2026)**:
+1. Provider in v1: Anthropic + OpenAI + Gemini (tool-use nativo). Ollama + Perplexity restano sul path legacy `action` markdown.
+2. Tool readonly per DB (lookup_clients, lookup_pricelist, lookup_projects) — Slice 5.
+3. Streaming risposte — Slice 6.
+
+**Slice 1 (questo bump)**: Foundation Anthropic — il loop completo end-to-end con il solo provider Claude.
+
+**Backend**
+- `app/services/ai_tools.py` nuovo: registry centralizzato delle 9 capability AI con JSON Schema canonico (formato Anthropic), categoria `readonly` vs `mutation`, e converter per OpenAI / Gemini. Nuovo system prompt slim `ASSISTANT_SYSTEM_PROMPT_TOOLS` (no schema action inline — lo fanno i tool descriptors).
+- `app/services/ai_provider.py`: nuova astrazione `AIProvider.chat_with_tools(messages, system, tools) → ToolUseResponse` (text + tool_uses + stop_reason + raw_assistant_message). `supports_tools()` dichiara la capability. `ClaudeProvider` la implementa via Anthropic Messages API tool_use; gli altri provider la sollevano `NotImplementedError` per ora.
+- `app/services/ai_loop.py` nuovo:
+  - `advance_loop(db, conv, provider, system, user_message)`: itera fino a end_turn o mutation. Tool readonly eseguite inline e tool_result re-injectato nel modello. Tool mutation salvate come `AIAction` e loop sospeso.
+  - `resume_after_action(db, conv, provider, system, action)`: chiamato dal /apply o /reject; sostituisce il placeholder tool_result della mutation con il risultato vero, e se tutte le mutation della batch sono state gestite, riprende il loop.
+  - Cap di sicurezza `MAX_LOOP_ITERATIONS = 10`.
+- `app/routers/ai.py`:
+  - `POST /api/chat` ora dirotta al loop tool-use se `provider.supports_tools()` (Claude). Altrimenti fallback al path legacy `chat_with_assistant` (Ollama/Perplexity/Gemini/OpenAI per ora — questi ultimi due passano al tool-use in Slice 4).
+  - `POST /api/actions/{id}/apply` e `/reject` ritornano una `continuation` (`{text, actions, done, still_pending}`) costruita riprendendo il loop dopo l'azione utente. UI la mostra come bubble assistant aggiuntiva.
+- `app/services/ai_assistant.py`: nuovo helper `build_system_prompt(use_tools=…)` per condividere la logica del contesto fra i due path.
+
+**Modelli**
+- `AIConversation.tool_state` (Text, nullable): JSON con la storia messages canonica + i tool_result pending. Persistito SOLO mentre il loop è sospeso in attesa di Apply utente.
+- `AIAction.tool_use_id` (String, nullable): id del tool_use Anthropic/OpenAI/Gemini, necessario per costruire il tool_result corretto al resume.
+- Auto-migrate al boot in `_auto_migrate_columns()` (idempotente).
+
+**Frontend**
+- `app/static/js/copilot.js`: `copilotApply` e `copilotReject` ora gestiscono `res.continuation` mostrandola come nuova bubble assistant (testo + eventuali nuove card mutation).
+- Cache-buster bumpato a `3.5.0-alpha.1`.
+
+**Cosa funziona ora**: con un provider Claude attivo (Anthropic API key in `/settings#ai`), il caso "aggiungi cliente Cattleya, cerca info online" deve girare end-to-end:
+1. user → Claude
+2. Claude `tool_use(web_search, query='Cattleya …')` → loop esegue Tavily inline → `tool_result` rientra nel modello
+3. Claude legge i risultati → `tool_use(propose_client, name='Cattleya', vat_number='IT07330331004', …)` → loop ferma, UI mostra card di conferma popolata
+4. user clicca Applica → backend crea il cliente → continuation con eventuale testo di chiusura di Claude
+
+**Cosa NON funziona ancora** (slice successive):
+- OpenAI e Gemini ancora sul path legacy markdown (Slice 4).
+- Tool readonly per DB lookup (Slice 5).
+- Streaming (Slice 6).
+- Cleanup definitivo del path legacy (Slice 7, opzionale).
+
 ## v3.4.56 — Conferma assegnazione risorse + warning quote approved senza risorse + workflow docs (3 maggio 2026)
 
 Completati i due TODO non risolti in v3.4.55 + 3 documenti di mappatura processi.

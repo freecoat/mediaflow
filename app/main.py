@@ -91,6 +91,20 @@ def _auto_migrate_columns():
                 conn.execute(text(
                     "ALTER TABLE quote_lines ADD COLUMN parent_line_id "
                     "INTEGER NULL REFERENCES quote_lines(id)"))
+    # v3.5.0 — AI tool-use nativo: stato del loop su conversazione + binding
+    # tool_use_id ↔ AIAction per riprendere il loop dopo Apply.
+    if "ai_conversations" in insp.get_table_names():
+        accols = {c["name"] for c in insp.get_columns("ai_conversations")}
+        if "tool_state" not in accols:
+            print("[auto-migrate] ai_conversations.tool_state mancante → ALTER TABLE")
+            with engine.begin() as conn:
+                conn.execute(text("ALTER TABLE ai_conversations ADD COLUMN tool_state TEXT NULL"))
+    if "ai_actions" in insp.get_table_names():
+        aacols = {c["name"] for c in insp.get_columns("ai_actions")}
+        if "tool_use_id" not in aacols:
+            print("[auto-migrate] ai_actions.tool_use_id mancante → ALTER TABLE")
+            with engine.begin() as conn:
+                conn.execute(text("ALTER TABLE ai_actions ADD COLUMN tool_use_id VARCHAR(128) NULL"))
 
 
 @asynccontextmanager
@@ -133,7 +147,7 @@ async def lifespan(app: FastAPI):
     yield
 
 
-app = FastAPI(title="MediaFlow", version="3.4.56", lifespan=lifespan)
+app = FastAPI(title="MediaFlow", version="3.5.0-alpha.1", lifespan=lifespan)
 
 BASE_DIR = Path(__file__).parent
 app.mount("/static", StaticFiles(directory=BASE_DIR / "static"), name="static")

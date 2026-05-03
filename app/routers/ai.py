@@ -22,7 +22,9 @@ from app.models import (
 from app.models.models import AIAction
 from app.services.ai_assistant import (
     chat_with_assistant, review_quote, apply_action, VALID_ACTION_TYPES,
+    build_system_prompt,
 )
+from app.services.ai_loop import advance_loop, resume_after_action
 from app.services.ai_provider import get_provider_for_user
 from app.services.auth import get_current_user_from_token
 from app.services.deliverables_parser import (
@@ -75,6 +77,13 @@ async def chat(
     """
     Body JSON: {messages, project_id?, quote_id?, job_id?, page?, conversation_id?}
     Risposta: {reply, actions: [{id, action_type, title, data}], conversation_id}
+
+    Dispatch:
+    - Se provider supporta tool_use nativo (Claude/OpenAI/Gemini) → path nuovo
+      basato su `ai_loop.advance_loop` (loop tool_use, mutation gated da Apply,
+      readonly auto-eseguite con tool_result re-injected nel modello).
+    - Altrimenti (Ollama/Perplexity) → path LEGACY `chat_with_assistant`
+      (blocchi markdown ```action``` estratti via regex).
     """
     data = await request.json()
     messages = data.get("messages", [])
@@ -84,16 +93,12 @@ async def chat(
     user = _resolve_current_user(db, access_token)
     user_id = user.id if user else None
 
-    result = chat_with_assistant(
-        db, messages,
-        user_id=user_id,
-        project_id=data.get("project_id"),
-        quote_id=data.get("quote_id"),
-        job_id=data.get("job_id"),
-        page=data.get("page"),
-    )
+    project_id = data.get("project_id")
+    quote_id   = data.get("quote_id")
+    job_id     = data.get("job_id")
+    page       = data.get("page")
 
-    # Salva conversazione
+    # Risolvi/crea conversazione
     conv_id = data.get("conversation_id")
     conv = None
     if conv_id:
@@ -101,19 +106,54 @@ async def chat(
     if conv is None and user_id:
         conv = AIConversation(
             user_id=user_id,
-            project_id=data.get("project_id"),
-            quote_id=data.get("quote_id"),
-            job_id=data.get("job_id"),
+            project_id=project_id, quote_id=quote_id, job_id=job_id,
             title=(messages[0]["content"][:60] if messages else None),
         )
         db.add(conv); db.flush()
 
+    provider = get_provider_for_user(user_id, db)
+    if not provider:
+        return {
+            "reply": "AI non configurata. Vai in Impostazioni → tab AI per scegliere e attivare un provider.",
+            "actions": [], "conversation_id": conv.id if conv else None,
+            "error": "provider_disabled",
+        }
+
+    last_user_content = messages[-1].get("content", "") if messages else ""
+
+    # ── Path 1: provider con tool_use nativo ──────────────────
+    if conv and provider.supports_tools():
+        system = build_system_prompt(db, use_tools=True, project_id=project_id,
+                                     quote_id=quote_id, job_id=job_id, page=page)
+        # Per ora ignoriamo `messages` storici dal client: la storia è quella
+        # nel tool_state della conversazione (autoritativa). Il client manda
+        # solo l'ultimo messaggio utente.
+        result = advance_loop(db, conv, provider, system, user_message=last_user_content)
+
+        # Persisti display-friendly delle interazioni
+        db.add(AIMessage(conversation_id=conv.id, role="user", content=last_user_content))
+        db.add(AIMessage(conversation_id=conv.id, role="assistant", content=result.get("text") or ""))
+        db.commit()
+
+        return {
+            "reply":           result.get("text") or "",
+            "actions":         result.get("actions") or [],
+            "conversation_id": conv.id,
+            "pending":         not result.get("done", True),
+            "error":           result.get("error"),
+        }
+
+    # ── Path 2: legacy markdown ```action``` ────────────────────
+    result = chat_with_assistant(
+        db, messages,
+        user_id=user_id,
+        project_id=project_id, quote_id=quote_id, job_id=job_id, page=page,
+    )
+
     if conv:
-        last_user = messages[-1]
-        db.add(AIMessage(conversation_id=conv.id, role="user", content=last_user["content"]))
+        db.add(AIMessage(conversation_id=conv.id, role="user", content=last_user_content))
         db.add(AIMessage(conversation_id=conv.id, role="assistant", content=result["reply"] or ""))
 
-    # Salva azioni proposte come AIAction status="proposed"
     saved_actions = []
     for a in (result.get("actions") or []):
         if a.get("type") not in VALID_ACTION_TYPES:
@@ -127,20 +167,18 @@ async def chat(
         )
         db.add(act); db.flush()
         saved_actions.append({
-            "id": act.id,
-            "action_type": act.action_type,
+            "id": act.id, "action_type": act.action_type,
             "title": a.get("title") or act.action_type,
-            "data": a.get("data") or {},
-            "status": act.status,
+            "data": a.get("data") or {}, "status": act.status,
         })
 
     db.commit()
 
     return {
-        "reply": result["reply"],
-        "actions": saved_actions,
+        "reply":           result["reply"],
+        "actions":         saved_actions,
         "conversation_id": conv.id if conv else None,
-        "error": result.get("error"),
+        "error":           result.get("error"),
     }
 
 
@@ -199,13 +237,23 @@ async def action_apply(
         act.status = "applied"
         act.applied_at = datetime.utcnow()
         act.result = json.dumps(res.get("result") or {}, ensure_ascii=False)
-        db.commit()
-        return {"ok": True, "status": "applied", "result": res.get("result")}
     else:
         act.status = "failed"
         act.result = json.dumps({"error": res.get("error")}, ensure_ascii=False)
-        db.commit()
-        raise HTTPException(400, res.get("error") or "Esecuzione fallita")
+
+    # Resume del loop tool_use se la conversazione era in attesa
+    continuation = _maybe_resume_loop(db, act, action_result=res.get("result"),
+                                      rejected=False, applied_ok=res.get("ok"))
+    db.commit()
+
+    if not res.get("ok"):
+        # Mantieni semantica HTTP 400 come prima ma includi continuation se presente
+        msg = res.get("error") or "Esecuzione fallita"
+        return JSONResponse(status_code=400,
+                            content={"ok": False, "status": "failed", "error": msg,
+                                     "continuation": continuation})
+    return {"ok": True, "status": "applied", "result": res.get("result"),
+            "continuation": continuation}
 
 
 @router.post("/api/actions/{action_id}/reject")
@@ -224,8 +272,56 @@ async def action_reject(
         raise HTTPException(400, f"Azione già in stato {act.status}")
     act.status = "rejected"
     act.applied_at = datetime.utcnow()
+
+    continuation = _maybe_resume_loop(db, act, action_result=None,
+                                      rejected=True, applied_ok=False)
     db.commit()
-    return {"ok": True, "status": "rejected"}
+    return {"ok": True, "status": "rejected", "continuation": continuation}
+
+
+def _maybe_resume_loop(db: Session, act: AIAction, *,
+                       action_result, rejected: bool, applied_ok: bool):
+    """Se la conversazione collegata all'action è un loop tool_use sospeso,
+    chiama resume_after_action e ritorna la continuation (testo + nuove
+    AIAction proposte). Altrimenti ritorna None.
+    """
+    if not act.conversation_id or not act.tool_use_id:
+        return None
+    conv = db.query(AIConversation).filter(AIConversation.id == act.conversation_id).first()
+    if not conv or not conv.tool_state:
+        return None
+    provider = get_provider_for_user(act.user_id, db)
+    if not provider or not provider.supports_tools():
+        return None
+
+    system = build_system_prompt(
+        db, use_tools=True,
+        project_id=conv.project_id, quote_id=conv.quote_id, job_id=conv.job_id,
+    )
+    # Se l'apply è fallito, segnaliamo l'errore al modello come tool_result error
+    # così che possa proporre un'alternativa.
+    if rejected:
+        result = resume_after_action(db, conv, provider, system, act,
+                                     action_result=None, rejected=True)
+    elif applied_ok:
+        result = resume_after_action(db, conv, provider, system, act,
+                                     action_result=action_result, rejected=False)
+    else:
+        # Apply fallito → tratta come rejected nel loop, il modello vedrà l'errore
+        result = resume_after_action(db, conv, provider, system, act,
+                                     action_result={"error": "apply_failed"}, rejected=True)
+
+    # Persisti il messaggio assistant aggiuntivo (display)
+    if result.get("text"):
+        db.add(AIMessage(conversation_id=conv.id, role="assistant",
+                          content=result["text"]))
+
+    return {
+        "text":           result.get("text") or "",
+        "actions":        result.get("actions") or [],
+        "done":           result.get("done", True),
+        "still_pending":  result.get("still_pending", False),
+    }
 
 
 # ── Review quotazione ────────────────────────────────────────
