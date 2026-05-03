@@ -1,5 +1,36 @@
 # MediaFlow — Changelog
 
+## v3.4.53 — Booking parla quote+lavorazione (Job nascosto), filtro reparto risorse (3 maggio 2026)
+
+UX critica del modal booking ricostruita su feedback Matteo: "non voglio scegliere il job, voglio scegliere la quotazione e la lavorazione filtrata per reparto delle risorse". Il Job resta nel DB come puntatore interno, ma sparisce dall'UI booking.
+
+**Cambio campo `tlb-job-search`**: ora autocompleta sulle Quote (status `draft|sent|approved`), non più sui Job. La label diventa "Quotazione". Badge stato colorato (approved verde / sent giallo / draft indigo) + badge PHANTOM. Il `tlb-job-id` hidden ora contiene `quote_id` (semantica cambiata).
+
+**Lavorazione obbligatoria** per `kind=project` (era opzionale). Filtrata per dipartimento delle risorse selezionate: ogni risorsa ha `Resource.department_id`, ogni voce di listino ha `PriceItem.department_id`. Il dropdown ricarica automaticamente al cambio risorse (hook su `tlbAssOnChange`).
+
+**Backend**:
+- `GET /quotes/api/{quote_id}/booking-lines?dept_ids=1,2` — ritorna lavorazioni della quote filtrate per reparto. Per quote `approved`: `JobCostLine` (kind=cost_line). Per `draft|sent`: `QuoteLine` (kind=quote_line). Linee senza price_item.department_id sono sempre incluse (voci generiche).
+- `POST /quotes/api/{quote_id}/promote-line-to-cost-line` — al volo: approva implicitamente quote `draft|sent` + ensure Job (forward standard) + crea JobCostLine corrispondente alla QuoteLine. Idempotente. Notifica account managers (`edit_quotes`).
+- `planning.py`: query nuova `quotes` (status in draft|sent|approved) passata al template.
+
+**Flusso save booking** (`tlbSubmit`):
+1. Valida quote + lavorazione obbligatorie
+2. Se `lineKind=quote_line` → POST promote → ottiene `cost_line_id` + `job_id`
+3. Se `lineKind=cost_line` → legge `job_id` dal context cached
+4. POST `/planning/api/bookings` con `job_id` + `job_cost_line_id` (invariato dal backend booking)
+
+**UI** in `/planning`:
+- Field "Job" → "Quotazione" con autocomplete QUOTES_SEED
+- Field "Lavorazione" obbligatoria, opzioni `descrizione · Reparto [extra]`
+- Meta sotto la lavorazione: "N lavorazioni disponibili (filtrate per reparto risorse)" oppure warning "⚠ Quote in stato draft: salvando il booking, verrà approvata implicitamente"
+- Cambio risorse → ricarica lavorazioni con nuovo filtro reparto
+- CTA "+ Genera **phantom quote** da questo booking" (già da v3.4.52) — ora più chiara per il caso "progetto senza quote"
+- Sub-modal phantom (v3.4.52) auto-pusha la nuova quote in QUOTES_SEED + auto-seleziona
+
+Caso d'uso: progetto in emergenza con quote in trattativa (draft/sent) → producer pianifica i booking → ogni booking attacca una linea alla quote esistente con approvazione implicita → l'account manager riceve notifica `quote_reverse_approval` per coordinare la trattativa.
+
+Niente migrazione DB. Cache-buster bumpato a `3.4.53`.
+
 ## v3.4.52 — Reverse-flow v2: booking → QuoteLine + approvazione implicita / phantom quote (3 maggio 2026)
 
 Riformulazione completa del reverse-flow di v3.4.51 dopo discussione con Matteo. Il flusso "extra job + JobCostLine manuale" è scartato: il **driver canonico è la Quote**, non il Job. Niente più qty/unit/prezzo da digitare a mano: tutto deriva dalla durata del booking + voce listino.

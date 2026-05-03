@@ -177,6 +177,209 @@ async def list_quotes(
     ]
 
 
+@router.get("/api/{quote_id}/booking-lines")
+async def get_quote_booking_lines(
+    quote_id: int,
+    dept_ids: Optional[str] = None,  # CSV "1,2,3"
+    db: Session = Depends(get_db),
+):
+    """Linee selezionabili in un booking, partendo dalla quote (v3.4.53).
+
+    Ritorna le lavorazioni della quote filtrate per reparto delle risorse
+    selezionate (passate in `dept_ids` come CSV). Job nascosto: l'UI booking
+    parla solo in termini di quote+lavorazione.
+
+    Modalità:
+    - quote `approved` con Job: ritorna `JobCostLine` (kind=cost_line)
+    - quote `draft|sent`: ritorna `QuoteLine` (kind=quote_line) — il booking save
+      farà reverse-attach implicito al primo uso (approva la quote, crea il
+      JobCostLine, link al booking)
+
+    Filtro dept: include linee con `price_item.department_id ∈ dept_ids` o NULL
+    (voce non assegnata a reparto = visibile a tutti). Se `dept_ids` vuoto,
+    nessun filtro reparto applicato.
+    """
+    quote = db.query(Quote).options(
+        joinedload(Quote.lines).joinedload(QuoteLine.price_item),
+        joinedload(Quote.job).joinedload(Job.cost_lines),
+    ).filter(Quote.id == quote_id).first()
+    if not quote:
+        raise HTTPException(404, "Quote non trovata")
+
+    dept_set: Optional[set[int]] = None
+    if dept_ids:
+        try:
+            dept_set = {int(x) for x in dept_ids.split(",") if x.strip()}
+        except ValueError:
+            raise HTTPException(400, "dept_ids deve essere CSV di interi")
+
+    def _dept_match(price_item) -> bool:
+        if dept_set is None:
+            return True
+        if price_item is None:
+            return True  # riga senza price_item → sempre visibile
+        pid = getattr(price_item, "department_id", None)
+        return pid is None or pid in dept_set
+
+    out = []
+    if quote.status == QuoteStatus.approved and quote.job:
+        # JobCostLines (canoniche per quote già approvata)
+        # Carico esplicitamente price_item su ogni cost line (la relationship esiste in v3.4.33)
+        from app.models import PriceItem
+        pi_ids = {l.price_item_id for l in quote.job.cost_lines if l.price_item_id}
+        pi_map = {}
+        if pi_ids:
+            pis = db.query(PriceItem).options(joinedload(PriceItem.department)).filter(PriceItem.id.in_(pi_ids)).all()
+            pi_map = {p.id: p for p in pis}
+        for ln in quote.job.cost_lines:
+            pi = pi_map.get(ln.price_item_id) if ln.price_item_id else None
+            if not _dept_match(pi):
+                continue
+            dept = getattr(pi, "department", None) if pi else None
+            out.append({
+                "id": ln.id, "kind": "cost_line",
+                "description": ln.description,
+                "unit": ln.unit, "quantity_quoted": ln.quantity_quoted,
+                "is_extra": ln.is_extra,
+                "department_id": dept.id if dept else None,
+                "department_name": dept.name if dept else None,
+                "department_color": dept.color if dept else None,
+            })
+    else:
+        # QuoteLines (la quote è ancora in trattativa). Il booking save attiverà
+        # reverse-attach implicit-approval per materializzare la JobCostLine.
+        for ln in quote.lines:
+            pi = ln.price_item
+            if not _dept_match(pi):
+                continue
+            dept = getattr(pi, "department", None) if pi else None
+            out.append({
+                "id": ln.id, "kind": "quote_line",
+                "description": ln.description,
+                "unit": ln.unit, "quantity_quoted": ln.quantity,
+                "is_extra": False,
+                "department_id": dept.id if dept else None,
+                "department_name": dept.name if dept else None,
+                "department_color": dept.color if dept else None,
+            })
+
+    return {
+        "quote_id": quote.id, "quote_number": quote.number,
+        "quote_status": quote.status.value if hasattr(quote.status, "value") else str(quote.status),
+        "is_phantom": getattr(quote, "is_phantom", False),
+        "has_job": quote.job is not None,
+        "job_id": quote.job.id if quote.job else None,
+        "job_code": quote.job.code if quote.job else None,
+        "filter_dept_ids": sorted(dept_set) if dept_set else None,
+        "lines": out,
+    }
+
+
+@router.post("/api/{quote_id}/promote-line-to-cost-line")
+async def promote_line_to_cost_line(
+    quote_id: int,
+    request: Request,
+    quote_line_id: int = Form(...),
+    db: Session = Depends(get_db),
+):
+    """Materializza una QuoteLine → JobCostLine al volo (v3.4.53).
+
+    Usato dal modal booking quando l'utente seleziona una linea di una quote
+    in trattativa (`draft|sent`) come bersaglio del booking. Effetti:
+    - Se la quote è in `draft|sent`: approva implicitamente + notifica AM
+      (kind=quote_reverse_approval, severity=action_required)
+    - Crea il Job (forward-flow standard) se manca
+    - Crea la JobCostLine corrispondente alla QuoteLine se manca
+    - Idempotente: se tutto esiste già, no-op + ritorna gli ID
+
+    Ritorna `{quote_id, job_id, cost_line_id, was_implicit_approval}` per il
+    binding diretto del booking.
+    """
+    from app.services.rbac import current_user_optional
+    actor = current_user_optional(request)
+
+    quote = db.query(Quote).options(
+        joinedload(Quote.lines).joinedload(QuoteLine.price_item),
+        joinedload(Quote.job).joinedload(Job.cost_lines),
+        joinedload(Quote.project),
+    ).filter(Quote.id == quote_id).first()
+    if not quote:
+        raise HTTPException(404, "Quote non trovata")
+
+    line = next((ln for ln in quote.lines if ln.id == quote_line_id), None)
+    if not line:
+        raise HTTPException(404, "QuoteLine non trovata in questa quote")
+
+    was_implicit = False
+    prev_status = quote.status
+    if quote.status in (QuoteStatus.draft, QuoteStatus.sent):
+        quote.status = QuoteStatus.approved
+        was_implicit = True
+
+    job = _create_job_from_quote(db, quote)  # idempotente
+    db.flush()
+
+    # Trova o crea la JobCostLine corrispondente alla QuoteLine
+    jcl = db.query(JobCostLine).filter(
+        JobCostLine.quote_line_id == line.id, JobCostLine.job_id == job.id
+    ).first()
+    if not jcl:
+        jcl = JobCostLine(
+            job_id=job.id,
+            quote_line_id=line.id,
+            price_item_id=line.price_item_id,
+            description=line.description,
+            quantity_quoted=line.quantity,
+            unit=line.unit,
+            unit_price=line.unit_price,
+            total_quoted=line.total,
+            total_expected=line.total,
+        )
+        db.add(jcl)
+        db.flush()
+
+    db.commit()
+    db.refresh(quote); db.refresh(job); db.refresh(jcl)
+
+    if was_implicit:
+        try:
+            from app.services.notifications import notify_permission
+            from app.models import NotificationKind, NotificationSeverity
+            notify_permission(
+                db,
+                permission="edit_quotes",
+                exclude_user_ids=[actor.id] if actor else None,
+                kind=NotificationKind.quote_reverse_approval.value,
+                severity=NotificationSeverity.action_required.value,
+                title=f"Quote {quote.number} approvata implicitamente (booking → linea)",
+                body=(
+                    f"Booking su progetto '{quote.project.title if quote.project else '?'}' "
+                    f"ha attivato la linea '{line.description}' (€ {line.total:.2f}). "
+                    f"Stato precedente: {prev_status.value}. Verifica e attiva eventualmente "
+                    f"procedure di migrate-job o versioning standard."
+                ),
+                link=f"/quotes#{quote.id}",
+                payload={
+                    "quote_id": quote.id, "quote_number": quote.number,
+                    "job_id": job.id, "line_id": line.id,
+                    "previous_status": prev_status.value,
+                },
+                actor_user_id=actor.id if actor else None,
+            )
+        except Exception as e:
+            print(f"[promote-line] notify failed: {e}")
+
+    return {
+        "quote_id": quote.id, "quote_number": quote.number,
+        "quote_status": quote.status.value,
+        "previous_status": prev_status.value,
+        "job_id": job.id, "job_code": job.code,
+        "cost_line_id": jcl.id,
+        "cost_line_description": jcl.description,
+        "was_implicit_approval": was_implicit,
+    }
+
+
 @router.post("/api/reverse-attach")
 async def reverse_attach(
     request: Request,

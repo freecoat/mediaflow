@@ -8,6 +8,14 @@
 
 ## Versione corrente
 
+**v3.4.53** — 3 maggio 2026 — Booking parla quote+lavorazione (Job nascosto), filtro reparto risorse
+
+Modal booking riscritto: il campo "Job" diventa "Quotazione" (autocomplete `QUOTES_SEED` con stati draft|sent|approved). La lavorazione è obbligatoria e filtrata per dipartimento delle risorse selezionate (ricarico automatico al cambio risorse). Job resta nel DB ma invisibile.
+
+Backend: `GET /quotes/api/{id}/booking-lines?dept_ids=...` (cost_line per approved, quote_line per pending) + `POST /quotes/api/{id}/promote-line-to-cost-line` (approva implicit + ensure Job + crea JobCostLine, idempotente, notifica AM). `tlbSubmit` lato client: se kind=quote_line, promuove prima del save booking.
+
+Caso d'uso target: emergenza cliente con quote in trattativa → bookings attaccano lavorazioni alla quote draft/sent con approvazione implicita.
+
 **v3.4.52** — 3 maggio 2026 — Reverse-flow v2: booking → QuoteLine + approvazione implicita / phantom quote
 
 Riformulazione architetturale dopo discussione con Matteo. Il driver canonico è la **Quote**, non il Job. Reverse: booking su progetto senza quote attiva → 2 modalità: (1) **attach_existing** alla quote draft/sent con approvazione implicita + notifica account managers (`edit_quotes`); (2) **create_phantom** = nuova `Quote(is_phantom=True, status=approved)`. In entrambi i casi il forward-flow standard `_create_job_from_quote` crea il Job. Niente più qty/prezzo manuali: tutto da `booking_hours` + voce listino.

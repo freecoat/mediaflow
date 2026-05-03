@@ -70,6 +70,17 @@ async def planning_hub(
         .filter(Job.status != JobStatus.cancelled)
         .order_by(Job.created_at.desc()).all()
     )
+    # v3.4.53 — quote autocomplete (sostituisce job dal punto di vista UI booking).
+    # Mostra approved + draft + sent: il producer può attaccare booking anche a quote
+    # in trattativa (caso emergenza cliente, reverse-attach implicit-approval).
+    from app.models import Quote, QuoteStatus
+    quotes = (
+        db.query(Quote).options(
+            joinedload(Quote.client), joinedload(Quote.project)
+        ).filter(
+            Quote.status.in_((QuoteStatus.draft, QuoteStatus.sent, QuoteStatus.approved))
+        ).order_by(Quote.created_at.desc()).all()
+    )
     cur_user = _resolve_current_user(db, access_token)
     cur_resource_id = None
     if cur_user:
@@ -94,6 +105,7 @@ async def planning_hub(
             "departments": departments,
             "resources": resources,
             "jobs": jobs,
+            "quotes": quotes,
             "current_resource_id": cur_resource_id,
             "user_is_elevated": user_is_elevated,
         },
