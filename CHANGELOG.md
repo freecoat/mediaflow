@@ -1,5 +1,24 @@
 # MediaFlow — Changelog
 
+## v3.5.0-alpha.7.5 — Rinomina inline di title e number quote (3 maggio 2026)
+
+Editor `/quotes`: header (riga 1 della topbar) ora inline-editable.
+
+**Backend** (`PUT /quotes/api/{quote_id}`):
+- Accetta `title` (Form, opzionale): libero in qualsiasi stato.
+- Accetta `number` (Form, opzionale): permesso SOLO se `status=draft`. Una quote `sent`/`approved` ha già un numero ufficiale comunicato al cliente, non si tocca → 409 con messaggio. Pre-check unicità con bypass soft-delete (le quote in cestino occupano il number, vincolo UNIQUE su DB).
+- Permesso `edit_quotes` per entrambi (invariato).
+- Response include ora `number` e `title` per refresh UI.
+
+**UI**:
+- Header dell'editor ora due `contenteditable` separati: `<span id="editor-number">` e `<span id="editor-title">`. Click → input + selezione testo, Enter salva, Esc annulla, blur salva.
+- Stato `draft` → entrambi editabili. Altri stati → number diventa read-only con opacity 0.7 e tooltip esplicativo, title rimane editabile.
+- Border-bottom dashed in hover per scoprire l'editabilità.
+- Toast "Numero aggiornato a Q-..." / "Titolo aggiornato" + reload lista.
+- Errori (409 not draft, 409 collisione) mostrati come toast e ripristino del valore originale.
+
+Smoke test: rename verde su draft (number + title), bloccato su approved.
+
 ## v3.5.0-alpha.7.4 — Tool result più espliciti per evitare allucinazioni AI (3 maggio 2026)
 
 Bug osservato (Matteo, ISIDE): dopo `propose_project ISIDE` con status=applied (creato OK con id=5), Sonnet nel turno successivo ha detto "Il progetto ISIDE esiste già in DB". Lettura sbagliata del tool_result, che era solo `{project_id: 5, code: "ISIDE", title: "ISIDE", client: "Cattleya"}` — ambiguo: poteva essere un record creato O trovato.

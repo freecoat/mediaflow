@@ -87,7 +87,24 @@
   <div class="quote-editor-topbar">
     <div class="quote-editor-topbar-row">
       <div class="quote-editor-title-block">
-        <h2 id="editor-title" style="font-size:18px;font-weight:600;"></h2>
+        <!-- v3.5.0-alpha.7.5: header inline-editable (number + title) -->
+        <h2 style="font-size:18px;font-weight:600;display:flex;gap:8px;align-items:baseline;flex-wrap:wrap;">
+          <span class="qe-edit-number mono" id="editor-number"
+                contenteditable="true" spellcheck="false"
+                title="Click per rinominare il numero (solo bozze)"
+                style="outline:none;border-bottom:1px dashed transparent;padding:0 2px;"
+                onfocus="qeHeaderFocus(this)"
+                onblur="qeSaveNumber(this)"
+                onkeydown="qeHeaderKey(event,this)"></span>
+          <span class="text-muted" style="font-weight:400;">—</span>
+          <span class="qe-edit-title" id="editor-title"
+                contenteditable="true" spellcheck="false"
+                title="Click per rinominare il titolo"
+                style="outline:none;border-bottom:1px dashed transparent;padding:0 2px;flex:1;min-width:120px;"
+                onfocus="qeHeaderFocus(this)"
+                onblur="qeSaveTitle(this)"
+                onkeydown="qeHeaderKey(event,this)"></span>
+        </h2>
         <span class="text-xs" id="editor-status"></span>
       </div>
       <div class="flex gap-2">
@@ -145,6 +162,12 @@
     .quote-editor-topbar { margin-bottom: 16px; display:flex; flex-direction:column; gap:10px; }
     .quote-editor-topbar-row { display:flex; align-items:center; justify-content:space-between; gap:14px; flex-wrap:wrap; }
     .quote-editor-title-block { min-width:0; }
+    /* v3.5.0-alpha.7.5: feedback visivo sull'inline-edit di number/title */
+    .qe-edit-number[contenteditable="true"]:hover,
+    .qe-edit-title[contenteditable="true"]:hover {
+      background:var(--bg3); border-bottom-color:var(--border) !important; cursor:text;
+    }
+    .qe-edit-number:focus, .qe-edit-title:focus { background:var(--bg3); }
     /* Critical Assumptions compatto: bar con input piccoli affiancati */
     .quote-editor-assumptions {
       display:flex; align-items:center; gap:8px; flex-wrap:wrap;
@@ -764,7 +787,21 @@ async function openEditor(id) {
 
 async function reloadQuote() {
   currentQuote = await api('GET', `/quotes/api/${currentQuoteId}`);
-  document.getElementById('editor-title').textContent = `${currentQuote.number} — ${currentQuote.title}`;
+  // v3.5.0-alpha.7.5: header inline-editable, popola number e title separati.
+  document.getElementById('editor-number').textContent = currentQuote.number || '';
+  document.getElementById('editor-title').textContent = currentQuote.title || '';
+  // Number editabile solo in draft (vincolo backend); UI: disabilita il
+  // contenteditable e applica stile "muted" altrimenti.
+  const numEl = document.getElementById('editor-number');
+  if (currentQuote.status === 'draft') {
+    numEl.setAttribute('contenteditable', 'true');
+    numEl.style.opacity = '';
+    numEl.title = 'Click per rinominare il numero (solo bozze)';
+  } else {
+    numEl.setAttribute('contenteditable', 'false');
+    numEl.style.opacity = '0.7';
+    numEl.title = `Number bloccato in stato '${currentQuote.status}'`;
+  }
   document.getElementById('editor-status').textContent = SL[currentQuote.status] || currentQuote.status;
   document.getElementById('btn-pdf').href = `/quotes/api/${currentQuoteId}/pdf`;
   document.getElementById('btn-csv').href = `/quotes/api/${currentQuoteId}/export.csv`;
@@ -909,6 +946,59 @@ async function deleteQuoteFromEditor() {
   await deleteQuoteCommon(currentQuoteId, currentQuote && currentQuote.number);
   // Se delete soft riuscito, torna alla lista
 }
+// ── Inline-edit di number e title nell'header (v3.5.0-alpha.7.5) ────
+function qeHeaderFocus(el) {
+  el.dataset.original = el.textContent;
+  el.style.borderBottomColor = 'var(--border)';
+  // seleziona tutto il testo per facilitare la riscrittura
+  const r = document.createRange(); r.selectNodeContents(el);
+  const s = window.getSelection(); s.removeAllRanges(); s.addRange(r);
+}
+function qeHeaderKey(e, el) {
+  if (e.key === 'Enter') { e.preventDefault(); el.blur(); }
+  else if (e.key === 'Escape') {
+    e.preventDefault();
+    el.textContent = el.dataset.original || '';
+    el.blur();
+  }
+}
+async function qeSaveTitle(el) {
+  el.style.borderBottomColor = 'transparent';
+  const v = el.textContent.trim();
+  const orig = el.dataset.original;
+  if (!v) { el.textContent = orig; return; }
+  if (v === orig) return;
+  try {
+    const fd = new FormData(); fd.append('title', v);
+    const r = await api('PUT', `/quotes/api/${currentQuoteId}`, fd);
+    currentQuote.title = r.title;
+    el.textContent = r.title;
+    toast('Titolo aggiornato', 'success');
+    if (typeof loadQuotes === 'function') loadQuotes();
+  } catch (e) {
+    el.textContent = orig;
+    toast('Errore: ' + e.message, 'error');
+  }
+}
+async function qeSaveNumber(el) {
+  el.style.borderBottomColor = 'transparent';
+  const v = el.textContent.trim();
+  const orig = el.dataset.original;
+  if (!v) { el.textContent = orig; return; }
+  if (v === orig) return;
+  try {
+    const fd = new FormData(); fd.append('number', v);
+    const r = await api('PUT', `/quotes/api/${currentQuoteId}`, fd);
+    currentQuote.number = r.number;
+    el.textContent = r.number;
+    toast(`Numero aggiornato a ${r.number}`, 'success');
+    if (typeof loadQuotes === 'function') loadQuotes();
+  } catch (e) {
+    el.textContent = orig;
+    toast('Errore: ' + e.message, 'error');
+  }
+}
+
 async function deleteQuoteCommon(id, label) {
   const human = label || `#${id}`;
   if (!confirm(`Spostare la quotazione ${human} nel cestino?`)) return;

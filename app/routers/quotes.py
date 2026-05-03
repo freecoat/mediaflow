@@ -622,6 +622,9 @@ async def update_quote(
     vat_rate: Optional[float] = Form(None),
     notes: Optional[str] = Form(None),
     payment_terms: Optional[str] = Form(None),
+    # v3.5.0-alpha.7.5 — rinomina di title (sempre) e number (solo draft)
+    title: Optional[str] = Form(None),
+    number: Optional[str] = Form(None),
     db: Session = Depends(get_db),
 ):
     # v3.4.38 (R3.2): guard permission edit_quotes
@@ -633,6 +636,35 @@ async def update_quote(
         joinedload(Quote.lines).joinedload(QuoteLine.price_item).joinedload(PriceItem.category)
     ).filter(Quote.id == quote_id).first()
     if not q: raise HTTPException(404)
+
+    if title is not None:
+        new_title = title.strip()
+        if not new_title:
+            raise HTTPException(400, "Il titolo non può essere vuoto")
+        q.title = new_title
+    if number is not None:
+        new_number = number.strip()
+        if not new_number:
+            raise HTTPException(400, "Il numero non può essere vuoto")
+        if new_number != q.number:
+            # Modifica del numero ammessa solo finché la quote è in draft.
+            # Una volta "sent" (proposta al cliente) o "approved" (con job
+            # collegato), il numero è il riferimento ufficiale e non va toccato.
+            if q.status != QuoteStatus.draft:
+                raise HTTPException(409,
+                    f"Il numero non può essere modificato in stato '{q.status.value}'. "
+                    "Solo le bozze sono rinominabili.")
+            # Unicità: bypass del filter soft-delete perché le quote in cestino
+            # occupano comunque il number (vincolo UNIQUE su DB).
+            collision = (db.query(Quote)
+                           .execution_options(include_deleted=True)
+                           .filter(Quote.number == new_number, Quote.id != q.id)
+                           .first())
+            if collision:
+                raise HTTPException(409,
+                    f"Esiste già una quote con number '{new_number}' (eventualmente nel cestino)")
+            q.number = new_number
+
     if package_discount is not None: q.package_discount = package_discount
     if vat_rate is not None: q.vat_rate = vat_rate
     if notes is not None: q.notes = notes
@@ -641,6 +673,8 @@ async def update_quote(
     db.commit()
     return {
         "id": q.id,
+        "number": q.number,
+        "title": q.title,
         "subtotal_gross": q.subtotal_gross,
         "subtotal": q.subtotal,
         "total_after_discount": q.total_after_discount,
