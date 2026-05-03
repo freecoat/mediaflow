@@ -1,5 +1,20 @@
 # MediaFlow — Changelog
 
+## v3.5.0-alpha.4 — propose_quote.lines con price_item_id (3 maggio 2026)
+
+`propose_quote` ora accetta `price_item_id` per ogni riga in `lines`, eredità completa dal listino come già faceva `propose_quote_line`. Sblocca il flusso "voci nuove + quote nuova":
+1. AI propone `propose_price_item` per ogni voce mancante (una alla volta, Apply utente)
+2. Tool result restituisce il `price_item_id` di ciascuna voce
+3. AI propone `propose_quote` con `lines: [{price_item_id: N, quantity: K}, ...]` per tutte le righe — incluse sia voci esistenti dal context "VOCI LISTINO ATTIVE" sia voci appena create.
+
+Cambiamenti:
+- `ai_tools.py`: schema `propose_quote.lines.items` ha ora `price_item_id` (integer opzionale). Required ridotto a `["quantity"]`: con `price_item_id` valorizzato, description/unit/unit_price si ereditano dal listino come in `propose_quote_line`.
+- `ai_assistant._h_propose_quote`: risolve `price_item_id` per riga, eredità da `pi.name`/`pi.unit`/`pi.price_list`, salva `QuoteLine.price_item_id`.
+- System prompt rinforzato: "Per ogni riga, usa `price_item_id` se la voce è in listino — qty basta, gli altri campi vengono ereditati."
+- Aggiornato anche legacy markdown action prompt (path Ollama/Perplexity) per coerenza schema.
+
+Mantiene invariante v3.4.55: le righe quote restano legate al listino (non più orfane), così cost report e man-hours funzionano correttamente.
+
 ## v3.5.0-alpha.3 — Hotfix: errore vero visibile su Apply fallito + ordine azioni AI (3 maggio 2026)
 
 Due fix dopo test reale Matteo (conversazione Gomorra):

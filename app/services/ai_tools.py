@@ -134,7 +134,10 @@ TOOLS: list[dict] = [
             "Crea una nuova quotazione. Richiede un progetto: `project_id` (PK) o `project_code`. "
             "Auto-genera il numero (Q-{anno}-NNN), default issue_date=oggi, valid_until=+30gg, "
             "vat_rate=22. Se l'utente cita righe ('5gg color, 4h QC'), inseriscile in `lines` "
-            "per creare quote+righe in singolo turno."
+            "per creare quote+righe in singolo turno. Ogni riga DOVREBBE legarsi al listino "
+            "via `price_item_id` quando un match esiste (anche per voci appena create con "
+            "`propose_price_item` — il loro id ti torna come tool_result dopo l'Apply); "
+            "una riga libera (senza price_item_id) richiede `description` e `unit_price` espliciti."
         ),
         "input_schema": {
             "type": "object",
@@ -151,14 +154,15 @@ TOOLS: list[dict] = [
                     "items": {
                         "type": "object",
                         "properties": {
-                            "description": {"type": "string"},
-                            "quantity":    {"type": "number"},
-                            "unit":        {"type": "string", "enum": ["day", "hour", "flat"]},
-                            "unit_price":  {"type": "number"},
-                            "section":     {"type": "string", "enum": ["A", "B", "C"]},
-                            "detail":      {"type": "string"},
+                            "price_item_id": {"type": "integer", "description": "ID voce listino — usa SEMPRE quando esiste un match (anche per voci appena create). Se valorizzato, description/unit/unit_price sono opzionali e vengono ereditati dal listino."},
+                            "description":   {"type": "string"},
+                            "quantity":      {"type": "number"},
+                            "unit":          {"type": "string", "enum": ["day", "hour", "flat"]},
+                            "unit_price":    {"type": "number"},
+                            "section":       {"type": "string", "enum": ["A", "B", "C"]},
+                            "detail":        {"type": "string"},
                         },
-                        "required": ["description", "quantity", "unit_price"],
+                        "required": ["quantity"],
                     },
                 },
             },
@@ -393,8 +397,8 @@ Regole critiche:
 5. **Cliente o sito web mancanti?** Cerca prima con `web_search`. Non popolare campi (P.IVA, telefono, indirizzo) senza fonte.
 
 **Ordine delle azioni quando si lavora su una quote nuova** (sequenza obbligatoria, ogni step richiede Apply utente):
-- (a) **Voci listino mancanti** → proponile UNA ALLA VOLTA con `propose_price_item`. Aspetti che l'utente le applichi (riceverai i loro `price_item_id` come tool_result).
-- (b) **Quote** → SE non esiste nel context "QUOTE ESISTENTI" per il progetto richiesto, propone `propose_quote` con `lines` inline (descrizione + qty + unit_price), inclusi sia voci da listino sia voci appena create. Aspetti l'Apply (riceverai il `quote_id`).
+- (a) **Voci listino mancanti** → proponile UNA ALLA VOLTA con `propose_price_item`. Aspetti che l'utente le applichi: il tool_result conterrà `{price_item_id: N, name, category}` da usare al passo successivo.
+- (b) **Quote** → SE non esiste nel context "QUOTE ESISTENTI" per il progetto richiesto, propone `propose_quote` con `lines` inline. Per ogni riga, usa `price_item_id` se la voce è in listino (da context o appena creata in (a)) — qty basta, gli altri campi vengono ereditati. Per voci libere (raro), passa `description` + `unit_price` espliciti. Aspetti l'Apply (riceverai il `quote_id`).
 - (c) **Aggiunte successive** → solo dopo che la quote esiste, usa `propose_quote_line` (con `price_item_id` quando applicabile).
 NON proporre `propose_new_item_and_line` se la quote non esiste ancora — fallirà perché serve un `quote_id` valido. Per nuove voci listino + nuova quote in unica creazione, segui (a) → (b).
 """

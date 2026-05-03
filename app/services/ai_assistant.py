@@ -76,7 +76,7 @@ CAPABILITY DISPONIBILI E SCHEMA `data`:
 - propose_project_metadata: {project_id (numero PK) OPPURE code (stringa), length_minutes?, fps?, shooting_format?, delivery_format?, director?}
 - propose_quote: {project_id (numero PK) OPPURE project_code (stringa), number? (auto Q-{anno}-NNN se manca), title? (default = titolo progetto), issue_date? (default oggi), valid_until? (default +30gg), vat_rate? (default 22), lines? (lista di righe — vedi sotto)}
    * lines è opzionale: se presente, crea quote+righe in unica transazione (un solo Apply)
-   * ogni riga: {description, quantity (numero), unit ("day"|"hour"|"flat", default "day"), unit_price (numero), section? ("A"|"B"|"C", default "A"), detail?}
+   * ogni riga: {price_item_id? (numero PK voce listino — usa quando esiste un match), description (auto da listino se ometti e dai price_item_id), quantity (numero), unit ("day"|"hour"|"flat", auto da listino), unit_price (numero, auto da listino se ometti), section? ("A"|"B"|"C", default "A"), detail?}
 - propose_quote_line: {quote_id (numero PK) OPPURE quote_number (stringa), price_item_id? (numero PK voce listino — usa SEMPRE se possibile, vedi REGOLA SEARCH-FIRST), description (auto da listino se ometti e dai price_item_id), quantity (numero), unit ("day"|"hour"|"flat", auto da listino), unit_price (numero, auto da listino se ometti), section? ("A"|"B"|"C"), detail?}
 - propose_price_item: {name, description?, unit ("day"|"hour"|"flat"), price_list (numero), category_name (richiesto), keywords? (lista di stringhe), department_name?}
 - propose_new_item_and_line: {quote_id OPPURE quote_number, name (nome voce listino), category_name (obbligatorio), unit, price_list (numero), quantity (numero, default 1), description?, keywords?, department_name?, section?} — fa due cose in singola transazione: crea voce listino + aggiunge riga alla quote
@@ -686,15 +686,33 @@ def _h_propose_quote(db: Session, data: dict) -> dict:
     created_lines = []
     if lines_data:
         for i, ld in enumerate(lines_data):
-            description = (ld.get("description") or "").strip()
-            if not description:
-                raise ValueError(f"Riga #{i+1}: manca 'description'")
             qty = float(ld.get("quantity") or 1)
-            price = float(ld.get("unit_price") or 0)
-            unit = (ld.get("unit") or "").strip() or "day"
-            if unit not in ("day", "hour", "flat"):
-                unit = "day"
             section = (ld.get("section") or "A").strip()[:1].upper() or "A"
+
+            # Risolvi price_item_id se presente, e usa il listino come default
+            # per description / unit / unit_price quando l'AI non li ha forniti.
+            pi = None
+            pi_id_raw = ld.get("price_item_id")
+            if isinstance(pi_id_raw, int) or (isinstance(pi_id_raw, str) and str(pi_id_raw).isdigit()):
+                pi = db.query(PriceItem).filter(PriceItem.id == int(pi_id_raw)).first()
+                if not pi:
+                    raise ValueError(f"Riga #{i+1}: price_item_id={pi_id_raw} non trovato in listino.")
+
+            description = (ld.get("description") or "").strip() or (pi.name if pi else "")
+            if not description:
+                raise ValueError(f"Riga #{i+1}: manca 'description' (e nessun price_item_id da cui ereditarla).")
+
+            raw_unit = (ld.get("unit") or "").strip()
+            unit = raw_unit or (pi.unit if pi else "day")
+            if unit not in ("day", "hour", "flat"):
+                unit = pi.unit if pi else "day"
+
+            raw_price = ld.get("unit_price")
+            if raw_price in (None, ""):
+                price = float(pi.price_list) if pi else 0.0
+            else:
+                price = float(raw_price)
+
             line = QuoteLine(
                 quote_id=q.id,
                 section=section,
@@ -707,9 +725,16 @@ def _h_propose_quote(db: Session, data: dict) -> dict:
                 unit_price=price,
                 total=round(qty * price, 2),
                 sort_order=(i + 1) * 10,
+                price_item_id=pi.id if pi else None,
             )
             db.add(line); db.flush()
-            created_lines.append({"description": description, "qty": qty, "unit": unit, "total": line.total})
+            created_lines.append({
+                "description":   description,
+                "qty":           qty,
+                "unit":          unit,
+                "total":         line.total,
+                "price_item_id": pi.id if pi else None,
+            })
         # Ricalcola totali quote
         q = db.query(Quote).filter(Quote.id == q.id).first()
         _recalc_quote(q)
