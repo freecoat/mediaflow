@@ -8,6 +8,12 @@
 
 ## Versione corrente
 
+**v3.4.52** — 3 maggio 2026 — Reverse-flow v2: booking → QuoteLine + approvazione implicita / phantom quote
+
+Riformulazione architetturale dopo discussione con Matteo. Il driver canonico è la **Quote**, non il Job. Reverse: booking su progetto senza quote attiva → 2 modalità: (1) **attach_existing** alla quote draft/sent con approvazione implicita + notifica account managers (`edit_quotes`); (2) **create_phantom** = nuova `Quote(is_phantom=True, status=approved)`. In entrambi i casi il forward-flow standard `_create_job_from_quote` crea il Job. Niente più qty/prezzo manuali: tutto da `booking_hours` + voce listino.
+
+Aggiunto `Quote.is_phantom` (auto-migrate). Nuovo `NotificationKind.quote_reverse_approval`. Service `app/services/reverse_quote.py`. Endpoint `POST /quotes/api/reverse-attach`. `GET /projects/api/{id}/job-context` esteso (approved/pending/phantom quotes + suggested_flow). Sub-modal `modal-tlb-reverse-quote` con anteprima riga calcolata. Eliminati: `app/services/job_extras.py` + `POST /jobs/api/reverse-extra` (defunti dalla v3.4.51).
+
 **v3.4.51** — 3 maggio 2026 — Reverse-flow: job extra da booking su progetto senza quote
 
 Cambio architetturale: un Job non nasce mai dal nulla con valore commerciale arbitrario. Forward (Quote.approved → Job) o Reverse (Booking su progetto senza quote → modal blocking → Job extra creato/riusato + JobCostLine extra + price_item). Service `app/services/job_extras.py`. Endpoint `GET /projects/api/{id}/job-context` + `POST /jobs/api/reverse-extra`. Sub-modal `modal-tlb-extra-job` in /planning con CTA in fondo al job-search. ProjectType `internal` come label. Bonifica seed: rimosso Job Sky orfano con budget arbitrario. Niente migrazione DB.

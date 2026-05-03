@@ -137,6 +137,8 @@ class NotificationKind(str, enum.Enum):
     # Anomalie financial (v3.4.39) — Job orfani, discrepanze quote/consuntivo
     job_floating_alert = "job_floating_alert"                # → admin/accounting (job senza quote)
     quote_discrepancy_alert = "quote_discrepancy_alert"      # → admin/accounting (sforamenti / extra)
+    # Reverse-flow (v3.4.52) — booking ha forzato approvazione implicita o creato phantom
+    quote_reverse_approval = "quote_reverse_approval"        # → edit_quotes (account managers)
     custom = "custom"
 
 
@@ -632,6 +634,11 @@ class Quote(Base):
     # posto della precedente, V_old.status=superseded + V_old.superseded_by_id=V_new.
     parent_quote_id: Mapped[Optional[int]] = mapped_column(ForeignKey("quotes.id"), nullable=True)
     superseded_by_id: Mapped[Optional[int]] = mapped_column(ForeignKey("quotes.id"), nullable=True)
+    # v3.4.52 — Phantom quote: generata in reverse-flow (booking su progetto senza
+    # quote). Stessa struttura di una quote normale (status, lines, total) ma mai
+    # inviata al cliente. Visualizzata come anomalia in /finance, può essere
+    # promossa a quote di riferimento (toggle is_phantom=False).
+    is_phantom: Mapped[bool] = mapped_column(Boolean, default=False)
 
     project: Mapped["Project"] = relationship(back_populates="quotes")
     client: Mapped["Client"] = relationship(back_populates="quotes")

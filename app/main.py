@@ -74,6 +74,8 @@ def _auto_migrate_columns():
         quote_alter = [
             ("parent_quote_id", "INTEGER NULL REFERENCES quotes(id)"),
             ("superseded_by_id", "INTEGER NULL REFERENCES quotes(id)"),
+            # v3.4.52 — phantom quote (reverse-flow)
+            ("is_phantom", "BOOLEAN NOT NULL DEFAULT 0"),
         ]
         with engine.begin() as conn:
             for col, ddl in quote_alter:
@@ -131,7 +133,7 @@ async def lifespan(app: FastAPI):
     yield
 
 
-app = FastAPI(title="MediaFlow", version="3.4.51", lifespan=lifespan)
+app = FastAPI(title="MediaFlow", version="3.4.52", lifespan=lifespan)
 
 BASE_DIR = Path(__file__).parent
 app.mount("/static", StaticFiles(directory=BASE_DIR / "static"), name="static")

@@ -177,6 +177,69 @@ async def list_quotes(
     ]
 
 
+@router.post("/api/reverse-attach")
+async def reverse_attach(
+    request: Request,
+    project_id: int = Form(...),
+    mode: str = Form(...),  # "attach_existing" | "create_phantom"
+    target_quote_id: Optional[int] = Form(None),
+    price_item_id: int = Form(...),
+    booking_hours: float = Form(0.0),  # somma ore-persona del booking corrente
+    quantity_override: Optional[float] = Form(None),
+    phantom_title: Optional[str] = Form(None),
+    db: Session = Depends(get_db),
+):
+    """Reverse-flow v3.4.52: booking su progetto senza quote attiva.
+
+    - mode="attach_existing": riga aggiunta a quote draft|sent → approvazione
+      implicita → ensure Job → notifica account managers (edit_quotes).
+    - mode="create_phantom": crea Quote(is_phantom=True, status=approved) +
+      una line + Job auto-creato → notifica account managers.
+
+    Quantità: se quantity_override è valorizzato lo usa, altrimenti la deriva
+    da booking_hours secondo l'unità della voce listino.
+    """
+    from app.services.rbac import current_user_optional
+    from app.services.reverse_quote import (
+        attach_to_pending_quote, compute_quantity_from_hours,
+        create_phantom_quote_with_line,
+    )
+    actor = current_user_optional(request)
+
+    project = db.query(Project).filter(Project.id == project_id).first()
+    if not project:
+        raise HTTPException(404, "Progetto non trovato")
+    pi = db.query(PriceItem).filter(PriceItem.id == price_item_id).first()
+    if not pi:
+        raise HTTPException(404, "Voce listino non trovata")
+
+    qty = float(quantity_override) if quantity_override is not None else compute_quantity_from_hours(
+        float(booking_hours or 0.0), pi.unit or "day"
+    )
+    if qty <= 0:
+        raise HTTPException(400, "quantity calcolata <= 0: passa booking_hours o quantity_override > 0")
+
+    if mode == "attach_existing":
+        if not target_quote_id:
+            raise HTTPException(400, "target_quote_id richiesto in mode=attach_existing")
+        result = attach_to_pending_quote(
+            db, target_quote_id, project_id, price_item_id, qty, actor=actor,
+        )
+    elif mode == "create_phantom":
+        result = create_phantom_quote_with_line(
+            db, project, price_item_id, qty, title=phantom_title, actor=actor,
+        )
+    else:
+        raise HTTPException(400, "mode deve essere 'attach_existing' o 'create_phantom'")
+
+    result["client_name"] = project.client.name if project.client else None
+    result["project_code"] = project.code
+    result["project_title"] = project.title
+    result["computed_quantity"] = qty
+    result["price_item_unit"] = pi.unit
+    return result
+
+
 @router.post("/api")
 async def create_quote(
     number: str = Form(...),

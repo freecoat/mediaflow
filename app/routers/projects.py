@@ -167,28 +167,52 @@ async def update_project(
 
 @router.get("/api/{project_id}/job-context")
 async def get_project_job_context(project_id: int, db: Session = Depends(get_db)):
-    """Contesto job di un progetto per il flusso 'reverse' (booking → extra job).
+    """Contesto quote/job di un progetto per il reverse-flow v3.4.52.
 
-    Usato dal modal booking quando l'utente vuole creare un booking ma il
-    progetto non ha quote attive: il client mostra le opzioni disponibili.
+    Usato dal modal booking quando il progetto non ha quote attive non-phantom:
+    il client decide se attaccare la riga a una quote pending (draft|sent) con
+    approvazione implicita, oppure creare una phantom quote.
+
+    Ritorna:
+    - approved_quotes: quote già approvate non-phantom (forward-flow normale, no reverse)
+    - pending_quotes: quote draft|sent attaccabili (reverse implicit-approval)
+    - phantom_quotes: quote phantom esistenti (reverse precedenti)
+    - jobs_with_quote / jobs_without_quote (legacy: orfani residui da seed pre-v3.4.51)
     """
+    from app.models import Quote
     p = db.query(Project).options(
         joinedload(Project.quotes), joinedload(Project.jobs)
     ).filter(Project.id == project_id).first()
     if not p:
         raise HTTPException(404, "Progetto non trovato")
-    has_active_quote = any(
-        (q.status or "") in ("draft", "sent", "approved") for q in p.quotes
-    )
-    extra_jobs = [j for j in p.jobs if j.quote_id is None]
-    quoted_jobs = [j for j in p.jobs if j.quote_id is not None]
+
+    approved_quotes = [q for q in p.quotes if q.status == "approved" and not getattr(q, "is_phantom", False)]
+    pending_quotes = [q for q in p.quotes if q.status in ("draft", "sent")]
+    phantom_quotes = [q for q in p.quotes if getattr(q, "is_phantom", False)]
+    jobs_without_quote = [j for j in p.jobs if j.quote_id is None]
+    jobs_with_quote = [j for j in p.jobs if j.quote_id is not None]
+
+    def _q(q):
+        return {"id": q.id, "number": q.number, "title": q.title,
+                "status": q.status.value if hasattr(q.status, "value") else str(q.status),
+                "total_with_vat": q.total_with_vat}
+    def _j(j):
+        return {"id": j.id, "code": j.code, "title": j.title}
+
     return {
         "project_id": p.id, "project_code": p.code, "project_title": p.title,
         "project_type": p.project_type,
         "is_internal": (p.project_type or "") == "internal",
-        "has_active_quote": has_active_quote,
-        "extra_jobs": [{"id": j.id, "code": j.code, "title": j.title} for j in extra_jobs],
-        "quoted_jobs": [{"id": j.id, "code": j.code, "title": j.title} for j in quoted_jobs],
+        "approved_quotes": [_q(q) for q in approved_quotes],
+        "pending_quotes": [_q(q) for q in pending_quotes],
+        "phantom_quotes": [_q(q) for q in phantom_quotes],
+        "jobs_with_quote": [_j(j) for j in jobs_with_quote],
+        "jobs_without_quote": [_j(j) for j in jobs_without_quote],
+        # Convenienza per UI: quale flusso suggerire
+        "suggested_flow": (
+            "use_existing_job" if jobs_with_quote else
+            ("attach_existing" if pending_quotes else "create_phantom")
+        ),
     }
 
 

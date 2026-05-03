@@ -1,0 +1,317 @@
+"""
+Reverse quote-flow (v3.4.52) — booking su progetto senza quotazione attiva.
+
+Architettura:
+- Il booking è il driver. La sua durata (somma assignments) è la "domanda di ore".
+- L'utente (producer) sceglie SOLO la voce di listino conforme. Quantità e prezzo
+  sono derivati: qty = ore / 8 se unit=day, ore se unit=hour, 1 altrimenti.
+- Due modalità:
+    1) `attach_existing` — esiste una quote in draft|sent: si aggiunge la riga,
+       la quote viene **implicitamente approvata** (status=approved), il Job viene
+       auto-creato col flusso forward standard, gli account manager (permesso
+       `edit_quotes`) ricevono notifica perché potrebbero voler attivare la
+       procedura di migrate-job/versioning.
+    2) `create_phantom` — non esiste alcuna quote: viene creata una `Quote` con
+       `is_phantom=True`, status=approved, una sola line, e il Job viene
+       auto-creato. Phantom quote = mai inviata al cliente; può essere promossa
+       a quote di riferimento da /finance toggling `is_phantom=False`.
+"""
+from datetime import date as _date
+from typing import Optional
+
+from fastapi import HTTPException
+from sqlalchemy.orm import Session
+
+from app.models import (
+    Job, JobCostLine, NotificationKind, NotificationSeverity, PriceItem,
+    Project, Quote, QuoteLine, QuoteStatus, User,
+)
+
+
+WORKING_HOURS_PER_DAY = 8.0
+
+
+def compute_quantity_from_hours(hours: float, unit: str) -> float:
+    """Converte ore-persona in quantità coerente con l'unità del listino.
+
+    - "day" → ore / 8 (giornata standard)
+    - "hour" / "h" → ore così come sono
+    - altrimenti → 1.0 (one-shot deliverable, l'utente potrà aggiustare)
+    """
+    if hours <= 0:
+        return 1.0
+    u = (unit or "day").strip().lower()
+    if u in ("hour", "hours", "h", "ora", "ore"):
+        return round(hours, 2)
+    if u in ("day", "days", "d", "giorno", "giorni"):
+        return round(hours / WORKING_HOURS_PER_DAY, 2)
+    return 1.0
+
+
+def _next_position(quote: Quote) -> str:
+    """Calcola posizione progressiva 'A.{N+1}' per la nuova riga."""
+    used = []
+    for ln in quote.lines:
+        try:
+            tail = (ln.position or "").rsplit(".", 1)[-1]
+            used.append(int(tail))
+        except (ValueError, IndexError):
+            pass
+    n = (max(used) + 1) if used else len(quote.lines) + 1
+    return f"A.{n}"
+
+
+def _next_sort_order(quote: Quote) -> int:
+    if not quote.lines:
+        return 10
+    return max((ln.sort_order or 0) for ln in quote.lines) + 10
+
+
+def add_line_from_price_item(
+    db: Session,
+    quote: Quote,
+    price_item: PriceItem,
+    *,
+    quantity: float,
+    description_override: Optional[str] = None,
+) -> QuoteLine:
+    """Aggiunge una QuoteLine alla quote a partire da una voce di listino.
+    Eredita unit, unit_price, hardcosts. Calcola total = qty × unit_price."""
+    if quantity <= 0:
+        raise HTTPException(400, "quantity deve essere > 0")
+    desc = (description_override or price_item.name or "").strip()[:255]
+    unit = (price_item.unit or "day")
+    unit_price = float(price_item.price_list or 0.0)
+    total = round(quantity * unit_price, 2)
+    line = QuoteLine(
+        price_item_id=price_item.id,
+        section="A",
+        position=_next_position(quote),
+        description=desc,
+        quantity=quantity,
+        unit=unit,
+        unit_price=unit_price,
+        total=total,
+        hardcosts=float(price_item.hardcosts or 0.0),
+        sort_order=_next_sort_order(quote),
+    )
+    line.quote = quote
+    db.add(line)
+    db.flush()
+    return line
+
+
+def _recalc_quote_totals(quote: Quote) -> None:
+    """Ricalcolo minimale dei totali quote dopo aggiunta riga reverse.
+    Volutamente ignoro sconti per categoria/pacchetto: la phantom non ne ha,
+    e per attach_existing la riga reverse è 'puro accodamento' — l'AM rifarà
+    il giro di sconti se serve."""
+    subtotal_gross = 0.0
+    subtotal = 0.0
+    for ln in quote.lines:
+        unit_price = float(ln.unit_price or 0.0)
+        qty = float(ln.quantity or 0.0)
+        allowance = float(ln.allowance or 0.0)
+        line_disc = float(ln.line_discount_pct or 0.0)
+        gross = qty * unit_price * (1 + allowance)
+        net = gross * (1 - line_disc)
+        subtotal_gross += gross
+        subtotal += net
+    quote.subtotal_gross = round(subtotal_gross, 2)
+    quote.subtotal = round(subtotal, 2)
+    pkg_disc = float(quote.package_discount or 0.0)
+    quote.total_after_discount = round(subtotal * (1 - pkg_disc), 2)
+    vat = float(quote.vat_rate or 0.0)
+    quote.total_with_vat = round(quote.total_after_discount * (1 + vat / 100.0), 2)
+
+
+def _ensure_job_for_quote(db: Session, quote: Quote) -> Job:
+    """Crea (o riusa) il Job per una quote approvata. Riusa il forward-flow
+    canonico in app.routers.quotes._create_job_from_quote."""
+    from app.routers.quotes import _create_job_from_quote
+    job = _create_job_from_quote(db, quote)
+    db.flush()
+    return job
+
+
+def attach_to_pending_quote(
+    db: Session,
+    quote_id: int,
+    project_id: int,
+    price_item_id: int,
+    quantity: float,
+    actor: Optional[User] = None,
+) -> dict:
+    """Attacca una riga reverse a una quote draft|sent → approva implicitamente
+    → ensure Job → notifica account managers.
+
+    Vincoli:
+    - quote_id deve appartenere al project_id
+    - quote.status deve essere draft o sent (non approved/rejected/superseded)
+    - price_item deve esistere
+    """
+    quote = db.query(Quote).filter(Quote.id == quote_id, Quote.project_id == project_id).first()
+    if not quote:
+        raise HTTPException(404, "Quote non trovata o non appartiene al progetto")
+    if quote.status not in (QuoteStatus.draft, QuoteStatus.sent):
+        raise HTTPException(
+            400,
+            f"La quote {quote.number} ha stato '{quote.status.value}', "
+            "non è ammessa l'approvazione implicita reverse (solo da draft o sent)."
+        )
+    pi = db.query(PriceItem).filter(PriceItem.id == price_item_id).first()
+    if not pi:
+        raise HTTPException(404, "Voce listino non trovata")
+
+    line = add_line_from_price_item(db, quote, pi, quantity=quantity)
+    _recalc_quote_totals(quote)
+
+    # Approvazione implicita
+    prev_status = quote.status
+    quote.status = QuoteStatus.approved
+
+    # Ensure Job (forward-flow standard)
+    job = _ensure_job_for_quote(db, quote)
+
+    # JobCostLine corrispondente alla nuova QuoteLine
+    jcl = db.query(JobCostLine).filter(
+        JobCostLine.quote_line_id == line.id
+    ).first()
+    if not jcl:
+        # _create_job_from_quote popola da q.lines AL MOMENTO della creazione del job:
+        # se il job esisteva già prima della reverse-attach, le righe nuove non
+        # ci sono. Le aggiungiamo ora.
+        jcl = JobCostLine(
+            job_id=job.id,
+            quote_line_id=line.id,
+            price_item_id=line.price_item_id,
+            description=line.description,
+            quantity_quoted=line.quantity,
+            unit=line.unit,
+            unit_price=line.unit_price,
+            total_quoted=line.total,
+            total_expected=line.total,
+        )
+        db.add(jcl)
+        db.flush()
+
+    db.commit()
+    db.refresh(quote); db.refresh(job); db.refresh(line); db.refresh(jcl)
+
+    # Notifica account managers (permesso edit_quotes)
+    try:
+        from app.services.notifications import notify_permission
+        notify_permission(
+            db,
+            permission="edit_quotes",
+            exclude_user_ids=[actor.id] if actor else None,
+            kind=NotificationKind.quote_reverse_approval.value,
+            severity=NotificationSeverity.action_required.value,
+            title=f"Quote {quote.number} approvata implicitamente (reverse-flow)",
+            body=(
+                f"Riga aggiunta da booking su progetto '{quote.project.title if quote.project else '?'}': "
+                f"{line.quantity}× {line.description} = € {line.total:.2f}. "
+                f"Stato precedente: {prev_status.value}. Verifica e attiva eventuali "
+                f"procedure di migrate-job o versioning standard."
+            ),
+            link=f"/quotes#{quote.id}",
+            payload={
+                "quote_id": quote.id, "quote_number": quote.number,
+                "job_id": job.id, "job_code": job.code,
+                "line_id": line.id, "amount": line.total,
+                "previous_status": prev_status.value,
+            },
+            actor_user_id=actor.id if actor else None,
+        )
+    except Exception as e:
+        print(f"[reverse_quote] notify failed: {e}")
+
+    return {
+        "quote_id": quote.id, "quote_number": quote.number,
+        "quote_status": quote.status.value,
+        "previous_status": prev_status.value,
+        "is_phantom": False,
+        "job_id": job.id, "job_code": job.code,
+        "cost_line_id": jcl.id,
+        "cost_line_description": jcl.description,
+        "was_implicit_approval": True,
+    }
+
+
+def create_phantom_quote_with_line(
+    db: Session,
+    project: Project,
+    price_item_id: int,
+    quantity: float,
+    title: Optional[str] = None,
+    actor: Optional[User] = None,
+) -> dict:
+    """Crea una phantom quote (status=approved, is_phantom=True) con una line
+    derivata dal listino + Job auto-creato. Notifica account managers."""
+    pi = db.query(PriceItem).filter(PriceItem.id == price_item_id).first()
+    if not pi:
+        raise HTTPException(404, "Voce listino non trovata")
+
+    from app.routers.quotes import _next_quote_number_progressive
+    today = _date.today()
+    quote = Quote(
+        number=_next_quote_number_progressive(db),
+        version=1,
+        project_id=project.id,
+        client_id=project.client_id,
+        title=(title or f"Phantom — {project.title}").strip()[:255],
+        status=QuoteStatus.approved,
+        is_phantom=True,
+        issue_date=today,
+        notes="Quote phantom: generata da booking reverse-flow. Mai inviata al cliente.",
+    )
+    db.add(quote)
+    db.flush()
+
+    line = add_line_from_price_item(db, quote, pi, quantity=quantity)
+    _recalc_quote_totals(quote)
+
+    job = _ensure_job_for_quote(db, quote)
+    db.flush()
+
+    jcl = db.query(JobCostLine).filter(JobCostLine.quote_line_id == line.id).first()
+    db.commit()
+    db.refresh(quote); db.refresh(job); db.refresh(line)
+    if jcl: db.refresh(jcl)
+
+    try:
+        from app.services.notifications import notify_permission
+        notify_permission(
+            db,
+            permission="edit_quotes",
+            exclude_user_ids=[actor.id] if actor else None,
+            kind=NotificationKind.quote_reverse_approval.value,
+            severity=NotificationSeverity.action_required.value,
+            title=f"Phantom quote {quote.number} creata (reverse-flow)",
+            body=(
+                f"Booking su progetto '{project.title}' senza quote attiva → "
+                f"creata phantom approvata: {line.quantity}× {line.description} = € {line.total:.2f}. "
+                f"Promuovibile a quote di riferimento da /finance."
+            ),
+            link=f"/quotes#{quote.id}",
+            payload={
+                "quote_id": quote.id, "quote_number": quote.number,
+                "job_id": job.id, "job_code": job.code,
+                "line_id": line.id, "amount": line.total,
+                "is_phantom": True,
+            },
+            actor_user_id=actor.id if actor else None,
+        )
+    except Exception as e:
+        print(f"[reverse_quote] notify failed: {e}")
+
+    return {
+        "quote_id": quote.id, "quote_number": quote.number,
+        "quote_status": quote.status.value,
+        "previous_status": None,
+        "is_phantom": True,
+        "job_id": job.id, "job_code": job.code,
+        "cost_line_id": jcl.id if jcl else None,
+        "cost_line_description": jcl.description if jcl else line.description,
+        "was_implicit_approval": False,
+    }

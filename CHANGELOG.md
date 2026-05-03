@@ -1,5 +1,40 @@
 # MediaFlow — Changelog
 
+## v3.4.52 — Reverse-flow v2: booking → QuoteLine + approvazione implicita / phantom quote (3 maggio 2026)
+
+Riformulazione completa del reverse-flow di v3.4.51 dopo discussione con Matteo. Il flusso "extra job + JobCostLine manuale" è scartato: il **driver canonico è la Quote**, non il Job. Niente più qty/unit/prezzo da digitare a mano: tutto deriva dalla durata del booking + voce listino.
+
+**Modello concettuale (definitivo)**:
+- **Forward (canonica)**: `Quote.approved → Job` (esistente)
+- **Reverse (eccezione, v3.4.52)**: booking su progetto senza quote attiva → modal blocking → due strade:
+  - **`attach_existing`**: esiste una quote in `draft|sent` → si aggiunge la riga, la quote viene **approvata implicitamente**, il Job viene auto-creato col flusso forward standard, **gli account manager** (`edit_quotes`) ricevono notifica `quote_reverse_approval` (severity `action_required`) per attivare eventualmente migrate-job/versioning standard.
+  - **`create_phantom`**: nessuna quote esiste → si crea una `Quote(is_phantom=True, status=approved)` con la nuova riga, il Job viene auto-creato. Phantom = mai inviata al cliente, visibile in `/finance` come anomalia, promuovibile a quote di riferimento (toggle `is_phantom=False`).
+
+**Modello DB**:
+- `Quote.is_phantom: Boolean default False` — auto-migrate al boot (`ALTER TABLE quotes ADD COLUMN is_phantom`).
+- `NotificationKind.quote_reverse_approval` — nuovo kind per gli alert agli account manager.
+
+**Backend**:
+- `app/services/reverse_quote.py` — `compute_quantity_from_hours(hours, unit)` (8h/giorno per `day`, 1:1 per `hour`, 1.0 altrimenti), `add_line_from_price_item`, `attach_to_pending_quote` (transazione: add line → approve → ensure Job → notify), `create_phantom_quote_with_line` (crea Quote phantom + line + Job + notify).
+- `POST /quotes/api/reverse-attach` — accetta `mode=attach_existing|create_phantom`, `target_quote_id`, `price_item_id`, `booking_hours`, `quantity_override` opzionale, `phantom_title` opzionale. Riusa `_create_job_from_quote` (forward standard) per la promozione a Job.
+- `GET /projects/api/{id}/job-context` esteso: ritorna `approved_quotes`, `pending_quotes`, `phantom_quotes`, `jobs_with_quote`, `jobs_without_quote`, `suggested_flow` per guidare il client.
+
+**UI** in `/planning` modal booking:
+- CTA arancione "+ Genera **quote+job** da questo booking (progetto senza quote attiva)…" sempre in fondo a `tlb-job-suggestions`
+- Nuovo sub-modal `modal-tlb-reverse-quote` (rinominato da `modal-tlb-extra-job`):
+  - Project select → caricamento context con badge: "✓ interno", "⚠ N quote APPROVATE — usa autocomplete", "N pending attaccabili", "N phantom esistenti", "Nessuna quote — verrà creata phantom"
+  - Radio `attach_existing` (disabilitata se nessuna pending) / `create_phantom` (default se no pending)
+  - Picker quote pending / titolo phantom in base alla scelta
+  - Listino voce (autocomplete con cache lazy `/pricelist/api/items`)
+  - **Anteprima riga**: `qty unit × € price = € total` derivata da `booking_hours` (somma assignments correnti) + `price_item.unit`
+- Salva → reverse-attach endpoint → push del nuovo job in `JOBS_SEED` → auto-select job + cost line nel modal booking principale → utente clicca Salva del booking normale
+
+**Removed**:
+- `app/services/job_extras.py` (defunto: il modello "extra job senza quote" è scartato)
+- `POST /jobs/api/reverse-extra` (sostituito da `/quotes/api/reverse-attach`)
+
+Cache-buster bumpato a `3.4.52`. Auto-migrate `quotes.is_phantom` al boot, no script manuale richiesto.
+
 ## v3.4.51 — Reverse-flow: job extra da booking su progetto senza quote (3 maggio 2026)
 
 Cambio architetturale richiesto da Matteo dopo audit del job orfano "Spot istituzionale Sky" con `budget_quoted=18000` arbitrario nel seed.
