@@ -1,5 +1,24 @@
 # MediaFlow — Changelog
 
+## v3.5.0-alpha.3 — Hotfix: errore vero visibile su Apply fallito + ordine azioni AI (3 maggio 2026)
+
+Due fix dopo test reale Matteo (conversazione Gomorra):
+
+**1) "Errore sconosciuto" mascherava il vero errore**
+- L'AI proponeva `propose_new_item_and_line` per voce listino + riga in nuova quote, ma la quote per Gomorra non esisteva ancora → handler sollevava `ValueError("Quote non trovata (quote_id=None, quote_number=None)")`.
+- Il vero errore era salvato in `AIAction.result`, ma il frontend lo mostrava come "Errore sconosciuto".
+- Causa: il router `/apply` rispondeva HTTP 400 con body `{"error": ...}`, ma `api()` helper in `global.js` cerca `err.detail` (convenzione FastAPI). Default fallback "Errore sconosciuto".
+- Fix: il router ora ritorna sempre 200 OK con envelope `{ok, error?, result?, continuation}`. Un Apply fallito è un risultato applicativo, non un errore HTTP. Il frontend `copilotApply` controlla `res.ok === false` e mostra `res.error` reale.
+
+**2) System prompt: ordine delle azioni quando la quote non esiste**
+- Aggiunta sezione "Ordine delle azioni quando si lavora su una quote nuova":
+  (a) `propose_price_item` per voci listino mancanti, una alla volta, attendendo Apply
+  (b) `propose_quote` con `lines` inline (incluse voci nuove appena create, di cui ora si conosce `price_item_id`)
+  (c) `propose_quote_line` solo dopo che la quote esiste
+- Esplicitato il divieto: NON proporre `propose_new_item_and_line` se la quote non esiste, perché fallisce sul `_resolve_quote`.
+
+Cache-buster bumpato a `3.5.0-alpha.3`.
+
 ## v3.5.0-alpha.2 — Hotfix: persistenza storia conversazione fra turni (3 maggio 2026)
 
 Bug critico in v3.5.0-alpha.1 emerso al primo test reale (Matteo, conversazione su quote Gomorra):

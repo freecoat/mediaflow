@@ -241,19 +241,30 @@ async def action_apply(
         act.status = "failed"
         act.result = json.dumps({"error": res.get("error")}, ensure_ascii=False)
 
-    # Resume del loop tool_use se la conversazione era in attesa
+    # Resume del loop tool_use se la conversazione era in attesa.
+    # Anche su Apply fallito riprendiamo il loop: il modello vedrà il
+    # tool_result con `error: ...` e potrà proporre un'alternativa
+    # (es. creare prima la quote che mancava).
     continuation = _maybe_resume_loop(db, act, action_result=res.get("result"),
                                       rejected=False, applied_ok=res.get("ok"))
     db.commit()
 
+    # Envelope 200 OK in entrambi i casi: un Apply fallito non è un errore
+    # HTTP (la richiesta è stata processata correttamente), è un risultato
+    # applicativo che il frontend mostra come stato della card.
     if not res.get("ok"):
-        # Mantieni semantica HTTP 400 come prima ma includi continuation se presente
-        msg = res.get("error") or "Esecuzione fallita"
-        return JSONResponse(status_code=400,
-                            content={"ok": False, "status": "failed", "error": msg,
-                                     "continuation": continuation})
-    return {"ok": True, "status": "applied", "result": res.get("result"),
-            "continuation": continuation}
+        return {
+            "ok":           False,
+            "status":       "failed",
+            "error":        res.get("error") or "Esecuzione fallita",
+            "continuation": continuation,
+        }
+    return {
+        "ok":           True,
+        "status":       "applied",
+        "result":       res.get("result"),
+        "continuation": continuation,
+    }
 
 
 @router.post("/api/actions/{action_id}/reject")

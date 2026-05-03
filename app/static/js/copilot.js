@@ -397,9 +397,17 @@
   window.copilotApply = async function (actionId) {
     try {
       const res = await api("POST", `/ai/api/actions/${actionId}/apply`);
-      updateActionStatus(actionId, "applied", res.result);
-      toast("Azione applicata", "success");
-      handleContinuation(res.continuation);
+      // Il backend può ritornare 200 con {ok: false, error} per Apply
+      // fallito ma processato (stato applicativo, non errore HTTP).
+      if (res && res.ok === false) {
+        const msg = res.error || "Errore sconosciuto";
+        updateActionStatus(actionId, "failed", msg);
+        toast("Applicazione fallita: " + msg, "error");
+      } else {
+        updateActionStatus(actionId, "applied", res.result);
+        toast("Azione applicata", "success");
+      }
+      handleContinuation(res && res.continuation);
     } catch (e) {
       updateActionStatus(actionId, "failed", e.message);
       toast("Applicazione fallita: " + e.message, "error");

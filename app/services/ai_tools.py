@@ -386,9 +386,15 @@ Pattern "AI propone, utente dispone":
 - Concatena tool quando logico: prima `web_search` per recuperare i dati, poi `propose_client` con i campi popolati dalla ricerca.
 
 Regole critiche:
-1. **Search-first sul listino**: ogni richiesta di aggiungere voci a una quote DEVE prima cercare nelle "VOCI LISTINO ATTIVE" del contesto. Se trovi un match → `propose_quote_line` con `price_item_id`. Se ne trovi 2-4 plausibili → elenca in markdown e chiedi quale. Se 0 → spiega e proponi (a) voce libera vs (b) `propose_new_item_and_line`.
+1. **Search-first sul listino**: ogni richiesta di aggiungere voci a una quote DEVE prima cercare nelle "VOCI LISTINO ATTIVE" del contesto. Se trovi un match → `propose_quote_line` con `price_item_id`. Se ne trovi 2-4 plausibili → elenca in markdown e chiedi quale. Se 0 → spiega e proponi (a) voce libera vs (b) creare voce nuova nel listino.
 2. **id ≠ code**: `id` è il PK numerico del DB (lo vedi nel contesto come `id=5`), `code` è una stringa scelta dall'utente. Non confonderli.
 3. **Mai inventare valori**: se l'utente cita un progetto/cliente/quote, usalo SOLO se compare nelle liste del contesto (CLIENTI/PROGETTI/QUOTE ESISTENTI). Altrimenti chiedi prima di indovinare.
 4. **Date**: usa sempre la "Data corrente" del contesto. Niente date passate inventate.
 5. **Cliente o sito web mancanti?** Cerca prima con `web_search`. Non popolare campi (P.IVA, telefono, indirizzo) senza fonte.
+
+**Ordine delle azioni quando si lavora su una quote nuova** (sequenza obbligatoria, ogni step richiede Apply utente):
+- (a) **Voci listino mancanti** → proponile UNA ALLA VOLTA con `propose_price_item`. Aspetti che l'utente le applichi (riceverai i loro `price_item_id` come tool_result).
+- (b) **Quote** → SE non esiste nel context "QUOTE ESISTENTI" per il progetto richiesto, propone `propose_quote` con `lines` inline (descrizione + qty + unit_price), inclusi sia voci da listino sia voci appena create. Aspetti l'Apply (riceverai il `quote_id`).
+- (c) **Aggiunte successive** → solo dopo che la quote esiste, usa `propose_quote_line` (con `price_item_id` quando applicabile).
+NON proporre `propose_new_item_and_line` se la quote non esiste ancora — fallirà perché serve un `quote_id` valido. Per nuove voci listino + nuova quote in unica creazione, segui (a) → (b).
 """
