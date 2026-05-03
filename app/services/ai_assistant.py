@@ -599,12 +599,19 @@ def _h_propose_project(db: Session, data: dict) -> dict:
 
 
 def _next_quote_number(db: Session) -> str:
-    """Genera Q-{anno}-{progressivo zero-padded a 3 cifre} basato sulle quote esistenti."""
+    """Genera Q-{anno}-{progressivo zero-padded a 3 cifre} basato sulle quote esistenti.
+
+    BYPASS soft-delete filter (`include_deleted=True`): le quote in cestino
+    occupano comunque il `number` (vincolo UNIQUE su DB), quindi devono essere
+    considerate qui per evitare collisioni di numero al successivo INSERT.
+    """
     from datetime import date as date_type
     year = date_type.today().year
     prefix = f"Q-{year}-"
-    last = db.query(Quote).filter(Quote.number.like(f"{prefix}%"))\
-            .order_by(Quote.id.desc()).first()
+    last = (db.query(Quote)
+              .execution_options(include_deleted=True)
+              .filter(Quote.number.like(f"{prefix}%"))
+              .order_by(Quote.id.desc()).first())
     n = 1
     if last:
         try:
@@ -644,12 +651,14 @@ def _h_propose_quote(db: Session, data: dict) -> dict:
     if project is None:
         raise ValueError("Specifica 'project_id' (PK numerico) o 'project_code' (stringa).")
 
-    # number: auto se mancante
+    # number: auto se mancante (bypass soft-delete: quote in cestino occupano il number)
     number = (data.get("number") or "").strip()
     if not number:
         number = _next_quote_number(db)
-    elif db.query(Quote).filter(Quote.number == number).first():
-        raise ValueError(f"Esiste già una quote con number '{number}'")
+    elif (db.query(Quote)
+            .execution_options(include_deleted=True)
+            .filter(Quote.number == number).first()):
+        raise ValueError(f"Esiste già una quote con number '{number}' (eventualmente nel cestino)")
 
     # title: fallback al titolo del progetto
     title = (data.get("title") or "").strip() or project.title

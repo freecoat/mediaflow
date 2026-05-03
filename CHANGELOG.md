@@ -1,5 +1,24 @@
 # MediaFlow — Changelog
 
+## v3.5.0-alpha.7.3 — Hotfix: collisione numero quote dopo soft-delete (3 maggio 2026)
+
+> propose_quote → 500 Internal Server Error
+> sqlalchemy.exc.IntegrityError: UNIQUE constraint failed: quotes.number — Q-2026-001
+
+Bug architetturale del cestino: `_next_quote_number` cerca il prossimo progressivo via `Quote.number LIKE 'Q-2026-%'`, ma il filter automatico soft-delete esclude le quote con `deleted_at IS NOT NULL`. Le quote in cestino occupano comunque il `number` (vincolo UNIQUE su DB) → progressivo collidente → INSERT fallisce.
+
+Il filter è "user-facing" (UI nasconde le cestinate), ma per le query di sistema che dipendono da unicità DB devo bypassarlo con `execution_options(include_deleted=True)`.
+
+Fix in 4 punti:
+1. `ai_assistant._next_quote_number` (auto-numero per `propose_quote` AI)
+2. `ai_assistant._h_propose_quote` (controllo unicità prima di INSERT)
+3. `quotes._next_quote_number_progressive` (auto-numero da UI)
+4. `quotes new-version` (controllo unicità new_number)
+
+Smoke test: dopo aver cestinato Q-2026-001 (visibile in cestino), `propose_quote` ora genera Q-2026-002 correttamente.
+
+**Lezione architetturale memorizzata**: con soft-delete, ogni vincolo UNIQUE/progressivo deve esplicitamente decidere se considerare i record cestinati. Pattern `execution_options(include_deleted=True)` per le query di sistema. Per le query user-facing (lookup, validazione semantica) lasciare il filter di default.
+
 ## v3.5.0-alpha.7.2 — Hotfix: escapeHtml is not defined in /admin/cestino (3 maggio 2026)
 
 > Uncaught ReferenceError: escapeHtml is not defined — cestino:206

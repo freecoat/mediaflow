@@ -1269,13 +1269,18 @@ def _quote_chain(db: Session, root: Quote) -> list[Quote]:
 
 
 def _next_quote_number_progressive(db: Session) -> str:
-    """Wrapper su _next_quote_number di ai_assistant. Inline per evitare circular import."""
+    """Wrapper su _next_quote_number di ai_assistant. Inline per evitare circular import.
+
+    BYPASS soft-delete: le quote in cestino occupano il number (vincolo UNIQUE).
+    """
     from datetime import date as date_type
     year = date_type.today().year
     prefix = f"Q-{year}-"
     last = (
-        db.query(Quote).filter(Quote.number.like(f"{prefix}%"))
-        .order_by(Quote.id.desc()).first()
+        db.query(Quote)
+          .execution_options(include_deleted=True)
+          .filter(Quote.number.like(f"{prefix}%"))
+          .order_by(Quote.id.desc()).first()
     )
     n = 1
     if last:
@@ -1483,9 +1488,11 @@ async def new_version_quote(
     base_number = re.sub(r"-v\d+$", "", root.number)
     new_number = f"{base_number}-v{next_version}"
 
-    # Conflitto improbabile ma garantiamo unicità
-    if db.query(Quote).filter(Quote.number == new_number).first():
-        raise HTTPException(409, f"Numero quotazione '{new_number}' già esistente")
+    # Conflitto improbabile ma garantiamo unicità (anche su cestino)
+    if (db.query(Quote)
+          .execution_options(include_deleted=True)
+          .filter(Quote.number == new_number).first()):
+        raise HTTPException(409, f"Numero quotazione '{new_number}' già esistente (eventualmente nel cestino)")
 
     new_q = Quote(
         number=new_number,
