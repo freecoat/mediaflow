@@ -107,7 +107,7 @@
       </div>
       {% endif %}
 
-      {% if can_manage_users(_user) or can_manage_roles(_user) %}
+      {% if can_manage_users(_user) or can_manage_roles(_user) or has_permission(_user, 'view_trash') %}
       <div class="nav-section">
         <div class="nav-section-label">Amministrazione</div>
         {% if can_manage_users(_user) %}
@@ -118,6 +118,11 @@
         {% if can_manage_roles(_user) %}
         <a href="/admin/roles" data-nav-id="admin_roles" class="nav-item {% if active_page == 'admin_roles' %}active{% endif %}">
           <span class="nav-icon">🔐</span> Ruoli e permessi
+        </a>
+        {% endif %}
+        {% if has_permission(_user, 'view_trash') %}
+        <a href="/admin/cestino" data-nav-id="admin_trash" class="nav-item {% if active_page == 'admin_trash' %}active{% endif %}">
+          <span class="nav-icon">🗑</span> Cestino
         </a>
         {% endif %}
       </div>

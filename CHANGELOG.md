@@ -1,5 +1,46 @@
 # MediaFlow — Changelog
 
+## v3.5.0-alpha.7 — Cestino quote (Slice 1+2+3) (3 maggio 2026)
+
+Soft-delete framework + cestino UI per le quotazioni. Risolve il caso "Non posso più eliminare i preventivi" (l'endpoint DELETE intera quote non era mai esistito).
+
+**Decisioni di design** (concordate con Matteo):
+- Quotazione attiva con booking → HARD-BLOCK delete; serve cancellare prima i booking.
+- Solo admin con permesso nuovo `purge_total` può fare "Pulizia totale": hard-delete cascade su Quote + Job + JobCostLine + Booking + assignments. Bypassa il cestino, irreversibile.
+- Soft-delete normale → record nel cestino (`deleted_at IS NOT NULL`), ripristinabile da chi ha `restore_trash`.
+
+**Backend**
+- `app/services/soft_delete.py` nuovo: framework generico, registra event listener SQLAlchemy `do_orm_execute` con `with_loader_criteria` per filtrare automaticamente `deleted_at IS NULL` su tutte le SELECT (bypass via `execution_options(include_deleted=True)`). Service `soft_delete_quote(force)` con regole HARD-BLOCK + cascade. `restore_quote()`. Eccezione tipata `DeleteBlocked` per il 409 strutturato.
+- `Quote` model: aggiunti `deleted_at`, `deleted_by_user_id` (auto-migrate idempotente).
+- `app/routers/quotes.py`:
+  - `DELETE /api/{quote_id}?force=false|true` → 200 (soft) | 409 con `{detail, blocking, can_force}`. Permesso `delete_quotes`. `force=true` richiede `purge_total`.
+  - `POST /api/{quote_id}/restore` → ripristina dal cestino. Permesso `restore_trash`.
+- `app/routers/admin.py`:
+  - `GET /admin/cestino` (HTML page) — permesso `view_trash`.
+  - `GET /admin/api/trash` — lista record nel cestino con metadata + count "danno collaterale".
+  - `POST /admin/api/trash/{type}/{id}/restore` — ripristina.
+  - `DELETE /admin/api/trash/{type}/{id}` — purge definitivo (perm `purge_total`).
+
+**RBAC nuovi permessi** (categoria "Cestino / Pulizia"):
+- `delete_quotes` → admin/manager/producer/accounting
+- `view_trash` → admin/manager
+- `restore_trash` → admin/manager
+- `purge_total` → SOLO admin
+
+**UI**
+- `/quotes` lista: bottone 🗑 per riga (soft-delete con dialog di conferma).
+- Editor quote: bottone "🗑 Elimina" in topbar accanto a Duplica/Versione.
+- Su 409 con `can_force=true` (admin): secondo dialog "Pulizia totale" con conferma esplicita IRREVERSIBILE.
+- Su 409 con `can_force=false`: alert con elenco booking ostativi e suggerimento.
+- `/admin/cestino` nuovo: tabs per entity-type (per ora solo Quote), card con metadata + bottoni "↩ Ripristina" e "🗑 Elimina definitivamente".
+- Sidebar: voce "🗑 Cestino" sotto Amministrazione, solo per chi ha `view_trash`.
+
+**Smoke test eseguito**: soft-delete + filter automatico verde (quote scompare con filter ON, visibile con `execution_options(include_deleted=True)`, restore la rimette). HARD-BLOCK testato con `_collect_blocking_bookings`.
+
+**Cosa rimane** (slice successive):
+- Slice 4: estendere il pattern a `Project` (con regole simmetriche: blocco se ha quote attive, pulizia totale admin per tutto il progetto).
+- Slice 5: setting `trash_retention_days` + purge automatico al boot.
+
 ## v3.5.0-alpha.6 — Hotfix: tool_use orphans + sanitizer difensivo (3 maggio 2026)
 
 Errore Anthropic 400 emerso al test Gomorra:

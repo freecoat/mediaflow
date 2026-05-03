@@ -936,6 +936,85 @@ async def delete_quote_line(quote_id: int, line_id: int, db: Session = Depends(g
     return {"ok": True, "cost_lines_deleted": len(cost_lines)}
 
 
+# ── Soft-delete dell'intera Quote (v3.5.0-alpha.7) ───────────
+
+@router.delete("/api/{quote_id}")
+async def delete_quote(
+    quote_id: int,
+    request: Request,
+    force: bool = False,
+    db: Session = Depends(get_db),
+):
+    """Soft-delete di una Quote (sposta nel cestino) o pulizia totale (admin).
+
+    Permessi:
+    - `delete_quotes`: soft-delete normale. HARD-BLOCK 409 se ci sono booking
+      attivi sul Job collegato (con elenco bloccanti nel response body).
+    - `purge_total` (solo admin per default): può passare `?force=true` per
+      hard-delete cascade su Quote + Job + JobCostLine + Booking + assignments.
+
+    Response success:
+      200 {"ok": true, "mode": "soft" | "purge_total", ...}
+
+    Response HARD-BLOCK:
+      409 {"detail": "...", "blocking": {"bookings": [...]}, "can_force": true|false}
+    """
+    from app.services.rbac import current_user_optional, has_permission
+    from app.services.soft_delete import (
+        soft_delete_quote, fetch_quote_including_trash, DeleteBlocked,
+    )
+    from fastapi.responses import JSONResponse
+
+    user = current_user_optional(request)
+    if not has_permission(user, "delete_quotes"):
+        raise HTTPException(403, "Permesso negato (delete_quotes)")
+    if force and not has_permission(user, "purge_total"):
+        raise HTTPException(403, "Solo un admin con permesso 'purge_total' può forzare la pulizia totale")
+
+    q = fetch_quote_including_trash(db, quote_id)
+    if not q:
+        raise HTTPException(404, "Quotazione non trovata")
+
+    try:
+        result = soft_delete_quote(db, q, user=user, force=force)
+    except DeleteBlocked as e:
+        # Mantieni in lista anche se l'utente è admin: il frontend deciderà
+        # se mostrare il bottone "Pulizia totale" usando `can_force`.
+        return JSONResponse(
+            status_code=409,
+            content={
+                "detail":    e.message,
+                "blocking":  {"bookings": e.bookings, "jobs": e.jobs},
+                "can_force": has_permission(user, "purge_total"),
+            },
+        )
+
+    db.commit()
+    return result
+
+
+@router.post("/api/{quote_id}/restore")
+async def restore_quote_endpoint(
+    quote_id: int,
+    request: Request,
+    db: Session = Depends(get_db),
+):
+    """Ripristina una Quote dal cestino. Idempotente."""
+    from app.services.rbac import current_user_optional, has_permission
+    from app.services.soft_delete import fetch_quote_including_trash, restore_quote
+
+    user = current_user_optional(request)
+    if not has_permission(user, "restore_trash"):
+        raise HTTPException(403, "Permesso negato (restore_trash)")
+
+    q = fetch_quote_including_trash(db, quote_id)
+    if not q:
+        raise HTTPException(404, "Quotazione non trovata")
+    result = restore_quote(db, q)
+    db.commit()
+    return result
+
+
 @router.post("/api/{quote_id}/convert-to-job")
 async def convert_to_job_legacy(
     quote_id: int,

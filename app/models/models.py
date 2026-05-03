@@ -642,6 +642,16 @@ class Quote(Base):
     # promossa a quote di riferimento (toggle is_phantom=False).
     is_phantom: Mapped[bool] = mapped_column(Boolean, default=False)
 
+    # v3.5.0-alpha.7 — Soft-delete (cestino).
+    # Una Quote con `deleted_at` non NULL è "in cestino": invisibile alla UI
+    # principale (filter automatico via SQLAlchemy event listener), ripristinabile
+    # da chi ha `restore_trash`, purgata definitivamente dopo retention.
+    # Le QuoteLine non hanno il proprio flag: ereditano lo stato dal parent via
+    # relationship Quote.lines (il parent eliminato non è caricabile, le righe
+    # diventano de facto invisibili).
+    deleted_at:         Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True, index=True)
+    deleted_by_user_id: Mapped[Optional[int]]      = mapped_column(ForeignKey("users.id"), nullable=True)
+
     project: Mapped["Project"] = relationship(back_populates="quotes")
     client: Mapped["Client"] = relationship(back_populates="quotes")
     lines: Mapped[List["QuoteLine"]] = relationship(back_populates="quote", cascade="all, delete-orphan")

@@ -105,6 +105,19 @@ def _auto_migrate_columns():
             print("[auto-migrate] ai_actions.tool_use_id mancante → ALTER TABLE")
             with engine.begin() as conn:
                 conn.execute(text("ALTER TABLE ai_actions ADD COLUMN tool_use_id VARCHAR(128) NULL"))
+    # v3.5.0-alpha.7 — Soft-delete cestino: deleted_at + deleted_by_user_id
+    # su Quote (più entità verranno aggiunte in slice successive).
+    if "quotes" in insp.get_table_names():
+        qcols = {c["name"] for c in insp.get_columns("quotes")}
+        soft_alter = [
+            ("deleted_at",         "DATETIME NULL"),
+            ("deleted_by_user_id", "INTEGER NULL REFERENCES users(id)"),
+        ]
+        with engine.begin() as conn:
+            for col, ddl in soft_alter:
+                if col not in qcols:
+                    print(f"[auto-migrate] quotes.{col} mancante → ALTER TABLE")
+                    conn.execute(text(f"ALTER TABLE quotes ADD COLUMN {col} {ddl}"))
 
 
 @asynccontextmanager
@@ -116,6 +129,14 @@ async def lifespan(app: FastAPI):
         _auto_migrate_columns()
     except Exception as e:
         print(f"[lifespan] _auto_migrate_columns failed: {e}")
+    # v3.5.0-alpha.7 — Registra event listener per soft-delete (Quote).
+    # Filtra automaticamente i record con deleted_at != NULL su tutte le
+    # query SELECT, salvo execution_options(include_deleted=True).
+    try:
+        from app.services.soft_delete import _install_soft_delete_filter
+        _install_soft_delete_filter()
+    except Exception as e:
+        print(f"[lifespan] soft-delete listener init failed: {e}")
     settings.upload_dir.mkdir(parents=True, exist_ok=True)
     (settings.upload_dir / "assets").mkdir(exist_ok=True)
     (settings.upload_dir / "thumbnails").mkdir(exist_ok=True)
@@ -147,7 +168,7 @@ async def lifespan(app: FastAPI):
     yield
 
 
-app = FastAPI(title="MediaFlow", version="3.5.0-alpha.6", lifespan=lifespan)
+app = FastAPI(title="MediaFlow", version="3.5.0-alpha.7", lifespan=lifespan)
 
 BASE_DIR = Path(__file__).parent
 app.mount("/static", StaticFiles(directory=BASE_DIR / "static"), name="static")

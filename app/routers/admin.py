@@ -52,6 +52,100 @@ async def admin_roles_page(request: Request, db: Session = Depends(get_db),
     })
 
 
+# ── Cestino (v3.5.0-alpha.7) ───────────────────────────────────
+
+@router.get("/cestino", response_class=HTMLResponse)
+async def admin_trash_page(request: Request,
+                           _: User = Depends(requires_permission("view_trash"))):
+    return _tpl().TemplateResponse("pages/admin_trash.html", {"request": request})
+
+
+@router.get("/api/trash")
+async def list_trash(
+    request: Request, db: Session = Depends(get_db),
+    _: User = Depends(requires_permission("view_trash")),
+):
+    """Lista record nel cestino, raggruppati per entity_type.
+    Per ora copre solo `quote`. Estendibile con nuove entità."""
+    from app.models.models import Quote, JobCostLine, Booking, BookingStatus
+    out: dict[str, list[dict]] = {"quote": []}
+
+    deleted_quotes = (db.query(Quote)
+                        .execution_options(include_deleted=True)
+                        .filter(Quote.deleted_at.isnot(None))
+                        .order_by(Quote.deleted_at.desc())
+                        .all())
+    for q in deleted_quotes:
+        deleter = (db.query(User).filter(User.id == q.deleted_by_user_id).first()
+                   if q.deleted_by_user_id else None)
+        # Conta entità "danneggiate collateralmente" se restoreggiamo
+        active_bookings = 0
+        if q.job:
+            active_bookings = (db.query(Booking)
+                                 .join(JobCostLine, Booking.job_cost_line_id == JobCostLine.id)
+                                 .filter(JobCostLine.job_id == q.job.id,
+                                         Booking.status != BookingStatus.cancelled)
+                                 .count())
+        out["quote"].append({
+            "id":            q.id,
+            "label":         f"{q.number} — {q.title}",
+            "project_code":  q.project.code if q.project else None,
+            "project_id":    q.project_id,
+            "client_name":   q.client.name if q.client else None,
+            "deleted_at":    q.deleted_at.isoformat() if q.deleted_at else None,
+            "deleted_by":    deleter.full_name if deleter else (deleter.email if deleter else None),
+            "lines_count":   len(q.lines),
+            "had_job":       bool(q.job),
+            "active_bookings_on_job": active_bookings,
+            "status":        q.status.value if hasattr(q.status, "value") else str(q.status),
+        })
+    return out
+
+
+@router.post("/api/trash/{entity_type}/{entity_id}/restore")
+async def trash_restore(
+    entity_type: str, entity_id: int,
+    db: Session = Depends(get_db),
+    _: User = Depends(requires_permission("restore_trash")),
+):
+    if entity_type == "quote":
+        from app.services.soft_delete import fetch_quote_including_trash, restore_quote
+        q = fetch_quote_including_trash(db, entity_id)
+        if not q:
+            raise HTTPException(404)
+        result = restore_quote(db, q)
+        db.commit()
+        return result
+    raise HTTPException(400, f"entity_type sconosciuto: {entity_type}")
+
+
+@router.delete("/api/trash/{entity_type}/{entity_id}")
+async def trash_purge(
+    entity_type: str, entity_id: int,
+    request: Request,
+    db: Session = Depends(get_db),
+    _: User = Depends(requires_permission("purge_total")),
+):
+    """Hard-delete definitivo dal cestino. Per Quote usa lo stesso engine
+    `soft_delete_quote(force=True)` perché la logica cascade su Job + Booking
+    è la stessa: se il record è già nel cestino, l'engine fa hard-delete
+    cascade come per la pulizia totale.
+    """
+    if entity_type == "quote":
+        from app.services.soft_delete import (
+            fetch_quote_including_trash, soft_delete_quote,
+        )
+        from app.services.rbac import current_user_optional
+        q = fetch_quote_including_trash(db, entity_id)
+        if not q:
+            raise HTTPException(404)
+        user = current_user_optional(request)
+        result = soft_delete_quote(db, q, user=user, force=True)
+        db.commit()
+        return result
+    raise HTTPException(400, f"entity_type sconosciuto: {entity_type}")
+
+
 # ── API system maintenance ─────────────────────────────────────
 @router.post("/api/check-deadlines")
 async def trigger_deadline_check(

@@ -1,0 +1,138 @@
+{% extends "base.html" %}
+{% set active_page = "admin_trash" %}
+
+{% block title %}Cestino — MediaFlow{% endblock %}
+{% block topbar_title %}Amministrazione <span class="text-muted">/</span> Cestino{% endblock %}
+{% block topbar_actions %}
+  <a href="/admin/users" class="btn btn-secondary btn-sm">← Utenti</a>
+{% endblock %}
+
+{% block content %}
+
+<style>
+  .trash-tabs { display:flex; gap:4px; border-bottom:1px solid var(--border); margin-bottom:14px; }
+  .trash-tab {
+    padding:8px 14px; font-size:13px; cursor:pointer; border:1px solid transparent;
+    border-bottom:none; border-radius:6px 6px 0 0; color:var(--text2);
+  }
+  .trash-tab.active { background:var(--bg2); border-color:var(--border); color:var(--text); }
+  .trash-tab .count { margin-left:6px; font-size:11px; color:var(--text3); }
+  .trash-tab.active .count { color:var(--brand); }
+  .trash-row {
+    display:grid; grid-template-columns:1fr auto auto; gap:12px;
+    padding:12px 14px; border:1px solid var(--border); border-radius:var(--radius);
+    background:var(--bg2); margin-bottom:8px; align-items:center;
+  }
+  .trash-row .meta { font-size:12px; color:var(--text3); }
+  .trash-row .label { font-weight:500; }
+  .trash-row .badges { display:flex; gap:6px; flex-wrap:wrap; margin-top:4px; }
+  .trash-row .badges .b { font-size:11px; padding:2px 8px; border-radius:10px; background:var(--bg3); color:var(--text2); }
+  .trash-row .badges .b.warn { background:#5a4520; color:#ffd897; }
+  .trash-empty { padding:32px 16px; text-align:center; color:var(--text3); }
+</style>
+
+<div class="card">
+  <div class="trash-tabs" id="trash-tabs">
+    <div class="trash-tab active" data-type="quote" onclick="trashSwitch('quote')">
+      Quotazioni <span class="count" id="trash-count-quote">…</span>
+    </div>
+    <!-- Future: project, client, ... -->
+  </div>
+  <div id="trash-pane-quote">
+    <div class="text-muted text-sm" style="padding:8px 0;">Caricamento…</div>
+  </div>
+</div>
+
+<script>
+let trashData = {};
+
+async function loadTrash() {
+  try {
+    trashData = await api('GET', '/admin/api/trash');
+  } catch (e) {
+    document.getElementById('trash-pane-quote').innerHTML =
+      `<div class="trash-empty">Errore: ${escapeHtml(e.message)}</div>`;
+    return;
+  }
+  renderTrashTabs();
+  trashSwitch('quote');
+}
+
+function renderTrashTabs() {
+  document.getElementById('trash-count-quote').textContent = (trashData.quote || []).length;
+}
+
+function trashSwitch(type) {
+  document.querySelectorAll('.trash-tab').forEach(t => {
+    t.classList.toggle('active', t.dataset.type === type);
+  });
+  if (type === 'quote') renderQuotesTrash();
+}
+
+function renderQuotesTrash() {
+  const pane = document.getElementById('trash-pane-quote');
+  const list = trashData.quote || [];
+  if (!list.length) {
+    pane.innerHTML = `<div class="trash-empty">🗑 Cestino vuoto. Nessuna quotazione eliminata.</div>`;
+    return;
+  }
+  const html = list.map(q => {
+    const badges = [];
+    if (q.project_code) badges.push(`<span class="b">${escapeHtml(q.project_code)}</span>`);
+    if (q.client_name) badges.push(`<span class="b">${escapeHtml(q.client_name)}</span>`);
+    badges.push(`<span class="b">${escapeHtml(q.status)}</span>`);
+    badges.push(`<span class="b">${q.lines_count} righ${q.lines_count === 1 ? 'a' : 'e'}</span>`);
+    if (q.had_job) badges.push(`<span class="b">job collegato</span>`);
+    if (q.active_bookings_on_job > 0) {
+      badges.push(`<span class="b warn">⚠ ${q.active_bookings_on_job} booking attivi</span>`);
+    }
+    const deletedHuman = q.deleted_at ? new Date(q.deleted_at).toLocaleString('it-IT') : '?';
+    return `<div class="trash-row">
+      <div>
+        <div class="label">${escapeHtml(q.label)}</div>
+        <div class="badges">${badges.join('')}</div>
+        <div class="meta">Eliminata il ${deletedHuman}${q.deleted_by ? ' da ' + escapeHtml(q.deleted_by) : ''}</div>
+      </div>
+      <button class="btn btn-secondary btn-sm" onclick="trashRestore('quote', ${q.id})">↩ Ripristina</button>
+      <button class="btn btn-ghost btn-sm color-rose" onclick="trashPurge('quote', ${q.id}, ${JSON.stringify(q.label)})">🗑 Elimina definitivamente</button>
+    </div>`;
+  }).join('');
+  pane.innerHTML = html;
+}
+
+async function trashRestore(type, id) {
+  if (!confirm('Ripristinare questo elemento dal cestino?')) return;
+  try {
+    await api('POST', `/admin/api/trash/${type}/${id}/restore`);
+    toast('Ripristinato', 'success');
+    await loadTrash();
+  } catch (e) {
+    toast('Errore: ' + e.message, 'error');
+  }
+}
+
+async function trashPurge(type, id, label) {
+  const human = label || `#${id}`;
+  if (!confirm(`Eliminare DEFINITIVAMENTE "${human}" e tutto il suo strascico (job, lavorazioni, booking)?\n\n⚠ Operazione IRREVERSIBILE. Solo admin con permesso 'purge_total'.`)) return;
+  try {
+    const r = await fetch(`/admin/api/trash/${type}/${id}`, {method: 'DELETE'});
+    if (!r.ok) {
+      const body = await r.json().catch(() => ({}));
+      throw new Error(body.detail || ('HTTP ' + r.status));
+    }
+    const data = await r.json();
+    const stats = [];
+    if (data.lines_count != null) stats.push(`${data.lines_count} righe`);
+    if (data.cost_lines_count != null) stats.push(`${data.cost_lines_count} lavorazioni`);
+    if (data.bookings_count != null) stats.push(`${data.bookings_count} booking`);
+    toast(`Cancellati: 1 quote, ` + stats.join(', '), 'success');
+    await loadTrash();
+  } catch (e) {
+    toast('Errore: ' + e.message, 'error');
+  }
+}
+
+loadTrash();
+</script>
+
+{% endblock %}

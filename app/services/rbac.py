@@ -52,6 +52,7 @@ PERMISSIONS: Dict[str, Dict[str, List[str]]] = {
         "view_finance":     ["Visualizza dati finanziari"],
         "view_quotes":      ["Visualizza quotazioni"],
         "edit_quotes":      ["Crea/modifica quotazioni"],
+        "delete_quotes":    ["Elimina quotazioni (cestino)"],
         "view_pricelist":   ["Visualizza listino prezzi"],
         "edit_pricelist":   ["Modifica listino prezzi"],
         "view_cost_report": ["Visualizza cost report"],
@@ -61,6 +62,16 @@ PERMISSIONS: Dict[str, Dict[str, List[str]]] = {
         # deriva dai booking marcati `done` (cost_line_sync). Solo admin /
         # accounting / manager possono fare override in fase di verifica.
         "edit_cost_actuals": ["Override manuale ore lavorate (cost line)"],
+    },
+    "Cestino / Pulizia": {
+        # v3.5.0-alpha.7 — soft-delete framework
+        "view_trash":      ["Visualizza cestino + log eliminazioni"],
+        "restore_trash":   ["Ripristina record dal cestino"],
+        # Pulizia totale admin: HARD-DELETE atomico di Quote + Job +
+        # JobCostLine + Booking quando l'utente vuole davvero spazzare via
+        # un'intera linea (es. quote di test con tutto il suo strascico).
+        # Irreversibile, niente passaggio dal cestino.
+        "purge_total":     ["Pulizia totale (hard-delete cascade quote+job+booking)"],
     },
     "Risorse": {
         "view_resources":   ["Visualizza anagrafica risorse"],
@@ -93,10 +104,12 @@ PRESET_PERMISSIONS: Dict[str, List[str]] = {
         "approve_overtime",
         "view_punches_own", "view_punches_all", "edit_punches_own", "edit_punches_all",
         "approve_unavailability",
-        "view_finance", "view_quotes", "edit_quotes", "view_pricelist", "edit_pricelist",
+        "view_finance", "view_quotes", "edit_quotes", "delete_quotes",
+        "view_pricelist", "edit_pricelist",
         "view_cost_report", "view_invoices", "edit_invoices", "edit_cost_actuals",
         "view_resources", "edit_resources",
         "manage_departments",
+        "view_trash", "restore_trash",
     ],
     "producer": [
         "view_clients",
@@ -105,7 +118,8 @@ PRESET_PERMISSIONS: Dict[str, List[str]] = {
         "approve_overtime",
         "view_punches_own", "view_punches_all", "edit_punches_own", "edit_punches_all",
         "approve_unavailability",
-        "view_finance", "view_quotes", "edit_quotes", "view_pricelist",
+        "view_finance", "view_quotes", "edit_quotes", "delete_quotes",
+        "view_pricelist",
         "view_cost_report",
         "view_resources",
     ],
@@ -114,7 +128,8 @@ PRESET_PERMISSIONS: Dict[str, List[str]] = {
         "view_projects",
         "view_planning",
         "view_punches_all",
-        "view_finance", "view_quotes", "edit_quotes", "view_pricelist",
+        "view_finance", "view_quotes", "edit_quotes", "delete_quotes",
+        "view_pricelist",
         "view_cost_report", "view_invoices", "edit_invoices", "edit_cost_actuals",
     ],
     "operator": [

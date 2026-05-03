@@ -100,6 +100,8 @@
         <button class="btn btn-secondary btn-sm" onclick="newVersionQuote()" title="Crea una nuova versione legata (-v2, -v3...)">📐 Versione</button>
         <!-- v3.4.43: sposta a un altro progetto, solo draft -->
         <button class="btn btn-secondary btn-sm" id="btn-move-quote" onclick="moveQuote()" style="display:none;" title="Sposta questa quote a un altro progetto (solo bozza)">🚚 Sposta</button>
+        <!-- v3.5.0-alpha.7: cestino -->
+        <button class="btn btn-secondary btn-sm color-rose" onclick="deleteQuoteFromEditor()" title="Sposta nel cestino (admin: pulizia totale)">🗑 Elimina</button>
         <div class="dropdown" style="position:relative;display:inline-block;">
           <button class="btn btn-secondary btn-sm" onclick="this.nextElementSibling.classList.toggle('open')">⬇ Esporta ▾</button>
           <div class="dropdown-menu" style="position:absolute;right:0;top:100%;margin-top:4px;background:var(--bg2);border:1px solid var(--border);border-radius:6px;display:none;flex-direction:column;min-width:160px;z-index:10;box-shadow:0 4px 12px rgba(0,0,0,0.2);">
@@ -733,6 +735,7 @@ async function loadQuotes() {
         ${q.has_job ? '<span class="badge badge-active" style="font-size:10px;">Job ✓</span>' : ''}
         <button class="btn btn-ghost btn-sm" onclick="event.stopPropagation();duplicateQuoteFromList(${q.id});" title="Duplica (scenario / template)">📋</button>
         <button class="btn btn-ghost btn-sm" onclick="event.stopPropagation();newVersionQuoteFromList(${q.id});" title="Nuova versione (legata)">📐</button>
+        <button class="btn btn-ghost btn-sm color-rose" onclick="event.stopPropagation();deleteQuoteFromList(${q.id}, ${JSON.stringify(q.number)});" title="Sposta nel cestino">🗑</button>
       </td>
     </tr>`).join('');
 }
@@ -887,6 +890,70 @@ async function newVersionQuoteFromList(id) {
     toast(`Creata ${r.number} (v${r.version})`, 'success');
     openEditor(r.id);
   } catch(e) { toast(e.message || 'Errore', 'error'); }
+}
+
+// ── Soft-delete (v3.5.0-alpha.7) ───────────────────────────────
+// Workflow:
+// - DELETE /quotes/api/{id} senza force → 200 (soft) o 409 con elenco bloccanti
+// - Se 409 + can_force, mostra dialog "Pulizia totale" (admin)
+// - Se 409 senza can_force, mostra solo elenco e chiede di cancellare booking
+async function deleteQuoteFromList(id, number) {
+  await deleteQuoteCommon(id, number);
+}
+async function deleteQuoteFromEditor() {
+  if (!currentQuoteId) return;
+  await deleteQuoteCommon(currentQuoteId, currentQuote && currentQuote.number);
+  // Se delete soft riuscito, torna alla lista
+}
+async function deleteQuoteCommon(id, label) {
+  const human = label || `#${id}`;
+  if (!confirm(`Spostare la quotazione ${human} nel cestino?`)) return;
+  // Tentativo soft (force=false)
+  let res;
+  try {
+    res = await fetch(`/quotes/api/${id}`, {method: 'DELETE'});
+  } catch (e) {
+    toast('Errore di rete: ' + e.message, 'error');
+    return;
+  }
+  if (res.ok) {
+    toast(`Quotazione ${human} spostata nel cestino`, 'success');
+    closeEditor();
+    return;
+  }
+  if (res.status === 409) {
+    const body = await res.json().catch(() => ({}));
+    const blockingBk = (body.blocking && body.blocking.bookings) || [];
+    const canForce = !!body.can_force;
+    const lines = [
+      body.detail || `Impossibile eliminare ${human}.`,
+      '',
+      `Booking attivi bloccanti: ${blockingBk.length}`,
+      ...blockingBk.slice(0, 5).map(b => ` · #${b.booking_id} (${b.start_datetime || '?'}, ${b.status})`),
+      blockingBk.length > 5 ? ` … e altri ${blockingBk.length - 5}` : '',
+    ].filter(Boolean).join('\n');
+    if (canForce) {
+      const ok = confirm(lines + '\n\n⚠ PULIZIA TOTALE (admin): cancellerà DEFINITIVAMENTE quote + job + lavorazioni + booking. Irreversibile.\n\nProcedere?');
+      if (!ok) return;
+      try {
+        const r2 = await fetch(`/quotes/api/${id}?force=true`, {method: 'DELETE'});
+        if (!r2.ok) throw new Error((await r2.json()).detail || 'Errore');
+        const data = await r2.json();
+        toast(`Pulizia totale: cancellati 1 quote + ${data.cost_lines_count || 0} lavorazioni + ${data.bookings_count || 0} booking`, 'success');
+        closeEditor();
+        refreshList();
+      } catch (e) {
+        toast('Errore pulizia totale: ' + e.message, 'error');
+      }
+      return;
+    } else {
+      alert(lines + '\n\nCancella prima i booking, oppure chiedi a un admin di fare la pulizia totale.');
+      return;
+    }
+  }
+  // Altri errori
+  const body = await res.json().catch(() => ({}));
+  toast('Errore: ' + (body.detail || res.statusText), 'error');
 }
 
 async function openMigratePreview() {
