@@ -170,6 +170,32 @@ TOOLS: list[dict] = [
         "handler": "propose_quote",
     },
     {
+        "name": "update_quote",
+        "category": "mutation",
+        "description": (
+            "Modifica i metadata di una quote esistente: titolo, date (issue/valid_until), "
+            "VAT rate, sconto pacchetto, payment_terms, note. NON tocca le righe — per "
+            "modificare/aggiungere/rimuovere righe usa propose_quote_line o gli altri tool. "
+            "Richiede `quote_id` (PK) o `quote_number` (es. 'Q-2026-001'). Quote in stato "
+            "'superseded' (storiche, sostituite da nuova versione) non modificabili."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "quote_id":         {"type": "integer"},
+                "quote_number":     {"type": "string"},
+                "title":            {"type": "string"},
+                "issue_date":       {"type": "string", "description": "ISO YYYY-MM-DD."},
+                "valid_until":      {"type": "string", "description": "ISO YYYY-MM-DD."},
+                "vat_rate":         {"type": "number", "description": "% IVA (es. 22)."},
+                "package_discount": {"type": "number", "description": "Sconto pacchetto in percentuale (es. 10 per -10%)."},
+                "payment_terms":    {"type": "string"},
+                "notes":            {"type": "string"},
+            },
+        },
+        "handler": "update_quote",
+    },
+    {
         "name": "propose_quote_line",
         "category": "mutation",
         "description": (

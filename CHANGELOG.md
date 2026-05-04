@@ -1,5 +1,61 @@
 # MediaFlow — Changelog
 
+## v3.5.0-alpha.14 — Round 5: timezone timbratura + revert click + bulk cascade + UX (5 maggio 2026)
+
+Round 5 dei fix post-test Matteo. 9 fix: 4 bug critici + 4 UX + 1 capability AI.
+
+**Bug 1: Timbratura timezone — orario riportato errato (9:00 → 7:00)**
+
+`hr.html:savePunch` inviava `new Date(start).toISOString()` (UTC) ma il backend salvava la datetime come naive senza timezone, e il display rileggeva naive → frontend interpretava 07:00 UTC come local 07:00 → user Italia (UTC+2 in maggio DST) vedeva orario sfasato di 2h.
+
+Fix: invio raw del valore datetime-local input ("YYYY-MM-DDTHH:MM"). FastAPI parsa naive, storia naive, ritorna naive — niente trasformazione tz.
+
+**Bug 2: Doppia timbratura sovrapposta**
+
+`POST /hr/api/punches` non controllava overlap → utente poteva creare due timbrature attive sulla stessa risorsa nello stesso intervallo.
+
+Fix in `app/routers/hr.py:create_punch`: query overlap pre-insert, considerando sia chiusi (start<end & end>start) sia in-corso (no end → start<new_end). 409 con riferimento al punch in conflitto.
+
+**Bug 3: Ordine timbrature**
+
+Lista `/hr/api/punches` era `desc()` (più recente prima). Matteo: ordine calendario.
+
+Fix: `order_by(asc())`.
+
+**Bug 4: Click timeline auto-open detail — REVERT**
+
+In alpha.13 avevo aggiunto: `select=1 → todoOpenDetail`. Confliggeva con la selezione singola "click per evidenziare". Revert. Il dettaglio resta accessibile via right-click → Modifica oppure dalle altre viste (todo / project / agenda / calendar dove non c'è select-conflict).
+
+**Feature: Bulk delete cascade su tutti gli assignments del booking**
+
+Pre-alpha.14: utente selezionava 2 row di Davide (bulk delete) → solo Davide cancellato → Studio A (stesso booking, altra risorsa) restava attivo → booking orfano.
+
+Fix in `_tlDeleteHandler`: espande la selezione a TUTTI gli assignment dei booking selezionati (set di booking_id → all assignments con quell'id). Conferma menziona la cascade ("includendo le risorse linkate non selezionate").
+
+**Feature: Cleanup aggressivo timeline pre-render**
+
+Bug "timeline duplicata sopra/sotto" post bulk delete: vis-timeline 7.7 lascia talvolta `.vis-timeline` orfani se renderTimeline è chiamata in race.
+
+Fix: destroy ANCHE `window._tlInstance` (era residuo non resettato), reset `host.innerHTML`, rimuovi `.vis-timeline` siblings orfani dal parent.
+
+**Feature: CSS modal booking — `Stesso orario` non copre più risorsa #1**
+
+Badge `.ass-num` (position:absolute; top:-8px) della prima riga finiva sotto la label "Stesso orario per tutte le risorse".
+
+Fix: `padding-top: 10px` su `#tlb-assignments`.
+
+**Feature: Lista quote — colonne con larghezza min**
+
+Nome progetto / titolo quote troncato in viewport stretti. Fix: `min-width:280px` sulla colonna "Progetto / Titolo quote", `min-width:160px` su Cliente, larghezze fisse sulle altre.
+
+**AI capability: `update_quote`**
+
+Nuovo tool `update_quote` (mutation) per modificare metadata di quote esistente: title, issue_date, valid_until, vat_rate, package_discount, payment_terms, notes. Quote in stato `superseded` (storiche) bloccate. Renderer + label nel copilot, listener `mf:ai-action-applied` già copre `update_quote` (filtro contiene 'quote').
+
+Cache-buster `v=3.5.0-alpha.14`. Niente migrazione DB.
+
+---
+
 ## v3.5.0-alpha.13 — Round 4: 3 bug critici + UX planning (4 maggio 2026)
 
 Round 4 dei fix post-test Matteo. 3 bug critici risolti + 5 feature UX planning + 1 chiusura realtime quote.

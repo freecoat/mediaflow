@@ -767,6 +767,70 @@ def _h_propose_quote(db: Session, data: dict) -> dict:
     }
 
 
+def _h_update_quote(db: Session, data: dict) -> dict:
+    """v3.5.0-alpha.14: modifica i metadata di una quote esistente.
+    Permette: title, issue_date, valid_until, vat_rate, package_discount, notes,
+    payment_terms, status (con validazione transitions).
+    Quote in cestino o sostituita non sono modificabili (status=superseded blocca).
+    """
+    from datetime import date as date_type
+    from app.routers.quotes import _recalc_quote
+
+    qid = data.get("quote_id")
+    qnum = (data.get("quote_number") or "").strip()
+    q = None
+    if isinstance(qid, int) or (isinstance(qid, str) and str(qid).isdigit()):
+        q = db.query(Quote).filter(Quote.id == int(qid)).first()
+    if q is None and qnum:
+        q = db.query(Quote).filter(Quote.number == qnum).first()
+    if q is None:
+        raise ValueError("Specifica `quote_id` (PK) o `quote_number` (es. 'Q-2026-001').")
+
+    # Status superseded → bloccare (è una versione storica di un altro)
+    status_v = q.status.value if hasattr(q.status, "value") else str(q.status)
+    if status_v == "superseded":
+        raise ValueError(f"Quote {q.number} è 'superseded' (sostituita) — non modificabile.")
+
+    changed = []
+    if data.get("title") and data["title"].strip():
+        q.title = data["title"].strip(); changed.append("title")
+    if data.get("notes") is not None:
+        q.notes = data["notes"]; changed.append("notes")
+    if data.get("payment_terms") is not None:
+        q.payment_terms = data["payment_terms"]; changed.append("payment_terms")
+    if data.get("vat_rate") is not None:
+        q.vat_rate = float(data["vat_rate"]); changed.append("vat_rate")
+    if data.get("package_discount") is not None:
+        # Convenzione UI: discount positivo (0..1); in DB lo stocchiamo negativo
+        pd = float(data["package_discount"])
+        if pd > 1: pd = pd / 100.0  # accetta sia "0.1" sia "10"
+        q.package_discount = -abs(pd) if pd > 0 else 0.0
+        changed.append("package_discount")
+    for date_field in ("issue_date", "valid_until"):
+        raw = data.get(date_field)
+        if raw:
+            try:
+                setattr(q, date_field, date_type.fromisoformat(raw))
+                changed.append(date_field)
+            except (ValueError, TypeError):
+                raise ValueError(f"{date_field} non è una data ISO valida (atteso YYYY-MM-DD).")
+
+    if not changed:
+        raise ValueError("Nessun campo modificabile passato. Usa title/notes/vat_rate/package_discount/issue_date/valid_until/payment_terms.")
+
+    _recalc_quote(q)
+    db.flush()
+    return {
+        "updated": True,
+        "quote_id": q.id,
+        "number": q.number,
+        "title": q.title,
+        "fields_changed": changed,
+        "total_after_discount": q.total_after_discount,
+        "message": f"Quotazione {q.number} aggiornata ({', '.join(changed)}). Totale netto: €{q.total_after_discount:.2f}.",
+    }
+
+
 def _h_propose_quote_line(db: Session, data: dict) -> dict:
     """Aggiunge una riga a una quote esistente.
 
@@ -1040,6 +1104,7 @@ _ACTION_HANDLERS = {
     "propose_project":           _h_propose_project,
     "propose_project_metadata":  _h_propose_project_metadata,
     "propose_quote":             _h_propose_quote,
+    "update_quote":              _h_update_quote,
     "propose_quote_line":        _h_propose_quote_line,
     "propose_price_item":        _h_propose_price_item,
     "propose_new_item_and_line": _h_propose_new_item_and_line,

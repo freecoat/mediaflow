@@ -534,9 +534,14 @@ async function savePunch() {
   if (!start || !document.getElementById('p-resource').value) {
     toast('Risorsa e inizio obbligatori', 'error'); return;
   }
-  fd.append('start_datetime', new Date(start).toISOString());
+  // v3.5.0-alpha.14: NO toISOString — invia raw local datetime-local value
+  // ("YYYY-MM-DDTHH:MM"). FastAPI lo parsa come naive datetime e lo storia
+  // nel DB così com'è. La display poi ri-legge naive e non applica offset.
+  // Bug pre-alpha.14: utente Italia (UTC+2 DST) inseriva 9:00 → toISOString
+  // mandava 07:00 UTC → server salvava 07:00 naive → display 07:00 (-2h).
+  fd.append('start_datetime', start);
   if (end) {
-    fd.append('end_datetime', new Date(end).toISOString());
+    fd.append('end_datetime', end);
   } else if (id) {
     fd.append('clear_end', 'true');
   }

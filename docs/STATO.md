@@ -8,6 +8,24 @@
 
 ## Versione corrente
 
+**v3.5.0-alpha.14** — 5 maggio 2026 — Round 5: timezone timbratura + revert click + bulk cascade + UX
+
+9 fix:
+1. Timbratura timezone (9:00 → 7:00): toISOString rimosso, send raw local datetime-local.
+2. Timbratura overlap: 409 se sovrapposta.
+3. Timbratura ordine: ASC (calendario).
+4. REVERT auto-open detail su timeline select (era v3.5.0-alpha.13 ma confliggeva).
+5. Bulk delete cascade su tutti assignments del booking.
+6. Cleanup aggressivo timeline pre-render (timeline duplicata post bulk delete).
+7. CSS Stesso orario non copre risorsa #1.
+8. Lista quote larghezza colonne min.
+9. AI capability `update_quote` (modifica metadata quote esistente).
+
+**Restano in coda (Round 6 prossimo)**:
+- Shift+drag ROI multiselect timeline (custom rectangle selection — vis-timeline non supporta nativo)
+- Ore straordinario 1° maggio non riportate (verifica holiday detection)
+- Formato data globale dd/mm/yyyy + setting
+
 **v3.5.0-alpha.13** — 4 maggio 2026 — Round 4: 3 bug critici + UX planning realtime + multiselect timeline
 
 3 bug critici risolti:

@@ -361,7 +361,10 @@
   .tlb-job-item:hover { background: rgba(98,114,245,0.12); }
   .tlb-job-item:last-child { border-bottom: none; }
   /* Multi-row assignment rows */
-  #tlb-assignments { max-height: 380px; overflow-y: auto; padding-right: 4px; }
+  #tlb-assignments { max-height: 380px; overflow-y: auto; padding-top: 10px; padding-right: 4px; }
+  /* v3.5.0-alpha.14: padding-top:10px lascia spazio al badge ass-num
+     (position:absolute; top:-8px) della prima riga, che pre-alpha.14
+     finiva sotto la label "Stesso orario per tutte le risorse". */
   #tlb-assignments::-webkit-scrollbar { width: 6px; }
   #tlb-assignments::-webkit-scrollbar-thumb { background: rgba(98,114,245,0.4); border-radius: 3px; }
   .tlb-ass-row { border:1px solid var(--border,#2a2e3d); border-radius:6px; padding:10px; margin-bottom:8px; background:rgba(98,114,245,0.04); position:relative; }
@@ -2742,8 +2745,29 @@ function tlHasConflict(item, allItems) {
 async function renderTimeline(preserveWindow=false) {
   const host = document.getElementById('tl-host');
   const savedWin = (preserveWindow && tlInstance) ? tlInstance.getWindow() : null;
-  if (tlInstance) { tlInstance.destroy(); tlInstance = null; }
+  // v3.5.0-alpha.14: cleanup aggressivo per evitare l'effetto "timeline
+  // duplicata sopra/sotto" segnalato post bulk-delete. La sequenza è:
+  // 1) destroy istanza vis (rilascia eventi + DOM children gestiti)
+  // 2) reset window._tlInstance (era residuo lasciato dal vecchio render)
+  // 3) svuota innerHTML del host
+  // 4) rimuovi anche qualsiasi `.vis-timeline` orfano nel parent (race da
+  //    renderTimeline chiamata in parallelo)
+  if (tlInstance) {
+    try { tlInstance.destroy(); } catch(_) {}
+    tlInstance = null;
+  }
+  if (window._tlInstance) {
+    try { window._tlInstance.destroy(); } catch(_) {}
+    window._tlInstance = null;
+  }
   host.innerHTML = '';
+  // Rimuovi container vis orfani che potrebbero essere stati lasciati da
+  // un destroy parziale (vis-timeline 7.7 talvolta lascia .vis-timeline
+  // siblings se il host è stato detached/reattached).
+  const stale = host.parentElement && host.parentElement.querySelectorAll('.vis-timeline');
+  if (stale && stale.length) {
+    stale.forEach(el => { if (!host.contains(el)) el.remove(); });
+  }
   // Track mouse per posizionare context menu
   host.addEventListener('mousemove', e => {
     window._tlLastMouse = {x: e.clientX, y: e.clientY};
@@ -2996,11 +3020,10 @@ async function renderTimeline(preserveWindow=false) {
     const linkHint = (sel && allItems.filter(x => x.booking_id === sel.booking_id).length > 1)
       ? ` · ${allItems.filter(x => x.booking_id === sel.booking_id).length} risorse linkate` : '';
     toast(`${sel.content} | ${fmt(sel.start)} – ${fmt(sel.end)}${linkHint}`, 'info', 3000);
-    // Multi-select gestito da delete bulk handler: se >1 item selected, NON
-    // apriamo il dettaglio (l'utente sta selezionando per bulk action).
-    if (props.items.length === 1 && bid && typeof todoOpenDetail === 'function') {
-      todoOpenDetail(bid);
-    }
+    // v3.5.0-alpha.14: REVERTITO auto-open detail su select=1. Era v3.5.0-alpha.13
+    // ma confliggeva con la selezione singola dell'utente (non si poteva più
+    // selezionare un job senza che si aprisse il modal). Per il dettaglio:
+    // doppio click oppure right-click → "Modifica" → vista dettaglio.
   });
   // Doppio click su area vuota → modal nuovo booking (fallback E1, sostituito da click&drag in E2)
   tlInstance.on('doubleClick', (props) => {
@@ -3129,13 +3152,35 @@ async function renderTimeline(preserveWindow=false) {
     if (!tlInstance) return;
     const sel = tlInstance.getSelection() || [];
     // Filtra solo gli id assignment ('aN'), escludi background (u-/tp-)
-    const aIds = sel.filter(id => typeof id === 'string' && id.startsWith('a'))
-                    .map(id => parseInt(id.substring(1), 10));
-    if (aIds.length < 2) return;  // Single → context menu o select già gestiti
+    const selectedAssignmentIds = sel.filter(id => typeof id === 'string' && id.startsWith('a'))
+                                     .map(id => parseInt(id.substring(1), 10));
+    if (selectedAssignmentIds.length < 2) return;  // Single → context menu o select già gestiti
     e.preventDefault();
-    if (!confirm(`Eliminare ${aIds.length} assegnazioni selezionate?`)) return;
+    // v3.5.0-alpha.14: cascade delete — espandiamo la selezione a TUTTI gli
+    // assignments dei booking selezionati (non solo le righe cliccate).
+    // Bug pre-alpha.14: utente selezionava 2 row di Davide ma "Studio A"
+    // (stesso booking, altra risorsa) restava attiva → booking orfano.
+    const allItems = itemsDS.get();
+    const bookingIds = new Set();
+    for (const aid of selectedAssignmentIds) {
+      const item = allItems.find(x => x.id === 'a' + aid || x.assignment_id === aid);
+      if (item && item.booking_id) bookingIds.add(item.booking_id);
+    }
+    // Tutti gli assignment dei booking selezionati
+    const aIds = new Set(selectedAssignmentIds);
+    for (const it of allItems) {
+      if (it.booking_id && bookingIds.has(it.booking_id) && it.assignment_id) {
+        aIds.add(it.assignment_id);
+      }
+    }
+    const aIdList = [...aIds];
+    const cascade = aIdList.length > selectedAssignmentIds.length;
+    const msg = cascade
+      ? `Eliminare ${aIdList.length} assegnazioni (cascade su ${bookingIds.size} booking — incluse le risorse linkate non selezionate)?`
+      : `Eliminare ${aIdList.length} assegnazioni selezionate?`;
+    if (!confirm(msg)) return;
     let ok = 0, fail = 0;
-    for (const aid of aIds) {
+    for (const aid of aIdList) {
       try {
         await api('DELETE', `/planning/api/booking-assignments/${aid}`);
         ok++;

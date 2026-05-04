@@ -188,6 +188,7 @@
       "propose_project": "Progetto (nuovo)",
       "propose_project_metadata": "Progetto (metadati)",
       "propose_quote": "Quote (nuova)",
+      "update_quote": "Quote (modifica)",
       "propose_quote_line": "Riga quote",
       "propose_price_item": "Voce listino",
       "propose_new_item_and_line": "Nuova voce listino + riga quote",
@@ -251,6 +252,7 @@
       case "propose_project": return summaryProject(d);
       case "propose_project_metadata": return summaryProjectMeta(d);
       case "propose_quote": return summaryQuote(d);
+      case "update_quote": return summaryUpdateQuote(d);
       case "propose_quote_line": return summaryQuoteLine(d);
       case "propose_price_item": return summaryPriceItem(d);
       case "propose_new_item_and_line": return summaryNewItemAndLine(d);
@@ -291,6 +293,25 @@
     ].filter(Boolean).map(escapeHtml).join(" · ");
     if (tech) lines.push(`<span class="cp-muted">${tech}</span>`);
     return lines.join("<br>") || `<span class="cp-muted">Nessun campo</span>`;
+  }
+
+  function summaryUpdateQuote(d) {
+    const lines = [];
+    const head = d.quote_id
+      ? `<b>Quote #${escapeHtml(String(d.quote_id))}</b>`
+      : (d.quote_number ? `<b>${escapeHtml(d.quote_number)}</b>` : "<b>(quote)</b>");
+    lines.push(head + " — modifica");
+    const fields = [
+      ["title", "titolo"], ["issue_date", "data emiss."], ["valid_until", "scadenza"],
+      ["vat_rate", "IVA %"], ["package_discount", "sconto pkg %"],
+      ["payment_terms", "pagamento"], ["notes", "note"],
+    ];
+    for (const [k, lbl] of fields) {
+      if (d[k] !== undefined && d[k] !== null && d[k] !== "") {
+        lines.push(`<span class="cp-muted">${lbl}:</span> ${escapeHtml(String(d[k])).slice(0, 120)}`);
+      }
+    }
+    return lines.join("<br>");
   }
 
   function summaryProjectMeta(d) {

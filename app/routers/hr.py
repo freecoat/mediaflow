@@ -221,7 +221,10 @@ async def list_punches(
         q = q.join(Resource, TimePunch.resource_id == Resource.id).filter(
             Resource.department_id == department_id
         )
-    q = q.order_by(TimePunch.start_datetime.desc())
+    # v3.5.0-alpha.14: ordine ASC (cronologico, allineato col calendario).
+    # Pre-alpha.14 era desc() = più recente prima. Matteo (5 mag): preferisce
+    # ordine calendario.
+    q = q.order_by(TimePunch.start_datetime.asc())
     punches = q.all()
 
     fc = format == "fullcalendar"
@@ -253,6 +256,43 @@ async def create_punch(
 
     if end_datetime and end_datetime <= start_datetime:
         raise HTTPException(400, "end_datetime deve essere successivo a start_datetime")
+
+    # v3.5.0-alpha.14: blocco overlap con altre timbrature della stessa risorsa.
+    # Una timbratura "in corso" (no end) si considera estesa fino al momento
+    # del check; in pratica blocchiamo se start_datetime ricade dentro un'altra.
+    overlap_q = db.query(TimePunch).filter(
+        TimePunch.resource_id == resource_id,
+        TimePunch.tenant_id == CURRENT_TENANT,
+    )
+    if end_datetime:
+        # Nuova chiusa: cerca overlap [start, end) vs [s, e)
+        # Punch in corso (end NULL) → overlap se p.start < end
+        overlap = overlap_q.filter(
+            (
+                (TimePunch.end_datetime.is_(None)) & (TimePunch.start_datetime < end_datetime)
+            ) | (
+                (TimePunch.end_datetime.isnot(None))
+                & (TimePunch.start_datetime < end_datetime)
+                & (TimePunch.end_datetime > start_datetime)
+            )
+        ).first()
+    else:
+        # Nuova in corso: blocca se esiste una qualsiasi punch che copre `start`
+        overlap = overlap_q.filter(
+            (
+                (TimePunch.end_datetime.is_(None))
+            ) | (
+                (TimePunch.end_datetime.isnot(None))
+                & (TimePunch.end_datetime > start_datetime)
+            )
+        ).first()
+    if overlap:
+        raise HTTPException(
+            409,
+            f"Timbratura sovrapposta a #{overlap.id} ({overlap.start_datetime.strftime('%d/%m/%Y %H:%M')}"
+            f"{' → ' + overlap.end_datetime.strftime('%H:%M') if overlap.end_datetime else ' (in corso)'}). "
+            f"Non puoi avere due timbrature sovrapposte sulla stessa risorsa.",
+        )
 
     if job_id:
         j = db.query(Job).filter(Job.id == job_id).first()
