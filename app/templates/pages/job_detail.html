@@ -85,10 +85,12 @@
     <div class="lbl">Stato</div>
     <div class="val" id="job-status">{{ job.status.value if job.status.value else job.status }}</div>
   </div>
+  {% if can_view_finance(request.state.current_user) %}
   <div class="job-meta-card">
     <div class="lbl">Budget quotato</div>
     <div class="val mono">€ {{ '{:,.2f}'.format(job.budget_quoted or 0).replace(',', '_').replace('.', ',').replace('_', '.') }}</div>
   </div>
+  {% endif %}
 </div>
 
 <!-- ── Riepilogo ore ───────────────────────────────────────── -->
@@ -120,17 +122,17 @@
         <tr>
           <th>Descrizione</th>
           <th>Unità</th>
-          <th style="text-align:right;">€ unitario</th>
+          {% if can_view_finance(request.state.current_user) %}<th style="text-align:right;">€ unitario</th>{% endif %}
           <th style="text-align:right;">Quotate</th>
           <th style="text-align:right;" title="Ore pianificate via Booking legati a questa lavorazione">Pian.</th>
-          <th style="text-align:right;" title="Ore lavorate via TimePunch legate a questa lavorazione">Lavor.</th>
+          <th style="text-align:right;" title="Ore lavorate via Booking done">Lavor.</th>
           <th style="text-align:right;">Extra</th>
-          <th style="text-align:right;">Tot. previsto</th>
+          {% if can_view_finance(request.state.current_user) %}<th style="text-align:right;">Tot. previsto</th>{% endif %}
           <th></th>
         </tr>
       </thead>
       <tbody id="lines-tbody">
-        <tr><td colspan="9" class="text-muted" style="text-align:center;padding:24px;">Caricamento…</td></tr>
+        <tr><td colspan="{% if can_view_finance(request.state.current_user) %}9{% else %}7{% endif %}" class="text-muted" style="text-align:center;padding:24px;">Caricamento…</td></tr>
       </tbody>
     </table>
     <div id="unassigned-warning" style="display:none;margin-top:10px;font-size:12px;color:var(--text3,#888);"></div>
@@ -221,9 +223,9 @@
           <small class="text-muted">Non modificabile da qui se ereditata da quote</small>
         </div>
         <div class="form-group">
-          <label class="form-label">Ore lavorate <span id="ed-actual-readonly-badge" style="display:none; font-size:10px; color:var(--text3); font-weight:normal;">(read-only — deriva dai booking ✓)</span></label>
-          <input class="form-input" id="ed-actual" type="number" step="0.5">
-          <small id="ed-actual-help" class="text-muted" style="display:none;">Sync automatico dai booking marcati `done`. Override manuale richiede permesso `edit_cost_actuals` (admin/manager/accounting).</small>
+          <label class="form-label">Ore lavorate</label>
+          <input class="form-input" id="ed-actual-display" type="text" disabled style="opacity:.7;">
+          <small class="text-muted">🔒 Derivate automaticamente dai booking marcati <code>done</code>. Non modificabili manualmente — la fatturazione di extra/scontistica passerà dal flusso "fatturazione" dedicato (in roadmap).</small>
         </div>
       </div>
       <div class="form-row">
@@ -258,9 +260,9 @@
 {% block scripts %}
 <script>
 const JOB_ID = {{ job.id }};
-// v3.4.54 — flag RBAC dal server
+// v3.4.54 / v3.5.0-alpha.10 — flag RBAC dal server. CAN_EDIT_COST_ACTUALS
+// rimosso: il quantity_actual non è più editabile manualmente (decisione 4 mag).
 const CAN_VIEW_FINANCE = {{ 'true' if can_view_finance(request.state.current_user) else 'false' }};
-const CAN_EDIT_COST_ACTUALS = {{ 'true' if can_edit_cost_actuals(request.state.current_user) else 'false' }};
 let currentJob = null;
 
 function fmtH(n) { return (n == null) ? '—' : Number(n).toFixed(2); }
@@ -316,18 +318,21 @@ function renderLines(lines) {
     // v3.4.55: click su riga → vista dettaglio read-only (booking, risorse,
     // origine quote line). La modifica resta per chi ha view_finance e si apre
     // dal bottone "Modifica" dentro al modal dettaglio.
+    // v3.5.0-alpha.10: € unitario e Tot. previsto solo a chi ha view_finance
+    const unitPriceCell = CAN_VIEW_FINANCE ? `<td class="col-money">${fmtEur(l.unit_price)}</td>` : '';
+    const totExpectedCell = CAN_VIEW_FINANCE ? `<td class="col-money">${fmtEur(l.total_expected)}</td>` : '';
     return `<tr class="${l.is_extra ? 'line-extra' : ''} ${overBudget ? 'over-budget' : ''}" onclick='openLineDetail(${l.id})' style="cursor:pointer;">
       <td>
         ${escapeHtml(l.description)}${l.is_extra ? '<span class="extra-badge">EXTRA</span>' : ''}
         ${!l.is_billable ? '<span class="extra-badge" style="background:rgba(150,150,150,0.2);color:#999;">no fatt.</span>' : ''}
       </td>
       <td>${escapeHtml(l.unit)}</td>
-      <td class="col-money">${fmtEur(l.unit_price)}</td>
+      ${unitPriceCell}
       <td class="col-hours">${l.is_extra ? '—' : fmtH(l.quantity_quoted)}${progress}</td>
       <td class="col-hours" style="color:var(--text3,#888);">${planned}</td>
       <td class="col-hours" style="color:var(--text3,#888);">${actualBooked}</td>
       <td class="col-hours">${l.quantity_extra > 0 ? fmtH(l.quantity_extra) : '—'}</td>
-      <td class="col-money">${fmtEur(l.total_expected)}</td>
+      ${totExpectedCell}
       <td></td>
     </tr>`;
   }).join('');
@@ -412,13 +417,17 @@ async function openLineDetail(lineId) {
     resourcesHtml = '<div class="text-muted" style="font-size:12px; font-style:italic;">Nessuna risorsa coinvolta (dedotta dai booking).</div>';
   }
 
+  // v3.5.0-alpha.10: per editor (no view_finance) niente prezzi/totali, solo ore.
   let originHtml = '';
   if (data.quote_origin) {
     const o = data.quote_origin;
+    const priceFragment = CAN_VIEW_FINANCE
+      ? ` · ${o.quantity} ${escapeHtml(o.unit)} × ${fmtE(o.unit_price)} = <b>${fmtE(o.total)}</b>`
+      : ` · ${o.quantity} ${escapeHtml(o.unit)}`;
     originHtml = `<div style="font-size:12px;">
       <span class="mono" style="color:#6272f5;">${escapeHtml(o.position||'')}</span>
-      ${escapeHtml(o.description)} · ${o.quantity} ${escapeHtml(o.unit)} × ${fmtE(o.unit_price)} = <b>${fmtE(o.total)}</b>
-      <br><a href="/quotes#${o.quote_id}" style="font-size:11px; color:#6272f5;">→ apri quote</a>
+      ${escapeHtml(o.description)}${priceFragment}
+      ${CAN_VIEW_FINANCE ? `<br><a href="/quotes#${o.quote_id}" style="font-size:11px; color:#6272f5;">→ apri quote</a>` : ''}
     </div>`;
   } else if (l.is_extra) {
     originHtml = '<div class="text-muted" style="font-size:12px; font-style:italic;">Lavorazione extra (no quote line di origine).</div>';
@@ -426,17 +435,31 @@ async function openLineDetail(lineId) {
     originHtml = '<div class="text-muted" style="font-size:12px; font-style:italic;">Origine quote non risolta.</div>';
   }
 
+  // KPI Quotato/Maturato: editor vede solo ore, finance vede ore × prezzo = totale
+  const kpiHtml = CAN_VIEW_FINANCE
+    ? `<div style="display:grid; grid-template-columns:1fr 1fr; gap:12px; margin-bottom:14px;">
+        <div style="padding:8px 10px; background:var(--bg3,rgba(255,255,255,0.03)); border-radius:6px;">
+          <div style="font-size:11px; color:var(--text3); text-transform:uppercase; margin-bottom:4px;">Quotato</div>
+          <div style="font-size:14px;">${fmtH2(l.quantity_quoted)} ${escapeHtml(l.unit||'')} × ${fmtE(l.unit_price)} = <b>${fmtE(l.total_quoted)}</b></div>
+        </div>
+        <div style="padding:8px 10px; background:rgba(34,197,94,0.06); border:1px solid rgba(34,197,94,0.2); border-radius:6px;">
+          <div style="font-size:11px; color:var(--text3); text-transform:uppercase; margin-bottom:4px;">Maturato (da booking done)</div>
+          <div style="font-size:14px;">${fmtH2(l.quantity_actual)} ${escapeHtml(l.unit||'')} × ${fmtE(l.unit_price)} = <b style="color:#22c55e;">${fmtE(l.total_accrued)}</b></div>
+        </div>
+      </div>`
+    : `<div style="display:grid; grid-template-columns:1fr 1fr; gap:12px; margin-bottom:14px;">
+        <div style="padding:8px 10px; background:var(--bg3,rgba(255,255,255,0.03)); border-radius:6px;">
+          <div style="font-size:11px; color:var(--text3); text-transform:uppercase; margin-bottom:4px;">Quotate</div>
+          <div style="font-size:14px;"><b>${fmtH2(l.quantity_quoted)}</b> ${escapeHtml(l.unit||'')}</div>
+        </div>
+        <div style="padding:8px 10px; background:rgba(34,197,94,0.06); border:1px solid rgba(34,197,94,0.2); border-radius:6px;">
+          <div style="font-size:11px; color:var(--text3); text-transform:uppercase; margin-bottom:4px;">Lavorate (da booking done)</div>
+          <div style="font-size:14px;"><b style="color:#22c55e;">${fmtH2(l.quantity_actual)}</b> ${escapeHtml(l.unit||'')}</div>
+        </div>
+      </div>`;
+
   document.getElementById('ld-body').innerHTML = `
-    <div style="display:grid; grid-template-columns:1fr 1fr; gap:12px; margin-bottom:14px;">
-      <div style="padding:8px 10px; background:var(--bg3,rgba(255,255,255,0.03)); border-radius:6px;">
-        <div style="font-size:11px; color:var(--text3); text-transform:uppercase; margin-bottom:4px;">Quotato</div>
-        <div style="font-size:14px;">${fmtH2(l.quantity_quoted)} ${escapeHtml(l.unit||'')} × ${fmtE(l.unit_price)} = <b>${fmtE(l.total_quoted)}</b></div>
-      </div>
-      <div style="padding:8px 10px; background:rgba(34,197,94,0.06); border:1px solid rgba(34,197,94,0.2); border-radius:6px;">
-        <div style="font-size:11px; color:var(--text3); text-transform:uppercase; margin-bottom:4px;">Maturato (da booking done)</div>
-        <div style="font-size:14px;">${fmtH2(l.quantity_actual)} ${escapeHtml(l.unit||'')} × ${fmtE(l.unit_price)} = <b style="color:#22c55e;">${fmtE(l.total_accrued)}</b></div>
-      </div>
-    </div>
+    ${kpiHtml}
 
     <div style="margin-bottom:14px;">
       <div style="font-size:11px; color:var(--text3); text-transform:uppercase; margin-bottom:6px;">Origine quote line</div>
@@ -474,12 +497,10 @@ function openEditLine(lineId) {
   document.getElementById('ed-desc').value = l.description;
   document.getElementById('ed-quoted').value = l.quantity_quoted;
   document.getElementById('ed-quoted').disabled = !l.is_extra;
-  document.getElementById('ed-actual').value = l.quantity_actual;
-  // v3.4.54: lock quantity_actual se non edit_cost_actuals (deriva dai booking done)
-  const edActual = document.getElementById('ed-actual');
-  edActual.disabled = !CAN_EDIT_COST_ACTUALS;
-  document.getElementById('ed-actual-readonly-badge').style.display = CAN_EDIT_COST_ACTUALS ? 'none' : '';
-  document.getElementById('ed-actual-help').style.display = CAN_EDIT_COST_ACTUALS ? 'none' : '';
+  // v3.5.0-alpha.10: ore lavorate sempre read-only (deriva da booking done).
+  // Niente più override manuale.
+  document.getElementById('ed-actual-display').value =
+    `${(l.quantity_actual || 0).toFixed(2)} ${l.unit || ''}`;
   document.getElementById('ed-unit').value = l.unit;
   document.getElementById('ed-price').value = l.unit_price;
   document.getElementById('ed-notes').value = l.notes || '';
@@ -493,11 +514,9 @@ async function saveLine() {
   const id = document.getElementById('ed-id').value;
   const fd = new FormData();
   fd.append('description', document.getElementById('ed-desc').value);
-  // v3.4.54: invia quantity_actual SOLO se l'utente ha permesso (altrimenti
-  // il backend tornerebbe 403 e si perderebbero anche le altre modifiche)
-  if (CAN_EDIT_COST_ACTUALS) {
-    fd.append('quantity_actual', document.getElementById('ed-actual').value || '0');
-  }
+  // v3.5.0-alpha.10: quantity_actual rimosso dal modal — è sempre letto dai
+  // booking done. Niente più override manuale (la "banca ore forfait" e gli
+  // sconti passeranno dal flusso fatturazione, non dal cost line edit).
   if (!document.getElementById('ed-quoted').disabled) {
     fd.append('quantity_quoted', document.getElementById('ed-quoted').value || '0');
   }

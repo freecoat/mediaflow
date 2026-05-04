@@ -834,7 +834,18 @@ async def create_booking(
     `assignments` è una stringa JSON con la lista delle assegnazioni.
     Ogni elemento: {"resource_id": int, "start_datetime": ISO, "end_datetime": ISO}.
     Almeno 1 assignment richiesto (warning per 0).
+
+    v3.5.0-alpha.10: gate `can_create_booking` (admin/manager/producer).
+    Editor/operator devono usare `POST /api/booking-requests` (notifica al producer).
     """
+    from app.services.rbac import can_create_booking as _can_create_booking
+    user = current_user_optional(request)
+    if not _can_create_booking(user):
+        raise HTTPException(
+            403,
+            "Non hai il permesso di creare booking direttamente. Usa il flusso "
+            "'Richiedi booking' (notifica producer/manager).",
+        )
     try:
         ass_list = _json.loads(assignments)
     except Exception:
@@ -1004,6 +1015,107 @@ async def create_booking(
              "end_datetime": a.end_datetime.isoformat()}
             for a in b.assignments
         ],
+    }
+
+
+# ── Booking request flow (v3.5.0-alpha.10) ──────────────────────
+# Editor/operator non possono creare booking direttamente. Inviano una
+# "richiesta" testuale al producer/manager (notifica `booking_request`),
+# che crea il booking effettivo dopo verifica disponibilità risorsa.
+
+@router.post("/api/booking-requests")
+async def submit_booking_request(
+    request: Request,
+    proposed_start: datetime = Form(...),
+    proposed_end: datetime = Form(...),
+    resource_id: Optional[int] = Form(None),
+    quote_id: Optional[int] = Form(None),
+    job_cost_line_id: Optional[int] = Form(None),
+    notes: str = Form(...),  # motivazione obbligatoria
+    db: Session = Depends(get_db),
+):
+    """Editor/operator manda una richiesta di booking al producer.
+
+    Non crea Booking — crea solo una notifica `booking_request` con i parametri
+    proposti. Il producer/manager riceve la notifica, valuta e crea il booking
+    direttamente dalla pagina /planning (oppure rifiuta).
+
+    Permesso: chiunque autenticato (la creazione effettiva resta gated da
+    `can_create_booking` lato `POST /api/bookings`).
+    """
+    user = current_user_optional(request)
+    if not user:
+        raise HTTPException(401, "Non autenticato")
+    if proposed_end <= proposed_start:
+        raise HTTPException(400, "Fine deve essere > Inizio")
+    notes = (notes or "").strip()
+    if not notes:
+        raise HTTPException(400, "Inserisci una motivazione per la richiesta")
+
+    # Risorsa di default = quella linkata all'utente (se editor)
+    if not resource_id:
+        rid = scope_resource_id(db, user)
+        if rid:
+            resource_id = rid
+    res = None
+    if resource_id:
+        res = db.query(Resource).filter(
+            Resource.id == resource_id,
+            Resource.tenant_id == CURRENT_TENANT,
+        ).first()
+
+    quote = None
+    if quote_id:
+        from app.models import Quote
+        quote = db.query(Quote).filter(
+            Quote.id == quote_id,
+            Quote.tenant_id == CURRENT_TENANT,
+        ).first()
+
+    cost_line = None
+    if job_cost_line_id:
+        cost_line = db.query(JobCostLine).filter(
+            JobCostLine.id == job_cost_line_id,
+        ).first()
+
+    summary_bits = []
+    if res:
+        summary_bits.append(res.name)
+    summary_bits.append(
+        f"{proposed_start.strftime('%d/%m %H:%M')} → {proposed_end.strftime('%d/%m %H:%M')}"
+    )
+    if quote:
+        summary_bits.append(f"quote {quote.number}")
+    if cost_line:
+        summary_bits.append(f"lavorazione: {cost_line.description[:60]}")
+    summary = " · ".join(summary_bits)
+
+    from app.services import notifications as notif_svc
+    from app.models import NotificationKind, NotificationSeverity
+    ns = notif_svc.notify_permission(
+        db,
+        permission="assign_resources",  # producer/manager/admin
+        exclude_user_ids=[user.id],
+        kind=NotificationKind.booking_request.value,
+        severity=NotificationSeverity.action_required.value,
+        title=f"📩 Richiesta booking: {summary}",
+        body=notes,
+        link="/planning?view=timeline",
+        actor_user_id=user.id,
+        payload={
+            "requester_user_id": user.id,
+            "resource_id": resource_id,
+            "quote_id": quote_id,
+            "job_cost_line_id": job_cost_line_id,
+            "proposed_start": proposed_start.isoformat(),
+            "proposed_end": proposed_end.isoformat(),
+            "notes": notes,
+        },
+    )
+    return {
+        "ok": True,
+        "notified_count": len(ns),
+        "summary": summary,
     }
 
 

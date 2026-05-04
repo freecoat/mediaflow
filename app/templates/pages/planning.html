@@ -654,14 +654,14 @@
                 <th>Cliente</th>
                 <th>Progetto</th>
                 <th>Periodo</th>
-                <th>Budget</th>
+                {% if can_view_finance(request.state.current_user) %}<th>Budget</th>{% endif %}
                 <th>Stato</th>
                 <th style="width:140px;">Avanzamento</th>
                 <th></th>
               </tr>
             </thead>
             <tbody id="jobs-table">
-              <tr><td colspan="9" class="pl-empty">Caricamento…</td></tr>
+              <tr><td colspan="{% if can_view_finance(request.state.current_user) %}9{% else %}8{% endif %}" class="pl-empty">Caricamento…</td></tr>
             </tbody>
           </table>
         </div>
@@ -1048,6 +1048,13 @@
 const ACTIVE_VIEW = {{ ('"' + active_view + '"')|safe }};
 const CURRENT_RESOURCE_ID = {{ current_resource_id if current_resource_id else 'null' }};
 const VALID_VIEWS = ['jobs','calendar','agenda','todo','project','storyboard','timeline'];
+// v3.5.0-alpha.10 — flag RBAC per nascondere prezzi/budget agli editor (operator)
+// e bloccare la creazione booking diretta. CAN_REQUEST_BOOKING è sempre true per
+// chi vede il planning (il flusso "richiesta booking" notifica producer/manager).
+const CAN_VIEW_FINANCE     = {{ 'true' if can_view_finance(request.state.current_user) else 'false' }};
+const CAN_CREATE_BOOKING   = {{ 'true' if can_create_booking(request.state.current_user) else 'false' }};
+const CAN_ASSIGN_RESOURCES = {{ 'true' if can_assign_resources(request.state.current_user) else 'false' }};
+const CAN_REQUEST_BOOKING  = {{ 'true' if request.state.current_user else 'false' }};
 const RESOURCES_SEED = [
 {% for r in resources %}  {id:{{ r.id }}, name:{{ r.name|tojson }}, dept:{{ (r.department_id or 0) }}, color:{{ (r.color or '#6272f5')|tojson }}}{{ "," if not loop.last else "" }}
 {% endfor %}];
@@ -1394,6 +1401,10 @@ async function renderJobs() {
           <div style="height:100%;width:${Math.min(pct, 100)}%;background:${barColor};transition:width .25s ease;"></div>
         </div>
       </div>` : '<span class="text-xs text-muted">—</span>';
+    // v3.5.0-alpha.10: budget cell visibile solo a chi ha view_finance
+    const budgetCell = CAN_VIEW_FINANCE
+      ? `<td class="mono text-sm">${j.budget ? fmtCurrency(j.budget) : '—'}</td>`
+      : '';
     return `
     <tr onclick='showJobDetail(${j.id})' style="cursor:pointer;">
       <td class="mono" style="font-size:12px;color:var(--text2);">${escapeHtml(j.code)}</td>
@@ -1401,7 +1412,7 @@ async function renderJobs() {
       <td style="color:var(--text2);">${escapeHtml(j.client||'—')}</td>
       <td class="mono text-sm">${escapeHtml(j.project_code||'—')}</td>
       <td class="text-sm text-muted">${fmtDate(j.start_date)} ${j.end_date ? '→ '+fmtDate(j.end_date) : ''}</td>
-      <td class="mono text-sm">${j.budget ? fmtCurrency(j.budget) : '—'}</td>
+      ${budgetCell}
       <td>${statusBadge(j.status)}</td>
       <td>${progressCell}</td>
       <td onclick="event.stopPropagation()"><a class="btn btn-ghost btn-sm" href="/jobs/${j.id}">Apri</a></td>
@@ -3015,8 +3026,14 @@ function tlbSetTimePart(part, value) {
 
 function _tlbReset() {
   document.getElementById('tlb-editing-booking-id').value = '';
-  document.getElementById('tlb-modal-title').textContent = 'Nuovo booking';
-  document.getElementById('tlb-submit').textContent = 'Crea booking';
+  // v3.5.0-alpha.10: editor (non can_create_booking) vede modale come "Richiesta"
+  if (CAN_CREATE_BOOKING) {
+    document.getElementById('tlb-modal-title').textContent = 'Nuovo booking';
+    document.getElementById('tlb-submit').textContent = 'Crea booking';
+  } else {
+    document.getElementById('tlb-modal-title').textContent = '📩 Richiedi booking';
+    document.getElementById('tlb-submit').textContent = 'Invia richiesta';
+  }
   document.getElementById('tlb-kind').value = 'project';
   document.getElementById('tlb-job-search').value = '';
   document.getElementById('tlb-job-search').placeholder = 'scegli prima il progetto…';
@@ -4013,16 +4030,33 @@ async function tlbSubmit() {
     if (editingId) {
       await api('PUT', `/planning/api/bookings/${editingId}`, fd);
       toast('Booking aggiornato', 'success');
+      closeModal('modal-tl-booking');
+      renderTimeline(true);
+    } else if (!CAN_CREATE_BOOKING) {
+      // v3.5.0-alpha.10 — editor: invia richiesta al producer invece di creare booking
+      const first = assignments[0];
+      const reqFd = new FormData();
+      reqFd.append('proposed_start', first.start_datetime);
+      reqFd.append('proposed_end', first.end_datetime);
+      reqFd.append('resource_id', String(first.resource_id));
+      if (quoteId) reqFd.append('quote_id', quoteId);
+      if (costLineIdResolved) reqFd.append('job_cost_line_id', String(costLineIdResolved));
+      const reqNotes = (notes && notes.trim()) || '(senza motivazione)';
+      reqFd.append('notes', reqNotes);
+      const r = await api('POST', '/planning/api/booking-requests', reqFd);
+      toast(`📩 Richiesta inviata (${r.notified_count} approvatori notificati)`, 'success', 4000);
+      closeModal('modal-tl-booking');
     } else {
       await api('POST', '/planning/api/bookings', fd);
       toast('Booking creato', 'success');
+      closeModal('modal-tl-booking');
+      renderTimeline(true);
     }
-    closeModal('modal-tl-booking');
-    renderTimeline(true);
   } catch(e) {
     toast(e.message || 'Errore', 'error');
   } finally {
-    btn.disabled = false; btn.textContent = editingId ? 'Aggiorna' : 'Crea booking';
+    const lblCreate = CAN_CREATE_BOOKING ? 'Crea booking' : 'Invia richiesta';
+    btn.disabled = false; btn.textContent = editingId ? 'Aggiorna' : lblCreate;
   }
 }
 
@@ -4041,12 +4075,19 @@ document.querySelectorAll('#tl-zoom button').forEach(b => {
 // ── Job detail modal ───────────────────────────────────────
 async function showJobDetail(jobId) {
   try {
-    const [job, report] = await Promise.all([
-      api('GET', `/planning/api/jobs/${jobId}`),
-      api('GET', `/finance/api/report/job/${jobId}`),
-    ]);
+    // v3.5.0-alpha.10: il finance report è chiamato solo se l'utente può vederlo.
+    // Editor (no view_finance) vede solo info job + ore (no budget/costi/margine).
+    const calls = [api('GET', `/planning/api/jobs/${jobId}`)];
+    if (CAN_VIEW_FINANCE) {
+      calls.push(api('GET', `/finance/api/report/job/${jobId}`));
+    }
+    const results = await Promise.all(calls);
+    const job = results[0];
+    const report = results[1] || null;
     document.getElementById('detail-title').textContent = `${job.code} — ${job.title}`;
-    document.getElementById('detail-body').innerHTML = `
+    let financeBlock = '';
+    if (CAN_VIEW_FINANCE && report) {
+      financeBlock = `
       <div class="flex gap-3 mb-4" style="flex-wrap:wrap;">
         <div class="stat-card" style="flex:1;min-width:120px;background:var(--bg3);">
           <div class="stat-label">Budget</div>
@@ -4066,7 +4107,10 @@ async function showJobDetail(jobId) {
           <div class="stat-label">Ore</div>
           <div class="stat-value color-indigo mono" style="font-size:18px;">${report.total_hours}h</div>
         </div>
-      </div>
+      </div>`;
+    }
+    document.getElementById('detail-body').innerHTML = `
+      ${financeBlock}
       <div class="form-group">
         <label class="form-label">Cambia stato</label>
         <div class="flex gap-2" style="flex-wrap:wrap;">

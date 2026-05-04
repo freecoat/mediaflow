@@ -252,13 +252,21 @@ async def update_cost_line(
     notes: Optional[str] = Form(None),
     db: Session = Depends(get_db),
 ):
+    """v3.5.0-alpha.10: rimosso override manuale di `quantity_actual` /
+    `total_accrued` (decisione architetturale Matteo). I valori sono sempre
+    derivati dai booking marcati `done` (cost_line_sync). Se passati, 422.
+    Restano editabili `total_expected` (forecast finance) e `notes`.
+    """
+    if quantity_actual is not None or total_accrued is not None:
+        raise HTTPException(
+            422,
+            "Le ore lavorate / il maturato non sono più modificabili manualmente. "
+            "Derivano sempre dai booking marcati 'done'. La fatturazione di "
+            "extra/scontistica/banca-ore passerà dal flusso fatturazione (in roadmap)."
+        )
     line = db.query(JobCostLine).filter(
         JobCostLine.id == line_id, JobCostLine.job_id == job_id).first()
     if not line: raise HTTPException(404)
-    if quantity_actual is not None:
-        line.quantity_actual = quantity_actual
-        line.total_accrued = round(quantity_actual * line.unit_price, 2)
-    if total_accrued is not None: line.total_accrued = total_accrued
     if total_expected is not None: line.total_expected = total_expected
     if notes is not None: line.notes = notes
     db.commit()
@@ -268,6 +276,7 @@ async def update_cost_line(
 @router.post("/api/job/{job_id}/assign-resource")
 async def assign_resource(
     job_id: int,
+    request: Request,
     resource_id: int = Form(...),
     role_in_project: Optional[str] = Form(None),
     planned_days: Optional[float] = Form(None),
@@ -277,6 +286,12 @@ async def assign_resource(
     notes: Optional[str] = Form(None),
     db: Session = Depends(get_db),
 ):
+    """v3.5.0-alpha.10: gate `assign_resources` (admin/manager/producer).
+    Editor/operator NON possono assegnare risorse a un job."""
+    from app.services.rbac import current_user_optional, can_assign_resources
+    user = current_user_optional(request)
+    if not can_assign_resources(user):
+        raise HTTPException(403, "Non hai il permesso di assegnare risorse")
     assignment = JobResourceAssignment(
         job_id=job_id, resource_id=resource_id,
         role_in_project=role_in_project,
@@ -290,7 +305,12 @@ async def assign_resource(
 
 @router.delete("/api/job/{job_id}/assign-resource/{assignment_id}")
 async def remove_resource_assignment(
-    job_id: int, assignment_id: int, db: Session = Depends(get_db)):
+    job_id: int, assignment_id: int, request: Request, db: Session = Depends(get_db)):
+    """v3.5.0-alpha.10: gate `assign_resources`."""
+    from app.services.rbac import current_user_optional, can_assign_resources
+    user = current_user_optional(request)
+    if not can_assign_resources(user):
+        raise HTTPException(403, "Non hai il permesso di rimuovere risorse")
     a = db.query(JobResourceAssignment).filter(
         JobResourceAssignment.id == assignment_id, JobResourceAssignment.job_id == job_id).first()
     if not a: raise HTTPException(404)

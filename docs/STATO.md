@@ -8,6 +8,24 @@
 
 ## Versione corrente
 
+**v3.5.0-alpha.10** — 4 maggio 2026 — Round 2: RBAC editor + ore lavorate sempre da booking
+
+Decisione architetturale (Matteo, 4 maggio): le ore lavorate (`JobCostLine.quantity_actual`) corrispondono SEMPRE alle ore dei booking marcati `done`. Niente più override manuale dal cost line edit. La fatturazione di extra/scontistica/banca-ore forfait passerà dal flusso fatturazione dedicato (in roadmap), non da qui.
+
+Backend rifiuta `quantity_actual` con 422 in `PUT /jobs/api/{id}/cost-lines/{lid}` e `PUT /cost-report/api/job/{id}/cost-lines/{lid}`. Permesso `edit_cost_actuals` marcato deprecato + rimosso da preset manager/accounting.
+
+UI: campo `quantity_actual` editor sostituito da display read-only ("🔒 Derivate da booking done").
+
+**RBAC editor (Luca Bianchi / operator)**: nuovo helper `can_create_booking` (= `edit_planning_all` OR `assign_resources`). Editor → false. Gate su `POST /planning/api/bookings` (redirige tlbSubmit lato client a richiesta) + nuovo endpoint `POST /planning/api/booking-requests` (chiunque autenticato → notifica `booking_request` action_required a producer/manager via `notify_permission("assign_resources")`).
+
+Gate frontend in `planning.html` + `job_detail.html`: budget/costi/margine/€unitario/tot.previsto nascosti a chi non ha `view_finance`. Modal create booking → titolo "📩 Richiedi booking" / submit "Invia richiesta" per editor.
+
+Gate `POST /cost-report/api/job/{id}/assign-resource` (e DELETE) con `can_assign_resources`. Editor → 403.
+
+NotificationKind nuovo: `booking_request`.
+
+Niente migrazione DB.
+
 **v3.5.0-alpha.9** — 4 maggio 2026 — Round 1 fix post-test estensivo Matteo
 
 Sei fix raggruppati emersi dal test del 3 maggio:
@@ -264,10 +282,11 @@ Sessione 1 maggio sera (commit unico): chiusa v3.4.32 dopo discussione completa 
 - ✅ openModal refresh searchable wrappers (fix dept mancante in modal risorsa)
 - ✅ Pagina Accesso Negato centrata
 
-**Round 2 — RBAC editor (in coda)**:
-- 🔜 Editor (Luca Bianchi) NON deve vedere prezzi/budget in `/jobs/{id}` + `/cost-report/`. Gate con `view_finance` su template + endpoint.
-- 🔜 Editor NON può creare booking. Aggiungere flusso "richiesta booking" che crea notifica al producer/manager.
-- 🔜 Editor NON può assegnare risorse a progetto/job. Gate `assign_resources` sui POST/PUT.
+**Round 2 — RBAC editor (chiuso in alpha.10)**:
+- ✅ Editor non vede prezzi/budget in `/jobs/{id}` + tabella jobs di `/planning` + modal job-detail
+- ✅ Editor non può creare booking direttamente — modal create diventa "📩 Richiedi booking" → POST `/api/booking-requests` → notifica `booking_request` a producer/manager
+- ✅ Editor non può assegnare risorse a progetto/job (`POST /cost-report/api/job/{id}/assign-resource` gated)
+- ✅ Override manuale `quantity_actual` rimosso dovunque (decisione: ore = booking done, sempre)
 
 **Round 3 — UX/feature (in coda)**:
 - 🔜 Quote editor: subtotali categoria realtime (oggi non si aggiornano all'add) + sconto categoria visibile con totale aggiornato.

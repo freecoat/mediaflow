@@ -59,10 +59,11 @@ PERMISSIONS: Dict[str, Dict[str, List[str]]] = {
         "view_cost_report": ["Visualizza cost report"],
         "view_invoices":    ["Visualizza fatture"],
         "edit_invoices":    ["Crea/modifica fatture"],
-        # v3.4.54 — override manuale del maturato (ore lavorate). Default
-        # deriva dai booking marcati `done` (cost_line_sync). Solo admin /
-        # accounting / manager possono fare override in fase di verifica.
-        "edit_cost_actuals": ["Override manuale ore lavorate (cost line)"],
+        # v3.4.54 → v3.5.0-alpha.10: il `quantity_actual` non è più editabile
+        # via API (decisione architetturale 4 mag — le ore sono SEMPRE da
+        # booking done). Permesso preservato per casi eccezionali futuri ma
+        # rimosso da tutti i preset (solo admin lo eredita via list completo).
+        "edit_cost_actuals": ["[DEPRECATO] Override ore lavorate"],
     },
     "Cestino / Pulizia": {
         # v3.5.0-alpha.7 — soft-delete framework
@@ -107,7 +108,8 @@ PRESET_PERMISSIONS: Dict[str, List[str]] = {
         "approve_unavailability",
         "view_finance", "view_quotes", "edit_quotes", "delete_quotes",
         "view_pricelist", "edit_pricelist",
-        "view_cost_report", "view_invoices", "edit_invoices", "edit_cost_actuals",
+        # v3.5.0-alpha.10: edit_cost_actuals rimosso (quantity_actual non più editabile)
+        "view_cost_report", "view_invoices", "edit_invoices",
         "view_resources", "edit_resources",
         "manage_departments",
         "view_trash", "restore_trash",
@@ -131,7 +133,8 @@ PRESET_PERMISSIONS: Dict[str, List[str]] = {
         "view_punches_all",
         "view_finance", "view_quotes", "edit_quotes", "delete_quotes",
         "view_pricelist",
-        "view_cost_report", "view_invoices", "edit_invoices", "edit_cost_actuals",
+        # v3.5.0-alpha.10: edit_cost_actuals rimosso
+        "view_cost_report", "view_invoices", "edit_invoices",
     ],
     "operator": [
         "view_projects",
@@ -270,6 +273,20 @@ def can_edit_pricelist(user: Optional[User]) -> bool:
 
 def can_assign_resources(user: Optional[User]) -> bool:
     return has_permission(user, "assign_resources")
+
+
+def can_create_booking(user: Optional[User]) -> bool:
+    """v3.5.0-alpha.10 — chi può creare booking direttamente (no via richiesta).
+
+    Default: chi ha `edit_planning_all` O `assign_resources` (admin/manager/producer).
+    Operator/editor (con solo `edit_planning_own`) NON può creare booking — può
+    solo richiederli al producer/manager via flusso 'request_booking'.
+
+    Nota: `edit_planning_own` resta valido per modifiche dei propri booking
+    esistenti (priority, execution status, durata in cascade) — quello è già
+    gestito dai check granulari sui rispettivi endpoint.
+    """
+    return has_any(user, "edit_planning_all", "assign_resources")
 
 
 def can_approve_unavailability(user: Optional[User]) -> bool:

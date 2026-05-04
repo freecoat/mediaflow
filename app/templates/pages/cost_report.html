@@ -85,17 +85,21 @@
   <div class="text-muted">Seleziona un job per visualizzare il cost report</div>
 </div>
 
-<!-- Modal aggiorna riga costo -->
+<!-- Modal aggiorna riga costo (v3.5.0-alpha.10):
+     Rimossi campi "Quantità effettiva" e "Totale maturato": derivano sempre
+     dai booking marcati `done` (cost_line_sync). La fatturazione extra /
+     sconti / banca ore forfait passerà dal flusso fatturazione dedicato. -->
 <div class="modal-overlay" id="modal-update-line">
   <div class="modal" style="max-width:400px;">
     <div class="modal-header"><span class="modal-title">Aggiorna riga costo</span>
       <button class="btn btn-ghost btn-icon" onclick="closeModal('modal-update-line')">✕</button></div>
     <div class="modal-body">
       <input type="hidden" id="ul-id">
-      <div class="form-group"><label class="form-label">Quantità effettiva</label>
-        <input class="form-input" id="ul-qty" type="number" step="0.5"></div>
-      <div class="form-group"><label class="form-label">Totale maturato (€)</label>
-        <input class="form-input" id="ul-accrued" type="number" step="0.01"></div>
+      <div class="form-group">
+        <label class="form-label">Ore lavorate</label>
+        <input class="form-input" id="ul-actual-display" type="text" disabled style="opacity:.7;">
+        <small class="text-muted">🔒 Derivate automaticamente dai booking marcati <code>done</code>. Non modificabili da qui.</small>
+      </div>
       <div class="form-group"><label class="form-label">Totale stimato a finire (€)</label>
         <input class="form-input" id="ul-expected" type="number" step="0.01"></div>
       <div class="form-group"><label class="form-label">Note</label>
@@ -416,8 +420,8 @@ function renderTimesheets() {
 
 function openUpdateLine(line) {
   document.getElementById('ul-id').value = line.id;
-  document.getElementById('ul-qty').value = line.quantity_actual || '';
-  document.getElementById('ul-accrued').value = line.total_accrued || '';
+  document.getElementById('ul-actual-display').value =
+    `${(line.quantity_actual || 0).toFixed(2)} ${line.unit || ''}`;
   document.getElementById('ul-expected').value = line.total_expected || '';
   document.getElementById('ul-notes').value = line.notes || '';
   openModal('modal-update-line');
@@ -425,10 +429,9 @@ function openUpdateLine(line) {
 
 async function updateLine() {
   const id = document.getElementById('ul-id').value;
+  // v3.5.0-alpha.10: niente più quantity_actual/total_accrued — solo expected + notes
   try {
     const fd = new FormData();
-    fd.append('quantity_actual', document.getElementById('ul-qty').value || '');
-    fd.append('total_accrued', document.getElementById('ul-accrued').value || '');
     fd.append('total_expected', document.getElementById('ul-expected').value || '');
     fd.append('notes', document.getElementById('ul-notes').value);
     await api('PUT', `/cost-report/api/job/${currentJobId}/cost-lines/${id}`, fd);

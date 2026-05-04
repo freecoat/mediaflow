@@ -1,5 +1,49 @@
 # MediaFlow — Changelog
 
+## v3.5.0-alpha.10 — Round 2: RBAC editor + ore lavorate sempre da booking (4 maggio 2026)
+
+Round 2 dei fix post-test 3 maggio. Restringe i permessi di editor (operator role) e fissa architetturalmente la regola "ore lavorate ≡ booking done" decisa con Matteo il 4 maggio.
+
+**Decisione architetturale: niente più override manuale di `quantity_actual`**
+
+Le ore lavorate sul cost line corrispondono SEMPRE alle ore dei booking marcati `done`. La modifica manuale era un escape hatch (perm `edit_cost_actuals` per admin/manager/accounting), ma in pratica è un caso eccezionale che squilibra il cost report. La gestione di scontistiche / banca ore forfait / extra fattura passerà dal flusso fatturazione dedicato (in roadmap), non dall'editing del cost line.
+
+Backend
+- `PUT /jobs/api/{id}/cost-lines/{lid}` e `PUT /cost-report/api/job/{id}/cost-lines/{lid}`: rifiutano `quantity_actual` (e `total_accrued`) con HTTP 422 + messaggio chiaro. Restano editabili description, quantity_quoted, unit, unit_price, is_extra, is_billable, total_expected, notes.
+- `edit_cost_actuals` permesso marcato `[DEPRECATO]`, rimosso da `manager` e `accounting` preset. Solo admin lo eredita (admin = tutti i permessi) ma il backend ignora comunque.
+
+UI
+- `job_detail.html` modal "Modifica lavorazione": campo "Ore lavorate" → display read-only con suffix unità + nota "🔒 Derivate da booking done".
+- `cost_report.html` modal "Aggiorna riga costo": rimossi "Quantità effettiva" e "Totale maturato"; aggiunto "Ore lavorate" read-only display. Restano editabili "Totale stimato a finire" + "Note".
+
+**RBAC editor (Luca Bianchi / operator role)**
+
+Editor ha solo `view_planning` + `edit_planning_own` + `view_punches_own` + `edit_punches_own` + `view_projects`. NON ha `view_finance` né `assign_resources` né `edit_planning_all`. I bug emersi nel test:
+1. Vede "Budget quotato" job-meta-card e colonne "€ unitario" / "Tot. previsto" in `/jobs/{id}` — non dovrebbe.
+2. Vede "Budget", "Costi", "Margine" nel modal job-detail di `/planning` — non dovrebbe.
+3. Vede colonna "Budget" nella tabella jobs di `/planning?view=jobs` — non dovrebbe.
+4. Può creare booking propri tramite il modal del planning — non dovrebbe (Matteo: "solo richiesta booking al producer").
+5. Può assegnare risorse a job tramite endpoint cost-report — non dovrebbe.
+
+Fix:
+- **Nuovo helper RBAC `can_create_booking(user)`** = ha `edit_planning_all` O `assign_resources` (admin/manager/producer). Editor → false.
+- **Backend gate** su `POST /planning/api/bookings` con `can_create_booking`. Editor riceve 403 con messaggio "Usa il flusso 'Richiedi booking'".
+- **Backend gate** su `POST /cost-report/api/job/{id}/assign-resource` (e DELETE) con `can_assign_resources`. Editor riceve 403.
+- **Nuovo endpoint `POST /planning/api/booking-requests`**: chiunque autenticato può inviare una richiesta di booking (start, end, resource, quote, lavorazione, motivazione obbligatoria) — il backend non crea il Booking, crea una notifica `booking_request` (action_required) ai producer/manager via `notify_permission(permission="assign_resources")`. Il producer poi crea il booking dalla pagina /planning.
+- **Frontend planning.html**: aggiunto `CAN_VIEW_FINANCE` / `CAN_CREATE_BOOKING` / `CAN_ASSIGN_RESOURCES` flag dal server.
+  - Tabella jobs: colonna "Budget" condizionale.
+  - Modal `showJobDetail`: blocco Budget/Costi/Margine condizionale + chiamata `/finance/api/...` saltata se editor.
+  - Modal `tlb-booking`: titolo dinamico "Nuovo booking" vs "📩 Richiedi booking", bottone submit "Crea booking" vs "Invia richiesta".
+  - `tlbSubmit`: se non editing e non `CAN_CREATE_BOOKING`, redirige il payload a `/api/booking-requests`.
+- **Frontend job_detail.html**: server-side `{% if can_view_finance %}` su "Budget quotato" job-meta-card + colonne "€ unitario" / "Tot. previsto" della tabella lavorazioni. JS `renderLines` salta le celle € se non `CAN_VIEW_FINANCE`. `openLineDetail` mostra KPI senza prezzi (solo ore) per editor.
+- **NotificationKind nuovo**: `booking_request` → can_create_booking (admin/manager/producer).
+
+Cache-buster `base.html` → `global.js?v=3.5.0-alpha.10`.
+
+Niente migrazione DB.
+
+---
+
 ## v3.5.0-alpha.9 — Round 1 fix post-test estensivo Matteo (4 maggio 2026)
 
 Bug fix focalizzato emerso dal test estensivo del 3 maggio. Tagliato il primo round di issue prioritari prima dei cantieri più grossi (RBAC editor, quote editor live, timeline UX).

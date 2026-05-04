@@ -382,22 +382,25 @@ async def update_cost_line(
     notes: Optional[str] = Form(None),
     db: Session = Depends(get_db),
 ):
-    """v3.4.54 — RBAC:
+    """v3.4.54 + v3.5.0-alpha.10 — RBAC:
     - `view_finance` per qualsiasi modifica (no producer/operator senza permesso)
-    - `edit_cost_actuals` aggiuntivo per modificare `quantity_actual` (override
-      manuale del maturato). Default = sync da Booking done (cost_line_sync).
-      Solo admin/manager/accounting per evitare che producer/editor sballino il
-      cost report (es. "100h conforming → 90.000€ inventati nel maturato").
+    - `quantity_actual` NON è più editabile via API: è sempre sync dai booking
+      marcati `done` (cost_line_sync). Decisione architetturale Matteo (4 mag):
+      le ore lavorate corrispondono SEMPRE al booking; le scontistiche/banca
+      ore forfait passeranno dal flusso fatturazione (in roadmap), non da qui.
+      Se ricevuto un valore, restituiamo 422 invece di silently ignore così il
+      client capisce che il campo è gone.
     """
-    from app.services.rbac import can_edit_cost_actuals, can_view_finance, current_user_optional
+    from app.services.rbac import can_view_finance, current_user_optional
     user = current_user_optional(request)
     if not can_view_finance(user):
         raise HTTPException(403, "Permesso negato (richiede view_finance)")
-    if quantity_actual is not None and not can_edit_cost_actuals(user):
+    if quantity_actual is not None:
         raise HTTPException(
-            403,
-            "Override del maturato (ore lavorate) richiede permesso edit_cost_actuals "
-            "(admin/manager/accounting). Default: deriva dai booking marcati `done`."
+            422,
+            "Il campo 'ore lavorate' (quantity_actual) non è modificabile manualmente. "
+            "Deriva sempre dai booking marcati 'done'. La fatturazione di extra/sconti "
+            "passerà dal flusso fatturazione dedicato (in roadmap)."
         )
 
     line = db.query(JobCostLine).filter(
@@ -408,14 +411,13 @@ async def update_cost_line(
 
     if description is not None: line.description = description.strip()
     if quantity_quoted is not None: line.quantity_quoted = quantity_quoted
-    if quantity_actual is not None: line.quantity_actual = quantity_actual
     if unit is not None: line.unit = unit
     if unit_price is not None: line.unit_price = unit_price
     if is_extra is not None: line.is_extra = is_extra
     if is_billable is not None: line.is_billable = is_billable
     if notes is not None: line.notes = notes
 
-    # Ricalcolo totali coerenti
+    # Ricalcolo totali coerenti — quantity_actual resta lock dai booking
     line.total_quoted = round(line.quantity_quoted * line.unit_price, 2)
     line.total_accrued = round(line.quantity_actual * line.unit_price, 2)
     line.total_expected = round(max(line.quantity_quoted, line.quantity_actual) * line.unit_price, 2)

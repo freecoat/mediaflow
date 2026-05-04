@@ -141,6 +141,8 @@ class NotificationKind(str, enum.Enum):
     quote_reverse_approval = "quote_reverse_approval"        # → edit_quotes (account managers)
     # v3.4.56 — quote approvata ma il job risultante non ha ancora risorse assegnate
     quote_approved_no_resources = "quote_approved_no_resources"  # → assign_resources (producer/manager)
+    # v3.5.0-alpha.10 — editor (operator) richiede creazione booking al producer/manager
+    booking_request = "booking_request"  # → can_create_booking (admin/manager/producer)
     custom = "custom"
 
 
