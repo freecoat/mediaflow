@@ -1,5 +1,43 @@
 # MediaFlow — Changelog
 
+## v3.5.0-alpha.11 — Round 3: quote subtotali live + booking timeline UX (4 maggio 2026)
+
+Round 3 dei fix post-test 3 maggio. UX/feature più complessi su quote editor e timeline planning.
+
+**Quote editor — subtotali categoria realtime + sconto categoria visibile**
+
+Bug: i subtotali per categoria nell'editor `/quotes` non si aggiornavano quando l'utente modificava una riga inline (qty, prezzo, sconto). Restavano congelati ai valori al primo render. Lo sconto categoria mostrava solo il `−amount` ma non un "totale categoria al netto".
+
+Fix in `app/templates/pages/quotes.html`:
+- Subtotale e discount-amount delle categorie marcati con `data-cat-subtotal`/`data-cat-disc-amount`/`data-cat-net` per refresh live.
+- Nuova riga **"Totale categoria (al netto)"** sotto lo sconto, visibile solo se discount > 0, in verde.
+- `refreshCategoryDiscountAmounts()` esteso (di fatto rinominato a "refresh category rows"): ricalcola subtotale, discount-amount e net-row da `currentQuote.lines` + `category_discounts` ad ogni save di linea/sconto.
+
+**Resource → Project sync — anche su PUT booking + PUT assignment**
+
+Bug: aggiungere una risorsa a un booking esistente (PUT booking con replace-all assignments) o cambiare risorsa su un assignment (PUT assignment, drag/resize/reassign) NON triggherava `ensure_resources_assigned_to_job`. La risorsa nuova restava NON assegnata al progetto.
+
+Fix in `app/routers/planning.py`:
+- `update_booking`: dopo replace-all, hook `ensure_resources_assigned_to_job(b.job_id, [a.resource_id for a in b.assignments])`.
+- `update_assignment`: dopo reassign, hook `ensure_resource_assigned_to_job(a.booking.job_id, a.resource_id)`.
+
+**Booking done → propaga a tutte le risorse**
+
+Il modello era già booking-level (`Booking.execution_status`), quindi il backend già marca done per TUTTE le risorse di un booking. La regressione visiva era: la timeline non si aggiornava dopo il "Le mie" → "✓ Fatto".
+
+Fix in `todoSetExec()`: dopo l'API call, se la timeline view è attiva, chiama `renderTimeline(true)` per ridisegnare gli items con i nuovi `tl-exec-*` class. Toast aggiornato a "completato (tutte le risorse del booking)" per chiarezza.
+
+**Timeline — highlight cross-resource su click + duplica multi-risorsa + overlay drag**
+
+3 fix UX richiesti da Matteo nel test:
+1. **Highlight risorse linkate** (#6): click su un item di un booking multi-risorsa → tutti gli items con stesso `booking_id` ricevono CSS class `tl-link-highlight` (outline indaco). Il toast informativo aggiunge "· N risorse linkate".
+2. **Copia multi-risorsa** (#7): `_tlDoDuplicate` riscritto. Prima clonava SOLO l'item cliccato (1 risorsa). Ora calcola l'offset temporale dal click point e shifta TUTTI gli assignments della sorgente (preserva l'unità operativa). Toast: "Booking duplicato (N risorse)".
+3. **Overlay drag con orario** (#6 bis): nuovo elemento flottante `#tl-drag-overlay` segue il cursore durante drag/resize, mostra "start → end / ⏱ durata / ⛔ ferie / ⚠ festivo". Si nasconde su drop (`onMove`), `mouseup`, `Escape`. Tooltip nativo (`item.title`) preservato come fallback.
+
+**File toccati**: `planning.py`, `planning.html`, `quotes.html`, `base.html`, `main.py`. Cache-buster `v=3.5.0-alpha.11`. Niente migrazione DB.
+
+---
+
 ## v3.5.0-alpha.10 — Round 2: RBAC editor + ore lavorate sempre da booking (4 maggio 2026)
 
 Round 2 dei fix post-test 3 maggio. Restringe i permessi di editor (operator role) e fissa architetturalmente la regola "ore lavorate ≡ booking done" decisa con Matteo il 4 maggio.

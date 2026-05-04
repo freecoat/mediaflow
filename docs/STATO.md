@@ -8,6 +8,22 @@
 
 ## Versione corrente
 
+**v3.5.0-alpha.11** — 4 maggio 2026 — Round 3 (parziale): quote subtotali live + booking timeline UX
+
+Sei fix raggruppati:
+1. Quote `/quotes` editor: subtotale/sconto/netto per categoria live al save (prima freezing); nuova riga "Totale categoria al netto" verde se sconto > 0.
+2. Resource→Project sync: hook `ensure_resources_assigned_to_job` aggiunto su `PUT /api/bookings/{id}` (replace-all assignments) e `PUT /api/booking-assignments/{id}` (reassign). Prima copriva solo il CREATE.
+3. Booking done propagation: `todoSetExec` ora richiama `renderTimeline(true)` se la timeline è la view attiva. Toast: "completato (tutte le risorse del booking)".
+4. Timeline highlight cross-resource: select su un item multi-risorsa applica `tl-link-highlight` (outline indaco) a tutti gli items con stesso `booking_id`.
+5. Timeline copia multi-risorsa: `_tlDoDuplicate` riscritto — clona TUTTI gli assignments della sorgente (era 1 sola). Calcola offset temporale dal click point e shifta tutti.
+6. Timeline drag overlay: floating box segue il cursore con start→end, durata, warning ferie/festivo. Si nasconde su drop / mouseup / Escape.
+
+Cache-buster `base.html` → `global.js?v=3.5.0-alpha.11`. Niente migrazione DB.
+
+**Restano in Round 3 (in coda)**:
+- Cost report row → popup booking-detail (porting di `openLineDetail` da `job_detail.html` a `cost_report.html`)
+- Cost report: hardcost dettagliati nel breakdown
+
 **v3.5.0-alpha.10** — 4 maggio 2026 — Round 2: RBAC editor + ore lavorate sempre da booking
 
 Decisione architetturale (Matteo, 4 maggio): le ore lavorate (`JobCostLine.quantity_actual`) corrispondono SEMPRE alle ore dei booking marcati `done`. Niente più override manuale dal cost line edit. La fatturazione di extra/scontistica/banca-ore forfait passerà dal flusso fatturazione dedicato (in roadmap), non da qui.
@@ -288,21 +304,21 @@ Sessione 1 maggio sera (commit unico): chiusa v3.4.32 dopo discussione completa 
 - ✅ Editor non può assegnare risorse a progetto/job (`POST /cost-report/api/job/{id}/assign-resource` gated)
 - ✅ Override manuale `quantity_actual` rimosso dovunque (decisione: ore = booking done, sempre)
 
-**Round 3 — UX/feature (in coda)**:
-- 🔜 Quote editor: subtotali categoria realtime (oggi non si aggiornano all'add) + sconto categoria visibile con totale aggiornato.
-- 🔜 Cost report row: popup booking-detail (oggi solo in `/jobs/{id}` come `openLineDetail` v3.4.55, da portare anche in `/cost-report/`).
-- 🔜 Cost report: hardcost legati al costo risorsa visibili (oggi `total_expenses` è in summary ma non breakdown dettagliato).
-- 🔜 Add resource a booking esistente / job esistente → auto-assign al progetto. Verificare che POST `/booking-assignments` chiami `ensure_resources_assigned_to_job`.
-- 🔜 Booking done propaga a tutte le risorse: già booking-level nel modello (`Booking.execution_status`), verificare la viz timeline.
-- 🔜 Timeline: highlight cross-resource su click di un booking multi-risorsa.
-- 🔜 Timeline: overlay con orario corrente durante drag/duplicate (visualmente).
-- 🔜 Timeline: copy multi-risorsa (oggi clona singolo).
-- 🔜 UX `quantity_actual` lavorazione: badge "🔒 sincronizzato dai booking" + bottone "Override manuale" (oggi è editabile direttamente con permesso `edit_cost_actuals`).
+**Round 3 — UX/feature (parziale: 7/9 chiusi in alpha.11; 2 in coda)**:
+- ✅ Quote editor: subtotali categoria live + nuova riga "Totale categoria al netto" sotto lo sconto (alpha.11)
+- ✅ Add resource a booking esistente / job esistente → auto-assign al progetto (hook esteso a PUT booking + PUT assignment, alpha.11)
+- ✅ Booking done propaga a tutte le risorse (refresh timeline su todoSetExec, alpha.11)
+- ✅ Timeline highlight cross-resource su click di un booking multi-risorsa (alpha.11)
+- ✅ Timeline overlay con orario corrente durante drag/resize (alpha.11)
+- ✅ Timeline copy multi-risorsa (era singolo, alpha.11)
+- ✅ UX `quantity_actual` lavorazione: rimosso edit completo (Matteo decisione 4 maggio, alpha.10)
+- 🔜 Cost report row: popup booking-detail (oggi solo in `/jobs/{id}` come `openLineDetail` v3.4.55, da portare anche in `/cost-report/`)
+- 🔜 Cost report: hardcost legati al costo risorsa visibili (oggi `total_expenses` è in summary ma non breakdown dettagliato)
 
-### Domande aperte per Matteo (su cui aspetto risposta)
+### Domande aperte chiuse in questa sessione
 
-- Override manuale `quantity_actual`: vuoi un sistema di "pin" che impedisca al recompute_for_booking di sovrascrivere l'override fino a sblocco esplicito?
-- Modifica nome lavorazione: oggi richiede `view_finance`. Restringere a `edit_quotes` (più stretto)?
+- ✅ Override manuale `quantity_actual` → Matteo: rimuovi completamente. Fatto in alpha.10.
+- 🟡 Modifica nome lavorazione: oggi richiede `view_finance`. Restringere a `edit_quotes` (più stretto)? — non ancora deciso.
 
 ### Cantieri chiusi nella sessione del 3 maggio
 

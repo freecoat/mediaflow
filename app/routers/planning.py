@@ -1213,6 +1213,18 @@ async def update_booking(
             recompute_for_booking(db, b)
         except Exception as e:
             print(f"[update_booking] cost line sync failed: {e}")
+    # v3.5.0-alpha.11: replace-all assignments su booking con job → garantisce
+    # che le NUOVE risorse siano assegnate al job (JobResourceAssignment).
+    # Senza questa chiamata, aggiungere una risorsa via "modifica booking"
+    # non la legava al progetto/job — bug v3.4.55 era hook solo su CREATE.
+    if assignments is not None and b.job_id:
+        try:
+            from app.services.resource_assignment_sync import ensure_resources_assigned_to_job
+            ensure_resources_assigned_to_job(
+                db, b.job_id, [a.resource_id for a in b.assignments]
+            )
+        except Exception as e:
+            print(f"[update_booking] auto-assignment failed: {e}")
     db.commit()
     return {
         "id": b.id, "kind": b.kind.value if hasattr(b.kind, "value") else b.kind,
@@ -1296,6 +1308,14 @@ async def update_assignment(
             recompute_for_booking(db, a.booking)
         except Exception as e:
             print(f"[update_assignment] cost line sync failed: {e}")
+    # v3.5.0-alpha.11: reassign (cambio resource_id) su booking con job →
+    # garantisce che la nuova risorsa sia assegnata al job. Idempotente.
+    if a.booking and a.booking.job_id:
+        try:
+            from app.services.resource_assignment_sync import ensure_resource_assigned_to_job
+            ensure_resource_assigned_to_job(db, a.booking.job_id, a.resource_id)
+        except Exception as e:
+            print(f"[update_assignment] auto-assignment failed: {e}")
     db.commit()
 
     # v3.4.32.1: dopo il drop, se l'assignment ora cade in fascia overtime

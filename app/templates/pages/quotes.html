@@ -1182,26 +1182,43 @@ function renderLines() {
     for (const l of catLines) {
       html += renderLineRow(l);
     }
+    // v3.5.0-alpha.11: subtotale categoria con id `data-cat-subtotal` per
+    // refresh live al save di una linea (prima la riga restava ferma).
     html += `
-      <tr class="ql-cat-sub-row">
+      <tr class="ql-cat-sub-row" data-cat="${safeCat}">
         <td colspan="6" style="text-align:right;color:var(--text2);font-size:12px;padding:4px 12px;">
           Subtotale <strong>${escapeHtml(cat)}</strong>:
         </td>
-        <td class="mono text-right" style="font-size:12px;font-weight:600;padding:4px 12px;">
+        <td class="mono text-right" style="font-size:12px;font-weight:600;padding:4px 12px;" data-cat-subtotal="${safeCat}">
           ${fmtCurrency(catSubtotal)}
         </td>
         <td></td>
       </tr>`;
     html += `
-      <tr class="ql-cat-disc-row">
+      <tr class="ql-cat-disc-row" data-cat="${safeCat}">
         <td colspan="5" style="text-align:right;">Sconto categoria <strong>${escapeHtml(cat)}</strong>:</td>
         <td class="text-right">
           <input type="number" class="inline-edit text-right mono" step="0.5" min="0" max="100"
                  value="${(catDisc * 100).toFixed(1)}" data-cat="${safeCat}"
                  onblur="saveCategoryDiscount(this)" style="width:60px;font-size:12px;">
         </td>
-        <td class="mono text-right" style="font-size:12px;">
+        <td class="mono text-right" style="font-size:12px;" data-cat-disc-amount="${safeCat}">
           ${catDisc > 0 ? '−' + fmtCurrency(catDisc * catSubtotal) : '—'}
+        </td>
+        <td></td>
+      </tr>`;
+    // v3.5.0-alpha.11: nuova riga "Totale dopo sconto categoria" (visibile
+    // solo se discount > 0). Mostra l'importo netto della categoria — Matteo:
+    // "Sconto su categoria va reso visibile in categoria con totale aggiornato".
+    const showNet = catDisc > 0;
+    const catNet = catSubtotal * (1 - catDisc);
+    html += `
+      <tr class="ql-cat-net-row" data-cat="${safeCat}" style="${showNet ? '' : 'display:none;'}">
+        <td colspan="6" style="text-align:right;color:var(--text);font-size:12px;font-weight:600;padding:4px 12px;border-top:1px dashed var(--border);">
+          ↳ Totale categoria <strong>${escapeHtml(cat)}</strong> (al netto):
+        </td>
+        <td class="mono text-right" style="font-size:13px;font-weight:700;color:#22c55e;padding:4px 12px;border-top:1px dashed var(--border);" data-cat-net="${safeCat}">
+          ${fmtCurrency(catNet)}
         </td>
         <td></td>
       </tr>`;
@@ -1468,23 +1485,38 @@ async function saveQuoteMeta() {
 }
 
 function refreshCategoryDiscountAmounts() {
-  // Aggiorna gli importi mostrati nelle righe "Sconto categoria"
+  // v3.5.0-alpha.11: ribattezzato di fatto "refreshCategoryRows" — aggiorna
+  // simultaneamente subtotale, discount-amount, totale-netto per ogni
+  // categoria a partire da `currentQuote.lines` + `category_discounts`.
+  // Risolve il bug dei subtotali categoria che non si aggiornavano live al
+  // save di una linea.
   const cd = currentQuote.category_discounts || {};
   const groups = {};
   for (const l of currentQuote.lines) {
     const cat = l.category || 'Altro';
-    groups[cat] = (groups[cat] || 0) + l.total;
+    groups[cat] = (groups[cat] || 0) + (l.total || 0);
   }
-  document.querySelectorAll('.ql-cat-disc-row').forEach(row => {
-    const input = row.querySelector('input[data-cat]');
-    if (!input) return;
-    const cat = input.dataset.cat;
+  for (const cat of Object.keys(groups)) {
+    const subtotal = groups[cat];
     const disc = cd[cat] || 0;
-    const cell = row.querySelector('td.mono.text-right');
-    if (cell) {
-      cell.textContent = disc > 0 ? '−' + fmtCurrency(disc * (groups[cat] || 0)) : '—';
-    }
-  });
+    const netAmount = subtotal * (1 - disc);
+
+    const safeCat = cat.replace(/"/g, '&quot;');
+    const subEl = document.querySelector(`[data-cat-subtotal="${cat}"]`)
+                  || document.querySelector(`[data-cat-subtotal="${safeCat}"]`);
+    if (subEl) subEl.textContent = fmtCurrency(subtotal);
+
+    const discEl = document.querySelector(`[data-cat-disc-amount="${cat}"]`)
+                   || document.querySelector(`[data-cat-disc-amount="${safeCat}"]`);
+    if (discEl) discEl.textContent = disc > 0 ? '−' + fmtCurrency(disc * subtotal) : '—';
+
+    const netEl = document.querySelector(`[data-cat-net="${cat}"]`)
+                  || document.querySelector(`[data-cat-net="${safeCat}"]`);
+    const netRow = document.querySelector(`tr.ql-cat-net-row[data-cat="${cat}"]`)
+                   || document.querySelector(`tr.ql-cat-net-row[data-cat="${safeCat}"]`);
+    if (netEl) netEl.textContent = fmtCurrency(netAmount);
+    if (netRow) netRow.style.display = disc > 0 ? '' : 'none';
+  }
 }
 
 // ── Drag-drop persistence ─────────────────────────────────────
