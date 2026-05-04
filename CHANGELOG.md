@@ -1,5 +1,65 @@
 # MediaFlow — Changelog
 
+## v3.5.0-alpha.13 — Round 4: 3 bug critici + UX planning (4 maggio 2026)
+
+Round 4 dei fix post-test Matteo. 3 bug critici risolti + 5 feature UX planning + 1 chiusura realtime quote.
+
+**Bug 1: Maturato fantasma su unità non-time (Ligas J2)**
+
+`recompute_cost_line_actual` ritornava `non_time_unit` early per unità `pc`/`lump`/`fix`/`lot`/`shot`/`version`/`allow`/`TB`/`GB` → `quantity_actual` non veniva mai resettato dopo cancellazione bookings. Bug Matteo: maturato fantasma persisteva su Ligas J2.
+
+Fix in `app/services/cost_line_sync.py`:
+- Per unità non-time, `new_qty = float(len(bookings_done))`. 0 se nessuno → resetta correttamente. Logica: 1 booking done = 1 unità (semplice, prevedibile).
+
+Inoltre `cost_report.html:loadReport` ora chiama `POST /api/job/{id}/reconcile-actuals` automaticamente prima del GET → fix retroattivo silenzioso per drift storici (cancellazioni pre-alpha.9 + non-time pre-alpha.13).
+
+**Bug 2: Timbratura "fine cancellata" durante input**
+
+`mfWrapDateTimeLocal.parseValue` clearava i sub-input `date` e `time` quando il hidden era vuoto. Sequenza bug: utente digita data → syncBack scrive '' in hidden (time ancora vuoto) → focus su time → parseValue legge hidden vuoto → CANCELLA SIA DATE CHE TIME → utente perde la data appena inserita.
+
+Fix in `app/static/js/global.js`:
+- `parseValue` ora riempie i sub-input solo se il hidden ha un valore valido. Se vuoto, non tocca i sub (l'utente sta digitando, syncBack è già consistente).
+
+**Bug 3: Filtro Davide Moretti mostra anche Luca Bianchi**
+
+`/planning/api/project-bookings` non filtrava per `resource_id`. Vista "Per progetto" ignorava il filtro f-resource client-side.
+
+Fix:
+- `app/routers/planning.py:project_bookings`: aggiunto query param `resource_id` (csv supportato via `_parse_id_list`).
+- `app/templates/pages/planning.html:renderProjectView`: passa `f-resource` all'endpoint.
+
+**UX Planning — Realtime su tutte le viste post "Fatto"**
+
+`todoSetExec` aggiornava solo timeline. Refactor: nuovo helper `refreshActiveView()` (legge tab attiva, chiama il render appropriato) — applicato a `todoSetExec`, `todoExtend`, `todoSetPriority`. Ora il refresh è realtime su jobs/timeline/agenda/project/storyboard/todo.
+
+**UX Planning — Bottone "+ Booking" globale + click dettaglio in tutte le viste**
+
+- Topbar planning: bottone `+ Booking` visibile da qualsiasi tab. Apre il modal con risorsa di default (filtro f-resource o prima del seed) + ora corrente arrotondata al quarto.
+- Calendar (FullCalendar) `eventClick`: apre `todoOpenDetail(booking_id)` invece del solo toast.
+- Agenda: ogni evento booking ora cliccabile → apre il modal dettaglio.
+- Timeline `select` (1 item): apre `todoOpenDetail(bid)` automaticamente. Multi-select non apre il modal (l'utente sta selezionando per bulk).
+
+**UX Planning — Multiselect Shift+click + bulk delete**
+
+- vis-timeline option `multiselect: true` + `multiselectPerGroup: true` → Ctrl/Cmd+click aggiunge, Shift+click range-select.
+- Tasto Delete/Backspace su selezione multipla → conferma + bulk DELETE delle assegnazioni. Listener cleanup-aware (ri-bound ad ogni renderTimeline).
+
+**UX Quotes — Titolo quotazione visibile nei dropdown**
+
+- Lista `/quotes`: colonna "Progetto / Titolo quote" — se `q.title` differente da `q.project_title`, mostra entrambi (titolo quote come sub-line).
+- Cost report job-select dropdown: mostra `code — title · quote N (titolo)` con doppio livello.
+- Modal booking autocomplete (planning): già mostrava `number — title` da v3.4.53, nessun cambio.
+
+**UX Realtime — Lista quote ricarica dopo Apply copilot**
+
+`copilot.js:copilotApply` dispatcha custom event `mf:ai-action-applied` con `{actionId, actionType, result}` post-success. Listener su `quotes.html` rilancia `loadQuotes()` (lista) o `reloadQuote()` (editor) quando l'azione è quote-related (`propose_quote*`, `propose_new_item_and_line`).
+
+Pattern estendibile: altre pagine possono ascoltare `mf:ai-action-applied` per refresh contestuali.
+
+Cache-buster `v=3.5.0-alpha.13`. Niente migrazione DB.
+
+---
+
 ## v3.5.0-alpha.12 — Round 3 (chiusura): cost report popup booking + hardcost (4 maggio 2026)
 
 Chiusi gli ultimi 2 issue di Round 3 (test estensivo Matteo del 3 maggio).

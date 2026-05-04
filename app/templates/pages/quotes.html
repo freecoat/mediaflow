@@ -70,7 +70,7 @@
   <div class="table-wrap">
     <table>
       <thead>
-        <tr><th>Numero</th><th>Progetto</th><th>Cliente</th><th>Data</th>
+        <tr><th>Numero</th><th>Progetto / Titolo quote</th><th>Cliente</th><th>Data</th>
             <th>Scadenza</th><th class="text-right">Totale</th><th>Stato</th><th></th></tr>
       </thead>
       <tbody id="quotes-table">
@@ -751,7 +751,10 @@ async function loadQuotes() {
   tbody.innerHTML = qs.map(q => `
     <tr style="cursor:pointer;">
       <td class="mono" style="font-size:12px;" onclick="openEditor(${q.id})">${q.number}</td>
-      <td style="font-weight:500;" onclick="openEditor(${q.id})">${q.project_title || q.title}</td>
+      <td style="font-weight:500;" onclick="openEditor(${q.id})">
+        <div>${q.project_title || q.title || '—'}</div>
+        ${q.project_title && q.title && q.title !== q.project_title ? `<div style="font-size:11px;font-weight:400;color:var(--text3);margin-top:2px;">${escapeHtml(q.title)}</div>` : ''}
+      </td>
       <td class="text-muted text-sm" onclick="openEditor(${q.id})">${q.client || '—'}</td>
       <td class="text-sm" onclick="openEditor(${q.id})">${fmtDate(q.issue_date)}</td>
       <td class="text-sm ${q.valid_until && new Date(q.valid_until) < new Date() ? 'color-rose' : ''}" onclick="openEditor(${q.id})">${fmtDate(q.valid_until)}</td>
@@ -2041,6 +2044,22 @@ document.getElementById('nq-date').value = new Date().toISOString().slice(0,10);
     openEditor(hashId);
   }
 })();
+
+// v3.5.0-alpha.13: refresh realtime quando il copilot applica un'azione
+// che tocca le quote (creazione, riga aggiunta, sconto, ecc.). Vedi
+// dispatch in `static/js/copilot.js:copilotApply`.
+document.addEventListener('mf:ai-action-applied', (e) => {
+  const at = e.detail?.actionType || '';
+  const quoteRelevant = at.includes('quote') || at === 'propose_new_item_and_line';
+  if (!quoteRelevant) return;
+  if (currentQuoteId) {
+    // Editor aperto: ricarica la quote corrente per riflettere le righe nuove
+    if (typeof reloadQuote === 'function') reloadQuote();
+  } else {
+    // Lista aperta: ricarica la lista (potrebbe essere apparsa una nuova quote)
+    loadQuotes();
+  }
+});
 
 window.addEventListener('hashchange', () => {
   const hashId = parseInt((window.location.hash || '').replace('#', ''), 10);

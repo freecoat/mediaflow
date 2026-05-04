@@ -67,14 +67,13 @@ def recompute_cost_line_actual(db: Session, jcl) -> dict:
     elif unit in TIME_UNITS_DAY:
         new_qty = round(total_hours / HOURS_PER_DAY, 4)
     else:
-        # Unità non temporale: non aggiorniamo automaticamente.
-        return {
-            "updated": False,
-            "reason": "non_time_unit",
-            "unit": unit,
-            "bookings_done": len(bookings),
-            "total_hours": round(total_hours, 2),
-        }
+        # v3.5.0-alpha.13: per unità non temporali (pc / lump / fix / lot / shot / version / allow / TB / GB)
+        # contiamo il numero di booking done. 0 se nessuno → resetta correttamente
+        # `quantity_actual` quando l'utente cancella tutti i booking (bug Ligas J2:
+        # maturato fantasma persisteva post-delete su lavorazioni con unit "pc"/"lump").
+        # Logica: 1 booking done → 1 unità (semplice, prevedibile). Se serve mappatura
+        # diversa per un'unità specifica, si estende qui.
+        new_qty = float(len(bookings))
 
     new_accrued = round(new_qty * (jcl.unit_price or 0.0), 2)
     changed = (

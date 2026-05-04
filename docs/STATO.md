@@ -8,6 +8,27 @@
 
 ## Versione corrente
 
+**v3.5.0-alpha.13** — 4 maggio 2026 — Round 4: 3 bug critici + UX planning realtime + multiselect timeline
+
+3 bug critici risolti:
+1. Maturato fantasma su unità non-time (pc/lump/fix/lot/...): recompute_cost_line_actual ora setta `quantity_actual = len(bookings_done)`. + auto-reconcile silenzioso al load di /cost-report (fix retroattivo drift storici).
+2. Timbratura: input fine turno non più cancellato durante digitazione (parseValue mfWrapDateTimeLocal non sovrascrive subs se hidden empty).
+3. Filtro pianificazione "Per progetto" ora rispetta f-resource (project_bookings endpoint accetta resource_id csv).
+
+5 feature UX:
+- todoSetExec/Extend/Priority refresh la view attiva (refreshActiveView helper) — Fatto/Iniziato/etc. immediato qualunque sia la tab.
+- Topbar planning: bottone "+ Booking" globale (visibile da tutte le viste).
+- Click su booking apre il modal dettaglio in agenda + calendar + timeline (1 item) — uniforme con todo/project/storyboard.
+- Timeline multiselect (Ctrl/Shift+click) + Delete/Backspace key per bulk-delete con conferma.
+- Lista /quotes e cost report job-select mostrano titolo quote + titolo progetto.
+
+1 quick win realtime:
+- copilotApply dispatcha `mf:ai-action-applied` event → quotes.html ricarica la lista o l'editor automaticamente quando il copilot crea una quote.
+
+**Lasciato fuori scope (chiarimento)**:
+- "Suddivisione risorse per reparto" in pianificazione: la timeline già raggruppa per reparto via DEPARTMENTS_SEED. Servirebbe vista alternativa? Decidi cosa.
+- "Caricamento documenti al copilot": cantiere grande (file picker + upload + parser AI per capitolato/post-prod schedule). Rimandato a session futura.
+
 **v3.5.0-alpha.12** — 4 maggio 2026 — Round 3 chiuso: cost report popup booking + hardcost
 
 Ultimi 2 issue di Round 3 chiusi.

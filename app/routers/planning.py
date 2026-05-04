@@ -2385,13 +2385,19 @@ async def project_bookings(
     project_id: int,
     from_date: Optional[datetime] = None,
     to_date: Optional[datetime] = None,
+    resource_id: Optional[str] = None,  # v3.5.0-alpha.13: filtro risorsa multi (csv)
     db: Session = Depends(get_db),
 ):
     """v3.4.44 — Booking di un progetto, formato come "Le mie" ma con info
     risorsa visibile. Per manager+admin+producer (vista trasversale di tutte
     le risorse del progetto). RBAC: nessun permesso esplicito definito ancora,
     ma scopo manager+: blocco se l'utente non ha 'view_all_planning' (alias
-    edit_planning) o uno dei ruoli admin/manager/producer."""
+    edit_planning) o uno dei ruoli admin/manager/producer.
+
+    v3.5.0-alpha.13: aggiunto filtro `resource_id` (singolo o csv) — risolve
+    il bug per cui il filtro Davide Moretti mostrava anche Luca Bianchi nella
+    vista "Per progetto".
+    """
     user = current_user_optional(request)
     if not user:
         raise HTTPException(401, "Non autenticato")
@@ -2414,6 +2420,9 @@ async def project_bookings(
         q = q.filter(BookingAssignment.end_datetime >= from_date)
     if to_date:
         q = q.filter(BookingAssignment.start_datetime <= to_date)
+    rid_list = _parse_id_list(resource_id)
+    if rid_list:
+        q = q.filter(BookingAssignment.resource_id.in_(rid_list))
     rows = q.order_by(BookingAssignment.start_datetime.asc()).all()
 
     out = []

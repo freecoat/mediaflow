@@ -5,6 +5,7 @@
 {% block topbar_title %}Pianificazione{% endblock %}
 
 {% block topbar_actions %}
+  <button class="btn btn-primary btn-sm" onclick="openNewBookingFromTopbar()">+ Booking</button>
   <a href="/quotes" class="btn btn-secondary btn-sm">→ Vai a quotazioni</a>
 {% endblock %}
 
@@ -1345,6 +1346,43 @@ async function renderView(view) {
   if (view === 'timeline') return renderTimeline();
 }
 
+// v3.5.0-alpha.13: bottone "+ Booking" globale in topbar (visibile da
+// qualsiasi view). Apre il modal di creazione con risorsa di default
+// (la prima della lista filtrata) e ora corrente come start.
+function openNewBookingFromTopbar() {
+  if (typeof tlbOpenWithRange !== 'function') {
+    toast('Modal booking non disponibile in questa view — vai sulla timeline', 'warning');
+    return;
+  }
+  // Risorsa default: se ce n'è una sola filtrata via f-resource, usa quella;
+  // altrimenti usa la prima del seed.
+  let rid = null;
+  const fr = (document.getElementById('f-resource')?.value || '').trim();
+  if (fr && !fr.includes(',')) rid = parseInt(fr, 10);
+  if (!rid && RESOURCES_SEED && RESOURCES_SEED.length) rid = RESOURCES_SEED[0].id;
+  if (!rid) { toast('Nessuna risorsa disponibile', 'warning'); return; }
+  // Window: ora corrente arrotondata al quarto d'ora + 1h
+  const now = new Date();
+  now.setSeconds(0, 0);
+  now.setMinutes(Math.floor(now.getMinutes() / 15) * 15);
+  const end = new Date(now.getTime() + 60 * 60 * 1000);
+  tlbOpenWithRange(rid, now, end);
+}
+
+// v3.5.0-alpha.13: helper per re-render della view attiva. Usato dagli
+// handler di stato/azione (todoSetExec, todoSetPriority, todoExtend, ...)
+// per garantire refresh immediato qualunque sia la view corrente.
+function _activeView() {
+  const t = document.querySelector('.pl-tab.active');
+  return t ? t.dataset.view : 'jobs';
+}
+async function refreshActiveView() {
+  const v = _activeView();
+  // Per la timeline preserviamo la finestra (non re-zoomare a oggi)
+  if (v === 'timeline' && tlInstance) return renderTimeline(true);
+  return renderView(v);
+}
+
 // v3.4.44: Per progetto (manager+) — riusa renderTodoCard ma con header
 // risorsa visibile. Endpoint /planning/api/project-bookings (RBAC backend).
 async function renderProjectView() {
@@ -1359,7 +1397,12 @@ async function renderProjectView() {
   }
   host.innerHTML = '<div class="pl-empty">Caricamento…</div>';
   try {
-    const items = await api('GET', `/planning/api/project-bookings?project_id=${projectId}`);
+    // v3.5.0-alpha.13: passa il filtro f-resource al backend per chiudere il
+    // bug "filtro Davide Moretti mostrava anche Luca Bianchi" nella vista per progetto.
+    const resFilter = (document.getElementById('f-resource')?.value || '').trim();
+    let url = `/planning/api/project-bookings?project_id=${projectId}`;
+    if (resFilter) url += `&resource_id=${encodeURIComponent(resFilter)}`;
+    const items = await api('GET', url);
     counter.textContent = `${items.length} booking`;
     if (!items.length) {
       host.innerHTML = '<div class="pl-empty">Nessun booking per questo progetto.</div>';
@@ -1760,10 +1803,23 @@ function renderCalendar() {
       { id:'punches', url:'/hr/api/punches?format=fullcalendar&'+qs, method:'GET' },
     ],
     eventClick: (info) => {
-      const p = info.event.extendedProps;
-      const start = info.event.start ? info.event.start.toLocaleString('it-IT') : '';
-      const end = info.event.end ? info.event.end.toLocaleString('it-IT') : '';
-      toast(`${info.event.title} | ${start}${end?' – '+end:''}`, 'info', 5000);
+      // v3.5.0-alpha.13: click → modal dettaglio booking (riusa openBookingDetail)
+      const p = info.event.extendedProps || {};
+      const eid = String(info.event.id || '');
+      // Booking ids vengono in formato 'a{assignment_id}' o numerico booking_id
+      let bookingId = p.booking_id;
+      if (!bookingId && eid.startsWith('a')) {
+        // fallback: cerca dal _tlBookings cached
+        const m = (window._tlBookings || []).find(b => b.id === eid);
+        if (m) bookingId = m.booking_id;
+      }
+      if (bookingId && typeof todoOpenDetail === 'function') {
+        todoOpenDetail(bookingId);
+      } else {
+        const start = info.event.start ? info.event.start.toLocaleString('it-IT') : '';
+        const end = info.event.end ? info.event.end.toLocaleString('it-IT') : '';
+        toast(`${info.event.title} | ${start}${end?' – '+end:''}`, 'info', 5000);
+      }
     },
   });
   calInstance.render();
@@ -1798,7 +1854,10 @@ async function renderAgenda() {
       const time = s.toLocaleTimeString('it-IT',{hour:'2-digit',minute:'2-digit'}) + (e_ ? ' – '+e_.toLocaleTimeString('it-IT',{hour:'2-digit',minute:'2-digit'}) : '');
       const src = (e.extendedProps && e.extendedProps.source) || (e.id && String(e.id).startsWith('punch-') ? 'punch' : 'booking');
       const srcLbl = src === 'punch' ? 'Timbratura' : 'Booking';
-      return `<div class="agenda-evt">
+      // v3.5.0-alpha.13: click su agenda item booking → modal dettaglio
+      const bookingId = (e.extendedProps && e.extendedProps.booking_id) || null;
+      const clickAttr = bookingId ? `onclick="todoOpenDetail(${bookingId})" style="cursor:pointer;"` : '';
+      return `<div class="agenda-evt" ${clickAttr}>
         <div class="time">${time}</div>
         <div class="title">${escapeHtml(e.title || '')}</div>
         <div><span class="badge-src ${src}">${srcLbl}</span></div>
@@ -1994,12 +2053,10 @@ async function todoSetExec(bookingId, newStatus, reason) {
     toast(newStatus === 'done' ? 'Booking completato (tutte le risorse del booking)' :
           newStatus === 'not_done' ? 'Booking marcato come non fatto' :
           newStatus === 'in_progress' ? 'Iniziato' : 'Riportato a pianificato', 'success');
-    renderTodo();
-    // v3.5.0-alpha.11: refresh timeline se attiva (status è booking-level →
-    // tutti gli items con stesso booking_id devono aggiornare ✓ / ✗ / ▶).
-    if (tlInstance && document.getElementById('view-timeline')?.classList.contains('active')) {
-      renderTimeline(true);
-    }
+    // v3.5.0-alpha.13: refresh la view attiva (jobs/timeline/agenda/project/...)
+    // così l'utente vede subito il nuovo stato qualunque sia la pagina.
+    // renderTodo è chiamato da refreshActiveView se siamo nella tab Le mie.
+    refreshActiveView();
   } catch(e) {
     toast(e.message || 'Errore aggiornamento stato', 'error');
   }
@@ -2018,7 +2075,7 @@ async function todoExtend(bookingId, deltaMin) {
     if (pending && notified) msg += ` — ${notified} approvatore/i notificati`;
     else if (pending && !notified) msg += ` — straordinario in attesa (nessun altro approvatore)`;
     toast(msg, 'success');
-    renderTodo();
+    refreshActiveView();
   } catch(e) {
     toast(e.message || 'Estensione rifiutata', 'error');
   }
@@ -2029,7 +2086,7 @@ async function todoSetPriority(bookingId, prio) {
     const fd = new FormData();
     fd.append('priority', prio);
     await api('PATCH', `/planning/api/bookings/${bookingId}/priority`, fd);
-    renderTodo();
+    refreshActiveView();
   } catch(e) {
     toast(e.message || 'Errore priorità', 'error');
   }
@@ -2789,6 +2846,11 @@ async function renderTimeline(preserveWindow=false) {
     tooltip: {followMouse: true, overflowMethod: 'flip'},
     editable: {updateTime: true, updateGroup: true, remove: true, add: false, overrideItems: true},
     snap: tlSnap,
+    // v3.5.0-alpha.13: multiselect = Shift+click (default vis-timeline è
+    // Ctrl/Cmd+click; multiselectPerGroup permette anche cross-resource).
+    // Tasto Delete su una selezione multipla → bulk delete con conferma.
+    multiselect: true,
+    multiselectPerGroup: true,
     // onMoving live: durante drag/resize, valida conflict client-side e applica style
     onMoving: function(item, callback) {
       // Blocca drop su gruppi reparto (id stringa 'dN'). Solo risorse foglia (id numerico) consentite.
@@ -2906,6 +2968,9 @@ async function renderTimeline(preserveWindow=false) {
     // v3.5.0-alpha.11: highlight cross-resource — items con stesso booking_id
     // ricevono className 'tl-link-highlight' per evidenziare visivamente che
     // appartengono allo stesso booking multi-risorsa.
+    // v3.5.0-alpha.13: in più, se selezione singola → apre modal dettaglio
+    // booking (uniformità con altre viste). Multi-select via Shift+click resta
+    // a multi-id (gestito separato sotto per delete bulk).
     const allItems = itemsDS.get();
     // Reset highlight precedenti
     allItems.forEach(it => {
@@ -2930,7 +2995,12 @@ async function renderTimeline(preserveWindow=false) {
     const fmt = d => new Date(d).toLocaleString('it-IT', {day:'numeric', month:'short', hour:'2-digit', minute:'2-digit'});
     const linkHint = (sel && allItems.filter(x => x.booking_id === sel.booking_id).length > 1)
       ? ` · ${allItems.filter(x => x.booking_id === sel.booking_id).length} risorse linkate` : '';
-    toast(`${sel.content} | ${fmt(sel.start)} – ${fmt(sel.end)}${linkHint}`, 'info', 5000);
+    toast(`${sel.content} | ${fmt(sel.start)} – ${fmt(sel.end)}${linkHint}`, 'info', 3000);
+    // Multi-select gestito da delete bulk handler: se >1 item selected, NON
+    // apriamo il dettaglio (l'utente sta selezionando per bulk action).
+    if (props.items.length === 1 && bid && typeof todoOpenDetail === 'function') {
+      todoOpenDetail(bid);
+    }
   });
   // Doppio click su area vuota → modal nuovo booking (fallback E1, sostituito da click&drag in E2)
   tlInstance.on('doubleClick', (props) => {
@@ -3043,6 +3113,42 @@ async function renderTimeline(preserveWindow=false) {
       });
     }, 150);
   });
+
+  // v3.5.0-alpha.13: Delete/Backspace key → bulk delete dei booking
+  // selezionati (Shift/Ctrl-click multi-select via vis-timeline).
+  // Cleanup precedente listener (renderTimeline può essere chiamata più volte)
+  if (window._tlDeleteHandler) {
+    document.removeEventListener('keydown', window._tlDeleteHandler, true);
+    window._tlDeleteHandler = null;
+  }
+  window._tlDeleteHandler = async function(e) {
+    if (e.key !== 'Delete' && e.key !== 'Backspace') return;
+    // Ignora se l'utente sta scrivendo in un input/textarea/contenteditable
+    const t = e.target;
+    if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.isContentEditable)) return;
+    if (!tlInstance) return;
+    const sel = tlInstance.getSelection() || [];
+    // Filtra solo gli id assignment ('aN'), escludi background (u-/tp-)
+    const aIds = sel.filter(id => typeof id === 'string' && id.startsWith('a'))
+                    .map(id => parseInt(id.substring(1), 10));
+    if (aIds.length < 2) return;  // Single → context menu o select già gestiti
+    e.preventDefault();
+    if (!confirm(`Eliminare ${aIds.length} assegnazioni selezionate?`)) return;
+    let ok = 0, fail = 0;
+    for (const aid of aIds) {
+      try {
+        await api('DELETE', `/planning/api/booking-assignments/${aid}`);
+        ok++;
+      } catch(err) {
+        fail++;
+        console.warn('delete failed for assignment', aid, err);
+      }
+    }
+    toast(`${ok} eliminate${fail ? ` · ${fail} errori` : ''}`, fail ? 'warning' : 'success');
+    renderTimeline(true);
+  };
+  document.addEventListener('keydown', window._tlDeleteHandler, true);
+
   tlUpdateRangeLabel();
 }
 

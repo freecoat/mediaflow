@@ -10,7 +10,7 @@
   <select class="form-select" style="width:auto;min-width:280px;" id="job-select" onchange="loadReport()">
     <option value="">— seleziona un job —</option>
     {% for job in jobs %}
-    <option value="{{ job.id }}">{{ job.code }} — {{ job.title }}</option>
+    <option value="{{ job.id }}">{{ job.code }} — {{ job.title }}{% if job.quote %} · quote {{ job.quote.number }}{% if job.quote.title and job.quote.title != job.title %} ({{ job.quote.title }}){% endif %}{% endif %}</option>
     {% endfor %}
   </select>
   <button class="btn btn-secondary btn-sm" onclick="openModal('modal-assign-resource')" id="btn-assign" disabled>
@@ -186,6 +186,11 @@ async function loadReport() {
   }
   currentJobId = id;
   document.getElementById('btn-assign').disabled = false;
+  // v3.5.0-alpha.13: auto-reconcile prima di leggere il report. Idempotente,
+  // garantisce che eventuali drift storici (es. cancellazioni pre-alpha.9 o
+  // unit non-time pre-alpha.13) vengano azzerati prima della visualizzazione.
+  try { await api('POST', `/cost-report/api/job/${id}/reconcile-actuals`); }
+  catch(e) { /* non blocking — lasciamo il GET successivo procedere */ }
   currentReport = await api('GET', `/cost-report/api/job/${id}`);
   document.getElementById('report-area').classList.remove('hidden');
   document.getElementById('no-report').classList.add('hidden');

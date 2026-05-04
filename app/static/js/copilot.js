@@ -406,6 +406,21 @@
       } else {
         updateActionStatus(actionId, "applied", res.result);
         toast("Azione applicata", "success");
+        // v3.5.0-alpha.13: notifica le pagine in ascolto in modo che possano
+        // fare un refresh realtime (es. lista /quotes deve apparire la nuova
+        // quote senza F5). I listener si registrano via:
+        //   document.addEventListener('mf:ai-action-applied', e => ...)
+        // L'evento porta `detail = {actionId, actionType, result}`.
+        try {
+          const action = _findAction(actionId);
+          document.dispatchEvent(new CustomEvent('mf:ai-action-applied', {
+            detail: {
+              actionId,
+              actionType: action ? action.action_type : null,
+              result: res.result || null,
+            },
+          }));
+        } catch(_) { /* fail-safe */ }
       }
       handleContinuation(res && res.continuation);
     } catch (e) {
@@ -413,6 +428,16 @@
       toast("Applicazione fallita: " + e.message, "error");
     }
   };
+
+  // Helper: ritrova un'azione dal state per leggere action_type
+  function _findAction(actionId) {
+    for (const m of state.messages) {
+      for (const a of (m.actions || [])) {
+        if (a.id === actionId) return a;
+      }
+    }
+    return null;
+  }
 
   window.copilotReject = async function (actionId) {
     try {

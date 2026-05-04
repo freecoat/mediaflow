@@ -27,7 +27,9 @@ def _tpl():
 
 @router.get("/", response_class=HTMLResponse)
 async def cost_report_page(request: Request, db: Session = Depends(get_db)):
-    jobs = db.query(Job).options(joinedload(Job.client)).all()
+    # v3.5.0-alpha.13: joinedload Job.quote per mostrare numero+titolo quote
+    # nel dropdown selettore (Matteo: vedere titolo quotazione anche in CR)
+    jobs = db.query(Job).options(joinedload(Job.client), joinedload(Job.quote)).all()
     return _tpl().TemplateResponse("pages/cost_report.html", {"request": request, "jobs": jobs})
 
 

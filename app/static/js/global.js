@@ -515,8 +515,19 @@ function mfWrapDateTimeLocal(input) {
     const v = input.value || '';
     // Formato YYYY-MM-DDTHH:MM[:SS]
     const m = v.match(/^(\d{4}-\d{2}-\d{2})T(\d{2}:\d{2})/);
-    if (m) { dateInp.value = m[1]; timeInp.value = m[2]; }
-    else { dateInp.value = ''; timeInp.value = ''; }
+    // v3.5.0-alpha.13 — bug timbratura "fine cancellata":
+    // non sovrascriviamo i sub-input se contengono già un valore digitato
+    // dall'utente. Il bug pre-alpha.13: utente apre modal con punch open
+    // (no end), digita data nel sub date, syncBack scrive '' in hidden
+    // (perché time è ancora vuoto), poi al focus su time → parseValue legge
+    // hidden vuoto → cancellava sia date che time. Patch: se hidden ha un
+    // valore valido, riempi solo i sub vuoti; se hidden è vuoto, lascia stare.
+    if (m) {
+      if (!dateInp.value) dateInp.value = m[1];
+      if (!timeInp.value) timeInp.value = m[2];
+    }
+    // Se hidden vuoto e i sub-input contengono qualcosa: non toccare —
+    // l'utente sta digitando, syncBack è già consistente.
   }
   function syncBack() {
     if (dateInp.value && timeInp.value) {
