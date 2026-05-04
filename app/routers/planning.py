@@ -1094,6 +1094,13 @@ async def update_booking(
     db.refresh(b)
     _recalc_booking_envelope(b)
     _log_change(db, b.id, "update", "Booking aggiornato", None)
+    # v3.5.0-alpha.9: replace-all assignments cambia man-hours → recompute
+    if assignments is not None and b.execution_status == BookingExecutionStatus.done:
+        try:
+            from app.services.cost_line_sync import recompute_for_booking
+            recompute_for_booking(db, b)
+        except Exception as e:
+            print(f"[update_booking] cost line sync failed: {e}")
     db.commit()
     return {
         "id": b.id, "kind": b.kind.value if hasattr(b.kind, "value") else b.kind,
@@ -1169,6 +1176,14 @@ async def update_assignment(
                         "Booking riportato in fascia regolare → overtime_status azzerato",
                         None,
                     )
+    # v3.5.0-alpha.9: drag/resize singolo assignment cambia man-hours →
+    # se il booking era done, ricomputo la cost line.
+    if a.booking and a.booking.execution_status == BookingExecutionStatus.done:
+        try:
+            from app.services.cost_line_sync import recompute_for_booking
+            recompute_for_booking(db, a.booking)
+        except Exception as e:
+            print(f"[update_assignment] cost line sync failed: {e}")
     db.commit()
 
     # v3.4.32.1: dopo il drop, se l'assignment ora cade in fascia overtime
@@ -1287,7 +1302,12 @@ def _maybe_flag_overtime_on_assignment_change(
 
 @router.delete("/api/booking-assignments/{assignment_id}")
 async def delete_assignment(assignment_id: int, request: Request, db: Session = Depends(get_db)):
-    """Cancella un singolo assignment. Se è l'ultimo del booking, cancella il booking intero."""
+    """Cancella un singolo assignment. Se è l'ultimo del booking, cancella il booking intero.
+
+    v3.5.0-alpha.9: triggera recompute della JobCostLine. Senza questa chiamata
+    il cost report mostrava il maturato fantasma post-eliminazione (le ore
+    dell'assignment cancellato restavano congelate in `quantity_actual`).
+    """
     a = db.query(BookingAssignment).join(Booking).filter(
         BookingAssignment.id == assignment_id,
         Booking.tenant_id == CURRENT_TENANT,
@@ -1303,12 +1323,22 @@ async def delete_assignment(assignment_id: int, request: Request, db: Session = 
         booking.status = BookingStatus.cancelled
     else:
         _recalc_booking_envelope(booking)
+    # Sync cost line: se il booking era done, le man-hours cambiano (-1 risorsa).
+    try:
+        from app.services.cost_line_sync import recompute_for_booking
+        recompute_for_booking(db, booking)
+    except Exception as e:
+        print(f"[delete_assignment] cost line sync failed: {e}")
     db.commit()
     return {"ok": True, "booking_cancelled": not bool(booking.assignments)}
 
 
 @router.delete("/api/bookings/{booking_id}")
 async def delete_booking(booking_id: int, request: Request, db: Session = Depends(get_db)):
+    """v3.5.0-alpha.9: chiama recompute_for_booking dopo lo soft-delete per
+    far ritirare le ore dal `total_accrued` della cost line collegata. La
+    query in `recompute_cost_line_actual` filtra `status != cancelled`, quindi
+    il booking appena cancellato non rientra più nel totale."""
     b = db.query(Booking).filter(
         Booking.id == booking_id,
         Booking.tenant_id == CURRENT_TENANT,
@@ -1318,6 +1348,11 @@ async def delete_booking(booking_id: int, request: Request, db: Session = Depend
     _enforce_planning_scope(request, db, {a.resource_id for a in b.assignments})
     b.status = BookingStatus.cancelled
     _log_change(db, b.id, "delete", "Booking eliminato (soft)", None)
+    try:
+        from app.services.cost_line_sync import recompute_for_booking
+        recompute_for_booking(db, b)
+    except Exception as e:
+        print(f"[delete_booking] cost line sync failed: {e}")
     db.commit()
     return {"ok": True}
 

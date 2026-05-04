@@ -8,6 +8,30 @@
 
 ## Versione corrente
 
+**v3.5.0-alpha.9** — 4 maggio 2026 — Round 1 fix post-test estensivo Matteo
+
+Sei fix raggruppati emersi dal test del 3 maggio:
+1. Cost report — `recompute_for_booking` agganciato a `DELETE booking`, `DELETE assignment`, `PUT booking (replace assignments)`, `PUT assignment` (drag/resize). Risolve il maturato fantasma post-eliminazione.
+2. HR `/api/overtime` — degradazione graceful con 200+warning quando manca `WorkingHoursPolicy` default (era 400 e rompeva `/hr/`, side-effect: blocco UI timbratura).
+3. Timepicker quick options — da 8 a 27 orari (07→23 + 00:00, mezz'ora sui passaggi giornata).
+4. `openModal()` helper — refresh `mfApplySearchable` + `mfApplyTimePickers` sui figli del modal (fix generico al sintomo "campo non si vede" dopo `select.value=`; risolve il reparto mancante nel modal risorsa).
+5. Pagina 403 + scheda pubblica error — centratura corretta (body globale ha `display:flex` per sidebar, override con `display:block` + `width:100%`).
+6. `propose_quote.lines` accetta `price_item_id` (eredità dal listino) — già in alpha.4, non tocco.
+
+Cache-buster `base.html` → `global.js?v=3.5.0-alpha.9`.
+
+**Versioni intermedie 3.5.0-alpha.x** (3-4 maggio 2026):
+- alpha.1: AI tool-use nativo Anthropic — Slice 1 foundation
+- alpha.2: hotfix persistenza storia conversazione
+- alpha.3: hotfix errore Apply visibile + ordine azioni AI
+- alpha.4: `propose_quote.lines` con price_item_id
+- alpha.5: riordino sezioni sidebar (drag&drop ⠿ header)
+- alpha.6: hotfix tool_use orfani + sanitizer difensivo
+- alpha.7: cestino quote (Slice 1+2+3)
+  - alpha.7.1-7.5: hotfix vari
+- alpha.8: cestino Project + retention auto (Slice 4+5)
+- **alpha.9: Round 1 fix post-test (questa versione)**
+
 **v3.5.0-alpha.8** — 3 maggio 2026 — Cestino Project (Slice 4) + Retention auto (Slice 5)
 
 Cantiere "cestino" chiuso completamente. Soft-delete framework esteso da Quote a Project con stesso pattern (`_SOFT_DELETE_MODELS` + filter automatico via SQLAlchemy event listener). Retention configurabile (`trash_retention_days`, default 30, env `TRASH_RETENTION_DAYS`); 0 = disabilitato. Bottone "⏱ Purga scaduti" in `/admin/cestino` (solo admin).
@@ -228,6 +252,47 @@ Cantiere "booking come unità operativa". Trasformato il booking da pura intenzi
 Sessione 1 maggio sera (commit unico): chiusa v3.4.32 dopo discussione completa di scope + 4 domande chiave (priorità a 3 livelli ✓, default normal/planned ✓, cascade intra-day con workflow overtime su sforamento ✓, pozzo come sezione del cost report progetto ✓).
 
 ## In corso
+
+**Sessione 4 maggio aperta — Round 1 fix post-test del 3 maggio chiuso (v3.5.0-alpha.9).** Working tree pulito dopo commit alpha.9. Round 2 e Round 3 in attesa di green-light Matteo + riapertura.
+
+### Issue identificati nel test estensivo Matteo del 3 maggio
+
+**Round 1 (chiuso in alpha.9)** — fix integrità + UX bloccante:
+- ✅ Cost report maturato fantasma post-delete booking/assignment
+- ✅ HR overtime 400 → 200+warning (sblocca pagina /hr e modal timbratura)
+- ✅ Timepicker quick options estese (07→23, mezz'ora)
+- ✅ openModal refresh searchable wrappers (fix dept mancante in modal risorsa)
+- ✅ Pagina Accesso Negato centrata
+
+**Round 2 — RBAC editor (in coda)**:
+- 🔜 Editor (Luca Bianchi) NON deve vedere prezzi/budget in `/jobs/{id}` + `/cost-report/`. Gate con `view_finance` su template + endpoint.
+- 🔜 Editor NON può creare booking. Aggiungere flusso "richiesta booking" che crea notifica al producer/manager.
+- 🔜 Editor NON può assegnare risorse a progetto/job. Gate `assign_resources` sui POST/PUT.
+
+**Round 3 — UX/feature (in coda)**:
+- 🔜 Quote editor: subtotali categoria realtime (oggi non si aggiornano all'add) + sconto categoria visibile con totale aggiornato.
+- 🔜 Cost report row: popup booking-detail (oggi solo in `/jobs/{id}` come `openLineDetail` v3.4.55, da portare anche in `/cost-report/`).
+- 🔜 Cost report: hardcost legati al costo risorsa visibili (oggi `total_expenses` è in summary ma non breakdown dettagliato).
+- 🔜 Add resource a booking esistente / job esistente → auto-assign al progetto. Verificare che POST `/booking-assignments` chiami `ensure_resources_assigned_to_job`.
+- 🔜 Booking done propaga a tutte le risorse: già booking-level nel modello (`Booking.execution_status`), verificare la viz timeline.
+- 🔜 Timeline: highlight cross-resource su click di un booking multi-risorsa.
+- 🔜 Timeline: overlay con orario corrente durante drag/duplicate (visualmente).
+- 🔜 Timeline: copy multi-risorsa (oggi clona singolo).
+- 🔜 UX `quantity_actual` lavorazione: badge "🔒 sincronizzato dai booking" + bottone "Override manuale" (oggi è editabile direttamente con permesso `edit_cost_actuals`).
+
+### Domande aperte per Matteo (su cui aspetto risposta)
+
+- Override manuale `quantity_actual`: vuoi un sistema di "pin" che impedisca al recompute_for_booking di sovrascrivere l'override fino a sblocco esplicito?
+- Modifica nome lavorazione: oggi richiede `view_finance`. Restringere a `edit_quotes` (più stretto)?
+
+### Cantieri chiusi nella sessione del 3 maggio
+
+1. ✅ **Reverse-flow v1** — job extra da booking su progetto senza quote (v3.4.51)
+2. ✅ **Reverse-flow v2** — booking → QuoteLine + approvazione implicita / phantom quote (v3.4.52)
+3. ✅ **Booking parla quote+lavorazione** (Job nascosto), filtro reparto risorse (v3.4.53)
+4. ✅ **Project filter nel booking** + cost-line RBAC (`edit_cost_actuals`, lock `quantity_actual` per non finance) (v3.4.54)
+5. ✅ **Fix sistemico integrità Quote↔Job↔Booking** — HARD-BLOCK delete con booking attivi, vista lavorazione read-only, auto-assignment Resource→Job, man-hours canonico (v3.4.55)
+6. ✅ **Conferma assegnazione risorse + warning quote approved senza risorse** + 3 docs Mermaid `workflow.md`/`data-model.md`/`permissions-matrix.md` (v3.4.56)
 
 **Sessione 3 maggio chiusa — 6 commit (v3.4.51 → v3.4.56) NON ancora pushati su origin/main** (8 commit ahead totali). Working tree pulito.
 

@@ -119,9 +119,23 @@ function toast(msg, type = 'info', duration = 3500) {
 }
 
 // ── Modal ─────────────────────────────────────────────────────
+// v3.5.0-alpha.9: openModal ora rinfresca searchable selects + timepickers
+// dentro il modal dopo averlo aperto. Fix generico per i casi in cui un
+// template setta `select.value = ...` programmaticamente PRIMA di aprire
+// il modal: il wrapper mf-ss non rifletteva il nuovo valore (es. "department
+// non visibile nel modal risorsa"). Idempotente.
 function openModal(id) {
   const el = document.getElementById(id);
-  if (el) el.classList.add('open');
+  if (!el) return;
+  el.classList.add('open');
+  // L'innerHTML del modal potrebbe essere stato appena popolato: ritarda di
+  // un tick così i value impostati nel medesimo turno sincrono sono visibili.
+  setTimeout(() => {
+    try {
+      if (typeof mfApplySearchable === 'function') mfApplySearchable(el);
+      if (typeof mfApplyTimePickers === 'function') mfApplyTimePickers(el);
+    } catch (e) { /* fail-safe: non bloccare apertura */ }
+  }, 0);
 }
 function closeModal(id) {
   const el = document.getElementById(id);
@@ -390,7 +404,15 @@ function mfApplySearchable(root) {
 // `data-no-time-picker`. Step 15min default (override `data-time-step`).
 // Quick row con orari frequenti. Coesiste col native (typing manuale OK).
 
-const _MF_TP_QUICK = ['08:00','09:00','12:00','13:00','14:00','17:00','18:00','20:00'];
+// v3.5.0-alpha.9: quick options estese per coprire turni serali/notturni
+// e granulità mezz'ora sui passaggi giornata standard. La griglia completa
+// resta sotto (HH:MM ogni 15min).
+const _MF_TP_QUICK = [
+  '07:00','08:00','08:30','09:00','09:30','10:00','10:30',
+  '11:00','12:00','12:30','13:00','13:30','14:00','14:30',
+  '15:00','16:00','17:00','17:30','18:00','18:30','19:00',
+  '19:30','20:00','21:00','22:00','23:00','00:00',
+];
 let _mfTpHost = null;
 
 function _mfTpEnsureHost() {

@@ -170,7 +170,7 @@ async def lifespan(app: FastAPI):
     yield
 
 
-app = FastAPI(title="MediaFlow", version="3.5.0-alpha.8", lifespan=lifespan)
+app = FastAPI(title="MediaFlow", version="3.5.0-alpha.9", lifespan=lifespan)
 
 BASE_DIR = Path(__file__).parent
 app.mount("/static", StaticFiles(directory=BASE_DIR / "static"), name="static")
@@ -297,9 +297,14 @@ def _forbidden(request: Request, path: str):
         from fastapi.responses import JSONResponse
         return JSONResponse({"detail": "Accesso non autorizzato per questo ruolo"}, status_code=403)
     from fastapi.responses import HTMLResponse
+    # NB: body globale (main.css) ha `display:flex; min-height:100vh;` per il
+    # layout sidebar+content. Sulla pagina 403 stand-alone forziamo `display:block`
+    # e centriamo il contenuto con `margin:0 auto + max-width`. Senza l'override
+    # il flex-row del body tiene il contenitore inerte a sinistra.
     html = """<!DOCTYPE html><html lang="it"><head><meta charset="utf-8">
 <title>403 — Accesso negato</title><link rel="stylesheet" href="/static/css/main.css"></head>
-<body><div style="display:flex;align-items:center;justify-content:center;min-height:100vh;flex-direction:column;gap:16px;padding:24px;text-align:center;">
+<body style="display:block;">
+<div style="min-height:100vh;display:flex;align-items:center;justify-content:center;flex-direction:column;gap:16px;padding:24px;text-align:center;width:100%;box-sizing:border-box;">
 <div style="font-size:64px;">🔒</div>
 <h1 style="margin:0;font-size:24px;">Accesso negato</h1>
 <p style="color:var(--text2);max-width:480px;">Il tuo ruolo non ha i permessi per accedere a questa sezione.</p>

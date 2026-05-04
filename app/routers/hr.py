@@ -590,7 +590,48 @@ async def overtime_breakdown(
 
     policy = _resolve_policy_for_resource(db, res)
     if not policy:
-        raise HTTPException(400, "Nessuna WorkingHoursPolicy disponibile (default mancante)")
+        # v3.5.0-alpha.9: degradazione graceful invece di 400.
+        # Senza policy non possiamo splittare regular/overtime/notturno, ma
+        # possiamo comunque tornare le ore totali della risorsa nel periodo
+        # + un warning visibile in UI. Evita di rompere /hr quando il tenant
+        # non ha (ancora) configurato nessuna WorkingHoursPolicy default.
+        punches = db.query(TimePunch).filter(
+            TimePunch.tenant_id == CURRENT_TENANT,
+            TimePunch.resource_id == resource_id,
+            TimePunch.end_datetime.isnot(None),
+            TimePunch.start_datetime >= datetime.combine(from_date, datetime.min.time()),
+            TimePunch.start_datetime <= datetime.combine(to_date, datetime.max.time()),
+        ).all()
+        total_h = sum(
+            (p.end_datetime - p.start_datetime).total_seconds() / 3600.0 for p in punches
+        )
+        return {
+            "resource_id": resource_id,
+            "resource_name": res.name,
+            "from_date": from_date.isoformat(),
+            "to_date": to_date.isoformat(),
+            "policy": None,
+            "warning": (
+                "Nessuna WorkingHoursPolicy default configurata. Il breakdown "
+                "regular/overtime/notturno non è disponibile. Vai in /settings#hours "
+                "per impostare una policy default."
+            ),
+            "breakdown": {
+                "regular_hours": round(total_h, 2),
+                "overtime_daily_hours": 0.0,
+                "overtime_weekly_hours": 0.0,
+                "night_hours": 0.0,
+                "sunday_hours": 0.0,
+                "holiday_hours": 0.0,
+                "total_hours": round(total_h, 2),
+                "weighted_factor": round(total_h, 2),
+            },
+            "unavailability": {
+                "vacation_days": 0, "sick_days": 0, "other_days": 0,
+                "vacation_hours": 0.0, "sick_hours": 0.0, "other_hours": 0.0,
+            },
+            "grand_total_hours": round(total_h, 2),
+        }
 
     punches = db.query(TimePunch).filter(
         TimePunch.tenant_id == CURRENT_TENANT,

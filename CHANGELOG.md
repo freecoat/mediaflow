@@ -1,5 +1,49 @@
 # MediaFlow — Changelog
 
+## v3.5.0-alpha.9 — Round 1 fix post-test estensivo Matteo (4 maggio 2026)
+
+Bug fix focalizzato emerso dal test estensivo del 3 maggio. Tagliato il primo round di issue prioritari prima dei cantieri più grossi (RBAC editor, quote editor live, timeline UX).
+
+**Cost report — maturato fantasma post-eliminazione (HIGH IMPACT)**
+
+I `DELETE /api/bookings/{id}` e `DELETE /api/booking-assignments/{id}` non triggeravano `cost_line_sync.recompute_for_booking`. Risultato: il `JobCostLine.quantity_actual` restava congelato dopo la cancellazione e il cost report continuava a mostrare il maturato come se il booking esistesse ancora.
+
+Fix in `app/routers/planning.py`:
+- `delete_assignment`: dopo lo `db.delete(a)` e refresh booking, chiamo `recompute_for_booking(db, booking)`. Aggiorna man-hours (-1 risorsa) o pulisce tutto se ultima.
+- `delete_booking`: dopo `b.status = cancelled`, chiamo `recompute_for_booking(db, b)`. La query in `recompute_cost_line_actual` filtra `status != cancelled` quindi il booking appena cancellato esce dal totale.
+- `update_booking` (PUT replace-all assignments) e `update_assignment` (PUT singolo drag/resize): recompute aggiunto se booking è done (cambia man-hours).
+
+Tutti i fix sono try/except con log per non rompere la transazione principale (idempotente, fail-safe).
+
+**HR overtime endpoint — degradazione graceful invece di 400**
+
+`/hr/api/overtime` ritornava 400 se mancava la `WorkingHoursPolicy(is_default=True)` del tenant, rompendo il rendering della pagina `/hr` (la dashboard "Le mie ore" chiama l'endpoint al load). Il sintomo collaterale era anche l'impossibilità di chiudere una timbratura aperta — il modal usa l'API ma la pagina era in stato semi-bloccato.
+
+Fix in `app/routers/hr.py`:
+- Se la policy manca, l'endpoint ritorna 200 con `breakdown` calcolato come somma flat delle ore (no split regular/overtime/notturno) + warning testuale `"Nessuna WorkingHoursPolicy default configurata. Vai in /settings#hours…"`. Lasciamo all'utente la scelta di configurarla.
+
+**Timepicker — quick options estese**
+
+`_MF_TP_QUICK` in `app/static/js/global.js` aveva solo 8 orari (08/09/12/13/14/17/18/20). Aggiunti tutti i passaggi orari standard (07:00 → 23:00 + 00:00) con granularità mezz'ora sui passaggi giornata (08:30, 09:30, 12:30, 13:30, 14:30, 17:30, 18:30, 19:30). 27 quick-pick totali. La griglia HH:MM completa ogni 15min resta sotto.
+
+**openModal helper — refresh searchables/timepickers (fix sintomo "campo non si vede nel modal")**
+
+`document.getElementById('rs-dept').value = r.department_id` non aggiornava il display del wrapper `mf-ss` perché impostava solo `select.value` senza rinfrescare il bottone display custom. Sintomo: nel modal modifica risorsa il reparto risultava vuoto anche se la risorsa lo aveva.
+
+Fix in `app/static/js/global.js` su `openModal()`: dopo aver aperto il modal chiama `mfApplySearchable(modalEl)` + `mfApplyTimePickers(modalEl)` con setTimeout 0 (per consentire al codice chiamante di settare i value nello stesso turno sincrono). Idempotente. Generalizzato a tutti i modal — risolve potenzialmente altri sintomi simili.
+
+**Pagina Accesso Negato — centratura corretta**
+
+Il `body` globale (`main.css`) ha `display: flex; min-height: 100vh;` per il layout sidebar+content. Il pannello 403 stand-alone ereditava questa flex-row, lasciando il contenuto inerte a sinistra anche con `justify-content: center` sull'inner div.
+
+Fix in `app/main.py` `_forbidden()` e in `templates/pages/tech_sheet_public_error.html`: aggiunto `style="display:block;"` sul body delle pagine stand-alone + `width:100%; box-sizing:border-box` sul container.
+
+**Cache-buster**
+
+`base.html`: `global.js?v=3.5.0-alpha.9`.
+
+---
+
 ## v3.5.0-alpha.8 — Cestino Project (Slice 4) + Retention auto (Slice 5) (3 maggio 2026)
 
 Estende il framework soft-delete da Quote a Project + aggiunge retention configurabile con purge cascade dei record scaduti.
