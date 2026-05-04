@@ -810,11 +810,19 @@ function renderMyHoursSummary(summary, fromIso, toIso) {
     <div style="font-size:10px; text-transform:uppercase; letter-spacing:0.5px; color:var(--text3,#888); margin-bottom:4px;">${lbl}</div>
     <div style="font-size:18px; font-weight:${highlight ? 600 : 500}; color:${color || 'var(--text,#fff)'};">${val}</div>
   </div>`;
+  // v3.5.0-alpha.15: aggiunte card Festivo + Domenica (Matteo: ore 1 maggio
+  // non venivano riportate). holiday_hours + sunday_hours hanno il loro
+  // multiplier separato (vedi WorkingHoursPolicy.holiday_multiplier /
+  // sunday_multiplier), distinti dall'overtime giornaliero/settimanale.
+  // Le ore festive non sovrapposte alla domenica vanno solo in "Festivo".
+  const sundayNonHoliday = Math.max(0, (b.sunday_hours || 0) - (b.holiday_hours || 0));
   host.innerHTML = `<div class="card">
     <h3 style="font-size:14px; margin:0 0 10px;">📊 Riepilogo ore — ${escapeHtml(periodLabel)}</h3>
     <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(110px, 1fr)); gap:8px;">
       ${cell('Regolari', b.regular_hours.toFixed(1)+'h')}
       ${cell('Straordinari', (b.overtime_daily_hours + b.overtime_weekly_hours).toFixed(1)+'h', '#fb923c')}
+      ${cell('Festivo', (b.holiday_hours || 0).toFixed(1)+'h', '#ef4444')}
+      ${cell('Domenicali', sundayNonHoliday.toFixed(1)+'h', '#fb923c')}
       ${cell('Notturne', b.night_hours.toFixed(1)+'h', '#a78bfa')}
       ${cell('Ferie', (u.vacation_hours||0).toFixed(1)+'h', '#6272f5')}
       ${cell('Malattia', (u.sick_hours||0).toFixed(1)+'h', '#ef4444')}

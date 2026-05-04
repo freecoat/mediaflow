@@ -3194,6 +3194,97 @@ async function renderTimeline(preserveWindow=false) {
   };
   document.addEventListener('keydown', window._tlDeleteHandler, true);
 
+  // v3.5.0-alpha.15: Shift+drag ROI multiselect.
+  // vis-timeline non ha rectangle-selection nativa. Implementazione custom:
+  // mousedown+Shift su area vuota → registra start, draw overlay rect su
+  // mousemove, su mouseup intersezione [time, group]×items → setSelection.
+  if (window._tlRoiHandler) {
+    host.removeEventListener('mousedown', window._tlRoiHandler, true);
+    window._tlRoiHandler = null;
+  }
+  window._tlRoiHandler = function(e) {
+    if (!e.shiftKey) return;
+    if (e.button !== 0) return;
+    // Skip se click su item (vis-timeline gestisce selezione singola)
+    if (e.target.closest && e.target.closest('.vis-item')) return;
+    // Skip se click su scrollbar/label/group
+    if (e.target.closest && e.target.closest('.vis-labelset, .vis-time-axis')) return;
+    if (!tlInstance) return;
+    const startProps = tlInstance.getEventProperties(e);
+    if (!startProps || !startProps.time) return;
+    e.preventDefault();
+    e.stopPropagation();
+
+    const startX = e.clientX, startY = e.clientY;
+    const overlay = document.createElement('div');
+    overlay.id = 'tl-roi-rect';
+    overlay.style.cssText =
+      'position:fixed; border:1px dashed #6272f5; background:rgba(98,114,245,0.10);' +
+      ' pointer-events:none; z-index:9998; left:0; top:0; width:0; height:0;';
+    document.body.appendChild(overlay);
+
+    const onMove = (ev) => {
+      const x1 = Math.min(startX, ev.clientX), x2 = Math.max(startX, ev.clientX);
+      const y1 = Math.min(startY, ev.clientY), y2 = Math.max(startY, ev.clientY);
+      overlay.style.left   = x1 + 'px';
+      overlay.style.top    = y1 + 'px';
+      overlay.style.width  = (x2 - x1) + 'px';
+      overlay.style.height = (y2 - y1) + 'px';
+    };
+    const onUp = (ev) => {
+      document.removeEventListener('mousemove', onMove, true);
+      document.removeEventListener('mouseup',   onUp,   true);
+      overlay.remove();
+      const endProps = tlInstance.getEventProperties(ev);
+      if (!endProps || !endProps.time) return;
+      const t0 = Math.min(startProps.time.getTime(), endProps.time.getTime());
+      const t1 = Math.max(startProps.time.getTime(), endProps.time.getTime());
+
+      // Range gruppi: se i due punti hanno group, intersechiamo solo le
+      // risorse coperte. Altrimenti consideriamo tutti i gruppi.
+      let groupSet = null;
+      if (typeof startProps.group === 'number' && typeof endProps.group === 'number') {
+        groupSet = new Set();
+        // Determinare i gruppi tra start e end via DOM y-coord.
+        const allGroups = (groupsDS.get() || []).filter(g => typeof g.id === 'number');
+        const yMin = Math.min(startY, ev.clientY);
+        const yMax = Math.max(startY, ev.clientY);
+        for (const g of allGroups) {
+          const groupEl = host.querySelector(`.vis-label[data-group-id="${g.id}"]`)
+                       || host.querySelector(`.vis-group[data-group-id="${g.id}"]`);
+          if (!groupEl) {
+            // Fallback: aggiungi solo i 2 group estremi
+            if (g.id === startProps.group || g.id === endProps.group) groupSet.add(g.id);
+            continue;
+          }
+          const r = groupEl.getBoundingClientRect();
+          if (r.bottom >= yMin && r.top <= yMax) groupSet.add(g.id);
+        }
+        if (!groupSet.size) {
+          groupSet.add(startProps.group);
+          groupSet.add(endProps.group);
+        }
+      }
+
+      const inRange = [];
+      for (const it of itemsDS.get()) {
+        if (typeof it.id !== 'string' || !it.id.startsWith('a')) continue;
+        const its = new Date(it.start).getTime();
+        const ite = new Date(it.end).getTime();
+        if (its > t1 || ite < t0) continue;  // No overlap su time
+        if (groupSet && !groupSet.has(it.group)) continue;  // Fuori range gruppi
+        inRange.push(it.id);
+      }
+      if (inRange.length) {
+        tlInstance.setSelection(inRange);
+        toast(`📦 ${inRange.length} booking selezionati (ROI). Premi Delete per eliminare.`, 'info', 4500);
+      }
+    };
+    document.addEventListener('mousemove', onMove, true);
+    document.addEventListener('mouseup',   onUp,   true);
+  };
+  host.addEventListener('mousedown', window._tlRoiHandler, true);
+
   tlUpdateRangeLabel();
 }
 

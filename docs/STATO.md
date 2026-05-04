@@ -8,6 +8,15 @@
 
 ## Versione corrente
 
+**v3.5.0-alpha.15** — 5 maggio 2026 — Round 6: ore festivo + ROI multiselect timeline
+
+Chiusura dei 3 punti rimasti dal Round 5:
+1. **Ore festivo/domenicali nel riepilogo "Le mie ore"** — aggiunte card "Festivo" (rosso) e "Domenicali" (arancione) accanto a Regolari/Straordinari/Notturne. Engine calcolava già `holiday_hours` + `sunday_hours` con multiplier dedicati ma la UI non li mostrava → 1 maggio restava "non riportato".
+2. **Shift+drag ROI multiselect timeline** — implementazione custom (vis-timeline non supporta rect selection nativa). Capture-phase mousedown+Shift su area vuota traccia overlay floating, mouseup calcola intersezione [time, group]×items, `setSelection(ids)`. Si combina col bulk-delete di alpha.14.
+3. **Formato data dd/mm/yyyy** — verifica: già di default via `fmtDate('it-IT')`. UI selezione formato in `/settings` rinviata.
+
+Tasks 19-30 chiusi. 7 commit alpha sopra origin/main (alpha.9 → alpha.15).
+
 **v3.5.0-alpha.14** — 5 maggio 2026 — Round 5: timezone timbratura + revert click + bulk cascade + UX
 
 9 fix:

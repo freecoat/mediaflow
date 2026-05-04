@@ -1,5 +1,38 @@
 # MediaFlow — Changelog
 
+## v3.5.0-alpha.15 — Round 6: ore festivo + ROI multiselect timeline (5 maggio 2026)
+
+Ultimi 2 punti aperti del Round 5 chiusi.
+
+**Ore festivo / domenicali ora visibili nel riepilogo "Le mie ore"**
+
+Bug Matteo: "Ore straordinario non riportate (per esempio 1° maggio)". Causa:
+`renderMyHoursSummary` (hr.html) mostrava solo `regular_hours`, `overtime_daily+weekly`, `night_hours`, `vacation_hours`, `sick_hours` e totale. Le ore festive (1 maggio) finivano in `holiday_hours` ma quel campo non era reso visibile nella UI.
+
+Fix in `app/templates/pages/hr.html:renderMyHoursSummary`:
+- Aggiunte 2 card: **"Festivo"** (rosso `#ef4444`, da `b.holiday_hours`) e **"Domenicali"** (arancione `#fb923c`, da `b.sunday_hours - b.holiday_hours` per evitare doppi conteggi quando una domenica è anche festa).
+- Le ore restano calcolate distintamente dall'engine (`compute_overtime`) con i loro multipli `holiday_multiplier` / `sunday_multiplier` (CCNL). La visualizzazione le distingue da `overtime_daily/weekly` (straordinari "veri" che eccedono le soglie giornaliere/settimanali).
+
+**Shift+drag ROI multiselect timeline**
+
+Vis-timeline non supporta rectangle-selection nativa. Implementazione custom:
+
+`window._tlRoiHandler` (registrato in capture-phase su `host`):
+1. Mousedown + Shift su area vuota della timeline (no item, no labelset, no time-axis) → `getEventProperties(e)` registra `startTime` + `startGroup`. preventDefault per bloccare il drag-pan vis.
+2. Overlay `<div id="tl-roi-rect">` floating fixed (border tratteggiato indaco + bg semi-trasparente) traccia il rettangolo via mousemove globale.
+3. Mouseup → `getEventProperties(eventUp)` → calcolo intersezione: `t0..t1` su time, `groupSet` derivato da DOM `getBoundingClientRect()` di ogni gruppo (filtra solo le risorse coperte). Iterazione `itemsDS` → seleziona items con id "aN" (assignment) overlapping in tempo + dentro groupSet.
+4. `tlInstance.setSelection(ids)` + toast "📦 N booking selezionati (ROI). Premi Delete per eliminare."
+
+Si combina col bulk-delete di alpha.14 (Delete key → cascade su tutti gli assignment dei booking selezionati).
+
+**Formato data dd/mm/yyyy**
+
+Verifica: `fmtDate(iso)` in `global.js` usa `toLocaleDateString('it-IT')` → output naturale dd/mm/yyyy in locale italiano. Già rispettato per lista quote, cost report job-select, planning jobs table. I template che usano formato 'short' mese (es. "5 mag 2026") sono casi specifici (header agenda, etichette grafici) e restano. La selezione formato in `/settings` è rinviata.
+
+Cache-buster `v=3.5.0-alpha.15`. Niente migrazione DB.
+
+---
+
 ## v3.5.0-alpha.14 — Round 5: timezone timbratura + revert click + bulk cascade + UX (5 maggio 2026)
 
 Round 5 dei fix post-test Matteo. 9 fix: 4 bug critici + 4 UX + 1 capability AI.
