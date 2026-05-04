@@ -1,5 +1,31 @@
 # MediaFlow — Changelog
 
+## v3.5.0-alpha.12 — Round 3 (chiusura): cost report popup booking + hardcost (4 maggio 2026)
+
+Chiusi gli ultimi 2 issue di Round 3 (test estensivo Matteo del 3 maggio).
+
+**Cost report — popup booking detail su row click**
+
+Bug v3.4.55 stesso pattern: il popup `modal-line-detail` (KPI Quotato/Maturato + origine quote + risorse + booking attivi) era implementato solo in `/jobs/{id}` (`openLineDetail`). In `/cost-report/` il click sulla riga apriva solo il modal di edit → mancava la vista delle prenotazioni connesse.
+
+Fix in `app/templates/pages/cost_report.html`:
+- Aggiunto `<div id="modal-line-detail">` con stesso layout di `job_detail.html`.
+- Riga `cost-lines-table` ora `onclick='openLineDetailHere(l.id)'` (cursor:pointer); il bottone ✎ resta accessibile con `event.stopPropagation()`.
+- Nuova funzione `openLineDetailHere()` chiama `/jobs/api/{job_id}/cost-lines/{line_id}/detail` (endpoint v3.4.55 riusato) e popola il modal con KPI + origine + risorse + booking + assignments.
+
+**Cost report — hardcost dettagliati**
+
+`Expense.amount` aggregato in summary `total_expenses`, ma il breakdown per riga non era visibile. La `QuoteLine.hardcosts` è una snapshot al momento della quote (es. "DCP master HD: 220€/pezzo + 35€ hardcost").
+
+Fix in `app/routers/jobs.py`:
+- `GET /api/{job_id}/cost-lines/{line_id}/detail`: aggiunti `hardcosts_unit` (€/unità) e `hardcosts_total` (× quantity_quoted) letti da `QuoteLine.hardcosts`.
+
+UI: blocco viola "Hardcost (materiali / spese vive)" nel popup line-detail (sia `cost_report.html` sia `job_detail.html`), visibile solo se hardcost > 0. In `job_detail.html` il blocco è gated dietro `CAN_VIEW_FINANCE`.
+
+Cache-buster `v=3.5.0-alpha.12`. Niente migrazione DB.
+
+---
+
 ## v3.5.0-alpha.11 — Round 3: quote subtotali live + booking timeline UX (4 maggio 2026)
 
 Round 3 dei fix post-test 3 maggio. UX/feature più complessi su quote editor e timeline planning.

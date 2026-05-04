@@ -8,6 +8,15 @@
 
 ## Versione corrente
 
+**v3.5.0-alpha.12** — 4 maggio 2026 — Round 3 chiuso: cost report popup booking + hardcost
+
+Ultimi 2 issue di Round 3 chiusi.
+
+1. Cost report: popup booking-detail su click riga (porting di `openLineDetail` da `job_detail.html`). Endpoint riusato `/jobs/api/{job_id}/cost-lines/{line_id}/detail`.
+2. Hardcost dettagliato: `QuoteLine.hardcosts` esposto via detail endpoint (`hardcosts_unit`, `hardcosts_total`); blocco viola "Hardcost (materiali / spese vive)" nel popup, visibile solo se >0 e gated dietro `CAN_VIEW_FINANCE` in `job_detail.html`.
+
+Round 1+2+3 chiusi (alpha.9 → alpha.12). 4 commit pronti dopo l'ultimo push: `2728c01` alpha.9, `eeb8189` alpha.10, `7e855ce` alpha.11, alpha.12 (in arrivo).
+
 **v3.5.0-alpha.11** — 4 maggio 2026 — Round 3 (parziale): quote subtotali live + booking timeline UX
 
 Sei fix raggruppati:
@@ -304,7 +313,7 @@ Sessione 1 maggio sera (commit unico): chiusa v3.4.32 dopo discussione completa 
 - ✅ Editor non può assegnare risorse a progetto/job (`POST /cost-report/api/job/{id}/assign-resource` gated)
 - ✅ Override manuale `quantity_actual` rimosso dovunque (decisione: ore = booking done, sempre)
 
-**Round 3 — UX/feature (parziale: 7/9 chiusi in alpha.11; 2 in coda)**:
+**Round 3 — UX/feature (chiuso: 9/9 in alpha.11+alpha.12)**:
 - ✅ Quote editor: subtotali categoria live + nuova riga "Totale categoria al netto" sotto lo sconto (alpha.11)
 - ✅ Add resource a booking esistente / job esistente → auto-assign al progetto (hook esteso a PUT booking + PUT assignment, alpha.11)
 - ✅ Booking done propaga a tutte le risorse (refresh timeline su todoSetExec, alpha.11)
@@ -312,8 +321,8 @@ Sessione 1 maggio sera (commit unico): chiusa v3.4.32 dopo discussione completa 
 - ✅ Timeline overlay con orario corrente durante drag/resize (alpha.11)
 - ✅ Timeline copy multi-risorsa (era singolo, alpha.11)
 - ✅ UX `quantity_actual` lavorazione: rimosso edit completo (Matteo decisione 4 maggio, alpha.10)
-- 🔜 Cost report row: popup booking-detail (oggi solo in `/jobs/{id}` come `openLineDetail` v3.4.55, da portare anche in `/cost-report/`)
-- 🔜 Cost report: hardcost legati al costo risorsa visibili (oggi `total_expenses` è in summary ma non breakdown dettagliato)
+- ✅ Cost report row: popup booking-detail (porting di `openLineDetail` da `job_detail.html`, alpha.12)
+- ✅ Cost report: hardcost (`QuoteLine.hardcosts`) esposti nel popup detail come blocco "Hardcost (materiali / spese vive)" (alpha.12)
 
 ### Domande aperte chiuse in questa sessione
 

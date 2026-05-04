@@ -458,8 +458,16 @@ async function openLineDetail(lineId) {
         </div>
       </div>`;
 
+  // v3.5.0-alpha.11: hardcost dalla quote_line snapshot (visibile solo a finance)
+  const hardcostHtml = (CAN_VIEW_FINANCE && l.hardcosts_unit != null && l.hardcosts_unit > 0) ? `
+    <div style="padding:8px 10px; background:rgba(168,85,247,0.06); border:1px solid rgba(168,85,247,0.25); border-radius:6px; margin-bottom:14px;">
+      <div style="font-size:11px; color:var(--text3); text-transform:uppercase; margin-bottom:4px;">Hardcost (materiali / spese vive)</div>
+      <div style="font-size:13px;">${fmtE(l.hardcosts_unit)}/${escapeHtml(l.unit||'')} × ${fmtH2(l.quantity_quoted)} = <b style="color:#c084fc;">${fmtE(l.hardcosts_total)}</b></div>
+    </div>` : '';
+
   document.getElementById('ld-body').innerHTML = `
     ${kpiHtml}
+    ${hardcostHtml}
 
     <div style="margin-bottom:14px;">
       <div style="font-size:11px; color:var(--text3); text-transform:uppercase; margin-bottom:6px;">Origine quote line</div>

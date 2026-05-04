@@ -304,6 +304,18 @@ async def get_cost_line_detail(job_id: int, line_id: int, db: Session = Depends(
                 "total": ql.total,
             }
 
+    # v3.5.0-alpha.11: hardcost (materiali / supporti / spese vive) ereditati
+    # dal price_item. La QuoteLine.hardcosts è snapshot al momento della
+    # quote; lo riportiamo nel detail per visibilità nel cost report.
+    hardcosts_unit = None
+    hardcosts_total = None
+    if quote_origin:
+        from app.models import QuoteLine as _QL
+        ql = db.query(_QL).filter(_QL.id == line.quote_line_id).first()
+        if ql and ql.hardcosts is not None:
+            hardcosts_unit = ql.hardcosts
+            hardcosts_total = (ql.hardcosts or 0) * (line.quantity_quoted or 0)
+
     return {
         "line": {
             "id": line.id, "description": line.description,
@@ -314,6 +326,8 @@ async def get_cost_line_detail(job_id: int, line_id: int, db: Session = Depends(
             "total_quoted": line.total_quoted,
             "total_accrued": line.total_accrued,
             "total_expected": line.total_expected,
+            "hardcosts_unit": hardcosts_unit,
+            "hardcosts_total": hardcosts_total,
             "notes": line.notes,
         },
         "bookings": bookings_out,

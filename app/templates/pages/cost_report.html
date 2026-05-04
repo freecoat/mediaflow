@@ -85,6 +85,25 @@
   <div class="text-muted">Seleziona un job per visualizzare il cost report</div>
 </div>
 
+<!-- Modal dettaglio lavorazione (v3.5.0-alpha.11): popup booking-detail
+     attivato dal click sulla riga della tabella cost-lines. Riusa lo stesso
+     endpoint `/jobs/api/{id}/cost-lines/{lid}/detail` di /jobs/{id} (v3.4.55).
+     Mostra KPI, origine quote, risorse, booking attivi. -->
+<div class="modal-overlay" id="modal-line-detail">
+  <div class="modal" style="max-width:760px;">
+    <div class="modal-header">
+      <span class="modal-title" id="ld-title">Dettaglio lavorazione</span>
+      <button class="btn btn-ghost btn-icon" onclick="closeModal('modal-line-detail')">✕</button>
+    </div>
+    <div class="modal-body" id="ld-body">
+      <div class="text-muted">Caricamento…</div>
+    </div>
+    <div class="modal-footer" id="ld-footer">
+      <button class="btn btn-secondary" onclick="closeModal('modal-line-detail')">Chiudi</button>
+    </div>
+  </div>
+</div>
+
 <!-- Modal aggiorna riga costo (v3.5.0-alpha.10):
      Rimossi campi "Quantità effettiva" e "Totale maturato": derivano sempre
      dai booking marcati `done` (cost_line_sync). La fatturazione extra /
@@ -369,7 +388,9 @@ function renderCostLines() {
   tbody.innerHTML = currentReport.cost_lines.map(l => {
     const ov = l.over_under;
     const pct = l.total_quoted > 0 ? Math.round((l.total_expected / l.total_quoted) * 100) : 0;
-    return `<tr>
+    // v3.5.0-alpha.11: row click → popup dettaglio lavorazione (booking + risorse).
+    // Il bottone ✎ apre invece il modal di edit (stop propagation).
+    return `<tr onclick='openLineDetailHere(${l.id})' style="cursor:pointer;">
       <td>
         <div style="font-weight:500;font-size:13px;">${l.description}</div>
         ${l.category ? `<div class="text-xs text-muted">${l.category}</div>` : ''}
@@ -383,7 +404,7 @@ function renderCostLines() {
         </div>
       </td>
       <td class="mono text-right" style="color:${ov>=0?'var(--green)':'var(--rose)'};">${fmtCurrency(ov)}</td>
-      <td><button class="btn btn-ghost btn-sm" onclick="openUpdateLine(${JSON.stringify(l).replace(/"/g,'&quot;')})">✎</button></td>
+      <td onclick="event.stopPropagation()"><button class="btn btn-ghost btn-sm" onclick="openUpdateLine(${JSON.stringify(l).replace(/"/g,'&quot;')})">✎</button></td>
     </tr>`;
   }).join('');
 }
@@ -425,6 +446,109 @@ function openUpdateLine(line) {
   document.getElementById('ul-expected').value = line.total_expected || '';
   document.getElementById('ul-notes').value = line.notes || '';
   openModal('modal-update-line');
+}
+
+// v3.5.0-alpha.11 — popup booking-detail (porting da job_detail.html
+// openLineDetail). Click su riga `cost-lines-table` → mostra KPI + origine
+// quote line + risorse coinvolte + booking attivi (con assignments).
+async function openLineDetailHere(lineId) {
+  document.getElementById('ld-title').textContent = `Lavorazione #${lineId}`;
+  document.getElementById('ld-body').innerHTML = '<div class="text-muted">Caricamento…</div>';
+  document.getElementById('ld-footer').innerHTML = '<button class="btn btn-secondary" onclick="closeModal(\'modal-line-detail\')">Chiudi</button>';
+  openModal('modal-line-detail');
+  let data;
+  try {
+    data = await api('GET', `/jobs/api/${currentJobId}/cost-lines/${lineId}/detail`);
+  } catch(e) {
+    document.getElementById('ld-body').innerHTML = `<div style="color:#ef4444;">Errore: ${escapeHtml(e.message||'')}</div>`;
+    return;
+  }
+  const l = data.line;
+  const fmtH2 = n => (n == null) ? '—' : Number(n).toFixed(2);
+  const fmtE  = n => (n == null) ? '—' : new Intl.NumberFormat('it-IT', {style:'currency', currency:'EUR'}).format(n);
+  const extraBadge = l.is_extra ? '<span style="background:rgba(251,146,60,0.2);color:#fb923c;padding:1px 6px;border-radius:8px;font-size:10px;font-weight:600;text-transform:uppercase;margin-left:6px;">EXTRA</span>' : '';
+  const billBadge  = !l.is_billable ? '<span style="background:rgba(150,150,150,0.2);color:#999;padding:1px 6px;border-radius:8px;font-size:10px;margin-left:6px;">non fatturabile</span>' : '';
+  document.getElementById('ld-title').innerHTML = `${escapeHtml(l.description)} ${extraBadge}${billBadge}`;
+
+  let bookingsHtml = '';
+  if ((data.bookings || []).length) {
+    bookingsHtml = data.bookings.map(b => {
+      const ass = (b.assignments || []).map(a =>
+        `<div style="font-size:11px; color:var(--text2); margin-left:12px;">↳ ${escapeHtml(a.resource_name||'')} · ${new Date(a.start).toLocaleString('it-IT', {dateStyle:'short', timeStyle:'short'})} → ${new Date(a.end).toLocaleString('it-IT', {timeStyle:'short'})} · ${a.duration_h}h</div>`
+      ).join('');
+      const exColor = b.execution_status === 'done' ? '#22c55e' : b.execution_status === 'in_progress' ? '#f59e0b' : b.execution_status === 'not_done' ? '#ef4444' : 'var(--text3)';
+      return `<div style="padding:8px 10px; border:1px solid var(--border,#2a2e3d); border-radius:6px; margin-bottom:6px; background:var(--bg3,rgba(255,255,255,0.02));">
+        <div style="display:flex; justify-content:space-between; align-items:center;">
+          <span style="font-size:12px; font-weight:500;">Booking #${b.id}</span>
+          <span style="font-size:11px; color:${exColor}; text-transform:uppercase; font-weight:600;">${b.execution_status}</span>
+        </div>
+        ${ass}
+      </div>`;
+    }).join('');
+  } else {
+    bookingsHtml = '<div class="text-muted" style="font-size:12px; font-style:italic;">Nessun booking attivo collegato a questa lavorazione.</div>';
+  }
+
+  let resourcesHtml = '';
+  if ((data.resources || []).length) {
+    resourcesHtml = '<div style="display:flex; gap:6px; flex-wrap:wrap;">' +
+      data.resources.map(r =>
+        `<span style="padding:3px 9px; background:var(--bg3,rgba(255,255,255,0.05)); border-radius:12px; font-size:11px;">${escapeHtml(r.name||'')}${r.role?` · <span style="color:var(--text3);">${escapeHtml(r.role)}</span>`:''}${r.department_name?` <span style="color:#6272f5;">[${escapeHtml(r.department_name)}]</span>`:''}</span>`
+      ).join('') + '</div>';
+  } else {
+    resourcesHtml = '<div class="text-muted" style="font-size:12px; font-style:italic;">Nessuna risorsa coinvolta (dedotta dai booking).</div>';
+  }
+
+  let originHtml = '';
+  if (data.quote_origin) {
+    const o = data.quote_origin;
+    originHtml = `<div style="font-size:12px;">
+      <span class="mono" style="color:#6272f5;">${escapeHtml(o.position||'')}</span>
+      ${escapeHtml(o.description)} · ${o.quantity} ${escapeHtml(o.unit||'')} × ${fmtE(o.unit_price)} = <b>${fmtE(o.total)}</b>
+      <br><a href="/quotes#${o.quote_id}" style="font-size:11px; color:#6272f5;">→ apri quote</a>
+    </div>`;
+  } else if (l.is_extra) {
+    originHtml = '<div class="text-muted" style="font-size:12px; font-style:italic;">Lavorazione extra (no quote line di origine).</div>';
+  } else {
+    originHtml = '<div class="text-muted" style="font-size:12px; font-style:italic;">Origine quote non risolta.</div>';
+  }
+
+  // v3.5.0-alpha.11: hardcost dalla quote_line snapshot (se presenti)
+  const hardcostHtml = (l.hardcosts_unit != null && l.hardcosts_unit > 0) ? `
+    <div style="padding:8px 10px; background:rgba(168,85,247,0.06); border:1px solid rgba(168,85,247,0.25); border-radius:6px; margin-bottom:14px;">
+      <div style="font-size:11px; color:var(--text3); text-transform:uppercase; margin-bottom:4px;">Hardcost (materiali / spese vive)</div>
+      <div style="font-size:13px;">${fmtE(l.hardcosts_unit)}/${escapeHtml(l.unit||'')} × ${fmtH2(l.quantity_quoted)} = <b style="color:#c084fc;">${fmtE(l.hardcosts_total)}</b></div>
+    </div>` : '';
+
+  document.getElementById('ld-body').innerHTML = `
+    <div style="display:grid; grid-template-columns:1fr 1fr; gap:12px; margin-bottom:14px;">
+      <div style="padding:8px 10px; background:var(--bg3,rgba(255,255,255,0.03)); border-radius:6px;">
+        <div style="font-size:11px; color:var(--text3); text-transform:uppercase; margin-bottom:4px;">Quotato</div>
+        <div style="font-size:14px;">${fmtH2(l.quantity_quoted)} ${escapeHtml(l.unit||'')} × ${fmtE(l.unit_price)} = <b>${fmtE(l.total_quoted)}</b></div>
+      </div>
+      <div style="padding:8px 10px; background:rgba(34,197,94,0.06); border:1px solid rgba(34,197,94,0.2); border-radius:6px;">
+        <div style="font-size:11px; color:var(--text3); text-transform:uppercase; margin-bottom:4px;">Maturato (da booking done)</div>
+        <div style="font-size:14px;">${fmtH2(l.quantity_actual)} ${escapeHtml(l.unit||'')} × ${fmtE(l.unit_price)} = <b style="color:#22c55e;">${fmtE(l.total_accrued)}</b></div>
+      </div>
+    </div>
+
+    ${hardcostHtml}
+
+    <div style="margin-bottom:14px;">
+      <div style="font-size:11px; color:var(--text3); text-transform:uppercase; margin-bottom:6px;">Origine quote line</div>
+      ${originHtml}
+    </div>
+
+    <div style="margin-bottom:14px;">
+      <div style="font-size:11px; color:var(--text3); text-transform:uppercase; margin-bottom:6px;">Risorse coinvolte (${(data.resources||[]).length})</div>
+      ${resourcesHtml}
+    </div>
+
+    <div>
+      <div style="font-size:11px; color:var(--text3); text-transform:uppercase; margin-bottom:6px;">Booking attivi (${(data.bookings||[]).length})</div>
+      ${bookingsHtml}
+    </div>
+  `;
 }
 
 async function updateLine() {
