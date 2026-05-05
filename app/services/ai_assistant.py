@@ -452,6 +452,11 @@ def apply_action(db: Session, action: AIAction) -> dict:
     Esegue concretamente l'azione approvata dall'utente.
     Ritorna {ok, result} oppure {ok: False, error}.
     Solleva ValueError se il payload è incompleto.
+
+    v3.5.0-alpha.19: gli handler che dichiarano un parametro keyword-only `user`
+    (settings registry: read_setting/update_setting) ricevono l'utente che ha
+    creato l'action — necessario per i permission check + per le aree
+    "self" (preferenze per-utente).
     """
     if action.status != "proposed":
         return {"ok": False, "error": f"Azione in stato {action.status}, non applicabile"}
@@ -462,7 +467,16 @@ def apply_action(db: Session, action: AIAction) -> dict:
         return {"ok": False, "error": f"Tipo azione non supportato: {action.action_type}"}
 
     try:
-        result = handler(db, payload)
+        import inspect
+        sig = inspect.signature(handler)
+        kwargs: dict = {}
+        if "user" in sig.parameters:
+            user = None
+            if action.user_id:
+                from app.models import User
+                user = db.query(User).filter(User.id == action.user_id).first()
+            kwargs["user"] = user
+        result = handler(db, payload, **kwargs)
         return {"ok": True, "result": result}
     except Exception as e:
         logger.exception(f"apply_action {action.action_type} fallita")
@@ -1000,6 +1014,79 @@ def _h_web_search(db: Session, data: dict) -> dict:
     return {"query": query, "results": results}
 
 
+# ── Settings registry handlers (v3.5.0-alpha.19) ─────────────
+# Tre tool generici per scoprire/leggere/modificare qualsiasi area di settings
+# registrata in `settings_registry.SCHEMAS`. Sostituiscono l'idea di una
+# capability AI per ogni area. Per estendere a una nuova area: aggiungi una
+# `SettingsSchema` al registry, niente codice qui da toccare.
+
+def _h_list_settings_schemas(db: Session, data: dict) -> dict:
+    from app.services.settings_registry import list_schemas
+    schemas = list_schemas()
+    return {
+        "schemas": schemas,
+        "message": (
+            f"Aree configurabili: {', '.join(s['key'] for s in schemas)}. "
+            "Usa read_setting per vedere lo stato corrente di un'area, "
+            "update_setting per proporre modifiche."
+        ),
+    }
+
+
+def _h_read_setting(db: Session, data: dict, *, user=None) -> dict:
+    from app.services.settings_registry import get_schema
+    key = (data.get("key") or "").strip()
+    if not key:
+        raise ValueError("Manca 'key' (es. 'working_hours', 'tenant_settings')")
+    schema = get_schema(key)
+    if not schema:
+        raise ValueError(f"Schema settings '{key}' non trovato")
+    state = schema.read(db, user)
+    return {
+        "key": key,
+        "label": schema.label,
+        "permission_required": schema.permission,
+        "current": state,
+        "fields": [f.to_dict() for f in schema.fields],
+    }
+
+
+def _h_update_setting(db: Session, data: dict, *, user=None) -> dict:
+    from app.services.settings_registry import get_schema, can_user_access
+    key = (data.get("key") or "").strip()
+    if not key:
+        raise ValueError("Manca 'key'")
+    patch = data.get("patch") or {}
+    if not isinstance(patch, dict) or not patch:
+        raise ValueError("'patch' deve essere un dict non vuoto con i campi da modificare")
+    schema = get_schema(key)
+    if not schema:
+        raise ValueError(f"Schema settings '{key}' non trovato")
+    if user is not None and not can_user_access(schema, user):
+        raise ValueError(
+            f"Permesso negato: per modificare '{schema.label}' serve permesso "
+            f"'{schema.permission}'"
+        )
+    result = schema.write(db, user, patch)
+    applied = result.get("applied") or {}
+    if not applied:
+        return {
+            "key": key,
+            "label": schema.label,
+            "applied": {},
+            "current": result.get("current"),
+            "message": f"Nessuna modifica effettiva su '{schema.label}' (i valori erano già corretti).",
+        }
+    diff_lines = [f"{k}: {v['old']} → {v['new']}" for k, v in applied.items()]
+    return {
+        "key": key,
+        "label": schema.label,
+        "applied": applied,
+        "current": result.get("current"),
+        "message": f"'{schema.label}' aggiornato. Cambi: " + " · ".join(diff_lines),
+    }
+
+
 def _h_propose_booking(db: Session, data: dict) -> dict:
     """Crea un Booking con N risorse (E6 v3.4.20).
 
@@ -1110,6 +1197,10 @@ _ACTION_HANDLERS = {
     "propose_new_item_and_line": _h_propose_new_item_and_line,
     "propose_booking":           _h_propose_booking,
     "web_search":                _h_web_search,
+    # v3.5.0-alpha.19 — Settings registry tools
+    "list_settings_schemas":     _h_list_settings_schemas,
+    "read_setting":              _h_read_setting,
+    "update_setting":            _h_update_setting,
 }
 
 

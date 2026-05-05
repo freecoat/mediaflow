@@ -1,5 +1,67 @@
 # MediaFlow — Changelog
 
+## v3.5.0-alpha.19 — Round 7D.1: AI settings registry + tool generico (5 maggio 2026)
+
+Apertura del Round 7D (cantieri di design del feedback Matteo del 5 maggio).
+Punto 1: AI integrazione GUI/settings — proposta A2 confermata.
+
+**Architettura "settings registry" + 3 tool AI generici**
+
+Il pattern: invece di aggiungere una capability AI per ogni nuova area
+configurabile (`propose_working_hours`, `propose_user_prefs`, ecc.), il copilot
+**scopre dinamicamente** cosa è configurabile via discovery e applica patch
+generiche tramite un singolo tool `update_setting`. Estendere a una nuova area
+= aggiungere uno schema al registry, niente nuove capability.
+
+Cantiere strategico per Matteo: "Questa integrazione andrà fatta su tutto il
+software in ogni stage". Il registry è il punto di estensione single-source-of-truth.
+
+**Componenti aggiunti:**
+
+`app/services/settings_registry.py` (nuovo):
+- `SettingsField` (dataclass) — descrizione field con type JSON-Schema
+  sottoinsieme: integer/number/string/boolean/time/enum + nullable + ui_hint.
+- `SettingsSchema` (dataclass) — area configurabile: key, label, description,
+  fields, read+write handlers, permission ("admin" | "self" | permesso RBAC).
+- 2 schemi iniziali: `working_hours` (16 field WorkingHoursPolicy) e
+  `tenant_settings` (10 field anagrafica azienda + valuta/IVA/lingua).
+- `_apply_patch` con coercion + validation (es. "HH:MM" → time, enum check).
+- `_serialize` per output JSON sicuro (time → "HH:MM").
+- `can_user_access(schema, user)` — RBAC check.
+- Estendibile: aggiungere uno schema = +1 entry in `SCHEMAS` dict, niente
+  altro codice da toccare.
+
+`app/services/ai_tools.py`:
+- 3 tool nuovi:
+  - `list_settings_schemas` (readonly) — discovery aree configurabili.
+  - `read_setting(key)` (readonly) — stato corrente.
+  - `update_setting(key, patch)` (mutation, gated da Apply utente) — proposta
+    di modifica con diff visibile in card.
+- System prompt esteso con sezione "Settings — modificare configurazioni":
+  pattern obbligatorio discovery → read → update.
+
+`app/services/ai_assistant.py`:
+- Handlers `_h_list_settings_schemas`, `_h_read_setting`, `_h_update_setting`
+  (i due ultimi accettano `user` keyword-only per RBAC + aree "self").
+- `apply_action` esteso con iniezione opzionale di `user` via inspect.signature
+  (handlers che lo dichiarano lo ricevono dal `AIAction.user_id`).
+
+`app/services/ai_loop.py`:
+- `_exec_readonly` esteso con `user` keyword-only + iniezione consistente.
+
+`app/static/js/copilot.js`:
+- `actionTypeLabel` esteso (label "⚙ ..." per i 3 tool settings).
+- Nuovo `summaryUpdateSetting(d)` che renderizza la card mutation con label
+  area + lista patch (campo: nuovo valore).
+
+Cache-buster `v=3.5.0-alpha.19` (sia global.js che copilot.js).
+Niente migrazione DB.
+
+**Estensione futura**: aggiungere `notification_preferences` e `user_preferences`
+quando si avranno modelli/colonne dedicati. Pattern già pronto.
+
+---
+
 ## v3.5.0-alpha.18 — Round 7C: undo/redo planning + bulk-edit booking (5 maggio 2026)
 
 Round 7C su feedback Matteo del 5 maggio: 2 punti planning power-user.

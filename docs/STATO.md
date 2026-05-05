@@ -8,6 +8,22 @@
 
 ## Versione corrente
 
+**v3.5.0-alpha.19** — 5 maggio 2026 — Round 7D.1: AI settings registry + tool generico
+
+Sotto-round 7D.1 chiuso (cantiere architetturale "AI integrazione GUI/settings"
+proposta A2). Discovery dinamica + patch generica → estendibile a tutto il
+software senza nuove capability AI.
+
+- `app/services/settings_registry.py`: `SettingsSchema` con read/write handlers,
+  validation/coercion, RBAC. 2 schemi iniziali (`working_hours`, `tenant_settings`).
+- 3 tool AI: `list_settings_schemas` + `read_setting` + `update_setting`.
+- `apply_action` + `_exec_readonly` con iniezione opzionale di `user` via
+  inspect.signature → handler che lo richiedono lo ricevono.
+- Card mutation `update_setting` nel copilot con summary leggibile (area + diff).
+- System prompt aggiornato con sezione "Settings".
+
+Cache-buster `v=3.5.0-alpha.19`. Niente migrazione DB.
+
 **v3.5.0-alpha.18** — 5 maggio 2026 — Round 7C: undo/redo planning + bulk-edit booking
 
 Sotto-round 7C chiuso (2 punti):
@@ -421,10 +437,15 @@ Lista feedback ricevuta:
 - ✅ Undo/redo planning timeline (stack max 50 + bottoni toolbar persistenti + undo per `remove_assignment`)
 - ✅ Bulk modify bookings (modal con shift orario + cambio stato esecuzione, endpoint `bulk-edit`)
 
-**Round 7D (cantieri di design — proposte presentate, in attesa green-light Matteo):**
-- 🔜 AI integrazione GUI/settings: proposta **A2** = tool generico `update_settings` con discovery API (`SETTINGS_SCHEMAS` registry)
-- 🔜 Menu assegnazioni risorse a 200 progetti: pagina dedicata `/assignments` (matrice Risorsa × Progetto + filtri + palette typeahead)
-- 🔜 Risorse + reparti a 500/30: pagina unificata `/team` con sidebar reparti (count + freelance/internal/equipment toggle), drill-down per reparto
+**Round 7D (cantieri di design):**
+- ✅ 7D.1 — AI integrazione GUI/settings: **A2** implementato in alpha.19. Registry
+  `settings_registry.py` + 3 tool AI generici (list/read/update). 2 schemi iniziali
+  (working_hours, tenant_settings). Estendibile a tutto il software via add di nuovi
+  schemi.
+- 🔜 7D.2 — Menu assegnazioni risorse a 200 progetti: pagina dedicata `/assignments`
+  (matrice Risorsa × Progetto + filtri + palette typeahead). Avviato.
+- 🔜 7D.3 — Risorse + reparti a 500/30: pagina unificata `/team` con sidebar reparti
+  drill-down. In coda.
 
 **Sessione 4 maggio chiusa — Round 1 fix post-test del 3 maggio chiuso (v3.5.0-alpha.9).** Working tree pulito dopo commit alpha.9. Round 2 e Round 3 in attesa di green-light Matteo + riapertura.
 

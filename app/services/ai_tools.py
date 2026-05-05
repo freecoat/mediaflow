@@ -272,6 +272,74 @@ TOOLS: list[dict] = [
         },
         "handler": "propose_new_item_and_line",
     },
+    # ────────── SETTINGS (read-only discovery + read + mutation update) ──────────
+    {
+        "name": "list_settings_schemas",
+        "category": "readonly",
+        "description": (
+            "Elenca tutte le aree configurabili del sistema (orario di lavoro, dati "
+            "azienda, ecc.) con i rispettivi field e tipi. Usa questo tool come "
+            "PRIMO passo se l'utente chiede di modificare una configurazione: ti "
+            "mostra cosa è effettivamente configurabile e dove sta. Non modifica "
+            "niente, solo discovery."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {},
+        },
+        "handler": "list_settings_schemas",
+    },
+    {
+        "name": "read_setting",
+        "category": "readonly",
+        "description": (
+            "Legge lo stato corrente di un'area di settings (es. working_hours). "
+            "Usalo per sapere il valore attuale prima di proporre una modifica, "
+            "così l'utente vede chiaramente il diff (prima → dopo)."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "key": {
+                    "type": "string",
+                    "description": "Chiave dello schema (es. 'working_hours', 'tenant_settings'). Vedi list_settings_schemas.",
+                }
+            },
+            "required": ["key"],
+        },
+        "handler": "read_setting",
+    },
+    {
+        "name": "update_setting",
+        "category": "mutation",
+        "description": (
+            "Propone modifiche a un'area di settings. Il sistema mostrerà una card "
+            "di conferma con il diff (campo: vecchio → nuovo); l'utente approva "
+            "cliccando Applica. Specifica `key` (es. 'working_hours') e `patch` "
+            "(dict con SOLO i field da modificare — i campi assenti restano "
+            "invariati). Per scoprire field validi e tipi, chiama prima "
+            "list_settings_schemas + read_setting."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "key": {
+                    "type": "string",
+                    "description": "Chiave schema (vedi list_settings_schemas).",
+                },
+                "patch": {
+                    "type": "object",
+                    "description": (
+                        "Dict {field_key: nuovo_valore}. Solo i field da cambiare. "
+                        "Per i field di tipo 'time' usa 'HH:MM' (es. '08:30'). Per "
+                        "boolean usa true/false."
+                    ),
+                },
+            },
+            "required": ["key", "patch"],
+        },
+        "handler": "update_setting",
+    },
     {
         "name": "propose_booking",
         "category": "mutation",
@@ -427,4 +495,11 @@ Regole critiche:
 - (b) **Quote** → SE non esiste nel context "QUOTE ESISTENTI" per il progetto richiesto, propone `propose_quote` con `lines` inline. Per ogni riga, usa `price_item_id` se la voce è in listino (da context o appena creata in (a)) — qty basta, gli altri campi vengono ereditati. Per voci libere (raro), passa `description` + `unit_price` espliciti. Aspetti l'Apply (riceverai il `quote_id`).
 - (c) **Aggiunte successive** → solo dopo che la quote esiste, usa `propose_quote_line` (con `price_item_id` quando applicabile).
 NON proporre `propose_new_item_and_line` se la quote non esiste ancora — fallirà perché serve un `quote_id` valido. Per nuove voci listino + nuova quote in unica creazione, segui (a) → (b).
+
+**Settings — modificare configurazioni del sistema** (NUOVO in v3.5.0-alpha.19):
+Quando l'utente chiede di **modificare una configurazione** (es. "porta lo straordinario al 35%", "cambia la mia P.IVA", "imposta orario 9-13/14-19"), NON cercare di indovinare se esiste un endpoint dedicato. Usa il flusso generico:
+1. **Discovery**: chiama `list_settings_schemas` per scoprire quali aree sono configurabili e con quali field. Si ottiene una lista tipo `[{key:"working_hours", label:"Orario di lavoro", fields:[...]}, {key:"tenant_settings", ...}]`.
+2. **Stato corrente**: chiama `read_setting(key="working_hours")` per vedere i valori attuali. Così quando proporrai la modifica avrai chiaro cosa cambia.
+3. **Proposta**: chiama `update_setting(key="working_hours", patch={"overtime_multiplier": 1.35})`. Il sistema mostra una card con diff (vecchio → nuovo) e l'utente conferma cliccando Applica. Includi nel `patch` SOLO i campi da modificare; i campi assenti restano invariati.
+Se l'utente è vago ("velocizza l'elaborazione"), prima chiarisci con una domanda — non inventare quale setting cambiare.
 """

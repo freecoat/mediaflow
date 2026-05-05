@@ -192,7 +192,12 @@
       "propose_quote_line": "Riga quote",
       "propose_price_item": "Voce listino",
       "propose_new_item_and_line": "Nuova voce listino + riga quote",
+      "propose_booking": "Booking (nuovo)",
       "web_search": "Ricerca web",
+      // v3.5.0-alpha.19 — Settings
+      "list_settings_schemas": "⚙ Discovery aree configurabili",
+      "read_setting": "⚙ Lettura impostazione",
+      "update_setting": "⚙ Modifica impostazioni",
     })[t] || t;
   }
 
@@ -257,8 +262,42 @@
       case "propose_price_item": return summaryPriceItem(d);
       case "propose_new_item_and_line": return summaryNewItemAndLine(d);
       case "web_search": return `<div>Cerca: <b>${escapeHtml(d.query || "—")}</b></div>`;
+      case "update_setting": return summaryUpdateSetting(d);
       default: return `<span class="cp-muted">Nessun renderer per questo tipo. Apri "dati grezzi".</span>`;
     }
+  }
+
+  // v3.5.0-alpha.19 — diff visivo per update_setting (settings registry).
+  // Il payload è {key, patch:{field: new_value, ...}}. Mostriamo "key" + ogni
+  // field con freccia "→ nuovo_valore". Lo stato attuale (per il "vecchio
+  // valore") non è disponibile lato client, ma il backend lo aggiunge al
+  // tool_result post-apply ("applied: {field: {old, new}}"). Per la card
+  // pre-apply mostriamo solo i nuovi valori e il nome dell'area.
+  function summaryUpdateSetting(d) {
+    const SETTINGS_LABEL = {
+      "working_hours": "Orario di lavoro (default tenant)",
+      "tenant_settings": "Dati azienda",
+      "notification_preferences": "Preferenze notifiche",
+    };
+    const lines = [];
+    const lbl = SETTINGS_LABEL[d.key] || d.key || "—";
+    lines.push(`<b>${escapeHtml(lbl)}</b>`);
+    const patch = d.patch || {};
+    const keys = Object.keys(patch);
+    if (!keys.length) {
+      lines.push(`<span class="cp-muted">(nessun campo specificato)</span>`);
+      return lines.join("<br>");
+    }
+    lines.push(`<span class="cp-muted">Modifiche proposte:</span>`);
+    const rows = keys.map(k => {
+      const v = patch[k];
+      const vRender = typeof v === "boolean"
+        ? (v ? "✓ true" : "✗ false")
+        : (v == null ? "—" : escapeHtml(String(v)));
+      return `<div style="font-size:12px;"><span class="cp-muted">${escapeHtml(k)}:</span> <b>${vRender}</b></div>`;
+    });
+    lines.push(rows.join(""));
+    return lines.join("<br>");
   }
 
   function fmtCur(n) {

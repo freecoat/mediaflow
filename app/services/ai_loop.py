@@ -65,19 +65,28 @@ def _save_state(conv: AIConversation, state: dict) -> None:
 
 # ── Esecuzione tool readonly ───────────────────────────────────
 
-def _exec_readonly(db: Session, tu: ToolUse) -> str:
+def _exec_readonly(db: Session, tu: ToolUse, user=None) -> str:
     """Esegue una tool readonly e ritorna una stringa con il risultato (per
     iniettarla come `content` di un blocco tool_result Anthropic-style).
     Le eccezioni vengono catturate e tradotte in un messaggio di errore
     leggibile dal modello, che potrà cambiare strategia.
+
+    v3.5.0-alpha.19: gli handler readonly che dichiarano `user` keyword-only
+    (es. read_setting) ricevono l'utente corrente. Negli altri casi viene
+    ignorato.
     """
     from app.services.ai_assistant import _ACTION_HANDLERS
+    import inspect
 
     handler = _ACTION_HANDLERS.get(tu.name)
     if handler is None:
         return json.dumps({"error": f"tool '{tu.name}' non implementato"}, ensure_ascii=False)
     try:
-        result = handler(db, tu.input or {})
+        sig = inspect.signature(handler)
+        kwargs: dict = {}
+        if "user" in sig.parameters:
+            kwargs["user"] = user
+        result = handler(db, tu.input or {}, **kwargs)
         return json.dumps(result, ensure_ascii=False, default=str)
     except Exception as e:
         logger.exception(f"Tool readonly {tu.name} fallita")
@@ -335,9 +344,14 @@ def advance_loop(db: Session, conv: AIConversation, provider: AIProvider,
         # Esegue readonly inline; raccoglie mutation come AIAction.
         tool_results: list[dict] = []
         has_mutation = False
+        # Recupera l'utente della conversazione (per handler che lo richiedono).
+        _user_for_readonly = None
+        if conv.user_id:
+            from app.models import User as _U
+            _user_for_readonly = db.query(_U).filter(_U.id == conv.user_id).first()
         for tu in resp.tool_uses:
             if is_readonly(tu.name):
-                content = _exec_readonly(db, tu)
+                content = _exec_readonly(db, tu, user=_user_for_readonly)
                 tool_results.append({"tool_use_id": tu.id, "content": content})
             else:
                 # Mutation → salva AIAction proposed; tool_result verrà
