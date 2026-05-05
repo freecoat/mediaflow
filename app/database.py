@@ -33,5 +33,12 @@ def get_db():
 
 
 def create_tables():
-    """Crea tutte le tabelle al primo avvio (dev only — usa Alembic in produzione)."""
+    """Crea tutte le tabelle al primo avvio (dev only — usa Alembic in produzione).
+
+    v3.5.0-alpha.21: forza l'import di app.models PRIMA di create_all() così
+    che tutti i modelli siano registrati in Base.metadata.tables. Senza questo
+    import, una nuova tabella aggiunta in models.py non viene creata se nessun
+    router ha importato il suo modello prima del lifespan startup.
+    """
+    import app.models  # noqa: F401  (registra i modelli nella metadata)
     Base.metadata.create_all(bind=engine)

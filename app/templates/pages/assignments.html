@@ -16,6 +16,19 @@
 
 <!-- ── Vista Matrice (default, v3.5.0-alpha.20) ────────────── -->
 <div id="ax-matrix-view">
+  <!-- v3.5.0-alpha.21: banner istruzioni inline + legenda colori (Matteo:
+       "non mi è chiaro come assegnare le risorse al progetto"). -->
+  <div style="background:rgba(98,114,245,0.08); border:1px solid rgba(98,114,245,0.3); border-radius:6px; padding:10px 14px; font-size:12px; margin-bottom:10px; display:flex; flex-wrap:wrap; align-items:center; gap:14px;">
+    <div style="flex:1; min-width:300px;">
+      <b>📌 Come assegnare</b>: clicca una cella della matrice (intersezione Risorsa × Job).
+      Si apre il modal per scegliere ruolo, giorni/ore pianificate e tariffa concordata. Salva → l'assegnazione appare verde.
+    </div>
+    <div style="display:flex; gap:14px; font-size:11px;">
+      <span><span style="display:inline-block; width:14px; height:14px; background:rgba(34,197,94,0.20); border:1px solid #2a2e3d; vertical-align:middle; margin-right:4px;"></span>Assegnata</span>
+      <span><span style="display:inline-block; width:14px; height:14px; background:rgba(251,146,60,0.15); border:1px solid #2a2e3d; vertical-align:middle; margin-right:4px;"></span>Solo booking (no assignment)</span>
+      <span><span style="display:inline-block; width:14px; height:14px; background:transparent; border:1px solid #2a2e3d; vertical-align:middle; margin-right:4px;"></span>Vuota</span>
+    </div>
+  </div>
   <div class="card" style="margin-bottom:12px;">
     <div style="display:flex; flex-wrap:wrap; gap:10px; align-items:flex-end;">
       <div class="form-group" style="flex:2; min-width:220px; margin:0;">

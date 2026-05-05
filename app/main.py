@@ -170,7 +170,7 @@ async def lifespan(app: FastAPI):
     yield
 
 
-app = FastAPI(title="MediaFlow", version="3.5.0-alpha.20", lifespan=lifespan)
+app = FastAPI(title="MediaFlow", version="3.5.0-alpha.21", lifespan=lifespan)
 
 BASE_DIR = Path(__file__).parent
 app.mount("/static", StaticFiles(directory=BASE_DIR / "static"), name="static")
@@ -186,6 +186,7 @@ templates.env.globals["is_elevated"] = _rbac.is_elevated
 templates.env.globals["can_view_finance"] = _rbac.can_view_finance
 templates.env.globals["can_edit_cost_actuals"] = _rbac.can_edit_cost_actuals
 templates.env.globals["can_edit_settings"] = _rbac.can_edit_settings
+templates.env.globals["can_view_settings"] = _rbac.can_view_settings
 templates.env.globals["can_edit_pricelist"] = _rbac.can_edit_pricelist
 templates.env.globals["can_assign_resources"] = _rbac.can_assign_resources
 templates.env.globals["can_create_booking"] = _rbac.can_create_booking

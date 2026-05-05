@@ -7,7 +7,8 @@ from typing import Optional
 from datetime import date
 from sqlalchemy.orm import Session, joinedload
 from app.database import get_db
-from app.models import Project, Client, Quote, Job, ProjectStatus, Resource
+from datetime import datetime as _dt
+from app.models import Project, Client, Quote, Job, ProjectStatus, Resource, ProjectMilestone
 from app.models.models import JobResourceAssignment
 from app.services.rbac import can_view_finance, current_user_optional
 
@@ -405,6 +406,109 @@ async def delete_assignment(project_id: int, assignment_id: int, db: Session = D
     if not a:
         raise HTTPException(404)
     db.delete(a); db.commit()
+    return {"ok": True}
+
+
+# ── Milestones (v3.5.0-alpha.21) ─────────────────────────────
+
+
+def _milestone_dict(m: ProjectMilestone) -> dict:
+    today = date.today()
+    if m.is_completed:
+        status = "done"
+    elif m.target_date < today:
+        status = "missed"
+    elif (m.target_date - today).days <= 7:
+        status = "imminent"
+    else:
+        status = "pending"
+    return {
+        "id": m.id, "project_id": m.project_id,
+        "title": m.title, "description": m.description,
+        "target_date": m.target_date.isoformat(),
+        "color": m.color,
+        "is_completed": bool(m.is_completed),
+        "completed_at": m.completed_at.isoformat() if m.completed_at else None,
+        "status": status,
+    }
+
+
+@router.get("/api/{project_id}/milestones")
+async def list_milestones(project_id: int, db: Session = Depends(get_db)):
+    rows = (
+        db.query(ProjectMilestone)
+        .filter(ProjectMilestone.project_id == project_id)
+        .order_by(ProjectMilestone.target_date)
+        .all()
+    )
+    return [_milestone_dict(m) for m in rows]
+
+
+@router.post("/api/{project_id}/milestones")
+async def create_milestone(
+    project_id: int,
+    request: Request,
+    title: str = Form(...),
+    target_date: date = Form(...),
+    description: Optional[str] = Form(None),
+    color: Optional[str] = Form(None),
+    db: Session = Depends(get_db),
+):
+    p = db.query(Project).filter(Project.id == project_id).first()
+    if not p:
+        raise HTTPException(404, "Progetto non trovato")
+    user = current_user_optional(request)
+    m = ProjectMilestone(
+        project_id=project_id,
+        title=title.strip(),
+        target_date=target_date,
+        description=description,
+        color=color,
+        created_by_user_id=user.id if user else None,
+    )
+    db.add(m)
+    db.commit()
+    db.refresh(m)
+    return _milestone_dict(m)
+
+
+@router.put("/api/{project_id}/milestones/{milestone_id}")
+async def update_milestone(
+    project_id: int, milestone_id: int,
+    title: Optional[str] = Form(None),
+    target_date: Optional[date] = Form(None),
+    description: Optional[str] = Form(None),
+    color: Optional[str] = Form(None),
+    is_completed: Optional[bool] = Form(None),
+    db: Session = Depends(get_db),
+):
+    m = db.query(ProjectMilestone).filter(
+        ProjectMilestone.id == milestone_id,
+        ProjectMilestone.project_id == project_id,
+    ).first()
+    if not m:
+        raise HTTPException(404, "Milestone non trovata")
+    if title is not None: m.title = title.strip()
+    if target_date is not None: m.target_date = target_date
+    if description is not None: m.description = description
+    if color is not None: m.color = color or None
+    if is_completed is not None:
+        m.is_completed = bool(is_completed)
+        m.completed_at = _dt.utcnow() if is_completed else None
+    db.commit()
+    db.refresh(m)
+    return _milestone_dict(m)
+
+
+@router.delete("/api/{project_id}/milestones/{milestone_id}")
+async def delete_milestone(project_id: int, milestone_id: int, db: Session = Depends(get_db)):
+    m = db.query(ProjectMilestone).filter(
+        ProjectMilestone.id == milestone_id,
+        ProjectMilestone.project_id == project_id,
+    ).first()
+    if not m:
+        raise HTTPException(404)
+    db.delete(m); db.commit()
     return {"ok": True}
 
 

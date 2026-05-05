@@ -8,6 +8,31 @@
 
 ## Versione corrente
 
+**v3.5.0-alpha.21** — 5 maggio 2026 — Round 8 (parziale)
+
+Round 8 aperto su feedback Matteo dal test su altra macchina. 8/9 punti chiusi.
+
+**Bug critici (8A):**
+- ✅ Salvataggio Orari lavorativi: auto-create policy default al primo GET (`_ensure_default_policy`)
+- ✅ Bulk modify lookup booking_id (campo a top-level non in extendedProps)
+- ✅ ROI selezione area: aggiunto menu dropdown affidabile alternativo
+  (Tutti visibili / Per Job / Per Risorsa / Per Date / Deseleziona)
+- ✅ Permesso deprecato `edit_cost_actuals` rimosso
+- ✅ RBAC orari: split `view_settings_global` (tutti) vs `manage_settings_global`
+  (admin/manager). User vede ma non modifica.
+- ✅ Matrice assegnazioni: banner istruzioni inline + legenda colori
+
+**Feature (8B):**
+- ✅ ProjectMilestone modello + CRUD + UI tab in /projects/{id}
+- ✅ Timeline planning vista "Per progetto" (toggle in toolbar)
+- 🔜 Form KDM in DAM (rinviato, cantiere medio)
+
+**Tecnici:**
+- `create_tables()` ora forza import app.models per registrare tutti i modelli
+- Backend `/planning/api/bookings` espone `project_id/project_title/project_code/job_code/job_title`
+
+Cache-buster `v=3.5.0-alpha.21`. Tabella `project_milestones` creata auto al boot.
+
 **v3.5.0-alpha.20** — 5 maggio 2026 — Round 7D.2 + 7D.3: matrice assegnazioni + pagina Team
 
 **Round 7 chiuso completamente** (12 punti su 12 del feedback Matteo del 5 maggio).

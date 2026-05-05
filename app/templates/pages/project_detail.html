@@ -40,6 +40,7 @@
   {% endif %}
   <div class="tab {% if not _can_finance %}active{% endif %}" onclick="showTab('jobs', this)">Job / lavorazioni <span id="tab-count-jobs" class="text-xs text-muted"></span></div>
   <div class="tab" onclick="showTab('resources', this)">Risorse <span id="tab-count-resources" class="text-xs text-muted"></span></div>
+  <div class="tab" onclick="showTab('milestones', this)">📍 Milestone <span id="tab-count-milestones" class="text-xs text-muted"></span></div>
   <div class="tab" onclick="showTab('details', this)">Dettagli progetto</div>
   <div class="tab" onclick="showTab('techsheet', this)">🛠 Scheda tecnica</div>
 </div>
@@ -105,6 +106,54 @@
 
     <!-- Job + drop targets -->
     <div id="rs-jobs-wrap"></div>
+  </div>
+</div>
+
+<!-- ── Sezione Milestone (v3.5.0-alpha.21) ──────────────────────
+     Marker di deadline relativi al progetto. Non sono booking: nessuna risorsa
+     occupata, nessuna ora generata. Servono come punti di riferimento
+     temporali ("Trailer cliente 15 mag", "Screening 22 mag", "DCP 30 mag").
+     Visibili in timeline planning come linee verticali. -->
+<div id="section-milestones" class="hidden">
+  <div class="card mb-3">
+    <div class="card-title mb-3">📍 Milestone progetto</div>
+    <p class="text-sm text-muted mb-3">
+      Milestone = marker di deadline (non occupa risorse, non genera ore). Si
+      vede come linea verticale nella timeline pianificazione. Esempi tipici:
+      consegna trailer, screening cliente, DCP master, KDM activation.
+    </p>
+    {% if can_view_finance(request.state.current_user) %}
+    <div class="mb-3" style="display:flex; flex-wrap:wrap; gap:8px; align-items:flex-end;">
+      <div class="form-group" style="flex:2; min-width:200px; margin:0;">
+        <label class="form-label" style="font-size:11px;">Titolo *</label>
+        <input class="form-input" id="ms-new-title" placeholder="es. Consegna trailer cliente">
+      </div>
+      <div class="form-group" style="min-width:140px; margin:0;">
+        <label class="form-label" style="font-size:11px;">Data target *</label>
+        <input class="form-input" id="ms-new-date" type="date">
+      </div>
+      <div class="form-group" style="min-width:80px; margin:0;">
+        <label class="form-label" style="font-size:11px;">Colore</label>
+        <input class="form-input" id="ms-new-color" type="color" value="#6272f5" style="height:36px; padding:2px;">
+      </div>
+      <button class="btn btn-primary btn-sm" onclick="msAdd()">+ Aggiungi</button>
+    </div>
+    {% endif %}
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th style="width:120px;">Data</th>
+            <th>Titolo / Descrizione</th>
+            <th style="width:120px;">Stato</th>
+            <th style="width:120px;"></th>
+          </tr>
+        </thead>
+        <tbody id="ms-table">
+          <tr><td colspan="4" class="text-muted" style="text-align:center; padding:20px;">Caricamento…</td></tr>
+        </tbody>
+      </table>
+    </div>
   </div>
 </div>
 
@@ -682,7 +731,7 @@ function renderDetails(p) {
 function showTab(name, el) {
   document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
   if (el) el.classList.add('active');
-  ['quotes', 'jobs', 'resources', 'details', 'techsheet'].forEach(s => {
+  ['quotes', 'jobs', 'resources', 'milestones', 'details', 'techsheet'].forEach(s => {
     const sec = document.getElementById('section-' + s);
     if (sec) sec.classList.add('hidden');
   });
@@ -690,6 +739,81 @@ function showTab(name, el) {
   if (target) target.classList.remove('hidden');
   if (name === 'resources') loadAssignments();
   if (name === 'techsheet') tsLoad();
+  if (name === 'milestones') msLoad();
+}
+
+// v3.5.0-alpha.21 — Milestones (marker deadline)
+async function msLoad() {
+  try {
+    const list = await api('GET', `/projects/api/${PROJECT_ID}/milestones`);
+    const tbody = document.getElementById('ms-table');
+    document.getElementById('tab-count-milestones').textContent = `(${list.length})`;
+    if (!list.length) {
+      tbody.innerHTML = '<tr><td colspan="4" class="text-muted" style="text-align:center; padding:20px;">Nessuna milestone configurata.</td></tr>';
+      return;
+    }
+    const STATUS_LABELS = {
+      pending:   '<span style="color:var(--text2);">⏳ In attesa</span>',
+      imminent:  '<span style="color:#fb923c; font-weight:500;">⚠ Imminente</span>',
+      missed:    '<span style="color:#ef4444; font-weight:500;">⛔ Scaduta</span>',
+      done:      '<span style="color:#22c55e; font-weight:500;">✓ Completata</span>',
+    };
+    tbody.innerHTML = list.map(m => `<tr>
+      <td class="mono">${fmtDate(m.target_date)}</td>
+      <td>
+        <div style="display:flex; align-items:center; gap:6px;">
+          ${m.color ? `<span style="display:inline-block; width:10px; height:10px; border-radius:50%; background:${escapeHtml(m.color)};"></span>` : ''}
+          <b>${escapeHtml(m.title)}</b>
+        </div>
+        ${m.description ? `<div class="text-xs text-muted" style="margin-top:2px;">${escapeHtml(m.description)}</div>` : ''}
+      </td>
+      <td>${STATUS_LABELS[m.status] || m.status}</td>
+      <td style="text-align:right;">
+        ${m.is_completed
+          ? `<button class="btn btn-ghost btn-sm" onclick="msToggle(${m.id}, false)" title="Riapri">↶</button>`
+          : `<button class="btn btn-ghost btn-sm" onclick="msToggle(${m.id}, true)" title="Marca completata">✓</button>`}
+        <button class="btn btn-ghost btn-sm color-rose" onclick="msDelete(${m.id})" title="Elimina">🗑</button>
+      </td>
+    </tr>`).join('');
+  } catch(e) {
+    toast(e.message || 'Errore caricamento milestones', 'error');
+  }
+}
+
+async function msAdd() {
+  const title = document.getElementById('ms-new-title').value.trim();
+  const date = document.getElementById('ms-new-date').value;
+  const color = document.getElementById('ms-new-color').value;
+  if (!title || !date) { toast('Titolo e data sono obbligatori', 'error'); return; }
+  const fd = new FormData();
+  fd.append('title', title);
+  fd.append('target_date', date);
+  if (color && color !== '#6272f5') fd.append('color', color);
+  try {
+    await api('POST', `/projects/api/${PROJECT_ID}/milestones`, fd);
+    document.getElementById('ms-new-title').value = '';
+    document.getElementById('ms-new-date').value = '';
+    toast('Milestone creata', 'success');
+    msLoad();
+  } catch(e) { toast(e.message || 'Errore', 'error'); }
+}
+
+async function msToggle(id, completed) {
+  const fd = new FormData();
+  fd.append('is_completed', completed ? 'true' : 'false');
+  try {
+    await api('PUT', `/projects/api/${PROJECT_ID}/milestones/${id}`, fd);
+    msLoad();
+  } catch(e) { toast(e.message || 'Errore', 'error'); }
+}
+
+async function msDelete(id) {
+  if (!confirm('Eliminare questa milestone?')) return;
+  try {
+    await api('DELETE', `/projects/api/${PROJECT_ID}/milestones/${id}`);
+    toast('Milestone eliminata', 'success');
+    msLoad();
+  } catch(e) { toast(e.message || 'Errore', 'error'); }
 }
 
 // ── Risorse: drag&drop ───────────────────────────────────────

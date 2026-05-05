@@ -311,9 +311,44 @@ def _parse_time(s: Optional[str]) -> Optional[time]:
         raise HTTPException(400, f"Orario non valido: {s}")
 
 
+def _ensure_default_policy(db: Session) -> WorkingHoursPolicy:
+    """v3.5.0-alpha.21: auto-crea una policy default minima al primo accesso.
+
+    Pre-alpha.21: se nessuna WorkingHoursPolicy esisteva nel tenant, la pagina
+    /settings#hours mostrava form vuoto e il save falliva (PUT richiede id).
+    Ora se non esiste viene creata con valori sensati italiani (8h/40h CCNL
+    base, 1.30/1.25/1.50/2.00 multipliers, fascia notturna 22-06, festività IT).
+    """
+    p = db.query(WorkingHoursPolicy).filter(
+        WorkingHoursPolicy.tenant_id == CURRENT_TENANT_FALLBACK,
+        WorkingHoursPolicy.is_default == True,  # noqa: E712
+    ).first()
+    if p:
+        return p
+    p = WorkingHoursPolicy(
+        tenant_id=CURRENT_TENANT_FALLBACK,
+        name="Italia standard",
+        is_default=True,
+        morning_start=time(9, 0), morning_end=time(13, 0),
+        afternoon_start=time(14, 0), afternoon_end=time(18, 0),
+        working_days=31,  # lun-ven
+        holidays_country="IT",
+        daily_hours_threshold=8.0, weekly_hours_threshold=40.0,
+        overtime_multiplier=1.30, night_multiplier=1.25,
+        sunday_multiplier=1.50, holiday_multiplier=2.00,
+        night_start=time(22, 0), night_end=time(6, 0),
+    )
+    db.add(p)
+    db.commit()
+    db.refresh(p)
+    return p
+
+
 @router.get("/api/working-hours")
 async def get_working_hours(db: Session = Depends(get_db)):
     """Ritorna tutte le policy del tenant (di default 1: la 'Italia standard')."""
+    # v3.5.0-alpha.21: garantisce esistenza policy default (auto-crea se assente)
+    _ensure_default_policy(db)
     pols = db.query(WorkingHoursPolicy).filter(
         WorkingHoursPolicy.tenant_id == CURRENT_TENANT_FALLBACK,
     ).order_by(WorkingHoursPolicy.is_default.desc(), WorkingHoursPolicy.id).all()
@@ -323,6 +358,7 @@ async def get_working_hours(db: Session = Depends(get_db)):
 @router.put("/api/working-hours/{policy_id}")
 async def update_working_hours(
     policy_id: int,
+    request: Request,
     name: Optional[str] = Form(None),
     morning_start: Optional[str] = Form(None),
     morning_end: Optional[str] = Form(None),
@@ -342,6 +378,15 @@ async def update_working_hours(
     ccnl_label: Optional[str] = Form(None),
     db: Session = Depends(get_db),
 ):
+    # v3.5.0-alpha.21: RBAC — solo manager+ può modificare working hours.
+    from app.services.rbac import current_user_optional, can_edit_settings
+    user = current_user_optional(request)
+    if not can_edit_settings(user):
+        raise HTTPException(
+            403,
+            "Non hai i permessi per modificare gli orari lavorativi. "
+            "Servono permessi di manager o superiore.",
+        )
     p = db.query(WorkingHoursPolicy).filter(
         WorkingHoursPolicy.id == policy_id,
         WorkingHoursPolicy.tenant_id == CURRENT_TENANT_FALLBACK,

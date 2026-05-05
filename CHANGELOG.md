@@ -1,5 +1,67 @@
 # MediaFlow — Changelog
 
+## v3.5.0-alpha.21 — Round 8 (parziale): bug fix critici + milestone + timeline progetto (5 maggio 2026)
+
+Round 8 su feedback Matteo dal test su altra macchina. 8 dei 9 punti chiusi
+(KDM rinviato — cantiere medio, spec già pronta).
+
+**Bug critici (8A):**
+
+- **Salvataggio Orari lavorativi non possibile**: causa root = nessuna
+  WorkingHoursPolicy default in DB → form vuoto → save fallisce (PUT richiede
+  id). Fix: `_ensure_default_policy(db)` auto-crea una policy minimale al primo
+  GET `/settings/api/working-hours` con valori sensati italiani (8h/40h CCNL
+  base, multipliers 1.30/1.25/1.50/2.00, fascia 22-06, festività IT).
+  Effetto a cascata: gli straordinari ora vengono calcolati dall'engine.
+- **Bulk-edit "impossibile risalire ai booking"**: `tlOpenBulkModal` cercava
+  `b.extendedProps.booking_id` ma il backend espone `booking_id` AL TOP del dict
+  (cf. planning.py serializer). Stesso bug per `assignment_id`. Fix: lookup
+  diretto su top-level.
+- **ROI selezione area inaffidabile**: aggiunto menu dropdown alternativo
+  affidabile (`☑ Seleziona ▾`) con: "Tutti i booking visibili",
+  "Per Job…", "Per Risorsa…", "Per intervallo date…", "Deseleziona tutto".
+  Il toggle ROI shift+drag resta come backup (rinominato `📦 Area`).
+- **Permesso deprecato `edit_cost_actuals`**: rimosso definitivamente da
+  PERMISSIONS dict + `can_edit_cost_actuals()` ora ritorna sempre False.
+- **RBAC orari lavorativi**: split in 2 permessi:
+  - `view_settings_global` (default per tutti i ruoli) → vede /settings#hours
+  - `manage_settings_global` (admin/manager) → modifica.
+  Form `/settings#hours` mostra banner "🔒 Sola lettura" + disabilita input +
+  nasconde bottoni Save per chi non ha `manage_settings_global`. Backend PUT
+  bloccato con 403 + messaggio chiaro.
+- **Matrice assegnazioni UX**: aggiunto banner istruzioni inline ("clicca cella
+  → modal con ruolo/giorni/tariffe") + legenda colori (Assegnata / Solo
+  booking / Vuota).
+
+**Feature (8B):**
+
+- **Milestone progetto** (modello + CRUD + UI): nuovo `ProjectMilestone`
+  (project_id, target_date, title, description, color, is_completed). Marker
+  di deadline NON-booking (no risorse, no ore, no costi). Tab dedicata in
+  `/projects/{id}` con form add/list/toggle done/delete. Status auto-calcolato
+  (pending/imminent/missed/done) da target_date vs today. 4 endpoint:
+  `GET/POST/PUT/DELETE /projects/api/{id}/milestones[/{mid}]`.
+- **Timeline planning vista "Per progetto"**: toggle `👥 Per risorsa` /
+  `🎬 Per progetto` in toolbar. Quando attivo, gruppi=Project (treeLevel 1) →
+  Job (treeLevel 2), items raggruppati per `j{job_id}`. Background unav/
+  punches nascosti (legati a risorse, irrilevanti per progetto). Persistito in
+  localStorage. Backend `/api/booking-assignments` esteso con `project_id`,
+  `project_title`, `project_code`, `job_code`, `job_title` in extendedProps.
+- **`create_tables()` robusto**: forza `import app.models` per registrare tutti
+  i modelli in `Base.metadata.tables` prima di create_all(). Pre-fix una nuova
+  tabella non veniva creata se nessun router aveva importato il suo modello.
+
+**Rinviati al prossimo round:**
+
+- 8B.1 — Form richiesta KDM in DAM (cantiere medio: nuovo modello KdmRequest
+  + flusso amministrativo separato da Asset).
+
+Cache-buster `v=3.5.0-alpha.21`. Migrazione DB: nuova tabella
+`project_milestones` viene creata automaticamente al boot via `create_tables()`
+(idempotente, no Alembic).
+
+---
+
 ## v3.5.0-alpha.20 — Round 7D.2 + 7D.3: matrice assegnazioni + pagina Team (5 maggio 2026)
 
 Chiusura del Round 7D in unica versione: 2 cantieri di scalabilità (200 progetti

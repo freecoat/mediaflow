@@ -621,7 +621,7 @@ async def list_bookings(
     accettano comma-separated (`?resource_id=1,3,5`). Compatibile single."""
     q = db.query(BookingAssignment).options(
         joinedload(BookingAssignment.resource),
-        joinedload(BookingAssignment.booking).joinedload(Booking.job),
+        joinedload(BookingAssignment.booking).joinedload(Booking.job).joinedload(Job.project),
         joinedload(BookingAssignment.booking).joinedload(Booking.cost_line),
     ).join(Booking, BookingAssignment.booking_id == Booking.id).filter(
         Booking.tenant_id == CURRENT_TENANT,
@@ -700,6 +700,11 @@ async def list_bookings(
                 "source": "booking",
                 "kind": b.kind.value if hasattr(b.kind, "value") else b.kind,
                 "job_id": b.job_id,
+                "job_code": b.job.code if b.job else None,
+                "job_title": b.job.title if b.job else None,
+                "project_id": (b.job.project_id if b.job else None),
+                "project_title": (b.job.project.title if (b.job and b.job.project) else None),
+                "project_code": (b.job.project.code if (b.job and b.job.project) else None),
                 "job_cost_line_id": b.job_cost_line_id,
                 "cost_line_description": b.cost_line.description if b.cost_line else None,
                 "resource_id": a.resource_id,

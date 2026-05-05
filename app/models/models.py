@@ -449,6 +449,37 @@ class Project(Base):
     client: Mapped["Client"] = relationship(back_populates="projects")
     quotes: Mapped[List["Quote"]] = relationship(back_populates="project", cascade="all, delete-orphan")
     jobs: Mapped[List["Job"]] = relationship(back_populates="project")
+    milestones: Mapped[List["ProjectMilestone"]] = relationship(
+        back_populates="project", cascade="all, delete-orphan",
+        order_by="ProjectMilestone.target_date",
+    )
+
+
+# ── PROJECT MILESTONE (v3.5.0-alpha.21) ──────────────────────
+#
+# Marker di deadline relativo al progetto. NON è un booking (non occupa risorsa,
+# non genera ore/costo). È un punto di riferimento temporale: "consegna trailer
+# il 15 maggio", "screening cliente il 22 maggio", "DCP master il 30 maggio".
+# Visualizzato come linea verticale nella timeline di pianificazione + lista
+# nella scheda progetto. Notifica deadline_approaching quando si avvicina.
+
+class ProjectMilestone(Base):
+    __tablename__ = "project_milestones"
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    project_id: Mapped[int] = mapped_column(ForeignKey("projects.id"), index=True)
+    title: Mapped[str] = mapped_column(String(255))
+    target_date: Mapped[date] = mapped_column(Date, index=True)
+    description: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    # Colore opzionale (default = colore tema progetto). Hex senza #.
+    color: Mapped[Optional[str]] = mapped_column(String(7), nullable=True)
+    # Stato: pending | done | missed (calcolato in UI da target_date vs today
+    # quando is_completed=False)
+    is_completed: Mapped[bool] = mapped_column(Boolean, default=False, index=True)
+    completed_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    created_by_user_id: Mapped[Optional[int]] = mapped_column(ForeignKey("users.id"), nullable=True)
+
+    project: Mapped["Project"] = relationship(back_populates="milestones")
 
 
 # ── RISORSE ──────────────────────────────────────────────────

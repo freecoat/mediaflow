@@ -751,6 +751,11 @@
             <button class="btn btn-secondary btn-sm" data-zoom="month">Mese</button>
             <button class="btn btn-secondary btn-sm" data-zoom="quarter">Trimestre</button>
           </div>
+          <!-- v3.5.0-alpha.21: toggle group-by Risorsa/Progetto -->
+          <div class="btn-group" id="tl-groupby" style="margin-left:10px;">
+            <button class="btn btn-secondary btn-sm active" data-groupby="resource" title="Raggruppa per risorsa (default)">👥 Per risorsa</button>
+            <button class="btn btn-secondary btn-sm" data-groupby="project" title="Raggruppa per progetto">🎬 Per progetto</button>
+          </div>
           <button class="btn btn-ghost btn-sm" onclick="tlMove(-1)">◀</button>
           <button class="btn btn-ghost btn-sm" onclick="tlMove(0)">Oggi</button>
           <button class="btn btn-ghost btn-sm" onclick="tlMove(1)">▶</button>
@@ -763,7 +768,19 @@
           <button class="btn btn-ghost btn-sm" id="tl-undo-btn-toolbar" onclick="tlPerformUndo()" disabled style="opacity:0.4; margin-left:6px;" title="Annulla (Ctrl+Z)">↶</button>
           <button class="btn btn-ghost btn-sm" id="tl-redo-btn-toolbar" onclick="tlPerformRedo()" disabled style="opacity:0.4;" title="Ripeti (Ctrl+Y)">↷</button>
           <button class="btn btn-ghost btn-sm" id="tl-bulk-btn-toolbar" onclick="tlOpenBulkModal()" style="display:none; margin-left:6px;" title="Modifica in blocco i booking selezionati">✏ Bulk</button>
-          <button class="btn btn-ghost btn-sm" id="tl-roi-toggle" onclick="tlRoiTogglePersist()" title="Modalità selezione area: drag su zona vuota per selezionare più booking. Alt+drag funziona sempre, anche senza modalità attiva." style="margin-left:6px;">📦 Selezione area</button>
+          <!-- v3.5.0-alpha.21: dropdown selezione multipla affidabile (sostituisce/affianca shift+drag inaffidabile) -->
+          <div style="position:relative; display:inline-block; margin-left:6px;">
+            <button class="btn btn-ghost btn-sm" onclick="tlSelectMenuToggle(event)" title="Selezione multipla">☑ Seleziona ▾</button>
+            <div id="tl-select-menu" style="display:none; position:absolute; right:0; top:100%; margin-top:4px; background:var(--bg-elev,#1a1d29); border:1px solid var(--border,#2a2e3d); border-radius:6px; box-shadow:0 8px 24px rgba(0,0,0,.5); z-index:1100; min-width:220px; padding:4px; font-size:12px;">
+              <button class="btn btn-ghost btn-sm" style="display:block; width:100%; text-align:left; padding:7px 10px;" onclick="tlSelectAllVisible()">Tutti i booking visibili</button>
+              <button class="btn btn-ghost btn-sm" style="display:block; width:100%; text-align:left; padding:7px 10px;" onclick="tlSelectByJob()">Per Job…</button>
+              <button class="btn btn-ghost btn-sm" style="display:block; width:100%; text-align:left; padding:7px 10px;" onclick="tlSelectByResource()">Per Risorsa…</button>
+              <button class="btn btn-ghost btn-sm" style="display:block; width:100%; text-align:left; padding:7px 10px;" onclick="tlSelectByDate()">Per intervallo date…</button>
+              <hr style="margin:4px 0; border-color:var(--border);">
+              <button class="btn btn-ghost btn-sm" style="display:block; width:100%; text-align:left; padding:7px 10px;" onclick="tlClearSelection()">Deseleziona tutto (Esc)</button>
+            </div>
+          </div>
+          <button class="btn btn-ghost btn-sm" id="tl-roi-toggle" onclick="tlRoiTogglePersist()" title="Modalità selezione area sperimentale: trascina su zona vuota per selezionare. Funziona meglio dopo zoom-in. Alt+drag fallback." style="margin-left:6px;">📦 Area</button>
           <button class="btn btn-ghost btn-sm" onclick="tlPrefsToggle(event)" title="Personalizza look timeline" style="margin-left:6px;">⚙</button>
         </div>
 
@@ -2207,6 +2224,14 @@ function tlHeatmapHTML(days) {
 }
 
 function tlBuildGroups(bookings, rangeStart, rangeEnd) {
+  // v3.5.0-alpha.21: dispatch su modalità raggruppamento (Risorsa | Progetto).
+  if (window._tlGroupBy === 'project') {
+    return tlBuildProjectGroups(bookings);
+  }
+  return tlBuildResourceGroups(bookings, rangeStart, rangeEnd);
+}
+
+function tlBuildResourceGroups(bookings, rangeStart, rangeEnd) {
   // Filtri: dept e resource limitano cosa mostriamo
   const fp = getFilterParams();
   const deptFilter = fp.department_id ? Number(fp.department_id) : null;
@@ -2246,6 +2271,67 @@ function tlBuildGroups(bookings, rangeStart, rangeEnd) {
     groups.push({id: r.id, content, treeLevel: 2});
   }
   return groups;
+}
+
+// v3.5.0-alpha.21: vista alternativa "Per progetto" (groups=Project, leaves=Job).
+// Costruita dai bookings caricati (project_id + job_id in extendedProps).
+function tlBuildProjectGroups(bookings) {
+  if (!bookings || !bookings.length) return [];
+  // Mappa project_id → {title, jobs: Map(job_id → {code, title})}
+  const projects = new Map();
+  const jobs = new Map();
+  for (const b of bookings) {
+    const p = b.extendedProps || {};
+    const pid = p.project_id;
+    const jid = p.job_id;
+    if (!pid || !jid) continue;
+    if (!projects.has(pid)) {
+      projects.set(pid, {title: p.project_title || `Progetto #${pid}`, code: p.project_code, jobs: new Set()});
+    }
+    projects.get(pid).jobs.add(jid);
+    if (!jobs.has(jid)) {
+      jobs.set(jid, {project_id: pid, code: p.job_code, title: p.job_title || `Job #${jid}`});
+    }
+  }
+  if (!projects.size) return [];
+  const groups = [];
+  // Project parent + Job leaves
+  for (const [pid, info] of projects) {
+    const childIds = [...info.jobs].map(j => 'j' + j);
+    groups.push({
+      id: 'p' + pid,
+      content: `<b>${escapeHtml(info.title)}</b>${info.code ? ` <span style="opacity:.6; font-size:10px;">[${escapeHtml(info.code)}]</span>` : ''}`,
+      nestedGroups: childIds,
+      treeLevel: 1,
+      className: 'tl-project-' + pid,
+    });
+  }
+  // Job leaves
+  for (const [jid, info] of jobs) {
+    groups.push({
+      id: 'j' + jid,
+      content: `${info.code ? `<span class="mono text-xs text-muted">${escapeHtml(info.code)}</span> ` : ''}${escapeHtml(info.title)}`,
+      treeLevel: 2,
+    });
+  }
+  return groups;
+}
+
+// v3.5.0-alpha.21: re-mappa group degli items per la modalità progetto.
+// Va chiamata DOPO tlBookingToItem (che assegna group=resource_id).
+function tlRemapItemsForProjectMode(items, bookings) {
+  // Lookup: assignment_id → job_id (preso dai bookings raw)
+  const aToJob = new Map();
+  for (const b of bookings) {
+    const p = b.extendedProps || {};
+    if (b.assignment_id && p.job_id) aToJob.set(b.assignment_id, p.job_id);
+  }
+  return items.map(it => {
+    if (!it.assignment_id) return it;
+    const jid = aToJob.get(it.assignment_id);
+    if (!jid) return null;  // booking senza job → escluso dalla vista progetto
+    return { ...it, group: 'j' + jid };
+  }).filter(Boolean);
 }
 
 function tlBookingToItem(b) {
@@ -2953,7 +3039,11 @@ async function renderTimeline(preserveWindow=false) {
   const qs = buildQS();
   const bookings = await api('GET', '/planning/api/bookings'+(qs?'?'+qs:''));
   window._tlBookings = bookings; // espongo per tlbOpenEdit (multi-row precarica)
-  const items = bookings.map(tlBookingToItem).filter(i => i.group);
+  let items = bookings.map(tlBookingToItem).filter(i => i.group);
+  // v3.5.0-alpha.21: vista "Per progetto" → re-mappa group da resource_id a 'j'+job_id
+  if (window._tlGroupBy === 'project') {
+    items = tlRemapItemsForProjectMode(items, bookings);
+  }
 
   // E3 v3.4.17: fetch ferie/festività/weekend come background items
   const _winForUnav = savedWin || tlWindowFor(tlZoom, new Date());
@@ -3010,7 +3100,11 @@ async function renderTimeline(preserveWindow=false) {
     });
   } catch(_) {}
 
-  const itemsDS = new vis.DataSet([...items, ...bgItems, ...punchItems]);
+  // v3.5.0-alpha.21: in vista "Per progetto" gli items background (ferie /
+  // festività / timbrature) sono legati a resource_id e non hanno senso
+  // raggruppati per job → li nascondiamo. Restano solo i booking items.
+  const _hideBg = (window._tlGroupBy === 'project');
+  const itemsDS = new vis.DataSet(_hideBg ? items : [...items, ...bgItems, ...punchItems]);
 
   const win = savedWin || tlWindowFor(tlZoom, new Date());
   const groups = tlBuildGroups(bookings, win.start, win.end);
@@ -3527,9 +3621,11 @@ function tlOpenBulkModal() {
     toast('Seleziona almeno un booking (Ctrl/Shift+click o Alt+drag area).', 'info', 3000);
     return;
   }
-  // Estraggo gli items per derivare booking_ids unici
+  // v3.5.0-alpha.21: bug fix bulk-edit "impossibile risalire". Pre-fix
+  // cercavo b.extendedProps.booking_id ma il backend espone booking_id AL TOP
+  // (vedi planning.py riga 694). assignment_id stesso pattern.
   const items = (window._tlBookings || []).filter(b => selA.includes(b.id));
-  const bookingIds = [...new Set(items.map(it => it.extendedProps && it.extendedProps.booking_id).filter(Boolean))];
+  const bookingIds = [...new Set(items.map(it => it.booking_id).filter(Boolean))];
   if (!bookingIds.length) {
     toast('Impossibile risalire ai booking selezionati', 'error');
     return;
@@ -3553,16 +3649,18 @@ async function tlSubmitBulkEdit() {
     toast('Seleziona almeno un\'azione (shift orario o cambio stato).', 'warning');
     return;
   }
-  // Snapshot per undo: salva start/end/resource per ogni assignment + execution_status
+  // Snapshot per undo: salva start/end/resource per ogni assignment + execution_status.
+  // v3.5.0-alpha.21: booking_id e assignment_id sono al top, execution_status e
+  // resource_id dentro extendedProps (cf. planning.py serializer).
   const snaps = [];
   for (const bid of bookingIds) {
-    const items = (window._tlBookings || []).filter(b => b.extendedProps && b.extendedProps.booking_id === parseInt(bid));
+    const items = (window._tlBookings || []).filter(b => b.booking_id === parseInt(bid));
     if (!items.length) continue;
     snaps.push({
       booking_id: parseInt(bid),
       execution_status: items[0].extendedProps && items[0].extendedProps.execution_status,
       assignments: items.map(it => ({
-        id: it.extendedProps && it.extendedProps.assignment_id,
+        id: it.assignment_id,
         start: it.start, end: it.end,
         resource_id: it.extendedProps && it.extendedProps.resource_id,
       })),
@@ -3594,6 +3692,135 @@ function tlOnSelectionChange() {
   const selA = sel.filter(id => typeof id === 'string' && id.startsWith('a'));
   const btn = document.getElementById('tl-bulk-btn-toolbar');
   if (btn) btn.style.display = selA.length >= 1 ? '' : 'none';
+}
+
+// ── v3.5.0-alpha.21: selezione multipla via menu (alternativa affidabile a ROI shift+drag) ──
+function tlSelectMenuToggle(ev) {
+  ev.stopPropagation();
+  const m = document.getElementById('tl-select-menu');
+  if (!m) return;
+  const isOpen = m.style.display !== 'none';
+  m.style.display = isOpen ? 'none' : 'block';
+  if (!isOpen) {
+    const closer = (e) => {
+      if (!m.contains(e.target)) {
+        m.style.display = 'none';
+        document.removeEventListener('mousedown', closer, true);
+      }
+    };
+    setTimeout(() => document.addEventListener('mousedown', closer, true), 50);
+  }
+}
+
+function _tlAllAssignmentItems() {
+  // Tutti gli items visibili nel range corrente della timeline che sono booking
+  // assignments (id 'aN'). Ignoriamo background unavailability e separatori.
+  if (!window._tlInstance) return [];
+  const ds = window._tlInstance.itemsData;
+  if (!ds) return [];
+  const all = ds.get();
+  return all.filter(it => typeof it.id === 'string' && it.id.startsWith('a'));
+}
+
+function tlSelectAllVisible() {
+  const items = _tlAllAssignmentItems();
+  if (!items.length) { toast('Nessun booking nel range visibile', 'info'); return; }
+  // Filtra al range visibile (timeline.window)
+  const win = window._tlInstance.getWindow();
+  const ws = win.start.getTime(), we = win.end.getTime();
+  const ids = items.filter(it => {
+    const its = new Date(it.start).getTime();
+    const ite = new Date(it.end).getTime();
+    return its < we && ite > ws;
+  }).map(it => it.id);
+  window._tlInstance.setSelection(ids);
+  toast(`${ids.length} booking selezionati`, 'success');
+  document.getElementById('tl-select-menu').style.display = 'none';
+  tlOnSelectionChange();
+}
+
+function tlSelectByJob() {
+  document.getElementById('tl-select-menu').style.display = 'none';
+  const bookings = window._tlBookings || [];
+  if (!bookings.length) { toast('Nessun booking caricato', 'info'); return; }
+  // Costruisci elenco {job_id: title} unico
+  const jobsMap = new Map();
+  for (const b of bookings) {
+    const jid = b.extendedProps && b.extendedProps.job_id;
+    if (!jid) continue;
+    if (!jobsMap.has(jid)) {
+      // Estrai titolo dal title del booking (formato "JOBCODE — Title")
+      jobsMap.set(jid, b.title || `Job #${jid}`);
+    }
+  }
+  if (!jobsMap.size) { toast('Nessun job trovato nei booking', 'info'); return; }
+  const choices = [...jobsMap.entries()].map(([id, title]) => `${id} · ${title}`).join('\n');
+  const picked = prompt(`Inserisci ID job da selezionare (lista disponibile):\n\n${choices}\n\nID:`, '');
+  if (!picked) return;
+  const jid = parseInt(picked.trim(), 10);
+  if (!jid) return;
+  const ids = bookings
+    .filter(b => b.extendedProps && b.extendedProps.job_id === jid)
+    .map(b => b.id);
+  if (!ids.length) { toast('Nessun booking per quel job', 'info'); return; }
+  window._tlInstance.setSelection(ids);
+  toast(`${ids.length} booking del job ${jid} selezionati`, 'success');
+  tlOnSelectionChange();
+}
+
+function tlSelectByResource() {
+  document.getElementById('tl-select-menu').style.display = 'none';
+  const bookings = window._tlBookings || [];
+  if (!bookings.length) { toast('Nessun booking caricato', 'info'); return; }
+  const resMap = new Map();
+  for (const b of bookings) {
+    const rid = b.extendedProps && b.extendedProps.resource_id;
+    if (!rid) continue;
+    if (!resMap.has(rid)) {
+      // Estrai resource name da title (parte prima del separatore)
+      resMap.set(rid, b.title?.split('—')[0]?.trim() || `Risorsa #${rid}`);
+    }
+  }
+  if (!resMap.size) { toast('Nessuna risorsa trovata', 'info'); return; }
+  const choices = [...resMap.entries()].map(([id, name]) => `${id} · ${name}`).join('\n');
+  const picked = prompt(`Inserisci ID risorsa da selezionare:\n\n${choices}\n\nID:`, '');
+  if (!picked) return;
+  const rid = parseInt(picked.trim(), 10);
+  if (!rid) return;
+  const ids = bookings
+    .filter(b => b.extendedProps && b.extendedProps.resource_id === rid)
+    .map(b => b.id);
+  if (!ids.length) { toast('Nessun booking per quella risorsa', 'info'); return; }
+  window._tlInstance.setSelection(ids);
+  toast(`${ids.length} booking della risorsa ${rid} selezionati`, 'success');
+  tlOnSelectionChange();
+}
+
+function tlSelectByDate() {
+  document.getElementById('tl-select-menu').style.display = 'none';
+  const from = prompt('Data inizio (YYYY-MM-DD):', new Date().toISOString().slice(0, 10));
+  if (!from) return;
+  const to = prompt('Data fine (YYYY-MM-DD):', from);
+  if (!to) return;
+  const fs = new Date(from + 'T00:00:00').getTime();
+  const fe = new Date(to + 'T23:59:59').getTime();
+  if (isNaN(fs) || isNaN(fe)) { toast('Date non valide', 'error'); return; }
+  const items = _tlAllAssignmentItems();
+  const ids = items.filter(it => {
+    const its = new Date(it.start).getTime();
+    const ite = new Date(it.end).getTime();
+    return its < fe && ite > fs;
+  }).map(it => it.id);
+  if (!ids.length) { toast('Nessun booking nel range', 'info'); return; }
+  window._tlInstance.setSelection(ids);
+  toast(`${ids.length} booking selezionati`, 'success');
+  tlOnSelectionChange();
+}
+
+function tlClearSelection() {
+  document.getElementById('tl-select-menu').style.display = 'none';
+  if (window._tlInstance) window._tlInstance.setSelection([]);
+  tlOnSelectionChange();
 }
 
 // ── Modal "Nuovo/Edit booking" — multi-row assignments (v3.4.16.1) ─
@@ -4746,6 +4973,26 @@ document.querySelectorAll('#tl-zoom button').forEach(b => {
     }
   });
 });
+
+// v3.5.0-alpha.21: toggle Risorsa | Progetto.
+window._tlGroupBy = 'resource';
+document.querySelectorAll('#tl-groupby button').forEach(b => {
+  b.addEventListener('click', () => {
+    const v = b.dataset.groupby;
+    if (window._tlGroupBy === v) return;
+    window._tlGroupBy = v;
+    document.querySelectorAll('#tl-groupby button').forEach(x => x.classList.toggle('active', x === b));
+    try { localStorage.setItem('mf_tl_groupby', v); } catch(_) {}
+    renderTimeline(true);
+  });
+});
+try {
+  const saved = localStorage.getItem('mf_tl_groupby');
+  if (saved === 'project') {
+    window._tlGroupBy = 'project';
+    document.querySelectorAll('#tl-groupby button').forEach(x => x.classList.toggle('active', x.dataset.groupby === 'project'));
+  }
+} catch(_) {}
 
 // ── Job detail modal ───────────────────────────────────────
 async function showJobDetail(jobId) {

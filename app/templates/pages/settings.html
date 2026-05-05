@@ -150,7 +150,13 @@
           Si applica come default a tutte le risorse del tenant.
           Smart split nei booking rispetta questi orari.
         </p>
-        <form id="form-wh">
+        {% if not can_edit_settings(user) %}
+        <div style="background:rgba(251,146,60,0.10); border:1px solid #fb923c; border-radius:6px; padding:10px 14px; font-size:12px; margin-bottom:14px;">
+          🔒 Sola lettura — per modificare gli orari lavorativi servono permessi di manager o superiore.
+          Le configurazioni qui mostrate sono il regolamento d'azienda applicato alle tue ore.
+        </div>
+        {% endif %}
+        <form id="form-wh" {% if not can_edit_settings(user) %}data-readonly="1"{% endif %}>
           <input type="hidden" id="wh-id">
           <div class="form-group">
             <label class="form-label">Nome policy</label>
@@ -263,8 +269,12 @@
           </div>
 
           <div class="flex gap-2 mt-3">
+            {% if can_edit_settings(user) %}
             <button type="button" class="btn btn-primary" onclick="whSave()">Salva</button>
             <button type="button" class="btn btn-ghost" onclick="whReload()">Annulla modifiche</button>
+            {% else %}
+            <button type="button" class="btn btn-ghost" disabled>🔒 Sola lettura</button>
+            {% endif %}
           </div>
         </form>
       </div>
@@ -348,6 +358,16 @@ function showPane(id) {
   if (id === 'hours') whReload();
 }
 
+// v3.5.0-alpha.21: read-only mode per non-admin/manager
+function whApplyReadonly() {
+  const form = document.getElementById('form-wh');
+  if (!form || form.dataset.readonly !== '1') return;
+  form.querySelectorAll('input, select, textarea').forEach(el => {
+    if (el.id === 'wh-id') return;
+    el.disabled = true;
+  });
+}
+
 // ── Working hours (v3.4.20.3) ────────────────────────────────
 async function whReload() {
   try {
@@ -376,6 +396,7 @@ async function whReload() {
     // v3.4.32.2 — scaglioni overtime + ccnl label
     document.getElementById('wh-ccnl-label').value = p.ccnl_label || '';
     whRenderBrackets(p.overtime_brackets || []);
+    whApplyReadonly();
   } catch(e) { toast(e.message || 'Errore caricamento policy', 'error'); }
 }
 

@@ -59,11 +59,10 @@ PERMISSIONS: Dict[str, Dict[str, List[str]]] = {
         "view_cost_report": ["Visualizza cost report"],
         "view_invoices":    ["Visualizza fatture"],
         "edit_invoices":    ["Crea/modifica fatture"],
-        # v3.4.54 → v3.5.0-alpha.10: il `quantity_actual` non è più editabile
-        # via API (decisione architetturale 4 mag — le ore sono SEMPRE da
-        # booking done). Permesso preservato per casi eccezionali futuri ma
-        # rimosso da tutti i preset (solo admin lo eredita via list completo).
-        "edit_cost_actuals": ["[DEPRECATO] Override ore lavorate"],
+        # v3.5.0-alpha.21: edit_cost_actuals rimosso definitivamente. Le ore
+        # lavorate sono SEMPRE derivate da booking marcati `done` (cost_line_sync).
+        # La fatturazione di extra/sconti/banca-ore forfait passa dal flusso
+        # fatturazione dedicato (in roadmap), non da qui.
     },
     "Cestino / Pulizia": {
         # v3.5.0-alpha.7 — soft-delete framework
@@ -81,7 +80,11 @@ PERMISSIONS: Dict[str, Dict[str, List[str]]] = {
     },
     "Configurazione": {
         "manage_departments":      ["Gestione reparti"],
-        "manage_settings_global":  ["Modifica impostazioni globali (orari, AI)"],
+        # v3.5.0-alpha.21: split tra view e manage per dare ai non-admin la
+        # possibilità di consultare gli orari lavorativi (read-only) senza
+        # poterli modificare.
+        "view_settings_global":    ["Visualizza impostazioni globali (orari, AI, anagrafica)"],
+        "manage_settings_global":  ["Modifica impostazioni globali (orari, AI, anagrafica)"],
         "manage_users":            ["Gestione utenti"],
         "manage_roles":            ["Gestione ruoli e permessi"],
     },
@@ -108,10 +111,12 @@ PRESET_PERMISSIONS: Dict[str, List[str]] = {
         "approve_unavailability",
         "view_finance", "view_quotes", "edit_quotes", "delete_quotes",
         "view_pricelist", "edit_pricelist",
-        # v3.5.0-alpha.10: edit_cost_actuals rimosso (quantity_actual non più editabile)
         "view_cost_report", "view_invoices", "edit_invoices",
         "view_resources", "edit_resources",
         "manage_departments",
+        # v3.5.0-alpha.21: manager può modificare orari lavorativi (Matteo:
+        # "Orari lavorativi definibili solo da autorizzazione manager in su")
+        "view_settings_global", "manage_settings_global",
         "view_trash", "restore_trash",
     ],
     "producer": [
@@ -125,6 +130,8 @@ PRESET_PERMISSIONS: Dict[str, List[str]] = {
         "view_pricelist",
         "view_cost_report",
         "view_resources",
+        # v3.5.0-alpha.21: producer ha read-only sugli orari (vede regole CCNL)
+        "view_settings_global",
     ],
     "accounting": [
         "view_clients",
@@ -133,18 +140,22 @@ PRESET_PERMISSIONS: Dict[str, List[str]] = {
         "view_punches_all",
         "view_finance", "view_quotes", "edit_quotes", "delete_quotes",
         "view_pricelist",
-        # v3.5.0-alpha.10: edit_cost_actuals rimosso
         "view_cost_report", "view_invoices", "edit_invoices",
+        "view_settings_global",
     ],
     "operator": [
         "view_projects",
         "view_planning", "edit_planning_own",
         "view_punches_own", "edit_punches_own",
+        # v3.5.0-alpha.21: operator/staff vede gli orari lavorativi (read-only)
+        # — il regolamento d'azienda gli serve per orientarsi sulle proprie ore
+        "view_settings_global",
     ],
     "viewer": [
         "view_clients", "view_projects",
         "view_planning",
         "view_punches_own",
+        "view_settings_global",
     ],
 }
 
@@ -258,13 +269,24 @@ def can_view_finance(user: Optional[User]) -> bool:
 
 
 def can_edit_cost_actuals(user: Optional[User]) -> bool:
-    """Override manuale di JobCostLine.quantity_actual (ore lavorate).
-    v3.4.54 — admin/manager/accounting; producer/operator/viewer no."""
-    return has_permission(user, "edit_cost_actuals")
+    """v3.5.0-alpha.21: rimosso definitivamente. Le ore lavorate sono SEMPRE
+    derivate dai booking marcati `done` (cost_line_sync). Helper preservato
+    perché ancora referenziato in `templates.env.globals` (back-compat) ma
+    ritorna sempre False — nessun utente può più editare quantity_actual.
+    """
+    return False
 
 
 def can_edit_settings(user: Optional[User]) -> bool:
     return has_permission(user, "manage_settings_global")
+
+
+def can_view_settings(user: Optional[User]) -> bool:
+    """v3.5.0-alpha.21: vedere /settings (orari lavorativi, anagrafica, AI).
+    User può vedere ma non modificare se ha solo `view_settings_global`.
+    Admin/manager con `manage_settings_global` possono modificare.
+    """
+    return has_permission(user, "view_settings_global") or has_permission(user, "manage_settings_global")
 
 
 def can_edit_pricelist(user: Optional[User]) -> bool:
