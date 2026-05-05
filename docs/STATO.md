@@ -8,6 +8,38 @@
 
 ## Versione corrente
 
+**v3.5.0-alpha.24** — 5 maggio 2026 notte tardi — Round 10: planning UX refinement (6/7)
+
+Terza tornata feedback Matteo post-test alpha.23. Chiusi 6 punti su 7. Il
+7° (scheda cliente con filmografia AI) è in attesa di conferma piano:
+proposta = `ClientWork` model + tab "🎬 Filmografia" + endpoint AI con
+tool-use puntato a filmitalia.org / cinema.cultura.gov.it / IMDB / MyMovies.
+
+**Chiusi:**
+- ✅ Risorse duplicate sui booking: dedupe per `(booking_id, resource_id)`,
+  badge "+N segmenti" nelle card, riga aggregata nel detail modal.
+- ✅ Ferie/malattia/festività look uniforme (alpha 0.12, palette indigo
+  MediaFlow).
+- ✅ Hover ferie/malattia/festività: tooltip arricchito con periodo, durata
+  giorni, risorsa, motivo, status.
+- ✅ Hover job: aggiunti orari inizio/fine + icona semaforo priorità.
+- ✅ Semaforo priorità più grande/distanziato in "Le mie" e "Per progetto".
+- ✅ Pannello selezione "stile filtri" con 4 dropdown + glow animato sui
+  selezionati (`tl-pulse-glow` ease-in-out infinite).
+
+**In attesa conferma Matteo:**
+- 🔜 Scheda cliente AI con filmografia (cantiere grosso). Proposta:
+  - Modello `ClientWork(client_id, title, year, kind, our_role, director, sources_json)` — o JSON `clients.filmography`
+  - Tab "🎬 Filmografia" in scheda cliente con bottone "🔍 Cerca con AI"
+  - Endpoint `POST /clients/api/{id}/search-filmography` con AI tool-use
+    + `web_search` (Tavily) puntato a filmitalia.org, cinema.cultura.gov.it,
+    IMDB, MyMovies
+  - Workflow "AI propone, utente conferma" — match candidati in cards di
+    anteprima, utente seleziona quali importare
+  - Import idempotente su (title, year)
+
+Cache-buster `v=3.5.0-alpha.24`. Niente migrazione DB.
+
 **v3.5.0-alpha.23** — 5 maggio 2026 notte — Round 9 chiuso (17/17 punti)
 
 Round 9 sulla seconda lista feedback Matteo del 5 maggio chiuso interamente.

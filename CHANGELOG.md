@@ -1,5 +1,63 @@
 # MediaFlow — Changelog
 
+## v3.5.0-alpha.24 — Round 10: planning UX refinement (5 maggio 2026 notte tardi)
+
+Round 10 sulla terza tornata feedback Matteo (post-test alpha.23). Chiusi 6
+punti su 7 — la "scheda cliente AI con filmografia" è ferma in attesa di
+conferma sul piano architetturale.
+
+**Bug fix:**
+
+- **Risorse duplicate sui booking**: i booking splittati per pausa pranzo
+  (smart-split) hanno N assignments stessa risorsa. Le viste "Le mie",
+  "Per progetto" e il modal dettaglio mostravano N card/righe per la stessa
+  risorsa → look duplicato. Fix: `_dedupeBookingSegments` raggruppa per
+  `(booking_id, resource_id)`, somma le durate dei segmenti, espone
+  `_segments` per badge "+N segmenti" nelle card. Detail modal: 1 riga per
+  risorsa con badge "N segmenti" hover-titled con gli intervalli.
+
+**Look & feel:**
+
+- **Ferie/malattia/festività uniformi**: le ferie usavano `rgba(99,102,241)`
+  (indigo cool) e alpha 0.15, mentre malattia/festività usavano alpha 0.12.
+  Ora tutti allineati: alpha 0.12 sul bg, 0.20 sulle stripes 45°, ferie passa
+  alla palette MediaFlow `rgba(98,114,245)`. Aggiunto `tl-bg-other` per
+  permessi ("non disponibile" generico).
+- **Hover ferie/malattia/festività con info base**: il `title` era statico
+  ("Ferie · motivo"). Ora arricchito con icona, periodo formattato, durata
+  in giorni, risorsa (se applicabile), motivo e status pending/approved.
+- **Hover job: orari di inizio/fine espliciti**: tooltip booking ora
+  include `🕐 lun 5 mag 09:00 → mar 6 mag 18:00` oltre a durata e ore
+  lavorazione. Priorità con icona semaforo (🔴/🟡/🟢) se non normale.
+
+**Priorità semaforo:**
+
+- **Ingrandito e distanziato in "Le mie" e "Per progetto"**: dot attivo
+  passa da 14px → 18px, dot inattivo da 10px → 13px, gap da 0 → 8px,
+  ring 2px → 3px. Più cliccabile e leggibile.
+
+**Selezione multipla:**
+
+- **Pannello "stile filtri"**: nuovo bottone "☑ Seleziona…" apre un
+  pannello orizzontale sopra la timeline con 4 dropdown filtri
+  (Job/Risorsa/Stato/Priorità) + bottoni Applica/Inverti/Pulisci.
+  Counter live "N selezionati" + Bulk-edit shortcut. Il dropdown ▾
+  legacy resta come scorciatoia.
+- **Glow animato sui selezionati**: quando il pannello è aperto, gli
+  item con classe `vis-selected` ricevono un'animazione `tl-pulse-glow`
+  che fa pulsare il bordo indigo (1.5s ease-in-out infinite). Risolve
+  "evidenziare più chiaramente gli item selezionati" (Matteo).
+
+**In coda:**
+
+- **Scheda cliente con filmografia AI** (cantiere grosso, in attesa
+  conferma): ClientWork model + tab "🎬 Filmografia" + endpoint
+  `POST /clients/api/{id}/search-filmography` con AI tool-use puntato a
+  filmitalia.org / cinema.cultura.gov.it / IMDB / MyMovies. Workflow
+  AI propone, utente conferma + import idempotente.
+
+Cache-buster `v=3.5.0-alpha.24`. Niente migrazione DB.
+
 ## v3.5.0-alpha.23 — Round 9 (parte 2/2): timeline drag/multi-select + ombra timbrature + DB snapshot (5 maggio 2026 sera tardi)
 
 Round 9 chiuso interamente (17/17 punti). Questo bump chiude le rimanenti

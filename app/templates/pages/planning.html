@@ -222,6 +222,28 @@
       inset 0 1px 0 rgba(255,255,255,.30),
       inset 0 -2px 3px rgba(0,0,0,.18);
   }
+  /* v3.5.0-alpha.24: glow animato sui selezionati quando il pannello selezione
+     è aperto (Matteo: "evidenziare più chiaramente gli item selezionati,
+     glow con animazione"). */
+  @keyframes tl-pulse-glow {
+    0%, 100% {
+      box-shadow:
+        0 0 0 2px #fff,
+        0 0 0 5px rgba(98,114,245,.55),
+        0 6px 22px rgba(98,114,245,.45),
+        inset 0 1px 0 rgba(255,255,255,.30);
+    }
+    50% {
+      box-shadow:
+        0 0 0 2px #fff,
+        0 0 0 7px rgba(98,114,245,.78),
+        0 8px 28px rgba(98,114,245,.62),
+        inset 0 1px 0 rgba(255,255,255,.30);
+    }
+  }
+  body.tl-select-panel-open .vis-item.vis-selected {
+    animation: tl-pulse-glow 1.5s ease-in-out infinite;
+  }
   .vis-item .vis-item-content {
     padding: 0 2px;
     line-height: 1.35;
@@ -346,12 +368,17 @@
   #tl-host.tl-paste-mode .vis-foreground .vis-group { cursor: copy; }
   #tl-host.tl-paste-mode .vis-item { cursor: not-allowed; }
   /* Background items: ferie/malattia/festività/weekend (E3 v3.4.17) */
-  .vis-item.tl-bg-vacation { background: rgba(99,102,241,0.15) !important; border: none !important; box-shadow: none; }
-  .vis-item.tl-bg-vacation::before { content: ''; position: absolute; inset: 0; background: repeating-linear-gradient(45deg, transparent 0 4px, rgba(99,102,241,0.25) 4px 8px); }
+  /* v3.5.0-alpha.24: ferie/malattia/festività uniformati (stesso alpha 0.12 +
+     stripes 0.20) e ferie passa al colore palette MediaFlow indigo (#6272f5)
+     invece di indigo cool (#6366f1). */
+  .vis-item.tl-bg-vacation { background: rgba(98,114,245,0.12) !important; border: none !important; box-shadow: none; }
+  .vis-item.tl-bg-vacation::before { content: ''; position: absolute; inset: 0; background: repeating-linear-gradient(45deg, transparent 0 4px, rgba(98,114,245,0.20) 4px 8px); }
   .vis-item.tl-bg-sick { background: rgba(239,68,68,0.12) !important; border: none !important; }
-  .vis-item.tl-bg-sick::before { content: ''; position: absolute; inset: 0; background: repeating-linear-gradient(45deg, transparent 0 4px, rgba(239,68,68,0.22) 4px 8px); }
+  .vis-item.tl-bg-sick::before { content: ''; position: absolute; inset: 0; background: repeating-linear-gradient(45deg, transparent 0 4px, rgba(239,68,68,0.20) 4px 8px); }
   .vis-item.tl-bg-holiday { background: rgba(251,146,60,0.12) !important; border: none !important; }
   .vis-item.tl-bg-holiday::before { content: ''; position: absolute; inset: 0; background: repeating-linear-gradient(45deg, transparent 0 4px, rgba(251,146,60,0.20) 4px 8px); }
+  .vis-item.tl-bg-other { background: rgba(156,163,175,0.10) !important; border: none !important; }
+  .vis-item.tl-bg-other::before { content: ''; position: absolute; inset: 0; background: repeating-linear-gradient(45deg, transparent 0 4px, rgba(156,163,175,0.18) 4px 8px); }
   .vis-item.tl-bg-weekend { background: rgba(255,255,255,0.025) !important; border: none !important; }
   /* Hard conflict (drop su ferie/festa) */
   .vis-item.tl-conflict-hard { background: #991b1b !important; border-color: #7f1d1d !important; box-shadow: 0 0 0 3px rgba(220,38,38,.6) !important; animation: tl-shake .25s; }
@@ -776,9 +803,11 @@
           <button class="btn btn-ghost btn-sm" id="tl-undo-btn-toolbar" onclick="tlPerformUndo()" disabled style="opacity:0.4; margin-left:6px;" title="Annulla (Ctrl+Z)">↶</button>
           <button class="btn btn-ghost btn-sm" id="tl-redo-btn-toolbar" onclick="tlPerformRedo()" disabled style="opacity:0.4;" title="Ripeti (Ctrl+Y)">↷</button>
           <button class="btn btn-ghost btn-sm" id="tl-bulk-btn-toolbar" onclick="tlOpenBulkModal()" style="display:none; margin-left:6px;" title="Modifica in blocco i booking selezionati">✏ Bulk</button>
-          <!-- v3.5.0-alpha.21: dropdown selezione multipla affidabile (sostituisce/affianca shift+drag inaffidabile) -->
-          <div style="position:relative; display:inline-block; margin-left:6px;">
-            <button class="btn btn-ghost btn-sm" onclick="tlSelectMenuToggle(event)" title="Selezione multipla">☑ Seleziona ▾</button>
+          <!-- v3.5.0-alpha.21: dropdown legacy (mantenuto come fallback). -->
+          <!-- v3.5.0-alpha.24: nuovo bottone apre il pannello stile filtri. -->
+          <button class="btn btn-ghost btn-sm" onclick="tlSelectPanelToggle()" title="Modalità selezione (pannello filtri)" style="margin-left:6px;">☑ Seleziona…</button>
+          <div style="position:relative; display:inline-block;">
+            <button class="btn btn-ghost btn-sm" onclick="tlSelectMenuToggle(event)" title="Menu rapido selezione" style="margin-left:2px; padding:2px 5px;" aria-label="Menu rapido">▾</button>
             <div id="tl-select-menu" style="display:none; position:absolute; right:0; top:100%; margin-top:4px; background:var(--bg-elev,#1a1d29); border:1px solid var(--border,#2a2e3d); border-radius:6px; box-shadow:0 8px 24px rgba(0,0,0,.5); z-index:1100; min-width:220px; padding:4px; font-size:12px;">
               <button class="btn btn-ghost btn-sm" style="display:block; width:100%; text-align:left; padding:7px 10px;" onclick="tlSelectAllVisible()">Tutti i booking visibili</button>
               <button class="btn btn-ghost btn-sm" style="display:block; width:100%; text-align:left; padding:7px 10px;" onclick="tlSelectByJob()">Per Job…</button>
@@ -855,6 +884,43 @@
           <label class="tl-pref-check"><input type="checkbox" id="tlp-show-punches" checked> Mostra timbrature (ombra leggera)</label>
           <hr style="border:none; border-top:1px solid var(--border); margin:10px 0;">
           <button class="btn btn-ghost btn-sm" onclick="tlPrefsReset()" style="width:100%;">↺ Ripristina default</button>
+        </div>
+        <!-- v3.5.0-alpha.24: pannello selezione stile filtri -->
+        <div id="tl-select-panel" style="display:none; position:relative; background:var(--bg-elev,#1a1d29); border:1px solid var(--border,#2a2e3d); border-bottom:0; border-radius:6px 6px 0 0; padding:10px 14px; margin-top:8px; font-size:12px;">
+          <div style="display:flex; align-items:center; gap:10px; flex-wrap:wrap;">
+            <strong style="color:var(--indigo2,#7e8ef7); font-size:13px;">☑ Modalità selezione</strong>
+            <span class="text-muted" style="font-size:11px;">Click su un item per selezionare/deselezionare. Filtri:</span>
+            <span style="display:inline-flex; gap:6px; align-items:center;">
+              <select id="tlsp-job" class="form-select" data-no-search="true" style="height:28px; padding:2px 8px; font-size:12px; min-width:160px;">
+                <option value="">— Job —</option>
+              </select>
+              <select id="tlsp-resource" class="form-select" data-no-search="true" style="height:28px; padding:2px 8px; font-size:12px; min-width:160px;">
+                <option value="">— Risorsa —</option>
+              </select>
+              <select id="tlsp-status" class="form-select" data-no-search="true" style="height:28px; padding:2px 8px; font-size:12px; min-width:140px;">
+                <option value="">— Stato —</option>
+                <option value="planned">Pianificato</option>
+                <option value="in_progress">In corso</option>
+                <option value="done">Fatto</option>
+                <option value="not_done">Non fatto</option>
+                <option value="tentative">Tentative</option>
+              </select>
+              <select id="tlsp-priority" class="form-select" data-no-search="true" style="height:28px; padding:2px 8px; font-size:12px; min-width:130px;">
+                <option value="">— Priorità —</option>
+                <option value="high">🔴 Alta</option>
+                <option value="normal">🟡 Normale</option>
+                <option value="low">🟢 Bassa</option>
+              </select>
+              <button class="btn btn-secondary btn-sm" onclick="tlSelectPanelApply()" title="Seleziona tutti gli item che soddisfano i filtri">Applica filtri</button>
+              <button class="btn btn-ghost btn-sm" onclick="tlSelectPanelInvert()" title="Inverti la selezione corrente">Inverti</button>
+              <button class="btn btn-ghost btn-sm" onclick="tlClearSelection()" title="Deseleziona tutto">Pulisci</button>
+            </span>
+            <span style="margin-left:auto; display:inline-flex; gap:8px; align-items:center;">
+              <span id="tlsp-counter" style="padding:3px 10px; background:rgba(98,114,245,0.18); border-radius:12px; font-weight:600; color:var(--indigo2,#7e8ef7);">0 selezionati</span>
+              <button class="btn btn-primary btn-sm" id="tlsp-bulk" onclick="tlOpenBulkModal()" style="display:none;">✏ Bulk-edit</button>
+              <button class="btn btn-ghost btn-sm" onclick="tlSelectPanelToggle()" title="Chiudi pannello">✕</button>
+            </span>
+          </div>
         </div>
         <div id="tl-week-label" style="font-size:13px; font-weight:500; color:var(--text2,#aaa); padding:6px 14px; background:var(--bg3,#22253a); border-radius:6px 6px 0 0; border-bottom:1px solid var(--border,#2a2e3d);"></div>
         <div style="font-size:11px; color:var(--text3,#888); padding:4px 14px 0;">
@@ -1501,15 +1567,18 @@ async function renderProjectView() {
     let html = '';
     for (const rid of Object.keys(byRes)) {
       const g = byRes[rid];
+      // v3.5.0-alpha.24: dedupe segments stessa (risorsa, booking) per evitare
+      // card duplicate sui booking splittati per pausa pranzo.
+      const merged = _dedupeBookingSegments(g.items);
       // v3.5.0-alpha.22: sort priorità desc poi data
-      g.items.sort(_cmpByPrioThenDate);
+      merged.sort(_cmpByPrioThenDate);
       html += `<div style="margin-bottom:18px;">
         <div style="display:flex;align-items:center;gap:8px;font-size:14px;font-weight:600;margin-bottom:6px;color:var(--text);">
           <span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:${escapeHtml(g.color || '#6272f5')};"></span>
           ${escapeHtml(g.name || ('Risorsa #'+rid))}
-          <span class="text-sm text-muted" style="font-weight:400;">${g.items.length} booking</span>
+          <span class="text-sm text-muted" style="font-weight:400;">${merged.length} booking</span>
         </div>`;
-      html += g.items.map(it => renderTodoCard(it, today, tomorrow)).join('');
+      html += merged.map(it => renderTodoCard(it, today, tomorrow)).join('');
       html += '</div>';
     }
     host.innerHTML = html;
@@ -2021,16 +2090,47 @@ async function renderTodo() {
   const today = new Date(); today.setHours(0,0,0,0);
   const tomorrow = new Date(today); tomorrow.setDate(today.getDate()+1);
 
+  // v3.5.0-alpha.24: dedupe segments stessa risorsa + stesso booking (split
+  // pause): Matteo "sui booking vedo le risorse duplicate". Aggreghiamo i
+  // segments → 1 card per (booking_id, resource) con N segmenti dentro.
+  const merged = _dedupeBookingSegments(items);
   // v3.5.0-alpha.22: sort default = priorità (high→low) poi data start asc.
-  // Matteo: "preferibilmente in ordine di priorità e poi di data".
-  items.sort(_cmpByPrioThenDate);
+  merged.sort(_cmpByPrioThenDate);
 
   host.innerHTML = '<div style="padding:8px 12px; background:rgba(98,114,245,0.06); border-radius:6px; margin-bottom:10px; font-size:12px; color:var(--text2);">💡 Per richieste ferie/malattia e riepilogo ore → <a href="/hr/">Le mie ore</a></div>' +
-    items.map(it => renderTodoCard(it, today, tomorrow)).join('');
+    merged.map(it => renderTodoCard(it, today, tomorrow)).join('');
+}
+
+// v3.5.0-alpha.24: dedupe per (booking_id, resource_id). Per booking
+// splittato (es. pausa pranzo) il backend restituisce 1 record per
+// assignment → 2 card uguali. Aggreghiamo: l'envelope è min(start)/max(end)
+// dei segmenti, mentre `segments` contiene le sotto-fasce per chi vuole
+// dettaglio (mostrato nella card come "+N segmenti" se >1).
+function _dedupeBookingSegments(items) {
+  const byKey = new Map();
+  for (const it of (items || [])) {
+    const rid = (it.resource_id != null) ? it.resource_id : (it.assignment_id || it.booking_id);
+    const k = `${it.booking_id}::${rid}`;
+    const cur = byKey.get(k);
+    const seg = { start: it.start, end: it.end, assignment_id: it.assignment_id };
+    if (!cur) {
+      byKey.set(k, { ...it, _segments: [seg] });
+    } else {
+      cur._segments.push(seg);
+      const ns = new Date(it.start), ne = new Date(it.end);
+      if (ns < new Date(cur.start)) cur.start = it.start;
+      if (ne > new Date(cur.end))   cur.end   = it.end;
+      // Somma durata netta dei segmenti (per non perdere la pausa)
+      cur.duration_minutes = (cur.duration_minutes || 0) + (it.duration_minutes || 0);
+    }
+  }
+  return [...byKey.values()];
 }
 
 // v3.5.0-alpha.22: priority "semaforo" — 3 dot colorati clickabili.
 // Sostituisce il select dropdown nelle card todo / project view.
+// v3.5.0-alpha.24: ingranditi e distanziati (Matteo: "distanziare ed
+// ingrandire leggermente in modalità per progetto e le mie").
 const _PRIO_DOTS = [
   { v: 'low',    color: '#22c55e', title: 'Priorità bassa' },
   { v: 'normal', color: '#fbbf24', title: 'Priorità normale' },
@@ -2038,15 +2138,16 @@ const _PRIO_DOTS = [
 ];
 function _renderPrioTraffic(bookingId, currentPrio) {
   const cur = currentPrio || 'normal';
-  return _PRIO_DOTS.map(d => {
+  const buttons = _PRIO_DOTS.map(d => {
     const active = d.v === cur;
-    const sz = active ? 14 : 10;
+    const sz = active ? 18 : 13;
     const bg = active ? d.color : 'rgba(120,120,120,0.25)';
-    const ring = active ? `0 0 0 2px rgba(255,255,255,0.18)` : 'none';
+    const ring = active ? `0 0 0 3px rgba(255,255,255,0.22)` : 'none';
     return `<button type="button" onclick="event.stopPropagation();todoSetPriority(${bookingId}, '${d.v}')"
       title="${d.title}" aria-label="${d.title}"
-      style="border:0; padding:0; cursor:pointer; background:${bg}; width:${sz}px; height:${sz}px; border-radius:50%; box-shadow:${ring}; transition:all .12s ease;"></button>`;
+      style="border:0; padding:0; cursor:pointer; background:${bg}; width:${sz}px; height:${sz}px; border-radius:50%; box-shadow:${ring}; transition:all .14s ease;"></button>`;
   }).join('');
+  return `<span style="display:inline-flex; align-items:center; gap:8px;">${buttons}</span>`;
 }
 
 // v3.5.0-alpha.22: helper sort priorità desc + data start asc.
@@ -2066,6 +2167,11 @@ function renderTodoCard(it, today, tomorrow) {
   if (s < today) { whenCls = 'late'; when = 'In ritardo · ' + when; }
   else if (s < tomorrow) { whenCls = 'today'; when = 'Oggi · ' + tdTimeLabel(it.start, it.end); }
   else { when = when + ' · ' + tdTimeLabel(it.start, it.end); }
+  // v3.5.0-alpha.24: badge segmenti per booking splittati (pausa pranzo)
+  const segCount = (it._segments && it._segments.length > 1) ? it._segments.length : 0;
+  const segBadge = segCount
+    ? ` <span title="Booking splittato in ${segCount} segmenti" style="margin-left:6px; padding:1px 6px; background:rgba(98,114,245,0.10); border-radius:3px; font-size:10px; color:var(--text2);">${segCount} segmenti</span>`
+    : '';
 
   const prio = it.priority || 'normal';
   const exec = it.execution_status || 'planned';
@@ -2088,7 +2194,7 @@ function renderTodoCard(it, today, tomorrow) {
   // v3.4.42: notes inline + click area opens detail modal
   const notesBlock = it.notes ? `<div class="todo-notes" title="Note booking">📝 ${escapeHtml(it.notes)}</div>` : '';
   return `<div class="todo-card ${cls.join(' ')}" data-bid="${it.booking_id}">
-    <div class="when ${whenCls}">${escapeHtml(when)}</div>
+    <div class="when ${whenCls}">${escapeHtml(when)}${segBadge}</div>
     <div class="what" style="cursor:pointer;" onclick="todoOpenDetail(${it.booking_id})" title="Vedi dettagli">${escapeHtml(it.title || '')} <span style="font-size:11px;color:var(--text3);">›</span></div>
     ${meta ? '<div class="meta" style="cursor:pointer;" onclick="todoOpenDetail('+it.booking_id+')">'+escapeHtml(meta)+'</div>' : ''}
     ${notesBlock}
@@ -2183,12 +2289,39 @@ async function todoOpenDetail(bookingId) {
     if (d.assignments && d.assignments.length) {
       // v3.5.0-alpha.22: lista esplicita risorse anche per booking singolo,
       // con dipartimento e durata per-risorsa.
-      const rowsHtml = d.assignments.map(a => {
-        const dept = a.department_name ? ' <span class="text-muted text-sm">· '+escapeHtml(a.department_name)+'</span>' : '';
-        const role = a.resource_role ? ' <span class="text-muted text-sm">· '+escapeHtml(a.resource_role)+'</span>' : '';
+      // v3.5.0-alpha.24: dedupe per resource_id — i booking splittati per
+      // pausa pranzo hanno N assignments stessa risorsa → 1 riga aggregata
+      // con somma durata e badge "N segmenti" per chiarezza.
+      const byRes = new Map();
+      const _fmtT = (iso) => new Date(iso).toLocaleTimeString('it-IT', {hour:'2-digit', minute:'2-digit'});
+      for (const a of d.assignments) {
+        const k = a.resource_id;
+        const segLabel = `${_fmtT(a.start_datetime)}–${_fmtT(a.end_datetime)}`;
+        const cur = byRes.get(k);
+        if (!cur) {
+          byRes.set(k, {
+            resource_id: k,
+            resource_name: a.resource_name,
+            resource_role: a.resource_role,
+            department_name: a.department_name,
+            total_h: a.duration_hours || 0,
+            segments: [segLabel],
+          });
+        } else {
+          cur.total_h += (a.duration_hours || 0);
+          cur.segments.push(segLabel);
+        }
+      }
+      const rowsHtml = [...byRes.values()].map(r => {
+        const dept = r.department_name ? ' <span class="text-muted text-sm">· '+escapeHtml(r.department_name)+'</span>' : '';
+        const role = r.resource_role ? ' <span class="text-muted text-sm">· '+escapeHtml(r.resource_role)+'</span>' : '';
+        const totH = r.total_h.toFixed(2).replace(/\.?0+$/, '');
+        const segBadge = r.segments.length > 1
+          ? ` <span class="text-muted text-sm" title="${r.segments.join(' + ')}" style="margin-left:6px; padding:1px 6px; background:rgba(98,114,245,0.10); border-radius:3px; font-size:10px;">${r.segments.length} segmenti</span>`
+          : '';
         return `<div style="padding:3px 0; border-bottom:1px dashed rgba(255,255,255,0.05);">
-          <b>${escapeHtml(a.resource_name || ('#'+a.resource_id))}</b>${role}${dept}
-          <span class="text-muted text-sm" style="margin-left:6px;">${a.duration_hours}h</span>
+          <b>${escapeHtml(r.resource_name || ('#'+r.resource_id))}</b>${role}${dept}
+          <span class="text-muted text-sm" style="margin-left:6px;">${totH}h</span>${segBadge}
         </div>`;
       }).join('');
       html += `
@@ -2473,18 +2606,23 @@ function tlBookingToItem(b) {
   if (isInternal) classes += 'kind-internal ';
   if (isTentative) classes += 'tl-tentative ';
   // v3.5.0-alpha.22: tooltip esteso con durata booking + ore lavorazione totali.
+  // v3.5.0-alpha.24: aggiunti orari di inizio/fine espliciti (Matteo).
   const _ms = new Date(b.end) - new Date(b.start);
   const _h = _ms > 0 ? _ms / 3600000 : 0;
   const _hLab = _h >= 24 ? `${Math.floor(_h/24)}g ${(_h%24).toFixed(1)}h` : `${_h.toFixed(1)}h`;
+  const _fmtDt = (iso) => new Date(iso).toLocaleString('it-IT', {weekday:'short', day:'numeric', month:'short', hour:'2-digit', minute:'2-digit'});
+  const _sLab = _fmtDt(b.start);
+  const _eLab = _fmtDt(b.end);
   const jobTotalH = (p.job_total_hours != null) ? p.job_total_hours : null;
   const jobDoneH  = (p.job_done_hours  != null) ? p.job_done_hours  : null;
   let jobDurLine = '';
   if (jobTotalH != null) {
     const doneStr = jobDoneH != null ? `${jobDoneH}h fatte / ` : '';
-    jobDurLine = `\n📊 Job: ${doneStr}${jobTotalH}h pianificate`;
+    jobDurLine = `\n📊 Lavorazione: ${doneStr}${jobTotalH}h pianificate`;
   }
-  const prioLab = (p.priority && p.priority !== 'normal') ? ` · ${p.priority}` : '';
-  const tooltip = `${b.title || ''}${isTentative ? ' (tentative)' : ''}\n⏱ Durata booking: ${_hLab}${jobDurLine} · ${exec}${prioLab}`;
+  const prioIcon = {high:'🔴', normal:'🟡', low:'🟢'}[p.priority] || '';
+  const prioLab = prioIcon ? ` · ${prioIcon} ${p.priority}` : '';
+  const tooltip = `${b.title || ''}${isTentative ? ' (tentative)' : ''}\n🕐 ${_sLab} → ${_eLab}\n⏱ Durata booking: ${_hLab}${jobDurLine}\n${exec}${prioLab}`;
   return {
     id: b.id,
     assignment_id: b.assignment_id,
@@ -3291,16 +3429,40 @@ async function renderTimeline(preserveWindow=false) {
   let unavailabilities = [];
   try { unavailabilities = await api('GET', '/planning/api/unavailabilities?'+unavParams); } catch(_) {}
   window._tlUnavailabilities = unavailabilities;
-  const bgItems = unavailabilities.map(u => ({
-    id: 'u-' + u.id,
-    group: u.resource_id,
-    start: u.start_date + 'T00:00:00',
-    end: u.end_date + 'T23:59:59',
-    type: 'background',
-    className: 'tl-bg-' + u.kind,
-    title: ({vacation:'Ferie', sick:'Malattia', holiday:'Festività', weekend:'Weekend', other:'Non disponibile'}[u.kind] || u.kind) + (u.reason ? ' · '+u.reason : ''),
-    _kind: u.kind,
-  }));
+  // v3.5.0-alpha.24: tooltip arricchito su ferie/malattia/festività con
+  // periodo, durata in giorni, risorsa (se applicabile) e motivo.
+  const _kindLbl = {vacation:'Ferie', sick:'Malattia', holiday:'Festività', weekend:'Weekend', other:'Non disponibile'};
+  const _kindIcon = {vacation:'🏖', sick:'🏥', holiday:'🎉', weekend:'🛌', other:'⏸'};
+  const _fmtDay = (iso) => new Date(iso+'T12:00:00').toLocaleDateString('it-IT', {weekday:'short', day:'numeric', month:'short', year:'numeric'});
+  const _resourceName = (rid) => {
+    if (!rid) return '';
+    const r = (RESOURCES_SEED || []).find(x => x.id === rid);
+    return r ? r.name : '#'+rid;
+  };
+  const bgItems = unavailabilities.map(u => {
+    const lbl = _kindLbl[u.kind] || u.kind;
+    const icon = _kindIcon[u.kind] || '';
+    const sd = new Date(u.start_date + 'T00:00:00');
+    const ed = new Date(u.end_date + 'T00:00:00');
+    const days = Math.round((ed - sd) / 86400000) + 1;
+    const range = (u.start_date === u.end_date)
+      ? _fmtDay(u.start_date)
+      : `${_fmtDay(u.start_date)} → ${_fmtDay(u.end_date)} (${days} giorni)`;
+    const resLine = (u.kind !== 'holiday' && u.resource_id)
+      ? `\n👤 ${_resourceName(u.resource_id)}` : '';
+    const reason = u.reason ? `\n📝 ${u.reason}` : '';
+    const status = u.status === 'pending' ? '\n⏳ In attesa di approvazione' : '';
+    return {
+      id: 'u-' + u.id,
+      group: u.resource_id,
+      start: u.start_date + 'T00:00:00',
+      end: u.end_date + 'T23:59:59',
+      type: 'background',
+      className: 'tl-bg-' + u.kind,
+      title: `${icon} ${lbl}\n${range}${resLine}${reason}${status}`,
+      _kind: u.kind,
+    };
+  });
   // v3.4.32.1: distinzione tra hard block (ferie/malattia operatore = persona
   // non disponibile) e soft block festività (giorno festivo nazionale = lavoro
   // possibile ma con maggiorazione → workflow overtime + approvazione).
@@ -4078,6 +4240,8 @@ function tlOnSelectionChange() {
   const selA = sel.filter(id => typeof id === 'string' && id.startsWith('a'));
   const btn = document.getElementById('tl-bulk-btn-toolbar');
   if (btn) btn.style.display = selA.length >= 1 ? '' : 'none';
+  // v3.5.0-alpha.24: aggiorna anche il counter del pannello selezione
+  if (typeof tlSelectPanelUpdateCounter === 'function') tlSelectPanelUpdateCounter();
 }
 
 // ── v3.5.0-alpha.21: selezione multipla via menu (alternativa affidabile a ROI shift+drag) ──
@@ -4207,6 +4371,107 @@ function tlClearSelection() {
   document.getElementById('tl-select-menu').style.display = 'none';
   if (window._tlInstance) window._tlInstance.setSelection([]);
   tlOnSelectionChange();
+  // v3.5.0-alpha.24: aggiorna counter pannello
+  if (typeof tlSelectPanelUpdateCounter === 'function') tlSelectPanelUpdateCounter();
+}
+
+// ── v3.5.0-alpha.24: pannello selezione "stile filtri" ──────────
+// Toggle che apre un pannello orizzontale sopra la timeline con dropdown
+// Job/Risorsa/Stato/Priorità + bottoni Applica/Inverti/Pulisci. Quando il
+// pannello è aperto la classe `tl-select-panel-open` sul body attiva il
+// glow pulsante sui selezionati. Il dropdown legacy ▾ resta come scorciatoia.
+function tlSelectPanelToggle() {
+  const panel = document.getElementById('tl-select-panel');
+  if (!panel) return;
+  const open = panel.style.display !== 'none';
+  if (open) {
+    panel.style.display = 'none';
+    document.body.classList.remove('tl-select-panel-open');
+    return;
+  }
+  // Popolazione dropdown a partire dai bookings caricati nel range visibile.
+  _tlSelectPanelPopulateFilters();
+  panel.style.display = '';
+  document.body.classList.add('tl-select-panel-open');
+  tlSelectPanelUpdateCounter();
+  if (typeof mfApplySearchable === 'function') mfApplySearchable(panel);
+}
+
+function _tlSelectPanelPopulateFilters() {
+  const bookings = window._tlBookings || [];
+  const jobs = new Map();
+  const resources = new Map();
+  for (const b of bookings) {
+    const p = b.extendedProps || {};
+    if (p.job_id && !jobs.has(p.job_id)) {
+      jobs.set(p.job_id, `${p.job_code || ''} ${p.job_title || ''}`.trim() || ('Job #'+p.job_id));
+    }
+    if (p.resource_id && !resources.has(p.resource_id)) {
+      const r = (RESOURCES_SEED || []).find(x => x.id === p.resource_id);
+      resources.set(p.resource_id, r ? r.name : ('Risorsa #'+p.resource_id));
+    }
+  }
+  const _setOptions = (selId, map, placeholder) => {
+    const el = document.getElementById(selId);
+    if (!el) return;
+    const cur = el.value;
+    el.innerHTML = `<option value="">${placeholder}</option>` +
+      [...map.entries()].sort((a,b) => String(a[1]).localeCompare(b[1]))
+        .map(([id, name]) => `<option value="${id}">${escapeHtml(name)}</option>`).join('');
+    if (cur && map.has(parseInt(cur, 10))) el.value = cur;
+  };
+  _setOptions('tlsp-job', jobs, '— Job —');
+  _setOptions('tlsp-resource', resources, '— Risorsa —');
+}
+
+function tlSelectPanelApply() {
+  if (!window._tlInstance) return;
+  const ds = window._tlInstance.itemsData;
+  if (!ds) return;
+  const fJob  = document.getElementById('tlsp-job').value;
+  const fRes  = document.getElementById('tlsp-resource').value;
+  const fStat = document.getElementById('tlsp-status').value;
+  const fPrio = document.getElementById('tlsp-priority').value;
+  const bookings = window._tlBookings || [];
+  const ids = [];
+  for (const it of ds.get()) {
+    if (typeof it.id !== 'string' || !it.id.startsWith('a')) continue;
+    const b = bookings.find(x => x.id === it.id);
+    const p = (b && b.extendedProps) || {};
+    if (fJob  && String(p.job_id) !== fJob) continue;
+    if (fRes  && String(p.resource_id) !== fRes) continue;
+    if (fStat && String(p.execution_status || (p.status === 'tentative' ? 'tentative' : '')) !== fStat) continue;
+    if (fPrio && String(p.priority || 'normal') !== fPrio) continue;
+    ids.push(it.id);
+  }
+  window._tlInstance.setSelection(ids);
+  tlOnSelectionChange();
+  tlSelectPanelUpdateCounter();
+  if (!ids.length) toast('Nessun booking soddisfa i filtri', 'info', 1800);
+  else toast(`${ids.length} booking selezionati`, 'success', 1800);
+}
+
+function tlSelectPanelInvert() {
+  if (!window._tlInstance) return;
+  const ds = window._tlInstance.itemsData;
+  if (!ds) return;
+  const cur = new Set(window._tlInstance.getSelection() || []);
+  const all = ds.get().filter(it => typeof it.id === 'string' && it.id.startsWith('a')).map(it => it.id);
+  const inv = all.filter(id => !cur.has(id));
+  window._tlInstance.setSelection(inv);
+  tlOnSelectionChange();
+  tlSelectPanelUpdateCounter();
+  toast(`Inversione: ${inv.length} ora selezionati`, 'info', 1500);
+}
+
+function tlSelectPanelUpdateCounter() {
+  const el = document.getElementById('tlsp-counter');
+  if (!el) return;
+  const sel = window._tlInstance ? (window._tlInstance.getSelection() || []) : [];
+  const n = sel.filter(id => typeof id === 'string' && id.startsWith('a')).length;
+  el.textContent = `${n} selezionati`;
+  const bulkBtn = document.getElementById('tlsp-bulk');
+  if (bulkBtn) bulkBtn.style.display = n >= 1 ? '' : 'none';
 }
 
 // ── Modal "Nuovo/Edit booking" — multi-row assignments (v3.4.16.1) ─
