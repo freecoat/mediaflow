@@ -759,6 +759,10 @@
             <button class="btn btn-ghost btn-sm" onclick="tlGoTo()">Vai a</button>
           </span>
           <span class="text-sm text-muted" id="tl-range" style="margin-left:auto;"></span>
+          <!-- v3.5.0-alpha.18: undo/redo persistente + bulk-edit -->
+          <button class="btn btn-ghost btn-sm" id="tl-undo-btn-toolbar" onclick="tlPerformUndo()" disabled style="opacity:0.4; margin-left:6px;" title="Annulla (Ctrl+Z)">↶</button>
+          <button class="btn btn-ghost btn-sm" id="tl-redo-btn-toolbar" onclick="tlPerformRedo()" disabled style="opacity:0.4;" title="Ripeti (Ctrl+Y)">↷</button>
+          <button class="btn btn-ghost btn-sm" id="tl-bulk-btn-toolbar" onclick="tlOpenBulkModal()" style="display:none; margin-left:6px;" title="Modifica in blocco i booking selezionati">✏ Bulk</button>
           <button class="btn btn-ghost btn-sm" id="tl-roi-toggle" onclick="tlRoiTogglePersist()" title="Modalità selezione area: drag su zona vuota per selezionare più booking. Alt+drag funziona sempre, anche senza modalità attiva." style="margin-left:6px;">📦 Selezione area</button>
           <button class="btn btn-ghost btn-sm" onclick="tlPrefsToggle(event)" title="Personalizza look timeline" style="margin-left:6px;">⚙</button>
         </div>
@@ -1064,6 +1068,41 @@
     <div class="modal-footer">
       <a id="todo-detail-job-link" class="btn btn-secondary" href="#" style="display:none;">→ Apri job</a>
       <button class="btn btn-primary" onclick="closeModal('modal-todo-detail')">Chiudi</button>
+    </div>
+  </div>
+</div>
+
+<!-- Modal Bulk-edit (v3.5.0-alpha.18): applica modifiche in blocco a più
+     booking selezionati. Le azioni sono indipendenti: shift orario relativo
+     e/o cambio stato esecuzione. Per delete bulk usa Delete key sulla timeline. -->
+<div class="modal-overlay" id="modal-bulk-edit" style="z-index:300;">
+  <div class="modal" style="max-width:520px;">
+    <div class="modal-header">
+      <span class="modal-title">✏ Modifica in blocco</span>
+      <button class="btn btn-ghost btn-icon" onclick="closeModal('modal-bulk-edit')">✕</button>
+    </div>
+    <div class="modal-body">
+      <div id="bulk-summary" style="background:rgba(98,114,245,0.08); border:1px solid rgba(98,114,245,0.3); border-radius:6px; padding:10px 12px; font-size:13px; margin-bottom:14px;"></div>
+      <div class="form-group">
+        <label class="form-label">Shift orario (minuti)</label>
+        <input type="number" class="form-input" id="bulk-shift-min" placeholder="es. 30 (avanti) o -60 (indietro)" step="15">
+        <small class="form-help text-muted">Sposta start+end di tutti gli assignments dei booking selezionati. Lascia vuoto per non shiftare. Conflitti orari → quel booking viene saltato.</small>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Cambio stato esecuzione</label>
+        <select class="form-select" id="bulk-status">
+          <option value="">— non cambiare —</option>
+          <option value="todo">⏳ Da fare</option>
+          <option value="started">▶ Iniziato</option>
+          <option value="done">✓ Fatto</option>
+          <option value="not_done">✗ Non fatto</option>
+        </select>
+        <small class="form-help text-muted">Marcare "Fatto" triggera il sync col cost report (man-hours).</small>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeModal('modal-bulk-edit')">Annulla</button>
+      <button class="btn btn-primary" onclick="tlSubmitBulkEdit()">Applica</button>
     </div>
   </div>
 </div>
@@ -2321,10 +2360,18 @@ window.addEventListener('keydown', async (e) => {
   // Solo item booking (id 'aN'), non background (id 'u-N')
   const selBookings = sel.filter(id => typeof id === 'string' && id.startsWith('a'));
 
-  // Ctrl+Z = undo
-  if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z') {
+  // Ctrl+Z = undo, Ctrl+Shift+Z / Ctrl+Y = redo
+  if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z' && !e.shiftKey) {
     e.preventDefault();
     tlPerformUndo();
+    return;
+  }
+  if ((e.ctrlKey || e.metaKey) && (
+      (e.key.toLowerCase() === 'z' && e.shiftKey) ||
+      e.key.toLowerCase() === 'y'
+  )) {
+    e.preventDefault();
+    tlPerformRedo();
     return;
   }
   // Ctrl+C = copia selezione
@@ -2512,12 +2559,46 @@ function tlSnap(date, scale, step) {
   return new Date(Math.round(date.getTime() / ms) * ms);
 }
 
-// ── Undo stack ─────────────────────────────────────────────
+// ── Undo / Redo stack (v3.5.0-alpha.18) ──────────────────────
+// Stack di azioni reversibili. Ogni mutazione (create/update/remove/duplicate
+// /paste) chiama tlPushUndo(action, label). Ctrl+Z invoca tlPerformUndo() che
+// applica l'inverso e push l'azione opposta su _tlRedoStack. Ctrl+Y/Ctrl+Shift+Z
+// fa il reverso. Nuova azione utente svuota il redo (stack lineare standard).
 window._tlUndoStack = [];
-function tlPushUndo(action, label) {
-  window._tlUndoStack.push(action);
-  if (window._tlUndoStack.length > 20) window._tlUndoStack.shift();
+window._tlRedoStack = [];
+function tlPushUndo(action, label, opts) {
+  opts = opts || {};
+  window._tlUndoStack.push({ ...action, _label: label });
+  if (window._tlUndoStack.length > 50) window._tlUndoStack.shift();
+  // Nuova azione utente → svuota redo (a meno che opts.preserveRedo)
+  if (!opts.preserveRedo) window._tlRedoStack = [];
   tlShowUndoToast(label);
+  tlUpdateHistoryButtons();
+}
+
+function tlPushRedo(action, label) {
+  window._tlRedoStack.push({ ...action, _label: label });
+  if (window._tlRedoStack.length > 50) window._tlRedoStack.shift();
+  tlUpdateHistoryButtons();
+}
+
+function tlUpdateHistoryButtons() {
+  const u = document.getElementById('tl-undo-btn-toolbar');
+  const r = document.getElementById('tl-redo-btn-toolbar');
+  if (u) {
+    const can = (window._tlUndoStack || []).length > 0;
+    u.disabled = !can;
+    u.style.opacity = can ? '1' : '0.4';
+    const last = (window._tlUndoStack || []).slice(-1)[0];
+    u.title = can ? `Annulla: ${last && last._label || ''}` : 'Niente da annullare';
+  }
+  if (r) {
+    const can = (window._tlRedoStack || []).length > 0;
+    r.disabled = !can;
+    r.style.opacity = can ? '1' : '0.4';
+    const last = (window._tlRedoStack || []).slice(-1)[0];
+    r.title = can ? `Ripeti: ${last && last._label || ''}` : 'Niente da ripetere';
+  }
 }
 function tlShowUndoToast(label) {
   // Custom toast con bottone Annulla. Riusa elemento esistente o crea.
@@ -2550,6 +2631,90 @@ function tlDismissUndoToast() {
 async function tlPerformUndo() {
   const action = window._tlUndoStack.pop();
   tlDismissUndoToast();
+  tlUpdateHistoryButtons();
+  if (!action) return;
+  try {
+    if (action.type === 'update_assignment') {
+      // Salva lo stato CORRENTE per il redo prima di rollback
+      const cur = (window._tlBookings || []).find(x => x.assignment_id === parseInt(action.assignment_id));
+      const fd = new FormData();
+      fd.append('start_datetime', _toLocalDtInput(new Date(action.prev.start)));
+      fd.append('end_datetime', _toLocalDtInput(new Date(action.prev.end)));
+      fd.append('resource_id', action.prev.resource_id);
+      await api('PUT', `/planning/api/booking-assignments/${action.assignment_id}`, fd);
+      if (cur) {
+        tlPushRedo({type:'update_assignment', assignment_id: action.assignment_id,
+          prev:{start: cur.start, end: cur.end, resource_id: cur.extendedProps && cur.extendedProps.resource_id}}, action._label || 'Modifica');
+      }
+    } else if (action.type === 'remove_assignment') {
+      // v3.5.0-alpha.18: ricreiamo l'assignment via POST /api/bookings/{bid}/assignments
+      if (!action.snapshot) {
+        toast('Undo cancellazione: snapshot mancante', 'warning');
+        return;
+      }
+      const s = action.snapshot;
+      const fd = new FormData();
+      fd.append('resource_id', s.resource_id);
+      fd.append('start_datetime', _toLocalDtInput(new Date(s.start)));
+      fd.append('end_datetime', _toLocalDtInput(new Date(s.end)));
+      if (s.role) fd.append('role', s.role);
+      const created = await api('POST', `/planning/api/bookings/${s.booking_id}/assignments`, fd);
+      tlPushRedo({type:'remove_assignment_redo', assignment_id: created.id}, action._label || 'Cancellazione');
+    } else if (action.type === 'remove') {
+      await api('POST', `/planning/api/bookings/${action.id}/restore`);
+      tlPushRedo({type:'remove', id: action.id}, action._label || 'Cancellazione booking');
+    } else if (action.type === 'create') {
+      await api('DELETE', `/planning/api/bookings/${action.id}`);
+      tlPushRedo({type:'create_redo', restoreId: action.id}, action._label || 'Creazione');
+    } else if (action.type === 'paste_batch') {
+      let undone = 0, errs = 0;
+      for (const id of action.ids || []) {
+        try { await api('DELETE', `/planning/api/bookings/${id}`); undone++; }
+        catch(_) { errs++; }
+      }
+      tlPushRedo({type:'paste_batch_redo', ids: action.ids}, action._label || 'Paste');
+      toast(`Paste annullato: ${undone} cancellat${undone === 1 ? 'o' : 'i'}${errs ? `, ${errs} err.` : ''}`,
+            errs ? 'warning' : 'success');
+      renderTimeline(true);
+      return;
+    } else if (action.type === 'bulk_edit') {
+      // v3.5.0-alpha.18: undo bulk-edit applica lo stato precedente per ogni booking
+      let ok = 0, errs = 0;
+      for (const snap of (action.snapshots || [])) {
+        try {
+          // Ripristina assignments + execution_status
+          for (const a of (snap.assignments || [])) {
+            const fd = new FormData();
+            fd.append('start_datetime', _toLocalDtInput(new Date(a.start)));
+            fd.append('end_datetime', _toLocalDtInput(new Date(a.end)));
+            fd.append('resource_id', a.resource_id);
+            await api('PUT', `/planning/api/booking-assignments/${a.id}`, fd);
+          }
+          if (snap.execution_status) {
+            const fd = new FormData();
+            fd.append('execution_status', snap.execution_status);
+            await api('PATCH', `/planning/api/bookings/${snap.booking_id}/execution`, fd);
+          }
+          ok++;
+        } catch(_) { errs++; }
+      }
+      toast(`Bulk-edit annullato: ${ok}${errs ? ` · ${errs} err.` : ''}`, errs ? 'warning' : 'success');
+      renderTimeline(true);
+      return;
+    }
+    toast('Operazione annullata', 'success');
+    renderTimeline(true);
+  } catch(e) {
+    toast(e.message || 'Errore undo', 'error');
+    // Riposiziona l'azione sullo stack se l'undo ha fallito
+    window._tlUndoStack.push(action);
+    tlUpdateHistoryButtons();
+  }
+}
+
+async function tlPerformRedo() {
+  const action = window._tlRedoStack.pop();
+  tlUpdateHistoryButtons();
   if (!action) return;
   try {
     if (action.type === 'update_assignment') {
@@ -2558,30 +2723,36 @@ async function tlPerformUndo() {
       fd.append('end_datetime', _toLocalDtInput(new Date(action.prev.end)));
       fd.append('resource_id', action.prev.resource_id);
       await api('PUT', `/planning/api/booking-assignments/${action.assignment_id}`, fd);
-    } else if (action.type === 'remove_assignment') {
-      // Restore di un assignment cancellato non è semplice (backend non ha restore per assignment singolo).
-      // Avviso: undo per cancellazione assignment richiede che il booking-padre sia ancora attivo.
-      toast('Undo cancellazione assignment non ancora implementato', 'warning');
+      tlPushUndo({type:'update_assignment', assignment_id: action.assignment_id,
+        prev: action.prev}, action._label || 'Modifica', { preserveRedo: true });
+    } else if (action.type === 'remove_assignment_redo') {
+      await api('DELETE', `/planning/api/booking-assignments/${action.assignment_id}`);
+      // Re-aggiungiamo all'undo come ritorno (pero il restore non avrebbe il snapshot — semplifichiamo)
+      tlPushUndo({type:'noop', _label: 'Re-cancellazione'}, action._label || 'Cancellazione', { preserveRedo: true });
     } else if (action.type === 'remove') {
-      await api('POST', `/planning/api/bookings/${action.id}/restore`);
-    } else if (action.type === 'create') {
       await api('DELETE', `/planning/api/bookings/${action.id}`);
-    } else if (action.type === 'paste_batch') {
-      // v3.4.42: undo bulk paste — cancella tutti i booking creati
-      let undone = 0, errs = 0;
+      tlPushUndo({type:'remove', id: action.id}, action._label || 'Cancellazione booking', { preserveRedo: true });
+    } else if (action.type === 'create_redo') {
+      await api('POST', `/planning/api/bookings/${action.restoreId}/restore`);
+      tlPushUndo({type:'create', id: action.restoreId}, action._label || 'Creazione', { preserveRedo: true });
+    } else if (action.type === 'paste_batch_redo') {
+      // Restore di tutti gli id
+      let ok = 0, errs = 0;
       for (const id of action.ids || []) {
-        try { await api('DELETE', `/planning/api/bookings/${id}`); undone++; }
+        try { await api('POST', `/planning/api/bookings/${id}/restore`); ok++; }
         catch(_) { errs++; }
       }
-      toast(`Paste annullato: ${undone} cancellat${undone === 1 ? 'o' : 'i'}${errs ? `, ${errs} err.` : ''}`,
-            errs ? 'warning' : 'success');
+      tlPushUndo({type:'paste_batch', ids: action.ids}, action._label || 'Paste', { preserveRedo: true });
+      toast(`Paste ripristinato: ${ok}${errs ? ` · ${errs} err.` : ''}`, errs ? 'warning' : 'success');
       renderTimeline(true);
       return;
     }
-    toast('Operazione annullata', 'success');
+    toast('Operazione ripetuta', 'success');
     renderTimeline(true);
   } catch(e) {
-    toast(e.message || 'Errore undo', 'error');
+    toast(e.message || 'Errore redo', 'error');
+    window._tlRedoStack.push(action);
+    tlUpdateHistoryButtons();
   }
 }
 
@@ -3025,6 +3196,8 @@ async function renderTimeline(preserveWindow=false) {
     // ma confliggeva con la selezione singola dell'utente (non si poteva più
     // selezionare un job senza che si aprisse il modal). Per il dettaglio:
     // doppio click oppure right-click → "Modifica" → vista dettaglio.
+    // v3.5.0-alpha.18: aggiorna visibilità del bottone Bulk in toolbar.
+    tlOnSelectionChange();
   });
   // Doppio click su area vuota → modal nuovo booking (fallback E1, sostituito da click&drag in E2)
   tlInstance.on('doubleClick', (props) => {
@@ -3341,6 +3514,86 @@ function tlRoiTogglePersist() {
     ? '📦 Selezione area attiva: trascina su zona vuota per selezionare. Premi di nuovo per disattivare.'
     : 'Selezione area disattivata. Alt+drag funziona sempre.',
     'info', 3500);
+}
+
+// ── Bulk-edit modal (v3.5.0-alpha.18) ──────────────────────────
+// Apre il modal con le opzioni applicabili alla selezione corrente. Usa
+// PUT /planning/api/bookings/{primary_id}/bulk-edit (vedi planning.py).
+function tlOpenBulkModal() {
+  if (!window._tlInstance) return;
+  const sel = window._tlInstance.getSelection() || [];
+  const selA = sel.filter(id => typeof id === 'string' && id.startsWith('a'));
+  if (selA.length < 1) {
+    toast('Seleziona almeno un booking (Ctrl/Shift+click o Alt+drag area).', 'info', 3000);
+    return;
+  }
+  // Estraggo gli items per derivare booking_ids unici
+  const items = (window._tlBookings || []).filter(b => selA.includes(b.id));
+  const bookingIds = [...new Set(items.map(it => it.extendedProps && it.extendedProps.booking_id).filter(Boolean))];
+  if (!bookingIds.length) {
+    toast('Impossibile risalire ai booking selezionati', 'error');
+    return;
+  }
+  document.getElementById('bulk-summary').innerHTML =
+    `<b>${bookingIds.length}</b> booking selezionati (${selA.length} righe assignment).
+     <span class="text-muted text-sm">Le modifiche saranno applicate in blocco.</span>`;
+  document.getElementById('bulk-shift-min').value = '';
+  document.getElementById('bulk-status').value = '';
+  document.getElementById('modal-bulk-edit').dataset.bookingIds = bookingIds.join(',');
+  openModal('modal-bulk-edit');
+}
+
+async function tlSubmitBulkEdit() {
+  const modal = document.getElementById('modal-bulk-edit');
+  const bookingIds = (modal.dataset.bookingIds || '').split(',').filter(Boolean);
+  if (!bookingIds.length) { closeModal('modal-bulk-edit'); return; }
+  const shiftMin = (document.getElementById('bulk-shift-min').value || '').trim();
+  const status = document.getElementById('bulk-status').value;
+  if (!shiftMin && !status) {
+    toast('Seleziona almeno un\'azione (shift orario o cambio stato).', 'warning');
+    return;
+  }
+  // Snapshot per undo: salva start/end/resource per ogni assignment + execution_status
+  const snaps = [];
+  for (const bid of bookingIds) {
+    const items = (window._tlBookings || []).filter(b => b.extendedProps && b.extendedProps.booking_id === parseInt(bid));
+    if (!items.length) continue;
+    snaps.push({
+      booking_id: parseInt(bid),
+      execution_status: items[0].extendedProps && items[0].extendedProps.execution_status,
+      assignments: items.map(it => ({
+        id: it.extendedProps && it.extendedProps.assignment_id,
+        start: it.start, end: it.end,
+        resource_id: it.extendedProps && it.extendedProps.resource_id,
+      })),
+    });
+  }
+  const fd = new FormData();
+  fd.append('booking_ids', bookingIds.join(','));
+  if (shiftMin) fd.append('shift_minutes', String(parseInt(shiftMin, 10) || 0));
+  if (status) fd.append('execution_status', status);
+  try {
+    const res = await api('PUT', `/planning/api/bookings/${bookingIds[0]}/bulk-edit`, fd);
+    closeModal('modal-bulk-edit');
+    const failedN = (res.failed || []).length;
+    toast(`✓ ${res.ok} aggiornat${res.ok === 1 ? 'o' : 'i'}${failedN ? ` · ⚠ ${failedN} falliti` : ''}`,
+          failedN ? 'warning' : 'success');
+    if (res.ok > 0) {
+      const lbl = (shiftMin ? `Shift ${shiftMin}min` : '') + (shiftMin && status ? ' + ' : '') + (status ? `Stato → ${status}` : '');
+      tlPushUndo({type:'bulk_edit', snapshots: snaps}, `Bulk: ${lbl}`);
+    }
+    renderTimeline(true);
+  } catch(e) {
+    toast(e.message || 'Errore bulk-edit', 'error');
+  }
+}
+
+// Mostra/nasconde il bottone Bulk e Selezione area in base alla selezione corrente.
+function tlOnSelectionChange() {
+  const sel = window._tlInstance ? (window._tlInstance.getSelection() || []) : [];
+  const selA = sel.filter(id => typeof id === 'string' && id.startsWith('a'));
+  const btn = document.getElementById('tl-bulk-btn-toolbar');
+  if (btn) btn.style.display = selA.length >= 1 ? '' : 'none';
 }
 
 // ── Modal "Nuovo/Edit booking" — multi-row assignments (v3.4.16.1) ─

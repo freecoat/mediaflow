@@ -2,7 +2,7 @@
 from fastapi import APIRouter, Cookie, Depends, HTTPException, Request, Form
 from fastapi.responses import HTMLResponse, RedirectResponse
 from typing import Optional
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 from sqlalchemy.orm import Session, joinedload
 from sqlalchemy import or_, func
 from app.database import get_db
@@ -1430,6 +1430,161 @@ def _maybe_flag_overtime_on_assignment_change(
     except Exception as e:
         print(f"[overtime auto-flag] notify failed: {e}")
     return {"overtime_status": "pending", "notified_count": notified}
+
+
+@router.post("/api/bookings/{booking_id}/assignments")
+async def add_assignment_to_booking(
+    booking_id: int,
+    request: Request,
+    resource_id: int = Form(...),
+    start_datetime: datetime = Form(...),
+    end_datetime: datetime = Form(...),
+    role: Optional[str] = Form(None),
+    db: Session = Depends(get_db),
+):
+    """v3.5.0-alpha.18: aggiunge un assignment singolo a un booking esistente.
+
+    Pensato come tassello per undo/redo (ripristinare un assignment cancellato)
+    e per bulk-edit "duplica risorsa". Il PUT /api/bookings/{id} resta il modo
+    canonico per definire l'intero set di assignments in un'unica transazione;
+    qui invece si aggiunge solo 1 riga senza toccare le altre.
+    """
+    b = db.query(Booking).filter(
+        Booking.id == booking_id,
+        Booking.tenant_id == CURRENT_TENANT,
+    ).first()
+    if not b:
+        raise HTTPException(404, "Booking non trovato")
+    _enforce_planning_scope(request, db, {resource_id})
+    if end_datetime <= start_datetime:
+        raise HTTPException(400, "end_datetime deve essere > start_datetime")
+    c = _check_assignment_conflict(db, resource_id, start_datetime, end_datetime)
+    if c:
+        raise HTTPException(409, f"Conflitto con assignment #{c.id}")
+    res = db.query(Resource).filter(Resource.id == resource_id).first()
+    if not res:
+        raise HTTPException(404, "Risorsa non trovata")
+    a = BookingAssignment(
+        booking_id=booking_id,
+        resource_id=resource_id,
+        start_datetime=start_datetime,
+        end_datetime=end_datetime,
+        role=role,
+    )
+    db.add(a)
+    db.flush()
+    _recalc_booking_envelope(b)
+    # Se il booking era cancelled e l'assignment lo riattiva → ripristina status
+    if b.status == BookingStatus.cancelled:
+        b.status = BookingStatus.confirmed
+    if b.job_id:
+        try:
+            from app.services.resource_assignment_sync import ensure_resource_assigned_to_job
+            ensure_resource_assigned_to_job(db, b.job_id, resource_id)
+        except Exception as e:
+            print(f"[add_assignment_to_booking] auto-assignment failed: {e}")
+    if b.execution_status == BookingExecutionStatus.done:
+        try:
+            from app.services.cost_line_sync import recompute_for_booking
+            recompute_for_booking(db, b)
+        except Exception as e:
+            print(f"[add_assignment_to_booking] cost line sync failed: {e}")
+    db.commit()
+    db.refresh(a)
+    return {
+        "id": a.id, "booking_id": a.booking_id, "resource_id": a.resource_id,
+        "start_datetime": a.start_datetime.isoformat(),
+        "end_datetime": a.end_datetime.isoformat(),
+        "role": a.role,
+    }
+
+
+@router.put("/api/bookings/{booking_id}/bulk-edit")
+async def bulk_edit_bookings(
+    booking_id: int,
+    request: Request,
+    booking_ids: str = Form(...),  # CSV "1,2,3"
+    shift_minutes: Optional[int] = Form(None),
+    execution_status: Optional[str] = Form(None),
+    db: Session = Depends(get_db),
+):
+    """v3.5.0-alpha.18: applica modifiche in blocco a più booking.
+
+    Il `booking_id` nel path identifica il "primario" (per scopo coerenza con
+    altri endpoint pattern), ma le modifiche vengono applicate a TUTTI i
+    booking elencati in `booking_ids` (CSV). Ritorna conteggio successi/errori.
+
+    Operazioni supportate:
+    - `shift_minutes`: shift relativo di start+end di tutti gli assignments
+      (positivo = avanti nel tempo, negativo = indietro).
+    - `execution_status`: applica lo stesso execution_status (todo/started/done/not_done)
+      a tutti i booking. Se "done", triggera il cost line sync.
+
+    Le operazioni sono indipendenti — se passi entrambi, vengono applicate in
+    sequenza shift → status sullo stesso booking.
+    """
+    ids = [int(x.strip()) for x in (booking_ids or "").split(",") if x.strip().isdigit()]
+    if not ids:
+        raise HTTPException(400, "booking_ids vuoto o malformato")
+    if execution_status and execution_status not in ("todo", "started", "done", "not_done"):
+        raise HTTPException(400, f"execution_status non valido: {execution_status}")
+
+    bookings = db.query(Booking).filter(
+        Booking.id.in_(ids),
+        Booking.tenant_id == CURRENT_TENANT,
+    ).all()
+    if not bookings:
+        raise HTTPException(404, "Nessun booking trovato")
+    # RBAC: scope su tutte le risorse coinvolte
+    all_rids = set()
+    for b in bookings:
+        for a in b.assignments:
+            all_rids.add(a.resource_id)
+    _enforce_planning_scope(request, db, all_rids)
+
+    ok_count = 0
+    failed_ids: list[dict] = []
+    for b in bookings:
+        try:
+            if shift_minutes:
+                delta = timedelta(minutes=shift_minutes)
+                # Check conflict per ogni assignment shiftato
+                conflict_msg = None
+                for a in b.assignments:
+                    new_s = a.start_datetime + delta
+                    new_e = a.end_datetime + delta
+                    c = _check_assignment_conflict(
+                        db, a.resource_id, new_s, new_e,
+                        exclude_assignment_id=a.id,
+                    )
+                    if c:
+                        conflict_msg = f"#{a.id} → conflitto con #{c.id}"
+                        break
+                if conflict_msg:
+                    failed_ids.append({"id": b.id, "error": conflict_msg})
+                    continue
+                for a in b.assignments:
+                    a.start_datetime += delta
+                    a.end_datetime += delta
+                _recalc_booking_envelope(b)
+            if execution_status:
+                b.execution_status = BookingExecutionStatus(execution_status)
+                if execution_status == "done":
+                    try:
+                        from app.services.cost_line_sync import recompute_for_booking
+                        recompute_for_booking(db, b)
+                    except Exception as e:
+                        print(f"[bulk_edit] cost sync failed for #{b.id}: {e}")
+            ok_count += 1
+        except Exception as e:
+            failed_ids.append({"id": b.id, "error": str(e)})
+
+    db.commit()
+    return {
+        "ok": ok_count,
+        "failed": failed_ids,
+        "total": len(bookings),
+    }
 
 
 @router.delete("/api/booking-assignments/{assignment_id}")

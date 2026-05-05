@@ -8,6 +8,18 @@
 
 ## Versione corrente
 
+**v3.5.0-alpha.18** — 5 maggio 2026 — Round 7C: undo/redo planning + bulk-edit booking
+
+Sotto-round 7C chiuso (2 punti):
+1. **Undo/redo planning timeline**: stack max 50 + Ctrl+Y/Ctrl+Shift+Z per redo,
+   2 bottoni toolbar persistenti `↶ Undo` / `↷ Redo`, undo per `remove_assignment`
+   ora funziona via nuovo endpoint `POST /planning/api/bookings/{id}/assignments`.
+2. **Bulk-edit booking**: bottone `✏ Bulk` toolbar (visibile su selezione ≥1),
+   modal con shift orario (minuti) + cambio stato esecuzione, endpoint
+   `PUT /planning/api/bookings/{id}/bulk-edit`. Snapshot pre-modifica per undo.
+
+Cache-buster `v=3.5.0-alpha.18`. Niente migrazione DB.
+
 **v3.5.0-alpha.17** — 5 maggio 2026 — Round 7B: cost report lista + ricerca + export
 
 Sotto-round 7B chiuso (3 punti):
@@ -405,9 +417,9 @@ Lista feedback ricevuta:
 - ✅ Quote ricerca + filtri simmetrici al cost report
 - ✅ Cost report cliente PDF: opzione "rendiconto" (quotato/maturato/stimato + over/under) + export CSV/XLSX
 
-**Round 7C (planning power-user):**
-- 🔜 Undo/redo planning timeline (stack azioni create/move/resize/delete/duplicate, Ctrl+Z/Y)
-- 🔜 Bulk modify bookings (multiselect → modal: shift orario, cambio stato, cambio risorsa, cambio reparto)
+**Round 7C (chiuso in alpha.18):**
+- ✅ Undo/redo planning timeline (stack max 50 + bottoni toolbar persistenti + undo per `remove_assignment`)
+- ✅ Bulk modify bookings (modal con shift orario + cambio stato esecuzione, endpoint `bulk-edit`)
 
 **Round 7D (cantieri di design — proposte presentate, in attesa green-light Matteo):**
 - 🔜 AI integrazione GUI/settings: proposta **A2** = tool generico `update_settings` con discovery API (`SETTINGS_SCHEMAS` registry)

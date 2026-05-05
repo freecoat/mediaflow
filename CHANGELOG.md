@@ -1,5 +1,47 @@
 # MediaFlow — Changelog
 
+## v3.5.0-alpha.18 — Round 7C: undo/redo planning + bulk-edit booking (5 maggio 2026)
+
+Round 7C su feedback Matteo del 5 maggio: 2 punti planning power-user.
+
+**Undo / Redo planning timeline**
+
+Pre-alpha.18 esisteva già `_tlUndoStack` con Ctrl+Z (10 azioni in toast
+ephemeral). Estensione completa:
+- Stack max 50, **redo stack** parallelo `_tlRedoStack` con Ctrl+Y / Ctrl+Shift+Z.
+- 2 bottoni persistenti in toolbar (`↶ Undo` / `↷ Redo`) con tooltip che mostra
+  l'azione "in cima" allo stack (es. "Annulla: Booking duplicato").
+- `tlPushUndo(action, label, opts)` accetta `preserveRedo:true` quando l'azione
+  è generata da una redo (lo standard è "nuova azione utente svuota redo").
+- Nuovo endpoint backend `POST /planning/api/bookings/{id}/assignments` per
+  ricreare un assignment singolo (sblocca undo di `remove_assignment` che
+  pre-alpha.18 era marcato "non implementato").
+- Undo per `bulk_edit` ripristina lo stato precedente (assignments + execution_status)
+  per ogni booking.
+
+**Bulk-edit booking**
+
+Pre-alpha.18: solo bulk-delete via Delete key sulla multiselect timeline.
+
+Estensione:
+- Bottone `✏ Bulk` nella toolbar timeline appare quando ci sono ≥1 assignment
+  selezionati. `tlOnSelectionChange()` aggiornato dall'evento `select` di
+  vis-timeline.
+- Modal `modal-bulk-edit` con 2 azioni indipendenti (combinabili):
+  - **Shift orario** in minuti (positivo/negativo) — applicato a start+end di
+    tutti gli assignments. Conflitti orari → quel booking saltato e listato
+    nei `failed`.
+  - **Cambio stato esecuzione** (todo/started/done/not_done). Done triggera
+    cost line sync.
+- Nuovo endpoint `PUT /planning/api/bookings/{id}/bulk-edit` che accetta
+  `booking_ids` CSV, `shift_minutes`, `execution_status`. Ritorna
+  `{ok, failed, total}`.
+- Snapshot pre-modifica registrato per undo (assignments + execution_status).
+
+Cache-buster `v=3.5.0-alpha.18`. Niente migrazione DB.
+
+---
+
 ## v3.5.0-alpha.17 — Round 7B: cost report lista + ricerca + export (5 maggio 2026)
 
 Round 7B su feedback Matteo del 5 maggio: 3 punti su quote/cost-report,
