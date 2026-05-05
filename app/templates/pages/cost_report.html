@@ -5,20 +5,85 @@
 
 {% block content %}
 
-<!-- Selettore job -->
-<div class="flex gap-3 mb-4 items-center">
-  <select class="form-select" style="width:auto;min-width:280px;" id="job-select" onchange="loadReport()">
-    <option value="">— seleziona un job —</option>
-    {% for job in jobs %}
-    <option value="{{ job.id }}">{{ job.code }} — {{ job.title }}{% if job.quote %} · quote {{ job.quote.number }}{% if job.quote.title and job.quote.title != job.title %} ({{ job.quote.title }}){% endif %}{% endif %}</option>
-    {% endfor %}
-  </select>
-  <button class="btn btn-secondary btn-sm" onclick="openModal('modal-assign-resource')" id="btn-assign" disabled>
-    + Assegna risorsa
-  </button>
-  <a id="btn-client-pdf" class="btn btn-secondary btn-sm" style="display:none;" target="_blank" rel="noopener">
-    📄 Esporta PDF cliente
-  </a>
+<!-- ── Lista cost report (v3.5.0-alpha.16) ─────────────────────
+     Pattern allineato a /quotes: lista default con tutti i cost report,
+     ricerca live + filtri (cliente, stato, periodo), click riga apre il
+     dettaglio. Sostituisce il dropdown pre-alpha.16 (truncava i titoli a
+     200 progetti). Bottoni di esport (PDF/CSV/XLSX) appaiono solo a job
+     selezionato. -->
+<div id="cr-list-card" class="card">
+  <div class="cr-filters" style="display:flex; flex-wrap:wrap; gap:10px; align-items:flex-end; margin-bottom:14px;">
+    <div class="form-group" style="flex:2; min-width:220px;">
+      <label class="form-label" style="font-size:11px;">Ricerca</label>
+      <input class="form-input" id="cr-search" placeholder="codice, titolo, cliente, numero quote…" oninput="renderCrList()">
+    </div>
+    <div class="form-group" style="min-width:140px;">
+      <label class="form-label" style="font-size:11px;">Cliente</label>
+      <select class="form-select" id="cr-f-client" onchange="renderCrList()"><option value="">— tutti —</option></select>
+    </div>
+    <div class="form-group" style="min-width:140px;">
+      <label class="form-label" style="font-size:11px;">Stato job</label>
+      <select class="form-select" id="cr-f-status" onchange="renderCrList()">
+        <option value="">— tutti —</option>
+        <option value="open">Aperto</option>
+        <option value="in_progress">In corso</option>
+        <option value="completed">Completato</option>
+        <option value="cancelled">Annullato</option>
+      </select>
+    </div>
+    <div class="form-group" style="min-width:140px;">
+      <label class="form-label" style="font-size:11px;">Margine</label>
+      <select class="form-select" id="cr-f-margin" onchange="renderCrList()">
+        <option value="">— tutti —</option>
+        <option value="over">⚠ Solo Over (sforamento)</option>
+        <option value="under">✓ Solo Under (in budget)</option>
+      </select>
+    </div>
+    <button class="btn btn-ghost btn-sm" onclick="resetCrFilters()">Reset</button>
+  </div>
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th style="width:120px;">Codice</th>
+          <th style="min-width:280px;">Titolo / Quote</th>
+          <th style="min-width:160px;">Cliente</th>
+          <th style="width:90px;">Stato</th>
+          <th class="text-right" style="width:120px;">Quotato</th>
+          <th class="text-right" style="width:120px;">Maturato</th>
+          <th class="text-right" style="width:120px;">Stimato</th>
+          <th class="text-right" style="width:120px;">Over/Under</th>
+        </tr>
+      </thead>
+      <tbody id="cr-list-tbody">
+        <tr><td colspan="8" class="text-muted" style="text-align:center;padding:24px;">Caricamento…</td></tr>
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<!-- ── Toolbar dettaglio (visibile solo quando un job è aperto) ── -->
+<div id="cr-detail-toolbar" class="flex gap-3 mb-4 items-center" style="display:none;">
+  <button class="btn btn-secondary btn-sm" onclick="closeReport()">← Lista</button>
+  <span id="cr-detail-title" style="font-size:14px; font-weight:500;"></span>
+  <div style="margin-left:auto; display:flex; gap:6px; align-items:center;">
+    <button class="btn btn-secondary btn-sm" onclick="openModal('modal-assign-resource')" id="btn-assign" disabled>
+      + Assegna risorsa
+    </button>
+    <a id="btn-client-pdf" class="btn btn-secondary btn-sm" style="display:none;" target="_blank" rel="noopener">
+      📄 PDF cliente
+    </a>
+    <a id="btn-client-csv" class="btn btn-secondary btn-sm" style="display:none;" target="_blank" rel="noopener">
+      📑 CSV
+    </a>
+    <a id="btn-client-xlsx" class="btn btn-secondary btn-sm" style="display:none;" target="_blank" rel="noopener">
+      📊 Excel
+    </a>
+    <label class="text-xs text-muted" style="margin-left:6px; display:flex; align-items:center; gap:4px;" title="Quando attivo, gli export contengono Quotato/Maturato/Stimato e Over/Under per riga e in totale.">
+      <input type="checkbox" id="cr-rendiconto-toggle" onchange="updateExportLinks()" checked>
+      Modalità rendiconto
+    </label>
+  </div>
 </div>
 
 <div id="report-area" class="hidden">
@@ -79,10 +144,12 @@
   </div>
 </div>
 
-<!-- Placeholder vuoto -->
-<div id="no-report" class="card" style="text-align:center;padding:60px 20px;">
+<!-- Placeholder vuoto (non più visibile di default in alpha.16: la lista
+     filtrabile lo sostituisce. Resta nascosto, usato solo come fallback
+     quando si chiude il report da `closeReport()`. -->
+<div id="no-report" class="card hidden" style="text-align:center;padding:60px 20px;">
   <div style="font-size:40px;margin-bottom:16px;opacity:0.3;">📊</div>
-  <div class="text-muted">Seleziona un job per visualizzare il cost report</div>
+  <div class="text-muted">Seleziona un cost report dalla lista per visualizzarlo</div>
 </div>
 
 <!-- Modal dettaglio lavorazione (v3.5.0-alpha.11): popup booking-detail
@@ -168,36 +235,132 @@
 let currentJobId = null;
 let currentReport = null;
 let allResources = [];
+// v3.5.0-alpha.16: lista cost report filtrabile (sostituisce il dropdown).
+let _crAll = [];
 
 async function init() {
   allResources = await api('GET', '/resources/api');
   document.getElementById('ar-resource').innerHTML =
     '<option value="">— seleziona —</option>' +
     allResources.map(r => `<option value="${r.id}">${r.name} (${r.type})</option>`).join('');
+  await loadCrList();
 }
 
-async function loadReport() {
-  const id = document.getElementById('job-select').value;
-  if (!id) {
-    document.getElementById('report-area').classList.add('hidden');
-    document.getElementById('no-report').classList.remove('hidden');
-    document.getElementById('btn-client-pdf').style.display = 'none';
+async function loadCrList() {
+  try {
+    _crAll = await api('GET', '/cost-report/api/list');
+  } catch(e) {
+    document.getElementById('cr-list-tbody').innerHTML =
+      `<tr><td colspan="8" style="text-align:center;color:#ef4444;padding:24px;">Errore: ${escapeHtml(e.message || 'caricamento lista')}</td></tr>`;
     return;
   }
+  // Popola filtro cliente
+  const clientSel = document.getElementById('cr-f-client');
+  const clients = [...new Map(_crAll.filter(c => c.client_id).map(r => [r.client_id, r.client])).entries()];
+  clients.sort((a, b) => (a[1] || '').localeCompare(b[1] || ''));
+  clientSel.innerHTML = '<option value="">— tutti —</option>' +
+    clients.map(([id, name]) => `<option value="${id}">${escapeHtml(name)}</option>`).join('');
+  renderCrList();
+}
+
+function renderCrList() {
+  const q = (document.getElementById('cr-search').value || '').toLowerCase().trim();
+  const fClient = document.getElementById('cr-f-client').value;
+  const fStatus = document.getElementById('cr-f-status').value;
+  const fMargin = document.getElementById('cr-f-margin').value;
+  const tbody = document.getElementById('cr-list-tbody');
+  let rows = _crAll.slice();
+  if (fClient) rows = rows.filter(r => String(r.client_id) === fClient);
+  if (fStatus) rows = rows.filter(r => r.status === fStatus);
+  if (fMargin === 'over') rows = rows.filter(r => r.over_under < 0);
+  if (fMargin === 'under') rows = rows.filter(r => r.over_under >= 0);
+  if (q) {
+    rows = rows.filter(r =>
+      (r.code || '').toLowerCase().includes(q) ||
+      (r.title || '').toLowerCase().includes(q) ||
+      (r.client || '').toLowerCase().includes(q) ||
+      (r.quote_number || '').toLowerCase().includes(q) ||
+      (r.quote_title || '').toLowerCase().includes(q)
+    );
+  }
+  if (!rows.length) {
+    tbody.innerHTML = '<tr><td colspan="8" class="text-muted" style="text-align:center;padding:24px;">Nessun cost report corrisponde ai filtri</td></tr>';
+    return;
+  }
+  const STATUS_LBL = { open:'Aperto', in_progress:'In corso', completed:'Completato', cancelled:'Annullato' };
+  tbody.innerHTML = rows.map(r => {
+    const oVal = r.over_under;
+    const oCls = oVal < 0 ? 'color-rose' : (oVal > 0 ? 'color-success' : 'text-muted');
+    const oSign = oVal > 0 ? '+' : '';
+    return `<tr style="cursor:pointer;" onclick="loadReport(${r.id})">
+      <td class="mono" style="font-size:12px;">${escapeHtml(r.code)}</td>
+      <td>
+        <div style="font-weight:500;">${escapeHtml(r.title || '—')}</div>
+        ${r.quote_number ? `<div style="font-size:11px;color:var(--text3);margin-top:2px;">quote ${escapeHtml(r.quote_number)}${r.quote_title && r.quote_title !== r.title ? ' · ' + escapeHtml(r.quote_title) : ''}</div>` : ''}
+      </td>
+      <td class="text-muted text-sm">${escapeHtml(r.client || '—')}</td>
+      <td><span class="badge">${escapeHtml(STATUS_LBL[r.status] || r.status || '')}</span></td>
+      <td class="mono text-right">${fmtCurrency(r.total_quoted)}</td>
+      <td class="mono text-right">${fmtCurrency(r.total_accrued)}</td>
+      <td class="mono text-right">${fmtCurrency(r.total_expected)}</td>
+      <td class="mono text-right ${oCls}">${oSign}${fmtCurrency(oVal)}</td>
+    </tr>`;
+  }).join('');
+}
+
+function resetCrFilters() {
+  document.getElementById('cr-search').value = '';
+  document.getElementById('cr-f-client').value = '';
+  document.getElementById('cr-f-status').value = '';
+  document.getElementById('cr-f-margin').value = '';
+  renderCrList();
+}
+
+function closeReport() {
+  currentJobId = null;
+  currentReport = null;
+  document.getElementById('cr-list-card').style.display = '';
+  document.getElementById('cr-detail-toolbar').style.display = 'none';
+  document.getElementById('report-area').classList.add('hidden');
+  // no-report rimane nascosto: la lista è la vista default in alpha.16
+  loadCrList();  // refresh KPI nella lista
+}
+
+function updateExportLinks() {
+  if (!currentJobId) return;
+  const rendiconto = document.getElementById('cr-rendiconto-toggle').checked ? '1' : '0';
+  const qs = `?rendiconto=${rendiconto}`;
+  const pdf = document.getElementById('btn-client-pdf');
+  const csv = document.getElementById('btn-client-csv');
+  const xlsx = document.getElementById('btn-client-xlsx');
+  pdf.href = `/cost-report/api/job/${currentJobId}/client-pdf${qs}`;
+  csv.href = `/cost-report/api/job/${currentJobId}/client-csv${qs}`;
+  xlsx.href = `/cost-report/api/job/${currentJobId}/client-xlsx${qs}`;
+}
+
+async function loadReport(jobId) {
+  const id = jobId;
+  if (!id) { closeReport(); return; }
   currentJobId = id;
   document.getElementById('btn-assign').disabled = false;
-  // v3.5.0-alpha.13: auto-reconcile prima di leggere il report. Idempotente,
-  // garantisce che eventuali drift storici (es. cancellazioni pre-alpha.9 o
-  // unit non-time pre-alpha.13) vengano azzerati prima della visualizzazione.
+  // Auto-reconcile (idempotente): garantisce che eventuali drift storici
+  // vengano azzerati prima della visualizzazione.
   try { await api('POST', `/cost-report/api/job/${id}/reconcile-actuals`); }
-  catch(e) { /* non blocking — lasciamo il GET successivo procedere */ }
+  catch(e) { /* non blocking */ }
   currentReport = await api('GET', `/cost-report/api/job/${id}`);
+  document.getElementById('cr-list-card').style.display = 'none';
+  document.getElementById('cr-detail-toolbar').style.display = '';
+  const job = currentReport.job;
+  document.getElementById('cr-detail-title').innerHTML =
+    `<span class="mono" style="font-size:12px;">${escapeHtml(job.code)}</span> · ${escapeHtml(job.title || '')}` +
+    (job.client ? ` <span style="color:var(--text3); font-weight:400;">— ${escapeHtml(job.client)}</span>` : '');
   document.getElementById('report-area').classList.remove('hidden');
   document.getElementById('no-report').classList.add('hidden');
-  // v3.4.33 — bottone export PDF cliente attivo
-  const btn = document.getElementById('btn-client-pdf');
-  btn.href = `/cost-report/api/job/${id}/client-pdf`;
-  btn.style.display = '';
+  // Bottoni export
+  ['btn-client-pdf', 'btn-client-csv', 'btn-client-xlsx'].forEach(id => {
+    document.getElementById(id).style.display = '';
+  });
+  updateExportLinks();
   renderKPIs(); renderCostLines(); renderResources(); renderTimesheets();
   renderBookingSummary(id);
 }

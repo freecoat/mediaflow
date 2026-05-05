@@ -23,6 +23,16 @@ WHITE   = colors.white
 BLACK   = colors.HexColor("#1a1a2e")
 
 
+def _money(v: float, sign: bool = False) -> str:
+    """Formatta un importo come '€ 1.234,56'. Se sign=True, prefissa + per positivi."""
+    if v is None:
+        return ""
+    s = f"€ {v:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
+    if sign and v > 0:
+        s = "+" + s
+    return s
+
+
 def generate_invoice_pdf(invoice: dict, lines: list[dict], company: dict = None) -> bytes:
     """
     Genera il PDF di una fattura e restituisce i bytes.
@@ -171,7 +181,8 @@ def generate_invoice_pdf(invoice: dict, lines: list[dict], company: dict = None)
     return buf.getvalue()
 
 
-def generate_client_cost_report_pdf(report: dict, company: dict = None) -> bytes:
+def generate_client_cost_report_pdf(report: dict, company: dict = None,
+                                    rendiconto: bool = False) -> bytes:
     """v3.4.33 — Cost report **vista cliente** in PDF.
 
     A differenza di `generate_invoice_pdf` (fatturazione), questo è un report
@@ -185,6 +196,12 @@ def generate_client_cost_report_pdf(report: dict, company: dict = None) -> bytes
                               category, notes}
       - bookings_breakdown: dict con regular/overtime/night/sunday/holiday
       - job: {code, title, client, start_date, end_date}
+
+    v3.5.0-alpha.16: nuova flag `rendiconto`. Se True, oltre alle quantità
+    mostra Quotato/Maturato/Stimato e Over/Under per ogni riga + totale finale.
+    Il PDF rimane "vista cliente" (niente hardcost/rate/margine) ma più
+    informativo per la fatturazione progressiva. Default False = comportamento
+    pre-alpha.16 (solo quantità).
     """
     buf = BytesIO()
     doc = SimpleDocTemplate(
@@ -258,45 +275,110 @@ def generate_client_cost_report_pdf(report: dict, company: dict = None) -> bytes
 
     if quoted_lines:
         story.append(Paragraph("<b>Lavorazioni preventivate</b>", h2))
-        col_w = [80*mm, 18*mm, 35*mm, 37*mm]
-        table_data = [[
-            Paragraph("<b>Descrizione</b>", ParagraphStyle("th", fontSize=8, fontName="Helvetica-Bold", textColor=WHITE)),
-            Paragraph("<b>Unità</b>",       ParagraphStyle("th", fontSize=8, fontName="Helvetica-Bold", textColor=WHITE, alignment=TA_CENTER)),
-            Paragraph("<b>Q.tà preventivo → consuntivo</b>", ParagraphStyle("th", fontSize=8, fontName="Helvetica-Bold", textColor=WHITE, alignment=TA_RIGHT)),
-            Paragraph("<b>Stato</b>",       ParagraphStyle("th", fontSize=8, fontName="Helvetica-Bold", textColor=WHITE, alignment=TA_CENTER)),
-        ]]
-        for l in quoted_lines:
-            qq = l.get("quantity_quoted") or 0
-            qa = l.get("quantity_actual") or 0
-            if qa == 0 and qq > 0:
-                stato = "Da fare"
-            elif qa < qq:
-                stato = "In corso"
-            elif qa == qq:
-                stato = "Completata"
-            else:
-                stato = "Sforamento"
-            cat = l.get("category") or ""
-            desc_html = f"{l.get('description', '')}"
-            if cat:
-                desc_html += f"<br/><font size=7 color='#888'>{cat}</font>"
+        if rendiconto:
+            # Modalità rendiconto: 6 colonne con importi Quotato/Maturato/Stimato + Over/Under
+            col_w = [62*mm, 14*mm, 14*mm, 24*mm, 24*mm, 24*mm, 18*mm]
+            th = lambda t, a=TA_LEFT: Paragraph(f"<b>{t}</b>", ParagraphStyle(
+                "th", fontSize=8, fontName="Helvetica-Bold", textColor=WHITE, alignment=a))
+            table_data = [[
+                th("Descrizione"),
+                th("Unità", TA_CENTER),
+                th("Q.tà", TA_RIGHT),
+                th("Quotato", TA_RIGHT),
+                th("Maturato", TA_RIGHT),
+                th("Stimato", TA_RIGHT),
+                th("±", TA_RIGHT),
+            ]]
+            tot_quoted = tot_accrued = tot_expected = 0.0
+            for l in quoted_lines:
+                qq = l.get("quantity_quoted") or 0
+                qa = l.get("quantity_actual") or 0
+                tq = l.get("total_quoted") or 0
+                ta = l.get("total_accrued") or 0
+                te = l.get("total_expected") or 0
+                ou = l.get("over_under") or (tq - te)
+                tot_quoted += tq
+                tot_accrued += ta
+                tot_expected += te
+                cat = l.get("category") or ""
+                desc_html = f"{l.get('description', '')}"
+                if cat:
+                    desc_html += f"<br/><font size=7 color='#888'>{cat}</font>"
+                ou_color = "#16a34a" if ou >= 0 else "#dc2626"
+                table_data.append([
+                    Paragraph(desc_html, body),
+                    Paragraph(l.get("unit", ""), ParagraphStyle("c", fontSize=9, fontName="Helvetica", alignment=TA_CENTER)),
+                    Paragraph(_row_qty(l), right),
+                    Paragraph(_money(tq), right),
+                    Paragraph(_money(ta), right),
+                    Paragraph(_money(te), right),
+                    Paragraph(f"<font color='{ou_color}'>{_money(ou, sign=True)}</font>", right),
+                ])
+            tot_ou = tot_quoted - tot_expected
+            tot_color = "#16a34a" if tot_ou >= 0 else "#dc2626"
             table_data.append([
-                Paragraph(desc_html, body),
-                Paragraph(l.get("unit", ""), ParagraphStyle("c", fontSize=9, fontName="Helvetica", alignment=TA_CENTER)),
-                Paragraph(_row_qty(l), right),
-                Paragraph(stato, ParagraphStyle("c", fontSize=9, fontName="Helvetica", alignment=TA_CENTER)),
+                Paragraph("<b>Totale</b>", body),
+                Paragraph("", body),
+                Paragraph("", body),
+                Paragraph(f"<b>{_money(tot_quoted)}</b>", right),
+                Paragraph(f"<b>{_money(tot_accrued)}</b>", right),
+                Paragraph(f"<b>{_money(tot_expected)}</b>", right),
+                Paragraph(f"<font color='{tot_color}'><b>{_money(tot_ou, sign=True)}</b></font>", right),
             ])
-        line_table = Table(table_data, colWidths=col_w, repeatRows=1)
-        line_table.setStyle(TableStyle([
-            ("BACKGROUND",     (0,0), (-1,0), INDIGO),
-            ("ROWBACKGROUNDS", (0,1), (-1,-1), [WHITE, LIGHT]),
-            ("GRID",           (0,0), (-1,-1), 0.3, colors.HexColor("#e0e3f0")),
-            ("TOPPADDING",     (0,0), (-1,-1), 3*mm),
-            ("BOTTOMPADDING",  (0,0), (-1,-1), 3*mm),
-            ("LEFTPADDING",    (0,0), (-1,-1), 2*mm),
-            ("RIGHTPADDING",   (0,0), (-1,-1), 2*mm),
-            ("VALIGN",         (0,0), (-1,-1), "MIDDLE"),
-        ]))
+            line_table = Table(table_data, colWidths=col_w, repeatRows=1)
+            line_table.setStyle(TableStyle([
+                ("BACKGROUND",     (0,0), (-1,0), INDIGO),
+                ("ROWBACKGROUNDS", (0,1), (-1,-2), [WHITE, LIGHT]),
+                ("BACKGROUND",     (0,-1), (-1,-1), colors.HexColor("#eef0fb")),
+                ("LINEABOVE",      (0,-1), (-1,-1), 0.8, INDIGO),
+                ("GRID",           (0,0), (-1,-1), 0.3, colors.HexColor("#e0e3f0")),
+                ("TOPPADDING",     (0,0), (-1,-1), 3*mm),
+                ("BOTTOMPADDING",  (0,0), (-1,-1), 3*mm),
+                ("LEFTPADDING",    (0,0), (-1,-1), 2*mm),
+                ("RIGHTPADDING",   (0,0), (-1,-1), 2*mm),
+                ("VALIGN",         (0,0), (-1,-1), "MIDDLE"),
+            ]))
+        else:
+            # Modalità "stato lavorazioni" (solo quantità) — comportamento storico
+            col_w = [80*mm, 18*mm, 35*mm, 37*mm]
+            table_data = [[
+                Paragraph("<b>Descrizione</b>", ParagraphStyle("th", fontSize=8, fontName="Helvetica-Bold", textColor=WHITE)),
+                Paragraph("<b>Unità</b>",       ParagraphStyle("th", fontSize=8, fontName="Helvetica-Bold", textColor=WHITE, alignment=TA_CENTER)),
+                Paragraph("<b>Q.tà preventivo → consuntivo</b>", ParagraphStyle("th", fontSize=8, fontName="Helvetica-Bold", textColor=WHITE, alignment=TA_RIGHT)),
+                Paragraph("<b>Stato</b>",       ParagraphStyle("th", fontSize=8, fontName="Helvetica-Bold", textColor=WHITE, alignment=TA_CENTER)),
+            ]]
+            for l in quoted_lines:
+                qq = l.get("quantity_quoted") or 0
+                qa = l.get("quantity_actual") or 0
+                if qa == 0 and qq > 0:
+                    stato = "Da fare"
+                elif qa < qq:
+                    stato = "In corso"
+                elif qa == qq:
+                    stato = "Completata"
+                else:
+                    stato = "Sforamento"
+                cat = l.get("category") or ""
+                desc_html = f"{l.get('description', '')}"
+                if cat:
+                    desc_html += f"<br/><font size=7 color='#888'>{cat}</font>"
+                table_data.append([
+                    Paragraph(desc_html, body),
+                    Paragraph(l.get("unit", ""), ParagraphStyle("c", fontSize=9, fontName="Helvetica", alignment=TA_CENTER)),
+                    Paragraph(_row_qty(l), right),
+                    Paragraph(stato, ParagraphStyle("c", fontSize=9, fontName="Helvetica", alignment=TA_CENTER)),
+                ])
+            line_table = Table(table_data, colWidths=col_w, repeatRows=1)
+            line_table.setStyle(TableStyle([
+                ("BACKGROUND",     (0,0), (-1,0), INDIGO),
+                ("ROWBACKGROUNDS", (0,1), (-1,-1), [WHITE, LIGHT]),
+                ("GRID",           (0,0), (-1,-1), 0.3, colors.HexColor("#e0e3f0")),
+                ("TOPPADDING",     (0,0), (-1,-1), 3*mm),
+                ("BOTTOMPADDING",  (0,0), (-1,-1), 3*mm),
+                ("LEFTPADDING",    (0,0), (-1,-1), 2*mm),
+                ("RIGHTPADDING",   (0,0), (-1,-1), 2*mm),
+                ("VALIGN",         (0,0), (-1,-1), "MIDDLE"),
+            ]))
         story.append(line_table)
         story.append(Spacer(1, 5*mm))
 

@@ -8,6 +8,23 @@
 
 ## Versione corrente
 
+**v3.5.0-alpha.17** — 5 maggio 2026 — Round 7B: cost report lista + ricerca + export
+
+Sotto-round 7B chiuso (3 punti):
+1. **Cost report da dropdown a lista filtrabile** (pattern come `/quotes`):
+   nuovo `GET /cost-report/api/list` + ricerca live + 3 filtri (cliente, stato,
+   margine over/under). Click riga apre dettaglio in toolbar; bottone "← Lista".
+2. **Quote ricerca + filtri**: refactor `loadQuotes` in fetch+render filtrato,
+   ricerca live + 3 filtri (cliente, stato, con/senza job) + counter.
+3. **Export cost report cliente esteso**:
+   - PDF con `?rendiconto=1` mostra Quotato/Maturato/Stimato + Over/Under per
+     riga + totale finale (verde/rosso). Modalità stato storica resta default.
+   - 2 endpoint nuovi: `client-csv` (UTF-8 BOM, `;` separatore) e `client-xlsx`
+     (openpyxl, header indaco). Helper `_client_export_rows` condiviso.
+   - Toggle "Modalità rendiconto" nella toolbar dettaglio cost report.
+
+Cache-buster `v=3.5.0-alpha.17`. Niente migrazione DB.
+
 **v3.5.0-alpha.16** — 5 maggio 2026 — Round 7A: HR breakdown per-punch + ROI riscritto
 
 Aperto Round 7 su lista feedback Matteo del 5 maggio (12 punti, suddivisi in
@@ -383,10 +400,10 @@ Lista feedback ricevuta:
 - ✅ Ferie/malattia visibili nella tabella timbrature
 - ✅ Shift+drag ROI riscritto + Alt+drag + toggle "Selezione area" toolbar
 
-**Round 7B (prossimo — quote/cost-report uniformi):**
-- 🔜 Cost report: dropdown → searchable + filtri + lista default (pattern come `/quotes`)
-- 🔜 Quote ricerca + filtri simmetrici al cost report
-- 🔜 Cost report cliente PDF: opzione "rendiconto" (quotato/maturato/stimato + over/under) + export CSV/Excel
+**Round 7B (chiuso in alpha.17):**
+- ✅ Cost report: dropdown → searchable + filtri + lista default (pattern come `/quotes`)
+- ✅ Quote ricerca + filtri simmetrici al cost report
+- ✅ Cost report cliente PDF: opzione "rendiconto" (quotato/maturato/stimato + over/under) + export CSV/XLSX
 
 **Round 7C (planning power-user):**
 - 🔜 Undo/redo planning timeline (stack azioni create/move/resize/delete/duplicate, Ctrl+Z/Y)

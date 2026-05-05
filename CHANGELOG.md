@@ -1,5 +1,63 @@
 # MediaFlow — Changelog
 
+## v3.5.0-alpha.17 — Round 7B: cost report lista + ricerca + export (5 maggio 2026)
+
+Round 7B su feedback Matteo del 5 maggio: 3 punti su quote/cost-report,
+chiusi in unica versione condividendo il pattern lista filtrabile.
+
+**Cost report — da dropdown a lista filtrabile**
+
+Bug Matteo: "menu a tendina non mostra tutto il titolo. Sostituire con ricerca.
+Aggiungere filtri. Mostrare di default tutti i cost report (come in quotazioni)
+ed aprire il cost report dopo click (come in quotazioni)".
+
+Fix:
+- Nuovo endpoint `GET /cost-report/api/list` che ritorna riassunto di tutti i
+  job (codice/titolo/cliente/stato/quote + KPI rapidi: quotato/maturato/stimato/
+  over-under).
+- Pagina `/cost-report` ridisegnata: lista come `/quotes` con ricerca live
+  (codice, titolo, cliente, numero quote) + 3 filtri (cliente, stato job,
+  margine over/under). Click riga → toolbar dettaglio + report.
+- Toolbar dettaglio: bottone "← Lista", titolo job, export PDF/CSV/XLSX,
+  toggle "Modalità rendiconto".
+
+**Cost report — export rendiconto + CSV + XLSX**
+
+Bug Matteo: "Il cost report esportato per il cliente deve avere l'opzione per
+rendicontare anche le cifre quotate, maturate e stimate, con la visione di
+over/under. Aggiungi anche export csv e excel".
+
+Fix:
+- `generate_client_cost_report_pdf(report, rendiconto=True)`: nuova modalità
+  con tabella a 7 colonne (Descrizione/Unità/Q.tà/Quotato/Maturato/Stimato/±)
+  + riga totale finale. Over/Under colorato (verde/rosso). Modalità "stato"
+  storica resta default.
+- `GET /cost-report/api/job/{id}/client-pdf?rendiconto=1` accetta il flag.
+- 2 endpoint nuovi:
+  - `GET /cost-report/api/job/{id}/client-csv?rendiconto=0|1` — CSV UTF-8 con
+    BOM (apribile direttamente in Excel italiano), separatore `;`.
+  - `GET /cost-report/api/job/{id}/client-xlsx?rendiconto=0|1` — XLSX nativo
+    via openpyxl con header indaco + larghezze colonne ottimizzate.
+- Helper `_client_export_rows(report, rendiconto)` riusato da CSV/XLSX per
+  garantire output identico tra i 2 formati.
+
+**Quote — ricerca + filtri lista**
+
+Bug Matteo: "aggiungere ricerca (con compilazione automatica standard) e filtri
+in quotazioni".
+
+Fix in `/quotes`:
+- Refactor di `loadQuotes` in 2 step: fetch dataset + render filtrato.
+- Ricerca live (numero, titolo, progetto, cliente).
+- Filtri: cliente (popolato dinamicamente), stato (Bozza/Inviata/Approvata/
+  Rifiutata/Scaduta/Sostituita), Job (con/senza).
+- Counter "N su totale" sopra la tabella.
+- Reset filtri.
+
+Cache-buster `v=3.5.0-alpha.17`. Niente migrazione DB.
+
+---
+
 ## v3.5.0-alpha.16 — Round 7A: HR breakdown per-punch + ROI riscritto (5 maggio 2026)
 
 Round 7A su feedback Matteo del 5 maggio 2026: 4 bug + 1 cantiere UX, tutti

@@ -67,6 +67,41 @@
 
 <!-- Lista quotazioni -->
 <div class="card" id="quotes-list-card">
+  <!-- v3.5.0-alpha.16: ricerca live + filtri (cliente/stato/job) — pattern
+       allineato a /cost-report. Tutti client-side: filtri sul dataset
+       restituito da /quotes/api. -->
+  <div class="ql-filters" style="display:flex; flex-wrap:wrap; gap:10px; align-items:flex-end; margin-bottom:14px;">
+    <div class="form-group" style="flex:2; min-width:220px;">
+      <label class="form-label" style="font-size:11px;">Ricerca</label>
+      <input class="form-input" id="ql-search" placeholder="numero, titolo, cliente, progetto…" oninput="renderQuotesList()">
+    </div>
+    <div class="form-group" style="min-width:160px;">
+      <label class="form-label" style="font-size:11px;">Cliente</label>
+      <select class="form-select" id="ql-f-client" onchange="renderQuotesList()"><option value="">— tutti —</option></select>
+    </div>
+    <div class="form-group" style="min-width:140px;">
+      <label class="form-label" style="font-size:11px;">Stato</label>
+      <select class="form-select" id="ql-f-status" onchange="renderQuotesList()">
+        <option value="">— tutti —</option>
+        <option value="draft">Bozza</option>
+        <option value="sent">Inviata</option>
+        <option value="approved">Approvata</option>
+        <option value="rejected">Rifiutata</option>
+        <option value="expired">Scaduta</option>
+        <option value="superseded">Sostituita</option>
+      </select>
+    </div>
+    <div class="form-group" style="min-width:140px;">
+      <label class="form-label" style="font-size:11px;">Job</label>
+      <select class="form-select" id="ql-f-job" onchange="renderQuotesList()">
+        <option value="">— tutti —</option>
+        <option value="yes">Con job ✓</option>
+        <option value="no">Senza job</option>
+      </select>
+    </div>
+    <button class="btn btn-ghost btn-sm" onclick="resetQlFilters()">Reset</button>
+    <span class="text-sm text-muted" id="ql-count" style="margin-left:auto;"></span>
+  </div>
   <div class="table-wrap">
     <table>
       <thead>
@@ -748,15 +783,47 @@ const HOURS_PER_DAY = 8;
 
 // ── List view ─────────────────────────────────────────────────
 let _quotesIndex = {};  // {id: quote} per recuperare label e altro nei handler
+let _quotesAll = [];     // dataset completo da filtrare client-side
+
 async function loadQuotes() {
-  const qs = await api('GET', '/quotes/api');
+  _quotesAll = await api('GET', '/quotes/api');
   _quotesIndex = {};
-  qs.forEach(q => { _quotesIndex[q.id] = q; });
-  const tbody = document.getElementById('quotes-table');
-  if (!qs.length) {
-    tbody.innerHTML = '<tr><td colspan="8" class="text-muted" style="text-align:center;padding:24px;">Nessuna quotazione</td></tr>'; return;
+  _quotesAll.forEach(q => { _quotesIndex[q.id] = q; });
+  // Popola filtro cliente con valori unici
+  const clientSel = document.getElementById('ql-f-client');
+  if (clientSel) {
+    const clients = [...new Set(_quotesAll.map(q => q.client).filter(Boolean))].sort();
+    clientSel.innerHTML = '<option value="">— tutti —</option>' +
+      clients.map(c => `<option value="${escapeHtml(c)}">${escapeHtml(c)}</option>`).join('');
   }
-  tbody.innerHTML = qs.map(q => `
+  renderQuotesList();
+}
+
+function renderQuotesList() {
+  const q = (document.getElementById('ql-search')?.value || '').toLowerCase().trim();
+  const fClient = document.getElementById('ql-f-client')?.value || '';
+  const fStatus = document.getElementById('ql-f-status')?.value || '';
+  const fJob = document.getElementById('ql-f-job')?.value || '';
+  let rows = _quotesAll.slice();
+  if (fClient) rows = rows.filter(r => r.client === fClient);
+  if (fStatus) rows = rows.filter(r => r.status === fStatus);
+  if (fJob === 'yes') rows = rows.filter(r => r.has_job);
+  if (fJob === 'no') rows = rows.filter(r => !r.has_job);
+  if (q) {
+    rows = rows.filter(r =>
+      (r.number || '').toLowerCase().includes(q) ||
+      (r.title || '').toLowerCase().includes(q) ||
+      (r.project_title || '').toLowerCase().includes(q) ||
+      (r.client || '').toLowerCase().includes(q)
+    );
+  }
+  const tbody = document.getElementById('quotes-table');
+  const counter = document.getElementById('ql-count');
+  if (counter) counter.textContent = `${rows.length} su ${_quotesAll.length} quotazioni`;
+  if (!rows.length) {
+    tbody.innerHTML = '<tr><td colspan="8" class="text-muted" style="text-align:center;padding:24px;">Nessuna quotazione corrisponde ai filtri</td></tr>'; return;
+  }
+  tbody.innerHTML = rows.map(q => `
     <tr style="cursor:pointer;">
       <td class="mono" style="font-size:12px;" onclick="openEditor(${q.id})">${q.number}</td>
       <td style="font-weight:500;" onclick="openEditor(${q.id})">
@@ -775,6 +842,14 @@ async function loadQuotes() {
         <button class="btn btn-ghost btn-sm color-rose" onclick="event.stopPropagation();deleteQuoteFromList(${q.id});" title="Sposta nel cestino">🗑</button>
       </td>
     </tr>`).join('');
+}
+
+function resetQlFilters() {
+  document.getElementById('ql-search').value = '';
+  document.getElementById('ql-f-client').value = '';
+  document.getElementById('ql-f-status').value = '';
+  document.getElementById('ql-f-job').value = '';
+  renderQuotesList();
 }
 
 // ── Editor ────────────────────────────────────────────────────

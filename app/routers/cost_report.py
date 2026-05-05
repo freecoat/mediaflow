@@ -27,10 +27,59 @@ def _tpl():
 
 @router.get("/", response_class=HTMLResponse)
 async def cost_report_page(request: Request, db: Session = Depends(get_db)):
-    # v3.5.0-alpha.13: joinedload Job.quote per mostrare numero+titolo quote
-    # nel dropdown selettore (Matteo: vedere titolo quotazione anche in CR)
+    # v3.5.0-alpha.16: passiamo solo i jobs per il modal "Assegna risorsa".
+    # La lista dei cost report ora viene caricata via /cost-report/api/list
+    # con ricerca + filtri (pattern allineato a /quotes).
     jobs = db.query(Job).options(joinedload(Job.client), joinedload(Job.quote)).all()
     return _tpl().TemplateResponse("pages/cost_report.html", {"request": request, "jobs": jobs})
+
+
+@router.get("/api/list")
+async def list_cost_reports(
+    db: Session = Depends(get_db),
+):
+    """Lista riassuntiva di tutti i cost report (1 per job).
+
+    Per ogni job ritorna codice/titolo/cliente/stato + KPI rapidi (totale
+    quotato, maturato, stimato, over/under), pensati per la lista filtrabile
+    in `/cost-report` (sostituisce il dropdown pre-alpha.16).
+    """
+    jobs = (
+        db.query(Job)
+        .options(
+            joinedload(Job.client),
+            joinedload(Job.quote),
+            joinedload(Job.cost_lines),
+        )
+        .filter(Job.client_id.isnot(None))
+        .order_by(Job.created_at.desc())
+        .all()
+    )
+    out = []
+    for j in jobs:
+        total_quoted = sum(l.total_quoted for l in j.cost_lines)
+        total_accrued = sum(l.total_accrued for l in j.cost_lines)
+        total_expected = sum(l.total_expected for l in j.cost_lines)
+        over_under = round(total_quoted - total_expected, 2)
+        out.append({
+            "id": j.id,
+            "code": j.code,
+            "title": j.title,
+            "status": j.status,
+            "client_id": j.client_id,
+            "client": j.client.name if j.client else None,
+            "quote_id": j.quote_id,
+            "quote_number": j.quote.number if j.quote else None,
+            "quote_title": j.quote.title if j.quote else None,
+            "start_date": str(j.start_date) if j.start_date else None,
+            "end_date": str(j.end_date) if j.end_date else None,
+            "total_quoted": round(total_quoted, 2),
+            "total_accrued": round(total_accrued, 2),
+            "total_expected": round(total_expected, 2),
+            "over_under": over_under,
+            "lines_count": len(j.cost_lines),
+        })
+    return out
 
 
 def _resource_policy_for_cost(resource: Resource, db: Session) -> Optional[WorkingHoursPolicy]:
@@ -468,18 +517,199 @@ async def discard_not_done_pool_booking(
 # verificare l'avanzamento del lavoro.
 
 @router.get("/api/job/{job_id}/client-pdf")
-async def cost_report_client_pdf(job_id: int, db: Session = Depends(get_db)):
+async def cost_report_client_pdf(
+    job_id: int,
+    rendiconto: int = 0,
+    db: Session = Depends(get_db),
+):
     """Genera il PDF cliente del cost report. Riusa `job_cost_report` per
     raccogliere i dati e poi li passa a `generate_client_cost_report_pdf`
     filtrando i campi sensibili (hardcost/rate/margine NON vengono mai
-    serializzati nel PDF — vedi pdf_export.py)."""
-    # Riusa il calcolo esistente
+    serializzati nel PDF — vedi pdf_export.py).
+
+    v3.5.0-alpha.16: parametro `rendiconto` (0/1). Se 1, il PDF mostra
+    Quotato/Maturato/Stimato + Over/Under per riga + totali (utile per
+    fatturazione progressiva). Default 0 = solo quantità (vista cliente).
+    """
     report = await job_cost_report(job_id, db)
-    pdf_bytes = generate_client_cost_report_pdf(report)
+    pdf_bytes = generate_client_cost_report_pdf(report, rendiconto=bool(rendiconto))
     job_code = (report.get("job") or {}).get("code") or f"job-{job_id}"
-    filename = f"rendicontazione_{job_code}.pdf"
+    suffix = "_rendiconto" if rendiconto else ""
+    filename = f"rendicontazione_{job_code}{suffix}.pdf"
     return Response(
         content=pdf_bytes,
         media_type="application/pdf",
         headers={"Content-Disposition": f'inline; filename="{filename}"'},
+    )
+
+
+def _client_export_rows(report: dict, rendiconto: bool) -> tuple[list[str], list[list]]:
+    """Costruisce header + rows tabellari per export CSV/XLSX dal report.
+
+    Modalità rendiconto include 6 colonne (Quotato/Maturato/Stimato/Over-Under).
+    Modalità "stato" include solo quantità + stato lavorazione.
+    Aggiunge sezione "Lavorazioni extra" e blocco riepilogo ore lavorate.
+    """
+    quoted_lines = [l for l in (report.get("cost_lines") or []) if not l.get("is_extra")]
+    extra_lines = [l for l in (report.get("cost_lines") or []) if l.get("is_extra")]
+    rows: list[list] = []
+    if rendiconto:
+        header = ["Sezione", "Descrizione", "Categoria", "Unità",
+                  "Q.tà preventivo", "Q.tà consuntivo",
+                  "Quotato", "Maturato", "Stimato", "Over/Under"]
+        tot_q = tot_a = tot_e = 0.0
+        for l in quoted_lines:
+            tq = l.get("total_quoted") or 0
+            ta = l.get("total_accrued") or 0
+            te = l.get("total_expected") or 0
+            ou = l.get("over_under") or (tq - te)
+            tot_q += tq; tot_a += ta; tot_e += te
+            rows.append([
+                "Preventivata", l.get("description"), l.get("category") or "",
+                l.get("unit") or "",
+                l.get("quantity_quoted") or 0, l.get("quantity_actual") or 0,
+                round(tq, 2), round(ta, 2), round(te, 2), round(ou, 2),
+            ])
+        # Totale parziale preventivate
+        if quoted_lines:
+            rows.append([
+                "TOTALE preventivate", "", "", "", "", "",
+                round(tot_q, 2), round(tot_a, 2), round(tot_e, 2),
+                round(tot_q - tot_e, 2),
+            ])
+        for l in extra_lines:
+            tq = l.get("total_quoted") or 0
+            ta = l.get("total_accrued") or 0
+            te = l.get("total_expected") or 0
+            rows.append([
+                "Extra", l.get("description"), l.get("category") or "",
+                l.get("unit") or "",
+                "", l.get("quantity_actual") or 0,
+                round(tq, 2), round(ta, 2), round(te, 2),
+                round((l.get("over_under") or (tq - te)), 2),
+            ])
+    else:
+        header = ["Sezione", "Descrizione", "Categoria", "Unità",
+                  "Q.tà preventivo", "Q.tà consuntivo", "Stato"]
+        for l in quoted_lines:
+            qq = l.get("quantity_quoted") or 0
+            qa = l.get("quantity_actual") or 0
+            if qa == 0 and qq > 0: stato = "Da fare"
+            elif qa < qq: stato = "In corso"
+            elif qa == qq: stato = "Completata"
+            else: stato = "Sforamento"
+            rows.append(["Preventivata", l.get("description"), l.get("category") or "",
+                        l.get("unit") or "", qq, qa, stato])
+        for l in extra_lines:
+            rows.append(["Extra", l.get("description"), l.get("category") or "",
+                        l.get("unit") or "", "", l.get("quantity_actual") or 0, "Extra"])
+
+    # Blocco ore (sempre incluso, sotto i righe)
+    bd = report.get("bookings_breakdown") or {}
+    summary = report.get("summary") or {}
+    bk_hours = summary.get("bookings_hours", 0)
+    if bk_hours and bk_hours > 0:
+        rows.append([])
+        rows.append(["RIEPILOGO ORE LAVORATE"] + [""] * (len(header) - 1))
+        for k_label, k_field in [
+            ("Ore regolari", "regular_hours"),
+            ("Ore straordinarie", "overtime_hours"),
+            ("Ore notturne", "night_hours"),
+            ("Ore domenicali", "sunday_hours"),
+            ("Ore festive", "holiday_hours"),
+        ]:
+            v = bd.get(k_field) or 0
+            if v:
+                rows.append([k_label] + [""] * (len(header) - 2) + [f"{v:.2f}h"])
+        rows.append(["Totale ore"] + [""] * (len(header) - 2) + [f"{bk_hours:.2f}h"])
+    return header, rows
+
+
+@router.get("/api/job/{job_id}/client-csv")
+async def cost_report_client_csv(
+    job_id: int,
+    rendiconto: int = 0,
+    db: Session = Depends(get_db),
+):
+    """Export CSV (UTF-8 + BOM per Excel) del cost report cliente."""
+    import csv
+    import io
+    report = await job_cost_report(job_id, db)
+    header, rows = _client_export_rows(report, bool(rendiconto))
+    buf = io.StringIO()
+    buf.write("﻿")  # BOM per Excel
+    w = csv.writer(buf, delimiter=";")
+    job = report.get("job") or {}
+    w.writerow([f"Cost Report — {job.get('code', '')} · {job.get('title', '')}"])
+    w.writerow([f"Cliente: {job.get('client') or '—'}"])
+    w.writerow([f"Periodo: {job.get('start_date') or '—'} → {job.get('end_date') or '—'}"])
+    w.writerow([f"Modalità: {'Rendiconto (Quotato/Maturato/Stimato/Over-Under)' if rendiconto else 'Stato lavorazioni'}"])
+    w.writerow([])
+    w.writerow(header)
+    for r in rows:
+        w.writerow(r)
+    suffix = "_rendiconto" if rendiconto else ""
+    filename = f"rendicontazione_{job.get('code', f'job-{job_id}')}{suffix}.csv"
+    return Response(
+        content=buf.getvalue().encode("utf-8"),
+        media_type="text/csv; charset=utf-8",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
+
+
+@router.get("/api/job/{job_id}/client-xlsx")
+async def cost_report_client_xlsx(
+    job_id: int,
+    rendiconto: int = 0,
+    db: Session = Depends(get_db),
+):
+    """Export XLSX (Excel) del cost report cliente. Usa openpyxl."""
+    from openpyxl import Workbook
+    from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
+    from io import BytesIO
+    report = await job_cost_report(job_id, db)
+    header, rows = _client_export_rows(report, bool(rendiconto))
+    wb = Workbook()
+    ws = wb.active
+    ws.title = "Rendicontazione"
+    job = report.get("job") or {}
+    bold = Font(bold=True)
+    indigo = PatternFill(start_color="6272F5", end_color="6272F5", fill_type="solid")
+    white_bold = Font(bold=True, color="FFFFFF")
+    grey_fill = PatternFill(start_color="EEF0FB", end_color="EEF0FB", fill_type="solid")
+
+    ws.append([f"Cost Report — {job.get('code', '')} · {job.get('title', '')}"])
+    ws["A1"].font = Font(bold=True, size=14, color="6272F5")
+    ws.append([f"Cliente: {job.get('client') or '—'}"])
+    ws.append([f"Periodo: {job.get('start_date') or '—'} → {job.get('end_date') or '—'}"])
+    ws.append([f"Modalità: {'Rendiconto (Quotato/Maturato/Stimato/Over-Under)' if rendiconto else 'Stato lavorazioni'}"])
+    ws.append([])
+    ws.append(header)
+    header_row_idx = ws.max_row
+    for cell in ws[header_row_idx]:
+        cell.font = white_bold
+        cell.fill = indigo
+        cell.alignment = Alignment(horizontal="center", vertical="center")
+    for r in rows:
+        ws.append(r if r else [""])
+        # Highlight TOTALE preventivate
+        if r and isinstance(r[0], str) and r[0].startswith("TOTALE"):
+            for cell in ws[ws.max_row]:
+                cell.font = bold
+                cell.fill = grey_fill
+
+    # Larghezze colonne
+    widths = [16, 50, 18, 12, 16, 16, 14, 14, 14, 14]
+    for i, w in enumerate(widths[:len(header)], start=1):
+        col = ws.cell(row=header_row_idx, column=i).column_letter
+        ws.column_dimensions[col].width = w
+
+    buf = BytesIO()
+    wb.save(buf)
+    suffix = "_rendiconto" if rendiconto else ""
+    filename = f"rendicontazione_{job.get('code', f'job-{job_id}')}{suffix}.xlsx"
+    return Response(
+        content=buf.getvalue(),
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
     )
