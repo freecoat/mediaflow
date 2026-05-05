@@ -711,6 +711,7 @@
     </div>
 
     <!-- v3.4.45: Storyboard view (settimanale) -->
+    <!-- v3.5.0-alpha.22: opzioni storyboard (densità) spostate qui dalla popover globale -->
     <div class="pl-view" id="view-storyboard">
       <div class="card">
         <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px;flex-wrap:wrap;">
@@ -718,6 +719,13 @@
           <button class="btn btn-secondary btn-sm" onclick="storyboardWeek(0)">Oggi</button>
           <button class="btn btn-secondary btn-sm" onclick="storyboardWeek(+7)">Settimana →</button>
           <span id="sb-week-label" class="text-sm" style="font-weight:600;margin-left:8px;"></span>
+          <span style="display:inline-flex; align-items:center; gap:6px; margin-left:14px;">
+            <span class="text-sm text-muted">Densità</span>
+            <select id="sb-density-inline" class="form-select" data-no-search="true" onchange="storyboardSetDensity(this.value)" style="height:30px; padding:2px 8px; font-size:12px; width:auto;">
+              <option value="compact">Compatta</option>
+              <option value="normal" selected>Normale</option>
+            </select>
+          </span>
           <span id="sb-week-totals" class="text-sm text-muted" style="margin-left:auto;"></span>
         </div>
         <div id="sb-host"><div class="pl-empty">Caricamento storyboard…</div></div>
@@ -780,7 +788,8 @@
               <button class="btn btn-ghost btn-sm" style="display:block; width:100%; text-align:left; padding:7px 10px;" onclick="tlClearSelection()">Deseleziona tutto (Esc)</button>
             </div>
           </div>
-          <button class="btn btn-ghost btn-sm" id="tl-roi-toggle" onclick="tlRoiTogglePersist()" title="Modalità selezione area sperimentale: trascina su zona vuota per selezionare. Funziona meglio dopo zoom-in. Alt+drag fallback." style="margin-left:6px;">📦 Area</button>
+          <!-- v3.5.0-alpha.22: bottone "📦 Area" rimosso (ROI Alt/Shift+drag disabilitato). Usare il dropdown "☑ Seleziona ▾". -->
+          <button class="btn btn-ghost btn-sm" id="tl-roi-toggle" onclick="tlRoiTogglePersist()" title="Disabilitato in v3.5.0-alpha.22 — usa il dropdown ☑ Seleziona" style="display:none;">📦 Area</button>
           <button class="btn btn-ghost btn-sm" onclick="tlPrefsToggle(event)" title="Personalizza look timeline" style="margin-left:6px;">⚙</button>
         </div>
 
@@ -831,7 +840,8 @@
               <option value="mono">Mono (grigio)</option>
               <option value="dept">Per reparto</option>
             </select></div>
-          <div class="tl-pref-row"><label>Storyboard</label>
+          <!-- v3.5.0-alpha.22: opzione "Storyboard densità" spostata nella vista Storyboard (era qui sotto, fuori contesto). Hidden per retro-compat con codice JS. -->
+          <div class="tl-pref-row" style="display:none;"><label>Storyboard</label>
             <select id="tlp-sb-density" class="form-select" data-no-search="true">
               <option value="compact">Compatta</option>
               <option value="normal" selected>Normale</option>
@@ -925,6 +935,15 @@
         <div class="form-group">
           <label class="form-label">Note</label>
           <textarea id="tlb-notes" class="form-input" rows="3" style="resize:vertical; font-family:inherit;" placeholder="Annotazioni libere, riferimenti, contatti…"></textarea>
+        </div>
+
+        <!-- ─── Priorità con "semaforo" (v3.5.0-alpha.22) ────── -->
+        <div class="form-group" id="tlb-priority-group">
+          <label class="form-label">Priorità</label>
+          <div id="tlb-priority-traffic" style="display:inline-flex; gap:8px; align-items:center;">
+            <!-- popolato da tlbSetPriorityUI() -->
+          </div>
+          <input type="hidden" id="tlb-priority" value="normal">
         </div>
 
         <!-- ─── Smart split (E3) ────────────────────── -->
@@ -1480,6 +1499,8 @@ async function renderProjectView() {
     let html = '';
     for (const rid of Object.keys(byRes)) {
       const g = byRes[rid];
+      // v3.5.0-alpha.22: sort priorità desc poi data
+      g.items.sort(_cmpByPrioThenDate);
       html += `<div style="margin-bottom:18px;">
         <div style="display:flex;align-items:center;gap:8px;font-size:14px;font-weight:600;margin-bottom:6px;color:var(--text);">
           <span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:${escapeHtml(g.color || '#6272f5')};"></span>
@@ -1643,6 +1664,21 @@ function tlPrefsToggle(ev) {
   }
   if (ev) ev.stopPropagation();
 }
+// v3.5.0-alpha.22: setter dedicato per la densità storyboard (chiamato dal
+// dropdown inline nella vista). Sincronizza prefs e UI.
+function storyboardSetDensity(value) {
+  const v = (value === 'compact') ? 'compact' : 'normal';
+  const p = tlPrefsLoad();
+  p.sb_density = v;
+  tlPrefsSave(p);
+  tlPrefsApply(p);
+  // Sync hidden input + inline select
+  const inline = document.getElementById('sb-density-inline');
+  if (inline) inline.value = v;
+  const hidden = document.getElementById('tlp-sb-density');
+  if (hidden) hidden.value = v;
+}
+
 function tlPrefsBindHandlers() {
   const ids = ['font','font-family','text-color','bg','accent','sb-density','anim','heatmap','today-glow','weekend-bg'];
   for (const id of ids) {
@@ -1705,6 +1741,10 @@ function storyboardWeek(deltaDays) {
 
 async function renderStoryboard() {
   if (!window._sbWeekStart) window._sbWeekStart = _sbStartOfWeek(new Date());
+  // v3.5.0-alpha.22: sync inline density select coi prefs ad ogni render
+  const _p = tlPrefsLoad();
+  const _inline = document.getElementById('sb-density-inline');
+  if (_inline) _inline.value = (_p.sb_density === 'compact') ? 'compact' : 'normal';
   const start = new Date(window._sbWeekStart);
   const end = new Date(start); end.setDate(end.getDate() + 7);
   const fmtD = d => d.toISOString().substring(0,10);
@@ -1968,8 +2008,43 @@ async function renderTodo() {
   const today = new Date(); today.setHours(0,0,0,0);
   const tomorrow = new Date(today); tomorrow.setDate(today.getDate()+1);
 
+  // v3.5.0-alpha.22: sort default = priorità (high→low) poi data start asc.
+  // Matteo: "preferibilmente in ordine di priorità e poi di data".
+  items.sort(_cmpByPrioThenDate);
+
   host.innerHTML = '<div style="padding:8px 12px; background:rgba(98,114,245,0.06); border-radius:6px; margin-bottom:10px; font-size:12px; color:var(--text2);">💡 Per richieste ferie/malattia e riepilogo ore → <a href="/hr/">Le mie ore</a></div>' +
     items.map(it => renderTodoCard(it, today, tomorrow)).join('');
+}
+
+// v3.5.0-alpha.22: priority "semaforo" — 3 dot colorati clickabili.
+// Sostituisce il select dropdown nelle card todo / project view.
+const _PRIO_DOTS = [
+  { v: 'low',    color: '#22c55e', title: 'Priorità bassa' },
+  { v: 'normal', color: '#fbbf24', title: 'Priorità normale' },
+  { v: 'high',   color: '#ef4444', title: 'Priorità alta' },
+];
+function _renderPrioTraffic(bookingId, currentPrio) {
+  const cur = currentPrio || 'normal';
+  return _PRIO_DOTS.map(d => {
+    const active = d.v === cur;
+    const sz = active ? 14 : 10;
+    const bg = active ? d.color : 'rgba(120,120,120,0.25)';
+    const ring = active ? `0 0 0 2px rgba(255,255,255,0.18)` : 'none';
+    return `<button type="button" onclick="event.stopPropagation();todoSetPriority(${bookingId}, '${d.v}')"
+      title="${d.title}" aria-label="${d.title}"
+      style="border:0; padding:0; cursor:pointer; background:${bg}; width:${sz}px; height:${sz}px; border-radius:50%; box-shadow:${ring}; transition:all .12s ease;"></button>`;
+  }).join('');
+}
+
+// v3.5.0-alpha.22: helper sort priorità desc + data start asc.
+const _PRIO_RANK = { high: 0, normal: 1, low: 2 };
+function _cmpByPrioThenDate(a, b) {
+  const ap = _PRIO_RANK[(a.priority || 'normal')] ?? 1;
+  const bp = _PRIO_RANK[(b.priority || 'normal')] ?? 1;
+  if (ap !== bp) return ap - bp;
+  const ad = new Date(a.start || a.start_datetime || 0).getTime();
+  const bd = new Date(b.start || b.start_datetime || 0).getTime();
+  return ad - bd;
 }
 
 function renderTodoCard(it, today, tomorrow) {
@@ -2019,12 +2094,8 @@ function renderTodoCard(it, today, tomorrow) {
         <button class="dur-handle" onclick="todoExtend(${it.booking_id}, +15)" title="Estendi 15 min">+15</button>
         <button class="dur-handle" onclick="todoExtend(${it.booking_id}, +30)" title="Estendi 30 min">+30</button>
       ` : ''}
-      <span style="margin-left:auto; font-size:11px; color:var(--text3);">Priorità:
-        <select onchange="todoSetPriority(${it.booking_id}, this.value)" style="background:transparent; color:var(--text2); border:1px solid var(--border); border-radius:3px; padding:2px 4px; font-size:11px;">
-          <option value="low" ${prio==='low'?'selected':''}>Bassa</option>
-          <option value="normal" ${prio==='normal'?'selected':''}>Normale</option>
-          <option value="high" ${prio==='high'?'selected':''}>Alta</option>
-        </select>
+      <span class="prio-traffic" style="margin-left:auto; display:inline-flex; align-items:center; gap:4px; font-size:11px; color:var(--text3);" title="Priorità (semaforo)">
+        ${_renderPrioTraffic(it.booking_id, prio)}
       </span>
     </div>
     <div class="actions">
@@ -2063,17 +2134,31 @@ async function todoOpenDetail(bookingId) {
       <div style="display:grid;grid-template-columns:max-content 1fr;gap:6px 12px;align-items:start;">
         <div class="text-muted text-sm">Quando</div>
         <div>${escapeHtml(fmt(start))} → ${escapeHtml(fmt(end))} <span class="text-muted text-sm">(${d.duration_hours}h)</span></div>`;
+    // v3.5.0-alpha.22: cliente esposto in dettaglio.
+    if (d.client) {
+      html += `
+        <div class="text-muted text-sm">Cliente</div>
+        <div><b>${escapeHtml(d.client.name)}</b></div>`;
+    }
     if (d.job) {
       html += `
+        <div class="text-muted text-sm">Progetto</div>
+        <div><b>${escapeHtml(d.job.project_code || '—')}</b> ${d.job.project_title ? ' — '+escapeHtml(d.job.project_title) : ''}</div>
         <div class="text-muted text-sm">Job</div>
-        <div><b>${escapeHtml(d.job.code)}</b> — ${escapeHtml(d.job.title || '')}${d.job.project_code ? ' <span class="text-muted text-sm">· '+escapeHtml(d.job.project_code)+'</span>' : ''}</div>`;
+        <div><span class="mono">${escapeHtml(d.job.code)}</span> — ${escapeHtml(d.job.title || '')}</div>`;
       jobLink.href = '/jobs/' + d.job.id;
       jobLink.style.display = '';
     }
     if (d.cost_line) {
+      const u = escapeHtml(d.cost_line.unit || '');
+      const totH = d.cost_line.total_planned_hours_all_bookings;
+      const doneH = d.cost_line.done_hours_all_bookings;
+      const progressLine = (totH != null && doneH != null)
+        ? `<div class="text-muted" style="font-size:11px; margin-top:3px;">📊 Avanzamento lavorazione: <b>${doneH.toFixed(1)}h</b> fatte / <b>${totH.toFixed(1)}h</b> pianificate (su tutti i booking)</div>`
+        : '';
       html += `
         <div class="text-muted text-sm">Lavorazione</div>
-        <div>${escapeHtml(d.cost_line.description || '—')} <span class="text-muted text-sm">(${d.cost_line.quantity_actual || 0}/${d.cost_line.quantity_quoted || 0} ${escapeHtml(d.cost_line.unit || '')})</span></div>`;
+        <div>${escapeHtml(d.cost_line.description || '—')} <span class="text-muted text-sm">(${d.cost_line.quantity_actual || 0}/${d.cost_line.quantity_quoted || 0} ${u})</span>${progressLine}</div>`;
     }
     html += `
         <div class="text-muted text-sm">Stato</div>
@@ -2082,10 +2167,20 @@ async function todoOpenDetail(bookingId) {
           <span class="badge-exec ${exec}">${EXEC_LABEL[exec] || exec}</span>
           ${otBadge}
         </div>`;
-    if (d.assignments && d.assignments.length > 1) {
+    if (d.assignments && d.assignments.length) {
+      // v3.5.0-alpha.22: lista esplicita risorse anche per booking singolo,
+      // con dipartimento e durata per-risorsa.
+      const rowsHtml = d.assignments.map(a => {
+        const dept = a.department_name ? ' <span class="text-muted text-sm">· '+escapeHtml(a.department_name)+'</span>' : '';
+        const role = a.resource_role ? ' <span class="text-muted text-sm">· '+escapeHtml(a.resource_role)+'</span>' : '';
+        return `<div style="padding:3px 0; border-bottom:1px dashed rgba(255,255,255,0.05);">
+          <b>${escapeHtml(a.resource_name || ('#'+a.resource_id))}</b>${role}${dept}
+          <span class="text-muted text-sm" style="margin-left:6px;">${a.duration_hours}h</span>
+        </div>`;
+      }).join('');
       html += `
         <div class="text-muted text-sm">Risorse</div>
-        <div>${d.assignments.map(a => '<span class="badge badge-draft" style="margin-right:4px;">'+escapeHtml(a.resource_name || ('#'+a.resource_id))+'</span>').join('')}</div>`;
+        <div>${rowsHtml}</div>`;
     }
     if (d.notes) {
       html += `
@@ -2096,6 +2191,16 @@ async function todoOpenDetail(bookingId) {
       html += `
         <div class="text-muted text-sm">Motivazione &laquo;non fatto&raquo;</div>
         <div style="white-space:pre-wrap;color:#fca5a5;background:rgba(239,68,68,.06);padding:6px 10px;border-left:2px solid #ef4444;border-radius:3px;">${escapeHtml(d.not_done_reason)}</div>`;
+    }
+    // v3.5.0-alpha.22: timestamps tracciamento
+    if (d.created_at || d.last_change_at) {
+      const fmtTs = (t) => t ? new Date(t).toLocaleString('it-IT', {dateStyle:'medium', timeStyle:'short'}) : '—';
+      html += `
+        <div class="text-muted text-sm">Tracciamento</div>
+        <div class="text-muted text-sm">
+          Creato: ${fmtTs(d.created_at)}${d.last_change_at ? ' · Ultima modifica: '+fmtTs(d.last_change_at) : ''}
+          ${d.audit_count ? ' · '+d.audit_count+' modifiche tracciate' : ''}
+        </div>`;
     }
     html += '</div>';
     body.innerHTML = html;
@@ -2354,6 +2459,19 @@ function tlBookingToItem(b) {
   let classes = `tl-exec-${exec} `;
   if (isInternal) classes += 'kind-internal ';
   if (isTentative) classes += 'tl-tentative ';
+  // v3.5.0-alpha.22: tooltip esteso con durata booking + ore lavorazione totali.
+  const _ms = new Date(b.end) - new Date(b.start);
+  const _h = _ms > 0 ? _ms / 3600000 : 0;
+  const _hLab = _h >= 24 ? `${Math.floor(_h/24)}g ${(_h%24).toFixed(1)}h` : `${_h.toFixed(1)}h`;
+  const jobTotalH = (p.job_total_hours != null) ? p.job_total_hours : null;
+  const jobDoneH  = (p.job_done_hours  != null) ? p.job_done_hours  : null;
+  let jobDurLine = '';
+  if (jobTotalH != null) {
+    const doneStr = jobDoneH != null ? `${jobDoneH}h fatte / ` : '';
+    jobDurLine = `\n📊 Job: ${doneStr}${jobTotalH}h pianificate`;
+  }
+  const prioLab = (p.priority && p.priority !== 'normal') ? ` · ${p.priority}` : '';
+  const tooltip = `${b.title || ''}${isTentative ? ' (tentative)' : ''}\n⏱ Durata booking: ${_hLab}${jobDurLine} · ${exec}${prioLab}`;
   return {
     id: b.id,
     assignment_id: b.assignment_id,
@@ -2364,7 +2482,7 @@ function tlBookingToItem(b) {
     end: b.end,
     style: 'background-color:'+color+'; border-color:'+color+';',
     className: classes.trim(),
-    title: escapeHtml(b.title || '') + (isTentative ? ' (tentative)' : '') + ` · ${exec}`,
+    title: tooltip,
   };
 }
 
@@ -3293,9 +3411,23 @@ async function renderTimeline(preserveWindow=false) {
     // v3.5.0-alpha.18: aggiorna visibilità del bottone Bulk in toolbar.
     tlOnSelectionChange();
   });
-  // Doppio click su area vuota → modal nuovo booking (fallback E1, sostituito da click&drag in E2)
-  tlInstance.on('doubleClick', (props) => {
-    if (props.item) return;
+  // Doppio click:
+  // - su area vuota → modal nuovo booking
+  // - su item → apre il modal edit booking (v3.5.0-alpha.22: prima apriva
+  //   solo la toast "popup" sul select, non utile a Matteo).
+  tlInstance.on('doubleClick', async (props) => {
+    if (props.item) {
+      const it = items.find(x => x.id === props.item) || (itemsDS.get(props.item));
+      if (!it) return;
+      // Background items (ferie/festa/timbrature) non hanno booking_id
+      if (typeof props.item === 'string' && (props.item.startsWith('u-') || props.item.startsWith('tp-'))) return;
+      const bid = it.booking_id || (bookings.find(b => b.id === props.item) || {}).booking_id;
+      if (bid) {
+        try { await tlbOpenEdit(bid); }
+        catch(e) { toast(e.message || 'Errore apertura dettaglio booking', 'error'); }
+      }
+      return;
+    }
     if (!props.group || typeof props.group !== 'number') return;
     if (!props.time) return;
     tlbOpen(props.group, props.time);
@@ -3590,7 +3722,11 @@ async function renderTimeline(preserveWindow=false) {
     document.addEventListener('mouseup', finalize, true);
     document.addEventListener('keydown', onEsc, true);
   };
-  host.addEventListener('mousedown', window._tlRoiHandler, true);
+  // v3.5.0-alpha.22: ROI Alt/Shift+drag disabilitato (Matteo: "area non funziona,
+  // o lo togliamo o troviamo un'altro modo"). Conflitto con Hammer.js + UX confusa
+  // sulla selezione singola. Resta attivo SOLO il dropdown "☑ Seleziona ▾"
+  // (alpha.21) come canale affidabile di multi-selezione. Il codice della ROI
+  // rimane in archivio per future revisioni.
 
   tlUpdateRangeLabel();
 }
@@ -3952,6 +4088,8 @@ function _tlbReset() {
   document.getElementById('tlb-line').innerHTML = '<option value="">— scegli quotazione prima —</option>';
   document.getElementById('tlb-line-group').style.display = 'none';
   document.getElementById('tlb-notes').value = '';
+  // v3.5.0-alpha.22: priority semaforo
+  tlbSetPriorityUI('normal');
   document.getElementById('tlb-assignments').innerHTML = '';
   const ss = document.getElementById('tlb-smart-split');
   if (ss) ss.checked = false;
@@ -4403,6 +4541,8 @@ async function tlbOpenEdit(bookingId) {
   const p = first.extendedProps || {};
   document.getElementById('tlb-kind').value = p.kind || 'project';
   if (p.notes) document.getElementById('tlb-notes').value = p.notes;
+  // v3.5.0-alpha.22: pre-fill priority in edit
+  tlbSetPriorityUI(p.priority || 'normal');
   if (p.job_id) {
     // v3.4.53: dal Job risaliamo alla Quote (job_id resta come puntatore interno)
     try {
@@ -4451,6 +4591,29 @@ async function tlbOpenEdit(bookingId) {
   }
   tlbOnKindChange();
   openModal('modal-tl-booking');
+}
+
+// v3.5.0-alpha.22: semaforo priorità nel modal create/edit booking.
+function tlbSetPriorityUI(value) {
+  const v = (value === 'low' || value === 'normal' || value === 'high') ? value : 'normal';
+  const hidden = document.getElementById('tlb-priority');
+  if (hidden) hidden.value = v;
+  const host = document.getElementById('tlb-priority-traffic');
+  if (!host) return;
+  const dots = [
+    { v: 'low',    color: '#22c55e', title: 'Bassa' },
+    { v: 'normal', color: '#fbbf24', title: 'Normale' },
+    { v: 'high',   color: '#ef4444', title: 'Alta' },
+  ];
+  host.innerHTML = dots.map(d => {
+    const active = d.v === v;
+    const sz = active ? 18 : 14;
+    const bg = active ? d.color : 'rgba(120,120,120,0.3)';
+    const ring = active ? '0 0 0 3px rgba(255,255,255,0.18)' : 'none';
+    return `<button type="button" onclick="tlbSetPriorityUI('${d.v}')"
+      title="${d.title}" aria-label="Priorità ${d.title}"
+      style="border:0; padding:0; cursor:pointer; background:${bg}; width:${sz}px; height:${sz}px; border-radius:50%; box-shadow:${ring}; transition:all .12s ease;"></button>`;
+  }).join('') + ` <span class="text-muted" style="font-size:11px; margin-left:4px;">${dots.find(x=>x.v===v).title}</span>`;
 }
 
 function tlbOnKindChange() {
@@ -4915,6 +5078,10 @@ async function tlbSubmit() {
   if (costLineIdResolved) fd.append('job_cost_line_id', costLineIdResolved);
   const notes = document.getElementById('tlb-notes').value;
   if (notes) fd.append('notes', notes);
+  // v3.5.0-alpha.22: priorità (default normal). Se editing, send sempre per
+  // permettere al backend di aggiornare anche al downgrade.
+  const prio = (document.getElementById('tlb-priority') || {}).value || 'normal';
+  fd.append('priority', prio);
   // E3 v3.4.17: smart split server-side (solo per nuovo, non in edit)
   const smartSplit = document.getElementById('tlb-smart-split');
   if (smartSplit && smartSplit.checked && !editingId) fd.append('smart_split', 'true');

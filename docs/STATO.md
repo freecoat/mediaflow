@@ -8,6 +8,48 @@
 
 ## Versione corrente
 
+**v3.5.0-alpha.22** — 5 maggio 2026 sera — Round 9 (parte 1/3)
+
+Round 9 aperto sulla seconda lista feedback Matteo (5 maggio sera, 17 punti
+totali). Diviso in 3 sotto-round per scope-bound. Questo bump chiude 9 punti.
+
+**HR (3):**
+- ✅ Ferie/malattia ora visibili in lista timbrature (default range = mese
+  corrente sul page load `/hr` per popolare l'endpoint timeline)
+- ✅ Block timbratura su giorno con ferie/malattia approvata + viceversa (409)
+- ✅ Pausa pranzo opzionale in timbratura (default 60 min, opzioni 0..240 step
+  15). Nuova colonna `time_punches.break_minutes` auto-migrate. Sottratta
+  dalla durata e dall'engine `compute_overtime`/`compute_punch_breakdown`.
+
+**Timeline UX (5):**
+- ✅ Doppio click su item → apre modal edit booking
+- ✅ Tooltip hover esteso con durata booking + ore lavorazione (totali/done)
+- ✅ Priorità "semaforo" 3-dot in card "Le mie" / Per progetto + nel modal
+  create/edit booking
+- ✅ Booking detail arricchito (cliente, dipartimento per risorsa, ore done
+  cumulato, audit count, last-edit)
+- ✅ Sort priorità desc + data asc in "Le mie" e "Per progetto"
+
+**Selezione & UX (1):**
+- ✅ ROI Alt/Shift+drag disabilitato (UX confusa). Solo dropdown
+  `☑ Seleziona ▾` resta attivo.
+
+**Storyboard (1):**
+- ✅ Opzione densità storyboard spostata dalla popover globale al toolbar
+  della vista Storyboard.
+
+**In coda (Round 9 part 2/3):**
+- 🔜 Click+drag area vuota → modal nuovo booking pre-compilato con durata
+- 🔜 Drag&move conflitti backend (cross-resource non riflesso al refresh)
+- 🔜 Multi-select drag su altra risorsa
+- 🔜 Block drop su risorsa di reparto incompatibile
+- 🔜 Split-pause unit drag (entrambi i segmenti)
+- 🔜 Settings toggle visualizzazione timbrature come ombra leggera in timeline
+- 🔜 Push DB nel bundle
+
+Cache-buster `v=3.5.0-alpha.22`. Migrazione DB auto: aggiunge colonna
+`time_punches.break_minutes` al boot.
+
 **v3.5.0-alpha.21** — 5 maggio 2026 — Round 8 (parziale)
 
 Round 8 aperto su feedback Matteo dal test su altra macchina. 8/9 punti chiusi.

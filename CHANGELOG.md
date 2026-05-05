@@ -1,5 +1,82 @@
 # MediaFlow — Changelog
 
+## v3.5.0-alpha.22 — Round 9 (parte 1): HR pausa pranzo, ferie/malattia in lista, conflict block + timeline UX cleanup (5 maggio 2026)
+
+Round 9 aperto sulla seconda lista feedback Matteo (5 maggio sera). Diviso in
+3 sotto-round per scope-bound. Questo bump chiude 9 punti su 17.
+
+**HR / timbrature (3 punti):**
+
+- **Ferie e malattia ora visibili nella lista timbrature**: la pagina `/hr`
+  caricava `/api/timeline` senza date di default → l'endpoint ritornava solo
+  TimePunch (le `ResourceUnavailability` richiedono from/to per espansione
+  giorno-per-giorno). Fix: default range = mese corrente al primo load. Le
+  righe ferie/malattia/permesso appaiono quindi già di prima mano in tabella.
+- **Block timbratura su giorno con ferie/malattia approvata e viceversa**:
+  POST `/hr/api/punches` (kind=shift) → 409 se la risorsa ha già una
+  `ResourceUnavailability` approvata che si sovrappone al periodo richiesto.
+  Simmetrico: POST `/planning/api/unavailabilities` (status=approved) e
+  approve unavailability → 409 se ci sono già TimePunch shift nel periodo.
+- **Pausa pranzo opzionale in timbratura** (default 60 min, opzioni 0..240
+  min step 15): nuova colonna `time_punches.break_minutes` (auto-migrate),
+  campo dropdown nel modal timbratura visibile solo per `kind=shift`,
+  sottratta dalla durata mostrata in tabella e dall'engine
+  `compute_overtime`/`compute_punch_breakdown` (riduce le ore "regular" del
+  giorno prima del calcolo soglia overtime). Il conteggio ore lordo resta
+  esposto in `duration_h_gross` per audit.
+
+**Timeline planning UX (5 punti):**
+
+- **Doppio click su item booking apre il modal di edit**: pre-alpha.22
+  faceva nulla di utile (toast info sul select). Ora chiama
+  `tlbOpenEdit(booking_id)`. Doppio click su area vuota resta = nuovo booking.
+- **Hover tooltip esteso**: oltre a titolo + status, ora mostra durata
+  booking e durata totale lavorazione (ore fatte / ore pianificate) +
+  priorità se non normale. Dati esposti via `extendedProps.job_total_hours`
+  / `job_done_hours` nel serializer `/api/bookings`.
+- **Priorità "semaforo" in card "Le mie" / per progetto**: 3 dot colorati
+  (verde/giallo/rosso) clickabili che sostituiscono il dropdown. Il dot
+  attivo è ingrandito e ha glow.
+- **Priorità nel modal create/edit booking**: nuovo campo "semaforo" in
+  `modal-tl-booking`, persisted via `priority` form param su POST/PUT
+  `/api/bookings`. Helper backend `_parse_priority`.
+- **Booking detail (modal todo) arricchito**: cliente, dipartimento per
+  risorsa, ore fatte vs pianificate cumulato sulla cost_line, audit count
+  + last-edit timestamp. Backend `/api/bookings/{id}/detail` esteso.
+
+**Vista per progetto / Le mie (1 punto):**
+
+- **Sort default = priorità desc poi data start asc** (Matteo: "preferibilmente
+  in ordine di priorità e poi di data"). Helper `_cmpByPrioThenDate`
+  applicato sia in `renderTodo` che in `renderProjectView` (per gruppo).
+
+**Selezione multipla timeline (1 punto):**
+
+- **ROI Alt/Shift+drag disabilitato**: Matteo "area non funziona, o lo
+  togliamo o troviamo un'altro modo". Conflitto con Hammer.js + UX confusa
+  sulla selezione singola. Bottone `📦 Area` nascosto. Resta attivo SOLO il
+  dropdown affidabile `☑ Seleziona ▾` (alpha.21) per multi-selezione. Il
+  codice ROI rimane in archivio.
+
+**Storyboard (1 punto):**
+
+- **Opzione densità storyboard spostata nella vista Storyboard**: era nel
+  popover globale `⚙ Look timeline` (fuori contesto). Ora è inline nel
+  toolbar di `view-storyboard` e sincronizza i prefs.
+
+Cache-buster `v=3.5.0-alpha.22`. Migrazione DB auto: aggiunge colonna
+`time_punches.break_minutes` al boot.
+
+**In coda (Round 9 part 2/3):**
+
+- Click+drag area vuota → modal nuovo booking pre-compilato con durata
+- Drag&move conflitti backend (cross-resource non riflesso al refresh)
+- Multi-select drag su altra risorsa
+- Block drop su risorsa di reparto incompatibile
+- Split-pause unit drag (entrambi i segmenti)
+- Settings toggle visualizzazione timbrature come ombra leggera in timeline
+- Push DB nel bundle
+
 ## v3.5.0-alpha.21 — Round 8 (parziale): bug fix critici + milestone + timeline progetto (5 maggio 2026)
 
 Round 8 su feedback Matteo dal test su altra macchina. 8 dei 9 punti chiusi

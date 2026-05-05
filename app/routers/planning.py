@@ -8,11 +8,24 @@ from sqlalchemy import or_, func
 from app.database import get_db
 from app.models import (
     Job, JobStatus, Client, Project, Booking, BookingAssignment, BookingChange,
-    BookingStatus, BookingKind, BookingExecutionStatus,
+    BookingStatus, BookingKind, BookingExecutionStatus, BookingPriority,
     Resource, ResourceType, JobCostLine, Department, User,
     WorkingHoursPolicy, ResourceUnavailability, UnavailabilityKind, UnavailabilityStatus,
-    ResourcePreset,
+    ResourcePreset, TimePunch, PunchKind,
 )
+
+
+def _parse_priority(value):
+    """v3.5.0-alpha.22: parse `priority` form param → BookingPriority enum.
+    None / valore invalido → normal (default). Casefold-tolerant."""
+    if value is None:
+        return BookingPriority.normal
+    v = str(value).strip().lower()
+    if v == "low":
+        return BookingPriority.low
+    if v == "high":
+        return BookingPriority.high
+    return BookingPriority.normal
 from datetime import date as _date, timedelta as _td
 from app.services.auth import get_current_user_from_token
 from app.services.rbac import is_elevated, scope_resource_id, current_user_optional
@@ -718,6 +731,10 @@ async def list_bookings(
                 "overtime_status": b.overtime_status.value if hasattr(b.overtime_status, "value") else (b.overtime_status or "none"),
                 "not_done_reason": b.not_done_reason,
                 "count_in_costs": bool(b.count_in_costs),
+                # v3.5.0-alpha.22: durata totale lavorazione (per tooltip hover).
+                "job_total_hours": (b.cost_line.quantity_quoted if b.cost_line else None),
+                "job_done_hours": (b.cost_line.quantity_actual if b.cost_line else None),
+                "cost_line_unit": (b.cost_line.unit if b.cost_line else None),
             }
         })
     return out
@@ -829,6 +846,7 @@ async def create_booking(
     kind: BookingKind = Form(BookingKind.project),
     status: BookingStatus = Form(BookingStatus.tentative),
     notes: Optional[str] = Form(None),
+    priority: Optional[str] = Form(None),  # v3.5.0-alpha.22: low|normal|high
     smart_split: bool = Form(False),  # E3 v3.4.17
     recurrence_rule: Optional[str] = Form(None),  # E5 v3.4.19: WEEKDAYS, MON, TUE,THU, DAILY...
     recurrence_until: Optional[_date] = Form(None),
@@ -935,6 +953,7 @@ async def create_booking(
                 job_id=job_id, job_cost_line_id=job_cost_line_id,
                 start_datetime=env_s, end_datetime=env_e,
                 status=status, kind=kind, notes=notes,
+                priority=_parse_priority(priority),
             )
             db.add(b); db.flush()
             for pa in shifted_ass:
@@ -983,6 +1002,7 @@ async def create_booking(
         job_cost_line_id=job_cost_line_id,
         start_datetime=env_start, end_datetime=env_end,
         status=status, kind=kind, notes=notes,
+        priority=_parse_priority(priority),
     )
     db.add(b)
     db.flush()  # serve b.id
@@ -1133,6 +1153,7 @@ async def update_booking(
     kind: Optional[BookingKind] = Form(None),
     status: Optional[BookingStatus] = Form(None),
     notes: Optional[str] = Form(None),
+    priority: Optional[str] = Form(None),  # v3.5.0-alpha.22
     assignments: Optional[str] = Form(None),  # se passato, replace-all
     db: Session = Depends(get_db),
 ):
@@ -1206,6 +1227,8 @@ async def update_booking(
         b.status = status
     if notes is not None:
         b.notes = notes
+    if priority is not None and str(priority).strip():
+        b.priority = _parse_priority(priority)
 
     db.flush()
     db.refresh(b)
@@ -1920,6 +1943,27 @@ async def create_unavailability(
     else:
         status = UnavailabilityStatus.approved
 
+    # v3.5.0-alpha.22: blocca creazione di ferie/malattia su giorni dove la
+    # risorsa ha già timbrature shift registrate. Il rendiconto sarebbe
+    # incoerente. Solo per status=approved (manager); le richieste pending
+    # passano e in caso di conflitto saranno bloccate al momento dell'approvazione.
+    from datetime import datetime as _dt
+    span_start = _dt.combine(start_date, _dt.min.time())
+    span_end = _dt.combine(end_date, _dt.max.time())
+    existing_punches = db.query(TimePunch).filter(
+        TimePunch.resource_id == resource_id,
+        TimePunch.kind == PunchKind.shift,
+        TimePunch.start_datetime <= span_end,
+        TimePunch.end_datetime >= span_start,
+    ).first()
+    if existing_punches and status == UnavailabilityStatus.approved:
+        raise HTTPException(
+            409,
+            f"La risorsa ha già una timbratura registrata il "
+            f"{existing_punches.start_datetime.strftime('%d/%m/%Y %H:%M')}. "
+            f"Elimina la timbratura prima di creare l'assenza.",
+        )
+
     u = ResourceUnavailability(
         resource_id=resource_id, start_date=start_date, end_date=end_date,
         kind=kind, reason=reason,
@@ -1993,6 +2037,23 @@ async def approve_unavailability(
     ).first()
     if not u:
         raise HTTPException(404, "Richiesta non trovata")
+    # v3.5.0-alpha.22: blocca approvazione se nel periodo ci sono già
+    # timbrature shift della stessa risorsa.
+    span_start = datetime.combine(u.start_date, datetime.min.time())
+    span_end = datetime.combine(u.end_date, datetime.max.time())
+    existing_punch = db.query(TimePunch).filter(
+        TimePunch.resource_id == u.resource_id,
+        TimePunch.kind == PunchKind.shift,
+        TimePunch.start_datetime <= span_end,
+        TimePunch.end_datetime >= span_start,
+    ).first()
+    if existing_punch:
+        raise HTTPException(
+            409,
+            f"Impossibile approvare: la risorsa ha una timbratura il "
+            f"{existing_punch.start_datetime.strftime('%d/%m/%Y %H:%M')}. "
+            f"Rifiuta la richiesta o elimina la timbratura.",
+        )
     u.status = UnavailabilityStatus.approved
     u.approved_by_user_id = user.id
     u.approved_at = datetime.utcnow()
@@ -2617,15 +2678,53 @@ async def project_bookings(
 async def booking_detail(booking_id: int, db: Session = Depends(get_db)):
     """v3.4.42 — dettaglio booking per modal "Le mie" / dashboard / drilldown.
     Ritorna info estese: assegnatari, job/lavorazione, priorità/stato/overtime,
-    notes, motivazione not_done, timestamps."""
+    notes, motivazione not_done, timestamps.
+    v3.5.0-alpha.22: aggiunte cliente, dipartimento per risorsa, ore già fatte
+    sul job dalle altre prenotazioni done, last-edit timestamp, audit count."""
     b = db.query(Booking).options(
-        joinedload(Booking.job).joinedload(Job.project),
+        joinedload(Booking.job).joinedload(Job.project).joinedload(Project.client),
+        joinedload(Booking.job).joinedload(Job.client),
         joinedload(Booking.cost_line),
-        joinedload(Booking.assignments).joinedload(BookingAssignment.resource),
+        joinedload(Booking.assignments).joinedload(BookingAssignment.resource).joinedload(Resource.department),
     ).filter(Booking.id == booking_id, Booking.tenant_id == CURRENT_TENANT).first()
     if not b:
         raise HTTPException(404, "Booking non trovato")
     duration_min = int(round((b.end_datetime - b.start_datetime).total_seconds() / 60)) if b.start_datetime and b.end_datetime else 0
+
+    # Cliente: prima prova client diretto sul Job, poi via Project.
+    client_obj = None
+    if b.job:
+        if getattr(b.job, "client", None):
+            client_obj = b.job.client
+        elif getattr(b.job, "project", None) and getattr(b.job.project, "client", None):
+            client_obj = b.job.project.client
+
+    # Stats della lavorazione: somma ore done degli altri booking sulla stessa cost_line
+    cl_done_hours = 0.0
+    cl_total_planned_hours = 0.0
+    if b.cost_line:
+        sib_q = db.query(Booking).filter(
+            Booking.tenant_id == CURRENT_TENANT,
+            Booking.job_cost_line_id == b.cost_line.id,
+            Booking.status != BookingStatus.cancelled,
+        )
+        for sb in sib_q.all():
+            for a in sb.assignments:
+                seg = (a.end_datetime - a.start_datetime).total_seconds() / 3600.0
+                cl_total_planned_hours += seg
+                if sb.execution_status == BookingExecutionStatus.done:
+                    cl_done_hours += seg
+
+    # Audit count (booking_changes)
+    audit_n = db.query(BookingChange).filter(BookingChange.booking_id == b.id).count()
+    last_change = (
+        db.query(BookingChange)
+        .filter(BookingChange.booking_id == b.id)
+        .order_by(BookingChange.created_at.desc())
+        .first()
+    )
+    last_change_at = last_change.created_at.isoformat() if (last_change and last_change.created_at) else None
+
     return {
         "id": b.id,
         "kind": b.kind.value if hasattr(b.kind, "value") else b.kind,
@@ -2640,6 +2739,10 @@ async def booking_detail(booking_id: int, db: Session = Depends(get_db)):
         "notes": b.notes,
         "not_done_reason": b.not_done_reason,
         "count_in_costs": b.count_in_costs,
+        "client": (
+            {"id": client_obj.id, "name": client_obj.name}
+            if client_obj else None
+        ),
         "job": {
             "id": b.job.id, "code": b.job.code, "title": b.job.title,
             "project_id": b.job.project_id,
@@ -2652,17 +2755,26 @@ async def booking_detail(booking_id: int, db: Session = Depends(get_db)):
             "unit": b.cost_line.unit,
             "quantity_quoted": b.cost_line.quantity_quoted,
             "quantity_actual": b.cost_line.quantity_actual,
+            # v3.5.0-alpha.22: somma cross-booking di ore done (utile per
+            # vedere "quanto è già stato fatto su questa lavorazione").
+            "total_planned_hours_all_bookings": round(cl_total_planned_hours, 2),
+            "done_hours_all_bookings": round(cl_done_hours, 2),
         } if b.cost_line else None,
         "assignments": [
             {
                 "id": a.id,
                 "resource_id": a.resource_id,
                 "resource_name": a.resource.name if a.resource else None,
+                "resource_role": (a.resource.role if a.resource else None),
+                "department_name": (a.resource.department.name if a.resource and a.resource.department else None),
                 "start_datetime": a.start_datetime.isoformat(),
                 "end_datetime": a.end_datetime.isoformat(),
+                "duration_hours": round((a.end_datetime - a.start_datetime).total_seconds() / 3600.0, 2),
             } for a in b.assignments
         ],
         "created_at": b.created_at.isoformat() if b.created_at else None,
+        "audit_count": audit_n,
+        "last_change_at": last_change_at,
     }
 
 

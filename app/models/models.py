@@ -901,6 +901,9 @@ class TimePunch(Base):
     # end_datetime nullable = "in corso" (timbratura ingresso senza ancora uscita).
     end_datetime: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
     kind: Mapped[PunchKind] = mapped_column(SAEnum(PunchKind), default=PunchKind.shift)
+    # Pausa pranzo (minuti) sottratta al totale ore lavorate del shift.
+    # Default 60 min, opzioni 0..240 a step 15 nel modal. Solo per kind=shift.
+    break_minutes: Mapped[int] = mapped_column(Integer, default=0)
     notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     # Chi ha registrato la timbratura (manager/HR per freelance senza login).
     created_by_user_id: Mapped[Optional[int]] = mapped_column(ForeignKey("users.id"), nullable=True)

@@ -71,9 +71,18 @@ def _resolve_current_user(db: Session, token: Optional[str]) -> Optional[User]:
 def _punch_dict(p: TimePunch, *, fullcalendar: bool = False) -> dict:
     """Serializza una timbratura. Se fullcalendar=True, formato compatibile FullCalendar."""
     duration_h = None
+    duration_h_gross = None
+    break_min = int(getattr(p, "break_minutes", 0) or 0)
     if p.end_datetime:
         delta = p.end_datetime - p.start_datetime
-        duration_h = round(delta.total_seconds() / 3600.0, 2)
+        gross_h = delta.total_seconds() / 3600.0
+        duration_h_gross = round(gross_h, 2)
+        # v3.5.0-alpha.22: durata netta = lordo − pausa pranzo (solo per shift).
+        if p.kind == PunchKind.shift and break_min > 0:
+            net_h = max(0.0, gross_h - break_min / 60.0)
+        else:
+            net_h = gross_h
+        duration_h = round(net_h, 2)
 
     if fullcalendar:
         kind_color = KIND_COLOR.get(p.kind)
@@ -114,6 +123,8 @@ def _punch_dict(p: TimePunch, *, fullcalendar: bool = False) -> dict:
         "start_datetime": p.start_datetime.isoformat(),
         "end_datetime": p.end_datetime.isoformat() if p.end_datetime else None,
         "duration_h": duration_h,
+        "duration_h_gross": duration_h_gross,
+        "break_minutes": break_min,
         "kind": p.kind.value if hasattr(p.kind, "value") else p.kind,
         "kind_label": KIND_LABEL.get(p.kind, str(p.kind)),
         "notes": p.notes,
@@ -241,6 +252,7 @@ async def create_punch(
     start_datetime: datetime = Form(...),
     end_datetime: Optional[datetime] = Form(None),
     kind: PunchKind = Form(PunchKind.shift),
+    break_minutes: int = Form(0),
     job_id: Optional[int] = Form(None),
     job_cost_line_id: Optional[int] = Form(None),
     notes: Optional[str] = Form(None),
@@ -297,6 +309,27 @@ async def create_punch(
             f"Non puoi avere due timbrature sovrapposte sulla stessa risorsa.",
         )
 
+    # v3.5.0-alpha.22: blocco timbratura su giorno con ferie/malattia approvata.
+    # Una giornata di assenza dichiarata non può convivere con una presenza
+    # registrata sulla stessa data: il dato sarebbe incoerente nel rendiconto.
+    if kind == PunchKind.shift:
+        check_end = end_datetime or start_datetime
+        unav = db.query(ResourceUnavailability).filter(
+            ResourceUnavailability.resource_id == resource_id,
+            ResourceUnavailability.status == UnavailabilityStatus.approved,
+            ResourceUnavailability.start_date <= check_end.date(),
+            ResourceUnavailability.end_date >= start_datetime.date(),
+        ).first()
+        if unav:
+            kv = unav.kind.value if hasattr(unav.kind, "value") else unav.kind
+            kv_label = {"vacation": "ferie", "sick": "malattia", "other": "permesso"}.get(kv, kv)
+            raise HTTPException(
+                409,
+                f"Risorsa in {kv_label} dal {unav.start_date.strftime('%d/%m/%Y')} "
+                f"al {unav.end_date.strftime('%d/%m/%Y')} (richiesta #{unav.id}). "
+                f"Annulla l'assenza prima di registrare la timbratura.",
+            )
+
     if job_id:
         j = db.query(Job).filter(Job.id == job_id).first()
         if not j:
@@ -312,6 +345,10 @@ async def create_punch(
             job_id = line.job_id
 
     u = _resolve_current_user(db, access_token)
+    # break_minutes: clamp [0, 240] step 15. Solo per shift.
+    bm = max(0, min(240, int(break_minutes or 0)))
+    if kind != PunchKind.shift:
+        bm = 0
     p = TimePunch(
         tenant_id=CURRENT_TENANT,
         resource_id=resource_id,
@@ -320,6 +357,7 @@ async def create_punch(
         start_datetime=start_datetime,
         end_datetime=end_datetime,
         kind=kind,
+        break_minutes=bm,
         notes=notes,
         created_by_user_id=u.id if u else None,
     )
@@ -336,6 +374,7 @@ async def update_punch(
     start_datetime: Optional[datetime] = Form(None),
     end_datetime: Optional[datetime] = Form(None),
     kind: Optional[PunchKind] = Form(None),
+    break_minutes: Optional[int] = Form(None),
     job_id: Optional[int] = Form(None),
     job_cost_line_id: Optional[int] = Form(None),
     notes: Optional[str] = Form(None),
@@ -360,6 +399,11 @@ async def update_punch(
         p.end_datetime = None
     if kind is not None:
         p.kind = kind
+    if break_minutes is not None:
+        bm = max(0, min(240, int(break_minutes or 0)))
+        if (kind or p.kind) != PunchKind.shift:
+            bm = 0
+        p.break_minutes = bm
     if job_id is not None:
         p.job_id = job_id
     elif clear_job:
@@ -577,8 +621,13 @@ async def hr_timeline(
         kv = p.kind.value if hasattr(p.kind, "value") else p.kind
         bd = breakdown_by_punch.get(p.id)
         duration_h = None
+        duration_h_gross = None
+        bm = int(getattr(p, "break_minutes", 0) or 0)
         if p.end_datetime:
-            duration_h = round((p.end_datetime - p.start_datetime).total_seconds() / 3600.0, 2)
+            gross = (p.end_datetime - p.start_datetime).total_seconds() / 3600.0
+            duration_h_gross = round(gross, 2)
+            net = gross - (bm / 60.0) if (p.kind == PunchKind.shift and bm > 0) else gross
+            duration_h = round(max(0.0, net), 2)
         punch_entries.append({
             "source": "punch",
             "id": f"p{p.id}",
@@ -592,6 +641,8 @@ async def hr_timeline(
             "start_datetime": p.start_datetime.isoformat(),
             "end_datetime": p.end_datetime.isoformat() if p.end_datetime else None,
             "duration_h": duration_h,
+            "duration_h_gross": duration_h_gross,
+            "break_minutes": bm,
             "kind": kv,
             "kind_label": KIND_LABEL.get(p.kind, str(p.kind)),
             "notes": p.notes,

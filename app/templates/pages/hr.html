@@ -286,7 +286,7 @@
         </div>
         <div class="form-group">
           <label class="form-label">Tipo *</label>
-          <select class="form-select" id="p-kind" required>
+          <select class="form-select" id="p-kind" required onchange="updatePunchDuration()">
             {% for k in kinds %}
               {% if k.value in ('shift', 'break') %}
               <option value="{{ k.value }}">{{ k.label }}</option>
@@ -306,6 +306,14 @@
           <input class="form-input" id="p-end" type="datetime-local" oninput="updatePunchDuration()">
           <small class="form-help text-muted">Vuoto = timbratura in corso</small>
         </div>
+      </div>
+      <!-- Pausa pranzo (v3.5.0-alpha.22): solo per kind=shift, sottratta al totale ore. -->
+      <div class="form-group" id="p-break-group">
+        <label class="form-label">Pausa pranzo</label>
+        <select class="form-select" id="p-break-min" onchange="updatePunchDuration()">
+          <!-- options popolate da JS: 0..240 step 15 -->
+        </select>
+        <small class="form-help text-muted">Sottratta al totale ore lavorate (default 60 min).</small>
       </div>
       {% if user_is_elevated %}
       <!-- Job legato alla timbratura: solo per admin/manager/producer.
@@ -357,6 +365,27 @@ const CAT_LABEL = {
 const CAT_COLOR = {
   {% for c in categories %}"{{ c.value }}": "{{ c.color }}",{% endfor %}
 };
+
+// v3.5.0-alpha.22: popolazione select pausa pranzo (0..240 step 15) e
+// gestione visibilità in base al kind.
+function _populateBreakOptions() {
+  const sel = document.getElementById('p-break-min');
+  if (!sel || sel.options.length) return;
+  for (let m = 0; m <= 240; m += 15) {
+    const lab = m === 0 ? 'Nessuna pausa' : (m < 60 ? `${m} min` : (m % 60 === 0 ? `${m/60}h` : `${Math.floor(m/60)}h ${m%60}min`));
+    const opt = document.createElement('option');
+    opt.value = String(m);
+    opt.textContent = lab;
+    sel.appendChild(opt);
+  }
+  sel.value = '60';  // default 60 min
+}
+function _updateBreakVisibility() {
+  const kind = (document.getElementById('p-kind') || {}).value;
+  const grp = document.getElementById('p-break-group');
+  if (!grp) return;
+  grp.style.display = (kind === 'shift') ? '' : 'none';
+}
 
 function fmtDate(iso) {
   if (!iso) return '';
@@ -483,6 +512,10 @@ function renderTable(entries) {
     const job = e.job_id
       ? `<span class="text-muted">${escapeHtml(e.job_code || '')}</span> ${escapeHtml(e.job_title || '')}`
       : (e.notes ? escapeHtml(e.notes) : '<span class="text-muted">—</span>');
+    const bm = e.break_minutes || 0;
+    const breakHint = bm > 0
+      ? `<div class="text-muted" style="font-size:10px;">pausa ${bm}min</div>`
+      : '';
     return `<tr class="punch-row ${inProgress ? 'in-progress' : ''}" onclick='openEditPunch(${e.punch_id})' style="cursor:pointer;">
       <td>${fmtDate(e.start_datetime)}</td>
       <td>
@@ -491,7 +524,7 @@ function renderTable(entries) {
       </td>
       <td class="col-time">${fmtTime(e.start_datetime)}</td>
       <td class="col-time">${inProgress ? '<span class="in-progress-tag">in corso</span>' : fmtTime(e.end_datetime)}</td>
-      <td class="col-dur">${e.duration_h != null ? e.duration_h.toFixed(2) : '—'}</td>
+      <td class="col-dur">${e.duration_h != null ? e.duration_h.toFixed(2) : '—'}${breakHint}</td>
       <td><span class="kind-badge" style="border-left:3px solid ${color};padding-left:6px;">${escapeHtml(e.kind_label)}</span></td>
       <td style="font-size:11px;">${_breakdownBadges(e.breakdown)}</td>
       <td>${job}${e.job_id && e.notes ? `<br><span class="text-muted" style="font-size:11px;">${escapeHtml(e.notes)}</span>` : ''}</td>
@@ -526,15 +559,18 @@ function resetFilters() {
 }
 
 function openNewPunch() {
+  _populateBreakOptions();
   document.getElementById('modal-punch-title').textContent = 'Nuova timbratura';
   document.getElementById('p-id').value = '';
   document.getElementById('p-resource').value = document.getElementById('f-resource').value || '';
   document.getElementById('p-kind').value = 'shift';
+  document.getElementById('p-break-min').value = '60';
   document.getElementById('p-start').value = '';
   document.getElementById('p-end').value = '';
   document.getElementById('p-job').value = '';
   document.getElementById('p-notes').value = '';
   document.getElementById('p-delete-btn').style.display = 'none';
+  _updateBreakVisibility();
   // Default: oggi 09:00
   const today = new Date();
   today.setHours(9, 0, 0, 0);
@@ -544,6 +580,7 @@ function openNewPunch() {
 }
 
 function updatePunchDuration() {
+  _updateBreakVisibility();
   const start = document.getElementById('p-start').value;
   const end = document.getElementById('p-end').value;
   const box = document.getElementById('p-duration-info');
@@ -556,21 +593,30 @@ function updatePunchDuration() {
     out.innerHTML = '<span style="color:var(--rose);">Fine ≤ Inizio</span>';
     return;
   }
-  const h = ms / 3600000;
-  const dd = Math.floor(h / 24);
-  const remH = h - dd * 24;
-  const lab = dd > 0 ? (dd + 'g ' + remH.toFixed(1) + 'h') : (h.toFixed(2) + 'h');
-  // Calcolo overtime preview se >8h
-  let extra = '';
-  if (h > 8) {
-    const ot = h - 8;
-    extra = ` <span style="color:#fb923c;">(${ot.toFixed(1)}h straordinario)</span>`;
+  const grossH = ms / 3600000;
+  const kind = (document.getElementById('p-kind') || {}).value;
+  const bm = (kind === 'shift') ? (parseInt((document.getElementById('p-break-min')||{}).value || '0', 10) || 0) : 0;
+  const netH = Math.max(0, grossH - bm/60);
+  const fmtHours = (h) => {
+    const dd = Math.floor(h / 24);
+    const remH = h - dd * 24;
+    return dd > 0 ? (dd + 'g ' + remH.toFixed(1) + 'h') : (h.toFixed(2) + 'h');
+  };
+  const labNet = fmtHours(netH);
+  let html = labNet;
+  if (bm > 0) {
+    html += ` <span class="text-muted" style="font-size:11px;">(lordo ${fmtHours(grossH)} − pausa ${bm}min)</span>`;
+  }
+  if (netH > 8) {
+    const ot = netH - 8;
+    html += ` <span style="color:#fb923c;">(${ot.toFixed(1)}h straordinario)</span>`;
   }
   box.style.display = 'block';
-  out.innerHTML = lab + extra;
+  out.innerHTML = html;
 }
 
 async function openEditPunch(punchId) {
+  _populateBreakOptions();
   const punches = await api('GET', `/hr/api/punches`);
   const p = punches.find(x => x.id === punchId);
   if (!p) { toast('Timbratura non trovata', 'error'); return; }
@@ -579,11 +625,15 @@ async function openEditPunch(punchId) {
   document.getElementById('p-resource').value = p.resource_id;
   // v3.4.24: kind=overtime non è più scelto manualmente → record storici aperti come shift
   document.getElementById('p-kind').value = (p.kind === 'overtime') ? 'shift' : p.kind;
+  // Snap break_minutes al valore più vicino tra le opzioni multiplo di 15.
+  const bm = parseInt(p.break_minutes || 0, 10);
+  document.getElementById('p-break-min').value = String(Math.max(0, Math.min(240, Math.round(bm/15)*15)));
   document.getElementById('p-start').value = fmtDateTimeLocal(p.start_datetime);
   document.getElementById('p-end').value = p.end_datetime ? fmtDateTimeLocal(p.end_datetime) : '';
   document.getElementById('p-job').value = p.job_id || '';
   document.getElementById('p-notes').value = p.notes || '';
   document.getElementById('p-delete-btn').style.display = '';
+  _updateBreakVisibility();
   updatePunchDuration();
   openModal('modal-punch');
 }
@@ -592,7 +642,15 @@ async function savePunch() {
   const id = document.getElementById('p-id').value;
   const fd = new FormData();
   fd.append('resource_id', document.getElementById('p-resource').value);
-  fd.append('kind', document.getElementById('p-kind').value);
+  const kind = document.getElementById('p-kind').value;
+  fd.append('kind', kind);
+  // v3.5.0-alpha.22: pausa pranzo (solo per shift)
+  if (kind === 'shift') {
+    const bm = parseInt((document.getElementById('p-break-min')||{}).value || '0', 10) || 0;
+    fd.append('break_minutes', String(bm));
+  } else {
+    fd.append('break_minutes', '0');
+  }
   const start = document.getElementById('p-start').value;
   const end = document.getElementById('p-end').value;
   if (!start || !document.getElementById('p-resource').value) {
@@ -642,6 +700,22 @@ async function deletePunch() {
   } catch(e) { toast(e.message || 'Errore', 'error'); }
 }
 
+// v3.5.0-alpha.22: default range = mese corrente al primo caricamento, in modo
+// che ferie/malattia (che dipendono da from/to) siano visibili senza che
+// l'utente debba cliccare "Mese corrente". Niente persistenza per ora.
+(function _initHRDateRange() {
+  const f = document.getElementById('f-from');
+  const t = document.getElementById('f-to');
+  if (!f || !t) return;
+  if (!f.value && !t.value) {
+    const now = new Date();
+    const first = new Date(now.getFullYear(), now.getMonth(), 1);
+    const last = new Date(now.getFullYear(), now.getMonth() + 1, 0);
+    const iso = d => `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+    f.value = iso(first);
+    t.value = iso(last);
+  }
+})();
 reloadHR();
 
 // ── View toggle (Tabella / Calendario) — v3.4.30 ─────────────

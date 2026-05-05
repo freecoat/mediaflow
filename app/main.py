@@ -105,6 +105,15 @@ def _auto_migrate_columns():
             print("[auto-migrate] ai_actions.tool_use_id mancante → ALTER TABLE")
             with engine.begin() as conn:
                 conn.execute(text("ALTER TABLE ai_actions ADD COLUMN tool_use_id VARCHAR(128) NULL"))
+    # v3.5.0-alpha.22 — TimePunch.break_minutes (pausa pranzo opzionale)
+    if "time_punches" in insp.get_table_names():
+        tpcols = {c["name"] for c in insp.get_columns("time_punches")}
+        if "break_minutes" not in tpcols:
+            print("[auto-migrate] time_punches.break_minutes mancante → ALTER TABLE")
+            with engine.begin() as conn:
+                conn.execute(text(
+                    "ALTER TABLE time_punches ADD COLUMN break_minutes "
+                    "INTEGER NOT NULL DEFAULT 0"))
     # v3.5.0-alpha.7 — Soft-delete cestino: deleted_at + deleted_by_user_id
     # su Quote. v3.5.0-alpha.8 estende a Project.
     soft_alter = [
@@ -170,7 +179,7 @@ async def lifespan(app: FastAPI):
     yield
 
 
-app = FastAPI(title="MediaFlow", version="3.5.0-alpha.21", lifespan=lifespan)
+app = FastAPI(title="MediaFlow", version="3.5.0-alpha.22", lifespan=lifespan)
 
 BASE_DIR = Path(__file__).parent
 app.mount("/static", StaticFiles(directory=BASE_DIR / "static"), name="static")

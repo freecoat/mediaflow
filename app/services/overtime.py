@@ -158,6 +158,13 @@ def compute_overtime(
     # 1. Splitta per-giorno e accumula per data
     daily: Dict[date, DayBreakdown] = {}
     for p in closed:
+        # v3.5.0-alpha.22: pausa pranzo (break_minutes) sottratta al totale
+        # ore del giorno di start_datetime. Per shift che attraversano la
+        # mezzanotte la pausa resta attribuita al giorno di inizio (la pausa
+        # pranzo per definizione cade nel turno diurno).
+        bm = int(getattr(p, "break_minutes", 0) or 0)
+        bh = (bm / 60.0) if (p.kind == PunchKind.shift and bm > 0) else 0.0
+        seg_count = 0
         for seg_s, seg_e in _split_at_midnight(p.start_datetime, p.end_datetime):
             d = seg_s.date()
             db = daily.setdefault(d, DayBreakdown(date=d))
@@ -165,6 +172,11 @@ def compute_overtime(
             db.night_hours += _night_overlap_hours(
                 seg_s, seg_e, policy.night_start, policy.night_end,
             )
+            seg_count += 1
+        if bh > 0:
+            d0 = p.start_datetime.date()
+            db0 = daily.setdefault(d0, DayBreakdown(date=d0))
+            db0.total_hours = max(0.0, db0.total_hours - bh)
 
     # 2. Marca domenica/festività + accumula totali per categoria
     weekly_totals: Dict[tuple, float] = {}
@@ -327,6 +339,12 @@ def compute_punch_breakdown(
                     continue
                 day_h += _hours(seg_e - seg_s)
                 day_n += _night_overlap_hours(seg_s, seg_e, night_start, night_end)
+            # v3.5.0-alpha.22: pausa pranzo sottratta dalla durata del punch
+            # (solo se il punch parte in questo giorno; per cross-mezzanotte
+            # la pausa è già attribuita al giorno di start).
+            bm = int(getattr(p, "break_minutes", 0) or 0)
+            if p.kind == PunchKind.shift and bm > 0 and p.start_datetime.date() == day:
+                day_h = max(0.0, day_h - bm / 60.0)
             durations.append(day_h)
             nights.append(day_n)
         total_day = sum(durations)
