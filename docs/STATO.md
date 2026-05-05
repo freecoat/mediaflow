@@ -8,6 +8,35 @@
 
 ## Versione corrente
 
+**v3.5.0-alpha.16** — 5 maggio 2026 — Round 7A: HR breakdown per-punch + ROI riscritto
+
+Aperto Round 7 su lista feedback Matteo del 5 maggio (12 punti, suddivisi in
+sotto-round 7A bug puri / 7B-C feature medie / 7D cantieri di design).
+
+Sotto-round 7A chiuso (4 punti):
+
+1. **Straordinari per singola timbratura + nei totali** — nuovo servizio
+   `compute_punch_breakdown` che distribuisce l'overtime giornaliero sui punch
+   del giorno (last-in-first-out: le ore "in coda" diventano straordinario).
+   Tabella `/hr` mostra colonna "Breakdown" con badge inline. Totali header
+   ricalcolati sulle 9 categorie del rendiconto.
+2. **Filtro Tipo in Le mie ore funzionante** — dropdown ora propone le 9
+   categorie del breakdown (Regolari/Straordinari/Notturne/Festivo/Domenicali/
+   Pausa/Ferie/Malattia/Permesso) invece dei raw `PunchKind` (che erano solo 6
+   e non riflettevano il breakdown overtime). Filtro applicato uniformemente a
+   tabella + totali via parametro `category` su `/api/timeline`.
+3. **Ferie/malattia in tabella timbrature** — nuovo endpoint unificato
+   `/hr/api/timeline` che fonde TimePunch + ResourceUnavailability approvate.
+   1 riga sintetica per giorno per ogni record di unavailability, con bg
+   colorato e durata = `daily_hours_threshold` della policy.
+4. **ROI multiselect riscritto** — diagnosi: Hammer.js (vis-timeline) bypassa
+   `stopPropagation` su capture-phase. Fix: `setOptions({moveable:false, zoomable:false})`
+   durante il drag, trigger keys allargati a **Alt+drag** (default) +
+   **Shift+drag** + toggle toolbar **"📦 Selezione area"** persistente.
+   Rilevazione gruppi via scansione `.vis-label` invece di `[data-group-id]`.
+
+Cache-buster `v=3.5.0-alpha.16`. Niente migrazione DB.
+
 **v3.5.0-alpha.15** — 5 maggio 2026 — Round 6: ore festivo + ROI multiselect timeline
 
 Chiusura dei 3 punti rimasti dal Round 5:
@@ -344,7 +373,31 @@ Sessione 1 maggio sera (commit unico): chiusa v3.4.32 dopo discussione completa 
 
 ## In corso
 
-**Sessione 4 maggio aperta — Round 1 fix post-test del 3 maggio chiuso (v3.5.0-alpha.9).** Working tree pulito dopo commit alpha.9. Round 2 e Round 3 in attesa di green-light Matteo + riapertura.
+**Sessione 5 maggio — Round 7 aperto su lista feedback Matteo (12 punti).**
+
+Lista feedback ricevuta:
+
+**Round 7A (chiuso in alpha.16 — 4 bug puri):**
+- ✅ Straordinari nella lista timbrature per singola riga + nel totale
+- ✅ Filtro Tipo in "Le mie ore" funzionante (categorie breakdown invece di raw kinds)
+- ✅ Ferie/malattia visibili nella tabella timbrature
+- ✅ Shift+drag ROI riscritto + Alt+drag + toggle "Selezione area" toolbar
+
+**Round 7B (prossimo — quote/cost-report uniformi):**
+- 🔜 Cost report: dropdown → searchable + filtri + lista default (pattern come `/quotes`)
+- 🔜 Quote ricerca + filtri simmetrici al cost report
+- 🔜 Cost report cliente PDF: opzione "rendiconto" (quotato/maturato/stimato + over/under) + export CSV/Excel
+
+**Round 7C (planning power-user):**
+- 🔜 Undo/redo planning timeline (stack azioni create/move/resize/delete/duplicate, Ctrl+Z/Y)
+- 🔜 Bulk modify bookings (multiselect → modal: shift orario, cambio stato, cambio risorsa, cambio reparto)
+
+**Round 7D (cantieri di design — proposte presentate, in attesa green-light Matteo):**
+- 🔜 AI integrazione GUI/settings: proposta **A2** = tool generico `update_settings` con discovery API (`SETTINGS_SCHEMAS` registry)
+- 🔜 Menu assegnazioni risorse a 200 progetti: pagina dedicata `/assignments` (matrice Risorsa × Progetto + filtri + palette typeahead)
+- 🔜 Risorse + reparti a 500/30: pagina unificata `/team` con sidebar reparti (count + freelance/internal/equipment toggle), drill-down per reparto
+
+**Sessione 4 maggio chiusa — Round 1 fix post-test del 3 maggio chiuso (v3.5.0-alpha.9).** Working tree pulito dopo commit alpha.9. Round 2 e Round 3 in attesa di green-light Matteo + riapertura.
 
 ### Issue identificati nel test estensivo Matteo del 3 maggio
 

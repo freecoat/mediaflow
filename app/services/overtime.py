@@ -237,3 +237,124 @@ def compute_overtime(
     out.weighted_factor = weighted
     out.daily = {d.isoformat(): db for d, db in sorted(daily.items())}
     return out
+
+
+# ── Breakdown per-punch (v3.5.0-alpha.16) ────────────────────────────
+@dataclass
+class PunchBreakdown:
+    """Distribuzione di un singolo TimePunch sulle categorie di maggiorazione.
+
+    Le ore "extra" del giorno (overtime giornaliero) sono attribuite alle ore
+    finali della giornata (last-in-first-out): se ho due punch da 4h+5h con
+    threshold 8, il primo è 4h reg, il secondo è 4h reg + 1h ot. Questa
+    convenzione riflette il modo standard in cui vengono firmate le buste paga.
+    """
+    punch_id: int
+    duration_h: float = 0.0
+    regular_h: float = 0.0
+    overtime_h: float = 0.0
+    night_h: float = 0.0
+    sunday_h: float = 0.0
+    holiday_h: float = 0.0
+    is_sunday: bool = False
+    is_holiday: bool = False
+
+    def as_dict(self) -> dict:
+        return {
+            "punch_id": self.punch_id,
+            "duration_h": round(self.duration_h, 2),
+            "regular_h": round(self.regular_h, 2),
+            "overtime_h": round(self.overtime_h, 2),
+            "night_h": round(self.night_h, 2),
+            "sunday_h": round(self.sunday_h, 2),
+            "holiday_h": round(self.holiday_h, 2),
+            "is_sunday": self.is_sunday,
+            "is_holiday": self.is_holiday,
+        }
+
+
+def compute_punch_breakdown(
+    punches: Iterable[TimePunch],
+    policy: WorkingHoursPolicy,
+    holidays_set: Optional[Set[date]] = None,
+) -> Dict[int, PunchBreakdown]:
+    """Per ogni punch, calcola il breakdown distribuendo le ore di maggiorazione.
+
+    L'overtime è attribuito alle ore "in coda" alla giornata (per giornata di
+    calendario, non per settimana ISO che è gestita separatamente nel weighted_factor).
+    Le ore notturne sono calcolate puntualmente dal segmento. Sunday/holiday
+    flaggano l'intero punch quando il suo giorno cade in tali categorie.
+
+    Restituisce dict {punch_id: PunchBreakdown}. Punch in corso (no end) sono
+    saltati. Punch break/leave/sick/idle vengono ritornati con duration=0 ma
+    senza categorie (sono fuori dalla rendicontazione).
+    """
+    out: Dict[int, PunchBreakdown] = {}
+    closed_countable = [p for p in punches if p.end_datetime and p.kind in COUNTABLE_KINDS]
+    if not closed_countable:
+        return out
+
+    if holidays_set is None:
+        y_min = min(p.start_datetime.year for p in closed_countable)
+        y_max = max(p.end_datetime.year for p in closed_countable)
+        holidays_set = get_holidays(policy, y_min, y_max)
+
+    threshold = policy.daily_hours_threshold or 8.0
+    night_start = policy.night_start
+    night_end = policy.night_end
+
+    # Raggruppa per giorno di calendario (basato su start_datetime.date())
+    from collections import defaultdict
+    by_day: Dict[date, List[TimePunch]] = defaultdict(list)
+    for p in closed_countable:
+        by_day[p.start_datetime.date()].append(p)
+
+    for day, day_punches in by_day.items():
+        is_sunday = (day.weekday() == 6)
+        is_holiday = (day in holidays_set)
+        # Ordino per start_datetime per attribuire l'overtime alle ULTIME ore
+        day_punches_sorted = sorted(day_punches, key=lambda p: p.start_datetime)
+        # Calcolo ore di ogni punch (sommando segmenti che cadono in questo
+        # giorno — un punch che attraversa mezzanotte conta solo la parte di
+        # questo giorno).
+        durations: List[float] = []
+        nights: List[float] = []
+        for p in day_punches_sorted:
+            day_h = 0.0
+            day_n = 0.0
+            for seg_s, seg_e in _split_at_midnight(p.start_datetime, p.end_datetime):
+                if seg_s.date() != day:
+                    continue
+                day_h += _hours(seg_e - seg_s)
+                day_n += _night_overlap_hours(seg_s, seg_e, night_start, night_end)
+            durations.append(day_h)
+            nights.append(day_n)
+        total_day = sum(durations)
+        ot_total_day = max(0.0, total_day - threshold)
+        # Distribuzione last-in-first-out: scorro i punch dal più recente,
+        # tolgo `ot_total_day` finché esaurisce.
+        ot_share: List[float] = [0.0] * len(durations)
+        remaining = ot_total_day
+        for i in range(len(durations) - 1, -1, -1):
+            if remaining <= 0:
+                break
+            take = min(remaining, durations[i])
+            ot_share[i] = take
+            remaining -= take
+
+        for idx, p in enumerate(day_punches_sorted):
+            d_h = durations[idx]
+            ot_h = ot_share[idx]
+            reg_h = max(0.0, d_h - ot_h)
+            out[p.id] = PunchBreakdown(
+                punch_id=p.id,
+                duration_h=d_h,
+                regular_h=reg_h,
+                overtime_h=ot_h,
+                night_h=nights[idx],
+                sunday_h=d_h if is_sunday else 0.0,
+                holiday_h=d_h if is_holiday else 0.0,
+                is_sunday=is_sunday,
+                is_holiday=is_holiday,
+            )
+    return out

@@ -153,8 +153,8 @@
     <label class="form-label" style="font-size:11px;">Tipo</label>
     <select class="form-select" id="f-kind" onchange="reloadHR()">
       <option value="">— tutti —</option>
-      {% for k in kinds %}
-      <option value="{{ k.value }}">{{ k.label }}</option>
+      {% for c in categories %}
+      <option value="{{ c.value }}">{{ c.label }}</option>
       {% endfor %}
     </select>
   </div>
@@ -241,7 +241,7 @@
   </div>
 </div>
 
-<!-- ── Tabella timbrature ──────────────────────────────────── -->
+<!-- ── Tabella timbrature + ferie/malattia (v3.5.0-alpha.16) ────────── -->
 <div class="card" id="view-table">
   <div class="table-wrap">
     <table>
@@ -253,8 +253,8 @@
           <th>Fine</th>
           <th style="text-align:right;">Durata (h)</th>
           <th>Tipo</th>
-          <th>Job</th>
-          <th>Note</th>
+          <th>Breakdown</th>
+          <th>Job / Note</th>
           <th></th>
         </tr>
       </thead>
@@ -350,6 +350,13 @@ const KIND_LABEL = {
 const KIND_COLOR = {
   {% for k in kinds %}"{{ k.value }}": {% if k.color %}"{{ k.color }}"{% else %}null{% endif %},{% endfor %}
 };
+// v3.5.0-alpha.16: categorie del filtro Tipo (breakdown overtime + unavailability)
+const CAT_LABEL = {
+  {% for c in categories %}"{{ c.value }}": "{{ c.label }}",{% endfor %}
+};
+const CAT_COLOR = {
+  {% for c in categories %}"{{ c.value }}": "{{ c.color }}",{% endfor %}
+};
 
 function fmtDate(iso) {
   if (!iso) return '';
@@ -374,63 +381,120 @@ function buildQuery() {
   const t = document.getElementById('f-to').value;
   const k = document.getElementById('f-kind').value;
   if (r) params.set('resource_id', r);
-  if (f) params.set('from_date', f + 'T00:00:00');
-  if (t) params.set('to_date', t + 'T23:59:59');
-  if (k) params.set('kind', k);
+  if (f) params.set('from_date', f);
+  if (t) params.set('to_date', t);
+  if (k) params.set('category', k);
   return params.toString();
 }
 
+// v3.5.0-alpha.16: lista timbrature + ferie/malattia + breakdown straordinari
+// in un unico endpoint /api/timeline. La pagina ora mostra l'overtime per
+// singola timbratura (distribuito sui punch del giorno con regola last-in-
+// first-out) e i totali del periodo per le 8 categorie del breakdown.
 async function reloadHR() {
   const qs = buildQuery();
-  const [punches, summary] = await Promise.all([
-    api('GET', `/hr/api/punches${qs ? '?' + qs : ''}`),
-    api('GET', `/hr/api/summary${qs ? '?' + qs : ''}`),
-  ]);
-  renderTotals(summary);
-  renderTable(punches);
-  // Aggiorna anche il riepilogo "Le mie ore" se il blocco è presente
+  let data;
+  try {
+    data = await api('GET', `/hr/api/timeline${qs ? '?' + qs : ''}`);
+  } catch(e) {
+    document.getElementById('punches-tbody').innerHTML =
+      `<tr><td colspan="9" style="text-align:center;color:#ef4444;padding:24px;">Errore: ${escapeHtml(e.message || 'caricamento timeline')}</td></tr>`;
+    return;
+  }
+  renderTotals(data);
+  renderTable(data.entries);
+  // Banner warning se manca policy default (impedisce split overtime/notte)
+  let warnEl = document.getElementById('hr-policy-warn');
+  if (data.warning) {
+    if (!warnEl) {
+      warnEl = document.createElement('div');
+      warnEl.id = 'hr-policy-warn';
+      warnEl.style.cssText = 'background:rgba(251,146,60,0.12); border:1px solid #fb923c; border-radius:6px; padding:10px 14px; margin-bottom:12px; font-size:12px; color:var(--text);';
+      document.getElementById('hr-totals').parentNode.insertBefore(warnEl, document.getElementById('hr-totals'));
+    }
+    warnEl.innerHTML = '⚠ ' + escapeHtml(data.warning) + ' <a href="/settings#hours" style="color:var(--indigo2); margin-left:6px;">Apri impostazioni →</a>';
+  } else if (warnEl) {
+    warnEl.remove();
+  }
   if (typeof reloadMyHours === 'function') reloadMyHours();
 }
 
-function renderTotals(s) {
+function renderTotals(data) {
   const el = document.getElementById('hr-totals');
   const cards = [];
   cards.push(`<div class="hr-tot-card hr-tot-grand">
     <div class="lbl">Totale ore</div>
-    <div class="val">${s.grand_total.toFixed(2)}<span class="unit">h</span></div>
+    <div class="val">${data.grand_total.toFixed(2)}<span class="unit">h</span></div>
   </div>`);
-  for (const [kind, hours] of Object.entries(s.totals)) {
-    if (hours <= 0) continue;
-    const color = s.colors[kind] || '#6272f5';
-    cards.push(`<div class="hr-tot-card" style="border-left-color:${color};">
-      <div class="lbl">${escapeHtml(s.labels[kind])}</div>
-      <div class="val">${hours.toFixed(2)}<span class="unit">h</span></div>
+  for (const cat of (data.categories || [])) {
+    const h = data.totals[cat.value] || 0;
+    if (h <= 0) continue;
+    cards.push(`<div class="hr-tot-card" style="border-left-color:${cat.color};">
+      <div class="lbl">${escapeHtml(cat.label)}</div>
+      <div class="val">${h.toFixed(2)}<span class="unit">h</span></div>
+    </div>`);
+  }
+  if (cards.length === 1) {
+    cards.push(`<div class="hr-tot-card" style="opacity:.6;">
+      <div class="lbl">Nessuna voce</div><div class="val">0<span class="unit">h</span></div>
     </div>`);
   }
   el.innerHTML = cards.join('');
 }
 
-function renderTable(punches) {
+function _breakdownBadges(bd) {
+  if (!bd) return '<span class="text-muted">—</span>';
+  const parts = [];
+  if (bd.regular_h > 0) parts.push(`<span style="color:#6272f5;">Reg. ${bd.regular_h.toFixed(1)}h</span>`);
+  if (bd.overtime_h > 0) parts.push(`<span style="color:#fb923c;font-weight:500;">Str. ${bd.overtime_h.toFixed(1)}h</span>`);
+  if (bd.night_h > 0) parts.push(`<span style="color:#a78bfa;">Notte ${bd.night_h.toFixed(1)}h</span>`);
+  if (bd.is_holiday) parts.push(`<span style="color:#ef4444;font-weight:500;">Festivo</span>`);
+  else if (bd.is_sunday) parts.push(`<span style="color:#fb923c;">Domenicale</span>`);
+  return parts.length ? parts.join(' · ') : '<span class="text-muted">—</span>';
+}
+
+function renderTable(entries) {
   const tbody = document.getElementById('punches-tbody');
-  if (!punches.length) {
-    tbody.innerHTML = '<tr><td colspan="9" class="text-muted" style="text-align:center;padding:24px;">Nessuna timbratura nel periodo</td></tr>';
+  if (!entries.length) {
+    tbody.innerHTML = '<tr><td colspan="9" class="text-muted" style="text-align:center;padding:24px;">Nessuna voce nel periodo</td></tr>';
     return;
   }
-  tbody.innerHTML = punches.map(p => {
-    const inProgress = !p.end_datetime;
-    const color = KIND_COLOR[p.kind] || p.resource_color || '#6272f5';
-    return `<tr class="punch-row ${inProgress ? 'in-progress' : ''}" onclick='openEditPunch(${p.id})' style="cursor:pointer;">
-      <td>${fmtDate(p.start_datetime)}</td>
+  tbody.innerHTML = entries.map(e => {
+    if (e.source === 'unavailability') {
+      const col = CAT_COLOR[e.unav_kind] || '#9ca3af';
+      return `<tr class="punch-row" style="background:rgba(98,114,245,0.04);">
+        <td>${fmtDate(e.start_datetime)}</td>
+        <td>
+          <span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:${e.resource_color || '#888'};margin-right:6px;"></span>
+          ${escapeHtml(e.resource_name || '')}
+        </td>
+        <td class="col-time text-muted">—</td>
+        <td class="col-time text-muted">—</td>
+        <td class="col-dur">${(e.duration_h || 0).toFixed(2)}</td>
+        <td><span class="kind-badge" style="border-left:3px solid ${col};padding-left:6px;">${escapeHtml(e.unav_kind_label)}</span></td>
+        <td><span class="text-muted">—</span></td>
+        <td>${escapeHtml(e.reason || '')}</td>
+        <td></td>
+      </tr>`;
+    }
+    // punch
+    const inProgress = e.in_progress;
+    const color = KIND_COLOR[e.kind] || e.resource_color || '#6272f5';
+    const job = e.job_id
+      ? `<span class="text-muted">${escapeHtml(e.job_code || '')}</span> ${escapeHtml(e.job_title || '')}`
+      : (e.notes ? escapeHtml(e.notes) : '<span class="text-muted">—</span>');
+    return `<tr class="punch-row ${inProgress ? 'in-progress' : ''}" onclick='openEditPunch(${e.punch_id})' style="cursor:pointer;">
+      <td>${fmtDate(e.start_datetime)}</td>
       <td>
-        <span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:${p.resource_color || '#888'};margin-right:6px;"></span>
-        ${escapeHtml(p.resource_name)}
+        <span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:${e.resource_color || '#888'};margin-right:6px;"></span>
+        ${escapeHtml(e.resource_name)}
       </td>
-      <td class="col-time">${fmtTime(p.start_datetime)}</td>
-      <td class="col-time">${inProgress ? '<span class="in-progress-tag">in corso</span>' : fmtTime(p.end_datetime)}</td>
-      <td class="col-dur">${p.duration_h != null ? p.duration_h.toFixed(2) : '—'}</td>
-      <td><span class="kind-badge" style="border-left:3px solid ${color};padding-left:6px;">${escapeHtml(p.kind_label)}</span></td>
-      <td>${p.job_id ? `<span class="text-muted">${escapeHtml(p.job_code || '')}</span> ${escapeHtml(p.job_title || '')}` : '<span class="text-muted">—</span>'}</td>
-      <td>${escapeHtml(p.notes || '')}</td>
+      <td class="col-time">${fmtTime(e.start_datetime)}</td>
+      <td class="col-time">${inProgress ? '<span class="in-progress-tag">in corso</span>' : fmtTime(e.end_datetime)}</td>
+      <td class="col-dur">${e.duration_h != null ? e.duration_h.toFixed(2) : '—'}</td>
+      <td><span class="kind-badge" style="border-left:3px solid ${color};padding-left:6px;">${escapeHtml(e.kind_label)}</span></td>
+      <td style="font-size:11px;">${_breakdownBadges(e.breakdown)}</td>
+      <td>${job}${e.job_id && e.notes ? `<br><span class="text-muted" style="font-size:11px;">${escapeHtml(e.notes)}</span>` : ''}</td>
       <td></td>
     </tr>`;
   }).join('');

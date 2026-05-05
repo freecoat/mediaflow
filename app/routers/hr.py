@@ -8,7 +8,7 @@ booking = intenzione di pianificazione, time_punch = presenza effettiva.
 MVP: CRUD + lista filtrabile + totali per kind. Aggregazioni avanzate (report
 mensile, costo orario × ore, esportazione cedolino) in iterazione successiva.
 """
-from datetime import date, datetime, timedelta
+from datetime import date, datetime, time, timedelta
 from typing import Optional
 
 from fastapi import APIRouter, Cookie, Depends, HTTPException, Request, Form
@@ -21,7 +21,7 @@ from app.models import (
     WorkingHoursPolicy, ResourceUnavailability, UnavailabilityKind, UnavailabilityStatus,
 )
 from app.services.auth import get_current_user_from_token
-from app.services.overtime import compute_overtime
+from app.services.overtime import compute_overtime, compute_punch_breakdown
 from app.services.rbac import is_elevated, scope_resource_id, current_user_optional
 
 router = APIRouter(prefix="/hr", tags=["hr"])
@@ -152,9 +152,12 @@ async def hr_page(request: Request, db: Session = Depends(get_db)):
         .all()
     )
     kinds = [{"value": k.value, "label": KIND_LABEL[k], "color": KIND_COLOR.get(k)} for k in PunchKind]
+    # Categorie del filtro Tipo nella pagina (v3.5.0-alpha.16): non più i raw
+    # PunchKind ma le categorie del breakdown straordinari + ferie/malattia.
     return _tpl().TemplateResponse(
         "pages/hr.html",
         {"request": request, "persons": persons, "jobs": jobs, "kinds": kinds,
+         "categories": TIMELINE_CATEGORIES,
          "user_is_elevated": elevated, "scoped_resource_id": scoped_rid},
     )
 
@@ -425,6 +428,224 @@ async def punches_summary(
         "grand_total": round(grand_total, 2),
         "labels": {k.value: KIND_LABEL[k] for k in PunchKind},
         "colors": {k.value: KIND_COLOR.get(k) for k in PunchKind},
+    }
+
+
+## ── Timeline unificata: TimePunch + Unavailability + breakdown (v3.5.0-alpha.16) ──
+# Le categorie del filtro Tipo nella pagina HR. Sostituiscono i raw PunchKind
+# nel dropdown perché solo `shift`/`break` vengono creati dal modal: l'overtime
+# è una conseguenza del breakdown dell'engine, non un kind di punch. Le ferie/
+# malattia sono Unavailability separati e non punch.
+TIMELINE_CATEGORIES = [
+    {"value": "regular",  "label": "Regolari",      "color": "#6272f5"},
+    {"value": "overtime", "label": "Straordinari",  "color": "#fb923c"},
+    {"value": "night",    "label": "Notturne",      "color": "#a78bfa"},
+    {"value": "holiday",  "label": "Festivo",       "color": "#ef4444"},
+    {"value": "sunday",   "label": "Domenicali",    "color": "#fb923c"},
+    {"value": "break",    "label": "Pausa",         "color": "#fbbf24"},
+    {"value": "vacation", "label": "Ferie",         "color": "#6272f5"},
+    {"value": "sick",     "label": "Malattia",      "color": "#ef4444"},
+    {"value": "other",    "label": "Permesso",      "color": "#9ca3af"},
+]
+
+
+def _entry_matches_category(entry: dict, cat: str) -> bool:
+    """True se un'entry timeline rientra nella categoria filtro selezionata."""
+    if not cat:
+        return True
+    if entry["source"] == "unavailability":
+        return entry["unav_kind"] == cat
+    # source == 'punch'
+    if cat == "break":
+        return entry["kind"] == "break"
+    bd = entry.get("breakdown") or {}
+    if cat == "regular":
+        return (bd.get("regular_h") or 0.0) > 0
+    if cat == "overtime":
+        return (bd.get("overtime_h") or 0.0) > 0
+    if cat == "night":
+        return (bd.get("night_h") or 0.0) > 0
+    if cat == "holiday":
+        return bool(bd.get("is_holiday"))
+    if cat == "sunday":
+        return bool(bd.get("is_sunday"))
+    return False
+
+
+@router.get("/api/timeline")
+async def hr_timeline(
+    request: Request,
+    resource_id: Optional[int] = None,
+    from_date: Optional[date] = None,
+    to_date: Optional[date] = None,
+    category: Optional[str] = None,
+    db: Session = Depends(get_db),
+):
+    """Lista unificata TimePunch + ResourceUnavailability con breakdown per-punch.
+
+    Sostituisce le 2 chiamate separate /api/punches + /api/summary nella pagina
+    HR. Ritorna entries cronologiche miste e totali per categoria. Il filtro
+    `category` agisce su entrambe le sorgenti (es. "vacation" filtra solo le
+    unavailability di tipo ferie; "overtime" filtra solo i punch con quota di
+    straordinario > 0).
+    """
+    resource_id = _enforce_scope(request, db, resource_id)
+
+    # Punch nel periodo (chiusi e in corso, ma il breakdown salta gli in-corso)
+    pq = (
+        db.query(TimePunch)
+        .options(joinedload(TimePunch.resource), joinedload(TimePunch.job))
+        .filter(TimePunch.tenant_id == CURRENT_TENANT)
+    )
+    if resource_id:
+        pq = pq.filter(TimePunch.resource_id == resource_id)
+    if from_date:
+        pq = pq.filter(
+            (TimePunch.end_datetime.is_(None))
+            | (TimePunch.end_datetime >= datetime.combine(from_date, datetime.min.time()))
+        )
+    if to_date:
+        pq = pq.filter(TimePunch.start_datetime <= datetime.combine(to_date, datetime.max.time()))
+    punches = pq.order_by(TimePunch.start_datetime.asc()).all()
+
+    # Calcolo breakdown raggruppato per (resource_id, policy)
+    breakdown_by_punch: dict[int, dict] = {}
+    if punches:
+        from collections import defaultdict
+        by_res: dict[int, list[TimePunch]] = defaultdict(list)
+        for p in punches:
+            by_res[p.resource_id].append(p)
+        for rid, group in by_res.items():
+            res = db.query(Resource).filter(Resource.id == rid).first()
+            policy = _resolve_policy_for_resource(db, res) if res else None
+            if not policy:
+                continue
+            bd_map = compute_punch_breakdown(group, policy)
+            for pid, pb in bd_map.items():
+                breakdown_by_punch[pid] = pb.as_dict()
+
+    # Unavailability approvate nel periodo (espanse 1 entry per giorno)
+    uav_entries: list[dict] = []
+    if from_date and to_date:
+        uq = (
+            db.query(ResourceUnavailability)
+            .options(joinedload(ResourceUnavailability.resource))
+            .filter(
+                ResourceUnavailability.status == UnavailabilityStatus.approved,
+                ResourceUnavailability.end_date >= from_date,
+                ResourceUnavailability.start_date <= to_date,
+            )
+        )
+        if resource_id:
+            uq = uq.filter(ResourceUnavailability.resource_id == resource_id)
+        # daily hours per assenza dipende dalla policy della risorsa
+        for u in uq.all():
+            policy = _resolve_policy_for_resource(db, u.resource) if u.resource else None
+            daily_h = (policy.daily_hours_threshold if policy else 8.0) or 8.0
+            kv = u.kind.value if hasattr(u.kind, "value") else u.kind
+            s = max(u.start_date, from_date)
+            e = min(u.end_date, to_date)
+            cur = s
+            while cur <= e:
+                # Salta i weekend per ferie? No — ricalca quanto fa /api/calendar
+                # (anche lì conta tutti i giorni). L'utente vede esattamente le
+                # date in cui era assente. Eventuale skip weekend va deciso in UI.
+                uav_entries.append({
+                    "source": "unavailability",
+                    "id": f"u{u.id}-{cur.isoformat()}",
+                    "unav_id": u.id,
+                    "resource_id": u.resource_id,
+                    "resource_name": u.resource.name if u.resource else None,
+                    "resource_color": u.resource.color if u.resource else None,
+                    "date": cur.isoformat(),
+                    "start_datetime": datetime.combine(cur, time(9, 0)).isoformat(),
+                    "end_datetime": datetime.combine(cur, time(9, 0)).isoformat(),
+                    "duration_h": daily_h,
+                    "unav_kind": kv,
+                    "unav_kind_label": {
+                        "vacation": "Ferie",
+                        "sick": "Malattia",
+                        "other": "Permesso",
+                    }.get(kv, kv),
+                    "reason": u.reason,
+                })
+                cur += timedelta(days=1)
+
+    # Compongo entries punch
+    punch_entries: list[dict] = []
+    for p in punches:
+        kv = p.kind.value if hasattr(p.kind, "value") else p.kind
+        bd = breakdown_by_punch.get(p.id)
+        duration_h = None
+        if p.end_datetime:
+            duration_h = round((p.end_datetime - p.start_datetime).total_seconds() / 3600.0, 2)
+        punch_entries.append({
+            "source": "punch",
+            "id": f"p{p.id}",
+            "punch_id": p.id,
+            "resource_id": p.resource_id,
+            "resource_name": p.resource.name if p.resource else None,
+            "resource_color": p.resource.color if p.resource else None,
+            "job_id": p.job_id,
+            "job_title": p.job.title if p.job else None,
+            "job_code": p.job.code if p.job else None,
+            "start_datetime": p.start_datetime.isoformat(),
+            "end_datetime": p.end_datetime.isoformat() if p.end_datetime else None,
+            "duration_h": duration_h,
+            "kind": kv,
+            "kind_label": KIND_LABEL.get(p.kind, str(p.kind)),
+            "notes": p.notes,
+            "in_progress": p.end_datetime is None,
+            "breakdown": bd,
+        })
+
+    # Filtro categoria
+    cat = (category or "").strip() or None
+    all_entries = punch_entries + uav_entries
+    if cat:
+        all_entries = [e for e in all_entries if _entry_matches_category(e, cat)]
+
+    # Sort cronologico
+    all_entries.sort(key=lambda e: e.get("start_datetime") or e.get("date") or "")
+
+    # Totali per categoria, ricalcolati sul subset filtrato
+    totals = {c["value"]: 0.0 for c in TIMELINE_CATEGORIES}
+    has_policy_warning = False
+    for e in all_entries:
+        if e["source"] == "unavailability":
+            totals[e["unav_kind"]] = totals.get(e["unav_kind"], 0.0) + (e["duration_h"] or 0.0)
+        else:
+            if e["kind"] == "break":
+                totals["break"] += (e["duration_h"] or 0.0)
+                continue
+            bd = e.get("breakdown")
+            if bd is None:
+                # Fallback: nessuna WorkingHoursPolicy default → tutte le ore
+                # vanno in "regular" (niente split overtime/notte/festivo).
+                totals["regular"] += (e["duration_h"] or 0.0)
+                if e["kind"] == "shift" and e.get("end_datetime"):
+                    has_policy_warning = True
+                continue
+            totals["regular"] += bd.get("regular_h") or 0.0
+            totals["overtime"] += bd.get("overtime_h") or 0.0
+            totals["night"]    += bd.get("night_h") or 0.0
+            if bd.get("is_holiday"):
+                totals["holiday"] += bd.get("duration_h") or 0.0
+            elif bd.get("is_sunday"):
+                totals["sunday"] += bd.get("duration_h") or 0.0
+    grand_total = sum(totals.values())
+
+    return {
+        "entries": all_entries,
+        "totals": {k: round(v, 2) for k, v in totals.items()},
+        "grand_total": round(grand_total, 2),
+        "categories": TIMELINE_CATEGORIES,
+        "filter_category": cat,
+        "warning": (
+            "Nessuna WorkingHoursPolicy default configurata: il breakdown "
+            "regular/overtime/notte/festivo non è disponibile. Vai in /settings#hours "
+            "per impostare una policy default."
+        ) if has_policy_warning else None,
     }
 
 

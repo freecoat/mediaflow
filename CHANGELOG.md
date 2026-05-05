@@ -1,5 +1,67 @@
 # MediaFlow — Changelog
 
+## v3.5.0-alpha.16 — Round 7A: HR breakdown per-punch + ROI riscritto (5 maggio 2026)
+
+Round 7A su feedback Matteo del 5 maggio 2026: 4 bug + 1 cantiere UX, tutti
+chiusi in un'unica versione perché condividono i punti di intervento.
+
+**HR — straordinari nella lista timbrature, filtro Tipo, ferie/malattia in tabella (3 bug → 1 fix sistemico)**
+
+Causa comune: la pagina `/hr` mostrava solo i `TimePunch` raw filtrati per
+`PunchKind`. Lo straordinario non è un kind ma una conseguenza del breakdown
+calcolato da `compute_overtime` (ore oltre `daily_hours_threshold`). Le
+`ResourceUnavailability` (ferie/malattia) sono entità separate e non comparivano
+in tabella. Il filtro Tipo proponeva i raw kinds (Turno/Pausa/Ferie/...) ma
+filtrava solo i punch, lasciando fuori tutto il breakdown.
+
+Soluzione: nuovo endpoint unificato `/hr/api/timeline?from_date&to_date&resource_id&category`
+che fonde le 2 sorgenti e ritorna entries cronologiche con breakdown per-punch.
+
+- Servizio `compute_punch_breakdown(punches, policy)` in `app/services/overtime.py`:
+  raggruppa punches per giorno, calcola `regular/overtime/night/sunday/holiday`
+  per-punch distribuendo l'overtime giornaliero sulle ore "in coda" alla
+  giornata (last-in-first-out — convenzione standard busta paga).
+- Filtro Tipo riprogrammato sulle 9 categorie di rendiconto:
+  Regolari, Straordinari, Notturne, Festivo, Domenicali, Pausa, Ferie, Malattia,
+  Permesso. Costante `TIMELINE_CATEGORIES` esposta al template.
+- Tabella ridisegnata: nuova colonna "Breakdown" con badge inline
+  ("Reg. 8h · Str. 1h · Notte 1h · Festivo"). Le righe ferie/malattia/permessi
+  appaiono come righe sintetiche per giorno (1 entry/giorno per range), bg
+  leggermente colorato, durata = `daily_hours_threshold` della policy.
+- Totali per categoria nel header (cards colorate) coerenti col filtro attivo.
+- Fallback graceful quando manca `WorkingHoursPolicy` default: tutte le ore in
+  "Regolari" + banner warning con link a `/settings#hours`. Stesso pattern di
+  `/api/overtime` (alpha.9).
+
+`/api/punches` e `/api/summary` restano disponibili per consumer esterni
+(calendar overlay, pannelli risorse). La pagina HR ora usa solo `/api/timeline`.
+
+**Planning — ROI multiselect timeline riscritto**
+
+Bug Matteo: "Shift+drag area su planning non funziona". Diagnosi:
+1. Vis-timeline usa Hammer.js per pan/zoom. Anche con capture-phase listener +
+   `stopPropagation`, Hammer attacca i suoi listener al container e parte il pan
+   PRIMA che l'overlay venga aggiornato → l'utente vede la timeline scorrere e
+   l'overlay non disegna.
+2. La rilevazione gruppi via `[data-group-id]` falliva su vis-timeline 7.x che
+   usa altri selettori per la labelset.
+
+Fix in `_tlRoiHandler`:
+- `setOptions({moveable: false, zoomable: false})` durante il drag → Hammer
+  disabilitato → niente pan-conflict. Ripristino su mouseup/Escape.
+- Trigger keys allargati: **Alt+drag** (più affidabile, vis-timeline non
+  intercetta), **Shift+drag** (mantenuto per backward compat), e nuovo toggle
+  persistente in toolbar **"📦 Selezione area"** per chi non vuole/può usare
+  modifier keys.
+- Rilevazione gruppi via scansione `.vis-labelset .vis-label` con
+  `getBoundingClientRect()` + mappa indice DOM → group id da `groupsDS`.
+- Cursor `crosshair` durante il drag, Escape annulla.
+- Empty selection → toast "Nessun booking nell'area selezionata".
+
+Cache-buster `v=3.5.0-alpha.16`. Niente migrazione DB.
+
+---
+
 ## v3.5.0-alpha.15 — Round 6: ore festivo + ROI multiselect timeline (5 maggio 2026)
 
 Ultimi 2 punti aperti del Round 5 chiusi.
