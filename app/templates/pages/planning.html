@@ -851,12 +851,14 @@
           <label class="tl-pref-check"><input type="checkbox" id="tlp-heatmap" checked> Heatmap capacity</label>
           <label class="tl-pref-check"><input type="checkbox" id="tlp-today-glow" checked> Linea oggi con glow</label>
           <label class="tl-pref-check"><input type="checkbox" id="tlp-weekend-bg" checked> Sfondo weekend</label>
+          <!-- v3.5.0-alpha.23: ombra leggera timbrature TimePunch -->
+          <label class="tl-pref-check"><input type="checkbox" id="tlp-show-punches" checked> Mostra timbrature (ombra leggera)</label>
           <hr style="border:none; border-top:1px solid var(--border); margin:10px 0;">
           <button class="btn btn-ghost btn-sm" onclick="tlPrefsReset()" style="width:100%;">↺ Ripristina default</button>
         </div>
         <div id="tl-week-label" style="font-size:13px; font-weight:500; color:var(--text2,#aaa); padding:6px 14px; background:var(--bg3,#22253a); border-radius:6px 6px 0 0; border-bottom:1px solid var(--border,#2a2e3d);"></div>
         <div style="font-size:11px; color:var(--text3,#888); padding:4px 14px 0;">
-          Drag = pan · Drag item = sposta · Bordi = durata · <kbd style="background:rgba(255,255,255,.05); border:1px solid var(--border); border-radius:3px; padding:0 4px; font-size:10px;">Alt</kbd>+drag = duplica · <kbd style="background:rgba(255,255,255,.05); border:1px solid var(--border); border-radius:3px; padding:0 4px; font-size:10px;">Ctrl</kbd>+click = multi-select · <kbd style="background:rgba(255,255,255,.05); border:1px solid var(--border); border-radius:3px; padding:0 4px; font-size:10px;">Canc</kbd>/<kbd style="background:rgba(255,255,255,.05); border:1px solid var(--border); border-radius:3px; padding:0 4px; font-size:10px;">←→</kbd>/<kbd style="background:rgba(255,255,255,.05); border:1px solid var(--border); border-radius:3px; padding:0 4px; font-size:10px;">⌘C/V</kbd>/<kbd style="background:rgba(255,255,255,.05); border:1px solid var(--border); border-radius:3px; padding:0 4px; font-size:10px;">⌘Z</kbd> · doppio click vuoto = nuovo
+          Drag = pan · Drag item = sposta · <kbd style="background:rgba(255,255,255,.05); border:1px solid var(--border); border-radius:3px; padding:0 4px; font-size:10px;">Shift</kbd>+drag su vuoto = nuovo booking · doppio click item = modifica · doppio click vuoto = nuovo · <kbd style="background:rgba(255,255,255,.05); border:1px solid var(--border); border-radius:3px; padding:0 4px; font-size:10px;">Alt</kbd>+drag = duplica · <kbd style="background:rgba(255,255,255,.05); border:1px solid var(--border); border-radius:3px; padding:0 4px; font-size:10px;">Ctrl</kbd>+click = multi-select · <kbd style="background:rgba(255,255,255,.05); border:1px solid var(--border); border-radius:3px; padding:0 4px; font-size:10px;">Canc</kbd>/<kbd style="background:rgba(255,255,255,.05); border:1px solid var(--border); border-radius:3px; padding:0 4px; font-size:10px;">⌘C/V</kbd>/<kbd style="background:rgba(255,255,255,.05); border:1px solid var(--border); border-radius:3px; padding:0 4px; font-size:10px;">⌘Z</kbd>
         </div>
         <div id="tl-host"></div>
       </div>
@@ -1580,6 +1582,7 @@ const TL_PREFS_DEFAULTS = {
   heatmap: true,
   today_glow: true,
   weekend_bg: true,
+  show_punches: true,  // v3.5.0-alpha.23: ombra leggera timbrature
 };
 function tlPrefsLoad() {
   try {
@@ -1652,6 +1655,8 @@ function tlPrefsToggle(ev) {
     document.getElementById('tlp-heatmap').checked = !!p.heatmap;
     document.getElementById('tlp-today-glow').checked = !!p.today_glow;
     document.getElementById('tlp-weekend-bg').checked = !!p.weekend_bg;
+    const tpShow = document.getElementById('tlp-show-punches');
+    if (tpShow) tpShow.checked = (p.show_punches !== false);
     if (typeof mfApplySearchable === 'function') mfApplySearchable(pop);
     setTimeout(() => {
       const off = e => { if (!pop.contains(e.target) && !e.target.closest('[onclick*="tlPrefsToggle"]')) {
@@ -1680,7 +1685,8 @@ function storyboardSetDensity(value) {
 }
 
 function tlPrefsBindHandlers() {
-  const ids = ['font','font-family','text-color','bg','accent','sb-density','anim','heatmap','today-glow','weekend-bg'];
+  // v3.5.0-alpha.23: aggiunto 'show-punches' alla lista watched.
+  const ids = ['font','font-family','text-color','bg','accent','sb-density','anim','heatmap','today-glow','weekend-bg','show-punches'];
   for (const id of ids) {
     const el = document.getElementById('tlp-' + id);
     if (!el || el._mfBound) continue;
@@ -1697,8 +1703,15 @@ function tlPrefsBindHandlers() {
       p.heatmap = document.getElementById('tlp-heatmap').checked;
       p.today_glow = document.getElementById('tlp-today-glow').checked;
       p.weekend_bg = document.getElementById('tlp-weekend-bg').checked;
+      const tp = document.getElementById('tlp-show-punches');
+      p.show_punches = tp ? !!tp.checked : true;
       tlPrefsSave(p);
       tlPrefsApply(p);
+      // v3.5.0-alpha.23: il toggle timbrature richiede re-fetch del dataset
+      // (i punch non sono nel render iniziale se disattivati). Re-render full.
+      if (id === 'show-punches' && typeof renderTimeline === 'function') {
+        renderTimeline(true);
+      }
     });
   }
 }
@@ -3001,6 +3014,94 @@ function tlContextMenu(x, y, choices) {
   });
 }
 
+// v3.5.0-alpha.23: split-pause unit drag — i booking splittati per pausa
+// pranzo o smart-split hanno più assignments sulla stessa risorsa con stesso
+// booking_id. Quando l'utente sposta uno dei segmenti, gli altri segmenti
+// dello stesso booking sulla stessa risorsa devono shiftare con lo stesso
+// delta come unità logica. Senza questo, il booking si rompe in pezzi
+// scollegati.
+async function _tlApplySplitPauseShift(movedItem, origItem, origBooking) {
+  if (!origItem || !origBooking) return;
+  const bookingId = origBooking.booking_id;
+  const movedAid = origBooking.assignment_id;
+  const movedResId = origItem.group;
+  if (!bookingId || !movedAid || movedResId == null) return;
+  // Trova segmenti SIBLING: stesso booking_id, stessa risorsa originaria,
+  // assignment diverso da quello mosso. Usa la cache _tlBookings (snapshot
+  // pre-render).
+  const all = window._tlBookings || [];
+  const siblings = all.filter(b =>
+    b.booking_id === bookingId &&
+    b.assignment_id !== movedAid &&
+    b.extendedProps && b.extendedProps.resource_id === movedResId
+  );
+  if (!siblings.length) return;
+  const dtMs = new Date(movedItem.start).getTime() - new Date(origItem.start).getTime();
+  if (Math.abs(dtMs) < 30000) return;
+  // Cross-resource: il moved item ha cambiato gruppo. Per i sibling restiamo
+  // sulla risorsa originaria (Matteo: "il booking splittato per pausa pranzo
+  // viene spostato unitariamente?"). Il sibling viene shiftato in time SUL
+  // GRUPPO ORIGINARIO. Se l'utente ha appena moved cross-resource, applichiamo
+  // lo SHIFT in tempo, NON il cambio gruppo: la pausa è specifica della
+  // risorsa, non un attributo del booking.
+  for (const sib of siblings) {
+    const aid = sib.assignment_id;
+    const ns = new Date(new Date(sib.start).getTime() + dtMs);
+    const ne = new Date(new Date(sib.end).getTime() + dtMs);
+    const fd = new FormData();
+    fd.append('start_datetime', _toLocalDtInput(ns));
+    fd.append('end_datetime', _toLocalDtInput(ne));
+    fd.append('resource_id', String(sib.extendedProps.resource_id));
+    try {
+      await api('PUT', `/planning/api/booking-assignments/${aid}`, fd);
+    } catch(e) {
+      console.warn('split-pause sibling shift failed for assignment', aid, e);
+    }
+  }
+  // Refresh per riflettere i sibling spostati
+  setTimeout(() => renderTimeline(true), 50);
+}
+
+// v3.5.0-alpha.23: applica lo stesso delta del move agli altri items
+// nella selezione corrente (vis-timeline non emette onMove per loro).
+// Cross-resource: shift solo del delta time, non del group (logico — l'utente
+// vuole spostare la fascia oraria del gruppo selezionato in blocco; se vuole
+// cambiare risorsa ad ognuno, lo fa singolarmente o via menu Bulk).
+async function _tlApplyMoveToOthersInSelection(movedItem, origItem) {
+  if (!window._tlInstance || !origItem) return;
+  const sel = window._tlInstance.getSelection() || [];
+  const others = sel.filter(id => typeof id === 'string' && id.startsWith('a') && id !== movedItem.id);
+  if (!others.length) return;
+  const ds = window._tlInstance.itemsData;
+  const allItems = ds ? ds.get() : [];
+  const dtMs = new Date(movedItem.start).getTime() - new Date(origItem.start).getTime();
+  if (Math.abs(dtMs) < 30000) return;  // < 30s = no-op
+  const ok = confirm(`Applicare lo stesso shift orario (${(dtMs/3600000).toFixed(2)}h) a ${others.length} booking selezionati?`);
+  if (!ok) return;
+  let okN = 0, failN = 0;
+  for (const oid of others) {
+    const it = allItems.find(x => x.id === oid);
+    if (!it) { failN++; continue; }
+    const aid = String(oid).startsWith('a') ? String(oid).substring(1) : oid;
+    const ns = new Date(new Date(it.start).getTime() + dtMs);
+    const ne = new Date(new Date(it.end).getTime() + dtMs);
+    const fd = new FormData();
+    fd.append('start_datetime', _toLocalDtInput(ns));
+    fd.append('end_datetime', _toLocalDtInput(ne));
+    fd.append('resource_id', String(it.group));
+    try {
+      await api('PUT', `/planning/api/booking-assignments/${aid}`, fd);
+      okN++;
+    } catch(e) {
+      failN++;
+      console.warn('multi-move failed for', oid, e);
+    }
+  }
+  toast(`✓ ${okN} spostat${okN === 1 ? 'o' : 'i'}${failN ? ` · ⚠ ${failN} falliti` : ''}`,
+        failN ? 'warning' : 'success');
+  if (okN) renderTimeline(true);
+}
+
 // ── Helpers azioni assignment (multi-resource v3.4.16) ─────
 async function _tlDoMove(item, orig, assignmentId) {
   // Sposta UN singolo assignment (drag/resize/reassign del singolo item timeline)
@@ -3008,11 +3109,27 @@ async function _tlDoMove(item, orig, assignmentId) {
   fd.append('start_datetime', _toLocalDtInput(new Date(item.start)));
   fd.append('end_datetime', _toLocalDtInput(new Date(item.end)));
   fd.append('resource_id', item.group);
-  await api('PUT', `/planning/api/booking-assignments/${assignmentId}`, fd);
+  const res = await api('PUT', `/planning/api/booking-assignments/${assignmentId}`, fd);
   tlPushUndo({
     type:'update_assignment', assignment_id: assignmentId,
     prev:{start:orig.start, end:orig.end, resource_id:orig.group}
   }, 'Assegnazione spostata');
+  // v3.5.0-alpha.23: aggiorno la cache `_tlBookings` coerentemente col DB.
+  // Senza questo, drag successivi usavano `orig.group` da un items stale →
+  // sintomo riportato da Matteo "spostamento non aggiorna risorsa".
+  try {
+    if (window._tlBookings) {
+      const b = window._tlBookings.find(x => x.id === item.id);
+      if (b) {
+        if (res && res.start_datetime) b.start = res.start_datetime;
+        if (res && res.end_datetime)   b.end   = res.end_datetime;
+        if (b.extendedProps && res && res.resource_id != null) {
+          b.extendedProps.resource_id = res.resource_id;
+        }
+      }
+    }
+  } catch(_) {}
+  return res;
 }
 
 async function _tlDoDuplicate(item, origBooking) {
@@ -3197,26 +3314,32 @@ async function renderTimeline(preserveWindow=false) {
 
   // v3.4.22 cantiere C: overlay timbrature TimePunch sopra le righe risorsa.
   // Visibile in modo sottile per non disturbare i booking pianificati.
+  // v3.5.0-alpha.23: toggle per visualizzazione (default ON, ombra leggera).
   let punchItems = [];
-  try {
-    const pParams = `from_date=${fmtD(winFrom)}&to_date=${fmtD(winTo)}`;
-    const punches = await api('GET', '/hr/api/punches?' + pParams);
-    punchItems = (punches || []).filter(p => p.end_datetime).map(p => {
-      const kind = p.kind || 'shift';
-      const colorMap = {shift:'#10b981', overtime:'#fb923c', break:'#fbbf24', sick:'#f87171', leave:'#c084fc', idle:'#9ca3af'};
-      const color = colorMap[kind] || '#10b981';
-      return {
-        id: 'tp-' + p.id,
-        group: p.resource_id,
-        start: p.start_datetime,
-        end: p.end_datetime,
-        type: 'background',
-        className: 'tl-bg-punch tl-bg-punch-' + kind,
-        title: `Timbratura · ${p.kind_label || kind}\n${new Date(p.start_datetime).toLocaleString('it-IT', {dateStyle:'short', timeStyle:'short'})} → ${new Date(p.end_datetime).toLocaleString('it-IT', {dateStyle:'short', timeStyle:'short'})}\n⏱ ${p.duration_h}h`,
-        style: `background:linear-gradient(180deg, ${color}1a 0%, ${color}33 100%); border-bottom:2px solid ${color};`,
-      };
-    });
-  } catch(_) {}
+  const _prefsP = (typeof tlPrefsLoad === 'function') ? tlPrefsLoad() : { show_punches: true };
+  if (_prefsP.show_punches !== false) {
+    try {
+      const pParams = `from_date=${fmtD(winFrom)}&to_date=${fmtD(winTo)}`;
+      const punches = await api('GET', '/hr/api/punches?' + pParams);
+      punchItems = (punches || []).filter(p => p.end_datetime).map(p => {
+        const kind = p.kind || 'shift';
+        const colorMap = {shift:'#10b981', overtime:'#fb923c', break:'#fbbf24', sick:'#f87171', leave:'#c084fc', idle:'#9ca3af'};
+        const color = colorMap[kind] || '#10b981';
+        return {
+          id: 'tp-' + p.id,
+          group: p.resource_id,
+          start: p.start_datetime,
+          end: p.end_datetime,
+          type: 'background',
+          className: 'tl-bg-punch tl-bg-punch-' + kind,
+          title: `Timbratura · ${p.kind_label || kind}\n${new Date(p.start_datetime).toLocaleString('it-IT', {dateStyle:'short', timeStyle:'short'})} → ${new Date(p.end_datetime).toLocaleString('it-IT', {dateStyle:'short', timeStyle:'short'})}\n⏱ ${p.duration_h}h`,
+          // v3.5.0-alpha.23: "solo un'ombra leggera" — opacità ridotta
+          // (10% sfondo, 20% bordo) per non distrarre dalla pianificazione.
+          style: `background:linear-gradient(180deg, ${color}10 0%, ${color}1a 100%); border-bottom:1px dotted ${color}50;`,
+        };
+      });
+    } catch(_) {}
+  }
 
   // v3.5.0-alpha.21: in vista "Per progetto" gli items background (ferie /
   // festività / timbrature) sono legati a resource_id e non hanno senso
@@ -3318,6 +3441,31 @@ async function renderTimeline(preserveWindow=false) {
         callback(null);
         return;
       }
+      // v3.5.0-alpha.23: blocco drop su risorsa di reparto incompatibile col
+      // job (la lavorazione ha price_item.department_id; se la risorsa target
+      // appartiene a un altro reparto il drop produce un booking "senza
+      // lavorazione" semanticamente). Bypassabile con conferma esplicita.
+      try {
+        const orig0 = items.find(x => x.id === item.id);
+        if (orig0 && origBooking && origBooking.extendedProps && item.group !== orig0.group) {
+          const lineDeptId = origBooking.extendedProps.cost_line_department_id;
+          if (lineDeptId) {
+            const newRes = (RESOURCES_SEED || []).find(r => r.id === item.group);
+            if (newRes && newRes.dept != null && newRes.dept !== lineDeptId) {
+              const lineDeptName = (DEPARTMENTS_SEED || []).find(d => d.id === lineDeptId);
+              const newDeptName  = (DEPARTMENTS_SEED || []).find(d => d.id === newRes.dept);
+              const lblA = lineDeptName ? lineDeptName.name : ('reparto #'+lineDeptId);
+              const lblB = newDeptName  ? newDeptName.name  : ('reparto #'+newRes.dept);
+              const ok = confirm(
+                `Risorsa di reparto NON compatibile con la lavorazione.\n\n` +
+                `Lavorazione → ${lblA}\nRisorsa target → ${lblB}\n\n` +
+                `Procedere comunque? (Il booking risulterà su una risorsa fuori reparto.)`
+              );
+              if (!ok) { callback(null); return; }
+            }
+          }
+        }
+      } catch(_) {}
       // Soft block festività: chiede conferma + workflow overtime
       if (item._softBlockHoliday) {
         const ok = confirm('Questo periodo cade in un giorno festivo.\nIl booking richiederà approvazione straordinario e sarà conteggiato con maggiorazione festiva.\n\nProcedere?');
@@ -3351,6 +3499,19 @@ async function renderTimeline(preserveWindow=false) {
           await _tlDoMove(item, orig, assignmentId);
           item.className = (item.className || '').replace(/\s*tl-conflict/g, '');
           callback(item);
+          // v3.5.0-alpha.23: cross-resource move → re-render per riflettere
+          // lo stato server-of-truth (envelope booking, eventuali altre
+          // assignment dello stesso booking, badge "1/N", etc.).
+          if (crossResource) {
+            setTimeout(() => renderTimeline(true), 50);
+          }
+          // v3.5.0-alpha.23: split-pause unit drag — se l'item è parte di un
+          // booking splittato (più assignments stessa risorsa stesso booking),
+          // applica lo stesso shift agli altri segmenti come unità.
+          await _tlApplySplitPauseShift(item, orig, origBooking);
+          // Multi-select drag — applica lo stesso shift agli altri items
+          // selezionati (vis-timeline emette onMove SOLO per l'item draggato).
+          await _tlApplyMoveToOthersInSelection(item, orig);
         } else {
           callback(null);
         }
@@ -3727,6 +3888,95 @@ async function renderTimeline(preserveWindow=false) {
   // sulla selezione singola. Resta attivo SOLO il dropdown "☑ Seleziona ▾"
   // (alpha.21) come canale affidabile di multi-selezione. Il codice della ROI
   // rimane in archivio per future revisioni.
+
+  // v3.5.0-alpha.23: click+drag su area vuota → modal nuovo booking
+  // pre-compilato con start/end dell'intervallo trascinato e risorsa target.
+  // Trigger: shift+drag su zona vuota di una risorsa-foglia (id numerico).
+  // Disabilita pan/zoom durante il drag come fa la vecchia ROI per evitare
+  // conflitto Hammer.js. UX: l'utente vede un overlay rettangolo, al mouseup
+  // si apre il modal con le date pre-impostate.
+  if (window._tlCreateDragHandler) {
+    host.removeEventListener('mousedown', window._tlCreateDragHandler, true);
+    window._tlCreateDragHandler = null;
+  }
+  window._tlCreateDragHandler = function(e) {
+    if (!e.shiftKey) return;  // gesture: Shift+drag
+    if (e.button !== 0) return;
+    if (e.target.closest && e.target.closest('.vis-item')) return;
+    if (e.target.closest && e.target.closest('.vis-labelset, .vis-time-axis')) return;
+    if (!tlInstance) return;
+    const startProps = tlInstance.getEventProperties(e);
+    if (!startProps || !startProps.time) return;
+    if (typeof startProps.group !== 'number') return;  // solo risorsa foglia
+    e.preventDefault(); e.stopPropagation();
+    const prevOpts = {
+      moveable: tlInstance.options.moveable !== false,
+      zoomable: tlInstance.options.zoomable !== false,
+    };
+    tlInstance.setOptions({ moveable: false, zoomable: false });
+    const startX = e.clientX, startY = e.clientY;
+    const overlay = document.createElement('div');
+    overlay.id = 'tl-create-rect';
+    overlay.style.cssText =
+      'position:fixed; border:2px dashed #22c55e; background:rgba(34,197,94,0.12);' +
+      ' pointer-events:none; z-index:9998; left:0; top:0; width:0; height:0;' +
+      ' display:flex; align-items:center; justify-content:center; color:#22c55e;' +
+      ' font-size:11px; font-weight:600;';
+    document.body.appendChild(overlay);
+    document.body.style.cursor = 'crosshair';
+    let endTime = startProps.time;
+    const onMove = (ev) => {
+      const x1 = Math.min(startX, ev.clientX), x2 = Math.max(startX, ev.clientX);
+      const y1 = Math.min(startY, ev.clientY), y2 = Math.max(startY, ev.clientY);
+      overlay.style.left = x1 + 'px';
+      overlay.style.top = y1 + 'px';
+      overlay.style.width = (x2 - x1) + 'px';
+      overlay.style.height = (y2 - y1) + 'px';
+      const ep = tlInstance.getEventProperties(ev);
+      if (ep && ep.time) endTime = ep.time;
+      const t0 = Math.min(startProps.time.getTime(), endTime.getTime());
+      const t1 = Math.max(startProps.time.getTime(), endTime.getTime());
+      const h = (t1 - t0) / 3600000;
+      overlay.textContent = `+ Booking · ${h.toFixed(1)}h`;
+    };
+    const finalize = (ev) => {
+      document.removeEventListener('mousemove', onMove, true);
+      document.removeEventListener('mouseup', finalize, true);
+      document.removeEventListener('keydown', onEsc, true);
+      overlay.remove();
+      document.body.style.cursor = '';
+      tlInstance.setOptions({ moveable: prevOpts.moveable, zoomable: prevOpts.zoomable });
+      if (ev.type === 'keydown') return;
+      const ep = tlInstance.getEventProperties(ev);
+      if (ep && ep.time) endTime = ep.time;
+      let s = new Date(Math.min(startProps.time.getTime(), endTime.getTime()));
+      let en = new Date(Math.max(startProps.time.getTime(), endTime.getTime()));
+      // Se l'utente ha cliccato senza trascinare (delta < 1 min), fallback 1h.
+      if ((en - s) < 60000) {
+        s = new Date(startProps.time);
+        s.setMinutes(0, 0, 0);
+        en = new Date(s.getTime() + 60 * 60 * 1000);
+      } else {
+        // Snap a 5 min per leggibilità
+        const snap = (d) => { const m = d.getMinutes(); d.setMinutes(Math.round(m/5)*5, 0, 0); return d; };
+        s = snap(s); en = snap(en);
+      }
+      tlbOpenWithRange(startProps.group, s, en);
+    };
+    const onEsc = (ev) => {
+      if (ev.key !== 'Escape') return;
+      document.removeEventListener('mousemove', onMove, true);
+      document.removeEventListener('mouseup', finalize, true);
+      document.removeEventListener('keydown', onEsc, true);
+      overlay.remove();
+      document.body.style.cursor = '';
+      tlInstance.setOptions({ moveable: prevOpts.moveable, zoomable: prevOpts.zoomable });
+    };
+    document.addEventListener('mousemove', onMove, true);
+    document.addEventListener('mouseup', finalize, true);
+    document.addEventListener('keydown', onEsc, true);
+  };
+  host.addEventListener('mousedown', window._tlCreateDragHandler, true);
 
   tlUpdateRangeLabel();
 }

@@ -632,10 +632,11 @@ async def list_bookings(
 
     v3.4.47 — Tutti i filtri id (job/resource/client/project/department)
     accettano comma-separated (`?resource_id=1,3,5`). Compatibile single."""
+    from app.models import PriceItem  # locale per evitare import cycle
     q = db.query(BookingAssignment).options(
         joinedload(BookingAssignment.resource),
         joinedload(BookingAssignment.booking).joinedload(Booking.job).joinedload(Job.project),
-        joinedload(BookingAssignment.booking).joinedload(Booking.cost_line),
+        joinedload(BookingAssignment.booking).joinedload(Booking.cost_line).joinedload(JobCostLine.price_item),
     ).join(Booking, BookingAssignment.booking_id == Booking.id).filter(
         Booking.tenant_id == CURRENT_TENANT,
     )
@@ -735,6 +736,13 @@ async def list_bookings(
                 "job_total_hours": (b.cost_line.quantity_quoted if b.cost_line else None),
                 "job_done_hours": (b.cost_line.quantity_actual if b.cost_line else None),
                 "cost_line_unit": (b.cost_line.unit if b.cost_line else None),
+                # v3.5.0-alpha.23: dept_id della lavorazione (per dept-compat
+                # check al drop su altra risorsa nel client). Risale via
+                # price_item.department_id.
+                "cost_line_department_id": (
+                    b.cost_line.price_item.department_id
+                    if (b.cost_line and b.cost_line.price_item) else None
+                ),
             }
         })
     return out

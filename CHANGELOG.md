@@ -1,5 +1,55 @@
 # MediaFlow — Changelog
 
+## v3.5.0-alpha.23 — Round 9 (parte 2/2): timeline drag/multi-select + ombra timbrature + DB snapshot (5 maggio 2026 sera tardi)
+
+Round 9 chiuso interamente (17/17 punti). Questo bump chiude le rimanenti
+8 voci sulla pianificazione + DB snapshot per porting test.
+
+**Drag & drop fixes (5 punti):**
+
+- **Cross-resource drag refresh**: dopo PUT booking-assignment, aggiorno
+  `_tlBookings` cache localmente coi valori server-of-truth (resource_id,
+  start, end). Per cross-resource drag, force-trigger `renderTimeline(true)`
+  con 50ms delay per riflettere envelope booking, badge group_size e altri
+  items dello stesso booking. Sintomo Matteo: "spostamento item non aggiorna
+  orario e data nè risorse" / "il booking non modifica la risorsa".
+- **Multi-select drag**: vis-timeline emette `onMove` SOLO per l'item
+  draggato. `_tlApplyMoveToOthersInSelection` applica lo stesso shift agli
+  altri items selezionati (con conferma utente). Cross-group: shift solo
+  in tempo, non in risorsa (la selezione multipla è gruppo logico, non
+  un'unica risorsa).
+- **Block drop su risorsa di reparto incompatibile**: prima dell'API call,
+  controllo `cost_line_department_id` del booking vs `dept` della risorsa
+  target. Se diversi, prompt di conferma esplicita ("risorsa di reparto NON
+  compatibile, procedere?"). Esposto `cost_line_department_id` nel
+  serializer `/api/bookings` via `JobCostLine.price_item.department_id`.
+- **Split-pause unit drag**: `_tlApplySplitPauseShift` rileva i sibling
+  assignment (stesso booking_id, stessa risorsa, assignment diverso) e
+  applica lo stesso shift. Risolve il "booking splittato per pausa pranzo
+  non viene spostato unitariamente".
+- **Click+drag su area vuota → modal nuovo booking pre-compilato**:
+  `_tlCreateDragHandler` con gesture Shift+drag (vis-timeline drag puro
+  resta = pan). Overlay rettangolo verde con durata live. Snap a 5 min.
+  Click singolo (delta < 1 min) → fallback durata 1h dall'orario cliccato.
+
+**Settings (1 punto):**
+
+- **Timbrature come ombra leggera, toggle**: aggiunto `show_punches`
+  ai prefs timeline (default on), checkbox in popover ⚙ Look timeline
+  ("Mostra timbrature ombra leggera"). Stile sfondo ridotto a 10%/20%
+  alpha + bordo 1px dotted (era pesante visivamente). Re-render su
+  toggle.
+
+**DB snapshot (1 punto):**
+
+- **db_snapshots/ con eccezione gitignore**: copia di `mediaflow.db`
+  attuale come `db_snapshots/snapshot-3.5.0-alpha.23.db` per testing
+  porting (Matteo: "voglio tenere tutto com'è al momento e verificare
+  eventuale porting"). Aggiunta regola `!db_snapshots/*.db` al
+  `.gitignore`. README con convenzione e istruzioni di restore.
+
+Cache-buster `v=3.5.0-alpha.23`. Niente migrazione DB nuova.
+
 ## v3.5.0-alpha.22 — Round 9 (parte 1): HR pausa pranzo, ferie/malattia in lista, conflict block + timeline UX cleanup (5 maggio 2026)
 
 Round 9 aperto sulla seconda lista feedback Matteo (5 maggio sera). Diviso in

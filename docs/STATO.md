@@ -8,6 +8,31 @@
 
 ## Versione corrente
 
+**v3.5.0-alpha.23** — 5 maggio 2026 notte — Round 9 chiuso (17/17 punti)
+
+Round 9 sulla seconda lista feedback Matteo del 5 maggio chiuso interamente.
+Push include `db_snapshots/snapshot-3.5.0-alpha.23.db` per porting test.
+
+**Drag & drop timeline (5):**
+- ✅ Cross-resource drag aggiorna cache locale + force re-render server-of-truth
+- ✅ Multi-select drag — applica shift a tutti i selezionati con conferma
+- ✅ Block drop su risorsa di reparto incompatibile (prompt conferma esplicita)
+- ✅ Split-pause unit drag — sibling assignments shiftati insieme
+- ✅ Shift+drag area vuota → modal nuovo booking pre-compilato (overlay verde con durata live)
+
+**Settings (1):**
+- ✅ Toggle "Mostra timbrature (ombra leggera)" in popover ⚙ Look timeline. Stile più sottile (10%/20% alpha).
+
+**DB (1):**
+- ✅ Snapshot DB committato in `db_snapshots/snapshot-3.5.0-alpha.23.db` per porting test su altra macchina. README istruzioni restore.
+
+**In coda dopo test Matteo:**
+- Test E2E della pausa pranzo + split overtime su edge cases
+- Test del semaforo priorità in tutte le viste
+- Verifica DB snapshot su Mac (porting effettivo)
+
+Cache-buster `v=3.5.0-alpha.23`. Niente migrazione nuova.
+
 **v3.5.0-alpha.22** — 5 maggio 2026 sera — Round 9 (parte 1/3)
 
 Round 9 aperto sulla seconda lista feedback Matteo (5 maggio sera, 17 punti

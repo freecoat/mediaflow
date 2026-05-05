@@ -1,6 +1,8 @@
 .env
 *.db
 *.sqlite
+# Eccezione: gli snapshot in db_snapshots/ sono committati apposta (porting tests).
+!db_snapshots/*.db
 __pycache__/
 *.pyc
 .venv/
