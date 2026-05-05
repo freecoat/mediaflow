@@ -374,5 +374,5 @@ async def dashboard(request: Request):
 async def health():
     from app.services.ai_provider import get_provider
     p = get_provider()
-    return {"status": "ok", "app": settings.app_name, "version": "3.4.50.1",
+    return {"status": "ok", "app": settings.app_name, "version": app.version,
             "ai": {"configured": p is not None, "provider": p.name if p else None}}
