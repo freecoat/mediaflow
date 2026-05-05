@@ -1,5 +1,62 @@
 # MediaFlow — Changelog
 
+## v3.5.0-alpha.20 — Round 7D.2 + 7D.3: matrice assegnazioni + pagina Team (5 maggio 2026)
+
+Chiusura del Round 7D in unica versione: 2 cantieri di scalabilità (200 progetti
+/ 500 risorse) implementati con backend e UI dedicate.
+
+**Pagina /assignments — Vista Matrice (alpha.20)**
+
+Pre-alpha.20: solo vista kanban (drag&drop colonna risorse → colonna job),
+adatta a pochi job. A 200 progetti la kanban diventa muro orizzontale.
+
+Estensione (NON sostituzione): toggle in topbar tra **Matrice** (default) e
+**Kanban** (legacy preservata).
+
+Backend `app/routers/assignments.py`:
+- `GET /api/matrix?job_status=&department_id=&resource_type=&only_persons=&include_inactive=`
+  ritorna {resources, jobs, assignments, bookings_hours} filtrati server-side.
+- `POST /api/cells` upsert idempotente di JobResourceAssignment (planned_days,
+  planned_hours, role, agreed_*_rate).
+- bookings_hours aggregato dalle BookingAssignment (specchio di quanto già
+  pianificato in /planning).
+
+Frontend `app/templates/pages/assignments.html`:
+- Toggle vista (matrice/kanban) persistito in localStorage.
+- Filtri server-side: stato job, reparto, tipo risorsa, only_persons.
+- Filtro client-side: ricerca testuale (su righe e colonne).
+- Tabella matrice sticky-header + sticky-first-column. Cella vuota = no
+  assignment, cella verde = assegnata, cella arancione = ore booking ma no
+  assignment formale (segnale di drift).
+- Click cella → modal upsert con planned_days/hours + ruolo + tariffe.
+
+**Pagina /team — Risorse + Reparti unificate (alpha.21)**
+
+Pre-alpha.21: 2 pagine separate (`/resources` lista flat, `/departments` admin).
+A 500 risorse / 30 reparti la lista flat diventa muro.
+
+Pagina `/team` con sidebar drill-down + main pane:
+- Sidebar (sticky 240px): "Tutte le risorse" + lista reparti con conteggio +
+  "Senza reparto" se applicabile.
+- Topbar interno: ricerca live (nome/ruolo/email/telefono) + filtro tipo +
+  filtro stato (attive/tutte).
+- Main pane: griglia card (auto-fill min 260px), 1 card per risorsa con
+  nome/tipo/ruolo/reparto/contatti/tariffa.
+- Le 2 pagine vecchie restano accessibili (link in topbar) come fallback
+  amministrativo.
+
+Voce sidebar `/resources` rimpiazzata con `/team` (nuova pagina = home risorse).
+
+Niente nuovi endpoint backend (riusa `/resources/api` + `/departments/api`).
+
+Cache-buster `v=3.5.0-alpha.20`. Niente migrazione DB.
+
+**Round 7 (12 punti feedback Matteo del 5 maggio) chiuso completamente**:
+alpha.16 → 7A · alpha.17 → 7B · alpha.18 → 7C · alpha.19 → 7D.1 ·
+alpha.20 → 7D.2 + 7D.3.
+
+---
+
 ## v3.5.0-alpha.19 — Round 7D.1: AI settings registry + tool generico (5 maggio 2026)
 
 Apertura del Round 7D (cantieri di design del feedback Matteo del 5 maggio).

@@ -8,6 +8,31 @@
 
 ## Versione corrente
 
+**v3.5.0-alpha.20** — 5 maggio 2026 — Round 7D.2 + 7D.3: matrice assegnazioni + pagina Team
+
+**Round 7 chiuso completamente** (12 punti su 12 del feedback Matteo del 5 maggio).
+Sequenza alpha.16 → alpha.20 (5 versioni):
+- alpha.16 → 7A (HR breakdown per-punch + ROI)
+- alpha.17 → 7B (cost report lista + quote ricerca + export rendiconto/CSV/XLSX)
+- alpha.18 → 7C (undo/redo planning + bulk-edit booking)
+- alpha.19 → 7D.1 (AI settings registry + 3 tool generici)
+- alpha.20 → 7D.2 (matrice assegnazioni scalabile) + 7D.3 (pagina /team unificata)
+
+Sotto-round 7D.2 chiuso:
+- `GET /assignments/api/matrix` server-filtered + client-filtered (ricerca live).
+- Tabella matrice Risorsa × Job sticky-header + sticky-first-column.
+- Cella verde = assegnata, arancione = ore booking ma no assignment (drift).
+- Modal upsert con planned days/hours + role + tariffe.
+- Toggle topbar Matrice/Kanban (kanban legacy preservata).
+
+Sotto-round 7D.3 chiuso:
+- Pagina `/team` con sidebar reparti drill-down (count + Senza reparto + Tutte).
+- Main pane: griglia card auto-fill, ricerca live + filtri tipo/stato.
+- Voce sidebar `/resources` → `/team`. Pagine `/resources` e `/departments`
+  restano accessibili (link in topbar di /team).
+
+Cache-buster `v=3.5.0-alpha.20`. Niente migrazione DB.
+
 **v3.5.0-alpha.19** — 5 maggio 2026 — Round 7D.1: AI settings registry + tool generico
 
 Sotto-round 7D.1 chiuso (cantiere architetturale "AI integrazione GUI/settings"
@@ -437,15 +462,15 @@ Lista feedback ricevuta:
 - ✅ Undo/redo planning timeline (stack max 50 + bottoni toolbar persistenti + undo per `remove_assignment`)
 - ✅ Bulk modify bookings (modal con shift orario + cambio stato esecuzione, endpoint `bulk-edit`)
 
-**Round 7D (cantieri di design):**
-- ✅ 7D.1 — AI integrazione GUI/settings: **A2** implementato in alpha.19. Registry
-  `settings_registry.py` + 3 tool AI generici (list/read/update). 2 schemi iniziali
-  (working_hours, tenant_settings). Estendibile a tutto il software via add di nuovi
-  schemi.
-- 🔜 7D.2 — Menu assegnazioni risorse a 200 progetti: pagina dedicata `/assignments`
-  (matrice Risorsa × Progetto + filtri + palette typeahead). Avviato.
-- 🔜 7D.3 — Risorse + reparti a 500/30: pagina unificata `/team` con sidebar reparti
-  drill-down. In coda.
+**Round 7D (chiuso):**
+- ✅ 7D.1 — AI integrazione GUI/settings (alpha.19): registry `settings_registry.py`
+  + 3 tool AI generici (list/read/update). 2 schemi iniziali (working_hours,
+  tenant_settings). Estendibile a tutto il software via add di nuovi schemi.
+- ✅ 7D.2 — Menu assegnazioni risorse a 200 progetti (alpha.20): vista Matrice
+  Risorsa × Job + filtri server-side + ricerca client-side + modal upsert cella.
+  Toggle Matrice/Kanban (kanban legacy preservata).
+- ✅ 7D.3 — Risorse + reparti a 500/30 (alpha.20): pagina `/team` con sidebar
+  reparti drill-down + griglia card. Voce sidebar `/resources` → `/team`.
 
 **Sessione 4 maggio chiusa — Round 1 fix post-test del 3 maggio chiuso (v3.5.0-alpha.9).** Working tree pulito dopo commit alpha.9. Round 2 e Round 3 in attesa di green-light Matteo + riapertura.
 

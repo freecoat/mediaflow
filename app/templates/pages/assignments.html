@@ -3,25 +3,124 @@
 {% block title %}Assegnazioni — MediaFlow{% endblock %}
 {% block topbar_title %}Assegnazioni risorse → job{% endblock %}
 {% block topbar_actions %}
-  <input type="text" id="kb-search" placeholder="🔍 cerca risorsa…" class="form-input" style="width:220px;font-size:13px;">
-  <select id="kb-dept-filter" class="form-select" style="width:180px;font-size:13px;"><option value="">Tutti i reparti</option></select>
-  <button class="btn btn-secondary btn-sm" onclick="loadBoard()">↻</button>
+  <!-- v3.5.0-alpha.20: toggle Vista Matrice / Kanban. La matrice è scalabile a
+       200+ progetti, la kanban resta come vista alternativa drag&drop. -->
+  <div class="btn-group" id="ax-view-toggle" style="display:inline-flex;">
+    <button class="btn btn-secondary btn-sm active" data-view="matrix" onclick="setAssignmentsView('matrix')">▦ Matrice</button>
+    <button class="btn btn-secondary btn-sm" data-view="kanban" onclick="setAssignmentsView('kanban')">⬚ Kanban</button>
+  </div>
+  <button class="btn btn-secondary btn-sm" id="ax-refresh-btn" onclick="reloadAssignments()" style="margin-left:6px;">↻</button>
 {% endblock %}
 
 {% block content %}
-<div class="text-xs text-muted mb-3" style="padding:8px 12px;background:var(--indigo-bg);border:1px solid var(--indigo-border);border-radius:var(--radius);">
-  Trascina una risorsa dalla colonna sinistra a un job per assegnarla. Trascina una risorsa già assegnata su un altro job per spostarla. Click ✕ per rimuovere.
-</div>
 
-<div class="kb-wrap" style="display:grid;grid-template-columns:280px 1fr;gap:14px;align-items:start;">
-  <!-- Sorgente: risorse disponibili -->
-  <div class="card" style="position:sticky;top:14px;max-height:calc(100vh - 100px);overflow:hidden;display:flex;flex-direction:column;">
-    <div class="card-title mb-3">Risorse disponibili</div>
-    <div id="kb-source" class="kb-list" style="flex:1;overflow-y:auto;"></div>
+<!-- ── Vista Matrice (default, v3.5.0-alpha.20) ────────────── -->
+<div id="ax-matrix-view">
+  <div class="card" style="margin-bottom:12px;">
+    <div style="display:flex; flex-wrap:wrap; gap:10px; align-items:flex-end;">
+      <div class="form-group" style="flex:2; min-width:220px; margin:0;">
+        <label class="form-label" style="font-size:11px;">Ricerca (risorsa, ruolo, codice job, titolo, cliente)</label>
+        <input class="form-input" id="ax-mx-search" placeholder="es. 'colorist' / 'MONG25' / 'Cattleya'…" oninput="renderMatrix()">
+      </div>
+      <div class="form-group" style="min-width:180px; margin:0;">
+        <label class="form-label" style="font-size:11px;">Reparto risorsa</label>
+        <select class="form-select" id="ax-mx-dept" onchange="reloadMatrix()">
+          <option value="">— tutti —</option>
+          {% for d in departments %}
+          <option value="{{ d.id }}">{{ d.name }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="form-group" style="min-width:160px; margin:0;">
+        <label class="form-label" style="font-size:11px;">Stato job</label>
+        <select class="form-select" id="ax-mx-status" onchange="reloadMatrix()">
+          <option value="">— tutti —</option>
+          <option value="draft,quoting,approved,active,on_hold" selected>Solo attivi</option>
+          <option value="active">In corso</option>
+          <option value="approved">Approvati</option>
+          <option value="on_hold">In attesa</option>
+          <option value="completed">Completati</option>
+          <option value="invoiced">Fatturati</option>
+        </select>
+      </div>
+      <div class="form-group" style="min-width:160px; margin:0;">
+        <label class="form-label" style="font-size:11px;">Tipo risorsa</label>
+        <select class="form-select" id="ax-mx-type" onchange="reloadMatrix()">
+          <option value="">— tutti —</option>
+          <option value="" data-only-persons="1">Solo persone</option>
+          <option value="person_internal">Interna</option>
+          <option value="person_freelance">Freelance</option>
+          <option value="studio">Studio</option>
+          <option value="equipment">Apparecchio</option>
+          <option value="software">Software</option>
+        </select>
+      </div>
+      <button class="btn btn-ghost btn-sm" onclick="resetMatrixFilters()">Reset</button>
+      <span class="text-sm text-muted" id="ax-mx-count" style="margin-left:auto;"></span>
+    </div>
   </div>
 
-  <!-- Job columns -->
-  <div id="kb-jobs" style="display:flex;gap:12px;overflow-x:auto;padding-bottom:14px;align-items:flex-start;"></div>
+  <div class="card" style="padding:0; overflow:auto; max-height:calc(100vh - 220px);">
+    <div id="ax-matrix-host">
+      <div class="text-muted" style="padding:40px; text-align:center;">Caricamento matrice…</div>
+    </div>
+  </div>
+</div>
+
+<!-- ── Vista Kanban (legacy, drag&drop) ────────────────────── -->
+<div id="ax-kanban-view" style="display:none;">
+  <div class="text-xs text-muted mb-3" style="padding:8px 12px;background:var(--indigo-bg);border:1px solid var(--indigo-border);border-radius:var(--radius);">
+    Trascina una risorsa dalla colonna sinistra a un job per assegnarla. Trascina una risorsa già assegnata su un altro job per spostarla. Click ✕ per rimuovere.
+  </div>
+  <div style="display:flex; gap:8px; align-items:center; margin-bottom:8px;">
+    <input type="text" id="kb-search" placeholder="🔍 cerca risorsa…" class="form-input" style="width:220px;font-size:13px;">
+    <select id="kb-dept-filter" class="form-select" style="width:180px;font-size:13px;"><option value="">Tutti i reparti</option></select>
+  </div>
+  <div class="kb-wrap" style="display:grid;grid-template-columns:280px 1fr;gap:14px;align-items:start;">
+    <div class="card" style="position:sticky;top:14px;max-height:calc(100vh - 120px);overflow:hidden;display:flex;flex-direction:column;">
+      <div class="card-title mb-3">Risorse disponibili</div>
+      <div id="kb-source" class="kb-list" style="flex:1;overflow-y:auto;"></div>
+    </div>
+    <div id="kb-jobs" style="display:flex;gap:12px;overflow-x:auto;padding-bottom:14px;align-items:flex-start;"></div>
+  </div>
+</div>
+
+<!-- Modal cella matrice (assegna / modifica) -->
+<div class="modal-overlay" id="modal-ax-cell" style="z-index:300;">
+  <div class="modal" style="max-width:480px;">
+    <div class="modal-header">
+      <span class="modal-title" id="ax-cell-title">Assegna</span>
+      <button class="btn btn-ghost btn-icon" onclick="closeModal('modal-ax-cell')">✕</button>
+    </div>
+    <div class="modal-body">
+      <div id="ax-cell-summary" style="background:rgba(98,114,245,0.08); border:1px solid rgba(98,114,245,0.3); border-radius:6px; padding:10px 12px; font-size:12px; margin-bottom:14px;"></div>
+      <div class="form-group">
+        <label class="form-label">Ruolo nel progetto</label>
+        <input type="text" class="form-input" id="ax-cell-role" placeholder="es. Colorist, Sound Editor…">
+      </div>
+      <div class="form-row">
+        <div class="form-group"><label class="form-label">Giorni pianificati</label>
+          <input class="form-input" id="ax-cell-planned-days" type="number" step="0.5"></div>
+        <div class="form-group"><label class="form-label">Ore pianificate</label>
+          <input class="form-input" id="ax-cell-planned-hours" type="number" step="0.5"></div>
+      </div>
+      <div class="form-row">
+        <div class="form-group"><label class="form-label">Tariffa/giorno (€)</label>
+          <input class="form-input" id="ax-cell-rate-day" type="number" step="0.01"></div>
+        <div class="form-group"><label class="form-label">Tariffa/ora (€)</label>
+          <input class="form-input" id="ax-cell-rate-hour" type="number" step="0.01"></div>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Note</label>
+        <textarea class="form-textarea" id="ax-cell-notes" rows="2"></textarea>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-danger" id="ax-cell-delete" onclick="axDeleteCell()" style="display:none;margin-right:auto;">Rimuovi</button>
+      <button class="btn btn-secondary" onclick="closeModal('modal-ax-cell')">Annulla</button>
+      <button class="btn btn-primary" onclick="axSubmitCell()">Salva</button>
+    </div>
+  </div>
 </div>
 
 <style>
@@ -199,6 +298,221 @@ async function removeAssignment(id) {
 document.getElementById('kb-search').addEventListener('input', (e) => { q = e.target.value; render(); });
 document.getElementById('kb-dept-filter').addEventListener('change', (e) => { deptFilter = e.target.value; render(); });
 
-loadBoard();
+// ── v3.5.0-alpha.20: Vista Matrice (scalabile a 200+ progetti) ──────
+let _axView = 'matrix';
+let _axMatrix = null;
+
+function setAssignmentsView(v) {
+  _axView = v;
+  document.querySelectorAll('#ax-view-toggle button').forEach(b => {
+    b.classList.toggle('active', b.dataset.view === v);
+  });
+  document.getElementById('ax-matrix-view').style.display = (v === 'matrix') ? '' : 'none';
+  document.getElementById('ax-kanban-view').style.display = (v === 'kanban') ? '' : 'none';
+  try { localStorage.setItem('mf_assignments_view', v); } catch(_) {}
+  if (v === 'matrix' && !_axMatrix) reloadMatrix();
+  if (v === 'kanban' && !board) loadBoard();
+}
+
+function reloadAssignments() {
+  if (_axView === 'matrix') reloadMatrix();
+  else loadBoard();
+}
+
+async function reloadMatrix() {
+  const params = new URLSearchParams();
+  const status = document.getElementById('ax-mx-status').value;
+  const dept = document.getElementById('ax-mx-dept').value;
+  const typeSel = document.getElementById('ax-mx-type');
+  const type = typeSel.value;
+  const opt = typeSel.selectedOptions[0];
+  const onlyPersons = opt && opt.dataset.onlyPersons === '1';
+  if (status) params.set('job_status', status);
+  if (dept) params.set('department_id', dept);
+  if (type) params.set('resource_type', type);
+  if (onlyPersons) params.set('only_persons', 'true');
+  const host = document.getElementById('ax-matrix-host');
+  host.innerHTML = '<div class="text-muted" style="padding:40px; text-align:center;">Caricamento…</div>';
+  try {
+    _axMatrix = await api('GET', `/assignments/api/matrix?${params.toString()}`);
+    renderMatrix();
+  } catch(e) {
+    host.innerHTML = `<div style="padding:40px; text-align:center; color:#ef4444;">${escapeHtml(e.message || 'Errore')}</div>`;
+  }
+}
+
+function renderMatrix() {
+  if (!_axMatrix) return;
+  const q = (document.getElementById('ax-mx-search').value || '').toLowerCase().trim();
+  const host = document.getElementById('ax-matrix-host');
+  // Filtro client-side: la ricerca matcha sia righe (risorse) che colonne (jobs)
+  const resMatch = (r) => !q ||
+    (r.name||'').toLowerCase().includes(q) ||
+    (r.role||'').toLowerCase().includes(q) ||
+    (r.department_name||'').toLowerCase().includes(q);
+  const jobMatch = (j) => !q ||
+    (j.code||'').toLowerCase().includes(q) ||
+    (j.title||'').toLowerCase().includes(q) ||
+    (j.client_name||'').toLowerCase().includes(q) ||
+    (j.project_title||'').toLowerCase().includes(q);
+
+  const resources = _axMatrix.resources.filter(resMatch);
+  const jobs = _axMatrix.jobs.filter(jobMatch);
+
+  // Indici di lookup
+  const aMap = new Map();   // key=`${rid}|${jid}` → assignment
+  for (const a of _axMatrix.assignments) aMap.set(`${a.resource_id}|${a.job_id}`, a);
+  const bMap = new Map();   // key=`${rid}|${jid}` → ore booking
+  for (const b of _axMatrix.bookings_hours) bMap.set(`${b.resource_id}|${b.job_id}`, b.hours);
+
+  const counter = document.getElementById('ax-mx-count');
+  if (counter) counter.textContent = `${resources.length} risorse × ${jobs.length} job · ${_axMatrix.assignments.length} assegnazioni`;
+
+  if (!resources.length || !jobs.length) {
+    host.innerHTML = '<div class="text-muted" style="padding:40px; text-align:center;">Nessun match per i filtri</div>';
+    return;
+  }
+
+  // Tabella sticky-header + sticky-first-column
+  const html = [];
+  html.push('<table class="ax-matrix">');
+  html.push('<thead><tr>');
+  html.push('<th class="ax-mx-corner">Risorsa →<br>Job ↓</th>');
+  for (const j of jobs) {
+    const sub = [j.client_name, j.project_title].filter(Boolean).map(escapeHtml).join(' · ');
+    html.push(`<th class="ax-mx-jobcol" title="${escapeHtml((j.code||'') + ' · ' + (j.title||''))}">
+      <div class="mono text-xs text-muted">${escapeHtml(j.code)}</div>
+      <div style="font-size:11.5px; font-weight:600;">${escapeHtml((j.title||'').slice(0, 32))}${(j.title||'').length > 32 ? '…' : ''}</div>
+      <div class="text-xs text-muted">${sub || '—'}</div>
+    </th>`);
+  }
+  html.push('</tr></thead><tbody>');
+  for (const r of resources) {
+    const dept = r.department_name ? `<span class="text-xs text-muted">· ${escapeHtml(r.department_name)}</span>` : '';
+    html.push(`<tr><th class="ax-mx-rescell" title="${escapeHtml(r.name)}">
+      <div style="display:flex; align-items:center; gap:6px;">
+        <span style="display:inline-block; width:8px; height:8px; border-radius:50%; background:${r.color || '#6272f5'};"></span>
+        <span style="font-weight:500;">${escapeHtml(r.name)}</span>
+      </div>
+      <div class="text-xs text-muted">${escapeHtml(r.role || r.type || '')} ${dept}</div>
+    </th>`);
+    for (const j of jobs) {
+      const key = `${r.id}|${j.id}`;
+      const a = aMap.get(key);
+      const hours = bMap.get(key);
+      const cls = ['ax-mx-cell'];
+      if (a) cls.push('assigned');
+      if (hours) cls.push('has-bookings');
+      const planned = a && (a.planned_days != null || a.planned_hours != null)
+        ? `${a.planned_days != null ? a.planned_days + 'g' : ''}${a.planned_days != null && a.planned_hours != null ? ' · ' : ''}${a.planned_hours != null ? a.planned_hours + 'h' : ''}`
+        : '';
+      const inner = a
+        ? `<div class="ax-mx-tag">✓${planned ? ' <span class="text-xs">' + planned + '</span>' : ''}${a.role ? '<div class="text-xs text-muted">' + escapeHtml(a.role) + '</div>' : ''}${hours ? '<div class="text-xs" style="color:#fb923c;">⏱ ' + hours.toFixed(1) + 'h booking</div>' : ''}</div>`
+        : (hours ? `<div class="text-xs" style="color:#fb923c;">⏱ ${hours.toFixed(1)}h<br><span class="text-muted">non assegnato</span></div>` : '');
+      html.push(`<td class="${cls.join(' ')}" data-rid="${r.id}" data-jid="${j.id}" onclick="axOpenCell(${r.id}, ${j.id})">${inner}</td>`);
+    }
+    html.push('</tr>');
+  }
+  html.push('</tbody></table>');
+  host.innerHTML = html.join('');
+}
+
+function resetMatrixFilters() {
+  document.getElementById('ax-mx-search').value = '';
+  document.getElementById('ax-mx-dept').value = '';
+  document.getElementById('ax-mx-status').value = 'draft,quoting,approved,active,on_hold';
+  document.getElementById('ax-mx-type').value = '';
+  reloadMatrix();
+}
+
+// Modal cella ─────────────────────────────────────────────
+let _axCurrentCell = null;
+function axOpenCell(resourceId, jobId) {
+  if (!_axMatrix) return;
+  const r = _axMatrix.resources.find(x => x.id === resourceId);
+  const j = _axMatrix.jobs.find(x => x.id === jobId);
+  if (!r || !j) return;
+  const a = _axMatrix.assignments.find(x => x.resource_id === resourceId && x.job_id === jobId);
+  _axCurrentCell = { resource: r, job: j, assignment: a || null };
+  document.getElementById('ax-cell-title').textContent = a ? 'Modifica assegnazione' : 'Assegna risorsa al job';
+  document.getElementById('ax-cell-summary').innerHTML =
+    `<b>${escapeHtml(r.name)}</b> ${r.department_name ? '<span class="text-muted">(' + escapeHtml(r.department_name) + ')</span>' : ''} → ` +
+    `<b>${escapeHtml(j.code)}</b> ${escapeHtml(j.title || '')}<br>` +
+    `<span class="text-xs text-muted">${escapeHtml(j.client_name || '—')} · ${escapeHtml(j.project_title || '—')}</span>`;
+  document.getElementById('ax-cell-role').value = a ? (a.role || '') : (r.role || '');
+  document.getElementById('ax-cell-planned-days').value = a ? (a.planned_days ?? '') : '';
+  document.getElementById('ax-cell-planned-hours').value = a ? (a.planned_hours ?? '') : '';
+  document.getElementById('ax-cell-rate-day').value = a ? (a.agreed_daily_rate ?? '') : (r.daily_rate ?? '');
+  document.getElementById('ax-cell-rate-hour').value = a ? (a.agreed_hourly_rate ?? '') : (r.hourly_rate ?? '');
+  document.getElementById('ax-cell-notes').value = a ? (a.notes || '') : '';
+  document.getElementById('ax-cell-delete').style.display = a ? '' : 'none';
+  openModal('modal-ax-cell');
+}
+
+async function axSubmitCell() {
+  if (!_axCurrentCell) return;
+  const fd = new FormData();
+  fd.append('job_id', _axCurrentCell.job.id);
+  fd.append('resource_id', _axCurrentCell.resource.id);
+  const role = document.getElementById('ax-cell-role').value.trim();
+  if (role) fd.append('role', role);
+  const pd = document.getElementById('ax-cell-planned-days').value;
+  if (pd) fd.append('planned_days', pd);
+  const ph = document.getElementById('ax-cell-planned-hours').value;
+  if (ph) fd.append('planned_hours', ph);
+  const rd = document.getElementById('ax-cell-rate-day').value;
+  if (rd) fd.append('agreed_daily_rate', rd);
+  const rh = document.getElementById('ax-cell-rate-hour').value;
+  if (rh) fd.append('agreed_hourly_rate', rh);
+  const notes = document.getElementById('ax-cell-notes').value;
+  if (notes) fd.append('notes', notes);
+  try {
+    const res = await api('POST', '/assignments/api/cells', fd);
+    closeModal('modal-ax-cell');
+    toast(res.created ? 'Risorsa assegnata' : 'Assegnazione aggiornata', 'success');
+    reloadMatrix();
+  } catch(e) {
+    toast(e.message || 'Errore salvataggio', 'error');
+  }
+}
+
+async function axDeleteCell() {
+  if (!_axCurrentCell || !_axCurrentCell.assignment) return;
+  if (!confirm(`Rimuovere "${_axCurrentCell.resource.name}" da "${_axCurrentCell.job.code}"?`)) return;
+  try {
+    await api('DELETE', `/assignments/api/${_axCurrentCell.assignment.id}`);
+    closeModal('modal-ax-cell');
+    toast('Assegnazione rimossa', 'success');
+    reloadMatrix();
+  } catch(e) { toast(e.message || 'Errore', 'error'); }
+}
+
+// Init: vista persistita oppure matrice di default
+try {
+  const saved = localStorage.getItem('mf_assignments_view');
+  if (saved === 'kanban') {
+    setAssignmentsView('kanban');
+  } else {
+    reloadMatrix();
+  }
+} catch(_) {
+  reloadMatrix();
+}
 </script>
+
+<style>
+  .ax-matrix { width: 100%; border-collapse: separate; border-spacing: 0; font-size: 12px; }
+  .ax-matrix th, .ax-matrix td { border: 1px solid var(--border); padding: 0; }
+  .ax-matrix thead th { position: sticky; top: 0; z-index: 2; background: var(--bg2); padding: 8px 10px; text-align: left; vertical-align: top; }
+  .ax-matrix .ax-mx-corner { z-index: 3; left: 0; position: sticky; min-width: 220px; max-width: 220px; }
+  .ax-matrix .ax-mx-jobcol { min-width: 140px; max-width: 200px; }
+  .ax-matrix .ax-mx-rescell { position: sticky; left: 0; z-index: 1; background: var(--bg2); padding: 8px 10px; min-width: 220px; max-width: 220px; vertical-align: middle; text-align: left; }
+  .ax-matrix .ax-mx-cell { padding: 6px 8px; cursor: pointer; min-height: 50px; vertical-align: middle; transition: background 100ms; }
+  .ax-matrix .ax-mx-cell:hover { background: rgba(98,114,245,0.10); }
+  .ax-matrix .ax-mx-cell.assigned { background: rgba(34,197,94,0.08); }
+  .ax-matrix .ax-mx-cell.assigned:hover { background: rgba(34,197,94,0.20); }
+  .ax-matrix .ax-mx-cell.has-bookings:not(.assigned) { background: rgba(251,146,60,0.08); }
+  .ax-matrix .ax-mx-tag { display: flex; flex-direction: column; gap: 2px; font-weight: 500; color: #22c55e; }
+  .ax-matrix .ax-mx-tag .text-muted { font-weight: 400; color: var(--text2); }
+</style>
 {% endblock %}

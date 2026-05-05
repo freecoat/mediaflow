@@ -1,0 +1,272 @@
+{% extends "base.html" %}
+{% set active_page = "team" %}
+{% block title %}Team — MediaFlow{% endblock %}
+{% block topbar_title %}Team · Risorse + Reparti{% endblock %}
+{% block topbar_actions %}
+  <a href="/resources/" class="btn btn-ghost btn-sm" title="Vista flat (legacy)">📋 Lista</a>
+  <a href="/departments/" class="btn btn-ghost btn-sm" title="Solo reparti (admin)">🗂 Reparti</a>
+{% endblock %}
+
+{% block head %}
+<style>
+  .team-layout {
+    display: grid;
+    grid-template-columns: 240px 1fr;
+    gap: 16px;
+    align-items: start;
+  }
+  .team-sidebar {
+    position: sticky; top: 14px;
+    max-height: calc(100vh - 100px);
+    overflow-y: auto;
+    background: var(--bg2, #1a1d2e);
+    border: 1px solid var(--border, #2a2e3d);
+    border-radius: var(--radius, 8px);
+    padding: 10px;
+  }
+  .team-dept-link {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 8px 10px; border-radius: 6px; cursor: pointer;
+    font-size: 13px; color: var(--text, #eee);
+    transition: background 100ms;
+    margin-bottom: 2px;
+    border: 1px solid transparent;
+  }
+  .team-dept-link:hover { background: var(--bg3, #232639); }
+  .team-dept-link.active { background: rgba(98,114,245,0.15); border-color: rgba(98,114,245,0.3); color: var(--indigo2, #7e8ef7); font-weight: 500; }
+  .team-dept-link .count {
+    background: var(--bg3, #232639);
+    border-radius: 10px; padding: 1px 8px;
+    font-size: 11px; color: var(--text2, #9ca3af); font-variant-numeric: tabular-nums;
+  }
+  .team-dept-link.active .count { background: rgba(98,114,245,0.25); color: var(--indigo2, #7e8ef7); }
+  .team-dept-divider {
+    border-top: 1px solid var(--border, #2a2e3d);
+    margin: 8px 0;
+  }
+  .team-toolbar {
+    display: flex; flex-wrap: wrap; gap: 10px;
+    align-items: flex-end;
+    margin-bottom: 14px;
+  }
+  .team-toolbar input.form-input,
+  .team-toolbar select.form-select { min-width: 160px; }
+  .team-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+    gap: 12px;
+  }
+  .team-card {
+    background: var(--bg2, #1a1d2e);
+    border: 1px solid var(--border, #2a2e3d);
+    border-radius: var(--radius, 8px);
+    padding: 12px;
+    cursor: pointer;
+    transition: border-color 100ms, transform 100ms;
+    display: flex; flex-direction: column; gap: 6px;
+  }
+  .team-card:hover { border-color: var(--indigo, #6272f5); transform: translateY(-1px); }
+  .team-card-head {
+    display: flex; align-items: center; gap: 8px;
+  }
+  .team-card-dot { width: 12px; height: 12px; border-radius: 50%; flex-shrink: 0; }
+  .team-card-name { flex: 1; font-weight: 600; font-size: 14px; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .team-card-type { font-size: 10.5px; padding: 2px 7px; border-radius: 10px; background: var(--bg3, #232639); color: var(--text2, #9ca3af); text-transform: uppercase; letter-spacing: 0.5px; }
+  .team-card-role { font-size: 12px; color: var(--text2, #9ca3af); }
+  .team-card-meta { font-size: 11px; color: var(--text3, #888); display: flex; flex-wrap: wrap; gap: 8px; }
+  .team-card-rate { font-family: 'DM Mono', monospace; font-size: 11px; color: var(--text2, #9ca3af); }
+  .team-empty {
+    grid-column: 1 / -1;
+    text-align: center; padding: 40px;
+    color: var(--text2, #9ca3af);
+    border: 1px dashed var(--border, #2a2e3d);
+    border-radius: var(--radius, 8px);
+  }
+  .team-section-title {
+    font-size: 12px; text-transform: uppercase; letter-spacing: 0.6px;
+    color: var(--text3, #888); margin: 12px 0 6px;
+  }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="team-layout">
+
+  <!-- Sidebar reparti ───────────────────────────────────── -->
+  <aside class="team-sidebar" id="team-sidebar">
+    <div class="team-section-title">Filtra per reparto</div>
+    <div id="team-dept-list">
+      <div class="text-muted text-sm" style="padding:14px; text-align:center;">Caricamento…</div>
+    </div>
+  </aside>
+
+  <!-- Main pane ──────────────────────────────────────────── -->
+  <section>
+    <div class="team-toolbar">
+      <div class="form-group" style="flex:2; min-width:240px; margin:0;">
+        <label class="form-label" style="font-size:11px;">Ricerca</label>
+        <input class="form-input" id="team-search" placeholder="nome, ruolo, email…" oninput="renderTeam()">
+      </div>
+      <div class="form-group" style="margin:0;">
+        <label class="form-label" style="font-size:11px;">Tipo</label>
+        <select class="form-select" id="team-type" onchange="renderTeam()">
+          <option value="">— tutti —</option>
+          <option value="person_internal">👤 Interno</option>
+          <option value="person_freelance">💼 Freelance</option>
+          <option value="studio">🎬 Studio</option>
+          <option value="equipment">🎛 Apparecchio</option>
+          <option value="software">💻 Software</option>
+          <option value="vehicle">🚐 Veicolo</option>
+        </select>
+      </div>
+      <div class="form-group" style="margin:0;">
+        <label class="form-label" style="font-size:11px;">Stato</label>
+        <select class="form-select" id="team-active" onchange="renderTeam()">
+          <option value="active" selected>Solo attive</option>
+          <option value="all">Tutte (incluse archiviate)</option>
+        </select>
+      </div>
+      <span class="text-sm text-muted" id="team-count" style="margin-left:auto;"></span>
+    </div>
+
+    <div class="team-grid" id="team-grid">
+      <div class="team-empty">Caricamento…</div>
+    </div>
+  </section>
+
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+let _teamResources = [];
+let _teamDepts = [];
+let _teamFilterDeptId = '__all__';  // '__all__' | '__none__' | dept_id (string)
+
+async function loadTeam() {
+  try {
+    const [resources, depts] = await Promise.all([
+      api('GET', '/resources/api'),
+      api('GET', '/departments/api'),
+    ]);
+    _teamResources = resources || [];
+    _teamDepts = depts || [];
+    renderDeptSidebar();
+    renderTeam();
+  } catch(e) {
+    document.getElementById('team-grid').innerHTML =
+      `<div class="team-empty" style="color:#ef4444;">Errore caricamento: ${escapeHtml(e.message || '')}</div>`;
+  }
+}
+
+function renderDeptSidebar() {
+  const host = document.getElementById('team-dept-list');
+  // Conteggi per dept_id
+  const countByDept = new Map();
+  let withoutDept = 0;
+  for (const r of _teamResources) {
+    if (r.is_active === false) continue;  // sidebar mostra count attive
+    if (r.department_id) {
+      countByDept.set(r.department_id, (countByDept.get(r.department_id) || 0) + 1);
+    } else {
+      withoutDept++;
+    }
+  }
+  const html = [];
+  const totalActive = _teamResources.filter(r => r.is_active !== false).length;
+  html.push(_deptItem('__all__', 'Tutte le risorse', totalActive));
+  html.push('<div class="team-dept-divider"></div>');
+  for (const d of _teamDepts) {
+    html.push(_deptItem(String(d.id), d.name, countByDept.get(d.id) || 0));
+  }
+  if (withoutDept) {
+    html.push('<div class="team-dept-divider"></div>');
+    html.push(_deptItem('__none__', 'Senza reparto', withoutDept));
+  }
+  host.innerHTML = html.join('');
+}
+
+function _deptItem(value, label, count) {
+  const active = (value === _teamFilterDeptId) ? 'active' : '';
+  return `<div class="team-dept-link ${active}" onclick="teamSelectDept('${value}')">
+    <span>${escapeHtml(label)}</span>
+    <span class="count">${count}</span>
+  </div>`;
+}
+
+function teamSelectDept(value) {
+  _teamFilterDeptId = value;
+  renderDeptSidebar();
+  renderTeam();
+}
+
+function renderTeam() {
+  const q = (document.getElementById('team-search').value || '').toLowerCase().trim();
+  const type = document.getElementById('team-type').value;
+  const activeFilter = document.getElementById('team-active').value;
+  const grid = document.getElementById('team-grid');
+  const counter = document.getElementById('team-count');
+
+  let rows = _teamResources.slice();
+  if (activeFilter === 'active') rows = rows.filter(r => r.is_active !== false);
+  if (_teamFilterDeptId === '__all__') {
+    // niente filtro dept
+  } else if (_teamFilterDeptId === '__none__') {
+    rows = rows.filter(r => !r.department_id);
+  } else {
+    rows = rows.filter(r => String(r.department_id) === _teamFilterDeptId);
+  }
+  if (type) rows = rows.filter(r => r.type === type);
+  if (q) {
+    rows = rows.filter(r =>
+      (r.name || '').toLowerCase().includes(q) ||
+      (r.role || '').toLowerCase().includes(q) ||
+      (r.email || '').toLowerCase().includes(q) ||
+      (r.phone || '').toLowerCase().includes(q)
+    );
+  }
+  if (counter) counter.textContent = `${rows.length} su ${_teamResources.length} risorse`;
+
+  if (!rows.length) {
+    grid.innerHTML = '<div class="team-empty">Nessuna risorsa corrisponde ai filtri.</div>';
+    return;
+  }
+  const TYPE_LABEL = {
+    person_internal: '👤 Interno', person_freelance: '💼 Freelance', person: '👤 Persona',
+    studio: '🎬 Studio', equipment: '🎛 Apparecchio',
+    software: '💻 Software', vehicle: '🚐 Veicolo',
+  };
+  grid.innerHTML = rows.map(r => {
+    const dept = (_teamDepts.find(d => d.id === r.department_id) || {}).name || (r.department_id ? '' : '—');
+    const rate = [
+      r.daily_rate ? `${r.daily_rate}€/g` : '',
+      r.hourly_rate ? `${r.hourly_rate}€/h` : '',
+    ].filter(Boolean).join(' · ');
+    const contact = [r.email, r.phone].filter(Boolean).map(escapeHtml).join(' · ');
+    return `<div class="team-card" onclick="teamOpenResource(${r.id})">
+      <div class="team-card-head">
+        <span class="team-card-dot" style="background:${r.color || '#6272f5'};"></span>
+        <span class="team-card-name" title="${escapeHtml(r.name)}">${escapeHtml(r.name)}</span>
+        <span class="team-card-type">${TYPE_LABEL[r.type] || r.type || '?'}</span>
+      </div>
+      ${r.role ? `<div class="team-card-role">${escapeHtml(r.role)}</div>` : ''}
+      <div class="team-card-meta">
+        <span>📁 ${escapeHtml(dept || 'Senza reparto')}</span>
+        ${r.is_active === false ? '<span style="color:#fb923c;">⚠ archiviata</span>' : ''}
+      </div>
+      ${contact ? `<div class="team-card-meta">${contact}</div>` : ''}
+      ${rate ? `<div class="team-card-rate">${escapeHtml(rate)}</div>` : ''}
+    </div>`;
+  }).join('');
+}
+
+function teamOpenResource(id) {
+  // Per ora apriamo la pagina /resources/ con un anchor; la modal completa è
+  // su /resources, qui il drill-down è la "lista del reparto". In futuro
+  // possiamo embeddare la modal direttamente.
+  window.location.href = `/resources/#r${id}`;
+}
+
+loadTeam();
+</script>
+{% endblock %}
