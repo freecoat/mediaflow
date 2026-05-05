@@ -8,6 +8,25 @@
 
 ## Versione corrente
 
+**v3.5.0-alpha.25** — 5 maggio 2026 notte tardi — Round 10 chiuso (7/7)
+
+Chiuso anche il 7° punto: scheda cliente con filmografia AI, fonti pubbliche
+italiane + IMDB/MyMovies, workflow propone+conferma, idempotente.
+
+**Cantiere completato:**
+- ✅ Modello `ClientWork` (tabella `client_works`, auto-create al boot)
+- ✅ Service `app/services/filmography.py` con Tavily `include_domains` ristretto
+- ✅ 5 endpoint CRUD + AI search (no scrittura DB nell'AI search, propone solo)
+- ✅ Tab Filmografia nella scheda cliente con AI search + lista cards
+- ✅ Modal candidati AI con checkbox, fonti cliccabili, badge confidence
+- ✅ Modal edit opera con form completo + delete
+- ✅ Idempotency su (title, year) — re-import safe
+
+**Smoke test live:** ricerca su "RAI Documentari" → 14 fonti consultate, 6
+opere proposte con confidence/source URLs valide.
+
+Cache-buster `v=3.5.0-alpha.25`. Tabella `client_works` auto-creata.
+
 **v3.5.0-alpha.24** — 5 maggio 2026 notte tardi — Round 10: planning UX refinement (6/7)
 
 Terza tornata feedback Matteo post-test alpha.23. Chiusi 6 punti su 7. Il

@@ -7,7 +7,7 @@ from fastapi.responses import HTMLResponse
 from typing import Optional, List
 from sqlalchemy.orm import Session, joinedload
 from app.database import get_db
-from app.models import Client, Project, User
+from app.models import Client, ClientWork, Project, User
 from app.services.client_enrichment import enrich_client
 from app.services.ai_provider import get_provider_for_user
 from app.services.auth import get_current_user_from_token
@@ -375,3 +375,232 @@ async def search_and_create(
             setattr(client, field, val)
     db.add(client); db.commit(); db.refresh(client)
     return {"ok": True, "client_id": client.id, "name": client.name}
+
+
+# ── ClientWork (filmografia) — v3.5.0-alpha.25 ───────────────
+
+def _work_dict(w: ClientWork) -> dict:
+    """Serializza un ClientWork in JSON-friendly."""
+    sources = []
+    if w.sources_json:
+        try:
+            sources = json.loads(w.sources_json) or []
+        except Exception:
+            sources = []
+    return {
+        "id": w.id,
+        "client_id": w.client_id,
+        "title": w.title,
+        "year": w.year,
+        "kind": w.kind,
+        "our_role": w.our_role,
+        "director": w.director,
+        "country": w.country,
+        "sources": sources,  # lista di {name, url}
+        "notes": w.notes,
+        "ai_imported": bool(w.ai_imported),
+        "created_at": w.created_at.isoformat() if w.created_at else None,
+        "updated_at": w.updated_at.isoformat() if w.updated_at else None,
+    }
+
+
+@router.get("/api/{client_id}/works")
+async def list_client_works(client_id: int, db: Session = Depends(get_db)):
+    c = db.query(Client).filter(
+        Client.id == client_id, Client.tenant_id == CURRENT_TENANT,
+    ).first()
+    if not c:
+        raise HTTPException(404, "Cliente non trovato")
+    items = (
+        db.query(ClientWork)
+        .filter(ClientWork.client_id == client_id, ClientWork.tenant_id == CURRENT_TENANT)
+        .order_by(ClientWork.year.desc().nullslast(), ClientWork.title.asc())
+        .all()
+    )
+    return [_work_dict(w) for w in items]
+
+
+@router.post("/api/{client_id}/works")
+async def create_client_work(
+    client_id: int,
+    title: str = Form(...),
+    year: Optional[int] = Form(None),
+    kind: Optional[str] = Form(None),
+    our_role: Optional[str] = Form(None),
+    director: Optional[str] = Form(None),
+    country: Optional[str] = Form(None),
+    sources: Optional[str] = Form(None),  # JSON string [{name,url}, ...]
+    notes: Optional[str] = Form(None),
+    ai_imported: bool = Form(False),
+    db: Session = Depends(get_db),
+):
+    """Crea una nuova opera nella filmografia del cliente. Idempotente su
+    (title, year): se esiste già un record con stesso titolo+anno, ritorna
+    quello esistente con HTTP 200 (no errore) per non rompere il flusso AI
+    quando l'utente importa di nuovo opere già presenti."""
+    c = db.query(Client).filter(
+        Client.id == client_id, Client.tenant_id == CURRENT_TENANT,
+    ).first()
+    if not c:
+        raise HTTPException(404, "Cliente non trovato")
+    title = (title or "").strip()
+    if not title:
+        raise HTTPException(400, "Title è obbligatorio")
+    # Idempotency check: stessa (client, title.lower, year)
+    existing = (
+        db.query(ClientWork)
+        .filter(
+            ClientWork.client_id == client_id,
+            ClientWork.tenant_id == CURRENT_TENANT,
+            ClientWork.title.ilike(title),
+            ClientWork.year == year,
+        )
+        .first()
+    )
+    if existing:
+        return {"ok": True, "duplicate": True, **_work_dict(existing)}
+
+    sources_clean = None
+    if sources:
+        try:
+            parsed = json.loads(sources)
+            if isinstance(parsed, list):
+                sources_clean = json.dumps([
+                    s for s in parsed if isinstance(s, dict) and s.get("url")
+                ])
+        except Exception:
+            sources_clean = None
+
+    w = ClientWork(
+        tenant_id=CURRENT_TENANT,
+        client_id=client_id,
+        title=title[:255],
+        year=year,
+        kind=(kind or None),
+        our_role=(our_role or None),
+        director=(director or None),
+        country=(country or None),
+        sources_json=sources_clean,
+        notes=(notes or None),
+        ai_imported=bool(ai_imported),
+    )
+    db.add(w); db.commit(); db.refresh(w)
+    return {"ok": True, "duplicate": False, **_work_dict(w)}
+
+
+@router.put("/api/{client_id}/works/{work_id}")
+async def update_client_work(
+    client_id: int,
+    work_id: int,
+    title: Optional[str] = Form(None),
+    year: Optional[int] = Form(None),
+    kind: Optional[str] = Form(None),
+    our_role: Optional[str] = Form(None),
+    director: Optional[str] = Form(None),
+    country: Optional[str] = Form(None),
+    sources: Optional[str] = Form(None),
+    notes: Optional[str] = Form(None),
+    db: Session = Depends(get_db),
+):
+    w = (
+        db.query(ClientWork)
+        .filter(
+            ClientWork.id == work_id,
+            ClientWork.client_id == client_id,
+            ClientWork.tenant_id == CURRENT_TENANT,
+        )
+        .first()
+    )
+    if not w:
+        raise HTTPException(404, "Opera non trovata")
+    if title is not None and title.strip():
+        w.title = title.strip()[:255]
+    if year is not None:
+        w.year = year if year else None
+    if kind is not None:
+        w.kind = (kind or None)
+    if our_role is not None:
+        w.our_role = (our_role or None)
+    if director is not None:
+        w.director = (director or None)
+    if country is not None:
+        w.country = (country or None)
+    if notes is not None:
+        w.notes = (notes or None)
+    if sources is not None:
+        try:
+            parsed = json.loads(sources)
+            if isinstance(parsed, list):
+                w.sources_json = json.dumps([
+                    s for s in parsed if isinstance(s, dict) and s.get("url")
+                ])
+        except Exception:
+            pass
+    db.commit(); db.refresh(w)
+    return _work_dict(w)
+
+
+@router.delete("/api/{client_id}/works/{work_id}")
+async def delete_client_work(
+    client_id: int, work_id: int, db: Session = Depends(get_db),
+):
+    w = (
+        db.query(ClientWork)
+        .filter(
+            ClientWork.id == work_id,
+            ClientWork.client_id == client_id,
+            ClientWork.tenant_id == CURRENT_TENANT,
+        )
+        .first()
+    )
+    if not w:
+        raise HTTPException(404, "Opera non trovata")
+    db.delete(w); db.commit()
+    return {"ok": True}
+
+
+@router.post("/api/{client_id}/search-filmography")
+async def search_filmography_api(
+    client_id: int,
+    extra_hint: Optional[str] = Form(None),
+    access_token: Optional[str] = Cookie(None),
+    db: Session = Depends(get_db),
+):
+    """Cerca via AI le opere del cliente sulle 4 fonti pubbliche
+    (filmitalia.org, cinema.cultura.gov.it, IMDB, MyMovies).
+
+    NESSUNA scrittura DB qui. Ritorna proposte. L'utente importa via
+    `POST /api/{client_id}/works` per ogni opera selezionata.
+    """
+    c = db.query(Client).filter(
+        Client.id == client_id, Client.tenant_id == CURRENT_TENANT,
+    ).first()
+    if not c:
+        raise HTTPException(404, "Cliente non trovato")
+
+    u = _resolve_current_user(db, access_token)
+    provider = get_provider_for_user(u.id if u else None, db)
+    if not provider:
+        raise HTTPException(503, "AI provider non configurato. Vai in Impostazioni → AI.")
+
+    from app.services.filmography import search_filmography
+    result = search_filmography(c.name, provider=provider, extra_hint=extra_hint)
+    if not result:
+        raise HTTPException(500, "Ricerca filmografia fallita")
+
+    # Marca con ID già esistenti per UI dedup-friendly
+    existing = (
+        db.query(ClientWork)
+        .filter(ClientWork.client_id == client_id, ClientWork.tenant_id == CURRENT_TENANT)
+        .all()
+    )
+    existing_keys = {(w.title.strip().lower(), w.year) for w in existing}
+    for w in result.get("works", []):
+        key = (w["title"].strip().lower(), w.get("year"))
+        w["already_imported"] = key in existing_keys
+
+    return {
+        "client_id": client_id,
+        "client_name": c.name,
+        **result,
+    }

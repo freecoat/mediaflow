@@ -398,6 +398,40 @@ class Client(Base):
     jobs: Mapped[List["Job"]] = relationship(back_populates="client")
     quotes: Mapped[List["Quote"]] = relationship(back_populates="client")
     invoices: Mapped[List["Invoice"]] = relationship(back_populates="client")
+    works: Mapped[List["ClientWork"]] = relationship(back_populates="client", cascade="all, delete-orphan")
+
+
+# ── FILMOGRAFIA / PORTFOLIO CLIENTE (v3.5.0-alpha.25) ────────
+# Tabella separata da `Client.recent_productions` (testo libero AI-generated):
+# qui ogni opera è un record strutturato cercabile/filtrabile, popolabile via
+# AI con fonti esterne (filmitalia.org, cinema.cultura.gov.it, IMDB, MyMovies)
+# o manualmente. Il rapporto N:1 verso Client lascia spazio a future feature
+# come cross-link verso Project quando un cliente porta dentro MediaFlow una
+# delle proprie opere come progetto attivo.
+
+class ClientWork(Base):
+    __tablename__ = "client_works"
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    tenant_id: Mapped[int] = mapped_column(ForeignKey("tenants.id"), default=1, index=True)
+    client_id: Mapped[int] = mapped_column(ForeignKey("clients.id", ondelete="CASCADE"), index=True)
+    title: Mapped[str] = mapped_column(String(255), index=True)
+    year: Mapped[Optional[int]] = mapped_column(Integer, nullable=True, index=True)
+    # Tipo opera: film, serie, documentario, spot, cortometraggio, altro
+    kind: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
+    # Ruolo del cliente nell'opera: produzione, post-produzione, distribuzione,
+    # co-produzione, ecc. Free-form per non vincolare la tassonomia.
+    our_role: Mapped[Optional[str]] = mapped_column(String(120), nullable=True)
+    director: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
+    country: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
+    # Lista JSON di {name, url} delle fonti consultate (filmitalia, cinema.cultura, ...)
+    sources_json: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    # Marker provenienza: True se il record è stato proposto dall'AI e
+    # confermato dall'utente; False se inserito manualmente.
+    ai_imported: Mapped[bool] = mapped_column(Boolean, default=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    client: Mapped["Client"] = relationship(back_populates="works")
 
 
 # ── PROGETTO (NUOVA ENTITÀ) ──────────────────────────────────

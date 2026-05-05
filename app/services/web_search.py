@@ -12,11 +12,17 @@ logger = logging.getLogger(__name__)
 
 def tavily_search(query: str, max_results: int = 5,
                   search_depth: str = "advanced",
-                  include_raw_content: bool = False) -> Optional[dict]:
+                  include_raw_content: bool = False,
+                  include_domains: Optional[list] = None,
+                  exclude_domains: Optional[list] = None) -> Optional[dict]:
     """
     Esegue una ricerca web tramite Tavily.
     Restituisce: {'answer': str, 'results': [{'title', 'url', 'content', 'score'}], 'query': str}
     oppure None in caso di errore.
+
+    `include_domains`/`exclude_domains` (v3.5.0-alpha.25): liste di domini da
+    includere/escludere dai risultati. Usato dalla ricerca filmografia per
+    restringere a filmitalia.org / cinema.cultura.gov.it / IMDB / MyMovies.
     """
     if not settings.tavily_api_key:
         logger.warning("TAVILY_API_KEY non configurata — ricerca web disabilitata")
@@ -29,13 +35,18 @@ def tavily_search(query: str, max_results: int = 5,
 
     try:
         client = TavilyClient(api_key=settings.tavily_api_key)
-        resp = client.search(
+        kwargs = dict(
             query=query,
             search_depth=search_depth,
             max_results=max_results,
             include_answer=True,
             include_raw_content=include_raw_content,
         )
+        if include_domains:
+            kwargs["include_domains"] = include_domains
+        if exclude_domains:
+            kwargs["exclude_domains"] = exclude_domains
+        resp = client.search(**kwargs)
         return resp
     except Exception as e:
         logger.error(f"Tavily search failed: {e}")

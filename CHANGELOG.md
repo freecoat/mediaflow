@@ -1,5 +1,61 @@
 # MediaFlow — Changelog
 
+## v3.5.0-alpha.25 — Scheda cliente AI: filmografia con fonti esterne (5 maggio 2026 notte tardi)
+
+Chiuso il 7° punto del Round 10 (la scheda cliente con filmografia AI).
+Cantiere medio: nuovo modello + service + 5 endpoint + tab UI + 2 modal.
+
+**Modello**:
+- `ClientWork` — tabella `client_works` (auto-creata al boot via
+  `Base.metadata.create_all`). Campi: title, year, kind (film/serie/doc/
+  spot/cortometraggio/altro), our_role (produzione/post-produzione/
+  distribuzione free-form), director, country, sources_json (lista
+  di {name, url}), notes, ai_imported, timestamps. FK CASCADE su Client.
+
+**Service** `app/services/filmography.py`:
+- `search_filmography(client_name, provider, extra_hint=...)` — workflow:
+  1. 2-3 query Tavily mirate con `include_domains` ristretto a
+     filmitalia.org / cinema.cultura.gov.it / imdb.com / mymovies.it.
+  2. Aggrega risultati cross-fonte, dedup per URL.
+  3. Prompt AI per estrazione strutturata (title, year, kind, our_role,
+     director, country, source_urls, confidence alta/media/bassa).
+  4. Sanitize schema + drop entries senza title.
+- Nessuna scrittura DB nel service — il chiamante decide cosa importare.
+
+**Web search**:
+- `tavily_search` esteso con `include_domains` / `exclude_domains` opt
+  params (passati through al client Tavily).
+
+**Endpoint** (router `clients`):
+- `GET /clients/api/{id}/works` — lista filmografia (sort year desc).
+- `POST /clients/api/{id}/works` — crea opera. Idempotente su
+  (title, year): se duplicato, ritorna l'esistente con `duplicate: true`.
+- `PUT /clients/api/{id}/works/{wid}` — modifica.
+- `DELETE /clients/api/{id}/works/{wid}` — elimina.
+- `POST /clients/api/{id}/search-filmography` — AI search, ritorna
+  proposte + flag `already_imported` per dedup-friendly UI. **NESSUNA**
+  scrittura DB qui.
+
+**UI** (clients.html):
+- Modal scheda cliente ridisegnato con 2 tab: 📋 Anagrafica · 🎬 Filmografia.
+- Tab Filmografia: blocco AI search con hint opzionale + bottone "✨ Cerca",
+  lista opere come cards con titolo/anno/tipo/regista/ruolo/fonti, click
+  apre modal edit, "+ Aggiungi opera" per inserimento manuale.
+- Modal candidati AI: lista checkbox con titolo, anno, kind, ruolo, regista,
+  fonti cliccabili, badge confidence colorato. Bottoni "Seleziona tutti /
+  Deseleziona / Importa selezionati". Le opere già presenti hanno checkbox
+  disabilitato + badge "già importata".
+- Modal edit opera: form completo con tutti i campi + bottone Elimina.
+
+**Smoke test E2E**:
+- CRUD round-trip OK su `/clients/api/{id}/works`.
+- `search-filmography` su "RAI Documentari" → 14 fonti consultate
+  (filmitalia.org), 6 opere trovate con confidence + sources.
+- Idempotency: re-import di un'opera già presente → `duplicate: true`,
+  no insert duplicato in DB.
+
+Cache-buster `v=3.5.0-alpha.25`. Tabella `client_works` auto-creata al boot.
+
 ## v3.5.0-alpha.24 — Round 10: planning UX refinement (5 maggio 2026 notte tardi)
 
 Round 10 sulla terza tornata feedback Matteo (post-test alpha.23). Chiusi 6
