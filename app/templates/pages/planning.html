@@ -834,8 +834,10 @@
               <button class="btn btn-ghost btn-sm" style="display:block; width:100%; text-align:left; padding:7px 10px;" onclick="tlClearSelection()">Deseleziona tutto (Esc)</button>
             </div>
           </div>
-          <!-- v3.5.0-alpha.22: bottone "📦 Area" rimosso (ROI Alt/Shift+drag disabilitato). Usare il dropdown "☑ Seleziona ▾". -->
-          <button class="btn btn-ghost btn-sm" id="tl-roi-toggle" onclick="tlRoiTogglePersist()" title="Disabilitato in v3.5.0-alpha.22 — usa il dropdown ☑ Seleziona" style="display:none;">📦 Area</button>
+          <!-- v3.5.0-alpha.35: ROI rubber-band riabilitato come modalità persistente toggle.
+               Il trigger Shift+drag resta disabilitato (conflict con create-booking shift+drag);
+               persist mode + Alt+drag sono i due gesti supportati. -->
+          <button class="btn btn-ghost btn-sm" id="tl-roi-toggle" onclick="tlRoiTogglePersist()" title="Modalità area: trascina su zona vuota per selezionare i booking dentro il rettangolo (ESC per uscire). Alt+drag funziona sempre." style="margin-left:6px;">📦 Area</button>
           <button class="btn btn-ghost btn-sm" onclick="tlPrefsToggle(event)" title="Personalizza look timeline" style="margin-left:6px;">⚙</button>
         </div>
 
@@ -1244,7 +1246,7 @@ const CAN_CREATE_BOOKING   = {{ 'true' if can_create_booking(request.state.curre
 const CAN_ASSIGN_RESOURCES = {{ 'true' if can_assign_resources(request.state.current_user) else 'false' }};
 const CAN_REQUEST_BOOKING  = {{ 'true' if request.state.current_user else 'false' }};
 const RESOURCES_SEED = [
-{% for r in resources %}  {id:{{ r.id }}, name:{{ r.name|tojson }}, dept:{{ (r.department_id or 0) }}, color:{{ (r.color or '#6272f5')|tojson }}}{{ "," if not loop.last else "" }}
+{% for r in resources %}  {id:{{ r.id }}, name:{{ r.name|tojson }}, dept:{{ (r.department_id or 0) }}, color:{{ (r.color or '#6272f5')|tojson }}, role:{{ (r.role or '')|tojson }}}{{ "," if not loop.last else "" }}
 {% endfor %}];
 const DEPARTMENTS_SEED = [
 {% for d in departments %}  {id:{{ d.id }}, name:{{ d.name|tojson }}, color:{{ (d.color or '#6272f5')|tojson }}}{{ "," if not loop.last else "" }}
@@ -2530,12 +2532,18 @@ function tlBuildResourceGroups(bookings, rangeStart, rangeEnd) {
     if (children.length) groups.push({id: 'd0', content: '<i>Senza reparto</i>', nestedGroups: children, treeLevel: 1});
   }
   // Risorse foglia con heatmap se range fornito
+  // alpha.35: render `role` sotto il nome (font-size 10.5, muted, italic).
+  // Wrap in flex-column per non collidere con vis-inner (flex row+center).
   for (const r of resources) {
-    let content = escapeHtml(r.name);
+    let inner = '<div class="tl-res-name">' + escapeHtml(r.name) + '</div>';
+    if (r.role) {
+      inner += '<div class="tl-res-role" style="font-size:10.5px; color:var(--text-muted,#8b91a8); font-style:italic; line-height:1.15; margin-top:1px; opacity:0.85;">' + escapeHtml(r.role) + '</div>';
+    }
     if (bookings && rangeStart && rangeEnd) {
       const days = tlComputeHeatmap(r.id, bookings, rangeStart, rangeEnd);
-      content += tlHeatmapHTML(days);
+      inner += tlHeatmapHTML(days);
     }
+    const content = '<div class="tl-res-cell" style="display:flex; flex-direction:column; align-items:flex-start; width:100%;">' + inner + '</div>';
     groups.push({id: r.id, content, treeLevel: 2});
   }
   return groups;
@@ -3992,10 +4000,12 @@ async function renderTimeline(preserveWindow=false) {
     window._tlRoiHandler = null;
   }
   window._tlRoiHandler = function(e) {
+    // v3.5.0-alpha.35: trigger Shift rimosso (conflitto con _tlCreateDragHandler che
+    // usa Shift+drag per creare booking). Restano: Alt+drag (power-user) e
+    // _tlRoiPersistMode (toggle "📦 Area" in toolbar — gesto comune drag senza modifier).
     const isAlt = e.altKey;
-    const isShift = e.shiftKey;
     const isPersistMode = (window._tlRoiPersistMode === true);
-    if (!isAlt && !isShift && !isPersistMode) return;
+    if (!isAlt && !isPersistMode) return;
     if (e.button !== 0) return;
     if (e.target.closest && e.target.closest('.vis-item')) return;
     if (e.target.closest && e.target.closest('.vis-labelset, .vis-time-axis')) return;
@@ -4003,7 +4013,7 @@ async function renderTimeline(preserveWindow=false) {
     const startProps = tlInstance.getEventProperties(e);
     if (!startProps || !startProps.time) return;
     e.preventDefault();
-    e.stopPropagation();
+    e.stopImmediatePropagation();  // alpha.35: blocca anche _tlCreateDragHandler in coda
 
     // Disabilita pan/zoom durante il drag per evitare conflitto Hammer.js
     const prevOpts = {
@@ -4098,11 +4108,10 @@ async function renderTimeline(preserveWindow=false) {
     document.addEventListener('mouseup', finalize, true);
     document.addEventListener('keydown', onEsc, true);
   };
-  // v3.5.0-alpha.22: ROI Alt/Shift+drag disabilitato (Matteo: "area non funziona,
-  // o lo togliamo o troviamo un'altro modo"). Conflitto con Hammer.js + UX confusa
-  // sulla selezione singola. Resta attivo SOLO il dropdown "☑ Seleziona ▾"
-  // (alpha.21) come canale affidabile di multi-selezione. Il codice della ROI
-  // rimane in archivio per future revisioni.
+  // v3.5.0-alpha.35: ROI riabilitato. Wirato in capture-phase. Il handler stesso
+  // è no-op se né Alt né persist-mode sono attivi, quindi non interferisce con
+  // l'uso normale (drag item, pan, click vuoto).
+  host.addEventListener('mousedown', window._tlRoiHandler, true);
 
   // v3.5.0-alpha.23: click+drag su area vuota → modal nuovo booking
   // pre-compilato con start/end dell'intervallo trascinato e risorsa target.
@@ -4117,6 +4126,9 @@ async function renderTimeline(preserveWindow=false) {
   window._tlCreateDragHandler = function(e) {
     if (!e.shiftKey) return;  // gesture: Shift+drag
     if (e.button !== 0) return;
+    // alpha.35: in modalità area persistente lo Shift+drag non deve creare
+    // booking (è gesto ambiguo); fuori da modalità area, Shift+drag = crea.
+    if (window._tlRoiPersistMode === true) return;
     if (e.target.closest && e.target.closest('.vis-item')) return;
     if (e.target.closest && e.target.closest('.vis-labelset, .vis-time-axis')) return;
     if (!tlInstance) return;
@@ -4198,6 +4210,7 @@ async function renderTimeline(preserveWindow=false) {
 
 // v3.5.0-alpha.16: toggle modalità selezione area (per chi non vuole/può
 // usare Alt-drag o ha tastiera senza Alt comoda).
+// v3.5.0-alpha.35: riabilitato + cursor crosshair globale + ESC esce.
 function tlRoiTogglePersist() {
   window._tlRoiPersistMode = !window._tlRoiPersistMode;
   const btn = document.getElementById('tl-roi-toggle');
@@ -4205,9 +4218,29 @@ function tlRoiTogglePersist() {
     btn.classList.toggle('btn-primary', window._tlRoiPersistMode);
     btn.classList.toggle('btn-ghost', !window._tlRoiPersistMode);
   }
+  // Cursor crosshair persistente sull'host timeline (non solo durante drag)
+  const host = document.getElementById('tl-host');
+  if (host) {
+    host.style.cursor = window._tlRoiPersistMode ? 'crosshair' : '';
+  }
+  // ESC globale per uscire dalla modalità (oltre al click sul bottone)
+  if (window._tlRoiPersistMode) {
+    window._tlRoiEscHandler = (ev) => {
+      if (ev.key === 'Escape' && window._tlRoiPersistMode) {
+        // Solo se non sta editando un input (l'utente potrebbe voler chiudere un modal con ESC)
+        const ae = document.activeElement;
+        if (ae && (ae.tagName === 'INPUT' || ae.tagName === 'TEXTAREA' || ae.tagName === 'SELECT')) return;
+        tlRoiTogglePersist();
+      }
+    };
+    document.addEventListener('keydown', window._tlRoiEscHandler, true);
+  } else if (window._tlRoiEscHandler) {
+    document.removeEventListener('keydown', window._tlRoiEscHandler, true);
+    window._tlRoiEscHandler = null;
+  }
   toast(window._tlRoiPersistMode
-    ? '📦 Selezione area attiva: trascina su zona vuota per selezionare. Premi di nuovo per disattivare.'
-    : 'Selezione area disattivata. Alt+drag funziona sempre.',
+    ? '📦 Modalità area ON: trascina su zona vuota per selezionare. ESC o click di nuovo per uscire.'
+    : 'Modalità area OFF. Alt+drag funziona sempre.',
     'info', 3500);
 }
 

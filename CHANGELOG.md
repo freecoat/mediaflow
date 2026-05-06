@@ -1,5 +1,43 @@
 # MediaFlow — Changelog
 
+## v3.5.0-alpha.35 — ROI rubber-band riabilitato + funzione sotto nome operatore (6 maggio 2026)
+
+Due richieste di Matteo nello stesso giro:
+
+**1. ROI rubber-band timeline riabilitato** (chiusura desiderata forte
+`feedback_multiselect_multidrag.md`).
+
+- Bottone toolbar **📦 Area** reso visibile (era nascosto da α.22).
+  Click → modalità persistente: cursore crosshair sull'host timeline,
+  drag su zona vuota disegna rettangolo, mouseup seleziona tutti i
+  booking dentro l'area `[time, group]`.
+- ESC globale per uscire dalla modalità (oltre al re-click sul bottone).
+  ESC ignorato se l'utente sta editando un input/textarea/select (per non
+  interferire con chiusura modal).
+- **Risolto conflitto Shift+drag**: il trigger Shift è stato rimosso dal
+  `_tlRoiHandler` (in α.16-22 conflivava con `_tlCreateDragHandler` che
+  usa shift+drag per creare un booking). Restano: **Alt+drag** (power
+  user, sempre attivo) + **modalità persistente toggle** (gesto comune).
+- ROI handler ora wirato in capture-phase con `stopImmediatePropagation()`:
+  blocca anche il create-handler in coda → due gesti incompatibili non
+  partono insieme.
+- Guard incrociato: `_tlCreateDragHandler` esce subito se `_tlRoiPersistMode`
+  è ON (in modalità area lo Shift+drag non deve creare booking).
+
+**2. Funzione (role) sotto nome operatore in timeline.**
+
+- `RESOURCES_SEED` esteso con `role` (Resource.role esiste dal modello,
+  visibile in `/resources` ma non in timeline).
+- `tlBuildResourceGroups` renderizza ora `<div class="tl-res-name">` +
+  (se presente) `<div class="tl-res-role">` con font 10.5px italic muted.
+- Wrapper `tl-res-cell` flex-column per non collidere con `vis-inner`
+  (flex row + align-items center) — necessario perché altrimenti nome e
+  role sarebbero affiancati invece che impilati.
+- L'altezza riga si adatta automaticamente (no min-height forzato dopo
+  α.32.2).
+
+**Niente migrate**: solo modifiche al template `planning.html`.
+
 ## v3.5.0-alpha.34 — Admin Export/Import dati (6 maggio 2026)
 
 Tool admin per export/import dati completo (DB + memorie Claude + Excel

@@ -8,6 +8,68 @@
 
 ## Versione corrente
 
+**v3.5.0-alpha.35** — 6 maggio 2026 — ROI rubber-band + funzione sotto nome operatore
+
+Due richieste di Matteo:
+
+1. **ROI rubber-band riabilitato** (chiusura desiderata forte
+   `feedback_multiselect_multidrag.md`). Bottone "📦 Area" toggle in
+   toolbar planning timeline → cursor crosshair, drag su zona vuota
+   disegna rettangolo, mouseup seleziona tutti i booking dentro
+   `[time, group]`. ESC esce. Trigger Shift rimosso per evitare conflict
+   con shift+drag = create-booking.
+2. **Funzione (role) sotto nome operatore** nelle foglie risorsa della
+   timeline. RESOURCES_SEED ora include `role`, render font 10.5px
+   italic muted sotto il nome.
+
+**Chiuso α.35:**
+- ✅ `planning.html` toolbar: bottone `📦 Area` reso visibile (era
+  nascosto da α.22), title aggiornato
+- ✅ `_tlRoiHandler`: trigger Shift rimosso (conflict create-booking),
+  restano Alt+drag + persist-mode. `stopImmediatePropagation` per
+  bloccare create-handler in coda
+- ✅ `_tlCreateDragHandler`: guard `if (window._tlRoiPersistMode) return`
+- ✅ `_tlRoiHandler` wirato in capture-phase via
+  `host.addEventListener('mousedown', ..., true)` (era definito ma mai
+  attaccato)
+- ✅ `tlRoiTogglePersist`: cursor crosshair persistente sull'host +
+  ESC globale per uscire (skippato se focus su input/textarea/select)
+- ✅ `RESOURCES_SEED` template: aggiunto `role:{{ (r.role or '')|tojson }}`
+- ✅ `tlBuildResourceGroups`: render foglie con wrapper
+  `tl-res-cell` flex-column → `tl-res-name` + `tl-res-role` (font 10.5
+  italic muted) + heatmap. Wrapper necessario per non collidere con
+  `vis-inner` (flex row + align-items center)
+
+**Verifica live richiesta a Matteo:**
+- Apri `/planning` vista timeline. In toolbar vedi `📦 Area` (prima del
+  bottone ⚙). Click → cursor crosshair, toast "Modalità area ON…"
+- Trascina su zona vuota della griglia → rettangolo tratteggiato
+  indaco. Al mouseup → toast "📦 N booking selezionati. Premi Delete
+  per eliminare in blocco."
+- ESC → esce dalla modalità (cursor torna normale, toast OFF)
+- Alt+drag (anche fuori modalità area) → ROI come prima
+- Shift+drag (fuori modalità) → create booking come prima
+- In modalità area, shift+drag NON crea booking (cede a ROI)
+- Sulle righe foglia in label sinistra: vedi nome + sotto, in piccolo
+  italic, la funzione (es. "Colorist", "Sound Designer"). Se la
+  risorsa non ha role, vedi solo il nome (no riga vuota)
+
+**Niente migrate**: solo modifiche al template `planning.html`.
+
+**In coda Round 12**:
+- 🔜 **Multidrag** (sposto N booking simultaneamente con un solo gesto):
+  ROI ora seleziona, ma il drag multiplo "vero" resta da affrontare —
+  vis-timeline non lo supporta nativamente, candidato di sostituzione
+  libreria (Bryntum/DHTMLX) da valutare
+- 🔜 **Batch modifica orario+risorse** sui booking selezionati: estendere
+  `modal-bulk-edit` con orario assoluto + sostituisci/aggiungi risorsa
+  + endpoint `bulk-edit` corrispondente
+- 🔜 Test Mac+Chrome del branch `experiment/timeline-audit`
+- 🔜 Step 3-5 del piano export (CSV/Excel altre entità, import per-entità
+  con dry-run, refinements)
+
+## Storico recenti
+
 **v3.5.0-alpha.34** — 6 maggio 2026 — Admin Export/Import dati
 
 Tool admin per export/import completo (DB + memorie Claude + Excel
@@ -50,14 +112,6 @@ solo admin.
   in app v4.x rifiuta (schema potrebbe essere cambiato)
 - `.env` opt-in: di default NO. Se attivo, l'export contiene secrets
   (API keys, JWT secret, AI_KEY_ENCRYPTION_KEY) — non condividere
-
-**In coda Round 12**:
-- 🔜 Multiselect/multidrag (memoria forte)
-- 🔜 Test Mac+Chrome del branch `experiment/timeline-audit`
-- 🔜 Step 3-5 del piano export (CSV/Excel altre entità, import per-entità
-  con dry-run, refinements)
-
-## Storico recenti
 
 **v3.5.0-alpha.33** — 6 maggio 2026 — Capability copilot `propose_resource`
 
