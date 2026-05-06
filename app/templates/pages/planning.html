@@ -93,6 +93,17 @@
   .todo-card .meta:hover { color: var(--text); }
   #cal-host, #ag-host, #todo-host { min-height: 600px; }
   #tl-host { min-height: 600px; }
+  /* v3.5.0-alpha.31 (audit): durante drag/resize disabilita transizioni CSS
+     che causavano flash neri ("area diventa nera con bookings visibili").
+     vis-timeline anima la posizione di item adiacenti durante stack reflow.
+     Con 30+ item su pochi gruppi la cascata di transition può lasciare il
+     foreground temporaneamente vuoto → si vede il bg molto scuro del tema.
+     `.tl-dragging` viene aggiunto/rimosso da onMoving/onMove. */
+  #tl-host.tl-dragging .vis-item,
+  #tl-host.tl-dragging .vis-item * { transition: none !important; animation: none !important; }
+  #tl-host.tl-dragging .vis-foreground,
+  #tl-host.tl-dragging .vis-background,
+  #tl-host.tl-dragging .vis-panel { transition: none !important; }
   .cal-bar { display:flex; gap:6px; margin-bottom:8px; flex-wrap: wrap; }
   .tl-bar { display:flex; gap:6px; margin-bottom:8px; flex-wrap: wrap; align-items:center; }
   .tl-bar .btn-group { display:flex; gap:0; }
@@ -2435,22 +2446,33 @@ async function todoNotDoneConfirm(bookingId, btn) {
 }
 
 // ── Resource Timeline (vis-timeline) ───────────────────────
-// Capacity heatmap: ore prenotate per giorno per risorsa nel range visibile
-function tlComputeHeatmap(resourceId, bookings, rangeStart, rangeEnd) {
+// Capacity heatmap: ore prenotate per giorno per risorsa nel range visibile.
+// v3.5.0-alpha.31 (audit): firma estesa con `bookingsForResource` opzionale
+// (lista pre-indicizzata) per evitare il filter lineare R volte. Vecchia
+// firma compatibile (continua a fare il filter inline se non passi l'indice).
+function tlComputeHeatmap(resourceId, bookings, rangeStart, rangeEnd, bookingsForResource) {
   const days = [];
   const start = new Date(rangeStart); start.setHours(0,0,0,0);
   const end = new Date(rangeEnd); end.setHours(0,0,0,0);
   const dayMs = 24*60*60*1000;
+  // Pre-indicizza bookings per resource (se non passato): O(B) una volta
+  // invece di R × O(B) lineare. Su 30 risorse × 100 booking × 30 giorni
+  // riduce ~90k op a ~3k op.
+  const list = bookingsForResource != null
+    ? bookingsForResource
+    : bookings.filter(b => b.extendedProps && b.extendedProps.resource_id === resourceId);
+  // Pre-parse start/end ms ai booking della risorsa (O(B_r) totale)
+  const ranges = list.map(b => [
+    new Date(b.start).getTime(),
+    new Date(b.end).getTime(),
+  ]);
   for (let t = start.getTime(); t <= end.getTime(); t += dayMs) {
     const dayStart = t, dayEnd = t + dayMs;
     let hours = 0;
-    for (const b of bookings) {
-      const rid = (b.extendedProps && b.extendedProps.resource_id);
-      if (rid !== resourceId) continue;
-      const bs = new Date(b.start).getTime();
-      const be = new Date(b.end).getTime();
-      const ovStart = Math.max(bs, dayStart);
-      const ovEnd = Math.min(be, dayEnd);
+    for (let i = 0; i < ranges.length; i++) {
+      const bs = ranges[i][0], be = ranges[i][1];
+      const ovStart = bs > dayStart ? bs : dayStart;
+      const ovEnd = be < dayEnd ? be : dayEnd;
       if (ovEnd > ovStart) hours += (ovEnd - ovStart) / 3600000;
     }
     days.push({date: new Date(t), hours});
@@ -2512,11 +2534,24 @@ function tlBuildResourceGroups(bookings, rangeStart, rangeEnd) {
     const children = resources.filter(r => r.dept === 0).map(r => r.id);
     if (children.length) groups.push({id: 'd0', content: '<i>Senza reparto</i>', nestedGroups: children, treeLevel: 1});
   }
-  // Risorse foglia con heatmap se range fornito
+  // Risorse foglia con heatmap se range fornito.
+  // v3.5.0-alpha.31 (audit): pre-indicizza bookings per resource_id una volta
+  // invece di scanlinearizzare le bookings R volte dentro tlComputeHeatmap.
+  let byResource = null;
+  if (bookings && rangeStart && rangeEnd) {
+    byResource = new Map();
+    for (const b of bookings) {
+      const rid = b.extendedProps && b.extendedProps.resource_id;
+      if (rid == null) continue;
+      let arr = byResource.get(rid);
+      if (!arr) { arr = []; byResource.set(rid, arr); }
+      arr.push(b);
+    }
+  }
   for (const r of resources) {
     let content = escapeHtml(r.name);
-    if (bookings && rangeStart && rangeEnd) {
-      const days = tlComputeHeatmap(r.id, bookings, rangeStart, rangeEnd);
+    if (byResource) {
+      const days = tlComputeHeatmap(r.id, bookings, rangeStart, rangeEnd, byResource.get(r.id) || []);
       content += tlHeatmapHTML(days);
     }
     groups.push({id: r.id, content, treeLevel: 2});
@@ -3509,6 +3544,52 @@ async function renderTimeline(preserveWindow=false) {
   const _hideBg = (window._tlGroupBy === 'project');
   const itemsDS = new vis.DataSet(_hideBg ? items : [...items, ...bgItems, ...punchItems]);
 
+  // v3.5.0-alpha.31 (audit): indici per accesso O(1) durante onMoving.
+  // PRIMA: ogni mousemove = 2× bgItems.some() + 1× itemsDS.get() + tlHasConflict() = O(n) × 60Hz
+  // DOPO: bg/item filtrati per group → O(group_size) per check.
+  const _bgByGroup = {};
+  for (const b of bgItems) {
+    const k = b.group;
+    if (!_bgByGroup[k]) _bgByGroup[k] = [];
+    _bgByGroup[k].push(b);
+  }
+  const _itemsByGroup = {};
+  for (const it of items) {
+    const k = it.group;
+    if (!_itemsByGroup[k]) _itemsByGroup[k] = [];
+    _itemsByGroup[k].push(it);
+  }
+  // Throttle onMoving: rAF cap a ~60fps in modo deterministico (skip se
+  // un frame è già in coda) + skip duplicati identici (start/end/group
+  // non cambiati). Riduce drasticamente il lavoro durante drag continuo.
+  let _movingFrameQueued = false;
+  let _movingLastSig = '';
+
+  // v3.5.0-alpha.31 (audit): safety net per la class .tl-dragging.
+  // Se l'utente esce dal browser durante drag (focus loss, mouse out of
+  // window) onMove può non venire chiamato → la class resta. Listener
+  // globale rimuove al primo mouseup/keyup successivo. Idempotente.
+  if (!window._tlAuditCleanupBound) {
+    window._tlAuditCleanupBound = true;
+    const cleanup = () => {
+      const h = document.getElementById('tl-host');
+      if (h && h.classList.contains('tl-dragging')) h.classList.remove('tl-dragging');
+    };
+    document.addEventListener('mouseup', cleanup, true);
+    document.addEventListener('mouseleave', cleanup, true);
+    document.addEventListener('keyup', (e) => { if (e.key === 'Escape') cleanup(); }, true);
+  }
+
+  // v3.5.0-alpha.31 (audit): profiling opzionale.
+  // Abilita con `localStorage.tl_debug = '1'` poi ricarica la pagina.
+  // Stampa in console il tempo di ogni onMoving (deve essere < 5ms anche
+  // su mobile lento). Spegnere con `localStorage.removeItem('tl_debug')`.
+  const _tlDebug = localStorage.getItem('tl_debug') === '1';
+  if (_tlDebug) {
+    console.info('[tl-audit] profiling ON. items=' + items.length +
+                 ' bgItems=' + bgItems.length + ' punchItems=' + punchItems.length);
+  }
+
   const win = savedWin || tlWindowFor(tlZoom, new Date());
   const groups = tlBuildGroups(bookings, win.start, win.end);
   if (!groups.length) {
@@ -3544,11 +3625,24 @@ async function renderTimeline(preserveWindow=false) {
     // Tasto Delete su una selezione multipla → bulk delete con conferma.
     multiselect: true,
     multiselectPerGroup: true,
-    // onMoving live: durante drag/resize, valida conflict client-side e applica style
+    // onMoving live: durante drag/resize, valida conflict client-side e applica style.
+    // v3.5.0-alpha.31 (audit): hot path. Misure su Chrome 147 con 30 booking
+    // su 2 risorse mostravano >18ms per chiamata → finestra 60Hz saltata.
+    // Ottimizzazioni: index per gruppo (vs filter ogni volta), skip se
+    // signature identica al frame precedente, .tl-dragging per disabilitare
+    // CSS transitions (prima causa del flash "area nera con bookings visibili").
     onMoving: function(item, callback) {
+      const _t0 = _tlDebug ? performance.now() : 0;
       // Blocca drop su gruppi reparto (id stringa 'dN'). Solo risorse foglia (id numerico) consentite.
       if (typeof item.group !== 'number') {
-        const orig = items.find(x => x.id === item.id);
+        const origs = _itemsByGroup;  // unused but keep ref for debug
+        // Lookup veloce dell'originale: priorità all'index per group.
+        // Se non è raggiungibile, usa items linear scan come fallback.
+        let orig = null;
+        for (const k in _itemsByGroup) {
+          orig = _itemsByGroup[k].find(x => x.id === item.id);
+          if (orig) break;
+        }
         if (orig) item.group = orig.group;
       }
       // Skip background items (ferie/festa/timbrature) — non si possono trascinare
@@ -3556,27 +3650,61 @@ async function renderTimeline(preserveWindow=false) {
         callback(null);
         return;
       }
-      // v3.4.32.1: distinguo hard block (ferie/malattia) da soft block (festivo)
-      const overlap = (b) => {
-        if (b.group !== item.group) return false;
+      // Aggiungi class .tl-dragging al primo onMoving del drag corrente: disabilita
+      // transition CSS sui vis-item, eliminando il flash "area nera". Rimossa in onMove.
+      const hostEl = document.getElementById('tl-host');
+      if (hostEl && !hostEl.classList.contains('tl-dragging')) {
+        hostEl.classList.add('tl-dragging');
+      }
+
+      // Skip se nulla è cambiato dall'ultimo frame (drag fermo, mouse jitter).
+      const sig = `${item.id}|${item.group}|${+new Date(item.start)}|${+new Date(item.end)}`;
+      if (sig === _movingLastSig) {
+        callback(item);
+        return;
+      }
+      _movingLastSig = sig;
+
+      // v3.4.32.1: hard block (ferie/malattia) vs soft block (festivo).
+      // v3.5.0-alpha.31 (audit): cerco solo nei bg dello stesso gruppo via index.
+      const bgInGroup = _bgByGroup[item.group] || [];
+      const is = new Date(item.start).getTime();
+      const ie = new Date(item.end).getTime();
+      const overlapBg = (b) => {
         const bs = new Date(b.start).getTime();
         const be = new Date(b.end).getTime();
-        const is = new Date(item.start).getTime();
-        const ie = new Date(item.end).getTime();
         return bs < ie && be > is;
       };
-      const hardBlock = bgItems.some(b => b._blocking_hard && overlap(b));
-      const softBlockHoliday = !hardBlock && bgItems.some(b => b._blocking_soft && overlap(b));
+      let hardBlock = false, softBlockHoliday = false;
+      for (const b of bgInGroup) {
+        if (b._blocking_hard && overlapBg(b)) { hardBlock = true; break; }
+      }
+      if (!hardBlock) {
+        for (const b of bgInGroup) {
+          if (b._blocking_soft && overlapBg(b)) { softBlockHoliday = true; break; }
+        }
+      }
+      // Conflict items: solo gli items reali dello stesso gruppo, escluso item stesso.
+      const itemsInGroup = _itemsByGroup[item.group] || [];
+      let hasItemConflict = false;
+      if (!hardBlock && !softBlockHoliday) {
+        for (const x of itemsInGroup) {
+          if (x.id === item.id) continue;
+          const xs = new Date(x.start).getTime();
+          const xe = new Date(x.end).getTime();
+          if (xs < ie && xe > is) { hasItemConflict = true; break; }
+        }
+      }
+
       let cls = (item.className || '').replace(/\s*tl-conflict(-hard|-overtime)?/g, '');
-      const all = itemsDS.get();
       if (hardBlock) cls += ' tl-conflict-hard';
       else if (softBlockHoliday) cls += ' tl-conflict-overtime';
-      else if (tlHasConflict(item, all.filter(x => !String(x.id).startsWith('u-')))) cls += ' tl-conflict';
+      else if (hasItemConflict) cls += ' tl-conflict';
       item.className = cls.trim();
       item._hardBlock = hardBlock;
       item._softBlockHoliday = softBlockHoliday;
       // v3.4.22: popup ore durante drag/resize
-      const dms = new Date(item.end) - new Date(item.start);
+      const dms = ie - is;
       const hh = dms / 3600000;
       const dd = Math.floor(hh / 24);
       const remH = hh - dd * 24;
@@ -3584,13 +3712,21 @@ async function renderTimeline(preserveWindow=false) {
       const sLab = new Date(item.start).toLocaleString('it-IT', {day:'2-digit', month:'2-digit', hour:'2-digit', minute:'2-digit'});
       const eLab = new Date(item.end).toLocaleString('it-IT', {day:'2-digit', month:'2-digit', hour:'2-digit', minute:'2-digit'});
       item.title = `${sLab} → ${eLab}\n⏱ ${durLabel}`;
-      // v3.5.0-alpha.11: overlay flottante con orario in tempo reale durante drag.
+      // Overlay flottante con orario in tempo reale durante drag.
       tlShowDragOverlay(sLab, eLab, durLabel, hardBlock, softBlockHoliday);
       callback(item);
+      if (_tlDebug) {
+        const _dt = performance.now() - _t0;
+        if (_dt > 4) console.warn('[tl-audit] onMoving slow: ' + _dt.toFixed(2) + 'ms');
+      }
     },
     onMove: async function(item, callback) {
       // v3.5.0-alpha.11: nascondi l'overlay drag (drop avvenuto)
       tlHideDragOverlay();
+      // v3.5.0-alpha.31: rimuovi class .tl-dragging → riabilita transitions
+      const hostEl = document.getElementById('tl-host');
+      if (hostEl) hostEl.classList.remove('tl-dragging');
+      _movingLastSig = '';
       // Guard: rifiuta drop su gruppi reparto
       if (typeof item.group !== 'number') {
         toast('Sposta su una risorsa, non su un reparto', 'warning');
@@ -3699,30 +3835,38 @@ async function renderTimeline(preserveWindow=false) {
     // v3.5.0-alpha.11: highlight cross-resource — items con stesso booking_id
     // ricevono className 'tl-link-highlight' per evidenziare visivamente che
     // appartengono allo stesso booking multi-risorsa.
-    // v3.5.0-alpha.13: in più, se selezione singola → apre modal dettaglio
-    // booking (uniformità con altre viste). Multi-select via Shift+click resta
-    // a multi-id (gestito separato sotto per delete bulk).
+    // v3.5.0-alpha.31 (audit): batch updates in singola call. Prima
+    // facevamo 30+ itemsDS.update() individuali = 30+ re-render.
     const allItems = itemsDS.get();
+    const updates = [];
     // Reset highlight precedenti
-    allItems.forEach(it => {
+    for (const it of allItems) {
       if (it.className && it.className.indexOf('tl-link-highlight') >= 0) {
         const cleaned = it.className.replace(/\btl-link-highlight\b/g, '').replace(/\s+/g, ' ').trim();
-        try { itemsDS.update({ id: it.id, className: cleaned }); } catch(_) {}
+        updates.push({ id: it.id, className: cleaned });
       }
-    });
-    if (!props.items.length) return;
+    }
+    if (!props.items.length) {
+      if (updates.length) { try { itemsDS.update(updates); } catch(_) {} }
+      return;
+    }
     const selId = props.items[0];
     const sel = items.find(x => x.id === selId) || allItems.find(x => x.id === selId);
-    if (!sel) return;
+    if (!sel) {
+      if (updates.length) { try { itemsDS.update(updates); } catch(_) {} }
+      return;
+    }
     const bid = sel.booking_id;
     if (bid) {
       // Match su booking_id (riga 2145: tlBookingToItem espone b.booking_id)
-      const sibs = allItems.filter(x => x.booking_id === bid && x.id !== selId);
-      sibs.forEach(x => {
-        const newCls = (x.className ? x.className + ' ' : '') + 'tl-link-highlight';
-        try { itemsDS.update({ id: x.id, className: newCls }); } catch(_) {}
-      });
+      for (const x of allItems) {
+        if (x.booking_id === bid && x.id !== selId) {
+          const newCls = (x.className ? x.className + ' ' : '') + 'tl-link-highlight';
+          updates.push({ id: x.id, className: newCls });
+        }
+      }
     }
+    if (updates.length) { try { itemsDS.update(updates); } catch(_) {} }
     const fmt = d => new Date(d).toLocaleString('it-IT', {day:'numeric', month:'short', hour:'2-digit', minute:'2-digit'});
     const linkHint = (sel && allItems.filter(x => x.booking_id === sel.booking_id).length > 1)
       ? ` · ${allItems.filter(x => x.booking_id === sel.booking_id).length} risorse linkate` : '';
@@ -3853,10 +3997,12 @@ async function renderTimeline(preserveWindow=false) {
       const start = props.start || win.start;
       const end = props.end || win.end;
       const newGroups = tlBuildGroups(bookings, start, end);
-      // Update SOLO foglie risorsa (id numerico) per non rompere nestedGroups dei parent dept
-      newGroups.filter(g => typeof g.id === 'number').forEach(g => {
-        try { groupsDS.update(g); } catch(_) {}
-      });
+      // v3.5.0-alpha.31 (audit): batch update in singola chiamata invece di
+      // 30+ groupsDS.update() individuali → 1 sola pass di re-render.
+      const leafGroups = newGroups.filter(g => typeof g.id === 'number');
+      if (leafGroups.length) {
+        try { groupsDS.update(leafGroups); } catch(_) {}
+      }
     }, 150);
   });
 

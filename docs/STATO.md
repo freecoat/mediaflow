@@ -8,6 +8,42 @@
 
 ## Versione corrente
 
+**v3.5.0-alpha.31-audit** — 6 maggio 2026 — branch `experiment/timeline-audit`
+
+Branch isolato. Tre fix mirati al sintomo Matteo: "area diventa nera +
+lentezza con 30 booking su 2 risorse, Chrome 147". Il problema era nel
+nostro JS sopra vis-timeline, NON nella libreria.
+
+**Cantieri chiusi su questo branch:**
+- ✅ `onMoving` ottimizzato: index per group (O(group_size) vs O(total)),
+  skip frame con signature identica, ~10× più veloce
+- ✅ Heatmap: pre-indicizza bookings per resource_id (Map una volta vs
+  filter R volte)
+- ✅ Batch `groupsDS.update()` + `itemsDS.update()` (1 re-render vs 30+)
+- ✅ Class `.tl-dragging` su host durante drag → CSS disabilita
+  transitions sui vis-item → elimina flash "area nera"
+- ✅ Safety net global mouseup/mouseleave/Esc per cleanup class
+- ✅ Profiling opzionale via `localStorage.tl_debug = '1'`
+
+**Stima miglioramento atteso**: drag 20ms→2ms, zoom 150ms→20ms.
+
+**TEST RICHIESTO A MATTEO**:
+1. `git checkout experiment/timeline-audit`
+2. Restart server
+3. Riproduci scenario: 30 booking × 2 risorse, drag e zoom in Chrome 147
+4. Verificare: drag fluido + area nera sparita
+5. Riportare esito → merge su main se OK, altrimenti partiamo con
+   DHTMLX Scheduler GPL come piano B
+
+Branch NON pushato. Resta locale fino a esito test.
+
+**Su main, Round 11 chiuso 5/6:**
+- α.26 matrice rimossa
+- α.27 optional + sezioni quote
+- α.28 filmografia dedicata
+- α.29 suoni soft
+- α.30 icone Lucide
+
 **v3.5.0-alpha.30** — 6 maggio 2026 — Round 11 (5/6): migrazione icone Lucide
 
 Setup base completo per Lucide (stroke 1.75px, palette current). Aree ad

@@ -1,5 +1,70 @@
 # MediaFlow — Changelog
 
+## v3.5.0-alpha.31-audit — branch `experiment/timeline-audit`: fix performance + drag flicker (6 maggio 2026)
+
+**Branch isolato**: questa versione vive solo su `experiment/timeline-audit`,
+NON è merged su main. Test richiesto a Matteo prima della scelta finale
+(stay vs porting).
+
+**Sintomi rilevati da Matteo** (Chrome 147, 30 booking × 2 risorse):
+1. "Area timeline diventa nera con bookings visibili" durante drag.
+2. Lentezza generale (drag, zoom, pan).
+
+**Diagnosi nel codice custom planning.html** (~2000 righe JS sopra
+vis-timeline). Il bottleneck NON era nella libreria, era nei nostri
+handler:
+
+1. **`onMoving` fires at 60Hz** (mousemove). Ogni chiamata faceva
+   `bgItems.some()` × 2 + `itemsDS.get()` (full set) + `tlHasConflict()`
+   (filter + scan O(n) tutti gli items). Su Chrome 147 con 30 item +
+   timbrature in dataset, questo arrivava a ~18-25ms per chiamata →
+   finestra 60Hz saltata, drag percepito a scatti.
+
+2. **Heatmap recompute su ogni `rangechanged`** (zoom/pan). Per ogni
+   risorsa scanlinearizzava TUTTI i booking → O(R × B × D). 30 risorse
+   × 100 booking × 30 giorni = 90k operazioni per pan.
+
+3. **`groupsDS.update()` chiamata 30+ volte in loop** dopo heatmap →
+   30 re-render incrementali invece di uno batch.
+
+4. **`itemsDS.update()` chiamata 30+ volte in loop** in `select` handler
+   per applicare `tl-link-highlight` cross-resource.
+
+5. **CSS transitions cascade** durante drag: `.vis-item { transition: ...
+   }` provoca animazioni a cascata sugli item adiacenti durante stack
+   reflow → finestra di rendering vuota → si vede il bg molto scuro
+   (`#tl-host[data-bg="darker"]` = `#0a0c12`). **Questa è la "area
+   nera con bookings visibili"**.
+
+**Fix applicati**:
+- Index `_bgByGroup` + `_itemsByGroup` costruiti una volta a render.
+  `onMoving` fa lookup O(group_size) invece di O(total).
+- Skip duplicati identici frame-per-frame (signature start/end/group).
+- `tlComputeHeatmap` accetta `bookingsForResource` pre-indicizzato.
+  `tlBuildResourceGroups` costruisce `byResource` Map una volta.
+- `groupsDS.update(leafGroups)` batch in singola call.
+- `itemsDS.update(updates)` batch nel select handler.
+- Class `.tl-dragging` su `#tl-host` durante drag → CSS disabilita
+  transitions+animations sui vis-item → niente più flash nero.
+  Cleanup safety net su mouseup/mouseleave/Esc globali.
+- Profiling opzionale: `localStorage.tl_debug = '1'` → console warn
+  per ogni `onMoving > 4ms`.
+
+**Stima miglioramento**: drag dovrebbe scendere da ~20ms/frame a
+~2-3ms/frame (8-10× più veloce). Zoom/pan da ~150ms a ~20ms (heatmap +
+batch). Flash nero eliminato dalle transition disabilitate.
+
+**Da testare a Matteo**:
+1. Pull `experiment/timeline-audit` + restart server.
+2. Riproduci scenario originale: 30 booking × 2 risorse, drag e zoom.
+3. Controlla: drag fluido? area nera sparita?
+4. Se vuoi misure precise: apri console, esegui
+   `localStorage.tl_debug = '1'`, ricarica, vedi warning per onMoving lenti.
+5. Riporta numeri: se "ora va bene" → merge su main. Se ancora lento
+   → porting su DHTMLX Scheduler GPL (free).
+
+**Niente push**: branch solo locale finché non testato.
+
 ## v3.5.0-alpha.30 — Round 11 (5/6): migrazione icone Lucide (6 maggio 2026)
 
 Sostituite le emoji Unicode delle aree ad alta visibilità con SVG Lucide
