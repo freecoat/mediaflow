@@ -1,5 +1,40 @@
 # MediaFlow — Changelog
 
+## v3.5.0-alpha.29 — Round 11 (4/6): suoni soft notifiche + AI (6 maggio 2026)
+
+Suoni discreti stile macOS, sintetizzati via WebAudio API (zero file MP3,
+zero dipendenze esterne, zero CORS). Toggle indipendenti in `/settings`
+→ tab Aspetto.
+
+**Implementazione** (`app/static/js/global.js`):
+- Helper `playSound(name)` con WebAudio:
+  - `notify`: due note ascendenti sine 880Hz→1320Hz, decay rapido (~200ms),
+    stile macOS "Tink"
+  - `ai_done`: bell soft 660Hz + 3a armonica 1980Hz, decay 600ms
+- Throttle 800ms per evitare spam su sequenze rapide.
+- AudioContext lazy-init + auto-resume da policy autoplay browser.
+- Helper `isSoundEnabled(kind)` / `setSoundEnabled(kind, on)` su
+  localStorage (`mf_sound_notify` default ON, `mf_sound_ai` default OFF).
+
+**Trigger automatici**:
+- `toast(msg, type)`: invoca `playSound('notify')` per type ≠ 'info'
+  (success/error/warning) — gli info banali non suonano.
+- `copilotSend()` (`copilot.js`): invoca `playSound('ai_done')` dopo
+  risposta AI completa nel drawer.
+
+**UI** (`/settings` → Aspetto):
+- Card "🔔 Suoni" con 2 toggle stile pillola (notifiche / risposta AI)
+- Bottoni "▶ Test" anteprima suono per ciascun tipo
+- Init checkbox da localStorage al caricamento pagina
+
+**Razionale niente file MP3**: WebAudio è più leggero (zero asset), più
+veloce (no fetch), più portabile (no licensing concerns). Il sintetizzato
+sine-wave a basse intensità è già lo standard delle UI moderne (macOS
+Big Sur, Slack desktop). Se Matteo preferirà file recordati in futuro,
+basta swap di `playSound()` con `new Audio('/static/sounds/x.mp3').play()`.
+
+Cache-buster `v=3.5.0-alpha.29` (global.js + copilot.js).
+
 ## v3.5.0-alpha.28 — Round 11 (3/6): pagina filmografia dedicata + campi estesi (6 maggio 2026)
 
 La filmografia esce dalla scheda cliente e diventa una pagina dedicata

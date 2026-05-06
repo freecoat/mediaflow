@@ -132,6 +132,9 @@
       });
       if (data.error === "provider_disabled") {
         toast("AI non configurata. Vai in Impostazioni → tab AI.", "info");
+      } else {
+        // v3.5.0-alpha.29: chime soft al completamento AI (toggle in /settings).
+        try { if (typeof playSound === 'function') playSound('ai_done'); } catch (e) {}
       }
     } catch (e) {
       if (e.name === "AbortError") {

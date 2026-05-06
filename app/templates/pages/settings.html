@@ -96,11 +96,37 @@
           <!-- generato da JS -->
         </div>
       </div>
-      <div class="card">
+      <div class="card mb-4">
         <div class="card-title mb-3">Tipografia</div>
         <p class="text-sm text-muted mb-3">Famiglia di caratteri usata in tutta l'interfaccia. Anche questa è salvata nel browser corrente.</p>
         <div style="display:grid; grid-template-columns:repeat(auto-fill, minmax(220px, 1fr)); gap:12px;" id="font-grid">
           <!-- generato da JS -->
+        </div>
+      </div>
+      <!-- v3.5.0-alpha.29: suoni soft -->
+      <div class="card">
+        <div class="card-title mb-3">🔔 Suoni</div>
+        <p class="text-sm text-muted mb-3">
+          Brevi ping sintetizzati (stile macOS), salvati nel browser corrente.
+          Toggle indipendenti per le notifiche e per il copilot AI.
+        </p>
+        <div style="display:flex; flex-direction:column; gap:10px;">
+          <label style="display:flex; align-items:center; gap:10px; padding:10px 12px; background:var(--bg2); border:1px solid var(--border); border-radius:6px; cursor:pointer;">
+            <input type="checkbox" id="snd-notify" onchange="toggleSound('notify', this.checked)">
+            <div style="flex:1;">
+              <div style="font-weight:500;">Notifiche</div>
+              <div class="text-xs text-muted">Ping breve quando appare un toast di successo, errore o warning.</div>
+            </div>
+            <button class="btn btn-ghost btn-sm" type="button" onclick="event.preventDefault(); event.stopPropagation(); playSound('notify')" title="Anteprima">▶ Test</button>
+          </label>
+          <label style="display:flex; align-items:center; gap:10px; padding:10px 12px; background:var(--bg2); border:1px solid var(--border); border-radius:6px; cursor:pointer;">
+            <input type="checkbox" id="snd-ai" onchange="toggleSound('ai', this.checked)">
+            <div style="flex:1;">
+              <div style="font-weight:500;">Risposta AI copilot</div>
+              <div class="text-xs text-muted">Chime soft quando l'AI completa una risposta nel drawer.</div>
+            </div>
+            <button class="btn btn-ghost btn-sm" type="button" onclick="event.preventDefault(); event.stopPropagation(); playSound('ai_done')" title="Anteprima">▶ Test</button>
+          </label>
         </div>
       </div>
     </div>
@@ -521,6 +547,18 @@ function pickFont(id) {
   toast(`Font impostato: ${FONTS.find(f=>f.id===id).name}`, 'success');
 }
 
+// ── Suoni (v3.5.0-alpha.29) ──────────────────────────────────
+function initSoundToggles() {
+  const cb1 = document.getElementById('snd-notify');
+  const cb2 = document.getElementById('snd-ai');
+  if (cb1) cb1.checked = isSoundEnabled('notify');
+  if (cb2) cb2.checked = isSoundEnabled('ai');
+}
+function toggleSound(kind, on) {
+  setSoundEnabled(kind, on);
+  toast(on ? `Suono ${kind === 'ai' ? 'AI' : 'notifiche'} attivo` : `Suono ${kind === 'ai' ? 'AI' : 'notifiche'} disattivato`, 'success');
+}
+
 // ── Sidebar reorder (auto-discovery dal DOM) ─────────────────
 // Due livelli di Sortable:
 //  - lista esterna `nav-reorder-list` con handle ⠿ sul label sezione →
@@ -663,6 +701,7 @@ async function changePassword() {
 renderThemes();
 renderFonts();
 renderNavReorder();
+initSoundToggles();
 
 // ── AI providers ─────────────────────────────────────────────
 let _aiState = null;

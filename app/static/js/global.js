@@ -103,6 +103,83 @@ applyFont();
 document.addEventListener('DOMContentLoaded', applySidebarOrder);
 
 
+// ── Suoni soft (v3.5.0-alpha.29) ──────────────────────────────
+// WebAudio-synthesized: niente file MP3, niente CORS, latenza zero.
+// Stile macOS (ping discreto). Throttle 1s per evitare spam.
+// Toggle salvati in localStorage:
+//   mf_sound_notify (default: '1')   — suoni su toast success/error/warning
+//   mf_sound_ai     (default: '0')   — suono al completamento AI copilot
+const _SOUND_THROTTLE_MS = 800;
+let _lastSoundAt = 0;
+let _soundCtx = null;
+
+function _soundCtxLazy() {
+  if (_soundCtx) return _soundCtx;
+  try {
+    const AC = window.AudioContext || window.webkitAudioContext;
+    if (!AC) return null;
+    _soundCtx = new AC();
+    return _soundCtx;
+  } catch (e) { return null; }
+}
+
+function isSoundEnabled(kind) {
+  // Default: notify=on, ai=off (meno invasivo)
+  const key = kind === 'ai' ? 'mf_sound_ai' : 'mf_sound_notify';
+  const def = kind === 'ai' ? '0' : '1';
+  return (localStorage.getItem(key) || def) === '1';
+}
+
+function setSoundEnabled(kind, on) {
+  const key = kind === 'ai' ? 'mf_sound_ai' : 'mf_sound_notify';
+  localStorage.setItem(key, on ? '1' : '0');
+}
+
+function playSound(name) {
+  // name: 'notify' | 'ai_done'
+  const kind = name === 'ai_done' ? 'ai' : 'notify';
+  if (!isSoundEnabled(kind)) return;
+  const now = Date.now();
+  if (now - _lastSoundAt < _SOUND_THROTTLE_MS) return;
+  _lastSoundAt = now;
+  const ctx = _soundCtxLazy();
+  if (!ctx) return;
+  // Resume se sospeso da policy autoplay browser
+  if (ctx.state === 'suspended') { try { ctx.resume(); } catch (e) {} }
+
+  const t = ctx.currentTime;
+  if (name === 'notify') {
+    // macOS-style "Tink": due note brevi ascendenti, sine, decay rapido
+    [880, 1320].forEach((freq, i) => {
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = 'sine';
+      osc.frequency.value = freq;
+      const start = t + i * 0.06;
+      gain.gain.setValueAtTime(0, start);
+      gain.gain.linearRampToValueAtTime(0.12, start + 0.005);
+      gain.gain.exponentialRampToValueAtTime(0.0001, start + 0.18);
+      osc.connect(gain).connect(ctx.destination);
+      osc.start(start);
+      osc.stop(start + 0.2);
+    });
+  } else if (name === 'ai_done') {
+    // Bell soft: fondamentale + 3a armonica + decay più lungo (~600ms)
+    [{f: 660, g: 0.08}, {f: 1980, g: 0.025}].forEach(({f, g}) => {
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = 'sine';
+      osc.frequency.value = f;
+      gain.gain.setValueAtTime(0, t);
+      gain.gain.linearRampToValueAtTime(g, t + 0.01);
+      gain.gain.exponentialRampToValueAtTime(0.0001, t + 0.6);
+      osc.connect(gain).connect(ctx.destination);
+      osc.start(t);
+      osc.stop(t + 0.65);
+    });
+  }
+}
+
 // ── Toast ─────────────────────────────────────────────────────
 function toast(msg, type = 'info', duration = 3500) {
   const container = document.getElementById('toast-container');
@@ -111,6 +188,11 @@ function toast(msg, type = 'info', duration = 3500) {
   el.className = `toast ${type}`;
   el.textContent = msg;
   container.appendChild(el);
+  // v3.5.0-alpha.29: suono soft per toast non-info (success/error/warning).
+  // Skipped per 'info' che è troppo frequente. Throttle 800ms in playSound.
+  if (type && type !== 'info') {
+    try { playSound('notify'); } catch (e) {}
+  }
   setTimeout(() => {
     el.style.opacity = '0';
     el.style.transition = 'opacity 300ms';

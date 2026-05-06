@@ -8,6 +8,27 @@
 
 ## Versione corrente
 
+**v3.5.0-alpha.29** — 6 maggio 2026 — Round 11 (4/6): suoni soft
+
+Suoni discreti via WebAudio (sintetizzati, zero file MP3). Toggle in
+`/settings` → Aspetto. Default: notifiche ON, AI OFF (meno invasivo).
+
+**Chiuso α.29 (4/6):**
+- ✅ `playSound(name)` in global.js con WebAudio: `notify` due note sine
+  880→1320Hz (stile macOS Tink, ~200ms), `ai_done` bell 660Hz + 3a armonica
+  (~600ms)
+- ✅ Throttle 800ms anti-spam, AudioContext lazy + auto-resume
+- ✅ `toast()` invoca notify per type ≠ 'info'
+- ✅ Copilot drawer invoca ai_done a risposta completa
+- ✅ Card "🔔 Suoni" in `/settings` Aspetto con toggle + bottoni test
+- ✅ Smoke test boot OK
+
+**In coda Round 11 (2/6):**
+- 🔜 α.30 — Migrazione completa icone Lucide
+- 🔜 branch `experiment/timeline-audit`
+
+Cache-buster `v=3.5.0-alpha.29` (global.js + copilot.js).
+
 **v3.5.0-alpha.28** — 6 maggio 2026 — Round 11 (3/6): filmografia dedicata + campi estesi
 
 La filmografia esce dalla scheda cliente. Pagina dedicata
