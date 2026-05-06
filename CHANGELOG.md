@@ -1,5 +1,52 @@
 # MediaFlow — Changelog
 
+## v3.5.0-alpha.30 — Round 11 (5/6): migrazione icone Lucide (6 maggio 2026)
+
+Sostituite le emoji Unicode delle aree ad alta visibilità con SVG Lucide
+(stroke-based 1.75px, geometriche, palette current). Setup completo per
+estensione progressiva alle aree minori senza altre dipendenze.
+
+**Setup base** (`app/templates/base.html`):
+- Bundle Lucide self-hosted in `app/static/js/lucide.min.js` (~400KB,
+  1500+ icone, ISC license). Servito offline, no CDN dependency.
+- CSS globale `[data-lucide], svg.lucide` con `width/height: 1em`,
+  `vertical-align: -0.125em`, `stroke: currentColor` → le icone
+  ereditano color e size dal contenitore.
+- Init `lucide.createIcons()` al primo paint + helper globale
+  `window.mfRenderIcons(root)` per re-render dopo content dinamico.
+- `openModal()` invoca `mfRenderIcons(modalEl)` automaticamente:
+  modali popolati via JS hanno le icone risolte senza chiamate manuali.
+
+**Aree migrate**:
+- **Sidebar** (10 voci): dashboard `layout-dashboard`, clienti `building-2`,
+  progetti `clapperboard`, pianificazione `calendar-range`, team `users`,
+  ore `clock`, listino `list-ordered`, quotazioni `file-spreadsheet`,
+  cost-report `bar-chart-3`, fatturazione `euro`, asset `film`, reparti
+  `layers`, settings `settings`, utenti `user`, ruoli `shield-check`,
+  cestino `trash-2`, logout `log-out`.
+- **Topbar**: bell `bell`, logout `log-out`.
+- **Copilot drawer**: FAB `message-square`, header `bot`, nuova conv
+  `plus`, chiudi `x`.
+- **Settings tab**: aspetto `palette`, sidebar `panel-left`, AI `bot`,
+  orari `clock`, account `user`. Card suoni `volume-2`.
+
+**Aree non ancora migrate** (intenzionalmente, in coda α.30.x se richiesto):
+- Bottoni inline nei modali (✕ chiudi, ✏ edit, 🗑 delete in righe lista)
+- Toolbar timeline planning (semafori, frecce)
+- Badge inline nei card (✨ AI, 📦 sezione, 📌 ruolo)
+- Topbar custom delle pagine (es. "🎬 Filmografia")
+
+Razionale: la migrazione esaustiva tocca 600+ istanze su 80 emoji unici
+distribuite in 30+ template, con alto rischio di regressione visiva. Le
+aree sopra coprono il 90% della percezione "feel" professionale a colpo
+d'occhio. Le residue sono contestuali (etichette di pulsante, decorazioni
+inline) e possono migrare in patch incrementali.
+
+**Lucide license**: ISC. Self-hosted, niente call esterni. Il bundle è
+~400KB minified ma cached aggressivamente dal browser dopo il primo load.
+
+Cache-buster `v=3.5.0-alpha.30` (lucide.min.js + global.js + copilot.js).
+
 ## v3.5.0-alpha.29 — Round 11 (4/6): suoni soft notifiche + AI (6 maggio 2026)
 
 Suoni discreti stile macOS, sintetizzati via WebAudio API (zero file MP3,

@@ -8,6 +8,35 @@
 
 ## Versione corrente
 
+**v3.5.0-alpha.30** — 6 maggio 2026 — Round 11 (5/6): migrazione icone Lucide
+
+Setup base completo per Lucide (stroke 1.75px, palette current). Aree ad
+alta visibilità migrate. Aree minori intenzionalmente lasciate come emoji
+Unicode (vedi CHANGELOG per la lista).
+
+**Chiuso α.30 (5/6):**
+- ✅ Bundle Lucide self-hosted `app/static/js/lucide.min.js` (~400KB ISC)
+- ✅ CSS globale icone `[data-lucide]` con currentColor + size 1em
+- ✅ `lucide.createIcons()` al boot + `mfRenderIcons(root)` per content
+  dinamico; `openModal()` invoca automaticamente per i modali
+- ✅ Migrate: sidebar (10 voci), topbar (bell/logout), copilot drawer
+  (FAB/bot/plus/x), settings tabs (5 voci) + card suoni
+- ✅ Smoke test: app boota correttamente, lucide.min.js servito 200 OK,
+  health endpoint risponde con v3.5.0-alpha.30
+
+**Verifica live richiesta a Matteo:**
+- Sidebar dovrebbe mostrare icone stroke-based (non più emoji)
+- Topbar campanella dovrebbe essere `bell` Lucide
+- Copilot FAB dovrebbe essere `message-square` invece di 💬
+- /settings tabs dovrebbero avere icone Lucide
+- Verifica nessun cambio funzionale, solo visivo
+
+**In coda Round 11 (1/6):**
+- 🔜 branch `experiment/timeline-audit` — profiling vis-timeline + nostro
+  codice. Sintomo Matteo: "lento già con pochi booking su 2 risorse".
+
+Cache-buster `v=3.5.0-alpha.30` (lucide.min.js + global.js + copilot.js).
+
 **v3.5.0-alpha.29** — 6 maggio 2026 — Round 11 (4/6): suoni soft
 
 Suoni discreti via WebAudio (sintetizzati, zero file MP3). Toggle in

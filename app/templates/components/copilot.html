@@ -126,15 +126,15 @@
   .cp-typing { font-size: 11px; color: var(--text3); padding: 0 14px 6px; }
 </style>
 
-<button id="copilot-fab" onclick="copilotOpen()" title="Apri copilot AI">💬</button>
+<button id="copilot-fab" onclick="copilotOpen()" title="Apri copilot AI"><i data-lucide="message-square" style="width:24px;height:24px;"></i></button>
 <div id="copilot-overlay" onclick="copilotClose()"></div>
 <div id="copilot-drawer" role="dialog" aria-label="Copilot AI">
   <div class="cp-head">
-    <span style="font-size:18px;">🤖</span>
+    <span style="font-size:18px;color:var(--indigo2);"><i data-lucide="bot" style="width:20px;height:20px;"></i></span>
     <h3>Copilot</h3>
     <span class="cp-context-tag" id="cp-context-tag">—</span>
-    <button onclick="copilotNewConv()" title="Nuova conversazione">＋</button>
-    <button onclick="copilotClose()" title="Chiudi">✕</button>
+    <button onclick="copilotNewConv()" title="Nuova conversazione"><i data-lucide="plus"></i></button>
+    <button onclick="copilotClose()" title="Chiudi"><i data-lucide="x"></i></button>
   </div>
   <div class="cp-conv-bar">
     <span>Storia:</span>

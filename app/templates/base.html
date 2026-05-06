@@ -11,6 +11,17 @@
   <title>{% block title %}MediaFlow{% endblock %}</title>
   <link rel="stylesheet" href="/static/css/main.css?v=3.4.56">
   <!-- FullCalendar 6.x: lo stylesheet è incorporato in index.global.min.js — niente CSS separato. -->
+  <!-- v3.5.0-alpha.30: Lucide icons (1500+ stroke-based, 1.5px). -->
+  <style>
+    /* Stile globale icone Lucide: ereditano color e size dal contenitore */
+    [data-lucide], svg.lucide {
+      width: 1em; height: 1em; vertical-align: -0.125em;
+      stroke-width: 1.75; stroke: currentColor; fill: none;
+    }
+    .nav-icon svg { width: 18px; height: 18px; }
+    .topbar-bell-icon svg { width: 18px; height: 18px; }
+    .btn svg { width: 1em; height: 1em; }
+  </style>
   {% block head %}{% endblock %}
 </head>
 <body>
@@ -27,7 +38,7 @@
       <div class="nav-section">
         <div class="nav-section-label">Principale</div>
         <a href="/dashboard" data-nav-id="dashboard" class="nav-item {% if active_page == 'dashboard' %}active{% endif %}">
-          <span class="nav-icon">⬛</span> Dashboard
+          <span class="nav-icon"><i data-lucide="layout-dashboard"></i></span> Dashboard
         </a>
       </div>
 
@@ -36,26 +47,26 @@
         <div class="nav-section-label">Anagrafica</div>
         {% if can_view_finance(_user) %}
         <a href="/clients" data-nav-id="clients" class="nav-item {% if active_page == 'clients' %}active{% endif %}">
-          <span class="nav-icon">🏢</span> Clienti
+          <span class="nav-icon"><i data-lucide="building-2"></i></span> Clienti
         </a>
         {% endif %}
         <a href="/projects" data-nav-id="projects" class="nav-item {% if active_page == 'projects' %}active{% endif %}">
-          <span class="nav-icon">🎞</span> Progetti
+          <span class="nav-icon"><i data-lucide="clapperboard"></i></span> Progetti
         </a>
       </div>
 
       <div class="nav-section">
         <div class="nav-section-label">Operativo</div>
         <a href="/planning" data-nav-id="planning" class="nav-item {% if active_page == 'planning' %}active{% endif %}">
-          <span class="nav-icon">📋</span> Pianificazione
+          <span class="nav-icon"><i data-lucide="calendar-range"></i></span> Pianificazione
         </a>
         {% if can_assign_resources(_user) %}
         <a href="/team" data-nav-id="team" class="nav-item {% if active_page == 'team' %}active{% endif %}">
-          <span class="nav-icon">👥</span> Team
+          <span class="nav-icon"><i data-lucide="users"></i></span> Team
         </a>
         {% endif %}
         <a href="/hr" data-nav-id="hr" class="nav-item {% if active_page == 'hr' %}active{% endif %}">
-          <span class="nav-icon">🕐</span> {% if is_staff(_user) %}Le mie ore{% else %}Ore lavoro{% endif %}
+          <span class="nav-icon"><i data-lucide="clock"></i></span> {% if is_staff(_user) %}Le mie ore{% else %}Ore lavoro{% endif %}
         </a>
       </div>
 
@@ -64,21 +75,21 @@
         <div class="nav-section-label">Preventivi</div>
         {% if can_edit_pricelist(_user) %}
         <a href="/pricelist" data-nav-id="pricelist" class="nav-item {% if active_page == 'pricelist' %}active{% endif %}">
-          <span class="nav-icon">📋</span> Listino Prezzi
+          <span class="nav-icon"><i data-lucide="list-ordered"></i></span> Listino Prezzi
         </a>
         {% endif %}
         <a href="/quotes" data-nav-id="quotes" class="nav-item {% if active_page == 'quotes' %}active{% endif %}">
-          <span class="nav-icon">💬</span> Quotazioni
+          <span class="nav-icon"><i data-lucide="file-spreadsheet"></i></span> Quotazioni
         </a>
       </div>
 
       <div class="nav-section">
         <div class="nav-section-label">Finanza</div>
         <a href="/cost-report" data-nav-id="cost_report" class="nav-item {% if active_page == 'cost_report' %}active{% endif %}">
-          <span class="nav-icon">📊</span> Cost Report
+          <span class="nav-icon"><i data-lucide="bar-chart-3"></i></span> Cost Report
         </a>
         <a href="/finance" data-nav-id="finance" class="nav-item {% if active_page == 'finance' %}active{% endif %}">
-          <span class="nav-icon">💶</span> Fatturazione
+          <span class="nav-icon"><i data-lucide="euro"></i></span> Fatturazione
         </a>
       </div>
       {% endif %}
@@ -86,7 +97,7 @@
       <div class="nav-section">
         <div class="nav-section-label">Media</div>
         <a href="/dam" data-nav-id="dam" class="nav-item {% if active_page == 'dam' %}active{% endif %}">
-          <span class="nav-icon">🎬</span> Asset Library
+          <span class="nav-icon"><i data-lucide="film"></i></span> Asset Library
         </a>
       </div>
 
@@ -95,11 +106,11 @@
         <div class="nav-section-label">Configurazione</div>
         {% if can_edit_settings(_user) %}
         <a href="/departments" data-nav-id="departments" class="nav-item {% if active_page == 'departments' %}active{% endif %}">
-          <span class="nav-icon">🏛️</span> Reparti
+          <span class="nav-icon"><i data-lucide="layers"></i></span> Reparti
         </a>
         {% endif %}
         <a href="/settings" data-nav-id="settings" class="nav-item {% if active_page == 'settings' %}active{% endif %}">
-          <span class="nav-icon">⚙</span> Impostazioni
+          <span class="nav-icon"><i data-lucide="settings"></i></span> Impostazioni
         </a>
       </div>
       {% endif %}
@@ -109,17 +120,17 @@
         <div class="nav-section-label">Amministrazione</div>
         {% if can_manage_users(_user) %}
         <a href="/admin/users" data-nav-id="admin_users" class="nav-item {% if active_page == 'admin_users' %}active{% endif %}">
-          <span class="nav-icon">👤</span> Utenti
+          <span class="nav-icon"><i data-lucide="user"></i></span> Utenti
         </a>
         {% endif %}
         {% if can_manage_roles(_user) %}
         <a href="/admin/roles" data-nav-id="admin_roles" class="nav-item {% if active_page == 'admin_roles' %}active{% endif %}">
-          <span class="nav-icon">🔐</span> Ruoli e permessi
+          <span class="nav-icon"><i data-lucide="shield-check"></i></span> Ruoli e permessi
         </a>
         {% endif %}
         {% if has_permission(_user, 'view_trash') %}
         <a href="/admin/cestino" data-nav-id="admin_trash" class="nav-item {% if active_page == 'admin_trash' %}active{% endif %}">
-          <span class="nav-icon">🗑</span> Cestino
+          <span class="nav-icon"><i data-lucide="trash-2"></i></span> Cestino
         </a>
         {% endif %}
       </div>
@@ -128,7 +139,7 @@
 
     <div class="sidebar-footer">
       <a href="/auth/logout" class="nav-item">
-        <span class="nav-icon">↩</span> Logout
+        <span class="nav-icon"><i data-lucide="log-out"></i></span> Logout
       </a>
     </div>
   </aside>
@@ -141,13 +152,13 @@
         {% block topbar_actions %}{% endblock %}
         {% if request.state.current_user %}
         <button id="notif-bell-btn" class="topbar-bell" title="Notifiche" onclick="notifToggleDrawer()">
-          <span class="topbar-bell-icon">🔔</span>
+          <span class="topbar-bell-icon"><i data-lucide="bell"></i></span>
           <span id="notif-badge" class="topbar-bell-badge" style="display:none;">0</span>
         </button>
         <div class="topbar-user" title="{{ request.state.current_user.email }}">
           <span class="topbar-user-name">{{ request.state.current_user.full_name or request.state.current_user.email }}</span>
           <span class="topbar-user-role">{{ request.state.current_user.role.value if request.state.current_user.role else '' }}</span>
-          <a href="/auth/logout" class="topbar-user-logout" title="Logout">↩</a>
+          <a href="/auth/logout" class="topbar-user-logout" title="Logout"><i data-lucide="log-out"></i></a>
         </div>
         {% endif %}
       </div>
@@ -171,8 +182,35 @@
 {% include "components/notifications.html" %}
 {% endif %}
 
-<script src="/static/js/global.js?v=3.5.0-alpha.29"></script>
+<script src="/static/js/lucide.min.js?v=3.5.0-alpha.30"></script>
+<script src="/static/js/global.js?v=3.5.0-alpha.30"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/fullcalendar/6.1.11/index.global.min.js"></script>
+<script>
+  // v3.5.0-alpha.30: Lucide createIcons() al primo paint + helper globale
+  // mfRenderIcons(root) per re-render dopo content dinamico (modali, liste).
+  if (window.lucide && typeof lucide.createIcons === 'function') {
+    lucide.createIcons();
+    window.mfRenderIcons = function(root) {
+      try {
+        if (root) {
+          // Lucide non supporta root scope nativo: fallback ricerca + replace.
+          root.querySelectorAll('[data-lucide]').forEach(el => {
+            const name = el.getAttribute('data-lucide');
+            if (!name) return;
+            // Ricalcola SVG inline se l'elemento è ancora <i>; se è già SVG, no-op
+            if (el.tagName === 'I' || (el.tagName === 'SPAN' && !el.querySelector('svg'))) {
+              lucide.createIcons({ nameAttr: 'data-lucide', root: el.parentNode || document });
+            }
+          });
+        } else {
+          lucide.createIcons();
+        }
+      } catch (e) { /* fail-safe */ }
+    };
+  } else {
+    window.mfRenderIcons = function() {};
+  }
+</script>
 {% block scripts %}{% endblock %}
 </body>
 </html>

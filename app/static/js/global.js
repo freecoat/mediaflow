@@ -216,6 +216,8 @@ function openModal(id) {
     try {
       if (typeof mfApplySearchable === 'function') mfApplySearchable(el);
       if (typeof mfApplyTimePickers === 'function') mfApplyTimePickers(el);
+      // v3.5.0-alpha.30: re-render icone Lucide per contenuti modale dinamici
+      if (typeof window.mfRenderIcons === 'function') window.mfRenderIcons(el);
     } catch (e) { /* fail-safe: non bloccare apertura */ }
   }, 0);
 }
