@@ -1,5 +1,32 @@
 # MediaFlow — Changelog
 
+## v3.5.0-alpha.26 — Round 11 (1/6): rimozione matrice + kanban assegnazioni (6 maggio 2026)
+
+Apertura Round 11 (6 voci feedback Matteo del 6 maggio). Prima voce a basso
+rischio: sparisce l'area `/assignments` (matrice + kanban). Le assegnazioni
+restano gestibili **solo dalla scheda progetto** (`/projects/{id}` ha già la
+tab risorse) e dalla **timeline planning** (vista "Per progetto"). Un solo
+posto per gestirle, niente duplicazione.
+
+**Cancellati**:
+- `app/routers/assignments.py` (matrice + kanban + endpoint API).
+- `app/templates/pages/assignments.html` (tabella matrice + drag kanban).
+- Voce sidebar "🧩 Assegnazioni" (tra Team e Ore lavoro).
+- Prefisso `/assignments` da `_NON_ELEVATED_BLOCKED_PREFIXES` middleware RBAC
+  (rimasto solo `/resources`).
+- Import `assignments` da `app/main.py`.
+
+**Preservato**:
+- Modello `JobResourceAssignment` (usato dalla scheda progetto + integrazione
+  con `BookingAssignment` via `resource_assignment_sync`).
+- Tabella `job_resource_assignments` nel DB (zero migrazione: dati intatti).
+
+**Rationale**: Matteo ha confermato che la matrice non lo convinceva. La vista
+"Risorse e assegnazioni" nella scheda progetto è il punto di gestione naturale
+("chi lavora su questo progetto"), e la timeline planning per "quando".
+
+Cache-buster `v=3.5.0-alpha.26`. Smoke test import OK. Niente migrazione DB.
+
 ## v3.5.0-alpha.25 — Scheda cliente AI: filmografia con fonti esterne (5 maggio 2026 notte tardi)
 
 Chiuso il 7° punto del Round 10 (la scheda cliente con filmografia AI).

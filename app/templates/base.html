@@ -53,9 +53,6 @@
         <a href="/team" data-nav-id="team" class="nav-item {% if active_page == 'team' %}active{% endif %}">
           <span class="nav-icon">👥</span> Team
         </a>
-        <a href="/assignments" data-nav-id="assignments" class="nav-item {% if active_page == 'assignments' %}active{% endif %}">
-          <span class="nav-icon">🧩</span> Assegnazioni
-        </a>
         {% endif %}
         <a href="/hr" data-nav-id="hr" class="nav-item {% if active_page == 'hr' %}active{% endif %}">
           <span class="nav-icon">🕐</span> {% if is_staff(_user) %}Le mie ore{% else %}Ore lavoro{% endif %}
@@ -174,7 +171,7 @@
 {% include "components/notifications.html" %}
 {% endif %}
 
-<script src="/static/js/global.js?v=3.5.0-alpha.25"></script>
+<script src="/static/js/global.js?v=3.5.0-alpha.26"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/fullcalendar/6.1.11/index.global.min.js"></script>
 {% block scripts %}{% endblock %}
 </body>

@@ -11,7 +11,7 @@ from app.routers import (
     auth, resources, planning, finance, dam,
     pricelist, quotes, cost_report as cr,
     clients, projects, ai, departments, settings as settings_router,
-    assignments, hr, jobs, admin, notifications as notifications_router,
+    hr, jobs, admin, notifications as notifications_router,
     tech_sheets, team,
 )
 
@@ -179,7 +179,7 @@ async def lifespan(app: FastAPI):
     yield
 
 
-app = FastAPI(title="MediaFlow", version="3.5.0-alpha.25", lifespan=lifespan)
+app = FastAPI(title="MediaFlow", version="3.5.0-alpha.26", lifespan=lifespan)
 
 BASE_DIR = Path(__file__).parent
 app.mount("/static", StaticFiles(directory=BASE_DIR / "static"), name="static")
@@ -277,7 +277,7 @@ async def auth_guard(request: Request, call_next):
 # Path/prefix vietati a staff/viewer (non vedono finanza, listino, quote, settings, reparti).
 # I router HR e planning gestiscono internamente lo scoping fine (vedi rbac.scope_resource_id).
 _FINANCE_BLOCKED_PREFIXES = ("/quotes", "/cost-report", "/finance", "/pricelist", "/clients")
-_NON_ELEVATED_BLOCKED_PREFIXES = ("/assignments", "/resources")  # kanban + anagrafica risorse
+_NON_ELEVATED_BLOCKED_PREFIXES = ("/resources",)  # anagrafica risorse globale
 _ADMIN_ONLY_PREFIXES = ("/departments", "/settings/api/working-hours", "/settings/api/ai")
 
 
@@ -288,7 +288,7 @@ def _is_forbidden_for_role(path: str, user) -> bool:
         for pref in _FINANCE_BLOCKED_PREFIXES:
             if path == pref or path.startswith(pref + "/"):
                 return True
-    # Staff/viewer: niente kanban assegnazioni e anagrafica risorse globale
+    # Staff/viewer: niente anagrafica risorse globale
     if not is_elevated(user):
         for pref in _NON_ELEVATED_BLOCKED_PREFIXES:
             if path == pref or path.startswith(pref + "/"):
@@ -348,7 +348,6 @@ app.include_router(cr.router)
 app.include_router(ai.router)
 app.include_router(departments.router)
 app.include_router(settings_router.router)
-app.include_router(assignments.router)
 app.include_router(hr.router)
 app.include_router(jobs.router)
 app.include_router(admin.router)

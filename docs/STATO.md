@@ -8,6 +8,38 @@
 
 ## Versione corrente
 
+**v3.5.0-alpha.26** — 6 maggio 2026 — Round 11 (1/6): rimozione matrice + kanban
+
+Apertura Round 11 sui feedback Matteo del 6 maggio. 6 voci totali divise
+per scope. Prima voce chiusa: l'area `/assignments` (matrice + kanban)
+sparisce. Le assegnazioni si gestiscono solo da scheda progetto + timeline
+planning. La matrice non convinceva e duplicava la gestione.
+
+**Chiuso α.26 (1/6):**
+- ✅ Cancellato `app/routers/assignments.py` + template + nav-item sidebar
+- ✅ Modello `JobResourceAssignment` preservato (usato in scheda progetto)
+- ✅ RBAC middleware aggiornato (`/assignments` rimosso da blocked prefixes)
+- ✅ Smoke test import: `from app import main` OK con v3.5.0-alpha.26
+
+**In coda Round 11 (5/6):**
+- 🔜 α.27 — `is_optional` + `section_label` su QuoteLine (raggruppamento
+  per deliverable: SKY/NBCU/Beta Film + voci opzionali fuori totale)
+- 🔜 α.28 — Pagina filmografia dedicata `/clients/{id}/works` con campi
+  estesi (funding pubblico, cast/crew, link esterni, sinossi, premi).
+  Tab filmografia rimossa dalla scheda cliente.
+- 🔜 α.29 — Suoni soft notifiche + AI risposta (royalty-free Pixabay,
+  toggle in `/settings`)
+- 🔜 α.30 — Migrazione completa icone Lucide (sostituzione emoji →
+  SVG inline via macro Jinja, stroke 1.5px, currentColor)
+- 🔜 branch `experiment/timeline-audit` — profiling vis-timeline + nostro
+  codice. Sintomo Matteo: "lento già con pochi booking su 2 risorse".
+  Probabile bottleneck nel custom JS (heatmap re-render, listener accumulo,
+  force-redraw eccessivo). Se confermato → ottimizziamo gratis. Altrimenti
+  porting su DHTMLX Scheduler GPL (free per uso interno) o Bryntum Scheduler
+  Pro ($900) come ultima istanza.
+
+Cache-buster `v=3.5.0-alpha.26`. Niente migrazione DB.
+
 **v3.5.0-alpha.25** — 5 maggio 2026 notte tardi — Round 10 chiuso (7/7)
 
 Chiuso anche il 7° punto: scheda cliente con filmografia AI, fonti pubbliche
