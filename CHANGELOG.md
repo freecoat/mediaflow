@@ -1,5 +1,51 @@
 # MediaFlow — Changelog
 
+## v3.5.0-alpha.39 — Fix tint+font (window.RESOURCES_SEED) + multidrag bulk + render mutex (6 maggio 2026)
+
+α.38 ha aggiunto tint colore-risorsa, bold nome, role piccolo e header
+reparto grande, ma Matteo ha riportato "non si vede nulla". Diagnosi:
+
+**Bug 1 (tint sfondo): `window.RESOURCES_SEED` undefined.**
+- `RESOURCES_SEED` è dichiarato come `const` di modulo (`const RESOURCES_SEED = [...]`).
+  In JavaScript moderno le `const` di top-level NON diventano property di
+  `window` (a differenza di `var`).
+- `_tlInjectResourceTints` aveva il check `if (!window.RESOURCES_SEED || ...)`
+  → sempre true → early-return → nessun `<style>` iniettato → niente tint.
+- Fix: `if (typeof RESOURCES_SEED === 'undefined' || !RESOURCES_SEED.length)`.
+
+**Bug 2 (font/bold non visibili anche con cache fresca):** stili più
+aggressivi e con `!important` per essere robusti a eventuali regole
+ereditate da vis-timeline. In più visivamente più marcati per essere
+riconoscibili a colpo d'occhio:
+- Nome operatore: `font-weight: 800` + `font-size: 14px` + colore `#ffffff` puro
+- Funzione (role): `font-size: 9px` + `text-transform: uppercase` + `letter-spacing: 0.5px`,
+  niente più italic (collideva visivamente con uppercase)
+- Header reparto: `font-size: 17px` + `font-weight: 800` + colore `#d4daff`,
+  background gradient più contrastato
+- Inline `font-style: italic` rimosso dal JS (era in conflitto con CSS)
+
+**Bug 3 (multidrag cascade conferme + timeline doppia):**
+- Refactor `_tlApplyMoveToOthersInSelection`: invece di N `PUT
+  /api/booking-assignments/{aid}` (uno per assignment selezionato), un
+  singolo `PUT /api/bookings/{id}/bulk-edit` con `shift_minutes` e CSV
+  di booking_ids. Vantaggi:
+  1. Singolo round-trip → niente cascade
+  2. Conflict check atomico server-side
+  3. Singolo render finale
+- Aggregazione: `Set` di booking_id univoci (bulk-edit lavora a
+  booking-level, shift_minutes shifta tutti gli assignments di un booking
+  → equivalente al loop per assignment).
+
+**Bug 4 (timeline doppia, sopra e sotto, sparisce dopo refresh):**
+- Race condition: `renderTimeline` chiamato in parallelo da più handler
+  (multi-move callback, undo, filtro, drag finalize) → cleanup parziale +
+  doppia istanza vis.Timeline appesa allo host.
+- Fix: serializzazione via promise queue. Wrapper `renderTimeline` mette
+  in coda ogni chiamata; il body è ora `_doRenderTimeline`. Più chiamate
+  stacked si risolvono in FIFO, mai in parallelo.
+
+**Niente migrate**: solo modifiche frontend.
+
 ## v3.5.0-alpha.38 — Polish ROI/look label + bulk-edit esteso + filtro orario (6 maggio 2026)
 
 Round di rifiniture post-feedback Matteo su ROI funzionante (α.37):

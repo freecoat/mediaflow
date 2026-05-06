@@ -163,14 +163,15 @@
   .vis-foreground .vis-group:nth-child(odd) { background: rgba(255,255,255,0.012); }
   .vis-foreground .vis-group { border-color: rgba(255,255,255,0.04); transition: background .12s ease; }
   /* Reparto padre — header sticky più contrastato (v3.4.45).
-     v3.5.0-alpha.38: font-size aumentato (era 11px → 14px), letter-spacing
-     ridotto, no uppercase (leggibilità), Matteo "ingrandisci font reparto". */
+     v3.5.0-alpha.38/39: font-size molto più grande (era 11px → 17px),
+     letter-spacing ridotto, no uppercase (leggibilità), Matteo
+     "ingrandisci font reparto". */
   .vis-labelset .vis-label.vis-nesting-group {
-    background: linear-gradient(90deg, rgba(98,114,245,0.25) 0%, rgba(98,114,245,0.08) 70%, transparent 100%);
-    font-weight: 700;
-    color: #c0c8ff;
-    letter-spacing: 0.4px;
-    font-size: 14px;
+    background: linear-gradient(90deg, rgba(98,114,245,0.30) 0%, rgba(98,114,245,0.10) 70%, transparent 100%);
+    font-weight: 800 !important;
+    color: #d4daff !important;
+    letter-spacing: 0.3px;
+    font-size: 17px !important;
     border-left: 4px solid #6272f5;
     padding-left: 12px;
     box-shadow: inset 0 -1px 0 rgba(98,114,245,0.15);
@@ -187,14 +188,20 @@
     padding-left: 22px;
   }
   .vis-labelset .vis-label .tl-res-name {
-    font-weight: 700;
-    font-size: 13px;
+    font-weight: 800 !important;
+    font-size: 14px !important;
     line-height: 1.15;
+    color: #ffffff;
+    letter-spacing: 0.2px;
   }
   .vis-labelset .vis-label .tl-res-role {
-    font-size: 9.5px !important;  /* override inline style legacy */
+    font-size: 9px !important;
     line-height: 1.1;
-    margin-top: 2px;
+    margin-top: 1px;
+    font-weight: 400 !important;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    color: #9aa0b8 !important;
   }
   .vis-labelset .vis-label:hover { background: rgba(98,114,245,0.10); }
   .vis-foreground .vis-group:hover { background: rgba(98,114,245,0.04); }
@@ -2590,7 +2597,10 @@ function _hexToRgba(hex, alpha) {
 function _tlInjectResourceTints() {
   const old = document.getElementById('tl-res-tints');
   if (old) old.remove();
-  if (!window.RESOURCES_SEED || !RESOURCES_SEED.length) return;
+  // alpha.39 fix: `RESOURCES_SEED` è una `const` di modulo → NON è property
+  // di window. Il vecchio check `!window.RESOURCES_SEED` era sempre true →
+  // early-return → nessun tint iniettato. Niente window prefix.
+  if (typeof RESOURCES_SEED === 'undefined' || !RESOURCES_SEED.length) return;
   const rules = RESOURCES_SEED.map(r => {
     const cls = 'tl-res-' + r.id;
     const labelBg = _hexToRgba(r.color, 0.07);
@@ -2654,9 +2664,9 @@ function tlBuildResourceGroups(bookings, rangeStart, rangeEnd) {
   for (const r of resources) {
     let inner = '<div class="tl-res-name">' + escapeHtml(r.name) + '</div>';
     if (r.role) {
-      // alpha.38: stili principali via CSS (.tl-res-role) — qui solo color
-      // e font-style per non ripetere font-size/line-height (override CSS).
-      inner += '<div class="tl-res-role" style="color:var(--text-muted,#8b91a8); font-style:italic; opacity:0.85;">' + escapeHtml(r.role) + '</div>';
+      // alpha.38/39: stili principali via CSS (.tl-res-role nel template head).
+      // Qui niente inline style (si sovrapporrebbero al CSS).
+      inner += '<div class="tl-res-role">' + escapeHtml(r.role) + '</div>';
     }
     if (bookings && rangeStart && rangeEnd) {
       const days = tlComputeHeatmap(r.id, bookings, rangeStart, rangeEnd);
@@ -3367,39 +3377,47 @@ async function _tlApplySplitPauseShift(movedItem, origItem, origBooking) {
 // Cross-resource: shift solo del delta time, non del group (logico — l'utente
 // vuole spostare la fascia oraria del gruppo selezionato in blocco; se vuole
 // cambiare risorsa ad ognuno, lo fa singolarmente o via menu Bulk).
+//
+// alpha.39: refactor per usare l'endpoint bulk-edit invece di N PUT
+// per-assignment. Vantaggi:
+//   1. Singolo round-trip → niente cascade di errori/conferme
+//   2. Singolo render alla fine → niente timeline doppia da render race
+//   3. Conflict check atomico server-side (esistente in bulk_edit_bookings)
 async function _tlApplyMoveToOthersInSelection(movedItem, origItem) {
   if (!window._tlInstance || !origItem) return;
   const sel = window._tlInstance.getSelection() || [];
-  const others = sel.filter(id => typeof id === 'string' && id.startsWith('a') && id !== movedItem.id);
-  if (!others.length) return;
+  const otherAids = sel.filter(id => typeof id === 'string' && id.startsWith('a') && id !== movedItem.id);
+  if (!otherAids.length) return;
   const ds = window._tlInstance.itemsData;
   const allItems = ds ? ds.get() : [];
   const dtMs = new Date(movedItem.start).getTime() - new Date(origItem.start).getTime();
   if (Math.abs(dtMs) < 30000) return;  // < 30s = no-op
-  const ok = confirm(`Applicare lo stesso shift orario (${(dtMs/3600000).toFixed(2)}h) a ${others.length} booking selezionati?`);
-  if (!ok) return;
-  let okN = 0, failN = 0;
-  for (const oid of others) {
-    const it = allItems.find(x => x.id === oid);
-    if (!it) { failN++; continue; }
-    const aid = String(oid).startsWith('a') ? String(oid).substring(1) : oid;
-    const ns = new Date(new Date(it.start).getTime() + dtMs);
-    const ne = new Date(new Date(it.end).getTime() + dtMs);
-    const fd = new FormData();
-    fd.append('start_datetime', _toLocalDtInput(ns));
-    fd.append('end_datetime', _toLocalDtInput(ne));
-    fd.append('resource_id', String(it.group));
-    try {
-      await api('PUT', `/planning/api/booking-assignments/${aid}`, fd);
-      okN++;
-    } catch(e) {
-      failN++;
-      console.warn('multi-move failed for', oid, e);
+  // Mappa assignment_id selezionati → booking_id univoci (bulk-edit lavora a
+  // booking-level, shift_minutes shifta tutti gli assignments di un booking).
+  const otherBookingIds = new Set();
+  for (const aid of otherAids) {
+    const it = allItems.find(x => x.id === aid);
+    if (it && it.booking_id && it.booking_id !== movedItem.booking_id) {
+      otherBookingIds.add(it.booking_id);
     }
   }
-  toast(`✓ ${okN} spostat${okN === 1 ? 'o' : 'i'}${failN ? ` · ⚠ ${failN} falliti` : ''}`,
-        failN ? 'warning' : 'success');
-  if (okN) renderTimeline(true);
+  if (!otherBookingIds.size) return;
+  const ok = confirm(`Applicare lo stesso shift orario (${(dtMs/3600000).toFixed(2)}h) a ${otherBookingIds.size} booking selezionati?`);
+  if (!ok) return;
+  const shiftMin = Math.round(dtMs / 60000);
+  const ids = Array.from(otherBookingIds);
+  const fd = new FormData();
+  fd.append('booking_ids', ids.join(','));
+  fd.append('shift_minutes', String(shiftMin));
+  try {
+    const res = await api('PUT', `/planning/api/bookings/${ids[0]}/bulk-edit`, fd);
+    const failedN = (res.failed || []).length;
+    toast(`✓ ${res.ok} spostat${res.ok === 1 ? 'o' : 'i'}${failedN ? ` · ⚠ ${failedN} falliti (conflitti)` : ''}`,
+          failedN ? 'warning' : 'success');
+    if (res.ok > 0) renderTimeline(true);
+  } catch(e) {
+    toast(e.message || 'Errore multi-move', 'error');
+  }
 }
 
 // ── Helpers azioni assignment (multi-resource v3.4.16) ─────
@@ -3535,7 +3553,22 @@ function tlHasConflict(item, allItems) {
   });
 }
 
+// alpha.39: serializzazione di renderTimeline per evitare il bug "timeline
+// doppia (sopra e sotto, sparisce dopo refresh)" causato da race condition
+// quando renderTimeline viene chiamato in parallelo (es. dopo multi-move,
+// undo, filtro, drag finalize). Wrapper coda l'esecuzione: se uno è in volo,
+// il chiamante successivo aspetta. Più chiamate stacked si risolvono in
+// FIFO ordinato.
+let _tlRenderQueue = Promise.resolve();
 async function renderTimeline(preserveWindow=false) {
+  const next = _tlRenderQueue.then(() => _doRenderTimeline(preserveWindow));
+  // Aggancia il prossimo turno: anche se _doRenderTimeline rigetta, la
+  // catena prosegue (catch swallowing per non incatenare errori).
+  _tlRenderQueue = next.catch(() => {});
+  return next;
+}
+
+async function _doRenderTimeline(preserveWindow=false) {
   const host = document.getElementById('tl-host');
   const savedWin = (preserveWindow && tlInstance) ? tlInstance.getWindow() : null;
   // v3.5.0-alpha.14: cleanup aggressivo per evitare l'effetto "timeline

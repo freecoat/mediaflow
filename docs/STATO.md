@@ -8,28 +8,27 @@
 
 ## Versione corrente
 
-**v3.5.0-alpha.38** — 6 maggio 2026 — Polish ROI + bulk-edit esteso + filtro orario
+**v3.5.0-alpha.39** — 6 maggio 2026 — Fix tint+font + multidrag bulk + render mutex
 
-Round di rifiniture post-feedback Matteo su ROI funzionante (α.37):
-toolbar pulita, modalità area additiva, label timeline migliorate, bulk
-con orario assoluto e nuova data, filtro fascia oraria.
+Tre bug bloccanti su α.38 chiusi tutti.
 
-**Chiuso α.38:**
-- ✅ Toolbar: rimosso `☑ Seleziona…` + dropdown (i filtri generali bastano)
-- ✅ ROI: selezione additiva (ogni drag SOMMA, "pennellare" la timeline)
-- ✅ Look: nome operatore bold, role 9.5px, header reparto 14px no-upper,
-  tint colore-risorsa soft (label rgba .07, foreground rgba .045, bordo
-  sx 3px rgba .55)
-- ✅ Bulk-edit: nuove opzioni "sposta a nuova data" + "orario assoluto
-  (dalle X alle Y)". Backend con `_parse_hhmm` + delta giornaliero
-  (rispetto al booking più antico tra i selezionati). Conflict check
-  dopo tutti i passi temporali calcolati
-- ✅ Filtro orario nei filtri generali (`f-time-from` / `f-time-to`,
-  client-side: overlap fascia oraria su almeno 1 assignment per booking).
-  `FILTER_KEYS` array centralizzato. Backend non tocca il filtro
-  (strftime SQL platform-specific)
-- ✅ Multidrag: già esistente da α.23 (`_tlApplyMoveToOthersInSelection`),
-  niente da fare
+**Chiuso α.39:**
+- ✅ Bug TINT: `window.RESOURCES_SEED` era `undefined` (in JS moderno le
+  `const` top-level NON sono property di `window`) → early-return in
+  `_tlInjectResourceTints` → nessun `<style>` iniettato. Check
+  riscritto come `typeof RESOURCES_SEED === 'undefined'`. Ora i tint
+  sfondo per riga risorsa funzionano
+- ✅ Bug FONT/BOLD: stili più aggressivi e con `!important` per essere
+  robusti. Nome operatore 14px / 800 / bianco puro; role 9px /
+  uppercase / letter-spacing 0.5px (no italic); header reparto 17px /
+  800 / colore più contrastato. Inline `font-style:italic` rimosso dal JS
+- ✅ Bug MULTIDRAG cascade: refactor
+  `_tlApplyMoveToOthersInSelection` per usare endpoint
+  `bulk-edit` (1 round-trip invece di N). Aggregazione su booking_id
+  univoci. Singolo conflict check + singolo render finale
+- ✅ Bug TIMELINE DOPPIA: serializzazione `renderTimeline` via promise
+  queue. Wrapper coda ogni chiamata; body rinominato `_doRenderTimeline`.
+  Più chiamate stacked si risolvono in FIFO, mai in parallelo
 
 **Verifica live richiesta a Matteo:**
 - `/planning` → tab Timeline. Bottone `☑ Seleziona…` non c'è più
@@ -66,6 +65,13 @@ con orario assoluto e nuova data, filtro fascia oraria.
   con dry-run, refinements)
 
 ## Storico recenti
+
+**v3.5.0-alpha.38** — 6 maggio 2026 — Polish ROI/look + bulk-edit esteso + filtro orario
+
+Round di rifiniture: rimosso bottone Seleziona, ROI selezione additiva,
+look label timeline (font + tint colore-risorsa, ma con bug
+`window.RESOURCES_SEED` che ha richiesto α.39 per essere visibile),
+bulk-edit con orario assoluto + nuova data, filtro orario nei filtri.
 
 **v3.5.0-alpha.37** — 6 maggio 2026 — Fix ROI: tasto S + selezione precisa per riga
 
