@@ -16,22 +16,42 @@ nome operatore + funzione restavano invisibili nonostante CSS
 con bookings split persistevano.
 
 **Chiuso α.40:**
-- ✅ FONT visibile via **inline styles brutali** nel content HTML
-  (CSS `!important` non bastava, presunta override da regole
-  vis-timeline interne con specificity alta). Nome operatore: 14px/800/
-  bianco. Role: 9px UPPERCASE letter-spacing 0.6 grigio. Header reparto:
-  17px/800 indaco chiaro. Inline styles vincono su qualunque CSS rule
-  non-`!important`-su-tutto
-- ✅ NO-CONFIRM multi-move: rimosso `confirm()` da
-  `_tlApplyMoveToOthersInSelection`. Era il 3° dialog di una catena
-  (cross-dept + holiday + multi-move). L'azione è chiaramente
-  intenzionale (multi-select + drag). Reversibile via `Ctrl+Z` con
-  `tlPushUndo({type:'bulk_edit', snapshots})` aggiunto. Toast più
-  informativo
+- ✅ FONT inline styles brutali nel content HTML (CSS `!important` non
+  bastava). Nome operatore: 14px/800/bianco. Role: 9px UPPERCASE
+  letter-spacing 0.6 grigio. Header reparto: 17px/800 indaco chiaro
+- ✅ NO-CONFIRM multi-move + tlPushUndo per Ctrl+Z
 - ✅ NO RACE SPLIT: rimosso `setTimeout(renderTimeline, 50)` da
-  `_tlApplySplitPauseShift`. Il chiamante (onMove) fa il render finale.
-  Con mutex α.39 ogni render è serializzata → niente più conflict check
-  spurio su DB intermedio
+  `_tlApplySplitPauseShift`
+
+⚠ **APERTI dopo α.40 (riprendere domani mattina):**
+
+1. **Diversificazione font NOMI/FUNZIONI ancora non funziona.** Anche
+   con inline styles brutali Matteo dice "rimane identico". Tint colore
+   invece SÌ visibili → template ricaricato, non è cache. Ipotesi
+   residue:
+   - vis-timeline strippa l'attributo `style` per security?
+   - `escapeHtml` strippa lo style? (improbabile)
+   - Matteo è in modalità "Per progetto" e non `Per risorsa`? Lì
+     `tlBuildProjectGroups` non applica le mie inline styles
+   - Diagnostica: chiedere screenshot DevTools (computed font-weight
+     sul nome operatore, e verificare presenza tag `<div
+     class="tl-res-name" style="...">`). Se inline style mancante →
+     vis-timeline lo strippa, fix è passare un `HTMLElement` invece
+     di stringa HTML al group `content`
+
+2. **Multidrag conflitti fantasma.** Anche con bulk-edit + mutex α.39
+   + no-race α.40, Matteo segnala conflitti su +1h con multi-select
+   + bookings split. Possibili cause:
+   - REALI: A split (A1+A2 risorsa X) + B (risorsa X) selezionati. Drag
+     A1+1h. Sib A2 spostato +1h. Bulk-edit shifta B+60min → B nuovo
+     può overlappare con A2 nuovo. Limite semantico
+   - SPURII: bulk-edit `_check_assignment_conflict` non sa che gli
+     assignments che sta per modificare sono "atomici" → fa check su
+     stato intermedio
+   - Diagnostica: chiedere scenario specifico (quali risorse, quali
+     posizioni iniziali e finali). Se spurii: aggiungere parametro
+     `exclude_assignment_ids` (CSV) a bulk-edit per skippare nei check
+     gli assignment in modifica nella stessa transazione
 
 **Verifica live richiesta a Matteo:**
 - `/planning` → tab Timeline. Bottone `☑ Seleziona…` non c'è più
