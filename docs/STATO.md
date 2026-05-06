@@ -8,52 +8,48 @@
 
 ## Versione corrente
 
-**v3.5.0-alpha.37** — 6 maggio 2026 — Fix ROI: tasto S + selezione precisa per riga
+**v3.5.0-alpha.38** — 6 maggio 2026 — Polish ROI + bulk-edit esteso + filtro orario
 
-α.36 ha portato l'overlay-div funzionante (Matteo: "vedo l'area blu, il
-rettangolo e la selezione funziona") ma due bug al test live, ora chiusi.
+Round di rifiniture post-feedback Matteo su ROI funzionante (α.37):
+toolbar pulita, modalità area additiva, label timeline migliorate, bulk
+con orario assoluto e nuova data, filtro fascia oraria.
 
-**Bug 1 — tasto S non attivava la modalità.** `ACTIVE_VIEW` è una const
-JS settata al boot col valore della query string (default "jobs"); non
-veniva aggiornata da `setView()` al cambio tab. Sostituita la guardia
-`ACTIVE_VIEW !== 'timeline'` con check sulla classe `.active` del DOM
-`#view-timeline` (stato vero della UI).
-
-**Bug 2 — selezione includeva task in righe sottostanti.** La mappatura
-`.vis-label` index → `groupsData` numeric era sbagliata: `.vis-label`
-include header reparto (`.vis-nesting-group`) + foglie risorsa, ma il
-groupsData filtrato a numerici dà solo le foglie → indici sfasati →
-groupSet con risorse sbagliate. Rimossa la logica group-set: ora per
-ogni item che passa il filtro time, si legge la posizione DOM reale
-via `tlInstance.itemSet.items[id].dom.box.getBoundingClientRect()` e
-si check overlap y. Robusto a gerarchia/stacking/numero reparti.
-
-**Chiuso α.37:**
-- ✅ Bug 1 (tasto S inerte): rimossa guardia `ACTIVE_VIEW !== 'timeline'`
-  in `_tlRoiInitKbd`; check sostituito con classe `.active` su
-  `#view-timeline` (lo stato del DOM è la fonte di verità, non la
-  const settata al boot)
-- ✅ Bug 2 (selezione errata): rimossa logica group-set basata su
-  scansione `.vis-label` (mismatch indici nesting vs leaf). In
-  `_tlRoiMousedown` ora si itera `itemsDS.get()`, si pre-filtra per
-  time, e per ogni item si legge `tlInstance.itemSet.items[id].dom.box`
-  per verificare overlap y col rettangolo del drag. Items non
-  renderizzati (gruppi collassati, fuori viewport) vengono naturalmente
-  esclusi
+**Chiuso α.38:**
+- ✅ Toolbar: rimosso `☑ Seleziona…` + dropdown (i filtri generali bastano)
+- ✅ ROI: selezione additiva (ogni drag SOMMA, "pennellare" la timeline)
+- ✅ Look: nome operatore bold, role 9.5px, header reparto 14px no-upper,
+  tint colore-risorsa soft (label rgba .07, foreground rgba .045, bordo
+  sx 3px rgba .55)
+- ✅ Bulk-edit: nuove opzioni "sposta a nuova data" + "orario assoluto
+  (dalle X alle Y)". Backend con `_parse_hhmm` + delta giornaliero
+  (rispetto al booking più antico tra i selezionati). Conflict check
+  dopo tutti i passi temporali calcolati
+- ✅ Filtro orario nei filtri generali (`f-time-from` / `f-time-to`,
+  client-side: overlap fascia oraria su almeno 1 assignment per booking).
+  `FILTER_KEYS` array centralizzato. Backend non tocca il filtro
+  (strftime SQL platform-specific)
+- ✅ Multidrag: già esistente da α.23 (`_tlApplyMoveToOthersInSelection`),
+  niente da fare
 
 **Verifica live richiesta a Matteo:**
-- Apri `/planning`, click tab `📅 Timeline`
-- Premi `S` → modalità area ON (velo + crosshair + toast). Era questo
-  che α.36 sbagliava
-- Trascina un piccolo rettangolo che copre SOLO una riga risorsa →
-  vengono selezionati SOLO i booking in quella riga (non più anche le
-  righe sottostanti)
-- Trascina trasversalmente più righe → seleziona tutti i booking nelle
-  righe attraversate (verticalmente)
-- Trascina sopra ad un booking che però è temporalmente fuori dal
-  rettangolo (es. inizia prima e finisce dopo l'area trascinata) →
-  viene comunque selezionato perché l'item DOM box overlappa con
-  l'area (intersezione non solo containment)
+- `/planning` → tab Timeline. Bottone `☑ Seleziona…` non c'è più
+- Modalità area (`S` o bottone `📦 Area`): trascina un'area, poi
+  un'altra senza uscire dalla modalità → la seconda area si AGGIUNGE
+  alla prima (toast "+N aggiunti, totale M")
+- Label sinistra: nome operatore in **bold**, sotto la funzione in
+  italic 9.5px. Header reparto più grande, no maiuscole. Ogni riga ha
+  uno sfondo soft del colore della risorsa, sia in label sia in foreground
+- Filtri sidebar: nuovi campi "Orario da / a" — imposta es. 14:00 / 18:00
+  → la timeline mostra solo i booking che hanno almeno un assignment
+  nella fascia. Reset con "Reset filtri"
+- Modal Bulk-edit (selezione + bottone ✏ Bulk in toolbar):
+  - "Sposta a nuova data di inizio": setta una data → tutti i booking
+    si spostano dello stesso delta giornaliero rispetto al più antico,
+    mantenendo cadenza e orario
+  - "Orario assoluto: dalle / alle": sostituisce ore:minuti su tutti
+    (mantiene la data). Si combina con shift e new-date
+  - I tre operatori temporali si combinano (in ordine: data, shift,
+    orario). Conflitti orari: il booking viene saltato
 
 **Niente migrate**: solo modifiche al template `planning.html`.
 
@@ -70,6 +66,14 @@ si check overlap y. Robusto a gerarchia/stacking/numero reparti.
   con dry-run, refinements)
 
 ## Storico recenti
+
+**v3.5.0-alpha.37** — 6 maggio 2026 — Fix ROI: tasto S + selezione precisa per riga
+
+α.36 ha portato l'overlay-div funzionante; due bug emersi al test live
+chiusi: tasto S inerte (sostituita guardia ACTIVE_VIEW con check classe
+`.active` su `#view-timeline`) e selezione che includeva righe
+sottostanti (rimossa logica group-set buggata, sostituita con check
+DOM rect per ogni item via `tlInstance.itemSet.items[id].dom.box`).
 
 **v3.5.0-alpha.36** — 6 maggio 2026 — ROI overlay-based + scorciatoia tastiera "S"
 

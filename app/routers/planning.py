@@ -1591,6 +1591,20 @@ async def add_assignment_to_booking(
     }
 
 
+def _parse_hhmm(s: Optional[str]) -> Optional[tuple[int, int]]:
+    """Parse 'HH:MM' → (h, m). None se vuoto/malformato."""
+    if not s:
+        return None
+    try:
+        h, m = s.split(":")
+        h, m = int(h), int(m)
+        if 0 <= h < 24 and 0 <= m < 60:
+            return (h, m)
+    except (ValueError, AttributeError):
+        pass
+    return None
+
+
 @router.put("/api/bookings/{booking_id}/bulk-edit")
 async def bulk_edit_bookings(
     booking_id: int,
@@ -1598,28 +1612,48 @@ async def bulk_edit_bookings(
     booking_ids: str = Form(...),  # CSV "1,2,3"
     shift_minutes: Optional[int] = Form(None),
     execution_status: Optional[str] = Form(None),
+    # alpha.38: nuovi parametri per estendere la modifica in blocco
+    new_start_date: Optional[date] = Form(None),
+    absolute_start_time: Optional[str] = Form(None),  # "HH:MM"
+    absolute_end_time: Optional[str] = Form(None),    # "HH:MM"
     db: Session = Depends(get_db),
 ):
-    """v3.5.0-alpha.18: applica modifiche in blocco a più booking.
+    """v3.5.0-alpha.18+α.38: applica modifiche in blocco a più booking.
 
-    Il `booking_id` nel path identifica il "primario" (per scopo coerenza con
-    altri endpoint pattern), ma le modifiche vengono applicate a TUTTI i
-    booking elencati in `booking_ids` (CSV). Ritorna conteggio successi/errori.
+    Il `booking_id` nel path identifica il "primario" (coerenza con altri
+    endpoint pattern), ma le modifiche vengono applicate a TUTTI i booking
+    elencati in `booking_ids` (CSV).
 
-    Operazioni supportate:
-    - `shift_minutes`: shift relativo di start+end di tutti gli assignments
-      (positivo = avanti nel tempo, negativo = indietro).
-    - `execution_status`: applica lo stesso execution_status (todo/started/done/not_done)
-      a tutti i booking. Se "done", triggera il cost line sync.
+    Operazioni temporali supportate (applicate in QUESTO ORDINE su ciascun
+    booking, poi check conflict UNA volta):
+      1. `new_start_date`: sposta tutti i booking del delta giornaliero
+         (`new_start_date - earliest_start_date_among_bookings`). Usato per
+         "ripianificare" un blocco di lavoro a partire da una nuova data
+         mantenendo la cadenza relativa tra i singoli booking.
+      2. `shift_minutes`: shift relativo aggiuntivo (minuti, +/-).
+      3. `absolute_start_time` / `absolute_end_time`: imposta l'orario
+         assoluto del giorno (formato HH:MM). Mantiene la data risultante
+         dai passi 1+2; sostituisce ore:minuti su start e/o end. Se valorizzati
+         entrambi e end < start, il booking viene saltato come errore.
 
-    Le operazioni sono indipendenti — se passi entrambi, vengono applicate in
-    sequenza shift → status sullo stesso booking.
+    Operazione di stato:
+      4. `execution_status`: applica lo stesso stato (todo/started/done/not_done).
+         Se "done", triggera il cost line sync.
+
+    Conflitti orari rilevati DOPO i passi 1+2+3 → il booking viene saltato.
     """
     ids = [int(x.strip()) for x in (booking_ids or "").split(",") if x.strip().isdigit()]
     if not ids:
         raise HTTPException(400, "booking_ids vuoto o malformato")
     if execution_status and execution_status not in ("todo", "started", "done", "not_done"):
         raise HTTPException(400, f"execution_status non valido: {execution_status}")
+
+    abs_start = _parse_hhmm(absolute_start_time)
+    abs_end = _parse_hhmm(absolute_end_time)
+    if absolute_start_time and not abs_start:
+        raise HTTPException(400, f"absolute_start_time malformato (atteso HH:MM): {absolute_start_time}")
+    if absolute_end_time and not abs_end:
+        raise HTTPException(400, f"absolute_end_time malformato (atteso HH:MM): {absolute_end_time}")
 
     bookings = db.query(Booking).filter(
         Booking.id.in_(ids),
@@ -1634,31 +1668,66 @@ async def bulk_edit_bookings(
             all_rids.add(a.resource_id)
     _enforce_planning_scope(request, db, all_rids)
 
+    # Se è richiesto new_start_date: calcola il delta giornaliero rispetto al
+    # booking più "antico" tra quelli selezionati (per mantenere la cadenza
+    # relativa). Applichiamo lo stesso delta a tutti.
+    days_delta: Optional[timedelta] = None
+    if new_start_date:
+        earliest_dt = None
+        for b in bookings:
+            for a in b.assignments:
+                if earliest_dt is None or a.start_datetime < earliest_dt:
+                    earliest_dt = a.start_datetime
+        if earliest_dt is not None:
+            days_delta = timedelta(days=(new_start_date - earliest_dt.date()).days)
+
+    minute_delta = timedelta(minutes=shift_minutes) if shift_minutes else None
+
     ok_count = 0
     failed_ids: list[dict] = []
     for b in bookings:
         try:
-            if shift_minutes:
-                delta = timedelta(minutes=shift_minutes)
-                # Check conflict per ogni assignment shiftato
-                conflict_msg = None
-                for a in b.assignments:
-                    new_s = a.start_datetime + delta
-                    new_e = a.end_datetime + delta
-                    c = _check_assignment_conflict(
-                        db, a.resource_id, new_s, new_e,
-                        exclude_assignment_id=a.id,
-                    )
-                    if c:
-                        conflict_msg = f"#{a.id} → conflitto con #{c.id}"
-                        break
-                if conflict_msg:
-                    failed_ids.append({"id": b.id, "error": conflict_msg})
-                    continue
-                for a in b.assignments:
-                    a.start_datetime += delta
-                    a.end_datetime += delta
+            # Calcola tutti i nuovi orari in una list, check conflict, poi commit
+            updates: list[tuple] = []  # (assignment, new_start, new_end)
+            for a in b.assignments:
+                ns = a.start_datetime
+                ne = a.end_datetime
+                if days_delta is not None:
+                    ns = ns + days_delta
+                    ne = ne + days_delta
+                if minute_delta is not None:
+                    ns = ns + minute_delta
+                    ne = ne + minute_delta
+                if abs_start is not None:
+                    ns = ns.replace(hour=abs_start[0], minute=abs_start[1], second=0, microsecond=0)
+                if abs_end is not None:
+                    ne = ne.replace(hour=abs_end[0], minute=abs_end[1], second=0, microsecond=0)
+                if ne <= ns:
+                    raise ValueError(f"end <= start dopo le modifiche (assignment #{a.id})")
+                updates.append((a, ns, ne))
+
+            # Check conflict su tutti i nuovi orari
+            conflict_msg = None
+            for (a, ns, ne) in updates:
+                c = _check_assignment_conflict(
+                    db, a.resource_id, ns, ne,
+                    exclude_assignment_id=a.id,
+                )
+                if c:
+                    conflict_msg = f"#{a.id} → conflitto con #{c.id}"
+                    break
+            if conflict_msg:
+                failed_ids.append({"id": b.id, "error": conflict_msg})
+                continue
+
+            # Commit modifiche temporali
+            if updates and (days_delta is not None or minute_delta is not None
+                            or abs_start is not None or abs_end is not None):
+                for (a, ns, ne) in updates:
+                    a.start_datetime = ns
+                    a.end_datetime = ne
                 _recalc_booking_envelope(b)
+
             if execution_status:
                 b.execution_status = BookingExecutionStatus(execution_status)
                 if execution_status == "done":

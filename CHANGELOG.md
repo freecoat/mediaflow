@@ -1,5 +1,67 @@
 # MediaFlow — Changelog
 
+## v3.5.0-alpha.38 — Polish ROI/look label + bulk-edit esteso + filtro orario (6 maggio 2026)
+
+Round di rifiniture post-feedback Matteo su ROI funzionante (α.37):
+toolbar pulita, modalità area additiva, label timeline migliorate, bulk
+con orario assoluto e nuova data, filtro fascia oraria nei filtri generali.
+
+**Toolbar timeline**:
+- ✅ Rimosso bottone `☑ Seleziona…` + dropdown ▾ (Matteo: "i filtri
+  generali bastano"). Il pannello `tl-select-panel` resta nel DOM
+  (no-op), le funzioni JS rimangono morte.
+
+**Modalità area (ROI)**:
+- ✅ Selezione **additiva**: ogni drag in modalità area SOMMA alla
+  selezione corrente invece di sostituirla. Permette di "pennellare"
+  zone diverse della timeline per costruire una selezione composita.
+  Toast: "📦 +N aggiunti (totale M)" oppure "📦 N già in selezione".
+
+**Look label timeline**:
+- ✅ Nome operatore **bold** (`.tl-res-name { font-weight: 700; }`)
+- ✅ Funzione (role) più piccola del nome (`.tl-res-role { font-size: 9.5px }`)
+- ✅ Header reparto ingrandito (era 11px → 14px), no uppercase,
+  letter-spacing ridotto (più leggibile)
+- ✅ Tint colore-risorsa molto soft sullo sfondo (sidebar + foreground):
+  iniezione `<style id="tl-res-tints">` con regole per ogni resource,
+  `_hexToRgba(color, 0.07)` su label + `_hexToRgba(color, 0.045)` su
+  foreground + bordo sx 3px in `_hexToRgba(color, 0.55)`. Riga risorsa
+  visivamente identificabile a colpo d'occhio
+
+**Bulk-edit esteso** (modal `modal-bulk-edit` + endpoint
+`PUT /planning/api/bookings/{id}/bulk-edit`):
+- ✅ Nuova opzione **Sposta a nuova data di inizio**: calcola delta
+  giornaliero rispetto al booking più antico tra i selezionati e applica
+  a tutti — ripianificazione di un blocco mantenendo la cadenza
+- ✅ Nuova opzione **Orario assoluto** (dalle X alle Y): sostituisce
+  ore:minuti su start e/o end mantenendo la data risultante dai passi
+  precedenti
+- ✅ Ordine di applicazione per ogni booking: 1) new_start_date →
+  2) shift_minutes → 3) absolute_start/end_time → 4) execution_status
+- ✅ Conflict check su tutti i nuovi orari calcolati DOPO i passi 1+2+3
+  (no false-positive intermedi)
+- ✅ Helper backend `_parse_hhmm` per validazione `HH:MM`
+
+**Filtro orario nei filtri generali**:
+- ✅ Due input `time` (`f-time-from` / `f-time-to`) nel pannello filtri
+  con step 15 minuti. Affiancati side-by-side
+- ✅ Filtro client-side via `filterBookingsByTimeRange(bookings, range)`:
+  un booking passa se almeno un assignment interseca la fascia
+  `[fromMin, toMin]` in minuti dal midnight (gestione overnight con due
+  segmenti)
+- ✅ Applicato in `renderTimeline` dopo il fetch (altre viste TBD)
+- ✅ `FILTER_KEYS` array centralizzato per readFiltersFromURL /
+  writeFiltersToURL / resetFilters (no più liste hardcoded)
+- ✅ Backend NON tocca questo filtro (strftime SQL platform-specific):
+  `getFilterParams` esclude `time-from`/`time-to` dal QS
+
+**Multidrag**: già esistente da α.23 (`_tlApplyMoveToOthersInSelection`
+chiede conferma e applica lo stesso delta a tutti i selezionati). Non
+modificato — funziona già.
+
+**Niente migrate**: solo modifiche al template + endpoint con parametri
+opzionali (backward-compatible).
+
 ## v3.5.0-alpha.37 — Fix ROI: tasto S + selezione precisa per riga (6 maggio 2026)
 
 α.36 ha portato l'overlay-div funzionante (Matteo conferma "vedo l'area
