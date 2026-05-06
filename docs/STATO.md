@@ -8,27 +8,30 @@
 
 ## Versione corrente
 
-**v3.5.0-alpha.39** — 6 maggio 2026 — Fix tint+font + multidrag bulk + render mutex
+**v3.5.0-alpha.40** — 6 maggio 2026 — Inline styles font + no-confirm multi-move + no race split
 
-Tre bug bloccanti su α.38 chiusi tutti.
+α.39 ha sistemato i tint colore-risorsa (visibili) ma il bold/font su
+nome operatore + funzione restavano invisibili nonostante CSS
+`!important`. E la cascade conferme + conflitti orari su multi-select
+con bookings split persistevano.
 
-**Chiuso α.39:**
-- ✅ Bug TINT: `window.RESOURCES_SEED` era `undefined` (in JS moderno le
-  `const` top-level NON sono property di `window`) → early-return in
-  `_tlInjectResourceTints` → nessun `<style>` iniettato. Check
-  riscritto come `typeof RESOURCES_SEED === 'undefined'`. Ora i tint
-  sfondo per riga risorsa funzionano
-- ✅ Bug FONT/BOLD: stili più aggressivi e con `!important` per essere
-  robusti. Nome operatore 14px / 800 / bianco puro; role 9px /
-  uppercase / letter-spacing 0.5px (no italic); header reparto 17px /
-  800 / colore più contrastato. Inline `font-style:italic` rimosso dal JS
-- ✅ Bug MULTIDRAG cascade: refactor
-  `_tlApplyMoveToOthersInSelection` per usare endpoint
-  `bulk-edit` (1 round-trip invece di N). Aggregazione su booking_id
-  univoci. Singolo conflict check + singolo render finale
-- ✅ Bug TIMELINE DOPPIA: serializzazione `renderTimeline` via promise
-  queue. Wrapper coda ogni chiamata; body rinominato `_doRenderTimeline`.
-  Più chiamate stacked si risolvono in FIFO, mai in parallelo
+**Chiuso α.40:**
+- ✅ FONT visibile via **inline styles brutali** nel content HTML
+  (CSS `!important` non bastava, presunta override da regole
+  vis-timeline interne con specificity alta). Nome operatore: 14px/800/
+  bianco. Role: 9px UPPERCASE letter-spacing 0.6 grigio. Header reparto:
+  17px/800 indaco chiaro. Inline styles vincono su qualunque CSS rule
+  non-`!important`-su-tutto
+- ✅ NO-CONFIRM multi-move: rimosso `confirm()` da
+  `_tlApplyMoveToOthersInSelection`. Era il 3° dialog di una catena
+  (cross-dept + holiday + multi-move). L'azione è chiaramente
+  intenzionale (multi-select + drag). Reversibile via `Ctrl+Z` con
+  `tlPushUndo({type:'bulk_edit', snapshots})` aggiunto. Toast più
+  informativo
+- ✅ NO RACE SPLIT: rimosso `setTimeout(renderTimeline, 50)` da
+  `_tlApplySplitPauseShift`. Il chiamante (onMove) fa il render finale.
+  Con mutex α.39 ogni render è serializzata → niente più conflict check
+  spurio su DB intermedio
 
 **Verifica live richiesta a Matteo:**
 - `/planning` → tab Timeline. Bottone `☑ Seleziona…` non c'è più
@@ -65,6 +68,14 @@ Tre bug bloccanti su α.38 chiusi tutti.
   con dry-run, refinements)
 
 ## Storico recenti
+
+**v3.5.0-alpha.39** — 6 maggio 2026 — Fix tint+font + multidrag bulk + render mutex
+
+Tre bug bloccanti chiusi: tint sfondo via `_tlInjectResourceTints` (era
+silenziato da `window.RESOURCES_SEED` undefined), multidrag refactor a
+bulk-edit (1 round-trip), render serializzato via promise queue. Il
+font/bold restava invisibile nonostante CSS aggressivo: chiuso in α.40
+con inline styles.
 
 **v3.5.0-alpha.38** — 6 maggio 2026 — Polish ROI/look + bulk-edit esteso + filtro orario
 

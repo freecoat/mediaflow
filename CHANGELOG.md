@@ -1,5 +1,45 @@
 # MediaFlow — Changelog
 
+## v3.5.0-alpha.40 — Inline styles font + no-confirm multi-move + no race split (6 maggio 2026)
+
+α.39 ha sistemato i tint colore-risorsa (visibili) ma il bold/font su
+nome operatore + funzione restavano invisibili. E la cascade di conferme
++ conflitti su multi-select con bookings split persistevano.
+
+**Bug 1 — font/bold non visibili nonostante CSS `!important`.**
+- Le regole CSS `.tl-res-name` / `.tl-res-role` con `!important` non
+  sortivano effetto. Ipotesi: regole vis-timeline interne con specificity
+  alta o `!important` su `.vis-label *`. Diagnosi remota impossibile.
+- Fix: **inline styles brutali** nel content HTML generato da
+  `tlBuildResourceGroups`. Inline styles vincono su qualunque CSS rule
+  che non sia `!important` su tutte le proprietà. Garantito.
+- Stessa cura per header reparto (era `<b>name</b>`, ora
+  `<span style="font-size:17px; font-weight:800; ...">name</span>`).
+
+**Bug 2 — cascade conferme.**
+- Sequenza tipica al multi-move drag: cross-department warning confirm
+  + holiday confirm + multi-move confirm = 3 dialog di seguito.
+- Fix: rimosso `confirm()` da `_tlApplyMoveToOthersInSelection`.
+  L'azione è chiaramente intenzionale (utente ha multi-selezionato e
+  trascinato). Reversibile via `Ctrl+Z` (undo).
+- Aggiunto `tlPushUndo({type: 'bulk_edit', snapshots: ...})` con
+  snapshot pre-modifica (start/end/resource_id per ogni assignment).
+- Toast post-azione più informativo: `✓ N multi-move (shift Xh) · ⚠ M
+  falliti per conflitto. Ctrl+Z per annullare`.
+
+**Bug 3 — conflitti orari fantasma su multi-select + bookings split.**
+- `_tlApplySplitPauseShift` aveva `setTimeout(renderTimeline, 50)` alla
+  fine. Subito dopo, `_tlApplyMoveToOthersInSelection` chiamava
+  anch'esso `renderTimeline`. Race condition: la prima render iniziava
+  durante il bulk-edit, vedendo un DB intermedio inconsistente
+  (sibling spostati, multi-move in corso) → conflict check spurio +
+  timeline doppia.
+- Fix: rimosso il `setTimeout` in `_tlApplySplitPauseShift`. Il
+  chiamante (onMove) si occupa del render finale; con il mutex di α.39
+  ogni renderTimeline è serializzata.
+
+**Niente migrate**: solo modifiche frontend.
+
 ## v3.5.0-alpha.39 — Fix tint+font (window.RESOURCES_SEED) + multidrag bulk + render mutex (6 maggio 2026)
 
 α.38 ha aggiunto tint colore-risorsa, bold nome, role piccolo e header

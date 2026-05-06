@@ -2647,7 +2647,7 @@ function tlBuildResourceGroups(bookings, rangeStart, rangeEnd) {
     if (!children.length) continue;
     groups.push({
       id: 'd'+d.id,
-      content: '<b>'+escapeHtml(d.name)+'</b>',
+      content: '<span style="font-size:17px; font-weight:800; color:#d4daff; letter-spacing:0.3px;">'+escapeHtml(d.name)+'</span>',
       nestedGroups: children,
       treeLevel: 1,
       className: 'tl-dept-' + d.id,
@@ -2662,11 +2662,19 @@ function tlBuildResourceGroups(bookings, rangeStart, rangeEnd) {
   // alpha.35: render `role` sotto il nome (font-size 10.5, muted, italic).
   // Wrap in flex-column per non collidere con vis-inner (flex row+center).
   for (const r of resources) {
-    let inner = '<div class="tl-res-name">' + escapeHtml(r.name) + '</div>';
+    // alpha.40: stili INLINE brutali nel content HTML. Le regole CSS
+    // .tl-res-name / .tl-res-role non sortivano effetto (probabilmente
+    // override da regole vis-timeline ereditate). Inline styles hanno
+    // specificity più alta di qualsiasi CSS rule (se non ha !important
+    // su tutte le proprietà). Garantito.
+    let inner = '<div class="tl-res-name" style="font-weight:800; font-size:14px;'
+      + ' line-height:1.15; color:#ffffff; letter-spacing:0.2px;">'
+      + escapeHtml(r.name) + '</div>';
     if (r.role) {
-      // alpha.38/39: stili principali via CSS (.tl-res-role nel template head).
-      // Qui niente inline style (si sovrapporrebbero al CSS).
-      inner += '<div class="tl-res-role">' + escapeHtml(r.role) + '</div>';
+      inner += '<div class="tl-res-role" style="font-size:9px; line-height:1.1;'
+        + ' margin-top:2px; font-weight:500; text-transform:uppercase;'
+        + ' letter-spacing:0.6px; color:#9aa0b8;">'
+        + escapeHtml(r.role) + '</div>';
     }
     if (bookings && rangeStart && rangeEnd) {
       const days = tlComputeHeatmap(r.id, bookings, rangeStart, rangeEnd);
@@ -3368,8 +3376,10 @@ async function _tlApplySplitPauseShift(movedItem, origItem, origBooking) {
       console.warn('split-pause sibling shift failed for assignment', aid, e);
     }
   }
-  // Refresh per riflettere i sibling spostati
-  setTimeout(() => renderTimeline(true), 50);
+  // alpha.40: rimosso `setTimeout(renderTimeline, 50)` — andava in race
+  // col `renderTimeline` di `_tlApplyMoveToOthersInSelection` chiamato
+  // subito dopo, causando timeline doppia + conflitti orari fantasma.
+  // Il chiamante (onMove → blocco try) si occupa del render finale.
 }
 
 // v3.5.0-alpha.23: applica lo stesso delta del move agli altri items
@@ -3402,19 +3412,37 @@ async function _tlApplyMoveToOthersInSelection(movedItem, origItem) {
     }
   }
   if (!otherBookingIds.size) return;
-  const ok = confirm(`Applicare lo stesso shift orario (${(dtMs/3600000).toFixed(2)}h) a ${otherBookingIds.size} booking selezionati?`);
-  if (!ok) return;
+  // alpha.40: rimosso confirm() — era ridondante (l'utente ha già scelto
+  // di muovere multi-select) e contribuiva alla "cascade" di dialoghi
+  // (cross-dept warning + holiday + multi-move = 3 dialog di seguito).
+  // L'azione è reversibile: tlPushUndo registrato + Ctrl+Z.
   const shiftMin = Math.round(dtMs / 60000);
   const ids = Array.from(otherBookingIds);
+  // Snapshot pre-modifica per undo (start/end di tutti gli assignments
+  // dei booking che stiamo per shiftare)
+  const snaps = ids.map(bid => {
+    const itemsOfBooking = (window._tlBookings || []).filter(b => b.booking_id === bid);
+    return {
+      booking_id: bid,
+      execution_status: itemsOfBooking[0] && itemsOfBooking[0].extendedProps && itemsOfBooking[0].extendedProps.execution_status,
+      assignments: itemsOfBooking.map(it => ({
+        id: it.assignment_id, start: it.start, end: it.end,
+        resource_id: it.extendedProps && it.extendedProps.resource_id,
+      })),
+    };
+  });
   const fd = new FormData();
   fd.append('booking_ids', ids.join(','));
   fd.append('shift_minutes', String(shiftMin));
   try {
     const res = await api('PUT', `/planning/api/bookings/${ids[0]}/bulk-edit`, fd);
     const failedN = (res.failed || []).length;
-    toast(`✓ ${res.ok} spostat${res.ok === 1 ? 'o' : 'i'}${failedN ? ` · ⚠ ${failedN} falliti (conflitti)` : ''}`,
-          failedN ? 'warning' : 'success');
-    if (res.ok > 0) renderTimeline(true);
+    toast(`✓ ${res.ok} multi-move (shift ${(dtMs/3600000).toFixed(2)}h)${failedN ? ` · ⚠ ${failedN} falliti per conflitto` : ''}. Ctrl+Z per annullare.`,
+          failedN ? 'warning' : 'success', 5000);
+    if (res.ok > 0) {
+      try { tlPushUndo({type:'bulk_edit', snapshots: snaps}, `Multi-move: shift ${shiftMin}min`); } catch(_) {}
+      renderTimeline(true);
+    }
   } catch(e) {
     toast(e.message || 'Errore multi-move', 'error');
   }
