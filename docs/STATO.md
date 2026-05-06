@@ -8,6 +8,43 @@
 
 ## Versione corrente
 
+**v3.5.0-alpha.27** — 6 maggio 2026 — Round 11 (2/6): optional + sezioni quote
+
+Voci "opzionali" + etichette di sezione intra-categoria su `QuoteLine`.
+Risolve due scenari del feedback Matteo: voci proposte ma non incluse nel
+totale, e raggruppamento di deliverable per portale (SKY/NBCU/Beta Film…)
+dentro la stessa categoria.
+
+**Chiuso α.27 (2/6):**
+- ✅ Modello `QuoteLine.is_optional` + `QuoteLine.section_label` con
+  auto-migrate
+- ✅ Backend `_recalc_quote()` esclude opzionali da subtotali; POST/PUT
+  endpoint accettano i nuovi campi; GET espone `subtotal_optional`
+- ✅ UI: badge "Opzionale" + bottoni `🏷` (sezione) e `○` (toggle opt)
+  inline su ogni riga; section header + subtotale di sezione quando
+  `section_label` cambia; blocco "Optional aggiuntivi" in fondo ai totali
+- ✅ PDF: tabella principale solo billabili; tabella separata "OPTIONAL
+  AGGIUNTIVI — non inclusi nel totale" amber-styled
+- ✅ Bug-fix laterale: `_auto_migrate_columns()` print con `→` Unicode
+  crashava su Windows charmap codec → sostituito `->` ASCII (latente da
+  v3.4.27.1)
+- ✅ Smoke test boot: lifespan + migrate OK, ambo le colonne presenti
+
+**Verifica live richiesta a Matteo:**
+- Aprire una quote esistente, marcare 1-2 righe come opzionali col bottone
+  `○`, vedere il blocco "Optional aggiuntivi" sotto i totali
+- Su righe della stessa categoria, settare `section_label` (es. "SKY",
+  "NBCU") tramite bottone `🏷` → vedere mini-header + subtotale di sezione
+- Esportare PDF → verificare tabella optional separata in fondo
+
+**In coda Round 11 (4/6):**
+- 🔜 α.28 — Pagina filmografia dedicata + campi estesi
+- 🔜 α.29 — Suoni soft notifiche + AI
+- 🔜 α.30 — Migrazione completa icone Lucide
+- 🔜 branch `experiment/timeline-audit`
+
+Cache-buster `v=3.5.0-alpha.27`. Auto-migrate: 2 nuove colonne in `quote_lines`.
+
 **v3.5.0-alpha.26** — 6 maggio 2026 — Round 11 (1/6): rimozione matrice + kanban
 
 Apertura Round 11 sui feedback Matteo del 6 maggio. 6 voci totali divise

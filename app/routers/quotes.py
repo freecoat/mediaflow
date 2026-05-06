@@ -109,6 +109,11 @@ def _recalc_quote(quote: Quote) -> None:
       5. subtotal = Σ categoria_totale                                  (post line + cat)
       6. total_after_discount = subtotal × (1 + package_discount)       (package è negativo per retrocompat)
       7. total_with_vat = total_after_discount × (1 + vat_rate/100)
+
+    v3.5.0-alpha.27: le righe con `is_optional=True` hanno il proprio
+    `total` calcolato ma NON contribuiscono a subtotal_gross / cat_buckets /
+    subtotal / total_after_discount / total_with_vat. Sono mostrate in un
+    blocco "Optional aggiuntivi" separato (UI + PDF).
     """
     cat_disc = quote.category_discounts or {}
     subtotal_gross = 0.0
@@ -118,6 +123,8 @@ def _recalc_quote(quote: Quote) -> None:
         gross = (l.quantity or 0.0) * (l.unit_price or 0.0) * (1 + (l.allowance or 0.0))
         net_after_line = gross * (1 - (l.line_discount_pct or 0.0))
         l.total = round(net_after_line, 2)
+        if l.is_optional:
+            continue  # totale calcolato ma fuori dai subtotali
         subtotal_gross += gross
         cat_key = _line_category(l)
         cat_buckets[cat_key] = cat_buckets.get(cat_key, 0.0) + net_after_line
@@ -509,6 +516,9 @@ async def get_quote(quote_id: int, db: Session = Depends(get_db)):
         "notes": q.notes, "payment_terms": q.payment_terms,
         "generated_from_deliverables": q.generated_from_deliverables,
         "source_document_name": q.source_document_name,
+        "subtotal_optional": round(
+            sum((l.total or 0.0) for l in q.lines if l.is_optional), 2
+        ),
         "lines": [
             {
                 "id": l.id, "section": l.section, "position": l.position,
@@ -522,6 +532,8 @@ async def get_quote(quote_id: int, db: Session = Depends(get_db)):
                 "price_item_id": l.price_item_id,
                 "category": _line_category(l),
                 "category_override": l.category_override,
+                "is_optional": bool(l.is_optional),
+                "section_label": l.section_label or None,
             }
             for l in sorted(q.lines, key=lambda x: x.sort_order)
         ],
@@ -773,6 +785,8 @@ async def add_quote_line(
     hardcosts: float = Form(0.0),
     price_item_id: Optional[int] = Form(None),
     category_override: Optional[str] = Form(None),
+    is_optional: bool = Form(False),
+    section_label: Optional[str] = Form(None),
     db: Session = Depends(get_db),
 ):
     q = db.query(Quote).options(
@@ -789,6 +803,7 @@ async def add_quote_line(
             }.get(price_level, item.price_list) or 0.0
     sort_order = max((l.sort_order for l in q.lines), default=0) + 10
     cat_override_clean = (category_override or "").strip() or None
+    section_label_clean = (section_label or "").strip() or None
     line = QuoteLine(
         quote_id=quote_id, description=description, section=section,
         position=position, detail=detail, quantity=quantity, unit=unit,
@@ -797,6 +812,8 @@ async def add_quote_line(
         total=0.0, hardcosts=hardcosts,
         price_item_id=price_item_id, sort_order=sort_order,
         category_override=cat_override_clean,
+        is_optional=bool(is_optional),
+        section_label=section_label_clean,
     )
     db.add(line); db.flush()
     db.refresh(q)
@@ -831,6 +848,12 @@ async def add_quote_line(
     db.commit()
     return {
         "id": line.id, "total": line.total, "quote_total": q.total_with_vat,
+        "subtotal_gross": q.subtotal_gross, "subtotal": q.subtotal,
+        "total_after_discount": q.total_after_discount,
+        "total_with_vat": q.total_with_vat,
+        "subtotal_optional": round(
+            sum((l.total or 0.0) for l in q.lines if l.is_optional), 2
+        ),
         "job_cost_line_created": job_cost_line_created,
     }
 
@@ -846,6 +869,8 @@ async def update_quote_line(
     allowance: Optional[float] = Form(None),
     line_discount_pct: Optional[float] = Form(None),
     category_override: Optional[str] = Form(None),
+    is_optional: Optional[bool] = Form(None),
+    section_label: Optional[str] = Form(None),
     db: Session = Depends(get_db),
 ):
     line = db.query(QuoteLine).filter(QuoteLine.id == line_id, QuoteLine.quote_id == quote_id).first()
@@ -865,6 +890,14 @@ async def update_quote_line(
             line.category_override = None
         else:
             line.category_override = cleaned or None
+    if is_optional is not None:
+        line.is_optional = bool(is_optional)
+    if section_label is not None:
+        cleaned = section_label.strip()
+        if cleaned in ("__CLEAR__", "__none__"):
+            line.section_label = None
+        else:
+            line.section_label = cleaned or None
     q = db.query(Quote).options(
         joinedload(Quote.lines).joinedload(QuoteLine.price_item).joinedload(PriceItem.category)
     ).filter(Quote.id == quote_id).first()
@@ -897,6 +930,11 @@ async def update_quote_line(
         "subtotal_gross": q.subtotal_gross, "subtotal": q.subtotal,
         "total_after_discount": q.total_after_discount,
         "total_with_vat": q.total_with_vat,
+        "subtotal_optional": round(
+            sum((l.total or 0.0) for l in q.lines if l.is_optional), 2
+        ),
+        "is_optional": bool(line.is_optional),
+        "section_label": line.section_label or None,
         "job_cost_line_synced": job_cost_line_synced,
     }
 

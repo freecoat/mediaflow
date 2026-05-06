@@ -193,9 +193,13 @@ def generate_quote_pdf(quote) -> bytes:
 
     cat_disc = quote.category_discounts or {}
     sorted_lines = sorted(quote.lines, key=lambda l: l.sort_order)
+    # v3.5.0-alpha.27: tabella principale solo righe billabili. Le opzionali
+    # vengono raccolte qui e renderizzate in una tabella separata dopo i totali.
+    billable_lines = [l for l in sorted_lines if not getattr(l, "is_optional", False)]
+    optional_lines = [l for l in sorted_lines if getattr(l, "is_optional", False)]
     groups: dict[str, list] = {}
     group_order = []
-    for line in sorted_lines:
+    for line in billable_lines:
         cat = _line_category(line)
         if cat not in groups:
             groups[cat] = []
@@ -212,7 +216,45 @@ def generate_quote_pdf(quote) -> bytes:
         style_cmds.append(("SPAN", (0, idx), (4, idx)))
         style_cmds.append(("LINEBELOW", (0, idx), (-1, idx), 0.3, INDIGO))
 
+        # v3.5.0-alpha.27: section_label intra-categoria. Quando il label
+        # cambia tra righe consecutive, emettiamo un mini-header e un
+        # subtotale di sezione al cambio.
+        current_section = None
+        section_accum = 0.0
+        section_first_idx = -1
+
+        def _flush_section():
+            nonlocal current_section, section_accum, section_first_idx
+            if current_section and section_first_idx >= 0:
+                sub_i = len(rows)
+                rows.append([
+                    _p(f"  Subtotale sezione {current_section}", 8, GRAY,
+                       bold=True, align=TA_RIGHT),
+                    _p(""), _p(""), _p(""), _p(""),
+                    _p(_fmt(section_accum), 8, GRAY, bold=True, align=TA_RIGHT),
+                ])
+                style_cmds.append(("SPAN", (0, sub_i), (4, sub_i)))
+                style_cmds.append(("LINEABOVE", (0, sub_i), (-1, sub_i),
+                                   0.2, GRAY_LT))
+
         for line in cat_lines:
+            lbl = (getattr(line, "section_label", None) or "").strip() or None
+            if lbl != current_section:
+                _flush_section()
+                current_section = lbl
+                section_accum = 0.0
+                section_first_idx = -1
+                if current_section:
+                    h_idx = len(rows)
+                    rows.append([
+                        _p(f"📦 {current_section}", 8, INDIGO_DK, bold=True),
+                        _p(""), _p(""), _p(""), _p(""), _p(""),
+                    ])
+                    style_cmds.append(("SPAN", (0, h_idx), (-1, h_idx)))
+                    style_cmds.append(
+                        ("BACKGROUND", (0, h_idx), (-1, h_idx), BAND))
+                    style_cmds.append(
+                        ("LINEBELOW", (0, h_idx), (-1, h_idx), 0.2, INDIGO))
             disc_str = f"{(line.line_discount_pct or 0)*100:.1f}%" if line.line_discount_pct else "—"
             rows.append([
                 _p(line.description, 8) if not line.detail else
@@ -224,8 +266,12 @@ def generate_quote_pdf(quote) -> bytes:
                 _p(disc_str, 8, align=TA_RIGHT, color=ROSE if line.line_discount_pct else GRAY),
                 _p(_fmt(line.total), 8, DARK, bold=True, align=TA_RIGHT),
             ])
+            section_accum += (line.total or 0.0)
+            if section_first_idx < 0:
+                section_first_idx = len(rows) - 1
+        _flush_section()
 
-        # Subtotale categoria
+        # Subtotale categoria (escluse opzionali, già filtrate sopra)
         cat_subtotal = sum(l.total for l in cat_lines)
         sub_idx = len(rows)
         rows.append([
@@ -305,6 +351,67 @@ def generate_quote_pdf(quote) -> bytes:
     wrap = Table([[spacer_cell, tt]], colWidths=[80*mm, 100*mm])
     wrap.setStyle(TableStyle([("VALIGN", (0,0), (-1,-1), "TOP")]))
     story.append(wrap)
+
+    # ── Optional aggiuntivi (v3.5.0-alpha.27) ─────────────────
+    # Tabella separata, dichiaratamente fuori dal totale. Stesso schema della
+    # tabella principale ma senza subtotali categoria/sconti — sono voci che
+    # il cliente decide se attivare a parte.
+    if optional_lines:
+        AMBER = colors.HexColor("#f59e0b")
+        AMBER_BG = colors.HexColor("#fffaf0")
+        story.append(Spacer(1, 8*mm))
+        story.append(_p(
+            "OPTIONAL AGGIUNTIVI — non inclusi nel totale", 9, AMBER, bold=True))
+        story.append(_p(
+            "Voci proposte come opzionali. Possono essere attivate "
+            "separatamente con quotazione integrativa.", 7, GRAY))
+        story.append(Spacer(1, 2*mm))
+
+        opt_rows = [header_row]
+        opt_style = [
+            ("BACKGROUND", (0, 0), (-1, 0), AMBER),
+            ("LINEBELOW", (0, 0), (-1, 0), 0.4, AMBER),
+            ("ROWBACKGROUNDS", (0, 1), (-1, -1), [AMBER_BG, WHITE]),
+            ("TOPPADDING", (0, 0), (-1, -1), 2*mm),
+            ("BOTTOMPADDING", (0, 0), (-1, -1), 2*mm),
+            ("LEFTPADDING", (0, 0), (-1, -1), 2.5*mm),
+            ("RIGHTPADDING", (0, 0), (-1, -1), 2.5*mm),
+            ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+        ]
+        for line in optional_lines:
+            disc_str = (
+                f"{(line.line_discount_pct or 0)*100:.1f}%"
+                if line.line_discount_pct else "—"
+            )
+            opt_rows.append([
+                _p(line.description, 8) if not line.detail else
+                    Paragraph(
+                        f"<b>{line.description}</b><br/>"
+                        f"<font size='7' color='#7a8198'>{line.detail}</font>",
+                        ParagraphStyle("xo", fontSize=8,
+                                       fontName="Helvetica", leading=11)),
+                _p(f"{line.quantity:g}", 8, align=TA_RIGHT),
+                _p(line.unit, 8, align=TA_RIGHT),
+                _p(_fmt(line.unit_price), 8, align=TA_RIGHT),
+                _p(disc_str, 8, align=TA_RIGHT,
+                   color=ROSE if line.line_discount_pct else GRAY),
+                _p(_fmt(line.total), 8, AMBER, bold=True, align=TA_RIGHT),
+            ])
+        # subtotale opzionale
+        opt_subtotal = sum((l.total or 0.0) for l in optional_lines)
+        sub_i = len(opt_rows)
+        opt_rows.append([
+            _p("Totale optional", 9, AMBER, bold=True, align=TA_RIGHT),
+            _p(""), _p(""), _p(""), _p(""),
+            _p("+" + _fmt(opt_subtotal), 9, AMBER, bold=True, align=TA_RIGHT),
+        ])
+        opt_style.append(("SPAN", (0, sub_i), (4, sub_i)))
+        opt_style.append(("LINEABOVE", (0, sub_i), (-1, sub_i), 0.5, AMBER))
+        opt_style.append(("BACKGROUND", (0, sub_i), (-1, sub_i), AMBER_BG))
+
+        opt_tbl = Table(opt_rows, colWidths=col_w, repeatRows=1)
+        opt_tbl.setStyle(TableStyle(opt_style))
+        story.append(opt_tbl)
 
     # ── Termini & note ────────────────────────────────────────
     if quote.payment_terms:

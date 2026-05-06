@@ -23,6 +23,29 @@
   .ql-cat-disc-row td { padding: 6px 12px; font-size: 12px; color: var(--text2); }
   .ql-cat-sub-row { background: rgba(98,114,245,0.02); border-top: 1px dashed var(--border); }
   .ql-cat-sub-row td { padding: 4px 12px; }
+  /* v3.5.0-alpha.27: section_label intra-categoria + righe opzionali */
+  .ql-section-header { background: rgba(167,139,250,0.05); }
+  .ql-section-sub-row { background: rgba(167,139,250,0.03); }
+  .ql-row-optional td { background: repeating-linear-gradient(
+    45deg, transparent, transparent 6px,
+    rgba(245,158,11,0.04) 6px, rgba(245,158,11,0.04) 12px); }
+  .ql-row-optional .inline-edit { color: rgba(255,255,255,0.7); }
+  .ql-row-optional [data-line-total] { color: #f59e0b; font-style: italic; }
+  .ql-opt-badge {
+    display: inline-block; padding: 1px 7px; font-size: 10px; font-weight: 600;
+    text-transform: uppercase; letter-spacing: 0.4px;
+    background: rgba(245,158,11,0.18); color: #f59e0b;
+    border: 1px solid rgba(245,158,11,0.4); border-radius: 4px;
+    white-space: nowrap;
+  }
+  .totals-optional-block {
+    margin-top: 10px; padding-top: 10px;
+    border-top: 1px dashed rgba(245,158,11,0.4);
+  }
+  .totals-line.opt-header {
+    color: #f59e0b; font-size: 13px; font-weight: 600;
+  }
+  .totals-line.opt-header small { font-weight: 400; }
   .inline-edit {
     background: transparent; border: 1px solid transparent; padding: 4px 6px;
     width: 100%; color: var(--text); font-size: 13px; border-radius: 4px;
@@ -1251,7 +1274,9 @@ function renderLines() {
   for (const cat of finalOrder) {
     const catLines = groups[cat];
     const catDisc = cd[cat] || 0;
-    const catSubtotal = catLines.reduce((s, l) => s + (l.total || 0), 0);
+    // v3.5.0-alpha.27: subtotale categoria solo righe billabili (escluse
+    // opzionali) per allinearsi a _recalc_quote backend.
+    const catSubtotal = catLines.reduce((s, l) => s + (l.is_optional ? 0 : (l.total || 0)), 0);
     const safeCat = cat.replace(/"/g, '&quot;');
 
     const tbody = document.createElement('tbody');
@@ -1265,9 +1290,51 @@ function renderLines() {
         </td>
         <td colspan="7" style="padding:10px 4px;">${escapeHtml(cat)}</td>
       </tr>`;
+    // v3.5.0-alpha.27: section_label intra-categoria. Quando il label cambia
+    // tra righe consecutive (e non è null), emettiamo un header di sezione +
+    // un subtotale al cambio. Le righe senza section_label scorrono fluide.
+    let currentSection = null;
+    let sectionAccum = 0;
+    let sectionStartIdx = -1;
+    const flushSectionSubtotal = () => {
+      if (currentSection && sectionAccum > 0) {
+        html += `
+          <tr class="ql-section-sub-row">
+            <td></td>
+            <td colspan="5" style="text-align:right;color:var(--text2);font-size:11px;font-style:italic;padding:3px 12px;">
+              Subtotale sezione <strong>${escapeHtml(currentSection)}</strong>:
+            </td>
+            <td class="mono text-right" style="font-size:11px;font-weight:600;color:var(--text2);padding:3px 12px;">
+              ${fmtCurrency(sectionAccum)}
+            </td>
+            <td></td>
+          </tr>`;
+      }
+    };
     for (const l of catLines) {
+      const lblNorm = (l.section_label || '').trim() || null;
+      if (lblNorm !== currentSection) {
+        // chiudi sezione precedente se presente
+        flushSectionSubtotal();
+        currentSection = lblNorm;
+        sectionAccum = 0;
+        if (currentSection) {
+          html += `
+            <tr class="ql-section-header">
+              <td></td>
+              <td colspan="7" style="padding:6px 8px 4px 12px;color:#a78bfa;font-size:12px;font-weight:600;letter-spacing:0.3px;border-top:1px dashed rgba(167,139,250,0.3);">
+                📦 ${escapeHtml(currentSection)}
+              </td>
+            </tr>`;
+        }
+      }
+      // accumula nel subtotale di sezione (sia opzionali che non — utile per
+      // valutare il "cosa pesa questo deliverable"). Le opzionali continuano
+      // comunque a non contare nel totale generale della quote.
+      sectionAccum += (l.total || 0);
       html += renderLineRow(l);
     }
+    flushSectionSubtotal();
     // v3.5.0-alpha.11: subtotale categoria con id `data-cat-subtotal` per
     // refresh live al save di una linea (prima la riga restava ferma).
     html += `
@@ -1357,11 +1424,18 @@ async function persistCategoryOrder() {
 function renderLineRow(l) {
   const desc = (l.description || '').replace(/"/g, '&quot;');
   const detail = (l.detail || '').replace(/"/g, '&quot;');
+  const isOpt = !!l.is_optional;
+  const optBadge = isOpt
+    ? `<span class="ql-opt-badge" title="Voce opzionale: totale escluso dal subtotale">Opzionale</span>`
+    : '';
   return `
-    <tr class="ql-row" data-line-id="${l.id}">
+    <tr class="ql-row${isOpt ? ' ql-row-optional' : ''}" data-line-id="${l.id}" data-optional="${isOpt ? '1' : '0'}">
       <td><span class="drag-handle" title="Trascina per riordinare">⠿</span></td>
       <td>
-        <input class="inline-edit" data-field="description" value="${desc}" onblur="saveLineField(this)">
+        <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;">
+          <input class="inline-edit" data-field="description" value="${desc}" onblur="saveLineField(this)" style="flex:1;min-width:160px;">
+          ${optBadge}
+        </div>
         <input class="inline-edit" data-field="detail" value="${detail}" placeholder="dettaglio…"
                onblur="saveLineField(this)" style="font-size:11px;color:var(--text2);margin-top:2px;">
       </td>
@@ -1386,6 +1460,8 @@ function renderLineRow(l) {
                  value="${(l.line_discount_pct * 100).toFixed(1)}" onblur="saveLineDiscount(this)"></td>
       <td class="mono text-right" style="font-weight:600;" data-line-total="${l.id}">${fmtCurrency(l.total)}</td>
       <td style="white-space:nowrap;">
+        <button class="btn btn-ghost btn-sm" onclick="editLineSection(${l.id})" title="Etichetta sezione (es. SKY, NBCU…)">🏷</button>
+        <button class="btn btn-ghost btn-sm" onclick="toggleLineOptional(${l.id})" title="${isOpt ? 'Rendi obbligatoria' : 'Rendi opzionale'}" style="${isOpt ? 'color:#f59e0b;' : ''}">${isOpt ? '◎' : '○'}</button>
         <button class="btn btn-ghost btn-sm" onclick="changeLineCategory(${l.id})" title="Sposta in altra categoria">📁</button>
         <button class="btn btn-ghost btn-sm color-rose" onclick="deleteLine(${l.id})" title="Rimuovi">✕</button>
       </td>
@@ -1399,6 +1475,11 @@ function renderTotals() {
   const pkgPct = -(q.package_discount || 0) * 100; // mostra positivo
   const pkgAmount = (q.subtotal || 0) - (q.total_after_discount || 0);
   const vatAmount = (q.total_with_vat || 0) - (q.total_after_discount || 0);
+  // v3.5.0-alpha.27: blocco "Optional aggiuntivi" — calcolato server-side ma
+  // ricalcoliamo client-side come fallback se il backend non lo restituisce.
+  const optTotal = (q.subtotal_optional != null)
+    ? q.subtotal_optional
+    : (q.lines || []).reduce((s, l) => s + (l.is_optional ? (l.total || 0) : 0), 0);
 
   document.getElementById('totals-panel').innerHTML = `
     <div class="totals-line gross">
@@ -1436,6 +1517,13 @@ function renderTotals() {
       <span>TOTALE</span>
       <span class="mono">${fmtCurrency(q.total_with_vat)}</span>
     </div>
+    ${optTotal > 0.005 ? `
+    <div class="totals-optional-block">
+      <div class="totals-line opt-header">
+        <span>Optional aggiuntivi <small style="opacity:0.7;">(non inclusi nel totale)</small></span>
+        <span class="mono">+${fmtCurrency(optTotal)}</span>
+      </div>
+    </div>` : ''}
   `;
 }
 
@@ -1939,6 +2027,46 @@ async function deleteLine(lineId) {
       quotePushUndo({kind: 'line_delete', line_data: snapshot, label: `Voce «${snapshot.description}»`},
                     `Voce «${snapshot.description}» rimossa`);
     }
+    await reloadQuote();
+  } catch(e) { toast(e.message, 'error'); }
+}
+
+// ── Toggle riga opzionale (v3.5.0-alpha.27) ───────────────────
+async function toggleLineOptional(lineId) {
+  const line = (currentQuote.lines || []).find(l => l.id === lineId);
+  if (!line) return;
+  const newVal = !line.is_optional;
+  try {
+    const fd = new FormData();
+    fd.append('is_optional', newVal ? 'true' : 'false');
+    await api('PUT', `/quotes/api/${currentQuoteId}/lines/${lineId}`, fd);
+    toast(newVal ? 'Voce resa opzionale' : 'Voce resa obbligatoria', 'success');
+    await reloadQuote();
+  } catch(e) { toast(e.message, 'error'); }
+}
+
+// ── Edit etichetta sezione (v3.5.0-alpha.27) ──────────────────
+async function editLineSection(lineId) {
+  const line = (currentQuote.lines || []).find(l => l.id === lineId);
+  if (!line) return;
+  // Suggerisci sezioni già presenti nella quote
+  const existing = [...new Set((currentQuote.lines || [])
+    .map(l => l.section_label).filter(s => s && s.trim()))];
+  const hint = existing.length
+    ? `\n\nSezioni già usate: ${existing.join(', ')}`
+    : '\n\nEsempi: SKY Originals, NBCU TechOps, Beta Film';
+  const current = line.section_label || '';
+  const value = prompt(
+    `Etichetta sezione (intra-categoria):${hint}\n\nLascia vuoto per rimuovere.`,
+    current
+  );
+  if (value === null) return;
+  const trimmed = value.trim();
+  try {
+    const fd = new FormData();
+    fd.append('section_label', trimmed === '' ? '__CLEAR__' : trimmed);
+    await api('PUT', `/quotes/api/${currentQuoteId}/lines/${lineId}`, fd);
+    toast(trimmed ? `Sezione: ${trimmed}` : 'Sezione rimossa', 'success');
     await reloadQuote();
   } catch(e) { toast(e.message, 'error'); }
 }

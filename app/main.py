@@ -32,7 +32,7 @@ def _auto_migrate_columns():
     if "users" in insp.get_table_names():
         cols = {c["name"] for c in insp.get_columns("users")}
         if "extra_permissions" not in cols:
-            print("[auto-migrate] users.extra_permissions mancante → ALTER TABLE")
+            print("[auto-migrate] users.extra_permissions mancante -> ALTER TABLE")
             with engine.begin() as conn:
                 conn.execute(text("ALTER TABLE users ADD COLUMN extra_permissions TEXT NULL"))
     # v3.4.32 — Booking esecutivo (priority/execution_status/overtime_status/...)
@@ -49,7 +49,7 @@ def _auto_migrate_columns():
         with engine.begin() as conn:
             for col, ddl in booking_alter:
                 if col not in bcols:
-                    print(f"[auto-migrate] bookings.{col} mancante → ALTER TABLE")
+                    print(f"[auto-migrate] bookings.{col} mancante -> ALTER TABLE")
                     conn.execute(text(f"ALTER TABLE bookings ADD COLUMN {col} {ddl}"))
     # v3.4.32.2 — WorkingHoursPolicy: overtime_brackets JSON + ccnl_label
     if "working_hours_policies" in insp.get_table_names():
@@ -61,13 +61,13 @@ def _auto_migrate_columns():
         with engine.begin() as conn:
             for col, ddl in whp_alter:
                 if col not in wcols:
-                    print(f"[auto-migrate] working_hours_policies.{col} mancante → ALTER TABLE")
+                    print(f"[auto-migrate] working_hours_policies.{col} mancante -> ALTER TABLE")
                     conn.execute(text(f"ALTER TABLE working_hours_policies ADD COLUMN {col} {ddl}"))
     # v3.4.34 — Quote: category_order JSON nullable
     if "quotes" in insp.get_table_names():
         qcols = {c["name"] for c in insp.get_columns("quotes")}
         if "category_order" not in qcols:
-            print("[auto-migrate] quotes.category_order mancante → ALTER TABLE")
+            print("[auto-migrate] quotes.category_order mancante -> ALTER TABLE")
             with engine.begin() as conn:
                 conn.execute(text("ALTER TABLE quotes ADD COLUMN category_order TEXT NULL"))
         # v3.4.50.1 — Versioning quote
@@ -80,36 +80,41 @@ def _auto_migrate_columns():
         with engine.begin() as conn:
             for col, ddl in quote_alter:
                 if col not in qcols:
-                    print(f"[auto-migrate] quotes.{col} mancante → ALTER TABLE")
+                    print(f"[auto-migrate] quotes.{col} mancante -> ALTER TABLE")
                     conn.execute(text(f"ALTER TABLE quotes ADD COLUMN {col} {ddl}"))
     # v3.4.50.1 — QuoteLine: parent_line_id per eredità righe in versioning
+    # v3.5.0-alpha.27 — QuoteLine: is_optional + section_label
     if "quote_lines" in insp.get_table_names():
         qlcols = {c["name"] for c in insp.get_columns("quote_lines")}
-        if "parent_line_id" not in qlcols:
-            print("[auto-migrate] quote_lines.parent_line_id mancante → ALTER TABLE")
-            with engine.begin() as conn:
-                conn.execute(text(
-                    "ALTER TABLE quote_lines ADD COLUMN parent_line_id "
-                    "INTEGER NULL REFERENCES quote_lines(id)"))
+        ql_alter = [
+            ("parent_line_id", "INTEGER NULL REFERENCES quote_lines(id)"),
+            ("is_optional", "BOOLEAN NOT NULL DEFAULT 0"),
+            ("section_label", "VARCHAR(120) NULL"),
+        ]
+        with engine.begin() as conn:
+            for col, ddl in ql_alter:
+                if col not in qlcols:
+                    print(f"[auto-migrate] quote_lines.{col} mancante -> ALTER TABLE")
+                    conn.execute(text(f"ALTER TABLE quote_lines ADD COLUMN {col} {ddl}"))
     # v3.5.0 — AI tool-use nativo: stato del loop su conversazione + binding
     # tool_use_id ↔ AIAction per riprendere il loop dopo Apply.
     if "ai_conversations" in insp.get_table_names():
         accols = {c["name"] for c in insp.get_columns("ai_conversations")}
         if "tool_state" not in accols:
-            print("[auto-migrate] ai_conversations.tool_state mancante → ALTER TABLE")
+            print("[auto-migrate] ai_conversations.tool_state mancante -> ALTER TABLE")
             with engine.begin() as conn:
                 conn.execute(text("ALTER TABLE ai_conversations ADD COLUMN tool_state TEXT NULL"))
     if "ai_actions" in insp.get_table_names():
         aacols = {c["name"] for c in insp.get_columns("ai_actions")}
         if "tool_use_id" not in aacols:
-            print("[auto-migrate] ai_actions.tool_use_id mancante → ALTER TABLE")
+            print("[auto-migrate] ai_actions.tool_use_id mancante -> ALTER TABLE")
             with engine.begin() as conn:
                 conn.execute(text("ALTER TABLE ai_actions ADD COLUMN tool_use_id VARCHAR(128) NULL"))
     # v3.5.0-alpha.22 — TimePunch.break_minutes (pausa pranzo opzionale)
     if "time_punches" in insp.get_table_names():
         tpcols = {c["name"] for c in insp.get_columns("time_punches")}
         if "break_minutes" not in tpcols:
-            print("[auto-migrate] time_punches.break_minutes mancante → ALTER TABLE")
+            print("[auto-migrate] time_punches.break_minutes mancante -> ALTER TABLE")
             with engine.begin() as conn:
                 conn.execute(text(
                     "ALTER TABLE time_punches ADD COLUMN break_minutes "
@@ -127,7 +132,7 @@ def _auto_migrate_columns():
         with engine.begin() as conn:
             for col, ddl in soft_alter:
                 if col not in cols:
-                    print(f"[auto-migrate] {table_name}.{col} mancante → ALTER TABLE")
+                    print(f"[auto-migrate] {table_name}.{col} mancante -> ALTER TABLE")
                     conn.execute(text(f"ALTER TABLE {table_name} ADD COLUMN {col} {ddl}"))
 
 
@@ -179,7 +184,7 @@ async def lifespan(app: FastAPI):
     yield
 
 
-app = FastAPI(title="MediaFlow", version="3.5.0-alpha.26", lifespan=lifespan)
+app = FastAPI(title="MediaFlow", version="3.5.0-alpha.27", lifespan=lifespan)
 
 BASE_DIR = Path(__file__).parent
 app.mount("/static", StaticFiles(directory=BASE_DIR / "static"), name="static")

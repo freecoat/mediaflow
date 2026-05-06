@@ -1,5 +1,57 @@
 # MediaFlow — Changelog
 
+## v3.5.0-alpha.27 — Round 11 (2/6): voci opzionali + sezioni intra-categoria su quote (6 maggio 2026)
+
+Due nuovi campi su `QuoteLine` per coprire scenari ricorrenti del settore:
+- **`is_optional` (bool)** — la voce ha total calcolato ma NON entra nel
+  subtotale/total della quote. Viene mostrata in un blocco dedicato
+  "Optional aggiuntivi" sotto i totali.
+- **`section_label` (string)** — etichetta libera per raggruppamento
+  intra-categoria (es. "SKY Originals", "NBCU TechOps", "Beta Film"). Le
+  righe con stesso label consecutive vengono mostrate sotto un mini-header
+  con subtotale di sezione, dentro il blocco categoria.
+
+**Modello** (`QuoteLine`):
+- `is_optional: bool = False` (NOT NULL, default 0)
+- `section_label: str | None` (VARCHAR 120 nullable)
+- Auto-migrate al boot (`_auto_migrate_columns`).
+
+**Backend** (`app/routers/quotes.py`):
+- `_recalc_quote()` — le righe optional hanno `total` calcolato ma vengono
+  saltate da `subtotal_gross` / `cat_buckets` / `subtotal` / pacchetto / IVA.
+  Mantengono validità di "preventivo se attivata".
+- `POST/PUT /api/{quote_id}/lines` accettano `is_optional` + `section_label`
+  (con sentinel `__CLEAR__` per rimuovere section_label).
+- `GET /api/{quote_id}` espone i nuovi campi sulla riga + `subtotal_optional`
+  sulla quote (somma totali optional).
+
+**UI** (`app/templates/pages/quotes.html`):
+- `renderLineRow`: badge "Opzionale" + sfondo rigato amber + 2 nuovi bottoni
+  (`🏷` etichetta sezione, `○`/`◎` toggle opzionale).
+- `renderLines`: section header + section subtotal quando `section_label`
+  cambia tra righe consecutive.
+- `renderTotals`: blocco "Optional aggiuntivi (non inclusi nel totale)"
+  in basso, separato da divider amber.
+- Subtotale categoria UI: ora esclude le opzionali (allineato a backend).
+- Handler `toggleLineOptional()` + `editLineSection()` con prompt che
+  suggerisce le sezioni già usate nella quote.
+
+**PDF** (`app/services/quote_pdf.py`):
+- Tabella principale: solo righe billabili. Section header + subtotale di
+  sezione quando `section_label` cambia.
+- Dopo i totali: tabella separata "OPTIONAL AGGIUNTIVI — non inclusi nel
+  totale" con sfondo amber e totale optional in fondo. Layout invariato
+  per quote senza optional.
+
+**Bug-fix laterale**: `_auto_migrate_columns()` usava `→` Unicode nei
+`print()`. Su Windows con charmap codec questo crashava la migration al
+primo ALTER TABLE da stampare (caso reale: chi pull-ava una versione con
+nuove colonne mai aggiunte). Sostituito con `->` ASCII in tutti i print
+della funzione.
+
+Cache-buster `v=3.5.0-alpha.27`. Auto-migrate: 2 nuove colonne in
+`quote_lines` (entrambe con default safe per righe esistenti).
+
 ## v3.5.0-alpha.26 — Round 11 (1/6): rimozione matrice + kanban assegnazioni (6 maggio 2026)
 
 Apertura Round 11 (6 voci feedback Matteo del 6 maggio). Prima voce a basso

@@ -765,6 +765,16 @@ class QuoteLine(Base):
     # parent_line_id = id della riga sorgente in V1. Permette il re-bind preciso
     # dei JobCostLine durante migrate-job, anche se descrizione/quantity cambiano.
     parent_line_id: Mapped[Optional[int]] = mapped_column(ForeignKey("quote_lines.id"), nullable=True)
+    # v3.5.0-alpha.27 — Riga "opzionale": il totale è calcolato ma non sommato
+    # nel subtotal/cat_bucket della quote. Mostrato come blocco separato.
+    is_optional: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False, server_default="0",
+    )
+    # v3.5.0-alpha.27 — Etichetta libera per raggruppamento intra-categoria
+    # (es. "SKY Originals", "NBCU TechOps", "Beta Film"). Righe consecutive
+    # con lo stesso label vengono raggruppate visivamente con header e
+    # subtotale di sezione, dentro la categoria.
+    section_label: Mapped[Optional[str]] = mapped_column(String(120), nullable=True)
     quote: Mapped["Quote"] = relationship(back_populates="lines")
     price_item: Mapped[Optional["PriceItem"]] = relationship()
     parent_line: Mapped[Optional["QuoteLine"]] = relationship(
