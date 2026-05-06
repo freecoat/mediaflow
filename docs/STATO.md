@@ -8,6 +8,57 @@
 
 ## Versione corrente
 
+**v3.5.0-alpha.34** — 6 maggio 2026 — Admin Export/Import dati
+
+Tool admin per export/import completo (DB + memorie Claude + Excel
+human-readable). Risolve sync PC↔Mac (memorie vivono fuori dal repo) +
+funziona come backup/restore generico. Pagina dedicata in `/settings`,
+solo admin.
+
+**Chiuso α.34:**
+- ✅ `app/services/data_export.py`: `build_export_zip()` con DB + metadata +
+  README + Excel multi-sheet (listino/quotazioni) + memorie Claude (path
+  mangled cross-OS), opt-in env/uploads/trash, AES-256 password via pyzipper
+- ✅ `app/services/data_import.py`: `restore_from_zip()` con check major
+  version, DB swap atomico (backup auto + rollback su errore), memorie
+  ricalcola path mangled per macchina locale (non riusa quello sorgente)
+- ✅ `app/routers/admin_data.py`: 4 endpoint sotto `/settings/admin/data/*`
+  con dependency `_require_admin` (RBAC `is_admin`)
+- ✅ Tab "Dati" in `/settings` (icona Lucide `database`), visibile solo se
+  `is_admin(user)`. Card Export con 4 checkbox + password. Card Import con
+  file upload + password + 3 restore flag + warning rosso
+- ✅ JS `adminExportZip()` (window.location download) e `adminImportZip()`
+  (confirm + summary actions/warnings)
+- ✅ Dependency: `pyzipper>=0.3.6` aggiunto a requirements.txt
+
+**Verifica live richiesta a Matteo:**
+- Apri `/settings` come admin, vedi la nuova tab "Dati"
+- Click "Scarica ZIP completo" senza opzioni opt-in: arriva ZIP base
+  (~MB con DB + Excel + memorie)
+- Click "Solo Excel listino" / "Solo Excel quotazioni": file `.xlsx`
+- Su altra macchina (Mac): tab Dati → Import → carica lo ZIP →
+  conferma → vedi summary con "DB ripristinato" e "Memorie Claude
+  ripristinate (N file) in /Users/.../memory"
+- Riavvia il server dopo restore
+
+**Note operative**:
+- Password ZIP cifra con AES-256 standard (apribile anche da 7zip/WinZip
+  con la password — utile se vuoi consultare il contenuto manualmente)
+- Backup DB precedente sopravvive: `mediaflow.db.backup-<timestamp>` in
+  cartella progetto. Cancellabile a mano una volta verificato il restore
+- Major version mismatch rifiutato: export α.34 in app α.34/35/36 ok,
+  in app v4.x rifiuta (schema potrebbe essere cambiato)
+- `.env` opt-in: di default NO. Se attivo, l'export contiene secrets
+  (API keys, JWT secret, AI_KEY_ENCRYPTION_KEY) — non condividere
+
+**In coda Round 12**:
+- 🔜 Multiselect/multidrag (memoria forte)
+- 🔜 Test Mac+Chrome del branch `experiment/timeline-audit`
+- 🔜 Step 3-5 del piano export (CSV/Excel altre entità, import per-entità
+  con dry-run, refinements)
+
+## Storico recenti
+
 **v3.5.0-alpha.33** — 6 maggio 2026 — Capability copilot `propose_resource`
 
 Nuova capability AI per creare risorse via copilot. Pattern coerente con

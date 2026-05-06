@@ -36,6 +36,8 @@ pillow>=11.0.0
 # PDF & Excel
 reportlab>=4.2.5
 openpyxl>=3.1.5
+# ZIP AES encrypted (admin export/restore, v3.5.0-alpha.34). Pure Python, no compile.
+pyzipper>=0.3.6
 
 # Utilities
 python-dateutil>=2.9.0

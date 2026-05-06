@@ -1,5 +1,55 @@
 # MediaFlow — Changelog
 
+## v3.5.0-alpha.34 — Admin Export/Import dati (6 maggio 2026)
+
+Tool admin per export/import dati completo (DB + memorie Claude + Excel
+human-readable) come richiesto da Matteo. Risolve nativamente il problema
+sync PC↔Mac (le memorie Claude vivono in `~/.claude/.../memory/`,
+quindi non viaggiano via Git) e si pone come backup/restore generico.
+
+**Backend** (`app/services/`):
+- `data_export.py`:
+  - `build_export_zip(...)` → bytes ZIP + filename suggerito
+  - Path mangling cross-OS per memorie Claude (`:`/`\\`/`/`/`_` → `-`)
+  - Excel multi-sheet `listino.xlsx` (PriceItems + Categories + Departments)
+    e `quotazioni.xlsx` (Quotes + Lines)
+  - `metadata.json` con app version, schema, opzioni usate, source machine
+  - `README.md` con istruzioni di restore embedded
+  - Opt-in: `.env` (secrets), `uploads/` (asset library), trash
+    (record soft-deleted dump JSON via `execution_options(include_deleted=True)`)
+  - Cifratura AES-256 via `pyzipper` se password fornita (ZIP standard
+    apribile da 7zip/WinZip con la password)
+- `data_import.py`:
+  - `restore_from_zip(...)` con validazione `metadata.json` + check major
+    version (rifiuta se incompatibile)
+  - DB swap atomico: vecchio DB → `mediaflow.db.backup-<timestamp>`,
+    poi rinomina nuovo. Rollback automatico su errore
+  - Memorie Claude: ricalcola path mangled per la macchina LOCALE
+    (non riusa quello dell'export) → cross-OS funziona
+  - Restore opt-in `.env` con backup auto, `uploads/` in merge
+
+**Router** (`app/routers/admin_data.py`, prefix `/settings/admin/data`):
+- `GET /export?include_env&include_uploads&include_trash&include_memory&password`
+- `GET /excel/listino` e `GET /excel/quotazioni` (download diretti senza ZIP)
+- `POST /import` (multipart: `file`, `password`, restore flags)
+- Tutti gli endpoint protetti da `_require_admin` (RBAC `is_admin`)
+
+**Frontend** (`app/templates/pages/settings.html`):
+- Tab "Dati" con icona `database`, visibile **solo se `is_admin(user)`**
+- Card Export: 4 checkbox opt-in (memorie, env, uploads, cestino) +
+  campo password opzionale + 3 bottoni (ZIP completo, Excel listino,
+  Excel quotazioni)
+- Card Import: file upload + password + 3 checkbox restore (memorie,
+  env, uploads) + warning rosso "SOSTITUISCE il DB corrente" + risultato
+  con summary actions/warnings
+- JS: `adminExportZip()` (window.location per attachment download),
+  `adminImportZip()` con confirm modal pre-restore
+
+**Dependency**: `pyzipper>=0.3.6` (pure Python, zero compile, AES-256
+ZIP standard).
+
+**Niente migrate**: solo nuovi servizi/router/UI.
+
 ## v3.5.0-alpha.33 — Capability copilot `propose_resource` (6 maggio 2026)
 
 Nuova capability AI per creare risorse (persone interne/freelance, sale,

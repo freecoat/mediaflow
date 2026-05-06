@@ -84,6 +84,9 @@
     <div class="settings-tab" data-pane="ai" onclick="showPane('ai')"><i data-lucide="bot" style="width:14px;height:14px;vertical-align:-2px;"></i> AI</div>
     <div class="settings-tab" data-pane="hours" onclick="showPane('hours')"><i data-lucide="clock" style="width:14px;height:14px;vertical-align:-2px;"></i> Orari lavorativi</div>
     <div class="settings-tab" data-pane="account" onclick="showPane('account')"><i data-lucide="user" style="width:14px;height:14px;vertical-align:-2px;"></i> Account</div>
+    {% if is_admin(user) %}
+    <div class="settings-tab" data-pane="data" onclick="showPane('data')"><i data-lucide="database" style="width:14px;height:14px;vertical-align:-2px;"></i> Dati</div>
+    {% endif %}
   </div>
 
   <div>
@@ -336,6 +339,91 @@
       </div>
       {% endif %}
     </div>
+
+    {% if is_admin(user) %}
+    <!-- ── Pannello Dati (admin only, v3.5.0-alpha.34) ────────── -->
+    <div class="settings-pane" id="pane-data">
+      <div class="card mb-4">
+        <div class="card-title mb-2"><i data-lucide="download" style="width:16px;height:16px;vertical-align:-3px;"></i> Export</div>
+        <p class="text-sm text-muted mb-3">
+          Genera uno ZIP completo con il database, le memorie Claude di questa
+          macchina, e gli Excel di listino e quotazioni. Le opzioni opt-in
+          includono dati pesanti o sensibili.
+        </p>
+        <div style="display:flex; flex-direction:column; gap:10px;">
+          <label style="display:flex; align-items:center; gap:10px; padding:10px 12px; background:var(--bg2); border:1px solid var(--border); border-radius:6px;">
+            <input type="checkbox" id="exp-memory" checked>
+            <div style="flex:1;">
+              <div style="font-weight:500;">Includi memorie Claude</div>
+              <div class="text-xs text-muted">Preferenze e decisioni archiviate da Claude su questa macchina. Default ON.</div>
+            </div>
+          </label>
+          <label style="display:flex; align-items:center; gap:10px; padding:10px 12px; background:var(--bg2); border:1px solid var(--border); border-radius:6px;">
+            <input type="checkbox" id="exp-env">
+            <div style="flex:1;">
+              <div style="font-weight:500;">Includi <code>.env</code> (secrets)</div>
+              <div class="text-xs text-muted">⚠ Contiene API key AI e chiavi di cifratura. NON condividere l'export con terzi se attivo.</div>
+            </div>
+          </label>
+          <label style="display:flex; align-items:center; gap:10px; padding:10px 12px; background:var(--bg2); border:1px solid var(--border); border-radius:6px;">
+            <input type="checkbox" id="exp-uploads">
+            <div style="flex:1;">
+              <div style="font-weight:500;">Includi <code>uploads/</code> (asset library)</div>
+              <div class="text-xs text-muted">Tutti i file caricati. Può essere pesante.</div>
+            </div>
+          </label>
+          <label style="display:flex; align-items:center; gap:10px; padding:10px 12px; background:var(--bg2); border:1px solid var(--border); border-radius:6px;">
+            <input type="checkbox" id="exp-trash">
+            <div style="flex:1;">
+              <div style="font-weight:500;">Includi cestino</div>
+              <div class="text-xs text-muted">Record soft-deleted (clienti, progetti, quote, voci listino).</div>
+            </div>
+          </label>
+          <label style="display:flex; align-items:center; gap:10px; padding:10px 12px; background:var(--bg2); border:1px solid var(--border); border-radius:6px;">
+            <input type="password" id="exp-password" placeholder="(opzionale) Password per cifratura AES" autocomplete="new-password" style="flex:1; padding:6px 8px; background:var(--bg3); color:var(--text); border:1px solid var(--border); border-radius:4px;">
+          </label>
+        </div>
+        <div class="flex gap-2 mt-3">
+          <button class="btn btn-primary btn-sm" onclick="adminExportZip()"><i data-lucide="download" style="width:14px;height:14px;vertical-align:-2px;"></i> Scarica ZIP completo</button>
+          <a class="btn btn-secondary btn-sm" href="/settings/admin/data/excel/listino"><i data-lucide="file-spreadsheet" style="width:14px;height:14px;vertical-align:-2px;"></i> Solo Excel listino</a>
+          <a class="btn btn-secondary btn-sm" href="/settings/admin/data/excel/quotazioni"><i data-lucide="file-spreadsheet" style="width:14px;height:14px;vertical-align:-2px;"></i> Solo Excel quotazioni</a>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-title mb-2"><i data-lucide="upload" style="width:16px;height:16px;vertical-align:-3px;"></i> Import / Restore</div>
+        <p class="text-sm text-muted mb-3" style="background:rgba(220,38,38,0.10); border:1px solid #dc2626; border-radius:6px; padding:10px 14px;">
+          ⚠ <b>ATTENZIONE</b>: il restore SOSTITUISCE il database corrente.
+          Verrà fatto un backup automatico (<code>mediaflow.db.backup-&lt;timestamp&gt;</code>)
+          prima dell'overwrite. Ferma il server prima di importare grandi archivi.
+        </p>
+        <div class="form-group">
+          <label class="form-label">File ZIP esportato</label>
+          <input type="file" id="imp-file" accept=".zip,.enc.zip" class="form-input">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Password (se l'archivio è cifrato)</label>
+          <input type="password" id="imp-password" autocomplete="current-password" class="form-input" placeholder="lascia vuoto se non cifrato">
+        </div>
+        <div style="display:flex; flex-direction:column; gap:8px; margin:10px 0 14px;">
+          <label style="display:flex; align-items:center; gap:8px;">
+            <input type="checkbox" id="imp-memory" checked>
+            <span class="text-sm">Ripristina memorie Claude (path locale ricalcolato)</span>
+          </label>
+          <label style="display:flex; align-items:center; gap:8px;">
+            <input type="checkbox" id="imp-env">
+            <span class="text-sm">Ripristina <code>.env</code> (sovrascrive locale, backup auto)</span>
+          </label>
+          <label style="display:flex; align-items:center; gap:8px;">
+            <input type="checkbox" id="imp-uploads">
+            <span class="text-sm">Ripristina <code>uploads/</code> (merge, non overwrite)</span>
+          </label>
+        </div>
+        <button class="btn btn-danger btn-sm" onclick="adminImportZip()"><i data-lucide="upload" style="width:14px;height:14px;vertical-align:-2px;"></i> Conferma e importa</button>
+        <div id="imp-result" style="margin-top:14px;"></div>
+      </div>
+    </div>
+    {% endif %}
   </div>
 </div>
 {% endblock %}
@@ -696,6 +784,63 @@ async function changePassword() {
     document.getElementById('ac-pwd-conf').value = '';
     toast('Password aggiornata', 'success');
   } catch(e) { toast(e.message, 'error'); }
+}
+
+// ── Admin: Export / Import dati (v3.5.0-alpha.34) ─────────────
+function adminExportZip() {
+  const params = new URLSearchParams();
+  params.set('include_memory',  document.getElementById('exp-memory').checked);
+  params.set('include_env',     document.getElementById('exp-env').checked);
+  params.set('include_uploads', document.getElementById('exp-uploads').checked);
+  params.set('include_trash',   document.getElementById('exp-trash').checked);
+  const pwd = document.getElementById('exp-password').value.trim();
+  if (pwd) params.set('password', pwd);
+  // Apriamo via window.location per scaricare con header Content-Disposition
+  // (fetch + blob non sfrutta automaticamente l'attachment).
+  const url = '/settings/admin/data/export?' + params.toString();
+  window.location.assign(url);
+  toast('Generazione export avviata. Il download partirà a breve.', 'info', 3000);
+}
+
+async function adminImportZip() {
+  const fileInput = document.getElementById('imp-file');
+  if (!fileInput.files.length) { toast('Seleziona un file ZIP', 'error'); return; }
+  const file = fileInput.files[0];
+  const ok = confirm(
+    'ATTENZIONE: il restore SOSTITUISCE il database corrente.\n\n' +
+    'Verrà fatto un backup automatico (mediaflow.db.backup-<timestamp>) prima dell\'overwrite.\n\n' +
+    'Procedere?'
+  );
+  if (!ok) return;
+
+  const fd = new FormData();
+  fd.append('file', file);
+  const pwd = document.getElementById('imp-password').value.trim();
+  if (pwd) fd.append('password', pwd);
+  fd.append('restore_memory',  document.getElementById('imp-memory').checked);
+  fd.append('restore_env',     document.getElementById('imp-env').checked);
+  fd.append('restore_uploads', document.getElementById('imp-uploads').checked);
+
+  const resultBox = document.getElementById('imp-result');
+  resultBox.innerHTML = '<div class="text-sm text-muted">Importazione in corso…</div>';
+  try {
+    const res = await api('POST', '/settings/admin/data/import', fd);
+    const lines = [];
+    lines.push(`<div style="color:#22c55e;"><b>✓ Restore completato</b> · export v${escapeHtml(res.export_version || '?')}</div>`);
+    if (res.exported_at) lines.push(`<div class="text-xs text-muted">Exported: ${escapeHtml(res.exported_at)}</div>`);
+    for (const a of (res.actions || [])) {
+      lines.push(`<div class="text-sm">• ${escapeHtml(a)}</div>`);
+    }
+    for (const w of (res.warnings || [])) {
+      lines.push(`<div class="text-sm" style="color:#f59e0b;">⚠ ${escapeHtml(w)}</div>`);
+    }
+    lines.push('<div class="text-sm" style="margin-top:8px;"><b>Riavvia il server</b> per ricaricare il DB.</div>');
+    resultBox.innerHTML = lines.join('');
+    toast('Import completato. Riavvia il server.', 'success', 5000);
+  } catch(e) {
+    resultBox.innerHTML = `<div style="color:#ef4444;"><b>Errore:</b> ${escapeHtml(e.message || 'restore fallito')}</div>`;
+    toast('Errore restore: ' + (e.message || ''), 'error', 6000);
+  }
 }
 
 renderThemes();
