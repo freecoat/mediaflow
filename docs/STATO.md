@@ -8,34 +8,61 @@
 
 ## Versione corrente
 
-**v3.5.0-alpha.30** — 6 maggio 2026 — Round 11 (5/6): migrazione icone Lucide
+**v3.5.0-alpha.32** — 6 maggio 2026 — Cross-department: warning + badge persistente
 
-Setup base completo per Lucide (stroke 1.75px, palette current). Aree ad
-alta visibilità migrate. Aree minori intenzionalmente lasciate come emoji
-Unicode (vedi CHANGELOG per la lista).
+Fix di un bug latente da α.23 (24 aprile): il warning cross-department
+era silenziato da un TDZ JavaScript dentro un `try/catch(_) {}`. Aggiunto
+in più il badge persistente ⚠ sull'item con bordo amber, così il mismatch
+risorsa/task è visibile anche post-drop e tra sessioni.
 
-**Chiuso α.30 (5/6):**
-- ✅ Bundle Lucide self-hosted `app/static/js/lucide.min.js` (~400KB ISC)
-- ✅ CSS globale icone `[data-lucide]` con currentColor + size 1em
-- ✅ `lucide.createIcons()` al boot + `mfRenderIcons(root)` per content
-  dinamico; `openModal()` invoca automaticamente per i modali
-- ✅ Migrate: sidebar (10 voci), topbar (bell/logout), copilot drawer
-  (FAB/bot/plus/x), settings tabs (5 voci) + card suoni
-- ✅ Smoke test: app boota correttamente, lucide.min.js servito 200 OK,
-  health endpoint risponde con v3.5.0-alpha.30
+**Chiuso α.32:**
+- ✅ Backend `_booking_task_department_id(b)` + `_dept_mismatch_payload(...)`
+  helpers in `app/routers/planning.py`
+- ✅ Serializer `list_bookings` espone `cross_department: bool` per ogni
+  assignment (calcolato server-side dal join cost_line.price_item.dept_id)
+- ✅ Endpoint `PUT /api/booking-assignments/{id}` include
+  `cross_department: {task/resource dept id+name}` nel response (informativo)
+- ✅ Frontend fix bug TDZ in `onMove`: `orig`/`origBooking`/`assignmentId`
+  spostati prima del check, `try/catch(_) {}` swallowing rimosso
+- ✅ `tlBookingToItem()` aggiunge classe `tl-cross-dept` se mismatch +
+  tooltip `⚠ Reparto risorsa (X) ≠ reparto task (Y)`
+- ✅ `onMoving()` applica classe live durante drag preview (cleanup ad ogni
+  frame per evitare stale state)
+- ✅ CSS `.vis-item.tl-cross-dept`: bordo amber inset 4px + glow + ⚠ in
+  alto a destra. Combinabile con tl-conflict / tl-tentative / tl-exec-*
+
+**Architettura cross-department** (decisione 6/5/2026):
+- A1 derivato (no schema change): `task_dept = cost_line.price_item.department_id`
+- B2 + B3: confirm al gesto + badge persistente (visione d'insieme)
+- C1 singolo dept per Resource (no multi-dept; rivalutare se emergono
+  persone tuttofare nel team — Matteo confermato "no")
 
 **Verifica live richiesta a Matteo:**
-- Sidebar dovrebbe mostrare icone stroke-based (non più emoji)
-- Topbar campanella dovrebbe essere `bell` Lucide
-- Copilot FAB dovrebbe essere `message-square` invece di 💬
-- /settings tabs dovrebbero avere icone Lucide
-- Verifica nessun cambio funzionale, solo visivo
+- Spostare un booking di Sara Conti (DI) su Davide Moretti (Audio):
+  durante il drag dovrebbe apparire bordo amber + ⚠ live
+- Al drop: confirm "Risorsa di reparto diverso dal task. Task → DI ·
+  Risorsa target → Audio. Procedere comunque?"
+- Al rifiuto: torna alla posizione originale
+- All'accettazione: il booking si sposta e MANTIENE il badge ⚠ persistente.
+  Refresh pagina → badge sempre lì
+- Hover sul booking: tooltip include riga `⚠ Reparto risorsa ≠ reparto task`
 
-**In coda Round 11 (1/6):**
-- 🔜 branch `experiment/timeline-audit` — profiling vis-timeline + nostro
-  codice. Sintomo Matteo: "lento già con pochi booking su 2 risorse".
+**Niente migrate**: il dato `department_id` esisteva già su PriceItem e
+Resource; il flag è derivato server-side al GET.
 
-Cache-buster `v=3.5.0-alpha.30` (lucide.min.js + global.js + copilot.js).
+**Note operative**:
+- α.31 saltata: branch isolato (`experiment/timeline-audit`) non mergato
+  in main. Teniamo separato per il test performance Mac+Chrome
+- Il branch audit ha fix performance (onMoving index, .tl-dragging CSS)
+  NON ancora in main: se test Mac va bene, merge come α.33
+
+**In coda Round 12** (priorità):
+- 🔜 **Multiselect/multidrag** — desiderata forte di Matteo (vedi memoria
+  `feedback_multiselect_multidrag.md`). Da affrontare strutturalmente
+- 🔜 Capability copilot "crea risorsa"
+
+Cache-buster `v=3.5.0-alpha.30` invariato (modifiche solo a planning.html
+template + planning.py router; niente static asset toccato).
 
 **v3.5.0-alpha.29** — 6 maggio 2026 — Round 11 (4/6): suoni soft
 

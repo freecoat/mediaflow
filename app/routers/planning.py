@@ -411,6 +411,44 @@ def _booking_title_for_assignment(b: Booking, resource_name: str) -> str:
     return f"{_KIND_LABEL.get(b.kind, str(b.kind))} · {resource_name or '?'}"
 
 
+def _booking_task_department_id(b: Booking) -> Optional[int]:
+    """Reparto canonico del 'task' di un booking. Catena:
+    Booking.cost_line → JobCostLine.price_item → PriceItem.department_id.
+    Ritorna None se booking senza cost_line o cost_line senza price_item
+    o price_item senza department: in quei casi non c'è reparto atteso e
+    il check cross-department non si applica.
+    """
+    if not b or not b.cost_line:
+        return None
+    pi = b.cost_line.price_item
+    if not pi:
+        return None
+    return pi.department_id
+
+
+def _dept_mismatch_payload(db: Session, b: Booking, resource_id_target: int) -> Optional[dict]:
+    """Se la risorsa target appartiene a un reparto diverso da quello del task
+    (entrambi non null), ritorna un payload con i nomi reparto. Altrimenti None.
+    Usato dal client per mostrare confirm + badge."""
+    task_dept = _booking_task_department_id(b)
+    if task_dept is None:
+        return None
+    res = db.query(Resource).filter(Resource.id == resource_id_target).first()
+    if not res or res.department_id is None:
+        return None
+    if res.department_id == task_dept:
+        return None
+    depts = {d.id: d.name for d in db.query(Department).filter(
+        Department.id.in_([task_dept, res.department_id])
+    ).all()}
+    return {
+        "task_department_id": task_dept,
+        "task_department_name": depts.get(task_dept) or f"#{task_dept}",
+        "resource_department_id": res.department_id,
+        "resource_department_name": depts.get(res.department_id) or f"#{res.department_id}",
+    }
+
+
 def _check_assignment_conflict(db: Session, resource_id: int, start: datetime, end: datetime,
                                 exclude_assignment_id: Optional[int] = None) -> Optional[BookingAssignment]:
     """Verifica se esiste un altro assignment in conflitto sulla stessa risorsa."""
@@ -742,6 +780,18 @@ async def list_bookings(
                 "cost_line_department_id": (
                     b.cost_line.price_item.department_id
                     if (b.cost_line and b.cost_line.price_item) else None
+                ),
+                # v3.5.0-alpha.32: flag persistente cross-department.
+                # True se sia il reparto del task (price_item) sia il reparto
+                # della risorsa sono noti e diversi. Il client lo usa per il
+                # badge ⚠ sull'item, indipendente dal momento del drop.
+                "cross_department": (
+                    bool(
+                        b.cost_line and b.cost_line.price_item
+                        and b.cost_line.price_item.department_id is not None
+                        and a.resource and a.resource.department_id is not None
+                        and b.cost_line.price_item.department_id != a.resource.department_id
+                    )
                 ),
             }
         })
@@ -1366,6 +1416,12 @@ async def update_assignment(
     }
     if overtime_payload:
         out.update(overtime_payload)
+    # v3.5.0-alpha.32: cross-department warning. Non blocca il save (il client
+    # ha già confermato in onMove). Il client lo usa per registrare audit/log
+    # e per refresh badge persistente ⚠ sull'item dopo il drop.
+    cd = _dept_mismatch_payload(db, a.booking, a.resource_id)
+    if cd:
+        out["cross_department"] = cd
     return out
 
 

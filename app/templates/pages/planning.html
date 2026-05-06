@@ -267,6 +267,23 @@
     box-shadow: 0 0 0 2px rgba(107,114,128,.6) !important;
     opacity: .7;
   }
+  /* v3.5.0-alpha.32: cross-department mismatch — badge persistente.
+     Bordo amber spesso a sinistra (non altera background per preservare il
+     color-coding della risorsa) + icona ⚠ in alto a destra. Si combina con
+     tl-conflict, tl-tentative, tl-exec-* senza conflitti. */
+  .vis-item.tl-cross-dept {
+    box-shadow: inset 4px 0 0 #f59e0b, 0 0 0 1px rgba(245,158,11,.5) !important;
+  }
+  .vis-item.tl-cross-dept::after {
+    content: '⚠';
+    position: absolute;
+    top: 1px;
+    right: 4px;
+    font-size: 11px;
+    color: #fbbf24;
+    text-shadow: 0 0 2px rgba(0,0,0,.7);
+    pointer-events: none;
+  }
   /* v3.4.45: Drag handles più visibili anche senza hover (chiarezza affordance) */
   .vis-item .vis-drag-left, .vis-item .vis-drag-right {
     background: linear-gradient(90deg, rgba(0,0,0,.18) 0%, rgba(255,255,255,.22) 50%, rgba(0,0,0,.18) 100%);
@@ -2605,6 +2622,11 @@ function tlBookingToItem(b) {
   let classes = `tl-exec-${exec} `;
   if (isInternal) classes += 'kind-internal ';
   if (isTentative) classes += 'tl-tentative ';
+  // v3.5.0-alpha.32: badge persistente cross-department. Backend espone
+  // `cross_department: true` quando il reparto del task (price_item) e quello
+  // della risorsa sono entrambi noti e diversi. Mostra bordo amber + ⚠ così
+  // il mismatch è visibile anche post-drop, non solo al momento del move.
+  if (p.cross_department) classes += 'tl-cross-dept ';
   // v3.5.0-alpha.22: tooltip esteso con durata booking + ore lavorazione totali.
   // v3.5.0-alpha.24: aggiunti orari di inizio/fine espliciti (Matteo).
   const _ms = new Date(b.end) - new Date(b.start);
@@ -2622,7 +2644,17 @@ function tlBookingToItem(b) {
   }
   const prioIcon = {high:'🔴', normal:'🟡', low:'🟢'}[p.priority] || '';
   const prioLab = prioIcon ? ` · ${prioIcon} ${p.priority}` : '';
-  const tooltip = `${b.title || ''}${isTentative ? ' (tentative)' : ''}\n🕐 ${_sLab} → ${_eLab}\n⏱ Durata booking: ${_hLab}${jobDurLine}\n${exec}${prioLab}`;
+  // v3.5.0-alpha.32: tooltip include il mismatch reparto, se presente.
+  let crossDeptLine = '';
+  if (p.cross_department) {
+    const taskDept = (DEPARTMENTS_SEED || []).find(d => d.id === p.cost_line_department_id);
+    const taskDeptName = taskDept ? taskDept.name : '?';
+    const res = (RESOURCES_SEED || []).find(r => r.id === p.resource_id);
+    const resDept = res ? (DEPARTMENTS_SEED || []).find(d => d.id === res.dept) : null;
+    const resDeptName = resDept ? resDept.name : '?';
+    crossDeptLine = `\n⚠ Reparto risorsa (${resDeptName}) ≠ reparto task (${taskDeptName})`;
+  }
+  const tooltip = `${b.title || ''}${isTentative ? ' (tentative)' : ''}\n🕐 ${_sLab} → ${_eLab}\n⏱ Durata booking: ${_hLab}${jobDurLine}\n${exec}${prioLab}${crossDeptLine}`;
   return {
     id: b.id,
     assignment_id: b.assignment_id,
@@ -3568,10 +3600,26 @@ async function renderTimeline(preserveWindow=false) {
       const hardBlock = bgItems.some(b => b._blocking_hard && overlap(b));
       const softBlockHoliday = !hardBlock && bgItems.some(b => b._blocking_soft && overlap(b));
       let cls = (item.className || '').replace(/\s*tl-conflict(-hard|-overtime)?/g, '');
+      // v3.5.0-alpha.32: rimuovo tl-cross-dept ad ogni frame, riapplico se
+      // ancora valido. Senza il replace, una volta entrato nello stato non
+      // ne usciva più anche tornando sulla risorsa originale.
+      cls = cls.replace(/\s*tl-cross-dept/g, '');
       const all = itemsDS.get();
       if (hardBlock) cls += ' tl-conflict-hard';
       else if (softBlockHoliday) cls += ' tl-conflict-overtime';
       else if (tlHasConflict(item, all.filter(x => !String(x.id).startsWith('u-')))) cls += ' tl-conflict';
+      // v3.5.0-alpha.32: preview live cross-department durante drag — se la
+      // risorsa target ha dept diverso dal task, anticipa il badge ⚠ così
+      // l'utente lo vede già prima del drop. Lookup in RESOURCES_SEED + il
+      // booking originale (per cost_line_department_id).
+      const _ob = bookings.find(b => b.id === item.id);
+      const _ldid = _ob && _ob.extendedProps ? _ob.extendedProps.cost_line_department_id : null;
+      if (_ldid) {
+        const _newRes = (RESOURCES_SEED || []).find(r => r.id === item.group);
+        if (_newRes && _newRes.dept && _newRes.dept !== _ldid) {
+          cls += ' tl-cross-dept';
+        }
+      }
       item.className = cls.trim();
       item._hardBlock = hardBlock;
       item._softBlockHoliday = softBlockHoliday;
@@ -3603,40 +3651,45 @@ async function renderTimeline(preserveWindow=false) {
         callback(null);
         return;
       }
-      // v3.5.0-alpha.23: blocco drop su risorsa di reparto incompatibile col
-      // job (la lavorazione ha price_item.department_id; se la risorsa target
-      // appartiene a un altro reparto il drop produce un booking "senza
-      // lavorazione" semanticamente). Bypassabile con conferma esplicita.
-      try {
-        const orig0 = items.find(x => x.id === item.id);
-        if (orig0 && origBooking && origBooking.extendedProps && item.group !== orig0.group) {
-          const lineDeptId = origBooking.extendedProps.cost_line_department_id;
-          if (lineDeptId) {
-            const newRes = (RESOURCES_SEED || []).find(r => r.id === item.group);
-            if (newRes && newRes.dept != null && newRes.dept !== lineDeptId) {
-              const lineDeptName = (DEPARTMENTS_SEED || []).find(d => d.id === lineDeptId);
-              const newDeptName  = (DEPARTMENTS_SEED || []).find(d => d.id === newRes.dept);
-              const lblA = lineDeptName ? lineDeptName.name : ('reparto #'+lineDeptId);
-              const lblB = newDeptName  ? newDeptName.name  : ('reparto #'+newRes.dept);
-              const ok = confirm(
-                `Risorsa di reparto NON compatibile con la lavorazione.\n\n` +
-                `Lavorazione → ${lblA}\nRisorsa target → ${lblB}\n\n` +
-                `Procedere comunque? (Il booking risulterà su una risorsa fuori reparto.)`
-              );
-              if (!ok) { callback(null); return; }
-            }
+      // item.id = 'a{assignment_id}' (multi-resource v3.4.16)
+      const assignmentId = String(item.id).startsWith('a') ? String(item.id).substring(1) : item.id;
+      const orig = items.find(x => x.id === item.id);
+      const origBooking = bookings.find(b => b.id === item.id);
+      // v3.5.0-alpha.32: confirm dialog cross-department.
+      // Pre-α.32: il check viveva in un try/catch(_) che SILENZIAVA un
+      // ReferenceError TDZ (origBooking usato prima della dichiarazione, era
+      // 28 righe sotto). Effetto: il warning non scattava mai dall'alpha.23 al
+      // 6/5/2026. Ora le dichiarazioni di orig/origBooking sono sopra il check
+      // e il try/catch swallowing è rimosso (eventuali errori vanno in console).
+      // Logica: se la risorsa target ha un dept noto E il task ha un dept noto
+      // (via price_item.department_id) E sono diversi → conferma esplicita.
+      // Bypassabile (utente "dispone"). Trigger: SOLO su cambio risorsa
+      // (item.group !== orig.group) — non riconfermo a ogni resize sulla
+      // stessa risorsa già fuori reparto.
+      if (orig && origBooking && origBooking.extendedProps && item.group !== orig.group) {
+        const lineDeptId = origBooking.extendedProps.cost_line_department_id;
+        if (lineDeptId) {
+          const newRes = (RESOURCES_SEED || []).find(r => r.id === item.group);
+          if (newRes && newRes.dept && newRes.dept !== lineDeptId) {
+            const lineDeptName = (DEPARTMENTS_SEED || []).find(d => d.id === lineDeptId);
+            const newDeptName  = (DEPARTMENTS_SEED || []).find(d => d.id === newRes.dept);
+            const lblA = lineDeptName ? lineDeptName.name : ('reparto #'+lineDeptId);
+            const lblB = newDeptName  ? newDeptName.name  : ('reparto #'+newRes.dept);
+            const ok = confirm(
+              `Risorsa di reparto diverso dal task.\n\n` +
+              `Task (lavorazione) → ${lblA}\n` +
+              `Risorsa target → ${lblB} (${newRes.name || ''})\n\n` +
+              `Procedere comunque? Il booking resterà visibile con badge ⚠.`
+            );
+            if (!ok) { callback(null); return; }
           }
         }
-      } catch(_) {}
+      }
       // Soft block festività: chiede conferma + workflow overtime
       if (item._softBlockHoliday) {
         const ok = confirm('Questo periodo cade in un giorno festivo.\nIl booking richiederà approvazione straordinario e sarà conteggiato con maggiorazione festiva.\n\nProcedere?');
         if (!ok) { callback(null); return; }
       }
-      // item.id = 'a{assignment_id}' (multi-resource v3.4.16)
-      const assignmentId = String(item.id).startsWith('a') ? String(item.id).substring(1) : item.id;
-      const orig = items.find(x => x.id === item.id);
-      const origBooking = bookings.find(b => b.id === item.id);
       const altDup = window._tlAltDown;
       const crossResource = orig && item.group !== orig.group;
       let action;

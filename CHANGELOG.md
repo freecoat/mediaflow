@@ -1,5 +1,57 @@
 # MediaFlow — Changelog
 
+## v3.5.0-alpha.32 — Cross-department: warning al drop + badge persistente (6 maggio 2026)
+
+Fix di un bug latente da `α.23` (24 aprile 2026) e implementazione del
+badge persistente sui booking con risorsa di reparto diverso dal task.
+
+**Bug TDZ silenzioso (α.23 → α.31)**:
+- Il check cross-department in `onMove` (planning.html) usava la const
+  `origBooking` 28 righe prima della sua dichiarazione → `ReferenceError`
+  per Temporal Dead Zone, swallowed da un `try { } catch(_) {}` esterno.
+- Risultato netto: il warning di reparto incompatibile non scattava mai
+  dall'introduzione (α.23). Sintomo Matteo (6 maggio): "spostando booking
+  su altra risorsa di altro reparto non viene evidenziato il conflitto"
+  (es. Online Conforming di Sara Conti su Davide Moretti, reparto Audio).
+- **Fix**: spostate le dichiarazioni `orig`/`origBooking`/`assignmentId`
+  prima del check; rimosso `try/catch` swallowing (eventuali errori ora
+  visibili in console).
+
+**Badge persistente B3** (nuovo):
+- Backend `app/routers/planning.py`:
+  - Helper `_booking_task_department_id(b)` → catena
+    `Booking.cost_line.price_item.department_id`.
+  - Helper `_dept_mismatch_payload(db, b, target_resource_id)` → ritorna
+    nomi reparto se mismatch, None altrimenti.
+  - Serializer `list_bookings`: nuovo campo `cross_department: bool` in
+    `extendedProps` (calcolato per ogni assignment).
+  - Endpoint `PUT /api/booking-assignments/{id}`: response include
+    `cross_department: {task_department_id/name, resource_department_id/name}`
+    quando applicabile (non blocca, è informativo).
+- Frontend `app/templates/pages/planning.html`:
+  - `tlBookingToItem()`: aggiunge classe `tl-cross-dept` se
+    `p.cross_department === true`. Tooltip esteso con riga
+    `⚠ Reparto risorsa (X) ≠ reparto task (Y)`.
+  - `onMoving()`: applica `tl-cross-dept` live durante drag — l'utente vede
+    il bordo amber + ⚠ già durante il preview, prima del drop. Pulisce la
+    classe ad ogni frame e la riapplica se ancora valida (no stale state
+    quando si torna sulla risorsa originale).
+  - CSS `.vis-item.tl-cross-dept`: bordo amber spesso a sinistra
+    (`inset 4px 0 0 #f59e0b`) + glow `rgba(245,158,11,.5)` + icona ⚠ in
+    alto a destra. Non altera il background → preserva il color-coding
+    della risorsa, si combina con `tl-conflict`/`tl-tentative`/`tl-exec-*`.
+
+**Architettura cross-department** (decisione presa il 6/5/2026):
+- A1: reparto del task = derivato da `cost_line.price_item.department_id`,
+  non esplicito su Booking. Niente schema change.
+- B2 + B3: confirm dialog al drop (UX gesto) + badge persistente (UX vista
+  d'insieme). Un solo paradigma "AI propone, utente dispone".
+- C1: risorsa con singolo reparto (no multi-dept). Da rivalutare se
+  emergono persone tuttofare nel team — Matteo confermato "no" il 6/5.
+
+**Niente migrate**: il dato `department_id` esisteva già su `PriceItem`
+e `Resource`; il flag `cross_department` è derivato lato server al GET.
+
 ## v3.5.0-alpha.30 — Round 11 (5/6): migrazione icone Lucide (6 maggio 2026)
 
 Sostituite le emoji Unicode delle aree ad alta visibilità con SVG Lucide
