@@ -110,6 +110,23 @@ def _auto_migrate_columns():
             print("[auto-migrate] ai_actions.tool_use_id mancante -> ALTER TABLE")
             with engine.begin() as conn:
                 conn.execute(text("ALTER TABLE ai_actions ADD COLUMN tool_use_id VARCHAR(128) NULL"))
+    # v3.5.0-alpha.28 — ClientWork: campi estesi (synopsis, release_date,
+    # funding_public, cast_crew, external_links, awards)
+    if "client_works" in insp.get_table_names():
+        cwcols = {c["name"] for c in insp.get_columns("client_works")}
+        cw_alter = [
+            ("synopsis", "TEXT NULL"),
+            ("release_date", "DATE NULL"),
+            ("funding_public", "TEXT NULL"),
+            ("cast_crew", "TEXT NULL"),
+            ("external_links", "TEXT NULL"),
+            ("awards", "TEXT NULL"),
+        ]
+        with engine.begin() as conn:
+            for col, ddl in cw_alter:
+                if col not in cwcols:
+                    print(f"[auto-migrate] client_works.{col} mancante -> ALTER TABLE")
+                    conn.execute(text(f"ALTER TABLE client_works ADD COLUMN {col} {ddl}"))
     # v3.5.0-alpha.22 — TimePunch.break_minutes (pausa pranzo opzionale)
     if "time_punches" in insp.get_table_names():
         tpcols = {c["name"] for c in insp.get_columns("time_punches")}
@@ -184,7 +201,7 @@ async def lifespan(app: FastAPI):
     yield
 
 
-app = FastAPI(title="MediaFlow", version="3.5.0-alpha.27", lifespan=lifespan)
+app = FastAPI(title="MediaFlow", version="3.5.0-alpha.28", lifespan=lifespan)
 
 BASE_DIR = Path(__file__).parent
 app.mount("/static", StaticFiles(directory=BASE_DIR / "static"), name="static")

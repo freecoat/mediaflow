@@ -1,5 +1,65 @@
 # MediaFlow — Changelog
 
+## v3.5.0-alpha.28 — Round 11 (3/6): pagina filmografia dedicata + campi estesi (6 maggio 2026)
+
+La filmografia esce dalla scheda cliente e diventa una pagina dedicata
+`/clients/{id}/works`. Lo schema `ClientWork` viene esteso con 6 nuovi
+campi per coprire le richieste Matteo: sinossi, finanziamenti pubblici,
+cast & crew, link esterni, premi, data di uscita.
+
+**Modello** (`ClientWork`):
+- `synopsis: Text` — descrizione libera della trama/concept
+- `release_date: Date` — data di uscita
+- `funding_public: Text` (JSON) — `{mibac: bool, regional: str, eu: bool, notes: str}`
+- `cast_crew: Text` (JSON) — `{director, dop, executive_producer, editor,
+  screenplay, sound_design, music, lead_cast: [..]}`
+- `external_links: Text` (JSON) — `[{label, url}, ...]` (trailer, sito,
+  streaming, rassegna stampa…). Distinto da `sources` (tracking AI).
+- `awards: Text` (JSON) — `[{name, year, category, won}, ...]`
+- Auto-migrate al boot.
+
+**Backend** (`app/routers/clients.py`):
+- `GET /clients/{client_id}/works` — nuovo route HTML che renderizza la
+  pagina dedicata.
+- `_work_dict()` espone i 6 nuovi campi (JSON parsati a oggetti/liste).
+- `PUT /api/{client_id}/works/{work_id}` accetta i 6 nuovi campi
+  (JSON con sentinel `""`/`null` per cancellare).
+- Helper `_safe_json_load()` per deserializzazione tollerante.
+
+**UI nuova pagina** (`app/templates/pages/client_works.html`):
+- Topbar con breadcrumb Clienti / {nome} / Filmografia + bottoni "+ Nuova
+  opera" e "✨ Ricerca AI".
+- Filtri live (testo, tipo, anno) + counter.
+- Grid di card responsive (auto-fill min 320px) con titolo, anno, badges
+  (kind, ruolo, paese, AI, finanziamenti pubblici), regista, DOP, sinossi
+  excerpt (3 righe), link esterni e fonti AI.
+- Modal edit con 6 sezioni (📋 Anagrafica · 📝 Sinossi · 🎬 Cast & Crew ·
+  💶 Finanziamenti pubblici · 🔗 Link esterni · 🏆 Premi · 📎 Note).
+- Cast & Crew espone 8 campi (regista, DOP, exec producer, editor,
+  sceneggiatura, sound design, musiche, cast principale).
+- Link esterni e premi sono righe dinamiche aggiungibili/rimuovibili.
+- Modal candidati AI reso identico a quello legacy (compatibilità con
+  endpoint `/search-filmography` esistente).
+
+**UI scheda cliente pulita** (`app/templates/pages/clients.html`):
+- Rimossa tab "🎬 Filmografia" + tab anagrafica (ora unica vista).
+- Rimossi modal `modal-film-candidates` e `modal-work-edit`.
+- Rimossa preview "Filmografia recente" (`recent_productions`) dal modal.
+- Cancellate ~268 righe di JS legacy (`cdSwitchTab`, `filmLoadList`,
+  `filmRenderRow`, `filmEditWork`, `filmSaveWork`, `filmDeleteWork`,
+  `filmSearchAI`, `filmRenderCandidates`, `filmCandidatesImport`,
+  `escapeHtmlSafe`, …).
+- Aggiunto bottone "🎬 Filmografia" nel footer del modal cliente che
+  apre la pagina dedicata.
+
+**Nota retention**: il campo `Client.recent_productions` rimane nel DB
+per backward-compat con il flusso AI di arricchimento clienti. Non viene
+più mostrato nella scheda; la fonte di verità per la filmografia è la
+tabella `client_works`.
+
+Cache-buster `v=3.5.0-alpha.28`. Auto-migrate: 6 nuove colonne in
+`client_works` (tutte nullable, nessun impatto sui record esistenti).
+
 ## v3.5.0-alpha.27 — Round 11 (2/6): voci opzionali + sezioni intra-categoria su quote (6 maggio 2026)
 
 Due nuovi campi su `QuoteLine` per coprire scenari ricorrenti del settore:

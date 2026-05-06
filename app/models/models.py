@@ -426,6 +426,23 @@ class ClientWork(Base):
     # Lista JSON di {name, url} delle fonti consultate (filmitalia, cinema.cultura, ...)
     sources_json: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    # v3.5.0-alpha.28 — campi estesi per pagina filmografia dedicata
+    synopsis: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    release_date: Mapped[Optional[date]] = mapped_column(Date, nullable=True)
+    # JSON {"mibac": bool, "regional": str, "eu": bool, "notes": str}
+    funding_public: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    # JSON {"director": str, "dop": str, "executive_producer": str,
+    #       "editor": str, "sound_design": str, "music": str,
+    #       "screenplay": str, "lead_cast": [str, ...]}
+    # `director` qui ridondante con il campo top-level: lo manteniamo per
+    # avere un blocco compatto da editare insieme.
+    cast_crew: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    # JSON [{"label": str, "url": str}] — link esterni (trailer, sito,
+    # streaming, IMDB extra, rassegna stampa, ecc.). Distinto da `sources`
+    # (che è il tracking delle fonti AI consultate).
+    external_links: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    # JSON [{"name": str, "year": int, "category": str, "won": bool}]
+    awards: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     # Marker provenienza: True se il record è stato proposto dall'AI e
     # confermato dall'utente; False se inserito manualmente.
     ai_imported: Mapped[bool] = mapped_column(Boolean, default=False)

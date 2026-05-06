@@ -8,6 +8,47 @@
 
 ## Versione corrente
 
+**v3.5.0-alpha.28** — 6 maggio 2026 — Round 11 (3/6): filmografia dedicata + campi estesi
+
+La filmografia esce dalla scheda cliente. Pagina dedicata
+`/clients/{id}/works` con vista a griglia di card e modal edit a 6
+sezioni. `ClientWork` esteso con 6 nuovi campi.
+
+**Chiuso α.28 (3/6):**
+- ✅ Modello `ClientWork` esteso: synopsis, release_date, funding_public,
+  cast_crew, external_links, awards (auto-migrate)
+- ✅ Backend `_work_dict()` + PUT endpoint estesi con i nuovi campi (con
+  sentinel di clearing)
+- ✅ Nuovo route HTML `GET /clients/{client_id}/works`
+- ✅ Nuovo template `client_works.html` con grid responsive di card +
+  modal edit a sezioni + filtri live (testo/tipo/anno)
+- ✅ Modal cliente pulito: tab Filmografia rimossa, ~268 righe di JS
+  legacy cancellate, bottone "🎬 Filmografia" in footer linka alla pagina
+- ✅ Smoke test boot: tutte e 6 le colonne presenti, app starts correctly
+
+**Limiti noti α.28:**
+- L'AI search ancora restituisce solo i campi base (title/year/kind/role/
+  director/country). I 6 campi nuovi vanno compilati a mano post-import,
+  oppure tramite un'estensione futura del prompt AI. Decisione: lasciare
+  fuori dal cantiere α.28 per non gonfiarlo, valutare con Matteo se
+  serve.
+
+**Verifica live richiesta a Matteo:**
+- Aprire una scheda cliente, cliccare "🎬 Filmografia" → si apre la
+  nuova pagina con eventuali opere già presenti
+- Aggiungere/modificare un'opera con i campi estesi (sinossi, cast & crew,
+  finanziamenti, link, premi)
+- Filtri (testo/tipo/anno) sulla griglia
+- Verificare che la scheda cliente non abbia più la tab Filmografia
+
+**In coda Round 11 (3/6):**
+- 🔜 α.29 — Suoni soft notifiche + AI
+- 🔜 α.30 — Migrazione completa icone Lucide
+- 🔜 branch `experiment/timeline-audit`
+
+Cache-buster `v=3.5.0-alpha.28`. Auto-migrate: 6 nuove colonne in
+`client_works`.
+
 **v3.5.0-alpha.27** — 6 maggio 2026 — Round 11 (2/6): optional + sezioni quote
 
 Voci "opzionali" + etichette di sezione intra-categoria su `QuoteLine`.

@@ -1,0 +1,663 @@
+{% extends "base.html" %}
+{% set active_page = "clients" %}
+{% block title %}Filmografia — {{ client.name }} — MediaFlow{% endblock %}
+{% block topbar_title %}
+  <a href="/clients" style="color:var(--text2);text-decoration:none;">Clienti</a>
+  <span class="text-muted" style="margin:0 6px;">/</span>
+  <span>{{ client.name }}</span>
+  <span class="text-muted" style="margin:0 6px;">/</span>
+  <span>Filmografia</span>
+{% endblock %}
+{% block topbar_actions %}
+  <button class="btn btn-secondary btn-sm" onclick="openModal('modal-work-edit'); cwResetForm()">+ Nuova opera</button>
+  {% if ai_enabled %}
+  <button class="btn btn-primary btn-sm" onclick="cwOpenAISearch()"><span style="color:#fff;">✨</span> Ricerca AI</button>
+  {% endif %}
+{% endblock %}
+
+{% block content %}
+
+<div class="card mb-3" style="background:rgba(98,114,245,0.06);border-color:rgba(98,114,245,0.18);">
+  <div style="padding:12px 16px;font-size:13px;line-height:1.55;color:var(--text-2);">
+    Filmografia di <strong>{{ client.name }}</strong>: opere a cui il cliente ha contribuito
+    (produzione, post-produzione, distribuzione…). I record possono essere inseriti
+    manualmente o proposti dalla ricerca AI sulle fonti pubbliche
+    (filmitalia.org, cinema.cultura.gov.it, IMDB, MyMovies). Ogni opera espone
+    sinossi, finanziamenti pubblici, cast & crew, premi e link esterni.
+  </div>
+</div>
+
+<!-- Filtri + ricerca -->
+<div style="display:flex;gap:10px;align-items:center;margin-bottom:14px;flex-wrap:wrap;">
+  <input id="cw-filter-text" class="form-input" placeholder="Cerca per titolo, regista, ruolo…"
+         oninput="cwApplyFilters()" style="flex:1;min-width:220px;max-width:400px;">
+  <select id="cw-filter-kind" class="form-select" onchange="cwApplyFilters()" style="width:160px;">
+    <option value="">Tutti i tipi</option>
+    <option value="film">Film</option>
+    <option value="serie">Serie</option>
+    <option value="documentario">Documentario</option>
+    <option value="spot">Spot</option>
+    <option value="cortometraggio">Corto</option>
+    <option value="altro">Altro</option>
+  </select>
+  <select id="cw-filter-year" class="form-select" onchange="cwApplyFilters()" style="width:120px;">
+    <option value="">Tutti gli anni</option>
+  </select>
+  <span id="cw-counter" class="text-muted text-sm" style="margin-left:auto;"></span>
+</div>
+
+<div id="cw-grid" class="cw-grid">
+  <div class="text-muted" style="grid-column:1/-1;text-align:center;padding:40px;">Caricamento…</div>
+</div>
+
+<!-- Modal nuova/edit opera (campi estesi) -->
+<div class="modal-overlay" id="modal-work-edit">
+  <div class="modal" style="max-width:780px;">
+    <div class="modal-header">
+      <span class="modal-title" id="we-title">Nuova opera</span>
+      <button class="btn btn-ghost btn-icon" onclick="closeModal('modal-work-edit')">✕</button>
+    </div>
+    <div class="modal-body" style="max-height:74vh;overflow-y:auto;">
+      <input type="hidden" id="we-id">
+      <!-- Anagrafica base -->
+      <div class="cw-section-header">📋 Anagrafica</div>
+      <div class="form-group"><label class="form-label">Titolo *</label>
+        <input class="form-input" id="we-title-in" placeholder="es. Suburra"></div>
+      <div class="form-row">
+        <div class="form-group"><label class="form-label">Anno</label>
+          <input class="form-input" id="we-year" type="number" placeholder="2024"></div>
+        <div class="form-group"><label class="form-label">Tipo</label>
+          <select class="form-select" id="we-kind">
+            <option value="">—</option>
+            <option value="film">Film</option>
+            <option value="serie">Serie</option>
+            <option value="documentario">Documentario</option>
+            <option value="spot">Spot</option>
+            <option value="cortometraggio">Cortometraggio</option>
+            <option value="altro">Altro</option>
+          </select></div>
+        <div class="form-group"><label class="form-label">Data uscita</label>
+          <input class="form-input" id="we-release" type="date"></div>
+      </div>
+      <div class="form-row">
+        <div class="form-group"><label class="form-label">Ruolo del cliente</label>
+          <input class="form-input" id="we-role" placeholder="produzione, post-produzione…"></div>
+        <div class="form-group"><label class="form-label">Paese</label>
+          <input class="form-input" id="we-country" placeholder="IT"></div>
+      </div>
+
+      <!-- Sinossi -->
+      <div class="cw-section-header">📝 Sinossi</div>
+      <div class="form-group">
+        <textarea class="form-textarea" id="we-synopsis" rows="3"
+                  placeholder="Breve descrizione della trama o del concept…"></textarea>
+      </div>
+
+      <!-- Cast & Crew -->
+      <div class="cw-section-header">🎬 Cast &amp; Crew</div>
+      <div class="form-row">
+        <div class="form-group"><label class="form-label">Regista</label>
+          <input class="form-input" id="we-director" placeholder="Nome Cognome"></div>
+        <div class="form-group"><label class="form-label">Direttore della fotografia</label>
+          <input class="form-input" id="we-dop"></div>
+      </div>
+      <div class="form-row">
+        <div class="form-group"><label class="form-label">Produttore esecutivo</label>
+          <input class="form-input" id="we-execprod"></div>
+        <div class="form-group"><label class="form-label">Montaggio</label>
+          <input class="form-input" id="we-editor"></div>
+      </div>
+      <div class="form-row">
+        <div class="form-group"><label class="form-label">Sceneggiatura</label>
+          <input class="form-input" id="we-screenplay"></div>
+        <div class="form-group"><label class="form-label">Sound design</label>
+          <input class="form-input" id="we-sound"></div>
+      </div>
+      <div class="form-row">
+        <div class="form-group"><label class="form-label">Musiche</label>
+          <input class="form-input" id="we-music"></div>
+        <div class="form-group"><label class="form-label">Cast principale</label>
+          <input class="form-input" id="we-cast" placeholder="Nome Cognome, Nome Cognome…"></div>
+      </div>
+
+      <!-- Finanziamenti pubblici -->
+      <div class="cw-section-header">💶 Finanziamenti pubblici</div>
+      <div class="form-row">
+        <div class="form-group" style="flex:0 0 auto;display:flex;align-items:center;gap:6px;">
+          <input type="checkbox" id="we-fund-mibac"><label for="we-fund-mibac" class="form-label" style="margin:0;">MiC (ex MiBAC)</label>
+        </div>
+        <div class="form-group" style="flex:0 0 auto;display:flex;align-items:center;gap:6px;">
+          <input type="checkbox" id="we-fund-eu"><label for="we-fund-eu" class="form-label" style="margin:0;">UE / Creative Europe</label>
+        </div>
+        <div class="form-group" style="flex:1;"><label class="form-label">Finanziamento regionale</label>
+          <input class="form-input" id="we-fund-regional" placeholder="es. Regione Lazio, Lombardia Film Commission…"></div>
+      </div>
+      <div class="form-group"><label class="form-label">Note finanziamenti</label>
+        <textarea class="form-textarea" id="we-fund-notes" rows="2"
+                  placeholder="Tax credit, contributi specifici, fondi, partner istituzionali…"></textarea></div>
+
+      <!-- Link esterni -->
+      <div class="cw-section-header">🔗 Link esterni</div>
+      <div id="we-links-list"></div>
+      <button class="btn btn-ghost btn-sm" type="button" onclick="cwAddLinkRow()">+ Aggiungi link</button>
+
+      <!-- Premi -->
+      <div class="cw-section-header">🏆 Premi e riconoscimenti</div>
+      <div id="we-awards-list"></div>
+      <button class="btn btn-ghost btn-sm" type="button" onclick="cwAddAwardRow()">+ Aggiungi premio</button>
+
+      <!-- Note + fonti -->
+      <div class="cw-section-header">📎 Note &amp; fonti</div>
+      <div class="form-group"><label class="form-label">Note libere</label>
+        <textarea class="form-textarea" id="we-notes" rows="2"></textarea></div>
+      <div id="we-sources-display" class="text-xs text-muted"></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-danger" id="we-delete-btn" onclick="cwDeleteWork()" style="display:none;margin-right:auto;">Elimina</button>
+      <button class="btn btn-secondary" onclick="closeModal('modal-work-edit')">Annulla</button>
+      <button class="btn btn-primary" onclick="cwSaveWork()">Salva</button>
+    </div>
+  </div>
+</div>
+
+<!-- Modal candidati AI -->
+<div class="modal-overlay" id="modal-film-candidates">
+  <div class="modal" style="max-width:780px;">
+    <div class="modal-header">
+      <span class="modal-title">🎬 Filmografia — candidati AI</span>
+      <button class="btn btn-ghost btn-icon" onclick="closeModal('modal-film-candidates')">✕</button>
+    </div>
+    <div class="modal-body" id="film-candidates-body" style="max-height:60vh;">
+      <div class="text-muted">Caricamento candidati…</div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost btn-sm" onclick="cwCandidatesToggleAll(true)">Seleziona tutti</button>
+      <button class="btn btn-ghost btn-sm" onclick="cwCandidatesToggleAll(false)">Deseleziona</button>
+      <button class="btn btn-secondary" onclick="closeModal('modal-film-candidates')">Annulla</button>
+      <button class="btn btn-primary" onclick="cwCandidatesImport()">Importa selezionati</button>
+    </div>
+  </div>
+</div>
+
+<!-- Modal launcher AI search (input hint) -->
+<div class="modal-overlay" id="modal-ai-search">
+  <div class="modal" style="max-width:520px;">
+    <div class="modal-header">
+      <span class="modal-title">✨ Ricerca filmografia con AI</span>
+      <button class="btn btn-ghost btn-icon" onclick="closeModal('modal-ai-search')">✕</button>
+    </div>
+    <div class="modal-body">
+      <p class="text-sm text-muted">
+        L'AI cercherà sulle 4 fonti pubbliche (filmitalia.org, cinema.cultura.gov.it,
+        IMDB, MyMovies) opere collegate a <strong>{{ client.name }}</strong>.
+        Nessuna scrittura DB: vedrai i candidati e potrai scegliere cosa importare.
+      </p>
+      <div class="form-group">
+        <label class="form-label">Hint opzionale</label>
+        <input class="form-input" id="ai-hint" placeholder="es. 'serie Sky 2023', 'documentari'">
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeModal('modal-ai-search')">Annulla</button>
+      <button class="btn btn-primary" id="ai-go-btn" onclick="cwRunAISearch()">Cerca</button>
+    </div>
+  </div>
+</div>
+
+<style>
+  .cw-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+    gap: 14px;
+  }
+  .cw-card {
+    background: var(--bg2, #1a1d2e);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 14px;
+    transition: border-color 0.15s, transform 0.15s;
+    cursor: pointer;
+    display: flex; flex-direction: column;
+    min-height: 180px;
+  }
+  .cw-card:hover { border-color: var(--indigo, #6272f5); transform: translateY(-1px); }
+  .cw-card-title {
+    font-weight: 600; font-size: 15px; line-height: 1.3; margin-bottom: 4px;
+    display: flex; gap: 8px; align-items: baseline; flex-wrap: wrap;
+  }
+  .cw-card-title .year { color: var(--text2); font-weight: 400; font-size: 13px; }
+  .cw-card-meta { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 6px; }
+  .cw-badge {
+    font-size: 10px; padding: 2px 7px; border-radius: 3px;
+    background: var(--bg3, #22253a); color: var(--text2);
+    font-weight: 500; letter-spacing: 0.2px;
+  }
+  .cw-badge.role { background: rgba(98,114,245,0.2); color: var(--indigo2, #7e8ef7); }
+  .cw-badge.ai { background: rgba(167,139,250,0.18); color: #a78bfa; }
+  .cw-badge.fund { background: rgba(34,197,94,0.18); color: #22c55e; }
+  .cw-card-line { font-size: 12px; color: var(--text2); margin-top: 3px; }
+  .cw-synopsis {
+    font-size: 12px; color: var(--text2); line-height: 1.45; margin-top: 8px;
+    display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical;
+    overflow: hidden;
+  }
+  .cw-card-footer {
+    margin-top: auto; padding-top: 8px; border-top: 1px solid var(--border);
+    display: flex; gap: 4px; flex-wrap: wrap; align-items: center;
+  }
+  .cw-card-footer .src-link {
+    font-size: 10px; padding: 2px 6px; background: var(--bg3, #22253a);
+    border-radius: 3px; color: var(--text2); text-decoration: none;
+  }
+  .cw-card-footer .src-link:hover { background: var(--indigo-bg); color: var(--indigo2); }
+  .cw-section-header {
+    font-size: 11px; font-weight: 600; text-transform: uppercase;
+    letter-spacing: 0.5px; color: var(--indigo2, #7e8ef7);
+    margin: 16px 0 8px; padding-bottom: 4px;
+    border-bottom: 1px solid var(--border);
+  }
+  .cw-section-header:first-child { margin-top: 0; }
+  .cw-link-row, .cw-award-row {
+    display: flex; gap: 6px; margin-bottom: 6px; align-items: center;
+  }
+  .cw-link-row input, .cw-award-row input { flex: 1; }
+  .cw-link-row .btn-x, .cw-award-row .btn-x { flex: 0; }
+  .ai-badge {
+    display: inline-flex; align-items: center; gap: 4px;
+    padding: 2px 7px; background: rgba(167,139,250,0.18); color: #a78bfa;
+    border-radius: 4px; font-size: 10px; font-weight: 600;
+    border: 1px solid rgba(167,139,250,0.3);
+  }
+</style>
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+const CLIENT_ID = {{ client.id }};
+const CLIENT_NAME = {{ client.name | tojson }};
+let cwWorks = [];
+
+function cwEsc(s) {
+  if (s == null) return '';
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+async function cwLoad() {
+  const grid = document.getElementById('cw-grid');
+  grid.innerHTML = '<div class="text-muted" style="grid-column:1/-1;text-align:center;padding:40px;">Caricamento…</div>';
+  try {
+    cwWorks = await api('GET', `/clients/api/${CLIENT_ID}/works`);
+  } catch(e) {
+    grid.innerHTML = `<div style="color:#ef4444;grid-column:1/-1;padding:14px;">Errore: ${cwEsc(e.message || e)}</div>`;
+    return;
+  }
+  // Popola filtro anni
+  const yearSel = document.getElementById('cw-filter-year');
+  const years = [...new Set(cwWorks.map(w => w.year).filter(y => y))].sort((a,b) => b-a);
+  yearSel.innerHTML = '<option value="">Tutti gli anni</option>'
+    + years.map(y => `<option value="${y}">${y}</option>`).join('');
+  cwApplyFilters();
+}
+
+function cwApplyFilters() {
+  const txt = (document.getElementById('cw-filter-text').value || '').toLowerCase();
+  const kind = document.getElementById('cw-filter-kind').value;
+  const year = document.getElementById('cw-filter-year').value;
+  let filtered = cwWorks.slice();
+  if (txt) {
+    filtered = filtered.filter(w => {
+      const blob = [w.title, w.director, w.our_role, w.synopsis,
+        w.cast_crew?.dop, w.cast_crew?.executive_producer,
+        w.cast_crew?.editor, w.cast_crew?.lead_cast].join(' ').toLowerCase();
+      return blob.includes(txt);
+    });
+  }
+  if (kind) filtered = filtered.filter(w => w.kind === kind);
+  if (year) filtered = filtered.filter(w => String(w.year) === year);
+  cwRender(filtered);
+}
+
+function cwRender(works) {
+  const grid = document.getElementById('cw-grid');
+  document.getElementById('cw-counter').textContent = `${works.length} ${works.length === 1 ? 'opera' : 'opere'}${cwWorks.length !== works.length ? ' su ' + cwWorks.length : ''}`;
+  if (!works.length) {
+    grid.innerHTML = `<div class="text-muted" style="grid-column:1/-1;text-align:center;padding:40px;background:var(--bg2,#1a1d2e);border-radius:8px;">
+      ${cwWorks.length === 0
+        ? 'Nessuna opera registrata. Aggiungi manualmente o usa la ricerca AI.'
+        : 'Nessuna opera corrisponde ai filtri.'}
+    </div>`;
+    return;
+  }
+  grid.innerHTML = works.map(w => cwRenderCard(w)).join('');
+}
+
+function cwRenderCard(w) {
+  const badges = [];
+  if (w.kind) badges.push(`<span class="cw-badge">${cwEsc(w.kind)}</span>`);
+  if (w.our_role) badges.push(`<span class="cw-badge role">${cwEsc(w.our_role)}</span>`);
+  if (w.country) badges.push(`<span class="cw-badge">${cwEsc(w.country)}</span>`);
+  if (w.ai_imported) badges.push(`<span class="cw-badge ai">✨ AI</span>`);
+  const fp = w.funding_public;
+  if (fp && (fp.mibac || fp.eu || fp.regional)) {
+    const parts = [];
+    if (fp.mibac) parts.push('MiC');
+    if (fp.eu) parts.push('UE');
+    if (fp.regional) parts.push(fp.regional);
+    badges.push(`<span class="cw-badge fund">💶 ${cwEsc(parts.join(' · '))}</span>`);
+  }
+  const director = w.director || (w.cast_crew && w.cast_crew.director);
+  const dirLine = director
+    ? `<div class="cw-card-line">🎬 ${cwEsc(director)}</div>` : '';
+  const dopLine = (w.cast_crew && w.cast_crew.dop)
+    ? `<div class="cw-card-line">📷 DOP ${cwEsc(w.cast_crew.dop)}</div>` : '';
+  const synopsis = w.synopsis
+    ? `<div class="cw-synopsis">${cwEsc(w.synopsis)}</div>` : '';
+  const links = (w.external_links || []).slice(0, 4).map(l => {
+    const lbl = (l.label || (l.url || '').split('/')[2] || 'link').replace('www.', '');
+    return `<a class="src-link" href="${cwEsc(l.url)}" target="_blank" rel="noopener" onclick="event.stopPropagation()">${cwEsc(lbl)}</a>`;
+  }).join('');
+  const sources = (w.sources || []).slice(0, 3).map(s => {
+    const lbl = (s.name || '').replace('www.', '') || (s.url||'').split('/')[2] || 'fonte';
+    return `<a class="src-link" href="${cwEsc(s.url)}" target="_blank" rel="noopener" onclick="event.stopPropagation()" title="Fonte AI">📎 ${cwEsc(lbl)}</a>`;
+  }).join('');
+  return `<div class="cw-card" onclick="cwEdit(${w.id})">
+    <div class="cw-card-title">
+      <span>${cwEsc(w.title)}</span>
+      ${w.year ? `<span class="year">${w.year}</span>` : ''}
+    </div>
+    <div class="cw-card-meta">${badges.join('')}</div>
+    ${dirLine}
+    ${dopLine}
+    ${synopsis}
+    ${(links || sources) ? `<div class="cw-card-footer">${links}${sources}</div>` : ''}
+  </div>`;
+}
+
+function cwResetForm() {
+  document.getElementById('we-title').textContent = 'Nuova opera';
+  document.getElementById('we-id').value = '';
+  ['we-title-in','we-year','we-kind','we-release','we-role','we-country',
+   'we-synopsis','we-director','we-dop','we-execprod','we-editor',
+   'we-screenplay','we-sound','we-music','we-cast',
+   'we-fund-regional','we-fund-notes','we-notes'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.value = '';
+  });
+  document.getElementById('we-fund-mibac').checked = false;
+  document.getElementById('we-fund-eu').checked = false;
+  document.getElementById('we-links-list').innerHTML = '';
+  document.getElementById('we-awards-list').innerHTML = '';
+  document.getElementById('we-sources-display').innerHTML = '';
+  document.getElementById('we-delete-btn').style.display = 'none';
+}
+
+function cwEdit(workId) {
+  const w = cwWorks.find(x => x.id === workId);
+  if (!w) return;
+  cwResetForm();
+  document.getElementById('we-title').textContent = `Modifica: ${w.title}`;
+  document.getElementById('we-id').value = w.id;
+  document.getElementById('we-title-in').value = w.title || '';
+  document.getElementById('we-year').value = w.year || '';
+  document.getElementById('we-kind').value = w.kind || '';
+  document.getElementById('we-release').value = w.release_date || '';
+  document.getElementById('we-role').value = w.our_role || '';
+  document.getElementById('we-country').value = w.country || '';
+  document.getElementById('we-synopsis').value = w.synopsis || '';
+  document.getElementById('we-director').value = w.director || (w.cast_crew && w.cast_crew.director) || '';
+  document.getElementById('we-notes').value = w.notes || '';
+  const cc = w.cast_crew || {};
+  document.getElementById('we-dop').value = cc.dop || '';
+  document.getElementById('we-execprod').value = cc.executive_producer || '';
+  document.getElementById('we-editor').value = cc.editor || '';
+  document.getElementById('we-screenplay').value = cc.screenplay || '';
+  document.getElementById('we-sound').value = cc.sound_design || '';
+  document.getElementById('we-music').value = cc.music || '';
+  document.getElementById('we-cast').value = Array.isArray(cc.lead_cast)
+    ? cc.lead_cast.join(', ')
+    : (cc.lead_cast || '');
+  const fp = w.funding_public || {};
+  document.getElementById('we-fund-mibac').checked = !!fp.mibac;
+  document.getElementById('we-fund-eu').checked = !!fp.eu;
+  document.getElementById('we-fund-regional').value = fp.regional || '';
+  document.getElementById('we-fund-notes').value = fp.notes || '';
+  (w.external_links || []).forEach(l => cwAddLinkRow(l.label, l.url));
+  (w.awards || []).forEach(a => cwAddAwardRow(a));
+  if ((w.sources || []).length) {
+    const srcs = w.sources.map(s => {
+      const lbl = (s.name || '').replace('www.', '') || (s.url||'').split('/')[2] || 'fonte';
+      return `<a href="${cwEsc(s.url)}" target="_blank" rel="noopener" style="margin-right:6px;color:var(--text2);">📎 ${cwEsc(lbl)}</a>`;
+    }).join('');
+    document.getElementById('we-sources-display').innerHTML =
+      `<div style="margin-top:8px;">Fonti AI consultate: ${srcs}</div>`;
+  }
+  document.getElementById('we-delete-btn').style.display = '';
+  openModal('modal-work-edit');
+}
+
+function cwAddLinkRow(label, url) {
+  const div = document.createElement('div');
+  div.className = 'cw-link-row';
+  div.innerHTML = `
+    <input class="form-input" placeholder="Etichetta (es. Trailer, Sito ufficiale)" value="${cwEsc(label || '')}">
+    <input class="form-input" placeholder="URL" value="${cwEsc(url || '')}" type="url">
+    <button class="btn btn-ghost btn-sm btn-x" type="button" onclick="this.parentNode.remove()" title="Rimuovi">✕</button>`;
+  document.getElementById('we-links-list').appendChild(div);
+}
+
+function cwAddAwardRow(award) {
+  award = award || {};
+  const div = document.createElement('div');
+  div.className = 'cw-award-row';
+  div.innerHTML = `
+    <input class="form-input" placeholder="Premio (es. David di Donatello)" value="${cwEsc(award.name || '')}" style="flex:2;">
+    <input class="form-input" placeholder="Categoria" value="${cwEsc(award.category || '')}" style="flex:2;">
+    <input class="form-input" placeholder="Anno" value="${award.year || ''}" type="number" style="flex:0 0 90px;">
+    <label style="font-size:11px;display:flex;gap:4px;align-items:center;flex:0 0 auto;">
+      <input type="checkbox" ${award.won ? 'checked' : ''}>vinto
+    </label>
+    <button class="btn btn-ghost btn-sm btn-x" type="button" onclick="this.parentNode.remove()" title="Rimuovi">✕</button>`;
+  document.getElementById('we-awards-list').appendChild(div);
+}
+
+function cwCollectLinks() {
+  return [...document.querySelectorAll('#we-links-list .cw-link-row')]
+    .map(r => {
+      const inputs = r.querySelectorAll('input');
+      return { label: inputs[0].value.trim(), url: inputs[1].value.trim() };
+    })
+    .filter(l => l.url);
+}
+function cwCollectAwards() {
+  return [...document.querySelectorAll('#we-awards-list .cw-award-row')]
+    .map(r => {
+      const inputs = r.querySelectorAll('input');
+      return {
+        name: inputs[0].value.trim(),
+        category: inputs[1].value.trim() || null,
+        year: parseInt(inputs[2].value, 10) || null,
+        won: inputs[3].checked,
+      };
+    })
+    .filter(a => a.name);
+}
+
+async function cwSaveWork() {
+  const wid = document.getElementById('we-id').value;
+  const title = document.getElementById('we-title-in').value.trim();
+  if (!title) { toast('Titolo obbligatorio', 'error'); return; }
+  const fd = new FormData();
+  fd.append('title', title);
+  const map = {
+    year: 'we-year', kind: 'we-kind', release_date: 'we-release',
+    our_role: 'we-role', country: 'we-country',
+    synopsis: 'we-synopsis', director: 'we-director', notes: 'we-notes',
+  };
+  for (const [k, id] of Object.entries(map)) {
+    const v = (document.getElementById(id) || {}).value;
+    if (v != null) fd.append(k, v);  // mando anche stringhe vuote per clearing
+  }
+  // cast_crew JSON
+  const cc = {
+    director: document.getElementById('we-director').value.trim() || null,
+    dop: document.getElementById('we-dop').value.trim() || null,
+    executive_producer: document.getElementById('we-execprod').value.trim() || null,
+    editor: document.getElementById('we-editor').value.trim() || null,
+    screenplay: document.getElementById('we-screenplay').value.trim() || null,
+    sound_design: document.getElementById('we-sound').value.trim() || null,
+    music: document.getElementById('we-music').value.trim() || null,
+    lead_cast: document.getElementById('we-cast').value.split(',').map(s=>s.trim()).filter(Boolean),
+  };
+  const ccHasContent = Object.entries(cc).some(([k,v]) => Array.isArray(v) ? v.length : v);
+  fd.append('cast_crew', ccHasContent ? JSON.stringify(cc) : '');
+  // funding_public
+  const fp = {
+    mibac: document.getElementById('we-fund-mibac').checked,
+    eu: document.getElementById('we-fund-eu').checked,
+    regional: document.getElementById('we-fund-regional').value.trim() || null,
+    notes: document.getElementById('we-fund-notes').value.trim() || null,
+  };
+  const fpHasContent = fp.mibac || fp.eu || fp.regional || fp.notes;
+  fd.append('funding_public', fpHasContent ? JSON.stringify(fp) : '');
+  // external_links + awards
+  fd.append('external_links', JSON.stringify(cwCollectLinks()));
+  fd.append('awards', JSON.stringify(cwCollectAwards()));
+  try {
+    if (wid) {
+      await api('PUT', `/clients/api/${CLIENT_ID}/works/${wid}`, fd);
+      toast('Opera aggiornata', 'success');
+    } else {
+      await api('POST', `/clients/api/${CLIENT_ID}/works`, fd);
+      toast('Opera aggiunta', 'success');
+    }
+    closeModal('modal-work-edit');
+    cwLoad();
+  } catch(e) { toast(e.message || 'Errore', 'error'); }
+}
+
+async function cwDeleteWork() {
+  const wid = document.getElementById('we-id').value;
+  if (!wid) return;
+  if (!confirm('Eliminare questa opera dalla filmografia?')) return;
+  try {
+    await api('DELETE', `/clients/api/${CLIENT_ID}/works/${wid}`);
+    toast('Opera eliminata', 'success');
+    closeModal('modal-work-edit');
+    cwLoad();
+  } catch(e) { toast(e.message || 'Errore', 'error'); }
+}
+
+{% if ai_enabled %}
+function cwOpenAISearch() {
+  document.getElementById('ai-hint').value = '';
+  openModal('modal-ai-search');
+}
+
+async function cwRunAISearch() {
+  const btn = document.getElementById('ai-go-btn');
+  const hint = document.getElementById('ai-hint').value.trim();
+  btn.disabled = true; btn.textContent = '⏳ Ricerca…';
+  try {
+    const fd = new FormData();
+    if (hint) fd.append('extra_hint', hint);
+    const res = await api('POST', `/clients/api/${CLIENT_ID}/search-filmography`, fd);
+    window._cwCandidates = res.works || [];
+    window._cwSourcesConsulted = res.sources_consulted || [];
+    closeModal('modal-ai-search');
+    cwRenderCandidates();
+    if (res.warning) toast(res.warning, 'warning', 4000);
+  } catch(e) {
+    toast(e.message || 'Errore ricerca AI', 'error');
+  } finally {
+    btn.disabled = false; btn.textContent = 'Cerca';
+  }
+}
+
+function cwRenderCandidates() {
+  const body = document.getElementById('film-candidates-body');
+  const works = window._cwCandidates || [];
+  const sources = window._cwSourcesConsulted || [];
+  if (!works.length) {
+    body.innerHTML = `<div class="text-muted" style="padding:20px;text-align:center;">
+      Nessun candidato trovato. Riprova con un nome più completo o un hint.
+    </div>${sources.length ? '<div style="margin-top:10px;font-size:11px;color:var(--text3);">Fonti consultate: '+sources.length+'</div>' : ''}`;
+    openModal('modal-film-candidates');
+    return;
+  }
+  const confColor = {alta:'#22c55e', media:'#fbbf24', bassa:'#9ca3af'};
+  const rows = works.map((w, i) => {
+    const srcs = (w.source_urls || []).map(u => {
+      const host = (u.split('/')[2] || '').replace('www.', '');
+      return `<a href="${u}" target="_blank" rel="noopener" class="text-xs" style="margin-right:4px;padding:1px 6px;background:var(--bg3,#22253a);border-radius:3px;color:var(--text2);">${host}</a>`;
+    }).join('');
+    const conf = (w.confidence || 'media').toLowerCase();
+    const dimmed = w.already_imported ? 'opacity:0.5;' : '';
+    const alreadyBadge = w.already_imported ? '<span class="text-xs" style="margin-left:6px;padding:1px 6px;background:rgba(34,197,94,0.18);color:#22c55e;border-radius:3px;">già importata</span>' : '';
+    return `<label class="film-cand" style="display:flex;align-items:flex-start;gap:8px;padding:8px 10px;border:1px solid var(--border);border-radius:6px;margin-bottom:6px;cursor:pointer;${dimmed}">
+      <input type="checkbox" data-idx="${i}" ${w.already_imported ? '' : 'checked'} ${w.already_imported ? 'disabled' : ''} style="margin-top:3px;">
+      <div style="flex:1;">
+        <div style="font-weight:500;">${cwEsc(w.title)} ${w.year ? '<span class="text-muted text-xs">'+w.year+'</span>' : ''} ${alreadyBadge}</div>
+        <div class="text-xs text-muted" style="margin-top:2px;">
+          ${w.kind ? '<span style="padding:1px 5px;background:var(--bg3,#22253a);border-radius:3px;margin-right:4px;">'+cwEsc(w.kind)+'</span>' : ''}
+          ${w.our_role ? '<span style="color:var(--indigo2,#7e8ef7);">📌 '+cwEsc(w.our_role)+'</span> · ' : ''}
+          ${w.director ? '🎬 '+cwEsc(w.director)+' · ' : ''}
+          <span style="color:${confColor[conf] || '#9ca3af'};">●</span> confidence ${conf}
+        </div>
+        ${srcs ? '<div style="margin-top:3px;">'+srcs+'</div>' : ''}
+      </div>
+    </label>`;
+  }).join('');
+  body.innerHTML = `
+    <div class="text-sm text-muted" style="margin-bottom:10px;">
+      ${works.length} opere proposte dall'AI (basate su ${sources.length} fonti consultate). Seleziona quelle da importare.
+    </div>
+    <div>${rows}</div>`;
+  openModal('modal-film-candidates');
+}
+
+function cwCandidatesToggleAll(check) {
+  document.querySelectorAll('#film-candidates-body input[type="checkbox"]:not(:disabled)').forEach(cb => {
+    cb.checked = !!check;
+  });
+}
+
+async function cwCandidatesImport() {
+  const works = window._cwCandidates || [];
+  const checked = [...document.querySelectorAll('#film-candidates-body input[type="checkbox"]:checked')];
+  if (!checked.length) { toast('Seleziona almeno un\'opera', 'warning'); return; }
+  let okN = 0, dupN = 0, failN = 0;
+  for (const cb of checked) {
+    const w = works[parseInt(cb.dataset.idx, 10)];
+    if (!w) continue;
+    const fd = new FormData();
+    fd.append('title', w.title);
+    if (w.year) fd.append('year', String(w.year));
+    if (w.kind) fd.append('kind', w.kind);
+    if (w.our_role) fd.append('our_role', w.our_role);
+    if (w.director) fd.append('director', w.director);
+    if (w.country) fd.append('country', w.country);
+    fd.append('ai_imported', 'true');
+    if (w.source_urls && w.source_urls.length) {
+      const srcs = w.source_urls.map(u => {
+        const host = (u.split('/')[2] || '').replace('www.', '');
+        return {name: host, url: u};
+      });
+      fd.append('sources', JSON.stringify(srcs));
+    }
+    try {
+      const res = await api('POST', `/clients/api/${CLIENT_ID}/works`, fd);
+      if (res.duplicate) dupN++; else okN++;
+    } catch(e) { console.warn('import failed for', w.title, e); failN++; }
+  }
+  toast(`✓ ${okN} importate${dupN ? ' · '+dupN+' duplicate (saltate)' : ''}${failN ? ' · ⚠ '+failN+' errori' : ''}`,
+        failN ? 'warning' : 'success');
+  closeModal('modal-film-candidates');
+  cwLoad();
+}
+{% endif %}
+
+// Init
+cwLoad();
+</script>
+{% endblock %}

@@ -113,6 +113,34 @@ async def clients_page(
     )
 
 
+@router.get("/{client_id}/works", response_class=HTMLResponse)
+async def client_works_page(
+    client_id: int,
+    request: Request,
+    access_token: Optional[str] = Cookie(None),
+    db: Session = Depends(get_db),
+):
+    """v3.5.0-alpha.28: pagina dedicata filmografia cliente.
+
+    Sostituisce la tab "Filmografia" nella scheda cliente. Vista più ampia
+    con campi estesi (sinossi, finanziamenti pubblici, cast & crew, link
+    esterni, premi, data uscita).
+    """
+    c = (
+        db.query(Client)
+        .filter(Client.id == client_id, Client.tenant_id == CURRENT_TENANT)
+        .first()
+    )
+    if not c:
+        raise HTTPException(404, "Cliente non trovato")
+    u = _resolve_current_user(db, access_token)
+    ai_enabled = get_provider_for_user(u.id if u else None, db) is not None
+    return _tpl().TemplateResponse(
+        "pages/client_works.html",
+        {"request": request, "client": c, "ai_enabled": ai_enabled},
+    )
+
+
 # ── API JSON ─────────────────────────────────────────────────
 
 @router.get("/api")
@@ -379,14 +407,18 @@ async def search_and_create(
 
 # ── ClientWork (filmografia) — v3.5.0-alpha.25 ───────────────
 
+def _safe_json_load(raw, default):
+    if not raw:
+        return default
+    try:
+        v = json.loads(raw)
+        return v if v is not None else default
+    except Exception:
+        return default
+
+
 def _work_dict(w: ClientWork) -> dict:
     """Serializza un ClientWork in JSON-friendly."""
-    sources = []
-    if w.sources_json:
-        try:
-            sources = json.loads(w.sources_json) or []
-        except Exception:
-            sources = []
     return {
         "id": w.id,
         "client_id": w.client_id,
@@ -396,8 +428,15 @@ def _work_dict(w: ClientWork) -> dict:
         "our_role": w.our_role,
         "director": w.director,
         "country": w.country,
-        "sources": sources,  # lista di {name, url}
+        "sources": _safe_json_load(w.sources_json, []),  # lista di {name, url}
         "notes": w.notes,
+        # v3.5.0-alpha.28 — campi estesi
+        "synopsis": w.synopsis,
+        "release_date": w.release_date.isoformat() if w.release_date else None,
+        "funding_public": _safe_json_load(w.funding_public, None),
+        "cast_crew": _safe_json_load(w.cast_crew, None),
+        "external_links": _safe_json_load(w.external_links, []),
+        "awards": _safe_json_load(w.awards, []),
         "ai_imported": bool(w.ai_imported),
         "created_at": w.created_at.isoformat() if w.created_at else None,
         "updated_at": w.updated_at.isoformat() if w.updated_at else None,
@@ -500,6 +539,13 @@ async def update_client_work(
     country: Optional[str] = Form(None),
     sources: Optional[str] = Form(None),
     notes: Optional[str] = Form(None),
+    # v3.5.0-alpha.28 — campi estesi (tutti opzionali, JSON quando applicabile)
+    synopsis: Optional[str] = Form(None),
+    release_date: Optional[str] = Form(None),
+    funding_public: Optional[str] = Form(None),
+    cast_crew: Optional[str] = Form(None),
+    external_links: Optional[str] = Form(None),
+    awards: Optional[str] = Form(None),
     db: Session = Depends(get_db),
 ):
     w = (
@@ -527,6 +573,36 @@ async def update_client_work(
         w.country = (country or None)
     if notes is not None:
         w.notes = (notes or None)
+    if synopsis is not None:
+        w.synopsis = (synopsis or None)
+    if release_date is not None:
+        rd = (release_date or "").strip()
+        if not rd:
+            w.release_date = None
+        else:
+            try:
+                from datetime import date as _date
+                w.release_date = _date.fromisoformat(rd)
+            except ValueError:
+                pass  # ignora valori non validi
+    # JSON fields: passa "" o "null" per cancellare, JSON valido per setting.
+    for fname, fval in (
+        ("funding_public", funding_public),
+        ("cast_crew", cast_crew),
+        ("external_links", external_links),
+        ("awards", awards),
+    ):
+        if fval is None:
+            continue
+        cleaned = (fval or "").strip()
+        if cleaned in ("", "null"):
+            setattr(w, fname, None)
+            continue
+        try:
+            json.loads(cleaned)  # solo per validare
+            setattr(w, fname, cleaned)
+        except Exception:
+            pass  # ignora JSON invalidi
     if sources is not None:
         try:
             parsed = json.loads(sources)
