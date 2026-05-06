@@ -8,51 +8,45 @@
 
 ## Versione corrente
 
-**v3.5.0-alpha.35** — 6 maggio 2026 — ROI rubber-band + funzione sotto nome operatore
+**v3.5.0-alpha.36** — 6 maggio 2026 — ROI overlay-based + scorciatoia tastiera "S"
 
-Due richieste di Matteo:
+Riscrittura totale del ROI dopo che α.35 non funzionava per Matteo:
+vis-timeline 7.x usa Hammer.js su PointerEvents, il nostro mousedown
+capture-phase non bastava a impedire il pan. Approccio definitivo:
+**overlay-div trasparente** sopra l'host che intercetta tutti gli
+eventi → vis-timeline non li vede mai.
 
-1. **ROI rubber-band riabilitato** (chiusura desiderata forte
-   `feedback_multiselect_multidrag.md`). Bottone "📦 Area" toggle in
-   toolbar planning timeline → cursor crosshair, drag su zona vuota
-   disegna rettangolo, mouseup seleziona tutti i booking dentro
-   `[time, group]`. ESC esce. Trigger Shift rimosso per evitare conflict
-   con shift+drag = create-booking.
-2. **Funzione (role) sotto nome operatore** nelle foglie risorsa della
-   timeline. RESOURCES_SEED ora include `role`, render font 10.5px
-   italic muted sotto il nome.
+In più la scorciatoia da tastiera **"S"** (richiesta esplicita Matteo:
+"modalità senza mouseclick ma con combinazione tasti") per attivare la
+modalità area senza doverci cliccare il bottone.
 
-**Chiuso α.35:**
-- ✅ `planning.html` toolbar: bottone `📦 Area` reso visibile (era
-  nascosto da α.22), title aggiornato
-- ✅ `_tlRoiHandler`: trigger Shift rimosso (conflict create-booking),
-  restano Alt+drag + persist-mode. `stopImmediatePropagation` per
-  bloccare create-handler in coda
-- ✅ `_tlCreateDragHandler`: guard `if (window._tlRoiPersistMode) return`
-- ✅ `_tlRoiHandler` wirato in capture-phase via
-  `host.addEventListener('mousedown', ..., true)` (era definito ma mai
-  attaccato)
-- ✅ `tlRoiTogglePersist`: cursor crosshair persistente sull'host +
-  ESC globale per uscire (skippato se focus su input/textarea/select)
-- ✅ `RESOURCES_SEED` template: aggiunto `role:{{ (r.role or '')|tojson }}`
-- ✅ `tlBuildResourceGroups`: render foglie con wrapper
-  `tl-res-cell` flex-column → `tl-res-name` + `tl-res-role` (font 10.5
-  italic muted) + heatmap. Wrapper necessario per non collidere con
-  `vis-inner` (flex row + align-items center)
+**Chiuso α.36:**
+- ✅ Rimosso il vecchio `_tlRoiHandler` (no-op effettivo)
+- ✅ Nuove funzioni `tlRoiEnable()` / `tlRoiDisable()` / `_tlRoiMousedown()`:
+  overlay `position:fixed` z-index 50 sopra `tl-host`, `touch-action:none`,
+  cursor crosshair, riposizionamento automatico su scroll/resize
+- ✅ Calcolo time-range manuale: ratio clientX nel `.vis-panel.vis-center`
+  × windowSpan (no dipendenza da `getEventProperties` che richiede
+  e.target nel DOM tree timeline)
+- ✅ Calcolo group-set via `.vis-label` rect vs y-range
+- ✅ Scorciatoia tastiera `S` (no modifier, fuori da input, solo se
+  `ACTIVE_VIEW === 'timeline'`) → toggle. ESC esce
+- ✅ `_tlCreateDragHandler` guard aggiornato: `_tlRoiActive` o legacy
+  `_tlRoiPersistMode`
+- ✅ Bottone toolbar title aggiornato `📦 Area (S)`
+- ✅ Hint modal bulk-edit aggiornato
 
 **Verifica live richiesta a Matteo:**
-- Apri `/planning` vista timeline. In toolbar vedi `📦 Area` (prima del
-  bottone ⚙). Click → cursor crosshair, toast "Modalità area ON…"
-- Trascina su zona vuota della griglia → rettangolo tratteggiato
-  indaco. Al mouseup → toast "📦 N booking selezionati. Premi Delete
-  per eliminare in blocco."
-- ESC → esce dalla modalità (cursor torna normale, toast OFF)
-- Alt+drag (anche fuori modalità area) → ROI come prima
-- Shift+drag (fuori modalità) → create booking come prima
-- In modalità area, shift+drag NON crea booking (cede a ROI)
-- Sulle righe foglia in label sinistra: vedi nome + sotto, in piccolo
-  italic, la funzione (es. "Colorist", "Sound Designer"). Se la
-  risorsa non ha role, vedi solo il nome (no riga vuota)
+- Apri `/planning` vista timeline. Premi **`S`** (senza modifier) →
+  un velo trasparente azzurrino copre l'area timeline + cursor crosshair
+  + toast "📦 Modalità area ON…"
+- Trascina sulla griglia → rettangolo tratteggiato indaco con glow.
+  Al mouseup → toast "📦 N booking selezionati. Premi Delete per
+  eliminare in blocco" (o "Nessun booking nell'area")
+- Premi `S` di nuovo, oppure `ESC`, oppure click sul bottone
+  `📦 Area` → esce dalla modalità (velo via, cursor normale)
+- Verifica: con modalità OFF tutto funziona come prima (drag item,
+  pan, click vuoto, shift+drag = create booking)
 
 **Niente migrate**: solo modifiche al template `planning.html`.
 
@@ -69,6 +63,15 @@ Due richieste di Matteo:
   con dry-run, refinements)
 
 ## Storico recenti
+
+**v3.5.0-alpha.35** — 6 maggio 2026 — ROI rubber-band riabilitato + funzione sotto nome operatore
+
+Primo tentativo di riabilitazione ROI (handler in-line + Alt-drag +
+toggle persist-mode). Non funzionava per Matteo: vis-timeline/Hammer.js
+intercettava i mouse events. Sostituito da α.36 con approccio overlay-div.
+Resta valida la parte "funzione (role) sotto nome operatore" nelle
+foglie risorsa della timeline (RESOURCES_SEED esteso + render
+`tl-res-name` + `tl-res-role` font 10.5px italic muted).
 
 **v3.5.0-alpha.34** — 6 maggio 2026 — Admin Export/Import dati
 

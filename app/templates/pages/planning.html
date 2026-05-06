@@ -834,10 +834,10 @@
               <button class="btn btn-ghost btn-sm" style="display:block; width:100%; text-align:left; padding:7px 10px;" onclick="tlClearSelection()">Deseleziona tutto (Esc)</button>
             </div>
           </div>
-          <!-- v3.5.0-alpha.35: ROI rubber-band riabilitato come modalità persistente toggle.
-               Il trigger Shift+drag resta disabilitato (conflict con create-booking shift+drag);
-               persist mode + Alt+drag sono i due gesti supportati. -->
-          <button class="btn btn-ghost btn-sm" id="tl-roi-toggle" onclick="tlRoiTogglePersist()" title="Modalità area: trascina su zona vuota per selezionare i booking dentro il rettangolo (ESC per uscire). Alt+drag funziona sempre." style="margin-left:6px;">📦 Area</button>
+          <!-- v3.5.0-alpha.36: ROI riscritto con overlay-div trasparente (i tentativi
+               in-line erano vanificati da Hammer.js/PointerEvents di vis-timeline).
+               Toggle: click bottone OPPURE tasto S (no modifier). ESC esce. -->
+          <button class="btn btn-ghost btn-sm" id="tl-roi-toggle" onclick="tlRoiTogglePersist()" title="Modalità area (S): trascina sulla griglia per selezionare. ESC per uscire." style="margin-left:6px;">📦 Area</button>
           <button class="btn btn-ghost btn-sm" onclick="tlPrefsToggle(event)" title="Personalizza look timeline" style="margin-left:6px;">⚙</button>
         </div>
 
@@ -3978,140 +3978,17 @@ async function renderTimeline(preserveWindow=false) {
   };
   document.addEventListener('keydown', window._tlDeleteHandler, true);
 
-  // v3.5.0-alpha.16: ROI multiselect — riscrittura.
-  //
-  // Diagnosi del bug pre-alpha.16: vis-timeline usa Hammer.js per il
-  // panning. Anche in capture-phase con stopPropagation, Hammer attacca i
-  // suoi listener al container e parte il pan PRIMA che il nostro overlay
-  // venga aggiornato dal mousemove → l'utente vede la timeline scorrere e
-  // l'overlay non disegna. Inoltre la ricerca del gruppo via attributi DOM
-  // [data-group-id] fallisce su vis-timeline 7.x perché usa altri selettori.
-  //
-  // Fix:
-  // 1. Disabilito moveable + zoomable temporaneamente sul drag → Hammer non
-  //    attiva pan/zoom → nessun conflitto col nostro overlay.
-  // 2. Per i gruppi: scansione tutti gli elementi .vis-label (ognuno è una
-  //    riga gruppo nella labelset di sinistra) e mappo y-coord → group id
-  //    via getEventProperties con e.clientX fissato sull'asse temporale.
-  // 3. Trigger keys: Alt (più affidabile, vis-timeline non lo intercetta) +
-  //    fallback Shift + toggle persistente "📦 Modalità selezione" in toolbar.
+  // v3.5.0-alpha.36: ROI riscritto con approccio overlay-div (vedi
+  // tlRoiEnable/tlRoiDisable più giù). I tentativi pre-α.36 di intercettare
+  // mousedown sull'host sono stati abbandonati: vis-timeline usa
+  // Hammer.js + Pointer Events; capture-phase + stopPropagation non bastano
+  // perché Hammer agisce su un canale di eventi diverso (pointerdown).
+  // L'unico approccio robusto è sovrapporre un div trasparente che intercetta
+  // TUTTI gli eventi mouse → vis-timeline non li vede mai. Cleanup eredità.
   if (window._tlRoiHandler) {
-    host.removeEventListener('mousedown', window._tlRoiHandler, true);
+    try { host.removeEventListener('mousedown', window._tlRoiHandler, true); } catch(_) {}
     window._tlRoiHandler = null;
   }
-  window._tlRoiHandler = function(e) {
-    // v3.5.0-alpha.35: trigger Shift rimosso (conflitto con _tlCreateDragHandler che
-    // usa Shift+drag per creare booking). Restano: Alt+drag (power-user) e
-    // _tlRoiPersistMode (toggle "📦 Area" in toolbar — gesto comune drag senza modifier).
-    const isAlt = e.altKey;
-    const isPersistMode = (window._tlRoiPersistMode === true);
-    if (!isAlt && !isPersistMode) return;
-    if (e.button !== 0) return;
-    if (e.target.closest && e.target.closest('.vis-item')) return;
-    if (e.target.closest && e.target.closest('.vis-labelset, .vis-time-axis')) return;
-    if (!tlInstance) return;
-    const startProps = tlInstance.getEventProperties(e);
-    if (!startProps || !startProps.time) return;
-    e.preventDefault();
-    e.stopImmediatePropagation();  // alpha.35: blocca anche _tlCreateDragHandler in coda
-
-    // Disabilita pan/zoom durante il drag per evitare conflitto Hammer.js
-    const prevOpts = {
-      moveable: tlInstance.options.moveable !== false,
-      zoomable: tlInstance.options.zoomable !== false,
-    };
-    tlInstance.setOptions({ moveable: false, zoomable: false });
-
-    const startX = e.clientX, startY = e.clientY;
-    const overlay = document.createElement('div');
-    overlay.id = 'tl-roi-rect';
-    overlay.style.cssText =
-      'position:fixed; border:1px dashed #6272f5; background:rgba(98,114,245,0.10);' +
-      ' pointer-events:none; z-index:9998; left:0; top:0; width:0; height:0;';
-    document.body.appendChild(overlay);
-    document.body.style.cursor = 'crosshair';
-
-    const onMove = (ev) => {
-      const x1 = Math.min(startX, ev.clientX), x2 = Math.max(startX, ev.clientX);
-      const y1 = Math.min(startY, ev.clientY), y2 = Math.max(startY, ev.clientY);
-      overlay.style.left = x1 + 'px';
-      overlay.style.top = y1 + 'px';
-      overlay.style.width = (x2 - x1) + 'px';
-      overlay.style.height = (y2 - y1) + 'px';
-    };
-    const finalize = (ev) => {
-      document.removeEventListener('mousemove', onMove, true);
-      document.removeEventListener('mouseup', finalize, true);
-      document.removeEventListener('keydown', onEsc, true);
-      overlay.remove();
-      document.body.style.cursor = '';
-      tlInstance.setOptions({ moveable: prevOpts.moveable, zoomable: prevOpts.zoomable });
-      if (ev.type === 'keydown') return;  // Escape = aborto
-
-      const endProps = tlInstance.getEventProperties(ev);
-      const endTime = (endProps && endProps.time) ? endProps.time : startProps.time;
-      const t0 = Math.min(startProps.time.getTime(), endTime.getTime());
-      const t1 = Math.max(startProps.time.getTime(), endTime.getTime());
-
-      // Range gruppi via scansione di .vis-label (label-row sinistra)
-      let groupSet = null;
-      const labels = host.querySelectorAll('.vis-labelset .vis-label');
-      if (labels.length) {
-        groupSet = new Set();
-        const yMin = Math.min(startY, ev.clientY);
-        const yMax = Math.max(startY, ev.clientY);
-        // vis-timeline 7.x: label.getAttribute('data-id') o ordine DOM.
-        // Costruisco mappa label-index → group id via groupsDS.
-        const allGroups = (groupsDS.get() || []).filter(g => typeof g.id === 'number');
-        labels.forEach((lab, idx) => {
-          const r = lab.getBoundingClientRect();
-          if (r.bottom < yMin || r.top > yMax) return;
-          // Trova il group corrispondente alla y center del label
-          if (idx < allGroups.length) {
-            groupSet.add(allGroups[idx].id);
-          }
-        });
-        if (!groupSet.size) {
-          // Fallback estremi
-          if (typeof startProps.group === 'number') groupSet.add(startProps.group);
-          if (typeof endProps?.group === 'number') groupSet.add(endProps.group);
-        }
-      }
-
-      const inRange = [];
-      for (const it of itemsDS.get()) {
-        if (typeof it.id !== 'string' || !it.id.startsWith('a')) continue;
-        const its = new Date(it.start).getTime();
-        const ite = new Date(it.end).getTime();
-        if (its > t1 || ite < t0) continue;
-        if (groupSet && groupSet.size && !groupSet.has(it.group)) continue;
-        inRange.push(it.id);
-      }
-      if (inRange.length) {
-        tlInstance.setSelection(inRange);
-        toast(`📦 ${inRange.length} booking selezionati. Premi Delete per eliminare in blocco.`, 'info', 4500);
-      } else {
-        toast('Nessun booking nell\'area selezionata', 'info', 1800);
-      }
-    };
-    const onEsc = (ev) => {
-      if (ev.key === 'Escape') {
-        document.removeEventListener('mousemove', onMove, true);
-        document.removeEventListener('mouseup', finalize, true);
-        document.removeEventListener('keydown', onEsc, true);
-        overlay.remove();
-        document.body.style.cursor = '';
-        tlInstance.setOptions({ moveable: prevOpts.moveable, zoomable: prevOpts.zoomable });
-      }
-    };
-    document.addEventListener('mousemove', onMove, true);
-    document.addEventListener('mouseup', finalize, true);
-    document.addEventListener('keydown', onEsc, true);
-  };
-  // v3.5.0-alpha.35: ROI riabilitato. Wirato in capture-phase. Il handler stesso
-  // è no-op se né Alt né persist-mode sono attivi, quindi non interferisce con
-  // l'uso normale (drag item, pan, click vuoto).
-  host.addEventListener('mousedown', window._tlRoiHandler, true);
 
   // v3.5.0-alpha.23: click+drag su area vuota → modal nuovo booking
   // pre-compilato con start/end dell'intervallo trascinato e risorsa target.
@@ -4126,9 +4003,9 @@ async function renderTimeline(preserveWindow=false) {
   window._tlCreateDragHandler = function(e) {
     if (!e.shiftKey) return;  // gesture: Shift+drag
     if (e.button !== 0) return;
-    // alpha.35: in modalità area persistente lo Shift+drag non deve creare
-    // booking (è gesto ambiguo); fuori da modalità area, Shift+drag = crea.
-    if (window._tlRoiPersistMode === true) return;
+    // alpha.35/36: in modalità area lo Shift+drag non deve creare booking
+    // (l'overlay ROI cattura comunque i mousedown, ma guard per coerenza).
+    if (window._tlRoiActive === true || window._tlRoiPersistMode === true) return;
     if (e.target.closest && e.target.closest('.vis-item')) return;
     if (e.target.closest && e.target.closest('.vis-labelset, .vis-time-axis')) return;
     if (!tlInstance) return;
@@ -4208,41 +4085,197 @@ async function renderTimeline(preserveWindow=false) {
   tlUpdateRangeLabel();
 }
 
-// v3.5.0-alpha.16: toggle modalità selezione area (per chi non vuole/può
-// usare Alt-drag o ha tastiera senza Alt comoda).
-// v3.5.0-alpha.35: riabilitato + cursor crosshair globale + ESC esce.
-function tlRoiTogglePersist() {
-  window._tlRoiPersistMode = !window._tlRoiPersistMode;
+// ── ROI selezione area (v3.5.0-alpha.36) ──────────────────────
+// Approccio: overlay-div trasparente posizionato sopra l'host timeline.
+// L'overlay cattura mousedown/move/up — vis-timeline (e Hammer.js) non li
+// vedono mai → zero interferenza con pan/zoom. Coordinate clientX/Y →
+// time via window range manuale + group via scansione .vis-label rect.
+//
+// Trigger:
+//   - Click sul bottone "📦 Area" in toolbar
+//   - Tasto "S" da tastiera (no modifier, fuori da input)
+// Uscita: ESC, oppure trigger-toggle di nuovo.
+
+function tlRoiEnable() {
+  if (window._tlRoiActive) return;
+  const host = document.getElementById('tl-host');
+  if (!host || !window._tlInstance) {
+    toast('Timeline non attiva (passa alla vista Timeline)', 'warning', 2500);
+    return;
+  }
+  const overlay = document.createElement('div');
+  overlay.id = 'tl-roi-overlay';
+  const updatePos = () => {
+    const r = host.getBoundingClientRect();
+    overlay.style.left = r.left + 'px';
+    overlay.style.top = r.top + 'px';
+    overlay.style.width = r.width + 'px';
+    overlay.style.height = r.height + 'px';
+  };
+  overlay.style.cssText = 'position:fixed; z-index:50; cursor:crosshair;'
+    + ' background:rgba(98,114,245,0.04); user-select:none; touch-action:none;';
+  updatePos();
+  document.body.appendChild(overlay);
+  overlay._updatePos = updatePos;
+  window.addEventListener('scroll', updatePos, true);
+  window.addEventListener('resize', updatePos);
+  overlay.addEventListener('mousedown', _tlRoiMousedown);
+
+  window._tlRoiActive = true;
   const btn = document.getElementById('tl-roi-toggle');
   if (btn) {
-    btn.classList.toggle('btn-primary', window._tlRoiPersistMode);
-    btn.classList.toggle('btn-ghost', !window._tlRoiPersistMode);
+    btn.classList.add('btn-primary');
+    btn.classList.remove('btn-ghost');
   }
-  // Cursor crosshair persistente sull'host timeline (non solo durante drag)
-  const host = document.getElementById('tl-host');
-  if (host) {
-    host.style.cursor = window._tlRoiPersistMode ? 'crosshair' : '';
+  // ESC globale per uscire (skippato se focus su input)
+  window._tlRoiEscHandler = (ev) => {
+    if (ev.key !== 'Escape' || !window._tlRoiActive) return;
+    const ae = document.activeElement;
+    if (ae && (ae.tagName === 'INPUT' || ae.tagName === 'TEXTAREA'
+               || ae.tagName === 'SELECT' || ae.isContentEditable)) return;
+    tlRoiDisable();
+  };
+  document.addEventListener('keydown', window._tlRoiEscHandler, true);
+  toast('📦 Modalità area ON: trascina sulla griglia per selezionare. ESC o S per uscire.',
+        'info', 3500);
+}
+
+function tlRoiDisable() {
+  if (!window._tlRoiActive) return;
+  const overlay = document.getElementById('tl-roi-overlay');
+  if (overlay) {
+    if (overlay._updatePos) {
+      window.removeEventListener('scroll', overlay._updatePos, true);
+      window.removeEventListener('resize', overlay._updatePos);
+    }
+    overlay.remove();
   }
-  // ESC globale per uscire dalla modalità (oltre al click sul bottone)
-  if (window._tlRoiPersistMode) {
-    window._tlRoiEscHandler = (ev) => {
-      if (ev.key === 'Escape' && window._tlRoiPersistMode) {
-        // Solo se non sta editando un input (l'utente potrebbe voler chiudere un modal con ESC)
-        const ae = document.activeElement;
-        if (ae && (ae.tagName === 'INPUT' || ae.tagName === 'TEXTAREA' || ae.tagName === 'SELECT')) return;
-        tlRoiTogglePersist();
-      }
-    };
-    document.addEventListener('keydown', window._tlRoiEscHandler, true);
-  } else if (window._tlRoiEscHandler) {
+  if (window._tlRoiEscHandler) {
     document.removeEventListener('keydown', window._tlRoiEscHandler, true);
     window._tlRoiEscHandler = null;
   }
-  toast(window._tlRoiPersistMode
-    ? '📦 Modalità area ON: trascina su zona vuota per selezionare. ESC o click di nuovo per uscire.'
-    : 'Modalità area OFF. Alt+drag funziona sempre.',
-    'info', 3500);
+  window._tlRoiActive = false;
+  // Sync flag legacy per evitare regressioni in altri check
+  window._tlRoiPersistMode = false;
+  const btn = document.getElementById('tl-roi-toggle');
+  if (btn) {
+    btn.classList.remove('btn-primary');
+    btn.classList.add('btn-ghost');
+  }
+  toast('Modalità area OFF', 'info', 1500);
 }
+
+function tlRoiTogglePersist() {
+  if (window._tlRoiActive) tlRoiDisable(); else tlRoiEnable();
+}
+
+function _tlRoiMousedown(e) {
+  if (e.button !== 0) return;
+  const tlInstance = window._tlInstance;
+  const host = document.getElementById('tl-host');
+  if (!tlInstance || !host) return;
+  e.preventDefault();
+  e.stopPropagation();
+
+  const startX = e.clientX, startY = e.clientY;
+  const rect = document.createElement('div');
+  rect.id = 'tl-roi-rect';
+  rect.style.cssText = 'position:fixed; border:1.5px dashed #6272f5;'
+    + ' background:rgba(98,114,245,0.14); pointer-events:none; z-index:9999;'
+    + ' left:0; top:0; width:0; height:0; border-radius:3px;'
+    + ' box-shadow:0 0 0 1px rgba(98,114,245,0.25), 0 0 12px rgba(98,114,245,0.35);';
+  document.body.appendChild(rect);
+
+  const onMove = (ev) => {
+    const x1 = Math.min(startX, ev.clientX), x2 = Math.max(startX, ev.clientX);
+    const y1 = Math.min(startY, ev.clientY), y2 = Math.max(startY, ev.clientY);
+    rect.style.left = x1 + 'px';
+    rect.style.top = y1 + 'px';
+    rect.style.width = (x2 - x1) + 'px';
+    rect.style.height = (y2 - y1) + 'px';
+  };
+
+  const finalize = (ev) => {
+    document.removeEventListener('mousemove', onMove, true);
+    document.removeEventListener('mouseup', finalize, true);
+    rect.remove();
+
+    // Calcolo time-range da clientX (relative al center panel della timeline)
+    let t0 = null, t1 = null;
+    try {
+      const centerPanel = host.querySelector('.vis-panel.vis-center');
+      if (centerPanel) {
+        const cR = centerPanel.getBoundingClientRect();
+        const win = tlInstance.getWindow();
+        const winSpan = win.end.getTime() - win.start.getTime();
+        const ratX = (x) => Math.max(0, Math.min(1, (x - cR.left) / cR.width));
+        const xMin = Math.min(startX, ev.clientX);
+        const xMax = Math.max(startX, ev.clientX);
+        t0 = win.start.getTime() + winSpan * ratX(xMin);
+        t1 = win.start.getTime() + winSpan * ratX(xMax);
+      }
+    } catch(err) { console.warn('ROI time calc failed', err); }
+    if (t0 == null) {
+      toast('Errore calcolo intervallo ROI', 'error');
+      return;
+    }
+
+    // Calcolo group-set scansionando le label sinistre (ognuna corrisponde
+    // a una riga foreground 1:1 nel layout vis-timeline 7.x)
+    const groupSet = new Set();
+    const yMin = Math.min(startY, ev.clientY);
+    const yMax = Math.max(startY, ev.clientY);
+    const labels = host.querySelectorAll('.vis-labelset .vis-label');
+    const groupsDS = tlInstance.groupsData;
+    const allGroups = (groupsDS && groupsDS.get() || []).filter(g => typeof g.id === 'number');
+    labels.forEach((lab, idx) => {
+      const r = lab.getBoundingClientRect();
+      if (r.bottom < yMin || r.top > yMax) return;
+      if (idx < allGroups.length) groupSet.add(allGroups[idx].id);
+    });
+
+    // Items dentro [time, group]
+    const itemsDS = tlInstance.itemsData;
+    if (!itemsDS) { toast('Items dataset non disponibile', 'error'); return; }
+    const inRange = [];
+    for (const it of itemsDS.get()) {
+      if (typeof it.id !== 'string' || !it.id.startsWith('a')) continue;
+      const its = new Date(it.start).getTime();
+      const ite = new Date(it.end).getTime();
+      if (its > t1 || ite < t0) continue;
+      if (groupSet.size && !groupSet.has(it.group)) continue;
+      inRange.push(it.id);
+    }
+    if (inRange.length) {
+      tlInstance.setSelection(inRange);
+      toast(`📦 ${inRange.length} booking selezionati. Premi Delete per eliminare in blocco.`,
+            'info', 4500);
+    } else {
+      toast('Nessun booking nell\'area', 'info', 1800);
+    }
+  };
+
+  document.addEventListener('mousemove', onMove, true);
+  document.addEventListener('mouseup', finalize, true);
+}
+
+// Scorciatoia tastiera "S" (no modifier, fuori da input) per toggle ROI
+// — richiesta esplicita Matteo (alpha.36): "modalità senza mouseclick ma
+// con combinazione tasti".
+(function _tlRoiInitKbd() {
+  if (window._tlRoiKbdInit) return;
+  window._tlRoiKbdInit = true;
+  document.addEventListener('keydown', (ev) => {
+    if (ev.key !== 's' && ev.key !== 'S') return;
+    if (ev.ctrlKey || ev.metaKey || ev.altKey || ev.shiftKey) return;
+    const ae = document.activeElement;
+    if (ae && (ae.tagName === 'INPUT' || ae.tagName === 'TEXTAREA'
+               || ae.tagName === 'SELECT' || ae.isContentEditable)) return;
+    if (typeof ACTIVE_VIEW !== 'undefined' && ACTIVE_VIEW !== 'timeline') return;
+    ev.preventDefault();
+    tlRoiTogglePersist();
+  }, true);
+})();
 
 // ── Bulk-edit modal (v3.5.0-alpha.18) ──────────────────────────
 // Apre il modal con le opzioni applicabili alla selezione corrente. Usa
@@ -4252,7 +4285,7 @@ function tlOpenBulkModal() {
   const sel = window._tlInstance.getSelection() || [];
   const selA = sel.filter(id => typeof id === 'string' && id.startsWith('a'));
   if (selA.length < 1) {
-    toast('Seleziona almeno un booking (Ctrl/Shift+click o Alt+drag area).', 'info', 3000);
+    toast('Seleziona almeno un booking (Ctrl/Shift+click, oppure tasto S per modalità area).', 'info', 3000);
     return;
   }
   // v3.5.0-alpha.21: bug fix bulk-edit "impossibile risalire". Pre-fix

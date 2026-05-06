@@ -1,5 +1,42 @@
 # MediaFlow — Changelog
 
+## v3.5.0-alpha.36 — ROI rubber-band overlay-based + scorciatoia tastiera "S" (6 maggio 2026)
+
+α.35 ha riabilitato il ROI ma il listener su `tl-host` non scattava per
+Matteo: vis-timeline 7.x usa Hammer.js + PointerEvents (`pointerdown`),
+quindi il nostro `mousedown` capture-phase + `stopImmediatePropagation`
+non basta a impedire al panning di partire. Riscrittura totale.
+
+**Approccio overlay-div:**
+- Quando si attiva la modalità area, viene creato un `<div id="tl-roi-overlay">`
+  trasparente (rgba .04 indaco), `position:fixed` posizionato sopra
+  l'host timeline (z-index 50, cursor crosshair, `touch-action:none`).
+- L'overlay cattura mousedown/move/up — vis-timeline non li vede mai.
+  Hammer.js è bypassato strutturalmente, niente race condition.
+- Riposizionamento automatico su scroll/resize della finestra.
+- Calcolo time-range manuale: `(clientX - centerPanel.left) / centerPanel.width
+  * windowSpan + windowStart` (no dipendenza da `getEventProperties`).
+- Calcolo group-set scansionando le `.vis-label` con `getBoundingClientRect()`
+  vs y-range del drag (mappa indice 1:1 con `tlInstance.groupsData`).
+
+**Scorciatoia tastiera "S"** (richiesta esplicita Matteo):
+- Tasto `S` (no modifier) toggle ROI mode da qualsiasi punto del planning.
+- Skippato se focus su `INPUT/TEXTAREA/SELECT/contenteditable`.
+- Skippato se non si è sulla vista `timeline` (`ACTIVE_VIEW !== 'timeline'`).
+- ESC esce dalla modalità (idem skip su input).
+
+**Cleanup:**
+- Rimosso il vecchio `_tlRoiHandler` (era no-op effettivo per via di Hammer).
+- Rimosso il fallback Alt+drag (l'overlay è ora l'unico canale, più chiaro).
+- `_tlCreateDragHandler` ha guard `if (window._tlRoiActive)` aggiunto.
+- Hint del modal bulk-edit aggiornato: "tasto S per modalità area" invece
+  di "Alt+drag area".
+- Title del bottone toolbar `📦 Area` aggiornato con menzione `(S)`.
+
+**Funzione sotto nome operatore in timeline** (resta da α.35, immutato).
+
+**Niente migrate**: solo modifiche al template `planning.html`.
+
 ## v3.5.0-alpha.35 — ROI rubber-band riabilitato + funzione sotto nome operatore (6 maggio 2026)
 
 Due richieste di Matteo nello stesso giro:
