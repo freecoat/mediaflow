@@ -4220,30 +4220,40 @@ function _tlRoiMousedown(e) {
       return;
     }
 
-    // Calcolo group-set scansionando le label sinistre (ognuna corrisponde
-    // a una riga foreground 1:1 nel layout vis-timeline 7.x)
-    const groupSet = new Set();
+    // alpha.37: la mappatura `.vis-label` index → groupsData numeric era
+    // bacata. `.vis-label` include sia gli header reparto (`.vis-nesting-group`)
+    // sia le foglie risorsa, mentre groupsData filtrato a numerici dà SOLO
+    // le foglie → indici sfasati → groupSet conteneva risorse sbagliate
+    // → selezionati anche task in righe sottostanti l'area trascinata.
+    //
+    // Approccio nuovo: per ogni item che passa il filtro time, leggi la
+    // posizione DOM REALE (tlInstance.itemSet.items[id].dom.box) e check
+    // y-overlap con il rettangolo. Funziona indipendentemente dalla
+    // gerarchia gruppi, dallo stacking, e dal numero di header reparto.
     const yMin = Math.min(startY, ev.clientY);
     const yMax = Math.max(startY, ev.clientY);
-    const labels = host.querySelectorAll('.vis-labelset .vis-label');
-    const groupsDS = tlInstance.groupsData;
-    const allGroups = (groupsDS && groupsDS.get() || []).filter(g => typeof g.id === 'number');
-    labels.forEach((lab, idx) => {
-      const r = lab.getBoundingClientRect();
-      if (r.bottom < yMin || r.top > yMax) return;
-      if (idx < allGroups.length) groupSet.add(allGroups[idx].id);
-    });
-
-    // Items dentro [time, group]
     const itemsDS = tlInstance.itemsData;
-    if (!itemsDS) { toast('Items dataset non disponibile', 'error'); return; }
+    const itemSet = tlInstance.itemSet;
+    if (!itemsDS || !itemSet || !itemSet.items) {
+      toast('Items API non disponibile (vis-timeline)', 'error');
+      return;
+    }
     const inRange = [];
     for (const it of itemsDS.get()) {
       if (typeof it.id !== 'string' || !it.id.startsWith('a')) continue;
       const its = new Date(it.start).getTime();
       const ite = new Date(it.end).getTime();
       if (its > t1 || ite < t0) continue;
-      if (groupSet.size && !groupSet.has(it.group)) continue;
+      // Posizione DOM reale dell'item (skip se non renderizzato — fuori
+      // viewport, gruppo collassato, ecc.: non si può "rubber-band" qualcosa
+      // di non visibile, comportamento corretto)
+      const itemObj = itemSet.items[it.id];
+      const box = itemObj && itemObj.dom && itemObj.dom.box;
+      if (!box) continue;
+      const r = box.getBoundingClientRect();
+      // Overlap verticale: basta che il rettangolo del rect intersechi
+      // l'item, non solo che lo contenga (più tollerante sui bordi)
+      if (r.bottom < yMin || r.top > yMax) continue;
       inRange.push(it.id);
     }
     if (inRange.length) {
@@ -4262,6 +4272,11 @@ function _tlRoiMousedown(e) {
 // Scorciatoia tastiera "S" (no modifier, fuori da input) per toggle ROI
 // — richiesta esplicita Matteo (alpha.36): "modalità senza mouseclick ma
 // con combinazione tasti".
+// alpha.37: rimossa la guardia su ACTIVE_VIEW (è una const settata al boot
+// dal Jinja con il valore della query string, NON aggiornata da setView →
+// se l'utente entrava su /planning con view=jobs e poi passava alla tab
+// Timeline, ACTIVE_VIEW restava "jobs" e la S era silenziata). Ora si
+// controlla la presenza visibile del view-timeline (classe `active`).
 (function _tlRoiInitKbd() {
   if (window._tlRoiKbdInit) return;
   window._tlRoiKbdInit = true;
@@ -4271,7 +4286,10 @@ function _tlRoiMousedown(e) {
     const ae = document.activeElement;
     if (ae && (ae.tagName === 'INPUT' || ae.tagName === 'TEXTAREA'
                || ae.tagName === 'SELECT' || ae.isContentEditable)) return;
-    if (typeof ACTIVE_VIEW !== 'undefined' && ACTIVE_VIEW !== 'timeline') return;
+    // Solo se la vista timeline è attiva (la const ACTIVE_VIEW non si
+    // aggiorna al cambio tab — controlla la classe `active` sul DOM).
+    const tlView = document.getElementById('view-timeline');
+    if (!tlView || !tlView.classList.contains('active')) return;
     ev.preventDefault();
     tlRoiTogglePersist();
   }, true);

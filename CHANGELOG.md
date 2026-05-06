@@ -1,5 +1,37 @@
 # MediaFlow — Changelog
 
+## v3.5.0-alpha.37 — Fix ROI: tasto S + selezione precisa per riga (6 maggio 2026)
+
+α.36 ha portato l'overlay-div funzionante (Matteo conferma "vedo l'area
+blu, il rettangolo e la selezione funziona"), ma due bug emersi al
+test live.
+
+**Bug 1: tasto S non attivava la modalità.**
+- Causa: `ACTIVE_VIEW` è una `const` JS settata a page-load dal Jinja
+  con il valore della query string `?view=...` (default `"jobs"`).
+  Quando l'utente cambia tab via `setView()`, il DOM si aggiorna ma
+  `ACTIVE_VIEW` resta congelato. La guardia `ACTIVE_VIEW !== 'timeline'`
+  silenziava la S anche su timeline attiva.
+- Fix: rimossa la guardia su `ACTIVE_VIEW`. Sostituita con check sulla
+  classe `.active` del DOM `#view-timeline` (lo stato vero della UI).
+
+**Bug 2: selezione includeva task in righe sottostanti l'area.**
+- Causa: il calcolo del groupSet mappava `.vis-label` index → `groupsData`
+  numeric. Ma `.vis-label` include sia gli header reparto
+  (`.vis-nesting-group`) sia le foglie risorsa, mentre `groupsData`
+  filtrato a numerici dà SOLO le foglie → indici sfasati di N (numero
+  reparti visibili) → groupSet conteneva risorse sbagliate.
+- Fix: rimossa completamente la logica group-set. Ora per ogni item che
+  passa il filtro time, si legge la posizione DOM reale via
+  `tlInstance.itemSet.items[id].dom.box.getBoundingClientRect()` e si
+  verifica overlap y col rettangolo del drag. Funziona indipendentemente
+  da gerarchia gruppi, stacking, e numero di header reparto.
+- Side-effect positivo: items in gruppi collassati/fuori viewport
+  vengono naturalmente esclusi (non hanno `dom.box`) — comportamento
+  corretto (non si può rubber-band ciò che non si vede).
+
+**Niente migrate**: solo modifiche al template `planning.html`.
+
 ## v3.5.0-alpha.36 — ROI rubber-band overlay-based + scorciatoia tastiera "S" (6 maggio 2026)
 
 α.35 ha riabilitato il ROI ma il listener su `tl-host` non scattava per

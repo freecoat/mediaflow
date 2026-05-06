@@ -8,45 +8,52 @@
 
 ## Versione corrente
 
-**v3.5.0-alpha.36** — 6 maggio 2026 — ROI overlay-based + scorciatoia tastiera "S"
+**v3.5.0-alpha.37** — 6 maggio 2026 — Fix ROI: tasto S + selezione precisa per riga
 
-Riscrittura totale del ROI dopo che α.35 non funzionava per Matteo:
-vis-timeline 7.x usa Hammer.js su PointerEvents, il nostro mousedown
-capture-phase non bastava a impedire il pan. Approccio definitivo:
-**overlay-div trasparente** sopra l'host che intercetta tutti gli
-eventi → vis-timeline non li vede mai.
+α.36 ha portato l'overlay-div funzionante (Matteo: "vedo l'area blu, il
+rettangolo e la selezione funziona") ma due bug al test live, ora chiusi.
 
-In più la scorciatoia da tastiera **"S"** (richiesta esplicita Matteo:
-"modalità senza mouseclick ma con combinazione tasti") per attivare la
-modalità area senza doverci cliccare il bottone.
+**Bug 1 — tasto S non attivava la modalità.** `ACTIVE_VIEW` è una const
+JS settata al boot col valore della query string (default "jobs"); non
+veniva aggiornata da `setView()` al cambio tab. Sostituita la guardia
+`ACTIVE_VIEW !== 'timeline'` con check sulla classe `.active` del DOM
+`#view-timeline` (stato vero della UI).
 
-**Chiuso α.36:**
-- ✅ Rimosso il vecchio `_tlRoiHandler` (no-op effettivo)
-- ✅ Nuove funzioni `tlRoiEnable()` / `tlRoiDisable()` / `_tlRoiMousedown()`:
-  overlay `position:fixed` z-index 50 sopra `tl-host`, `touch-action:none`,
-  cursor crosshair, riposizionamento automatico su scroll/resize
-- ✅ Calcolo time-range manuale: ratio clientX nel `.vis-panel.vis-center`
-  × windowSpan (no dipendenza da `getEventProperties` che richiede
-  e.target nel DOM tree timeline)
-- ✅ Calcolo group-set via `.vis-label` rect vs y-range
-- ✅ Scorciatoia tastiera `S` (no modifier, fuori da input, solo se
-  `ACTIVE_VIEW === 'timeline'`) → toggle. ESC esce
-- ✅ `_tlCreateDragHandler` guard aggiornato: `_tlRoiActive` o legacy
-  `_tlRoiPersistMode`
-- ✅ Bottone toolbar title aggiornato `📦 Area (S)`
-- ✅ Hint modal bulk-edit aggiornato
+**Bug 2 — selezione includeva task in righe sottostanti.** La mappatura
+`.vis-label` index → `groupsData` numeric era sbagliata: `.vis-label`
+include header reparto (`.vis-nesting-group`) + foglie risorsa, ma il
+groupsData filtrato a numerici dà solo le foglie → indici sfasati →
+groupSet con risorse sbagliate. Rimossa la logica group-set: ora per
+ogni item che passa il filtro time, si legge la posizione DOM reale
+via `tlInstance.itemSet.items[id].dom.box.getBoundingClientRect()` e
+si check overlap y. Robusto a gerarchia/stacking/numero reparti.
+
+**Chiuso α.37:**
+- ✅ Bug 1 (tasto S inerte): rimossa guardia `ACTIVE_VIEW !== 'timeline'`
+  in `_tlRoiInitKbd`; check sostituito con classe `.active` su
+  `#view-timeline` (lo stato del DOM è la fonte di verità, non la
+  const settata al boot)
+- ✅ Bug 2 (selezione errata): rimossa logica group-set basata su
+  scansione `.vis-label` (mismatch indici nesting vs leaf). In
+  `_tlRoiMousedown` ora si itera `itemsDS.get()`, si pre-filtra per
+  time, e per ogni item si legge `tlInstance.itemSet.items[id].dom.box`
+  per verificare overlap y col rettangolo del drag. Items non
+  renderizzati (gruppi collassati, fuori viewport) vengono naturalmente
+  esclusi
 
 **Verifica live richiesta a Matteo:**
-- Apri `/planning` vista timeline. Premi **`S`** (senza modifier) →
-  un velo trasparente azzurrino copre l'area timeline + cursor crosshair
-  + toast "📦 Modalità area ON…"
-- Trascina sulla griglia → rettangolo tratteggiato indaco con glow.
-  Al mouseup → toast "📦 N booking selezionati. Premi Delete per
-  eliminare in blocco" (o "Nessun booking nell'area")
-- Premi `S` di nuovo, oppure `ESC`, oppure click sul bottone
-  `📦 Area` → esce dalla modalità (velo via, cursor normale)
-- Verifica: con modalità OFF tutto funziona come prima (drag item,
-  pan, click vuoto, shift+drag = create booking)
+- Apri `/planning`, click tab `📅 Timeline`
+- Premi `S` → modalità area ON (velo + crosshair + toast). Era questo
+  che α.36 sbagliava
+- Trascina un piccolo rettangolo che copre SOLO una riga risorsa →
+  vengono selezionati SOLO i booking in quella riga (non più anche le
+  righe sottostanti)
+- Trascina trasversalmente più righe → seleziona tutti i booking nelle
+  righe attraversate (verticalmente)
+- Trascina sopra ad un booking che però è temporalmente fuori dal
+  rettangolo (es. inizia prima e finisce dopo l'area trascinata) →
+  viene comunque selezionato perché l'item DOM box overlappa con
+  l'area (intersezione non solo containment)
 
 **Niente migrate**: solo modifiche al template `planning.html`.
 
@@ -63,6 +70,15 @@ modalità area senza doverci cliccare il bottone.
   con dry-run, refinements)
 
 ## Storico recenti
+
+**v3.5.0-alpha.36** — 6 maggio 2026 — ROI overlay-based + scorciatoia tastiera "S"
+
+Riscrittura totale del ROI dopo che α.35 non funzionava: vis-timeline
+7.x usa Hammer.js su PointerEvents, mousedown capture-phase non basta.
+Approccio definitivo: overlay-div trasparente sopra l'host. Aggiunta
+scorciatoia tastiera `S`. Funzionante ma con due bug emersi al test
+live (chiusi in α.37): tasto S inerte e selezione che includeva righe
+sottostanti.
 
 **v3.5.0-alpha.35** — 6 maggio 2026 — ROI rubber-band riabilitato + funzione sotto nome operatore
 
