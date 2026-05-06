@@ -195,6 +195,7 @@
       "propose_quote_line": "Riga quote",
       "propose_price_item": "Voce listino",
       "propose_new_item_and_line": "Nuova voce listino + riga quote",
+      "propose_resource": "Risorsa (nuova)",
       "propose_booking": "Booking (nuovo)",
       "web_search": "Ricerca web",
       // v3.5.0-alpha.19 — Settings
@@ -264,6 +265,8 @@
       case "propose_quote_line": return summaryQuoteLine(d);
       case "propose_price_item": return summaryPriceItem(d);
       case "propose_new_item_and_line": return summaryNewItemAndLine(d);
+      case "propose_resource": return summaryResource(d);
+      case "propose_booking": return summaryBooking(d);
       case "web_search": return `<div>Cerca: <b>${escapeHtml(d.query || "—")}</b></div>`;
       case "update_setting": return summaryUpdateSetting(d);
       default: return `<span class="cp-muted">Nessun renderer per questo tipo. Apri "dati grezzi".</span>`;
@@ -362,6 +365,52 @@
     return items.map(([k, v]) =>
       `<div><span class="cp-muted">${escapeHtml(k)}:</span> ${escapeHtml(String(v))}</div>`
     ).join("");
+  }
+
+  // v3.5.0-alpha.33
+  function summaryResource(d) {
+    const lines = [];
+    if (d.name) lines.push(`<b>${escapeHtml(d.name)}</b>`);
+    const typeLabel = ({
+      person_internal: "Persona interna",
+      person_freelance: "Freelance",
+      studio: "Sala/Studio",
+      equipment: "Attrezzatura",
+      software: "Software",
+      vehicle: "Veicolo",
+    })[d.type] || d.type || "—";
+    const head = [typeLabel, d.role].filter(Boolean).map(escapeHtml).join(" · ");
+    if (head) lines.push(`<span class="cp-muted">${head}</span>`);
+    const dept = d.department_name || (d.department_id ? `#${d.department_id}` : null);
+    if (dept) lines.push(`Reparto: <b>${escapeHtml(dept)}</b>`);
+    const rates = [];
+    if (d.daily_rate) rates.push(`${d.daily_rate}€/g`);
+    if (d.hourly_rate) rates.push(`${d.hourly_rate}€/h`);
+    if (rates.length) lines.push(`<span class="cp-muted">Tariffe:</span> ${escapeHtml(rates.join(" · "))}`);
+    if (d.email)  lines.push(`<span class="cp-muted">${escapeHtml(d.email)}</span>`);
+    if (d.phone)  lines.push(`<span class="cp-muted">${escapeHtml(d.phone)}</span>`);
+    return lines.join("<br>") || `<span class="cp-muted">Nessun campo</span>`;
+  }
+
+  function summaryBooking(d) {
+    const lines = [];
+    const job = d.job_code ? `Job <b>${escapeHtml(d.job_code)}</b>` :
+                d.job_id   ? `Job #${d.job_id}` :
+                (d.kind && d.kind !== 'project') ? `<span class="cp-muted">${escapeHtml(d.kind)}</span>` : null;
+    if (job) lines.push(job);
+    const ass = Array.isArray(d.assignments) ? d.assignments : [];
+    if (ass.length) {
+      const assLines = ass.slice(0, 4).map(a => {
+        const who = a.resource_name || (a.resource_id ? `#${a.resource_id}` : "—");
+        const s = a.start_datetime ? new Date(a.start_datetime).toLocaleString("it-IT", {day:"2-digit", month:"2-digit", hour:"2-digit", minute:"2-digit"}) : "?";
+        const e = a.end_datetime   ? new Date(a.end_datetime).toLocaleString("it-IT",   {day:"2-digit", month:"2-digit", hour:"2-digit", minute:"2-digit"}) : "?";
+        return `<div>• <b>${escapeHtml(who)}</b> · ${escapeHtml(s)} → ${escapeHtml(e)}</div>`;
+      }).join("");
+      lines.push(assLines);
+      if (ass.length > 4) lines.push(`<span class="cp-muted">+${ass.length - 4} altre risorse</span>`);
+    }
+    if (d.notes) lines.push(`<span class="cp-muted">Note: ${escapeHtml(String(d.notes).slice(0, 80))}</span>`);
+    return lines.join("<br>") || `<span class="cp-muted">Nessun campo</span>`;
   }
 
   function summaryQuote(d) {

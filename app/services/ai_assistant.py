@@ -6,12 +6,18 @@ Ogni risposta dell'AI può contenere:
 - una o più "proposed actions" in blocchi ```action ...``` JSON, che il backend
   estrae, valida, salva come AIAction in DB e restituisce al frontend per conferma.
 
-Le capability supportate nel primo push (Fase 2 step B):
+Capability mutation supportate (lista canonica in `_ACTION_HANDLERS`):
 - propose_price_item       — proporre nuova voce di listino
 - propose_client           — proporre creazione cliente
-- propose_quote_line       — proporre riga su quote attiva
+- propose_project          — proporre creazione progetto
 - propose_project_metadata — aggiornare metadata progetto
-- web_search               — cercare info via Tavily (read-only)
+- propose_quote            — proporre quotazione (con righe inline opt)
+- update_quote             — aggiornare quote esistente
+- propose_quote_line       — proporre riga su quote attiva
+- propose_new_item_and_line — voce listino + riga quote in singola transazione
+- propose_resource         — proporre nuova risorsa (α.33)
+- propose_booking          — proporre booking con N risorse
+- web_search               — Tavily (read-only)
 """
 from __future__ import annotations
 import json
@@ -80,6 +86,7 @@ CAPABILITY DISPONIBILI E SCHEMA `data`:
 - propose_quote_line: {quote_id (numero PK) OPPURE quote_number (stringa), price_item_id? (numero PK voce listino — usa SEMPRE se possibile, vedi REGOLA SEARCH-FIRST), description (auto da listino se ometti e dai price_item_id), quantity (numero), unit ("day"|"hour"|"flat", auto da listino), unit_price (numero, auto da listino se ometti), section? ("A"|"B"|"C"), detail?}
 - propose_price_item: {name, description?, unit ("day"|"hour"|"flat"), price_list (numero), category_name (richiesto), keywords? (lista di stringhe), department_name?}
 - propose_new_item_and_line: {quote_id OPPURE quote_number, name (nome voce listino), category_name (obbligatorio), unit, price_list (numero), quantity (numero, default 1), description?, keywords?, department_name?, section?} — fa due cose in singola transazione: crea voce listino + aggiunge riga alla quote
+- propose_resource: {name, type ("person_internal"|"person_freelance"|"studio"|"equipment"|"software"|"vehicle"), department_id (numero PK) OPPURE department_name (stringa esatta), role?, description?, daily_rate?, hourly_rate?, email?, phone?, internal_phone?, color? (#hex)} — crea una nuova risorsa. Tariffe: ometti se non note (NON scrivere 0).
 - propose_booking: {job_id (numero) OPPURE job_code (stringa) (richiesto se kind=project), kind? ("project"|"internal_maintenance"|"internal_research"|"internal_training", default "project"), job_cost_line_id?, notes?, assignments: [{resource_id (numero) OPPURE resource_name (stringa), start_datetime (ISO), end_datetime (ISO)}, ...]} — crea un Booking con N risorse. Status=tentative. Conflict check su ferie/altri booking.
 - web_search: {query}
 
@@ -275,6 +282,8 @@ VALID_ACTION_TYPES = {
     "propose_quote_line",
     "propose_price_item",
     "propose_new_item_and_line",
+    "propose_resource",
+    "propose_booking",
     "web_search",
 }
 
@@ -1087,6 +1096,85 @@ def _h_update_setting(db: Session, data: dict, *, user=None) -> dict:
     }
 
 
+def _h_propose_resource(db: Session, data: dict) -> dict:
+    """Crea una nuova Resource (v3.5.0-alpha.33).
+
+    Risolve il reparto via `department_id` (PK) o `department_name` (match esatto).
+    `type` deve essere uno dei ResourceType supportati. Tariffe ignorate se 0/None.
+    """
+    from app.models import ResourceType
+    name = (data.get("name") or "").strip()
+    if not name:
+        raise ValueError("Manca 'name'")
+    type_str = (data.get("type") or "").strip()
+    try:
+        rtype = ResourceType(type_str)
+    except Exception:
+        raise ValueError(
+            f"'type' non valido: '{type_str}'. Valori ammessi: "
+            "person_internal, person_freelance, studio, equipment, software, vehicle."
+        )
+
+    # Risolvi reparto: id (PK) o name (string match esatto)
+    dept_id = data.get("department_id")
+    department = None
+    if isinstance(dept_id, int) or (isinstance(dept_id, str) and str(dept_id).isdigit()):
+        department = db.query(Department).filter(Department.id == int(dept_id)).first()
+    if department is None:
+        dept_name = (data.get("department_name") or "").strip()
+        if dept_name:
+            department = db.query(Department).filter(Department.name == dept_name).first()
+            if not department:
+                raise ValueError(
+                    f"Reparto '{dept_name}' non trovato. Usa il PK numerico o il nome esatto "
+                    "(vedi DEPARTMENTS nel contesto)."
+                )
+
+    # Tariffe: 0 e None considerati "non noto" → NULL in DB (consistente col modello)
+    def _opt_num(key):
+        v = data.get(key)
+        if v is None: return None
+        try:
+            n = float(v)
+            return n if n > 0 else None
+        except Exception:
+            return None
+
+    color = (data.get("color") or "").strip() or "#6272f5"
+    if not color.startswith("#") or len(color) not in (4, 7):
+        color = "#6272f5"
+
+    r = Resource(
+        tenant_id=1,
+        name=name,
+        type=rtype,
+        department_id=(department.id if department else None),
+        role=(data.get("role") or None),
+        description=(data.get("description") or None),
+        daily_rate=_opt_num("daily_rate"),
+        hourly_rate=_opt_num("hourly_rate"),
+        email=(data.get("email") or None),
+        phone=(data.get("phone") or None),
+        internal_phone=(data.get("internal_phone") or None),
+        color=color,
+        is_active=True,
+    )
+    db.add(r); db.flush()
+    return {
+        "created": True,
+        "resource_id": r.id,
+        "name": r.name,
+        "type": r.type.value if hasattr(r.type, "value") else r.type,
+        "department_id": r.department_id,
+        "department_name": (department.name if department else None),
+        "message": (
+            f"Risorsa '{r.name}' creata"
+            + (f" nel reparto {department.name}" if department else "")
+            + f" (id={r.id})."
+        ),
+    }
+
+
 def _h_propose_booking(db: Session, data: dict) -> dict:
     """Crea un Booking con N risorse (E6 v3.4.20).
 
@@ -1195,6 +1283,7 @@ _ACTION_HANDLERS = {
     "propose_quote_line":        _h_propose_quote_line,
     "propose_price_item":        _h_propose_price_item,
     "propose_new_item_and_line": _h_propose_new_item_and_line,
+    "propose_resource":          _h_propose_resource,
     "propose_booking":           _h_propose_booking,
     "web_search":                _h_web_search,
     # v3.5.0-alpha.19 — Settings registry tools

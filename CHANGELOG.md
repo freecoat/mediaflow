@@ -1,5 +1,46 @@
 # MediaFlow — Changelog
 
+## v3.5.0-alpha.33 — Capability copilot `propose_resource` (6 maggio 2026)
+
+Nuova capability AI per creare risorse (persone interne/freelance, sale,
+attrezzature, software, veicoli) tramite il copilot. Pattern coerente con
+le altre 9 capability mutation: AI propone in blocco `action`/tool_use,
+utente conferma cliccando Applica nel drawer.
+
+**Backend** (`app/services/`):
+- `ai_tools.py`: tool definition `propose_resource` con schema completo
+  (name, type, department_id|department_name, role, description,
+  daily_rate, hourly_rate, email, phone, internal_phone, color).
+  Required: `name`, `type`. `type` con enum vincolato ai 6 ResourceType
+  ufficiali (escluso il deprecated `person`).
+- `ai_assistant.py`:
+  - Handler `_h_propose_resource(db, data)` con validazioni:
+    name non vuoto, type → enum check, dept resolve via id/name,
+    `_opt_num` per scartare 0/None su tariffe (NULL in DB), color
+    sanitization fallback al tema.
+  - Registrato in `_ACTION_HANDLERS`.
+  - Aggiunto a `VALID_ACTION_TYPES` (insieme a `propose_booking` che
+    mancava da quando era stato introdotto in α.20).
+  - Schema in `ASSISTANT_SYSTEM_PROMPT` aggiornato.
+  - Docstring del modulo aggiornato con la lista canonica delle
+    capability.
+
+**Frontend** (`app/static/js/copilot.js`):
+- `actionTypeLabel()`: aggiunto "Risorsa (nuova)".
+- `renderActionSummary()` dispatch a `summaryResource` (nuovo) e
+  `summaryBooking` (mancava un renderer human-readable, prima cadeva
+  in fallback "Nessun renderer").
+- `summaryResource(d)`: type tradotto in italiano, reparto, tariffe,
+  contatti — niente JSON grezzo nella card di conferma.
+- `summaryBooking(d)`: job + assignments con date locali leggibili (max
+  4 righe + "+N altre"), notes troncate a 80 char.
+
+**Cache-buster**: `copilot.js?v=3.5.0-alpha.33` in
+`app/templates/components/copilot.html`. Senza questo bump, i renderer
+nuovi non arrivano al browser (lezione `feedback_cache_buster_static.md`).
+
+**Niente migrate**: solo nuovo codice di servizio, nessun cambio schema.
+
 ## v3.5.0-alpha.32 — Cross-department: warning al drop + badge persistente (6 maggio 2026)
 
 Fix di un bug latente da `α.23` (24 aprile 2026) e implementazione del

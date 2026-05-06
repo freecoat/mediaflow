@@ -8,6 +8,41 @@
 
 ## Versione corrente
 
+**v3.5.0-alpha.33** — 6 maggio 2026 — Capability copilot `propose_resource`
+
+Nuova capability AI per creare risorse via copilot. Pattern coerente con
+le altre 9 mutation: AI propone, utente conferma in drawer. Renderer
+human-readable per la card.
+
+**Chiuso α.33:**
+- ✅ `ai_tools.py`: tool definition `propose_resource` (name+type required,
+  6 ResourceType ammessi, dept_id|dept_name, role, tariffe, contatti)
+- ✅ `ai_assistant.py`: handler `_h_propose_resource` con validazioni +
+  resolve dept (id/name) + `_opt_num` per tariffe (0/None → NULL DB) +
+  color sanitization
+- ✅ Registrato in `_ACTION_HANDLERS` e `VALID_ACTION_TYPES` (recuperato
+  anche `propose_booking` che mancava lì da α.20)
+- ✅ `ASSISTANT_SYSTEM_PROMPT` aggiornato con schema della nuova capability
+- ✅ `copilot.js`: label "Risorsa (nuova)", `summaryResource` + `summaryBooking`
+  (anche quest'ultimo mancava — cadeva nel fallback "Nessun renderer")
+- ✅ Cache-buster `copilot.js?v=3.5.0-alpha.33` in `components/copilot.html`
+
+**Verifica live richiesta a Matteo:**
+- Apri il copilot (FAB ⓘ in basso a destra) e chiedi: "Crea una risorsa
+  freelance Mario Rossi colorist nel reparto DI"
+- L'AI dovrebbe rispondere con un blocco action `propose_resource`
+- La card di conferma dovrebbe mostrare riassunto leggibile (non JSON grezzo)
+- Click "Applica" → la risorsa appare in `/resources` con i campi corretti
+- Tariffe non specificate → restano vuote (non 0)
+
+**Niente migrate**: solo codice di servizio.
+
+**In coda Round 12**:
+- 🔜 **Multiselect/multidrag** — desiderata forte (memoria
+  `feedback_multiselect_multidrag.md`)
+- 🔜 Test Mac+Chrome del branch `experiment/timeline-audit` (performance)
+  → se OK merge in main come α.34
+
 **v3.5.0-alpha.32** — 6 maggio 2026 — Cross-department: warning + badge persistente
 
 Fix di un bug latente da α.23 (24 aprile): il warning cross-department

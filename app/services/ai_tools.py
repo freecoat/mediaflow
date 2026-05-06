@@ -341,6 +341,40 @@ TOOLS: list[dict] = [
         "handler": "update_setting",
     },
     {
+        "name": "propose_resource",
+        "category": "mutation",
+        "description": (
+            "Crea una nuova risorsa (persona interna/freelance, sala, attrezzatura, "
+            "software, veicolo). Richiede `name` e `type`. Per legarla a un reparto, "
+            "passa `department_id` (PK numerico) o `department_name` (stringa, match "
+            "esatto sui DEPARTMENTS in context). Tariffe (daily_rate, hourly_rate) "
+            "opzionali — ometti se non note invece di scrivere zero."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "name":            {"type": "string", "description": "Nome persona o etichetta sala/attrezzatura."},
+                "type":            {
+                    "type": "string",
+                    "enum": ["person_internal", "person_freelance", "studio", "equipment", "software", "vehicle"],
+                    "description": "Tipo risorsa. person_internal=dipendente, person_freelance=esterno.",
+                },
+                "department_id":   {"type": "integer"},
+                "department_name": {"type": "string", "description": "Nome reparto esatto (alternativa a department_id)."},
+                "role":            {"type": "string", "description": "Ruolo nel reparto, es. 'Colorist', 'Mixer', 'Flame Artist'."},
+                "description":     {"type": "string"},
+                "daily_rate":      {"type": "number"},
+                "hourly_rate":     {"type": "number"},
+                "email":           {"type": "string"},
+                "phone":           {"type": "string"},
+                "internal_phone":  {"type": "string", "description": "Interno aziendale (utile per studio/sale)."},
+                "color":           {"type": "string", "description": "Colore esadecimale per timeline (es. '#6272f5'), default tema."},
+            },
+            "required": ["name", "type"],
+        },
+        "handler": "propose_resource",
+    },
+    {
         "name": "propose_booking",
         "category": "mutation",
         "description": (
