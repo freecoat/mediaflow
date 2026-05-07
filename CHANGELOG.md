@@ -1,5 +1,34 @@
 # MediaFlow — Changelog
 
+## v3.5.0-alpha.47.1 — HOTFIX: Bulk button non si attivava dopo selezione ROI/Esc (7 maggio 2026)
+
+Matteo: "Bulk non funziona quando bookings multiselected. Dovrebbe attivarsi?"
+
+**Diagnosi**: vis-timeline 7.x emette il `select` event SOLO per click
+utente, **non** quando `setSelection()` è chiamato programmaticamente.
+Il ROI/area selection (tasto S + drag) chiama `setSelection(merged)` da
+codice → nessun event → `tlOnSelectionChange()` mai chiamato → bottone
+Bulk resta disabled anche se la selezione è popolata.
+
+Stesso problema all'Esc per clear selezione.
+
+Le altre funzioni programmatiche (`tlSelectAllVisible`, `tlSelectByJob`,
+`tlSelectByResource`, `tlSelectByDate`, panel filters, invert, clear)
+chiamavano già `tlOnSelectionChange()` esplicitamente dopo
+`setSelection()` — non avevano il bug.
+
+**Fix**: nuovo helper `_tlSetSel(ids)` che wraps `setSelection` +
+`tlOnSelectionChange()` + sync cache `window._tlPrevSelection` (per
+sticky α.42). Sostituite le 2 chiamate "nude" con il wrapper:
+- ROI/area selection in `tlRoi*`
+- Esc clear selection nel keyboard handler
+
+Le 4 funzioni "select-by-*" potrebbero usare il wrapper per pulizia,
+ma funzionavano già — non toccate per non introdurre regressioni
+collaterali.
+
+**Niente migrate.**
+
 ## v3.5.0-alpha.47 — Step 2 Cost Report → Billing flow: API endpoints (7 maggio 2026)
 
 Secondo step del workflow Cost Report ↔ Fatturazione. **9 endpoint API**

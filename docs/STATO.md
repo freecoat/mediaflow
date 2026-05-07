@@ -8,6 +8,28 @@
 
 ## Versione corrente
 
+**v3.5.0-alpha.47.1** — 7 maggio 2026 — HOTFIX Bulk button non attivava dopo ROI/Esc
+
+Matteo: "Bulk non funziona quando bookings multiselected. Dovrebbe attivarsi?"
+
+**Diagnosi**: vis-timeline 7.x emette `select` event SOLO per click utente,
+non per `setSelection()` programmatico. Il ROI/area (tasto S + drag) usa
+setSelection da codice → no event → `tlOnSelectionChange` mai chiamato →
+button Bulk disabled anche con selezione popolata.
+
+**Chiuso α.47.1:**
+- ✅ Helper `_tlSetSel(ids)` che wraps setSelection + tlOnSelectionChange
+  + sync cache `window._tlPrevSelection` per sticky α.42
+- ✅ Sostituite 2 chiamate "nude" con il wrapper:
+  ROI/area in `tlRoi*` + Esc clear in keyboard handler
+- ✅ Le 4 select-by-* avevano già tlOnSelectionChange manuale → no toccate
+
+**Verifica live richiesta a Matteo:**
+- `/planning` → tasto S → drag area su 2-3 booking → bottone Bulk in
+  toolbar deve diventare attivo (indigo + counter "(N)")
+- Click Bulk → modal apre normalmente
+- Esc per pulire → bottone torna disabled
+
 **v3.5.0-alpha.47** — 7 maggio 2026 — Step 2 Cost Report → Billing flow: API endpoints
 
 Step 2 del workflow billing concordato con Matteo. **9 endpoint API**

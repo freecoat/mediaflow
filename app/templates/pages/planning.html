@@ -3133,7 +3133,7 @@ window.addEventListener('keydown', async (e) => {
   // Esc = cancel selezione
   if (e.key === 'Escape') {
     if (selBookings.length) {
-      window._tlInstance.setSelection([]);
+      _tlSetSel([]);
       e.preventDefault();
     }
   }
@@ -4742,7 +4742,7 @@ function _tlRoiMousedown(e) {
     const merged = Array.from(new Set([...current, ...inRange]));
     const added = merged.length - before;
     if (inRange.length) {
-      tlInstance.setSelection(merged);
+      _tlSetSel(merged);  // v3.5.0-alpha.47.1: wrapper notifica UI (button Bulk + counter)
       const msg = added > 0
         ? `📦 +${added} aggiunti (totale ${merged.length}). Delete per eliminare in blocco.`
         : `📦 ${inRange.length} già in selezione (totale ${merged.length}).`;
@@ -4871,6 +4871,21 @@ async function tlSubmitBulkEdit() {
   } catch(e) {
     toast(e.message || 'Errore bulk-edit', 'error');
   }
+}
+
+// v3.5.0-alpha.47.1: helper wrapper per setSelection programmatico.
+// Vis-timeline 7.x emette il `select` event SOLO per click utente, non
+// quando `setSelection()` è chiamato dal codice (es. ROI/area, select-by-job,
+// invert, ecc.). Senza questo wrapper il bottone Bulk e gli indicatori
+// counter non si aggiornano dopo selezioni programmatiche → Matteo "Bulk
+// non funziona quando bookings multiselected".
+function _tlSetSel(ids) {
+  if (!window._tlInstance) return;
+  try { window._tlInstance.setSelection(ids); } catch(_) {}
+  // Aggiorna anche cache sticky (α.42) per coerenza
+  window._tlPrevSelection = Array.isArray(ids) ? ids.slice() : [];
+  // Sincronizza UI (bottone Bulk + counter pannello)
+  if (typeof tlOnSelectionChange === 'function') tlOnSelectionChange();
 }
 
 // Mostra/nasconde il bottone Bulk e Selezione area in base alla selezione corrente.
