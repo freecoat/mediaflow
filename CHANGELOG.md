@@ -1,5 +1,80 @@
 # MediaFlow — Changelog
 
+## v3.5.0-alpha.47 — Step 2 Cost Report → Billing flow: API endpoints (7 maggio 2026)
+
+Secondo step del workflow Cost Report ↔ Fatturazione. **9 endpoint API**
+backend pronti, ancora niente UI (arriva in α.48-49).
+
+**Quick fix UI** incluso: bottone `⛶ Finestra` in toolbar timeline ora
+nascosto quando già in `/planning/full` (era illogico vedere "apri in
+finestra" mentre SEI nella finestra). Wrap `{% if not full_screen %}`.
+
+**Endpoint creati** (`app/routers/billing.py`, prefix
+`/finance/api/billing`):
+
+| Method | Path | Descrizione | RBAC |
+|---|---|---|---|
+| POST | `` | Trasmetti JCL maturate → nuovo BillingBatch (draft) | view_finance |
+| GET | `` | Lista batches con filtri project_id/status | view_finance |
+| GET | `/{id}` | Dettaglio batch + lines snapshot | view_finance |
+| PATCH | `/{id}/lines/{lid}` | Manager modifica importo riga (auto LossEntry se delta) | manager+ |
+| POST | `/{id}/approve` | Manager approva batch (draft → approved) | manager+ |
+| POST | `/{id}/invoice` | Emette Invoice + linka, JCL → billed | manager+ |
+| POST | `/{id}/cancel` | Annulla batch (rilascia JCL → not_billed) | manager+ |
+| PATCH | `/jcl/{id}/billing-status` | Override manuale stato JCL (es. billed → paid) | manager+ |
+| GET | `/loss/project/{id}` | Sommario perso per progetto (rendicontazione) | view_finance |
+
+**Logica chiave:**
+
+- **Auto-numero** `BB-{anno}-{NNN}` per tenant (no riciclo dei cancelled)
+- **Snapshot immutabile**: BillingBatchLine cattura `description`,
+  `quantity`, `unit_price`, `total_proposed` al momento del transmit. Se
+  la JCL viene modificata dopo (nuove ore lavorate), il batch resta
+  fedele al "documento" inviato a fatturazione
+- **Loss tracking**: ogni edit del manager con `total_approved <
+  total_proposed` genera (o sostituisce) una `LossEntry` collegata alla
+  line. Cap di sicurezza: `total_approved` non può superare proposed
+  × 1.5 (per maggiorazioni grosse, crea una JCL extra)
+- **JCL state machine**: not_billed → in_batch (al transmit) → billed
+  (a emit invoice) → paid (manuale). Cancel batch riporta in_batch →
+  not_billed. Invoice con `total_approved = 0` → JCL → lost
+- **Filtro JCL**: candidate se `billing_status == not_billed` AND
+  `total_accrued > 0` AND `is_billable == True` AND
+  (`work_date NULL` OR in `[period_start, period_end]`)
+- **Numero fattura manuale** in emit endpoint (non auto-numerato per
+  non interferire con gestionale fiscale esterno). Verifica unicità
+- **VAT default 22%** configurabile per chiamata
+
+**Test via /docs:**
+
+Apri `http://localhost:8000/docs` → sezione `billing`. I 9 endpoint sono
+testabili interattivamente. Esempio flusso completo:
+
+```
+POST /finance/api/billing   { project_id=1, period_start=2026-04-01,
+                              period_end=2026-04-30 }
+→ ottieni batch_id
+
+GET  /finance/api/billing/{batch_id}     # vedi snapshot
+
+PATCH /finance/api/billing/{id}/lines/{lid}  { total_approved=80 }
+                                               # se proposed era 100 → LossEntry 20
+
+POST /finance/api/billing/{id}/approve
+
+POST /finance/api/billing/{id}/invoice
+     { invoice_number="2026/042", issue_date=2026-04-30 }
+
+GET  /finance/api/billing/loss/project/1     # rendicontazione
+```
+
+**Niente migrate** (modello dati già in α.46).
+
+**Prossimi step concordati:**
+- α.48: UI Cost Report con stati billing colorati per riga + bottone "Trasmetti"
+- α.49: UI `/finance` con elenco batch + edit manager + voce perso
+- α.50: notifica fine mese auto + chiusura progetto + report finanziario
+
 ## v3.5.0-alpha.46.2 — Modalità leggera timeline (vera causa del freeze) (7 maggio 2026)
 
 Test in incognito Chrome (no estensioni) → freeze persiste. Quindi

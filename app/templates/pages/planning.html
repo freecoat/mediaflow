@@ -879,7 +879,9 @@
           <!-- v3.5.0-alpha.44: toggle veloce heatmap + apri standalone -->
           <button class="btn btn-ghost btn-sm" id="tl-heatmap-toggle" onclick="tlToggleHeatmap()" title="Mostra/nascondi heatmap occupazione giornaliera sotto i nomi operatore" style="margin-left:6px;">📊 Heatmap</button>
           <button class="btn btn-ghost btn-sm" id="tl-light-toggle" onclick="tlToggleLight()" title="Modalità leggera: disabilita stack overlap (O(N²)), background items (ferie/festività/timbrature) e animazioni. Risolve freeze Chrome con 30+ booking + zoom mese. Trade-off: items sovrapposti visivamente." style="margin-left:6px;">🪶 Light</button>
+          {% if not full_screen %}
           <button class="btn btn-ghost btn-sm" onclick="tlOpenStandalone()" title="Apri timeline in finestra dedicata full-screen (senza menu/topbar)" style="margin-left:6px;">⛶ Finestra</button>
+          {% endif %}
           <button class="btn btn-ghost btn-sm" onclick="tlPrefsToggle(event)" title="Personalizza look timeline" style="margin-left:6px;">⚙</button>
         </div>
 

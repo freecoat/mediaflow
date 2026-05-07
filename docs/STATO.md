@@ -8,6 +8,56 @@
 
 ## Versione corrente
 
+**v3.5.0-alpha.47** — 7 maggio 2026 — Step 2 Cost Report → Billing flow: API endpoints
+
+Step 2 del workflow billing concordato con Matteo. **9 endpoint API**
+backend pronti, ancora niente UI (arriva in α.48-49).
+
+Quick fix UI incluso: bottone `⛶ Finestra` in toolbar timeline ora
+nascosto in `/planning/full` (era illogico).
+
+**Endpoint creati** (`app/routers/billing.py`, prefix `/finance/api/billing`):
+1. `POST /` transmit JCL maturate → BillingBatch (draft)
+2. `GET /` lista con filtri
+3. `GET /{id}` dettaglio + lines snapshot
+4. `PATCH /{id}/lines/{lid}` manager edit importo (auto LossEntry)
+5. `POST /{id}/approve` manager approva
+6. `POST /{id}/invoice` emette Invoice + linka, JCL→billed
+7. `POST /{id}/cancel` annulla batch (rilascia JCL→not_billed)
+8. `PATCH /jcl/{id}/billing-status` override manuale stato
+9. `GET /loss/project/{id}` sommario perso (rendicontazione)
+
+**Logica chiave:**
+- Auto-numero `BB-{anno}-{NNN}` (no riciclo cancelled)
+- Snapshot immutabile (BatchLine cattura proposed al transmit)
+- Loss tracking: edit manager < proposed → LossEntry
+- Cap di sicurezza: approved ≤ proposed × 1.5
+- JCL state machine: not_billed→in_batch→billed→paid (loss in caso di approved=0)
+- Numero fattura MANUALE (no interferenza con gestionale fiscale esterno)
+- VAT default 22% configurabile per chiamata
+- RBAC: view_finance per read+transmit, manager+ per modifica/approve/invoice/cancel
+
+**Verifica richiesta a Matteo:**
+- Pull → app parte senza crash (auto-migrate α.46 + nuove tabelle già OK)
+- Apri `http://localhost:8000/docs` → sezione `billing` → vedi 9 endpoint
+- Flusso completo via /docs (oppure curl):
+  1. POST `/finance/api/billing` con project_id, period_start, period_end
+  2. GET `/finance/api/billing/{batch_id}` → vedi snapshot
+  3. PATCH `/lines/{lid}` con total_approved ridotto → LossEntry generata
+  4. POST `/{id}/approve` → status approved
+  5. POST `/{id}/invoice` con number+date → Invoice creata + JCL=billed
+  6. GET `/loss/project/{pid}` → totale perso
+- Test bottone Finestra: apri `/planning/full` → toolbar non deve avere `⛶ Finestra`
+
+**Bug ancora aperti:**
+- Freeze Chrome Mac specifico (non bug MediaFlow, conferma da test PC OK)
+- Light mode α.46.2 resta come safety net
+
+**Prossimi step:**
+- α.48: UI Cost Report con stati billing colorati + bottone "Trasmetti"
+- α.49: UI `/finance` con batch list + edit manager + perso
+- α.50: notifica fine mese auto + chiusura progetto + report finanziario
+
 **v3.5.0-alpha.46.2** — 7 maggio 2026 — Modalità leggera timeline (vera causa freeze)
 
 α.46.1 ipotizzava Bitwarden come causa principale del freeze Chrome.
