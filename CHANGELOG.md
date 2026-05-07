@@ -1,5 +1,28 @@
 # MediaFlow — Changelog
 
+## v3.5.0-alpha.48.1 — Bottone "Ritira" su card batch cost report (7 maggio 2026)
+
+Richiesta Matteo: "Aggiungerei una funzione di emergenza ritira fattura,
+valida solo mentre resta in approvazione. Una volta fatturato non ha più
+senso."
+
+Aggiunto bottone `↩ Ritira` (rosso) sulla card batch nel widget
+Fatturazione del cost report. Visibile **solo** se `status in
+{draft, approved}` — quando il batch è ancora pre-fattura. Per
+batch `invoiced` non appare (l'annullamento fattura è un'altra
+operazione, non implementata in questo step).
+
+Click → confirm dialog con riepilogo dell'effetto + label dello stato
+attuale (BOZZA o APPROVATO) → chiama `POST /finance/api/billing/{id}/cancel`
+(endpoint α.47 esistente) → rilascia JCL → not_billed, cancella LossEntry
+collegate, batch → `cancelled` (resta nello storico per audit). Refresh
+del cost report per vedere stati aggiornati.
+
+`event.stopPropagation()` sul click per non scatenare anche il click
+sulla card che apre `/finance#batch-{id}`.
+
+**Niente migrate.**
+
 ## v3.5.0-alpha.48 — Step 3 Cost Report → Billing flow: UI in Cost Report (7 maggio 2026)
 
 Terzo step del workflow billing. UI Cost Report ora mostra **stato

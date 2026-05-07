@@ -700,11 +700,19 @@ function renderBillingWidget() {
       ? `${fmtDate(b.period_start)} → ${fmtDate(b.period_end)}` : '—';
     const inv = b.invoice_number ? ` · Fattura <b>${escapeHtml(b.invoice_number)}</b>` : '';
     const lostBadge = b.total_lost > 0 ? ` · <span style="color:#ef4444;">${fmtCurrency(b.total_lost)} perso</span>` : '';
+    // v3.5.0-alpha.48.1: bottone Ritira valido SOLO finché batch è in
+    // approvazione (draft o approved). Una volta invoiced non ha più
+    // senso (la fattura è stata emessa, vai per annullamento fattura).
+    const canWithdraw = (b.status === 'draft' || b.status === 'approved');
+    const withdrawBtn = canWithdraw
+      ? `<button class="btn btn-ghost btn-sm" onclick="event.stopPropagation(); withdrawBatch(${b.id}, '${escapeHtml(b.code)}', '${b.status}')" title="Ritira il batch (cancel): rilascia le righe → tornano 'Da fatturare'. Disponibile solo finché non è stata emessa fattura." style="color:#ef4444;">↩ Ritira</button>`
+      : '';
     return `<div onclick="window.open('/finance#batch-${b.id}', '_blank')" style="display:flex; align-items:center; gap:12px; padding:10px 12px; background:var(--bg2); border:1px solid var(--border); border-radius:8px; cursor:pointer;" title="Apri batch in /finance">
       <div style="font-weight:600; font-family:'DM Mono', monospace; font-size:13px; color:var(--indigo2);">${escapeHtml(b.code)}</div>
       <span style="display:inline-block; padding:2px 8px; border-radius:10px; font-size:11px; font-weight:600; color:${meta.color}; background:${meta.bg};">${meta.lbl}</span>
       <div class="text-sm text-muted" style="flex:1;">${period}${inv}${lostBadge}</div>
       <div class="mono text-sm">${fmtCurrency(b.total_approved)}</div>
+      ${withdrawBtn}
     </div>`;
   }).join('') + `</div>`;
   if (cancelledN) {
@@ -727,6 +735,28 @@ function openTransmitModal() {
   document.getElementById('tm-include-extras').checked = true;
   document.getElementById('tm-notes').value = '';
   openModal('modal-transmit');
+}
+
+// v3.5.0-alpha.48.1: ritira batch (cancel pre-invoice). Conferma + chiama
+// l'endpoint cancel α.47, che rimette le JCL coinvolte → not_billed e
+// cancella le LossEntry collegate (il perso non era ancora 'reale' finché
+// non c'era fattura). Reversibile: l'utente può ritrasmettere subito.
+async function withdrawBatch(batchId, code, status) {
+  const stLbl = status === 'draft' ? 'in BOZZA' : 'APPROVATO (manager pronto a fatturare)';
+  if (!confirm(
+    `Ritirare il batch ${code} (${stLbl})?\n\n` +
+    `• Le righe coinvolte tornano "Da fatturare"\n` +
+    `• Eventuale "perso" segnato dal manager viene azzerato\n` +
+    `• Il batch resta nello storico come ANNULLATO (audit)\n\n` +
+    `Puoi ritrasmettere subito con periodo/contenuto diverso. Procedere?`
+  )) return;
+  try {
+    const res = await api('POST', `/finance/api/billing/${batchId}/cancel`);
+    toast(`✓ Batch ${code} ritirato: ${res.released_lines || 0} righe rilasciate.`, 'success', 5000);
+    if (currentJobId) await loadReport(currentJobId);
+  } catch(e) {
+    toast(e.message || 'Errore ritiro batch', 'error');
+  }
 }
 
 async function submitTransmit() {
