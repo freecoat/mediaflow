@@ -1,5 +1,77 @@
 # MediaFlow — Changelog
 
+## v3.5.0-alpha.49 — Step 4 Cost Report → Billing flow: UI /finance batch (7 maggio 2026)
+
+Quarto step del workflow billing. Pagina `/finance` estesa con tab
+**📦 Batch fatturazione** + drawer dettaglio batch + edit lines + bottoni
+azione (approve/cancel/emit invoice) + sezione perso aggregato per progetto.
+
+**Nuova tab "Batch fatturazione"**:
+- Filtro per status (draft/approved/invoiced/cancelled)
+- Tabella: codice, progetto, status badge, periodo, proposto, approvato,
+  perso, fattura, bottone Apri
+- Badge giallo sulla tab con count batch in `draft` (pending approvazione)
+- Auto-refresh + auto-open via deep-link `/finance#batch-{id}` (link dal
+  cost report)
+
+**Modal dettaglio batch** (`modal-batch-detail`, max-width 920px):
+- Header: code + progetto + status badge
+- Meta-grid: periodo, proposto, approvato, perso, fattura
+- Note del batch
+- Tabella lines: descrizione (+ marcatore [extra]), quantità, tariffa,
+  proposto, **approvato (editabile inline solo se draft)**, perso
+- Pannello "Perso aggregato sul progetto" con totale + breakdown per
+  reason (manager_discount/written_off/client_complaint/rounding/other)
+- Footer azioni dinamico per status:
+  - draft: Annulla batch (rosso) + ✅ Approva
+  - approved: Annulla batch + 💶 Emetti fattura
+  - invoiced: link 🔗 Vai alla fattura
+  - cancelled: solo Chiudi
+
+**Edit line inline** (manager+ su draft):
+- Input number con onChange
+- Se nuovo importo < proposed: prompt per `loss_reason`
+  (default `manager_discount`, valori: written_off/client_complaint/
+  rounding/other)
+- PATCH `/finance/api/billing/{id}/lines/{lid}` (endpoint α.47)
+- Toast con delta perso eventuale
+- Re-fetch batch per ricalcolo totali + refresh tabella batch
+
+**Modal emetti fattura** (`modal-emit-invoice`):
+- Input numero fattura (manuale, no auto-numero — coerenza con
+  gestionale fiscale esterno) + verifica unicità lato server
+- Date emissione/scadenza
+- IVA % (default 22)
+- Anteprima totali live: imponibile + IVA + totale (ricalcolata
+  on input change su VAT %)
+- Submit chiama `POST /finance/api/billing/{id}/invoice` (α.47):
+  - Crea Invoice draft
+  - JCL → billed con billed_amount = total_approved
+  - Lines azzerate (approved=0) → JCL `lost`
+  - Batch → invoiced
+
+**Auto-init**:
+- `loadBatches()` chiamato anche quando si è su altre tab (per popolare
+  badge tab e supportare deep-link da /cost-report → /finance#batch-X)
+
+**Verifica live**:
+- `/finance` → tab "📦 Batch fatturazione" → vedi lista batch
+- Click su un batch in stato `draft` → modal dettaglio
+- Modifica importo di una riga (es. da 100 a 80) → prompt motivo →
+  PATCH → vedi perso 20 + totale aggiornato
+- Click ✅ Approva → batch passa a `approved`
+- Click 💶 Emetti fattura → modal con anteprima IVA → conferma →
+  Invoice creata + visibile in tab Fatture, batch → `invoiced`
+- Click ↩ Annulla batch → conferma → batch `cancelled` (JCL rilasciate
+  in cost report)
+
+**Niente migrate.**
+
+**Prossimo step:**
+- α.50: notifica fine mese auto + chiusura progetto (producer "Chiudi
+  lavorazioni") + report finanziario completo con totali perso/fatturato/
+  pagato per anno
+
 ## v3.5.0-alpha.48.2 — Periodo trasmissione auto-derivato dai booking (7 maggio 2026)
 
 Richiesta Matteo: "Il periodo di riferimento della fatturazione dovrebbe

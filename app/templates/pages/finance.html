@@ -13,6 +13,7 @@
 <!-- ── Tabs ──────────────────────────────────────────────────── -->
 <div class="tabs">
   <div class="tab active" onclick="showSection('invoices',this)">Fatture</div>
+  <div class="tab" onclick="showSection('batches',this)">📦 Batch fatturazione <span id="batches-badge" class="badge" style="display:none;background:#fbbf24;color:#000;margin-left:6px;"></span></div>
   <div class="tab" onclick="showSection('timesheets',this)">Timesheet</div>
   <div class="tab" onclick="showSection('report',this)">Report P&amp;L</div>
   <div class="tab" onclick="showSection('anomalies',this)">⚠ Anomalie <span id="anomalies-badge" class="badge" style="display:none;background:#dc2626;color:#fff;margin-left:6px;"></span></div>
@@ -46,6 +47,46 @@
         </thead>
         <tbody id="inv-table">
           <tr><td colspan="7" class="text-muted" style="text-align:center;padding:24px;">Caricamento…</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<!-- ── Sezione Batch fatturazione (v3.5.0-alpha.49 Step 4 Cost Report → Billing) ── -->
+<div id="section-batches" class="hidden">
+  <!-- Filtri -->
+  <div class="flex gap-3 mb-4 items-center">
+    <select class="form-select" style="width:auto;" id="batch-status-filter" onchange="loadBatches()">
+      <option value="">Tutti gli stati</option>
+      <option value="draft">📋 Bozza (in approvazione)</option>
+      <option value="approved">✅ Approvato</option>
+      <option value="invoiced">💶 Fatturato</option>
+      <option value="cancelled">↩ Annullato</option>
+    </select>
+    <span class="text-sm text-muted" id="batches-count"></span>
+    <span style="margin-left:auto;" class="text-sm text-muted">
+      Manager+: editare importi prima dell'approvazione → ogni riduzione genera voce <b style="color:#ef4444;">perso</b>
+    </span>
+  </div>
+  <div class="card">
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>Codice</th>
+            <th>Progetto</th>
+            <th>Stato</th>
+            <th>Periodo</th>
+            <th class="text-right">Proposto</th>
+            <th class="text-right">Approvato</th>
+            <th class="text-right">Perso</th>
+            <th>Fattura</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody id="batches-table">
+          <tr><td colspan="9" class="text-muted" style="text-align:center;padding:24px;">Caricamento…</td></tr>
         </tbody>
       </table>
     </div>
@@ -228,12 +269,80 @@
   </div>
 </div>
 
+<!-- v3.5.0-alpha.49: Modal dettaglio batch (Step 4 Cost Report → Billing) -->
+<div class="modal-overlay" id="modal-batch-detail">
+  <div class="modal" style="max-width:920px;">
+    <div class="modal-header">
+      <span class="modal-title" id="bd-title">Dettaglio batch</span>
+      <button class="btn btn-ghost btn-icon" onclick="closeModal('modal-batch-detail')">✕</button>
+    </div>
+    <div class="modal-body">
+      <div id="bd-meta" style="margin-bottom:14px;"></div>
+      <div class="text-xs text-muted" style="text-transform:uppercase; letter-spacing:0.04em; margin-bottom:6px;">Righe del batch</div>
+      <div class="table-wrap" style="max-height:50vh; overflow-y:auto;">
+        <table>
+          <thead>
+            <tr>
+              <th style="width:38%;">Descrizione</th>
+              <th class="text-right">Q.tà</th>
+              <th class="text-right">Tariffa</th>
+              <th class="text-right">Proposto</th>
+              <th class="text-right">Approvato</th>
+              <th class="text-right">Perso</th>
+            </tr>
+          </thead>
+          <tbody id="bd-lines"></tbody>
+        </table>
+      </div>
+      <div id="bd-loss-panel" style="margin-top:14px;"></div>
+    </div>
+    <div class="modal-footer" id="bd-footer"></div>
+  </div>
+</div>
+
+<!-- v3.5.0-alpha.49: Modal emetti fattura -->
+<div class="modal-overlay" id="modal-emit-invoice">
+  <div class="modal" style="max-width:560px;">
+    <div class="modal-header">
+      <span class="modal-title">💶 Emetti fattura da batch</span>
+      <button class="btn btn-ghost btn-icon" onclick="closeModal('modal-emit-invoice')">✕</button>
+    </div>
+    <div class="modal-body">
+      <div id="ei-batch-info" style="margin-bottom:14px;"></div>
+      <div class="form-group">
+        <label class="form-label">Numero fattura *</label>
+        <input class="form-input" id="ei-number" placeholder="es. 2026/042" required>
+        <div class="text-xs text-muted">Numerazione manuale per coerenza col tuo gestionale fiscale esterno. Deve essere univoco.</div>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label class="form-label">Data emissione *</label>
+          <input class="form-input" id="ei-issue-date" type="date" required>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Scadenza</label>
+          <input class="form-input" id="ei-due-date" type="date">
+        </div>
+      </div>
+      <div class="form-group">
+        <label class="form-label">IVA (%)</label>
+        <input class="form-input" id="ei-vat" type="number" step="0.01" value="22" min="0" max="100" style="width:120px;">
+      </div>
+      <div id="ei-totals" style="background:var(--bg3); border-radius:8px; padding:10px 12px;"></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeModal('modal-emit-invoice')">Annulla</button>
+      <button class="btn btn-primary" onclick="submitEmitInvoice()">💶 Emetti fattura</button>
+    </div>
+  </div>
+</div>
+
 {% endblock %}
 
 {% block scripts %}
 <script>
 function showSection(name, el) {
-  ['invoices','timesheets','report','anomalies'].forEach(s => {
+  ['invoices','batches','timesheets','report','anomalies'].forEach(s => {
     document.getElementById('section-'+s).classList.add('hidden');
   });
   document.getElementById('section-'+name).classList.remove('hidden');
@@ -242,6 +351,329 @@ function showSection(name, el) {
   if (name === 'report') loadPL();
   if (name === 'timesheets') loadTimesheets();
   if (name === 'anomalies') loadAnomalies();
+  if (name === 'batches') loadBatches();
+}
+
+// ── v3.5.0-alpha.49: Batch fatturazione (Step 4 Cost Report → Billing) ──
+const BB_STATUS = {
+  draft:     { lbl: 'Bozza',      color: '#fbbf24', bg: 'rgba(251,191,36,.18)' },
+  approved:  { lbl: 'Approvato',  color: '#3b82f6', bg: 'rgba(59,130,246,.18)' },
+  invoiced:  { lbl: 'Fatturato',  color: '#22c55e', bg: 'rgba(34,197,94,.18)' },
+  cancelled: { lbl: 'Annullato',  color: '#9aa0b8', bg: 'rgba(154,160,184,.15)' },
+};
+function bbStatusBadge(st) {
+  const m = BB_STATUS[st] || BB_STATUS.draft;
+  return `<span style="display:inline-block; padding:2px 8px; border-radius:10px; font-size:11px; font-weight:600; color:${m.color}; background:${m.bg};">${m.lbl}</span>`;
+}
+
+let _batchesCache = [];
+async function loadBatches() {
+  const status = document.getElementById('batch-status-filter').value;
+  const url = '/finance/api/billing' + (status ? `?status=${status}` : '');
+  const tbody = document.getElementById('batches-table');
+  tbody.innerHTML = '<tr><td colspan="9" class="text-muted" style="text-align:center;padding:24px;">Caricamento…</td></tr>';
+  try {
+    _batchesCache = await api('GET', url);
+  } catch(e) {
+    tbody.innerHTML = `<tr><td colspan="9" style="color:var(--rose); text-align:center; padding:24px;">${escapeHtml(e.message || 'Errore')}</td></tr>`;
+    return;
+  }
+  document.getElementById('batches-count').textContent =
+    _batchesCache.length ? `${_batchesCache.length} batch` : '';
+  // Badge "in approvazione" sulla tab (count draft)
+  const draftCount = _batchesCache.filter(b => b.status === 'draft').length;
+  const badge = document.getElementById('batches-badge');
+  if (draftCount > 0) {
+    badge.textContent = String(draftCount);
+    badge.style.display = '';
+  } else {
+    badge.style.display = 'none';
+  }
+  if (!_batchesCache.length) {
+    tbody.innerHTML = '<tr><td colspan="9" class="text-muted" style="text-align:center;padding:24px;">Nessun batch trovato. I batch si creano dal Cost Report del progetto, bottone 📤 Trasmetti.</td></tr>';
+    return;
+  }
+  tbody.innerHTML = _batchesCache.map(b => {
+    const period = b.period_start && b.period_end
+      ? `${fmtDate(b.period_start)} → ${fmtDate(b.period_end)}` : '—';
+    const lostHtml = b.total_lost > 0
+      ? `<span style="color:#ef4444;">${fmtCurrency(b.total_lost)}</span>`
+      : '<span class="text-muted">—</span>';
+    const invHtml = b.invoice_number
+      ? `<b>${escapeHtml(b.invoice_number)}</b>`
+      : '<span class="text-muted text-xs">—</span>';
+    return `<tr style="cursor:pointer;" onclick="openBatchDetail(${b.id})">
+      <td><b class="mono" style="color:var(--indigo2);">${escapeHtml(b.code)}</b></td>
+      <td>
+        <div style="font-weight:500;">${escapeHtml(b.project_title || '—')}</div>
+        ${b.project_code ? `<div class="text-xs text-muted mono">${escapeHtml(b.project_code)}</div>` : ''}
+      </td>
+      <td>${bbStatusBadge(b.status)}</td>
+      <td class="text-sm">${period}</td>
+      <td class="mono text-right">${fmtCurrency(b.total_proposed)}</td>
+      <td class="mono text-right">${fmtCurrency(b.total_approved)}</td>
+      <td class="mono text-right">${lostHtml}</td>
+      <td>${invHtml}</td>
+      <td onclick="event.stopPropagation()"><button class="btn btn-ghost btn-sm" onclick="openBatchDetail(${b.id})">Apri</button></td>
+    </tr>`;
+  }).join('');
+  // Auto-open via hash es. /finance#batch-12 (link da cost report)
+  if (location.hash && location.hash.startsWith('#batch-')) {
+    const id = parseInt(location.hash.replace('#batch-', ''), 10);
+    if (id) {
+      // Switch tab batch se non già attiva
+      const tab = document.querySelector('.tab[onclick*="batches"]');
+      if (tab && !document.getElementById('section-batches').classList.contains('hidden') === false) {
+        showSection('batches', tab);
+      }
+      setTimeout(() => openBatchDetail(id), 50);
+    }
+  }
+}
+
+let _currentBatch = null;
+async function openBatchDetail(batchId) {
+  try {
+    _currentBatch = await api('GET', `/finance/api/billing/${batchId}`);
+  } catch(e) {
+    toast(e.message || 'Errore caricamento batch', 'error');
+    return;
+  }
+  const b = _currentBatch;
+  document.getElementById('bd-title').innerHTML =
+    `Batch <span class="mono" style="color:var(--indigo2);">${escapeHtml(b.code)}</span> · ${escapeHtml(b.project_title || '')} ${bbStatusBadge(b.status)}`;
+  // Meta box
+  const period = b.period_start && b.period_end
+    ? `${fmtDate(b.period_start)} → ${fmtDate(b.period_end)}` : '—';
+  document.getElementById('bd-meta').innerHTML = `
+    <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(160px, 1fr)); gap:10px;">
+      <div class="stat-card"><div class="stat-label">Periodo</div><div class="text-sm">${period}</div></div>
+      <div class="stat-card"><div class="stat-label">Proposto</div><div class="mono" style="font-size:18px;">${fmtCurrency(b.total_proposed)}</div></div>
+      <div class="stat-card"><div class="stat-label">Approvato</div><div class="mono" style="font-size:18px; color:var(--indigo2);">${fmtCurrency(b.total_approved)}</div></div>
+      <div class="stat-card"><div class="stat-label">Perso</div><div class="mono" style="font-size:18px; color:${b.total_lost > 0 ? '#ef4444' : 'var(--text3)'};">${fmtCurrency(b.total_lost)}</div></div>
+      ${b.invoice_number ? `<div class="stat-card"><div class="stat-label">Fattura</div><div class="text-sm"><b>${escapeHtml(b.invoice_number)}</b></div></div>` : ''}
+    </div>
+    ${b.notes ? `<div class="text-sm text-muted" style="margin-top:8px;">📝 ${escapeHtml(b.notes)}</div>` : ''}
+  `;
+  // Lines
+  renderBatchLines(b);
+  // Footer azioni
+  renderBatchFooter(b);
+  // Loss panel
+  renderLossPanel(b.project_id);
+  openModal('modal-batch-detail');
+}
+
+function renderBatchLines(b) {
+  const isDraft = (b.status === 'draft');
+  const tbody = document.getElementById('bd-lines');
+  if (!b.lines || !b.lines.length) {
+    tbody.innerHTML = '<tr><td colspan="6" class="text-muted text-sm" style="padding:20px; text-align:center;">Batch vuoto</td></tr>';
+    return;
+  }
+  tbody.innerHTML = b.lines.map(l => {
+    const lost = (l.total_proposed || 0) - (l.total_approved || 0);
+    const lostHtml = lost > 0.01
+      ? `<span style="color:#ef4444;">${fmtCurrency(lost)}</span>`
+      : '<span class="text-muted">—</span>';
+    // Editing solo se draft
+    const approvedCell = isDraft
+      ? `<input type="number" step="0.01" min="0" class="form-input mono"
+            style="width:110px; text-align:right; padding:3px 6px; height:28px;"
+            value="${(l.total_approved || 0).toFixed(2)}"
+            onchange="editBatchLine(${l.id}, this.value, this)">`
+      : `<span class="mono">${fmtCurrency(l.total_approved)}</span>`;
+    return `<tr>
+      <td>
+        <div style="font-size:13px;">${escapeHtml(l.description)}${l.is_extra ? ' <span class="text-xs" style="color:#fb923c;">[extra]</span>' : ''}</div>
+        ${l.notes ? `<div class="text-xs text-muted">📝 ${escapeHtml(l.notes)}</div>` : ''}
+      </td>
+      <td class="mono text-right">${(l.quantity || 0).toFixed(2)} ${escapeHtml(l.unit || '')}</td>
+      <td class="mono text-right">${fmtCurrency(l.unit_price)}</td>
+      <td class="mono text-right">${fmtCurrency(l.total_proposed)}</td>
+      <td class="text-right">${approvedCell}</td>
+      <td class="mono text-right">${lostHtml}</td>
+    </tr>`;
+  }).join('');
+}
+
+function renderBatchFooter(b) {
+  const f = document.getElementById('bd-footer');
+  let buttons = `<button class="btn btn-secondary" onclick="closeModal('modal-batch-detail')">Chiudi</button>`;
+  if (b.status === 'draft') {
+    buttons += `<button class="btn btn-ghost" onclick="cancelBatch(${b.id}, '${escapeHtml(b.code)}', 'draft')" style="color:#ef4444;">↩ Annulla batch</button>`;
+    buttons += `<button class="btn btn-primary" onclick="approveBatch(${b.id})">✅ Approva</button>`;
+  } else if (b.status === 'approved') {
+    buttons += `<button class="btn btn-ghost" onclick="cancelBatch(${b.id}, '${escapeHtml(b.code)}', 'approved')" style="color:#ef4444;">↩ Annulla batch</button>`;
+    buttons += `<button class="btn btn-primary" onclick="openEmitInvoice()">💶 Emetti fattura</button>`;
+  } else if (b.status === 'invoiced') {
+    buttons += `<a class="btn btn-secondary" href="/finance#invoice-${b.invoice_id}" target="_blank">🔗 Vai alla fattura</a>`;
+  }
+  f.innerHTML = buttons;
+}
+
+async function renderLossPanel(projectId) {
+  if (!projectId) { document.getElementById('bd-loss-panel').innerHTML = ''; return; }
+  try {
+    const loss = await api('GET', `/finance/api/billing/loss/project/${projectId}`);
+    if (!loss.count) {
+      document.getElementById('bd-loss-panel').innerHTML = '';
+      return;
+    }
+    const reasonLbl = {
+      manager_discount: 'Sconto manager',
+      written_off: 'Write-off',
+      client_complaint: 'Reclamo cliente',
+      rounding: 'Arrotondamento',
+      other: 'Altro',
+    };
+    const byReason = Object.entries(loss.by_reason || {}).map(([r, v]) =>
+      `<span style="display:inline-block; padding:2px 8px; background:rgba(239,68,68,.10); color:#ef4444; border-radius:6px; font-size:11px; margin-right:6px;">${escapeHtml(reasonLbl[r] || r)}: ${fmtCurrency(v.total)} (${v.count})</span>`
+    ).join('');
+    document.getElementById('bd-loss-panel').innerHTML = `
+      <div style="background:rgba(239,68,68,.06); border:1px solid rgba(239,68,68,.25); border-radius:8px; padding:10px 12px; margin-top:14px;">
+        <div style="font-size:12px; text-transform:uppercase; letter-spacing:0.04em; color:#ef4444; font-weight:600; margin-bottom:6px;">📉 Perso aggregato sul progetto: ${fmtCurrency(loss.total_lost)} (${loss.count} voci)</div>
+        <div>${byReason}</div>
+      </div>`;
+  } catch(_) {}
+}
+
+async function editBatchLine(lineId, newValue, inputEl) {
+  if (!_currentBatch) return;
+  const val = parseFloat(newValue);
+  if (isNaN(val) || val < 0) {
+    toast('Valore non valido', 'error');
+    return;
+  }
+  // Trova line corrente per il proposed (per chiedere reason solo se < proposed)
+  const line = _currentBatch.lines.find(l => l.id === lineId);
+  let reason = 'manager_discount';
+  if (line && val < line.total_proposed - 0.01) {
+    // Riduzione → richiede reason
+    const r = prompt(
+      `Importo ridotto da ${fmtCurrency(line.total_proposed)} a ${fmtCurrency(val)}.\n` +
+      `Delta perso: ${fmtCurrency(line.total_proposed - val)}\n\n` +
+      `Motivo (manager_discount / written_off / client_complaint / rounding / other):`,
+      'manager_discount'
+    );
+    if (r === null) {
+      // Annullato → revert input
+      inputEl.value = (line.total_approved || 0).toFixed(2);
+      return;
+    }
+    reason = r.trim();
+  }
+  const fd = new FormData();
+  fd.append('total_approved', String(val));
+  fd.append('loss_reason', reason);
+  try {
+    const res = await api('PATCH', `/finance/api/billing/${_currentBatch.id}/lines/${lineId}`, fd);
+    toast(`✓ Riga aggiornata. Batch: ${fmtCurrency(res.batch_total_approved)} approvato${res.delta_lost > 0 ? `, ${fmtCurrency(res.delta_lost)} perso` : ''}`, 'success', 4000);
+    // Re-fetch per ricalcolo totali
+    await openBatchDetail(_currentBatch.id);
+    await loadBatches();
+  } catch(e) {
+    toast(e.message || 'Errore aggiornamento', 'error');
+    inputEl.value = (line.total_approved || 0).toFixed(2);
+  }
+}
+
+async function approveBatch(batchId) {
+  if (!confirm('Approvare questo batch?\n\nDopo l\'approvazione le righe non saranno più modificabili (il manager può solo emettere fattura o annullare).')) return;
+  try {
+    await api('POST', `/finance/api/billing/${batchId}/approve`);
+    toast('✓ Batch approvato. Pronto per emissione fattura.', 'success');
+    await openBatchDetail(batchId);
+    await loadBatches();
+  } catch(e) {
+    toast(e.message || 'Errore approvazione', 'error');
+  }
+}
+
+async function cancelBatch(batchId, code, status) {
+  const stLbl = status === 'draft' ? 'in BOZZA' : 'APPROVATO';
+  if (!confirm(
+    `Annullare il batch ${code} (${stLbl})?\n\n` +
+    `• Le righe coinvolte tornano "Da fatturare" nel cost report\n` +
+    `• Eventuale "perso" segnato viene azzerato\n` +
+    `• Il batch resta nello storico come ANNULLATO (audit)\n\n` +
+    `Procedere?`
+  )) return;
+  try {
+    const res = await api('POST', `/finance/api/billing/${batchId}/cancel`);
+    toast(`✓ Batch ${code} annullato: ${res.released_lines || 0} righe rilasciate.`, 'success');
+    closeModal('modal-batch-detail');
+    await loadBatches();
+  } catch(e) {
+    toast(e.message || 'Errore annullamento', 'error');
+  }
+}
+
+function openEmitInvoice() {
+  if (!_currentBatch) return;
+  if (_currentBatch.status !== 'approved') {
+    toast('Il batch deve essere approvato per emettere fattura', 'warning');
+    return;
+  }
+  document.getElementById('ei-number').value = '';
+  document.getElementById('ei-issue-date').value = new Date().toISOString().slice(0, 10);
+  document.getElementById('ei-due-date').value = '';
+  document.getElementById('ei-vat').value = 22;
+  recalcEmitTotals();
+  // Bind onChange su vat per ricalcolo live
+  document.getElementById('ei-vat').oninput = recalcEmitTotals;
+  document.getElementById('ei-batch-info').innerHTML = `
+    <div style="background:var(--bg3); border-radius:8px; padding:10px 12px;">
+      <div class="text-sm">Batch <b class="mono" style="color:var(--indigo2);">${escapeHtml(_currentBatch.code)}</b> · ${escapeHtml(_currentBatch.project_title || '')}</div>
+      <div class="text-sm" style="margin-top:4px;">Importo approvato: <b>${fmtCurrency(_currentBatch.total_approved)}</b> (${_currentBatch.lines.length} righe)</div>
+    </div>`;
+  openModal('modal-emit-invoice');
+}
+
+function recalcEmitTotals() {
+  if (!_currentBatch) return;
+  const subtotal = _currentBatch.total_approved || 0;
+  const vatPct = parseFloat(document.getElementById('ei-vat').value) || 0;
+  const vat = subtotal * vatPct / 100;
+  const total = subtotal + vat;
+  document.getElementById('ei-totals').innerHTML = `
+    <div style="display:flex; justify-content:space-between; padding:3px 0;">
+      <span class="text-sm">Imponibile</span><span class="mono">${fmtCurrency(subtotal)}</span>
+    </div>
+    <div style="display:flex; justify-content:space-between; padding:3px 0;">
+      <span class="text-sm">IVA (${vatPct}%)</span><span class="mono">${fmtCurrency(vat)}</span>
+    </div>
+    <div style="display:flex; justify-content:space-between; padding:6px 0; border-top:1px solid var(--border); margin-top:4px;">
+      <span class="text-sm" style="font-weight:600;">Totale</span>
+      <span class="mono" style="font-weight:600; color:var(--indigo2);">${fmtCurrency(total)}</span>
+    </div>`;
+}
+
+async function submitEmitInvoice() {
+  if (!_currentBatch) return;
+  const number = document.getElementById('ei-number').value.trim();
+  const issueDate = document.getElementById('ei-issue-date').value;
+  const dueDate = document.getElementById('ei-due-date').value;
+  const vat = document.getElementById('ei-vat').value;
+  if (!number || !issueDate) {
+    toast('Numero fattura e data emissione sono obbligatori', 'warning');
+    return;
+  }
+  const fd = new FormData();
+  fd.append('invoice_number', number);
+  fd.append('issue_date', issueDate);
+  if (dueDate) fd.append('due_date', dueDate);
+  fd.append('vat_rate', vat);
+  try {
+    const res = await api('POST', `/finance/api/billing/${_currentBatch.id}/invoice`, fd);
+    toast(`✓ Fattura ${res.invoice_number} emessa: ${fmtCurrency(res.total)} totale (${fmtCurrency(res.subtotal)} + IVA ${fmtCurrency(res.vat_amount)})`, 'success', 6000);
+    closeModal('modal-emit-invoice');
+    closeModal('modal-batch-detail');
+    await loadBatches();
+    await loadInvoices();  // refresh anche elenco fatture
+  } catch(e) {
+    toast(e.message || 'Errore emissione fattura', 'error');
+  }
 }
 
 // ── Fatture ──────────────────────────────────────────────────
@@ -458,6 +890,9 @@ async function init() {
 
   loadInvoices();
   refreshAnomaliesBadge();
+  // v3.5.0-alpha.49: pre-fetch batch per popolare badge tab + supportare
+  // deep-link /finance#batch-12 anche se utente atterra su tab Fatture.
+  loadBatches();
 }
 
 init();

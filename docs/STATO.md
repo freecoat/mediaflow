@@ -8,6 +8,59 @@
 
 ## Versione corrente
 
+**v3.5.0-alpha.49** — 7 maggio 2026 — Step 4 Cost Report → Billing flow: UI /finance batch
+
+Step 4 chiuso. Pagina `/finance` ora ha tab dedicata "📦 Batch fatturazione"
+con lista filtrata, drawer dettaglio editabile, bottoni azione complete
+(approve/cancel/emit invoice), anteprima IVA live, sezione perso aggregato
+per progetto.
+
+**Chiuso α.49:**
+- ✅ Tab `📦 Batch fatturazione` in /finance con badge giallo count draft
+- ✅ Tabella batch: code, project, status, periodo, proposto/approvato/perso, fattura
+- ✅ Filtro status (draft/approved/invoiced/cancelled)
+- ✅ Auto-open via deep-link `/finance#batch-{id}` (link da cost report)
+- ✅ Modal dettaglio batch (920px): meta-grid + lines table + footer dinamico
+- ✅ Edit line inline (solo draft + manager+): input importo + prompt
+  loss_reason se ridotto < proposed → PATCH endpoint α.47 + toast delta
+- ✅ Bottone ✅ Approva (draft → approved)
+- ✅ Bottone 💶 Emetti fattura (modal con number/date/VAT live + POST emit)
+- ✅ Bottone ↩ Annulla batch (rosso, con conferma)
+- ✅ Pannello "Perso aggregato" con totale + breakdown by_reason
+- ✅ Auto-load batch al boot (per badge tab anche se utente è su altra tab)
+
+**Verifica richiesta a Matteo:**
+- Pull → app parte
+- /finance → click tab "📦 Batch fatturazione"
+- Vedi lista batch (se hai trasmesso da cost report)
+- Click su batch draft → modal dettaglio con lines editabili
+- Modifica importo (es. 100 → 80) → prompt motivo → vedi 20 perso + totale aggiornato
+- ✅ Approva → batch approved
+- 💶 Emetti fattura → numero+data → Invoice creata + visibile in tab Fatture
+- Test deep-link: /cost-report → click su una card batch → /finance si apre
+  con modal dettaglio aperto direttamente
+
+**Bug ancora aperti:**
+- Freeze Chrome Mac specifico (non bug MediaFlow, workaround light mode)
+
+**Prossimi step:**
+- α.50: notifica fine mese auto + chiusura progetto (producer "Chiudi
+  lavorazioni") + report finanziario completo
+
+**v3.5.0-alpha.48.2** — 7 maggio 2026 — Periodo trasmissione auto-derivato dai booking
+
+Richiesta Matteo. GET /finance/api/billing/preview calcola period_start/end
+da min/max work_date JCL candidate (popolate da cost_line_sync su booking
+done). Modal Trasmetti popola defaults dal preview, mostra anteprima
+righe+totale, label sorgente periodo (📅 from_bookings vs ⚠ fallback).
+Submit disabled se zero candidate.
+
+**v3.5.0-alpha.48.1** — 7 maggio 2026 — Bottone Ritira su card batch (cancel pre-invoice)
+
+Bottone ↩ Ritira (rosso) sulla card batch nel widget cost report.
+Visibile solo se status in {draft, approved}. Confirm + cancel endpoint
+α.47 → JCL rilasciate, LossEntry cancellate, batch → cancelled.
+
 **v3.5.0-alpha.48** — 7 maggio 2026 — Step 3 Cost Report → Billing flow: UI Cost Report
 
 Step 3 del workflow billing. UI Cost Report ora mostra stato fatturazione
