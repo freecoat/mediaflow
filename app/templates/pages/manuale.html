@@ -402,6 +402,18 @@
 
       <h3>Backup automatici?</h3>
       <p>Non ci sono ancora backup schedulati automatici. Per backup manuale: <a href="/settings">Impostazioni</a> → tab "Dati" → "Scarica ZIP completo" con password.</p>
+
+      <h3>La timeline si blocca/freeze in Chrome con molti booking</h3>
+      <p>Diagnosi performance trace 7/5/2026: il colpevole è quasi sempre un'<strong>estensione browser</strong> (Bitwarden, 1Password, LastPass, MetaMask, ecc.) che osserva le mutazioni del DOM. Vis-timeline crea/distrugge migliaia di nodi durante zoom/pan, e l'estensione esegue una scan a ogni mutazione → main thread saturo → freeze.</p>
+      <p><strong>Test diagnostico</strong>: apri Chrome in modalità incognito (<kbd>Cmd</kbd>/<kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>N</kbd>) e usa MediaFlow lì. Se in incognito funziona fluido → confermato problema estensione.</p>
+      <p><strong>Workaround</strong>:</p>
+      <ul>
+        <li>Disattiva l'estensione su <code>localhost</code> (Bitwarden: Settings → Excluded Domains → aggiungi <code>localhost</code>)</li>
+        <li>Usa Firefox (i test mostrano performance migliori per la timeline)</li>
+        <li>Usa <a href="/planning/full">Pagina timeline standalone</a> in finestra dedicata (riduce DOM extra di sidebar/topbar)</li>
+        <li>Disattiva la heatmap (📊 toolbar) se attivata</li>
+      </ul>
+      <p>MediaFlow include attributi <code>data-bwignore</code> / <code>data-lpignore</code> / <code>autocomplete="off"</code> su contenitori timeline per chiedere alle estensioni di non scansionarli, ma non tutte le rispettano.</p>
     </section>
 
   </article>

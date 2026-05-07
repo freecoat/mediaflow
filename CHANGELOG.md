@@ -1,5 +1,43 @@
 # MediaFlow — Changelog
 
+## v3.5.0-alpha.46.1 — Mitigazione freeze Chrome (estensioni autofill) (7 maggio 2026)
+
+Performance trace Chrome di Matteo (`Trace-20260507T171123.json.gz`) ha
+identificato la causa del freeze:
+
+**Bitwarden** (e altre estensioni autofill in Chrome): il
+`MutationObserver` di Bitwarden scansiona ogni mutazione DOM. Vis-timeline
+crea/distrugge migliaia di nodi durante zoom/pan → MutationObserver fire
+migliaia di volte → `setupOverlayOnField` schedula 55+ setTimeout per
+cercare campi input dentro la timeline → main thread saturo → freeze.
+
+**Numeri dal trace**:
+- 24,124 chiamate a Bitwarden script (838 ms totali)
+- 41 `CollectAutofillContentService.handleMutationObserverMutation`
+- 55 `setupOverlayOnField`
+- vs. solo 22 ms del nostro `global.js`
+
+**Mitigazione (lato app):**
+- Aggiunti `data-bwignore="true"` + `data-lpignore="true"` +
+  `data-1p-ignore="true"` + `autocomplete="off"` su `#tl-host` e
+  form modal booking. Le estensioni well-behaved rispettano questi flag
+  e non scansionano i discendenti
+- Aggiornato manuale `/manuale` con FAQ "La timeline si blocca in Chrome"
+  + workaround (incognito, exclude localhost in Bitwarden, Firefox,
+  pagina standalone, heatmap off)
+
+**Test definitivo per Matteo**:
+Cmd+Shift+N in Chrome → `localhost:8000/planning` → zoom mese 30+ booking.
+Se incognito funziona = confermata causa estensione, soluzione finale
+= aggiungere `localhost` alla whitelist excluded di Bitwarden.
+
+**Nota**: questi attributi sono raccomandazioni — estensioni che li
+ignorano rimangono problematiche. Soluzione 100% pulita = disabilitare
+l'estensione su localhost, oppure migrare timeline a una libreria che
+non genera tanti nodi DOM (vis-timeline → Bryntum/DHTMLX, già nel backlog).
+
+**Niente migrate.**
+
 ## v3.5.0-alpha.46 — Step 1 Cost Report → Billing flow: modello dati (7 maggio 2026)
 
 Primo step del workflow Cost Report ↔ Fatturazione concordato con Matteo.

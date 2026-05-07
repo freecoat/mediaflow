@@ -973,7 +973,15 @@
         <div style="font-size:11px; color:var(--text3,#888); padding:4px 14px 0;">
           Drag = pan · Drag item = sposta · <kbd style="background:rgba(255,255,255,.05); border:1px solid var(--border); border-radius:3px; padding:0 4px; font-size:10px;">Shift</kbd>+drag su vuoto = nuovo booking · doppio click item = modifica · doppio click vuoto = nuovo · <kbd style="background:rgba(255,255,255,.05); border:1px solid var(--border); border-radius:3px; padding:0 4px; font-size:10px;">Alt</kbd>+drag = duplica · <kbd style="background:rgba(255,255,255,.05); border:1px solid var(--border); border-radius:3px; padding:0 4px; font-size:10px;">Ctrl</kbd>+click = multi-select · <kbd style="background:rgba(255,255,255,.05); border:1px solid var(--border); border-radius:3px; padding:0 4px; font-size:10px;">Canc</kbd>/<kbd style="background:rgba(255,255,255,.05); border:1px solid var(--border); border-radius:3px; padding:0 4px; font-size:10px;">⌘C/V</kbd>/<kbd style="background:rgba(255,255,255,.05); border:1px solid var(--border); border-radius:3px; padding:0 4px; font-size:10px;">⌘Z</kbd>
         </div>
-        <div id="tl-host"></div>
+        <!-- v3.5.0-alpha.46.1: anti-autofill estensioni browser (Bitwarden,
+             1Password, LastPass). Diagnosi performance trace 7/5/2026:
+             il MutationObserver di Bitwarden scansiona OGNI mutazione DOM
+             di vis-timeline (migliaia/secondo durante zoom mese) → main
+             thread saturo Chrome → freeze. Questi attributi disattivano
+             la scan delle estensioni well-behaved. NON elimina del tutto
+             il problema su utenti con estensioni che ignorano i flag —
+             vedi FAQ manuale. -->
+        <div id="tl-host" data-bwignore="true" data-lpignore="true" data-1p-ignore="true" autocomplete="off"></div>
       </div>
     </div>
 
@@ -988,7 +996,7 @@
       <button class="btn btn-ghost btn-icon" onclick="closeModal('modal-tl-booking')">✕</button>
     </div>
     <div class="modal-body">
-      <form id="form-tl-booking">
+      <form id="form-tl-booking" autocomplete="off" data-bwignore="true" data-lpignore="true" data-1p-ignore="true">
         <input type="hidden" id="tlb-editing-booking-id">
 
         <!-- ─── Risorse assegnate (multi-row) ────────── -->

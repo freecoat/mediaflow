@@ -8,6 +8,40 @@
 
 ## Versione corrente
 
+**v3.5.0-alpha.46.1** — 7 maggio 2026 — Mitigazione freeze Chrome (estensioni autofill)
+
+Performance trace Chrome di Matteo ha identificato il colpevole: NON è
+vis-timeline da solo (2.4s su 65s totali), ma Bitwarden + altre estensioni
+autofill che osservano il DOM e scansionano migliaia di nodi creati da
+vis-timeline durante zoom mese.
+
+**Numeri dal trace `Trace-20260507T171123.json.gz`:**
+- 24,124 chiamate a Bitwarden script (838ms)
+- 41 callback `CollectAutofillContentService.handleMutationObserverMutation`
+- 55 `setupOverlayOnField` schedule via setTimeout
+- vs. solo 22ms global.js MediaFlow
+
+**Chiuso α.46.1:**
+- ✅ `data-bwignore` + `data-lpignore` + `data-1p-ignore` + `autocomplete="off"`
+  su `#tl-host` e form modal booking → estensioni well-behaved skippano scan
+- ✅ FAQ manuale aggiornata con workaround Chrome (incognito test, exclude
+  localhost Bitwarden, Firefox, pagina standalone, heatmap off)
+
+**Test richiesto a Matteo:**
+- **Cmd+Shift+N** (incognito Chrome) → `localhost:8000/planning` → zoom
+  mese 30+ booking. Se in incognito funziona fluido = causa CONFERMATA
+  estensioni. Soluzione: Bitwarden Settings → Excluded Domains → aggiungi
+  `localhost`. Allora anche Chrome normale funzionerà
+- Verifica anche pull dei nuovi attributi `data-bwignore`: rebooting
+  app + hard refresh
+
+**Bug ancora aperti:**
+- ⚠ Vis-timeline 7.7.3 da solo è pesante (2.4s su 65s del trace) ma non
+  causa il freeze. Sostituzione libreria (Bryntum/DHTMLX) resta nel backlog
+  ma NON è urgente con la mitigazione attuale
+- ⚠ Cost Report flow: implementato solo Step 1 (modello dati α.46),
+  prossimi step α.47-50 (API + UI)
+
 **v3.5.0-alpha.46** — 7 maggio 2026 — Step 1 Cost Report → Billing flow: modello dati
 
 Primo step del workflow Cost Report ↔ Fatturazione concordato con Matteo.
