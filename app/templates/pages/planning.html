@@ -264,6 +264,19 @@
   body.tl-select-panel-open .vis-item.vis-selected {
     animation: tl-pulse-glow 1.5s ease-in-out infinite;
   }
+  /* v3.5.0-alpha.46.2: in modalità leggera (data-light="on" su #tl-host)
+     disabilita TUTTE le transition + animation interne agli items. CSS
+     transition + paint continuo era una delle cause del freeze Chrome
+     (18761 Paint events nel trace). */
+  #tl-host[data-light="on"] .vis-item,
+  #tl-host[data-light="on"] .vis-item.vis-selected {
+    animation: none !important;
+    transition: none !important;
+  }
+  #tl-host[data-light="on"] .vis-item:hover {
+    /* Niente filter brightness/saturation in light mode (causa repaint) */
+    filter: none !important;
+  }
   .vis-item .vis-item-content {
     padding: 0 2px;
     line-height: 1.35;
@@ -865,6 +878,7 @@
           <button class="btn btn-ghost btn-sm" id="tl-roi-toggle" onclick="tlRoiTogglePersist()" title="Modalità area (S): trascina sulla griglia per selezionare. Selezioni multiple si sommano. ESC per uscire." style="margin-left:6px;">📦 Area</button>
           <!-- v3.5.0-alpha.44: toggle veloce heatmap + apri standalone -->
           <button class="btn btn-ghost btn-sm" id="tl-heatmap-toggle" onclick="tlToggleHeatmap()" title="Mostra/nascondi heatmap occupazione giornaliera sotto i nomi operatore" style="margin-left:6px;">📊 Heatmap</button>
+          <button class="btn btn-ghost btn-sm" id="tl-light-toggle" onclick="tlToggleLight()" title="Modalità leggera: disabilita stack overlap (O(N²)), background items (ferie/festività/timbrature) e animazioni. Risolve freeze Chrome con 30+ booking + zoom mese. Trade-off: items sovrapposti visivamente." style="margin-left:6px;">🪶 Light</button>
           <button class="btn btn-ghost btn-sm" onclick="tlOpenStandalone()" title="Apri timeline in finestra dedicata full-screen (senza menu/topbar)" style="margin-left:6px;">⛶ Finestra</button>
           <button class="btn btn-ghost btn-sm" onclick="tlPrefsToggle(event)" title="Personalizza look timeline" style="margin-left:6px;">⚙</button>
         </div>
@@ -1921,6 +1935,37 @@ function tlPrefsReset() {
   tlPrefsToggle();
 }
 
+// v3.5.0-alpha.46.2: modalità leggera timeline. Risolve freeze Chrome con
+// 30+ booking + zoom mese. Diagnosi performance trace 7/5/2026:
+// `requestAnimationFrame` di vis-timeline blocca singoli frame fino a 225ms
+// per ricalcolo overlap O(N²) (stack:true) + background items (ferie/festa/
+// punch moltiplicati × risorse). Light mode disabilita queste 3 cose.
+const TL_LIGHT_KEY = 'mf_tl_light_mode';
+function tlIsLightMode() {
+  try { return localStorage.getItem(TL_LIGHT_KEY) === '1'; } catch (_) { return false; }
+}
+function tlToggleLight() {
+  const cur = tlIsLightMode();
+  const next = !cur;
+  try { localStorage.setItem(TL_LIGHT_KEY, next ? '1' : '0'); } catch (_) {}
+  _tlSyncLightBtn(next);
+  // Ri-render timeline con nuove options (stack/bg/punch sono baked in vis options)
+  if (typeof renderTimeline === 'function') renderTimeline(true);
+  toast(next
+    ? '🪶 Modalità leggera attiva: stack/background/animazioni OFF'
+    : 'Modalità leggera disattivata',
+    'info', 3000);
+}
+function _tlSyncLightBtn(on) {
+  const btn = document.getElementById('tl-light-toggle');
+  if (!btn) return;
+  btn.style.background = on ? 'rgba(98,114,245,0.18)' : '';
+  btn.style.color = on ? 'var(--indigo2,#7e8ef7)' : '';
+  // Marca anche il host con data-light per CSS conditional (anim glow)
+  const host = document.getElementById('tl-host');
+  if (host) host.dataset.light = on ? 'on' : 'off';
+}
+
 // v3.5.0-alpha.44: toggle veloce heatmap dalla toolbar (parallel al popover ⚙).
 // Modifica TL_PREFS, riapplica, aggiorna lo stato visivo del bottone.
 function tlToggleHeatmap() {
@@ -1998,6 +2043,8 @@ function _tlBindResize() {
     // v3.5.0-alpha.44: bind resize listener una volta + sync stato bottone heatmap toolbar
     if (typeof _tlBindResize === 'function') _tlBindResize();
     if (typeof _tlSyncHeatmapBtn === 'function') _tlSyncHeatmapBtn(!!p.heatmap);
+    // v3.5.0-alpha.46.2: sync stato bottone Light mode + applica data-light al boot
+    if (typeof _tlSyncLightBtn === 'function') _tlSyncLightBtn(tlIsLightMode());
   }, 100);
 })();
 
@@ -3930,7 +3977,11 @@ async function _doRenderTimeline(preserveWindow=false) {
   // v3.5.0-alpha.21: in vista "Per progetto" gli items background (ferie /
   // festività / timbrature) sono legati a resource_id e non hanno senso
   // raggruppati per job → li nascondiamo. Restano solo i booking items.
-  const _hideBg = (window._tlGroupBy === 'project');
+  // v3.5.0-alpha.46.2: in modalità leggera (tlIsLightMode) skip TUTTI i
+  // background items + punch items per performance. Trace mostra che
+  // questi sono moltiplicati × risorse × giorni → con 20+ risorse + zoom
+  // mese diventano 600+ items extra che vis-timeline deve layoutare.
+  const _hideBg = (window._tlGroupBy === 'project') || tlIsLightMode();
   const itemsDS = new vis.DataSet(_hideBg ? items : [...items, ...bgItems, ...punchItems]);
 
   const win = savedWin || tlWindowFor(tlZoom, new Date());
@@ -3940,9 +3991,11 @@ async function _doRenderTimeline(preserveWindow=false) {
     return;
   }
   const groupsDS = new vis.DataSet(groups);
+  // v3.5.0-alpha.46.2: light mode disable stack (O(N²) → freeze Chrome 30+ items zoom mese)
+  const _lightMode = tlIsLightMode();
   tlInstance = window._tlInstance = new vis.Timeline(host, itemsDS, groupsDS, {
     locale: 'it',
-    stack: true,
+    stack: !_lightMode,
     showCurrentTime: true,
     zoomable: true,
     moveable: true, // drag pan abilitato (preferenza Matteo). Create via Shift+drag.
@@ -3954,7 +4007,7 @@ async function _doRenderTimeline(preserveWindow=false) {
     // margin axis ridotto. Min height groups uniforme per evitare "barre alte"
     // sparse e il salto in testa.
     margin: {item: {horizontal: 0, vertical: 3}, axis: 6},
-    stackSubgroups: true,
+    stackSubgroups: !_lightMode,
     groupHeightMode: 'fixed',
     // v3.5.0-alpha.44: altezza dinamica viewport (era hardcoded 600). Si
     // adatta al ridimensionamento finestra via tlComputeHeight + listener

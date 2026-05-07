@@ -8,6 +8,47 @@
 
 ## Versione corrente
 
+**v3.5.0-alpha.46.2** — 7 maggio 2026 — Modalità leggera timeline (vera causa freeze)
+
+α.46.1 ipotizzava Bitwarden come causa principale del freeze Chrome.
+Test Matteo in **incognito** (no estensioni) → freeze persiste.
+Diagnosi sbagliata. Riapertura analisi trace.
+
+**Vera causa:** vis-timeline con `stack: true` ricalcola overlap di
+TUTTI gli items per evitarne la sovrapposizione. Algoritmo O(N²).
+Con 30+ booking + 600+ background items (ferie/festa/weekend/punch
+moltiplicati × 20 risorse) + zoom mese, ogni `requestAnimationFrame`
+blocca 200+ms.
+
+Numeri trace conferma:
+- Top RunTask: 480ms, 416ms, 414ms, 396ms, 342ms, 337ms, 304ms (~3s
+  congelati nei 7 task più lunghi)
+- PageAnimator (single rAF): 225ms picco
+- Layout: 92ms picco
+- 18,761 Paint events
+
+**Chiuso α.46.2:**
+- ✅ Bottone `🪶 Light` in toolbar timeline (persistenza
+  `localStorage.mf_tl_light_mode`)
+- ✅ Light ON disabilita: `stack: false` + `stackSubgroups: false` +
+  background items (ferie/festa/punch) + animazioni/transition CSS
+  su `.vis-item`
+- ✅ Toast informativo on toggle
+- ✅ CSS `#tl-host[data-light="on"]` disabilita filter:hover, animation,
+  transition (riducono i 18k Paint events)
+
+**Verifica richiesta a Matteo:**
+- Chrome (anche normale, non solo incognito) → `/planning` → click
+  bottone `🪶 Light` in toolbar → diventa indigo evidenziato
+- Zoom mese 30+ booking → deve scorrere fluido
+- Trade-off: items sovrapposti visivamente (no impilamento). Per
+  leggibilità precisa, zoom giorno/settimana o disattiva light mode
+
+**Bug ancora possibili:**
+- Se anche light mode freeza → vis-timeline 7.7.3 ha bug native pure
+  senza stack. Soluzione finale: sostituzione libreria (Bryntum/DHTMLX),
+  backlog Round 12
+
 **v3.5.0-alpha.46.1** — 7 maggio 2026 — Mitigazione freeze Chrome (estensioni autofill)
 
 Performance trace Chrome di Matteo ha identificato il colpevole: NON è

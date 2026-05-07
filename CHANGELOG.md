@@ -1,5 +1,53 @@
 # MediaFlow — Changelog
 
+## v3.5.0-alpha.46.2 — Modalità leggera timeline (vera causa del freeze) (7 maggio 2026)
+
+Test in incognito Chrome (no estensioni) → freeze persiste. Quindi
+la diagnosi α.46.1 (Bitwarden) era SBAGLIATA — Bitwarden contribuiva
+ma non era la causa primaria. Riapertura analisi del trace.
+
+**Vera causa identificata:**
+
+- Top RunTask 480-300ms × 7 occorrenze (3+ secondi di freeze totale
+  solo nei 7 task più lunghi)
+- **PageAnimator::serviceScriptedAnimations**: singolo
+  `requestAnimationFrame` blocca **225ms**, un altro 117ms
+- **Layout**: max 92.9ms singolo (totale 703ms)
+- **Paint**: 18,761 chiamate (max 16ms)
+- **Commit (compositor)**: max 66ms
+
+→ Vis-timeline con `stack: true` ricalcola la posizione di TUTTI gli
+items per evitare overlap. Con N items larghi su zoom mese, l'algoritmo
+è O(N²). Aggiungere background items (ferie, festa, weekend, timbrature
+moltiplicati × risorse) porta il count totale a 600+ items in
+visualizzazione → frame da 200+ms.
+
+**Fix: Modalità leggera (toggle bottone)**
+
+Bottone `🪶 Light` in toolbar timeline. Quando attivo:
+- `stack: false` + `stackSubgroups: false` → niente calcolo overlap O(N²)
+  (items possono sovrapporsi visivamente, ma timeline scorre fluida)
+- `_hideBg = true` → skip totale background items (ferie, festa, weekend,
+  punch). Riduce drasticamente il count
+- CSS conditional `#tl-host[data-light="on"]`: disabilita
+  `animation` + `transition` + `filter` su `.vis-item` (ridotti i 18k
+  Paint events del trace)
+
+Persistenza in `localStorage.mf_tl_light_mode`. Bottone evidenziato
+indigo quando attivo. Toast "🪶 Modalità leggera attiva: stack/background/animazioni OFF".
+
+**Trade-off**: in light mode i booking si possono sovrapporre
+visivamente nella stessa riga risorsa (vis-timeline non li impila più
+verticalmente). Per leggibilità precisa, torna in modalità normale a
+zoom più stretto (giorno/settimana).
+
+**Bug ancora possibile**: se anche con light mode freeza, il problema
+è altrove (forse vis-timeline 7.7.3 ha bug native con N items pure
+senza stack). Soluzione finale: sostituzione libreria timeline
+(Bryntum/DHTMLX), già nel backlog.
+
+**Niente migrate.**
+
 ## v3.5.0-alpha.46.1 — Mitigazione freeze Chrome (estensioni autofill) (7 maggio 2026)
 
 Performance trace Chrome di Matteo (`Trace-20260507T171123.json.gz`) ha
