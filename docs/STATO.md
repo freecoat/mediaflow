@@ -8,6 +8,32 @@
 
 ## Versione corrente
 
+**v3.5.0-alpha.45** — 7 maggio 2026 — Bulk visibile + "Fatto" in fondo
+
+Quick fix utenza dopo test α.44.1:
+
+**Chiuso α.45:**
+- ✅ Bottone "✏ Bulk" toolbar timeline sempre visibile (era display:none
+  → Matteo "sparito"). Disabled+grigio se no selezione, attivo+indigo
+  con counter (N) quando ha item selezionati
+- ✅ Sort "Le mie" + "Per progetto": booking con execution_status terminale
+  (done/not_done) vanno SEMPRE in fondo, prima i task ancora attivi.
+  Modifica in `_cmpByPrioThenDate`
+
+**Bug ancora aperti:**
+- ⚠ **Freeze Chrome con 30+ booking + zoom mese PERSISTE** anche dopo
+  α.44.1. NON era né heatmap né resize loop la causa primaria. Ipotesi
+  residue:
+  - vis-timeline 7.7.3 `stack:true` con O(N²) overlap detection
+    esplode con N>30 + items larghi (zoom mese)
+  - background items (ferie/festa/punch) raddoppiano il count
+  - Bug Chrome rendering vis-timeline specifico
+  Serve **Performance profile DevTools** da Matteo per puntare il
+  problema. Possibile workaround: modalità "leggera" che disabilita
+  stack/animazioni/background
+- ⚠ Warning CSP "blocks eval" Chrome — collegato? Probabilmente no
+  ma da indagare insieme
+
 **v3.5.0-alpha.44.1** — 7 maggio 2026 — HOTFIX freeze Chrome 30+ booking
 
 Test α.44 su Chrome/Mac con 30+ booking + 20+ risorse: timeline sfarfalla

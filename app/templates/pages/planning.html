@@ -853,7 +853,10 @@
           <!-- v3.5.0-alpha.18: undo/redo persistente + bulk-edit -->
           <button class="btn btn-ghost btn-sm" id="tl-undo-btn-toolbar" onclick="tlPerformUndo()" disabled style="opacity:0.4; margin-left:6px;" title="Annulla (Ctrl+Z)">↶</button>
           <button class="btn btn-ghost btn-sm" id="tl-redo-btn-toolbar" onclick="tlPerformRedo()" disabled style="opacity:0.4;" title="Ripeti (Ctrl+Y)">↷</button>
-          <button class="btn btn-ghost btn-sm" id="tl-bulk-btn-toolbar" onclick="tlOpenBulkModal()" style="display:none; margin-left:6px;" title="Modifica in blocco i booking selezionati">✏ Bulk</button>
+          <!-- v3.5.0-alpha.45: bottone Bulk sempre visibile (era display:none
+               quando senza selezione → Matteo "sparito"). Ora sempre presente,
+               disabled se nessun item selezionato. UX più stabile. -->
+          <button class="btn btn-ghost btn-sm" id="tl-bulk-btn-toolbar" onclick="tlOpenBulkModal()" disabled style="opacity:0.4; margin-left:6px;" title="Modifica in blocco i booking selezionati (richiede selezione attiva)">✏ Bulk</button>
           <!-- v3.5.0-alpha.38: rimossi bottone "☑ Seleziona…" e dropdown ▾ (Matteo:
                "i filtri generali bastano"). Il pannello tl-select-panel resta nel DOM
                come no-op (può essere riusato in futuro), le funzioni JS rimangono. -->
@@ -2343,8 +2346,15 @@ function _renderPrioTraffic(bookingId, currentPrio) {
 }
 
 // v3.5.0-alpha.22: helper sort priorità desc + data start asc.
+// v3.5.0-alpha.45: i booking conclusi (done/not_done) vanno SEMPRE in fondo,
+// indipendentemente dalla priorità. Matteo: "Le mie" e "Per progetto" devono
+// mostrare prima i task ancora attivi, poi quelli chiusi come riferimento.
 const _PRIO_RANK = { high: 0, normal: 1, low: 2 };
+const _STATUS_TERMINAL = new Set(['done', 'not_done']);
 function _cmpByPrioThenDate(a, b) {
+  const aTerm = _STATUS_TERMINAL.has(a.execution_status || '');
+  const bTerm = _STATUS_TERMINAL.has(b.execution_status || '');
+  if (aTerm !== bTerm) return aTerm ? 1 : -1;  // terminale → in fondo
   const ap = _PRIO_RANK[(a.priority || 'normal')] ?? 1;
   const bp = _PRIO_RANK[(b.priority || 'normal')] ?? 1;
   if (ap !== bp) return ap - bp;
@@ -4801,11 +4811,23 @@ async function tlSubmitBulkEdit() {
 }
 
 // Mostra/nasconde il bottone Bulk e Selezione area in base alla selezione corrente.
+// v3.5.0-alpha.45: bottone sempre visibile, disabled se no selezione (era
+// display:none → Matteo "sparito"). Counter inline nel title per chiarezza.
 function tlOnSelectionChange() {
   const sel = window._tlInstance ? (window._tlInstance.getSelection() || []) : [];
   const selA = sel.filter(id => typeof id === 'string' && id.startsWith('a'));
   const btn = document.getElementById('tl-bulk-btn-toolbar');
-  if (btn) btn.style.display = selA.length >= 1 ? '' : 'none';
+  if (btn) {
+    const has = selA.length >= 1;
+    btn.disabled = !has;
+    btn.style.opacity = has ? '1' : '0.4';
+    btn.style.background = has ? 'rgba(98,114,245,0.18)' : '';
+    btn.style.color = has ? 'var(--indigo2,#7e8ef7)' : '';
+    btn.title = has
+      ? `Modifica in blocco i ${selA.length} booking selezionat${selA.length === 1 ? 'o' : 'i'}`
+      : 'Modifica in blocco i booking selezionati (richiede selezione attiva)';
+    btn.textContent = has ? `✏ Bulk (${selA.length})` : '✏ Bulk';
+  }
   // v3.5.0-alpha.24: aggiorna anche il counter del pannello selezione
   if (typeof tlSelectPanelUpdateCounter === 'function') tlSelectPanelUpdateCounter();
 }

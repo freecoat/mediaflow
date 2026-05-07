@@ -1,5 +1,35 @@
 # MediaFlow — Changelog
 
+## v3.5.0-alpha.45 — Bulk button sempre visibile + "Fatto" in fondo (7 maggio 2026)
+
+Quick fix utenza:
+
+**Bottone "✏ Bulk" toolbar timeline** — Matteo: "sparito". Era
+`display:none` quando senza selezione, riappariva su select ma il
+pattern era poco scopribile. Ora sempre visibile, disabled+grigio se
+nessuna selezione, attivo+evidenziato indigo con counter `(N)` quando
+hai item selezionati. UX più stabile.
+
+**Sort "Le mie" + "Per progetto"** — i booking con
+`execution_status` terminale (`done`/`not_done`) vanno SEMPRE in fondo
+alla lista, indipendentemente dalla priorità. Matteo: "task ancora
+attivi prima, conclusi come riferimento dopo". Modifica in
+`_cmpByPrioThenDate` (helper condiviso da `renderTodo` e
+`renderProjectView`).
+
+**Bug aperto, NON risolto in α.45**:
+- ⚠ Freeze Chrome con 30+ booking + zoom mese persiste anche dopo
+  α.44.1. Quindi NON era né heatmap né resize loop la causa primaria.
+  Ipotesi residue: vis-timeline 7.7.3 stack=true con O(N²) overlap
+  detection esplode con N>30 + items larghi (zoom mese), o background
+  items (ferie/festa/punch) che raddoppiano il count, o bug Chrome
+  rendering vis-timeline. Serve Performance profile DevTools per
+  puntare il problema. Possibile workaround: modalità "leggera" che
+  disabilita stack/animazioni/background. Da rivisitare con info
+  dal profile.
+
+**Niente migrate.**
+
 ## v3.5.0-alpha.44.1 — HOTFIX: freeze Chrome con 30+ booking + zoom mese (7 maggio 2026)
 
 Test live α.44 su Chrome/Mac con 30+ booking + 20+ risorse: timeline
