@@ -151,6 +151,22 @@ def _auto_migrate_columns():
                 if col not in cols:
                     print(f"[auto-migrate] {table_name}.{col} mancante -> ALTER TABLE")
                     conn.execute(text(f"ALTER TABLE {table_name} ADD COLUMN {col} {ddl}"))
+    # v3.5.0-alpha.46 — Cost report → Billing flow: estensione JobCostLine
+    # con stato fatturazione (billing_status, billing_batch_id, billed_amount).
+    # Le NUOVE tabelle billing_batches, billing_batch_lines, loss_entries vengono
+    # create automaticamente da Base.metadata.create_all() prima di questo step.
+    if "job_cost_lines" in insp.get_table_names():
+        jclcols = {c["name"] for c in insp.get_columns("job_cost_lines")}
+        jcl_alter = [
+            ("billing_status",   "VARCHAR(16) NOT NULL DEFAULT 'not_billed'"),
+            ("billing_batch_id", "INTEGER NULL REFERENCES billing_batches(id)"),
+            ("billed_amount",    "REAL NULL"),
+        ]
+        with engine.begin() as conn:
+            for col, ddl in jcl_alter:
+                if col not in jclcols:
+                    print(f"[auto-migrate] job_cost_lines.{col} mancante -> ALTER TABLE")
+                    conn.execute(text(f"ALTER TABLE job_cost_lines ADD COLUMN {col} {ddl}"))
 
 
 @asynccontextmanager
@@ -201,7 +217,7 @@ async def lifespan(app: FastAPI):
     yield
 
 
-app = FastAPI(title="MediaFlow", version="3.5.0-alpha.45", lifespan=lifespan)
+app = FastAPI(title="MediaFlow", version="3.5.0-alpha.46", lifespan=lifespan)
 
 BASE_DIR = Path(__file__).parent
 app.mount("/static", StaticFiles(directory=BASE_DIR / "static"), name="static")

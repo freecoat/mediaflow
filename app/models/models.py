@@ -116,6 +116,37 @@ class InvoiceStatus(str, enum.Enum):
     overdue = "overdue"; cancelled = "cancelled"
 
 
+# ── Cost report → Billing flow (v3.5.0-alpha.46) ──────────────
+class JCLBillingStatus(str, enum.Enum):
+    """Stato fatturazione di una JobCostLine.
+
+    Flow: not_billed → in_batch → billed → paid
+    Ramo alternativo: in_batch → lost (manager scarta dal batch o riduce a zero).
+    """
+    not_billed = "not_billed"   # default: maturato non ancora trasmesso a fatturazione
+    in_batch = "in_batch"       # incluso in un BillingBatch in approvazione/approvato
+    billed = "billed"           # fattura emessa
+    paid = "paid"               # fattura pagata
+    lost = "lost"               # parziale/totale scartato in fase di approvazione manager
+
+
+class BillingBatchStatus(str, enum.Enum):
+    """Stato di un BillingBatch (proposta di fatturazione mensile/extra)."""
+    draft = "draft"             # creato dal cost report, in attesa approvazione manager
+    approved = "approved"       # manager ha approvato gli importi, pronto per emissione
+    invoiced = "invoiced"       # fattura emessa, batch chiuso (collegato a Invoice)
+    cancelled = "cancelled"     # batch annullato senza emissione (no impatto JCL)
+
+
+class LossReason(str, enum.Enum):
+    """Motivo della voce 'perso' (delta tra proposed e approved nel batch)."""
+    manager_discount = "manager_discount"   # manager ha ridotto importo per gentlezza/negoziazione
+    written_off = "written_off"             # cancellato a fine progetto (non più recuperabile)
+    client_complaint = "client_complaint"   # rimborsato per disservizio/contestazione cliente
+    rounding = "rounding"                   # arrotondamento per allineare con accordo cliente
+    other = "other"
+
+
 class NotificationKind(str, enum.Enum):
     """Tipologia di notifica (v3.4.27).
 
@@ -868,6 +899,21 @@ class JobCostLine(Base):
     is_extra: Mapped[bool] = mapped_column(Boolean, default=False)
     work_date: Mapped[Optional[date]] = mapped_column(Date, nullable=True)
     notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    # v3.5.0-alpha.46 — flow Cost Report ↔ Fatturazione.
+    # Stato fatturazione della singola riga: progredisce da `not_billed`
+    # (maturato in cost report ma non ancora trasmesso) → `in_batch`
+    # (incluso in BillingBatch in approvazione) → `billed` (fattura
+    # emessa) → `paid`. Ramo alternativo `lost` se il manager scarta
+    # in approvazione. `billed_amount` è l'importo effettivo fatturato
+    # (può differire da `total_accrued` se il manager ha modificato
+    # l'importo nel batch, il delta finisce in LossEntry).
+    billing_status: Mapped[JCLBillingStatus] = mapped_column(
+        SAEnum(JCLBillingStatus), default=JCLBillingStatus.not_billed, index=True
+    )
+    billing_batch_id: Mapped[Optional[int]] = mapped_column(
+        ForeignKey("billing_batches.id"), nullable=True, index=True
+    )
+    billed_amount: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
     job: Mapped["Job"] = relationship(back_populates="cost_lines")
     # v3.4.33 — relazione opzionale a PriceItem (mancava, causava AttributeError
     # quando il cost_report tentava joinedload(JobCostLine.price_item)).
@@ -1036,6 +1082,100 @@ class InvoiceLine(Base):
     unit_price: Mapped[float] = mapped_column(Float)
     total: Mapped[float] = mapped_column(Float)
     invoice: Mapped["Invoice"] = relationship(back_populates="lines")
+
+
+# ── Cost report → Billing flow (v3.5.0-alpha.46) ──────────────
+# Workflow: il Cost Report aggrega le JobCostLine maturate (ore done × tariffa)
+# di un periodo (mese tipico, oppure extra). Producer/admin "trasmette" a
+# fatturazione → si crea un BillingBatch in stato draft con snapshot delle
+# righe (BillingBatchLine). Il manager rivede in /finance, eventualmente
+# modifica gli importi → ogni riduzione genera una LossEntry tracciata.
+# Approva → status approved. Emessa fattura (Invoice) → status invoiced,
+# JCL.billing_status passa a `billed`. Pagata → JCL → `paid`. A progetto
+# chiuso, producer comunica fine lavorazioni → si emette fattura finale
+# con extra a consuntivo + perso totale aggregato per rendicontazione.
+
+class BillingBatch(Base):
+    """Proposta di fatturazione (mensile o extra). Aggrega righe maturate
+    di un progetto in un periodo, prima di emettere la Invoice.
+
+    Lo `code` segue pattern `BB-{anno}-{NNN}` univoco per tenant.
+    `total_*` sono cache numeriche aggiornate al transmit/approve."""
+    __tablename__ = "billing_batches"
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    tenant_id: Mapped[int] = mapped_column(ForeignKey("tenants.id"), default=1, index=True)
+    code: Mapped[str] = mapped_column(String(40), unique=True, index=True)
+    project_id: Mapped[int] = mapped_column(ForeignKey("projects.id"), index=True)
+    status: Mapped[BillingBatchStatus] = mapped_column(
+        SAEnum(BillingBatchStatus), default=BillingBatchStatus.draft, index=True
+    )
+    period_start: Mapped[date] = mapped_column(Date)
+    period_end: Mapped[date] = mapped_column(Date)
+    # Snapshot importo proposto al momento della trasmissione (somma JCL maturate).
+    # `total_approved` viene aggiornato dal manager in fase di approvazione.
+    # `total_lost` = total_proposed - total_approved (delta tracked in LossEntry).
+    total_proposed: Mapped[float] = mapped_column(Float, default=0.0)
+    total_approved: Mapped[float] = mapped_column(Float, default=0.0)
+    total_lost: Mapped[float] = mapped_column(Float, default=0.0)
+    notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    # Audit
+    transmitted_by_user_id: Mapped[Optional[int]] = mapped_column(ForeignKey("users.id"), nullable=True)
+    transmitted_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    approved_by_user_id: Mapped[Optional[int]] = mapped_column(ForeignKey("users.id"), nullable=True)
+    approved_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+    invoice_id: Mapped[Optional[int]] = mapped_column(ForeignKey("invoices.id"), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    project: Mapped["Project"] = relationship()
+    invoice: Mapped[Optional["Invoice"]] = relationship(foreign_keys=[invoice_id])
+    lines: Mapped[List["BillingBatchLine"]] = relationship(
+        back_populates="batch", cascade="all, delete-orphan"
+    )
+
+
+class BillingBatchLine(Base):
+    """Snapshot di una JobCostLine al momento della trasmissione al batch.
+
+    I campi snapshot evitano inconsistenze: se la JCL viene modificata dopo
+    il transmit (es. nuove ore lavorate), il batch resta con i valori al
+    momento dell'invio. `total_proposed` = importo originale, `total_approved`
+    può essere diverso se il manager ha ridotto l'importo (delta → LossEntry)."""
+    __tablename__ = "billing_batch_lines"
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    batch_id: Mapped[int] = mapped_column(ForeignKey("billing_batches.id", ondelete="CASCADE"), index=True)
+    job_cost_line_id: Mapped[int] = mapped_column(ForeignKey("job_cost_lines.id"), index=True)
+    # Snapshot per audit / immutabilità documento
+    description: Mapped[str] = mapped_column(String(255))
+    quantity: Mapped[float] = mapped_column(Float, default=0.0)
+    unit: Mapped[str] = mapped_column(String(20), default="day")
+    unit_price: Mapped[float] = mapped_column(Float, default=0.0)
+    total_proposed: Mapped[float] = mapped_column(Float, default=0.0)
+    total_approved: Mapped[float] = mapped_column(Float, default=0.0)
+    is_extra: Mapped[bool] = mapped_column(Boolean, default=False)
+    notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    batch: Mapped["BillingBatch"] = relationship(back_populates="lines")
+    job_cost_line: Mapped["JobCostLine"] = relationship(foreign_keys=[job_cost_line_id])
+
+
+class LossEntry(Base):
+    """Voce 'perso' nel report finanziario. Generata quando manager riduce
+    l'importo di una BillingBatchLine in approvazione, o quando una JCL viene
+    write-off a chiusura progetto.
+
+    `amount` sempre positivo = importo NON fatturato/recuperato. Aggregato
+    per progetto nella rendicontazione finanziaria finale."""
+    __tablename__ = "loss_entries"
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    tenant_id: Mapped[int] = mapped_column(ForeignKey("tenants.id"), default=1, index=True)
+    project_id: Mapped[int] = mapped_column(ForeignKey("projects.id"), index=True)
+    job_cost_line_id: Mapped[Optional[int]] = mapped_column(ForeignKey("job_cost_lines.id"), nullable=True, index=True)
+    billing_batch_line_id: Mapped[Optional[int]] = mapped_column(ForeignKey("billing_batch_lines.id"), nullable=True)
+    amount: Mapped[float] = mapped_column(Float, default=0.0)
+    reason: Mapped[LossReason] = mapped_column(SAEnum(LossReason), default=LossReason.manager_discount)
+    notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    created_by_user_id: Mapped[Optional[int]] = mapped_column(ForeignKey("users.id"), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    project: Mapped["Project"] = relationship()
+    job_cost_line: Mapped[Optional["JobCostLine"]] = relationship(foreign_keys=[job_cost_line_id])
 
 
 # ── DAM ──────────────────────────────────────────────────────

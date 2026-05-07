@@ -8,6 +8,48 @@
 
 ## Versione corrente
 
+**v3.5.0-alpha.46** — 7 maggio 2026 — Step 1 Cost Report → Billing flow: modello dati
+
+Primo step del workflow Cost Report ↔ Fatturazione concordato con Matteo.
+**Solo modello dati + migrazione**, niente API/UI nuove (arrivano in α.47-50).
+
+**Workflow target (NON ancora attivo):**
+1. Cost Report → "Trasmetti a fatturazione" (manuale + notifica fine mese)
+2. BillingBatch creato (snapshot JCL maturate del periodo)
+3. Manager in /finance rivede + può modificare importi (delta → LossEntry)
+4. Approva → emette fattura → JCL.billing_status=billed
+5. Pagata → JCL=paid
+6. A chiusura progetto: producer click "Chiudi" → fattura finale + perso
+   aggregato per rendicontazione finanziaria
+
+**Chiuso α.46:**
+- ✅ Enum: JCLBillingStatus, BillingBatchStatus, LossReason
+- ✅ JobCostLine esteso: billing_status, billing_batch_id, billed_amount
+- ✅ BillingBatch (code BB-{anno}-{NNN}, project_id, period, totali,
+  audit transmit/approve, invoice_id)
+- ✅ BillingBatchLine (snapshot immutabile JCL al transmit)
+- ✅ LossEntry (importo, reason, project_id, audit user)
+- ✅ Auto-migrate al boot in main.py per le 3 colonne JCL
+- ✅ Script esplicito scripts/migrate_billing_flow.py
+- ✅ Models __init__.py exporta i nuovi nomi
+
+**Verifica Matteo dopo pull:**
+- App parte senza crash (auto-migrate dovrebbe gestire ALTER TABLE)
+- Se preferisce esplicito: `python scripts/migrate_billing_flow.py`
+- Niente da testare in UI: tutto invariato dal punto di vista utente
+- Cost report mostra ancora le stesse info di α.45 (i nuovi campi
+  esistono ma non sono ancora esposti)
+
+**Prossimi step concordati:**
+- α.47: API trasmissione/approvazione/emissione fattura da batch
+- α.48: UI Cost Report con stati colorati + bottone "Trasmetti"
+- α.49: UI /finance con batch + modifica manager + perso
+- α.50: notifica fine mese + chiusura progetto + report finanziario
+
+**Bug ancora aperti:**
+- ⚠ Freeze Chrome con 30+ booking + zoom mese (Firefox OK). Matteo sta
+  facendo test debug. Workaround "modalità leggera" pronto da implementare
+
 **v3.5.0-alpha.45** — 7 maggio 2026 — Bulk visibile + "Fatto" in fondo
 
 Quick fix utenza dopo test α.44.1:

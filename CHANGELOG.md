@@ -1,5 +1,68 @@
 # MediaFlow — Changelog
 
+## v3.5.0-alpha.46 — Step 1 Cost Report → Billing flow: modello dati (7 maggio 2026)
+
+Primo step del workflow Cost Report ↔ Fatturazione concordato con Matteo.
+**Solo modello dati + migrazione** in questa versione: nessuna API o UI nuova.
+La funzionalità arriverà nei step successivi (α.47 API, α.48-49 UI).
+
+**Workflow target (per riferimento, NON ancora attivo):**
+
+1. Cost Report → "Trasmetti a fatturazione" (manuale + notifica fine mese)
+2. Si crea un **BillingBatch** (proposta mensile o extra), snapshot delle
+   `JobCostLine` maturate (ore done × tariffa)
+3. Manager in `/finance` rivede, può modificare importi (delta → **LossEntry**
+   tracciato)
+4. Approva → `BillingBatch.status = approved`
+5. Emette fattura → `Invoice` collegato + JCL.billing_status = `billed`
+6. Pagata → JCL → `paid`
+7. Producer "Chiudi progetto" → fattura finale + perso aggregato per
+   rendicontazione finanziaria
+
+**Modelli aggiunti:**
+
+- **`JCLBillingStatus`** enum: `not_billed | in_batch | billed | paid | lost`
+- **`BillingBatchStatus`** enum: `draft | approved | invoiced | cancelled`
+- **`LossReason`** enum: `manager_discount | written_off | client_complaint
+  | rounding | other`
+
+- **`BillingBatch`**: code univoco `BB-{anno}-{NNN}`, project_id,
+  period_start/end, totali (proposed/approved/lost), audit
+  (transmitted_by, approved_by, invoice_id), status
+- **`BillingBatchLine`**: snapshot JCL al momento del transmit (immutabile
+  per audit). Campi proposed/approved per traccia modifiche manager
+- **`LossEntry`**: importo perso, reason, project_id, batch_line_id (opt),
+  jcl_id (opt), audit by user
+
+**Estensione `JobCostLine`:**
+- `billing_status` (default `not_billed`)
+- `billing_batch_id` (FK opt, batch corrente)
+- `billed_amount` (importo effettivamente fatturato, può differire
+  da `total_accrued` se manager ha modificato)
+
+**Migrazione:**
+- `scripts/migrate_billing_flow.py` esplicito (idempotente)
+- Auto-migrate al boot in `_auto_migrate_columns()` per i 3 campi su
+  `job_cost_lines` (lezione α.25.1: senza auto-migrate il pull crasha)
+- Nuove tabelle `billing_batches`, `billing_batch_lines`, `loss_entries`
+  create automaticamente da `Base.metadata.create_all()` al boot
+
+**Compatibilità:**
+- Nessuna rottura. Tutte le JCL esistenti acquisiscono `billing_status =
+  not_billed` (default) → vista cost report invariata fino allo step 2
+  (UI con stati colorati)
+- Nessun comportamento nuovo finché API non è esposta
+
+**Prossimi step:**
+- α.47: API trasmissione/approvazione/emissione (`/finance/api/billing/*`)
+- α.48: UI Cost Report con stati colorati + bottone "Trasmetti"
+- α.49: UI `/finance` con elenco batch + modifica manager + perso
+- α.50: notifica fine mese + chiusura progetto + report finanziario
+
+**Bug ancora aperti:**
+- ⚠ Freeze Chrome con 30+ booking + zoom mese (Firefox OK). Matteo sta
+  facendo test debug Chrome. Workaround "modalità leggera" pronto se serve
+
 ## v3.5.0-alpha.45 — Bulk button sempre visibile + "Fatto" in fondo (7 maggio 2026)
 
 Quick fix utenza:

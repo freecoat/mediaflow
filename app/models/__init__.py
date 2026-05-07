@@ -11,6 +11,8 @@ from app.models.models import (
     JobResourceAssignment, JobCostLine,
     TimePunch, PunchKind,
     Timesheet, Expense, Invoice, InvoiceLine, InvoiceStatus,
+    JCLBillingStatus, BillingBatch, BillingBatchLine, BillingBatchStatus,
+    LossEntry, LossReason,
     Asset, AssetType, Tag, AssetTag,
     PriceCategory, PriceItem, PriceLevel,
     Quote, QuoteLine, QuoteStatus,
