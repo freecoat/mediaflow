@@ -2569,20 +2569,30 @@ function tlComputeHeatmap(resourceId, bookings, rangeStart, rangeEnd) {
   return days;
 }
 
-function tlHeatmapHTML(days) {
+// alpha.41: tornato HTMLElement (era stringa HTML). Vis-timeline 7.7.3
+// strippa class+style dagli HTML annidati passati come content stringa →
+// le label perdevano il bold/font/colore. Element passato direttamente
+// viene `appendChild`ato senza sanitization. Vedi anche tlBuildResourceGroups.
+function tlHeatmapElement(days) {
   // 8h = piena giornata. Soglie: 0=trasparente, 0-50%=verde chiaro, 50-100%=verde, 100-150%=arancio, 150%+=rosso
-  if (days.length > 100) return ''; // troppi giorni, salta render
-  const segs = days.map(d => {
+  if (!days || days.length > 100) return null;
+  const wrap = document.createElement('div');
+  wrap.className = 'tl-heat';
+  wrap.style.cssText = 'display:flex; gap:1px; margin-top:4px; height:5px;';
+  for (const d of days) {
     const ratio = d.hours / 8;
     let bg = 'rgba(255,255,255,0.04)';
     if (ratio > 0 && ratio <= 0.5) bg = 'rgba(34,197,94,0.45)';
     else if (ratio > 0.5 && ratio <= 1) bg = 'rgba(34,197,94,0.85)';
     else if (ratio > 1 && ratio <= 1.5) bg = 'rgba(251,146,60,0.9)';
     else if (ratio > 1.5) bg = 'rgba(220,38,38,0.95)';
-    const t = `${d.date.toLocaleDateString('it-IT',{weekday:'short',day:'numeric',month:'short'})} · ${d.hours.toFixed(1)}h`;
-    return `<div class="tl-heat-cell" style="flex:1; min-width:2px; background:${bg}; border-radius:1px;" title="${t}"></div>`;
-  }).join('');
-  return `<div class="tl-heat" style="display:flex; gap:1px; margin-top:4px; height:5px;">${segs}</div>`;
+    const cell = document.createElement('div');
+    cell.className = 'tl-heat-cell';
+    cell.style.cssText = `flex:1; min-width:2px; background:${bg}; border-radius:1px;`;
+    cell.title = `${d.date.toLocaleDateString('it-IT',{weekday:'short',day:'numeric',month:'short'})} · ${d.hours.toFixed(1)}h`;
+    wrap.appendChild(cell);
+  }
+  return wrap;
 }
 
 // alpha.38: tint colore-risorsa molto soft sullo sfondo (sidebar + foreground).
@@ -2662,29 +2672,40 @@ function tlBuildResourceGroups(bookings, rangeStart, rangeEnd) {
   // alpha.35: render `role` sotto il nome (font-size 10.5, muted, italic).
   // Wrap in flex-column per non collidere con vis-inner (flex row+center).
   for (const r of resources) {
-    // alpha.40: stili INLINE brutali nel content HTML. Le regole CSS
-    // .tl-res-name / .tl-res-role non sortivano effetto (probabilmente
-    // override da regole vis-timeline ereditate). Inline styles hanno
-    // specificity più alta di qualsiasi CSS rule (se non ha !important
-    // su tutte le proprietà). Garantito.
-    let inner = '<div class="tl-res-name" style="font-weight:800; font-size:14px;'
-      + ' line-height:1.15; color:#ffffff; letter-spacing:0.2px;">'
-      + escapeHtml(r.name) + '</div>';
+    // alpha.41: content come HTMLElement detached, NON stringa HTML. Vis-timeline
+    // 7.7.3 strippa class+style dagli HTML annidati passati come stringa
+    // (header reparto sopravvive perché è un singolo <span> root). Element
+    // detached viene `appendChild`ato as-is, niente sanitization. Diagnosi
+    // confermata da DOM dump Matteo: `<div><div>Luca</div><div>Online Editor</div>...`
+    // — tutte le class+style sparite. Inline styles + CSS !important non
+    // bastavano perché erano spariti prima ancora di applicarsi.
+    const cell = document.createElement('div');
+    cell.className = 'tl-res-cell';
+    cell.style.cssText = 'display:flex; flex-direction:column; align-items:flex-start; width:100%;';
+
+    const nameEl = document.createElement('div');
+    nameEl.className = 'tl-res-name';
+    nameEl.style.cssText = 'font-weight:800; font-size:14px; line-height:1.15; color:#ffffff; letter-spacing:0.2px;';
+    nameEl.textContent = r.name;
+    cell.appendChild(nameEl);
+
     if (r.role) {
-      inner += '<div class="tl-res-role" style="font-size:9px; line-height:1.1;'
-        + ' margin-top:2px; font-weight:500; text-transform:uppercase;'
-        + ' letter-spacing:0.6px; color:#9aa0b8;">'
-        + escapeHtml(r.role) + '</div>';
+      const roleEl = document.createElement('div');
+      roleEl.className = 'tl-res-role';
+      roleEl.style.cssText = 'font-size:9px; line-height:1.1; margin-top:2px; font-weight:500; text-transform:uppercase; letter-spacing:0.6px; color:#9aa0b8;';
+      roleEl.textContent = r.role;
+      cell.appendChild(roleEl);
     }
+
     if (bookings && rangeStart && rangeEnd) {
       const days = tlComputeHeatmap(r.id, bookings, rangeStart, rangeEnd);
-      inner += tlHeatmapHTML(days);
+      const heatEl = tlHeatmapElement(days);
+      if (heatEl) cell.appendChild(heatEl);
     }
-    const content = '<div class="tl-res-cell" style="display:flex; flex-direction:column; align-items:flex-start; width:100%;">' + inner + '</div>';
     // alpha.38: className `tl-res-{id}` per applicare il tint colore-risorsa
     // sia su sidebar (label) sia su foreground (riga). CSS iniettato in
     // `<style id="tl-res-tints">` da _tlInjectResourceTints().
-    groups.push({id: r.id, content, treeLevel: 2, className: 'tl-res-' + r.id});
+    groups.push({id: r.id, content: cell, treeLevel: 2, className: 'tl-res-' + r.id});
   }
   return groups;
 }

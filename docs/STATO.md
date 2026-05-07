@@ -8,50 +8,62 @@
 
 ## Versione corrente
 
-**v3.5.0-alpha.40** — 6 maggio 2026 — Inline styles font + no-confirm multi-move + no race split
+**v3.5.0-alpha.41** — 7 maggio 2026 — Font label timeline via HTMLElement (vis-timeline strippa style annidati)
 
-α.39 ha sistemato i tint colore-risorsa (visibili) ma il bold/font su
-nome operatore + funzione restavano invisibili nonostante CSS
-`!important`. E la cascade conferme + conflitti orari su multi-select
-con bookings split persistevano.
+α.40 ha messo inline styles brutali nelle stringhe HTML del content
+delle label risorsa, ma il bold/font sui nomi operatore restava
+invisibile (header reparto invece corretto).
 
-**Chiuso α.40:**
-- ✅ FONT inline styles brutali nel content HTML (CSS `!important` non
-  bastava). Nome operatore: 14px/800/bianco. Role: 9px UPPERCASE
-  letter-spacing 0.6 grigio. Header reparto: 17px/800 indaco chiaro
-- ✅ NO-CONFIRM multi-move + tlPushUndo per Ctrl+Z
-- ✅ NO RACE SPLIT: rimosso `setTimeout(renderTimeline, 50)` da
-  `_tlApplySplitPauseShift`
+**Diagnosi confermata da DOM dump Matteo:**
 
-⚠ **APERTI dopo α.40 (riprendere domani mattina):**
+```html
+<div class="vis-inner">
+  <div>                           ← era <div class="tl-res-cell" style="display:flex;...">
+    <div>Luca Bianchi</div>       ← era <div class="tl-res-name" style="font-weight:800;...">
+    <div>Online Editor</div>      ← era <div class="tl-res-role" style="font-size:9px;...">
+    <div>...heatmap...</div>
+  </div>
+</div>
+```
 
-1. **Diversificazione font NOMI/FUNZIONI ancora non funziona.** Anche
-   con inline styles brutali Matteo dice "rimane identico". Tint colore
-   invece SÌ visibili → template ricaricato, non è cache. Ipotesi
-   residue:
-   - vis-timeline strippa l'attributo `style` per security?
-   - `escapeHtml` strippa lo style? (improbabile)
-   - Matteo è in modalità "Per progetto" e non `Per risorsa`? Lì
-     `tlBuildProjectGroups` non applica le mie inline styles
-   - Diagnostica: chiedere screenshot DevTools (computed font-weight
-     sul nome operatore, e verificare presenza tag `<div
-     class="tl-res-name" style="...">`). Se inline style mancante →
-     vis-timeline lo strippa, fix è passare un `HTMLElement` invece
-     di stringa HTML al group `content`
+Tutti i `class` e `style` annidati spariti. Vis-timeline 7.7.3 sanifica
+gli HTML string passati come `group.content` quando contengono nested
+elements. Header reparto sopravviveva perché single `<span>` root.
 
-2. **Multidrag conflitti fantasma.** Anche con bulk-edit + mutex α.39
-   + no-race α.40, Matteo segnala conflitti su +1h con multi-select
-   + bookings split. Possibili cause:
-   - REALI: A split (A1+A2 risorsa X) + B (risorsa X) selezionati. Drag
-     A1+1h. Sib A2 spostato +1h. Bulk-edit shifta B+60min → B nuovo
-     può overlappare con A2 nuovo. Limite semantico
-   - SPURII: bulk-edit `_check_assignment_conflict` non sa che gli
-     assignments che sta per modificare sono "atomici" → fa check su
-     stato intermedio
-   - Diagnostica: chiedere scenario specifico (quali risorse, quali
-     posizioni iniziali e finali). Se spurii: aggiungere parametro
-     `exclude_assignment_ids` (CSV) a bulk-edit per skippare nei check
-     gli assignment in modifica nella stessa transazione
+**Chiuso α.41:**
+- ✅ `tlBuildResourceGroups` line ~2664: content delle foglie risorsa
+  ora è HTMLElement detached (`document.createElement` +
+  `style.cssText` + `textContent`) anziché stringa HTML
+- ✅ `tlHeatmapHTML` → `tlHeatmapElement`: ritorna `HTMLElement` o
+  `null`, costruito via DOM API
+- ✅ Header reparto + tlBuildProjectGroups invariati (single `<span>`
+  root, già funzionante in α.40)
+
+**Verifica live richiesta a Matteo:**
+- Riapri `/planning` → tab Timeline
+- Sidebar sinistra: nome operatore in **bold 14px bianco**, sotto
+  funzione in `9px UPPERCASE` grigio chiaro
+- Heatmap sotto la riga (8 segmenti tipici per range settimanale)
+- DevTools sui nomi: ora dovrebbero esserci `<div class="tl-res-name"
+  style="font-weight:800; font-size:14px; ...">` con tutti gli attributi
+
+**Niente migrate**: solo template `planning.html`.
+
+⚠ **Resta APERTO il bug multidrag conflitti fantasma:**
+- Sintomo: shift +1h su multi-select con bookings split → conflitti
+  orari segnalati dal bulk-edit
+- Possibili cause:
+  - REALI: A split (A1+A2 risorsa X) + B (risorsa X) selezionati. Drag
+    A1+1h. Sib A2 spostato +1h. Bulk-edit shifta B+60min → B nuovo
+    può overlappare con A2 nuovo. Limite semantico
+  - SPURII: bulk-edit `_check_assignment_conflict` non sa che gli
+    assignments che sta per modificare sono "atomici" → fa check su
+    stato intermedio
+  - Diagnostica: chiedere a Matteo scenario specifico (quali risorse,
+    quali posizioni iniziali e finali, toast esatto). Se spurii:
+    aggiungere parametro `exclude_assignment_ids` (CSV) a bulk-edit
+    per skippare nei check gli assignment in modifica nella stessa
+    transazione
 
 **Verifica live richiesta a Matteo:**
 - `/planning` → tab Timeline. Bottone `☑ Seleziona…` non c'è più
@@ -88,6 +100,15 @@ con bookings split persistevano.
   con dry-run, refinements)
 
 ## Storico recenti
+
+**v3.5.0-alpha.40** — 6 maggio 2026 — Inline styles font + no-confirm multi-move + no race split
+
+α.39 ha sistemato i tint colore-risorsa (visibili) ma il bold/font su
+nome operatore + funzione restavano invisibili nonostante CSS
+`!important`. La fix con inline styles brutali NON ha risolto (vedi α.41
+per la diagnosi vera: vis-timeline strippa style+class annidati).
+Restano validi gli altri due interventi: NO-CONFIRM multi-move +
+tlPushUndo + NO RACE SPLIT.
 
 **v3.5.0-alpha.39** — 6 maggio 2026 — Fix tint+font + multidrag bulk + render mutex
 

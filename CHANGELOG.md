@@ -1,5 +1,51 @@
 # MediaFlow — Changelog
 
+## v3.5.0-alpha.41 — Font label timeline via HTMLElement (vis-timeline strippa style annidati) (7 maggio 2026)
+
+α.40 ha messo inline styles brutali nelle stringhe HTML del content
+delle label risorsa, ma Matteo ha riportato che il bold/font sui nomi
+operatore restava invisibile (header reparto invece corretto).
+
+**Diagnosi (DOM dump da Matteo):**
+
+```html
+<div class="vis-inner">
+  <div>                           ← era <div class="tl-res-cell" style="display:flex;...">
+    <div>Luca Bianchi</div>       ← era <div class="tl-res-name" style="font-weight:800;...">
+    <div>Online Editor</div>      ← era <div class="tl-res-role" style="font-size:9px;...">
+    <div>...heatmap...</div>
+  </div>
+</div>
+```
+
+Tutti i `class` e `style` annidati spariti. **Vis-timeline 7.7.3 sanifica
+gli HTML string passati come `group.content` quando contengono nested
+elements**: tag preservati, attributi (class+style+title) strippati.
+L'header reparto sopravviveva perché era un singolo `<span>` root.
+
+**Fix:** passare a `vis-timeline` un **HTMLElement detached** invece di
+una stringa HTML. Quando `content` è già un Element, vis-timeline fa
+`appendChild` as-is, niente sanitization. Stessa cura per la heatmap
+(prima generata da `tlHeatmapHTML` come stringa, ora `tlHeatmapElement`
+restituisce un `<div>` con cells DOM).
+
+**Impatto:**
+- `tlBuildResourceGroups` line ~2664: il content delle foglie risorsa è
+  ora un `<div class="tl-res-cell">` costruito con `document.createElement`
+  + `style.cssText` + `textContent` (anziché concatenazione di stringhe)
+- `tlHeatmapHTML(days)` → `tlHeatmapElement(days)` (ritorna `HTMLElement` o `null`)
+- Niente più `escapeHtml(r.name)` / `escapeHtml(r.role)`: `textContent`
+  protegge automaticamente da XSS
+- Header reparto resta stringa HTML (single `<span>`, già funzionante)
+- Header progetto / job leaf in `tlBuildProjectGroups`: NON modificati,
+  da rivisitare se Matteo dice che anche lì il `<b>` e l'opacity non si
+  vedono (al momento non segnalato)
+
+**Niente migrate**: solo modifiche frontend.
+
+⚠ **Resta aperto il bug multidrag conflitti fantasma** (rimandato in
+attesa di scenario specifico da Matteo).
+
 ## v3.5.0-alpha.40 — Inline styles font + no-confirm multi-move + no race split (6 maggio 2026)
 
 α.39 ha sistemato i tint colore-risorsa (visibili) ma il bold/font su
