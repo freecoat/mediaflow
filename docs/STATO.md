@@ -8,6 +8,53 @@
 
 ## Versione corrente
 
+**v3.5.0-alpha.51** — 7 maggio 2026 — Upload documenti per copilot (PDF/DOCX/TXT/MD/immagini)
+
+Richiesta serale Matteo. MVP solido: upload via clip 📎 o drag&drop nel
+drawer copilot, estrazione testo PDF/DOCX/TXT/MD inline nel messaggio AI,
+immagini salvate con placeholder testuale (vision integration in α.52).
+
+**Chiuso α.51:**
+- ✅ Servizio `app/services/copilot_attachments.py`: save/extract/embed/cleanup
+- ✅ Endpoint `POST /ai/api/upload` (multipart, max 20MB, ammette
+  pdf/docx/txt/md/jpg/jpeg/png/webp/gif)
+- ✅ Storage `uploads/copilot/{uuid}.{ext}` + mount `/uploads` pubblico
+- ✅ Cleanup auto > 7gg in lifespan startup
+- ✅ Endpoint `/ai/api/chat` integra `attachments[]` via embed inline
+  nell'ultimo messaggio user
+- ✅ UI: bottone clip in input bar, drag&drop overlay tutto il drawer,
+  lista allegati con badge tipo/size/× rimuovi
+- ✅ Stati ⏳ uploading + ⚠ errore con border rosso
+- ✅ PDF estratto via pypdf, DOCX via python-docx, TXT/MD raw
+- ✅ Immagini: dimensioni Pillow + placeholder testuale per AI
+- ✅ Cache-buster copilot.js?v=3.5.0-alpha.51
+
+**Verifica live richiesta a Matteo:**
+- Apri copilot da qualsiasi pagina
+- Click 📎 → seleziona PDF (es. capitolato cliente)
+- Card appare con nome + caratteri estratti + size + ×
+- Scrivi prompt tipo "Leggi questo capitolato e proponi una quote"
+- Send → AI riceve testo PDF inline + risponde proponendo azioni
+- Test drag&drop: trascina file nel drawer → overlay "Rilascia qui" → upload
+- Test rimozione × prima del send
+- Test errore: trascina file > 20MB → toast errore
+
+**Limitazioni note MVP**:
+- Immagini: caricate + visibili in card ma AI riceve solo placeholder
+  testuale (vision blocks per Claude/OpenAI/Gemini in α.52)
+- Niente persistenza DB: dopo refresh allegati spariscono dal client
+  (file su disk fino al cleanup 7gg)
+- Niente OCR per screenshot con testo
+
+**Prossimi step:**
+- α.52: vision integration per immagini (Anthropic Messages API supporta
+  image blocks → modifica build_messages per provider che hanno vision)
+- Domani: fattura formale PDF + anagrafica cliente + dati aziendali tenant
+  (rimandato da stasera per stanchezza)
+- Capability copilot avanzate: recurring_bookings, bulk_move,
+  analyze_conflicts, find_free_slots
+- Notifiche proattive sul FAB
+
 **v3.5.0-alpha.50** — 7 maggio 2026 — Copilot in-depth integration nella pianificazione
 
 Pre-α.50 il copilot vedeva clienti/progetti/listino/quote ma NIENTE

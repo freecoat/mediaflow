@@ -1,0 +1,206 @@
+"""
+MediaFlow — Copilot attachments (v3.5.0-alpha.51).
+
+Servizio per upload e processing di documenti caricati dal drawer copilot.
+L'utente può allegare file (PDF, DOCX, TXT, MD, immagini) al suo messaggio
+per dare contesto all'AI: capitolati cliente, brief, mail, screenshot, ecc.
+
+Pipeline:
+1. POST /ai/api/upload riceve il file → save_attachment salva su disk
+2. extract_content estrae testo per i tipi text-based (pypdf/docx/raw)
+   oppure ritorna metadata immagine
+3. Il client riceve {file_id, filename, kind, extracted_text, ...}
+4. Quando il client invia il prossimo messaggio, embed_attachments_in_text
+   aggiunge gli extracted_text inline nel content user (formato leggibile
+   per l'AI: header con nome file + contenuto troncato)
+
+Storage: `uploads/copilot/{uuid}.{ext}` — file con nome originale preservato
+nel manifest in-memory (non persistito in DB per MVP). Cleanup periodico
+via cleanup_old_attachments() in lifespan.
+
+NB: NON persistiamo in DB l'attachment per il MVP. Il file resta su disk,
+il content estratto resta in memoria del client (incluso nei messaggi).
+Per histories durature serve future estensione con AIAttachment model.
+"""
+from __future__ import annotations
+
+import logging
+import re
+import uuid
+from datetime import datetime, timedelta
+from pathlib import Path
+from typing import Optional
+
+logger = logging.getLogger(__name__)
+
+
+# Storage root — auto-created on first save
+ATTACHMENT_DIR = Path("uploads") / "copilot"
+ATTACHMENT_DIR.mkdir(parents=True, exist_ok=True)
+
+# Limiti
+MAX_FILE_SIZE = 20 * 1024 * 1024  # 20 MB
+MAX_TEXT_CHARS = 50_000           # tronca text estratto a 50k chars (≈ ~12k tokens)
+RETENTION_DAYS = 7
+
+# Estensioni supportate
+TEXT_EXTS = {".pdf", ".docx", ".txt", ".md"}
+IMAGE_EXTS = {".jpg", ".jpeg", ".png", ".webp", ".gif"}
+SUPPORTED_EXTS = TEXT_EXTS | IMAGE_EXTS
+
+
+def save_attachment(filename: str, content: bytes) -> dict:
+    """Salva un attachment caricato dall'utente. Ritorna metadata con file_id,
+    kind ("text" o "image"), extracted_text (se text), preview info.
+
+    Solleva ValueError se file troppo grande o estensione non supportata.
+    """
+    if len(content) > MAX_FILE_SIZE:
+        raise ValueError(f"File troppo grande ({len(content)} bytes, max {MAX_FILE_SIZE})")
+
+    # Sanitize filename + estrai estensione
+    safe_name = re.sub(r"[^\w\.\-]", "_", filename)[:120]
+    ext = Path(safe_name).suffix.lower()
+    if ext not in SUPPORTED_EXTS:
+        raise ValueError(
+            f"Estensione '{ext}' non supportata. Ammesse: "
+            + ", ".join(sorted(SUPPORTED_EXTS))
+        )
+
+    file_id = uuid.uuid4().hex
+    target = ATTACHMENT_DIR / f"{file_id}{ext}"
+    target.write_bytes(content)
+
+    kind = "image" if ext in IMAGE_EXTS else "text"
+
+    extracted_text: Optional[str] = None
+    extra: dict = {}
+
+    if kind == "text":
+        try:
+            extracted_text = _extract_text(target, ext)
+            if extracted_text and len(extracted_text) > MAX_TEXT_CHARS:
+                extracted_text = extracted_text[:MAX_TEXT_CHARS] + (
+                    f"\n\n[…troncato a {MAX_TEXT_CHARS} caratteri su {len(extracted_text)} totali]"
+                )
+        except Exception as e:
+            logger.warning(f"Estrazione testo fallita per {filename}: {e}")
+            extracted_text = f"[Errore estrazione testo: {e}]"
+    else:
+        # Immagine: leggi dimensioni se possibile
+        try:
+            from PIL import Image
+            with Image.open(target) as img:
+                extra["width"] = img.width
+                extra["height"] = img.height
+                extra["mode"] = img.mode
+        except Exception as e:
+            logger.warning(f"Lettura metadata immagine fallita: {e}")
+
+    return {
+        "file_id": file_id,
+        "filename": safe_name,
+        "ext": ext,
+        "size": len(content),
+        "kind": kind,
+        "extracted_text": extracted_text,
+        "extracted_text_chars": len(extracted_text) if extracted_text else 0,
+        "url": f"/uploads/copilot/{file_id}{ext}",
+        **extra,
+    }
+
+
+def _extract_text(path: Path, ext: str) -> str:
+    """Estrae testo da PDF (pypdf), DOCX (python-docx), TXT/MD (raw)."""
+    if ext == ".pdf":
+        from pypdf import PdfReader
+        reader = PdfReader(str(path))
+        pages = []
+        for i, p in enumerate(reader.pages):
+            try:
+                t = p.extract_text() or ""
+                if t.strip():
+                    pages.append(f"--- Pagina {i+1} ---\n{t.strip()}")
+            except Exception as e:
+                pages.append(f"--- Pagina {i+1} (errore): {e} ---")
+        return "\n\n".join(pages)
+    elif ext == ".docx":
+        from docx import Document
+        doc = Document(str(path))
+        # Paragrafi + tabelle
+        parts = [p.text for p in doc.paragraphs if p.text.strip()]
+        for tbl in doc.tables:
+            for row in tbl.rows:
+                cells = [c.text.strip() for c in row.cells if c.text.strip()]
+                if cells:
+                    parts.append(" | ".join(cells))
+        return "\n".join(parts)
+    elif ext in (".txt", ".md"):
+        return path.read_text(encoding="utf-8", errors="replace")
+    else:
+        return ""
+
+
+def embed_attachments_in_text(user_text: str, attachments: list[dict]) -> str:
+    """Costruisce il messaggio finale con gli allegati inline.
+
+    Formato per attachment text:
+      📎 ALLEGATO: filename.pdf (12345 chars)
+      <contenuto estratto>
+      ---FINE ALLEGATO---
+
+    Per immagini (MVP α.51, no vision integration): nota placeholder.
+    """
+    if not attachments:
+        return user_text
+    parts = []
+    for a in attachments:
+        if a.get("kind") == "text" and a.get("extracted_text"):
+            parts.append(
+                f"📎 ALLEGATO: {a.get('filename', '?')} ({a.get('extracted_text_chars', 0)} caratteri)\n"
+                f"{a['extracted_text']}\n"
+                f"---FINE ALLEGATO---"
+            )
+        elif a.get("kind") == "image":
+            # MVP: l'immagine è salvata ma non passata al provider (richiederebbe
+            # vision blocks per Anthropic/OpenAI/Gemini). Da estendere in α.52.
+            dims = ""
+            if a.get("width") and a.get("height"):
+                dims = f" {a['width']}x{a['height']}"
+            parts.append(
+                f"📎 ALLEGATO IMMAGINE: {a.get('filename', '?')}{dims}\n"
+                f"[L'utente ha allegato un'immagine. URL: {a.get('url', '?')}. "
+                f"Vision integration in arrivo nelle prossime versioni. "
+                f"Chiedi all'utente di descrivere il contenuto se necessario.]\n"
+                f"---FINE ALLEGATO---"
+            )
+        elif a.get("kind") == "text" and not a.get("extracted_text"):
+            parts.append(
+                f"📎 ALLEGATO: {a.get('filename', '?')} [vuoto o non leggibile]\n"
+                f"---FINE ALLEGATO---"
+            )
+    if parts:
+        return "\n\n".join(parts) + "\n\n" + user_text
+    return user_text
+
+
+def cleanup_old_attachments() -> int:
+    """Elimina file più vecchi di RETENTION_DAYS giorni. Idempotente.
+    Chiamato dal lifespan periodico dell'app. Ritorna conteggio eliminati."""
+    cutoff = datetime.utcnow() - timedelta(days=RETENTION_DAYS)
+    deleted = 0
+    if not ATTACHMENT_DIR.exists():
+        return 0
+    for f in ATTACHMENT_DIR.iterdir():
+        if not f.is_file():
+            continue
+        try:
+            mtime = datetime.utcfromtimestamp(f.stat().st_mtime)
+            if mtime < cutoff:
+                f.unlink()
+                deleted += 1
+        except Exception as e:
+            logger.warning(f"cleanup_old_attachments: skip {f.name}: {e}")
+    if deleted:
+        logger.info(f"cleanup_old_attachments: eliminati {deleted} file > {RETENTION_DAYS}gg")
+    return deleted

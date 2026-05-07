@@ -30,8 +30,29 @@ from app.services.auth import get_current_user_from_token
 from app.services.deliverables_parser import (
     extract_text_from_file, parse_deliverables, match_deliverables_to_pricelist,
 )
+from app.services.copilot_attachments import (
+    save_attachment, embed_attachments_in_text, MAX_FILE_SIZE,
+)
 
 router = APIRouter(prefix="/ai", tags=["ai"])
+
+
+# v3.5.0-alpha.51 — Upload documenti per copilot
+@router.post("/api/upload")
+async def copilot_upload(file: UploadFile = File(...)):
+    """Carica un documento (PDF/DOCX/TXT/MD/immagine) per allegarlo al
+    prossimo messaggio del copilot. Ritorna metadata + extracted_text per
+    file text-based. Le immagini vengono salvate ma per ora non passate
+    al provider come vision (placeholder per α.52).
+    """
+    content = await file.read()
+    if len(content) > MAX_FILE_SIZE:
+        raise HTTPException(413, f"File troppo grande (max {MAX_FILE_SIZE // 1024 // 1024} MB)")
+    try:
+        meta = save_attachment(file.filename or "untitled", content)
+    except ValueError as e:
+        raise HTTPException(400, str(e))
+    return meta
 
 
 def _tpl():
@@ -97,6 +118,15 @@ async def chat(
     quote_id   = data.get("quote_id")
     job_id     = data.get("job_id")
     page       = data.get("page")
+    # v3.5.0-alpha.51 — Allegati copilot inviati col messaggio.
+    # Format atteso: list[{file_id, filename, kind, extracted_text, ...}]
+    attachments = data.get("attachments") or []
+    if attachments and isinstance(attachments, list) and messages:
+        # Embed extracted_text inline nell'ultimo messaggio user
+        last_msg = messages[-1]
+        if last_msg.get("role") == "user":
+            original = last_msg.get("content", "")
+            last_msg["content"] = embed_attachments_in_text(original, attachments)
 
     # Risolvi/crea conversazione
     conv_id = data.get("conversation_id")

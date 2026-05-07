@@ -120,6 +120,46 @@
   .cp-input-bar button.cp-stop { background: #ef4444; }
   .cp-input-bar button.cp-stop:hover { background: #dc2626; }
 
+  /* v3.5.0-alpha.51 — allegati copilot */
+  .cp-attach-btn {
+    background: transparent !important;
+    color: var(--text2) !important;
+    border: 1px solid var(--border) !important;
+    width: 36px; height: 36px; padding: 0 !important;
+    display: inline-flex; align-items: center; justify-content: center;
+  }
+  .cp-attach-btn:hover { background: var(--bg3) !important; color: var(--text) !important; }
+  .cp-attachments {
+    display: flex; flex-direction: column; gap: 4px;
+    padding: 6px 14px 0; max-height: 140px; overflow-y: auto;
+  }
+  .cp-attachment {
+    display: flex; align-items: center; gap: 8px;
+    padding: 6px 8px;
+    background: var(--bg2); border: 1px solid var(--border);
+    border-radius: 6px; font-size: 11.5px;
+  }
+  .cp-attachment .cp-att-name { flex: 1; min-width: 0;
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .cp-attachment .cp-att-meta { color: var(--text3); font-size: 10.5px; }
+  .cp-attachment .cp-att-x {
+    background: transparent; border: 0; color: var(--text3); cursor: pointer;
+    padding: 2px 5px; font-size: 14px; line-height: 1;
+  }
+  .cp-attachment .cp-att-x:hover { color: #ef4444; }
+  .cp-attachment.uploading { opacity: 0.6; }
+  .cp-attachment.error { border-color: #ef4444; color: #ef4444; }
+  /* Drop zone overlay quando si trascina sopra il drawer */
+  body.cp-dragover #copilot-drawer::after {
+    content: "Rilascia qui per allegare";
+    position: absolute; inset: 0; z-index: 100;
+    background: rgba(98,114,245,0.12);
+    border: 2px dashed var(--indigo);
+    display: flex; align-items: center; justify-content: center;
+    color: var(--indigo2); font-size: 18px; font-weight: 600;
+    pointer-events: none;
+  }
+
   .cp-empty {
     padding: 30px 20px; text-align: center; color: var(--text3); font-size: 12px;
   }
@@ -174,10 +214,18 @@
     <div class="cp-empty" id="cp-welcome"></div>
   </div>
   <div class="cp-typing" id="cp-typing" style="display:none;">Sta pensando…</div>
+  <!-- v3.5.0-alpha.51: lista allegati visibili sopra l'input -->
+  <div class="cp-attachments" id="cp-attachments" style="display:none;"></div>
   <div class="cp-input-bar">
-    <textarea id="cp-input" rows="1" placeholder="Scrivi qui (Enter = a capo, Ctrl/⌘+Enter = invia)"
+    <button class="cp-attach-btn" type="button" onclick="document.getElementById('cp-file-input').click()" title="Allega documento (PDF/DOCX/TXT/MD/immagine, max 20MB)">
+      <i data-lucide="paperclip" style="width:16px;height:16px;"></i>
+    </button>
+    <input type="file" id="cp-file-input" hidden multiple
+           accept=".pdf,.docx,.txt,.md,.jpg,.jpeg,.png,.webp,.gif"
+           onchange="copilotHandleFiles(this.files); this.value='';">
+    <textarea id="cp-input" rows="1" placeholder="Scrivi qui (Enter = a capo, Ctrl/⌘+Enter = invia, 📎 per allegare)"
               onkeydown="copilotInputKey(event)" oninput="copilotResizeInput(this)"></textarea>
     <button id="cp-send" onclick="copilotSendOrStop()">Invia</button>
   </div>
 </div>
-<script src="/static/js/copilot.js?v=3.5.0-alpha.50"></script>
+<script src="/static/js/copilot.js?v=3.5.0-alpha.51"></script>

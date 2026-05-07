@@ -1,5 +1,60 @@
 # MediaFlow — Changelog
 
+## v3.5.0-alpha.51 — Upload documenti per copilot (PDF/DOCX/TXT/MD/immagini) (7 maggio 2026)
+
+Richiesta Matteo serale: caricamento documenti per il copilot. Use case
+tipici: capitolato cliente in PDF, brief in DOCX, mail in TXT, screenshot
+con richieste, ecc.
+
+**Backend:**
+- Nuovo servizio `app/services/copilot_attachments.py`:
+  - `save_attachment(filename, content)` → salva su `uploads/copilot/{uuid}.{ext}`,
+    estrae testo per PDF (pypdf) / DOCX (python-docx) / TXT/MD (raw),
+    legge dimensioni per immagini (Pillow). Limiti: 20MB, 50k caratteri estratti.
+  - `embed_attachments_in_text(user_text, attachments)` → costruisce il
+    messaggio finale embeddando il testo estratto inline (header
+    `📎 ALLEGATO: filename` + contenuto + `---FINE ALLEGATO---`)
+  - `cleanup_old_attachments()` elimina file > 7 giorni
+- Endpoint `POST /ai/api/upload` (multipart): accetta file, ritorna metadata
+  + extracted_text. Estensioni ammesse: pdf/docx/txt/md/jpg/jpeg/png/webp/gif
+- Endpoint `/ai/api/chat` esteso: accetta `attachments[]` nel body, fa embed
+  inline nell'ultimo messaggio user prima di invocare l'AI
+- Mount `/uploads` in main.py per servire le immagini caricate
+  (PUBLIC_PATHS aggiornato)
+- Cleanup auto in lifespan startup (ogni boot rimuove file > 7gg)
+
+**Frontend (`copilot.html` + `copilot.js`):**
+- Bottone clip (📎 paperclip Lucide) nella input bar — accept multiplo
+- Drag & drop su tutto il drawer con overlay "Rilascia qui per allegare"
+- Lista allegati pending sopra l'input: nome, badge tipo (🖼 immagine /
+  📝 N caratteri / 📄 testo), size, bottone × per rimuovere
+- Stati: ⏳ caricamento, ⚠ errore (border rosso), normale
+- Su Send: snapshot attachments → reset state → include nel body request
+- Allegati svuotati dopo invio (uno per messaggio, semplice & predicibile)
+- CSS: `.cp-attach-btn`, `.cp-attachment` (uploading/error variants),
+  body class `cp-dragover` per overlay drop
+- Cache-buster `copilot.js?v=3.5.0-alpha.51`
+
+**Limitazioni MVP α.51 (estensioni in roadmap)**:
+- Immagini caricate ma NON passate al provider come vision blocks
+  (richiede modifica per-provider Anthropic/OpenAI/Gemini message format).
+  Per ora l'AI riceve placeholder testuale con URL — chiede all'utente
+  di descrivere se serve. Vision integration in α.52
+- Nessuna persistenza in DB: file su disk + metadata nel client.
+  Dopo refresh pagina gli allegati scompaiono (ma file resta su disk
+  fino al cleanup retention)
+- Nessun OCR per immagini con testo (richiederebbe Tesseract o vision API)
+
+**Scenario d'uso tipico**:
+1. Apri copilot in qualunque pagina
+2. Click 📎 (o trascina file nel drawer) → file caricato + estratto testo
+3. Vedi card con "📎 capitolato_a24.pdf · 📝 8245 caratteri · 145 KB · ×"
+4. Scrivi: "Leggi questo capitolato e proponi una quote per il colore"
+5. Send → AI riceve user_text + extracted_text del PDF + context
+   PIANIFICAZIONE/listino → propone azioni concrete
+
+**Niente migrate** (no DB changes).
+
 ## v3.5.0-alpha.50 — Copilot in-depth integration nella pianificazione (7 maggio 2026)
 
 Richiesta Matteo: "integrazione in-depth del copilot nella pianificazione".

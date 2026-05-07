@@ -6,6 +6,8 @@
     conversationId: null,
     messages: [],          // [{role, content, actions?}]
     typing: false,
+    // v3.5.0-alpha.51: allegati pending del prossimo messaggio (svuotati on send)
+    attachments: [],       // [{file_id, filename, kind, extracted_text?, ...}]
   };
 
   // ── Context detection ────────────────────────────────────
@@ -181,6 +183,10 @@
     setTyping(true);
 
     const ctx = detectContext();
+    // v3.5.0-alpha.51: snapshot allegati per questo invio + reset state
+    const sentAttachments = state.attachments.slice();
+    state.attachments = [];
+    _renderAttachments();
     const body = {
       messages: state.messages.filter(m => m.role !== "system").map(m => ({ role: m.role, content: m.content })),
       page: ctx.page,
@@ -188,6 +194,12 @@
       quote_id: ctx.quote_id || null,
       job_id: ctx.job_id || null,
       conversation_id: state.conversationId,
+      attachments: sentAttachments.map(a => ({
+        file_id: a.file_id, filename: a.filename, kind: a.kind,
+        extracted_text: a.extracted_text || null,
+        extracted_text_chars: a.extracted_text_chars || 0,
+        url: a.url, width: a.width, height: a.height,
+      })),
     };
 
     try {
@@ -702,4 +714,117 @@
     }
     render();
   }
+
+  // ── v3.5.0-alpha.51: upload allegati copilot ─────────────
+  window.copilotHandleFiles = async function (files) {
+    if (!files || !files.length) return;
+    for (const f of files) {
+      // Crea entry placeholder con stato "uploading"
+      const tmpId = "tmp_" + Math.random().toString(36).slice(2);
+      const placeholder = {
+        _tmpId: tmpId, filename: f.name, size: f.size,
+        kind: f.type.startsWith("image/") ? "image" : "text",
+        _uploading: true,
+      };
+      state.attachments.push(placeholder);
+      _renderAttachments();
+      try {
+        const fd = new FormData();
+        fd.append("file", f);
+        const r = await fetch("/ai/api/upload", { method: "POST", body: fd });
+        if (!r.ok) {
+          const err = await r.json().catch(() => ({ detail: r.statusText }));
+          throw new Error(err.detail || "Errore upload");
+        }
+        const meta = await r.json();
+        // Sostituisci placeholder con metadata reali
+        const idx = state.attachments.findIndex(a => a._tmpId === tmpId);
+        if (idx >= 0) state.attachments[idx] = meta;
+      } catch (e) {
+        const idx = state.attachments.findIndex(a => a._tmpId === tmpId);
+        if (idx >= 0) {
+          state.attachments[idx]._error = e.message || "Errore";
+          state.attachments[idx]._uploading = false;
+        }
+        toast("Upload fallito: " + (e.message || "?"), "error");
+      }
+      _renderAttachments();
+    }
+  };
+
+  window.copilotRemoveAttachment = function (refId) {
+    state.attachments = state.attachments.filter(a =>
+      a.file_id !== refId && a._tmpId !== refId
+    );
+    _renderAttachments();
+  };
+
+  function _renderAttachments() {
+    const host = document.getElementById("cp-attachments");
+    if (!host) return;
+    if (!state.attachments.length) {
+      host.style.display = "none";
+      host.innerHTML = "";
+      return;
+    }
+    host.style.display = "";
+    host.innerHTML = state.attachments.map(a => {
+      const refId = a.file_id || a._tmpId;
+      const sizeKb = (a.size || 0) / 1024;
+      const sizeLbl = sizeKb < 1024
+        ? `${sizeKb.toFixed(0)} KB`
+        : `${(sizeKb / 1024).toFixed(1)} MB`;
+      let badge;
+      if (a._uploading) badge = `<span class="cp-att-meta">⏳ caricamento…</span>`;
+      else if (a._error) badge = `<span class="cp-att-meta" style="color:#ef4444;">⚠ ${escapeHtml(a._error)}</span>`;
+      else if (a.kind === "image") badge = `<span class="cp-att-meta">🖼 ${a.width || "?"}x${a.height || "?"}</span>`;
+      else if (a.extracted_text_chars) badge = `<span class="cp-att-meta">📝 ${a.extracted_text_chars} caratteri</span>`;
+      else badge = `<span class="cp-att-meta">📄</span>`;
+      const cls = "cp-attachment" + (a._uploading ? " uploading" : "") + (a._error ? " error" : "");
+      return `<div class="${cls}">
+        <span class="cp-att-name">${escapeHtml(a.filename || "?")}</span>
+        ${badge}
+        <span class="cp-att-meta">${sizeLbl}</span>
+        <button class="cp-att-x" type="button" onclick="copilotRemoveAttachment('${refId}')" title="Rimuovi">×</button>
+      </div>`;
+    }).join("");
+  }
+
+  // Drag & drop file su tutto il drawer
+  function _bindDnD() {
+    const drawer = document.getElementById("copilot-drawer");
+    if (!drawer || drawer._dndBound) return;
+    drawer._dndBound = true;
+    let dragDepth = 0;
+    drawer.addEventListener("dragenter", (e) => {
+      if (e.dataTransfer && Array.from(e.dataTransfer.types || []).includes("Files")) {
+        dragDepth++;
+        document.body.classList.add("cp-dragover");
+        e.preventDefault();
+      }
+    });
+    drawer.addEventListener("dragover", (e) => { e.preventDefault(); });
+    drawer.addEventListener("dragleave", (e) => {
+      dragDepth--;
+      if (dragDepth <= 0) {
+        dragDepth = 0;
+        document.body.classList.remove("cp-dragover");
+      }
+    });
+    drawer.addEventListener("drop", (e) => {
+      e.preventDefault();
+      dragDepth = 0;
+      document.body.classList.remove("cp-dragover");
+      if (e.dataTransfer && e.dataTransfer.files) {
+        copilotHandleFiles(e.dataTransfer.files);
+      }
+    });
+  }
+  // Bind DnD al primo open del drawer
+  const _originalOpen = window.copilotOpen;
+  window.copilotOpen = async function () {
+    _bindDnD();
+    await _originalOpen.apply(this, arguments);
+  };
+
 })();

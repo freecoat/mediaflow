@@ -215,13 +215,28 @@ async def lifespan(app: FastAPI):
             _db.close()
     except Exception as e:
         print(f"[lifespan] check_job_deadlines failed: {e}")
+    # v3.5.0-alpha.51 — Cleanup attachments copilot vecchi (> 7gg)
+    try:
+        from app.services.copilot_attachments import cleanup_old_attachments
+        n = cleanup_old_attachments()
+        if n:
+            print(f"[lifespan] cleanup_old_attachments: {n} file copilot eliminati")
+    except Exception as e:
+        print(f"[lifespan] cleanup_old_attachments failed: {e}")
     yield
 
 
-app = FastAPI(title="MediaFlow", version="3.5.0-alpha.50", lifespan=lifespan)
+app = FastAPI(title="MediaFlow", version="3.5.0-alpha.51", lifespan=lifespan)
 
 BASE_DIR = Path(__file__).parent
 app.mount("/static", StaticFiles(directory=BASE_DIR / "static"), name="static")
+# v3.5.0-alpha.51 — Mount /uploads per servire allegati copilot (immagini
+# caricate vengono linkate via URL pubblico). Cleanup auto > 7 giorni
+# (vedi copilot_attachments.cleanup_old_attachments).
+_uploads_dir = Path("uploads")
+_uploads_dir.mkdir(exist_ok=True)
+(_uploads_dir / "copilot").mkdir(exist_ok=True)
+app.mount("/uploads", StaticFiles(directory=_uploads_dir), name="uploads")
 templates = Jinja2Templates(directory=BASE_DIR / "templates")
 
 # Espone helpers RBAC ai template Jinja per condizionali UI
@@ -261,7 +276,7 @@ async def no_cache_html(request: Request, call_next):
 # ── Auth guard (v3.4.27.1) ─────────────────────────────────────
 # Redirect a /auth/login se cookie access_token mancante/invalido per
 # pagine HTML. API (path /api/* o accept JSON) ricevono 401 JSON.
-PUBLIC_PATHS = ("/auth/", "/static/", "/health", "/docs", "/openapi.json", "/favicon.ico", "/redoc", "/public/")
+PUBLIC_PATHS = ("/auth/", "/static/", "/uploads/", "/health", "/docs", "/openapi.json", "/favicon.ico", "/redoc", "/public/")
 
 
 def _resolve_user_from_token(token: str):
