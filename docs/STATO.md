@@ -8,6 +8,47 @@
 
 ## Versione corrente
 
+**v3.5.0-alpha.48** — 7 maggio 2026 — Step 3 Cost Report → Billing flow: UI Cost Report
+
+Step 3 del workflow billing. UI Cost Report ora mostra stato fatturazione
+per riga + widget Fatturazione (sommario + batch elenco) + modal Trasmetti.
+Endpoint API α.47 collegati al frontend.
+
+**Chiuso α.48:**
+- ✅ API `cost_report.py` estesa: `cost_lines[]` con billing_status/
+  billing_batch_id/billed_amount/is_extra; `job` con project_id;
+  `billing_batches[]` + `billing_summary` aggregati per stato
+- ✅ Helper backend `_billing_batches_for_job` + `_billing_summary_for_job`
+- ✅ Template colonna `Fatt.` con badge colorato per stato (5 colori)
+- ✅ Marcatore `[extra]` arancio sulle righe is_extra
+- ✅ Widget Fatturazione header: 5 card sommario + elenco batch
+  cliccabili (link `/finance#batch-{id}`)
+- ✅ Bottone `📤 Trasmetti a fatturazione` + modal con periodo/extras/note
+- ✅ Submit chiama `POST /finance/api/billing` (α.47), refresh report
+  per vedere nuovi stati
+
+**Verifica live richiesta a Matteo:**
+- Pull → app parte normale
+- Apri `/cost-report` → seleziona un job con maturato (booking done +
+  total_accrued > 0)
+- Vedi nuova colonna `Fatt.` nella tabella cost lines (default tutti
+  grigio "Da fatturare")
+- Vedi widget Fatturazione sopra la tabella con 5 card sommario
+- Click bottone `📤 Trasmetti a fatturazione` → modal apre
+- Default periodo = mese corrente. Submit → batch creato (toast)
+- Refresh: righe diventano ambra "In approv." + card batch appare
+  nel widget
+- Click sulla card batch → apre `/finance` in nuova scheda (UI batch
+  arriva in α.49)
+
+**Bug ancora aperti:**
+- Freeze Chrome Mac specifico (workaround light mode disponibile)
+- Step 4-5 cost report flow (UI /finance, notifiche, chiusura progetto)
+
+**Prossimi step:**
+- α.49: UI `/finance` con elenco batch + edit manager + voce perso
+- α.50: notifica fine mese + chiusura progetto + report finanziario
+
 **v3.5.0-alpha.47.1** — 7 maggio 2026 — HOTFIX Bulk button non attivava dopo ROI/Esc
 
 Matteo: "Bulk non funziona quando bookings multiselected. Dovrebbe attivarsi?"

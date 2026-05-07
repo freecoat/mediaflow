@@ -12,6 +12,7 @@ from app.models import (
     Job, JobCostLine, Expense, Invoice, InvoiceStatus, JobResourceAssignment,
     Booking, BookingAssignment, BookingExecutionStatus, BookingOvertimeStatus, BookingStatus,
     Resource, WorkingHoursPolicy,
+    BillingBatch, BillingBatchStatus, JCLBillingStatus,
 )
 from app.services.booking_cost import compute_assignment_breakdown, BookingBreakdown
 from app.services.working_hours import get_holidays
@@ -165,6 +166,63 @@ def _bookings_hours_cost(job_id: int, db: Session) -> dict:
     }
 
 
+# v3.5.0-alpha.48 — Helper Billing flow (Step 3 Cost Report → Billing).
+
+def _billing_batches_for_job(db: Session, job: Job) -> list[dict]:
+    """Lista BillingBatch del progetto del job. Usata dal widget Fatturazione
+    nel cost report per mostrare i batch già trasmessi/approvati/fatturati.
+
+    Mostra TUTTI gli stati (incluso cancelled) per audit completo. Il client
+    UI nasconde i cancelled di default."""
+    if not job.project_id:
+        return []
+    batches = (
+        db.query(BillingBatch)
+        .options(joinedload(BillingBatch.invoice))
+        .filter(BillingBatch.project_id == job.project_id)
+        .order_by(BillingBatch.transmitted_at.desc())
+        .all()
+    )
+    return [
+        {
+            "id": b.id,
+            "code": b.code,
+            "status": b.status.value,
+            "period_start": str(b.period_start) if b.period_start else None,
+            "period_end": str(b.period_end) if b.period_end else None,
+            "total_proposed": round(b.total_proposed or 0, 2),
+            "total_approved": round(b.total_approved or 0, 2),
+            "total_lost": round(b.total_lost or 0, 2),
+            "transmitted_at": b.transmitted_at.isoformat() if b.transmitted_at else None,
+            "approved_at": b.approved_at.isoformat() if b.approved_at else None,
+            "invoice_id": b.invoice_id,
+            "invoice_number": b.invoice.number if b.invoice else None,
+        }
+        for b in batches
+    ]
+
+
+def _billing_summary_for_job(job: Job) -> dict:
+    """Aggregati JCL per stato fatturazione. Usato dalla card Fatturazione
+    nell'header del cost report per mostrare a colpo d'occhio quanto è
+    not_billed / in_batch / billed / paid / lost."""
+    summary = {
+        "not_billed": 0.0,
+        "in_batch": 0.0,
+        "billed": 0.0,
+        "paid": 0.0,
+        "lost": 0.0,
+    }
+    for l in job.cost_lines:
+        st = l.billing_status.value if l.billing_status else "not_billed"
+        # billed/paid uso billed_amount (post-modifica manager); altri usano accrued
+        amt = (l.billed_amount if st in ("billed", "paid") and l.billed_amount is not None
+               else l.total_accrued)
+        if st in summary:
+            summary[st] += amt or 0
+    return {k: round(v, 2) for k, v in summary.items()}
+
+
 @router.get("/api/job/{job_id}")
 async def job_cost_report(job_id: int, db: Session = Depends(get_db)):
     """Report completo: quotazione vs reale (accrued/expected), Over/Under.
@@ -221,6 +279,9 @@ async def job_cost_report(job_id: int, db: Session = Depends(get_db)):
             "id": job.id, "code": job.code, "title": job.title,
             "status": job.status,
             "client": job.client.name if job.client else None,
+            "client_id": job.client_id,
+            # v3.5.0-alpha.48: project_id necessario per trasmissione billing
+            "project_id": job.project_id,
             "budget_quoted": job.budget_quoted,
             "start_date": str(job.start_date) if job.start_date else None,
             "end_date": str(job.end_date) if job.end_date else None,
@@ -254,10 +315,24 @@ async def job_cost_report(job_id: int, db: Session = Depends(get_db)):
                 "total_expected": l.total_expected,
                 "over_under": round(l.total_quoted - l.total_expected, 2),
                 "is_billable": l.is_billable,
+                "is_extra": l.is_extra,
                 "category": l.price_item.category.name if l.price_item and l.price_item.category else None,
+                # v3.5.0-alpha.48 — Step 3 Cost Report → Billing flow:
+                # esponiamo lo stato fatturazione + l'importo realmente
+                # fatturato (può divergere da total_accrued se manager ha
+                # ridotto in approvazione, delta finisce in LossEntry).
+                "billing_status": l.billing_status.value if l.billing_status else "not_billed",
+                "billing_batch_id": l.billing_batch_id,
+                "billed_amount": l.billed_amount,
             }
             for l in job.cost_lines
         ],
+        # v3.5.0-alpha.48: elenco BillingBatch del progetto per dare contesto
+        # nel widget Fatturazione del cost report (totali per stato + link).
+        # Solo se il job ha un progetto associato. Ordine cronologico desc.
+        "billing_batches": _billing_batches_for_job(db, job),
+        # Aggregati per la card Fatturazione
+        "billing_summary": _billing_summary_for_job(job),
         "resource_assignments": [
             {
                 "resource": a.resource.name if a.resource else None,

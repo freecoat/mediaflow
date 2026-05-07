@@ -107,6 +107,20 @@
 
   <div class="grid-2" style="align-items:start;gap:20px;">
 
+    <!-- v3.5.0-alpha.48: widget Fatturazione (Step 3 Cost Report → Billing) -->
+    <div class="card mb-4" id="billing-widget" style="display:none;">
+      <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:10px;">
+        <div class="card-title" style="margin:0;">Fatturazione</div>
+        <button class="btn btn-primary btn-sm" onclick="openTransmitModal()" title="Trasmetti il maturato non ancora fatturato a /finance per approvazione e fattura">
+          📤 Trasmetti a fatturazione
+        </button>
+      </div>
+      <!-- Sommario per stato -->
+      <div id="billing-summary" style="display:grid; grid-template-columns:repeat(auto-fit, minmax(140px, 1fr)); gap:10px; margin-bottom:14px;"></div>
+      <!-- Lista batch del progetto -->
+      <div id="billing-batches"></div>
+    </div>
+
     <!-- Cost lines table -->
     <div class="card">
       <div class="card-title mb-3">Voci di costo: Quotazione vs Reale</div>
@@ -119,6 +133,7 @@
               <th class="text-right">Maturato</th>
               <th class="text-right">Stimato</th>
               <th class="text-right">Over/Under</th>
+              <th>Fatt.</th>
               <th></th>
             </tr>
           </thead>
@@ -224,6 +239,48 @@
     <div class="modal-footer">
       <button class="btn btn-secondary" onclick="closeModal('modal-assign-resource')">Annulla</button>
       <button class="btn btn-primary" onclick="assignResource()">Assegna</button>
+    </div>
+  </div>
+</div>
+
+<!-- v3.5.0-alpha.48: Trasmetti a fatturazione (Step 3 Cost Report → Billing) -->
+<div class="modal-overlay" id="modal-transmit">
+  <div class="modal">
+    <div class="modal-header"><span class="modal-title">📤 Trasmetti a fatturazione</span>
+      <button class="btn btn-ghost btn-icon" onclick="closeModal('modal-transmit')">✕</button></div>
+    <div class="modal-body">
+      <p class="text-sm text-muted" style="margin-top:0;">
+        Crea un <b>BillingBatch</b> con le righe maturate del progetto nel periodo
+        selezionato. Default: mese corrente. Le righe già fatturate o in approvazione
+        sono escluse automaticamente. La trasmissione apre il batch in stato
+        <b>bozza</b>: il manager può modificarlo prima di approvarlo in
+        <a href="/finance" target="_blank">/finance</a>.
+      </p>
+      <div class="form-row">
+        <div class="form-group">
+          <label class="form-label">Periodo da *</label>
+          <input class="form-input" id="tm-period-start" type="date" required>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Periodo a *</label>
+          <input class="form-input" id="tm-period-end" type="date" required>
+        </div>
+      </div>
+      <div class="form-group">
+        <label class="form-label" style="display:flex; align-items:center; gap:8px;">
+          <input type="checkbox" id="tm-include-extras" checked>
+          Includi righe extra (lavorazioni aggiunte fuori quote)
+        </label>
+        <div class="text-xs text-muted">Disattiva per fatturare solo le righe ereditate dalla quote (gli extra restano per consuntivo finale).</div>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Note (opzionali)</label>
+        <textarea class="form-input" id="tm-notes" rows="2" placeholder="Es. fatturazione mensile aprile, riferimento PO #1234…"></textarea>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeModal('modal-transmit')">Annulla</button>
+      <button class="btn btn-primary" onclick="submitTransmit()">📤 Trasmetti</button>
     </div>
   </div>
 </div>
@@ -362,6 +419,7 @@ async function loadReport(jobId) {
   });
   updateExportLinks();
   renderKPIs(); renderCostLines(); renderResources(); renderTimesheets();
+  renderBillingWidget();  // v3.5.0-alpha.48: widget Fatturazione (Step 3)
   renderBookingSummary(id);
 }
 
@@ -548,19 +606,37 @@ function renderKPIs() {
       <div class="stat-value color-green mono" style="font-size:20px;">${fmtCurrency(s.paid)}</div></div>`;
 }
 
+// v3.5.0-alpha.48: badge per stato fatturazione JCL.
+// not_billed = grigio (default), in_batch = ambra (in approvazione),
+// billed = verde (fattura emessa), paid = blu (incassata),
+// lost = rosso (scartato/write-off).
+const BILLING_BADGE = {
+  not_billed: { lbl: 'Da fatturare', color: '#9aa0b8', bg: 'rgba(154,160,184,.15)' },
+  in_batch:   { lbl: 'In approv.',   color: '#fbbf24', bg: 'rgba(251,191,36,.18)' },
+  billed:     { lbl: 'Fatturato',    color: '#22c55e', bg: 'rgba(34,197,94,.18)' },
+  paid:       { lbl: 'Pagato',       color: '#3b82f6', bg: 'rgba(59,130,246,.18)' },
+  lost:       { lbl: 'Perso',        color: '#ef4444', bg: 'rgba(239,68,68,.18)' },
+};
+function renderBillingBadge(status, batchId) {
+  const meta = BILLING_BADGE[status] || BILLING_BADGE.not_billed;
+  const tip = batchId ? `Stato: ${meta.lbl} (batch #${batchId})` : `Stato: ${meta.lbl}`;
+  return `<span title="${tip}" style="display:inline-block; padding:2px 8px; border-radius:10px; font-size:11px; font-weight:600; color:${meta.color}; background:${meta.bg}; white-space:nowrap;">${meta.lbl}</span>`;
+}
+
 function renderCostLines() {
   const tbody = document.getElementById('cost-lines-table');
   if (!currentReport.cost_lines.length) {
-    tbody.innerHTML = '<tr><td colspan="7" class="text-muted" style="text-align:center;padding:20px;">Nessuna voce di costo</td></tr>'; return;
+    tbody.innerHTML = '<tr><td colspan="8" class="text-muted" style="text-align:center;padding:20px;">Nessuna voce di costo</td></tr>'; return;
   }
   tbody.innerHTML = currentReport.cost_lines.map(l => {
     const ov = l.over_under;
     const pct = l.total_quoted > 0 ? Math.round((l.total_expected / l.total_quoted) * 100) : 0;
     // v3.5.0-alpha.11: row click → popup dettaglio lavorazione (booking + risorse).
     // Il bottone ✎ apre invece il modal di edit (stop propagation).
+    // v3.5.0-alpha.48: aggiunta colonna stato fatturazione.
     return `<tr onclick='openLineDetailHere(${l.id})' style="cursor:pointer;">
       <td>
-        <div style="font-weight:500;font-size:13px;">${l.description}</div>
+        <div style="font-weight:500;font-size:13px;">${l.description}${l.is_extra ? ' <span class="text-xs" style="color:#fb923c;">[extra]</span>' : ''}</div>
         ${l.category ? `<div class="text-xs text-muted">${l.category}</div>` : ''}
       </td>
       <td class="text-sm text-muted">${l.unit}</td>
@@ -572,9 +648,110 @@ function renderCostLines() {
         </div>
       </td>
       <td class="mono text-right" style="color:${ov>=0?'var(--green)':'var(--rose)'};">${fmtCurrency(ov)}</td>
+      <td>${renderBillingBadge(l.billing_status, l.billing_batch_id)}</td>
       <td onclick="event.stopPropagation()"><button class="btn btn-ghost btn-sm" onclick="openUpdateLine(${JSON.stringify(l).replace(/"/g,'&quot;')})">✎</button></td>
     </tr>`;
   }).join('');
+}
+
+// v3.5.0-alpha.48: widget Fatturazione nell'header del cost report.
+// Mostra sommario per stato (somma in EUR) + elenco BillingBatch del progetto.
+const BATCH_STATUS_BADGE = {
+  draft:     { lbl: 'Bozza',      color: '#fbbf24', bg: 'rgba(251,191,36,.18)' },
+  approved:  { lbl: 'Approvato',  color: '#3b82f6', bg: 'rgba(59,130,246,.18)' },
+  invoiced:  { lbl: 'Fatturato',  color: '#22c55e', bg: 'rgba(34,197,94,.18)' },
+  cancelled: { lbl: 'Annullato',  color: '#9aa0b8', bg: 'rgba(154,160,184,.15)' },
+};
+function renderBillingWidget() {
+  const widget = document.getElementById('billing-widget');
+  if (!widget) return;
+  const summary = currentReport.billing_summary || {};
+  const batches = currentReport.billing_batches || [];
+  // Mostra widget solo se il job ha almeno un JCL (anche not_billed)
+  const total = Object.values(summary).reduce((a, b) => a + b, 0);
+  if (total === 0 && batches.length === 0) {
+    widget.style.display = 'none';
+    return;
+  }
+  widget.style.display = '';
+
+  // Sommario stati
+  const sumHtml = Object.entries(BILLING_BADGE).map(([key, meta]) => {
+    const amt = summary[key] || 0;
+    return `<div style="background:${meta.bg}; border:1px solid ${meta.color}30; border-radius:8px; padding:10px 12px;">
+      <div style="font-size:11px; color:${meta.color}; font-weight:600; text-transform:uppercase; letter-spacing:0.04em;">${meta.lbl}</div>
+      <div class="mono" style="font-size:18px; color:var(--text); margin-top:2px;">${fmtCurrency(amt)}</div>
+    </div>`;
+  }).join('');
+  document.getElementById('billing-summary').innerHTML = sumHtml;
+
+  // Lista batch (esclusi cancelled di default; toggle se vuoi mostrarli tutti)
+  const visible = batches.filter(b => b.status !== 'cancelled');
+  const cancelledN = batches.length - visible.length;
+  const batchesEl = document.getElementById('billing-batches');
+  if (!visible.length && !cancelledN) {
+    batchesEl.innerHTML = '<div class="text-muted text-sm" style="padding:10px 0;">Nessun batch trasmesso a fatturazione per questo progetto.</div>';
+    return;
+  }
+  let html = `<div class="text-xs text-muted" style="margin-bottom:6px; text-transform:uppercase; letter-spacing:0.04em;">Batch fatturazione del progetto</div>`;
+  html += `<div style="display:flex; flex-direction:column; gap:6px;">` + visible.map(b => {
+    const meta = BATCH_STATUS_BADGE[b.status] || BATCH_STATUS_BADGE.draft;
+    const period = b.period_start && b.period_end
+      ? `${fmtDate(b.period_start)} → ${fmtDate(b.period_end)}` : '—';
+    const inv = b.invoice_number ? ` · Fattura <b>${escapeHtml(b.invoice_number)}</b>` : '';
+    const lostBadge = b.total_lost > 0 ? ` · <span style="color:#ef4444;">${fmtCurrency(b.total_lost)} perso</span>` : '';
+    return `<div onclick="window.open('/finance#batch-${b.id}', '_blank')" style="display:flex; align-items:center; gap:12px; padding:10px 12px; background:var(--bg2); border:1px solid var(--border); border-radius:8px; cursor:pointer;" title="Apri batch in /finance">
+      <div style="font-weight:600; font-family:'DM Mono', monospace; font-size:13px; color:var(--indigo2);">${escapeHtml(b.code)}</div>
+      <span style="display:inline-block; padding:2px 8px; border-radius:10px; font-size:11px; font-weight:600; color:${meta.color}; background:${meta.bg};">${meta.lbl}</span>
+      <div class="text-sm text-muted" style="flex:1;">${period}${inv}${lostBadge}</div>
+      <div class="mono text-sm">${fmtCurrency(b.total_approved)}</div>
+    </div>`;
+  }).join('') + `</div>`;
+  if (cancelledN) {
+    html += `<div class="text-xs text-muted" style="margin-top:6px;">${cancelledN} batch annullat${cancelledN === 1 ? 'o' : 'i'} (nascosti)</div>`;
+  }
+  batchesEl.innerHTML = html;
+}
+
+// v3.5.0-alpha.48: modal Trasmetti a fatturazione. Form per period + extras.
+function openTransmitModal() {
+  if (!currentReport || !currentReport.job) {
+    toast('Carica prima un job', 'warning'); return;
+  }
+  const today = new Date();
+  // Default periodo = mese corrente
+  const firstDay = new Date(today.getFullYear(), today.getMonth(), 1).toISOString().slice(0, 10);
+  const lastDay = new Date(today.getFullYear(), today.getMonth() + 1, 0).toISOString().slice(0, 10);
+  document.getElementById('tm-period-start').value = firstDay;
+  document.getElementById('tm-period-end').value = lastDay;
+  document.getElementById('tm-include-extras').checked = true;
+  document.getElementById('tm-notes').value = '';
+  openModal('modal-transmit');
+}
+
+async function submitTransmit() {
+  const job = currentReport && currentReport.job;
+  if (!job) return;
+  // Job dict include project_id (esposto in API α.48).
+  if (!job.project_id) {
+    toast('Job senza progetto associato: impossibile trasmettere', 'error');
+    return;
+  }
+  const fd = new FormData();
+  fd.append('project_id', String(job.project_id));
+  fd.append('period_start', document.getElementById('tm-period-start').value);
+  fd.append('period_end', document.getElementById('tm-period-end').value);
+  fd.append('include_extras', document.getElementById('tm-include-extras').checked ? 'true' : 'false');
+  const notes = document.getElementById('tm-notes').value.trim();
+  if (notes) fd.append('notes', notes);
+  try {
+    const res = await api('POST', '/finance/api/billing', fd);
+    closeModal('modal-transmit');
+    toast(`✓ Batch ${res.code} creato (${res.lines ? res.lines.length : 0} righe, ${fmtCurrency(res.total_proposed || 0)})`, 'success', 6000);
+    await loadReport(job.id);  // refresh per vedere stati aggiornati
+  } catch(e) {
+    toast(e.message || 'Errore trasmissione', 'error');
+  }
 }
 
 function renderResources() {

@@ -1,5 +1,62 @@
 # MediaFlow — Changelog
 
+## v3.5.0-alpha.48 — Step 3 Cost Report → Billing flow: UI in Cost Report (7 maggio 2026)
+
+Terzo step del workflow billing. UI Cost Report ora mostra **stato
+fatturazione per riga** + **widget Fatturazione** in header con sommario
+e elenco batch + **modal Trasmetti a fatturazione**. Endpoint API α.47
+collegati.
+
+**API estesa** (`cost_report.py`):
+- `cost_lines[]` ora include: `billing_status`, `billing_batch_id`,
+  `billed_amount`, `is_extra`
+- `job` include `client_id` + `project_id` (necessario per trasmissione)
+- Nuova chiave `billing_batches[]` con i batch del progetto (escluso
+  cancelled per default UI ma esposti tutti)
+- Nuova chiave `billing_summary` con aggregati per stato (not_billed /
+  in_batch / billed / paid / lost) in EUR
+- Helper `_billing_batches_for_job` + `_billing_summary_for_job`
+
+**Template** (`cost_report.html`):
+- **Colonna `Fatt.`** nella tabella cost lines: badge colorato per stato
+  (grigio not_billed, ambra in_batch, verde billed, blu paid, rosso lost)
+- **Marcatore `[extra]`** arancio sulle righe `is_extra=true`
+- **Widget Fatturazione** sopra la tabella (visibile solo se ci sono
+  righe o batch). Sommario 5 card colorate per stato + elenco batch
+  cliccabili (apre `/finance#batch-{id}` in nuova scheda)
+- Bottone **📤 Trasmetti a fatturazione** apre modal con:
+  - Periodo da/a (default mese corrente)
+  - Checkbox "Includi righe extra"
+  - Note opzionali
+  - Submit chiama `POST /finance/api/billing` (Step 2 α.47)
+- Card batch elenca: code, status badge, periodo, fattura collegata,
+  perso (se >0), totale approvato
+
+**Flusso utente**:
+1. Apri cost report di un job
+2. Vedi colonna `Fatt.` con badge per ogni riga (di default tutte
+   `Da fatturare` grigio)
+3. Click `📤 Trasmetti` → conferma periodo → batch creato (status bozza)
+4. Le righe diventano `In approv.` ambra + appare la card del batch
+   nel widget Fatturazione
+5. Manager va in `/finance` (UI in α.49) per approvare/emettere fattura
+6. Una volta emessa fattura: righe `Fatturato` verde, batch
+   `Fatturato`, link a Invoice nel widget
+
+**Trade-off & note**:
+- Widget appare solo se job ha `project_id` (jobs orfani senza progetto
+  non hanno billing flow)
+- Badge nella colonna sostituisce eventuale icona; lo spazio in tabella
+  è limitato. Se ci sono troppi stati attivi, valutiamo dropdown
+- `billed_amount` è quello che il manager ha approvato (può differire
+  da `total_accrued` se ridotto in approvazione, delta = LossEntry)
+
+**Niente migrate.**
+
+**Prossimo step:**
+- α.49: UI `/finance` con elenco batch + edit manager + perso
+- α.50: notifica fine mese + chiusura progetto + report finanziario
+
 ## v3.5.0-alpha.47.1 — HOTFIX: Bulk button non si attivava dopo selezione ROI/Esc (7 maggio 2026)
 
 Matteo: "Bulk non funziona quando bookings multiselected. Dovrebbe attivarsi?"
