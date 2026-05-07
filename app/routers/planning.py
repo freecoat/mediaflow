@@ -1748,6 +1748,183 @@ async def bulk_edit_bookings(
     }
 
 
+@router.post("/api/multi-move")
+async def multi_move_assignments(
+    request: Request,
+    moves: str = Form(...),  # JSON array
+    db: Session = Depends(get_db),
+):
+    """v3.5.0-alpha.42: multi-move atomico transazionale.
+
+    Sostituisce il pattern frammentato pre-α.42 (1 PUT + N PUT split-pause +
+    1 bulk-edit) che produceva: conflitti spurii (check su stato intermedio),
+    sparizioni visive (render parziale post-azione), undo polverizzato in
+    N step (split sibling non tracciato), rollback impossibile.
+
+    Input — `moves`: JSON array di
+        [{
+          "assignment_id": int,
+          "new_start": ISO8601 string,   # "YYYY-MM-DDTHH:MM:SS"
+          "new_end":   ISO8601 string,
+          "new_resource_id": int        # opzionale; default = resource_id corrente
+        }, ...]
+
+    Comportamento:
+      - All-or-nothing. Se anche un solo move va in conflitto → HTTP 409
+        con dettaglio del conflict, NESSUNA modifica applicata.
+      - Conflict check escludendo TUTTI gli assignment_id della transazione
+        (no falsi positivi: gli assignment in modifica nello stesso gesto
+        non si "vedono" tra loro come conflitto).
+      - Recalcola Booking envelope per tutti i booking coinvolti.
+      - Restituisce snapshot pre-move per ogni assignment (per undo client-side
+        atomico) + snapshot post-move.
+
+    Niente cost line sync qui (le ore non cambiano, solo la finestra temporale
+    + risorsa). Cross-resource cambia resource_id → eventuale dept change è
+    a discrezione UI (badge cross-dept gestito client-side).
+    """
+    try:
+        moves_list = _json.loads(moves)
+        if not isinstance(moves_list, list) or not moves_list:
+            raise ValueError("moves deve essere un array JSON non vuoto")
+    except Exception as e:
+        raise HTTPException(400, f"moves malformato: {e}")
+
+    # Parse + validazione di ogni entry
+    parsed: list[dict] = []
+    for i, m in enumerate(moves_list):
+        if not isinstance(m, dict):
+            raise HTTPException(400, f"moves[{i}] non è un oggetto")
+        try:
+            aid = int(m["assignment_id"])
+            ns = datetime.fromisoformat(m["new_start"])
+            ne = datetime.fromisoformat(m["new_end"])
+        except (KeyError, ValueError, TypeError) as e:
+            raise HTTPException(400, f"moves[{i}] campi mancanti/invalidi: {e}")
+        if ne <= ns:
+            raise HTTPException(400, f"moves[{i}] (assignment {aid}): end <= start")
+        new_rid = m.get("new_resource_id")
+        if new_rid is not None:
+            try:
+                new_rid = int(new_rid)
+            except (ValueError, TypeError):
+                raise HTTPException(400, f"moves[{i}] new_resource_id non numerico")
+        parsed.append({
+            "assignment_id": aid,
+            "new_start": ns,
+            "new_end": ne,
+            "new_resource_id": new_rid,
+        })
+
+    aids = [p["assignment_id"] for p in parsed]
+    if len(set(aids)) != len(aids):
+        raise HTTPException(400, "Duplicati in assignment_id")
+
+    # Carica tutti gli assignments coinvolti (filtrati su tenant)
+    assignments = db.query(BookingAssignment).join(Booking).filter(
+        BookingAssignment.id.in_(aids),
+        Booking.tenant_id == CURRENT_TENANT,
+    ).all()
+    by_id = {a.id: a for a in assignments}
+    missing = [aid for aid in aids if aid not in by_id]
+    if missing:
+        raise HTTPException(404, f"Assignment non trovati: {missing}")
+
+    # RBAC: scope su risorse originarie + risorse target
+    all_rids: set[int] = set()
+    for a in assignments:
+        all_rids.add(a.resource_id)
+    for p in parsed:
+        if p["new_resource_id"] is not None:
+            all_rids.add(p["new_resource_id"])
+    _enforce_planning_scope(request, db, all_rids)
+
+    # Snapshot pre-move (per response al client per undo atomico)
+    pre_snapshots = [{
+        "assignment_id": a.id,
+        "booking_id": a.booking_id,
+        "start": a.start_datetime.isoformat(),
+        "end": a.end_datetime.isoformat(),
+        "resource_id": a.resource_id,
+    } for a in assignments]
+
+    # Conflict check ATOMICO: per ogni move, esclude TUTTI gli aids della transazione
+    # (così assignment "in volo" non collidono tra loro)
+    aids_set = set(aids)
+    for p in parsed:
+        a = by_id[p["assignment_id"]]
+        target_rid = p["new_resource_id"] if p["new_resource_id"] is not None else a.resource_id
+        ns, ne = p["new_start"], p["new_end"]
+        # Query: stesso pattern di _check_assignment_conflict ma con NOT IN
+        conflict = db.query(BookingAssignment).join(
+            Booking, BookingAssignment.booking_id == Booking.id
+        ).filter(
+            Booking.tenant_id == CURRENT_TENANT,
+            Booking.status != BookingStatus.cancelled,
+            BookingAssignment.resource_id == target_rid,
+            BookingAssignment.start_datetime < ne,
+            BookingAssignment.end_datetime > ns,
+            ~BookingAssignment.id.in_(aids_set),
+        ).first()
+        if conflict:
+            # All-or-nothing: niente commit. Ritorniamo 200 + success=false
+            # invece di 409 perché l'helper `api()` client-side wrappa il
+            # detail dict in "[object Object]" — più pulito esporre i campi
+            # nel body OK.
+            db.rollback()
+            return {
+                "success": False,
+                "code": "conflict",
+                "moved": 0,
+                "conflict": {
+                    "blocked_assignment_id": a.id,
+                    "blocked_booking_id": a.booking_id,
+                    "conflicts_with_assignment_id": conflict.id,
+                    "conflicts_with_booking_id": conflict.booking_id,
+                    "resource_id": target_rid,
+                    "start": conflict.start_datetime.isoformat(),
+                    "end": conflict.end_datetime.isoformat(),
+                },
+                "message": f"Assignment #{a.id} in conflitto con #{conflict.id} sulla risorsa #{target_rid}",
+            }
+
+    # Tutti OK → applica modifiche
+    affected_booking_ids: set[int] = set()
+    post_snapshots = []
+    for p in parsed:
+        a = by_id[p["assignment_id"]]
+        a.start_datetime = p["new_start"]
+        a.end_datetime = p["new_end"]
+        if p["new_resource_id"] is not None and p["new_resource_id"] != a.resource_id:
+            a.resource_id = p["new_resource_id"]
+        affected_booking_ids.add(a.booking_id)
+        post_snapshots.append({
+            "assignment_id": a.id,
+            "booking_id": a.booking_id,
+            "start": a.start_datetime.isoformat(),
+            "end": a.end_datetime.isoformat(),
+            "resource_id": a.resource_id,
+        })
+
+    # Recalc envelope per ogni booking coinvolto
+    if affected_booking_ids:
+        bookings = db.query(Booking).filter(
+            Booking.id.in_(affected_booking_ids),
+            Booking.tenant_id == CURRENT_TENANT,
+        ).all()
+        for b in bookings:
+            _recalc_booking_envelope(b)
+
+    db.commit()
+    return {
+        "success": True,
+        "moved": len(parsed),
+        "pre": pre_snapshots,
+        "post": post_snapshots,
+        "affected_booking_ids": sorted(affected_booking_ids),
+    }
+
+
 @router.delete("/api/booking-assignments/{assignment_id}")
 async def delete_assignment(assignment_id: int, request: Request, db: Session = Depends(get_db)):
     """Cancella un singolo assignment. Se è l'ultimo del booking, cancella il booking intero.

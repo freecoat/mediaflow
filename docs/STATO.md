@@ -8,7 +8,61 @@
 
 ## Versione corrente
 
-**v3.5.0-alpha.41** — 7 maggio 2026 — Font label timeline via HTMLElement (vis-timeline strippa style annidati)
+**v3.5.0-alpha.42** — 7 maggio 2026 — Multi-move atomico + sticky multi-selection
+
+α.41 ha sistemato il font ma il multi-move restava rotto. Test live di
+Matteo (2 booking ricorrenti split risorsa multipla) ha esposto 3 sintomi
+convergenti su un'unica root cause architettonica: `onMove` chiamava in
+sequenza 3 funzioni indipendenti (`_tlDoMove` + `_tlApplySplitPauseShift`
++ `_tlApplyMoveToOthersInSelection`) ognuna con il suo PUT/POST + push
+undo + render parziale.
+
+**Sintomi → Cause:**
+- "Booking spariscono" → render parziale post-azione (bulk-edit fallito →
+  renderTimeline saltato → A1 mosso visivamente, A2 sibling mosso sul
+  server e fermo visivamente)
+- 14 undo per ripristinare → push frammentato (1 update_assignment + 0
+  per sibling split silenti + 1 bulk_edit). Cumulativo su iterazioni di test
+- Conflitti "fantasma" → `_check_assignment_conflict` server-side vedeva
+  stato intermedio (A2 già shiftato + B in shift overlap con A2 nuovo)
+- "Click+drag deseleziona" → vis-timeline default rompe la multi su tap
+
+**Chiuso α.42:**
+- ✅ Endpoint `POST /planning/api/multi-move` atomico transazionale
+  (`planning.py:1751`): conflict check escludendo TUTTI gli aids della
+  transazione. All-or-nothing. Recalc envelope. RBAC su risorse origine ∪ target
+- ✅ Frontend `_tlApplyMultiMove` (`planning.html:3382`): raccoglie anchor
+  + sibling split + altri della selezione + loro sibling con dedup. 1 push
+  undo atomico (`type:'multi_move'`). 1 renderTimeline finale
+- ✅ Undo `multi_move` via stesso endpoint (pre snapshots → restore moves)
+- ✅ Sticky multi-selection: click su item della multi → preserva;
+  click fuori → rompe. Loop guard sincrono con `window._tlSuppressSelect`
+- ✅ Cleanup `window._tlPrevSelection` su renderTimeline (no stale)
+- ❌ **Rimosso codice legacy**: `_tlApplySplitPauseShift` +
+  `_tlApplyMoveToOthersInSelection` (sostituite da multi-move atomico)
+- ✅ `_tlDoMove` mantenuta — usata da context menu "Riassegna risorsa"
+
+**Verifica live richiesta a Matteo:**
+- `/planning` → tab Timeline (forza F5)
+- **Test 1 — multi-move semplice**: seleziona 2 booking diversi (Shift+click),
+  drag uno di +2h. Entrambi devono spostarsi atomicamente. Toast:
+  `✓ N spostati (shift 2h). Ctrl+Z per annullare`. Ctrl+Z → tornano TUTTI
+  in posizione originale in 1 colpo (no 14 undo)
+- **Test 2 — sticky**: dopo Shift+click su 2-3 booking, fai click semplice
+  (non Ctrl) su uno dei selezionati. Devono restare TUTTI evidenziati. Drag
+  immediato → multi-drag parte
+- **Test 3 — sticky off**: dopo Shift+click multi, fai click su un booking
+  NON selezionato. La multi si rompe, resta solo il nuovo. Standard
+- **Test 4 — multi-move con split risorsa multipla** (caso bug originale):
+  riproduci lo scenario di ieri. I booking devono restare visibili
+  (no sparizione). Toast esplicito su conflitto (se reale). Ctrl+Z
+  ripristina TUTTO in 1 colpo
+- **Test 5 — conflitto vero**: provoca un conflitto deliberato (sposta su
+  area occupata). Toast: `Multi-move annullato: assignment #X in conflitto
+  con #Y sulla risorsa #Z`. Niente modifiche applicate
+
+**Niente migrate**: nuovo endpoint backend + refactor JS template, niente
+schema DB.
 
 α.40 ha messo inline styles brutali nelle stringhe HTML del content
 delle label risorsa, ma il bold/font sui nomi operatore restava
@@ -100,6 +154,16 @@ elements. Header reparto sopravviveva perché single `<span>` root.
   con dry-run, refinements)
 
 ## Storico recenti
+
+**v3.5.0-alpha.41** — 7 maggio 2026 — Font label timeline via HTMLElement (vis-timeline strippa style annidati)
+
+α.40 ha messo inline styles brutali nelle stringhe HTML del content delle
+label risorsa, ma il bold/font sui nomi operatore restava invisibile (header
+reparto invece corretto). Diagnosi confermata da DOM dump Matteo: tutti i
+class+style annidati spariti. Vis-timeline 7.7.3 sanifica gli HTML string
+passati come `group.content` quando contengono nested elements. Fix: passare
+HTMLElement detached (`document.createElement` + `style.cssText` +
+`textContent`). Header reparto invariato (single `<span>` root).
 
 **v3.5.0-alpha.40** — 6 maggio 2026 — Inline styles font + no-confirm multi-move + no race split
 

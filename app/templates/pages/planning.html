@@ -3233,6 +3233,33 @@ async function tlPerformUndo() {
             errs ? 'warning' : 'success');
       renderTimeline(true);
       return;
+    } else if (action.type === 'multi_move') {
+      // v3.5.0-alpha.42: undo multi-move atomico via lo stesso endpoint
+      // /multi-move (con i pre snapshots come moves). Robusto: il check
+      // conflict scattaperebbe solo se nel frattempo lo spazio originale
+      // è stato occupato da un nuovo booking (caso raro).
+      const restoreMoves = (action.pre || []).map(p => ({
+        assignment_id: p.assignment_id,
+        new_start: _toLocalDtInput(new Date(p.start)),
+        new_end: _toLocalDtInput(new Date(p.end)),
+        new_resource_id: p.resource_id,
+      }));
+      if (!restoreMoves.length) {
+        toast('Undo multi-move: snapshot vuoto', 'warning');
+        return;
+      }
+      const fd = new FormData();
+      fd.append('moves', JSON.stringify(restoreMoves));
+      const res = await api('POST', '/planning/api/multi-move', fd);
+      if (!res.success) {
+        toast(`Undo multi-move fallito: ${res.message || 'conflitto'}`, 'error', 6000);
+        window._tlUndoStack.push(action);  // ripristina sullo stack
+        tlUpdateHistoryButtons();
+        return;
+      }
+      toast(`Annullato: ${restoreMoves.length} ripristinat${restoreMoves.length === 1 ? 'o' : 'i'}`, 'success');
+      renderTimeline(true);
+      return;
     } else if (action.type === 'bulk_edit') {
       // v3.5.0-alpha.18: undo bulk-edit applica lo stato precedente per ogni booking
       let ok = 0, errs = 0;
@@ -3353,119 +3380,162 @@ function tlContextMenu(x, y, choices) {
   });
 }
 
-// v3.5.0-alpha.23: split-pause unit drag — i booking splittati per pausa
-// pranzo o smart-split hanno più assignments sulla stessa risorsa con stesso
-// booking_id. Quando l'utente sposta uno dei segmenti, gli altri segmenti
-// dello stesso booking sulla stessa risorsa devono shiftare con lo stesso
-// delta come unità logica. Senza questo, il booking si rompe in pezzi
-// scollegati.
-async function _tlApplySplitPauseShift(movedItem, origItem, origBooking) {
-  if (!origItem || !origBooking) return;
-  const bookingId = origBooking.booking_id;
-  const movedAid = origBooking.assignment_id;
-  const movedResId = origItem.group;
-  if (!bookingId || !movedAid || movedResId == null) return;
-  // Trova segmenti SIBLING: stesso booking_id, stessa risorsa originaria,
-  // assignment diverso da quello mosso. Usa la cache _tlBookings (snapshot
-  // pre-render).
-  const all = window._tlBookings || [];
-  const siblings = all.filter(b =>
-    b.booking_id === bookingId &&
-    b.assignment_id !== movedAid &&
-    b.extendedProps && b.extendedProps.resource_id === movedResId
-  );
-  if (!siblings.length) return;
-  const dtMs = new Date(movedItem.start).getTime() - new Date(origItem.start).getTime();
-  if (Math.abs(dtMs) < 30000) return;
-  // Cross-resource: il moved item ha cambiato gruppo. Per i sibling restiamo
-  // sulla risorsa originaria (Matteo: "il booking splittato per pausa pranzo
-  // viene spostato unitariamente?"). Il sibling viene shiftato in time SUL
-  // GRUPPO ORIGINARIO. Se l'utente ha appena moved cross-resource, applichiamo
-  // lo SHIFT in tempo, NON il cambio gruppo: la pausa è specifica della
-  // risorsa, non un attributo del booking.
-  for (const sib of siblings) {
-    const aid = sib.assignment_id;
-    const ns = new Date(new Date(sib.start).getTime() + dtMs);
-    const ne = new Date(new Date(sib.end).getTime() + dtMs);
-    const fd = new FormData();
-    fd.append('start_datetime', _toLocalDtInput(ns));
-    fd.append('end_datetime', _toLocalDtInput(ne));
-    fd.append('resource_id', String(sib.extendedProps.resource_id));
-    try {
-      await api('PUT', `/planning/api/booking-assignments/${aid}`, fd);
-    } catch(e) {
-      console.warn('split-pause sibling shift failed for assignment', aid, e);
-    }
-  }
-  // alpha.40: rimosso `setTimeout(renderTimeline, 50)` — andava in race
-  // col `renderTimeline` di `_tlApplyMoveToOthersInSelection` chiamato
-  // subito dopo, causando timeline doppia + conflitti orari fantasma.
-  // Il chiamante (onMove → blocco try) si occupa del render finale.
-}
-
-// v3.5.0-alpha.23: applica lo stesso delta del move agli altri items
-// nella selezione corrente (vis-timeline non emette onMove per loro).
-// Cross-resource: shift solo del delta time, non del group (logico — l'utente
-// vuole spostare la fascia oraria del gruppo selezionato in blocco; se vuole
-// cambiare risorsa ad ognuno, lo fa singolarmente o via menu Bulk).
+// v3.5.0-alpha.42: multi-move ATOMICO via endpoint /planning/api/multi-move.
+// Sostituisce 3 funzioni separate (pre-α.42): _tlDoMove + _tlApplySplitPauseShift +
+// _tlApplyMoveToOthersInSelection.
 //
-// alpha.39: refactor per usare l'endpoint bulk-edit invece di N PUT
-// per-assignment. Vantaggi:
-//   1. Singolo round-trip → niente cascade di errori/conferme
-//   2. Singolo render alla fine → niente timeline doppia da render race
-//   3. Conflict check atomico server-side (esistente in bulk_edit_bookings)
-async function _tlApplyMoveToOthersInSelection(movedItem, origItem) {
-  if (!window._tlInstance || !origItem) return;
-  const sel = window._tlInstance.getSelection() || [];
-  const otherAids = sel.filter(id => typeof id === 'string' && id.startsWith('a') && id !== movedItem.id);
-  if (!otherAids.length) return;
-  const ds = window._tlInstance.itemsData;
-  const allItems = ds ? ds.get() : [];
+// Risolve i sintomi diagnosticati su test 7/5/2026 (split risorsa multipla):
+//   - "booking spariscono dopo move" → render parziale post-azione (bulk-edit
+//     fallito → renderTimeline NON chiamato → A1 visivamente mosso, A2 sibling
+//     mosso sul server e fermo visivamente)
+//   - 14 undo per ripristinare → push frammentato (1 update_assignment per A1,
+//     0 per sibling split, 1 bulk_edit per altri della selezione; cumulativo
+//     su iterazioni di test); ora 1 push atomico
+//   - Conflitti "fantasma" → _check_assignment_conflict server-side vedeva
+//     stato intermedio (A2 già shiftato, B in shift overlap con A2 nuovo);
+//     ora il check escludeTUTTI gli aids della transazione
+//
+// Raccoglie:
+//   1. movedItem (anchor) — può essere cross-resource
+//   2. sibling split di movedItem (stesso booking_id + stessa risorsa origine)
+//   3. altri della selezione (esclusi gli stessi del movedItem)
+//   4. sibling split di ognuno degli altri della selezione
+//
+// All-or-nothing: se UN solo move va in conflitto, server fa rollback completo
+// e ritorna {success:false, conflict:{...}}; toast con dettaglio + render
+// per tornare allo stato server-of-truth.
+async function _tlApplyMultiMove(movedItem, origItem, origBooking) {
+  if (!origItem) return false;
+
   const dtMs = new Date(movedItem.start).getTime() - new Date(origItem.start).getTime();
-  if (Math.abs(dtMs) < 30000) return;  // < 30s = no-op
-  // Mappa assignment_id selezionati → booking_id univoci (bulk-edit lavora a
-  // booking-level, shift_minutes shifta tutti gli assignments di un booking).
-  const otherBookingIds = new Set();
-  for (const aid of otherAids) {
-    const it = allItems.find(x => x.id === aid);
-    if (it && it.booking_id && it.booking_id !== movedItem.booking_id) {
-      otherBookingIds.add(it.booking_id);
+  const crossResource = movedItem.group !== origItem.group;
+  // No-op se nessuno spostamento significativo e nessun cambio risorsa
+  if (Math.abs(dtMs) < 30000 && !crossResource) return false;
+
+  const allBookings = window._tlBookings || [];
+  const movedAidStr = String(movedItem.id);
+  const movedAid = movedAidStr.startsWith('a')
+    ? parseInt(movedAidStr.substring(1))
+    : parseInt(movedAidStr);
+  const movedBookingId = movedItem.booking_id || (origBooking && origBooking.booking_id);
+
+  // Set di aids già aggiunti al vettore moves (dedup automatico)
+  const usedAids = new Set();
+  const moves = [];
+
+  // 1. Anchor (movedItem) — può cross-resource
+  moves.push({
+    assignment_id: movedAid,
+    new_start: _toLocalDtInput(new Date(movedItem.start)),
+    new_end: _toLocalDtInput(new Date(movedItem.end)),
+    new_resource_id: movedItem.group,
+  });
+  usedAids.add(movedAid);
+
+  // 2. Sibling split di movedItem — restano sulla risorsa originaria, shift dt
+  if (movedBookingId) {
+    const movedSibs = allBookings.filter(b =>
+      b.booking_id === movedBookingId &&
+      b.assignment_id !== movedAid &&
+      b.extendedProps && b.extendedProps.resource_id === origItem.group
+    );
+    for (const sib of movedSibs) {
+      if (usedAids.has(sib.assignment_id)) continue;
+      const ns = new Date(new Date(sib.start).getTime() + dtMs);
+      const ne = new Date(new Date(sib.end).getTime() + dtMs);
+      moves.push({
+        assignment_id: sib.assignment_id,
+        new_start: _toLocalDtInput(ns),
+        new_end: _toLocalDtInput(ne),
+        new_resource_id: sib.extendedProps.resource_id,
+      });
+      usedAids.add(sib.assignment_id);
     }
   }
-  if (!otherBookingIds.size) return;
-  // alpha.40: rimosso confirm() — era ridondante (l'utente ha già scelto
-  // di muovere multi-select) e contribuiva alla "cascade" di dialoghi
-  // (cross-dept warning + holiday + multi-move = 3 dialog di seguito).
-  // L'azione è reversibile: tlPushUndo registrato + Ctrl+Z.
-  const shiftMin = Math.round(dtMs / 60000);
-  const ids = Array.from(otherBookingIds);
-  // Snapshot pre-modifica per undo (start/end di tutti gli assignments
-  // dei booking che stiamo per shiftare)
-  const snaps = ids.map(bid => {
-    const itemsOfBooking = (window._tlBookings || []).filter(b => b.booking_id === bid);
-    return {
-      booking_id: bid,
-      execution_status: itemsOfBooking[0] && itemsOfBooking[0].extendedProps && itemsOfBooking[0].extendedProps.execution_status,
-      assignments: itemsOfBooking.map(it => ({
-        id: it.assignment_id, start: it.start, end: it.end,
-        resource_id: it.extendedProps && it.extendedProps.resource_id,
-      })),
-    };
-  });
-  const fd = new FormData();
-  fd.append('booking_ids', ids.join(','));
-  fd.append('shift_minutes', String(shiftMin));
-  try {
-    const res = await api('PUT', `/planning/api/bookings/${ids[0]}/bulk-edit`, fd);
-    const failedN = (res.failed || []).length;
-    toast(`✓ ${res.ok} multi-move (shift ${(dtMs/3600000).toFixed(2)}h)${failedN ? ` · ⚠ ${failedN} falliti per conflitto` : ''}. Ctrl+Z per annullare.`,
-          failedN ? 'warning' : 'success', 5000);
-    if (res.ok > 0) {
-      try { tlPushUndo({type:'bulk_edit', snapshots: snaps}, `Multi-move: shift ${shiftMin}min`); } catch(_) {}
-      renderTimeline(true);
+
+  // 3. Altri della selezione + 4. loro sibling split (stessa risorsa, stesso booking)
+  const sel = window._tlInstance ? (window._tlInstance.getSelection() || []) : [];
+  for (const id of sel) {
+    if (typeof id !== 'string' || !id.startsWith('a')) continue;
+    const aid = parseInt(id.substring(1));
+    if (usedAids.has(aid)) continue;
+    const b = allBookings.find(x => x.assignment_id === aid);
+    if (!b || !b.extendedProps) continue;
+    const ns = new Date(new Date(b.start).getTime() + dtMs);
+    const ne = new Date(new Date(b.end).getTime() + dtMs);
+    moves.push({
+      assignment_id: aid,
+      new_start: _toLocalDtInput(ns),
+      new_end: _toLocalDtInput(ne),
+      new_resource_id: b.extendedProps.resource_id,
+    });
+    usedAids.add(aid);
+    // Sibling split del selezionato
+    const sibs = allBookings.filter(x =>
+      x.booking_id === b.booking_id &&
+      x.assignment_id !== aid &&
+      x.extendedProps && x.extendedProps.resource_id === b.extendedProps.resource_id
+    );
+    for (const s of sibs) {
+      if (usedAids.has(s.assignment_id)) continue;
+      const sns = new Date(new Date(s.start).getTime() + dtMs);
+      const sne = new Date(new Date(s.end).getTime() + dtMs);
+      moves.push({
+        assignment_id: s.assignment_id,
+        new_start: _toLocalDtInput(sns),
+        new_end: _toLocalDtInput(sne),
+        new_resource_id: s.extendedProps.resource_id,
+      });
+      usedAids.add(s.assignment_id);
     }
+  }
+
+  // Snapshot pre per undo (mappa per ID, sorgente: cache _tlBookings + origItem
+  // come fallback per l'anchor se non in cache per qualche motivo)
+  const preSnaps = [];
+  for (const m of moves) {
+    const b = allBookings.find(x => x.assignment_id === m.assignment_id);
+    if (b && b.extendedProps) {
+      preSnaps.push({
+        assignment_id: m.assignment_id,
+        start: b.start,
+        end: b.end,
+        resource_id: b.extendedProps.resource_id,
+      });
+    } else if (m.assignment_id === movedAid) {
+      preSnaps.push({
+        assignment_id: movedAid,
+        start: origItem.start,
+        end: origItem.end,
+        resource_id: origItem.group,
+      });
+    }
+  }
+
+  const fd = new FormData();
+  fd.append('moves', JSON.stringify(moves));
+
+  try {
+    const res = await api('POST', '/planning/api/multi-move', fd);
+    if (!res.success) {
+      // Conflitto rilevato server-side (rollback già fatto). Mostra dettaglio.
+      const msg = res.message || 'Conflitto rilevato';
+      toast(`Multi-move annullato: ${msg}`, 'error', 6000);
+      renderTimeline(true);  // riallinea visivamente all'unchanged DB
+      return false;
+    }
+    // Successo: 1 push undo atomico
+    tlPushUndo({
+      type: 'multi_move',
+      pre: preSnaps,
+    }, `Multi-move: ${res.moved} assignment${res.moved > 1 ? 's' : ''}, shift ${(dtMs/3600000).toFixed(2)}h`);
+    toast(`✓ ${res.moved} spostat${res.moved === 1 ? 'o' : 'i'} (shift ${(dtMs/3600000).toFixed(2)}h). Ctrl+Z per annullare.`, 'success', 4000);
+    renderTimeline(true);
+    return true;
   } catch(e) {
     toast(e.message || 'Errore multi-move', 'error');
+    renderTimeline(true);  // ripristina vista coerente al server
+    return false;
   }
 }
 
@@ -3635,6 +3705,11 @@ async function _doRenderTimeline(preserveWindow=false) {
     try { window._tlInstance.destroy(); } catch(_) {}
     window._tlInstance = null;
   }
+  // v3.5.0-alpha.42: reset sticky-selection cache (la nuova istanza vis-timeline
+  // ha selezione vuota; qualunque prev rimasta sarebbe stale e indurrebbe
+  // setSelection su id non più validi al primo click).
+  window._tlPrevSelection = [];
+  window._tlSuppressSelect = false;
   host.innerHTML = '';
   // Rimuovi container vis orfani che potrebbero essere stati lasciati da
   // un destroy parziale (vis-timeline 7.7 talvolta lascia .vis-timeline
@@ -3926,22 +4001,15 @@ async function _doRenderTimeline(preserveWindow=false) {
           callback(null);
           renderTimeline(true);
         } else if (action === 'move') {
-          await _tlDoMove(item, orig, assignmentId);
+          // v3.5.0-alpha.42: tutto via _tlApplyMultiMove (atomic).
+          // Anchor + sibling split (auto-rilevati) + altri della selezione +
+          // loro sibling split, tutto in una transazione server. Conflict
+          // check escludendo TUTTI gli aids della transazione (no spurii).
+          // All-or-nothing: rollback completo se anche solo 1 conflict.
+          // Push 1 undo atomico, 1 renderTimeline finale (truth from server).
           item.className = (item.className || '').replace(/\s*tl-conflict/g, '');
-          callback(item);
-          // v3.5.0-alpha.23: cross-resource move → re-render per riflettere
-          // lo stato server-of-truth (envelope booking, eventuali altre
-          // assignment dello stesso booking, badge "1/N", etc.).
-          if (crossResource) {
-            setTimeout(() => renderTimeline(true), 50);
-          }
-          // v3.5.0-alpha.23: split-pause unit drag — se l'item è parte di un
-          // booking splittato (più assignments stessa risorsa stesso booking),
-          // applica lo stesso shift agli altri segmenti come unità.
-          await _tlApplySplitPauseShift(item, orig, origBooking);
-          // Multi-select drag — applica lo stesso shift agli altri items
-          // selezionati (vis-timeline emette onMove SOLO per l'item draggato).
-          await _tlApplyMoveToOthersInSelection(item, orig);
+          callback(item);  // commit visivo dell'anchor; render finale allinea il resto
+          await _tlApplyMultiMove(item, orig, origBooking);
         } else {
           callback(null);
         }
@@ -3964,6 +4032,27 @@ async function _doRenderTimeline(preserveWindow=false) {
     },
   });
   tlInstance.on('select', (props) => {
+    // v3.5.0-alpha.42: STICKY MULTI-SELECTION. Vis-timeline default rompe
+    // la multi quando l'utente clicca un item incluso (lascia solo lui),
+    // costringendo Matteo a Ctrl+click per riselezionare prima di trascinare.
+    // Comportamento desiderato (allineato Figma/Excel range): se la selezione
+    // precedente era multi (≥2) e il click cade su un item GIÀ INCLUSO
+    // → preserva la multi. Click fuori (item non incluso) o area vuota →
+    // rompe la multi (default). Drag su item della multi → multi-drag OK.
+    if (window._tlSuppressSelect) return;
+    const newSel = (props.items || []).slice();
+    const prev = window._tlPrevSelection || [];
+    if (prev.length >= 2 && newSel.length === 1 && prev.indexOf(newSel[0]) >= 0) {
+      window._tlSuppressSelect = true;
+      try { tlInstance.setSelection(prev); } finally {
+        window._tlSuppressSelect = false;
+      }
+      // Manteniamo prev (era già multi). Niente highlight/toast: la
+      // selezione effettiva non è cambiata dal punto di vista utente.
+      return;
+    }
+    window._tlPrevSelection = newSel;
+
     // v3.5.0-alpha.11: highlight cross-resource — items con stesso booking_id
     // ricevono className 'tl-link-highlight' per evidenziare visivamente che
     // appartengono allo stesso booking multi-risorsa.

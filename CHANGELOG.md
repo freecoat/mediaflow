@@ -1,5 +1,78 @@
 # MediaFlow — Changelog
 
+## v3.5.0-alpha.42 — Multi-move atomico + sticky multi-selection (7 maggio 2026)
+
+α.41 ha sistemato il font ma il multi-move restava rotto. Test live di Matteo
+sul 7/5/2026 ha esposto 3 sintomi convergenti su un'unica root cause
+architettonica:
+
+**Sintomi diagnosticati (test 2 booking ricorrenti split risorsa multipla):**
+- "Booking spariscono dopo move": `_tlApplyMoveToOthersInSelection` chiamava
+  `renderTimeline(true)` SOLO se `res.ok > 0`. Bulk-edit fallito per conflitti
+  → render saltato → A1 visivamente mosso, A2 sibling mosso sul server e fermo
+  visivamente, vis-timeline col `stack:true` riarrangia → item "scivolano"
+  fuori riga.
+- "Necessari 14 undo per ripristinare": push undo frammentato (1
+  `update_assignment` per anchor A1, 0 per sibling shiftati silenziosamente
+  da `_tlApplySplitPauseShift`, 1 `bulk_edit` per altri della selezione).
+  Cumulativo su 7 iterazioni di test → 14 undo. E i sibling split shiftati
+  NON erano nello stack: rollback impossibile.
+- Conflitti "fantasma": `_check_assignment_conflict` server-side vedeva stato
+  intermedio (A2 già shiftato + B in shift overlap con A2 nuovo) → falsi
+  positivi.
+- "Click+drag dopo multiselect deseleziona": vis-timeline default rompe la
+  multi su tap → Matteo costretto a Ctrl+click prima di trascinare.
+
+**Fix architetturale:**
+
+1. **Endpoint server `POST /planning/api/multi-move` atomico transazionale**
+   (`planning.py:1751`):
+   - Input `moves`: JSON array `[{assignment_id, new_start, new_end, new_resource_id}, ...]`
+   - Conflict check escludendo TUTTI gli `assignment_id` della transazione
+     (no falsi positivi: gli assignment in modifica nello stesso gesto non
+     si "vedono" tra loro come conflitto)
+   - All-or-nothing: se anche un solo move conflitta → `db.rollback()` +
+     ritorna 200 OK con `{success:false, conflict:{...}, message:...}`
+     (non 409: l'helper `api()` client-side wrappa detail-dict in
+     "[object Object]")
+   - Recalc `Booking` envelope per tutti i booking coinvolti
+   - RBAC: scope su risorse originarie ∪ risorse target
+
+2. **Frontend `_tlApplyMultiMove(movedItem, origItem, origBooking)`**
+   (`planning.html:3382`) sostituisce 3 funzioni separate (rimosse):
+   `_tlApplySplitPauseShift` + `_tlApplyMoveToOthersInSelection`
+   (`_tlDoMove` resta per single-move via context menu reassign).
+   - Raccoglie atomicamente: anchor + sibling split anchor + altri della
+     selezione + sibling split di ognuno (dedup automatico via Set)
+   - Snapshot pre-move atomico per UN solo `tlPushUndo({type:'multi_move',
+     pre: [...]})`
+   - 1 chiamata API → 1 renderTimeline finale (truth from server)
+
+3. **Undo `multi_move`** (`planning.html:3236`): restore atomico via lo stesso
+   endpoint multi-move (i pre snapshot diventano i nuovi moves). Robusto:
+   se nel frattempo lo spazio originale è occupato → toast con dettaglio +
+   re-push dell'azione sullo stack.
+
+4. **Sticky multi-selection** (`planning.html:4029`): listener
+   `tlInstance.on('select')` che intercetta il pattern `prev.length>=2 &&
+   newSel.length===1 && prev.includes(newSel[0])` → ripristina la prev
+   sincrono con loop guard `window._tlSuppressSelect`. Behavior: click su
+   item incluso nella multi → preserva (sticky); click su item non incluso
+   → rompe la multi (default). Allineato Figma/Excel range.
+
+**Niente migrate**: nuovo endpoint backend + refactor JS template, niente
+schema DB.
+
+⚠ **Da testare in profondità**:
+- Multi-move semplice (no split, no cross-resource): comportamento single-move
+- Multi-move con sibling split su risorsa multipla (caso bug originale)
+- Multi-move cross-resource: anchor cambia risorsa, gli altri restano sulla loro
+- Conflitto reale: toast con messaggio specifico + render coerente
+- Sticky: click su item della multi → multi preservata; click su area vuota
+  → multi rotta (deselezione corretta)
+- Ctrl+Z dopo multi-move: ripristino atomico in 1 click
+- Drag su item della multi: parte come multi-drag senza Ctrl+click pre-emptive
+
 ## v3.5.0-alpha.41 — Font label timeline via HTMLElement (vis-timeline strippa style annidati) (7 maggio 2026)
 
 α.40 ha messo inline styles brutali nelle stringhe HTML del content
