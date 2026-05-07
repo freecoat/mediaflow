@@ -1,5 +1,44 @@
 # MediaFlow — Changelog
 
+## v3.5.0-alpha.48.2 — Periodo trasmissione auto-derivato dai booking (7 maggio 2026)
+
+Richiesta Matteo: "Il periodo di riferimento della fatturazione dovrebbe
+essere determinato di volta in volta in base al periodo di attività del
+booking" (non un range arbitrario scelto dall'utente).
+
+**Backend** — nuovo endpoint `GET /finance/api/billing/preview`:
+- Input: `project_id` + `include_extras`
+- Calcola periodo da min/max `work_date` delle JCL candidate (work_date
+  è impostato da `cost_line_sync` sui booking done → proxy diretto del
+  periodo di attività)
+- Fallback "mese corrente" se tutte le candidate hanno work_date NULL
+  (caso JCL extra senza booking)
+- Ritorna `period_start/end`, `period_source` (from_bookings vs
+  current_month_fallback), `candidate_count`, `total_proposed`, `lines[]`
+  per anteprima dettagliata
+
+**UI Cost Report** — modal "Trasmetti a fatturazione":
+- Apertura del modal → chiamata `preview` async → popola period_start/end
+  con i defaults derivati dai booking (NON più mese corrente arbitrario)
+- Mostra anteprima sopra i campi: numero righe maturate + totale + label
+  sorgente del periodo (📅 verde "derivato da booking" oppure ⚠ ambra
+  "fallback mese corrente")
+- Onchange di "Includi extra" → re-trigger preview (count e periodo
+  possono cambiare)
+- Submit disabilitato se zero righe candidate
+- I campi date restano modificabili manualmente (override caso edge)
+
+**Note di design**:
+- Il backend `transmit_to_billing` continua a filtrare per period_start/end
+  passati (mantiene la possibilità di restringere). Il preview ne suggerisce
+  i defaults sensati. L'utente che lascia i defaults trasmette TUTTE le
+  candidate (periodo = range completo)
+- Tooltip esplicito sotto i campi date: "Default proposto = periodo
+  coperto dai booking eseguiti (work_date min → max). Modificabile
+  manualmente"
+
+**Niente migrate.**
+
 ## v3.5.0-alpha.48.1 — Bottone "Ritira" su card batch cost report (7 maggio 2026)
 
 Richiesta Matteo: "Aggiungerei una funzione di emergenza ritira fattura,

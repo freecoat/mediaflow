@@ -251,11 +251,13 @@
     <div class="modal-body">
       <p class="text-sm text-muted" style="margin-top:0;">
         Crea un <b>BillingBatch</b> con le righe maturate del progetto nel periodo
-        selezionato. Default: mese corrente. Le righe già fatturate o in approvazione
-        sono escluse automaticamente. La trasmissione apre il batch in stato
-        <b>bozza</b>: il manager può modificarlo prima di approvarlo in
+        selezionato. Le righe già fatturate o in approvazione sono escluse
+        automaticamente. La trasmissione apre il batch in stato <b>bozza</b>:
+        il manager può modificarlo prima di approvarlo in
         <a href="/finance" target="_blank">/finance</a>.
       </p>
+      <!-- v3.5.0-alpha.48.2: anteprima con periodo derivato dai booking -->
+      <div id="tm-preview" style="margin-bottom:14px;"></div>
       <div class="form-row">
         <div class="form-group">
           <label class="form-label">Periodo da *</label>
@@ -266,9 +268,12 @@
           <input class="form-input" id="tm-period-end" type="date" required>
         </div>
       </div>
+      <div class="text-xs text-muted" style="margin-top:-6px; margin-bottom:12px;">
+        Default proposto = periodo coperto dai booking eseguiti (work_date min → max). Modificabile manualmente.
+      </div>
       <div class="form-group">
         <label class="form-label" style="display:flex; align-items:center; gap:8px;">
-          <input type="checkbox" id="tm-include-extras" checked>
+          <input type="checkbox" id="tm-include-extras" checked onchange="refreshTransmitPreview()">
           Includi righe extra (lavorazioni aggiunte fuori quote)
         </label>
         <div class="text-xs text-muted">Disattiva per fatturare solo le righe ereditate dalla quote (gli extra restano per consuntivo finale).</div>
@@ -280,7 +285,7 @@
     </div>
     <div class="modal-footer">
       <button class="btn btn-secondary" onclick="closeModal('modal-transmit')">Annulla</button>
-      <button class="btn btn-primary" onclick="submitTransmit()">📤 Trasmetti</button>
+      <button class="btn btn-primary" id="tm-submit-btn" onclick="submitTransmit()">📤 Trasmetti</button>
     </div>
   </div>
 </div>
@@ -721,20 +726,68 @@ function renderBillingWidget() {
   batchesEl.innerHTML = html;
 }
 
-// v3.5.0-alpha.48: modal Trasmetti a fatturazione. Form per period + extras.
-function openTransmitModal() {
+// v3.5.0-alpha.48.2: modal Trasmetti con periodo auto da work_date booking.
+// Matteo: "il periodo di riferimento dovrebbe essere determinato di volta in
+// volta in base al periodo di attività del booking". Apre il modal poi
+// chiama il preview API che calcola period_start/end da min/max work_date
+// delle JCL candidate (popolate da cost_line_sync sui booking done).
+async function openTransmitModal() {
   if (!currentReport || !currentReport.job) {
     toast('Carica prima un job', 'warning'); return;
   }
-  const today = new Date();
-  // Default periodo = mese corrente
-  const firstDay = new Date(today.getFullYear(), today.getMonth(), 1).toISOString().slice(0, 10);
-  const lastDay = new Date(today.getFullYear(), today.getMonth() + 1, 0).toISOString().slice(0, 10);
-  document.getElementById('tm-period-start').value = firstDay;
-  document.getElementById('tm-period-end').value = lastDay;
+  if (!currentReport.job.project_id) {
+    toast('Job senza progetto associato', 'warning'); return;
+  }
+  // Reset campi prima di aprire
   document.getElementById('tm-include-extras').checked = true;
   document.getElementById('tm-notes').value = '';
+  document.getElementById('tm-period-start').value = '';
+  document.getElementById('tm-period-end').value = '';
+  document.getElementById('tm-preview').innerHTML =
+    '<div class="text-sm text-muted">Calcolo anteprima…</div>';
   openModal('modal-transmit');
+  await refreshTransmitPreview();
+}
+
+// v3.5.0-alpha.48.2: refresh preview (chiamato all'apertura modal e quando
+// cambia "include_extras" — il count/period può variare).
+async function refreshTransmitPreview() {
+  const job = currentReport && currentReport.job;
+  if (!job || !job.project_id) return;
+  const includeExtras = document.getElementById('tm-include-extras').checked;
+  const url = `/finance/api/billing/preview?project_id=${job.project_id}&include_extras=${includeExtras}`;
+  try {
+    const p = await api('GET', url);
+    // Popola defaults SOLO se i campi sono vuoti (non sovrascrive override utente)
+    const psEl = document.getElementById('tm-period-start');
+    const peEl = document.getElementById('tm-period-end');
+    if (!psEl.value) psEl.value = p.period_start;
+    if (!peEl.value) peEl.value = p.period_end;
+    // Mostra anteprima
+    const sourceLbl = p.period_source === 'from_bookings'
+      ? `<span style="color:#22c55e;">📅 Periodo derivato da booking eseguiti</span>`
+      : `<span style="color:#fbbf24;">⚠ Nessun booking con work_date — fallback mese corrente</span>`;
+    const previewHtml = p.candidate_count > 0
+      ? `<div style="background:var(--bg3); border:1px solid var(--border); border-radius:8px; padding:10px 12px;">
+          <div style="display:flex; justify-content:space-between; align-items:center; gap:10px;">
+            <div>
+              <div style="font-size:13px;"><b>${p.candidate_count}</b> rig${p.candidate_count === 1 ? 'a' : 'he'} maturat${p.candidate_count === 1 ? 'a' : 'e'} da fatturare</div>
+              <div style="font-size:11px; margin-top:2px;">${sourceLbl}</div>
+            </div>
+            <div class="mono" style="font-size:18px; color:var(--indigo2); font-weight:600;">${fmtCurrency(p.total_proposed)}</div>
+          </div>
+        </div>`
+      : `<div style="background:rgba(251,146,60,.10); border:1px solid rgba(251,146,60,.3); border-radius:8px; padding:10px 12px; color:#fb923c; font-size:13px;">
+          ⚠ Nessuna riga maturata da fatturare (filtro: not_billed + total_accrued > 0${includeExtras ? '' : ' + non extra'})
+        </div>`;
+    document.getElementById('tm-preview').innerHTML = previewHtml;
+    // Disabilita submit se nessuna candidata
+    const submitBtn = document.getElementById('tm-submit-btn');
+    if (submitBtn) submitBtn.disabled = (p.candidate_count === 0);
+  } catch(e) {
+    document.getElementById('tm-preview').innerHTML =
+      `<div class="text-sm" style="color:var(--rose);">Errore anteprima: ${escapeHtml(e.message || '')}</div>`;
+  }
 }
 
 // v3.5.0-alpha.48.1: ritira batch (cancel pre-invoice). Conferma + chiama

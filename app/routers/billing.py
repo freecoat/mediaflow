@@ -136,6 +136,85 @@ def _recompute_batch_totals(b: BillingBatch):
 
 # ── Endpoints ──────────────────────────────────────────────────────────
 
+@router.get("/preview")
+async def preview_transmission(
+    request: Request,
+    project_id: int,
+    include_extras: bool = True,
+    db: Session = Depends(get_db),
+):
+    """v3.5.0-alpha.48.2: anteprima per il modal Trasmetti.
+
+    Matteo: "il periodo di riferimento della fatturazione dovrebbe essere
+    determinato di volta in volta in base al periodo di attività del booking".
+
+    Calcola periodo suggerito da min/max work_date delle JCL candidate del
+    progetto (work_date è impostato da cost_line_sync sui booking done).
+    Fallback al mese corrente se tutte le JCL candidate hanno work_date NULL
+    (caso JCL extra senza booking).
+
+    Ritorna anche count e total per anteprima nel modal.
+    """
+    _require_finance(request)
+    proj = db.query(Project).filter(
+        Project.id == project_id, Project.tenant_id == CURRENT_TENANT,
+    ).first()
+    if not proj:
+        raise HTTPException(404, f"Progetto #{project_id} non trovato")
+
+    q = db.query(JobCostLine).join(Job).filter(
+        Job.project_id == project_id,
+        Job.status != JobStatus.cancelled,
+        JobCostLine.billing_status == JCLBillingStatus.not_billed,
+        JobCostLine.total_accrued > 0,
+        JobCostLine.is_billable == True,
+    )
+    if not include_extras:
+        q = q.filter(JobCostLine.is_extra == False)
+    candidates = q.all()
+
+    work_dates = [c.work_date for c in candidates if c.work_date is not None]
+    if work_dates:
+        period_start = min(work_dates)
+        period_end = max(work_dates)
+        period_source = "from_bookings"
+    else:
+        # Fallback: mese corrente (per JCL extra senza booking, ecc.)
+        today = date.today()
+        period_start = today.replace(day=1)
+        # Ultimo giorno del mese corrente
+        if today.month == 12:
+            next_month = date(today.year + 1, 1, 1)
+        else:
+            next_month = date(today.year, today.month + 1, 1)
+        period_end = date.fromordinal(next_month.toordinal() - 1)
+        period_source = "current_month_fallback"
+
+    total_proposed = round(sum(c.total_accrued for c in candidates), 2)
+    return {
+        "project_id": project_id,
+        "period_start": period_start.isoformat(),
+        "period_end": period_end.isoformat(),
+        "period_source": period_source,
+        "include_extras": include_extras,
+        "candidate_count": len(candidates),
+        "total_proposed": total_proposed,
+        "lines": [
+            {
+                "id": c.id,
+                "description": c.description,
+                "quantity": c.quantity_actual,
+                "unit": c.unit,
+                "unit_price": c.unit_price,
+                "total_accrued": c.total_accrued,
+                "is_extra": c.is_extra,
+                "work_date": c.work_date.isoformat() if c.work_date else None,
+            }
+            for c in candidates
+        ],
+    }
+
+
 @router.post("")
 async def transmit_to_billing(
     request: Request,
