@@ -8,106 +8,57 @@
 
 ## Versione corrente
 
-**v3.5.0-alpha.43** — 7 maggio 2026 — Sidebar collassabile + Manuale d'uso wiki
+**v3.5.0-alpha.44** — 7 maggio 2026 — Heatmap toggle + altezza dinamica + finestra standalone
 
-Quality-of-life: sidebar che si nasconde lasciando solo le icone (più
-spazio per timeline/contenuti su schermi piccoli), e prima versione del
-manuale d'uso navigabile dentro l'app.
+Test live α.43 ha riportato 4 issue + 1 da indagare. Risolti: heatmap
+"quadratini verdi" (era una feature pre-esistente che ora si vede grazie
+al fix font α.41 — default cambiato a OFF), altezza fissa 600px che
+sprecava monitor grandi e schiacciava 20+ risorse (ora dinamica viewport),
+richiesta scorporo timeline in finestra dedicata (`/planning/full` standalone).
 
-**Chiuso α.43:**
-- ✅ Sidebar collapse mode: width 64px, label nascoste via `font-size:0`,
-  toggle in topbar sx, scorciatoia <kbd>Ctrl</kbd>+<kbd>B</kbd>,
-  persistenza `localStorage.mf_sidebar_collapsed`
-- ✅ Tooltip flottante hover 1s su icone collassate (label da textContent,
-  posizionato a destra dell'icona, no layout shift)
-- ✅ Main-area si adatta col transition CSS al toggle
-- ✅ Pagina `/manuale` con TOC sticky + content + search client-side +
-  IntersectionObserver per evidenziare sezione corrente
-- ✅ Voce sidebar "Manuale" in nuova sezione "Aiuto" (senza permessi
-  speciali, visibile a tutti)
-- ✅ Bozze contenuti per 11 sezioni (Concetti, Pianificazione, Quote,
-  Cost Report, DAM, Copilot, Admin, Scorciatoie, FAQ)
-- ✅ Cache-buster CSS+JS bumpato a `?v=3.5.0-alpha.43`
-
-**Verifica live richiesta a Matteo:**
-- `/dashboard` → click sul pulsante in alto a sinistra (icona
-  panel-left-close) → la sidebar si collassa a 64px, vedi solo icone
-- Hover su un'icona per 1 secondo → appare tooltip a destra con la label
-- Click sull'icona → naviga normalmente
-- <kbd>Ctrl</kbd>+<kbd>B</kbd> da qualunque pagina → toggle sidebar
-- Refresh pagina → lo stato collassato persiste
-- Espandi sidebar → click su "Manuale" (nuova sezione "Aiuto")
-- Pagina `/manuale`: TOC a sx, click su una voce → scroll alla sezione
-- Search nella TOC: digita "kbd" o "split" → resta solo le sezioni che
-  contengono quella stringa
-
-**Niente migrate**: solo CSS, JS, template, nuovo router GET.
-
-## v3.5.0-alpha.42 — Multi-move atomico + sticky multi-selection (7 maggio 2026)
-
-α.41 ha sistemato il font ma il multi-move restava rotto. Test live di
-Matteo (2 booking ricorrenti split risorsa multipla) ha esposto 3 sintomi
-convergenti su un'unica root cause architettonica: `onMove` chiamava in
-sequenza 3 funzioni indipendenti (`_tlDoMove` + `_tlApplySplitPauseShift`
-+ `_tlApplyMoveToOthersInSelection`) ognuna con il suo PUT/POST + push
-undo + render parziale.
-
-**Sintomi → Cause:**
-- "Booking spariscono" → render parziale post-azione (bulk-edit fallito →
-  renderTimeline saltato → A1 mosso visivamente, A2 sibling mosso sul
-  server e fermo visivamente)
-- 14 undo per ripristinare → push frammentato (1 update_assignment + 0
-  per sibling split silenti + 1 bulk_edit). Cumulativo su iterazioni di test
-- Conflitti "fantasma" → `_check_assignment_conflict` server-side vedeva
-  stato intermedio (A2 già shiftato + B in shift overlap con A2 nuovo)
-- "Click+drag deseleziona" → vis-timeline default rompe la multi su tap
-
-**Chiuso α.42:**
-- ✅ Endpoint `POST /planning/api/multi-move` atomico transazionale
-  (`planning.py:1751`): conflict check escludendo TUTTI gli aids della
-  transazione. All-or-nothing. Recalc envelope. RBAC su risorse origine ∪ target
-- ✅ Frontend `_tlApplyMultiMove` (`planning.html:3382`): raccoglie anchor
-  + sibling split + altri della selezione + loro sibling con dedup. 1 push
-  undo atomico (`type:'multi_move'`). 1 renderTimeline finale
-- ✅ Undo `multi_move` via stesso endpoint (pre snapshots → restore moves)
-- ✅ Sticky multi-selection: click su item della multi → preserva;
-  click fuori → rompe. Loop guard sincrono con `window._tlSuppressSelect`
-- ✅ Cleanup `window._tlPrevSelection` su renderTimeline (no stale)
-- ❌ **Rimosso codice legacy**: `_tlApplySplitPauseShift` +
-  `_tlApplyMoveToOthersInSelection` (sostituite da multi-move atomico)
-- ✅ `_tlDoMove` mantenuta — usata da context menu "Riassegna risorsa"
+**Chiuso α.44:**
+- ✅ Heatmap default OFF (`TL_PREFS_DEFAULTS.heatmap=false`) +
+  bottone toolbar `📊 Heatmap` con sync popover ⚙
+- ✅ Altezza timeline dinamica: `tlComputeHeight(host)` da viewport
+  (`window.innerHeight - host.top - 24`, min 400px). Listener `resize`
+  con debounce 150ms → `setOptions({height})` senza re-render
+- ✅ Pagina `/planning/full`: nuovo route che render `planning.html`
+  con `full_screen=True`. `base.html` condizionali skip sidebar+topbar.
+  CSS `body.no-chrome`. Refactor helper `_planning_render` per
+  condividere la logica con `/planning`. Bottone `⛶ Finestra` in toolbar
+  che fa `window.open` con popup features (fallback tab)
+- ✅ Cache-buster CSS bumpato a `?v=3.5.0-alpha.44`
 
 **Verifica live richiesta a Matteo:**
-- `/planning` → tab Timeline (forza F5)
-- **Test 1 — multi-move semplice**: seleziona 2 booking diversi (Shift+click),
-  drag uno di +2h. Entrambi devono spostarsi atomicamente. Toast:
-  `✓ N spostati (shift 2h). Ctrl+Z per annullare`. Ctrl+Z → tornano TUTTI
-  in posizione originale in 1 colpo (no 14 undo)
-- **Test 2 — sticky**: dopo Shift+click su 2-3 booking, fai click semplice
-  (non Ctrl) su uno dei selezionati. Devono restare TUTTI evidenziati. Drag
-  immediato → multi-drag parte
-- **Test 3 — sticky off**: dopo Shift+click multi, fai click su un booking
-  NON selezionato. La multi si rompe, resta solo il nuovo. Standard
-- **Test 4 — multi-move con split risorsa multipla** (caso bug originale):
-  riproduci lo scenario di ieri. I booking devono restare visibili
-  (no sparizione). Toast esplicito su conflitto (se reale). Ctrl+Z
-  ripristina TUTTO in 1 colpo
-- **Test 5 — conflitto vero**: provoca un conflitto deliberato (sposta su
-  area occupata). Toast: `Multi-move annullato: assignment #X in conflitto
-  con #Y sulla risorsa #Z`. Niente modifiche applicate
+- `/planning` → tab Timeline. Cella heatmap NON deve apparire più sotto
+  i nomi (default OFF). Bottone `📊 Heatmap` in toolbar → click attiva,
+  click di nuovo disattiva. Stato persiste in localStorage
+- Ridimensiona finestra browser → la timeline si ridimensiona di
+  altezza automaticamente (era fissa a 600px)
+- Su monitor grande (es. 27" 4K) la timeline occupa tutto lo spazio
+  utile, non solo 600px iniziali
+- Bottone `⛶ Finestra` → si apre popup/tab a `/planning/full` senza
+  sidebar e senza topbar. Solo card timeline + filtri sidebar interna
+  (la `.pl-sidebar` di pagina)
+- Sulla pagina /planning/full la stessa funzionalità (drag, multi-move,
+  Ctrl+Z, Ctrl+B per sidebar — quest'ultimo nullo perché non c'è
+  sidebar globale)
 
-**Niente migrate**: nuovo endpoint backend + refactor JS template, niente
-schema DB.
+**Bug ancora aperto:**
+- Timeline nera in Chrome (solo Chrome, Firefox OK su Mac). Da
+  diagnosticare con info DevTools da Matteo: dove esattamente succede,
+  console errors, tab Elements → background del `.vis-timeline`
 
-**In coda Round 12** (resta valido):
-- 🔜 Test Mac+Chrome del branch `experiment/timeline-audit`
-- 🔜 Step 3-5 del piano export (CSV/Excel altre entità, import per-entità
-  con dry-run, refinements)
-- 🔜 Sostituzione vis-timeline (Bryntum/DHTMLX) — valutazione, non
-  ancora prioritaria con multi-move atomico α.42 funzionante
-
+**Niente migrate.**
 
 ## Storico recenti
+
+**v3.5.0-alpha.43** — 7 maggio 2026 — Sidebar collassabile + Manuale d'uso wiki
+
+Quality-of-life: sidebar collapse a 64px (toggle topbar + Ctrl+B + persistenza
+localStorage), tooltip flottante hover 1s su icone collassate. Pagina /manuale
+wiki interna con TOC sticky + content + search client-side + IntersectionObserver.
+11 sezioni con bozze contenuti. Voce sidebar "Manuale" in nuova sezione "Aiuto".
 
 **v3.5.0-alpha.42** — 7 maggio 2026 — Multi-move atomico + sticky multi-selection
 

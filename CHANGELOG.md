@@ -1,5 +1,70 @@
 # MediaFlow — Changelog
 
+## v3.5.0-alpha.44 — Heatmap toggle + altezza dinamica + finestra standalone (7 maggio 2026)
+
+Test live di Matteo dopo α.43 ha riportato 4 issue + 1 da indagare:
+
+1. **Heatmap "quadratini verdi" sotto i nomi operatore** — non era un bug
+   nuovo: la heatmap esisteva da tempo ma vis-timeline 7.7.3 strippava le
+   sue cells via la stessa sanitization che ha colpito font/role
+   (fixata in α.41 con HTMLElement). Ora che le cells si vedono, sono
+   rumore visivo sotto il nome. Default cambiato a OFF.
+2. **20+ risorse + altezza fissa 600px** — su monitor grandi, spazio
+   sotto sprecato; e con molte risorse, scaling visivo schiacciato
+   in 600px.
+3. **Richiesta scorporo timeline in finestra dedicata** — workflow
+   planning intensivo + monitor secondario.
+4. **Timeline nera in Chrome (su Mac)** — solo Chrome, non Firefox.
+   Indagine separata, in attesa info DevTools da Matteo.
+5. **AI quote network error** — probabile Firefox vecchio. Da rivalutare.
+
+**Chiuso α.44:**
+
+- ✅ **Heatmap default OFF + bottone toggle toolbar**:
+  - `TL_PREFS_DEFAULTS.heatmap` cambiato da `true` a `false`
+  - Checkbox popover ⚙ default unchecked
+  - Nuovo bottone `📊 Heatmap` in toolbar timeline (`tlToggleHeatmap`)
+    che sincronizza prefs + checkbox popover + active state visivo
+  - Persistenza già esistente in `TL_PREFS_KEY` localStorage
+
+- ✅ **Altezza timeline dinamica viewport**:
+  - `tlComputeHeight(host)` calcola `window.innerHeight - host.top - 24`
+    con minimo 400px
+  - `vis.Timeline` opzione `height: tlComputeHeight(host)` (era hardcoded
+    600)
+  - Listener `window.resize` con debounce 150ms chiama
+    `tlInstance.setOptions({height: ...})` → si adatta al ridimensionamento
+    finestra senza ri-render completo
+
+- ✅ **Pagina `/planning/full` standalone** (no chrome):
+  - Nuovo route `GET /planning/full` (in `planning.py`) che render
+    `pages/planning.html` con context `full_screen=True` e vista forzata
+    `timeline`
+  - Refactor: estratta logica context in helper `_planning_render` per
+    evitare duplicazione tra `/planning` e `/planning/full`
+  - `base.html`: condizionali `{% if not full_screen %}` su sidebar +
+    topbar; body class `no-chrome`
+  - CSS: `body.no-chrome .main-area { margin-left: 0 }` +
+    `.page-content { padding: 0 }` + `overflow: hidden`
+  - Bottone `⛶ Finestra` in toolbar timeline (`tlOpenStandalone`) che
+    fa `window.open('/planning/full', 'mf_timeline_full', popupFeatures)`
+    con fallback a tab nuova se popup bloccato
+  - L'auth si propaga via cookie (la nuova finestra è una pagina dello
+    stesso origin)
+
+**File modificati:**
+- `app/main.py`: bump versione
+- `app/routers/planning.py`: nuovo route `/full` + helper `_planning_render`
+- `app/templates/base.html`: condizionali sidebar/topbar, cache-buster CSS
+- `app/templates/pages/planning.html`: bottoni toolbar + JS toggle/standalone/resize
+- `app/static/css/main.css`: `body.no-chrome` rules
+
+**Niente migrate.**
+
+**Bug ancora aperto** (post α.44):
+- Timeline nera in Chrome solo (Firefox/Mac OK). Da indagare con info
+  DevTools da Matteo.
+
 ## v3.5.0-alpha.43 — Sidebar collassabile + Manuale d'uso wiki (7 maggio 2026)
 
 Quality-of-life: sidebar che si nasconde lasciando solo le icone (più

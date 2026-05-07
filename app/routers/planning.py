@@ -60,9 +60,46 @@ async def planning_hub(
     access_token: Optional[str] = Cookie(None),
     db: Session = Depends(get_db),
 ):
+    return await _planning_render(request, view, access_token, db, full_screen=False)
+
+
+@router.get("/calendar", response_class=HTMLResponse)
+async def calendar_redirect():
+    """Compat v3.4.10−: ora il calendario è una vista dell'hub."""
+    return RedirectResponse(url="/planning/?view=calendar", status_code=302)
+
+
+@router.get("/full", response_class=HTMLResponse)
+async def planning_full_screen(
+    request: Request,
+    access_token: Optional[str] = Cookie(None),
+    db: Session = Depends(get_db),
+):
+    """v3.5.0-alpha.44: pagina standalone full-screen della timeline.
+
+    Nasconde sidebar + topbar globali (via flag `full_screen=True` interpretato
+    da `base.html`) per dedicare tutta la viewport alla timeline. Forza la
+    vista a `timeline`. Pensata per essere aperta in popup/tab dedicato dal
+    bottone "⛶ Finestra" in toolbar planning, su monitor grandi e per workflow
+    planning intensivo.
+
+    Riusa lo stesso template `pages/planning.html` per evitare duplicazione.
+    L'auth e tutti i dati di context sono identici a `planning_hub`.
+    """
+    return await _planning_render(request, "timeline", access_token, db, full_screen=True)
+
+
+async def _planning_render(
+    request: Request,
+    view: str,
+    access_token: Optional[str],
+    db: Session,
+    full_screen: bool = False,
+):
+    """Helper privato per condividere la logica di context tra `planning_hub`
+    e `planning_full_screen`. Prima di α.44 era inline in planning_hub."""
     if view not in VALID_VIEWS:
         view = "jobs"
-    # Dati per i filtri trasversali
     clients = db.query(Client).filter(Client.tenant_id == CURRENT_TENANT).order_by(Client.name).all()
     projects = (
         db.query(Project).filter(Project.tenant_id == CURRENT_TENANT)
@@ -83,9 +120,6 @@ async def planning_hub(
         .filter(Job.status != JobStatus.cancelled)
         .order_by(Job.created_at.desc()).all()
     )
-    # v3.4.53 — quote autocomplete (sostituisce job dal punto di vista UI booking).
-    # Mostra approved + draft + sent: il producer può attaccare booking anche a quote
-    # in trattativa (caso emergenza cliente, reverse-attach implicit-approval).
     from app.models import Quote, QuoteStatus
     quotes = (
         db.query(Quote).options(
@@ -100,7 +134,6 @@ async def planning_hub(
         my_res = db.query(Resource).filter(Resource.user_id == cur_user.id).first()
         if my_res:
             cur_resource_id = my_res.id
-    # v3.4.44: tab "Per progetto" visibile solo a admin/manager/producer
     user_is_elevated = False
     if cur_user:
         from app.services.rbac import is_admin, is_manager, is_producer, has_permission
@@ -121,14 +154,9 @@ async def planning_hub(
             "quotes": quotes,
             "current_resource_id": cur_resource_id,
             "user_is_elevated": user_is_elevated,
+            "full_screen": full_screen,
         },
     )
-
-
-@router.get("/calendar", response_class=HTMLResponse)
-async def calendar_redirect():
-    """Compat v3.4.10−: ora il calendario è una vista dell'hub."""
-    return RedirectResponse(url="/planning/?view=calendar", status_code=302)
 
 
 # ── Clienti API ───────────────────────────────────────────────────────

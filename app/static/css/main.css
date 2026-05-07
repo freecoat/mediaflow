@@ -407,6 +407,13 @@ a:hover { text-decoration: underline; }
 }
 body.sidebar-collapsed .main-area { margin-left: var(--sidebar-w-collapsed); }
 
+/* v3.5.0-alpha.44: full-screen mode (es. /planning/full standalone window).
+   Niente sidebar, niente topbar — solo contenuto pagina. La main-area
+   occupa tutta la viewport. */
+body.no-chrome .main-area { margin-left: 0; }
+body.no-chrome .page-content { padding: 0; }
+body.no-chrome { overflow: hidden; }
+
 /* ── Topbar ───────────────────────────────────────────────── */
 .topbar {
   height: var(--topbar-h);
