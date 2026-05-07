@@ -1966,8 +1966,15 @@ function _tlBindResize() {
       const inst = window._tlInstance;
       const host = document.getElementById('tl-host');
       if (!inst || !host) return;
-      try { inst.setOptions({ height: tlComputeHeight(host) }); } catch (_) {}
-    }, 150);
+      // v3.5.0-alpha.44.1 — anti-loop: skip se delta height insignificante.
+      // setOptions({height}) può triggerare un nuovo resize event in alcuni
+      // browser quando la timeline interna ricalcola layout → loop infinito.
+      const newH = tlComputeHeight(host);
+      const lastH = window._tlLastHeight || 0;
+      if (Math.abs(newH - lastH) < 8) return;  // < 8px = jitter, ignora
+      window._tlLastHeight = newH;
+      try { inst.setOptions({ height: newH }); } catch (_) {}
+    }, 250);  // era 150ms, alzato per maggiore stabilità
   });
 }
 // Auto-apply on load + bind handlers (eseguito una volta)
@@ -3784,6 +3791,9 @@ async function _doRenderTimeline(preserveWindow=false) {
   // setSelection su id non più validi al primo click).
   window._tlPrevSelection = [];
   window._tlSuppressSelect = false;
+  // v3.5.0-alpha.44.1: reset cache rangechanged dedup (nuova istanza)
+  window._tlLastRangeSig = null;
+  if (window._tlHeatTimer) { clearTimeout(window._tlHeatTimer); window._tlHeatTimer = null; }
   host.innerHTML = '';
   // Rimuovi container vis orfani che potrebbero essere stati lasciati da
   // un destroy parziale (vis-timeline 7.7 talvolta lascia .vis-timeline
@@ -3931,7 +3941,8 @@ async function _doRenderTimeline(preserveWindow=false) {
     // v3.5.0-alpha.44: altezza dinamica viewport (era hardcoded 600). Si
     // adatta al ridimensionamento finestra via tlComputeHeight + listener
     // window.resize bindato in _tlBindResize() qui sotto.
-    height: tlComputeHeight(host),
+    // α.44.1: tracking last height per evitare resize loop.
+    height: (window._tlLastHeight = tlComputeHeight(host)),
     start: win.start,
     end: win.end,
     groupOrder: 'id',
@@ -4281,6 +4292,20 @@ async function _doRenderTimeline(preserveWindow=false) {
   });
   tlInstance.on('rangechanged', (props) => {
     tlUpdateRangeLabel();
+    // v3.5.0-alpha.44.1 — HOTFIX freeze Chrome con 30+ booking + zoom mese:
+    // l'unico contenuto dinamico nei groups è la heatmap (ricalcolata sul
+    // range visibile). Se l'utente l'ha disabilitata (default α.44), salta
+    // completamente il rebuild → nessun DOM thrash su rangechanged.
+    // Inoltre: dedup range (vis-timeline emette rangechanged anche per
+    // movimenti minimi durante pan continuo) + throttle 500ms (era 150).
+    const prefs = (typeof tlPrefsLoad === 'function') ? tlPrefsLoad() : { heatmap: false };
+    if (!prefs.heatmap) return;
+    const winNow = tlInstance.getWindow();
+    const sIso = (props.start || winNow.start).toISOString();
+    const eIso = (props.end || winNow.end).toISOString();
+    const sig = sIso + '|' + eIso;
+    if (window._tlLastRangeSig === sig) return;
+    window._tlLastRangeSig = sig;
     clearTimeout(window._tlHeatTimer);
     window._tlHeatTimer = setTimeout(() => {
       const win = tlInstance.getWindow();
@@ -4288,10 +4313,13 @@ async function _doRenderTimeline(preserveWindow=false) {
       const end = props.end || win.end;
       const newGroups = tlBuildGroups(bookings, start, end);
       // Update SOLO foglie risorsa (id numerico) per non rompere nestedGroups dei parent dept
-      newGroups.filter(g => typeof g.id === 'number').forEach(g => {
-        try { groupsDS.update(g); } catch(_) {}
-      });
-    }, 150);
+      const leafGroups = newGroups.filter(g => typeof g.id === 'number');
+      // Batch single update (vis-timeline DataSet supporta array): una sola
+      // re-render invece di N. Riduce DOM thrash da O(N) chiamate a O(1).
+      if (leafGroups.length) {
+        try { groupsDS.update(leafGroups); } catch(_) {}
+      }
+    }, 500);
   });
 
   // v3.5.0-alpha.13: Delete/Backspace key → bulk delete dei booking

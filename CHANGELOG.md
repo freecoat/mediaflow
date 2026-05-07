@@ -1,5 +1,66 @@
 # MediaFlow — Changelog
 
+## v3.5.0-alpha.44.1 — HOTFIX: freeze Chrome con 30+ booking + zoom mese (7 maggio 2026)
+
+Test live α.44 su Chrome/Mac con 30+ booking + 20+ risorse: timeline
+"sfarfalla" da 2 settimane in su, sparisce griglia giorni a zoom mese,
+Chrome si blocca completamente. Su Firefox/Mac stesso scenario funziona.
+
+**Diagnosi:**
+
+Il callback `tlInstance.on('rangechanged')` (linea 4282 di planning.html)
+ricostruiva via `tlBuildGroups()` e applicava via `groupsDS.update()`
+TUTTI i groups foglia risorsa ad ogni evento rangechanged. Dopo il fix
+α.41 (heatmap cells come HTMLElement), questo significa creare ex-novo:
+
+  - 1 div wrapper + 1 div nome + 1 div ruolo per ogni risorsa
+  - **8-30 div .tl-heat-cell** per ogni risorsa (a seconda dello zoom)
+
+Con 20 risorse + zoom mese (30 giorni): **600+ nodi DOM ricreati ad
+ogni rangechanged**. Vis-timeline emette rangechanged anche per
+movimenti di pochi pixel durante pan/zoom continuo → cascata di DOM
+thrash che Chrome non smaltisce → main thread bloccato → freeze.
+
+Su Firefox lo stesso pattern era più tollerato (probabilmente per
+allocazione/GC strategy più aggressive su DOM detached).
+
+**Fix (3 livelli):**
+
+1. **Skip totale se heatmap OFF** (default α.44): nessun contenuto
+   dinamico nei groups → niente bisogno di rebuild su rangechanged.
+   Risolve il caso comune (utente lascia default).
+
+2. **Dedup range signature**: cache `window._tlLastRangeSig` con
+   start+end ISO. Se rangechanged fire con stesso range (succede con
+   smoothing pan), skip.
+
+3. **Throttle 500ms** (era 150ms) + **batch update** (`groupsDS.update`
+   accetta array → 1 sola re-render invece di N).
+
+**Anti-loop resize α.44:**
+
+`_tlBindResize` con `setOptions({height})` poteva fire ricorsivamente
+in alcuni browser (resize → setOptions → vis ricalcola layout →
+window resize trigger interno → loop). Aggiunto guard:
+- Skip se delta height < 8px (jitter)
+- Throttle a 250ms (era 150ms)
+- Tracking `window._tlLastHeight` settato dal render iniziale
+
+**Cleanup nuovo render:**
+
+`_doRenderTimeline` resetta `_tlLastRangeSig` e clearTimeout di
+`_tlHeatTimer` per evitare carry-over tra istanze vis-timeline.
+
+**Da indagare separatamente** (warning CSP eval): Chrome segnala
+"CSP blocks the use of 'eval'". Né MediaFlow né FastAPI mettono CSP
+header — probabilmente vis-timeline 7.7.3 internamente usa
+`new Function()` o eval per qualche path (forse moment.js per
+formatter custom). Non sembra essere causa primaria del freeze
+(altrimenti rotto sempre, non solo > 30 booking). Da rivisitare se
+persiste dopo questo hotfix.
+
+**Niente migrate, solo template `planning.html` + bump main.py.**
+
 ## v3.5.0-alpha.44 — Heatmap toggle + altezza dinamica + finestra standalone (7 maggio 2026)
 
 Test live di Matteo dopo α.43 ha riportato 4 issue + 1 da indagare:

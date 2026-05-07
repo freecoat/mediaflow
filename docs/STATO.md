@@ -8,7 +8,49 @@
 
 ## Versione corrente
 
-**v3.5.0-alpha.44** — 7 maggio 2026 — Heatmap toggle + altezza dinamica + finestra standalone
+**v3.5.0-alpha.44.1** — 7 maggio 2026 — HOTFIX freeze Chrome 30+ booking
+
+Test α.44 su Chrome/Mac con 30+ booking + 20+ risorse: timeline sfarfalla
+da 2 settimane in su, sparisce griglia giorni a zoom mese, Chrome si
+blocca. Firefox/Mac stesso scenario funziona.
+
+**Diagnosi:** rangechanged callback ricostruiva via `tlBuildGroups()` +
+`groupsDS.update()` TUTTI i groups foglia ad ogni evento. Dopo fix α.41
+(heatmap cells come HTMLElement), 20 risorse × 30 giorni zoom mese =
+**600+ DOM nodes ricreati ad ogni rangechanged**. Vis-timeline emette
+rangechanged anche per piccoli movimenti pan → cascade DOM thrash →
+main thread bloccato Chrome.
+
+**Chiuso α.44.1:**
+- ✅ Skip rangechanged update se `prefs.heatmap=false` (default α.44):
+  nessun contenuto dinamico nei groups → niente rebuild necessario
+- ✅ Dedup range signature `window._tlLastRangeSig` (skip se
+  start+end identici al precedente)
+- ✅ Throttle bumped 150→500ms su `_tlHeatTimer`
+- ✅ Batch update: `groupsDS.update(arr)` invece di N call separate
+- ✅ Anti-loop `_tlBindResize`: skip se delta height < 8px,
+  throttle 250ms, tracking `window._tlLastHeight`
+- ✅ `_doRenderTimeline` resetta `_tlLastRangeSig` + clearTimeout
+  `_tlHeatTimer` per nuova istanza
+
+**Verifica live richiesta a Matteo:**
+- `/planning` su Chrome con 30+ booking. Zoom: settimana → mese.
+  Non deve più sfarfallare né bloccare la pagina
+- Ridimensiona finestra browser → no loop di resize
+- Se attivi heatmap (📊 toolbar) e poi zoom mese: con questi fix il
+  rebuild è throttled ma comunque presente. Su monitor lento può
+  ancora pesare. Soluzione futura se persiste: rendere heatmap
+  generata con CSS (background-image gradient) invece di N div
+
+**Bug ancora aperti:**
+- ⚠ Warning CSP "blocks eval" in Chrome — probabilmente vis-timeline
+  7.7.3 usa `new Function()` interno. Non sembra causa del freeze (era
+  ovunque, non solo > 30 booking). Da rivisitare se freeze persiste
+- ⚠ Timeline nera in Chrome — separato. In attesa info DevTools
+
+**Niente migrate, solo template planning.html + bump main.py.**
+
+## v3.5.0-alpha.44 — Heatmap toggle + altezza dinamica + finestra standalone (7 maggio 2026)
 
 Test live α.43 ha riportato 4 issue + 1 da indagare. Risolti: heatmap
 "quadratini verdi" (era una feature pre-esistente che ora si vede grazie
