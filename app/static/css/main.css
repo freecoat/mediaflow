@@ -44,6 +44,7 @@
 
   /* Layout */
   --sidebar-w: 220px;
+  --sidebar-w-collapsed: 64px;
   --topbar-h:  56px;
   --radius:    8px;
   --radius-lg: 14px;
@@ -333,6 +334,68 @@ a:hover { text-decoration: underline; }
   border-top: 1px solid var(--border);
 }
 
+/* v3.5.0-alpha.43: sidebar collapse mode (toggle dalla topbar). Persistenza
+   via localStorage `mf_sidebar_collapsed`. Nasconde label/section-label/logo-text
+   via font-size:0 (mantiene il testo nel DOM per leggerlo come tooltip on hover).
+   Hover con delay 1s → tooltip flottante (gestito in global.js mfSidebarTooltip). */
+.sidebar.collapsed { width: var(--sidebar-w-collapsed); }
+.sidebar.collapsed .logo-text,
+.sidebar.collapsed .nav-section-label { display: none; }
+.sidebar.collapsed .sidebar-logo { padding: 18px 0; justify-content: center; gap: 0; }
+.sidebar.collapsed .nav-item {
+  gap: 0;
+  font-size: 0;            /* nasconde testo, mantiene presenza nel DOM */
+  justify-content: center;
+  padding: 10px 0;
+}
+.sidebar.collapsed .nav-item .nav-icon { width: 22px; }
+.sidebar.collapsed .nav-item .nav-icon svg { width: 20px; height: 20px; }
+.sidebar.collapsed .sidebar-nav { padding: 12px 6px; }
+.sidebar.collapsed .nav-section { margin-bottom: 14px; }
+.sidebar.collapsed .sidebar-footer { padding: 12px 6px; }
+
+/* Tooltip flottante per icona collassata (v3.5.0-alpha.43) */
+#mf-sidebar-tip {
+  position: fixed;
+  background: var(--bg2, #181c27);
+  color: var(--text, #e8eaf3);
+  padding: 6px 12px;
+  border-radius: 6px;
+  font-size: 13px;
+  font-weight: 500;
+  border: 1px solid var(--border, rgba(255,255,255,.08));
+  z-index: 200;
+  box-shadow: 0 4px 12px rgba(0,0,0,.4);
+  pointer-events: none;
+  white-space: nowrap;
+  opacity: 0;
+  transform: translateY(-50%);
+  transition: opacity .15s ease;
+}
+#mf-sidebar-tip.visible { opacity: 1; }
+
+/* Topbar left side (toggle + title) (v3.5.0-alpha.43) */
+.topbar-left { display: flex; align-items: center; min-width: 0; }
+
+/* Toggle button in topbar (v3.5.0-alpha.43) */
+.topbar-sidebar-toggle {
+  background: transparent;
+  border: 1px solid transparent;
+  color: var(--text2);
+  width: 36px; height: 36px;
+  display: inline-flex; align-items: center; justify-content: center;
+  border-radius: 8px;
+  cursor: pointer;
+  margin-right: 12px;
+  transition: background .12s ease, color .12s ease, border-color .12s ease;
+}
+.topbar-sidebar-toggle:hover {
+  background: var(--bg3);
+  color: var(--text);
+  border-color: var(--border);
+}
+.topbar-sidebar-toggle svg { width: 18px; height: 18px; }
+
 /* ── Main content ─────────────────────────────────────────── */
 .main-area {
   margin-left: var(--sidebar-w);
@@ -340,7 +403,9 @@ a:hover { text-decoration: underline; }
   display: flex;
   flex-direction: column;
   min-height: 100vh;
+  transition: margin-left var(--t);
 }
+body.sidebar-collapsed .main-area { margin-left: var(--sidebar-w-collapsed); }
 
 /* ── Topbar ───────────────────────────────────────────────── */
 .topbar {

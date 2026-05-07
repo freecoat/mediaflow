@@ -8,7 +8,42 @@
 
 ## Versione corrente
 
-**v3.5.0-alpha.42** — 7 maggio 2026 — Multi-move atomico + sticky multi-selection
+**v3.5.0-alpha.43** — 7 maggio 2026 — Sidebar collassabile + Manuale d'uso wiki
+
+Quality-of-life: sidebar che si nasconde lasciando solo le icone (più
+spazio per timeline/contenuti su schermi piccoli), e prima versione del
+manuale d'uso navigabile dentro l'app.
+
+**Chiuso α.43:**
+- ✅ Sidebar collapse mode: width 64px, label nascoste via `font-size:0`,
+  toggle in topbar sx, scorciatoia <kbd>Ctrl</kbd>+<kbd>B</kbd>,
+  persistenza `localStorage.mf_sidebar_collapsed`
+- ✅ Tooltip flottante hover 1s su icone collassate (label da textContent,
+  posizionato a destra dell'icona, no layout shift)
+- ✅ Main-area si adatta col transition CSS al toggle
+- ✅ Pagina `/manuale` con TOC sticky + content + search client-side +
+  IntersectionObserver per evidenziare sezione corrente
+- ✅ Voce sidebar "Manuale" in nuova sezione "Aiuto" (senza permessi
+  speciali, visibile a tutti)
+- ✅ Bozze contenuti per 11 sezioni (Concetti, Pianificazione, Quote,
+  Cost Report, DAM, Copilot, Admin, Scorciatoie, FAQ)
+- ✅ Cache-buster CSS+JS bumpato a `?v=3.5.0-alpha.43`
+
+**Verifica live richiesta a Matteo:**
+- `/dashboard` → click sul pulsante in alto a sinistra (icona
+  panel-left-close) → la sidebar si collassa a 64px, vedi solo icone
+- Hover su un'icona per 1 secondo → appare tooltip a destra con la label
+- Click sull'icona → naviga normalmente
+- <kbd>Ctrl</kbd>+<kbd>B</kbd> da qualunque pagina → toggle sidebar
+- Refresh pagina → lo stato collassato persiste
+- Espandi sidebar → click su "Manuale" (nuova sezione "Aiuto")
+- Pagina `/manuale`: TOC a sx, click su una voce → scroll alla sezione
+- Search nella TOC: digita "kbd" o "split" → resta solo le sezioni che
+  contengono quella stringa
+
+**Niente migrate**: solo CSS, JS, template, nuovo router GET.
+
+## v3.5.0-alpha.42 — Multi-move atomico + sticky multi-selection (7 maggio 2026)
 
 α.41 ha sistemato il font ma il multi-move restava rotto. Test live di
 Matteo (2 booking ricorrenti split risorsa multipla) ha esposto 3 sintomi
@@ -64,96 +99,29 @@ undo + render parziale.
 **Niente migrate**: nuovo endpoint backend + refactor JS template, niente
 schema DB.
 
-α.40 ha messo inline styles brutali nelle stringhe HTML del content
-delle label risorsa, ma il bold/font sui nomi operatore restava
-invisibile (header reparto invece corretto).
-
-**Diagnosi confermata da DOM dump Matteo:**
-
-```html
-<div class="vis-inner">
-  <div>                           ← era <div class="tl-res-cell" style="display:flex;...">
-    <div>Luca Bianchi</div>       ← era <div class="tl-res-name" style="font-weight:800;...">
-    <div>Online Editor</div>      ← era <div class="tl-res-role" style="font-size:9px;...">
-    <div>...heatmap...</div>
-  </div>
-</div>
-```
-
-Tutti i `class` e `style` annidati spariti. Vis-timeline 7.7.3 sanifica
-gli HTML string passati come `group.content` quando contengono nested
-elements. Header reparto sopravviveva perché single `<span>` root.
-
-**Chiuso α.41:**
-- ✅ `tlBuildResourceGroups` line ~2664: content delle foglie risorsa
-  ora è HTMLElement detached (`document.createElement` +
-  `style.cssText` + `textContent`) anziché stringa HTML
-- ✅ `tlHeatmapHTML` → `tlHeatmapElement`: ritorna `HTMLElement` o
-  `null`, costruito via DOM API
-- ✅ Header reparto + tlBuildProjectGroups invariati (single `<span>`
-  root, già funzionante in α.40)
-
-**Verifica live richiesta a Matteo:**
-- Riapri `/planning` → tab Timeline
-- Sidebar sinistra: nome operatore in **bold 14px bianco**, sotto
-  funzione in `9px UPPERCASE` grigio chiaro
-- Heatmap sotto la riga (8 segmenti tipici per range settimanale)
-- DevTools sui nomi: ora dovrebbero esserci `<div class="tl-res-name"
-  style="font-weight:800; font-size:14px; ...">` con tutti gli attributi
-
-**Niente migrate**: solo template `planning.html`.
-
-⚠ **Resta APERTO il bug multidrag conflitti fantasma:**
-- Sintomo: shift +1h su multi-select con bookings split → conflitti
-  orari segnalati dal bulk-edit
-- Possibili cause:
-  - REALI: A split (A1+A2 risorsa X) + B (risorsa X) selezionati. Drag
-    A1+1h. Sib A2 spostato +1h. Bulk-edit shifta B+60min → B nuovo
-    può overlappare con A2 nuovo. Limite semantico
-  - SPURII: bulk-edit `_check_assignment_conflict` non sa che gli
-    assignments che sta per modificare sono "atomici" → fa check su
-    stato intermedio
-  - Diagnostica: chiedere a Matteo scenario specifico (quali risorse,
-    quali posizioni iniziali e finali, toast esatto). Se spurii:
-    aggiungere parametro `exclude_assignment_ids` (CSV) a bulk-edit
-    per skippare nei check gli assignment in modifica nella stessa
-    transazione
-
-**Verifica live richiesta a Matteo:**
-- `/planning` → tab Timeline. Bottone `☑ Seleziona…` non c'è più
-- Modalità area (`S` o bottone `📦 Area`): trascina un'area, poi
-  un'altra senza uscire dalla modalità → la seconda area si AGGIUNGE
-  alla prima (toast "+N aggiunti, totale M")
-- Label sinistra: nome operatore in **bold**, sotto la funzione in
-  italic 9.5px. Header reparto più grande, no maiuscole. Ogni riga ha
-  uno sfondo soft del colore della risorsa, sia in label sia in foreground
-- Filtri sidebar: nuovi campi "Orario da / a" — imposta es. 14:00 / 18:00
-  → la timeline mostra solo i booking che hanno almeno un assignment
-  nella fascia. Reset con "Reset filtri"
-- Modal Bulk-edit (selezione + bottone ✏ Bulk in toolbar):
-  - "Sposta a nuova data di inizio": setta una data → tutti i booking
-    si spostano dello stesso delta giornaliero rispetto al più antico,
-    mantenendo cadenza e orario
-  - "Orario assoluto: dalle / alle": sostituisce ore:minuti su tutti
-    (mantiene la data). Si combina con shift e new-date
-  - I tre operatori temporali si combinano (in ordine: data, shift,
-    orario). Conflitti orari: il booking viene saltato
-
-**Niente migrate**: solo modifiche al template `planning.html`.
-
-**In coda Round 12**:
-- 🔜 **Multidrag** (sposto N booking simultaneamente con un solo gesto):
-  ROI ora seleziona, ma il drag multiplo "vero" resta da affrontare —
-  vis-timeline non lo supporta nativamente, candidato di sostituzione
-  libreria (Bryntum/DHTMLX) da valutare
-- 🔜 **Batch modifica orario+risorse** sui booking selezionati: estendere
-  `modal-bulk-edit` con orario assoluto + sostituisci/aggiungi risorsa
-  + endpoint `bulk-edit` corrispondente
+**In coda Round 12** (resta valido):
 - 🔜 Test Mac+Chrome del branch `experiment/timeline-audit`
 - 🔜 Step 3-5 del piano export (CSV/Excel altre entità, import per-entità
   con dry-run, refinements)
+- 🔜 Sostituzione vis-timeline (Bryntum/DHTMLX) — valutazione, non
+  ancora prioritaria con multi-move atomico α.42 funzionante
+
 
 ## Storico recenti
+
+**v3.5.0-alpha.42** — 7 maggio 2026 — Multi-move atomico + sticky multi-selection
+
+Test live (2 booking ricorrenti split risorsa multipla) ha esposto 3
+sintomi convergenti su unica root cause: `onMove` chiamava in sequenza 3
+funzioni indipendenti, ognuna con suo PUT/POST + push undo + render
+parziale. Sintomi: "booking spariscono" (render parziale), "14 undo per
+ripristinare" (push frammentato), conflitti fantasma (check su stato
+intermedio), click+drag deseleziona. Fix: endpoint atomico
+`POST /planning/api/multi-move` con conflict check escludendo TUTTI gli
+aids della transazione + all-or-nothing rollback; frontend
+`_tlApplyMultiMove` (anchor + sibling + altri + loro-sibling con dedup)
+con 1 push undo atomico + 1 renderTimeline finale; sticky multi-selection
+con loop guard sincrono.
 
 **v3.5.0-alpha.41** — 7 maggio 2026 — Font label timeline via HTMLElement (vis-timeline strippa style annidati)
 

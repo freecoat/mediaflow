@@ -1,5 +1,55 @@
 # MediaFlow — Changelog
 
+## v3.5.0-alpha.43 — Sidebar collassabile + Manuale d'uso wiki (7 maggio 2026)
+
+Quality-of-life: sidebar che si nasconde lasciando solo le icone (più
+spazio per la timeline su schermi piccoli), e prima versione del
+manuale d'uso navigabile dentro l'app.
+
+**Sidebar collassabile:**
+- Pulsante toggle in topbar a sinistra (icona `panel-left-close` /
+  `panel-left-open`). Scorciatoia <kbd>Ctrl</kbd>+<kbd>B</kbd>.
+- Larghezza collassata: 64px (icone visibili, label nascoste via
+  `font-size:0` per mantenere il testo nel DOM e leggerlo come tooltip)
+- Persistenza in `localStorage.mf_sidebar_collapsed`
+- Hover 1s su un'icona quando collassata → tooltip flottante con la
+  label completa (posizionato a destra dell'icona, niente layout shift)
+- Main-area si adatta automaticamente al cambio larghezza (transition
+  CSS) — niente jump
+
+**Manuale d'uso wiki:**
+- Nuova route `GET /manuale` (router `app/routers/help.py`)
+- Voce sidebar "Manuale" in nuova sezione "Aiuto" (visibile a tutti gli
+  utenti loggati, senza permessi specifici)
+- Layout TOC sticky a sinistra + content area a destra (responsive a
+  colonna singola sotto 900px)
+- Sezioni: Introduzione, Concetti chiave (Cliente/Quote/Booking/Listino),
+  Pianificazione (timeline/multi-select/split/conflitti), Quotazioni,
+  Cost Report, Asset Library, AI Copilot, Amministrazione, Scorciatoie
+  tastiera, FAQ
+- Bozze contenuti basate sul codice attuale (multi-move atomico α.42,
+  sticky α.42, ROI/area α.36, font HTMLElement α.41, export/import α.34,
+  ecc.)
+- Search client-side filtra le sezioni (debounce 150ms)
+- IntersectionObserver per evidenziare la sezione corrente nella TOC
+  durante lo scroll
+- Anchor links + `scroll-margin-top` per centrare la sezione sotto la topbar
+
+**File modificati:**
+- `app/static/css/main.css`: variabile `--sidebar-w-collapsed`, classi
+  `.sidebar.collapsed *`, `#mf-sidebar-tip`, `.topbar-sidebar-toggle`,
+  `.topbar-left`, `body.sidebar-collapsed .main-area`
+- `app/static/js/global.js`: `mfToggleSidebar`, `_mfInitSidebarTooltip`,
+  `_mfInitSidebarFromStorage`, `_mfBindSidebarShortcut`
+- `app/templates/base.html`: wrap `topbar-left` con button toggle,
+  nuova sezione "Aiuto" in sidebar con voce Manuale
+- `app/routers/help.py`: nuovo (route `/manuale`)
+- `app/routers/__init__.py` + `app/main.py`: import + include_router
+- `app/templates/pages/manuale.html`: nuovo (template wiki completo)
+- Cache-buster CSS + JS bumpato a `?v=3.5.0-alpha.43`
+
+**Niente migrate.**
+
 ## v3.5.0-alpha.42 — Multi-move atomico + sticky multi-selection (7 maggio 2026)
 
 α.41 ha sistemato il font ma il multi-move restava rotto. Test live di Matteo

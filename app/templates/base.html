@@ -9,7 +9,7 @@
   <meta http-equiv="Pragma" content="no-cache">
   <meta http-equiv="Expires" content="0">
   <title>{% block title %}MediaFlow{% endblock %}</title>
-  <link rel="stylesheet" href="/static/css/main.css?v=3.4.56">
+  <link rel="stylesheet" href="/static/css/main.css?v=3.5.0-alpha.43">
   <!-- FullCalendar 6.x: lo stylesheet è incorporato in index.global.min.js — niente CSS separato. -->
   <!-- v3.5.0-alpha.30: Lucide icons (1500+ stroke-based, 1.5px). -->
   <style>
@@ -115,6 +115,13 @@
       </div>
       {% endif %}
 
+      <div class="nav-section">
+        <div class="nav-section-label">Aiuto</div>
+        <a href="/manuale" data-nav-id="manuale" class="nav-item {% if active_page == 'manuale' %}active{% endif %}">
+          <span class="nav-icon"><i data-lucide="book-open"></i></span> Manuale
+        </a>
+      </div>
+
       {% if can_manage_users(_user) or can_manage_roles(_user) or has_permission(_user, 'view_trash') %}
       <div class="nav-section">
         <div class="nav-section-label">Amministrazione</div>
@@ -147,7 +154,12 @@
   <!-- ── Main area ─────────────────────────────────────────── -->
   <div class="main-area">
     <header class="topbar">
-      <span class="topbar-title">{% block topbar_title %}{% endblock %}</span>
+      <div class="topbar-left">
+        <button class="topbar-sidebar-toggle" id="mf-sidebar-toggle" title="Mostra/nascondi menu (Ctrl+B)" onclick="mfToggleSidebar()">
+          <i data-lucide="panel-left-close"></i>
+        </button>
+        <span class="topbar-title">{% block topbar_title %}{% endblock %}</span>
+      </div>
       <div class="topbar-actions">
         {% block topbar_actions %}{% endblock %}
         {% if request.state.current_user %}
@@ -183,7 +195,7 @@
 {% endif %}
 
 <script src="/static/js/lucide.min.js?v=3.5.0-alpha.30"></script>
-<script src="/static/js/global.js?v=3.5.0-alpha.30"></script>
+<script src="/static/js/global.js?v=3.5.0-alpha.43"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/fullcalendar/6.1.11/index.global.min.js"></script>
 <script>
   // v3.5.0-alpha.30: Lucide createIcons() al primo paint + helper globale

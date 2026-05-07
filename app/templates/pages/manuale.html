@@ -1,0 +1,450 @@
+{% extends "base.html" %}
+{% block title %}Manuale d'uso — MediaFlow{% endblock %}
+{% block topbar_title %}Manuale d'uso{% endblock %}
+
+{% block head %}
+<style>
+  .manuale-shell {
+    display: grid;
+    grid-template-columns: 240px 1fr;
+    gap: 32px;
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: 24px 32px;
+    align-items: start;
+  }
+  .manuale-toc {
+    position: sticky;
+    top: calc(var(--topbar-h) + 16px);
+    max-height: calc(100vh - var(--topbar-h) - 32px);
+    overflow-y: auto;
+    background: var(--bg2);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-lg);
+    padding: 18px 14px;
+  }
+  .manuale-toc h3 {
+    font-size: 11px; text-transform: uppercase; letter-spacing: 0.08em;
+    color: var(--text3); margin: 0 0 10px 4px; font-weight: 600;
+  }
+  .manuale-toc-search {
+    width: 100%;
+    background: var(--bg3); border: 1px solid var(--border); color: var(--text);
+    padding: 7px 10px; border-radius: 7px; font-size: 13px;
+    margin-bottom: 12px;
+  }
+  .manuale-toc a {
+    display: block;
+    padding: 5px 10px;
+    border-radius: 6px;
+    color: var(--text2);
+    font-size: 13px;
+    text-decoration: none;
+    margin: 2px 0;
+    transition: background .12s ease, color .12s ease;
+  }
+  .manuale-toc a:hover { background: var(--bg3); color: var(--text); }
+  .manuale-toc a.active {
+    background: var(--indigo-bg);
+    color: var(--indigo2);
+    font-weight: 500;
+  }
+  .manuale-toc a.toc-sub {
+    padding-left: 22px;
+    font-size: 12px;
+    color: var(--text3);
+  }
+  .manuale-content {
+    background: var(--bg2);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-lg);
+    padding: 36px 44px;
+    line-height: 1.65;
+    color: var(--text2);
+    font-size: 14.5px;
+  }
+  .manuale-content h1 { font-size: 26px; font-weight: 700; color: var(--text); margin: 0 0 8px; }
+  .manuale-content h2 {
+    font-size: 20px; font-weight: 700; color: var(--text);
+    margin: 36px 0 12px; padding-top: 20px;
+    border-top: 1px solid var(--border);
+  }
+  .manuale-content h2:first-of-type { border-top: none; padding-top: 0; margin-top: 28px; }
+  .manuale-content h3 { font-size: 16px; font-weight: 600; color: var(--text); margin: 22px 0 8px; }
+  .manuale-content p { margin: 0 0 12px; }
+  .manuale-content ul, .manuale-content ol { margin: 0 0 14px 22px; padding: 0; }
+  .manuale-content li { margin: 4px 0; }
+  .manuale-content code {
+    background: var(--bg3);
+    padding: 1px 6px;
+    border-radius: 4px;
+    font-family: 'DM Mono', 'JetBrains Mono', Consolas, monospace;
+    font-size: 12.5px;
+    color: var(--indigo2);
+  }
+  .manuale-content kbd {
+    background: var(--bg3);
+    border: 1px solid var(--border);
+    border-bottom-width: 2px;
+    padding: 1px 7px;
+    border-radius: 5px;
+    font-family: 'DM Mono', monospace;
+    font-size: 12px;
+    color: var(--text);
+  }
+  .manuale-content a { color: var(--indigo2); }
+  .manuale-content blockquote {
+    margin: 12px 0; padding: 10px 16px;
+    border-left: 3px solid var(--indigo);
+    background: var(--indigo-bg);
+    border-radius: 0 8px 8px 0;
+    color: var(--text);
+  }
+  .manuale-content blockquote p:last-child { margin-bottom: 0; }
+  .manuale-content table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 12px 0 18px;
+    font-size: 13.5px;
+  }
+  .manuale-content th, .manuale-content td {
+    text-align: left;
+    padding: 8px 12px;
+    border-bottom: 1px solid var(--border);
+  }
+  .manuale-content th {
+    background: var(--bg3);
+    color: var(--text);
+    font-weight: 600;
+    font-size: 12px;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+  }
+  .manuale-content section { scroll-margin-top: calc(var(--topbar-h) + 16px); }
+  .manuale-content section.hidden { display: none; }
+
+  /* Hint info chip per "in arrivo" / "beta" */
+  .manuale-chip {
+    display: inline-block;
+    background: var(--bg3);
+    color: var(--text3);
+    padding: 1px 8px;
+    border-radius: 999px;
+    font-size: 11px;
+    font-weight: 500;
+    margin-left: 8px;
+    vertical-align: middle;
+  }
+  .manuale-chip.beta { background: rgba(251,146,60,.15); color: #fb923c; }
+  .manuale-chip.new  { background: rgba(34,197,94,.15);  color: #22c55e; }
+
+  @media (max-width: 900px) {
+    .manuale-shell { grid-template-columns: 1fr; }
+    .manuale-toc { position: relative; top: 0; max-height: none; }
+  }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="manuale-shell">
+
+  <aside class="manuale-toc">
+    <h3>Indice</h3>
+    <input type="search" class="manuale-toc-search" id="manuale-search" placeholder="🔍 Cerca…">
+    <a href="#intro" class="active">Introduzione</a>
+    <a href="#concetti">Concetti chiave</a>
+    <a href="#concetti-cliente"     class="toc-sub">Cliente · Progetto · Job</a>
+    <a href="#concetti-quote"       class="toc-sub">Quote e versioning</a>
+    <a href="#concetti-booking"     class="toc-sub">Booking e Assignment</a>
+    <a href="#concetti-listino"     class="toc-sub">Listino e Reparti</a>
+    <a href="#planning">Pianificazione</a>
+    <a href="#planning-timeline"    class="toc-sub">Timeline</a>
+    <a href="#planning-multi"       class="toc-sub">Multi-select e drag</a>
+    <a href="#planning-split"       class="toc-sub">Split pausa pranzo</a>
+    <a href="#planning-conflict"    class="toc-sub">Conflitti e ferie</a>
+    <a href="#quote">Quotazioni</a>
+    <a href="#quote-versioning"     class="toc-sub">Versioning A/B/C</a>
+    <a href="#quote-conversion"     class="toc-sub">Conversione in Job</a>
+    <a href="#cost-report">Cost Report</a>
+    <a href="#dam">Asset Library</a>
+    <a href="#copilot">AI Copilot</a>
+    <a href="#admin">Amministrazione</a>
+    <a href="#admin-utenti"         class="toc-sub">Utenti, ruoli, permessi</a>
+    <a href="#admin-cestino"        class="toc-sub">Cestino e ripristino</a>
+    <a href="#admin-data"           class="toc-sub">Export/Import dati</a>
+    <a href="#shortcuts">Scorciatoie tastiera</a>
+    <a href="#faq">FAQ e troubleshooting</a>
+  </aside>
+
+  <article class="manuale-content">
+
+    <section id="intro">
+      <h1>Manuale d'uso MediaFlow</h1>
+      <p>MediaFlow è una piattaforma di gestione per case di post-produzione audiovisiva, con un assistente AI integrato come <strong>co-pilota</strong>. Coordina il lavoro dalla quotazione iniziale fino al cost report finale.</p>
+
+      <h2>Filosofia</h2>
+      <ul>
+        <li><strong>AI propone, utente dispone.</strong> Ogni mutazione automatizzata richiede una conferma esplicita. Niente azioni "magiche" non tracciate.</li>
+        <li><strong>Funziona anche senza AI.</strong> Il copilota è un acceleratore, non un requisito: se non configuri provider AI, MediaFlow resta pienamente operativo.</li>
+        <li><strong>Listino modulare.</strong> Il listino non è uno standard rigido: ogni casa di post ha il suo, e il sistema si adatta.</li>
+      </ul>
+
+      <h2>Come è strutturata l'interfaccia</h2>
+      <ul>
+        <li><strong>Sidebar sinistra</strong>: navigazione tra le sezioni. Si può collassare con il tasto in alto a sinistra (<kbd>Ctrl</kbd>+<kbd>B</kbd>). In modalità collassata, hover su un'icona per 1 secondo mostra il nome.</li>
+        <li><strong>Topbar</strong>: titolo della pagina + azioni contestuali + campanella notifiche + nome utente.</li>
+        <li><strong>Copilot</strong>: pulsante 💬 fisso in basso a destra. Apre un drawer laterale con l'assistente AI. Vedi <a href="#copilot">AI Copilot</a>.</li>
+      </ul>
+    </section>
+
+    <section id="concetti">
+      <h2>Concetti chiave</h2>
+      <p>La gerarchia delle entità è il cuore di MediaFlow. Capire come si compongono evita confusione su cosa appare dove.</p>
+
+      <h3 id="concetti-cliente">Cliente · Progetto · Job</h3>
+      <ul>
+        <li><strong>Cliente</strong> — l'azienda committente (es. una distribuzione, una produzione). Sezione <a href="/clients">Clienti</a>.</li>
+        <li><strong>Progetto</strong> — un'opera audiovisiva commissionata da un cliente (es. "Il film X stagione 1"). Un cliente può avere più progetti. Sezione <a href="/projects">Progetti</a>.</li>
+        <li><strong>Quotazione</strong> (Quote) — una proposta economica per un progetto. Un progetto può avere più quote (versioni A/B/C, revisioni). Quando una è approvata, si converte in <em>Job</em>.</li>
+        <li><strong>Job</strong> — il lavoro effettivo da eseguire, con righe di costo (JobCostLine) ognuna riferita a una voce del listino. Da qui nascono i <em>Booking</em> di pianificazione.</li>
+      </ul>
+
+      <h3 id="concetti-quote">Quote e versioning</h3>
+      <p>Una quotazione contiene righe di prezzo (con quantità, unità, prezzo unitario) e produce un PDF. Il versioning permette di proporre più alternative al cliente:</p>
+      <ul>
+        <li>Sconto pacchetto applicabile a tutto il documento</li>
+        <li>IVA configurabile</li>
+        <li>3 livelli prezzo per voce: <em>List</em>, <em>Average</em>, <em>Low</em></li>
+        <li>Hardcosts (costi vivi non scontabili)</li>
+      </ul>
+
+      <h3 id="concetti-booking">Booking e Assignment <span class="manuale-chip">core</span></h3>
+      <p>Un <strong>Booking</strong> è una prenotazione di lavoro su una o più <strong>risorse</strong> (persone, sale, attrezzature) per una <em>finestra temporale</em>. Tecnicamente un booking ha una "envelope" (start/end totale) e <em>N assignment</em>:</p>
+      <ul>
+        <li>Un <strong>Assignment</strong> = una risorsa + start + end specifico</li>
+        <li>Un booking <strong>multi-risorsa</strong> ha più assignment, una per risorsa coinvolta</li>
+        <li>Un booking <strong>splittato</strong> (es. pausa pranzo) ha più assignment <em>sulla stessa risorsa</em>, con orari diversi nella stessa giornata</li>
+      </ul>
+      <blockquote>
+        <p>Quando sposti un assignment splittato sulla timeline, gli altri segmenti dello <em>stesso</em> booking sulla <em>stessa</em> risorsa si spostano in blocco automaticamente (split-pause unit drag).</p>
+      </blockquote>
+
+      <h3 id="concetti-listino">Listino e Reparti</h3>
+      <ul>
+        <li><strong>Reparto</strong> (Department) — unità di responsabilità trasversale (DI/Video, VFX, Audio, Commercial). Ogni risorsa e ogni voce listino appartiene a un reparto.</li>
+        <li><strong>Voce listino</strong> (PriceItem) — un servizio prezzato (es. "Color grading 1 ora", "Mix 5.1 a giornata"). Ha 3 livelli prezzo, unità di misura, descrizione, e <em>keywords</em> per il matching AI.</li>
+        <li><strong>Risorsa</strong> — può essere persona interna, freelance, sala, attrezzatura, software, veicolo.</li>
+      </ul>
+    </section>
+
+    <section id="planning">
+      <h2>Pianificazione</h2>
+      <p>La pagina <a href="/planning">Pianificazione</a> ha tre viste: <strong>Lista</strong>, <strong>Timeline</strong>, <strong>Calendario</strong>. La Timeline è quella più interattiva.</p>
+
+      <h3 id="planning-timeline">Timeline</h3>
+      <p>Vista orizzontale tipo Gantt: risorse in colonna sinistra, tempo in alto. Ogni booking è una "barra" colorata. Modalità di raggruppamento:</p>
+      <ul>
+        <li><strong>Per risorsa</strong> (default) — gruppo per reparto, foglie risorsa</li>
+        <li><strong>Per progetto</strong> — gruppo per progetto, foglie job</li>
+      </ul>
+      <p>Background colorato per ferie/malattia/festività/timbrature. Heatmap di occupazione sotto il nome di ogni risorsa.</p>
+
+      <h3 id="planning-multi">Multi-select e drag</h3>
+      <ul>
+        <li><strong>Selezione singola</strong>: click su un booking</li>
+        <li><strong>Multi-selezione</strong>: <kbd>Shift</kbd>+click oppure <kbd>Ctrl</kbd>+click su più booking</li>
+        <li><strong>Sticky multi</strong> <span class="manuale-chip new">α.42</span> — click su un booking già selezionato preserva la multi (utile prima del drag)</li>
+        <li><strong>Modalità area</strong>: tasto <kbd>S</kbd> oppure pulsante 📦 Area → trascina un riquadro per selezionare tutti i booking dentro</li>
+        <li><strong>Drag</strong>: trascina un booking per spostarlo. Su multi-selezione, il drag sposta TUTTI i booking selezionati dello stesso delta (multi-move atomico)</li>
+        <li><strong>Resize</strong>: trascina i bordi laterali per cambiare la durata</li>
+        <li><strong>Cross-resource</strong>: trascina su un'altra riga risorsa → menu Sposta/Duplica</li>
+        <li><strong>Alt+drag</strong>: duplica anziché spostare</li>
+      </ul>
+
+      <h3 id="planning-split">Split pausa pranzo</h3>
+      <p>Per spezzare un booking in due segmenti (es. mattina + pomeriggio con pausa), apri il booking in dettaglio → "Split". Indica l'orario della pausa. I due segmenti restano linkati: spostarne uno sposta anche l'altro.</p>
+
+      <h3 id="planning-conflict">Conflitti e ferie</h3>
+      <ul>
+        <li><strong>Conflitto orario</strong>: due booking sulla stessa risorsa con orari sovrapposti. La timeline li evidenzia in rosso. Le modifiche che generano conflitto vengono <strong>bloccate server-side</strong>.</li>
+        <li><strong>Ferie/malattia</strong>: hard block. Non è possibile prenotare una risorsa nei suoi giorni di indisponibilità.</li>
+        <li><strong>Festività</strong>: soft block. Si può prenotare ma scatta workflow di approvazione straordinario con maggiorazione festiva.</li>
+        <li><strong>Cross-department</strong>: se assegni una risorsa di un reparto diverso da quello del task, viene mostrato un badge ⚠ e una conferma esplicita.</li>
+      </ul>
+    </section>
+
+    <section id="quote">
+      <h2>Quotazioni</h2>
+      <p>Le quotazioni vivono dentro un progetto. Si crea da <a href="/quotes">Quotazioni</a> oppure dalla scheda progetto.</p>
+
+      <h3 id="quote-versioning">Versioning A/B/C</h3>
+      <p>Una quotazione può avere più <em>versioni</em> per gestire revisioni con il cliente. Auto-numerazione <code>Q-{anno}-NNN</code>. Drag&drop dal listino direttamente nelle righe della quote.</p>
+
+      <h3 id="quote-conversion">Conversione in Job</h3>
+      <p>Quando il cliente approva una quotazione, click "Converti in Job" → si crea automaticamente un Job con le righe di costo derivate dalla quote. Da quel momento le ore lavorate vengono tracciate via Booking → Cost Report.</p>
+    </section>
+
+    <section id="cost-report">
+      <h2>Cost Report</h2>
+      <p>Pagina <a href="/cost-report">Cost Report</a>. Per ogni job mostra:</p>
+      <ul>
+        <li><strong>Quotato</strong> — quanto è stato proposto al cliente (dalla quote convertita)</li>
+        <li><strong>Maturato</strong> — quanto è effettivamente stato eseguito (somma delle ore dei booking <em>done</em>)</li>
+        <li><strong>Stimato</strong> — proiezione finale = maturato + stima del residuo</li>
+      </ul>
+      <blockquote>
+        <p>Il maturato deriva dai <em>Booking</em> messi a stato "done" (segmenti completati). Il Timesheet dello staff è binario separato in <a href="/hr">Ore lavoro</a> ed è gestito da HR, non da Cost Report.</p>
+      </blockquote>
+    </section>
+
+    <section id="dam">
+      <h2>Asset Library</h2>
+      <p>Pagina <a href="/dam">Asset Library</a>. DAM (Digital Asset Management) per progetto. Upload file, organizzazione in cartelle, anteprime.</p>
+      <p><span class="manuale-chip">in evoluzione</span> Integrazione con storage esterno e portali consegne è prevista nelle fasi successive.</p>
+    </section>
+
+    <section id="copilot">
+      <h2>AI Copilot <span class="manuale-chip beta">beta</span></h2>
+      <p>Il pulsante 💬 in basso a destra (FAB) apre un drawer laterale con l'assistente AI. È <em>context-aware</em>: rileva da URL su che entità stai lavorando (cliente, progetto, quote, job).</p>
+
+      <h3>Configurazione</h3>
+      <p>Per attivarlo: <a href="/settings">Impostazioni</a> → tab "🤖 AI". Provider supportati:</p>
+      <ul>
+        <li><strong>Claude</strong> (Anthropic) — Opus / Sonnet / Haiku</li>
+        <li><strong>OpenAI</strong> — GPT-4o / o1 / o3-mini</li>
+        <li><strong>Gemini</strong> — Flash / Pro</li>
+        <li><strong>Perplexity</strong> — Sonar</li>
+        <li><strong>Ollama</strong> (locale)</li>
+      </ul>
+      <p>Inserisci l'API key per ogni provider che vuoi usare, salva, scegli il modello, "Test connessione", e attiva uno come provider corrente. Le key sono cifrate (Fernet) con chiave dedicata.</p>
+
+      <h3>Cosa può fare</h3>
+      <p>Il copilota può proporre <strong>azioni</strong> (mai eseguite senza la tua conferma). Capability disponibili:</p>
+      <ul>
+        <li>Creare cliente, progetto, quotazione (con righe), riga di quote, voce listino, risorsa, booking</li>
+        <li>Aggiornare metadata di progetto</li>
+        <li>Cercare nel listino esistente PRIMA di proporre voci nuove (regola search-first)</li>
+        <li>Web search (read-only, via Tavily) per arricchire dati cliente</li>
+      </ul>
+
+      <h3>Pattern AI propone, utente dispone</h3>
+      <p>Per ogni azione proposta, vedrai una <strong>card di conferma</strong> nel drawer con riassunto leggibile + pulsanti "Applica" / "Rifiuta". L'azione viene eseguita solo dopo il click su "Applica". Tutte le azioni (proposte, applicate, rifiutate, fallite) sono tracciate in tabella <code>ai_actions</code> per audit.</p>
+    </section>
+
+    <section id="admin">
+      <h2>Amministrazione</h2>
+
+      <h3 id="admin-utenti">Utenti, ruoli, permessi</h3>
+      <ul>
+        <li><a href="/admin/users">Utenti</a> — creazione/disattivazione utenti, reset password, assegnazione ruolo</li>
+        <li><a href="/admin/roles">Ruoli e permessi</a> — i ruoli base (admin/manager/staff/viewer) sono estendibili con permessi configurabili (es. <code>view_finance</code>, <code>edit_pricelist</code>, <code>assign_resources</code>)</li>
+      </ul>
+
+      <h3 id="admin-cestino">Cestino e ripristino</h3>
+      <p><a href="/admin/cestino">Cestino</a>. Le entità cancellate (Quote, Project, Booking, ecc.) finiscono qui (soft-delete) e sono ripristinabili. Retention automatica configurabile. Gli auto-numero/progressivi non si ricicliano (rimangono univoci anche con record cestinati).</p>
+
+      <h3 id="admin-data">Export/Import dati <span class="manuale-chip new">α.34</span></h3>
+      <p><a href="/settings">Impostazioni</a> → tab "Dati" (solo admin). Export ZIP completo:</p>
+      <ul>
+        <li>Database SQLite</li>
+        <li>Excel multi-sheet (listino, quotazioni)</li>
+        <li>Memorie del copilot (path mangled cross-OS per portabilità)</li>
+        <li>Opt-in: <code>.env</code>, uploads, trash</li>
+        <li>Cifratura AES-256 con password (apribile anche da 7zip/WinZip)</li>
+      </ul>
+      <p>Restore da ZIP: check di major version, swap atomico DB con backup automatico (<code>mediaflow.db.backup-{timestamp}</code>), rollback su errore. Utile per sincronizzare PC ↔ Mac o per backup/restore.</p>
+    </section>
+
+    <section id="shortcuts">
+      <h2>Scorciatoie tastiera</h2>
+      <table>
+        <thead><tr><th>Tasto</th><th>Contesto</th><th>Azione</th></tr></thead>
+        <tbody>
+          <tr><td><kbd>Ctrl</kbd>+<kbd>B</kbd></td><td>Globale</td><td>Toggle sidebar collassata/espansa</td></tr>
+          <tr><td><kbd>Ctrl</kbd>+<kbd>Z</kbd></td><td>Pianificazione</td><td>Annulla l'ultima azione (move, delete, multi-move)</td></tr>
+          <tr><td><kbd>Ctrl</kbd>+<kbd>Y</kbd> / <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>Z</kbd></td><td>Pianificazione</td><td>Ripeti azione annullata</td></tr>
+          <tr><td><kbd>Delete</kbd> / <kbd>Backspace</kbd></td><td>Pianificazione</td><td>Cancella i booking selezionati</td></tr>
+          <tr><td><kbd>S</kbd></td><td>Pianificazione → Timeline</td><td>Attiva modalità area (rubber-band selezione)</td></tr>
+          <tr><td><kbd>Esc</kbd></td><td>Modali / Drawer</td><td>Chiudi senza salvare</td></tr>
+          <tr><td><kbd>Shift</kbd>+drag</td><td>Pianificazione → Timeline</td><td>Crea nuovo booking</td></tr>
+          <tr><td><kbd>Shift</kbd>+click</td><td>Pianificazione → Timeline</td><td>Multi-selezione</td></tr>
+          <tr><td><kbd>Ctrl</kbd>+click</td><td>Pianificazione → Timeline</td><td>Toggle item nella selezione</td></tr>
+          <tr><td><kbd>Alt</kbd>+drag</td><td>Pianificazione → Timeline</td><td>Duplica anziché spostare</td></tr>
+        </tbody>
+      </table>
+    </section>
+
+    <section id="faq">
+      <h2>FAQ e troubleshooting</h2>
+
+      <h3>Il bold dei nomi operatore non si vede sulla timeline</h3>
+      <p>Risolto in v3.5.0-alpha.41+. Se ancora compare il problema, forza un hard-refresh del browser (<kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>R</kbd>) per scaricare CSS/JS aggiornati.</p>
+
+      <h3>Multi-move spara conflitti che non capisco</h3>
+      <p>Risolto in v3.5.0-alpha.42 (multi-move atomico). Se vedi un conflitto, è ora <strong>reale</strong>: il toast indica precisamente quale assignment è in conflitto con quale altro, e su che risorsa.</p>
+
+      <h3>Ho cancellato un booking per sbaglio</h3>
+      <p>Premi subito <kbd>Ctrl</kbd>+<kbd>Z</kbd>. Se è passato troppo tempo o hai chiuso la pagina: <a href="/admin/cestino">Cestino</a> → ripristina.</p>
+
+      <h3>Cos'è la differenza tra Booking e Timesheet?</h3>
+      <p>Il <strong>Booking</strong> è la prenotazione pianificata di una risorsa (parte del cost report). Il <strong>Timesheet</strong> (in HR) è il rendiconto delle ore effettivamente lavorate dallo staff. Sono due binari separati: il maturato del cost report viene dai booking <em>done</em>, non dal timesheet.</p>
+
+      <h3>Come configuro un nuovo modello AI dopo che il vendor lo rilascia?</h3>
+      <p><a href="/settings">Impostazioni</a> → tab "🤖 AI" → seleziona provider → dropdown modello. La lista è sincronizzata con i nomi correnti. Se manca, scrivilo manualmente nel campo: viene salvato e usato finché non lo cambi.</p>
+
+      <h3>L'AI inventa date passate o duplica voci</h3>
+      <p>Non dovrebbe (system prompt esplicito su questo punto). Se succede:</p>
+      <ul>
+        <li>"Rifiuta" la card di conferma (l'azione non viene applicata)</li>
+        <li>Riformula la richiesta più stringente (es. "usa la data odierna")</li>
+        <li>Se persiste, prova un modello più capace (Opus invece di Haiku)</li>
+      </ul>
+
+      <h3>Backup automatici?</h3>
+      <p>Non ci sono ancora backup schedulati automatici. Per backup manuale: <a href="/settings">Impostazioni</a> → tab "Dati" → "Scarica ZIP completo" con password.</p>
+    </section>
+
+  </article>
+</div>
+
+<script>
+(function() {
+  // Smooth scroll + active toc tracking
+  const tocLinks = document.querySelectorAll('.manuale-toc a');
+  const sections = document.querySelectorAll('.manuale-content section');
+
+  // IntersectionObserver per evidenziare la sezione corrente nella TOC
+  const io = new IntersectionObserver((entries) => {
+    entries.forEach(entry => {
+      if (entry.isIntersecting) {
+        const id = entry.target.id;
+        tocLinks.forEach(a => a.classList.remove('active'));
+        const link = document.querySelector(`.manuale-toc a[href="#${id}"]`);
+        if (link) link.classList.add('active');
+      }
+    });
+  }, { rootMargin: '-30% 0px -60% 0px', threshold: 0 });
+  sections.forEach(s => io.observe(s));
+
+  // Search client-side: filtra le sezioni che contengono la stringa
+  const search = document.getElementById('manuale-search');
+  if (search) {
+    let timer = null;
+    search.addEventListener('input', () => {
+      clearTimeout(timer);
+      timer = setTimeout(() => {
+        const q = search.value.trim().toLowerCase();
+        if (!q) {
+          sections.forEach(s => s.classList.remove('hidden'));
+          return;
+        }
+        sections.forEach(s => {
+          const txt = (s.textContent || '').toLowerCase();
+          s.classList.toggle('hidden', txt.indexOf(q) < 0);
+        });
+      }, 150);
+    });
+  }
+})();
+</script>
+{% endblock %}

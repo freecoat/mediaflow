@@ -643,10 +643,108 @@ function mfWrapDateTimeLocal(input) {
 }
 
 
+// ── Sidebar collapse + tooltip (v3.5.0-alpha.43) ─────────────
+// Toggle sidebar collassata/espansa via pulsante in topbar.
+// Persistenza in localStorage. Quando collassata: hover 1s su un nav-item
+// → tooltip flottante con la label completa (testo nascosto via font-size:0,
+// ancora leggibile da textContent).
+function mfToggleSidebar() {
+  const sb = document.getElementById('sidebar');
+  if (!sb) return;
+  const collapsed = !sb.classList.contains('collapsed');
+  sb.classList.toggle('collapsed', collapsed);
+  document.body.classList.toggle('sidebar-collapsed', collapsed);
+  try { localStorage.setItem('mf_sidebar_collapsed', collapsed ? '1' : '0'); } catch (_) {}
+  _mfUpdateSidebarToggleIcon(collapsed);
+  // Nascondi tooltip eventuale al toggle
+  const tip = document.getElementById('mf-sidebar-tip');
+  if (tip) tip.classList.remove('visible');
+}
+function _mfUpdateSidebarToggleIcon(collapsed) {
+  const wrap = document.getElementById('mf-sidebar-toggle');
+  if (!wrap) return;
+  const newName = collapsed ? 'panel-left-open' : 'panel-left-close';
+  wrap.innerHTML = `<i data-lucide="${newName}"></i>`;
+  if (window.mfRenderIcons) window.mfRenderIcons(wrap);
+}
+function _mfInitSidebarTooltip() {
+  let timer = null;
+  let tipEl = null;
+  function ensureTip() {
+    if (tipEl) return tipEl;
+    tipEl = document.createElement('div');
+    tipEl.id = 'mf-sidebar-tip';
+    document.body.appendChild(tipEl);
+    return tipEl;
+  }
+  function show(item) {
+    const sb = document.getElementById('sidebar');
+    if (!sb || !sb.classList.contains('collapsed')) return;
+    const label = (item.textContent || '').trim();
+    if (!label) return;
+    const t = ensureTip();
+    t.textContent = label;
+    const rect = item.getBoundingClientRect();
+    // Posiziona a destra dell'icona, centrato verticalmente sull'item
+    t.style.top = (rect.top + rect.height / 2) + 'px';
+    t.style.left = (rect.right + 10) + 'px';
+    t.classList.add('visible');
+  }
+  function hide() {
+    if (timer) { clearTimeout(timer); timer = null; }
+    if (tipEl) tipEl.classList.remove('visible');
+  }
+  document.addEventListener('mouseover', (e) => {
+    const sb = document.getElementById('sidebar');
+    if (!sb || !sb.classList.contains('collapsed')) { hide(); return; }
+    const target = e.target.closest && e.target.closest('.nav-item, .sidebar-logo');
+    if (!target || !sb.contains(target)) { hide(); return; }
+    if (timer) clearTimeout(timer);
+    timer = setTimeout(() => show(target), 1000);
+  });
+  document.addEventListener('mouseout', (e) => {
+    // Se esci dall'item o dalla sidebar, nascondi
+    const target = e.target.closest && e.target.closest('.nav-item, .sidebar-logo');
+    if (!target) return;
+    const related = e.relatedTarget && e.relatedTarget.closest && e.relatedTarget.closest('.nav-item, .sidebar-logo');
+    if (related === target) return;  // movimento interno
+    hide();
+  });
+  // Scroll sidebar → invalida tooltip (l'item potrebbe essersi spostato)
+  const sb = document.getElementById('sidebar');
+  if (sb) sb.addEventListener('scroll', hide);
+}
+function _mfInitSidebarFromStorage() {
+  const sb = document.getElementById('sidebar');
+  if (!sb) return;
+  let collapsed = false;
+  try { collapsed = localStorage.getItem('mf_sidebar_collapsed') === '1'; } catch (_) {}
+  if (collapsed) {
+    sb.classList.add('collapsed');
+    document.body.classList.add('sidebar-collapsed');
+    _mfUpdateSidebarToggleIcon(true);
+  }
+}
+// Scorciatoia tastiera: Ctrl+B (Cmd+B su Mac) → toggle sidebar
+function _mfBindSidebarShortcut() {
+  document.addEventListener('keydown', (e) => {
+    if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'b' && !e.shiftKey && !e.altKey) {
+      // Skip se utente sta scrivendo in un input/textarea/contenteditable
+      const t = e.target;
+      if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.isContentEditable)) return;
+      e.preventDefault();
+      mfToggleSidebar();
+    }
+  });
+}
+
 // ── Auto-init ────────────────────────────────────────────────
 document.addEventListener('DOMContentLoaded', () => {
   mfApplySearchable(document);
   mfApplyTimePickers(document);
+  _mfInitSidebarFromStorage();
+  _mfInitSidebarTooltip();
+  _mfBindSidebarShortcut();
   // Quando si apre un modal i select interni potrebbero essere stati ri-popolati
   // dopo il DOMContentLoaded; li ricontrolliamo (idempotente).
   document.addEventListener('click', (e) => {

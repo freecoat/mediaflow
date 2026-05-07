@@ -12,7 +12,7 @@ from app.routers import (
     pricelist, quotes, cost_report as cr,
     clients, projects, ai, departments, settings as settings_router,
     hr, jobs, admin, notifications as notifications_router,
-    tech_sheets, team, admin_data,
+    tech_sheets, team, admin_data, help as help_router,
 )
 
 
@@ -201,7 +201,7 @@ async def lifespan(app: FastAPI):
     yield
 
 
-app = FastAPI(title="MediaFlow", version="3.5.0-alpha.42", lifespan=lifespan)
+app = FastAPI(title="MediaFlow", version="3.5.0-alpha.43", lifespan=lifespan)
 
 BASE_DIR = Path(__file__).parent
 app.mount("/static", StaticFiles(directory=BASE_DIR / "static"), name="static")
@@ -377,6 +377,7 @@ app.include_router(notifications_router.router)
 app.include_router(tech_sheets.router)
 app.include_router(team.router)
 app.include_router(admin_data.router)
+app.include_router(help_router.router)
 
 
 @app.get("/", response_class=HTMLResponse)
