@@ -8,6 +8,55 @@
 
 ## Versione corrente
 
+**v3.5.0-alpha.50** — 7 maggio 2026 — Copilot in-depth integration nella pianificazione
+
+Pre-α.50 il copilot vedeva clienti/progetti/listino/quote ma NIENTE
+pianificazione viva → poteva creare booking ma "alla cieca". Ora ha
+context completo + 3 capability per operare su booking esistenti +
+quick prompts contestuali per pagina.
+
+**Chiuso α.50:**
+- ✅ Sezione PIANIFICAZIONE VIVA in `build_context` (booking 14gg,
+  conflitti, carico per risorsa, indisponibilità, job critici), filtra
+  per project_id/job_id se presenti
+- ✅ 3 capability nuove: `propose_move_booking` (shift/new_date/
+  new_resource/remap), `propose_resize_booking` (delta minuti),
+  `propose_delete_booking` (soft-delete con reason). Tutti con
+  conflict-check pre-apply, atomic
+- ✅ Tool spec in `ai_tools.py` per provider tool_use nativo + handler
+  in `ai_assistant.py`
+- ✅ System prompt rinforzato con sezione "PIANIFICAZIONE — operazioni
+  sulla timeline" (7 regole: consulta context, rispetta indisponibilità,
+  carico bilanciato, segnala conflitti, spiega perché, ricorrenti uno
+  alla volta, link a job_cost_line)
+- ✅ Quick prompts contestuali nel drawer per pagina (/planning ha 7
+  prompt dedicati: Diagnostica + Pianificazione)
+- ✅ Renderer human-readable per le 3 nuove card in copilot.js
+- ✅ Cache-buster copilot.js?v=3.5.0-alpha.50
+
+**Verifica live richiesta a Matteo:**
+- Pull → app parte
+- /planning → click FAB copilot → vedi quick prompts dedicati
+  ("Mostrami i conflitti", "Sposta booking", ecc.)
+- "Mostrami i conflitti orari della prossima settimana" → AI risponde
+  consultando il context PIANIFICAZIONE VIVA
+- "Sposta il booking #42 di +1 giorno" → AI propone
+  `propose_move_booking` → card conferma → Apply → booking spostato
+- "Allunga il booking #42 di 2 ore" → propose_resize → conferma → apply
+- "Cancella il booking #42" → propose_delete → conferma → soft-delete
+  (recuperabile dal Cestino)
+
+**Prossimi step (futuri):**
+- Capability avanzate: recurring_bookings, bulk_move, analyze_conflicts,
+  find_free_slots
+- Notifiche proattive sul FAB se rilevati problemi
+- Capability per Billing: propose_transmit_to_billing
+- Domani: fattura formale PDF con dati cliente (P.IVA) + dati aziendali
+  proprietario (configurazione tenant settings)
+
+**Bug ancora aperti:**
+- Freeze Chrome Mac specifico (workaround light mode in toolbar)
+
 **v3.5.0-alpha.49** — 7 maggio 2026 — Step 4 Cost Report → Billing flow: UI /finance batch
 
 Step 4 chiuso. Pagina `/finance` ora ha tab dedicata "📦 Batch fatturazione"

@@ -35,7 +35,82 @@
   window.copilotOpen = async function () {
     document.body.classList.add("copilot-open");
     document.getElementById("cp-context-tag").textContent = ctxTag();
+    _renderWelcome();  // v3.5.0-alpha.50: quick prompts contestuali
     await loadConversations();
+  };
+
+  // v3.5.0-alpha.50: renderWelcome popola il box con quick prompts cliccabili,
+  // selezionati in base alla pagina corrente. Quando si clicca un prompt, il
+  // testo viene messo nell'input e inviato automaticamente.
+  function _renderWelcome() {
+    const host = document.getElementById("cp-welcome");
+    if (!host || state.messages.length) return;
+    const ctx = detectContext();
+    const path = ctx.page || "";
+    let prompts;
+    if (path.indexOf("/planning") === 0) {
+      prompts = [
+        { sec: "Diagnostica" },
+        { txt: "Mostrami i conflitti orari della prossima settimana", icon: "⚠" },
+        { txt: "Quali risorse sono sotto-utilizzate questa settimana?", icon: "📊" },
+        { txt: "Riepilogo job critici (deadline ≤ 14 giorni)", icon: "🔴" },
+        { sec: "Pianificazione" },
+        { txt: "Crea un booking per … (descrivi job/risorsa/quando)", icon: "+" },
+        { txt: "Sposta il booking #N di +1 giorno", icon: "📅" },
+        { txt: "Cambia risorsa del booking #N da Luca a Marco", icon: "🔄" },
+        { txt: "Allunga il booking #N di 2 ore", icon: "⏱" },
+      ];
+    } else if (path.indexOf("/cost-report") === 0) {
+      prompts = [
+        { sec: "Cost Report" },
+        { txt: "Quale job ha il margine più stretto?", icon: "📉" },
+        { txt: "Mostra i job con sforamento ore", icon: "⚠" },
+        { txt: "Riepilogo perso del progetto attivo", icon: "💸" },
+      ];
+    } else if (path.indexOf("/quotes") === 0) {
+      prompts = [
+        { sec: "Quote" },
+        { txt: "Crea una quote per il progetto …", icon: "📝" },
+        { txt: "Aggiungi voce listino: descrizione, unità, prezzo", icon: "+" },
+        { txt: "Cerca specifiche di consegna Netflix 2026", icon: "🔍" },
+      ];
+    } else if (path.indexOf("/clients") === 0 || path.indexOf("/projects") === 0) {
+      prompts = [
+        { sec: "Anagrafica" },
+        { txt: "Crea cliente RAI con sede a Roma", icon: "🏢" },
+        { txt: "Cerca P.IVA e contatti di …", icon: "🔍" },
+        { txt: "Crea progetto: titolo, cliente, durata, deadline", icon: "🎬" },
+      ];
+    } else {
+      // Default
+      prompts = [
+        { sec: "Esempi" },
+        { txt: "Crea cliente RAI con sede a Roma", icon: "🏢" },
+        { txt: "Aggiungi voce listino: color grading 4K HDR, €1500/giorno", icon: "+" },
+        { txt: "Aggiorna durata di questo progetto a 90 minuti", icon: "✎" },
+        { txt: "Cerca specifiche di consegna Netflix 2026", icon: "🔍" },
+      ];
+    }
+    const html = ['<div class="cp-quick-prompts">'];
+    html.push('<div style="font-size:11px; color:var(--text3); margin-bottom:8px;">Suggerimenti per <b>' + escapeHtml(ctxTag()) + '</b>:</div>');
+    for (const p of prompts) {
+      if (p.sec) {
+        html.push(`<div class="cp-qp-section">${escapeHtml(p.sec)}</div>`);
+      } else {
+        html.push(`<button class="cp-qp-btn" type="button" onclick="copilotQuickPrompt(${JSON.stringify(p.txt).replace(/"/g, "&quot;")})">`);
+        html.push(`<span class="cp-qp-icon">${p.icon || "💬"}</span>${escapeHtml(p.txt)}`);
+        html.push(`</button>`);
+      }
+    }
+    html.push("</div>");
+    host.innerHTML = html.join("");
+  }
+  window.copilotQuickPrompt = function (txt) {
+    const ta = document.getElementById("cp-input");
+    ta.value = txt;
+    copilotResizeInput(ta);
+    ta.focus();
+    // Non inviare automaticamente: utente può rifinire prima di Ctrl+Enter
   };
   window.copilotClose = function () {
     document.body.classList.remove("copilot-open");
@@ -197,6 +272,10 @@
       "propose_new_item_and_line": "Nuova voce listino + riga quote",
       "propose_resource": "Risorsa (nuova)",
       "propose_booking": "Booking (nuovo)",
+      // v3.5.0-alpha.50 — Planning operations
+      "propose_move_booking": "📅 Sposta booking",
+      "propose_resize_booking": "📅 Ridimensiona booking",
+      "propose_delete_booking": "📅 Cancella booking",
       "web_search": "Ricerca web",
       // v3.5.0-alpha.19 — Settings
       "list_settings_schemas": "⚙ Discovery aree configurabili",
@@ -267,6 +346,10 @@
       case "propose_new_item_and_line": return summaryNewItemAndLine(d);
       case "propose_resource": return summaryResource(d);
       case "propose_booking": return summaryBooking(d);
+      // v3.5.0-alpha.50 — Planning operations
+      case "propose_move_booking": return summaryMoveBooking(d);
+      case "propose_resize_booking": return summaryResizeBooking(d);
+      case "propose_delete_booking": return summaryDeleteBooking(d);
       case "web_search": return `<div>Cerca: <b>${escapeHtml(d.query || "—")}</b></div>`;
       case "update_setting": return summaryUpdateSetting(d);
       default: return `<span class="cp-muted">Nessun renderer per questo tipo. Apri "dati grezzi".</span>`;
@@ -411,6 +494,41 @@
     }
     if (d.notes) lines.push(`<span class="cp-muted">Note: ${escapeHtml(String(d.notes).slice(0, 80))}</span>`);
     return lines.join("<br>") || `<span class="cp-muted">Nessun campo</span>`;
+  }
+
+  // ── v3.5.0-alpha.50: renderer planning operations ────────
+  function summaryMoveBooking(d) {
+    const lines = [`Booking <b>#${d.booking_id || "?"}</b>`];
+    if (d.shift_minutes) {
+      const m = parseInt(d.shift_minutes);
+      const dir = m >= 0 ? "avanti" : "indietro";
+      const abs = Math.abs(m);
+      const hr = abs >= 60 ? `${(abs/60).toFixed(1)}h` : `${abs}min`;
+      lines.push(`Shift ${dir}: <b>${hr}</b>`);
+    }
+    if (d.new_start_date) lines.push(`Nuova data inizio: <b>${escapeHtml(d.new_start_date)}</b>`);
+    if (d.new_resource_id) lines.push(`Nuova risorsa per TUTTI: <b>#${d.new_resource_id}</b>`);
+    const remap = Array.isArray(d.assignments_remap) ? d.assignments_remap : [];
+    if (remap.length) {
+      lines.push(`<span class="cp-muted">Rimappa ${remap.length} risorse:</span>`);
+      remap.slice(0, 3).forEach(r => {
+        lines.push(`• #${r.from_resource_id} → #${r.to_resource_id}`);
+      });
+      if (remap.length > 3) lines.push(`<span class="cp-muted">+${remap.length-3} altre</span>`);
+    }
+    return lines.join("<br>");
+  }
+  function summaryResizeBooking(d) {
+    const m = parseInt(d.delta_minutes || 0);
+    const sign = m > 0 ? "+" : "";
+    const hr = Math.abs(m) >= 60 ? `${(m/60).toFixed(1)}h` : `${m}min`;
+    return `Booking <b>#${d.booking_id || "?"}</b> · durata <b>${sign}${hr}</b>`;
+  }
+  function summaryDeleteBooking(d) {
+    const lines = [`Cancella booking <b>#${d.booking_id || "?"}</b>`];
+    if (d.reason) lines.push(`<span class="cp-muted">Motivo: ${escapeHtml(d.reason)}</span>`);
+    lines.push(`<span class="cp-muted" style="font-size:11px;">Soft-delete: recuperabile dal Cestino.</span>`);
+    return lines.join("<br>");
   }
 
   function summaryQuote(d) {

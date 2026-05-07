@@ -28,8 +28,10 @@ from typing import Optional
 from sqlalchemy.orm import Session
 
 from app.models import (
-    Project, Quote, Job, PriceItem, PriceCategory, Client, Resource,
+    Project, Quote, Job, JobStatus, PriceItem, PriceCategory, Client, Resource,
     Asset, Department,
+    Booking, BookingAssignment, BookingStatus, BookingExecutionStatus,
+    ResourceUnavailability, UnavailabilityKind, UnavailabilityStatus,
 )
 from app.models.models import AIAction
 from app.services.ai_provider import get_provider_for_user, safe_json_parse
@@ -269,7 +271,193 @@ def build_context(db: Session,
 
     parts.append("\n".join(overview))
 
+    # v3.5.0-alpha.50 — Sezione PIANIFICAZIONE viva (in-depth context).
+    # Mostrata SOLO se utente è in /planning o ha un progetto/job in canvas.
+    # Senza questa sezione l'AI non sa dei booking esistenti, conflitti,
+    # carico risorse, ferie → propone azioni "alla cieca". Con questa sezione
+    # può: rispondere a "che fa Luca questa settimana?", suggerire
+    # ottimizzazioni, evitare conflitti prima di proporre nuovi booking.
+    is_planning_page = bool(page and "/planning" in page)
+    if is_planning_page or project_id or job_id:
+        planning_section = _build_planning_context(db, project_id=project_id, job_id=job_id)
+        if planning_section:
+            parts.append(planning_section)
+
     return "\n\n".join(parts)
+
+
+def _build_planning_context(db: Session,
+                            project_id: Optional[int] = None,
+                            job_id: Optional[int] = None) -> str:
+    """v3.5.0-alpha.50: contesto pianificazione per copilot in-depth.
+
+    Aggrega:
+    - Booking nei prossimi 14 giorni (id, risorsa, range, kind/job)
+    - Conflitti orari attivi (overlap su stessa risorsa)
+    - Carico per risorsa nei prossimi 7 giorni (ore prenotate vs cap 40h)
+    - Ferie/festività nei prossimi 14 giorni
+    - Job in scadenza (deadline entro 30 giorni)
+
+    Filtri:
+    - Se project_id presente → restringe ai booking del progetto
+    - Se job_id presente → restringe al job specifico
+    """
+    from datetime import datetime, timedelta
+    from sqlalchemy.orm import joinedload as _jl
+
+    today = datetime.utcnow()
+    horizon_14 = today + timedelta(days=14)
+    horizon_7 = today + timedelta(days=7)
+    deadline_horizon = (today + timedelta(days=30)).date()
+
+    parts: list[str] = []
+
+    # ── Booking prossimi 14 giorni ────────────────────────────
+    bk_q = db.query(Booking).options(
+        _jl(Booking.assignments).joinedload(BookingAssignment.resource),
+        _jl(Booking.job),
+    ).filter(
+        Booking.status != BookingStatus.cancelled,
+        Booking.start_datetime < horizon_14,
+        Booking.end_datetime >= today,
+    )
+    if job_id:
+        bk_q = bk_q.filter(Booking.job_id == job_id)
+    elif project_id:
+        bk_q = bk_q.join(Job, Booking.job_id == Job.id, isouter=True).filter(
+            Job.project_id == project_id
+        )
+    bookings = bk_q.order_by(Booking.start_datetime).limit(80).all()
+
+    if bookings:
+        parts.append(f"PIANIFICAZIONE — booking prossimi 14gg ({len(bookings)} mostrati):")
+        parts.append("(formato: bid | start→end | risorse | job/kind | exec_status)")
+        for b in bookings[:50]:
+            res_names = ", ".join((a.resource.name if a.resource else "?") for a in b.assignments[:4])
+            if len(b.assignments) > 4:
+                res_names += f" +{len(b.assignments)-4}"
+            job_lbl = (b.job.code if b.job else b.kind.value if b.kind else "internal")
+            s = b.start_datetime.strftime("%d/%m %H:%M")
+            e = b.end_datetime.strftime("%d/%m %H:%M")
+            est = b.execution_status.value if b.execution_status else "planned"
+            parts.append(f"  {b.id} | {s}→{e} | {res_names} | {job_lbl} | {est}")
+        if len(bookings) > 50:
+            parts.append(f"  …altri {len(bookings)-50} omessi")
+
+    # ── Conflitti orari attivi ────────────────────────────────
+    # Trova coppie di assignment sovrapposti sulla stessa risorsa nei prossimi 14gg.
+    # Query semplice: tutti gli assignment del periodo, group by resource_id, check overlap.
+    conflicts = []
+    ass_q = db.query(BookingAssignment).join(Booking).filter(
+        Booking.status != BookingStatus.cancelled,
+        BookingAssignment.start_datetime < horizon_14,
+        BookingAssignment.end_datetime >= today,
+    )
+    if job_id:
+        ass_q = ass_q.filter(Booking.job_id == job_id)
+    elif project_id:
+        ass_q = ass_q.join(Job, Booking.job_id == Job.id, isouter=True).filter(
+            Job.project_id == project_id
+        )
+    ass_list = ass_q.order_by(BookingAssignment.resource_id, BookingAssignment.start_datetime).all()
+    by_res: dict[int, list] = {}
+    for a in ass_list:
+        by_res.setdefault(a.resource_id, []).append(a)
+    for rid, lst in by_res.items():
+        for i, a1 in enumerate(lst):
+            for a2 in lst[i+1:]:
+                if a2.start_datetime >= a1.end_datetime:
+                    break  # ordinati per start, no più overlap
+                if a2.end_datetime > a1.start_datetime:
+                    conflicts.append((rid, a1, a2))
+                    if len(conflicts) >= 10:
+                        break
+            if len(conflicts) >= 10:
+                break
+        if len(conflicts) >= 10:
+            break
+    if conflicts:
+        parts.append(f"\nCONFLITTI orari attivi prossimi 14gg ({len(conflicts)} mostrati):")
+        for rid, a1, a2 in conflicts[:10]:
+            res = db.query(Resource).filter(Resource.id == rid).first()
+            res_name = res.name if res else f"#{rid}"
+            parts.append(
+                f"  ⚠ {res_name}: assignment #{a1.id} ({a1.start_datetime.strftime('%d/%m %H:%M')}→{a1.end_datetime.strftime('%H:%M')}) "
+                f"overlap #{a2.id} ({a2.start_datetime.strftime('%d/%m %H:%M')}→{a2.end_datetime.strftime('%H:%M')})"
+            )
+
+    # ── Carico per risorsa prossimi 7 giorni ──────────────────
+    week_load: dict[int, float] = {}
+    week_q = db.query(BookingAssignment).join(Booking).filter(
+        Booking.status != BookingStatus.cancelled,
+        BookingAssignment.start_datetime < horizon_7,
+        BookingAssignment.end_datetime >= today,
+    )
+    if job_id:
+        week_q = week_q.filter(Booking.job_id == job_id)
+    elif project_id:
+        week_q = week_q.join(Job, Booking.job_id == Job.id, isouter=True).filter(
+            Job.project_id == project_id
+        )
+    for a in week_q.all():
+        # Calcola ore SOVRAPPOSTE alla finestra [today, horizon_7]
+        s = max(a.start_datetime, today)
+        e = min(a.end_datetime, horizon_7)
+        if e > s:
+            hrs = (e - s).total_seconds() / 3600
+            week_load[a.resource_id] = week_load.get(a.resource_id, 0) + hrs
+    if week_load:
+        parts.append(f"\nCARICO settimana corrente per risorsa (ore prenotate, cap riferimento 40h):")
+        for rid, hrs in sorted(week_load.items(), key=lambda kv: -kv[1])[:20]:
+            res = db.query(Resource).filter(Resource.id == rid).first()
+            name = res.name if res else f"#{rid}"
+            ratio = hrs / 40
+            badge = "🟢" if ratio < 0.8 else ("🟡" if ratio < 1.05 else "🔴")
+            parts.append(f"  {badge} {name}: {hrs:.1f}h ({ratio*100:.0f}%)")
+
+    # ── Ferie/festa prossime 14 giorni ─────────────────────────
+    unav = db.query(ResourceUnavailability).options(
+        _jl(ResourceUnavailability.resource),
+    ).filter(
+        ResourceUnavailability.status == UnavailabilityStatus.approved,
+        ResourceUnavailability.start_date <= horizon_14.date(),
+        ResourceUnavailability.end_date >= today.date(),
+    ).order_by(ResourceUnavailability.start_date).limit(30).all()
+    if unav:
+        kind_lbl = {
+            UnavailabilityKind.vacation: "Ferie",
+            UnavailabilityKind.sick: "Malattia",
+            UnavailabilityKind.holiday: "Festività",
+            UnavailabilityKind.weekend: "Weekend",
+            UnavailabilityKind.other: "Non disp.",
+        }
+        parts.append(f"\nINDISPONIBILITÀ prossimi 14gg ({len(unav)} mostrate):")
+        for u in unav[:15]:
+            who = u.resource.name if u.resource else "TUTTI"
+            kl = kind_lbl.get(u.kind, str(u.kind))
+            parts.append(f"  {kl} | {u.start_date}→{u.end_date} | {who}")
+
+    # ── Job critici (deadline ≤ 30gg) ─────────────────────────
+    crit_q = db.query(Job).filter(
+        Job.status.in_([JobStatus.active, JobStatus.approved, JobStatus.draft]),
+        Job.end_date.isnot(None),
+        Job.end_date <= deadline_horizon,
+    )
+    if project_id:
+        crit_q = crit_q.filter(Job.project_id == project_id)
+    if job_id:
+        crit_q = crit_q.filter(Job.id == job_id)
+    critical = crit_q.order_by(Job.end_date).limit(15).all()
+    if critical:
+        parts.append(f"\nJOB CRITICI (deadline ≤ 30gg, {len(critical)} mostrati):")
+        for j in critical:
+            days_left = (j.end_date - today.date()).days
+            urg = "🔴" if days_left < 7 else ("🟡" if days_left < 14 else "🟢")
+            parts.append(f"  {urg} {j.code} · {j.title or '?'} · scadenza {j.end_date} ({days_left}gg)")
+
+    if not parts:
+        return ""
+    return "━━━ PIANIFICAZIONE VIVA ━━━\n" + "\n".join(parts)
 
 
 # ── Estrazione azioni proposte ───────────────────────────────
@@ -284,6 +472,10 @@ VALID_ACTION_TYPES = {
     "propose_new_item_and_line",
     "propose_resource",
     "propose_booking",
+    # v3.5.0-alpha.50 — Planning operations (move/resize/delete su booking esistenti)
+    "propose_move_booking",
+    "propose_resize_booking",
+    "propose_delete_booking",
     "web_search",
 }
 
@@ -1274,6 +1466,218 @@ def _h_propose_booking(db: Session, data: dict) -> dict:
             "start": b.start_datetime.isoformat(), "end": b.end_datetime.isoformat()}
 
 
+# ── v3.5.0-alpha.50: capability planning (move/resize/delete booking esistente) ──
+
+def _resolve_booking_for_planning(db: Session, data: dict) -> Booking:
+    """Helper comune per move/resize/delete: risolve booking_id obbligatorio."""
+    bid = data.get("booking_id")
+    if not bid:
+        raise ValueError("Manca 'booking_id'")
+    try:
+        bid = int(bid)
+    except (TypeError, ValueError):
+        raise ValueError(f"booking_id non numerico: {bid}")
+    b = db.query(Booking).filter(Booking.id == bid).first()
+    if not b:
+        raise ValueError(f"Booking #{bid} non trovato")
+    if b.status == BookingStatus.cancelled:
+        raise ValueError(f"Booking #{bid} è già cancellato")
+    return b
+
+
+def _h_propose_move_booking(db: Session, data: dict) -> dict:
+    """Sposta un booking esistente di un delta temporale, opzionalmente
+    cambiando risorsa/risorse degli assignment.
+
+    Payload:
+      {
+        "booking_id": int (obbligatorio),
+        "shift_minutes"?: int (positivo = avanti, negativo = indietro),
+        "new_start_date"?: "YYYY-MM-DD" (alternativa: imposta nuova data ancorata
+            a min start del booking, sposta TUTTI gli assignment del delta),
+        "new_resource_id"?: int (cambia risorsa di TUTTI gli assignment),
+        "assignments_remap"?: [{from_resource_id, to_resource_id}, ...] (rimappa
+            risorse mantenendo la struttura)
+      }
+    Almeno uno tra shift_minutes / new_start_date / new_resource_id /
+    assignments_remap deve essere fornito.
+
+    Conflict check sui nuovi orari prima di applicare. Atomic.
+    """
+    from datetime import datetime as _dt, timedelta as _td, date as _d
+    b = _resolve_booking_for_planning(db, data)
+
+    shift_min = data.get("shift_minutes")
+    new_start_date_str = data.get("new_start_date")
+    new_resource_id = data.get("new_resource_id")
+    remap_list = data.get("assignments_remap") or []
+
+    if not any([shift_min, new_start_date_str, new_resource_id, remap_list]):
+        raise ValueError(
+            "Servono almeno uno tra: shift_minutes, new_start_date, "
+            "new_resource_id, assignments_remap"
+        )
+
+    delta = _td(0)
+    if shift_min:
+        try:
+            delta += _td(minutes=int(shift_min))
+        except (TypeError, ValueError):
+            raise ValueError(f"shift_minutes non numerico: {shift_min}")
+    if new_start_date_str:
+        try:
+            new_d = _d.fromisoformat(new_start_date_str)
+        except Exception:
+            raise ValueError(f"new_start_date non valido (atteso YYYY-MM-DD): {new_start_date_str}")
+        # Calcola delta giornaliero da min(start) a new_d
+        cur_start_date = min(a.start_datetime for a in b.assignments).date()
+        delta += _td(days=(new_d - cur_start_date).days)
+
+    # Costruisci remap: from_resource_id → to_resource_id
+    remap: dict[int, int] = {}
+    if new_resource_id:
+        try:
+            target = int(new_resource_id)
+        except (TypeError, ValueError):
+            raise ValueError(f"new_resource_id non numerico: {new_resource_id}")
+        # Verifica esistenza
+        if not db.query(Resource).filter(Resource.id == target).first():
+            raise ValueError(f"Risorsa #{target} non trovata")
+        for a in b.assignments:
+            remap[a.id] = target  # qui la chiave è assignment_id (univoca)
+    for entry in remap_list:
+        try:
+            fr = int(entry["from_resource_id"])
+            to = int(entry["to_resource_id"])
+        except (KeyError, TypeError, ValueError):
+            raise ValueError("assignments_remap entry malformato (need from_resource_id, to_resource_id)")
+        if not db.query(Resource).filter(Resource.id == to).first():
+            raise ValueError(f"Risorsa #{to} non trovata")
+        for a in b.assignments:
+            if a.resource_id == fr:
+                remap[a.id] = to
+
+    # Calcola nuovi valori per ogni assignment
+    new_values = []
+    for a in b.assignments:
+        ns = a.start_datetime + delta
+        ne = a.end_datetime + delta
+        nrid = remap.get(a.id, a.resource_id)
+        new_values.append((a, ns, ne, nrid))
+
+    # Conflict check per ogni assignment (esclude se stesso)
+    for a, ns, ne, nrid in new_values:
+        c = db.query(BookingAssignment).join(Booking).filter(
+            Booking.status != BookingStatus.cancelled,
+            BookingAssignment.id != a.id,
+            BookingAssignment.resource_id == nrid,
+            BookingAssignment.start_datetime < ne,
+            BookingAssignment.end_datetime > ns,
+        ).first()
+        if c:
+            raise ValueError(
+                f"Conflitto: assignment #{a.id} su risorsa #{nrid} "
+                f"({ns.strftime('%d/%m %H:%M')}→{ne.strftime('%H:%M')}) "
+                f"overlap con assignment #{c.id}"
+            )
+
+    # Applica
+    for a, ns, ne, nrid in new_values:
+        a.start_datetime = ns
+        a.end_datetime = ne
+        a.resource_id = nrid
+    # Ricalcola envelope booking
+    b.start_datetime = min(a.start_datetime for a in b.assignments)
+    b.end_datetime = max(a.end_datetime for a in b.assignments)
+    return {
+        "booking_id": b.id,
+        "assignments_count": len(b.assignments),
+        "new_start": b.start_datetime.isoformat(),
+        "new_end": b.end_datetime.isoformat(),
+        "shifted_minutes": int(delta.total_seconds() / 60),
+        "resources_changed": sum(1 for a in b.assignments if a.id in remap),
+    }
+
+
+def _h_propose_resize_booking(db: Session, data: dict) -> dict:
+    """Cambia la durata di un booking modificando end (o start) di tutti gli
+    assignment del medesimo delta. Mantenere proporzioni se booking è split
+    (più assignment stessa risorsa) — il delta viene applicato all'envelope:
+    sib intermedi shiftano in time per mantenere la pausa.
+
+    Payload:
+      {
+        "booking_id": int,
+        "delta_minutes": int (positivo = allunga end, negativo = accorcia)
+      }
+    """
+    from datetime import timedelta as _td
+    b = _resolve_booking_for_planning(db, data)
+    dm = data.get("delta_minutes")
+    if dm is None:
+        raise ValueError("Manca 'delta_minutes'")
+    try:
+        dm = int(dm)
+    except (TypeError, ValueError):
+        raise ValueError(f"delta_minutes non numerico: {dm}")
+    if dm == 0:
+        raise ValueError("delta_minutes = 0, niente da fare")
+
+    # Trova l'assignment con end massimo (l'ultimo) e applica delta a esso
+    # Per gli altri (split intermedi) lascia invariati. Comportamento intuitivo:
+    # "estendi/accorcia il booking" = sposta l'end finale.
+    last_a = max(b.assignments, key=lambda a: a.end_datetime)
+    new_end = last_a.end_datetime + _td(minutes=dm)
+    if new_end <= last_a.start_datetime:
+        raise ValueError(
+            f"Resize porta end <= start (delta {dm}min troppo negativo). "
+            f"Per cancellare il booking usa propose_delete_booking."
+        )
+    # Conflict check sull'estensione
+    c = db.query(BookingAssignment).join(Booking).filter(
+        Booking.status != BookingStatus.cancelled,
+        BookingAssignment.id != last_a.id,
+        BookingAssignment.resource_id == last_a.resource_id,
+        BookingAssignment.start_datetime < new_end,
+        BookingAssignment.end_datetime > last_a.start_datetime,
+    ).first()
+    if c:
+        raise ValueError(
+            f"Resize crea conflitto su risorsa #{last_a.resource_id} con assignment #{c.id}"
+        )
+    last_a.end_datetime = new_end
+    b.end_datetime = max(a.end_datetime for a in b.assignments)
+    return {
+        "booking_id": b.id,
+        "delta_minutes": dm,
+        "new_end": b.end_datetime.isoformat(),
+        "resized_assignment_id": last_a.id,
+    }
+
+
+def _h_propose_delete_booking(db: Session, data: dict) -> dict:
+    """Cancella un booking (soft-delete via status=cancelled).
+
+    Payload: {"booking_id": int, "reason"?: str}
+
+    Soft-delete preserva audit + permette undo via cestino. Il backend
+    `delete_booking` standard fa la stessa cosa + recompute cost line.
+    """
+    b = _resolve_booking_for_planning(db, data)
+    reason = (data.get("reason") or "").strip() or None
+    b.status = BookingStatus.cancelled
+    if reason:
+        existing = b.notes or ""
+        b.notes = (existing + ("\n" if existing else "") + f"[AI cancel] {reason}").strip()
+    # Recompute cost line (le ore done finiscono al netto)
+    try:
+        from app.services.cost_line_sync import recompute_for_booking
+        recompute_for_booking(db, b)
+    except Exception as _e:
+        logger.warning(f"recompute_for_booking failed in propose_delete_booking: {_e}")
+    return {"booking_id": b.id, "status": "cancelled", "reason": reason}
+
+
 _ACTION_HANDLERS = {
     "propose_client":            _h_propose_client,
     "propose_project":           _h_propose_project,
@@ -1285,6 +1689,10 @@ _ACTION_HANDLERS = {
     "propose_new_item_and_line": _h_propose_new_item_and_line,
     "propose_resource":          _h_propose_resource,
     "propose_booking":           _h_propose_booking,
+    # v3.5.0-alpha.50 — Planning operations
+    "propose_move_booking":      _h_propose_move_booking,
+    "propose_resize_booking":    _h_propose_resize_booking,
+    "propose_delete_booking":    _h_propose_delete_booking,
     "web_search":                _h_web_search,
     # v3.5.0-alpha.19 — Settings registry tools
     "list_settings_schemas":     _h_list_settings_schemas,

@@ -408,6 +408,81 @@ TOOLS: list[dict] = [
         },
         "handler": "propose_booking",
     },
+    # ── v3.5.0-alpha.50: Planning operations su booking esistenti ──
+    {
+        "name": "propose_move_booking",
+        "category": "mutation",
+        "description": (
+            "Sposta un booking esistente nel tempo e/o cambia risorsa. "
+            "Modalità: shift_minutes (delta in minuti, +/-), oppure new_start_date "
+            "(ancora a YYYY-MM-DD, sposta tutti gli assignment del delta giornaliero), "
+            "oppure new_resource_id (cambia risorsa di TUTTI gli assignment), "
+            "oppure assignments_remap (rimappa specifiche risorse). "
+            "Conflict check sui nuovi orari pre-apply, atomic. "
+            "USA QUESTA per richieste tipo 'sposta il booking di Luca a martedì pomeriggio', "
+            "'sposta tutto +1 settimana', 'cambia risorsa da Luca a Marco'."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "booking_id":        {"type": "integer", "description": "ID booking esistente da spostare. Obbligatorio."},
+                "shift_minutes":     {"type": "integer", "description": "Delta in minuti. Positivo=avanti, negativo=indietro. Es. 60=+1h, -1440=-1giorno."},
+                "new_start_date":    {"type": "string", "description": "Nuova data di inizio YYYY-MM-DD (alternativa a shift_minutes per ancorare a una data specifica)."},
+                "new_resource_id":   {"type": "integer", "description": "Cambia la risorsa di TUTTI gli assignment a questa risorsa."},
+                "assignments_remap": {
+                    "type": "array",
+                    "description": "Rimappa singole risorse (es. [{from_resource_id:1, to_resource_id:5}]).",
+                    "items": {
+                        "type": "object",
+                        "properties": {
+                            "from_resource_id": {"type": "integer"},
+                            "to_resource_id":   {"type": "integer"},
+                        },
+                        "required": ["from_resource_id", "to_resource_id"],
+                    },
+                },
+            },
+            "required": ["booking_id"],
+        },
+        "handler": "propose_move_booking",
+    },
+    {
+        "name": "propose_resize_booking",
+        "category": "mutation",
+        "description": (
+            "Cambia la durata di un booking esistente: delta_minutes positivo allunga "
+            "l'end, negativo accorcia. Per booking split (più assignment), modifica "
+            "l'ULTIMO segmento (mantiene la pausa pranzo intatta). USA per richieste "
+            "tipo 'allunga di 2 ore', 'accorcia di mezz'ora', 'estendi a fine giornata'."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "booking_id":    {"type": "integer", "description": "ID booking esistente."},
+                "delta_minutes": {"type": "integer", "description": "Delta in minuti. Positivo=allunga end. Es. 120=+2h, -30=-30min."},
+            },
+            "required": ["booking_id", "delta_minutes"],
+        },
+        "handler": "propose_resize_booking",
+    },
+    {
+        "name": "propose_delete_booking",
+        "category": "mutation",
+        "description": (
+            "Cancella (soft-delete via status=cancelled) un booking esistente. "
+            "Recupero possibile dal Cestino. Le ore done già conteggiate nel cost "
+            "report vengono ritirate automaticamente (recompute_for_booking)."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "booking_id": {"type": "integer", "description": "ID booking da cancellare."},
+                "reason":     {"type": "string", "description": "Motivo (opzionale, salvato come nota nel booking)."},
+            },
+            "required": ["booking_id"],
+        },
+        "handler": "propose_delete_booking",
+    },
 ]
 
 
@@ -536,4 +611,21 @@ Quando l'utente chiede di **modificare una configurazione** (es. "porta lo strao
 2. **Stato corrente**: chiama `read_setting(key="working_hours")` per vedere i valori attuali. Così quando proporrai la modifica avrai chiaro cosa cambia.
 3. **Proposta**: chiama `update_setting(key="working_hours", patch={"overtime_multiplier": 1.35})`. Il sistema mostra una card con diff (vecchio → nuovo) e l'utente conferma cliccando Applica. Includi nel `patch` SOLO i campi da modificare; i campi assenti restano invariati.
 Se l'utente è vago ("velocizza l'elaborazione"), prima chiarisci con una domanda — non inventare quale setting cambiare.
+
+**PIANIFICAZIONE — operazioni sulla timeline** (v3.5.0-alpha.50):
+Quando l'utente chiede di operare su booking esistenti (spostare, allungare, eliminare), USA i tool dedicati invece di proporre un nuovo booking:
+- `propose_move_booking(booking_id, shift_minutes | new_start_date | new_resource_id | assignments_remap)` → "sposta il booking di Luca a martedì pomeriggio", "sposta tutto +1 settimana", "cambia risorsa da Luca a Marco"
+- `propose_resize_booking(booking_id, delta_minutes)` → "allunga di 2 ore", "accorcia di mezz'ora"
+- `propose_delete_booking(booking_id, reason?)` → "cancella questo booking" (soft-delete, recuperabile dal Cestino)
+
+Per **CREARE** nuovi booking usa `propose_booking` (esistente).
+
+**Regole pianificazione:**
+1. **Consulta sempre la sezione "PIANIFICAZIONE VIVA" del contesto** (se presente) PRIMA di proporre azioni: vedi booking esistenti, conflitti attuali, carico per risorsa, ferie/festività, job critici. Riferisci sempre booking per `id` (es. "booking #42") quando puoi.
+2. **Rispetta indisponibilità**: se la sezione INDISPONIBILITÀ mostra ferie/malattia di una risorsa nel periodo richiesto, NON proporre booking lì. Spiega all'utente e suggerisci alternative.
+3. **Carico bilanciato**: se la sezione CARICO mostra una risorsa al 🔴 (>105% capacità), evita di aggiungere altri booking su quella. Suggerisci una risorsa 🟢 (<80%).
+4. **Conflict awareness**: se la sezione CONFLITTI mostra overlap esistenti, segnalali proattivamente all'utente quando rilevante. Non sovrascrivere conflitti esistenti.
+5. **Spiega il perché**: dopo aver proposto un'azione di pianificazione, aggiungi 1-2 frasi che giustificano la scelta (es. "Ho scelto martedì perché Luca è libero e non ci sono festività nel periodo").
+6. **Booking ricorrenti**: per richieste tipo "online editor lun-ven 9-18 per 4 settimane", proponi i booking UNO PER VOLTA (l'utente conferma a stocco) — NON un solo proposal con 20 booking, sarebbe difficile da revisionare.
+7. **Uso del job_cost_line_id**: quando crei booking su un job, prova a collegarlo a una `job_cost_line_id` esistente (visibile nel context del job). Permette al cost report di tracciare le ore correttamente.
 """

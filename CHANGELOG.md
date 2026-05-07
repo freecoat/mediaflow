@@ -1,5 +1,84 @@
 # MediaFlow — Changelog
 
+## v3.5.0-alpha.50 — Copilot in-depth integration nella pianificazione (7 maggio 2026)
+
+Richiesta Matteo: "integrazione in-depth del copilot nella pianificazione".
+Pre-α.50 il copilot vedeva clienti/progetti/listino/quote/risorse ma
+NIENTE pianificazione viva → poteva creare booking ma "alla cieca",
+senza sapere conflitti, ferie, carico esistente.
+
+**Sezione PIANIFICAZIONE VIVA in `build_context`** (mostrata se page=
+`/planning` o c'è progetto/job in canvas):
+- Booking prossimi 14gg (id, range, risorse, job, exec_status)
+- Conflitti orari attivi (overlap su stessa risorsa, top 10)
+- Carico per risorsa settimana corrente con badge 🟢🟡🔴 (vs cap 40h)
+- Indisponibilità approvate (ferie/malattia/festività) prossimi 14gg
+- Job critici con deadline ≤ 30gg (badge urgenza)
+- Filtri: `project_id` restringe al progetto, `job_id` al singolo job
+- Helper `_build_planning_context()` separato per leggibilità
+
+**3 capability planning nuove** (mutation, conflict-check pre-apply):
+
+| Tool | Quando | Payload chiave |
+|---|---|---|
+| `propose_move_booking` | "Sposta il booking di Luca a martedì pomeriggio" / "Sposta tutto +1 settimana" / "Cambia risorsa da Luca a Marco" | `booking_id` + `shift_minutes` \| `new_start_date` \| `new_resource_id` \| `assignments_remap[]` |
+| `propose_resize_booking` | "Allunga di 2 ore" / "Accorcia di mezz'ora" | `booking_id` + `delta_minutes` (positivo=allunga end) |
+| `propose_delete_booking` | "Cancella questo booking" | `booking_id` + `reason?` (soft-delete, recuperabile dal Cestino) |
+
+Tutte atomic. Move supporta combinazioni (shift_minutes + new_resource_id).
+Resize modifica l'ULTIMO assignment (mantiene split pause intatte). Delete
+triggera `recompute_for_booking` per recuperare le ore dal cost report.
+
+**System prompt rinforzato** (sezione "PIANIFICAZIONE — operazioni
+sulla timeline" in `ASSISTANT_SYSTEM_PROMPT_TOOLS`):
+1. Consultare sempre la sezione "PIANIFICAZIONE VIVA" prima di proporre
+2. Rispettare INDISPONIBILITÀ (no booking su ferie/malattia)
+3. Bilanciare CARICO (evitare risorse 🔴, preferire 🟢)
+4. Segnalare CONFLITTI esistenti proattivamente
+5. Spiegare il "perché" dopo ogni proposta planning
+6. Booking ricorrenti: proporre UNO ALLA VOLTA (non bulk 20)
+7. Collegare a `job_cost_line_id` quando applicabile (per cost tracking)
+
+**Quick prompts contestuali** nel drawer copilot, popolati da
+`_renderWelcome()` JS in base alla pagina:
+- `/planning`: 7 prompt (Diagnostica + Pianificazione)
+- `/cost-report`: 3 prompt (margini, sforamenti, perso)
+- `/quotes`: 3 prompt (crea quote, voce listino, search)
+- `/clients` o `/projects`: 3 prompt (anagrafica)
+- altri: 4 esempi generici (era hardcoded)
+- Click su prompt = popola input (non auto-invia, l'utente può rifinire)
+
+**Renderer card UI** per le 3 nuove capability:
+- `summaryMoveBooking`: shift in h/min direzione + new_resource_id +
+  remap dettagliato
+- `summaryResizeBooking`: delta in h/min con segno
+- `summaryDeleteBooking`: motivo + nota "Soft-delete recuperabile"
+
+**Altri**:
+- Cache-buster `copilot.js?v=3.5.0-alpha.50`
+- Import in `ai_assistant.py`: aggiunto `Booking, BookingAssignment,
+  BookingStatus, BookingExecutionStatus, ResourceUnavailability,
+  UnavailabilityKind, UnavailabilityStatus, JobStatus`
+
+**Niente migrate.**
+
+**Test**:
+- Apri `/planning` → click FAB copilot → vedi quick prompts dedicati
+- "Mostrami i conflitti orari della prossima settimana" → AI risponde
+  consultando il context PIANIFICAZIONE VIVA
+- "Sposta il booking #42 di +1 giorno" → AI propone
+  `propose_move_booking({booking_id:42, shift_minutes:1440})` →
+  card di conferma → Apply → booking spostato + recompute envelope
+
+**Prossimi step (futuri)**:
+- Capability avanzate: `propose_recurring_bookings` (serie ricorrente),
+  `propose_bulk_move` (sposta N booking di delta), `analyze_conflicts`
+  (read-only: trova + suggerisci risoluzioni), `find_free_slots`
+- Notifiche proattive: badge sul FAB se rilevati problemi (es. job in
+  scadenza senza booking pianificati)
+- Capability per modulo Billing: `propose_transmit_to_billing` con
+  preview integrata
+
 ## v3.5.0-alpha.49 — Step 4 Cost Report → Billing flow: UI /finance batch (7 maggio 2026)
 
 Quarto step del workflow billing. Pagina `/finance` estesa con tab
