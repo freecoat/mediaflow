@@ -1120,12 +1120,14 @@
         </div>
 
         <!-- ─── Ricorrenza (E5) ──────────────────────── -->
-        <div class="form-group" style="background:rgba(168,85,247,0.06); border:1px solid rgba(168,85,247,0.3); border-radius:6px; padding:8px 12px;">
+        <!-- v3.5.0-alpha.63: in edit mode il check diventa "Estendi come serie"
+             e chiama /extend-as-series invece di PUT (che ignorava i campi). -->
+        <div class="form-group" id="tlb-recur-group" style="background:rgba(168,85,247,0.06); border:1px solid rgba(168,85,247,0.3); border-radius:6px; padding:8px 12px;">
           <label style="display:flex; align-items:center; gap:8px; cursor:pointer; margin:0;">
             <input type="checkbox" id="tlb-recur-enabled" onchange="document.getElementById('tlb-recur-fields').style.display = this.checked ? 'flex' : 'none';" style="margin:0;">
             <span style="font-size:13px;">
-              <b>Ricorri</b>
-              <span style="color:var(--text3,#888); font-weight:normal; font-size:12px;">
+              <b id="tlb-recur-label">Ricorri</b>
+              <span id="tlb-recur-hint" style="color:var(--text3,#888); font-weight:normal; font-size:12px;">
                 — crea N booking distinti su giorni ricorrenti (es. ogni martedì)
               </span>
             </span>
@@ -1308,6 +1310,16 @@
       </div>
       <small class="form-help text-muted" style="display:block; margin-top:-4px;">Imposta l'orario assoluto giornaliero (es. 09:00–18:00) per tutti i booking. Mantiene la data; sostituisce ore:minuti. Se uno solo è valorizzato, modifica solo quel lato.</small>
 
+      <h5 style="margin:18px 0 6px; font-size:11px; text-transform:uppercase; letter-spacing:.6px; color:var(--text3,#888);">📂 Lavorazione</h5>
+
+      <div class="form-group">
+        <label class="form-label">Cambia lavorazione (e job)</label>
+        <select class="form-select" id="bulk-cost-line" disabled>
+          <option value="">— caricamento candidati… —</option>
+        </select>
+        <small id="bulk-cost-line-help" class="form-help text-muted">Sposta i booking selezionati su una diversa lavorazione/job dello <b>stesso progetto</b>. Le risorse vengono aggiunte automaticamente al nuovo job.</small>
+      </div>
+
       <h5 style="margin:18px 0 6px; font-size:11px; text-transform:uppercase; letter-spacing:.6px; color:var(--text3,#888);">⚙ Stato</h5>
 
       <div class="form-group">
@@ -1320,6 +1332,10 @@
           <option value="not_done">✗ Non fatto</option>
         </select>
         <small class="form-help text-muted">Marcare "Fatto" triggera il sync col cost report (man-hours).</small>
+      </div>
+
+      <!-- v3.5.0-alpha.63: pannello esiti dettagliati post-applicazione -->
+      <div id="bulk-result-detail" style="display:none; margin-top:14px; background:rgba(245,158,11,0.06); border:1px solid rgba(245,158,11,0.3); border-radius:6px; padding:10px 12px; font-size:12px;">
       </div>
     </div>
     <div class="modal-footer">
@@ -2619,6 +2635,17 @@ async function todoOpenDetail(bookingId) {
       // v3.5.0-alpha.24: dedupe per resource_id — i booking splittati per
       // pausa pranzo hanno N assignments stessa risorsa → 1 riga aggregata
       // con somma durata e badge "N segmenti" per chiarezza.
+      // v3.5.0-alpha.63: avviso esplicito + bottone "Rimuovi duplicati" per
+      // assignment in overlap sulla stessa risorsa (dato sporco pre-α.63).
+      if (d.has_duplicate_overlaps) {
+        html += `
+          <div class="text-muted text-sm">⚠ Anomalia</div>
+          <div style="background:rgba(245,158,11,0.10); border:1px solid rgba(245,158,11,0.4); border-radius:6px; padding:8px 10px; font-size:12px;">
+            Trovati assignment <b>duplicati con orari sovrapposti</b> sulla stessa risorsa
+            (residuo pre-α.63: ora bloccato in salvataggio).
+            <button class="btn btn-warning btn-sm" style="margin-left:8px;" onclick="todoFixDuplicateOverlaps(${d.id})">🧹 Rimuovi duplicati</button>
+          </div>`;
+      }
       const byRes = new Map();
       const _fmtT = (iso) => new Date(iso).toLocaleTimeString('it-IT', {hour:'2-digit', minute:'2-digit'});
       for (const a of d.assignments) {
@@ -2679,6 +2706,27 @@ async function todoOpenDetail(bookingId) {
     body.innerHTML = html;
   } catch(e) {
     body.innerHTML = `<div class="color-rose">${escapeHtml(e.message || 'Errore caricamento dettaglio')}</div>`;
+  }
+}
+
+// v3.5.0-alpha.63: rimuove assignment duplicati con overlap sulla stessa
+// risorsa (residuo pre-α.63). Confermato con prompt esplicito perché irreversibile.
+async function todoFixDuplicateOverlaps(bookingId) {
+  if (!confirm('Rimuovere gli assignment duplicati con orari sovrapposti su questo booking?\n\nVengono cancellati i record extra; il primo per orario di inizio viene mantenuto. Operazione irreversibile.')) {
+    return;
+  }
+  try {
+    const r = await api('POST', `/planning/api/bookings/${bookingId}/cleanup-duplicate-overlaps`, new FormData());
+    if (r.removed > 0) {
+      toast(`✓ Rimossi ${r.removed} assignment duplicati`, 'success');
+    } else {
+      toast('Nessun duplicato trovato', 'info');
+    }
+    // Ricarica il dettaglio (mostra l'avviso scomparso) + timeline
+    todoOpenDetail(bookingId);
+    renderTimeline(true);
+  } catch(e) {
+    toast(e.message || 'Errore cleanup', 'error');
   }
 }
 
@@ -3490,7 +3538,10 @@ async function tlPerformUndo() {
       return;
     } else if (action.type === 'bulk_edit') {
       // v3.5.0-alpha.18: undo bulk-edit applica lo stato precedente per ogni booking
+      // v3.5.0-alpha.63: ripristina anche job_cost_line_id se cambiato (via bulk-edit)
       let ok = 0, errs = 0;
+      // Raggruppa per cost_line da ripristinare → 1 chiamata bulk per gruppo (efficienza)
+      const restoreCl = new Map(); // cost_line_id → [booking_ids]
       for (const snap of (action.snapshots || [])) {
         try {
           // Ripristina assignments + execution_status
@@ -3506,7 +3557,21 @@ async function tlPerformUndo() {
             fd.append('execution_status', snap.execution_status);
             await api('PATCH', `/planning/api/bookings/${snap.booking_id}/execution`, fd);
           }
+          if (snap.job_cost_line_id) {
+            const k = snap.job_cost_line_id;
+            if (!restoreCl.has(k)) restoreCl.set(k, []);
+            restoreCl.get(k).push(snap.booking_id);
+          }
           ok++;
+        } catch(_) { errs++; }
+      }
+      // Ripristino cost-line per gruppi (1 chiamata bulk-edit per gruppo)
+      for (const [clId, bids] of restoreCl.entries()) {
+        try {
+          const fd = new FormData();
+          fd.append('booking_ids', bids.join(','));
+          fd.append('job_cost_line_id', String(clId));
+          await api('PUT', `/planning/api/bookings/${bids[0]}/bulk-edit`, fd);
         } catch(_) { errs++; }
       }
       toast(`Bulk-edit annullato: ${ok}${errs ? ` · ${errs} err.` : ''}`, errs ? 'warning' : 'success');
@@ -4893,8 +4958,54 @@ function tlOpenBulkModal() {
   document.getElementById('bulk-new-start-date').value = '';
   document.getElementById('bulk-abs-start').value = '';
   document.getElementById('bulk-abs-end').value = '';
+  // v3.5.0-alpha.63: reset cambio lavorazione + pannello esiti
+  const clSel = document.getElementById('bulk-cost-line');
+  clSel.innerHTML = '<option value="">— caricamento candidati… —</option>';
+  clSel.disabled = true;
+  document.getElementById('bulk-cost-line-help').innerHTML = 'Caricamento lavorazioni candidate…';
+  const resultBox = document.getElementById('bulk-result-detail');
+  resultBox.style.display = 'none';
+  resultBox.innerHTML = '';
   document.getElementById('modal-bulk-edit').dataset.bookingIds = bookingIds.join(',');
   openModal('modal-bulk-edit');
+  // v3.5.0-alpha.63 — fetch lavorazioni candidate (stesso progetto)
+  tlBulkLoadEligibleCostLines(bookingIds);
+}
+
+// v3.5.0-alpha.63 — popola la dropdown "Cambia lavorazione" interrogando il
+// backend per le JCL candidate (tutte le righe attive del progetto comune).
+async function tlBulkLoadEligibleCostLines(bookingIds) {
+  const sel = document.getElementById('bulk-cost-line');
+  const help = document.getElementById('bulk-cost-line-help');
+  try {
+    const r = await api('GET', `/planning/api/bookings/bulk-edit/eligible-cost-lines?ids=${bookingIds.join(',')}`);
+    if (!r.same_project) {
+      sel.innerHTML = '<option value="">— progetti diversi: non disponibile —</option>';
+      sel.disabled = true;
+      help.innerHTML = `<span style="color:#fbbf24;">⚠ I booking selezionati appartengono a progetti diversi (o non hanno job). Per cambiare lavorazione seleziona booking dello <b>stesso progetto</b>.</span>`;
+      return;
+    }
+    if (!r.lines || !r.lines.length) {
+      sel.innerHTML = '<option value="">— nessuna lavorazione disponibile —</option>';
+      sel.disabled = true;
+      help.innerHTML = 'Il progetto non ha lavorazioni attive su cui spostare i booking.';
+      return;
+    }
+    const opts = ['<option value="">— non cambiare —</option>'];
+    for (const cl of r.lines) {
+      const qActLab = (cl.quantity_actual != null && cl.quantity_quoted != null)
+        ? ` (${cl.quantity_actual}/${cl.quantity_quoted} ${cl.unit || ''})` : '';
+      const lbl = `${cl.job_code} · ${cl.description || '—'}${qActLab}`;
+      opts.push(`<option value="${cl.id}">${lbl.replace(/</g,'&lt;')}</option>`);
+    }
+    sel.innerHTML = opts.join('');
+    sel.disabled = false;
+    help.innerHTML = `Sposta i booking su una diversa lavorazione/job del progetto. ${r.lines.length} candidati. Risorse aggiunte al nuovo job in automatico.`;
+  } catch(e) {
+    sel.innerHTML = '<option value="">— errore caricamento —</option>';
+    sel.disabled = true;
+    help.innerHTML = `<span style="color:#fca5a5;">Errore: ${escapeHtml(e.message || '')}</span>`;
+  }
 }
 
 async function tlSubmitBulkEdit() {
@@ -4907,20 +5018,26 @@ async function tlSubmitBulkEdit() {
   const newStartDate = document.getElementById('bulk-new-start-date').value;
   const absStart = document.getElementById('bulk-abs-start').value;
   const absEnd = document.getElementById('bulk-abs-end').value;
-  if (!shiftMin && !status && !newStartDate && !absStart && !absEnd) {
-    toast('Seleziona almeno un\'azione (shift, data, orario assoluto, stato).', 'warning');
+  // v3.5.0-alpha.63: cambio lavorazione (e job)
+  const newCostLineId = (document.getElementById('bulk-cost-line').value || '').trim();
+  if (!shiftMin && !status && !newStartDate && !absStart && !absEnd && !newCostLineId) {
+    toast('Seleziona almeno un\'azione (shift, data, orario assoluto, stato, lavorazione).', 'warning');
     return;
   }
   // Snapshot per undo: salva start/end/resource per ogni assignment + execution_status.
   // v3.5.0-alpha.21: booking_id e assignment_id sono al top, execution_status e
   // resource_id dentro extendedProps (cf. planning.py serializer).
+  // v3.5.0-alpha.63: salva anche job_cost_line_id e job_id (per undo cambio lavorazione)
   const snaps = [];
   for (const bid of bookingIds) {
     const items = (window._tlBookings || []).filter(b => b.booking_id === parseInt(bid));
     if (!items.length) continue;
+    const ep = items[0].extendedProps || {};
     snaps.push({
       booking_id: parseInt(bid),
-      execution_status: items[0].extendedProps && items[0].extendedProps.execution_status,
+      execution_status: ep.execution_status,
+      job_cost_line_id: ep.job_cost_line_id || null,
+      job_id: ep.job_id || null,
       assignments: items.map(it => ({
         id: it.assignment_id,
         start: it.start, end: it.end,
@@ -4935,24 +5052,63 @@ async function tlSubmitBulkEdit() {
   if (newStartDate) fd.append('new_start_date', newStartDate);
   if (absStart) fd.append('absolute_start_time', absStart);
   if (absEnd) fd.append('absolute_end_time', absEnd);
+  if (newCostLineId) fd.append('job_cost_line_id', newCostLineId);
   try {
     const res = await api('PUT', `/planning/api/bookings/${bookingIds[0]}/bulk-edit`, fd);
-    closeModal('modal-bulk-edit');
-    const failedN = (res.failed || []).length;
-    toast(`✓ ${res.ok} aggiornat${res.ok === 1 ? 'o' : 'i'}${failedN ? ` · ⚠ ${failedN} falliti` : ''}`,
-          failedN ? 'warning' : 'success');
+    const failed = res.failed || [];
+    const skipped = res.skipped_locked_count || 0;
+    // v3.5.0-alpha.63 — pannello esiti dettagliato (resta nel modal se ci sono fail)
+    if (failed.length || skipped) {
+      tlBulkRenderResultDetail(res);
+    } else {
+      closeModal('modal-bulk-edit');
+    }
+    const totParts = [`✓ ${res.ok} aggiornat${res.ok === 1 ? 'o' : 'i'}`];
+    if (failed.length) totParts.push(`⚠ ${failed.length} falliti`);
+    if (skipped) totParts.push(`🔒 ${skipped} bloccati (fatturati)`);
+    toast(totParts.join(' · '), (failed.length || skipped) ? 'warning' : 'success');
     if (res.ok > 0) {
       const parts = [];
       if (newStartDate) parts.push(`→ ${newStartDate}`);
       if (shiftMin) parts.push(`Shift ${shiftMin}min`);
       if (absStart || absEnd) parts.push(`Orario ${absStart || '–'}/${absEnd || '–'}`);
       if (status) parts.push(`Stato → ${status}`);
+      if (newCostLineId) parts.push(`Lavorazione → #${newCostLineId}`);
       tlPushUndo({type:'bulk_edit', snapshots: snaps}, `Bulk: ${parts.join(' + ')}`);
     }
     renderTimeline(true);
   } catch(e) {
     toast(e.message || 'Errore bulk-edit', 'error');
   }
+}
+
+// v3.5.0-alpha.63: render dettagliato dei booking saltati per conflitto/lock.
+// Mostrato dentro il modal stesso (resta aperto se fail>0) per dare contesto
+// chiaro su CHI è fallito e PERCHÉ.
+function tlBulkRenderResultDetail(res) {
+  const box = document.getElementById('bulk-result-detail');
+  if (!box) return;
+  const failed = res.failed || [];
+  const skippedN = res.skipped_locked_count || 0;
+  let html = `<div style="font-weight:600; margin-bottom:6px;">⚠ Esito dettagliato</div>`;
+  if (skippedN) {
+    html += `<div style="margin-bottom:6px;">🔒 <b>${skippedN}</b> booking <b>non modificati</b> perché in periodo già fatturato (slice lock). Servono nota credito o cancellazione fattura per sbloccarli.</div>`;
+  }
+  if (failed.length) {
+    html += `<div style="margin-top:6px;">⚠ <b>${failed.length}</b> booking falliti:</div>`;
+    html += `<ul style="margin:6px 0 0 18px; padding:0; max-height:160px; overflow:auto;">`;
+    for (const f of failed) {
+      const reason = f.reason || f.error || 'errore';
+      const idLab = f.id ? `#${f.id}` : (f.booking_id ? `#${f.booking_id}` : '?');
+      html += `<li style="margin-bottom:2px;"><span class="mono">${idLab}</span> — <span style="color:#fbbf24;">${escapeHtml(String(reason))}</span></li>`;
+    }
+    html += `</ul>`;
+  }
+  if ((res.ok || 0) > 0) {
+    html += `<div style="margin-top:8px; color:#86efac;">✓ ${res.ok} booking applicati con successo. Chiudi il modal per tornare alla timeline.</div>`;
+  }
+  box.innerHTML = html;
+  box.style.display = '';
 }
 
 // v3.5.0-alpha.47.1: helper wrapper per setSelection programmatico.
@@ -5360,6 +5516,12 @@ function _tlbReset() {
   if (re) { re.checked = false; document.getElementById('tlb-recur-fields').style.display = 'none'; }
   const ru = document.getElementById('tlb-recur-until');
   if (ru) ru.value = '';
+  // v3.5.0-alpha.63 — ripristina label ricorrenza per modalità "nuovo"
+  // (in tlbOpenEdit la label cambia in "Estendi come serie")
+  const rLabReset = document.getElementById('tlb-recur-label');
+  const rHintReset = document.getElementById('tlb-recur-hint');
+  if (rLabReset) rLabReset.textContent = 'Ricorri';
+  if (rHintReset) rHintReset.textContent = '— crea N booking distinti su giorni ricorrenti (es. ogni martedì)';
   const tpp = document.getElementById('tlb-tp-popup');
   if (tpp) tpp.style.display = 'none';
   // v3.4.50: ripristina preferenza sync orario + aggiorna lista preset
@@ -5796,6 +5958,15 @@ async function tlbOpenEdit(bookingId) {
   document.getElementById('tlb-editing-booking-id').value = bookingId;
   document.getElementById('tlb-modal-title').textContent = `Modifica booking #${bookingId}`;
   document.getElementById('tlb-submit').textContent = 'Aggiorna';
+  // v3.5.0-alpha.63 — in edit mode la sezione ricorrenza diventa "Estendi come
+  // serie": se compili rule+until, viene chiamato /extend-as-series che CREA
+  // nuovi booking nelle date generate (lascia il pattern intatto).
+  // Pre-fix: l'utente compilava i campi in edit, vedeva "Aggiornato" ma i nuovi
+  // booking non comparivano (PUT ignorava recurrence_rule/recurrence_until).
+  const rLab = document.getElementById('tlb-recur-label');
+  const rHint = document.getElementById('tlb-recur-hint');
+  if (rLab) rLab.textContent = 'Estendi come serie';
+  if (rHint) rHint.textContent = '— crea booking aggiuntivi nelle date generate (questo booking resta come pattern)';
   // Raccolgo assignments dagli items correnti che hanno stesso booking_id
   const items = (window._tlBookings || []).filter(b => b.booking_id === bookingId);
   if (!items.length) { toast('Booking non trovato', 'error'); return; }
@@ -6348,20 +6519,54 @@ async function tlbSubmit() {
   // E3 v3.4.17: smart split server-side (solo per nuovo, non in edit)
   const smartSplit = document.getElementById('tlb-smart-split');
   if (smartSplit && smartSplit.checked && !editingId) fd.append('smart_split', 'true');
-  // E5 v3.4.19: ricorrenza
+  // E5 v3.4.19: ricorrenza (solo per CREATE — espande il booking originale).
+  // v3.5.0-alpha.63: in edit mode (editingId) la ricorrenza diventa "estendi
+  // come serie" → chiamata SEPARATA a /extend-as-series dopo il PUT, perché
+  // il PUT non supporta recurrence_rule/recurrence_until (era ignorato).
   const recurEnabled = document.getElementById('tlb-recur-enabled');
-  if (recurEnabled && recurEnabled.checked && !editingId) {
+  let extendAsSeriesArgs = null;
+  if (recurEnabled && recurEnabled.checked) {
     const rule = document.getElementById('tlb-recur-rule').value;
     const until = document.getElementById('tlb-recur-until').value;
     if (!until) { toast('Imposta data fine ricorrenza', 'warning'); return; }
-    fd.append('recurrence_rule', rule);
-    fd.append('recurrence_until', until);
+    if (!editingId) {
+      // CREATE: usa ricorrenza inline (back-compat α.19)
+      fd.append('recurrence_rule', rule);
+      fd.append('recurrence_until', until);
+    } else {
+      // EDIT: chiamata separata dopo il PUT
+      extendAsSeriesArgs = {rule, until};
+    }
   }
   btn.disabled = true; btn.textContent = 'Salvataggio…';
   try {
     if (editingId) {
       await api('PUT', `/planning/api/bookings/${editingId}`, fd);
       toast('Booking aggiornato', 'success');
+      // v3.5.0-alpha.63: se era richiesta estensione serie, fai la chiamata ora
+      if (extendAsSeriesArgs) {
+        try {
+          const exFd = new FormData();
+          exFd.append('recurrence_rule', extendAsSeriesArgs.rule);
+          exFd.append('recurrence_until', extendAsSeriesArgs.until);
+          const exRes = await api('POST', `/planning/api/bookings/${editingId}/extend-as-series`, exFd);
+          const okN = exRes.ok || 0;
+          const failedN = (exRes.failed || []).length;
+          if (okN > 0) {
+            toast(`✓ Serie estesa: ${okN} booking aggiunti${failedN ? ` · ⚠ ${failedN} saltati per conflitto` : ''}`,
+                  failedN ? 'warning' : 'success', 4500);
+          } else if (failedN > 0) {
+            // Mostra dettaglio se tutti falliti
+            const lines = (exRes.failed || []).slice(0, 8).map(f => `• ${f.date}: ${f.error}`).join('\n');
+            const more = (exRes.failed.length > 8) ? `\n…e altri ${exRes.failed.length - 8}` : '';
+            alert(`Estensione serie: 0 booking aggiunti.\nConflitti:\n${lines}${more}`);
+          } else {
+            toast('Nessuna occorrenza nel range (oltre la data di questo booking)', 'info', 4000);
+          }
+        } catch(e2) {
+          toast(`Estensione serie fallita: ${e2.message || 'errore'}`, 'error', 5000);
+        }
+      }
       closeModal('modal-tl-booking');
       renderTimeline(true);
     } else if (!CAN_CREATE_BOOKING) {

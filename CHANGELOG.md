@@ -1,5 +1,99 @@
 # MediaFlow — Changelog
 
+## v3.5.0-alpha.63 — Bulk job-change + extend-as-series + dedup risorse (8 maggio 2026)
+
+Round chiuso da feedback Matteo dopo α.62. 4 problemi distinti su pianificazione,
+ognuno con una causa diversa, una soluzione mirata e niente abstractions
+gratuite.
+
+**1. Bulk-edit "Cambia lavorazione" (e job)**
+
+Era assente: in bulk si poteva spostare/shiftare/cambiar stato ma non cambiare
+la lavorazione di destinazione (= il job sul cost report).
+
+- `app/routers/planning.py`:
+  - `bulk_edit_bookings()`: nuovo parametro `job_cost_line_id`. Risolve la JCL
+    + il job, valida appartenenza tenant, applica per booking. Re-sync
+    `cost_line_actual` per VECCHIA + NUOVA cost_line se booking done. Auto-
+    assignment risorse → nuovo job. Log change tracciato.
+  - `GET /api/bookings/bulk-edit/eligible-cost-lines?ids=...`: ritorna le JCL
+    candidate. Se i booking selezionati appartengono a progetti diversi,
+    `same_project=False` e UI mostra warning. Cross-job dello stesso project
+    OK (più job per progetto = scenario reale).
+- `app/templates/pages/planning.html`:
+  - Modal Bulk-edit: nuova sezione "📂 Lavorazione" con dropdown popolata via
+    fetch. Help text dinamico (caricamento / progetti diversi / candidati).
+  - `tlSubmitBulkEdit()`: invia `job_cost_line_id` + estende snapshot undo
+    (memorizza vecchio `job_cost_line_id`, ripristino bulk in 1 chiamata).
+
+**2. Stessa risorsa appariva 2 volte sul booking**
+
+Sara Conti compariva 2x in dettaglio. Il dedup frontend (α.24) c'era già MA
+copre solo la visualizzazione. La causa era a monte: nessun guard impediva
+l'inserimento di 2 BookingAssignment con stessa risorsa CON OVERLAP.
+
+- `app/routers/planning.py`:
+  - `_check_intra_payload_overlaps()`: scan a coppie sul payload
+    assignments di POST/PUT booking. Stessa risorsa con overlap → 400.
+    Segmenti contigui (es. split pranzo) restano permessi.
+  - `GET /api/bookings/{id}/detail`: aggiunto `has_duplicate_overlaps` +
+    `duplicate_resource_ids` per UI warning sui dati storici.
+  - `POST /api/bookings/{id}/cleanup-duplicate-overlaps`: rimuove duplicati
+    storici (tiene il primo per start, cancella overlap successivi).
+- `app/templates/pages/planning.html`:
+  - `todoOpenDetail()`: pannello giallo "⚠ Anomalia" sopra Risorse + bottone
+    "🧹 Rimuovi duplicati" che chiama l'endpoint cleanup con conferma.
+  - `todoFixDuplicateOverlaps()` nuova funzione.
+
+**3. Feedback chiaro su skip/conflict in bulk**
+
+Pre-α.63 il toast diceva solo "ok N · falliti M" senza dettaglio.
+
+- `app/routers/planning.py` `bulk_edit_bookings()`: response arricchita con
+  `skipped_locked_count` (booking bloccati da slice fatturate, separati dai
+  conflitti orari) + ogni elemento di `failed` ha ora `reason` umana ("Booking
+  dentro periodo già fatturato (date → date, fattura N)" oppure "Conflitto
+  orario: #ID → #IDcausante").
+- `app/templates/pages/planning.html`:
+  - Pannello `bulk-result-detail` dentro il modal: appare se failed>0 o
+    skipped>0, lista per booking_id con motivo. Modal resta aperto se ci sono
+    fail (utente vede subito chi è saltato e perché). Toast riassuntivo: "✓ N
+    aggiornati · ⚠ M falliti · 🔒 K bloccati (fatturati)".
+
+**4. Modifica booking creando nuova serie da quello → "aggiornato" ma niente nuovi booking**
+
+Causa: il PUT /api/bookings/{id} ha sempre ignorato `recurrence_rule` /
+`recurrence_until` (quei campi vivono solo nel POST). In edit mode l'utente
+compilava i campi, ricarica, "aggiornato" → niente.
+
+- `app/routers/planning.py`:
+  - `POST /api/bookings/{id}/extend-as-series`: estende un booking esistente
+    come pattern. Replica gli assignments shiftati al delta giornaliero per
+    ogni occorrenza, esclude la data del pattern (già materializzato).
+    Conflict check per occorrenza → quelle in conflitto vanno in `failed`,
+    le ok vengono create. Auto-assignment risorse al job. Log change.
+- `app/templates/pages/planning.html`:
+  - In `tlbOpenEdit()`: la sezione ricorrenza cambia label in "Estendi come
+    serie" + hint "crea booking aggiuntivi nelle date generate (questo
+    booking resta come pattern)". `_tlbReset()` ripristina "Ricorri".
+  - `tlbSubmit()`: in edit mode, se ricorrenza valorizzata, dopo il PUT
+    fa POST a /extend-as-series con rule+until. Toast con N create + N
+    saltati per conflitto. Alert dettagliato se 0 create.
+
+**Cosa NON cambia in α.63**:
+- Nessuna migrazione DB.
+- Convenzione segno over_under, formule cost report, status flow: invariati.
+- /finance batch detail: nessun cambiamento.
+- Slice lock α.59: ovvio, sempre attivo (i booking dentro periodi fatturati
+  restano immutabili anche da bulk-edit / extend-as-series).
+
+**Smoke test boot**: 268 routes (+3 vs α.62), version 3.5.0-alpha.63.
+
+Le 3 route nuove sono:
+- `POST /api/bookings/{id}/extend-as-series`
+- `POST /api/bookings/{id}/cleanup-duplicate-overlaps`
+- `GET /api/bookings/bulk-edit/eligible-cost-lines`
+
 ## v3.5.0-alpha.62 — Rimanda al commerciale (8 maggio 2026)
 
 Quinto e ultimo step della riarchitettura billing concordata l'8 maggio.

@@ -8,6 +8,78 @@
 
 ## Versione corrente
 
+**v3.5.0-alpha.63** — 8 maggio 2026 — Bulk job-change + extend-as-series + dedup risorse
+
+Round chiuso da feedback Matteo dopo α.62: 4 problemi distinti su pianificazione,
+ognuno con causa diversa e soluzione mirata. Niente migrazione DB.
+
+**Chiuso α.63:**
+- ✅ Bulk-edit "Cambia lavorazione": dropdown candidati = tutte le JCL
+  attive del progetto comune (cross-job dello stesso project OK). Errore
+  esplicito se progetti diversi. Re-sync man-hours su VECCHIA + NUOVA
+  cost_line per booking done. Auto-assignment risorse → nuovo job. Undo
+  bulk-edit ripristina anche cost_line in 1 chiamata.
+  - Endpoint nuovo: `GET /api/bookings/bulk-edit/eligible-cost-lines?ids=...`
+  - Form param nuovo su `PUT /api/bookings/.../bulk-edit`: `job_cost_line_id`.
+- ✅ Guard intra-payload: stessa risorsa con OVERLAP nello stesso booking
+  → 400 in POST/PUT. Segmenti contigui (split pranzo) restano permessi.
+  - Cleanup dati storici: `POST /api/bookings/{id}/cleanup-duplicate-overlaps`
+    rimuove i duplicati pre-α.63. UI: pannello giallo nel detail con
+    bottone "🧹 Rimuovi duplicati" + conferma.
+  - Detail endpoint espone `has_duplicate_overlaps` + `duplicate_resource_ids`.
+- ✅ Feedback chiaro skip/conflict in bulk: response include
+  `skipped_locked_count` separato dai conflitti orari + ogni `failed[i]`
+  ha `reason` umano (non più solo `error: "BOOKING_LOCKED_BY_SLICE"`).
+  Pannello `bulk-result-detail` dentro il modal: lista per booking_id con
+  motivo. Modal resta aperto se ci sono fail.
+- ✅ Extend-as-series: pre-α.63 il PUT booking ignorava
+  `recurrence_rule`/`recurrence_until` → toast "aggiornato" ma niente nuovi
+  booking. Ora in edit mode il check "Ricorri" diventa "Estendi come serie"
+  e dopo il PUT chiama `POST /api/bookings/{id}/extend-as-series`. Nuovo
+  endpoint replica gli assignments shiftati per ogni occorrenza, esclude la
+  data del pattern, conflict-check per occorrenza, auto-assignment risorse.
+
+**Smoke test boot**: 268 routes (+3 vs α.62), version 3.5.0-alpha.63.
+
+**Verifica live richiesta a Matteo**:
+1. Pull → app boot pulito (268 route, version 3.5.0-alpha.63).
+2. `/planning`: seleziona ≥2 booking dello stesso progetto su job diversi
+   → click Bulk-edit → vedi dropdown "Cambia lavorazione" con candidati
+   (codice job + descrizione lavorazione) → applica → toast "✓ aggiornati",
+   timeline rispecchia il cambio job/cost-line, cost report mostra
+   man-hours sulla nuova lavorazione (il vecchio JCL si decrementa).
+3. Selezione su progetti diversi → dropdown disabled + warning
+   "progetti diversi: non disponibile".
+4. Selezione mista (1 booking dentro periodo fatturato): tooltip 🔒 vis-
+   timeline + dopo Bulk applica, pannello esiti elenca quel booking come
+   "🔒 bloccato (date → date, fattura N)" e gli altri vanno OK.
+5. Apri il dettaglio di un booking che PRIMA aveva Sara Conti × 2 (dato
+   sporco pre-α.63): pannello giallo "⚠ Anomalia". Click "🧹 Rimuovi
+   duplicati" → conferma → 1 record cancellato → ricarica → Sara Conti
+   appare 1 sola volta.
+6. Crea un nuovo booking con stessa risorsa duplicata sovrapposta → 400
+   con messaggio specifico (righe #1 e #2). Crea con stessa risorsa in
+   segmenti CONTIGUI (split pranzo) → ok come prima.
+7. Apri edit su un booking esistente → spunta "Estendi come serie",
+   imposta regola = WEEKDAYS + data fine = +2 settimane → Aggiorna →
+   toast "✓ Serie estesa: N booking aggiunti". Ricarica timeline → vedi
+   le occorrenze nelle date attese (non sulla data del pattern).
+   Se conflitti: alert con lista date saltate.
+
+**Cosa NON cambia in α.63**:
+- Nessuna migrazione DB.
+- Slice lock α.59: sempre attivo (i booking in periodo fatturato non si
+  modificano nemmeno con bulk-edit cost-line / extend-as-series).
+- Convenzione segno over_under, formule cost report, status flow,
+  /finance batch detail: invariati.
+
+**Prossimi step (post-test live)**:
+- Eventuali tweak feedback estensione serie (mostrare lista date in toast?).
+- Roadmap billing α.59.x: endpoint rettifica per sbloccare manualmente un
+  periodo dopo nota credito (rimandato finché Matteo non lo richiede).
+
+---
+
 **v3.5.0-alpha.62** — 8 maggio 2026 — Rimanda al commerciale
 
 Quinto e ultimo step della riarchitettura billing concordata oggi. Il

@@ -516,6 +516,28 @@ def _check_assignment_conflict(db: Session, resource_id: int, start: datetime, e
     return q.first()
 
 
+def _check_intra_payload_overlaps(parsed_ass: list[dict]) -> Optional[tuple[int, int]]:
+    """v3.5.0-alpha.63: rileva risorse duplicate con tempo sovrapposto nello
+    stesso payload di assignments (POST/PUT booking). Senza questo guard era
+    possibile inserire 2 BookingAssignment per la stessa risorsa nello stesso
+    booking → la risorsa appariva 2 volte in /api/bookings/{id}/detail.
+
+    Ritorna (i, j) degli indici in conflitto, oppure None se ok.
+    Stessa risorsa con intervalli ADIACENTI o DISGIUNTI è permessa (es. split
+    pausa pranzo → 2 assignments stessa risorsa, contigui ma non sovrapposti).
+    """
+    n = len(parsed_ass)
+    for i in range(n):
+        for j in range(i + 1, n):
+            if parsed_ass[i]["resource_id"] != parsed_ass[j]["resource_id"]:
+                continue
+            si, ei = parsed_ass[i]["start_datetime"], parsed_ass[i]["end_datetime"]
+            sj, ej = parsed_ass[j]["start_datetime"], parsed_ass[j]["end_datetime"]
+            if si < ej and sj < ei:
+                return (i, j)
+    return None
+
+
 def _recalc_booking_envelope(b: Booking):
     """Ricalcola Booking.start_datetime/end_datetime come min/max dei suoi assignments."""
     if not b.assignments:
@@ -1051,6 +1073,17 @@ async def create_booking(
     # RBAC: staff può creare booking solo per la propria risorsa
     _enforce_planning_scope(request, db, {pa["resource_id"] for pa in parsed_ass})
 
+    # v3.5.0-alpha.63 — guard intra-payload: la stessa risorsa NON può essere
+    # presente due volte in OVERLAP nello stesso booking (segmenti contigui ok).
+    dup = _check_intra_payload_overlaps(parsed_ass)
+    if dup is not None:
+        i, j = dup
+        raise HTTPException(
+            400,
+            f"La stessa risorsa è inserita due volte con orari sovrapposti "
+            f"(righe #{i+1} e #{j+1}). Rimuovi il duplicato o sistema gli orari."
+        )
+
     # E5 v3.4.19: Recurrence — espande il range originale in N occorrenze (indipendenti dalla policy)
     # Crea un Booking distinct per ogni occorrenza, poi return solo il primo per coerenza payload.
     occurrence_offsets: list[tuple[datetime, datetime]] = []
@@ -1344,6 +1377,15 @@ async def update_booking(
             if ed <= sd:
                 raise HTTPException(400, f"assignments[{i}]: fine deve essere > inizio")
             parsed_ass.append({"resource_id": int(rid), "start_datetime": sd, "end_datetime": ed})
+        # v3.5.0-alpha.63 — guard intra-payload: rifiuta stessa risorsa in overlap
+        dup = _check_intra_payload_overlaps(parsed_ass)
+        if dup is not None:
+            i, j = dup
+            raise HTTPException(
+                400,
+                f"La stessa risorsa è inserita due volte con orari sovrapposti "
+                f"(righe #{i+1} e #{j+1}). Rimuovi il duplicato o sistema gli orari."
+            )
         # Conflict check (escludendo gli assignment attuali del booking, che sostituiremo)
         existing_ids = [a.id for a in b.assignments]
         for i, pa in enumerate(parsed_ass):
@@ -1418,6 +1460,181 @@ async def update_booking(
              "end_datetime": a.end_datetime.isoformat()}
             for a in b.assignments
         ],
+    }
+
+
+@router.post("/api/bookings/{booking_id}/cleanup-duplicate-overlaps")
+async def cleanup_duplicate_overlaps(
+    booking_id: int,
+    request: Request,
+    db: Session = Depends(get_db),
+):
+    """v3.5.0-alpha.63 — cancella assignment duplicati con OVERLAP sulla
+    stessa risorsa. Tiene il primo (per start_datetime), elimina gli altri.
+    Idempotente: se non c'è alcun duplicato, ritorna `removed=0`.
+
+    Necessario per pulire dati sporchi pre-α.63 (il guard intra-payload non
+    esisteva → la stessa risorsa poteva apparire 2 volte nello stesso
+    booking, quindi 2 volte nel detail modal).
+    """
+    b = db.query(Booking).options(
+        joinedload(Booking.assignments)
+    ).filter(Booking.id == booking_id, Booking.tenant_id == CURRENT_TENANT).first()
+    if not b:
+        raise HTTPException(404, "Booking non trovato")
+    _enforce_planning_scope(request, db, {a.resource_id for a in b.assignments})
+
+    by_res: dict[int, list[BookingAssignment]] = {}
+    for a in b.assignments:
+        by_res.setdefault(a.resource_id, []).append(a)
+    to_delete: list[int] = []
+    for rid, lst in by_res.items():
+        if len(lst) < 2:
+            continue
+        lst_sorted = sorted(lst, key=lambda x: x.start_datetime)
+        kept = lst_sorted[0]
+        for cand in lst_sorted[1:]:
+            # se overlap con il primo (kept) → cancella; se contiguo → conserva
+            if kept.start_datetime < cand.end_datetime and cand.start_datetime < kept.end_datetime:
+                to_delete.append(cand.id)
+            else:
+                # cand non in overlap col primo, ma potrebbe esserlo con un
+                # altro candidato già conservato — semplifichiamo: se NON
+                # overlap con kept, conserviamo (caso pranzo/split).
+                pass
+    if to_delete:
+        db.query(BookingAssignment).filter(BookingAssignment.id.in_(to_delete)).delete(
+            synchronize_session=False
+        )
+        _recalc_booking_envelope(b)
+        _log_change(
+            db, b.id, "update",
+            f"Cleanup duplicati overlap: rimossi {len(to_delete)} assignment",
+            {"removed_assignment_ids": to_delete},
+        )
+        db.commit()
+    return {"removed": len(to_delete), "removed_ids": to_delete}
+
+
+@router.post("/api/bookings/{booking_id}/extend-as-series")
+async def extend_booking_as_series(
+    booking_id: int,
+    request: Request,
+    recurrence_rule: str = Form(...),
+    recurrence_until: _date = Form(...),
+    db: Session = Depends(get_db),
+):
+    """v3.5.0-alpha.63 — estende un booking esistente come pattern di serie:
+    crea N booking aggiuntivi nelle date generate dalla regola, escludendo la
+    data del booking pattern (già materializzato). Mantiene job/cost_line/
+    notes/priority/kind del pattern e replica TUTTI gli assignments shiftati
+    al delta giornaliero corretto.
+
+    Risolve il bug pre-α.63: il PUT /api/bookings/{id} ignorava i campi
+    recurrence_rule/recurrence_until → dalla UI in edit mode l'utente vedeva
+    "Booking aggiornato" ma le occorrenze ricorrenti non venivano create.
+
+    Failed list: ogni occorrenza che va in conflitto con un assignment
+    esistente viene saltata (skipped) e riportata in `failed`. Operazione
+    non all-or-nothing: le occorrenze ok vengono create comunque.
+    """
+    pattern = db.query(Booking).filter(
+        Booking.id == booking_id,
+        Booking.tenant_id == CURRENT_TENANT,
+    ).first()
+    if not pattern:
+        raise HTTPException(404, "Booking pattern non trovato")
+    if not pattern.assignments:
+        raise HTTPException(400, "Il booking pattern non ha assignments")
+    _enforce_planning_scope(request, db, {a.resource_id for a in pattern.assignments})
+
+    pattern_first_start = min(a.start_datetime for a in pattern.assignments)
+    occurrences = _expand_recurrence(
+        pattern_first_start,
+        max(a.end_datetime for a in pattern.assignments),
+        recurrence_rule,
+        recurrence_until,
+    )
+    if not occurrences:
+        raise HTTPException(400, "La regola non genera occorrenze nel range indicato")
+
+    pattern_date = pattern_first_start.date()
+    created_ids: list[int] = []
+    failed: list[dict] = []
+    skipped_pattern_day = False
+
+    for (occ_start, _occ_end) in occurrences:
+        if occ_start.date() == pattern_date:
+            skipped_pattern_day = True
+            continue
+        day_offset = (occ_start.date() - pattern_date).days
+
+        # Replica gli assignments shiftati
+        shifted: list[dict] = []
+        for a in pattern.assignments:
+            shifted.append({
+                "resource_id": a.resource_id,
+                "start_datetime": a.start_datetime + _td(days=day_offset),
+                "end_datetime": a.end_datetime + _td(days=day_offset),
+            })
+
+        # Conflict check per occorrenza (per-assignment) — qualsiasi conflitto
+        # → salta l'intera occorrenza (non parziale).
+        conflict_msg = None
+        for pa in shifted:
+            c = _check_assignment_conflict(db, pa["resource_id"], pa["start_datetime"], pa["end_datetime"])
+            if c:
+                conflict_msg = f"conflitto con assignment #{c.id}"
+                break
+        if conflict_msg:
+            failed.append({"date": occ_start.date().isoformat(), "error": conflict_msg})
+            continue
+
+        env_s = min(pa["start_datetime"] for pa in shifted)
+        env_e = max(pa["end_datetime"] for pa in shifted)
+        b = Booking(
+            tenant_id=CURRENT_TENANT,
+            job_id=pattern.job_id,
+            job_cost_line_id=pattern.job_cost_line_id,
+            start_datetime=env_s,
+            end_datetime=env_e,
+            status=pattern.status,
+            kind=pattern.kind,
+            notes=pattern.notes,
+            priority=pattern.priority,
+        )
+        db.add(b); db.flush()
+        for pa in shifted:
+            db.add(BookingAssignment(
+                booking_id=b.id,
+                resource_id=pa["resource_id"],
+                start_datetime=pa["start_datetime"],
+                end_datetime=pa["end_datetime"],
+            ))
+        _log_change(
+            db, b.id, "create",
+            f"Estensione serie da booking #{pattern.id} ({recurrence_rule}, occ {occ_start.date()})",
+            {"recurrence": recurrence_rule, "until": str(recurrence_until), "pattern_id": pattern.id},
+        )
+        created_ids.append(b.id)
+
+    # Auto-assignment risorse → job (idempotente)
+    if pattern.job_id and created_ids:
+        try:
+            from app.services.resource_assignment_sync import ensure_resources_assigned_to_job
+            ensure_resources_assigned_to_job(
+                db, pattern.job_id, [a.resource_id for a in pattern.assignments]
+            )
+        except Exception as e:
+            print(f"[extend_as_series] auto-assignment failed: {e}")
+
+    db.commit()
+    return {
+        "ok": len(created_ids),
+        "failed": failed,
+        "total_occurrences": len(occurrences),
+        "pattern_date_skipped": skipped_pattern_day,
+        "created_ids": created_ids,
     }
 
 
@@ -1727,6 +1944,8 @@ async def bulk_edit_bookings(
     new_start_date: Optional[date] = Form(None),
     absolute_start_time: Optional[str] = Form(None),  # "HH:MM"
     absolute_end_time: Optional[str] = Form(None),    # "HH:MM"
+    # alpha.63: cambio lavorazione (e di conseguenza job) per i booking selezionati
+    job_cost_line_id: Optional[int] = Form(None),
     db: Session = Depends(get_db),
 ):
     """v3.5.0-alpha.18+α.38: applica modifiche in blocco a più booking.
@@ -1794,6 +2013,21 @@ async def bulk_edit_bookings(
 
     minute_delta = timedelta(minutes=shift_minutes) if shift_minutes else None
 
+    # v3.5.0-alpha.63 — cambio lavorazione (e job) bulk. Risolve la cost_line
+    # una volta sola, deriva il job_id, valida che la lavorazione sia attiva
+    # nel tenant. Le modifiche vengono applicate per booking nello stesso
+    # giro di check (skip se locked, log error se cost_line non valida).
+    new_cost_line = None
+    new_job_id_from_cl: Optional[int] = None
+    if job_cost_line_id is not None:
+        new_cost_line = db.query(JobCostLine).join(Job).join(Project).filter(
+            JobCostLine.id == job_cost_line_id,
+            Project.tenant_id == CURRENT_TENANT,
+        ).first()
+        if not new_cost_line:
+            raise HTTPException(404, f"Lavorazione #{job_cost_line_id} non trovata")
+        new_job_id_from_cl = new_cost_line.job_id
+
     ok_count = 0
     failed_ids: list[dict] = []
     # v3.5.0-alpha.59 — pre-check slice lock su tutti i booking selezionati.
@@ -1811,12 +2045,22 @@ async def bulk_edit_bookings(
                 "period_end": s.period_end.isoformat(),
                 "invoice_number": (s.invoice.number if s.invoice else None),
             }
+    skipped_locked_count = 0
     for b in bookings:
         if b.id in locked_bookings:
+            sl = locked_bookings[b.id]
+            human = (
+                f"Booking dentro periodo già fatturato "
+                f"({sl['period_start']} → {sl['period_end']}"
+                + (f", fattura {sl['invoice_number']}" if sl.get('invoice_number') else "")
+                + ")"
+            )
             failed_ids.append({
                 "id": b.id, "error": "BOOKING_LOCKED_BY_SLICE",
+                "reason": human,
                 "slice": locked_bookings[b.id],
             })
+            skipped_locked_count += 1
             continue
         try:
             # Calcola tutti i nuovi orari in una list, check conflict, poi commit
@@ -1868,15 +2112,130 @@ async def bulk_edit_bookings(
                         recompute_for_booking(db, b)
                     except Exception as e:
                         print(f"[bulk_edit] cost sync failed for #{b.id}: {e}")
+
+            # v3.5.0-alpha.63 — cambio job_cost_line_id (e job_id) per il booking
+            if new_cost_line is not None:
+                old_cl_id = b.job_cost_line_id
+                old_was_done = (b.execution_status == BookingExecutionStatus.done)
+                b.job_cost_line_id = new_cost_line.id
+                b.job_id = new_job_id_from_cl
+                if b.kind not in (BookingKind.project,):
+                    b.kind = BookingKind.project
+                # Se done, ricalcola man-hours sia per la VECCHIA che per la NUOVA cost_line
+                if old_was_done:
+                    try:
+                        from app.services.cost_line_sync import recompute_for_booking, recompute_cost_line_actual
+                        if old_cl_id:
+                            old_jcl = db.query(JobCostLine).filter(JobCostLine.id == old_cl_id).first()
+                            if old_jcl:
+                                recompute_cost_line_actual(db, old_jcl)
+                        recompute_for_booking(db, b)
+                    except Exception as e:
+                        print(f"[bulk_edit] cost sync (job-change) failed for #{b.id}: {e}")
+                # Auto-assignment delle risorse al nuovo job
+                if b.job_id:
+                    try:
+                        from app.services.resource_assignment_sync import ensure_resources_assigned_to_job
+                        ensure_resources_assigned_to_job(
+                            db, b.job_id, [a.resource_id for a in b.assignments]
+                        )
+                    except Exception as e:
+                        print(f"[bulk_edit] auto-assignment (job-change) failed for #{b.id}: {e}")
+                _log_change(
+                    db, b.id, "update",
+                    f"Cambio lavorazione bulk: {old_cl_id} → {new_cost_line.id}",
+                    {"job_cost_line_id": new_cost_line.id, "job_id": new_job_id_from_cl,
+                     "previous_job_cost_line_id": old_cl_id},
+                )
             ok_count += 1
         except Exception as e:
-            failed_ids.append({"id": b.id, "error": str(e)})
+            # v3.5.0-alpha.63 — reason leggibile: error tecnico per log,
+            # reason umano per UI panel.
+            failed_ids.append({"id": b.id, "error": str(e), "reason": str(e)})
 
     db.commit()
+    # v3.5.0-alpha.63 — aggiungi reason umana ai conflitti orari (string error
+    # tipo "#42 → conflitto con #99"); UI usa `reason` per il pannello esiti.
+    for f in failed_ids:
+        if "reason" not in f and f.get("error"):
+            err = f["error"]
+            if "conflitto" in err or "→" in err:
+                f["reason"] = f"Conflitto orario: {err}"
+            else:
+                f["reason"] = err
     return {
         "ok": ok_count,
         "failed": failed_ids,
+        "skipped_locked_count": skipped_locked_count,
         "total": len(bookings),
+    }
+
+
+@router.get("/api/bookings/bulk-edit/eligible-cost-lines")
+async def bulk_edit_eligible_cost_lines(
+    ids: str,
+    db: Session = Depends(get_db),
+):
+    """v3.5.0-alpha.63 — ritorna le lavorazioni candidate per un cambio
+    bulk del job_cost_line_id su un set di booking.
+
+    Logica:
+      - Se TUTTI i booking selezionati appartengono allo stesso progetto →
+        ritorna le JobCostLine attive di quel progetto (cross-job nello
+        stesso project sono possibili — più job, più quote).
+      - Se progetti diversi → `same_project=False` e `lines=[]`. La UI deve
+        mostrare un avviso ("seleziona booking dello stesso progetto").
+      - I booking interni (job_id NULL) vengono ignorati ai fini del check
+        progetto comune.
+    """
+    booking_ids = [int(x.strip()) for x in (ids or "").split(",") if x.strip().isdigit()]
+    if not booking_ids:
+        return {"same_project": False, "project_id": None, "lines": []}
+
+    bookings = db.query(Booking).options(
+        joinedload(Booking.job),
+    ).filter(
+        Booking.id.in_(booking_ids),
+        Booking.tenant_id == CURRENT_TENANT,
+    ).all()
+    project_ids = {b.job.project_id for b in bookings if b.job and b.job.project_id is not None}
+    if not project_ids or len(project_ids) > 1:
+        return {
+            "same_project": len(project_ids) == 1,
+            "project_id": (next(iter(project_ids)) if len(project_ids) == 1 else None),
+            "lines": [],
+            "reason": (
+                "MULTI_PROJECT" if len(project_ids) > 1
+                else ("NO_PROJECT" if not project_ids else "OK")
+            ),
+        }
+
+    pid = next(iter(project_ids))
+    # Lavorazioni di tutti i job del progetto (Project è il guard del tenant)
+    rows = (
+        db.query(JobCostLine, Job)
+        .join(Job, JobCostLine.job_id == Job.id)
+        .join(Project, Job.project_id == Project.id)
+        .filter(Job.project_id == pid, Project.tenant_id == CURRENT_TENANT)
+        .order_by(Job.code, JobCostLine.id)
+        .all()
+    )
+    out = []
+    for cl, j in rows:
+        out.append({
+            "id": cl.id,
+            "description": cl.description,
+            "unit": cl.unit,
+            "quantity_quoted": cl.quantity_quoted,
+            "quantity_actual": cl.quantity_actual,
+            "job_id": j.id,
+            "job_code": j.code,
+            "job_title": j.title,
+        })
+    return {
+        "same_project": True,
+        "project_id": pid,
+        "lines": out,
     }
 
 
@@ -3188,6 +3547,25 @@ async def booking_detail(booking_id: int, db: Session = Depends(get_db)):
                 if sb.execution_status == BookingExecutionStatus.done:
                     cl_done_hours += seg
 
+    # v3.5.0-alpha.63 — rileva eventuali assignment duplicati per stessa
+    # risorsa CON OVERLAP (residui pre-α.63: il guard intra-payload non
+    # esisteva). Espone bandiera `has_duplicate_overlaps` + lista
+    # `duplicate_resource_ids` per UI warning.
+    duplicate_resource_ids: list[int] = []
+    seen_by_res: dict[int, list[BookingAssignment]] = {}
+    for a in b.assignments:
+        seen_by_res.setdefault(a.resource_id, []).append(a)
+    for rid, lst in seen_by_res.items():
+        if len(lst) < 2:
+            continue
+        # check overlap a coppie (segmenti contigui non contano)
+        lst_sorted = sorted(lst, key=lambda x: x.start_datetime)
+        for i in range(len(lst_sorted) - 1):
+            ai, aj = lst_sorted[i], lst_sorted[i + 1]
+            if ai.start_datetime < aj.end_datetime and aj.start_datetime < ai.end_datetime:
+                duplicate_resource_ids.append(rid)
+                break
+
     # Audit count (booking_changes)
     audit_n = db.query(BookingChange).filter(BookingChange.booking_id == b.id).count()
     last_change = (
@@ -3248,6 +3626,11 @@ async def booking_detail(booking_id: int, db: Session = Depends(get_db)):
         "created_at": b.created_at.isoformat() if b.created_at else None,
         "audit_count": audit_n,
         "last_change_at": last_change_at,
+        # v3.5.0-alpha.63 — bandiera per UI: ci sono assignment dello stesso
+        # booking che si sovrappongono sulla stessa risorsa (dato sporco
+        # pre-α.63: ora bloccato in create/update da _check_intra_payload_overlaps).
+        "has_duplicate_overlaps": bool(duplicate_resource_ids),
+        "duplicate_resource_ids": duplicate_resource_ids,
     }
 
 
