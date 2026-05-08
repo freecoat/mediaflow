@@ -153,8 +153,9 @@
             <tr>
               <th>Voce</th><th>Unità</th>
               <th class="text-right">Quotato</th>
-              <th class="text-right">Maturato</th>
-              <th class="text-right">Stimato</th>
+              <th class="text-right" title="Σ JCLBilledSlice — chiuso in fattura, immutabile">Fatturato</th>
+              <th class="text-right" title="Maturato eccedente il già fatturato (done senza slice)">Mat. post</th>
+              <th class="text-right" title="Stima ulteriori ore ancora da lavorare (planned − done)">Stim. fut.</th>
               <th class="text-right">Over/Under</th>
               <th>Fatt.</th>
               <th></th>
@@ -661,28 +662,35 @@ function renderKPIs() {
   const ovSign = ov > 0 ? '+' : '';
   const ovHint = ov > 0 ? '⚠ Sforamento' : (ov < 0 ? '✓ Sotto budget' : 'In linea');
   const margin = s.margin || 0;
+  // v3.5.0-alpha.60: 3 colonne basate su JCLBilledSlice — chiusura
+  // contabile (immutabile), maturato non ancora fatturato, stima futuro.
+  const billedLocked = s.billed_locked || 0;
+  const accruedPost = s.accrued_post_period || 0;
+  const forecastFut = s.forecast_future || 0;
   document.getElementById('kpi-grid').innerHTML = `
     <div class="stat-card"><div class="stat-label">Budget quotato</div>
       <div class="stat-value color-indigo mono" style="font-size:20px;">${fmtCurrency(s.budget_quoted)}</div></div>
-    <div class="stat-card"><div class="stat-label">Stimato a finire</div>
-      <div class="stat-value mono" style="font-size:20px;">${fmtCurrency(s.total_expected)}</div>
-      <div class="stat-sub">qty pianificata × prezzo</div></div>
+    <div class="stat-card" title="Σ delle JCLBilledSlice — immutabile, già nelle fatture emesse"><div class="stat-label">Fatturato chiuso</div>
+      <div class="stat-value color-green mono" style="font-size:20px;">${fmtCurrency(billedLocked)}</div>
+      <div class="stat-sub">Σ slice fatturate</div></div>
+    <div class="stat-card" title="Maturato eccedente il già fatturato — prossimo candidato di trasmissione"><div class="stat-label">Maturato post-periodo</div>
+      <div class="stat-value color-amber mono" style="font-size:20px;">${fmtCurrency(accruedPost)}</div>
+      <div class="stat-sub">done non ancora slice-ato</div></div>
+    <div class="stat-card" title="Stima ulteriori ore ancora da lavorare (planned − done)"><div class="stat-label">Stimato futuro</div>
+      <div class="stat-value mono" style="font-size:20px;">${fmtCurrency(forecastFut)}</div>
+      <div class="stat-sub">planned non done</div></div>
     <div class="stat-card"><div class="stat-label">Over / Under <span class="text-xs text-muted">(${ovLabel})</span></div>
       <div class="stat-value mono" style="font-size:20px;color:${ov>0?'var(--rose)':(ov<0?'var(--green)':'var(--text3)')};">${ovSign}${fmtCurrency(ov)}</div>
       <div class="stat-sub">${ovHint}</div></div>
-    <div class="stat-card"><div class="stat-label">Maturato</div>
+    <div class="stat-card"><div class="stat-label">Maturato totale</div>
       <div class="stat-value mono" style="font-size:20px;">${fmtCurrency(s.total_accrued)}</div>
-      <div class="stat-sub">booking done × prezzo</div></div>
-    <div class="stat-card"><div class="stat-label">Costo ore (booking)</div>
-      <div class="stat-value mono" style="font-size:20px;">${fmtCurrency(s.bookings_hours_cost || 0)}</div>
-      <div class="stat-sub">${(s.bookings_hours || 0).toFixed(1)}h pianificate</div></div>
+      <div class="stat-sub">slice + post-periodo</div></div>
+    <div class="stat-card"><div class="stat-label">Stimato a finire</div>
+      <div class="stat-value mono" style="font-size:20px;">${fmtCurrency(s.total_expected)}</div>
+      <div class="stat-sub">slice + post + futuro</div></div>
     <div class="stat-card"><div class="stat-label">Margine stimato</div>
       <div class="stat-value mono" style="font-size:20px;color:${margin>=0?'var(--green)':'var(--rose)'};">${fmtCurrency(margin)}</div>
-      <div class="stat-sub">Σ quotato vivo − (costo ore + spese)</div></div>
-    <div class="stat-card"><div class="stat-label">Fatturato</div>
-      <div class="stat-value color-green mono" style="font-size:20px;">${fmtCurrency(s.invoiced)}</div></div>
-    <div class="stat-card"><div class="stat-label">Pagato</div>
-      <div class="stat-value color-green mono" style="font-size:20px;">${fmtCurrency(s.paid)}</div></div>`;
+      <div class="stat-sub">Σ quotato vivo − (costo ore + spese)</div></div>`;
 }
 
 // v3.5.0-alpha.48: badge per stato fatturazione JCL.
@@ -705,19 +713,20 @@ function renderBillingBadge(status, batchId) {
 function renderCostLines() {
   const tbody = document.getElementById('cost-lines-table');
   if (!currentReport.cost_lines.length) {
-    tbody.innerHTML = '<tr><td colspan="8" class="text-muted" style="text-align:center;padding:20px;">Nessuna voce di costo</td></tr>'; return;
+    tbody.innerHTML = '<tr><td colspan="9" class="text-muted" style="text-align:center;padding:20px;">Nessuna voce di costo</td></tr>'; return;
   }
   // v3.5.0-alpha.55: vista Maturato/Stima. Maturato → over_under_now.
-  // Stima → over_under_forecast. Pct = stima/quotato (sempre, è grafico
-  // del forecast). Convenzione: positivo=OVER (rosso), negativo=UNDER (verde).
+  // Stima → over_under_forecast. Convenzione: positivo=OVER (rosso),
+  // negativo=UNDER (verde).
+  // v3.5.0-alpha.60: 3 colonne slice-based (billed_locked / accrued_post /
+  // forecast_future) sostituiscono le precedenti Maturato + Stimato.
   const _viewKey2 = _crViewMode() === 'forecast' ? 'over_under_forecast' : 'over_under_now';
   tbody.innerHTML = currentReport.cost_lines.map(l => {
     const ov = (l[_viewKey2] ?? l.over_under) || 0;
     const ovSign = ov > 0 ? '+' : '';
-    const pct = l.total_quoted > 0 ? Math.round((l.total_expected / l.total_quoted) * 100) : 0;
-    // v3.5.0-alpha.11: row click → popup dettaglio lavorazione (booking + risorse).
-    // Il bottone ✎ apre invece il modal di edit (stop propagation).
-    // v3.5.0-alpha.48: aggiunta colonna stato fatturazione.
+    const billedLocked = l.billed_locked || 0;
+    const accruedPost = l.accrued_post_period || 0;
+    const forecastFut = l.forecast_future || 0;
     return `<tr onclick='openLineDetailHere(${l.id})' style="cursor:pointer;">
       <td>
         <div style="font-weight:500;font-size:13px;">${l.description}${l.is_extra ? ' <span class="text-xs" style="color:#fb923c;">[extra]</span>' : ''}</div>
@@ -725,12 +734,9 @@ function renderCostLines() {
       </td>
       <td class="text-sm text-muted">${l.unit}</td>
       <td class="mono text-right">${fmtCurrency(l.total_quoted)}</td>
-      <td class="mono text-right color-amber">${fmtCurrency(l.total_accrued)}</td>
-      <td class="mono text-right">${fmtCurrency(l.total_expected)}
-        <div style="height:3px;background:var(--bg3);border-radius:2px;margin-top:3px;">
-          <div style="height:3px;border-radius:2px;width:${Math.min(pct,100)}%;background:${pct>100?'var(--rose)':'var(--indigo)'}"></div>
-        </div>
-      </td>
+      <td class="mono text-right color-green">${fmtCurrency(billedLocked)}</td>
+      <td class="mono text-right color-amber">${fmtCurrency(accruedPost)}</td>
+      <td class="mono text-right">${fmtCurrency(forecastFut)}</td>
       <td class="mono text-right" style="color:${ov>0?'var(--rose)':(ov<0?'var(--green)':'var(--text3)')};">${ovSign}${fmtCurrency(ov)}</td>
       <td>${renderBillingBadge(l.billing_status, l.billing_batch_id)}</td>
       <td onclick="event.stopPropagation()"><button class="btn btn-ghost btn-sm" onclick="openUpdateLine(${JSON.stringify(l).replace(/"/g,'&quot;')})">✎</button></td>

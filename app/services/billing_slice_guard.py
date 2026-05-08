@@ -105,3 +105,66 @@ def slice_lock_payload(slice_: JCLBilledSlice) -> dict:
         ),
         "billed_amount": slice_.billed_amount,
     }
+
+
+# v3.5.0-alpha.60 — aggregati slice per il cost report 3 colonne ────────
+
+def billed_locked_for_jcl(db: Session, jcl_id: int) -> float:
+    """Σ `billed_amount` di tutte le slice della JCL. È l'importo
+    "chiuso in fattura": immutabile, non più variabile per backedit."""
+    if not jcl_id:
+        return 0.0
+    rows = (
+        db.query(JCLBilledSlice.billed_amount)
+        .filter(JCLBilledSlice.job_cost_line_id == jcl_id)
+        .all()
+    )
+    return round(sum((r[0] or 0.0) for r in rows), 2)
+
+
+def billed_locked_bulk(db: Session, jcl_ids) -> dict:
+    """Variante bulk: ritorna dict {jcl_id: Σ billed_amount}.
+    Singola query per evitare N+1 nel cost report (tipicamente 10-50 JCL
+    per job)."""
+    jcl_ids = list(set(jcl_ids or []))
+    if not jcl_ids:
+        return {}
+    from sqlalchemy import func as _f
+    rows = (
+        db.query(
+            JCLBilledSlice.job_cost_line_id,
+            _f.coalesce(_f.sum(JCLBilledSlice.billed_amount), 0.0),
+        )
+        .filter(JCLBilledSlice.job_cost_line_id.in_(jcl_ids))
+        .group_by(JCLBilledSlice.job_cost_line_id)
+        .all()
+    )
+    return {row[0]: round(row[1] or 0.0, 2) for row in rows}
+
+
+def three_column_view(jcl, billed_locked: float) -> dict:
+    """Calcola le 3 colonne cost report per una JobCostLine:
+
+    - **billed_locked**: Σ slice.billed_amount (chiuso in fattura,
+      immutabile). Passato come parametro per evitare N+1 (chiamante
+      pre-fetcha via `billed_locked_bulk`).
+    - **accrued_post_period**: maturato eccedente il già fatturato.
+      = max(0, total_accrued − billed_locked). Rappresenta le ore done
+      ancora non slice-ate, prossima candidata alla fatturazione.
+    - **forecast_future**: stima ulteriori ore ancora da lavorare.
+      = max(0, total_expected − total_accrued).
+
+    Note di consistenza:
+    - Σ delle 3 = total_expected (quando forecast > accrued).
+    - billed_locked + accrued_post_period = total_accrued (= over_under_now).
+    - billed_locked + accrued_post_period + forecast_future = total_expected.
+    """
+    accrued = jcl.total_accrued or 0.0
+    expected = jcl.total_expected or 0.0
+    accrued_post_period = max(0.0, round(accrued - billed_locked, 2))
+    forecast_future = max(0.0, round(expected - accrued, 2))
+    return {
+        "billed_locked": round(billed_locked, 2),
+        "accrued_post_period": accrued_post_period,
+        "forecast_future": forecast_future,
+    }

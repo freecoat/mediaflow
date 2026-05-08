@@ -8,6 +8,70 @@
 
 ## Versione corrente
 
+**v3.5.0-alpha.60** — 8 maggio 2026 — Cost report 3 colonne slice-based
+
+Terzo step della riarchitettura billing. Le `JCLBilledSlice` introdotte in
+α.58 ora alimentano una vista a 3 colonne nel cost report che separa il
+"chiuso contabile" dal "maturato non ancora fatturato" dalla "stima
+futuro". Permette al producer di vedere a colpo d'occhio: "ho già fatturato
+X, ho Y pronto da trasmettere, attendo altri Z".
+
+**Chiuso α.60:**
+- ✅ `app/services/billing_slice_guard.py` esteso:
+  `billed_locked_for_jcl`, `billed_locked_bulk` (singola query GROUP BY),
+  `three_column_view(jcl, billed_locked)` → dict {billed_locked,
+  accrued_post_period, forecast_future}.
+- ✅ API `/cost-report/api/list` e `/api/job/{id}`: aggiunti
+  `billed_locked` / `accrued_post_period` / `forecast_future` in summary
+  per-job e per ogni cost_line. Pre-fetch bulk per evitare N+1.
+- ✅ UI cost report detail view:
+  - KPI grid: 3 nuove card (Fatturato chiuso / Maturato post-periodo /
+    Stimato futuro) con tooltip.
+  - Tabella cost lines: colonne Maturato + Stimato sostituite da
+    Fatturato + Mat. post + Stim. fut. (3 colonne separate).
+- ✅ Smoke test boot: 264 routes, version 3.5.0-alpha.60.
+
+**Definizione delle 3 colonne (per riga e aggregato):**
+- `billed_locked` = Σ slice.billed_amount (immutabile, già fatturato).
+- `accrued_post_period` = max(0, total_accrued − billed_locked) (done
+  ancora senza slice → prossimo candidato di trasmissione).
+- `forecast_future` = max(0, total_expected − total_accrued) (planned
+  non done → ulteriori ore stimate).
+
+Identità di consistenza:
+- billed_locked + accrued_post_period = total_accrued (= maturato totale).
+- billed_locked + accrued_post_period + forecast_future = total_expected.
+
+**Cosa NON cambia in α.60:**
+- Lista cost report (vista riassuntiva top): invariata.
+- Convenzione segno over_under (positivo = OVER) e formule esistenti.
+- Export PDF/CSV/XLSX: invariati (potrà essere esteso se richiesto).
+- Nessuna migrazione DB.
+
+**Verifica live richiesta a Matteo:**
+1. Pull → app boot pulito (264 route, version 3.5.0-alpha.60).
+2. /cost-report → progetto con almeno una fattura emessa →
+   - KPI: vedi cards "Fatturato chiuso" (verde, importo fatture) /
+     "Maturato post-periodo" (ambra, ore done senza slice) /
+     "Stimato futuro" (planned non done).
+   - Tabella cost lines: 3 colonne dedicate (Fatturato / Mat. post / Stim. fut.).
+3. Progetto ancora senza fatture → Fatturato chiuso = €0 ovunque,
+   Mat. post = total_accrued, Stim. fut. = total_expected − total_accrued.
+4. Marca un booking done in più → Mat. post cresce della somma.
+5. Emetti una nuova fattura su batch draft → Mat. post scende del
+   total_approved del batch, Fatturato chiuso sale dello stesso importo.
+
+**Prossimi step (roadmap riarchitettura billing):**
+- α.61: notifica `EXTRA_AFTER_BILLED` (extra emerso su periodo già
+  slice-ato) → destinatari accounting + commerciale del progetto.
+- α.62: bottone "Rimanda al commerciale" da /finance con scelta
+  esplicita estendi quote esistente (versioning) vs nuova quote linkata
+  al progetto.
+- (eventuale α.59.x): endpoint di rettifica per sbloccare manualmente
+  un periodo, se serve dopo test live.
+
+---
+
 **v3.5.0-alpha.59** — 8 maggio 2026 — HARD-BLOCK booking in periodo fatturato
 
 Secondo step della riarchitettura billing. Le `JCLBilledSlice` introdotte

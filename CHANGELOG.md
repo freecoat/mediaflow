@@ -1,5 +1,50 @@
 # MediaFlow — Changelog
 
+## v3.5.0-alpha.60 — Cost report 3 colonne slice-based (8 maggio 2026)
+
+Terzo step della riarchitettura billing. Le `JCLBilledSlice` ora alimentano
+una vista a 3 colonne nel cost report che separa il chiuso contabile dal
+maturato non ancora fatturato dalla stima futuro. Permette al producer di
+vedere a colpo d'occhio: "ho già fatturato X, ho Y maturato pronto da
+trasmettere, mi aspetto altri Z di lavoro".
+
+**Service** `app/services/billing_slice_guard.py` (esteso):
+- `billed_locked_for_jcl(db, jcl_id)` → Σ slice.billed_amount per quella JCL.
+- `billed_locked_bulk(db, jcl_ids)` → variante bulk, singola query
+  group_by per evitare N+1 nel cost report.
+- `three_column_view(jcl, billed_locked)` → dict {billed_locked,
+  accrued_post_period, forecast_future}. Definizione:
+  - `billed_locked` = Σ slice.billed_amount (immutabile, già fatturato).
+  - `accrued_post_period` = max(0, total_accrued − billed_locked) (done
+    ancora senza slice → prossimo candidato di trasmissione).
+  - `forecast_future` = max(0, total_expected − total_accrued) (planned
+    non done → ulteriori ore stimate).
+
+**API `/cost-report/api/list` e `/api/job/{id}`**:
+- Aggiunti `billed_locked` / `accrued_post_period` / `forecast_future` in
+  summary (per-job) e per ogni cost_line.
+- Le viste over_under (now/forecast) restano invariate per back-compat.
+- Pre-fetch slice in singola query bulk (tipicamente 10-50 JCL per job).
+
+**UI `/cost-report` detail view**:
+- KPI grid: 3 nuove card (Fatturato chiuso / Maturato post-periodo /
+  Stimato futuro) con tooltip esplicativo. Sostituiscono le card
+  "Stimato a finire" / "Maturato" / "Costo ore" che ora sono in fondo
+  con sub-label aggiornata. Margine stimato resta.
+- Tabella cost lines: colonne Maturato + Stimato sostituite da
+  Fatturato + Mat. post + Stim. fut. (3 colonne separate). Quotato,
+  Over/Under, Stato fattura invariati. Colspan empty-row aggiornato.
+
+**Cosa NON cambia**:
+- Lista cost report (vista riassuntiva top): mostra ancora Quotato /
+  Maturato / Stimato / Over-Under aggregati — i nuovi campi sono nel
+  payload se servono in futuro.
+- Convenzione segno over_under (positivo = OVER) e formule esistenti.
+- Export PDF/CSV/XLSX: invariati (potrà essere esteso se Matteo lo chiede).
+- Nessuna migrazione DB.
+
+**Smoke**: 264 routes, version 3.5.0-alpha.60.
+
 ## v3.5.0-alpha.59 — HARD-BLOCK booking in periodo fatturato (8 maggio 2026)
 
 Secondo step della riarchitettura billing. Le `JCLBilledSlice` introdotte

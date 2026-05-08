@@ -56,6 +56,13 @@ async def list_cost_reports(
         .order_by(Job.created_at.desc())
         .all()
     )
+    # v3.5.0-alpha.60: pre-fetch slice per i 3 totali per-job in singola query
+    from app.services.billing_slice_guard import billed_locked_bulk
+    all_jcl_ids = []
+    for j in jobs:
+        for l in j.cost_lines:
+            all_jcl_ids.append(l.id)
+    billed_map = billed_locked_bulk(db, all_jcl_ids)
     out = []
     for j in jobs:
         total_quoted = sum(l.total_quoted for l in j.cost_lines)
@@ -64,6 +71,10 @@ async def list_cost_reports(
         # v3.5.0-alpha.55: convenzione segno positivo = OVER (sforamento).
         over_under_now = round(total_accrued - total_quoted, 2)
         over_under_forecast = round(total_expected - total_quoted, 2)
+        # v3.5.0-alpha.60: 3 colonne aggregate per job.
+        billed_locked = round(sum(billed_map.get(l.id, 0.0) for l in j.cost_lines), 2)
+        accrued_post_period = round(max(0.0, total_accrued - billed_locked), 2)
+        forecast_future = round(max(0.0, total_expected - total_accrued), 2)
         out.append({
             "id": j.id,
             "code": j.code,
@@ -83,6 +94,12 @@ async def list_cost_reports(
             "over_under_forecast": over_under_forecast,
             # Alias back-compat (= forecast). Da non usare in nuovi consumer.
             "over_under": over_under_forecast,
+            # v3.5.0-alpha.60: 3 colonne basate sulle JCLBilledSlice.
+            # billed_locked + accrued_post_period = total_accrued.
+            # billed_locked + accrued_post_period + forecast_future = total_expected.
+            "billed_locked": billed_locked,
+            "accrued_post_period": accrued_post_period,
+            "forecast_future": forecast_future,
             "lines_count": len(j.cost_lines),
         })
     return out
@@ -272,6 +289,14 @@ async def job_cost_report(job_id: int, db: Session = Depends(get_db)):
     total_accrued = sum(l.total_accrued for l in job.cost_lines)
     total_expected = sum(l.total_expected for l in job.cost_lines)
 
+    # v3.5.0-alpha.60: 3 colonne basate su slice. Pre-fetch in singola query.
+    from app.services.billing_slice_guard import billed_locked_bulk, three_column_view
+    line_ids = [l.id for l in job.cost_lines]
+    billed_map = billed_locked_bulk(db, line_ids)
+    sum_billed_locked = round(sum(billed_map.get(lid, 0.0) for lid in line_ids), 2)
+    sum_accrued_post_period = round(max(0.0, total_accrued - sum_billed_locked), 2)
+    sum_forecast_future = round(max(0.0, total_expected - total_accrued), 2)
+
     # v3.4.36 (R1.4): margine dinamico = Σ JobCostLine.total_quoted (vivo)
     # − (costo booking + spese). Non più contro Job.budget_quoted statico
     # (quello resta come riferimento "originale" all'approvazione, ma può
@@ -308,6 +333,14 @@ async def job_cost_report(job_id: int, db: Session = Depends(get_db)):
             # forecast (con segno invertito ex-API). Da non usare in nuovi
             # consumer: leggere over_under_now / over_under_forecast.
             "over_under": round(total_expected - total_quoted, 2),
+            # v3.5.0-alpha.60: 3 colonne aggregate per job.
+            # billed_locked = Σ slice (chiuso in fattura, immutabile).
+            # accrued_post_period = maturato non ancora fatturato (≈ ore done
+            #   senza slice → prossimo candidato di trasmissione).
+            # forecast_future = stima ulteriori ore ancora da lavorare.
+            "billed_locked": sum_billed_locked,
+            "accrued_post_period": sum_accrued_post_period,
+            "forecast_future": sum_forecast_future,
             "total_expenses": round(total_expenses, 2),
             # Canonico v3.4.33
             "bookings_hours": bk_data["total_hours"],
@@ -349,6 +382,8 @@ async def job_cost_report(job_id: int, db: Session = Depends(get_db)):
                 "billing_status": l.billing_status.value if l.billing_status else "not_billed",
                 "billing_batch_id": l.billing_batch_id,
                 "billed_amount": l.billed_amount,
+                # v3.5.0-alpha.60: 3 colonne per riga (slice-based).
+                **three_column_view(l, billed_map.get(l.id, 0.0)),
             }
             for l in job.cost_lines
         ],
