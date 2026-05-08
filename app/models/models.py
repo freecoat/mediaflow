@@ -174,6 +174,8 @@ class NotificationKind(str, enum.Enum):
     quote_approved_no_resources = "quote_approved_no_resources"  # → assign_resources (producer/manager)
     # v3.5.0-alpha.10 — editor (operator) richiede creazione booking al producer/manager
     booking_request = "booking_request"  # → can_create_booking (admin/manager/producer)
+    # v3.5.0-alpha.61 — extra emerso su progetto già fatturato in periodo X
+    extra_after_billed = "extra_after_billed"  # → accounting + producer/manager
     custom = "custom"
 
 

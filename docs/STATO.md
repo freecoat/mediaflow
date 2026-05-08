@@ -8,6 +8,54 @@
 
 ## Versione corrente
 
+**v3.5.0-alpha.61** — 8 maggio 2026 — Notifica EXTRA_AFTER_BILLED
+
+Quarto step della riarchitettura billing. Le slice di α.58 + il guard di
+α.59 + le 3 colonne di α.60 + ora la notifica automatica quando emerge
+maturato post-fatturazione: il loop "lavoro pre-fattura → fattura →
+lavoro post-fattura" ha la sua sentinella attiva.
+
+**Chiuso α.61:**
+- ✅ Modello: `NotificationKind.extra_after_billed` aggiunto. No migration.
+- ✅ Service: `billing_slice_guard.maybe_notify_extra_after_billed(db, jcl)`
+  — emette notifica se la JCL ha almeno una slice e maturato eccede
+  fatturato. Idempotente (skippa se notifica già non-archiviata per la
+  stessa JCL). Severity action_required. Destinatari ruoli admin/manager/
+  producer/accounting. Link a `/cost-report#job-{id}`.
+- ✅ Hook in `cost_line_sync.recompute_for_booking`: dopo recompute,
+  chiama il notify (try/except non bloccante).
+- ✅ Smoke test boot: 264 routes, version 3.5.0-alpha.61.
+
+**Verifica live richiesta a Matteo:**
+1. Pull → app boot pulito.
+2. Progetto già fatturato (con almeno una slice). Crea un nuovo booking
+   sulla stessa JCL ma con date posteriori al period_end della slice
+   (così il guard α.59 non blocca). Marca il booking done.
+3. Attendi recompute → in /notifications vedi una notifica
+   `⚠ Extra emerso su progetto fatturato: <progetto>` con severity ambra.
+4. Marca un secondo booking done sulla stessa JCL → no nuova notifica
+   (idempotenza). Cresce solo l'`extra_amount` reale ma la notifica
+   esistente già copre il caso.
+5. Archivia la notifica → il prossimo recompute dello stesso JCL può
+   ri-emetterne una nuova (utile se il problema persiste tra periodi).
+6. Solleva un booking su una JCL SENZA slice → niente notifica
+   (non è "after billed", è semplicemente maturato non ancora trasmesso).
+
+**Cosa NON cambia in α.61:**
+- Trigger solo da recompute_for_booking. Se l'extra emerge per edit
+  diretto JCL (raro), niente notifica (estendibile in α.61.x).
+- UI notifiche: invariata, riusa il rendering generico esistente.
+- Nessuna nuova route, nessuna migrazione DB.
+
+**Prossimi step (roadmap riarchitettura billing):**
+- α.62: bottone "Rimanda al commerciale" da /finance con scelta
+  esplicita estendi quote esistente (versioning) vs nuova quote linkata
+  al progetto.
+- (eventuale α.59.x): endpoint di rettifica per sbloccare manualmente
+  un periodo, se serve dopo test live.
+
+---
+
 **v3.5.0-alpha.60** — 8 maggio 2026 — Cost report 3 colonne slice-based
 
 Terzo step della riarchitettura billing. Le `JCLBilledSlice` introdotte in

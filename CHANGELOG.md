@@ -1,5 +1,42 @@
 # MediaFlow — Changelog
 
+## v3.5.0-alpha.61 — Notifica EXTRA_AFTER_BILLED (8 maggio 2026)
+
+Quarto step della riarchitettura billing. Quando emerge maturato
+post-fatturazione (booking done che fa salire `total_accrued` di una JCL
+che ha già almeno una `JCLBilledSlice`), il sistema notifica
+automaticamente accounting + producer + manager + admin: c'è del nuovo
+lavoro che andrà ri-trasmesso o coordinato col commerciale.
+
+**Modello** `app/models/models.py`:
+- Nuovo `NotificationKind.extra_after_billed`. Nessuna migrazione
+  (varchar enum sotto, valori sono stringhe).
+
+**Service** `app/services/billing_slice_guard.py` esteso:
+- `maybe_notify_extra_after_billed(db, jcl)` — emette notifica se la JCL
+  ha almeno una slice E `total_accrued − billed_locked > 0`. Idempotente:
+  skippa se esiste già una notifica `extra_after_billed` non archiviata
+  per la stessa JCL (ri-notifica solo dopo cleanup_old o archive
+  manuale). Severity `action_required`. Link a `/cost-report#job-{id}`.
+
+**Hook** `app/services/cost_line_sync.recompute_for_booking`:
+- Dopo `recompute_cost_line_actual`, chiama il notify-helper. Wrappato in
+  try/except: notifica non bloccante (errore stampato ma non fa fallire
+  il sync del booking, prioritario).
+
+**Destinatari**: ruoli `admin`, `manager`, `producer`, `accounting`. La
+nozione di "commerciale del progetto" specifico non c'è ancora come
+relazione modello — i producer fungono da proxy.
+
+**Cosa NON cambia**:
+- Trigger solo dal recompute di booking. Se l'extra emerge per un edit
+  diretto JCL (raro), niente notifica (può essere aggiunto in α.61.x se
+  Matteo lo chiede).
+- UI notifiche: invariata, riusa il rendering generico esistente.
+- Nessuna nuova route, nessuna migrazione DB.
+
+**Smoke**: 264 routes, version 3.5.0-alpha.61.
+
 ## v3.5.0-alpha.60 — Cost report 3 colonne slice-based (8 maggio 2026)
 
 Terzo step della riarchitettura billing. Le `JCLBilledSlice` ora alimentano

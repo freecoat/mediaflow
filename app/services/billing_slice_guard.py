@@ -142,6 +142,100 @@ def billed_locked_bulk(db: Session, jcl_ids) -> dict:
     return {row[0]: round(row[1] or 0.0, 2) for row in rows}
 
 
+def maybe_notify_extra_after_billed(db: Session, jcl) -> bool:
+    """v3.5.0-alpha.61 — Se la JCL ha almeno una slice E un maturato
+    eccedente il già fatturato, emette notifica `extra_after_billed`.
+
+    Idempotente in modo conservativo: non rinotifica se esiste già una
+    notifica `extra_after_billed` non archiviata per la stessa JCL. La
+    nuova notifica viene emessa solo dopo che quella precedente è stata
+    archiviata (o passata `cleanup_old` 90gg).
+
+    Destinatari: ruoli `admin`, `manager`, `producer`, `accounting` —
+    chi gestisce billing e chi pianifica il lavoro vedono insieme
+    l'allerta in tempo reale.
+
+    Ritorna True se ha emesso, False se nessuna azione (no slice, no
+    extra, già notificato).
+    """
+    if jcl is None or not jcl.id:
+        return False
+    accrued = jcl.total_accrued or 0.0
+    billed = billed_locked_for_jcl(db, jcl.id)
+    extra = round(accrued - billed, 2)
+    if extra <= 0.001:
+        return False
+    # Verifica esistenza slice (extra esiste solo se c'è anche solo una
+    # slice già emessa — altrimenti è semplice maturato non ancora
+    # trasmesso, niente di anomalo).
+    has_slice = (
+        db.query(JCLBilledSlice)
+        .filter(JCLBilledSlice.job_cost_line_id == jcl.id)
+        .first()
+        is not None
+    )
+    if not has_slice:
+        return False
+    # Dedup: cerca notifiche extra_after_billed non archiviate per questa JCL.
+    from app.models import Notification, NotificationKind, NotificationSeverity
+    from sqlalchemy import cast
+    from sqlalchemy.dialects.sqlite import JSON as SQLITE_JSON
+    existing = (
+        db.query(Notification.id)
+        .filter(
+            Notification.kind == NotificationKind.extra_after_billed.value,
+            Notification.is_archived == False,  # noqa: E712
+        )
+        .all()
+    )
+    # Filtraggio in-memory perché payload è JSON e SQLAlchemy/SQLite non offre
+    # operatori JSON portabili. Lista corta (qualche decina al massimo).
+    if existing:
+        ids = [e[0] for e in existing]
+        rows = db.query(Notification).filter(Notification.id.in_(ids)).all()
+        for r in rows:
+            try:
+                if (r.payload or {}).get("jcl_id") == jcl.id:
+                    return False  # già notificato, skip
+            except Exception:
+                pass
+
+    # Risali a project / job per il link
+    from app.models import JobCostLine, Job
+    full = (
+        db.query(JobCostLine).filter(JobCostLine.id == jcl.id).first()
+    )
+    job = full.job if full else None
+    project = job.project if (job and job.project_id) else None
+    project_label = (project.title if project else (job.title if job else "?"))
+    link = f"/cost-report#job-{job.id}" if job else "/cost-report"
+    title = f"⚠ Extra emerso su progetto fatturato: {project_label}"
+    body = (
+        f"Riga `{full.description}` ha {extra:.2f}€ di lavoro maturato "
+        f"oltre il già fatturato (€{billed:.2f}). Considera trasmissione "
+        f"a fatturazione o coordinamento col commerciale."
+    )
+    payload = {
+        "jcl_id": jcl.id,
+        "job_id": job.id if job else None,
+        "project_id": project.id if project else None,
+        "billed_locked": billed,
+        "extra_amount": extra,
+    }
+    from app.services import notifications as notif_svc
+    notif_svc.notify_role(
+        db,
+        role_codes=["admin", "manager", "producer", "accounting"],
+        kind=NotificationKind.extra_after_billed.value,
+        severity=NotificationSeverity.action_required.value,
+        title=title,
+        body=body,
+        link=link,
+        payload=payload,
+    )
+    return True
+
+
 def three_column_view(jcl, billed_locked: float) -> dict:
     """Calcola le 3 colonne cost report per una JobCostLine:
 

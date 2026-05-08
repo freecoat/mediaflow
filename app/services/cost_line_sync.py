@@ -137,14 +137,28 @@ def recompute_cost_line_actual(db: Session, jcl) -> dict:
 def recompute_for_booking(db: Session, booking) -> Optional[dict]:
     """Helper per gli hook negli endpoint planning. Se il booking ha
     una cost line associata, ricomputa la sua actual e ritorna il
-    risultato. Altrimenti None."""
+    risultato. Altrimenti None.
+
+    v3.5.0-alpha.61: dopo il recompute, se la JCL ha almeno una slice già
+    fatturata e il maturato eccede il già fatturato → emette notifica
+    `extra_after_billed` (idempotente). Permette al producer/manager/
+    accounting di accorgersi al volo che è emerso lavoro extra dopo la
+    fatturazione, e di valutare trasmissione/coordinamento col commerciale.
+    """
     if booking is None or not booking.job_cost_line_id:
         return None
     from app.models import JobCostLine
     jcl = db.query(JobCostLine).filter(JobCostLine.id == booking.job_cost_line_id).first()
     if not jcl:
         return None
-    return recompute_cost_line_actual(db, jcl)
+    result = recompute_cost_line_actual(db, jcl)
+    try:
+        from app.services.billing_slice_guard import maybe_notify_extra_after_billed
+        maybe_notify_extra_after_billed(db, jcl)
+    except Exception as e:
+        # Notifica non bloccante: l'errore non deve far fallire l'hook.
+        print(f"[recompute_for_booking] extra_after_billed notify failed: {e}")
+    return result
 
 
 def recompute_for_job(db: Session, job_id: int) -> dict:
