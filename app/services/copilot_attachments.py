@@ -184,6 +184,132 @@ def embed_attachments_in_text(user_text: str, attachments: list[dict]) -> str:
     return user_text
 
 
+def _media_type_for_ext(ext: str) -> str:
+    """Mappa estensione → MIME type per Anthropic image blocks."""
+    return {
+        ".png": "image/png",
+        ".jpg": "image/jpeg",
+        ".jpeg": "image/jpeg",
+        ".webp": "image/webp",
+        ".gif": "image/gif",
+    }.get(ext.lower(), "image/png")
+
+
+def _make_image_block_from_attachment(att: dict) -> Optional[dict]:
+    """Costruisce un blocco image canonico Anthropic per un attachment.
+
+    v3.5.0-alpha.53 — Vision integration. Ritorna None se il file non
+    esiste più o non è un'immagine.
+    Output formato Anthropic Messages API:
+        {"type": "image", "source": {"type": "base64",
+         "media_type": "image/png", "data": "..."}}
+    """
+    import base64
+    if att.get("kind") != "image":
+        return None
+    file_id = att.get("file_id")
+    ext = att.get("ext")
+    if not file_id or not ext:
+        return None
+    p = ATTACHMENT_DIR / f"{file_id}{ext}"
+    if not p.exists():
+        return None
+    try:
+        data = p.read_bytes()
+    except Exception as e:
+        logger.warning(f"image read failed for {p}: {e}")
+        return None
+    # Anthropic ha cap a ~5MB per immagine, 20MB totali per richiesta.
+    # Se >5MB ridimensiona/skippa
+    if len(data) > 5 * 1024 * 1024:
+        logger.warning(f"image {file_id}{ext} > 5MB, skipping")
+        return None
+    return {
+        "type": "image",
+        "source": {
+            "type": "base64",
+            "media_type": _media_type_for_ext(ext),
+            "data": base64.b64encode(data).decode("ascii"),
+        },
+    }
+
+
+def build_user_content_blocks(
+    user_text: str,
+    attachments: list[dict],
+    supports_vision: bool,
+) -> "str | list[dict]":
+    """Costruisce il content del messaggio user.
+
+    v3.5.0-alpha.53 — Vision integration:
+    - Se nessun allegato → ritorna `user_text` (stringa).
+    - Se solo allegati testuali → embed inline (stringa, retrocompat).
+    - Se allegati immagine + provider supports_vision → ritorna content
+      list canonico Anthropic con text block (testo + extract testo) +
+      image blocks (base64). Anthropic SDK lo accetta nativamente; gli
+      altri provider lo traducono nel proprio formato (vedi
+      OpenAIProvider).
+    - Se allegati immagine + provider NON supports_vision → fallback
+      placeholder testuale (comportamento α.51).
+
+    NB: Se l'immagine è > 5MB o file scomparso, cade in placeholder
+    testuale per quell'immagine specifica (gli altri restano image blocks).
+    """
+    if not attachments:
+        return user_text
+
+    # Separazione per tipo
+    text_atts = [a for a in attachments if a.get("kind") == "text"]
+    image_atts = [a for a in attachments if a.get("kind") == "image"]
+
+    # Se non ci sono immagini OR il provider non supporta vision → fallback
+    # alla vecchia funzione embed (placeholder per le immagini).
+    if not image_atts or not supports_vision:
+        return embed_attachments_in_text(user_text, attachments)
+
+    # Path vision: text block consolidato + image blocks
+    text_parts: list[str] = []
+    for a in text_atts:
+        if a.get("extracted_text"):
+            text_parts.append(
+                f"📎 ALLEGATO: {a.get('filename', '?')} "
+                f"({a.get('extracted_text_chars', 0)} caratteri)\n"
+                f"{a['extracted_text']}\n"
+                f"---FINE ALLEGATO---"
+            )
+        else:
+            text_parts.append(
+                f"📎 ALLEGATO: {a.get('filename', '?')} [vuoto o non leggibile]\n"
+                f"---FINE ALLEGATO---"
+            )
+
+    image_blocks: list[dict] = []
+    fallback_text_for_failed_images: list[str] = []
+    for a in image_atts:
+        block = _make_image_block_from_attachment(a)
+        if block is not None:
+            # Aggiungi un testo prima dell'immagine per identificarla nel contesto
+            text_parts.append(f"📎 IMMAGINE: {a.get('filename', '?')}")
+            image_blocks.append(block)
+        else:
+            dims = ""
+            if a.get("width") and a.get("height"):
+                dims = f" {a['width']}x{a['height']}"
+            fallback_text_for_failed_images.append(
+                f"📎 IMMAGINE: {a.get('filename', '?')}{dims} [non caricabile]"
+            )
+    text_parts.extend(fallback_text_for_failed_images)
+
+    if user_text:
+        text_parts.append(user_text)
+
+    blocks: list[dict] = []
+    if text_parts:
+        blocks.append({"type": "text", "text": "\n\n".join(text_parts)})
+    blocks.extend(image_blocks)
+    return blocks
+
+
 def cleanup_old_attachments() -> int:
     """Elimina file più vecchi di RETENTION_DAYS giorni. Idempotente.
     Chiamato dal lifespan periodico dell'app. Ritorna conteggio eliminati."""

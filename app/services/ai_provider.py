@@ -28,6 +28,41 @@ from app.config import settings
 logger = logging.getLogger(__name__)
 
 
+def _translate_blocks_to_openai(content):
+    """v3.5.0-alpha.53 — Traduce content Anthropic-canonico → OpenAI multimodal.
+
+    Input:
+      - stringa → ritornata invariata (modalità testo semplice)
+      - list[dict] con block types Anthropic ({type:text}, {type:image,source:base64})
+        → list[dict] OpenAI ({type:text}, {type:image_url, image_url:{url:data:...}})
+
+    Block sconosciuti vengono droppati con warning. La traduzione è
+    lossy ma sufficiente per il chat semplice; il path tool_use non
+    passa da qui (richiederebbe traduzione completa di tool_use/tool_result).
+    """
+    if isinstance(content, str):
+        return content
+    if not isinstance(content, list):
+        return str(content)
+    out = []
+    for block in content:
+        if not isinstance(block, dict):
+            continue
+        btype = block.get("type")
+        if btype == "text":
+            out.append({"type": "text", "text": block.get("text", "")})
+        elif btype == "image":
+            src = block.get("source", {}) or {}
+            if src.get("type") == "base64":
+                data_url = f"data:{src.get('media_type', 'image/png')};base64,{src.get('data', '')}"
+                out.append({"type": "image_url", "image_url": {"url": data_url}})
+            elif src.get("type") == "url":
+                out.append({"type": "image_url", "image_url": {"url": src.get("url", "")}})
+        else:
+            logger.debug(f"openai translate: skipping unknown block type={btype!r}")
+    return out if out else ""
+
+
 # ── Modelli supportati per-provider (Apr 2026) ────────────────
 
 PROVIDER_MODELS: dict[str, list[dict]] = {
@@ -146,6 +181,13 @@ class AIProvider(ABC):
         """
         return False
 
+    def supports_vision(self) -> bool:
+        """v3.5.0-alpha.53 — True se il provider accetta image blocks
+        nei messaggi user. Quando False, il copilot cade su placeholder
+        testuale (vedi `copilot_attachments.build_user_content_blocks`).
+        """
+        return False
+
     def chat_with_tools(self, messages: list[Any], system: Optional[str],
                         tools: list[dict], max_tokens: int = 4000,
                         temperature: float = 0.3) -> ToolUseResponse:
@@ -206,6 +248,10 @@ class ClaudeProvider(AIProvider):
         return True
 
     def supports_tools(self) -> bool:
+        return True
+
+    def supports_vision(self) -> bool:
+        # Tutti i modelli Claude 3.x+ supportano image blocks nativamente
         return True
 
     def chat_with_tools(self, messages, system, tools, max_tokens=4000, temperature=0.3):
@@ -321,10 +367,21 @@ class OpenAIProvider(AIProvider):
 
     def chat(self, messages, system=None, max_tokens=2000, temperature=0.5):
         msgs = [{"role": "system", "content": system}] if system else []
-        msgs.extend(messages)
+        # v3.5.0-alpha.53 — Traduzione image blocks Anthropic-canonici → OpenAI
+        for m in messages:
+            msgs.append({
+                "role": m.get("role", "user"),
+                "content": _translate_blocks_to_openai(m.get("content", "")),
+            })
         resp = self.client.chat.completions.create(
             model=self.model, max_tokens=max_tokens, temperature=temperature, messages=msgs)
         return resp.choices[0].message.content or ""
+
+    def supports_vision(self) -> bool:
+        # GPT-4o e o1 supportano vision; o3-mini no.
+        # Verifico via model name (tutti i recenti hanno multimodal).
+        model = (self.model or "").lower()
+        return any(k in model for k in ("4o", "vision", "o1", "gpt-4-turbo"))
 
 
 class GeminiProvider(AIProvider):

@@ -8,6 +8,35 @@
 
 ## Versione corrente
 
+**v3.5.0-alpha.53** — 8 maggio 2026 — Vision integration immagini copilot
+
+Step 3 chiuso. Le immagini caricate nel copilot ora sono "viste"
+direttamente dall'AI invece di restare placeholder testuali.
+
+**Chiuso α.53:**
+- ✅ `AIProvider.supports_vision()` astratto + override Claude (sempre True)
+  e OpenAI (True su 4o/o1/vision/turbo)
+- ✅ `build_user_content_blocks(text, attachments, supports_vision)` →
+  ritorna stringa (backcompat) o content list canonico Anthropic
+- ✅ Image blocks base64 con limite 5MB (Anthropic), fallback testuale
+  per immagini corrotte/grandi/mancanti
+- ✅ `_translate_blocks_to_openai` traduce Anthropic ↔ OpenAI
+  (`image` → `image_url` con data URL)
+- ✅ `OpenAIProvider.chat` traduce trasparentemente
+- ✅ `/ai/api/chat` costruisce `last_user_content` consapevole del
+  provider; helper `_flatten_content` per persistenza/title
+- ✅ Smoke test boot OK + 4 scenari content + translation OK
+
+**Verifica live richiesta a Matteo:**
+1. Pull → app parte (262 route, version 3.5.0-alpha.53)
+2. /settings → tab AI → verifica provider attivo (Claude o GPT-4o)
+3. Apri copilot drawer → trascina screenshot capitolato cliente
+4. Scrivi "Cosa specifica questo capitolato per il video master?"
+5. AI risponde citando contenuti effettivamente visibili nell'immagine
+   (numeri, label tabelle, scritte)
+6. Test fallback: switch a Ollama/Perplexity → stessa immagine →
+   placeholder testuale (chat continua a funzionare)
+
 **v3.5.0-alpha.52** — 8 maggio 2026 — Fattura PDF formale + dati fiscali
 
 Step 2 chiuso. Fattura italiana stampabile con cedente/cessionario, IVA per

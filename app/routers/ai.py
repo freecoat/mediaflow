@@ -31,7 +31,8 @@ from app.services.deliverables_parser import (
     extract_text_from_file, parse_deliverables, match_deliverables_to_pricelist,
 )
 from app.services.copilot_attachments import (
-    save_attachment, embed_attachments_in_text, MAX_FILE_SIZE,
+    save_attachment, embed_attachments_in_text, build_user_content_blocks,
+    MAX_FILE_SIZE,
 )
 
 router = APIRouter(prefix="/ai", tags=["ai"])
@@ -121,12 +122,20 @@ async def chat(
     # v3.5.0-alpha.51 — Allegati copilot inviati col messaggio.
     # Format atteso: list[{file_id, filename, kind, extracted_text, ...}]
     attachments = data.get("attachments") or []
-    if attachments and isinstance(attachments, list) and messages:
-        # Embed extracted_text inline nell'ultimo messaggio user
-        last_msg = messages[-1]
-        if last_msg.get("role") == "user":
-            original = last_msg.get("content", "")
-            last_msg["content"] = embed_attachments_in_text(original, attachments)
+
+    def _flatten_content(c):
+        """Estrae il testo da content che può essere stringa o list[dict]."""
+        if isinstance(c, str):
+            return c
+        if isinstance(c, list):
+            parts = []
+            for b in c:
+                if isinstance(b, dict) and b.get("type") == "text":
+                    parts.append(b.get("text", ""))
+                elif isinstance(b, dict) and b.get("type") == "image":
+                    parts.append("[immagine]")
+            return "\n".join(parts)
+        return str(c)
 
     # Risolvi/crea conversazione
     conv_id = data.get("conversation_id")
@@ -134,10 +143,11 @@ async def chat(
     if conv_id:
         conv = db.query(AIConversation).filter(AIConversation.id == conv_id).first()
     if conv is None and user_id:
+        title_src = _flatten_content(messages[0].get("content", "")) if messages else ""
         conv = AIConversation(
             user_id=user_id,
             project_id=project_id, quote_id=quote_id, job_id=job_id,
-            title=(messages[0]["content"][:60] if messages else None),
+            title=(title_src[:60] if title_src else None),
         )
         db.add(conv); db.flush()
 
@@ -148,6 +158,17 @@ async def chat(
             "actions": [], "conversation_id": conv.id if conv else None,
             "error": "provider_disabled",
         }
+
+    # v3.5.0-alpha.53 — Costruisce il content del messaggio user con
+    # vision blocks se il provider li supporta. `last_user_content` può
+    # essere stringa (compat) o list[dict] (multimodal).
+    if attachments and isinstance(attachments, list) and messages:
+        last_msg = messages[-1]
+        if last_msg.get("role") == "user":
+            original = last_msg.get("content", "")
+            last_msg["content"] = build_user_content_blocks(
+                original, attachments, supports_vision=provider.supports_vision(),
+            )
 
     last_user_content = messages[-1].get("content", "") if messages else ""
 
@@ -161,7 +182,7 @@ async def chat(
         result = advance_loop(db, conv, provider, system, user_message=last_user_content)
 
         # Persisti display-friendly delle interazioni
-        db.add(AIMessage(conversation_id=conv.id, role="user", content=last_user_content))
+        db.add(AIMessage(conversation_id=conv.id, role="user", content=_flatten_content(last_user_content)))
         db.add(AIMessage(conversation_id=conv.id, role="assistant", content=result.get("text") or ""))
         db.commit()
 
@@ -181,7 +202,7 @@ async def chat(
     )
 
     if conv:
-        db.add(AIMessage(conversation_id=conv.id, role="user", content=last_user_content))
+        db.add(AIMessage(conversation_id=conv.id, role="user", content=_flatten_content(last_user_content)))
         db.add(AIMessage(conversation_id=conv.id, role="assistant", content=result["reply"] or ""))
 
     saved_actions = []

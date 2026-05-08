@@ -1,5 +1,59 @@
 # MediaFlow — Changelog
 
+## v3.5.0-alpha.53 — Vision integration immagini copilot (8 maggio 2026)
+
+Step 3 chiuso. Le immagini caricate nel drawer copilot ora sono "viste"
+dall'AI invece di restare placeholder testuali. Supporto nativo Anthropic
+(tutti i modelli Claude) + OpenAI (GPT-4o, o1, gpt-4-turbo, vision).
+
+**Backend:**
+- `AIProvider.supports_vision()` (default False) — nuovo metodo astratto.
+  Override: ClaudeProvider=True (sempre), OpenAIProvider=True se modello
+  contiene "4o" / "vision" / "o1" / "gpt-4-turbo". Gemini/Perplexity/Ollama
+  restano False (placeholder testuale per ora).
+- `copilot_attachments.build_user_content_blocks(text, attachments, supports_vision)`:
+  - Senza allegati → ritorna `text` (stringa, retrocompat).
+  - Solo allegati testuali (PDF/DOCX/TXT/MD) → embed inline (stringa).
+  - Allegati immagine + supports_vision=True → ritorna content list
+    canonico Anthropic (`{type:text, text:...} + {type:image, source:base64}`).
+  - Allegati immagine + supports_vision=False → fallback placeholder
+    testuale (comportamento α.51).
+- `_translate_blocks_to_openai(content)` in `ai_provider.py` traduce
+  i block Anthropic-canonici in formato OpenAI (`image_url` con data URL
+  `data:image/png;base64,...`). OpenAIProvider.chat li traduce
+  trasparentemente.
+- Limiti: max 5MB per immagine (Anthropic limit). File mancanti / troppo
+  grandi → fallback testuale per quell'attachment specifico.
+
+**Routing chat:**
+- `/ai/api/chat` ora costruisce `last_user_content` chiamando
+  `build_user_content_blocks` PRIMA del dispatch. Supporta sia stringa
+  che list[dict].
+- Helper `_flatten_content` per normalizzare in stringa quando serve
+  (titolo conversazione, persistenza `AIMessage.content` SQL).
+
+**Cosa cambia per l'utente:**
+- Carica screenshot capitolato cliente, schema scenografia, mock-up grafico:
+  Claude/GPT-4o leggono direttamente il pixel e rispondono nel merito
+  ("Qui c'è scritto resolution 3840x2160, codec ProRes 4444 XQ...").
+- Se hai configurato Gemini/Ollama/Perplexity, le immagini restano
+  placeholder testuale (la chat continua a funzionare, ma con descrizione
+  testuale invece di "vedere" l'immagine).
+
+**Smoke test:**
+- Boot OK, 262 route, version 3.5.0-alpha.53
+- Test build_user_content_blocks con 4 scenari (string, text-only,
+  image+!vision, image+vision+missing-file) → tutti OK
+- Translation Anthropic → OpenAI verificata (image_url data URL valido)
+
+**Aperti:**
+- Gemini vision (formato `inline_data` differente, da implementare)
+- Ollama vision (alcuni modelli supportano via API custom)
+- Persistenza attachment in DB (oggi MVP non persiste, file su disk fino
+  a cleanup 7gg)
+
+---
+
 ## v3.5.0-alpha.52 — Fattura PDF formale + dati fiscali (8 maggio 2026)
 
 Step 2 della roadmap chiusa con Matteo: emissione fattura PDF "stampabile"
