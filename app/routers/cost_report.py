@@ -610,6 +610,25 @@ async def discard_not_done_pool_booking(
     return {"ok": True, "id": b.id, "status": "cancelled"}
 
 
+@router.post("/api/job/{job_id}/not-done-pool/discard-all")
+async def discard_all_not_done_pool(job_id: int, db: Session = Depends(get_db)):
+    """v3.5.0-alpha.56 — Scarta in blocco TUTTI i booking del pool not-done
+    (execution_status=not_done & count_in_costs=False) del job. Cancella i
+    booking (status=cancelled). Idempotente: se il pool è vuoto ritorna 0."""
+    bookings = db.query(Booking).filter(
+        Booking.job_id == job_id,
+        Booking.execution_status == BookingExecutionStatus.not_done,
+        Booking.count_in_costs == False,  # noqa: E712
+        Booking.status != BookingStatus.cancelled,
+    ).all()
+    n = 0
+    for b in bookings:
+        b.status = BookingStatus.cancelled
+        n += 1
+    db.commit()
+    return {"ok": True, "discarded": n}
+
+
 # ── PDF cliente (v3.4.33) ─────────────────────────────────────────
 # Esporta una versione del cost report **filtrata per il cliente**: solo
 # lavorazioni quote + extra, ore previste vs consuntivate, NIENTE hardcost,

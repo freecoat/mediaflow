@@ -113,7 +113,18 @@
 
   <!-- ── Pozzo ore non maturate (v3.4.32) ─────────────────── -->
   <div class="card mb-4" id="not-done-pool-card" style="display:none;">
-    <div class="card-title mb-3">⏳ Pozzo ore non maturate <span style="font-size:11px; color:var(--text3); font-weight:normal;">(booking marcati "non fatto" — non conteggiati nei costi)</span></div>
+    <div style="display:flex; align-items:center; justify-content:space-between; gap:10px; margin-bottom:12px;">
+      <div class="card-title" style="margin:0;">⏳ Pozzo ore non maturate
+        <span style="font-size:11px; color:var(--text3); font-weight:normal;">(booking marcati "non fatto" — non conteggiati nei costi)</span>
+      </div>
+      <!-- v3.5.0-alpha.56: scarto bulk del pool not-done. Cancella tutti i
+           booking del pool in un colpo solo (status=cancelled) — equivalente
+           a iterare il bottone "Scarta" per ogni riga. -->
+      <button class="btn btn-ghost btn-sm" onclick="poolDiscardAll()" id="btn-pool-discard-all"
+              style="color:#ef4444;" title="Scarta definitivamente tutte le righe del pool. I booking saranno cancellati.">
+        🗑 Scarta tutte
+      </button>
+    </div>
     <div id="not-done-pool-host"></div>
   </div>
 
@@ -555,6 +566,8 @@ async function renderBookingSummary(jobId) {
   }
 
   // Pool not_done
+  // v3.5.0-alpha.56: espongo il pool corrente per il bottone "Scarta tutte".
+  window._lastNotDonePool = data.not_done_pool || [];
   const poolCard = document.getElementById('not-done-pool-card');
   const poolHost = document.getElementById('not-done-pool-host');
   if (data.not_done_pool && data.not_done_pool.length) {
@@ -616,7 +629,24 @@ async function poolDiscard(bid) {
   try {
     await api('POST', `/cost-report/api/job/${currentJobId}/not-done-pool/${bid}/discard`);
     toast('Booking scartato', 'success');
-    loadReport();
+    loadReport(currentJobId);
+  } catch(e) { toast(e.message || 'Errore', 'error'); }
+}
+
+// v3.5.0-alpha.56: scarto bulk dell'intero pool not-done. Conferma esplicita
+// (azione distruttiva irreversibile, anche se i booking restano nel cestino
+// finché non viene fatto un retention sweep).
+async function poolDiscardAll() {
+  if (!currentJobId) return;
+  const data = window._lastNotDonePool || [];
+  if (!data.length) { toast('Pozzo già vuoto', 'info'); return; }
+  if (!confirm(`Scartare definitivamente TUTTI i ${data.length} booking del pool?\n\n` +
+               `Le ore non saranno mai conteggiate. I booking verranno cancellati.\n\n` +
+               `Procedere?`)) return;
+  try {
+    const r = await api('POST', `/cost-report/api/job/${currentJobId}/not-done-pool/discard-all`);
+    toast(`✓ ${r.discarded || 0} booking scartati dal pool`, 'success');
+    loadReport(currentJobId);
   } catch(e) { toast(e.message || 'Errore', 'error'); }
 }
 
@@ -816,6 +846,30 @@ async function refreshTransmitPreview() {
     const sourceLbl = p.period_source === 'from_bookings'
       ? `<span style="color:#22c55e;">📅 Periodo derivato da booking eseguiti</span>`
       : `<span style="color:#fbbf24;">⚠ Nessun booking con work_date — fallback mese corrente</span>`;
+    // v3.5.0-alpha.56: breakdown esplicito quote / extra / sforamento per
+    // rendere visibile l'effetto dello switch "Includi extra" e dare visibilità
+    // di quanto si sta fatturando "fuori budget".
+    const qN = p.quote_count || 0;
+    const eN = p.extra_count || 0;
+    const oTot = p.overrun_total || 0;
+    const breakdownHtml = `
+      <div style="display:flex; gap:8px; flex-wrap:wrap; margin-top:8px; font-size:11px;">
+        <div style="background:rgba(98,114,245,.08); border:1px solid rgba(98,114,245,.3); border-radius:6px; padding:4px 8px;">
+          <span class="text-muted">Da quote:</span>
+          <b class="mono" style="color:var(--indigo2);">${qN}</b>
+          <span class="mono" style="margin-left:4px;">${fmtCurrency(p.quote_total || 0)}</span>
+        </div>
+        <div style="background:rgba(251,146,60,.08); border:1px solid rgba(251,146,60,.3); border-radius:6px; padding:4px 8px;">
+          <span class="text-muted">Extra:</span>
+          <b class="mono" style="color:#fb923c;">${eN}</b>
+          <span class="mono" style="margin-left:4px;">${fmtCurrency(p.extra_total || 0)}</span>
+        </div>
+        ${oTot > 0 ? `
+        <div style="background:rgba(239,68,68,.08); border:1px solid rgba(239,68,68,.3); border-radius:6px; padding:4px 8px;" title="Sforamento sul quotato per le righe non-extra (max(0, maturato − quotato))">
+          <span class="text-muted">⚠ Sforamento quote:</span>
+          <span class="mono" style="color:#ef4444;">${fmtCurrency(oTot)}</span>
+        </div>` : ''}
+      </div>`;
     const previewHtml = p.candidate_count > 0
       ? `<div style="background:var(--bg3); border:1px solid var(--border); border-radius:8px; padding:10px 12px;">
           <div style="display:flex; justify-content:space-between; align-items:center; gap:10px;">
@@ -825,6 +879,7 @@ async function refreshTransmitPreview() {
             </div>
             <div class="mono" style="font-size:18px; color:var(--indigo2); font-weight:600;">${fmtCurrency(p.total_proposed)}</div>
           </div>
+          ${breakdownHtml}
         </div>`
       : `<div style="background:rgba(251,146,60,.10); border:1px solid rgba(251,146,60,.3); border-radius:8px; padding:10px 12px; color:#fb923c; font-size:13px;">
           ⚠ Nessuna riga maturata da fatturare (filtro: not_billed + total_accrued > 0${includeExtras ? '' : ' + non extra'})

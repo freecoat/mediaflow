@@ -1,5 +1,80 @@
 # MediaFlow — Changelog
 
+## v3.5.0-alpha.56 — Pulizia non-fatte + visibilità Over in fatturazione (8 maggio 2026)
+
+Quattro micro-feature richieste da Matteo che chiudono il loop operativo
+"booking eseguiti → cost report → trasmissione → fatturazione":
+
+**1. Cost report — Scarta tutte le non fatte in blocco.**
+Il pozzo "ore non maturate" mostrava un bottone Scarta per ogni riga ma non
+c'era una scorciatoia per svuotare l'intero pool. Ora c'è.
+- Endpoint nuovo: `POST /cost-report/api/job/{job_id}/not-done-pool/discard-all`
+  cancella tutti i booking con `execution_status=not_done` e
+  `count_in_costs=False` del job (status=cancelled). Idempotente.
+- UI: bottone "🗑 Scarta tutte" nell'header del card "Pozzo ore non maturate"
+  (visibile solo se il pool ha almeno una riga). Conferma esplicita prima
+  dell'azione (azione non reversibile dal cestino UI standard).
+
+**2. Planning — Filtro "Nascondi non fatte".**
+Toggle binario nella sidebar filtri che rimuove i booking
+`execution_status=not_done` da tutte le viste lato client.
+- Checkbox `f-hide-not-done` nuovo, persistito in URL (`?hide-not-done=1`)
+  come gli altri filtri. Compatibile con `readFiltersFromURL`,
+  `writeFiltersToURL`, `resetFilters`, `renderActiveFiltersBar`.
+- Helper `filterBookingsHideNotDone(bookings)` riusabile, applicato in
+  `renderTimeline`, `renderAgenda`, `renderCalendar` (via `events:` function
+  source FullCalendar perché l'API URL non offre filtri post-fetch),
+  `renderTodo` (top-level `execution_status` non in `extendedProps`),
+  `renderStoryboard`. Chip in active-filters bar quando attivo.
+
+**3. Cost report — Visibilità split quote/extra/sforamento nel preview Trasmetti.**
+Il toggle "Includi extra" funzionava già (verificato traccia
+`tm-include-extras` → `_transmit_core` → `q.filter(JobCostLine.is_extra == False)`)
+ma il preview mostrava solo un totale aggregato, dando l'impressione che
+"venisse mandato tutto in unica cifra". Ora il breakdown è esplicito.
+- `/finance/api/billing/preview` ritorna anche `quote_count`, `quote_total`,
+  `extra_count`, `extra_total`, `overrun_total` (= sforamento sul quotato
+  per le righe non-extra). `total_quoted` esposto per riga.
+- UI modal Trasmetti: pillola "Da quote · N · €X" + pillola "Extra · M · €Y"
+  + pillola "Sforamento quote · €Z" (solo se >0). Il toggle "Includi extra"
+  ora ha effetto visibile: spegnerlo fa scomparire la pillola Extra dal
+  preview e ricalcola il totale.
+
+**4. Fatturazione — Over per riga e "Rimanda al consuntivo finale".**
+Nel batch detail di /finance ora si vedono per ogni riga: Quotato originale,
+Over (sforamento sul quotato per non-extra), Proposto, Approvato, Perso.
+Sopra il batch un riepilogo aggregato Over + Extra. Il manager può decidere
+riga per riga se fatturare subito o rimandare.
+- Endpoint nuovo: `POST /finance/api/billing/{batch_id}/lines/{line_id}/defer`
+  rimuove la BillingBatchLine dal batch (solo draft), JCL collegata torna
+  `not_billed`, eventuali LossEntry collegate cancellate (era loss
+  ipotizzata, non realizzata). Manager+ richiesto. Reversibile (basta
+  ri-trasmettere). Se il batch resta vuoto il manager può annullarlo
+  manualmente — niente auto-cancellazione magica.
+- `_batch_to_dict(with_lines=True)` ora arricchisce ogni line con
+  `total_quoted` (lookup batch su JCL via `object_session(b)`) e
+  `over = max(0, total_proposed − total_quoted)` (0 per le extra che sono
+  per definizione fuori budget).
+- UI batch detail: 2 colonne nuove nella tabella (Quotato, Over) + bottone
+  "↪ Rimanda" per ogni riga in batch draft. Conferma esplicita. Card
+  riassuntive Over e Extra a livello batch (visibili solo se non zero) +
+  hint inline che spiega "fattura subito vs rimanda al consuntivo finale".
+
+**File toccati:**
+- `app/routers/cost_report.py` — endpoint discard-all.
+- `app/routers/billing.py` — preview breakdown, `_batch_to_dict` arricchito,
+  endpoint defer-line.
+- `app/templates/pages/cost_report.html` — bottone Scarta tutte +
+  preview breakdown nel modal Trasmetti.
+- `app/templates/pages/planning.html` — checkbox hide-not-done +
+  helper `filterBookingsHideNotDone` + integrazione 5 viste.
+- `app/templates/pages/finance.html` — colonne Quotato/Over + bottone
+  Rimanda + card aggregate Over/Extra.
+
+Niente migrazioni DB (solo nuovi endpoint e UI sopra schema esistente).
+Niente breaking change su API esistenti (preview/batch_to_dict aggiungono
+campi, non li rimuovono). Helper retro-compatibili.
+
 ## v3.5.0-alpha.55 — Cost report Over/Under doppia vista (8 maggio 2026)
 
 Fix bug: `total_expected` per riga non veniva mai aggiornato dai booking,

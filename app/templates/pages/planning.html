@@ -738,6 +738,16 @@
       </div>
     </div>
 
+    <!-- v3.5.0-alpha.56: filtro "nascondi non fatte". Toggle binario che
+         rimuove i booking con execution_status=not_done da tutte le viste
+         (timeline, calendario, agenda, todo, storyboard). Client-side. -->
+    <div class="form-group">
+      <label class="flex items-center gap-2" style="cursor:pointer; font-size:12px;">
+        <input type="checkbox" id="f-hide-not-done" onchange="onFilterChange()">
+        <span>Nascondi non fatte</span>
+      </label>
+    </div>
+
     <button class="btn btn-ghost btn-sm" onclick="resetFilters()" style="width:100%;">Reset filtri</button>
   </aside>
 
@@ -1476,12 +1486,15 @@ function _faSearch(faKey) {
 
 // ── URL state ───────────────────────────────────────────────
 // alpha.38: aggiunti `time-from` / `time-to` (filtro client-side fascia oraria).
-const FILTER_KEYS = ['q','dept','client','project','job','resource','status','kind','from','to','time-from','time-to'];
+const FILTER_KEYS = ['q','dept','client','project','job','resource','status','kind','from','to','time-from','time-to','hide-not-done'];
 function readFiltersFromURL() {
   const p = new URLSearchParams(location.search);
   FILTER_KEYS.forEach(k => {
     const el = document.getElementById('f-' + k);
-    if (el && p.get(k)) el.value = p.get(k);
+    if (!el) return;
+    // v3.5.0-alpha.56: gestione checkbox separata (hide-not-done).
+    if (el.type === 'checkbox') { el.checked = (p.get(k) === '1'); return; }
+    if (p.get(k)) el.value = p.get(k);
   });
   // v3.4.47: render chips multi per ogni filtro autocomplete
   ['client','project','job','resource'].forEach(faKey => {
@@ -1493,7 +1506,9 @@ function writeFiltersToURL(view) {
   p.set('view', view);
   FILTER_KEYS.forEach(k => {
     const el = document.getElementById('f-' + k);
-    if (el && el.value) p.set(k, el.value);
+    if (!el) return;
+    if (el.type === 'checkbox') { if (el.checked) p.set(k, '1'); return; }
+    if (el.value) p.set(k, el.value);
   });
   history.replaceState(null, '', '/planning/?' + p.toString());
 }
@@ -1523,6 +1538,23 @@ function getTimeRangeFilter() {
   const toMinV = b ? (toMin(b) ?? 24*60) : 24*60;
   return { fromMin, toMin: toMinV };
 }
+// v3.5.0-alpha.56: filtro "nascondi non fatte" — scarta booking con
+// execution_status=not_done. Applicato in tutte le viste lato client.
+// Funziona sia per booking nel formato API standard (`extendedProps.execution_status`)
+// sia per quelli "raw" del backend (`b.execution_status` direttamente).
+function _isHideNotDoneActive() {
+  const el = document.getElementById('f-hide-not-done');
+  return !!(el && el.checked);
+}
+function filterBookingsHideNotDone(bookings) {
+  if (!_isHideNotDoneActive() || !bookings || !bookings.length) return bookings;
+  return bookings.filter(b => {
+    const ex = (b && b.extendedProps && b.extendedProps.execution_status)
+            || (b && b.execution_status) || '';
+    return ex !== 'not_done';
+  });
+}
+
 // Filtra una lista di booking lasciando solo quelli con almeno un assignment
 // che interseca la fascia oraria [fromMin, toMin] (in minuti dal midnight).
 function filterBookingsByTimeRange(bookings, range) {
@@ -1581,6 +1613,11 @@ function renderActiveFiltersBar() {
     from: 'Dal', to: 'Al',
   };
   const chips = [];
+  // v3.5.0-alpha.56: chip "Nascondi non fatte" se attivo
+  const hideNd = document.getElementById('f-hide-not-done');
+  if (hideNd && hideNd.checked) {
+    chips.push('<span class="chip">Nascondi non fatte</span>');
+  }
   for (const k of Object.keys(labels)) {
     const el = document.getElementById('f-'+k);
     if (!el || !el.value) continue;
@@ -1612,7 +1649,9 @@ function onFilterChange() {
 function resetFilters() {
   FILTER_KEYS.forEach(k => {
     const el = document.getElementById('f-'+k);
-    if (el) el.value = '';
+    if (!el) return;
+    if (el.type === 'checkbox') { el.checked = false; return; }
+    el.value = '';
   });
   // v3.4.47: pulisce input ricerca + chips multi
   ['client','project','job','resource'].forEach(faKey => {
@@ -2104,6 +2143,8 @@ async function renderStoryboard() {
     host.innerHTML = `<div class="pl-empty color-rose">${escapeHtml(e.message || 'Errore')}</div>`;
     return;
   }
+  // v3.5.0-alpha.56: filtro client-side "nascondi non fatte"
+  bookings = filterBookingsHideNotDone(bookings);
 
   // Group per giorno (chiave YYYY-MM-DD locale)
   const days = [];
@@ -2233,7 +2274,16 @@ function renderCalendar() {
     height: 720, slotMinTime: '07:00', slotMaxTime: '22:00',
     allDaySlot: false, nowIndicator: true,
     eventSources: [
-      { id:'bookings', url:'/planning/api/bookings?'+qs, method:'GET' },
+      // v3.5.0-alpha.56: source come funzione per applicare filtro client-side
+      // "nascondi non fatte" (FullCalendar non offre filtri post-fetch nativi
+      // sui sources URL).
+      { id:'bookings', events: async function(info, success, failure) {
+          try {
+            const d = await api('GET', '/planning/api/bookings?' + qs);
+            success(filterBookingsHideNotDone(d));
+          } catch(e) { failure(e); }
+        }
+      },
       { id:'punches', url:'/hr/api/punches?format=fullcalendar&'+qs, method:'GET' },
     ],
     eventClick: (info) => {
@@ -2262,10 +2312,12 @@ function renderCalendar() {
 // ── Agenda list ────────────────────────────────────────────
 async function renderAgenda() {
   const qs = buildQS();
-  const [bookings, punches] = await Promise.all([
+  let [bookings, punches] = await Promise.all([
     api('GET', '/planning/api/bookings'+(qs?'?'+qs:'')),
     api('GET', '/hr/api/punches?format=fullcalendar'+(qs?'&'+qs:'')),
   ]);
+  // v3.5.0-alpha.56: filtro client-side "nascondi non fatte"
+  bookings = filterBookingsHideNotDone(bookings);
   const all = [...bookings, ...punches].filter(e => e.start);
   all.sort((a,b) => new Date(a.start) - new Date(b.start));
   const host = document.getElementById('ag-host');
@@ -2334,7 +2386,12 @@ async function renderTodo() {
   const fp = getFilterParams();
   // Filtri date eventuali, ma mostriamo di default tutto il range (passato+futuro)
   const qs = new URLSearchParams(fp).toString();
-  const items = await api('GET', '/planning/api/my-bookings' + (qs ? '?'+qs : ''));
+  let items = await api('GET', '/planning/api/my-bookings' + (qs ? '?'+qs : ''));
+  // v3.5.0-alpha.56: filtro client-side "nascondi non fatte". my-bookings
+  // espone execution_status al top-level (non in extendedProps).
+  if (_isHideNotDoneActive() && items) {
+    items = items.filter(it => (it.execution_status || '') !== 'not_done');
+  }
   if (!items || !items.length) {
     host.innerHTML = '<div class="pl-empty">Nessun booking per te. Per richieste ferie/malattia → <a href="/hr/">Le mie ore</a>.</div>';
     return;
@@ -3884,6 +3941,8 @@ async function _doRenderTimeline(preserveWindow=false) {
   // alpha.38: filtro fascia oraria client-side (non gestito dal backend per
   // evitare strftime SQL platform-specific)
   bookings = filterBookingsByTimeRange(bookings, getTimeRangeFilter());
+  // v3.5.0-alpha.56: filtro client-side "nascondi non fatte"
+  bookings = filterBookingsHideNotDone(bookings);
   window._tlBookings = bookings; // espongo per tlbOpenEdit (multi-row precarica)
   let items = bookings.map(tlBookingToItem).filter(i => i.group);
   // v3.5.0-alpha.21: vista "Per progetto" → re-mappa group da resource_id a 'j'+job_id

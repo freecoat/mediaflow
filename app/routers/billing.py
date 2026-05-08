@@ -110,8 +110,29 @@ def _batch_to_dict(b: BillingBatch, with_lines: bool = False) -> dict:
         "invoice_number": b.invoice.number if b.invoice else None,
     }
     if with_lines:
-        out["lines"] = [
-            {
+        # v3.5.0-alpha.56: hydration JCL → quotato + over (sforamento) per riga.
+        # Serve all'UI /finance per decidere "fattura subito" vs "rimanda
+        # a consuntivo". Lookup JCL in singola query via session dell'oggetto.
+        from sqlalchemy.orm import object_session
+        jcl_quoted: dict[int, float] = {}
+        sess = object_session(b)
+        jcl_ids = [l.job_cost_line_id for l in b.lines if l.job_cost_line_id]
+        if jcl_ids and sess is not None:
+            rows = (
+                sess.query(JobCostLine.id, JobCostLine.total_quoted)
+                .filter(JobCostLine.id.in_(jcl_ids))
+                .all()
+            )
+            jcl_quoted = {r[0]: (r[1] or 0.0) for r in rows}
+        out["lines"] = []
+        for l in b.lines:
+            tq = jcl_quoted.get(l.job_cost_line_id, 0.0)
+            tp = l.total_proposed or 0.0
+            # over = sforamento sul quotato (per righe non-extra; gli extra
+            # sono tutti "fuori budget" per definizione e vengono trattati come
+            # categoria a sé nella UI).
+            over = 0.0 if l.is_extra else max(0.0, tp - tq)
+            out["lines"].append({
                 "id": l.id,
                 "job_cost_line_id": l.job_cost_line_id,
                 "description": l.description,
@@ -122,9 +143,10 @@ def _batch_to_dict(b: BillingBatch, with_lines: bool = False) -> dict:
                 "total_approved": l.total_approved,
                 "is_extra": l.is_extra,
                 "notes": l.notes,
-            }
-            for l in b.lines
-        ]
+                # v3.5.0-alpha.56
+                "total_quoted": round(tq, 2),
+                "over": round(over, 2),
+            })
     return out
 
 
@@ -191,6 +213,17 @@ async def preview_transmission(
         period_end = date.fromordinal(next_month.toordinal() - 1)
         period_source = "current_month_fallback"
 
+    # v3.5.0-alpha.56: breakdown esplicito quote vs extra + sforamento.
+    # Sforamento = max(0, total_accrued - total_quoted) sulle righe NON extra
+    # (le extra sono già "fuori budget" per definizione).
+    quote_lines = [c for c in candidates if not c.is_extra]
+    extra_lines = [c for c in candidates if c.is_extra]
+    quote_total = round(sum(c.total_accrued for c in quote_lines), 2)
+    extra_total = round(sum(c.total_accrued for c in extra_lines), 2)
+    overrun_total = round(sum(
+        max(0.0, (c.total_accrued or 0) - (c.total_quoted or 0))
+        for c in quote_lines
+    ), 2)
     total_proposed = round(sum(c.total_accrued for c in candidates), 2)
     return {
         "project_id": project_id,
@@ -200,6 +233,12 @@ async def preview_transmission(
         "include_extras": include_extras,
         "candidate_count": len(candidates),
         "total_proposed": total_proposed,
+        # v3.5.0-alpha.56: breakdown
+        "quote_count": len(quote_lines),
+        "quote_total": quote_total,
+        "extra_count": len(extra_lines),
+        "extra_total": extra_total,
+        "overrun_total": overrun_total,
         "lines": [
             {
                 "id": c.id,
@@ -207,6 +246,7 @@ async def preview_transmission(
                 "quantity": c.quantity_actual,
                 "unit": c.unit,
                 "unit_price": c.unit_price,
+                "total_quoted": c.total_quoted,
                 "total_accrued": c.total_accrued,
                 "is_extra": c.is_extra,
                 "work_date": c.work_date.isoformat() if c.work_date else None,
@@ -460,6 +500,76 @@ async def edit_batch_line(
         "delta_lost": delta if delta > 0 else 0,
         "batch_total_approved": batch.total_approved,
         "batch_total_lost": batch.total_lost,
+    }
+
+
+@router.post("/{batch_id}/lines/{line_id}/defer")
+async def defer_batch_line(
+    batch_id: int, line_id: int,
+    request: Request,
+    db: Session = Depends(get_db),
+):
+    """v3.5.0-alpha.56 — Rimanda una riga del batch al consuntivo finale.
+
+    Operativamente: rimuove la BillingBatchLine dal batch (draft) e riporta la
+    JobCostLine collegata a `not_billed` (rilibera per future trasmissioni).
+    Eventuali LossEntry collegate alla riga vengono cancellate (era una loss
+    ipotizzata, non realizzata).
+
+    Use case: il manager vede una riga in over (es. extra non concordato col
+    cliente, o sforamento orario) e decide di NON fatturarla subito; resterà
+    in coda per la fattura di consuntivo finale.
+
+    Idempotente: se line_id non appartiene al batch o batch non è draft, 400.
+    Manager+ richiesto."""
+    user = _require_manager(request)
+    batch = db.query(BillingBatch).filter(
+        BillingBatch.id == batch_id, BillingBatch.tenant_id == CURRENT_TENANT,
+    ).first()
+    if not batch:
+        raise HTTPException(404, "Batch non trovato")
+    if batch.status != BillingBatchStatus.draft:
+        raise HTTPException(
+            400, f"Batch non modificabile in stato {batch.status.value}. "
+                 "Per rimandare una riga occorre che il batch sia in bozza."
+        )
+    line = db.query(BillingBatchLine).filter(
+        BillingBatchLine.id == line_id, BillingBatchLine.batch_id == batch_id,
+    ).first()
+    if not line:
+        raise HTTPException(404, "Riga non trovata in questo batch")
+
+    # Rilascia la JCL collegata: torna not_billed, rimossa dal batch
+    jcl_id = line.job_cost_line_id
+    if jcl_id:
+        jcl = db.query(JobCostLine).filter(JobCostLine.id == jcl_id).first()
+        if jcl:
+            jcl.billing_status = JCLBillingStatus.not_billed
+            jcl.billing_batch_id = None
+
+    # Cancella eventuali LossEntry collegate alla riga (loss ipotizzata)
+    db.query(LossEntry).filter(
+        LossEntry.billing_batch_line_id == line.id
+    ).delete(synchronize_session=False)
+
+    # Rimuovi la riga dal batch
+    db.delete(line)
+    db.flush()
+
+    # Ricalcola totali batch. Se vuoto, lo lascio in draft (manager può
+    # cancellarlo manualmente) — non auto-cancello per evitare side-effect
+    # "magici" che il manager non si aspetta.
+    db.refresh(batch)
+    _recompute_batch_totals(batch)
+    db.commit()
+    db.refresh(batch)
+    return {
+        "ok": True,
+        "deferred_line_id": line_id,
+        "released_jcl_id": jcl_id,
+        "remaining_lines": len(batch.lines),
+        "batch_total_proposed": batch.total_proposed,
+        "batch_total_approved": batch.total_approved,
     }
 
 

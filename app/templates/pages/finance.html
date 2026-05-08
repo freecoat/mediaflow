@@ -279,16 +279,22 @@
     <div class="modal-body">
       <div id="bd-meta" style="margin-bottom:14px;"></div>
       <div class="text-xs text-muted" style="text-transform:uppercase; letter-spacing:0.04em; margin-bottom:6px;">Righe del batch</div>
+      <!-- v3.5.0-alpha.56: aggiunte colonne Quotato e Over (sforamento) per
+           dare visibilità di quanto si sta fatturando fuori dal preventivo,
+           e bottone "Rimanda" per ogni riga (rimandare al consuntivo finale). -->
       <div class="table-wrap" style="max-height:50vh; overflow-y:auto;">
         <table>
           <thead>
             <tr>
-              <th style="width:38%;">Descrizione</th>
+              <th style="width:30%;">Descrizione</th>
               <th class="text-right">Q.tà</th>
               <th class="text-right">Tariffa</th>
+              <th class="text-right" title="Importo quotato originale per la riga">Quotato</th>
+              <th class="text-right" title="Sforamento (max(0, proposto − quotato), solo per righe non-extra)">Over</th>
               <th class="text-right">Proposto</th>
               <th class="text-right">Approvato</th>
               <th class="text-right">Perso</th>
+              <th></th>
             </tr>
           </thead>
           <tbody id="bd-lines"></tbody>
@@ -445,14 +451,35 @@ async function openBatchDetail(batchId) {
   // Meta box
   const period = b.period_start && b.period_end
     ? `${fmtDate(b.period_start)} → ${fmtDate(b.period_end)}` : '—';
+  // v3.5.0-alpha.56: aggregati Over + Extra a livello batch (calc client-side
+  // dalle line). Danno visibilità immediata di quanto si fattura "fuori budget".
+  const overSum = (b.lines || []).reduce((a, l) => a + (l.over || 0), 0);
+  const extraSum = (b.lines || []).filter(l => l.is_extra)
+                    .reduce((a, l) => a + (l.total_proposed || 0), 0);
+  const overCard = overSum > 0.01
+    ? `<div class="stat-card" style="background:rgba(239,68,68,.06); border:1px solid rgba(239,68,68,.25);">
+         <div class="stat-label" title="Sforamento sul quotato (righe non-extra)">⚠ Over (sforamento)</div>
+         <div class="mono" style="font-size:18px; color:#ef4444;">${fmtCurrency(overSum)}</div>
+       </div>` : '';
+  const extraCard = extraSum > 0.01
+    ? `<div class="stat-card" style="background:rgba(251,146,60,.06); border:1px solid rgba(251,146,60,.25);">
+         <div class="stat-label" title="Importo proposto da righe extra (lavorazioni fuori quote)">Extra</div>
+         <div class="mono" style="font-size:18px; color:#fb923c;">${fmtCurrency(extraSum)}</div>
+       </div>` : '';
   document.getElementById('bd-meta').innerHTML = `
     <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(160px, 1fr)); gap:10px;">
       <div class="stat-card"><div class="stat-label">Periodo</div><div class="text-sm">${period}</div></div>
       <div class="stat-card"><div class="stat-label">Proposto</div><div class="mono" style="font-size:18px;">${fmtCurrency(b.total_proposed)}</div></div>
+      ${overCard}
+      ${extraCard}
       <div class="stat-card"><div class="stat-label">Approvato</div><div class="mono" style="font-size:18px; color:var(--indigo2);">${fmtCurrency(b.total_approved)}</div></div>
       <div class="stat-card"><div class="stat-label">Perso</div><div class="mono" style="font-size:18px; color:${b.total_lost > 0 ? '#ef4444' : 'var(--text3)'};">${fmtCurrency(b.total_lost)}</div></div>
       ${b.invoice_number ? `<div class="stat-card"><div class="stat-label">Fattura</div><div class="text-sm"><b>${escapeHtml(b.invoice_number)}</b></div></div>` : ''}
     </div>
+    ${overSum > 0.01 || extraSum > 0.01
+      ? `<div style="margin-top:8px; padding:8px 12px; background:rgba(251,191,36,.06); border-left:3px solid #fbbf24; border-radius:4px; font-size:12px;">
+          💡 Per le righe in over o extra puoi <b>fatturare subito</b> (resta nel batch) oppure <b>↪ Rimandare</b> al consuntivo finale (riga per riga). Le rimandate tornano "Da fatturare" e potranno essere incluse in un batch successivo.
+        </div>` : ''}
     ${b.notes ? `<div class="text-sm text-muted" style="margin-top:8px;">📝 ${escapeHtml(b.notes)}</div>` : ''}
   `;
   // Lines
@@ -468,7 +495,7 @@ function renderBatchLines(b) {
   const isDraft = (b.status === 'draft');
   const tbody = document.getElementById('bd-lines');
   if (!b.lines || !b.lines.length) {
-    tbody.innerHTML = '<tr><td colspan="6" class="text-muted text-sm" style="padding:20px; text-align:center;">Batch vuoto</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="9" class="text-muted text-sm" style="padding:20px; text-align:center;">Batch vuoto</td></tr>';
     return;
   }
   tbody.innerHTML = b.lines.map(l => {
@@ -483,6 +510,18 @@ function renderBatchLines(b) {
             value="${(l.total_approved || 0).toFixed(2)}"
             onchange="editBatchLine(${l.id}, this.value, this)">`
       : `<span class="mono">${fmtCurrency(l.total_approved)}</span>`;
+    // v3.5.0-alpha.56: colonna Over (sforamento) e bottone "Rimanda"
+    // (defer line → consuntivo finale, riga torna not_billed).
+    const overVal = l.over || 0;
+    const overHtml = overVal > 0.01
+      ? `<span class="mono" style="color:#ef4444;" title="Sforamento sul quotato">+${fmtCurrency(overVal)}</span>`
+      : '<span class="text-muted">—</span>';
+    const quotedHtml = (l.is_extra)
+      ? `<span class="text-xs" style="color:#fb923c;" title="Riga extra: nessun quotato di riferimento">[extra]</span>`
+      : `<span class="mono">${fmtCurrency(l.total_quoted || 0)}</span>`;
+    const deferBtn = isDraft
+      ? `<button class="btn btn-ghost btn-sm" onclick="deferBatchLine(${l.id}, '${escapeHtml((l.description || '').slice(0, 40))}')" title="Rimanda al consuntivo finale: la riga viene rimossa dal batch e torna 'Da fatturare' nel cost report" style="color:#fbbf24;">↪ Rimanda</button>`
+      : '';
     return `<tr>
       <td>
         <div style="font-size:13px;">${escapeHtml(l.description)}${l.is_extra ? ' <span class="text-xs" style="color:#fb923c;">[extra]</span>' : ''}</div>
@@ -490,11 +529,46 @@ function renderBatchLines(b) {
       </td>
       <td class="mono text-right">${(l.quantity || 0).toFixed(2)} ${escapeHtml(l.unit || '')}</td>
       <td class="mono text-right">${fmtCurrency(l.unit_price)}</td>
+      <td class="text-right">${quotedHtml}</td>
+      <td class="text-right">${overHtml}</td>
       <td class="mono text-right">${fmtCurrency(l.total_proposed)}</td>
       <td class="text-right">${approvedCell}</td>
       <td class="mono text-right">${lostHtml}</td>
+      <td class="text-right">${deferBtn}</td>
     </tr>`;
   }).join('');
+}
+
+// v3.5.0-alpha.56: rimanda una riga al consuntivo finale (defer).
+// La JCL collegata torna `not_billed` nel cost report e potrà essere inclusa
+// in un batch successivo. Reversibile (basta ri-trasmetterla).
+async function deferBatchLine(lineId, descSnippet) {
+  if (!_currentBatch) return;
+  if (!confirm(
+    `Rimandare al consuntivo finale la riga "${descSnippet}"?\n\n` +
+    `• La riga viene rimossa da questo batch\n` +
+    `• Tornerà "Da fatturare" nel cost report\n` +
+    `• La potrai includere in un batch futuro (consuntivo finale o periodo successivo)\n\n` +
+    `Procedere?`
+  )) return;
+  try {
+    const res = await api('POST', `/finance/api/billing/${_currentBatch.id}/lines/${lineId}/defer`);
+    toast(
+      `✓ Riga rimandata. Batch ora con ${res.remaining_lines} righe (${fmtCurrency(res.batch_total_proposed)}).`,
+      'success', 4000
+    );
+    if (res.remaining_lines === 0) {
+      // Batch vuoto: chiudi modal e mostra avviso
+      closeModal('modal-batch-detail');
+      toast(`⚠ Il batch ${_currentBatch.code} è ora vuoto. Puoi annullarlo se vuoi.`, 'warning', 6000);
+      await loadBatches();
+    } else {
+      await openBatchDetail(_currentBatch.id);
+      await loadBatches();
+    }
+  } catch(e) {
+    toast(e.message || 'Errore rimando riga', 'error');
+  }
 }
 
 function renderBatchFooter(b) {

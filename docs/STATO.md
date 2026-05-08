@@ -8,6 +8,59 @@
 
 ## Versione corrente
 
+**v3.5.0-alpha.56** — 8 maggio 2026 — Pulizia non-fatte + visibilità Over in fatturazione
+
+Quattro micro-feature richieste da Matteo che chiudono il loop operativo
+"booking eseguiti → cost report → trasmissione → fatturazione".
+
+**Chiuso α.56:**
+- ✅ Cost report: bottone "🗑 Scarta tutte" sul pool ore non maturate.
+  Endpoint nuovo `POST /cost-report/api/job/{id}/not-done-pool/discard-all`,
+  cancella in blocco i booking del pool (status=cancelled). Idempotente.
+- ✅ Planning: filtro "Nascondi non fatte" (checkbox sidebar). Helper
+  `filterBookingsHideNotDone(bookings)` applicato in 5 viste (timeline,
+  agenda, calendar via FullCalendar `events:` function source, todo top-level
+  exec_status, storyboard). Persiste in URL come gli altri filtri, chip
+  visibile in active-filters bar.
+- ✅ Cost report — modal Trasmetti: preview con breakdown esplicito
+  Quote / Extra / Sforamento (€). Il toggle "Includi extra" funzionava già
+  (verificato), ora ha effetto VISIBILE sul preview (la pillola Extra
+  scompare). Endpoint preview ritorna `quote_count/total`, `extra_count/total`,
+  `overrun_total`, `total_quoted` per riga.
+- ✅ Fatturazione (/finance batch detail): colonne Quotato + Over per riga,
+  card aggregate Over + Extra a livello batch, bottone "↪ Rimanda" per
+  rimandare una riga al consuntivo finale (rimuove dal batch, JCL torna
+  not_billed). Endpoint `POST /finance/api/billing/{batch_id}/lines/{line_id}/defer`,
+  manager+ richiesto, draft only, reversibile.
+- ✅ Smoke test boot: 264 routes, version 3.5.0-alpha.56. Sintassi
+  Python+template OK.
+
+**Verifica live richiesta a Matteo:**
+1. /cost-report → job con booking marcati not_done → card "Pozzo ore non
+   maturate" → bottone "🗑 Scarta tutte" → conferma → tutto sparisce.
+2. /planning → checkbox "Nascondi non fatte" in sidebar → applica → tutte
+   le viste (Tabella/Calendario/Agenda/Todo/Storyboard/Timeline) nascondono
+   i booking not_done → URL ha `?hide-not-done=1` → Reset filtri lo spegne.
+3. /cost-report → un job con quote+extra → "📤 Trasmetti" → preview mostra
+   pillole separate (€ quote, € extra, € sforamento) → toglie "Includi
+   extra" → pillola Extra sparisce, total_proposed scende.
+4. /finance → tab Batch → apri un draft con almeno una riga in over o
+   extra → vedere card aggregate "⚠ Over" e "Extra" + colonne Quotato/Over
+   per riga → bottone "↪ Rimanda" → conferma → riga sparisce, JCL torna
+   "Da fatturare" nel cost report.
+
+**Note semantiche:**
+- "Defer" = rimuove dal batch, JCL → not_billed. NON è "loss" (loss = scarto
+  definitivo con LossEntry). Reversibile via ri-trasmissione.
+- "Over" per riga = max(0, total_proposed − total_quoted) per non-extra. Le
+  extra hanno over=0 perché sono "fuori budget" per definizione (categoria
+  a sé, mostrata separatamente).
+- Auto-cancel batch vuoto NO: dopo defer di tutte le righe il batch resta
+  in draft vuoto, il manager decide se annullarlo (audit).
+
+**Prossimi step:**
+- Step 5 finale: notifica fine mese auto, "Chiudi progetto", report annuale.
+
 **v3.5.0-alpha.55** — 8 maggio 2026 — Cost report Over/Under doppia vista
 
 Fix bug: `total_expected` non veniva aggiornato dai booking, quindi Over/Under
