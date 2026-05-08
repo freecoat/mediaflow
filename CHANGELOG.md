@@ -1,5 +1,63 @@
 # MediaFlow — Changelog
 
+## v3.5.0-alpha.59 — HARD-BLOCK booking in periodo fatturato (8 maggio 2026)
+
+Secondo step della riarchitettura billing. Le `JCLBilledSlice` introdotte
+in α.58 ora sono attive come invariante: un Booking il cui envelope
+ricade in un periodo già fatturato non è più modificabile né cancellabile.
+Il guard è centralizzato in un servizio dedicato e applicato sia su tutti
+gli endpoint planning sia sui tool_use AI.
+
+**Servizio nuovo** `app/services/billing_slice_guard.py`:
+- `find_blocking_slice(db, booking)` — ritorna la prima slice che si
+  sovrappone all'envelope del booking, o None.
+- `find_blocking_slice_for_dates(db, jcl_id, start, end)` — variante per
+  controlli pre-save su nuove date proposte (drag/resize).
+- `slice_lock_message(slice)` / `slice_lock_payload(slice)` — formattazione
+  standard per ValueError / HTTPException(409).
+
+**Hard-block 409 in planning.py**:
+- Helper locale `_assert_no_blocking_slice(db, b)` solleva
+  `HTTPException(409, detail={code: "BOOKING_LOCKED_BY_SLICE", message,
+  slice})`. Applicato in:
+  - `PUT /api/bookings/{id}` (update_booking)
+  - `PUT /api/booking-assignments/{id}` (update_assignment, sia date attuali
+    sia nuove date proposte — un drag NON può uscire da un periodo locked)
+  - `DELETE /api/bookings/{id}` (delete_booking)
+  - `DELETE /api/booking-assignments/{id}` (delete_assignment)
+  - `PATCH /api/bookings/{id}/execution` (cambio stato done/not_done)
+  - `PUT /api/bookings/{id}/bulk-edit` (skippa locked, continua restanti)
+  - `POST /api/multi-move` (all-or-nothing: blocca tutta la transazione)
+
+**Guard AI in `app/services/ai_assistant.py`**:
+- `_assert_no_blocking_slice` solleva `ValueError` (handler AI traduce in
+  failure card). Applicato in `_resolve_booking_for_planning` (copre
+  move/resize/delete) e in `_h_propose_bulk_move` per ognuno dei booking.
+- `_assert_jcl_not_locked` rifocalizzato: ora blocca solo `JCLBillingStatus
+  == in_batch` (batch in approvazione, niente slice ancora). Per `billed`
+  e `paid` il check granulare è quello slice-based, che permette nuovo
+  lavoro su periodi successivi senza ripristinare la JCL al manager.
+
+**API `/planning/api/bookings`**:
+- Ogni assignment ora include `extendedProps.slice_lock = { slice_id,
+  period_start, period_end, invoice_number }` se ricade in un periodo
+  fatturato. Pre-fetch con singola query di tutte le slice della JCL
+  (no N+1).
+
+**UI planning timeline** (`app/templates/pages/planning.html`):
+- Classe `.tl-slice-locked` su `.vis-item`: bordo viola spesso a sinistra
+  + icona 🔒 nel content + tooltip esteso con periodo + numero fattura.
+- I 409 dei mutator si vedono come toast standard via `api()` helper
+  (detail.message contiene il messaggio leggibile).
+
+**Cosa NON cambia in α.59 (per scelta)**:
+- Endpoint dedicato di rettifica (per emettere nota credito + riaprire
+  periodo) — sarà in α.59.x se Matteo lo chiede dopo il test live.
+- UI cost report: invariata (le 3 colonne arrivano in α.60).
+- Nessuna nuova migrazione DB (le slice sono già popolate da α.58).
+
+**Smoke**: 264 routes, version 3.5.0-alpha.59. Sintassi OK.
+
 ## v3.5.0-alpha.58 — JCLBilledSlice (foundation) (8 maggio 2026)
 
 Primo step della riarchitettura billing concordata con Matteo. Introduce

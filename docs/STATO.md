@@ -8,6 +8,69 @@
 
 ## Versione corrente
 
+**v3.5.0-alpha.59** — 8 maggio 2026 — HARD-BLOCK booking in periodo fatturato
+
+Secondo step della riarchitettura billing. Le `JCLBilledSlice` introdotte
+in α.58 sono ora attive come invariante: un Booking dentro un periodo già
+fatturato è immutabile (drag, resize, cancel, exec_status, bulk-edit,
+multi-move, AI tool_use → 409). Per cambiare quei booking serve emettere
+nota credito o cancellare la fattura.
+
+**Chiuso α.59:**
+- ✅ Servizio nuovo `app/services/billing_slice_guard.py`:
+  `find_blocking_slice(db, booking)`, `find_blocking_slice_for_dates(db,
+  jcl_id, start, end)`, `slice_lock_message(slice)`, `slice_lock_payload(slice)`.
+- ✅ Helper locale `_assert_no_blocking_slice` in `app/routers/planning.py`
+  che solleva `HTTPException(409, detail={code: "BOOKING_LOCKED_BY_SLICE",
+  message, slice})`. Applicato in: update_booking, update_assignment
+  (sia date attuali sia nuove proposte), delete_booking, delete_assignment,
+  update_booking_execution, bulk_edit (skippa locked), multi_move (atomico).
+- ✅ Helper analogo `_assert_no_blocking_slice` in `app/services/ai_assistant.py`
+  che solleva `ValueError`. Applicato in `_resolve_booking_for_planning`
+  (copre move/resize/delete AI) e in bulk_move handler.
+- ✅ `_assert_jcl_not_locked` rifocalizzato: ora blocca solo `in_batch`.
+  Per `billed`/`paid` il check granulare è il guard slice-based.
+- ✅ `GET /planning/api/bookings`: ogni assignment include `slice_lock` in
+  `extendedProps` (slice_id, period_start, period_end, invoice_number).
+  Singola query pre-fetch (no N+1).
+- ✅ UI timeline: classe `.tl-slice-locked` (bordo viola + 🔒) + tooltip
+  con periodo + fattura. CSS in `planning.html`.
+- ✅ Smoke test boot: 264 routes, version 3.5.0-alpha.59.
+
+**Cosa NON cambia in α.59 (per scelta):**
+- Endpoint dedicato di rettifica (nota credito + riapri periodo): rimandato
+  ad α.59.x se Matteo lo chiede dopo il test live.
+- UI cost report: invariata (3 colonne arrivano in α.60).
+- Nessuna migrazione DB.
+
+**Verifica live richiesta a Matteo:**
+1. Pull → app boot pulito.
+2. Su `/planning` apri un periodo che include booking di un progetto
+   già fatturato → vedi bordo viola + 🔒 sui booking dentro periodo
+   slice-ato. Tooltip mostra `Fatturato in periodo X → Y (fattura N)`.
+3. Prova a draggare/resizare uno di quei booking → toast 409
+   `Booking dentro periodo già fatturato [...]`.
+4. Prova a marcarlo done/not_done dalla modal → stesso 409.
+5. Prova a cancellarlo → 409.
+6. Booking dello stesso progetto in periodi NON fatturati restano
+   editabili normalmente (per esempio aggiungerne uno in maggio se
+   la fattura copre solo aprile → libero).
+7. Copilot AI: "sposta il booking #X di +1 giorno" su booking locked
+   → card di errore con messaggio leggibile.
+
+**Prossimi step (roadmap riarchitettura billing):**
+- α.60: cost report 3 colonne (Fatturato chiuso = Σ slice / Maturato
+  post ultimo period_end / Stimato futuro). Convenzione Over/Under
+  aggiornata.
+- α.61: notifica `EXTRA_AFTER_BILLED` (extra emerso su periodo già
+  slice-ato) → destinatari accounting + commerciale del progetto.
+- α.62: bottone "Rimanda al commerciale" da /finance con scelta
+  esplicita estendi quote esistente (versioning) vs nuova quote linkata.
+- (eventuale α.59.x): endpoint di rettifica per sbloccare manualmente
+  un periodo, se serve dopo test live.
+
+---
+
 **v3.5.0-alpha.58** — 8 maggio 2026 — JCLBilledSlice (foundation)
 
 Primo step della riarchitettura billing. Modello nuovo `JCLBilledSlice`

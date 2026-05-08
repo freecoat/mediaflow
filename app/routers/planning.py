@@ -35,6 +35,30 @@ router = APIRouter(prefix="/planning", tags=["planning"])
 CURRENT_TENANT = 1
 
 
+def _assert_no_blocking_slice(db: Session, b: Booking) -> None:
+    """v3.5.0-alpha.59 — HARD-BLOCK 409 se il booking ricade in un periodo
+    già fatturato (esiste una `JCLBilledSlice` la cui finestra si sovrappone
+    all'envelope del booking). Modificare/cancellare un booking il cui
+    maturato è stato slice-ato corromperebbe la fattura emessa: il
+    `total_accrued` divergerebbe dal `billed_amount` storico, ma la fattura
+    resta inalterata. Per correzioni formali → endpoint dedicato di
+    rettifica (α.59.x) o cancellazione fattura.
+
+    Idempotente: se non c'è JCL collegata, no-op."""
+    from app.services.billing_slice_guard import (
+        find_blocking_slice, slice_lock_message, slice_lock_payload,
+    )
+    s = find_blocking_slice(db, b)
+    if s is None:
+        return
+    detail = {
+        "code": "BOOKING_LOCKED_BY_SLICE",
+        "message": slice_lock_message(s),
+        "slice": slice_lock_payload(s),
+    }
+    raise HTTPException(409, detail=detail)
+
+
 def _tpl():
     from app.main import templates
     return templates
@@ -764,6 +788,42 @@ async def list_bookings(
         for i, a in enumerate(lst_sorted, 1):
             pos_map[a.id] = i
 
+    # v3.5.0-alpha.59 — pre-fetch slice locks per evitare N+1. Una sola query
+    # per tutte le JCL coinvolte nei booking della response. Map jcl_id →
+    # list of slices ordinate per period_start. Per ogni assignment poi
+    # cerchiamo (in memoria) un overlap tra la sua finestra e gli slice
+    # della stessa JCL.
+    from app.models import JCLBilledSlice
+    jcl_ids = {a.booking.job_cost_line_id for a in assignments if a.booking and a.booking.job_cost_line_id}
+    slices_by_jcl: dict[int, list[JCLBilledSlice]] = {}
+    if jcl_ids:
+        slc_rows = (
+            db.query(JCLBilledSlice)
+            .options(joinedload(JCLBilledSlice.invoice))
+            .filter(JCLBilledSlice.job_cost_line_id.in_(jcl_ids))
+            .all()
+        )
+        for s in slc_rows:
+            slices_by_jcl.setdefault(s.job_cost_line_id, []).append(s)
+
+    def _lock_for_assignment(a: BookingAssignment) -> Optional[dict]:
+        if not (a.booking and a.booking.job_cost_line_id):
+            return None
+        candidates = slices_by_jcl.get(a.booking.job_cost_line_id, [])
+        if not candidates:
+            return None
+        a_start = a.start_datetime.date()
+        a_end = a.end_datetime.date()
+        for s in candidates:
+            if s.period_start <= a_end and s.period_end >= a_start:
+                return {
+                    "slice_id": s.id,
+                    "period_start": s.period_start.isoformat(),
+                    "period_end": s.period_end.isoformat(),
+                    "invoice_number": (s.invoice.number if s.invoice else None),
+                }
+        return None
+
     out = []
     for a in assignments:
         b = a.booking
@@ -821,6 +881,10 @@ async def list_bookings(
                         and b.cost_line.price_item.department_id != a.resource.department_id
                     )
                 ),
+                # v3.5.0-alpha.59 — slice lock: presente se l'assignment ricade
+                # in un periodo già fatturato. UI mostra lucchetto + tooltip,
+                # API mutator → 409 con detail.code=BOOKING_LOCKED_BY_SLICE.
+                "slice_lock": _lock_for_assignment(a),
             }
         })
     return out
@@ -1254,6 +1318,7 @@ async def update_booking(
     if not b:
         raise HTTPException(404, "Booking non trovato")
     _enforce_planning_scope(request, db, {a.resource_id for a in b.assignments})
+    _assert_no_blocking_slice(db, b)  # v3.5.0-alpha.59
 
     new_kind = kind if kind is not None else b.kind
     new_job_id = job_id if job_id is not None else b.job_id
@@ -1378,6 +1443,24 @@ async def update_assignment(
     new_e = end_datetime if end_datetime is not None else a.end_datetime
     if new_e <= new_s:
         raise HTTPException(400, "end_datetime deve essere > start_datetime")
+    # v3.5.0-alpha.59 — HARD-BLOCK se l'assignment è dentro un periodo già
+    # slice-ato. Test sia su date attuali che su nuove date proposte
+    # (un drag potrebbe provare a portare l'assignment FUORI da un periodo
+    # locked, ma le date originali sono già locked).
+    _assert_no_blocking_slice(db, a.booking)
+    if a.booking.job_cost_line_id:
+        from app.services.billing_slice_guard import (
+            find_blocking_slice_for_dates, slice_lock_message, slice_lock_payload,
+        )
+        s_new = find_blocking_slice_for_dates(
+            db, a.booking.job_cost_line_id, new_s.date(), new_e.date()
+        )
+        if s_new:
+            raise HTTPException(409, detail={
+                "code": "BOOKING_LOCKED_BY_SLICE",
+                "message": slice_lock_message(s_new),
+                "slice": slice_lock_payload(s_new),
+            })
     c = _check_assignment_conflict(db, new_rid, new_s, new_e, exclude_assignment_id=assignment_id)
     if c:
         raise HTTPException(409, f"Conflitto con assignment #{c.id}")
@@ -1713,7 +1796,28 @@ async def bulk_edit_bookings(
 
     ok_count = 0
     failed_ids: list[dict] = []
+    # v3.5.0-alpha.59 — pre-check slice lock su tutti i booking selezionati.
+    # Se ANCHE UNO solo è dentro un periodo già fatturato, lo escludiamo
+    # dalla bulk-edit (lo skippiamo come failed) per non corrompere lo
+    # snapshot fattura. Operazione bulk continua sui restanti.
+    from app.services.billing_slice_guard import find_blocking_slice
+    locked_bookings: dict[int, dict] = {}
+    for _b in bookings:
+        s = find_blocking_slice(db, _b)
+        if s is not None:
+            locked_bookings[_b.id] = {
+                "slice_id": s.id,
+                "period_start": s.period_start.isoformat(),
+                "period_end": s.period_end.isoformat(),
+                "invoice_number": (s.invoice.number if s.invoice else None),
+            }
     for b in bookings:
+        if b.id in locked_bookings:
+            failed_ids.append({
+                "id": b.id, "error": "BOOKING_LOCKED_BY_SLICE",
+                "slice": locked_bookings[b.id],
+            })
+            continue
         try:
             # Calcola tutti i nuovi orari in una list, check conflict, poi commit
             updates: list[tuple] = []  # (assignment, new_start, new_end)
@@ -1867,6 +1971,31 @@ async def multi_move_assignments(
             all_rids.add(p["new_resource_id"])
     _enforce_planning_scope(request, db, all_rids)
 
+    # v3.5.0-alpha.59 — HARD-BLOCK se anche un solo assignment ricade dentro
+    # un periodo già fatturato (pre o post move). All-or-nothing: niente
+    # parziale. Niente rollback parziale, lo blocchiamo prima di procedere.
+    from app.services.billing_slice_guard import (
+        find_blocking_slice, find_blocking_slice_for_dates, slice_lock_payload,
+    )
+    for p in parsed:
+        a = by_id[p["assignment_id"]]
+        s_pre = find_blocking_slice(db, a.booking)
+        if s_pre is not None:
+            return {
+                "success": False, "code": "BOOKING_LOCKED_BY_SLICE", "moved": 0,
+                "blocked_assignment_id": a.id, "blocked_booking_id": a.booking_id,
+                "slice": slice_lock_payload(s_pre),
+            }
+        s_post = find_blocking_slice_for_dates(
+            db, a.booking.job_cost_line_id, p["new_start"].date(), p["new_end"].date()
+        )
+        if s_post is not None:
+            return {
+                "success": False, "code": "BOOKING_LOCKED_BY_SLICE", "moved": 0,
+                "blocked_assignment_id": a.id, "blocked_booking_id": a.booking_id,
+                "slice": slice_lock_payload(s_post),
+            }
+
     # Snapshot pre-move (per response al client per undo atomico)
     pre_snapshots = [{
         "assignment_id": a.id,
@@ -1968,6 +2097,7 @@ async def delete_assignment(assignment_id: int, request: Request, db: Session = 
     if not a:
         raise HTTPException(404, "Assignment non trovato")
     _enforce_planning_scope(request, db, {a.resource_id})
+    _assert_no_blocking_slice(db, a.booking)  # v3.5.0-alpha.59
     booking = a.booking
     db.delete(a)
     db.flush()
@@ -1999,6 +2129,7 @@ async def delete_booking(booking_id: int, request: Request, db: Session = Depend
     if not b:
         raise HTTPException(404, "Booking non trovato")
     _enforce_planning_scope(request, db, {a.resource_id for a in b.assignments})
+    _assert_no_blocking_slice(db, b)  # v3.5.0-alpha.59
     b.status = BookingStatus.cancelled
     _log_change(db, b.id, "delete", "Booking eliminato (soft)", None)
     try:
@@ -2590,6 +2721,10 @@ async def update_booking_execution(
         raise HTTPException(403, "Non puoi modificare lo stato di questo booking")
     if execution_status == BookingExecutionStatus.not_done and not (not_done_reason or "").strip():
         raise HTTPException(400, "Motivazione obbligatoria per stato 'Non fatto'")
+    # v3.5.0-alpha.59 — HARD-BLOCK se booking dentro periodo già fatturato.
+    # Cambiare execution_status su un booking slice-ato modifica
+    # `total_accrued` della JCL → invalida lo snapshot in fattura.
+    _assert_no_blocking_slice(db, b)
 
     user = current_user_optional(request)
     old_status = b.execution_status

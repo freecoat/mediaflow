@@ -317,6 +317,17 @@
     text-shadow: 0 0 2px rgba(0,0,0,.7);
     pointer-events: none;
   }
+  /* v3.5.0-alpha.59: slice-locked — booking dentro periodo già fatturato.
+     Bordo viola spesso a sinistra (drag/resize bloccati lato server con 409).
+     Si combina con tl-cross-dept e tl-exec-* senza conflitti visivi. */
+  .vis-item.tl-slice-locked {
+    box-shadow: inset 4px 0 0 #a855f7, 0 0 0 1px rgba(168,85,247,.5) !important;
+  }
+  .vis-item.tl-slice-locked .tl-slice-icon {
+    font-size: 10px;
+    margin-left: 4px;
+    text-shadow: 0 0 2px rgba(0,0,0,.7);
+  }
   /* v3.4.45: Drag handles più visibili anche senza hover (chiarezza affordance) */
   .vis-item .vis-drag-left, .vis-item .vis-drag-right {
     background: linear-gradient(90deg, rgba(0,0,0,.18) 0%, rgba(255,255,255,.22) 50%, rgba(0,0,0,.18) 100%);
@@ -3001,6 +3012,10 @@ function tlBookingToItem(b) {
   // della risorsa sono entrambi noti e diversi. Mostra bordo amber + ⚠ così
   // il mismatch è visibile anche post-drop, non solo al momento del move.
   if (p.cross_department) classes += 'tl-cross-dept ';
+  // v3.5.0-alpha.59: lock visivo se l'assignment ricade in periodo già fatturato.
+  // Backend espone `slice_lock: { period_start, period_end, invoice_number }`
+  // su /planning/api/bookings. Bordo viola + 🔒 nel content.
+  if (p.slice_lock) classes += 'tl-slice-locked ';
   // v3.5.0-alpha.22: tooltip esteso con durata booking + ore lavorazione totali.
   // v3.5.0-alpha.24: aggiunti orari di inizio/fine espliciti (Matteo).
   const _ms = new Date(b.end) - new Date(b.start);
@@ -3028,13 +3043,21 @@ function tlBookingToItem(b) {
     const resDeptName = resDept ? resDept.name : '?';
     crossDeptLine = `\n⚠ Reparto risorsa (${resDeptName}) ≠ reparto task (${taskDeptName})`;
   }
-  const tooltip = `${b.title || ''}${isTentative ? ' (tentative)' : ''}\n🕐 ${_sLab} → ${_eLab}\n⏱ Durata booking: ${_hLab}${jobDurLine}\n${exec}${prioLab}${crossDeptLine}`;
+  // v3.5.0-alpha.59: tooltip e icona lock se in periodo fatturato.
+  let sliceLockLine = '';
+  let sliceLockIcon = '';
+  if (p.slice_lock) {
+    const inv = p.slice_lock.invoice_number ? ` (fattura ${p.slice_lock.invoice_number})` : '';
+    sliceLockLine = `\n🔒 Fatturato in periodo ${p.slice_lock.period_start} → ${p.slice_lock.period_end}${inv}`;
+    sliceLockIcon = ' <span class="tl-slice-icon" title="Fatturato">🔒</span>';
+  }
+  const tooltip = `${b.title || ''}${isTentative ? ' (tentative)' : ''}\n🕐 ${_sLab} → ${_eLab}\n⏱ Durata booking: ${_hLab}${jobDurLine}\n${exec}${prioLab}${crossDeptLine}${sliceLockLine}`;
   return {
     id: b.id,
     assignment_id: b.assignment_id,
     booking_id: b.booking_id,
     group: p.resource_id,
-    content: escapeHtml(b.title || '') + groupBadge + execIcon,
+    content: escapeHtml(b.title || '') + groupBadge + execIcon + sliceLockIcon,
     start: b.start,
     end: b.end,
     style: 'background-color:'+color+'; border-color:'+color+';',

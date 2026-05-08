@@ -1471,22 +1471,33 @@ def _h_propose_booking(db: Session, data: dict) -> dict:
 
 def _assert_jcl_not_locked(db: Session, b: Booking) -> None:
     """v3.5.0-alpha.51.1 fix A2: blocca AI su booking la cui JobCostLine
-    è già `in_batch`, `billed` o `paid`. Modificare un booking il cui maturato
-    è stato trasmesso a un BillingBatch corromperebbe lo snapshot e il
-    `total_accrued` rendendo le LossEntry non più tracciabili al booking
-    originale. AI deve passare per il manager (cancel batch o emit refund)."""
+    è in stato `in_batch` (batch in approvazione, nessuno slice ancora).
+
+    v3.5.0-alpha.59 affinato: per `billed`/`paid` il check granulare è ora
+    in `_assert_no_blocking_slice` (basato su JCLBilledSlice + periodo del
+    booking). Il blocco JCLBillingStatus resta utile solo per `in_batch`,
+    quando il batch è ancora draft/approved e nessuno slice esiste."""
     if not b.job_cost_line_id:
         return
     jcl = db.query(JobCostLine).filter(JobCostLine.id == b.job_cost_line_id).first()
     if not jcl:
         return
-    locked = {JCLBillingStatus.in_batch, JCLBillingStatus.billed, JCLBillingStatus.paid}
-    if jcl.billing_status in locked:
+    if jcl.billing_status == JCLBillingStatus.in_batch:
         raise ValueError(
             f"Booking #{b.id} non modificabile: la riga di costo (JCL #{jcl.id}) "
-            f"è in stato `{jcl.billing_status.value}`. Il manager deve prima "
-            f"ritirare/annullare il batch di fatturazione."
+            f"è in un BillingBatch in approvazione. Il manager deve prima "
+            f"approvare/annullare il batch."
         )
+
+
+def _assert_no_blocking_slice(db: Session, b: Booking) -> None:
+    """v3.5.0-alpha.59: blocca AI su booking dentro periodo già fatturato.
+    Stesso check di `app.routers.planning._assert_no_blocking_slice` ma
+    solleva ValueError (handler AI traduce in failure card)."""
+    from app.services.billing_slice_guard import find_blocking_slice, slice_lock_message
+    s = find_blocking_slice(db, b)
+    if s is not None:
+        raise ValueError(slice_lock_message(s))
 
 
 def _resolve_booking_for_planning(db: Session, data: dict) -> Booking:
@@ -1507,6 +1518,7 @@ def _resolve_booking_for_planning(db: Session, data: dict) -> Booking:
     if b.status == BookingStatus.cancelled:
         raise ValueError(f"Booking #{bid} è già cancellato")
     _assert_jcl_not_locked(db, b)
+    _assert_no_blocking_slice(db, b)  # v3.5.0-alpha.59
     return b
 
 
@@ -2031,9 +2043,10 @@ def _h_propose_bulk_move(db: Session, data: dict) -> dict:
     if not bookings:
         raise ValueError("Nessun booking valido in booking_ids")
 
-    # Verifica JCL non locked per ognuno
+    # Verifica JCL non locked per ognuno + slice lock granulare
     for b in bookings:
         _assert_jcl_not_locked(db, b)
+        _assert_no_blocking_slice(db, b)  # v3.5.0-alpha.59
 
     delta = _td(minutes=sm)
     aids_set = set()
