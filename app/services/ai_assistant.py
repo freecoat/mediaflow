@@ -1745,6 +1745,466 @@ def _h_propose_delete_booking(db: Session, data: dict) -> dict:
     return {"booking_id": b.id, "status": "cancelled", "reason": reason}
 
 
+# ── v3.5.0-alpha.54: Capability planning avanzate ──────────────────
+
+def _h_analyze_conflicts(db: Session, data: dict) -> dict:
+    """READONLY. Trova conflitti orari nei booking di un periodo
+    (default = prossimi 14 giorni) e suggerisce risoluzioni.
+
+    Payload: {"days"?: int (default 14), "project_id"?: int, "department_id"?: int}
+    """
+    from datetime import datetime as _dt, timedelta as _td
+    CURRENT_TENANT = 1
+    days = int(data.get("days") or 14)
+    project_id = data.get("project_id")
+    department_id = data.get("department_id")
+    now = _dt.utcnow()
+    end = now + _td(days=days)
+    q = db.query(BookingAssignment).join(Booking).filter(
+        Booking.tenant_id == CURRENT_TENANT,
+        Booking.status != BookingStatus.cancelled,
+        BookingAssignment.start_datetime < end,
+        BookingAssignment.end_datetime > now,
+    )
+    if project_id:
+        q = q.filter(Booking.project_id == int(project_id))
+    assignments = q.all()
+    # Group by resource_id; ordina; trova overlap
+    by_res: dict[int, list] = {}
+    for a in assignments:
+        by_res.setdefault(a.resource_id, []).append(a)
+    conflicts = []
+    for rid, lst in by_res.items():
+        lst.sort(key=lambda x: x.start_datetime)
+        for i in range(len(lst) - 1):
+            cur, nxt = lst[i], lst[i + 1]
+            if nxt.start_datetime < cur.end_datetime:
+                if department_id:
+                    res = db.query(Resource).filter(Resource.id == rid).first()
+                    if not res or res.department_id != int(department_id):
+                        continue
+                res = db.query(Resource).filter(Resource.id == rid).first()
+                conflicts.append({
+                    "resource_id": rid,
+                    "resource_name": res.name if res else f"#{rid}",
+                    "assignment_a_id": cur.id,
+                    "booking_a_id": cur.booking_id,
+                    "a_start": cur.start_datetime.isoformat(),
+                    "a_end": cur.end_datetime.isoformat(),
+                    "assignment_b_id": nxt.id,
+                    "booking_b_id": nxt.booking_id,
+                    "b_start": nxt.start_datetime.isoformat(),
+                    "b_end": nxt.end_datetime.isoformat(),
+                    "overlap_minutes": int((cur.end_datetime - nxt.start_datetime).total_seconds() / 60),
+                    "suggestion": (
+                        f"Sposta booking #{nxt.booking_id} dopo {cur.end_datetime.strftime('%d/%m %H:%M')} "
+                        f"oppure cambia risorsa, oppure split del booking #{cur.booking_id}."
+                    ),
+                })
+    return {
+        "period_start": now.isoformat(),
+        "period_end": end.isoformat(),
+        "scope_filter": {"project_id": project_id, "department_id": department_id},
+        "conflicts_count": len(conflicts),
+        "conflicts": conflicts[:50],  # cap per tener context piccolo
+    }
+
+
+def _h_find_free_slots(db: Session, data: dict) -> dict:
+    """READONLY. Cerca slot liberi per una risorsa (o reparto) in un periodo.
+
+    Payload: {
+      "resource_id"?: int (alternativa: department_id per cercare su tutte le risorse del reparto),
+      "department_id"?: int,
+      "duration_minutes": int (durata richiesta),
+      "from_date"?: "YYYY-MM-DD" (default oggi),
+      "days"?: int (default 7),
+      "work_hours_start"?: "HH:MM" (default "09:00"),
+      "work_hours_end"?: "HH:MM" (default "18:00"),
+    }
+    """
+    from datetime import datetime as _dt, timedelta as _td, date as _d, time as _t
+    CURRENT_TENANT = 1
+    duration_min = int(data.get("duration_minutes") or 0)
+    if duration_min <= 0:
+        raise ValueError("duration_minutes deve essere > 0")
+    from_str = data.get("from_date")
+    start_d = _d.fromisoformat(from_str) if from_str else _d.today()
+    days = int(data.get("days") or 7)
+    end_d = start_d + _td(days=days)
+    wh_start = data.get("work_hours_start") or "09:00"
+    wh_end = data.get("work_hours_end") or "18:00"
+    h_s = _t.fromisoformat(wh_start)
+    h_e = _t.fromisoformat(wh_end)
+    # Risolvi risorse target
+    rids: list[int] = []
+    if data.get("resource_id"):
+        rids = [int(data["resource_id"])]
+    elif data.get("department_id"):
+        ress = db.query(Resource).filter(
+            Resource.department_id == int(data["department_id"]),
+            Resource.is_active == True,  # noqa
+        ).all()
+        rids = [r.id for r in ress]
+    else:
+        raise ValueError("Specifica resource_id o department_id")
+    if not rids:
+        return {"slots": [], "reason": "no_resources_in_scope"}
+    # Booking esistenti per le risorse target nell'intervallo
+    busy_by_res: dict[int, list] = {rid: [] for rid in rids}
+    rows = db.query(BookingAssignment).join(Booking).filter(
+        Booking.tenant_id == CURRENT_TENANT,
+        Booking.status != BookingStatus.cancelled,
+        BookingAssignment.resource_id.in_(rids),
+        BookingAssignment.start_datetime < _dt.combine(end_d, h_e),
+        BookingAssignment.end_datetime > _dt.combine(start_d, h_s),
+    ).all()
+    for a in rows:
+        busy_by_res.setdefault(a.resource_id, []).append((a.start_datetime, a.end_datetime))
+    # Trova slot liberi: scan per giorno × risorsa, salta intervalli busy
+    slots = []
+    cap = 30  # cap output
+    cur_d = start_d
+    while cur_d < end_d and len(slots) < cap:
+        if cur_d.weekday() >= 5:  # salta sab/dom default
+            cur_d += _td(days=1)
+            continue
+        day_start = _dt.combine(cur_d, h_s)
+        day_end = _dt.combine(cur_d, h_e)
+        for rid in rids:
+            busy = sorted([(s, e) for (s, e) in busy_by_res.get(rid, []) if e > day_start and s < day_end])
+            cursor = day_start
+            for (b_s, b_e) in busy:
+                if b_s > cursor:
+                    free_min = int((b_s - cursor).total_seconds() / 60)
+                    if free_min >= duration_min:
+                        slots.append({
+                            "resource_id": rid,
+                            "start": cursor.isoformat(),
+                            "end": (cursor + _td(minutes=duration_min)).isoformat(),
+                            "available_minutes": free_min,
+                        })
+                        if len(slots) >= cap:
+                            break
+                cursor = max(cursor, b_e)
+            if cursor < day_end and len(slots) < cap:
+                free_min = int((day_end - cursor).total_seconds() / 60)
+                if free_min >= duration_min:
+                    slots.append({
+                        "resource_id": rid,
+                        "start": cursor.isoformat(),
+                        "end": (cursor + _td(minutes=duration_min)).isoformat(),
+                        "available_minutes": free_min,
+                    })
+        cur_d += _td(days=1)
+    return {
+        "duration_minutes": duration_min,
+        "from_date": start_d.isoformat(),
+        "to_date": end_d.isoformat(),
+        "scope": {"resource_ids": rids, "department_id": data.get("department_id")},
+        "slots_count": len(slots),
+        "slots": slots,
+    }
+
+
+def _h_propose_recurring_bookings(db: Session, data: dict) -> dict:
+    """MUTATION. Crea una serie ricorrente di booking dal lunedì al venerdì
+    (o regola custom). Atomic per occorrenza, conflict check on each.
+
+    Payload: {
+      "job_id": int,
+      "job_cost_line_id"?: int,
+      "resource_id": int,
+      "rule": "DAILY" | "WEEKDAYS" | "WEEKENDS" | csv giorni "MON,WED,FRI",
+      "start_date": "YYYY-MM-DD",
+      "until_date": "YYYY-MM-DD",
+      "start_time": "HH:MM",
+      "end_time": "HH:MM",
+      "title"?: str,
+    }
+    """
+    from datetime import datetime as _dt, timedelta as _td, date as _d, time as _t
+    from app.models import BookingKind
+    CURRENT_TENANT = 1
+    DAYS = {"MON": 0, "TUE": 1, "WED": 2, "THU": 3, "FRI": 4, "SAT": 5, "SUN": 6}
+
+    job_id = data.get("job_id")
+    if not job_id:
+        raise ValueError("job_id obbligatorio")
+    rid = int(data.get("resource_id") or 0)
+    if not rid:
+        raise ValueError("resource_id obbligatorio")
+    start_d = _d.fromisoformat(data["start_date"])
+    until_d = _d.fromisoformat(data["until_date"])
+    start_t = _t.fromisoformat(data["start_time"])
+    end_t = _t.fromisoformat(data["end_time"])
+    if end_t <= start_t:
+        raise ValueError("end_time deve essere > start_time (overnight non supportato)")
+    rule = (data.get("rule") or "WEEKDAYS").upper().strip()
+    if rule == "DAILY":
+        days = set(range(7))
+    elif rule == "WEEKDAYS":
+        days = {0, 1, 2, 3, 4}
+    elif rule == "WEEKENDS":
+        days = {5, 6}
+    else:
+        days = {DAYS[d.strip()[:3].upper()] for d in rule.split(",") if d.strip()}
+    if not days:
+        raise ValueError(f"Regola ricorrenza non valida: {rule}")
+    job = db.query(Job).filter(Job.id == int(job_id)).first()
+    if not job:
+        raise ValueError(f"Job #{job_id} non trovato")
+    if not db.query(Resource).filter(Resource.id == rid).first():
+        raise ValueError(f"Risorsa #{rid} non trovata")
+
+    title = (data.get("title") or "").strip() or f"Ricorrente {rule.lower()}"
+    jcl_id = data.get("job_cost_line_id")
+    created = []
+    skipped_conflict = []
+    cur_d = start_d
+    while cur_d <= until_d:
+        if cur_d.weekday() in days:
+            ns = _dt.combine(cur_d, start_t)
+            ne = _dt.combine(cur_d, end_t)
+            # conflict check
+            c = db.query(BookingAssignment).join(Booking).filter(
+                Booking.status != BookingStatus.cancelled,
+                BookingAssignment.resource_id == rid,
+                BookingAssignment.start_datetime < ne,
+                BookingAssignment.end_datetime > ns,
+            ).first()
+            if c:
+                skipped_conflict.append(cur_d.isoformat())
+                cur_d += _td(days=1)
+                continue
+            b = Booking(
+                tenant_id=CURRENT_TENANT, job_id=job.id,
+                title=title, start_datetime=ns, end_datetime=ne,
+                status=BookingStatus.confirmed, kind=BookingKind.project,
+                job_cost_line_id=int(jcl_id) if jcl_id else None,
+            )
+            db.add(b); db.flush()
+            db.add(BookingAssignment(
+                booking_id=b.id, resource_id=rid,
+                start_datetime=ns, end_datetime=ne,
+            ))
+            try:
+                db.add(BookingChange(
+                    booking_id=b.id, kind="ai_create_recurring",
+                    summary=f"AI recurring create ({rule}, {cur_d})",
+                    payload={"rule": rule, "date": cur_d.isoformat()},
+                ))
+            except Exception:
+                pass
+            created.append({"booking_id": b.id, "date": cur_d.isoformat()})
+        cur_d += _td(days=1)
+    return {
+        "rule": rule, "start_date": start_d.isoformat(), "until_date": until_d.isoformat(),
+        "created_count": len(created),
+        "skipped_conflicts_count": len(skipped_conflict),
+        "created": created[:20],
+        "skipped_conflicts": skipped_conflict[:20],
+    }
+
+
+def _h_propose_bulk_move(db: Session, data: dict) -> dict:
+    """MUTATION. Sposta N booking di un delta uniforme. Conflict check
+    cross-batch (escludendo gli stessi booking della transazione).
+
+    Payload: {"booking_ids": [int], "shift_minutes": int}
+    """
+    from datetime import timedelta as _td
+    CURRENT_TENANT = 1
+    bids_raw = data.get("booking_ids") or []
+    if not bids_raw or not isinstance(bids_raw, list):
+        raise ValueError("booking_ids deve essere una lista non vuota")
+    bids = [int(x) for x in bids_raw]
+    sm = int(data.get("shift_minutes") or 0)
+    if sm == 0:
+        raise ValueError("shift_minutes = 0, niente da fare")
+
+    bookings = db.query(Booking).filter(
+        Booking.id.in_(bids),
+        Booking.tenant_id == CURRENT_TENANT,
+        Booking.status != BookingStatus.cancelled,
+    ).all()
+    if not bookings:
+        raise ValueError("Nessun booking valido in booking_ids")
+
+    # Verifica JCL non locked per ognuno
+    for b in bookings:
+        _assert_jcl_not_locked(db, b)
+
+    delta = _td(minutes=sm)
+    aids_set = set()
+    for b in bookings:
+        for a in b.assignments:
+            aids_set.add(a.id)
+
+    # Conflict check escludendo aids della transazione
+    for b in bookings:
+        for a in b.assignments:
+            ns = a.start_datetime + delta
+            ne = a.end_datetime + delta
+            c = db.query(BookingAssignment).join(Booking).filter(
+                Booking.status != BookingStatus.cancelled,
+                ~BookingAssignment.id.in_(aids_set),
+                BookingAssignment.resource_id == a.resource_id,
+                BookingAssignment.start_datetime < ne,
+                BookingAssignment.end_datetime > ns,
+            ).first()
+            if c:
+                raise ValueError(
+                    f"Conflitto: booking #{b.id} su risorsa #{a.resource_id} "
+                    f"({ns.strftime('%d/%m %H:%M')}→{ne.strftime('%H:%M')}) "
+                    f"overlap con assignment #{c.id} (booking #{c.booking_id})"
+                )
+
+    # Applica
+    for b in bookings:
+        for a in b.assignments:
+            a.start_datetime = a.start_datetime + delta
+            a.end_datetime = a.end_datetime + delta
+        b.start_datetime = min(a.start_datetime for a in b.assignments)
+        b.end_datetime = max(a.end_datetime for a in b.assignments)
+        try:
+            from app.services.cost_line_sync import recompute_for_booking
+            recompute_for_booking(db, b)
+        except Exception as _e:
+            logger.warning(f"recompute_for_booking failed in bulk_move: {_e}")
+        try:
+            db.add(BookingChange(
+                booking_id=b.id, kind="ai_bulk_move",
+                summary=f"AI bulk move ({sm:+d}min)",
+                payload={"shift_minutes": sm},
+            ))
+        except Exception:
+            pass
+
+    return {
+        "shifted_minutes": sm,
+        "moved_count": len(bookings),
+        "moved_booking_ids": [b.id for b in bookings],
+    }
+
+
+def _h_query_project_finance(db: Session, data: dict) -> dict:
+    """READONLY. Stato finanziario aggregato di un progetto: quotato,
+    maturato, atteso, spese, margine, fatturato, incassato, ripartizione
+    JCL per billing_status, top job per scostamento.
+
+    Payload: {"project_id": int}
+    """
+    from sqlalchemy import func as _func
+    from app.models import Expense, Invoice
+    from app.models.models import InvoiceStatus
+    CURRENT_TENANT = 1
+    pid = int(data.get("project_id") or 0)
+    if not pid:
+        raise ValueError("project_id obbligatorio")
+    proj = db.query(Project).filter(
+        Project.id == pid, Project.tenant_id == CURRENT_TENANT
+    ).first()
+    if not proj:
+        raise ValueError(f"Progetto #{pid} non trovato")
+
+    jobs = db.query(Job).filter(Job.project_id == pid).all()
+    if not jobs:
+        return {
+            "project_id": pid, "project_code": proj.code, "project_title": proj.title,
+            "jobs_count": 0, "summary": {}, "billing_status_breakdown": {},
+            "invoices": {}, "top_jobs_by_variance": [],
+        }
+    job_ids = [j.id for j in jobs]
+
+    # JCL aggregati
+    cost_lines = []
+    for j in jobs:
+        cost_lines.extend(j.cost_lines)
+    total_quoted   = sum(l.total_quoted   or 0 for l in cost_lines)
+    total_accrued  = sum(l.total_accrued  or 0 for l in cost_lines)
+    total_expected = sum(l.total_expected or 0 for l in cost_lines)
+    budget_quoted  = sum(j.budget_quoted  or 0 for j in jobs)
+
+    # Spese
+    total_expenses = db.query(_func.sum(Expense.amount)).filter(
+        Expense.job_id.in_(job_ids)
+    ).scalar() or 0
+
+    # Fatturato (Invoice sent/paid) + incassato (Invoice paid)
+    invoiced = db.query(_func.sum(Invoice.total)).filter(
+        Invoice.job_id.in_(job_ids),
+        Invoice.status.in_([InvoiceStatus.sent, InvoiceStatus.paid]),
+    ).scalar() or 0
+    paid = db.query(_func.sum(Invoice.total)).filter(
+        Invoice.job_id.in_(job_ids),
+        Invoice.status == InvoiceStatus.paid,
+    ).scalar() or 0
+
+    # Billing status breakdown su JCL
+    bs = {"not_billed": 0.0, "in_batch": 0.0, "billed": 0.0, "paid": 0.0, "lost": 0.0}
+    for l in cost_lines:
+        st = l.billing_status.value if l.billing_status else "not_billed"
+        amt = (l.billed_amount if st in ("billed", "paid") and l.billed_amount is not None
+               else l.total_accrued)
+        if st in bs:
+            bs[st] += amt or 0
+
+    margin = total_quoted - (total_expected + (total_expenses or 0))
+
+    # Top 5 job per scostamento (over-under = quoted − expected)
+    job_variances = []
+    for j in jobs:
+        jq = sum(l.total_quoted   or 0 for l in j.cost_lines)
+        je = sum(l.total_expected or 0 for l in j.cost_lines)
+        job_variances.append({
+            "job_id": j.id, "code": j.code, "title": j.title,
+            "status": j.status.value if hasattr(j.status, "value") else str(j.status),
+            "quoted": round(jq, 2), "expected": round(je, 2),
+            "variance": round(jq - je, 2),
+        })
+    job_variances.sort(key=lambda x: x["variance"])  # più rosso prima
+
+    return {
+        "project_id": pid,
+        "project_code": proj.code,
+        "project_title": proj.title,
+        "jobs_count": len(jobs),
+        "summary": {
+            "budget_quoted":  round(budget_quoted, 2),
+            "total_quoted":   round(total_quoted, 2),
+            "total_accrued":  round(total_accrued, 2),
+            "total_expected": round(total_expected, 2),
+            "total_expenses": round(total_expenses, 2),
+            "margin":         round(margin, 2),
+            "over_under":     round(total_quoted - total_expected, 2),
+        },
+        "billing_status_breakdown": {k: round(v, 2) for k, v in bs.items()},
+        "invoices": {
+            "invoiced": round(invoiced, 2),
+            "paid":     round(paid, 2),
+            "to_collect": round((invoiced or 0) - (paid or 0), 2),
+        },
+        "top_jobs_by_variance": job_variances[:5],
+    }
+
+
+def _h_propose_transmit_to_billing(db: Session, data: dict) -> dict:
+    """MUTATION. Trasmetti il maturato di un progetto come BillingBatch
+    in stato draft. Equivalente al bottone "Trasmetti" dal Cost Report
+    ma invocato dall'AI.
+
+    Payload: {"project_id": int, "include_extras"?: bool, "notes"?: str}
+    """
+    from app.routers.billing import _transmit_core, CURRENT_TENANT as CT
+    return _transmit_core(
+        db,
+        project_id=int(data["project_id"]),
+        include_extras=bool(data.get("include_extras", True)),
+        notes=(data.get("notes") or None),
+    )
+
+
 _ACTION_HANDLERS = {
     "propose_client":            _h_propose_client,
     "propose_project":           _h_propose_project,
@@ -1760,6 +2220,13 @@ _ACTION_HANDLERS = {
     "propose_move_booking":      _h_propose_move_booking,
     "propose_resize_booking":    _h_propose_resize_booking,
     "propose_delete_booking":    _h_propose_delete_booking,
+    # v3.5.0-alpha.54 — Planning avanzato + Billing
+    "analyze_conflicts":             _h_analyze_conflicts,
+    "find_free_slots":               _h_find_free_slots,
+    "propose_recurring_bookings":    _h_propose_recurring_bookings,
+    "propose_bulk_move":             _h_propose_bulk_move,
+    "propose_transmit_to_billing":   _h_propose_transmit_to_billing,
+    "query_project_finance":         _h_query_project_finance,
     "web_search":                _h_web_search,
     # v3.5.0-alpha.19 — Settings registry tools
     "list_settings_schemas":     _h_list_settings_schemas,

@@ -8,6 +8,60 @@
 
 ## Versione corrente
 
+**v3.5.0-alpha.54** — 8 maggio 2026 — Capability copilot avanzate + Financial Copilot
+
+Step 4 chiuso. Sei nuove capability per il copilot: 4 sulla pianificazione
+(analisi conflitti, ricerca slot liberi, ricorrenti, bulk move) + 2 sul
+finance (stato finanziario progetto readonly, trasmissione a fatturazione).
+L'AI ora può rispondere a "qual è il margine del progetto X?" e operare
+in batch su booking/billing.
+
+**Chiuso α.54:**
+- ✅ `analyze_conflicts` (readonly) — overlap nei booking + suggerimenti
+- ✅ `find_free_slots` (readonly) — slot liberi per risorsa o reparto
+- ✅ `propose_recurring_bookings` (mutation) — serie ricorrenti DAILY/
+  WEEKDAYS/WEEKENDS/CSV con conflict-skip non bloccante
+- ✅ `propose_bulk_move` (mutation) — shift atomico N booking, JCL-locked
+  rispettato, recompute cost per ognuno
+- ✅ `query_project_finance` (readonly) — quotato/maturato/atteso/spese/
+  margine/billing breakdown/invoices/top job per scostamento
+- ✅ `propose_transmit_to_billing` (mutation) — trasmette maturato come
+  BillingBatch draft, periodo auto-derivato. Refactor `_transmit_core`
+  estratto da endpoint HTTP per riuso AI
+- ✅ System prompt: 2 nuove sezioni (Pianificazione avanzata + Fatturazione)
+  + regola JCL-locked
+- ✅ `copilot.js`: 6 label + 6 case + 6 summary renderer
+- ✅ Cache-buster `copilot.js?v=3.5.0-alpha.54`
+- ✅ Smoke test boot: 262 routes, 23 tools / 23 handlers
+
+**Verifica live richiesta a Matteo:**
+1. Pull → app parte (262 route, version 3.5.0-alpha.54).
+2. Apri copilot drawer → "Mostrami i conflitti della prossima settimana"
+   → AI usa `analyze_conflicts`.
+3. "Quando il colorist senior ha 4h libere questa settimana?" →
+   `find_free_slots`.
+4. "Prenota Luca lun-ven 9-13 dall'11 al 22 maggio sul job #5" →
+   `propose_recurring_bookings` → Apply → 10 booking creati.
+5. "Sposta i booking #100, #101, #102 di +2 ore" → `propose_bulk_move`
+   → atomic.
+6. "Qual è il margine del progetto Ligas?" → `query_project_finance`
+   → AI sintetizza dal payload.
+7. "Trasmetti a fatturazione il progetto Ligas" →
+   `propose_transmit_to_billing` → batch draft visibile in /finance.
+
+**Limitazioni note α.54:**
+- `find_free_slots` non considera ResourceUnavailability (ferie/festività),
+  solo booking esistenti. Da raffinare se richiesto.
+- `propose_recurring_bookings` non supporta overnight.
+- `query_project_finance` non filtra Invoice per tenant_id (Invoice non
+  ha tenant_id; scoped indirettamente via job_id IN job_ids del progetto).
+
+**Prossimi step:**
+- Step 5: Cost Report flow finale (notifica fine mese auto, "Chiudi
+  progetto", report annuale)
+- Riempire ResourceUnavailability check in `find_free_slots` se Matteo
+  lo chiede dopo il test live
+
 **v3.5.0-alpha.53** — 8 maggio 2026 — Vision integration immagini copilot
 
 Step 3 chiuso. Le immagini caricate nel copilot ora sono "viste"

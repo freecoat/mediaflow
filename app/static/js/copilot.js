@@ -288,6 +288,13 @@
       "propose_move_booking": "📅 Sposta booking",
       "propose_resize_booking": "📅 Ridimensiona booking",
       "propose_delete_booking": "📅 Cancella booking",
+      // v3.5.0-alpha.54 — Planning avanzato + Financial Copilot
+      "analyze_conflicts": "⚠ Analisi conflitti",
+      "find_free_slots": "🔍 Slot liberi",
+      "propose_recurring_bookings": "🔁 Booking ricorrenti",
+      "propose_bulk_move": "📦 Spostamento bulk",
+      "propose_transmit_to_billing": "💸 Trasmetti a fatturazione",
+      "query_project_finance": "📊 Stato finanziario progetto",
       "web_search": "Ricerca web",
       // v3.5.0-alpha.19 — Settings
       "list_settings_schemas": "⚙ Discovery aree configurabili",
@@ -362,6 +369,13 @@
       case "propose_move_booking": return summaryMoveBooking(d);
       case "propose_resize_booking": return summaryResizeBooking(d);
       case "propose_delete_booking": return summaryDeleteBooking(d);
+      // v3.5.0-alpha.54 — Planning avanzato + Financial
+      case "analyze_conflicts": return summaryAnalyzeConflicts(d);
+      case "find_free_slots": return summaryFindFreeSlots(d);
+      case "propose_recurring_bookings": return summaryRecurringBookings(d);
+      case "propose_bulk_move": return summaryBulkMove(d);
+      case "propose_transmit_to_billing": return summaryTransmitToBilling(d);
+      case "query_project_finance": return summaryQueryProjectFinance(d);
       case "web_search": return `<div>Cerca: <b>${escapeHtml(d.query || "—")}</b></div>`;
       case "update_setting": return summaryUpdateSetting(d);
       default: return `<span class="cp-muted">Nessun renderer per questo tipo. Apri "dati grezzi".</span>`;
@@ -541,6 +555,67 @@
     if (d.reason) lines.push(`<span class="cp-muted">Motivo: ${escapeHtml(d.reason)}</span>`);
     lines.push(`<span class="cp-muted" style="font-size:11px;">Soft-delete: recuperabile dal Cestino.</span>`);
     return lines.join("<br>");
+  }
+
+  // ── v3.5.0-alpha.54: renderer planning avanzato + financial ──
+  function summaryAnalyzeConflicts(d) {
+    const lines = [];
+    const days = d.days || 14;
+    lines.push(`Finestra: <b>prossimi ${days} giorni</b>`);
+    if (d.project_id) lines.push(`Progetto: <b>#${d.project_id}</b>`);
+    if (d.department_id) lines.push(`Reparto: <b>#${d.department_id}</b>`);
+    lines.push(`<span class="cp-muted" style="font-size:11px;">Readonly: nessuna modifica al DB. Restituisce coppie in overlap con suggerimento.</span>`);
+    return lines.join("<br>");
+  }
+  function summaryFindFreeSlots(d) {
+    const lines = [];
+    const m = parseInt(d.duration_minutes || 0);
+    const dur = m >= 60 ? `${(m/60).toFixed(1)}h` : `${m}min`;
+    lines.push(`Durata richiesta: <b>${dur}</b>`);
+    if (d.resource_id) lines.push(`Risorsa: <b>#${d.resource_id}</b>`);
+    if (d.department_id) lines.push(`Reparto: <b>#${d.department_id}</b>`);
+    if (d.from_date) lines.push(`Da: <b>${escapeHtml(d.from_date)}</b>`);
+    if (d.days) lines.push(`Giorni scan: <b>${d.days}</b>`);
+    if (d.work_hours_start || d.work_hours_end) {
+      lines.push(`Orario: <b>${escapeHtml(d.work_hours_start || "09:00")}–${escapeHtml(d.work_hours_end || "18:00")}</b>`);
+    }
+    return lines.join("<br>");
+  }
+  function summaryRecurringBookings(d) {
+    const lines = [];
+    if (d.title) lines.push(`<b>${escapeHtml(d.title)}</b>`);
+    lines.push(`Job: <b>#${d.job_id || "?"}</b> · Risorsa: <b>#${d.resource_id || "?"}</b>`);
+    lines.push(`Regola: <b>${escapeHtml(d.rule || "WEEKDAYS")}</b>`);
+    lines.push(`Periodo: <b>${escapeHtml(d.start_date || "?")}</b> → <b>${escapeHtml(d.until_date || "?")}</b>`);
+    lines.push(`Orario giornata: <b>${escapeHtml(d.start_time || "?")}–${escapeHtml(d.end_time || "?")}</b>`);
+    lines.push(`<span class="cp-muted" style="font-size:11px;">Le occorrenze in conflitto vengono saltate (non bloccanti).</span>`);
+    return lines.join("<br>");
+  }
+  function summaryBulkMove(d) {
+    const ids = Array.isArray(d.booking_ids) ? d.booking_ids : [];
+    const m = parseInt(d.shift_minutes || 0);
+    const sign = m > 0 ? "+" : "";
+    const dir = m >= 0 ? "avanti" : "indietro";
+    const abs = Math.abs(m);
+    const hr = abs >= 60 ? `${(abs/60).toFixed(1)}h` : `${abs}min`;
+    const lines = [`Sposta <b>${ids.length}</b> booking ${dir} di <b>${sign}${hr}</b>`];
+    if (ids.length) {
+      const preview = ids.slice(0, 8).map(i => `#${i}`).join(", ");
+      lines.push(`<span class="cp-muted" style="font-size:12px;">${preview}${ids.length > 8 ? ` (+${ids.length-8})` : ""}</span>`);
+    }
+    lines.push(`<span class="cp-muted" style="font-size:11px;">Atomic: se uno fallisce, nessuno viene spostato.</span>`);
+    return lines.join("<br>");
+  }
+  function summaryTransmitToBilling(d) {
+    const lines = [`Progetto: <b>#${d.project_id || "?"}</b>`];
+    const xtras = (d.include_extras !== false);
+    lines.push(`Includi extra: <b>${xtras ? "sì" : "no"}</b>`);
+    if (d.notes) lines.push(`Note: ${escapeHtml(d.notes)}`);
+    lines.push(`<span class="cp-muted" style="font-size:11px;">Crea un BillingBatch in stato draft. Periodo derivato auto dai booking done.</span>`);
+    return lines.join("<br>");
+  }
+  function summaryQueryProjectFinance(d) {
+    return `Progetto: <b>#${d.project_id || "?"}</b><br><span class="cp-muted" style="font-size:11px;">Readonly: aggrega quotato, maturato, atteso, spese, margine, billing breakdown e fatture.</span>`;
   }
 
   function summaryQuote(d) {

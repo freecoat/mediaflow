@@ -216,38 +216,30 @@ async def preview_transmission(
     }
 
 
-@router.post("")
-async def transmit_to_billing(
-    request: Request,
-    project_id: int = Form(...),
-    period_start: date = Form(...),
-    period_end: date = Form(...),
-    notes: Optional[str] = Form(None),
-    include_extras: bool = Form(True),
-    db: Session = Depends(get_db),
-):
-    """Crea un BillingBatch (status draft) con snapshot delle JobCostLine
-    maturate del progetto nel periodo richiesto.
+def _transmit_core(
+    db: Session,
+    *,
+    project_id: int,
+    period_start: Optional[date] = None,
+    period_end: Optional[date] = None,
+    notes: Optional[str] = None,
+    include_extras: bool = True,
+    user_id: Optional[int] = None,
+) -> dict:
+    """Logica core trasmissione → BillingBatch (estratta da endpoint per
+    riuso da AI handler propose_transmit_to_billing).
 
-    Una JCL è candidata se:
-      - appartiene a un Job del progetto
-      - billing_status == not_billed (non già in batch / fatturata)
-      - total_accrued > 0 (c'è qualcosa di maturato)
-      - work_date in [period_start, period_end] OPPURE work_date NULL
-        (default → considerata sempre, l'utente decide caso per caso)
-      - is_extra in {True, False}: se include_extras=False, esclude is_extra=True
+    Se period_start/end omessi, derivati automaticamente da min/max work_date
+    delle JCL candidate (stessa logica di preview_transmission).
 
-    Crea N BillingBatchLine snapshot + marca le JCL → in_batch + collega
-    JCL.billing_batch_id al nuovo batch. total_approved iniziale = total_proposed
-    (manager può ridurre dopo)."""
-    user = _require_finance(request)
+    Solleva ValueError per errori di validazione (l'endpoint HTTP li riconverte
+    in HTTPException).
+    """
     proj = db.query(Project).filter(
         Project.id == project_id, Project.tenant_id == CURRENT_TENANT,
     ).first()
     if not proj:
-        raise HTTPException(404, f"Progetto #{project_id} non trovato")
-    if period_end < period_start:
-        raise HTTPException(400, "period_end precedente a period_start")
+        raise ValueError(f"Progetto #{project_id} non trovato")
 
     # Trova JCL candidate
     q = db.query(JobCostLine).join(Job).filter(
@@ -260,19 +252,36 @@ async def transmit_to_billing(
     if not include_extras:
         q = q.filter(JobCostLine.is_extra == False)
     candidates = q.all()
+
+    # Auto-derive period se non specificato
+    if period_start is None or period_end is None:
+        work_dates = [c.work_date for c in candidates if c.work_date is not None]
+        if work_dates:
+            period_start = period_start or min(work_dates)
+            period_end = period_end or max(work_dates)
+        else:
+            today = date.today()
+            period_start = period_start or today.replace(day=1)
+            if today.month == 12:
+                next_month = date(today.year + 1, 1, 1)
+            else:
+                next_month = date(today.year, today.month + 1, 1)
+            period_end = period_end or date.fromordinal(next_month.toordinal() - 1)
+
+    if period_end < period_start:
+        raise ValueError("period_end precedente a period_start")
+
     # Filtro work_date: ammessi NULL (sempre) o in range
     candidates = [
         c for c in candidates
         if c.work_date is None or (period_start <= c.work_date <= period_end)
     ]
     if not candidates:
-        raise HTTPException(
-            400,
+        raise ValueError(
             f"Nessuna riga maturata da fatturare per progetto #{project_id} nel periodo "
             f"{period_start.isoformat()} → {period_end.isoformat()}"
         )
 
-    # Crea batch
     batch = BillingBatch(
         tenant_id=CURRENT_TENANT,
         code=_next_batch_code(db),
@@ -281,13 +290,12 @@ async def transmit_to_billing(
         period_start=period_start,
         period_end=period_end,
         notes=notes,
-        transmitted_by_user_id=user.id if user else None,
+        transmitted_by_user_id=user_id,
         transmitted_at=datetime.utcnow(),
     )
     db.add(batch)
-    db.flush()  # id disponibile per le lines
+    db.flush()
 
-    # Snapshot lines + marca JCL
     for jcl in candidates:
         line = BillingBatchLine(
             batch_id=batch.id,
@@ -297,7 +305,7 @@ async def transmit_to_billing(
             unit=jcl.unit,
             unit_price=jcl.unit_price,
             total_proposed=jcl.total_accrued,
-            total_approved=jcl.total_accrued,  # default = proposed
+            total_approved=jcl.total_accrued,
             is_extra=jcl.is_extra,
         )
         db.add(line)
@@ -308,6 +316,33 @@ async def transmit_to_billing(
     db.commit()
     db.refresh(batch)
     return _batch_to_dict(batch, with_lines=True)
+
+
+@router.post("")
+async def transmit_to_billing(
+    request: Request,
+    project_id: int = Form(...),
+    period_start: date = Form(...),
+    period_end: date = Form(...),
+    notes: Optional[str] = Form(None),
+    include_extras: bool = Form(True),
+    db: Session = Depends(get_db),
+):
+    """Crea un BillingBatch (status draft) con snapshot delle JobCostLine
+    maturate del progetto nel periodo richiesto."""
+    user = _require_finance(request)
+    try:
+        return _transmit_core(
+            db,
+            project_id=project_id,
+            period_start=period_start,
+            period_end=period_end,
+            notes=notes,
+            include_extras=include_extras,
+            user_id=user.id if user else None,
+        )
+    except ValueError as e:
+        raise HTTPException(400, str(e))
 
 
 @router.get("")

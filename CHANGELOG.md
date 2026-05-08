@@ -1,5 +1,102 @@
 # MediaFlow — Changelog
 
+## v3.5.0-alpha.54 — Capability copilot avanzate + Financial Copilot (8 maggio 2026)
+
+Step 4 chiuso. Sei nuove capability per il copilot: 4 sulla pianificazione
+(analisi conflitti, ricerca slot liberi, ricorrenti, bulk move) + 2 sul
+finance (stato finanziario progetto readonly, trasmissione a fatturazione).
+
+**Backend — Planning avanzato (4 capability):**
+- `analyze_conflicts(days?, project_id?, department_id?)` — READONLY.
+  Trova overlap nei booking di un periodo (default 14gg), restituisce
+  coppie con `overlap_minutes` + suggerimento di risoluzione (sposta,
+  cambia risorsa, split). Cap 50 risultati. USA per "trova i conflitti
+  della prossima settimana", "ci sono sovrapposizioni su Luca?".
+- `find_free_slots(duration_minutes, resource_id|department_id, from_date?,
+  days?, work_hours_start?, work_hours_end?)` — READONLY. Cerca slot liberi
+  per una risorsa o tutto un reparto, salta sab/dom, rispetta orario
+  lavorativo (default 09:00–18:00). Cap 30 slot. USA per "quando ho 4h
+  libere su Marco?", "che slot ha il colorist senior questa settimana?".
+- `propose_recurring_bookings(job_id, resource_id, rule, start_date,
+  until_date, start_time, end_time, job_cost_line_id?, title?)` — MUTATION.
+  Crea N booking ricorrenti (rule: DAILY | WEEKDAYS | WEEKENDS | CSV
+  "MON,WED,FRI"). Conflict check per occorrenza, le date in conflitto
+  vengono saltate (non bloccanti). Audit `booking_changes` kind
+  `ai_create_recurring`. USA per "prenota Luca lun-ven 9-13 da domani al
+  30 maggio".
+- `propose_bulk_move(booking_ids[], shift_minutes)` — MUTATION. Sposta N
+  booking di un delta uniforme. Conflict check cross-batch (escludendo gli
+  stessi booking della transazione). Atomic: se uno fallisce, nessuno
+  viene spostato. JCL fatturate (in_batch/billed/paid) bloccate via
+  `_assert_jcl_not_locked`. Audit kind `ai_bulk_move`. Recompute
+  `recompute_for_booking` per ognuno. USA per "sposta tutti i booking
+  della prossima settimana di +1 giorno".
+
+**Backend — Financial Copilot (2 capability):**
+- `query_project_finance(project_id)` — READONLY. Aggrega per progetto:
+  budget_quoted, total_quoted, total_accrued, total_expected, expenses,
+  margin, over_under, billing_status_breakdown (not_billed/in_batch/billed/
+  paid/lost), invoices (invoiced/paid/to_collect), top 5 job per
+  scostamento. USA per "qual è il margine del progetto X?", "quanto è
+  fatturato sul progetto Y?", "quanto resta da incassare?".
+- `propose_transmit_to_billing(project_id, include_extras?, notes?)` —
+  MUTATION. Trasmette il maturato del progetto come BillingBatch in stato
+  draft. Periodo derivato auto da min/max work_date dei booking done
+  (fallback al mese corrente). Estrae logica core da
+  `billing.transmit_to_billing` in `_transmit_core` riusabile (endpoint
+  HTTP riconverte ValueError in HTTPException). USA per "genera la
+  fattura mensile del progetto Ligas", "trasmetti a fatturazione".
+
+**Refactor:**
+- `app/routers/billing.py`: `_transmit_core(db, *, project_id, period_start?,
+  period_end?, notes?, include_extras=True, user_id?)` — funzione pura
+  riusabile. Periodo auto-derivato se omesso. Solleva `ValueError` (l'API
+  HTTP wrappa in HTTPException 400/404).
+
+**System prompt copilot:**
+- Sezione "PIANIFICAZIONE AVANZATA" con le 4 capability nuove + esempi
+  d'uso.
+- Sezione "FATTURAZIONE" con `query_project_finance` + `propose_transmit_to_billing`.
+- Regola `ricorrenti`: ora "USA `propose_recurring_bookings` invece di
+  20 booking singoli".
+- Regola `JCL fatturate sono LOCKED`: avvisa l'AI che move/resize/delete/
+  bulk_move falliranno se JCL `in_batch`/`billed`/`paid`.
+
+**Frontend:**
+- `static/js/copilot.js`: 6 nuovi label + 6 nuovi case nello switch +
+  6 nuovi summary renderer (`summaryAnalyzeConflicts`, `summaryFindFreeSlots`,
+  `summaryRecurringBookings`, `summaryBulkMove`, `summaryTransmitToBilling`,
+  `summaryQueryProjectFinance`).
+- Cache-buster `copilot.js?v=3.5.0-alpha.54`.
+
+**Smoke test:**
+- App boot OK, 262 routes, 23 tools / 23 handlers.
+- Routing dispatcher `_ACTION_HANDLERS` allineato con TOOLS spec.
+
+**Verifica live richiesta a Matteo:**
+1. Pull → app parte (262 route, version 3.5.0-alpha.54).
+2. Apri copilot drawer → prova "Mostrami i conflitti della prossima
+   settimana sul progetto X" → AI risponde con `analyze_conflicts`.
+3. "Quando il colorist senior ha 4h libere questa settimana?" →
+   `find_free_slots`.
+4. "Prenota Luca lun-ven 9-13 dal 11 maggio al 22 maggio sul job #5" →
+   `propose_recurring_bookings` → conferma → 10 booking creati (eventuali
+   conflitti riportati come skipped).
+5. "Sposta i booking #100, #101, #102 di +2 ore" → `propose_bulk_move` →
+   conferma → 3 booking spostati atomicamente.
+6. "Qual è il margine del progetto Ligas?" → `query_project_finance` →
+   AI sintetizza la risposta umana sopra il payload.
+7. "Trasmetti a fatturazione il progetto Ligas" → `propose_transmit_to_billing`
+   → conferma → batch draft creato (visibile in /finance).
+
+**Limitazioni note:**
+- `find_free_slots` non considera ResourceUnavailability (ferie/festività)
+  in v3.5.0-alpha.54, solo booking esistenti. Da raffinare se richiesto.
+- `propose_recurring_bookings` non supporta overnight (start_time <
+  end_time obbligatorio).
+- `query_project_finance` somma le Invoice senza filtro tenant esplicito
+  (Invoice non ha tenant_id, ma è già scoped via job_id IN job_ids).
+
 ## v3.5.0-alpha.53 — Vision integration immagini copilot (8 maggio 2026)
 
 Step 3 chiuso. Le immagini caricate nel drawer copilot ora sono "viste"

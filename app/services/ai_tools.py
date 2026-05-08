@@ -483,6 +483,137 @@ TOOLS: list[dict] = [
         },
         "handler": "propose_delete_booking",
     },
+    # ── v3.5.0-alpha.54: Capability avanzate ───────────────────
+    {
+        "name": "analyze_conflicts",
+        "category": "readonly",
+        "description": (
+            "Analizza conflitti orari nei booking di un periodo (default 14 giorni). "
+            "Restituisce coppie di assignment in overlap sulla stessa risorsa, con "
+            "minuti di overlap e suggerimento di risoluzione (sposta, cambia risorsa, "
+            "split). Filtri opzionali: project_id, department_id. Massimo 50 risultati."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "days":          {"type": "integer", "description": "Finestra in giorni dalla data corrente. Default 14."},
+                "project_id":    {"type": "integer", "description": "Restringi a un progetto."},
+                "department_id": {"type": "integer", "description": "Restringi a un reparto."},
+            },
+        },
+        "handler": "analyze_conflicts",
+    },
+    {
+        "name": "find_free_slots",
+        "category": "readonly",
+        "description": (
+            "Cerca slot liberi per una risorsa (o tutte le risorse di un reparto) "
+            "in un periodo, di durata richiesta. Salta sab/dom, rispetta orario "
+            "lavorativo (default 09:00–18:00). Usa per 'quando posso prenotare X ore "
+            "su risorsa Y?', 'che slot ha il colorist senior questa settimana?'."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "duration_minutes":  {"type": "integer", "description": "Durata richiesta in minuti."},
+                "resource_id":       {"type": "integer", "description": "Risorsa specifica."},
+                "department_id":     {"type": "integer", "description": "Tutte le risorse del reparto (alternativa a resource_id)."},
+                "from_date":         {"type": "string", "description": "Data inizio YYYY-MM-DD. Default oggi."},
+                "days":              {"type": "integer", "description": "Numero giorni da scansionare. Default 7."},
+                "work_hours_start":  {"type": "string", "description": "Inizio orario lavorativo HH:MM. Default 09:00."},
+                "work_hours_end":    {"type": "string", "description": "Fine orario lavorativo HH:MM. Default 18:00."},
+            },
+            "required": ["duration_minutes"],
+        },
+        "handler": "find_free_slots",
+    },
+    {
+        "name": "propose_recurring_bookings",
+        "category": "mutation",
+        "description": (
+            "Crea una serie ricorrente di booking (es. lun-ven X→Y per 4 settimane). "
+            "Conflict check per ogni occorrenza, le date in conflitto vengono saltate "
+            "(non bloccanti). USA per 'prenota Luca lun-ven 9-13 da domani al 30 maggio', "
+            "'serie tutti i mercoledì'. Le occorrenze in conflitto restano da "
+            "pianificare manualmente."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "job_id":           {"type": "integer", "description": "Job di destinazione."},
+                "job_cost_line_id": {"type": "integer", "description": "Riga di costo opzionale (cost report sync)."},
+                "resource_id":      {"type": "integer", "description": "Risorsa unica per tutte le occorrenze."},
+                "rule":             {"type": "string", "description": "DAILY | WEEKDAYS (default) | WEEKENDS | CSV es. 'MON,WED,FRI'"},
+                "start_date":       {"type": "string", "description": "Prima data YYYY-MM-DD."},
+                "until_date":       {"type": "string", "description": "Ultima data YYYY-MM-DD (inclusa)."},
+                "start_time":       {"type": "string", "description": "Orario start HH:MM."},
+                "end_time":         {"type": "string", "description": "Orario end HH:MM (no overnight)."},
+                "title":            {"type": "string", "description": "Titolo opzionale, default 'Ricorrente {rule}'."},
+            },
+            "required": ["job_id", "resource_id", "start_date", "until_date", "start_time", "end_time"],
+        },
+        "handler": "propose_recurring_bookings",
+    },
+    {
+        "name": "propose_bulk_move",
+        "category": "mutation",
+        "description": (
+            "Sposta N booking di un delta uniforme (positivo=avanti, negativo=indietro). "
+            "Conflict check escludendo gli stessi booking della transazione. Atomic: "
+            "se uno fallisce, nessuno viene spostato. JCL fatturate (in_batch/billed/paid) "
+            "bloccate. USA per 'sposta tutti i booking di Marco di +3 ore', 'shift +1 "
+            "settimana per i 5 booking della prossima settimana'."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "booking_ids":   {"type": "array", "items": {"type": "integer"}, "description": "Lista ID booking."},
+                "shift_minutes": {"type": "integer", "description": "Delta uniforme in minuti."},
+            },
+            "required": ["booking_ids", "shift_minutes"],
+        },
+        "handler": "propose_bulk_move",
+    },
+    {
+        "name": "propose_transmit_to_billing",
+        "category": "mutation",
+        "description": (
+            "Trasmetti il maturato di un progetto come BillingBatch in stato draft. "
+            "Equivalente al bottone 'Trasmetti' dal Cost Report. Periodo derivato "
+            "automaticamente dai booking done (work_date) se non specificato. USA per "
+            "'genera la fattura mensile del progetto X', 'trasmetti a fatturazione'. "
+            "Il batch creato passa poi al manager per approvazione + emissione fattura."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "project_id":     {"type": "integer", "description": "ID progetto."},
+                "include_extras": {"type": "boolean", "description": "Includi righe extra (lavorazioni oltre quote). Default true."},
+                "notes":          {"type": "string", "description": "Note opzionali per il batch."},
+            },
+            "required": ["project_id"],
+        },
+        "handler": "propose_transmit_to_billing",
+    },
+    {
+        "name": "query_project_finance",
+        "category": "readonly",
+        "description": (
+            "Aggrega lo stato finanziario di un progetto: quotato, maturato, atteso, "
+            "spese, margine, ripartizione fatturazione (not_billed / in_batch / billed / "
+            "paid / lost), fatture emesse e incassate. Include top job per scostamento. "
+            "USA per 'qual è il margine del progetto X?', 'quanto è già fatturato sul "
+            "progetto Y?', 'quanto resta da fatturare?', 'come stiamo a maturato?'."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "project_id": {"type": "integer", "description": "ID del progetto."},
+            },
+            "required": ["project_id"],
+        },
+        "handler": "query_project_finance",
+    },
 ]
 
 
@@ -618,14 +749,25 @@ Quando l'utente chiede di operare su booking esistenti (spostare, allungare, eli
 - `propose_resize_booking(booking_id, delta_minutes)` → "allunga di 2 ore", "accorcia di mezz'ora"
 - `propose_delete_booking(booking_id, reason?)` → "cancella questo booking" (soft-delete, recuperabile dal Cestino)
 
-Per **CREARE** nuovi booking usa `propose_booking` (esistente).
+**PIANIFICAZIONE AVANZATA** (v3.5.0-alpha.54):
+- `analyze_conflicts(days?, project_id?, department_id?)` → READONLY: trova overlap orari nei booking di un periodo. Restituisce coppie con suggerimento di risoluzione. USA per "trova i conflitti della prossima settimana", "ci sono sovrapposizioni su Luca?".
+- `find_free_slots(duration_minutes, resource_id | department_id, from_date?, days?, work_hours_*)` → READONLY: cerca slot liberi. USA per "quando ho 4h libere su Marco?", "che slot ha il colorist senior questa settimana?".
+- `propose_recurring_bookings(job_id, resource_id, rule, start_date, until_date, start_time, end_time)` → MUTATION: crea N booking ricorrenti (lun-ven o regola custom). Le occorrenze in conflitto vengono saltate (non bloccanti). USA per "prenota Luca lun-ven 9-13 da domani al 30 maggio".
+- `propose_bulk_move(booking_ids[], shift_minutes)` → MUTATION: sposta N booking di delta uniforme. Atomic. USA per "sposta tutti i booking di questa settimana di +1 ora".
+
+**FATTURAZIONE** (v3.5.0-alpha.54):
+- `query_project_finance(project_id)` → READONLY: stato finanziario completo del progetto (quotato, maturato, atteso, spese, margine, fatturato, incassato, ripartizione billing_status). USA per "qual è il margine del progetto X?", "quanto resta da fatturare?", "come stiamo a maturato?".
+- `propose_transmit_to_billing(project_id, include_extras?, notes?)` → MUTATION: trasmette il maturato del progetto come BillingBatch in stato draft. Il periodo è derivato auto dai booking done. Equivalente al bottone Trasmetti dal cost report. USA per "genera la fattura mensile del progetto Ligas", "trasmetti a fatturazione il progetto X".
+
+Per **CREARE** nuovi booking singoli usa `propose_booking` (esistente).
 
 **Regole pianificazione:**
 1. **Consulta sempre la sezione "PIANIFICAZIONE VIVA" del contesto** (se presente) PRIMA di proporre azioni: vedi booking esistenti, conflitti attuali, carico per risorsa, ferie/festività, job critici. Riferisci sempre booking per `id` (es. "booking #42") quando puoi.
 2. **Rispetta indisponibilità**: se la sezione INDISPONIBILITÀ mostra ferie/malattia di una risorsa nel periodo richiesto, NON proporre booking lì. Spiega all'utente e suggerisci alternative.
 3. **Carico bilanciato**: se la sezione CARICO mostra una risorsa al 🔴 (>105% capacità), evita di aggiungere altri booking su quella. Suggerisci una risorsa 🟢 (<80%).
-4. **Conflict awareness**: se la sezione CONFLITTI mostra overlap esistenti, segnalali proattivamente all'utente quando rilevante. Non sovrascrivere conflitti esistenti.
+4. **Conflict awareness**: prima di proporre booking nuovi su una finestra contesa, considera `analyze_conflicts` per dare un quadro chiaro all'utente. Non sovrascrivere conflitti esistenti.
 5. **Spiega il perché**: dopo aver proposto un'azione di pianificazione, aggiungi 1-2 frasi che giustificano la scelta (es. "Ho scelto martedì perché Luca è libero e non ci sono festività nel periodo").
-6. **Booking ricorrenti**: per richieste tipo "online editor lun-ven 9-18 per 4 settimane", proponi i booking UNO PER VOLTA (l'utente conferma a stocco) — NON un solo proposal con 20 booking, sarebbe difficile da revisionare.
+6. **Booking ricorrenti**: per richieste tipo "online editor lun-ven 9-18 per 4 settimane", USA `propose_recurring_bookings` (un singolo Apply) invece di proporre 20 booking singoli.
 7. **Uso del job_cost_line_id**: quando crei booking su un job, prova a collegarlo a una `job_cost_line_id` esistente (visibile nel context del job). Permette al cost report di tracciare le ore correttamente.
+8. **JCL fatturate sono LOCKED**: se un booking ha JCL `in_batch`/`billed`/`paid`, le capability move/resize/delete/bulk_move falliscono con errore esplicativo. NON insistere — chiedi al manager di ritirare il batch prima.
 """
