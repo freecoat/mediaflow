@@ -325,10 +325,36 @@ async def lifespan(app: FastAPI):
                 _db.close()
     except Exception as e:
         print(f"[lifespan] backfill JCL.work_date failed: {e}")
+    # v3.5.0-alpha.55 — Backfill JobCostLine.total_expected dai booking.
+    # Pre-α.55 total_expected era riempito solo da edit manuale, quindi
+    # in molti DB esistenti vale = total_quoted e Over/Under viene 0.
+    # Eseguito una volta sola: marker file uploads/.total_expected_backfilled_v1.
+    try:
+        marker = Path("uploads") / ".total_expected_backfilled_v1"
+        if not marker.exists():
+            from app.database import SessionLocal
+            from app.models import JobCostLine
+            from app.services.cost_line_sync import recompute_cost_line_actual
+            _db = SessionLocal()
+            try:
+                jcls = _db.query(JobCostLine).all()
+                touched = 0
+                for jcl in jcls:
+                    r = recompute_cost_line_actual(_db, jcl)
+                    if r.get("updated"):
+                        touched += 1
+                _db.commit()
+                marker.write_text("ok")
+                if touched:
+                    print(f"[lifespan] backfill JCL.total_expected: {touched}/{len(jcls)} righe ricalcolate")
+            finally:
+                _db.close()
+    except Exception as e:
+        print(f"[lifespan] backfill JCL.total_expected failed: {e}")
     yield
 
 
-app = FastAPI(title="MediaFlow", version="3.5.0-alpha.54", lifespan=lifespan)
+app = FastAPI(title="MediaFlow", version="3.5.0-alpha.55", lifespan=lifespan)
 
 BASE_DIR = Path(__file__).parent
 app.mount("/static", StaticFiles(directory=BASE_DIR / "static"), name="static")

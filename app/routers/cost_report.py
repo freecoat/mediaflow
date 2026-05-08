@@ -61,7 +61,9 @@ async def list_cost_reports(
         total_quoted = sum(l.total_quoted for l in j.cost_lines)
         total_accrued = sum(l.total_accrued for l in j.cost_lines)
         total_expected = sum(l.total_expected for l in j.cost_lines)
-        over_under = round(total_quoted - total_expected, 2)
+        # v3.5.0-alpha.55: convenzione segno positivo = OVER (sforamento).
+        over_under_now = round(total_accrued - total_quoted, 2)
+        over_under_forecast = round(total_expected - total_quoted, 2)
         out.append({
             "id": j.id,
             "code": j.code,
@@ -77,7 +79,10 @@ async def list_cost_reports(
             "total_quoted": round(total_quoted, 2),
             "total_accrued": round(total_accrued, 2),
             "total_expected": round(total_expected, 2),
-            "over_under": over_under,
+            "over_under_now": over_under_now,
+            "over_under_forecast": over_under_forecast,
+            # Alias back-compat (= forecast). Da non usare in nuovi consumer.
+            "over_under": over_under_forecast,
             "lines_count": len(j.cost_lines),
         })
     return out
@@ -291,7 +296,18 @@ async def job_cost_report(job_id: int, db: Session = Depends(get_db)):
             "total_quoted": round(total_quoted, 2),
             "total_accrued": round(total_accrued, 2),
             "total_expected": round(total_expected, 2),
-            "over_under": round(job.budget_quoted - total_expected, 2),
+            # v3.5.0-alpha.55: due viste di Over/Under.
+            # NOW = maturato − quotato (extracosto certo, base fatturazione).
+            # FORECAST = stima − quotato (sforamento previsto su base
+            # pianificato, base report cliente).
+            # Convenzione segno: positivo = OVER (sforamento, problema),
+            # negativo = UNDER (sotto budget, ok).
+            "over_under_now": round(total_accrued - total_quoted, 2),
+            "over_under_forecast": round(total_expected - total_quoted, 2),
+            # Back-compat: vecchio campo `over_under` lasciato come alias di
+            # forecast (con segno invertito ex-API). Da non usare in nuovi
+            # consumer: leggere over_under_now / over_under_forecast.
+            "over_under": round(total_expected - total_quoted, 2),
             "total_expenses": round(total_expenses, 2),
             # Canonico v3.4.33
             "bookings_hours": bk_data["total_hours"],
@@ -309,11 +325,20 @@ async def job_cost_report(job_id: int, db: Session = Depends(get_db)):
                 "id": l.id, "description": l.description, "unit": l.unit,
                 "quantity_quoted": l.quantity_quoted,
                 "quantity_actual": l.quantity_actual,
+                # v3.5.0-alpha.55: quantity_planned derivata (qty_planned =
+                # total_expected / unit_price quando unit_price > 0).
+                "quantity_planned": (round(l.total_expected / l.unit_price, 4)
+                                     if l.unit_price else 0.0),
                 "unit_price": l.unit_price,
                 "total_quoted": l.total_quoted,
                 "total_accrued": l.total_accrued,
                 "total_expected": l.total_expected,
-                "over_under": round(l.total_quoted - l.total_expected, 2),
+                # v3.5.0-alpha.55: Now = maturato−quotato; Forecast = stima−quotato.
+                # Positivo = OVER (sforamento), negativo = UNDER (sotto budget).
+                "over_under_now": round(l.total_accrued - l.total_quoted, 2),
+                "over_under_forecast": round(l.total_expected - l.total_quoted, 2),
+                # Alias back-compat (= forecast). Da non usare in nuovi consumer.
+                "over_under": round(l.total_expected - l.total_quoted, 2),
                 "is_billable": l.is_billable,
                 "is_extra": l.is_extra,
                 "category": l.price_item.category.name if l.price_item and l.price_item.category else None,
@@ -595,6 +620,7 @@ async def discard_not_done_pool_booking(
 async def cost_report_client_pdf(
     job_id: int,
     rendiconto: int = 0,
+    vista: str = "now",
     db: Session = Depends(get_db),
 ):
     """Genera il PDF cliente del cost report. Riusa `job_cost_report` per
@@ -603,11 +629,14 @@ async def cost_report_client_pdf(
     serializzati nel PDF — vedi pdf_export.py).
 
     v3.5.0-alpha.16: parametro `rendiconto` (0/1). Se 1, il PDF mostra
-    Quotato/Maturato/Stimato + Over/Under per riga + totali (utile per
-    fatturazione progressiva). Default 0 = solo quantità (vista cliente).
+    Quotato/Maturato/Stimato + Over/Under per riga + totali.
+    v3.5.0-alpha.55: parametro `vista` (now|forecast). Now = Over/Under
+    su maturato (base fatturazione). Forecast = su stima (base report).
     """
     report = await job_cost_report(job_id, db)
-    pdf_bytes = generate_client_cost_report_pdf(report, rendiconto=bool(rendiconto))
+    pdf_bytes = generate_client_cost_report_pdf(
+        report, rendiconto=bool(rendiconto), vista=vista,
+    )
     job_code = (report.get("job") or {}).get("code") or f"job-{job_id}"
     suffix = "_rendiconto" if rendiconto else ""
     filename = f"rendicontazione_{job_code}{suffix}.pdf"
@@ -618,26 +647,35 @@ async def cost_report_client_pdf(
     )
 
 
-def _client_export_rows(report: dict, rendiconto: bool) -> tuple[list[str], list[list]]:
+def _client_export_rows(report: dict, rendiconto: bool, vista: str = "now") -> tuple[list[str], list[list]]:
     """Costruisce header + rows tabellari per export CSV/XLSX dal report.
 
     Modalità rendiconto include 6 colonne (Quotato/Maturato/Stimato/Over-Under).
     Modalità "stato" include solo quantità + stato lavorazione.
-    Aggiunge sezione "Lavorazioni extra" e blocco riepilogo ore lavorate.
+
+    v3.5.0-alpha.55: parametro `vista` ∈ {"now", "forecast"}.
+    - "now": Over/Under = maturato − quotato (extracosto certo, base fatturazione).
+    - "forecast": Over/Under = stima − quotato (sforamento previsto, base report cliente).
+    Convenzione segno: positivo = OVER (sforamento), negativo = UNDER.
     """
     quoted_lines = [l for l in (report.get("cost_lines") or []) if not l.get("is_extra")]
     extra_lines = [l for l in (report.get("cost_lines") or []) if l.get("is_extra")]
     rows: list[list] = []
+    is_forecast = (vista == "forecast")
+    ov_field = "over_under_forecast" if is_forecast else "over_under_now"
+    ou_label = f"Over/Under ({'Stima' if is_forecast else 'Maturato'} vs Quotato)"
     if rendiconto:
         header = ["Sezione", "Descrizione", "Categoria", "Unità",
                   "Q.tà preventivo", "Q.tà consuntivo",
-                  "Quotato", "Maturato", "Stimato", "Over/Under"]
+                  "Quotato", "Maturato", "Stimato", ou_label]
         tot_q = tot_a = tot_e = 0.0
         for l in quoted_lines:
             tq = l.get("total_quoted") or 0
             ta = l.get("total_accrued") or 0
             te = l.get("total_expected") or 0
-            ou = l.get("over_under") or (tq - te)
+            ou = l.get(ov_field)
+            if ou is None:
+                ou = (te - tq) if is_forecast else (ta - tq)
             tot_q += tq; tot_a += ta; tot_e += te
             rows.append([
                 "Preventivata", l.get("description"), l.get("category") or "",
@@ -645,23 +683,25 @@ def _client_export_rows(report: dict, rendiconto: bool) -> tuple[list[str], list
                 l.get("quantity_quoted") or 0, l.get("quantity_actual") or 0,
                 round(tq, 2), round(ta, 2), round(te, 2), round(ou, 2),
             ])
-        # Totale parziale preventivate
         if quoted_lines:
+            tot_ou = (tot_e - tot_q) if is_forecast else (tot_a - tot_q)
             rows.append([
                 "TOTALE preventivate", "", "", "", "", "",
                 round(tot_q, 2), round(tot_a, 2), round(tot_e, 2),
-                round(tot_q - tot_e, 2),
+                round(tot_ou, 2),
             ])
         for l in extra_lines:
             tq = l.get("total_quoted") or 0
             ta = l.get("total_accrued") or 0
             te = l.get("total_expected") or 0
+            ou = l.get(ov_field)
+            if ou is None:
+                ou = (te - tq) if is_forecast else (ta - tq)
             rows.append([
                 "Extra", l.get("description"), l.get("category") or "",
                 l.get("unit") or "",
                 "", l.get("quantity_actual") or 0,
-                round(tq, 2), round(ta, 2), round(te, 2),
-                round((l.get("over_under") or (tq - te)), 2),
+                round(tq, 2), round(ta, 2), round(te, 2), round(ou, 2),
             ])
     else:
         header = ["Sezione", "Descrizione", "Categoria", "Unità",
@@ -704,13 +744,14 @@ def _client_export_rows(report: dict, rendiconto: bool) -> tuple[list[str], list
 async def cost_report_client_csv(
     job_id: int,
     rendiconto: int = 0,
+    vista: str = "now",
     db: Session = Depends(get_db),
 ):
     """Export CSV (UTF-8 + BOM per Excel) del cost report cliente."""
     import csv
     import io
     report = await job_cost_report(job_id, db)
-    header, rows = _client_export_rows(report, bool(rendiconto))
+    header, rows = _client_export_rows(report, bool(rendiconto), vista=vista)
     buf = io.StringIO()
     buf.write("﻿")  # BOM per Excel
     w = csv.writer(buf, delimiter=";")
@@ -718,7 +759,8 @@ async def cost_report_client_csv(
     w.writerow([f"Cost Report — {job.get('code', '')} · {job.get('title', '')}"])
     w.writerow([f"Cliente: {job.get('client') or '—'}"])
     w.writerow([f"Periodo: {job.get('start_date') or '—'} → {job.get('end_date') or '—'}"])
-    w.writerow([f"Modalità: {'Rendiconto (Quotato/Maturato/Stimato/Over-Under)' if rendiconto else 'Stato lavorazioni'}"])
+    vista_lbl = "Over/Under su Stima vs Quotato (forecast)" if vista == "forecast" else "Over/Under su Maturato vs Quotato"
+    w.writerow([f"Modalità: {('Rendiconto — ' + vista_lbl) if rendiconto else 'Stato lavorazioni'}"])
     w.writerow([])
     w.writerow(header)
     for r in rows:
@@ -736,6 +778,7 @@ async def cost_report_client_csv(
 async def cost_report_client_xlsx(
     job_id: int,
     rendiconto: int = 0,
+    vista: str = "now",
     db: Session = Depends(get_db),
 ):
     """Export XLSX (Excel) del cost report cliente. Usa openpyxl."""
@@ -743,7 +786,7 @@ async def cost_report_client_xlsx(
     from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
     from io import BytesIO
     report = await job_cost_report(job_id, db)
-    header, rows = _client_export_rows(report, bool(rendiconto))
+    header, rows = _client_export_rows(report, bool(rendiconto), vista=vista)
     wb = Workbook()
     ws = wb.active
     ws.title = "Rendicontazione"
@@ -757,7 +800,8 @@ async def cost_report_client_xlsx(
     ws["A1"].font = Font(bold=True, size=14, color="6272F5")
     ws.append([f"Cliente: {job.get('client') or '—'}"])
     ws.append([f"Periodo: {job.get('start_date') or '—'} → {job.get('end_date') or '—'}"])
-    ws.append([f"Modalità: {'Rendiconto (Quotato/Maturato/Stimato/Over-Under)' if rendiconto else 'Stato lavorazioni'}"])
+    vista_lbl = "Over/Under su Stima vs Quotato (forecast)" if vista == "forecast" else "Over/Under su Maturato vs Quotato"
+    ws.append([f"Modalità: {('Rendiconto — ' + vista_lbl) if rendiconto else 'Stato lavorazioni'}"])
     ws.append([])
     ws.append(header)
     header_row_idx = ws.max_row

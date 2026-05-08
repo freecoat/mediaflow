@@ -83,6 +83,18 @@
       <input type="checkbox" id="cr-rendiconto-toggle" onchange="updateExportLinks()" checked>
       Modalità rendiconto
     </label>
+    <!-- v3.5.0-alpha.55: toggle vista Over/Under. Maturato (default) è
+         per la fatturazione: confronta lavoro fatto vs preventivato.
+         Stima è per il report cliente: include lavoro pianificato. -->
+    <span style="margin-left:10px; display:flex; align-items:center; gap:6px;">
+      <span class="text-xs text-muted">Vista:</span>
+      <select id="cr-view-mode" onchange="onViewModeChange()" class="text-xs"
+              style="background:var(--bg2); color:var(--text1); border:1px solid var(--border); border-radius:4px; padding:2px 6px;"
+              title="Maturato = lavoro fatto (booking done) vs quotato — base fatturazione.&#10;Stima = lavoro pianificato (tutti i booking) vs quotato — base report cliente.">
+        <option value="now" selected>Maturato vs Quotato</option>
+        <option value="forecast">Stima vs Quotato</option>
+      </select>
+    </span>
   </div>
 </div>
 
@@ -334,8 +346,13 @@ function renderCrList() {
   let rows = _crAll.slice();
   if (fClient) rows = rows.filter(r => String(r.client_id) === fClient);
   if (fStatus) rows = rows.filter(r => r.status === fStatus);
-  if (fMargin === 'over') rows = rows.filter(r => r.over_under < 0);
-  if (fMargin === 'under') rows = rows.filter(r => r.over_under >= 0);
+  // v3.5.0-alpha.55: convenzione segno aggiornata. Positivo = OVER
+  // (sforamento, problema), negativo o zero = UNDER (in budget).
+  // Il filtro usa la vista corrente (now o forecast).
+  const _viewKey = (document.getElementById('cr-view-mode')?.value || 'now') === 'forecast'
+    ? 'over_under_forecast' : 'over_under_now';
+  if (fMargin === 'over') rows = rows.filter(r => (r[_viewKey] ?? r.over_under) > 0);
+  if (fMargin === 'under') rows = rows.filter(r => (r[_viewKey] ?? r.over_under) <= 0);
   if (q) {
     rows = rows.filter(r =>
       (r.code || '').toLowerCase().includes(q) ||
@@ -351,8 +368,9 @@ function renderCrList() {
   }
   const STATUS_LBL = { open:'Aperto', in_progress:'In corso', completed:'Completato', cancelled:'Annullato' };
   tbody.innerHTML = rows.map(r => {
-    const oVal = r.over_under;
-    const oCls = oVal < 0 ? 'color-rose' : (oVal > 0 ? 'color-success' : 'text-muted');
+    // v3.5.0-alpha.55: segno positivo = OVER (rosso), negativo = UNDER (verde).
+    const oVal = (r[_viewKey] ?? r.over_under) || 0;
+    const oCls = oVal > 0 ? 'color-rose' : (oVal < 0 ? 'color-success' : 'text-muted');
     const oSign = oVal > 0 ? '+' : '';
     return `<tr style="cursor:pointer;" onclick="loadReport(${r.id})">
       <td class="mono" style="font-size:12px;">${escapeHtml(r.code)}</td>
@@ -368,6 +386,20 @@ function renderCrList() {
       <td class="mono text-right ${oCls}">${oSign}${fmtCurrency(oVal)}</td>
     </tr>`;
   }).join('');
+}
+
+// v3.5.0-alpha.55: cambio vista Maturato/Stima → ricomputa lista, KPI, righe
+// se un report è aperto, e aggiorna i link export.
+function onViewModeChange() {
+  if (typeof renderCrList === 'function') renderCrList();
+  if (currentReport) {
+    if (typeof renderKPIs === 'function') renderKPIs();
+    if (typeof renderCostLines === 'function') renderCostLines();
+  }
+  if (typeof updateExportLinks === 'function') updateExportLinks();
+}
+function _crViewMode() {
+  return document.getElementById('cr-view-mode')?.value || 'now';
 }
 
 function resetCrFilters() {
@@ -391,7 +423,11 @@ function closeReport() {
 function updateExportLinks() {
   if (!currentJobId) return;
   const rendiconto = document.getElementById('cr-rendiconto-toggle').checked ? '1' : '0';
-  const qs = `?rendiconto=${rendiconto}`;
+  // v3.5.0-alpha.55: passo anche la vista al backend così l'export
+  // riflette la scelta dell'utente (maturato per fatturazione, stima
+  // per il report cliente).
+  const vista = _crViewMode();
+  const qs = `?rendiconto=${rendiconto}&vista=${vista}`;
   const pdf = document.getElementById('btn-client-pdf');
   const csv = document.getElementById('btn-client-csv');
   const xlsx = document.getElementById('btn-client-xlsx');
@@ -586,19 +622,27 @@ async function poolDiscard(bid) {
 
 function renderKPIs() {
   const s = currentReport.summary;
-  const ov = s.over_under;
+  // v3.5.0-alpha.55: vista selezionabile. Convenzione segno: positivo=OVER
+  // (sforamento, rosso), negativo o zero=UNDER (in budget, verde).
+  const view = _crViewMode();
+  const ov = (view === 'forecast' ? s.over_under_forecast : s.over_under_now)
+             ?? s.over_under ?? 0;
+  const ovLabel = view === 'forecast' ? 'Stima vs Quotato' : 'Maturato vs Quotato';
+  const ovSign = ov > 0 ? '+' : '';
+  const ovHint = ov > 0 ? '⚠ Sforamento' : (ov < 0 ? '✓ Sotto budget' : 'In linea');
   const margin = s.margin || 0;
-  // v3.4.33: 8 KPI inclusi i nuovi "Costo booking" e "Margine stimato"
   document.getElementById('kpi-grid').innerHTML = `
     <div class="stat-card"><div class="stat-label">Budget quotato</div>
       <div class="stat-value color-indigo mono" style="font-size:20px;">${fmtCurrency(s.budget_quoted)}</div></div>
     <div class="stat-card"><div class="stat-label">Stimato a finire</div>
-      <div class="stat-value mono" style="font-size:20px;">${fmtCurrency(s.total_expected)}</div></div>
-    <div class="stat-card"><div class="stat-label">Over / Under</div>
-      <div class="stat-value mono" style="font-size:20px;color:${ov>=0?'var(--green)':'var(--rose)'};">${fmtCurrency(ov)}</div>
-      <div class="stat-sub">${ov >= 0 ? 'In budget' : 'Sforamento'}</div></div>
+      <div class="stat-value mono" style="font-size:20px;">${fmtCurrency(s.total_expected)}</div>
+      <div class="stat-sub">qty pianificata × prezzo</div></div>
+    <div class="stat-card"><div class="stat-label">Over / Under <span class="text-xs text-muted">(${ovLabel})</span></div>
+      <div class="stat-value mono" style="font-size:20px;color:${ov>0?'var(--rose)':(ov<0?'var(--green)':'var(--text3)')};">${ovSign}${fmtCurrency(ov)}</div>
+      <div class="stat-sub">${ovHint}</div></div>
     <div class="stat-card"><div class="stat-label">Maturato</div>
-      <div class="stat-value mono" style="font-size:20px;">${fmtCurrency(s.total_accrued)}</div></div>
+      <div class="stat-value mono" style="font-size:20px;">${fmtCurrency(s.total_accrued)}</div>
+      <div class="stat-sub">booking done × prezzo</div></div>
     <div class="stat-card"><div class="stat-label">Costo ore (booking)</div>
       <div class="stat-value mono" style="font-size:20px;">${fmtCurrency(s.bookings_hours_cost || 0)}</div>
       <div class="stat-sub">${(s.bookings_hours || 0).toFixed(1)}h pianificate</div></div>
@@ -633,8 +677,13 @@ function renderCostLines() {
   if (!currentReport.cost_lines.length) {
     tbody.innerHTML = '<tr><td colspan="8" class="text-muted" style="text-align:center;padding:20px;">Nessuna voce di costo</td></tr>'; return;
   }
+  // v3.5.0-alpha.55: vista Maturato/Stima. Maturato → over_under_now.
+  // Stima → over_under_forecast. Pct = stima/quotato (sempre, è grafico
+  // del forecast). Convenzione: positivo=OVER (rosso), negativo=UNDER (verde).
+  const _viewKey2 = _crViewMode() === 'forecast' ? 'over_under_forecast' : 'over_under_now';
   tbody.innerHTML = currentReport.cost_lines.map(l => {
-    const ov = l.over_under;
+    const ov = (l[_viewKey2] ?? l.over_under) || 0;
+    const ovSign = ov > 0 ? '+' : '';
     const pct = l.total_quoted > 0 ? Math.round((l.total_expected / l.total_quoted) * 100) : 0;
     // v3.5.0-alpha.11: row click → popup dettaglio lavorazione (booking + risorse).
     // Il bottone ✎ apre invece il modal di edit (stop propagation).
@@ -652,7 +701,7 @@ function renderCostLines() {
           <div style="height:3px;border-radius:2px;width:${Math.min(pct,100)}%;background:${pct>100?'var(--rose)':'var(--indigo)'}"></div>
         </div>
       </td>
-      <td class="mono text-right" style="color:${ov>=0?'var(--green)':'var(--rose)'};">${fmtCurrency(ov)}</td>
+      <td class="mono text-right" style="color:${ov>0?'var(--rose)':(ov<0?'var(--green)':'var(--text3)')};">${ovSign}${fmtCurrency(ov)}</td>
       <td>${renderBillingBadge(l.billing_status, l.billing_batch_id)}</td>
       <td onclick="event.stopPropagation()"><button class="btn btn-ghost btn-sm" onclick="openUpdateLine(${JSON.stringify(l).replace(/"/g,'&quot;')})">✎</button></td>
     </tr>`;

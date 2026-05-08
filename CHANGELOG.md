@@ -1,5 +1,69 @@
 # MediaFlow — Changelog
 
+## v3.5.0-alpha.55 — Cost report Over/Under doppia vista (8 maggio 2026)
+
+Fix bug: `total_expected` per riga non veniva mai aggiornato dai booking,
+quindi Over/Under restava 0 a meno di edit manuale. Ora la stima è
+allineata in tempo reale al pianificato e il cost report espone due viste
+(Maturato / Stima) selezionabili da UI ed export.
+
+**Backend:**
+- `cost_line_sync.recompute_cost_line_actual` ora calcola anche
+  `quantity_planned` (booking non cancellati, non solo done) e popola
+  `total_expected = qty_planned × unit_price`. Default a `quantity_quoted`
+  se non c'è ancora alcun booking. Già chiamato in tutti gli hook
+  planning/AI esistenti, quindi nessuna nuova invocazione necessaria.
+- `cost_report.py` espone su `/api/list` e `/api/job/{id}` due nuovi campi:
+  - `over_under_now` = `total_accrued − total_quoted` (extracosto certo,
+    base fatturazione)
+  - `over_under_forecast` = `total_expected − total_quoted` (sforamento
+    previsto su base pianificato, base report cliente)
+  - Per ogni riga: stessi due campi + `quantity_planned` derivato.
+  - Convenzione segno: positivo = OVER (sforamento), negativo = UNDER
+    (sotto budget). Inversa rispetto a pre-α.55.
+  - Alias `over_under` mantenuto come back-compat (= forecast).
+
+**UI cost report:**
+- Toggle vista "Maturato vs Quotato | Stima vs Quotato" nella toolbar
+  dettaglio. Default Maturato (più rilevante per fatturazione).
+- KPI grid aggiornata con label dinamico e "qty pianificata × prezzo"
+  come hint sotto Stimato.
+- Lista cost report: filtro Over/Under usa la vista corrente. Colonna
+  Over/Under con segno e colori coerenti (rosso=over, verde=under).
+- `_crViewMode()` helper + `onViewModeChange()` ricomputa list/KPI/righe
+  + export quando l'utente cambia la vista.
+
+**Export:**
+- Endpoint `client-pdf`, `client-csv`, `client-xlsx` ora accettano
+  `?vista=now|forecast`. La modalità rendiconto include la label
+  esplicita ("Over/Under su Maturato vs Quotato" o "su Stima vs Quotato").
+- `_client_export_rows(report, rendiconto, vista)` propaga la scelta
+  fino al totale parziale Over/Under.
+- `pdf_export.generate_client_cost_report_pdf(..., vista="now")` con
+  segno positivo = rosso (OVER), negativo = verde (UNDER).
+
+**Backfill al boot:**
+- Marker `uploads/.total_expected_backfilled_v1`: alla prima accensione
+  α.55 ricalcola `total_expected` per tutte le JCL esistenti (idempotente,
+  one-shot). Senza il backfill i DB pre-α.55 vedrebbero la nuova vista
+  vuota fino al primo nuovo booking.
+
+**Smoke test:**
+- App boot OK, 262 routes, version 3.5.0-alpha.55.
+
+**Verifica live richiesta a Matteo:**
+1. Pull → app parte. Al primo boot vedi log
+   `[lifespan] backfill JCL.total_expected: N/M righe ricalcolate`.
+2. /cost-report → apri un job con booking pianificati ma non ancora done
+   → vedi Stimato a finire = pianificato × prezzo, Maturato = 0.
+3. Vista Maturato → Over/Under = 0 (non c'è ancora extracosto certo).
+4. Vista Stima → se planned ≠ quoted → Over/Under = differenza, segno
+   positivo se sforamento (rosso), negativo se sotto budget (verde).
+5. Marca un booking done → Maturato cresce → vista Maturato mostra
+   over/under reale.
+6. Export PDF in vista Maturato → totale Over/Under usa accrued.
+7. Export PDF in vista Stima → totale Over/Under usa expected.
+
 ## v3.5.0-alpha.54 — Capability copilot avanzate + Financial Copilot (8 maggio 2026)
 
 Step 4 chiuso. Sei nuove capability per il copilot: 4 sulla pianificazione

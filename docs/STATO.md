@@ -8,6 +8,53 @@
 
 ## Versione corrente
 
+**v3.5.0-alpha.55** — 8 maggio 2026 — Cost report Over/Under doppia vista
+
+Fix bug: `total_expected` non veniva aggiornato dai booking, quindi Over/Under
+restava sempre 0. Ora la stima è allineata al pianificato in tempo reale e
+il cost report ha due viste selezionabili.
+
+**Chiuso α.55:**
+- ✅ `cost_line_sync.recompute_cost_line_actual` calcola `quantity_planned`
+  (booking non cancellati, anche non done) e popola `total_expected`. Già
+  chiamato in tutti gli hook planning/AI esistenti.
+- ✅ API `/cost-report/api/list` e `/api/job/{id}` espongono `over_under_now`
+  (= maturato − quotato) e `over_under_forecast` (= stima − quotato), per
+  riga + summary. Convenzione: positivo = OVER (sforamento), negativo = UNDER.
+- ✅ UI: toggle "Vista: Maturato vs Quotato | Stima vs Quotato" in toolbar
+  dettaglio. Default Maturato (base fatturazione). Lista, KPI, righe e
+  filtro Over/Under tutti reactive sulla vista.
+- ✅ Export PDF/CSV/XLSX: parametro `?vista=now|forecast` propagato fino
+  al totale parziale + label esplicita.
+- ✅ Backfill al boot per DB esistenti: marker
+  `uploads/.total_expected_backfilled_v1` ricalcola tutte le JCL una volta.
+- ✅ Smoke test boot: 262 routes, version 3.5.0-alpha.55.
+
+**Verifica live richiesta a Matteo:**
+1. Pull → al primo boot log `backfill JCL.total_expected: N/M righe`.
+2. /cost-report → apri un job con booking pianificati non done → Stimato
+   a finire = pianificato × prezzo, Maturato = 0.
+3. Vista Maturato → Over/Under = 0 (no extracosto certo finché niente done).
+4. Vista Stima → se planned ≠ quoted → Over/Under = delta. Segno positivo
+   sforamento (rosso), negativo sotto budget (verde).
+5. Marca booking done → Maturato cresce → vista Maturato mostra over/under
+   reale.
+6. Export PDF in vista Maturato vs Stima → totale Over/Under coerente con
+   la scelta.
+
+**Limitazioni / decisioni semantiche:**
+- Pianificato include TUTTI i booking non cancellati (anche tentative).
+  Decisione esplicita di Matteo: "tutti i booking non cancellati".
+- La stima default a `quantity_quoted` se nessun booking. Quando arriva
+  il primo booking passa a `qty_planned`, può andare sotto o sopra il
+  quotato (genera under o over rispettivamente).
+- Convenzione segno invertita rispetto a pre-α.55. Vecchio campo
+  `over_under` lasciato come alias di `over_under_forecast` per
+  back-compat.
+
+**Prossimi step:**
+- Step 5 finale: notifica fine mese auto, "Chiudi progetto", report annuale.
+
 **v3.5.0-alpha.54** — 8 maggio 2026 — Capability copilot avanzate + Financial Copilot
 
 Step 4 chiuso. Sei nuove capability per il copilot: 4 sulla pianificazione

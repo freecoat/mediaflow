@@ -182,7 +182,8 @@ def generate_invoice_pdf(invoice: dict, lines: list[dict], company: dict = None)
 
 
 def generate_client_cost_report_pdf(report: dict, company: dict = None,
-                                    rendiconto: bool = False) -> bytes:
+                                    rendiconto: bool = False,
+                                    vista: str = "now") -> bytes:
     """v3.4.33 — Cost report **vista cliente** in PDF.
 
     A differenza di `generate_invoice_pdf` (fatturazione), questo è un report
@@ -289,6 +290,10 @@ def generate_client_cost_report_pdf(report: dict, company: dict = None,
                 th("Stimato", TA_RIGHT),
                 th("±", TA_RIGHT),
             ]]
+            # v3.5.0-alpha.55: vista now=maturato vs quotato (segno positivo
+            # = OVER/sforamento, rosso). vista forecast=stima vs quotato.
+            is_forecast = (vista == "forecast")
+            ov_field = "over_under_forecast" if is_forecast else "over_under_now"
             tot_quoted = tot_accrued = tot_expected = 0.0
             for l in quoted_lines:
                 qq = l.get("quantity_quoted") or 0
@@ -296,7 +301,9 @@ def generate_client_cost_report_pdf(report: dict, company: dict = None,
                 tq = l.get("total_quoted") or 0
                 ta = l.get("total_accrued") or 0
                 te = l.get("total_expected") or 0
-                ou = l.get("over_under") or (tq - te)
+                ou = l.get(ov_field)
+                if ou is None:
+                    ou = (te - tq) if is_forecast else (ta - tq)
                 tot_quoted += tq
                 tot_accrued += ta
                 tot_expected += te
@@ -304,7 +311,7 @@ def generate_client_cost_report_pdf(report: dict, company: dict = None,
                 desc_html = f"{l.get('description', '')}"
                 if cat:
                     desc_html += f"<br/><font size=7 color='#888'>{cat}</font>"
-                ou_color = "#16a34a" if ou >= 0 else "#dc2626"
+                ou_color = "#dc2626" if ou > 0 else "#16a34a"
                 table_data.append([
                     Paragraph(desc_html, body),
                     Paragraph(l.get("unit", ""), ParagraphStyle("c", fontSize=9, fontName="Helvetica", alignment=TA_CENTER)),
@@ -314,8 +321,8 @@ def generate_client_cost_report_pdf(report: dict, company: dict = None,
                     Paragraph(_money(te), right),
                     Paragraph(f"<font color='{ou_color}'>{_money(ou, sign=True)}</font>", right),
                 ])
-            tot_ou = tot_quoted - tot_expected
-            tot_color = "#16a34a" if tot_ou >= 0 else "#dc2626"
+            tot_ou = (tot_expected - tot_quoted) if is_forecast else (tot_accrued - tot_quoted)
+            tot_color = "#dc2626" if tot_ou > 0 else "#16a34a"
             table_data.append([
                 Paragraph("<b>Totale</b>", body),
                 Paragraph("", body),

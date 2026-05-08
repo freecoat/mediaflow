@@ -47,61 +47,90 @@ def _booking_hours(b) -> float:
     return total
 
 
+def _qty_from_hours(unit: str, total_hours: float, n_bookings: int) -> float:
+    """Conversione ore → quantità nell'unit della cost line.
+
+    v3.5.0-alpha.13: per unità non temporali (pc/lump/fix/lot/shot/version/
+    allow/TB/GB) usiamo il count dei booking, non le ore.
+    """
+    u = (unit or "").strip().lower()
+    if u in TIME_UNITS_HOUR:
+        return round(total_hours, 2)
+    if u in TIME_UNITS_DAY:
+        return round(total_hours / HOURS_PER_DAY, 4)
+    return float(n_bookings)
+
+
 def recompute_cost_line_actual(db: Session, jcl) -> dict:
-    """Ricomputa `quantity_actual` e `total_accrued` per una JobCostLine
-    aggregando i booking con execution_status=done associati."""
+    """Ricomputa `quantity_actual`, `total_accrued`, `total_expected`
+    per una JobCostLine aggregando i booking associati.
+
+    v3.5.0-alpha.55: oltre al maturato (booking done) ora calcoliamo anche
+    la **stima** = tutti i booking non cancellati × prezzo. Va a popolare
+    `total_expected` (prima riempito solo da edit manuale, lasciava il
+    cost report con Over/Under sempre 0). Semantica:
+
+    - `quantity_actual` = booking done (lavoro fatto)
+    - `total_accrued`   = quantity_actual × unit_price (maturato certo)
+    - `total_expected`  = qty pianificata × unit_price (forecast: tutti i
+       booking confermati o done, esclusi solo cancelled)
+
+    L'over/under nel cost report è poi calcolato lato API in due viste:
+    Now (accrued − quoted) e Forecast (expected − quoted).
+    """
     from app.models import Booking, BookingExecutionStatus, BookingStatus
     if jcl is None:
         return {"updated": False, "reason": "no_jcl"}
 
-    bookings = db.query(Booking).filter(
+    # Tutti i booking non cancellati associati alla cost line
+    all_bookings = db.query(Booking).filter(
         Booking.job_cost_line_id == jcl.id,
-        Booking.execution_status == BookingExecutionStatus.done,
         Booking.status != BookingStatus.cancelled,
     ).all()
-    total_hours = sum(_booking_hours(b) for b in bookings)
+    done_bookings = [b for b in all_bookings if b.execution_status == BookingExecutionStatus.done]
 
     unit = (jcl.unit or "").strip().lower()
-    if unit in TIME_UNITS_HOUR:
-        new_qty = round(total_hours, 2)
-    elif unit in TIME_UNITS_DAY:
-        new_qty = round(total_hours / HOURS_PER_DAY, 4)
-    else:
-        # v3.5.0-alpha.13: per unità non temporali (pc / lump / fix / lot / shot / version / allow / TB / GB)
-        # contiamo il numero di booking done. 0 se nessuno → resetta correttamente
-        # `quantity_actual` quando l'utente cancella tutti i booking (bug Ligas J2:
-        # maturato fantasma persisteva post-delete su lavorazioni con unit "pc"/"lump").
-        # Logica: 1 booking done → 1 unità (semplice, prevedibile). Se serve mappatura
-        # diversa per un'unità specifica, si estende qui.
-        new_qty = float(len(bookings))
+    done_hours = sum(_booking_hours(b) for b in done_bookings)
+    planned_hours = sum(_booking_hours(b) for b in all_bookings)
+    new_qty_actual = _qty_from_hours(unit, done_hours, len(done_bookings))
+    new_qty_planned = _qty_from_hours(unit, planned_hours, len(all_bookings))
 
-    new_accrued = round(new_qty * (jcl.unit_price or 0.0), 2)
+    new_accrued = round(new_qty_actual * (jcl.unit_price or 0.0), 2)
+    # Stima = quantità pianificata × prezzo. Se non ci sono booking
+    # ancora pianificati, default al quotato (non a 0): la lavorazione
+    # esiste a preventivo ma non è stata ancora schedulata. Quando arriva
+    # il primo booking, la stima passa a qty_planned (può andare sotto
+    # o sopra il quotato → genera under o over).
+    expected_qty = new_qty_planned if all_bookings else (jcl.quantity_quoted or 0.0)
+    new_expected = round(expected_qty * (jcl.unit_price or 0.0), 2)
 
-    # v3.5.0-alpha.51.1 fix C1: popola JCL.work_date dalla data più recente
-    # tra i booking done. Serve a billing.preview_transmission per derivare
-    # period_start/end automaticamente. Senza, cade sempre nel fallback
-    # current_month e il modal mostra warning ⚠ giallo.
     new_work_date = max(
-        (b.start_datetime.date() for b in bookings if b.start_datetime),
+        (b.start_datetime.date() for b in done_bookings if b.start_datetime),
         default=None,
     )
 
     changed = (
-        abs((jcl.quantity_actual or 0) - new_qty) > 1e-6
+        abs((jcl.quantity_actual or 0) - new_qty_actual) > 1e-6
         or abs((jcl.total_accrued or 0) - new_accrued) > 1e-2
+        or abs((jcl.total_expected or 0) - new_expected) > 1e-2
         or jcl.work_date != new_work_date
     )
-    jcl.quantity_actual = new_qty
+    jcl.quantity_actual = new_qty_actual
     jcl.total_accrued = new_accrued
+    jcl.total_expected = new_expected
     jcl.work_date = new_work_date
     return {
         "updated": changed,
         "jcl_id": jcl.id,
         "unit": unit,
-        "bookings_done": len(bookings),
-        "total_hours": round(total_hours, 2),
-        "quantity_actual": new_qty,
+        "bookings_done": len(done_bookings),
+        "bookings_planned": len(all_bookings),
+        "total_hours": round(done_hours, 2),
+        "planned_hours": round(planned_hours, 2),
+        "quantity_actual": new_qty_actual,
+        "quantity_planned": new_qty_planned,
         "total_accrued": new_accrued,
+        "total_expected": new_expected,
     }
 
 
