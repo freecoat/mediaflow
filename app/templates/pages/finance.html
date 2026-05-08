@@ -522,6 +522,12 @@ function renderBatchLines(b) {
     const deferBtn = isDraft
       ? `<button class="btn btn-ghost btn-sm" onclick="deferBatchLine(${l.id}, '${escapeHtml((l.description || '').slice(0, 40))}')" title="Rimanda al consuntivo finale: la riga viene rimossa dal batch e torna 'Da fatturare' nel cost report" style="color:#fbbf24;">↪ Rimanda</button>`
       : '';
+    // v3.5.0-alpha.64: bottone ↪ AM (refer-to-sales) per righe in over o extra
+    // del batch in draft. Usa la modal modale per scegliere extend/new.
+    const showReferBtn = isDraft && (l.is_extra || (l.over || 0) > 0.01);
+    const referBtn = showReferBtn
+      ? `<button class="btn btn-ghost btn-sm" onclick="openReferBatchLineToSales(${l.id}, ${JSON.stringify(l.description || '').replace(/"/g, '&quot;')})" title="Rimanda al commerciale: rimuove la riga dal batch + crea/estende quote con [EXTRA]" style="color:#c084fc;">↪ AM</button>`
+      : '';
     return `<tr>
       <td>
         <div style="font-size:13px;">${escapeHtml(l.description)}${l.is_extra ? ' <span class="text-xs" style="color:#fb923c;">[extra]</span>' : ''}</div>
@@ -534,9 +540,82 @@ function renderBatchLines(b) {
       <td class="mono text-right">${fmtCurrency(l.total_proposed)}</td>
       <td class="text-right">${approvedCell}</td>
       <td class="mono text-right">${lostHtml}</td>
-      <td class="text-right">${deferBtn}</td>
+      <td class="text-right" style="white-space:nowrap;">${referBtn} ${deferBtn}</td>
     </tr>`;
   }).join('');
+}
+
+// v3.5.0-alpha.64: refer-to-sales DA batch detail. Apre dialog inline con
+// scelta mode (extend/new) + notes; chiama l'endpoint che combina defer +
+// refer (vedi billing.py refer_batch_line_to_sales).
+function openReferBatchLineToSales(lineId, descSnippet) {
+  if (!_currentBatch) return;
+  const overlay = document.createElement('div');
+  overlay.className = 'modal-overlay';
+  overlay.style.display = 'flex';
+  overlay.style.zIndex = '350';
+  overlay.innerHTML = `
+    <div class="modal" style="max-width:560px;">
+      <div class="modal-header">
+        <span class="modal-title">↪ Rimanda al commerciale</span>
+        <button class="btn btn-ghost btn-icon" onclick="this.closest('.modal-overlay').remove()">✕</button>
+      </div>
+      <div class="modal-body">
+        <p class="text-sm text-muted" style="margin:0 0 14px 0;">
+          La riga <b>${escapeHtml(descSnippet)}</b> verrà <b>rimossa dal batch</b> e <b>girata al commerciale</b>:
+          la JCL torna "Da fatturare" e si estende/crea una quote con la voce [EXTRA].
+        </p>
+        <div style="display:flex;flex-direction:column;gap:10px;margin-bottom:14px;">
+          <label style="display:flex; gap:10px; align-items:flex-start; padding:10px; border:1px solid var(--border); border-radius:8px; cursor:pointer;">
+            <input type="radio" name="rbm-mode" value="extend_existing" checked style="margin-top:3px;">
+            <div>
+              <div style="font-weight:600;">Estendi quote esistente (versioning)</div>
+              <div class="text-xs text-muted">Crea nuova versione della quote del job, con la riga extra. Mantiene la catena.</div>
+            </div>
+          </label>
+          <label style="display:flex; gap:10px; align-items:flex-start; padding:10px; border:1px solid var(--border); border-radius:8px; cursor:pointer;">
+            <input type="radio" name="rbm-mode" value="new_linked" style="margin-top:3px;">
+            <div>
+              <div style="font-weight:600;">Nuova quote linkata al progetto</div>
+              <div class="text-xs text-muted">Quote indipendente sullo stesso progetto. Per addendum negoziati separatamente.</div>
+            </div>
+          </label>
+        </div>
+        <label class="form-label" style="display:block; margin-bottom:4px;">Note (opzionali)</label>
+        <textarea id="rbm-notes" rows="3" style="width:100%; box-sizing:border-box; padding:8px; border:1px solid var(--border); border-radius:6px; resize:vertical; background:var(--bg2); color:var(--text);" placeholder="es. cliente ha chiesto upres extra non a budget"></textarea>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary" onclick="this.closest('.modal-overlay').remove()">Annulla</button>
+        <button class="btn btn-primary" id="rbm-submit">↪ Rimanda al commerciale</button>
+      </div>
+    </div>`;
+  document.body.appendChild(overlay);
+  overlay.querySelector('#rbm-submit').addEventListener('click', async () => {
+    const mode = overlay.querySelector('input[name="rbm-mode"]:checked').value;
+    const notes = overlay.querySelector('#rbm-notes').value.trim();
+    const fd = new FormData();
+    fd.append('mode', mode);
+    if (notes) fd.append('notes', notes);
+    try {
+      const res = await api('POST', `/finance/api/billing/${_currentBatch.id}/lines/${lineId}/refer-to-sales`, fd);
+      overlay.remove();
+      toast(
+        `✓ Riga rimandata. Quote ${res.quote_number} ${res.mode === 'extend_existing' ? '(nuova versione)' : '(nuova quote)'}. Batch ora ${res.remaining_batch_lines} righe.`,
+        'success', 5000
+      );
+      window.open(res.quote_url, '_blank');
+      // Refresh
+      if (res.remaining_batch_lines === 0) {
+        closeModal('modal-batch-detail');
+        await loadBatches();
+      } else {
+        await openBatchDetail(_currentBatch.id);
+        await loadBatches();
+      }
+    } catch(e) {
+      toast(e.message || 'Errore rimando al commerciale', 'error', 6000);
+    }
+  });
 }
 
 // v3.5.0-alpha.56: rimanda una riga al consuntivo finale (defer).

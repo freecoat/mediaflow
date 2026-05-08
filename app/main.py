@@ -85,12 +85,15 @@ def _auto_migrate_columns():
                     conn.execute(text(f"ALTER TABLE quotes ADD COLUMN {col} {ddl}"))
     # v3.4.50.1 — QuoteLine: parent_line_id per eredità righe in versioning
     # v3.5.0-alpha.27 — QuoteLine: is_optional + section_label
+    # v3.5.0-alpha.64 — QuoteLine: referred_from_jcl_id (link a JCL d'origine
+    # per righe [EXTRA] generate da refer-to-sales)
     if "quote_lines" in insp.get_table_names():
         qlcols = {c["name"] for c in insp.get_columns("quote_lines")}
         ql_alter = [
             ("parent_line_id", "INTEGER NULL REFERENCES quote_lines(id)"),
             ("is_optional", "BOOLEAN NOT NULL DEFAULT 0"),
             ("section_label", "VARCHAR(120) NULL"),
+            ("referred_from_jcl_id", "INTEGER NULL REFERENCES job_cost_lines(id)"),
         ]
         with engine.begin() as conn:
             for col, ddl in ql_alter:
@@ -410,7 +413,7 @@ async def lifespan(app: FastAPI):
     yield
 
 
-app = FastAPI(title="MediaFlow", version="3.5.0-alpha.63", lifespan=lifespan)
+app = FastAPI(title="MediaFlow", version="3.5.0-alpha.64", lifespan=lifespan)
 
 BASE_DIR = Path(__file__).parent
 app.mount("/static", StaticFiles(directory=BASE_DIR / "static"), name="static")

@@ -727,9 +727,14 @@ function renderCostLines() {
     const billedLocked = l.billed_locked || 0;
     const accruedPost = l.accrued_post_period || 0;
     const forecastFut = l.forecast_future || 0;
+    // v3.5.0-alpha.64: badge "↪ Riferita su Q-..." per JCL già rimandate al commerciale.
+    const refs = l.referrals || [];
+    const refsBadge = refs.length
+      ? refs.map(r => `<a class="text-xs" href="${r.quote_url}" target="_blank" style="display:inline-block; margin-left:6px; padding:1px 6px; background:rgba(168,85,247,0.15); color:#c084fc; border-radius:8px; text-decoration:none; font-weight:600; font-size:10px;" title="Riferita al commerciale su ${r.quote_number}${r.quote_version > 1 ? ' v' + r.quote_version : ''} (stato ${r.quote_status})" onclick="event.stopPropagation()">↪ ${r.quote_number}${r.quote_version > 1 ? ' v' + r.quote_version : ''}</a>`).join('')
+      : '';
     return `<tr onclick='openLineDetailHere(${l.id})' style="cursor:pointer;">
       <td>
-        <div style="font-weight:500;font-size:13px;">${l.description}${l.is_extra ? ' <span class="text-xs" style="color:#fb923c;">[extra]</span>' : ''}</div>
+        <div style="font-weight:500;font-size:13px;">${l.description}${l.is_extra ? ' <span class="text-xs" style="color:#fb923c;">[extra]</span>' : ''}${refsBadge}</div>
         ${l.category ? `<div class="text-xs text-muted">${l.category}</div>` : ''}
       </td>
       <td class="text-sm text-muted">${l.unit}</td>
@@ -938,16 +943,57 @@ async function refreshTransmitPreview() {
           <span class="mono" style="color:#ef4444;">${fmtCurrency(oTot)}</span>
         </div>` : ''}
       </div>`;
+    // v3.5.0-alpha.64: tabella editable con checkbox per riga (selezione granulare).
+    // Default: tutte le righe checked. Subtotale aggiornato in tempo reale.
+    const linesHtml = (p.lines || []).map(l => {
+      const overBadge = l.overrun > 0
+        ? ` <span class="text-xs" style="color:#ef4444;" title="Sforamento sul quotato">+${fmtCurrency(l.overrun)}</span>`
+        : '';
+      const extraBadge = l.is_extra
+        ? ` <span class="text-xs" style="color:#fb923c;">[extra]</span>`
+        : '';
+      const jobLbl = l.job_code ? `<span class="text-xs text-muted mono">${escapeHtml(l.job_code)}</span>` : '';
+      return `<tr data-jcl-id="${l.id}" data-total="${l.total_accrued}" data-extra="${l.is_extra ? '1' : '0'}">
+        <td style="width:24px;"><input type="checkbox" class="tm-line-cb" checked onchange="updateTransmitSubtotal()"></td>
+        <td>
+          <div style="font-size:12px;">${escapeHtml(l.description || '')}${extraBadge}${overBadge}</div>
+          <div style="margin-top:2px;">${jobLbl}</div>
+        </td>
+        <td class="mono text-right text-xs">${(l.quantity || 0).toFixed(2)} ${escapeHtml(l.unit || '')}</td>
+        <td class="mono text-right text-xs">${fmtCurrency(l.unit_price || 0)}</td>
+        <td class="mono text-right" style="font-weight:600;">${fmtCurrency(l.total_accrued)}</td>
+      </tr>`;
+    }).join('');
     const previewHtml = p.candidate_count > 0
       ? `<div style="background:var(--bg3); border:1px solid var(--border); border-radius:8px; padding:10px 12px;">
-          <div style="display:flex; justify-content:space-between; align-items:center; gap:10px;">
+          <div style="display:flex; justify-content:space-between; align-items:center; gap:10px; margin-bottom:6px;">
             <div>
-              <div style="font-size:13px;"><b>${p.candidate_count}</b> rig${p.candidate_count === 1 ? 'a' : 'he'} maturat${p.candidate_count === 1 ? 'a' : 'e'} da fatturare</div>
+              <div style="font-size:13px;">
+                <b>${p.candidate_count}</b> rig${p.candidate_count === 1 ? 'a' : 'he'} candidat${p.candidate_count === 1 ? 'a' : 'e'} —
+                <button class="btn btn-ghost btn-sm" type="button" onclick="tmToggleAll(true)" style="font-size:11px;">tutti</button>
+                <button class="btn btn-ghost btn-sm" type="button" onclick="tmToggleAll(false)" style="font-size:11px;">nessuno</button>
+              </div>
               <div style="font-size:11px; margin-top:2px;">${sourceLbl}</div>
             </div>
-            <div class="mono" style="font-size:18px; color:var(--indigo2); font-weight:600;">${fmtCurrency(p.total_proposed)}</div>
+            <div style="text-align:right;">
+              <div class="text-xs text-muted">Subtotale selezione</div>
+              <div class="mono" id="tm-subtotal" style="font-size:18px; color:var(--indigo2); font-weight:600;">${fmtCurrency(p.total_proposed)}</div>
+            </div>
           </div>
           ${breakdownHtml}
+          <div style="margin-top:10px; max-height:280px; overflow:auto; border:1px solid var(--border); border-radius:6px;">
+            <table style="width:100%; font-size:12px; border-collapse:collapse;" id="tm-lines-table">
+              <thead style="position:sticky; top:0; background:var(--bg2); z-index:1;">
+                <tr style="font-size:11px; color:var(--text3);">
+                  <th></th><th style="text-align:left; padding:6px;">Lavorazione</th>
+                  <th style="text-align:right; padding:6px;">Qty</th>
+                  <th style="text-align:right; padding:6px;">Prezzo</th>
+                  <th style="text-align:right; padding:6px;">Maturato</th>
+                </tr>
+              </thead>
+              <tbody>${linesHtml}</tbody>
+            </table>
+          </div>
         </div>`
       : `<div style="background:rgba(251,146,60,.10); border:1px solid rgba(251,146,60,.3); border-radius:8px; padding:10px 12px; color:#fb923c; font-size:13px;">
           ⚠ Nessuna riga maturata da fatturare (filtro: not_billed + total_accrued > 0${includeExtras ? '' : ' + non extra'})
@@ -960,6 +1006,29 @@ async function refreshTransmitPreview() {
     document.getElementById('tm-preview').innerHTML =
       `<div class="text-sm" style="color:var(--rose);">Errore anteprima: ${escapeHtml(e.message || '')}</div>`;
   }
+}
+
+// v3.5.0-alpha.64: tutti/nessuno selettori per la tabella checkbox
+function tmToggleAll(checked) {
+  document.querySelectorAll('#tm-lines-table .tm-line-cb').forEach(cb => cb.checked = !!checked);
+  updateTransmitSubtotal();
+}
+
+// v3.5.0-alpha.64: ricalcola il subtotale e disabilita submit se 0 selezionati
+function updateTransmitSubtotal() {
+  let subtotal = 0;
+  let n = 0;
+  document.querySelectorAll('#tm-lines-table tr[data-jcl-id]').forEach(row => {
+    const cb = row.querySelector('.tm-line-cb');
+    if (cb && cb.checked) {
+      subtotal += parseFloat(row.dataset.total || '0');
+      n++;
+    }
+  });
+  const sub = document.getElementById('tm-subtotal');
+  if (sub) sub.textContent = fmtCurrency(subtotal);
+  const submitBtn = document.getElementById('tm-submit-btn');
+  if (submitBtn) submitBtn.disabled = (n === 0);
 }
 
 // v3.5.0-alpha.48.1: ritira batch (cancel pre-invoice). Conferma + chiama
@@ -999,6 +1068,17 @@ async function submitTransmit() {
   fd.append('include_extras', document.getElementById('tm-include-extras').checked ? 'true' : 'false');
   const notes = document.getElementById('tm-notes').value.trim();
   if (notes) fd.append('notes', notes);
+  // v3.5.0-alpha.64: selezione granulare delle JCL da trasmettere
+  const selectedIds = [];
+  document.querySelectorAll('#tm-lines-table tr[data-jcl-id]').forEach(row => {
+    const cb = row.querySelector('.tm-line-cb');
+    if (cb && cb.checked) selectedIds.push(row.dataset.jclId);
+  });
+  if (!selectedIds.length) {
+    toast('Seleziona almeno una riga da trasmettere', 'warning');
+    return;
+  }
+  fd.append('jcl_ids', selectedIds.join(','));
   try {
     const res = await api('POST', '/finance/api/billing', fd);
     closeModal('modal-transmit');

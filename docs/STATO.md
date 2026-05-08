@@ -8,6 +8,87 @@
 
 ## Versione corrente
 
+**v3.5.0-alpha.64** — 8 maggio 2026 — Trasmissione granulare + refer-to-sales completo
+
+Bundle "trasmissione & refer-to-sales completo" da feedback Matteo dopo α.63
+(test live billing). 3 punti distinti, 1 sola release coerente. Cashflow è
+un altro round (α.65+) con decisioni semantiche da fare.
+
+**Chiuso α.64:**
+- ✅ **Link strutturale [EXTRA] → JCL d'origine**: nuova colonna
+  `quote_lines.referred_from_jcl_id` (FK), valorizzata dal refer-to-sales
+  α.62. Badge bidirezionali UI: "↪ Da JCL #X" in /quotes (cliccabile, apre
+  cost-report) e "↪ Q-NNN-NN v2" in /cost-report (link a /quotes#{id}).
+  Risolve "vedo una voce extra, a cosa corrisponde?".
+- ✅ **Trasmissione granulare**: la modal Trasmetti in /cost-report
+  diventa tabella editable con checkbox per JCL candidata (default
+  tutte checked), bottoni tutti/nessuno, subtotale dinamico in tempo
+  reale, evidenza sforamenti+extra. Backend: `_transmit_core` accetta
+  `jcl_ids` opzionale; endpoint Form `jcl_ids` CSV. Back-compat preservata.
+- ✅ **Refer-to-sales DA batch detail**: nuovo bottone `↪ AM` (viola)
+  in /finance batch detail su righe in draft con `is_extra=True` o
+  `over > 0`. Combina defer (rilascio JCL) + refer (estendi/nuova quote).
+  Atomico (rollback se refer fallisce). Refactor: estratto
+  `_refer_jcl_to_sales_core` per riuso.
+
+**Migrazione DB**: ALTER TABLE quote_lines ADD COLUMN
+`referred_from_jcl_id INTEGER NULL REFERENCES job_cost_lines(id)`.
+Idempotente, eseguita al boot via `_auto_migrate_columns`.
+
+**Smoke test boot**: 271 routes (+3 vs α.63), version 3.5.0-alpha.64.
+
+**Verifica live richiesta a Matteo**:
+1. Pull → app boot pulito (271 route, version 3.5.0-alpha.64). DB
+   migrato in automatico al primo boot (log `[auto-migrate]
+   quote_lines.referred_from_jcl_id mancante -> ALTER TABLE`).
+2. **Trasmissione granulare**: apri /cost-report → un progetto con
+   ≥3 JCL maturate non fatturate → bottone Trasmetti → modal mostra
+   tabella con checkbox di default tutte checked. Decheck 1-2 righe
+   → subtotale aggiornato in tempo reale. Submit → batch creato
+   contiene SOLO le righe checked, le decheck-ate restano `not_billed`
+   nel cost report (sono ancora trasmissibili in un batch successivo).
+3. **Link bidirezionale [EXTRA] → JCL**: in /cost-report apri un
+   progetto con ≥1 JCL già "Riferita al commerciale" (α.62 + click ↪)
+   → vedi badge viola "↪ Q-NNN-NN v2" sulla riga, click → apre la
+   quote in nuova tab. Nella quote la riga `[EXTRA]` ha badge viola
+   "↪ Da JCL #X" → click → apre cost-report del job d'origine.
+4. **Refer-to-sales da batch**: in /finance apri un batch in draft
+   con almeno 1 riga in over (badge `+€...` rosso) → riga mostra ora
+   2 bottoni: `↪ Rimanda` (giallo, defer al consuntivo) e `↪ AM`
+   (viola, refer al commerciale). Click `↪ AM` → modal extend/new +
+   note → submit → la riga sparisce dal batch, la JCL torna
+   `not_billed`, la quote del job ha una nuova versione con la riga
+   `[EXTRA] referred_from_jcl_id=jcl.id`. Si apre in nuova tab.
+5. Caso "extra batch vuoto post-refer": se rimuovi l'unica riga del
+   batch via `↪ AM`, il batch resta vuoto in draft (manager può
+   annullarlo manualmente — non auto-cancelliamo).
+6. **Back-compat**: trasmissione senza spuntare nulla nella tabella
+   = 0 selezionati → bottone disabilitato. Trasmissione classica
+   (senza modificare gli check, default checked) → comportamento
+   pre-α.64 (tutto trasmesso).
+
+**Cosa NON cambia in α.64**:
+- Modello straordinari weighted-hours: rimandato ad α.65 (richiede
+  decisioni semantiche su solo-approved vs pending, day-unit vs hr-unit
+  per la conversione).
+- Costi cost-side (Resource.hourly_cost): non aggiunti.
+- InvoicePayment / cashflow forecast: rimandati.
+- Supplier invoice / commesse esterne (punto 6 della sessione 8 maggio
+  pomeriggio): modulo nuovo, da pianificare.
+- Slice lock α.59: invariato. I booking dentro slice fatturate restano
+  immutabili anche con la nuova trasmissione granulare.
+
+**Prossimi step (post-test live)**:
+- α.65 candidato: engine `billable_hours.py` con coefficienti CCNL
+  (overtime_brackets già nel modello tenant). Prima discussione
+  semantica con Matteo, poi implementazione.
+- (eventuale α.65.x): campo nullable `JobCostLine.referred_from_jcl_id`
+  speculare per ereditare la catena quando una quote nata da
+  refer-to-sales viene promossa a job (oggi: il link vive solo in
+  QuoteLine, si "perde" alla promozione).
+
+---
+
 **v3.5.0-alpha.63** — 8 maggio 2026 — Bulk job-change + extend-as-series + dedup risorse
 
 Round chiuso da feedback Matteo dopo α.62: 4 problemi distinti su pianificazione,

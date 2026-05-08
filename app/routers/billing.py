@@ -225,7 +225,7 @@ async def preview_transmission(
     if not proj:
         raise HTTPException(404, f"Progetto #{project_id} non trovato")
 
-    q = db.query(JobCostLine).join(Job).filter(
+    q = db.query(JobCostLine).join(Job).options(joinedload(JobCostLine.job)).filter(
         Job.project_id == project_id,
         Job.status != JobStatus.cancelled,
         JobCostLine.billing_status == JCLBillingStatus.not_billed,
@@ -277,6 +277,13 @@ async def preview_transmission(
                 "total_accrued": c.total_accrued,
                 "is_extra": c.is_extra,
                 "work_date": c.work_date.isoformat() if c.work_date else None,
+                # v3.5.0-alpha.64: contesto job per UI tabella checkbox.
+                "job_id": c.job_id,
+                "job_code": (c.job.code if c.job else None),
+                "job_title": (c.job.title if c.job else None),
+                # over per riga: per evidenziare in UI le righe in sforamento
+                "overrun": round(max(0.0, (c.total_accrued or 0) - (c.total_quoted or 0)), 2)
+                           if not c.is_extra else 0.0,
             }
             for c in candidates
         ],
@@ -292,6 +299,7 @@ def _transmit_core(
     notes: Optional[str] = None,
     include_extras: bool = True,
     user_id: Optional[int] = None,
+    jcl_ids: Optional[list[int]] = None,
 ) -> dict:
     """Logica core trasmissione → BillingBatch (estratta da endpoint per
     riuso da AI handler propose_transmit_to_billing).
@@ -299,6 +307,12 @@ def _transmit_core(
     Se period_start/end omessi, derivati automaticamente da min/max delle
     date dei Booking done delle JCL candidate (vedi `_period_from_bookings`,
     fix v3.5.0-alpha.57).
+
+    v3.5.0-alpha.64: parametro `jcl_ids` opzionale. Se valorizzato, filtra
+    le candidate a quella lista esplicita (selezione granulare in UI). I
+    valori che non sono tra le candidate normali (per progetto/billing_status/
+    accrued/billable) vengono ignorati con un warning interno.
+    `include_extras` resta efficace anche con `jcl_ids` esplicito.
 
     Solleva ValueError per errori di validazione (l'endpoint HTTP li riconverte
     in HTTPException).
@@ -320,6 +334,16 @@ def _transmit_core(
     if not include_extras:
         q = q.filter(JobCostLine.is_extra == False)
     candidates = q.all()
+
+    # v3.5.0-alpha.64: filtro per selezione esplicita
+    if jcl_ids is not None:
+        ids_set = set(jcl_ids)
+        candidates = [c for c in candidates if c.id in ids_set]
+        if not candidates:
+            raise ValueError(
+                "Nessuna delle JCL selezionate è candidata valida "
+                "(non in stato not_billed con maturato > 0)."
+            )
 
     # Auto-derive period se non specificato (v3.5.0-alpha.57: da Booking done)
     if period_start is None or period_end is None:
@@ -387,11 +411,27 @@ async def transmit_to_billing(
     period_end: date = Form(...),
     notes: Optional[str] = Form(None),
     include_extras: bool = Form(True),
+    # v3.5.0-alpha.64: selezione granulare. Stringa CSV "12,17,42" oppure NULL
+    # per fallback al comportamento "tutte le candidate" (back-compat α.57).
+    jcl_ids: Optional[str] = Form(None),
     db: Session = Depends(get_db),
 ):
     """Crea un BillingBatch (status draft) con snapshot delle JobCostLine
-    maturate del progetto nel periodo richiesto."""
+    maturate del progetto nel periodo richiesto.
+
+    v3.5.0-alpha.64: il finance può passare `jcl_ids` (CSV) per scegliere
+    esplicitamente quali righe trasmettere (escludendo le altre dal batch).
+    Se omesso, il comportamento è "tutte le candidate" come pre-α.64.
+    """
     user = _require_finance(request)
+    parsed_ids: Optional[list[int]] = None
+    if jcl_ids and jcl_ids.strip():
+        try:
+            parsed_ids = [int(x.strip()) for x in jcl_ids.split(",") if x.strip()]
+        except ValueError:
+            raise HTTPException(400, f"jcl_ids non valido: {jcl_ids}")
+        if not parsed_ids:
+            raise HTTPException(400, "jcl_ids vuoto dopo parsing")
     try:
         return _transmit_core(
             db,
@@ -401,6 +441,7 @@ async def transmit_to_billing(
             notes=notes,
             include_extras=include_extras,
             user_id=user.id if user else None,
+            jcl_ids=parsed_ids,
         )
     except ValueError as e:
         raise HTTPException(400, str(e))
@@ -591,6 +632,88 @@ async def defer_batch_line(
         "remaining_lines": len(batch.lines),
         "batch_total_proposed": batch.total_proposed,
         "batch_total_approved": batch.total_approved,
+    }
+
+
+@router.post("/{batch_id}/lines/{line_id}/refer-to-sales")
+async def refer_batch_line_to_sales(
+    batch_id: int, line_id: int,
+    request: Request,
+    mode: str = Form(...),  # "extend_existing" | "new_linked"
+    notes: Optional[str] = Form(None),
+    db: Session = Depends(get_db),
+):
+    """v3.5.0-alpha.64 — refer-to-sales DA batch detail (oltre che da cost-report).
+
+    Combina `defer` (rilascio JCL dal batch) + refer-to-sales (creazione
+    quote/versione con riga `[EXTRA]` collegata). Use case: il manager in
+    approvazione batch vede una riga in over, decide di non fatturarla subito
+    e di girarla al commerciale → 1 click la rimuove dal batch + estende la
+    quote. JCL torna `not_billed`; la riga `[EXTRA]` punta a `referred_from_jcl_id`.
+
+    Vincoli:
+      - Batch deve essere in `draft`.
+      - JCL collegata DEVE avere `total_accrued > billed_locked` (altrimenti
+        ValueError dal core: niente extra da riferire).
+    """
+    user = _require_manager(request)
+    if mode not in ("extend_existing", "new_linked"):
+        raise HTTPException(400, f"mode non valido: {mode}")
+
+    batch = db.query(BillingBatch).filter(
+        BillingBatch.id == batch_id, BillingBatch.tenant_id == CURRENT_TENANT,
+    ).first()
+    if not batch:
+        raise HTTPException(404, "Batch non trovato")
+    if batch.status != BillingBatchStatus.draft:
+        raise HTTPException(
+            400, f"Batch non modificabile in stato {batch.status.value}. "
+                 "Per rimandare una riga al commerciale occorre che il batch sia in bozza."
+        )
+    line = db.query(BillingBatchLine).filter(
+        BillingBatchLine.id == line_id, BillingBatchLine.batch_id == batch_id,
+    ).first()
+    if not line:
+        raise HTTPException(404, "Riga non trovata in questo batch")
+    if not line.job_cost_line_id:
+        raise HTTPException(400, "Riga senza JCL collegata, impossibile riferire")
+
+    jcl_id = line.job_cost_line_id
+
+    # Step 1: rilascia la JCL dal batch (come `defer`)
+    jcl = db.query(JobCostLine).filter(JobCostLine.id == jcl_id).first()
+    if jcl:
+        jcl.billing_status = JCLBillingStatus.not_billed
+        jcl.billing_batch_id = None
+    db.query(LossEntry).filter(
+        LossEntry.billing_batch_line_id == line.id
+    ).delete(synchronize_session=False)
+    db.delete(line)
+    db.flush()
+    db.refresh(batch)
+    _recompute_batch_totals(batch)
+    db.flush()
+
+    # Step 2: refer-to-sales sulla JCL appena rilasciata
+    try:
+        refer_res = _refer_jcl_to_sales_core(db, jcl_id, mode, notes)
+    except ValueError as e:
+        # Se refer fallisce, NON commettiamo lo step 1 (rollback completo).
+        # La riga torna in batch e JCL torna in_batch.
+        db.rollback()
+        msg = str(e)
+        if "non trovata" in msg or "non trovato" in msg:
+            raise HTTPException(404, msg)
+        raise HTTPException(400, msg)
+
+    # core ha già committato (vedi _refer_jcl_to_sales_impl). Commit-already.
+    return {
+        "ok": True,
+        "removed_batch_line_id": line_id,
+        "released_jcl_id": jcl_id,
+        "remaining_batch_lines": len(batch.lines),
+        "batch_total_proposed": batch.total_proposed,
+        **refer_res,
     }
 
 
@@ -830,6 +953,33 @@ async def set_jcl_billing_status(
     return {"ok": True, "jcl_id": jcl_id, "old_status": old, "new_status": st.value}
 
 
+def _refer_jcl_to_sales_core(
+    db: Session, jcl_id: int, mode: str, notes: Optional[str] = None,
+) -> dict:
+    """v3.5.0-alpha.64: estrazione del core di refer-to-sales per riuso da
+    batch-detail (un'altra entry-point oltre al pulsante di cost-report).
+
+    Solleva ValueError sui casi di validazione (chi chiama converte in 4xx).
+    Ritorna {ok, mode, quote_id, quote_number, quote_url, jcl_id}.
+    """
+    if mode not in ("extend_existing", "new_linked"):
+        raise ValueError(f"mode non valido: {mode}")
+    jcl = (
+        db.query(JobCostLine)
+        .options(joinedload(JobCostLine.job).joinedload(Job.quote))
+        .filter(JobCostLine.id == jcl_id)
+        .first()
+    )
+    if not jcl:
+        raise ValueError(f"JobCostLine #{jcl_id} non trovata")
+    job = jcl.job
+    if not job:
+        raise ValueError("JCL senza job, impossibile riferire al commerciale")
+    if not job.project_id:
+        raise ValueError("Job senza progetto, impossibile creare/estendere quote")
+    return _refer_jcl_to_sales_impl(db, jcl, mode, notes)
+
+
 @router.post("/refer-to-sales")
 async def refer_to_sales(
     request: Request,
@@ -855,23 +1005,22 @@ async def refer_to_sales(
     Manager+ richiesto. Ritorna `{quote_id, quote_number, quote_url, mode}`.
     """
     user = _require_manager(request)
-    if mode not in ("extend_existing", "new_linked"):
-        raise HTTPException(400, f"mode non valido: {mode}")
+    try:
+        return _refer_jcl_to_sales_core(db, jcl_id, mode, notes)
+    except ValueError as e:
+        # 404 vs 400 differenziato sul testo per back-compat con test/UI
+        msg = str(e)
+        if "non trovata" in msg or "non trovato" in msg:
+            raise HTTPException(404, msg)
+        raise HTTPException(400, msg)
 
-    jcl = (
-        db.query(JobCostLine)
-        .options(joinedload(JobCostLine.job).joinedload(Job.quote))
-        .filter(JobCostLine.id == jcl_id)
-        .first()
-    )
-    if not jcl:
-        raise HTTPException(404, f"JobCostLine #{jcl_id} non trovata")
+
+def _refer_jcl_to_sales_impl(
+    db: Session, jcl, mode: str, notes: Optional[str],
+) -> dict:
+    """Implementazione effettiva di refer-to-sales (chiamata da
+    `_refer_jcl_to_sales_core` dopo aver validato jcl/job/project)."""
     job = jcl.job
-    if not job:
-        raise HTTPException(400, "JCL senza job, impossibile riferire al commerciale")
-    if not job.project_id:
-        raise HTTPException(400, "Job senza progetto, impossibile creare/estendere quote")
-
     # Determina lavoro residuo: preferisco accrued_post_period (eccedenza
     # rispetto a già fatturato), fallback a total_accrued se nessuna slice.
     from app.services.billing_slice_guard import billed_locked_for_jcl
@@ -879,8 +1028,7 @@ async def refer_to_sales(
     accrued = jcl.total_accrued or 0.0
     qty_extra = max(0.0, accrued - billed)
     if qty_extra <= 0.001:
-        raise HTTPException(
-            400,
+        raise ValueError(
             "Niente extra da riferire al commerciale: il maturato è già "
             "tutto coperto dalle fatture emesse."
         )
@@ -890,7 +1038,7 @@ async def refer_to_sales(
     from app.models import Quote, QuoteLine, QuoteStatus, Client
     project = db.query(Project).filter(Project.id == job.project_id).first()
     if not project:
-        raise HTTPException(400, "Progetto non trovato")
+        raise ValueError("Progetto non trovato")
 
     note_full = (
         f"Aggiunta da Finance per extra emerso su JCL #{jcl.id} "
@@ -901,8 +1049,7 @@ async def refer_to_sales(
 
     if mode == "extend_existing":
         if not job.quote_id or not job.quote:
-            raise HTTPException(
-                400,
+            raise ValueError(
                 "Job senza quote linkata. Usa mode=`new_linked` per creare "
                 "una nuova quote sul progetto."
             )
@@ -929,7 +1076,7 @@ async def refer_to_sales(
             .filter(Quote.number == new_number)
             .first()
         ):
-            raise HTTPException(409, f"Numero quotazione `{new_number}` già esistente")
+            raise ValueError(f"Numero quotazione `{new_number}` già esistente")
 
         new_q = Quote(
             number=new_number,
@@ -960,6 +1107,7 @@ async def refer_to_sales(
         db.add_all(new_lines)
         db.flush()
         # Aggiungi la riga extra
+        # v3.5.0-alpha.64: traccia link strutturale a JCL d'origine
         extra_line = QuoteLine(
             quote_id=new_q.id,
             description=f"[EXTRA] {jcl.description}",
@@ -969,6 +1117,7 @@ async def refer_to_sales(
             unit_price=unit_price,
             total=round(qty * unit_price, 2),
             sort_order=9999,  # in fondo, manager riordina dopo
+            referred_from_jcl_id=jcl.id,
         )
         db.add(extra_line)
         db.flush()
@@ -1000,6 +1149,7 @@ async def refer_to_sales(
     )
     db.add(new_q)
     db.flush()
+    # v3.5.0-alpha.64: traccia link strutturale a JCL d'origine
     extra_line = QuoteLine(
         quote_id=new_q.id,
         description=f"[EXTRA] {jcl.description}",
@@ -1009,6 +1159,7 @@ async def refer_to_sales(
         unit_price=unit_price,
         total=round(qty * unit_price, 2),
         sort_order=10,
+        referred_from_jcl_id=jcl.id,
     )
     db.add(extra_line)
     db.flush()
@@ -1022,6 +1173,73 @@ async def refer_to_sales(
         "quote_number": new_q.number,
         "quote_url": f"/quotes#{new_q.id}",
     }
+
+
+@router.get("/jcl/{jcl_id}/origin-info")
+async def jcl_origin_info(jcl_id: int, db: Session = Depends(get_db)):
+    """v3.5.0-alpha.64 — info compatte per UI quote: link cost-report di
+    riferimento per una QuoteLine con `referred_from_jcl_id` valorizzato.
+
+    Ritorna {jcl_id, description, job_id, job_code, project_id, project_code,
+    project_title, cost_report_url}.
+    """
+    jcl = (
+        db.query(JobCostLine)
+        .options(joinedload(JobCostLine.job).joinedload(Job.project))
+        .filter(JobCostLine.id == jcl_id)
+        .first()
+    )
+    if not jcl:
+        raise HTTPException(404, f"JCL #{jcl_id} non trovata")
+    job = jcl.job
+    project = job.project if job else None
+    return {
+        "jcl_id": jcl.id,
+        "description": jcl.description,
+        "job_id": (job.id if job else None),
+        "job_code": (job.code if job else None),
+        "project_id": (project.id if project else None),
+        "project_code": (project.code if project else None),
+        "project_title": (project.title if project else None),
+        "cost_report_url": (f"/cost-report#job-{job.id}" if job else None),
+    }
+
+
+@router.get("/jcl/{jcl_id}/referrals")
+async def jcl_referrals(jcl_id: int, db: Session = Depends(get_db)):
+    """v3.5.0-alpha.64 — reverse lookup: quote-line che referenziano questa JCL
+    (via `referred_from_jcl_id`, valorizzato in refer-to-sales).
+
+    Usato dalla UI cost-report per mostrare badge "↪ Riferita su Q-NNN-NN v2"
+    sulle JCL già rimandate al commerciale.
+
+    Ritorna lista di {quote_line_id, quote_id, quote_number, quote_version,
+    quote_status, quote_url, line_description, line_total}.
+    """
+    from app.models import Quote, QuoteLine
+    rows = (
+        db.query(QuoteLine, Quote)
+        .join(Quote, QuoteLine.quote_id == Quote.id)
+        .filter(
+            QuoteLine.referred_from_jcl_id == jcl_id,
+            Quote.deleted_at.is_(None),
+        )
+        .order_by(Quote.created_at.desc())
+        .all()
+    )
+    return [
+        {
+            "quote_line_id": ql.id,
+            "quote_id": q.id,
+            "quote_number": q.number,
+            "quote_version": q.version,
+            "quote_status": (q.status.value if hasattr(q.status, "value") else q.status),
+            "quote_url": f"/quotes#{q.id}",
+            "line_description": ql.description,
+            "line_total": ql.total,
+        }
+        for ql, q in rows
+    ]
 
 
 @router.get("/loss/project/{project_id}")

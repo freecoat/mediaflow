@@ -1,5 +1,107 @@
 # MediaFlow — Changelog
 
+## v3.5.0-alpha.64 — Trasmissione granulare + refer-to-sales completo (8 maggio 2026)
+
+Bundle "trasmissione & refer-to-sales completo" da feedback Matteo dopo α.63
+(3 punti rilevati durante test live billing). Niente cashflow ancora — quello
+è un altro round (α.65+) con decisioni semantiche da prendere.
+
+**1. Link strutturale [EXTRA] → JCL d'origine**
+
+Pre-α.64: la riga `[EXTRA]` generata da refer-to-sales (α.62) era pura
+documentazione testuale. Nessun FK alla JCL d'origine → bisogna leggere
+`detail` per capire da dove veniva. Matteo: "vedo una voce extra, a cosa
+corrisponde?".
+
+- **Migrazione DB**: `quote_lines.referred_from_jcl_id` (nullable FK a
+  job_cost_lines, idempotente, ALTER TABLE in `_auto_migrate_columns`).
+- `app/models/models.py` `QuoteLine`: nuovo campo + relationship
+  `referred_from_jcl`.
+- `app/routers/billing.py` `_refer_jcl_to_sales_impl()`: valorizza
+  `referred_from_jcl_id=jcl.id` per la riga `[EXTRA]` creata, sia in
+  mode `extend_existing` che `new_linked`.
+- `app/routers/billing.py` 2 endpoint nuovi:
+  - `GET /jcl/{id}/origin-info` → info compatte per UI quote (cost-report URL).
+  - `GET /jcl/{id}/referrals` → lista quote-line che referenziano la JCL.
+- `app/routers/quotes.py` `get_quote()`: espone `referred_from_jcl_id`
+  per ogni line.
+- `app/routers/cost_report.py` `job_cost_report()`: pre-fetch bulk dei
+  referrals (1 query JOIN) e li espone in `cost_lines[i].referrals`.
+- **UI quote** (`quotes.html` `renderLineRow`): badge viola "↪ Da JCL #X"
+  cliccabile sulle righe con `referred_from_jcl_id`. JS
+  `openOriginCostReport()` usa origin-info per aprire il cost-report del
+  job in nuova tab.
+- **UI cost-report** (`cost_report.html`): badge viola "↪ Q-NNN-NN v2"
+  sulle righe JCL con `referrals` valorizzati, link a /quotes#{id}.
+
+**2. Trasmissione granulare: scelta voce per voce**
+
+Pre-α.64: `transmit` accettava solo `include_extras` (booleano globale).
+Per escludere righe singole bisognava editare `is_billable=False` riga
+per riga. Matteo: "dammi la possibilità di scegliere quali voci includere
+o escludere".
+
+- `app/routers/billing.py`:
+  - `_transmit_core()`: nuovo parametro opzionale `jcl_ids: list[int]`.
+    Se valorizzato, filtra le candidate a quella lista esplicita. Validazione:
+    se nessun id intersecta le candidate normali (not_billed + accrued + billable)
+    → ValueError chiaro.
+  - `transmit_to_billing` endpoint: nuovo Form param `jcl_ids` (CSV stringa
+    parsata a `list[int]`). Back-compat: se omesso, comportamento "tutte le
+    candidate" come pre-α.64.
+  - `preview_transmission`: ogni line in response include ora `job_id`,
+    `job_code`, `job_title`, `overrun` (per evidenziare in UI le righe in
+    sforamento).
+- **UI cost-report** (`cost_report.html`):
+  - La modal Trasmetti diventa **tabella editable** con checkbox per ogni
+    JCL candidata (default tutte checked). Colonne: descrizione + badge
+    `[extra]` + badge sforamento + job-code, qty, prezzo, maturato.
+  - Bottoni "tutti / nessuno" sopra la tabella.
+  - **Subtotale dinamico** aggiornato in tempo reale (`updateTransmitSubtotal()`
+    su ogni `change` checkbox).
+  - Bottone Trasmetti disabilitato se 0 selezionati.
+  - `submitTransmit()`: raccoglie gli id checked → `jcl_ids` CSV nel POST.
+
+**3. Refer-to-sales DA batch detail (chiusura cerchio α.62)**
+
+Pre-α.64: il bottone `↪ Rimanda al commerciale` esisteva solo in cost-report.
+Il manager in /finance non aveva un equivalente: poteva ridurre l'importo
+(delta → LossEntry) o "Rimanda al consuntivo" (defer), ma non c'era un'opzione
+per girare la riga al commerciale come addendum quote.
+
+- `app/routers/billing.py`:
+  - Refactor: estratto `_refer_jcl_to_sales_core()` + `_refer_jcl_to_sales_impl()`
+    dal corpo dell'endpoint `/refer-to-sales` (α.62) per riuso. L'endpoint
+    originale resta come wrapper che converte ValueError → HTTPException.
+  - Nuovo endpoint `POST /finance/api/billing/{batch_id}/lines/{line_id}/refer-to-sales`:
+    combina `defer` (rilascia JCL dal batch, BBL cancellata, batch ricalcolato)
+    + `_refer_jcl_to_sales_core` (crea quote/versione con riga `[EXTRA]`).
+    Atomico: se refer fallisce, rollback completo (la riga torna nel batch).
+- **UI /finance** (`finance.html`):
+  - Nuovo bottone `↪ AM` (viola) accanto a `↪ Rimanda` su righe batch in
+    draft con `is_extra=True` o `over > 0`. Apre dialog inline (modal
+    creato JS al volo) con scelta extend/new + textarea note.
+  - On success: toast + `window.open(quote_url)` in nuova tab + reload
+    batch detail (chiude se 0 righe rimaste).
+
+**Cosa NON cambia in α.64**:
+- Cashflow: **non toccato** — modello straordinari weighted-hours è
+  pianificato per α.65 (richiede decisioni semantiche su solo-approved
+  vs pending, day-unit vs hr-unit).
+- Costi cost-side (Resource.hourly_cost): non aggiunti.
+- InvoicePayment: non aggiunto (rimandato).
+- Supplier invoice / commesse esterne: non toccate (modulo nuovo da pianificare).
+- Slice lock α.59: invariato (i booking dentro slice fatturate restano
+  immutabili anche con la nuova trasmissione granulare).
+- Convenzione segno over_under: invariata.
+
+**Smoke test boot**: 271 routes (+3 vs α.63), version 3.5.0-alpha.64.
+
+Le 3 route nuove:
+- `GET /finance/api/billing/jcl/{id}/origin-info`
+- `GET /finance/api/billing/jcl/{id}/referrals`
+- `POST /finance/api/billing/{batch_id}/lines/{line_id}/refer-to-sales`
+
 ## v3.5.0-alpha.63 — Bulk job-change + extend-as-series + dedup risorse (8 maggio 2026)
 
 Round chiuso da feedback Matteo dopo α.62. 4 problemi distinti su pianificazione,

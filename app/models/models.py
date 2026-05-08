@@ -838,10 +838,20 @@ class QuoteLine(Base):
     # con lo stesso label vengono raggruppate visivamente con header e
     # subtotale di sezione, dentro la categoria.
     section_label: Mapped[Optional[str]] = mapped_column(String(120), nullable=True)
+    # v3.5.0-alpha.64 — Tracciabilità "rimanda al commerciale". Quando una
+    # JCL in over/extra viene rimandata via /finance/api/billing/refer-to-sales
+    # (α.62) o via /batches/.../refer-to-sales (α.64), la riga [EXTRA] generata
+    # punta alla JCL d'origine. Permette badge bidirezionali UI quote↔cost-report
+    # e (in futuro) ereditare la catena quando la quote viene promossa a job.
+    referred_from_jcl_id: Mapped[Optional[int]] = mapped_column(
+        ForeignKey("job_cost_lines.id"), nullable=True, index=True
+    )
     quote: Mapped["Quote"] = relationship(back_populates="lines")
     price_item: Mapped[Optional["PriceItem"]] = relationship()
     parent_line: Mapped[Optional["QuoteLine"]] = relationship(
         foreign_keys=[parent_line_id], remote_side=[id], post_update=True)
+    referred_from_jcl: Mapped[Optional["JobCostLine"]] = relationship(
+        foreign_keys=[referred_from_jcl_id])
 
 
 # ── JOB (collegato a Progetto) ───────────────────────────────

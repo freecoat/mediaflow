@@ -534,6 +534,9 @@ async def get_quote(quote_id: int, db: Session = Depends(get_db)):
                 "category_override": l.category_override,
                 "is_optional": bool(l.is_optional),
                 "section_label": l.section_label or None,
+                # v3.5.0-alpha.64: link a JCL d'origine se la riga è nata da
+                # refer-to-sales (badge "↪ Da JCL #X" cliccabile).
+                "referred_from_jcl_id": l.referred_from_jcl_id,
             }
             for l in sorted(q.lines, key=lambda x: x.sort_order)
         ],

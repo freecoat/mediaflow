@@ -293,6 +293,32 @@ async def job_cost_report(job_id: int, db: Session = Depends(get_db)):
     from app.services.billing_slice_guard import billed_locked_bulk, three_column_view
     line_ids = [l.id for l in job.cost_lines]
     billed_map = billed_locked_bulk(db, line_ids)
+
+    # v3.5.0-alpha.64: pre-fetch quote-line referrals per badge "↪ Riferita".
+    # Una sola query JOIN per tutte le cost-line del job.
+    from app.models import Quote as _Quote, QuoteLine as _QuoteLine
+    refs_rows = []
+    if line_ids:
+        refs_rows = (
+            db.query(_QuoteLine, _Quote)
+            .join(_Quote, _QuoteLine.quote_id == _Quote.id)
+            .filter(
+                _QuoteLine.referred_from_jcl_id.in_(line_ids),
+                _Quote.deleted_at.is_(None),
+            )
+            .all()
+        )
+    refs_map: dict[int, list[dict]] = {}
+    for ql, q in refs_rows:
+        refs_map.setdefault(ql.referred_from_jcl_id, []).append({
+            "quote_id": q.id,
+            "quote_number": q.number,
+            "quote_version": q.version,
+            "quote_status": (q.status.value if hasattr(q.status, "value") else q.status),
+            "quote_url": f"/quotes#{q.id}",
+            "line_id": ql.id,
+            "line_total": ql.total,
+        })
     sum_billed_locked = round(sum(billed_map.get(lid, 0.0) for lid in line_ids), 2)
     sum_accrued_post_period = round(max(0.0, total_accrued - sum_billed_locked), 2)
     sum_forecast_future = round(max(0.0, total_expected - total_accrued), 2)
@@ -384,6 +410,9 @@ async def job_cost_report(job_id: int, db: Session = Depends(get_db)):
                 "billed_amount": l.billed_amount,
                 # v3.5.0-alpha.60: 3 colonne per riga (slice-based).
                 **three_column_view(l, billed_map.get(l.id, 0.0)),
+                # v3.5.0-alpha.64: lista quote-line che referenziano questa JCL
+                # (refer-to-sales). UI mostra badge "↪ Riferita su Q-NNN-NN v2".
+                "referrals": refs_map.get(l.id, []),
             }
             for l in job.cost_lines
         ],

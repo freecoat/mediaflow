@@ -1428,6 +1428,11 @@ function renderLineRow(l) {
   const optBadge = isOpt
     ? `<span class="ql-opt-badge" title="Voce opzionale: totale escluso dal subtotale">Opzionale</span>`
     : '';
+  // v3.5.0-alpha.64: badge "↪ Da JCL #X" cliccabile per righe nate da
+  // refer-to-sales (link al cost report del job d'origine).
+  const refBadge = l.referred_from_jcl_id
+    ? `<a href="#" onclick="openOriginCostReport(${l.referred_from_jcl_id});event.preventDefault();" class="text-xs" style="margin-left:6px; padding:1px 6px; background:rgba(168,85,247,0.15); color:#c084fc; border-radius:8px; text-decoration:none; font-weight:600; font-size:10px;" title="Riga generata da Rimanda al commerciale (JCL #${l.referred_from_jcl_id}) — apri cost report">↪ Da JCL #${l.referred_from_jcl_id}</a>`
+    : '';
   return `
     <tr class="ql-row${isOpt ? ' ql-row-optional' : ''}" data-line-id="${l.id}" data-optional="${isOpt ? '1' : '0'}">
       <td><span class="drag-handle" title="Trascina per riordinare">⠿</span></td>
@@ -1435,6 +1440,7 @@ function renderLineRow(l) {
         <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;">
           <input class="inline-edit" data-field="description" value="${desc}" onblur="saveLineField(this)" style="flex:1;min-width:160px;">
           ${optBadge}
+          ${refBadge}
         </div>
         <input class="inline-edit" data-field="detail" value="${detail}" placeholder="dettaglio…"
                onblur="saveLineField(this)" style="font-size:11px;color:var(--text2);margin-top:2px;">
@@ -1466,6 +1472,21 @@ function renderLineRow(l) {
         <button class="btn btn-ghost btn-sm color-rose" onclick="deleteLine(${l.id})" title="Rimuovi">✕</button>
       </td>
     </tr>`;
+}
+
+// v3.5.0-alpha.64: apre il cost-report del job da cui questa riga è stata
+// "rimandata al commerciale" (refer-to-sales).
+async function openOriginCostReport(jclId) {
+  try {
+    const info = await api('GET', `/finance/api/billing/jcl/${jclId}/origin-info`);
+    if (info.cost_report_url) {
+      window.open(info.cost_report_url, '_blank');
+    } else {
+      toast(`JCL #${jclId} senza job collegato`, 'warning');
+    }
+  } catch(e) {
+    toast(e.message || `JCL #${jclId} non più trovata`, 'error');
+  }
 }
 
 // ── Render totali ─────────────────────────────────────────────
