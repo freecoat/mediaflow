@@ -32,8 +32,9 @@ from app.models import (
     Asset, Department,
     Booking, BookingAssignment, BookingStatus, BookingExecutionStatus,
     ResourceUnavailability, UnavailabilityKind, UnavailabilityStatus,
+    JobCostLine, BookingChange,
 )
-from app.models.models import AIAction
+from app.models.models import AIAction, JCLBillingStatus
 from app.services.ai_provider import get_provider_for_user, safe_json_parse
 
 logger = logging.getLogger(__name__)
@@ -1468,8 +1469,29 @@ def _h_propose_booking(db: Session, data: dict) -> dict:
 
 # ── v3.5.0-alpha.50: capability planning (move/resize/delete booking esistente) ──
 
+def _assert_jcl_not_locked(db: Session, b: Booking) -> None:
+    """v3.5.0-alpha.51.1 fix A2: blocca AI su booking la cui JobCostLine
+    è già `in_batch`, `billed` o `paid`. Modificare un booking il cui maturato
+    è stato trasmesso a un BillingBatch corromperebbe lo snapshot e il
+    `total_accrued` rendendo le LossEntry non più tracciabili al booking
+    originale. AI deve passare per il manager (cancel batch o emit refund)."""
+    if not b.job_cost_line_id:
+        return
+    jcl = db.query(JobCostLine).filter(JobCostLine.id == b.job_cost_line_id).first()
+    if not jcl:
+        return
+    locked = {JCLBillingStatus.in_batch, JCLBillingStatus.billed, JCLBillingStatus.paid}
+    if jcl.billing_status in locked:
+        raise ValueError(
+            f"Booking #{b.id} non modificabile: la riga di costo (JCL #{jcl.id}) "
+            f"è in stato `{jcl.billing_status.value}`. Il manager deve prima "
+            f"ritirare/annullare il batch di fatturazione."
+        )
+
+
 def _resolve_booking_for_planning(db: Session, data: dict) -> Booking:
     """Helper comune per move/resize/delete: risolve booking_id obbligatorio."""
+    CURRENT_TENANT = 1  # v3.5.0-alpha.51.1 fix A1
     bid = data.get("booking_id")
     if not bid:
         raise ValueError("Manca 'booking_id'")
@@ -1477,11 +1499,14 @@ def _resolve_booking_for_planning(db: Session, data: dict) -> Booking:
         bid = int(bid)
     except (TypeError, ValueError):
         raise ValueError(f"booking_id non numerico: {bid}")
-    b = db.query(Booking).filter(Booking.id == bid).first()
+    b = db.query(Booking).filter(
+        Booking.id == bid, Booking.tenant_id == CURRENT_TENANT,
+    ).first()
     if not b:
         raise ValueError(f"Booking #{bid} non trovato")
     if b.status == BookingStatus.cancelled:
         raise ValueError(f"Booking #{bid} è già cancellato")
+    _assert_jcl_not_locked(db, b)
     return b
 
 
@@ -1589,6 +1614,23 @@ def _h_propose_move_booking(db: Session, data: dict) -> dict:
     # Ricalcola envelope booking
     b.start_datetime = min(a.start_datetime for a in b.assignments)
     b.end_datetime = max(a.end_datetime for a in b.assignments)
+    # v3.5.0-alpha.51.1 fix C2: ricomputa la cost line. Se cambiano risorse
+    # cross-reparto, il rate effettivo può variare; se il booking è done, le
+    # ore stesse spostano `total_accrued`. Allineato a planning.delete_booking.
+    try:
+        from app.services.cost_line_sync import recompute_for_booking
+        recompute_for_booking(db, b)
+    except Exception as _e:
+        logger.warning(f"recompute_for_booking failed in propose_move_booking: {_e}")
+    # Audit log (A4)
+    try:
+        db.add(BookingChange(
+            booking_id=b.id, kind="ai_move",
+            summary=f"AI move ({int(delta.total_seconds()/60)}min, {sum(1 for a in b.assignments if a.id in remap)} risorse rimappate)",
+            payload={"delta_minutes": int(delta.total_seconds()/60), "resources_changed": sum(1 for a in b.assignments if a.id in remap)},
+        ))
+    except Exception:
+        pass
     return {
         "booking_id": b.id,
         "assignments_count": len(b.assignments),
@@ -1647,6 +1689,22 @@ def _h_propose_resize_booking(db: Session, data: dict) -> dict:
         )
     last_a.end_datetime = new_end
     b.end_datetime = max(a.end_datetime for a in b.assignments)
+    # v3.5.0-alpha.51.1 fix C2: ricomputa cost line. Se booking è done, le
+    # ore-uomo cambiano e quantity_actual / total_accrued vanno aggiornati.
+    try:
+        from app.services.cost_line_sync import recompute_for_booking
+        recompute_for_booking(db, b)
+    except Exception as _e:
+        logger.warning(f"recompute_for_booking failed in propose_resize_booking: {_e}")
+    # Audit log (A4)
+    try:
+        db.add(BookingChange(
+            booking_id=b.id, kind="ai_resize",
+            summary=f"AI resize ({dm:+d}min)",
+            payload={"delta_minutes": dm, "resized_assignment_id": last_a.id},
+        ))
+    except Exception:
+        pass
     return {
         "booking_id": b.id,
         "delta_minutes": dm,
@@ -1675,6 +1733,15 @@ def _h_propose_delete_booking(db: Session, data: dict) -> dict:
         recompute_for_booking(db, b)
     except Exception as _e:
         logger.warning(f"recompute_for_booking failed in propose_delete_booking: {_e}")
+    # v3.5.0-alpha.51.1 fix A4: log audit (planning.delete_booking lo fa già)
+    try:
+        db.add(BookingChange(
+            booking_id=b.id, kind="ai_delete",
+            summary=f"AI cancel" + (f": {reason}" if reason else ""),
+            payload={"reason": reason},
+        ))
+    except Exception:
+        pass
     return {"booking_id": b.id, "status": "cancelled", "reason": reason}
 
 

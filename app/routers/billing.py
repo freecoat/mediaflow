@@ -478,8 +478,12 @@ async def emit_invoice(
         )
     if not batch.lines:
         raise HTTPException(400, "Batch vuoto, niente da fatturare")
-    # Verifica unicità numero fattura
-    existing = db.query(Invoice).filter(Invoice.number == invoice_number).first()
+    # Verifica unicità numero fattura (v3.5.0-alpha.51.1 fix A3: scoped per
+    # tenant via JOIN client; multi-tenant futuro non subirà collisioni)
+    existing = db.query(Invoice).join(Client, Invoice.client_id == Client.id).filter(
+        Invoice.number == invoice_number,
+        Client.tenant_id == CURRENT_TENANT,
+    ).first()
     if existing:
         raise HTTPException(409, f"Numero fattura {invoice_number} già esistente")
     # Ricava client_id dal progetto → cliente
@@ -560,10 +564,11 @@ async def cancel_batch(batch_id: int, request: Request, db: Session = Depends(ge
     if batch.status == BillingBatchStatus.cancelled:
         raise HTTPException(400, "Batch già annullato")
 
-    # Rilascia JCL
+    # Rilascia JCL (v3.5.0-alpha.51.1 fix M1: include `lost` per coprire JCL
+    # ridotte a 0 dal manager prima del cancel — ritornano disponibili)
     for bl in batch.lines:
         jcl = db.query(JobCostLine).filter(JobCostLine.id == bl.job_cost_line_id).first()
-        if jcl and jcl.billing_status == JCLBillingStatus.in_batch:
+        if jcl and jcl.billing_status in (JCLBillingStatus.in_batch, JCLBillingStatus.lost):
             jcl.billing_status = JCLBillingStatus.not_billed
             jcl.billing_batch_id = None
     # Cancella LossEntry collegate
@@ -594,7 +599,13 @@ async def set_jcl_billing_status(
         st = JCLBillingStatus(new_status)
     except ValueError:
         raise HTTPException(400, f"Stato non valido: {new_status}")
-    jcl = db.query(JobCostLine).join(Job).filter(JobCostLine.id == jcl_id).first()
+    # v3.5.0-alpha.51.1 fix A1: filtra per tenant via JOIN job→project
+    jcl = db.query(JobCostLine).join(Job, JobCostLine.job_id == Job.id).join(
+        Project, Job.project_id == Project.id
+    ).filter(
+        JobCostLine.id == jcl_id,
+        Project.tenant_id == CURRENT_TENANT,
+    ).first()
     if not jcl:
         raise HTTPException(404, "JCL non trovata")
     old = jcl.billing_status.value

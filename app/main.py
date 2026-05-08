@@ -223,10 +223,36 @@ async def lifespan(app: FastAPI):
             print(f"[lifespan] cleanup_old_attachments: {n} file copilot eliminati")
     except Exception as e:
         print(f"[lifespan] cleanup_old_attachments failed: {e}")
+    # v3.5.0-alpha.51.1 fix C1 — Backfill JobCostLine.work_date dai booking
+    # done. Le JCL pre-α.51.1 hanno work_date NULL, quindi billing.preview
+    # cade nel fallback "current_month". Eseguito una volta sola: marker file
+    # uploads/.work_date_backfilled per evitare re-run a ogni boot.
+    try:
+        marker = Path("uploads") / ".work_date_backfilled_v1"
+        if not marker.exists():
+            from app.database import SessionLocal
+            from app.models import JobCostLine
+            from app.services.cost_line_sync import recompute_cost_line_actual
+            _db = SessionLocal()
+            try:
+                jcls = _db.query(JobCostLine).filter(JobCostLine.work_date.is_(None)).all()
+                touched = 0
+                for jcl in jcls:
+                    r = recompute_cost_line_actual(_db, jcl)
+                    if r.get("updated"):
+                        touched += 1
+                _db.commit()
+                marker.write_text("ok")
+                if touched:
+                    print(f"[lifespan] backfill JCL.work_date: {touched}/{len(jcls)} righe popolate")
+            finally:
+                _db.close()
+    except Exception as e:
+        print(f"[lifespan] backfill JCL.work_date failed: {e}")
     yield
 
 
-app = FastAPI(title="MediaFlow", version="3.5.0-alpha.51", lifespan=lifespan)
+app = FastAPI(title="MediaFlow", version="3.5.0-alpha.51.1", lifespan=lifespan)
 
 BASE_DIR = Path(__file__).parent
 app.mount("/static", StaticFiles(directory=BASE_DIR / "static"), name="static")
@@ -276,7 +302,11 @@ async def no_cache_html(request: Request, call_next):
 # ── Auth guard (v3.4.27.1) ─────────────────────────────────────
 # Redirect a /auth/login se cookie access_token mancante/invalido per
 # pagine HTML. API (path /api/* o accept JSON) ricevono 401 JSON.
-PUBLIC_PATHS = ("/auth/", "/static/", "/uploads/", "/health", "/docs", "/openapi.json", "/favicon.ico", "/redoc", "/public/")
+# v3.5.0-alpha.51.1: /uploads/ NON più public — il mount StaticFiles era
+# auth-bypass su DAM e capitolati copilot. Il browser di un utente loggato
+# manda automaticamente il cookie access_token, quindi gli URL /uploads/*
+# inline nei template continuano a funzionare. Senza login → redirect /auth.
+PUBLIC_PATHS = ("/auth/", "/static/", "/health", "/docs", "/openapi.json", "/favicon.ico", "/redoc", "/public/")
 
 
 def _resolve_user_from_token(token: str):

@@ -8,6 +8,40 @@
 
 ## Versione corrente
 
+**v3.5.0-alpha.51.1** — 8 maggio 2026 — Fix audit α.41→α.51 (3 critici + 4 minori)
+
+Audit logico completo ha rivelato 3 bug critici e 4 alti sulla maratona
+α.41→α.51, fissati prima di passare alle feature nuove.
+
+**Chiuso α.51.1:**
+- ✅ **C3 sicurezza /uploads**: rimosso `/uploads/` da `PUBLIC_PATHS`. Pre-fix
+  tutti gli asset DAM e i capitolati copilot erano scaricabili senza auth.
+- ✅ **C1 JCL.work_date populate**: `cost_line_sync.recompute_cost_line_actual`
+  ora popola `work_date = max(start_datetime.date())` dei booking done.
+  Backfill one-shot al boot via marker `uploads/.work_date_backfilled_v1`.
+  Sblocca l'auto-derivazione periodo in `billing.preview_transmission`.
+- ✅ **C2 AI resize/move recompute**: `_h_propose_resize_booking` e
+  `_h_propose_move_booking` ora chiamano `recompute_for_booking`, allineato
+  a `_h_propose_delete_booking`.
+- ✅ **A2 JCL locked**: nuovo `_assert_jcl_not_locked` blocca AI su booking
+  con JCL in stato `in_batch|billed|paid` (corromperebbe snapshot batch).
+- ✅ **A4 BookingChange audit AI**: log in `booking_changes` per le 3
+  capability AI (kind=`ai_move|ai_resize|ai_delete`).
+- ✅ **A1 tenant_id**: filtro su `_resolve_booking_for_planning` e
+  `set_jcl_billing_status` (via JOIN job→project).
+- ✅ **A3 Invoice.number scoped**: check unicità via JOIN client per tenant.
+- ✅ **M1 cancel_batch rilascia anche `lost`**: oltre a `in_batch`.
+- ✅ **M5 cache-buster `global.js`**: bump α.43 → α.51.1 in `base.html`.
+
+**Aperti (refactor non bloccante):**
+- B1 OneDrive `st_mtime` su Mac (cleanup_old_attachments)
+- B2 system prompt esplicitare "spostare booking done = retroattivo"
+- M2/M3/M4 workflow tweaks
+
+**Verifica smoke:**
+- App boot pulita: version `3.5.0-alpha.51.1`, 258 route
+- Backfill `work_date` runs al primo boot, marker per idempotenza
+
 **v3.5.0-alpha.51** — 7 maggio 2026 — Upload documenti per copilot (PDF/DOCX/TXT/MD/immagini)
 
 Richiesta serale Matteo. MVP solido: upload via clip 📎 o drag&drop nel

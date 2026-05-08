@@ -76,12 +76,24 @@ def recompute_cost_line_actual(db: Session, jcl) -> dict:
         new_qty = float(len(bookings))
 
     new_accrued = round(new_qty * (jcl.unit_price or 0.0), 2)
+
+    # v3.5.0-alpha.51.1 fix C1: popola JCL.work_date dalla data più recente
+    # tra i booking done. Serve a billing.preview_transmission per derivare
+    # period_start/end automaticamente. Senza, cade sempre nel fallback
+    # current_month e il modal mostra warning ⚠ giallo.
+    new_work_date = max(
+        (b.start_datetime.date() for b in bookings if b.start_datetime),
+        default=None,
+    )
+
     changed = (
         abs((jcl.quantity_actual or 0) - new_qty) > 1e-6
         or abs((jcl.total_accrued or 0) - new_accrued) > 1e-2
+        or jcl.work_date != new_work_date
     )
     jcl.quantity_actual = new_qty
     jcl.total_accrued = new_accrued
+    jcl.work_date = new_work_date
     return {
         "updated": changed,
         "jcl_id": jcl.id,

@@ -1,5 +1,69 @@
 # MediaFlow — Changelog
 
+## v3.5.0-alpha.51.1 — Fix audit α.41→α.51 (3 critici + 4 minori) (8 maggio 2026)
+
+Audit logico in apertura sessione ha rivelato 3 bug critici sulla maratona
+α.41→α.51, fissati prima di passare alle feature nuove.
+
+**CRITICI fixati:**
+- **C3 — Sicurezza /uploads**: il mount `StaticFiles("/uploads")` aggiunto
+  in α.51 era in `PUBLIC_PATHS` → tutti gli asset DAM aziendali e i capitolati
+  caricati nel copilot erano **scaricabili senza autenticazione** da chiunque
+  conoscesse l'URL. Rimosso `/uploads/` da `PUBLIC_PATHS` (`app/main.py:279`).
+  Il browser di un utente loggato manda automaticamente il cookie
+  `access_token`, quindi gli URL inline nei template continuano a
+  funzionare; senza login → redirect /auth/login.
+- **C1 — JCL.work_date mai assegnato**: `cost_line_sync.recompute_cost_line_actual`
+  aggiornava `quantity_actual` e `total_accrued` ma non popolava mai
+  `JobCostLine.work_date`, rendendo il selling-point di α.48.2
+  ("periodo trasmissione auto da work_date booking") **rotto end-to-end**:
+  cadeva sempre nel fallback "current_month" col warning ⚠ giallo. Ora
+  popola `work_date = max(start_datetime.date())` dei booking done +
+  backfill one-shot al boot via marker `uploads/.work_date_backfilled_v1`.
+- **C2 — AI resize/move saltavano recompute**: `_h_propose_resize_booking`
+  e `_h_propose_move_booking` modificavano gli assignment ma non chiamavano
+  `recompute_for_booking`. Se il booking era `execution_status=done`, le
+  ore-uomo cambiavano ma `JCL.quantity_actual` / `total_accrued` restavano
+  congelate → cost report fantasma + manager trasmetteva un `total_proposed`
+  sbagliato. Allineato a `_h_propose_delete_booking` che già lo faceva.
+
+**Alti fixati:**
+- **A2 — JCL locked check**: nuovo helper `_assert_jcl_not_locked` chiamato
+  in `_resolve_booking_for_planning`. AI ora non può modificare booking la
+  cui `JobCostLine` sia `in_batch`/`billed`/`paid` (corromperebbe lo
+  snapshot del batch e le LossEntry). Il manager deve prima ritirare il
+  batch.
+- **A4 — BookingChange audit per AI**: `propose_move/resize/delete_booking`
+  ora loggano in `booking_changes` con `kind=ai_move|ai_resize|ai_delete`,
+  allineato al pattern di `planning.delete_booking`.
+- **A1 — tenant_id**: `_resolve_booking_for_planning` filtra Booking per
+  `tenant_id == CURRENT_TENANT`. `set_jcl_billing_status` filtra JCL via
+  JOIN `job→project.tenant_id`.
+- **A3 — Invoice.number scoped**: in `emit_invoice` il check unicità ora è
+  `Invoice.number == X AND Client.tenant_id == CURRENT_TENANT` via JOIN.
+
+**Minori fixati:**
+- **M1 — cancel_batch rilascia anche `lost`**: incluso `JCLBillingStatus.lost`
+  oltre a `in_batch` nel rilascio JCL su annullamento batch. Casi limite di
+  manager che azzera totalmente una line prima del cancel ora coperti.
+- **M5 — cache-buster `global.js`**: bump `?v=3.5.0-alpha.43 → α.51.1` in
+  `base.html`, allineato al resto del package.
+
+**Aperti (refactor non bloccante):**
+- B1 OneDrive `st_mtime` su Mac di Matteo (cleanup_old_attachments potrebbe
+  eliminare prematuramente o mai)
+- B2 system prompt potrebbe esplicitare "spostare booking done = correzione
+  retroattiva, usare con attenzione"
+- B3 filename sanitization regex permette `..` consecutivi (non path
+  traversal, ma cosmetico)
+- M2/M3/M4 (workflow tweaks da fare con calma)
+
+**Smoke test:**
+- App boot pulita, version 3.5.0-alpha.51.1, 258 route registrate
+- Backfill `work_date` esegue al primo boot, marker creato per evitare re-run
+
+---
+
 ## v3.5.0-alpha.51 — Upload documenti per copilot (PDF/DOCX/TXT/MD/immagini) (7 maggio 2026)
 
 Richiesta Matteo serale: caricamento documenti per il copilot. Use case
