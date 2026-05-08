@@ -8,6 +8,48 @@
 
 ## Versione corrente
 
+**v3.5.0-alpha.52** — 8 maggio 2026 — Fattura PDF formale + dati fiscali
+
+Step 2 chiuso. Fattura italiana stampabile con cedente/cessionario, IVA per
+riga, riepilogo IVA per aliquota, IBAN, bollo opt, snapshot fiscali
+immutabili. Tab `/settings/Azienda` per gestire dati cedente + logo.
+
+**Chiuso α.52:**
+- ✅ Modello esteso: Tenant +9 campi fiscali, Client +zip/province,
+  Invoice +4 doc + 10 snap cliente + 11 snap tenant, InvoiceLine +vat/disc
+- ✅ Auto-migrate al boot per le 4 tabelle (idempotente)
+- ✅ `app/services/invoice_pdf.py` — layout fattura italiana completo con
+  logo, REA, capitale, regime fiscale, IVA per aliquota, bollo virtuale,
+  pagamento, footer custom
+- ✅ `emit_invoice` popola snapshot al momento dell'emissione → fatture
+  storiche immuni a modifiche future di tenant/cliente
+- ✅ Endpoint `GET /finance/api/billing/{id}/invoice-pdf`
+- ✅ UI modal batch: bottone 📥 Stampa fattura PDF (visibile su `invoiced`)
+- ✅ /settings tab **Azienda** (form completo + upload logo, admin-only)
+- ✅ Endpoint settings: `GET/PUT /api/company`, `POST /api/company/logo`
+
+**Verifica live richiesta a Matteo:**
+1. Pull → app parte (262 route, version 3.5.0-alpha.52)
+2. /settings → tab Azienda → compila P.IVA, sede, REA, IBAN, regime → Salva
+3. Carica logo PNG/JPG max 1MB → vedi anteprima
+4. Crea batch fatturazione (Cost Report → Trasmetti)
+5. /finance → approva batch → emetti fattura (numero manuale tipo "2026/001")
+6. Modal batch → bottone 📥 Stampa fattura PDF → si apre PDF in nuova tab
+7. Verifica nel PDF: cedente con logo + dati fiscali, cessionario con P.IVA,
+   tabella righe con IVA per riga, riepilogo IVA, totali, IBAN, footer
+
+**Limitazioni note MVP:**
+- Niente XML SDI per invio elettronico (è PDF stampabile, non FE/SdI)
+- IVA per riga uniforme nell'emissione (configurabile UI futura)
+- Bollo virtuale opt-in (default off; va attivato manualmente per esenti)
+- 1 logo per tenant (no varianti chiaro/scuro)
+
+**Prossimi step:**
+- α.53: Vision immagini copilot (Anthropic + OpenAI image blocks)
+- Capability copilot avanzate (recurring/bulk/conflicts/free-slots)
+- Financial Copilot (Q&A + reporting + export status finanziario)
+- Step 5: notifica fine mese auto, "Chiudi progetto", report annuale
+
 **v3.5.0-alpha.51.1** — 8 maggio 2026 — Fix audit α.41→α.51 (3 critici + 4 minori)
 
 Audit logico completo ha rivelato 3 bug critici e 4 alti sulla maratona

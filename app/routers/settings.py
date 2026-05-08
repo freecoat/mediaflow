@@ -443,3 +443,149 @@ async def update_working_hours(
     db.commit()
     db.refresh(p)
     return _serialize_policy(p)
+
+
+# ── v3.5.0-alpha.52: DATI AZIENDALI per fattura formale ───────
+
+def _require_admin(user: Optional[User]):
+    if not user or user.role != "admin":
+        raise HTTPException(403, "Solo gli admin possono modificare i dati aziendali")
+
+
+@router.get("/api/company")
+async def company_get(
+    access_token: Optional[str] = Cookie(None),
+    db: Session = Depends(get_db),
+):
+    """Dati aziendali del tenant corrente, usati come header fattura."""
+    from app.models import Tenant
+    u = _resolve_current_user(db, access_token)
+    if not u:
+        raise HTTPException(401, "Utente non autenticato")
+    t = db.query(Tenant).filter(Tenant.id == 1).first()
+    if not t:
+        raise HTTPException(404, "Tenant non configurato")
+    return {
+        "id": t.id,
+        "name": t.name,
+        "legal_name": t.legal_name,
+        "vat_number": t.vat_number,
+        "tax_code": t.tax_code,
+        "address": t.address,
+        "email": t.email,
+        "phone": t.phone,
+        "website": t.website,
+        "logo_path": t.logo_path,
+        "iban": t.iban,
+        "sdi_code": t.sdi_code,
+        "rea_number": t.rea_number,
+        "fiscal_capital": t.fiscal_capital,
+        "fiscal_regime": t.fiscal_regime,
+        "payment_terms_default": t.payment_terms_default,
+        "payment_method_default": t.payment_method_default,
+        "invoice_footer": t.invoice_footer,
+        "default_currency": t.default_currency,
+        "default_vat_rate": t.default_vat_rate,
+        "default_language": t.default_language,
+    }
+
+
+@router.put("/api/company")
+async def company_update(
+    name: Optional[str] = Form(None),
+    legal_name: Optional[str] = Form(None),
+    vat_number: Optional[str] = Form(None),
+    tax_code: Optional[str] = Form(None),
+    address: Optional[str] = Form(None),
+    email: Optional[str] = Form(None),
+    phone: Optional[str] = Form(None),
+    website: Optional[str] = Form(None),
+    iban: Optional[str] = Form(None),
+    sdi_code: Optional[str] = Form(None),
+    rea_number: Optional[str] = Form(None),
+    fiscal_capital: Optional[str] = Form(None),
+    fiscal_regime: Optional[str] = Form(None),
+    payment_terms_default: Optional[int] = Form(None),
+    payment_method_default: Optional[str] = Form(None),
+    invoice_footer: Optional[str] = Form(None),
+    default_vat_rate: Optional[float] = Form(None),
+    access_token: Optional[str] = Cookie(None),
+    db: Session = Depends(get_db),
+):
+    """Admin only. Aggiorna anagrafica fiscale del tenant.
+
+    NOTA: le fatture già emesse hanno snapshot immutabili dei dati al
+    momento dell'emissione, quindi modifiche qui NON corrompono fatture
+    storiche.
+    """
+    from app.models import Tenant
+    u = _resolve_current_user(db, access_token)
+    _require_admin(u)
+    t = db.query(Tenant).filter(Tenant.id == 1).first()
+    if not t:
+        raise HTTPException(404, "Tenant non configurato")
+    # Update solo i campi forniti (form parzialmente compilati)
+    fields = dict(
+        name=name, legal_name=legal_name, vat_number=vat_number,
+        tax_code=tax_code, address=address, email=email, phone=phone,
+        website=website, iban=iban, sdi_code=sdi_code, rea_number=rea_number,
+        fiscal_capital=fiscal_capital, fiscal_regime=fiscal_regime,
+        payment_terms_default=payment_terms_default,
+        payment_method_default=payment_method_default,
+        invoice_footer=invoice_footer, default_vat_rate=default_vat_rate,
+    )
+    for k, v in fields.items():
+        if v is None:
+            continue
+        # stringhe vuote ammesse come "azzera campo" (Optional)
+        if isinstance(v, str):
+            v = v.strip() or None
+        setattr(t, k, v)
+    db.commit()
+    db.refresh(t)
+    return {"ok": True, "id": t.id}
+
+
+@router.post("/api/company/logo")
+async def company_logo_upload(
+    request: Request,
+    db: Session = Depends(get_db),
+    access_token: Optional[str] = Cookie(None),
+):
+    """Upload logo aziendale. Salva in `uploads/tenant/logo.{ext}`."""
+    from fastapi import UploadFile, File
+    from pathlib import Path
+    from app.models import Tenant
+    u = _resolve_current_user(db, access_token)
+    _require_admin(u)
+    form = await request.form()
+    f = form.get("file")
+    if f is None or not hasattr(f, "filename"):
+        raise HTTPException(400, "Nessun file fornito")
+    fname = (f.filename or "").lower()
+    ext = None
+    for e in (".png", ".jpg", ".jpeg", ".webp"):
+        if fname.endswith(e):
+            ext = e
+            break
+    if not ext:
+        raise HTTPException(400, "Estensione non ammessa (png/jpg/webp)")
+    content = await f.read()
+    if len(content) > 1_000_000:
+        raise HTTPException(400, "Logo troppo grande (max 1MB)")
+    target_dir = Path("uploads") / "tenant"
+    target_dir.mkdir(parents=True, exist_ok=True)
+    target = target_dir / f"logo{ext}"
+    # Pulisci eventuali altri formati per non lasciare residui ambigui
+    for e in (".png", ".jpg", ".jpeg", ".webp"):
+        old = target_dir / f"logo{e}"
+        if old.exists() and old != target:
+            try:
+                old.unlink()
+            except Exception:
+                pass
+    target.write_bytes(content)
+    t = db.query(Tenant).filter(Tenant.id == 1).first()
+    t.logo_path = str(target.as_posix())
+    db.commit()
+    return {"ok": True, "logo_path": t.logo_path}

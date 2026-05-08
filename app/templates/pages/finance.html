@@ -507,6 +507,8 @@ function renderBatchFooter(b) {
     buttons += `<button class="btn btn-ghost" onclick="cancelBatch(${b.id}, '${escapeHtml(b.code)}', 'approved')" style="color:#ef4444;">↩ Annulla batch</button>`;
     buttons += `<button class="btn btn-primary" onclick="openEmitInvoice()">💶 Emetti fattura</button>`;
   } else if (b.status === 'invoiced') {
+    // v3.5.0-alpha.52 — Stampa PDF formale (snapshot fiscali immutabili)
+    buttons += `<a class="btn btn-primary" href="/finance/api/billing/${b.id}/invoice-pdf" target="_blank">📥 Stampa fattura PDF</a>`;
     buttons += `<a class="btn btn-secondary" href="/finance#invoice-${b.invoice_id}" target="_blank">🔗 Vai alla fattura</a>`;
   }
   f.innerHTML = buttons;

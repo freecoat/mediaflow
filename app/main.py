@@ -168,6 +168,82 @@ def _auto_migrate_columns():
                 if col not in jclcols:
                     print(f"[auto-migrate] job_cost_lines.{col} mancante -> ALTER TABLE")
                     conn.execute(text(f"ALTER TABLE job_cost_lines ADD COLUMN {col} {ddl}"))
+    # v3.5.0-alpha.52 — Fattura PDF formale: dati fiscali estesi su tenant,
+    # client, invoice (con snapshot al momento emissione), invoice_line.
+    if "tenants" in insp.get_table_names():
+        tcols = {c["name"] for c in insp.get_columns("tenants")}
+        t_alter = [
+            ("tax_code",                "VARCHAR(50) NULL"),
+            ("iban",                    "VARCHAR(40) NULL"),
+            ("sdi_code",                "VARCHAR(20) NULL"),
+            ("rea_number",              "VARCHAR(40) NULL"),
+            ("fiscal_capital",          "VARCHAR(80) NULL"),
+            ("fiscal_regime",           "VARCHAR(8) NOT NULL DEFAULT 'RF01'"),
+            ("payment_terms_default",   "INTEGER NOT NULL DEFAULT 30"),
+            ("payment_method_default",  "VARCHAR(80) NOT NULL DEFAULT 'Bonifico bancario'"),
+            ("invoice_footer",          "TEXT NULL"),
+        ]
+        with engine.begin() as conn:
+            for col, ddl in t_alter:
+                if col not in tcols:
+                    print(f"[auto-migrate] tenants.{col} mancante -> ALTER TABLE")
+                    conn.execute(text(f"ALTER TABLE tenants ADD COLUMN {col} {ddl}"))
+    if "clients" in insp.get_table_names():
+        ccols = {c["name"] for c in insp.get_columns("clients")}
+        c_alter = [
+            ("zip_code", "VARCHAR(20) NULL"),
+            ("province", "VARCHAR(4) NULL"),
+        ]
+        with engine.begin() as conn:
+            for col, ddl in c_alter:
+                if col not in ccols:
+                    print(f"[auto-migrate] clients.{col} mancante -> ALTER TABLE")
+                    conn.execute(text(f"ALTER TABLE clients ADD COLUMN {col} {ddl}"))
+    if "invoices" in insp.get_table_names():
+        icols = {c["name"] for c in insp.get_columns("invoices")}
+        i_alter = [
+            ("doc_type",                    "VARCHAR(8) NOT NULL DEFAULT 'TD01'"),
+            ("payment_method",              "VARCHAR(80) NULL"),
+            ("payment_terms_days",          "INTEGER NULL"),
+            ("iban_snapshot",               "VARCHAR(40) NULL"),
+            ("client_legal_name_snap",      "VARCHAR(255) NULL"),
+            ("client_vat_snap",             "VARCHAR(50) NULL"),
+            ("client_tax_code_snap",        "VARCHAR(50) NULL"),
+            ("client_pec_snap",             "VARCHAR(255) NULL"),
+            ("client_sdi_snap",             "VARCHAR(20) NULL"),
+            ("client_address_snap",         "TEXT NULL"),
+            ("client_zip_snap",             "VARCHAR(20) NULL"),
+            ("client_city_snap",            "VARCHAR(100) NULL"),
+            ("client_province_snap",        "VARCHAR(4) NULL"),
+            ("client_country_snap",         "VARCHAR(100) NULL"),
+            ("tenant_legal_name_snap",      "VARCHAR(255) NULL"),
+            ("tenant_vat_snap",             "VARCHAR(50) NULL"),
+            ("tenant_tax_code_snap",        "VARCHAR(50) NULL"),
+            ("tenant_address_snap",         "TEXT NULL"),
+            ("tenant_email_snap",           "VARCHAR(255) NULL"),
+            ("tenant_phone_snap",           "VARCHAR(50) NULL"),
+            ("tenant_iban_snap",            "VARCHAR(40) NULL"),
+            ("tenant_sdi_snap",             "VARCHAR(20) NULL"),
+            ("tenant_rea_snap",             "VARCHAR(40) NULL"),
+            ("tenant_fiscal_capital_snap",  "VARCHAR(80) NULL"),
+            ("tenant_fiscal_regime_snap",   "VARCHAR(8) NULL"),
+        ]
+        with engine.begin() as conn:
+            for col, ddl in i_alter:
+                if col not in icols:
+                    print(f"[auto-migrate] invoices.{col} mancante -> ALTER TABLE")
+                    conn.execute(text(f"ALTER TABLE invoices ADD COLUMN {col} {ddl}"))
+    if "invoice_lines" in insp.get_table_names():
+        ilcols = {c["name"] for c in insp.get_columns("invoice_lines")}
+        il_alter = [
+            ("vat_rate",     "REAL NOT NULL DEFAULT 22.0"),
+            ("discount_pct", "REAL NOT NULL DEFAULT 0.0"),
+        ]
+        with engine.begin() as conn:
+            for col, ddl in il_alter:
+                if col not in ilcols:
+                    print(f"[auto-migrate] invoice_lines.{col} mancante -> ALTER TABLE")
+                    conn.execute(text(f"ALTER TABLE invoice_lines ADD COLUMN {col} {ddl}"))
 
 
 @asynccontextmanager
@@ -252,7 +328,7 @@ async def lifespan(app: FastAPI):
     yield
 
 
-app = FastAPI(title="MediaFlow", version="3.5.0-alpha.51.1", lifespan=lifespan)
+app = FastAPI(title="MediaFlow", version="3.5.0-alpha.52", lifespan=lifespan)
 
 BASE_DIR = Path(__file__).parent
 app.mount("/static", StaticFiles(directory=BASE_DIR / "static"), name="static")

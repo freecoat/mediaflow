@@ -1,5 +1,89 @@
 # MediaFlow — Changelog
 
+## v3.5.0-alpha.52 — Fattura PDF formale + dati fiscali (8 maggio 2026)
+
+Step 2 della roadmap chiusa con Matteo: emissione fattura PDF "stampabile"
+in formato italiano, con snapshot fiscali immutabili al momento
+dell'emissione e tab `Azienda` in /settings per gestire i dati del cedente.
+
+**Modello esteso (auto-migrate al boot, idempotente):**
+- `Tenant` + 9 campi fiscali: `tax_code`, `iban`, `sdi_code`, `rea_number`,
+  `fiscal_capital`, `fiscal_regime` (RF01..RF19, default RF01),
+  `payment_terms_default` (giorni, default 30), `payment_method_default`
+  (default "Bonifico bancario"), `invoice_footer` (testo libero in calce)
+- `Client` + `zip_code`, `province` (sigla 4 char es. "MI")
+- `Invoice` + 4 campi documento (`doc_type` default `TD01`, `payment_method`,
+  `payment_terms_days`, `iban_snapshot`) + 10 snapshot cliente + 11 snapshot
+  tenant. Modifiche successive a Tenant/Client NON corrompono fatture
+  storiche.
+- `InvoiceLine` + `vat_rate` (per riga, default 22), `discount_pct`
+
+**Generatore PDF — `app/services/invoice_pdf.py`:**
+Layout fattura italiana professionale:
+- Header con logo (se presente) + Cedente: ragione sociale, P.IVA, CF,
+  sede, REA, capitale sociale, regime fiscale (RF01..RF19), email/telefono
+- Box doc info: tipo (TD01..TD24), N°, data emissione, data scadenza
+- Box Cessionario: nome, indirizzo completo (via, CAP, città, provincia,
+  paese), P.IVA, CF, PEC, codice destinatario SDI (fallback `0000000` se
+  PEC presente)
+- Tabella righe: descrizione, quantità, prezzo, sconto%, IVA%, imponibile
+- Riepilogo IVA per aliquota (utile per esenzioni / split-rate)
+- Totali: imponibile, IVA totale, bollo virtuale 2€ opt (D.M. 17/06/2014
+  per esenti > 77.47€), Totale documento
+- Box pagamento: modalità + termini (giorni) + IBAN
+- Footer aziendale custom + footer fisso "Documento generato da MediaFlow"
+
+`generate_invoice_pdf(invoice, tenant=None, client=None, bollo_virtuale=False)`
+preferisce gli snapshot; cade sui campi vivi di tenant/client se mancano
+(retrocompat con fatture pre-α.52).
+
+**`emit_invoice` esteso**: popola tutti gli snapshot fiscali + payment
+method/terms/IBAN dai default tenant. Nuove fatture sono "auto-contenute"
+e stampabili indipendentemente da modifiche future.
+
+**Endpoint nuovo**:
+- `GET /finance/api/billing/{batch_id}/invoice-pdf` → PDF inline
+  (`Content-Disposition: inline; filename="Fattura-{number}.pdf"`).
+  Richiede status batch=`invoiced`. Auth `view_finance` (producer/manager/admin).
+
+**UI:**
+- `/finance` modal batch quando status=`invoiced`: bottone primario
+  **📥 Stampa fattura PDF** che apre il PDF in nuova tab. Lasciato anche
+  bottone secondario "🔗 Vai alla fattura".
+- `/settings` nuova tab **Azienda** con form completo per i dati fiscali:
+  - 17 campi raggruppati (anagrafica, fiscale, pagamento, footer)
+  - Upload logo (PNG/JPG/WebP, max 1MB) salvato in `uploads/tenant/logo.{ext}`
+  - Anteprima logo live
+  - Visibile a tutti, editabile solo da admin (badge "🔒 Sola lettura"
+    altrimenti)
+
+**Endpoint settings:**
+- `GET /settings/api/company` — leggi
+- `PUT /settings/api/company` — scrivi (admin only, parziale OK)
+- `POST /settings/api/company/logo` — upload logo (admin only, max 1MB)
+
+**Smoke test:**
+- App boot pulita, version 3.5.0-alpha.52, 262 route
+- PDF generato 3937 bytes valido (`%PDF-1.4`) con dati dummy
+- Endpoint billing PDF + settings company registrati
+
+**Per Matteo da provare:**
+1. /settings → tab Azienda → compila ragione sociale, P.IVA, sede, IBAN,
+   regime, ecc. → carica logo → Salva
+2. Crea un batch fatturazione (Cost report → Trasmetti) → /finance →
+   approva → emetti fattura
+3. Modal batch → bottone 📥 Stampa fattura PDF → apre PDF formale con
+   tutti i dati
+
+**Aperti per α.53:**
+- Vision integration immagini copilot (Anthropic + OpenAI image blocks)
+- Capability copilot avanzate (recurring_bookings, bulk_move,
+  analyze_conflicts, find_free_slots)
+- Financial Copilot (Q&A finanziarie, export financial status, project
+  status)
+
+---
+
 ## v3.5.0-alpha.51.1 — Fix audit α.41→α.51 (3 critici + 4 minori) (8 maggio 2026)
 
 Audit logico in apertura sessione ha rivelato 3 bug critici sulla maratona

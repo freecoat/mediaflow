@@ -84,6 +84,7 @@
     <div class="settings-tab" data-pane="ai" onclick="showPane('ai')"><i data-lucide="bot" style="width:14px;height:14px;vertical-align:-2px;"></i> AI</div>
     <div class="settings-tab" data-pane="hours" onclick="showPane('hours')"><i data-lucide="clock" style="width:14px;height:14px;vertical-align:-2px;"></i> Orari lavorativi</div>
     <div class="settings-tab" data-pane="account" onclick="showPane('account')"><i data-lucide="user" style="width:14px;height:14px;vertical-align:-2px;"></i> Account</div>
+    <div class="settings-tab" data-pane="company" onclick="showPane('company')"><i data-lucide="building-2" style="width:14px;height:14px;vertical-align:-2px;"></i> Azienda</div>
     {% if is_admin(user) %}
     <div class="settings-tab" data-pane="data" onclick="showPane('data')"><i data-lucide="database" style="width:14px;height:14px;vertical-align:-2px;"></i> Dati</div>
     {% endif %}
@@ -338,6 +339,112 @@
         <button class="btn btn-primary btn-sm" onclick="changePassword()">Cambia password</button>
       </div>
       {% endif %}
+    </div>
+
+    <!-- ── Pannello Azienda (v3.5.0-alpha.52) ──────────────────── -->
+    <div class="settings-pane" id="pane-company">
+      <div class="card mb-4">
+        <div class="flex items-center justify-between mb-3">
+          <div>
+            <div class="card-title"><i data-lucide="building-2" style="width:16px;height:16px;vertical-align:-3px;"></i> Dati aziendali per fattura</div>
+            <p class="text-sm text-muted" style="margin:4px 0 0;">
+              Questi dati vengono usati come <b>Cedente</b> nelle fatture PDF emesse
+              dal flusso Cost Report → Billing. Le fatture già emesse hanno snapshot
+              immutabili: modifiche qui non corrompono fatture storiche.
+              {% if not is_admin(user) %}
+              <br/>🔒 Solo gli admin possono modificare.
+              {% endif %}
+            </p>
+          </div>
+          <div id="cmp-saved-badge" class="text-sm" style="color:#22c55e; opacity:0; transition:opacity .25s;">✓ Salvato</div>
+        </div>
+
+        <div style="display:grid; grid-template-columns:1fr 1fr; gap:12px;">
+          <div class="form-group">
+            <label class="form-label">Ragione sociale (legal_name)</label>
+            <input class="form-input" id="cmp-legal_name" placeholder="es. Acme SRL"></div>
+          <div class="form-group">
+            <label class="form-label">Nome breve (display)</label>
+            <input class="form-input" id="cmp-name" placeholder="es. Acme"></div>
+          <div class="form-group">
+            <label class="form-label">P.IVA</label>
+            <input class="form-input" id="cmp-vat_number" placeholder="es. IT01234567890"></div>
+          <div class="form-group">
+            <label class="form-label">Codice fiscale (se ≠ P.IVA)</label>
+            <input class="form-input" id="cmp-tax_code"></div>
+          <div class="form-group" style="grid-column:1/-1;">
+            <label class="form-label">Sede legale (indirizzo completo, multilinea)</label>
+            <textarea class="form-input" id="cmp-address" rows="2" placeholder="Via Esempio 1\n00100 Roma (RM), Italia"></textarea></div>
+          <div class="form-group">
+            <label class="form-label">Email</label>
+            <input class="form-input" id="cmp-email" type="email"></div>
+          <div class="form-group">
+            <label class="form-label">Telefono</label>
+            <input class="form-input" id="cmp-phone"></div>
+          <div class="form-group">
+            <label class="form-label">Sito web</label>
+            <input class="form-input" id="cmp-website" placeholder="https://..."></div>
+          <div class="form-group">
+            <label class="form-label">REA</label>
+            <input class="form-input" id="cmp-rea_number" placeholder="es. MI-1234567"></div>
+          <div class="form-group">
+            <label class="form-label">Capitale sociale</label>
+            <input class="form-input" id="cmp-fiscal_capital" placeholder="es. 10.000,00 i.v."></div>
+          <div class="form-group">
+            <label class="form-label">Regime fiscale</label>
+            <select class="form-input" id="cmp-fiscal_regime">
+              <option value="RF01">RF01 — Ordinario</option>
+              <option value="RF19">RF19 — Forfettario</option>
+              <option value="RF02">RF02 — Contribuenti minimi</option>
+              <option value="RF17">RF17 — IVA per cassa</option>
+              <option value="RF11">RF11 — Agenzie viaggi</option>
+              <option value="RF12">RF12 — Agriturismo</option>
+            </select></div>
+          <div class="form-group">
+            <label class="form-label">Codice destinatario SDI proprio (opzionale)</label>
+            <input class="form-input" id="cmp-sdi_code" placeholder="7 caratteri"></div>
+          <div class="form-group" style="grid-column:1/-1;">
+            <label class="form-label">IBAN bancario</label>
+            <input class="form-input mono" id="cmp-iban" placeholder="IT60X0542811101000000123456"></div>
+          <div class="form-group">
+            <label class="form-label">Modalità pagamento default</label>
+            <input class="form-input" id="cmp-payment_method_default" placeholder="Bonifico bancario"></div>
+          <div class="form-group">
+            <label class="form-label">Termini pagamento default (giorni)</label>
+            <input class="form-input" id="cmp-payment_terms_default" type="number" min="0" max="365"></div>
+          <div class="form-group">
+            <label class="form-label">Aliquota IVA default (%)</label>
+            <input class="form-input" id="cmp-default_vat_rate" type="number" step="0.5" min="0" max="100"></div>
+          <div class="form-group" style="grid-column:1/-1;">
+            <label class="form-label">Footer fattura (note legali, condizioni, ecc.)</label>
+            <textarea class="form-input" id="cmp-invoice_footer" rows="2" placeholder="Pagamento entro la data di scadenza. In caso di ritardo si applicano interessi ex D.Lgs. 231/2002."></textarea></div>
+        </div>
+
+        <div style="display:flex; gap:8px; align-items:center; margin-top:12px; padding:12px; background:var(--bg2); border:1px solid var(--border); border-radius:6px;">
+          <div style="flex:1;">
+            <div style="font-weight:500;">Logo aziendale</div>
+            <div class="text-xs text-muted">Visualizzato in alto a sinistra nella fattura PDF. PNG/JPG/WebP, max 1MB.</div>
+            <div id="cmp-logo-preview" style="margin-top:6px; min-height:40px;"></div>
+          </div>
+          {% if is_admin(user) %}
+          <input type="file" id="cmp-logo-input" accept="image/png,image/jpeg,image/webp" style="display:none;" onchange="cmpUploadLogo(this)">
+          <button class="btn btn-secondary btn-sm" onclick="document.getElementById('cmp-logo-input').click()">
+            <i data-lucide="upload" style="width:14px;height:14px;vertical-align:-2px;"></i> Carica logo
+          </button>
+          {% endif %}
+        </div>
+
+        {% if is_admin(user) %}
+        <div class="flex gap-2 mt-3">
+          <button class="btn btn-primary" onclick="cmpSave()">Salva dati aziendali</button>
+          <button class="btn btn-ghost" onclick="cmpLoad()">Annulla modifiche</button>
+        </div>
+        {% else %}
+        <div class="flex gap-2 mt-3">
+          <button class="btn btn-ghost" disabled>🔒 Sola lettura</button>
+        </div>
+        {% endif %}
+      </div>
     </div>
 
     {% if is_admin(user) %}
@@ -982,5 +1089,80 @@ async function aiDelete(provider) {
 }
 
 loadAISettings();
+
+// ── v3.5.0-alpha.52: Tab Azienda (dati fiscali per fattura) ──
+const CMP_FIELDS = [
+  'name', 'legal_name', 'vat_number', 'tax_code', 'address',
+  'email', 'phone', 'website', 'rea_number', 'fiscal_capital',
+  'fiscal_regime', 'sdi_code', 'iban', 'payment_method_default',
+  'payment_terms_default', 'default_vat_rate', 'invoice_footer',
+];
+
+async function cmpLoad() {
+  try {
+    const data = await api('GET', '/settings/api/company');
+    CMP_FIELDS.forEach(f => {
+      const el = document.getElementById('cmp-' + f);
+      if (!el) return;
+      el.value = (data[f] === null || data[f] === undefined) ? '' : data[f];
+    });
+    cmpRenderLogo(data.logo_path);
+  } catch (e) { console.warn('cmpLoad failed', e); }
+}
+
+function cmpRenderLogo(path) {
+  const box = document.getElementById('cmp-logo-preview');
+  if (!box) return;
+  if (!path) {
+    box.innerHTML = '<span class="text-xs text-muted">Nessun logo caricato.</span>';
+    return;
+  }
+  const url = '/' + path.replace(/^\/+/, '') + '?t=' + Date.now();
+  box.innerHTML = `<img src="${url}" alt="Logo" style="max-height:60px; max-width:240px; background:#fff; padding:4px; border:1px solid var(--border); border-radius:4px;">`;
+}
+
+async function cmpSave() {
+  const fd = new FormData();
+  CMP_FIELDS.forEach(f => {
+    const el = document.getElementById('cmp-' + f);
+    if (!el) return;
+    fd.append(f, el.value || '');
+  });
+  try {
+    const r = await fetch('/settings/api/company', { method: 'PUT', body: fd, credentials: 'same-origin' });
+    if (!r.ok) {
+      const err = await r.json().catch(() => ({}));
+      throw new Error(err.detail || 'Errore salvataggio');
+    }
+    toast('Dati aziendali salvati', 'success');
+    const badge = document.getElementById('cmp-saved-badge');
+    if (badge) {
+      badge.style.opacity = '1';
+      setTimeout(() => badge.style.opacity = '0', 1800);
+    }
+  } catch (e) { toast(e.message, 'error'); }
+}
+
+async function cmpUploadLogo(input) {
+  const file = input.files && input.files[0];
+  if (!file) return;
+  const fd = new FormData();
+  fd.append('file', file);
+  try {
+    const r = await fetch('/settings/api/company/logo', {
+      method: 'POST', body: fd, credentials: 'same-origin',
+    });
+    if (!r.ok) {
+      const err = await r.json().catch(() => ({}));
+      throw new Error(err.detail || 'Upload fallito');
+    }
+    const data = await r.json();
+    cmpRenderLogo(data.logo_path);
+    toast('Logo caricato', 'success');
+  } catch (e) { toast(e.message, 'error'); }
+  input.value = '';  // reset
+}
+
+cmpLoad();
 </script>
 {% endblock %}

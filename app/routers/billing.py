@@ -37,6 +37,7 @@ from app.models import (
     JobCostLine, JCLBillingStatus,
     LossEntry, LossReason,
     Project, Job, JobStatus, Invoice, InvoiceLine, InvoiceStatus, Client,
+    Tenant,
 )
 from app.services.rbac import (
     current_user_optional, is_admin, is_manager, can_view_finance,
@@ -495,6 +496,11 @@ async def emit_invoice(
     vat_amount = subtotal * vat_rate / 100
     total = subtotal + vat_amount
 
+    # v3.5.0-alpha.52 — Snapshot dati fiscali al momento dell'emissione.
+    # Modifiche successive a tenant/cliente NON corrompono la fattura storica.
+    client_obj = db.query(Client).filter(Client.id == project.client_id).first()
+    tenant_obj = db.query(Tenant).filter(Tenant.id == CURRENT_TENANT).first()
+
     invoice = Invoice(
         number=invoice_number,
         client_id=project.client_id,
@@ -505,6 +511,33 @@ async def emit_invoice(
         vat_rate=vat_rate,
         total=total,
         notes=f"Generata da BillingBatch {batch.code}",
+        doc_type="TD01",
+        payment_method=(tenant_obj.payment_method_default if tenant_obj else None),
+        payment_terms_days=(tenant_obj.payment_terms_default if tenant_obj else None),
+        iban_snapshot=(tenant_obj.iban if tenant_obj else None),
+        # Snapshot client (cessionario)
+        client_legal_name_snap=(client_obj.legal_form and client_obj.name and f"{client_obj.name} {client_obj.legal_form}".strip()) or (client_obj.name if client_obj else None),
+        client_vat_snap=(client_obj.vat_number if client_obj else None),
+        client_tax_code_snap=(client_obj.tax_code if client_obj else None),
+        client_pec_snap=(client_obj.pec if client_obj else None),
+        client_sdi_snap=(client_obj.sdi_code if client_obj else None),
+        client_address_snap=(client_obj.address if client_obj else None),
+        client_zip_snap=(client_obj.zip_code if client_obj else None),
+        client_city_snap=(client_obj.city if client_obj else None),
+        client_province_snap=(client_obj.province if client_obj else None),
+        client_country_snap=(client_obj.country if client_obj else None),
+        # Snapshot tenant (cedente)
+        tenant_legal_name_snap=((tenant_obj.legal_name or tenant_obj.name) if tenant_obj else None),
+        tenant_vat_snap=(tenant_obj.vat_number if tenant_obj else None),
+        tenant_tax_code_snap=(tenant_obj.tax_code if tenant_obj else None),
+        tenant_address_snap=(tenant_obj.address if tenant_obj else None),
+        tenant_email_snap=(tenant_obj.email if tenant_obj else None),
+        tenant_phone_snap=(tenant_obj.phone if tenant_obj else None),
+        tenant_iban_snap=(tenant_obj.iban if tenant_obj else None),
+        tenant_sdi_snap=(tenant_obj.sdi_code if tenant_obj else None),
+        tenant_rea_snap=(tenant_obj.rea_number if tenant_obj else None),
+        tenant_fiscal_capital_snap=(tenant_obj.fiscal_capital if tenant_obj else None),
+        tenant_fiscal_regime_snap=(tenant_obj.fiscal_regime if tenant_obj else None),
     )
     db.add(invoice)
     db.flush()
@@ -519,6 +552,8 @@ async def emit_invoice(
             quantity=bl.quantity,
             unit_price=bl.unit_price,
             total=bl.total_approved,
+            vat_rate=vat_rate,  # uniforme da emit; UI futura potrà differenziare
+            discount_pct=0.0,
         )
         db.add(il)
         # Marca JCL → billed con importo effettivo
@@ -650,3 +685,46 @@ async def project_loss_summary(
             for l in sorted(losses, key=lambda x: x.created_at or datetime.min, reverse=True)
         ],
     }
+
+
+# ── v3.5.0-alpha.52: PDF formale fattura ─────────────────────────────
+
+@router.get("/{batch_id}/invoice-pdf")
+async def get_invoice_pdf(
+    batch_id: int,
+    request: Request,
+    db: Session = Depends(get_db),
+):
+    """Scarica il PDF della fattura collegata al batch (status=invoiced).
+
+    Usa snapshot fiscali catturati al momento dell'emissione: modifiche
+    successive a tenant/cliente NON corrompono questo PDF storico.
+    """
+    from fastapi.responses import Response
+    from app.services.invoice_pdf import generate_invoice_pdf
+    _require_finance(request)
+    batch = db.query(BillingBatch).options(joinedload(BillingBatch.lines)).filter(
+        BillingBatch.id == batch_id, BillingBatch.tenant_id == CURRENT_TENANT,
+    ).first()
+    if not batch:
+        raise HTTPException(404, "Batch non trovato")
+    if batch.status != BillingBatchStatus.invoiced or not batch.invoice_id:
+        raise HTTPException(400, "Il batch non ha ancora una fattura emessa")
+    invoice = db.query(Invoice).options(joinedload(Invoice.lines)).filter(
+        Invoice.id == batch.invoice_id,
+    ).first()
+    if not invoice:
+        raise HTTPException(404, "Fattura non trovata")
+    # Fallback: se snapshot non popolati (fattura pre-α.52), passa anche
+    # gli oggetti vivi per compilare il PDF dai campi attuali.
+    tenant_obj = db.query(Tenant).filter(Tenant.id == CURRENT_TENANT).first()
+    client_obj = db.query(Client).filter(Client.id == invoice.client_id).first()
+    pdf = generate_invoice_pdf(invoice, tenant=tenant_obj, client=client_obj)
+    safe_num = (invoice.number or f"invoice-{invoice.id}").replace("/", "-")
+    return Response(
+        content=pdf,
+        media_type="application/pdf",
+        headers={
+            "Content-Disposition": f'inline; filename="Fattura-{safe_num}.pdf"',
+        },
+    )

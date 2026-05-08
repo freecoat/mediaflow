@@ -256,6 +256,16 @@ class Tenant(Base):
     default_currency: Mapped[str] = mapped_column(String(3), default="EUR")
     default_vat_rate: Mapped[float] = mapped_column(Float, default=22.0)
     default_language: Mapped[str] = mapped_column(String(5), default="it")
+    # v3.5.0-alpha.52 — Dati fiscali estesi per emissione fatture
+    tax_code: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)         # CF se ≠ P.IVA
+    iban: Mapped[Optional[str]] = mapped_column(String(40), nullable=True)             # IBAN bancario
+    sdi_code: Mapped[Optional[str]] = mapped_column(String(20), nullable=True)         # codice destinatario SDI proprio
+    rea_number: Mapped[Optional[str]] = mapped_column(String(40), nullable=True)       # es. "MI-1234567"
+    fiscal_capital: Mapped[Optional[str]] = mapped_column(String(80), nullable=True)   # Capitale sociale es. "10.000,00 i.v."
+    fiscal_regime: Mapped[str] = mapped_column(String(8), default="RF01")              # RF01=ordinario, RF19=forfettario
+    payment_terms_default: Mapped[int] = mapped_column(Integer, default=30)            # giorni
+    payment_method_default: Mapped[str] = mapped_column(String(80), default="Bonifico bancario")
+    invoice_footer: Mapped[Optional[str]] = mapped_column(Text, nullable=True)         # testo libero in calce
     # Stato
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
     onboarding_completed: Mapped[bool] = mapped_column(Boolean, default=False)
@@ -406,7 +416,10 @@ class Client(Base):
     address: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     city: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
     country: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
-    
+    # v3.5.0-alpha.52 — Dati fattura estesi
+    zip_code: Mapped[Optional[str]] = mapped_column(String(20), nullable=True)
+    province: Mapped[Optional[str]] = mapped_column(String(4), nullable=True)  # sigla "MI"
+
     # Informazioni aziendali (arricchite da AI)
     website: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
     industry: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
@@ -1068,6 +1081,34 @@ class Invoice(Base):
     total: Mapped[float] = mapped_column(Float, default=0.0)
     notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    # v3.5.0-alpha.52 — Tipo documento + condizioni pagamento + IBAN snapshot
+    doc_type: Mapped[str] = mapped_column(String(8), default="TD01")          # TD01=fattura ord, TD04=NC, TD06=parcella
+    payment_method: Mapped[Optional[str]] = mapped_column(String(80), nullable=True)
+    payment_terms_days: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    iban_snapshot: Mapped[Optional[str]] = mapped_column(String(40), nullable=True)
+    # Snapshot fiscali cliente (cessionario) al momento dell'emissione — immutabili
+    client_legal_name_snap: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
+    client_vat_snap: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
+    client_tax_code_snap: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
+    client_pec_snap: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
+    client_sdi_snap: Mapped[Optional[str]] = mapped_column(String(20), nullable=True)
+    client_address_snap: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    client_zip_snap: Mapped[Optional[str]] = mapped_column(String(20), nullable=True)
+    client_city_snap: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
+    client_province_snap: Mapped[Optional[str]] = mapped_column(String(4), nullable=True)
+    client_country_snap: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
+    # Snapshot fiscali tenant (cedente) al momento dell'emissione
+    tenant_legal_name_snap: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
+    tenant_vat_snap: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
+    tenant_tax_code_snap: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
+    tenant_address_snap: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    tenant_email_snap: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
+    tenant_phone_snap: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
+    tenant_iban_snap: Mapped[Optional[str]] = mapped_column(String(40), nullable=True)
+    tenant_sdi_snap: Mapped[Optional[str]] = mapped_column(String(20), nullable=True)
+    tenant_rea_snap: Mapped[Optional[str]] = mapped_column(String(40), nullable=True)
+    tenant_fiscal_capital_snap: Mapped[Optional[str]] = mapped_column(String(80), nullable=True)
+    tenant_fiscal_regime_snap: Mapped[Optional[str]] = mapped_column(String(8), nullable=True)
     client: Mapped["Client"] = relationship(back_populates="invoices")
     job: Mapped[Optional["Job"]] = relationship(back_populates="invoices")
     lines: Mapped[List["InvoiceLine"]] = relationship(back_populates="invoice", cascade="all, delete-orphan")
@@ -1081,6 +1122,9 @@ class InvoiceLine(Base):
     quantity: Mapped[float] = mapped_column(Float, default=1.0)
     unit_price: Mapped[float] = mapped_column(Float)
     total: Mapped[float] = mapped_column(Float)
+    # v3.5.0-alpha.52 — IVA per riga + sconto % per riga
+    vat_rate: Mapped[float] = mapped_column(Float, default=22.0)
+    discount_pct: Mapped[float] = mapped_column(Float, default=0.0)
     invoice: Mapped["Invoice"] = relationship(back_populates="lines")
 
 
