@@ -36,6 +36,7 @@ from app.models import (
     BillingBatch, BillingBatchLine, BillingBatchStatus,
     JobCostLine, JCLBillingStatus,
     LossEntry, LossReason,
+    JCLBilledSlice,
     Project, Job, JobStatus, Invoice, InvoiceLine, InvoiceStatus, Client,
     Tenant,
     Booking, BookingStatus, BookingExecutionStatus,
@@ -726,6 +727,21 @@ async def emit_invoice(
         if jcl:
             jcl.billing_status = JCLBillingStatus.billed
             jcl.billed_amount = bl.total_approved
+        # v3.5.0-alpha.58 — JCLBilledSlice immutabile per la porzione fatturata.
+        # Foundation per α.59/α.60: la JCL non è più "billed/non-billed binaria"
+        # ma ha un set di slice con periodi e importi specifici.
+        slice_ = JCLBilledSlice(
+            tenant_id=CURRENT_TENANT,
+            job_cost_line_id=bl.job_cost_line_id,
+            billing_batch_line_id=bl.id,
+            invoice_id=invoice.id,
+            period_start=batch.period_start,
+            period_end=batch.period_end,
+            billed_quantity=bl.quantity or 0.0,
+            billed_amount=bl.total_approved,
+            unit_price_snap=bl.unit_price or 0.0,
+        )
+        db.add(slice_)
     # Marca le JCL azzerate come `lost` (manager le ha scartate completamente)
     for bl in batch.lines:
         if bl.total_approved <= 0.001:

@@ -1222,6 +1222,57 @@ class LossEntry(Base):
     job_cost_line: Mapped[Optional["JobCostLine"]] = relationship(foreign_keys=[job_cost_line_id])
 
 
+# v3.5.0-alpha.58 — JCLBilledSlice: porzione di una JCL fatturata in uno
+# specifico periodo. Supera il binario JCLBillingStatus che imprigiona la
+# JCL come "billed" anche se il lavoro continua su periodi successivi.
+#
+# Una JCL può avere N slice nel tempo (es. progetto trimestrale fatturato
+# mensilmente: tre slice distinti, ognuno copre il maturato del proprio
+# mese). Lo slice è un oggetto immutabile (snapshot al momento della
+# emissione fattura) — modifiche successive a JCL non lo toccano.
+#
+# Used by α.59 (hard-block backedit booking dentro periodo già slice-ato),
+# α.60 (cost report 3 colonne: slice-ato/post-periodo/futuro), α.61
+# (notifica EXTRA_AFTER_BILLED quando emerge extra su periodo già chiuso).
+class JCLBilledSlice(Base):
+    """Snapshot della porzione di JobCostLine fatturata per uno specifico
+    periodo. Generato in `emit_invoice` (uno per BillingBatchLine con
+    total_approved>0) e mai modificato post-creazione.
+
+    `period_start`/`period_end` ricalcano il periodo del BillingBatch da
+    cui lo slice deriva. `billed_quantity`/`billed_amount` snapshottano
+    la quantità e l'importo realmente fatturati (corrispondono a
+    BillingBatchLine.quantity e BillingBatchLine.total_approved).
+
+    Invariante α.59: i Booking done con start_datetime.date() compreso
+    in [period_start, period_end] di una slice della loro JCL non sono
+    più editabili (HARD-BLOCK 409 — uscita formale via endpoint dedicato
+    di rettifica)."""
+    __tablename__ = "jcl_billed_slices"
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    tenant_id: Mapped[int] = mapped_column(ForeignKey("tenants.id"), default=1, index=True)
+    job_cost_line_id: Mapped[int] = mapped_column(
+        ForeignKey("job_cost_lines.id"), index=True
+    )
+    billing_batch_line_id: Mapped[Optional[int]] = mapped_column(
+        ForeignKey("billing_batch_lines.id"), nullable=True, index=True
+    )
+    invoice_id: Mapped[Optional[int]] = mapped_column(
+        ForeignKey("invoices.id"), nullable=True, index=True
+    )
+    period_start: Mapped[date] = mapped_column(Date, index=True)
+    period_end: Mapped[date] = mapped_column(Date, index=True)
+    billed_quantity: Mapped[float] = mapped_column(Float, default=0.0)
+    billed_amount: Mapped[float] = mapped_column(Float, default=0.0)
+    unit_price_snap: Mapped[float] = mapped_column(Float, default=0.0)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    job_cost_line: Mapped["JobCostLine"] = relationship(foreign_keys=[job_cost_line_id])
+    billing_batch_line: Mapped[Optional["BillingBatchLine"]] = relationship(
+        foreign_keys=[billing_batch_line_id]
+    )
+    invoice: Mapped[Optional["Invoice"]] = relationship(foreign_keys=[invoice_id])
+
+
 # ── DAM ──────────────────────────────────────────────────────
 
 class Tag(Base):

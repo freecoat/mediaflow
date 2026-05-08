@@ -13,6 +13,7 @@ from app.models.models import (
     Timesheet, Expense, Invoice, InvoiceLine, InvoiceStatus,
     JCLBillingStatus, BillingBatch, BillingBatchLine, BillingBatchStatus,
     LossEntry, LossReason,
+    JCLBilledSlice,
     Asset, AssetType, Tag, AssetTag,
     PriceCategory, PriceItem, PriceLevel,
     Quote, QuoteLine, QuoteStatus,

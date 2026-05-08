@@ -351,10 +351,66 @@ async def lifespan(app: FastAPI):
                 _db.close()
     except Exception as e:
         print(f"[lifespan] backfill JCL.total_expected failed: {e}")
+    # v3.5.0-alpha.58 — Backfill JCLBilledSlice da BillingBatch già fatturati.
+    # Foundation per α.59 (hard-block backedit booking dentro periodo slice-ato)
+    # e α.60 (cost report 3 colonne). Per ogni BillingBatchLine appartenente a
+    # un batch invoiced con total_approved > 0 si crea uno slice retroattivo
+    # con periodo del batch e snapshot quantità/importo della line.
+    # Eseguito una volta sola: marker file uploads/.billed_slices_backfilled_v1.
+    try:
+        marker = Path("uploads") / ".billed_slices_backfilled_v1"
+        if not marker.exists():
+            from app.database import SessionLocal
+            from app.models import (
+                BillingBatch, BillingBatchLine, BillingBatchStatus,
+                JCLBilledSlice,
+            )
+            _db = SessionLocal()
+            try:
+                batches = _db.query(BillingBatch).filter(
+                    BillingBatch.status == BillingBatchStatus.invoiced
+                ).all()
+                created = 0
+                skipped = 0
+                for batch in batches:
+                    for line in batch.lines:
+                        if (line.total_approved or 0) <= 0.001:
+                            continue
+                        existing = _db.query(JCLBilledSlice).filter(
+                            JCLBilledSlice.billing_batch_line_id == line.id
+                        ).first()
+                        if existing:
+                            skipped += 1
+                            continue
+                        slice_ = JCLBilledSlice(
+                            tenant_id=batch.tenant_id or 1,
+                            job_cost_line_id=line.job_cost_line_id,
+                            billing_batch_line_id=line.id,
+                            invoice_id=batch.invoice_id,
+                            period_start=batch.period_start,
+                            period_end=batch.period_end,
+                            billed_quantity=line.quantity or 0.0,
+                            billed_amount=line.total_approved or 0.0,
+                            unit_price_snap=line.unit_price or 0.0,
+                        )
+                        _db.add(slice_)
+                        created += 1
+                _db.commit()
+                marker.write_text("ok")
+                if created or skipped:
+                    print(
+                        f"[lifespan] backfill JCLBilledSlice: "
+                        f"{created} creati, {skipped} già presenti, "
+                        f"{len(batches)} batch invoiced scansionati"
+                    )
+            finally:
+                _db.close()
+    except Exception as e:
+        print(f"[lifespan] backfill JCLBilledSlice failed: {e}")
     yield
 
 
-app = FastAPI(title="MediaFlow", version="3.5.0-alpha.57", lifespan=lifespan)
+app = FastAPI(title="MediaFlow", version="3.5.0-alpha.58", lifespan=lifespan)
 
 BASE_DIR = Path(__file__).parent
 app.mount("/static", StaticFiles(directory=BASE_DIR / "static"), name="static")

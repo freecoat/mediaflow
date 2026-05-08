@@ -8,6 +8,62 @@
 
 ## Versione corrente
 
+**v3.5.0-alpha.58** — 8 maggio 2026 — JCLBilledSlice (foundation)
+
+Primo step della riarchitettura billing. Modello nuovo `JCLBilledSlice`
+che rappresenta la "porzione di una JCL fatturata in un periodo X". Una
+JCL può avere N slice nel tempo (progetti pluri-mensili fatturati a
+tranche). È foundation only: il binario `JCLBillingStatus` resta in vigore
+per back-compat, ma da ora ogni emissione fattura genera anche slice
+immutabili che α.59/α.60 useranno per superarlo.
+
+**Chiuso α.58:**
+- ✅ Modello `JCLBilledSlice` (`app/models/models.py`): id, tenant_id,
+  job_cost_line_id, billing_batch_line_id, invoice_id, period_start,
+  period_end, billed_quantity, billed_amount, unit_price_snap,
+  created_at. Indici su jcl/period/batch_line/invoice. Export in
+  `app/models/__init__.py`.
+- ✅ Tabella creata automaticamente da `Base.metadata.create_all()` (no
+  ALTER richiesta, è una tabella nuova).
+- ✅ Hook in `POST /finance/api/billing/{batch_id}/invoice` (router
+  billing.py): per ogni `BillingBatchLine` con `total_approved > 0`
+  crea anche slice con periodo del batch e snapshot quantità/importo.
+- ✅ Backfill al boot da `BillingBatch` in stato `invoiced` esistenti
+  (idempotente, marker `uploads/.billed_slices_backfilled_v1`). Skip
+  per slice già presenti.
+- ✅ Smoke test boot: 264 routes, version 3.5.0-alpha.58. Lifespan
+  esegue il backfill: con 1 batch invoiced nel DB locale → 1 slice creato.
+
+**Cosa NON cambia in α.58 (per scelta):**
+- UI: nessun cambio.
+- API: nessuna nuova route, response invariate.
+- Logica preview/transmit: invariata.
+- `JCLBillingStatus` enum: invariato.
+- Behaviour edit/cancel batch: invariato.
+
+**Verifica live richiesta a Matteo:**
+1. Pull → app boot pulito (264 route, version 3.5.0-alpha.58).
+2. Log boot: linea `[lifespan] backfill JCLBilledSlice: N creati, ...`
+   se ci sono batch invoiced in DB.
+3. Emetti una fattura nuova da `/finance` → batch → "💶 Emetti fattura".
+   Verifica con `sqlite3 mediaflow.db "select count(*) from jcl_billed_slices"`
+   che il counter è cresciuto del numero di righe approved del batch.
+4. Tutto il resto del flusso (cost report, /finance UI, modificare
+   batch draft, cancel, ecc.) deve funzionare esattamente come prima.
+
+**Prossimi step (roadmap concordata 8 maggio 2026 — riarchitettura billing):**
+- α.59: invariante hard-block (409) su backedit di booking dentro slice
+  già fatturato. Per correzioni formali → endpoint dedicato rettifica.
+- α.60: cost report 3 colonne (Fatturato chiuso = Σ slice / Maturato
+  post ultimo period_end / Stimato futuro). Convenzione Over/Under
+  aggiornata.
+- α.61: notifica `EXTRA_AFTER_BILLED` (extra emerso su periodo già
+  slice-ato) → destinatari accounting + commerciale del progetto.
+- α.62: bottone "Rimanda al commerciale" da /finance con scelta esplicita
+  estendi quote esistente (versioning) vs nuova quote linkata al progetto.
+
+---
+
 **v3.5.0-alpha.57** — 8 maggio 2026 — Fix periodo trasmissione
 
 Bug periodo modal Trasmetti: dates non riflettevano min/max effettivi del

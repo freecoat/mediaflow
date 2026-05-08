@@ -1,5 +1,50 @@
 # MediaFlow — Changelog
 
+## v3.5.0-alpha.58 — JCLBilledSlice (foundation) (8 maggio 2026)
+
+Primo step della riarchitettura billing concordata con Matteo. Introduce
+il modello `JCLBilledSlice` come fonte di verità della "porzione di una
+JobCostLine fatturata in uno specifico periodo". Foundation only: il
+binario `JCLBillingStatus` resta in vigore per back-compat, ma da ora in
+poi ogni emissione fattura genera anche slice immutabili che α.59 e α.60
+useranno per superarlo.
+
+**Modello nuovo** `app/models/models.py`:
+- `JCLBilledSlice(tenant_id, job_cost_line_id, billing_batch_line_id,
+  invoice_id, period_start, period_end, billed_quantity, billed_amount,
+  unit_price_snap, created_at)`. Indici su jcl_id, period_start, period_end,
+  billing_batch_line_id, invoice_id.
+- Una JCL → N slice (progetti pluri-mensili fatturati a tranche). Lo
+  slice è snapshot immutabile creato in `emit_invoice`, mai modificato.
+
+**Hooks**:
+- `POST /finance/api/billing/{batch_id}/invoice` (router billing.py): per
+  ogni `BillingBatchLine` con `total_approved > 0` crea anche uno slice
+  con periodo del batch e snapshot quantità/importo della line. Il
+  `JCLBillingStatus` viene comunque marcato `billed` per non rompere il
+  resto del codice.
+
+**Backfill al boot** (idempotente, marker `uploads/.billed_slices_backfilled_v1`):
+- Per ogni `BillingBatch` in stato `invoiced` e ogni sua line con
+  `total_approved > 0`, crea uno slice retroattivo con periodo del batch.
+  Skip se esiste già uno slice per quella batch_line. Log num righe
+  popolate.
+
+**Cosa NON cambia in α.58** (per scelta — minimum viable):
+- UI: nessun cambio.
+- API: nessuna nuova route, nessun cambio response.
+- Logica preview/transmit: invariata.
+- `JCLBillingStatus` enum: invariato.
+- Behaviour edit/cancel batch: invariato.
+
+**Prossimi step (roadmap riarchitettura billing)**:
+- α.59: invariante hard-block (409) su backedit booking dentro periodo già
+  slice-ato. Endpoint dedicato di rettifica per modifiche formali.
+- α.60: cost report 3 colonne (Fatturato chiuso = Σ slice / Maturato post
+  ultimo period_end / Stimato futuro). Convenzione Over/Under aggiornata.
+- α.61: notifica `EXTRA_AFTER_BILLED` (extra emerso su periodo già slice-ato).
+- α.62: bottone "Rimanda al commerciale" da /finance.
+
 ## v3.5.0-alpha.57 — Fix periodo trasmissione (8 maggio 2026)
 
 Bug segnalato da Matteo: il modulo "Trasmetti a fatturazione" mostra date
