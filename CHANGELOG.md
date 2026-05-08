@@ -1,5 +1,55 @@
 # MediaFlow — Changelog
 
+## v3.5.0-alpha.57 — Fix periodo trasmissione (8 maggio 2026)
+
+Bug segnalato da Matteo: il modulo "Trasmetti a fatturazione" mostra date
+periodo sbagliate, dovrebbero coprire dalla *prima* alla *ultima* data
+lavorata in quella tranche.
+
+**Causa**: `cost_line_sync.recompute_cost_line_actual` salva su
+`JobCostLine.work_date` solo il MAX delle date dei booking done (l'ultima
+data lavorata per JCL). Il preview/transmit faceva poi `min/max` di
+`work_date` *tra le JCL candidate*: il "min" risultante era la più precoce
+delle *ultime date*, non la prima data effettivamente lavorata. Esempio:
+JCL con booking 1 mar → 30 apr aveva `work_date=30 apr` e il 1 mar era
+perso nel calcolo del periodo proposto.
+
+**Fix**: nuovo helper `_period_from_bookings(db, jcl_ids)` in `billing.py`
+che legge direttamente da `Booking` (status != cancelled, execution_status
+== done) e ritorna `(min(start_datetime), max(end_datetime), source)`.
+Fallback al mese corrente solo se nessuna JCL candidate ha booking done
+(es. JCL extra senza booking). Usato in:
+- `GET /finance/api/billing/preview` (preview modal Trasmetti)
+- `_transmit_core` (auto-derive quando period_start/end omessi)
+
+`cost_line_sync` resta invariato: `JCL.work_date` continua a salvare la
+data dell'ultimo done, utile per altre viste; non viene più usato per
+calcolare il periodo di fatturazione.
+
+**Note**:
+- Il filtro `c.work_date is None or (period_start <= c.work_date <= period_end)`
+  in `_transmit_core` resta sulla `work_date` della JCL. Quando l'utente
+  override-a il periodo manualmente per fatturare solo una porzione (es.
+  solo marzo) JCL con `work_date` post-marzo vengono escluse anche se
+  hanno booking marzo. Questo bug pre-esistente sarà chiuso in α.58 con
+  l'introduzione degli slice (modello fattura per periodo).
+
+**Roadmap concordata con Matteo (8 maggio 2026)** sul flow Cost Report ↔ Fatturazione:
+- α.57 (questa): fix bug periodo isolato.
+- α.58: modello `JCLBilledSlice` (o estensione `BillingBatchLine` come
+  slice di fatto) + populate retroattivo. Una JCL può essere "fatturata
+  fino al periodo X, libera dopo X" — supera il binario `JCLBillingStatus`.
+- α.59: invariante hard-block (409) su backedit di booking dentro slice
+  fatturato. Per correzioni serve passare da rettifica formale.
+- α.60: cost report 3 colonne — Fatturato chiuso / Maturato post-periodo
+  fatturabile / Stimato futuro. Convenzione Over/Under aggiornata.
+- α.61: notifica `EXTRA_AFTER_BILLED` (extra emerso su progetto già
+  fatturato in periodo X) → destinatari accounting + commerciale del progetto.
+- α.62: bottone "Rimanda al commerciale" da /finance: scelta esplicita
+  estendi quote esistente (versioning) vs nuova quote linkata al progetto.
+
+---
+
 ## v3.5.0-alpha.56 — Pulizia non-fatte + visibilità Over in fatturazione (8 maggio 2026)
 
 Quattro micro-feature richieste da Matteo che chiudono il loop operativo

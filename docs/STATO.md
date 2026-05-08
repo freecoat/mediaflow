@@ -8,6 +8,44 @@
 
 ## Versione corrente
 
+**v3.5.0-alpha.57** — 8 maggio 2026 — Fix periodo trasmissione
+
+Bug periodo modal Trasmetti: dates non riflettevano min/max effettivi del
+lavoro svolto. Causa: usavamo `JCL.work_date` (solo max-done per JCL) come
+proxy del periodo. Fix isolato che legge direttamente da `Booking`.
+
+**Chiuso α.57:**
+- ✅ `app/routers/billing.py`: nuovo helper `_period_from_bookings(db, jcl_ids)`
+  che legge `min(start_datetime), max(end_datetime)` direttamente dai Booking
+  done non cancellati delle JCL candidate. Fallback mese corrente solo se
+  zero booking done.
+- ✅ `preview_transmission` e `_transmit_core` usano il nuovo helper.
+- ✅ `cost_line_sync` invariato (work_date resta utile per altre viste).
+- ✅ Smoke boot version 3.5.0-alpha.57.
+
+**Verifica live richiesta a Matteo:**
+1. Cost report → job con booking done che si estendono su più giorni →
+   "📤 Trasmetti" → modal mostra `Periodo da` = primo giorno lavorato,
+   `Periodo a` = ultimo giorno lavorato (non più la "max date" della JCL
+   più precoce). Anteprima con badge "📅 Periodo derivato da booking eseguiti".
+2. Caso edge: progetto con sole JCL extra senza booking done → fallback mese
+   corrente con badge "⚠ Nessun booking con work_date".
+
+**Prossimi step (roadmap concordata 8 maggio 2026 — riarchitettura billing):**
+- α.58: modello `JCLBilledSlice` (o estensione di `BillingBatchLine` come slice).
+  Una JCL può essere fatturata "fino al periodo X" e libera dopo. Supera il
+  binario `JCLBillingStatus`. Populate retroattivo dai BillingBatch fatturati.
+- α.59: invariante **hard-block (409)** su backedit di booking dentro slice
+  già fatturato. Per correzioni formali → endpoint dedicato rettifica.
+- α.60: cost report **3 colonne** — Fatturato chiuso / Maturato post-periodo
+  fatturabile / Stimato futuro. Convenzione Over/Under aggiornata.
+- α.61: notifica `EXTRA_AFTER_BILLED` (extra emerso su progetto già fatturato
+  in periodo X) → destinatari accounting + commerciale del progetto.
+- α.62: bottone **"Rimanda al commerciale"** da /finance con scelta esplicita
+  estendi quote esistente (versioning) vs nuova quote linkata al progetto.
+
+---
+
 **v3.5.0-alpha.56** — 8 maggio 2026 — Pulizia non-fatte + visibilità Over in fatturazione
 
 Quattro micro-feature richieste da Matteo che chiudono il loop operativo

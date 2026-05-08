@@ -38,6 +38,7 @@ from app.models import (
     LossEntry, LossReason,
     Project, Job, JobStatus, Invoice, InvoiceLine, InvoiceStatus, Client,
     Tenant,
+    Booking, BookingStatus, BookingExecutionStatus,
 )
 from app.services.rbac import (
     current_user_optional, is_admin, is_manager, can_view_finance,
@@ -157,6 +158,44 @@ def _recompute_batch_totals(b: BillingBatch):
     b.total_lost = max(0.0, b.total_proposed - b.total_approved)
 
 
+def _period_from_bookings(db: Session, jcl_ids: list[int]) -> tuple[date, date, str]:
+    """v3.5.0-alpha.57 — Periodo di trasmissione dalle date dei booking done.
+
+    Bug pre-α.57: usavamo min/max di JCL.work_date, ma cost_line_sync
+    salva su work_date solo il MAX delle date done (l'ultima data lavorata
+    per JCL). Risultato: il "min" tra le JCL era la più precoce *delle ultime
+    date*, non la prima data effettivamente lavorata. Es. JCL con booking
+    1 mar → 30 apr aveva work_date=30 apr e il 1 mar era perso.
+
+    Fix: leggi direttamente da Booking. Per le JCL candidate prendi:
+      - period_start = min(start_datetime.date()) sui booking done non cancellati
+      - period_end   = max(end_datetime.date())   sui booking done non cancellati
+
+    Fallback al mese corrente se nessuna delle JCL ha booking done (caso
+    JCL extra senza booking, o quote pura senza esecuzione).
+    """
+    if jcl_ids:
+        bookings = db.query(Booking).filter(
+            Booking.job_cost_line_id.in_(jcl_ids),
+            Booking.status != BookingStatus.cancelled,
+            Booking.execution_status == BookingExecutionStatus.done,
+        ).all()
+    else:
+        bookings = []
+    if bookings:
+        period_start = min(b.start_datetime.date() for b in bookings if b.start_datetime)
+        period_end = max(b.end_datetime.date() for b in bookings if b.end_datetime)
+        return period_start, period_end, "from_bookings"
+    today = date.today()
+    period_start = today.replace(day=1)
+    if today.month == 12:
+        next_month = date(today.year + 1, 1, 1)
+    else:
+        next_month = date(today.year, today.month + 1, 1)
+    period_end = date.fromordinal(next_month.toordinal() - 1)
+    return period_start, period_end, "current_month_fallback"
+
+
 # ── Endpoints ──────────────────────────────────────────────────────────
 
 @router.get("/preview")
@@ -171,10 +210,10 @@ async def preview_transmission(
     Matteo: "il periodo di riferimento della fatturazione dovrebbe essere
     determinato di volta in volta in base al periodo di attività del booking".
 
-    Calcola periodo suggerito da min/max work_date delle JCL candidate del
-    progetto (work_date è impostato da cost_line_sync sui booking done).
-    Fallback al mese corrente se tutte le JCL candidate hanno work_date NULL
-    (caso JCL extra senza booking).
+    v3.5.0-alpha.57: il periodo è derivato direttamente dai Booking done
+    delle JCL candidate (min start_datetime → max end_datetime), non più
+    da JCL.work_date che salvava solo l'ULTIMA data done. Vedi
+    `_period_from_bookings` per il dettaglio del fix.
 
     Ritorna anche count e total per anteprima nel modal.
     """
@@ -196,22 +235,9 @@ async def preview_transmission(
         q = q.filter(JobCostLine.is_extra == False)
     candidates = q.all()
 
-    work_dates = [c.work_date for c in candidates if c.work_date is not None]
-    if work_dates:
-        period_start = min(work_dates)
-        period_end = max(work_dates)
-        period_source = "from_bookings"
-    else:
-        # Fallback: mese corrente (per JCL extra senza booking, ecc.)
-        today = date.today()
-        period_start = today.replace(day=1)
-        # Ultimo giorno del mese corrente
-        if today.month == 12:
-            next_month = date(today.year + 1, 1, 1)
-        else:
-            next_month = date(today.year, today.month + 1, 1)
-        period_end = date.fromordinal(next_month.toordinal() - 1)
-        period_source = "current_month_fallback"
+    period_start, period_end, period_source = _period_from_bookings(
+        db, [c.id for c in candidates]
+    )
 
     # v3.5.0-alpha.56: breakdown esplicito quote vs extra + sforamento.
     # Sforamento = max(0, total_accrued - total_quoted) sulle righe NON extra
@@ -269,8 +295,9 @@ def _transmit_core(
     """Logica core trasmissione → BillingBatch (estratta da endpoint per
     riuso da AI handler propose_transmit_to_billing).
 
-    Se period_start/end omessi, derivati automaticamente da min/max work_date
-    delle JCL candidate (stessa logica di preview_transmission).
+    Se period_start/end omessi, derivati automaticamente da min/max delle
+    date dei Booking done delle JCL candidate (vedi `_period_from_bookings`,
+    fix v3.5.0-alpha.57).
 
     Solleva ValueError per errori di validazione (l'endpoint HTTP li riconverte
     in HTTPException).
@@ -293,20 +320,13 @@ def _transmit_core(
         q = q.filter(JobCostLine.is_extra == False)
     candidates = q.all()
 
-    # Auto-derive period se non specificato
+    # Auto-derive period se non specificato (v3.5.0-alpha.57: da Booking done)
     if period_start is None or period_end is None:
-        work_dates = [c.work_date for c in candidates if c.work_date is not None]
-        if work_dates:
-            period_start = period_start or min(work_dates)
-            period_end = period_end or max(work_dates)
-        else:
-            today = date.today()
-            period_start = period_start or today.replace(day=1)
-            if today.month == 12:
-                next_month = date(today.year + 1, 1, 1)
-            else:
-                next_month = date(today.year, today.month + 1, 1)
-            period_end = period_end or date.fromordinal(next_month.toordinal() - 1)
+        derived_start, derived_end, _src = _period_from_bookings(
+            db, [c.id for c in candidates]
+        )
+        period_start = period_start or derived_start
+        period_end = period_end or derived_end
 
     if period_end < period_start:
         raise ValueError("period_end precedente a period_start")
