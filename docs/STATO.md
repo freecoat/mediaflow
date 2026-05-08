@@ -8,6 +8,62 @@
 
 ## Versione corrente
 
+**v3.5.0-alpha.62** — 8 maggio 2026 — Rimanda al commerciale
+
+Quinto e ultimo step della riarchitettura billing concordata oggi. Il
+finance ora ha un bottone esplicito per riferire un extra al commerciale:
+estendi la quote esistente (versioning) o crea nuova quote linkata.
+Chiude il loop Cost Report → Fatturazione → extra → commerciale.
+
+**Chiuso α.62:**
+- ✅ Endpoint `POST /finance/api/billing/refer-to-sales` (manager+):
+  - `mode=extend_existing` → nuova versione della quote del job
+    (parent_quote_id valorizzato), copia righe esistenti, aggiunge riga
+    `[EXTRA]` con qty/prezzo derivati da JCL.accrued_post_period.
+  - `mode=new_linked` → nuova Quote indipendente sul project con la sola
+    riga `[EXTRA]`. Per addendum negoziati separatamente.
+  - Risposta `{quote_id, quote_number, quote_url, mode}`.
+- ✅ UI cost report: bottone `↪` accanto a `✎` su righe con
+  `accrued_post_period > 0` o `is_extra=True && total_accrued > 0`.
+  Modal con radio extend/new + textarea note. On success → toast + apri
+  quote in nuova tab.
+- ✅ Smoke test boot: 265 routes (+1 vs α.61), version 3.5.0-alpha.62.
+
+**Verifica live richiesta a Matteo:**
+1. Pull → app boot pulito (265 route, version 3.5.0-alpha.62).
+2. Apri /cost-report → progetto con almeno una fattura emessa →
+   riga con `Mat. post > 0` (es. extra after billed) → bottone `↪` visibile.
+3. Click `↪` → modal "Rimanda al commerciale" → seleziona "Estendi quote
+   esistente" → submit → nuova versione della quote del job creata
+   (Q-...-v2), apre la quote in nuova tab. La nuova versione ha tutte le
+   righe della precedente + una riga `[EXTRA]` con quantità/prezzo
+   derivati da JCL.
+4. Stessa azione con "Nuova quote linkata" → nuova Quote indipendente
+   sul progetto con la sola riga extra.
+5. Riga senza extra (Mat. post = 0 e non is_extra) → bottone `↪` non
+   appare.
+
+**Cosa NON cambia in α.62:**
+- Nessuna nuova migrazione DB.
+- Conversion-to-job, deletion quote, status flow: invariati.
+- /finance batch detail: nessun cambiamento (il bottone è in cost report).
+- Notifiche EXTRA_AFTER_BILLED di α.61 continuano a girare; il bottone è
+  la risposta operativa esplicita.
+
+**Riarchitettura billing concordata 8 maggio 2026 — completata** (α.58→α.62):
+- α.58: `JCLBilledSlice` foundation (modello + emit_invoice + backfill).
+- α.59: HARD-BLOCK booking dentro periodo già fatturato.
+- α.60: cost report 3 colonne slice-based (Fatt. / Mat. post / Stim. fut.).
+- α.61: notifica EXTRA_AFTER_BILLED automatica.
+- α.62: bottone "Rimanda al commerciale" con scelta versioning vs new.
+
+**Prossimi step (post-test live):**
+- (eventuale α.59.x): endpoint di rettifica per sbloccare manualmente
+  un periodo, se serve dopo test live.
+- (eventuale α.62.1): bottone Rimanda anche in /finance batch detail.
+
+---
+
 **v3.5.0-alpha.61** — 8 maggio 2026 — Notifica EXTRA_AFTER_BILLED
 
 Quarto step della riarchitettura billing. Le slice di α.58 + il guard di

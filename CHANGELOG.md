@@ -1,5 +1,39 @@
 # MediaFlow — Changelog
 
+## v3.5.0-alpha.62 — Rimanda al commerciale (8 maggio 2026)
+
+Quinto e ultimo step della riarchitettura billing concordata l'8 maggio.
+Quando emerge extra/sforamento su un progetto già fatturato, il finance
+ora ha un bottone esplicito per riferire la voce al commerciale: o estendi
+la quote esistente (versioning) o crea una nuova quote linkata. Chiude
+il loop "Cost Report → Fatturazione → ricognizione extra → commerciale".
+
+**Endpoint nuovo** `app/routers/billing.py`:
+- `POST /finance/api/billing/refer-to-sales` (form: `jcl_id`, `mode`,
+  `notes` opt). Manager+ richiesto.
+- `mode=extend_existing`: crea nuova versione della quote del job (catena
+  versioning, parent_quote_id valorizzato), copia righe esistenti via
+  `_copy_quote_lines(track_parent=True)`, aggiunge una riga `[EXTRA]`
+  con qty/prezzo derivati da JCL.accrued_post_period (fallback total_accrued).
+- `mode=new_linked`: crea nuova Quote indipendente sullo stesso project
+  (no parent), con la sola riga `[EXTRA]`. Per addendum negoziati a parte.
+- Risposta `{quote_id, quote_number, quote_url, mode}`.
+
+**UI cost report** (`app/templates/pages/cost_report.html`):
+- Nuovo bottone `↪` accanto a `✎` su righe con `accrued_post_period > 0`
+  o `is_extra=True && total_accrued > 0`.
+- Modal: 2 radio (estendi vs nuova) + textarea note. On success → toast
+  + open quote in nuova tab.
+
+**Cosa NON cambia**:
+- Nessuna nuova migrazione DB.
+- Conversion-to-job, deletion quote, status flow: invariati.
+- /finance batch detail: nessun cambiamento (il bottone è in cost report).
+- Le notifiche EXTRA_AFTER_BILLED di α.61 continuano a girare; il
+  bottone è la risposta operativa esplicita.
+
+**Smoke**: 265 routes (+1), version 3.5.0-alpha.62.
+
 ## v3.5.0-alpha.61 — Notifica EXTRA_AFTER_BILLED (8 maggio 2026)
 
 Quarto step della riarchitettura billing. Quando emerge maturato

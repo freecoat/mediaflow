@@ -830,6 +830,200 @@ async def set_jcl_billing_status(
     return {"ok": True, "jcl_id": jcl_id, "old_status": old, "new_status": st.value}
 
 
+@router.post("/refer-to-sales")
+async def refer_to_sales(
+    request: Request,
+    jcl_id: int = Form(...),
+    mode: str = Form(...),  # "extend_existing" | "new_linked"
+    notes: Optional[str] = Form(None),
+    db: Session = Depends(get_db),
+):
+    """v3.5.0-alpha.62 — "Rimanda al commerciale".
+
+    Quando emerge lavoro extra/sforamento su un progetto già fatturato, il
+    finance può non fatturarlo subito e invece riportarlo al commerciale per:
+      - **extend_existing**: nuova versione della quote già linkata al job,
+        con una riga aggiuntiva che riflette il lavoro extra (parent_quote_id
+        valorizzato → catena versioning standard).
+      - **new_linked**: una NUOVA quote indipendente sullo stesso progetto
+        (no parent_quote_id), pensata per un addendum negoziato a parte.
+
+    In entrambi i casi la nuova/aggiornata quote ha `status=draft` e una
+    QuoteLine derivata dalla JCL (descrizione, qty=accrued_post_period,
+    unit_price snapshot) — il commerciale poi rivede e invia al cliente.
+
+    Manager+ richiesto. Ritorna `{quote_id, quote_number, quote_url, mode}`.
+    """
+    user = _require_manager(request)
+    if mode not in ("extend_existing", "new_linked"):
+        raise HTTPException(400, f"mode non valido: {mode}")
+
+    jcl = (
+        db.query(JobCostLine)
+        .options(joinedload(JobCostLine.job).joinedload(Job.quote))
+        .filter(JobCostLine.id == jcl_id)
+        .first()
+    )
+    if not jcl:
+        raise HTTPException(404, f"JobCostLine #{jcl_id} non trovata")
+    job = jcl.job
+    if not job:
+        raise HTTPException(400, "JCL senza job, impossibile riferire al commerciale")
+    if not job.project_id:
+        raise HTTPException(400, "Job senza progetto, impossibile creare/estendere quote")
+
+    # Determina lavoro residuo: preferisco accrued_post_period (eccedenza
+    # rispetto a già fatturato), fallback a total_accrued se nessuna slice.
+    from app.services.billing_slice_guard import billed_locked_for_jcl
+    billed = billed_locked_for_jcl(db, jcl.id)
+    accrued = jcl.total_accrued or 0.0
+    qty_extra = max(0.0, accrued - billed)
+    if qty_extra <= 0.001:
+        raise HTTPException(
+            400,
+            "Niente extra da riferire al commerciale: il maturato è già "
+            "tutto coperto dalle fatture emesse."
+        )
+    unit_price = jcl.unit_price or 0.0
+    qty = (qty_extra / unit_price) if unit_price > 0 else 1.0
+
+    from app.models import Quote, QuoteLine, QuoteStatus, Client
+    project = db.query(Project).filter(Project.id == job.project_id).first()
+    if not project:
+        raise HTTPException(400, "Progetto non trovato")
+
+    note_full = (
+        f"Aggiunta da Finance per extra emerso su JCL #{jcl.id} "
+        f"({jcl.description}). Maturato post-fatturazione: €{qty_extra:.2f}."
+    )
+    if notes:
+        note_full += f"\nNote operatore: {notes}"
+
+    if mode == "extend_existing":
+        if not job.quote_id or not job.quote:
+            raise HTTPException(
+                400,
+                "Job senza quote linkata. Usa mode=`new_linked` per creare "
+                "una nuova quote sul progetto."
+            )
+        # Crea nuova versione della quote del job (catena versioning).
+        # Logica allineata a /quotes/api/{id}/new-version.
+        from app.routers.quotes import (
+            _quote_root, _quote_chain, _copy_quote_lines, _recalc_quote,
+        )
+        src = (
+            db.query(Quote)
+            .options(joinedload(Quote.lines))
+            .filter(Quote.id == job.quote_id)
+            .first()
+        )
+        root = _quote_root(db, src)
+        chain = _quote_chain(db, root)
+        next_version = max(q.version for q in chain) + 1
+        import re as _re
+        base_number = _re.sub(r"-v\d+$", "", root.number)
+        new_number = f"{base_number}-v{next_version}"
+        if (
+            db.query(Quote)
+            .execution_options(include_deleted=True)
+            .filter(Quote.number == new_number)
+            .first()
+        ):
+            raise HTTPException(409, f"Numero quotazione `{new_number}` già esistente")
+
+        new_q = Quote(
+            number=new_number,
+            version=next_version,
+            parent_quote_id=src.id,
+            project_id=src.project_id,
+            client_id=src.client_id,
+            title=f"{src.title} — addendum extra (Finance)",
+            status=QuoteStatus.draft,
+            issue_date=date.today(),
+            valid_until=src.valid_until,
+            production_material=src.production_material,
+            length_minutes=src.length_minutes,
+            fps=src.fps,
+            delivery_format=src.delivery_format,
+            shooting_days=src.shooting_days,
+            shooting_format=src.shooting_format,
+            package_discount=src.package_discount,
+            category_discounts=dict(src.category_discounts) if src.category_discounts else None,
+            category_order=list(src.category_order) if src.category_order else None,
+            vat_rate=src.vat_rate,
+            notes=note_full,
+            payment_terms=src.payment_terms,
+        )
+        db.add(new_q)
+        db.flush()
+        new_lines = _copy_quote_lines(src.lines, new_q.id, track_parent=True)
+        db.add_all(new_lines)
+        db.flush()
+        # Aggiungi la riga extra
+        extra_line = QuoteLine(
+            quote_id=new_q.id,
+            description=f"[EXTRA] {jcl.description}",
+            detail=f"Riferito da Finance — JCL #{jcl.id}",
+            quantity=round(qty, 2),
+            unit=jcl.unit,
+            unit_price=unit_price,
+            total=round(qty * unit_price, 2),
+            sort_order=9999,  # in fondo, manager riordina dopo
+        )
+        db.add(extra_line)
+        db.flush()
+        _recalc_quote(new_q)
+        db.commit()
+        db.refresh(new_q)
+        return {
+            "ok": True,
+            "mode": "extend_existing",
+            "quote_id": new_q.id,
+            "quote_number": new_q.number,
+            "quote_url": f"/quotes#{new_q.id}",
+        }
+
+    # mode == "new_linked"
+    # Nuova quote indipendente sullo stesso project (no parent_quote_id).
+    from app.routers.quotes import _next_quote_number_progressive, _recalc_quote
+    new_number = _next_quote_number_progressive(db)
+    new_q = Quote(
+        number=new_number,
+        version=1,
+        project_id=project.id,
+        client_id=project.client_id,
+        title=f"Addendum extra: {project.title or project.code}",
+        status=QuoteStatus.draft,
+        issue_date=date.today(),
+        notes=note_full,
+        vat_rate=22.0,
+    )
+    db.add(new_q)
+    db.flush()
+    extra_line = QuoteLine(
+        quote_id=new_q.id,
+        description=f"[EXTRA] {jcl.description}",
+        detail=f"Riferito da Finance — JCL #{jcl.id}",
+        quantity=round(qty, 2),
+        unit=jcl.unit,
+        unit_price=unit_price,
+        total=round(qty * unit_price, 2),
+        sort_order=10,
+    )
+    db.add(extra_line)
+    db.flush()
+    _recalc_quote(new_q)
+    db.commit()
+    db.refresh(new_q)
+    return {
+        "ok": True,
+        "mode": "new_linked",
+        "quote_id": new_q.id,
+        "quote_number": new_q.number,
+        "quote_url": f"/quotes#{new_q.id}",
+    }
+
+
 @router.get("/loss/project/{project_id}")
 async def project_loss_summary(
     project_id: int, request: Request, db: Session = Depends(get_db),
