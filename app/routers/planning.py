@@ -3574,7 +3574,7 @@ async def update_booking_state(
     # Notifiche selettive: solo done/not_done emettono notifica (allineato con
     # update_booking_execution legacy). Pattern notify_role su producer/manager.
     if state in (BookingState.done, BookingState.not_done):
-        from app.services import notification_service as notif_svc
+        from app.services import notifications as notif_svc
         from app.models import NotificationKind, NotificationSeverity
         is_not_done = (state == BookingState.not_done)
         title = (
