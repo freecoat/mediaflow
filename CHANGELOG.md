@@ -1,5 +1,49 @@
 # MediaFlow — Changelog
 
+## v3.5.0-alpha.66.4 — Icone status più visibili + submenu inline + tentative nel modal (9 maggio 2026)
+
+3 fix da feedback Matteo dopo α.66.3:
+
+**1. Icona ⏳ tentative non visibile**
+- CSS rinforzato: font-size 11→13px, font-weight 700, text-shadow nero,
+  colore giallo (#fde68a) invece di grigio chiaro per stacco maggiore.
+- Confirmed: opacity .85 invece di .7, sempre verde discreto.
+
+**2. Submenu Marcature chiudeva il primo menu**
+- Riscritto `tlContextMenu` con supporto **submenu nativi**:
+  voci con `submenu: [...]` mostrano "▸" e aprono un sottomenu adiacente
+  on hover/click. Il menu padre **resta visibile**. Hover su una voce
+  senza submenu chiude l'eventuale submenu aperto. Esc chiude prima il
+  submenu, poi il menu padre. Click-fuori sul menu padre o sub chiude tutto.
+- Le voci execution_status raccolte in submenu nativo "🏷 Marcature".
+- Nuova voce "⏳ Stato: Tentative" / "✓ Stato: Confermato" con submenu
+  per il toggle BookingStatus → conferma/rendi tentative.
+- Rimosso il workaround "secondo `tlContextMenu` esplicito" introdotto
+  in α.66.3.
+
+**3. Tentative/Confirmed mancanti nel modal edit booking**
+- Nuovo gruppo radio nel modal `tlb-` (sotto Priorità):
+  ⏳ Tentative / ✓ Confermato.
+- Default tentative su create. Pre-fill in edit dal `extendedProps.status`.
+- `tlbSubmit` invia sempre `status` (Form param) → backend aggiorna
+  BookingStatus.
+
+**Smoke**: 276 routes invariato, version 3.5.0-alpha.66.4.
+
+**Verifica live** (hard-refresh forzato!):
+1. Click destro su booking → menu con voce "🏷 Marcature ▸". Hover/click
+   sulla voce → submenu si apre adiacente (a destra), il primo resta
+   visibile. Hover su altra voce → submenu si chiude. Esc chiude solo
+   il submenu se aperto, poi il menu padre.
+2. Stessa logica per "⏳ Stato: Tentative" / "✓ Stato: Confermato" →
+   submenu con toggle.
+3. Booking tentative → ⏳ giallo visibile in timeline. Booking confirmed
+   → ✓ verde discreto.
+4. Doppio-click su booking → modal edit ha sezione "Stato booking" con
+   2 radio. Pre-compilati con lo stato attuale. Submit aggiorna in DB.
+
+---
+
 ## v3.5.0-alpha.66.3 — Submenu Marcature + icone status booking + slice-lock relax (9 maggio 2026)
 
 Bundle 3 punti di feedback Matteo dopo conferma α.66.2 (fix doubleClick).

@@ -8,6 +8,37 @@
 
 ## Versione corrente
 
+**v3.5.0-alpha.66.4** — 9 maggio 2026 — Icone status più visibili + submenu inline + tentative nel modal
+
+3 fix da feedback Matteo dopo α.66.3:
+
+**Chiuso α.66.4:**
+- ✅ **Icone status visibili**: ⏳ tentative ora 13px+700+text-shadow+giallo
+  (#fde68a) → contrasto netto. Confirmed ✓ verde discreto opacity .85.
+- ✅ **Submenu nativo**: riscritto `tlContextMenu` per supportare voci
+  con `submenu: [...]` che aprono sottomenu adiacente on hover/click
+  MANTENENDO il menu padre visibile. Hover su voce senza submenu chiude
+  il sub aperto. Esc chiude prima il sub, poi il padre. Pattern
+  applicabile a qualsiasi futuro submenu del context-menu.
+- ✅ **Marcature ora submenu nativo** (era workaround "secondo
+  tlContextMenu esplicito" in α.66.3).
+- ✅ **Voce status BookingStatus nel context-menu come submenu**: "⏳ Stato:
+  Tentative" / "✓ Stato: Confermato" → submenu con toggle.
+- ✅ **Tentative/Confirmed nel modal edit**: nuovo gruppo radio sotto
+  Priorità. Default tentative su create, pre-fill in edit. tlbSubmit
+  invia sempre `status` Form → backend aggiorna BookingStatus.
+
+**Smoke test**: 276 routes invariato, version 3.5.0-alpha.66.4.
+
+**Verifica live** (hard-refresh!):
+1. Click destro su booking → "🏷 Marcature" ha "▸". Hover → submenu si
+   apre a destra, padre resta. Hover su altra voce padre → sub si chiude.
+   Stessa cosa per "Stato: Tentative/Confermato".
+2. Tentative ⏳ giallo ben visibile in timeline. Confirmed ✓ verde discreto.
+3. Doppio-click → modal con nuova sezione "Stato booking" radio.
+
+---
+
 **v3.5.0-alpha.66.3** — 9 maggio 2026 — Submenu Marcature + icone status booking + slice-lock relax
 
 Bundle 3 punti dopo conferma α.66.2 (DB pulito, fix doubleClick OK):

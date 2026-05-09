@@ -369,9 +369,18 @@
   /* v3.5.0-alpha.66.3: icone status booking (BookingStatus tentative/confirmed)
      distinte dalle icone execution_status. Tentative grigio chiaro, confirmed
      verde discreto. */
-  .vis-item .tl-status-icon { margin-left: 4px; font-size: 11px; opacity: 0.85; }
-  .vis-item .tl-status-tentative { color: #d1d5db; }
-  .vis-item .tl-status-confirmed { color: #6ee7b7; opacity: 0.7; }
+  /* v3.5.0-alpha.66.4: alzato font-size a 13px e font-weight per renderle
+     visibili. ⏳ in particolare è bassa di luminanza, serve rinforzo. */
+  .vis-item .tl-status-icon {
+    margin-left: 4px;
+    font-size: 13px;
+    font-weight: 700;
+    display: inline-block;
+    line-height: 1;
+    text-shadow: 0 0 3px rgba(0,0,0,.55);
+  }
+  .vis-item .tl-status-tentative { color: #fde68a; }   /* giallo chiaro: più visibile di grigio */
+  .vis-item .tl-status-confirmed { color: #6ee7b7; opacity: 0.85; }
   /* v3.5.0-alpha.11: highlight di tutti gli items che condividono lo stesso
      booking_id (booking multi-risorsa). Quando l'utente seleziona una riga,
      le altre del medesimo booking ricevono un alone indaco. */
@@ -1198,6 +1207,22 @@
             <!-- popolato da tlbSetPriorityUI() -->
           </div>
           <input type="hidden" id="tlb-priority" value="normal">
+        </div>
+
+        <!-- v3.5.0-alpha.66.4: Stato booking (BookingStatus tentative/confirmed).
+             Default tentative su create. Modificabile in edit. -->
+        <div class="form-group" id="tlb-status-group">
+          <label class="form-label">Stato booking</label>
+          <div style="display:flex; gap:14px; align-items:center; flex-wrap:wrap;">
+            <label style="display:inline-flex; align-items:center; gap:6px; cursor:pointer;">
+              <input type="radio" name="tlb-status" value="tentative" id="tlb-status-tentative" checked>
+              <span style="font-size:13px;">⏳ Tentative <span style="color:var(--text3,#888); font-size:11px;">(da confermare)</span></span>
+            </label>
+            <label style="display:inline-flex; align-items:center; gap:6px; cursor:pointer;">
+              <input type="radio" name="tlb-status" value="confirmed" id="tlb-status-confirmed">
+              <span style="font-size:13px;">✓ Confermato <span style="color:var(--text3,#888); font-size:11px;">(operativo)</span></span>
+            </label>
+          </div>
         </div>
 
         <!-- ─── Smart split (E3) ────────────────────── -->
@@ -3832,32 +3857,106 @@ async function tlPerformRedo() {
 
 // ── Context menu fluttuante (posizionato dal mouse) ────────
 window._tlLastMouse = {x: 200, y: 200};
+// v3.5.0-alpha.66.4: tlContextMenu supporta submenu nativi.
+// Pattern: scelta con `c.submenu = [{...}]` mostra "▸" e apre submenu
+// adiacente on hover/click MANTENENDO il menu padre visibile. La promise
+// si risolve quando l'utente clicca una voce foglia (senza submenu) o
+// click-fuori/Esc (resolve null).
 function tlContextMenu(x, y, choices) {
   return new Promise(resolve => {
     // Rimuovi menu precedenti
-    document.querySelectorAll('.tl-ctx-menu').forEach(el => el.remove());
+    document.querySelectorAll('.tl-ctx-menu, .tl-ctx-submenu').forEach(el => el.remove());
+    let _resolved = false;
+    let _activeSub = null;  // riferimento al submenu attualmente aperto
+    let _activeSubBtn = null;  // bottone parent del submenu attivo
+
+    function _doResolve(value) {
+      if (_resolved) return;
+      _resolved = true;
+      cleanup();
+      resolve(value);
+    }
+
+    function _renderMenu(host, items, isSub, parentMenu) {
+      items.forEach(c => {
+        const b = document.createElement('button');
+        const hasSub = Array.isArray(c.submenu) && c.submenu.length > 0;
+        // Mostra "▸" se ha submenu; rimuove eventuale " ▸" già nel label per evitare doppione
+        const labelClean = (c.label || '').replace(/\s*▸\s*$/, '');
+        b.textContent = labelClean + (hasSub ? '   ▸' : '');
+        b.style.cssText = `text-align:left; padding:8px 12px; border-radius:4px; background:transparent; border:none; color:var(--text,#eee); font-size:13px; cursor:pointer; font-family:inherit; display:flex; justify-content:space-between; gap:8px;`;
+        b.onmouseenter = () => {
+          b.style.background = 'rgba(98,114,245,0.15)';
+          // Hover su voce con submenu → apre il sub (e chiude eventuale altro sub aperto)
+          if (hasSub) _openSub(b, c.submenu);
+          else _closeSub();  // hover su voce senza submenu → chiudi sub aperto
+        };
+        b.onmouseleave = () => {
+          b.style.background = 'transparent';
+        };
+        b.onclick = (ev) => {
+          ev.stopPropagation();
+          if (hasSub) {
+            _openSub(b, c.submenu);  // click anche apre il submenu (touch-friendly)
+            return;
+          }
+          _doResolve(c.value);
+        };
+        host.appendChild(b);
+      });
+    }
+
+    function _openSub(btn, items) {
+      if (_activeSubBtn === btn && _activeSub) return;  // già aperto su questa voce
+      _closeSub();
+      _activeSubBtn = btn;
+      const sub = document.createElement('div');
+      sub.className = 'tl-ctx-submenu';
+      const r = btn.getBoundingClientRect();
+      sub.style.cssText = `position:fixed; left:${r.right + 2}px; top:${r.top}px; background:var(--bg-elev,#1a1d29); border:1px solid var(--border,#2a2e3d); border-radius:8px; padding:4px; box-shadow:0 8px 24px rgba(0,0,0,.5); z-index:100000; display:flex; flex-direction:column; gap:2px; min-width:200px;`;
+      _renderMenu(sub, items, true, m);
+      document.body.appendChild(sub);
+      // Reposiziona se sfora viewport (apri a sinistra invece)
+      const sr = sub.getBoundingClientRect();
+      if (sr.right > window.innerWidth) {
+        sub.style.left = Math.max(8, r.left - sr.width - 2) + 'px';
+      }
+      if (sr.bottom > window.innerHeight) {
+        sub.style.top = Math.max(8, window.innerHeight - sr.height - 8) + 'px';
+      }
+      _activeSub = sub;
+    }
+
+    function _closeSub() {
+      if (_activeSub) {
+        _activeSub.remove();
+        _activeSub = null;
+        _activeSubBtn = null;
+      }
+    }
+
     const m = document.createElement('div');
     m.className = 'tl-ctx-menu';
     m.style.cssText = `position:fixed; left:${x}px; top:${y}px; background:var(--bg-elev,#1a1d29); border:1px solid var(--border,#2a2e3d); border-radius:8px; padding:4px; box-shadow:0 8px 24px rgba(0,0,0,.5); z-index:99999; display:flex; flex-direction:column; gap:2px; min-width:200px;`;
-    choices.forEach(c => {
-      const b = document.createElement('button');
-      b.textContent = c.label;
-      b.style.cssText = `text-align:left; padding:8px 12px; border-radius:4px; background:transparent; border:none; color:var(--text,#eee); font-size:13px; cursor:pointer; font-family:inherit;`;
-      b.onmouseenter = () => b.style.background = 'rgba(98,114,245,0.15)';
-      b.onmouseleave = () => b.style.background = 'transparent';
-      b.onclick = (ev) => { ev.stopPropagation(); cleanup(); resolve(c.value); };
-      m.appendChild(b);
-    });
+    _renderMenu(m, choices, false, null);
+
     function cleanup() {
+      _closeSub();
       m.remove();
       document.removeEventListener('mousedown', onOutside, true);
       document.removeEventListener('keydown', onEsc, true);
     }
     function onOutside(e) {
-      if (!m.contains(e.target)) { cleanup(); resolve(null); }
+      // Tollera click sul submenu — non chiudere
+      if (m.contains(e.target)) return;
+      if (_activeSub && _activeSub.contains(e.target)) return;
+      _doResolve(null);
     }
     function onEsc(e) {
-      if (e.key === 'Escape') { cleanup(); resolve(null); }
+      if (e.key === 'Escape') {
+        if (_activeSub) { _closeSub(); }
+        else { _doResolve(null); }
+      }
     }
     document.body.appendChild(m);
     // Reposiziona se sfora viewport
@@ -4642,17 +4741,27 @@ async function _doRenderTimeline(preserveWindow=false) {
       const it = items.find(x => x.id === props.item);
       const origBooking = bookings.find(b => b.id === props.item);
       const isTentative = origBooking && origBooking.extendedProps && origBooking.extendedProps.status === 'tentative';
-      const statusItem = isTentative
-        ? {label: '✓  Conferma booking', value: 'confirm'}
-        : {label: '⏳  Rendi tentative', value: 'tentative'};
-      // v3.5.0-alpha.66.3: voci execution_status raccolte in submenu "Marcature ▸"
-      // per non gonfiare il menu principale. Click sulla voce → secondo
-      // tlContextMenu con le voci condizionali (filtra stato corrente).
+      // v3.5.0-alpha.66.4: voci status (BookingStatus) raccolte in un submenu
+      // dedicato per coerenza con submenu Marcature (execution_status).
+      const statusSubmenu = [
+        isTentative
+          ? {label: '✓  Conferma booking', value: 'confirm'}
+          : {label: '⏳  Rendi tentative', value: 'tentative'},
+      ];
+      // v3.5.0-alpha.66.3: voci execution_status raccolte in submenu "Marcature".
+      // v3.5.0-alpha.66.4: ora submenu nativo (parent resta visibile, hover apre).
       const exec = (origBooking && origBooking.extendedProps && origBooking.extendedProps.execution_status) || 'planned';
+      const execSubmenu = [];
+      if (exec !== 'in_progress') execSubmenu.push({label:'▶  Inizia (in corso)', value:'exec_in_progress'});
+      if (exec !== 'done')        execSubmenu.push({label:'✓  Marca come fatto', value:'exec_done'});
+      if (exec !== 'not_done')    execSubmenu.push({label:'✗  Marca come non fatto', value:'exec_not_done'});
+      if (exec === 'done' || exec === 'not_done')
+                                  execSubmenu.push({label:'↺  Riapri (planned)', value:'exec_planned'});
+
       const choice = await tlContextMenu(x, y, [
         {label: '✎  Modifica…', value: 'edit'},
-        {label: '🏷  Marcature ▸', value: 'marcature'},
-        statusItem,
+        {label: '🏷  Marcature', submenu: execSubmenu},
+        {label: (isTentative ? '⏳ Stato: Tentative' : '✓ Stato: Confermato'), submenu: statusSubmenu},
         {label: '⊕  Duplica qui', value: 'duplicate'},
         {label: '📅  Duplica giorno dopo', value: 'duplicate_day'},
         {label: '📅  Duplica settimana dopo', value: 'duplicate_week'},
@@ -4689,34 +4798,6 @@ async function _doRenderTimeline(preserveWindow=false) {
           // tlInstantPaste con dayOffset=1 o 7 e clipboard locale (1 booking).
           const days = choice === 'duplicate_week' ? 7 : 1;
           await tlInstantPaste([origBooking], days);
-        } else if (choice === 'marcature') {
-          // v3.5.0-alpha.66.3: submenu Marcature → secondo tlContextMenu con
-          // le voci execution_status condizionali (filtra lo stato corrente).
-          const subMenu = [];
-          if (exec !== 'in_progress') subMenu.push({label:'▶  Inizia (in corso)', value:'exec_in_progress'});
-          if (exec !== 'done')        subMenu.push({label:'✓  Marca come fatto', value:'exec_done'});
-          if (exec !== 'not_done')    subMenu.push({label:'✗  Marca come non fatto', value:'exec_not_done'});
-          if (exec === 'done' || exec === 'not_done')
-                                      subMenu.push({label:'↺  Riapri (planned)', value:'exec_planned'});
-          subMenu.push({label: '✕  Annulla', value: null});
-          const subChoice = await tlContextMenu(x + 180, y, subMenu);
-          if (!subChoice) return;
-          // Riusa il branch exec_* che già esiste:
-          const newExec = subChoice.replace(/^exec_/, '');
-          const bid = origBooking ? origBooking.booking_id : null;
-          if (!bid) throw new Error('Booking non trovato');
-          let reason = '';
-          if (newExec === 'not_done') {
-            reason = prompt('Motivo "non fatto" (richiesto):', '') || '';
-            if (!reason.trim()) { toast('Motivo obbligatorio per "non fatto"', 'warning'); return; }
-          }
-          const fd = new FormData();
-          fd.append('execution_status', newExec);
-          if (reason) fd.append('not_done_reason', reason);
-          await api('PATCH', `/planning/api/bookings/${bid}/execution`, fd);
-          const labels = {planned:'rimesso planned', in_progress:'avviato', done:'marcato fatto', not_done:'marcato non fatto'};
-          toast(`Booking ${labels[newExec] || newExec}`, 'success');
-          renderTimeline(true);
         } else if (choice && choice.toString().startsWith('exec_')) {
           // v3.5.0-alpha.66: cambio execution_status via endpoint dedicato.
           // Per not_done richiede un reason. Il context-menu opera sempre su
@@ -5779,6 +5860,11 @@ function _tlbReset() {
   document.getElementById('tlb-notes').value = '';
   // v3.5.0-alpha.22: priority semaforo
   tlbSetPriorityUI('normal');
+  // v3.5.0-alpha.66.4: reset BookingStatus a tentative (default per create)
+  const sT = document.getElementById('tlb-status-tentative');
+  const sC = document.getElementById('tlb-status-confirmed');
+  if (sT) sT.checked = true;
+  if (sC) sC.checked = false;
   document.getElementById('tlb-assignments').innerHTML = '';
   // v3.5.0-alpha.66.1: nascondi warning duplicate-overlap residuo
   const dw = document.getElementById('tlb-duplicate-warning');
@@ -6390,6 +6476,13 @@ async function tlbOpenEdit(bookingId) {
   if (p.notes) document.getElementById('tlb-notes').value = p.notes;
   // v3.5.0-alpha.22: pre-fill priority in edit
   tlbSetPriorityUI(p.priority || 'normal');
+  // v3.5.0-alpha.66.4: pre-fill status in edit
+  const sT2 = document.getElementById('tlb-status-tentative');
+  const sC2 = document.getElementById('tlb-status-confirmed');
+  if (sT2 && sC2) {
+    if (p.status === 'confirmed') { sC2.checked = true; sT2.checked = false; }
+    else                          { sT2.checked = true; sC2.checked = false; }
+  }
   if (p.job_id) {
     // v3.4.53: dal Job risaliamo alla Quote (job_id resta come puntatore interno)
     try {
@@ -6932,6 +7025,11 @@ async function tlbSubmit() {
   // permettere al backend di aggiornare anche al downgrade.
   const prio = (document.getElementById('tlb-priority') || {}).value || 'normal';
   fd.append('priority', prio);
+  // v3.5.0-alpha.66.4: BookingStatus (tentative/confirmed). Default tentative
+  // su create, sempre inviato in edit per permettere il toggle.
+  const statusRadio = document.querySelector('input[name="tlb-status"]:checked');
+  const bookingStatus = statusRadio ? statusRadio.value : 'tentative';
+  fd.append('status', bookingStatus);
   // E3 v3.4.17: smart split server-side (solo per nuovo, non in edit)
   const smartSplit = document.getElementById('tlb-smart-split');
   if (smartSplit && smartSplit.checked && !editingId) fd.append('smart_split', 'true');
