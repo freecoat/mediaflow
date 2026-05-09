@@ -517,8 +517,18 @@ def _dept_mismatch_payload(db: Session, b: Booking, resource_id_target: int) -> 
 
 
 def _check_assignment_conflict(db: Session, resource_id: int, start: datetime, end: datetime,
-                                exclude_assignment_id: Optional[int] = None) -> Optional[BookingAssignment]:
-    """Verifica se esiste un altro assignment in conflitto sulla stessa risorsa."""
+                                exclude_assignment_id: Optional[int] = None,
+                                exclude_booking_id: Optional[int] = None) -> Optional[BookingAssignment]:
+    """Verifica se esiste un altro assignment in conflitto sulla stessa risorsa.
+
+    `exclude_assignment_id`: esclude un singolo assignment (utile quando si
+    edita un assignment, per non vedere se stesso come conflitto).
+    `exclude_booking_id` (v3.5.0-alpha.66.5.2): esclude TUTTI gli assignment
+    di un dato booking. Necessario quando si modifica un booking smart-split
+    (multi-segment stessa risorsa): i segmenti contigui dello stesso booking
+    sono fratelli legittimi, non conflitti. L'overlap tra fratelli dello
+    stesso booking è gestito separatamente da `_check_intra_payload_overlaps`.
+    """
     q = db.query(BookingAssignment).join(Booking, BookingAssignment.booking_id == Booking.id).filter(
         Booking.tenant_id == CURRENT_TENANT,
         Booking.status != BookingStatus.cancelled,
@@ -528,6 +538,8 @@ def _check_assignment_conflict(db: Session, resource_id: int, start: datetime, e
     )
     if exclude_assignment_id:
         q = q.filter(BookingAssignment.id != exclude_assignment_id)
+    if exclude_booking_id:
+        q = q.filter(BookingAssignment.booking_id != exclude_booking_id)
     return q.first()
 
 
@@ -1951,9 +1963,35 @@ async def update_assignment(
                 "hint": "La nuova posizione cade in periodo fatturato. "
                         "Riinvia con `force_slice_unlock=true` per forzare.",
             })
-    c = _check_assignment_conflict(db, new_rid, new_s, new_e, exclude_assignment_id=assignment_id)
+    # v3.5.0-alpha.66.5.2: il check cross-booking esclude TUTTI i fratelli
+    # dello stesso booking (smart-split mattina+pomeriggio sulla stessa
+    # risorsa = fratelli legittimi, non conflitti).
+    c = _check_assignment_conflict(
+        db, new_rid, new_s, new_e,
+        exclude_assignment_id=assignment_id,
+        exclude_booking_id=a.booking_id,
+    )
     if c:
         raise HTTPException(409, f"Conflitto con assignment #{c.id}")
+    # Check intra-booking dedicato: se il drag/resize porta a un OVERLAP
+    # STRETTO con un fratello sulla stessa risorsa nel medesimo booking,
+    # blocca (è il caso "duplicate-overlap" pre-α.63 che vogliamo evitare).
+    # I segmenti contigui (end == start fratello) restano permessi.
+    sib_overlap = db.query(BookingAssignment).filter(
+        BookingAssignment.booking_id == a.booking_id,
+        BookingAssignment.id != assignment_id,
+        BookingAssignment.resource_id == new_rid,
+        BookingAssignment.start_datetime < new_e,
+        BookingAssignment.end_datetime > new_s,
+    ).first()
+    if sib_overlap:
+        raise HTTPException(
+            409,
+            f"Sovrapposizione con segmento dello stesso booking "
+            f"(#{sib_overlap.id}): {sib_overlap.start_datetime.strftime('%H:%M')}–"
+            f"{sib_overlap.end_datetime.strftime('%H:%M')}. Sposta o "
+            f"ridimensiona quel segmento prima."
+        )
     a.resource_id = new_rid
     a.start_datetime = new_s
     a.end_datetime = new_e
@@ -2384,18 +2422,44 @@ async def bulk_edit_bookings(
                     raise ValueError(f"end <= start dopo le modifiche (assignment #{a.id})")
                 updates.append((a, ns, ne))
 
-            # Check conflict su tutti i nuovi orari
+            # Check conflict su tutti i nuovi orari.
+            # v3.5.0-alpha.66.5.2: esclude TUTTI i fratelli del booking
+            # corrente dal check cross-booking (smart-split = fratelli leciti).
             conflict_msg = None
             for (a, ns, ne) in updates:
                 c = _check_assignment_conflict(
                     db, a.resource_id, ns, ne,
                     exclude_assignment_id=a.id,
+                    exclude_booking_id=b.id,
                 )
                 if c:
                     conflict_msg = f"#{a.id} → conflitto con #{c.id}"
                     break
             if conflict_msg:
                 failed_ids.append({"id": b.id, "error": conflict_msg})
+                continue
+            # Check intra-booking: dopo le modifiche, ci sono fratelli sulla
+            # stessa risorsa con OVERLAP stretto? (Caso bulk absolute_start/end
+            # che collasserebbe i segmenti smart-split su orari identici.)
+            intra_dup = None
+            for i in range(len(updates)):
+                for j in range(i + 1, len(updates)):
+                    a_i, s_i, e_i = updates[i]
+                    a_j, s_j, e_j = updates[j]
+                    if a_i.resource_id != a_j.resource_id:
+                        continue
+                    if s_i < e_j and s_j < e_i:
+                        intra_dup = (a_i.id, a_j.id)
+                        break
+                if intra_dup:
+                    break
+            if intra_dup:
+                failed_ids.append({
+                    "id": b.id,
+                    "error": f"Segmenti smart-split #{intra_dup[0]} e #{intra_dup[1]} "
+                             "diventerebbero sovrapposti (stesso orario assoluto applicato a "
+                             "tutti i segmenti). Rimuovi un segmento o usa shift relativo."
+                })
                 continue
 
             # Commit modifiche temporali
@@ -2687,13 +2751,19 @@ async def multi_move_assignments(
     } for a in assignments]
 
     # Conflict check ATOMICO: per ogni move, esclude TUTTI gli aids della transazione
-    # (così assignment "in volo" non collidono tra loro)
+    # (così assignment "in volo" non collidono tra loro).
+    # v3.5.0-alpha.66.5.2: esclude anche i FRATELLI dello stesso booking (smart-split):
+    # se l'utente sposta solo 1 segmento, l'altro fratello dello stesso booking NON
+    # deve essere visto come conflitto cross-booking. Overlap intra-booking
+    # gestito separatamente sotto.
     aids_set = set(aids)
+    affected_booking_ids_for_check = {a.booking_id for a in assignments}
     for p in parsed:
         a = by_id[p["assignment_id"]]
         target_rid = p["new_resource_id"] if p["new_resource_id"] is not None else a.resource_id
         ns, ne = p["new_start"], p["new_end"]
         # Query: stesso pattern di _check_assignment_conflict ma con NOT IN
+        # (sia su aids che su booking_ids della transazione).
         conflict = db.query(BookingAssignment).join(
             Booking, BookingAssignment.booking_id == Booking.id
         ).filter(
@@ -2703,6 +2773,7 @@ async def multi_move_assignments(
             BookingAssignment.start_datetime < ne,
             BookingAssignment.end_datetime > ns,
             ~BookingAssignment.id.in_(aids_set),
+            ~BookingAssignment.booking_id.in_(affected_booking_ids_for_check),
         ).first()
         if conflict:
             # All-or-nothing: niente commit. Ritorniamo 200 + success=false
@@ -2725,6 +2796,53 @@ async def multi_move_assignments(
                 },
                 "message": f"Assignment #{a.id} in conflitto con #{conflict.id} sulla risorsa #{target_rid}",
             }
+
+    # v3.5.0-alpha.66.5.2: check intra-booking pre-commit. Costruisco lo
+    # stato FINALE simulato per ogni booking toccato (fratelli che restano +
+    # fratelli che si muovono con i NUOVI orari). Se uno stesso booking ha
+    # 2+ assignment sulla stessa risorsa con OVERLAP stretto post-move,
+    # blocca: è il caso "duplicate-overlap" pre-α.63.
+    by_book_post: dict[int, list[dict]] = {}
+    aids_in_move = {p["assignment_id"] for p in parsed}
+    # Step 1: per ogni booking toccato, raccogli i fratelli che NON cambiano
+    affected_booking_ids_for_check2 = {a.booking_id for a in assignments}
+    if affected_booking_ids_for_check2:
+        siblings_other = db.query(BookingAssignment).filter(
+            BookingAssignment.booking_id.in_(affected_booking_ids_for_check2),
+            ~BookingAssignment.id.in_(aids_in_move),
+        ).all()
+        for s in siblings_other:
+            by_book_post.setdefault(s.booking_id, []).append({
+                "id": s.id, "rid": s.resource_id,
+                "start": s.start_datetime, "end": s.end_datetime,
+            })
+    # Step 2: aggiungi gli assignment in volo con i NUOVI orari/risorse
+    for p in parsed:
+        a = by_id[p["assignment_id"]]
+        new_rid = p["new_resource_id"] if p["new_resource_id"] is not None else a.resource_id
+        by_book_post.setdefault(a.booking_id, []).append({
+            "id": a.id, "rid": new_rid,
+            "start": p["new_start"], "end": p["new_end"],
+        })
+    # Step 3: pairwise overlap check intra-booking, stessa risorsa
+    for bid, segs in by_book_post.items():
+        n = len(segs)
+        for i in range(n):
+            for j in range(i + 1, n):
+                if segs[i]["rid"] != segs[j]["rid"]:
+                    continue
+                if segs[i]["start"] < segs[j]["end"] and segs[j]["start"] < segs[i]["end"]:
+                    return {
+                        "success": False, "code": "INTRA_BOOKING_OVERLAP", "moved": 0,
+                        "blocked_booking_id": bid,
+                        "blocked_assignment_ids": [segs[i]["id"], segs[j]["id"]],
+                        "message": (
+                            f"Il move farebbe sovrapporre 2 segmenti dello stesso "
+                            f"booking #{bid} sulla stessa risorsa "
+                            f"(#{segs[i]['id']} e #{segs[j]['id']}). "
+                            f"Sposta o ridimensiona uno dei due."
+                        ),
+                    }
 
     # Tutti OK → applica modifiche
     affected_booking_ids: set[int] = set()
