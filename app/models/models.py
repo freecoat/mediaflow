@@ -871,8 +871,16 @@ class Job(Base):
     start_date: Mapped[Optional[date]] = mapped_column(Date, nullable=True)
     end_date: Mapped[Optional[date]] = mapped_column(Date, nullable=True)
     budget_quoted: Mapped[float] = mapped_column(Float, default=0.0)
+    # v3.5.0-alpha.65 — Pass-through OT al cliente (opt-in per progetto).
+    # Quando True, l'engine `compute_assignment_breakdown.weighted_factor`
+    # alimenta JCL.quantity_actual (e quindi total_accrued) → l'overtime/notte/
+    # domenica/festivo gonfia anche il MATURATO cliente. Default False:
+    # comportamento storico (giornate fisiche, OT solo cost-side via
+    # `_bookings_hours_cost`). Si abilita su progetti dove il cliente ha
+    # accettato addendum di pass-through (rush, urgenze, festivi).
+    weighted_revenue: Mapped[bool] = mapped_column(Boolean, default=False)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
-    
+
     project: Mapped["Project"] = relationship(back_populates="jobs")
     client: Mapped["Client"] = relationship(back_populates="jobs")
     quote: Mapped[Optional["Quote"]] = relationship(back_populates="job")

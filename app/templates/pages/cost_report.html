@@ -83,6 +83,14 @@
       <input type="checkbox" id="cr-rendiconto-toggle" onchange="updateExportLinks()" checked>
       Modalità rendiconto
     </label>
+    <!-- v3.5.0-alpha.65: pass-through OT al cliente. Default OFF (giornate
+         fisiche). ON → maturato cliente pesato (OT/notte/dom/festivo).
+         Cambia il calcolo, non solo gli export → reload report dopo toggle. -->
+    <label class="text-xs" id="cr-weighted-revenue-wrap" style="margin-left:6px; display:none; align-items:center; gap:4px; padding:2px 8px; border-radius:6px; border:1px solid var(--border);"
+           title="Quando ON, l'overtime/notte/domenica/festivo gonfia anche il MATURATO cliente (1 giornata + 6h OT × 1.30 → 1.725 gg fatturate). Da abilitare solo sui progetti dove il cliente ha accettato il pass-through. Default OFF: cliente vede giornate fisiche, l'OT resta costo interno.">
+      <input type="checkbox" id="cr-weighted-revenue-toggle" onchange="onWeightedRevenueToggle()">
+      <span id="cr-weighted-revenue-label">Pass-through OT al cliente</span>
+    </label>
     <!-- v3.5.0-alpha.55: toggle vista Over/Under. Maturato (default) è
          per la fatturazione: confronta lavoro fatto vs preventivato.
          Stima è per il report cliente: include lavoro pianificato. -->
@@ -414,6 +422,41 @@ function _crViewMode() {
   return document.getElementById('cr-view-mode')?.value || 'now';
 }
 
+// v3.5.0-alpha.65: toggle pass-through OT al cliente. Salva il flag su
+// Job + ricomputa subito le actual (server-side) → reload report.
+async function onWeightedRevenueToggle() {
+  if (!currentJobId) return;
+  const cb = document.getElementById('cr-weighted-revenue-toggle');
+  if (!cb) return;
+  const enabled = cb.checked;
+  // Conferma quando si attiva: l'azione cambia retroattivamente il maturato
+  // del job — meglio confermare per evitare scoglio nel cost-report cliente.
+  if (enabled) {
+    const ok = confirm(
+      'Attivare pass-through OT al cliente?\n\n' +
+      'Le ore di overtime/notte/domenica/festivo (con stato APPROVED) verranno ' +
+      'rifatturate al cliente con i moltiplicatori della policy oraria.\n\n' +
+      'Esempio: 1 giornata 8-22 con 6h OT × 1.30 → 1.725 giornate maturate.\n\n' +
+      'Da abilitare solo se il cliente ha accettato il pass-through.'
+    );
+    if (!ok) { cb.checked = false; return; }
+  }
+  try {
+    const fd = new FormData();
+    fd.append('enabled', enabled ? 'true' : 'false');
+    const res = await fetch(`/cost-report/api/job/${currentJobId}/weighted-revenue`, {
+      method: 'PUT', body: fd, credentials: 'same-origin',
+    });
+    if (!res.ok) throw new Error((await res.json()).detail || 'Errore');
+    const data = await res.json();
+    toast(`✓ Pass-through OT ${data.weighted_revenue ? 'attivato' : 'disattivato'} — ${data.lines_updated} righe aggiornate`, 'success');
+    await loadReport(currentJobId);
+  } catch(e) {
+    cb.checked = !enabled;
+    toast(e.message || 'Errore toggle pass-through', 'error');
+  }
+}
+
 function resetCrFilters() {
   document.getElementById('cr-search').value = '';
   document.getElementById('cr-f-client').value = '';
@@ -470,6 +513,20 @@ async function loadReport(jobId) {
   ['btn-client-pdf', 'btn-client-csv', 'btn-client-xlsx'].forEach(id => {
     document.getElementById(id).style.display = '';
   });
+  // v3.5.0-alpha.65: stato toggle pass-through OT del job corrente
+  const wrWrap = document.getElementById('cr-weighted-revenue-wrap');
+  const wrToggle = document.getElementById('cr-weighted-revenue-toggle');
+  const wrLabel = document.getElementById('cr-weighted-revenue-label');
+  if (wrWrap && wrToggle) {
+    wrWrap.style.display = 'flex';
+    wrToggle.checked = !!job.weighted_revenue;
+    if (wrLabel) {
+      wrLabel.textContent = job.weighted_revenue
+        ? 'Pass-through OT al cliente · ATTIVO'
+        : 'Pass-through OT al cliente';
+    }
+    wrWrap.style.background = job.weighted_revenue ? 'rgba(168,85,247,0.12)' : 'transparent';
+  }
   updateExportLinks();
   renderKPIs(); renderCostLines(); renderResources(); renderTimesheets();
   renderBillingWidget();  // v3.5.0-alpha.48: widget Fatturazione (Step 3)
@@ -732,9 +789,18 @@ function renderCostLines() {
     const refsBadge = refs.length
       ? refs.map(r => `<a class="text-xs" href="${r.quote_url}" target="_blank" style="display:inline-block; margin-left:6px; padding:1px 6px; background:rgba(168,85,247,0.15); color:#c084fc; border-radius:8px; text-decoration:none; font-weight:600; font-size:10px;" title="Riferita al commerciale su ${r.quote_number}${r.quote_version > 1 ? ' v' + r.quote_version : ''} (stato ${r.quote_status})" onclick="event.stopPropagation()">↪ ${r.quote_number}${r.quote_version > 1 ? ' v' + r.quote_version : ''}</a>`).join('')
       : '';
+    // v3.5.0-alpha.65: badge "⏳ pending OT" se la riga ha booking con
+    // overtime_status=pending. Tooltip mostra ore + (se weighted_revenue ON)
+    // la stima € del delta post-approvazione.
+    const pendH = l.pending_overtime_hours || 0;
+    const pendAmt = l.pending_overtime_amount || 0;
+    const pendHTxt = Number(pendH).toFixed(2);
+    const pendBadge = pendH > 0
+      ? `<span class="text-xs" style="display:inline-block; margin-left:6px; padding:1px 6px; background:rgba(251,191,36,0.18); color:#fbbf24; border-radius:8px; font-weight:600; font-size:10px;" title="${pendHTxt}h overtime in attesa di approvazione${pendAmt>0?` — stima delta maturato: +${fmtCurrency(pendAmt)} (post-approvazione)`:' — non rifatturate al cliente con questa configurazione'}.">⏳ ${pendHTxt}h pending</span>`
+      : '';
     return `<tr onclick='openLineDetailHere(${l.id})' style="cursor:pointer;">
       <td>
-        <div style="font-weight:500;font-size:13px;">${l.description}${l.is_extra ? ' <span class="text-xs" style="color:#fb923c;">[extra]</span>' : ''}${refsBadge}</div>
+        <div style="font-weight:500;font-size:13px;">${l.description}${l.is_extra ? ' <span class="text-xs" style="color:#fb923c;">[extra]</span>' : ''}${refsBadge}${pendBadge}</div>
         ${l.category ? `<div class="text-xs text-muted">${l.category}</div>` : ''}
       </td>
       <td class="text-sm text-muted">${l.unit}</td>

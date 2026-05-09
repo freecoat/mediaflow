@@ -128,6 +128,7 @@
 <div class="hr-view-toggle" role="tablist">
   <button id="view-tab-table" class="active" onclick="setHRView('table')">📋 Tabella timbrature</button>
   <button id="view-tab-calendar" onclick="setHRView('calendar')">📅 Calendario complessivo</button>
+  <button id="view-tab-internal" onclick="setHRView('internal')">🛠 Booking interni</button>
 </div>
 
 <!-- ── Filtri ──────────────────────────────────────────────── -->
@@ -237,6 +238,61 @@
       <div class="cal-dow">Ven</div>
       <div class="cal-dow">Sab</div>
       <div class="cal-dow">Dom</div>
+    </div>
+  </div>
+</div>
+
+<!-- ── Booking interni (v3.5.0-alpha.65): manutenzione, R&D, training. ──
+     Fuori dal cost-report cliente, ma rendicontano monte ore (lineare e
+     pesato con i moltiplicatori della WorkingHoursPolicy della risorsa). -->
+<div id="view-internal" style="display:none;">
+  <div class="card" style="margin-bottom:16px;">
+    <div style="display:flex; gap:12px; align-items:end; flex-wrap:wrap;">
+      <div class="form-group">
+        <label class="form-label" style="font-size:11px;">Da</label>
+        <input class="form-input" type="date" id="ib-from" onchange="reloadInternalBookings()">
+      </div>
+      <div class="form-group">
+        <label class="form-label" style="font-size:11px;">A</label>
+        <input class="form-input" type="date" id="ib-to" onchange="reloadInternalBookings()">
+      </div>
+      <div class="form-group">
+        <button class="btn btn-secondary btn-sm" onclick="ibQuickRange('week')">Settimana</button>
+        <button class="btn btn-secondary btn-sm" onclick="ibQuickRange('month')">Mese</button>
+        <button class="btn btn-secondary btn-sm" onclick="ibQuickRange('year')">Anno</button>
+      </div>
+      <div class="text-xs text-muted" style="margin-left:auto; max-width:340px;">
+        Booking con tipologia <code>internal_*</code> (manutenzione, R&amp;D, formazione).
+        Non hanno cost-line cliente: il monte ore vive qui.
+        <b>Pesato</b> = ore con moltiplicatori OT/notte/dom/festivo.
+      </div>
+    </div>
+  </div>
+
+  <div class="hr-totals" id="ib-totals">
+    <div class="hr-tot-card"><div class="lbl">Caricamento…</div><div class="val">—</div></div>
+  </div>
+
+  <div class="card" style="margin-bottom:16px;">
+    <h3 style="font-size:13px; margin:0 0 10px 0; color:var(--text2); text-transform:uppercase; letter-spacing:0.5px;">Per tipologia</h3>
+    <div id="ib-by-kind" class="text-sm text-muted">—</div>
+  </div>
+
+  <div class="card">
+    <h3 style="font-size:13px; margin:0 0 10px 0; color:var(--text2); text-transform:uppercase; letter-spacing:0.5px;">Per risorsa</h3>
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th style="text-align:left;">Risorsa</th>
+            <th style="text-align:left;">Tipo</th>
+            <th style="text-align:right;">Ore lineari</th>
+            <th style="text-align:right;">Ore pesate</th>
+            <th style="text-align:left;">Distribuzione per kind</th>
+          </tr>
+        </thead>
+        <tbody id="ib-by-resource"><tr><td colspan="5" class="text-muted text-center" style="padding:20px;">—</td></tr></tbody>
+      </table>
     </div>
   </div>
 </div>
@@ -724,15 +780,96 @@ function setHRView(view) {
   HR_VIEW = view;
   document.getElementById('view-tab-table').classList.toggle('active', view === 'table');
   document.getElementById('view-tab-calendar').classList.toggle('active', view === 'calendar');
+  const internalTab = document.getElementById('view-tab-internal');
+  if (internalTab) internalTab.classList.toggle('active', view === 'internal');
   document.getElementById('view-table').style.display = view === 'table' ? '' : 'none';
   document.getElementById('view-calendar').style.display = view === 'calendar' ? '' : 'none';
+  const internalBlock = document.getElementById('view-internal');
+  if (internalBlock) internalBlock.style.display = view === 'internal' ? '' : 'none';
   if (view === 'calendar') reloadCalendar();
+  if (view === 'internal') reloadInternalBookings();
   try { localStorage.setItem('mf_hr_view', view); } catch(e) {}
 }
 try {
   const v = localStorage.getItem('mf_hr_view');
-  if (v === 'calendar') setHRView('calendar');
+  if (v === 'calendar' || v === 'internal') setHRView(v);
 } catch(e) {}
+
+// ── Booking interni (v3.5.0-alpha.65) ────────────────────────
+function ibQuickRange(kind) {
+  const t = new Date();
+  let from, to;
+  if (kind === 'week') {
+    const d = new Date(t); const dow = (d.getDay() + 6) % 7;
+    from = new Date(d); from.setDate(d.getDate() - dow);
+    to = new Date(from); to.setDate(from.getDate() + 6);
+  } else if (kind === 'year') {
+    from = new Date(t.getFullYear(), 0, 1);
+    to = new Date(t.getFullYear(), 11, 31);
+  } else {
+    from = new Date(t.getFullYear(), t.getMonth(), 1);
+    to = new Date(t.getFullYear(), t.getMonth() + 1, 0);
+  }
+  document.getElementById('ib-from').value = from.toISOString().slice(0,10);
+  document.getElementById('ib-to').value = to.toISOString().slice(0,10);
+  reloadInternalBookings();
+}
+
+async function reloadInternalBookings() {
+  let f = document.getElementById('ib-from').value;
+  let t = document.getElementById('ib-to').value;
+  if (!f || !t) {
+    // Default: mese corrente
+    const d = new Date();
+    f = new Date(d.getFullYear(), d.getMonth(), 1).toISOString().slice(0,10);
+    t = new Date(d.getFullYear(), d.getMonth()+1, 0).toISOString().slice(0,10);
+    document.getElementById('ib-from').value = f;
+    document.getElementById('ib-to').value = t;
+  }
+  let data;
+  try {
+    data = await api('GET', `/hr/api/internal-bookings-report?from_date=${f}&to_date=${t}`);
+  } catch(e) {
+    document.getElementById('ib-totals').innerHTML =
+      `<div class="hr-tot-card"><div class="lbl">Errore</div><div class="val">${escapeHtml(e.message||'')}</div></div>`;
+    return;
+  }
+  const tot = data.totals || {};
+  document.getElementById('ib-totals').innerHTML = `
+    <div class="hr-tot-card"><div class="lbl">Booking</div><div class="val">${tot.bookings_count || 0}</div></div>
+    <div class="hr-tot-card"><div class="lbl">Ore lineari</div><div class="val mono">${(tot.hours_linear||0).toFixed(2)}h</div></div>
+    <div class="hr-tot-card"><div class="lbl">Ore pesate</div><div class="val mono" style="color:#c084fc;">${(tot.hours_weighted||0).toFixed(2)}h</div></div>
+    <div class="hr-tot-card"><div class="lbl">Delta moltiplicatori</div><div class="val mono">+${((tot.hours_weighted||0) - (tot.hours_linear||0)).toFixed(2)}h</div></div>`;
+
+  const byKind = data.by_kind || [];
+  document.getElementById('ib-by-kind').innerHTML = byKind.length === 0
+    ? '<span class="text-muted">Nessun booking interno nel periodo.</span>'
+    : '<div style="display:flex; gap:10px; flex-wrap:wrap;">' + byKind.map(k => `
+        <div style="background:var(--bg2); padding:10px 14px; border-radius:8px; border:1px solid var(--border);">
+          <div style="font-weight:600;">${escapeHtml(k.label)}</div>
+          <div class="text-xs text-muted">${k.count} booking</div>
+          <div class="mono" style="font-size:13px; margin-top:4px;">${k.hours_linear.toFixed(2)}h lineari</div>
+          <div class="mono" style="font-size:13px; color:#c084fc;">${k.hours_weighted.toFixed(2)}h pesate</div>
+        </div>`).join('') + '</div>';
+
+  const byRes = data.by_resource || [];
+  document.getElementById('ib-by-resource').innerHTML = byRes.length === 0
+    ? '<tr><td colspan="5" class="text-muted text-center" style="padding:20px;">Nessuna risorsa con booking interni nel periodo.</td></tr>'
+    : byRes.map(r => `
+        <tr>
+          <td><div style="font-weight:500;">${escapeHtml(r.resource_name)}</div></td>
+          <td class="text-sm text-muted">${escapeHtml(r.resource_type || '')}</td>
+          <td class="mono text-right">${r.hours_linear.toFixed(2)}h</td>
+          <td class="mono text-right" style="color:#c084fc; font-weight:600;">${r.hours_weighted.toFixed(2)}h</td>
+          <td class="text-xs">
+            ${(r.by_kind || []).map(k =>
+              `<span style="display:inline-block; margin-right:8px; padding:1px 6px; background:rgba(168,85,247,0.12); border-radius:6px;"
+                title="${escapeHtml(k.label)}: ${k.hours_linear.toFixed(2)}h lineari · ${k.hours_weighted.toFixed(2)}h pesate"
+              >${escapeHtml(k.label)}: ${k.hours_weighted.toFixed(2)}h</span>`
+            ).join('')}
+          </td>
+        </tr>`).join('');
+}
 
 // ── Calendario (vista mensile complessiva) ───────────────────
 let CAL_MONTH = (() => { const d = new Date(); d.setDate(1); return d; })();

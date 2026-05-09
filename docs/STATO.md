@@ -8,6 +8,97 @@
 
 ## Versione corrente
 
+**v3.5.0-alpha.65** — 9 maggio 2026 — Pass-through OT al cliente (opt-in) + monte ore booking interni
+
+Primo step roadmap billing α.65+ (overtime weighted). Decisioni semantiche
+prese con Matteo prima di scrivere codice (memoria
+`project_billing_roadmap_alpha65plus`):
+- **OT status**: solo APPROVED applica i moltiplicatori, PENDING resta
+  lineare ma esposto in tooltip "+€X pending".
+- **Day-unit**: conversione lineare → 8-22 con 6h OT × 1.30 = 1.725 gg.
+- **Booking interni**: report HR-side separato dal cost-report cliente.
+- **Scope weighted al maturato cliente**: opt-in per progetto via flag
+  `Job.weighted_revenue` (default OFF). Cost-side interno
+  (`_bookings_hours_cost`) era già pesato.
+
+**Chiuso α.65:**
+- ✅ **Flag `Job.weighted_revenue` (default False)** + auto-migrate
+  ALTER TABLE jobs idempotente al boot (`_auto_migrate_columns` in
+  `app/main.py`). Default OFF = back-compat 100% per tutti i job
+  esistenti.
+- ✅ **Engine weighted hours nel sync** (`app/services/cost_line_sync.py`):
+  refactor `_booking_hours()` con due path (`_linear` storico +
+  `_weighted` che usa `compute_assignment_breakdown.weighted_factor`
+  per assignment con la WorkingHoursPolicy della risorsa). Pending OT
+  NON pesato. JCL.qty per day-unit = `weighted_factor / 8`.
+  `recompute_cost_line_actual()` risolve `Job.weighted_revenue` e
+  attiva il path corrispondente. L'engine
+  `compute_assignment_breakdown` esisteva già in
+  `app/services/booking_cost.py`: nessun nuovo file richiesto.
+- ✅ **UI toggle nel cost-report**: checkbox "Pass-through OT al cliente"
+  in toolbar dettaglio con badge ATTIVO viola e conferma all'attivazione.
+  Endpoint `PUT /cost-report/api/job/{id}/weighted-revenue` (Form):
+  persiste flag + trigger automatico `recompute_for_job` per allineare
+  maturato esistente. Idempotente.
+- ✅ **Tooltip pending OT per riga JCL**: response /api/job/{id} espone
+  `pending_overtime_hours` (sempre) + `pending_overtime_amount` (stima €
+  delta maturato post-approvazione, > 0 solo se weighted_revenue ON).
+  UI: badge giallo "⏳ Xh pending" con tooltip contestuale.
+- ✅ **Report HR booking interni**: `GET /hr/api/internal-bookings-report`
+  aggrega booking con kind ∈ {internal_maintenance, internal_research,
+  internal_training} per risorsa+kind. Tab nuova "🛠 Booking interni"
+  in /hr accanto a Tabella/Calendario, con filtro periodo, KPI
+  (lineari/pesate/delta), card per tipologia, tabella per risorsa.
+  Persistenza vista in localStorage.
+
+**Migrazione DB**: ALTER TABLE jobs ADD COLUMN
+`weighted_revenue BOOLEAN NOT NULL DEFAULT 0`. Idempotente.
+
+**Smoke test boot**: 273 routes (+2 vs α.64), version 3.5.0-alpha.65.
+Nessun errore di import, nessun crash al boot.
+
+**Verifica live richiesta a Matteo**:
+1. Pull → app boot pulito (273 route, version 3.5.0-alpha.65). DB
+   migrato in automatico al primo boot (log `[auto-migrate]
+   jobs.weighted_revenue mancante -> ALTER TABLE`).
+2. **Pass-through OT (default OFF, opt-in)**: /cost-report → progetto
+   con booking che hanno OT/notte/dom/festivo APPROVATI → toolbar
+   detail ha checkbox "Pass-through OT al cliente" (default off,
+   testo grigio). Click → conferma esplicita ("rifattura al cliente con
+   moltiplicatori") → badge ATTIVO viola, maturato JCL aumentato (es.
+   1 gg con 6h OT × 1.30 → 1.725 gg). Toggle OFF → torna a lineare.
+3. **Pending OT in tooltip**: booking con `overtime_status=pending`
+   → riga JCL mostra badge giallo "⏳ Xh pending". Hover → tooltip
+   con stima `+€` SOLO se pass-through ON, altrimenti messaggio
+   "non rifatturate al cliente con questa configurazione".
+4. **Solo APPROVED conta col moltiplicatore**: pending o rejected
+   → maturato resta lineare per quelle ore. Approve → trigger
+   recompute (manuale via "Aggiorna ore" o automatico al toggle
+   weighted_revenue) → maturato sale.
+5. **Booking interni**: /hr → tab "🛠 Booking interni" → range mese
+   corrente → 4 KPI cards (count, lineari, pesate, delta moltipl.)
+   + card per tipologia + tabella per risorsa. Test: crea booking
+   `internal_maintenance` su una risorsa → la risorsa compare con
+   monte ore atteso.
+
+**Cosa NON cambia in α.65**:
+- Cost-side interno (`_bookings_hours_cost`): già pesato a prescindere,
+  invariato.
+- Tutti i job esistenti restano `weighted_revenue=False` → back-compat
+  100% sul maturato cliente.
+- Nessuna nuova colonna in JCL, nessuna modifica a slice/billing.
+- Cashflow completo (5.b InvoicePayment, 5.c timeline) e supplier
+  invoice (punto 6): rimandati ad α.66+ secondo roadmap.
+
+**Prossimi step (post-test live)**:
+- α.66 candidato: Punto 5.b + 5.c base della roadmap
+  (`InvoicePayment` + cashflow timeline revenue-only).
+- (eventuale α.65.x): se Matteo vuole anche **colonna informativa
+  "OT da rifatturare"** in cost-report (delta tra weighted e lineare,
+  per decidere caso per caso), aggiunta semplice senza migrazione.
+
+---
+
 **v3.5.0-alpha.64** — 8 maggio 2026 — Trasmissione granulare + refer-to-sales completo
 
 Bundle "trasmissione & refer-to-sales completo" da feedback Matteo dopo α.63

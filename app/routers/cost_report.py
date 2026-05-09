@@ -20,6 +20,10 @@ from app.services.pdf_export import generate_client_cost_report_pdf
 
 router = APIRouter(prefix="/cost-report", tags=["cost_report"])
 
+# Costante condivisa con cost_line_sync.HOURS_PER_DAY: conversione
+# day-unit ↔ ore. Tenuta locale qui per evitare import circolari.
+HOURS_PER_DAY = 8.0
+
 
 def _tpl():
     from app.main import templates
@@ -323,6 +327,44 @@ async def job_cost_report(job_id: int, db: Session = Depends(get_db)):
     sum_accrued_post_period = round(max(0.0, total_accrued - sum_billed_locked), 2)
     sum_forecast_future = round(max(0.0, total_expected - total_accrued), 2)
 
+    # v3.5.0-alpha.65 — Pending OT per riga JCL: ore overtime in attesa di
+    # approvazione, non ancora pesate. Mostrate in tooltip nel cost-report
+    # ("+€X pending") senza alterare i numeri certi (decisione semantica:
+    # "solo APPROVED applica moltiplicatori"). Aggrega i booking del JCL con
+    # overtime_status=pending e somma le ore via compute_assignment_breakdown
+    # (campo pending_overtime_hours del breakdown).
+    pending_ot_by_jcl: dict[int, float] = {}
+    if line_ids:
+        from app.services.booking_cost import compute_assignment_breakdown
+        pending_bookings = (
+            db.query(Booking)
+            .options(joinedload(Booking.assignments).joinedload(BookingAssignment.resource))
+            .filter(
+                Booking.job_cost_line_id.in_(line_ids),
+                Booking.overtime_status == BookingOvertimeStatus.pending,
+                Booking.status != BookingStatus.cancelled,
+            )
+            .all()
+        )
+        _hols_cache: dict = {}
+        for b in pending_bookings:
+            for a in b.assignments:
+                if not a.resource:
+                    continue
+                policy = _resource_policy_for_cost(a.resource, db)
+                if not policy:
+                    continue
+                key = (id(policy), a.start_datetime.year, a.end_datetime.year)
+                if key not in _hols_cache:
+                    _hols_cache[key] = get_holidays(
+                        policy, a.start_datetime.year, a.end_datetime.year
+                    )
+                br = compute_assignment_breakdown(a, policy, _hols_cache[key], b)
+                pending_ot_by_jcl[b.job_cost_line_id] = (
+                    pending_ot_by_jcl.get(b.job_cost_line_id, 0.0)
+                    + br.pending_overtime_hours
+                )
+
     # v3.4.36 (R1.4): margine dinamico = Σ JobCostLine.total_quoted (vivo)
     # − (costo booking + spese). Non più contro Job.budget_quoted statico
     # (quello resta come riferimento "originale" all'approvazione, ma può
@@ -341,6 +383,8 @@ async def job_cost_report(job_id: int, db: Session = Depends(get_db)):
             "budget_quoted": job.budget_quoted,
             "start_date": str(job.start_date) if job.start_date else None,
             "end_date": str(job.end_date) if job.end_date else None,
+            # v3.5.0-alpha.65 — Pass-through OT al cliente (opt-in).
+            "weighted_revenue": bool(getattr(job, "weighted_revenue", False)),
         },
         "summary": {
             "budget_quoted": round(job.budget_quoted, 2),
@@ -413,6 +457,19 @@ async def job_cost_report(job_id: int, db: Session = Depends(get_db)):
                 # v3.5.0-alpha.64: lista quote-line che referenziano questa JCL
                 # (refer-to-sales). UI mostra badge "↪ Riferita su Q-NNN-NN v2".
                 "referrals": refs_map.get(l.id, []),
+                # v3.5.0-alpha.65: ore overtime pending sul JCL — informativa
+                # in tooltip ("+€X pending"), NON conteggiate nel maturato.
+                # L'amount è una stima del delta di maturato post-approvazione
+                # SE il job ha weighted_revenue=True (altrimenti = 0, perché
+                # OT non gonfia il revenue lineare).
+                "pending_overtime_hours": round(pending_ot_by_jcl.get(l.id, 0.0), 2),
+                "pending_overtime_amount": round(
+                    (pending_ot_by_jcl.get(l.id, 0.0)
+                     / (HOURS_PER_DAY if (l.unit or "").lower() in ("day","giorno","giornate","giornata","d") else 1.0)
+                     * (l.unit_price or 0.0))
+                    if getattr(job, "weighted_revenue", False) else 0.0,
+                    2,
+                ),
             }
             for l in job.cost_lines
         ],
@@ -436,6 +493,37 @@ async def job_cost_report(job_id: int, db: Session = Depends(get_db)):
         ],
         # v3.4.38 (R3.5): timesheet_summary rimosso. Le ore lavorate sono in
         # bookings_breakdown e bookings_by_resource (canonico Booking).
+    }
+
+
+@router.put("/api/job/{job_id}/weighted-revenue")
+async def set_weighted_revenue(
+    job_id: int,
+    enabled: bool = Form(...),
+    db: Session = Depends(get_db),
+):
+    """v3.5.0-alpha.65 — Toggle pass-through OT al cliente per il job.
+
+    Quando attivato, il maturato cliente (`JobCostLine.total_accrued`) viene
+    ricalcolato usando il `weighted_factor` di compute_assignment_breakdown:
+    overtime/notte/domenica/festivo gonfiano il revenue. Default OFF (giornate
+    fisiche). Disattivare ripristina il calcolo lineare.
+
+    Effetto: il flag è persistito sul Job + automatic reconcile-actuals di
+    tutte le cost-line (così il cliente vede subito i nuovi numeri). Idempotente.
+    """
+    job = db.query(Job).filter(Job.id == job_id).first()
+    if not job:
+        raise HTTPException(404, "Job non trovato")
+    job.weighted_revenue = bool(enabled)
+    db.flush()
+    from app.services.cost_line_sync import recompute_for_job
+    result = recompute_for_job(db, job_id)
+    db.commit()
+    return {
+        "job_id": job_id,
+        "weighted_revenue": job.weighted_revenue,
+        "lines_updated": result.get("lines_updated", 0),
     }
 
 

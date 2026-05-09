@@ -19,9 +19,12 @@ from app.database import get_db
 from app.models import (
     Resource, ResourceType, TimePunch, PunchKind, Job, JobCostLine, User,
     WorkingHoursPolicy, ResourceUnavailability, UnavailabilityKind, UnavailabilityStatus,
+    Booking, BookingAssignment, BookingKind, BookingStatus,
 )
 from app.services.auth import get_current_user_from_token
 from app.services.overtime import compute_overtime, compute_punch_breakdown
+from app.services.booking_cost import compute_assignment_breakdown, BookingBreakdown
+from app.services.working_hours import get_holidays
 from app.services.rbac import is_elevated, scope_resource_id, current_user_optional
 
 router = APIRouter(prefix="/hr", tags=["hr"])
@@ -1014,4 +1017,146 @@ async def overtime_breakdown(
         "breakdown": breakdown.as_dict(),
         "unavailability": unavailability,
         "grand_total_hours": grand_total,
+    }
+
+
+# ── BOOKING INTERNI: monte ore non-progetto (v3.5.0-alpha.65) ───────
+# Manutenzione, R&D, training. Non hanno cost-line cliente, quindi sono
+# fuori dal cost-report ma rendicontano comunque ore-uomo. Aggrega per
+# risorsa con ore lineari e weighted (multiplier holiday/sunday/overtime/night
+# della WorkingHoursPolicy della risorsa).
+
+INTERNAL_KIND_LABEL = {
+    BookingKind.internal_maintenance: "Manutenzione",
+    BookingKind.internal_research:    "R&D / Test",
+    BookingKind.internal_training:    "Formazione",
+}
+
+
+@router.get("/api/internal-bookings-report")
+async def internal_bookings_report(
+    request: Request,
+    from_date: date,
+    to_date: date,
+    db: Session = Depends(get_db),
+):
+    """Aggrega i booking con `kind != project` nel periodo, raggruppa per
+    risorsa e per kind interno, e calcola il monte ore (lineare + weighted).
+
+    Restituisce:
+      - by_resource: list of {resource_id, resource_name, total_h, weighted_h,
+        by_kind: {kind: {hours_linear, hours_weighted}}}
+      - by_kind: aggregato {kind_label: {hours_linear, hours_weighted, count}}
+      - totals: {hours_linear, hours_weighted}
+    """
+    if to_date < from_date:
+        raise HTTPException(400, "to_date precedente a from_date")
+
+    bookings = (
+        db.query(Booking)
+        .options(joinedload(Booking.assignments).joinedload(BookingAssignment.resource))
+        .filter(
+            Booking.kind != BookingKind.project,
+            Booking.status != BookingStatus.cancelled,
+            Booking.start_datetime >= datetime.combine(from_date, time(0, 0)),
+            Booking.start_datetime < datetime.combine(to_date + timedelta(days=1), time(0, 0)),
+        )
+        .all()
+    )
+
+    by_resource: dict[int, dict] = {}
+    by_kind: dict[str, dict] = {}
+    holidays_cache: dict = {}
+
+    def _hols(policy, y0, y1):
+        key = (id(policy), y0, y1)
+        if key not in holidays_cache:
+            holidays_cache[key] = get_holidays(policy, y0, y1)
+        return holidays_cache[key]
+
+    total_linear = 0.0
+    total_weighted = 0.0
+
+    for b in bookings:
+        kind_key = b.kind.value if hasattr(b.kind, "value") else str(b.kind)
+        kind_label = INTERNAL_KIND_LABEL.get(b.kind, kind_key)
+        by_kind.setdefault(kind_label, {
+            "kind": kind_key,
+            "label": kind_label,
+            "hours_linear": 0.0,
+            "hours_weighted": 0.0,
+            "count": 0,
+        })
+        by_kind[kind_label]["count"] += 1
+        for a in b.assignments:
+            if not a.resource or not a.start_datetime or not a.end_datetime:
+                continue
+            linear_h = max(0.0, (a.end_datetime - a.start_datetime).total_seconds() / 3600.0)
+            policy = _resolve_policy_for_resource(db, a.resource)
+            weighted_h = linear_h
+            if policy:
+                hols = _hols(policy, a.start_datetime.year, a.end_datetime.year)
+                br = compute_assignment_breakdown(a, policy, hols, b)
+                # weighted_factor copre regular + overtime/notte/dom/festivo
+                # con i moltiplicatori della policy. Per booking interni
+                # overtime_status è quasi sempre `none` (non c'è cliente da
+                # avvisare), quindi l'OT eventualmente speso è già pesato.
+                # Fallback al lineare se il breakdown è vuoto (es. assignment
+                # non valutabile). Pending OT su booking interni è raro: se
+                # presente lo aggiungiamo al weighted come ore "approved-eq"
+                # perché non c'è un workflow d'approvazione per il manutenzione.
+                weighted_h = br.weighted_factor + br.pending_overtime_hours
+                if weighted_h <= 0:
+                    weighted_h = linear_h
+
+            rmap = by_resource.setdefault(a.resource.id, {
+                "resource_id": a.resource.id,
+                "resource_name": a.resource.name,
+                "resource_type": (a.resource.type.value if hasattr(a.resource.type, "value")
+                                  else str(a.resource.type)),
+                "hours_linear": 0.0,
+                "hours_weighted": 0.0,
+                "by_kind": {},
+            })
+            rmap["hours_linear"] += linear_h
+            rmap["hours_weighted"] += weighted_h
+            kmap = rmap["by_kind"].setdefault(kind_label, {
+                "kind": kind_key, "label": kind_label,
+                "hours_linear": 0.0, "hours_weighted": 0.0,
+            })
+            kmap["hours_linear"] += linear_h
+            kmap["hours_weighted"] += weighted_h
+
+            by_kind[kind_label]["hours_linear"] += linear_h
+            by_kind[kind_label]["hours_weighted"] += weighted_h
+            total_linear += linear_h
+            total_weighted += weighted_h
+
+    # Round + sort
+    by_resource_out = []
+    for r in sorted(by_resource.values(), key=lambda x: -x["hours_weighted"]):
+        r["hours_linear"] = round(r["hours_linear"], 2)
+        r["hours_weighted"] = round(r["hours_weighted"], 2)
+        r["by_kind"] = [
+            {**v, "hours_linear": round(v["hours_linear"], 2),
+             "hours_weighted": round(v["hours_weighted"], 2)}
+            for v in r["by_kind"].values()
+        ]
+        by_resource_out.append(r)
+    by_kind_out = [
+        {**v, "hours_linear": round(v["hours_linear"], 2),
+         "hours_weighted": round(v["hours_weighted"], 2)}
+        for v in sorted(by_kind.values(), key=lambda x: -x["hours_weighted"])
+    ]
+
+    return {
+        "from_date": from_date.isoformat(),
+        "to_date": to_date.isoformat(),
+        "totals": {
+            "hours_linear": round(total_linear, 2),
+            "hours_weighted": round(total_weighted, 2),
+            "bookings_count": len(bookings),
+        },
+        "by_resource": by_resource_out,
+        "by_kind": by_kind_out,
     }

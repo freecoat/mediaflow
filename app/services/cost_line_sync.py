@@ -16,6 +16,16 @@ Conversione unit→ore:
 Idempotente: la ricomputazione legge tutti i booking `done` della cost
 line, sostituisce quantity_actual + total_accrued. Si auto-rigenera ad
 ogni hook (no drift incrementale).
+
+v3.5.0-alpha.65 — Pass-through OT al cliente (opt-in per Job.weighted_revenue).
+Quando il job ha `weighted_revenue=True`, le ore lineari vengono sostituite
+dal `weighted_factor` di `compute_assignment_breakdown`: ogni assignment
+viene pesato con i moltiplicatori della WorkingHoursPolicy della risorsa
+(holiday/sunday/overtime/night), e l'overtime APPROVED conta col coefficiente
+mentre PENDING resta lineare (vedi memoria progetto su decisioni semantiche).
+Default: weighted_revenue=False → comportamento storico (lineare). Il
+cost-side interno (costo stimato per risorsa) usa già il weighted_factor a
+prescindere via `_bookings_hours_cost`.
 """
 from typing import Optional
 from sqlalchemy.orm import Session
@@ -26,17 +36,10 @@ TIME_UNITS_HOUR = {"hr", "ore", "hour", "h"}
 TIME_UNITS_DAY = {"day", "giorno", "giornate", "giornata", "d"}
 
 
-def _booking_hours(b) -> float:
-    """Ore-uomo del booking = somma delle durate degli assignment (man-hours).
-
-    v3.4.55 fix: prima usavamo shell-duration (start→end del booking),
-    sottostimando il maturato per booking multi-risorsa. Es: 2 colorist su
-    8h → shell 8h → maturato 1 giornata; ma il costo cost-report è 2
-    giornate-colorist (ognuno conta come unità di lavoro). Allineato con
-    `reverse_quote.compute_quantity_from_hours` che già usa man-hours.
-    """
+def _booking_hours_linear(b) -> float:
+    """Ore-uomo lineari del booking = somma delle durate degli assignment.
+    Path storico (pre-α.65), invariato per back-compat."""
     if not getattr(b, "assignments", None):
-        # Fallback: nessun assignment caricato → usa shell-duration
         if not b.start_datetime or not b.end_datetime:
             return 0.0
         return max(0.0, (b.end_datetime - b.start_datetime).total_seconds() / 3600.0)
@@ -45,6 +48,77 @@ def _booking_hours(b) -> float:
         if a.start_datetime and a.end_datetime:
             total += max(0.0, (a.end_datetime - a.start_datetime).total_seconds() / 3600.0)
     return total
+
+
+def _booking_hours_weighted(db: Session, b) -> float:
+    """Ore-uomo pesate del booking via `compute_assignment_breakdown`.
+
+    Per ciascun assignment risolve la WorkingHoursPolicy della risorsa (override
+    o default tenant), calcola il `weighted_factor` (multiplier holiday/sunday/
+    overtime/night + brackets CCNL), e somma. Se la risorsa non ha policy
+    associabile, fallback alle ore lineari del singolo assignment.
+
+    `Booking.overtime_status=pending` → le ore overtime di quel booking NON
+    vengono pesate (restano in `pending_overtime_hours`, fuori dal weighted),
+    coerente con la decisione semantica α.65 ("solo APPROVED applica
+    moltiplicatori").
+    """
+    from app.models import WorkingHoursPolicy
+    from app.services.booking_cost import compute_assignment_breakdown
+    from app.services.working_hours import get_holidays
+
+    if not getattr(b, "assignments", None):
+        # Senza assignments non c'è una risorsa su cui applicare la policy:
+        # restiamo sullo shell-duration lineare.
+        return _booking_hours_linear(b)
+
+    # Cache policy default tenant (1 query) e holidays (1 calcolo per policy/year)
+    default_policy = db.query(WorkingHoursPolicy).filter(
+        WorkingHoursPolicy.is_default == True  # noqa: E712
+    ).first()
+    holidays_cache: dict = {}
+
+    def _resolve(resource) -> Optional["WorkingHoursPolicy"]:
+        if resource and resource.working_hours_policy_id:
+            p = db.query(WorkingHoursPolicy).filter(
+                WorkingHoursPolicy.id == resource.working_hours_policy_id
+            ).first()
+            if p:
+                return p
+        return default_policy
+
+    def _hols(policy, y0, y1):
+        key = (id(policy), y0, y1)
+        if key not in holidays_cache:
+            holidays_cache[key] = get_holidays(policy, y0, y1)
+        return holidays_cache[key]
+
+    total = 0.0
+    for a in b.assignments:
+        if not (a.start_datetime and a.end_datetime):
+            continue
+        policy = _resolve(a.resource)
+        if not policy:
+            # Nessuna policy: fallback lineare per questo assignment
+            total += max(0.0, (a.end_datetime - a.start_datetime).total_seconds() / 3600.0)
+            continue
+        hols = _hols(policy, a.start_datetime.year, a.end_datetime.year)
+        br = compute_assignment_breakdown(a, policy, hols, b)
+        total += br.weighted_factor
+    return total
+
+
+def _booking_hours(b, db: Optional[Session] = None, weighted: bool = False) -> float:
+    """Ore-uomo del booking. `weighted=True` (richiede `db`) usa il
+    weighted_factor della policy; default lineare (back-compat).
+
+    v3.4.55 fix: prima usavamo shell-duration (start→end del booking),
+    sottostimando il maturato per booking multi-risorsa. Allineato con
+    `reverse_quote.compute_quantity_from_hours` che già usa man-hours.
+    """
+    if weighted and db is not None:
+        return _booking_hours_weighted(db, b)
+    return _booking_hours_linear(b)
 
 
 def _qty_from_hours(unit: str, total_hours: float, n_bookings: int) -> float:
@@ -78,9 +152,15 @@ def recompute_cost_line_actual(db: Session, jcl) -> dict:
     L'over/under nel cost report è poi calcolato lato API in due viste:
     Now (accrued − quoted) e Forecast (expected − quoted).
     """
-    from app.models import Booking, BookingExecutionStatus, BookingStatus
+    from app.models import Booking, BookingExecutionStatus, BookingStatus, Job
     if jcl is None:
         return {"updated": False, "reason": "no_jcl"}
+
+    # v3.5.0-alpha.65 — risolvi weighted_revenue del job parent (1 query)
+    weighted = False
+    if jcl.job_id:
+        job_row = db.query(Job.weighted_revenue).filter(Job.id == jcl.job_id).first()
+        weighted = bool(job_row and job_row[0])
 
     # Tutti i booking non cancellati associati alla cost line
     all_bookings = db.query(Booking).filter(
@@ -90,8 +170,8 @@ def recompute_cost_line_actual(db: Session, jcl) -> dict:
     done_bookings = [b for b in all_bookings if b.execution_status == BookingExecutionStatus.done]
 
     unit = (jcl.unit or "").strip().lower()
-    done_hours = sum(_booking_hours(b) for b in done_bookings)
-    planned_hours = sum(_booking_hours(b) for b in all_bookings)
+    done_hours = sum(_booking_hours(b, db=db, weighted=weighted) for b in done_bookings)
+    planned_hours = sum(_booking_hours(b, db=db, weighted=weighted) for b in all_bookings)
     new_qty_actual = _qty_from_hours(unit, done_hours, len(done_bookings))
     new_qty_planned = _qty_from_hours(unit, planned_hours, len(all_bookings))
 
@@ -131,6 +211,7 @@ def recompute_cost_line_actual(db: Session, jcl) -> dict:
         "quantity_planned": new_qty_planned,
         "total_accrued": new_accrued,
         "total_expected": new_expected,
+        "weighted_revenue": weighted,
     }
 
 

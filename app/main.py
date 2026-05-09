@@ -247,6 +247,16 @@ def _auto_migrate_columns():
                 if col not in ilcols:
                     print(f"[auto-migrate] invoice_lines.{col} mancante -> ALTER TABLE")
                     conn.execute(text(f"ALTER TABLE invoice_lines ADD COLUMN {col} {ddl}"))
+    # v3.5.0-alpha.65 — Pass-through OT al cliente (opt-in per progetto).
+    if "jobs" in insp.get_table_names():
+        jcols = {c["name"] for c in insp.get_columns("jobs")}
+        if "weighted_revenue" not in jcols:
+            print("[auto-migrate] jobs.weighted_revenue mancante -> ALTER TABLE")
+            with engine.begin() as conn:
+                conn.execute(text(
+                    "ALTER TABLE jobs ADD COLUMN weighted_revenue "
+                    "BOOLEAN NOT NULL DEFAULT 0"
+                ))
 
 
 @asynccontextmanager
@@ -413,7 +423,7 @@ async def lifespan(app: FastAPI):
     yield
 
 
-app = FastAPI(title="MediaFlow", version="3.5.0-alpha.64", lifespan=lifespan)
+app = FastAPI(title="MediaFlow", version="3.5.0-alpha.65", lifespan=lifespan)
 
 BASE_DIR = Path(__file__).parent
 app.mount("/static", StaticFiles(directory=BASE_DIR / "static"), name="static")

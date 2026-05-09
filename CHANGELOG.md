@@ -1,5 +1,111 @@
 # MediaFlow — Changelog
 
+## v3.5.0-alpha.65 — Pass-through OT al cliente (opt-in) + monte ore booking interni (9 maggio 2026)
+
+Primo step della roadmap billing α.65+ (overtime weighted). Decisioni
+semantiche prese con Matteo prima del codice (memoria
+`project_billing_roadmap_alpha65plus`):
+- **OT status**: solo APPROVED applica i moltiplicatori, PENDING resta lineare
+  ma è esposto in tooltip "+€X pending" senza alterare i numeri certi.
+- **Day-unit**: conversione lineare → 8-22 con 6h OT × 1.30 = 1.725 gg.
+  Zero migrazione su JobCostLine.
+- **Booking interni**: report HR-side separato (manutenzione/R&D/training),
+  fuori dal cost-report cliente.
+- **Scope weighted al maturato (revenue)**: opt-in per progetto via flag
+  `Job.weighted_revenue` (default OFF). Il cost-side interno (`_bookings_hours_cost`)
+  era già pesato a prescindere via `compute_assignment_breakdown`.
+
+**1. Flag Job.weighted_revenue + auto-migrate**
+
+- `app/models/models.py` `Job`: nuovo campo `weighted_revenue: bool = False`.
+- `app/main.py` `_auto_migrate_columns`: ALTER TABLE jobs idempotente
+  per aggiungere la colonna su DB esistenti (BOOLEAN NOT NULL DEFAULT 0).
+
+**2. Engine weighted hours nel cost_line_sync (gated dal flag)**
+
+- `app/services/cost_line_sync.py`:
+  - Refactor `_booking_hours()` → due path:
+    - `_booking_hours_linear(b)`: comportamento storico (somma man-hours).
+    - `_booking_hours_weighted(db, b)`: usa
+      `compute_assignment_breakdown.weighted_factor` per ogni assignment
+      con la WorkingHoursPolicy della risorsa (override o default tenant).
+      `Booking.overtime_status=pending` → ore OT NON pesate (decisione α.65).
+  - `recompute_cost_line_actual()` risolve `Job.weighted_revenue` (1 query),
+    passa `weighted=` ai `_booking_hours()` e include `weighted_revenue`
+    nel response. JCL.qty diventa `weighted_factor / 8` per day-unit
+    (1.725 gg lineare).
+- L'engine `compute_assignment_breakdown` esisteva già in
+  `app/services/booking_cost.py` (multipliers + brackets CCNL + pending
+  gate); riuso senza creare nuovo file.
+
+**3. UI toggle pass-through nel cost-report + tooltip pending OT**
+
+- `app/routers/cost_report.py`:
+  - `PUT /api/job/{id}/weighted-revenue` (Form `enabled: bool`): persiste
+    il flag + trigger `recompute_for_job` automatico per allineare il
+    maturato del job esistente. Idempotente.
+  - `GET /api/job/{id}` espone `job.weighted_revenue` e per ciascuna
+    cost-line: `pending_overtime_hours` + `pending_overtime_amount`
+    (stima del delta maturato post-approvazione, > 0 solo se
+    `weighted_revenue=True`).
+- `app/templates/pages/cost_report.html`:
+  - Toolbar dettaglio: nuova checkbox "Pass-through OT al cliente" con
+    badge ATTIVO viola e conferma esplicita all'attivazione.
+  - Riga JCL: badge giallo "⏳ Xh pending" con tooltip che mostra il
+    delta € atteso se il pass-through è ON (informativa anche con OFF).
+
+**4. Report HR booking interni (kind != project)**
+
+- `app/routers/hr.py`:
+  - `GET /api/internal-bookings-report?from_date&to_date`: aggrega
+    booking con `kind ∈ {internal_maintenance, internal_research,
+    internal_training}`. Ritorna totals + by_resource + by_kind con
+    ore lineari e ore pesate (multipliers della policy della risorsa).
+- `app/templates/pages/hr.html`:
+  - Nuova tab "🛠 Booking interni" accanto a Tabella/Calendario.
+  - Filtro periodo (da/a) + quick range settimana/mese/anno.
+  - 4 KPI cards (booking count, ore lineari, ore pesate, delta multiplier).
+  - Card "Per tipologia" (manutenzione/R&D/formazione) + tabella per risorsa.
+  - Persistenza vista in localStorage (`mf_hr_view`).
+
+**Smoke test boot**: 273 routes (+2 vs α.64), version 3.5.0-alpha.65.
+
+**Verifica live richiesta a Matteo**:
+1. Pull → app boot pulito (273 route, version 3.5.0-alpha.65). DB
+   migrato in automatico al primo boot (log
+   `[auto-migrate] jobs.weighted_revenue mancante -> ALTER TABLE`).
+2. **Pass-through OT al cliente**: apri /cost-report → progetto con
+   booking che hanno overtime/notte/dom/festivo APPROVATI → toolbar
+   detail mostra checkbox "Pass-through OT al cliente" (default OFF
+   → maturato lineare). Click ON → conferma + reload → badge ATTIVO
+   viola, maturato JCL aumentato (es. 1 gg con 6h OT × 1.30 → 1.725 gg).
+   Toggle OFF → torna lineare.
+3. **Pending OT in tooltip**: progetto con almeno un booking
+   `overtime_status=pending` → riga JCL mostra badge giallo
+   "⏳ Xh pending". Hover → tooltip con stima `+€` SOLO se pass-through
+   ON, altrimenti "non rifatturate al cliente con questa configurazione".
+4. **Solo APPROVED conta**: rifiuta o lascia pending un OT su un job
+   con weighted_revenue ON → maturato resta lineare per quelle ore
+   (non pesate). Approva → al recompute (auto al toggle/edit booking
+   o manuale via "Aggiorna ore") il maturato sale.
+5. **Booking interni**: apri /hr → tab "🛠 Booking interni" → range mese
+   corrente → vedi totale ore lineari + pesate + delta moltiplicatori +
+   distribuzione per tipologia (manutenzione/R&D/formazione) + tabella
+   per risorsa con breakdown per kind. Test: crea un booking
+   `internal_maintenance` su una risorsa, ricarica → la risorsa appare
+   con monte ore corrispondente.
+
+**Cosa NON cambia in α.65**:
+- Cost-side interno (`_bookings_hours_cost`): già pesato a prescindere
+  da α.65, lasciato invariato.
+- Default behavior: tutti i job esistenti restano `weighted_revenue=False`
+  → maturato cliente lineare come prima dell'α.65 (back-compat 100%).
+- Nessuna modifica al modello JCL (no nuova colonna `weighted_hours`).
+- Cashflow completo (5.b InvoicePayment, 5.c cashflow timeline) e
+  supplier invoice (punto 6): rimandati ad α.66+.
+
+---
+
 ## v3.5.0-alpha.64 — Trasmissione granulare + refer-to-sales completo (8 maggio 2026)
 
 Bundle "trasmissione & refer-to-sales completo" da feedback Matteo dopo α.63
