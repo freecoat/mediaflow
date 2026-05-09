@@ -1078,11 +1078,11 @@
               </select>
               <select id="tlsp-status" class="form-select" data-no-search="true" style="height:28px; padding:2px 8px; font-size:12px; min-width:140px;">
                 <option value="">— Stato —</option>
-                <option value="planned">Pianificato</option>
-                <option value="in_progress">In corso</option>
-                <option value="done">Fatto</option>
-                <option value="not_done">Non fatto</option>
-                <option value="tentative">Tentative</option>
+                <option value="tentative">⏳ Tentative</option>
+                <option value="confirmed">✓ Confermato</option>
+                <option value="in_progress">▶ In lavorazione</option>
+                <option value="done">✅ Fatto</option>
+                <option value="not_done">✗ Non fatto</option>
               </select>
               <select id="tlsp-priority" class="form-select" data-no-search="true" style="height:28px; padding:2px 8px; font-size:12px; min-width:130px;">
                 <option value="">— Priorità —</option>
@@ -1456,15 +1456,16 @@
       <h5 style="margin:18px 0 6px; font-size:11px; text-transform:uppercase; letter-spacing:.6px; color:var(--text3,#888);">⚙ Stato</h5>
 
       <div class="form-group">
-        <label class="form-label">Cambio stato esecuzione</label>
-        <select class="form-select" id="bulk-status">
+        <label class="form-label">Cambio stato lavorazione</label>
+        <select class="form-select" id="bulk-state" data-no-search="true">
           <option value="">— non cambiare —</option>
-          <option value="todo">⏳ Da fare</option>
-          <option value="started">▶ Iniziato</option>
-          <option value="done">✓ Fatto</option>
+          <option value="tentative">⏳ Tentative</option>
+          <option value="confirmed">✓ Confermato</option>
+          <option value="in_progress">▶ In lavorazione</option>
+          <option value="done">✅ Fatto</option>
           <option value="not_done">✗ Non fatto</option>
         </select>
-        <small class="form-help text-muted">Marcare "Fatto" triggera il sync col cost report (man-hours).</small>
+        <small class="form-help text-muted">Marcare "Fatto" triggera il sync col cost report (man-hours). "Non fatto" richiede motivazione (verrà chiesta).</small>
       </div>
 
       <!-- v3.5.0-alpha.63: pannello esiti dettagliati post-applicazione -->
@@ -2887,15 +2888,19 @@ async function todoFixDuplicateOverlaps(bookingId) {
   }
 }
 
+// v3.5.0-alpha.66.5.1: migrato a PATCH /state. Accetta valori BookingState
+// canonici (tentative/confirmed/in_progress/done/not_done). 'planned' legacy
+// mappato a 'confirmed' per back-compat con il bottone "↺ Riapri".
 async function todoSetExec(bookingId, newStatus, reason) {
   try {
+    const newState = (newStatus === 'planned') ? 'confirmed' : newStatus;
     const fd = new FormData();
-    fd.append('execution_status', newStatus);
+    fd.append('state', newState);
     if (reason) fd.append('not_done_reason', reason);
-    await api('PATCH', `/planning/api/bookings/${bookingId}/execution`, fd);
-    toast(newStatus === 'done' ? 'Booking completato (tutte le risorse del booking)' :
-          newStatus === 'not_done' ? 'Booking marcato come non fatto' :
-          newStatus === 'in_progress' ? 'Iniziato' : 'Riportato a pianificato', 'success');
+    await api('PATCH', `/planning/api/bookings/${bookingId}/state`, fd);
+    toast(newState === 'done' ? 'Booking completato (tutte le risorse del booking)' :
+          newState === 'not_done' ? 'Booking marcato come non fatto' :
+          newState === 'in_progress' ? 'Iniziato' : 'Riportato a pianificato', 'success');
     // v3.5.0-alpha.13: refresh la view attiva (jobs/timeline/agenda/project/...)
     // così l'utente vede subito il nuovo stato qualunque sia la pagina.
     // renderTodo è chiamato da refreshActiveView se siamo nella tab Le mie.
@@ -5343,7 +5348,9 @@ function tlOpenBulkModal() {
      <span class="text-muted text-sm">Le modifiche saranno applicate in blocco.</span>`;
   // alpha.38: reset di tutti i campi (inclusi nuovi: data assoluta + orari assoluti)
   document.getElementById('bulk-shift-min').value = '';
-  document.getElementById('bulk-status').value = '';
+  // v3.5.0-alpha.66.5.1: rinominato bulk-status → bulk-state
+  const bulkStateEl = document.getElementById('bulk-state');
+  if (bulkStateEl) bulkStateEl.value = '';
   document.getElementById('bulk-new-start-date').value = '';
   document.getElementById('bulk-abs-start').value = '';
   document.getElementById('bulk-abs-end').value = '';
@@ -5402,16 +5409,26 @@ async function tlSubmitBulkEdit() {
   const bookingIds = (modal.dataset.bookingIds || '').split(',').filter(Boolean);
   if (!bookingIds.length) { closeModal('modal-bulk-edit'); return; }
   const shiftMin = (document.getElementById('bulk-shift-min').value || '').trim();
-  const status = document.getElementById('bulk-status').value;
+  // v3.5.0-alpha.66.5.1: bulk usa BookingState 5 valori esclusivi.
+  const newState = document.getElementById('bulk-state').value;
   // alpha.38: nuovi campi
   const newStartDate = document.getElementById('bulk-new-start-date').value;
   const absStart = document.getElementById('bulk-abs-start').value;
   const absEnd = document.getElementById('bulk-abs-end').value;
   // v3.5.0-alpha.63: cambio lavorazione (e job)
   const newCostLineId = (document.getElementById('bulk-cost-line').value || '').trim();
-  if (!shiftMin && !status && !newStartDate && !absStart && !absEnd && !newCostLineId) {
+  if (!shiftMin && !newState && !newStartDate && !absStart && !absEnd && !newCostLineId) {
     toast('Seleziona almeno un\'azione (shift, data, orario assoluto, stato, lavorazione).', 'warning');
     return;
+  }
+  // not_done richiede motivazione (chiesta inline via prompt)
+  let bulkNotDoneReason = '';
+  if (newState === 'not_done') {
+    bulkNotDoneReason = prompt('Motivo "Non fatto" (richiesto, applicato a TUTTI i booking selezionati):', '') || '';
+    if (!bulkNotDoneReason.trim()) {
+      toast('Motivazione obbligatoria per "Non fatto"', 'warning');
+      return;
+    }
   }
   // Snapshot per undo: salva start/end/resource per ogni assignment + execution_status.
   // v3.5.0-alpha.21: booking_id e assignment_id sono al top, execution_status e
@@ -5437,7 +5454,11 @@ async function tlSubmitBulkEdit() {
   const fd = new FormData();
   fd.append('booking_ids', bookingIds.join(','));
   if (shiftMin) fd.append('shift_minutes', String(parseInt(shiftMin, 10) || 0));
-  if (status) fd.append('execution_status', status);
+  // v3.5.0-alpha.66.5.1: usa nuovo Form param 'state' (BookingState).
+  if (newState) {
+    fd.append('state', newState);
+    if (bulkNotDoneReason) fd.append('not_done_reason', bulkNotDoneReason);
+  }
   if (newStartDate) fd.append('new_start_date', newStartDate);
   if (absStart) fd.append('absolute_start_time', absStart);
   if (absEnd) fd.append('absolute_end_time', absEnd);
@@ -5733,7 +5754,20 @@ function tlSelectPanelApply() {
     const p = (b && b.extendedProps) || {};
     if (fJob  && String(p.job_id) !== fJob) continue;
     if (fRes  && String(p.resource_id) !== fRes) continue;
-    if (fStat && String(p.execution_status || (p.status === 'tentative' ? 'tentative' : '')) !== fStat) continue;
+    // v3.5.0-alpha.66.5.1: filtra su state canonico (5 valori). Fallback
+    // derivazione legacy se backend non lo espone ancora.
+    if (fStat) {
+      let bookingState = p.state;
+      if (!bookingState) {
+        if (p.status === 'cancelled') bookingState = 'cancelled';
+        else if (p.status === 'tentative') bookingState = 'tentative';
+        else if (p.execution_status === 'in_progress') bookingState = 'in_progress';
+        else if (p.execution_status === 'done') bookingState = 'done';
+        else if (p.execution_status === 'not_done') bookingState = 'not_done';
+        else bookingState = 'confirmed';
+      }
+      if (bookingState !== fStat) continue;
+    }
     if (fPrio && String(p.priority || 'normal') !== fPrio) continue;
     ids.push(it.id);
   }

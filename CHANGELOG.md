@@ -1,5 +1,58 @@
 # MediaFlow — Changelog
 
+## v3.5.0-alpha.66.5.1 — Audit completo post-refactor: bulk-edit + 5 mutator + UI legacy + AI (9 maggio 2026)
+
+Audit con agente Explore ha rilevato 3 HIGH + multipli MEDIUM rimasti
+disallineati dopo α.66.5. Tutti sistemati in questo commit.
+
+**HIGH 1 — Bulk-edit completamente rotto** (`planning.html:1462` +
+`planning.py:2241`):
+- UI dichiarava valori `todo/started/done/not_done` che NON esistono
+  nell'enum `BookingExecutionStatus` (`planned/in_progress/done/not_done`).
+  Backend validava la stessa lista sbagliata. Al primo Apply: 400 silente.
+- Fix UI: select rinominato `bulk-state`, 5 valori `BookingState` canonici
+  (tentative/confirmed/in_progress/done/not_done) + motivazione obbligatoria
+  inline per `not_done`.
+- Fix backend: `bulk_edit_bookings` ora accetta `state` (Form) come canonico
+  + `execution_status` come deprecated alias per back-compat. Usa
+  `apply_state_to_booking` per sincronizzare atomicamente i 3 campi.
+  Mappa anche i vecchi valori `todo/started/done/not_done` → BookingState
+  per evitare regressioni a clienti API legacy.
+
+**HIGH 2 — 5 mutator backend non sincronizzavano `state`**:
+- `add_assignment_to_booking` (revive da cancelled): aggiunto `b.state = confirmed`.
+- `delete_assignment` (booking diventa empty): aggiunto `b.state = cancelled`.
+- `delete_booking` (soft-delete): aggiunto `b.state = cancelled`.
+- `restore_booking`: aggiunto `b.state = tentative`.
+- `_h_propose_delete_booking` AI: aggiunto `b.state = cancelled`.
+- `create_booking` (POST): sincronizza `state` con `status` passato dal client
+  (anche nel branch ricorrenza).
+- AI recurring booking creator: aggiunto `state=BookingState.confirmed`
+  esplicito (era desync permanente: status=confirmed, state=tentative default).
+
+**MEDIUM — UI legacy migrate a /state**:
+- `dashboard.html:mySetExec` migrata da `PATCH /execution` → `PATCH /state`.
+  'planned' (legacy "Riapri") mappato a 'confirmed'.
+- `planning.html:todoSetExec` migrata da `/execution` → `/state`.
+- `planning.html:tlSelectPanelApply` filtra ora su `state` canonico
+  (con fallback derivazione legacy se backend non lo espone). Filter UI
+  `tlsp-status` allineato a 5 valori (aggiunto `confirmed` mancante).
+
+**MEDIUM — AI prompt + tool schema**:
+- `ai_assistant.py` system prompt: descrizione `propose_booking` aggiornata
+  con BookingState (5 stati esclusivi).
+- `ai_tools.py` schema `propose_booking`: description menziona BookingState
+  invece di `Status`.
+
+**LOW non toccati** (cost-report mostra `execution_status` direttamente,
+labels "Da fare" in pdf_export): cosmetici, sincronizzati automaticamente
+via apply_state_to_booking.
+
+**Smoke**: 277 routes invariato, version 3.5.0-alpha.66.5.1. Mapping
+state ↔ legacy verificato per tutti i 6 valori.
+
+---
+
 ## v3.5.0-alpha.66.5 — Stato unificato BookingState (5 valori esclusivi, hard refactor enum DB) (9 maggio 2026)
 
 Rifusione architetturale richiesta da Matteo: i 2 enum DB ortogonali

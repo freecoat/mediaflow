@@ -1385,12 +1385,17 @@ async def create_booking(
                     raise HTTPException(409, f"Conflitto su occorrenza {occ_start.date()} (vs assignment #{c.id})")
             env_s = min(pa["start_datetime"] for pa in shifted_ass)
             env_e = max(pa["end_datetime"] for pa in shifted_ass)
+            # v3.5.0-alpha.66.5.1: sincronizza state con status passato dal client
+            recur_state = (BookingState.cancelled if status == BookingStatus.cancelled
+                           else BookingState.confirmed if status == BookingStatus.confirmed
+                           else BookingState.tentative)
             b = Booking(
                 tenant_id=CURRENT_TENANT,
                 job_id=job_id, job_cost_line_id=job_cost_line_id,
                 start_datetime=env_s, end_datetime=env_e,
                 status=status, kind=kind, notes=notes,
                 priority=_parse_priority(priority),
+                state=recur_state,
             )
             db.add(b); db.flush()
             for pa in shifted_ass:
@@ -1433,6 +1438,10 @@ async def create_booking(
     # Caso semplice: 1 booking
     env_start = min(pa["start_datetime"] for pa in parsed_ass)
     env_end = max(pa["end_datetime"] for pa in parsed_ass)
+    # v3.5.0-alpha.66.5.1: sincronizza state con status passato dal client
+    initial_state = (BookingState.cancelled if status == BookingStatus.cancelled
+                     else BookingState.confirmed if status == BookingStatus.confirmed
+                     else BookingState.tentative)
     b = Booking(
         tenant_id=CURRENT_TENANT,
         job_id=job_id,
@@ -1440,6 +1449,7 @@ async def create_booking(
         start_datetime=env_start, end_datetime=env_end,
         status=status, kind=kind, notes=notes,
         priority=_parse_priority(priority),
+        state=initial_state,
     )
     db.add(b)
     db.flush()  # serve b.id
@@ -2157,9 +2167,11 @@ async def add_assignment_to_booking(
     db.add(a)
     db.flush()
     _recalc_booking_envelope(b)
-    # Se il booking era cancelled e l'assignment lo riattiva → ripristina status
+    # Se il booking era cancelled e l'assignment lo riattiva → ripristina status.
+    # v3.5.0-alpha.66.5.1: sync anche state (canonico).
     if b.status == BookingStatus.cancelled:
         b.status = BookingStatus.confirmed
+        b.state = BookingState.confirmed
     if b.job_id:
         try:
             from app.services.resource_assignment_sync import ensure_resource_assigned_to_job
@@ -2202,7 +2214,11 @@ async def bulk_edit_bookings(
     request: Request,
     booking_ids: str = Form(...),  # CSV "1,2,3"
     shift_minutes: Optional[int] = Form(None),
-    execution_status: Optional[str] = Form(None),
+    # v3.5.0-alpha.66.5.1: parametro CANONICO è ora `state` (BookingState 5+1).
+    # `execution_status` è deprecated alias per back-compat (non usato dalla UI).
+    state: Optional[str] = Form(None),
+    not_done_reason: Optional[str] = Form(None),
+    execution_status: Optional[str] = Form(None),  # DEPRECATED
     # alpha.38: nuovi parametri per estendere la modifica in blocco
     new_start_date: Optional[date] = Form(None),
     absolute_start_time: Optional[str] = Form(None),  # "HH:MM"
@@ -2238,8 +2254,31 @@ async def bulk_edit_bookings(
     ids = [int(x.strip()) for x in (booking_ids or "").split(",") if x.strip().isdigit()]
     if not ids:
         raise HTTPException(400, "booking_ids vuoto o malformato")
-    if execution_status and execution_status not in ("todo", "started", "done", "not_done"):
-        raise HTTPException(400, f"execution_status non valido: {execution_status}")
+
+    # v3.5.0-alpha.66.5.1: validazione state (canonico) con fallback su
+    # execution_status legacy. Allineato a BookingState 5+1.
+    target_state = None
+    if state:
+        try:
+            target_state = BookingState(state)
+        except ValueError:
+            raise HTTPException(400, f"state non valido: {state}")
+    elif execution_status:
+        # Mappa legacy execution_status → BookingState (per back-compat).
+        # Old UI usava todo/started/done/not_done che NON esistono nell'enum
+        # BookingExecutionStatus reale (planned/in_progress/done/not_done) →
+        # bug pre-α.66.5.1. Ora accettiamo entrambe le forme.
+        legacy_to_state = {
+            "todo": BookingState.confirmed, "planned": BookingState.confirmed,
+            "started": BookingState.in_progress, "in_progress": BookingState.in_progress,
+            "done": BookingState.done,
+            "not_done": BookingState.not_done,
+        }
+        target_state = legacy_to_state.get(execution_status)
+        if not target_state:
+            raise HTTPException(400, f"execution_status non valido: {execution_status}")
+    if target_state == BookingState.not_done and not (not_done_reason or "").strip():
+        raise HTTPException(400, "Motivazione obbligatoria per stato 'Non fatto' (Form not_done_reason)")
 
     abs_start = _parse_hhmm(absolute_start_time)
     abs_end = _parse_hhmm(absolute_end_time)
@@ -2367,9 +2406,18 @@ async def bulk_edit_bookings(
                     a.end_datetime = ne
                 _recalc_booking_envelope(b)
 
-            if execution_status:
-                b.execution_status = BookingExecutionStatus(execution_status)
-                if execution_status == "done":
+            # v3.5.0-alpha.66.5.1: applica state via apply_state_to_booking
+            # (sincronizza state + status + execution_status atomicamente).
+            if target_state is not None:
+                from app.services.booking_state import apply_state_to_booking
+                apply_state_to_booking(b, target_state)
+                if target_state == BookingState.not_done:
+                    b.not_done_reason = (not_done_reason or "").strip()
+                else:
+                    b.not_done_reason = None
+                    if b.count_in_costs:
+                        b.count_in_costs = False
+                if target_state == BookingState.done:
                     try:
                         from app.services.cost_line_sync import recompute_for_booking
                         recompute_for_booking(db, b)
@@ -2742,6 +2790,7 @@ async def delete_assignment(
     db.refresh(booking)
     if not booking.assignments:
         booking.status = BookingStatus.cancelled
+        booking.state = BookingState.cancelled  # v3.5.0-alpha.66.5.1
     else:
         _recalc_booking_envelope(booking)
     # Sync cost line: se il booking era done, le man-hours cambiano (-1 risorsa).
@@ -2774,6 +2823,7 @@ async def delete_booking(
     _enforce_planning_scope(request, db, {a.resource_id for a in b.assignments})
     _assert_no_blocking_slice(db, b, force=force_slice_unlock)
     b.status = BookingStatus.cancelled
+    b.state = BookingState.cancelled  # v3.5.0-alpha.66.5.1
     _log_change(db, b.id, "delete", "Booking eliminato (soft)", None)
     try:
         from app.services.cost_line_sync import recompute_for_booking
@@ -3275,6 +3325,7 @@ async def restore_booking(booking_id: int, db: Session = Depends(get_db)):
         if c:
             raise HTTPException(409, f"Conflitto al ripristino: assignment #{a.id} vs #{c.id}")
     b.status = BookingStatus.tentative
+    b.state = BookingState.tentative  # v3.5.0-alpha.66.5.1
     _log_change(db, b.id, "restore", "Booking ripristinato", None)
     db.commit()
     return {"ok": True, "id": b.id}

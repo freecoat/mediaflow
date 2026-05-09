@@ -90,7 +90,7 @@ CAPABILITY DISPONIBILI E SCHEMA `data`:
 - propose_price_item: {name, description?, unit ("day"|"hour"|"flat"), price_list (numero), category_name (richiesto), keywords? (lista di stringhe), department_name?}
 - propose_new_item_and_line: {quote_id OPPURE quote_number, name (nome voce listino), category_name (obbligatorio), unit, price_list (numero), quantity (numero, default 1), description?, keywords?, department_name?, section?} — fa due cose in singola transazione: crea voce listino + aggiunge riga alla quote
 - propose_resource: {name, type ("person_internal"|"person_freelance"|"studio"|"equipment"|"software"|"vehicle"), department_id (numero PK) OPPURE department_name (stringa esatta), role?, description?, daily_rate?, hourly_rate?, email?, phone?, internal_phone?, color? (#hex)} — crea una nuova risorsa. Tariffe: ometti se non note (NON scrivere 0).
-- propose_booking: {job_id (numero) OPPURE job_code (stringa) (richiesto se kind=project), kind? ("project"|"internal_maintenance"|"internal_research"|"internal_training", default "project"), job_cost_line_id?, notes?, assignments: [{resource_id (numero) OPPURE resource_name (stringa), start_datetime (ISO), end_datetime (ISO)}, ...]} — crea un Booking con N risorse. Status=tentative. Conflict check su ferie/altri booking.
+- propose_booking: {job_id (numero) OPPURE job_code (stringa) (richiesto se kind=project), kind? ("project"|"internal_maintenance"|"internal_research"|"internal_training", default "project"), job_cost_line_id?, notes?, assignments: [{resource_id (numero) OPPURE resource_name (stringa), start_datetime (ISO), end_datetime (ISO)}, ...]} — crea un Booking con N risorse. BookingState iniziale=tentative (5 stati esclusivi: tentative→confirmed→in_progress→done|not_done; cancelled è soft-delete). Conflict check su ferie/altri booking.
 - web_search: {query}
 
 REGOLE CRITICHE:
@@ -1450,12 +1450,14 @@ def _h_propose_booking(db: Session, data: dict) -> dict:
     # Crea Booking + assignments
     env_s = min(pa["start_datetime"] for pa in parsed)
     env_e = max(pa["end_datetime"] for pa in parsed)
+    from app.models import BookingState
     b = Booking(
         tenant_id=CURRENT_TENANT,
         job_id=job_id, job_cost_line_id=line_id,
         start_datetime=env_s, end_datetime=env_e,
         status=BookingStatus.tentative, kind=kind,
         notes=data.get("notes"),
+        state=BookingState.tentative,  # v3.5.0-alpha.66.5.1: sync state
     )
     db.add(b); db.flush()
     for pa in parsed:
@@ -1736,6 +1738,8 @@ def _h_propose_delete_booking(db: Session, data: dict) -> dict:
     b = _resolve_booking_for_planning(db, data)
     reason = (data.get("reason") or "").strip() or None
     b.status = BookingStatus.cancelled
+    from app.models import BookingState
+    b.state = BookingState.cancelled  # v3.5.0-alpha.66.5.1
     if reason:
         existing = b.notes or ""
         b.notes = (existing + ("\n" if existing else "") + f"[AI cancel] {reason}").strip()
@@ -1989,11 +1993,13 @@ def _h_propose_recurring_bookings(db: Session, data: dict) -> dict:
                 skipped_conflict.append(cur_d.isoformat())
                 cur_d += _td(days=1)
                 continue
+            from app.models import BookingState as _BSt
             b = Booking(
                 tenant_id=CURRENT_TENANT, job_id=job.id,
                 title=title, start_datetime=ns, end_datetime=ne,
                 status=BookingStatus.confirmed, kind=BookingKind.project,
                 job_cost_line_id=int(jcl_id) if jcl_id else None,
+                state=_BSt.confirmed,  # v3.5.0-alpha.66.5.1: sync state
             )
             db.add(b); db.flush()
             db.add(BookingAssignment(

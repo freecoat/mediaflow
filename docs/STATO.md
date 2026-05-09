@@ -8,6 +8,44 @@
 
 ## Versione corrente
 
+**v3.5.0-alpha.66.5.1** — 9 maggio 2026 — Audit cleanup: bulk-edit + 5 mutator + UI legacy + AI
+
+Audit con agente Explore post-α.66.5 ha rilevato 3 HIGH + multipli MEDIUM
+rimasti disallineati. Tutti sistemati.
+
+**Chiuso α.66.5.1:**
+- ✅ **HIGH bulk-edit rotto**: UI con valori `todo/started/done/not_done`
+  non-enum + backend che li validava. Fix UI con 5 valori `BookingState`
+  canonici + motivazione inline per `not_done`. Fix backend con `state`
+  Form param canonico + `execution_status` deprecated alias.
+- ✅ **HIGH 5 mutator non sincronizzano state**: `add_assignment_to_booking`
+  (revive), `delete_assignment` (empty), `delete_booking`, `restore_booking`,
+  AI `_h_propose_delete_booking`. Tutti aggiungono `b.state = ...`.
+- ✅ **HIGH AI recurring booking** desync permanente (status=confirmed,
+  state=tentative default): aggiunto `state=BookingState.confirmed` esplicito.
+- ✅ **HIGH create_booking** (POST): sincronizza `state` da `status` passato
+  dal client (in entrambi i branch standard + ricorrenza).
+- ✅ **MEDIUM dashboard.mySetExec** + **planning.todoSetExec**: migrate da
+  `/execution` legacy → `/state`. 'planned' mappato a 'confirmed'.
+- ✅ **MEDIUM filter UI tlsp-status**: aggiunto `confirmed` mancante.
+  tlSelectPanelApply filtra su `state` canonico.
+- ✅ **MEDIUM AI prompt + tool schema**: descrizione `propose_booking`
+  parla ora di BookingState (5 stati esclusivi).
+
+**Smoke**: 277 routes invariato, version 3.5.0-alpha.66.5.1.
+
+**Verifica live** (hard-refresh + restart per migrazione):
+1. Bulk-edit: seleziona 2+ booking → ✏ Bulk → "Cambio stato lavorazione" ha
+   5 opzioni. Scegli "Non fatto" → prompt motivazione. Apply → tutti i
+   selezionati cambiano stato.
+2. Elimina booking → soft-delete → state=cancelled.
+3. Ripristina dal cestino → state=tentative.
+4. Dashboard ▶ Inizia / ✓ Fatto / ↺ Riapri → tutti via /state.
+5. Filtro toolbar planning per stato → vedi 5 opzioni esclusive.
+6. AI propone booking → response BookingState=tentative.
+
+---
+
 **v3.5.0-alpha.66.5** — 9 maggio 2026 — Stato unificato BookingState (refactor enum DB)
 
 Rifusione architetturale: i 2 enum DB ortogonali `BookingStatus` +

@@ -323,17 +323,21 @@ function renderMyBookingCard(it) {
       ${exec !== 'in_progress' && editable ? `<button class="act-btn primary" onclick="mySetExec(${it.booking_id}, 'in_progress')">▶ Inizia</button>` : ''}
       ${editable ? `<button class="act-btn success" onclick="mySetExec(${it.booking_id}, 'done')">✓ Fatto</button>` : ''}
       ${editable ? `<button class="act-btn danger" onclick="myNotDone(${it.booking_id})">✗ Non fatto</button>` : ''}
-      ${(exec === 'done' || exec === 'not_done') ? `<button class="act-btn" onclick="mySetExec(${it.booking_id}, 'planned')">↺ Riapri</button>` : ''}
+      ${(exec === 'done' || exec === 'not_done') ? `<button class="act-btn" onclick="mySetExec(${it.booking_id}, 'confirmed')">↺ Riapri</button>` : ''}
     </div>
   </div>`;
 }
 
-async function mySetExec(bid, status, reason) {
+// v3.5.0-alpha.66.5.1: migrato a PATCH /state. Accetta i 5 valori BookingState
+// (tentative/confirmed/in_progress/done/not_done). 'planned' legacy mappato a
+// 'confirmed' per back-compat call site UI.
+async function mySetExec(bid, stateOrLegacy, reason) {
+  const stateVal = (stateOrLegacy === 'planned') ? 'confirmed' : stateOrLegacy;
   const fd = new FormData();
-  fd.append('execution_status', status);
+  fd.append('state', stateVal);
   if (reason) fd.append('not_done_reason', reason);
   try {
-    await api('PATCH', `/planning/api/bookings/${bid}/execution`, fd);
+    await api('PATCH', `/planning/api/bookings/${bid}/state`, fd);
     toast('Stato aggiornato', 'success');
     loadDashboard();
   } catch(e) { toast(e.message || 'Errore', 'error'); }

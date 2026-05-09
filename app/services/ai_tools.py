@@ -378,7 +378,9 @@ TOOLS: list[dict] = [
         "name": "propose_booking",
         "category": "mutation",
         "description": (
-            "Crea un Booking con N risorse su un job. Status iniziale = tentative. "
+            "Crea un Booking con N risorse su un job. BookingState iniziale = tentative. "
+            "5 stati esclusivi: tentative → confirmed → in_progress → done | not_done. "
+            "Cancelled è soft-delete (azione 'Elimina', non uno stato del selettore). "
             "Esegue conflict-check su ferie e altri booking della risorsa."
         ),
         "input_schema": {
