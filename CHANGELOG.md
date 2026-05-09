@@ -1,5 +1,41 @@
 # MediaFlow — Changelog
 
+## v3.5.0-alpha.66.1 — Hotfix: warning duplicate-overlap nel modal edit booking (9 maggio 2026)
+
+Bug rilevato da Matteo via screenshot: il modal "Modifica booking #96" mostrava
+2 righe risorsa con identico Luca Bianchi (overlap totale 09:00–13:00 stesso
+giorno) **senza alcun warning**. Il pannello giallo "🧹 Rimuovi duplicati"
+introdotto in α.63 era cablato solo nella todo-card detail (`todoOpenDetail`),
+non nel modal edit (`tlbOpenEdit`). Dato sporco pre-α.63 invisibile a chi
+apre il modal edit.
+
+**Fix client-side** (no backend changes):
+- `_tlbCheckDuplicateOverlaps()`: scorre le righe del modal, raggruppa per
+  resource_id, per ogni gruppo con 2+ righe verifica overlap pairwise. Se
+  trova duplicati, marca le righe coinvolte con classe
+  `.tl-row-duplicate-overlap` (bordo rosso 4px sx + sfondo .10) e mostra
+  pannello giallo `#tlb-duplicate-warning` con elenco risorse + bottone
+  "🧹 Rimuovi duplicati".
+- `tlbFixDuplicateOverlapsHere()`: chiama
+  `POST /planning/api/bookings/{id}/cleanup-duplicate-overlaps` (endpoint
+  α.63 esistente), poi ricarica il modal con i dati puliti.
+- Cabling: `tlbOpenEdit()` chiama check all'apertura. `tlbAssOnChange()`
+  ri-controlla live (cambio risorsa o orario) con throttle 80ms.
+  `tlbRemoveAssignmentRow()` ri-controlla post-remove. `_tlbReset()` nasconde
+  il warning quando si apre per nuovo booking.
+
+**File: `app/templates/pages/planning.html`** — nuovo `#tlb-duplicate-warning`,
+CSS `.tlb-ass-row.tl-row-duplicate-overlap`, 2 fn nuove.
+
+**Smoke**: 273 routes invariato, version 3.5.0-alpha.66.1.
+
+**Verifica live**: apri il modal edit del booking #96 → ora vedi il warning
+giallo + le 2 righe Luca Bianchi con bordo rosso → click "🧹 Rimuovi duplicati"
+→ il sistema cancella la 2ª riga (mantiene la prima per orario di inizio),
+ricarica il modal pulito.
+
+---
+
 ## v3.5.0-alpha.66 — Planning quick wins: paste immediato + fasce orarie + status visivo + cambio stato dal menu (9 maggio 2026)
 
 Bundle 4 punti da feedback Matteo dopo α.65: tutti pertinenti al planning,

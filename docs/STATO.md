@@ -8,6 +8,33 @@
 
 ## Versione corrente
 
+**v3.5.0-alpha.66.1** — 9 maggio 2026 — Hotfix: warning duplicate-overlap nel modal edit booking
+
+Hotfix per bug rilevato da Matteo via screenshot: modal edit booking #96
+mostrava 2 righe Luca Bianchi in overlap totale (09:00–13:00 stesso giorno)
+senza alcun warning. Il pannello giallo "🧹 Rimuovi duplicati" α.63 era
+cablato solo nella todo-card, non nel modal edit. Dato sporco invisibile.
+
+**Chiuso α.66.1:**
+- ✅ Detection client-side `_tlbCheckDuplicateOverlaps()` nel modal edit:
+  scorre le righe assignment, raggruppa per resource_id, verifica overlap
+  pairwise. Se duplicati: pannello giallo + bordo rosso 4px sx sulle righe
+  + bottone "🧹 Rimuovi duplicati" che riusa endpoint α.63
+  `POST /api/bookings/{id}/cleanup-duplicate-overlaps`.
+- ✅ Cabling: check all'apertura del modal edit (`tlbOpenEdit`), live re-check
+  ad ogni cambio risorsa/orario (`tlbAssOnChange` + throttle 80ms),
+  ricontrollo post-remove riga, reset warning su `_tlbReset` (modal nuovo).
+- ✅ CSS `.tlb-ass-row.tl-row-duplicate-overlap`: bordo rosso 4px sx + sfondo
+  rgba(220,38,38,.10), si combina con `.has-conflict` esistente.
+
+**Smoke test**: 273 routes invariato, version 3.5.0-alpha.66.1.
+
+**Verifica live**: apri modal edit booking #96 → ora vedi warning giallo +
+2 righe rosse → click "🧹 Rimuovi duplicati" → cancella la 2ª riga,
+ricarica modal pulito.
+
+---
+
 **v3.5.0-alpha.66** — 9 maggio 2026 — Planning quick wins: paste immediato + fasce orarie + status visivo + cambio stato dal menu
 
 Bundle 4 punti pertinenti al planning, da feedback Matteo dopo α.65. Nessuna

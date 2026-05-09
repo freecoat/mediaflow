@@ -471,6 +471,14 @@
   .tlb-ass-row .ass-footer .presets { display:flex; gap:3px; margin-left:auto; flex-wrap:wrap; }
   .tlb-ass-row .ass-footer .presets button { font-size:10px; padding:2px 6px; }
   .tlb-ass-row.has-conflict { border-color:#dc2626; background:rgba(220,38,38,0.08); }
+  /* v3.5.0-alpha.66.1: marker per righe in duplicate-overlap (stessa risorsa,
+     orari sovrapposti). Bordo rosso + sfondo molto leggero. Si combina senza
+     conflitto con .has-conflict (che è il check intra-payload pre-save). */
+  .tlb-ass-row.tl-row-duplicate-overlap {
+    border-color:#dc2626 !important;
+    background:rgba(220,38,38,0.10) !important;
+    box-shadow: inset 4px 0 0 #dc2626;
+  }
   /* Time picker custom */
   .tlb-tp-trigger { background: var(--bg-elev,#1a1d29); border: 1px solid var(--border,#2a2e3d); color: var(--text,#eee); padding: 8px 12px; border-radius: 4px; font-family: monospace; font-size: 14px; cursor: pointer; width: 100%; text-align: center; }
   .tlb-tp-trigger:hover { border-color: #6272f5; }
@@ -1116,6 +1124,16 @@
             <button type="button" class="btn btn-ghost btn-sm" onclick="tlbApplyTimePreset('afternoon')" title="Applica orario pomeriggio dalla policy a tutte le righe">☀ Pomeriggio</button>
             <button type="button" class="btn btn-ghost btn-sm" onclick="tlbApplyTimePreset('full_day')" title="Mattina + pomeriggio (giornata intera)">📆 Tutto il giorno</button>
             <span id="tlb-time-preset-hint" style="font-size:10px; color:var(--text3,#888); margin-left:auto;"></span>
+          </div>
+          <!-- v3.5.0-alpha.66.1: warning duplicate-overlap nel modal edit.
+               Pre-α.66.1 il warning era cablato solo nel modal todo-card.
+               Ora calcolato client-side dalle righe assignment in tempo reale. -->
+          <div id="tlb-duplicate-warning" style="display:none; background:rgba(245,158,11,0.10); border:1px solid rgba(245,158,11,0.5); border-radius:6px; padding:8px 10px; margin-bottom:8px; font-size:12px;">
+            <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
+              <span style="font-size:14px;">⚠</span>
+              <span><b>Duplicato rilevato</b>: <span id="tlb-duplicate-detail">—</span> in overlap sulle stesse risorse. Dato sporco pre-α.63 (ora bloccato in salvataggio). Le righe duplicate sono evidenziate in rosso sotto.</span>
+              <button type="button" class="btn btn-warning btn-sm" style="margin-left:auto;" onclick="tlbFixDuplicateOverlapsHere()">🧹 Rimuovi duplicati</button>
+            </div>
           </div>
           <div id="tlb-assignments"></div>
         </div>
@@ -5706,6 +5724,9 @@ function _tlbReset() {
   // v3.5.0-alpha.22: priority semaforo
   tlbSetPriorityUI('normal');
   document.getElementById('tlb-assignments').innerHTML = '';
+  // v3.5.0-alpha.66.1: nascondi warning duplicate-overlap residuo
+  const dw = document.getElementById('tlb-duplicate-warning');
+  if (dw) dw.style.display = 'none';
   const ss = document.getElementById('tlb-smart-split');
   if (ss) ss.checked = false;
   const re = document.getElementById('tlb-recur-enabled');
@@ -5827,6 +5848,9 @@ function tlbRemoveAssignmentRow(btn) {
   const row = btn.closest('.tlb-ass-row');
   if (row) row.remove();
   _tlbUpdateRemoveButtons();
+  // v3.5.0-alpha.66.1: dopo remove rilegge l'eventuale duplicate-overlap
+  // (l'utente potrebbe aver risolto l'anomalia rimuovendo una delle righe).
+  if (typeof _tlbCheckDuplicateOverlaps === 'function') _tlbCheckDuplicateOverlaps();
 }
 
 function _tlbUpdateRemoveButtons() {
@@ -5845,6 +5869,10 @@ function _tlbUpdateRemoveButtons() {
 function tlbAssOnChange(el) {
   const row = el.closest('.tlb-ass-row');
   if (row) tlbAssUpdateDuration(row);
+  // v3.5.0-alpha.66.1: live re-check duplicate-overlap ad ogni cambio
+  // (cambio risorsa o orario). Throttle leggero per evitare flickering.
+  clearTimeout(window._tlbDupCheckTimer);
+  window._tlbDupCheckTimer = setTimeout(_tlbCheckDuplicateOverlaps, 80);
   // v3.4.50: sync orario tra risorse se la spunta è ON e la riga toccata
   // è la prima. Propaga start/end (date+time) a tutte le altre.
   const syncOn = document.getElementById('tlb-sync-times')?.checked;
@@ -6130,6 +6158,80 @@ async function _tlbLoadPoliciesOnce() {
   return window._tlPolicies;
 }
 
+// v3.5.0-alpha.66.1: detection client-side dei duplicate-overlap nel modal.
+// Stesso resource_id su 2+ righe + intervalli che si sovrappongono =
+// dato sporco pre-α.63. Marca le righe in rosso + mostra warning + bottone
+// "Rimuovi duplicati" che chiama l'endpoint cleanup esistente.
+function _tlbCheckDuplicateOverlaps() {
+  const warn = document.getElementById('tlb-duplicate-warning');
+  const det  = document.getElementById('tlb-duplicate-detail');
+  if (!warn) return;
+  const rows = Array.from(document.querySelectorAll('#tlb-assignments .tlb-ass-row'));
+  // Reset evidenza precedente (lascia altre classi has-conflict gestite altrove)
+  rows.forEach(r => r.classList.remove('tl-row-duplicate-overlap'));
+  if (rows.length < 2) { warn.style.display = 'none'; return; }
+  // Raggruppa per resource_id
+  const byRes = new Map();
+  for (const r of rows) {
+    const ridSel = r.querySelector('.tlb-ass-resource');
+    const rid = ridSel && ridSel.value ? Number(ridSel.value) : null;
+    if (!rid) continue;
+    const sd = r.querySelector('.tlb-ass-start-date')?.value;
+    const st = r.querySelector('.tlb-ass-start-time')?.value;
+    const ed = r.querySelector('.tlb-ass-end-date')?.value;
+    const et = r.querySelector('.tlb-ass-end-time')?.value;
+    if (!sd || !st || !ed || !et) continue;
+    const start = new Date(`${sd}T${st}:00`).getTime();
+    const end   = new Date(`${ed}T${et}:00`).getTime();
+    if (!Number.isFinite(start) || !Number.isFinite(end) || end <= start) continue;
+    if (!byRes.has(rid)) byRes.set(rid, []);
+    byRes.get(rid).push({ row: r, rid, start, end });
+  }
+  const dupRowsByRes = new Map(); // rid -> Set(row)
+  for (const [rid, arr] of byRes) {
+    if (arr.length < 2) continue;
+    // pairwise overlap (segmenti contigui non contano: end == start altra)
+    for (let i = 0; i < arr.length; i++) {
+      for (let j = i + 1; j < arr.length; j++) {
+        const a = arr[i], b = arr[j];
+        if (a.start < b.end && b.start < a.end) {
+          if (!dupRowsByRes.has(rid)) dupRowsByRes.set(rid, new Set());
+          dupRowsByRes.get(rid).add(a.row);
+          dupRowsByRes.get(rid).add(b.row);
+        }
+      }
+    }
+  }
+  if (!dupRowsByRes.size) { warn.style.display = 'none'; return; }
+  // Marca righe + popola dettaglio
+  const names = [];
+  for (const [rid, rowSet] of dupRowsByRes) {
+    const first = rowSet.values().next().value;
+    const sel = first?.querySelector('.tlb-ass-resource');
+    const name = sel?.options?.[sel.selectedIndex]?.textContent?.trim() || `risorsa #${rid}`;
+    names.push(name);
+    rowSet.forEach(r => r.classList.add('tl-row-duplicate-overlap'));
+  }
+  if (det) det.textContent = names.join(', ');
+  warn.style.display = '';
+}
+
+async function tlbFixDuplicateOverlapsHere() {
+  const bid = document.getElementById('tlb-editing-booking-id')?.value;
+  if (!bid) { toast('Apri il modal in modalità modifica', 'warning'); return; }
+  if (!confirm('Rimuovere gli assignment duplicati con orari sovrapposti?\n\nVengono cancellati i record extra; il primo per orario di inizio viene mantenuto. Operazione irreversibile.')) return;
+  try {
+    const r = await api('POST', `/planning/api/bookings/${bid}/cleanup-duplicate-overlaps`, new FormData());
+    toast(r.removed > 0 ? `✓ Rimossi ${r.removed} assignment duplicati` : 'Nessun duplicato trovato', r.removed > 0 ? 'success' : 'info');
+    // Ricarica il modal con i dati puliti + timeline
+    await renderTimeline(true);
+    closeModal('modal-tl-booking');
+    setTimeout(() => tlbOpenEdit(Number(bid)), 200);
+  } catch(e) {
+    toast(e.message || 'Errore cleanup', 'error');
+  }
+}
+
 async function tlbApplyTimePreset(slot) {
   const pols = await _tlbLoadPoliciesOnce();
   const p = pols.default;
@@ -6279,6 +6381,9 @@ async function tlbOpenEdit(bookingId) {
     }
   }
   tlbOnKindChange();
+  // v3.5.0-alpha.66.1: rileva duplicate-overlap subito all'apertura del modal
+  // edit (dato sporco pre-α.63). Mostra warning + bordo rosso sulle righe.
+  _tlbCheckDuplicateOverlaps();
   openModal('modal-tl-booking');
 }
 
