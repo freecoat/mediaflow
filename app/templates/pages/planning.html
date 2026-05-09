@@ -3887,9 +3887,12 @@ function tlContextMenu(x, y, choices) {
         b.style.cssText = `text-align:left; padding:8px 12px; border-radius:4px; background:transparent; border:none; color:var(--text,#eee); font-size:13px; cursor:pointer; font-family:inherit; display:flex; justify-content:space-between; gap:8px;`;
         b.onmouseenter = () => {
           b.style.background = 'rgba(98,114,245,0.15)';
-          // Hover su voce con submenu → apre il sub (e chiude eventuale altro sub aperto)
+          // v3.5.0-alpha.66.4.1: bug fix — _closeSub deve scattare SOLO sulle
+          // voci del menu PADRE (per chiudere un sub aperto su altra voce
+          // padre). Le voci DENTRO il submenu NON devono chiudere il proprio
+          // contenitore (era il bug "sub sparisce appena ci passi sopra").
           if (hasSub) _openSub(b, c.submenu);
-          else _closeSub();  // hover su voce senza submenu → chiudi sub aperto
+          else if (!isSub) _closeSub();
         };
         b.onmouseleave = () => {
           b.style.background = 'transparent';
