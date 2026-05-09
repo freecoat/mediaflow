@@ -1084,6 +1084,162 @@ def _detect_dup_overlap_pairs(assigns: list) -> list:
     return out
 
 
+@router.get("/api/diag/scan-duplicate-overlaps")
+async def diag_scan_duplicate_overlaps(request: Request, db: Session = Depends(get_db)):
+    """Scansiona TUTTI i booking del tenant e ritorna quelli che hanno
+    almeno una coppia di assignment duplicati con orari sovrapposti.
+
+    v3.5.0-alpha.66.2 — Risponde alla domanda: il bug doubleClick double-fire
+    ha lasciato dati sporchi in DB? Per ogni booking sporco ritorna:
+    booking_id, job_id, count assignment, lista coppie sovrapposte, ore-uomo
+    DOPPIE (somma duplicati che gonfiano il cost-report).
+
+    Read-only. Solo manager/admin."""
+    user = current_user_optional(request)
+    if not user or not is_elevated(user):
+        raise HTTPException(403, "Solo manager/admin")
+    bookings = (
+        db.query(Booking)
+        .options(joinedload(Booking.assignments), joinedload(Booking.job))
+        .filter(
+            Booking.tenant_id == CURRENT_TENANT,
+            Booking.status != BookingStatus.cancelled,
+        )
+        .all()
+    )
+    dirty = []
+    total_phantom_hours = 0.0
+    for b in bookings:
+        pairs = _detect_dup_overlap_pairs(list(b.assignments))
+        if not pairs:
+            continue
+        # Calcolo "ore fantasma" = ore conteggiate due volte = somma delle
+        # ore overlap effettive fra coppie. Approssimazione: per ogni coppia,
+        # ore di overlap = min(end_i,end_j) - max(start_i,start_j).
+        phantom_h = 0.0
+        for p in pairs:
+            ai = next((a for a in b.assignments if a.id == p["ass_id_i"]), None)
+            aj = next((a for a in b.assignments if a.id == p["ass_id_j"]), None)
+            if ai and aj:
+                ovs = max(ai.start_datetime, aj.start_datetime)
+                ove = min(ai.end_datetime, aj.end_datetime)
+                if ove > ovs:
+                    phantom_h += (ove - ovs).total_seconds() / 3600.0
+        total_phantom_hours += phantom_h
+        dirty.append({
+            "booking_id": b.id,
+            "job_id": b.job_id,
+            "job_code": (b.job.code if b.job else None),
+            "job_title": (b.job.title if b.job else None),
+            "assignments_count": len(b.assignments),
+            "duplicate_pairs": pairs,
+            "phantom_hours": round(phantom_h, 2),
+        })
+    return {
+        "scanned_bookings": len(bookings),
+        "dirty_bookings_count": len(dirty),
+        "total_phantom_hours": round(total_phantom_hours, 2),
+        "dirty_bookings": dirty,
+    }
+
+
+@router.post("/api/diag/cleanup-all-duplicate-overlaps")
+async def diag_cleanup_all_duplicate_overlaps(
+    request: Request,
+    dry_run: bool = Form(True),
+    db: Session = Depends(get_db),
+):
+    """Cleanup massivo dei booking con assignment duplicati overlap.
+
+    `dry_run=True` (default): conta cosa cancellerebbe senza toccare nulla.
+    `dry_run=False`: esegue. Per ogni booking sporco mantiene il primo
+    assignment per orario (e ID più basso a parità di start), cancella gli
+    altri della stessa risorsa con overlap. Reconcile cost line per i
+    job toccati.
+
+    Solo manager/admin. Operazione irreversibile (in execute mode)."""
+    user = current_user_optional(request)
+    if not user or not is_elevated(user):
+        raise HTTPException(403, "Solo manager/admin")
+    bookings = (
+        db.query(Booking)
+        .options(joinedload(Booking.assignments))
+        .filter(
+            Booking.tenant_id == CURRENT_TENANT,
+            Booking.status != BookingStatus.cancelled,
+        )
+        .all()
+    )
+    actions = []  # lista di {booking_id, kept_assignment_ids, removed_assignment_ids, removed_count}
+    total_removed = 0
+    affected_jobs = set()
+    for b in bookings:
+        pairs = _detect_dup_overlap_pairs(list(b.assignments))
+        if not pairs:
+            continue
+        # Per ogni resource_id: tieni il primo per (start_datetime, id), cancella gli altri overlap.
+        by_res: dict = {}
+        for a in b.assignments:
+            by_res.setdefault(a.resource_id, []).append(a)
+        kept_ids = []
+        removed_ids = []
+        for rid, lst in by_res.items():
+            if len(lst) < 2:
+                kept_ids.extend([a.id for a in lst])
+                continue
+            lst_sorted = sorted(lst, key=lambda x: (x.start_datetime, x.id))
+            kept_for_res = [lst_sorted[0]]
+            for cand in lst_sorted[1:]:
+                # cancello cand se ha overlap con qualunque kept_for_res
+                conflict = any(
+                    cand.start_datetime < k.end_datetime and k.start_datetime < cand.end_datetime
+                    for k in kept_for_res
+                )
+                if conflict:
+                    removed_ids.append(cand.id)
+                else:
+                    kept_for_res.append(cand)
+            kept_ids.extend([a.id for a in kept_for_res])
+        if not removed_ids:
+            continue
+        actions.append({
+            "booking_id": b.id,
+            "job_id": b.job_id,
+            "kept_assignment_ids": kept_ids,
+            "removed_assignment_ids": removed_ids,
+            "removed_count": len(removed_ids),
+        })
+        total_removed += len(removed_ids)
+        if b.job_id:
+            affected_jobs.add(b.job_id)
+        if not dry_run:
+            for aid in removed_ids:
+                a = db.query(BookingAssignment).filter(BookingAssignment.id == aid).first()
+                if a:
+                    db.delete(a)
+            _recalc_booking_envelope(b)
+            _log_change(db, b.id, "cleanup", f"Cleanup duplicate-overlap: rimossi {len(removed_ids)} assignments",
+                        {"removed_ids": removed_ids, "kept_ids": kept_ids})
+    if not dry_run and affected_jobs:
+        db.flush()
+        # Reconcile cost line per ogni job toccato (ricomputa quantity_actual + total_accrued)
+        try:
+            from app.services.cost_line_sync import recompute_for_job
+            for jid in affected_jobs:
+                recompute_for_job(db, jid)
+        except Exception as e:
+            print(f"[cleanup-all] reconcile fail: {e}")
+        db.commit()
+    return {
+        "dry_run": dry_run,
+        "scanned_bookings": len(bookings),
+        "dirty_bookings_affected": len(actions),
+        "total_assignments_removed": total_removed,
+        "affected_jobs": sorted(affected_jobs),
+        "actions": actions,
+    }
+
+
 @router.post("/api/bookings")
 async def create_booking(
     request: Request,
