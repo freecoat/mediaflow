@@ -8,6 +8,41 @@
 
 ## Versione corrente
 
+**v3.5.0-alpha.66.2** — 9 maggio 2026 — Fix root cause: vis-timeline doubleClick double-fire
+
+Matteo segnala booking #99 nuovi che nascono con risorsa "duplicata" anche
+quando il DB ha 1 solo assignment. Diagnosticato via logging client-side
+temporaneo: **vis-timeline 7.x emette `doubleClick` due volte** (Hammer.js
++ DOM nativo) → `tlbOpenEdit` invocato 2 volte → modal con 2 righe per
+1 assignment in DB.
+
+**Chiuso α.66.2:**
+- ✅ Fix root cause: dedup nel listener `tlInstance.on('doubleClick', ...)`
+  con timestamp window 350ms (gap dblclick ~250ms, doppio-fire <10ms).
+  1 listener, 1 guard, ~3 righe.
+- ✅ Endpoint diag `GET /planning/api/diag/booking-raw/{id}` (manager+)
+  lasciato in app come strumento utile per future investigazioni: dumpa
+  booking + assignments + audit changes raw.
+- ✅ Memoria progetto aggiornata: `feedback_vis_timeline_quirks.md` ora
+  ha 4ª trappola "doubleClick double-fire (Hammer.js + DOM nativo)".
+
+**Cosa NON era il bug**:
+- Backend `create_booking` / `update_booking` corretti.
+- Booking #61 (4 assignments) NON era duplicato: 2 risorse × 2 segmenti
+  contigui smart-split pausa pranzo. Legittimo (α.63 lo permette).
+- Audit di 8 endpoint senza guard intra-payload (multi-move, extend-as-
+  series, ecc.) → potenziali fragilità ma NON il bug del #99. Si potranno
+  hardenare in α.67 se serve, ma non urgenti.
+
+**Smoke**: 274 routes (+1 endpoint diag), version 3.5.0-alpha.66.2.
+
+**Verifica live**: hard-refresh (Ctrl+Shift+R) → doppio-click su qualsiasi
+booking → modal apre con il numero corretto di righe (1 per assignment in
+DB). Test su #99 (dovrebbe ora aprirsi con 1 sola riga). Test su #61
+(dovrebbe aprirsi con 4 righe, ma sono legittime: 2 risorse × split pranzo).
+
+---
+
 **v3.5.0-alpha.66.1** — 9 maggio 2026 — Hotfix: warning duplicate-overlap nel modal edit booking
 
 Hotfix per bug rilevato da Matteo via screenshot: modal edit booking #96

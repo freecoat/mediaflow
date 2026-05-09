@@ -1,5 +1,57 @@
 # MediaFlow — Changelog
 
+## v3.5.0-alpha.66.2 — Fix root cause: vis-timeline doubleClick double-fire (9 maggio 2026)
+
+Bug rilevato da Matteo: i booking nuovi nascevano con la stessa risorsa
+"duplicata" anche quando il DB ne aveva una sola. Sintomo: doppio-click
+sul booking → modal edit con 2 righe identiche.
+
+**Root cause** (diagnosticata via logging client-side temporaneo):
+**vis-timeline 7.x emette il `doubleClick` due volte** per ogni gesto:
+1. Una dal recognizer Hammer.js interno (`e.recognize` → `tryEmit` → `emit`)
+2. Una dal native DOM `ondblclick` (`p.dom.root.ondblclick`)
+
+Il listener `tlInstance.on('doubleClick', ...)` invocava `tlbOpenEdit(bid)`
+due volte. Essendo async (await su `/jobs/api/{id}` per quote/lavorazione),
+il primo invocation era ancora in volo quando partiva il secondo:
+ognuno faceva `_tlbReset()` (svuotava) e poi aggiungeva una riga →
+modal con 2 righe per 1 assignment in DB. Stessa dinamica per il
+modal "nuovo booking" su area vuota (`tlbOpen`).
+
+**Fix in `app/templates/pages/planning.html`** (1 listener, 1 guard):
+```js
+let __tlLastDblClick = 0;
+tlInstance.on('doubleClick', async (props) => {
+  const now = Date.now();
+  if (now - __tlLastDblClick < 350) return;  // 2° fire: ignora
+  __tlLastDblClick = now;
+  ...
+});
+```
+Window 350ms (gap tipico dblclick è ~250ms, doppio-fire <10ms).
+
+**Cosa NON era il bug**:
+- Backend `create_booking` / `update_booking` corretti, guard
+  `_check_intra_payload_overlaps` funzionante.
+- Booking #61 con 4 assignments **non era duplicato**: 2 risorse × 2
+  segmenti contigui da smart-split pausa pranzo (legittimo).
+- 8 endpoint senza guard intra-payload trovati nell'audit (multi-move,
+  extend-as-series, ecc.) sono comunque potenziali fragilità da
+  hardenare in α.67, ma NON erano il bug del job 99.
+
+**Strumento utile lasciato**: nuovo endpoint
+`GET /planning/api/diag/booking-raw/{id}` (manager+) che dumpa il
+record grezzo del booking + tutti i suoi assignments + audit changes.
+Lo abbiamo usato per scartare l'ipotesi "bug server-side" sul #99.
+
+**Memoria progetto aggiornata**:
+`feedback_vis_timeline_quirks.md` — aggiunta 4ª trappola: doubleClick
+double-fire (Hammer.js + DOM nativo).
+
+**Smoke**: 274 routes (+1 endpoint diag), version 3.5.0-alpha.66.2.
+
+---
+
 ## v3.5.0-alpha.66.1 — Hotfix: warning duplicate-overlap nel modal edit booking (9 maggio 2026)
 
 Bug rilevato da Matteo via screenshot: il modal "Modifica booking #96" mostrava

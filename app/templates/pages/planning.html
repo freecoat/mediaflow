@@ -4581,7 +4581,20 @@ async function _doRenderTimeline(preserveWindow=false) {
   // - su area vuota → modal nuovo booking
   // - su item → apre il modal edit booking (v3.5.0-alpha.22: prima apriva
   //   solo la toast "popup" sul select, non utile a Matteo).
+  // v3.5.0-alpha.66.2 — vis-timeline 7.x QUIRK: l'evento `doubleClick` viene
+  // emesso DUE VOLTE per ogni gesto: una dal recognizer Hammer.js interno
+  // (`e.recognize`/`emit`), una dal native DOM `ondblclick` (vedi stack
+  // trace della diagnostica). Risultato: tlbOpenEdit invocato 2x e
+  // `tlbAddAssignmentRow` chiamato 2x → modal con 2 righe per 1 assignment.
+  // Fix: dedup con timestamp window 350ms (più del normale gap dblclick ~250ms).
+  let __tlLastDblClick = 0;
   tlInstance.on('doubleClick', async (props) => {
+    const now = Date.now();
+    if (now - __tlLastDblClick < 350) {
+      // Secondo fire dello stesso gesto: ignora.
+      return;
+    }
+    __tlLastDblClick = now;
     if (props.item) {
       const it = items.find(x => x.id === props.item) || (itemsDS.get(props.item));
       if (!it) return;

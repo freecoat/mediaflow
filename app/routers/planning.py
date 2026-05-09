@@ -1009,6 +1009,81 @@ def _enforce_planning_scope(request: Request, db: Session, resource_ids):
             raise HTTPException(403, "Puoi pianificare solo la tua risorsa")
 
 
+# ── DIAGNOSTICA BUG DUPLICAZIONE (v3.5.0-alpha.66.2) ─────────────
+# Matteo segnala che booking nuovi nascono con risorse duplicate (es. #99
+# subito dopo save mostra 2x stessa risorsa). Endpoint diag ritorna i record
+# grezzi senza filtri → permette di vedere ESATTAMENTE cosa è in DB.
+
+@router.get("/api/diag/booking-raw/{booking_id}")
+async def diag_booking_raw(booking_id: int, request: Request, db: Session = Depends(get_db)):
+    """Dump grezzo di un Booking + i suoi assignments + audit changes recenti.
+    Solo manager/admin. Ignora qualunque filtro di status (cancelled compresi)."""
+    user = current_user_optional(request)
+    if not user or not is_elevated(user):
+        raise HTTPException(403, "Solo manager/admin")
+    b = db.query(Booking).filter(Booking.id == booking_id).first()
+    if not b:
+        raise HTTPException(404, f"Booking #{booking_id} non trovato")
+    assigns = db.query(BookingAssignment).filter(
+        BookingAssignment.booking_id == booking_id
+    ).order_by(BookingAssignment.id).all()
+    changes = db.query(BookingChange).filter(
+        BookingChange.booking_id == booking_id
+    ).order_by(BookingChange.created_at.asc()).all()
+    return {
+        "booking": {
+            "id": b.id, "tenant_id": b.tenant_id,
+            "job_id": b.job_id, "job_cost_line_id": b.job_cost_line_id,
+            "kind": str(b.kind), "status": str(b.status),
+            "execution_status": str(b.execution_status),
+            "overtime_status": str(b.overtime_status),
+            "start_datetime": b.start_datetime.isoformat() if b.start_datetime else None,
+            "end_datetime": b.end_datetime.isoformat() if b.end_datetime else None,
+            "notes": b.notes,
+            "created_at": b.created_at.isoformat() if b.created_at else None,
+        },
+        "assignments_count": len(assigns),
+        "assignments": [
+            {
+                "id": a.id, "resource_id": a.resource_id,
+                "start_datetime": a.start_datetime.isoformat(),
+                "end_datetime": a.end_datetime.isoformat(),
+            } for a in assigns
+        ],
+        # Detection: stessa risorsa con overlap fra coppie di assignments.
+        # Aiuta a vedere subito se il booking è duplicato.
+        "duplicate_overlap_detected": _detect_dup_overlap_pairs(assigns),
+        "audit_changes_count": len(changes),
+        "audit_changes": [
+            {
+                "kind": c.kind, "summary": c.summary,
+                "user_id": c.user_id, "payload": c.payload,
+                "created_at": c.created_at.isoformat() if c.created_at else None,
+            } for c in changes
+        ],
+    }
+
+
+def _detect_dup_overlap_pairs(assigns: list) -> list:
+    """Per diagnostica: ritorna le coppie (i, j) di assignment con stessa
+    risorsa e orari sovrapposti. Vuoto se ok."""
+    out = []
+    for i in range(len(assigns)):
+        for j in range(i + 1, len(assigns)):
+            ai, aj = assigns[i], assigns[j]
+            if ai.resource_id != aj.resource_id:
+                continue
+            if ai.start_datetime < aj.end_datetime and aj.start_datetime < ai.end_datetime:
+                out.append({
+                    "i": i, "j": j,
+                    "ass_id_i": ai.id, "ass_id_j": aj.id,
+                    "resource_id": ai.resource_id,
+                    "i_range": f"{ai.start_datetime.isoformat()} → {ai.end_datetime.isoformat()}",
+                    "j_range": f"{aj.start_datetime.isoformat()} → {aj.end_datetime.isoformat()}",
+                })
+    return out
+
+
 @router.post("/api/bookings")
 async def create_booking(
     request: Request,
