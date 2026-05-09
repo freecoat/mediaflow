@@ -348,11 +348,17 @@
     box-shadow: inset 0 0 0 2px rgba(251,146,60,.85), 0 2px 6px rgba(0,0,0,.35) !important;
     animation: tl-pulse 1.6s ease-in-out infinite;
   }
-  .vis-item.tl-exec-done { opacity: .82; box-shadow: inset 0 0 0 2px rgba(16,185,129,.65) !important; }
+  /* v3.5.0-alpha.66: rinforzato contrasto done — bordo più spesso (3px) +
+     opacity meno aggressiva (.92) per non confonderlo con planned. Banda
+     verde a sinistra che richiama la legenda. */
+  .vis-item.tl-exec-done {
+    opacity: .92;
+    box-shadow: inset 4px 0 0 #10b981, inset 0 0 0 2px rgba(16,185,129,.55) !important;
+  }
   .vis-item.tl-exec-done::after {
     content: '✓'; position: absolute; right: 4px; top: 0; bottom: 0;
-    display: flex; align-items: center; color: #6ee7b7; font-weight: 700; font-size: 11px;
-    text-shadow: 0 0 4px rgba(0,0,0,.55); pointer-events: none;
+    display: flex; align-items: center; color: #6ee7b7; font-weight: 700; font-size: 12px;
+    text-shadow: 0 0 4px rgba(0,0,0,.7); pointer-events: none;
   }
   .vis-item.tl-exec-not_done {
     opacity: .55;
@@ -903,7 +909,55 @@
           {% if not full_screen %}
           <button class="btn btn-ghost btn-sm" onclick="tlOpenStandalone()" title="Apri timeline in finestra dedicata full-screen (senza menu/topbar)" style="margin-left:6px;">⛶ Finestra</button>
           {% endif %}
+          <!-- v3.5.0-alpha.66: bottone Legenda — apre popover con stati visivi
+               dei booking (planned/in_progress/done/not_done + tentative). -->
+          <button class="btn btn-ghost btn-sm" id="tl-legend-toggle" onclick="tlLegendToggle(event)" title="Mostra significato dei colori/pattern dei booking nella timeline" style="margin-left:6px;">🏷 Legenda</button>
           <button class="btn btn-ghost btn-sm" onclick="tlPrefsToggle(event)" title="Personalizza look timeline" style="margin-left:6px;">⚙</button>
+        </div>
+
+        <!-- v3.5.0-alpha.66: legenda stati booking -->
+        <div id="tl-legend-pop" style="display:none; position:absolute; right:18px; z-index:1100; background:var(--bg2); border:1px solid var(--border); border-radius:8px; padding:14px; width:340px; box-shadow:0 12px 32px rgba(0,0,0,.45); font-size:12px;">
+          <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
+            <strong style="color:var(--text); font-size:13px;">🏷 Stati lavorazione</strong>
+            <button class="btn btn-ghost btn-icon btn-sm" onclick="tlLegendToggle(event)">✕</button>
+          </div>
+          <div style="display:flex; flex-direction:column; gap:8px;">
+            <div style="display:flex; gap:10px; align-items:center;">
+              <div class="tl-leg-swatch" style="background:#6272f5; width:54px; height:22px; border-radius:4px; flex-shrink:0;"></div>
+              <div><div style="font-weight:600; font-size:12px;">Planned</div><div class="text-muted" style="font-size:11px;">Pianificato (default)</div></div>
+            </div>
+            <div style="display:flex; gap:10px; align-items:center;">
+              <div class="tl-leg-swatch tl-exec-in_progress" style="background:#6272f5; width:54px; height:22px; border-radius:4px; flex-shrink:0; position:relative;"></div>
+              <div><div style="font-weight:600; font-size:12px;">▶ In corso</div><div class="text-muted" style="font-size:11px;">Glow arancione lampeggiante</div></div>
+            </div>
+            <div style="display:flex; gap:10px; align-items:center;">
+              <div class="tl-leg-swatch tl-exec-done" style="background:#6272f5; width:54px; height:22px; border-radius:4px; flex-shrink:0; position:relative;"></div>
+              <div><div style="font-weight:600; font-size:12px;">✓ Fatto</div><div class="text-muted" style="font-size:11px;">Bordo verde + ✓ a destra</div></div>
+            </div>
+            <div style="display:flex; gap:10px; align-items:center;">
+              <div class="tl-leg-swatch tl-exec-not_done" style="width:54px; height:22px; border-radius:4px; flex-shrink:0;"></div>
+              <div><div style="font-weight:600; font-size:12px;">✗ Non fatto</div><div class="text-muted" style="font-size:11px;">Tratteggio rosso 45°</div></div>
+            </div>
+            <div style="display:flex; gap:10px; align-items:center;">
+              <div class="tl-leg-swatch tl-tentative" style="background:#6272f5; width:54px; height:22px; border-radius:4px; flex-shrink:0; border:2px dashed rgba(255,255,255,0.5); box-sizing:border-box;"></div>
+              <div><div style="font-weight:600; font-size:12px;">⏳ Tentative</div><div class="text-muted" style="font-size:11px;">Bordo dashed (non confermato)</div></div>
+            </div>
+          </div>
+          <hr style="margin:12px 0; border:none; border-top:1px solid var(--border);">
+          <div style="display:flex; flex-direction:column; gap:6px;">
+            <div style="display:flex; gap:8px; align-items:center;">
+              <div style="width:24px; height:18px; box-shadow: inset 4px 0 0 #f59e0b, 0 0 0 1px rgba(245,158,11,.5); background:#6272f5; border-radius:3px; flex-shrink:0;"></div>
+              <div class="text-muted" style="font-size:11px;">Reparto risorsa ≠ reparto lavorazione (cross-dept)</div>
+            </div>
+            <div style="display:flex; gap:8px; align-items:center;">
+              <div style="width:24px; height:18px; box-shadow: inset 4px 0 0 #a855f7, 0 0 0 1px rgba(168,85,247,.5); background:#6272f5; border-radius:3px; flex-shrink:0;"></div>
+              <div class="text-muted" style="font-size:11px;">Periodo già fatturato (slice-locked, drag bloccato)</div>
+            </div>
+          </div>
+          <div class="text-muted" style="font-size:10px; margin-top:10px; line-height:1.4;">
+            Click destro su un booking → menu con cambio stato rapido
+            (▶ Inizia · ✓ Fatto · ✗ Non fatto · ↺ Riapri).
+          </div>
         </div>
 
         <!-- v3.4.46: pannello preferenze look timeline (popover) -->
@@ -1053,6 +1107,16 @@
             <input type="checkbox" id="tlb-sync-times" onchange="tlbToggleSyncTimes()" style="margin:0;">
             🔗 Stesso orario per tutte le risorse <span style="color:var(--text3,#888);">(applica start/end della 1ª riga al cambio)</span>
           </label>
+          <!-- v3.5.0-alpha.66: quick-pick fasce orarie. Applica gli orari a
+               TUTTE le righe (mantiene la data corrente di ogni riga). Usa la
+               WorkingHoursPolicy del tenant: morning_start/end + afternoon_start/end. -->
+          <div style="display:flex; gap:6px; align-items:center; margin-bottom:8px; flex-wrap:wrap;">
+            <span style="font-size:11px; color:var(--text3,#888);">Fasce orarie:</span>
+            <button type="button" class="btn btn-ghost btn-sm" onclick="tlbApplyTimePreset('morning')" title="Applica orario mattina dalla policy a tutte le righe">🌅 Mattina</button>
+            <button type="button" class="btn btn-ghost btn-sm" onclick="tlbApplyTimePreset('afternoon')" title="Applica orario pomeriggio dalla policy a tutte le righe">☀ Pomeriggio</button>
+            <button type="button" class="btn btn-ghost btn-sm" onclick="tlbApplyTimePreset('full_day')" title="Mattina + pomeriggio (giornata intera)">📆 Tutto il giorno</button>
+            <span id="tlb-time-preset-hint" style="font-size:10px; color:var(--text3,#888); margin-left:auto;"></span>
+          </div>
           <div id="tlb-assignments"></div>
         </div>
 
@@ -1949,6 +2013,30 @@ function tlPrefsToggle(ev) {
   }
   if (ev) ev.stopPropagation();
 }
+
+// v3.5.0-alpha.66: toggle popover legenda stati booking. Stesso pattern
+// di tlPrefsToggle (popover ancorato a destra, click fuori chiude).
+function tlLegendToggle(ev) {
+  const pop = document.getElementById('tl-legend-pop');
+  if (!pop) return;
+  if (pop.style.display === 'none' || !pop.style.display) {
+    pop.style.display = 'block';
+    pop.style.top = '40px';
+    setTimeout(() => {
+      const off = e => {
+        if (!pop.contains(e.target) && !e.target.closest('[onclick*="tlLegendToggle"]')) {
+          pop.style.display = 'none';
+          document.removeEventListener('mousedown', off);
+        }
+      };
+      document.addEventListener('mousedown', off);
+    }, 50);
+  } else {
+    pop.style.display = 'none';
+  }
+  if (ev) ev.stopPropagation();
+}
+
 // v3.5.0-alpha.22: setter dedicato per la densità storyboard (chiamato dal
 // dropdown inline nella vista). Sincronizza prefs e UI.
 function storyboardSetDensity(value) {
@@ -3214,10 +3302,16 @@ window.addEventListener('keydown', async (e) => {
     toast(`Copiati ${window._tlClipboard.length} booking. Ctrl+V per incollare.`, 'info', 3000);
     return;
   }
-  // Ctrl+V = incolla (preserva offset relativo dal primo)
-  if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'v' && window._tlClipboard.length) {
+  // Ctrl+V = incolla immediato al giorno successivo (v3.5.0-alpha.66).
+  // Ctrl+Shift+V = paste-mode interattivo (comportamento legacy: click sulla
+  // timeline per scegliere il punto di atterraggio).
+  if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'v' && (window._tlClipboard||[]).length) {
     e.preventDefault();
-    await tlBulkPaste();
+    if (e.shiftKey) {
+      await tlBulkPaste();
+    } else {
+      await tlInstantPaste(window._tlClipboard, /*dayOffset=*/1);
+    }
     return;
   }
   // Delete = bulk delete
@@ -3267,12 +3361,78 @@ window.addEventListener('keydown', async (e) => {
   }
 });
 
-// v3.4.32.2: Ctrl+V → entra in "paste mode": prossimo click su area vuota
-// della timeline incolla il clipboard a quella posizione (primo elemento al
-// click, gli altri shiftati di pari offset). Esc esce dalla mode.
+// v3.4.32.2: Ctrl+Shift+V → entra in "paste mode": prossimo click su area
+// vuota della timeline incolla il clipboard a quella posizione (primo
+// elemento al click, gli altri shiftati di pari offset). Esc esce dalla mode.
 async function tlBulkPaste() {
   if (!(window._tlClipboard || []).length) return;
   tlEnterPasteMode();
+}
+
+// v3.5.0-alpha.66 — Incolla immediato (Ctrl+V default): replica i booking
+// del clipboard sulla stessa risorsa, stesso orario, +`dayOffset` giorni.
+// Se conflict orario sul +1, prova +2..+7. Se tutti i giorni nel range hanno
+// conflict, fallisce per quel booking (skip). Best-effort: scopo è "replica
+// turno giorno dopo" senza dover scegliere il punto. Per scelte fini → Ctrl+Shift+V.
+async function tlInstantPaste(items, dayOffset) {
+  items = items || window._tlClipboard || [];
+  if (!items.length) return;
+  if (dayOffset == null) dayOffset = 1;
+
+  let ok = 0, fail = 0, blocked = 0, shifted = 0;
+  const createdIds = [];
+  const MAX_RETRY_DAYS = 7;
+
+  for (const it of items) {
+    const p = it.extendedProps || {};
+    let placed = false;
+    for (let off = dayOffset; off <= dayOffset + MAX_RETRY_DAYS - 1; off++) {
+      const newStart = new Date(new Date(it.start).getTime() + off * 86400000);
+      const newEnd   = new Date(new Date(it.end).getTime()   + off * 86400000);
+      // Hard block ferie/malattia
+      if (tlIsResourceBlockedHard(p.resource_id, newStart.getTime(), newEnd.getTime())) {
+        if (off === dayOffset) blocked++;
+        continue;
+      }
+      const fd = new FormData();
+      fd.append('assignments', JSON.stringify([{
+        resource_id: p.resource_id,
+        start_datetime: _toLocalDtInput(newStart),
+        end_datetime: _toLocalDtInput(newEnd),
+      }]));
+      fd.append('kind', p.kind || 'project');
+      if (p.job_id) fd.append('job_id', p.job_id);
+      if (p.job_cost_line_id) fd.append('job_cost_line_id', p.job_cost_line_id);
+      if (p.notes) fd.append('notes', p.notes);
+      try {
+        const r = await api('POST', '/planning/api/bookings', fd);
+        ok++;
+        if (off > dayOffset) shifted++;
+        if (r && r.id) createdIds.push(r.id);
+        placed = true;
+        break;
+      } catch(err) {
+        // Conflict orario → provo giorno successivo. Altri errori → stop.
+        const msg = (err && err.message) ? err.message : '';
+        const isConflict = /conflit|409|overlap|sovrapp/i.test(msg);
+        if (!isConflict) { fail++; placed = true; break; }
+      }
+    }
+    if (!placed) fail++;
+  }
+  let msg = `${ok} incollat${ok === 1 ? 'o' : 'i'} +${dayOffset}gg`;
+  if (shifted) msg += ` (${shifted} spostat${shifted === 1 ? 'o' : 'i'} per conflitto)`;
+  if (blocked) msg += `, ${blocked} bloccat${blocked === 1 ? 'o' : 'i'} (ferie/malattia)`;
+  if (fail) msg += `, ${fail} non incollat${fail === 1 ? 'o' : 'i'}`;
+  if (createdIds.length) {
+    tlPushUndo(
+      { type: 'paste_batch', ids: createdIds },
+      `${msg} · annullabile`
+    );
+  } else {
+    toast(msg || 'Nessun booking incollato', (blocked || fail) ? 'warning' : 'info', 4500);
+  }
+  renderTimeline(true);
 }
 
 function tlEnterPasteMode() {
@@ -4434,10 +4594,22 @@ async function _doRenderTimeline(preserveWindow=false) {
       const statusItem = isTentative
         ? {label: '✓  Conferma booking', value: 'confirm'}
         : {label: '⏳  Rendi tentative', value: 'tentative'};
+      // v3.5.0-alpha.66: voci execution_status condizionali (filtra lo stato
+      // corrente). Endpoint backend: PATCH /planning/api/bookings/{id}/execution.
+      const exec = (origBooking && origBooking.extendedProps && origBooking.extendedProps.execution_status) || 'planned';
+      const execMenu = [];
+      if (exec !== 'in_progress') execMenu.push({label:'▶  Inizia (in corso)', value:'exec_in_progress'});
+      if (exec !== 'done')        execMenu.push({label:'✓  Marca come fatto', value:'exec_done'});
+      if (exec !== 'not_done')    execMenu.push({label:'✗  Marca come non fatto', value:'exec_not_done'});
+      if (exec === 'done' || exec === 'not_done')
+                                  execMenu.push({label:'↺  Riapri (planned)', value:'exec_planned'});
       const choice = await tlContextMenu(x, y, [
         {label: '✎  Modifica…', value: 'edit'},
+        ...execMenu,
         statusItem,
         {label: '⊕  Duplica qui', value: 'duplicate'},
+        {label: '📅  Duplica giorno dopo', value: 'duplicate_day'},
+        {label: '📅  Duplica settimana dopo', value: 'duplicate_week'},
         {label: '↪  Sposta su altra risorsa…', value: 'reassign'},
         {label: '🗑  Elimina assegnazione', value: 'delete'},
         {label: '✕  Annulla', value: null},
@@ -4465,6 +4637,30 @@ async function _doRenderTimeline(preserveWindow=false) {
             end: new Date(new Date(it.end).getTime() + 2*60*60*1000),
           };
           await _tlDoDuplicate(itemCopy, origBooking);
+          renderTimeline(true);
+        } else if (choice === 'duplicate_day' || choice === 'duplicate_week') {
+          // v3.5.0-alpha.66: replica rapida senza paste-mode, riusa
+          // tlInstantPaste con dayOffset=1 o 7 e clipboard locale (1 booking).
+          const days = choice === 'duplicate_week' ? 7 : 1;
+          await tlInstantPaste([origBooking], days);
+        } else if (choice && choice.toString().startsWith('exec_')) {
+          // v3.5.0-alpha.66: cambio execution_status via endpoint dedicato.
+          // Per not_done richiede un reason. Il context-menu opera sempre su
+          // un singolo booking (right-click su 1 item).
+          const newExec = choice.replace(/^exec_/, '');
+          const bid = origBooking ? origBooking.booking_id : null;
+          if (!bid) throw new Error('Booking non trovato');
+          let reason = '';
+          if (newExec === 'not_done') {
+            reason = prompt('Motivo "non fatto" (richiesto):', '') || '';
+            if (!reason.trim()) { toast('Motivo obbligatorio per "non fatto"', 'warning'); return; }
+          }
+          const fd = new FormData();
+          fd.append('execution_status', newExec);
+          if (reason) fd.append('not_done_reason', reason);
+          await api('PATCH', `/planning/api/bookings/${bid}/execution`, fd);
+          const labels = {planned:'rimesso planned', in_progress:'avviato', done:'marcato fatto', not_done:'marcato non fatto'};
+          toast(`Booking ${labels[newExec] || newExec}`, 'success');
           renderTimeline(true);
         } else if (choice === 'reassign') {
           const choices = RESOURCES_SEED.map(r => ({label: r.name, value: r.id}));
@@ -5915,6 +6111,65 @@ function tlbAssSetDurDays(btn, days) {
   const end = new Date(r.start);
   end.setDate(end.getDate() + days);
   _setRow(row, {end});
+}
+
+// v3.5.0-alpha.66: quick-pick fasce orarie (Mattina/Pomeriggio/Tutto il giorno).
+// Applica gli orari della WorkingHoursPolicy default a TUTTE le righe del modal,
+// preservando la data corrente di ciascuna riga (default oggi). Carica le policy
+// lazy alla prima invocazione e cacha in window._tlPolicies. Fallback se la
+// policy non è raggiungibile: 09:00-13:00 / 14:00-18:00 / 09:00-18:00.
+async function _tlbLoadPoliciesOnce() {
+  if (window._tlPolicies) return window._tlPolicies;
+  try {
+    const data = await api('GET', '/settings/api/working-hours');
+    const def = (data || []).find(p => p.is_default) || (data || [])[0] || null;
+    window._tlPolicies = { all: data || [], default: def };
+  } catch(_) {
+    window._tlPolicies = { all: [], default: null };
+  }
+  return window._tlPolicies;
+}
+
+async function tlbApplyTimePreset(slot) {
+  const pols = await _tlbLoadPoliciesOnce();
+  const p = pols.default;
+  // Defaults se policy assente (italiana standard 09-13 / 14-18)
+  let mS = '09:00', mE = '13:00', aS = '14:00', aE = '18:00';
+  if (p) {
+    mS = p.morning_start || mS;
+    mE = p.morning_end || mE;
+    aS = p.afternoon_start || aS;
+    aE = p.afternoon_end || aE;
+  }
+  let startTime, endTime, label;
+  if (slot === 'morning')        { startTime = mS; endTime = mE; label = 'Mattina'; }
+  else if (slot === 'afternoon') { startTime = aS; endTime = aE; label = 'Pomeriggio'; }
+  else /* full_day */            { startTime = mS; endTime = aE; label = 'Tutto il giorno'; }
+
+  const todayIso = new Date().toISOString().slice(0,10);
+  const rows = document.querySelectorAll('#tlb-assignments .tlb-ass-row');
+  if (!rows.length) {
+    toast('Nessuna riga risorsa da impostare', 'warning');
+    return;
+  }
+  rows.forEach(row => {
+    const sd = row.querySelector('.tlb-ass-start-date');
+    const st = row.querySelector('.tlb-ass-start-time');
+    const ed = row.querySelector('.tlb-ass-end-date');
+    const et = row.querySelector('.tlb-ass-end-time');
+    if (!sd || !st || !ed || !et) return;
+    if (!sd.value) sd.value = todayIso;
+    if (!ed.value) ed.value = sd.value;
+    st.value = startTime;
+    et.value = endTime;
+    tlbAssUpdateDuration(row);
+  });
+  const hint = document.getElementById('tlb-time-preset-hint');
+  if (hint) {
+    hint.textContent = `${label}: ${startTime}–${endTime}`;
+    setTimeout(() => { if (hint.textContent.includes(label)) hint.textContent = ''; }, 4000);
+  }
+  toast(`✓ Applicato "${label}" a ${rows.length} ris${rows.length===1?'orsa':'orse'} (${startTime}–${endTime})`, 'success', 2500);
 }
 
 function _tlbCollectAssignments() {

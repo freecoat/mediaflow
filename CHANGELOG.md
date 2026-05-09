@@ -1,5 +1,99 @@
 # MediaFlow — Changelog
 
+## v3.5.0-alpha.66 — Planning quick wins: paste immediato + fasce orarie + status visivo + cambio stato dal menu (9 maggio 2026)
+
+Bundle 4 punti da feedback Matteo dopo α.65: tutti pertinenti al planning,
+nessuna migrazione DB, niente nuovi endpoint backend (riusa quelli esistenti).
+
+**1. Ctrl+V incolla SUBITO (era: paste-mode interattivo)**
+- Pre-α.66: Ctrl+V entrava in "paste mode" e aspettava un click sulla
+  timeline per scegliere il punto di atterraggio.
+- α.66: **Ctrl+V** = incolla immediato a +1 giorno, stessa risorsa, stesso
+  orario. Se conflict orario sul +1, ritenta automaticamente +2..+7.
+  **Ctrl+Shift+V** = paste-mode legacy (per chi vuole scegliere il punto).
+- Voci context-menu nuove: **📅 Duplica giorno dopo** e
+  **📅 Duplica settimana dopo** (riusano `tlInstantPaste`).
+- File: `app/templates/pages/planning.html` — nuova fn `tlInstantPaste()`,
+  refactor handler `keydown` (riconosce shiftKey).
+
+**2. Quick-pick fasce orarie nel modal booking**
+- Aggiunti 3 bottoni preset sopra le righe assignment del modal toolbar:
+  **🌅 Mattina**, **☀ Pomeriggio**, **📆 Tutto il giorno**. Click → applica
+  gli orari della WorkingHoursPolicy default (`morning_start/_end` +
+  `afternoon_start/_end`) a TUTTE le righe del modal, preservando la data
+  corrente di ogni riga (default oggi se vuota).
+- Lazy-load `/settings/api/working-hours` (cached in `window._tlPolicies`).
+- Fallback hardcoded 09:00-13:00 / 14:00-18:00 / 09:00-18:00 se policy
+  non disponibile.
+- File: `planning.html` — nuovi bottoni nell'header risorse + fn
+  `tlbApplyTimePreset(slot)` + `_tlbLoadPoliciesOnce()`.
+
+**3. Status booking visivamente rinforzato + legenda**
+- CSS done rinforzato: bordo verde 3px sx (era 2px solo inset), opacity
+  .92 (era .82, troppo simile a planned), check ✓ più grande/contrastato.
+- Nuovo bottone toolbar **🏷 Legenda** che apre popover con i 5 stati
+  visivi (Planned / In corso / Fatto / Non fatto / Tentative) + 2 stati
+  trasversali (Cross-dept, Slice-locked) e suggerimento sul context-menu.
+- Pattern già esistenti per `in_progress` (glow arancione lampeggiante),
+  `not_done` (tratteggio rosso 45°), `tentative` (bordo dashed): invariati.
+- File: `planning.html` — nuovo `#tl-legend-pop`, fn `tlLegendToggle()`.
+
+**4. Cambio stato lavorazione dal context-menu**
+- Pre-α.66: il context-menu su un booking aveva solo `Modifica`,
+  `Conferma/Tentative` (BookingStatus), `Duplica`, `Reassign`, `Elimina`.
+  Per cambiare `execution_status` bisognava aprire le todo-card o il
+  modal edit.
+- α.66: aggiunte voci condizionali (filtra lo stato corrente):
+  - **▶ Inizia (in corso)** — planned/done/not_done → in_progress
+  - **✓ Marca come fatto** — qualsiasi → done
+  - **✗ Marca come non fatto** — chiede `not_done_reason` via prompt
+  - **↺ Riapri (planned)** — solo se done o not_done
+- Riusa endpoint esistente `PATCH /planning/api/bookings/{id}/execution`
+  (planning.py:3062). Nessun cambio backend.
+- File: `planning.html` — refactor del menu in `tlInstance.on('contextmenu', ...)`.
+
+**Smoke test boot**: 273 routes (invariato vs α.65, nessun nuovo endpoint),
+version 3.5.0-alpha.66. Nessun errore di import.
+
+**Verifica live richiesta a Matteo**:
+1. Pull → app boot pulito (273 route, version 3.5.0-alpha.66). Nessuna
+   migrazione DB.
+2. **Ctrl+V immediato**: seleziona 1+ booking → Ctrl+C → Ctrl+V → si crea
+   subito una replica +1 giorno con stesso orario+risorsa. Tooltip undo.
+   Test conflict: due booking su giorni consecutivi → Ctrl+C+V → il
+   secondo "scivola" a +2gg automaticamente (toast "1 spostato per
+   conflitto"). Ctrl+Shift+V → comportamento vecchio (paste-mode).
+3. **Voce context-menu duplica**: click destro su un booking → "📅
+   Duplica giorno dopo" → replica immediata. Stessa cosa "settimana dopo".
+4. **Fasce orarie**: apri modal "+ Nuovo booking" → click "🌅 Mattina"
+   → tutte le righe ricevono start=09:00 end=13:00 (o quanto da policy).
+   Stesso per "☀ Pomeriggio" e "📆 Tutto il giorno". Hint a destra mostra
+   l'intervallo applicato per 4s.
+5. **Legenda**: toolbar planning → click "🏷 Legenda" → popover con i
+   5 stati visivi e descrizione. Confronta con un booking sulla
+   timeline che ha il bordo dashed (tentative) o tratteggiato (not_done).
+6. **Cambio stato dal menu**: click destro su un booking planned →
+   menu mostra "▶ Inizia · ✓ Marca come fatto · ✗ Marca come non fatto"
+   (manca "↺ Riapri" perché ancora non in done/not_done). Marca come
+   "non fatto" → prompt motivo obbligatorio. Click destro su booking
+   done → vede solo "↺ Riapri" + altre. La timeline si aggiorna subito
+   (icona done verde, tratteggio rosso, ecc.).
+
+**Cosa NON cambia in α.66**:
+- Nessuna migrazione DB.
+- Nessun nuovo endpoint backend (riusa quelli esistenti).
+- Pattern visivi esistenti `tl-exec-in_progress`, `tl-exec-not_done`,
+  `tl-tentative`, `tl-cross-dept`, `tl-slice-locked` invariati.
+- Behavior pre-α.66 di paste-mode mantenuto su Ctrl+Shift+V.
+
+**Prossimi step (post-test live)**:
+- α.67 candidato (roadmap): Punto 5.b della roadmap billing
+  (`InvoicePayment` + cashflow timeline revenue-only).
+- (eventuali tweak feedback): se manca un bottone "Mattina+Pomeriggio
+  spezzato" o quick-pick "ultime 8h" → aggiunta semplice.
+
+---
+
 ## v3.5.0-alpha.65 — Pass-through OT al cliente (opt-in) + monte ore booking interni (9 maggio 2026)
 
 Primo step della roadmap billing α.65+ (overtime weighted). Decisioni
