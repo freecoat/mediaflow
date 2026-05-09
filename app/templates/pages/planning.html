@@ -465,7 +465,14 @@
   /* Hard conflict (drop su ferie/festa) */
   .vis-item.tl-conflict-hard { background: #991b1b !important; border-color: #7f1d1d !important; box-shadow: 0 0 0 3px rgba(220,38,38,.6) !important; animation: tl-shake .25s; }
   /* E5: Tentative bookings — bordo tratteggiato, opacità ridotta */
-  .vis-item.tl-tentative { opacity: 0.7; border-style: dashed !important; border-width: 2px !important; }
+  .vis-item.tl-tentative {
+    opacity: 0.7;
+    border-style: dashed !important;
+    border-width: 2px !important;
+    /* v3.5.0-alpha.66.4.2: banda gialla a sinistra come backup visivo se
+       l'icona ⏳ viene clippata dall'overflow su item stretti. */
+    box-shadow: inset 4px 0 0 #fbbf24;
+  }
   @keyframes tl-shake { 0%,100% { transform: translateX(0); } 25% { transform: translateX(-2px); } 75% { transform: translateX(2px); } }
   .tlb-job-item:hover { background: rgba(98,114,245,0.12); }
   .tlb-job-item:last-child { border-bottom: none; }
@@ -3198,10 +3205,13 @@ function tlBookingToItem(b) {
     done: ' <span class="tl-exec-icon" title="Fatto">✓</span>',
     not_done: ' <span class="tl-exec-icon" title="Non fatto">✗</span>',
   }[exec] || '';
+  // v3.5.0-alpha.66.4.2: statusIcon all'INIZIO del content (prima del titolo)
+  // perché vis-timeline tronca con overflow:hidden gli item stretti (l'icona
+  // a destra spariva). Suffix con spazio per separazione visiva dal titolo.
   const statusIcon = isTentative
-    ? ' <span class="tl-status-icon tl-status-tentative" title="Tentative — da confermare">⏳</span>'
+    ? '<span class="tl-status-icon tl-status-tentative" title="Tentative — da confermare">⏳</span> '
     : (p.status === 'confirmed'
-        ? ' <span class="tl-status-icon tl-status-confirmed" title="Confermato">✓</span>'
+        ? '<span class="tl-status-icon tl-status-confirmed" title="Confermato">✓</span> '
         : '');
   let classes = `tl-exec-${exec} `;
   if (isInternal) classes += 'kind-internal ';
@@ -3256,7 +3266,7 @@ function tlBookingToItem(b) {
     assignment_id: b.assignment_id,
     booking_id: b.booking_id,
     group: p.resource_id,
-    content: escapeHtml(b.title || '') + groupBadge + statusIcon + execIcon + sliceLockIcon,
+    content: statusIcon + escapeHtml(b.title || '') + groupBadge + execIcon + sliceLockIcon,
     start: b.start,
     end: b.end,
     style: 'background-color:'+color+'; border-color:'+color+';',
