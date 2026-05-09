@@ -366,21 +366,26 @@
     border-color: #ef4444 !important;
   }
   .vis-item .tl-exec-icon { margin-left: 4px; opacity: 0.9; font-weight: 700; }
-  /* v3.5.0-alpha.66.3: icone status booking (BookingStatus tentative/confirmed)
-     distinte dalle icone execution_status. Tentative grigio chiaro, confirmed
-     verde discreto. */
-  /* v3.5.0-alpha.66.4: alzato font-size a 13px e font-weight per renderle
-     visibili. ⏳ in particolare è bassa di luminanza, serve rinforzo. */
-  .vis-item .tl-status-icon {
-    margin-left: 4px;
+  /* v3.5.0-alpha.66.5: icona unica per stato unificato (5 valori).
+     Font 13px+700+text-shadow per visibilità anche su sfondi colorati.
+     Posizionata all'inizio del content (no clipping su item stretti). */
+  .vis-item .tl-state-icon {
+    margin-right: 4px;
     font-size: 13px;
     font-weight: 700;
     display: inline-block;
     line-height: 1;
     text-shadow: 0 0 3px rgba(0,0,0,.55);
   }
-  .vis-item .tl-status-tentative { color: #fde68a; }   /* giallo chiaro: più visibile di grigio */
-  .vis-item .tl-status-confirmed { color: #6ee7b7; opacity: 0.85; }
+  .vis-item .tl-state-tentative   { color: #fde68a; }   /* giallo chiaro */
+  .vis-item .tl-state-confirmed   { color: #6ee7b7; opacity: 0.85; }
+  .vis-item .tl-state-in_progress { color: #fb923c; }   /* arancio (già pulse via tl-exec-in_progress) */
+  .vis-item .tl-state-done        { color: #6ee7b7; }
+  .vis-item .tl-state-not_done    { color: #fca5a5; }
+  /* Back-compat: vecchi selettori .tl-status-* usati da legenda HTML statica */
+  .vis-item .tl-status-icon, .vis-item .tl-status-tentative, .vis-item .tl-status-confirmed {
+    /* alias verso tl-state-* (mantengo per la legenda popover che usa classi vecchie) */
+  }
   /* v3.5.0-alpha.11: highlight di tutti gli items che condividono lo stesso
      booking_id (booking multi-risorsa). Quando l'utente seleziona una riga,
      le altre del medesimo booking ricevono un alone indaco. */
@@ -1216,19 +1221,21 @@
           <input type="hidden" id="tlb-priority" value="normal">
         </div>
 
-        <!-- v3.5.0-alpha.66.4: Stato booking (BookingStatus tentative/confirmed).
-             Default tentative su create. Modificabile in edit. -->
-        <div class="form-group" id="tlb-status-group">
-          <label class="form-label">Stato booking</label>
-          <div style="display:flex; gap:14px; align-items:center; flex-wrap:wrap;">
-            <label style="display:inline-flex; align-items:center; gap:6px; cursor:pointer;">
-              <input type="radio" name="tlb-status" value="tentative" id="tlb-status-tentative" checked>
-              <span style="font-size:13px;">⏳ Tentative <span style="color:var(--text3,#888); font-size:11px;">(da confermare)</span></span>
-            </label>
-            <label style="display:inline-flex; align-items:center; gap:6px; cursor:pointer;">
-              <input type="radio" name="tlb-status" value="confirmed" id="tlb-status-confirmed">
-              <span style="font-size:13px;">✓ Confermato <span style="color:var(--text3,#888); font-size:11px;">(operativo)</span></span>
-            </label>
+        <!-- v3.5.0-alpha.66.5: Stato unificato del booking (BookingState).
+             5 valori esclusivi: tentative/confirmed/in_progress/done/not_done.
+             Cancelled NON è qui (azione separata "Elimina"). -->
+        <div class="form-group" id="tlb-state-group">
+          <label class="form-label">Stato lavorazione</label>
+          <select id="tlb-state" class="form-select" data-no-search="true" onchange="tlbOnStateChange()">
+            <option value="tentative">⏳ Tentative — da confermare</option>
+            <option value="confirmed">✓ Confermato — pianificato, non iniziato</option>
+            <option value="in_progress">▶ In lavorazione — in corso</option>
+            <option value="done">✅ Fatto — completato</option>
+            <option value="not_done">✗ Non fatto — pianificato ma non eseguito</option>
+          </select>
+          <div id="tlb-not-done-reason-row" style="display:none; margin-top:8px;">
+            <label class="form-label" style="font-size:11px;">Motivazione "Non fatto" (richiesta)</label>
+            <input type="text" id="tlb-not-done-reason" class="form-input" placeholder="es. risorsa malata, job rimandato…">
           </div>
         </div>
 
@@ -3190,30 +3197,40 @@ function tlBookingToItem(b) {
   // b.id = 'a{assignment_id}', b.assignment_id e b.booking_id presenti.
   const p = b.extendedProps || {};
   const isInternal = p.kind && p.kind.startsWith('internal_');
-  const isTentative = p.status === 'tentative'; // E5: viz tratteggiato
   const color = b.color || '#6272f5';
   const groupSize = p.group_size || 1;
   const groupBadge = groupSize > 1 ? ` <span style="background:rgba(0,0,0,.35); padding:0 4px; border-radius:3px; font-size:10px;">${p.group_position}/${groupSize}</span>` : '';
-  // v3.4.44: indicator inline execution_status sui booking timeline.
-  // v3.5.0-alpha.66.3: aggiunta icona ⏳ per BookingStatus.tentative (oltre
-  // al bordo dashed esistente) e ✓ per BookingStatus.confirmed (discreto,
-  // verde). Status icon precede l'execution icon nel content.
-  const exec = p.execution_status || 'planned';
-  const execIcon = {
-    planned: '',
-    in_progress: ' <span class="tl-exec-icon" title="In corso">▶</span>',
-    done: ' <span class="tl-exec-icon" title="Fatto">✓</span>',
-    not_done: ' <span class="tl-exec-icon" title="Non fatto">✗</span>',
-  }[exec] || '';
-  // v3.5.0-alpha.66.4.2: statusIcon all'INIZIO del content (prima del titolo)
-  // perché vis-timeline tronca con overflow:hidden gli item stretti (l'icona
-  // a destra spariva). Suffix con spazio per separazione visiva dal titolo.
-  const statusIcon = isTentative
-    ? '<span class="tl-status-icon tl-status-tentative" title="Tentative — da confermare">⏳</span> '
-    : (p.status === 'confirmed'
-        ? '<span class="tl-status-icon tl-status-confirmed" title="Confermato">✓</span> '
-        : '');
-  let classes = `tl-exec-${exec} `;
+  // v3.5.0-alpha.66.5: stato unificato `state` (5 valori esclusivi + cancelled).
+  // Sostituisce le 2 icone separate (status + execution_status) di α.66.4.
+  // Fonte canonica: extendedProps.state. Fallback derivazione legacy se assente.
+  let state = p.state;
+  if (!state) {
+    if (p.status === 'cancelled') state = 'cancelled';
+    else if (p.status === 'tentative') state = 'tentative';
+    else if (p.execution_status === 'in_progress') state = 'in_progress';
+    else if (p.execution_status === 'done') state = 'done';
+    else if (p.execution_status === 'not_done') state = 'not_done';
+    else state = 'confirmed';
+  }
+  const isTentative = (state === 'tentative');  // back-compat tooltip
+  // 1 icona inline (all'inizio del content per evitare clipping su item stretti)
+  const STATE_ICON = {
+    tentative:   '<span class="tl-state-icon tl-state-tentative" title="Tentative — da confermare">⏳</span> ',
+    confirmed:   '<span class="tl-state-icon tl-state-confirmed" title="Confermato">✓</span> ',
+    in_progress: '<span class="tl-state-icon tl-state-in_progress" title="In lavorazione">▶</span> ',
+    done:        '<span class="tl-state-icon tl-state-done" title="Fatto">✅</span> ',
+    not_done:    '<span class="tl-state-icon tl-state-not_done" title="Non fatto">✗</span> ',
+    cancelled:   '',  // cancelled non dovrebbe finire qui (filtro list_bookings)
+  };
+  const stateIcon = STATE_ICON[state] || '';
+  // Classi CSS: riusa quelle esistenti. tentative → tl-tentative; in_progress
+  // /done/not_done → tl-exec-* esistenti (CSS inv ariato). state diventa
+  // l'unica fonte ma le classi CSS restano le stesse per minimizzare diff.
+  let classes = '';
+  if (state === 'in_progress') classes += 'tl-exec-in_progress ';
+  else if (state === 'done')    classes += 'tl-exec-done ';
+  else if (state === 'not_done') classes += 'tl-exec-not_done ';
+  else                          classes += 'tl-exec-planned ';  // include tentative+confirmed
   if (isInternal) classes += 'kind-internal ';
   if (isTentative) classes += 'tl-tentative ';
   // v3.5.0-alpha.32: badge persistente cross-department. Backend espone
@@ -3260,13 +3277,19 @@ function tlBookingToItem(b) {
     sliceLockLine = `\n🔒 Fatturato in periodo ${p.slice_lock.period_start} → ${p.slice_lock.period_end}${inv}`;
     sliceLockIcon = ' <span class="tl-slice-icon" title="Fatturato">🔒</span>';
   }
-  const tooltip = `${b.title || ''}${isTentative ? ' (tentative)' : ''}\n🕐 ${_sLab} → ${_eLab}\n⏱ Durata booking: ${_hLab}${jobDurLine}\n${exec}${prioLab}${crossDeptLine}${sliceLockLine}`;
+  // v3.5.0-alpha.66.5: tooltip include 1 sola label di stato unificato.
+  const STATE_LABEL_IT = {
+    tentative: 'Tentative', confirmed: 'Confermato', in_progress: 'In lavorazione',
+    done: 'Fatto', not_done: 'Non fatto', cancelled: 'Annullato',
+  };
+  const stateLab = STATE_LABEL_IT[state] || state;
+  const tooltip = `${b.title || ''}\n🕐 ${_sLab} → ${_eLab}\n⏱ Durata booking: ${_hLab}${jobDurLine}\nStato: ${stateLab}${prioLab}${crossDeptLine}${sliceLockLine}`;
   return {
     id: b.id,
     assignment_id: b.assignment_id,
     booking_id: b.booking_id,
     group: p.resource_id,
-    content: statusIcon + escapeHtml(b.title || '') + groupBadge + execIcon + sliceLockIcon,
+    content: stateIcon + escapeHtml(b.title || '') + groupBadge + sliceLockIcon,
     start: b.start,
     end: b.end,
     style: 'background-color:'+color+'; border-color:'+color+';',
@@ -4753,28 +4776,37 @@ async function _doRenderTimeline(preserveWindow=false) {
       const assignmentId = String(props.item).startsWith('a') ? String(props.item).substring(1) : props.item;
       const it = items.find(x => x.id === props.item);
       const origBooking = bookings.find(b => b.id === props.item);
-      const isTentative = origBooking && origBooking.extendedProps && origBooking.extendedProps.status === 'tentative';
-      // v3.5.0-alpha.66.4: voci status (BookingStatus) raccolte in un submenu
-      // dedicato per coerenza con submenu Marcature (execution_status).
-      const statusSubmenu = [
-        isTentative
-          ? {label: '✓  Conferma booking', value: 'confirm'}
-          : {label: '⏳  Rendi tentative', value: 'tentative'},
-      ];
-      // v3.5.0-alpha.66.3: voci execution_status raccolte in submenu "Marcature".
-      // v3.5.0-alpha.66.4: ora submenu nativo (parent resta visibile, hover apre).
-      const exec = (origBooking && origBooking.extendedProps && origBooking.extendedProps.execution_status) || 'planned';
-      const execSubmenu = [];
-      if (exec !== 'in_progress') execSubmenu.push({label:'▶  Inizia (in corso)', value:'exec_in_progress'});
-      if (exec !== 'done')        execSubmenu.push({label:'✓  Marca come fatto', value:'exec_done'});
-      if (exec !== 'not_done')    execSubmenu.push({label:'✗  Marca come non fatto', value:'exec_not_done'});
-      if (exec === 'done' || exec === 'not_done')
-                                  execSubmenu.push({label:'↺  Riapri (planned)', value:'exec_planned'});
+      // v3.5.0-alpha.66.5: 1 solo submenu "Stato lavorazione" con 5 voci esclusive.
+      // Sostituisce i 2 submenu separati (BookingStatus + execution_status) di α.66.4.
+      // Resolve "state_<value>" con value uno di tentative/confirmed/in_progress/
+      // done/not_done. Esclude lo stato corrente.
+      const ext = (origBooking && origBooking.extendedProps) || {};
+      let curState = ext.state;
+      if (!curState) {
+        // Fallback derivazione legacy
+        if (ext.status === 'cancelled') curState = 'cancelled';
+        else if (ext.status === 'tentative') curState = 'tentative';
+        else if (ext.execution_status === 'in_progress') curState = 'in_progress';
+        else if (ext.execution_status === 'done') curState = 'done';
+        else if (ext.execution_status === 'not_done') curState = 'not_done';
+        else curState = 'confirmed';
+      }
+      const STATE_LABELS = {
+        tentative:   '⏳ Tentative',
+        confirmed:   '✓ Confermato',
+        in_progress: '▶ In lavorazione',
+        done:        '✅ Fatto',
+        not_done:    '✗ Non fatto',
+      };
+      const stateSubmenu = [];
+      ['tentative','confirmed','in_progress','done','not_done'].forEach(s => {
+        if (s === curState) return;  // skip stato corrente
+        stateSubmenu.push({label: '   ' + STATE_LABELS[s], value: 'state_' + s});
+      });
 
       const choice = await tlContextMenu(x, y, [
         {label: '✎  Modifica…', value: 'edit'},
-        {label: '🏷  Marcature', submenu: execSubmenu},
-        {label: (isTentative ? '⏳ Stato: Tentative' : '✓ Stato: Confermato'), submenu: statusSubmenu},
+        {label: '🏷  Stato: ' + STATE_LABELS[curState].slice(2).trim(), submenu: stateSubmenu},
         {label: '⊕  Duplica qui', value: 'duplicate'},
         {label: '📅  Duplica giorno dopo', value: 'duplicate_day'},
         {label: '📅  Duplica settimana dopo', value: 'duplicate_week'},
@@ -4788,14 +4820,26 @@ async function _doRenderTimeline(preserveWindow=false) {
           const bid = origBooking ? origBooking.booking_id : null;
           if (bid) await tlbOpenEdit(bid);
           else if (it) tlbOpenWithRange(it.group, new Date(it.start), new Date(it.end));
-        } else if (choice === 'confirm' || choice === 'tentative') {
-          const newStatus = choice === 'confirm' ? 'confirmed' : 'tentative';
+        } else if (choice && choice.toString().startsWith('state_')) {
+          // v3.5.0-alpha.66.5: cambio stato unificato via PATCH /state.
+          // Sostituisce i vecchi branch confirm/tentative/exec_* di α.66.4.
+          const newState = choice.replace(/^state_/, '');
           const bid = origBooking ? origBooking.booking_id : null;
           if (!bid) throw new Error('Booking non trovato');
+          let reason = '';
+          if (newState === 'not_done') {
+            reason = prompt('Motivo "Non fatto" (richiesto):', '') || '';
+            if (!reason.trim()) { toast('Motivo obbligatorio per "Non fatto"', 'warning'); return; }
+          }
           const fd = new FormData();
-          fd.append('status', newStatus);
-          await api('PUT', `/planning/api/bookings/${bid}`, fd);
-          toast(`Booking ${newStatus === 'confirmed' ? 'confermato' : 'reso tentative'}`, 'success');
+          fd.append('state', newState);
+          if (reason) fd.append('not_done_reason', reason);
+          await api('PATCH', `/planning/api/bookings/${bid}/state`, fd);
+          const STATE_LBL = {
+            tentative:'reso tentative', confirmed:'confermato',
+            in_progress:'avviato', done:'marcato fatto', not_done:'marcato non fatto',
+          };
+          toast(`Booking ${STATE_LBL[newState] || newState}`, 'success');
           renderTimeline(true);
         } else if (choice === 'duplicate') {
           const itemCopy = {
@@ -4811,25 +4855,6 @@ async function _doRenderTimeline(preserveWindow=false) {
           // tlInstantPaste con dayOffset=1 o 7 e clipboard locale (1 booking).
           const days = choice === 'duplicate_week' ? 7 : 1;
           await tlInstantPaste([origBooking], days);
-        } else if (choice && choice.toString().startsWith('exec_')) {
-          // v3.5.0-alpha.66: cambio execution_status via endpoint dedicato.
-          // Per not_done richiede un reason. Il context-menu opera sempre su
-          // un singolo booking (right-click su 1 item).
-          const newExec = choice.replace(/^exec_/, '');
-          const bid = origBooking ? origBooking.booking_id : null;
-          if (!bid) throw new Error('Booking non trovato');
-          let reason = '';
-          if (newExec === 'not_done') {
-            reason = prompt('Motivo "non fatto" (richiesto):', '') || '';
-            if (!reason.trim()) { toast('Motivo obbligatorio per "non fatto"', 'warning'); return; }
-          }
-          const fd = new FormData();
-          fd.append('execution_status', newExec);
-          if (reason) fd.append('not_done_reason', reason);
-          await api('PATCH', `/planning/api/bookings/${bid}/execution`, fd);
-          const labels = {planned:'rimesso planned', in_progress:'avviato', done:'marcato fatto', not_done:'marcato non fatto'};
-          toast(`Booking ${labels[newExec] || newExec}`, 'success');
-          renderTimeline(true);
         } else if (choice === 'reassign') {
           const choices = RESOURCES_SEED.map(r => ({label: r.name, value: r.id}));
           const newRes = await tlContextMenu(x, y, choices);
@@ -5873,11 +5898,13 @@ function _tlbReset() {
   document.getElementById('tlb-notes').value = '';
   // v3.5.0-alpha.22: priority semaforo
   tlbSetPriorityUI('normal');
-  // v3.5.0-alpha.66.4: reset BookingStatus a tentative (default per create)
-  const sT = document.getElementById('tlb-status-tentative');
-  const sC = document.getElementById('tlb-status-confirmed');
-  if (sT) sT.checked = true;
-  if (sC) sC.checked = false;
+  // v3.5.0-alpha.66.5: reset state a tentative (default per create)
+  const stEl = document.getElementById('tlb-state');
+  if (stEl) stEl.value = 'tentative';
+  const ndr = document.getElementById('tlb-not-done-reason');
+  if (ndr) ndr.value = '';
+  const ndrRow = document.getElementById('tlb-not-done-reason-row');
+  if (ndrRow) ndrRow.style.display = 'none';
   document.getElementById('tlb-assignments').innerHTML = '';
   // v3.5.0-alpha.66.1: nascondi warning duplicate-overlap residuo
   const dw = document.getElementById('tlb-duplicate-warning');
@@ -6489,12 +6516,25 @@ async function tlbOpenEdit(bookingId) {
   if (p.notes) document.getElementById('tlb-notes').value = p.notes;
   // v3.5.0-alpha.22: pre-fill priority in edit
   tlbSetPriorityUI(p.priority || 'normal');
-  // v3.5.0-alpha.66.4: pre-fill status in edit
-  const sT2 = document.getElementById('tlb-status-tentative');
-  const sC2 = document.getElementById('tlb-status-confirmed');
-  if (sT2 && sC2) {
-    if (p.status === 'confirmed') { sC2.checked = true; sT2.checked = false; }
-    else                          { sT2.checked = true; sC2.checked = false; }
+  // v3.5.0-alpha.66.5: pre-fill state in edit. Fallback su status legacy se
+  // backend non espone ancora state (compat).
+  const stEl2 = document.getElementById('tlb-state');
+  if (stEl2) {
+    let stateVal = p.state;
+    if (!stateVal) {
+      // Fallback derivazione legacy
+      if (p.status === 'cancelled') stateVal = 'cancelled';
+      else if (p.status === 'tentative') stateVal = 'tentative';
+      else if (p.execution_status === 'in_progress') stateVal = 'in_progress';
+      else if (p.execution_status === 'done') stateVal = 'done';
+      else if (p.execution_status === 'not_done') stateVal = 'not_done';
+      else stateVal = 'confirmed';
+    }
+    stEl2.value = stateVal;
+    // Pre-fill motivazione non-done se presente
+    const ndr2 = document.getElementById('tlb-not-done-reason');
+    if (ndr2) ndr2.value = p.not_done_reason || '';
+    tlbOnStateChange();  // mostra/nascondi reason row
   }
   if (p.job_id) {
     // v3.4.53: dal Job risaliamo alla Quote (job_id resta come puntatore interno)
@@ -6547,6 +6587,14 @@ async function tlbOpenEdit(bookingId) {
   // edit (dato sporco pre-α.63). Mostra warning + bordo rosso sulle righe.
   _tlbCheckDuplicateOverlaps();
   openModal('modal-tl-booking');
+}
+
+// v3.5.0-alpha.66.5: handler per il select stato unificato.
+// Mostra il campo motivazione SOLO quando state=not_done (richiesto dal backend).
+function tlbOnStateChange() {
+  const st = (document.getElementById('tlb-state') || {}).value || 'tentative';
+  const row = document.getElementById('tlb-not-done-reason-row');
+  if (row) row.style.display = (st === 'not_done') ? '' : 'none';
 }
 
 // v3.5.0-alpha.22: semaforo priorità nel modal create/edit booking.
@@ -7038,11 +7086,26 @@ async function tlbSubmit() {
   // permettere al backend di aggiornare anche al downgrade.
   const prio = (document.getElementById('tlb-priority') || {}).value || 'normal';
   fd.append('priority', prio);
-  // v3.5.0-alpha.66.4: BookingStatus (tentative/confirmed). Default tentative
-  // su create, sempre inviato in edit per permettere il toggle.
-  const statusRadio = document.querySelector('input[name="tlb-status"]:checked');
-  const bookingStatus = statusRadio ? statusRadio.value : 'tentative';
-  fd.append('status', bookingStatus);
+  // v3.5.0-alpha.66.5: stato unificato (5 valori esclusivi). Backend POST/PUT
+  // accettano `status` legacy + sincronizzano state via mapping. Per state
+  // in_progress/done/not_done facciamo PATCH /state DOPO il save (vedi sotto).
+  const stateValue = (document.getElementById('tlb-state') || {}).value || 'tentative';
+  // Validazione client motivazione non-done
+  let notDoneReason = '';
+  if (stateValue === 'not_done') {
+    notDoneReason = (document.getElementById('tlb-not-done-reason') || {}).value || '';
+    if (!notDoneReason.trim()) {
+      toast('Motivazione obbligatoria per "Non fatto"', 'warning');
+      return;
+    }
+  }
+  // Mappo state → status legacy per il POST/PUT (back-compat)
+  const _stateToStatus = {
+    tentative: 'tentative', confirmed: 'confirmed',
+    in_progress: 'confirmed', done: 'confirmed', not_done: 'confirmed',
+    cancelled: 'cancelled',
+  };
+  fd.append('status', _stateToStatus[stateValue] || 'tentative');
   // E3 v3.4.17: smart split server-side (solo per nuovo, non in edit)
   const smartSplit = document.getElementById('tlb-smart-split');
   if (smartSplit && smartSplit.checked && !editingId) fd.append('smart_split', 'true');
@@ -7069,6 +7132,19 @@ async function tlbSubmit() {
   try {
     if (editingId) {
       await api('PUT', `/planning/api/bookings/${editingId}`, fd);
+      // v3.5.0-alpha.66.5: dopo PUT, se state è in_progress/done/not_done
+      // chiamo PATCH /state per allineare execution_status (PUT accetta solo
+      // status legacy → tentative/confirmed/cancelled, non stati esecutivi).
+      if (['in_progress','done','not_done'].includes(stateValue)) {
+        const stateFd = new FormData();
+        stateFd.append('state', stateValue);
+        if (notDoneReason) stateFd.append('not_done_reason', notDoneReason);
+        try {
+          await api('PATCH', `/planning/api/bookings/${editingId}/state`, stateFd);
+        } catch(stErr) {
+          toast('Stato esecuzione non aggiornato: ' + (stErr.message||''), 'warning', 4500);
+        }
+      }
       toast('Booking aggiornato', 'success');
       // v3.5.0-alpha.63: se era richiesta estensione serie, fai la chiamata ora
       if (extendAsSeriesArgs) {
@@ -7111,7 +7187,17 @@ async function tlbSubmit() {
       toast(`📩 Richiesta inviata (${r.notified_count} approvatori notificati)`, 'success', 4000);
       closeModal('modal-tl-booking');
     } else {
-      await api('POST', '/planning/api/bookings', fd);
+      const created = await api('POST', '/planning/api/bookings', fd);
+      // v3.5.0-alpha.66.5: dopo POST, se state è in_progress/done/not_done
+      // allinea via PATCH /state (POST accetta solo status legacy).
+      if (created && created.id && ['in_progress','done','not_done'].includes(stateValue)) {
+        const stateFd = new FormData();
+        stateFd.append('state', stateValue);
+        if (notDoneReason) stateFd.append('not_done_reason', notDoneReason);
+        try {
+          await api('PATCH', `/planning/api/bookings/${created.id}/state`, stateFd);
+        } catch(stErr) { /* non blocca: booking creato col status legacy */ }
+      }
       toast('Booking creato', 'success');
       closeModal('modal-tl-booking');
       renderTimeline(true);

@@ -1,5 +1,83 @@
 # MediaFlow — Changelog
 
+## v3.5.0-alpha.66.5 — Stato unificato BookingState (5 valori esclusivi, hard refactor enum DB) (9 maggio 2026)
+
+Rifusione architetturale richiesta da Matteo: i 2 enum DB ortogonali
+`BookingStatus` (tentative/confirmed/cancelled) + `BookingExecutionStatus`
+(planned/in_progress/done/not_done) ora vivono come **una sola dimensione**
+di 5 stati esclusivi nel ciclo di vita.
+
+**Sequenza** (transizioni libere fra tutti i 5):
+```
+tentative → confirmed → in_progress → done | not_done
+```
+**Cancelled** è soft-delete (azione separata via "Elimina assegnazione" /
+"Elimina booking"), non appare nel selettore UI.
+
+**Modello** (`app/models/models.py`):
+- Nuovo enum `BookingState` con 6 valori (i 5 + cancelled).
+- Nuova colonna `Booking.state: BookingState = tentative` (canonica).
+- Mapping `BOOKING_STATE_TO_LEGACY` + helper `compute_state_from_legacy`.
+- Mantenuti `status` e `execution_status` come **campi derivati** per
+  back-compat con slice-lock, billing-slice-guard, recompute_cost_line_actual,
+  cost-report. Sincronizzati automaticamente via
+  `app/services/booking_state.py:apply_state_to_booking()`.
+
+**Migrazione DB** (`app/main.py`):
+- ALTER TABLE bookings ADD COLUMN state (default tentative)
+- UPDATE: popola state da (status, execution_status) per ogni riga
+  esistente. Idempotente, eseguita al boot.
+
+**Endpoint backend** (`app/routers/planning.py`):
+- Nuovo `PATCH /api/bookings/{id}/state` (Form `state`, opt `not_done_reason`,
+  opt `force_slice_unlock`). Sincronizza i 3 campi via
+  `apply_state_to_booking`. Slice-lock check (skip tentative, conferma per
+  confirmed e oltre). Notifiche selettive su `done`/`not_done`.
+- API `/api/bookings` espone `extendedProps.state` (canonical).
+- Vecchi endpoint `PUT /bookings/{id}` (status) e `PATCH /bookings/{id}/execution`
+  ancora disponibili — sincronizzano automaticamente `state` quando
+  cambiano i campi legacy (back-compat con AI, multi-move, ecc.).
+
+**UI** (`app/templates/pages/planning.html`):
+- Modal: rimossi i 2 campi separati (radio `tentative/confirmed` α.66.4 +
+  submenu Marcature). Sostituiti da **1 unico select dropdown "Stato lavorazione"**
+  con 5 valori. Campo motivazione mostrato solo per `not_done`.
+- Context-menu: rimossi i 2 submenu separati. Sostituito da **1 unico submenu
+  "🏷 Stato: <stato corrente> ▸"** con le 4 voci diverse dallo stato corrente.
+- Timeline render: 1 sola icona inline per state (tentative ⏳, confirmed ✓,
+  in_progress ▶, done ✅, not_done ✗) all'inizio del content. Tooltip mostra
+  unica label IT. CSS `.tl-state-*` con classi unificate.
+- Pre-fill in edit con fallback derivazione legacy se backend non espone
+  ancora state.
+
+**Smoke**: 277 routes (+1 endpoint), version 3.5.0-alpha.66.5. Mapping
+state ↔ legacy verificato con tutti i 6 valori + edge case "tentative + done"
+(status precede → tentative).
+
+**Verifica live** (hard-refresh):
+1. Pull → migrazione automatica al boot. Log: `[auto-migrate] bookings.state
+   mancante -> ALTER TABLE + populate`. Booking esistenti mantengono lo
+   stato corretto (tentative resta tentative, confirmed+done diventa done, ecc).
+2. Click destro su booking → "🏷 Stato: <stato>" → submenu con 4 voci
+   diverse dallo stato corrente. Click → toast + timeline aggiornata.
+3. Doppio-click → modal con select "Stato lavorazione" pre-compilato.
+   Cambia a "✗ Non fatto" → appare campo motivazione obbligatorio.
+4. Booking tentative → ⏳ giallo + bordo dashed + banda gialla sx.
+   Booking confirmed → ✓ verde discreto. In progress → ▶ + glow arancione.
+   Done → ✅ + bordo verde + check ::after. Not done → ✗ + tratteggio rosso.
+5. Slice-lock invariato: tentative passa, confirmed e oltre richiedono
+   conferma + force_slice_unlock automatico via `api()` global.
+
+**Cosa NON cambia in α.66.5**:
+- Slice-lock, billing, cost-report, recompute leggono ancora `status` e
+  `execution_status` legacy → sincronizzati automaticamente, niente regressione.
+- Schema base (priority, kind, count_in_costs, overtime_status) invariato.
+- Pattern submenu nativo (α.66.4) invariato.
+- API response include sia `state` (nuovo) che `status`+`execution_status`
+  (legacy) per back-compat client che non sono ancora migrati.
+
+---
+
 ## v3.5.0-alpha.66.4 — Icone status più visibili + submenu inline + tentative nel modal (9 maggio 2026)
 
 3 fix da feedback Matteo dopo α.66.3:

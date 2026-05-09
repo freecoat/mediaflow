@@ -47,13 +47,63 @@ class BookingPriority(str, enum.Enum):
     high = "high"
 
 class BookingExecutionStatus(str, enum.Enum):
-    """Stato di esecuzione del booking dal punto di vista dell'operatore (v3.4.32).
-    Ortogonale a `status` (che esprime intenzione di pianificazione).
-    `not_done` richiede `not_done_reason` valorizzato."""
+    """[DEPRECATED v3.5.0-alpha.66.5] Stato di esecuzione del booking.
+    Manteniamo per back-compat (slice-lock, billing, recompute leggono questo
+    e BookingStatus). La fonte canonica è ora `Booking.state` (BookingState).
+    Sincronizzato automaticamente quando state cambia."""
     planned = "planned"
     in_progress = "in_progress"
     done = "done"
     not_done = "not_done"
+
+
+class BookingState(str, enum.Enum):
+    """Ciclo di vita unificato del booking (v3.5.0-alpha.66.5).
+
+    5 stati esclusivi nel selettore UI + cancelled per soft-delete (azione
+    separata via "Elimina"). Sostituisce concettualmente `BookingStatus` e
+    `BookingExecutionStatus` che restano nel DB come campi DERIVATI per
+    back-compat con slice-lock/billing/recompute.
+
+    Sequenza tipica (transizioni libere): tentative → confirmed → in_progress
+    → done | not_done. Cancelled è soft-delete, non appare nel selettore."""
+    tentative = "tentative"
+    confirmed = "confirmed"
+    in_progress = "in_progress"
+    done = "done"
+    not_done = "not_done"
+    cancelled = "cancelled"
+
+
+# v3.5.0-alpha.66.5 — Mapper canonico state → (status, execution_status).
+# Quando si cambia BookingState, status+execution_status devono essere
+# sincronizzati a questo. Importato dal sync helper.
+BOOKING_STATE_TO_LEGACY: dict = {
+    "tentative":   ("tentative",  "planned"),
+    "confirmed":   ("confirmed",  "planned"),
+    "in_progress": ("confirmed",  "in_progress"),
+    "done":        ("confirmed",  "done"),
+    "not_done":    ("confirmed",  "not_done"),
+    "cancelled":   ("cancelled",  "planned"),
+}
+
+
+def compute_state_from_legacy(status_value: str, execution_value: str) -> "BookingState":
+    """Migrazione 1-shot: deriva BookingState dai 2 campi legacy.
+    1. cancelled → cancelled (soft-delete)
+    2. tentative + qualsiasi execution → tentative (status precede)
+    3. confirmed + execution → in_progress/done/not_done o confirmed (planned)"""
+    if status_value == "cancelled":
+        return BookingState.cancelled
+    if status_value == "tentative":
+        return BookingState.tentative
+    if execution_value == "in_progress":
+        return BookingState.in_progress
+    if execution_value == "done":
+        return BookingState.done
+    if execution_value == "not_done":
+        return BookingState.not_done
+    return BookingState.confirmed
 
 class BookingOvertimeStatus(str, enum.Enum):
     """Workflow approvazione straordinari (v3.4.32).
@@ -971,7 +1021,15 @@ class Booking(Base):
     status: Mapped[BookingStatus] = mapped_column(SAEnum(BookingStatus), default=BookingStatus.tentative)
     kind: Mapped[BookingKind] = mapped_column(SAEnum(BookingKind), default=BookingKind.project)
     notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
-    # ── Booking esecutivo (v3.4.32) ─────────────────────────────
+    # ── Stato unificato (v3.5.0-alpha.66.5) ─────────────────────
+    # Campo CANONICO del ciclo di vita del booking. UI mostra solo questo.
+    # `status` e `execution_status` sotto restano per back-compat con
+    # slice-lock, billing, recompute. Sincronizzati automaticamente via
+    # `apply_state_to_booking()` quando state cambia.
+    state: Mapped[BookingState] = mapped_column(
+        SAEnum(BookingState), default=BookingState.tentative, index=True
+    )
+    # ── Booking esecutivo (v3.4.32) — DEPRECATED, derivato da state ────
     priority: Mapped[BookingPriority] = mapped_column(
         SAEnum(BookingPriority), default=BookingPriority.normal, index=True
     )

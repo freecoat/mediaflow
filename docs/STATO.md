@@ -8,6 +8,50 @@
 
 ## Versione corrente
 
+**v3.5.0-alpha.66.5** — 9 maggio 2026 — Stato unificato BookingState (refactor enum DB)
+
+Rifusione architetturale: i 2 enum DB ortogonali `BookingStatus` +
+`BookingExecutionStatus` ora vivono come **una sola dimensione** di 5 stati
+esclusivi nel ciclo di vita.
+
+**Sequenza** (transizioni libere):
+`tentative → confirmed → in_progress → done | not_done`
+
+Cancelled è soft-delete (azione "Elimina"), non appare nel selettore.
+
+**Chiuso α.66.5:**
+- ✅ Modello: nuovo enum `BookingState` + colonna `Booking.state` canonica.
+  Helper `apply_state_to_booking` sincronizza state + status + execution_status.
+  Helper `compute_state_from_legacy` per migrazione.
+- ✅ Migrazione DB auto al boot: ALTER TABLE bookings ADD state + UPDATE
+  popolamento da (status, execution_status). Idempotente.
+- ✅ Endpoint nuovo `PATCH /api/bookings/{id}/state` + `state` nell'API
+  response. Slice-lock + force_slice_unlock supportati. Notifiche su
+  done/not_done. Vecchi endpoint sincronizzano automaticamente state.
+- ✅ Modal: 1 select unico "Stato lavorazione" (5 valori). Motivazione
+  appare solo per `not_done`.
+- ✅ Context-menu: 1 submenu "🏷 Stato: <corrente>" con 4 voci esclusive
+  (lo stato corrente è filtrato).
+- ✅ Timeline render: 1 sola icona inline (⏳/✓/▶/✅/✗) all'inizio del
+  content. CSS unificato `.tl-state-*`.
+- ✅ Tutti i call site backend legacy (slice-lock/billing/recompute/AI)
+  funzionano senza modifiche perché status+execution_status sono
+  sincronizzati automaticamente.
+
+**Smoke**: 277 routes (+1 endpoint), version 3.5.0-alpha.66.5. Mapping
+state ↔ legacy verificato per tutti i 6 valori + edge case.
+
+**Verifica live** (hard-refresh!):
+1. Pull → migrazione automatica al boot.
+2. Click destro su booking → "🏷 Stato" → submenu 4 voci → cambio.
+3. Doppio-click → modal con select "Stato lavorazione" pre-compilato.
+4. Booking tentative ⏳ giallo + bordo dashed + banda gialla sx.
+   Confirmed ✓ verde discreto. In progress ▶ + glow. Done ✅ + bordo verde.
+   Not done ✗ + tratteggio rosso.
+5. Slice-lock: tentative passa, confirmed+ richiedono conferma.
+
+---
+
 **v3.5.0-alpha.66.4** — 9 maggio 2026 — Icone status più visibili + submenu inline + tentative nel modal
 
 3 fix da feedback Matteo dopo α.66.3:

@@ -8,6 +8,7 @@ from app.models.models import (
     Client, ClientWork, Project, ProjectStatus, ProjectMilestone,
     Job, JobStatus, Booking, BookingAssignment, BookingChange, BookingStatus, BookingKind,
     BookingPriority, BookingExecutionStatus, BookingOvertimeStatus,
+    BookingState, BOOKING_STATE_TO_LEGACY, compute_state_from_legacy,
     JobResourceAssignment, JobCostLine,
     TimePunch, PunchKind,
     Timesheet, Expense, Invoice, InvoiceLine, InvoiceStatus,

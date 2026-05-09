@@ -8,7 +8,7 @@ from sqlalchemy import or_, func
 from app.database import get_db
 from app.models import (
     Job, JobStatus, Client, Project, Booking, BookingAssignment, BookingChange,
-    BookingStatus, BookingKind, BookingExecutionStatus, BookingPriority,
+    BookingStatus, BookingKind, BookingExecutionStatus, BookingPriority, BookingState,
     Resource, ResourceType, JobCostLine, Department, User,
     WorkingHoursPolicy, ResourceUnavailability, UnavailabilityKind, UnavailabilityStatus,
     ResourcePreset, TimePunch, PunchKind,
@@ -890,6 +890,10 @@ async def list_bookings(
                 "cost_line_description": b.cost_line.description if b.cost_line else None,
                 "resource_id": a.resource_id,
                 "status": b.status.value if hasattr(b.status, "value") else b.status,
+                # v3.5.0-alpha.66.5 — stato unificato (5 valori esclusivi + cancelled).
+                # Fonte canonica per la UI. status + execution_status restano
+                # per back-compat ma sono derivati da state.
+                "state": b.state.value if hasattr(b.state, "value") else b.state,
                 "notes": b.notes,
                 "group_size": sizes.get(b.id, 1),
                 "group_position": pos_map.get(a.id, 1),
@@ -1669,6 +1673,12 @@ async def update_booking(
     b.job_cost_line_id = new_line_id
     if status is not None:
         b.status = status
+        # v3.5.0-alpha.66.5: sincronizza state con i 2 enum legacy.
+        # Se status diventa tentative/cancelled, state segue. Se status diventa
+        # confirmed e execution_status era planned/in_progress/done/not_done,
+        # state riflette quello.
+        from app.models import compute_state_from_legacy
+        b.state = compute_state_from_legacy(b.status.value, b.execution_status.value)
     if notes is not None:
         b.notes = notes
     if priority is not None and str(priority).strip():
@@ -3333,6 +3343,109 @@ async def update_booking_priority(
     return {"id": b.id, "priority": priority.value}
 
 
+@router.patch("/api/bookings/{booking_id}/state")
+async def update_booking_state(
+    booking_id: int,
+    request: Request,
+    state: BookingState = Form(...),
+    not_done_reason: Optional[str] = Form(None),
+    force_slice_unlock: bool = Form(False),
+    db: Session = Depends(get_db),
+):
+    """v3.5.0-alpha.66.5 — Cambio stato unificato del booking.
+
+    Sostituisce concettualmente `PUT /api/bookings/{id}` (per status) e
+    `PATCH /api/bookings/{id}/execution` (per execution_status). Riceve
+    UN solo `state` (5 valori esclusivi + cancelled per soft-delete) e
+    sincronizza `state` + `status` + `execution_status` coerentemente
+    via `apply_state_to_booking()`.
+
+    Transizioni libere (qualsiasi → qualsiasi). Su transizione a `not_done`
+    richiede motivazione. Slice-lock: skip per tentative, conferma per
+    confirmed/in_progress/done/not_done.
+    """
+    from app.services.booking_state import apply_state_to_booking, state_label
+
+    b = db.query(Booking).options(joinedload(Booking.job)).filter(
+        Booking.id == booking_id,
+        Booking.tenant_id == CURRENT_TENANT,
+    ).first()
+    if not b:
+        raise HTTPException(404, "Booking non trovato")
+    if not _can_edit_booking_execution(request, db, b):
+        raise HTTPException(403, "Non puoi modificare lo stato di questo booking")
+    if state == BookingState.not_done and not (not_done_reason or "").strip():
+        raise HTTPException(400, "Motivazione obbligatoria per stato 'Non fatto'")
+
+    # Slice-lock check (skip per tentative; conferma per confirmed e oltre)
+    _assert_no_blocking_slice(db, b, force=force_slice_unlock)
+
+    user = current_user_optional(request)
+    sync = apply_state_to_booking(b, state)
+    if state == BookingState.not_done:
+        b.not_done_reason = (not_done_reason or "").strip()
+    else:
+        b.not_done_reason = None
+        # Invariante v3.4.38: count_in_costs ↔ not_done (pool). Reset se non più not_done.
+        if b.count_in_costs:
+            b.count_in_costs = False
+
+    summary_text = f"Stato: {state_label(sync['old_state'])} → {state_label(state)}"
+    _log_change(db, b.id, "state", summary_text, sync)
+
+    # Sync cost-line: ogni cambio di state che impatta on/off "done" tocca le ore
+    try:
+        from app.services.cost_line_sync import recompute_for_booking
+        recompute_for_booking(db, b)
+    except Exception as e:
+        print(f"[update_booking_state] cost line sync failed: {e}")
+    db.commit()
+    db.refresh(b)
+
+    # Notifiche selettive: solo done/not_done emettono notifica (allineato con
+    # update_booking_execution legacy). Pattern notify_role su producer/manager.
+    if state in (BookingState.done, BookingState.not_done):
+        from app.services import notification_service as notif_svc
+        from app.models import NotificationKind, NotificationSeverity
+        is_not_done = (state == BookingState.not_done)
+        title = (
+            f"❌ Booking non fatto: {_booking_short_label(b)}"
+            if is_not_done
+            else f"✅ Booking completato: {_booking_short_label(b)}"
+        )
+        body = (
+            f"Motivazione: {b.not_done_reason}"
+            if is_not_done and b.not_done_reason else None
+        )
+        link = f"/jobs/{b.job_id}" if b.job_id else "/planning?view=jobs"
+        try:
+            notif_svc.notify_role(
+                db,
+                role_codes=["producer", "manager", "admin"],
+                exclude_user_ids=[user.id] if user else None,
+                kind=NotificationKind.booking_status_changed.value,
+                severity=(
+                    NotificationSeverity.action_required.value
+                    if is_not_done
+                    else NotificationSeverity.info.value
+                ),
+                title=title,
+                body=body,
+                link=link,
+                actor_user_id=user.id if user else None,
+                payload={"booking_id": b.id, "state": state.value},
+            )
+        except Exception as e:
+            print(f"[update_booking_state] notify failed: {e}")
+    return {
+        "id": b.id,
+        "state": b.state.value,
+        "status": b.status.value,
+        "execution_status": b.execution_status.value,
+        "not_done_reason": b.not_done_reason,
+    }
+
+
 @router.patch("/api/bookings/{booking_id}/execution")
 async def update_booking_execution(
     booking_id: int,
@@ -3364,6 +3477,16 @@ async def update_booking_execution(
     user = current_user_optional(request)
     old_status = b.execution_status
     b.execution_status = execution_status
+    # v3.5.0-alpha.66.5: sincronizza state. Se execution_status passa a in_progress/
+    # done/not_done e status era tentative, promuovo a confirmed (transizione
+    # implicita). state si ricalcola coerente.
+    from app.models import compute_state_from_legacy, BookingStatus as _BS
+    if execution_status in (BookingExecutionStatus.in_progress,
+                            BookingExecutionStatus.done,
+                            BookingExecutionStatus.not_done):
+        if b.status == _BS.tentative:
+            b.status = _BS.confirmed
+    b.state = compute_state_from_legacy(b.status.value, b.execution_status.value)
     if execution_status == BookingExecutionStatus.not_done:
         b.not_done_reason = (not_done_reason or "").strip()
     else:

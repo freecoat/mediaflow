@@ -257,6 +257,30 @@ def _auto_migrate_columns():
                     "ALTER TABLE jobs ADD COLUMN weighted_revenue "
                     "BOOLEAN NOT NULL DEFAULT 0"
                 ))
+    # v3.5.0-alpha.66.5 — Stato unificato booking (BookingState canonico).
+    # Aggiunge bookings.state e popola dai legacy (status + execution_status).
+    if "bookings" in insp.get_table_names():
+        bcols = {c["name"] for c in insp.get_columns("bookings")}
+        if "state" not in bcols:
+            print("[auto-migrate] bookings.state mancante -> ALTER TABLE + populate")
+            with engine.begin() as conn:
+                conn.execute(text(
+                    "ALTER TABLE bookings ADD COLUMN state VARCHAR(20) "
+                    "NOT NULL DEFAULT 'tentative'"
+                ))
+                # Popola: cancelled → cancelled; tentative → tentative;
+                # confirmed + execution → in_progress/done/not_done o confirmed
+                conn.execute(text("""
+                    UPDATE bookings
+                    SET state = CASE
+                        WHEN status = 'cancelled' THEN 'cancelled'
+                        WHEN status = 'tentative' THEN 'tentative'
+                        WHEN execution_status = 'in_progress' THEN 'in_progress'
+                        WHEN execution_status = 'done' THEN 'done'
+                        WHEN execution_status = 'not_done' THEN 'not_done'
+                        ELSE 'confirmed'
+                    END
+                """))
 
 
 @asynccontextmanager
@@ -423,7 +447,7 @@ async def lifespan(app: FastAPI):
     yield
 
 
-app = FastAPI(title="MediaFlow", version="3.5.0-alpha.66.4.2", lifespan=lifespan)
+app = FastAPI(title="MediaFlow", version="3.5.0-alpha.66.5", lifespan=lifespan)
 
 BASE_DIR = Path(__file__).parent
 app.mount("/static", StaticFiles(directory=BASE_DIR / "static"), name="static")
