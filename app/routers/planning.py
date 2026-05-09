@@ -35,16 +35,29 @@ router = APIRouter(prefix="/planning", tags=["planning"])
 CURRENT_TENANT = 1
 
 
-def _assert_no_blocking_slice(db: Session, b: Booking) -> None:
+def _assert_no_blocking_slice(db: Session, b: Booking, *, force: bool = False) -> None:
     """v3.5.0-alpha.59 — HARD-BLOCK 409 se il booking ricade in un periodo
     già fatturato (esiste una `JCLBilledSlice` la cui finestra si sovrappone
-    all'envelope del booking). Modificare/cancellare un booking il cui
-    maturato è stato slice-ato corromperebbe la fattura emessa: il
-    `total_accrued` divergerebbe dal `billed_amount` storico, ma la fattura
-    resta inalterata. Per correzioni formali → endpoint dedicato di
-    rettifica (α.59.x) o cancellazione fattura.
+    all'envelope del booking).
+
+    v3.5.0-alpha.66.3 — Relax semantico:
+    - `b.status == tentative` → SKIP guard. I booking tentative non sono
+      "consolidati" e possono essere mossi liberamente anche dentro periodi
+      fatturati (rappresentano ipotesi di pianificazione, non lavoro
+      maturato).
+    - `b.status == confirmed` (o cancelled, raro) → guard attivo, 409 con
+      `code=SLICE_LOCK_CONFIRM_REQUIRED`. Il client può intercettare e
+      ri-inviare con `force=True` Form param dopo aver ottenuto conferma
+      esplicita dall'utente. La fattura emessa resta inalterata: il rischio
+      è la divergenza `total_accrued` ↔ `billed_amount` storico, e l'utente
+      lo accetta consapevolmente.
+    - `force=True` → SKIP guard (override esplicito post-conferma).
 
     Idempotente: se non c'è JCL collegata, no-op."""
+    if force:
+        return
+    if b.status == BookingStatus.tentative:
+        return
     from app.services.billing_slice_guard import (
         find_blocking_slice, slice_lock_message, slice_lock_payload,
     )
@@ -52,9 +65,11 @@ def _assert_no_blocking_slice(db: Session, b: Booking) -> None:
     if s is None:
         return
     detail = {
-        "code": "BOOKING_LOCKED_BY_SLICE",
+        "code": "SLICE_LOCK_CONFIRM_REQUIRED",
         "message": slice_lock_message(s),
         "slice": slice_lock_payload(s),
+        "hint": "Booking confermato in periodo fatturato. Riinvia con "
+                "`force_slice_unlock=true` per forzare la modifica.",
     }
     raise HTTPException(409, detail=detail)
 
@@ -831,6 +846,10 @@ async def list_bookings(
     def _lock_for_assignment(a: BookingAssignment) -> Optional[dict]:
         if not (a.booking and a.booking.job_cost_line_id):
             return None
+        # v3.5.0-alpha.66.3: tentative NON ottiene lock visivo (resta libero
+        # di essere mosso anche dentro periodi fatturati, niente bordo viola).
+        if a.booking.status == BookingStatus.tentative:
+            return None
         candidates = slices_by_jcl.get(a.booking.job_cost_line_id, [])
         if not candidates:
             return None
@@ -1569,6 +1588,7 @@ async def update_booking(
     notes: Optional[str] = Form(None),
     priority: Optional[str] = Form(None),  # v3.5.0-alpha.22
     assignments: Optional[str] = Form(None),  # se passato, replace-all
+    force_slice_unlock: bool = Form(False),  # v3.5.0-alpha.66.3
     db: Session = Depends(get_db),
 ):
     """Aggiorna metadata booking (kind/job/status/notes) e/o sostituisce assignments.
@@ -1582,7 +1602,7 @@ async def update_booking(
     if not b:
         raise HTTPException(404, "Booking non trovato")
     _enforce_planning_scope(request, db, {a.resource_id for a in b.assignments})
-    _assert_no_blocking_slice(db, b)  # v3.5.0-alpha.59
+    _assert_no_blocking_slice(db, b, force=force_slice_unlock)
 
     new_kind = kind if kind is not None else b.kind
     new_job_id = job_id if job_id is not None else b.job_id
@@ -1876,6 +1896,7 @@ async def update_assignment(
     resource_id: Optional[int] = Form(None),
     start_datetime: Optional[datetime] = Form(None),
     end_datetime: Optional[datetime] = Form(None),
+    force_slice_unlock: bool = Form(False),  # v3.5.0-alpha.66.3
     db: Session = Depends(get_db),
 ):
     """Aggiorna un singolo assignment (drag/resize/reassign del singolo item timeline)."""
@@ -1892,11 +1913,10 @@ async def update_assignment(
     if new_e <= new_s:
         raise HTTPException(400, "end_datetime deve essere > start_datetime")
     # v3.5.0-alpha.59 — HARD-BLOCK se l'assignment è dentro un periodo già
-    # slice-ato. Test sia su date attuali che su nuove date proposte
-    # (un drag potrebbe provare a portare l'assignment FUORI da un periodo
-    # locked, ma le date originali sono già locked).
-    _assert_no_blocking_slice(db, a.booking)
-    if a.booking.job_cost_line_id:
+    # slice-ato. v3.5.0-alpha.66.3: skip per tentative, override via
+    # force_slice_unlock per confirmed.
+    _assert_no_blocking_slice(db, a.booking, force=force_slice_unlock)
+    if a.booking.job_cost_line_id and not force_slice_unlock and a.booking.status != BookingStatus.tentative:
         from app.services.billing_slice_guard import (
             find_blocking_slice_for_dates, slice_lock_message, slice_lock_payload,
         )
@@ -1905,9 +1925,11 @@ async def update_assignment(
         )
         if s_new:
             raise HTTPException(409, detail={
-                "code": "BOOKING_LOCKED_BY_SLICE",
+                "code": "SLICE_LOCK_CONFIRM_REQUIRED",
                 "message": slice_lock_message(s_new),
                 "slice": slice_lock_payload(s_new),
+                "hint": "La nuova posizione cade in periodo fatturato. "
+                        "Riinvia con `force_slice_unlock=true` per forzare.",
             })
     c = _check_assignment_conflict(db, new_rid, new_s, new_e, exclude_assignment_id=assignment_id)
     if c:
@@ -2474,6 +2496,7 @@ async def bulk_edit_eligible_cost_lines(
 async def multi_move_assignments(
     request: Request,
     moves: str = Form(...),  # JSON array
+    force_slice_unlock: bool = Form(False),  # v3.5.0-alpha.66.3
     db: Session = Depends(get_db),
 ):
     """v3.5.0-alpha.42: multi-move atomico transazionale.
@@ -2564,27 +2587,37 @@ async def multi_move_assignments(
     # v3.5.0-alpha.59 — HARD-BLOCK se anche un solo assignment ricade dentro
     # un periodo già fatturato (pre o post move). All-or-nothing: niente
     # parziale. Niente rollback parziale, lo blocchiamo prima di procedere.
+    # v3.5.0-alpha.66.3: skip per tentative; bypass se force_slice_unlock=True;
+    # restituisce SLICE_LOCK_CONFIRM_REQUIRED (confirmed) per permettere al
+    # client di chiedere conferma e ri-inviare con force.
     from app.services.billing_slice_guard import (
         find_blocking_slice, find_blocking_slice_for_dates, slice_lock_payload,
     )
-    for p in parsed:
-        a = by_id[p["assignment_id"]]
-        s_pre = find_blocking_slice(db, a.booking)
-        if s_pre is not None:
-            return {
-                "success": False, "code": "BOOKING_LOCKED_BY_SLICE", "moved": 0,
-                "blocked_assignment_id": a.id, "blocked_booking_id": a.booking_id,
-                "slice": slice_lock_payload(s_pre),
-            }
-        s_post = find_blocking_slice_for_dates(
-            db, a.booking.job_cost_line_id, p["new_start"].date(), p["new_end"].date()
-        )
-        if s_post is not None:
-            return {
-                "success": False, "code": "BOOKING_LOCKED_BY_SLICE", "moved": 0,
-                "blocked_assignment_id": a.id, "blocked_booking_id": a.booking_id,
-                "slice": slice_lock_payload(s_post),
-            }
+    if not force_slice_unlock:
+        for p in parsed:
+            a = by_id[p["assignment_id"]]
+            if a.booking.status == BookingStatus.tentative:
+                continue  # tentative: liberamente movibile
+            s_pre = find_blocking_slice(db, a.booking)
+            if s_pre is not None:
+                return {
+                    "success": False, "code": "SLICE_LOCK_CONFIRM_REQUIRED", "moved": 0,
+                    "blocked_assignment_id": a.id, "blocked_booking_id": a.booking_id,
+                    "slice": slice_lock_payload(s_pre),
+                    "hint": "Booking confermato in periodo fatturato. "
+                            "Riinvia con force_slice_unlock=true per forzare.",
+                }
+            s_post = find_blocking_slice_for_dates(
+                db, a.booking.job_cost_line_id, p["new_start"].date(), p["new_end"].date()
+            )
+            if s_post is not None:
+                return {
+                    "success": False, "code": "SLICE_LOCK_CONFIRM_REQUIRED", "moved": 0,
+                    "blocked_assignment_id": a.id, "blocked_booking_id": a.booking_id,
+                    "slice": slice_lock_payload(s_post),
+                    "hint": "La nuova posizione cade in periodo fatturato. "
+                            "Riinvia con force_slice_unlock=true per forzare.",
+                }
 
     # Snapshot pre-move (per response al client per undo atomico)
     pre_snapshots = [{
@@ -2673,7 +2706,12 @@ async def multi_move_assignments(
 
 
 @router.delete("/api/booking-assignments/{assignment_id}")
-async def delete_assignment(assignment_id: int, request: Request, db: Session = Depends(get_db)):
+async def delete_assignment(
+    assignment_id: int,
+    request: Request,
+    force_slice_unlock: bool = False,  # v3.5.0-alpha.66.3 (query param: ?force_slice_unlock=true)
+    db: Session = Depends(get_db),
+):
     """Cancella un singolo assignment. Se è l'ultimo del booking, cancella il booking intero.
 
     v3.5.0-alpha.9: triggera recompute della JobCostLine. Senza questa chiamata
@@ -2687,7 +2725,7 @@ async def delete_assignment(assignment_id: int, request: Request, db: Session = 
     if not a:
         raise HTTPException(404, "Assignment non trovato")
     _enforce_planning_scope(request, db, {a.resource_id})
-    _assert_no_blocking_slice(db, a.booking)  # v3.5.0-alpha.59
+    _assert_no_blocking_slice(db, a.booking, force=force_slice_unlock)
     booking = a.booking
     db.delete(a)
     db.flush()
@@ -2707,7 +2745,12 @@ async def delete_assignment(assignment_id: int, request: Request, db: Session = 
 
 
 @router.delete("/api/bookings/{booking_id}")
-async def delete_booking(booking_id: int, request: Request, db: Session = Depends(get_db)):
+async def delete_booking(
+    booking_id: int,
+    request: Request,
+    force_slice_unlock: bool = False,  # v3.5.0-alpha.66.3
+    db: Session = Depends(get_db),
+):
     """v3.5.0-alpha.9: chiama recompute_for_booking dopo lo soft-delete per
     far ritirare le ore dal `total_accrued` della cost line collegata. La
     query in `recompute_cost_line_actual` filtra `status != cancelled`, quindi
@@ -2719,7 +2762,7 @@ async def delete_booking(booking_id: int, request: Request, db: Session = Depend
     if not b:
         raise HTTPException(404, "Booking non trovato")
     _enforce_planning_scope(request, db, {a.resource_id for a in b.assignments})
-    _assert_no_blocking_slice(db, b)  # v3.5.0-alpha.59
+    _assert_no_blocking_slice(db, b, force=force_slice_unlock)
     b.status = BookingStatus.cancelled
     _log_change(db, b.id, "delete", "Booking eliminato (soft)", None)
     try:
@@ -3296,6 +3339,7 @@ async def update_booking_execution(
     request: Request,
     execution_status: BookingExecutionStatus = Form(...),
     not_done_reason: Optional[str] = Form(None),
+    force_slice_unlock: bool = Form(False),  # v3.5.0-alpha.66.3
     db: Session = Depends(get_db),
 ):
     """Cambio stato esecuzione del booking. Su not_done richiede motivazione.
@@ -3314,7 +3358,8 @@ async def update_booking_execution(
     # v3.5.0-alpha.59 — HARD-BLOCK se booking dentro periodo già fatturato.
     # Cambiare execution_status su un booking slice-ato modifica
     # `total_accrued` della JCL → invalida lo snapshot in fattura.
-    _assert_no_blocking_slice(db, b)
+    # v3.5.0-alpha.66.3: skip per tentative; bypass se force_slice_unlock.
+    _assert_no_blocking_slice(db, b, force=force_slice_unlock)
 
     user = current_user_optional(request)
     old_status = b.execution_status

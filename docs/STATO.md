@@ -8,6 +8,48 @@
 
 ## Versione corrente
 
+**v3.5.0-alpha.66.3** — 9 maggio 2026 — Submenu Marcature + icone status booking + slice-lock relax
+
+Bundle 3 punti dopo conferma α.66.2 (DB pulito, fix doubleClick OK):
+
+**Chiuso α.66.3:**
+- ✅ **P1 Submenu Marcature**: voci ▶ Inizia / ✓ Fatto / ✗ Non fatto /
+  ↺ Riapri raggruppate dietro "🏷 Marcature ▸" nel context-menu (apre
+  secondo tlContextMenu adiacente con voci condizionali). Menu
+  principale meno gonfiato.
+- ✅ **P2 Icone status booking**: ⏳ per tentative (oltre bordo dashed),
+  ✓ verde discreto per confirmed. Coesistono con icone execution_status
+  ▶/✓/✗. Legenda aggiornata.
+- ✅ **P3 Slice-lock relax**:
+  - Tentative dentro periodo fatturato → SKIP guard (modificabili
+    liberamente, niente bordo viola).
+  - Confirmed dentro periodo fatturato → 409 con
+    `code=SLICE_LOCK_CONFIRM_REQUIRED` + dettaglio slice/fattura.
+  - Frontend `api()` globale intercetta automaticamente quel code,
+    mostra confirm() con periodo+fattura, su OK re-invia con
+    `force_slice_unlock=true`. Single retry, no loop. Tutti i call
+    site mutator beneficiano senza cabling puntuale.
+  - 5 endpoint backend con nuovo Form/query param `force_slice_unlock`:
+    update_booking, update_assignment, delete_assignment, delete_booking,
+    multi_move_assignments, update_booking_execution.
+
+**Smoke test**: 276 routes invariato, version 3.5.0-alpha.66.3.
+
+**Verifica live**:
+1. Hard-refresh (cache-buster `global.js?v=3.5.0-alpha.66.3`).
+2. **Marcature submenu**: click destro su booking → "🏷 Marcature ▸" →
+   secondo menu con voci condizionali. Click "▶ Inizia" → toast.
+3. **Icone status**: tentative mostra ⏳ + dashed; confirmed mostra ✓
+   verde piccolo discreto.
+4. **Slice-lock tentative**: drag-resize libero, no lock visivo 🔒,
+   no blocco.
+5. **Slice-lock confirmed**: drag su booking confirmed in periodo
+   fatturato → confirm dialog "Stai modificando booking CONFERMATO
+   in periodo fatturato. Confermi?". OK passa, Annulla → errore
+   originale.
+
+---
+
 **v3.5.0-alpha.66.2** — 9 maggio 2026 — Fix root cause: vis-timeline doubleClick double-fire
 
 Matteo segnala booking #99 nuovi che nascono con risorsa "duplicata" anche

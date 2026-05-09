@@ -236,21 +236,94 @@ document.addEventListener('click', (e) => {
 async function api(method, url, body, options) {
   // body: FormData (multipart) | plain object (urlencoded by default,
   //       or JSON if options.json === true) | undefined.
-  const opts = { method };
-  const useJson = options && options.json === true;
-  if (body instanceof FormData) {
-    opts.body = body;
-  } else if (useJson && body && typeof body === 'object') {
-    opts.headers = { 'Content-Type': 'application/json' };
-    opts.body = JSON.stringify(body);
-  } else if (body) {
-    opts.headers = { 'Content-Type': 'application/x-www-form-urlencoded' };
-    opts.body = new URLSearchParams(body).toString();
-  }
-  const resp = await fetch(url, opts);
-  if (!resp.ok) {
+  // v3.5.0-alpha.66.3: gestisce automaticamente SLICE_LOCK_CONFIRM_REQUIRED
+  // (booking confirmed in periodo fatturato) → confirm + retry con
+  // force_slice_unlock=true. Single retry, no loop. Se l'utente annulla,
+  // throw l'errore originale.
+  const _doRequest = async (b) => {
+    const opts = { method };
+    const useJson = options && options.json === true;
+    if (b instanceof FormData) {
+      opts.body = b;
+    } else if (useJson && b && typeof b === 'object') {
+      opts.headers = { 'Content-Type': 'application/json' };
+      opts.body = JSON.stringify(b);
+    } else if (b) {
+      opts.headers = { 'Content-Type': 'application/x-www-form-urlencoded' };
+      opts.body = new URLSearchParams(b).toString();
+    }
+    return fetch(url, opts);
+  };
+  const _parseError = async (resp) => {
     const err = await resp.json().catch(() => ({ detail: resp.statusText }));
-    throw new Error(err.detail || 'Errore sconosciuto');
+    let humanMsg;
+    if (typeof err.detail === 'string') {
+      humanMsg = err.detail;
+    } else if (err.detail && typeof err.detail === 'object') {
+      humanMsg = err.detail.message || err.detail.code || 'Errore sconosciuto';
+    } else {
+      humanMsg = 'Errore sconosciuto';
+    }
+    const e = new Error(humanMsg);
+    e.detail = err.detail;
+    e.status = resp.status;
+    return e;
+  };
+
+  let resp = await _doRequest(body);
+  if (!resp.ok) {
+    const e = await _parseError(resp);
+    // v3.5.0-alpha.66.3: intercetta SLICE_LOCK_CONFIRM_REQUIRED automaticamente.
+    // Booking confirmed in periodo fatturato → chiede conferma esplicita
+    // all'utente, poi re-invia con force_slice_unlock=true. Pattern globale:
+    // tutti i call site beneficiano senza modifiche puntuali.
+    const det = e.detail;
+    const isSliceLock = e.status === 409 && det && typeof det === 'object'
+      && det.code === 'SLICE_LOCK_CONFIRM_REQUIRED';
+    if (isSliceLock) {
+      const slc = det.slice || {};
+      const inv = slc.invoice_number ? ` (fattura ${slc.invoice_number})` : '';
+      const period = (slc.period_start && slc.period_end)
+        ? ` ${slc.period_start} → ${slc.period_end}` : '';
+      const ok = confirm(
+        'Stai modificando un booking CONFERMATO in periodo già fatturato' + period + inv + '.\n\n' +
+        'Il maturato ricalcolato potrebbe divergere da quello già fatturato.\n' +
+        'La fattura emessa resta inalterata, ma il cost-report può cambiare.\n\n' +
+        'Confermi la modifica?'
+      );
+      if (!ok) throw e;
+      // Retry con force_slice_unlock=true. Per FormData clona; per object
+      // ricostruisci; per query DELETE aggiungi al URL.
+      let retryBody = body, retryUrl = url;
+      if (body instanceof FormData) {
+        const cloned = new FormData();
+        for (const [k, v] of body.entries()) cloned.append(k, v);
+        cloned.set('force_slice_unlock', 'true');
+        retryBody = cloned;
+      } else if (body && typeof body === 'object') {
+        retryBody = { ...body, force_slice_unlock: 'true' };
+      } else {
+        // No body (es. DELETE): aggiungi al query string
+        retryUrl = url + (url.includes('?') ? '&' : '?') + 'force_slice_unlock=true';
+      }
+      // Riusa la pipeline ma evita ricorsione infinita: nuovo fetch diretto.
+      const retryResp = await (async () => {
+        const opts = { method };
+        if (retryBody instanceof FormData) {
+          opts.body = retryBody;
+        } else if (options && options.json && retryBody && typeof retryBody === 'object') {
+          opts.headers = { 'Content-Type': 'application/json' };
+          opts.body = JSON.stringify(retryBody);
+        } else if (retryBody) {
+          opts.headers = { 'Content-Type': 'application/x-www-form-urlencoded' };
+          opts.body = new URLSearchParams(retryBody).toString();
+        }
+        return fetch(retryUrl, opts);
+      })();
+      if (!retryResp.ok) throw await _parseError(retryResp);
+      return retryResp.json();
+    }
+    throw e;
   }
   return resp.json();
 }

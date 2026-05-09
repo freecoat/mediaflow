@@ -366,6 +366,12 @@
     border-color: #ef4444 !important;
   }
   .vis-item .tl-exec-icon { margin-left: 4px; opacity: 0.9; font-weight: 700; }
+  /* v3.5.0-alpha.66.3: icone status booking (BookingStatus tentative/confirmed)
+     distinte dalle icone execution_status. Tentative grigio chiaro, confirmed
+     verde discreto. */
+  .vis-item .tl-status-icon { margin-left: 4px; font-size: 11px; opacity: 0.85; }
+  .vis-item .tl-status-tentative { color: #d1d5db; }
+  .vis-item .tl-status-confirmed { color: #6ee7b7; opacity: 0.7; }
   /* v3.5.0-alpha.11: highlight di tutti gli items che condividono lo stesso
      booking_id (booking multi-risorsa). Quando l'utente seleziona una riga,
      le altre del medesimo booking ricevono un alone indaco. */
@@ -948,7 +954,13 @@
             </div>
             <div style="display:flex; gap:10px; align-items:center;">
               <div class="tl-leg-swatch tl-tentative" style="background:#6272f5; width:54px; height:22px; border-radius:4px; flex-shrink:0; border:2px dashed rgba(255,255,255,0.5); box-sizing:border-box;"></div>
-              <div><div style="font-weight:600; font-size:12px;">⏳ Tentative</div><div class="text-muted" style="font-size:11px;">Bordo dashed (non confermato)</div></div>
+              <div><div style="font-weight:600; font-size:12px;">⏳ Tentative</div><div class="text-muted" style="font-size:11px;">Bordo dashed + icona ⏳ (non confermato)</div></div>
+            </div>
+            <div style="display:flex; gap:10px; align-items:center;">
+              <div class="tl-leg-swatch" style="background:#6272f5; width:54px; height:22px; border-radius:4px; flex-shrink:0;">
+                <span style="position:relative; left:30px; top:2px; color:#6ee7b7; font-size:11px; font-weight:700;">✓</span>
+              </div>
+              <div><div style="font-weight:600; font-size:12px;">✓ Confermato</div><div class="text-muted" style="font-size:11px;">Check verde discreto inline (operativo)</div></div>
             </div>
           </div>
           <hr style="margin:12px 0; border:none; border-top:1px solid var(--border);">
@@ -3151,6 +3163,9 @@ function tlBookingToItem(b) {
   const groupSize = p.group_size || 1;
   const groupBadge = groupSize > 1 ? ` <span style="background:rgba(0,0,0,.35); padding:0 4px; border-radius:3px; font-size:10px;">${p.group_position}/${groupSize}</span>` : '';
   // v3.4.44: indicator inline execution_status sui booking timeline.
+  // v3.5.0-alpha.66.3: aggiunta icona ⏳ per BookingStatus.tentative (oltre
+  // al bordo dashed esistente) e ✓ per BookingStatus.confirmed (discreto,
+  // verde). Status icon precede l'execution icon nel content.
   const exec = p.execution_status || 'planned';
   const execIcon = {
     planned: '',
@@ -3158,6 +3173,11 @@ function tlBookingToItem(b) {
     done: ' <span class="tl-exec-icon" title="Fatto">✓</span>',
     not_done: ' <span class="tl-exec-icon" title="Non fatto">✗</span>',
   }[exec] || '';
+  const statusIcon = isTentative
+    ? ' <span class="tl-status-icon tl-status-tentative" title="Tentative — da confermare">⏳</span>'
+    : (p.status === 'confirmed'
+        ? ' <span class="tl-status-icon tl-status-confirmed" title="Confermato">✓</span>'
+        : '');
   let classes = `tl-exec-${exec} `;
   if (isInternal) classes += 'kind-internal ';
   if (isTentative) classes += 'tl-tentative ';
@@ -3211,7 +3231,7 @@ function tlBookingToItem(b) {
     assignment_id: b.assignment_id,
     booking_id: b.booking_id,
     group: p.resource_id,
-    content: escapeHtml(b.title || '') + groupBadge + execIcon + sliceLockIcon,
+    content: escapeHtml(b.title || '') + groupBadge + statusIcon + execIcon + sliceLockIcon,
     start: b.start,
     end: b.end,
     style: 'background-color:'+color+'; border-color:'+color+';',
@@ -4625,18 +4645,13 @@ async function _doRenderTimeline(preserveWindow=false) {
       const statusItem = isTentative
         ? {label: '✓  Conferma booking', value: 'confirm'}
         : {label: '⏳  Rendi tentative', value: 'tentative'};
-      // v3.5.0-alpha.66: voci execution_status condizionali (filtra lo stato
-      // corrente). Endpoint backend: PATCH /planning/api/bookings/{id}/execution.
+      // v3.5.0-alpha.66.3: voci execution_status raccolte in submenu "Marcature ▸"
+      // per non gonfiare il menu principale. Click sulla voce → secondo
+      // tlContextMenu con le voci condizionali (filtra stato corrente).
       const exec = (origBooking && origBooking.extendedProps && origBooking.extendedProps.execution_status) || 'planned';
-      const execMenu = [];
-      if (exec !== 'in_progress') execMenu.push({label:'▶  Inizia (in corso)', value:'exec_in_progress'});
-      if (exec !== 'done')        execMenu.push({label:'✓  Marca come fatto', value:'exec_done'});
-      if (exec !== 'not_done')    execMenu.push({label:'✗  Marca come non fatto', value:'exec_not_done'});
-      if (exec === 'done' || exec === 'not_done')
-                                  execMenu.push({label:'↺  Riapri (planned)', value:'exec_planned'});
       const choice = await tlContextMenu(x, y, [
         {label: '✎  Modifica…', value: 'edit'},
-        ...execMenu,
+        {label: '🏷  Marcature ▸', value: 'marcature'},
         statusItem,
         {label: '⊕  Duplica qui', value: 'duplicate'},
         {label: '📅  Duplica giorno dopo', value: 'duplicate_day'},
@@ -4674,6 +4689,34 @@ async function _doRenderTimeline(preserveWindow=false) {
           // tlInstantPaste con dayOffset=1 o 7 e clipboard locale (1 booking).
           const days = choice === 'duplicate_week' ? 7 : 1;
           await tlInstantPaste([origBooking], days);
+        } else if (choice === 'marcature') {
+          // v3.5.0-alpha.66.3: submenu Marcature → secondo tlContextMenu con
+          // le voci execution_status condizionali (filtra lo stato corrente).
+          const subMenu = [];
+          if (exec !== 'in_progress') subMenu.push({label:'▶  Inizia (in corso)', value:'exec_in_progress'});
+          if (exec !== 'done')        subMenu.push({label:'✓  Marca come fatto', value:'exec_done'});
+          if (exec !== 'not_done')    subMenu.push({label:'✗  Marca come non fatto', value:'exec_not_done'});
+          if (exec === 'done' || exec === 'not_done')
+                                      subMenu.push({label:'↺  Riapri (planned)', value:'exec_planned'});
+          subMenu.push({label: '✕  Annulla', value: null});
+          const subChoice = await tlContextMenu(x + 180, y, subMenu);
+          if (!subChoice) return;
+          // Riusa il branch exec_* che già esiste:
+          const newExec = subChoice.replace(/^exec_/, '');
+          const bid = origBooking ? origBooking.booking_id : null;
+          if (!bid) throw new Error('Booking non trovato');
+          let reason = '';
+          if (newExec === 'not_done') {
+            reason = prompt('Motivo "non fatto" (richiesto):', '') || '';
+            if (!reason.trim()) { toast('Motivo obbligatorio per "non fatto"', 'warning'); return; }
+          }
+          const fd = new FormData();
+          fd.append('execution_status', newExec);
+          if (reason) fd.append('not_done_reason', reason);
+          await api('PATCH', `/planning/api/bookings/${bid}/execution`, fd);
+          const labels = {planned:'rimesso planned', in_progress:'avviato', done:'marcato fatto', not_done:'marcato non fatto'};
+          toast(`Booking ${labels[newExec] || newExec}`, 'success');
+          renderTimeline(true);
         } else if (choice && choice.toString().startsWith('exec_')) {
           // v3.5.0-alpha.66: cambio execution_status via endpoint dedicato.
           // Per not_done richiede un reason. Il context-menu opera sempre su

@@ -1,5 +1,81 @@
 # MediaFlow — Changelog
 
+## v3.5.0-alpha.66.3 — Submenu Marcature + icone status booking + slice-lock relax (9 maggio 2026)
+
+Bundle 3 punti di feedback Matteo dopo conferma α.66.2 (fix doubleClick).
+
+**P1 — Submenu Marcature nel context-menu booking**
+Le voci ▶ Inizia / ✓ Fatto / ✗ Non fatto / ↺ Riapri introdotte in α.66
+gonfiavano il menu principale. Ora raggruppate dietro "🏷 Marcature ▸"
+che apre un secondo `tlContextMenu` adiacente con le voci condizionali
+(filtra lo stato corrente). Click su Annulla del submenu = no-op.
+- File: `app/templates/pages/planning.html` — sezione "contextmenu" del
+  listener vis-timeline.
+
+**P2 — Icone visibili per BookingStatus tentative + confirmed**
+Pre-α.66.3 lo stato `tentative` aveva solo bordo dashed; `confirmed`
+nessun marker visivo. Ora aggiunte icone inline (oltre alle classi CSS):
+- ⏳ per tentative (grigio chiaro, accanto al titolo) → unisce al bordo
+  dashed esistente per evidenza forte.
+- ✓ per confirmed (verde discreto opacity .7) → operativo, non rumoroso.
+- Legenda toolbar aggiornata: nuova riga "Confermato" con esempio.
+- Icone `tl-status-icon`/`tl-status-tentative`/`tl-status-confirmed`
+  precedono le icone execution_status (`tl-exec-icon` ▶/✓/✗) nel
+  content. I due assi (BookingStatus vs execution_status) coesistono.
+
+**P3 — Slice-lock relax: tentative liberi, confirmed con conferma**
+Pre-α.66.3 `_assert_no_blocking_slice` bloccava qualunque modifica su
+booking dentro periodo fatturato (HARD-BLOCK 409 cieco).
+
+Nuova policy:
+- **Tentative in periodo fatturato**: SKIP automatico del guard.
+  Modificabili liberamente. Niente bordo viola 🔒 in timeline (filtro
+  in `_lock_for_assignment` server-side).
+- **Confirmed in periodo fatturato**: 409 con `code=SLICE_LOCK_CONFIRM_REQUIRED`
+  (era `BOOKING_LOCKED_BY_SLICE`). Detail include `slice` + `hint` per il
+  client.
+- **`force_slice_unlock=true`** (Form/query param): bypass esplicito
+  del guard, usato dopo conferma utente.
+
+Backend: `_assert_no_blocking_slice(db, b, *, force=False)` con la nuova
+policy; aggiunto `force_slice_unlock` Form/query param ai 5 endpoint
+mutator: `update_booking`, `update_assignment`, `delete_assignment`,
+`delete_booking`, `multi_move_assignments`, `update_booking_execution`.
+
+Frontend: gestione automatica del code in `app/static/js/global.js` →
+`api()` ora intercetta 409 con `code=SLICE_LOCK_CONFIRM_REQUIRED`,
+mostra `confirm()` con dettagli (periodo + numero fattura), e se OK
+re-invia automaticamente la richiesta con `force_slice_unlock=true`.
+**Single retry**, no loop. Tutti i call site `api(...)` mutator del
+planning beneficiano automaticamente — niente cabling puntuale.
+- Cache-buster `global.js?v=` bumpato a `3.5.0-alpha.66.3`.
+- Errori `Error.detail` (oggetto strutturato) e `Error.status` (HTTP
+  code) ora esposti dal generico `api()` per intercettazione di code
+  custom in futuro.
+
+**Smoke**: 276 routes invariato, version 3.5.0-alpha.66.3.
+
+**Verifica live**:
+1. Hard-refresh (forza reload `global.js?v=3.5.0-alpha.66.3`).
+2. Submenu Marcature: click destro su un booking → "🏷 Marcature ▸"
+   → secondo menu con le voci condizionali. ▶ Inizia → toast "avviato".
+3. Icone status: prendi un booking tentative → vedi ⏳ + bordo dashed.
+   Confermalo (context-menu "✓ Conferma booking") → ⏳ → ✓ verde discreto.
+4. Slice-lock relax: prendi un booking **tentative** dentro un periodo
+   fatturato → drag-resize liberamente, nessun lucchetto 🔒, nessun
+   blocco. Prendi un booking **confirmed** dentro un periodo fatturato
+   → drag → confirm dialog "Stai modificando un booking CONFERMATO in
+   periodo fatturato (data → data, fattura N). Confermi?". Click OK →
+   modifica passa. Click Annulla → toast errore (originale 409).
+
+**Cosa NON cambia in α.66.3**:
+- Schema DB invariato.
+- Cost-report calcola sempre da assignments effettivi (no override).
+- La fattura emessa resta inalterata anche dopo override slice-unlock:
+  `total_accrued` ricalcola, `billed_amount` (snapshot) resta.
+
+---
+
 ## v3.5.0-alpha.66.2 — Fix root cause: vis-timeline doubleClick double-fire (9 maggio 2026)
 
 Bug rilevato da Matteo: i booking nuovi nascevano con la stessa risorsa
