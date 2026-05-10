@@ -1,5 +1,134 @@
 # MediaFlow — Changelog
 
+## v3.5.0-alpha.66.9 — JobDeliverable + cost-rate Resource + DAM physical + naming helper (10 maggio 2026)
+
+Substrato dati per il modello deliverable. Cantiere "Listino & Deliverable"
+sezione architetturale. UI completa (kanban, copilot QC, cost report split)
+nelle versioni successive (α.66.10+).
+
+**4 nuovi enum** in `app/models/models.py`:
+- `PhysicalAssetKind` (lto/hdd/cru/bluray/dvd/case/other)
+- `DeliverableStatus` (planned → in_production → file_attached → qc_running →
+  qc_passed | qc_failed → delivered → accepted | rejected)
+- `DeliverableNature` (digital/physical, mutually exclusive)
+- `ResourceCostType` (employee/freelance/studio/external)
+
+**3 modelli** (2 nuovi + 2 estesi):
+
+1. **`JobDeliverable`** (NUOVO, table `job_deliverables`) — nodo di produzione
+   tra JobCostLine e Asset/PhysicalAsset:
+   - identità: name, file_naming (libero), price_item_id, job_cost_line_id,
+     delivery_template_id, spec_json (cristallizzato dal template)
+   - produzione: primary_resource_id, estimated_hours
+   - bridge: digital_asset_id (FK Asset) **OR** physical_asset_id (FK PhysicalAsset)
+     — mutually exclusive a livello "file consegnato"
+   - QC: qc_report_json, qc_run_at, qc_run_by_user_id
+   - stato: status enum + target/delivered/accepted dates
+   - soft-delete via deleted_at
+
+2. **`PhysicalAsset`** (NUOVO, table `physical_assets`) — supporto fisico:
+   LTO/HDD/CRU/Blu-Ray/DVD/Case con kind + label + serial + barcode +
+   capacity_gb + condition + location + custodian + flag
+   `is_internal_archive` + `is_delivered_external` (ortogonali) +
+   delivered_at/courier/tracking_number per shipping + unit_cost (per
+   hardcost quando venduto al cliente) + checksum_md5/xxhash + verifiche
+   periodiche (last_verified_at, next_verification_due) per LTO. Soft-delete.
+
+3. **`Asset` esteso** (DAM digitale) — aggiunti: job_deliverable_id (bridge),
+   is_internal_archive, is_delivered_external, delivered_at, delivered_to,
+   delivery_method, delivery_tracking. Pattern flag identico a PhysicalAsset
+   per coerenza UI.
+
+4. **`Booking` esteso** — aggiunto `job_deliverable_id` (FK opz). Le ore di
+   booking attribuite contano come **hardcost interno** del deliverable
+   (= ore × Resource.internal_cost_hourly). Cliente non lo vede.
+
+5. **`Resource` esteso** — cost-rate interno separato dalle tariffe di vendita:
+   - `cost_type` enum (employee/freelance/studio/external)
+   - per employee: `monthly_gross_salary` × `annual_bonus_months` (default 13)
+     × `cost_multiplier_oneri` (default 1.30) / `annual_working_hours`
+     (default 1720) → `internal_cost_hourly` calcolato deterministicamente
+   - per freelance: `freelance_hourly_cost` (≠ hourly_rate venduto)
+   - per studio: `studio_hourly_cost` (allocazione struttura, tariffa fissa
+     decisa dal manager — derivazione AI da visura amministrativa rinviata)
+   - per external: fallback a hourly_rate
+   - **Property** `internal_cost_hourly` su Resource che restituisce il valore
+     corretto in base al cost_type. None se non configurato (graceful).
+
+**Migrazione DB auto al boot**: tabelle nuove via `Base.metadata.create_all()`,
+ALTER TABLE per le colonne aggiunte. Idempotente.
+
+**Naming helper** (`app/services/naming_helper.py`) — token resolver basato
+su Netflix Picture Archival + ISDCF DCP Naming Convention v9:
+- **34 token** documentati in `TOKEN_HELP`: project/client/show/episode,
+  format (resolution/framerate/audio_config/aspect/color_space/dynamic_range),
+  language/territory (ISO 639-2 + ISO 3166-1), version/cut/revision,
+  standard (IOP/SMPTE/IMF/DPP/AS-11), package_type (OV/VF/SUPP), date, facility,
+  barcode (per asset fisico), deliverable_id.
+- **9 preset template** built-in: ISDCF DCP (cinema), ISDCF DCP short,
+  Netflix Picture Archival, Netflix IMF master, DPP/AS-11 broadcast,
+  ProRes master, Screener H.264/H.265, LTO archive label, Custom (libero).
+- `build_token_dict(...)` risolve dal contesto (JobDeliverable, Job, Project,
+  Client, DeliveryTemplate, PhysicalAsset) + accetta `overrides` utente
+  (UI invia mentre digita).
+- `resolve_template(template, tokens)` → output + lista missing tokens
+  (placeholder `__` visibile per token mancanti).
+
+**8 endpoint nuovi** in `app/routers/jobs.py`:
+- `GET /jobs/api/{job_id}/deliverables` (lista + actual_hours per riga)
+- `POST /jobs/api/{job_id}/deliverables` (crea N con quantity 1-50, default 1;
+  se N>1 crea deliverable separati con suffix "(i/N)")
+- `GET /jobs/api/deliverables/{id}` (dettaglio + internal_hardcost calcolato)
+- `PUT /jobs/api/deliverables/{id}` (update; status=delivered/accepted
+  cristallizza date automaticamente)
+- `DELETE /jobs/api/deliverables/{id}` (soft-delete)
+- `POST /jobs/api/deliverables/{id}/restore` (recupera da cestino)
+- `GET /jobs/api/naming/presets` (lista preset + token help)
+- `POST /jobs/api/naming/preview` (resolve template con overrides → output)
+
+**UI MVP** in `/jobs/{id}` — nuovo blocco "Consegne" sotto la tabella
+lavorazioni:
+- Lista deliverable con status badge color-coded + nature badge digital/physical
+- Modal "+ Nuovo deliverable" con: nome, natura, quantity (1-50), legame
+  a JobCostLine + voce listino, risorsa primaria, ore stimate, target date,
+  naming preset dropdown + campo libero file_naming con **live preview**
+  (debounced) mentre l'utente digita le specifiche tecniche → chiama
+  `/naming/preview` e popola il campo.
+- Sezione collassabile "Specifiche tecniche" (resolution/framerate/audio_config/
+  lang_audio/lang_subs/territory) → spec_json salvato.
+
+**Smoke test E2E** completo:
+- Create qty=3 → 3 deliverable creati con suffix
+- Booking attribuito → actual_hours=4.0 calcolate
+- internal_hardcost = 4h × €27.51 = €110.04 (employee €2800/mese × 13 ×
+  1.30 / 1720h)
+- Update status planned → in_production OK
+- Lista preset + token help OK (9 preset + 34 token)
+- Preview ISDCF DCP: `MareNostrum_FTR-F_IT-it_51_2K_RAI_20260612_TPRBerlin_IOP_OV`
+
+**Smoke**: 295 routes (+8), version `3.5.0-alpha.66.9`. Tabelle nuove +
+ALTER TABLE applicate idempotentemente al boot.
+
+**Cosa NON è in α.66.9** (apre α.66.10+):
+- Kanban deliverable + drag tra colonne stato
+- Modal completo edit con asset link da DAM (digital + physical)
+- Modal CRUD PhysicalAsset (oggi solo modello DB, no UI dedicata)
+- Copilot QC (`propose_qc_check` capability con ffprobe + LLM contro spec_json)
+- Cost report split cliente vs interno con hardcost ore deliverable
+- UI cost-rate in `/resources/{id}` con preview calcolo employee live
+- Tool generazione nomi file completo (regole, validazione conflitti, batch rename)
+
+**Verifica live** (al riavvio):
+1. `/jobs/{id}` → blocco "Consegne" sotto Lavorazioni → "+ Nuovo deliverable"
+   → modal con dropdown naming presets (9 opzioni) → seleziona ISDCF DCP →
+   compila campi spec → live preview popola file_naming.
+2. Crea con quantity=3 → 3 card in lista, naming generato uguale per tutti
+   (l'utente li distinguerà dopo per territorio).
+3. Click 🗑️ → soft-delete. La lista non lo mostra più.
+4. POST `/jobs/api/naming/preview` con template `{film_name}_FTR-{aspect}_{audio_config}_{resolution}` e overrides `{film_name:"Test", aspect:"F", audio_config:"71", resolution:"4K"}` → output `Test_FTR-F_71_4K` no missing.
+
+---
+
 ## v3.5.0-alpha.66.8 — Listino lean 2026-Q3 (79 → 43 voci, –46%) + nuovo seed_demo (10 maggio 2026)
 
 Scrematura del listino base secondo mappatura concordata con Matteo:

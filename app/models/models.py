@@ -161,6 +161,46 @@ class AssetType(str, enum.Enum):
     video = "video"; audio = "audio"; image = "image"
     document = "document"; other = "other"
 
+
+# v3.5.0-alpha.66.9 — Asset fisici (LTO/HDD/CRU/Blu-Ray/DVD/Case)
+class PhysicalAssetKind(str, enum.Enum):
+    lto = "lto"           # tape LTO LTFS (capacity_gb tipica 6000/9000/12000/18000)
+    hdd = "hdd"           # hard disk USB/Thunderbolt/EXT
+    cru = "cru"           # CRU drive (DCP fisico, EXT3/EXT4)
+    bluray = "bluray"     # Blu-Ray disc (BD25/BD50/BD100)
+    dvd = "dvd"           # DVD disc
+    case = "case"         # case/packaging fisico (per shipping)
+    other = "other"       # tutto il resto fisico
+
+
+# v3.5.0-alpha.66.9 — Stato del ciclo di vita di un JobDeliverable
+class DeliverableStatus(str, enum.Enum):
+    planned = "planned"             # specifica nota, produzione non iniziata
+    in_production = "in_production" # ≥1 booking attivo o file in lavorazione
+    file_attached = "file_attached" # asset (digital o physical) linkato
+    qc_running = "qc_running"       # AI QC in corso
+    qc_passed = "qc_passed"         # QC ok, pronto consegna
+    qc_failed = "qc_failed"         # QC fallito, da rifare
+    delivered = "delivered"         # consegnato al cliente / portale
+    accepted = "accepted"           # cliente ha approvato
+    rejected = "rejected"           # cliente ha rifiutato
+
+
+# v3.5.0-alpha.66.9 — Natura del deliverable: digital o physical (mutually exclusive)
+class DeliverableNature(str, enum.Enum):
+    digital = "digital"   # file/output digitale (ProRes, DCP master, IMF, ecc.)
+    physical = "physical" # supporto fisico consegnato (LTO, HDD, CRU, Blu-Ray)
+
+
+# v3.5.0-alpha.66.9 — Tipo di costo della risorsa, per calcolo hardcost interno
+# nel cost report. Separato dalle tariffe di vendita esistenti (hourly_rate /
+# daily_rate) che restano per la quote al cliente.
+class ResourceCostType(str, enum.Enum):
+    employee = "employee"     # dipendente — costo derivato da monthly_gross_salary × multiplier
+    freelance = "freelance"   # freelance — costo = freelance_hourly_cost (tariffa pagata, ≠ hourly_rate venduto)
+    studio = "studio"         # sala interna — costo = studio_hourly_cost (allocazione struttura)
+    external = "external"     # risorsa esterna a uso (sala/equipment a noleggio)
+
 class InvoiceStatus(str, enum.Enum):
     draft = "draft"; sent = "sent"; paid = "paid"
     overdue = "overdue"; cancelled = "cancelled"
@@ -678,6 +718,25 @@ class Resource(Base):
     description: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     daily_rate: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
     hourly_rate: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
+    # ── Cost-rate interno (v3.5.0-alpha.66.9) ────────────────────
+    # Le tariffe sopra (daily_rate / hourly_rate) sono di VENDITA al cliente.
+    # I campi sotto sono di COSTO interno per cost report → hardcost.
+    cost_type: Mapped[Optional[ResourceCostType]] = mapped_column(
+        SAEnum(ResourceCostType), nullable=True, index=True
+    )
+    # Per cost_type=employee: calcolo deterministico
+    #   internal_cost_hourly = monthly_gross_salary × annual_bonus_months ×
+    #                          cost_multiplier_oneri / annual_working_hours
+    monthly_gross_salary: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
+    annual_bonus_months: Mapped[Optional[float]] = mapped_column(Float, nullable=True, default=13.0)
+    cost_multiplier_oneri: Mapped[Optional[float]] = mapped_column(Float, nullable=True, default=1.30)
+    annual_working_hours: Mapped[Optional[float]] = mapped_column(Float, nullable=True, default=1720.0)
+    # Per cost_type=freelance: tariffa oraria PAGATA al freelance
+    # (NON la hourly_rate sopra, che è di vendita al cliente).
+    freelance_hourly_cost: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
+    # Per cost_type=studio: allocazione oraria della struttura (sala interna).
+    # Tariffa fissa decisa dal manager (futuro: derivata via AI da visura).
+    studio_hourly_cost: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
     # Contatti (utili per freelance ma validi anche per sale/attrezzature)
     email: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
     phone: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
@@ -695,6 +754,30 @@ class Resource(Base):
     working_hours_policy: Mapped[Optional["WorkingHoursPolicy"]] = relationship(foreign_keys=[working_hours_policy_id])
     job_assignments: Mapped[List["JobResourceAssignment"]] = relationship(back_populates="resource")
     time_punches: Mapped[List["TimePunch"]] = relationship(back_populates="resource")
+
+    @property
+    def internal_cost_hourly(self) -> Optional[float]:
+        """Costo orario aziendale interno per cost report (hardcost ore).
+        Derivato dal cost_type. Restituisce None se non configurato.
+        """
+        ct = self.cost_type
+        if ct == ResourceCostType.employee:
+            mensile = self.monthly_gross_salary or 0.0
+            bonus = self.annual_bonus_months or 13.0
+            mult = self.cost_multiplier_oneri or 1.30
+            hours = self.annual_working_hours or 1720.0
+            if mensile > 0 and hours > 0:
+                return round(mensile * bonus * mult / hours, 2)
+            return None
+        if ct == ResourceCostType.freelance:
+            return self.freelance_hourly_cost
+        if ct == ResourceCostType.studio:
+            return self.studio_hourly_cost
+        if ct == ResourceCostType.external:
+            # Per external usiamo, in mancanza di altro, hourly_rate (tariffa pagata
+            # = tariffa "noleggio" per la sessione, tipicamente coincide con vendita).
+            return self.hourly_rate
+        return None
 
 
 # v3.4.50 — Preset di selezione multipla di risorse (es. "Crew base color HDR",
@@ -1050,6 +1133,13 @@ class Booking(Base):
     # job_id nullable: NULL per booking interni (manutenzione, R&D, training)
     job_id: Mapped[Optional[int]] = mapped_column(ForeignKey("jobs.id"), nullable=True, index=True)
     job_cost_line_id: Mapped[Optional[int]] = mapped_column(ForeignKey("job_cost_lines.id"), nullable=True, index=True)
+    # v3.5.0-alpha.66.9 — Booking attribuibili a un JobDeliverable specifico.
+    # Quando settato, le ore del booking accumulano hardcost interno per il
+    # deliverable (ore × Resource.internal_cost_hourly). NULL = booking generico
+    # di lavorazione, non legato a un deliverable specifico.
+    job_deliverable_id: Mapped[Optional[int]] = mapped_column(
+        ForeignKey("job_deliverables.id"), nullable=True, index=True
+    )
     # Envelope min/max degli assignments. Auto-calcolato dal router al save.
     start_datetime: Mapped[datetime] = mapped_column(DateTime)
     end_datetime: Mapped[datetime] = mapped_column(DateTime)
@@ -1401,6 +1491,9 @@ class AssetTag(Base):
 
 
 class Asset(Base):
+    """Asset DIGITALE in DAM. File: ProRes, DCP master, IMF, immagini, audio,
+    sub. Per asset FISICI (LTO, HDD, CRU, Blu-Ray, ecc.) vedi PhysicalAsset.
+    """
     __tablename__ = "assets"
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     filename: Mapped[str] = mapped_column(String(255))
@@ -1417,6 +1510,20 @@ class Asset(Base):
     version: Mapped[int] = mapped_column(Integer, default=1)
     parent_asset_id: Mapped[Optional[int]] = mapped_column(ForeignKey("assets.id"), nullable=True)
     is_public: Mapped[bool] = mapped_column(Boolean, default=False)
+    # v3.5.0-alpha.66.9 — Bridge DAM ↔ JobDeliverable + flag archive/delivery.
+    # Lega l'asset al deliverable di produzione di cui rappresenta "il file".
+    # Promosso dall'utente con click "Questo è il file finale per [deliverable]".
+    job_deliverable_id: Mapped[Optional[int]] = mapped_column(
+        ForeignKey("job_deliverables.id"), nullable=True, index=True
+    )
+    # Flag ortogonali (un asset può essere SIA archiviato internamente SIA
+    # consegnato a qualcuno — es. master DPX su LTO interno + drive USB al cliente).
+    is_internal_archive: Mapped[bool] = mapped_column(Boolean, default=False, index=True)
+    is_delivered_external: Mapped[bool] = mapped_column(Boolean, default=False, index=True)
+    delivered_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+    delivered_to: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
+    delivery_method: Mapped[Optional[str]] = mapped_column(String(80), nullable=True)
+    delivery_tracking: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
     job: Mapped[Optional["Job"]] = relationship(back_populates="assets")
     uploaded_by_user: Mapped["User"] = relationship(back_populates="assets")
@@ -1425,6 +1532,120 @@ class Asset(Base):
         foreign_keys=[parent_asset_id], back_populates="parent")
     parent: Mapped[Optional["Asset"]] = relationship(
         foreign_keys=[parent_asset_id], back_populates="versions", remote_side=[id])
+
+
+# v3.5.0-alpha.66.9 — Asset FISICO (LTO/HDD/CRU/Blu-Ray/DVD/Case).
+# Modello separato da Asset (file digitale): la gestione di un supporto
+# fisico (location, courier, batch, calibrazione, capacità) è strutturalmente
+# diversa dal video/codec/container di un file digitale.
+class PhysicalAsset(Base):
+    __tablename__ = "physical_assets"
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    tenant_id: Mapped[int] = mapped_column(ForeignKey("tenants.id"), default=1, index=True)
+    project_id: Mapped[Optional[int]] = mapped_column(ForeignKey("projects.id"), nullable=True, index=True)
+    job_id: Mapped[Optional[int]] = mapped_column(ForeignKey("jobs.id"), nullable=True, index=True)
+    job_deliverable_id: Mapped[Optional[int]] = mapped_column(
+        ForeignKey("job_deliverables.id"), nullable=True, index=True
+    )
+    kind: Mapped[PhysicalAssetKind] = mapped_column(SAEnum(PhysicalAssetKind), index=True)
+    label: Mapped[str] = mapped_column(String(255))                  # es. "LTO #042 - Mare Nostrum"
+    description: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    serial_number: Mapped[Optional[str]] = mapped_column(String(120), nullable=True, index=True)
+    manufacturer: Mapped[Optional[str]] = mapped_column(String(120), nullable=True)
+    barcode: Mapped[Optional[str]] = mapped_column(String(120), nullable=True, index=True)
+    capacity_gb: Mapped[Optional[float]] = mapped_column(Float, nullable=True)  # capacità nominale
+    used_gb: Mapped[Optional[float]] = mapped_column(Float, nullable=True)      # spazio occupato
+    # Stato fisico/condizione (per nastri: nuovo / verificato / sospetto / dismesso).
+    condition: Mapped[Optional[str]] = mapped_column(String(40), nullable=True)
+    # Location dove si trova fisicamente (es. "Cassaforte sala server", "Spedito al cliente").
+    location: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
+    custodian_user_id: Mapped[Optional[int]] = mapped_column(ForeignKey("users.id"), nullable=True)
+    # Flag ortogonali (vedi commento Asset).
+    is_internal_archive: Mapped[bool] = mapped_column(Boolean, default=True, index=True)
+    is_delivered_external: Mapped[bool] = mapped_column(Boolean, default=False, index=True)
+    # Campi consegna (popolati quando is_delivered_external=True)
+    delivered_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+    delivered_to: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
+    courier: Mapped[Optional[str]] = mapped_column(String(80), nullable=True)
+    tracking_number: Mapped[Optional[str]] = mapped_column(String(120), nullable=True)
+    # Costo del supporto (€) — usato come hardcost in cost report quando il
+    # supporto è venduto al cliente (non quando è archivio interno).
+    unit_cost: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
+    # Hash di integrità (MD5/xxHash) calcolato al write/verify
+    checksum_md5: Mapped[Optional[str]] = mapped_column(String(64), nullable=True)
+    checksum_xxhash: Mapped[Optional[str]] = mapped_column(String(64), nullable=True)
+    # Per tape LTO: data ultima verifica integrità + scadenza calibrazione
+    last_verified_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+    next_verification_due: Mapped[Optional[date]] = mapped_column(Date, nullable=True)
+    notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    deleted_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True, index=True)
+
+
+# v3.5.0-alpha.66.9 — JobDeliverable: nodo di produzione tra JobCostLine
+# (riga prezzo cliente) e Asset/PhysicalAsset (file/supporto consegnato).
+# - spec_json cristallizza le specifiche tecniche dal DeliveryTemplate
+#   al momento della pianificazione.
+# - status traccia il workflow planned → in_production → file_attached →
+#   qc_passed → delivered → accepted.
+# - Booking.job_deliverable_id collega le ore di produzione a questo deliverable
+#   per calcolare l'hardcost interno (ore × Resource.internal_cost_hourly).
+# - Asset.job_deliverable_id (digital) o PhysicalAsset.job_deliverable_id
+#   (fisico) — mutually exclusive a livello di "file consegnato".
+class JobDeliverable(Base):
+    __tablename__ = "job_deliverables"
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    tenant_id: Mapped[int] = mapped_column(ForeignKey("tenants.id"), default=1, index=True)
+    job_id: Mapped[int] = mapped_column(ForeignKey("jobs.id"), index=True)
+    job_cost_line_id: Mapped[Optional[int]] = mapped_column(
+        ForeignKey("job_cost_lines.id"), nullable=True, index=True
+    )
+    price_item_id: Mapped[Optional[int]] = mapped_column(
+        ForeignKey("price_items.id"), nullable=True, index=True
+    )
+    # Identità
+    name: Mapped[str] = mapped_column(String(255))           # es. "DCP INTEROP 2K — Featurette IT"
+    file_naming: Mapped[Optional[str]] = mapped_column(String(500), nullable=True)
+    # Natura: digital o physical (mutually exclusive)
+    nature: Mapped[DeliverableNature] = mapped_column(
+        SAEnum(DeliverableNature), default=DeliverableNature.digital, index=True
+    )
+    # Specifiche tecniche
+    delivery_template_id: Mapped[Optional[int]] = mapped_column(
+        ForeignKey("delivery_templates.id"), nullable=True
+    )
+    spec_json: Mapped[Optional[dict]] = mapped_column(JSON, nullable=True)
+    # Produzione
+    primary_resource_id: Mapped[Optional[int]] = mapped_column(
+        ForeignKey("resources.id"), nullable=True, index=True
+    )
+    estimated_hours: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
+    # Output / asset bridge (FK separate per chiarezza; popolato uno solo)
+    digital_asset_id: Mapped[Optional[int]] = mapped_column(
+        ForeignKey("assets.id"), nullable=True
+    )
+    physical_asset_id: Mapped[Optional[int]] = mapped_column(
+        ForeignKey("physical_assets.id"), nullable=True
+    )
+    asset_locked_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+    # QC AI
+    qc_report_json: Mapped[Optional[dict]] = mapped_column(JSON, nullable=True)
+    qc_run_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+    qc_run_by_user_id: Mapped[Optional[int]] = mapped_column(
+        ForeignKey("users.id"), nullable=True
+    )
+    # Stato e date
+    status: Mapped[DeliverableStatus] = mapped_column(
+        SAEnum(DeliverableStatus), default=DeliverableStatus.planned, index=True
+    )
+    target_delivery_date: Mapped[Optional[date]] = mapped_column(Date, nullable=True)
+    delivered_date: Mapped[Optional[date]] = mapped_column(Date, nullable=True)
+    accepted_date: Mapped[Optional[date]] = mapped_column(Date, nullable=True)
+    notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    deleted_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True, index=True)
 
 
 # ── AI ASSISTANT (storico conversazioni) ─────────────────────

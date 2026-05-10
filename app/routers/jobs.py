@@ -14,7 +14,7 @@ Le lavorazioni (`JobCostLine`) sono first-class:
 L'operatore può aggiungere lavorazioni extra a posteriori (cliente chiede
 upres) e il sistema le marca con `is_extra=True` per la rendicontazione.
 """
-from datetime import datetime
+from datetime import datetime, date
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Request, Form
@@ -26,6 +26,8 @@ from app.database import get_db
 from app.models import (
     Job, JobStatus, JobCostLine, Booking, BookingAssignment, BookingStatus,
     TimePunch, Project, Client, PriceItem, PriceCategory,
+    JobDeliverable, DeliverableNature, DeliverableStatus,
+    PhysicalAsset, PhysicalAssetKind, Asset, DeliveryTemplate, Resource,
 )
 
 router = APIRouter(prefix="/jobs", tags=["jobs"])
@@ -482,4 +484,405 @@ async def delete_cost_line(job_id: int, line_id: int, request: Request, db: Sess
     ).update({"job_cost_line_id": None}, synchronize_session=False)
     db.delete(line)
     db.commit()
+
+
+# ── JOB DELIVERABLES (v3.5.0-alpha.66.9) ──────────────────────
+# CRUD base. UI completa (kanban, modal spec, link asset DAM, copilot QC)
+# in α.66.10+.
+
+def _serialize_deliverable(d: JobDeliverable) -> dict:
+    return {
+        "id": d.id,
+        "job_id": d.job_id,
+        "job_cost_line_id": d.job_cost_line_id,
+        "price_item_id": d.price_item_id,
+        "name": d.name,
+        "file_naming": d.file_naming,
+        "nature": d.nature.value if d.nature else "digital",
+        "status": d.status.value if d.status else "planned",
+        "delivery_template_id": d.delivery_template_id,
+        "spec_json": d.spec_json or {},
+        "primary_resource_id": d.primary_resource_id,
+        "estimated_hours": d.estimated_hours,
+        "digital_asset_id": d.digital_asset_id,
+        "physical_asset_id": d.physical_asset_id,
+        "asset_locked_at": d.asset_locked_at.isoformat() + "Z" if d.asset_locked_at else None,
+        "qc_report_json": d.qc_report_json,
+        "qc_run_at": d.qc_run_at.isoformat() + "Z" if d.qc_run_at else None,
+        "target_delivery_date": d.target_delivery_date.isoformat() if d.target_delivery_date else None,
+        "delivered_date": d.delivered_date.isoformat() if d.delivered_date else None,
+        "accepted_date": d.accepted_date.isoformat() if d.accepted_date else None,
+        "notes": d.notes,
+        "created_at": d.created_at.isoformat() + "Z" if d.created_at else None,
+    }
+
+
+def _compute_actual_hours(db: Session, deliverable_id: int) -> float:
+    """Somma le ore di tutti i Booking attribuiti al deliverable (status != cancelled)."""
+    bks = (
+        db.query(Booking)
+        .filter(
+            Booking.job_deliverable_id == deliverable_id,
+            Booking.status != BookingStatus.cancelled,
+        )
+        .all()
+    )
+    total = 0.0
+    for b in bks:
+        for a in (b.assignments or []):
+            if a.start_datetime and a.end_datetime:
+                total += (a.end_datetime - a.start_datetime).total_seconds() / 3600.0
+    return round(total, 2)
+
+
+def _compute_internal_hardcost(db: Session, deliverable_id: int) -> dict:
+    """Hardcost interno = somma per ogni booking di (ore × Resource.internal_cost_hourly).
+
+    Restituisce dict con `hardcost_eur` totale e `breakdown` per risorsa.
+    Solo cost report INTERNO usa questo valore — il cliente non lo vede.
+    """
+    bks = (
+        db.query(Booking)
+        .filter(
+            Booking.job_deliverable_id == deliverable_id,
+            Booking.status != BookingStatus.cancelled,
+        )
+        .all()
+    )
+    breakdown: dict[int, dict] = {}
+    total_eur = 0.0
+    for b in bks:
+        for a in (b.assignments or []):
+            if not (a.start_datetime and a.end_datetime):
+                continue
+            hours = (a.end_datetime - a.start_datetime).total_seconds() / 3600.0
+            res = a.resource
+            cost_h = res.internal_cost_hourly if res else None
+            cost = round(hours * (cost_h or 0.0), 2)
+            total_eur += cost
+            slot = breakdown.setdefault(a.resource_id, {
+                "resource_id": a.resource_id,
+                "resource_name": res.name if res else f"#{a.resource_id}",
+                "cost_type": res.cost_type.value if (res and res.cost_type) else None,
+                "internal_cost_hourly": cost_h,
+                "hours": 0.0, "cost_eur": 0.0,
+            })
+            slot["hours"] = round(slot["hours"] + hours, 2)
+            slot["cost_eur"] = round(slot["cost_eur"] + cost, 2)
+    return {
+        "hardcost_eur": round(total_eur, 2),
+        "breakdown": list(breakdown.values()),
+    }
+
+
+@router.get("/api/{job_id}/deliverables")
+async def list_deliverables(
+    job_id: int,
+    include_deleted: bool = False,
+    db: Session = Depends(get_db),
+):
+    job = db.query(Job).filter(Job.id == job_id).first()
+    if not job:
+        raise HTTPException(404, "Job non trovato")
+    q = db.query(JobDeliverable).filter(
+        JobDeliverable.job_id == job_id,
+        JobDeliverable.tenant_id == CURRENT_TENANT,
+    )
+    if not include_deleted:
+        q = q.filter(JobDeliverable.deleted_at.is_(None))
+    items = q.order_by(JobDeliverable.target_delivery_date.asc(), JobDeliverable.id.asc()).all()
+    out = []
+    for d in items:
+        rec = _serialize_deliverable(d)
+        rec["actual_hours"] = _compute_actual_hours(db, d.id)
+        out.append(rec)
+    return out
+
+
+@router.post("/api/{job_id}/deliverables")
+async def create_deliverable(
+    job_id: int,
+    request: Request,
+    name: str = Form(...),
+    nature: str = Form("digital"),
+    job_cost_line_id: Optional[int] = Form(None),
+    price_item_id: Optional[int] = Form(None),
+    delivery_template_id: Optional[int] = Form(None),
+    primary_resource_id: Optional[int] = Form(None),
+    estimated_hours: Optional[float] = Form(None),
+    target_delivery_date: Optional[str] = Form(None),
+    file_naming: Optional[str] = Form(None),
+    spec_json: Optional[str] = Form(None),
+    notes: Optional[str] = Form(None),
+    quantity: int = Form(1, ge=1, le=50),
+    db: Session = Depends(get_db),
+):
+    """Crea N JobDeliverable (default 1, max 50) per un job.
+
+    Quando quantity > 1 (es. quote.line.quantity=3 DCP per 3 territori) crea
+    N deliverable separati con suffix "(1/N)", "(2/N)" sul nome — l'utente
+    li distingue poi nei dettagli (territorio/spec/QC).
+    """
+    from app.services.rbac import current_user_optional, has_permission
+    user = current_user_optional(request)
+    # Permesso: usiamo edit_planning_all (chi può creare booking può creare deliverable).
+    if not has_permission(user, "edit_planning_all") and not has_permission(user, "assign_resources"):
+        raise HTTPException(403, "Permesso insufficiente per creare deliverable")
+
+    job = db.query(Job).filter(Job.id == job_id).first()
+    if not job:
+        raise HTTPException(404, "Job non trovato")
+
+    try:
+        nature_enum = DeliverableNature(nature)
+    except ValueError:
+        raise HTTPException(400, f"nature invalida: {nature}")
+
+    # Parsing spec_json se fornito come stringa
+    spec_dict: Optional[dict] = None
+    if spec_json:
+        try:
+            import json as _json
+            spec_dict = _json.loads(spec_json)
+            if not isinstance(spec_dict, dict):
+                raise ValueError("spec_json deve essere un oggetto JSON")
+        except Exception as e:
+            raise HTTPException(400, f"spec_json non valido: {e}")
+
+    # Parsing target_delivery_date
+    target_d = None
+    if target_delivery_date:
+        try:
+            target_d = datetime.strptime(target_delivery_date, "%Y-%m-%d").date()
+        except ValueError:
+            raise HTTPException(400, "target_delivery_date deve essere YYYY-MM-DD")
+
+    created = []
+    for i in range(quantity):
+        suffix = f" ({i+1}/{quantity})" if quantity > 1 else ""
+        d = JobDeliverable(
+            tenant_id=CURRENT_TENANT,
+            job_id=job_id,
+            job_cost_line_id=job_cost_line_id,
+            price_item_id=price_item_id,
+            name=name.strip()[:255] + suffix,
+            nature=nature_enum,
+            status=DeliverableStatus.planned,
+            delivery_template_id=delivery_template_id,
+            primary_resource_id=primary_resource_id,
+            estimated_hours=estimated_hours,
+            target_delivery_date=target_d,
+            file_naming=(file_naming or "").strip()[:500] or None,
+            spec_json=spec_dict,
+            notes=(notes or "").strip() or None,
+        )
+        db.add(d); db.flush()
+        created.append(d)
+    db.commit()
+    return {
+        "ok": True,
+        "created": len(created),
+        "deliverables": [_serialize_deliverable(d) for d in created],
+    }
+
+
+@router.get("/api/deliverables/{deliverable_id}")
+async def get_deliverable(deliverable_id: int, db: Session = Depends(get_db)):
+    d = db.query(JobDeliverable).filter(
+        JobDeliverable.id == deliverable_id,
+        JobDeliverable.tenant_id == CURRENT_TENANT,
+    ).first()
+    if not d:
+        raise HTTPException(404, "Deliverable non trovato")
+    rec = _serialize_deliverable(d)
+    rec["actual_hours"] = _compute_actual_hours(db, d.id)
+    rec["internal_hardcost"] = _compute_internal_hardcost(db, d.id)
+    return rec
+
+
+@router.put("/api/deliverables/{deliverable_id}")
+async def update_deliverable(
+    deliverable_id: int,
+    request: Request,
+    name: Optional[str] = Form(None),
+    nature: Optional[str] = Form(None),
+    status: Optional[str] = Form(None),
+    job_cost_line_id: Optional[int] = Form(None),
+    price_item_id: Optional[int] = Form(None),
+    delivery_template_id: Optional[int] = Form(None),
+    primary_resource_id: Optional[int] = Form(None),
+    estimated_hours: Optional[float] = Form(None),
+    target_delivery_date: Optional[str] = Form(None),
+    delivered_date: Optional[str] = Form(None),
+    accepted_date: Optional[str] = Form(None),
+    file_naming: Optional[str] = Form(None),
+    spec_json: Optional[str] = Form(None),
+    notes: Optional[str] = Form(None),
+    digital_asset_id: Optional[int] = Form(None),
+    physical_asset_id: Optional[int] = Form(None),
+    db: Session = Depends(get_db),
+):
+    from app.services.rbac import current_user_optional, has_permission
+    user = current_user_optional(request)
+    if not has_permission(user, "edit_planning_all") and not has_permission(user, "assign_resources"):
+        raise HTTPException(403, "Permesso insufficiente")
+
+    d = db.query(JobDeliverable).filter(
+        JobDeliverable.id == deliverable_id,
+        JobDeliverable.tenant_id == CURRENT_TENANT,
+    ).first()
+    if not d:
+        raise HTTPException(404, "Deliverable non trovato")
+
+    if name is not None:
+        d.name = name.strip()[:255] or d.name
+    if nature is not None:
+        try: d.nature = DeliverableNature(nature)
+        except ValueError: raise HTTPException(400, f"nature invalida: {nature}")
+    if status is not None:
+        try:
+            new_status = DeliverableStatus(status)
+            d.status = new_status
+            # Cristallizza date di stato se rilevanti
+            if new_status == DeliverableStatus.delivered and not d.delivered_date:
+                d.delivered_date = date.today()
+            if new_status == DeliverableStatus.accepted and not d.accepted_date:
+                d.accepted_date = date.today()
+        except ValueError:
+            raise HTTPException(400, f"status invalido: {status}")
+    if job_cost_line_id is not None: d.job_cost_line_id = job_cost_line_id or None
+    if price_item_id is not None: d.price_item_id = price_item_id or None
+    if delivery_template_id is not None: d.delivery_template_id = delivery_template_id or None
+    if primary_resource_id is not None: d.primary_resource_id = primary_resource_id or None
+    if estimated_hours is not None: d.estimated_hours = estimated_hours
+    if file_naming is not None: d.file_naming = file_naming.strip()[:500] or None
+    if notes is not None: d.notes = notes.strip() or None
+
+    if target_delivery_date is not None:
+        d.target_delivery_date = datetime.strptime(target_delivery_date, "%Y-%m-%d").date() if target_delivery_date else None
+    if delivered_date is not None:
+        d.delivered_date = datetime.strptime(delivered_date, "%Y-%m-%d").date() if delivered_date else None
+    if accepted_date is not None:
+        d.accepted_date = datetime.strptime(accepted_date, "%Y-%m-%d").date() if accepted_date else None
+
+    if spec_json is not None:
+        try:
+            import json as _json
+            d.spec_json = _json.loads(spec_json) if spec_json else None
+        except Exception as e:
+            raise HTTPException(400, f"spec_json non valido: {e}")
+
+    # Bridge asset (mutually exclusive con nature)
+    if digital_asset_id is not None:
+        d.digital_asset_id = digital_asset_id or None
+        if digital_asset_id:
+            d.asset_locked_at = datetime.utcnow()
+            if d.status == DeliverableStatus.in_production:
+                d.status = DeliverableStatus.file_attached
+    if physical_asset_id is not None:
+        d.physical_asset_id = physical_asset_id or None
+        if physical_asset_id:
+            d.asset_locked_at = datetime.utcnow()
+            if d.status == DeliverableStatus.in_production:
+                d.status = DeliverableStatus.file_attached
+
+    db.commit()
+    return _serialize_deliverable(d)
+
+
+@router.delete("/api/deliverables/{deliverable_id}")
+async def delete_deliverable(
+    deliverable_id: int,
+    request: Request,
+    db: Session = Depends(get_db),
+):
+    """Soft-delete del deliverable. Booking attribuiti restano (job_deliverable_id resta).
+    Per recuperare: PATCH /api/deliverables/{id}/restore."""
+    from app.services.rbac import current_user_optional, has_permission
+    user = current_user_optional(request)
+    if not has_permission(user, "edit_planning_all") and not has_permission(user, "assign_resources"):
+        raise HTTPException(403, "Permesso insufficiente")
+    d = db.query(JobDeliverable).filter(
+        JobDeliverable.id == deliverable_id,
+        JobDeliverable.tenant_id == CURRENT_TENANT,
+    ).first()
+    if not d:
+        raise HTTPException(404, "Deliverable non trovato")
+    d.deleted_at = datetime.utcnow()
+    db.commit()
+    return {"ok": True, "id": deliverable_id}
+
+
+@router.post("/api/deliverables/{deliverable_id}/restore")
+async def restore_deliverable(
+    deliverable_id: int,
+    request: Request,
+    db: Session = Depends(get_db),
+):
+    from app.services.rbac import current_user_optional, has_permission
+    user = current_user_optional(request)
+    if not has_permission(user, "edit_planning_all") and not has_permission(user, "assign_resources"):
+        raise HTTPException(403, "Permesso insufficiente")
+    d = db.query(JobDeliverable).filter(
+        JobDeliverable.id == deliverable_id,
+        JobDeliverable.tenant_id == CURRENT_TENANT,
+    ).execution_options(include_deleted=True).first()
+    if not d:
+        raise HTTPException(404, "Deliverable non trovato")
+    d.deleted_at = None
+    db.commit()
+    return _serialize_deliverable(d)
+
+
+# ── NAMING HELPER (v3.5.0-alpha.66.9) ────────────────────────
+
+@router.get("/api/naming/presets")
+async def list_naming_presets():
+    """Lista preset di template naming (ISDCF, Netflix, broadcast, ecc.)."""
+    from app.services.naming_helper import PRESET_TEMPLATES, TOKEN_HELP
+    return {"presets": PRESET_TEMPLATES, "tokens": TOKEN_HELP}
+
+
+@router.post("/api/naming/preview")
+async def preview_naming(
+    template: str = Form(...),
+    deliverable_id: Optional[int] = Form(None),
+    overrides_json: Optional[str] = Form(None),
+    db: Session = Depends(get_db),
+):
+    """Risolve un template di naming dati i token del contesto + overrides.
+    Output: nome file generato + lista token ancora mancanti.
+    """
+    from app.services.naming_helper import build_token_dict, resolve_template
+    import json as _json
+
+    overrides = {}
+    if overrides_json:
+        try:
+            overrides = _json.loads(overrides_json) or {}
+            if not isinstance(overrides, dict):
+                raise ValueError("overrides_json deve essere un oggetto")
+        except Exception as e:
+            raise HTTPException(400, f"overrides_json non valido: {e}")
+
+    deliverable = None
+    job = None
+    if deliverable_id:
+        deliverable = db.query(JobDeliverable).filter(
+            JobDeliverable.id == deliverable_id,
+            JobDeliverable.tenant_id == CURRENT_TENANT,
+        ).first()
+        if deliverable:
+            job = db.query(Job).filter(Job.id == deliverable.job_id).first()
+
+    tokens = build_token_dict(
+        db, deliverable=deliverable, job=job, overrides=overrides,
+    )
+    output, missing = resolve_template(template, tokens)
+    return {
+        "output": output,
+        "missing_tokens": missing,
+        "resolved_tokens": tokens,
+    }
+
     return {"ok": True}

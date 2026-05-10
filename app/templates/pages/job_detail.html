@@ -139,6 +139,98 @@
   </div>
 </div>
 
+<!-- ── Tab Consegne / Deliverable (v3.5.0-alpha.66.9) ─────── -->
+<div class="card mt-4">
+  <div class="flex items-center justify-between mb-3">
+    <div class="card-title" style="margin:0;"><i data-lucide="package" style="width:16px;height:16px;vertical-align:-3px;"></i> Consegne</div>
+    {% if can_assign_resources(request.state.current_user) or can_create_booking(request.state.current_user) %}
+    <button class="btn btn-secondary btn-sm" onclick="openNewDeliverable()"><i data-lucide="plus" style="width:14px;height:14px;vertical-align:-2px;"></i> Nuovo deliverable</button>
+    {% endif %}
+  </div>
+  <p class="text-sm text-muted mb-3" style="margin-top:0;">
+    File e supporti fisici da consegnare al cliente (DCP, ProRes, IMF, LTO, drive, Blu-Ray).
+    Ogni deliverable ha specifiche tecniche, naming convention e (in futuro) QC automatico AI.
+    Le ore di booking attribuite contano come <b>hardcost interno</b> nel cost report (non visibile al cliente).
+  </p>
+  <div id="deliverables-list">
+    <div class="text-muted text-sm" style="padding:14px;text-align:center;">Caricamento…</div>
+  </div>
+</div>
+
+<!-- Modal nuovo deliverable -->
+<div class="modal-overlay" id="modal-new-deliverable">
+  <div class="modal" style="max-width:680px;">
+    <div class="modal-header"><span class="modal-title">Nuovo deliverable</span>
+      <button class="btn btn-ghost btn-icon" onclick="closeModal('modal-new-deliverable')">✕</button></div>
+    <div class="modal-body">
+      <div class="form-row">
+        <div class="form-group" style="flex:2;"><label class="form-label">Nome *</label>
+          <input class="form-input" id="dlv-name" placeholder="Es: DCP INTEROP 2K — Featurette IT" maxlength="255"></div>
+        <div class="form-group" style="max-width:140px;"><label class="form-label">Natura *</label>
+          <select class="form-select" id="dlv-nature">
+            <option value="digital">Digitale</option>
+            <option value="physical">Fisico</option>
+          </select></div>
+        <div class="form-group" style="max-width:90px;"><label class="form-label">Quantità</label>
+          <input class="form-input" id="dlv-qty" type="number" min="1" max="50" value="1"
+                 title="Crea N deliverable separati (es. 3 DCP per 3 territori)"></div>
+      </div>
+      <div class="form-row">
+        <div class="form-group"><label class="form-label">Lavorazione di origine</label>
+          <select class="form-select" id="dlv-jcl"><option value="">— nessuna —</option></select></div>
+        <div class="form-group"><label class="form-label">Voce listino</label>
+          <select class="form-select" id="dlv-price-item"><option value="">— nessuna —</option></select></div>
+      </div>
+      <div class="form-row">
+        <div class="form-group"><label class="form-label">Risorsa primaria (responsabile)</label>
+          <select class="form-select" id="dlv-resource"><option value="">— nessuno —</option></select></div>
+        <div class="form-group" style="max-width:140px;"><label class="form-label">Ore stimate</label>
+          <input class="form-input" id="dlv-hours" type="number" step="0.5" min="0" placeholder="0"></div>
+        <div class="form-group" style="max-width:160px;"><label class="form-label">Consegna entro</label>
+          <input class="form-input" id="dlv-target" type="date"></div>
+      </div>
+      <div class="form-group">
+        <label class="form-label" style="display:flex;justify-content:space-between;align-items:center;">
+          <span>Naming convention</span>
+          <select class="form-select" id="dlv-naming-preset" style="max-width:280px;">
+            <option value="">— libero —</option>
+          </select>
+        </label>
+        <input class="form-input" id="dlv-naming" placeholder="es. MareNostrum_FTR-F_IT-it_51_2K_…">
+        <div class="text-xs text-muted" style="margin-top:4px;" id="dlv-naming-help">
+          Token disponibili: <code>{film_name}</code>, <code>{territory}</code>, <code>{audio_config}</code>, ecc.
+          Genera automaticamente con il preset.
+        </div>
+      </div>
+      <details>
+        <summary class="text-sm text-muted" style="cursor:pointer;">▸ Specifiche tecniche (opzionali)</summary>
+        <div class="form-row" style="margin-top:10px;">
+          <div class="form-group"><label class="form-label">Risoluzione</label>
+            <input class="form-input" id="dlv-spec-resolution" placeholder="2K / 4K / UHD"></div>
+          <div class="form-group"><label class="form-label">Frame rate</label>
+            <input class="form-input" id="dlv-spec-framerate" placeholder="24 / 25 / 2997"></div>
+          <div class="form-group"><label class="form-label">Audio config</label>
+            <input class="form-input" id="dlv-spec-audio" placeholder="51 / 71 / Atmos"></div>
+        </div>
+        <div class="form-row">
+          <div class="form-group"><label class="form-label">Lingua audio</label>
+            <input class="form-input" id="dlv-spec-lang-audio" placeholder="it / en / fr"></div>
+          <div class="form-group"><label class="form-label">Lingua sub</label>
+            <input class="form-input" id="dlv-spec-lang-subs" placeholder="en"></div>
+          <div class="form-group"><label class="form-label">Territorio</label>
+            <input class="form-input" id="dlv-spec-territory" placeholder="IT / US / INT"></div>
+        </div>
+      </details>
+      <div class="form-group"><label class="form-label">Note</label>
+        <textarea class="form-input" id="dlv-notes" rows="2"></textarea></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeModal('modal-new-deliverable')">Annulla</button>
+      <button class="btn btn-primary" onclick="saveDeliverable()">Crea deliverable</button>
+    </div>
+  </div>
+</div>
+
 <!-- ── Modal aggiungi lavorazione extra ────────────────────── -->
 <div class="modal-overlay" id="modal-add-extra">
   <div class="modal">
@@ -552,5 +644,194 @@ async function deleteLine() {
 }
 
 loadJob();
+
+// ── Deliverable management (v3.5.0-alpha.66.9) ───────────────
+const DLV_STATUS_LABEL = {
+  planned: 'Pianificato', in_production: 'In produzione',
+  file_attached: 'File linkato', qc_running: 'QC in corso',
+  qc_passed: 'QC passato', qc_failed: 'QC fallito',
+  delivered: 'Consegnato', accepted: 'Accettato', rejected: 'Rifiutato',
+};
+const DLV_STATUS_COLOR = {
+  planned: 'var(--muted)', in_production: 'var(--primary)',
+  file_attached: '#3b82f6', qc_running: '#f59e0b',
+  qc_passed: '#22c55e', qc_failed: '#ef4444',
+  delivered: '#0ea5e9', accepted: '#10b981', rejected: '#dc2626',
+};
+let _dlvNamingPresets = [];
+
+async function loadDeliverables() {
+  const target = document.getElementById('deliverables-list');
+  try {
+    const list = await api('GET', `/jobs/api/${JOB_ID}/deliverables`);
+    if (!list.length) {
+      target.innerHTML = `<div class="text-muted text-sm" style="padding:20px;text-align:center;">Nessun deliverable. Aggiungi il primo con "+ Nuovo deliverable".</div>`;
+      return;
+    }
+    target.innerHTML = list.map(d => renderDeliverableCard(d)).join('');
+    if (typeof lucide !== 'undefined' && lucide.createIcons) lucide.createIcons();
+  } catch(e) {
+    target.innerHTML = `<div class="text-sm" style="color:var(--rose);padding:14px;">${e.message}</div>`;
+  }
+}
+
+function renderDeliverableCard(d) {
+  const statusBadge = `<span style="display:inline-block;padding:2px 8px;border-radius:3px;background:${DLV_STATUS_COLOR[d.status]};color:#fff;font-size:11px;">${DLV_STATUS_LABEL[d.status] || d.status}</span>`;
+  const natureBadge = `<span style="display:inline-block;padding:2px 6px;border-radius:3px;background:${d.nature === 'physical' ? '#a855f7' : '#6272f5'};color:#fff;font-size:10px;text-transform:uppercase;">${d.nature}</span>`;
+  const target = d.target_delivery_date ? `<span class="text-xs text-muted">📅 ${d.target_delivery_date}</span>` : '';
+  const hours = d.actual_hours ? `<span class="text-xs text-muted" title="Ore booking attribuiti">⏱ ${d.actual_hours}h</span>` : '';
+  const fileNaming = d.file_naming ? `<div class="text-xs" style="font-family:monospace;color:var(--text2);margin-top:2px;">📝 ${escapeHtml(d.file_naming)}</div>` : '';
+  return `
+    <div class="card" style="margin-bottom:8px;padding:12px 14px;">
+      <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
+        <div style="flex:1;min-width:240px;">
+          <div style="font-weight:500;">${escapeHtml(d.name)}</div>
+          ${fileNaming}
+        </div>
+        <div style="display:flex;gap:8px;align-items:center;">
+          ${natureBadge}
+          ${statusBadge}
+          ${target}
+          ${hours}
+          <button class="btn btn-ghost btn-sm" onclick="deleteDeliverable(${d.id})" title="Elimina deliverable" style="color:var(--rose);"><i data-lucide="trash-2" style="width:13px;height:13px;"></i></button>
+        </div>
+      </div>
+    </div>`;
+}
+
+async function openNewDeliverable() {
+  // Reset form
+  ['dlv-name','dlv-naming','dlv-hours','dlv-target','dlv-notes',
+   'dlv-spec-resolution','dlv-spec-framerate','dlv-spec-audio',
+   'dlv-spec-lang-audio','dlv-spec-lang-subs','dlv-spec-territory'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.value = '';
+  });
+  document.getElementById('dlv-nature').value = 'digital';
+  document.getElementById('dlv-qty').value = '1';
+  document.getElementById('dlv-naming-preset').value = '';
+
+  // Carica naming presets se non già fatto
+  if (!_dlvNamingPresets.length) {
+    try {
+      const data = await api('GET', '/jobs/api/naming/presets');
+      _dlvNamingPresets = data.presets;
+      const sel = document.getElementById('dlv-naming-preset');
+      sel.innerHTML = '<option value="">— libero —</option>' +
+        _dlvNamingPresets.map(p => `<option value="${p.id}">${escapeHtml(p.label)}</option>`).join('');
+    } catch(e) { /* silent */ }
+  }
+
+  // Carica lavorazioni del job per dropdown jcl
+  try {
+    const lines = await api('GET', `/jobs/api/${JOB_ID}`);
+    const sel = document.getElementById('dlv-jcl');
+    sel.innerHTML = '<option value="">— nessuna —</option>' +
+      (lines.cost_lines || []).map(l =>
+        `<option value="${l.id}">${escapeHtml(l.description)} · ${l.quantity_quoted} ${escapeHtml(l.unit||'')}</option>`
+      ).join('');
+  } catch(e) { /* silent */ }
+
+  // Carica voci listino + risorse (riusa endpoint generici)
+  try {
+    const items = await api('GET', '/pricelist/api/items?active_only=true');
+    const sel = document.getElementById('dlv-price-item');
+    sel.innerHTML = '<option value="">— nessuna —</option>' +
+      items.map(it => `<option value="${it.id}">${escapeHtml(it.name)}</option>`).join('');
+  } catch(e) { /* silent */ }
+  try {
+    const resources = await api('GET', '/resources/api/list');
+    const sel = document.getElementById('dlv-resource');
+    sel.innerHTML = '<option value="">— nessuno —</option>' +
+      (resources || []).map(r => `<option value="${r.id}">${escapeHtml(r.name)} (${escapeHtml(r.role||'')})</option>`).join('');
+  } catch(e) { /* silent */ }
+
+  openModal('modal-new-deliverable');
+}
+
+// Live preview del naming quando cambiano i campi spec
+document.addEventListener('input', async (e) => {
+  if (!['dlv-spec-resolution','dlv-spec-framerate','dlv-spec-audio',
+        'dlv-spec-lang-audio','dlv-spec-lang-subs','dlv-spec-territory',
+        'dlv-naming-preset'].includes(e.target.id)) return;
+  const presetId = document.getElementById('dlv-naming-preset').value;
+  if (!presetId) return;
+  const preset = _dlvNamingPresets.find(p => p.id === presetId);
+  if (!preset || !preset.template) return;
+  const overrides = {
+    resolution: document.getElementById('dlv-spec-resolution').value,
+    framerate: document.getElementById('dlv-spec-framerate').value,
+    audio_config: document.getElementById('dlv-spec-audio').value,
+    lang_audio: document.getElementById('dlv-spec-lang-audio').value,
+    lang_subs: document.getElementById('dlv-spec-lang-subs').value,
+    territory: document.getElementById('dlv-spec-territory').value,
+  };
+  try {
+    const fd = new FormData();
+    fd.append('template', preset.template);
+    fd.append('overrides_json', JSON.stringify(overrides));
+    const r = await fetch('/jobs/api/naming/preview', { method:'POST', body: fd });
+    if (r.ok) {
+      const j = await r.json();
+      document.getElementById('dlv-naming').value = j.output;
+      const help = document.getElementById('dlv-naming-help');
+      if (j.missing_tokens.length) {
+        help.textContent = `Token mancanti: ${j.missing_tokens.join(', ')} (compila i campi sotto per popolare)`;
+        help.style.color = 'var(--warning, #f59e0b)';
+      } else {
+        help.textContent = `✓ Tutti i token risolti.`;
+        help.style.color = 'var(--text-muted)';
+      }
+    }
+  } catch(e) { /* silent */ }
+});
+
+async function saveDeliverable() {
+  const name = document.getElementById('dlv-name').value.trim();
+  if (!name) { toast('Nome obbligatorio', 'error'); return; }
+  const fd = new FormData();
+  fd.append('name', name);
+  fd.append('nature', document.getElementById('dlv-nature').value);
+  fd.append('quantity', document.getElementById('dlv-qty').value || '1');
+  const jcl = document.getElementById('dlv-jcl').value;
+  if (jcl) fd.append('job_cost_line_id', jcl);
+  const pi = document.getElementById('dlv-price-item').value;
+  if (pi) fd.append('price_item_id', pi);
+  const res = document.getElementById('dlv-resource').value;
+  if (res) fd.append('primary_resource_id', res);
+  const hours = document.getElementById('dlv-hours').value;
+  if (hours) fd.append('estimated_hours', hours);
+  const target = document.getElementById('dlv-target').value;
+  if (target) fd.append('target_delivery_date', target);
+  const naming = document.getElementById('dlv-naming').value.trim();
+  if (naming) fd.append('file_naming', naming);
+  const notes = document.getElementById('dlv-notes').value.trim();
+  if (notes) fd.append('notes', notes);
+  // Spec JSON da campi tecnici
+  const spec = {};
+  ['resolution','framerate','audio_config','lang_audio','lang_subs','territory'].forEach(k => {
+    const v = document.getElementById('dlv-spec-' + (k === 'audio_config' ? 'audio' : k))?.value?.trim();
+    if (v) spec[k] = v;
+  });
+  if (Object.keys(spec).length) fd.append('spec_json', JSON.stringify(spec));
+
+  try {
+    const r = await api('POST', `/jobs/api/${JOB_ID}/deliverables`, fd);
+    closeModal('modal-new-deliverable');
+    toast(`${r.created} deliverable creati`, 'success');
+    loadDeliverables();
+  } catch(e) { toast(e.message || 'Errore', 'error'); }
+}
+
+async function deleteDeliverable(id) {
+  if (!confirm('Spostare il deliverable nel cestino?')) return;
+  try {
+    await api('DELETE', `/jobs/api/deliverables/${id}`);
+    toast('Deliverable eliminato', 'success');
+    loadDeliverables();
+  } catch(e) { toast(e.message || 'Errore', 'error'); }
+}
+
+loadDeliverables();
 </script>
 {% endblock %}

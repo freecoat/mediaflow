@@ -8,6 +8,44 @@
 
 ## Versione corrente
 
+**v3.5.0-alpha.66.9** — 10 maggio 2026 — JobDeliverable + cost-rate Resource + DAM physical + naming helper
+
+Substrato dati per il modello deliverable. UI completa rinviata a α.66.10+.
+
+**Nuovi modelli**: `JobDeliverable`, `PhysicalAsset` (separato da Asset
+digitale per chiarezza, vedi memoria `project_dam_physical_assets`).
+
+**Estesi**: `Asset` (+ flag archive/delivery + bridge deliverable),
+`Booking` (+ job_deliverable_id per hardcost interno),
+`Resource` (+ cost_type + monthly_gross_salary + freelance_hourly_cost +
+studio_hourly_cost + property `internal_cost_hourly`).
+
+**Naming helper** con 34 token e 9 preset (ISDCF DCP cinema, Netflix
+Picture Archival, IMF, DPP/AS-11 broadcast, ProRes, screener, LTO label,
+custom). Token resolver con build_token_dict + resolve_template +
+overrides utente live.
+
+**8 endpoint nuovi** sotto `/jobs/api/`: CRUD deliverable + naming presets
++ naming preview.
+
+**UI MVP**: blocco "Consegne" in `/jobs/{id}` sotto Lavorazioni con lista
++ modal "Nuovo deliverable" + live preview naming dal preset.
+
+**Smoke E2E**: create qty=3 → 3 deliverable separati con suffix (i/N) +
+hardcost calc verificato (4h × €27.51 employee = €110.04).
+
+**Smoke**: 295 routes (+8), version 3.5.0-alpha.66.9.
+
+**Cosa NON è in α.66.9** (apre α.66.10+):
+- Kanban + drag stato; UI edit completo con asset link DAM
+- CRUD PhysicalAsset (modello solo, no UI ancora)
+- Copilot QC (ffprobe + LLM contro spec_json)
+- Cost report split cliente vs interno
+- UI cost-rate in `/resources/{id}` con live preview calc
+- Tool generazione nomi file completo (regole, validazione, batch)
+
+---
+
 **v3.5.0-alpha.66.8** — 10 maggio 2026 — Listino lean 79 → 43 (–46%) + seed_demo rifattorizzato
 
 Scrematura del listino base secondo mappatura concordata. Le specifiche
@@ -61,8 +99,10 @@ strategica con Matteo (10 maggio). Sequenza concordata:
 | α.66.6 | Backup/restore listino (snapshot DB + UI dedicata) | ✅ chiuso |
 | α.66.7 | Snapshot legacy committato come preset built-in | ✅ chiuso |
 | α.66.8 | Semplificazione listino base (79 → 43 voci, –46%, descrizione modulare) | ✅ chiuso |
-| α.66.9 | Modello `JobDeliverable` + cost-rate Resource (employee/freelance/studio) + estensione DAM asset fisici | 🔜 next |
-| α.66.10+ | UI deliverable + asset library bridge + copilot QC + cost report split (cliente vs interno) | 🔜 |
+| α.66.9 | Modello `JobDeliverable` + cost-rate Resource + DAM digital/physical separato + naming helper Netflix/ISDCF | ✅ chiuso |
+| α.66.10 | UI deliverable kanban + edit modal + bridge DAM digital/physical | 🔜 next |
+| α.66.11 | Tool generazione nomi file completo + CRUD PhysicalAsset UI | 🔜 |
+| α.66.12 | Copilot QC (ffprobe + LLM contro spec_json) + cost report split cliente vs interno | 🔜 |
 
 **Decisioni architetturali fissate (10 maggio)** per i prossimi step:
 - **Deliverable ≠ "no ore"**: anche un DCP/ProRes ha ore di produzione che vanno

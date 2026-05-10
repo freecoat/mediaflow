@@ -257,6 +257,52 @@ def _auto_migrate_columns():
                     "ALTER TABLE jobs ADD COLUMN weighted_revenue "
                     "BOOLEAN NOT NULL DEFAULT 0"
                 ))
+    # v3.5.0-alpha.66.9 — JobDeliverable + cost-rate Resource + DAM physical.
+    # Le NUOVE tabelle job_deliverables e physical_assets vengono create
+    # automaticamente da Base.metadata.create_all() prima di questa funzione.
+    # Qui solo le ALTER TABLE per le colonne aggiunte a tabelle esistenti.
+    if "bookings" in insp.get_table_names():
+        bcols = {c["name"] for c in insp.get_columns("bookings")}
+        if "job_deliverable_id" not in bcols:
+            print("[auto-migrate] bookings.job_deliverable_id mancante -> ALTER TABLE")
+            with engine.begin() as conn:
+                conn.execute(text(
+                    "ALTER TABLE bookings ADD COLUMN job_deliverable_id INTEGER NULL "
+                    "REFERENCES job_deliverables(id)"
+                ))
+    if "assets" in insp.get_table_names():
+        acols = {c["name"] for c in insp.get_columns("assets")}
+        asset_alter = [
+            ("job_deliverable_id",     "INTEGER NULL REFERENCES job_deliverables(id)"),
+            ("is_internal_archive",    "BOOLEAN NOT NULL DEFAULT 0"),
+            ("is_delivered_external",  "BOOLEAN NOT NULL DEFAULT 0"),
+            ("delivered_at",           "DATETIME NULL"),
+            ("delivered_to",           "VARCHAR(255) NULL"),
+            ("delivery_method",        "VARCHAR(80) NULL"),
+            ("delivery_tracking",      "VARCHAR(255) NULL"),
+        ]
+        with engine.begin() as conn:
+            for col, ddl in asset_alter:
+                if col not in acols:
+                    print(f"[auto-migrate] assets.{col} mancante -> ALTER TABLE")
+                    conn.execute(text(f"ALTER TABLE assets ADD COLUMN {col} {ddl}"))
+    if "resources" in insp.get_table_names():
+        rcols = {c["name"] for c in insp.get_columns("resources")}
+        resource_alter = [
+            ("cost_type",                "VARCHAR(20) NULL"),
+            ("monthly_gross_salary",     "REAL NULL"),
+            ("annual_bonus_months",      "REAL NULL"),
+            ("cost_multiplier_oneri",    "REAL NULL"),
+            ("annual_working_hours",     "REAL NULL"),
+            ("freelance_hourly_cost",    "REAL NULL"),
+            ("studio_hourly_cost",       "REAL NULL"),
+        ]
+        with engine.begin() as conn:
+            for col, ddl in resource_alter:
+                if col not in rcols:
+                    print(f"[auto-migrate] resources.{col} mancante -> ALTER TABLE")
+                    conn.execute(text(f"ALTER TABLE resources ADD COLUMN {col} {ddl}"))
+
     # v3.5.0-alpha.66.5 — Stato unificato booking (BookingState canonico).
     # Aggiunge bookings.state e popola dai legacy (status + execution_status).
     if "bookings" in insp.get_table_names():
@@ -501,7 +547,7 @@ async def lifespan(app: FastAPI):
     yield
 
 
-app = FastAPI(title="MediaFlow", version="3.5.0-alpha.66.8", lifespan=lifespan)
+app = FastAPI(title="MediaFlow", version="3.5.0-alpha.66.9", lifespan=lifespan)
 
 BASE_DIR = Path(__file__).parent
 app.mount("/static", StaticFiles(directory=BASE_DIR / "static"), name="static")
