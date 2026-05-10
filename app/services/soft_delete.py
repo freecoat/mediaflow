@@ -1,18 +1,22 @@
 """
-MediaFlow — Soft-delete framework (v3.5.0-alpha.7)
+MediaFlow — Soft-delete framework (v3.5.0-alpha.7, esteso α.66.15.3)
 
-Per ora copre la sola entità `Quote`. Il pattern è generico: per estendere
-ad altre entità (Project, Client, Resource, …) basta:
+Estensione α.66.15.3 (sprint R2): copre ora 5 entità: Quote, Project,
+PricelistSnapshot, PhysicalAsset, JobDeliverable. Tutte hanno colonna
+`deleted_at` e vengono auto-filtrate dalle SELECT salvo bypass esplicito.
+
+Pattern generico: per estendere ad altre entità basta:
 
   1. Aggiungere `deleted_at` + `deleted_by_user_id` al modello
   2. Aggiungere il modello a `_SOFT_DELETE_MODELS`
-  3. Aggiornare l'auto-migrate in `app/main.py`
+  3. Aggiornare l'auto-migrate in `app/main.py` (se nuova colonna su tabella esistente)
 
 Il filter automatico è implementato via SQLAlchemy 2.0 `with_loader_criteria`
 applicato dentro un event listener su `do_orm_execute`. Esclude di default
 qualsiasi record con `deleted_at IS NOT NULL`.
 
-Per bypassare il filter (es. pagina cestino, restore, audit), usare:
+Per bypassare il filter (es. pagina cestino, restore, audit, pre-check
+unicità di un campo che il record cestinato occupa ancora), usare:
 
     db.query(Quote).execution_options(include_deleted=True).all()
 
@@ -20,6 +24,10 @@ oppure il context manager:
 
     with include_deleted(db):
         deleted_quotes = db.query(Quote).filter(Quote.deleted_at.isnot(None)).all()
+
+Per le pre-check di unicità su rename/INSERT, usare il helper
+`is_unique_or_deleted_aware` (v3.5.0-alpha.66.15.4) che fa il bypass
+automaticamente.
 """
 from __future__ import annotations
 import logging
@@ -33,6 +41,7 @@ from sqlalchemy.orm import Session, with_loader_criteria
 from app.models.models import (
     Quote, QuoteLine, Job, JobCostLine, Booking, BookingAssignment,
     BookingStatus, JobResourceAssignment, Project, User,
+    PricelistSnapshot, PhysicalAsset, JobDeliverable,
 )
 
 logger = logging.getLogger(__name__)
@@ -41,7 +50,14 @@ logger = logging.getLogger(__name__)
 # ── Modelli soggetti al filter automatico ──────────────────────
 
 # Aggiungere qui per estendere il pattern. Il modello deve avere `deleted_at`.
-_SOFT_DELETE_MODELS = (Quote, Project)
+# v3.5.0-alpha.66.15.3 (R2.0): aggiunti i 3 modelli che avevano deleted_at
+# come colonna ma non erano nel filter auto (audit pattern systemico B).
+_SOFT_DELETE_MODELS = (
+    Quote, Project,
+    PricelistSnapshot,   # introdotta α.66.6
+    PhysicalAsset,       # introdotta α.66.9
+    JobDeliverable,      # introdotta α.66.9
+)
 
 
 # ── Event listener: filtra di default ──────────────────────────

@@ -1,5 +1,35 @@
 # MediaFlow — Changelog
 
+## v3.5.0-alpha.66.15.3 — Sprint R2 Step 0: soft-delete framework esteso (11 maggio 2026)
+
+Apre R2 — Soft-delete framework completo. Audit pattern systemico B:
+5 modelli avevano `deleted_at` come colonna ma solo 2 erano nel filter
+auto → record cestinati visibili nelle query a default.
+
+**`_SOFT_DELETE_MODELS` esteso** (`app/services/soft_delete.py:44`) da
+`(Quote, Project)` a:
+- Quote
+- Project
+- **PricelistSnapshot** (introdotta α.66.6)
+- **PhysicalAsset** (introdotta α.66.9)
+- **JobDeliverable** (introdotta α.66.9)
+
+Effetto: ogni `db.query(PhysicalAsset)` (e altri 2) auto-applica
+`WHERE deleted_at IS NULL`. Bypass via `execution_options(include_deleted=True)`
+come da pattern esistente.
+
+**Smoke**: `_install_soft_delete_filter()` registra il listener,
+import resolve tutti i 5 modelli, 302 routes invariato.
+
+**Cosa NON è ancora chiuso** (R2.1+):
+- Pre-check unicità su Project.code/Quote.number rename → helper unique-aware
+  (audit HIGH #2). Già fatto inline in `_next_quote_number_progressive`,
+  manca per Project.
+- Force-purge cascade incompleta su `JCLBilledSlice` / `BookingChange` /
+  `JobResourceAssignment` orfani (audit MEDIUM services).
+
+---
+
 ## v3.5.0-alpha.66.15.2 — Sprint R1 Step 2: tenant filter su query critiche (11 maggio 2026)
 
 Continua R1. Applica `tenant_id == CURRENT_TENANT` alle query LIST + by-id

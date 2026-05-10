@@ -8,6 +8,18 @@
 
 ## Versione corrente
 
+**v3.5.0-alpha.66.15.3** — 11 maggio 2026 — Sprint R2 Step 0: soft-delete esteso
+
+_SOFT_DELETE_MODELS da 2 a 5 modelli: aggiunti PricelistSnapshot,
+PhysicalAsset, JobDeliverable. Filter auto su SELECT, bypass via
+execution_options(include_deleted=True). Chiude pattern systemico B audit.
+
+Helper unique-aware + cascade purge orfani in R2.1+.
+
+**Smoke**: 302 routes invariato, version 3.5.0-alpha.66.15.3.
+
+---
+
 **v3.5.0-alpha.66.15.2** — 11 maggio 2026 — Sprint R1 Step 2: tenant filter
 
 Tenant filter applicato a list+by-id critici dei 4 router maggiori
