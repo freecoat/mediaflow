@@ -8,6 +8,44 @@
 
 ## Versione corrente
 
+**v3.5.0-alpha.66.14.9** — 11 maggio 2026 — CSS extract da planning.html
+
+Apre il refactor "file giganti" suggerito dall'audit. planning.html da
+7377 → 6747 righe (–9%). CSS vive in app/static/css/planning.css (682
+righe). Cache HTTP indipendente, IDE meno stressato, diff git pulito.
+
+PR2 (split partial Jinja) e PR3 (moduli JS) restano backlog R5.
+
+**Smoke**: 302 routes invariato, version 3.5.0-alpha.66.14.9.
+
+---
+
+## Cantiere consolidamento (M1) — quick wins post-audit
+
+**Sessione 11 maggio 2026** — chiuse 11/11 quick wins:
+
+| QW | Versione | Descrizione | File toccati |
+|----|----------|-------------|--------------|
+| 1  | α.66.14   | Modal a11y completa (focus trap + Esc + ARIA) | global.js |
+| 2  | α.66.14.1 | Light mode auto-on planning sopra soglia | planning.html |
+| 3  | α.66.14.2 | Auth fail-closed via env flag | config.py + auth.py + 5 router |
+| 4  | α.66.14.3 | Tenant scope build_context AI | ai_assistant.py |
+| 5  | α.66.14.4 | Upload copilot security (auth+MIME+ownership) | copilot_attachments.py + ai.py |
+| 6  | α.66.14.5 | Permission gate mutator quote (11 endpoint) | quotes.py |
+| 7  | α.66.14.6 | Slice-lock re-check su new dates AI move/resize | ai_assistant.py |
+| 8  | α.66.14.7 | Anthropic prompt caching (~90% saving) | ai_provider.py |
+| 9  | α.66.14.8 | Numbering service unificato + soft-delete bypass | numbering.py + quotes.py + billing.py |
+| 10 | α.66.14.8 | (combinato con 9) include_deleted ovunque pre-check | (vedi 9) |
+| 11 | α.66.14.9 | CSS extract planning.html (–9% righe) | planning.html + planning.css |
+
+**11 commit**, tutti su origin/main al prossimo push (autorizzazione Matteo).
+
+**Prossimo step (M1 in corso)**: sprint R1 (tenant scope DI), R2 (soft-delete
+framework completo), R3 (permission gate sweep su tutti i mutator). Vedi
+audit roadmap sopra.
+
+---
+
 **v3.5.0-alpha.66.14.8** — 11 maggio 2026 — Numbering service unificato
 
 Pattern systemico C dell'audit. app/services/numbering.py centralizza

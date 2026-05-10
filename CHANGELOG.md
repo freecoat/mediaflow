@@ -1,5 +1,37 @@
 # MediaFlow — Changelog
 
+## v3.5.0-alpha.66.14.9 — CSS extract da planning.html (11 maggio 2026)
+
+Quick win post-audit #11. Apre il refactor "file giganti" iniziando dal
+più gigante: `planning.html` da 7377 → 6747 righe (–9%, 1° passo PR1
+del refactor planning suggerito dall'audit frontend).
+
+**Nuovo file**: `app/static/css/planning.css` (682 righe, schema 1.0).
+Selettori che vivono SOLO in /planning: `.pl-*`, `.tl-*`, `.tlb-*`,
+`.sb-*`, `.fa-*` + override scoped vis-timeline.
+
+**Modifica `planning.html`**:
+- `<link rel="stylesheet" href="/static/css/planning.css?v=3.5.0-alpha.66.14.9">`
+- Blocco `<style>` ridotto a 1 commento esplicativo + chiusura.
+
+**Beneficio immediato**:
+- Cache HTTP indipendente: una modifica CSS non invalida tutto l'HTML
+  della pagina (era unico cache key).
+- Hot-reload selettivo: editor live-reload solo del file CSS toccato.
+- IDE indicizza meglio: 6747 righe HTML vs 7377 prima → completion JS
+  più veloce.
+- Diff git pulito: modifiche stilistiche separate da modifiche struttura.
+
+**NON è in questa versione** (PR2/PR3 dell'audit):
+- Spezzare `planning.html` in partial Jinja (modal booking, view tabs,
+  filtri, bulk).
+- Spezzare il blocco `<script>` JS in moduli `static/js/planning/*`.
+
+**Smoke**: 302 routes invariato, version 3.5.0-alpha.66.14.9. CSS path
+`/static/css/planning.css` accessibile via StaticFiles mount esistente.
+
+---
+
 ## v3.5.0-alpha.66.14.8 — Numbering service unificato + soft-delete bypass everywhere (11 maggio 2026)
 
 Quick win post-audit #9+#10 (combinati). Chiude la mancanza di soft-delete

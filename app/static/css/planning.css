@@ -1,0 +1,682 @@
+/* MediaFlow — planning.css
+ * Estratto da app/templates/pages/planning.html (in-template <style>) in
+ * v3.5.0-alpha.66.14.9. Quick win post-audit #11 — riduce planning.html da
+ * 7377 righe a ~6710, abilita cache HTTP indipendente del CSS, IDE/diff
+ * meno stressati. Comportamento visivo invariato.
+ *
+ * Convenzioni:
+ * - Selettori che vivono SOLO in /planning (pl-*, tl-*, tlb-*, sb-*, fa-*)
+ * - Override vis-timeline 7.x scoped via .vis-* dentro #tl-host
+ * - Light mode (data-light="on") disabilita transizioni/animation per perf
+ *
+ * NB: gli override vis-timeline usano !important perché la libreria injecta
+ * stili inline. Non rimuoverli senza testare zoom giorno/sett/mese su
+ * dataset reale (vedi memoria feedback_vis_timeline_quirks.md).
+ */
+  .pl-shell { display: flex; gap: 16px; align-items: flex-start; }
+  .pl-shell > .pl-filters { width: 240px; flex-shrink: 0; }
+  .pl-shell > .pl-main { flex: 1 1 auto; min-width: 0; } /* min-width:0 evita che vis-timeline forzi overflow */
+  .pl-shell.filters-collapsed > .pl-filters { display: none; }
+  .pl-filters { background: var(--bg-elev,#1a1d29); border: 1px solid var(--border,#2a2e3d); border-radius: 8px; padding: 14px; position: sticky; top: 12px; }
+  .pl-toggle-filters { background: var(--bg-elev,#1a1d29); border: 1px solid var(--border,#2a2e3d); color: var(--text2,#aaa); border-radius: 6px; padding: 6px 10px; font-size: 12px; cursor: pointer; margin-bottom: 10px; display: inline-flex; align-items: center; gap: 6px; }
+  .pl-toggle-filters:hover { color: var(--text,#eee); border-color: #6272f5; }
+  .pl-toggle-filters .badge-n { background: #6272f5; color: #fff; padding: 1px 6px; border-radius: 8px; font-size: 10px; font-weight: 600; }
+  .pl-filters h4 { font-size: 11px; text-transform: uppercase; letter-spacing: .8px; color: var(--text3,#888); margin: 0 0 8px; }
+  .pl-filters .form-group { margin-bottom: 10px; }
+  .pl-filters .form-group label { font-size: 11px; color: var(--text3,#888); margin-bottom: 3px; display: block; }
+  .pl-filters select, .pl-filters input { width: 100%; }
+  .pl-tabs { display: flex; gap: 2px; margin-bottom: 14px; flex-wrap: wrap; border-bottom: 1px solid var(--border,#2a2e3d); }
+  .pl-tab { padding: 8px 14px; cursor: pointer; font-size: 13px; color: var(--text2,#aaa); border-bottom: 2px solid transparent; user-select: none; }
+  .pl-tab:hover { color: var(--text,#eee); }
+  .pl-tab.active { color: var(--text,#eee); border-bottom-color: #6272f5; font-weight: 500; }
+  .pl-view { display: none; }
+  .pl-view.active { display: block; }
+  .pl-empty { padding: 32px; text-align: center; color: var(--text3,#888); }
+  .agenda-day { margin-bottom: 18px; }
+  .agenda-day-header { font-size: 12px; text-transform: uppercase; color: var(--text3); letter-spacing: 1px; padding: 6px 10px; background: var(--bg3,#22253a); border-radius: 4px 4px 0 0; }
+  .agenda-evt { display: grid; grid-template-columns: 80px 1fr auto; gap: 12px; padding: 8px 10px; border-bottom: 1px solid var(--border); align-items: center; }
+  .agenda-evt:hover { background: rgba(98,114,245,0.05); }
+  .agenda-evt .time { color: var(--text3); font-size: 12px; font-variant-numeric: tabular-nums; }
+  .agenda-evt .title { font-size: 13px; }
+  .agenda-evt .badge-src { font-size: 10px; padding: 2px 6px; border-radius: 8px; font-weight: 600; }
+  .badge-src.booking { background: rgba(98,114,245,0.2); color: #6272f5; }
+  .badge-src.punch { background: rgba(156,163,175,0.2); color: #aaa; }
+  /* ── Card "Le mie" (booking esecutivo, v3.4.32) ─────────────── */
+  .todo-card { background: var(--bg-elev); border: 1px solid var(--border); border-left: 4px solid #6272f5; border-radius: 6px; padding: 10px 14px; margin-bottom: 8px; position: relative; }
+  /* Priorità: bordo sinistro */
+  .todo-card.prio-low    { border-left-color: #6b7280; }
+  .todo-card.prio-normal { border-left-color: #6272f5; }
+  .todo-card.prio-high   { border-left-color: #ef4444; }
+  /* Stato esecuzione: opacità + accent */
+  .todo-card.exec-in_progress { box-shadow: 0 0 0 1px rgba(98,114,245,.4) inset; }
+  .todo-card.exec-done { opacity: .6; }
+  .todo-card.exec-not_done { opacity: .55; background: rgba(239,68,68,.04); }
+  /* Overtime pending = pulse warning */
+  .todo-card.ot-pending { box-shadow: 0 0 0 2px rgba(251,146,60,.55) inset; }
+  .todo-card .when { font-size: 11px; text-transform: uppercase; color: var(--text3); font-variant-numeric: tabular-nums; }
+  .todo-card .when.late { color: #ef4444; font-weight: 600; }
+  .todo-card .when.today { color: #fb923c; font-weight: 600; }
+  .todo-card .what { font-size: 14px; font-weight: 500; margin-top: 2px; }
+  .todo-card .meta { font-size: 12px; color: var(--text3); margin-top: 4px; }
+  .todo-card .duration-strip { display:flex; align-items:center; gap:6px; margin-top:8px; padding:6px 8px; background: rgba(255,255,255,.02); border-radius: 4px; font-size: 12px; }
+  .todo-card .duration-strip .dur-label { color: var(--text3); }
+  .todo-card .duration-strip .dur-value { font-weight: 600; color: var(--text); font-variant-numeric: tabular-nums; min-width: 80px; }
+  .todo-card .duration-strip .dur-handle { background: rgba(98,114,245,.12); color: #6272f5; border: none; padding: 2px 8px; border-radius: 3px; font-size: 12px; font-weight: 700; cursor: pointer; }
+  .todo-card .duration-strip .dur-handle:hover:not(:disabled) { background: rgba(98,114,245,.25); }
+  .todo-card .duration-strip .dur-handle:disabled { opacity: .35; cursor: not-allowed; }
+  .todo-card .actions { display:flex; gap:6px; margin-top:8px; flex-wrap:wrap; }
+  .todo-card .act-btn { padding: 4px 10px; border-radius: 4px; border: 1px solid var(--border); background: transparent; color: var(--text2); font-size: 12px; cursor: pointer; transition: all .12s ease; }
+  .todo-card .act-btn:hover { background: rgba(255,255,255,.04); color: var(--text); }
+  .todo-card .act-btn.primary { background: #6272f5; color: #fff; border-color: #6272f5; }
+  .todo-card .act-btn.primary:hover { background: #7585ff; }
+  .todo-card .act-btn.success { background: #10b981; color: #fff; border-color: #10b981; }
+  .todo-card .act-btn.success:hover { background: #34d399; }
+  .todo-card .act-btn.danger { color: #ef4444; border-color: rgba(239,68,68,.4); }
+  .todo-card .act-btn.danger:hover { background: rgba(239,68,68,.1); }
+  .todo-card .act-btn.active { box-shadow: 0 0 0 2px rgba(98,114,245,.4); }
+  .todo-card .badges { display:flex; gap:6px; align-items:center; flex-wrap:wrap; margin-top:6px; }
+  .todo-card .badge-prio { font-size: 10px; padding: 2px 8px; border-radius: 8px; font-weight: 700; text-transform: uppercase; letter-spacing: .3px; }
+  .todo-card .badge-prio.low    { background: rgba(107,114,128,.18); color: #9ca3af; }
+  .todo-card .badge-prio.normal { background: rgba(98,114,245,.18); color: #8b9aff; }
+  .todo-card .badge-prio.high   { background: rgba(239,68,68,.18); color: #fca5a5; }
+  .todo-card .badge-exec { font-size: 10px; padding: 2px 8px; border-radius: 8px; font-weight: 700; text-transform: uppercase; }
+  .todo-card .badge-exec.planned { background: rgba(98,114,245,.12); color: #8b9aff; }
+  .todo-card .badge-exec.in_progress { background: rgba(251,146,60,.18); color: #fcd34d; }
+  .todo-card .badge-exec.done { background: rgba(16,185,129,.18); color: #6ee7b7; }
+  .todo-card .badge-exec.not_done { background: rgba(239,68,68,.18); color: #fca5a5; }
+  .todo-card .badge-ot { font-size: 10px; padding: 2px 8px; border-radius: 8px; font-weight: 700; background: rgba(251,146,60,.25); color: #fb923c; }
+  .todo-card .badge-ot.approved { background: rgba(16,185,129,.18); color: #6ee7b7; }
+  .todo-card .badge-ot.rejected { background: rgba(107,114,128,.18); color: #9ca3af; }
+  .todo-card .not-done-reason { margin-top: 6px; padding: 6px 10px; background: rgba(239,68,68,.06); border-left: 2px solid #ef4444; border-radius: 3px; font-size: 12px; color: #fca5a5; }
+  /* v3.4.42: notes inline + click-to-detail hover */
+  .todo-card .todo-notes { margin-top: 6px; padding: 6px 10px; background: rgba(98,114,245,.05); border-left: 2px solid #6272f5; border-radius: 3px; font-size: 12px; color: var(--text2); white-space: pre-wrap; }
+  .todo-card .what:hover { color: var(--indigo2); }
+  .todo-card .meta:hover { color: var(--text); }
+  #cal-host, #ag-host, #todo-host { min-height: 600px; }
+  #tl-host { min-height: 600px; }
+  .cal-bar { display:flex; gap:6px; margin-bottom:8px; flex-wrap: wrap; }
+  .tl-bar { display:flex; gap:6px; margin-bottom:8px; flex-wrap: wrap; align-items:center; }
+  .tl-bar .btn-group { display:flex; gap:0; }
+  .tl-bar .btn-group .btn { border-radius: 0; }
+  .tl-bar .btn-group .btn:first-child { border-radius: 4px 0 0 4px; }
+  .tl-bar .btn-group .btn:last-child { border-radius: 0 4px 4px 0; }
+  .tl-bar .btn-group .btn.active { background: #6272f5; color: #fff; }
+  /* ─── Vis-timeline polish (v3.4.22 cantiere F) ─────────────── */
+  .vis-timeline {
+    border: 1px solid var(--border,#2a2e3d);
+    border-radius: 0 0 12px 12px;
+    background:
+      linear-gradient(180deg, rgba(98,114,245,0.025) 0%, transparent 30%),
+      var(--bg-elev,#1a1d29);
+    box-shadow: 0 4px 16px -4px rgba(0,0,0,.3), inset 0 1px 0 rgba(255,255,255,0.02);
+    overflow: hidden;
+  }
+  /* v3.4.45: Time axis più tipografato. Major (giorni/mesi) ora pill-style,
+     minor (ore/giorni) compatto. Gradient di fondo accentuato. */
+  .vis-time-axis {
+    background: linear-gradient(180deg, rgba(98,114,245,0.06) 0%, rgba(255,255,255,0.015) 60%, transparent 100%);
+    border-bottom: 1px solid rgba(255,255,255,0.07);
+  }
+  .vis-time-axis .vis-text {
+    color: var(--text2,#aaa);
+    font-size: 10.5px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    font-weight: 500;
+    padding: 2px 6px;
+  }
+  .vis-time-axis .vis-text.vis-major {
+    color: #cdd5ff;
+    font-weight: 700;
+    font-size: 11.5px;
+    letter-spacing: 0.6px;
+  }
+  .vis-time-axis .vis-grid { border-color: rgba(255,255,255,0.05); }
+  .vis-time-axis .vis-grid.vis-major { border-color: rgba(98,114,245,0.18); }
+  /* v3.4.45: weekend evidenziato su tutta la timeline (axis + foreground) */
+  .vis-time-axis .vis-grid.vis-saturday,
+  .vis-time-axis .vis-grid.vis-sunday {
+    background: rgba(98,114,245,0.05);
+  }
+  .vis-foreground .vis-group .vis-saturday,
+  .vis-foreground .vis-group .vis-sunday {
+    background: rgba(98,114,245,0.04);
+  }
+  /* v3.4.45: oggi (vis-today) con sfondo lieve indigo */
+  .vis-time-axis .vis-grid.vis-today { background: rgba(251,146,60,0.05); }
+  /* Labels (left col) — v3.4.32.2: senza min-height (rompeva allineamento
+     con le righe foreground). Font più grande e chiaro, padding leggero. */
+  .vis-labelset .vis-label {
+    color: #f5f5f5;
+    border-color: rgba(255,255,255,0.04);
+    padding: 6px 12px;
+    font-size: 13.5px;
+    font-weight: 500;
+    box-sizing: border-box;
+    transition: background .12s ease;
+  }
+  /* Centratura verticale del contenuto della label senza forzare l'altezza */
+  .vis-labelset .vis-label .vis-inner {
+    display: flex; align-items: center;
+  }
+  /* Zebra rows (alternate) — più sottile e simmetrico */
+  .vis-labelset .vis-label:nth-child(odd) { background: rgba(255,255,255,0.012); }
+  .vis-foreground .vis-group:nth-child(odd) { background: rgba(255,255,255,0.012); }
+  .vis-foreground .vis-group { border-color: rgba(255,255,255,0.04); transition: background .12s ease; }
+  /* Reparto padre — header sticky più contrastato (v3.4.45).
+     v3.5.0-alpha.38/39: font-size molto più grande (era 11px → 17px),
+     letter-spacing ridotto, no uppercase (leggibilità), Matteo
+     "ingrandisci font reparto". */
+  .vis-labelset .vis-label.vis-nesting-group {
+    background: linear-gradient(90deg, rgba(98,114,245,0.30) 0%, rgba(98,114,245,0.10) 70%, transparent 100%);
+    font-weight: 800 !important;
+    color: #d4daff !important;
+    letter-spacing: 0.3px;
+    font-size: 17px !important;
+    border-left: 4px solid #6272f5;
+    padding-left: 12px;
+    box-shadow: inset 0 -1px 0 rgba(98,114,245,0.15);
+  }
+  .vis-labelset .vis-label.vis-nesting-group:nth-child(odd) {
+    background: linear-gradient(90deg, rgba(98,114,245,0.18) 0%, rgba(98,114,245,0.06) 60%, transparent 100%);
+  }
+  /* Risorsa figlia — v3.4.32.2: niente min-height qui, vis calcola in coppia
+     label↔group e mismatch CSS rompe l'allineamento. La leggibilità si ottiene
+     con padding + font-size, non forzando altezze.
+     v3.5.0-alpha.38: nome operatore bold (era 500 ereditato), funzione più
+     piccola del nome. Bold per gerarchia visiva. */
+  .vis-labelset .vis-label:not(.vis-nesting-group) {
+    padding-left: 22px;
+  }
+  .vis-labelset .vis-label .tl-res-name {
+    font-weight: 800 !important;
+    font-size: 14px !important;
+    line-height: 1.15;
+    color: #ffffff;
+    letter-spacing: 0.2px;
+  }
+  .vis-labelset .vis-label .tl-res-role {
+    font-size: 9px !important;
+    line-height: 1.1;
+    margin-top: 1px;
+    font-weight: 400 !important;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    color: #9aa0b8 !important;
+  }
+  .vis-labelset .vis-label:hover { background: rgba(98,114,245,0.10); }
+  .vis-foreground .vis-group:hover { background: rgba(98,114,245,0.04); }
+  /* v3.4.48: Items con bordi più arrotondati + effetto 3D bevel.
+     Multi-layer shadow: highlight inset top + ombra inset bottom (depth) +
+     drop shadow esterna doppia (close + ambient). Niente transition su
+     transform/position (vis-timeline usa transform per drag). */
+  .vis-item {
+    border: 1px solid rgba(0,0,0,.45);
+    color: #fff;
+    font-size: 11.5px;
+    font-weight: 500;
+    border-radius: 9px;
+    padding: 3px 9px;
+    box-shadow:
+      inset 0 1px 0 rgba(255,255,255,.22),
+      inset 0 -2px 3px rgba(0,0,0,.20),
+      0 1px 2px rgba(0,0,0,.30),
+      0 4px 10px rgba(0,0,0,.22);
+    backdrop-filter: saturate(115%);
+    transition: box-shadow .14s ease, filter .14s ease, border-color .14s ease;
+  }
+  .vis-item:hover {
+    filter: brightness(1.10) saturate(1.05);
+    box-shadow:
+      inset 0 1px 0 rgba(255,255,255,.30),
+      inset 0 -2px 3px rgba(0,0,0,.18),
+      0 2px 4px rgba(0,0,0,.35),
+      0 8px 18px rgba(0,0,0,.28),
+      0 0 0 1px rgba(255,255,255,.10);
+    border-color: rgba(255,255,255,.22);
+  }
+  .vis-item.vis-selected {
+    box-shadow:
+      0 0 0 2px #fff,
+      0 0 0 4px rgba(98,114,245,.45),
+      0 6px 20px rgba(98,114,245,.35),
+      inset 0 1px 0 rgba(255,255,255,.30),
+      inset 0 -2px 3px rgba(0,0,0,.18);
+  }
+  /* v3.5.0-alpha.24: glow animato sui selezionati quando il pannello selezione
+     è aperto (Matteo: "evidenziare più chiaramente gli item selezionati,
+     glow con animazione"). */
+  @keyframes tl-pulse-glow {
+    0%, 100% {
+      box-shadow:
+        0 0 0 2px #fff,
+        0 0 0 5px rgba(98,114,245,.55),
+        0 6px 22px rgba(98,114,245,.45),
+        inset 0 1px 0 rgba(255,255,255,.30);
+    }
+    50% {
+      box-shadow:
+        0 0 0 2px #fff,
+        0 0 0 7px rgba(98,114,245,.78),
+        0 8px 28px rgba(98,114,245,.62),
+        inset 0 1px 0 rgba(255,255,255,.30);
+    }
+  }
+  body.tl-select-panel-open .vis-item.vis-selected {
+    animation: tl-pulse-glow 1.5s ease-in-out infinite;
+  }
+  /* v3.5.0-alpha.46.2: in modalità leggera (data-light="on" su #tl-host)
+     disabilita TUTTE le transition + animation interne agli items. CSS
+     transition + paint continuo era una delle cause del freeze Chrome
+     (18761 Paint events nel trace). */
+  #tl-host[data-light="on"] .vis-item,
+  #tl-host[data-light="on"] .vis-item.vis-selected {
+    animation: none !important;
+    transition: none !important;
+  }
+  #tl-host[data-light="on"] .vis-item:hover {
+    /* Niente filter brightness/saturation in light mode (causa repaint) */
+    filter: none !important;
+  }
+  .vis-item .vis-item-content {
+    padding: 0 2px;
+    line-height: 1.35;
+  }
+  .vis-item.kind-internal { background: linear-gradient(180deg, #7a8290 0%, #5a6272 100%); border-color: #4b5563; }
+  /* Conflict highlight live durante drag/resize */
+  .vis-item.tl-conflict {
+    background: linear-gradient(180deg, #dc2626 0%, #b91c1c 100%) !important;
+    border-color: #991b1b !important;
+    box-shadow: 0 0 0 2px rgba(220,38,38,.45), 0 4px 12px rgba(220,38,38,.3) !important;
+  }
+  /* Soft conflict festività: overlay arancione, conferma al drop (v3.4.32.1) */
+  .vis-item.tl-conflict-overtime {
+    background: linear-gradient(180deg, #ea580c 0%, #c2410c 100%) !important;
+    border-color: #9a3412 !important;
+    box-shadow: 0 0 0 2px rgba(234,88,12,.45), 0 4px 12px rgba(234,88,12,.3) !important;
+  }
+  .vis-item.tl-conflict-hard {
+    background: linear-gradient(180deg, #6b7280 0%, #4b5563 100%) !important;
+    border-color: #374151 !important;
+    box-shadow: 0 0 0 2px rgba(107,114,128,.6) !important;
+    opacity: .7;
+  }
+  /* v3.5.0-alpha.32: cross-department mismatch — badge persistente.
+     Bordo amber spesso a sinistra (non altera background per preservare il
+     color-coding della risorsa) + icona ⚠ in alto a destra. Si combina con
+     tl-conflict, tl-tentative, tl-exec-* senza conflitti. */
+  .vis-item.tl-cross-dept {
+    box-shadow: inset 4px 0 0 #f59e0b, 0 0 0 1px rgba(245,158,11,.5) !important;
+  }
+  .vis-item.tl-cross-dept::after {
+    content: '⚠';
+    position: absolute;
+    top: 1px;
+    right: 4px;
+    font-size: 11px;
+    color: #fbbf24;
+    text-shadow: 0 0 2px rgba(0,0,0,.7);
+    pointer-events: none;
+  }
+  /* v3.5.0-alpha.59: slice-locked — booking dentro periodo già fatturato.
+     Bordo viola spesso a sinistra (drag/resize bloccati lato server con 409).
+     Si combina con tl-cross-dept e tl-exec-* senza conflitti visivi. */
+  .vis-item.tl-slice-locked {
+    box-shadow: inset 4px 0 0 #a855f7, 0 0 0 1px rgba(168,85,247,.5) !important;
+  }
+  .vis-item.tl-slice-locked .tl-slice-icon {
+    font-size: 10px;
+    margin-left: 4px;
+    text-shadow: 0 0 2px rgba(0,0,0,.7);
+  }
+  /* v3.4.45: Drag handles più visibili anche senza hover (chiarezza affordance) */
+  .vis-item .vis-drag-left, .vis-item .vis-drag-right {
+    background: linear-gradient(90deg, rgba(0,0,0,.18) 0%, rgba(255,255,255,.22) 50%, rgba(0,0,0,.18) 100%);
+    width: 8px;
+    opacity: 0;
+    transition: opacity .12s ease;
+  }
+  .vis-item:hover .vis-drag-left, .vis-item:hover .vis-drag-right {
+    opacity: 1;
+    background: linear-gradient(90deg, rgba(0,0,0,.18) 0%, rgba(255,255,255,.55) 50%, rgba(0,0,0,.18) 100%);
+  }
+  .vis-item.vis-editable { cursor: move; }
+  /* Punch overlay (timbrature reali — sotto i booking) */
+  .vis-item.tl-bg-punch { border: none !important; box-shadow: none !important; opacity: 0.85; }
+  .vis-item.tl-bg-punch:hover { opacity: 1; }
+  /* v3.4.44: indicatori execution_status sui booking timeline */
+  .vis-item.tl-exec-in_progress {
+    box-shadow: inset 0 0 0 2px rgba(251,146,60,.85), 0 2px 6px rgba(0,0,0,.35) !important;
+    animation: tl-pulse 1.6s ease-in-out infinite;
+  }
+  /* v3.5.0-alpha.66: rinforzato contrasto done — bordo più spesso (3px) +
+     opacity meno aggressiva (.92) per non confonderlo con planned. Banda
+     verde a sinistra che richiama la legenda. */
+  .vis-item.tl-exec-done {
+    opacity: .92;
+    box-shadow: inset 4px 0 0 #10b981, inset 0 0 0 2px rgba(16,185,129,.55) !important;
+  }
+  .vis-item.tl-exec-done::after {
+    content: '✓'; position: absolute; right: 4px; top: 0; bottom: 0;
+    display: flex; align-items: center; color: #6ee7b7; font-weight: 700; font-size: 12px;
+    text-shadow: 0 0 4px rgba(0,0,0,.7); pointer-events: none;
+  }
+  .vis-item.tl-exec-not_done {
+    opacity: .55;
+    background: repeating-linear-gradient(45deg, rgba(239,68,68,.3) 0 4px, rgba(0,0,0,.05) 4px 10px) !important;
+    border-color: #ef4444 !important;
+  }
+  .vis-item .tl-exec-icon { margin-left: 4px; opacity: 0.9; font-weight: 700; }
+  /* v3.5.0-alpha.66.5: icona unica per stato unificato (5 valori).
+     Font 13px+700+text-shadow per visibilità anche su sfondi colorati.
+     Posizionata all'inizio del content (no clipping su item stretti). */
+  .vis-item .tl-state-icon {
+    margin-right: 4px;
+    font-size: 13px;
+    font-weight: 700;
+    display: inline-block;
+    line-height: 1;
+    text-shadow: 0 0 3px rgba(0,0,0,.55);
+  }
+  .vis-item .tl-state-tentative   { color: #fde68a; }   /* giallo chiaro */
+  .vis-item .tl-state-confirmed   { color: #6ee7b7; opacity: 0.85; }
+  .vis-item .tl-state-in_progress { color: #fb923c; }   /* arancio (già pulse via tl-exec-in_progress) */
+  .vis-item .tl-state-done        { color: #6ee7b7; }
+  .vis-item .tl-state-not_done    { color: #fca5a5; }
+  /* Back-compat: vecchi selettori .tl-status-* usati da legenda HTML statica */
+  .vis-item .tl-status-icon, .vis-item .tl-status-tentative, .vis-item .tl-status-confirmed {
+    /* alias verso tl-state-* (mantengo per la legenda popover che usa classi vecchie) */
+  }
+  /* v3.5.0-alpha.11: highlight di tutti gli items che condividono lo stesso
+     booking_id (booking multi-risorsa). Quando l'utente seleziona una riga,
+     le altre del medesimo booking ricevono un alone indaco. */
+  .vis-item.tl-link-highlight {
+    outline: 2px solid rgba(98,114,245,.85) !important;
+    outline-offset: 1px;
+    box-shadow: 0 0 12px rgba(98,114,245,.5), inset 0 0 0 1px rgba(98,114,245,.6) !important;
+    z-index: 5;
+  }
+  /* v3.5.0-alpha.11: overlay flottante con orario corrente durante drag/resize.
+     Segue il cursore (top-left = mousepos+12px). Visibile solo quando viene
+     reso `display:block` da onMoving handler. */
+  #tl-drag-overlay {
+    position: fixed; display: none; pointer-events: none; z-index: 9999;
+    background: rgba(20, 24, 35, 0.97); color: #fff;
+    border: 1px solid rgba(98,114,245,.55); border-radius: 6px;
+    padding: 6px 10px; font-size: 12px; font-variant-numeric: tabular-nums;
+    box-shadow: 0 4px 14px rgba(0,0,0,.45); line-height: 1.4;
+    font-family: var(--font-body, system-ui), monospace;
+  }
+  #tl-drag-overlay .tl-do-time { color: #8b9aff; font-weight: 600; }
+  #tl-drag-overlay .tl-do-dur  { color: #6ee7b7; font-weight: 700; }
+  #tl-drag-overlay .tl-do-warn { color: #fb923c; }
+  @keyframes tl-pulse {
+    0%, 100% { box-shadow: inset 0 0 0 2px rgba(251,146,60,.55), 0 2px 6px rgba(0,0,0,.25); }
+    50% { box-shadow: inset 0 0 0 2px rgba(251,146,60,1), 0 2px 10px rgba(251,146,60,.4); }
+  }
+  /* v3.4.45: Heatmap capacity più curato. Round corners, separatori sottili,
+     hover preview con tooltip standard via title attribute. */
+  .vis-labelset .vis-label .tl-heat {
+    width: calc(100% - 6px);
+    margin: 5px 3px 0;
+    height: 7px !important;
+    display: flex !important;
+    border-radius: 3px;
+    overflow: hidden;
+    background: rgba(255,255,255,0.03);
+    box-shadow: inset 0 0 0 1px rgba(255,255,255,0.03);
+  }
+  .vis-labelset .vis-label .tl-heat-cell {
+    display: block;
+    transition: opacity .12s ease;
+  }
+  .vis-labelset .vis-label .tl-heat-cell:hover { opacity: .75; }
+  /* Spazio verticale extra per le label foglia */
+  .vis-labelset .vis-label:not(.vis-nesting-group) .vis-inner { padding-bottom: 4px; }
+  .vis-item .vis-item-content { padding: 2px 4px; }
+  /* v3.4.45: Linea oggi più prominente con glow */
+  .vis-current-time {
+    background-color: #fb923c !important;
+    width: 2px;
+    box-shadow: 0 0 8px rgba(251,146,60,.6), 0 0 14px rgba(251,146,60,.3);
+  }
+  .vis-current-time::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: -4px;
+    width: 10px;
+    height: 10px;
+    background: #fb923c;
+    border-radius: 50%;
+    box-shadow: 0 0 8px rgba(251,146,60,.7);
+  }
+  /* v3.4.32.2: paste mode — cursor copy + outline arancione sulla timeline */
+  #tl-host.tl-paste-mode { outline: 2px dashed #fb923c; outline-offset: -2px; cursor: copy; }
+  #tl-host.tl-paste-mode .vis-foreground .vis-group { cursor: copy; }
+  #tl-host.tl-paste-mode .vis-item { cursor: not-allowed; }
+  /* Background items: ferie/malattia/festività/weekend (E3 v3.4.17) */
+  /* v3.5.0-alpha.24: ferie/malattia/festività uniformati (stesso alpha 0.12 +
+     stripes 0.20) e ferie passa al colore palette MediaFlow indigo (#6272f5)
+     invece di indigo cool (#6366f1). */
+  .vis-item.tl-bg-vacation { background: rgba(98,114,245,0.12) !important; border: none !important; box-shadow: none; }
+  .vis-item.tl-bg-vacation::before { content: ''; position: absolute; inset: 0; background: repeating-linear-gradient(45deg, transparent 0 4px, rgba(98,114,245,0.20) 4px 8px); }
+  .vis-item.tl-bg-sick { background: rgba(239,68,68,0.12) !important; border: none !important; }
+  .vis-item.tl-bg-sick::before { content: ''; position: absolute; inset: 0; background: repeating-linear-gradient(45deg, transparent 0 4px, rgba(239,68,68,0.20) 4px 8px); }
+  .vis-item.tl-bg-holiday { background: rgba(251,146,60,0.12) !important; border: none !important; }
+  .vis-item.tl-bg-holiday::before { content: ''; position: absolute; inset: 0; background: repeating-linear-gradient(45deg, transparent 0 4px, rgba(251,146,60,0.20) 4px 8px); }
+  .vis-item.tl-bg-other { background: rgba(156,163,175,0.10) !important; border: none !important; }
+  .vis-item.tl-bg-other::before { content: ''; position: absolute; inset: 0; background: repeating-linear-gradient(45deg, transparent 0 4px, rgba(156,163,175,0.18) 4px 8px); }
+  .vis-item.tl-bg-weekend { background: rgba(255,255,255,0.025) !important; border: none !important; }
+  /* Hard conflict (drop su ferie/festa) */
+  .vis-item.tl-conflict-hard { background: #991b1b !important; border-color: #7f1d1d !important; box-shadow: 0 0 0 3px rgba(220,38,38,.6) !important; animation: tl-shake .25s; }
+  /* E5: Tentative bookings — bordo tratteggiato, opacità ridotta */
+  .vis-item.tl-tentative {
+    opacity: 0.7;
+    border-style: dashed !important;
+    border-width: 2px !important;
+    /* v3.5.0-alpha.66.4.2: banda gialla a sinistra come backup visivo se
+       l'icona ⏳ viene clippata dall'overflow su item stretti. */
+    box-shadow: inset 4px 0 0 #fbbf24;
+  }
+  @keyframes tl-shake { 0%,100% { transform: translateX(0); } 25% { transform: translateX(-2px); } 75% { transform: translateX(2px); } }
+  .tlb-job-item:hover { background: rgba(98,114,245,0.12); }
+  .tlb-job-item:last-child { border-bottom: none; }
+  /* Multi-row assignment rows */
+  #tlb-assignments { max-height: 380px; overflow-y: auto; padding-top: 10px; padding-right: 4px; }
+  /* v3.5.0-alpha.14: padding-top:10px lascia spazio al badge ass-num
+     (position:absolute; top:-8px) della prima riga, che pre-alpha.14
+     finiva sotto la label "Stesso orario per tutte le risorse". */
+  #tlb-assignments::-webkit-scrollbar { width: 6px; }
+  #tlb-assignments::-webkit-scrollbar-thumb { background: rgba(98,114,245,0.4); border-radius: 3px; }
+  .tlb-ass-row { border:1px solid var(--border,#2a2e3d); border-radius:6px; padding:10px; margin-bottom:8px; background:rgba(98,114,245,0.04); position:relative; }
+  .tlb-ass-row .ass-num { position:absolute; top:-8px; left:8px; background:var(--bg-elev,#1a1d29); border:1px solid var(--border,#2a2e3d); color:#6272f5; font-size:10px; font-weight:600; padding:1px 8px; border-radius:10px; }
+  .tlb-ass-row .ass-grid { display:grid; grid-template-columns: 2fr 1fr 2fr 1fr; gap:6px; align-items:center; }
+  .tlb-ass-row .ass-labels { display:grid; grid-template-columns: 2fr 1fr 2fr 1fr; gap:6px; font-size:11px; color:var(--text3,#888); margin-bottom:4px; }
+  .tlb-ass-row .ass-footer { display:flex; gap:6px; align-items:center; margin-top:8px; flex-wrap:wrap; }
+  .tlb-ass-row .ass-footer .duration { font-size:12px; color:var(--text2,#aaa); }
+  .tlb-ass-row .ass-footer .duration b { color:#6272f5; font-weight:500; }
+  .tlb-ass-row .ass-footer .presets { display:flex; gap:3px; margin-left:auto; flex-wrap:wrap; }
+  .tlb-ass-row .ass-footer .presets button { font-size:10px; padding:2px 6px; }
+  .tlb-ass-row.has-conflict { border-color:#dc2626; background:rgba(220,38,38,0.08); }
+  /* v3.5.0-alpha.66.1: marker per righe in duplicate-overlap (stessa risorsa,
+     orari sovrapposti). Bordo rosso + sfondo molto leggero. Si combina senza
+     conflitto con .has-conflict (che è il check intra-payload pre-save). */
+  .tlb-ass-row.tl-row-duplicate-overlap {
+    border-color:#dc2626 !important;
+    background:rgba(220,38,38,0.10) !important;
+    box-shadow: inset 4px 0 0 #dc2626;
+  }
+  /* Time picker custom */
+  .tlb-tp-trigger { background: var(--bg-elev,#1a1d29); border: 1px solid var(--border,#2a2e3d); color: var(--text,#eee); padding: 8px 12px; border-radius: 4px; font-family: monospace; font-size: 14px; cursor: pointer; width: 100%; text-align: center; }
+  .tlb-tp-trigger:hover { border-color: #6272f5; }
+  .tlb-tp-trigger:focus { outline: none; border-color: #6272f5; box-shadow: 0 0 0 2px rgba(98,114,245,.25); }
+  #tlb-tp-popup { position: fixed; background: var(--bg-elev,#1a1d29); border: 1px solid var(--border,#2a2e3d); border-radius: 8px; box-shadow: 0 8px 24px rgba(0,0,0,.5); z-index: 99999; padding: 10px; min-width: 200px; display: none; }
+  #tlb-tp-popup .tp-cols { display: flex; gap: 8px; }
+  #tlb-tp-popup .tp-col { flex: 1; }
+  #tlb-tp-popup .tp-header { font-size: 11px; text-transform: uppercase; color: var(--text3,#888); margin-bottom: 6px; text-align: center; letter-spacing: .5px; }
+  #tlb-tp-popup .tp-list { max-height: 200px; overflow-y: auto; border: 1px solid var(--border,#2a2e3d); border-radius: 4px; }
+  #tlb-tp-popup .tp-cell { padding: 8px 14px; cursor: pointer; text-align: center; font-family: monospace; font-size: 14px; color: var(--text,#eee); }
+  #tlb-tp-popup .tp-cell:hover { background: rgba(98,114,245,0.15); }
+  #tlb-tp-popup .tp-cell.selected { background: #6272f5; color: #fff; font-weight: 600; }
+  .pl-active-filters-bar { font-size: 12px; color: var(--text3); margin-bottom: 8px; }
+  .pl-active-filters-bar .chip { display: inline-block; background: rgba(98,114,245,0.15); color: #6272f5; padding: 2px 8px; border-radius: 10px; margin-right: 6px; font-weight: 500; }
+  /* Filter autocomplete dropdown */
+  .fa-suggestions { display: none; position: absolute; left: 0; right: 0; top: 100%; background: var(--bg-elev,#1a1d29); border: 1px solid var(--border,#2a2e3d); border-radius: 6px; max-height: 220px; overflow-y: auto; z-index: 200; box-shadow: 0 4px 12px rgba(0,0,0,.35); margin-top: 2px; }
+  .fa-suggestions .fa-item { padding: 7px 10px; cursor: pointer; font-size: 12px; border-bottom: 1px solid rgba(255,255,255,.04); color: var(--text,#eee); }
+  .fa-suggestions .fa-item:last-child { border-bottom: none; }
+  .fa-suggestions .fa-item:hover, .fa-suggestions .fa-item.active { background: rgba(98,114,245,0.18); }
+  .fa-suggestions .fa-item .fa-meta { color: var(--text3,#888); font-size: 11px; }
+  .fa-input.has-value { background: rgba(98,114,245,0.10); }
+  /* v3.4.47: filtri multi-select (chips + autocomplete inline) */
+  .fa-multi {
+    display: flex; flex-wrap: wrap; gap: 4px; align-items: center;
+    border: 1px solid var(--border); border-radius: var(--radius);
+    padding: 4px 6px; background: var(--bg3,#22253a);
+    min-height: 36px; transition: border-color .12s ease;
+  }
+  .fa-multi:focus-within { border-color: var(--indigo); box-shadow: 0 0 0 3px rgba(98,114,245,.12); }
+  .fa-multi .fa-input {
+    border: none !important; background: transparent !important; flex: 1; min-width: 100px;
+    padding: 4px 6px; font-size: 12.5px; color: var(--text); outline: none;
+    font-family: inherit;
+  }
+  .fa-chip {
+    display: inline-flex; align-items: center; gap: 4px;
+    background: rgba(98,114,245,0.18); color: #a8b3ff;
+    border-radius: 4px; padding: 2px 4px 2px 8px; font-size: 11.5px;
+    font-weight: 500; line-height: 1.4;
+    border: 1px solid rgba(98,114,245,0.32);
+  }
+  .fa-chip-x {
+    background: transparent; border: none; color: var(--text2); cursor: pointer;
+    padding: 0 4px; font-size: 13px; line-height: 1; border-radius: 3px;
+  }
+  .fa-chip-x:hover { color: #ef4444; background: rgba(239,68,68,.12); }
+  /* v3.4.46: Pannello preferenze timeline */
+  #view-timeline > .card { position: relative; }
+  .tl-pref-row { display:flex; justify-content:space-between; align-items:center; gap:8px; margin-bottom:8px; }
+  .tl-pref-row > label { color: var(--text2); font-size: 11.5px; }
+  .tl-pref-row > select { width: 130px; height: 28px; font-size: 11.5px; padding: 2px 6px; }
+  .tl-pref-check { display:flex; align-items:center; gap:8px; margin-bottom:6px; color:var(--text2); cursor:pointer; user-select:none; }
+  .tl-pref-check input { margin:0; }
+  /* v3.4.48: Reactive data-attributes su #tl-host */
+  #tl-host[data-anim="off"] .vis-item, #tl-host[data-anim="off"] * { transition: none !important; animation: none !important; }
+  #tl-host[data-heatmap="off"] .vis-labelset .vis-label .tl-heat { display:none !important; }
+  #tl-host[data-today-glow="off"] .vis-current-time { box-shadow:none !important; }
+  #tl-host[data-today-glow="off"] .vis-current-time::before { display:none; }
+  #tl-host[data-weekend-bg="off"] .vis-time-axis .vis-grid.vis-saturday,
+  #tl-host[data-weekend-bg="off"] .vis-time-axis .vis-grid.vis-sunday,
+  #tl-host[data-weekend-bg="off"] .vis-foreground .vis-group .vis-saturday,
+  #tl-host[data-weekend-bg="off"] .vis-foreground .vis-group .vis-sunday { background: transparent !important; }
+  #tl-host[data-accent="mono"] .vis-labelset .vis-label.vis-nesting-group {
+    background: linear-gradient(90deg, rgba(160,170,200,0.18) 0%, rgba(160,170,200,0.05) 70%, transparent 100%) !important;
+    border-left-color: #9aa1b8 !important;
+    color: #cdd5e8 !important;
+  }
+  /* v3.4.48.2: Famiglia font (override locale rispetto al tema globale).
+     'auto' = nessuna regola (eredita). Le altre opzioni applicano famiglia
+     a items + label + time-axis text per coerenza visiva. */
+  #tl-host[data-font-family="dm-sans"] .vis-item,
+  #tl-host[data-font-family="dm-sans"] .vis-labelset .vis-label,
+  #tl-host[data-font-family="dm-sans"] .vis-time-axis .vis-text { font-family: 'DM Sans', sans-serif !important; }
+  #tl-host[data-font-family="inter"] .vis-item,
+  #tl-host[data-font-family="inter"] .vis-labelset .vis-label,
+  #tl-host[data-font-family="inter"] .vis-time-axis .vis-text { font-family: 'Inter', system-ui, sans-serif !important; }
+  #tl-host[data-font-family="system"] .vis-item,
+  #tl-host[data-font-family="system"] .vis-labelset .vis-label,
+  #tl-host[data-font-family="system"] .vis-time-axis .vis-text { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif !important; }
+  #tl-host[data-font-family="serif"] .vis-item,
+  #tl-host[data-font-family="serif"] .vis-labelset .vis-label,
+  #tl-host[data-font-family="serif"] .vis-time-axis .vis-text { font-family: Georgia, 'Times New Roman', serif !important; }
+  #tl-host[data-font-family="mono"] .vis-item,
+  #tl-host[data-font-family="mono"] .vis-labelset .vis-label,
+  #tl-host[data-font-family="mono"] .vis-time-axis .vis-text { font-family: 'DM Mono', 'JetBrains Mono', Consolas, monospace !important; }
+
+  /* v3.4.48.2: Colore testo (override locale).
+     'auto' = nessuna regola (eredita dal bg variant CSS). */
+  #tl-host[data-text-color="white"] .vis-item,
+  #tl-host[data-text-color="white"] .vis-labelset .vis-label,
+  #tl-host[data-text-color="white"] .vis-time-axis .vis-text { color: #ffffff !important; }
+  #tl-host[data-text-color="soft"] .vis-item,
+  #tl-host[data-text-color="soft"] .vis-labelset .vis-label,
+  #tl-host[data-text-color="soft"] .vis-time-axis .vis-text { color: #e8eaf3 !important; }
+  #tl-host[data-text-color="amber"] .vis-item,
+  #tl-host[data-text-color="amber"] .vis-labelset .vis-label,
+  #tl-host[data-text-color="amber"] .vis-time-axis .vis-text { color: #fbbf24 !important; }
+  #tl-host[data-text-color="dark"] .vis-item,
+  #tl-host[data-text-color="dark"] .vis-labelset .vis-label,
+  #tl-host[data-text-color="dark"] .vis-time-axis .vis-text { color: #1a1d2c !important; }
+  #tl-host[data-text-color="indigo"] .vis-item,
+  #tl-host[data-text-color="indigo"] .vis-labelset .vis-label,
+  #tl-host[data-text-color="indigo"] .vis-time-axis .vis-text { color: #a8b3ff !important; }
+
+  /* v3.4.48.1: Colore sfondo timeline.
+     Va applicato a `.vis-timeline` dentro #tl-host (non a #tl-host stesso),
+     perché .vis-timeline ha un background hardcoded gradient+bg-elev che
+     sovrascriverebbe l'host. Scriviamo over il background completo. */
+  #tl-host[data-bg="dark"]    .vis-timeline { background: #14171f !important; }
+  #tl-host[data-bg="darker"]  .vis-timeline { background: #0a0c12 !important; }
+  #tl-host[data-bg="warm"]    .vis-timeline { background: #221c14 !important; }
+  #tl-host[data-bg="cool"]    .vis-timeline { background: #11162a !important; }
+  #tl-host[data-bg="forest"]  .vis-timeline { background: #0f1a13 !important; }
+  #tl-host[data-bg="paper"]   .vis-timeline { background: #e6e9f0 !important; }
+  /* Anche i pannelli interni (vis-panel) possono avere bg: lasciamo trasparente
+     così ereditano dal container. */
+  #tl-host[data-bg]:not([data-bg="default"]) .vis-panel,
+  #tl-host[data-bg]:not([data-bg="default"]) .vis-foreground,
+  #tl-host[data-bg]:not([data-bg="default"]) .vis-background { background: transparent !important; }
+  /* Variant "paper" (chiaro): inverti testo per leggibilità */
+  #tl-host[data-bg="paper"] .vis-labelset .vis-label { color: #1a1d2c; border-color: rgba(0,0,0,.06); }
+  #tl-host[data-bg="paper"] .vis-time-axis .vis-text { color: #2a2e44; }
+  #tl-host[data-bg="paper"] .vis-time-axis .vis-text.vis-major { color: #4a55b8; }
+  #tl-host[data-bg="paper"] .vis-time-axis { background: linear-gradient(180deg, rgba(98,114,245,0.10) 0%, transparent 60%); border-bottom-color: rgba(0,0,0,.08); }
+  #tl-host[data-bg="paper"] .vis-foreground .vis-group:nth-child(odd) { background: rgba(0,0,0,.025); }
+  #tl-host[data-bg="paper"] .vis-foreground .vis-group { border-color: rgba(0,0,0,.07); }
+  #tl-host[data-bg="paper"] .vis-time-axis .vis-grid { border-color: rgba(0,0,0,.06); }
+  #tl-host[data-bg="paper"] .vis-time-axis .vis-grid.vis-major { border-color: rgba(0,0,0,.10); }
+  #tl-host[data-bg="paper"] .vis-labelset .vis-label.vis-nesting-group { color: #2a2e44; }
+  #tl-host[data-bg="paper"] .vis-labelset .vis-label:hover { background: rgba(98,114,245,0.08); }
+  /* Storyboard density */
+  #sb-host[data-density="compact"] .sb-card { padding: 4px 6px; font-size: 10.5px; }
+  #sb-host[data-density="compact"] .sb-card-time { font-size: 9px; margin-bottom: 1px; }
+  /* v3.4.45: Storyboard view — 7 colonne giorno (responsive collapse <960px) */
+  .sb-grid { display: grid; grid-template-columns: repeat(7, minmax(140px, 1fr)); gap: 8px; }
+  @media (max-width: 1100px) { .sb-grid { grid-template-columns: repeat(4, minmax(160px, 1fr)); } }
+  @media (max-width: 720px) { .sb-grid { grid-template-columns: 1fr; } }
+  .sb-col {
+    display: flex; flex-direction: column; gap: 6px;
+    background: var(--bg2, rgba(0,0,0,.12)); border-radius: 8px; padding: 8px;
+    border: 1px solid var(--border, rgba(255,255,255,.06));
+    min-height: 180px;
+  }
+  .sb-col.is-today { border-color: rgba(251,146,60,.55); box-shadow: 0 0 0 1px rgba(251,146,60,.25); }
+  .sb-col.is-weekend { background: rgba(98,114,245,.04); }
+  .sb-col-head {
+    display: flex; align-items: baseline; justify-content: space-between;
+    padding-bottom: 6px; border-bottom: 1px solid rgba(255,255,255,.06); margin-bottom: 4px;
+  }
+  .sb-col-day { font-size: 11px; text-transform: uppercase; letter-spacing: .6px; color: var(--text2); font-weight: 600; }
+  .sb-col-date { font-size: 16px; font-weight: 700; color: var(--text); margin-left: 6px; }
+  .sb-col.is-today .sb-col-date { color: #fb923c; }
+  .sb-col-hours { font-size: 11px; color: var(--text3); font-family: var(--font-mono, monospace); }
+  .sb-card {
+    background: var(--bg-elev, #1a1d29);
+    border-left: 3px solid #6272f5; border-radius: 5px;
+    padding: 6px 8px; font-size: 11.5px; cursor: pointer;
+    border: 1px solid rgba(255,255,255,.04); border-left-width: 3px;
+    transition: transform .12s ease, box-shadow .12s ease, border-color .12s ease;
+  }
+  .sb-card:hover { transform: translateX(2px); box-shadow: 0 4px 10px rgba(0,0,0,.3); border-left-color: #8b9aff; }
+  .sb-card.exec-done { opacity: .65; border-left-color: #10b981; }
+  .sb-card.exec-in_progress { border-left-color: #fb923c; box-shadow: inset 0 0 0 1px rgba(251,146,60,.3); }
+  .sb-card.exec-not_done {
+    opacity: .55; border-left-color: #ef4444;
+    background: repeating-linear-gradient(45deg, rgba(239,68,68,.04) 0 4px, transparent 4px 10px), var(--bg-elev, #1a1d29);
+  }
+  .sb-card-time { font-size: 10px; font-family: var(--font-mono, monospace); color: var(--text3); margin-bottom: 2px; }
+  .sb-card-title { font-weight: 500; color: var(--text); line-height: 1.3; }
+  .sb-card-meta { font-size: 10.5px; color: var(--text2); margin-top: 3px; }
+  .sb-card-resource { display: inline-flex; align-items: center; gap: 4px; font-size: 10px; color: var(--text2); margin-top: 4px; }
+  .sb-card-resource::before { content: ''; display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: var(--res-color, #6272f5); }
+  .sb-empty { font-size: 10.5px; color: var(--text3); font-style: italic; padding: 6px 4px; }
