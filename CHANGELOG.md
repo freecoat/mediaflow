@@ -1,5 +1,43 @@
 # MediaFlow — Changelog
 
+## v3.5.0-alpha.66.14.6 — Slice-lock re-check su new dates AI move/resize (11 maggio 2026)
+
+Quick win post-audit #7. Chiude bypass slice-lock via AI handlers
+(audit HIGH services #5).
+
+**Bug**: `_resolve_booking_for_planning` chiamava `find_blocking_slice(b)`
+sulla posizione **OLD** del booking. Un booking che parte FUORI periodo
+fatturato e viene mosso DENTRO nuova finestra, passava il check sulla
+vecchia posizione e poi mutava DENTRO uno slice locked → invariante
+α.66.5 aggirata via copilot.
+
+**Fix `_h_propose_move_booking`**: dopo conflict-check sui new_values,
+prima dell'apply, se `b.job_cost_line_id`:
+- calcola `new_min_date / new_max_date` da `(ns, ne)` di tutti gli assignment
+- chiama `find_blocking_slice_for_dates(jcl_id, new_min, new_max)`
+- se ritorna slice → `ValueError("Move bloccato: ...")`
+
+**Fix `_h_propose_resize_booking`**: se `dm > 0` (allunga) e
+`new_max_date > old_max_date`:
+- chiama `find_blocking_slice_for_dates(jcl_id, old_max, new_max)`
+- se slice nuovo entrato in periodo billed → `ValueError("Resize bloccato: ...")`
+
+**Delete**: già coperto dal check OLD-position in
+`_resolve_booking_for_planning` (cancellare un booking dentro slice billed
+era già rifiutato).
+
+**Smoke**: 302 routes invariato, version 3.5.0-alpha.66.14.6.
+
+**Verifica live (manuale, richiede setup)**:
+1. Crea slice billed JCL X per periodo [10/06 → 20/06].
+2. Crea booking JCL X per 5/06 → 7/06 (fuori slice). Nessun lock visivo.
+3. Da copilot: "Sposta il booking #N di 7 giorni avanti". L'AI propone
+   move shift_minutes=10080 → Apply → ora ValueError "Move bloccato:
+   booking dentro periodo già fatturato [10/06 → 20/06]".
+4. Idem per resize: "estendi il booking di 10 giorni" → bloccato.
+
+---
+
 ## v3.5.0-alpha.66.14.5 — Permission gate mutator quote (11 maggio 2026)
 
 Quick win post-audit #6. 11 mutator del router quotes erano sprovvisti di

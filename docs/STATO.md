@@ -8,6 +8,18 @@
 
 ## Versione corrente
 
+**v3.5.0-alpha.66.14.6** — 11 maggio 2026 — Slice-lock re-check AI move/resize
+
+Chiude bypass slice-lock documentato in audit HIGH services #5: AI
+handlers controllavano find_blocking_slice sulla posizione OLD del
+booking, ma move/resize potevano portarlo dentro un nuovo slice billed
+non visto. Re-check con find_blocking_slice_for_dates su new_min/new_max
+prima dell'apply. Allineato all'invariante α.66.5.
+
+**Smoke**: 302 routes invariato, version 3.5.0-alpha.66.14.6.
+
+---
+
 **v3.5.0-alpha.66.14.5** — 11 maggio 2026 — Permission gate mutator quote
 
 11 mutator quote senza permission check (audit HIGH #4) ora protetti via

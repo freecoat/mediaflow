@@ -1656,6 +1656,27 @@ def _h_propose_move_booking(db: Session, data: dict) -> dict:
                 f"overlap con assignment #{c.id}"
             )
 
+    # v3.5.0-alpha.66.14.6 — Slice-lock re-check sui NEW dates.
+    # `_resolve_booking_for_planning` blocca booking che partono già dentro
+    # un periodo fatturato; ma un move può portare un booking FUORI periodo
+    # DENTRO uno nuovo, e questo path non era controllato (audit HIGH #5).
+    # Re-check con `find_blocking_slice_for_dates` sulla finestra che
+    # risulterà DOPO il move. Stessa policy del router planning.
+    if b.job_cost_line_id and new_values:
+        from app.services.billing_slice_guard import (
+            find_blocking_slice_for_dates, slice_lock_message,
+        )
+        new_min_date = min(ns for _a, ns, _ne, _nrid in new_values).date()
+        new_max_date = max(ne for _a, _ns, ne, _nrid in new_values).date()
+        s_new = find_blocking_slice_for_dates(
+            db, b.job_cost_line_id, new_min_date, new_max_date,
+        )
+        if s_new is not None:
+            raise ValueError(
+                "Move bloccato: " + slice_lock_message(s_new) +
+                " — la nuova posizione del booking ricade in periodo già fatturato."
+            )
+
     # Applica
     for a, ns, ne, nrid in new_values:
         a.start_datetime = ns
@@ -1737,6 +1758,24 @@ def _h_propose_resize_booking(db: Session, data: dict) -> dict:
         raise ValueError(
             f"Resize crea conflitto su risorsa #{last_a.resource_id} con assignment #{c.id}"
         )
+    # v3.5.0-alpha.66.14.6 — Slice-lock re-check sulla nuova fine. Se il
+    # resize allunga il booking dentro un periodo fatturato non ancora
+    # toccato, blocca (audit HIGH #5).
+    if b.job_cost_line_id and dm > 0:
+        from app.services.billing_slice_guard import (
+            find_blocking_slice_for_dates, slice_lock_message,
+        )
+        old_max_date = b.end_datetime.date() if b.end_datetime else last_a.end_datetime.date()
+        new_max_date = new_end.date()
+        if new_max_date > old_max_date:
+            s_new = find_blocking_slice_for_dates(
+                db, b.job_cost_line_id, old_max_date, new_max_date,
+            )
+            if s_new is not None:
+                raise ValueError(
+                    "Resize bloccato: " + slice_lock_message(s_new) +
+                    " — l'estensione entra in periodo già fatturato."
+                )
     last_a.end_datetime = new_end
     b.end_datetime = max(a.end_datetime for a in b.assignments)
     # v3.5.0-alpha.51.1 fix C2: ricomputa cost line. Se booking è done, le
