@@ -8,6 +8,17 @@
 
 ## Versione corrente
 
+**v3.5.0-alpha.66.14.7** — 11 maggio 2026 — Anthropic prompt caching
+
+Saving stimato ~90% sui costi input copilot Claude ricorrenti. System
+prompt + tools schema marcati cache_control ephemeral in chat_with_tools.
+Soglia minima 1024 tokens (Claude 3.x+), sopra quella → cache hit a 0.1×
+del costo cold. Logging hit_ratio per monitoring.
+
+**Smoke**: 302 routes invariato, version 3.5.0-alpha.66.14.7.
+
+---
+
 **v3.5.0-alpha.66.14.6** — 11 maggio 2026 — Slice-lock re-check AI move/resize
 
 Chiude bypass slice-lock documentato in audit HIGH services #5: AI

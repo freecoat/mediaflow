@@ -258,17 +258,59 @@ class ClaudeProvider(AIProvider):
         """Loop tool_use Anthropic. Ritorna UN turno (un singolo round-trip API).
         Il caller decide se proseguire (eseguire i tool, append tool_result,
         richiamare chat_with_tools) o fermarsi (mutation in attesa di Apply).
+
+        v3.5.0-alpha.66.14.7 — Prompt caching su system + tools per ridurre
+        ~90% del costo input ricorrente (Anthropic addebita 0.1× cache hits
+        vs 1× cold). Soglia minima 1024 tokens per Claude 3.x+, sotto la
+        soglia il marker `cache_control` viene ignorato senza errore. Hit
+        ratio loggato a INFO per monitoring.
         """
         kwargs: dict = {
             "model":       self.model,
             "max_tokens":  max_tokens,
             "temperature": temperature,
             "messages":    messages,
-            "tools":       tools,
         }
+        # System prompt: cache_control ephemeral. Accettiamo sia stringa (compat
+        # con call site esistenti) che list di blocks già pronta.
         if system:
-            kwargs["system"] = system
+            if isinstance(system, str):
+                kwargs["system"] = [{
+                    "type": "text",
+                    "text": system,
+                    "cache_control": {"type": "ephemeral"},
+                }]
+            else:
+                kwargs["system"] = system
+        # Tools: marca l'ULTIMO tool con cache_control. Anthropic estende il
+        # cache fino a quel punto (cumulativo: system+tools cachato insieme).
+        if tools:
+            cached_tools = list(tools)
+            if cached_tools:
+                last = dict(cached_tools[-1])
+                last["cache_control"] = {"type": "ephemeral"}
+                cached_tools[-1] = last
+            kwargs["tools"] = cached_tools
+
         resp = self.client.messages.create(**kwargs)
+
+        # v3.5.0-alpha.66.14.7 — Log cache stats. Utile per misurare il
+        # risparmio reale; passare a INFO permanente quando confermato.
+        try:
+            usage = getattr(resp, "usage", None)
+            if usage is not None:
+                cc_in = getattr(usage, "cache_creation_input_tokens", 0) or 0
+                cr_in = getattr(usage, "cache_read_input_tokens", 0) or 0
+                tot_in = getattr(usage, "input_tokens", 0) or 0
+                tot_out = getattr(usage, "output_tokens", 0) or 0
+                if cc_in or cr_in:
+                    logger.info(
+                        f"[anthropic cache] read={cr_in} create={cc_in} "
+                        f"input={tot_in} output={tot_out} "
+                        f"hit_ratio={cr_in/(cr_in+tot_in) if (cr_in+tot_in) else 0:.0%}"
+                    )
+        except Exception:
+            pass
 
         text_parts: list[str] = []
         tool_uses: list[ToolUse] = []

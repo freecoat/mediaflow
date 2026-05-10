@@ -1,5 +1,43 @@
 # MediaFlow — Changelog
 
+## v3.5.0-alpha.66.14.7 — Anthropic prompt caching (11 maggio 2026)
+
+Quick win post-audit #8 — quello con il ROI economico più alto. Riduce
+il costo input ricorrente del copilot Claude **fino al 90%** (Anthropic
+fattura le cache hit a 0.1× del prezzo cold).
+
+**Modifica `ClaudeProvider.chat_with_tools`** (`ai_provider.py:257`):
+- **System prompt**: se passato come stringa, wrap in
+  `[{"type": "text", "text": ..., "cache_control": {"type": "ephemeral"}}]`.
+  Compatibile con call site esistenti (advance_loop passa stringa).
+- **Tools**: l'ULTIMO tool dell'array tools riceve `cache_control` →
+  Anthropic estende il cache fino a quel punto (system + tools cachato
+  insieme, cumulativo).
+- **Soglia minima 1024 tokens** (Claude 3.x+): sotto quella il marker
+  viene ignorato senza errore. Il system prompt MediaFlow + tools schema
+  sono ~3-5k tokens, ampiamente sopra soglia.
+
+**Logging cache stats**: estraggo `cache_creation_input_tokens` e
+`cache_read_input_tokens` dalla `resp.usage` Anthropic. Logga a INFO con
+`hit_ratio` per ogni call con almeno una cache stat. Utile per misurare
+saving reale; lasciare attivo finché confermato il vantaggio.
+
+**Esempio risparmio realistico**:
+- Copilot ~10 turni/sessione × 5k system+tools tokens × 30 utenti/giorno
+- Cold: 30 × 10 × 5000 × $3/M = $4.50/giorno × 30gg = **$135/mese**
+- Cached (90% hit): $4.50 × 0.1 + $4.50 × 0.1 (cache create) ≈ **$13.5/mese**
+- Saving: **~90%** sui costi input ricorrenti
+
+**Provider OpenAI/Gemini**: prompt caching ha logica diversa (OpenAI è
+automatico ≥1024 tokens, Gemini Context Caching API è esplicita ma
+overhead setup). Lasciato per follow-up dedicato.
+
+**Smoke**: 302 routes invariato, version 3.5.0-alpha.66.14.7. Lo smoke
+puro non triggera la cache (richiede API key reale + 2 turni back-to-back),
+verificare in produzione via logger INFO `[anthropic cache] read=N ...`.
+
+---
+
 ## v3.5.0-alpha.66.14.6 — Slice-lock re-check su new dates AI move/resize (11 maggio 2026)
 
 Quick win post-audit #7. Chiude bypass slice-lock via AI handlers
