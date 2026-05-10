@@ -72,11 +72,14 @@ def _auto_migrate_columns():
             with engine.begin() as conn:
                 conn.execute(text("ALTER TABLE quotes ADD COLUMN category_order TEXT NULL"))
         # v3.4.50.1 — Versioning quote
+        # v3.5.0-alpha.66.15.0 — sprint R1: tenant_id per scope multi-tenant
         quote_alter = [
             ("parent_quote_id", "INTEGER NULL REFERENCES quotes(id)"),
             ("superseded_by_id", "INTEGER NULL REFERENCES quotes(id)"),
             # v3.4.52 — phantom quote (reverse-flow)
             ("is_phantom", "BOOLEAN NOT NULL DEFAULT 0"),
+            # v3.5.0-alpha.66.15.0 — tenant scope (R1)
+            ("tenant_id", "INTEGER NOT NULL DEFAULT 1"),
         ]
         with engine.begin() as conn:
             for col, ddl in quote_alter:
@@ -333,6 +336,21 @@ def _auto_migrate_columns():
                     END
                 """))
 
+    # v3.5.0-alpha.66.15.0 — Sprint R1: tenant scope per modelli orfani.
+    # Audit HIGH #1: Quote/Job/JobCostLine/Asset non avevano tenant_id.
+    # Aggiunto come INTEGER NOT NULL DEFAULT 1 → backfill automatico per i
+    # record esistenti. Multi-tenant hard sarà attivato in Fase 7 quando
+    # tenant_id sarà popolato durante il login. Project già ce l'ha.
+    for tbl in ("jobs", "job_cost_lines", "assets"):
+        if tbl in insp.get_table_names():
+            tcols = {c["name"] for c in insp.get_columns(tbl)}
+            if "tenant_id" not in tcols:
+                print(f"[auto-migrate] {tbl}.tenant_id mancante -> ALTER TABLE (R1)")
+                with engine.begin() as conn:
+                    conn.execute(text(
+                        f"ALTER TABLE {tbl} ADD COLUMN tenant_id INTEGER NOT NULL DEFAULT 1"
+                    ))
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -552,7 +570,7 @@ async def lifespan(app: FastAPI):
     yield
 
 
-app = FastAPI(title="MediaFlow", version="3.5.0-alpha.66.14.9", lifespan=lifespan)
+app = FastAPI(title="MediaFlow", version="3.5.0-alpha.66.15.0", lifespan=lifespan)
 
 BASE_DIR = Path(__file__).parent
 app.mount("/static", StaticFiles(directory=BASE_DIR / "static"), name="static")

@@ -1,5 +1,42 @@
 # MediaFlow — Changelog
 
+## v3.5.0-alpha.66.15.0 — Sprint R1 Step 0: tenant_id ai modelli orfani (11 maggio 2026)
+
+Apre il sprint **R1 — Tenant scope DI** del piano post-audit. Step 0:
+aggiunge la colonna `tenant_id` ai 4 modelli orfani identificati
+nell'audit HIGH #1 (Project l'aveva già). Comportamento runtime invariato
+(default=1, backfill auto), preparazione per R1.1 (DI helper) e R1.2
+(filtri nelle query).
+
+**Modelli aggiornati**:
+- `Quote.tenant_id`: `Mapped[int] = mapped_column(ForeignKey("tenants.id"), default=1, index=True)`
+- `Job.tenant_id`: idem
+- `JobCostLine.tenant_id`: denormalized da `job.tenant_id` per scope cost-report efficiente
+- `Asset.tenant_id`: denormalized da `project.tenant_id` per scope DAM senza JOIN
+
+**Migrazione auto al boot** (`_auto_migrate_columns` in `main.py`):
+- `quote_alter` esteso con `("tenant_id", "INTEGER NOT NULL DEFAULT 1")`
+- Loop generico per `jobs`, `job_cost_lines`, `assets`: ALTER TABLE
+  idempotente con default 1 (backfill automatico per record esistenti)
+
+**UNIQUE constraints**: `Quote.number`, `Job.code` restano UNIQUE GLOBALI
+per ora — saranno migrati a `UniqueConstraint(tenant_id, ...)` in R1.5
+quando si attiverà multi-tenant hard. Memo: pattern identico a
+Department/PriceCategory/DeliveryTemplate.
+
+**Smoke E2E**:
+- `_auto_migrate_columns()` su DB reale → 4 ALTER TABLE applicate
+- `tenant_id present: True` su tutte e 4 le tabelle
+- DB Matteo era vuoto (0 rows) → no backfill necessario
+- 302 routes invariato, version 3.5.0-alpha.66.15.0
+
+**Cosa NON è ancora attivo**:
+- Le query nei router NON filtrano ancora su `tenant_id` per Quote/Job/
+  JobCostLine/Asset → cross-tenant resta possibile finché non arriva R1.2.
+- `app/context.py` con `current_tenant_id()` DI → R1.1 prossimo step.
+
+---
+
 ## v3.5.0-alpha.66.14.9 — CSS extract da planning.html (11 maggio 2026)
 
 Quick win post-audit #11. Apre il refactor "file giganti" iniziando dal

@@ -889,9 +889,15 @@ class WorkingHoursPolicy(Base):
 class Quote(Base):
     __tablename__ = "quotes"
     id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    # v3.5.0-alpha.66.15.0 — tenant_id aggiunto in sprint R1 (audit HIGH #1).
+    # default=1 per back-compat single-tenant; backfill auto in _auto_migrate.
+    # Il vincolo UNIQUE su `number` resta GLOBALE per ora — sarà migrato a
+    # UniqueConstraint(tenant_id, number) in R1.5 quando arriverà multi-tenant
+    # hard. Memo: per multi-tenant fisico vedi Department/PriceCategory pattern.
+    tenant_id: Mapped[int] = mapped_column(ForeignKey("tenants.id"), default=1, index=True)
     number: Mapped[str] = mapped_column(String(50), unique=True)
     version: Mapped[int] = mapped_column(Integer, default=1)
-    
+
     # Collegamento: Progetto è primario, Cliente viene dal progetto
     project_id: Mapped[int] = mapped_column(ForeignKey("projects.id"))
     client_id: Mapped[int] = mapped_column(ForeignKey("clients.id"))   # denormalized per query veloci
@@ -1032,6 +1038,9 @@ class QuoteLine(Base):
 class Job(Base):
     __tablename__ = "jobs"
     id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    # v3.5.0-alpha.66.15.0 — tenant_id aggiunto in sprint R1 (audit HIGH #1).
+    # Vedi nota su Quote.tenant_id per la policy UNIQUE su `code`.
+    tenant_id: Mapped[int] = mapped_column(ForeignKey("tenants.id"), default=1, index=True)
     code: Mapped[str] = mapped_column(String(50), unique=True)
     title: Mapped[str] = mapped_column(String(255))
     description: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
@@ -1086,6 +1095,9 @@ class JobResourceAssignment(Base):
 class JobCostLine(Base):
     __tablename__ = "job_cost_lines"
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    # v3.5.0-alpha.66.15.0 — tenant_id aggiunto in sprint R1 (audit HIGH #1).
+    # Denormalized da job.tenant_id per scope efficiente nel cost-report.
+    tenant_id: Mapped[int] = mapped_column(ForeignKey("tenants.id"), default=1, index=True)
     job_id: Mapped[int] = mapped_column(ForeignKey("jobs.id"))
     quote_line_id: Mapped[Optional[int]] = mapped_column(ForeignKey("quote_lines.id"), nullable=True)
     price_item_id: Mapped[Optional[int]] = mapped_column(ForeignKey("price_items.id"), nullable=True)
@@ -1501,6 +1513,10 @@ class Asset(Base):
     """
     __tablename__ = "assets"
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    # v3.5.0-alpha.66.15.0 — tenant_id aggiunto in sprint R1 (audit HIGH #1).
+    # Denormalized da project.tenant_id (asset → project.tenant_id implicito)
+    # per scope diretto dal DAM senza JOIN.
+    tenant_id: Mapped[int] = mapped_column(ForeignKey("tenants.id"), default=1, index=True)
     filename: Mapped[str] = mapped_column(String(255))
     original_name: Mapped[str] = mapped_column(String(255))
     file_path: Mapped[str] = mapped_column(String(512))

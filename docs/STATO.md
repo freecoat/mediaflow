@@ -8,6 +8,19 @@
 
 ## Versione corrente
 
+**v3.5.0-alpha.66.15.0** — 11 maggio 2026 — Sprint R1 Step 0: tenant_id orfani
+
+Apre il sprint R1. Quote/Job/JobCostLine/Asset acquisiscono colonna
+tenant_id (default=1, ALTER TABLE auto al boot). Comportamento runtime
+invariato. UNIQUE constraints restano globali (R1.5 dedicato).
+
+Project aveva già tenant_id (audit aveva sbagliato lì).
+
+**Smoke**: 302 routes invariato, ALTER TABLE testate sul DB reale (vuoto),
+version 3.5.0-alpha.66.15.0.
+
+---
+
 **v3.5.0-alpha.66.14.9** — 11 maggio 2026 — CSS extract da planning.html
 
 Apre il refactor "file giganti" suggerito dall'audit. planning.html da
