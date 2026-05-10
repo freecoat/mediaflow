@@ -1,5 +1,46 @@
 # MediaFlow — Changelog
 
+## v3.5.0-alpha.66.16.1 — Sprint R4 Step 0: booking_mutate service (11 maggio 2026)
+
+Apre R4 — Single mutation gate per Booking. Audit pattern systemico O:
+SLICE_LOCK validato in 7+ posti diversi (router planning lines 64, 1955,
+2380, 2723, 2732 + ai_assistant 1500, 2055) con copie inline divergenti.
+Ogni nuovo mutator dimentica facilmente.
+
+**Nuovo modulo `app/services/booking_mutate.py`** — 3 helper unificati:
+
+1. **`assert_slice_lock_safe(db, b, *, new_dates=None, force_unlock=False)`**
+   Single API per il check SLICE_LOCK in tutti i suoi 3 modi:
+   - `new_dates=None` → check posizione CORRENTE (delete, state change)
+   - `new_dates=(start,end)` → check NUOVA posizione (move/resize)
+   - `force_unlock=True` → bypass (UI 409 confirm)
+   Solleva `SliceLocked` con `payload` pronto per response 409.
+
+2. **`assert_no_overlap_after(db, b, proposed_assignments)`**
+   Verifica conflitti orari su altri assignment (esclusi quelli del
+   booking corrente). Solleva `BookingConflict` con metadata.
+
+3. **`audit_booking_mutation(db, b, *, kind, summary, payload, user_id)`**
+   Crea `BookingChange` row con metadata standard. NON committa
+   (transazione resta del caller — pattern E audit).
+
+**Helper combinato `assert_mutation_safe`**: check completo
+(slice-current + overlap + slice-new) in 1 chiamata. Per AI move/resize,
+multi-move, bulk-edit.
+
+**Eccezioni tipate**: `SliceLocked`, `BookingConflict`. Caller traduce
+in HTTP 409 con codici standard (`SLICE_LOCK_CONFIRM_REQUIRED`,
+`BOOKING_CONFLICT`).
+
+**NB**: nessun call site migrato in questo step. R4.1 sostituirà i
+check inline con chiamate al service nelle ~7 location (AI handlers
++ router planning + multi-move + bulk-edit).
+
+**Smoke**: tutti gli import OK, 302 routes invariato,
+version 3.5.0-alpha.66.16.1.
+
+---
+
 ## v3.5.0-alpha.66.16.0 — Sprint R3: permission gate sweep cross-router (11 maggio 2026)
 
 Chiude pattern systemico D dell'audit: 27 mutator senza permission gate

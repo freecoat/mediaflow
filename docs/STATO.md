@@ -8,6 +8,21 @@
 
 ## Versione corrente
 
+**v3.5.0-alpha.66.16.1** — 11 maggio 2026 — Sprint R4 Step 0: booking_mutate service
+
+Apre R4. app/services/booking_mutate.py con 3 helper unificati:
+assert_slice_lock_safe (3 modi: current/new/force_unlock),
+assert_no_overlap_after, audit_booking_mutation. Helper combinato
+assert_mutation_safe per move/resize/multi-move.
+
+Eccezioni tipate SliceLocked/BookingConflict.
+
+R4.1 migrerà i 7 call site con check inline duplicato.
+
+**Smoke**: 302 routes invariato, version 3.5.0-alpha.66.16.1.
+
+---
+
 **v3.5.0-alpha.66.16.0** — 11 maggio 2026 — Sprint R3: permission gate sweep
 
 Pattern systemico D audit chiuso. 27 mutator senza gate su 6 router
