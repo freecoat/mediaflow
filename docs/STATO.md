@@ -3232,9 +3232,68 @@ Cantiere "overlay prenotato vs effettivo + adeguamento" (era v3.4.15 nel plan pr
 
 ## Prossimo step concordato
 
-> **🔖 ULTIMO COMMENTO (10 mag 2026 sera) — punto di riapertura**
+> **🔖 ULTIMO COMMENTO (11 mag 2026 sera) — punto di riapertura**
 
-**Sessione 10 maggio chiusa**: 8 commit α.66.6→α.66.13 **pushati su origin/main**.
+**Sessione 11 maggio chiusa**: **21 commit α.66.14 → α.66.16.3 pushati su
+origin/main**. Maratona consolidamento post-audit profondo.
+
+### Cosa è stato fatto
+
+| Sprint | Versioni | Cosa |
+|---|---|---|
+| **Audit profondo** | (no commit) | 5 agenti paralleli su modelli/router/services/frontend/AI |
+| **M1 Quick Wins** | α.66.14 → .14.9 | 11 quick win (modal a11y, light mode, auth fail-closed, tenant filter AI, upload security, permission gate quote, slice-lock AI, prompt caching, numbering service, soft-delete bypass, CSS extract planning) |
+| **R1 Tenant scope DI** | α.66.15.0 → .15.2 | tenant_id ai 4 modelli orfani + app/context.py DI helper + tenant filter su query critiche (quotes/jobs/cost-report/dam) |
+| **R2 Soft-delete framework** | α.66.15.3 → .15.4 | _SOFT_DELETE_MODELS esteso (5 modelli) + helper is_unique_or_deleted_aware + fix Project.code create |
+| **R3 Permission gate sweep** | α.66.16.0 | 27 mutator senza gate protetti (76/76 totale 100%): finance/pricelist/resources/dam/ai/planning |
+| **R4 Booking mutation gate** | α.66.16.1 → .16.3 | app/services/booking_mutate.py + AI handlers + planning router migrati. 7/7 call site SLICE_LOCK centralizzati. Pattern systemico O chiuso |
+
+### Audit chiuso
+
+12 problemi HIGH dell'audit + 6 dei 7 pattern systemici (A tenant scope,
+B soft-delete, C numbering, D permission gate, F single-mutation gate
+per Booking, O slice-lock unificato, parte di G file giganti).
+
+### Backlog rimanente (sprint successivi)
+
+- **R5** Split planning.html partial Jinja + JS moduli (PR2/PR3 audit)
+- **R6** Split ai_assistant.py 2287 righe in `ai_capabilities/` package
+- **R7** Split planning.py 4265 righe in 5 file (planning_hub /
+  bookings / unavailabilities / presets / diagnostics)
+- **R8** Float→Decimal soldi (EUR `Decimal('0.01')` ROUND_HALF_EVEN)
+- **R9** Datetime tz-aware (UTC ovunque + ZoneInfo display)
+- **R10** AI token tracking + rate limit per-user (`AIUsageLog` table)
+- **R4 follow-up**: PUT booking + bulk-edit usano già `_assert_no_blocking_slice`
+  che è migrato internamente, ma il call site potrebbe usare anche
+  `assert_no_overlap_after` per uniformare conflict-check inline
+
+### Cosa fa Matteo quando riapre domani
+
+1. **Pull**: `git pull origin main` — 21 commit pronti (chunk α.66.14 → α.66.16.3)
+2. **Restart server** — ALTER TABLE auto al boot (tenant_id su 4 nuovi modelli)
+3. **Hard-refresh browser** per cache-buster nuovo `?v=3.5.0-alpha.66.14` su global.js
+4. **Test smoke focus**:
+   - **Modal a11y**: apri qualsiasi modal → Tab cicla solo dentro,
+     Esc chiude solo top, focus restored al close
+   - **Planning**: light mode auto-on se >80 booking; vis-timeline gira
+   - **AI copilot**: prova il prompt cache (turno 2 dovrebbe essere
+     più veloce; logger Anthropic `[anthropic cache] read=N create=N`
+     in console server)
+   - **Mutator quote/finance/pricelist/resources con utente non-admin**:
+     viewer/operator deve vedere 403 sui mutator
+5. **Verifica** che le 76/76 protezioni mutator non rompano flussi reali
+6. **Riportare bug** trovati → faccio hotfix prima di proseguire R5+
+
+### Riapertura
+
+Parola chiave: **"Riprendi da v3.5.0-alpha.66.16.3 — apri con il tuo ultimo commento"**.
+Audit + M1+R1+R2+R3+R4 chiusi e pushati. Prossimo: R5 split file giganti
+oppure feature backlog α.66.14+ (kanban deliverable, copilot QC, AI
+cost derivation) a scelta di Matteo.
+
+---
+
+**Sessione 10 maggio (storico precedente)**: 8 commit α.66.6→α.66.13 **pushati su origin/main**.
 Cantiere "Listino & Deliverable" sostanziale:
 - Snapshot listino persistenti (UI in `/pricelist` 📦 Snapshot)
 - Listino lean 43 voci con descrizione modulare (preset built-in al boot)
