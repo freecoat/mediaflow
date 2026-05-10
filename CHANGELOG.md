@@ -1,5 +1,92 @@
 # MediaFlow — Changelog
 
+## v3.5.0-alpha.66.6 — Backup/restore listino con snapshot persistenti (10 maggio 2026)
+
+Cantiere multi-versione "Listino & Deliverable" — versione **abilitante**
+prima della scrematura del listino base e del modello `JobDeliverable`.
+
+**Obiettivo**: non perdere mai il listino corrente prima di applicare
+modifiche aggressive. Sostituisce il flusso "esporta JSON → conserva sul
+disco → reimporta a mano" con uno storage persistente nel DB + UI dedicata.
+
+**Modello nuovo**: `PricelistSnapshot` (table `pricelist_snapshots`)
+con `id`, `tenant_id`, `name`, `description`, `kind` (manual/auto/preset),
+counters denormalizzati (item/category/department), `schema_version`,
+`source_app_version`, `payload_json`, `created_by_user_id`, `created_at`,
+`deleted_at` (soft-delete). Tabella creata automaticamente al boot via
+`Base.metadata.create_all()`, nessuna migrazione manuale richiesta.
+
+**Service** `app/services/pricelist_snapshot.py`:
+- `build_snapshot_payload(db, tenant_id)` — schema 1.1, include departments
+  (mancanti nello schema 1.0 esistente), categories, items con keywords.
+- `apply_snapshot_payload(db, tenant_id, payload, mode, auto_backup=True)` —
+  applica un payload con `mode=merge` (aggiorna voci con stesso nome, aggiunge
+  nuove, preserva esistenti) o `mode=replace` (DELETE all → import). In
+  `replace` crea automaticamente un PricelistSnapshot di tipo `auto` PRIMA
+  dell'overwrite per permettere rollback.
+- `create_snapshot_record(...)`, `list_snapshots(...)`, `soft_delete_snapshot`,
+  `restore_deleted_snapshot`, `hard_delete_snapshot`.
+- `list_preset_files()` / `load_preset_payload(...)` — preset built-in
+  caricabili da `app/data/pricelist_presets/*.json` (cartella creata in
+  questo commit, popolata in α.66.7).
+
+**Endpoint nuovi** in `app/routers/pricelist.py` (8 nuovi route, +permission
+gate `edit_pricelist` su tutte le mutation):
+- `GET /pricelist/api/snapshots` — lista
+- `POST /pricelist/api/snapshots` — crea da listino corrente
+- `GET /pricelist/api/snapshots/{id}` — dettaglio + payload
+- `GET /pricelist/api/snapshots/{id}/download` — scarica .json
+- `POST /pricelist/api/snapshots/{id}/restore` — ripristina (mode merge|replace)
+- `DELETE /pricelist/api/snapshots/{id}?hard=bool` — soft o hard delete
+- `POST /pricelist/api/snapshots/{id}/restore-deleted` — recupera dal cestino
+- `POST /pricelist/api/snapshots/upload` — upload file .json come snapshot manuale
+- `GET /pricelist/api/presets` — lista preset built-in
+- `POST /pricelist/api/presets/load` — carica preset come snapshot (idempotente)
+
+**UI listino** (`/pricelist`):
+- Bottone toolbar `📦 Snapshot` (visibile solo con permesso `edit_pricelist`).
+- Modal "Snapshot listino": tabella con tutti gli snapshot (kind badge
+  color-coded), bottoni per riga Ripristina / Scarica / Elimina, opzione
+  "Mostra cestino", import file `.json`, blocco "Preset built-in".
+- Modal "Salva snapshot": nome (con default datestamp) + descrizione.
+- Modal "Ripristina": scelta merge/replace con warning per replace.
+
+**UI impostazioni** (`/settings#data`):
+- Nuovo blocco "Listino — Snapshot dedicati" con shortcut
+  "💾 Salva snapshot listino corrente" + link a `/pricelist#snapshots`
+  + scarica .json + lista compatta degli ultimi 5 snapshot.
+- Nuovo opt-in "Includi snapshot listino" nel pannello Export ZIP
+  (default ON, esporta solo gli `manual` non cancellati come `.json`
+  + `_index.json` di sintesi).
+
+**Smoke test live**: 287 routes (+10), version `3.5.0-alpha.66.6`. Test
+diretto del service: build payload schema 1.1 da listino reale (79 voci,
+12 categorie, 4 reparti), create snapshot id=1, apply merge → 4 dept
+updated, 12 cat updated, 79 items updated, 0 created, 0 skipped (idempotente).
+
+**Verifica live** (hard-refresh):
+1. `/pricelist` → bottone `📦 Snapshot` → modal lista vuota → "💾 Salva
+   listino corrente" → snapshot in lista con counters corretti.
+2. Modifica una voce → torna in modal Snapshot → "↺ Ripristina" merge
+   → modifica annullata. Verifica auto-backup id presente nei stats di
+   replace.
+3. "⬇ Scarica .json" → file portabile schema 1.1 con departments.
+4. "⬆ Importa file .json" → carica file scaricato → appare come snapshot
+   manuale. Ripristina con mode=replace → DB sostituito + auto-backup
+   visibile in lista.
+5. `/settings#data` → blocco "Listino" → "💾 Salva snapshot listino
+   corrente" → toast successo + lista aggiornata.
+6. Export ZIP completo → cartella `listino-snapshots/` contiene un
+   `.json` per ogni snapshot manuale + `_index.json`.
+
+**Cantieri rimasti aperti** (in ordine):
+- α.66.7 — Snapshot legacy del Mac di Matteo committato come preset
+- α.66.8 — Semplificazione listino base (76 → ~38)
+- α.66.9 — Modello `JobDeliverable` + cost-rate Resource (employee/freelance/studio)
+- α.66.10+ — UI deliverable + asset library bridge + copilot QC + cost report split
+
+---
+
 ## v3.5.0-alpha.66.5.1 — Audit completo post-refactor: bulk-edit + 5 mutator + UI legacy + AI (9 maggio 2026)
 
 Audit con agente Explore ha rilevato 3 HIGH + multipli MEDIUM rimasti

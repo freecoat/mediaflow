@@ -1,0 +1,4 @@
+# Preset built-in del listino (file .json schema 1.1).
+# Caricati come PricelistSnapshot kind=preset al boot, se mancanti.
+# Aggiungere preset committati in repo per renderli disponibili a tutte
+# le installazioni (es. legacy_2026q2_full.json, lean_2026q3.json).

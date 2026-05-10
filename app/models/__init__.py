@@ -17,6 +17,7 @@ from app.models.models import (
     JCLBilledSlice,
     Asset, AssetType, Tag, AssetTag,
     PriceCategory, PriceItem, PriceLevel,
+    PricelistSnapshot, PricelistSnapshotKind,
     Quote, QuoteLine, QuoteStatus,
     AIConversation, AIMessage,
     UserAISettings, AIAction,

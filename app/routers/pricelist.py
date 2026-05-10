@@ -4,12 +4,17 @@ Fase 1-bis: aggiunti department_id e keywords su PriceItem.
 """
 import json
 from datetime import datetime
+from pathlib import Path
 from fastapi import APIRouter, Depends, HTTPException, Request, Form, UploadFile, File
 from fastapi.responses import HTMLResponse, JSONResponse, Response
 from typing import Optional
 from sqlalchemy.orm import Session, joinedload
 from app.database import get_db
-from app.models import PriceCategory, PriceItem, Department
+from app.models import (
+    PriceCategory, PriceItem, Department,
+    PricelistSnapshot, PricelistSnapshotKind,
+)
+from app.services import pricelist_snapshot as plsnap
 
 router = APIRouter(prefix="/pricelist", tags=["pricelist"])
 
@@ -542,3 +547,317 @@ async def import_pricelist(
         "items_updated": updated,
         "items_skipped": skipped,
     }
+
+
+# ── SNAPSHOT LISTINO (v3.5.0-alpha.66.6) ──────────────────────
+# Storage persistente di backup/restore del listino. Wrappato sopra il
+# servizio app/services/pricelist_snapshot.py.
+
+def _serialize_snapshot(s: PricelistSnapshot, include_payload: bool = False) -> dict:
+    out = {
+        "id": s.id,
+        "name": s.name,
+        "description": s.description,
+        "kind": s.kind.value if s.kind else "manual",
+        "item_count": s.item_count,
+        "category_count": s.category_count,
+        "department_count": s.department_count,
+        "schema_version": s.schema_version,
+        "source_app_version": s.source_app_version,
+        "created_by_user_id": s.created_by_user_id,
+        "created_at": s.created_at.isoformat() + "Z" if s.created_at else None,
+        "deleted_at": s.deleted_at.isoformat() + "Z" if s.deleted_at else None,
+    }
+    if include_payload:
+        out["payload"] = s.payload_json
+    return out
+
+
+def _require_edit_pricelist(request: Request):
+    from app.services.rbac import current_user_optional, has_permission
+    user = current_user_optional(request)
+    if not has_permission(user, "edit_pricelist"):
+        raise HTTPException(403, "Permesso 'edit_pricelist' richiesto")
+    return user
+
+
+@router.get("/api/snapshots")
+async def list_snapshots(
+    include_deleted: bool = False,
+    db: Session = Depends(get_db),
+):
+    snaps = plsnap.list_snapshots(
+        db,
+        tenant_id=CURRENT_TENANT,
+        include_deleted=include_deleted,
+    )
+    return [_serialize_snapshot(s) for s in snaps]
+
+
+@router.post("/api/snapshots")
+async def create_snapshot(
+    request: Request,
+    name: str = Form(...),
+    description: Optional[str] = Form(None),
+    db: Session = Depends(get_db),
+):
+    """Crea uno snapshot del listino corrente del tenant."""
+    user = _require_edit_pricelist(request)
+    name = (name or "").strip()
+    if not name:
+        raise HTTPException(400, "Il nome è obbligatorio")
+    snap = plsnap.create_snapshot_record(
+        db,
+        tenant_id=CURRENT_TENANT,
+        name=name,
+        description=description,
+        kind=PricelistSnapshotKind.manual,
+        user_id=getattr(user, "id", None),
+        user_email=getattr(user, "email", None),
+    )
+    db.commit()
+    return _serialize_snapshot(snap)
+
+
+@router.get("/api/snapshots/{snap_id}")
+async def get_snapshot(snap_id: int, db: Session = Depends(get_db)):
+    s = (
+        db.query(PricelistSnapshot)
+        .filter(
+            PricelistSnapshot.id == snap_id,
+            PricelistSnapshot.tenant_id == CURRENT_TENANT,
+        )
+        .first()
+    )
+    if not s:
+        raise HTTPException(404, "Snapshot non trovato")
+    return _serialize_snapshot(s, include_payload=True)
+
+
+@router.get("/api/snapshots/{snap_id}/download")
+async def download_snapshot(snap_id: int, db: Session = Depends(get_db)):
+    s = (
+        db.query(PricelistSnapshot)
+        .filter(
+            PricelistSnapshot.id == snap_id,
+            PricelistSnapshot.tenant_id == CURRENT_TENANT,
+        )
+        .first()
+    )
+    if not s:
+        raise HTTPException(404, "Snapshot non trovato")
+    body = json.dumps(s.payload_json, ensure_ascii=False, indent=2)
+    safe_stem = "".join(c if c.isalnum() or c in "-_" else "_" for c in s.name)[:80] or f"snapshot-{s.id}"
+    ts = s.created_at.strftime("%Y%m%d-%H%M%S") if s.created_at else "snapshot"
+    fname = f"mediaflow-listino-{safe_stem}-{ts}.json"
+    return Response(
+        content=body,
+        media_type="application/json",
+        headers={"Content-Disposition": f'attachment; filename="{fname}"'},
+    )
+
+
+@router.post("/api/snapshots/{snap_id}/restore")
+async def restore_snapshot(
+    snap_id: int,
+    request: Request,
+    mode: str = Form("merge"),
+    db: Session = Depends(get_db),
+):
+    """Ripristina uno snapshot. mode: 'merge' o 'replace'.
+
+    Se mode='replace' viene creato automaticamente un auto-snapshot del
+    listino corrente PRIMA dell'overwrite, per permettere rollback.
+    """
+    user = _require_edit_pricelist(request)
+    if mode not in ("merge", "replace"):
+        raise HTTPException(400, "mode deve essere 'merge' o 'replace'")
+    s = (
+        db.query(PricelistSnapshot)
+        .filter(
+            PricelistSnapshot.id == snap_id,
+            PricelistSnapshot.tenant_id == CURRENT_TENANT,
+            PricelistSnapshot.deleted_at.is_(None),
+        )
+        .first()
+    )
+    if not s:
+        raise HTTPException(404, "Snapshot non trovato")
+    try:
+        stats = plsnap.apply_snapshot_payload(
+            db,
+            tenant_id=CURRENT_TENANT,
+            payload=s.payload_json or {},
+            mode=mode,  # type: ignore[arg-type]
+            auto_backup=True,
+            auto_backup_user_id=getattr(user, "id", None),
+        )
+    except ValueError as e:
+        db.rollback()
+        raise HTTPException(400, str(e))
+    db.commit()
+    return {
+        "ok": True,
+        "snapshot_id": s.id,
+        "snapshot_name": s.name,
+        **stats,
+    }
+
+
+@router.delete("/api/snapshots/{snap_id}")
+async def delete_snapshot(
+    snap_id: int,
+    request: Request,
+    hard: bool = False,
+    db: Session = Depends(get_db),
+):
+    """Soft-delete (default) o hard-delete (?hard=true) di uno snapshot.
+
+    I preset built-in (kind=preset) non sono cancellabili — vengono
+    ricreati al boot da app/data/pricelist_presets/.
+    """
+    _require_edit_pricelist(request)
+    s = (
+        db.query(PricelistSnapshot)
+        .filter(
+            PricelistSnapshot.id == snap_id,
+            PricelistSnapshot.tenant_id == CURRENT_TENANT,
+        )
+        .first()
+    )
+    if not s:
+        raise HTTPException(404, "Snapshot non trovato")
+    if s.kind == PricelistSnapshotKind.preset and hard:
+        raise HTTPException(400, "I preset built-in non sono cancellabili definitivamente.")
+    if hard:
+        plsnap.hard_delete_snapshot(db, s)
+    else:
+        plsnap.soft_delete_snapshot(db, s)
+    db.commit()
+    return {"ok": True, "id": snap_id, "hard": hard}
+
+
+@router.post("/api/snapshots/{snap_id}/restore-deleted")
+async def restore_deleted_snapshot(
+    snap_id: int,
+    request: Request,
+    db: Session = Depends(get_db),
+):
+    _require_edit_pricelist(request)
+    s = (
+        db.query(PricelistSnapshot)
+        .filter(
+            PricelistSnapshot.id == snap_id,
+            PricelistSnapshot.tenant_id == CURRENT_TENANT,
+        )
+        .first()
+    )
+    if not s:
+        raise HTTPException(404, "Snapshot non trovato")
+    plsnap.restore_deleted_snapshot(db, s)
+    db.commit()
+    return _serialize_snapshot(s)
+
+
+@router.post("/api/snapshots/upload")
+async def upload_snapshot(
+    request: Request,
+    file: UploadFile = File(...),
+    name: Optional[str] = Form(None),
+    description: Optional[str] = Form(None),
+    db: Session = Depends(get_db),
+):
+    """Carica un file .json esportato (schema 1.0 o 1.1) come snapshot manuale.
+    Non applica nulla al listino: lo snapshot resta in lista e va
+    ripristinato esplicitamente con `/restore`.
+    """
+    user = _require_edit_pricelist(request)
+    raw = await file.read()
+    try:
+        payload = json.loads(raw.decode("utf-8"))
+    except (json.JSONDecodeError, UnicodeDecodeError) as e:
+        raise HTTPException(400, f"File non valido: {e}")
+    if not isinstance(payload, dict) or "items" not in payload:
+        raise HTTPException(400, "File non riconosciuto: manca il campo 'items'")
+    snap_name = (name or "").strip() or f"Importato {datetime.utcnow().strftime('%Y-%m-%d %H:%M')}"
+    snap = plsnap.create_snapshot_record(
+        db,
+        tenant_id=CURRENT_TENANT,
+        name=snap_name,
+        description=description or f"Importato da file {file.filename!r}",
+        kind=PricelistSnapshotKind.manual,
+        user_id=getattr(user, "id", None),
+        payload=payload,
+    )
+    db.commit()
+    return _serialize_snapshot(snap)
+
+
+@router.get("/api/presets")
+async def list_pricelist_presets(db: Session = Depends(get_db)):
+    """Lista preset built-in disponibili in app/data/pricelist_presets/.
+    Ognuno è un file .json schema 1.1 caricabile come snapshot.
+    """
+    presets = []
+    for path in plsnap.list_preset_files():
+        try:
+            data = plsnap.load_preset_payload(path.name)
+            presets.append({
+                "filename": path.name,
+                "description": data.get("description") or path.stem.replace("_", " "),
+                "schema_version": data.get("schema_version", "1.0"),
+                "source_app_version": data.get("source_app_version"),
+                "exported_at": data.get("exported_at"),
+                "item_count": len(data.get("items", []) or []),
+                "category_count": len(data.get("categories", []) or []),
+                "department_count": len(data.get("departments", []) or []),
+            })
+        except Exception as e:
+            presets.append({
+                "filename": path.name,
+                "error": str(e),
+            })
+    return presets
+
+
+@router.post("/api/presets/load")
+async def load_preset_as_snapshot(
+    request: Request,
+    preset_filename: str = Form(...),
+    name: Optional[str] = Form(None),
+    db: Session = Depends(get_db),
+):
+    """Carica un preset built-in come PricelistSnapshot (kind=preset).
+    Idempotente: se esiste già uno snapshot preset con stesso filename
+    di origine, restituisce quello esistente senza duplicare.
+    """
+    user = _require_edit_pricelist(request)
+    try:
+        payload = plsnap.load_preset_payload(preset_filename)
+    except FileNotFoundError as e:
+        raise HTTPException(404, str(e))
+    snap_name = (name or "").strip() or f"Preset: {Path(preset_filename).stem}"
+    # Idempotenza: cerca snapshot preset già esistente per stesso filename
+    existing = (
+        db.query(PricelistSnapshot)
+        .filter(
+            PricelistSnapshot.tenant_id == CURRENT_TENANT,
+            PricelistSnapshot.kind == PricelistSnapshotKind.preset,
+            PricelistSnapshot.name == snap_name,
+            PricelistSnapshot.deleted_at.is_(None),
+        )
+        .first()
+    )
+    if existing:
+        return _serialize_snapshot(existing)
+    snap = plsnap.create_snapshot_record(
+        db,
+        tenant_id=CURRENT_TENANT,
+        name=snap_name,
+        description=payload.get("description") or f"Preset {preset_filename}",
+        kind=PricelistSnapshotKind.preset,
+        user_id=getattr(user, "id", None),
+        payload=payload,
+    )
+    db.commit()
+    return _serialize_snapshot(snap)

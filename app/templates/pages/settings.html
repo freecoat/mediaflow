@@ -487,6 +487,13 @@
             </div>
           </label>
           <label style="display:flex; align-items:center; gap:10px; padding:10px 12px; background:var(--bg2); border:1px solid var(--border); border-radius:6px;">
+            <input type="checkbox" id="exp-listino-snapshots" checked>
+            <div style="flex:1;">
+              <div style="font-weight:500;">Includi snapshot listino</div>
+              <div class="text-xs text-muted">Tutti gli snapshot manuali del listino (no auto-backup, no preset). Default ON.</div>
+            </div>
+          </label>
+          <label style="display:flex; align-items:center; gap:10px; padding:10px 12px; background:var(--bg2); border:1px solid var(--border); border-radius:6px;">
             <input type="password" id="exp-password" placeholder="(opzionale) Password per cifratura AES" autocomplete="new-password" style="flex:1; padding:6px 8px; background:var(--bg3); color:var(--text); border:1px solid var(--border); border-radius:4px;">
           </label>
         </div>
@@ -495,6 +502,22 @@
           <a class="btn btn-secondary btn-sm" href="/settings/admin/data/excel/listino"><i data-lucide="file-spreadsheet" style="width:14px;height:14px;vertical-align:-2px;"></i> Solo Excel listino</a>
           <a class="btn btn-secondary btn-sm" href="/settings/admin/data/excel/quotazioni"><i data-lucide="file-spreadsheet" style="width:14px;height:14px;vertical-align:-2px;"></i> Solo Excel quotazioni</a>
         </div>
+      </div>
+
+      <div class="card mb-4">
+        <div class="card-title mb-2"><i data-lucide="archive" style="width:16px;height:16px;vertical-align:-3px;"></i> Listino — Snapshot dedicati</div>
+        <p class="text-sm text-muted mb-3">
+          Backup/restore del solo listino prezzi. Diverso dallo ZIP completo: snapshot
+          leggeri, ripristinabili con un click, ideali quando vuoi solo cambiare il listino
+          senza toccare il resto. Il pannello completo è in
+          <a href="/pricelist" style="color:var(--primary);">Listino → 📦 Snapshot</a>.
+        </p>
+        <div class="flex gap-2 mb-2" style="flex-wrap:wrap;">
+          <button class="btn btn-primary btn-sm" onclick="settingsSaveListinoSnapshot()"><i data-lucide="save" style="width:14px;height:14px;vertical-align:-2px;"></i> Salva snapshot listino corrente</button>
+          <a class="btn btn-secondary btn-sm" href="/pricelist#snapshots" onclick="setTimeout(() => { if (window.openSnapshotsModal) openSnapshotsModal(); }, 100)"><i data-lucide="list" style="width:14px;height:14px;vertical-align:-2px;"></i> Vai a Listino → Snapshot</a>
+          <a class="btn btn-secondary btn-sm" href="/pricelist/api/export"><i data-lucide="download" style="width:14px;height:14px;vertical-align:-2px;"></i> Scarica .json</a>
+        </div>
+        <div id="settings-snap-list" class="text-xs text-muted">Nessuno snapshot caricato.</div>
       </div>
 
       <div class="card">
@@ -893,6 +916,55 @@ async function changePassword() {
   } catch(e) { toast(e.message, 'error'); }
 }
 
+// ── Listino snapshot quick-actions (v3.5.0-alpha.66.6) ────────
+async function settingsLoadListinoSnapshots() {
+  const target = document.getElementById('settings-snap-list');
+  if (!target) return;
+  try {
+    const r = await fetch('/pricelist/api/snapshots');
+    if (!r.ok) return;
+    const list = await r.json();
+    if (!list.length) {
+      target.textContent = 'Nessuno snapshot del listino ancora salvato.';
+      return;
+    }
+    const recent = list.slice(0, 5);
+    target.innerHTML = `<b>${list.length}</b> snapshot disponibili. Recenti: ` +
+      recent.map(s => {
+        const d = s.created_at ? new Date(s.created_at).toLocaleDateString('it-IT') : '';
+        return `<span style="margin-right:10px;">${escapeHtml(s.name)} <span class="text-muted">(${d})</span></span>`;
+      }).join('');
+  } catch(e) { /* silent */ }
+}
+
+async function settingsSaveListinoSnapshot() {
+  const name = prompt('Nome dello snapshot:',
+    `Snapshot ${new Date().toLocaleString('it-IT', {dateStyle:'short', timeStyle:'short'})}`);
+  if (!name) return;
+  const fd = new FormData();
+  fd.append('name', name.trim());
+  try {
+    const r = await fetch('/pricelist/api/snapshots', { method:'POST', body: fd });
+    if (!r.ok) {
+      const err = await r.json().catch(() => ({detail: r.statusText}));
+      throw new Error(err.detail || 'Errore salvataggio');
+    }
+    toast('Snapshot listino salvato', 'success');
+    settingsLoadListinoSnapshots();
+  } catch(e) { toast(e.message, 'error'); }
+}
+
+document.addEventListener('DOMContentLoaded', () => {
+  // Carica lista snapshot listino quando si apre il pannello Dati
+  const dataTab = document.querySelector('[data-pane="data"]');
+  if (dataTab) {
+    dataTab.addEventListener('click', () => setTimeout(settingsLoadListinoSnapshots, 50));
+  }
+  if (window.location.hash === '#data') {
+    setTimeout(settingsLoadListinoSnapshots, 100);
+  }
+});
+
 // ── Admin: Export / Import dati (v3.5.0-alpha.34) ─────────────
 function adminExportZip() {
   const params = new URLSearchParams();
@@ -900,6 +972,8 @@ function adminExportZip() {
   params.set('include_env',     document.getElementById('exp-env').checked);
   params.set('include_uploads', document.getElementById('exp-uploads').checked);
   params.set('include_trash',   document.getElementById('exp-trash').checked);
+  params.set('include_listino_snapshots',
+             document.getElementById('exp-listino-snapshots').checked);
   const pwd = document.getElementById('exp-password').value.trim();
   if (pwd) params.set('password', pwd);
   // Apriamo via window.location per scaricare con header Content-Disposition

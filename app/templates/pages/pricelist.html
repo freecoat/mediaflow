@@ -12,6 +12,9 @@
     </div>
   </div>
   <button class="btn btn-secondary btn-sm" onclick="openModal('modal-import')" title="Importa listino da JSON">⬆ Importa</button>
+  {% if can_edit_pricelist(user) %}
+  <button class="btn btn-secondary btn-sm" onclick="openSnapshotsModal()" title="Backup e ripristino del listino"><i data-lucide="archive" style="width:14px;height:14px;vertical-align:-2px;"></i> Snapshot</button>
+  {% endif %}
   <button class="btn btn-secondary btn-sm" onclick="openModal('modal-new-cat')">+ Categoria</button>
   <button class="btn btn-primary btn-sm" onclick="openNewItem()">+ Voce</button>
   <style>
@@ -102,6 +105,100 @@
               onclick="deleteCategoryFromEdit()">Elimina</button>
       <button class="btn btn-secondary" onclick="closeModal('modal-edit-cat')">Annulla</button>
       <button class="btn btn-primary" onclick="saveCategoryEdit()">Salva</button>
+    </div>
+  </div>
+</div>
+
+<!-- Modal gestione snapshot listino (v3.5.0-alpha.66.6) -->
+<div class="modal-overlay" id="modal-snapshots">
+  <div class="modal" style="max-width:920px;">
+    <div class="modal-header">
+      <span class="modal-title"><i data-lucide="archive" style="width:18px;height:18px;vertical-align:-3px;"></i> Snapshot listino</span>
+      <button class="btn btn-ghost btn-icon" onclick="closeModal('modal-snapshots')">✕</button>
+    </div>
+    <div class="modal-body">
+      <p class="text-sm text-muted mb-3">
+        Uno snapshot è una fotografia completa del listino (reparti + categorie + voci + keywords).
+        Puoi salvare quello attuale, ripristinarne uno precedente, o importare un file.
+        <b>Auto-backup</b>: prima di un restore in modalità Replace, viene creato automaticamente
+        uno snapshot del listino corrente per permettere il rollback.
+      </p>
+      <div class="flex gap-2 mb-3" style="flex-wrap:wrap;">
+        <button class="btn btn-primary btn-sm" onclick="snapSaveCurrent()"><i data-lucide="save" style="width:14px;height:14px;vertical-align:-2px;"></i> Salva listino corrente</button>
+        <button class="btn btn-secondary btn-sm" onclick="document.getElementById('snap-upload-input').click()"><i data-lucide="upload" style="width:14px;height:14px;vertical-align:-2px;"></i> Importa file .json</button>
+        <input type="file" id="snap-upload-input" accept="application/json,.json" style="display:none;" onchange="snapUpload(this)">
+        <button class="btn btn-secondary btn-sm" onclick="snapShowPresets()"><i data-lucide="gift" style="width:14px;height:14px;vertical-align:-2px;"></i> Preset built-in</button>
+        <span style="flex:1;"></span>
+        <label style="display:flex;align-items:center;gap:6px;font-size:13px;color:var(--muted);">
+          <input type="checkbox" id="snap-show-deleted" onchange="snapReload()"> Mostra cestino
+        </label>
+      </div>
+      <div id="snap-presets-block" class="hidden" style="background:var(--bg2);border:1px solid var(--border);border-radius:6px;padding:10px;margin-bottom:12px;">
+        <div class="text-sm" style="font-weight:600;margin-bottom:6px;">Preset built-in disponibili</div>
+        <div id="snap-presets-list"></div>
+      </div>
+      <div id="snap-list-container" style="max-height:50vh;overflow:auto;">
+        <table class="table" style="width:100%;font-size:13px;">
+          <thead>
+            <tr>
+              <th style="text-align:left;">Nome</th>
+              <th style="text-align:center;">Tipo</th>
+              <th style="text-align:right;">Voci</th>
+              <th style="text-align:right;">Categ.</th>
+              <th style="text-align:left;">Creato</th>
+              <th style="text-align:right;">Azioni</th>
+            </tr>
+          </thead>
+          <tbody id="snap-list-tbody"><tr><td colspan="6" class="text-muted" style="text-align:center;padding:20px;">Caricamento…</td></tr></tbody>
+        </table>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeModal('modal-snapshots')">Chiudi</button>
+    </div>
+  </div>
+</div>
+
+<!-- Modal salva snapshot (nome + descrizione) -->
+<div class="modal-overlay" id="modal-snap-save">
+  <div class="modal" style="max-width:480px;">
+    <div class="modal-header"><span class="modal-title">Salva snapshot del listino</span>
+      <button class="btn btn-ghost btn-icon" onclick="closeModal('modal-snap-save')">✕</button></div>
+    <div class="modal-body">
+      <p class="text-sm text-muted mb-3">Crea una fotografia del listino corrente. Recuperabile in qualsiasi momento.</p>
+      <div class="form-group"><label class="form-label">Nome *</label>
+        <input class="form-input" id="snap-save-name" placeholder="es. Listino TPR settembre 2026" maxlength="255"></div>
+      <div class="form-group"><label class="form-label">Descrizione (opzionale)</label>
+        <textarea class="form-input" id="snap-save-desc" rows="2" placeholder="Cosa cambia in questo listino, perché vuoi conservarlo…"></textarea></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeModal('modal-snap-save')">Annulla</button>
+      <button class="btn btn-primary" id="snap-save-confirm">Salva snapshot</button>
+    </div>
+  </div>
+</div>
+
+<!-- Modal restore snapshot (scelta mode) -->
+<div class="modal-overlay" id="modal-snap-restore">
+  <div class="modal" style="max-width:540px;">
+    <div class="modal-header"><span class="modal-title">Ripristina snapshot</span>
+      <button class="btn btn-ghost btn-icon" onclick="closeModal('modal-snap-restore')">✕</button></div>
+    <div class="modal-body">
+      <p class="text-sm mb-2"><b>Snapshot</b>: <span id="snap-restore-name"></span></p>
+      <p class="text-sm text-muted mb-3" id="snap-restore-meta"></p>
+      <div class="form-group"><label class="form-label">Modalità</label>
+        <select class="form-select" id="snap-restore-mode">
+          <option value="merge">Merge — aggiorna voci con stesso nome, aggiunge nuove. Le voci correnti non in snapshot sono preservate.</option>
+          <option value="replace">Replace — CANCELLA tutte le voci correnti, poi importa quelle dello snapshot.</option>
+        </select>
+      </div>
+      <div id="snap-restore-warning" class="hidden" style="padding:10px;background:rgba(225,29,72,0.08);border:1px solid var(--rose);border-radius:6px;font-size:13px;color:var(--rose);">
+        ⚠ Modalità Replace: il listino corrente viene <b>auto-salvato</b> come snapshot prima dell'overwrite (rollback sempre possibile).
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeModal('modal-snap-restore')">Annulla</button>
+      <button class="btn btn-primary" id="snap-restore-confirm">Ripristina</button>
     </div>
   </div>
 </div>
@@ -420,7 +517,206 @@ document.addEventListener('change', (e) => {
   if (e.target && e.target.id === 'import-mode') {
     document.getElementById('import-warning').classList.toggle('hidden', e.target.value !== 'replace');
   }
+  if (e.target && e.target.id === 'snap-restore-mode') {
+    document.getElementById('snap-restore-warning').classList.toggle('hidden', e.target.value !== 'replace');
+  }
 });
+
+// ── SNAPSHOT LISTINO (v3.5.0-alpha.66.6) ──────────────────────
+const KIND_LABEL = { manual:'Manuale', auto:'Auto-backup', preset:'Preset' };
+const KIND_COLOR = { manual:'var(--primary)', auto:'var(--muted)', preset:'#a855f7' };
+
+function openSnapshotsModal() {
+  document.getElementById('snap-presets-block').classList.add('hidden');
+  openModal('modal-snapshots');
+  snapReload();
+}
+
+async function snapReload() {
+  const showDel = document.getElementById('snap-show-deleted').checked;
+  const tbody = document.getElementById('snap-list-tbody');
+  tbody.innerHTML = '<tr><td colspan="6" class="text-muted" style="text-align:center;padding:20px;">Caricamento…</td></tr>';
+  try {
+    const r = await fetch(`/pricelist/api/snapshots?include_deleted=${showDel}`);
+    if (!r.ok) throw new Error('Errore caricamento');
+    const list = await r.json();
+    if (!list.length) {
+      tbody.innerHTML = '<tr><td colspan="6" class="text-muted" style="text-align:center;padding:20px;">Nessuno snapshot. Crea il primo con "💾 Salva listino corrente".</td></tr>';
+      return;
+    }
+    tbody.innerHTML = list.map(s => snapRow(s)).join('');
+  } catch(e) {
+    tbody.innerHTML = `<tr><td colspan="6" class="text-muted" style="text-align:center;padding:20px;color:var(--rose);">${e.message}</td></tr>`;
+  }
+}
+
+function snapRow(s) {
+  const created = s.created_at ? new Date(s.created_at).toLocaleString('it-IT', {dateStyle:'short', timeStyle:'short'}) : '—';
+  const deleted = !!s.deleted_at;
+  const kindBadge = `<span style="display:inline-block;padding:1px 6px;border-radius:3px;background:${KIND_COLOR[s.kind] || 'var(--bg3)'};color:#fff;font-size:11px;">${KIND_LABEL[s.kind] || s.kind}</span>`;
+  const safeName = escapeHtml(s.name);
+  const desc = s.description ? `<div class="text-xs text-muted" style="margin-top:2px;">${escapeHtml(s.description)}</div>` : '';
+  let actions = '';
+  if (deleted) {
+    actions = `
+      <button class="btn btn-ghost btn-sm" onclick="snapRestoreDeleted(${s.id})" title="Recupera dal cestino"><i data-lucide="rotate-ccw" style="width:13px;height:13px;"></i></button>
+      <button class="btn btn-ghost btn-sm" onclick="snapDelete(${s.id}, true)" title="Elimina definitivamente" style="color:var(--rose);"><i data-lucide="trash-2" style="width:13px;height:13px;"></i></button>`;
+  } else {
+    actions = `
+      <button class="btn btn-primary btn-sm" onclick="snapRestore(${s.id}, '${safeName.replace(/'/g, "\\'")}', ${s.item_count})" title="Ripristina questo snapshot">↺ Ripristina</button>
+      <a class="btn btn-ghost btn-sm" href="/pricelist/api/snapshots/${s.id}/download" title="Scarica .json"><i data-lucide="download" style="width:13px;height:13px;"></i></a>`;
+    if (s.kind !== 'preset') {
+      actions += `<button class="btn btn-ghost btn-sm" onclick="snapDelete(${s.id}, false)" title="Sposta nel cestino" style="color:var(--rose);"><i data-lucide="trash-2" style="width:13px;height:13px;"></i></button>`;
+    }
+  }
+  return `
+    <tr style="${deleted ? 'opacity:0.5;' : ''}">
+      <td><div style="font-weight:500;">${safeName}</div>${desc}</td>
+      <td style="text-align:center;">${kindBadge}</td>
+      <td style="text-align:right;">${s.item_count}</td>
+      <td style="text-align:right;">${s.category_count}</td>
+      <td style="font-size:12px;color:var(--muted);">${created}</td>
+      <td style="text-align:right;white-space:nowrap;">${actions}</td>
+    </tr>`;
+}
+
+function snapSaveCurrent() {
+  document.getElementById('snap-save-name').value = `Snapshot ${new Date().toLocaleString('it-IT', {dateStyle:'short', timeStyle:'short'})}`;
+  document.getElementById('snap-save-desc').value = '';
+  openModal('modal-snap-save');
+  document.getElementById('snap-save-confirm').onclick = async () => {
+    const name = document.getElementById('snap-save-name').value.trim();
+    if (!name) { alert('Il nome è obbligatorio'); return; }
+    const fd = new FormData();
+    fd.append('name', name);
+    const desc = document.getElementById('snap-save-desc').value.trim();
+    if (desc) fd.append('description', desc);
+    try {
+      const r = await fetch('/pricelist/api/snapshots', { method:'POST', body: fd });
+      if (!r.ok) {
+        const err = await r.json().catch(() => ({detail: r.statusText}));
+        throw new Error(err.detail || 'Errore salvataggio');
+      }
+      closeModal('modal-snap-save');
+      if (typeof toast === 'function') toast('Snapshot salvato');
+      snapReload();
+      if (typeof lucide !== 'undefined' && lucide.createIcons) lucide.createIcons();
+    } catch(e) { alert(e.message); }
+  };
+}
+
+function snapRestore(id, name, itemCount) {
+  document.getElementById('snap-restore-name').textContent = name;
+  document.getElementById('snap-restore-meta').textContent = `${itemCount} voci nel snapshot`;
+  document.getElementById('snap-restore-mode').value = 'merge';
+  document.getElementById('snap-restore-warning').classList.add('hidden');
+  openModal('modal-snap-restore');
+  document.getElementById('snap-restore-confirm').onclick = async () => {
+    const mode = document.getElementById('snap-restore-mode').value;
+    if (mode === 'replace' && !confirm(`Replace: ${itemCount} voci sostituiranno l'intero listino corrente. Verrà creato un auto-backup. Procedere?`)) return;
+    const fd = new FormData();
+    fd.append('mode', mode);
+    try {
+      const r = await fetch(`/pricelist/api/snapshots/${id}/restore`, { method:'POST', body: fd });
+      if (!r.ok) {
+        const err = await r.json().catch(() => ({detail: r.statusText}));
+        throw new Error(err.detail || 'Errore ripristino');
+      }
+      const res = await r.json();
+      closeModal('modal-snap-restore');
+      let msg = `Ripristino completato (${res.mode}).\nVoci create: ${res.items_created} · aggiornate: ${res.items_updated} · scartate: ${res.items_skipped}`;
+      if (res.auto_backup_id) msg += `\n\n✓ Auto-backup creato (id ${res.auto_backup_id})`;
+      alert(msg);
+      snapReload();
+      loadAll();
+    } catch(e) { alert(e.message); }
+  };
+}
+
+async function snapDelete(id, hard) {
+  const msg = hard ? 'Eliminare DEFINITIVAMENTE questo snapshot? L\'azione non è reversibile.' : 'Spostare nel cestino?';
+  if (!confirm(msg)) return;
+  try {
+    const r = await fetch(`/pricelist/api/snapshots/${id}?hard=${hard}`, { method:'DELETE' });
+    if (!r.ok) {
+      const err = await r.json().catch(() => ({detail: r.statusText}));
+      throw new Error(err.detail || 'Errore');
+    }
+    snapReload();
+  } catch(e) { alert(e.message); }
+}
+
+async function snapRestoreDeleted(id) {
+  try {
+    const r = await fetch(`/pricelist/api/snapshots/${id}/restore-deleted`, { method:'POST' });
+    if (!r.ok) throw new Error('Errore ripristino');
+    snapReload();
+  } catch(e) { alert(e.message); }
+}
+
+async function snapUpload(input) {
+  if (!input.files.length) return;
+  const file = input.files[0];
+  const name = prompt('Nome dello snapshot:', file.name.replace(/\.json$/i, ''));
+  if (!name) { input.value=''; return; }
+  const fd = new FormData();
+  fd.append('file', file);
+  fd.append('name', name.trim());
+  try {
+    const r = await fetch('/pricelist/api/snapshots/upload', { method:'POST', body: fd });
+    if (!r.ok) {
+      const err = await r.json().catch(() => ({detail: r.statusText}));
+      throw new Error(err.detail || 'Errore upload');
+    }
+    if (typeof toast === 'function') toast('File importato come snapshot');
+    snapReload();
+  } catch(e) { alert(e.message); }
+  finally { input.value=''; }
+}
+
+async function snapShowPresets() {
+  const block = document.getElementById('snap-presets-block');
+  const list = document.getElementById('snap-presets-list');
+  block.classList.remove('hidden');
+  list.innerHTML = '<div class="text-muted text-sm">Caricamento…</div>';
+  try {
+    const r = await fetch('/pricelist/api/presets');
+    if (!r.ok) throw new Error('Errore');
+    const presets = await r.json();
+    if (!presets.length) {
+      list.innerHTML = '<div class="text-muted text-sm">Nessun preset built-in disponibile in questa installazione.</div>';
+      return;
+    }
+    list.innerHTML = presets.map(p => {
+      if (p.error) return `<div class="text-sm" style="color:var(--rose);">${escapeHtml(p.filename)}: ${escapeHtml(p.error)}</div>`;
+      return `
+        <div style="display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid var(--border);">
+          <div style="flex:1;">
+            <div style="font-weight:500;">${escapeHtml(p.filename)}</div>
+            <div class="text-xs text-muted">${escapeHtml(p.description || '')} · ${p.item_count} voci · schema ${escapeHtml(p.schema_version || '?')}</div>
+          </div>
+          <button class="btn btn-secondary btn-sm" onclick="snapLoadPreset('${escapeHtml(p.filename).replace(/'/g, "\\'")}')">Carica come snapshot</button>
+        </div>`;
+    }).join('');
+  } catch(e) {
+    list.innerHTML = `<div class="text-sm" style="color:var(--rose);">${e.message}</div>`;
+  }
+}
+
+async function snapLoadPreset(filename) {
+  const fd = new FormData();
+  fd.append('preset_filename', filename);
+  try {
+    const r = await fetch('/pricelist/api/presets/load', { method:'POST', body: fd });
+    if (!r.ok) {
+      const err = await r.json().catch(() => ({detail: r.statusText}));
+      throw new Error(err.detail || 'Errore');
+    }
+    if (typeof toast === 'function') toast('Preset caricato come snapshot');
+    document.getElementById('snap-presets-block').classList.add('hidden');
+    snapReload();
+  } catch(e) { alert(e.message); }
+}
 
 async function doImport() {
   const fileInput = document.getElementById('import-file');

@@ -50,6 +50,7 @@ async def export_all(
     include_uploads: bool = False,
     include_trash: bool = False,
     include_memory: bool = True,
+    include_listino_snapshots: bool = True,
     password: Optional[str] = None,
     db: Session = Depends(get_db),
 ):
@@ -64,6 +65,7 @@ async def export_all(
         include_uploads=include_uploads,
         include_trash=include_trash,
         include_memory=include_memory,
+        include_listino_snapshots=include_listino_snapshots,
         password=pwd,
         app_version=_app_version(),
     )

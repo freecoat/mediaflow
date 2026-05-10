@@ -205,6 +205,50 @@ def _dump_trash_to_dir(db: Session, dest_dir: Path) -> None:
     )
 
 
+def _dump_pricelist_snapshots_to_dir(db: Session, dest_dir: Path) -> None:
+    """Esporta tutti i PricelistSnapshot manuali (no auto, no preset) come .json.
+
+    Solo i manual: gli `auto` sono backup transitori e i `preset` sono già
+    committati nel repo.
+    """
+    from app.models import PricelistSnapshot, PricelistSnapshotKind
+    dest_dir.mkdir(parents=True, exist_ok=True)
+    snaps = (
+        db.query(PricelistSnapshot)
+        .filter(
+            PricelistSnapshot.kind == PricelistSnapshotKind.manual,
+            PricelistSnapshot.deleted_at.is_(None),
+        )
+        .order_by(PricelistSnapshot.created_at.desc())
+        .all()
+    )
+    index = []
+    for s in snaps:
+        safe_stem = "".join(c if c.isalnum() or c in "-_" else "_" for c in s.name)[:80] or f"snapshot-{s.id}"
+        ts = s.created_at.strftime("%Y%m%d-%H%M%S") if s.created_at else "snapshot"
+        fname = f"{safe_stem}-{ts}.json"
+        (dest_dir / fname).write_text(
+            json.dumps(s.payload_json, ensure_ascii=False, indent=2),
+            encoding="utf-8",
+        )
+        index.append({
+            "id": s.id,
+            "name": s.name,
+            "description": s.description,
+            "kind": s.kind.value,
+            "item_count": s.item_count,
+            "category_count": s.category_count,
+            "department_count": s.department_count,
+            "schema_version": s.schema_version,
+            "created_at": s.created_at.isoformat() + "Z" if s.created_at else None,
+            "filename": fname,
+        })
+    (dest_dir / "_index.json").write_text(
+        json.dumps(index, ensure_ascii=False, indent=2),
+        encoding="utf-8",
+    )
+
+
 # ── Builder principale ────────────────────────────────────────
 
 def build_export_zip(
@@ -214,6 +258,7 @@ def build_export_zip(
     include_uploads: bool = False,
     include_trash: bool = False,
     include_memory: bool = True,
+    include_listino_snapshots: bool = True,
     password: Optional[str] = None,
     app_version: str = "?",
 ) -> tuple[bytes, str]:
@@ -249,6 +294,7 @@ def build_export_zip(
                 "include_uploads": include_uploads,
                 "include_trash": include_trash,
                 "include_memory": include_memory,
+                "include_listino_snapshots": include_listino_snapshots,
                 "encrypted": bool(password),
             },
             "source_machine": {
@@ -316,6 +362,15 @@ def build_export_zip(
             except Exception as e:
                 (staging / "trash.ERROR.txt").write_text(str(e), encoding="utf-8")
 
+        # 8.5) Listino snapshots opt-in (v3.5.0-alpha.66.6)
+        if include_listino_snapshots:
+            try:
+                _dump_pricelist_snapshots_to_dir(db, staging / "listino-snapshots")
+            except Exception as e:
+                (staging / "listino-snapshots.ERROR.txt").write_text(
+                    str(e), encoding="utf-8"
+                )
+
         # 9) ZIP finale
         zip_path = tmp_root / "export.zip"
         if password:
@@ -364,6 +419,8 @@ Cifrato: **{encrypted}**
 - `env/` — file `.env` con secrets (se incluso)
 - `uploads/` — asset library (se inclusi)
 - `trash/` — record soft-deleted (se inclusi)
+- `listino-snapshots/` — backup del listino salvati dall'utente (se inclusi),
+  uno per file `.json` + `_index.json` di sintesi
 
 ## Restore
 

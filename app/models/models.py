@@ -443,6 +443,41 @@ class PriceItem(Base):
     department: Mapped[Optional["Department"]] = relationship(back_populates="price_items")
 
 
+# v3.5.0-alpha.66.6 — Snapshot del listino (backup/restore).
+# Un PricelistSnapshot cristallizza l'intero listino di un tenant (departments
+# + categories + items) in un payload JSON versionato. Permette:
+#   - backup manuale prima di modifiche aggressive
+#   - ripristino con modalità replace o merge
+#   - export/import file .json per portabilità tra installazioni
+#   - preset built-in (kind=preset) committati in repo
+#   - auto-snapshot pre-replace per sicurezza (kind=auto)
+class PricelistSnapshotKind(str, enum.Enum):
+    manual = "manual"   # creato esplicitamente dall'utente
+    auto = "auto"       # auto-snapshot pre-restore o pre-reset
+    preset = "preset"   # preset built-in caricato da app/data/pricelist_presets/
+
+class PricelistSnapshot(Base):
+    __tablename__ = "pricelist_snapshots"
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    tenant_id: Mapped[int] = mapped_column(ForeignKey("tenants.id"), default=1, index=True)
+    name: Mapped[str] = mapped_column(String(255))
+    description: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    kind: Mapped[PricelistSnapshotKind] = mapped_column(
+        SAEnum(PricelistSnapshotKind), default=PricelistSnapshotKind.manual, index=True
+    )
+    # Counters denormalizzati per ListView veloce (no parse del payload).
+    item_count: Mapped[int] = mapped_column(Integer, default=0)
+    category_count: Mapped[int] = mapped_column(Integer, default=0)
+    department_count: Mapped[int] = mapped_column(Integer, default=0)
+    schema_version: Mapped[str] = mapped_column(String(16), default="1.0")
+    source_app_version: Mapped[Optional[str]] = mapped_column(String(64), nullable=True)
+    payload_json: Mapped[dict] = mapped_column(JSON)
+    created_by_user_id: Mapped[Optional[int]] = mapped_column(ForeignKey("users.id"), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, index=True)
+    # Soft-delete (cestino degli snapshot). Recuperabile.
+    deleted_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True, index=True)
+
+
 # ── CLIENTE (con arricchimento AI) ───────────────────────────
 
 class Client(Base):

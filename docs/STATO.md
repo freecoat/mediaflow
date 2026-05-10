@@ -8,6 +8,76 @@
 
 ## Versione corrente
 
+**v3.5.0-alpha.66.6** — 10 maggio 2026 — Backup/restore listino con snapshot persistenti
+
+Apertura cantiere multi-versione **Listino & Deliverable** dopo discussione
+strategica con Matteo (10 maggio). Sequenza concordata:
+
+| Versione | Cantiere | Stato |
+|---|---|---|
+| α.66.6 | Backup/restore listino (snapshot DB + UI dedicata) | ✅ chiuso |
+| α.66.7 | Snapshot legacy committato come preset built-in | 🔜 next |
+| α.66.8 | Semplificazione listino base (79 → ~38 voci, descrizione modulare) | 🔜 |
+| α.66.9 | Modello `JobDeliverable` + cost-rate Resource (employee/freelance/studio) | 🔜 |
+| α.66.10+ | UI deliverable + asset library bridge + copilot QC + cost report split (cliente vs interno) | 🔜 |
+
+**Decisioni architetturali fissate (10 maggio)** per i prossimi step:
+- **Deliverable ≠ "no ore"**: anche un DCP/ProRes ha ore di produzione che vanno
+  a **hardcost interno** (ore × cost_rate risorsa). Cliente NON le vede, internamente sì.
+- **JobDeliverable** è entità DB nuova, terza tra `JobCostLine` (riga prezzo
+  cliente) e `Asset` (file DAM). Spec_json snapshot da DeliveryTemplate.
+  Booking.job_deliverable_id e Asset.job_deliverable_id come bridge.
+- **Cost-rate per tipo risorsa**: aggiungere `Resource.cost_type`
+  (employee | freelance | studio | external). Per employee:
+  `monthly_gross_salary` + `annual_bonus_months` (default 13) +
+  `cost_multiplier_oneri` (default 1.30) → calcolo deterministico orario su
+  1720h/anno. Per freelance: `freelance_hourly_cost` (≠ `hourly_rate` di
+  vendita). AI usata per suggerire multiplier per CCNL specifici.
+- **Naming file deliverable**: campo libero con helper "Genera da template"
+  (token replacement: `{project_code}`, `{territory}`, `{format}`, ecc.).
+  Tool completo (regole, validazione, batch) come **α.66.11 dedicato**.
+- **Quantity > 1 in quote** → conversion crea N deliverable separati.
+- **QC AI engine MVP**: `ffprobe` locale + LLM contro `spec_json` (gratis,
+  best-effort). Provider-pluggable per Baton/Vidcheck commerciale futuro.
+
+**Chiuso α.66.6:**
+- ✅ Modello `PricelistSnapshot` + enum `PricelistSnapshotKind`
+  (manual/auto/preset). Tabella creata auto al boot, soft-delete via `deleted_at`.
+- ✅ Service `app/services/pricelist_snapshot.py`: build_payload (schema 1.1
+  con departments — schema 1.0 ne era privo), apply_payload con mode
+  merge|replace + auto-backup pre-replace, list/CRUD snapshot, preset loader.
+- ✅ 10 endpoint nuovi in `app/routers/pricelist.py` (snapshots CRUD +
+  download/upload + preset list/load), tutti con permission gate `edit_pricelist`.
+- ✅ UI `/pricelist`: bottone toolbar `📦 Snapshot` + modal completo
+  (lista, salva, ripristina merge/replace, scarica, importa file, preset
+  built-in, cestino).
+- ✅ UI `/settings#data`: blocco "Listino" con shortcut + lista compatta
+  ultimi 5 snapshot. Opt-in "Includi snapshot listino" in Export ZIP
+  (default ON, dump in `listino-snapshots/`).
+- ✅ Test idempotenza: build payload → create snapshot → apply merge → 0
+  diff (4 dept updated, 12 cat updated, 79 items updated, 0 skipped).
+
+**Smoke**: 287 routes (+10), version 3.5.0-alpha.66.6. Listino reale di
+Matteo: 79 voci, 12 categorie, 4 reparti.
+
+**Verifica live** (hard-refresh):
+1. `/pricelist` → bottone `📦 Snapshot` → modal vuoto → "💾 Salva listino
+   corrente" → snapshot id=1 in lista (kind=manual badge blu).
+2. Modifica una voce listino → torna nel modal → "↺ Ripristina" merge →
+   modifica annullata. Per replace: confirm dialog + auto-backup id
+   nei stats della response.
+3. "⬇ Scarica .json" → file con schema 1.1 + departments.
+4. "⬆ Importa file .json" → snapshot importato (no apply automatico).
+5. `/settings#data` → blocco "Listino" → bottone "💾 Salva" → toast +
+   lista aggiornata.
+6. Export ZIP completo → `listino-snapshots/` con N file + `_index.json`.
+
+---
+
+**v3.5.0-alpha.66.5.2** — 9 maggio 2026 — Fix conflict check su booking smart-split + Audit E2E α.66.5.2 (originale precedente)
+
+---
+
 **v3.5.0-alpha.66.5.1** — 9 maggio 2026 — Audit cleanup: bulk-edit + 5 mutator + UI legacy + AI
 
 Audit con agente Explore post-α.66.5 ha rilevato 3 HIGH + multipli MEDIUM
