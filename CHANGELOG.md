@@ -1,5 +1,40 @@
 # MediaFlow — Changelog
 
+## v3.5.0-alpha.66.14.1 — Light mode auto-on sopra soglia (11 maggio 2026)
+
+Quick win post-audit #2. Risolve il rischio "freeze Chrome al primo
+accesso utente nuovo con dataset reale". Il light mode esisteva già
+(α.46.2) ma era OFF di default + visibile solo nella toolbar.
+
+**Auto-on intelligente** (`planning.html:tlMaybeAutoEnableLight`):
+- Soglia: items > 80 OR groups > 15
+- Eseguito una sola volta per nuovo utente, prima del primo render
+- Se l'utente ha mai toccato il toggle manualmente
+  (`mf_tl_light_mode_user_set='1'`), la sua scelta è rispettata: chi
+  vuole OFF non se lo vede riattivato all'apertura
+- Toast informativo 6s che spiega cosa è e come riattivare i background
+  via il bottone toolbar
+
+**Logica**:
+- Inserito subito dopo il calcolo di `groups` in `_doRenderTimeline`,
+  prima del check `_hideBg = ... || tlIsLightMode()`
+- Reordering: spostato `tlBuildGroups` PRIMA del calcolo `_hideBg`
+  (era dopo) per avere `groups.length` disponibile
+
+**`tlToggleLight` aggiornato**: setta sempre `mf_tl_light_mode_user_set='1'`
+così future auto-attivazioni vengono saltate.
+
+**Smoke**: nessuna modifica backend, version 3.5.0-alpha.66.14.1.
+
+**Verifica live** (richiede dataset > soglia):
+1. localStorage clear → riapri /planning con > 80 booking → toast giallo
+   "Modalità leggera attiva (...)" + bottone toolbar evidenziato.
+2. Premi 🪶 Light → off → toast "disattivato". Reload → resta off
+   (user_set rispettato).
+3. Premi di nuovo 🪶 Light → on → toast "attiva". Reload → resta on.
+
+---
+
 ## v3.5.0-alpha.66.14 — Modal a11y completa (11 maggio 2026)
 
 Apre il "cantiere consolidamento" post-audit profondo. Primo quick win:

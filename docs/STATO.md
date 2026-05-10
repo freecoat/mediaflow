@@ -8,6 +8,17 @@
 
 ## Versione corrente
 
+**v3.5.0-alpha.66.14.1** — 11 maggio 2026 — Light mode auto-on planning
+
+Risolve il rischio "freeze Chrome al primo accesso con dataset reale".
+Light mode (α.46.2) ora si auto-attiva una volta sopra soglia (items > 80
+OR groups > 15) con toast informativo, ma rispetta la scelta utente
+permanente se ha mai toccato il toggle manualmente.
+
+**Smoke**: 302 routes invariato, version 3.5.0-alpha.66.14.1.
+
+---
+
 **v3.5.0-alpha.66.14** — 11 maggio 2026 — Modal a11y completa
 
 Apre il "cantiere consolidamento" post-audit profondo. Quick win

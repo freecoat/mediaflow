@@ -2166,14 +2166,40 @@ function tlPrefsReset() {
 // `requestAnimationFrame` di vis-timeline blocca singoli frame fino a 225ms
 // per ricalcolo overlap O(N²) (stack:true) + background items (ferie/festa/
 // punch moltiplicati × risorse). Light mode disabilita queste 3 cose.
+// v3.5.0-alpha.66.14.1: auto-on alla prima apertura sopra soglia (items > 80
+// OR groups > 15) per non bruciare il browser di nuovi utenti con dataset
+// reali. La scelta viene marcata user_set solo dopo toggle manuale: chi ha
+// detto "voglio off" non se la vede più riattivata.
 const TL_LIGHT_KEY = 'mf_tl_light_mode';
+const TL_LIGHT_USER_SET_KEY = 'mf_tl_light_mode_user_set';
+const TL_LIGHT_AUTO_ITEMS = 80;
+const TL_LIGHT_AUTO_GROUPS = 15;
 function tlIsLightMode() {
   try { return localStorage.getItem(TL_LIGHT_KEY) === '1'; } catch (_) { return false; }
+}
+function tlMaybeAutoEnableLight(itemsCount, groupsCount) {
+  // Skip se l'utente ha già fatto una scelta esplicita
+  let userSet = false;
+  try { userSet = localStorage.getItem(TL_LIGHT_USER_SET_KEY) === '1'; } catch (_) {}
+  if (userSet) return false;
+  if (tlIsLightMode()) return false; // già on
+  if (itemsCount <= TL_LIGHT_AUTO_ITEMS && groupsCount <= TL_LIGHT_AUTO_GROUPS) return false;
+  try { localStorage.setItem(TL_LIGHT_KEY, '1'); } catch (_) {}
+  _tlSyncLightBtn(true);
+  toast(
+    `🪶 Modalità leggera attiva (${itemsCount} booking · ${groupsCount} risorse): stack/background OFF per evitare freeze. ` +
+    `Tasto "🪶 Light" nella toolbar per riattivare i background.`,
+    'info', 6000
+  );
+  return true;
 }
 function tlToggleLight() {
   const cur = tlIsLightMode();
   const next = !cur;
-  try { localStorage.setItem(TL_LIGHT_KEY, next ? '1' : '0'); } catch (_) {}
+  try {
+    localStorage.setItem(TL_LIGHT_KEY, next ? '1' : '0');
+    localStorage.setItem(TL_LIGHT_USER_SET_KEY, '1');
+  } catch (_) {}
   _tlSyncLightBtn(next);
   // Ri-render timeline con nuove options (stack/bg/punch sono baked in vis options)
   if (typeof renderTimeline === 'function') renderTimeline(true);
@@ -4461,6 +4487,17 @@ async function _doRenderTimeline(preserveWindow=false) {
     } catch(_) {}
   }
 
+  const win = savedWin || tlWindowFor(tlZoom, new Date());
+  const groups = tlBuildGroups(bookings, win.start, win.end);
+  if (!groups.length) {
+    host.innerHTML = '<div class="pl-empty">Nessuna risorsa con i filtri attuali</div>';
+    return;
+  }
+  // v3.5.0-alpha.66.14.1: auto-on light mode prima del rendering quando
+  // dataset supera la soglia di sicurezza (items > 80 OR groups > 15). Una
+  // sola volta per nuovo utente; se ha già toccato il toggle manualmente,
+  // rispetta la sua scelta.
+  tlMaybeAutoEnableLight(items.length, groups.length);
   // v3.5.0-alpha.21: in vista "Per progetto" gli items background (ferie /
   // festività / timbrature) sono legati a resource_id e non hanno senso
   // raggruppati per job → li nascondiamo. Restano solo i booking items.
@@ -4471,12 +4508,6 @@ async function _doRenderTimeline(preserveWindow=false) {
   const _hideBg = (window._tlGroupBy === 'project') || tlIsLightMode();
   const itemsDS = new vis.DataSet(_hideBg ? items : [...items, ...bgItems, ...punchItems]);
 
-  const win = savedWin || tlWindowFor(tlZoom, new Date());
-  const groups = tlBuildGroups(bookings, win.start, win.end);
-  if (!groups.length) {
-    host.innerHTML = '<div class="pl-empty">Nessuna risorsa con i filtri attuali</div>';
-    return;
-  }
   const groupsDS = new vis.DataSet(groups);
   // v3.5.0-alpha.46.2: light mode disable stack (O(N²) → freeze Chrome 30+ items zoom mese)
   const _lightMode = tlIsLightMode();
