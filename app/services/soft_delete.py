@@ -102,6 +102,58 @@ def include_deleted(db: Session):
     yield db
 
 
+def is_unique_or_deleted_aware(
+    db: Session,
+    model: type,
+    field: str,
+    value: Any,
+    *,
+    exclude_id: Optional[int] = None,
+    extra_filter: Optional[Any] = None,
+) -> bool:
+    """v3.5.0-alpha.66.15.4 — Pre-check unicità SOFT-DELETE-AWARE.
+
+    Risolve l'audit HIGH #2: i pre-check di unicità sui campi `Project.code`,
+    `Quote.number`, `Job.code`, ecc NON bypassano automaticamente il filter
+    soft-delete. Risultato: l'utente cancella un Project con code "X", ne
+    crea uno nuovo con code "X" → la pre-check passa (vede 0 record perché
+    cestinato è filtrato), ma INSERT viola UNIQUE → 500.
+
+    Questo helper bypassa il filter via `execution_options(include_deleted=True)`
+    e ritorna True se il valore è davvero unico (anche includendo il cestino),
+    False altrimenti.
+
+    Args:
+        db: Session SQLAlchemy.
+        model: Classe ORM (Project, Quote, Job, BillingBatch, ecc.).
+        field: Nome del campo da controllare (es. "code", "number").
+        value: Valore proposto.
+        exclude_id: PK da escludere (per UPDATE/rename: non comparare con se stesso).
+        extra_filter: Clausola SQL aggiuntiva (es. tenant scope).
+
+    Returns:
+        True se `value` è disponibile (non occupato neanche in cestino).
+        False se è occupato.
+
+    Esempio uso:
+
+        # CREATE Project
+        if not is_unique_or_deleted_aware(db, Project, "code", code):
+            raise HTTPException(400, f"Codice '{code}' già usato (anche in cestino)")
+
+        # UPDATE Project rename
+        if not is_unique_or_deleted_aware(db, Project, "code", new_code, exclude_id=p.id):
+            raise HTTPException(400, f"Codice '{new_code}' già usato")
+    """
+    col = getattr(model, field)
+    q = db.query(model).execution_options(include_deleted=True).filter(col == value)
+    if exclude_id is not None:
+        q = q.filter(model.id != exclude_id)
+    if extra_filter is not None:
+        q = q.filter(extra_filter)
+    return q.first() is None
+
+
 # ── Service: regole di delete/restore Quote ──────────────────
 
 class DeleteBlocked(Exception):

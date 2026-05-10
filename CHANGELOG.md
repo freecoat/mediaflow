@@ -1,5 +1,37 @@
 # MediaFlow — Changelog
 
+## v3.5.0-alpha.66.15.4 — Sprint R2 Step 1: helper unique-aware + fix Project.code (11 maggio 2026)
+
+Continua R2. Chiude **audit HIGH #2**: bug pre-check unicità non
+bypassava soft-delete, causando IntegrityError 500 su INSERT con code
+già usato in cestino.
+
+**Nuovo helper** `app/services/soft_delete.py:is_unique_or_deleted_aware`:
+- Signature: `(db, model, field, value, *, exclude_id=None, extra_filter=None) -> bool`
+- Internamente fa `query(model).execution_options(include_deleted=True).filter(...)`
+- Ritorna `True` se il valore è davvero unico (anche includendo cestino)
+- Riusabile per Project/Quote/Job/Invoice/BillingBatch ovunque
+
+**Fix concreto applicato**:
+- `app/routers/projects.py:86` `create_project`: ora usa il helper.
+  Errore 400 esplicito "anche se in cestino: ripristinalo o usa un altro
+  codice" invece del 500 IntegrityError.
+
+**Audit altri call site** (già a posto):
+- `quotes.py:707` rename quote `number`: già con `include_deleted=True` ✓
+- `quotes.py:1584` new-version quote: già con `include_deleted=True` ✓
+- `billing.py:1067` reverse-quote new-version: già con `include_deleted=True` ✓
+- `billing.py:768` Invoice.number unique: NON necessario (Invoice non è
+  soft-deletable, è entità fiscale immutabile) ✓
+- `billing.py` `_next_batch_code` + `quotes.py` `_next_quote_number_progressive`
+  + `_next_job_code`: già migrati al numbering service α.66.14.8 con
+  `include_deleted=True` ✓
+
+**Smoke**: helper ritorna `True` per Project/Quote codes inesistenti su
+DB reale Matteo, 302 routes invariato, version 3.5.0-alpha.66.15.4.
+
+---
+
 ## v3.5.0-alpha.66.15.3 — Sprint R2 Step 0: soft-delete framework esteso (11 maggio 2026)
 
 Apre R2 — Soft-delete framework completo. Audit pattern systemico B:

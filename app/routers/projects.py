@@ -83,9 +83,15 @@ async def create_project(
 ):
     if not can_view_finance(current_user_optional(request)):
         raise HTTPException(403, "Permesso negato")
-    existing = db.query(Project).filter(Project.code == code).first()
-    if existing:
-        raise HTTPException(400, f"Codice progetto '{code}' già esistente")
+    # v3.5.0-alpha.66.15.4 — pre-check soft-delete-aware: se esiste un
+    # Project (anche in cestino) con questo code, l'INSERT violerebbe UNIQUE
+    # con un IntegrityError 500. Helper centralizzato bypassa il filter auto.
+    from app.services.soft_delete import is_unique_or_deleted_aware
+    if not is_unique_or_deleted_aware(db, Project, "code", code):
+        raise HTTPException(
+            400,
+            f"Codice progetto '{code}' già esistente (anche se in cestino: ripristinalo o usa un altro codice)"
+        )
     p = Project(
         code=code, title=title, client_id=client_id, project_type=project_type,
         length_minutes=length_minutes, fps=fps, shooting_format=shooting_format,

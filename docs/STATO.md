@@ -8,6 +8,19 @@
 
 ## Versione corrente
 
+**v3.5.0-alpha.66.15.4** — 11 maggio 2026 — Sprint R2 Step 1: helper unique-aware
+
+Chiude audit HIGH #2 — bug pre-check unicità Project.code che non
+bypassava soft-delete (IntegrityError 500 su INSERT post-cestino).
+
+Helper centralizzato is_unique_or_deleted_aware in
+app/services/soft_delete.py. Project.create migrato. Altri call site
+(quote rename, new-version, batch/job/quote numbers) già a posto.
+
+**Smoke**: 302 routes invariato, version 3.5.0-alpha.66.15.4.
+
+---
+
 **v3.5.0-alpha.66.15.3** — 11 maggio 2026 — Sprint R2 Step 0: soft-delete esteso
 
 _SOFT_DELETE_MODELS da 2 a 5 modelli: aggiunti PricelistSnapshot,
