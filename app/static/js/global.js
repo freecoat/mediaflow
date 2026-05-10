@@ -202,34 +202,104 @@ function toast(msg, type = 'info', duration = 3500) {
 
 // ── Modal ─────────────────────────────────────────────────────
 // v3.5.0-alpha.9: openModal ora rinfresca searchable selects + timepickers
-// dentro il modal dopo averlo aperto. Fix generico per i casi in cui un
-// template setta `select.value = ...` programmaticamente PRIMA di aprire
-// il modal: il wrapper mf-ss non rifletteva il nuovo valore (es. "department
-// non visibile nel modal risorsa"). Idempotente.
+// dentro il modal dopo averlo aperto.
+// v3.5.0-alpha.66.14: a11y completa - focus trap, Esc handler, aria-modal,
+// restore focus al close, stack di modali aperti (chiudi solo il top sul click
+// outside o su Esc), idempotente.
+const MF_MODAL_STACK = [];
+
+function _mfFocusableIn(el) {
+  if (!el) return [];
+  const sel = 'a[href], button:not([disabled]), textarea:not([disabled]), input:not([disabled]):not([type="hidden"]), select:not([disabled]), [tabindex]:not([tabindex="-1"])';
+  return Array.from(el.querySelectorAll(sel)).filter(n => n.offsetParent !== null || n === document.activeElement);
+}
+
+function _mfModalKeydown(e) {
+  if (!MF_MODAL_STACK.length) return;
+  const top = MF_MODAL_STACK[MF_MODAL_STACK.length - 1];
+  if (e.key === 'Escape') {
+    e.preventDefault();
+    closeModal(top.id);
+    return;
+  }
+  if (e.key === 'Tab') {
+    const focusables = _mfFocusableIn(top.el);
+    if (!focusables.length) { e.preventDefault(); return; }
+    const first = focusables[0];
+    const last = focusables[focusables.length - 1];
+    const active = document.activeElement;
+    if (e.shiftKey && (active === first || !top.el.contains(active))) {
+      e.preventDefault();
+      last.focus();
+    } else if (!e.shiftKey && (active === last || !top.el.contains(active))) {
+      e.preventDefault();
+      first.focus();
+    }
+  }
+}
+
 function openModal(id) {
   const el = document.getElementById(id);
   if (!el) return;
+  // Evita double-push se già aperto
+  if (MF_MODAL_STACK.some(m => m.id === id)) {
+    el.classList.add('open');
+    return;
+  }
+  const previousFocus = document.activeElement;
   el.classList.add('open');
+  // ARIA: il container del modal è il dialog
+  el.setAttribute('role', el.getAttribute('role') || 'dialog');
+  el.setAttribute('aria-modal', 'true');
+  if (!el.hasAttribute('tabindex')) el.setAttribute('tabindex', '-1');
+  MF_MODAL_STACK.push({ id, el, previousFocus });
+  // Listener globale solo sulla prima apertura
+  if (MF_MODAL_STACK.length === 1) {
+    document.addEventListener('keydown', _mfModalKeydown, true);
+  }
   // L'innerHTML del modal potrebbe essere stato appena popolato: ritarda di
   // un tick così i value impostati nel medesimo turno sincrono sono visibili.
   setTimeout(() => {
     try {
       if (typeof mfApplySearchable === 'function') mfApplySearchable(el);
       if (typeof mfApplyTimePickers === 'function') mfApplyTimePickers(el);
-      // v3.5.0-alpha.30: re-render icone Lucide per contenuti modale dinamici
       if (typeof window.mfRenderIcons === 'function') window.mfRenderIcons(el);
+      // Sposta focus sul primo focusable dentro il modal (o sul container)
+      const focusables = _mfFocusableIn(el);
+      if (focusables.length) focusables[0].focus();
+      else el.focus();
     } catch (e) { /* fail-safe: non bloccare apertura */ }
   }, 0);
 }
+
 function closeModal(id) {
   const el = document.getElementById(id);
-  if (el) el.classList.remove('open');
-}
-// Chiudi cliccando fuori
-document.addEventListener('click', (e) => {
-  if (e.target.classList.contains('modal-overlay')) {
-    e.target.classList.remove('open');
+  if (!el) return;
+  el.classList.remove('open');
+  // Pop dallo stack se presente, restore focus
+  const idx = MF_MODAL_STACK.findIndex(m => m.id === id);
+  if (idx !== -1) {
+    const m = MF_MODAL_STACK.splice(idx, 1)[0];
+    el.removeAttribute('aria-modal');
+    if (m.previousFocus && typeof m.previousFocus.focus === 'function') {
+      try { m.previousFocus.focus(); } catch (e) { /* dom gone */ }
+    }
   }
+  if (!MF_MODAL_STACK.length) {
+    document.removeEventListener('keydown', _mfModalKeydown, true);
+  }
+}
+
+// Click outside: chiudi SOLO il modal in cima allo stack (non tutti).
+document.addEventListener('click', (e) => {
+  if (!e.target.classList.contains('modal-overlay')) return;
+  if (!MF_MODAL_STACK.length) {
+    // Fallback legacy: modal aperto via classe ma non tracciato
+    e.target.classList.remove('open');
+    return;
+  }
+  const top = MF_MODAL_STACK[MF_MODAL_STACK.length - 1];
+  if (e.target === top.el) closeModal(top.id);
 });
 
 // ── API helper ────────────────────────────────────────────────

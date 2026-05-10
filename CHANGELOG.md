@@ -1,5 +1,44 @@
 # MediaFlow — Changelog
 
+## v3.5.0-alpha.66.14 — Modal a11y completa (11 maggio 2026)
+
+Apre il "cantiere consolidamento" post-audit profondo. Primo quick win:
+accessibilità di tutti i ~30 modali in un colpo solo, una sola modifica
+nel helper centrale `global.js`.
+
+**`openModal/closeModal` riscritti** (`app/static/js/global.js:203-300`):
+- Stack di modali aperti `MF_MODAL_STACK` (per gestire modali annidati
+  tipo Booking → Resource picker).
+- ARIA: `role="dialog"` + `aria-modal="true"` impostati al open, rimossi
+  al close. `tabindex="-1"` sul container per renderlo focusabile.
+- **Focus trap**: `Tab`/`Shift+Tab` ciclano tra i focusable dentro il
+  modal in cima allo stack. Outside-of-modal salta al primo/ultimo.
+- **Esc handler**: chiude SOLO il modal in cima (non tutti).
+- **Restore focus**: al close, ritorna al focus precedente all'apertura
+  (es. il bottone che ha aperto il modal). UX nativa.
+- **Click outside**: chiude solo il modal in cima allo stack
+  (prima chiudeva TUTTI i modali in DOM).
+- **Auto-focus**: al open, sposta focus sul primo elemento focusabile
+  dentro il modal (o sul container se vuoto).
+- Listener globale `keydown` montato solo quando c'è almeno un modal
+  aperto, smontato a stack vuoto.
+
+**Compatibilità**: API invariata (`openModal('id')` / `closeModal('id')`).
+Nessun template da toccare. I template che usano `class="modal-overlay"`
++ overlay click outside continuano a funzionare.
+
+**Smoke**: 302 routes invariato, version 3.5.0-alpha.66.14.
+
+**Verifica live** (hard-refresh per cache-buster):
+1. Apri qualsiasi modal (es. `/resources` → ✏️) → focus va sul primo input.
+2. Tab → cicla solo dentro il modal, non esce.
+3. Esc → chiude il modal, focus torna al bottone che lo aveva aperto.
+4. Apri un modal annidato (es. da modal Booking apri picker risorsa) →
+   Esc chiude solo il picker, non anche il Booking modal.
+5. Click sull'overlay esterno del modal annidato → chiude solo il top.
+
+---
+
 ## v3.5.0-alpha.66.13 — Branding aziendale completo (10 maggio 2026)
 
 Personalizzazione tool per azienda applicata a quote PDF, cost report

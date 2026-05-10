@@ -8,6 +8,18 @@
 
 ## Versione corrente
 
+**v3.5.0-alpha.66.14** — 11 maggio 2026 — Modal a11y completa
+
+Apre il "cantiere consolidamento" post-audit profondo. Quick win
+foundazionale: tutti i ~30 modali ora hanno focus trap, Esc handler,
+aria-modal, restore focus al close, stack di modali annidati gestito
+correttamente. Una sola modifica nel helper `openModal/closeModal` di
+`global.js`, zero template da toccare. WCAG 2.1.2 + 2.4.3 a posto.
+
+**Smoke**: 302 routes invariato, version 3.5.0-alpha.66.14.
+
+---
+
 **v3.5.0-alpha.66.13** — 10 maggio 2026 — Branding aziendale completo
 
 Personalizzazione documenti azienda applicata a quote PDF, cost report
