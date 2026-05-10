@@ -1,0 +1,1705 @@
+{
+  "schema_version": "1.1",
+  "exported_at": "2026-05-10T13:45:03.669945Z",
+  "exported_by": null,
+  "source_app_version": "3.5.0-alpha.66.6",
+  "tenant_id": 1,
+  "departments": [
+    {
+      "code": "DI-VIDEO",
+      "name": "DI / Video",
+      "color": "#ff7171",
+      "sort_order": 10,
+      "description": "Digital Intermediate: dailies, conform, color grading, mastering DCP/DCDM, deliverables video, archive, QC"
+    },
+    {
+      "code": "VFX",
+      "name": "VFX / Finishing",
+      "color": "#6279ea",
+      "sort_order": 20,
+      "description": "Visual Effects e finishing: compositing, 3D, matte painting, rotoscoping, paint"
+    },
+    {
+      "code": "AUDIO",
+      "name": "Audio",
+      "color": "#74ff64",
+      "sort_order": 30,
+      "description": "Post-produzione audio: editing, mix, foley, ADR, deliverables sound, localization, doppiaggio"
+    },
+    {
+      "code": "COMMERCIAL",
+      "name": "Commercial / Produzione",
+      "color": "#f4d10b",
+      "sort_order": 40,
+      "description": "Project management, coordinamento produzione, preventivazione, amministrazione"
+    }
+  ],
+  "categories": [
+    {
+      "name": "DAILIES",
+      "description": null,
+      "sort_order": 10
+    },
+    {
+      "name": "PICTURE / DI",
+      "description": null,
+      "sort_order": 20
+    },
+    {
+      "name": "MASTERING DCP / DCDM",
+      "description": null,
+      "sort_order": 30
+    },
+    {
+      "name": "DELIVERABLES VIDEO",
+      "description": null,
+      "sort_order": 40
+    },
+    {
+      "name": "ARCHIVE / TRANSFER",
+      "description": null,
+      "sort_order": 50
+    },
+    {
+      "name": "VFX",
+      "description": null,
+      "sort_order": 60
+    },
+    {
+      "name": "SOUND EDIT",
+      "description": null,
+      "sort_order": 70
+    },
+    {
+      "name": "MIX",
+      "description": null,
+      "sort_order": 80
+    },
+    {
+      "name": "DELIVERABLES SOUND",
+      "description": null,
+      "sort_order": 90
+    },
+    {
+      "name": "LOCALIZATION",
+      "description": null,
+      "sort_order": 100
+    },
+    {
+      "name": "QC / METADATA",
+      "description": null,
+      "sort_order": 110
+    },
+    {
+      "name": "PROJECT MANAGEMENT",
+      "description": null,
+      "sort_order": 120
+    }
+  ],
+  "items": [
+    {
+      "category": "DAILIES",
+      "department_code": "DI-VIDEO",
+      "name": "Dailies sync + color + proxy",
+      "description": "Sincronizzazione audio, color base con LUT, transcoding proxy per editing",
+      "unit_pre": "per",
+      "unit": "day",
+      "price_list": 450.0,
+      "price_average": null,
+      "price_low": null,
+      "hardcosts": null,
+      "keywords": [
+        "dailies",
+        "sync",
+        "proxy",
+        "ingest",
+        "lut",
+        "transcoding"
+      ],
+      "is_active": true
+    },
+    {
+      "category": "DAILIES",
+      "department_code": "DI-VIDEO",
+      "name": "Dailies QC",
+      "description": "Controllo qualità rushes, scarti tecnici, segnalazioni al set",
+      "unit_pre": "per",
+      "unit": "day",
+      "price_list": 350.0,
+      "price_average": null,
+      "price_low": null,
+      "hardcosts": null,
+      "keywords": [
+        "dailies",
+        "qc",
+        "review",
+        "rushes"
+      ],
+      "is_active": true
+    },
+    {
+      "category": "DAILIES",
+      "department_code": "DI-VIDEO",
+      "name": "Dailies upload piattaforma review",
+      "description": "Upload su Frame.io, Pix, Aspera o equivalente con permessi e log",
+      "unit_pre": "just",
+      "unit": "allow",
+      "price_list": 200.0,
+      "price_average": null,
+      "price_low": null,
+      "hardcosts": null,
+      "keywords": [
+        "dailies",
+        "upload",
+        "frameio",
+        "pix",
+        "review"
+      ],
+      "is_active": true
+    },
+    {
+      "category": "DAILIES",
+      "department_code": "DI-VIDEO",
+      "name": "Camera card download e verifica MHL",
+      "description": "Offload card camera con generazione MHL/MD5 e backup ridondante",
+      "unit_pre": "per",
+      "unit": "day",
+      "price_list": 280.0,
+      "price_average": null,
+      "price_low": null,
+      "hardcosts": null,
+      "keywords": [
+        "cards",
+        "ingest",
+        "mhl",
+        "md5",
+        "verify",
+        "offload"
+      ],
+      "is_active": true
+    },
+    {
+      "category": "PICTURE / DI",
+      "department_code": "DI-VIDEO",
+      "name": "Online conform 2K",
+      "description": "Conform 2K da EDL/AAF con riferimento offline, gestione VFX shots",
+      "unit_pre": "per",
+      "unit": "day",
+      "price_list": 900.0,
+      "price_average": null,
+      "price_low": null,
+      "hardcosts": null,
+      "keywords": [
+        "conform",
+        "2k",
+        "edl",
+        "aaf",
+        "online",
+        "finishing"
+      ],
+      "is_active": true
+    },
+    {
+      "category": "PICTURE / DI",
+      "department_code": "DI-VIDEO",
+      "name": "Online conform 4K",
+      "description": "Conform 4K da EDL/AAF con riferimento offline e gestione VFX",
+      "unit_pre": "per",
+      "unit": "day",
+      "price_list": 1100.0,
+      "price_average": null,
+      "price_low": null,
+      "hardcosts": null,
+      "keywords": [
+        "conform",
+        "4k",
+        "edl",
+        "aaf",
+        "online",
+        "finishing"
+      ],
+      "is_active": true
+    },
+    {
+      "category": "PICTURE / DI",
+      "department_code": "DI-VIDEO",
+      "name": "Color grading 2K SDR",
+      "description": "Sessione color grading 2K Rec.709 con colorist e sala certificata",
+      "unit_pre": "per",
+      "unit": "day",
+      "price_list": 1500.0,
+      "price_average": null,
+      "price_low": null,
+      "hardcosts": null,
+      "keywords": [
+        "color",
+        "grading",
+        "2k",
+        "sdr",
+        "rec709",
+        "colorist",
+        "di"
+      ],
+      "is_active": true
+    },
+    {
+      "category": "PICTURE / DI",
+      "department_code": "DI-VIDEO",
+      "name": "Color grading 4K SDR",
+      "description": "Sessione color grading 4K Rec.709 con colorist e sala certificata",
+      "unit_pre": "per",
+      "unit": "day",
+      "price_list": 1800.0,
+      "price_average": null,
+      "price_low": null,
+      "hardcosts": null,
+      "keywords": [
+        "color",
+        "grading",
+        "4k",
+        "sdr",
+        "rec709",
+        "colorist",
+        "di"
+      ],
+      "is_active": true
+    },
+    {
+      "category": "PICTURE / DI",
+      "department_code": "DI-VIDEO",
+      "name": "Color grading HDR Dolby Vision",
+      "description": "Sessione HDR P3 D65 PQ con monitor Dolby e generazione metadata Dolby Vision",
+      "unit_pre": "per",
+      "unit": "day",
+      "price_list": 2200.0,
+      "price_average": null,
+      "price_low": null,
+      "hardcosts": null,
+      "keywords": [
+        "hdr",
+        "dolby",
+        "vision",
+        "grading",
+        "p3",
+        "pq",
+        "metadata"
+      ],
+      "is_active": true
+    },
+    {
+      "category": "PICTURE / DI",
+      "department_code": "DI-VIDEO",
+      "name": "HDR trim pass",
+      "description": "Trim pass aggiuntivo per target HDR (4000nit / 1000nit / 600nit / 100nit / Rec.709)",
+      "unit_pre": "per",
+      "unit": "pc",
+      "price_list": 600.0,
+      "price_average": null,
+      "price_low": null,
+      "hardcosts": null,
+      "keywords": [
+        "hdr",
+        "trim",
+        "dolby",
+        "vision",
+        "1000nit",
+        "600nit",
+        "100nit",
+        "rec709"
+      ],
+      "is_active": true
+    },
+    {
+      "category": "PICTURE / DI",
+      "department_code": "DI-VIDEO",
+      "name": "Versioning / textless creation",
+      "description": "Creazione versione textless o alternative cut con conform aggiuntivo",
+      "unit_pre": "per",
+      "unit": "version",
+      "price_list": 400.0,
+      "price_average": null,
+      "price_low": null,
+      "hardcosts": null,
+      "keywords": [
+        "textless",
+        "version",
+        "recompositing",
+        "vf",
+        "oar"
+      ],
+      "is_active": true
+    },
+    {
+      "category": "MASTERING DCP / DCDM",
+      "department_code": "DI-VIDEO",
+      "name": "DCP INTEROP 2K",
+      "description": "DCP 2K standard INTEROP con CPL, PKL, naming DCNC, 5.1 audio, encryption opzionale",
+      "unit_pre": "per",
+      "unit": "pc",
+      "price_list": 700.0,
+      "price_average": null,
+      "price_low": null,
+      "hardcosts": null,
+      "keywords": [
+        "dcp",
+        "interop",
+        "2k",
+        "cinema",
+        "distribution",
+        "dcnc"
+      ],
+      "is_active": true
+    },
+    {
+      "category": "MASTERING DCP / DCDM",
+      "department_code": "DI-VIDEO",
+      "name": "DCP INTEROP 4K",
+      "description": "DCP 4K standard INTEROP con CPL, PKL, naming DCNC, 5.1 audio",
+      "unit_pre": "per",
+      "unit": "pc",
+      "price_list": 900.0,
+      "price_average": null,
+      "price_low": null,
+      "hardcosts": null,
+      "keywords": [
+        "dcp",
+        "interop",
+        "4k",
+        "cinema",
+        "distribution",
+        "dcnc"
+      ],
+      "is_active": true
+    },
+    {
+      "category": "MASTERING DCP / DCDM",
+      "department_code": "DI-VIDEO",
+      "name": "DCP SMPTE 2K",
+      "description": "DCP 2K standard SMPTE con CPL, PKL, naming DCNC, audio 5.1/7.1",
+      "unit_pre": "per",
+      "unit": "pc",
+      "price_list": 700.0,
+      "price_average": null,
+      "price_low": null,
+      "hardcosts": null,
+      "keywords": [
+        "dcp",
+        "smpte",
+        "2k",
+        "cinema"
+      ],
+      "is_active": true
+    },
+    {
+      "category": "MASTERING DCP / DCDM",
+      "department_code": "DI-VIDEO",
+      "name": "DCP SMPTE 4K",
+      "description": "DCP 4K standard SMPTE con CPL, PKL, naming DCNC, audio 5.1/7.1",
+      "unit_pre": "per",
+      "unit": "pc",
+      "price_list": 900.0,
+      "price_average": null,
+      "price_low": null,
+      "hardcosts": null,
+      "keywords": [
+        "dcp",
+        "smpte",
+        "4k",
+        "cinema"
+      ],
+      "is_active": true
+    },
+    {
+      "category": "MASTERING DCP / DCDM",
+      "department_code": "DI-VIDEO",
+      "name": "DCP SMPTE Bv2.1 Dolby Vision/Atmos",
+      "description": "DCP SMPTE Bv2.1 con Dolby Vision XYZ TIFF e/o Dolby Atmos MXF",
+      "unit_pre": "per",
+      "unit": "pc",
+      "price_list": 1500.0,
+      "price_average": null,
+      "price_low": null,
+      "hardcosts": null,
+      "keywords": [
+        "dcp",
+        "dolby",
+        "vision",
+        "atmos",
+        "smpte",
+        "bv2.1"
+      ],
+      "is_active": true
+    },
+    {
+      "category": "MASTERING DCP / DCDM",
+      "department_code": "DI-VIDEO",
+      "name": "DCDM 16-bit XYZ TIFF",
+      "description": "Digital Cinema Distribution Master 16-bit XYZ TIFF in rulli per archive",
+      "unit_pre": "per",
+      "unit": "pc",
+      "price_list": 1200.0,
+      "price_average": null,
+      "price_low": null,
+      "hardcosts": null,
+      "keywords": [
+        "dcdm",
+        "xyz",
+        "tiff",
+        "16bit",
+        "master",
+        "archive"
+      ],
+      "is_active": true
+    },
+    {
+      "category": "MASTERING DCP / DCDM",
+      "department_code": "DI-VIDEO",
+      "name": "DCP encryption + KDM/DKDM",
+      "description": "Encryption DCP + generazione DKDM (validità lunga) o KDM per singola sala",
+      "unit_pre": "per",
+      "unit": "pc",
+      "price_list": 100.0,
+      "price_average": null,
+      "price_low": null,
+      "hardcosts": null,
+      "keywords": [
+        "kdm",
+        "dkdm",
+        "encryption",
+        "key",
+        "security"
+      ],
+      "is_active": true
+    },
+    {
+      "category": "MASTERING DCP / DCDM",
+      "department_code": "DI-VIDEO",
+      "name": "DCP Festival pass",
+      "description": "DCP dedicato per festival con specifiche differenti dal DCP distribuzione",
+      "unit_pre": "per",
+      "unit": "pc",
+      "price_list": 500.0,
+      "price_average": null,
+      "price_low": null,
+      "hardcosts": null,
+      "keywords": [
+        "dcp",
+        "festival",
+        "screening"
+      ],
+      "is_active": true
+    },
+    {
+      "category": "DELIVERABLES VIDEO",
+      "department_code": "DI-VIDEO",
+      "name": "ProRes 4444 XQ HD master",
+      "description": "Master ProRes 4444 XQ 1080p con head format completo (bars, slate, tone)",
+      "unit_pre": "per",
+      "unit": "pc",
+      "price_list": 350.0,
+      "price_average": null,
+      "price_low": null,
+      "hardcosts": null,
+      "keywords": [
+        "prores",
+        "4444",
+        "hd",
+        "1080p",
+        "master",
+        "head",
+        "slate"
+      ],
+      "is_active": true
+    },
+    {
+      "category": "DELIVERABLES VIDEO",
+      "department_code": "DI-VIDEO",
+      "name": "ProRes 4444 XQ UHD SDR master",
+      "description": "Master ProRes 4444 XQ UHD 3840x2160 Rec.709 con head format",
+      "unit_pre": "per",
+      "unit": "pc",
+      "price_list": 500.0,
+      "price_average": null,
+      "price_low": null,
+      "hardcosts": null,
+      "keywords": [
+        "prores",
+        "4444",
+        "uhd",
+        "4k",
+        "sdr",
+        "rec709"
+      ],
+      "is_active": true
+    },
+    {
+      "category": "DELIVERABLES VIDEO",
+      "department_code": "DI-VIDEO",
+      "name": "ProRes 4444 XQ UHD HDR Dolby Vision",
+      "description": "Master ProRes 4444 XQ UHD P3 D65 PQ con sidecar Dolby Vision XML v2.9",
+      "unit_pre": "per",
+      "unit": "pc",
+      "price_list": 700.0,
+      "price_average": null,
+      "price_low": null,
+      "hardcosts": null,
+      "keywords": [
+        "prores",
+        "hdr",
+        "dolby",
+        "vision",
+        "p3",
+        "pq",
+        "sidecar"
+      ],
+      "is_active": true
+    },
+    {
+      "category": "DELIVERABLES VIDEO",
+      "department_code": "DI-VIDEO",
+      "name": "ProRes 422 HQ HD proxy",
+      "description": "Proxy ProRes 422 HQ 1080p per screener interni o broadcast",
+      "unit_pre": "per",
+      "unit": "pc",
+      "price_list": 250.0,
+      "price_average": null,
+      "price_low": null,
+      "hardcosts": null,
+      "keywords": [
+        "prores",
+        "422",
+        "hd",
+        "proxy",
+        "screener"
+      ],
+      "is_active": true
+    },
+    {
+      "category": "DELIVERABLES VIDEO",
+      "department_code": "DI-VIDEO",
+      "name": "ProRes 422 HQ UHD proxy",
+      "description": "Proxy ProRes 422 HQ UHD per screener",
+      "unit_pre": "per",
+      "unit": "pc",
+      "price_list": 350.0,
+      "price_average": null,
+      "price_low": null,
+      "hardcosts": null,
+      "keywords": [
+        "prores",
+        "422",
+        "uhd",
+        "proxy"
+      ],
+      "is_active": true
+    },
+    {
+      "category": "DELIVERABLES VIDEO",
+      "department_code": "DI-VIDEO",
+      "name": "H.264 screener clean",
+      "description": "Export H.264 1080p15Mbps senza watermark né timecode burn",
+      "unit_pre": "per",
+      "unit": "pc",
+      "price_list": 120.0,
+      "price_average": null,
+      "price_low": null,
+      "hardcosts": null,
+      "keywords": [
+        "h264",
+        "screener",
+        "mp4",
+        "preview",
+        "clean"
+      ],
+      "is_active": true
+    },
+    {
+      "category": "DELIVERABLES VIDEO",
+      "department_code": "DI-VIDEO",
+      "name": "H.264 screener watermarked",
+      "description": "Export H.264 con watermark dinamico per security review",
+      "unit_pre": "per",
+      "unit": "pc",
+      "price_list": 180.0,
+      "price_average": null,
+      "price_low": null,
+      "hardcosts": null,
+      "keywords": [
+        "h264",
+        "watermark",
+        "security",
+        "screener",
+        "review"
+      ],
+      "is_active": true
+    },
+    {
+      "category": "DELIVERABLES VIDEO",
+      "department_code": "DI-VIDEO",
+      "name": "H.264 screener with timecode burn",
+      "description": "Export H.264 con timecode visibile a rulli, conform al DCP",
+      "unit_pre": "per",
+      "unit": "pc",
+      "price_list": 150.0,
+      "price_average": null,
+      "price_low": null,
+      "hardcosts": null,
+      "keywords": [
+        "h264",
+        "timecode",
+        "burn",
+        "review"
+      ],
+      "is_active": true
+    },
+    {
+      "category": "DELIVERABLES VIDEO",
+      "department_code": "DI-VIDEO",
+      "name": "Textless ProRes",
+      "description": "Export ProRes textless backgrounds (titoli, end credits, lower thirds)",
+      "unit_pre": "per",
+      "unit": "pc",
+      "price_list": 280.0,
+      "price_average": null,
+      "price_low": null,
+      "hardcosts": null,
+      "keywords": [
+        "textless",
+        "prores",
+        "backgrounds",
+        "credits"
+      ],
+      "is_active": true
+    },
+    {
+      "category": "ARCHIVE / TRANSFER",
+      "department_code": "DI-VIDEO",
+      "name": "LTO LTFS — Camera Original",
+      "description": "Archive camera original su nastri LTO7/8 LTFS con MD5",
+      "unit_pre": "per",
+      "unit": "TB",
+      "price_list": 120.0,
+      "price_average": null,
+      "price_low": null,
+      "hardcosts": null,
+      "keywords": [
+        "lto",
+        "ltfs",
+        "camera",
+        "original",
+        "archive",
+        "md5"
+      ],
+      "is_active": true
+    },
+    {
+      "category": "ARCHIVE / TRANSFER",
+      "department_code": "DI-VIDEO",
+      "name": "LTO LTFS — Graded DPX",
+      "description": "Archive sequenze DPX gradate su LTO7/8 LTFS, una bobina per nastro",
+      "unit_pre": "per",
+      "unit": "TB",
+      "price_list": 150.0,
+      "price_average": null,
+      "price_low": null,
+      "hardcosts": null,
+      "keywords": [
+        "lto",
+        "ltfs",
+        "dpx",
+        "graded",
+        "di",
+        "archive"
+      ],
+      "is_active": true
+    },
+    {
+      "category": "ARCHIVE / TRANSFER",
+      "department_code": "DI-VIDEO",
+      "name": "LTO LTFS — Non-graded DPX",
+      "description": "Archive sequenze DPX non gradate (conform output) su LTO7/8 LTFS",
+      "unit_pre": "per",
+      "unit": "TB",
+      "price_list": 130.0,
+      "price_average": null,
+      "price_low": null,
+      "hardcosts": null,
+      "keywords": [
+        "lto",
+        "ltfs",
+        "dpx",
+        "ungraded",
+        "archive"
+      ],
+      "is_active": true
+    },
+    {
+      "category": "ARCHIVE / TRANSFER",
+      "department_code": "DI-VIDEO",
+      "name": "LTO LTFS — Dolby Vision Master",
+      "description": "Archive Dolby Vision Master DPX/EXR/TIFF + sidecar XML",
+      "unit_pre": "per",
+      "unit": "TB",
+      "price_list": 180.0,
+      "price_average": null,
+      "price_low": null,
+      "hardcosts": null,
+      "keywords": [
+        "lto",
+        "dolby",
+        "vision",
+        "dpx",
+        "exr",
+        "archive"
+      ],
+      "is_active": true
+    },
+    {
+      "category": "ARCHIVE / TRANSFER",
+      "department_code": "DI-VIDEO",
+      "name": "LTO LTFS — ProRes Deliverables backup",
+      "description": "Archive di tutti i ProRes deliverables QC-approved",
+      "unit_pre": "per",
+      "unit": "TB",
+      "price_list": 100.0,
+      "price_average": null,
+      "price_low": null,
+      "hardcosts": null,
+      "keywords": [
+        "lto",
+        "prores",
+        "backup",
+        "archive",
+        "deliverables"
+      ],
+      "is_active": true
+    },
+    {
+      "category": "ARCHIVE / TRANSFER",
+      "department_code": "DI-VIDEO",
+      "name": "Hard Drive USB 3.0 (1-2-4 TB)",
+      "description": "Drive consegna deliverables, USB 3.0 autoalimentato exFAT/NTFS",
+      "unit_pre": "per",
+      "unit": "pc",
+      "price_list": 150.0,
+      "price_average": null,
+      "price_low": null,
+      "hardcosts": 80.0,
+      "keywords": [
+        "usb",
+        "hdd",
+        "drive",
+        "delivery",
+        "exfat",
+        "ntfs"
+      ],
+      "is_active": true
+    },
+    {
+      "category": "ARCHIVE / TRANSFER",
+      "department_code": "DI-VIDEO",
+      "name": "CRU drive DCP (EXT3)",
+      "description": "CRU drive formattato EXT3 per consegna fisica DCP",
+      "unit_pre": "per",
+      "unit": "pc",
+      "price_list": 180.0,
+      "price_average": null,
+      "price_low": null,
+      "hardcosts": 100.0,
+      "keywords": [
+        "cru",
+        "drive",
+        "dcp",
+        "ext3",
+        "shipping"
+      ],
+      "is_active": true
+    },
+    {
+      "category": "ARCHIVE / TRANSFER",
+      "department_code": "DI-VIDEO",
+      "name": "Mediashuttle / Aspera transfer",
+      "description": "Trasferimento elettronico via Signiant/Aspera fino a soglia per TB",
+      "unit_pre": "per",
+      "unit": "TB",
+      "price_list": 80.0,
+      "price_average": null,
+      "price_low": null,
+      "hardcosts": null,
+      "keywords": [
+        "signiant",
+        "mediashuttle",
+        "aspera",
+        "transfer",
+        "upload"
+      ],
+      "is_active": true
+    },
+    {
+      "category": "ARCHIVE / TRANSFER",
+      "department_code": "DI-VIDEO",
+      "name": "MD5 / checksum generation",
+      "description": "Generazione e verifica checksum MD5 / xxHash su deliverables/archive",
+      "unit_pre": "just",
+      "unit": "allow",
+      "price_list": 150.0,
+      "price_average": null,
+      "price_low": null,
+      "hardcosts": null,
+      "keywords": [
+        "md5",
+        "xxhash",
+        "checksum",
+        "hash",
+        "verify"
+      ],
+      "is_active": true
+    },
+    {
+      "category": "VFX",
+      "department_code": "VFX",
+      "name": "VFX shot composite — standard",
+      "description": "Composite VFX standard: cleanup, screen replacement, semplici comp",
+      "unit_pre": "per",
+      "unit": "shot",
+      "price_list": 450.0,
+      "price_average": null,
+      "price_low": null,
+      "hardcosts": null,
+      "keywords": [
+        "vfx",
+        "composite",
+        "shot",
+        "comp",
+        "cleanup"
+      ],
+      "is_active": true
+    },
+    {
+      "category": "VFX",
+      "department_code": "VFX",
+      "name": "VFX shot composite — complex",
+      "description": "Composite VFX complesso: hero shot, multi-layer, integrazione 3D",
+      "unit_pre": "per",
+      "unit": "shot",
+      "price_list": 1200.0,
+      "price_average": null,
+      "price_low": null,
+      "hardcosts": null,
+      "keywords": [
+        "vfx",
+        "complex",
+        "hero",
+        "comp",
+        "3d"
+      ],
+      "is_active": true
+    },
+    {
+      "category": "VFX",
+      "department_code": "VFX",
+      "name": "VFX plates pull / handles export",
+      "description": "Estrazione plates da DI con maniglie configurabili per VFX vendor",
+      "unit_pre": "just",
+      "unit": "allow",
+      "price_list": 600.0,
+      "price_average": null,
+      "price_low": null,
+      "hardcosts": null,
+      "keywords": [
+        "vfx",
+        "plates",
+        "pull",
+        "handles",
+        "export"
+      ],
+      "is_active": true
+    },
+    {
+      "category": "VFX",
+      "department_code": "VFX",
+      "name": "Title design / motion graphics",
+      "description": "Sessione design titoli, lower thirds, end roller, motion graphics",
+      "unit_pre": "per",
+      "unit": "day",
+      "price_list": 1100.0,
+      "price_average": null,
+      "price_low": null,
+      "hardcosts": null,
+      "keywords": [
+        "titles",
+        "motion",
+        "graphics",
+        "opening",
+        "credits",
+        "lower thirds"
+      ],
+      "is_active": true
+    },
+    {
+      "category": "VFX",
+      "department_code": "VFX",
+      "name": "Rotoscoping",
+      "description": "Rotoscoping per shot (mask, isolation, holdouts)",
+      "unit_pre": "per",
+      "unit": "shot",
+      "price_list": 350.0,
+      "price_average": null,
+      "price_low": null,
+      "hardcosts": null,
+      "keywords": [
+        "roto",
+        "rotoscope",
+        "mask",
+        "isolation"
+      ],
+      "is_active": true
+    },
+    {
+      "category": "VFX",
+      "department_code": "VFX",
+      "name": "Paint / cleanup / stabilization",
+      "description": "Lavorazione paint, cleanup wire/rig, stabilizzazione shot per shot",
+      "unit_pre": "per",
+      "unit": "shot",
+      "price_list": 280.0,
+      "price_average": null,
+      "price_low": null,
+      "hardcosts": null,
+      "keywords": [
+        "paint",
+        "cleanup",
+        "stabilize",
+        "beauty",
+        "rig",
+        "wire"
+      ],
+      "is_active": true
+    },
+    {
+      "category": "SOUND EDIT",
+      "department_code": "AUDIO",
+      "name": "Sound editorial dialogue",
+      "description": "Dialog editing in Pro Tools, ricostruzione tracce, edit-room",
+      "unit_pre": "per",
+      "unit": "day",
+      "price_list": 750.0,
+      "price_average": null,
+      "price_low": null,
+      "hardcosts": null,
+      "keywords": [
+        "dialogue",
+        "edit",
+        "audio",
+        "protools"
+      ],
+      "is_active": true
+    },
+    {
+      "category": "SOUND EDIT",
+      "department_code": "AUDIO",
+      "name": "Sound design / FX editing",
+      "description": "Sound design e FX editing con sound designer e libreria",
+      "unit_pre": "per",
+      "unit": "day",
+      "price_list": 750.0,
+      "price_average": null,
+      "price_low": null,
+      "hardcosts": null,
+      "keywords": [
+        "sfx",
+        "sound",
+        "design",
+        "fx",
+        "editor"
+      ],
+      "is_active": true
+    },
+    {
+      "category": "SOUND EDIT",
+      "department_code": "AUDIO",
+      "name": "Foley session",
+      "description": "Registrazione foley con artist, engineer e sala foley",
+      "unit_pre": "per",
+      "unit": "day",
+      "price_list": 900.0,
+      "price_average": null,
+      "price_low": null,
+      "hardcosts": null,
+      "keywords": [
+        "foley",
+        "recording",
+        "footsteps",
+        "props"
+      ],
+      "is_active": true
+    },
+    {
+      "category": "SOUND EDIT",
+      "department_code": "AUDIO",
+      "name": "ADR session",
+      "description": "Sessione ADR con sound engineer, sala ADR e direttore",
+      "unit_pre": "per",
+      "unit": "day",
+      "price_list": 1100.0,
+      "price_average": null,
+      "price_low": null,
+      "hardcosts": null,
+      "keywords": [
+        "adr",
+        "looping",
+        "dub",
+        "recording",
+        "vocal"
+      ],
+      "is_active": true
+    },
+    {
+      "category": "SOUND EDIT",
+      "department_code": "AUDIO",
+      "name": "Music editing",
+      "description": "Music editor in postazione Pro Tools, gestione cue e stems",
+      "unit_pre": "per",
+      "unit": "day",
+      "price_list": 700.0,
+      "price_average": null,
+      "price_low": null,
+      "hardcosts": null,
+      "keywords": [
+        "music",
+        "edit",
+        "score",
+        "cue",
+        "stems"
+      ],
+      "is_active": true
+    },
+    {
+      "category": "MIX",
+      "department_code": "AUDIO",
+      "name": "Re-recording mix 5.1",
+      "description": "Mix theatrical 5.1 con re-recording mixer e sala certificata",
+      "unit_pre": "per",
+      "unit": "day",
+      "price_list": 1800.0,
+      "price_average": null,
+      "price_low": null,
+      "hardcosts": 500.0,
+      "keywords": [
+        "mix",
+        "5.1",
+        "surround",
+        "rerecord",
+        "theater"
+      ],
+      "is_active": true
+    },
+    {
+      "category": "MIX",
+      "department_code": "AUDIO",
+      "name": "Re-recording mix 7.1",
+      "description": "Mix theatrical 7.1 con re-recording mixer e sala certificata",
+      "unit_pre": "per",
+      "unit": "day",
+      "price_list": 2100.0,
+      "price_average": null,
+      "price_low": null,
+      "hardcosts": 500.0,
+      "keywords": [
+        "mix",
+        "7.1",
+        "surround",
+        "theater"
+      ],
+      "is_active": true
+    },
+    {
+      "category": "MIX",
+      "department_code": "AUDIO",
+      "name": "Re-recording mix Dolby Atmos",
+      "description": "Mix immersivo Dolby Atmos con sala certificata e renderer",
+      "unit_pre": "per",
+      "unit": "day",
+      "price_list": 2800.0,
+      "price_average": null,
+      "price_low": null,
+      "hardcosts": 800.0,
+      "keywords": [
+        "atmos",
+        "dolby",
+        "immersive",
+        "mix",
+        "renderer"
+      ],
+      "is_active": true
+    },
+    {
+      "category": "MIX",
+      "department_code": "AUDIO",
+      "name": "Mix theater rental",
+      "description": "Affitto sala mix certificata (Dolby) — solo struttura, no mixer",
+      "unit_pre": "per",
+      "unit": "day",
+      "price_list": 900.0,
+      "price_average": null,
+      "price_low": null,
+      "hardcosts": null,
+      "keywords": [
+        "theater",
+        "dub",
+        "stage",
+        "room",
+        "rental"
+      ],
+      "is_active": true
+    },
+    {
+      "category": "DELIVERABLES SOUND",
+      "department_code": "AUDIO",
+      "name": "5.1 Printmaster",
+      "description": "Printmaster 5.1 conform DCP, head format completo, 24/25 fps",
+      "unit_pre": "per",
+      "unit": "pc",
+      "price_list": 600.0,
+      "price_average": null,
+      "price_low": null,
+      "hardcosts": null,
+      "keywords": [
+        "5.1",
+        "printmaster",
+        "mix",
+        "master"
+      ],
+      "is_active": true
+    },
+    {
+      "category": "DELIVERABLES SOUND",
+      "department_code": "AUDIO",
+      "name": "5.1 M&E",
+      "description": "Music & Effects 5.1 per doppiaggio internazionale",
+      "unit_pre": "per",
+      "unit": "pc",
+      "price_list": 600.0,
+      "price_average": null,
+      "price_low": null,
+      "hardcosts": null,
+      "keywords": [
+        "5.1",
+        "me",
+        "music",
+        "effects",
+        "international"
+      ],
+      "is_active": true
+    },
+    {
+      "category": "DELIVERABLES SOUND",
+      "department_code": "AUDIO",
+      "name": "5.1 DME stems",
+      "description": "Dialogue/Music/Effects stems separati 5.1",
+      "unit_pre": "per",
+      "unit": "pc",
+      "price_list": 750.0,
+      "price_average": null,
+      "price_low": null,
+      "hardcosts": null,
+      "keywords": [
+        "5.1",
+        "dme",
+        "dialogue",
+        "music",
+        "effects",
+        "stems"
+      ],
+      "is_active": true
+    },
+    {
+      "category": "DELIVERABLES SOUND",
+      "department_code": "AUDIO",
+      "name": "7.1 Printmaster",
+      "description": "Printmaster 7.1 conform DCP",
+      "unit_pre": "per",
+      "unit": "pc",
+      "price_list": 750.0,
+      "price_average": null,
+      "price_low": null,
+      "hardcosts": null,
+      "keywords": [
+        "7.1",
+        "printmaster"
+      ],
+      "is_active": true
+    },
+    {
+      "category": "DELIVERABLES SOUND",
+      "department_code": "AUDIO",
+      "name": "Atmos ADM BWF master",
+      "description": "Master Dolby Atmos ADM BWF immersivo + renderer config",
+      "unit_pre": "per",
+      "unit": "pc",
+      "price_list": 1200.0,
+      "price_average": null,
+      "price_low": null,
+      "hardcosts": null,
+      "keywords": [
+        "atmos",
+        "adm",
+        "bwf",
+        "immersive",
+        "dolby"
+      ],
+      "is_active": true
+    },
+    {
+      "category": "DELIVERABLES SOUND",
+      "department_code": "AUDIO",
+      "name": "Stereo LtRt fold-down",
+      "description": "Fold-down stereo Lt/Rt da 5.1/7.1, conform al DCP",
+      "unit_pre": "per",
+      "unit": "pc",
+      "price_list": 350.0,
+      "price_average": null,
+      "price_low": null,
+      "hardcosts": null,
+      "keywords": [
+        "stereo",
+        "ltrt",
+        "fold",
+        "downmix"
+      ],
+      "is_active": true
+    },
+    {
+      "category": "DELIVERABLES SOUND",
+      "department_code": "AUDIO",
+      "name": "Audio description recording IT",
+      "description": "Registrazione audiodescrizione italiana con narratore e mix",
+      "unit_pre": "per",
+      "unit": "min",
+      "price_list": 18.0,
+      "price_average": null,
+      "price_low": null,
+      "hardcosts": null,
+      "keywords": [
+        "audiodescription",
+        "ad",
+        "accessibility",
+        "narrator"
+      ],
+      "is_active": true
+    },
+    {
+      "category": "DELIVERABLES SOUND",
+      "department_code": "AUDIO",
+      "name": "Audio description script IT",
+      "description": "Stesura script audiodescrizione conforme alle linee guida",
+      "unit_pre": "per",
+      "unit": "pc",
+      "price_list": 350.0,
+      "price_average": null,
+      "price_low": null,
+      "hardcosts": null,
+      "keywords": [
+        "ad",
+        "script",
+        "audiodescription",
+        "italiano"
+      ],
+      "is_active": true
+    },
+    {
+      "category": "LOCALIZATION",
+      "department_code": "AUDIO",
+      "name": "Subtitle translation EN→IT",
+      "description": "Traduzione sottotitoli inglese → italiano con QC linguistico",
+      "unit_pre": "per",
+      "unit": "min",
+      "price_list": 15.0,
+      "price_average": null,
+      "price_low": null,
+      "hardcosts": null,
+      "keywords": [
+        "subtitle",
+        "translation",
+        "italian",
+        "spotting"
+      ],
+      "is_active": true
+    },
+    {
+      "category": "LOCALIZATION",
+      "department_code": "AUDIO",
+      "name": "Subtitle translation IT→EN",
+      "description": "Traduzione sottotitoli italiano → inglese con QC linguistico",
+      "unit_pre": "per",
+      "unit": "min",
+      "price_list": 18.0,
+      "price_average": null,
+      "price_low": null,
+      "hardcosts": null,
+      "keywords": [
+        "subtitle",
+        "translation",
+        "english",
+        "spotting"
+      ],
+      "is_active": true
+    },
+    {
+      "category": "LOCALIZATION",
+      "department_code": "AUDIO",
+      "name": "Subtitle conformance multi-format",
+      "description": "Conformance sottotitoli a IMSC/STL/SRT/iTT/TimedText XML INTEROP-SMPTE",
+      "unit_pre": "per",
+      "unit": "pc",
+      "price_list": 280.0,
+      "price_average": null,
+      "price_low": null,
+      "hardcosts": null,
+      "keywords": [
+        "imsc",
+        "stl",
+        "srt",
+        "itt",
+        "timedtext",
+        "subtitle",
+        "conform"
+      ],
+      "is_active": true
+    },
+    {
+      "category": "LOCALIZATION",
+      "department_code": "AUDIO",
+      "name": "SDH closed caption authoring",
+      "description": "Authoring SDH/CC per non udenti, 32 char/line standard",
+      "unit_pre": "per",
+      "unit": "pc",
+      "price_list": 450.0,
+      "price_average": null,
+      "price_low": null,
+      "hardcosts": null,
+      "keywords": [
+        "sdh",
+        "cc",
+        "deaf",
+        "accessibility",
+        "closed",
+        "caption"
+      ],
+      "is_active": true
+    },
+    {
+      "category": "LOCALIZATION",
+      "department_code": "AUDIO",
+      "name": "Forced subtitle creation",
+      "description": "Creazione sottotitoli forzati narrativi (lingue straniere in scena)",
+      "unit_pre": "per",
+      "unit": "pc",
+      "price_list": 280.0,
+      "price_average": null,
+      "price_low": null,
+      "hardcosts": null,
+      "keywords": [
+        "forced",
+        "subtitle",
+        "narrative",
+        "burn"
+      ],
+      "is_active": true
+    },
+    {
+      "category": "LOCALIZATION",
+      "department_code": "AUDIO",
+      "name": "Dubbing direction + recording",
+      "description": "Sessione doppiaggio con direttore, attori, fonico, sala",
+      "unit_pre": "per",
+      "unit": "day",
+      "price_list": 1500.0,
+      "price_average": null,
+      "price_low": null,
+      "hardcosts": 200.0,
+      "keywords": [
+        "dub",
+        "dubbing",
+        "voiceover",
+        "loop"
+      ],
+      "is_active": true
+    },
+    {
+      "category": "QC / METADATA",
+      "department_code": "DI-VIDEO",
+      "name": "Manual QC HD/SDR",
+      "description": "Visione integrale operatore QC con report tecnico (artefatti, audio, sub)",
+      "unit_pre": "per",
+      "unit": "pc",
+      "price_list": 280.0,
+      "price_average": null,
+      "price_low": null,
+      "hardcosts": null,
+      "keywords": [
+        "qc",
+        "manual",
+        "review",
+        "hd",
+        "sdr"
+      ],
+      "is_active": true
+    },
+    {
+      "category": "QC / METADATA",
+      "department_code": "DI-VIDEO",
+      "name": "Manual QC UHD/HDR",
+      "description": "QC manuale UHD/HDR con monitor Dolby Vision e analisi metadata",
+      "unit_pre": "per",
+      "unit": "pc",
+      "price_list": 450.0,
+      "price_average": null,
+      "price_low": null,
+      "hardcosts": null,
+      "keywords": [
+        "qc",
+        "manual",
+        "uhd",
+        "hdr",
+        "review",
+        "dolby"
+      ],
+      "is_active": true
+    },
+    {
+      "category": "QC / METADATA",
+      "department_code": "DI-VIDEO",
+      "name": "Auto-QC Baton/Vidcheck",
+      "description": "QC automatico Baton/Vidcheck/Aurora con report XML",
+      "unit_pre": "per",
+      "unit": "pc",
+      "price_list": 120.0,
+      "price_average": null,
+      "price_low": null,
+      "hardcosts": null,
+      "keywords": [
+        "baton",
+        "vidcheck",
+        "aurora",
+        "autoqc",
+        "automated"
+      ],
+      "is_active": true
+    },
+    {
+      "category": "QC / METADATA",
+      "department_code": "DI-VIDEO",
+      "name": "Metadata XML / TechOps template",
+      "description": "Compilazione metadata XML Sky/RAI/NBCU TechOps/IMF/IMSC",
+      "unit_pre": "per",
+      "unit": "pc",
+      "price_list": 280.0,
+      "price_average": null,
+      "price_low": null,
+      "hardcosts": null,
+      "keywords": [
+        "metadata",
+        "xml",
+        "techops",
+        "gtm",
+        "sidecar",
+        "imf"
+      ],
+      "is_active": true
+    },
+    {
+      "category": "QC / METADATA",
+      "department_code": "DI-VIDEO",
+      "name": "Music Cue Sheet preparation",
+      "description": "Compilazione Music Cue Sheet con autori, editori, ISWC",
+      "unit_pre": "per",
+      "unit": "pc",
+      "price_list": 350.0,
+      "price_average": null,
+      "price_low": null,
+      "hardcosts": null,
+      "keywords": [
+        "cue",
+        "sheet",
+        "music",
+        "rights",
+        "iswc"
+      ],
+      "is_active": true
+    },
+    {
+      "category": "PROJECT MANAGEMENT",
+      "department_code": "COMMERCIAL",
+      "name": "Project Management",
+      "description": "Project manager dedicato: coordinamento, scheduling, deliverables tracking",
+      "unit_pre": "per",
+      "unit": "day",
+      "price_list": 700.0,
+      "price_average": null,
+      "price_low": null,
+      "hardcosts": null,
+      "keywords": [
+        "project",
+        "manager",
+        "pm",
+        "coordination",
+        "tracking"
+      ],
+      "is_active": true
+    },
+    {
+      "category": "PROJECT MANAGEMENT",
+      "department_code": "COMMERCIAL",
+      "name": "Production Coordination",
+      "description": "Production coordinator: liaison con vendor, calendari, materiali",
+      "unit_pre": "per",
+      "unit": "day",
+      "price_list": 450.0,
+      "price_average": null,
+      "price_low": null,
+      "hardcosts": null,
+      "keywords": [
+        "coordinator",
+        "production",
+        "tpr",
+        "liaison"
+      ],
+      "is_active": true
+    },
+    {
+      "category": "PROJECT MANAGEMENT",
+      "department_code": "COMMERCIAL",
+      "name": "Quote / estimate preparation",
+      "description": "Preparazione quotazione con analisi capitolato e stima risorse",
+      "unit_pre": "per",
+      "unit": "pc",
+      "price_list": 450.0,
+      "price_average": null,
+      "price_low": null,
+      "hardcosts": null,
+      "keywords": [
+        "quote",
+        "estimate",
+        "bid",
+        "preventivo"
+      ],
+      "is_active": true
+    },
+    {
+      "category": "PROJECT MANAGEMENT",
+      "department_code": "COMMERCIAL",
+      "name": "Travel / shipping allowance",
+      "description": "Forfait spese di trasferimento personale e shipping deliverables",
+      "unit_pre": "just",
+      "unit": "allow",
+      "price_list": 350.0,
+      "price_average": null,
+      "price_low": null,
+      "hardcosts": null,
+      "keywords": [
+        "travel",
+        "shipping",
+        "courier",
+        "transfer"
+      ],
+      "is_active": true
+    },
+    {
+      "category": "DELIVERABLES VIDEO",
+      "department_code": "DI-VIDEO",
+      "name": "MXF Master UHD SDR",
+      "description": "Master di consegna UHD 4K SDR in formato MXF (AS-11 / OP1a), per broadcaster (es. SKY). Durata fino a 60 min per file.",
+      "unit_pre": "per",
+      "unit": "pc",
+      "price_list": 800.0,
+      "price_average": 800.0,
+      "price_low": 800.0,
+      "hardcosts": null,
+      "keywords": [
+        "mxf",
+        "sdr",
+        "uhd",
+        "4k",
+        "as11",
+        "op1a",
+        "master",
+        "sky",
+        "broadcast"
+      ],
+      "is_active": true
+    },
+    {
+      "category": "DELIVERABLES VIDEO",
+      "department_code": "DI-VIDEO",
+      "name": "MXF Master UHD HDR Dolby Vision",
+      "description": "Master di consegna UHD 4K HDR Dolby Vision in formato MXF (AS-11 / OP1a), per broadcaster (es. SKY). Durata fino a 60 min per file.",
+      "unit_pre": "per",
+      "unit": "pc",
+      "price_list": 800.0,
+      "price_average": 800.0,
+      "price_low": 800.0,
+      "hardcosts": null,
+      "keywords": [
+        "mxf",
+        "hdr",
+        "dolby",
+        "vision",
+        "uhd",
+        "4k",
+        "as11",
+        "op1a",
+        "master",
+        "sky",
+        "broadcast"
+      ],
+      "is_active": true
+    },
+    {
+      "category": "QC / METADATA",
+      "department_code": "DI-VIDEO",
+      "name": "QC orario UHD/HDR",
+      "description": "Quality Control manuale a ore su materiale UHD/HDR. Include verifica tecnica, report e segnalazione anomalie.",
+      "unit_pre": "per",
+      "unit": "hour",
+      "price_list": 150.0,
+      "price_average": 150.0,
+      "price_low": 150.0,
+      "hardcosts": null,
+      "keywords": [
+        "qc",
+        "quality",
+        "control",
+        "ore",
+        "orario",
+        "uhd",
+        "hdr",
+        "manual",
+        "review"
+      ],
+      "is_active": true
+    },
+    {
+      "category": "DELIVERABLES VIDEO",
+      "department_code": "DI-VIDEO",
+      "name": "Blu-Ray authoring + mastering",
+      "description": "Authoring e mastering Blu-Ray (BD-25/BD-50), incluso menu, sottotitoli e audio multitrack.",
+      "unit_pre": "per",
+      "unit": "pc",
+      "price_list": 300.0,
+      "price_average": 300.0,
+      "price_low": 300.0,
+      "hardcosts": null,
+      "keywords": [
+        "blu-ray",
+        "bluray",
+        "bd",
+        "authoring",
+        "mastering",
+        "disc"
+      ],
+      "is_active": true
+    }
+  ],
+  "description": "Listino MediaFlow legacy 2026-Q2 — 79 voci complete, 12 categorie, 4 reparti. Snapshot del listino prima della scrematura α.66.8 (riduzione a ~38 voci con descrizione modulare). Restore via Listino → Snapshot → Carica preset built-in."
+}

@@ -8,6 +8,18 @@
 
 ## Versione corrente
 
+**v3.5.0-alpha.66.7** — 10 maggio 2026 — Preset legacy committato + bootstrap
+
+Listino corrente (79 voci, 12 cat, 4 dep) salvato in repo come preset
+`app/data/pricelist_presets/legacy_2026q2_full.json` (44KB schema 1.1).
+Bootstrap loader nel `lifespan` carica ogni preset come
+`PricelistSnapshot kind=preset` per ogni Tenant al boot, idempotente.
+Sicurezza assoluta prima della scrematura α.66.8.
+
+**Smoke**: 287 routes invariato, doppio-boot test = 1 preset (no dup).
+
+---
+
 **v3.5.0-alpha.66.6** — 10 maggio 2026 — Backup/restore listino con snapshot persistenti
 
 Apertura cantiere multi-versione **Listino & Deliverable** dopo discussione
@@ -16,8 +28,8 @@ strategica con Matteo (10 maggio). Sequenza concordata:
 | Versione | Cantiere | Stato |
 |---|---|---|
 | α.66.6 | Backup/restore listino (snapshot DB + UI dedicata) | ✅ chiuso |
-| α.66.7 | Snapshot legacy committato come preset built-in | 🔜 next |
-| α.66.8 | Semplificazione listino base (79 → ~38 voci, descrizione modulare) | 🔜 |
+| α.66.7 | Snapshot legacy committato come preset built-in | ✅ chiuso |
+| α.66.8 | Semplificazione listino base (79 → ~38 voci, descrizione modulare) | 🔜 next |
 | α.66.9 | Modello `JobDeliverable` + cost-rate Resource (employee/freelance/studio) | 🔜 |
 | α.66.10+ | UI deliverable + asset library bridge + copilot QC + cost report split (cliente vs interno) | 🔜 |
 

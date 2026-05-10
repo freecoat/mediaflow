@@ -314,6 +314,60 @@ async def lifespan(app: FastAPI):
             _db.close()
     except Exception as e:
         print(f"[lifespan] ensure_built_in_roles failed: {e}")
+    # v3.5.0-alpha.66.7 — Bootstrap preset listino built-in. I file in
+    # app/data/pricelist_presets/*.json vengono caricati come
+    # PricelistSnapshot kind=preset al boot, una volta per tenant.
+    # Idempotente: se già esiste uno snapshot preset con stesso nome
+    # derivato dal filename, viene saltato. I preset NON vengono mai
+    # applicati automaticamente al listino — sono solo "pronti all'uso"
+    # nella UI di /pricelist → 📦 Snapshot → Preset.
+    try:
+        from app.database import SessionLocal
+        from app.models import (
+            PricelistSnapshot, PricelistSnapshotKind, Tenant,
+        )
+        from app.services import pricelist_snapshot as _plsnap
+        _db = SessionLocal()
+        try:
+            tenants = _db.query(Tenant).all()
+            preset_files = _plsnap.list_preset_files()
+            loaded = 0
+            for tenant in tenants:
+                for preset_path in preset_files:
+                    preset_name = f"Preset: {preset_path.stem}"
+                    existing = (
+                        _db.query(PricelistSnapshot)
+                        .filter(
+                            PricelistSnapshot.tenant_id == tenant.id,
+                            PricelistSnapshot.kind == PricelistSnapshotKind.preset,
+                            PricelistSnapshot.name == preset_name,
+                            PricelistSnapshot.deleted_at.is_(None),
+                        )
+                        .first()
+                    )
+                    if existing:
+                        continue
+                    try:
+                        payload = _plsnap.load_preset_payload(preset_path.name)
+                        _plsnap.create_snapshot_record(
+                            _db,
+                            tenant_id=tenant.id,
+                            name=preset_name,
+                            description=payload.get("description") or f"Preset {preset_path.name}",
+                            kind=PricelistSnapshotKind.preset,
+                            user_id=None,
+                            payload=payload,
+                        )
+                        loaded += 1
+                    except Exception as inner_e:
+                        print(f"[lifespan] preset {preset_path.name} skipped: {inner_e}")
+            if loaded:
+                _db.commit()
+                print(f"[lifespan] pricelist presets bootstrapped: {loaded}")
+        finally:
+            _db.close()
+    except Exception as e:
+        print(f"[lifespan] bootstrap pricelist presets failed: {e}")
     # Check deadline job al boot (v3.4.28) — emette notifiche per job con
     # end_date imminente, idempotente (dedup 14 giorni)
     try:
@@ -447,7 +501,7 @@ async def lifespan(app: FastAPI):
     yield
 
 
-app = FastAPI(title="MediaFlow", version="3.5.0-alpha.66.6", lifespan=lifespan)
+app = FastAPI(title="MediaFlow", version="3.5.0-alpha.66.7", lifespan=lifespan)
 
 BASE_DIR = Path(__file__).parent
 app.mount("/static", StaticFiles(directory=BASE_DIR / "static"), name="static")

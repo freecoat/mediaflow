@@ -1,5 +1,40 @@
 # MediaFlow — Changelog
 
+## v3.5.0-alpha.66.7 — Preset listino legacy committato + bootstrap automatico (10 maggio 2026)
+
+Step di sicurezza prima della scrematura α.66.8: il listino corrente
+(79 voci, 12 categorie, 4 reparti — versione completa pre-scrematura)
+viene **committato in repo** come preset built-in, così non potrà mai
+andare perso indipendentemente dallo stato del DB di chiunque.
+
+**Nuovo file**:
+- `app/data/pricelist_presets/legacy_2026q2_full.json` — preset
+  schema 1.1, 44KB, descrizione: "Listino MediaFlow legacy 2026-Q2 —
+  79 voci complete, prima della scrematura α.66.8".
+
+**Bootstrap loader nel `lifespan` di `app/main.py`**:
+- Al boot, per ogni Tenant del DB, scansiona
+  `app/data/pricelist_presets/*.json` e crea un `PricelistSnapshot`
+  kind=preset per ogni file (idempotente: salta se esiste già con
+  stesso name).
+- I preset NON vengono mai applicati automaticamente al listino —
+  rimangono solo "pronti all'uso" nella UI di
+  `/pricelist → 📦 Snapshot → Preset built-in`.
+- Doppio-boot test: 1 preset prima, 1 preset dopo (no duplicazione).
+
+**Smoke**: 287 routes invariato, version `3.5.0-alpha.66.7`. Boot DB
+reale: snapshot id=1 caricato, kind=preset, 79/12/4.
+
+**Verifica live** (al riavvio):
+1. `/pricelist` → bottone `📦 Snapshot` → modal vuoto → tab Lista
+   mostra "Preset: legacy_2026q2_full" (badge viola).
+2. Click "↺ Ripristina" su un DB vuoto/diverso → ricostruisce il
+   listino legacy completo (mode replace consigliato).
+3. `/pricelist/api/presets` → JSON con `legacy_2026q2_full.json`,
+   counters, schema_version 1.1.
+
+---
+
 ## v3.5.0-alpha.66.6 — Backup/restore listino con snapshot persistenti (10 maggio 2026)
 
 Cantiere multi-versione "Listino & Deliverable" — versione **abilitante**
