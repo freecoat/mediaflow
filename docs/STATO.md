@@ -8,6 +8,19 @@
 
 ## Versione corrente
 
+**v3.5.0-alpha.66.14.2** — 11 maggio 2026 — Auth fail-closed via env flag
+
+Chiude l'auth bypass effettivo causato dal fallback "primo admin attivo"
+quando il cookie JWT è assente o scaduto. Default DEV invariato. In
+produzione: settare `AUTH_REQUIRED=true` in `.env`.
+
+Singleton `app/services/auth.py:resolve_current_user` sostituisce 5
+copie identiche nei router. ~30 call site beneficiano senza modifiche.
+
+**Smoke**: 302 routes invariato, version 3.5.0-alpha.66.14.2.
+
+---
+
 **v3.5.0-alpha.66.14.1** — 11 maggio 2026 — Light mode auto-on planning
 
 Risolve il rischio "freeze Chrome al primo accesso con dataset reale".

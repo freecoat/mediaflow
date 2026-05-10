@@ -1,5 +1,38 @@
 # MediaFlow — Changelog
 
+## v3.5.0-alpha.66.14.2 — Auth fail-closed via env flag (11 maggio 2026)
+
+Quick win post-audit #3. Chiude il pattern "fallback al primo admin
+attivo" che esisteva in 5 router (ai/clients/settings/hr/planning) come
+helper privato `_resolve_current_user`. In dev resta utile per il flusso
+demo single-user, ma in produzione era un'auth bypass effettivo: cookie
+JWT scaduto/assente → impersonificazione admin trasparente.
+
+**Nuova settings flag** (`app/config.py:auth_required`):
+- Default `False` (dev/demo: fallback comportamento storico)
+- Set `AUTH_REQUIRED=true` in `.env` per produzione → fail-closed:
+  token assente/invalido → `resolve_current_user` ritorna `None`,
+  l'endpoint risponde 401 (o redirect login) come da gestione esistente
+
+**Singleton `app/services/auth.py:resolve_current_user`**:
+- Single source of truth della politica auth
+- Sostituisce le 5 copie ad-hoc identiche nei router
+- Ogni router ora importa via alias:
+  `from app.services.auth import resolve_current_user as _resolve_current_user`
+- Zero call site cambiato (~30 endpoint), API invariata
+
+**Smoke**: 302 routes invariato, alias unificati cross-router, version
+3.5.0-alpha.66.14.2.
+
+**Per produzione**:
+```bash
+# .env
+AUTH_REQUIRED=true
+```
+Senza questo flag il comportamento è identico a oggi (compatibilità).
+
+---
+
 ## v3.5.0-alpha.66.14.1 — Light mode auto-on sopra soglia (11 maggio 2026)
 
 Quick win post-audit #2. Risolve il rischio "freeze Chrome al primo

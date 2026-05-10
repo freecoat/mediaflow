@@ -60,3 +60,30 @@ def get_current_user_from_token(db: Session, token: str) -> Optional[User]:
     if not email:
         return None
     return db.query(User).filter(User.email == email, User.is_active == True).first()
+
+
+def resolve_current_user(db: Session, token: Optional[str]) -> Optional[User]:
+    """Risolve l'utente corrente con politica auth_required.
+
+    v3.5.0-alpha.66.14.2 — sostituisce le 5 copie ad-hoc `_resolve_current_user`
+    sparse nei router. Comportamento:
+
+    - Se `token` valido → ritorna User dal token.
+    - Se `token` assente/invalido E `settings.auth_required=False` (DEV
+      default) → fallback al primo User attivo per ID (compatibilità
+      single-user demo storica).
+    - Se `token` assente/invalido E `settings.auth_required=True` (PROD)
+      → ritorna None. L'endpoint chiamante deve gestire (raise 401 o
+      reindirizzare a /login). NIENTE fallback amministrativo.
+
+    Per la migrazione: i router che usano questa funzione devono già
+    gestire il caso `user is None` (alcuni endpoint AI/settings rinviano
+    a 401, altri continuano in degraded mode). Verificare singolarmente.
+    """
+    if token:
+        u = get_current_user_from_token(db, token)
+        if u:
+            return u
+    if settings.auth_required:
+        return None
+    return db.query(User).filter(User.is_active == True).order_by(User.id).first()

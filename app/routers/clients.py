@@ -20,13 +20,9 @@ router = APIRouter(prefix="/clients", tags=["clients"])
 CURRENT_TENANT = 1  # Fase 1-bis: tenant fisso, multi-tenant hard rinviato a Fase 7
 
 
-def _resolve_current_user(db: Session, token: Optional[str]) -> Optional[User]:
-    """Cookie JWT → user; fallback al primo utente attivo (stessa logica di ai.py/settings.py)."""
-    if token:
-        u = get_current_user_from_token(db, token)
-        if u:
-            return u
-    return db.query(User).filter(User.is_active == True).order_by(User.id).first()
+# v3.5.0-alpha.66.14.2: alias verso il singleton in app.services.auth.
+# La logica fail-closed (settings.auth_required=True → no fallback) vive lì.
+from app.services.auth import resolve_current_user as _resolve_current_user  # noqa: E402,F401
 
 
 # ── Duplicate detection ──────────────────────────────────────

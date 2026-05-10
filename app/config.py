@@ -50,6 +50,13 @@ class Settings(BaseSettings):
     # manualmente). Default 30 giorni.
     trash_retention_days: int = 30
 
+    # v3.5.0-alpha.66.14.2 — Auth fail-closed in produzione.
+    # Se True, _resolve_current_user NON ritorna fallback "primo admin attivo"
+    # quando il token è assente/invalido: ritorna None e l'endpoint deve
+    # rispondere 401. Default False per continuare a supportare il flusso
+    # demo single-user di sviluppo. In produzione METTERE = True.
+    auth_required: bool = False
+
     class Config:
         env_file = ".env"
         env_file_encoding = "utf-8"
