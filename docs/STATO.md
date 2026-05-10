@@ -2979,7 +2979,63 @@ Cantiere "overlay prenotato vs effettivo + adeguamento" (era v3.4.15 nel plan pr
 
 ## Prossimo step concordato
 
-**Sessione 3 maggio**: chiusi tutti gli invarianti d'integrità (v3.4.55) + i 2 TODO + workflow docs (v3.4.56). 8 commit ahead di origin/main.
+> **🔖 ULTIMO COMMENTO (10 mag 2026 sera) — punto di riapertura**
+
+**Sessione 10 maggio chiusa**: 8 commit α.66.6→α.66.13 **pushati su origin/main**.
+Cantiere "Listino & Deliverable" sostanziale:
+- Snapshot listino persistenti (UI in `/pricelist` 📦 Snapshot)
+- Listino lean 43 voci con descrizione modulare (preset built-in al boot)
+- Modelli `JobDeliverable` + `PhysicalAsset` (separati, ortogonali archive/delivered)
+- Cost-rate Resource (employee/freelance/studio/external) con UI live preview
+- Cost report **split** cliente vs interno (cliente non vede ore deliverable)
+- Pagina `/physical-assets` CRUD completa
+- Branding aziendale completo (tagline + brand_color + powered_by toggle)
+
+**Quando riapri domani**:
+
+1. **Pull** `git pull origin main` (8 commit attesi).
+2. **Restart server** — ALTER TABLE auto al boot:
+   - `pricelist_snapshots` nuova
+   - `job_deliverables`, `physical_assets` nuove
+   - `bookings.job_deliverable_id`
+   - `assets +7 col` (job_deliverable_id, is_internal_archive, is_delivered_external, delivered_at/to/method/tracking)
+   - `resources +7 col` (cost_type, monthly_gross_salary, annual_bonus_months, cost_multiplier_oneri, annual_working_hours, freelance_hourly_cost, studio_hourly_cost)
+   - `tenants +4 col` (tagline, brand_color, show_powered_by, document_header)
+3. **Test estensivo sul Mac** — DB era vuoto, ricostruisci dati da zero (suggerito `seed_demo` per partire con il listino lean 43 voci):
+
+   ### Flusso end-to-end consigliato
+   - **A. Listino**: `/pricelist` → 📦 Snapshot → 🎁 Preset built-in → vedi 2 preset (legacy 79 + lean 43). Carica lean come snapshot, poi tab Lista → Ripristina (Replace, auto-backup creato).
+   - **B. Branding**: `/settings#company` → blocco "🎨 Branding documenti" → tagline + colore primario (color picker) + intestazione + checkbox powered_by → Salva. Carica logo (50x50 .png).
+   - **C. Cost-rate Resource**: `/resources` → ✏️ una risorsa → "💰 Costo interno" → Dipendente €2800/mese → preview live €27.51/h. Salva → riapri → valori persistiti.
+   - **D. Asset fisici**: sidebar → "Asset Fisici" → + nuovo LTO 12TB archivio interno (condizione "verified", location "Cassaforte"). Poi nuovo HDD consegnato a cliente (courier + tracking).
+   - **E. Deliverable**: `/jobs/{id}` → blocco "Consegne" → + nuovo deliverable → seleziona preset "ISDCF DCP (cinema)" → spec tecniche (resolution 2K, audio 51, lang it, territory IT) → vedi live preview file_naming = `MareNostrum_FTR-F_IT-it_51_2K_RAI_20260612_TPRBerlin_IOP_OV` → quantity=3 → 3 deliverable separati con suffix (1/3) (2/3) (3/3).
+   - **F. Booking attribuiti**: crea booking 4h attribuito a deliverable DCP + booking 8h attribuito a JCL Color grading day senza deliverable → torna in `/jobs/{id}` → card KPI viola "Hardcost ore deliverable INTERNO" mostra €110.04 (4h × €27.51) + 1 deliverable.
+   - **G. PDF cliente**: `/cost-report/{job}` → 📄 Esporta PDF cliente → vedi:
+     - Header con logo + tagline + titolo "RENDICONTAZIONE" nel brand_color scelto
+     - Document header opzionale sotto la HR
+     - "Riepilogo ore lavorate" mostra **solo 8h** (no 4h DCP — cliente non vede)
+     - Footer **senza** "Generato con MediaFlow" se hai disattivato powered_by
+   - **H. PDF quote**: apri una quote → PDF → header con logo (3 colonne se presente) + tagline + titolo "QUOTAZIONE" nel brand_color.
+   - **I. PDF fattura**: emetti fattura → PDF → footer toggleable "Generato con MediaFlow".
+
+4. **Riporta cosa funziona / cosa rotto**. Se trovi bug, faccio hotfix prima di proseguire con α.66.14+.
+
+### α.66.14+ rinviati (dopo green-light test)
+
+- **Kanban deliverable** in `/jobs/{id}`: drag tra colonne stato (planned → in_production → file_attached → qc_passed → delivered → accepted) con SortableJS. Edit modal completo con bridge DAM (link asset digital o physical).
+- **Tool generazione nomi file completo**: regole, validazione conflitti, batch rename, preset custom salvabili dall'utente. Oggi solo 9 preset built-in.
+- **Copilot QC**: nuova capability `propose_qc_check` con ffprobe + LLM contro `spec_json` del deliverable. Verifica res/framerate/audio/durata/codec automaticamente.
+- **Cost report split UI completa**: oggi backend espone i campi internal (`deliverable_hardcost_internal`, `unit_is_time_based` per riga). Manca colonna dedicata in tabella `/cost-report` + filtro "Solo voci time" / "Solo voci deliverable".
+- **AI derivazione costi amministrativi** (post α.66.10): capability `propose_resource_cost_update` legge visura/bilancio per proporre cost_rate aggiornati.
+- **Edit modal deliverable completo**: oggi solo create. Manca edit (cambio status, link asset, QC report viewer, breakdown hardcost per risorsa).
+
+### Riapertura
+
+Parola chiave: **"Riprendi da v3.5.0-alpha.66.13 — apri con il tuo ultimo commento"**.
+
+---
+
+**Sessione 3 maggio (storico)**: chiusi tutti gli invarianti d'integrità (v3.4.55) + i 2 TODO + workflow docs (v3.4.56). 8 commit ahead di origin/main.
 
 Le opzioni naturali per la prossima sessione, in ordine di valore:
 
@@ -3113,7 +3169,9 @@ Dopo conferma test sul Mac, passare a **#4 server-side abort**.
 
 ---
 
-*Ultimo aggiornamento: 3 maggio 2026 — chiusa v3.4.56 (conferma assegnazione + warning quote-no-resources + 3 docs Mermaid). Sessione 3 maggio: 6 commit (v3.4.51→v3.4.56). 8 commit ahead origin/main, push solo dopo green light test sul Mac (eventuale v3.5.0).*
+*Ultimo aggiornamento: 10 maggio 2026 sera — chiusa sessione "Listino & Deliverable": 8 commit α.66.6→α.66.13 push completato a origin/main (autorizzato da Matteo nonostante alpha). DB di Matteo era completamente vuoto a inizio sessione. Test estensivo end-to-end pianificato per domani 11 maggio. Riapertura: "Riprendi da v3.5.0-alpha.66.13 — apri con il tuo ultimo commento" (sezione "Prossimo step concordato" sopra).*
+
+*Ultimo aggiornamento precedente: 3 maggio 2026 — chiusa v3.4.56 (conferma assegnazione + warning quote-no-resources + 3 docs Mermaid). Sessione 3 maggio: 6 commit (v3.4.51→v3.4.56).*
 
 **v3.4.55+v3.4.56**: chiusi 5 invarianti sistemici (eliminazione HARD-BLOCK con booking attivi, vista lavorazione read-only, auto-assignment Resource→Job, man-hours canonico, Job nascosto in booking) + 2 TODO (pre-save confirm risorse non assegnate, notifica `quote_approved_no_resources`). Aggiunti `app/services/resource_assignment_sync.py` + 3 docs Mermaid in `docs/` (workflow / data-model / permissions-matrix). Niente migrazione DB.
 

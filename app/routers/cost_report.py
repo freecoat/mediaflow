@@ -917,8 +917,10 @@ async def cost_report_client_pdf(
     su maturato (base fatturazione). Forecast = su stima (base report).
     """
     report = await _client_filtered_report(job_id, db)
+    from app.services.branding import get_branding
+    branding = get_branding(db)
     pdf_bytes = generate_client_cost_report_pdf(
-        report, rendiconto=bool(rendiconto), vista=vista,
+        report, rendiconto=bool(rendiconto), vista=vista, branding=branding,
     )
     job_code = (report.get("job") or {}).get("code") or f"job-{job_id}"
     suffix = "_rendiconto" if rendiconto else ""
