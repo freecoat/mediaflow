@@ -8,6 +8,17 @@
 
 ## Versione corrente
 
+**v3.5.0-alpha.66.17.3** — 11 maggio 2026 — Sprint R7 MVP: deprecated duplicate
+
+Audit pattern G "file giganti" planning.py: CRUD duplicate clients/jobs
+sono usati attivamente da template (dropdown/multi-filter). Decisione
+conservativa: marcare deprecated POST, lasciare GET. Estrazione diag/
+unavailabilities/bookings rinviata a R7.x dedicati.
+
+**Smoke**: 303 routes invariato, version 3.5.0-alpha.66.17.3.
+
+---
+
 **v3.5.0-alpha.66.17.2** — 11 maggio 2026 — Sprint R6 Step 2: capability registry
 
 Chiude pattern systemico N audit: drift _ACTION_HANDLERS (23) vs

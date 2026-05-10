@@ -1,5 +1,35 @@
 # MediaFlow — Changelog
 
+## v3.5.0-alpha.66.17.3 — Sprint R7 MVP: deprecated POST clients duplicato (11 maggio 2026)
+
+Audit consigliava la rimozione del CRUD duplicato di `clients` e `jobs`
+in `planning.py` (già esistente in router dedicati). Verifica template
+rivela però che `GET /planning/api/clients` e `GET /planning/api/jobs`
+sono **attivamente usati** da finance.html / dashboard.html / dam.html /
+planning.html per dropdown e multi-filter (snake-payload più snello).
+
+**Decisione conservativa**: NON rimuovere; marcare deprecated solo i POST
+duplicati (per disincentivare nuovo utilizzo).
+
+**Modifiche**:
+- `POST /planning/api/clients` → `deprecated=True` + docstring che
+  rinvia a `POST /clients/api`. Subset di campi vs il completo
+  (legal_form, sdi_code, pec, città).
+- `POST /planning/api/jobs` già `deprecated=True` (R3 sweep precedente).
+- `GET /planning/api/clients` + `GET /planning/api/jobs` + `PUT
+  /api/jobs/{id}/status` + `GET /api/jobs/{id}` lasciati: usati da UI.
+
+**Backlog R7.x**:
+- Estrarre `app/routers/planning_diag.py` con i 3 endpoint `/diag/*`
+  (booking-raw + scan-duplicate-overlaps + cleanup-all). ~200 righe.
+- Estrarre `app/routers/planning_unavailabilities.py` (~500 righe).
+- Estrazione bookings `app/routers/planning_bookings.py` (la grossa
+  parte, ~1800 righe). Richiede gestione attenta delle helper condivise.
+
+**Smoke**: 303 routes invariato, version 3.5.0-alpha.66.17.3.
+
+---
+
 ## v3.5.0-alpha.66.17.2 — Sprint R6 Step 2: capability decorator registry (11 maggio 2026)
 
 Continua R6. Chiude **audit pattern systemico N**: drift fra

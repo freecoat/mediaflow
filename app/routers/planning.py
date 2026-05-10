@@ -237,7 +237,7 @@ async def list_clients(db: Session = Depends(get_db)):
     return db.query(Client).all()
 
 
-@router.post("/api/clients", dependencies=[RequireEditClients])
+@router.post("/api/clients", dependencies=[RequireEditClients], deprecated=True)
 async def create_client(
     name: str = Form(...),
     contact_email: Optional[str] = Form(None),
@@ -246,6 +246,11 @@ async def create_client(
     address: Optional[str] = Form(None),
     db: Session = Depends(get_db),
 ):
+    """v3.5.0-alpha.66.17.3 (R7) — DEPRECATED: usa POST /clients/api che ha
+    schema completo (legal_form, contact_name, sdi_code, pec, città, ecc).
+    Endpoint duplicato di clients.py:212 con subset minimo dei campi.
+    Mantenuto per compat client legacy; rimuovere quando nessun template
+    chiama più /planning/api/clients POST."""
     c = Client(
         name=name, contact_email=contact_email,
         contact_phone=contact_phone, vat_number=vat_number, address=address,
