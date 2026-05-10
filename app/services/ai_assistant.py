@@ -1640,42 +1640,24 @@ def _h_propose_move_booking(db: Session, data: dict) -> dict:
         nrid = remap.get(a.id, a.resource_id)
         new_values.append((a, ns, ne, nrid))
 
-    # Conflict check per ogni assignment (esclude se stesso)
-    for a, ns, ne, nrid in new_values:
-        c = db.query(BookingAssignment).join(Booking).filter(
-            Booking.status != BookingStatus.cancelled,
-            BookingAssignment.id != a.id,
-            BookingAssignment.resource_id == nrid,
-            BookingAssignment.start_datetime < ne,
-            BookingAssignment.end_datetime > ns,
-        ).first()
-        if c:
-            raise ValueError(
-                f"Conflitto: assignment #{a.id} su risorsa #{nrid} "
-                f"({ns.strftime('%d/%m %H:%M')}→{ne.strftime('%H:%M')}) "
-                f"overlap con assignment #{c.id}"
-            )
-
-    # v3.5.0-alpha.66.14.6 — Slice-lock re-check sui NEW dates.
-    # `_resolve_booking_for_planning` blocca booking che partono già dentro
-    # un periodo fatturato; ma un move può portare un booking FUORI periodo
-    # DENTRO uno nuovo, e questo path non era controllato (audit HIGH #5).
-    # Re-check con `find_blocking_slice_for_dates` sulla finestra che
-    # risulterà DOPO il move. Stessa policy del router planning.
-    if b.job_cost_line_id and new_values:
-        from app.services.billing_slice_guard import (
-            find_blocking_slice_for_dates, slice_lock_message,
+    # v3.5.0-alpha.66.16.2 — Sprint R4: pre-flight check unificato via
+    # booking_mutate.assert_mutation_safe. Sostituisce 2 blocchi inline
+    # (conflict check + slice-lock re-check su NEW dates) con 1 chiamata.
+    # Solleva BookingConflict / SliceLocked → re-raise come ValueError (la
+    # capability AI traduce ValueError in "failure card" UI).
+    from app.services.booking_mutate import (
+        assert_mutation_safe, BookingConflict, SliceLocked,
+        audit_booking_mutation,
+    )
+    try:
+        assert_mutation_safe(db, b, new_values, force_unlock=False)
+    except BookingConflict as e:
+        raise ValueError(e.message)
+    except SliceLocked as e:
+        raise ValueError(
+            "Move bloccato: " + e.message +
+            " — la nuova posizione del booking ricade in periodo già fatturato."
         )
-        new_min_date = min(ns for _a, ns, _ne, _nrid in new_values).date()
-        new_max_date = max(ne for _a, _ns, ne, _nrid in new_values).date()
-        s_new = find_blocking_slice_for_dates(
-            db, b.job_cost_line_id, new_min_date, new_max_date,
-        )
-        if s_new is not None:
-            raise ValueError(
-                "Move bloccato: " + slice_lock_message(s_new) +
-                " — la nuova posizione del booking ricade in periodo già fatturato."
-            )
 
     # Applica
     for a, ns, ne, nrid in new_values:
@@ -1693,13 +1675,18 @@ def _h_propose_move_booking(db: Session, data: dict) -> dict:
         recompute_for_booking(db, b)
     except Exception as _e:
         logger.warning(f"recompute_for_booking failed in propose_move_booking: {_e}")
-    # Audit log (A4)
+    # Audit log centralizzato via booking_mutate (R4)
     try:
-        db.add(BookingChange(
-            booking_id=b.id, kind="ai_move",
-            summary=f"AI move ({int(delta.total_seconds()/60)}min, {sum(1 for a in b.assignments if a.id in remap)} risorse rimappate)",
-            payload={"delta_minutes": int(delta.total_seconds()/60), "resources_changed": sum(1 for a in b.assignments if a.id in remap)},
-        ))
+        audit_booking_mutation(
+            db, b,
+            kind="ai_move",
+            summary=f"AI move ({int(delta.total_seconds()/60)}min, "
+                    f"{sum(1 for a in b.assignments if a.id in remap)} risorse rimappate)",
+            payload={
+                "delta_minutes": int(delta.total_seconds()/60),
+                "resources_changed": sum(1 for a in b.assignments if a.id in remap),
+            },
+        )
     except Exception:
         pass
     return {
@@ -1746,36 +1733,24 @@ def _h_propose_resize_booking(db: Session, data: dict) -> dict:
             f"Resize porta end <= start (delta {dm}min troppo negativo). "
             f"Per cancellare il booking usa propose_delete_booking."
         )
-    # Conflict check sull'estensione
-    c = db.query(BookingAssignment).join(Booking).filter(
-        Booking.status != BookingStatus.cancelled,
-        BookingAssignment.id != last_a.id,
-        BookingAssignment.resource_id == last_a.resource_id,
-        BookingAssignment.start_datetime < new_end,
-        BookingAssignment.end_datetime > last_a.start_datetime,
-    ).first()
-    if c:
+    # v3.5.0-alpha.66.16.2 — Sprint R4: pre-flight unificato per resize.
+    # Costruisco proposed_assignments con SOLO last_a modificato (gli altri
+    # assignment intermedi del booking restano invariati). Combina
+    # conflict-check + slice-lock NEW (estensione dentro periodo billed).
+    from app.services.booking_mutate import (
+        assert_mutation_safe, BookingConflict, SliceLocked,
+        audit_booking_mutation,
+    )
+    proposed = [(last_a, last_a.start_datetime, new_end, last_a.resource_id)]
+    try:
+        assert_mutation_safe(db, b, proposed, force_unlock=False)
+    except BookingConflict as e:
+        raise ValueError(f"Resize crea conflitto: {e.message}")
+    except SliceLocked as e:
         raise ValueError(
-            f"Resize crea conflitto su risorsa #{last_a.resource_id} con assignment #{c.id}"
+            "Resize bloccato: " + e.message +
+            " — l'estensione entra in periodo già fatturato."
         )
-    # v3.5.0-alpha.66.14.6 — Slice-lock re-check sulla nuova fine. Se il
-    # resize allunga il booking dentro un periodo fatturato non ancora
-    # toccato, blocca (audit HIGH #5).
-    if b.job_cost_line_id and dm > 0:
-        from app.services.billing_slice_guard import (
-            find_blocking_slice_for_dates, slice_lock_message,
-        )
-        old_max_date = b.end_datetime.date() if b.end_datetime else last_a.end_datetime.date()
-        new_max_date = new_end.date()
-        if new_max_date > old_max_date:
-            s_new = find_blocking_slice_for_dates(
-                db, b.job_cost_line_id, old_max_date, new_max_date,
-            )
-            if s_new is not None:
-                raise ValueError(
-                    "Resize bloccato: " + slice_lock_message(s_new) +
-                    " — l'estensione entra in periodo già fatturato."
-                )
     last_a.end_datetime = new_end
     b.end_datetime = max(a.end_datetime for a in b.assignments)
     # v3.5.0-alpha.51.1 fix C2: ricomputa cost line. Se booking è done, le
@@ -1785,13 +1760,14 @@ def _h_propose_resize_booking(db: Session, data: dict) -> dict:
         recompute_for_booking(db, b)
     except Exception as _e:
         logger.warning(f"recompute_for_booking failed in propose_resize_booking: {_e}")
-    # Audit log (A4)
+    # Audit log centralizzato via booking_mutate (R4)
     try:
-        db.add(BookingChange(
-            booking_id=b.id, kind="ai_resize",
+        audit_booking_mutation(
+            db, b,
+            kind="ai_resize",
             summary=f"AI resize ({dm:+d}min)",
             payload={"delta_minutes": dm, "resized_assignment_id": last_a.id},
-        ))
+        )
     except Exception:
         pass
     return {

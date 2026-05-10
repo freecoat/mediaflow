@@ -8,6 +8,20 @@
 
 ## Versione corrente
 
+**v3.5.0-alpha.66.16.2** — 11 maggio 2026 — Sprint R4 Step 1: AI handlers migrati
+
+_h_propose_move_booking + _h_propose_resize_booking ora usano
+booking_mutate.assert_mutation_safe + audit_booking_mutation. ~30 righe
+sostituite con 2 chiamate per handler. Bug fix collaterale: slice-lock
+check su resize ora applicato sempre (prima solo dm>0).
+
+R4.2+ migrerà router planning (PUT booking, multi-move, bulk-edit,
+assignment update, delete, restore).
+
+**Smoke**: 302 routes invariato, version 3.5.0-alpha.66.16.2.
+
+---
+
 **v3.5.0-alpha.66.16.1** — 11 maggio 2026 — Sprint R4 Step 0: booking_mutate service
 
 Apre R4. app/services/booking_mutate.py con 3 helper unificati:

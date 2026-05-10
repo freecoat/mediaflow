@@ -1,5 +1,40 @@
 # MediaFlow — Changelog
 
+## v3.5.0-alpha.66.16.2 — Sprint R4 Step 1: migrate AI handlers a booking_mutate (11 maggio 2026)
+
+Continua R4. Migra i 2 AI handlers principali (`_h_propose_move_booking`,
+`_h_propose_resize_booking`) per usare `booking_mutate.assert_mutation_safe`
+al posto dei check inline duplicati.
+
+**Cambio per ogni handler**:
+- BEFORE: ~30 righe (conflict-check loop + slice-lock current/new
+  inline + audit `db.add(BookingChange(...))` manuale)
+- AFTER: 1 chiamata `assert_mutation_safe(db, b, new_values)` + 1
+  chiamata `audit_booking_mutation(db, b, kind=, summary=, payload=)`
+
+**Eccezioni gestite**:
+- `BookingConflict` → `ValueError(f"Conflitto: ...")` (capability AI
+  traduce in failure card UI)
+- `SliceLocked` → `ValueError("Move/Resize bloccato: ...")` con stesso
+  messaggio descrittivo di prima
+
+**Bug-fix collaterale risize**: prima il check slice-lock era applicato
+SOLO se `dm > 0` (resize allunga). Con `assert_mutation_safe` ora il
+check è sempre applicato per coerenza. Edge case "resize accorcia ma
+porta booking dentro slice" precedentemente non coperto.
+
+**Smoke**: import AI handlers OK, 302 routes invariato,
+version 3.5.0-alpha.66.16.2.
+
+**Backlog R4.2+** (sprint successivi):
+- Migrazione PUT /api/bookings/{id} in planning.py (~lines 1627+)
+- Migrazione multi-move (~line 2704)
+- Migrazione bulk-edit (~line 2336)
+- Migrazione assignment update PUT (~line 1939)
+- Migrazione delete + restore (~lines 2900, 3427)
+
+---
+
 ## v3.5.0-alpha.66.16.1 — Sprint R4 Step 0: booking_mutate service (11 maggio 2026)
 
 Apre R4 — Single mutation gate per Booking. Audit pattern systemico O:
