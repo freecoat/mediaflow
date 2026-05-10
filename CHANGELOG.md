@@ -1,5 +1,54 @@
 # MediaFlow — Changelog
 
+## v3.5.0-alpha.66.17.1 — Sprint R6 Step 1: estrai legacy parser (11 maggio 2026)
+
+Continua R6 — Split ai_assistant.py 2287 → 1785 righe (-22% totale dopo
+.17.0+.17.1).
+
+**Nuovo `app/services/ai_legacy_parser.py`** (156 righe):
+- `VALID_ACTION_TYPES` set (13 capability legali per parser legacy)
+- `_balanced_json_at(text, start)` parser balanced-brace
+- `extract_proposed_actions(reply_text)` regex + safe_json_parse + cleanup
+
+**Path legacy**: usato SOLO da provider che non supportano tool_use nativo
+(Ollama/Perplexity). Provider con tool_use (Claude/OpenAI/Gemini) usano
+`ai_loop.advance_loop` che gestisce direttamente `tool_use` blocks.
+
+**`ai_assistant.py`**: blocco 60-180 sostituito con re-export per compat
+call site (router/ai.py importa `VALID_ACTION_TYPES` + `extract_proposed_actions`).
+
+**Identità preservata**: `assert VALID_ACTION_TYPES is legacy_vat` ✓.
+
+**Smoke**: parser estrae 1 azione da text test, 303 routes invariato,
+version 3.5.0-alpha.66.17.1.
+
+---
+
+## v3.5.0-alpha.66.17.0 — Sprint R6 Step 0: estrai ai_context.py (11 maggio 2026)
+
+Apre R6 — Split ai_assistant.py. Audit pattern systemico G "file giganti":
+2287 righe mischiavano 4 responsabilità non correlate.
+
+**Nuovo `app/services/ai_context.py`** (516 righe):
+- `CURRENT_TENANT = 1` (constante modulare R1 stub)
+- `ASSISTANT_SYSTEM_PROMPT` (110 righe markdown system prompt completo)
+- `_short_money(v)` helper formato €
+- `build_context(db, project_id, quote_id, job_id, page)` overview DB
+- `_build_planning_context(db, project_id, job_id)` planning viva
+
+Tutte le query già scoped tenant (R1 lavoro precedente preservato).
+
+**`ai_assistant.py`**: 2339 → 1899 righe (-19%). Blocco righe 50-497
+sostituito con re-export per compat (`build_system_prompt` continua
+a importare `ASSISTANT_SYSTEM_PROMPT` + `build_context` come prima).
+
+**Identità preservata**: `ASSISTANT_SYSTEM_PROMPT is ctx_prompt` ✓
+e `build_context is ctx_build` ✓.
+
+**Smoke**: 303 routes invariato, version 3.5.0-alpha.66.17.0.
+
+---
+
 ## v3.5.0-alpha.66.16.4 — Sprint R10: AI token tracking + cost analytics (11 maggio 2026)
 
 Apre R10 — AI token tracking + rate limit per-user. Step 0+1 in 1 versione.

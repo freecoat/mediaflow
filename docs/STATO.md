@@ -8,6 +8,27 @@
 
 ## Versione corrente
 
+**v3.5.0-alpha.66.17.1** — 11 maggio 2026 — Sprint R6 Step 1: legacy parser estratto
+
+Continua R6 split ai_assistant.py. 2339 → 1785 righe (-23% totale).
+Estratto ai_legacy_parser.py (156 righe) con VALID_ACTION_TYPES +
+extract_proposed_actions + _balanced_json_at. Re-export in ai_assistant
+per compat call site router/ai.py.
+
+**Smoke**: 303 routes invariato, version 3.5.0-alpha.66.17.1.
+
+---
+
+**v3.5.0-alpha.66.17.0** — 11 maggio 2026 — Sprint R6 Step 0: ai_context.py estratto
+
+Apre R6. ai_assistant.py 2287→1899 righe (-19%). Estratto ai_context.py
+con CURRENT_TENANT + ASSISTANT_SYSTEM_PROMPT + build_context +
+_build_planning_context + _short_money. Re-export per compat.
+
+**Smoke**: 303 routes invariato, version 3.5.0-alpha.66.17.0.
+
+---
+
 **v3.5.0-alpha.66.16.4** — 11 maggio 2026 — Sprint R10: AI token tracking
 
 Modello AIUsageLog + tabella prezzi 14 modelli + helper compute_cost_usd
