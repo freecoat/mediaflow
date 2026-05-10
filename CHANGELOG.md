@@ -1,5 +1,81 @@
 # MediaFlow — Changelog
 
+## v3.5.0-alpha.66.8 — Listino lean 2026-Q3 (79 → 43 voci, –46%) + nuovo seed_demo (10 maggio 2026)
+
+Scrematura del listino base secondo mappatura concordata con Matteo:
+accorpamento di varianti vicine in voci-padre con **descrizione modulare**.
+Le specifiche tecniche scendono dalla voce di listino alla descrizione di
+riga in quote, dove il PM le dettaglia per progetto. Il legacy 79 voci
+resta disponibile come preset built-in `legacy_2026q2_full` (α.66.7) per
+ripristino su richiesta.
+
+**Mappatura applicata** (12 categorie invariate):
+
+| Categoria | Da | A | Esempio accorpamento |
+|---|---|---|---|
+| DAILIES | 4 | 2 | sync+QC+upload+MHL → "Dailies workflow" |
+| PICTURE / DI | 7 | 4 | 2K/4K conform → "Online conform"; HDR DV+trim pass → 1 |
+| MASTERING DCP / DCDM | 8 | 3 | INTEROP+SMPTE+festival+KDM → "Mastering DCP standard" |
+| DELIVERABLES VIDEO | 9 | 5 | ProRes 4444 HD/UHD/HDR → 1; H.264 clean/wm/burn → 1; **+IMF/DPP/AS-11 nuovo** |
+| ARCHIVE / TRANSFER | 9 | 4 | 5 LTO → "LTO archive"; USB+CRU+shipping → "Drive consegna" |
+| VFX | 6 | 4 | std+complex → "VFX comp"; roto+paint → "Roto/paint" |
+| SOUND EDIT | 5 | 3 | dialogue+sfx+music edit → "Sound editorial day" |
+| MIX | 4 | 3 | 5.1+7.1 → "Mix surround" |
+| DELIVERABLES SOUND | 8 | 5 | Printmaster+M&E (5.1+7.1) → "Surround printmaster/M&E" |
+| LOCALIZATION | 6 | 4 | EN→IT + IT→EN → "Subtitle translation"; SDH+CC+forced → "Caption authoring" |
+| QC / METADATA | 5 | 3 | Manual HD+UHD → "Manual QC"; metadata+cue → 1 |
+| PROJECT MGMT | 4 | 3 | PM+Coordinator → "Production management" |
+| **TOTALE** | **79** | **43** | **–46%** |
+
+**Pattern descrizione modulare**: ogni voce accorpata ha `description` con
+placeholder che il PM completa nella riga di quote. Esempio per "Mastering
+DCP standard":
+```
+"Mastering Digital Cinema Package con CPL/PKL/naming DCNC.
+ Dettagliare: formato (INTEROP / SMPTE), risoluzione (2K ≈€700, 4K ≈€900),
+ audio (5.1/7.1), encryption (KDM/DKDM), festival pass se richiesto."
+```
+
+**Nuovo file** `app/data/pricelist_presets/lean_2026q3_v1.json` (43 voci
+schema 1.1) generato da `scripts/build_lean_preset.py` (single source of
+truth per lean preset, ri-eseguibile dopo modifiche).
+
+**`scripts/seed_demo.py` rifattorizzato**:
+- Rimosso `LISTINO_GENERICO` letterale (228 righe).
+- Carica direttamente da preset lean via `pricelist_snapshot.apply_snapshot_payload`.
+- Quote demo (Mare Nostrum) aggiornata: voci legacy mappate a quelle lean
+  con specifiche tecniche in `detail` di riga, secondo il nuovo pattern
+  modulare.
+- Smoke test su DB pulito: 4 dept + 12 cat + 43 items + 12 quote lines OK.
+
+**Cosa NON è stato accorpato** (esplicito):
+- Voci con prezzo molto diverso (HDR DV €2200/day vs SDR €1650/day vs
+  trim €600/pc — accorpate trim+HDR perché complementari, ma SDR resta separato).
+- Voci con unità diversa (day vs pc vs min vs TB): mai accorpate, sarebbero
+  semanticamente sbagliate.
+- Mix Atmos separato dal surround (sala diversa, prezzo +30%).
+- Voci uniche per dominio (Foley, ADR, theater rental, DCDM): restano separate.
+
+**Hardcost**: ridiscusse in α.66.9 contestualmente al modello cost-rate
+Resource (employee/freelance/studio) e all'integrazione DAM ↔ JobDeliverable.
+Per ora il lean ne preserva la struttura sulle voci dove c'erano (mix
+surround €500, Atmos €800, drive €90, dubbing €200).
+
+**Smoke**: 287 routes invariato, version `3.5.0-alpha.66.8`. Boot DB reale:
+2 preset caricati (legacy 79 voci + lean 43 voci) come PricelistSnapshot
+kind=preset, no auto-apply al listino corrente.
+
+**Verifica live** (sul DB esistente di Matteo, listino corrente immutato):
+1. `/pricelist` → bottone `📦 Snapshot` → "🎁 Preset built-in" → vedi
+   2 preset disponibili (legacy 79 voci + lean 43 voci).
+2. "Carica come snapshot" sul lean → snapshot creato e visibile in lista.
+3. Per applicare il lean al listino corrente: tab Lista → Ripristina
+   → modalità Replace (con auto-backup del listino legacy automatico).
+4. Per nuove installazioni (re-seed con `[O] reset_business_data` o seed
+   da zero): il listino di default è ora lean (43 voci).
+
+---
+
 ## v3.5.0-alpha.66.7 — Preset listino legacy committato + bootstrap automatico (10 maggio 2026)
 
 Step di sicurezza prima della scrematura α.66.8: il listino corrente

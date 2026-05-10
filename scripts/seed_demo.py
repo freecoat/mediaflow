@@ -1,16 +1,21 @@
 """
-MediaFlow — seed_demo.py (v3.1, listino generico Aprile 2026)
+MediaFlow — seed_demo.py (v3.5.0-alpha.66.8, listino lean 2026-Q3)
 
 Crea database demo con:
 - Tenant default
 - 4 Reparti: DI-Video, VFX, Audio, Commercial
-- LISTINO_GENERICO (~75 voci) — costruito sui pattern ricorrenti dei capitolati
-  reali (A24, Vision, Fremantle, Sky, NBCU TechOps) + workflow standard
-  di post-produzione. Prezzi orientativi mercato italiano 2026.
-- Prezzo singolo per voce (List/Average/Low rimossi: lo sconto cascata
-  riga + categoria + pacchetto sostituisce i tre livelli storici)
-- Keywords inline per matching AI capitolato → voce
-- 2 clienti, 3 progetti, 1 quotazione approvata, 1 job attivo
+- Listino LEAN 2026-Q3 (43 voci) caricato dal preset
+  `app/data/pricelist_presets/lean_2026q3_v1.json` (single source of truth
+  condivisa con UI Listino → Snapshot). Riduzione del 46% dal legacy 79
+  voci tramite accorpamento + descrizione modulare con placeholder.
+  Aggiunge IMF/DPP/AS-11 broadcast moderno.
+- Prezzo singolo per voce (List/Average/Low collassati: lo sconto a cascata
+  riga + categoria + pacchetto sostituisce i tre livelli storici).
+- Keywords inline per matching AI capitolato → voce.
+- 2 clienti, 3 progetti, 1 quotazione approvata, 1 job attivo.
+
+Per ripristinare il listino legacy completo (79 voci): UI → Listino →
+📦 Snapshot → Preset built-in → "Preset: legacy_2026q2_full" → Ripristina.
 """
 import sys, os
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -32,235 +37,18 @@ from app.models import (
 from app.services.auth import hash_password
 
 
-# ── LISTINO GENERICO (Aprile 2026) ────────────────────────────────────
+
+# ── LISTINO GENERICO ──────────────────────────────────────────────────
 #
-# Schema record:
-#   (nome, descrizione, unit_pre, unit, prezzo_eur, hardcost_eur, [keywords])
+# Il listino di default e' definito nel preset committato
+#   app/data/pricelist_presets/lean_2026q3_v1.json (43 voci, schema 1.1)
+# che e' single source of truth condivisa con la UI di Listino → Snapshot.
 #
-# Convenzioni:
-# - "day" = 1 turno = 8 ore (configurabile via UI in fase di quotazione)
-# - "pc" = pezzo / unità (es. 1 DCP, 1 deliverable file)
-# - "min" = minuto del prodotto finale (per voci legate alla durata)
-# - "TB" = unità di archiviazione/trasferimento
-# - "shot" = singola lavorazione VFX
-# - "version" = versione di mastering aggiuntiva (textless, alternative cuts)
-# - "allow" = allowance / forfait
-#
-# Prezzi: orientativi mercato italiano 2026, da affinare per casa di post.
+# Per modificare il listino di default: edita
+#   scripts/build_lean_preset.py + ri-esegui per rigenerare il preset.
 # ──────────────────────────────────────────────────────────────────────
 
-LISTINO_GENERICO = {
-    "DAILIES": {
-        "department": "DI-VIDEO",
-        "items": [
-            ("Dailies sync + color + proxy", "Sincronizzazione audio, color base con LUT, transcoding proxy per editing", "per", "day", 450, None,
-                ["dailies", "sync", "proxy", "ingest", "lut", "transcoding"]),
-            ("Dailies QC", "Controllo qualità rushes, scarti tecnici, segnalazioni al set", "per", "day", 350, None,
-                ["dailies", "qc", "review", "rushes"]),
-            ("Dailies upload piattaforma review", "Upload su Frame.io, Pix, Aspera o equivalente con permessi e log", "just", "allow", 200, None,
-                ["dailies", "upload", "frameio", "pix", "review"]),
-            ("Camera card download e verifica MHL", "Offload card camera con generazione MHL/MD5 e backup ridondante", "per", "day", 280, None,
-                ["cards", "ingest", "mhl", "md5", "verify", "offload"]),
-        ],
-    },
-    "PICTURE / DI": {
-        "department": "DI-VIDEO",
-        "items": [
-            ("Online conform 2K", "Conform 2K da EDL/AAF con riferimento offline, gestione VFX shots", "per", "day", 900, None,
-                ["conform", "2k", "edl", "aaf", "online", "finishing"]),
-            ("Online conform 4K", "Conform 4K da EDL/AAF con riferimento offline e gestione VFX", "per", "day", 1100, None,
-                ["conform", "4k", "edl", "aaf", "online", "finishing"]),
-            ("Color grading 2K SDR", "Sessione color grading 2K Rec.709 con colorist e sala certificata", "per", "day", 1500, None,
-                ["color", "grading", "2k", "sdr", "rec709", "colorist", "di"]),
-            ("Color grading 4K SDR", "Sessione color grading 4K Rec.709 con colorist e sala certificata", "per", "day", 1800, None,
-                ["color", "grading", "4k", "sdr", "rec709", "colorist", "di"]),
-            ("Color grading HDR Dolby Vision", "Sessione HDR P3 D65 PQ con monitor Dolby e generazione metadata Dolby Vision", "per", "day", 2200, None,
-                ["hdr", "dolby", "vision", "grading", "p3", "pq", "metadata"]),
-            ("HDR trim pass", "Trim pass aggiuntivo per target HDR (4000nit / 1000nit / 600nit / 100nit / Rec.709)", "per", "pc", 600, None,
-                ["hdr", "trim", "dolby", "vision", "1000nit", "600nit", "100nit", "rec709"]),
-            ("Versioning / textless creation", "Creazione versione textless o alternative cut con conform aggiuntivo", "per", "version", 400, None,
-                ["textless", "version", "recompositing", "vf", "oar"]),
-        ],
-    },
-    "MASTERING DCP / DCDM": {
-        "department": "DI-VIDEO",
-        "items": [
-            ("DCP INTEROP 2K", "DCP 2K standard INTEROP con CPL, PKL, naming DCNC, 5.1 audio, encryption opzionale", "per", "pc", 700, None,
-                ["dcp", "interop", "2k", "cinema", "distribution", "dcnc"]),
-            ("DCP INTEROP 4K", "DCP 4K standard INTEROP con CPL, PKL, naming DCNC, 5.1 audio", "per", "pc", 900, None,
-                ["dcp", "interop", "4k", "cinema", "distribution", "dcnc"]),
-            ("DCP SMPTE 2K", "DCP 2K standard SMPTE con CPL, PKL, naming DCNC, audio 5.1/7.1", "per", "pc", 700, None,
-                ["dcp", "smpte", "2k", "cinema"]),
-            ("DCP SMPTE 4K", "DCP 4K standard SMPTE con CPL, PKL, naming DCNC, audio 5.1/7.1", "per", "pc", 900, None,
-                ["dcp", "smpte", "4k", "cinema"]),
-            ("DCP SMPTE Bv2.1 Dolby Vision/Atmos", "DCP SMPTE Bv2.1 con Dolby Vision XYZ TIFF e/o Dolby Atmos MXF", "per", "pc", 1500, None,
-                ["dcp", "dolby", "vision", "atmos", "smpte", "bv2.1"]),
-            ("DCDM 16-bit XYZ TIFF", "Digital Cinema Distribution Master 16-bit XYZ TIFF in rulli per archive", "per", "pc", 1200, None,
-                ["dcdm", "xyz", "tiff", "16bit", "master", "archive"]),
-            ("DCP encryption + KDM/DKDM", "Encryption DCP + generazione DKDM (validità lunga) o KDM per singola sala", "per", "pc", 100, None,
-                ["kdm", "dkdm", "encryption", "key", "security"]),
-            ("DCP Festival pass", "DCP dedicato per festival con specifiche differenti dal DCP distribuzione", "per", "pc", 500, None,
-                ["dcp", "festival", "screening"]),
-        ],
-    },
-    "DELIVERABLES VIDEO": {
-        "department": "DI-VIDEO",
-        "items": [
-            ("ProRes 4444 XQ HD master", "Master ProRes 4444 XQ 1080p con head format completo (bars, slate, tone)", "per", "pc", 350, None,
-                ["prores", "4444", "hd", "1080p", "master", "head", "slate"]),
-            ("ProRes 4444 XQ UHD SDR master", "Master ProRes 4444 XQ UHD 3840x2160 Rec.709 con head format", "per", "pc", 500, None,
-                ["prores", "4444", "uhd", "4k", "sdr", "rec709"]),
-            ("ProRes 4444 XQ UHD HDR Dolby Vision", "Master ProRes 4444 XQ UHD P3 D65 PQ con sidecar Dolby Vision XML v2.9", "per", "pc", 700, None,
-                ["prores", "hdr", "dolby", "vision", "p3", "pq", "sidecar"]),
-            ("ProRes 422 HQ HD proxy", "Proxy ProRes 422 HQ 1080p per screener interni o broadcast", "per", "pc", 250, None,
-                ["prores", "422", "hd", "proxy", "screener"]),
-            ("ProRes 422 HQ UHD proxy", "Proxy ProRes 422 HQ UHD per screener", "per", "pc", 350, None,
-                ["prores", "422", "uhd", "proxy"]),
-            ("H.264 screener clean", "Export H.264 1080p15Mbps senza watermark né timecode burn", "per", "pc", 120, None,
-                ["h264", "screener", "mp4", "preview", "clean"]),
-            ("H.264 screener watermarked", "Export H.264 con watermark dinamico per security review", "per", "pc", 180, None,
-                ["h264", "watermark", "security", "screener", "review"]),
-            ("H.264 screener with timecode burn", "Export H.264 con timecode visibile a rulli, conform al DCP", "per", "pc", 150, None,
-                ["h264", "timecode", "burn", "review"]),
-            ("Textless ProRes", "Export ProRes textless backgrounds (titoli, end credits, lower thirds)", "per", "pc", 280, None,
-                ["textless", "prores", "backgrounds", "credits"]),
-        ],
-    },
-    "ARCHIVE / TRANSFER": {
-        "department": "DI-VIDEO",
-        "items": [
-            ("LTO LTFS — Camera Original", "Archive camera original su nastri LTO7/8 LTFS con MD5", "per", "TB", 120, None,
-                ["lto", "ltfs", "camera", "original", "archive", "md5"]),
-            ("LTO LTFS — Graded DPX", "Archive sequenze DPX gradate su LTO7/8 LTFS, una bobina per nastro", "per", "TB", 150, None,
-                ["lto", "ltfs", "dpx", "graded", "di", "archive"]),
-            ("LTO LTFS — Non-graded DPX", "Archive sequenze DPX non gradate (conform output) su LTO7/8 LTFS", "per", "TB", 130, None,
-                ["lto", "ltfs", "dpx", "ungraded", "archive"]),
-            ("LTO LTFS — Dolby Vision Master", "Archive Dolby Vision Master DPX/EXR/TIFF + sidecar XML", "per", "TB", 180, None,
-                ["lto", "dolby", "vision", "dpx", "exr", "archive"]),
-            ("LTO LTFS — ProRes Deliverables backup", "Archive di tutti i ProRes deliverables QC-approved", "per", "TB", 100, None,
-                ["lto", "prores", "backup", "archive", "deliverables"]),
-            ("Hard Drive USB 3.0 (1-2-4 TB)", "Drive consegna deliverables, USB 3.0 autoalimentato exFAT/NTFS", "per", "pc", 150, 80,
-                ["usb", "hdd", "drive", "delivery", "exfat", "ntfs"]),
-            ("CRU drive DCP (EXT3)", "CRU drive formattato EXT3 per consegna fisica DCP", "per", "pc", 180, 100,
-                ["cru", "drive", "dcp", "ext3", "shipping"]),
-            ("Mediashuttle / Aspera transfer", "Trasferimento elettronico via Signiant/Aspera fino a soglia per TB", "per", "TB", 80, None,
-                ["signiant", "mediashuttle", "aspera", "transfer", "upload"]),
-            ("MD5 / checksum generation", "Generazione e verifica checksum MD5 / xxHash su deliverables/archive", "just", "allow", 150, None,
-                ["md5", "xxhash", "checksum", "hash", "verify"]),
-        ],
-    },
-    "VFX": {
-        "department": "VFX",
-        "items": [
-            ("VFX shot composite — standard", "Composite VFX standard: cleanup, screen replacement, semplici comp", "per", "shot", 450, None,
-                ["vfx", "composite", "shot", "comp", "cleanup"]),
-            ("VFX shot composite — complex", "Composite VFX complesso: hero shot, multi-layer, integrazione 3D", "per", "shot", 1200, None,
-                ["vfx", "complex", "hero", "comp", "3d"]),
-            ("VFX plates pull / handles export", "Estrazione plates da DI con maniglie configurabili per VFX vendor", "just", "allow", 600, None,
-                ["vfx", "plates", "pull", "handles", "export"]),
-            ("Title design / motion graphics", "Sessione design titoli, lower thirds, end roller, motion graphics", "per", "day", 1100, None,
-                ["titles", "motion", "graphics", "opening", "credits", "lower thirds"]),
-            ("Rotoscoping", "Rotoscoping per shot (mask, isolation, holdouts)", "per", "shot", 350, None,
-                ["roto", "rotoscope", "mask", "isolation"]),
-            ("Paint / cleanup / stabilization", "Lavorazione paint, cleanup wire/rig, stabilizzazione shot per shot", "per", "shot", 280, None,
-                ["paint", "cleanup", "stabilize", "beauty", "rig", "wire"]),
-        ],
-    },
-    "SOUND EDIT": {
-        "department": "AUDIO",
-        "items": [
-            ("Sound editorial dialogue", "Dialog editing in Pro Tools, ricostruzione tracce, edit-room", "per", "day", 750, None,
-                ["dialogue", "edit", "audio", "protools"]),
-            ("Sound design / FX editing", "Sound design e FX editing con sound designer e libreria", "per", "day", 750, None,
-                ["sfx", "sound", "design", "fx", "editor"]),
-            ("Foley session", "Registrazione foley con artist, engineer e sala foley", "per", "day", 900, None,
-                ["foley", "recording", "footsteps", "props"]),
-            ("ADR session", "Sessione ADR con sound engineer, sala ADR e direttore", "per", "day", 1100, None,
-                ["adr", "looping", "dub", "recording", "vocal"]),
-            ("Music editing", "Music editor in postazione Pro Tools, gestione cue e stems", "per", "day", 700, None,
-                ["music", "edit", "score", "cue", "stems"]),
-        ],
-    },
-    "MIX": {
-        "department": "AUDIO",
-        "items": [
-            ("Re-recording mix 5.1", "Mix theatrical 5.1 con re-recording mixer e sala certificata", "per", "day", 1800, 500,
-                ["mix", "5.1", "surround", "rerecord", "theater"]),
-            ("Re-recording mix 7.1", "Mix theatrical 7.1 con re-recording mixer e sala certificata", "per", "day", 2100, 500,
-                ["mix", "7.1", "surround", "theater"]),
-            ("Re-recording mix Dolby Atmos", "Mix immersivo Dolby Atmos con sala certificata e renderer", "per", "day", 2800, 800,
-                ["atmos", "dolby", "immersive", "mix", "renderer"]),
-            ("Mix theater rental", "Affitto sala mix certificata (Dolby) — solo struttura, no mixer", "per", "day", 900, None,
-                ["theater", "dub", "stage", "room", "rental"]),
-        ],
-    },
-    "DELIVERABLES SOUND": {
-        "department": "AUDIO",
-        "items": [
-            ("5.1 Printmaster", "Printmaster 5.1 conform DCP, head format completo, 24/25 fps", "per", "pc", 600, None,
-                ["5.1", "printmaster", "mix", "master"]),
-            ("5.1 M&E", "Music & Effects 5.1 per doppiaggio internazionale", "per", "pc", 600, None,
-                ["5.1", "me", "music", "effects", "international"]),
-            ("5.1 DME stems", "Dialogue/Music/Effects stems separati 5.1", "per", "pc", 750, None,
-                ["5.1", "dme", "dialogue", "music", "effects", "stems"]),
-            ("7.1 Printmaster", "Printmaster 7.1 conform DCP", "per", "pc", 750, None,
-                ["7.1", "printmaster"]),
-            ("Atmos ADM BWF master", "Master Dolby Atmos ADM BWF immersivo + renderer config", "per", "pc", 1200, None,
-                ["atmos", "adm", "bwf", "immersive", "dolby"]),
-            ("Stereo LtRt fold-down", "Fold-down stereo Lt/Rt da 5.1/7.1, conform al DCP", "per", "pc", 350, None,
-                ["stereo", "ltrt", "fold", "downmix"]),
-            ("Audio description recording IT", "Registrazione audiodescrizione italiana con narratore e mix", "per", "min", 18, None,
-                ["audiodescription", "ad", "accessibility", "narrator"]),
-            ("Audio description script IT", "Stesura script audiodescrizione conforme alle linee guida", "per", "pc", 350, None,
-                ["ad", "script", "audiodescription", "italiano"]),
-        ],
-    },
-    "LOCALIZATION": {
-        "department": "AUDIO",
-        "items": [
-            ("Subtitle translation EN→IT", "Traduzione sottotitoli inglese → italiano con QC linguistico", "per", "min", 15, None,
-                ["subtitle", "translation", "italian", "spotting"]),
-            ("Subtitle translation IT→EN", "Traduzione sottotitoli italiano → inglese con QC linguistico", "per", "min", 18, None,
-                ["subtitle", "translation", "english", "spotting"]),
-            ("Subtitle conformance multi-format", "Conformance sottotitoli a IMSC/STL/SRT/iTT/TimedText XML INTEROP-SMPTE", "per", "pc", 280, None,
-                ["imsc", "stl", "srt", "itt", "timedtext", "subtitle", "conform"]),
-            ("SDH closed caption authoring", "Authoring SDH/CC per non udenti, 32 char/line standard", "per", "pc", 450, None,
-                ["sdh", "cc", "deaf", "accessibility", "closed", "caption"]),
-            ("Forced subtitle creation", "Creazione sottotitoli forzati narrativi (lingue straniere in scena)", "per", "pc", 280, None,
-                ["forced", "subtitle", "narrative", "burn"]),
-            ("Dubbing direction + recording", "Sessione doppiaggio con direttore, attori, fonico, sala", "per", "day", 1500, 200,
-                ["dub", "dubbing", "voiceover", "loop"]),
-        ],
-    },
-    "QC / METADATA": {
-        "department": "DI-VIDEO",
-        "items": [
-            ("Manual QC HD/SDR", "Visione integrale operatore QC con report tecnico (artefatti, audio, sub)", "per", "pc", 280, None,
-                ["qc", "manual", "review", "hd", "sdr"]),
-            ("Manual QC UHD/HDR", "QC manuale UHD/HDR con monitor Dolby Vision e analisi metadata", "per", "pc", 450, None,
-                ["qc", "manual", "uhd", "hdr", "review", "dolby"]),
-            ("Auto-QC Baton/Vidcheck", "QC automatico Baton/Vidcheck/Aurora con report XML", "per", "pc", 120, None,
-                ["baton", "vidcheck", "aurora", "autoqc", "automated"]),
-            ("Metadata XML / TechOps template", "Compilazione metadata XML Sky/RAI/NBCU TechOps/IMF/IMSC", "per", "pc", 280, None,
-                ["metadata", "xml", "techops", "gtm", "sidecar", "imf"]),
-            ("Music Cue Sheet preparation", "Compilazione Music Cue Sheet con autori, editori, ISWC", "per", "pc", 350, None,
-                ["cue", "sheet", "music", "rights", "iswc"]),
-        ],
-    },
-    "PROJECT MANAGEMENT": {
-        "department": "COMMERCIAL",
-        "items": [
-            ("Project Management", "Project manager dedicato: coordinamento, scheduling, deliverables tracking", "per", "day", 700, None,
-                ["project", "manager", "pm", "coordination", "tracking"]),
-            ("Production Coordination", "Production coordinator: liaison con vendor, calendari, materiali", "per", "day", 450, None,
-                ["coordinator", "production", "tpr", "liaison"]),
-            ("Quote / estimate preparation", "Preparazione quotazione con analisi capitolato e stima risorse", "per", "pc", 450, None,
-                ["quote", "estimate", "bid", "preventivo"]),
-            ("Travel / shipping allowance", "Forfait spese di trasferimento personale e shipping deliverables", "just", "allow", 350, None,
-                ["travel", "shipping", "courier", "transfer"]),
-        ],
-    },
-}
+
 
 
 DEFAULT_DEPARTMENTS = [
@@ -311,34 +99,19 @@ def seed():
         db.add(d); db.flush()
         departments[code] = d
 
-    # ── 4. LISTINO GENERICO ───────────────────────────────────
-    cat_objs = {}
-    items_count = 0
-    for idx, (cat_name, cat_data) in enumerate(LISTINO_GENERICO.items()):
-        cat = PriceCategory(
-            tenant_id=1, name=cat_name, sort_order=(idx + 1) * 10,
-        )
-        db.add(cat); db.flush()
-        cat_objs[cat_name] = cat
-        dept_code = cat_data["department"]
-        dept_id = departments[dept_code].id
-
-        for (name, desc, unit_pre, unit, price, hardcost, keywords) in cat_data["items"]:
-            db.add(PriceItem(
-                tenant_id=1,
-                category_id=cat.id,
-                department_id=dept_id,
-                name=name, description=desc,
-                unit=unit, unit_pre=unit_pre,
-                # Prezzo singolo: list/average/low collassati. Lo sconto a cascata
-                # (riga + categoria + pacchetto) sostituisce i tre livelli storici.
-                price_list=price,
-                price_average=None,
-                price_low=None,
-                hardcosts=hardcost,
-                keywords=keywords,
-            ))
-            items_count += 1
+    # ── 4. LISTINO LEAN 2026-Q3 (v3.5.0-alpha.66.8) ────────────
+    # Il listino di default per nuove installazioni viene caricato dal preset
+    # `lean_2026q3_v1.json` in app/data/pricelist_presets/. Single source of
+    # truth: lo stesso preset è esposto anche in UI (Listino → Snapshot →
+    # Preset built-in) ed è il template che il PM applicherà a un tenant esistente
+    # quando vorrà sostituire un listino legacy con quello scremato.
+    from app.services import pricelist_snapshot as _plsnap
+    payload = _plsnap.load_preset_payload("lean_2026q3_v1.json")
+    stats = _plsnap.apply_snapshot_payload(
+        db, tenant_id=1, payload=payload, mode="merge", auto_backup=False,
+    )
+    items_count = stats["items_created"] + stats["items_updated"]
+    categories_count = stats["categories_created"] + stats["categories_updated"]
     db.flush()
 
     # ── 5. CLIENTI ────────────────────────────────────────────
@@ -522,21 +295,22 @@ def seed():
             price_item_id=item.id,
         )
 
+    # Quote demo aggiornata per voci lean (v3.5.0-alpha.66.8). Le specifiche
+    # tecniche scendono in `detail` (descrizione di riga) anziché nel nome
+    # della voce listino, secondo il pattern di descrizione modulare del lean.
     qlines = [
-        ql(10,  "Online conform 4K", 3),
-        ql(20,  "Color grading 4K SDR", 5),
-        ql(30,  "DCP INTEROP 4K", 1, "VF italiana, INTEROP 24fps"),
-        ql(40,  "DCP encryption + KDM/DKDM", 1),
-        ql(50,  "ProRes 4444 XQ UHD SDR master", 1, "Master per archive e versions"),
-        ql(60,  "H.264 screener watermarked", 86),
-        ql(70,  "Sound editorial dialogue", 6),
-        ql(80,  "Foley session", 2),
-        ql(90,  "Re-recording mix 7.1", 8, "Mix theatrical 7.1", 500),
-        ql(100, "5.1 Printmaster", 1),
-        ql(110, "5.1 M&E", 1),
-        ql(120, "Manual QC UHD/HDR", 1),
-        ql(130, "LTO LTFS — Graded DPX", 4),
-        ql(140, "Project Management", 25),
+        ql(10,  "Online conform", 3, "4K, frame rate 24fps, sorgente Avid"),
+        ql(20,  "Color grading SDR", 5, "4K Rec.709"),
+        ql(30,  "Mastering DCP standard", 1, "INTEROP 4K, VF italiana 24fps, encryption KDM"),
+        ql(40,  "Master ProRes 4444 XQ", 1, "UHD SDR Rec.709 — master archive e versions"),
+        ql(50,  "Screener H.264 / H.265", 86, "H.264 1080p con watermark dinamico (security review)"),
+        ql(60,  "Sound editorial day", 6, "Dialogue editing"),
+        ql(70,  "Foley session", 2),
+        ql(80,  "Re-recording mix surround", 8, "Mix theatrical 7.1", 500),
+        ql(90,  "Surround printmaster / M&E", 2, "Printmaster 5.1 + M&E 5.1"),
+        ql(100, "Manual QC", 1, "UHD/HDR con monitor Dolby Vision"),
+        ql(110, "LTO LTFS archive", 4, "DPX graded — TB"),
+        ql(120, "Production management", 25, "PM senior — coordinamento + scheduling"),
     ]
     for l in qlines: db.add(l)
     db.flush()
@@ -615,7 +389,7 @@ def seed():
     print(f"✓ Seed v3.1 (listino generico Aprile 2026) completato")
     print(f"  - Tenant default")
     print(f"  - {len(DEFAULT_DEPARTMENTS)} reparti: DI-Video, VFX, Audio, Commercial")
-    print(f"  - {items_count} voci listino in {len(LISTINO_GENERICO)} categorie (prezzi mercato IT 2026)")
+    print(f"  - {items_count} voci listino in {categories_count} categorie (preset lean_2026q3_v1, mercato IT 2026)")
     print(f"  - 1 delivery template di esempio")
     print(f"  - 3 progetti (1 con quote→job, 1 senza job — scenario reverse-flow)")
     print(f"  - 1 quotazione approvata, 1 job (Mare Nostrum)")

@@ -8,6 +8,37 @@
 
 ## Versione corrente
 
+**v3.5.0-alpha.66.8** — 10 maggio 2026 — Listino lean 79 → 43 (–46%) + seed_demo rifattorizzato
+
+Scrematura del listino base secondo mappatura concordata. Le specifiche
+tecniche scendono dalla voce di listino alla **descrizione di riga in
+quote** (pattern modulare con placeholder). Il listino legacy 79 voci
+resta disponibile come preset `legacy_2026q2_full` (α.66.7) per restore.
+
+Aggiunto preset `lean_2026q3_v1.json` (43 voci) generato da
+`scripts/build_lean_preset.py`. `scripts/seed_demo.py` rifattorizzato per
+caricare il preset lean (single source of truth). Quote demo aggiornata
+con voci lean + specifiche tecniche in `detail` di riga.
+
+Hardcost preservate dove c'erano nel legacy (mix surround €500, Atmos
+€800, drive €90, dubbing €200) ma **da ridiscutere in α.66.9** insieme
+al modello cost-rate Resource e all'estensione DAM per asset fisici
+(LTO/HDD/CRU/Blu-Ray vendibili al cliente — vedi memoria
+`project_dam_physical_assets`).
+
+**Smoke**: 287 routes invariato, version 3.5.0-alpha.66.8.
+Boot DB reale: 2 preset caricati come kind=preset, no auto-apply.
+Smoke seed_demo su DB pulito: 4 dept + 12 cat + 43 items + 12 quote lines.
+
+**Cosa fa Matteo per applicare il lean al suo DB esistente**:
+1. `/pricelist` → bottone `📦 Snapshot` → "🎁 Preset built-in" →
+   "Preset: lean_2026q3_v1" → "Carica come snapshot"
+2. Tab Lista → Ripristina → modalità Replace (auto-backup automatico)
+3. Verifica con un test su una quote di prova; se non torna, ripristina
+   il legacy con un click.
+
+---
+
 **v3.5.0-alpha.66.7** — 10 maggio 2026 — Preset legacy committato + bootstrap
 
 Listino corrente (79 voci, 12 cat, 4 dep) salvato in repo come preset
@@ -29,8 +60,8 @@ strategica con Matteo (10 maggio). Sequenza concordata:
 |---|---|---|
 | α.66.6 | Backup/restore listino (snapshot DB + UI dedicata) | ✅ chiuso |
 | α.66.7 | Snapshot legacy committato come preset built-in | ✅ chiuso |
-| α.66.8 | Semplificazione listino base (79 → ~38 voci, descrizione modulare) | 🔜 next |
-| α.66.9 | Modello `JobDeliverable` + cost-rate Resource (employee/freelance/studio) | 🔜 |
+| α.66.8 | Semplificazione listino base (79 → 43 voci, –46%, descrizione modulare) | ✅ chiuso |
+| α.66.9 | Modello `JobDeliverable` + cost-rate Resource (employee/freelance/studio) + estensione DAM asset fisici | 🔜 next |
 | α.66.10+ | UI deliverable + asset library bridge + copilot QC + cost report split (cliente vs interno) | 🔜 |
 
 **Decisioni architetturali fissate (10 maggio)** per i prossimi step:
