@@ -13,10 +13,12 @@ from app.models import (
     Booking, BookingAssignment, BookingExecutionStatus, BookingOvertimeStatus, BookingStatus,
     Resource, WorkingHoursPolicy,
     BillingBatch, BillingBatchStatus, JCLBillingStatus,
+    JobDeliverable,
 )
 from app.services.booking_cost import compute_assignment_breakdown, BookingBreakdown
 from app.services.working_hours import get_holidays
 from app.services.pdf_export import generate_client_cost_report_pdf
+from app.services.cost_line_sync import is_time_based_unit
 
 router = APIRouter(prefix="/cost-report", tags=["cost_report"])
 
@@ -119,8 +121,14 @@ def _resource_policy_for_cost(resource: Resource, db: Session) -> Optional[Worki
     ).first()
 
 
-def _bookings_hours_cost(job_id: int, db: Session) -> dict:
+def _bookings_hours_cost(job_id: int, db: Session, *, client_view: bool = False) -> dict:
     """v3.4.33 — ore + costo derivati dai BOOKING del job (non più Timesheet).
+
+    Se `client_view=True` (v3.5.0-alpha.66.11) esclude i booking attribuiti a
+    JobDeliverable la cui JCL è non-time-based (pc/min/TB/shot/version/allow):
+    quelle ore sono "produzione interna del file" e diventano hardcost interno
+    (vedi `deliverable_hardcost_internal` nel response). Il cliente NON le vede
+    come monte ore fatturabili. Default False = vista interna (tutto).
 
     Ritorna:
       - total_hours: ore totali pianificate (escluse cancellate e pool not_done)
@@ -128,6 +136,25 @@ def _bookings_hours_cost(job_id: int, db: Session) -> dict:
       - breakdown_total: BookingBreakdown aggregato
       - by_resource: lista breakdown per-risorsa con rate e costo
     """
+    # v3.5.0-alpha.66.11: pre-calcolo l'insieme dei deliverable_id da escludere
+    # (deliverable la cui JCL associata è non-time-based)
+    excluded_dlv_ids: set[int] = set()
+    if client_view:
+        from app.services.cost_line_sync import is_time_based_unit
+        deliverables = (
+            db.query(JobDeliverable, JobCostLine)
+            .outerjoin(JobCostLine, JobDeliverable.job_cost_line_id == JobCostLine.id)
+            .filter(
+                JobDeliverable.job_id == job_id,
+                JobDeliverable.deleted_at.is_(None),
+            )
+            .all()
+        )
+        for d, jcl in deliverables:
+            # Deliverable senza JCL: assumiamo non-billable (esclude dal cliente)
+            if jcl is None or not is_time_based_unit(jcl.unit):
+                excluded_dlv_ids.add(d.id)
+
     bookings = (
         db.query(Booking).options(
             joinedload(Booking.assignments).joinedload(BookingAssignment.resource),
@@ -138,6 +165,8 @@ def _bookings_hours_cost(job_id: int, db: Session) -> dict:
         )
         .all()
     )
+    if client_view and excluded_dlv_ids:
+        bookings = [b for b in bookings if b.job_deliverable_id not in excluded_dlv_ids]
     totals = BookingBreakdown()
     by_resource: dict[int, dict] = {}
     holidays_cache: dict = {}
@@ -293,6 +322,55 @@ async def job_cost_report(job_id: int, db: Session = Depends(get_db)):
     total_accrued = sum(l.total_accrued for l in job.cost_lines)
     total_expected = sum(l.total_expected for l in job.cost_lines)
 
+    # v3.5.0-alpha.66.11 — Hardcost ORE DELIVERABLE per cost report INTERNO.
+    # Per ogni JobDeliverable del job, somma (booking.hours × Resource.internal_cost_hourly).
+    # Aggregato per JobCostLine per mostrare il valore per riga + totale job.
+    # Il cost report CLIENTE non vede questo dato (solo qty + descrizione).
+    deliverables = (
+        db.query(JobDeliverable)
+        .filter(
+            JobDeliverable.job_id == job_id,
+            JobDeliverable.deleted_at.is_(None),
+        )
+        .all()
+    )
+    deliverable_hardcost_by_jcl: dict[int, float] = {}
+    deliverable_hours_by_jcl: dict[int, float] = {}
+    deliverable_count_by_jcl: dict[int, int] = {}
+    total_deliverable_hardcost = 0.0
+    total_deliverable_hours = 0.0
+    for d in deliverables:
+        # Conta i deliverable per JCL (anche se ore=0)
+        if d.job_cost_line_id:
+            deliverable_count_by_jcl[d.job_cost_line_id] = (
+                deliverable_count_by_jcl.get(d.job_cost_line_id, 0) + 1
+            )
+        # Aggrega ore + costo dai booking attribuiti
+        bks_d = (
+            db.query(Booking)
+            .filter(
+                Booking.job_deliverable_id == d.id,
+                Booking.status != BookingStatus.cancelled,
+            )
+            .all()
+        )
+        for b in bks_d:
+            for a in (b.assignments or []):
+                if not (a.start_datetime and a.end_datetime):
+                    continue
+                hours = (a.end_datetime - a.start_datetime).total_seconds() / 3600.0
+                cost_h = a.resource.internal_cost_hourly if a.resource else None
+                eur = hours * (cost_h or 0.0)
+                total_deliverable_hours += hours
+                total_deliverable_hardcost += eur
+                if d.job_cost_line_id:
+                    deliverable_hardcost_by_jcl[d.job_cost_line_id] = (
+                        deliverable_hardcost_by_jcl.get(d.job_cost_line_id, 0.0) + eur
+                    )
+                    deliverable_hours_by_jcl[d.job_cost_line_id] = (
+                        deliverable_hours_by_jcl.get(d.job_cost_line_id, 0.0) + hours
+                    )
+
     # v3.5.0-alpha.60: 3 colonne basate su slice. Pre-fetch in singola query.
     from app.services.billing_slice_guard import billed_locked_bulk, three_column_view
     line_ids = [l.id for l in job.cost_lines]
@@ -419,6 +497,12 @@ async def job_cost_report(job_id: int, db: Session = Depends(get_db)):
             "margin": round(margin, 2),
             "invoiced": round(invoiced, 2),
             "paid": round(paid, 2),
+            # v3.5.0-alpha.66.11 — Hardcost ore deliverable (solo INTERNO).
+            # Cliente non vede. Da mostrare in /cost-report e /jobs/{id} solo
+            # con permesso view_finance.
+            "deliverable_hardcost_internal": round(total_deliverable_hardcost, 2),
+            "deliverable_hours_internal": round(total_deliverable_hours, 2),
+            "deliverable_count": len(deliverables),
         },
         # v3.4.33 — Breakdown per fascia + per-risorsa dai booking
         "bookings_breakdown": bk_data["breakdown_total"],
@@ -426,6 +510,14 @@ async def job_cost_report(job_id: int, db: Session = Depends(get_db)):
         "cost_lines": [
             {
                 "id": l.id, "description": l.description, "unit": l.unit,
+                # v3.5.0-alpha.66.11 — Categorizzazione unit per cost report split.
+                # time-based (day/hr) → mostra ore al cliente. non-time (pc/min/TB/...)
+                # → cliente vede solo qty + descrizione, no monte ore.
+                "unit_is_time_based": is_time_based_unit(l.unit),
+                # Hardcost ore deliverable attribuiti a questa JCL (interno only)
+                "deliverable_hardcost_internal": round(deliverable_hardcost_by_jcl.get(l.id, 0.0), 2),
+                "deliverable_hours_internal": round(deliverable_hours_by_jcl.get(l.id, 0.0), 2),
+                "deliverable_count": deliverable_count_by_jcl.get(l.id, 0),
                 "quantity_quoted": l.quantity_quoted,
                 "quantity_actual": l.quantity_actual,
                 # v3.5.0-alpha.55: quantity_planned derivata (qty_planned =
@@ -787,6 +879,26 @@ async def discard_all_not_done_pool(job_id: int, db: Session = Depends(get_db)):
 # NIENTE rate risorsa, NIENTE costi/margine. Solo cosa serve al cliente per
 # verificare l'avanzamento del lavoro.
 
+async def _client_filtered_report(job_id: int, db: Session) -> dict:
+    """v3.5.0-alpha.66.11 — Vista cliente del cost report: ricalcola
+    `bookings_hours` escludendo le ore dei booking attribuiti a deliverable
+    non-time-based (produzione interna del file → hardcost interno, no fatt.
+    al cliente). Rimuove `deliverable_hardcost_internal` e altri campi
+    internal-only dal `summary`. Riusato da PDF/CSV/XLSX cliente."""
+    report = await job_cost_report(job_id, db)
+    bk_client = _bookings_hours_cost(job_id, db, client_view=True)
+    if "summary" in report:
+        report["summary"] = dict(report["summary"])
+        report["summary"]["bookings_hours"] = bk_client["total_hours"]
+        report["summary"]["bookings_hours_cost"] = bk_client["total_cost"]
+        for k in ("deliverable_hardcost_internal", "deliverable_hours_internal",
+                  "deliverable_count", "estimated_cost", "margin"):
+            report["summary"].pop(k, None)
+    report["bookings_breakdown"] = bk_client["breakdown_total"]
+    report["bookings_by_resource"] = bk_client["by_resource"]
+    return report
+
+
 @router.get("/api/job/{job_id}/client-pdf")
 async def cost_report_client_pdf(
     job_id: int,
@@ -804,7 +916,7 @@ async def cost_report_client_pdf(
     v3.5.0-alpha.55: parametro `vista` (now|forecast). Now = Over/Under
     su maturato (base fatturazione). Forecast = su stima (base report).
     """
-    report = await job_cost_report(job_id, db)
+    report = await _client_filtered_report(job_id, db)
     pdf_bytes = generate_client_cost_report_pdf(
         report, rendiconto=bool(rendiconto), vista=vista,
     )
@@ -921,7 +1033,7 @@ async def cost_report_client_csv(
     """Export CSV (UTF-8 + BOM per Excel) del cost report cliente."""
     import csv
     import io
-    report = await job_cost_report(job_id, db)
+    report = await _client_filtered_report(job_id, db)
     header, rows = _client_export_rows(report, bool(rendiconto), vista=vista)
     buf = io.StringIO()
     buf.write("﻿")  # BOM per Excel
@@ -956,7 +1068,7 @@ async def cost_report_client_xlsx(
     from openpyxl import Workbook
     from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
     from io import BytesIO
-    report = await job_cost_report(job_id, db)
+    report = await _client_filtered_report(job_id, db)
     header, rows = _client_export_rows(report, bool(rendiconto), vista=vista)
     wb = Workbook()
     ws = wb.active

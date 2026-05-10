@@ -8,6 +8,32 @@
 
 ## Versione corrente
 
+**v3.5.0-alpha.66.11** — 10 maggio 2026 — Cost report split cliente vs interno
+
+Chiude il loop hardcost α.66.9. Le ore booking attribuiti a deliverable
+non-time-based (DCP/ProRes/LTO) contano come hardcost interno (cliente
+NON le vede); quelle attribuite a JCL time-based (color grading day) sono
+fatturate al cliente come prima.
+
+**Helper**: `is_time_based_unit(unit)` in cost_line_sync.py.
+
+**API**: `/cost-report/api/job/{id}` espone
+`summary.deliverable_hardcost_internal/hours_internal/count` (totali job)
++ per ogni cost_line: `unit_is_time_based` + `deliverable_hardcost_internal`
++ `deliverable_hours_internal` + `deliverable_count`.
+
+**`_bookings_hours_cost(client_view=True)`**: esclude booking attribuiti a
+deliverable non-billable. `_client_filtered_report()` usato da PDF/CSV/XLSX
+cliente — rimuove anche `estimated_cost`, `margin` per sicurezza.
+
+**UI `/jobs/{id}`**: nuova card KPI viola "Hardcost ore deliverable INTERNO"
+visibile solo a finance, mostra € + ore + count quando ci sono deliverable.
+
+**Smoke E2E**: 14h totali (4 DCP + 2 orfano + 8 color) → vista interna
+mostra €165.06 hardcost, vista cliente solo 8h color.
+
+---
+
 **v3.5.0-alpha.66.10** — 10 maggio 2026 — UI cost-rate Resource con live preview
 
 Modal `/resources` esteso con sezione "💰 Costo interno" + dropdown
@@ -119,10 +145,11 @@ strategica con Matteo (10 maggio). Sequenza concordata:
 | α.66.7 | Snapshot legacy committato come preset built-in | ✅ chiuso |
 | α.66.8 | Semplificazione listino base (79 → 43 voci, –46%, descrizione modulare) | ✅ chiuso |
 | α.66.9 | Modello `JobDeliverable` + cost-rate Resource + DAM digital/physical separato + naming helper Netflix/ISDCF | ✅ chiuso |
-| α.66.10 | UI cost-rate Resource con live preview (necessaria per testare hardcost α.66.9) | ✅ chiuso |
-| α.66.11 | UI deliverable kanban + edit modal + bridge DAM digital/physical | 🔜 next |
-| α.66.12 | Tool generazione nomi file completo + CRUD PhysicalAsset UI | 🔜 |
-| α.66.13 | Copilot QC (ffprobe + LLM contro spec_json) + cost report split cliente vs interno | 🔜 |
+| α.66.10 | UI cost-rate Resource con live preview | ✅ chiuso |
+| α.66.11 | Cost report split cliente vs interno (hardcost ore deliverable solo interno) | ✅ chiuso |
+| α.66.12 | PhysicalAsset CRUD UI | 🔜 next |
+| α.66.13 | Branding aziendale (logo + intestazione applicati a tutti i documenti) | 🔜 |
+| α.66.14+ | UI deliverable kanban + edit completo + bridge DAM + copilot QC | 🔜 |
 
 **Decisioni architetturali fissate (10 maggio)** per i prossimi step:
 - **Deliverable ≠ "no ore"**: anche un DCP/ProRes ha ore di produzione che vanno

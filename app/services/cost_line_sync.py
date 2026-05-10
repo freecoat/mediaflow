@@ -34,6 +34,21 @@ from sqlalchemy import and_
 HOURS_PER_DAY = 8.0
 TIME_UNITS_HOUR = {"hr", "ore", "hour", "h"}
 TIME_UNITS_DAY = {"day", "giorno", "giornate", "giornata", "d"}
+# v3.5.0-alpha.66.11 — Categorizzazione delle unità per cost report split
+# cliente vs interno. Le voci TIME-based mostrano monte ore al cliente
+# (sessioni di lavoro). Le voci NON-time-based (deliverable, materiale,
+# forfait) NON mostrano ore al cliente — il loro hardcost interno è il
+# costo orario delle risorse che le hanno prodotte (ore booking
+# attribuite × Resource.internal_cost_hourly).
+TIME_UNITS = TIME_UNITS_HOUR | TIME_UNITS_DAY
+
+
+def is_time_based_unit(unit: Optional[str]) -> bool:
+    """True se l'unità implica monte ore (day/hr/h/ore...). False per
+    deliverable/materiale/forfait (pc/min/TB/GB/shot/version/allow/lump)."""
+    if not unit:
+        return False
+    return unit.strip().lower() in TIME_UNITS
 
 
 def _booking_hours_linear(b) -> float:

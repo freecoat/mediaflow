@@ -1,5 +1,64 @@
 # MediaFlow — Changelog
 
+## v3.5.0-alpha.66.11 — Cost report split cliente vs interno (10 maggio 2026)
+
+Chiude il loop dell'hardcost α.66.9: le ore dei booking attribuiti a
+deliverable non-time-based (DCP/ProRes/LTO/screener) sono ora "produzione
+interna del file" → contano come **hardcost interno** nel cost report
+finance, ma **non** vengono mostrate al cliente come monte ore fatturabili.
+Le voci time-based (color grading day, mix day) continuano a fatturare ore.
+
+**Helper centralizzato** in `app/services/cost_line_sync.py`:
+- `is_time_based_unit(unit)` — True per `day/hr/h/ore`, False per
+  `pc/min/TB/GB/shot/version/allow/lump/...`.
+
+**`/cost-report/api/job/{id}` arricchito**:
+- `summary.deliverable_hardcost_internal` — totale `Σ ore × Resource.internal_cost_hourly` per booking attribuiti a deliverable.
+- `summary.deliverable_hours_internal` — ore totali deliverable.
+- `summary.deliverable_count` — numero di JobDeliverable attivi del job.
+- Per ogni `cost_lines[i]`:
+  - `unit_is_time_based` flag
+  - `deliverable_hardcost_internal` (€) per la riga
+  - `deliverable_hours_internal` (h) per la riga
+  - `deliverable_count` per la riga
+
+**`_bookings_hours_cost(client_view=True)` nuovo flag**:
+- Esclude i booking attribuiti a deliverable la cui JCL è **non-time-based**
+  (o senza JCL = considerato non-billable).
+- Vista interna (default `client_view=False`) include tutto come prima.
+
+**`_client_filtered_report()` nuovo helper**:
+- Riusa `job_cost_report` e ricalcola `bookings_hours` con `client_view=True`.
+- Rimuove dal `summary` i campi internal-only (`deliverable_hardcost_internal`,
+  `estimated_cost`, `margin`) per sicurezza.
+- Riusato da `/client-pdf`, `/client-csv`, `/client-xlsx`.
+
+**UI `/jobs/{id}`** (solo con permesso `view_finance`):
+- Nuova card KPI viola "Hardcost ore deliverable INTERNO" con €+ore+count
+  visibile solo se ci sono deliverable attivi. Tooltip esplicito:
+  "Costo orario × ore booking attribuiti a deliverable. Cliente NON lo vede".
+
+**Smoke E2E** (3 booking: 4h DCP + 2h orfano + 8h color):
+- Vista interna: `bookings_hours=14h`, `deliverable_hardcost_internal=€165.06`
+  (6h × €27.51 employee), per riga `Mastering DCP` hardcost €110.04 (4h × €27.51).
+- Vista cliente: `bookings_hours=8h` (esclusi 4h DCP + 2h orfano).
+- Client PDF generato (200, 3046 bytes).
+
+**Smoke**: 295 routes invariato, version `3.5.0-alpha.66.11`.
+
+**Verifica live**:
+1. Setup: `/resources` → configura cost_type su una risorsa (Dipendente o Freelance).
+2. Crea un deliverable in `/jobs/{id}` legato a JCL non-time (es. "Mastering DCP", unit pc).
+3. Crea booking 4h attribuito al deliverable.
+4. `/jobs/{id}` → nuova card "Hardcost ore deliverable INTERNO" mostra €+h.
+5. Crea altro booking 8h attribuito a JCL time-based (color grading day).
+6. Client PDF (`📄 Esporta PDF cliente`) → "Riepilogo ore lavorate" mostra
+   solo 8h (no 4h DCP).
+7. `/cost-report/api/job/{id}` da admin → `summary.bookings_hours=12h`,
+   `deliverable_hardcost_internal=€110.04`.
+
+---
+
 ## v3.5.0-alpha.66.10 — UI cost-rate Resource con live preview (10 maggio 2026)
 
 UI per popolare i campi cost-rate introdotti in α.66.9 (modello DB).

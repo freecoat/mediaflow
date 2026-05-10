@@ -111,6 +111,13 @@
     <div class="lbl">Extra</div>
     <div class="val" id="h-extra">—<span class="unit"></span></div>
   </div>
+  {% if can_view_finance(request.state.current_user) %}
+  <!-- v3.5.0-alpha.66.11 — Hardcost ore deliverable (solo finance) -->
+  <div class="hours-card" id="card-deliverable-hardcost" style="border-left-color:#a855f7; display:none;">
+    <div class="lbl" title="Costo orario × ore booking attribuiti a deliverable. Cliente NON lo vede.">Hardcost ore deliverable <span style="font-size:9px; color:#a855f7;">INTERNO</span></div>
+    <div class="val" id="h-deliverable-hardcost">—<span class="unit" style="font-size:11px;">€ <span id="h-deliverable-hours">0</span>h</span></div>
+  </div>
+  {% endif %}
 </div>
 
 <!-- ── Tabella lavorazioni ─────────────────────────────────── -->
@@ -368,9 +375,31 @@ async function loadJob() {
     renderTotals(currentJob.totals);
     renderLines(currentJob.cost_lines);
     renderUnassigned(currentJob.totals);
+    loadDeliverableHardcost();
   } catch(e) {
     toast(e.message || 'Errore caricamento job', 'error');
   }
+}
+
+async function loadDeliverableHardcost() {
+  // Solo se la card è renderizzata (= utente ha view_finance)
+  const card = document.getElementById('card-deliverable-hardcost');
+  if (!card) return;
+  try {
+    const cr = await api('GET', `/cost-report/api/job/${JOB_ID}`);
+    const sum = cr.summary || {};
+    const eur = sum.deliverable_hardcost_internal || 0;
+    const hrs = sum.deliverable_hours_internal || 0;
+    const cnt = sum.deliverable_count || 0;
+    if (cnt > 0 || eur > 0) {
+      card.style.display = '';
+      const eurFmt = new Intl.NumberFormat('it-IT', {style:'currency', currency:'EUR', maximumFractionDigits:0}).format(eur);
+      document.getElementById('h-deliverable-hardcost').innerHTML =
+        `${eurFmt}<span class="unit" style="font-size:11px;"> · <span id="h-deliverable-hours">${hrs.toFixed(1)}</span>h · ${cnt} consegne</span>`;
+    } else {
+      card.style.display = 'none';
+    }
+  } catch(e) { /* silent */ }
 }
 
 function renderTotals(t) {
