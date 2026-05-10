@@ -3266,10 +3266,18 @@ Cantiere "overlay prenotato vs effettivo + adeguamento" (era v3.4.15 nel plan pr
 
 ## Prossimo step concordato
 
-> **🔖 ULTIMO COMMENTO (11 mag 2026 sera) — punto di riapertura**
+> **🔖 ULTIMO COMMENTO (11 mag 2026 notte tarda) — punto di riapertura**
 
-**Sessione 11 maggio chiusa**: **21 commit α.66.14 → α.66.16.3 pushati su
-origin/main**. Maratona consolidamento post-audit profondo.
+**Sessione 11 maggio chiusa (estesa)**: **25 commit α.66.14 → α.66.17.1
+pushati su origin/main**. Audit profondo + consolidamento + R10 AI tracking
++ R6 split ai_assistant.
+
+Estensione della sessione 11 maggio (Matteo: "Procedi. Poi push, salvi
+tutto e riprendiamo domani"): aggiunti 3 commit oltre i 22 del giro
+precedente:
+- α.66.16.4 — R10 AI token tracking (modello AIUsageLog + endpoint `/ai/api/usage`)
+- α.66.17.0 — R6 Step 0 estrai `ai_context.py` (ai_assistant 2339→1899)
+- α.66.17.1 — R6 Step 1 estrai `ai_legacy_parser.py` (ai_assistant 1899→1785)
 
 ### Cosa è stato fatto
 
@@ -3281,6 +3289,8 @@ origin/main**. Maratona consolidamento post-audit profondo.
 | **R2 Soft-delete framework** | α.66.15.3 → .15.4 | _SOFT_DELETE_MODELS esteso (5 modelli) + helper is_unique_or_deleted_aware + fix Project.code create |
 | **R3 Permission gate sweep** | α.66.16.0 | 27 mutator senza gate protetti (76/76 totale 100%): finance/pricelist/resources/dam/ai/planning |
 | **R4 Booking mutation gate** | α.66.16.1 → .16.3 | app/services/booking_mutate.py + AI handlers + planning router migrati. 7/7 call site SLICE_LOCK centralizzati. Pattern systemico O chiuso |
+| **R10 AI token tracking** | α.66.16.4 | Modello AIUsageLog + tabella prezzi 14 modelli + endpoint /ai/api/usage. Hook in ClaudeProvider + ai_loop. Cost analytics user/model/day |
+| **R6 Split ai_assistant.py** | α.66.17.0 → .17.1 | Estratto ai_context.py (516 righe) + ai_legacy_parser.py (156 righe). ai_assistant 2287→1785 righe (-23%). Pattern G iniziato |
 
 ### Audit chiuso
 
@@ -3291,39 +3301,55 @@ per Booking, O slice-lock unificato, parte di G file giganti).
 ### Backlog rimanente (sprint successivi)
 
 - **R5** Split planning.html partial Jinja + JS moduli (PR2/PR3 audit)
-- **R6** Split ai_assistant.py 2287 righe in `ai_capabilities/` package
+- **R6.2+** Split capability handlers (`_h_propose_*`) in
+  `ai_capabilities/` package con decorator `@ai_capability` registry.
+  Elimina drift handler/tool/VALID_ACTION_TYPES (audit pattern N).
 - **R7** Split planning.py 4265 righe in 5 file (planning_hub /
   bookings / unavailabilities / presets / diagnostics)
 - **R8** Float→Decimal soldi (EUR `Decimal('0.01')` ROUND_HALF_EVEN)
 - **R9** Datetime tz-aware (UTC ovunque + ZoneInfo display)
-- **R10** AI token tracking + rate limit per-user (`AIUsageLog` table)
+- **R10.2** Hook usage_* anche su OpenAI/Gemini/Ollama chat_with_tools;
+  rate limit per-user; UI dashboard `/settings#ai-usage`
 - **R4 follow-up**: PUT booking + bulk-edit usano già `_assert_no_blocking_slice`
   che è migrato internamente, ma il call site potrebbe usare anche
   `assert_no_overlap_after` per uniformare conflict-check inline
 
 ### Cosa fa Matteo quando riapre domani
 
-1. **Pull**: `git pull origin main` — 21 commit pronti (chunk α.66.14 → α.66.16.3)
-2. **Restart server** — ALTER TABLE auto al boot (tenant_id su 4 nuovi modelli)
-3. **Hard-refresh browser** per cache-buster nuovo `?v=3.5.0-alpha.66.14` su global.js
+1. **Pull**: `git pull origin main` — 25 commit pronti (chunk α.66.14 → α.66.17.1)
+2. **Restart server** — ALTER TABLE auto al boot:
+   - `tenant_id` su 4 nuovi modelli (Quote/Job/JobCostLine/Asset)
+   - `ai_usage_logs` tabella nuova (creata da `create_tables()`)
+3. **Hard-refresh browser** per cache-buster `?v=3.5.0-alpha.66.14` su global.js
 4. **Test smoke focus**:
    - **Modal a11y**: apri qualsiasi modal → Tab cicla solo dentro,
      Esc chiude solo top, focus restored al close
    - **Planning**: light mode auto-on se >80 booking; vis-timeline gira
    - **AI copilot**: prova il prompt cache (turno 2 dovrebbe essere
      più veloce; logger Anthropic `[anthropic cache] read=N create=N`
-     in console server)
+     in console server) → poi `GET /ai/api/usage?period_days=1` ritorna
+     totals con cost_usd e cache_hit_ratio
    - **Mutator quote/finance/pricelist/resources con utente non-admin**:
      viewer/operator deve vedere 403 sui mutator
+   - **AI move/resize via copilot** dentro slice billed → blocked con
+     messaggio chiaro
 5. **Verifica** che le 76/76 protezioni mutator non rompano flussi reali
 6. **Riportare bug** trovati → faccio hotfix prima di proseguire R5+
 
 ### Riapertura
 
-Parola chiave: **"Riprendi da v3.5.0-alpha.66.16.3 — apri con il tuo ultimo commento"**.
-Audit + M1+R1+R2+R3+R4 chiusi e pushati. Prossimo: R5 split file giganti
-oppure feature backlog α.66.14+ (kanban deliverable, copilot QC, AI
-cost derivation) a scelta di Matteo.
+Parola chiave: **"Riprendi da v3.5.0-alpha.66.17.1 — apri con il tuo
+ultimo commento"**.
+
+Audit + M1+R1+R2+R3+R4 + R6 Step 0-1 + R10 chiusi e pushati. Prossimo:
+- **R5** split planning.html (basso rischio, alto valore manutenzione)
+- **R6.2+** split capability handlers in `ai_capabilities/` (decorator registry)
+- **R7** split planning.py 4265 righe
+- **R8** Float→Decimal soldi
+- **R9** Datetime tz-aware
+- **R10.2** OpenAI/Gemini/Ollama hook usage + rate limit + UI dashboard
+- Oppure **feature backlog α.66.14+**: kanban deliverable, copilot QC,
+  AI cost derivation
 
 ---
 
