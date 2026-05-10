@@ -1,5 +1,32 @@
 # MediaFlow — Changelog
 
+## v3.5.0-alpha.66.15.1 — Sprint R1 Step 1: app/context.py DI helper (11 maggio 2026)
+
+Continua R1. Aggiunge il single source of truth per il tenant scope.
+
+**Nuovo `app/context.py`**:
+- `DEFAULT_TENANT_ID = 1` (costante)
+- `current_tenant_id() -> int`: per service layer (no FastAPI). Stub
+  ritorna 1.
+- `get_tenant_id() -> int`: FastAPI dependency (`Depends(get_tenant_id)`).
+  Stub ritorna 1.
+- `get_optional_tenant_id() -> Optional[int]`: variante non-bloccante per
+  endpoint pubblici.
+
+In Fase 7 (multi-tenant hard) basta cambiare l'implementazione interna di
+`current_tenant_id` (leggere da `contextvars` popolata da middleware auth)
+senza toccare i call site. Tutti i router che useranno
+`Depends(get_tenant_id)` saranno automaticamente future-ready.
+
+**Smoke**: tutte le 3 funzioni ritornano 1 come da contract stub.
+302 routes invariato, version 3.5.0-alpha.66.15.1.
+
+**Prossimo (R1.2)**: applicare il filtro `tenant_id == current_tenant_id()`
+alle query nei router per Quote/Job/JobCostLine/Asset (e Project che già
+ce l'aveva ma in molti router non era filtrato).
+
+---
+
 ## v3.5.0-alpha.66.15.0 — Sprint R1 Step 0: tenant_id ai modelli orfani (11 maggio 2026)
 
 Apre il sprint **R1 — Tenant scope DI** del piano post-audit. Step 0:

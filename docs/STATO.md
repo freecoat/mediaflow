@@ -8,6 +8,17 @@
 
 ## Versione corrente
 
+**v3.5.0-alpha.66.15.1** — 11 maggio 2026 — Sprint R1 Step 1: context DI
+
+Single source of truth per tenant scope: app/context.py con
+get_tenant_id (FastAPI dep), current_tenant_id (service layer),
+get_optional_tenant_id (endpoint pubblici). Stub ritorna 1.
+Future-ready per Fase 7 senza toccare call site.
+
+**Smoke**: 302 routes invariato, version 3.5.0-alpha.66.15.1.
+
+---
+
 **v3.5.0-alpha.66.15.0** — 11 maggio 2026 — Sprint R1 Step 0: tenant_id orfani
 
 Apre il sprint R1. Quote/Job/JobCostLine/Asset acquisiscono colonna
