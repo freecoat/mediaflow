@@ -8,6 +8,16 @@
 
 ## Versione corrente
 
+**v3.5.0-alpha.66.14.4** — 11 maggio 2026 — Upload copilot security
+
+Chiude 3 buchi auth+MIME+ownership su /ai/api/upload e attachment pipeline.
+Magic-bytes validati prima del write. file_id include prefisso user_id
+per ownership server-side senza persistence DB. Auth required (compat dev).
+
+**Smoke**: 302 routes invariato, version 3.5.0-alpha.66.14.4.
+
+---
+
 **v3.5.0-alpha.66.14.3** — 11 maggio 2026 — Tenant scope build_context AI
 
 Chiude cross-tenant data leak latente in build_context/build_planning_context.

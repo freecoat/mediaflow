@@ -48,13 +48,50 @@ TEXT_EXTS = {".pdf", ".docx", ".txt", ".md"}
 IMAGE_EXTS = {".jpg", ".jpeg", ".png", ".webp", ".gif"}
 SUPPORTED_EXTS = TEXT_EXTS | IMAGE_EXTS
 
+# v3.5.0-alpha.66.14.4 — Magic-bytes per validazione MIME oltre l'estensione.
+# `txt` e `md` sono testo plain: nessuna firma, lasciamo passare se l'estensione
+# matcha. Per gli altri tipi controlliamo i primi byte. WEBP richiede check su
+# offset 8-12 in aggiunta al RIFF header (gestito custom).
+MAGIC_BYTES: dict[str, list[bytes]] = {
+    ".pdf": [b"%PDF-"],
+    ".docx": [b"PK\x03\x04", b"PK\x05\x06", b"PK\x07\x08"],  # ZIP container
+    ".png": [b"\x89PNG\r\n\x1a\n"],
+    ".jpg": [b"\xff\xd8\xff"],
+    ".jpeg": [b"\xff\xd8\xff"],
+    ".gif": [b"GIF87a", b"GIF89a"],
+    # WEBP: gestito a parte, richiede 'RIFF????WEBP'
+}
 
-def save_attachment(filename: str, content: bytes) -> dict:
+
+def _validate_magic_bytes(ext: str, content: bytes) -> None:
+    """Solleva ValueError se i primi byte di `content` non corrispondono
+    all'estensione dichiarata. Per .webp richiede check su byte 8-12."""
+    if ext in (".txt", ".md"):
+        return  # plain text: niente magic
+    if ext == ".webp":
+        if not (len(content) >= 12 and content[:4] == b"RIFF" and content[8:12] == b"WEBP"):
+            raise ValueError(f"Contenuto non valido: l'header non corrisponde a {ext}")
+        return
+    expected = MAGIC_BYTES.get(ext)
+    if not expected:
+        return  # estensione gestita ma senza firma definita
+    if not any(content.startswith(sig) for sig in expected):
+        raise ValueError(f"Contenuto non valido: l'header non corrisponde a {ext}")
+
+
+def save_attachment(filename: str, content: bytes, user_id: int) -> dict:
     """Salva un attachment caricato dall'utente. Ritorna metadata con file_id,
     kind ("text" o "image"), extracted_text (se text), preview info.
 
-    Solleva ValueError se file troppo grande o estensione non supportata.
+    v3.5.0-alpha.66.14.4 — `user_id` obbligatorio. Il file_id include il
+    prefisso utente per ownership (`{user_id}-{uuid}`) — verificabile lato
+    server senza dover persistere un manifest in DB.
+
+    Solleva ValueError se: file troppo grande, estensione non supportata,
+    magic-bytes incoerenti con l'estensione.
     """
+    if not user_id or not isinstance(user_id, int):
+        raise ValueError("user_id richiesto per upload attachment")
     if len(content) > MAX_FILE_SIZE:
         raise ValueError(f"File troppo grande ({len(content)} bytes, max {MAX_FILE_SIZE})")
 
@@ -67,7 +104,10 @@ def save_attachment(filename: str, content: bytes) -> dict:
             + ", ".join(sorted(SUPPORTED_EXTS))
         )
 
-    file_id = uuid.uuid4().hex
+    # Magic bytes BEFORE write a disk: rifiutiamo prima di toccare il FS
+    _validate_magic_bytes(ext, content)
+
+    file_id = f"{user_id}-{uuid.uuid4().hex}"
     target = ATTACHMENT_DIR / f"{file_id}{ext}"
     target.write_bytes(content)
 
@@ -195,11 +235,25 @@ def _media_type_for_ext(ext: str) -> str:
     }.get(ext.lower(), "image/png")
 
 
-def _make_image_block_from_attachment(att: dict) -> Optional[dict]:
+def _ownership_ok(file_id: str, user_id: int) -> bool:
+    """v3.5.0-alpha.66.14.4 — Verifica che `file_id` appartenga a `user_id`.
+
+    Convenzione: `{user_id}-{uuid32}` (vedi save_attachment). Se il prefisso
+    non matcha, l'utente sta tentando di linkare un file altrui.
+    """
+    if not file_id or not user_id:
+        return False
+    expected_prefix = f"{user_id}-"
+    return file_id.startswith(expected_prefix)
+
+
+def _make_image_block_from_attachment(att: dict, user_id: Optional[int] = None) -> Optional[dict]:
     """Costruisce un blocco image canonico Anthropic per un attachment.
 
     v3.5.0-alpha.53 — Vision integration. Ritorna None se il file non
     esiste più o non è un'immagine.
+    v3.5.0-alpha.66.14.4 — Se `user_id` è passato, valida ownership: ritorna
+    None se il file_id non appartiene all'utente corrente (anti-leak).
     Output formato Anthropic Messages API:
         {"type": "image", "source": {"type": "base64",
          "media_type": "image/png", "data": "..."}}
@@ -210,6 +264,9 @@ def _make_image_block_from_attachment(att: dict) -> Optional[dict]:
     file_id = att.get("file_id")
     ext = att.get("ext")
     if not file_id or not ext:
+        return None
+    if user_id is not None and not _ownership_ok(file_id, user_id):
+        logger.warning(f"image attachment ownership denied: file_id={file_id} user_id={user_id}")
         return None
     p = ATTACHMENT_DIR / f"{file_id}{ext}"
     if not p.exists():
@@ -238,6 +295,7 @@ def build_user_content_blocks(
     user_text: str,
     attachments: list[dict],
     supports_vision: bool,
+    user_id: Optional[int] = None,
 ) -> "str | list[dict]":
     """Costruisce il content del messaggio user.
 
@@ -286,7 +344,7 @@ def build_user_content_blocks(
     image_blocks: list[dict] = []
     fallback_text_for_failed_images: list[str] = []
     for a in image_atts:
-        block = _make_image_block_from_attachment(a)
+        block = _make_image_block_from_attachment(a, user_id=user_id)
         if block is not None:
             # Aggiungi un testo prima dell'immagine per identificarla nel contesto
             text_parts.append(f"📎 IMMAGINE: {a.get('filename', '?')}")

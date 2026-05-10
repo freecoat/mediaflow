@@ -1,5 +1,45 @@
 # MediaFlow — Changelog
 
+## v3.5.0-alpha.66.14.4 — Upload copilot security (auth + magic-bytes + ownership) (11 maggio 2026)
+
+Quick win post-audit #5. Chiude 3 buchi documentati nell'audit AI:
+upload accettato senza auth, validazione MIME basata solo su estensione,
+ownership file_id non verificata.
+
+**Auth required** su `POST /ai/api/upload` (`app/routers/ai.py:42`):
+- Cookie JWT obbligatorio. Senza → 401 "Autenticazione richiesta".
+- In dev (default) il fallback "primo admin attivo" passa tramite
+  `_resolve_current_user` (resta funzionale per demo).
+- In prod con `AUTH_REQUIRED=true` (α.66.14.2) → fail-closed.
+
+**Magic-bytes validation** (`copilot_attachments._validate_magic_bytes`):
+- Verifica i primi byte del content prima di scrivere su disk.
+- Tabella `MAGIC_BYTES`: `.pdf` (`%PDF-`), `.docx` (ZIP `PK\\x03\\x04`),
+  `.png`, `.jpg/.jpeg`, `.gif`. `.webp` validato con check RIFF + offset 8-12.
+- `.txt`/`.md` plain text → niente magic, lascia passare.
+- Un `evil.pdf` contenente HTML/JS → `ValueError` 400 senza toccare il FS.
+
+**Ownership file_id** (`copilot_attachments._ownership_ok`):
+- Convenzione: `file_id = f"{user_id}-{uuid32}"` (sostituisce uuid puro).
+- `_make_image_block_from_attachment(att, user_id=...)` rifiuta file_id
+  che non iniziano con `{user_id}-`. Pattern non vincola persistence DB
+  (manifest resta in-memory client) ma chiude il leak: chi conosce un
+  UUID altrui non può linkarlo come allegato del proprio messaggio.
+- `build_user_content_blocks(..., user_id=...)` passa user_id ai check.
+- `/ai/api/chat` propaga `user_id` da `_resolve_current_user` esistente.
+
+**API change**: `save_attachment(filename, content, *, user_id)` —
+parametro `user_id` ora obbligatorio. Solleva `ValueError` se mancante.
+Il client riceve `file_id` con prefisso utente (trasparente lato UI).
+
+**Smoke E2E**:
+- `_validate_magic_bytes('.pdf', b'NOTAPDF')` → ValueError ✓
+- `_validate_magic_bytes('.pdf', b'%PDF-1.4 valid')` → OK ✓
+- `_ownership_ok('1-abc', 1)` → True; `('1-abc', 2)` → False ✓
+- 302 routes invariato, version 3.5.0-alpha.66.14.4.
+
+---
+
 ## v3.5.0-alpha.66.14.3 — Tenant scope build_context AI (11 maggio 2026)
 
 Quick win post-audit #4. Chiude il pattern "AI vede tutti i tenant"

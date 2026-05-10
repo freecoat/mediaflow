@@ -39,18 +39,30 @@ router = APIRouter(prefix="/ai", tags=["ai"])
 
 
 # v3.5.0-alpha.51 — Upload documenti per copilot
+# v3.5.0-alpha.66.14.4 — Auth required + magic-bytes validati in
+# save_attachment. Il file_id ritornato include il prefisso utente per
+# enforcement ownership lato server (vedi copilot_attachments._ownership_ok).
 @router.post("/api/upload")
-async def copilot_upload(file: UploadFile = File(...)):
+async def copilot_upload(
+    file: UploadFile = File(...),
+    access_token: Optional[str] = Cookie(None),
+    db: Session = Depends(get_db),
+):
     """Carica un documento (PDF/DOCX/TXT/MD/immagine) per allegarlo al
     prossimo messaggio del copilot. Ritorna metadata + extracted_text per
-    file text-based. Le immagini vengono salvate ma per ora non passate
-    al provider come vision (placeholder per α.52).
+    file text-based. Per immagini, vision integration dal v3.5.0-alpha.53.
+
+    Auth: richiede utente autenticato (cookie JWT). In produzione con
+    AUTH_REQUIRED=true risponde 401 senza fallback.
     """
+    user = _resolve_current_user(db, access_token)
+    if not user:
+        raise HTTPException(401, "Autenticazione richiesta per upload allegati")
     content = await file.read()
     if len(content) > MAX_FILE_SIZE:
         raise HTTPException(413, f"File troppo grande (max {MAX_FILE_SIZE // 1024 // 1024} MB)")
     try:
-        meta = save_attachment(file.filename or "untitled", content)
+        meta = save_attachment(file.filename or "untitled", content, user_id=user.id)
     except ValueError as e:
         raise HTTPException(400, str(e))
     return meta
@@ -158,12 +170,16 @@ async def chat(
     # v3.5.0-alpha.53 — Costruisce il content del messaggio user con
     # vision blocks se il provider li supporta. `last_user_content` può
     # essere stringa (compat) o list[dict] (multimodal).
+    # v3.5.0-alpha.66.14.4 — Passa user_id per enforcement ownership su
+    # file_id immagine: file di altri utenti vengono droppati (sostituiti
+    # con placeholder testuale "non caricabile").
     if attachments and isinstance(attachments, list) and messages:
         last_msg = messages[-1]
         if last_msg.get("role") == "user":
             original = last_msg.get("content", "")
             last_msg["content"] = build_user_content_blocks(
                 original, attachments, supports_vision=provider.supports_vision(),
+                user_id=user_id,
             )
 
     last_user_content = messages[-1].get("content", "") if messages else ""
