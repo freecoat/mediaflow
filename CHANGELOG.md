@@ -1,5 +1,62 @@
 # MediaFlow — Changelog
 
+## v3.5.0-alpha.66.12 — PhysicalAsset CRUD UI (10 maggio 2026)
+
+UI per il modello `PhysicalAsset` introdotto in α.66.9. Nuova pagina
+`/physical-assets` per gestire LTO/HDD/CRU/Blu-Ray/DVD/Case con tracking
+archive interno + spedizione cliente + verifica integrità periodica.
+
+**Nuova pagina** `/physical-assets`:
+- Tabella con tipo (badge color-coded), etichetta, serial/barcode, capacità
+  (GB→TB auto), location, condizione, flag archive/delivered, tracking
+  consegna.
+- Filtri: tipo (lto/hdd/cru/bluray/dvd/case/other), solo archivio interno,
+  solo consegnati esternamente, mostra cestino.
+- Modal "Nuovo asset fisico" / "Modifica" con tutti i campi:
+  - Identità: kind + label + description + serial + manufacturer + barcode
+  - Dimensioni: capacity_gb + used_gb (visualizzati in GB/TB auto)
+  - Costo unitario (€) — usato come hardcost quando venduto al cliente
+  - Condizione (new/verified/suspect/retired) + location fisica
+  - Fieldset "Stato e consegna": flag is_internal_archive +
+    is_delivered_external (ortogonali) + campi consegna che appaiono
+    automaticamente quando "consegnato esternamente" è ON
+  - Details collassabile "Verifica integrità (LTO/HDD)": MD5/xxHash +
+    last_verified_at + next_verification_due
+  - Note libere
+
+**Nuovo router** `app/routers/physical_assets.py`:
+- `GET /physical-assets/` (pagina)
+- `GET /physical-assets/api` (lista con filtri kind/project/job/internal/delivered/include_deleted)
+- `GET /physical-assets/api/{id}` (dettaglio)
+- `POST /physical-assets/api` (crea)
+- `PUT /physical-assets/api/{id}` (modifica)
+- `DELETE /physical-assets/api/{id}?hard=bool` (soft o hard delete)
+- `POST /physical-assets/api/{id}/restore` (ripristina dal cestino)
+- Permessi: `edit_planning_all` o `assign_resources` per le mutation.
+
+**Sidebar** in `base.html`: nuova voce "Asset Fisici" sotto "Asset Library"
+nella sezione Media (icona `hard-drive`).
+
+**Smoke E2E**:
+- POST LTO con capacity 12TB usato 10.5TB, condizione verified, archivio interno: OK
+- POST HDD consegnato a RAI con courier BRT + tracking number: OK
+- List: 2 asset, filtro kind=lto → 1, filtro only_delivered → 1: OK
+- Soft-delete + restore + hard-delete tutti funzionanti.
+
+**Smoke**: 302 routes (+7), version `3.5.0-alpha.66.12`.
+
+**Verifica live**:
+1. Sidebar → "Asset Fisici" → pagina vuota.
+2. "+ Nuovo asset fisico" → modal → kind=LTO → label "LTO 042" →
+   capacità 12000 GB → location "Cassaforte" → Salva → vedi badge LTO blu
+   con etichetta + 12TB.
+3. Riapri → spunta "Consegnato esternamente" → appaiono campi consegna
+   → compila courier+tracking → Salva → vedi 📦 + 📤.
+4. Filtro "Solo consegnati esternamente" → mostra solo asset spediti.
+5. Cestino: 🗑️ elimina → poi spunta "Mostra cestino" → vedi asset opacizzato.
+
+---
+
 ## v3.5.0-alpha.66.11 — Cost report split cliente vs interno (10 maggio 2026)
 
 Chiude il loop dell'hardcost α.66.9: le ore dei booking attribuiti a

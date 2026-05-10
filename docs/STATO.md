@@ -8,6 +8,29 @@
 
 ## Versione corrente
 
+**v3.5.0-alpha.66.12** — 10 maggio 2026 — PhysicalAsset CRUD UI
+
+Nuova pagina `/physical-assets` per gestire LTO/HDD/CRU/Blu-Ray/DVD/Case
+introdotti come modello in α.66.9. Sidebar nav "Asset Fisici" sotto
+"Asset Library" (icona hard-drive).
+
+**Funzionalità**:
+- CRUD completo con modal ricco (tipo, label, serial, barcode, capacità
+  GB/TB auto, condizione, location, costo unitario)
+- Flag ortogonali archive interno + consegna esterna
+- Campi consegna: courier + tracking + delivered_to + delivered_at
+  (appaiono solo quando is_delivered_external=true)
+- Verifica integrità (collassabile): MD5/xxHash + last_verified +
+  next_verification_due (per LTO calibrazione periodica)
+- Filtri: tipo + solo archivio + solo consegnati + mostra cestino
+- Soft-delete via deleted_at, restore endpoint dedicato
+
+**Router nuovo**: `app/routers/physical_assets.py` (7 endpoint).
+**Smoke E2E**: POST LTO + HDD consegnato → list → filtri tipo/delivered → OK.
+**Smoke**: 302 routes (+7), version 3.5.0-alpha.66.12.
+
+---
+
 **v3.5.0-alpha.66.11** — 10 maggio 2026 — Cost report split cliente vs interno
 
 Chiude il loop hardcost α.66.9. Le ore booking attribuiti a deliverable
@@ -147,8 +170,8 @@ strategica con Matteo (10 maggio). Sequenza concordata:
 | α.66.9 | Modello `JobDeliverable` + cost-rate Resource + DAM digital/physical separato + naming helper Netflix/ISDCF | ✅ chiuso |
 | α.66.10 | UI cost-rate Resource con live preview | ✅ chiuso |
 | α.66.11 | Cost report split cliente vs interno (hardcost ore deliverable solo interno) | ✅ chiuso |
-| α.66.12 | PhysicalAsset CRUD UI | 🔜 next |
-| α.66.13 | Branding aziendale (logo + intestazione applicati a tutti i documenti) | 🔜 |
+| α.66.12 | PhysicalAsset CRUD UI | ✅ chiuso |
+| α.66.13 | Branding aziendale (logo + intestazione applicati a tutti i documenti) | 🔜 next |
 | α.66.14+ | UI deliverable kanban + edit completo + bridge DAM + copilot QC | 🔜 |
 
 **Decisioni architetturali fissate (10 maggio)** per i prossimi step:

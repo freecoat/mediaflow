@@ -1,0 +1,358 @@
+{% extends "base.html" %}
+{% set active_page = "physical_assets" %}
+{% block title %}Asset Fisici — MediaFlow{% endblock %}
+{% block topbar_title %}Asset Fisici{% endblock %}
+{% block topbar_actions %}
+  <button class="btn btn-primary btn-sm" onclick="openNewPhysicalAsset()"><i data-lucide="plus" style="width:14px;height:14px;vertical-align:-2px;"></i> Nuovo asset fisico</button>
+{% endblock %}
+
+{% block content %}
+<div class="card mb-4" style="background:rgba(168,85,247,0.06);border-color:rgba(168,85,247,0.18);">
+  <div style="padding:14px 16px;font-size:13px;line-height:1.55;color:var(--text-2);">
+    <strong>Asset fisici</strong>: LTO tape, hard disk, CRU drive (DCP fisici), Blu-Ray, DVD, cases.
+    Possono essere <b>archivio interno</b> (custoditi internamente) o <b>consegnati esternamente</b> al cliente — i due flag sono ortogonali (un drive può essere SIA archivio SIA aver generato copie spedite).
+    Il modello digitale dei file (ProRes/DCP/IMF) è in <a href="/dam" style="color:var(--primary);">DAM Digital</a>, qui solo i supporti fisici.
+  </div>
+</div>
+
+<!-- Filtri -->
+<div class="card mb-3" style="padding:10px 14px;">
+  <div style="display:flex; gap:10px; align-items:center; flex-wrap:wrap;">
+    <label class="text-sm" style="display:flex; align-items:center; gap:6px;">Tipo:
+      <select id="f-kind" class="form-select" onchange="loadAssets()" style="max-width:160px;">
+        <option value="">Tutti</option>
+        {% for k in kinds %}
+        <option value="{{ k }}">{{ k.upper() }}</option>
+        {% endfor %}
+      </select>
+    </label>
+    <label class="text-sm" style="display:flex; align-items:center; gap:6px;">
+      <input type="checkbox" id="f-internal" onchange="loadAssets()"> Solo archivio interno
+    </label>
+    <label class="text-sm" style="display:flex; align-items:center; gap:6px;">
+      <input type="checkbox" id="f-delivered" onchange="loadAssets()"> Solo consegnati esternamente
+    </label>
+    <label class="text-sm" style="display:flex; align-items:center; gap:6px;">
+      <input type="checkbox" id="f-deleted" onchange="loadAssets()"> Mostra cestino
+    </label>
+    <span style="flex:1;"></span>
+    <span id="count-info" class="text-sm text-muted"></span>
+  </div>
+</div>
+
+<div class="card">
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th style="width:60px;">Tipo</th>
+          <th>Etichetta</th>
+          <th>Serial / Barcode</th>
+          <th class="text-right">Capacità</th>
+          <th>Location</th>
+          <th>Stato</th>
+          <th>Consegna</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody id="assets-tbody">
+        <tr><td colspan="8" class="text-muted" style="text-align:center;padding:30px;">Caricamento…</td></tr>
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<!-- Modal nuovo/modifica asset fisico -->
+<div class="modal-overlay" id="modal-physical-asset">
+  <div class="modal" style="max-width:760px;">
+    <div class="modal-header">
+      <span class="modal-title" id="pa-modal-title">Nuovo asset fisico</span>
+      <button class="btn btn-ghost btn-icon" onclick="closeModal('modal-physical-asset')">✕</button>
+    </div>
+    <div class="modal-body">
+      <input type="hidden" id="pa-id">
+      <div class="form-row">
+        <div class="form-group" style="max-width:160px;"><label class="form-label">Tipo *</label>
+          <select class="form-select" id="pa-kind">
+            {% for k in kinds %}
+            <option value="{{ k }}">{{ k.upper() }}</option>
+            {% endfor %}
+          </select></div>
+        <div class="form-group" style="flex:2;"><label class="form-label">Etichetta *</label>
+          <input class="form-input" id="pa-label" placeholder="es. LTO #042 - Mare Nostrum DPX graded" maxlength="255"></div>
+      </div>
+      <div class="form-group"><label class="form-label">Descrizione</label>
+        <textarea class="form-input" id="pa-description" rows="2" placeholder="Contenuto, note tecniche…"></textarea></div>
+      <div class="form-row">
+        <div class="form-group"><label class="form-label">Serial number</label>
+          <input class="form-input" id="pa-serial" placeholder="es. WD42-A1B2C3"></div>
+        <div class="form-group"><label class="form-label">Manufacturer</label>
+          <input class="form-input" id="pa-manufacturer" placeholder="es. Western Digital, IBM, Sony"></div>
+        <div class="form-group"><label class="form-label">Barcode</label>
+          <input class="form-input" id="pa-barcode" placeholder="LTO L8 barcode"></div>
+      </div>
+      <div class="form-row">
+        <div class="form-group" style="max-width:160px;"><label class="form-label">Capacità (GB)</label>
+          <input class="form-input" id="pa-capacity" type="number" step="0.1" min="0" placeholder="es. 12000"></div>
+        <div class="form-group" style="max-width:160px;"><label class="form-label">Spazio usato (GB)</label>
+          <input class="form-input" id="pa-used" type="number" step="0.1" min="0"></div>
+        <div class="form-group" style="max-width:180px;"><label class="form-label">Costo unitario (€)</label>
+          <input class="form-input" id="pa-cost" type="number" step="0.01" min="0" placeholder="es. 80"></div>
+        <div class="form-group" style="max-width:160px;"><label class="form-label">Condizione</label>
+          <select class="form-select" id="pa-condition">
+            <option value="">— non specificato —</option>
+            <option value="new">Nuovo</option>
+            <option value="verified">Verificato</option>
+            <option value="suspect">Sospetto</option>
+            <option value="retired">Dismesso</option>
+          </select></div>
+      </div>
+      <div class="form-group"><label class="form-label">Location fisica</label>
+        <input class="form-input" id="pa-location" placeholder="es. Cassaforte sala server, Spedito al cliente, ecc."></div>
+
+      <fieldset style="border:1px solid var(--border); border-radius:6px; padding:10px 14px; margin-top:12px;">
+        <legend style="padding:0 8px; font-weight:500;">Stato e consegna</legend>
+        <div class="form-row" style="margin-top:6px;">
+          <label style="display:flex; align-items:center; gap:8px; flex:1;">
+            <input type="checkbox" id="pa-internal" checked> <span>Archivio interno</span>
+          </label>
+          <label style="display:flex; align-items:center; gap:8px; flex:1;">
+            <input type="checkbox" id="pa-delivered" onchange="togglePaDelivery()"> <span>Consegnato esternamente</span>
+          </label>
+        </div>
+        <div id="pa-delivery-fields" style="display:none; margin-top:10px;">
+          <div class="form-row">
+            <div class="form-group"><label class="form-label">Consegnato a</label>
+              <input class="form-input" id="pa-delivered-to" placeholder="es. Sky Italia, A24"></div>
+            <div class="form-group" style="max-width:200px;"><label class="form-label">Data consegna</label>
+              <input class="form-input" id="pa-delivered-at" type="date"></div>
+          </div>
+          <div class="form-row">
+            <div class="form-group"><label class="form-label">Courier</label>
+              <input class="form-input" id="pa-courier" placeholder="es. DHL, FedEx, BRT"></div>
+            <div class="form-group"><label class="form-label">Tracking number</label>
+              <input class="form-input" id="pa-tracking"></div>
+          </div>
+        </div>
+      </fieldset>
+
+      <details style="margin-top:12px;">
+        <summary class="form-label" style="cursor:pointer;">▸ Verifica integrità (LTO/HDD)</summary>
+        <div style="padding:10px 0;">
+          <div class="form-row">
+            <div class="form-group"><label class="form-label">Checksum MD5</label>
+              <input class="form-input" id="pa-md5" placeholder="32 char hex"></div>
+            <div class="form-group"><label class="form-label">Checksum xxHash</label>
+              <input class="form-input" id="pa-xxhash"></div>
+          </div>
+          <div class="form-row">
+            <div class="form-group"><label class="form-label">Ultima verifica</label>
+              <input class="form-input" id="pa-last-verified" type="date"></div>
+            <div class="form-group"><label class="form-label">Prossima verifica entro</label>
+              <input class="form-input" id="pa-next-verify" type="date"></div>
+          </div>
+        </div>
+      </details>
+
+      <div class="form-group" style="margin-top:12px;"><label class="form-label">Note</label>
+        <textarea class="form-input" id="pa-notes" rows="2"></textarea></div>
+    </div>
+    <div class="modal-footer">
+      <div style="flex:1;">
+        <button class="btn btn-ghost btn-sm" id="pa-delete-btn" onclick="deletePhysicalAsset()" style="display:none;color:var(--rose);"><i data-lucide="trash-2" style="width:14px;height:14px;vertical-align:-2px;"></i> Sposta nel cestino</button>
+      </div>
+      <button class="btn btn-secondary" onclick="closeModal('modal-physical-asset')">Annulla</button>
+      <button class="btn btn-primary" onclick="savePhysicalAsset()">Salva</button>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+const KIND_LABEL = {lto:'LTO', hdd:'HDD', cru:'CRU', bluray:'Blu-Ray', dvd:'DVD', case:'Case', other:'Altro'};
+const KIND_COLOR = {lto:'#0ea5e9', hdd:'#22c55e', cru:'#f59e0b', bluray:'#a855f7', dvd:'#6366f1', case:'#9ca3af', other:'#6b7280'};
+const COND_LABEL = {new:'Nuovo', verified:'Verificato', suspect:'Sospetto', retired:'Dismesso'};
+const COND_COLOR = {new:'#22c55e', verified:'#3b82f6', suspect:'#f59e0b', retired:'#9ca3af'};
+
+async function loadAssets() {
+  const params = new URLSearchParams();
+  const kind = document.getElementById('f-kind').value;
+  if (kind) params.set('kind', kind);
+  if (document.getElementById('f-internal').checked) params.set('only_internal_archive', 'true');
+  if (document.getElementById('f-delivered').checked) params.set('only_delivered_external', 'true');
+  if (document.getElementById('f-deleted').checked) params.set('include_deleted', 'true');
+  const tbody = document.getElementById('assets-tbody');
+  tbody.innerHTML = '<tr><td colspan="8" class="text-muted" style="text-align:center;padding:30px;">Caricamento…</td></tr>';
+  try {
+    const list = await api('GET', '/physical-assets/api?' + params.toString());
+    document.getElementById('count-info').textContent = `${list.length} asset`;
+    if (!list.length) {
+      tbody.innerHTML = '<tr><td colspan="8" class="text-muted" style="text-align:center;padding:30px;">Nessun asset fisico. Crea il primo con "+ Nuovo asset fisico".</td></tr>';
+      return;
+    }
+    tbody.innerHTML = list.map(a => renderRow(a)).join('');
+    if (typeof lucide !== 'undefined' && lucide.createIcons) lucide.createIcons();
+  } catch(e) {
+    tbody.innerHTML = `<tr><td colspan="8" class="text-muted" style="text-align:center;padding:30px;color:var(--rose);">${e.message}</td></tr>`;
+  }
+}
+
+function renderRow(a) {
+  const kindBadge = `<span style="display:inline-block;padding:2px 8px;border-radius:3px;background:${KIND_COLOR[a.kind]||'#6b7280'};color:#fff;font-size:11px;font-weight:500;">${KIND_LABEL[a.kind]||a.kind}</span>`;
+  const serial = a.serial_number || a.barcode || '—';
+  const cap = a.capacity_gb ? `${a.capacity_gb >= 1000 ? (a.capacity_gb/1000).toFixed(1)+'TB' : a.capacity_gb+'GB'}${a.used_gb ? ' · '+(a.used_gb >= 1000 ? (a.used_gb/1000).toFixed(1)+'TB' : a.used_gb+'GB')+' usati' : ''}` : '—';
+  const loc = a.location || '—';
+  const condBadge = a.condition ? `<span style="display:inline-block;padding:1px 6px;border-radius:3px;background:${COND_COLOR[a.condition]||'#6b7280'};color:#fff;font-size:10px;">${COND_LABEL[a.condition]||a.condition}</span>` : '';
+  let statusFlags = '';
+  if (a.is_internal_archive) statusFlags += `<span class="text-xs text-muted" title="Archivio interno">📦</span> `;
+  if (a.is_delivered_external) statusFlags += `<span class="text-xs" title="Consegnato a ${a.delivered_to||'cliente'}" style="color:#0ea5e9;">📤</span> `;
+  let delivery = '—';
+  if (a.is_delivered_external) {
+    const date = a.delivered_at ? new Date(a.delivered_at).toLocaleDateString('it-IT') : '?';
+    const tracking = a.tracking_number ? ` · <code style="font-size:10px;">${escapeHtml(a.tracking_number)}</code>` : '';
+    delivery = `<div style="font-size:12px;"><b>${escapeHtml(a.delivered_to || '?')}</b><br/><span class="text-muted">${date} ${escapeHtml(a.courier||'')}</span>${tracking}</div>`;
+  }
+  const opacity = a.deleted_at ? 'opacity:0.45;' : '';
+  return `
+    <tr style="cursor:pointer;${opacity}" onclick='openEditPhysicalAsset(${a.id})'>
+      <td>${kindBadge}</td>
+      <td><strong>${escapeHtml(a.label)}</strong>${a.description ? `<div class="text-xs text-muted">${escapeHtml(a.description.substring(0,80))}${a.description.length > 80 ? '…' : ''}</div>` : ''}</td>
+      <td class="mono text-xs">${escapeHtml(serial)}</td>
+      <td class="text-right text-sm">${cap}</td>
+      <td class="text-sm">${escapeHtml(loc)}</td>
+      <td>${condBadge} ${statusFlags}</td>
+      <td>${delivery}</td>
+      <td class="text-right" onclick="event.stopPropagation()">
+        ${a.deleted_at
+          ? `<button class="btn btn-ghost btn-sm" onclick="restorePhysicalAsset(${a.id})" title="Recupera dal cestino"><i data-lucide="rotate-ccw" style="width:13px;height:13px;"></i></button>`
+          : `<button class="btn btn-ghost btn-sm" onclick="openEditPhysicalAsset(${a.id})" title="Modifica"><i data-lucide="pencil" style="width:13px;height:13px;"></i></button>`}
+      </td>
+    </tr>`;
+}
+
+function resetPaForm() {
+  document.getElementById('pa-id').value = '';
+  document.getElementById('pa-modal-title').textContent = 'Nuovo asset fisico';
+  document.getElementById('pa-delete-btn').style.display = 'none';
+  ['pa-label','pa-description','pa-serial','pa-manufacturer','pa-barcode',
+   'pa-capacity','pa-used','pa-cost','pa-location','pa-delivered-to',
+   'pa-delivered-at','pa-courier','pa-tracking','pa-md5','pa-xxhash',
+   'pa-last-verified','pa-next-verify','pa-notes'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.value = '';
+  });
+  document.getElementById('pa-condition').value = '';
+  document.getElementById('pa-kind').value = 'lto';
+  document.getElementById('pa-internal').checked = true;
+  document.getElementById('pa-delivered').checked = false;
+  togglePaDelivery();
+}
+
+function togglePaDelivery() {
+  document.getElementById('pa-delivery-fields').style.display =
+    document.getElementById('pa-delivered').checked ? '' : 'none';
+}
+
+function openNewPhysicalAsset() {
+  resetPaForm();
+  openModal('modal-physical-asset');
+}
+
+async function openEditPhysicalAsset(id) {
+  resetPaForm();
+  try {
+    const a = await api('GET', `/physical-assets/api/${id}`);
+    document.getElementById('pa-id').value = a.id;
+    document.getElementById('pa-modal-title').textContent = 'Modifica asset fisico';
+    document.getElementById('pa-delete-btn').style.display = '';
+    document.getElementById('pa-kind').value = a.kind || 'lto';
+    document.getElementById('pa-label').value = a.label || '';
+    document.getElementById('pa-description').value = a.description || '';
+    document.getElementById('pa-serial').value = a.serial_number || '';
+    document.getElementById('pa-manufacturer').value = a.manufacturer || '';
+    document.getElementById('pa-barcode').value = a.barcode || '';
+    document.getElementById('pa-capacity').value = a.capacity_gb ?? '';
+    document.getElementById('pa-used').value = a.used_gb ?? '';
+    document.getElementById('pa-cost').value = a.unit_cost ?? '';
+    document.getElementById('pa-condition').value = a.condition || '';
+    document.getElementById('pa-location').value = a.location || '';
+    document.getElementById('pa-internal').checked = !!a.is_internal_archive;
+    document.getElementById('pa-delivered').checked = !!a.is_delivered_external;
+    document.getElementById('pa-delivered-to').value = a.delivered_to || '';
+    document.getElementById('pa-delivered-at').value = a.delivered_at ? a.delivered_at.substring(0,10) : '';
+    document.getElementById('pa-courier').value = a.courier || '';
+    document.getElementById('pa-tracking').value = a.tracking_number || '';
+    document.getElementById('pa-md5').value = a.checksum_md5 || '';
+    document.getElementById('pa-xxhash').value = a.checksum_xxhash || '';
+    document.getElementById('pa-last-verified').value = a.last_verified_at ? a.last_verified_at.substring(0,10) : '';
+    document.getElementById('pa-next-verify').value = a.next_verification_due || '';
+    document.getElementById('pa-notes').value = a.notes || '';
+    togglePaDelivery();
+    openModal('modal-physical-asset');
+  } catch(e) { toast(e.message || 'Errore', 'error'); }
+}
+
+async function savePhysicalAsset() {
+  const id = document.getElementById('pa-id').value;
+  const label = document.getElementById('pa-label').value.trim();
+  if (!label) { toast('Etichetta obbligatoria', 'error'); return; }
+  const fd = new FormData();
+  fd.append('kind', document.getElementById('pa-kind').value);
+  fd.append('label', label);
+  const fields = {
+    description: 'pa-description', serial_number: 'pa-serial',
+    manufacturer: 'pa-manufacturer', barcode: 'pa-barcode',
+    capacity_gb: 'pa-capacity', used_gb: 'pa-used',
+    unit_cost: 'pa-cost', condition: 'pa-condition',
+    location: 'pa-location', delivered_to: 'pa-delivered-to',
+    courier: 'pa-courier', tracking_number: 'pa-tracking',
+    checksum_md5: 'pa-md5', checksum_xxhash: 'pa-xxhash',
+    next_verification_due: 'pa-next-verify',
+    notes: 'pa-notes',
+  };
+  for (const [api_field, dom_id] of Object.entries(fields)) {
+    const v = document.getElementById(dom_id).value.trim();
+    if (v !== '') fd.append(api_field, v);
+  }
+  fd.append('is_internal_archive', document.getElementById('pa-internal').checked ? 'true' : 'false');
+  fd.append('is_delivered_external', document.getElementById('pa-delivered').checked ? 'true' : 'false');
+  // Date → datetime ISO (yyyy-mm-ddT00:00)
+  const dDel = document.getElementById('pa-delivered-at').value;
+  if (dDel) fd.append('delivered_at', dDel + 'T00:00');
+  const dLast = document.getElementById('pa-last-verified').value;
+  if (dLast) fd.append('last_verified_at', dLast + 'T00:00');
+
+  try {
+    const url = id ? `/physical-assets/api/${id}` : '/physical-assets/api';
+    const method = id ? 'PUT' : 'POST';
+    await api(method, url, fd);
+    closeModal('modal-physical-asset');
+    toast(id ? 'Asset aggiornato' : 'Asset creato', 'success');
+    loadAssets();
+  } catch(e) { toast(e.message || 'Errore salvataggio', 'error'); }
+}
+
+async function deletePhysicalAsset() {
+  const id = document.getElementById('pa-id').value;
+  if (!id) return;
+  if (!confirm('Spostare l\'asset nel cestino?')) return;
+  try {
+    await api('DELETE', `/physical-assets/api/${id}`);
+    closeModal('modal-physical-asset');
+    toast('Asset spostato nel cestino', 'success');
+    loadAssets();
+  } catch(e) { toast(e.message || 'Errore', 'error'); }
+}
+
+async function restorePhysicalAsset(id) {
+  try {
+    await api('POST', `/physical-assets/api/${id}/restore`);
+    toast('Asset ripristinato', 'success');
+    loadAssets();
+  } catch(e) { toast(e.message || 'Errore', 'error'); }
+}
+
+loadAssets();
+</script>
+{% endblock %}
