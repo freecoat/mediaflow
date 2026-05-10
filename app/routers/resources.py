@@ -7,11 +7,17 @@ from typing import Optional
 from sqlalchemy.orm import Session
 from app.database import get_db
 from app.models import Resource, ResourceType, ResourceUnavailability, Department, WorkingHoursPolicy
+from app.services.rbac import requires_permission
 from datetime import date
 
 router = APIRouter(prefix="/resources", tags=["resources"])
 
 CURRENT_TENANT = 1
+
+# v3.5.0-alpha.66.16.0 — Sprint R3: gate riusabile per i 5 mutator del
+# router resources (CRUD risorsa + ferie). Prima erano completamente aperti
+# ai viewer (audit HIGH #4: leak salary inclusi).
+RequireEditResources = Depends(requires_permission("edit_resources"))
 
 TYPE_LABEL = {
     "person_internal": "Personale interno",
@@ -96,7 +102,7 @@ async def list_resources(
     return q.all()
 
 
-@router.post("/api")
+@router.post("/api", dependencies=[RequireEditResources])
 async def create_resource(
     name: str = Form(...),
     type: ResourceType = Form(...),
@@ -217,7 +223,7 @@ async def get_resource(resource_id: int, db: Session = Depends(get_db)):
     }
 
 
-@router.put("/api/{resource_id}")
+@router.put("/api/{resource_id}", dependencies=[RequireEditResources])
 async def update_resource(
     resource_id: int,
     name: Optional[str] = Form(None),
@@ -281,7 +287,7 @@ async def update_resource(
     return {"ok": True, "id": r.id, "internal_cost_hourly": r.internal_cost_hourly}
 
 
-@router.delete("/api/{resource_id}")
+@router.delete("/api/{resource_id}", dependencies=[RequireEditResources])
 async def delete_resource(resource_id: int, db: Session = Depends(get_db)):
     r = db.query(Resource).filter(
         Resource.id == resource_id,
@@ -309,7 +315,7 @@ async def list_unavailabilities_for_resource(resource_id: int, db: Session = Dep
     ]
 
 
-@router.post("/api/{resource_id}/unavailability")
+@router.post("/api/{resource_id}/unavailability", dependencies=[RequireEditResources])
 async def add_unavailability(
     resource_id: int,
     start_date: date = Form(...),
@@ -339,7 +345,7 @@ async def add_unavailability(
             "reason": u.reason}
 
 
-@router.delete("/api/unavailability/{u_id}")
+@router.delete("/api/unavailability/{u_id}", dependencies=[RequireEditResources])
 async def delete_unavailability(u_id: int, db: Session = Depends(get_db)):
     u = db.query(ResourceUnavailability).join(Resource).filter(
         ResourceUnavailability.id == u_id,

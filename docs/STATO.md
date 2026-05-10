@@ -8,6 +8,17 @@
 
 ## Versione corrente
 
+**v3.5.0-alpha.66.16.0** — 11 maggio 2026 — Sprint R3: permission gate sweep
+
+Pattern systemico D audit chiuso. 27 mutator senza gate su 6 router
+(finance/pricelist/resources/dam/ai/planning) protetti via dependencies.
+Stato finale: 76/76 mutator protetti (100%). Closure leak salary
+viewer su resources.PUT.
+
+**Smoke**: 302 routes invariato, version 3.5.0-alpha.66.16.0.
+
+---
+
 **v3.5.0-alpha.66.15.4** — 11 maggio 2026 — Sprint R2 Step 1: helper unique-aware
 
 Chiude audit HIGH #2 — bug pre-check unicità Project.code che non

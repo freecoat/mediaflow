@@ -1,5 +1,68 @@
 # MediaFlow — Changelog
 
+## v3.5.0-alpha.66.16.0 — Sprint R3: permission gate sweep cross-router (11 maggio 2026)
+
+Chiude pattern systemico D dell'audit: 27 mutator senza permission gate
+distribuiti su 6 router minori (oltre quote già fatto in α.66.14.5).
+Censimento via subagent: 76 mutator totali → 49 già protetti (64%) → 27
+da chiudere. Tutti coperti in questo sweep.
+
+**Pattern applicato** (uniforme con quotes/finance):
+```python
+RequireXxx = Depends(requires_permission("perm_code"))
+
+@router.post("/api/...", dependencies=[RequireXxx])
+```
+
+**Router protetti** (27 endpoint nuovi, 0 vecchi toccati):
+
+### `finance.py` (5/5)
+- `POST /api/timesheets` → `edit_planning_own`
+- `POST /api/expenses` → `edit_invoices`
+- `POST /api/invoices` → `edit_invoices`
+- `POST /api/invoices/{id}/lines` → `edit_invoices`
+- `PUT /api/invoices/{id}/status` → `edit_invoices`
+
+### `pricelist.py` (7/7)
+- `POST /api/categories` → `edit_pricelist`
+- `PUT /api/categories/{cat_id}` → `edit_pricelist`
+- `DELETE /api/categories/{cat_id}` → `edit_pricelist`
+- `POST /api/items` → `edit_pricelist`
+- `PUT /api/items/{item_id}` → `edit_pricelist`
+- `DELETE /api/items/{item_id}` → `edit_pricelist`
+- `POST /api/import` → `edit_pricelist`
+
+### `resources.py` (5/5)
+- `POST /api`, `PUT /api/{id}`, `DELETE /api/{id}` → `edit_resources`
+- `POST /api/{id}/unavailability`, `DELETE /api/unavailability/{id}` → `edit_resources`
+- **Closure leak salary** a viewer (audit MEDIUM): senza gate chiunque
+  poteva mutare `monthly_gross_salary` via PUT.
+
+### `dam.py` (2/2)
+- `POST /api/assets/upload`, `DELETE /api/assets/{id}` → `edit_planning_all`
+  (fallback in mancanza di `manage_assets` dedicato — da rivedere)
+
+### `ai.py` (3/3)
+- `POST /api/quotes/{id}/review` → `view_quotes` (read-AI)
+- `POST /api/deliverables/parse` → `edit_quotes` (preludio creazione)
+- `POST /api/deliverables/create-quote` → `edit_quotes` (CRITICO: scriveva
+  Quote+QuoteLine senza alcun check)
+
+### `planning.py` (4/6, 2 skip-by-design)
+- `POST /api/clients` → `edit_clients`
+- `POST /api/jobs` (deprecated) → `edit_planning_all`
+- `PUT /api/jobs/{id}/status` → `edit_planning_all`
+- `POST /api/bookings/{id}/restore` → `edit_planning_all`
+- **Skip**: `POST /api/resource-presets` + `POST /api/booking-requests`
+  → restano "autenticato basta" (semantica per design utente standard).
+
+**Stato finale**: 76/76 mutator protetti (100%). Permission gate
+sistemico chiuso.
+
+**Smoke**: 302 routes invariato, version 3.5.0-alpha.66.16.0.
+
+---
+
 ## v3.5.0-alpha.66.15.4 — Sprint R2 Step 1: helper unique-aware + fix Project.code (11 maggio 2026)
 
 Continua R2. Chiude **audit HIGH #2**: bug pre-check unicità non

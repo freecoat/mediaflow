@@ -6,6 +6,7 @@ from sqlalchemy.orm import Session, joinedload
 from app.database import get_db
 from app.models import Asset, AssetType, Tag, AssetTag, User
 from app.services.dam import save_upload, generate_thumbnail, resolve_asset_type, delete_asset_files
+from app.services.rbac import requires_permission
 from app.context import current_tenant_id
 import os
 
@@ -13,6 +14,13 @@ router = APIRouter(prefix="/dam", tags=["dam"])
 
 # v3.5.0-alpha.66.15.2 — tenant scope (R1)
 CURRENT_TENANT = current_tenant_id()
+
+# v3.5.0-alpha.66.16.0 — Sprint R3: gate per upload/delete asset DAM.
+# Manca permesso DAM-specifico nello schema RBAC; usato `edit_planning_all`
+# come fallback ragionevole (chi gestisce la pianificazione operativa
+# tipicamente deve poter caricare e cancellare asset). Da rivedere se
+# Matteo introdurrà `manage_assets` dedicato.
+RequireEditDam = Depends(requires_permission("edit_planning_all"))
 
 
 def _tpl():
@@ -77,7 +85,7 @@ async def list_assets(
     ]
 
 
-@router.post("/api/assets/upload")
+@router.post("/api/assets/upload", dependencies=[RequireEditDam])
 async def upload_asset(
     file: UploadFile = File(...),
     job_id: Optional[int] = Form(None),
@@ -142,7 +150,7 @@ async def get_thumbnail(asset_id: int, db: Session = Depends(get_db)):
     return FileResponse(a.thumbnail_path, media_type="image/jpeg")
 
 
-@router.delete("/api/assets/{asset_id}")
+@router.delete("/api/assets/{asset_id}", dependencies=[RequireEditDam])
 async def delete_asset(asset_id: int, db: Session = Depends(get_db)):
     # v3.5.0-alpha.66.15.2 — tenant scope (R1)
     a = db.query(Asset).filter(Asset.id == asset_id, Asset.tenant_id == CURRENT_TENANT).first()

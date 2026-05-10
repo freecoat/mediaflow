@@ -34,8 +34,15 @@ from app.services.copilot_attachments import (
     save_attachment, embed_attachments_in_text, build_user_content_blocks,
     MAX_FILE_SIZE,
 )
+from app.services.rbac import requires_permission
 
 router = APIRouter(prefix="/ai", tags=["ai"])
+
+# v3.5.0-alpha.66.16.0 — Sprint R3: gate per i mutator AI che possono
+# scrivere su Quote (review è read-AI ma può materializzare suggestions;
+# parse + create-quote scrivono direttamente).
+RequireViewQuotes = Depends(requires_permission("view_quotes"))
+RequireEditQuotesAI = Depends(requires_permission("edit_quotes"))
 
 
 # v3.5.0-alpha.51 — Upload documenti per copilot
@@ -400,7 +407,7 @@ def _maybe_resume_loop(db: Session, act: AIAction, *,
 
 # ── Review quotazione ────────────────────────────────────────
 
-@router.post("/api/quotes/{quote_id}/review")
+@router.post("/api/quotes/{quote_id}/review", dependencies=[RequireViewQuotes])
 async def ai_review_quote(
     quote_id: int,
     access_token: Optional[str] = Cookie(None),
@@ -418,7 +425,7 @@ async def ai_review_quote(
 
 # ── Deliverables parser (upload capitolato) ──────────────────
 
-@router.post("/api/deliverables/parse")
+@router.post("/api/deliverables/parse", dependencies=[RequireEditQuotesAI])
 async def parse_deliverables_api(
     file: Optional[UploadFile] = File(None),
     text: Optional[str] = Form(None),
@@ -487,7 +494,7 @@ async def parse_deliverables_api(
 
 # ── Crea quotazione da capitolato confermato ─────────────────
 
-@router.post("/api/deliverables/create-quote")
+@router.post("/api/deliverables/create-quote", dependencies=[RequireEditQuotesAI])
 async def create_quote_from_deliverables(
     request: Request,
     db: Session = Depends(get_db),

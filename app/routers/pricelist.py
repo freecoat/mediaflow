@@ -15,10 +15,16 @@ from app.models import (
     PricelistSnapshot, PricelistSnapshotKind,
 )
 from app.services import pricelist_snapshot as plsnap
+from app.services.rbac import requires_permission
 
 router = APIRouter(prefix="/pricelist", tags=["pricelist"])
 
 CURRENT_TENANT = 1
+
+# v3.5.0-alpha.66.16.0 — Sprint R3: gate riusabile per i 7 mutator CRUD
+# (categorie + items + import) che non avevano alcun check (audit HIGH #4).
+# Pattern identico a quotes.RequireEditQuotes / finance.RequireEditInvoices.
+RequireEditPricelist = Depends(requires_permission("edit_pricelist"))
 
 
 def _tpl():
@@ -78,7 +84,7 @@ async def list_categories(db: Session = Depends(get_db)):
              "sort_order": c.sort_order, "item_count": len(c.items)} for c in cats]
 
 
-@router.post("/api/categories")
+@router.post("/api/categories", dependencies=[RequireEditPricelist])
 async def create_category(
     name: str = Form(...),
     description: Optional[str] = Form(None),
@@ -93,7 +99,7 @@ async def create_category(
     return {"id": c.id, "name": c.name}
 
 
-@router.put("/api/categories/{cat_id}")
+@router.put("/api/categories/{cat_id}", dependencies=[RequireEditPricelist])
 async def update_category(
     cat_id: int,
     name: Optional[str] = Form(None),
@@ -113,7 +119,7 @@ async def update_category(
     return {"id": c.id, "name": c.name}
 
 
-@router.delete("/api/categories/{cat_id}")
+@router.delete("/api/categories/{cat_id}", dependencies=[RequireEditPricelist])
 async def delete_category(cat_id: int, db: Session = Depends(get_db)):
     c = db.query(PriceCategory).filter(
         PriceCategory.id == cat_id,
@@ -178,7 +184,7 @@ async def get_item(item_id: int, db: Session = Depends(get_db)):
     }
 
 
-@router.post("/api/items")
+@router.post("/api/items", dependencies=[RequireEditPricelist])
 async def create_item(
     category_id: int = Form(...),
     department_id: Optional[int] = Form(None),
@@ -210,7 +216,7 @@ async def create_item(
     return {"id": item.id, "name": item.name}
 
 
-@router.put("/api/items/{item_id}")
+@router.put("/api/items/{item_id}", dependencies=[RequireEditPricelist])
 async def update_item(
     item_id: int,
     category_id: Optional[int] = Form(None),
@@ -248,7 +254,7 @@ async def update_item(
     return {"id": i.id, "name": i.name}
 
 
-@router.delete("/api/items/{item_id}")
+@router.delete("/api/items/{item_id}", dependencies=[RequireEditPricelist])
 async def delete_item(item_id: int, db: Session = Depends(get_db)):
     i = db.query(PriceItem).filter(
         PriceItem.id == item_id,
@@ -414,7 +420,7 @@ async def export_pricelist_xlsx(db: Session = Depends(get_db)):
     )
 
 
-@router.post("/api/import")
+@router.post("/api/import", dependencies=[RequireEditPricelist])
 async def import_pricelist(
     file: UploadFile = File(...),
     mode: str = Form("merge"),

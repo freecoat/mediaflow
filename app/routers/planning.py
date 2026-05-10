@@ -28,7 +28,14 @@ def _parse_priority(value):
     return BookingPriority.normal
 from datetime import date as _date, timedelta as _td
 from app.services.auth import get_current_user_from_token
-from app.services.rbac import is_elevated, scope_resource_id, current_user_optional
+from app.services.rbac import is_elevated, scope_resource_id, current_user_optional, requires_permission
+
+# v3.5.0-alpha.66.16.0 — Sprint R3: gate per i 4 mutator planning senza
+# protezione (audit HIGH #4). Endpoint duplicati di clients/jobs (CRUD)
+# qui chiusi finché non rimossi (refactor R7); job status FSM e restore
+# booking ricevono permessi specifici.
+RequireEditClients = Depends(requires_permission("edit_clients"))
+RequireEditPlanningAll = Depends(requires_permission("edit_planning_all"))
 
 router = APIRouter(prefix="/planning", tags=["planning"])
 
@@ -202,7 +209,7 @@ async def list_clients(db: Session = Depends(get_db)):
     return db.query(Client).all()
 
 
-@router.post("/api/clients")
+@router.post("/api/clients", dependencies=[RequireEditClients])
 async def create_client(
     name: str = Form(...),
     contact_email: Optional[str] = Form(None),
@@ -373,7 +380,7 @@ async def list_jobs(
     return out
 
 
-@router.post("/api/jobs", deprecated=True)
+@router.post("/api/jobs", deprecated=True, dependencies=[RequireEditPlanningAll])
 async def create_job(
     code: str = Form(...),
     title: str = Form(...),
@@ -424,7 +431,7 @@ JOB_STATUS_TRANSITIONS = {
 }
 
 
-@router.put("/api/jobs/{job_id}/status")
+@router.put("/api/jobs/{job_id}/status", dependencies=[RequireEditPlanningAll])
 async def update_job_status(
     job_id: int,
     request: Request,
@@ -3424,7 +3431,7 @@ async def delete_unavailability(u_id: int, request: Request, db: Session = Depen
     return {"ok": True}
 
 
-@router.post("/api/bookings/{booking_id}/restore")
+@router.post("/api/bookings/{booking_id}/restore", dependencies=[RequireEditPlanningAll])
 async def restore_booking(booking_id: int, db: Session = Depends(get_db)):
     """Ripristina un booking cancellato (per undo)."""
     b = db.query(Booking).filter(

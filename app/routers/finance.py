@@ -11,8 +11,14 @@ from app.models import (
     Job, JobStatus, JobCostLine, Quote, QuoteStatus, Project,
 )
 from app.services.finance import job_financial_summary, company_pl_summary
+from app.services.rbac import requires_permission
 
 router = APIRouter(prefix="/finance", tags=["finance"])
+
+# v3.5.0-alpha.66.16.0 — Sprint R3 (permission gate sweep). Pattern
+# identico a quotes.RequireEditQuotes (α.66.14.5).
+RequireEditInvoices = Depends(requires_permission("edit_invoices"))
+RequireEditPlanningOwn = Depends(requires_permission("edit_planning_own"))
 
 
 def _tpl():
@@ -46,7 +52,7 @@ async def list_timesheets(
     return q.all()
 
 
-@router.post("/api/timesheets")
+@router.post("/api/timesheets", dependencies=[RequireEditPlanningOwn])
 async def log_hours(
     user_id: int = Form(...),
     job_id: int = Form(...),
@@ -70,7 +76,7 @@ async def log_hours(
 
 # ── Spese API ─────────────────────────────────────────────────────────
 
-@router.post("/api/expenses")
+@router.post("/api/expenses", dependencies=[RequireEditInvoices])
 async def add_expense(
     job_id: int = Form(...),
     description: str = Form(...),
@@ -106,7 +112,7 @@ async def list_invoices(
     return q.all()
 
 
-@router.post("/api/invoices")
+@router.post("/api/invoices", dependencies=[RequireEditInvoices])
 async def create_invoice(
     number: str = Form(...),
     client_id: int = Form(...),
@@ -128,7 +134,7 @@ async def create_invoice(
     return inv
 
 
-@router.post("/api/invoices/{invoice_id}/lines")
+@router.post("/api/invoices/{invoice_id}/lines", dependencies=[RequireEditInvoices])
 async def add_invoice_line(
     invoice_id: int,
     description: str = Form(...),
@@ -152,7 +158,7 @@ async def add_invoice_line(
     return line
 
 
-@router.put("/api/invoices/{invoice_id}/status")
+@router.put("/api/invoices/{invoice_id}/status", dependencies=[RequireEditInvoices])
 async def update_invoice_status(
     invoice_id: int,
     status: InvoiceStatus = Form(...),
