@@ -487,6 +487,11 @@ async def company_get(
         "default_currency": t.default_currency,
         "default_vat_rate": t.default_vat_rate,
         "default_language": t.default_language,
+        # v3.5.0-alpha.66.13 — Branding
+        "tagline": getattr(t, "tagline", None),
+        "brand_color": getattr(t, "brand_color", None) or "#6272f5",
+        "show_powered_by": bool(getattr(t, "show_powered_by", True)),
+        "document_header": getattr(t, "document_header", None),
     }
 
 
@@ -509,6 +514,11 @@ async def company_update(
     payment_method_default: Optional[str] = Form(None),
     invoice_footer: Optional[str] = Form(None),
     default_vat_rate: Optional[float] = Form(None),
+    # v3.5.0-alpha.66.13 — Branding
+    tagline: Optional[str] = Form(None),
+    brand_color: Optional[str] = Form(None),
+    document_header: Optional[str] = Form(None),
+    show_powered_by: Optional[str] = Form(None),
     access_token: Optional[str] = Cookie(None),
     db: Session = Depends(get_db),
 ):
@@ -533,6 +543,9 @@ async def company_update(
         payment_terms_default=payment_terms_default,
         payment_method_default=payment_method_default,
         invoice_footer=invoice_footer, default_vat_rate=default_vat_rate,
+        # Branding
+        tagline=tagline, brand_color=brand_color,
+        document_header=document_header,
     )
     for k, v in fields.items():
         if v is None:
@@ -540,7 +553,15 @@ async def company_update(
         # stringhe vuote ammesse come "azzera campo" (Optional)
         if isinstance(v, str):
             v = v.strip() or None
+        # Validazione brand_color: hex 6 caratteri
+        if k == "brand_color" and v:
+            import re as _re
+            if not _re.match(r"^#[0-9a-fA-F]{6}$", v):
+                v = None  # silenziosamente droppa hex non validi
         setattr(t, k, v)
+    # Boolean separato (Form invia 'true'/'false' string)
+    if show_powered_by is not None:
+        t.show_powered_by = (show_powered_by.strip().lower() == "true")
     db.commit()
     db.refresh(t)
     return {"ok": True, "id": t.id}

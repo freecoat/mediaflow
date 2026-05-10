@@ -4,10 +4,14 @@ Genera PDF quotazione in italiano con header tenant, raggruppamento dinamico per
 categoria, subtotali, sconti multilivello e box totali.
 """
 from io import BytesIO
+from pathlib import Path
 from reportlab.lib.pagesizes import A4
 from reportlab.lib import colors
 from reportlab.lib.units import mm
-from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer, HRFlowable
+from reportlab.platypus import (
+    SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer, HRFlowable,
+    Image as RLImage,
+)
 from reportlab.lib.styles import ParagraphStyle
 from reportlab.lib.enums import TA_RIGHT, TA_CENTER, TA_LEFT
 
@@ -56,22 +60,35 @@ def _line_category(line) -> str:
 
 
 def _get_tenant_info(quote):
-    """Ricava i dati del tenant dal client/quote. Fallback se la relazione non c'è."""
+    """Ricava i dati del tenant + branding completo (v3.5.0-alpha.66.13).
+
+    Restituisce dict con: name + address + email + phone + website + vat
+    + tagline + brand_color + show_powered_by + logo_path + document_header.
+    """
     try:
         from app.database import SessionLocal
-        from app.models.models import Tenant
+        from app.services.branding import get_branding
         with SessionLocal() as db:
-            t = db.query(Tenant).first()
-            if t:
-                return {
-                    "name": t.legal_name or t.name,
-                    "vat": t.vat_number, "address": t.address,
-                    "email": t.email, "phone": t.phone, "website": t.website,
-                }
+            b = get_branding(db)
+            return {
+                "name": b["name"],
+                "vat": b["vat_number"] or None,
+                "address": b["address"] or None,
+                "email": b["email"] or None,
+                "phone": b["phone"] or None,
+                "website": b["website"] or None,
+                "tagline": b["tagline"],
+                "brand_color": b["brand_color"],
+                "show_powered_by": b["show_powered_by"],
+                "logo_path": b["logo_path"],
+                "document_header": b["document_header"],
+            }
     except Exception:
         pass
     return {"name": "MediaFlow", "vat": None, "address": None,
-            "email": None, "phone": None, "website": None}
+            "email": None, "phone": None, "website": None,
+            "tagline": "", "brand_color": "#6272f5",
+            "show_powered_by": True, "logo_path": None, "document_header": ""}
 
 
 def generate_quote_pdf(quote) -> bytes:
@@ -82,10 +99,17 @@ def generate_quote_pdf(quote) -> bytes:
     story = []
 
     tenant = _get_tenant_info(quote)
+    # v3.5.0-alpha.66.13 — Branding: brand_color + tagline + logo
+    brand_hex = tenant.get("brand_color") or "#6272f5"
+    try:
+        BRAND = colors.HexColor(brand_hex)
+    except Exception:
+        BRAND = INDIGO
 
     # ── Header: brand a sinistra, numero quote a destra ───────
     tenant_lines = []
     if tenant["name"]:    tenant_lines.append(f"<b>{tenant['name']}</b>")
+    if tenant.get("tagline"): tenant_lines.append(f"<i>{tenant['tagline']}</i>")
     if tenant["address"]: tenant_lines.append(tenant['address'])
     contact_bits = []
     if tenant["email"]:   contact_bits.append(tenant["email"])
@@ -96,19 +120,42 @@ def generate_quote_pdf(quote) -> bytes:
     tenant_block = Paragraph("<br/>".join(tenant_lines) or "MediaFlow",
         ParagraphStyle("tt", fontSize=8, textColor=GRAY, leading=11))
 
+    # Logo opzionale: messo in colonna dedicata se presente
+    logo_flow = None
+    logo_path = tenant.get("logo_path")
+    if logo_path:
+        try:
+            p = Path(logo_path) if not isinstance(logo_path, Path) else logo_path
+            if p.exists() and p.stat().st_size < 5_000_000:
+                logo_flow = RLImage(str(p), width=35*mm, height=16*mm, kind="proportional")
+        except Exception:
+            logo_flow = None
+
     quote_meta = [
-        f'<font size="22" color="#6272f5"><b>QUOTAZIONE</b></font>',
+        f'<font size="22" color="{brand_hex}"><b>QUOTAZIONE</b></font>',
         f'<font size="14" color="#1a1a2e"><b>{quote.number}</b></font>'
         + (f'<font size="9" color="#7a8198">  ·  versione {quote.version}</font>' if quote.version and quote.version != 1 else ''),
     ]
     quote_block = Paragraph("<br/>".join(quote_meta),
         ParagraphStyle("qm", fontSize=10, alignment=TA_RIGHT, leading=22))
 
-    hdr = Table([[tenant_block, quote_block]], colWidths=[100*mm, 80*mm])
+    if logo_flow:
+        # 3 colonne: logo + tenant info + quote meta
+        hdr = Table([[logo_flow, tenant_block, quote_block]],
+                    colWidths=[40*mm, 60*mm, 80*mm])
+    else:
+        hdr = Table([[tenant_block, quote_block]], colWidths=[100*mm, 80*mm])
     hdr.setStyle(TableStyle([("VALIGN", (0,0), (-1,-1), "TOP")]))
     story.append(hdr)
     story.append(Spacer(1, 3*mm))
-    story.append(HRFlowable(width="100%", thickness=2, color=INDIGO, spaceAfter=4*mm))
+    story.append(HRFlowable(width="100%", thickness=2, color=BRAND, spaceAfter=4*mm))
+
+    # Document header opzionale
+    if tenant.get("document_header"):
+        story.append(Paragraph(
+            tenant["document_header"].replace("\n", "<br/>"),
+            ParagraphStyle("dh", fontSize=9, textColor=DARK, leading=12)))
+        story.append(Spacer(1, 4*mm))
 
     # ── Blocco cliente + dati emissione su due colonne ─────────
     client = quote.client
@@ -431,6 +478,10 @@ def generate_quote_pdf(quote) -> bytes:
         "Si applicano le nostre Condizioni Generali di Vendita.  ·  "
         "Spese di spedizione, corriere e trasferte non sono incluse e verranno fatturate separatamente.",
         7, GRAY, align=TA_CENTER))
+    # v3.5.0-alpha.66.13 — Footer branding "powered by" toggleable
+    if tenant.get("show_powered_by", True):
+        story.append(Spacer(1, 1*mm))
+        story.append(_p("Generato con MediaFlow", 6, GRAY, align=TA_CENTER))
 
     doc.build(story)
     return buf.getvalue()

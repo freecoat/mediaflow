@@ -8,6 +8,33 @@
 
 ## Versione corrente
 
+**v3.5.0-alpha.66.13** — 10 maggio 2026 — Branding aziendale completo
+
+Personalizzazione documenti azienda applicata a quote PDF, cost report
+cliente PDF e fattura PDF: logo + tagline + brand_color + intestazione
+documento + footer "Generato con MediaFlow" toggleable per white-label.
+
+**Tenant esteso** (4 campi, ALTER TABLE auto al boot):
+- tagline + brand_color (hex) + show_powered_by + document_header
+
+**Service nuovo**: `app/services/branding.py` con `get_branding(db)`
+single source of truth per tutti i PDF.
+
+**PDF aggiornati**: quote (logo nell'header, brand_color sul titolo),
+cost report cliente (parametro `branding=` nuovo), invoice (footer
+toggleable). Tutti rispettano `show_powered_by=False` per white-label.
+
+**UI /settings#company**: blocco "Branding documenti" con tagline,
+color picker + hex sincronizzati, intestazione documento, checkbox
+powered_by.
+
+**Smoke E2E**: PUT con brand_color #a855f7 + powered_by=false → 200,
+get_branding helper restituisce dict completo.
+
+**Smoke**: 302 routes invariato, version 3.5.0-alpha.66.13.
+
+---
+
 **v3.5.0-alpha.66.12** — 10 maggio 2026 — PhysicalAsset CRUD UI
 
 Nuova pagina `/physical-assets` per gestire LTO/HDD/CRU/Blu-Ray/DVD/Case
@@ -171,8 +198,8 @@ strategica con Matteo (10 maggio). Sequenza concordata:
 | α.66.10 | UI cost-rate Resource con live preview | ✅ chiuso |
 | α.66.11 | Cost report split cliente vs interno (hardcost ore deliverable solo interno) | ✅ chiuso |
 | α.66.12 | PhysicalAsset CRUD UI | ✅ chiuso |
-| α.66.13 | Branding aziendale (logo + intestazione applicati a tutti i documenti) | 🔜 next |
-| α.66.14+ | UI deliverable kanban + edit completo + bridge DAM + copilot QC | 🔜 |
+| α.66.13 | Branding aziendale (logo + tagline + brand_color + powered_by toggle) | ✅ chiuso |
+| α.66.14+ | UI deliverable kanban + edit completo + bridge DAM + copilot QC + cost report split UI completa | 🔜 |
 
 **Decisioni architetturali fissate (10 maggio)** per i prossimi step:
 - **Deliverable ≠ "no ore"**: anche un DCP/ProRes ha ore di produzione che vanno

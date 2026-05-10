@@ -429,12 +429,15 @@ def generate_invoice_pdf(
         story.append(HRFlowable(width="100%", thickness=0.4, color=GRAY_LT, spaceBefore=2 * mm, spaceAfter=2 * mm))
         story.append(_p(footer_text, size=8, color=GRAY, leading=11))
 
-    # Footer fisso documento
+    # Footer fisso documento (v3.5.0-alpha.66.13: powered_by toggleable)
     story.append(Spacer(1, 4 * mm))
     story.append(HRFlowable(width="100%", thickness=0.3, color=GRAY_LT, spaceAfter=2 * mm))
+    show_powered = bool(getattr(tenant, "show_powered_by", True)) if tenant else True
+    footer_bits = [cedente_name, f"Tipo documento {invoice.doc_type or 'TD01'} ({doc_label})"]
+    if show_powered:
+        footer_bits.insert(1, "Generato con MediaFlow")
     story.append(_p(
-        f"Documento generato da MediaFlow · {cedente_name} · "
-        f"Tipo documento {invoice.doc_type or 'TD01'} ({doc_label})",
+        " · ".join(footer_bits),
         size=7, color=GRAY, align=TA_CENTER,
     ))
 

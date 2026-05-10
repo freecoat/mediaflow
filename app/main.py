@@ -185,6 +185,11 @@ def _auto_migrate_columns():
             ("payment_terms_default",   "INTEGER NOT NULL DEFAULT 30"),
             ("payment_method_default",  "VARCHAR(80) NOT NULL DEFAULT 'Bonifico bancario'"),
             ("invoice_footer",          "TEXT NULL"),
+            # v3.5.0-alpha.66.13 — Branding aziendale
+            ("tagline",                 "VARCHAR(255) NULL"),
+            ("brand_color",             "VARCHAR(7) NULL"),
+            ("show_powered_by",         "BOOLEAN NOT NULL DEFAULT 1"),
+            ("document_header",         "TEXT NULL"),
         ]
         with engine.begin() as conn:
             for col, ddl in t_alter:
@@ -547,7 +552,7 @@ async def lifespan(app: FastAPI):
     yield
 
 
-app = FastAPI(title="MediaFlow", version="3.5.0-alpha.66.12", lifespan=lifespan)
+app = FastAPI(title="MediaFlow", version="3.5.0-alpha.66.13", lifespan=lifespan)
 
 BASE_DIR = Path(__file__).parent
 app.mount("/static", StaticFiles(directory=BASE_DIR / "static"), name="static")

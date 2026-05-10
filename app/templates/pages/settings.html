@@ -420,6 +420,40 @@
             <textarea class="form-input" id="cmp-invoice_footer" rows="2" placeholder="Pagamento entro la data di scadenza. In caso di ritardo si applicano interessi ex D.Lgs. 231/2002."></textarea></div>
         </div>
 
+        <!-- v3.5.0-alpha.66.13 — Branding aziendale -->
+        <div style="margin-top:18px; padding:14px; background:var(--bg2); border:1px solid var(--border); border-radius:6px;">
+          <div style="font-weight:500; margin-bottom:10px;"><i data-lucide="palette" style="width:14px;height:14px;vertical-align:-2px;"></i> Branding documenti</div>
+          <p class="text-xs text-muted" style="margin-top:0; margin-bottom:10px;">
+            Personalizzazione applicata a quotazioni, cost report cliente e fatture: tagline, colore primario PDF, intestazione documento, footer.
+          </p>
+          <div style="display:grid; grid-template-columns:repeat(2,1fr); gap:10px;">
+            <div class="form-group">
+              <label class="form-label">Tagline / claim</label>
+              <input class="form-input" id="cmp-tagline" placeholder="es. Post-production house since 2003" maxlength="255">
+              <div class="text-xs text-muted" style="margin-top:3px;">Sottotitolo opzionale sotto il nome azienda nei PDF.</div>
+            </div>
+            <div class="form-group">
+              <label class="form-label">Colore primario PDF</label>
+              <div style="display:flex; gap:8px; align-items:center;">
+                <input type="color" id="cmp-brand_color" value="#6272f5" style="width:40px; height:34px; padding:0; border:1px solid var(--border); border-radius:4px;">
+                <input class="form-input" id="cmp-brand_color_hex" placeholder="#6272f5" maxlength="7" style="font-family:monospace;">
+              </div>
+              <div class="text-xs text-muted" style="margin-top:3px;">Usato come accent color (titoli, separatori, header tabelle) nei PDF.</div>
+            </div>
+            <div class="form-group" style="grid-column:1/-1;">
+              <label class="form-label">Intestazione documento (opzionale)</label>
+              <textarea class="form-input" id="cmp-document_header" rows="2" placeholder="Testo libero che appare sotto il logo, sopra il contenuto del documento."></textarea>
+            </div>
+            <div class="form-group" style="grid-column:1/-1;">
+              <label style="display:flex; align-items:center; gap:8px;">
+                <input type="checkbox" id="cmp-show_powered_by" checked>
+                <span class="text-sm">Mostra "Generato con MediaFlow" nel footer dei documenti</span>
+              </label>
+              <div class="text-xs text-muted" style="margin-top:3px;">Disattivalo per fattura/quote completamente white-label.</div>
+            </div>
+          </div>
+        </div>
+
         <div style="display:flex; gap:8px; align-items:center; margin-top:12px; padding:12px; background:var(--bg2); border:1px solid var(--border); border-radius:6px;">
           <div style="flex:1;">
             <div style="font-weight:500;">Logo aziendale</div>
@@ -1165,12 +1199,17 @@ async function aiDelete(provider) {
 loadAISettings();
 
 // ── v3.5.0-alpha.52: Tab Azienda (dati fiscali per fattura) ──
+// v3.5.0-alpha.66.13: aggiunti campi branding (tagline, brand_color,
+// document_header, show_powered_by).
 const CMP_FIELDS = [
   'name', 'legal_name', 'vat_number', 'tax_code', 'address',
   'email', 'phone', 'website', 'rea_number', 'fiscal_capital',
   'fiscal_regime', 'sdi_code', 'iban', 'payment_method_default',
   'payment_terms_default', 'default_vat_rate', 'invoice_footer',
+  'tagline', 'brand_color', 'document_header',
 ];
+// Boolean separati: serializzati come 'true'/'false' nel form
+const CMP_BOOL_FIELDS = ['show_powered_by'];
 
 async function cmpLoad() {
   try {
@@ -1180,9 +1219,34 @@ async function cmpLoad() {
       if (!el) return;
       el.value = (data[f] === null || data[f] === undefined) ? '' : data[f];
     });
+    CMP_BOOL_FIELDS.forEach(f => {
+      const el = document.getElementById('cmp-' + f);
+      if (!el) return;
+      el.checked = !!data[f];
+    });
+    // Sincronizza color picker + hex input
+    const bcHex = document.getElementById('cmp-brand_color_hex');
+    const bcPicker = document.getElementById('cmp-brand_color');
+    if (bcHex && bcPicker) {
+      const v = data.brand_color || '#6272f5';
+      bcHex.value = v;
+      bcPicker.value = v;
+    }
     cmpRenderLogo(data.logo_path);
   } catch (e) { console.warn('cmpLoad failed', e); }
 }
+
+// Sync color picker ↔ hex input
+document.addEventListener('input', (e) => {
+  if (e.target.id === 'cmp-brand_color') {
+    const hex = document.getElementById('cmp-brand_color_hex');
+    if (hex) hex.value = e.target.value;
+  } else if (e.target.id === 'cmp-brand_color_hex') {
+    const picker = document.getElementById('cmp-brand_color');
+    const v = e.target.value.trim();
+    if (picker && /^#[0-9a-fA-F]{6}$/.test(v)) picker.value = v;
+  }
+});
 
 function cmpRenderLogo(path) {
   const box = document.getElementById('cmp-logo-preview');
@@ -1200,7 +1264,20 @@ async function cmpSave() {
   CMP_FIELDS.forEach(f => {
     const el = document.getElementById('cmp-' + f);
     if (!el) return;
+    // Per brand_color preferiamo l'hex input se valido (consente lower/upper case)
+    if (f === 'brand_color') {
+      const hex = document.getElementById('cmp-brand_color_hex');
+      const picker = document.getElementById('cmp-brand_color');
+      const v = (hex && /^#[0-9a-fA-F]{6}$/.test(hex.value.trim())) ? hex.value.trim() : (picker ? picker.value : '#6272f5');
+      fd.append(f, v);
+      return;
+    }
     fd.append(f, el.value || '');
+  });
+  CMP_BOOL_FIELDS.forEach(f => {
+    const el = document.getElementById('cmp-' + f);
+    if (!el) return;
+    fd.append(f, el.checked ? 'true' : 'false');
   });
   try {
     const r = await fetch('/settings/api/company', { method: 'PUT', body: fd, credentials: 'same-origin' });

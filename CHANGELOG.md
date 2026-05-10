@@ -1,5 +1,68 @@
 # MediaFlow — Changelog
 
+## v3.5.0-alpha.66.13 — Branding aziendale completo (10 maggio 2026)
+
+Personalizzazione tool per azienda applicata a quote PDF, cost report
+cliente PDF e fattura PDF: logo + tagline + colore primario + intestazione
+documento + footer "powered by" toggleable per white-label completo.
+
+**Modello esteso `Tenant`** (4 campi nuovi, ALTER TABLE auto al boot):
+- `tagline` (claim/sottotitolo opzionale, max 255 char)
+- `brand_color` (hex `#RRGGBB`, default `#6272f5`) — usato come accent
+  nei PDF (titoli, separatori, label)
+- `show_powered_by` (bool, default True) — toggle "Generato con MediaFlow"
+  nel footer dei documenti
+- `document_header` (text libero opzionale) — intestazione che appare
+  sotto il logo, sopra il contenuto del documento (note legali, codice
+  riservatezza, ecc.)
+
+**Service nuovo** `app/services/branding.py`:
+- `get_branding(db, tenant_id=1)` — single source of truth: prepara dict
+  con name/short_name/tagline/info/info_html/logo_path (Path absolute)/
+  brand_color/show_powered_by/document_header. Robusto a tenant=None.
+
+**PDF aggiornati**:
+- `quote_pdf.py` — logo nell'header (3 colonne se presente: logo + tenant
+  info + quote meta), titolo "QUOTAZIONE" usa `brand_color`, tagline come
+  sottotitolo, document_header opzionale sotto la HR, footer "Generato
+  con MediaFlow" toggleable.
+- `pdf_export.py` (cost report cliente) — accetta nuovo parametro
+  `branding`. Logo + tagline + brand_color + document_header + footer.
+- `invoice_pdf.py` — footer "Generato con MediaFlow" toggleable. Logo
+  era già presente da v3.5.0-alpha.52.
+
+**UI `/settings#company`**:
+- Nuovo blocco "🎨 Branding documenti" con 4 campi:
+  - Tagline (input text)
+  - Colore primario PDF (color picker + hex input sincronizzati)
+  - Intestazione documento (textarea)
+  - Checkbox "Mostra 'Generato con MediaFlow' nel footer"
+
+**Backend** `/settings/api/company` (PUT/GET):
+- Esposti e accettati i 4 nuovi campi.
+- `brand_color` validato come `#[0-9a-fA-F]{6}` (hex non validi droppati).
+- `show_powered_by` ricevuto come `'true'`/`'false'` string.
+
+**Smoke E2E**:
+- ALTER TABLE applicate al boot (4 colonne).
+- PUT branding con tagline + brand_color #a855f7 + show_powered_by=false +
+  document_header → 200, tutti i 4 campi persistiti correttamente.
+- get_branding helper restituisce dict completo.
+
+**Smoke**: 302 routes invariato, version `3.5.0-alpha.66.13`.
+
+**Verifica live**:
+1. `/settings#company` → blocco "🎨 Branding documenti" → compila tagline
+   + scegli colore con picker → spunta off "Generato con MediaFlow" →
+   compila intestazione → "Salva dati aziendali".
+2. `/quotes/{id}/pdf` → header con logo + tagline + titolo "QUOTAZIONE"
+   nel colore scelto + intestazione documento.
+3. `/cost-report/api/job/{id}/client-pdf` → idem (RENDICONTAZIONE).
+4. Footer sui PDF: solo nome azienda, no "Generato con MediaFlow".
+5. Cambio colore in `#22c55e` → ricarica PDF → nuovo accent verde.
+
+---
+
 ## v3.5.0-alpha.66.12 — PhysicalAsset CRUD UI (10 maggio 2026)
 
 UI per il modello `PhysicalAsset` introdotto in α.66.9. Nuova pagina

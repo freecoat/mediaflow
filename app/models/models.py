@@ -358,6 +358,11 @@ class Tenant(Base):
     payment_terms_default: Mapped[int] = mapped_column(Integer, default=30)            # giorni
     payment_method_default: Mapped[str] = mapped_column(String(80), default="Bonifico bancario")
     invoice_footer: Mapped[Optional[str]] = mapped_column(Text, nullable=True)         # testo libero in calce
+    # v3.5.0-alpha.66.13 — Branding aziendale per PDF (quote/cost report/invoice)
+    tagline: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)        # claim/sottotitolo opzionale
+    brand_color: Mapped[Optional[str]] = mapped_column(String(7), nullable=True)      # hex es. #6272f5 — usato come accent nei PDF
+    show_powered_by: Mapped[bool] = mapped_column(Boolean, default=True)              # toggle "Generato da MediaFlow" in footer PDF
+    document_header: Mapped[Optional[str]] = mapped_column(Text, nullable=True)       # intestazione libera (HTML-light) sopra ogni doc
     # Stato
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
     onboarding_completed: Mapped[bool] = mapped_column(Boolean, default=False)

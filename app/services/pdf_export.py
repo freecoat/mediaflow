@@ -4,12 +4,13 @@ Genera PDF fatture con ReportLab (compatibile Windows senza dipendenze native).
 """
 from io import BytesIO
 from datetime import date
+from pathlib import Path
 from reportlab.lib.pagesizes import A4
 from reportlab.lib import colors
 from reportlab.lib.units import mm
 from reportlab.platypus import (
     SimpleDocTemplate, Table, TableStyle, Paragraph,
-    Spacer, HRFlowable
+    Spacer, HRFlowable, Image as RLImage,
 )
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.lib.enums import TA_RIGHT, TA_LEFT, TA_CENTER
@@ -183,7 +184,8 @@ def generate_invoice_pdf(invoice: dict, lines: list[dict], company: dict = None)
 
 def generate_client_cost_report_pdf(report: dict, company: dict = None,
                                     rendiconto: bool = False,
-                                    vista: str = "now") -> bytes:
+                                    vista: str = "now",
+                                    branding: dict = None) -> bytes:
     """v3.4.33 — Cost report **vista cliente** in PDF.
 
     A differenza di `generate_invoice_pdf` (fatturazione), questo è un report
@@ -213,7 +215,15 @@ def generate_client_cost_report_pdf(report: dict, company: dict = None,
     styles = getSampleStyleSheet()
     story = []
 
-    h1 = ParagraphStyle("h1", fontSize=22, textColor=INDIGO,
+    # v3.5.0-alpha.66.13 — Branding tenant: brand_color + logo + tagline
+    branding = branding or {}
+    brand_hex = branding.get("brand_color") or "#6272f5"
+    try:
+        BRAND = colors.HexColor(brand_hex)
+    except Exception:
+        BRAND = INDIGO
+
+    h1 = ParagraphStyle("h1", fontSize=22, textColor=BRAND,
                         fontName="Helvetica-Bold", spaceAfter=2*mm)
     h2 = ParagraphStyle("h2", fontSize=11, textColor=BLACK,
                         fontName="Helvetica-Bold", spaceAfter=1*mm)
@@ -223,9 +233,15 @@ def generate_client_cost_report_pdf(report: dict, company: dict = None,
                            fontName="Helvetica", leading=12)
     right = ParagraphStyle("right", fontSize=9, textColor=BLACK,
                            fontName="Helvetica", alignment=TA_RIGHT)
+    tagline_style = ParagraphStyle("tagline", fontSize=9, textColor=BRAND,
+                                   fontName="Helvetica-Oblique", leading=12)
 
-    company_name = (company or {}).get("name", "MediaFlow")
-    company_info = (company or {}).get("info", "")
+    company_name = branding.get("name") or (company or {}).get("name") or "MediaFlow"
+    company_info = branding.get("info") or (company or {}).get("info") or ""
+    tagline = branding.get("tagline") or ""
+    document_header = branding.get("document_header") or ""
+    show_powered_by = branding.get("show_powered_by", True)
+    logo_path = branding.get("logo_path")  # Path o None
 
     job = report.get("job", {})
     job_code = job.get("code", "—")
@@ -234,12 +250,44 @@ def generate_client_cost_report_pdf(report: dict, company: dict = None,
     start = job.get("start_date") or "—"
     end = job.get("end_date") or "—"
 
-    # ── Header ───────────────────────────────────────────────
+    # ── Header con logo (v3.5.0-alpha.66.13) ─────────────────
+    logo_flow = None
+    if logo_path:
+        try:
+            p = Path(logo_path) if not isinstance(logo_path, Path) else logo_path
+            if p.exists() and p.stat().st_size < 5_000_000:
+                logo_flow = RLImage(str(p), width=40*mm, height=18*mm, kind="proportional")
+        except Exception:
+            logo_flow = None
+
+    name_block_parts = [Paragraph(f"<b>{company_name}</b>", h1)]
+    if tagline:
+        name_block_parts.append(Paragraph(tagline, tagline_style))
+
+    if logo_flow:
+        name_cell = Table([[logo_flow], *[[p] for p in name_block_parts]],
+                          colWidths=[90*mm])
+        name_cell.setStyle(TableStyle([
+            ("LEFTPADDING", (0,0), (-1,-1), 0),
+            ("RIGHTPADDING", (0,0), (-1,-1), 0),
+            ("BOTTOMPADDING", (0,0), (0,0), 2*mm),
+            ("TOPPADDING", (0,0), (-1,-1), 0),
+        ]))
+        left_block = name_cell
+    elif tagline:
+        left_block = Table([[p] for p in name_block_parts], colWidths=[90*mm])
+        left_block.setStyle(TableStyle([
+            ("LEFTPADDING", (0,0), (-1,-1), 0),
+            ("RIGHTPADDING", (0,0), (-1,-1), 0),
+        ]))
+    else:
+        left_block = name_block_parts[0]
+
     header_data = [
-        [Paragraph(f"<b>{company_name}</b>", h1),
+        [left_block,
          Paragraph("RENDICONTAZIONE",
                    ParagraphStyle("title_label", fontSize=18,
-                                  textColor=INDIGO, fontName="Helvetica-Bold",
+                                  textColor=BRAND, fontName="Helvetica-Bold",
                                   alignment=TA_RIGHT))],
         [Paragraph(company_info.replace("\n", "<br/>") if company_info else "", muted),
          Paragraph(
@@ -256,7 +304,12 @@ def generate_client_cost_report_pdf(report: dict, company: dict = None,
         ("BOTTOMPADDING", (0,0), (-1,-1), 4*mm),
     ]))
     story.append(header_table)
-    story.append(HRFlowable(width="100%", thickness=1, color=INDIGO, spaceAfter=4*mm))
+    story.append(HRFlowable(width="100%", thickness=1, color=BRAND, spaceAfter=4*mm))
+
+    # Document header opzionale (sopra il contenuto del report)
+    if document_header:
+        story.append(Paragraph(document_header.replace("\n", "<br/>"), body))
+        story.append(Spacer(1, 4*mm))
 
     # ── Cliente ──────────────────────────────────────────────
     story.append(Paragraph("Cliente", muted))
@@ -450,12 +503,15 @@ def generate_client_cost_report_pdf(report: dict, company: dict = None,
         ]))
         story.append(ott)
 
-    # ── Footer ───────────────────────────────────────────────
+    # ── Footer (v3.5.0-alpha.66.13: branding-aware) ──────────
     story.append(Spacer(1, 12*mm))
     story.append(HRFlowable(width="100%", thickness=0.5, color=GRAY, spaceAfter=2*mm))
+    footer_bits = [f"<b>{company_name}</b>"]
+    if show_powered_by:
+        footer_bits.append("Generato con MediaFlow")
+    footer_bits.append("Rendicontazione lavorazioni — non è una fattura")
     story.append(Paragraph(
-        f"Documento generato da MediaFlow · {company_name} · "
-        f"Rendicontazione lavorazioni — non è una fattura",
+        " · ".join(footer_bits),
         ParagraphStyle("footer", fontSize=7, textColor=GRAY,
                        fontName="Helvetica", alignment=TA_CENTER)
     ))
