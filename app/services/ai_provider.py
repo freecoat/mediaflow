@@ -102,6 +102,122 @@ PROVIDER_LABELS: dict[str, str] = {
 }
 
 
+# v3.5.0-alpha.66.16.4 — Tabella prezzi per il calcolo del costo USD per
+# token. Sorgenti: pricing pubblico provider al maggio 2026. Aggiornare
+# quando si aggiunge un nuovo modello o cambiano i prezzi.
+# Convenzione: prezzi in USD per 1M tokens. cache_read prezzo Anthropic =
+# 0.1× input cold; cache_create = 1.25× input cold (write-through).
+# Ollama: locale = 0 USD (compute on-prem).
+MODEL_PRICING_USD_PER_M_TOKENS: dict[str, dict[str, float]] = {
+    # Claude (Anthropic) — pricing maggio 2026
+    "claude-opus-4-7":      {"input": 15.0,  "output": 75.0,  "cache_read": 1.5,    "cache_create": 18.75},
+    "claude-sonnet-4-6":    {"input": 3.0,   "output": 15.0,  "cache_read": 0.30,   "cache_create": 3.75},
+    "claude-haiku-4-5":     {"input": 1.0,   "output": 5.0,   "cache_read": 0.10,   "cache_create": 1.25},
+    # OpenAI
+    "gpt-4o":               {"input": 2.5,   "output": 10.0,  "cache_read": 1.25,   "cache_create": 0.0},
+    "o1":                   {"input": 15.0,  "output": 60.0,  "cache_read": 7.5,    "cache_create": 0.0},
+    "o3-mini":              {"input": 1.10,  "output": 4.40,  "cache_read": 0.55,   "cache_create": 0.0},
+    # Gemini
+    "gemini-2.0-flash":          {"input": 0.10,  "output": 0.40,  "cache_read": 0.025,  "cache_create": 0.0},
+    "gemini-2.0-flash-thinking": {"input": 0.15,  "output": 0.60,  "cache_read": 0.0375, "cache_create": 0.0},
+    "gemini-1.5-pro":            {"input": 1.25,  "output": 5.0,   "cache_read": 0.3125, "cache_create": 0.0},
+    # Perplexity
+    "sonar-pro":            {"input": 3.0,   "output": 15.0,  "cache_read": 0.0, "cache_create": 0.0},
+    "sonar":                {"input": 1.0,   "output": 1.0,   "cache_read": 0.0, "cache_create": 0.0},
+    "sonar-reasoning":      {"input": 1.0,   "output": 5.0,   "cache_read": 0.0, "cache_create": 0.0},
+    # Ollama (locale → costo zero compute on-prem)
+    "llama3.1:70b":         {"input": 0.0, "output": 0.0, "cache_read": 0.0, "cache_create": 0.0},
+    "llama3.1:8b":          {"input": 0.0, "output": 0.0, "cache_read": 0.0, "cache_create": 0.0},
+    "qwen2.5:32b":          {"input": 0.0, "output": 0.0, "cache_read": 0.0, "cache_create": 0.0},
+}
+
+
+def compute_cost_usd(
+    model: str,
+    *,
+    input_tokens: int = 0,
+    output_tokens: int = 0,
+    cache_read_tokens: int = 0,
+    cache_create_tokens: int = 0,
+) -> float:
+    """Calcola costo USD per una singola call API.
+
+    Modelli sconosciuti → 0.0 (no errore: l'audit log resta utilizzabile,
+    il costo è underestimate ma noto). Aggiungere il modello a
+    `MODEL_PRICING_USD_PER_M_TOKENS` per evitare drift.
+
+    NB: usa float, non Decimal. Per analytics microcent precision sufficiente.
+    Se un giorno servirà fatturazione interna AI, migrare a Decimal('0.0001').
+    """
+    p = MODEL_PRICING_USD_PER_M_TOKENS.get(model)
+    if not p:
+        return 0.0
+    cost = (
+        input_tokens * p["input"] / 1_000_000
+        + output_tokens * p["output"] / 1_000_000
+        + cache_read_tokens * p["cache_read"] / 1_000_000
+        + cache_create_tokens * p["cache_create"] / 1_000_000
+    )
+    return round(cost, 6)
+
+
+def log_ai_usage(
+    *,
+    db,
+    user_id,
+    conversation_id,
+    provider: str,
+    model: str,
+    input_tokens: int = 0,
+    output_tokens: int = 0,
+    cache_read_tokens: int = 0,
+    cache_create_tokens: int = 0,
+    call_kind: str = "chat_with_tools",
+    stop_reason: Optional[str] = None,
+    duration_ms: Optional[int] = None,
+    tenant_id: int = 1,
+) -> None:
+    """v3.5.0-alpha.66.16.4 — Persiste 1 riga AIUsageLog per la call.
+
+    Best-effort: errori di I/O loggati ma non re-raise (il logging non
+    deve mai bloccare la response AI all'utente). Calcola `cost_usd` via
+    `compute_cost_usd` automaticamente.
+
+    `db` è la Session SQLAlchemy del request. Tipo non annotato per evitare
+    import circolari (SessionLocal sta in app/database.py che importa qui).
+    """
+    if db is None:
+        return
+    try:
+        from app.models.models import AIUsageLog
+        cost = compute_cost_usd(
+            model,
+            input_tokens=input_tokens,
+            output_tokens=output_tokens,
+            cache_read_tokens=cache_read_tokens,
+            cache_create_tokens=cache_create_tokens,
+        )
+        row = AIUsageLog(
+            tenant_id=tenant_id,
+            user_id=user_id,
+            conversation_id=conversation_id,
+            provider=provider,
+            model=model,
+            input_tokens=input_tokens,
+            output_tokens=output_tokens,
+            cache_read_tokens=cache_read_tokens,
+            cache_create_tokens=cache_create_tokens,
+            cost_usd=cost,
+            call_kind=call_kind,
+            stop_reason=stop_reason,
+            duration_ms=duration_ms,
+        )
+        db.add(row)
+        # NB: niente commit. La transazione è del caller (router/loop).
+    except Exception as e:
+        logger.warning(f"log_ai_usage failed: {e}")
+
+
 # ── Config dataclass ──────────────────────────────────────────
 
 @dataclass
@@ -254,7 +370,9 @@ class ClaudeProvider(AIProvider):
         # Tutti i modelli Claude 3.x+ supportano image blocks nativamente
         return True
 
-    def chat_with_tools(self, messages, system, tools, max_tokens=4000, temperature=0.3):
+    def chat_with_tools(self, messages, system, tools, max_tokens=4000, temperature=0.3,
+                        *, usage_db=None, usage_user_id=None,
+                        usage_conversation_id=None, usage_tenant_id: int = 1):
         """Loop tool_use Anthropic. Ritorna UN turno (un singolo round-trip API).
         Il caller decide se proseguire (eseguire i tool, append tool_result,
         richiamare chat_with_tools) o fermarsi (mutation in attesa di Apply).
@@ -262,9 +380,15 @@ class ClaudeProvider(AIProvider):
         v3.5.0-alpha.66.14.7 — Prompt caching su system + tools per ridurre
         ~90% del costo input ricorrente (Anthropic addebita 0.1× cache hits
         vs 1× cold). Soglia minima 1024 tokens per Claude 3.x+, sotto la
-        soglia il marker `cache_control` viene ignorato senza errore. Hit
-        ratio loggato a INFO per monitoring.
+        soglia il marker `cache_control` viene ignorato senza errore.
+
+        v3.5.0-alpha.66.16.4 (R10) — Logging persistente AIUsageLog. I
+        parametri `usage_*` sono opzionali: se passati, loga 1 row con
+        token + costo USD. Caller (`ai_loop.advance_loop`) ha db+user+conv
+        a portata di mano e può popolarli senza overhead.
         """
+        import time as _t
+        _t0 = _t.time()
         kwargs: dict = {
             "model":       self.model,
             "max_tokens":  max_tokens,
@@ -294,8 +418,8 @@ class ClaudeProvider(AIProvider):
 
         resp = self.client.messages.create(**kwargs)
 
-        # v3.5.0-alpha.66.14.7 — Log cache stats. Utile per misurare il
-        # risparmio reale; passare a INFO permanente quando confermato.
+        # v3.5.0-alpha.66.14.7 — Log cache stats + (R10) persistenza AIUsageLog.
+        cc_in, cr_in, tot_in, tot_out = 0, 0, 0, 0
         try:
             usage = getattr(resp, "usage", None)
             if usage is not None:
@@ -311,6 +435,25 @@ class ClaudeProvider(AIProvider):
                     )
         except Exception:
             pass
+
+        # v3.5.0-alpha.66.16.4 (R10) — Persisti riga AIUsageLog se il caller
+        # ha passato i `usage_*` parametri.
+        if usage_db is not None:
+            log_ai_usage(
+                db=usage_db,
+                user_id=usage_user_id,
+                conversation_id=usage_conversation_id,
+                tenant_id=usage_tenant_id,
+                provider="claude",
+                model=self.model,
+                input_tokens=tot_in,
+                output_tokens=tot_out,
+                cache_read_tokens=cr_in,
+                cache_create_tokens=cc_in,
+                call_kind="chat_with_tools",
+                stop_reason=str(getattr(resp, "stop_reason", "") or ""),
+                duration_ms=int((_t.time() - _t0) * 1000),
+            )
 
         text_parts: list[str] = []
         tool_uses: list[ToolUse] = []

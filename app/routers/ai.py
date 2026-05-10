@@ -565,3 +565,116 @@ async def create_quote_from_deliverables(
     db.refresh(quote)
 
     return {"ok": True, "quote_id": quote.id, "quote_number": quote.number}
+
+
+# ── AI Usage stats (R10 v3.5.0-alpha.66.16.4) ────────────────
+
+@router.get("/api/usage")
+async def ai_usage_stats(
+    period_days: int = 30,
+    by: str = "user",  # "user" | "model" | "day"
+    user_id: Optional[int] = None,
+    access_token: Optional[str] = Cookie(None),
+    db: Session = Depends(get_db),
+):
+    """Aggregati AIUsageLog: token + costo per periodo, raggruppati per
+    user/model/day a scelta. Default: ultimi 30 giorni, breakdown per user.
+
+    Richiede `view_finance` (i costi AI sono dato finanziario interno).
+    L'utente standard può vedere solo le proprie usage (filtro implicito
+    via `user_id == self`).
+    """
+    from datetime import timedelta
+    from sqlalchemy import func
+    from app.models.models import AIUsageLog
+    from app.services.rbac import has_permission
+
+    u = _resolve_current_user(db, access_token)
+    if not u:
+        raise HTTPException(401, "Autenticazione richiesta")
+    can_see_all = has_permission(u, "view_finance")
+    if not can_see_all:
+        # Standard user: vede solo i suoi
+        user_id = u.id
+
+    cutoff = datetime.utcnow() - timedelta(days=max(1, min(period_days, 365)))
+    # CURRENT_TENANT pattern come in altri router (R1 future-ready stub)
+    from app.context import current_tenant_id
+    base_q = db.query(AIUsageLog).filter(
+        AIUsageLog.tenant_id == current_tenant_id(),
+        AIUsageLog.created_at >= cutoff,
+    )
+    if user_id is not None:
+        base_q = base_q.filter(AIUsageLog.user_id == user_id)
+
+    # Totali aggregati (sempre presenti)
+    totals_row = base_q.with_entities(
+        func.coalesce(func.sum(AIUsageLog.input_tokens), 0).label("input_tokens"),
+        func.coalesce(func.sum(AIUsageLog.output_tokens), 0).label("output_tokens"),
+        func.coalesce(func.sum(AIUsageLog.cache_read_tokens), 0).label("cache_read_tokens"),
+        func.coalesce(func.sum(AIUsageLog.cache_create_tokens), 0).label("cache_create_tokens"),
+        func.coalesce(func.sum(AIUsageLog.cost_usd), 0.0).label("cost_usd"),
+        func.count(AIUsageLog.id).label("calls"),
+    ).first()
+    totals = {
+        "input_tokens":         int(totals_row.input_tokens or 0),
+        "output_tokens":        int(totals_row.output_tokens or 0),
+        "cache_read_tokens":    int(totals_row.cache_read_tokens or 0),
+        "cache_create_tokens":  int(totals_row.cache_create_tokens or 0),
+        "cost_usd":             round(float(totals_row.cost_usd or 0.0), 4),
+        "calls":                int(totals_row.calls or 0),
+    }
+    # hit_ratio cache (saving prompt caching)
+    crt = totals["cache_read_tokens"]
+    inp = totals["input_tokens"]
+    totals["cache_hit_ratio"] = round(crt / (crt + inp), 3) if (crt + inp) else 0.0
+
+    # Breakdown
+    breakdown: list[dict] = []
+    if by == "user":
+        rows = (base_q.with_entities(
+            AIUsageLog.user_id.label("k"),
+            func.sum(AIUsageLog.cost_usd).label("cost"),
+            func.count(AIUsageLog.id).label("calls"),
+            func.sum(AIUsageLog.input_tokens).label("inp"),
+            func.sum(AIUsageLog.output_tokens).label("out"),
+        ).group_by(AIUsageLog.user_id).order_by(func.sum(AIUsageLog.cost_usd).desc()).all())
+        breakdown = [{
+            "user_id": r.k, "cost_usd": round(float(r.cost or 0.0), 4),
+            "calls": int(r.calls), "input_tokens": int(r.inp or 0),
+            "output_tokens": int(r.out or 0),
+        } for r in rows]
+    elif by == "model":
+        rows = (base_q.with_entities(
+            AIUsageLog.model.label("k"),
+            func.sum(AIUsageLog.cost_usd).label("cost"),
+            func.count(AIUsageLog.id).label("calls"),
+            func.sum(AIUsageLog.input_tokens).label("inp"),
+            func.sum(AIUsageLog.output_tokens).label("out"),
+        ).group_by(AIUsageLog.model).order_by(func.sum(AIUsageLog.cost_usd).desc()).all())
+        breakdown = [{
+            "model": r.k, "cost_usd": round(float(r.cost or 0.0), 4),
+            "calls": int(r.calls), "input_tokens": int(r.inp or 0),
+            "output_tokens": int(r.out or 0),
+        } for r in rows]
+    elif by == "day":
+        rows = (base_q.with_entities(
+            func.date(AIUsageLog.created_at).label("k"),
+            func.sum(AIUsageLog.cost_usd).label("cost"),
+            func.count(AIUsageLog.id).label("calls"),
+        ).group_by(func.date(AIUsageLog.created_at))
+         .order_by(func.date(AIUsageLog.created_at).desc()).all())
+        breakdown = [{
+            "date": str(r.k), "cost_usd": round(float(r.cost or 0.0), 4),
+            "calls": int(r.calls),
+        } for r in rows]
+    else:
+        raise HTTPException(400, "by deve essere user|model|day")
+
+    return {
+        "period_days": period_days,
+        "by": by,
+        "scope": "all" if can_see_all and user_id is None else f"user:{user_id}",
+        "totals": totals,
+        "breakdown": breakdown,
+    }

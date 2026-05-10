@@ -1,5 +1,64 @@
 # MediaFlow — Changelog
 
+## v3.5.0-alpha.66.16.4 — Sprint R10: AI token tracking + cost analytics (11 maggio 2026)
+
+Apre R10 — AI token tracking + rate limit per-user. Step 0+1 in 1 versione.
+
+**Nuovo modello `AIUsageLog`** (`app/models/models.py`):
+- 1 riga per ogni call API a un provider
+- Campi: tenant/user/conv/provider/model + token cold/cache_read/cache_create/output
+  + `cost_usd` calcolato + `call_kind` + `stop_reason` + `duration_ms`
+- Indici su `tenant_id`, `user_id`, `conversation_id`, `created_at`
+- Tabella creata da `create_tables()` al boot (no ALTER necessario)
+
+**Tabella prezzi `MODEL_PRICING_USD_PER_M_TOKENS`** (`app/services/ai_provider.py`):
+- 14 modelli mappati: Claude 4.x, OpenAI (4o/o1/o3-mini), Gemini 2.0/1.5,
+  Perplexity Sonar, Ollama (=$0)
+- Prezzi maggio 2026 cold/output/cache_read/cache_create per 1M tokens
+- Cache_read Anthropic = 0.1× cold (ricavato da pricing pubblico)
+
+**Helper `compute_cost_usd(model, input, output, cache_read, cache_create)`**:
+- Calcolo lineare. Modelli sconosciuti → 0.0 (no errore).
+- Float precision sufficiente per analytics; Decimal solo per fatturazione.
+
+**Helper `log_ai_usage(db, ...)`**:
+- Persiste 1 riga AIUsageLog. NO commit (transazione del caller).
+- Best-effort: errori loggati, mai re-raise (logging non blocca AI response).
+
+**Hook in `ClaudeProvider.chat_with_tools`**:
+- Aggiunti kwargs opzionali `usage_db`, `usage_user_id`,
+  `usage_conversation_id`, `usage_tenant_id`.
+- Se passati, registra automaticamente con tutti i token estratti da
+  `resp.usage` (incluso cache_read/cache_create per cache hit ratio).
+- `duration_ms` misurato con `time.time()`.
+
+**Migrazione `ai_loop.advance_loop`**:
+- Propaga db/user_id/conv_id/tenant_id alla chat_with_tools.
+- Try/except `TypeError` per fallback compat su provider non-Anthropic
+  (OpenAI/Ollama/Gemini chat_with_tools non ancora migrato — segue in R10.2).
+
+**Nuovo endpoint `GET /ai/api/usage`**:
+- Query params: `period_days` (1-365, default 30), `by` (user|model|day),
+  `user_id` opzionale.
+- RBAC: `view_finance` per vedere tutti i users; standard user vede
+  solo i propri.
+- Response: `totals` (token+cost+calls+cache_hit_ratio) + `breakdown`
+  raggruppato.
+- Tenant scope via `current_tenant_id()` (DI stub).
+
+**Smoke E2E**:
+- Tabella `ai_usage_logs` creata con 15 colonne ✓
+- Cost claude-sonnet-4-6 5k input + 1k out → $0.030
+- Cost claude-sonnet-4-6 500 cold + 4500 cached + 1k out → $0.0179 (40% saving)
+- 303 routes (+1 nuovo `/ai/api/usage`), version 3.5.0-alpha.66.16.4
+
+**Backlog R10.2** (futuro):
+- Migrazione hook usage_* a OpenAI/Gemini/Ollama chat_with_tools
+- Rate limit per-user (cap token/day) — aggiungere middleware su `/ai/api/chat`
+- UI dashboard `/settings#ai-usage` con grafico daily cost
+
+---
+
 ## v3.5.0-alpha.66.16.3 — Sprint R4 Step 2: migrate planning router a booking_mutate (11 maggio 2026)
 
 Continua R4. Migra il router planning per centralizzare TUTTI i check

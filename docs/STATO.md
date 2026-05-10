@@ -8,6 +8,19 @@
 
 ## Versione corrente
 
+**v3.5.0-alpha.66.16.4** — 11 maggio 2026 — Sprint R10: AI token tracking
+
+Modello AIUsageLog + tabella prezzi 14 modelli + helper compute_cost_usd
++ log_ai_usage. Hook in ClaudeProvider.chat_with_tools (kwargs opzionali
+usage_db/user/conv/tenant). Migrazione ai_loop con try/except per compat
+provider non-Anthropic. Endpoint GET /ai/api/usage con totali +
+breakdown user/model/day, RBAC view_finance.
+
+**Smoke**: 303 routes (+1), $0.030 vs $0.0179 con cache 90% (40% saving),
+version 3.5.0-alpha.66.16.4.
+
+---
+
 **v3.5.0-alpha.66.16.3** — 11 maggio 2026 — Sprint R4 Step 2: planning router migrato
 
 Coverage R4 completata. _assert_no_blocking_slice ora delega a

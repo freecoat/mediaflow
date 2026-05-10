@@ -23,7 +23,7 @@ from app.models.models import (
     PricelistSnapshot, PricelistSnapshotKind,
     Quote, QuoteLine, QuoteStatus,
     AIConversation, AIMessage,
-    UserAISettings, AIAction,
+    UserAISettings, AIAction, AIUsageLog,
     Notification, NotificationKind, NotificationSeverity,
     ProjectTechSheet,
 )

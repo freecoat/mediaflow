@@ -313,7 +313,21 @@ def advance_loop(db: Session, conv: AIConversation, provider: AIProvider,
 
     for iteration in range(MAX_LOOP_ITERATIONS):
         try:
-            resp = provider.chat_with_tools(_sanitize_messages(messages), system, tools)
+            # v3.5.0-alpha.66.16.4 (R10) — Propaga db/user/conv per persistenza
+            # AIUsageLog. Se il provider non supporta i parametri (compat),
+            # fallback al call senza usage_*.
+            try:
+                resp = provider.chat_with_tools(
+                    _sanitize_messages(messages), system, tools,
+                    usage_db=db,
+                    usage_user_id=conv.user_id,
+                    usage_conversation_id=conv.id,
+                    usage_tenant_id=getattr(conv, "tenant_id", 1) or 1,
+                )
+            except TypeError:
+                # Provider non-Anthropic (OpenAI/Ollama/Gemini) non ancora
+                # migrato a usage_* kwargs → fallback compat.
+                resp = provider.chat_with_tools(_sanitize_messages(messages), system, tools)
         except Exception as e:
             logger.exception("chat_with_tools failed")
             # Salva i messages raccolti finora con pending_results vuoto: la

@@ -1751,6 +1751,48 @@ class AIAction(Base):
     tool_use_id: Mapped[Optional[str]] = mapped_column(String(128), nullable=True)
 
 
+# ── AI USAGE LOG (v3.5.0-alpha.66.16.4 — sprint R10) ─────────
+#
+# Una riga per ogni call API a un provider AI (Claude/OpenAI/Gemini/...).
+# Sostituisce il logger.info ad-hoc α.66.14.7 con audit persistente per:
+# - Costo per user/tenant/periodo (billing AI interno + reportistica)
+# - Hit ratio prompt cache reale
+# - Rate limiting per-user (futuro: cap token/giorno)
+# - Debug latenza/errori
+#
+# Una conversazione N-turn produce N righe (un turno = una request HTTP
+# al provider). NULL su user_id se chiamata system (es. enrich_client).
+
+class AIUsageLog(Base):
+    __tablename__ = "ai_usage_logs"
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    tenant_id: Mapped[int] = mapped_column(ForeignKey("tenants.id"), default=1, index=True)
+    user_id: Mapped[Optional[int]] = mapped_column(ForeignKey("users.id"), nullable=True, index=True)
+    conversation_id: Mapped[Optional[int]] = mapped_column(
+        ForeignKey("ai_conversations.id"), nullable=True, index=True
+    )
+    # Provider e modello effettivi al momento della call (non per-utente:
+    # un user può cambiare provider e voglio sapere chi ha pagato cosa).
+    provider: Mapped[str] = mapped_column(String(32))  # claude | openai | ollama | gemini | perplexity
+    model: Mapped[str] = mapped_column(String(64))
+    # Token reali da `resp.usage` (Anthropic/OpenAI/Gemini hanno tutti questo).
+    input_tokens: Mapped[int] = mapped_column(Integer, default=0)
+    output_tokens: Mapped[int] = mapped_column(Integer, default=0)
+    # Specifici Anthropic prompt caching (α.66.14.7). 0 se provider non supporta.
+    cache_read_tokens: Mapped[int] = mapped_column(Integer, default=0)
+    cache_create_tokens: Mapped[int] = mapped_column(Integer, default=0)
+    # Costo USD calcolato lato app via tabella prezzi
+    # (`app.services.ai_provider.compute_cost_usd`). Float, non Decimal:
+    # microcent precision OK per analytics; Decimal solo per fatturazione.
+    cost_usd: Mapped[float] = mapped_column(Float, default=0.0)
+    # Tipo call: "chat_with_tools" | "complete" | "chat" | "extract_json_with_web_search"
+    call_kind: Mapped[str] = mapped_column(String(32), default="chat_with_tools")
+    # Errore o stop_reason (es. "end_turn", "tool_use", "max_tokens", "error:...")
+    stop_reason: Mapped[Optional[str]] = mapped_column(String(64), nullable=True)
+    duration_ms: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, index=True)
+
+
 # ── NOTIFICATIONS (v3.4.27) ──────────────────────────────────
 #
 # Sistema generico di notifiche utente. Ogni evento "interessante" del
