@@ -175,6 +175,80 @@
         </div>
       </div>
 
+      <!-- ─── Cost-rate interno (v3.5.0-alpha.66.10) ─────────── -->
+      <details style="margin-bottom:14px;">
+        <summary class="form-label" style="cursor:pointer; user-select:none;">
+          💰 Costo interno (per cost report — non visibile al cliente)
+        </summary>
+        <div style="padding:10px; background:var(--bg2,#1a1d29); border-radius:6px; margin-top:6px;">
+          <p class="text-xs text-muted" style="margin-top:0;">
+            Le tariffe €/giorno e €/ora sopra sono di <b>vendita al cliente</b>.
+            Qui imposti il <b>costo interno</b> (per hardcost ore deliverable).
+          </p>
+          <div class="form-row">
+            <div class="form-group" style="flex:0 0 200px;">
+              <label class="form-label">Tipo costo</label>
+              <select class="form-select" id="rs-cost-type" onchange="updateCostBlock()">
+                <option value="">— non configurato —</option>
+                <option value="employee">Dipendente</option>
+                <option value="freelance">Freelance</option>
+                <option value="studio">Sala / Studio interno</option>
+                <option value="external">Risorsa esterna a uso</option>
+              </select>
+            </div>
+            <div class="form-group" style="flex:1;" id="rs-cost-preview-box">
+              <label class="form-label">Costo orario interno (calcolato)</label>
+              <div id="rs-cost-preview" style="padding:8px 12px; background:var(--bg3); border-radius:4px; font-family:monospace; font-size:14px; color:var(--text);">—</div>
+            </div>
+          </div>
+          <!-- Employee fields -->
+          <div id="rs-cost-employee" style="display:none;">
+            <div class="form-row">
+              <div class="form-group">
+                <label class="form-label">Stipendio mensile lordo (€)</label>
+                <input type="number" step="0.01" min="0" class="form-input" id="rs-cost-mensile" placeholder="es. 2500" oninput="updateCostPreview()">
+              </div>
+              <div class="form-group" style="max-width:120px;">
+                <label class="form-label">Mensilità</label>
+                <input type="number" step="0.5" min="12" max="14" class="form-input" id="rs-cost-bonus" value="13" oninput="updateCostPreview()" title="Default 13 (con tredicesima)">
+              </div>
+              <div class="form-group" style="max-width:120px;">
+                <label class="form-label">Multiplier oneri</label>
+                <input type="number" step="0.05" min="1" max="2" class="form-input" id="rs-cost-mult" value="1.30" oninput="updateCostPreview()" title="Costo aziendale = lordo × N (default 1.30 per CCNL standard)">
+              </div>
+              <div class="form-group" style="max-width:140px;">
+                <label class="form-label">Ore annue</label>
+                <input type="number" step="10" min="800" max="2200" class="form-input" id="rs-cost-hours" value="1720" oninput="updateCostPreview()" title="Ore lavorate effettive in un anno (default 1720h CCNL)">
+              </div>
+            </div>
+          </div>
+          <!-- Freelance fields -->
+          <div id="rs-cost-freelance" style="display:none;">
+            <div class="form-row">
+              <div class="form-group" style="max-width:240px;">
+                <label class="form-label">Tariffa oraria pagata (€/h)</label>
+                <input type="number" step="0.5" min="0" class="form-input" id="rs-cost-freelance-h" placeholder="es. 60" oninput="updateCostPreview()">
+                <p class="text-xs text-muted" style="margin-top:4px;">Costo che paghi al freelance, ≠ tariffa di vendita al cliente sopra.</p>
+              </div>
+            </div>
+          </div>
+          <!-- Studio fields -->
+          <div id="rs-cost-studio" style="display:none;">
+            <div class="form-row">
+              <div class="form-group" style="max-width:240px;">
+                <label class="form-label">Allocazione oraria struttura (€/h)</label>
+                <input type="number" step="0.5" min="0" class="form-input" id="rs-cost-studio-h" placeholder="es. 150" oninput="updateCostPreview()">
+                <p class="text-xs text-muted" style="margin-top:4px;">Costo orario allocato alla sala/struttura interna. Tariffa fissa decisa dal manager (futuro: derivata via AI da visura amministrativa).</p>
+              </div>
+            </div>
+          </div>
+          <!-- External fields -->
+          <div id="rs-cost-external" style="display:none;">
+            <p class="text-sm text-muted" style="margin-top:6px;">Per risorse esterne a uso (sala/equipment a noleggio), il costo orario interno coincide con la tariffa oraria di vendita sopra.</p>
+          </div>
+        </div>
+      </details>
+
       <!-- ─── Orario lavorativo override (v3.4.20.4) ──────────── -->
       <div class="form-group">
         <label class="form-label">Orario lavorativo</label>
@@ -312,6 +386,15 @@ async function editResource(id) {
     document.getElementById('rs-desc').value = r.description || '';
     document.getElementById('rs-color').value = r.color || '#6272f5';
     document.getElementById('rs-wh-policy').value = r.working_hours_policy_id || '';
+    // Cost-rate (v3.5.0-alpha.66.10)
+    document.getElementById('rs-cost-type').value = r.cost_type || '';
+    document.getElementById('rs-cost-mensile').value = r.monthly_gross_salary || '';
+    document.getElementById('rs-cost-bonus').value = r.annual_bonus_months ?? 13;
+    document.getElementById('rs-cost-mult').value = r.cost_multiplier_oneri ?? 1.30;
+    document.getElementById('rs-cost-hours').value = r.annual_working_hours ?? 1720;
+    document.getElementById('rs-cost-freelance-h').value = r.freelance_hourly_cost || '';
+    document.getElementById('rs-cost-studio-h').value = r.studio_hourly_cost || '';
+    updateCostBlock();
     // Sezione ferie (solo in edit, no create)
     document.getElementById('rs-unav-section').style.display = 'block';
     await rsUnavLoad(id);
@@ -402,6 +485,27 @@ async function saveResource() {
   // Override policy orari (vuoto = usa default tenant)
   fd.append('working_hours_policy_id', document.getElementById('rs-wh-policy').value || '0');
 
+  // Cost-rate fields (v3.5.0-alpha.66.10)
+  const costType = document.getElementById('rs-cost-type').value;
+  if (costType) {
+    fd.append('cost_type', costType);
+    if (costType === 'employee') {
+      const mensile = document.getElementById('rs-cost-mensile').value;
+      if (mensile) fd.append('monthly_gross_salary', mensile);
+      fd.append('annual_bonus_months', document.getElementById('rs-cost-bonus').value || '13');
+      fd.append('cost_multiplier_oneri', document.getElementById('rs-cost-mult').value || '1.30');
+      fd.append('annual_working_hours', document.getElementById('rs-cost-hours').value || '1720');
+    } else if (costType === 'freelance') {
+      const fh = document.getElementById('rs-cost-freelance-h').value;
+      if (fh) fd.append('freelance_hourly_cost', fh);
+    } else if (costType === 'studio') {
+      const sh = document.getElementById('rs-cost-studio-h').value;
+      if (sh) fd.append('studio_hourly_cost', sh);
+    }
+  } else {
+    fd.append('cost_type', '');  // Clear se l'utente lo seleziona come "non configurato"
+  }
+
   // v3.4.23: Auto-create User in create mode se attivato
   if (!id) {
     const cu = document.getElementById('rs-create-user');
@@ -423,6 +527,50 @@ async function saveResource() {
     }
     location.reload();
   } catch (e) { alert(e.message); }
+}
+
+// ── Cost-rate live preview (v3.5.0-alpha.66.10) ───────────────
+function updateCostBlock() {
+  const t = document.getElementById('rs-cost-type').value;
+  ['employee', 'freelance', 'studio', 'external'].forEach(k => {
+    const el = document.getElementById('rs-cost-' + k);
+    if (el) el.style.display = (t === k) ? 'block' : 'none';
+  });
+  const previewBox = document.getElementById('rs-cost-preview-box');
+  if (previewBox) previewBox.style.display = t ? 'block' : 'none';
+  updateCostPreview();
+}
+
+function updateCostPreview() {
+  const t = document.getElementById('rs-cost-type').value;
+  const out = document.getElementById('rs-cost-preview');
+  if (!t) { out.textContent = '—'; return; }
+  let val = null;
+  let formula = '';
+  if (t === 'employee') {
+    const m = parseFloat(document.getElementById('rs-cost-mensile').value) || 0;
+    const b = parseFloat(document.getElementById('rs-cost-bonus').value) || 13;
+    const k = parseFloat(document.getElementById('rs-cost-mult').value) || 1.30;
+    const h = parseFloat(document.getElementById('rs-cost-hours').value) || 1720;
+    if (m > 0 && h > 0) {
+      val = m * b * k / h;
+      formula = `${m} × ${b} × ${k} / ${h}h`;
+    }
+  } else if (t === 'freelance') {
+    val = parseFloat(document.getElementById('rs-cost-freelance-h').value) || null;
+    formula = 'tariffa pagata';
+  } else if (t === 'studio') {
+    val = parseFloat(document.getElementById('rs-cost-studio-h').value) || null;
+    formula = 'allocazione struttura';
+  } else if (t === 'external') {
+    val = parseFloat(document.getElementById('rs-hourly').value) || null;
+    formula = 'tariffa €/h sopra';
+  }
+  if (val !== null) {
+    out.innerHTML = `€ <b>${val.toFixed(2)}</b>/h <span style="color:var(--text3); font-size:11px;">(${formula})</span>`;
+  } else {
+    out.textContent = '— (compila i campi)';
+  }
 }
 
 async function toggleActive(id, newState) {

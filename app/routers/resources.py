@@ -109,10 +109,24 @@ async def create_resource(
     phone: Optional[str] = Form(None),
     internal_phone: Optional[str] = Form(None),
     color: str = Form("#6272f5"),
+    # v3.5.0-alpha.66.10 — cost-rate interno
+    cost_type: Optional[str] = Form(None),
+    monthly_gross_salary: Optional[float] = Form(None),
+    annual_bonus_months: Optional[float] = Form(None),
+    cost_multiplier_oneri: Optional[float] = Form(None),
+    annual_working_hours: Optional[float] = Form(None),
+    freelance_hourly_cost: Optional[float] = Form(None),
+    studio_hourly_cost: Optional[float] = Form(None),
     create_user: bool = Form(False),
     user_role_code: Optional[str] = Form(None),  # default: operator
     db: Session = Depends(get_db),
 ):
+    from app.models import ResourceCostType
+    cost_type_enum = None
+    if cost_type:
+        try: cost_type_enum = ResourceCostType(cost_type)
+        except ValueError: cost_type_enum = None
+
     r = Resource(
         tenant_id=CURRENT_TENANT,
         name=name.strip(),
@@ -126,6 +140,13 @@ async def create_resource(
         phone=phone.strip() if phone else None,
         internal_phone=internal_phone.strip() if internal_phone else None,
         color=color,
+        cost_type=cost_type_enum,
+        monthly_gross_salary=monthly_gross_salary,
+        annual_bonus_months=annual_bonus_months,
+        cost_multiplier_oneri=cost_multiplier_oneri,
+        annual_working_hours=annual_working_hours,
+        freelance_hourly_cost=freelance_hourly_cost,
+        studio_hourly_cost=studio_hourly_cost,
     )
     db.add(r); db.flush()
 
@@ -184,6 +205,15 @@ async def get_resource(resource_id: int, db: Session = Depends(get_db)):
         "email": r.email, "phone": r.phone, "internal_phone": r.internal_phone,
         "color": r.color, "is_active": r.is_active,
         "working_hours_policy_id": r.working_hours_policy_id,
+        # v3.5.0-alpha.66.10 — cost-rate interno
+        "cost_type": r.cost_type.value if r.cost_type else None,
+        "monthly_gross_salary": r.monthly_gross_salary,
+        "annual_bonus_months": r.annual_bonus_months,
+        "cost_multiplier_oneri": r.cost_multiplier_oneri,
+        "annual_working_hours": r.annual_working_hours,
+        "freelance_hourly_cost": r.freelance_hourly_cost,
+        "studio_hourly_cost": r.studio_hourly_cost,
+        "internal_cost_hourly": r.internal_cost_hourly,
     }
 
 
@@ -203,6 +233,14 @@ async def update_resource(
     color: Optional[str] = Form(None),
     is_active: Optional[bool] = Form(None),
     working_hours_policy_id: Optional[int] = Form(None),
+    # v3.5.0-alpha.66.10 — cost-rate interno
+    cost_type: Optional[str] = Form(None),
+    monthly_gross_salary: Optional[float] = Form(None),
+    annual_bonus_months: Optional[float] = Form(None),
+    cost_multiplier_oneri: Optional[float] = Form(None),
+    annual_working_hours: Optional[float] = Form(None),
+    freelance_hourly_cost: Optional[float] = Form(None),
+    studio_hourly_cost: Optional[float] = Form(None),
     db: Session = Depends(get_db),
 ):
     r = db.query(Resource).filter(
@@ -225,8 +263,22 @@ async def update_resource(
     if is_active is not None: r.is_active = is_active
     if working_hours_policy_id is not None:
         r.working_hours_policy_id = working_hours_policy_id or None
+    # v3.5.0-alpha.66.10 — cost-rate interno
+    from app.models import ResourceCostType
+    if cost_type is not None:
+        if cost_type == "":
+            r.cost_type = None
+        else:
+            try: r.cost_type = ResourceCostType(cost_type)
+            except ValueError: pass
+    if monthly_gross_salary is not None: r.monthly_gross_salary = monthly_gross_salary
+    if annual_bonus_months is not None: r.annual_bonus_months = annual_bonus_months
+    if cost_multiplier_oneri is not None: r.cost_multiplier_oneri = cost_multiplier_oneri
+    if annual_working_hours is not None: r.annual_working_hours = annual_working_hours
+    if freelance_hourly_cost is not None: r.freelance_hourly_cost = freelance_hourly_cost
+    if studio_hourly_cost is not None: r.studio_hourly_cost = studio_hourly_cost
     db.commit()
-    return {"ok": True, "id": r.id}
+    return {"ok": True, "id": r.id, "internal_cost_hourly": r.internal_cost_hourly}
 
 
 @router.delete("/api/{resource_id}")

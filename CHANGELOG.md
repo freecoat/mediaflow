@@ -1,5 +1,50 @@
 # MediaFlow — Changelog
 
+## v3.5.0-alpha.66.10 — UI cost-rate Resource con live preview (10 maggio 2026)
+
+UI per popolare i campi cost-rate introdotti in α.66.9 (modello DB).
+Senza questa UI non era possibile testare l'hardcost dei deliverable.
+
+**Modal `/resources` esteso** con sezione collassabile "💰 Costo interno":
+- Dropdown `cost_type` (employee / freelance / studio interno / external).
+- **Blocco condizionale per tipo**:
+  - Employee: stipendio mensile lordo (€) + mensilità (default 13) +
+    multiplier oneri (default 1.30) + ore annue (default 1720h).
+  - Freelance: tariffa oraria pagata (€/h, separata dalla `hourly_rate` di
+    vendita al cliente).
+  - Studio: allocazione oraria struttura (€/h, tariffa fissa decisa dal
+    manager — derivazione AI futura via visura amministrativa, vedi
+    memoria `project_ai_cost_derivation`).
+  - External: nessun campo (usa `hourly_rate` come fallback).
+- **Live preview** del calcolo (es. `2800 × 13 × 1.30 / 1720h = €27.51/h`)
+  che si aggiorna mentre l'utente digita.
+
+**Backend `/resources/api/` esteso**:
+- `POST` e `PUT` accettano: `cost_type`, `monthly_gross_salary`,
+  `annual_bonus_months`, `cost_multiplier_oneri`, `annual_working_hours`,
+  `freelance_hourly_cost`, `studio_hourly_cost`.
+- `GET /resources/api/{id}` espone i nuovi campi + `internal_cost_hourly`
+  calcolato (property della Resource).
+- Update PUT restituisce `internal_cost_hourly` aggiornato → la UI può
+  mostrare il valore confermato server-side.
+
+**Smoke E2E**:
+- POST employee €2800/mese 13 mesi × 1.30 / 1720h → €27.51/h ✓
+- GET espone tutti i 7 nuovi campi + `internal_cost_hourly` ✓
+- PUT switch employee → freelance €50/h → recalcolo €50/h ✓
+
+**Smoke**: 295 routes invariato, version `3.5.0-alpha.66.10`.
+
+**Verifica live**:
+1. `/resources` → click matita su una risorsa → modal apre.
+2. Sezione "💰 Costo interno" → dropdown "Dipendente" → compila stipendio
+   mensile → preview live: `€27.51/h`.
+3. Cambia tipo a "Freelance" → blocchi nascosti/mostrati correttamente.
+4. Cambia tipo a "Studio interno" → "Allocazione oraria" appare.
+5. Salva → ricarica `/resources` → riapri modal → valori persistiti.
+
+---
+
 ## v3.5.0-alpha.66.9 — JobDeliverable + cost-rate Resource + DAM physical + naming helper (10 maggio 2026)
 
 Substrato dati per il modello deliverable. Cantiere "Listino & Deliverable"

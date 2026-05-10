@@ -8,6 +8,25 @@
 
 ## Versione corrente
 
+**v3.5.0-alpha.66.10** — 10 maggio 2026 — UI cost-rate Resource con live preview
+
+Modal `/resources` esteso con sezione "💰 Costo interno" + dropdown
+`cost_type` (employee/freelance/studio/external) + blocchi condizionali
+per tipo + **live preview** calcolo (es. `2800 × 13 × 1.30 / 1720h = €27.51/h`).
+Backend `/resources/api/` esteso con tutti i 7 nuovi campi e ritorno
+`internal_cost_hourly` confermato server-side.
+
+Senza questa UI non era possibile testare l'hardcost α.66.9. Ora il flusso
+è completo: configura cost_type su Resource → crea deliverable → attribuisci
+booking → vedi `internal_hardcost.hardcost_eur` calcolato in dettaglio.
+
+**Verifica live**:
+1. `/resources` → matita su risorsa → sezione "💰 Costo interno"
+2. Compila Dipendente con stipendio €2800 → vedi preview €27.51/h
+3. Salva, riapri modal → valori persistiti.
+
+---
+
 **v3.5.0-alpha.66.9** — 10 maggio 2026 — JobDeliverable + cost-rate Resource + DAM physical + naming helper
 
 Substrato dati per il modello deliverable. UI completa rinviata a α.66.10+.
@@ -100,9 +119,10 @@ strategica con Matteo (10 maggio). Sequenza concordata:
 | α.66.7 | Snapshot legacy committato come preset built-in | ✅ chiuso |
 | α.66.8 | Semplificazione listino base (79 → 43 voci, –46%, descrizione modulare) | ✅ chiuso |
 | α.66.9 | Modello `JobDeliverable` + cost-rate Resource + DAM digital/physical separato + naming helper Netflix/ISDCF | ✅ chiuso |
-| α.66.10 | UI deliverable kanban + edit modal + bridge DAM digital/physical | 🔜 next |
-| α.66.11 | Tool generazione nomi file completo + CRUD PhysicalAsset UI | 🔜 |
-| α.66.12 | Copilot QC (ffprobe + LLM contro spec_json) + cost report split cliente vs interno | 🔜 |
+| α.66.10 | UI cost-rate Resource con live preview (necessaria per testare hardcost α.66.9) | ✅ chiuso |
+| α.66.11 | UI deliverable kanban + edit modal + bridge DAM digital/physical | 🔜 next |
+| α.66.12 | Tool generazione nomi file completo + CRUD PhysicalAsset UI | 🔜 |
+| α.66.13 | Copilot QC (ffprobe + LLM contro spec_json) + cost report split cliente vs interno | 🔜 |
 
 **Decisioni architetturali fissate (10 maggio)** per i prossimi step:
 - **Deliverable ≠ "no ore"**: anche un DCP/ProRes ha ore di produzione che vanno
