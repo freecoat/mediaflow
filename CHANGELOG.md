@@ -1,5 +1,34 @@
 # MediaFlow — Changelog
 
+## v3.5.0-alpha.66.14.3 — Tenant scope build_context AI (11 maggio 2026)
+
+Quick win post-audit #4. Chiude il pattern "AI vede tutti i tenant"
+documentato nell'audit AI/Copilot. `build_context` e
+`_build_planning_context` ignoravano `tenant_id` su tutte le query
+overview → cross-tenant data leak latente in Fase 7.
+
+**Costante modulare** `CURRENT_TENANT = 1` in `app/services/ai_assistant.py`
+(stesso pattern dei 13 router già scoped).
+
+**Filtri aggiunti su entità con `tenant_id`**:
+- `Client`, `PriceItem`, `PriceCategory`, `Department`, `Resource` in
+  `build_context` (overview + lista clienti)
+- `Booking` in `_build_planning_context` (booking 14gg + conflitti +
+  carico settimana)
+- `Resource` outerjoin in `_build_planning_context` per scope
+  `ResourceUnavailability` (holiday rows con `resource_id` NULL passano)
+
+**Modelli SENZA `tenant_id` (TODO R1)**: Project, Quote, Job, JobCostLine,
+Asset. Restano cross-tenant nelle query overview con commento esplicito
+`# TODO R1`. Saranno migrati nel sprint di consolidamento R1.
+
+**Smoke E2E**: `build_context()` boot OK, ctx_len 8535 char, query
+SQL visibili con `WHERE tenant_id = ?` per le 5 entità scoped.
+
+**Smoke**: 302 routes invariato, version 3.5.0-alpha.66.14.3.
+
+---
+
 ## v3.5.0-alpha.66.14.2 — Auth fail-closed via env flag (11 maggio 2026)
 
 Quick win post-audit #3. Chiude il pattern "fallback al primo admin

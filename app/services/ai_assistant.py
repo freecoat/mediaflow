@@ -40,6 +40,16 @@ from app.services.ai_provider import get_provider_for_user, safe_json_parse
 logger = logging.getLogger(__name__)
 
 
+# v3.5.0-alpha.66.14.3 — Tenant scope per le query del context AI.
+# I router applicano già `tenant_id == CURRENT_TENANT` ovunque, ma `build_context`
+# ignorava questa policy → cross-tenant data leak latente in Fase 7 multi-tenant
+# hard. Applicato qui ai modelli che hanno la colonna `tenant_id`.
+# Project/Quote/Job/JobCostLine non hanno tenant_id (audit HIGH #1, sarà
+# affrontato nel refactor R1 di consolidamento). Per ora restano cross-tenant
+# nelle query overview, con un commento esplicito.
+CURRENT_TENANT = 1
+
+
 # ── System prompt ────────────────────────────────────────────
 
 ASSISTANT_SYSTEM_PROMPT = """Sei l'assistente AI di MediaFlow, un software di gestione per case di postproduzione audiovisiva.
@@ -210,20 +220,34 @@ def build_context(db: Session,
     overview = []
     overview.append(f"Data corrente: {date_type.today().isoformat()}")
 
-    n_clients = db.query(Client).count()
-    n_projects = db.query(Project).count()
-    n_items = db.query(PriceItem).filter(PriceItem.is_active == True).count()
-    n_quotes = db.query(Quote).count()
-    n_resources = db.query(Resource).filter(Resource.is_active == True).count()
-    n_assets = db.query(Asset).count()
+    # v3.5.0-alpha.66.14.3 — tenant scope esplicito su tutte le entità con
+    # colonna tenant_id. Modelli senza tenant_id (Project/Quote/Job/JobCostLine/
+    # Asset) restano cross-tenant finché non saranno migrati in R1.
+    n_clients = db.query(Client).filter(Client.tenant_id == CURRENT_TENANT).count()
+    n_projects = db.query(Project).count()  # TODO R1: project.tenant_id
+    n_items = db.query(PriceItem).filter(
+        PriceItem.is_active == True,
+        PriceItem.tenant_id == CURRENT_TENANT,
+    ).count()
+    n_quotes = db.query(Quote).count()  # TODO R1: quote.tenant_id
+    n_resources = db.query(Resource).filter(
+        Resource.is_active == True,
+        Resource.tenant_id == CURRENT_TENANT,
+    ).count()
+    n_assets = db.query(Asset).count()  # TODO R1: asset.tenant_id
     overview.append(f"DB: {n_clients} clienti, {n_projects} progetti, {n_items} voci listino attive, "
                     f"{n_quotes} quote, {n_resources} risorse, {n_assets} asset.")
 
-    cats = [c.name for c in db.query(PriceCategory).order_by(PriceCategory.sort_order).limit(20).all()]
+    cats = [c.name for c in db.query(PriceCategory).filter(
+        PriceCategory.tenant_id == CURRENT_TENANT,
+    ).order_by(PriceCategory.sort_order).limit(20).all()]
     if cats:
         overview.append("Categorie listino: " + ", ".join(cats[:20]))
 
-    depts = [d.name for d in db.query(Department).filter(Department.is_active == True).all()]
+    depts = [d.name for d in db.query(Department).filter(
+        Department.is_active == True,
+        Department.tenant_id == CURRENT_TENANT,
+    ).all()]
     if depts:
         overview.append("Reparti: " + ", ".join(depts))
 
@@ -231,7 +255,10 @@ def build_context(db: Session,
     # Limite 200 voci attive per non gonfiare il context oltre il ragionevole.
     PRICELIST_LIMIT = 200
     items = (db.query(PriceItem)
-             .filter(PriceItem.is_active == True)
+             .filter(
+                 PriceItem.is_active == True,
+                 PriceItem.tenant_id == CURRENT_TENANT,
+             )
              .order_by(PriceItem.id)
              .limit(PRICELIST_LIMIT)
              .all())
@@ -246,7 +273,9 @@ def build_context(db: Session,
             overview.append(f"  …(altre {n_items - PRICELIST_LIMIT} voci omesse — chiedi all'utente se serve cercare oltre)")
 
     # Lista clienti esistenti (per evitare allucinazioni di nomi)
-    clients_rows = db.query(Client).order_by(Client.name).limit(40).all()
+    clients_rows = db.query(Client).filter(
+        Client.tenant_id == CURRENT_TENANT,
+    ).order_by(Client.name).limit(40).all()
     if clients_rows:
         overview.append("CLIENTI ESISTENTI (id | name):")
         for cl in clients_rows:
@@ -314,10 +343,12 @@ def _build_planning_context(db: Session,
     parts: list[str] = []
 
     # ── Booking prossimi 14 giorni ────────────────────────────
+    # v3.5.0-alpha.66.14.3 — tenant scope esplicito
     bk_q = db.query(Booking).options(
         _jl(Booking.assignments).joinedload(BookingAssignment.resource),
         _jl(Booking.job),
     ).filter(
+        Booking.tenant_id == CURRENT_TENANT,
         Booking.status != BookingStatus.cancelled,
         Booking.start_datetime < horizon_14,
         Booking.end_datetime >= today,
@@ -350,6 +381,7 @@ def _build_planning_context(db: Session,
     # Query semplice: tutti gli assignment del periodo, group by resource_id, check overlap.
     conflicts = []
     ass_q = db.query(BookingAssignment).join(Booking).filter(
+        Booking.tenant_id == CURRENT_TENANT,
         Booking.status != BookingStatus.cancelled,
         BookingAssignment.start_datetime < horizon_14,
         BookingAssignment.end_datetime >= today,
@@ -390,6 +422,7 @@ def _build_planning_context(db: Session,
     # ── Carico per risorsa prossimi 7 giorni ──────────────────
     week_load: dict[int, float] = {}
     week_q = db.query(BookingAssignment).join(Booking).filter(
+        Booking.tenant_id == CURRENT_TENANT,
         Booking.status != BookingStatus.cancelled,
         BookingAssignment.start_datetime < horizon_7,
         BookingAssignment.end_datetime >= today,
@@ -417,9 +450,12 @@ def _build_planning_context(db: Session,
             parts.append(f"  {badge} {name}: {hrs:.1f}h ({ratio*100:.0f}%)")
 
     # ── Ferie/festa prossime 14 giorni ─────────────────────────
-    unav = db.query(ResourceUnavailability).options(
+    # ResourceUnavailability scope via Resource (la riga unav è per resource)
+    unav = db.query(ResourceUnavailability).outerjoin(Resource).options(
         _jl(ResourceUnavailability.resource),
     ).filter(
+        # Resource.tenant_id check via outerjoin (holiday rows hanno resource_id NULL → restano)
+        ((Resource.tenant_id == CURRENT_TENANT) | (Resource.id.is_(None))),
         ResourceUnavailability.status == UnavailabilityStatus.approved,
         ResourceUnavailability.start_date <= horizon_14.date(),
         ResourceUnavailability.end_date >= today.date(),

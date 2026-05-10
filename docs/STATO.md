@@ -8,6 +8,16 @@
 
 ## Versione corrente
 
+**v3.5.0-alpha.66.14.3** — 11 maggio 2026 — Tenant scope build_context AI
+
+Chiude cross-tenant data leak latente in build_context/build_planning_context.
+Filtri tenant_id su Client/PriceItem/PriceCategory/Department/Resource/Booking.
+Modelli senza tenant_id (Project/Quote/Job/JobCostLine/Asset) marcati TODO R1.
+
+**Smoke**: 302 routes invariato, version 3.5.0-alpha.66.14.3.
+
+---
+
 **v3.5.0-alpha.66.14.2** — 11 maggio 2026 — Auth fail-closed via env flag
 
 Chiude l'auth bypass effettivo causato dal fallback "primo admin attivo"
