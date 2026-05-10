@@ -1,5 +1,43 @@
 # MediaFlow — Changelog
 
+## v3.5.0-alpha.66.14.5 — Permission gate mutator quote (11 maggio 2026)
+
+Quick win post-audit #6. 11 mutator del router quotes erano sprovvisti di
+permission check (audit HIGH #4). Solo 7 endpoint avevano `if not
+has_permission(user, "edit_quotes")` inline; gli altri erano accessibili
+a chiunque autenticato.
+
+**Nuovo pattern**:
+- Module-level `RequireEditQuotes = Depends(requires_permission("edit_quotes"))`
+- Applicato come `dependencies=[RequireEditQuotes]` nel decoratore router.
+- 403 automatico se permesso mancante, prima ancora che il body venga letto.
+
+**11 endpoint protetti**:
+- `POST /api/{quote_id}/promote-line-to-cost-line`
+- `POST /api/reverse-attach`
+- `POST /api` (create quote)
+- `PUT /api/{quote_id}/status` (transizione stato — più impattante)
+- `PUT /api/{quote_id}/category-discount`
+- `PUT /api/{quote_id}/lines-reorder`
+- `PUT /api/{quote_id}/category-order`
+- `POST /api/{quote_id}/lines` (add line)
+- `PUT /api/{quote_id}/lines/{line_id}` (update line)
+- `DELETE /api/{quote_id}/lines/{line_id}`
+- `POST /api/{quote_id}/convert-to-job` (legacy, marcato `deprecated=True`)
+
+**Endpoint con check inline preesistente**: lasciati invariati (la
+ridondanza dependency + check non rompe nulla, e il messaggio italiano
+inline è più informativo del 403 generico).
+
+**Smoke**: 302 routes invariato, version 3.5.0-alpha.66.14.5.
+
+**Verifica live**: utente con ruolo `viewer` (no `edit_quotes`)
+- POST `/quotes/api/{id}/lines` → 403 "Permesso negato" (prima passava)
+- DELETE `/quotes/api/{id}/lines/{lid}` → 403 idem
+- POST `/quotes/api/{id}/duplicate` → 403 (preesistente, identico)
+
+---
+
 ## v3.5.0-alpha.66.14.4 — Upload copilot security (auth + magic-bytes + ownership) (11 maggio 2026)
 
 Quick win post-audit #5. Chiude 3 buchi documentati nell'audit AI:

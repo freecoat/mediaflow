@@ -8,6 +8,16 @@
 
 ## Versione corrente
 
+**v3.5.0-alpha.66.14.5** — 11 maggio 2026 — Permission gate mutator quote
+
+11 mutator quote senza permission check (audit HIGH #4) ora protetti via
+`Depends(requires_permission("edit_quotes"))` come router-level dependency.
+Pattern `RequireEditQuotes` riusabile a inizio modulo.
+
+**Smoke**: 302 routes invariato, version 3.5.0-alpha.66.14.5.
+
+---
+
 **v3.5.0-alpha.66.14.4** — 11 maggio 2026 — Upload copilot security
 
 Chiude 3 buchi auth+MIME+ownership su /ai/api/upload e attachment pipeline.

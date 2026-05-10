@@ -10,8 +10,16 @@ from app.models import (
     PriceItem, PriceCategory, PriceLevel, Project,
     Booking, BookingStatus, JobCostLine, TimePunch,
 )
+from app.services.rbac import requires_permission
 
 router = APIRouter(prefix="/quotes", tags=["quotes"])
+
+# v3.5.0-alpha.66.14.5 — Dependency riusabile per i mutator quote.
+# Sostituisce i check inline `if not has_permission(user, "edit_quotes")` e
+# li applica anche agli 11 mutator che ne erano sprovvisti (audit HIGH #4).
+# Importato come module-level per essere usato in `dependencies=[...]` dei
+# decoratori router. La dependency raise 403 se permesso mancante.
+RequireEditQuotes = Depends(requires_permission("edit_quotes"))
 
 CATEGORY_FALLBACK = "Altro"
 
@@ -282,7 +290,7 @@ async def get_quote_booking_lines(
     }
 
 
-@router.post("/api/{quote_id}/promote-line-to-cost-line")
+@router.post("/api/{quote_id}/promote-line-to-cost-line", dependencies=[RequireEditQuotes])
 async def promote_line_to_cost_line(
     quote_id: int,
     request: Request,
@@ -387,7 +395,7 @@ async def promote_line_to_cost_line(
     }
 
 
-@router.post("/api/reverse-attach")
+@router.post("/api/reverse-attach", dependencies=[RequireEditQuotes])
 async def reverse_attach(
     request: Request,
     project_id: int = Form(...),
@@ -450,7 +458,7 @@ async def reverse_attach(
     return result
 
 
-@router.post("/api")
+@router.post("/api", dependencies=[RequireEditQuotes])
 async def create_quote(
     number: str = Form(...),
     project_id: int = Form(...),
@@ -543,7 +551,7 @@ async def get_quote(quote_id: int, db: Session = Depends(get_db)):
     }
 
 
-@router.put("/api/{quote_id}/status")
+@router.put("/api/{quote_id}/status", dependencies=[RequireEditQuotes])
 async def update_quote_status(
     quote_id: int, status: QuoteStatus = Form(...), db: Session = Depends(get_db),
 ):
@@ -697,7 +705,7 @@ async def update_quote(
     }
 
 
-@router.put("/api/{quote_id}/category-discount")
+@router.put("/api/{quote_id}/category-discount", dependencies=[RequireEditQuotes])
 async def update_category_discount(
     quote_id: int,
     category: str = Form(...),
@@ -728,7 +736,7 @@ async def update_category_discount(
     }
 
 
-@router.put("/api/{quote_id}/lines-reorder")
+@router.put("/api/{quote_id}/lines-reorder", dependencies=[RequireEditQuotes])
 async def reorder_quote_lines(
     quote_id: int,
     request: Request,
@@ -750,7 +758,7 @@ async def reorder_quote_lines(
     return {"ok": True, "count": len(order)}
 
 
-@router.put("/api/{quote_id}/category-order")
+@router.put("/api/{quote_id}/category-order", dependencies=[RequireEditQuotes])
 async def reorder_quote_categories(
     quote_id: int,
     request: Request,
@@ -772,7 +780,7 @@ async def reorder_quote_categories(
     return {"ok": True, "category_order": q.category_order or []}
 
 
-@router.post("/api/{quote_id}/lines")
+@router.post("/api/{quote_id}/lines", dependencies=[RequireEditQuotes])
 async def add_quote_line(
     quote_id: int,
     description: str = Form(...),
@@ -861,7 +869,7 @@ async def add_quote_line(
     }
 
 
-@router.put("/api/{quote_id}/lines/{line_id}")
+@router.put("/api/{quote_id}/lines/{line_id}", dependencies=[RequireEditQuotes])
 async def update_quote_line(
     quote_id: int, line_id: int,
     description: Optional[str] = Form(None),
@@ -942,7 +950,7 @@ async def update_quote_line(
     }
 
 
-@router.delete("/api/{quote_id}/lines/{line_id}")
+@router.delete("/api/{quote_id}/lines/{line_id}", dependencies=[RequireEditQuotes])
 async def delete_quote_line(quote_id: int, line_id: int, db: Session = Depends(get_db)):
     """v3.4.55 — cancellazione QuoteLine: HARD-BLOCK se ha JobCostLine con
     booking attivi (status != cancelled). Fino a v3.4.54 facevamo soft-detach
@@ -1090,7 +1098,7 @@ async def restore_quote_endpoint(
     return result
 
 
-@router.post("/api/{quote_id}/convert-to-job")
+@router.post("/api/{quote_id}/convert-to-job", dependencies=[RequireEditQuotes], deprecated=True)
 async def convert_to_job_legacy(
     quote_id: int,
     job_code: Optional[str] = Form(None),
