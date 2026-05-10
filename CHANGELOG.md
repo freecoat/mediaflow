@@ -1,5 +1,47 @@
 # MediaFlow — Changelog
 
+## v3.5.0-alpha.66.16.3 — Sprint R4 Step 2: migrate planning router a booking_mutate (11 maggio 2026)
+
+Continua R4. Migra il router planning per centralizzare TUTTI i check
+slice-lock attraverso `booking_mutate`.
+
+**`_assert_no_blocking_slice`** (planning.py:45) — wrapper interno ora
+delega a `booking_mutate.assert_slice_lock_safe`. API esterna identica:
+mantiene tentative-bypass + 409 con `code=SLICE_LOCK_CONFIRM_REQUIRED`.
+Tutti gli endpoint che lo usavano (PUT booking, delete_booking,
+delete_assignment, update_state, update_execution) beneficiano
+automaticamente del nuovo backend senza modifiche.
+
+**Nuova `_assert_no_blocking_slice_for_dates`** (planning.py:84) —
+wrapper analogo per check NEW dates (move/resize). Sostituisce 2 blocchi
+inline ridondanti (update_assignment + multi-move) che richiamavano
+`find_blocking_slice_for_dates` + manuale 409 mapping.
+
+**Call site migrati esplicitamente**:
+- `update_assignment` PUT (line 1979): 2 blocchi inline (~20 righe) → 2
+  chiamate al wrapper.
+- `multi_move` (line 2735): 2 blocchi inline (~30 righe) → 2 try/except
+  con `assert_slice_lock_safe`. Pattern speciale `success:false + dict`
+  mantenuto per compat client api() helper.
+
+**Coverage R4 finale (Step 0+1+2)**: 7/7 call site SLICE_LOCK
+centralizzati nel service `booking_mutate`. Pattern systemico O audit
+chiuso completamente.
+
+| Call site | Prima | Dopo |
+|---|---|---|
+| AI move (`_h_propose_move_booking`) | inline check + audit | `assert_mutation_safe` + `audit_booking_mutation` |
+| AI resize (`_h_propose_resize_booking`) | inline check + audit | idem |
+| router PUT booking | `_assert_no_blocking_slice` | wrapper → service |
+| router PUT assignment | inline current+new | helper + helper-for-dates |
+| router multi-move | inline loop con due check | service + try/except |
+| router delete booking/assignment | `_assert_no_blocking_slice` | wrapper → service |
+| router state/execution PATCH | `_assert_no_blocking_slice` | wrapper → service |
+
+**Smoke**: import OK, 302 routes invariato, version 3.5.0-alpha.66.16.3.
+
+---
+
 ## v3.5.0-alpha.66.16.2 — Sprint R4 Step 1: migrate AI handlers a booking_mutate (11 maggio 2026)
 
 Continua R4. Migra i 2 AI handlers principali (`_h_propose_move_booking`,

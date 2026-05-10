@@ -8,6 +8,17 @@
 
 ## Versione corrente
 
+**v3.5.0-alpha.66.16.3** — 11 maggio 2026 — Sprint R4 Step 2: planning router migrato
+
+Coverage R4 completata. _assert_no_blocking_slice ora delega a
+booking_mutate.assert_slice_lock_safe internamente; nuova helper
+_assert_no_blocking_slice_for_dates per NEW position. Tutti i 7 call
+site SLICE_LOCK centralizzati nel service. Pattern systemico O chiuso.
+
+**Smoke**: 302 routes invariato, version 3.5.0-alpha.66.16.3.
+
+---
+
 **v3.5.0-alpha.66.16.2** — 11 maggio 2026 — Sprint R4 Step 1: AI handlers migrati
 
 _h_propose_move_booking + _h_propose_resize_booking ora usano

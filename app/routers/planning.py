@@ -60,25 +60,53 @@ def _assert_no_blocking_slice(db: Session, b: Booking, *, force: bool = False) -
       lo accetta consapevolmente.
     - `force=True` → SKIP guard (override esplicito post-conferma).
 
+    v3.5.0-alpha.66.16.3 — Internamente usa booking_mutate.assert_slice_lock_safe
+    (sprint R4). Mantiene API esterna invariata + tentative-bypass + 409 con
+    code=SLICE_LOCK_CONFIRM_REQUIRED.
+
     Idempotente: se non c'è JCL collegata, no-op."""
-    if force:
-        return
     if b.status == BookingStatus.tentative:
         return
-    from app.services.billing_slice_guard import (
-        find_blocking_slice, slice_lock_message, slice_lock_payload,
-    )
-    s = find_blocking_slice(db, b)
-    if s is None:
+    from app.services.booking_mutate import assert_slice_lock_safe, SliceLocked
+    try:
+        assert_slice_lock_safe(db, b, force_unlock=force)
+    except SliceLocked as e:
+        detail = {
+            "code": "SLICE_LOCK_CONFIRM_REQUIRED",
+            "message": e.message,
+            "slice": e.payload,
+            "hint": "Booking confermato in periodo fatturato. Riinvia con "
+                    "`force_slice_unlock=true` per forzare la modifica.",
+        }
+        raise HTTPException(409, detail=detail)
+
+
+def _assert_no_blocking_slice_for_dates(
+    db: Session, b: Booking, new_start: date, new_end: date,
+    *, force: bool = False,
+) -> None:
+    """v3.5.0-alpha.66.16.3 — Variante per check NEW dates (move/resize).
+
+    Sostituisce 2 blocchi inline (linee ~1957 update_assignment, ~2736
+    multi-move) che richiamavano `find_blocking_slice_for_dates` + manuale
+    HTTPException 409. Stessa policy di `_assert_no_blocking_slice` ma
+    sulla posizione PROPOSTA (not current).
+
+    Tentative bypass: stesso comportamento (booking tentative liberamente
+    spostabili anche dentro slice billed)."""
+    if b.status == BookingStatus.tentative:
         return
-    detail = {
-        "code": "SLICE_LOCK_CONFIRM_REQUIRED",
-        "message": slice_lock_message(s),
-        "slice": slice_lock_payload(s),
-        "hint": "Booking confermato in periodo fatturato. Riinvia con "
-                "`force_slice_unlock=true` per forzare la modifica.",
-    }
-    raise HTTPException(409, detail=detail)
+    from app.services.booking_mutate import assert_slice_lock_safe, SliceLocked
+    try:
+        assert_slice_lock_safe(db, b, new_dates=(new_start, new_end), force_unlock=force)
+    except SliceLocked as e:
+        detail = {
+            "code": "SLICE_LOCK_CONFIRM_REQUIRED",
+            "message": e.message + " — la nuova posizione del booking ricade in periodo già fatturato.",
+            "slice": e.payload,
+            "hint": "Riinvia con `force_slice_unlock=true` per forzare la modifica.",
+        }
+        raise HTTPException(409, detail=detail)
 
 
 def _tpl():
@@ -1948,25 +1976,13 @@ async def update_assignment(
     new_e = end_datetime if end_datetime is not None else a.end_datetime
     if new_e <= new_s:
         raise HTTPException(400, "end_datetime deve essere > start_datetime")
-    # v3.5.0-alpha.59 — HARD-BLOCK se l'assignment è dentro un periodo già
-    # slice-ato. v3.5.0-alpha.66.3: skip per tentative, override via
-    # force_slice_unlock per confirmed.
+    # v3.5.0-alpha.59 — HARD-BLOCK slice-lock current + new position.
+    # v3.5.0-alpha.66.16.3 — sostituiti 2 blocchi inline con _assert_no_blocking_slice
+    # + _assert_no_blocking_slice_for_dates (sprint R4 booking_mutate).
     _assert_no_blocking_slice(db, a.booking, force=force_slice_unlock)
-    if a.booking.job_cost_line_id and not force_slice_unlock and a.booking.status != BookingStatus.tentative:
-        from app.services.billing_slice_guard import (
-            find_blocking_slice_for_dates, slice_lock_message, slice_lock_payload,
-        )
-        s_new = find_blocking_slice_for_dates(
-            db, a.booking.job_cost_line_id, new_s.date(), new_e.date()
-        )
-        if s_new:
-            raise HTTPException(409, detail={
-                "code": "SLICE_LOCK_CONFIRM_REQUIRED",
-                "message": slice_lock_message(s_new),
-                "slice": slice_lock_payload(s_new),
-                "hint": "La nuova posizione cade in periodo fatturato. "
-                        "Riinvia con `force_slice_unlock=true` per forzare.",
-            })
+    _assert_no_blocking_slice_for_dates(
+        db, a.booking, new_s.date(), new_e.date(), force=force_slice_unlock,
+    )
     # v3.5.0-alpha.66.5.2: il check cross-booking esclude TUTTI i fratelli
     # dello stesso booking (smart-split mattina+pomeriggio sulla stessa
     # risorsa = fratelli legittimi, non conflitti).
@@ -2712,35 +2728,41 @@ async def multi_move_assignments(
 
     # v3.5.0-alpha.59 — HARD-BLOCK se anche un solo assignment ricade dentro
     # un periodo già fatturato (pre o post move). All-or-nothing: niente
-    # parziale. Niente rollback parziale, lo blocchiamo prima di procedere.
-    # v3.5.0-alpha.66.3: skip per tentative; bypass se force_slice_unlock=True;
-    # restituisce SLICE_LOCK_CONFIRM_REQUIRED (confirmed) per permettere al
-    # client di chiedere conferma e ri-inviare con force.
-    from app.services.billing_slice_guard import (
-        find_blocking_slice, find_blocking_slice_for_dates, slice_lock_payload,
-    )
+    # parziale.
+    # v3.5.0-alpha.66.3: skip per tentative; bypass se force_slice_unlock=True.
+    # v3.5.0-alpha.66.16.3 — Sprint R4: usa booking_mutate.assert_slice_lock_safe
+    # invece dei 2 check inline duplicati. Pattern di response speciale
+    # `success:false + dict` mantenuto per compat client (api() wrappa
+    # HTTPException detail dict come "[object Object]").
+    from app.services.booking_mutate import assert_slice_lock_safe, SliceLocked
     if not force_slice_unlock:
         for p in parsed:
             a = by_id[p["assignment_id"]]
             if a.booking.status == BookingStatus.tentative:
                 continue  # tentative: liberamente movibile
-            s_pre = find_blocking_slice(db, a.booking)
-            if s_pre is not None:
+            # Check posizione CORRENTE
+            try:
+                assert_slice_lock_safe(db, a.booking, force_unlock=False)
+            except SliceLocked as e:
                 return {
                     "success": False, "code": "SLICE_LOCK_CONFIRM_REQUIRED", "moved": 0,
                     "blocked_assignment_id": a.id, "blocked_booking_id": a.booking_id,
-                    "slice": slice_lock_payload(s_pre),
+                    "slice": e.payload,
                     "hint": "Booking confermato in periodo fatturato. "
                             "Riinvia con force_slice_unlock=true per forzare.",
                 }
-            s_post = find_blocking_slice_for_dates(
-                db, a.booking.job_cost_line_id, p["new_start"].date(), p["new_end"].date()
-            )
-            if s_post is not None:
+            # Check posizione NUOVA
+            try:
+                assert_slice_lock_safe(
+                    db, a.booking,
+                    new_dates=(p["new_start"].date(), p["new_end"].date()),
+                    force_unlock=False,
+                )
+            except SliceLocked as e:
                 return {
                     "success": False, "code": "SLICE_LOCK_CONFIRM_REQUIRED", "moved": 0,
                     "blocked_assignment_id": a.id, "blocked_booking_id": a.booking_id,
-                    "slice": slice_lock_payload(s_post),
+                    "slice": e.payload,
                     "hint": "La nuova posizione cade in periodo fatturato. "
                             "Riinvia con force_slice_unlock=true per forzare.",
                 }
