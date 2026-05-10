@@ -8,6 +8,18 @@
 
 ## Versione corrente
 
+**v3.5.0-alpha.66.15.2** — 11 maggio 2026 — Sprint R1 Step 2: tenant filter
+
+Tenant filter applicato a list+by-id critici dei 4 router maggiori
+(quotes/jobs/cost_report/dam). Pattern transitorio
+`CURRENT_TENANT = current_tenant_id()` a livello modulo. Sweep su altri
+servizi (cost_line_sync, billing_slice_guard, reverse_quote, ecc) +
+billing/finance/hr router rinviato a R1.3/R1.4.
+
+**Smoke**: 302 routes invariato, version 3.5.0-alpha.66.15.2.
+
+---
+
 **v3.5.0-alpha.66.15.1** — 11 maggio 2026 — Sprint R1 Step 1: context DI
 
 Single source of truth per tenant scope: app/context.py con

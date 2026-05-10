@@ -11,6 +11,7 @@ from app.models import (
     Booking, BookingStatus, JobCostLine, TimePunch,
 )
 from app.services.rbac import requires_permission
+from app.context import current_tenant_id
 
 router = APIRouter(prefix="/quotes", tags=["quotes"])
 
@@ -20,6 +21,10 @@ router = APIRouter(prefix="/quotes", tags=["quotes"])
 # Importato come module-level per essere usato in `dependencies=[...]` dei
 # decoratori router. La dependency raise 403 se permesso mancante.
 RequireEditQuotes = Depends(requires_permission("edit_quotes"))
+
+# v3.5.0-alpha.66.15.2 — Costante locale per leggibilità. Single-tenant attuale
+# → 1. In Fase 7 sostituire con `Depends(get_tenant_id)` su ogni endpoint.
+CURRENT_TENANT = current_tenant_id()
 
 CATEGORY_FALLBACK = "Altro"
 
@@ -165,11 +170,16 @@ def _recalc_quote(quote: Quote) -> None:
 
 @router.get("/", response_class=HTMLResponse)
 async def quotes_page(request: Request, db: Session = Depends(get_db)):
-    quotes = db.query(Quote).options(
+    # v3.5.0-alpha.66.15.2 — tenant scope (R1)
+    quotes = db.query(Quote).filter(
+        Quote.tenant_id == CURRENT_TENANT,
+    ).options(
         joinedload(Quote.client),
         joinedload(Quote.project),
     ).order_by(Quote.created_at.desc()).all()
-    projects = db.query(Project).options(joinedload(Project.client)).order_by(Project.title).all()
+    projects = db.query(Project).filter(
+        Project.tenant_id == CURRENT_TENANT,
+    ).options(joinedload(Project.client)).order_by(Project.title).all()
     return _tpl().TemplateResponse(
         "pages/quotes.html",
         {"request": request, "quotes": quotes, "projects": projects},
@@ -181,7 +191,10 @@ async def list_quotes(
     project_id: Optional[int] = None,
     db: Session = Depends(get_db),
 ):
-    q = db.query(Quote).options(joinedload(Quote.client), joinedload(Quote.project))
+    # v3.5.0-alpha.66.15.2 — tenant scope (R1)
+    q = db.query(Quote).filter(
+        Quote.tenant_id == CURRENT_TENANT,
+    ).options(joinedload(Quote.client), joinedload(Quote.project))
     if project_id:
         q = q.filter(Quote.project_id == project_id)
     qs = q.order_by(Quote.created_at.desc()).all()

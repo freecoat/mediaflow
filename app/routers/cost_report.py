@@ -19,12 +19,16 @@ from app.services.booking_cost import compute_assignment_breakdown, BookingBreak
 from app.services.working_hours import get_holidays
 from app.services.pdf_export import generate_client_cost_report_pdf
 from app.services.cost_line_sync import is_time_based_unit
+from app.context import current_tenant_id
 
 router = APIRouter(prefix="/cost-report", tags=["cost_report"])
 
 # Costante condivisa con cost_line_sync.HOURS_PER_DAY: conversione
 # day-unit ↔ ore. Tenuta locale qui per evitare import circolari.
 HOURS_PER_DAY = 8.0
+
+# v3.5.0-alpha.66.15.2 — tenant scope (R1)
+CURRENT_TENANT = current_tenant_id()
 
 
 def _tpl():
@@ -37,7 +41,10 @@ async def cost_report_page(request: Request, db: Session = Depends(get_db)):
     # v3.5.0-alpha.16: passiamo solo i jobs per il modal "Assegna risorsa".
     # La lista dei cost report ora viene caricata via /cost-report/api/list
     # con ricerca + filtri (pattern allineato a /quotes).
-    jobs = db.query(Job).options(joinedload(Job.client), joinedload(Job.quote)).all()
+    # v3.5.0-alpha.66.15.2 — tenant scope (R1)
+    jobs = db.query(Job).filter(
+        Job.tenant_id == CURRENT_TENANT,
+    ).options(joinedload(Job.client), joinedload(Job.quote)).all()
     return _tpl().TemplateResponse("pages/cost_report.html", {"request": request, "jobs": jobs})
 
 
@@ -51,6 +58,7 @@ async def list_cost_reports(
     quotato, maturato, stimato, over/under), pensati per la lista filtrabile
     in `/cost-report` (sostituisce il dropdown pre-alpha.16).
     """
+    # v3.5.0-alpha.66.15.2 — tenant scope (R1)
     jobs = (
         db.query(Job)
         .options(
@@ -58,7 +66,10 @@ async def list_cost_reports(
             joinedload(Job.quote),
             joinedload(Job.cost_lines),
         )
-        .filter(Job.client_id.isnot(None))
+        .filter(
+            Job.tenant_id == CURRENT_TENANT,
+            Job.client_id.isnot(None),
+        )
         .order_by(Job.created_at.desc())
         .all()
     )

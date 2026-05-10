@@ -6,9 +6,13 @@ from sqlalchemy.orm import Session, joinedload
 from app.database import get_db
 from app.models import Asset, AssetType, Tag, AssetTag, User
 from app.services.dam import save_upload, generate_thumbnail, resolve_asset_type, delete_asset_files
+from app.context import current_tenant_id
 import os
 
 router = APIRouter(prefix="/dam", tags=["dam"])
+
+# v3.5.0-alpha.66.15.2 — tenant scope (R1)
+CURRENT_TENANT = current_tenant_id()
 
 
 def _tpl():
@@ -20,7 +24,11 @@ def _tpl():
 
 @router.get("/", response_class=HTMLResponse)
 async def dam_page(request: Request, db: Session = Depends(get_db)):
-    assets = db.query(Asset).filter(Asset.parent_asset_id == None).order_by(Asset.created_at.desc()).limit(50).all()
+    # v3.5.0-alpha.66.15.2 — tenant scope (R1)
+    assets = db.query(Asset).filter(
+        Asset.tenant_id == CURRENT_TENANT,
+        Asset.parent_asset_id == None,
+    ).order_by(Asset.created_at.desc()).limit(50).all()
     tags = db.query(Tag).all()
     return _tpl().TemplateResponse(
         "pages/dam.html", {"request": request, "assets": assets, "tags": tags}
@@ -37,7 +45,11 @@ async def list_assets(
     q: Optional[str] = None,
     db: Session = Depends(get_db),
 ):
-    query = db.query(Asset).filter(Asset.parent_asset_id == None)
+    # v3.5.0-alpha.66.15.2 — tenant scope (R1)
+    query = db.query(Asset).filter(
+        Asset.tenant_id == CURRENT_TENANT,
+        Asset.parent_asset_id == None,
+    )
     if asset_type:
         query = query.filter(Asset.asset_type == asset_type)
     if job_id:
@@ -114,7 +126,8 @@ async def upload_asset(
 
 @router.get("/download/{asset_id}")
 async def download_asset(asset_id: int, db: Session = Depends(get_db)):
-    a = db.query(Asset).filter(Asset.id == asset_id).first()
+    # v3.5.0-alpha.66.15.2 — tenant scope (R1)
+    a = db.query(Asset).filter(Asset.id == asset_id, Asset.tenant_id == CURRENT_TENANT).first()
     if not a or not os.path.exists(a.file_path):
         raise HTTPException(404, "Asset non trovato")
     return FileResponse(a.file_path, filename=a.original_name, media_type=a.mime_type)
@@ -122,7 +135,8 @@ async def download_asset(asset_id: int, db: Session = Depends(get_db)):
 
 @router.get("/thumbnail/{asset_id}")
 async def get_thumbnail(asset_id: int, db: Session = Depends(get_db)):
-    a = db.query(Asset).filter(Asset.id == asset_id).first()
+    # v3.5.0-alpha.66.15.2 — tenant scope (R1)
+    a = db.query(Asset).filter(Asset.id == asset_id, Asset.tenant_id == CURRENT_TENANT).first()
     if not a or not a.thumbnail_path or not os.path.exists(a.thumbnail_path):
         raise HTTPException(404, "Thumbnail non disponibile")
     return FileResponse(a.thumbnail_path, media_type="image/jpeg")
@@ -130,7 +144,8 @@ async def get_thumbnail(asset_id: int, db: Session = Depends(get_db)):
 
 @router.delete("/api/assets/{asset_id}")
 async def delete_asset(asset_id: int, db: Session = Depends(get_db)):
-    a = db.query(Asset).filter(Asset.id == asset_id).first()
+    # v3.5.0-alpha.66.15.2 — tenant scope (R1)
+    a = db.query(Asset).filter(Asset.id == asset_id, Asset.tenant_id == CURRENT_TENANT).first()
     if not a:
         raise HTTPException(404, "Asset non trovato")
     delete_asset_files(a.file_path, a.thumbnail_path)

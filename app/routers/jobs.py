@@ -188,6 +188,7 @@ def _job_payload(db: Session, job: Job) -> dict:
 
 @router.get("/{job_id}", response_class=HTMLResponse)
 async def job_detail_page(job_id: int, request: Request, db: Session = Depends(get_db)):
+    # v3.5.0-alpha.66.15.2 — tenant scope (R1)
     job = (
         db.query(Job)
         .options(
@@ -196,7 +197,7 @@ async def job_detail_page(job_id: int, request: Request, db: Session = Depends(g
             joinedload(Job.quote),
             joinedload(Job.cost_lines),
         )
-        .filter(Job.id == job_id)
+        .filter(Job.id == job_id, Job.tenant_id == CURRENT_TENANT)
         .first()
     )
     if not job:
@@ -219,6 +220,7 @@ async def job_detail_page(job_id: int, request: Request, db: Session = Depends(g
 
 @router.get("/api/{job_id}")
 async def get_job(job_id: int, db: Session = Depends(get_db)):
+    # v3.5.0-alpha.66.15.2 — tenant scope (R1)
     job = (
         db.query(Job)
         .options(
@@ -227,7 +229,7 @@ async def get_job(job_id: int, db: Session = Depends(get_db)):
             joinedload(Job.quote),
             joinedload(Job.cost_lines),
         )
-        .filter(Job.id == job_id)
+        .filter(Job.id == job_id, Job.tenant_id == CURRENT_TENANT)
         .first()
     )
     if not job:
@@ -357,7 +359,8 @@ async def add_cost_line(
     from app.services.rbac import can_view_finance, current_user_optional
     if not can_view_finance(current_user_optional(request)):
         raise HTTPException(403, "Permesso negato (richiede view_finance)")
-    job = db.query(Job).filter(Job.id == job_id).first()
+    # v3.5.0-alpha.66.15.2 — tenant scope (R1)
+    job = db.query(Job).filter(Job.id == job_id, Job.tenant_id == CURRENT_TENANT).first()
     if not job:
         raise HTTPException(404, "Job non trovato")
     if quantity <= 0:
@@ -581,7 +584,8 @@ async def list_deliverables(
     include_deleted: bool = False,
     db: Session = Depends(get_db),
 ):
-    job = db.query(Job).filter(Job.id == job_id).first()
+    # v3.5.0-alpha.66.15.2 — tenant scope (R1)
+    job = db.query(Job).filter(Job.id == job_id, Job.tenant_id == CURRENT_TENANT).first()
     if not job:
         raise HTTPException(404, "Job non trovato")
     q = db.query(JobDeliverable).filter(
@@ -629,7 +633,8 @@ async def create_deliverable(
     if not has_permission(user, "edit_planning_all") and not has_permission(user, "assign_resources"):
         raise HTTPException(403, "Permesso insufficiente per creare deliverable")
 
-    job = db.query(Job).filter(Job.id == job_id).first()
+    # v3.5.0-alpha.66.15.2 — tenant scope (R1)
+    job = db.query(Job).filter(Job.id == job_id, Job.tenant_id == CURRENT_TENANT).first()
     if not job:
         raise HTTPException(404, "Job non trovato")
 

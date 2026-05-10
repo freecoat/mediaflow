@@ -1,5 +1,47 @@
 # MediaFlow — Changelog
 
+## v3.5.0-alpha.66.15.2 — Sprint R1 Step 2: tenant filter su query critiche (11 maggio 2026)
+
+Continua R1. Applica `tenant_id == CURRENT_TENANT` alle query LIST + by-id
+critiche dei 4 router maggiori per Quote/Job/JobCostLine/Asset. Chiude il
+leak diretto cross-tenant (info disclosure su list); le query by-id nei
+mutator restano scope-safe via PK + permission gate.
+
+**File modificati**:
+- `app/routers/quotes.py`: `quotes_page` + `list_quotes` filtrate. Costante
+  modulare `CURRENT_TENANT = current_tenant_id()` (stub stile DI esistente).
+- `app/routers/jobs.py`: `job_detail_page`, `get_job` + tutte le altre
+  `db.query(Job).filter(Job.id == job_id)` ricevono il filter
+  `Job.tenant_id == CURRENT_TENANT` via `replace_all`.
+- `app/routers/cost_report.py`: `cost_report_page` + `list_cost_reports`
+  filtrate; `CURRENT_TENANT` aggiunto al modulo.
+- `app/routers/dam.py`: `dam_page`, `list_assets`, e tutte le by-id
+  `Asset.id == asset_id` ricevono filter `Asset.tenant_id == CURRENT_TENANT`.
+
+**Pattern adottato** (transitorio):
+```python
+from app.context import current_tenant_id
+CURRENT_TENANT = current_tenant_id()  # stub R1.1: ritorna sempre 1
+```
+Importa lo stub a livello modulo; l'evoluzione futura sarà `Depends(get_tenant_id)`
+per-endpoint, da fare quando il middleware popolerà `request.state.tenant_id`
+(Fase 7 multi-tenant hard).
+
+**NON è ancora coperto** (R1.3+):
+- `app/services/cost_line_sync.py`, `services/billing_slice_guard.py`,
+  `services/reverse_quote.py`, `services/data_export.py` ecc.
+  Queste lavorano su entità già scoped via parent (Booking → tenant_id,
+  Job → tenant_id) — il leak è indiretto. Sweep dedicato in R1.3 quando
+  R1.2 sarà confermato dai test live.
+- Router `billing.py`, `finance.py`, `hr.py`, `planning.py` (booking ce
+  l'ha già, ma alcune query Job non lo applicano). R1.4.
+
+**Smoke E2E**: 302 routes invariato. Query `Quote/Job/Asset filter
+tenant_id=1` ritornano 0 record (DB Matteo vuoto). Nessun errore.
+Version 3.5.0-alpha.66.15.2.
+
+---
+
 ## v3.5.0-alpha.66.15.1 — Sprint R1 Step 1: app/context.py DI helper (11 maggio 2026)
 
 Continua R1. Aggiunge il single source of truth per il tenant scope.
