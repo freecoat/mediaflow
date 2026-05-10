@@ -66,6 +66,11 @@ from app.services.ai_legacy_parser import (
     _balanced_json_at,
 )
 
+from app.services.ai_capability_registry import (
+    ai_capability,
+    get_handlers as _registry_get_handlers,
+    get_action_types as _registry_get_action_types,
+)
 # ── Chat principale ─────────────────────────────────────────
 
 def build_system_prompt(db: Session, *, use_tools: bool,
@@ -169,6 +174,7 @@ def apply_action(db: Session, action: AIAction) -> dict:
 
 # Handler concreti ────────────────────────────────────────────
 
+@ai_capability("propose_price_item")
 def _h_propose_price_item(db: Session, data: dict) -> dict:
     name = (data.get("name") or "").strip()
     if not name:
@@ -206,6 +212,7 @@ def _h_propose_price_item(db: Session, data: dict) -> dict:
             "message": f"Voce listino '{item.name}' creata con id={item.id} (categoria {cat.name}, {item.unit}, €{item.price_list})."}
 
 
+@ai_capability("propose_client")
 def _h_propose_client(db: Session, data: dict) -> dict:
     name = (data.get("name") or "").strip()
     if not name:
@@ -261,6 +268,7 @@ def _resolve_quote(db: Session, data: dict) -> Quote:
     raise ValueError(f"Quote non trovata (quote_id={qid!r}, quote_number={number!r}).")
 
 
+@ai_capability("propose_project")
 def _h_propose_project(db: Session, data: dict) -> dict:
     code = (data.get("code") or "").strip()
     title = (data.get("title") or "").strip()
@@ -324,6 +332,7 @@ def _next_quote_number(db: Session) -> str:
     return f"{prefix}{n:03d}"
 
 
+@ai_capability("propose_quote")
 def _h_propose_quote(db: Session, data: dict) -> dict:
     """
     Crea una quote. Se data['lines'] è una lista, crea anche le righe in transazione.
@@ -465,6 +474,7 @@ def _h_propose_quote(db: Session, data: dict) -> dict:
     }
 
 
+@ai_capability("update_quote")
 def _h_update_quote(db: Session, data: dict) -> dict:
     """v3.5.0-alpha.14: modifica i metadata di una quote esistente.
     Permette: title, issue_date, valid_until, vat_rate, package_discount, notes,
@@ -529,6 +539,7 @@ def _h_update_quote(db: Session, data: dict) -> dict:
     }
 
 
+@ai_capability("propose_quote_line")
 def _h_propose_quote_line(db: Session, data: dict) -> dict:
     """Aggiunge una riga a una quote esistente.
 
@@ -587,6 +598,7 @@ def _h_propose_quote_line(db: Session, data: dict) -> dict:
     }
 
 
+@ai_capability("propose_new_item_and_line")
 def _h_propose_new_item_and_line(db: Session, data: dict) -> dict:
     """Scenario C — search-first AI fallback.
 
@@ -676,6 +688,7 @@ def _h_propose_new_item_and_line(db: Session, data: dict) -> dict:
     }
 
 
+@ai_capability("propose_project_metadata")
 def _h_propose_project_metadata(db: Session, data: dict) -> dict:
     p = _resolve_project(db, data)
     fields = ["length_minutes", "fps", "shooting_format", "delivery_format", "director"]
@@ -688,6 +701,7 @@ def _h_propose_project_metadata(db: Session, data: dict) -> dict:
     return {"project_id": p.id, "code": p.code, "updated": updated}
 
 
+@ai_capability("web_search")
 def _h_web_search(db: Session, data: dict) -> dict:
     """Ricerca web read-only via Tavily, restituisce snippet testuali."""
     from app.services.web_search import tavily_search
@@ -704,6 +718,7 @@ def _h_web_search(db: Session, data: dict) -> dict:
 # capability AI per ogni area. Per estendere a una nuova area: aggiungi una
 # `SettingsSchema` al registry, niente codice qui da toccare.
 
+@ai_capability("list_settings_schemas")
 def _h_list_settings_schemas(db: Session, data: dict) -> dict:
     from app.services.settings_registry import list_schemas
     schemas = list_schemas()
@@ -717,6 +732,7 @@ def _h_list_settings_schemas(db: Session, data: dict) -> dict:
     }
 
 
+@ai_capability("read_setting")
 def _h_read_setting(db: Session, data: dict, *, user=None) -> dict:
     from app.services.settings_registry import get_schema
     key = (data.get("key") or "").strip()
@@ -735,6 +751,7 @@ def _h_read_setting(db: Session, data: dict, *, user=None) -> dict:
     }
 
 
+@ai_capability("update_setting")
 def _h_update_setting(db: Session, data: dict, *, user=None) -> dict:
     from app.services.settings_registry import get_schema, can_user_access
     key = (data.get("key") or "").strip()
@@ -771,6 +788,7 @@ def _h_update_setting(db: Session, data: dict, *, user=None) -> dict:
     }
 
 
+@ai_capability("propose_resource")
 def _h_propose_resource(db: Session, data: dict) -> dict:
     """Crea una nuova Resource (v3.5.0-alpha.33).
 
@@ -850,6 +868,7 @@ def _h_propose_resource(db: Session, data: dict) -> dict:
     }
 
 
+@ai_capability("propose_booking")
 def _h_propose_booking(db: Session, data: dict) -> dict:
     """Crea un Booking con N risorse (E6 v3.4.20).
 
@@ -1006,6 +1025,7 @@ def _resolve_booking_for_planning(db: Session, data: dict) -> Booking:
     return b
 
 
+@ai_capability("propose_move_booking")
 def _h_propose_move_booking(db: Session, data: dict) -> dict:
     """Sposta un booking esistente di un delta temporale, opzionalmente
     cambiando risorsa/risorse degli assignment.
@@ -1145,6 +1165,7 @@ def _h_propose_move_booking(db: Session, data: dict) -> dict:
     }
 
 
+@ai_capability("propose_resize_booking")
 def _h_propose_resize_booking(db: Session, data: dict) -> dict:
     """Cambia la durata di un booking modificando end (o start) di tutti gli
     assignment del medesimo delta. Mantenere proporzioni se booking è split
@@ -1224,6 +1245,7 @@ def _h_propose_resize_booking(db: Session, data: dict) -> dict:
     }
 
 
+@ai_capability("propose_delete_booking")
 def _h_propose_delete_booking(db: Session, data: dict) -> dict:
     """Cancella un booking (soft-delete via status=cancelled).
 
@@ -1260,6 +1282,7 @@ def _h_propose_delete_booking(db: Session, data: dict) -> dict:
 
 # ── v3.5.0-alpha.54: Capability planning avanzate ──────────────────
 
+@ai_capability("analyze_conflicts")
 def _h_analyze_conflicts(db: Session, data: dict) -> dict:
     """READONLY. Trova conflitti orari nei booking di un periodo
     (default = prossimi 14 giorni) e suggerisce risoluzioni.
@@ -1323,6 +1346,7 @@ def _h_analyze_conflicts(db: Session, data: dict) -> dict:
     }
 
 
+@ai_capability("find_free_slots")
 def _h_find_free_slots(db: Session, data: dict) -> dict:
     """READONLY. Cerca slot liberi per una risorsa (o reparto) in un periodo.
 
@@ -1420,6 +1444,7 @@ def _h_find_free_slots(db: Session, data: dict) -> dict:
     }
 
 
+@ai_capability("propose_recurring_bookings")
 def _h_propose_recurring_bookings(db: Session, data: dict) -> dict:
     """MUTATION. Crea una serie ricorrente di booking dal lunedì al venerdì
     (o regola custom). Atomic per occorrenza, conflict check on each.
@@ -1522,6 +1547,7 @@ def _h_propose_recurring_bookings(db: Session, data: dict) -> dict:
     }
 
 
+@ai_capability("propose_bulk_move")
 def _h_propose_bulk_move(db: Session, data: dict) -> dict:
     """MUTATION. Sposta N booking di un delta uniforme. Conflict check
     cross-batch (escludendo gli stessi booking della transazione).
@@ -1604,6 +1630,7 @@ def _h_propose_bulk_move(db: Session, data: dict) -> dict:
     }
 
 
+@ai_capability("query_project_finance")
 def _h_query_project_finance(db: Session, data: dict) -> dict:
     """READONLY. Stato finanziario aggregato di un progetto: quotato,
     maturato, atteso, spese, margine, fatturato, incassato, ripartizione
@@ -1705,6 +1732,7 @@ def _h_query_project_finance(db: Session, data: dict) -> dict:
     }
 
 
+@ai_capability("propose_transmit_to_billing")
 def _h_propose_transmit_to_billing(db: Session, data: dict) -> dict:
     """MUTATION. Trasmetti il maturato di un progetto come BillingBatch
     in stato draft. Equivalente al bottone "Trasmetti" dal Cost Report
@@ -1721,34 +1749,33 @@ def _h_propose_transmit_to_billing(db: Session, data: dict) -> dict:
     )
 
 
-_ACTION_HANDLERS = {
-    "propose_client":            _h_propose_client,
-    "propose_project":           _h_propose_project,
-    "propose_project_metadata":  _h_propose_project_metadata,
-    "propose_quote":             _h_propose_quote,
-    "update_quote":              _h_update_quote,
-    "propose_quote_line":        _h_propose_quote_line,
-    "propose_price_item":        _h_propose_price_item,
-    "propose_new_item_and_line": _h_propose_new_item_and_line,
-    "propose_resource":          _h_propose_resource,
-    "propose_booking":           _h_propose_booking,
-    # v3.5.0-alpha.50 — Planning operations
-    "propose_move_booking":      _h_propose_move_booking,
-    "propose_resize_booking":    _h_propose_resize_booking,
-    "propose_delete_booking":    _h_propose_delete_booking,
-    # v3.5.0-alpha.54 — Planning avanzato + Billing
-    "analyze_conflicts":             _h_analyze_conflicts,
-    "find_free_slots":               _h_find_free_slots,
-    "propose_recurring_bookings":    _h_propose_recurring_bookings,
-    "propose_bulk_move":             _h_propose_bulk_move,
-    "propose_transmit_to_billing":   _h_propose_transmit_to_billing,
-    "query_project_finance":         _h_query_project_finance,
-    "web_search":                _h_web_search,
-    # v3.5.0-alpha.19 — Settings registry tools
-    "list_settings_schemas":     _h_list_settings_schemas,
-    "read_setting":              _h_read_setting,
-    "update_setting":            _h_update_setting,
-}
+# v3.5.0-alpha.66.17.2 (R6.2) — `_ACTION_HANDLERS` derivato dal registry
+# popolato dai decorator `@ai_capability("name")` sopra ogni `_h_*`.
+# Manteniamo l'attributo come dict (non funzione) per compat back-compat
+# call site `_ACTION_HANDLERS.get(...)`/`_ACTION_HANDLERS[...]`.
+# Idem VALID_ACTION_TYPES nel modulo `ai_legacy_parser`: viene rimpiazzato
+# in fondo (vedi `_sync_legacy_parser_action_types()`).
+_ACTION_HANDLERS = _registry_get_handlers()
+
+
+def _sync_legacy_parser_action_types() -> None:
+    """Aggiorna `ai_legacy_parser.VALID_ACTION_TYPES` con il set derivato
+    dal registry. Eseguito una volta a import-time di questo modulo, dopo
+    che TUTTI i decorator `@ai_capability` sono stati eseguiti.
+
+    Risolve il drift documentato nell'audit: legacy parser aveva 13 type
+    statici hardcoded vs 23 handler reali → 10 capability invisibili al
+    parser markdown (path Ollama/Perplexity).
+    """
+    from app.services import ai_legacy_parser as _legacy
+    actual = _registry_get_action_types()
+    # Update in-place (set object identity preservata: chi ha fatto
+    # `from ai_legacy_parser import VALID_ACTION_TYPES` continua a vederlo).
+    _legacy.VALID_ACTION_TYPES.clear()
+    _legacy.VALID_ACTION_TYPES.update(actual)
+
+
+_sync_legacy_parser_action_types()
 
 
 # ── Review quotazione (legacy, immutato funzionalmente) ──────

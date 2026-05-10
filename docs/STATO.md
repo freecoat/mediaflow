@@ -8,6 +8,18 @@
 
 ## Versione corrente
 
+**v3.5.0-alpha.66.17.2** — 11 maggio 2026 — Sprint R6 Step 2: capability registry
+
+Chiude pattern systemico N audit: drift _ACTION_HANDLERS (23) vs
+VALID_ACTION_TYPES (13) statici → 10 capability invisibili al parser
+legacy. Decorator @ai_capability registra 23 handler in
+ai_capability_registry; _ACTION_HANDLERS + VALID_ACTION_TYPES derivati
+auto. Drift chiuso.
+
+**Smoke**: 303 routes invariato, 23 handler decorati, version 3.5.0-alpha.66.17.2.
+
+---
+
 **v3.5.0-alpha.66.17.1** — 11 maggio 2026 — Sprint R6 Step 1: legacy parser estratto
 
 Continua R6 split ai_assistant.py. 2339 → 1785 righe (-23% totale).

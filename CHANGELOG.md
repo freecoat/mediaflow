@@ -1,5 +1,56 @@
 # MediaFlow — Changelog
 
+## v3.5.0-alpha.66.17.2 — Sprint R6 Step 2: capability decorator registry (11 maggio 2026)
+
+Continua R6. Chiude **audit pattern systemico N**: drift fra
+`_ACTION_HANDLERS` (23 handler) e `VALID_ACTION_TYPES` (13 statici) →
+**10 capability invisibili al parser legacy markdown** (path Ollama/
+Perplexity).
+
+**Nuovo `app/services/ai_capability_registry.py`** (108 righe):
+- Decorator `@ai_capability("name", category=None)` registra handler
+- `_REGISTRY: dict[name, (fn, category)]` interno
+- `get_handlers()`, `get_action_types()`, `get_categories()`,
+  `get_handler(name)`, `list_capabilities()` API pulita
+- Categorie auto-inferite: `propose_*`/`update_*` → mutation;
+  `analyze_*`/`find_*`/`query_*`/`read_*`/`list_*`/`web_search` → readonly
+
+**Decoro 23 handler** in `ai_assistant.py` con `@ai_capability(...)`:
+- Sostituzione automatica via script regex (1 commit clean)
+- `_h_propose_client` → `@ai_capability("propose_client")\n_h_propose_client`
+- ... per tutti i 23
+
+**`_ACTION_HANDLERS` ora derivato dal registry**:
+```python
+_ACTION_HANDLERS = _registry_get_handlers()
+```
+API esterna invariata (resta dict `{name: fn}`); call site
+`_ACTION_HANDLERS.get(...)` continuano a funzionare.
+
+**`VALID_ACTION_TYPES` sincronizzato in-place** alla fine del module
+import (`_sync_legacy_parser_action_types()`). Identità del set object
+preservata: chi ha fatto `from ai_legacy_parser import VALID_ACTION_TYPES`
+continua a vedere le 23 capability complete.
+
+**Drift verificato chiuso**:
+```
+Handlers registered: 23
+VALID_ACTION_TYPES count: 23
+Drift check (handlers vs valid types): True ✓
+```
+
+**10 capability prima invisibili al parser legacy** ora supportate:
+update_quote, propose_move_booking, propose_resize_booking,
+propose_delete_booking, analyze_conflicts, find_free_slots,
+propose_recurring_bookings, propose_bulk_move,
+propose_transmit_to_billing, query_project_finance, list_settings_schemas,
+read_setting, update_setting.
+
+**Smoke**: 303 routes invariato, 23 handler decorati, drift chiuso,
+version 3.5.0-alpha.66.17.2.
+
+---
+
 ## v3.5.0-alpha.66.17.1 — Sprint R6 Step 1: estrai legacy parser (11 maggio 2026)
 
 Continua R6 — Split ai_assistant.py 2287 → 1785 righe (-22% totale dopo
