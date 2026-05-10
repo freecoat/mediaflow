@@ -1,5 +1,46 @@
 # MediaFlow — Changelog
 
+## v3.5.0-alpha.66.14.8 — Numbering service unificato + soft-delete bypass everywhere (11 maggio 2026)
+
+Quick win post-audit #9+#10 (combinati). Chiude la mancanza di soft-delete
+bypass nei progressivi `_next_*_code` e centralizza la logica in un service
+unico (Pattern systemico C dell'audit).
+
+**Nuovo `app/services/numbering.py`**:
+- `next_progressive_code(db, model, prefix, *, code_field, include_deleted, extra_filter)`:
+  ritorna `f"{prefix}{N:03d}"` libero. Default `include_deleted=True`
+  → bypass del soft-delete event-listener. Tail `vNN` di versioning quote
+  gestito (ricava base prima di incrementare).
+- `next_year_progressive(db, model, *, base, ...)`: helper sopra il primo
+  per pattern `{base}-{anno}-{NNN}`.
+- `with_retry_on_unique(fn, retries=3)`: wrapper retry-on-IntegrityError
+  per la race condition residua (TODO: migrazione a transazione pessimistica
+  in sprint R4 — Booking mutation gate).
+
+**Migrate**:
+- `_next_quote_number_progressive` (`quotes.py`): 25 righe → 3.
+  Comportamento identico (già aveva include_deleted=True, ora consolidato).
+- `_next_job_code` (`quotes.py`): aggiunto `execution_options(include_deleted=True)`.
+  **Bug fix**: prima i job in cestino liberavano il code → al ripristino
+  collisione UNIQUE.
+- `_next_batch_code` (`billing.py`): refactor + aggiunto include_deleted=True.
+  Stesso bug (BB cestinati liberavano il code).
+
+**Smoke E2E** sul DB reale Matteo:
+- `next quote: Q-2026-001` (DB vuoto → primo numero ok)
+- `next batch: BB-2026-003` (esistono 2 batch, tenant_id=1 filter ok)
+
+**Smoke**: 302 routes invariato, version 3.5.0-alpha.66.14.8.
+
+**Cosa NON è ancora fatto** (R4 sprint dedicato):
+- Race condition: con 2 utenti concorrenti, SELECT max + INSERT non è
+  atomico → IntegrityError visibile. `with_retry_on_unique` esiste ma
+  non è ancora wrappato sui call site (richiede refactor signature).
+- Project.code rename pre-check: ancora non bypassato (audit HIGH #2).
+  Sarà chiuso in sprint R2 "Soft-delete framework completo".
+
+---
+
 ## v3.5.0-alpha.66.14.7 — Anthropic prompt caching (11 maggio 2026)
 
 Quick win post-audit #8 — quello con il ROI economico più alto. Riduce

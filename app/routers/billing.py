@@ -70,24 +70,18 @@ def _require_manager(request: Request):
 # ── Helpers ────────────────────────────────────────────────────────────
 
 def _next_batch_code(db: Session) -> str:
-    """Genera prossimo BB-{anno}-{NNN} unico per tenant. Considera anche
-    batch cancelled (no riciclo numero)."""
-    year = date.today().year
-    prefix = f"BB-{year}-"
-    last = (
-        db.query(BillingBatch)
-        .filter(BillingBatch.tenant_id == CURRENT_TENANT, BillingBatch.code.like(f"{prefix}%"))
-        .order_by(BillingBatch.id.desc())
-        .first()
+    """v3.5.0-alpha.66.14.8 — Wrapper sul numbering service unificato.
+
+    Genera prossimo BB-{anno}-{NNN} per tenant. Ora bypassa soft-delete
+    (i batch cestinati occupano il code UNIQUE) — prima includeva solo
+    cancelled. Coerente con quote.number e job.code policy.
+    """
+    from app.services.numbering import next_year_progressive
+    return next_year_progressive(
+        db, BillingBatch, base="BB", code_field="code",
+        include_deleted=True,
+        extra_filter=(BillingBatch.tenant_id == CURRENT_TENANT),
     )
-    next_n = 1
-    if last:
-        try:
-            last_n = int(last.code.rsplit("-", 1)[-1])
-            next_n = last_n + 1
-        except (ValueError, IndexError):
-            pass
-    return f"{prefix}{next_n:03d}"
 
 
 def _batch_to_dict(b: BillingBatch, with_lines: bool = False) -> dict:

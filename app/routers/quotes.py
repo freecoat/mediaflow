@@ -25,9 +25,21 @@ CATEGORY_FALLBACK = "Altro"
 
 
 def _next_job_code(db: Session, project: Project) -> str:
-    """Genera codice job '{PROJECT_CODE}-J{N}' progressivo per quel progetto."""
+    """v3.5.0-alpha.66.14.8 — Genera codice job '{PROJECT_CODE}-J{N}'
+    progressivo per il progetto.
+
+    BYPASS soft-delete via numbering service (i job cestinati occupano il
+    code UNIQUE). Pattern format diverso da prefix-{NNN}: qui usiamo
+    while-loop sul SET completo dei code esistenti per il progetto.
+    """
     base = (project.code or f"P{project.id}").strip()
-    existing = db.query(Job).filter(Job.project_id == project.id).all()
+    # include_deleted=True così i job in cestino non liberano il code
+    existing = (
+        db.query(Job)
+        .execution_options(include_deleted=True)
+        .filter(Job.project_id == project.id)
+        .all()
+    )
     n = 1
     used = {j.code for j in existing if j.code}
     while f"{base}-J{n}" in used:
@@ -1352,32 +1364,16 @@ def _quote_chain(db: Session, root: Quote) -> list[Quote]:
 
 
 def _next_quote_number_progressive(db: Session) -> str:
-    """Wrapper su _next_quote_number di ai_assistant. Inline per evitare circular import.
+    """v3.5.0-alpha.66.14.8 — wrapper sul numbering service unificato.
 
-    BYPASS soft-delete: le quote in cestino occupano il number (vincolo UNIQUE).
+    Bypassa soft-delete (le quote in cestino occupano il number UNIQUE) e
+    gestisce tail vNN (versioning quote). Comportamento identico al
+    pre-α.66.14.8 ma centralizzato in app/services/numbering.py.
     """
-    from datetime import date as date_type
-    year = date_type.today().year
-    prefix = f"Q-{year}-"
-    last = (
-        db.query(Quote)
-          .execution_options(include_deleted=True)
-          .filter(Quote.number.like(f"{prefix}%"))
-          .order_by(Quote.id.desc()).first()
+    from app.services.numbering import next_year_progressive
+    return next_year_progressive(
+        db, Quote, base="Q", code_field="number", include_deleted=True,
     )
-    n = 1
-    if last:
-        try:
-            tail = last.number.rsplit("-", 1)[1]
-            # Se tail è "vNN" (versioning), non è il progressivo: salta indietro
-            if tail.startswith("v") and tail[1:].isdigit():
-                # Pesca il base
-                base = last.number.rsplit("-", 1)[0]
-                tail = base.rsplit("-", 1)[1]
-            n = int(tail) + 1
-        except (ValueError, IndexError):
-            n = 1
-    return f"{prefix}{n:03d}"
 
 
 def _copy_quote_lines(src_lines: list, dest_quote_id: int, track_parent: bool) -> list[QuoteLine]:

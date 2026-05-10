@@ -8,6 +8,20 @@
 
 ## Versione corrente
 
+**v3.5.0-alpha.66.14.8** — 11 maggio 2026 — Numbering service unificato
+
+Pattern systemico C dell'audit. app/services/numbering.py centralizza
+le 3 funzioni _next_*_code (quote/batch/job). Tutte ora con
+include_deleted=True esplicito (chiude bug riciclo code da cestino su
+job e batch). Quote già aveva il bypass, ora consolidato.
+
+with_retry_on_unique disponibile per race condition; wrapping sui call
+site rimandato a sprint R4 (richiede refactor signature).
+
+**Smoke**: 302 routes invariato, version 3.5.0-alpha.66.14.8.
+
+---
+
 **v3.5.0-alpha.66.14.7** — 11 maggio 2026 — Anthropic prompt caching
 
 Saving stimato ~90% sui costi input copilot Claude ricorrenti. System
