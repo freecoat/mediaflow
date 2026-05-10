@@ -3291,13 +3291,16 @@ Cantiere "overlay prenotato vs effettivo + adeguamento" (era v3.4.15 nel plan pr
 
 > **🔖 ULTIMO COMMENTO (11 mag 2026 notte tarda) — punto di riapertura**
 
-**Sessione 11 maggio chiusa (estesa)**: **25 commit α.66.14 → α.66.17.1
+**Sessione 11 maggio chiusa (estesa terza fase)**: **29 commit α.66.14 → α.66.17.3
 pushati su origin/main**. Audit profondo + consolidamento + R10 AI tracking
-+ R6 split ai_assistant.
++ R6 split ai_assistant + capability registry + R7 MVP.
 
-Estensione della sessione 11 maggio (Matteo: "Procedi. Poi push, salvi
-tutto e riprendiamo domani"): aggiunti 3 commit oltre i 22 del giro
-precedente:
+Terza estensione sessione (Matteo: "vai avanti e finisci se puoi. Push alla fine"):
+aggiunti 2 commit oltre i 26 precedenti:
+- α.66.17.2 — R6 Step 2 capability decorator registry (drift handler/types chiuso 23=23)
+- α.66.17.3 — R7 MVP: deprecated POST duplicate (estrazione diag/unav/bookings rimandata)
+
+Estensione precedente (R10+R6 Step 0+1):
 - α.66.16.4 — R10 AI token tracking (modello AIUsageLog + endpoint `/ai/api/usage`)
 - α.66.17.0 — R6 Step 0 estrai `ai_context.py` (ai_assistant 2339→1899)
 - α.66.17.1 — R6 Step 1 estrai `ai_legacy_parser.py` (ai_assistant 1899→1785)
@@ -3314,6 +3317,8 @@ precedente:
 | **R4 Booking mutation gate** | α.66.16.1 → .16.3 | app/services/booking_mutate.py + AI handlers + planning router migrati. 7/7 call site SLICE_LOCK centralizzati. Pattern systemico O chiuso |
 | **R10 AI token tracking** | α.66.16.4 | Modello AIUsageLog + tabella prezzi 14 modelli + endpoint /ai/api/usage. Hook in ClaudeProvider + ai_loop. Cost analytics user/model/day |
 | **R6 Split ai_assistant.py** | α.66.17.0 → .17.1 | Estratto ai_context.py (516 righe) + ai_legacy_parser.py (156 righe). ai_assistant 2287→1785 righe (-23%). Pattern G iniziato |
+| **R6.2 Capability registry** | α.66.17.2 | Decorator @ai_capability + ai_capability_registry.py. _ACTION_HANDLERS + VALID_ACTION_TYPES derivati auto. Drift 23 vs 13 chiuso. Pattern N audit chiuso |
+| **R7 MVP deprecate dup** | α.66.17.3 | POST /planning/api/clients deprecated (duplicato). Estrazione diag/unav/bookings rinviata a R7.x dedicati (helper condivisi richiedono attenzione) |
 
 ### Audit chiuso
 
@@ -3324,11 +3329,12 @@ per Booking, O slice-lock unificato, parte di G file giganti).
 ### Backlog rimanente (sprint successivi)
 
 - **R5** Split planning.html partial Jinja + JS moduli (PR2/PR3 audit)
-- **R6.2+** Split capability handlers (`_h_propose_*`) in
-  `ai_capabilities/` package con decorator `@ai_capability` registry.
-  Elimina drift handler/tool/VALID_ACTION_TYPES (audit pattern N).
-- **R7** Split planning.py 4265 righe in 5 file (planning_hub /
-  bookings / unavailabilities / presets / diagnostics)
+- **R6.3** Split capability handlers (`_h_propose_*`) in
+  `ai_capabilities/` package per dominio (clients/projects/quotes/
+  pricelist/bookings/billing/settings). Il decorator registry α.66.17.2
+  rende il refactor mechanical: importi i moduli e il registry si popola.
+- **R7.x** Split planning.py 4265 righe (estrazione diag, unavailabilities,
+  bookings) — richiede attenzione su helper condivisi e variabili globali
 - **R8** Float→Decimal soldi (EUR `Decimal('0.01')` ROUND_HALF_EVEN)
 - **R9** Datetime tz-aware (UTC ovunque + ZoneInfo display)
 - **R10.2** Hook usage_* anche su OpenAI/Gemini/Ollama chat_with_tools;
@@ -3361,7 +3367,7 @@ per Booking, O slice-lock unificato, parte di G file giganti).
 
 ### Riapertura
 
-Parola chiave: **"Riprendi da v3.5.0-alpha.66.17.1 — apri con il tuo
+Parola chiave: **"Riprendi da v3.5.0-alpha.66.17.3 — apri con il tuo
 ultimo commento"**.
 
 Audit + M1+R1+R2+R3+R4 + R6 Step 0-1 + R10 chiusi e pushati. Prossimo:
