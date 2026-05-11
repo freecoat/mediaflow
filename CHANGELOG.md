@@ -1,5 +1,74 @@
 # MediaFlow — Changelog
 
+## v3.5.0-alpha.72.0 — Asset fisici: ownership + movimenti + DDT + QR (11 maggio 2026)
+
+Sistema logistico completo per asset fisici (LTO/HDD/CRU/Blu-Ray):
+ingest/outgest con bolle DDT, conferma consegna, etichetta QR
+stampabile, scan mobile.
+
+**Modelli nuovi**:
+- `AssetMovement` (tabella `asset_movements`): movimento append-only con
+  delivery_note_number, movement_type enum (ingest/outgest/transfer/
+  return_to_client/return_from_client), mittente/destinatario completi
+  (party + address + contact), FK opt client_id/supplier_id, package_count
+  + total_weight_kg + dimensions_lwh_cm, contents_description, carrier
+  + tracking_number + shipping_cost, conferma (confirmed_at +
+  confirmed_by_user_id + confirmed_by_name), attachment_path +
+  signature_path, notes.
+- `AssetMovementType` enum + `AssetOwnerType` enum (internal/client/
+  supplier/third_party).
+
+**PhysicalAsset esteso** (6 colonne, auto-migrate):
+- `owner_type` enum (default internal)
+- `owner_client_id` FK opt → Client
+- `owner_supplier_id` FK opt → Supplier
+- `owner_label` libero
+- `qr_code_token` UUID hex univoco (auto-generato al create)
+- `logistics_status` ("in_storage", "transit_out", "delivered_external")
+
+**Service** `app/services/asset_qr.py` (NUOVO):
+- `new_token()` UUID4 hex.
+- `generate_qr_png(scan_url, size)` → PNG QR.
+- `generate_label_png(...)` → PNG etichetta 60×40mm @ 300dpi default,
+  QR a sinistra + asset_label/kind/serial/owner/id text a destra.
+- `generate_delivery_note_pdf(...)` → PDF A5 con header mittente/
+  destinatario, dettaglio collo, spedizione, firme, QR top-right.
+
+**Router** `/physical-assets/*`:
+- `POST /api` esteso con `owner_type` + `owner_client_id` + `owner_supplier_id`
+  + `owner_label`. Auto-genera `qr_code_token`.
+- `GET /api/{id}/movements` lista.
+- `POST /api/{id}/movements` crea movimento (auto-DDT-number se omesso).
+- `POST /api/movements/{id}/confirm` conferma consegna/ritiro.
+- `GET /api/{id}/qr.png` QR standalone.
+- `GET /api/{id}/label.png` etichetta stampabile.
+- `GET /api/movements/{id}/ddt.pdf` PDF bolla A5.
+- `GET /scan/{token}` HTML mobile-friendly lookup (no auth dura).
+
+**UI** `/physical-assets`:
+- Riga asset: bottoni "🏷 Etichetta QR" + "🚚 Movimenti" + edit.
+- Modal Movimenti: lista DDT con tipo/data/da-a/colli/tracking/stato
+  + bottoni PDF + Conferma per riga.
+- Form "+ Nuovo movimento" con tutti i campi DDT.
+- Auto-apre PDF DDT in nuova tab dopo create.
+
+**Template** `pages/physical_asset_scan.html` (NUOVO):
+- Layout mobile-friendly responsive.
+- Banner ownership (cliente arancio / noleggio / interno indigo).
+- Card asset (label/kind/status/serial/capacità/locazione).
+- Card ultimo movimento (tipo/DDT/data/da/a/tracking/conferma).
+
+**File toccati** (5):
+- `app/main.py` — VERSION + auto-migrate 6 colonne + populate qr_code_token
+- `app/models/models.py` — AssetMovement + AssetOwnerType + PhysicalAsset
+- `app/models/__init__.py` — re-export
+- `app/routers/physical_assets.py` — 7 endpoint nuovi
+- `app/services/asset_qr.py` — NUOVO
+- `app/templates/pages/physical_assets.html` — bottoni + modal movimenti
+- `app/templates/pages/physical_asset_scan.html` — NUOVO
+
+358 routes (+7).
+
 ## v3.5.0-alpha.71 — Supplier: parse PDF AI + 2 query AI capability (11 maggio 2026)
 
 Estrae fattura passiva da file (PDF/docx/xlsx/txt), crea fornitore +

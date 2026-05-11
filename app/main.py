@@ -331,6 +331,33 @@ def _auto_migrate_columns():
             if backfill_rows:
                 print(f"[auto-migrate] backfill InvoicePayment per {len(backfill_rows)} "
                       f"fatture legacy paid (cashflow ora le conteggia)")
+    # v3.5.0-alpha.72 — PhysicalAsset ownership + QR
+    if "physical_assets" in insp.get_table_names():
+        pacols = {c["name"] for c in insp.get_columns("physical_assets")}
+        pa_alter = [
+            ("owner_type", "VARCHAR(20) NOT NULL DEFAULT 'internal'"),
+            ("owner_client_id", "INTEGER NULL REFERENCES clients(id)"),
+            ("owner_supplier_id", "INTEGER NULL REFERENCES suppliers(id)"),
+            ("owner_label", "VARCHAR(255) NULL"),
+            ("qr_code_token", "VARCHAR(64) NULL"),
+            ("logistics_status", "VARCHAR(40) NULL"),
+        ]
+        with engine.begin() as conn:
+            for col, ddl in pa_alter:
+                if col not in pacols:
+                    print(f"[auto-migrate] physical_assets.{col} mancante -> ALTER TABLE")
+                    conn.execute(text(f"ALTER TABLE physical_assets ADD COLUMN {col} {ddl}"))
+            # Populate qr_code_token per asset esistenti senza token
+            import uuid as _uuid
+            rows = conn.execute(text(
+                "SELECT id FROM physical_assets WHERE qr_code_token IS NULL"
+            )).all()
+            for (aid,) in rows:
+                conn.execute(text(
+                    "UPDATE physical_assets SET qr_code_token = :tk WHERE id = :id"
+                ), {"tk": _uuid.uuid4().hex, "id": aid})
+            if rows:
+                print(f"[auto-migrate] populated qr_code_token su {len(rows)} physical_assets")
     # v3.5.0-alpha.70.3 — TPN security policy fields su projects.
     if "projects" in insp.get_table_names():
         pcols = {c["name"] for c in insp.get_columns("projects")}
@@ -659,7 +686,7 @@ async def lifespan(app: FastAPI):
     yield
 
 
-app = FastAPI(title="MediaFlow", version="3.5.0-alpha.71", lifespan=lifespan)
+app = FastAPI(title="MediaFlow", version="3.5.0-alpha.72.0", lifespan=lifespan)
 
 BASE_DIR = Path(__file__).parent
 app.mount("/static", StaticFiles(directory=BASE_DIR / "static"), name="static")

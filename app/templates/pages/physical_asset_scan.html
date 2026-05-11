@@ -1,0 +1,89 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0,user-scalable=no">
+  <title>Asset — MediaFlow</title>
+  <link rel="stylesheet" href="/static/css/main.css">
+  <style>
+    body { padding:0; background:var(--bg); }
+    .scan-wrap { max-width:480px; margin:0 auto; padding:16px; }
+    .scan-card { background:var(--surface); border-radius:12px; padding:18px; margin-bottom:12px; }
+    .scan-title { font-size:20px; font-weight:700; margin-bottom:6px; }
+    .scan-kind { display:inline-block; padding:3px 10px; border-radius:12px; background:rgba(98,114,245,.15); color:var(--indigo2); font-size:11px; font-weight:600; text-transform:uppercase; letter-spacing:0.04em; }
+    .row { display:flex; justify-content:space-between; padding:6px 0; border-bottom:1px solid var(--border); font-size:13px; }
+    .row:last-child { border-bottom:none; }
+    .row .lbl { color:var(--text3); font-size:11px; text-transform:uppercase; letter-spacing:0.04em; }
+    .row .val { font-weight:500; color:var(--text); text-align:right; max-width:60%; word-break:break-word; }
+    .owner-banner { padding:10px 14px; border-radius:8px; margin-bottom:12px; font-size:13px; font-weight:600; }
+    .owner-client { background:rgba(251,146,60,0.15); color:#fb923c; border:1px solid rgba(251,146,60,0.3); }
+    .owner-internal { background:rgba(98,114,245,0.12); color:var(--indigo2); }
+    .badge-status { display:inline-block; padding:3px 10px; border-radius:10px; font-size:11px; font-weight:600; }
+    .b-in_storage { background:rgba(34,197,94,.18); color:#22c55e; }
+    .b-transit_out { background:rgba(251,191,36,.18); color:#fbbf24; }
+    .b-delivered_external { background:rgba(167,139,250,.18); color:#a78bfa; }
+  </style>
+</head>
+<body>
+<div class="scan-wrap">
+  <div style="text-align:center;margin-bottom:14px;font-size:12px;color:var(--text3);">
+    <span style="font-weight:700;">MediaFlow</span> · Asset scan
+  </div>
+  {% if not_found %}
+  <div class="scan-card" style="text-align:center;padding:36px 16px;">
+    <div style="font-size:48px;color:var(--rose);">✕</div>
+    <div style="font-size:16px;font-weight:600;margin:10px 0 6px;">Asset non trovato</div>
+    <div class="text-sm text-muted">Token QR non valido o asset eliminato.</div>
+    <div class="text-xs text-muted" style="margin-top:14px;font-family:var(--font-mono);">{{ token }}</div>
+  </div>
+  {% else %}
+  {% if asset.owner_type.value == 'client' %}
+  <div class="owner-banner owner-client">⚠ PROPRIETÀ CLIENTE
+    {% if owner_client %}— {{ owner_client.name }}{% endif %}
+  </div>
+  {% elif asset.owner_type.value == 'supplier' %}
+  <div class="owner-banner owner-client">📦 NOLEGGIO FORNITORE</div>
+  {% else %}
+  <div class="owner-banner owner-internal">🏢 Asset interno</div>
+  {% endif %}
+
+  <div class="scan-card">
+    <div class="scan-title">{{ asset.label }}</div>
+    <span class="scan-kind">{{ asset.kind.value }}</span>
+    {% if asset.logistics_status %}
+    <span class="badge-status b-{{ asset.logistics_status }}" style="margin-left:6px;">{{ asset.logistics_status }}</span>
+    {% endif %}
+    {% if asset.description %}
+    <div class="text-sm text-muted" style="margin-top:10px;">{{ asset.description }}</div>
+    {% endif %}
+  </div>
+
+  <div class="scan-card">
+    {% if asset.serial_number %}<div class="row"><span class="lbl">S/N</span><span class="val mono">{{ asset.serial_number }}</span></div>{% endif %}
+    {% if asset.barcode %}<div class="row"><span class="lbl">Barcode</span><span class="val mono">{{ asset.barcode }}</span></div>{% endif %}
+    {% if asset.manufacturer %}<div class="row"><span class="lbl">Brand</span><span class="val">{{ asset.manufacturer }}</span></div>{% endif %}
+    {% if asset.capacity_gb %}<div class="row"><span class="lbl">Capacità</span><span class="val">{{ asset.capacity_gb }} GB</span></div>{% endif %}
+    {% if asset.location %}<div class="row"><span class="lbl">Locazione</span><span class="val">{{ asset.location }}</span></div>{% endif %}
+    {% if asset.condition %}<div class="row"><span class="lbl">Condizione</span><span class="val">{{ asset.condition }}</span></div>{% endif %}
+  </div>
+
+  {% if last_movement %}
+  <div class="scan-card">
+    <div style="font-weight:600;font-size:13px;margin-bottom:8px;">Ultimo movimento</div>
+    <div class="row"><span class="lbl">Tipo</span><span class="val">{{ last_movement.movement_type.value }}</span></div>
+    <div class="row"><span class="lbl">DDT</span><span class="val mono">{{ last_movement.delivery_note_number or '—' }}</span></div>
+    <div class="row"><span class="lbl">Data</span><span class="val">{{ last_movement.movement_date.strftime('%d/%m/%Y') if last_movement.movement_date else '—' }}</span></div>
+    {% if last_movement.from_party %}<div class="row"><span class="lbl">Da</span><span class="val">{{ last_movement.from_party }}</span></div>{% endif %}
+    {% if last_movement.to_party %}<div class="row"><span class="lbl">A</span><span class="val">{{ last_movement.to_party }}</span></div>{% endif %}
+    {% if last_movement.tracking_number %}<div class="row"><span class="lbl">Tracking</span><span class="val mono">{{ last_movement.tracking_number }}</span></div>{% endif %}
+    <div class="row"><span class="lbl">Confermato</span><span class="val">{{ '✓ ' + last_movement.confirmed_at.strftime('%d/%m/%Y %H:%M') if last_movement.confirmed_at else '⏳ in attesa' }}</span></div>
+  </div>
+  {% endif %}
+
+  <div style="text-align:center;margin-top:18px;">
+    <a href="/physical-assets" class="btn btn-secondary btn-sm">Apri in MediaFlow</a>
+  </div>
+  {% endif %}
+</div>
+</body>
+</html>

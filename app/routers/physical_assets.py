@@ -15,11 +15,12 @@ Pattern d'uso:
 from datetime import datetime, date
 from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException, Request, Form
-from fastapi.responses import HTMLResponse
+from fastapi.responses import HTMLResponse, Response
 from sqlalchemy.orm import Session, joinedload
 from app.database import get_db
 from app.models import (
     PhysicalAsset, PhysicalAssetKind, JobDeliverable, Job, Project, Client, User,
+    AssetMovement, AssetMovementType, AssetOwnerType, Supplier,
 )
 
 router = APIRouter(prefix="/physical-assets", tags=["physical_assets"])
@@ -76,6 +77,15 @@ def _serialize(a: PhysicalAsset) -> dict:
         "notes": a.notes,
         "created_at": a.created_at.isoformat() + "Z" if a.created_at else None,
         "deleted_at": a.deleted_at.isoformat() + "Z" if a.deleted_at else None,
+        # v3.5.0-alpha.72 — Ownership + QR + logistics
+        "owner_type": a.owner_type.value if a.owner_type else "internal",
+        "owner_client_id": a.owner_client_id,
+        "owner_supplier_id": a.owner_supplier_id,
+        "owner_label": a.owner_label,
+        "qr_code_token": a.qr_code_token,
+        "qr_url": f"/physical-assets/api/{a.id}/qr.png" if a.qr_code_token else None,
+        "label_url": f"/physical-assets/api/{a.id}/label.png" if a.qr_code_token else None,
+        "logistics_status": a.logistics_status,
     }
 
 
@@ -181,6 +191,10 @@ async def create_physical_asset(
     last_verified_at: Optional[str] = Form(None),
     next_verification_due: Optional[str] = Form(None),
     notes: Optional[str] = Form(None),
+    owner_type: Optional[str] = Form("internal"),
+    owner_client_id: Optional[int] = Form(None),
+    owner_supplier_id: Optional[int] = Form(None),
+    owner_label: Optional[str] = Form(None),
     db: Session = Depends(get_db),
 ):
     _require_perm(request)
@@ -188,6 +202,11 @@ async def create_physical_asset(
         kind_enum = PhysicalAssetKind(kind)
     except ValueError:
         raise HTTPException(400, f"kind invalido: {kind}")
+    try:
+        owner_enum = AssetOwnerType(owner_type or "internal")
+    except ValueError:
+        owner_enum = AssetOwnerType.internal
+    from app.services.asset_qr import new_token
     a = PhysicalAsset(
         tenant_id=CURRENT_TENANT,
         kind=kind_enum,
@@ -216,6 +235,12 @@ async def create_physical_asset(
         last_verified_at=_parse_datetime(last_verified_at),
         next_verification_due=_parse_date(next_verification_due),
         notes=(notes or "").strip() or None,
+        owner_type=owner_enum,
+        owner_client_id=owner_client_id,
+        owner_supplier_id=owner_supplier_id,
+        owner_label=(owner_label or "").strip() or None,
+        qr_code_token=new_token(),
+        logistics_status="in_storage",
     )
     db.add(a); db.commit(); db.refresh(a)
     return _serialize(a)
@@ -332,3 +357,328 @@ async def restore_physical_asset(
     a.deleted_at = None
     db.commit()
     return _serialize(a)
+
+
+# ── Movimenti / Logistics (v3.5.0-alpha.72) ──────────────────
+
+
+def _movement_dict(m: AssetMovement) -> dict:
+    return {
+        "id": m.id,
+        "physical_asset_id": m.physical_asset_id,
+        "movement_type": m.movement_type.value if m.movement_type else None,
+        "delivery_note_number": m.delivery_note_number,
+        "movement_date": str(m.movement_date)[:19] if m.movement_date else None,
+        "expected_date": str(m.expected_date) if m.expected_date else None,
+        "expected_return_date": str(m.expected_return_date) if m.expected_return_date else None,
+        "from_party": m.from_party, "from_address": m.from_address, "from_contact": m.from_contact,
+        "to_party": m.to_party, "to_address": m.to_address, "to_contact": m.to_contact,
+        "client_id": m.client_id, "supplier_id": m.supplier_id,
+        "package_count": m.package_count,
+        "total_weight_kg": m.total_weight_kg,
+        "dimensions_lwh_cm": m.dimensions_lwh_cm,
+        "contents_description": m.contents_description,
+        "carrier": m.carrier, "tracking_number": m.tracking_number,
+        "shipping_cost": m.shipping_cost,
+        "confirmed_at": str(m.confirmed_at)[:19] if m.confirmed_at else None,
+        "confirmed_by_user_id": m.confirmed_by_user_id,
+        "confirmed_by_name": m.confirmed_by_name,
+        "attachment_path": m.attachment_path,
+        "notes": m.notes,
+        "created_at": str(m.created_at)[:19] if m.created_at else None,
+    }
+
+
+@router.get("/api/{asset_id}/movements")
+async def list_movements(asset_id: int, db: Session = Depends(get_db)):
+    rows = (
+        db.query(AssetMovement)
+        .filter(
+            AssetMovement.physical_asset_id == asset_id,
+            AssetMovement.tenant_id == CURRENT_TENANT,
+        )
+        .order_by(AssetMovement.movement_date.desc())
+        .all()
+    )
+    return [_movement_dict(m) for m in rows]
+
+
+def _next_ddt_number(db: Session) -> str:
+    """Auto-incrementale 'DDT-YYYY-NNN' per tenant."""
+    year = datetime.utcnow().year
+    last = (
+        db.query(AssetMovement)
+        .filter(
+            AssetMovement.tenant_id == CURRENT_TENANT,
+            AssetMovement.delivery_note_number.like(f"DDT-{year}-%"),
+        )
+        .order_by(AssetMovement.id.desc())
+        .first()
+    )
+    n = 1
+    if last and last.delivery_note_number:
+        try:
+            n = int(last.delivery_note_number.split("-")[-1]) + 1
+        except (ValueError, IndexError):
+            n = 1
+    return f"DDT-{year}-{n:03d}"
+
+
+@router.post("/api/{asset_id}/movements")
+async def create_movement(
+    asset_id: int,
+    request: Request,
+    movement_type: str = Form(...),
+    delivery_note_number: Optional[str] = Form(None),
+    movement_date: Optional[datetime] = Form(None),
+    expected_return_date: Optional[date] = Form(None),
+    from_party: Optional[str] = Form(None),
+    from_address: Optional[str] = Form(None),
+    from_contact: Optional[str] = Form(None),
+    to_party: Optional[str] = Form(None),
+    to_address: Optional[str] = Form(None),
+    to_contact: Optional[str] = Form(None),
+    client_id: Optional[int] = Form(None),
+    supplier_id: Optional[int] = Form(None),
+    package_count: int = Form(1),
+    total_weight_kg: Optional[float] = Form(None),
+    dimensions_lwh_cm: Optional[str] = Form(None),
+    contents_description: Optional[str] = Form(None),
+    carrier: Optional[str] = Form(None),
+    tracking_number: Optional[str] = Form(None),
+    shipping_cost: Optional[float] = Form(None),
+    notes: Optional[str] = Form(None),
+    db: Session = Depends(get_db),
+):
+    _require_perm(request)
+    a = db.query(PhysicalAsset).filter(
+        PhysicalAsset.id == asset_id, PhysicalAsset.tenant_id == CURRENT_TENANT,
+    ).first()
+    if not a:
+        raise HTTPException(404, "Asset fisico non trovato")
+    try:
+        mt = AssetMovementType(movement_type)
+    except ValueError:
+        raise HTTPException(400, f"movement_type non valido: {movement_type}")
+    user = getattr(request.state, "current_user", None)
+    if not delivery_note_number:
+        delivery_note_number = _next_ddt_number(db)
+    m = AssetMovement(
+        tenant_id=CURRENT_TENANT,
+        physical_asset_id=asset_id,
+        movement_type=mt,
+        delivery_note_number=delivery_note_number,
+        movement_date=movement_date or datetime.utcnow(),
+        expected_return_date=expected_return_date,
+        from_party=(from_party or "").strip() or None,
+        from_address=(from_address or "").strip() or None,
+        from_contact=(from_contact or "").strip() or None,
+        to_party=(to_party or "").strip() or None,
+        to_address=(to_address or "").strip() or None,
+        to_contact=(to_contact or "").strip() or None,
+        client_id=client_id, supplier_id=supplier_id,
+        package_count=package_count,
+        total_weight_kg=total_weight_kg,
+        dimensions_lwh_cm=(dimensions_lwh_cm or "").strip() or None,
+        contents_description=(contents_description or "").strip() or None,
+        carrier=(carrier or "").strip() or None,
+        tracking_number=(tracking_number or "").strip() or None,
+        shipping_cost=shipping_cost,
+        notes=(notes or "").strip() or None,
+        created_by_user_id=user.id if user else None,
+    )
+    db.add(m)
+    # Update logistics_status su asset
+    status_map = {
+        AssetMovementType.ingest: "in_storage",
+        AssetMovementType.outgest: "transit_out",
+        AssetMovementType.transfer: "in_storage",
+        AssetMovementType.return_to_client: "transit_out",
+        AssetMovementType.return_from_client: "in_storage",
+    }
+    a.logistics_status = status_map.get(mt, a.logistics_status)
+    db.commit()
+    db.refresh(m)
+    return _movement_dict(m)
+
+
+@router.post("/api/movements/{movement_id}/confirm")
+async def confirm_movement(
+    movement_id: int,
+    request: Request,
+    confirmed_by_name: Optional[str] = Form(None),
+    db: Session = Depends(get_db),
+):
+    """Conferma consegna/ritiro. Aggiorna logistics_status finale."""
+    _require_perm(request)
+    m = db.query(AssetMovement).filter(
+        AssetMovement.id == movement_id,
+        AssetMovement.tenant_id == CURRENT_TENANT,
+    ).first()
+    if not m:
+        raise HTTPException(404, "Movimento non trovato")
+    if m.confirmed_at:
+        return {"ok": True, "already_confirmed": True, "at": str(m.confirmed_at)[:19]}
+    user = getattr(request.state, "current_user", None)
+    m.confirmed_at = datetime.utcnow()
+    m.confirmed_by_user_id = user.id if user else None
+    m.confirmed_by_name = (confirmed_by_name or "").strip() or None
+    # Aggiorna logistics_status finale
+    final_map = {
+        AssetMovementType.outgest: "delivered_external",
+        AssetMovementType.return_to_client: "delivered_external",
+        AssetMovementType.return_from_client: "in_storage",
+        AssetMovementType.ingest: "in_storage",
+        AssetMovementType.transfer: "in_storage",
+    }
+    a = db.query(PhysicalAsset).filter(
+        PhysicalAsset.id == m.physical_asset_id
+    ).first()
+    if a:
+        a.logistics_status = final_map.get(m.movement_type, a.logistics_status)
+    db.commit()
+    return {"ok": True, "confirmed_at": str(m.confirmed_at)[:19]}
+
+
+# ── QR + Label + DDT PDF ─────────────────────────────────────
+
+
+@router.get("/api/{asset_id}/qr.png")
+async def asset_qr_png(asset_id: int, request: Request, db: Session = Depends(get_db)):
+    a = db.query(PhysicalAsset).filter(
+        PhysicalAsset.id == asset_id, PhysicalAsset.tenant_id == CURRENT_TENANT,
+    ).first()
+    if not a:
+        raise HTTPException(404)
+    from app.services.asset_qr import generate_qr_png, new_token
+    if not a.qr_code_token:
+        a.qr_code_token = new_token()
+        db.commit()
+    base = str(request.base_url).rstrip("/")
+    scan_url = f"{base}/physical-assets/scan/{a.qr_code_token}"
+    png = generate_qr_png(scan_url, size_px=300)
+    return Response(content=png, media_type="image/png")
+
+
+@router.get("/api/{asset_id}/label.png")
+async def asset_label_png(
+    asset_id: int,
+    request: Request,
+    width_mm: float = 60,
+    height_mm: float = 40,
+    db: Session = Depends(get_db),
+):
+    a = db.query(PhysicalAsset).filter(
+        PhysicalAsset.id == asset_id, PhysicalAsset.tenant_id == CURRENT_TENANT,
+    ).options(joinedload(PhysicalAsset.__mapper__.relationships.get("project")) if False else joinedload()).first()
+    if not a:
+        raise HTTPException(404)
+    from app.services.asset_qr import generate_label_png, new_token
+    if not a.qr_code_token:
+        a.qr_code_token = new_token()
+        db.commit()
+    base = str(request.base_url).rstrip("/")
+    scan_url = f"{base}/physical-assets/scan/{a.qr_code_token}"
+    owner_lbl = a.owner_label or None
+    if not owner_lbl and a.owner_client_id:
+        c = db.query(Client).filter(Client.id == a.owner_client_id).first()
+        owner_lbl = f"Cliente: {c.name}" if c else None
+    png = generate_label_png(
+        scan_url=scan_url,
+        asset_label=a.label,
+        asset_kind=a.kind.value if a.kind else "",
+        serial_number=a.serial_number,
+        owner_label=owner_lbl,
+        barcode_value=str(a.id),
+        width_mm=width_mm, height_mm=height_mm,
+    )
+    return Response(content=png, media_type="image/png")
+
+
+@router.get("/api/movements/{movement_id}/ddt.pdf")
+async def movement_ddt_pdf(
+    movement_id: int, request: Request, db: Session = Depends(get_db),
+):
+    m = db.query(AssetMovement).filter(
+        AssetMovement.id == movement_id,
+        AssetMovement.tenant_id == CURRENT_TENANT,
+    ).first()
+    if not m:
+        raise HTTPException(404)
+    a = db.query(PhysicalAsset).filter(
+        PhysicalAsset.id == m.physical_asset_id
+    ).first()
+    if not a:
+        raise HTTPException(404)
+    from app.services.asset_qr import generate_delivery_note_pdf
+    base = str(request.base_url).rstrip("/")
+    scan_url = (
+        f"{base}/physical-assets/scan/{a.qr_code_token}"
+        if a.qr_code_token else None
+    )
+    title_map = {
+        AssetMovementType.ingest: "Bolla di Ingresso (Carico)",
+        AssetMovementType.outgest: "Bolla di Uscita (Scarico)",
+        AssetMovementType.transfer: "Bolla di Trasferimento Interno",
+        AssetMovementType.return_to_client: "Bolla di Restituzione al Cliente",
+        AssetMovementType.return_from_client: "Bolla di Restituzione dal Cliente",
+    }
+    pdf = generate_delivery_note_pdf(
+        title=title_map.get(m.movement_type, "Bolla di Consegna"),
+        movement_type=m.movement_type.value if m.movement_type else "",
+        delivery_note_number=m.delivery_note_number,
+        movement_date=str(m.movement_date)[:19] if m.movement_date else "—",
+        from_party=m.from_party, from_address=m.from_address,
+        to_party=m.to_party, to_address=m.to_address,
+        asset_label=a.label,
+        asset_kind=a.kind.value if a.kind else "",
+        serial_number=a.serial_number,
+        package_count=m.package_count or 1,
+        total_weight_kg=m.total_weight_kg,
+        dimensions_lwh_cm=m.dimensions_lwh_cm,
+        contents_description=m.contents_description,
+        carrier=m.carrier, tracking_number=m.tracking_number,
+        notes=m.notes,
+        scan_url=scan_url,
+    )
+    fname = f"ddt_{m.delivery_note_number or m.id}.pdf"
+    return Response(
+        content=pdf, media_type="application/pdf",
+        headers={"Content-Disposition": f'inline; filename="{fname}"'},
+    )
+
+
+# ── Scan QR (mobile-friendly lookup) ─────────────────────────
+
+
+@router.get("/scan/{token}", response_class=HTMLResponse)
+async def scan_asset(token: str, request: Request, db: Session = Depends(get_db)):
+    """Mobile-friendly page raggiunta da QR scan. Mostra dettaglio asset
+    + ultimo movimento. NO access control duro per scope corrente (QR è
+    in possesso fisico del supporto). Future: integrare access check TPN."""
+    a = db.query(PhysicalAsset).filter(
+        PhysicalAsset.qr_code_token == token,
+        PhysicalAsset.tenant_id == CURRENT_TENANT,
+    ).options(joinedload(PhysicalAsset.__mapper__.relationships.get("project")) if False else joinedload()).first()
+    if not a:
+        return _tpl().TemplateResponse(
+            "pages/physical_asset_scan.html",
+            {"request": request, "not_found": True, "token": token},
+            status_code=404,
+        )
+    last_mov = (
+        db.query(AssetMovement)
+        .filter(AssetMovement.physical_asset_id == a.id)
+        .order_by(AssetMovement.movement_date.desc())
+        .first()
+    )
+    return _tpl().TemplateResponse(
+        "pages/physical_asset_scan.html",
+        {
+            "request": request, "asset": a, "last_movement": last_mov,
+            "owner_client": (
+                db.query(Client).filter(Client.id == a.owner_client_id).first()
+                if a.owner_client_id else None
+            ),
+        },
+    )

@@ -1780,6 +1780,82 @@ class Asset(Base):
         foreign_keys=[parent_asset_id], back_populates="versions", remote_side=[id])
 
 
+# ── ASSET MOVEMENTS / LOGISTICS (v3.5.0-alpha.72) ─────────────
+# Movimenti ingest/outgest di PhysicalAsset: bolle di ingresso/uscita,
+# tracking corriere, dettaglio collo, conferma consegna, etichetta QR.
+# Append-only per audit completo.
+
+class AssetMovementType(str, enum.Enum):
+    """Tipologia movimento asset fisico."""
+    ingest = "ingest"           # ingresso (cliente → noi, fornitore → noi)
+    outgest = "outgest"         # uscita (noi → cliente, noi → terzo)
+    transfer = "transfer"       # spostamento interno (stanza → cassaforte)
+    return_to_client = "return_to_client"   # restituzione (era prestito)
+    return_from_client = "return_from_client"  # cliente restituisce nostro
+
+
+class AssetOwnerType(str, enum.Enum):
+    """Proprietà del PhysicalAsset. TPN-relevant: asset cliente
+    richiedono tracking dedicato."""
+    internal = "internal"           # nostro (default)
+    client = "client"               # proprietà cliente, custodia temporanea
+    supplier = "supplier"           # noleggio da fornitore (es. CRU)
+    third_party = "third_party"     # altro (es. consulente esterno)
+
+
+class AssetMovement(Base):
+    """Movimento logistico di un PhysicalAsset. Append-only per audit.
+
+    Genera "bolla" stampabile: delivery_note_number, dettagli mittente/
+    destinatario, collo (peso/dimensioni/numero pacchi), corriere/tracking,
+    conferma consegna + firma (allegato PDF).
+    """
+    __tablename__ = "asset_movements"
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    tenant_id: Mapped[int] = mapped_column(ForeignKey("tenants.id"), default=1, index=True)
+    physical_asset_id: Mapped[int] = mapped_column(
+        ForeignKey("physical_assets.id"), index=True
+    )
+    movement_type: Mapped[AssetMovementType] = mapped_column(
+        SAEnum(AssetMovementType), index=True
+    )
+    # Bolla di consegna / DDT (Delivery Note)
+    delivery_note_number: Mapped[Optional[str]] = mapped_column(String(80), nullable=True, index=True)
+    movement_date: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, index=True)
+    expected_date: Mapped[Optional[date]] = mapped_column(Date, nullable=True)
+    expected_return_date: Mapped[Optional[date]] = mapped_column(Date, nullable=True)
+    # Mittente / Destinatario (text libero, può linkare a Client/Supplier
+    # tramite from_client_id / to_client_id o lasciare descrittivo)
+    from_party: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
+    from_address: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    from_contact: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
+    to_party: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
+    to_address: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    to_contact: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
+    # FK opt a Client / Supplier per traccia esplicita
+    client_id: Mapped[Optional[int]] = mapped_column(ForeignKey("clients.id"), nullable=True, index=True)
+    supplier_id: Mapped[Optional[int]] = mapped_column(ForeignKey("suppliers.id"), nullable=True, index=True)
+    # Dettaglio collo
+    package_count: Mapped[int] = mapped_column(Integer, default=1)
+    total_weight_kg: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
+    dimensions_lwh_cm: Mapped[Optional[str]] = mapped_column(String(40), nullable=True)  # "30x20x10"
+    contents_description: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    # Spedizione
+    carrier: Mapped[Optional[str]] = mapped_column(String(80), nullable=True)
+    tracking_number: Mapped[Optional[str]] = mapped_column(String(120), nullable=True, index=True)
+    shipping_cost: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
+    # Conferma consegna/ritiro
+    confirmed_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+    confirmed_by_user_id: Mapped[Optional[int]] = mapped_column(ForeignKey("users.id"), nullable=True)
+    confirmed_by_name: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)  # nome firma manuale
+    # Allegati (PDF bolla firmata, foto del collo, ecc.)
+    attachment_path: Mapped[Optional[str]] = mapped_column(String(512), nullable=True)
+    signature_path: Mapped[Optional[str]] = mapped_column(String(512), nullable=True)
+    notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    created_by_user_id: Mapped[Optional[int]] = mapped_column(ForeignKey("users.id"), nullable=True)
+
+
 # v3.5.0-alpha.66.9 — Asset FISICO (LTO/HDD/CRU/Blu-Ray/DVD/Case).
 # Modello separato da Asset (file digitale): la gestione di un supporto
 # fisico (location, courier, batch, calibrazione, capacità) è strutturalmente
@@ -1827,6 +1903,23 @@ class PhysicalAsset(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
     deleted_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True, index=True)
+    # v3.5.0-alpha.72 — Ownership tracking (TPN: asset cliente vanno
+    # tracciati a parte da quelli interni).
+    owner_type: Mapped[AssetOwnerType] = mapped_column(
+        SAEnum(AssetOwnerType), default=AssetOwnerType.internal, index=True
+    )
+    owner_client_id: Mapped[Optional[int]] = mapped_column(
+        ForeignKey("clients.id"), nullable=True, index=True
+    )
+    owner_supplier_id: Mapped[Optional[int]] = mapped_column(
+        ForeignKey("suppliers.id"), nullable=True, index=True
+    )
+    owner_label: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
+    # QR token univoco per scan / etichetta. Generato al create.
+    qr_code_token: Mapped[Optional[str]] = mapped_column(String(64), unique=True, nullable=True, index=True)
+    # Stato logistico corrente (derivato ma denormalizzato per query rapide)
+    # Es. "in_storage", "transit_out", "delivered_external", "transit_in"
+    logistics_status: Mapped[Optional[str]] = mapped_column(String(40), nullable=True, index=True)
 
 
 # v3.5.0-alpha.66.9 — JobDeliverable: nodo di produzione tra JobCostLine

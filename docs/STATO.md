@@ -8,6 +8,33 @@
 
 ## Versione corrente
 
+**v3.5.0-alpha.72.0** — 11 maggio 2026 — Asset fisici: logistics + DDT + QR
+
+Sistema logistico completo per PhysicalAsset:
+- Modelli: AssetMovement + AssetOwnerType + AssetMovementType enum.
+- PhysicalAsset esteso con ownership (internal/client/supplier/third_party
+  + owner_client_id/supplier_id/label) + qr_code_token + logistics_status.
+- Service asset_qr.py: QR PNG + etichetta stampabile 60×40mm @300dpi +
+  PDF DDT A5 con mittente/destinatario/colli/corriere/firme + QR.
+- Router: GET movements + POST movement + POST confirm + QR/label/ddt PDF
+  + scan/{token} mobile.
+- UI /physical-assets: bottoni 🏷 etichetta + 🚚 movimenti per riga +
+  modal lista + form "+ Nuovo movimento" + auto-open DDT PDF post-create.
+- Template scan mobile: banner ownership (cliente/noleggio/interno).
+
+358 routes (+7).
+
+## Prossimo step
+
+- **AI capability propose_asset_movement** — copilot crea movimento
+- **OCR DDT entrante** — upload PDF DDT cliente → estrazione auto
+- **Owner UI** in modal edit physical asset (selettore client/supplier)
+- **Stampa multipla** etichette (selezione + grid PDF A4)
+- **R7.x continuazione planning_bookings** — quando green light
+- **R5/R8/R9** — tech debt
+
+## (versione precedente)
+
 **v3.5.0-alpha.71** — 11 maggio 2026 — Supplier parse PDF + AI query
 
 Crea fornitore + fattura da upload PDF in un colpo. AI query readonly.

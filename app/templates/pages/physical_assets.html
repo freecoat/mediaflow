@@ -166,6 +166,97 @@
     </div>
   </div>
 </div>
+
+<!-- v3.5.0-alpha.72 — Modal Movimenti / Bolle -->
+<div class="modal-overlay" id="modal-movements">
+  <div class="modal" style="max-width:920px;max-height:88vh;display:flex;flex-direction:column;">
+    <div class="modal-header">
+      <span class="modal-title" id="mv-title">🚚 Movimenti asset</span>
+      <button class="btn btn-ghost btn-icon" onclick="closeModal('modal-movements')">&times;</button>
+    </div>
+    <div class="modal-body" style="overflow:auto;">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
+        <div class="text-sm text-muted">Storia movimenti + bolle (ingresso/uscita)</div>
+        <button class="btn btn-primary btn-sm" onclick="openNewMovementForm()">+ Nuovo movimento</button>
+      </div>
+      <div id="mv-list-host"></div>
+      <div id="mv-form-host" style="display:none;margin-top:14px;padding:14px;background:var(--bg2);border-radius:8px;">
+        <div style="font-weight:600;margin-bottom:10px;">Nuovo movimento</div>
+        <div class="form-row">
+          <div class="form-group">
+            <label class="form-label">Tipo *</label>
+            <select class="form-select" id="nm-type">
+              <option value="ingest">📥 Ingresso</option>
+              <option value="outgest">📤 Uscita</option>
+              <option value="transfer">🔄 Trasferimento interno</option>
+              <option value="return_to_client">↩️ Restituzione al cliente</option>
+              <option value="return_from_client">↪️ Ritorno dal cliente</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label class="form-label">N. bolla (auto se vuoto)</label>
+            <input class="form-input" id="nm-ddt" placeholder="DDT-YYYY-NNN">
+          </div>
+          <div class="form-group">
+            <label class="form-label">Data</label>
+            <input class="form-input" id="nm-date" type="datetime-local">
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="form-group" style="flex:1;">
+            <label class="form-label">Mittente</label>
+            <input class="form-input" id="nm-from-party" placeholder="Nome / Ragione sociale">
+            <textarea class="form-textarea" id="nm-from-addr" rows="2" placeholder="Indirizzo" style="margin-top:4px;"></textarea>
+          </div>
+          <div class="form-group" style="flex:1;">
+            <label class="form-label">Destinatario</label>
+            <input class="form-input" id="nm-to-party" placeholder="Nome / Ragione sociale">
+            <textarea class="form-textarea" id="nm-to-addr" rows="2" placeholder="Indirizzo" style="margin-top:4px;"></textarea>
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label class="form-label">Colli</label>
+            <input class="form-input" id="nm-pkg" type="number" value="1" min="1">
+          </div>
+          <div class="form-group">
+            <label class="form-label">Peso (kg)</label>
+            <input class="form-input" id="nm-weight" type="number" step="0.1">
+          </div>
+          <div class="form-group">
+            <label class="form-label">Dimensioni L×W×H (cm)</label>
+            <input class="form-input" id="nm-dims" placeholder="30x20x10">
+          </div>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Contenuto / dettaglio</label>
+          <textarea class="form-textarea" id="nm-contents" rows="2"></textarea>
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label class="form-label">Corriere</label>
+            <input class="form-input" id="nm-carrier" placeholder="es. DHL, BRT, Mailboxes">
+          </div>
+          <div class="form-group">
+            <label class="form-label">Tracking</label>
+            <input class="form-input" id="nm-tracking">
+          </div>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Note</label>
+          <textarea class="form-textarea" id="nm-notes" rows="2"></textarea>
+        </div>
+        <div style="display:flex;gap:6px;justify-content:flex-end;">
+          <button class="btn btn-secondary btn-sm" onclick="document.getElementById('mv-form-host').style.display='none'">Annulla</button>
+          <button class="btn btn-primary btn-sm" onclick="mvSave()">Crea movimento + DDT</button>
+        </div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeModal('modal-movements')">Chiudi</button>
+    </div>
+  </div>
+</div>
 {% endblock %}
 
 {% block scripts %}
@@ -223,10 +314,14 @@ function renderRow(a) {
       <td class="text-sm">${escapeHtml(loc)}</td>
       <td>${condBadge} ${statusFlags}</td>
       <td>${delivery}</td>
-      <td class="text-right" onclick="event.stopPropagation()">
+      <td class="text-right" onclick="event.stopPropagation()" style="white-space:nowrap;">
         ${a.deleted_at
-          ? `<button class="btn btn-ghost btn-sm" onclick="restorePhysicalAsset(${a.id})" title="Recupera dal cestino"><i data-lucide="rotate-ccw" style="width:13px;height:13px;"></i></button>`
-          : `<button class="btn btn-ghost btn-sm" onclick="openEditPhysicalAsset(${a.id})" title="Modifica"><i data-lucide="pencil" style="width:13px;height:13px;"></i></button>`}
+          ? `<button class="btn btn-ghost btn-sm" onclick="restorePhysicalAsset(${a.id})" title="Recupera"><i data-lucide="rotate-ccw" style="width:13px;height:13px;"></i></button>`
+          : `
+            <a href="/physical-assets/api/${a.id}/label.png" target="_blank" class="btn btn-ghost btn-sm" title="Etichetta QR stampabile">🏷</a>
+            <button class="btn btn-ghost btn-sm" onclick="openMovementsModal(${a.id}, '${escapeHtml(a.label).replace(/'/g, '&apos;')}')" title="Movimenti / DDT">🚚</button>
+            <button class="btn btn-ghost btn-sm" onclick="openEditPhysicalAsset(${a.id})" title="Modifica"><i data-lucide="pencil" style="width:13px;height:13px;"></i></button>
+          `}
       </td>
     </tr>`;
 }
@@ -350,6 +445,147 @@ async function restorePhysicalAsset(id) {
     await api('POST', `/physical-assets/api/${id}/restore`);
     toast('Asset ripristinato', 'success');
     loadAssets();
+  } catch(e) { toast(e.message || 'Errore', 'error'); }
+}
+
+// v3.5.0-alpha.72 — Movimenti / DDT
+let _mvCurrentAssetId = null;
+const MOV_TYPE_LBL = {
+  ingest: '📥 Ingresso',
+  outgest: '📤 Uscita',
+  transfer: '🔄 Trasferimento',
+  return_to_client: '↩️ Restituz. cliente',
+  return_from_client: '↪️ Ritorno da cliente',
+};
+
+async function openMovementsModal(assetId, assetLabel) {
+  _mvCurrentAssetId = assetId;
+  document.getElementById('mv-title').textContent = '🚚 Movimenti — ' + assetLabel;
+  document.getElementById('mv-form-host').style.display = 'none';
+  await mvLoadList();
+  openModal('modal-movements');
+}
+
+async function mvLoadList() {
+  const host = document.getElementById('mv-list-host');
+  while (host.firstChild) host.removeChild(host.firstChild);
+  const loading = document.createElement('div'); loading.className = 'text-muted'; loading.textContent = 'Caricamento...';
+  host.appendChild(loading);
+  try {
+    const rows = await api('GET', `/physical-assets/api/${_mvCurrentAssetId}/movements`);
+    while (host.firstChild) host.removeChild(host.firstChild);
+    if (!rows.length) {
+      const e = document.createElement('div'); e.className = 'text-muted text-sm';
+      e.style.cssText = 'padding:20px;text-align:center;background:var(--bg2);border-radius:6px;';
+      e.textContent = 'Nessun movimento registrato.';
+      host.appendChild(e); return;
+    }
+    const tbl = document.createElement('table');
+    tbl.style.cssText = 'width:100%;font-size:12px;';
+    const thead = document.createElement('thead');
+    const trh = document.createElement('tr'); trh.style.color = 'var(--text3)';
+    ['DDT','Tipo','Data','Da → A','Colli','Tracking','Stato',''].forEach(h => {
+      const th = document.createElement('th'); th.style.padding = '6px';
+      th.style.textAlign = (h==='Colli'||h==='Stato'||h==='') ? 'center' : 'left';
+      th.textContent = h; trh.appendChild(th);
+    });
+    thead.appendChild(trh); tbl.appendChild(thead);
+    const tbody = document.createElement('tbody');
+    rows.forEach(m => {
+      const tr = document.createElement('tr'); tr.style.cssText = 'border-bottom:1px solid var(--border);';
+      const td = (txt, css) => { const e = document.createElement('td'); e.style.padding = '6px'; if (css) e.style.cssText += ';' + css; e.textContent = txt; tr.appendChild(e); return e; };
+      td(m.delivery_note_number || '—', 'font-family:var(--font-mono);');
+      td(MOV_TYPE_LBL[m.movement_type] || m.movement_type);
+      td((m.movement_date || '').slice(0, 16).replace('T', ' '));
+      td((m.from_party || '—') + ' → ' + (m.to_party || '—'));
+      td(String(m.package_count || 1), 'text-align:center;');
+      td(m.tracking_number || '—');
+      const tdState = document.createElement('td'); tdState.style.cssText = 'padding:6px;text-align:center;';
+      const sp = document.createElement('span');
+      if (m.confirmed_at) { sp.style.color = 'var(--green)'; sp.textContent = '✓ Conf.'; }
+      else { sp.style.color = '#fbbf24'; sp.textContent = '⏳ Attesa'; }
+      tdState.appendChild(sp); tr.appendChild(tdState);
+      const tdAct = document.createElement('td'); tdAct.style.cssText = 'padding:6px;text-align:right;white-space:nowrap;';
+      const a1 = document.createElement('a');
+      a1.href = `/physical-assets/api/movements/${m.id}/ddt.pdf`;
+      a1.target = '_blank'; a1.className = 'btn btn-ghost btn-sm';
+      a1.style.fontSize = '11px'; a1.textContent = '📄 PDF';
+      tdAct.appendChild(a1);
+      if (!m.confirmed_at) {
+        const b2 = document.createElement('button');
+        b2.className = 'btn btn-ghost btn-sm';
+        b2.style.cssText = 'font-size:11px;color:var(--green);margin-left:4px;';
+        b2.textContent = '✓ Conferma';
+        b2.onclick = () => mvConfirm(m.id);
+        tdAct.appendChild(b2);
+      }
+      tr.appendChild(tdAct);
+      tbody.appendChild(tr);
+    });
+    tbl.appendChild(tbody); host.appendChild(tbl);
+  } catch(e) {
+    while (host.firstChild) host.removeChild(host.firstChild);
+    const err = document.createElement('div'); err.style.color = 'var(--rose)';
+    err.textContent = 'Errore: ' + (e.message || '');
+    host.appendChild(err);
+  }
+}
+
+function openNewMovementForm() {
+  document.getElementById('mv-form-host').style.display = '';
+  document.getElementById('nm-date').value = new Date().toISOString().slice(0, 16);
+  document.getElementById('nm-type').value = 'ingest';
+  ['nm-ddt','nm-from-party','nm-from-addr','nm-to-party','nm-to-addr',
+   'nm-weight','nm-dims','nm-contents','nm-carrier','nm-tracking','nm-notes'].forEach(id => {
+    const el = document.getElementById(id); if (el) el.value = '';
+  });
+  document.getElementById('nm-pkg').value = 1;
+}
+
+async function mvSave() {
+  const fd = new FormData();
+  fd.append('movement_type', document.getElementById('nm-type').value);
+  const ddt = document.getElementById('nm-ddt').value.trim();
+  if (ddt) fd.append('delivery_note_number', ddt);
+  const dt = document.getElementById('nm-date').value;
+  if (dt) fd.append('movement_date', dt);
+  const fields = [
+    ['from_party','nm-from-party'], ['from_address','nm-from-addr'],
+    ['to_party','nm-to-party'], ['to_address','nm-to-addr'],
+    ['package_count','nm-pkg'], ['total_weight_kg','nm-weight'],
+    ['dimensions_lwh_cm','nm-dims'], ['contents_description','nm-contents'],
+    ['carrier','nm-carrier'], ['tracking_number','nm-tracking'],
+    ['notes','nm-notes'],
+  ];
+  fields.forEach(([k, id]) => {
+    const v = document.getElementById(id).value.trim();
+    if (v) fd.append(k, v);
+  });
+  try {
+    const r = await fetch(`/physical-assets/api/${_mvCurrentAssetId}/movements`, {
+      method:'POST', body: fd, credentials:'same-origin',
+    });
+    if (!r.ok) throw new Error((await r.json()).detail || 'Errore');
+    const res = await r.json();
+    toast('Movimento creato: ' + res.delivery_note_number, 'success');
+    document.getElementById('mv-form-host').style.display = 'none';
+    await mvLoadList();
+    window.open(`/physical-assets/api/movements/${res.id}/ddt.pdf`, '_blank');
+  } catch(e) { toast(e.message || 'Errore', 'error'); }
+}
+
+async function mvConfirm(mid) {
+  const name = prompt('Nome di chi ha firmato la conferma (opzionale):') || '';
+  const fd = new FormData();
+  if (name.trim()) fd.append('confirmed_by_name', name.trim());
+  try {
+    const r = await fetch(`/physical-assets/api/movements/${mid}/confirm`, {
+      method:'POST', body: fd, credentials:'same-origin',
+    });
+    if (!r.ok) throw new Error((await r.json()).detail || 'Errore');
+    toast('Movimento confermato', 'success');
+    await mvLoadList();
+    await loadAssets();
   } catch(e) { toast(e.message || 'Errore', 'error'); }
 }
 
