@@ -8,6 +8,29 @@
 
 ## Versione corrente
 
+**v3.5.0-alpha.73** — 11 maggio 2026 — Asset In/Out unificato + digital ingest
+
+Risponde audit Matteo:
+- AssetMovement esteso con `asset_id` (digital) opt + `ingest_batch_id`.
+- `IngestBatch` nuovo (raggruppa N movement, code BATCH-YYYY-NNN).
+- Page `/physical-assets/inout` con vista unificata digital + physical.
+- Ingest digitale: upload file → Asset DAM + Movement + DDT auto.
+- Sidebar link "🚚 In/Out Asset".
+
+366 routes (+5).
+
+## Prossimo step
+
+- **α.74 AssetMembership** (digital ↔ physical N:M con storico).
+  "Cosa c'è dentro l'HDD X?" lookup. Import manifest CSV/JSON.
+- **α.75 Filesystem scan** server-side: tool che monta path → walk +
+  checksum + auto-register Asset digital + AssetMembership.
+- **α.76 AI capability** propose_asset_movement, query_assets,
+  parse_ddt_pdf (riusa supplier pattern).
+- **α.77 Dashboard shelf/vault** mappa storage visuale.
+
+## (versione precedente)
+
 **v3.5.0-alpha.72.1** — 11 maggio 2026 — Fix etichetta + numerazione + batch
 
 3 issue:

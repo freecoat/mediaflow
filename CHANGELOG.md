@@ -1,5 +1,52 @@
 # MediaFlow — Changelog
 
+## v3.5.0-alpha.73 — Asset In/Out unificato + ingest digital + IngestBatch (11 maggio 2026)
+
+Risponde all'audit Matteo: ripensare in/out come modal/page strutturato,
+permettere creazione asset (fisici+digitali) dal flow, vista unificata.
+
+**Modelli nuovi/estesi**:
+- `IngestBatch` (tabella nuova): raggruppa N AssetMovement nello stesso
+  DDT/operazione. Use case: cliente consegna 1 disco con 5 file digitali
+  → 1 IngestBatch + movimenti correlati. Code auto BATCH-YYYY-NNN.
+- `AssetMovement` esteso: `asset_id` (FK Asset digital opt) + `ingest_batch_id`
+  (FK IngestBatch opt). `physical_asset_id` ora nullable (mutex con
+  asset_id). Auto-migrate con detect rebuild se 0 righe.
+
+**Endpoint nuovi** (`/physical-assets/api/*`):
+- `GET /movements/all` — lista unificata cross-assets con filtri direction
+  (ingest/outgest derivato), movement_type, client_id, supplier_id,
+  only_pending. Hydrata asset_label/kind/nature (digital|physical) +
+  file_size se digital.
+- `POST /movements/digital` — multipart upload: file → crea Asset DAM +
+  AssetMovement digital + auto-DDT. Use case: cliente invia DCP/mix.
+- `POST /ingest-batches` — crea IngestBatch raggruppante.
+
+**Pagina nuova** `/physical-assets/inout`:
+- Vista unificata movimenti In/Out (digital + physical) ordinata per data.
+- Filtri: direzione + tipo + stato (conferma).
+- Badge natura (digital indigo / physical viola).
+- Bottoni PDF DDT + Conferma per riga.
+- Topbar: "📥 Ingest digitale" (modal upload) + "📥 Ingest fisico"
+  (redirect a `/physical-assets` per flow esistente).
+
+**Sidebar**: nuovo link "🚚 In/Out Asset" sopra "Asset Fisici".
+
+**Bugfix routing**: `/api/movements-all` path collideva con
+`/api/{asset_id}` (FastAPI matchava asset_id="movements-all" → 422).
+Risolto con `/api/movements/all` (2 segmenti).
+
+**File toccati** (5):
+- `app/main.py` — VERSION + auto-migrate asset_movements rebuild
+- `app/models/models.py` — IngestBatch + AssetMovement extension
+- `app/models/__init__.py` — re-export IngestBatch
+- `app/routers/physical_assets.py` — 3 endpoint + page /inout
+- `app/services/...` — N/A (riusa DAM service per file upload)
+- `app/templates/pages/assets_inout.html` — NUOVO
+- `app/templates/base.html` — sidebar link
+
+366 routes (+5).
+
 ## v3.5.0-alpha.72.1 — Fix etichetta + numerazione automatica + batch import (11 maggio 2026)
 
 **Bug fix critico**: `/physical-assets/api/{id}/label.png` e `/scan/{token}`

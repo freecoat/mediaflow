@@ -331,6 +331,36 @@ def _auto_migrate_columns():
             if backfill_rows:
                 print(f"[auto-migrate] backfill InvoicePayment per {len(backfill_rows)} "
                       f"fatture legacy paid (cashflow ora le conteggia)")
+    # v3.5.0-alpha.73 — AssetMovement extension digital + ingest_batch
+    # SQLite NOT NULL su physical_asset_id (era required in α.72.0) → richiede
+    # table rebuild se DB esistente con righe. Approccio: skip rebuild se 0
+    # righe (DB nuovo), altrimenti 12-step manual migration. Per ora rebuild
+    # solo se 0 righe (workflow attuale Matteo).
+    if "asset_movements" in insp.get_table_names():
+        amcols = {c["name"]: c for c in insp.get_columns("asset_movements")}
+        needs_rebuild = (
+            amcols.get("physical_asset_id", {}).get("nullable") is False
+            and ("asset_id" not in amcols or "ingest_batch_id" not in amcols)
+        )
+        with engine.begin() as conn:
+            row_count = conn.execute(text("SELECT COUNT(*) FROM asset_movements")).scalar() or 0
+            if needs_rebuild:
+                if row_count == 0:
+                    print("[auto-migrate] asset_movements rebuild (0 rows): DROP+CREATE")
+                    conn.execute(text("DROP TABLE asset_movements"))
+                    # create_tables() più sotto ricrea con nuovo schema
+                else:
+                    print(f"[auto-migrate] asset_movements: {row_count} rows, "
+                          "rebuild manuale necessario (vedi script futuro)")
+                    # Fallback: aggiungi colonne nullable, lascia constraint
+                    am_alter = [
+                        ("asset_id", "INTEGER NULL REFERENCES assets(id)"),
+                        ("ingest_batch_id", "INTEGER NULL REFERENCES ingest_batches(id)"),
+                    ]
+                    for col, ddl in am_alter:
+                        if col not in amcols:
+                            print(f"[auto-migrate] asset_movements.{col} ALTER (preserve)")
+                            conn.execute(text(f"ALTER TABLE asset_movements ADD COLUMN {col} {ddl}"))
     # v3.5.0-alpha.72.1 — Tenant asset_numbering_config
     if "tenants" in insp.get_table_names():
         tcols = {c["name"] for c in insp.get_columns("tenants")}
@@ -695,7 +725,7 @@ async def lifespan(app: FastAPI):
     yield
 
 
-app = FastAPI(title="MediaFlow", version="3.5.0-alpha.72.1", lifespan=lifespan)
+app = FastAPI(title="MediaFlow", version="3.5.0-alpha.73", lifespan=lifespan)
 
 BASE_DIR = Path(__file__).parent
 app.mount("/static", StaticFiles(directory=BASE_DIR / "static"), name="static")

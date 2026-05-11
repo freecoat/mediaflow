@@ -1,0 +1,266 @@
+{% extends "base.html" %}
+{% set active_page = "assets_inout" %}
+{% block title %}In/Out Asset — MediaFlow{% endblock %}
+{% block topbar_title %}🚚 In/Out Asset (vista unificata){% endblock %}
+
+{% block topbar_actions %}
+  <button class="btn btn-secondary btn-sm" onclick="openDigitalIngest()">📥 Ingest digitale</button>
+  <button class="btn btn-primary btn-sm" onclick="openPhysicalIngest()">📥 Ingest fisico</button>
+{% endblock %}
+
+{% block content %}
+
+<div class="card mb-3" style="background:rgba(98,114,245,0.06);border-color:rgba(98,114,245,0.2);">
+  <div style="padding:14px 16px;font-size:13px;line-height:1.55;">
+    Lista unificata movimenti In/Out per asset <b>fisici</b> (LTO/HDD/CRU/disco cliente) e <b>digitali</b> (DCP/mix/file).
+    Bolla DDT auto-incrementale. Conferma consegna/ritiro. QR/etichetta per fisici.
+  </div>
+</div>
+
+<div class="card mb-3">
+  <div style="display:flex;flex-wrap:wrap;gap:10px;align-items:flex-end;">
+    <div class="form-group" style="min-width:140px;">
+      <label class="form-label" style="font-size:11px;">Direzione</label>
+      <select class="form-select" id="f-direction" onchange="loadList()">
+        <option value="">— tutte —</option>
+        <option value="ingest">Ingressi</option>
+        <option value="outgest">Uscite</option>
+      </select>
+    </div>
+    <div class="form-group" style="min-width:140px;">
+      <label class="form-label" style="font-size:11px;">Tipo</label>
+      <select class="form-select" id="f-type" onchange="loadList()">
+        <option value="">— tutti —</option>
+        <option value="ingest">Ingresso</option>
+        <option value="outgest">Uscita</option>
+        <option value="transfer">Trasferimento</option>
+        <option value="return_to_client">Restituz. cliente</option>
+        <option value="return_from_client">Ritorno da cliente</option>
+      </select>
+    </div>
+    <div class="form-group" style="min-width:160px;">
+      <label class="form-label" style="font-size:11px;">Stato</label>
+      <select class="form-select" id="f-pending" onchange="loadList()">
+        <option value="0">— tutti —</option>
+        <option value="1">Solo non confermati</option>
+      </select>
+    </div>
+    <button class="btn btn-ghost btn-sm" onclick="resetFilters()">Reset</button>
+  </div>
+</div>
+
+<div class="card">
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th>DDT</th>
+          <th>Tipo</th>
+          <th>Data</th>
+          <th>Asset</th>
+          <th>Natura</th>
+          <th>Da → A</th>
+          <th>Colli</th>
+          <th>Tracking</th>
+          <th>Stato</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody id="list-tbody"></tbody>
+    </table>
+  </div>
+</div>
+
+<!-- Modal Digital ingest -->
+<div class="modal-overlay" id="modal-digital">
+  <div class="modal" style="max-width:680px;">
+    <div class="modal-header">
+      <span class="modal-title">📥 Ingest digitale (file da cliente)</span>
+      <button class="btn btn-ghost btn-icon" onclick="closeModal('modal-digital')">&times;</button>
+    </div>
+    <div class="modal-body">
+      <div class="text-sm text-muted" style="margin-bottom:12px;">
+        Carica file ricevuto dal cliente (DCP, mix audio, master). Crea Asset DAM + AssetMovement con DDT.
+      </div>
+      <div class="form-group">
+        <label class="form-label">File *</label>
+        <input class="form-input" id="d-file" type="file">
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label class="form-label">Tipo movimento</label>
+          <select class="form-select" id="d-type">
+            <option value="ingest">Ingresso (da cliente)</option>
+            <option value="return_from_client">Ritorno da cliente</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label class="form-label">DDT (auto se vuoto)</label>
+          <input class="form-input" id="d-ddt">
+        </div>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Mittente / Cliente</label>
+        <input class="form-input" id="d-from">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Descrizione contenuto</label>
+        <textarea class="form-textarea" id="d-desc" rows="2" placeholder="es. DCP IMF master 2K — Theatrical IT"></textarea>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Note</label>
+        <textarea class="form-textarea" id="d-notes" rows="2"></textarea>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeModal('modal-digital')">Annulla</button>
+      <button class="btn btn-primary" onclick="submitDigital()">Crea + carica</button>
+    </div>
+  </div>
+</div>
+
+<script>
+const MOV_LBL = {
+  ingest: 'Ingresso', outgest: 'Uscita',
+  transfer: 'Trasferimento', return_to_client: 'Restituz.',
+  return_from_client: 'Ritorno',
+};
+
+async function loadList() {
+  const qs = [];
+  const d = document.getElementById('f-direction').value;
+  if (d) qs.push('direction=' + d);
+  const t = document.getElementById('f-type').value;
+  if (t) qs.push('movement_type=' + t);
+  const p = document.getElementById('f-pending').value;
+  if (p === '1') qs.push('only_pending=1');
+  const url = '/physical-assets/api/movements/all' + (qs.length ? '?' + qs.join('&') : '');
+  let rows = [];
+  try { rows = await api('GET', url); } catch(e) {}
+  renderRows(rows);
+}
+
+function renderRows(rows) {
+  const tbody = document.getElementById('list-tbody');
+  while (tbody.firstChild) tbody.removeChild(tbody.firstChild);
+  if (!rows.length) {
+    const tr = document.createElement('tr');
+    const td = document.createElement('td');
+    td.colSpan = 10; td.className = 'text-muted';
+    td.style.cssText = 'text-align:center;padding:24px;';
+    td.textContent = 'Nessun movimento.';
+    tr.appendChild(td); tbody.appendChild(tr); return;
+  }
+  rows.forEach(m => {
+    const tr = document.createElement('tr');
+    const td = (txt, css) => { const e = document.createElement('td'); e.style.padding = '6px'; if (css) e.style.cssText += ';' + css; e.textContent = txt; tr.appendChild(e); return e; };
+    td(m.delivery_note_number || '—', 'font-family:var(--font-mono);font-size:12px;');
+    td(MOV_LBL[m.movement_type] || m.movement_type, 'font-size:12px;');
+    td((m.movement_date || '').slice(0, 16).replace('T', ' '), 'font-size:12px;');
+    const tdAsset = document.createElement('td');
+    tdAsset.style.padding = '6px';
+    const b = document.createElement('b'); b.textContent = m.asset_label || '—'; tdAsset.appendChild(b);
+    if (m.asset_kind) {
+      const sub = document.createElement('div'); sub.className = 'text-xs text-muted'; sub.textContent = m.asset_kind;
+      tdAsset.appendChild(sub);
+    }
+    tr.appendChild(tdAsset);
+    const tdNat = document.createElement('td'); tdNat.style.padding = '6px';
+    const badge = document.createElement('span');
+    if (m.asset_nature === 'digital') {
+      badge.style.cssText = 'padding:2px 8px;background:rgba(98,114,245,.18);color:var(--indigo2);border-radius:10px;font-size:11px;font-weight:600;';
+      badge.textContent = 'digital';
+    } else if (m.asset_nature === 'physical') {
+      badge.style.cssText = 'padding:2px 8px;background:rgba(168,139,250,.18);color:#a78bfa;border-radius:10px;font-size:11px;font-weight:600;';
+      badge.textContent = 'physical';
+    } else {
+      badge.style.cssText = 'padding:2px 8px;background:var(--bg2);color:var(--text3);border-radius:10px;font-size:11px;';
+      badge.textContent = '?';
+    }
+    tdNat.appendChild(badge); tr.appendChild(tdNat);
+    td((m.from_party || '—') + ' → ' + (m.to_party || '—'), 'font-size:12px;');
+    td(String(m.package_count || 1), 'text-align:center;font-size:12px;');
+    td(m.tracking_number || '—', 'font-size:12px;font-family:var(--font-mono);');
+    const tdState = document.createElement('td'); tdState.style.padding = '6px';
+    const sp = document.createElement('span');
+    if (m.confirmed_at) { sp.style.color = 'var(--green)'; sp.textContent = '✓ Conf.'; }
+    else { sp.style.color = '#fbbf24'; sp.textContent = 'Attesa'; }
+    tdState.appendChild(sp); tr.appendChild(tdState);
+    const tdAct = document.createElement('td'); tdAct.style.cssText = 'padding:6px;white-space:nowrap;';
+    const a1 = document.createElement('a');
+    a1.href = `/physical-assets/api/movements/${m.id}/ddt.pdf`;
+    a1.target = '_blank'; a1.className = 'btn btn-ghost btn-sm';
+    a1.style.fontSize = '11px'; a1.textContent = 'PDF';
+    a1.title = 'PDF DDT'; tdAct.appendChild(a1);
+    if (!m.confirmed_at) {
+      const b2 = document.createElement('button');
+      b2.className = 'btn btn-ghost btn-sm';
+      b2.style.cssText = 'font-size:11px;color:var(--green);';
+      b2.textContent = '✓';
+      b2.title = 'Conferma';
+      b2.onclick = () => confirmMov(m.id);
+      tdAct.appendChild(b2);
+    }
+    tr.appendChild(tdAct);
+    tbody.appendChild(tr);
+  });
+}
+
+function resetFilters() {
+  document.getElementById('f-direction').value = '';
+  document.getElementById('f-type').value = '';
+  document.getElementById('f-pending').value = '0';
+  loadList();
+}
+
+async function confirmMov(mid) {
+  const name = prompt('Nome conferma (opzionale):') || '';
+  const fd = new FormData();
+  if (name.trim()) fd.append('confirmed_by_name', name.trim());
+  try {
+    const r = await fetch(`/physical-assets/api/movements/${mid}/confirm`, {
+      method:'POST', body: fd, credentials:'same-origin',
+    });
+    if (!r.ok) throw new Error((await r.json()).detail || 'Errore');
+    toast('Confermato', 'success');
+    await loadList();
+  } catch(e) { toast(e.message || 'Errore', 'error'); }
+}
+
+function openDigitalIngest() {
+  ['d-ddt','d-from','d-desc','d-notes'].forEach(id => document.getElementById(id).value = '');
+  document.getElementById('d-file').value = '';
+  document.getElementById('d-type').value = 'ingest';
+  openModal('modal-digital');
+}
+
+function openPhysicalIngest() {
+  window.location.href = '/physical-assets';
+}
+
+async function submitDigital() {
+  const f = document.getElementById('d-file').files[0];
+  if (!f) { toast('Carica un file', 'warning'); return; }
+  const fd = new FormData();
+  fd.append('file', f);
+  fd.append('movement_type', document.getElementById('d-type').value);
+  ['d-ddt:delivery_note_number','d-from:from_party','d-desc:contents_description','d-notes:notes'].forEach(p => {
+    const [id, k] = p.split(':');
+    const v = document.getElementById(id).value.trim();
+    if (v) fd.append(k, v);
+  });
+  try {
+    const r = await fetch('/physical-assets/api/movements/digital', {
+      method:'POST', body: fd, credentials:'same-origin',
+    });
+    if (!r.ok) throw new Error((await r.json()).detail || 'Errore');
+    const res = await r.json();
+    closeModal('modal-digital');
+    toast(`DDT ${res.delivery_note_number} — asset ${res.asset_name} caricato`, 'success');
+    await loadList();
+  } catch(e) { toast(e.message || 'Errore', 'error'); }
+}
+
+loadList();
+</script>
+{% endblock %}

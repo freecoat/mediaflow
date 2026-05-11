@@ -1809,18 +1809,48 @@ class AssetOwnerType(str, enum.Enum):
     third_party = "third_party"     # altro (es. consulente esterno)
 
 
-class AssetMovement(Base):
-    """Movimento logistico di un PhysicalAsset. Append-only per audit.
+class IngestBatch(Base):
+    """v3.5.0-alpha.73 — Raggruppa N AssetMovement nello stesso DDT (bolla).
+    Use case: cliente consegna 1 disco con 5 file digitali → 1 IngestBatch
+    + 1 AssetMovement physical (il disco) + 5 AssetMovement digital (i file)
+    + 1 manifest CSV/JSON con checksum.
+    """
+    __tablename__ = "ingest_batches"
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    tenant_id: Mapped[int] = mapped_column(ForeignKey("tenants.id"), default=1, index=True)
+    code: Mapped[str] = mapped_column(String(40), unique=True, index=True)  # BATCH-YYYY-NNN
+    direction: Mapped[str] = mapped_column(String(20), default="ingest")  # ingest/outgest
+    title: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
+    description: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    project_id: Mapped[Optional[int]] = mapped_column(ForeignKey("projects.id"), nullable=True, index=True)
+    client_id: Mapped[Optional[int]] = mapped_column(ForeignKey("clients.id"), nullable=True, index=True)
+    supplier_id: Mapped[Optional[int]] = mapped_column(ForeignKey("suppliers.id"), nullable=True, index=True)
+    delivery_note_number: Mapped[Optional[str]] = mapped_column(String(80), nullable=True)
+    batch_date: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, index=True)
+    manifest_path: Mapped[Optional[str]] = mapped_column(String(512), nullable=True)
+    notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    created_by_user_id: Mapped[Optional[int]] = mapped_column(ForeignKey("users.id"), nullable=True)
 
-    Genera "bolla" stampabile: delivery_note_number, dettagli mittente/
-    destinatario, collo (peso/dimensioni/numero pacchi), corriere/tracking,
-    conferma consegna + firma (allegato PDF).
+
+class AssetMovement(Base):
+    """Movimento logistico di un Asset (digital o physical). Append-only audit.
+
+    v3.5.0-alpha.73: asset_id (digital) E physical_asset_id (physical) MUTEX:
+    almeno uno valorizzato, ma non entrambi. Constraint logico (SQLite no CHECK).
     """
     __tablename__ = "asset_movements"
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     tenant_id: Mapped[int] = mapped_column(ForeignKey("tenants.id"), default=1, index=True)
-    physical_asset_id: Mapped[int] = mapped_column(
-        ForeignKey("physical_assets.id"), index=True
+    # v3.5.0-alpha.73 — Mutex: physical_asset_id OR asset_id (digital)
+    physical_asset_id: Mapped[Optional[int]] = mapped_column(
+        ForeignKey("physical_assets.id"), nullable=True, index=True
+    )
+    asset_id: Mapped[Optional[int]] = mapped_column(
+        ForeignKey("assets.id"), nullable=True, index=True
+    )
+    ingest_batch_id: Mapped[Optional[int]] = mapped_column(
+        ForeignKey("ingest_batches.id"), nullable=True, index=True
     )
     movement_type: Mapped[AssetMovementType] = mapped_column(
         SAEnum(AssetMovementType), index=True

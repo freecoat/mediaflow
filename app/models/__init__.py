@@ -19,7 +19,7 @@ from app.models.models import (
     Asset, AssetType, Tag, AssetTag,
     ProjectAccessGrant, AssetAccessAction, AssetAccessLog,
     PhysicalAsset, PhysicalAssetKind, AssetOwnerType,
-    AssetMovement, AssetMovementType,
+    AssetMovement, AssetMovementType, IngestBatch,
     JobDeliverable, DeliverableNature, DeliverableStatus,
     ResourceCostType,
     PriceCategory, PriceItem, PriceLevel,

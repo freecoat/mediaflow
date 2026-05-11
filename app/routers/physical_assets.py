@@ -14,7 +14,7 @@ Pattern d'uso:
 """
 from datetime import datetime, date
 from typing import Optional
-from fastapi import APIRouter, Depends, HTTPException, Request, Form
+from fastapi import APIRouter, Depends, HTTPException, Request, Form, UploadFile, File
 from fastapi.responses import HTMLResponse, Response
 from sqlalchemy.orm import Session, joinedload
 from app.database import get_db
@@ -487,6 +487,71 @@ def _movement_dict(m: AssetMovement) -> dict:
     }
 
 
+@router.get("/api/movements/all")
+async def list_all_movements(
+    direction: Optional[str] = None,
+    movement_type: Optional[str] = None,
+    client_id: Optional[int] = None,
+    supplier_id: Optional[int] = None,
+    only_pending: int = 0,
+    limit: int = 200,
+    db: Session = Depends(get_db),
+):
+    """v3.5.0-alpha.73 — Vista unificata movimenti (physical + digital).
+    Filtri: direction (ingest/outgest derivato da movement_type),
+    movement_type, client, supplier, only_pending (no conferma)."""
+    from app.models import Asset
+    q = db.query(AssetMovement).filter(
+        AssetMovement.tenant_id == CURRENT_TENANT,
+    )
+    if movement_type:
+        try:
+            q = q.filter(AssetMovement.movement_type == AssetMovementType(movement_type))
+        except ValueError:
+            raise HTTPException(400, f"movement_type invalido: {movement_type}")
+    if direction:
+        if direction == "ingest":
+            q = q.filter(AssetMovement.movement_type.in_([
+                AssetMovementType.ingest, AssetMovementType.return_from_client,
+            ]))
+        elif direction == "outgest":
+            q = q.filter(AssetMovementType.outgest == AssetMovement.movement_type)
+            q = q.union_all(
+                db.query(AssetMovement).filter(
+                    AssetMovement.tenant_id == CURRENT_TENANT,
+                    AssetMovement.movement_type == AssetMovementType.return_to_client,
+                )
+            ) if False else q.filter(AssetMovement.movement_type.in_([
+                AssetMovementType.outgest, AssetMovementType.return_to_client,
+            ]))
+    if client_id: q = q.filter(AssetMovement.client_id == client_id)
+    if supplier_id: q = q.filter(AssetMovement.supplier_id == supplier_id)
+    if only_pending: q = q.filter(AssetMovement.confirmed_at.is_(None))
+    rows = q.order_by(AssetMovement.movement_date.desc()).limit(min(limit, 500)).all()
+    pa_ids = [m.physical_asset_id for m in rows if m.physical_asset_id]
+    a_ids = [m.asset_id for m in rows if m.asset_id]
+    pa_map = {p.id: p for p in db.query(PhysicalAsset).filter(PhysicalAsset.id.in_(pa_ids)).all()} if pa_ids else {}
+    a_map = {a.id: a for a in db.query(Asset).filter(Asset.id.in_(a_ids)).all()} if a_ids else {}
+    out = []
+    for m in rows:
+        d = _movement_dict(m)
+        if m.physical_asset_id and m.physical_asset_id in pa_map:
+            pa = pa_map[m.physical_asset_id]
+            d["asset_label"] = pa.label
+            d["asset_kind"] = pa.kind.value if pa.kind else None
+            d["asset_nature"] = "physical"
+        elif m.asset_id and m.asset_id in a_map:
+            a = a_map[m.asset_id]
+            d["asset_label"] = a.original_name
+            d["asset_kind"] = a.asset_type.value if hasattr(a.asset_type, 'value') else str(a.asset_type)
+            d["asset_nature"] = "digital"
+            d["asset_file_size"] = a.file_size
+        else:
+            d["asset_nature"] = "unknown"
+        out.append(d)
+    return out
+
+
 @router.get("/api/{asset_id}/movements")
 async def list_movements(asset_id: int, db: Session = Depends(get_db)):
     rows = (
@@ -743,6 +808,140 @@ async def movement_ddt_pdf(
     return Response(
         content=pdf, media_type="application/pdf",
         headers={"Content-Disposition": f'inline; filename="{fname}"'},
+    )
+
+
+# ── Digital ingest + IngestBatch (v3.5.0-alpha.73) ───────────
+
+
+def _next_batch_code(db: Session) -> str:
+    year = datetime.utcnow().year
+    from app.models import IngestBatch
+    last = (
+        db.query(IngestBatch)
+        .filter(
+            IngestBatch.tenant_id == CURRENT_TENANT,
+            IngestBatch.code.like(f"BATCH-{year}-%"),
+        )
+        .order_by(IngestBatch.id.desc())
+        .first()
+    )
+    n = 1
+    if last and last.code:
+        try:
+            n = int(last.code.split("-")[-1]) + 1
+        except (ValueError, IndexError):
+            n = 1
+    return f"BATCH-{year}-{n:03d}"
+
+
+@router.post("/api/ingest-batches")
+async def create_ingest_batch(
+    request: Request,
+    direction: str = Form("ingest"),
+    title: Optional[str] = Form(None),
+    description: Optional[str] = Form(None),
+    project_id: Optional[int] = Form(None),
+    client_id: Optional[int] = Form(None),
+    supplier_id: Optional[int] = Form(None),
+    delivery_note_number: Optional[str] = Form(None),
+    notes: Optional[str] = Form(None),
+    db: Session = Depends(get_db),
+):
+    """v3.5.0-alpha.73 — Crea IngestBatch (raggruppa N movimenti)."""
+    _require_perm(request)
+    from app.models import IngestBatch
+    user = getattr(request.state, "current_user", None)
+    code = _next_batch_code(db)
+    b = IngestBatch(
+        tenant_id=CURRENT_TENANT,
+        code=code, direction=direction,
+        title=(title or "").strip() or None,
+        description=(description or "").strip() or None,
+        project_id=project_id, client_id=client_id, supplier_id=supplier_id,
+        delivery_note_number=(delivery_note_number or "").strip() or None,
+        notes=(notes or "").strip() or None,
+        created_by_user_id=user.id if user else None,
+    )
+    db.add(b); db.commit(); db.refresh(b)
+    return {"id": b.id, "code": b.code, "direction": b.direction}
+
+
+@router.post("/api/movements/digital")
+async def create_digital_ingest(
+    request: Request,
+    file: UploadFile = File(...),
+    movement_type: str = Form("ingest"),
+    delivery_note_number: Optional[str] = Form(None),
+    ingest_batch_id: Optional[int] = Form(None),
+    project_id: Optional[int] = Form(None),
+    client_id: Optional[int] = Form(None),
+    from_party: Optional[str] = Form(None),
+    to_party: Optional[str] = Form(None),
+    contents_description: Optional[str] = Form(None),
+    notes: Optional[str] = Form(None),
+    db: Session = Depends(get_db),
+):
+    """v3.5.0-alpha.73 — Ingest digital: upload file + crea Asset (DAM)
+    + crea AssetMovement digital. Esempio cliente consegna DCP/mix.
+    Mutex con physical_asset_id (qui null)."""
+    _require_perm(request)
+    from app.models import Asset
+    from app.services.dam import save_upload, generate_thumbnail, resolve_asset_type
+    try:
+        mt = AssetMovementType(movement_type)
+    except ValueError:
+        raise HTTPException(400, f"movement_type invalido: {movement_type}")
+    file_bytes = await file.read()
+    filename, file_path, mime_type = save_upload(file_bytes, file.filename)
+    thumbnail_path = generate_thumbnail(file_path, mime_type)
+    asset_type = resolve_asset_type(mime_type)
+    user = getattr(request.state, "current_user", None)
+    asset = Asset(
+        tenant_id=CURRENT_TENANT,
+        filename=filename, original_name=file.filename,
+        file_path=file_path, thumbnail_path=thumbnail_path,
+        asset_type=asset_type, mime_type=mime_type,
+        file_size=len(file_bytes),
+        project_id=project_id,
+        uploaded_by=user.id if user else 1,
+        description=contents_description or None,
+    )
+    db.add(asset); db.flush()
+    if not delivery_note_number:
+        delivery_note_number = _next_ddt_number(db)
+    m = AssetMovement(
+        tenant_id=CURRENT_TENANT,
+        asset_id=asset.id,
+        physical_asset_id=None,
+        ingest_batch_id=ingest_batch_id,
+        movement_type=mt,
+        delivery_note_number=delivery_note_number,
+        movement_date=datetime.utcnow(),
+        from_party=(from_party or "").strip() or None,
+        to_party=(to_party or "").strip() or None,
+        client_id=client_id,
+        contents_description=(contents_description or "").strip() or None,
+        notes=(notes or "").strip() or None,
+        created_by_user_id=user.id if user else None,
+    )
+    db.add(m); db.commit(); db.refresh(asset); db.refresh(m)
+    return {
+        "ok": True,
+        "movement_id": m.id,
+        "asset_id": asset.id,
+        "asset_name": asset.original_name,
+        "delivery_note_number": delivery_note_number,
+    }
+
+
+# ── Pagina vista unificata In/Out (v3.5.0-alpha.73) ──────────
+
+
+@router.get("/inout", response_class=HTMLResponse)
+async def assets_inout_page(request: Request, db: Session = Depends(get_db)):
+    return _tpl().TemplateResponse(
+        "pages/assets_inout.html", {"request": request},
     )
 
 
