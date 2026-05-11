@@ -1,5 +1,47 @@
 # MediaFlow — Changelog
 
+## v3.5.0-alpha.69 — Capitolati↔quote wizard PDF + AI (B+C) (11 maggio 2026)
+
+Tappe **B** (wizard PDF→quote) + **C** (AI capability) della roadmap
+capitolati→quotazioni. A era già in α.68.6.
+
+**B — Wizard PDF capitolato → quote** (`/quotes`):
+- Topbar nuovo bottone "✨ Crea da capitolato".
+- Modal wizard 2 step:
+  - Step 1: select progetto + numero quote + upload PDF/docx/xlsx/txt
+    (o testo incollato) + hint opzionale per AI.
+  - Step 2: anteprima deliverables estratti dall'AI, ogni voce con:
+    - Checkbox include/skip (default ON)
+    - Section editor (A-E)
+    - Qty editor
+    - Match price_item con badge confidence (high/medium/low/manual)
+    - Bottone "cambia" per picker manuale (search nome/categoria)
+    - Unit price editable
+- Riusa endpoint backend AI esistenti orphan-da-α.66.20:
+  `/ai/api/deliverables/parse` (parse_deliverables +
+  match_deliverables_to_pricelist auto-integrati) e
+  `/ai/api/deliverables/create-quote` (bulk-create Quote + QuoteLines).
+
+**C — AI capability `propose_quote_from_template`**:
+- Nuova capability (handler + tool schema + legacy parser).
+- Input: `template_id` o `template_code` + `quote_id` o `quote_number`
+  + `price_level` opzionale.
+- Resolve template + quote, scorre suggested_items, bulk-add QuoteLines
+  con stessa logica di `load-from-template`. Skip duplicati + mancanti.
+- Esempio uso: utente in chat AI: "carica il template Netflix-IMF
+  sulla quote Q-2026-12" → AI propone → utente Apply → righe aggiunte.
+
+**File toccati** (5):
+- `app/main.py` — VERSION
+- `app/services/ai_assistant.py` — handler `_h_propose_quote_from_template`
+- `app/services/ai_tools.py` — entry TOOLS (26 totali)
+- `app/services/ai_legacy_parser.py` — voce VALID_ACTION_TYPES
+- `app/templates/pages/quotes.html` — wizard modal + JS multi-step
+
+334 routes. **No backend nuovo lato B**: i 2 endpoint AI erano già
+implementati (alpha.66.20) ma orfani (nessuna UI li usava). Adesso
+finalmente esposti via wizard.
+
 ## v3.5.0-alpha.68.6 — Capitolati↔quote foundation (A) (11 maggio 2026)
 
 Prima tappa del lavoro estensivo capitolati→quotazioni (vedi roadmap

@@ -8,30 +8,21 @@
 
 ## Versione corrente
 
-**v3.5.0-alpha.68.6** — 11 maggio 2026 — Capitolati↔quote foundation (A)
+**v3.5.0-alpha.69** — 11 maggio 2026 — Capitolati↔quote wizard PDF + AI (B+C)
 
-Prima tappa lavoro estensivo capitolati→quotazioni. Roadmap A/B/C:
+Roadmap A/B/C completata in 2 commit (α.68.6 = A, α.69 = B+C).
 
-- **A (questa versione)**: editor `suggested_items` in /delivery-templates
-  + bulk-add "Carica da template" in /quotes.
-- B (prossima): wizard PDF capitolato → quote tramite AI parse_deliverables
-  + match_deliverables_to_pricelist
-- C (dopo): AI capability `propose_quote_from_template` per copilot
+- **A** (α.68.6): editor `suggested_items` + bulk-add "Carica da template".
+- **B** (α.69): wizard `/quotes` "Crea da capitolato PDF" 2-step
+  (upload + parse AI → preview matchato editabile → create-quote).
+- **C** (α.69): AI capability `propose_quote_from_template` per copilot
+  (resolve template+quote → bulk-add suggested_items).
 
-Backend: PUT/POST template accettano `suggested_items` JSON; nuovo
-`/api/{id}/suggested-hydrated` con price_item espansi; nuovo
-`/quotes/api/{id}/load-from-template` bulk-insert idempotente.
-
-UI: editor in modal detail templates (tabella + picker + save);
-bottone + modal preview in /quotes editor card "Voci preventivo".
-
-334 routes (+2). No DB migration.
+26 AI tools. Backend B riusa endpoint `/ai/api/deliverables/parse`+
+`/create-quote` esistenti da α.66.20 ma prima orfani.
 
 ## Prossimo step
 
-- **B — Wizard PDF capitolato → quote** (parse_deliverables AI →
-  match listino → preview → bulk-create QuoteLines)
-- **C — AI capability propose_quote_from_template** per copilot
 - **JobDeliverable auto-create** da template alla creazione job
 - **F15 esecuzione reale** sul Mac Matteo (corpus test 17 capitolati)
 - **R7.x continuazione planning_bookings** — quando Matteo dà green

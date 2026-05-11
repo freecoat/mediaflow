@@ -1732,6 +1732,124 @@ def _h_query_project_finance(db: Session, data: dict) -> dict:
     }
 
 
+# ── Capitolati → quote (v3.5.0-alpha.69) ──────────────────────
+
+@ai_capability("propose_quote_from_template")
+def _h_propose_quote_from_template(db: Session, data: dict) -> dict:
+    """MUTATION. Carica suggested_items di un DeliveryTemplate dentro una
+    quote esistente (bulk-add). Skip duplicati + voci con price_item
+    mancante. Idempotente."""
+    from app.models import DeliveryTemplate, PriceLevel
+    # Resolve template
+    t = None
+    tid = data.get("template_id")
+    if tid:
+        t = db.query(DeliveryTemplate).filter(
+            DeliveryTemplate.id == int(tid),
+            DeliveryTemplate.tenant_id == CURRENT_TENANT,
+        ).first()
+    if not t:
+        code = (data.get("template_code") or "").strip().upper()
+        if code:
+            t = db.query(DeliveryTemplate).filter(
+                DeliveryTemplate.code == code,
+                DeliveryTemplate.tenant_id == CURRENT_TENANT,
+            ).first()
+    if not t:
+        raise ValueError(
+            f"Template non trovato (template_id={tid!r}, template_code={data.get('template_code')!r})."
+        )
+    items = t.suggested_items or []
+    if not items:
+        raise ValueError(
+            f"Il template {t.code} non ha suggested_items configurate. "
+            "Vai in /delivery-templates e popola le voci suggerite prima."
+        )
+    # Resolve quote
+    q = _resolve_quote(db, data)
+    if q.status in (QuoteStatus.approved, QuoteStatus.rejected):
+        raise ValueError(f"Quote {q.number} in stato {q.status.value}, non modificabile")
+    # Price level
+    level_str = (data.get("price_level") or "list_price").strip()
+    try:
+        price_level = PriceLevel(level_str)
+    except ValueError:
+        price_level = PriceLevel.list_price
+    existing_pi = {l.price_item_id for l in q.lines if l.price_item_id}
+    sort_order = max((l.sort_order for l in q.lines), default=0)
+    added = 0
+    skipped_dup = 0
+    skipped_missing = 0
+    section_counters: dict[str, int] = {}
+    for it in items:
+        pid = it.get("price_item_id")
+        if not pid:
+            skipped_missing += 1
+            continue
+        if pid in existing_pi:
+            skipped_dup += 1
+            continue
+        item = db.query(PriceItem).filter(
+            PriceItem.id == int(pid),
+            PriceItem.tenant_id == CURRENT_TENANT,
+            PriceItem.is_active == True,  # noqa: E712
+        ).first()
+        if not item:
+            skipped_missing += 1
+            continue
+        price = {
+            PriceLevel.list_price: item.price_list,
+            PriceLevel.average: item.price_average,
+            PriceLevel.low: item.price_low,
+        }.get(price_level, item.price_list) or 0.0
+        section = (it.get("section") or "A").strip().upper()[:1]
+        section_counters[section] = section_counters.get(section, 0) + 1
+        position = f"{section}.{section_counters[section]}"
+        sort_order += 10
+        qty = float(it.get("qty_hint") or 1)
+        from app.models import QuoteLine
+        line = QuoteLine(
+            quote_id=q.id,
+            description=item.name,
+            section=section,
+            position=position,
+            detail=(it.get("notes") or None),
+            quantity=qty,
+            unit=item.unit,
+            price_level=price_level,
+            unit_price=price,
+            allowance=0.0,
+            line_discount_pct=0.0,
+            total=0.0,
+            hardcosts=0.0,
+            price_item_id=item.id,
+            sort_order=sort_order,
+            is_optional=False,
+        )
+        db.add(line)
+        added += 1
+        existing_pi.add(item.id)
+    if added > 0:
+        from app.routers.quotes import _recalc_quote
+        db.flush()
+        db.refresh(q)
+        _recalc_quote(q)
+    return {
+        "ok": True,
+        "template_id": t.id,
+        "template_code": t.code,
+        "quote_id": q.id,
+        "quote_number": q.number,
+        "added": added,
+        "skipped_duplicate": skipped_dup,
+        "skipped_missing": skipped_missing,
+        "message": (
+            f"Aggiunte {added} righe da template {t.code} alla quote {q.number}. "
+            f"({skipped_dup} duplicati + {skipped_missing} mancanti saltati)"
+        ),
+    }
+
+
 # ── Supplier / fatture passive (v3.5.0-alpha.68.5) ────────────
 
 @ai_capability("propose_supplier")

@@ -51,6 +51,8 @@ VALID_ACTION_TYPES = {
     # v3.5.0-alpha.68.5 — Supplier / fatture passive
     "propose_supplier",
     "propose_supplier_invoice",
+    # v3.5.0-alpha.69 — Capitolati template → quote
+    "propose_quote_from_template",
     "web_search",
 }
 

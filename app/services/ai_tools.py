@@ -676,6 +676,30 @@ TOOLS: list[dict] = [
         },
         "handler": "propose_supplier_invoice",
     },
+    # ────────── CAPITOLATI → QUOTE (v3.5.0-alpha.69) ──────────
+    {
+        "name": "propose_quote_from_template",
+        "category": "mutation",
+        "description": (
+            "Aggiunge bulk righe a una quotazione esistente caricandole da un "
+            "DeliveryTemplate (suggested_items). Usa quando l'utente dice "
+            "'carica il template X sulla quote Y' o 'aggiungi le voci del "
+            "template Netflix alla quote Q-2026-12'. Skip duplicati e voci "
+            "con price_item mancante. Idempotente."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "template_id":   {"type": "integer", "description": "PK DeliveryTemplate."},
+                "template_code": {"type": "string", "description": "Fallback se id ignoto (es. 'NETFLIX-IMF')."},
+                "quote_id":      {"type": "integer", "description": "PK Quote destinazione."},
+                "quote_number":  {"type": "string", "description": "Fallback se id ignoto (es. 'Q-2026-12')."},
+                "price_level":   {"type": "string", "enum": ["list_price", "average", "low"], "description": "Default list_price."},
+            },
+            "required": [],
+        },
+        "handler": "propose_quote_from_template",
+    },
 ]
 
 

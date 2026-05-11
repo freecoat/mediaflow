@@ -3,6 +3,7 @@
 {% block title %}Quotazioni — MediaFlow{% endblock %}
 {% block topbar_title %}Quotazioni{% endblock %}
 {% block topbar_actions %}
+  <button class="btn btn-secondary btn-sm" onclick="openWizardCapitolato()">✨ Crea da capitolato</button>
   <button class="btn btn-primary btn-sm" onclick="openModal('modal-new-quote')">+ Nuova quotazione</button>
 {% endblock %}
 
@@ -611,6 +612,75 @@
     <div class="modal-footer">
       <button class="btn btn-secondary" onclick="closeModal('modal-new-quote')">Annulla</button>
       <button class="btn btn-primary" onclick="createQuote()">Crea</button>
+    </div>
+  </div>
+</div>
+
+<!-- v3.5.0-alpha.69 — Wizard "Crea da capitolato PDF" -->
+<div class="modal-overlay" id="modal-wizard-capitolato">
+  <div class="modal" style="max-width:860px;max-height:88vh;display:flex;flex-direction:column;">
+    <div class="modal-header">
+      <span class="modal-title" id="wc-title">✨ Crea quotazione da capitolato PDF</span>
+      <button class="btn btn-ghost btn-icon" onclick="closeWizard()">&times;</button>
+    </div>
+    <div class="modal-body" style="overflow:auto;">
+      <!-- Step 1: input -->
+      <div id="wc-step-1">
+        <div class="text-sm text-muted" style="margin-bottom:14px;">
+          Carica un capitolato cliente (PDF/docx/xlsx/txt). L'AI estrae le voci, le matcha sul listino, e prepara la quotazione.
+        </div>
+        <div class="form-group">
+          <label class="form-label">Progetto destinazione *</label>
+          <select class="form-select" id="wc-project">
+            <option value="">— seleziona progetto —</option>
+          </select>
+          <div class="form-hint">Il progetto deve esistere. Crealo prima da /projects se necessario.</div>
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label class="form-label">Numero quote *</label>
+            <input class="form-input" id="wc-number" placeholder="es. Q-2026-NNN">
+          </div>
+          <div class="form-group">
+            <label class="form-label">Data emissione</label>
+            <input class="form-input" id="wc-issue-date" type="date">
+          </div>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Capitolato (PDF / docx / xlsx / txt) *</label>
+          <input class="form-input" id="wc-file" type="file" accept=".pdf,.docx,.doc,.xlsx,.xls,.txt,.md">
+          <div class="form-hint">Max 10 MB. Oppure incolla testo qui sotto.</div>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Oppure incolla testo capitolato</label>
+          <textarea class="form-textarea" id="wc-text" rows="4" placeholder="(alternativo al file)"></textarea>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Suggerimento all'AI</label>
+          <input class="form-input" id="wc-hint" placeholder="es. \"è un documentario da 52 minuti, consegna in 4K\"">
+        </div>
+        <div id="wc-step1-progress" style="display:none;padding:14px;background:var(--bg2);border-radius:6px;text-align:center;color:var(--text2);font-size:13px;">
+          ⏳ AI sta analizzando il capitolato e matchando il listino...
+        </div>
+      </div>
+      <!-- Step 2: preview deliverables -->
+      <div id="wc-step-2" style="display:none;">
+        <div id="wc-project-info" style="background:var(--bg2);border:1px solid var(--border);border-radius:6px;padding:10px 14px;margin-bottom:12px;font-size:12px;"></div>
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">
+          <div style="font-weight:600;font-size:13px;">Voci estratte (modifica match e quantità)</div>
+          <div class="text-xs text-muted" id="wc-counter"></div>
+        </div>
+        <div id="wc-deliv-host"></div>
+        <div class="form-group" style="margin-top:14px;">
+          <label class="form-label">Note quote</label>
+          <textarea class="form-textarea" id="wc-notes" rows="2"></textarea>
+        </div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" id="wc-back-btn" onclick="wizardBack()" style="display:none;">← Indietro</button>
+      <button class="btn btn-secondary" onclick="closeWizard()">Annulla</button>
+      <button class="btn btn-primary" id="wc-next-btn" onclick="wizardNext()">Analizza con AI →</button>
     </div>
   </div>
 </div>
@@ -2538,6 +2608,366 @@ async function onTemplatePicked() {
     err.textContent = 'Errore: ' + (e.message || '');
     host.appendChild(err);
     btn.disabled = true;
+  }
+}
+
+// v3.5.0-alpha.69 — Wizard PDF capitolato → quote
+let _wcStep = 1;
+let _wcParsed = null;
+let _wcPriceItems = [];
+
+async function openWizardCapitolato() {
+  _wcStep = 1;
+  _wcParsed = null;
+  // Populate projects + load pricelist for in-step-2 picker
+  try {
+    const [projects, pi] = await Promise.all([
+      api('GET', '/projects/api'),
+      api('GET', '/pricelist/api'),
+    ]);
+    _wcPriceItems = pi;
+    const sel = document.getElementById('wc-project');
+    while (sel.firstChild) sel.removeChild(sel.firstChild);
+    const def = document.createElement('option');
+    def.value = ''; def.textContent = '— seleziona progetto —';
+    sel.appendChild(def);
+    projects.forEach(p => {
+      const o = document.createElement('option');
+      o.value = p.id;
+      o.textContent = `${p.code} — ${p.title}` + (p.client_name ? ` (${p.client_name})` : '');
+      sel.appendChild(o);
+    });
+  } catch(e) { toast(e.message || 'Errore caricamento', 'error'); return; }
+  document.getElementById('wc-number').value = '';
+  document.getElementById('wc-file').value = '';
+  document.getElementById('wc-text').value = '';
+  document.getElementById('wc-hint').value = '';
+  document.getElementById('wc-issue-date').value = new Date().toISOString().slice(0,10);
+  document.getElementById('wc-step-1').style.display = '';
+  document.getElementById('wc-step-2').style.display = 'none';
+  document.getElementById('wc-step1-progress').style.display = 'none';
+  document.getElementById('wc-back-btn').style.display = 'none';
+  document.getElementById('wc-next-btn').textContent = 'Analizza con AI →';
+  document.getElementById('wc-next-btn').disabled = false;
+  openModal('modal-wizard-capitolato');
+}
+
+function closeWizard() {
+  closeModal('modal-wizard-capitolato');
+  _wcParsed = null;
+}
+
+function wizardBack() {
+  if (_wcStep === 2) {
+    _wcStep = 1;
+    document.getElementById('wc-step-1').style.display = '';
+    document.getElementById('wc-step-2').style.display = 'none';
+    document.getElementById('wc-back-btn').style.display = 'none';
+    document.getElementById('wc-next-btn').textContent = 'Analizza con AI →';
+    document.getElementById('wc-next-btn').disabled = false;
+  }
+}
+
+async function wizardNext() {
+  if (_wcStep === 1) await wizardStep1Submit();
+  else if (_wcStep === 2) await wizardStep2Submit();
+}
+
+async function wizardStep1Submit() {
+  const projectId = document.getElementById('wc-project').value;
+  const number = document.getElementById('wc-number').value.trim();
+  const file = document.getElementById('wc-file').files[0];
+  const text = document.getElementById('wc-text').value.trim();
+  const hint = document.getElementById('wc-hint').value.trim();
+  if (!projectId) { toast('Seleziona progetto', 'warning'); return; }
+  if (!number) { toast('Numero quote richiesto', 'warning'); return; }
+  if (!file && !text) { toast('Carica file o incolla testo', 'warning'); return; }
+  const fd = new FormData();
+  if (file) fd.append('file', file);
+  if (text) fd.append('text', text);
+  if (hint) fd.append('hint', hint);
+  document.getElementById('wc-step1-progress').style.display = '';
+  document.getElementById('wc-next-btn').disabled = true;
+  try {
+    const r = await fetch('/ai/api/deliverables/parse', {
+      method: 'POST', body: fd, credentials: 'same-origin',
+    });
+    if (!r.ok) throw new Error((await r.json()).detail || 'Errore parsing');
+    _wcParsed = await r.json();
+    _wcParsed._project_id = parseInt(projectId);
+    _wcParsed._number = number;
+    _wcParsed._issue_date = document.getElementById('wc-issue-date').value;
+    renderWizardStep2();
+    _wcStep = 2;
+    document.getElementById('wc-step-1').style.display = 'none';
+    document.getElementById('wc-step-2').style.display = '';
+    document.getElementById('wc-back-btn').style.display = '';
+    document.getElementById('wc-next-btn').textContent = 'Crea quotazione';
+    document.getElementById('wc-next-btn').disabled = false;
+  } catch(e) {
+    toast(e.message || 'Errore parsing', 'error');
+  } finally {
+    document.getElementById('wc-step1-progress').style.display = 'none';
+    if (_wcStep === 1) document.getElementById('wc-next-btn').disabled = false;
+  }
+}
+
+function renderWizardStep2() {
+  const info = document.getElementById('wc-project-info');
+  const pi = _wcParsed.project_info || {};
+  const bits = [];
+  if (pi.title) bits.push(`Titolo: <b>${escapeHtml(pi.title)}</b>`);
+  if (pi.length_minutes) bits.push(`Durata: ${pi.length_minutes} min`);
+  if (pi.fps) bits.push(`FPS: ${pi.fps}`);
+  if (pi.delivery_format) bits.push(`Format: ${escapeHtml(pi.delivery_format)}`);
+  if (pi.shooting_format) bits.push(`Shooting: ${escapeHtml(pi.shooting_format)}`);
+  if (pi.delivery_deadline) bits.push(`Deadline: ${pi.delivery_deadline}`);
+  info.innerHTML = bits.length ? bits.join(' · ') : '<span class="text-muted">Nessuna info di progetto estratta</span>';
+
+  const host = document.getElementById('wc-deliv-host');
+  while (host.firstChild) host.removeChild(host.firstChild);
+  const deliv = _wcParsed.deliverables || [];
+  if (!deliv.length) {
+    const e = document.createElement('div');
+    e.className = 'text-muted';
+    e.textContent = 'Nessuna voce estratta dal capitolato.';
+    host.appendChild(e);
+    document.getElementById('wc-counter').textContent = '';
+    return;
+  }
+  const tbl = document.createElement('table');
+  tbl.style.cssText = 'width:100%;font-size:12px;';
+  const thead = document.createElement('thead');
+  thead.innerHTML = '<tr style="color:var(--text3);"><th style="padding:4px;width:30px;">✓</th><th style="text-align:left;padding:4px;">Voce</th><th style="padding:4px;width:60px;">Sect</th><th style="padding:4px;width:70px;">Qty</th><th style="padding:4px;width:60px;">Unit</th><th style="text-align:left;padding:4px;">Match listino</th><th style="text-align:right;padding:4px;width:80px;">€/u</th></tr>';
+  tbl.appendChild(thead);
+  const tbody = document.createElement('tbody');
+  deliv.forEach((d, idx) => {
+    const tr = document.createElement('tr');
+    tr.style.borderBottom = '1px solid var(--border)';
+    // Include checkbox (default ON)
+    const td1 = document.createElement('td');
+    td1.style.cssText = 'padding:6px 4px;text-align:center;';
+    const cb = document.createElement('input');
+    cb.type = 'checkbox'; cb.checked = true;
+    cb.dataset.idx = idx;
+    cb.className = 'wc-include';
+    td1.appendChild(cb);
+    tr.appendChild(td1);
+    // Descrizione
+    const td2 = document.createElement('td');
+    td2.style.padding = '6px 4px';
+    const b = document.createElement('b'); b.textContent = d.description || '—';
+    td2.appendChild(b);
+    if (d.detail) {
+      const sub = document.createElement('div');
+      sub.className = 'text-xs text-muted';
+      sub.textContent = d.detail;
+      td2.appendChild(sub);
+    }
+    if (d.notes) {
+      const n = document.createElement('div');
+      n.className = 'text-xs';
+      n.style.color = 'var(--amber)';
+      n.textContent = '⚠ ' + d.notes;
+      td2.appendChild(n);
+    }
+    tr.appendChild(td2);
+    // Section editor
+    const td3 = document.createElement('td');
+    td3.style.cssText = 'padding:6px 4px;text-align:center;';
+    const secSel = document.createElement('select');
+    secSel.style.cssText = 'background:var(--bg2);color:var(--text);border:1px solid var(--border);border-radius:3px;padding:1px 4px;font-size:11px;';
+    secSel.dataset.idx = idx;
+    secSel.className = 'wc-section';
+    ['A','B','C','D','E'].forEach(s => {
+      const o = document.createElement('option');
+      o.value = s; o.textContent = s;
+      if (s === (d.section || 'A')) o.selected = true;
+      secSel.appendChild(o);
+    });
+    td3.appendChild(secSel);
+    tr.appendChild(td3);
+    // Qty
+    const td4 = document.createElement('td');
+    td4.style.cssText = 'padding:6px 4px;text-align:center;';
+    const qty = document.createElement('input');
+    qty.type = 'number'; qty.step = '0.1';
+    qty.value = d.quantity != null ? d.quantity : 1;
+    qty.style.cssText = 'width:55px;text-align:right;background:var(--bg2);color:var(--text);border:1px solid var(--border);border-radius:3px;padding:1px 4px;';
+    qty.dataset.idx = idx;
+    qty.className = 'wc-qty';
+    td4.appendChild(qty);
+    tr.appendChild(td4);
+    // Unit
+    const td5 = document.createElement('td');
+    td5.style.cssText = 'padding:6px 4px;text-align:center;color:var(--text2);font-size:11px;';
+    td5.textContent = d.unit || '—';
+    tr.appendChild(td5);
+    // Match (editable picker)
+    const td6 = document.createElement('td');
+    td6.style.padding = '6px 4px';
+    if (d.matched_price_item_id) {
+      const conf = d.match_confidence || 'medium';
+      const color = conf === 'high' ? '#22c55e' : (conf === 'low' ? '#fb923c' : '#3b82f6');
+      const b2 = document.createElement('b');
+      b2.textContent = d.matched_price_item_name || '?';
+      td6.appendChild(b2);
+      const badge = document.createElement('span');
+      badge.style.cssText = `display:inline-block;margin-left:6px;padding:1px 6px;background:${color}20;color:${color};border-radius:8px;font-size:10px;font-weight:600;`;
+      badge.textContent = conf;
+      td6.appendChild(badge);
+    } else {
+      const no = document.createElement('span');
+      no.style.color = 'var(--rose)';
+      no.textContent = 'No match';
+      td6.appendChild(no);
+    }
+    const chgBtn = document.createElement('button');
+    chgBtn.className = 'btn btn-ghost btn-sm';
+    chgBtn.style.cssText = 'margin-left:6px;font-size:10px;padding:1px 6px;';
+    chgBtn.textContent = 'cambia';
+    chgBtn.onclick = () => wizardChangeMatch(idx, tr);
+    td6.appendChild(chgBtn);
+    tr.appendChild(td6);
+    // Unit price (editable)
+    const td7 = document.createElement('td');
+    td7.style.cssText = 'padding:6px 4px;text-align:right;';
+    const up = document.createElement('input');
+    up.type = 'number'; up.step = '0.01';
+    up.value = d.matched_unit_price || d.unit_price || 0;
+    up.style.cssText = 'width:70px;text-align:right;background:var(--bg2);color:var(--text);border:1px solid var(--border);border-radius:3px;padding:1px 4px;font-family:var(--font-mono);';
+    up.dataset.idx = idx;
+    up.className = 'wc-price';
+    td7.appendChild(up);
+    tr.appendChild(td7);
+    tbody.appendChild(tr);
+  });
+  tbl.appendChild(tbody);
+  host.appendChild(tbl);
+  const cnt = document.getElementById('wc-counter');
+  const matched = deliv.filter(d => d.matched_price_item_id).length;
+  cnt.textContent = `${deliv.length} voci · ${matched} matchate auto`;
+}
+
+async function wizardChangeMatch(idx, trEl) {
+  const choice = await pickPriceItemQuotes();
+  if (!choice) return;
+  _wcParsed.deliverables[idx].matched_price_item_id = choice.id;
+  _wcParsed.deliverables[idx].matched_price_item_name = choice.name;
+  _wcParsed.deliverables[idx].matched_unit_price = choice.price_list;
+  _wcParsed.deliverables[idx].match_confidence = 'manual';
+  // Re-render step 2 (riusa _wcParsed)
+  renderWizardStep2();
+}
+
+function pickPriceItemQuotes() {
+  return new Promise((resolve) => {
+    const ov = document.createElement('div');
+    ov.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.6);z-index:2500;display:flex;align-items:center;justify-content:center;';
+    const box = document.createElement('div');
+    box.style.cssText = 'background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:14px;width:520px;max-height:80vh;display:flex;flex-direction:column;';
+    const hdr = document.createElement('div');
+    hdr.style.cssText = 'display:flex;justify-content:space-between;margin-bottom:10px;';
+    const ht = document.createElement('div'); ht.style.fontWeight = '600'; ht.textContent = 'Scegli voce listino';
+    hdr.appendChild(ht);
+    const xb = document.createElement('button'); xb.className = 'btn btn-ghost btn-icon'; xb.textContent = '✕';
+    hdr.appendChild(xb);
+    box.appendChild(hdr);
+    const search = document.createElement('input');
+    search.placeholder = 'Cerca...';
+    search.style.cssText = 'background:var(--bg2);color:var(--text);border:1px solid var(--border);border-radius:4px;padding:6px 10px;margin-bottom:10px;font-size:13px;';
+    box.appendChild(search);
+    const list = document.createElement('div');
+    list.style.cssText = 'flex:1;overflow:auto;border:1px solid var(--border);border-radius:4px;';
+    box.appendChild(list);
+    ov.appendChild(box);
+    document.body.appendChild(ov);
+    const cleanup = () => { document.body.removeChild(ov); };
+    xb.onclick = () => { cleanup(); resolve(null); };
+    ov.onclick = (e) => { if (e.target === ov) { cleanup(); resolve(null); } };
+    function render() {
+      const q = (search.value || '').toLowerCase().trim();
+      const rows = _wcPriceItems.filter(p => p.is_active !== false).filter(p => {
+        if (!q) return true;
+        return (p.name||'').toLowerCase().includes(q)
+            || (p.category||'').toLowerCase().includes(q);
+      }).slice(0, 50);
+      while (list.firstChild) list.removeChild(list.firstChild);
+      if (!rows.length) {
+        const e = document.createElement('div');
+        e.className = 'text-muted text-sm';
+        e.style.cssText = 'padding:14px;text-align:center;';
+        e.textContent = 'Nessun risultato';
+        list.appendChild(e);
+        return;
+      }
+      rows.forEach(p => {
+        const row = document.createElement('div');
+        row.style.cssText = 'padding:8px 10px;border-bottom:1px solid var(--border);cursor:pointer;font-size:12px;';
+        row.onmouseover = () => row.style.background = 'var(--bg2)';
+        row.onmouseout = () => row.style.background = 'transparent';
+        const nm = document.createElement('b'); nm.textContent = p.name; row.appendChild(nm);
+        const sub = document.createElement('div');
+        sub.className = 'text-xs text-muted';
+        sub.textContent = `${p.category||'—'} · ${p.unit||''} · €${(p.price_list||0).toFixed(0)}`;
+        row.appendChild(sub);
+        row.onclick = () => { cleanup(); resolve(p); };
+        list.appendChild(row);
+      });
+    }
+    search.oninput = render;
+    render();
+    setTimeout(() => search.focus(), 50);
+  });
+}
+
+async function wizardStep2Submit() {
+  if (!_wcParsed) return;
+  // Update qty/section/price from inputs
+  document.querySelectorAll('.wc-qty').forEach(el => {
+    _wcParsed.deliverables[parseInt(el.dataset.idx)].quantity = parseFloat(el.value) || 1;
+  });
+  document.querySelectorAll('.wc-section').forEach(el => {
+    _wcParsed.deliverables[parseInt(el.dataset.idx)].section = el.value;
+  });
+  document.querySelectorAll('.wc-price').forEach(el => {
+    _wcParsed.deliverables[parseInt(el.dataset.idx)].matched_unit_price = parseFloat(el.value) || 0;
+  });
+  // Filter by include
+  const includeIdx = new Set();
+  document.querySelectorAll('.wc-include').forEach(el => {
+    if (el.checked) includeIdx.add(parseInt(el.dataset.idx));
+  });
+  const selected = _wcParsed.deliverables.filter((_, i) => includeIdx.has(i));
+  if (!selected.length) { toast('Seleziona almeno una voce', 'warning'); return; }
+  const payload = {
+    project_id: _wcParsed._project_id,
+    number: _wcParsed._number,
+    issue_date: _wcParsed._issue_date,
+    title: _wcParsed.project_info?.title,
+    project_info: _wcParsed.project_info || {},
+    deliverables: selected,
+    source_document_name: _wcParsed.source_document_name,
+    notes: document.getElementById('wc-notes').value,
+  };
+  document.getElementById('wc-next-btn').disabled = true;
+  try {
+    const r = await fetch('/ai/api/deliverables/create-quote', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      credentials: 'same-origin',
+      body: JSON.stringify(payload),
+    });
+    if (!r.ok) throw new Error((await r.json()).detail || 'Errore creazione');
+    const res = await r.json();
+    closeWizard();
+    toast(`✓ Quote ${res.quote_number || res.quote_id} creata da capitolato (${selected.length} voci)`, 'success');
+    if (typeof loadQuotes === 'function') await loadQuotes();
+    if (res.quote_id && typeof openEditor === 'function') openEditor(res.quote_id);
+  } catch(e) {
+    toast(e.message || 'Errore creazione quote', 'error');
+  } finally {
+    document.getElementById('wc-next-btn').disabled = false;
   }
 }
 
