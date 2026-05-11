@@ -99,6 +99,66 @@
   }
   /* Color-by overrides applied via data-colorby attribute on host */
   /* Generato dinamico in tlSetColorBy() */
+
+  /* v3.5.0-alpha.83 — Custom tooltip booking */
+  #tl-tooltip {
+    position: fixed; z-index: 3000;
+    background: rgba(20, 24, 36, 0.96);
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+    color: #e8ecf5;
+    border: 1px solid rgba(255,255,255,0.10);
+    border-radius: 10px;
+    padding: 12px 14px;
+    font-size: 12px;
+    line-height: 1.45;
+    min-width: 260px;
+    max-width: 380px;
+    box-shadow: 0 14px 38px rgba(0,0,0,0.55), 0 4px 12px rgba(0,0,0,0.30);
+    pointer-events: none;
+    opacity: 0;
+    transition: opacity 110ms ease;
+  }
+  #tl-tooltip.is-visible { opacity: 1; }
+  #tl-tooltip .ttip-title {
+    font-size: 13px; font-weight: 700; color: #fff;
+    margin-bottom: 6px; letter-spacing: -0.01em;
+    display: flex; align-items: center; gap: 6px;
+  }
+  #tl-tooltip .ttip-row {
+    display: flex; justify-content: space-between; gap: 12px;
+    padding: 3px 0; border-bottom: 1px solid rgba(255,255,255,0.05);
+  }
+  #tl-tooltip .ttip-row:last-of-type { border-bottom: none; }
+  #tl-tooltip .ttip-lbl {
+    color: rgba(255,255,255,0.55); font-size: 11px;
+    text-transform: uppercase; letter-spacing: 0.04em;
+  }
+  #tl-tooltip .ttip-val { color: #e8ecf5; font-weight: 500; }
+  #tl-tooltip .ttip-notes {
+    margin-top: 8px; padding: 8px 10px;
+    background: rgba(255,255,255,0.04);
+    border-left: 3px solid var(--indigo);
+    border-radius: 4px;
+    font-style: italic; color: #c5cae0;
+    white-space: pre-wrap;
+    max-height: 120px; overflow: auto;
+  }
+  #tl-tooltip .ttip-warn {
+    margin-top: 6px; padding: 6px 8px;
+    background: rgba(251,146,60,0.12); color: #fb923c;
+    border-radius: 4px; font-size: 11px;
+  }
+  #tl-tooltip .ttip-badge {
+    display: inline-block; padding: 1px 7px; border-radius: 5px;
+    font-size: 11px; font-weight: 600;
+  }
+  #tl-tooltip .badge-tentative { background: rgba(154,160,184,0.20); color: #c8cee0; }
+  #tl-tooltip .badge-confirmed { background: rgba(98,114,245,0.22); color: #a7b3f9; }
+  #tl-tooltip .badge-in_progress { background: rgba(251,146,60,0.20); color: #fb923c; }
+  #tl-tooltip .badge-done { background: rgba(34,197,94,0.20); color: #22c55e; }
+  #tl-tooltip .badge-not_done { background: rgba(220,38,38,0.18); color: #f87171; }
+  #tl-tooltip .badge-cancelled { background: rgba(154,160,184,0.15); color: #9aa0b8; }
 </style>
 {% endblock %}
 
@@ -2700,6 +2760,162 @@ function _tlInjectResourceTints() {
   document.head.appendChild(style);
 }
 
+// v3.5.0-alpha.83 — Custom tooltip booking hover (HTML rich).
+function _tlEnsureTooltipEl() {
+  let el = document.getElementById('tl-tooltip');
+  if (!el) {
+    el = document.createElement('div');
+    el.id = 'tl-tooltip';
+    document.body.appendChild(el);
+  }
+  return el;
+}
+
+function tlTooltipShow(itemId, evt) {
+  if (!itemId || typeof bookings === 'undefined') return;
+  // Skip background items (vacanze/timbrature)
+  if (typeof itemId === 'string' && (itemId.startsWith('u-') || itemId.startsWith('tp-'))) return;
+  const b = bookings.find(x => x.id === itemId);
+  if (!b) return;
+  const p = b.extendedProps || {};
+  const tt = _tlEnsureTooltipEl();
+  while (tt.firstChild) tt.removeChild(tt.firstChild);
+  // Title
+  const titleEl = document.createElement('div'); titleEl.className = 'ttip-title';
+  const STATE_ICON = {
+    tentative: '◌', confirmed: '✓', in_progress: '▶', done: '✓',
+    not_done: '✕', cancelled: '⊘',
+  };
+  let state = p.state;
+  if (!state) {
+    if (p.status === 'cancelled') state = 'cancelled';
+    else if (p.status === 'tentative') state = 'tentative';
+    else if (p.execution_status === 'in_progress') state = 'in_progress';
+    else if (p.execution_status === 'done') state = 'done';
+    else if (p.execution_status === 'not_done') state = 'not_done';
+    else state = 'confirmed';
+  }
+  const icon = document.createElement('span'); icon.textContent = STATE_ICON[state] || '•';
+  icon.style.color = b.color || '#7e8ef7';
+  titleEl.appendChild(icon);
+  const titleText = document.createElement('span');
+  titleText.textContent = b.title || '(senza titolo)';
+  titleEl.appendChild(titleText);
+  tt.appendChild(titleEl);
+  // Rows helper
+  const addRow = (lbl, val, opts) => {
+    if (val == null || val === '') return;
+    const row = document.createElement('div'); row.className = 'ttip-row';
+    const l = document.createElement('span'); l.className = 'ttip-lbl'; l.textContent = lbl;
+    const v = document.createElement('span'); v.className = 'ttip-val';
+    if (opts && opts.html instanceof Node) v.appendChild(opts.html);
+    else v.textContent = String(val);
+    row.appendChild(l); row.appendChild(v); tt.appendChild(row);
+  };
+  // Periodo
+  const _fmt = (iso) => new Date(iso).toLocaleString('it-IT', {weekday:'short', day:'numeric', month:'short', hour:'2-digit', minute:'2-digit'});
+  addRow('Inizio', b.start ? _fmt(b.start) : null);
+  addRow('Fine', b.end ? _fmt(b.end) : null);
+  // Durata
+  if (b.start && b.end) {
+    const ms = new Date(b.end) - new Date(b.start);
+    const h = ms > 0 ? ms / 3600000 : 0;
+    const lbl = h >= 24 ? `${Math.floor(h/24)}g ${(h%24).toFixed(1)}h` : `${h.toFixed(1)}h`;
+    addRow('Durata', lbl);
+  }
+  // Stato (badge colorato)
+  const STATE_LABEL = {
+    tentative: 'Tentative', confirmed: 'Confermato', in_progress: 'In lavorazione',
+    done: 'Fatto', not_done: 'Non fatto', cancelled: 'Annullato',
+  };
+  const badge = document.createElement('span');
+  badge.className = 'ttip-badge badge-' + state;
+  badge.textContent = STATE_LABEL[state] || state;
+  addRow('Stato', state, {html: badge});
+  // Priority
+  if (p.priority && p.priority !== 'normal') {
+    const PRI_ICON = {high: '🔴 Alta', normal: '🟡 Normale', low: '🟢 Bassa'};
+    addRow('Priorità', PRI_ICON[p.priority] || p.priority);
+  }
+  // Risorsa (utile in project mode)
+  try {
+    if (typeof RESOURCES_SEED !== 'undefined' && p.resource_id) {
+      const r = RESOURCES_SEED.find(x => x.id === p.resource_id);
+      if (r) addRow('Risorsa', r.name);
+    }
+  } catch(e) {}
+  // Job / progetto / cost line
+  if (p.job_code) addRow('Job', `${p.job_code} · ${p.job_title || ''}`);
+  if (p.project_code || p.project_title) {
+    addRow('Progetto', p.project_code ? `${p.project_code} · ${p.project_title || ''}` : p.project_title);
+  }
+  if (p.cost_line_description) addRow('Lavorazione', p.cost_line_description);
+  // Job total/done hours
+  if (p.job_total_hours != null) {
+    const done = p.job_done_hours != null ? `${p.job_done_hours}h fatte / ` : '';
+    addRow('Ore lavoraz.', `${done}${p.job_total_hours}h pianificate`);
+  }
+  // Cross dept warning
+  if (p.cross_department) {
+    const w = document.createElement('div'); w.className = 'ttip-warn';
+    w.textContent = '⚠ Cross-reparto: la risorsa appartiene a un reparto diverso dal task';
+    tt.appendChild(w);
+  }
+  // Slice lock (fatturato)
+  if (p.slice_lock) {
+    const inv = p.slice_lock.invoice_number ? ` (fattura ${p.slice_lock.invoice_number})` : '';
+    const w = document.createElement('div'); w.className = 'ttip-warn';
+    w.style.background = 'rgba(34,197,94,0.10)'; w.style.color = '#22c55e';
+    w.textContent = `🔒 Fatturato in periodo ${p.slice_lock.period_start} → ${p.slice_lock.period_end}${inv}`;
+    tt.appendChild(w);
+  }
+  // Notes booking (highlight)
+  if (p.notes && p.notes.trim()) {
+    const lbl2 = document.createElement('div'); lbl2.className = 'ttip-lbl';
+    lbl2.style.marginTop = '8px'; lbl2.textContent = 'Nota booking';
+    tt.appendChild(lbl2);
+    const n = document.createElement('div'); n.className = 'ttip-notes';
+    n.textContent = String(p.notes).slice(0, 500) + (p.notes.length > 500 ? '…' : '');
+    tt.appendChild(n);
+  }
+  // Not-done reason
+  if (state === 'not_done' && p.not_done_reason) {
+    const lbl3 = document.createElement('div'); lbl3.className = 'ttip-lbl';
+    lbl3.style.marginTop = '8px'; lbl3.textContent = 'Motivo non fatto';
+    tt.appendChild(lbl3);
+    const n = document.createElement('div'); n.className = 'ttip-notes';
+    n.style.borderLeftColor = '#f87171'; n.style.color = '#fda4af';
+    n.textContent = p.not_done_reason;
+    tt.appendChild(n);
+  }
+  // Position + show
+  tlTooltipMove(evt);
+  tt.classList.add('is-visible');
+}
+
+function tlTooltipMove(evt) {
+  const tt = document.getElementById('tl-tooltip');
+  if (!tt) return;
+  let x = (evt && evt.clientX) || 0;
+  let y = (evt && evt.clientY) || 0;
+  const W = tt.offsetWidth || 300;
+  const H = tt.offsetHeight || 100;
+  const vw = window.innerWidth, vh = window.innerHeight;
+  // Position bottom-right del cursore con flip se overflow
+  let left = x + 14, top = y + 14;
+  if (left + W + 12 > vw) left = x - W - 14;
+  if (top + H + 12 > vh) top = y - H - 14;
+  if (left < 6) left = 6;
+  if (top < 6) top = 6;
+  tt.style.left = left + 'px';
+  tt.style.top = top + 'px';
+}
+
+function tlTooltipHide() {
+  const tt = document.getElementById('tl-tooltip');
+  if (tt) tt.classList.remove('is-visible');
+}
+
 // v3.5.0-alpha.82 — Dettaglio risorsa (doppio click label area).
 function tlShowResourceDetail(resourceId) {
   const r = (typeof RESOURCES_SEED !== 'undefined') ? RESOURCES_SEED.find(x => x.id === resourceId) : null;
@@ -3094,13 +3310,7 @@ function tlBookingToItem(b) {
     sliceLockLine = `\n🔒 Fatturato in periodo ${p.slice_lock.period_start} → ${p.slice_lock.period_end}${inv}`;
     sliceLockIcon = ' <span class="tl-slice-icon" title="Fatturato">🔒</span>';
   }
-  // v3.5.0-alpha.66.5: tooltip include 1 sola label di stato unificato.
-  const STATE_LABEL_IT = {
-    tentative: 'Tentative', confirmed: 'Confermato', in_progress: 'In lavorazione',
-    done: 'Fatto', not_done: 'Non fatto', cancelled: 'Annullato',
-  };
-  const stateLab = STATE_LABEL_IT[state] || state;
-  const tooltip = `${b.title || ''}\n🕐 ${_sLab} → ${_eLab}\n⏱ Durata booking: ${_hLab}${jobDurLine}\nStato: ${stateLab}${prioLab}${crossDeptLine}${sliceLockLine}`;
+  // v3.5.0-alpha.83 — Tooltip custom HTML (vedi tlTooltipShow), no title native.
   return {
     id: b.id,
     assignment_id: b.assignment_id,
@@ -3111,7 +3321,6 @@ function tlBookingToItem(b) {
     end: b.end,
     style: 'background-color:'+color+'; border-color:'+color+';',
     className: classes.trim(),
-    title: tooltip,
   };
 }
 
@@ -4564,6 +4773,19 @@ async function _doRenderTimeline(preserveWindow=false) {
   // trace della diagnostica). Risultato: tlbOpenEdit invocato 2x e
   // `tlbAddAssignmentRow` chiamato 2x → modal con 2 righe per 1 assignment.
   // Fix: dedup con timestamp window 350ms (più del normale gap dblclick ~250ms).
+  // v3.5.0-alpha.83 — Custom tooltip hover (HTML rich, no title native)
+  tlInstance.on('itemover', (props) => { tlTooltipShow(props.item, props.event); });
+  tlInstance.on('itemout', () => { tlTooltipHide(); });
+  // Aggiorna posizione tooltip su mousemove dentro la timeline.
+  const _tlHostEl = document.getElementById('tl-host');
+  if (_tlHostEl) {
+    _tlHostEl.addEventListener('mousemove', (e) => {
+      const tt = document.getElementById('tl-tooltip');
+      if (tt && tt.classList.contains('is-visible')) tlTooltipMove(e);
+    });
+    _tlHostEl.addEventListener('mouseleave', () => tlTooltipHide());
+  }
+
   let __tlLastDblClick = 0;
   tlInstance.on('doubleClick', async (props) => {
     const now = Date.now();
