@@ -8,6 +8,25 @@
 
 ## Versione corrente
 
+**v3.5.0-alpha.70.0** — 11 maggio 2026 — TPN foundation DAM access control
+
+Prima tappa roadmap TPN (α.70.0→α.70.3). Compartimentalizzazione DAM.
+
+- 2 modelli nuovi: ProjectAccessGrant + AssetAccessLog (+ enum).
+- Service `project_access.py`: user_can_access_project/asset +
+  accessible_project_ids + log_asset_access. 3 livelli (admin bypass |
+  grant esplicito | auto via JobResourceAssignment.user_id).
+- DAM router hardenato: list/upload/download/thumbnail/delete con
+  access check + audit log. `assign-project` per internal queue.
+- Projects router: CRUD grants `/api/{id}/access/*`.
+
+Prossimi step roadmap:
+- α.70.1: UI page accessi in /projects/{id} + viewer audit log
+- α.70.2: watermark download + secure delete
+- α.70.3: MFA TOTP + session timeout + IP allow-list
+
+## (vedi sotto per fix precedenti)
+
 **v3.5.0-alpha.69.1** — 11 maggio 2026 — Fix cashflow + filtri + drill-down
 
 3 issue Matteo:

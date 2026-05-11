@@ -1,5 +1,47 @@
 # MediaFlow — Changelog
 
+## v3.5.0-alpha.70.0 — TPN foundation: DAM access control (11 maggio 2026)
+
+Prima tappa roadmap TPN compliance (α.70.0→α.70.3). Compartimentalizzazione
+DAM per progetto con need-to-know principle.
+
+**Modelli nuovi** (2 tabelle + 1 enum):
+- `ProjectAccessGrant` (project_access_grants): grant esplicito user→
+  project, soft-revoke via revoked_at + revoked_by_user_id, granted_by,
+  notes, role_in_project informativo.
+- `AssetAccessLog` (asset_access_logs): audit trail append-only.
+  asset_id, user_id, action enum, project_id, ip, user_agent, ts, extra.
+  Conservato indefinitamente per compliance TPN.
+- `AssetAccessAction` enum: view|download|upload|delete|update|share|deny.
+
+**Service** `app/services/project_access.py` (helpers centralizzati):
+- `user_can_access_project(user, project_id, db) → bool`: 3 livelli
+  (admin/manager bypass | ProjectAccessGrant attivo | JobResourceAssignment
+  via Resource.user_id).
+- `accessible_project_ids(user, db) → set[int]`.
+- `user_can_access_asset(user, asset, db) → bool`: include logica
+  internal queue (project_id=NULL ⇒ visibile solo a admin + uploader).
+- `log_asset_access(...)` append-only con auto-IP + auto-UA capture.
+
+**Router DAM** (`/dam/*`): tutti gli endpoint hardenati:
+- `list_assets` filtra per `accessible_project_ids` (admin bypass).
+  Nuovo query param `project_id` con check access. Nuovo `include_internal`
+  per uploader queue.
+- `upload_asset`: project_id auto-resolve da Job.project_id se omesso.
+  Audit log upload.
+- `download_asset`: check access + log download (deny→403 + log).
+- `get_thumbnail`: check access silenzioso (no log per evitare spam).
+- `delete_asset`: check access + log pre-delete (asset_id resta nel log).
+- Nuovo `POST /api/assets/{id}/assign-project` per spostare da internal
+  queue al progetto.
+
+**Router Projects** (`/projects/api/{id}/access/*`): CRUD grants:
+- GET list grants (esplicit + auto da JobResourceAssignment).
+- POST crea grant.
+- DELETE revoca grant (soft).
+
+339 routes (+4 nuove). Tabelle auto-create al boot.
+
 ## v3.5.0-alpha.69.1 — Fix cashflow + filtri + drill-down risorsa (11 maggio 2026)
 
 3 issue Matteo:

@@ -1,12 +1,24 @@
-"""Router DAM — upload, ricerca, versioning, tag."""
+"""Router DAM — upload, ricerca, versioning, tag.
+
+v3.5.0-alpha.70 — TPN compliance: access control compartimentalizzato.
+Ogni endpoint applica `user_can_access_asset()` o
+`accessible_project_ids()` per filtrare il visibile all'user.
+Tutti i tentativi (incl. negati) loggati in AssetAccessLog.
+"""
 from fastapi import APIRouter, Depends, HTTPException, Request, Form, UploadFile, File
 from fastapi.responses import HTMLResponse, FileResponse
 from typing import Optional, List
 from sqlalchemy.orm import Session, joinedload
+from sqlalchemy import or_
 from app.database import get_db
-from app.models import Asset, AssetType, Tag, AssetTag, User
+from app.models import (
+    Asset, AssetType, Tag, AssetTag, User, AssetAccessAction, Job,
+)
 from app.services.dam import save_upload, generate_thumbnail, resolve_asset_type, delete_asset_files
-from app.services.rbac import requires_permission
+from app.services.rbac import requires_permission, current_user_optional, is_admin
+from app.services.project_access import (
+    user_can_access_asset, accessible_project_ids, log_asset_access,
+)
 from app.context import current_tenant_id
 import os
 
@@ -32,11 +44,29 @@ def _tpl():
 
 @router.get("/", response_class=HTMLResponse)
 async def dam_page(request: Request, db: Session = Depends(get_db)):
-    # v3.5.0-alpha.66.15.2 — tenant scope (R1)
-    assets = db.query(Asset).filter(
+    # v3.5.0-alpha.70 — TPN access control. Filtro asset per progetti
+    # accessibili dall'user. project_id=NULL (internal queue) visibile
+    # solo a admin/manager + uploader proprio.
+    user = current_user_optional(request)
+    proj_ids = accessible_project_ids(user, db)
+    q = db.query(Asset).filter(
         Asset.tenant_id == CURRENT_TENANT,
-        Asset.parent_asset_id == None,
-    ).order_by(Asset.created_at.desc()).limit(50).all()
+        Asset.parent_asset_id == None,  # noqa: E711
+    )
+    if is_admin(user):
+        pass  # vede tutto
+    else:
+        filters = []
+        if proj_ids:
+            filters.append(Asset.project_id.in_(proj_ids))
+        # Internal queue: visibile solo all'uploader
+        if user:
+            filters.append((Asset.project_id.is_(None)) & (Asset.uploaded_by == user.id))
+        if filters:
+            q = q.filter(or_(*filters))
+        else:
+            q = q.filter(Asset.id < 0)  # zero rows
+    assets = q.order_by(Asset.created_at.desc()).limit(50).all()
     tags = db.query(Tag).all()
     return _tpl().TemplateResponse(
         "pages/dam.html", {"request": request, "assets": assets, "tags": tags}
@@ -47,21 +77,45 @@ async def dam_page(request: Request, db: Session = Depends(get_db)):
 
 @router.get("/api/assets")
 async def list_assets(
+    request: Request,
     asset_type: Optional[AssetType] = None,
     job_id: Optional[int] = None,
+    project_id: Optional[int] = None,
     tag: Optional[str] = None,
     q: Optional[str] = None,
+    include_internal: int = 0,
     db: Session = Depends(get_db),
 ):
-    # v3.5.0-alpha.66.15.2 — tenant scope (R1)
+    """v3.5.0-alpha.70 — TPN access filter.
+    Solo asset di progetti accessibili dall'user + opt internal queue
+    propria dell'uploader."""
+    user = current_user_optional(request)
+    proj_ids = accessible_project_ids(user, db)
     query = db.query(Asset).filter(
         Asset.tenant_id == CURRENT_TENANT,
-        Asset.parent_asset_id == None,
+        Asset.parent_asset_id == None,  # noqa: E711
     )
+    if not is_admin(user):
+        filters = []
+        if proj_ids:
+            filters.append(Asset.project_id.in_(proj_ids))
+        if user and include_internal:
+            filters.append((Asset.project_id.is_(None)) & (Asset.uploaded_by == user.id))
+        if filters:
+            query = query.filter(or_(*filters))
+        else:
+            query = query.filter(Asset.id < 0)
     if asset_type:
         query = query.filter(Asset.asset_type == asset_type)
     if job_id:
         query = query.filter(Asset.job_id == job_id)
+    if project_id:
+        if not is_admin(user) and project_id not in proj_ids:
+            log_asset_access(db, user=user, action=AssetAccessAction.deny,
+                             project_id=project_id, request=request,
+                             extra=f"list_assets project_id={project_id} not in grants")
+            raise HTTPException(403, "Accesso al progetto non autorizzato")
+        query = query.filter(Asset.project_id == project_id)
     if q:
         query = query.filter(Asset.original_name.ilike(f"%{q}%"))
     if tag:
@@ -78,6 +132,8 @@ async def list_assets(
             "download_url": f"/dam/download/{a.id}",
             "tags": [t.name for t in a.tags],
             "job_id": a.job_id,
+            "project_id": a.project_id,
+            "is_internal": a.project_id is None,
             "version": a.version,
             "created_at": a.created_at.isoformat(),
         }
@@ -85,10 +141,38 @@ async def list_assets(
     ]
 
 
+@router.post("/api/assets/{asset_id}/assign-project", dependencies=[RequireEditDam])
+async def assign_asset_to_project(
+    asset_id: int,
+    request: Request,
+    project_id: int = Form(...),
+    db: Session = Depends(get_db),
+):
+    """v3.5.0-alpha.70 — Sposta un asset dall'internal queue a un progetto
+    (esce dal compartimento internal e diventa visibile alle risorse del
+    progetto). Solo admin/manager/elevated."""
+    user = current_user_optional(request)
+    if not is_admin(user):
+        # Only admin per ora — più avanti relaxare con permission gate
+        raise HTTPException(403, "Solo admin/manager possono assegnare asset")
+    a = db.query(Asset).filter(
+        Asset.id == asset_id, Asset.tenant_id == CURRENT_TENANT
+    ).first()
+    if not a:
+        raise HTTPException(404, "Asset non trovato")
+    a.project_id = project_id
+    log_asset_access(db, user=user, action=AssetAccessAction.update,
+                     asset_id=asset_id, project_id=project_id, request=request,
+                     extra="assigned to project")
+    return {"ok": True, "asset_id": asset_id, "project_id": project_id}
+
+
 @router.post("/api/assets/upload", dependencies=[RequireEditDam])
 async def upload_asset(
+    request: Request,
     file: UploadFile = File(...),
     job_id: Optional[int] = Form(None),
+    project_id: Optional[int] = Form(None),
     uploaded_by: int = Form(...),
     description: Optional[str] = Form(None),
     tags: Optional[str] = Form(None),  # CSV di tag
@@ -102,7 +186,16 @@ async def upload_asset(
     thumbnail_path = generate_thumbnail(file_path, mime_type)
     asset_type = resolve_asset_type(mime_type)
 
+    # v3.5.0-alpha.70 — Auto-resolve project_id da job_id se non passato
+    if project_id is None and job_id is not None:
+        job = db.query(Job).filter(
+            Job.id == job_id, Job.tenant_id == CURRENT_TENANT
+        ).first()
+        if job:
+            project_id = job.project_id
+
     asset = Asset(
+        tenant_id=CURRENT_TENANT,
         filename=filename,
         original_name=file.filename,
         file_path=file_path,
@@ -111,6 +204,7 @@ async def upload_asset(
         mime_type=mime_type,
         file_size=len(file_bytes),
         job_id=job_id,
+        project_id=project_id,
         uploaded_by=uploaded_by,
         description=description,
     )
@@ -127,35 +221,63 @@ async def upload_asset(
                 db.flush()
             db.add(AssetTag(asset_id=asset.id, tag_id=tag_obj.id))
 
+    db.flush()
+    log_asset_access(
+        db, user=current_user_optional(request), action=AssetAccessAction.upload,
+        asset_id=asset.id, project_id=asset.project_id, request=request,
+        commit=False,
+    )
     db.commit()
     db.refresh(asset)
-    return {"id": asset.id, "filename": asset.filename, "asset_type": asset.asset_type}
+    return {"id": asset.id, "filename": asset.filename, "asset_type": asset.asset_type,
+            "project_id": asset.project_id, "is_internal": asset.project_id is None}
 
 
 @router.get("/download/{asset_id}")
-async def download_asset(asset_id: int, db: Session = Depends(get_db)):
-    # v3.5.0-alpha.66.15.2 — tenant scope (R1)
+async def download_asset(asset_id: int, request: Request, db: Session = Depends(get_db)):
+    user = current_user_optional(request)
     a = db.query(Asset).filter(Asset.id == asset_id, Asset.tenant_id == CURRENT_TENANT).first()
     if not a or not os.path.exists(a.file_path):
         raise HTTPException(404, "Asset non trovato")
+    # v3.5.0-alpha.70 — TPN access check
+    if not user_can_access_asset(user, a, db):
+        log_asset_access(db, user=user, action=AssetAccessAction.deny,
+                         asset_id=asset_id, project_id=a.project_id, request=request,
+                         extra="download denied")
+        raise HTTPException(403, "Accesso negato (TPN compartimentalizzazione)")
+    log_asset_access(db, user=user, action=AssetAccessAction.download,
+                     asset_id=asset_id, project_id=a.project_id, request=request)
     return FileResponse(a.file_path, filename=a.original_name, media_type=a.mime_type)
 
 
 @router.get("/thumbnail/{asset_id}")
-async def get_thumbnail(asset_id: int, db: Session = Depends(get_db)):
-    # v3.5.0-alpha.66.15.2 — tenant scope (R1)
+async def get_thumbnail(asset_id: int, request: Request, db: Session = Depends(get_db)):
+    user = current_user_optional(request)
     a = db.query(Asset).filter(Asset.id == asset_id, Asset.tenant_id == CURRENT_TENANT).first()
     if not a or not a.thumbnail_path or not os.path.exists(a.thumbnail_path):
         raise HTTPException(404, "Thumbnail non disponibile")
+    # v3.5.0-alpha.70 — TPN access check (no log per thumbnail per non
+    # spam-mare il log con view passive)
+    if not user_can_access_asset(user, a, db):
+        raise HTTPException(403, "Accesso negato")
     return FileResponse(a.thumbnail_path, media_type="image/jpeg")
 
 
 @router.delete("/api/assets/{asset_id}", dependencies=[RequireEditDam])
-async def delete_asset(asset_id: int, db: Session = Depends(get_db)):
-    # v3.5.0-alpha.66.15.2 — tenant scope (R1)
+async def delete_asset(asset_id: int, request: Request, db: Session = Depends(get_db)):
+    user = current_user_optional(request)
     a = db.query(Asset).filter(Asset.id == asset_id, Asset.tenant_id == CURRENT_TENANT).first()
     if not a:
         raise HTTPException(404, "Asset non trovato")
+    if not user_can_access_asset(user, a, db):
+        log_asset_access(db, user=user, action=AssetAccessAction.deny,
+                         asset_id=asset_id, project_id=a.project_id, request=request,
+                         extra="delete denied")
+        raise HTTPException(403, "Accesso negato")
+    # Log delete BEFORE actual deletion (asset_id riferimento storico)
+    log_asset_access(db, user=user, action=AssetAccessAction.delete,
+                     asset_id=asset_id, project_id=a.project_id, request=request,
+                     extra=f"original_name={a.original_name}", commit=False)
     delete_asset_files(a.file_path, a.thumbnail_path)
     db.delete(a)
     db.commit()

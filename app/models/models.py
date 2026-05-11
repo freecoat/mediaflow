@@ -1639,9 +1639,84 @@ class AssetTag(Base):
     tag_id: Mapped[int] = mapped_column(ForeignKey("tags.id"), primary_key=True)
 
 
+# ── PROJECT ACCESS / TPN COMPLIANCE (v3.5.0-alpha.70) ─────────
+# Compartimentalizzazione DAM e access control per progetto. Implementa
+# il principio TPN "need-to-know": un utente vede solo gli asset dei
+# progetti a cui è esplicitamente assegnato (o derivato da
+# JobResourceAssignment via Resource.user_id).
+#
+# 3 livelli di accesso:
+#   1. Admin → bypass (vede tutto, audit log)
+#   2. ProjectAccessGrant esplicito (producer/manager/external) → True
+#   3. JobResourceAssignment via Resource.user_id → True (auto-grant
+#      staff/operator basato su pianificazione)
+# Default = no access.
+
+class ProjectAccessGrant(Base):
+    """Concessione esplicita di accesso a un progetto per un user.
+    Soft-revoke via `revoked_at`. Granted da admin/manager via UI."""
+    __tablename__ = "project_access_grants"
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    tenant_id: Mapped[int] = mapped_column(ForeignKey("tenants.id"), default=1, index=True)
+    project_id: Mapped[int] = mapped_column(ForeignKey("projects.id"), index=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), index=True)
+    # Ruolo nel progetto (informativo per UI). Non condiziona access RBAC
+    # (per quello servono i permessi globali). Esempi: "producer",
+    # "external_consultant", "client_observer", "auditor".
+    role_in_project: Mapped[Optional[str]] = mapped_column(String(80), nullable=True)
+    granted_by_user_id: Mapped[Optional[int]] = mapped_column(
+        ForeignKey("users.id"), nullable=True
+    )
+    granted_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    revoked_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True, index=True)
+    revoked_by_user_id: Mapped[Optional[int]] = mapped_column(
+        ForeignKey("users.id"), nullable=True
+    )
+    notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+
+
+class AssetAccessAction(str, enum.Enum):
+    """Azioni tracciate nel log accessi asset (audit TPN)."""
+    view = "view"
+    download = "download"
+    upload = "upload"
+    delete = "delete"
+    update = "update"
+    share = "share"
+    deny = "deny"   # tentativo accesso negato (audit trail security)
+
+
+class AssetAccessLog(Base):
+    """Audit trail accessi/azioni su Asset. Append-only. v3.5.0-alpha.70.1.
+    Conservato indefinitamente per compliance TPN (no retention).
+    Indici per query per asset, per user, per ts."""
+    __tablename__ = "asset_access_logs"
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    tenant_id: Mapped[int] = mapped_column(ForeignKey("tenants.id"), default=1, index=True)
+    asset_id: Mapped[Optional[int]] = mapped_column(
+        ForeignKey("assets.id"), nullable=True, index=True
+    )
+    user_id: Mapped[Optional[int]] = mapped_column(
+        ForeignKey("users.id"), nullable=True, index=True
+    )
+    action: Mapped[AssetAccessAction] = mapped_column(
+        SAEnum(AssetAccessAction), index=True
+    )
+    project_id: Mapped[Optional[int]] = mapped_column(
+        ForeignKey("projects.id"), nullable=True, index=True
+    )
+    ip_address: Mapped[Optional[str]] = mapped_column(String(45), nullable=True)
+    user_agent: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
+    extra: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    ts: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, index=True)
+
+
 class Asset(Base):
     """Asset DIGITALE in DAM. File: ProRes, DCP master, IMF, immagini, audio,
     sub. Per asset FISICI (LTO, HDD, CRU, Blu-Ray, ecc.) vedi PhysicalAsset.
+
+    v3.5.0-alpha.70 — TPN: project_id=NULL ⇒ "internal queue" visibile solo
+    a admin + uploader, finché non viene assegnato a un progetto.
     """
     __tablename__ = "assets"
     id: Mapped[int] = mapped_column(Integer, primary_key=True)

@@ -17,6 +17,7 @@ from app.models.models import (
     LossEntry, LossReason,
     JCLBilledSlice,
     Asset, AssetType, Tag, AssetTag,
+    ProjectAccessGrant, AssetAccessAction, AssetAccessLog,
     PhysicalAsset, PhysicalAssetKind,
     JobDeliverable, DeliverableNature, DeliverableStatus,
     ResourceCostType,

@@ -10,7 +10,9 @@ from app.database import get_db
 from datetime import datetime as _dt
 from app.models import Project, Client, Quote, Job, ProjectStatus, Resource, ProjectMilestone
 from app.models.models import JobResourceAssignment
-from app.services.rbac import can_view_finance, current_user_optional
+from app.models import ProjectAccessGrant, User, AssetAccessAction
+from app.services.rbac import can_view_finance, current_user_optional, is_admin
+from app.services.project_access import log_asset_access
 
 router = APIRouter(prefix="/projects", tags=["projects"])
 
@@ -516,6 +518,160 @@ async def delete_milestone(project_id: int, milestone_id: int, db: Session = Dep
         raise HTTPException(404)
     db.delete(m); db.commit()
     return {"ok": True}
+
+
+# ── Project Access Grants (TPN compliance, v3.5.0-alpha.70) ──────────
+
+CURRENT_TENANT = 1  # local helper; multi-tenant hard quando si arriverà
+
+
+@router.get("/api/{project_id}/access")
+async def list_project_access(
+    project_id: int,
+    request: Request,
+    include_revoked: int = 0,
+    db: Session = Depends(get_db),
+):
+    """Lista grants attivi (e opt revoked) per il progetto + lista risorse
+    auto-grant via JobResourceAssignment.user_id."""
+    user = current_user_optional(request)
+    if not is_admin(user):
+        raise HTTPException(403, "Solo admin può vedere la lista access grants")
+    p = db.query(Project).filter(Project.id == project_id).first()
+    if not p:
+        raise HTTPException(404, "Progetto non trovato")
+    q = db.query(ProjectAccessGrant).filter(
+        ProjectAccessGrant.project_id == project_id,
+        ProjectAccessGrant.tenant_id == CURRENT_TENANT,
+    )
+    if not include_revoked:
+        q = q.filter(ProjectAccessGrant.revoked_at.is_(None))
+    grants = q.order_by(ProjectAccessGrant.granted_at.desc()).all()
+    # Hydrate user info
+    user_ids = list({g.user_id for g in grants} | {g.granted_by_user_id for g in grants if g.granted_by_user_id})
+    users = {u.id: u for u in db.query(User).filter(User.id.in_(user_ids)).all()} if user_ids else {}
+    out_grants = []
+    for g in grants:
+        u = users.get(g.user_id)
+        gb = users.get(g.granted_by_user_id) if g.granted_by_user_id else None
+        out_grants.append({
+            "id": g.id,
+            "user_id": g.user_id,
+            "user_email": u.email if u else None,
+            "user_name": getattr(u, "full_name", None) or (u.email if u else None),
+            "role_in_project": g.role_in_project,
+            "granted_at": str(g.granted_at)[:19] if g.granted_at else None,
+            "granted_by_email": gb.email if gb else None,
+            "revoked_at": str(g.revoked_at)[:19] if g.revoked_at else None,
+            "notes": g.notes,
+            "source": "explicit",
+        })
+    # Auto-grants da JobResourceAssignment
+    auto_assignments = (
+        db.query(Resource, User)
+        .join(JobResourceAssignment, JobResourceAssignment.resource_id == Resource.id)
+        .join(Job, Job.id == JobResourceAssignment.job_id)
+        .outerjoin(User, User.id == Resource.user_id)
+        .filter(Job.project_id == project_id)
+        .filter(Resource.user_id.isnot(None))
+        .distinct()
+        .all()
+    )
+    auto_out = []
+    seen_users = set()
+    for r, u in auto_assignments:
+        if u and u.id not in seen_users:
+            seen_users.add(u.id)
+            auto_out.append({
+                "user_id": u.id,
+                "user_email": u.email,
+                "user_name": getattr(u, "full_name", None) or u.email,
+                "resource_id": r.id,
+                "resource_name": r.name,
+                "source": "auto_assignment",
+            })
+    return {
+        "project_id": project_id,
+        "project_code": p.code,
+        "project_title": p.title,
+        "grants": out_grants,
+        "auto_grants": auto_out,
+    }
+
+
+@router.post("/api/{project_id}/access")
+async def create_project_access(
+    project_id: int,
+    request: Request,
+    user_id: int = Form(...),
+    role_in_project: Optional[str] = Form(None),
+    notes: Optional[str] = Form(None),
+    db: Session = Depends(get_db),
+):
+    """Concedi access esplicito a un user per il progetto."""
+    actor = current_user_optional(request)
+    if not is_admin(actor):
+        raise HTTPException(403, "Solo admin può concedere access")
+    if not db.query(Project).filter(Project.id == project_id).first():
+        raise HTTPException(404, "Progetto non trovato")
+    if not db.query(User).filter(User.id == user_id).first():
+        raise HTTPException(404, "User non trovato")
+    # Pre-check: se grant attivo esiste già, no duplicate
+    existing = db.query(ProjectAccessGrant).filter(
+        ProjectAccessGrant.project_id == project_id,
+        ProjectAccessGrant.user_id == user_id,
+        ProjectAccessGrant.revoked_at.is_(None),
+        ProjectAccessGrant.tenant_id == CURRENT_TENANT,
+    ).first()
+    if existing:
+        raise HTTPException(409, "Grant attivo già esistente")
+    g = ProjectAccessGrant(
+        tenant_id=CURRENT_TENANT,
+        project_id=project_id,
+        user_id=user_id,
+        role_in_project=(role_in_project or "").strip() or None,
+        granted_by_user_id=actor.id if actor else None,
+        notes=(notes or "").strip() or None,
+    )
+    db.add(g)
+    db.flush()
+    log_asset_access(db, user=actor, action=AssetAccessAction.share,
+                     project_id=project_id, request=request,
+                     extra=f"grant access to user_id={user_id} role={role_in_project}",
+                     commit=False)
+    db.commit()
+    return {"id": g.id, "ok": True}
+
+
+@router.delete("/api/{project_id}/access/{grant_id}")
+async def revoke_project_access(
+    project_id: int,
+    grant_id: int,
+    request: Request,
+    db: Session = Depends(get_db),
+):
+    """Soft-revoke grant. Mantiene riga per audit trail."""
+    actor = current_user_optional(request)
+    if not is_admin(actor):
+        raise HTTPException(403, "Solo admin può revocare access")
+    g = db.query(ProjectAccessGrant).filter(
+        ProjectAccessGrant.id == grant_id,
+        ProjectAccessGrant.project_id == project_id,
+        ProjectAccessGrant.tenant_id == CURRENT_TENANT,
+    ).first()
+    if not g:
+        raise HTTPException(404, "Grant non trovato")
+    if g.revoked_at:
+        return {"ok": True, "already_revoked": True}
+    from datetime import datetime as _dt2
+    g.revoked_at = _dt2.utcnow()
+    g.revoked_by_user_id = actor.id if actor else None
+    log_asset_access(db, user=actor, action=AssetAccessAction.deny,
+                     project_id=project_id, request=request,
+                     extra=f"revoked grant_id={grant_id} for user_id={g.user_id}",
+                     commit=False)
+    db.commit()
+    return {"ok": True, "revoked_at": str(g.revoked_at)}
 
 
 # ── HTML page detail (DOPO le API per evitare conflitti di path) ─────
