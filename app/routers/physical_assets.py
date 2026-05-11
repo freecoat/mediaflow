@@ -17,10 +17,12 @@ from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException, Request, Form, UploadFile, File
 from fastapi.responses import HTMLResponse, Response
 from sqlalchemy.orm import Session, joinedload
+from sqlalchemy import or_
 from app.database import get_db
 from app.models import (
     PhysicalAsset, PhysicalAssetKind, JobDeliverable, Job, Project, Client, User,
     AssetMovement, AssetMovementType, AssetOwnerType, Supplier,
+    AssetMembership, Asset,
 )
 
 router = APIRouter(prefix="/physical-assets", tags=["physical_assets"])
@@ -809,6 +811,279 @@ async def movement_ddt_pdf(
         content=pdf, media_type="application/pdf",
         headers={"Content-Disposition": f'inline; filename="{fname}"'},
     )
+
+
+# ── Contenuti digital ↔ physical (v3.5.0-alpha.74) ───────────
+
+
+def _membership_dict(m: AssetMembership, asset: Optional[Asset] = None) -> dict:
+    return {
+        "id": m.id,
+        "physical_asset_id": m.physical_asset_id,
+        "asset_id": m.asset_id,
+        "asset_name": asset.original_name if asset else None,
+        "asset_mime": asset.mime_type if asset else None,
+        "path_on_media": m.path_on_media,
+        "checksum": m.checksum,
+        "file_size": m.file_size or (asset.file_size if asset else None),
+        "notes": m.notes,
+        "added_at": str(m.added_at)[:19] if m.added_at else None,
+        "removed_at": str(m.removed_at)[:19] if m.removed_at else None,
+        "is_present": m.removed_at is None,
+    }
+
+
+@router.get("/api/{asset_id}/contents")
+async def list_contents(
+    asset_id: int,
+    include_removed: int = 0,
+    db: Session = Depends(get_db),
+):
+    """Lista digital Asset contenuti nel PhysicalAsset (storico + presente)."""
+    q = db.query(AssetMembership).filter(
+        AssetMembership.physical_asset_id == asset_id,
+        AssetMembership.tenant_id == CURRENT_TENANT,
+    )
+    if not include_removed:
+        q = q.filter(AssetMembership.removed_at.is_(None))
+    rows = q.order_by(AssetMembership.added_at.desc()).all()
+    a_ids = list({r.asset_id for r in rows})
+    a_map = {a.id: a for a in db.query(Asset).filter(Asset.id.in_(a_ids)).all()} if a_ids else {}
+    return [_membership_dict(m, a_map.get(m.asset_id)) for m in rows]
+
+
+@router.post("/api/{asset_id}/contents/add")
+async def add_content(
+    asset_id: int,
+    request: Request,
+    digital_asset_id: int = Form(...),
+    path_on_media: Optional[str] = Form(None),
+    checksum: Optional[str] = Form(None),
+    file_size: Optional[int] = Form(None),
+    notes: Optional[str] = Form(None),
+    db: Session = Depends(get_db),
+):
+    """Aggiunge digital Asset esistente al physical (es. user lo mette
+    fisicamente sul disco e lo registra qui)."""
+    _require_perm(request)
+    pa = db.query(PhysicalAsset).filter(
+        PhysicalAsset.id == asset_id, PhysicalAsset.tenant_id == CURRENT_TENANT,
+    ).first()
+    if not pa: raise HTTPException(404, "Physical asset non trovato")
+    da = db.query(Asset).filter(
+        Asset.id == digital_asset_id, Asset.tenant_id == CURRENT_TENANT,
+    ).first()
+    if not da: raise HTTPException(404, "Digital asset non trovato")
+    user = getattr(request.state, "current_user", None)
+    m = AssetMembership(
+        tenant_id=CURRENT_TENANT,
+        physical_asset_id=asset_id,
+        asset_id=digital_asset_id,
+        path_on_media=(path_on_media or "").strip() or None,
+        checksum=(checksum or "").strip() or None,
+        file_size=file_size,
+        notes=(notes or "").strip() or None,
+        added_by_user_id=user.id if user else None,
+    )
+    db.add(m); db.commit(); db.refresh(m)
+    return _membership_dict(m, da)
+
+
+@router.post("/api/{asset_id}/contents/{membership_id}/remove")
+async def remove_content(
+    asset_id: int, membership_id: int, request: Request,
+    db: Session = Depends(get_db),
+):
+    """Marca asset come rimosso dal supporto (mantiene storico)."""
+    _require_perm(request)
+    m = db.query(AssetMembership).filter(
+        AssetMembership.id == membership_id,
+        AssetMembership.physical_asset_id == asset_id,
+        AssetMembership.tenant_id == CURRENT_TENANT,
+    ).first()
+    if not m: raise HTTPException(404)
+    if m.removed_at: return {"ok": True, "already_removed": True}
+    user = getattr(request.state, "current_user", None)
+    m.removed_at = datetime.utcnow()
+    m.removed_by_user_id = user.id if user else None
+    db.commit()
+    return {"ok": True, "removed_at": str(m.removed_at)[:19]}
+
+
+@router.post("/api/{asset_id}/scan-content")
+async def scan_filesystem_content(
+    asset_id: int,
+    request: Request,
+    path: str = Form(...),
+    compute_checksum: int = Form(0),
+    auto_register: int = Form(0),
+    max_files: int = Form(2000),
+    db: Session = Depends(get_db),
+):
+    """v3.5.0-alpha.75 — Scansiona filesystem path (es. HDD montato),
+    walk + opt checksum + opt auto-register come Asset+Membership.
+
+    SECURITY: path validato server-side (deve essere assoluto + accessible).
+    NO arbitrary fs access: amministratore configura mount path; user
+    inserisce path within whitelist.
+
+    Output: lista file con metadata. Se auto_register=1, crea anche
+    Asset placeholder + AssetMembership.
+    """
+    _require_perm(request)
+    pa = db.query(PhysicalAsset).filter(
+        PhysicalAsset.id == asset_id, PhysicalAsset.tenant_id == CURRENT_TENANT,
+    ).first()
+    if not pa: raise HTTPException(404)
+    from app.services.fs_scan import walk_filesystem
+    result = walk_filesystem(
+        path, compute_checksum=bool(compute_checksum), max_files=max_files,
+    )
+    if "error" in result and not result.get("files"):
+        raise HTTPException(400, result["error"])
+    if auto_register:
+        from app.models import AssetType
+        user = getattr(request.state, "current_user", None)
+        created = 0
+        linked = 0
+        for entry in result["files"]:
+            # Skip se file system_type non determinabile come asset (placeholder)
+            mime = entry.get("mime") or "application/octet-stream"
+            a_type = AssetType.other
+            if mime.startswith("video"): a_type = AssetType.video
+            elif mime.startswith("audio"): a_type = AssetType.audio
+            elif mime.startswith("image"): a_type = AssetType.image
+            elif mime == "application/pdf": a_type = AssetType.document
+            da = Asset(
+                tenant_id=CURRENT_TENANT,
+                filename=entry["hash"] or entry["filename"],
+                original_name=entry["filename"],
+                file_path="",  # placeholder, file NON copiato
+                asset_type=a_type,
+                mime_type=mime,
+                file_size=entry["size"],
+                project_id=pa.project_id,
+                uploaded_by=user.id if user else 1,
+                description=f"FS scan da {pa.label} ({result['root']})",
+            )
+            db.add(da); db.flush()
+            created += 1
+            m = AssetMembership(
+                tenant_id=CURRENT_TENANT,
+                physical_asset_id=asset_id,
+                asset_id=da.id,
+                path_on_media=entry["rel_path"],
+                checksum=entry["hash"],
+                file_size=entry["size"],
+                added_by_user_id=user.id if user else None,
+            )
+            db.add(m); linked += 1
+        db.commit()
+        result["registered"] = {"created": created, "linked": linked}
+    return result
+
+
+@router.post("/api/{asset_id}/contents/manifest-import")
+async def import_manifest(
+    asset_id: int,
+    request: Request,
+    manifest: UploadFile = File(...),
+    db: Session = Depends(get_db),
+):
+    """v3.5.0-alpha.74 — Bulk import contenuto da manifest CSV/JSON.
+
+    CSV: header `filename,path,checksum,size,notes` (size+checksum opt).
+    JSON: lista `[{filename, path, checksum, size, notes}, ...]`.
+
+    Per ogni riga:
+      1. Cerca Asset DAM esistente per checksum (priorità) o filename.
+      2. Se non trovato, crea Asset placeholder (file_path vuoto, is_internal).
+      3. Crea AssetMembership con metadata.
+    """
+    _require_perm(request)
+    pa = db.query(PhysicalAsset).filter(
+        PhysicalAsset.id == asset_id, PhysicalAsset.tenant_id == CURRENT_TENANT,
+    ).first()
+    if not pa: raise HTTPException(404)
+    raw = await manifest.read()
+    if not raw: raise HTTPException(400, "Manifest vuoto")
+    fname = (manifest.filename or "").lower()
+    entries = []
+    try:
+        if fname.endswith(".json"):
+            import json as _json
+            data = _json.loads(raw.decode("utf-8", errors="ignore"))
+            if not isinstance(data, list):
+                raise HTTPException(400, "JSON deve essere lista di entry")
+            entries = data
+        else:
+            # CSV (default)
+            import csv as _csv
+            import io as _io
+            txt = raw.decode("utf-8", errors="ignore")
+            reader = _csv.DictReader(_io.StringIO(txt))
+            entries = list(reader)
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(400, f"Parse manifest: {e}")
+    user = getattr(request.state, "current_user", None)
+    from app.models import AssetType
+    created = 0
+    linked = 0
+    skipped = 0
+    for row in entries:
+        if not isinstance(row, dict): skipped += 1; continue
+        fn = (row.get("filename") or row.get("name") or "").strip()
+        if not fn: skipped += 1; continue
+        cs = (row.get("checksum") or "").strip() or None
+        path = (row.get("path") or "").strip() or None
+        try: size = int(row.get("size") or 0) or None
+        except (ValueError, TypeError): size = None
+        notes = (row.get("notes") or "").strip() or None
+        # Lookup esistente
+        da = None
+        if cs:
+            da = db.query(Asset).filter(
+                Asset.tenant_id == CURRENT_TENANT,
+                or_(Asset.filename == cs,
+                    Asset.original_name == fn)
+            ).first()
+        if not da:
+            # Crea placeholder
+            da = Asset(
+                tenant_id=CURRENT_TENANT,
+                filename=cs or fn,
+                original_name=fn,
+                file_path="",
+                asset_type=AssetType.other,
+                mime_type="application/octet-stream",
+                file_size=size or 0,
+                project_id=pa.project_id,
+                uploaded_by=user.id if user else 1,
+                description=f"Manifest import da {pa.label}",
+            )
+            db.add(da); db.flush()
+            created += 1
+        m = AssetMembership(
+            tenant_id=CURRENT_TENANT,
+            physical_asset_id=asset_id,
+            asset_id=da.id,
+            path_on_media=path,
+            checksum=cs,
+            file_size=size,
+            notes=notes,
+            added_by_user_id=user.id if user else None,
+        )
+        db.add(m); linked += 1
+    db.commit()
+    return {
+        "ok": True,
+        "linked": linked,
+        "created_placeholders": created,
+        "skipped": skipped,
+        "total": len(entries),
+    }
 
 
 # ── Digital ingest + IngestBatch (v3.5.0-alpha.73) ───────────

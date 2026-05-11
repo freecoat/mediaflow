@@ -1809,6 +1809,32 @@ class AssetOwnerType(str, enum.Enum):
     third_party = "third_party"     # altro (es. consulente esterno)
 
 
+class AssetMembership(Base):
+    """v3.5.0-alpha.74 — Link N:M digital Asset → PhysicalAsset con storico.
+
+    Use case: HDD cliente con DCP + mix audio + sub. Sapere quando è stato
+    aggiunto/rimosso ogni file, da chi, con quale path.
+    `removed_at` IS NULL = ancora presente sul supporto.
+    """
+    __tablename__ = "asset_memberships"
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    tenant_id: Mapped[int] = mapped_column(ForeignKey("tenants.id"), default=1, index=True)
+    physical_asset_id: Mapped[int] = mapped_column(
+        ForeignKey("physical_assets.id"), index=True
+    )
+    asset_id: Mapped[int] = mapped_column(ForeignKey("assets.id"), index=True)
+    # Path/posizione sul supporto fisico (es. "/DCP/feature_2k/", "/MIX/")
+    path_on_media: Mapped[Optional[str]] = mapped_column(String(512), nullable=True)
+    # Checksum salvato (per verifica integrità futura)
+    checksum: Mapped[Optional[str]] = mapped_column(String(128), nullable=True)
+    file_size: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    added_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, index=True)
+    added_by_user_id: Mapped[Optional[int]] = mapped_column(ForeignKey("users.id"), nullable=True)
+    removed_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True, index=True)
+    removed_by_user_id: Mapped[Optional[int]] = mapped_column(ForeignKey("users.id"), nullable=True)
+
+
 class IngestBatch(Base):
     """v3.5.0-alpha.73 — Raggruppa N AssetMovement nello stesso DDT (bolla).
     Use case: cliente consegna 1 disco con 5 file digitali → 1 IngestBatch

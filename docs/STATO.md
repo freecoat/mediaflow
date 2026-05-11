@@ -8,6 +8,29 @@
 
 ## Versione corrente
 
+**v3.5.0-alpha.75** — 11 maggio 2026 — AssetMembership + manifest + fs scan
+
+Risponde "storico HDD cliente + sistema legge disco + index".
+
+- AssetMembership N:M digital↔physical con storico (added/removed).
+- Endpoint contents (list/add/remove + manifest CSV/JSON import).
+- fs_scan service: walk filesystem + xxhash64 + auto-register Asset
+  + AssetMembership da path locale.
+- xxhash installato.
+
+371 routes (+5).
+
+## Prossimo step
+
+- **α.76 AI capability** assets: propose_asset_movement,
+  query_assets_in_physical, parse_ddt_pdf (riusa supplier pattern).
+- **UI contenuto** in physical_assets.html: tab "Contenuto" su modal
+  asset + import manifest + scan FS button.
+- **UI tracking** AssetMembership su scan page mobile.
+- **α.77 Dashboard shelf/vault** mappa storage visuale.
+
+## (versione precedente)
+
 **v3.5.0-alpha.73** — 11 maggio 2026 — Asset In/Out unificato + digital ingest
 
 Risponde audit Matteo:

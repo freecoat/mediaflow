@@ -1,5 +1,53 @@
 # MediaFlow — Changelog
 
+## v3.5.0-alpha.75 — AssetMembership + manifest + filesystem scan (11 maggio 2026)
+
+Risponde direttamente alla richiesta Matteo: "storico di cosa è stato
+messo dentro l'HDD cliente, sistema legge direttamente il disco e fa
+index dei contenuti".
+
+**Modello nuovo** `AssetMembership` (N:M con storico):
+- Tabella `asset_memberships`: physical_asset_id, asset_id (digital),
+  path_on_media (es. "/DCP/feature/"), checksum, file_size, notes,
+  added_at + added_by_user_id, removed_at + removed_by (soft).
+- removed_at NULL = ancora presente sul supporto.
+
+**Endpoint contents**:
+- `GET /api/{id}/contents?include_removed=0/1` — lista digital
+  contenuti con hydrate Asset.
+- `POST /api/{id}/contents/add` — link digital esistente.
+- `POST /api/{id}/contents/{mid}/remove` — soft-remove.
+- `POST /api/{id}/contents/manifest-import` — bulk CSV/JSON:
+  per ogni entry lookup esistente (checksum/filename) o crea
+  placeholder + AssetMembership.
+
+**Service nuovo** `fs_scan.py` (v3.5.0-alpha.75):
+- Dipendenza nuova `xxhash` (veloce, fallback md5).
+- `walk_filesystem(root_path, compute_checksum, max_depth, skip_patterns,
+  max_files)` → walk OS + skip __MACOSX/Thumbs.db/.DS_Store + xxhash64
+  per file (opt) + mime guess.
+- Output: lista file con rel_path/size/mtime/hash/mime/algo.
+
+**Endpoint scan-content**:
+- `POST /api/{id}/scan-content` (path + compute_checksum + auto_register):
+  scansiona path filesystem, opt checksum, opt auto-register come
+  Asset placeholder + AssetMembership.
+- Sicurezza: path validato server-side (esiste + è directory). Per usare
+  da remoto serve mount del filesystem sul server.
+
+**Dipendenze nuove**:
+- `xxhash>=3.0` (requirements.txt aggiornato).
+
+**File toccati** (5):
+- `app/main.py` — VERSION
+- `app/models/models.py` — AssetMembership
+- `app/models/__init__.py` — re-export
+- `app/routers/physical_assets.py` — 4 endpoint nuovi + scan
+- `app/services/fs_scan.py` — NUOVO
+- `requirements.txt` — xxhash
+
+371 routes (+5).
+
 ## v3.5.0-alpha.73 — Asset In/Out unificato + ingest digital + IngestBatch (11 maggio 2026)
 
 Risponde all'audit Matteo: ripensare in/out come modal/page strutturato,
