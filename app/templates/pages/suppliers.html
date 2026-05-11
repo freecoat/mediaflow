@@ -1,0 +1,601 @@
+{% extends "base.html" %}
+{% set active_page = "suppliers" %}
+{% block title %}Fornitori — MediaFlow{% endblock %}
+{% block topbar_title %}Fornitori & Fatture passive{% endblock %}
+{% block topbar_actions %}
+  <button class="btn btn-secondary btn-sm" onclick="openSupplierModal()">+ Fornitore</button>
+  <button class="btn btn-primary btn-sm" onclick="openInvoiceModal()">+ Fattura passiva</button>
+{% endblock %}
+
+{% block content %}
+
+<div class="stat-grid mb-4" id="sup-kpi-grid">
+  <div class="stat-card"><div class="stat-label">Fatture totali</div>
+    <div class="stat-value mono" id="kpi-total-count" style="font-size:24px;">—</div></div>
+  <div class="stat-card"><div class="stat-label">Outstanding</div>
+    <div class="stat-value mono color-amber" id="kpi-outstanding" style="font-size:24px;">—</div>
+    <div class="stat-sub">da pagare</div></div>
+  <div class="stat-card"><div class="stat-label">Scaduto</div>
+    <div class="stat-value mono color-rose" id="kpi-overdue" style="font-size:24px;">—</div>
+    <div class="stat-sub">due_date passata</div></div>
+</div>
+
+<div class="card" style="margin-bottom:0;border-bottom-left-radius:0;border-bottom-right-radius:0;border-bottom:none;padding:0;">
+  <div style="display:flex;gap:0;">
+    <button class="tab-btn active" id="tab-invoices" onclick="switchTab('invoices')"
+            style="padding:12px 20px;background:none;border:none;border-bottom:2px solid var(--indigo2);color:var(--text);cursor:pointer;font-size:13px;font-weight:600;">
+      Fatture passive
+    </button>
+    <button class="tab-btn" id="tab-suppliers" onclick="switchTab('suppliers')"
+            style="padding:12px 20px;background:none;border:none;border-bottom:2px solid transparent;color:var(--text3);cursor:pointer;font-size:13px;font-weight:500;">
+      Anagrafica fornitori
+    </button>
+  </div>
+</div>
+
+<div class="card" style="border-top-left-radius:0;border-top-right-radius:0;">
+
+  <div id="pane-invoices">
+    <div class="cr-filters" style="display:flex;flex-wrap:wrap;gap:10px;align-items:flex-end;margin-bottom:14px;">
+      <div class="form-group" style="flex:2;min-width:220px;">
+        <label class="form-label" style="font-size:11px;">Ricerca</label>
+        <input class="form-input" id="inv-search" placeholder="numero, fornitore, note..." oninput="renderInvoices()">
+      </div>
+      <div class="form-group" style="min-width:160px;">
+        <label class="form-label" style="font-size:11px;">Fornitore</label>
+        <select class="form-select" id="inv-f-supplier" onchange="renderInvoices()">
+          <option value="">— tutti —</option>
+        </select>
+      </div>
+      <div class="form-group" style="min-width:140px;">
+        <label class="form-label" style="font-size:11px;">Stato</label>
+        <select class="form-select" id="inv-f-status" onchange="renderInvoices()">
+          <option value="">— tutti —</option>
+          <option value="unpaid">Non pagata</option>
+          <option value="partial">Pagata parz.</option>
+          <option value="paid">Pagata</option>
+          <option value="cancelled">Annullata</option>
+        </select>
+      </div>
+      <button class="btn btn-ghost btn-sm" onclick="resetInvoiceFilters()">Reset</button>
+    </div>
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th style="min-width:120px;">Numero</th>
+            <th style="min-width:200px;">Fornitore</th>
+            <th>Emissione</th>
+            <th>Scadenza</th>
+            <th class="text-right">Imponibile</th>
+            <th class="text-right">IVA</th>
+            <th class="text-right">Totale</th>
+            <th class="text-right">Pagato</th>
+            <th>Stato</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody id="inv-tbody">
+          <tr><td colspan="10" class="text-muted" style="text-align:center;padding:24px;">Caricamento...</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <div id="pane-suppliers" style="display:none;">
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th style="min-width:220px;">Nome</th>
+            <th>P.IVA / CF</th>
+            <th>Contatto</th>
+            <th class="text-right">Fatture</th>
+            <th class="text-right">Outstanding</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody id="sup-tbody">
+          <tr><td colspan="6" class="text-muted" style="text-align:center;padding:24px;">Caricamento...</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+</div>
+
+<div class="modal-overlay" id="modal-supplier">
+  <div class="modal">
+    <div class="modal-header">
+      <span class="modal-title" id="ms-title">Nuovo fornitore</span>
+      <button class="btn btn-ghost btn-icon" onclick="closeModal('modal-supplier')">&times;</button>
+    </div>
+    <div class="modal-body">
+      <input type="hidden" id="ms-id">
+      <div class="form-group">
+        <label class="form-label">Nome / Ragione sociale *</label>
+        <input class="form-input" id="ms-name" placeholder="es. Acme Studios srl">
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label class="form-label">P.IVA</label>
+          <input class="form-input" id="ms-vat" placeholder="IT12345678901">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Codice Fiscale</label>
+          <input class="form-input" id="ms-cf">
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label class="form-label">Email</label>
+          <input class="form-input" id="ms-email" type="email">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Telefono</label>
+          <input class="form-input" id="ms-phone">
+        </div>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Indirizzo</label>
+        <textarea class="form-textarea" id="ms-addr" rows="2"></textarea>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label class="form-label">IBAN</label>
+          <input class="form-input" id="ms-iban">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Termini pagamento (gg)</label>
+          <input class="form-input" id="ms-terms" type="number" placeholder="30">
+        </div>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Note</label>
+        <textarea class="form-textarea" id="ms-notes" rows="2"></textarea>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" id="ms-delete-btn" onclick="deleteSupplier()" style="margin-right:auto;display:none;color:#ef4444;">Elimina</button>
+      <button class="btn btn-secondary" onclick="closeModal('modal-supplier')">Annulla</button>
+      <button class="btn btn-primary" onclick="saveSupplier()">Salva</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="modal-invoice">
+  <div class="modal" style="max-width:680px;">
+    <div class="modal-header">
+      <span class="modal-title" id="mi-title">Nuova fattura passiva</span>
+      <button class="btn btn-ghost btn-icon" onclick="closeModal('modal-invoice')">&times;</button>
+    </div>
+    <div class="modal-body">
+      <input type="hidden" id="mi-id">
+      <div class="form-row">
+        <div class="form-group" style="flex:2;">
+          <label class="form-label">Fornitore *</label>
+          <select class="form-select" id="mi-supplier"></select>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Numero *</label>
+          <input class="form-input" id="mi-number" placeholder="FT-2026/001">
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label class="form-label">Data emissione *</label>
+          <input class="form-input" id="mi-issue" type="date">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Scadenza</label>
+          <input class="form-input" id="mi-due" type="date">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Data pagamento</label>
+          <input class="form-input" id="mi-paydate" type="date">
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label class="form-label">Imponibile (EUR) *</label>
+          <input class="form-input" id="mi-net" type="number" step="0.01" oninput="recalcInvoiceTotals()">
+        </div>
+        <div class="form-group">
+          <label class="form-label">IVA (%)</label>
+          <input class="form-input" id="mi-vatrate" type="number" step="0.5" value="22" oninput="recalcInvoiceTotals()">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Totale (EUR)</label>
+          <input class="form-input" id="mi-total" type="number" step="0.01" disabled style="opacity:.7;">
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label class="form-label">Pagato (EUR)</label>
+          <input class="form-input" id="mi-paid" type="number" step="0.01" value="0">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Valuta</label>
+          <input class="form-input" id="mi-currency" value="EUR" maxlength="3" style="text-transform:uppercase;">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Stato</label>
+          <select class="form-select" id="mi-status">
+            <option value="">— auto (da pagato) —</option>
+            <option value="unpaid">Non pagata</option>
+            <option value="partial">Pagata parz.</option>
+            <option value="paid">Pagata</option>
+            <option value="cancelled">Annullata</option>
+          </select>
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label class="form-label">Progetto</label>
+          <select class="form-select" id="mi-project"><option value="">— nessuno —</option></select>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Job</label>
+          <select class="form-select" id="mi-job"><option value="">— nessuno —</option></select>
+        </div>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Allegato (path/URL)</label>
+        <input class="form-input" id="mi-attachment" placeholder="es. /uploads/ft-2026-001.pdf">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Note</label>
+        <textarea class="form-textarea" id="mi-notes" rows="2"></textarea>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" id="mi-delete-btn" onclick="deleteInvoice()" style="margin-right:auto;display:none;color:#ef4444;">Elimina</button>
+      <button class="btn btn-secondary" onclick="closeModal('modal-invoice')">Annulla</button>
+      <button class="btn btn-primary" onclick="saveInvoice()">Salva</button>
+    </div>
+  </div>
+</div>
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+let _suppliers = [];
+let _invoices = [];
+let _projects = [];
+let _jobs = [];
+
+async function init() {
+  await Promise.all([loadSuppliers(), loadInvoices(), loadSummary(), loadAuxLists()]);
+}
+
+async function loadSummary() {
+  try {
+    const s = await api('GET', '/suppliers/api/summary/tenant');
+    document.getElementById('kpi-total-count').textContent = s.invoices_count;
+    document.getElementById('kpi-outstanding').textContent = fmtCurrency(s.total_outstanding);
+    document.getElementById('kpi-overdue').textContent = s.overdue_count;
+  } catch(e) {}
+}
+
+async function loadAuxLists() {
+  try { _projects = await api('GET', '/projects/api'); } catch(e) { _projects = []; }
+  try {
+    const r = await fetch('/jobs/api', {credentials:'same-origin'});
+    _jobs = r.ok ? await r.json() : [];
+  } catch(e) { _jobs = []; }
+}
+
+async function loadSuppliers() {
+  try {
+    _suppliers = await api('GET', '/suppliers/api?include_inactive=1');
+  } catch(e) {
+    document.getElementById('sup-tbody').innerHTML =
+      '<tr><td colspan="6" style="text-align:center;color:#ef4444;padding:24px;">Errore: ' + escapeHtml(e.message||'') + '</td></tr>';
+    return;
+  }
+  const fSel = document.getElementById('inv-f-supplier');
+  fSel.innerHTML = '<option value="">— tutti —</option>' +
+    _suppliers.map(s => `<option value="${s.id}">${escapeHtml(s.name)}</option>`).join('');
+  renderSuppliers();
+}
+
+function renderSuppliers() {
+  const tbody = document.getElementById('sup-tbody');
+  if (!_suppliers.length) {
+    tbody.innerHTML = '<tr><td colspan="6" class="text-muted" style="text-align:center;padding:24px;">Nessun fornitore. Aggiungi il primo.</td></tr>';
+    return;
+  }
+  tbody.innerHTML = _suppliers.map(s => `
+    <tr style="cursor:pointer;${s.is_active?'':'opacity:0.5;'}" onclick="editSupplier(${s.id})">
+      <td><strong>${escapeHtml(s.name)}</strong>${!s.is_active?' <span class="text-xs text-muted">(disattivato)</span>':''}</td>
+      <td class="text-sm text-muted">${escapeHtml(s.vat_number||'—')}${s.tax_code?'<br><span class="text-xs">'+escapeHtml(s.tax_code)+'</span>':''}</td>
+      <td class="text-sm text-muted">${escapeHtml(s.contact_email||'—')}${s.contact_phone?'<br>'+escapeHtml(s.contact_phone):''}</td>
+      <td class="text-right mono">${s.invoices_count}</td>
+      <td class="text-right mono" style="color:${s.outstanding_total>0?'var(--rose)':'var(--text3)'};">${s.outstanding_total>0?fmtCurrency(s.outstanding_total):'—'}</td>
+      <td class="text-right text-muted">&rarr;</td>
+    </tr>
+  `).join('');
+}
+
+async function loadInvoices() {
+  try {
+    _invoices = await api('GET', '/suppliers/api/invoices?include_cancelled=1');
+  } catch(e) {
+    document.getElementById('inv-tbody').innerHTML =
+      '<tr><td colspan="10" style="text-align:center;color:#ef4444;padding:24px;">Errore: ' + escapeHtml(e.message||'') + '</td></tr>';
+    return;
+  }
+  renderInvoices();
+}
+
+const INV_STATUS_LBL = {
+  unpaid: {lbl:'Non pagata', color:'#fbbf24', bg:'rgba(251,191,36,.18)'},
+  partial: {lbl:'Parziale', color:'#fb923c', bg:'rgba(251,146,60,.18)'},
+  paid: {lbl:'Pagata', color:'#22c55e', bg:'rgba(34,197,94,.18)'},
+  cancelled: {lbl:'Annullata', color:'#9aa0b8', bg:'rgba(154,160,184,.15)'},
+};
+function renderInvStatus(st) {
+  const m = INV_STATUS_LBL[st] || INV_STATUS_LBL.unpaid;
+  return `<span style="display:inline-block;padding:2px 8px;border-radius:10px;font-size:11px;font-weight:600;color:${m.color};background:${m.bg};">${m.lbl}</span>`;
+}
+
+function renderInvoices() {
+  const q = (document.getElementById('inv-search').value||'').toLowerCase().trim();
+  const fSup = document.getElementById('inv-f-supplier').value;
+  const fStat = document.getElementById('inv-f-status').value;
+  let rows = _invoices.slice();
+  if (fSup) rows = rows.filter(r => String(r.supplier_id) === fSup);
+  if (fStat) rows = rows.filter(r => r.payment_status === fStat);
+  if (q) rows = rows.filter(r =>
+    (r.number||'').toLowerCase().includes(q) ||
+    (r.supplier_name||'').toLowerCase().includes(q) ||
+    (r.notes||'').toLowerCase().includes(q));
+  const tbody = document.getElementById('inv-tbody');
+  if (!rows.length) {
+    tbody.innerHTML = '<tr><td colspan="10" class="text-muted" style="text-align:center;padding:24px;">Nessuna fattura corrisponde ai filtri</td></tr>';
+    return;
+  }
+  const today = new Date().toISOString().slice(0,10);
+  tbody.innerHTML = rows.map(r => {
+    const isOverdue = r.due_date && r.due_date < today &&
+                      (r.payment_status === 'unpaid' || r.payment_status === 'partial');
+    return `<tr style="cursor:pointer;" onclick="editInvoice(${r.id})">
+      <td class="mono"><strong>${escapeHtml(r.number)}</strong></td>
+      <td>${escapeHtml(r.supplier_name||'—')}</td>
+      <td class="text-sm">${fmtDate(r.issue_date)}</td>
+      <td class="text-sm" style="${isOverdue?'color:var(--rose);font-weight:600;':''}">${r.due_date?fmtDate(r.due_date):'—'}${isOverdue?' &#9888;':''}</td>
+      <td class="mono text-right">${fmtCurrency(r.amount_net)}</td>
+      <td class="mono text-right text-muted">${fmtCurrency(r.amount_vat)}</td>
+      <td class="mono text-right"><strong>${fmtCurrency(r.amount_total)}</strong></td>
+      <td class="mono text-right" style="color:${r.amount_paid>0?'var(--green)':'var(--text3)'};">${r.amount_paid>0?fmtCurrency(r.amount_paid):'—'}</td>
+      <td>${renderInvStatus(r.payment_status)}</td>
+      <td class="text-right text-muted">&rarr;</td>
+    </tr>`;
+  }).join('');
+}
+
+function resetInvoiceFilters() {
+  document.getElementById('inv-search').value = '';
+  document.getElementById('inv-f-supplier').value = '';
+  document.getElementById('inv-f-status').value = '';
+  renderInvoices();
+}
+
+function switchTab(tab) {
+  document.getElementById('pane-invoices').style.display = tab === 'invoices' ? '' : 'none';
+  document.getElementById('pane-suppliers').style.display = tab === 'suppliers' ? '' : 'none';
+  const tInv = document.getElementById('tab-invoices');
+  const tSup = document.getElementById('tab-suppliers');
+  [tInv, tSup].forEach(t => {
+    t.classList.remove('active');
+    t.style.borderBottomColor = 'transparent';
+    t.style.color = 'var(--text3)';
+    t.style.fontWeight = '500';
+  });
+  const active = tab === 'invoices' ? tInv : tSup;
+  active.classList.add('active');
+  active.style.borderBottomColor = 'var(--indigo2)';
+  active.style.color = 'var(--text)';
+  active.style.fontWeight = '600';
+}
+
+function openSupplierModal() {
+  document.getElementById('ms-id').value = '';
+  document.getElementById('ms-title').textContent = 'Nuovo fornitore';
+  ['ms-name','ms-vat','ms-cf','ms-email','ms-phone','ms-addr','ms-iban','ms-terms','ms-notes'].forEach(id => {
+    document.getElementById(id).value = '';
+  });
+  document.getElementById('ms-delete-btn').style.display = 'none';
+  openModal('modal-supplier');
+}
+
+function editSupplier(id) {
+  const s = _suppliers.find(x => x.id === id);
+  if (!s) return;
+  document.getElementById('ms-id').value = s.id;
+  document.getElementById('ms-title').textContent = `Fornitore: ${s.name}`;
+  document.getElementById('ms-name').value = s.name || '';
+  document.getElementById('ms-vat').value = s.vat_number || '';
+  document.getElementById('ms-cf').value = s.tax_code || '';
+  document.getElementById('ms-email').value = s.contact_email || '';
+  document.getElementById('ms-phone').value = s.contact_phone || '';
+  document.getElementById('ms-addr').value = s.address || '';
+  document.getElementById('ms-iban').value = s.iban || '';
+  document.getElementById('ms-terms').value = s.default_payment_terms_days || '';
+  document.getElementById('ms-notes').value = s.notes || '';
+  document.getElementById('ms-delete-btn').style.display = '';
+  openModal('modal-supplier');
+}
+
+async function saveSupplier() {
+  const id = document.getElementById('ms-id').value;
+  const fd = new FormData();
+  fd.append('name', document.getElementById('ms-name').value);
+  fd.append('vat_number', document.getElementById('ms-vat').value);
+  fd.append('tax_code', document.getElementById('ms-cf').value);
+  fd.append('contact_email', document.getElementById('ms-email').value);
+  fd.append('contact_phone', document.getElementById('ms-phone').value);
+  fd.append('address', document.getElementById('ms-addr').value);
+  fd.append('iban', document.getElementById('ms-iban').value);
+  const terms = document.getElementById('ms-terms').value;
+  if (terms) fd.append('default_payment_terms_days', terms);
+  fd.append('notes', document.getElementById('ms-notes').value);
+  try {
+    const url = id ? `/suppliers/api/${id}` : '/suppliers/api';
+    const method = id ? 'PUT' : 'POST';
+    const r = await fetch(url, {method, body: fd, credentials:'same-origin'});
+    if (!r.ok) throw new Error((await r.json()).detail || 'Errore');
+    closeModal('modal-supplier');
+    toast(id ? 'Fornitore aggiornato' : 'Fornitore creato', 'success');
+    await loadSuppliers();
+    await loadSummary();
+  } catch(e) { toast(e.message || 'Errore', 'error'); }
+}
+
+async function deleteSupplier() {
+  const id = document.getElementById('ms-id').value;
+  if (!id) return;
+  const s = _suppliers.find(x => x.id == id);
+  if (!confirm(`Eliminare il fornitore "${s ? s.name : id}"? Bloccato se ci sono fatture attive.`)) return;
+  try {
+    const r = await fetch(`/suppliers/api/${id}`, {method:'DELETE', credentials:'same-origin'});
+    if (!r.ok) throw new Error((await r.json()).detail || 'Errore');
+    closeModal('modal-supplier');
+    toast('Fornitore eliminato', 'success');
+    await loadSuppliers();
+    await loadSummary();
+  } catch(e) { toast(e.message || 'Errore', 'error'); }
+}
+
+function _populateSupplierSelect() {
+  const sel = document.getElementById('mi-supplier');
+  sel.innerHTML = '<option value="">— seleziona —</option>' +
+    _suppliers.filter(s => s.is_active).map(s =>
+      `<option value="${s.id}">${escapeHtml(s.name)}</option>`
+    ).join('');
+}
+function _populateProjectSelect() {
+  const sel = document.getElementById('mi-project');
+  sel.innerHTML = '<option value="">— nessuno —</option>' +
+    _projects.map(p =>
+      `<option value="${p.id}">${escapeHtml(p.code || '')} · ${escapeHtml(p.title || '')}</option>`
+    ).join('');
+}
+function _populateJobSelect() {
+  const sel = document.getElementById('mi-job');
+  sel.innerHTML = '<option value="">— nessuno —</option>' +
+    _jobs.map(j =>
+      `<option value="${j.id}">${escapeHtml(j.code || '')} · ${escapeHtml(j.title || '')}</option>`
+    ).join('');
+}
+
+function openInvoiceModal() {
+  document.getElementById('mi-id').value = '';
+  document.getElementById('mi-title').textContent = 'Nuova fattura passiva';
+  _populateSupplierSelect();
+  _populateProjectSelect();
+  _populateJobSelect();
+  document.getElementById('mi-number').value = '';
+  document.getElementById('mi-issue').value = new Date().toISOString().slice(0,10);
+  document.getElementById('mi-due').value = '';
+  document.getElementById('mi-paydate').value = '';
+  document.getElementById('mi-net').value = '';
+  document.getElementById('mi-vatrate').value = '22';
+  document.getElementById('mi-total').value = '';
+  document.getElementById('mi-paid').value = '0';
+  document.getElementById('mi-currency').value = 'EUR';
+  document.getElementById('mi-status').value = '';
+  document.getElementById('mi-attachment').value = '';
+  document.getElementById('mi-notes').value = '';
+  document.getElementById('mi-delete-btn').style.display = 'none';
+  openModal('modal-invoice');
+}
+
+function editInvoice(id) {
+  const i = _invoices.find(x => x.id === id);
+  if (!i) return;
+  _populateSupplierSelect();
+  _populateProjectSelect();
+  _populateJobSelect();
+  document.getElementById('mi-id').value = i.id;
+  document.getElementById('mi-title').textContent = `Fattura ${i.number}`;
+  document.getElementById('mi-supplier').value = i.supplier_id || '';
+  document.getElementById('mi-number').value = i.number || '';
+  document.getElementById('mi-issue').value = i.issue_date || '';
+  document.getElementById('mi-due').value = i.due_date || '';
+  document.getElementById('mi-paydate').value = i.payment_date || '';
+  document.getElementById('mi-net').value = i.amount_net;
+  document.getElementById('mi-vatrate').value = i.vat_rate;
+  document.getElementById('mi-total').value = i.amount_total;
+  document.getElementById('mi-paid').value = i.amount_paid || 0;
+  document.getElementById('mi-currency').value = i.currency || 'EUR';
+  document.getElementById('mi-status').value = i.payment_status || '';
+  document.getElementById('mi-project').value = i.project_id || '';
+  document.getElementById('mi-job').value = i.job_id || '';
+  document.getElementById('mi-attachment').value = i.attachment_path || '';
+  document.getElementById('mi-notes').value = i.notes || '';
+  document.getElementById('mi-delete-btn').style.display = '';
+  openModal('modal-invoice');
+}
+
+function recalcInvoiceTotals() {
+  const net = parseFloat(document.getElementById('mi-net').value) || 0;
+  const rate = parseFloat(document.getElementById('mi-vatrate').value) || 0;
+  const vat = Math.round(net * rate) / 100;
+  const total = Math.round((net + vat) * 100) / 100;
+  document.getElementById('mi-total').value = total.toFixed(2);
+}
+
+async function saveInvoice() {
+  const id = document.getElementById('mi-id').value;
+  const fd = new FormData();
+  const supplier_id = document.getElementById('mi-supplier').value;
+  if (!supplier_id) { toast('Seleziona un fornitore', 'warning'); return; }
+  if (!id) fd.append('supplier_id', supplier_id);
+  fd.append('number', document.getElementById('mi-number').value);
+  fd.append('issue_date', document.getElementById('mi-issue').value);
+  const due = document.getElementById('mi-due').value;
+  if (due) fd.append('due_date', due);
+  const paydate = document.getElementById('mi-paydate').value;
+  if (paydate) fd.append('payment_date', paydate);
+  fd.append('amount_net', document.getElementById('mi-net').value);
+  fd.append('vat_rate', document.getElementById('mi-vatrate').value);
+  fd.append('amount_paid', document.getElementById('mi-paid').value);
+  fd.append('currency', document.getElementById('mi-currency').value || 'EUR');
+  const status = document.getElementById('mi-status').value;
+  if (status) fd.append('payment_status', status);
+  const proj = document.getElementById('mi-project').value;
+  if (proj) fd.append('project_id', proj);
+  const job = document.getElementById('mi-job').value;
+  if (job) fd.append('job_id', job);
+  const att = document.getElementById('mi-attachment').value;
+  if (att) fd.append('attachment_path', att);
+  fd.append('notes', document.getElementById('mi-notes').value);
+  try {
+    const url = id ? `/suppliers/api/invoices/${id}` : '/suppliers/api/invoices';
+    const method = id ? 'PUT' : 'POST';
+    const r = await fetch(url, {method, body: fd, credentials:'same-origin'});
+    if (!r.ok) throw new Error((await r.json()).detail || 'Errore');
+    closeModal('modal-invoice');
+    toast(id ? 'Fattura aggiornata' : 'Fattura registrata', 'success');
+    await Promise.all([loadInvoices(), loadSuppliers(), loadSummary()]);
+  } catch(e) { toast(e.message || 'Errore', 'error'); }
+}
+
+async function deleteInvoice() {
+  const id = document.getElementById('mi-id').value;
+  if (!id) return;
+  if (!confirm('Eliminare la fattura?')) return;
+  try {
+    const r = await fetch(`/suppliers/api/invoices/${id}`, {method:'DELETE', credentials:'same-origin'});
+    if (!r.ok) throw new Error((await r.json()).detail || 'Errore');
+    closeModal('modal-invoice');
+    toast('Fattura eliminata', 'success');
+    await Promise.all([loadInvoices(), loadSuppliers(), loadSummary()]);
+  } catch(e) { toast(e.message || 'Errore', 'error'); }
+}
+
+init();
+</script>
+{% endblock %}

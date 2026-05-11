@@ -1,5 +1,101 @@
 # MediaFlow — Changelog
 
+## v3.5.0-alpha.68 — Supplier / SupplierInvoice modulo (11 maggio 2026)
+
+Modulo nuovo isolato per fatture passive. Punto 6 della roadmap
+billing α.65+ chiusa. Sblocca cost-side esterno (cassa cost report
++ cashflow).
+
+**Modelli nuovi** (2 tabelle + 1 enum):
+- `Supplier` — anagrafica fornitore: name, vat_number, tax_code,
+  contact_email/phone, address, iban, default_payment_terms_days,
+  notes, is_active, deleted_at. Tenant scope. Soft delete.
+- `SupplierInvoice` — fattura passiva: supplier_id, number, issue_date,
+  due_date, payment_date, project_id/job_id/job_cost_line_id (FK
+  opzionali per granularità), amount_net + vat_rate + amount_vat +
+  amount_total (calcolati server-side), currency, payment_status enum,
+  amount_paid (denormalizzato), attachment_path, notes, deleted_at.
+- `SupplierInvoiceStatus` enum: unpaid|partial|paid|cancelled.
+
+Tabelle create automaticamente al boot da `Base.metadata.create_all()`.
+Zero migrazione manuale.
+
+**Router** `app/routers/suppliers.py` (13 endpoint, prefix `/suppliers`):
+- CRUD fornitori (`/api`, `/api/{id}` — list/create/update/delete soft)
+- CRUD fatture (`/api/invoices*` — list con filtri supplier/project/
+  job/status, get-by-id, create, update, delete soft, register-payment
+  incrementale)
+- Aggregati: `/api/summary/job/{id}` per cost-report, `/api/summary/tenant`
+  per KPI dashboard.
+
+Logica notevole:
+- `_derive_status()` calcola payment_status canonico da amount_paid/
+  amount_total. Rispetta `cancelled` se settato esplicitamente.
+- `due_date` auto-fill da `default_payment_terms_days` del fornitore
+  alla creazione fattura.
+- Pre-check unicità `(supplier_id, number)` su create per evitare
+  duplicati.
+- Delete supplier bloccato se ha fatture attive (non cancelled).
+
+**UI** `/suppliers` (template `suppliers.html`):
+- 3 KPI card (fatture totali / outstanding / scaduto).
+- 2 tab: Fatture passive (default) + Anagrafica fornitori.
+- Tabelle filtrabili (ricerca + supplier + stato).
+- Modal CRUD per fornitore + fattura. Modal fattura ha auto-recalc
+  totale via JS.
+- Badge stato pagamento colorato. Warning ⚠ su due_date scaduta.
+
+**Sidebar**: link "Fornitori" in sezione Finanza (icona receipt).
+
+**Cost-report integration** (`/cost-report/api/job/{id}`):
+- Nuovo campo summary `total_supplier_invoices` (Σ amount_total fatture
+  passive non cancelled linkate al job o project).
+- Nuovo campo summary `real_margin_full` = `total_accrued −
+  total_cost_accrued − total_supplier_invoices` (margine reale completo).
+- UI cost-report (`renderKPIs`): 2 nuove KPI card (Fatture passive +
+  Margine reale ⊕) accanto Margine reale.
+
+**File toccati** (8):
+- `app/models/models.py` — Supplier + SupplierInvoice + enum
+- `app/models/__init__.py` — re-export
+- `app/main.py` — VERSION + import router
+- `app/routers/__init__.py` — N/A (import diretto in main.py)
+- `app/routers/suppliers.py` — NUOVO (519 righe)
+- `app/routers/cost_report.py` — aggregato supplier_invoices
+- `app/templates/pages/suppliers.html` — NUOVO
+- `app/templates/pages/cost_report.html` — KPI card supplier
+- `app/templates/base.html` — sidebar link
+
+**Smoke**: AST parse OK su tutti i file. Boot app OK, 329 routes, +13
+nuove `/suppliers/*`. Tabelle create con tutti gli index attesi.
+
+## v3.5.0-alpha.66.22 — UI cost-report real_margin (11 maggio 2026)
+
+Completa la parte cliente dell'α.67 cost-side risorsa: i numeri sono
+in DB ed esposti dal backend da α.66.21, ora visibili in UI.
+
+**Cosa cambia in `/cost-report`**:
+
+Vista lista (1 riga per job):
+- Nuova colonna **Marg. reale** (verde se positivo, rosa se
+  negativo, dash se nessun cost-rate configurato sulle risorse).
+
+Vista dettaglio (singolo job):
+- 2 nuove KPI card nel summary: **Costo reale risorse** + **Margine
+  reale** (entrambe con fallback "—" + hint "attiva cost_type su
+  /resources" se 0).
+- 2 nuove colonne nella tabella voci di costo: **Costo reale** e
+  **Margine reale** per riga JCL.
+
+Tutto guarda i campi `total_cost_accrued` e `real_margin` già esposti
+da α.66.21 in `/cost-report/api/list` e `/cost-report/api/job/{id}`.
+Nessun cambio backend, nessuna migrazione.
+
+**File toccati** (3):
+- `app/main.py` — VERSION
+- `app/templates/pages/cost_report.html` — KPI + colonne lista/detail
+- `CHANGELOG.md` + `docs/STATO.md`
+
 ## v3.5.0-alpha.66.21 — UI cashflow + α.67 cost-side risorsa (11 maggio 2026)
 
 Autopilot post "fai tutto in autonomia e push". 2 sviluppi:

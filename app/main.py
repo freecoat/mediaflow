@@ -16,6 +16,7 @@ from app.routers import (
     billing,
     planning_diag, planning_unavailabilities,
     delivery_templates,
+    suppliers as suppliers_router,
 )
 
 
@@ -594,7 +595,7 @@ async def lifespan(app: FastAPI):
     yield
 
 
-app = FastAPI(title="MediaFlow", version="3.5.0-alpha.66.21", lifespan=lifespan)
+app = FastAPI(title="MediaFlow", version="3.5.0-alpha.68", lifespan=lifespan)
 
 BASE_DIR = Path(__file__).parent
 app.mount("/static", StaticFiles(directory=BASE_DIR / "static"), name="static")
@@ -787,6 +788,7 @@ app.include_router(admin_data.router)
 from app.routers import physical_assets as physical_assets_router
 app.include_router(physical_assets_router.router)
 app.include_router(help_router.router)
+app.include_router(suppliers_router.router)
 app.include_router(billing.router)
 
 

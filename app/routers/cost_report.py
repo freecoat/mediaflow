@@ -14,6 +14,7 @@ from app.models import (
     Resource, WorkingHoursPolicy,
     BillingBatch, BillingBatchStatus, JCLBillingStatus,
     JobDeliverable,
+    SupplierInvoice, SupplierInvoiceStatus,
 )
 from app.services.booking_cost import compute_assignment_breakdown, BookingBreakdown
 from app.services.working_hours import get_holidays
@@ -460,6 +461,26 @@ async def job_cost_report(job_id: int, db: Session = Depends(get_db)):
                     + br.pending_overtime_hours
                 )
 
+    # v3.5.0-alpha.68 — Σ fatture passive linkate al job (diretto o via
+    # project) non cancelled. Contribuisce al margine reale completo
+    # come hardcost esterno (costo per il tenant pagato a fornitori).
+    sup_q = db.query(SupplierInvoice).filter(
+        SupplierInvoice.tenant_id == CURRENT_TENANT,
+        SupplierInvoice.deleted_at.is_(None),
+        SupplierInvoice.payment_status != SupplierInvoiceStatus.cancelled,
+    )
+    if job.project_id:
+        from sqlalchemy import or_ as _or
+        sup_q = sup_q.filter(_or(
+            SupplierInvoice.job_id == job_id,
+            SupplierInvoice.project_id == job.project_id,
+        ))
+    else:
+        sup_q = sup_q.filter(SupplierInvoice.job_id == job_id)
+    total_supplier_invoices = sum(
+        (i.amount_total or 0) for i in sup_q.all()
+    )
+
     # v3.4.36 (R1.4): margine dinamico = Σ JobCostLine.total_quoted (vivo)
     # − (costo booking + spese). Non più contro Job.budget_quoted statico
     # (quello resta come riferimento "originale" all'approvazione, ma può
@@ -495,6 +516,14 @@ async def job_cost_report(job_id: int, db: Session = Depends(get_db)):
             "total_cost_accrued": round(sum((l.total_cost_accrued or 0) for l in job.cost_lines), 2),
             "real_margin": round(
                 total_accrued - sum((l.total_cost_accrued or 0) for l in job.cost_lines), 2
+            ),
+            # v3.5.0-alpha.68 — Fatture passive (Supplier) linkate al job
+            # o al project. real_margin_full sottrae anche queste.
+            "total_supplier_invoices": round(total_supplier_invoices, 2),
+            "real_margin_full": round(
+                total_accrued
+                - sum((l.total_cost_accrued or 0) for l in job.cost_lines)
+                - total_supplier_invoices, 2
             ),
             # v3.5.0-alpha.55: due viste di Over/Under.
             # NOW = maturato − quotato (extracosto certo, base fatturazione).

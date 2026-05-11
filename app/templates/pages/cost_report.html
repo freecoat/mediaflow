@@ -53,10 +53,11 @@
           <th class="text-right" style="width:120px;">Maturato</th>
           <th class="text-right" style="width:120px;">Stimato</th>
           <th class="text-right" style="width:120px;">Over/Under</th>
+          <th class="text-right" style="width:120px;" title="Maturato − Costo reale risorse (α.67)">Marg. reale</th>
         </tr>
       </thead>
       <tbody id="cr-list-tbody">
-        <tr><td colspan="8" class="text-muted" style="text-align:center;padding:24px;">Caricamento…</td></tr>
+        <tr><td colspan="9" class="text-muted" style="text-align:center;padding:24px;">Caricamento…</td></tr>
       </tbody>
     </table>
   </div>
@@ -165,6 +166,8 @@
               <th class="text-right" title="Maturato eccedente il già fatturato (done senza slice)">Mat. post</th>
               <th class="text-right" title="Stima ulteriori ore ancora da lavorare (planned − done)">Stim. fut.</th>
               <th class="text-right">Over/Under</th>
+              <th class="text-right" title="Σ ore done × Resource.internal_cost_hourly — costo reale risorse interne (α.67)">Costo reale</th>
+              <th class="text-right" title="Maturato − Costo reale (margine reale stimato basato sui cost-rate interni)">Margine reale</th>
               <th>Fatt.</th>
               <th></th>
             </tr>
@@ -345,7 +348,7 @@ async function loadCrList() {
     _crAll = await api('GET', '/cost-report/api/list');
   } catch(e) {
     document.getElementById('cr-list-tbody').innerHTML =
-      `<tr><td colspan="8" style="text-align:center;color:#ef4444;padding:24px;">Errore: ${escapeHtml(e.message || 'caricamento lista')}</td></tr>`;
+      `<tr><td colspan="9" style="text-align:center;color:#ef4444;padding:24px;">Errore: ${escapeHtml(e.message || 'caricamento lista')}</td></tr>`;
     return;
   }
   // Popola filtro cliente
@@ -383,7 +386,7 @@ function renderCrList() {
     );
   }
   if (!rows.length) {
-    tbody.innerHTML = '<tr><td colspan="8" class="text-muted" style="text-align:center;padding:24px;">Nessun cost report corrisponde ai filtri</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="9" class="text-muted" style="text-align:center;padding:24px;">Nessun cost report corrisponde ai filtri</td></tr>';
     return;
   }
   const STATUS_LBL = { open:'Aperto', in_progress:'In corso', completed:'Completato', cancelled:'Annullato' };
@@ -404,6 +407,7 @@ function renderCrList() {
       <td class="mono text-right">${fmtCurrency(r.total_accrued)}</td>
       <td class="mono text-right">${fmtCurrency(r.total_expected)}</td>
       <td class="mono text-right ${oCls}">${oSign}${fmtCurrency(oVal)}</td>
+      <td class="mono text-right" style="color:${(r.total_cost_accrued||0)>0?((r.real_margin||0)>=0?'var(--green)':'var(--rose)'):'var(--text3)'};">${(r.total_cost_accrued||0)>0?fmtCurrency(r.real_margin):'—'}</td>
     </tr>`;
   }).join('');
 }
@@ -724,6 +728,14 @@ function renderKPIs() {
   const billedLocked = s.billed_locked || 0;
   const accruedPost = s.accrued_post_period || 0;
   const forecastFut = s.forecast_future || 0;
+  // v3.5.0-alpha.66.22 — α.67 cost-side risorsa
+  const costAccrued = s.total_cost_accrued || 0;
+  const realMargin = s.real_margin ?? 0;
+  const hasCostData = costAccrued > 0;
+  // v3.5.0-alpha.68 — Σ fatture passive (Supplier) linkate al job/project
+  const supplierTotal = s.total_supplier_invoices || 0;
+  const realMarginFull = s.real_margin_full ?? realMargin;
+  const hasSupplier = supplierTotal > 0;
   document.getElementById('kpi-grid').innerHTML = `
     <div class="stat-card"><div class="stat-label">Budget quotato</div>
       <div class="stat-value color-indigo mono" style="font-size:20px;">${fmtCurrency(s.budget_quoted)}</div></div>
@@ -747,7 +759,19 @@ function renderKPIs() {
       <div class="stat-sub">slice + post + futuro</div></div>
     <div class="stat-card"><div class="stat-label">Margine stimato</div>
       <div class="stat-value mono" style="font-size:20px;color:${margin>=0?'var(--green)':'var(--rose)'};">${fmtCurrency(margin)}</div>
-      <div class="stat-sub">Σ quotato vivo − (costo ore + spese)</div></div>`;
+      <div class="stat-sub">Σ quotato vivo − (costo ore + spese)</div></div>
+    <div class="stat-card" title="Σ ore done × Resource.internal_cost_hourly. Risorse senza cost_type configurato → contributo 0."><div class="stat-label">Costo reale risorse</div>
+      <div class="stat-value mono" style="font-size:20px;color:${hasCostData?'var(--text)':'var(--text3)'};">${hasCostData?fmtCurrency(costAccrued):'—'}</div>
+      <div class="stat-sub">${hasCostData?'α.67 cost-side':'cost-rate non configurati'}</div></div>
+    <div class="stat-card" title="Maturato − Costo reale. Margine reale basato sui cost-rate interni delle risorse."><div class="stat-label">Margine reale</div>
+      <div class="stat-value mono" style="font-size:20px;color:${hasCostData?(realMargin>=0?'var(--green)':'var(--rose)'):'var(--text3)'};">${hasCostData?fmtCurrency(realMargin):'—'}</div>
+      <div class="stat-sub">${hasCostData?'maturato − costo reale':'attiva cost_type su /resources'}</div></div>
+    <div class="stat-card" title="Σ fatture passive non cancellate linkate al job o project. α.68."><div class="stat-label">Fatture passive</div>
+      <div class="stat-value mono" style="font-size:20px;color:${hasSupplier?'var(--rose)':'var(--text3)'};">${hasSupplier?fmtCurrency(supplierTotal):'—'}</div>
+      <div class="stat-sub">${hasSupplier?'costo esterno fornitori':'nessuna fattura passiva'}</div></div>
+    <div class="stat-card" title="Maturato − Costo reale − Fatture passive. Margine reale completo (interno + esterno)."><div class="stat-label">Margine reale ⊕</div>
+      <div class="stat-value mono" style="font-size:20px;color:${(hasCostData||hasSupplier)?(realMarginFull>=0?'var(--green)':'var(--rose)'):'var(--text3)'};">${(hasCostData||hasSupplier)?fmtCurrency(realMarginFull):'—'}</div>
+      <div class="stat-sub">${(hasCostData||hasSupplier)?'reale interno + esterno':'nessun dato cost-side'}</div></div>`;
 }
 
 // v3.5.0-alpha.48: badge per stato fatturazione JCL.
@@ -770,7 +794,7 @@ function renderBillingBadge(status, batchId) {
 function renderCostLines() {
   const tbody = document.getElementById('cost-lines-table');
   if (!currentReport.cost_lines.length) {
-    tbody.innerHTML = '<tr><td colspan="9" class="text-muted" style="text-align:center;padding:20px;">Nessuna voce di costo</td></tr>'; return;
+    tbody.innerHTML = '<tr><td colspan="11" class="text-muted" style="text-align:center;padding:20px;">Nessuna voce di costo</td></tr>'; return;
   }
   // v3.5.0-alpha.55: vista Maturato/Stima. Maturato → over_under_now.
   // Stima → over_under_forecast. Convenzione: positivo=OVER (rosso),
@@ -809,6 +833,8 @@ function renderCostLines() {
       <td class="mono text-right color-amber">${fmtCurrency(accruedPost)}</td>
       <td class="mono text-right">${fmtCurrency(forecastFut)}</td>
       <td class="mono text-right" style="color:${ov>0?'var(--rose)':(ov<0?'var(--green)':'var(--text3)')};">${ovSign}${fmtCurrency(ov)}</td>
+      <td class="mono text-right" style="color:${(l.total_cost_accrued||0)>0?'var(--text)':'var(--text3)'};">${(l.total_cost_accrued||0)>0?fmtCurrency(l.total_cost_accrued):'—'}</td>
+      <td class="mono text-right" style="color:${(l.total_cost_accrued||0)>0?((l.real_margin||0)>=0?'var(--green)':'var(--rose)'):'var(--text3)'};">${(l.total_cost_accrued||0)>0?fmtCurrency(l.real_margin):'—'}</td>
       <td>${renderBillingBadge(l.billing_status, l.billing_batch_id)}</td>
       <td onclick="event.stopPropagation()" style="white-space:nowrap;">
         ${(accruedPost > 0 || (l.is_extra && (l.total_accrued || 0) > 0)) ? `<button class="btn btn-ghost btn-sm" title="Rimanda al commerciale" onclick="openReferToSales(${l.id})">↪</button>` : ''}

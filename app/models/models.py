@@ -1290,6 +1290,79 @@ class Expense(Base):
     job: Mapped["Job"] = relationship(back_populates="expenses")
 
 
+# ── FORNITORI / FATTURE PASSIVE (v3.5.0-alpha.68) ────────────
+# Modulo nuovo per tracciare commesse esterne / freelance fatturati
+# direttamente al tenant (non risorse interne). Punto 6 della roadmap
+# billing α.65+. SupplierInvoice è "passiva" (in entrata, costo per
+# il tenant) → contribuisce al cost report come hardcost esterno e al
+# cashflow come outflow.
+
+class SupplierInvoiceStatus(str, enum.Enum):
+    """Stato pagamento fattura passiva (visto dal tenant pagatore)."""
+    unpaid = "unpaid"       # ricevuta, non ancora pagata
+    partial = "partial"     # pagata parzialmente (amount_paid > 0 ma < total)
+    paid = "paid"           # saldata
+    cancelled = "cancelled" # annullata (storno o errore)
+
+
+class Supplier(Base):
+    """Anagrafica fornitore/commessa esterna. Soft-delete via deleted_at."""
+    __tablename__ = "suppliers"
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    tenant_id: Mapped[int] = mapped_column(ForeignKey("tenants.id"), default=1, index=True)
+    name: Mapped[str] = mapped_column(String(255), index=True)
+    vat_number: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
+    tax_code: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
+    contact_email: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
+    contact_phone: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
+    address: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    iban: Mapped[Optional[str]] = mapped_column(String(40), nullable=True)
+    default_payment_terms_days: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    is_active: Mapped[bool] = mapped_column(Boolean, default=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    deleted_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True, index=True)
+    invoices: Mapped[List["SupplierInvoice"]] = relationship(
+        back_populates="supplier", cascade="all, delete-orphan"
+    )
+
+
+class SupplierInvoice(Base):
+    """Fattura passiva ricevuta da un fornitore. Può essere associata a
+    project (più granulare) o direttamente a job o job_cost_line.
+
+    `amount_total = amount_net + amount_vat`. `amount_paid` denormalizzato
+    per query veloci. `payment_status` derivato canonico dal client al
+    save: unpaid|partial|paid|cancelled."""
+    __tablename__ = "supplier_invoices"
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    tenant_id: Mapped[int] = mapped_column(ForeignKey("tenants.id"), default=1, index=True)
+    supplier_id: Mapped[int] = mapped_column(ForeignKey("suppliers.id"), index=True)
+    number: Mapped[str] = mapped_column(String(80), index=True)
+    issue_date: Mapped[date] = mapped_column(Date, index=True)
+    due_date: Mapped[Optional[date]] = mapped_column(Date, nullable=True, index=True)
+    payment_date: Mapped[Optional[date]] = mapped_column(Date, nullable=True)
+    project_id: Mapped[Optional[int]] = mapped_column(ForeignKey("projects.id"), nullable=True, index=True)
+    job_id: Mapped[Optional[int]] = mapped_column(ForeignKey("jobs.id"), nullable=True, index=True)
+    job_cost_line_id: Mapped[Optional[int]] = mapped_column(
+        ForeignKey("job_cost_lines.id"), nullable=True, index=True
+    )
+    amount_net: Mapped[float] = mapped_column(Float, default=0.0)
+    vat_rate: Mapped[float] = mapped_column(Float, default=22.0)
+    amount_vat: Mapped[float] = mapped_column(Float, default=0.0)
+    amount_total: Mapped[float] = mapped_column(Float, default=0.0)
+    currency: Mapped[str] = mapped_column(String(3), default="EUR")
+    payment_status: Mapped[SupplierInvoiceStatus] = mapped_column(
+        SAEnum(SupplierInvoiceStatus), default=SupplierInvoiceStatus.unpaid, index=True
+    )
+    amount_paid: Mapped[float] = mapped_column(Float, default=0.0)
+    attachment_path: Mapped[Optional[str]] = mapped_column(String(512), nullable=True)
+    notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    deleted_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True, index=True)
+    supplier: Mapped["Supplier"] = relationship(back_populates="invoices")
+
+
 # ── FATTURE ──────────────────────────────────────────────────
 
 class Invoice(Base):
