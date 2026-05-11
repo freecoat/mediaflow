@@ -166,7 +166,7 @@ def _require_perm(request: Request, perm: str = "edit_planning_all"):
 async def create_physical_asset(
     request: Request,
     kind: str = Form(...),
-    label: str = Form(...),
+    label: Optional[str] = Form(None),  # v3.5.0-alpha.72.1: auto se vuoto
     description: Optional[str] = Form(None),
     project_id: Optional[int] = Form(None),
     job_id: Optional[int] = Form(None),
@@ -207,6 +207,11 @@ async def create_physical_asset(
     except ValueError:
         owner_enum = AssetOwnerType.internal
     from app.services.asset_qr import new_token
+    # v3.5.0-alpha.72.1 — auto-numerazione se label vuoto
+    from app.services.asset_numbering import next_label
+    if not (label or "").strip():
+        auto = next_label(db, kind, tenant_id=CURRENT_TENANT)
+        label = auto or "(no label)"
     a = PhysicalAsset(
         tenant_id=CURRENT_TENANT,
         kind=kind_enum,
@@ -357,6 +362,99 @@ async def restore_physical_asset(
     a.deleted_at = None
     db.commit()
     return _serialize(a)
+
+
+# ── Numerazione automatica (v3.5.0-alpha.72.1) ────────────────
+
+
+@router.get("/api/numbering/config")
+async def get_numbering_config(request: Request, db: Session = Depends(get_db)):
+    from app.services.asset_numbering import get_config
+    return get_config(db, tenant_id=CURRENT_TENANT)
+
+
+@router.put("/api/numbering/config")
+async def update_numbering_config(
+    request: Request,
+    config: str = Form(...),
+    db: Session = Depends(get_db),
+):
+    """PUT JSON string config (es. {"LTO":{"prefix":"LTO-","counter":1,"pad":3}})."""
+    _require_perm(request, "edit_settings")
+    import json as _json
+    try:
+        new = _json.loads(config)
+    except _json.JSONDecodeError as e:
+        raise HTTPException(400, f"JSON malformato: {e}")
+    from app.services.asset_numbering import save_config
+    saved = save_config(db, new, tenant_id=CURRENT_TENANT)
+    db.commit()
+    return saved
+
+
+@router.get("/api/numbering/peek")
+async def peek_numbering(kind: str, offset: int = 0, db: Session = Depends(get_db)):
+    from app.services.asset_numbering import peek_label
+    return {"kind": kind, "next_label": peek_label(db, kind, offset, tenant_id=CURRENT_TENANT)}
+
+
+# ── Batch import (v3.5.0-alpha.72.1) ──────────────────────────
+
+
+@router.post("/api/batch-import")
+async def batch_import_physical_assets(
+    request: Request,
+    kind: str = Form(...),
+    count: int = Form(...),
+    description: Optional[str] = Form(None),
+    manufacturer: Optional[str] = Form(None),
+    capacity_gb: Optional[float] = Form(None),
+    location: Optional[str] = Form(None),
+    owner_type: str = Form("internal"),
+    unit_cost: Optional[float] = Form(None),
+    notes: Optional[str] = Form(None),
+    db: Session = Depends(get_db),
+):
+    """Crea N PhysicalAsset stesso kind con numerazione progressiva
+    dalla config tenant. Use case: acquisto batch LTO (es. 20 LTO-9
+    in un colpo).
+    """
+    _require_perm(request)
+    if count <= 0 or count > 500:
+        raise HTTPException(400, "count deve essere 1..500")
+    try:
+        kind_enum = PhysicalAssetKind(kind)
+    except ValueError:
+        raise HTTPException(400, f"kind invalido: {kind}")
+    try:
+        owner_enum = AssetOwnerType(owner_type or "internal")
+    except ValueError:
+        owner_enum = AssetOwnerType.internal
+    from app.services.asset_numbering import next_label
+    from app.services.asset_qr import new_token
+    created = []
+    for _ in range(count):
+        lbl = next_label(db, kind, tenant_id=CURRENT_TENANT) or "(no label)"
+        a = PhysicalAsset(
+            tenant_id=CURRENT_TENANT,
+            kind=kind_enum,
+            label=lbl,
+            description=(description or "").strip() or None,
+            manufacturer=(manufacturer or "").strip()[:120] or None,
+            capacity_gb=capacity_gb,
+            location=(location or "").strip()[:255] or None,
+            unit_cost=unit_cost,
+            owner_type=owner_enum,
+            qr_code_token=new_token(),
+            logistics_status="in_storage",
+            notes=(notes or "").strip() or None,
+            is_internal_archive=True,
+        )
+        db.add(a)
+        db.flush()
+        created.append({"id": a.id, "label": a.label, "kind": a.kind.value})
+    db.commit()
+    return {"ok": True, "count": len(created), "assets": created}
 
 
 # ── Movimenti / Logistics (v3.5.0-alpha.72) ──────────────────
@@ -570,7 +668,7 @@ async def asset_label_png(
 ):
     a = db.query(PhysicalAsset).filter(
         PhysicalAsset.id == asset_id, PhysicalAsset.tenant_id == CURRENT_TENANT,
-    ).options(joinedload(PhysicalAsset.__mapper__.relationships.get("project")) if False else joinedload()).first()
+    ).first()
     if not a:
         raise HTTPException(404)
     from app.services.asset_qr import generate_label_png, new_token
@@ -659,7 +757,7 @@ async def scan_asset(token: str, request: Request, db: Session = Depends(get_db)
     a = db.query(PhysicalAsset).filter(
         PhysicalAsset.qr_code_token == token,
         PhysicalAsset.tenant_id == CURRENT_TENANT,
-    ).options(joinedload(PhysicalAsset.__mapper__.relationships.get("project")) if False else joinedload()).first()
+    ).first()
     if not a:
         return _tpl().TemplateResponse(
             "pages/physical_asset_scan.html",

@@ -8,6 +8,37 @@
 
 ## Versione corrente
 
+**v3.5.0-alpha.72.1** — 11 maggio 2026 — Fix etichetta + numerazione + batch
+
+3 issue:
+1. Fix bug: bottone etichetta crashava per joinedload vuoto.
+2. Numerazione automatica: Tenant config JSON {kind: {prefix, counter,
+   pad}}. Service asset_numbering.py + UI modal config.
+3. Batch import: crea N asset stessa kind con label progressiva.
+
+Endpoint nuovi: /api/numbering/{config,peek} + /api/batch-import.
+UI: topbar bottoni "📦 Batch import" + "🔢 Numerazione".
+
+361 routes (+3).
+
+## Prossimo step (α.73 → α.77 design roadmap)
+
+Pensata su confronto con CatDV/Iconik/Frame.io/MediaSilo:
+
+- **α.73**: Estendi AssetMovement con asset_id (Asset digital) opt
+  (mutex con physical_asset_id). Page `/assets/inout` con vista
+  unificata movimenti in/out + filtri. Wizard crea movimento +
+  genera asset al volo (digital file upload o physical inline).
+- **α.74**: AssetMembership (digital ↔ physical N:M con storico).
+  "Cosa c'è dentro l'HDD X?" lookup. Endpoint manifest CSV/JSON import.
+- **α.75**: Filesystem scan (mock manifest upload per ora — full fs
+  walk richiede agent locale, scope futuro).
+- **α.76**: AI capability propose_asset_movement, query_assets,
+  parse_ddt_pdf (riusa supplier parser pattern).
+- **α.77**: UI shelf/vault dashboard (mappa storage).
+
+## (versione precedente)
+
 **v3.5.0-alpha.72.0** — 11 maggio 2026 — Asset fisici: logistics + DDT + QR
 
 Sistema logistico completo per PhysicalAsset:

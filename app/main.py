@@ -331,6 +331,15 @@ def _auto_migrate_columns():
             if backfill_rows:
                 print(f"[auto-migrate] backfill InvoicePayment per {len(backfill_rows)} "
                       f"fatture legacy paid (cashflow ora le conteggia)")
+    # v3.5.0-alpha.72.1 — Tenant asset_numbering_config
+    if "tenants" in insp.get_table_names():
+        tcols = {c["name"] for c in insp.get_columns("tenants")}
+        if "asset_numbering_config" not in tcols:
+            print("[auto-migrate] tenants.asset_numbering_config mancante -> ALTER TABLE")
+            with engine.begin() as conn:
+                conn.execute(text(
+                    "ALTER TABLE tenants ADD COLUMN asset_numbering_config TEXT NULL"
+                ))
     # v3.5.0-alpha.72 — PhysicalAsset ownership + QR
     if "physical_assets" in insp.get_table_names():
         pacols = {c["name"] for c in insp.get_columns("physical_assets")}
@@ -686,7 +695,7 @@ async def lifespan(app: FastAPI):
     yield
 
 
-app = FastAPI(title="MediaFlow", version="3.5.0-alpha.72.0", lifespan=lifespan)
+app = FastAPI(title="MediaFlow", version="3.5.0-alpha.72.1", lifespan=lifespan)
 
 BASE_DIR = Path(__file__).parent
 app.mount("/static", StaticFiles(directory=BASE_DIR / "static"), name="static")

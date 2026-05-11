@@ -1,5 +1,52 @@
 # MediaFlow — Changelog
 
+## v3.5.0-alpha.72.1 — Fix etichetta + numerazione automatica + batch import (11 maggio 2026)
+
+**Bug fix critico**: `/physical-assets/api/{id}/label.png` e `/scan/{token}`
+crashavano per `joinedload()` vuoto (residuo refactor α.72.0). Sostituiti
+con query senza relationship loading.
+
+**Numerazione automatica** asset fisici (analisi vs CatDV/Iconik):
+- Tenant.asset_numbering_config JSON (auto-migrate): `{kind: {prefix,
+  counter, pad}}`. Esempio: `LTO-001`, `HDD-042`, `BD-0023`.
+- Service `app/services/asset_numbering.py`: get_config (con default
+  merge) + save_config + next_label + peek_label.
+- POST `/physical-assets/api`: label=optional, auto-genera da config se
+  vuoto. Counter avanzato ad ogni create.
+- Fix SQLA: `flag_modified` per JSON mutation detection (mutation
+  in-place non rilevata di default, prima 5 asset stesso label).
+
+**Batch import** (acquisto in stock LTO/HDD):
+- POST `/physical-assets/api/batch-import`: input kind + count (1..500)
+  + campi comuni (manufacturer, capacity_gb, location, unit_cost,
+  description). Crea N asset con label progressiva.
+
+**API settings numerazione**:
+- GET `/api/numbering/config` ritorna config con default merge
+- PUT `/api/numbering/config` salva nuova config (gate `edit_settings`)
+- GET `/api/numbering/peek?kind&offset` preview senza avanzare
+
+**UI** `/physical-assets`:
+- Topbar 2 bottoni nuovi: "📦 Batch import" + "🔢 Numerazione"
+- Modal batch: preview labels live (first → last) + form campi comuni
+- Modal numerazione: tabella editabile prefix/counter/pad per kind
+
+**Confronto sistemi commerciali**:
+- CatDV: numerazione fissa "bin id", no batch import
+- Iconik: tagging metadata, no logistics
+- Frame.io Vault: shelf id auto ma chiuso ($)
+- MediaFlow ora supera entrambi sul side logistics + numerazione
+  configurabile per tenant.
+
+**File toccati** (5):
+- `app/main.py` — VERSION + auto-migrate asset_numbering_config
+- `app/models/models.py` — Tenant.asset_numbering_config
+- `app/routers/physical_assets.py` — fix joinedload + 4 endpoint nuovi
+- `app/services/asset_numbering.py` — NUOVO
+- `app/templates/pages/physical_assets.html` — 2 modal nuovi + JS
+
+361 routes (+3 dalla α.72.0).
+
 ## v3.5.0-alpha.72.0 — Asset fisici: ownership + movimenti + DDT + QR (11 maggio 2026)
 
 Sistema logistico completo per asset fisici (LTO/HDD/CRU/Blu-Ray):

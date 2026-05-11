@@ -369,6 +369,12 @@ class Tenant(Base):
     brand_color: Mapped[Optional[str]] = mapped_column(String(7), nullable=True)      # hex es. #6272f5 — usato come accent nei PDF
     show_powered_by: Mapped[bool] = mapped_column(Boolean, default=True)              # toggle "Generato da MediaFlow" in footer PDF
     document_header: Mapped[Optional[str]] = mapped_column(Text, nullable=True)       # intestazione libera (HTML-light) sopra ogni doc
+    # v3.5.0-alpha.72.1 — Numerazione automatica asset fisici.
+    # JSON: {"LTO": {"prefix":"LTO-", "counter":1, "pad":3},
+    #        "HDD": {"prefix":"HDD-", "counter":1, "pad":3}, ...}
+    # Counter incrementato ad ogni create. pad = zero-padding (003 vs 3).
+    # Esempio risultato: "LTO-001", "LTO-002", "HDD-042".
+    asset_numbering_config: Mapped[Optional[dict]] = mapped_column(JSON, nullable=True)
     # Stato
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
     onboarding_completed: Mapped[bool] = mapped_column(Boolean, default=False)

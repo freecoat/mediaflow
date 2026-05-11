@@ -3,6 +3,8 @@
 {% block title %}Asset Fisici — MediaFlow{% endblock %}
 {% block topbar_title %}Asset Fisici{% endblock %}
 {% block topbar_actions %}
+  <button class="btn btn-secondary btn-sm" onclick="openBatchImportModal()">📦 Batch import</button>
+  <button class="btn btn-secondary btn-sm" onclick="openNumberingSettings()">🔢 Numerazione</button>
   <button class="btn btn-primary btn-sm" onclick="openNewPhysicalAsset()"><i data-lucide="plus" style="width:14px;height:14px;vertical-align:-2px;"></i> Nuovo asset fisico</button>
 {% endblock %}
 
@@ -163,6 +165,100 @@
       </div>
       <button class="btn btn-secondary" onclick="closeModal('modal-physical-asset')">Annulla</button>
       <button class="btn btn-primary" onclick="savePhysicalAsset()">Salva</button>
+    </div>
+  </div>
+</div>
+
+<!-- v3.5.0-alpha.72.1 — Modal Batch Import -->
+<div class="modal-overlay" id="modal-batch">
+  <div class="modal" style="max-width:640px;">
+    <div class="modal-header">
+      <span class="modal-title">📦 Batch import asset fisici</span>
+      <button class="btn btn-ghost btn-icon" onclick="closeModal('modal-batch')">&times;</button>
+    </div>
+    <div class="modal-body">
+      <div class="text-sm text-muted" style="margin-bottom:12px;">
+        Crea N asset stesso tipo con numerazione progressiva automatica (es. 20 LTO acquistati in batch).
+        Etichette generate da config numerazione tenant.
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label class="form-label">Tipo *</label>
+          <select class="form-select" id="bt-kind" onchange="btPreview()">
+            <option value="lto">LTO</option>
+            <option value="hdd">HDD</option>
+            <option value="cru">CRU</option>
+            <option value="bluray">Blu-Ray</option>
+            <option value="dvd">DVD</option>
+            <option value="case">Case</option>
+            <option value="other">Altro</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Quantità *</label>
+          <input class="form-input" id="bt-count" type="number" value="10" min="1" max="500" oninput="btPreview()">
+        </div>
+      </div>
+      <div id="bt-preview" style="background:var(--bg2);padding:10px;border-radius:6px;font-size:12px;font-family:var(--font-mono);margin-bottom:14px;">
+        Anteprima labels...
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label class="form-label">Brand / Manufacturer</label>
+          <input class="form-input" id="bt-manuf" placeholder="es. Sony, IBM, LTO-9">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Capacità (GB)</label>
+          <input class="form-input" id="bt-cap" type="number" step="100">
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label class="form-label">Locazione</label>
+          <input class="form-input" id="bt-loc" placeholder="es. Cassaforte sala server">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Costo unitario (€)</label>
+          <input class="form-input" id="bt-cost" type="number" step="0.01">
+        </div>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Descrizione (applicata a tutti)</label>
+        <textarea class="form-textarea" id="bt-desc" rows="2"></textarea>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeModal('modal-batch')">Annulla</button>
+      <button class="btn btn-primary" onclick="btSubmit()">Crea batch</button>
+    </div>
+  </div>
+</div>
+
+<!-- v3.5.0-alpha.72.1 — Modal Numerazione settings -->
+<div class="modal-overlay" id="modal-numbering">
+  <div class="modal" style="max-width:680px;">
+    <div class="modal-header">
+      <span class="modal-title">🔢 Numerazione automatica asset fisici</span>
+      <button class="btn btn-ghost btn-icon" onclick="closeModal('modal-numbering')">&times;</button>
+    </div>
+    <div class="modal-body">
+      <div class="text-sm text-muted" style="margin-bottom:14px;">
+        Configura prefisso + contatore + padding per ogni tipo di asset.
+        Esempio: prefix=<b>LTO-</b>, counter=<b>1</b>, pad=<b>3</b> → "LTO-001", "LTO-002", ...
+        Contatore aggiornato automaticamente ad ogni create.
+      </div>
+      <div class="table-wrap">
+        <table style="font-size:12px;">
+          <thead><tr>
+            <th>Tipo</th><th>Prefisso</th><th>Counter</th><th>Pad</th><th>Anteprima next</th>
+          </tr></thead>
+          <tbody id="num-tbody"></tbody>
+        </table>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeModal('modal-numbering')">Annulla</button>
+      <button class="btn btn-primary" onclick="numSubmit()">Salva</button>
     </div>
   </div>
 </div>
@@ -445,6 +541,101 @@ async function restorePhysicalAsset(id) {
     await api('POST', `/physical-assets/api/${id}/restore`);
     toast('Asset ripristinato', 'success');
     loadAssets();
+  } catch(e) { toast(e.message || 'Errore', 'error'); }
+}
+
+// v3.5.0-alpha.72.1 — Batch import + numerazione
+function openBatchImportModal() {
+  document.getElementById('bt-kind').value = 'LTO';
+  document.getElementById('bt-count').value = '10';
+  ['bt-manuf','bt-cap','bt-loc','bt-cost','bt-desc'].forEach(id => document.getElementById(id).value = '');
+  btPreview();
+  openModal('modal-batch');
+}
+
+async function btPreview() {
+  const kind = document.getElementById('bt-kind').value;
+  const count = parseInt(document.getElementById('bt-count').value) || 0;
+  const host = document.getElementById('bt-preview');
+  try {
+    const first = await api('GET', `/physical-assets/api/numbering/peek?kind=${kind}&offset=0`);
+    const last = await api('GET', `/physical-assets/api/numbering/peek?kind=${kind}&offset=${count-1}`);
+    host.textContent = `${first.next_label || '?'} → ${last.next_label || '?'} (${count} asset)`;
+  } catch(e) {
+    host.textContent = 'Errore anteprima: ' + (e.message || '');
+  }
+}
+
+async function btSubmit() {
+  const fd = new FormData();
+  fd.append('kind', document.getElementById('bt-kind').value);
+  fd.append('count', document.getElementById('bt-count').value);
+  ['bt-manuf','bt-cap','bt-loc','bt-cost','bt-desc'].forEach(id => {
+    const v = document.getElementById(id).value.trim();
+    if (v) {
+      const key = ({'bt-manuf':'manufacturer','bt-cap':'capacity_gb','bt-loc':'location','bt-cost':'unit_cost','bt-desc':'description'})[id];
+      fd.append(key, v);
+    }
+  });
+  try {
+    const r = await fetch('/physical-assets/api/batch-import', {
+      method:'POST', body: fd, credentials:'same-origin',
+    });
+    if (!r.ok) throw new Error((await r.json()).detail || 'Errore');
+    const res = await r.json();
+    closeModal('modal-batch');
+    toast(`✓ ${res.count} asset creati (${res.assets[0]?.label} → ${res.assets[res.count-1]?.label})`, 'success');
+    loadAssets();
+  } catch(e) { toast(e.message || 'Errore', 'error'); }
+}
+
+let _numConfig = {};
+async function openNumberingSettings() {
+  try {
+    _numConfig = await api('GET', '/physical-assets/api/numbering/config');
+  } catch(e) { toast(e.message || 'Errore', 'error'); return; }
+  const tbody = document.getElementById('num-tbody');
+  while (tbody.firstChild) tbody.removeChild(tbody.firstChild);
+  Object.entries(_numConfig).forEach(([kind, cfg]) => {
+    const tr = document.createElement('tr');
+    const td = (html, isInput) => { const e = document.createElement('td'); e.style.padding = '6px'; if (isInput) e.appendChild(html); else e.textContent = html; tr.appendChild(e); };
+    td(kind);
+    const pIn = document.createElement('input'); pIn.className = 'form-input';
+    pIn.value = cfg.prefix || ''; pIn.dataset.kind = kind; pIn.dataset.field = 'prefix';
+    pIn.style.cssText = 'width:120px;font-family:var(--font-mono);';
+    td(pIn, true);
+    const cIn = document.createElement('input'); cIn.className = 'form-input'; cIn.type = 'number';
+    cIn.value = cfg.counter || 1; cIn.dataset.kind = kind; cIn.dataset.field = 'counter';
+    cIn.style.cssText = 'width:80px;';
+    td(cIn, true);
+    const padIn = document.createElement('input'); padIn.className = 'form-input'; padIn.type = 'number';
+    padIn.value = cfg.pad || 3; padIn.dataset.kind = kind; padIn.dataset.field = 'pad';
+    padIn.min = 0; padIn.max = 8; padIn.style.cssText = 'width:60px;';
+    td(padIn, true);
+    const preview = (cfg.prefix||'') + String(cfg.counter||1).padStart(cfg.pad||3, '0');
+    td(preview);
+    tbody.appendChild(tr);
+  });
+  openModal('modal-numbering');
+}
+
+async function numSubmit() {
+  const newCfg = {};
+  document.querySelectorAll('#num-tbody input').forEach(el => {
+    const kind = el.dataset.kind;
+    const field = el.dataset.field;
+    if (!newCfg[kind]) newCfg[kind] = {};
+    newCfg[kind][field] = field === 'prefix' ? el.value : parseInt(el.value) || 0;
+  });
+  const fd = new FormData();
+  fd.append('config', JSON.stringify(newCfg));
+  try {
+    const r = await fetch('/physical-assets/api/numbering/config', {
+      method:'PUT', body: fd, credentials:'same-origin',
+    });
+    if (!r.ok) throw new Error((await r.json()).detail || 'Errore');
+    closeModal('modal-numbering');
+    toast('Config numerazione salvata', 'success');
   } catch(e) { toast(e.message || 'Errore', 'error'); }
 }
 
