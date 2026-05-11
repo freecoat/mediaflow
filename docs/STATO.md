@@ -8,6 +8,39 @@
 
 ## Versione corrente
 
+**v3.5.0-alpha.66.18** — 11 maggio 2026 — Frontend polish primo giro
+
+Su richiesta Matteo "frontend più sleek, sfruttare vis.js":
+- **Tema Broadcast** (10°): cyan `#00d4ff` su `#1c1c1f`, flat,
+  DaVinci/Avid-style. Override scoped sidebar + card + tabelle +
+  vis-timeline (linea oggi cyan, selected outline cyan, axis cyan).
+- **Stat card variants**: 5 colori border-left (accent/green/amber/
+  rose/purple) + `.stat-trend` pill (up/down/flat) + `.kpi-bar` 5-cell
+  mini-bar (warn≥70%, danger≥85%).
+- **Dashboard 4 KPI cards** ora colorate + 2 kpi-bar (jobs
+  attivi/totali, risorse interne/totali).
+- **Planning timeline broadcast scope**: items flat (no bevel 3D),
+  heatmap capacity più alta+contrastata, reparti UPPERCASE 14px, tab
+  cyan, drag-overlay cyan.
+
+Switch tema: `/settings → Aspetto → Broadcast`. Persistito
+localStorage.
+
+**Smoke**: theme switch live (no reload necessario), stat-card
+colorati, kpi-bar disegnati al load.
+
+## Prossimo step
+
+Dipende da feedback Matteo dopo test visivo:
+- Se piace il tema Broadcast: estendere ad altri 2 temi "pro"
+  (Resolve/Premiere/AfterEffects) + toggle topbar rapido
+- Se la dashboard appare ancora scarna: aggiungere capacity-week
+  strip + dept ROI gauge + upcoming deadlines
+- Se la timeline è OK così: passare a R7.x extraction
+  (planning_diag, planning_unavailabilities) come da backlog R7
+
+---
+
 **v3.5.0-alpha.66.17.3** — 11 maggio 2026 — Sprint R7 MVP: deprecated duplicate
 
 Audit pattern G "file giganti" planning.py: CRUD duplicate clients/jobs

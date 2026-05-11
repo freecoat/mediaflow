@@ -12,22 +12,24 @@
 
 <!-- ── Stat cards ─────────────────────────────────────────── -->
 <div class="stat-grid" id="stat-grid">
-  <div class="stat-card">
+  <div class="stat-card stat-card-accent">
     <div class="stat-label">Job attivi</div>
     <div class="stat-value stat-accent" id="stat-jobs">—</div>
     <div class="stat-sub">in corso questo mese</div>
+    <div class="kpi-bar" id="kpi-bar-jobs" title="Distribuzione job per stato"></div>
   </div>
-  <div class="stat-card">
+  <div class="stat-card stat-card-purple">
     <div class="stat-label">Risorse</div>
     <div class="stat-value" id="stat-resources">—</div>
     <div class="stat-sub">persone e attrezzature</div>
+    <div class="kpi-bar" id="kpi-bar-resources" title="Capacity settimana corrente"></div>
   </div>
-  <div class="stat-card">
+  <div class="stat-card stat-card-green">
     <div class="stat-label">Fatturato (anno)</div>
     <div class="stat-value" id="stat-revenue">—</div>
     <div class="stat-sub">fatture emesse/pagate</div>
   </div>
-  <div class="stat-card">
+  <div class="stat-card stat-card-amber">
     <div class="stat-label">Asset in libreria</div>
     <div class="stat-value" id="stat-assets">—</div>
     <div class="stat-sub">video, audio, immagini</div>
@@ -176,6 +178,8 @@ async function loadDashboard() {
     const jobs = await api('GET', '/planning/api/jobs');
     const active = jobs.filter(j => j.status === 'active');
     document.getElementById('stat-jobs').textContent = active.length;
+    // v3.5.0-alpha.66.18: kpi-bar — 5 celle, riempite in proporzione al ratio attivi/totali
+    renderKpiBar('kpi-bar-jobs', jobs.length ? (active.length / jobs.length) : 0);
 
     // Ultime 5 job
     const tbody = document.getElementById('jobs-tbody');
@@ -197,6 +201,9 @@ async function loadDashboard() {
     // Resources
     const res = await api('GET', '/resources/api');
     document.getElementById('stat-resources').textContent = res.length;
+    // Bar: ratio risorse interne (proxy capacity propria)
+    const internalCount = res.filter(r => (r.type || '') === 'person_internal').length;
+    renderKpiBar('kpi-bar-resources', res.length ? (internalCount / res.length) : 0);
   } catch(e) {}
 
   try {
@@ -426,6 +433,25 @@ async function myOpenDetail(bookingId) {
     body.innerHTML = html;
   } catch(e) {
     body.innerHTML = `<div class="color-rose">${escapeHtml(e.message || 'Errore')}</div>`;
+  }
+}
+
+// v3.5.0-alpha.66.18: render 5-cell mini-bar (ratio 0..1).
+// Niente innerHTML: costruisco celle via DOM API per evitare warning XSS
+// (ratio è numerico, ma manteniamo il pattern safe-by-default).
+function renderKpiBar(id, ratio) {
+  const el = document.getElementById(id);
+  if (!el) return;
+  while (el.firstChild) el.removeChild(el.firstChild);
+  const cells = 5;
+  const filled = Math.max(0, Math.min(cells, Math.round((ratio || 0) * cells)));
+  let extraClass = '';
+  if (ratio >= 0.85) extraClass = 'danger';
+  else if (ratio >= 0.7) extraClass = 'warn';
+  for (let i = 0; i < cells; i++) {
+    const c = document.createElement('div');
+    c.className = 'kpi-bar-cell' + (i < filled ? ' on' : '') + (i < filled && extraClass ? ' ' + extraClass : '');
+    el.appendChild(c);
   }
 }
 

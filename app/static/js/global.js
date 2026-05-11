@@ -3,7 +3,7 @@
 */
 
 // ── Tema (preset CSS variables) ────────────────────────────────
-const MF_THEMES = ['indigo', 'slate', 'forest', 'sand', 'midnight', 'copper', 'plum', 'teal', 'mono'];
+const MF_THEMES = ['indigo', 'slate', 'forest', 'sand', 'midnight', 'copper', 'plum', 'teal', 'mono', 'broadcast'];
 const MF_FONTS = ['dmsans', 'inter', 'roboto', 'ibmplex', 'source', 'system'];
 
 function applyTheme() {

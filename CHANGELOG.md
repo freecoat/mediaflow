@@ -1,5 +1,61 @@
 # MediaFlow — Changelog
 
+## v3.5.0-alpha.66.18 — Frontend polish: tema Broadcast + stat-card rich + timeline flat-mode (11 maggio 2026)
+
+Su richiesta Matteo "rendere il frontend più sleek, sfruttare meglio
+vis.js": primo giro di design system + planning timeline. Pattern
+caveman: tutto incrementale, no rewrite, additivo via classi nuove.
+
+**Tema `broadcast`** (DaVinci/Avid-style, 10° tema):
+- Palette flat neutro freddo `#1c1c1f`, accento **cyan `#00d4ff`**
+- Radius ridotti (4/6 px), shadow piatte, no glass, no gradient
+  decorativo
+- Override automatici scoped: sidebar (border-left cyan su active),
+  card (no shadow), th (uppercase + letter-spacing), tabelle (hover
+  cyan), vis-timeline (linea oggi cyan + glow, selected con outline
+  cyan)
+- Logo-mark con bordo cyan invece di pieno indigo
+- Registrato in `MF_THEMES` global.js + entry `THEMES` settings.html
+
+**Stat card variants** (`main.css`):
+- `.stat-card-accent|green|amber|rose|purple` → border-left 3px del
+  colore corrispondente (rhythm visivo sulla riga stat-grid)
+- `.stat-trend.up|down|flat` → pill colorato per delta vs periodo prec.
+- `.kpi-bar` → 5-cell mini-bar, classe `.on` per filled, `.warn`
+  (>=70%), `.danger` (>=85%). Costruita via DOM (no innerHTML).
+- Dashboard: 4 stat-cards usano i 4 colori + 2 kpi-bar (jobs
+  attivi/totali, risorse interne/totali).
+
+**Planning timeline broadcast scope** (`planning.css`):
+- Quando html.theme-broadcast attivo: items flat (no bevel 3D, radius
+  3px, shadow piatta), heatmap capacity più alta (9px) e contrasto
+  rinforzato su sfondo nero `#0f0f12`
+- Reparti label UPPERCASE 14px + letter-spacing 0.06em
+- tab attivo + btn-group attivo in cyan
+- `#tl-drag-overlay` restyled con bordo cyan + time cyan + dur verde
+
+**File toccati**:
+- `app/static/css/main.css` — +146 righe (tema broadcast + stat
+  variants + kpi-bar)
+- `app/static/css/planning.css` — +44 righe (override broadcast scoped)
+- `app/static/js/global.js` — MF_THEMES +1
+- `app/templates/pages/settings.html` — THEMES array +1
+- `app/templates/pages/dashboard.html` — 4 stat-card classes + 2
+  kpi-bar + renderKpiBar()
+- `app/templates/base.html` — cache-buster main.css/global.js bumped
+- `app/templates/pages/planning.html` — cache-buster planning.css
+
+**Cosa NON è incluso** (giro successivo se Matteo apprezza):
+- Dashboard rebuild profondo (capacity-week strip, dept ROI gauge,
+  upcoming deadlines)
+- Timeline item dept-icon inline (richiede rendering injection)
+- Density preset "broadcast" come variante compatta separata
+- Toggle in topbar per cambio tema rapido senza passare da /settings
+
+**Smoke**: theme switch via `/settings → Aspetto → Broadcast` (cyan
+accent persistito via localStorage), dashboard stat-card colorati +
+kpi-bar disegnati al load.
+
 ## v3.5.0-alpha.66.17.3 — Sprint R7 MVP: deprecated POST clients duplicato (11 maggio 2026)
 
 Audit consigliava la rimozione del CRUD duplicato di `clients` e `jobs`

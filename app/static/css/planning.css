@@ -680,3 +680,48 @@
   .sb-card-resource { display: inline-flex; align-items: center; gap: 4px; font-size: 10px; color: var(--text2); margin-top: 4px; }
   .sb-card-resource::before { content: ''; display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: var(--res-color, #6272f5); }
   .sb-empty { font-size: 10.5px; color: var(--text3); font-style: italic; padding: 6px 4px; }
+
+  /* ── Broadcast theme overrides (v3.5.0-alpha.66.18) ─────────
+     Quando l'utente attiva il tema "Broadcast", flattenare items e
+     potenziare ROI heatmap per look DaVinci/Avid. */
+  html.theme-broadcast .vis-item {
+    border-radius: 3px;
+    box-shadow:
+      inset 0 -1px 0 rgba(0,0,0,.35),
+      0 1px 0 rgba(0,0,0,.45) !important;
+    backdrop-filter: none;
+    border-color: rgba(0,0,0,.55);
+  }
+  html.theme-broadcast .vis-item:hover {
+    filter: brightness(1.06) saturate(1.0);
+    box-shadow:
+      inset 0 -1px 0 rgba(0,0,0,.3),
+      0 0 0 1px rgba(0,212,255,.45),
+      0 2px 4px rgba(0,0,0,.4) !important;
+  }
+  html.theme-broadcast .vis-labelset .vis-label .tl-heat {
+    height: 9px !important;
+    background: #0f0f12;
+    box-shadow: inset 0 0 0 1px #2a2a30;
+  }
+  html.theme-broadcast .vis-labelset .vis-label.vis-nesting-group {
+    font-size: 14px !important;
+    font-weight: 700 !important;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+  }
+  html.theme-broadcast .vis-labelset .vis-label .tl-res-name {
+    text-transform: none;
+    letter-spacing: 0;
+  }
+  html.theme-broadcast .pl-tab.active { border-bottom-color: #00d4ff; color: #4de3ff; }
+  html.theme-broadcast .tl-bar .btn-group .btn.active { background: #00d4ff; color: #0a0a0c; }
+  html.theme-broadcast #tl-drag-overlay {
+    background: rgba(15,15,18,.97);
+    border-color: rgba(0,212,255,.65);
+    color: #e8eaed;
+    border-radius: 3px;
+    box-shadow: 0 4px 14px rgba(0,0,0,.55), 0 0 0 1px rgba(0,212,255,.25);
+  }
+  html.theme-broadcast #tl-drag-overlay .tl-do-time { color: #4de3ff; }
+  html.theme-broadcast #tl-drag-overlay .tl-do-dur  { color: #4cd964; }
