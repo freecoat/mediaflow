@@ -8,18 +8,19 @@
 
 ## Versione corrente
 
-**v3.5.0-alpha.68.1** — 11 maggio 2026 — Cashflow ↔ supplier outflows
+**v3.5.0-alpha.68.2** — 11 maggio 2026 — SupplierInvoicePayment
 
-Estende `/finance/cashflow` con cost-side fatture passive. Cassa
-effettiva (`paid` − `supplier_paid`) ora visibile per mese.
+Storicizza i pagamenti incrementali a fornitori (analogia esatta con
+InvoicePayment per fatture attive). Risolve il limite noto di α.68.1.
 
-- **Backend** `cashflow_year`: 3 nuovi campi (supplier_billed/paid/due)
-  + derivato `net_cashflow`.
-- **UI**: 5 stat-card (Outflow + Cassa netta nuove), chart 4 barre
-  (4° rosso fornitori), tabella 7 colonne (Fatt. passive, Outflow,
-  Cassa netta colorata).
-- **Limite noto**: pagamenti incrementali a fornitori non storicizzati
-  (solo payment_date snapshot). Future: SupplierInvoicePayment table.
+- **Modello**: `SupplierInvoicePayment` (tabella nuova, auto-create).
+  amount_paid sulla fattura denormalizzato; fonte verità = Σ payments.
+- **Router**: GET `/suppliers/api/invoices/{id}/payments`, POST `/pay`
+  ora storicizza riga, DELETE `/sup-payments/{id}` per rollback.
+- **Cashflow**: `supplier_paid` da SupplierInvoicePayment.payment_date,
+  pagamenti incrementali distribuiti tra i mesi correttamente.
+
+331 routes (+2). Auto-migrate idempotente.
 
 ## Prossimo step
 
@@ -28,8 +29,10 @@ effettiva (`paid` − `supplier_paid`) ora visibile per mese.
   light per refactor invasivo (CRUD booking + multi-move + bulk-edit)
 - **AI parser PDF fattura passiva** — upload PDF → estrazione auto
   campi → conferma utente (pattern AI propone/dispone)
-- **SupplierInvoicePayment table** — analogia con InvoicePayment per
-  storico pagamenti incrementali
+- **UI gestione payments lato /suppliers** — drawer con lista pagamenti
+  + + Aggiungi pagamento + delete (già supportato backend)
+- **Anomalies overdue supplier** — sezione /finance per fatture passive
+  scadute non pagate
 - **R5/R8/R9** — split planning.html, Float→Decimal, datetime tz-aware
 - **Frontend polish** (in caldo, lo riprendiamo a richiesta)
 

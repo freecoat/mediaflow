@@ -1,5 +1,39 @@
 # MediaFlow — Changelog
 
+## v3.5.0-alpha.68.2 — SupplierInvoicePayment (11 maggio 2026)
+
+Risolve il limite noto di α.68.1: pagamenti incrementali a fornitori
+ora storicizzati (analogia con InvoicePayment per fatture attive).
+
+**Modello nuovo**:
+- `SupplierInvoicePayment` (tabella `supplier_invoice_payments`):
+  tenant_id, supplier_invoice_id, amount, payment_date, method, notes,
+  reference, recorded_by_user_id, created_at. Cascade delete on
+  invoice.
+- `SupplierInvoice.payments` relationship + `SupplierInvoice.payment_date`
+  diventa "data ultimo saldo" (back-compat, derivato).
+- `SupplierInvoice.amount_paid` resta denormalizzato per query veloci;
+  fonte verità = Σ payments.amount.
+
+**Router** `/suppliers/api/invoices/{id}/payments` (GET) + endpoint
+esistente `/pay` (POST) ora crea riga SupplierInvoicePayment + aggiorna
+denormalizzazione via `_refresh_supplier_invoice_payment_state()`.
+Nuovo `DELETE /suppliers/api/sup-payments/{id}` per rollback.
+
+**Cashflow** `/finance/api/cashflow/{year}`:
+- `supplier_paid` ora aggrega da `SupplierInvoicePayment.payment_date`
+  (fonte verità) invece di `SupplierInvoice.payment_date` (snapshot).
+- Pagamenti incrementali distribuiti correttamente tra i mesi.
+
+**File toccati** (4):
+- `app/main.py` — VERSION
+- `app/models/models.py` — SupplierInvoicePayment + relationship
+- `app/models/__init__.py` — re-export
+- `app/routers/suppliers.py` — list/create/delete payments + refresh
+- `app/routers/finance.py` — cashflow_year query da payments table
+
+Tabella auto-create al boot. 331 routes (+2 nuove).
+
 ## v3.5.0-alpha.68.1 — Cashflow ↔ supplier outflows (11 maggio 2026)
 
 Integra le fatture passive nella timeline cashflow. Chiude il giro

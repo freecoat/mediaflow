@@ -1332,8 +1332,13 @@ class SupplierInvoice(Base):
     project (più granulare) o direttamente a job o job_cost_line.
 
     `amount_total = amount_net + amount_vat`. `amount_paid` denormalizzato
-    per query veloci. `payment_status` derivato canonico dal client al
-    save: unpaid|partial|paid|cancelled."""
+    per query veloci (= Σ payments.amount). `payment_status` derivato
+    canonico: unpaid|partial|paid|cancelled.
+
+    v3.5.0-alpha.68.2 — pagamenti storicizzati in SupplierInvoicePayment
+    (analogia con InvoicePayment). `payment_date` resta come "ultima
+    data di saldo" per back-compat/UX, ma la fonte verità è la tabella
+    payments per il cashflow."""
     __tablename__ = "supplier_invoices"
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     tenant_id: Mapped[int] = mapped_column(ForeignKey("tenants.id"), default=1, index=True)
@@ -1361,6 +1366,29 @@ class SupplierInvoice(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
     deleted_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True, index=True)
     supplier: Mapped["Supplier"] = relationship(back_populates="invoices")
+    payments: Mapped[List["SupplierInvoicePayment"]] = relationship(
+        back_populates="invoice", cascade="all, delete-orphan"
+    )
+
+
+class SupplierInvoicePayment(Base):
+    """Pagamento (anche parziale) verso un fornitore (v3.5.0-alpha.68.2).
+    Analogia esatta con InvoicePayment. amount_paid sull'invoice è
+    denormalizzato; fonte verità sono i payments."""
+    __tablename__ = "supplier_invoice_payments"
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    tenant_id: Mapped[int] = mapped_column(ForeignKey("tenants.id"), default=1, index=True)
+    supplier_invoice_id: Mapped[int] = mapped_column(
+        ForeignKey("supplier_invoices.id"), index=True
+    )
+    amount: Mapped[float] = mapped_column(Float)
+    payment_date: Mapped[date] = mapped_column(Date, index=True)
+    method: Mapped[Optional[str]] = mapped_column(String(80), nullable=True)
+    notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    reference: Mapped[Optional[str]] = mapped_column(String(120), nullable=True)
+    recorded_by_user_id: Mapped[Optional[int]] = mapped_column(ForeignKey("users.id"), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    invoice: Mapped["SupplierInvoice"] = relationship(back_populates="payments")
 
 
 # ── FATTURE ──────────────────────────────────────────────────

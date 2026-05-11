@@ -9,7 +9,7 @@ from app.database import get_db
 from app.models import (
     Timesheet, Expense, Invoice, InvoiceLine, InvoiceStatus, InvoicePayment,
     Job, JobStatus, JobCostLine, Quote, QuoteStatus, Project,
-    SupplierInvoice, SupplierInvoiceStatus,
+    SupplierInvoice, SupplierInvoiceStatus, SupplierInvoicePayment,
 )
 from app.services.finance import job_financial_summary, company_pl_summary, departments_pl_summary
 from app.services.rbac import requires_permission
@@ -327,12 +327,12 @@ async def cashflow_year(year: int, db: Session = Depends(get_db)):
       - paid: somma InvoicePayment.amount per pagamenti del mese
       - outstanding: somma Invoice residuo non pagato
 
-    Cost-side (v3.5.0-alpha.68.1 — supplier outflow):
+    Cost-side (v3.5.0-alpha.68.1 — supplier outflow,
+    v3.5.0-alpha.68.2 — pagamenti storicizzati):
       - supplier_billed: Σ SupplierInvoice.amount_total fatture passive
         ricevute nel mese (issue_date), non cancelled
-      - supplier_paid: Σ amount_paid per fatture passive con payment_date
-        nel mese (limite: pagamenti incrementali non storicizzati, vedi
-        memoria α.68 — futuro SupplierInvoicePayment table)
+      - supplier_paid: Σ SupplierInvoicePayment.amount per pagamenti
+        del mese (fonte verità, pagamenti incrementali corretti)
       - supplier_due: Σ residuo (amount_total - amount_paid) per fatture
         con due_date nel mese, ancora unpaid/partial
 
@@ -381,19 +381,14 @@ async def cashflow_year(year: int, db: Session = Depends(get_db)):
         m = s.issue_date.month if s.issue_date else 1
         series[m - 1]["supplier_billed"] += s.amount_total or 0.0
 
-    # Fatture passive pagate (amount_paid > 0) con payment_date nel mese.
-    # Limite: il modello attuale ha amount_paid denormalizzato sull'invoice,
-    # non c'è storico pagamenti per supplier (a differenza di Invoice →
-    # InvoicePayment). Quindi assumiamo il pagamento avvenuto in payment_date.
-    sup_paid_rows = db.query(SupplierInvoice).filter(
-        extract("year", SupplierInvoice.payment_date) == year,
-        SupplierInvoice.deleted_at.is_(None),
-        SupplierInvoice.payment_status != SupplierInvoiceStatus.cancelled,
-        SupplierInvoice.amount_paid > 0,
+    # Pagamenti a fornitori del mese (fonte verità: SupplierInvoicePayment).
+    # v3.5.0-alpha.68.2 — pagamenti incrementali storicizzati.
+    sup_payments = db.query(SupplierInvoicePayment).filter(
+        extract("year", SupplierInvoicePayment.payment_date) == year,
     ).all()
-    for s in sup_paid_rows:
-        m = s.payment_date.month if s.payment_date else 1
-        series[m - 1]["supplier_paid"] += s.amount_paid or 0.0
+    for p in sup_payments:
+        m = p.payment_date.month if p.payment_date else 1
+        series[m - 1]["supplier_paid"] += p.amount or 0.0
 
     # Fatture passive con due_date nel mese, ancora non saldate
     sup_due_rows = db.query(SupplierInvoice).filter(

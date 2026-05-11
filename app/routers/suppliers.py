@@ -23,7 +23,7 @@ from sqlalchemy.orm import Session, joinedload
 from sqlalchemy import func, or_
 from app.database import get_db
 from app.models import (
-    Supplier, SupplierInvoice, SupplierInvoiceStatus,
+    Supplier, SupplierInvoice, SupplierInvoiceStatus, SupplierInvoicePayment,
     Project, Job, JobCostLine,
 )
 from app.context import current_tenant_id
@@ -400,43 +400,126 @@ async def update_supplier_invoice(
     return _invoice_to_dict(i)
 
 
-@router.post("/api/invoices/{invoice_id}/pay")
-async def register_payment(
-    invoice_id: int,
-    amount: float = Form(...),
-    payment_date: date = Form(...),
-    db: Session = Depends(get_db),
-):
-    """Registra un pagamento (incrementale): somma a amount_paid. Aggiorna
-    payment_date se la fattura era unpaid. Calcola status canonico."""
-    i = db.query(SupplierInvoice).filter(
+def _refresh_supplier_invoice_payment_state(db: Session, inv: SupplierInvoice) -> None:
+    """Ricomputa amount_paid + payment_status canonico + payment_date
+    da Σ payments. Idempotente. Chiamato dopo INSERT/DELETE payment."""
+    total = round(sum((p.amount or 0.0) for p in inv.payments), 2)
+    inv.amount_paid = total
+    inv.payment_status = _derive_status(total, inv.amount_total or 0, inv.payment_status)
+    # payment_date = data ultimo pagamento (se ce ne sono)
+    if inv.payments:
+        latest = max(p.payment_date for p in inv.payments if p.payment_date)
+        inv.payment_date = latest
+    else:
+        inv.payment_date = None
+
+
+@router.get("/api/invoices/{invoice_id}/payments")
+async def list_invoice_payments(invoice_id: int, db: Session = Depends(get_db)):
+    """Lista pagamenti per fattura passiva. v3.5.0-alpha.68.2."""
+    inv = db.query(SupplierInvoice).filter(
         SupplierInvoice.id == invoice_id,
         SupplierInvoice.tenant_id == CURRENT_TENANT,
         SupplierInvoice.deleted_at.is_(None),
     ).first()
-    if not i:
+    if not inv:
         raise HTTPException(404, "Fattura non trovata")
-    if i.payment_status == SupplierInvoiceStatus.cancelled:
-        raise HTTPException(400, "Fattura annullata, non si può pagare")
+    rows = sorted(inv.payments, key=lambda p: p.payment_date or date.min, reverse=True)
+    return {
+        "invoice_id": invoice_id,
+        "invoice_total": round(inv.amount_total or 0.0, 2),
+        "amount_paid": round(inv.amount_paid or 0.0, 2),
+        "amount_remaining": round(max(0.0, (inv.amount_total or 0.0) - (inv.amount_paid or 0.0)), 2),
+        "payments": [
+            {
+                "id": p.id,
+                "amount": round(p.amount or 0, 2),
+                "payment_date": str(p.payment_date) if p.payment_date else None,
+                "method": p.method,
+                "reference": p.reference,
+                "notes": p.notes,
+                "created_at": str(p.created_at)[:19] if p.created_at else None,
+            }
+            for p in rows
+        ],
+    }
+
+
+@router.post("/api/invoices/{invoice_id}/pay")
+async def register_payment(
+    invoice_id: int,
+    request: Request,
+    amount: float = Form(...),
+    payment_date: date = Form(...),
+    method: Optional[str] = Form(None),
+    reference: Optional[str] = Form(None),
+    notes: Optional[str] = Form(None),
+    db: Session = Depends(get_db),
+):
+    """Registra un pagamento (anche parziale). v3.5.0-alpha.68.2:
+    crea una riga `SupplierInvoicePayment` (fonte verità), aggiorna
+    `amount_paid` e `payment_status` canonici. amount_paid denormalizzato
+    per query veloci."""
+    inv = db.query(SupplierInvoice).filter(
+        SupplierInvoice.id == invoice_id,
+        SupplierInvoice.tenant_id == CURRENT_TENANT,
+        SupplierInvoice.deleted_at.is_(None),
+    ).first()
+    if not inv:
+        raise HTTPException(404, "Fattura non trovata")
+    if inv.payment_status == SupplierInvoiceStatus.cancelled:
+        raise HTTPException(409, "Fattura annullata: pagamenti non ammessi")
     if amount <= 0:
         raise HTTPException(400, "Importo pagamento deve essere positivo")
-    new_paid = round((i.amount_paid or 0) + amount, 2)
-    if new_paid > (i.amount_total or 0) + 0.01:
+    new_total = round((inv.amount_paid or 0) + amount, 2)
+    if new_total > (inv.amount_total or 0) + 0.01:
         raise HTTPException(
             400,
-            f"Importo pagato ({new_paid}) supera il totale fattura ({i.amount_total})",
+            f"Importo cumulato ({new_total}) supera totale fattura ({inv.amount_total})",
         )
-    i.amount_paid = new_paid
-    if not i.payment_date:
-        i.payment_date = payment_date
-    elif new_paid >= (i.amount_total or 0):
-        # Saldo completo: aggiorna payment_date all'ultimo pagamento
-        i.payment_date = payment_date
-    i.payment_status = _derive_status(
-        i.amount_paid, i.amount_total or 0, i.payment_status
+    user = getattr(request.state, "current_user", None)
+    payment = SupplierInvoicePayment(
+        tenant_id=CURRENT_TENANT,
+        supplier_invoice_id=invoice_id,
+        amount=round(amount, 2),
+        payment_date=payment_date,
+        method=(method or "").strip() or None,
+        reference=(reference or "").strip() or None,
+        notes=(notes or "").strip() or None,
+        recorded_by_user_id=user.id if user else None,
     )
+    db.add(payment)
+    db.flush()
+    db.refresh(inv)
+    _refresh_supplier_invoice_payment_state(db, inv)
     db.commit()
-    return _invoice_to_dict(i)
+    return {
+        "id": payment.id,
+        "invoice_id": invoice_id,
+        "amount_paid": inv.amount_paid,
+        "payment_status": inv.payment_status.value,
+    }
+
+
+@router.delete("/api/sup-payments/{payment_id}")
+async def delete_supplier_payment(payment_id: int, db: Session = Depends(get_db)):
+    """Elimina un pagamento singolo (rollback). Ricomputa stato fattura."""
+    p = db.query(SupplierInvoicePayment).filter(
+        SupplierInvoicePayment.id == payment_id,
+        SupplierInvoicePayment.tenant_id == CURRENT_TENANT,
+    ).first()
+    if not p:
+        raise HTTPException(404, "Pagamento non trovato")
+    inv = db.query(SupplierInvoice).filter(
+        SupplierInvoice.id == p.supplier_invoice_id
+    ).first()
+    db.delete(p)
+    db.flush()
+    if inv:
+        db.refresh(inv)
+        _refresh_supplier_invoice_payment_state(db, inv)
+    db.commit()
+    return {"ok": True}
 
 
 @router.delete("/api/invoices/{invoice_id}")
