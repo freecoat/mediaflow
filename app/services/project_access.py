@@ -24,6 +24,7 @@ from typing import Optional, Set
 from datetime import datetime
 from sqlalchemy.orm import Session
 
+import ipaddress
 from app.models import (
     User, Project, ProjectAccessGrant, JobResourceAssignment,
     Job, Resource, AssetAccessLog, AssetAccessAction,
@@ -33,6 +34,59 @@ from app.context import current_tenant_id
 
 
 CURRENT_TENANT = current_tenant_id()
+
+
+def _client_ip(request) -> Optional[str]:
+    """Estrae IP client dal request. Rispetta X-Forwarded-For per proxy."""
+    if request is None:
+        return None
+    try:
+        xff = (request.headers.get("x-forwarded-for") or "").split(",")[0].strip()
+        if xff:
+            return xff
+        return request.client.host if request.client else None
+    except Exception:
+        return None
+
+
+def _ip_in_allowlist(ip: Optional[str], allowlist: Optional[list]) -> bool:
+    """True se ip matcha almeno un CIDR/IP della allowlist.
+    Allowlist None o vuoto → True (no restrizione)."""
+    if not allowlist:
+        return True
+    if not ip:
+        return False
+    try:
+        ip_obj = ipaddress.ip_address(ip)
+    except ValueError:
+        return False
+    for entry in allowlist:
+        try:
+            if "/" in str(entry):
+                if ip_obj in ipaddress.ip_network(entry, strict=False):
+                    return True
+            else:
+                if ip_obj == ipaddress.ip_address(str(entry)):
+                    return True
+        except (ValueError, TypeError):
+            continue
+    return False
+
+
+def check_project_ip_allowlist(
+    project_id: Optional[int],
+    request,
+    db: Session,
+) -> bool:
+    """v3.5.0-alpha.70.3 — Verifica IP request contro project.ip_allowlist.
+    True se OK o nessun progetto / no restrizione. False se ip NON matcha."""
+    if not project_id:
+        return True
+    p = db.query(Project).filter(Project.id == project_id).first()
+    if not p or not p.ip_allowlist:
+        return True
+    ip = _client_ip(request)
+    return _ip_in_allowlist(ip, p.ip_allowlist)
 
 
 def _is_elevated(user: Optional[User]) -> bool:

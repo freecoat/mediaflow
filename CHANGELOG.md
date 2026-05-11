@@ -1,5 +1,74 @@
 # MediaFlow — Changelog
 
+## v3.5.0-alpha.70.3 — TPN: IP allowlist + security policy progetto (11 maggio 2026)
+
+**Modello Project esteso** (3 campi nuovi, auto-migrate):
+- `ip_allowlist` JSON: array CIDR/IP. Vuoto = no restrizione. Popolato:
+  DAM download bloccato se IP request non matcha (log deny).
+- `mfa_required` bool: placeholder per α.70.4 MFA TOTP (richiede pyotp).
+- `min_role_for_access` String: placeholder per gating by role.
+
+**Service** `project_access.py`:
+- `check_project_ip_allowlist(project_id, request, db) → bool`
+- `_ip_in_allowlist` con `ipaddress` stdlib (no deps).
+- `_client_ip` da request (X-Forwarded-For aware).
+
+**DAM**: `download_asset` ora check IP allowlist + log deny se mismatch.
+
+**Router projects** `/api/{id}/security` GET/PUT — solo admin.
+Validazione CIDR/IP server-side.
+
+**Note MFA**: TOTP non implementato — richiede `pip install pyotp qrcode`.
+Quando Matteo conferma deps, α.70.4 implementerà:
+- `User.mfa_secret` Fernet-encrypted + `mfa_enabled`
+- /auth/mfa/setup (QR) + /auth/mfa/verify
+- Login flow: password OK → check mfa_enabled → richiedi OTP
+
+343 routes (+2).
+
+## v3.5.0-alpha.70.2 — TPN: watermark immagini + secure delete (11 maggio 2026)
+
+**Service** `app/services/dam_security.py` (nuovo):
+- `apply_watermark_image(path, user_email, ts, extra)` → bytes JPEG:
+  overlay testuale bottom-right (user+ts+UTC+asset_id) + diagonal big
+  semi-trasparente centrale (user email uppercase, rotate -30°).
+  Font auto-detect (DejaVu/Arial fallback PIL default).
+- `secure_delete_file(path, passes=3)` → bool: DOD-style overwrite con
+  random bytes 3 pass + zero pass + truncate + unlink. fsync ad ogni
+  round. Best-effort fallback su PermissionError.
+- `is_image_mime(mime)` helper.
+
+**DAM download**: `?watermark=1` (default) per immagini applica watermark
+inline → bytes JPEG con filename `<orig>_wm.jpg`. Admin può `?watermark=0`
+per esporto pulito. Video/audio/document non hanno watermark (richiede
+ffmpeg/PDF libs, scope futuro).
+
+**DAM delete**: `?secure=1` attiva DOD wipe. Più lento ma garantisce
+no-recovery. Default `secure=0` (unlink standard).
+
+**File toccati** (2):
+- `app/services/dam_security.py` — NUOVO
+- `app/routers/dam.py` — hook watermark + secure delete
+
+## v3.5.0-alpha.70.1 — TPN UI: project access + audit log viewer (11 maggio 2026)
+
+**UI Project Access Grants** (tab nuovo su `/projects/{id}/detail`):
+- "🔒 Accessi TPN" tab con badge count `(grants_count + auto_grants)`.
+- Sezione Grant espliciti: tabella user/ruolo/granted_by/data/note +
+  bottone "+ Concedi accesso" → modal con dropdown user + role + notes.
+  Bottone Revoca soft per riga.
+- Sezione Auto-grant: lista risorse con assignment su job nel project
+  (via `Resource.user_id`).
+
+**Admin audit log viewer**:
+- `/admin/audit-log` (link sidebar Admin, gate `manage_users`).
+- Filtri user_id/asset_id/project_id/action.
+- Tabella eventi con colore action (deny rosso, download verde, etc.)
+  + IP + UA + extra info + timestamp.
+- Endpoint `GET /admin/api/audit-log` con limit/offset.
+
+341 routes (+2: pagina HTML + API list).
+
 ## v3.5.0-alpha.70.0 — TPN foundation: DAM access control (11 maggio 2026)
 
 Prima tappa roadmap TPN compliance (α.70.0→α.70.3). Compartimentalizzazione

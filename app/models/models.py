@@ -629,6 +629,7 @@ class ClientWork(Base):
 
 # ── PROGETTO (NUOVA ENTITÀ) ──────────────────────────────────
 
+# Project con TPN compliance fields (v3.5.0-alpha.70.3)
 class Project(Base):
     """
     Un progetto è un'opera audiovisiva (film, serie, spot, doc) del cliente.
@@ -672,6 +673,17 @@ class Project(Base):
     # v3.5.0-alpha.8 — Soft-delete (cestino).
     deleted_at:         Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True, index=True)
     deleted_by_user_id: Mapped[Optional[int]]      = mapped_column(ForeignKey("users.id"), nullable=True)
+
+    # v3.5.0-alpha.70.3 — TPN security policy per-progetto.
+    # ip_allowlist: JSON con array stringhe CIDR (es. ["1.2.3.0/24","10.0.0.5"]).
+    #   Se popolato e DAM access richiesto: l'IP richiedente deve matchare,
+    #   altrimenti 403 + log deny. Vuoto/NULL = no restrizione IP.
+    # mfa_required: placeholder per α.70.3+ (MFA TOTP), non ancora applicato.
+    # min_role_for_access: ruolo minimo richiesto (es. "manager" su progetti
+    #   sensibili). Future use.
+    ip_allowlist: Mapped[Optional[list]] = mapped_column(JSON, nullable=True)
+    mfa_required: Mapped[bool] = mapped_column(Boolean, default=False)
+    min_role_for_access: Mapped[Optional[str]] = mapped_column(String(40), nullable=True)
 
     client: Mapped["Client"] = relationship(back_populates="projects")
     quotes: Mapped[List["Quote"]] = relationship(back_populates="project", cascade="all, delete-orphan")

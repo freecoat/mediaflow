@@ -15,9 +15,14 @@ from app.models import (
     Asset, AssetType, Tag, AssetTag, User, AssetAccessAction, Job,
 )
 from app.services.dam import save_upload, generate_thumbnail, resolve_asset_type, delete_asset_files
+from app.services.dam_security import (
+    apply_watermark_image, secure_delete_file, is_image_mime,
+)
+from fastapi.responses import Response
 from app.services.rbac import requires_permission, current_user_optional, is_admin
 from app.services.project_access import (
     user_can_access_asset, accessible_project_ids, log_asset_access,
+    check_project_ip_allowlist,
 )
 from app.context import current_tenant_id
 import os
@@ -234,7 +239,12 @@ async def upload_asset(
 
 
 @router.get("/download/{asset_id}")
-async def download_asset(asset_id: int, request: Request, db: Session = Depends(get_db)):
+async def download_asset(
+    asset_id: int,
+    request: Request,
+    watermark: int = 1,  # v3.5.0-alpha.70.2: default ON per immagini
+    db: Session = Depends(get_db),
+):
     user = current_user_optional(request)
     a = db.query(Asset).filter(Asset.id == asset_id, Asset.tenant_id == CURRENT_TENANT).first()
     if not a or not os.path.exists(a.file_path):
@@ -245,8 +255,32 @@ async def download_asset(asset_id: int, request: Request, db: Session = Depends(
                          asset_id=asset_id, project_id=a.project_id, request=request,
                          extra="download denied")
         raise HTTPException(403, "Accesso negato (TPN compartimentalizzazione)")
+    # v3.5.0-alpha.70.3 — IP allowlist per progetto
+    if not check_project_ip_allowlist(a.project_id, request, db):
+        log_asset_access(db, user=user, action=AssetAccessAction.deny,
+                         asset_id=asset_id, project_id=a.project_id, request=request,
+                         extra="ip allowlist mismatch")
+        raise HTTPException(403, "IP non autorizzato per questo progetto (TPN allowlist)")
     log_asset_access(db, user=user, action=AssetAccessAction.download,
-                     asset_id=asset_id, project_id=a.project_id, request=request)
+                     asset_id=asset_id, project_id=a.project_id, request=request,
+                     extra=f"watermark={'on' if watermark else 'off'}")
+    # v3.5.0-alpha.70.2 — Watermark immagini. Admin può disabilitare con
+    # ?watermark=0 (es. per esporto pulito a fini di archivio). Altri:
+    # forzato ON (sicurezza non bypassabile da client).
+    if watermark and is_image_mime(a.mime_type):
+        if not is_admin(user) or watermark == 1:
+            wm_bytes = apply_watermark_image(
+                a.file_path,
+                user_email=(user.email if user else None),
+                extra=f"asset:{a.id}",
+            )
+            if wm_bytes:
+                # Forced .jpg output (watermark sempre JPEG)
+                fname = (a.original_name.rsplit(".", 1)[0]
+                         + "_wm.jpg") if "." in a.original_name else a.original_name + "_wm.jpg"
+                return Response(content=wm_bytes, media_type="image/jpeg",
+                                headers={"Content-Disposition": f'attachment; filename="{fname}"'})
+    # Non-image o watermark disabilitato by admin
     return FileResponse(a.file_path, filename=a.original_name, media_type=a.mime_type)
 
 
@@ -264,7 +298,13 @@ async def get_thumbnail(asset_id: int, request: Request, db: Session = Depends(g
 
 
 @router.delete("/api/assets/{asset_id}", dependencies=[RequireEditDam])
-async def delete_asset(asset_id: int, request: Request, db: Session = Depends(get_db)):
+async def delete_asset(
+    asset_id: int, request: Request,
+    secure: int = 0,
+    db: Session = Depends(get_db),
+):
+    """`secure=1` → DOD wipe (random 3 pass) prima di unlink. Più lento
+    ma garantisce no-recover dei dati su disco (TPN compliance)."""
     user = current_user_optional(request)
     a = db.query(Asset).filter(Asset.id == asset_id, Asset.tenant_id == CURRENT_TENANT).first()
     if not a:
@@ -277,11 +317,19 @@ async def delete_asset(asset_id: int, request: Request, db: Session = Depends(ge
     # Log delete BEFORE actual deletion (asset_id riferimento storico)
     log_asset_access(db, user=user, action=AssetAccessAction.delete,
                      asset_id=asset_id, project_id=a.project_id, request=request,
-                     extra=f"original_name={a.original_name}", commit=False)
-    delete_asset_files(a.file_path, a.thumbnail_path)
+                     extra=f"original_name={a.original_name} secure={bool(secure)}",
+                     commit=False)
+    if secure:
+        # v3.5.0-alpha.70.2 — Secure delete DOD-style. Skip thumbnail
+        # (non sensibile, ma anche scrubbed via standard unlink).
+        secure_delete_file(a.file_path)
+        if a.thumbnail_path:
+            secure_delete_file(a.thumbnail_path)
+    else:
+        delete_asset_files(a.file_path, a.thumbnail_path)
     db.delete(a)
     db.commit()
-    return {"ok": True}
+    return {"ok": True, "secure": bool(secure)}
 
 
 # ── Tag API ───────────────────────────────────────────────────────────

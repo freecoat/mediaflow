@@ -8,24 +8,35 @@
 
 ## Versione corrente
 
-**v3.5.0-alpha.70.0** — 11 maggio 2026 — TPN foundation DAM access control
+**v3.5.0-alpha.70.3** — 11 maggio 2026 — TPN roadmap completa (foundation→IP allowlist)
 
-Prima tappa roadmap TPN (α.70.0→α.70.3). Compartimentalizzazione DAM.
+Roadmap TPN α.70.0→α.70.3 completata in 4 commit:
 
-- 2 modelli nuovi: ProjectAccessGrant + AssetAccessLog (+ enum).
-- Service `project_access.py`: user_can_access_project/asset +
-  accessible_project_ids + log_asset_access. 3 livelli (admin bypass |
-  grant esplicito | auto via JobResourceAssignment.user_id).
-- DAM router hardenato: list/upload/download/thumbnail/delete con
-  access check + audit log. `assign-project` per internal queue.
-- Projects router: CRUD grants `/api/{id}/access/*`.
+- **α.70.0** Foundation: ProjectAccessGrant + AssetAccessLog models +
+  service project_access + DAM router hardenato (access check + audit).
+- **α.70.1** UI: tab "🔒 Accessi TPN" su /projects/{id} +
+  /admin/audit-log viewer per admin.
+- **α.70.2** Watermark immagini + secure delete (DOD wipe 3-pass).
+- **α.70.3** IP allowlist per progetto (Project.ip_allowlist JSON CIDR)
+  + check su download. Placeholder MFA + min_role_for_access.
 
-Prossimi step roadmap:
-- α.70.1: UI page accessi in /projects/{id} + viewer audit log
-- α.70.2: watermark download + secure delete
-- α.70.3: MFA TOTP + session timeout + IP allow-list
+343 routes. 3 tabelle nuove + 3 colonne projects (auto-migrate).
 
-## (vedi sotto per fix precedenti)
+**MFA TOTP non implementato** — richiede `pip install pyotp qrcode`.
+Quando Matteo conferma deps → α.70.4 implementerà setup/verify/login flow.
+
+## Prossimo step
+
+- **α.70.4 MFA TOTP** — solo se Matteo OK su pip install pyotp + qrcode
+- **UI per ip_allowlist** in tab Accessi TPN (textarea CIDR multipla)
+- **DAM tab "Asset interni"** (project_id=NULL) + bulk-assign UI
+- **Watermark video** via ffmpeg (scope grosso)
+- **JobDeliverable auto-create** da template alla creazione job
+- **F15 esecuzione reale** sul Mac Matteo (corpus 17 capitolati)
+- **R7.x continuazione planning_bookings** — quando green light
+- **R5/R8/R9** — split planning.html, Float→Decimal, datetime tz-aware
+
+## (versione precedente)
 
 **v3.5.0-alpha.69.1** — 11 maggio 2026 — Fix cashflow + filtri + drill-down
 

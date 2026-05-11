@@ -320,6 +320,19 @@ def _auto_migrate_columns():
             if backfill_rows:
                 print(f"[auto-migrate] backfill InvoicePayment per {len(backfill_rows)} "
                       f"fatture legacy paid (cashflow ora le conteggia)")
+    # v3.5.0-alpha.70.3 — TPN security policy fields su projects.
+    if "projects" in insp.get_table_names():
+        pcols = {c["name"] for c in insp.get_columns("projects")}
+        proj_alter = [
+            ("ip_allowlist", "TEXT NULL"),
+            ("mfa_required", "BOOLEAN NOT NULL DEFAULT 0"),
+            ("min_role_for_access", "VARCHAR(40) NULL"),
+        ]
+        with engine.begin() as conn:
+            for col, ddl in proj_alter:
+                if col not in pcols:
+                    print(f"[auto-migrate] projects.{col} mancante -> ALTER TABLE")
+                    conn.execute(text(f"ALTER TABLE projects ADD COLUMN {col} {ddl}"))
     # v3.5.0-alpha.65 — Pass-through OT al cliente (opt-in per progetto).
     if "jobs" in insp.get_table_names():
         jcols = {c["name"] for c in insp.get_columns("jobs")}
@@ -635,7 +648,7 @@ async def lifespan(app: FastAPI):
     yield
 
 
-app = FastAPI(title="MediaFlow", version="3.5.0-alpha.70.1", lifespan=lifespan)
+app = FastAPI(title="MediaFlow", version="3.5.0-alpha.70.3", lifespan=lifespan)
 
 BASE_DIR = Path(__file__).parent
 app.mount("/static", StaticFiles(directory=BASE_DIR / "static"), name="static")

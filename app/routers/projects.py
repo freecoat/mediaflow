@@ -674,6 +674,76 @@ async def revoke_project_access(
     return {"ok": True, "revoked_at": str(g.revoked_at)}
 
 
+@router.put("/api/{project_id}/security")
+async def update_project_security(
+    project_id: int,
+    request: Request,
+    ip_allowlist: Optional[str] = Form(None),  # JSON array string
+    mfa_required: Optional[bool] = Form(None),
+    min_role_for_access: Optional[str] = Form(None),
+    db: Session = Depends(get_db),
+):
+    """v3.5.0-alpha.70.3 — Aggiorna policy security TPN del progetto.
+    Solo admin. ip_allowlist JSON: ["1.2.3.0/24", "10.0.0.5"]."""
+    actor = current_user_optional(request)
+    if not is_admin(actor):
+        raise HTTPException(403, "Solo admin può modificare security")
+    p = db.query(Project).filter(Project.id == project_id).first()
+    if not p:
+        raise HTTPException(404, "Progetto non trovato")
+    if ip_allowlist is not None:
+        import json as _json
+        try:
+            parsed = _json.loads(ip_allowlist) if ip_allowlist.strip() else None
+            if parsed is not None and not isinstance(parsed, list):
+                raise HTTPException(400, "ip_allowlist deve essere lista JSON")
+            # Validazione CIDR/IP
+            import ipaddress
+            for entry in (parsed or []):
+                try:
+                    if "/" in str(entry):
+                        ipaddress.ip_network(entry, strict=False)
+                    else:
+                        ipaddress.ip_address(str(entry))
+                except ValueError as e:
+                    raise HTTPException(400, f"Entry non valida: {entry} ({e})")
+            p.ip_allowlist = parsed
+        except (TypeError, ValueError) as e:
+            raise HTTPException(400, f"ip_allowlist JSON malformato: {e}")
+    if mfa_required is not None:
+        p.mfa_required = mfa_required
+    if min_role_for_access is not None:
+        p.min_role_for_access = min_role_for_access.strip() or None
+    log_asset_access(db, user=actor, action=AssetAccessAction.update,
+                     project_id=project_id, request=request,
+                     extra="security policy updated", commit=False)
+    db.commit()
+    return {
+        "ok": True,
+        "ip_allowlist": p.ip_allowlist,
+        "mfa_required": p.mfa_required,
+        "min_role_for_access": p.min_role_for_access,
+    }
+
+
+@router.get("/api/{project_id}/security")
+async def get_project_security(
+    project_id: int, request: Request, db: Session = Depends(get_db),
+):
+    actor = current_user_optional(request)
+    if not is_admin(actor):
+        raise HTTPException(403, "Solo admin può vedere security")
+    p = db.query(Project).filter(Project.id == project_id).first()
+    if not p:
+        raise HTTPException(404, "Progetto non trovato")
+    return {
+        "project_id": project_id,
+        "ip_allowlist": p.ip_allowlist or [],
+        "mfa_required": bool(p.mfa_required),
+        "min_role_for_access": p.min_role_for_access,
+    }
+
+
 # ── HTML page detail (DOPO le API per evitare conflitti di path) ─────
 
 @router.get("/{project_id}", response_class=HTMLResponse)
