@@ -897,6 +897,119 @@ async def job_booking_summary(job_id: int, db: Session = Depends(get_db)):
     }
 
 
+@router.get("/api/resource/{resource_id}/jobs")
+async def resource_job_drill(
+    resource_id: int,
+    period_start: Optional[date] = None,
+    period_end: Optional[date] = None,
+    db: Session = Depends(get_db),
+):
+    """v3.5.0-alpha.69.2 — Drill-down inverso: per una risorsa, mostra i
+    job lavorati con breakdown ore + costo per ogni job. Reverse della
+    vista per-line nel cost-report (`bookings_by_resource` aggrega per
+    risorsa dentro un job; questo aggrega per job di una risorsa)."""
+    resource = db.query(Resource).filter(
+        Resource.id == resource_id,
+        Resource.tenant_id == CURRENT_TENANT,
+    ).first()
+    if not resource:
+        raise HTTPException(404, "Risorsa non trovata")
+    q = (
+        db.query(Booking)
+        .options(
+            joinedload(Booking.assignments).joinedload(BookingAssignment.resource),
+            joinedload(Booking.job).joinedload(Job.client),
+            joinedload(Booking.cost_line),
+        )
+        .join(BookingAssignment, BookingAssignment.booking_id == Booking.id)
+        .filter(
+            BookingAssignment.resource_id == resource_id,
+            Booking.status != BookingStatus.cancelled,
+            Booking.job_id.isnot(None),
+        )
+    )
+    if period_start:
+        q = q.filter(Booking.start_datetime >= period_start)
+    if period_end:
+        from datetime import timedelta as _td
+        q = q.filter(Booking.start_datetime < period_end + _td(days=1))
+    bookings = q.all()
+    by_job: dict[int, dict] = {}
+    holidays_cache: dict = {}
+    def _hols(policy, y0, y1):
+        key = (id(policy), y0, y1)
+        if key not in holidays_cache:
+            holidays_cache[key] = get_holidays(policy, y0, y1)
+        return holidays_cache[key]
+    for b in bookings:
+        if not b.job:
+            continue
+        for a in b.assignments:
+            if a.resource_id != resource_id or not a.resource:
+                continue
+            policy = _resource_policy_for_cost(a.resource, db)
+            if not policy:
+                continue
+            hols = _hols(policy, a.start_datetime.year, a.end_datetime.year)
+            br = compute_assignment_breakdown(a, policy, hols, b)
+            entry = by_job.setdefault(b.job.id, {
+                "job_id": b.job.id,
+                "job_code": b.job.code,
+                "job_title": b.job.title,
+                "job_status": b.job.status,
+                "client_name": b.job.client.name if b.job.client else None,
+                "client_id": b.job.client_id,
+                "breakdown": BookingBreakdown(),
+                "bookings_count": 0,
+                "first_date": None,
+                "last_date": None,
+            })
+            entry["breakdown"].add(br)
+            entry["bookings_count"] += 1
+            d = a.start_datetime.date()
+            if entry["first_date"] is None or d < entry["first_date"]:
+                entry["first_date"] = d
+            if entry["last_date"] is None or d > entry["last_date"]:
+                entry["last_date"] = d
+    rate_h = resource.hourly_rate or (
+        resource.daily_rate / 8 if resource.daily_rate else 0
+    )
+    cost_h = resource.internal_cost_hourly or 0
+    out = []
+    for e in by_job.values():
+        bd = e["breakdown"].as_dict()
+        weighted = bd.get("weighted_factor", 0) or 0
+        est_cost = round(weighted * rate_h, 2)
+        real_cost = round(weighted * cost_h, 2) if cost_h else None
+        out.append({
+            "job_id": e["job_id"],
+            "job_code": e["job_code"],
+            "job_title": e["job_title"],
+            "job_status": e["job_status"],
+            "client_name": e["client_name"],
+            "client_id": e["client_id"],
+            "first_date": str(e["first_date"]) if e["first_date"] else None,
+            "last_date": str(e["last_date"]) if e["last_date"] else None,
+            "bookings_count": e["bookings_count"],
+            "breakdown": bd,
+            "total_hours": round(bd.get("total_hours", 0) or 0, 2),
+            "weighted_hours": round(weighted, 2),
+            "cost_estimated_sell": est_cost,
+            "cost_estimated_internal": real_cost,
+        })
+    # Sort: most recent first
+    out.sort(key=lambda r: r.get("last_date") or "", reverse=True)
+    return {
+        "resource_id": resource_id,
+        "resource_name": resource.name,
+        "resource_type": resource.type if hasattr(resource, "type") else None,
+        "rate_hourly_sell": rate_h,
+        "rate_hourly_internal_cost": cost_h or None,
+        "jobs_count": len(out),
+        "jobs": out,
+    }
+
+
 @router.post("/api/job/{job_id}/not-done-pool/{booking_id}/discard")
 async def discard_not_done_pool_booking(
     job_id: int, booking_id: int, db: Session = Depends(get_db),

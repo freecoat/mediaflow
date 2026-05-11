@@ -1,5 +1,50 @@
 # MediaFlow — Changelog
 
+## v3.5.0-alpha.69.1 — Fix cashflow + filtri + drill-down risorsa (11 maggio 2026)
+
+3 issue Matteo:
+
+**1. Cashflow: aprile pagato non visibile**
+- Root cause: Invoice marcata `paid` ma senza riga `InvoicePayment` (DB
+  pre-α.66.20). Cashflow aggrega da `InvoicePayment.payment_date` → 0.
+- Fix: backfill in `_auto_migrate_columns()` — per ogni Invoice
+  status=paid con amount_paid=0 e 0 payments, crea InvoicePayment
+  (amount=total, payment_date=issue_date, reference='BACKFILL_AUTOMIGRATE').
+  Aggiorna anche amount_paid denormalizzato. Idempotente.
+
+**2. Filtri progetto/cliente in cashflow**
+- Backend `cashflow_year`: query params `project_id` + `client_id`
+  opzionali. Filtra Invoice (via Invoice.client_id + Job.project_id) +
+  InvoicePayment (restringe a invoice filtered) + SupplierInvoice
+  (project_id direct o via job→project→client) + SupplierInvoicePayment.
+- UI `/finance/cashflow` topbar: 2 dropdown nuovi (cliente, progetto).
+  Cambio cliente filtra progetti; cambio progetto/cliente refresh dati.
+
+**3. Cost report drill-down risorsa → job (reverse vista voci di costo)**
+- Backend nuovo `GET /cost-report/api/resource/{rid}/jobs?period_start&period_end`:
+  per una risorsa, lista job lavorati con breakdown ore (reg/OT/notturno/
+  festivo) + bookings_count + first/last_date + cost stimato sell +
+  cost interno (se configurato).
+- UI cost-report: cliccando una riga della tabella "Ore booking per fascia"
+  apre modal con elenco job ordinato per data recente, totali + click
+  job riga = apri cost report del job.
+
+**4. Templates capitolati seed**
+- Tabella `delivery_templates` era vuota. Aggiunto `scripts/seed_delivery_templates.py`
+  con 11 template base (A24, MUBI, Vision, IRDA, RAI, Sky, Netflix,
+  Amazon MGM, BETA, Fremantle, NBCU TechOps). Solo scheletro (code/name/
+  broadcaster/description). Idempotente. Esecuzione: `python scripts/seed_delivery_templates.py`.
+
+**File toccati** (5):
+- `app/main.py` — VERSION + backfill auto-migrate
+- `app/routers/finance.py` — cashflow_year filtri
+- `app/routers/cost_report.py` — resource/jobs drill endpoint
+- `app/templates/pages/cashflow.html` — 2 dropdown topbar + loadFilters
+- `app/templates/pages/cost_report.html` — modal drill + onclick risorsa
+- `scripts/seed_delivery_templates.py` — NUOVO
+
+335 routes (+1).
+
 ## v3.5.0-alpha.69 — Capitolati↔quote wizard PDF + AI (B+C) (11 maggio 2026)
 
 Tappe **B** (wizard PDF→quote) + **C** (AI capability) della roadmap

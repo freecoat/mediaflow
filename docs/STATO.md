@@ -8,25 +8,31 @@
 
 ## Versione corrente
 
-**v3.5.0-alpha.69** — 11 maggio 2026 — Capitolati↔quote wizard PDF + AI (B+C)
+**v3.5.0-alpha.69.1** — 11 maggio 2026 — Fix cashflow + filtri + drill-down
 
-Roadmap A/B/C completata in 2 commit (α.68.6 = A, α.69 = B+C).
+3 issue Matteo:
+1. **Cashflow paid mese aprile** — root cause: Invoice paid senza
+   InvoicePayment (legacy). Fix backfill in auto-migrate idempotente.
+2. **Filtri progetto/cliente cashflow** — backend query params +
+   dropdown UI in topbar.
+3. **Cost report drill-down risorsa** — modal con job lavorati (reverse
+   vista voci di costo). Endpoint `/cost-report/api/resource/{id}/jobs`.
+4. **Templates capitolati vuoti** — `scripts/seed_delivery_templates.py`
+   con 11 broadcaster (A24, MUBI, Vision, RAI, Sky, Netflix, Amazon
+   MGM, BETA, Fremantle, NBCU). Da lanciare: `python scripts/seed_delivery_templates.py`.
 
-- **A** (α.68.6): editor `suggested_items` + bulk-add "Carica da template".
-- **B** (α.69): wizard `/quotes` "Crea da capitolato PDF" 2-step
-  (upload + parse AI → preview matchato editabile → create-quote).
-- **C** (α.69): AI capability `propose_quote_from_template` per copilot
-  (resolve template+quote → bulk-add suggested_items).
-
-26 AI tools. Backend B riusa endpoint `/ai/api/deliverables/parse`+
-`/create-quote` esistenti da α.66.20 ma prima orfani.
+335 routes (+1).
 
 ## Prossimo step
 
+- **AI config UserAISettings reset** — Matteo deve riconfigurare in
+  /settings → tab AI (key Fernet-encrypted, non recuperabile)
 - **JobDeliverable auto-create** da template alla creazione job
-- **F15 esecuzione reale** sul Mac Matteo (corpus test 17 capitolati)
-- **R7.x continuazione planning_bookings** — quando Matteo dà green
-  light per refactor invasivo
+- **AI parser PDF capitolato batch** — script che processa i 17
+  capitolati esempio in `docs/capitolati_esempio/` per popolare auto
+  i blocchi tech dei template seedati
+- **F15 esecuzione reale** sul Mac Matteo (corpus test capitolati)
+- **R7.x continuazione planning_bookings** — quando green light Matteo
 - **AI parser PDF fattura passiva** — pattern simile a capitolato
 - **R5/R8/R9** — split planning.html, Float→Decimal, datetime tz-aware
 

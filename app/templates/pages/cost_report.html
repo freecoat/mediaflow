@@ -202,6 +202,22 @@
   <div class="text-muted">Seleziona un cost report dalla lista per visualizzarlo</div>
 </div>
 
+<!-- v3.5.0-alpha.69.2 — Drill-down risorsa → job lavorati -->
+<div class="modal-overlay" id="modal-resource-jobs">
+  <div class="modal" style="max-width:880px;max-height:88vh;display:flex;flex-direction:column;">
+    <div class="modal-header">
+      <span class="modal-title" id="rj-title">Risorsa — job lavorati</span>
+      <button class="btn btn-ghost btn-icon" onclick="closeModal('modal-resource-jobs')">&times;</button>
+    </div>
+    <div class="modal-body" id="rj-body" style="overflow:auto;">
+      <div class="text-muted">Caricamento...</div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeModal('modal-resource-jobs')">Chiudi</button>
+    </div>
+  </div>
+</div>
+
 <!-- Modal dettaglio lavorazione (v3.5.0-alpha.11): popup booking-detail
      attivato dal click sulla riga della tabella cost-lines. Riusa lo stesso
      endpoint `/jobs/api/{id}/cost-lines/{lid}/detail` di /jobs/{id} (v3.4.55).
@@ -604,8 +620,8 @@ async function renderBookingSummary(jobId) {
             ${data.by_resource.map(r => {
               const b = r.breakdown;
               const cost = (b.weighted_factor || 0) * (r.rate || 0) / 8; // assume rate giornaliero ÷ 8h
-              return `<tr>
-                <td>${escapeHtml(r.resource_name)}</td>
+              return `<tr style="cursor:pointer;" title="Clicca per vedere i job lavorati da questa risorsa" onclick="openResourceJobs(${r.resource_id}, '${escapeHtml(r.resource_name).replace(/'/g, '&apos;')}')">
+                <td>${escapeHtml(r.resource_name)} <span class="text-xs text-muted">↗</span></td>
                 <td class="mono text-right">${fmtH(b.regular_hours)}</td>
                 <td class="mono text-right" style="color:#fb923c;">${fmtH(b.overtime_hours)}</td>
                 <td class="mono text-right" style="color:#fcd34d;">${fmtH(b.pending_overtime_hours)}</td>
@@ -698,6 +714,110 @@ async function poolDiscard(bid) {
 // v3.5.0-alpha.56: scarto bulk dell'intero pool not-done. Conferma esplicita
 // (azione distruttiva irreversibile, anche se i booking restano nel cestino
 // finché non viene fatto un retention sweep).
+// v3.5.0-alpha.69.2 — Drill-down risorsa → job lavorati
+async function openResourceJobs(resourceId, resourceName) {
+  const body = document.getElementById('rj-body');
+  document.getElementById('rj-title').textContent = `${resourceName || 'Risorsa'} — job lavorati`;
+  while (body.firstChild) body.removeChild(body.firstChild);
+  const loading = document.createElement('div');
+  loading.className = 'text-muted';
+  loading.textContent = 'Caricamento...';
+  body.appendChild(loading);
+  openModal('modal-resource-jobs');
+  try {
+    const d = await api('GET', `/cost-report/api/resource/${resourceId}/jobs`);
+    while (body.firstChild) body.removeChild(body.firstChild);
+    // Header summary
+    const hdr = document.createElement('div');
+    hdr.style.cssText = 'background:var(--bg2);padding:10px 14px;border-radius:6px;margin-bottom:12px;font-size:13px;';
+    const summary = `${d.jobs_count} job · rate sell €${(d.rate_hourly_sell||0).toFixed(2)}/h` +
+      (d.rate_hourly_internal_cost ? ` · cost interno €${d.rate_hourly_internal_cost.toFixed(2)}/h` : '');
+    hdr.textContent = summary;
+    body.appendChild(hdr);
+    if (!d.jobs.length) {
+      const e = document.createElement('div');
+      e.className = 'text-muted';
+      e.textContent = 'Nessun job trovato per questa risorsa.';
+      body.appendChild(e);
+      return;
+    }
+    const tbl = document.createElement('table');
+    tbl.style.cssText = 'width:100%;font-size:12px;';
+    const thead = document.createElement('thead');
+    thead.innerHTML = '<tr style="color:var(--text3);"><th style="text-align:left;padding:4px;">Job</th><th style="text-align:left;padding:4px;">Cliente</th><th style="padding:4px;">Stato</th><th style="padding:4px;">Periodo</th><th style="text-align:right;padding:4px;">Reg.</th><th style="text-align:right;padding:4px;">OT</th><th style="text-align:right;padding:4px;">Not./Fest.</th><th style="text-align:right;padding:4px;">Tot ore</th><th style="text-align:right;padding:4px;">Pesate</th><th style="text-align:right;padding:4px;">Costo sell</th><th style="text-align:right;padding:4px;">Costo interno</th></tr>';
+    tbl.appendChild(thead);
+    const tbody = document.createElement('tbody');
+    let totH = 0, totW = 0, totSell = 0, totReal = 0;
+    d.jobs.forEach(j => {
+      const b = j.breakdown || {};
+      totH += j.total_hours || 0;
+      totW += j.weighted_hours || 0;
+      totSell += j.cost_estimated_sell || 0;
+      if (j.cost_estimated_internal != null) totReal += j.cost_estimated_internal;
+      const tr = document.createElement('tr');
+      tr.style.cssText = 'border-bottom:1px solid var(--border);cursor:pointer;';
+      tr.title = 'Apri job nel cost report';
+      tr.onclick = () => {
+        closeModal('modal-resource-jobs');
+        if (typeof loadReport === 'function') loadReport(j.job_id);
+      };
+      const fmtH2 = (h) => (h||0).toFixed(2) + 'h';
+      const fmtPeriod = () => {
+        if (!j.first_date) return '—';
+        if (j.first_date === j.last_date) return fmtDate(j.first_date);
+        return fmtDate(j.first_date) + ' → ' + fmtDate(j.last_date);
+      };
+      const cells = [
+        ['<b class="mono">'+escapeHtml(j.job_code||'')+'</b><div class="text-xs text-muted">'+escapeHtml(j.job_title||'')+'</div>', null],
+        [escapeHtml(j.client_name||'—'), null],
+        ['<span class="badge">'+escapeHtml(j.job_status||'')+'</span>', null],
+        [fmtPeriod(), null],
+        [fmtH2(b.regular_hours), 'mono text-right'],
+        [fmtH2(b.overtime_hours), 'mono text-right' + (b.overtime_hours?' color:#fb923c':'') ],
+        [fmtH2((b.sunday_hours||0)+(b.holiday_hours||0)+(b.night_hours||0)), 'mono text-right'],
+        ['<b>'+fmtH2(j.total_hours)+'</b>', 'mono text-right'],
+        [fmtH2(j.weighted_hours), 'mono text-right'],
+        [fmtCurrency(j.cost_estimated_sell||0), 'mono text-right'],
+        [j.cost_estimated_internal!=null?fmtCurrency(j.cost_estimated_internal):'—', 'mono text-right text-muted'],
+      ];
+      cells.forEach(([html, cls]) => {
+        const td = document.createElement('td');
+        td.style.padding = '6px 4px';
+        if (cls) td.className = cls;
+        td.innerHTML = html;
+        tr.appendChild(td);
+      });
+      tbody.appendChild(tr);
+    });
+    // Totals
+    const tot = document.createElement('tr');
+    tot.style.cssText = 'border-top:2px solid var(--border);font-weight:600;background:var(--bg2);';
+    const totCells = [
+      'TOTALE', '', '', '', '', '', '',
+      `${totH.toFixed(2)}h`,
+      `${totW.toFixed(2)}h`,
+      fmtCurrency(totSell),
+      totReal>0?fmtCurrency(totReal):'—',
+    ];
+    totCells.forEach((v, i) => {
+      const td = document.createElement('td');
+      td.style.padding = '8px 4px';
+      if (i >= 4) td.className = 'mono text-right';
+      td.textContent = v;
+      tot.appendChild(td);
+    });
+    tbody.appendChild(tot);
+    tbl.appendChild(tbody);
+    body.appendChild(tbl);
+  } catch(e) {
+    while (body.firstChild) body.removeChild(body.firstChild);
+    const err = document.createElement('div');
+    err.style.color = 'var(--rose)';
+    err.textContent = 'Errore: ' + (e.message || '');
+    body.appendChild(err);
+  }
+}
+
 async function poolDiscardAll() {
   if (!currentJobId) return;
   const data = window._lastNotDonePool || [];

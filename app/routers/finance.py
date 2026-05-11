@@ -318,7 +318,12 @@ async def delete_invoice_payment(payment_id: int, db: Session = Depends(get_db))
 
 
 @router.get("/api/cashflow/{year}")
-async def cashflow_year(year: int, db: Session = Depends(get_db)):
+async def cashflow_year(
+    year: int,
+    project_id: Optional[int] = None,
+    client_id: Optional[int] = None,
+    db: Session = Depends(get_db),
+):
     """Cashflow completo aggregato per mese dell'anno.
 
     Per ogni mese ritorna:
@@ -351,10 +356,18 @@ async def cashflow_year(year: int, db: Session = Depends(get_db)):
         }
         for m in range(1, 13)
     ]
-    invoices = db.query(Invoice).filter(
+    # v3.5.0-alpha.69.1 — filtri project_id + client_id.
+    # Invoice → filter by client_id direct + project_id via job
+    inv_q = db.query(Invoice).filter(
         extract("year", Invoice.issue_date) == year,
         Invoice.status != InvoiceStatus.cancelled,
-    ).all()
+    )
+    if client_id:
+        inv_q = inv_q.filter(Invoice.client_id == client_id)
+    if project_id:
+        inv_q = inv_q.join(Job, Invoice.job_id == Job.id).filter(Job.project_id == project_id)
+    invoices = inv_q.all()
+    invoice_ids = [i.id for i in invoices]
     for inv in invoices:
         m = inv.issue_date.month if inv.issue_date else 1
         if inv.status in (InvoiceStatus.sent, InvoiceStatus.paid, InvoiceStatus.overdue, InvoiceStatus.draft):
@@ -363,41 +376,76 @@ async def cashflow_year(year: int, db: Session = Depends(get_db)):
         if remaining > 0 and inv.status != InvoiceStatus.paid:
             series[m - 1]["outstanding"] += remaining
 
-    payments = db.query(InvoicePayment).filter(
+    pay_q = db.query(InvoicePayment).filter(
         extract("year", InvoicePayment.payment_date) == year,
-    ).all()
+    )
+    if client_id or project_id:
+        # Restrict payments alle stesse invoice filtrate sopra
+        if invoice_ids:
+            pay_q = pay_q.filter(InvoicePayment.invoice_id.in_(invoice_ids))
+        else:
+            pay_q = pay_q.filter(InvoicePayment.id < 0)  # zero rows
+    payments = pay_q.all()
     for p in payments:
         m = p.payment_date.month if p.payment_date else 1
         series[m - 1]["paid"] += p.amount or 0.0
 
     # v3.5.0-alpha.68.1 — cost-side fatture passive.
-    # Fatture passive emesse (ricevute) nel mese
-    sup_billed = db.query(SupplierInvoice).filter(
+    # SupplierInvoice → filter by project_id direct + client_id via job
+    sup_billed_q = db.query(SupplierInvoice).filter(
         extract("year", SupplierInvoice.issue_date) == year,
         SupplierInvoice.deleted_at.is_(None),
         SupplierInvoice.payment_status != SupplierInvoiceStatus.cancelled,
-    ).all()
+    )
+    if project_id:
+        sup_billed_q = sup_billed_q.filter(SupplierInvoice.project_id == project_id)
+    elif client_id:
+        # SupplierInvoice non ha client_id diretto: join via job → client
+        sup_billed_q = sup_billed_q.join(
+            Job, SupplierInvoice.job_id == Job.id
+        ).join(
+            Project, Job.project_id == Project.id
+        ).filter(Project.client_id == client_id)
+    sup_billed = sup_billed_q.all()
+    sup_billed_ids = [s.id for s in sup_billed]
     for s in sup_billed:
         m = s.issue_date.month if s.issue_date else 1
         series[m - 1]["supplier_billed"] += s.amount_total or 0.0
 
     # Pagamenti a fornitori del mese (fonte verità: SupplierInvoicePayment).
     # v3.5.0-alpha.68.2 — pagamenti incrementali storicizzati.
-    sup_payments = db.query(SupplierInvoicePayment).filter(
+    sup_pay_q = db.query(SupplierInvoicePayment).filter(
         extract("year", SupplierInvoicePayment.payment_date) == year,
-    ).all()
+    )
+    if client_id or project_id:
+        if sup_billed_ids:
+            sup_pay_q = sup_pay_q.filter(
+                SupplierInvoicePayment.supplier_invoice_id.in_(sup_billed_ids)
+            )
+        else:
+            sup_pay_q = sup_pay_q.filter(SupplierInvoicePayment.id < 0)
+    sup_payments = sup_pay_q.all()
     for p in sup_payments:
         m = p.payment_date.month if p.payment_date else 1
         series[m - 1]["supplier_paid"] += p.amount or 0.0
 
     # Fatture passive con due_date nel mese, ancora non saldate
-    sup_due_rows = db.query(SupplierInvoice).filter(
+    sup_due_q = db.query(SupplierInvoice).filter(
         extract("year", SupplierInvoice.due_date) == year,
         SupplierInvoice.deleted_at.is_(None),
         SupplierInvoice.payment_status.in_([
             SupplierInvoiceStatus.unpaid, SupplierInvoiceStatus.partial,
         ]),
-    ).all()
+    )
+    if project_id:
+        sup_due_q = sup_due_q.filter(SupplierInvoice.project_id == project_id)
+    elif client_id:
+        sup_due_q = sup_due_q.join(
+            Job, SupplierInvoice.job_id == Job.id
+        ).join(
+            Project, Job.project_id == Project.id
+        ).filter(Project.client_id == client_id)
+    sup_due_rows = sup_due_q.all()
     for s in sup_due_rows:
         m = s.due_date.month if s.due_date else 1
         residuo = max(0.0, (s.amount_total or 0.0) - (s.amount_paid or 0.0))

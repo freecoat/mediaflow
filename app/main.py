@@ -280,6 +280,46 @@ def _auto_migrate_columns():
                     "ALTER TABLE invoices ADD COLUMN amount_paid "
                     "REAL NOT NULL DEFAULT 0"
                 ))
+    # v3.5.0-alpha.69.1 — Backfill InvoicePayment per fatture legacy pagate
+    # senza riga di pagamento. Senza questo backfill, /finance/cashflow
+    # mostra 0 incassato per fatture marcate paid pre-α.66.20 (rotture
+    # silenziose di /finance/cashflow su DB pre-storici).
+    # Idempotente: skip se già processato (presenza payment con reference
+    # 'BACKFILL_AUTOMIGRATE' indica run precedente).
+    if "invoice_payments" in insp.get_table_names() and "invoices" in insp.get_table_names():
+        with engine.begin() as conn:
+            # Invoices non ha tenant_id (modello single-tenant per ora), uso default 1.
+            backfill_rows = conn.execute(text("""
+                SELECT i.id, i.total, i.issue_date
+                FROM invoices i
+                WHERE i.status = 'paid'
+                  AND i.amount_paid = 0
+                  AND NOT EXISTS (
+                    SELECT 1 FROM invoice_payments p WHERE p.invoice_id = i.id
+                  )
+            """)).all()
+            for inv_id, total, issue_date in backfill_rows:
+                if not total or total <= 0:
+                    continue
+                conn.execute(text("""
+                    INSERT INTO invoice_payments
+                    (tenant_id, invoice_id, amount, payment_date, method, notes,
+                     reference, recorded_by_user_id, created_at)
+                    VALUES
+                    (1, :iid, :amt, :pdate, NULL,
+                     'Backfill auto-migrate v3.5.0-alpha.69.1 (legacy paid invoice)',
+                     'BACKFILL_AUTOMIGRATE', NULL, datetime('now'))
+                """), {
+                    "iid": inv_id,
+                    "amt": total,
+                    "pdate": issue_date,
+                })
+                conn.execute(text(
+                    "UPDATE invoices SET amount_paid = :amt WHERE id = :iid"
+                ), {"amt": total, "iid": inv_id})
+            if backfill_rows:
+                print(f"[auto-migrate] backfill InvoicePayment per {len(backfill_rows)} "
+                      f"fatture legacy paid (cashflow ora le conteggia)")
     # v3.5.0-alpha.65 — Pass-through OT al cliente (opt-in per progetto).
     if "jobs" in insp.get_table_names():
         jcols = {c["name"] for c in insp.get_columns("jobs")}
@@ -595,7 +635,7 @@ async def lifespan(app: FastAPI):
     yield
 
 
-app = FastAPI(title="MediaFlow", version="3.5.0-alpha.69", lifespan=lifespan)
+app = FastAPI(title="MediaFlow", version="3.5.0-alpha.69.1", lifespan=lifespan)
 
 BASE_DIR = Path(__file__).parent
 app.mount("/static", StaticFiles(directory=BASE_DIR / "static"), name="static")

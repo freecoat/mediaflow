@@ -5,7 +5,13 @@
 {% block topbar_title %}Cashflow{% endblock %}
 
 {% block topbar_actions %}
-  <select id="cf-year" class="form-input" style="height:32px; font-size:13px; width:100px;" onchange="loadCashflow()"></select>
+  <select id="cf-client" class="form-input" style="height:32px;font-size:13px;width:180px;" onchange="onClientChange()">
+    <option value="">— tutti i clienti —</option>
+  </select>
+  <select id="cf-project" class="form-input" style="height:32px;font-size:13px;width:180px;" onchange="loadCashflow()">
+    <option value="">— tutti i progetti —</option>
+  </select>
+  <select id="cf-year" class="form-input" style="height:32px;font-size:13px;width:100px;" onchange="loadCashflow()"></select>
 {% endblock %}
 
 {% block content %}
@@ -101,11 +107,59 @@ function initYearSelect() {
   }
 }
 
+let _cfClients = [];
+let _cfProjects = [];
+
+async function loadFilters() {
+  try {
+    [_cfClients, _cfProjects] = await Promise.all([
+      api('GET', '/planning/api/clients').catch(() => []),
+      api('GET', '/projects/api').catch(() => []),
+    ]);
+  } catch(e) { _cfClients = []; _cfProjects = []; }
+  const cSel = document.getElementById('cf-client');
+  while (cSel.children.length > 1) cSel.removeChild(cSel.lastChild);
+  _cfClients.forEach(c => {
+    const o = document.createElement('option');
+    o.value = c.id;
+    o.textContent = c.name || ('Cliente ' + c.id);
+    cSel.appendChild(o);
+  });
+  renderProjectFilter();
+}
+
+function renderProjectFilter() {
+  const cid = document.getElementById('cf-client').value;
+  const pSel = document.getElementById('cf-project');
+  while (pSel.children.length > 1) pSel.removeChild(pSel.lastChild);
+  const filtered = cid
+    ? _cfProjects.filter(p => String(p.client_id) === cid)
+    : _cfProjects;
+  filtered.forEach(p => {
+    const o = document.createElement('option');
+    o.value = p.id;
+    o.textContent = `${p.code} — ${p.title}`;
+    pSel.appendChild(o);
+  });
+}
+
+function onClientChange() {
+  // Quando cambia il cliente, resetta progetto + re-render lista progetti
+  document.getElementById('cf-project').value = '';
+  renderProjectFilter();
+  loadCashflow();
+}
+
 async function loadCashflow() {
   const year = parseInt(document.getElementById('cf-year').value || _curYear);
+  const cid = document.getElementById('cf-client').value;
+  const pid = document.getElementById('cf-project').value;
+  const qs = [];
+  if (cid) qs.push('client_id=' + cid);
+  if (pid) qs.push('project_id=' + pid);
   let data;
   try {
-    data = await api('GET', `/finance/api/cashflow/${year}`);
+    data = await api('GET', `/finance/api/cashflow/${year}` + (qs.length ? '?' + qs.join('&') : ''));
   } catch(e) {
     toast(e.message || 'Errore caricamento', 'error');
     return;
@@ -195,6 +249,6 @@ function renderTable(months) {
 }
 
 initYearSelect();
-loadCashflow();
+loadFilters().then(loadCashflow);
 </script>
 {% endblock %}
