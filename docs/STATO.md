@@ -8,6 +8,47 @@
 
 ## Versione corrente
 
+**v3.5.0-alpha.66.20** — 11 maggio 2026 — α.66 InvoicePayment + R7.x + Capitolati F14
+
+3 sviluppi sostanziali post recap roadmap (α.65 già fatto da prima):
+
+- **α.66 InvoicePayment**: modello + Invoice.amount_paid denorm +
+  auto-migrate + 4 endpoint payment + endpoint cashflow 12-mesi.
+  Cashflow timeline UI da fare (endpoint pronto).
+- **R7.x**: planning.py 4296 → 3678 righe. Estratti planning_diag.py
+  (3 endpoint) + planning_unavailabilities.py (7 endpoint). Path
+  esterni invariati.
+- **Fase 2 step C — Capitolati F14**: nuovo prompt `PARSE_TEMPLATE`
+  + funzione `parse_delivery_template` + router + pagina HTML
+  `/delivery-templates` con upload→preview→edit→save degli 8 blocchi.
+  Sidebar link in sezione Media.
+
+**Decisioni billing chiuse con Matteo** (3 trade-off da memoria
+billing_roadmap): solo overtime APPROVED conta, day-unit lineare,
+booking interni esclusi. Engine attuale `_booking_hours_weighted`
+già rispetta tutte (codice pre-esistente).
+
+**Smoke**: AST OK su 10 file. +22 endpoint totali.
+
+## Prossimo step
+
+- **F15** — Test E2E parser su 17 capitolati in
+  `docs/capitolati_esempio/`. Verificare confidence + completezza
+  blocchi su corpus reale (A24, Netflix, Amazon, NBCU, Sky, RAI,
+  Vision, MUBI, …).
+- **Cashflow timeline UI** — `/finance/cashflow` pagina che disegna
+  endpoint `/finance/api/cashflow/{year}` come 12-mesi stacked
+  (invoiced/paid/outstanding).
+- **α.67 — Resource cost-side**: `Resource.hourly_cost` + `JCL.total_cost_accrued`
+  + margine reale per riga. Migrazione DB.
+- **α.68 — Supplier/SupplierInvoice**: modulo nuovo esterni.
+- **R7.x continuazione**: estrarre `planning_bookings.py` (~1500 righe
+  ancora in planning.py: create_booking, PUT, multi-move, bulk-edit).
+- **R5/R8/R9**: split planning.html (7377), Float→Decimal, datetime tz-aware.
+- **Frontend polish** (in caldo, lo riprendiamo quando Matteo dice).
+
+---
+
 **v3.5.0-alpha.66.19** — 11 maggio 2026 — Frontend polish round 2
 
 Dopo α.66.18 ("procedi con prossimi step"):

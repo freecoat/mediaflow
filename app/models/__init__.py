@@ -11,7 +11,7 @@ from app.models.models import (
     BookingState, BOOKING_STATE_TO_LEGACY, compute_state_from_legacy,
     JobResourceAssignment, JobCostLine,
     TimePunch, PunchKind,
-    Timesheet, Expense, Invoice, InvoiceLine, InvoiceStatus,
+    Timesheet, Expense, Invoice, InvoiceLine, InvoiceStatus, InvoicePayment,
     JCLBillingStatus, BillingBatch, BillingBatchLine, BillingBatchStatus,
     LossEntry, LossReason,
     JCLBilledSlice,

@@ -1,5 +1,98 @@
 # MediaFlow — Changelog
 
+## v3.5.0-alpha.66.20 — α.66 InvoicePayment + R7.x extraction + Fase 2 step C Capitolati (11 maggio 2026)
+
+Su richiesta Matteo "procedi con tutti e 4" (post recap roadmap).
+α.65 saltato perché engine weighted hours già completo da prima
+(`cost_line_sync._booking_hours_weighted` + `Job.weighted_revenue`).
+Restano 3 sviluppi di sostanza + decisioni billing chiuse.
+
+**3 decisioni semantiche billing chiuse con Matteo** (memoria
+`project_billing_roadmap_alpha65plus`):
+1. Overtime: solo APPROVED conta nei numeri maturati (pending in tooltip)
+2. Day-unit: lineare hours_pesate / 8 (zero migrazione)
+3. Booking interni (no JCL): esclusi dal weighted total
+
+Engine attuale (`_booking_hours_weighted`) già rispetta #1 (commento
+codice: "pending → ore overtime NON pesate"). Conferma utente
+documentata, no codice da scrivere.
+
+**α.66 InvoicePayment** (cashflow revenue-side, sblocca DSO/cassa):
+- Modello `InvoicePayment` (tenant_id, invoice_id, amount, payment_date,
+  method, reference, notes, recorded_by_user_id, created_at)
+- `Invoice.amount_paid` denormalizzato (server_default 0)
+- `Invoice.payments` relationship cascade delete
+- Auto-migrate boot: `ALTER TABLE invoices ADD COLUMN amount_paid REAL`
+- Endpoint:
+  - `GET /finance/api/invoices/{id}/payments` (lista + remaining)
+  - `POST /finance/api/invoices/{id}/payments` (registra, auto-status)
+  - `DELETE /finance/api/payments/{id}` (rollback + ricomputa)
+  - `GET /finance/api/cashflow/{year}` (serie 12 mesi: invoiced/paid/outstanding)
+- Helper `_refresh_invoice_payment_state`: idempotente, auto-set
+  status=paid quando cumulato ≥ totale (-0.01 tolleranza), revert
+  a sent se rollback parziale
+
+**R7.x extraction** (planning.py da 4296 → 3678 righe, -14%):
+- `planning_diag.py` (217 righe): 3 endpoint `/planning/api/diag/*`
+  (booking-raw, scan-duplicate-overlaps, cleanup-all). Helper
+  `_detect_dup_overlap_pairs` duplicato (20 righe pure). Import lazy
+  di `_recalc_booking_envelope` + `_log_change` per evitare circolari.
+- `planning_unavailabilities.py` (366 righe): 7 endpoint
+  (`/unavailabilities`, `/my-unavailabilities`, `/.../pending`,
+  `/.../approve`, `/.../reject`, DELETE, POST). Helper `_u_dict`
+  duplicato. Import lazy `_parse_id_list`.
+- Path esterni invariati. Marker `_LEGACY_*_RELOCATED` in planning.py
+  per grep storici. Mount in main.py dopo `planning.router`.
+
+**Fase 2 step C — Capitolati (F14 cablato)**:
+- Nuovo prompt `PARSE_TEMPLATE_SYSTEM_PROMPT` in deliverables_parser.py
+  che estrae i 8 blocchi DeliveryTemplate (video/audio/text/head/
+  textless/naming/archive/metadata) + metadata (code/name/broadcaster/
+  description/ai_confidence)
+- Funzione `parse_delivery_template(text) -> dict`
+- Router `app/routers/delivery_templates.py`:
+  - `GET /delivery-templates/` (pagina HTML)
+  - `GET /delivery-templates/api/list`
+  - `GET /delivery-templates/api/{id}`
+  - `POST /delivery-templates/api/parse` (file upload + AI)
+  - `POST /delivery-templates/api/save` (FormData, parse JSON blocchi)
+  - `PUT /delivery-templates/api/{id}`
+  - `DELETE /delivery-templates/api/{id}` (soft-delete)
+- Template `pages/delivery_templates.html`: tabella + 2 modali (import
+  con preview a 8 blocchi editabili + dettaglio JSON read-only)
+- Sidebar: link "Capitolati" in sezione "Media"
+
+**File toccati** (10):
+- `app/main.py` — VERSION + auto-migrate amount_paid + 3 include_router
+- `app/models/models.py` — InvoicePayment class + Invoice.amount_paid +
+  Invoice.payments relationship
+- `app/models/__init__.py` — export InvoicePayment
+- `app/routers/finance.py` — import InvoicePayment + 4 endpoint
+  payment + cashflow + helper _refresh
+- `app/routers/planning.py` — 2 sezioni rimosse (~617 righe), marker
+  relocated
+- `app/routers/planning_diag.py` — nuovo (217 righe)
+- `app/routers/planning_unavailabilities.py` — nuovo (366 righe)
+- `app/routers/delivery_templates.py` — nuovo (~220 righe)
+- `app/services/finance.py` — niente (già OK da α.66.19)
+- `app/services/deliverables_parser.py` — +75 righe PARSE_TEMPLATE
+- `app/templates/base.html` — link sidebar Capitolati
+- `app/templates/pages/delivery_templates.html` — nuovo (~280 righe)
+
+**Smoke**: AST parse OK su 10 file. Endpoint:
+- 3 diag esposti su nuovo router
+- 7 unavailabilities su nuovo router
+- 4 payment + 1 cashflow su finance
+- 7 delivery_templates su nuovo router
++22 endpoint totali, planning.py -617 righe.
+
+**Cosa NON è incluso**:
+- UI cashflow timeline (l'endpoint c'è, pagina HTML da fare)
+- Test E2E sui 17 capitolati in `docs/capitolati_esempio/` (F15)
+- Modulo Supplier/SupplierInvoice (α.68)
+- Resource cost-side hourly_cost (α.67)
+- Frontend polish (in caldo da richiesta utente)
+
 ## v3.5.0-alpha.66.19 — Frontend polish round 2: topbar theme switcher + dashboard widgets (11 maggio 2026)
 
 Secondo giro dopo feedback "procedi con prossimi step". Aggiunti 4

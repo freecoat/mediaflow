@@ -7,7 +7,7 @@ from sqlalchemy.orm import Session, joinedload
 from sqlalchemy import func
 from app.database import get_db
 from app.models import (
-    Timesheet, Expense, Invoice, InvoiceLine, InvoiceStatus,
+    Timesheet, Expense, Invoice, InvoiceLine, InvoiceStatus, InvoicePayment,
     Job, JobStatus, JobCostLine, Quote, QuoteStatus, Project,
 )
 from app.services.finance import job_financial_summary, company_pl_summary, departments_pl_summary
@@ -190,6 +190,166 @@ async def departments_pl(year: int, db: Session = Depends(get_db)):
     Usato dalla dashboard per il widget "Margine per reparto".
     """
     return departments_pl_summary(db, year)
+
+
+# ── Pagamenti fattura (v3.5.0-alpha.66.20) ────────────────────────────
+
+
+def _refresh_invoice_payment_state(db: Session, invoice: Invoice) -> None:
+    """Ricomputa amount_paid e auto-aggiorna status:
+    - amount_paid >= total → InvoiceStatus.paid
+    - amount_paid in (0, total) → resta sent (parziale, UI mostra residuo)
+    - amount_paid == 0 e era paid → torna a sent (rollback pagamento)
+    Idempotente. Chiamato dopo INSERT/DELETE InvoicePayment.
+    """
+    total_paid = sum((p.amount or 0.0) for p in invoice.payments)
+    invoice.amount_paid = round(total_paid, 2)
+    inv_total = invoice.total or 0.0
+    if invoice.amount_paid >= inv_total - 0.01 and inv_total > 0:
+        invoice.status = InvoiceStatus.paid
+    elif invoice.status == InvoiceStatus.paid and invoice.amount_paid < inv_total - 0.01:
+        invoice.status = InvoiceStatus.sent
+
+
+@router.get("/api/invoices/{invoice_id}/payments")
+async def list_invoice_payments(invoice_id: int, db: Session = Depends(get_db)):
+    """Lista pagamenti registrati per una fattura."""
+    inv = db.query(Invoice).filter(Invoice.id == invoice_id).first()
+    if not inv:
+        raise HTTPException(404, "Fattura non trovata")
+    rows = sorted(inv.payments, key=lambda p: p.payment_date or date.min, reverse=True)
+    return {
+        "invoice_id": invoice_id,
+        "invoice_total": round(inv.total or 0.0, 2),
+        "amount_paid": round(inv.amount_paid or 0.0, 2),
+        "amount_remaining": round(max(0.0, (inv.total or 0.0) - (inv.amount_paid or 0.0)), 2),
+        "payments": [
+            {
+                "id": p.id,
+                "amount": p.amount,
+                "payment_date": str(p.payment_date) if p.payment_date else None,
+                "method": p.method,
+                "reference": p.reference,
+                "notes": p.notes,
+                "created_at": str(p.created_at)[:19] if p.created_at else None,
+            }
+            for p in rows
+        ],
+    }
+
+
+@router.post("/api/invoices/{invoice_id}/payments", dependencies=[RequireEditInvoices])
+async def create_invoice_payment(
+    invoice_id: int,
+    request: Request,
+    amount: float = Form(...),
+    payment_date: date = Form(...),
+    method: Optional[str] = Form(None),
+    reference: Optional[str] = Form(None),
+    notes: Optional[str] = Form(None),
+    db: Session = Depends(get_db),
+):
+    """Registra un pagamento (anche parziale) su una fattura.
+
+    Auto-aggiorna `Invoice.amount_paid` e `Invoice.status=paid` se il
+    cumulativo supera il totale. Non blocca pagamenti che superano il
+    totale (overpayment manuale, raro ma possibile per arrotondamenti);
+    documentabile via `notes`.
+    """
+    if amount <= 0:
+        raise HTTPException(400, "Importo deve essere > 0")
+    inv = db.query(Invoice).filter(Invoice.id == invoice_id).first()
+    if not inv:
+        raise HTTPException(404, "Fattura non trovata")
+    if inv.status == InvoiceStatus.cancelled:
+        raise HTTPException(409, "Fattura cancellata: pagamenti non ammessi")
+
+    user = getattr(request.state, "current_user", None)
+    payment = InvoicePayment(
+        tenant_id=getattr(inv, "tenant_id", 1) or 1,
+        invoice_id=invoice_id,
+        amount=round(amount, 2),
+        payment_date=payment_date,
+        method=(method or "").strip() or None,
+        reference=(reference or "").strip() or None,
+        notes=(notes or "").strip() or None,
+        recorded_by_user_id=user.id if user else None,
+    )
+    db.add(payment)
+    db.flush()
+    db.refresh(inv)
+    _refresh_invoice_payment_state(db, inv)
+    db.commit()
+    return {
+        "id": payment.id,
+        "invoice_id": invoice_id,
+        "amount_paid": inv.amount_paid,
+        "status": inv.status,
+    }
+
+
+@router.delete("/api/payments/{payment_id}", dependencies=[RequireEditInvoices])
+async def delete_invoice_payment(payment_id: int, db: Session = Depends(get_db)):
+    """Elimina un pagamento (annulla incasso). Ricomputa amount_paid + status."""
+    p = db.query(InvoicePayment).filter(InvoicePayment.id == payment_id).first()
+    if not p:
+        raise HTTPException(404, "Pagamento non trovato")
+    inv = db.query(Invoice).filter(Invoice.id == p.invoice_id).first()
+    db.delete(p)
+    db.flush()
+    if inv is not None:
+        db.refresh(inv)
+        _refresh_invoice_payment_state(db, inv)
+    db.commit()
+    return {"deleted": True, "invoice_id": p.invoice_id, "amount_paid": (inv.amount_paid if inv else None)}
+
+
+# ── Cashflow timeline (v3.5.0-alpha.66.20) ────────────────────────────
+
+
+@router.get("/api/cashflow/{year}")
+async def cashflow_year(year: int, db: Session = Depends(get_db)):
+    """Cashflow revenue-side aggregato per mese dell'anno.
+
+    Per ogni mese ritorna:
+      - invoiced: somma Invoice.total emesse (status sent/paid/overdue)
+      - paid: somma InvoicePayment.amount per pagamenti del mese
+      - outstanding: somma Invoice.total ancora non pagate
+        (issue_date nel mese, status != paid)
+
+    Non considera costi (questi arriveranno in α.67 con Resource cost-rate
+    + supplier invoice in α.68).
+    """
+    from sqlalchemy import extract
+
+    series = [
+        {"month": m, "invoiced": 0.0, "paid": 0.0, "outstanding": 0.0}
+        for m in range(1, 13)
+    ]
+    invoices = db.query(Invoice).filter(
+        extract("year", Invoice.issue_date) == year,
+        Invoice.status != InvoiceStatus.cancelled,
+    ).all()
+    for inv in invoices:
+        m = inv.issue_date.month if inv.issue_date else 1
+        if inv.status in (InvoiceStatus.sent, InvoiceStatus.paid, InvoiceStatus.overdue, InvoiceStatus.draft):
+            series[m - 1]["invoiced"] += inv.total or 0.0
+        remaining = max(0.0, (inv.total or 0.0) - (inv.amount_paid or 0.0))
+        if remaining > 0 and inv.status != InvoiceStatus.paid:
+            series[m - 1]["outstanding"] += remaining
+
+    payments = db.query(InvoicePayment).filter(
+        extract("year", InvoicePayment.payment_date) == year,
+    ).all()
+    for p in payments:
+        m = p.payment_date.month if p.payment_date else 1
+        series[m - 1]["paid"] += p.amount or 0.0
+
+    for s in series:
+        s["invoiced"] = round(s["invoiced"], 2)
+        s["paid"] = round(s["paid"], 2)
+        s["outstanding"] = round(s["outstanding"], 2)
+    return {"year": year, "months": series}
 
 
 # ── Anomalie financial (v3.4.39) ──────────────────────────────────────

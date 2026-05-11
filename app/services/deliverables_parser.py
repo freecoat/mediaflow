@@ -155,6 +155,77 @@ def parse_deliverables(text: str, hint: Optional[str] = None) -> Optional[dict]:
     return result
 
 
+# ── Estrazione blocchi DeliveryTemplate (v3.5.0-alpha.66.20 F14) ─
+
+PARSE_TEMPLATE_SYSTEM_PROMPT = """Sei un esperto di postproduzione e capitolati di consegna (delivery schedule) per cinema/TV/streaming.
+
+Compito: leggere un capitolato e produrre **8 blocchi JSON strutturati** che descrivono le specifiche tecniche del template di consegna.
+
+I 8 blocchi (tutti opzionali, ometti i campi mancanti):
+
+1. video_specs: { codec, container, resolution, fps, scan, colorspace, bit_depth, gamma, white_point, hdr, prores_flavor, dpx_pad, ... }
+2. audio_specs: { config, channel_layout, sample_rate, bit_depth, peak_dbfs, lufs_target, true_peak, dialnorm, languages, codec, ... }
+3. text_specs: { subtitles, closed_captions, forced_narratives, languages, format (SCC/SRT/IMSC/STL), embed_or_sidecar, ... }
+4. head_format: { bars_color, bars_duration_s, slate_required, slate_layout, beep_2pop, head_silence_s, timecode_start, ... }
+5. textless_format: { required, type (clean/dirty), reels, formats, ... }
+6. naming_convention: { pattern, examples, special_chars_allowed, max_length, ... }
+7. archive_specs: { master_format, lto_generation, hash_required, redundancy, media_type, ... }
+8. metadata_requirements: { mxf_metadata, exif_required, xml_sidecar (IMF/IMSC), iso639, fps_metadata, dolbyvision_xml, ... }
+
+Inoltre:
+- name: nome sintetico (es. "Netflix HDR10 IMF v1.3")
+- broadcaster: emittente/distributore (es. "Netflix", "A24", "Sky")
+- code: codice breve uppercase (es. "NETFLIX-IMF-HDR10")
+- description: 1-2 frasi
+- ai_confidence: 0..1 (quanto sei sicuro dell'estrazione)
+
+Schema output:
+{
+  "code": "NETFLIX-IMF",
+  "name": "Netflix IMF Standard 1.3",
+  "broadcaster": "Netflix",
+  "description": "Master IMF per delivery Netflix originals (HDR10/Atmos).",
+  "video_specs": {...},
+  "audio_specs": {...},
+  "text_specs": {...},
+  "head_format": {...},
+  "textless_format": {...},
+  "naming_convention": {...},
+  "archive_specs": {...},
+  "metadata_requirements": {...},
+  "ai_confidence": 0.85
+}
+
+Se un blocco non è menzionato nel capitolato, ometti la chiave. Non inventare specifiche assenti."""
+
+
+def parse_delivery_template(text: str) -> Optional[dict]:
+    """Analizza un capitolato e ritorna un dict con i 8 blocchi DeliveryTemplate
+    + metadati (code/name/broadcaster/description/ai_confidence).
+
+    Usato dall'endpoint POST /delivery-templates/api/parse per popolare la
+    preview prima del salvataggio. L'utente può poi correggere/integrare
+    prima di salvare. v3.5.0-alpha.66.20 Fase 2 step C.
+    """
+    provider = get_provider()
+    if not provider:
+        logger.warning("AI provider non disponibile — parse_delivery_template disabilitato")
+        return None
+    if len(text.strip()) < 20:
+        return None
+    MAX_CHARS = 30000
+    if len(text) > MAX_CHARS:
+        text = text[:MAX_CHARS] + "\n\n[... testo troncato ...]"
+    user_prompt = f"""Capitolato da analizzare:
+
+---
+{text}
+---
+
+Estrai i blocchi strutturati come da schema."""
+    return provider.extract_json(PARSE_TEMPLATE_SYSTEM_PROMPT, user_prompt, max_tokens=4000)
+
+
 # ── Matching voci capitolato ↔ listino prezzi ───────────────
 
 MATCH_SYSTEM_PROMPT = """Sei un assistente che mappa voci di capitolato di un cliente sul listino prezzi interno della casa di postproduzione.

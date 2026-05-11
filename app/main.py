@@ -14,6 +14,8 @@ from app.routers import (
     hr, jobs, admin, notifications as notifications_router,
     tech_sheets, team, admin_data, help as help_router,
     billing,
+    planning_diag, planning_unavailabilities,
+    delivery_templates,
 )
 
 
@@ -255,6 +257,18 @@ def _auto_migrate_columns():
                 if col not in ilcols:
                     print(f"[auto-migrate] invoice_lines.{col} mancante -> ALTER TABLE")
                     conn.execute(text(f"ALTER TABLE invoice_lines ADD COLUMN {col} {ddl}"))
+    # v3.5.0-alpha.66.20 — Pagamenti fattura (cashflow revenue-side).
+    # Tabella invoice_payments creata automaticamente da create_all() su DB nuovi;
+    # qui solo l'ALTER per la colonna denormalizzata sulla tabella esistente.
+    if "invoices" in insp.get_table_names():
+        icols = {c["name"] for c in insp.get_columns("invoices")}
+        if "amount_paid" not in icols:
+            print("[auto-migrate] invoices.amount_paid mancante -> ALTER TABLE")
+            with engine.begin() as conn:
+                conn.execute(text(
+                    "ALTER TABLE invoices ADD COLUMN amount_paid "
+                    "REAL NOT NULL DEFAULT 0"
+                ))
     # v3.5.0-alpha.65 — Pass-through OT al cliente (opt-in per progetto).
     if "jobs" in insp.get_table_names():
         jcols = {c["name"] for c in insp.get_columns("jobs")}
@@ -570,7 +584,7 @@ async def lifespan(app: FastAPI):
     yield
 
 
-app = FastAPI(title="MediaFlow", version="3.5.0-alpha.66.19", lifespan=lifespan)
+app = FastAPI(title="MediaFlow", version="3.5.0-alpha.66.20", lifespan=lifespan)
 
 BASE_DIR = Path(__file__).parent
 app.mount("/static", StaticFiles(directory=BASE_DIR / "static"), name="static")
@@ -742,6 +756,9 @@ app.include_router(clients.router)
 app.include_router(projects.router)
 app.include_router(resources.router)
 app.include_router(planning.router)
+app.include_router(planning_diag.router)
+app.include_router(planning_unavailabilities.router)
+app.include_router(delivery_templates.router)
 app.include_router(finance.router)
 app.include_router(dam.router)
 app.include_router(pricelist.router)

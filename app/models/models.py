@@ -1329,9 +1329,12 @@ class Invoice(Base):
     tenant_rea_snap: Mapped[Optional[str]] = mapped_column(String(40), nullable=True)
     tenant_fiscal_capital_snap: Mapped[Optional[str]] = mapped_column(String(80), nullable=True)
     tenant_fiscal_regime_snap: Mapped[Optional[str]] = mapped_column(String(8), nullable=True)
+    # v3.5.0-alpha.66.20 — pagamenti denormalizzati
+    amount_paid: Mapped[float] = mapped_column(Float, default=0.0, server_default="0")
     client: Mapped["Client"] = relationship(back_populates="invoices")
     job: Mapped[Optional["Job"]] = relationship(back_populates="invoices")
     lines: Mapped[List["InvoiceLine"]] = relationship(back_populates="invoice", cascade="all, delete-orphan")
+    payments: Mapped[List["InvoicePayment"]] = relationship(back_populates="invoice", cascade="all, delete-orphan")
 
 
 class InvoiceLine(Base):
@@ -1346,6 +1349,28 @@ class InvoiceLine(Base):
     vat_rate: Mapped[float] = mapped_column(Float, default=22.0)
     discount_pct: Mapped[float] = mapped_column(Float, default=0.0)
     invoice: Mapped["Invoice"] = relationship(back_populates="lines")
+
+
+# ── Pagamenti fattura (v3.5.0-alpha.66.20) ────────────────────
+# Sblocca cashflow revenue-side: una fattura può ricevere uno o più
+# pagamenti parziali (es. acconto + saldo). amount_paid sull'Invoice è
+# denormalizzato per query veloci, fonte verità sono i pagamenti.
+class InvoicePayment(Base):
+    __tablename__ = "invoice_payments"
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    tenant_id: Mapped[int] = mapped_column(ForeignKey("tenants.id"), default=1, index=True)
+    invoice_id: Mapped[int] = mapped_column(ForeignKey("invoices.id"), index=True)
+    amount: Mapped[float] = mapped_column(Float)
+    payment_date: Mapped[date] = mapped_column(Date, index=True)
+    # Metodo libero (bonifico/cassa/carta/assegno/altro) — string, no enum:
+    # i metodi cambiano per paese/banca, vogliamo flessibilità senza migrazione.
+    method: Mapped[Optional[str]] = mapped_column(String(80), nullable=True)
+    notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    # Riferimento bancario / TRN (per riconciliazione futura con estratto conto)
+    reference: Mapped[Optional[str]] = mapped_column(String(120), nullable=True)
+    recorded_by_user_id: Mapped[Optional[int]] = mapped_column(ForeignKey("users.id"), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    invoice: Mapped["Invoice"] = relationship(back_populates="payments")
 
 
 # ── Cost report → Billing flow (v3.5.0-alpha.46) ──────────────

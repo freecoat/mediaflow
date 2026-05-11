@@ -1,0 +1,317 @@
+{% extends "base.html" %}
+{% set active_page = "delivery_templates" %}
+
+{% block title %}Capitolati — MediaFlow{% endblock %}
+{% block topbar_title %}Capitolati di consegna{% endblock %}
+
+{% block topbar_actions %}
+  <button class="btn btn-primary btn-sm" onclick="openImportModal()">
+    <i data-lucide="upload"></i> Importa capitolato
+  </button>
+{% endblock %}
+
+{% block content %}
+<div class="card">
+  <div class="card-header">
+    <span class="card-title">Template di consegna</span>
+    <span style="color:var(--text3); font-size:12px;">{{ templates|length }} template configurati</span>
+  </div>
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th>Codice</th>
+          <th>Nome</th>
+          <th>Emittente</th>
+          <th>Versione</th>
+          <th>Blocchi</th>
+          <th>AI</th>
+          <th style="width:120px;">Azioni</th>
+        </tr>
+      </thead>
+      <tbody id="dt-tbody">
+        {% if not templates %}
+        <tr><td colspan="7" class="text-muted" style="text-align:center; padding:30px;">
+          Nessun template. Importa un capitolato con il bottone in alto, oppure crea uno manuale.
+        </td></tr>
+        {% endif %}
+        {% for t in templates %}
+        <tr data-tid="{{ t.id }}" style="{{ 'opacity:0.5;' if not t.is_active else '' }}">
+          <td class="mono text-sm">{{ t.code }}</td>
+          <td>{{ t.name }}</td>
+          <td style="color:var(--text2);">{{ t.broadcaster or '—' }}</td>
+          <td class="mono text-sm">{{ t.version }}</td>
+          <td class="text-sm" style="color:var(--text2);">
+            {% set blocks = [] %}
+            {% if t.video_specs %}{% set _ = blocks.append('video') %}{% endif %}
+            {% if t.audio_specs %}{% set _ = blocks.append('audio') %}{% endif %}
+            {% if t.text_specs %}{% set _ = blocks.append('text') %}{% endif %}
+            {% if t.head_format %}{% set _ = blocks.append('head') %}{% endif %}
+            {% if t.textless_format %}{% set _ = blocks.append('textless') %}{% endif %}
+            {% if t.naming_convention %}{% set _ = blocks.append('naming') %}{% endif %}
+            {% if t.archive_specs %}{% set _ = blocks.append('archive') %}{% endif %}
+            {% if t.metadata_requirements %}{% set _ = blocks.append('metadata') %}{% endif %}
+            {{ blocks|length }}/8 — {{ blocks|join(', ') }}
+          </td>
+          <td>
+            {% if t.ai_generated %}<span class="badge" style="background:rgba(168,85,247,0.18); color:#c084fc;">AI {{ ((t.ai_confidence or 0) * 100)|round|int }}%</span>{% else %}<span style="color:var(--text3);">manuale</span>{% endif %}
+          </td>
+          <td>
+            <button class="btn btn-ghost btn-sm" onclick="openDetail({{ t.id }})" title="Vedi dettagli">👁</button>
+            <button class="btn btn-ghost btn-sm" onclick="confirmDelete({{ t.id }}, '{{ t.code|e }}')" title="Cestina">🗑</button>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<!-- Modal Import capitolato -->
+<div id="modal-import" class="modal-overlay">
+  <div class="modal" style="max-width:760px;">
+    <div class="modal-header">
+      <span class="modal-title">📥 Importa capitolato (PDF / docx / xlsx / txt)</span>
+      <button class="btn btn-ghost btn-icon" onclick="closeModal('modal-import')">✕</button>
+    </div>
+    <div class="modal-body">
+      <div id="import-step1">
+        <p class="text-muted text-sm" style="margin-bottom:14px;">
+          Carica un capitolato di consegna del cliente. L'AI estrae gli 8 blocchi
+          tecnici (video, audio, text, head, textless, naming, archive, metadata)
+          e ti mostra una preview che puoi correggere prima di salvare.
+        </p>
+        <input type="file" id="capitolato-file" accept=".pdf,.docx,.xlsx,.xls,.txt,.md"
+               class="form-input" style="margin-bottom:14px;">
+        <div id="import-progress" style="display:none; color:var(--indigo2); font-size:13px;">
+          🔄 Estrazione testo + analisi AI in corso (può richiedere 10-30 secondi)…
+        </div>
+      </div>
+
+      <div id="import-step2" style="display:none;">
+        <div style="background:var(--bg3); padding:10px 14px; border-radius:6px; margin-bottom:14px; font-size:13px;">
+          <b id="parsed-code"></b> — <span id="parsed-name"></span>
+          <span id="parsed-confidence" style="margin-left:8px; color:var(--text3);"></span>
+        </div>
+        <div class="form-group">
+          <label>Code *</label>
+          <input id="f-code" class="form-input mono" maxlength="50">
+        </div>
+        <div class="form-group">
+          <label>Nome *</label>
+          <input id="f-name" class="form-input">
+        </div>
+        <div class="grid-2">
+          <div class="form-group">
+            <label>Emittente / Distributore</label>
+            <input id="f-broadcaster" class="form-input">
+          </div>
+          <div class="form-group">
+            <label>Versione</label>
+            <input id="f-version" class="form-input mono" value="1.0">
+          </div>
+        </div>
+        <div class="form-group">
+          <label>Descrizione</label>
+          <textarea id="f-description" class="form-input" rows="2"></textarea>
+        </div>
+        <!-- 8 blocchi JSON editabili -->
+        <details style="margin-top:12px;" open>
+          <summary style="cursor:pointer; font-weight:600;">8 blocchi tecnici (JSON editabili)</summary>
+          <div id="blocks-host" style="margin-top:10px; display:flex; flex-direction:column; gap:10px;"></div>
+        </details>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeModal('modal-import')">Annulla</button>
+      <button id="btn-parse" class="btn btn-primary" onclick="doParseCapitolato()">Analizza con AI</button>
+      <button id="btn-save" class="btn btn-success" onclick="doSaveTemplate()" style="display:none;">Salva template</button>
+    </div>
+  </div>
+</div>
+
+<!-- Modal Detail -->
+<div id="modal-detail" class="modal-overlay">
+  <div class="modal" style="max-width:760px;">
+    <div class="modal-header">
+      <span class="modal-title">📋 Dettaglio template</span>
+      <button class="btn btn-ghost btn-icon" onclick="closeModal('modal-detail')">✕</button>
+    </div>
+    <div class="modal-body" id="detail-body">
+      <div class="text-muted text-sm">Caricamento…</div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-primary" onclick="closeModal('modal-detail')">Chiudi</button>
+    </div>
+  </div>
+</div>
+
+<style>
+  .blk-card { background:var(--bg3); border:1px solid var(--border); border-radius:6px; padding:10px 12px; }
+  .blk-card label { font-size:11px; text-transform:uppercase; letter-spacing:0.06em; color:var(--text3); font-weight:600; }
+  .blk-card textarea { width:100%; min-height:80px; background:var(--bg2); color:var(--text); border:1px solid var(--border); border-radius:4px; padding:6px 8px; font-family:var(--font-mono); font-size:12px; resize:vertical; }
+  .blk-card.has-data { border-left:3px solid var(--indigo); }
+</style>
+
+<script>
+const BLOCK_DEFS = [
+  ['video_specs', 'Video specs'],
+  ['audio_specs', 'Audio specs'],
+  ['text_specs', 'Text/subs specs'],
+  ['head_format', 'Head format'],
+  ['textless_format', 'Textless format'],
+  ['naming_convention', 'Naming convention'],
+  ['archive_specs', 'Archive specs'],
+  ['metadata_requirements', 'Metadata requirements'],
+];
+
+function openImportModal() {
+  document.getElementById('import-step1').style.display = '';
+  document.getElementById('import-step2').style.display = 'none';
+  document.getElementById('btn-parse').style.display = '';
+  document.getElementById('btn-save').style.display = 'none';
+  document.getElementById('import-progress').style.display = 'none';
+  document.getElementById('capitolato-file').value = '';
+  openModal('modal-import');
+}
+
+async function doParseCapitolato() {
+  const fileInput = document.getElementById('capitolato-file');
+  if (!fileInput.files || !fileInput.files[0]) { toast('Seleziona un file', 'error'); return; }
+  const fd = new FormData();
+  fd.append('file', fileInput.files[0]);
+  document.getElementById('import-progress').style.display = '';
+  document.getElementById('btn-parse').disabled = true;
+  try {
+    const res = await api('POST', '/delivery-templates/api/parse', fd);
+    renderParseStep2(res);
+  } catch(e) {
+    toast(e.message || 'Errore parse', 'error');
+  } finally {
+    document.getElementById('import-progress').style.display = 'none';
+    document.getElementById('btn-parse').disabled = false;
+  }
+}
+
+function renderParseStep2(parsed) {
+  document.getElementById('import-step1').style.display = 'none';
+  document.getElementById('import-step2').style.display = '';
+  document.getElementById('btn-parse').style.display = 'none';
+  document.getElementById('btn-save').style.display = '';
+
+  document.getElementById('parsed-code').textContent = parsed.code || '(no code)';
+  document.getElementById('parsed-name').textContent = parsed.name || '(no name)';
+  const conf = parsed.ai_confidence;
+  document.getElementById('parsed-confidence').textContent =
+    (conf != null) ? ('AI confidence ' + Math.round(conf * 100) + '%') : '';
+
+  document.getElementById('f-code').value = parsed.code || '';
+  document.getElementById('f-name').value = parsed.name || '';
+  document.getElementById('f-broadcaster').value = parsed.broadcaster || '';
+  document.getElementById('f-version').value = parsed.version || '1.0';
+  document.getElementById('f-description').value = parsed.description || '';
+
+  const host = document.getElementById('blocks-host');
+  while (host.firstChild) host.removeChild(host.firstChild);
+  for (const [key, label] of BLOCK_DEFS) {
+    const card = document.createElement('div');
+    card.className = 'blk-card' + (parsed[key] ? ' has-data' : '');
+    const lbl = document.createElement('label'); lbl.textContent = label;
+    const ta = document.createElement('textarea');
+    ta.dataset.blockKey = key;
+    ta.value = parsed[key] ? JSON.stringify(parsed[key], null, 2) : '';
+    card.appendChild(lbl); card.appendChild(ta);
+    host.appendChild(card);
+  }
+  // store metadata for save
+  window._parsedMeta = {
+    ai_generated: !!parsed.ai_generated,
+    ai_confidence: conf,
+    source_document_name: parsed.source_document_name,
+  };
+}
+
+async function doSaveTemplate() {
+  const fd = new FormData();
+  fd.append('code', document.getElementById('f-code').value.trim());
+  fd.append('name', document.getElementById('f-name').value.trim());
+  fd.append('broadcaster', document.getElementById('f-broadcaster').value.trim());
+  fd.append('version', document.getElementById('f-version').value.trim() || '1.0');
+  fd.append('description', document.getElementById('f-description').value.trim());
+
+  // valida JSON dei blocchi
+  for (const [key] of BLOCK_DEFS) {
+    const ta = document.querySelector(`textarea[data-block-key="${key}"]`);
+    if (!ta) continue;
+    const v = ta.value.trim();
+    if (!v) continue;
+    try { JSON.parse(v); } catch(e) {
+      toast(`JSON malformato in ${key}: ${e.message}`, 'error');
+      return;
+    }
+    fd.append(key, v);
+  }
+  const meta = window._parsedMeta || {};
+  fd.append('ai_generated', String(meta.ai_generated || false));
+  if (meta.ai_confidence != null) fd.append('ai_confidence', String(meta.ai_confidence));
+  if (meta.source_document_name) fd.append('source_document_name', meta.source_document_name);
+
+  try {
+    await api('POST', '/delivery-templates/api/save', fd);
+    toast('Template salvato', 'success');
+    closeModal('modal-import');
+    setTimeout(() => window.location.reload(), 500);
+  } catch(e) {
+    toast(e.message || 'Errore salvataggio', 'error');
+  }
+}
+
+async function openDetail(tid) {
+  openModal('modal-detail');
+  const body = document.getElementById('detail-body');
+  while (body.firstChild) body.removeChild(body.firstChild);
+  const loading = document.createElement('div');
+  loading.className = 'text-muted text-sm';
+  loading.textContent = 'Caricamento…';
+  body.appendChild(loading);
+  try {
+    const t = await api('GET', '/delivery-templates/api/' + tid);
+    body.removeChild(loading);
+    const header = document.createElement('div');
+    header.style.cssText = 'background:var(--bg3); padding:10px 14px; border-radius:6px; margin-bottom:12px; font-size:13px;';
+    const hb = document.createElement('b'); hb.textContent = t.code; header.appendChild(hb);
+    header.appendChild(document.createTextNode(' — ' + (t.name || '')));
+    body.appendChild(header);
+    for (const [key, label] of BLOCK_DEFS) {
+      const data = t[key];
+      if (!data || Object.keys(data).length === 0) continue;
+      const card = document.createElement('div');
+      card.className = 'blk-card has-data';
+      card.style.marginBottom = '8px';
+      const lbl = document.createElement('label'); lbl.textContent = label;
+      const pre = document.createElement('pre');
+      pre.style.cssText = 'margin:6px 0 0; font-family:var(--font-mono); font-size:12px; color:var(--text2); white-space:pre-wrap;';
+      pre.textContent = JSON.stringify(data, null, 2);
+      card.appendChild(lbl); card.appendChild(pre);
+      body.appendChild(card);
+    }
+  } catch(e) {
+    body.removeChild(loading);
+    const err = document.createElement('div'); err.style.color = 'var(--rose)';
+    err.textContent = e.message || 'Errore';
+    body.appendChild(err);
+  }
+}
+
+async function confirmDelete(tid, code) {
+  if (!confirm(`Disattivare template "${code}"? (soft-delete: i job collegati restano integri)`)) return;
+  try {
+    await api('DELETE', '/delivery-templates/api/' + tid);
+    toast('Template disattivato', 'success');
+    setTimeout(() => window.location.reload(), 400);
+  } catch(e) {
+    toast(e.message || 'Errore', 'error');
+  }
+}
+</script>
+{% endblock %}
