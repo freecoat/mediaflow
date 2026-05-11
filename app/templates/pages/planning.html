@@ -39,12 +39,42 @@
   #tl-host .vis-item.vis-selected {
     box-shadow: 0 0 0 2px var(--indigo), 0 4px 12px rgba(98,114,245,0.45) !important;
   }
-  /* Density compact */
+  /* Density compact — v3.5.0-alpha.82: anche label row + nesting groups */
   #tl-host[data-density="compact"] .vis-item { padding: 1px 5px !important; min-height: 16px; font-size: 10px !important; }
-  #tl-host[data-density="compact"] .vis-foreground .vis-group { height: 24px !important; min-height: 24px !important; }
+  #tl-host[data-density="compact"] .vis-foreground .vis-group,
+  #tl-host[data-density="compact"] .vis-labelset .vis-label {
+    min-height: 24px !important;
+    line-height: 22px !important;
+  }
+  #tl-host[data-density="compact"] .vis-labelset .vis-label .vis-inner {
+    font-size: 11px !important;
+    padding: 2px 8px !important;
+  }
   /* Density spacious */
   #tl-host[data-density="spacious"] .vis-item { padding: 5px 10px !important; min-height: 30px; font-size: 13px !important; }
-  #tl-host[data-density="spacious"] .vis-foreground .vis-group { height: 56px !important; min-height: 56px !important; }
+  #tl-host[data-density="spacious"] .vis-foreground .vis-group,
+  #tl-host[data-density="spacious"] .vis-labelset .vis-label {
+    min-height: 56px !important;
+    line-height: 54px !important;
+  }
+  #tl-host[data-density="spacious"] .vis-labelset .vis-label .vis-inner {
+    font-size: 14px !important;
+    padding: 6px 10px !important;
+  }
+  /* v3.5.0-alpha.82 — Top-align contenuto gruppi collassati
+     (vis-timeline default è bottom-align; preferiamo top per leggibilità). */
+  #tl-host .vis-foreground .vis-group {
+    align-items: flex-start !important;
+  }
+  #tl-host .vis-foreground .vis-group .vis-item {
+    margin-top: 2px;
+  }
+  /* v3.5.0-alpha.82 — Heatmap container neutro (era rgba bianco, invisibile su tema chiaro).
+     Usa color-mix var(--text) per adattarsi sia su dark che chiaro. */
+  #tl-host .vis-labelset .vis-label .tl-heat {
+    background: color-mix(in srgb, var(--text2, #9aa3bf) 12%, transparent) !important;
+    box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--text2, #9aa3bf) 12%, transparent) !important;
+  }
   /* Time axis subtler */
   #tl-host .vis-time-axis .vis-text {
     color: var(--text3) !important;
@@ -1492,9 +1522,16 @@ function tlSetColorBy(mode) {
   try { localStorage.setItem('mf_tl_colorby', mode); } catch(e) {}
   const host = document.getElementById('tl-host');
   if (host) host.dataset.colorby = mode;
-  // Forza re-render items (se possibile)
-  if (typeof refreshTimeline === 'function') refreshTimeline();
-  else if (typeof tlReloadItems === 'function') tlReloadItems();
+  // v3.5.0-alpha.82 — Re-apply color a items esistenti senza reload backend.
+  try {
+    if (typeof itemsDS !== 'undefined' && typeof bookings !== 'undefined' && itemsDS && bookings) {
+      const updates = bookings.map(b => {
+        const c = tlResolveItemColor(b);
+        return { id: b.id, style: `background-color:${c}; border-color:${c};` };
+      });
+      itemsDS.update(updates);
+    }
+  } catch(e) { /* silent */ }
 }
 function tlInitColorBy() {
   const saved = (() => { try { return localStorage.getItem('mf_tl_colorby') || 'status'; } catch(e) { return 'status'; } })();
@@ -2550,7 +2587,9 @@ function tlHeatmapElement(days) {
   wrap.style.cssText = 'display:flex; gap:1px; margin-top:4px; height:5px;';
   for (const d of days) {
     const ratio = d.hours / 8;
-    let bg = 'rgba(255,255,255,0.04)';
+    // v3.5.0-alpha.82 — Cell vuota usa color-mix neutro (era rgba(255,255,255,..)
+    // invisibile su tema chiaro).
+    let bg = 'color-mix(in srgb, currentColor 8%, transparent)';
     if (ratio > 0 && ratio <= 0.5) bg = 'rgba(34,197,94,0.45)';
     else if (ratio > 0.5 && ratio <= 1) bg = 'rgba(34,197,94,0.85)';
     else if (ratio > 1 && ratio <= 1.5) bg = 'rgba(251,146,60,0.9)';
@@ -2661,9 +2700,119 @@ function _tlInjectResourceTints() {
   document.head.appendChild(style);
 }
 
+// v3.5.0-alpha.82 — Dettaglio risorsa (doppio click label area).
+function tlShowResourceDetail(resourceId) {
+  const r = (typeof RESOURCES_SEED !== 'undefined') ? RESOURCES_SEED.find(x => x.id === resourceId) : null;
+  if (!r) return;
+  const dept = (typeof DEPARTMENTS_SEED !== 'undefined') ? DEPARTMENTS_SEED.find(d => d.id === r.dept) : null;
+  // Conta booking attivi per la risorsa (lookup nei bookings caricati)
+  let activeCount = 0;
+  try {
+    if (typeof bookings !== 'undefined' && Array.isArray(bookings)) {
+      activeCount = bookings.filter(b => {
+        const p = b.extendedProps || {};
+        return p.resource_id === resourceId;
+      }).length;
+    }
+  } catch(e) {}
+  // Popover semplice + link a edit risorsa
+  const old = document.getElementById('tl-res-detail-pop');
+  if (old) old.remove();
+  const pop = document.createElement('div');
+  pop.id = 'tl-res-detail-pop';
+  pop.style.cssText = 'position:fixed;left:50%;top:30%;transform:translate(-50%,-50%);z-index:2100;background:var(--bg2);border:1px solid var(--border);border-radius:10px;padding:18px 22px;width:340px;box-shadow:0 18px 48px rgba(0,0,0,.55);font-size:13px;';
+  const close = () => pop.remove();
+  // Header
+  const h = document.createElement('div');
+  h.style.cssText = 'display:flex;align-items:center;gap:10px;margin-bottom:12px;';
+  const sw = document.createElement('span');
+  sw.style.cssText = `width:14px;height:14px;border-radius:4px;background:${r.color || '#6272f5'};flex-shrink:0;`;
+  h.appendChild(sw);
+  const ht = document.createElement('div'); ht.style.cssText = 'flex:1;font-weight:700;font-size:14px;';
+  ht.textContent = r.name; h.appendChild(ht);
+  const xb = document.createElement('button'); xb.className = 'btn btn-ghost btn-icon btn-sm';
+  xb.textContent = '×'; xb.onclick = close; h.appendChild(xb);
+  pop.appendChild(h);
+  // Rows
+  const addRow = (lbl, val) => {
+    const row = document.createElement('div');
+    row.style.cssText = 'display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid var(--border);';
+    const l = document.createElement('span'); l.style.cssText = 'color:var(--text3);font-size:11px;text-transform:uppercase;letter-spacing:.04em;';
+    l.textContent = lbl;
+    const v = document.createElement('span'); v.style.color = 'var(--text)'; v.textContent = val || '—';
+    row.appendChild(l); row.appendChild(v); pop.appendChild(row);
+  };
+  addRow('ID', r.id);
+  if (r.role) addRow('Ruolo', r.role);
+  if (dept) addRow('Reparto', dept.name);
+  addRow('Booking attivi', String(activeCount));
+  // Actions
+  const acts = document.createElement('div');
+  acts.style.cssText = 'margin-top:14px;display:flex;gap:6px;justify-content:flex-end;';
+  const editBtn = document.createElement('a');
+  editBtn.className = 'btn btn-secondary btn-sm';
+  editBtn.textContent = 'Apri in /resources';
+  editBtn.href = `/resources?focus=${r.id}`; editBtn.target = '_blank';
+  acts.appendChild(editBtn);
+  const okBtn = document.createElement('button'); okBtn.className = 'btn btn-primary btn-sm';
+  okBtn.textContent = 'Chiudi'; okBtn.onclick = close;
+  acts.appendChild(okBtn);
+  pop.appendChild(acts);
+  document.body.appendChild(pop);
+  // Click outside chiude
+  setTimeout(() => {
+    const off = e => { if (!pop.contains(e.target)) { close(); document.removeEventListener('mousedown', off); } };
+    document.addEventListener('mousedown', off);
+  }, 50);
+}
+
+// v3.5.0-alpha.82 — Hash deterministic da stringa → indice palette
+function _tlHashColor(key) {
+  if (!key) return '#9aa0b8';
+  const PALETTE = ['#6272f5','#22c55e','#fb923c','#a78bfa','#f472b6','#fbbf24',
+                   '#3b82f6','#ef4444','#14b8a6','#eab308','#8b5cf6','#10b981'];
+  let h = 0;
+  for (let i = 0; i < key.length; i++) {
+    h = ((h << 5) - h + key.charCodeAt(i)) | 0;
+  }
+  return PALETTE[Math.abs(h) % PALETTE.length];
+}
+
+// v3.5.0-alpha.82 — Risolve colore item secondo mode tlColorBy
+function tlResolveItemColor(b) {
+  let mode = 'status';
+  try { mode = localStorage.getItem('mf_tl_colorby') || 'status'; } catch(e) {}
+  const p = b.extendedProps || {};
+  if (mode === 'status') return b.color || '#6272f5';  // = resource color (default)
+  if (mode === 'department') {
+    const r = (typeof RESOURCES_SEED !== 'undefined') ? RESOURCES_SEED.find(x => x.id === p.resource_id) : null;
+    const d = (r && typeof DEPARTMENTS_SEED !== 'undefined') ? DEPARTMENTS_SEED.find(dx => dx.id === r.dept) : null;
+    return (d && d.color) || '#6272f5';
+  }
+  if (mode === 'client') {
+    // Lookup project → client_name
+    const proj = (typeof PROJECTS_SEED !== 'undefined') ? PROJECTS_SEED.find(x => x.id === p.project_id) : null;
+    const clientKey = (proj && proj.client_name) || ('c' + (p.project_id || 'X'));
+    return _tlHashColor(clientKey);
+  }
+  if (mode === 'project') {
+    const proj = (typeof PROJECTS_SEED !== 'undefined') ? PROJECTS_SEED.find(x => x.id === p.project_id) : null;
+    const key = (proj && proj.code) || ('p' + (p.project_id || 'X'));
+    return _tlHashColor(key);
+  }
+  return b.color || '#6272f5';
+}
+
 function tlSetResourceLabelStyle(preset) {
   try { localStorage.setItem('mf_tl_res_label_style', preset); } catch(e) {}
   _tlInjectResourceTints();
+  // v3.5.0-alpha.82 — Anche project tints rispondono allo stesso preset
+  if (window._tlGroupBy === 'project') {
+    const pids = (typeof bookings !== 'undefined' && Array.isArray(bookings))
+      ? Array.from(new Set(bookings.map(b => (b.extendedProps || {}).project_id).filter(Boolean)))
+      : [];
+    _tlInjectProjectTints(pids);
+  }
   // Aggiorna selector UI
   const sel = document.getElementById('tl-res-label-style');
   if (sel) sel.value = preset;
@@ -2672,6 +2821,9 @@ function tlSetResourceLabelStyle(preset) {
 function tlBuildGroups(bookings, rangeStart, rangeEnd) {
   // v3.5.0-alpha.21: dispatch su modalità raggruppamento (Risorsa | Progetto).
   if (window._tlGroupBy === 'project') {
+    // v3.5.0-alpha.82 — Inject project tints (analogo a resource tints)
+    const pids = Array.from(new Set((bookings || []).map(b => (b.extendedProps || {}).project_id).filter(Boolean)));
+    _tlInjectProjectTints(pids);
     return tlBuildProjectGroups(bookings);
   }
   return tlBuildResourceGroups(bookings, rangeStart, rangeEnd);
@@ -2782,15 +2934,59 @@ function tlBuildProjectGroups(bookings) {
       className: 'tl-project-' + pid,
     });
   }
-  // Job leaves
+  // Job leaves — v3.5.0-alpha.82: className tl-project-{id} per applicare tint
   for (const [jid, info] of jobs) {
     groups.push({
       id: 'j' + jid,
       content: `${info.code ? `<span class="mono text-xs text-muted">${escapeHtml(info.code)}</span> ` : ''}${escapeHtml(info.title)}`,
       treeLevel: 2,
+      className: 'tl-project-' + info.project_id,
     });
   }
   return groups;
+}
+
+// v3.5.0-alpha.82 — Tints per project mode (analogo a _tlInjectResourceTints).
+// Color deterministic da project code/id via _tlHashColor.
+function _tlInjectProjectTints(projectIds) {
+  const old = document.getElementById('tl-proj-tints');
+  if (old) old.remove();
+  if (!projectIds || !projectIds.length) return;
+  let preset = 'auto';
+  try { preset = localStorage.getItem('mf_tl_res_label_style') || 'auto'; } catch(e) {}
+  const PROJECTS = (typeof PROJECTS_SEED !== 'undefined') ? PROJECTS_SEED : [];
+  const rules = projectIds.map(pid => {
+    const proj = PROJECTS.find(x => x.id === pid);
+    const key = (proj && proj.code) || ('p' + pid);
+    const c = _tlHashColor(key);
+    const cls = 'tl-project-' + pid;
+    if (preset === 'plain') return '';
+    if (preset === 'text') return `
+      .vis-labelset .vis-label.${cls} { color: ${c} !important; font-weight: 600 !important; border-left: 2px solid ${c}; }
+      .vis-labelset .vis-label.${cls} .vis-inner { color: ${c} !important; }`;
+    if (preset === 'solid') {
+      const fg = _tlContrastTextOn(c);
+      return `
+      .vis-labelset .vis-label.${cls} { background: ${c} !important; color: ${fg} !important; font-weight: 600 !important; border-left: 3px solid ${c}; }
+      .vis-labelset .vis-label.${cls} .vis-inner { color: ${fg} !important; }
+      .vis-foreground .vis-group.${cls} { background: ${_hexToRgba(c, 0.045)} !important; }`;
+    }
+    if (preset === 'outline') return `
+      .vis-labelset .vis-label.${cls} { background: transparent !important; color: ${c} !important; font-weight: 700 !important; border-left: 5px solid ${c}; }
+      .vis-labelset .vis-label.${cls} .vis-inner { color: ${c} !important; }
+      .vis-foreground .vis-group.${cls} { background: ${_hexToRgba(c, 0.03)} !important; }`;
+    // auto: tint sottile
+    return `
+      .vis-labelset .vis-label.${cls}:not(.vis-nesting-group) {
+        background: ${_hexToRgba(c, 0.07)} !important;
+        border-left: 3px solid ${_hexToRgba(c, 0.55)};
+      }
+      .vis-foreground .vis-group.${cls} { background: ${_hexToRgba(c, 0.045)} !important; }`;
+  }).join('\n');
+  const style = document.createElement('style');
+  style.id = 'tl-proj-tints';
+  style.textContent = rules;
+  document.head.appendChild(style);
 }
 
 // v3.5.0-alpha.21: re-mappa group degli items per la modalità progetto.
@@ -2815,7 +3011,10 @@ function tlBookingToItem(b) {
   // b.id = 'a{assignment_id}', b.assignment_id e b.booking_id presenti.
   const p = b.extendedProps || {};
   const isInternal = p.kind && p.kind.startsWith('internal_');
-  const color = b.color || '#6272f5';
+  // v3.5.0-alpha.82 — Color by mode (status/client/project/department)
+  const color = (typeof tlResolveItemColor === 'function')
+    ? tlResolveItemColor(b)
+    : (b.color || '#6272f5');
   const groupSize = p.group_size || 1;
   const groupBadge = groupSize > 1 ? ` <span style="background:rgba(0,0,0,.35); padding:0 4px; border-radius:3px; font-size:10px;">${p.group_position}/${groupSize}</span>` : '';
   // v3.5.0-alpha.66.5: stato unificato `state` (5 valori esclusivi + cancelled).
@@ -4386,6 +4585,13 @@ async function _doRenderTimeline(preserveWindow=false) {
       return;
     }
     if (!props.group || typeof props.group !== 'number') return;
+    // v3.5.0-alpha.82 — Doppio click su area label risorsa → mostra dettaglio
+    // risorsa invece che creare booking. props.what === 'group-label'
+    // identifica click sulla colonna sinistra (label set).
+    if (props.what === 'group-label') {
+      tlShowResourceDetail(props.group);
+      return;
+    }
     if (!props.time) return;
     tlbOpen(props.group, props.time);
   });
