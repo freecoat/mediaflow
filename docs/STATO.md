@@ -8,6 +8,27 @@
 
 ## Versione corrente
 
+**v3.5.0-alpha.78** — 11 maggio 2026 — Reportistica YoY + proiezioni + export
+
+- Service financial_reports.py: year_over_year + ytd_projection
+  (linear + realistic) + export_csv + export_xlsx multi-sheet.
+- Endpoint /finance/api/reports/* (comparison, projection, export).
+- Pagina /finance/reports con 4 KPI + bar export + tabella YoY +
+  chart 2 barre + tabella YTD breakdown.
+- Sidebar link "Report YoY + Export".
+- α.77.1 toggle granularità mensile/trim/annuale anche in cashflow.
+
+378 routes (+5).
+
+## Prossimo step
+
+- AI capability `propose_forecast` (scenari best/worst case via AI)
+- Export PDF financial report (riusa reportlab branding)
+- Tab "Forecast" dedicato dentro project_detail
+- R7.x continuazione planning_bookings
+
+## (versione precedente)
+
 **v3.5.0-alpha.77** — 11 maggio 2026 — Financial model + sales pipeline
 
 Pattern Salesforce/HubSpot per quote forecast:

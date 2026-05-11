@@ -1,0 +1,228 @@
+{% extends "base.html" %}
+{% set active_page = "finance_reports" %}
+{% block title %}Report finanziari — MediaFlow{% endblock %}
+{% block topbar_title %}📑 Report finanziari (YoY + proiezione + export){% endblock %}
+
+{% block topbar_actions %}
+  <select id="cf-granularity" class="form-input" style="height:32px;font-size:13px;width:130px;" onchange="loadAll()">
+    <option value="month">Mensile</option>
+    <option value="quarter" selected>Trimestrale</option>
+    <option value="year">Annuale</option>
+  </select>
+  <select id="cf-year-a" class="form-input" style="height:32px;font-size:13px;width:100px;" onchange="loadAll()"></select>
+  <span style="color:var(--text3);font-size:13px;">vs</span>
+  <select id="cf-year-b" class="form-input" style="height:32px;font-size:13px;width:100px;" onchange="loadAll()"></select>
+{% endblock %}
+
+{% block content %}
+
+<div class="card mb-3" style="background:rgba(98,114,245,0.06);border-color:rgba(98,114,245,0.2);">
+  <div style="padding:14px 16px;font-size:13px;line-height:1.55;">
+    <strong>📑 Report finanziari</strong> — Comparazione anno-su-anno + proiezione full-year da YTD + export CSV/XLSX.
+    Funzioni standard pattern Salesforce/QuickBooks/Pennylane.
+  </div>
+</div>
+
+<!-- KPI projection top -->
+<div class="stat-grid mb-4">
+  <div class="stat-card" style="border-left:3px solid var(--indigo);">
+    <div class="stat-label">YTD Incassato</div>
+    <div class="stat-value mono color-green" id="kpi-ytd-paid">—</div>
+    <div class="stat-sub" id="kpi-ytd-months">— mesi completi</div>
+  </div>
+  <div class="stat-card" style="border-left:3px solid #a78bfa;">
+    <div class="stat-label">Proiezione lineare</div>
+    <div class="stat-value mono" id="kpi-linear">—</div>
+    <div class="stat-sub">YTD / mesi × 12</div>
+  </div>
+  <div class="stat-card" style="border-left:3px solid #22c55e;">
+    <div class="stat-label">Proiezione realistic</div>
+    <div class="stat-value mono color-green" id="kpi-realistic">—</div>
+    <div class="stat-sub">YTD + forecast pesato</div>
+  </div>
+  <div class="stat-card" style="border-left:3px solid #fbbf24;">
+    <div class="stat-label">Pipeline residua</div>
+    <div class="stat-value mono" id="kpi-pipeline-rem">—</div>
+    <div class="stat-sub">quote aperte mesi futuri</div>
+  </div>
+</div>
+
+<!-- Export bar -->
+<div class="card mb-3">
+  <div style="padding:12px 16px;display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
+    <strong style="font-size:13px;">📥 Export:</strong>
+    <a id="exp-csv" class="btn btn-secondary btn-sm" target="_blank">CSV</a>
+    <a id="exp-xlsx" class="btn btn-secondary btn-sm" target="_blank">Excel (multi-sheet)</a>
+    <span style="color:var(--text3);font-size:11px;margin-left:auto;">
+      XLSX include sheet "Report" + "YTD Projection"
+    </span>
+  </div>
+</div>
+
+<!-- YoY comparison table -->
+<div class="card mb-3">
+  <div class="card-header"><span class="card-title" id="yoy-title">Comparazione anno-su-anno</span></div>
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th>Periodo</th>
+          <th class="text-right" id="th-year-a">Anno A</th>
+          <th class="text-right" id="th-year-b">Anno B</th>
+          <th class="text-right">Δ Incassato</th>
+          <th class="text-right">% Δ</th>
+          <th class="text-right">Forecast pesato A</th>
+          <th class="text-right">Forecast B</th>
+          <th class="text-right">Cassa netta A</th>
+          <th class="text-right">Cassa netta B</th>
+        </tr>
+      </thead>
+      <tbody id="yoy-tbody"></tbody>
+    </table>
+  </div>
+</div>
+
+<!-- Chart comparativo -->
+<div class="card mb-3">
+  <div class="card-header">
+    <span class="card-title">Grafico incassato YoY</span>
+    <span style="color:var(--text3);font-size:12px;">Verde = Anno A · Grigio = Anno B</span>
+  </div>
+  <div id="yoy-chart" style="display:grid;gap:8px;padding:16px 6px;min-height:280px;align-items:end;"></div>
+</div>
+
+<!-- YTD projection breakdown -->
+<div class="card">
+  <div class="card-header"><span class="card-title">YTD Projection breakdown</span></div>
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr><th>Metrica</th><th class="text-right">YTD</th><th class="text-right">Linear full-year</th><th class="text-right">Realistic full-year</th></tr>
+      </thead>
+      <tbody id="proj-tbody"></tbody>
+    </table>
+  </div>
+</div>
+
+<script>
+const _curYear = new Date().getFullYear();
+const MESI = ['Gen','Feb','Mar','Apr','Mag','Giu','Lug','Ago','Set','Ott','Nov','Dic'];
+
+function initYearSelects() {
+  const a = document.getElementById('cf-year-a');
+  const b = document.getElementById('cf-year-b');
+  for (let y = _curYear + 1; y >= _curYear - 4; y--) {
+    [a, b].forEach((s, i) => {
+      const o = document.createElement('option'); o.value = String(y); o.textContent = String(y);
+      if (i === 0 && y === _curYear) o.selected = true;
+      if (i === 1 && y === _curYear - 1) o.selected = true;
+      s.appendChild(o);
+    });
+  }
+}
+
+async function loadAll() {
+  const ya = parseInt(document.getElementById('cf-year-a').value || _curYear);
+  const yb = parseInt(document.getElementById('cf-year-b').value || (_curYear-1));
+  const gran = document.getElementById('cf-granularity').value || 'quarter';
+  document.getElementById('th-year-a').textContent = String(ya);
+  document.getElementById('th-year-b').textContent = String(yb);
+  document.getElementById('yoy-title').textContent = `Comparazione ${ya} vs ${yb} (${gran === 'quarter' ? 'trim.' : gran === 'year' ? 'annuale' : 'mensile'})`;
+  // Update export URLs
+  document.getElementById('exp-csv').href = `/finance/api/reports/export.csv?year=${ya}&granularity=${gran}`;
+  document.getElementById('exp-xlsx').href = `/finance/api/reports/export.xlsx?year=${ya}&granularity=${gran}`;
+  try {
+    const [yoy, proj] = await Promise.all([
+      api('GET', `/finance/api/reports/comparison?year_a=${ya}&year_b=${yb}&granularity=${gran}`),
+      api('GET', `/finance/api/reports/projection/${ya}`),
+    ]);
+    renderYoY(yoy);
+    renderChart(yoy);
+    renderProjection(proj);
+  } catch(e) { toast(e.message || 'Errore caricamento', 'error'); }
+}
+
+function renderYoY(yoy) {
+  const tbody = document.getElementById('yoy-tbody');
+  while (tbody.firstChild) tbody.removeChild(tbody.firstChild);
+  yoy.rows.forEach(r => {
+    const tr = document.createElement('tr');
+    const td = (txt, css) => { const e = document.createElement('td'); if (css) e.className = css; e.textContent = txt; tr.appendChild(e); };
+    let period = r.period;
+    if (typeof period === 'number') period = MESI[period - 1] || period;
+    td(period);
+    td(fmtCurrency(r.paid_a || 0), 'mono text-right');
+    td(fmtCurrency(r.paid_b || 0), 'mono text-right');
+    const deltaCss = (r.paid_delta || 0) >= 0 ? 'mono text-right color-green' : 'mono text-right color-rose';
+    td(fmtCurrency(r.paid_delta || 0), deltaCss);
+    td(r.paid_pct != null ? r.paid_pct + '%' : '—', deltaCss);
+    td(fmtCurrency(r.forecast_weighted_a || 0), 'mono text-right');
+    td(fmtCurrency(r.forecast_weighted_b || 0), 'mono text-right text-muted');
+    const ncCss = (r.net_cashflow_a || 0) >= 0 ? 'mono text-right color-green' : 'mono text-right color-rose';
+    td(fmtCurrency(r.net_cashflow_a || 0), ncCss);
+    td(fmtCurrency(r.net_cashflow_b || 0), 'mono text-right text-muted');
+    tbody.appendChild(tr);
+  });
+}
+
+function renderChart(yoy) {
+  const host = document.getElementById('yoy-chart');
+  while (host.firstChild) host.removeChild(host.firstChild);
+  host.style.gridTemplateColumns = `repeat(${yoy.rows.length || 1}, 1fr)`;
+  const maxV = Math.max(1, ...yoy.rows.flatMap(r => [r.paid_a||0, r.paid_b||0]));
+  yoy.rows.forEach(r => {
+    const col = document.createElement('div');
+    col.style.cssText = 'display:flex;flex-direction:column;align-items:center;gap:4px;height:100%;';
+    const bars = document.createElement('div');
+    bars.style.cssText = 'display:flex;gap:4px;align-items:flex-end;height:220px;width:100%;justify-content:center;';
+    const ba = document.createElement('div');
+    ba.style.cssText = `width:18px;background:#22c55e;border-radius:3px 3px 0 0;height:${Math.max(1, Math.round((r.paid_a||0)/maxV*220))}px;`;
+    ba.title = `Anno A: ${fmtCurrency(r.paid_a||0)}`;
+    bars.appendChild(ba);
+    const bb = document.createElement('div');
+    bb.style.cssText = `width:18px;background:#9aa0b8;border-radius:3px 3px 0 0;height:${Math.max(1, Math.round((r.paid_b||0)/maxV*220))}px;`;
+    bb.title = `Anno B: ${fmtCurrency(r.paid_b||0)}`;
+    bars.appendChild(bb);
+    col.appendChild(bars);
+    let period = r.period;
+    if (typeof period === 'number') period = MESI[period - 1] || period;
+    const lbl = document.createElement('div');
+    lbl.style.cssText = 'font-size:11px;color:var(--text3);padding-top:4px;border-top:1px solid var(--border);width:100%;text-align:center;';
+    lbl.textContent = period;
+    col.appendChild(lbl);
+    host.appendChild(col);
+  });
+}
+
+function renderProjection(proj) {
+  document.getElementById('kpi-ytd-paid').textContent = fmtCurrency(proj.ytd.paid || 0);
+  document.getElementById('kpi-ytd-months').textContent = `${proj.ytd_months} mesi completi`;
+  document.getElementById('kpi-linear').textContent = fmtCurrency(proj.linear_full_year.paid || 0);
+  document.getElementById('kpi-realistic').textContent = fmtCurrency(proj.realistic_full_year.paid || 0);
+  document.getElementById('kpi-pipeline-rem').textContent = fmtCurrency(proj.pipeline_remaining || 0);
+  const tbody = document.getElementById('proj-tbody');
+  while (tbody.firstChild) tbody.removeChild(tbody.firstChild);
+  const LABELS = {
+    invoiced:'Fatturato', paid:'Incassato', outstanding:'Aperto',
+    supplier_billed:'Fatt. passive', supplier_paid:'Outflow', supplier_due:'Scaduto',
+    net_cashflow:'Cassa netta',
+    forecast_soft:'Forecast soft', forecast_committed:'Forecast committed',
+    forecast_weighted:'Forecast pesato', pipeline_total:'Pipeline',
+    quotes_approved:'Approved', quotes_sent:'Sent', quotes_rejected:'Rejected',
+    projected_cash:'Cassa proiettata',
+  };
+  Object.entries(LABELS).forEach(([k, lbl]) => {
+    const tr = document.createElement('tr');
+    const td = (txt, css) => { const e = document.createElement('td'); if (css) e.className = css; e.textContent = txt; tr.appendChild(e); };
+    td(lbl);
+    td(fmtCurrency(proj.ytd[k] || 0), 'mono text-right');
+    td(fmtCurrency(proj.linear_full_year[k] || 0), 'mono text-right text-muted');
+    td(fmtCurrency(proj.realistic_full_year[k] || 0), 'mono text-right');
+    tbody.appendChild(tr);
+  });
+}
+
+initYearSelects();
+loadAll();
+</script>
+{% endblock %}

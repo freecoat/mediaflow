@@ -1,5 +1,5 @@
 """Router finanza — timesheet, spese, fatture, P&L."""
-from fastapi import APIRouter, Depends, HTTPException, Request, Form
+from fastapi import APIRouter, Depends, HTTPException, Request, Form, Response
 from fastapi.responses import HTMLResponse
 from typing import Optional
 from datetime import date
@@ -323,6 +323,72 @@ async def forecast_page(request: Request, db: Session = Depends(get_db)):
     return _tpl().TemplateResponse("pages/finance_forecast.html", {"request": request})
 
 
+@router.get("/reports", response_class=HTMLResponse)
+async def reports_page(request: Request, db: Session = Depends(get_db)):
+    """v3.5.0-alpha.78 — Reportistica con YoY + proiezione + export."""
+    return _tpl().TemplateResponse("pages/finance_reports.html", {"request": request})
+
+
+@router.get("/api/reports/comparison")
+async def reports_yoy(
+    year_a: int, year_b: int,
+    granularity: str = "quarter",
+    project_id: Optional[int] = None,
+    client_id: Optional[int] = None,
+    db: Session = Depends(get_db),
+):
+    """YoY comparison year_a vs year_b. Granularity: month|quarter|year."""
+    from app.services.financial_reports import year_over_year
+    return year_over_year(db, year_a, year_b, granularity, project_id=project_id, client_id=client_id)
+
+
+@router.get("/api/reports/projection/{year}")
+async def reports_projection(
+    year: int,
+    project_id: Optional[int] = None,
+    client_id: Optional[int] = None,
+    db: Session = Depends(get_db),
+):
+    """YTD projection (linear + realistic-with-forecast)."""
+    from app.services.financial_reports import ytd_projection
+    return ytd_projection(db, year, project_id=project_id, client_id=client_id)
+
+
+@router.get("/api/reports/export.csv")
+async def reports_export_csv(
+    year: int,
+    granularity: str = "month",
+    project_id: Optional[int] = None,
+    client_id: Optional[int] = None,
+    db: Session = Depends(get_db),
+):
+    from app.services.financial_reports import export_csv
+    data = export_csv(db, year, granularity, project_id=project_id, client_id=client_id)
+    fname = f"mediaflow-report-{year}-{granularity}.csv"
+    return Response(
+        content=data, media_type="text/csv; charset=utf-8",
+        headers={"Content-Disposition": f'attachment; filename="{fname}"'},
+    )
+
+
+@router.get("/api/reports/export.xlsx")
+async def reports_export_xlsx(
+    year: int,
+    granularity: str = "month",
+    project_id: Optional[int] = None,
+    client_id: Optional[int] = None,
+    db: Session = Depends(get_db),
+):
+    from app.services.financial_reports import export_xlsx
+    data = export_xlsx(db, year, granularity, project_id=project_id, client_id=client_id)
+    fname = f"mediaflow-report-{year}-{granularity}.xlsx"
+    return Response(
+        content=data,
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={"Content-Disposition": f'attachment; filename="{fname}"'},
+    )
+
+
 @router.get("/api/forecast/{year}")
 async def quote_forecast_year(
     year: int,
@@ -341,6 +407,12 @@ async def cashflow_year(
     project_id: Optional[int] = None,
     client_id: Optional[int] = None,
     db: Session = Depends(get_db),
+):
+    return cashflow_year_sync(year, project_id, client_id, db)
+
+
+def cashflow_year_sync(
+    year: int, project_id: Optional[int], client_id: Optional[int], db: Session,
 ):
     """Cashflow completo aggregato per mese dell'anno.
 

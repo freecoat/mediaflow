@@ -1,5 +1,47 @@
 # MediaFlow — Changelog
 
+## v3.5.0-alpha.78 — Reportistica YoY + proiezioni + export CSV/XLSX (11 maggio 2026)
+
+Pattern QuickBooks/Pennylane/Salesforce Reports: anno-su-anno,
+proiezione full-year, export Excel multi-sheet.
+
+**Service nuovo** `financial_reports.py`:
+- `year_over_year(year_a, year_b, granularity)`: confronto periodi
+  con delta + %. Granularità: month|quarter|year.
+- `ytd_projection(year)`: YTD actual + 2 proiezioni:
+  - **Linear**: YTD avg × 12 (no seasonality).
+  - **Realistic**: YTD + forecast pesato rimanente (combina actual + pipeline).
+- `aggregate_quarters` / `aggregate_year` helpers.
+- `export_csv` (UTF-8 BOM, separator ;).
+- `export_xlsx` multi-sheet (Report + YTD Projection).
+
+**Endpoint nuovi** `/finance/api/reports/*`:
+- `GET /comparison?year_a&year_b&granularity` → YoY breakdown.
+- `GET /projection/{year}` → YTD + linear + realistic.
+- `GET /export.csv?year&granularity` → CSV scaricabile.
+- `GET /export.xlsx?year&granularity` → Excel multi-sheet.
+
+**Refactor**: `cashflow_year` → sync core `cashflow_year_sync` per
+chiamata interna senza nested asyncio.
+
+**Pagina nuova** `/finance/reports` ("📑 Report YoY + Export"):
+- 4 KPI YTD: Incassato · Lineare · Realistic · Pipeline residua.
+- Bar export: CSV + Excel.
+- Tabella YoY comparison (paid_a vs paid_b + delta + %).
+- Chart YoY incassato (2 barre per periodo).
+- Tabella YTD Projection breakdown (15 metriche × 3 viste).
+
+**Sidebar**: link "Report YoY + Export" sotto Forecast.
+
+**File toccati** (5):
+- `app/main.py` — VERSION
+- `app/routers/finance.py` — 4 endpoint + sync refactor
+- `app/services/financial_reports.py` — NUOVO
+- `app/templates/pages/finance_reports.html` — NUOVO
+- `app/templates/base.html` — sidebar link
+
+378 routes (+5).
+
 ## v3.5.0-alpha.77.1 — Granularità mensile/trimestrale/annuale (11 maggio 2026)
 
 Toggle topbar in `/finance/forecast` e `/finance/cashflow`:
