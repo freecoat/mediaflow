@@ -8,25 +8,36 @@
 
 ## Versione corrente
 
-**v3.5.0-alpha.68.5** — 11 maggio 2026 — AI capability supplier
+**v3.5.0-alpha.68.6** — 11 maggio 2026 — Capitolati↔quote foundation (A)
 
-Copilot crea fornitori + fatture passive via pattern propose/Apply.
+Prima tappa lavoro estensivo capitolati→quotazioni. Roadmap A/B/C:
 
-- `propose_supplier` — anagrafica fornitore (solo `name` required).
-- `propose_supplier_invoice` — fattura passiva con resolve supplier
-  by id/name, calcoli IVA + due_date auto, FK opt project/job/JCL.
+- **A (questa versione)**: editor `suggested_items` in /delivery-templates
+  + bulk-add "Carica da template" in /quotes.
+- B (prossima): wizard PDF capitolato → quote tramite AI parse_deliverables
+  + match_deliverables_to_pricelist
+- C (dopo): AI capability `propose_quote_from_template` per copilot
 
-25 tools registrati. Action handler auto-discovered via decorator.
+Backend: PUT/POST template accettano `suggested_items` JSON; nuovo
+`/api/{id}/suggested-hydrated` con price_item espansi; nuovo
+`/quotes/api/{id}/load-from-template` bulk-insert idempotente.
+
+UI: editor in modal detail templates (tabella + picker + save);
+bottone + modal preview in /quotes editor card "Voci preventivo".
+
+334 routes (+2). No DB migration.
 
 ## Prossimo step
 
+- **B — Wizard PDF capitolato → quote** (parse_deliverables AI →
+  match listino → preview → bulk-create QuoteLines)
+- **C — AI capability propose_quote_from_template** per copilot
+- **JobDeliverable auto-create** da template alla creazione job
 - **F15 esecuzione reale** sul Mac Matteo (corpus test 17 capitolati)
 - **R7.x continuazione planning_bookings** — quando Matteo dà green
-  light per refactor invasivo (CRUD booking + multi-move + bulk-edit)
-- **AI parser PDF fattura passiva** — upload PDF → estrazione auto
-  campi → conferma utente (richiede pypdf/pdfplumber + prompt)
+  light per refactor invasivo
+- **AI parser PDF fattura passiva** — pattern simile a capitolato
 - **R5/R8/R9** — split planning.html, Float→Decimal, datetime tz-aware
-- **Frontend polish** (in caldo, lo riprendiamo a richiesta)
 
 ---
 

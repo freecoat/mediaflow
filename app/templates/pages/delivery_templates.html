@@ -132,7 +132,7 @@
 
 <!-- Modal Detail -->
 <div id="modal-detail" class="modal-overlay">
-  <div class="modal" style="max-width:760px;">
+  <div class="modal" style="max-width:860px;">
     <div class="modal-header">
       <span class="modal-title">📋 Dettaglio template</span>
       <button class="btn btn-ghost btn-icon" onclick="closeModal('modal-detail')">✕</button>
@@ -141,7 +141,8 @@
       <div class="text-muted text-sm">Caricamento…</div>
     </div>
     <div class="modal-footer">
-      <button class="btn btn-primary" onclick="closeModal('modal-detail')">Chiudi</button>
+      <button class="btn btn-primary" id="btn-save-suggested" onclick="saveSuggestedItems()" style="display:none;">Salva voci listino</button>
+      <button class="btn btn-secondary" onclick="closeModal('modal-detail')">Chiudi</button>
     </div>
   </div>
 </div>
@@ -266,16 +267,37 @@ async function doSaveTemplate() {
   }
 }
 
+let _currentTemplate = null;
+let _currentSuggested = [];
+let _allPriceItems = [];
+
+async function _loadPriceItemsOnce() {
+  if (_allPriceItems.length) return;
+  try { _allPriceItems = await api('GET', '/pricelist/api'); } catch(e) { _allPriceItems = []; }
+}
+
 async function openDetail(tid) {
   openModal('modal-detail');
+  document.getElementById('btn-save-suggested').style.display = 'none';
   const body = document.getElementById('detail-body');
   while (body.firstChild) body.removeChild(body.firstChild);
   const loading = document.createElement('div');
   loading.className = 'text-muted text-sm';
-  loading.textContent = 'Caricamento…';
+  loading.textContent = 'Caricamento...';
   body.appendChild(loading);
   try {
-    const t = await api('GET', '/delivery-templates/api/' + tid);
+    const [t, hyd, _pi] = await Promise.all([
+      api('GET', '/delivery-templates/api/' + tid),
+      api('GET', `/delivery-templates/api/${tid}/suggested-hydrated`),
+      _loadPriceItemsOnce(),
+    ]);
+    _currentTemplate = t;
+    _currentSuggested = (hyd.items || []).map(it => ({
+      price_item_id: it.price_item_id,
+      qty_hint: it.qty_hint,
+      section: it.section || 'A',
+      notes: it.notes || '',
+    }));
     body.removeChild(loading);
     const header = document.createElement('div');
     header.style.cssText = 'background:var(--bg3); padding:10px 14px; border-radius:6px; margin-bottom:12px; font-size:13px;';
@@ -295,11 +317,227 @@ async function openDetail(tid) {
       card.appendChild(lbl); card.appendChild(pre);
       body.appendChild(card);
     }
+    // Editor suggested_items (v3.5.0-alpha.68.6)
+    const itemsCard = document.createElement('div');
+    itemsCard.style.cssText = 'margin-top:18px; padding:12px 14px; background:rgba(98,114,245,.06); border:1px solid rgba(98,114,245,.18); border-radius:8px;';
+    const h = document.createElement('div');
+    h.style.cssText = 'display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;';
+    const ht = document.createElement('div');
+    ht.style.cssText = 'font-weight:600;font-size:13px;';
+    ht.appendChild(document.createTextNode('Voci listino suggerite '));
+    const hs = document.createElement('span');
+    hs.style.cssText = 'color:var(--text3);font-weight:normal;font-size:11px;';
+    hs.textContent = '— usate da "Carica da template" in /quotes';
+    ht.appendChild(hs);
+    h.appendChild(ht);
+    const addBtn = document.createElement('button');
+    addBtn.className = 'btn btn-ghost btn-sm';
+    addBtn.textContent = '+ Aggiungi voce';
+    addBtn.onclick = addSuggestedRow;
+    h.appendChild(addBtn);
+    itemsCard.appendChild(h);
+    const rowsHost = document.createElement('div');
+    rowsHost.id = 'sug-rows';
+    itemsCard.appendChild(rowsHost);
+    const hint = document.createElement('div');
+    hint.className = 'text-xs text-muted';
+    hint.style.cssText = 'margin-top:8px;';
+    hint.textContent = 'Section: A=Mastering/Delivery, B=Picture/Grading, C=Sound, D=VFX, E=Archive/Transfer.';
+    itemsCard.appendChild(hint);
+    body.appendChild(itemsCard);
+    renderSuggestedRows();
+    document.getElementById('btn-save-suggested').style.display = '';
   } catch(e) {
-    body.removeChild(loading);
+    if (body.contains(loading)) body.removeChild(loading);
     const err = document.createElement('div'); err.style.color = 'var(--rose)';
     err.textContent = e.message || 'Errore';
     body.appendChild(err);
+  }
+}
+
+function renderSuggestedRows() {
+  const host = document.getElementById('sug-rows');
+  if (!host) return;
+  while (host.firstChild) host.removeChild(host.firstChild);
+  if (!_currentSuggested.length) {
+    const e = document.createElement('div');
+    e.className = 'text-muted text-xs';
+    e.style.padding = '8px 0';
+    e.textContent = 'Nessuna voce suggerita. Clicca "+ Aggiungi voce" per iniziare.';
+    host.appendChild(e);
+    return;
+  }
+  const pi_map = {};
+  _allPriceItems.forEach(p => { pi_map[p.id] = p; });
+  const table = document.createElement('table');
+  table.style.cssText = 'width:100%;font-size:12px;';
+  const thead = document.createElement('thead');
+  thead.innerHTML = '<tr style="color:var(--text3);"><th style="text-align:left;padding:4px;width:50%;">Voce listino</th><th style="text-align:right;padding:4px;width:12%;">Qty hint</th><th style="padding:4px;width:10%;">Section</th><th style="text-align:left;padding:4px;width:24%;">Notes</th><th style="padding:4px;width:4%;"></th></tr>';
+  table.appendChild(thead);
+  const tbody = document.createElement('tbody');
+  _currentSuggested.forEach((it, idx) => {
+    const p = pi_map[it.price_item_id];
+    const tr = document.createElement('tr');
+    tr.style.cssText = 'border-bottom:1px solid var(--border);' + (p ? '' : 'background:rgba(239,68,68,.05);');
+    // Col 1: voce
+    const td1 = document.createElement('td');
+    td1.style.padding = '6px 4px';
+    if (p) {
+      const b = document.createElement('b');
+      b.textContent = p.name;
+      td1.appendChild(b);
+      const sub = document.createElement('span');
+      sub.className = 'text-xs text-muted';
+      sub.textContent = ` (${p.unit||''} · €${(p.price_list||0).toFixed(0)})`;
+      td1.appendChild(sub);
+    } else {
+      const w = document.createElement('span');
+      w.style.color = 'var(--rose)';
+      w.textContent = `⚠ price_item ${it.price_item_id} non trovato`;
+      td1.appendChild(w);
+    }
+    tr.appendChild(td1);
+    // Col 2: qty
+    const td2 = document.createElement('td');
+    td2.style.cssText = 'padding:6px 4px;text-align:right;';
+    const qtyInput = document.createElement('input');
+    qtyInput.type = 'number'; qtyInput.step = '0.1';
+    qtyInput.value = it.qty_hint || 1;
+    qtyInput.style.cssText = 'width:60px;text-align:right;background:var(--bg2);color:var(--text);border:1px solid var(--border);border-radius:3px;padding:2px 4px;';
+    qtyInput.onchange = (e) => { _currentSuggested[idx].qty_hint = parseFloat(e.target.value) || 1; };
+    td2.appendChild(qtyInput);
+    tr.appendChild(td2);
+    // Col 3: section
+    const td3 = document.createElement('td');
+    td3.style.cssText = 'padding:6px 4px;text-align:center;';
+    const sel = document.createElement('select');
+    sel.style.cssText = 'background:var(--bg2);color:var(--text);border:1px solid var(--border);border-radius:3px;padding:2px 4px;font-size:11px;';
+    ['A','B','C','D','E'].forEach(s => {
+      const o = document.createElement('option'); o.value = s; o.textContent = s;
+      if (s === (it.section||'A')) o.selected = true;
+      sel.appendChild(o);
+    });
+    sel.onchange = (e) => { _currentSuggested[idx].section = e.target.value; };
+    td3.appendChild(sel);
+    tr.appendChild(td3);
+    // Col 4: notes
+    const td4 = document.createElement('td');
+    td4.style.padding = '6px 4px';
+    const nIn = document.createElement('input');
+    nIn.type = 'text'; nIn.value = it.notes || '';
+    nIn.placeholder = 'opzionale';
+    nIn.style.cssText = 'width:100%;background:var(--bg2);color:var(--text);border:1px solid var(--border);border-radius:3px;padding:2px 4px;font-size:11px;';
+    nIn.onchange = (e) => { _currentSuggested[idx].notes = e.target.value; };
+    td4.appendChild(nIn);
+    tr.appendChild(td4);
+    // Col 5: remove
+    const td5 = document.createElement('td');
+    td5.style.cssText = 'padding:6px 4px;text-align:center;';
+    const rmBtn = document.createElement('button');
+    rmBtn.className = 'btn btn-ghost btn-sm';
+    rmBtn.style.cssText = 'color:#ef4444;padding:1px 6px;font-size:11px;';
+    rmBtn.textContent = '✕';
+    rmBtn.onclick = () => { _currentSuggested.splice(idx, 1); renderSuggestedRows(); };
+    td5.appendChild(rmBtn);
+    tr.appendChild(td5);
+    tbody.appendChild(tr);
+  });
+  table.appendChild(tbody);
+  host.appendChild(table);
+}
+
+async function addSuggestedRow() {
+  await _loadPriceItemsOnce();
+  const choice = await pickPriceItem();
+  if (!choice) return;
+  if (_currentSuggested.some(s => s.price_item_id === choice.id)) {
+    toast('Voce già presente nei suggested', 'warning');
+    return;
+  }
+  _currentSuggested.push({
+    price_item_id: choice.id, qty_hint: 1, section: 'A', notes: '',
+  });
+  renderSuggestedRows();
+}
+
+function pickPriceItem() {
+  return new Promise((resolve) => {
+    const ov = document.createElement('div');
+    ov.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.6);z-index:2000;display:flex;align-items:center;justify-content:center;';
+    const box = document.createElement('div');
+    box.style.cssText = 'background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:14px;width:520px;max-height:80vh;display:flex;flex-direction:column;';
+    const hdr = document.createElement('div');
+    hdr.style.cssText = 'display:flex;justify-content:space-between;margin-bottom:10px;';
+    const ht = document.createElement('div'); ht.style.fontWeight = '600'; ht.textContent = 'Scegli voce listino';
+    hdr.appendChild(ht);
+    const xb = document.createElement('button');
+    xb.className = 'btn btn-ghost btn-icon';
+    xb.textContent = '✕';
+    hdr.appendChild(xb);
+    box.appendChild(hdr);
+    const search = document.createElement('input');
+    search.placeholder = 'Cerca per nome, categoria, keyword...';
+    search.style.cssText = 'background:var(--bg2);color:var(--text);border:1px solid var(--border);border-radius:4px;padding:6px 10px;margin-bottom:10px;font-size:13px;';
+    box.appendChild(search);
+    const list = document.createElement('div');
+    list.style.cssText = 'flex:1;overflow:auto;border:1px solid var(--border);border-radius:4px;';
+    box.appendChild(list);
+    ov.appendChild(box);
+    document.body.appendChild(ov);
+    const cleanup = () => { document.body.removeChild(ov); };
+    xb.onclick = () => { cleanup(); resolve(null); };
+    ov.onclick = (e) => { if (e.target === ov) { cleanup(); resolve(null); } };
+    function render() {
+      const q = (search.value || '').toLowerCase().trim();
+      const rows = _allPriceItems.filter(p => p.is_active !== false).filter(p => {
+        if (!q) return true;
+        const kws = (p.keywords || []).join(' ');
+        return (p.name||'').toLowerCase().includes(q)
+            || (p.category||'').toLowerCase().includes(q)
+            || kws.toLowerCase().includes(q);
+      }).slice(0, 50);
+      while (list.firstChild) list.removeChild(list.firstChild);
+      if (!rows.length) {
+        const e = document.createElement('div');
+        e.className = 'text-muted text-sm';
+        e.style.cssText = 'padding:14px;text-align:center;';
+        e.textContent = 'Nessun risultato';
+        list.appendChild(e);
+        return;
+      }
+      rows.forEach(p => {
+        const row = document.createElement('div');
+        row.style.cssText = 'padding:8px 10px;border-bottom:1px solid var(--border);cursor:pointer;font-size:12px;';
+        row.onmouseover = () => row.style.background = 'var(--bg2)';
+        row.onmouseout = () => row.style.background = 'transparent';
+        const nm = document.createElement('b'); nm.textContent = p.name;
+        row.appendChild(nm);
+        const sub = document.createElement('div');
+        sub.className = 'text-xs text-muted';
+        sub.textContent = `${p.category||'—'} · ${p.unit||''} · €${(p.price_list||0).toFixed(0)}`;
+        row.appendChild(sub);
+        row.onclick = () => { cleanup(); resolve(p); };
+        list.appendChild(row);
+      });
+    }
+    search.oninput = render;
+    render();
+    setTimeout(() => search.focus(), 50);
+  });
+}
+
+async function saveSuggestedItems() {
+  if (!_currentTemplate) return;
+  const fd = new FormData();
+  fd.append('suggested_items', JSON.stringify(_currentSuggested));
+  try {
+    const r = await fetch(`/delivery-templates/api/${_currentTemplate.id}`, {
+      method: 'PUT', body: fd, credentials: 'same-origin',
+    });
+    if (!r.ok) throw new Error((await r.json()).detail || 'Errore');
+    toast(`Salvate ${_currentSuggested.length} voci suggerite`, 'success');
+  } catch(e) {
+    toast(e.message || 'Errore salvataggio', 'error');
   }
 }
 

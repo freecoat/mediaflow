@@ -18,7 +18,7 @@ from fastapi import APIRouter, Depends, HTTPException, Request, UploadFile, File
 from fastapi.responses import HTMLResponse
 from sqlalchemy.orm import Session
 from app.database import get_db
-from app.models import DeliveryTemplate
+from app.models import DeliveryTemplate, PriceItem, PriceCategory
 from app.services.rbac import requires_permission
 
 router = APIRouter(prefix="/delivery-templates", tags=["delivery-templates"])
@@ -144,6 +144,7 @@ async def save_template(
     naming_convention: Optional[str] = Form(None),
     archive_specs: Optional[str] = Form(None),
     metadata_requirements: Optional[str] = Form(None),
+    suggested_items: Optional[str] = Form(None),  # v3.5.0-alpha.68.6
     ai_generated: bool = Form(False),
     ai_confidence: Optional[float] = Form(None),
     source_document_name: Optional[str] = Form(None),
@@ -159,6 +160,17 @@ async def save_template(
             return json.loads(s)
         except json.JSONDecodeError as e:
             raise HTTPException(400, f"JSON malformato in uno dei blocchi: {e}")
+
+    def _parse_list(s: Optional[str]) -> Optional[list]:
+        if not s:
+            return None
+        try:
+            v = json.loads(s)
+            if not isinstance(v, list):
+                raise HTTPException(400, "suggested_items deve essere lista")
+            return v
+        except json.JSONDecodeError as e:
+            raise HTTPException(400, f"JSON malformato suggested_items: {e}")
 
     code = (code or "").strip().upper()
     name = (name or "").strip()
@@ -187,6 +199,7 @@ async def save_template(
         naming_convention=_parse(naming_convention),
         archive_specs=_parse(archive_specs),
         metadata_requirements=_parse(metadata_requirements),
+        suggested_items=_parse_list(suggested_items),
         source_document_name=source_document_name,
         ai_generated=ai_generated,
         ai_confidence=ai_confidence,
@@ -214,6 +227,7 @@ async def update_template(
     naming_convention: Optional[str] = Form(None),
     archive_specs: Optional[str] = Form(None),
     metadata_requirements: Optional[str] = Form(None),
+    suggested_items: Optional[str] = Form(None),  # v3.5.0-alpha.68.6
     is_active: Optional[bool] = Form(None),
     db: Session = Depends(get_db),
 ):
@@ -224,7 +238,7 @@ async def update_template(
     if not t:
         raise HTTPException(404, "Template non trovato")
 
-    def _parse(s: Optional[str]) -> Optional[dict]:
+    def _parse_dict(s: Optional[str]) -> Optional[dict]:
         if s is None:
             return None
         try:
@@ -232,23 +246,82 @@ async def update_template(
         except json.JSONDecodeError as e:
             raise HTTPException(400, f"JSON malformato: {e}")
 
+    def _parse_list(s: Optional[str]) -> Optional[list]:
+        if s is None:
+            return None
+        try:
+            v = json.loads(s) if s.strip() else None
+            if v is not None and not isinstance(v, list):
+                raise HTTPException(400, "suggested_items deve essere una lista")
+            return v
+        except json.JSONDecodeError as e:
+            raise HTTPException(400, f"JSON malformato suggested_items: {e}")
+
     if code is not None: t.code = code.strip().upper()
     if name is not None: t.name = name.strip()
     if broadcaster is not None: t.broadcaster = (broadcaster.strip() or None)
     if version is not None: t.version = version.strip() or "1.0"
     if description is not None: t.description = (description.strip() or None)
-    if video_specs is not None: t.video_specs = _parse(video_specs)
-    if audio_specs is not None: t.audio_specs = _parse(audio_specs)
-    if text_specs is not None: t.text_specs = _parse(text_specs)
-    if head_format is not None: t.head_format = _parse(head_format)
-    if textless_format is not None: t.textless_format = _parse(textless_format)
-    if naming_convention is not None: t.naming_convention = _parse(naming_convention)
-    if archive_specs is not None: t.archive_specs = _parse(archive_specs)
-    if metadata_requirements is not None: t.metadata_requirements = _parse(metadata_requirements)
+    if video_specs is not None: t.video_specs = _parse_dict(video_specs)
+    if audio_specs is not None: t.audio_specs = _parse_dict(audio_specs)
+    if text_specs is not None: t.text_specs = _parse_dict(text_specs)
+    if head_format is not None: t.head_format = _parse_dict(head_format)
+    if textless_format is not None: t.textless_format = _parse_dict(textless_format)
+    if naming_convention is not None: t.naming_convention = _parse_dict(naming_convention)
+    if archive_specs is not None: t.archive_specs = _parse_dict(archive_specs)
+    if metadata_requirements is not None: t.metadata_requirements = _parse_dict(metadata_requirements)
+    if suggested_items is not None: t.suggested_items = _parse_list(suggested_items)
     if is_active is not None: t.is_active = is_active
     db.commit()
     db.refresh(t)
     return _dt_dict(t)
+
+
+@router.get("/api/{template_id}/suggested-hydrated")
+async def hydrated_suggested_items(template_id: int, db: Session = Depends(get_db)):
+    """v3.5.0-alpha.68.6 — Ritorna `suggested_items` espandendo i price_item
+    referenziati (name, unit, price_list, category). Usato dalla UI editor
+    e dal selector "Carica da template" in /quotes."""
+    t = db.query(DeliveryTemplate).filter(
+        DeliveryTemplate.id == template_id,
+        DeliveryTemplate.tenant_id == CURRENT_TENANT,
+    ).first()
+    if not t:
+        raise HTTPException(404, "Template non trovato")
+    items = t.suggested_items or []
+    pi_ids = [int(it["price_item_id"]) for it in items if it.get("price_item_id")]
+    pi_map: dict[int, PriceItem] = {}
+    if pi_ids:
+        rows = db.query(PriceItem).options().filter(
+            PriceItem.id.in_(pi_ids),
+            PriceItem.tenant_id == CURRENT_TENANT,
+        ).all()
+        pi_map = {p.id: p for p in rows}
+    out = []
+    for it in items:
+        pid = it.get("price_item_id")
+        p = pi_map.get(int(pid)) if pid else None
+        out.append({
+            "price_item_id": pid,
+            "qty_hint": it.get("qty_hint") or 1,
+            "section": it.get("section"),  # A/B/C raggruppamento quote
+            "notes": it.get("notes"),
+            # Hydrated fields (None se price_item cancellato)
+            "name": p.name if p else None,
+            "unit": p.unit if p else None,
+            "price_list": p.price_list if p else None,
+            "category": (p.category.name if (p and p.category) else None),
+            "department_id": p.department_id if p else None,
+            "missing": p is None,
+        })
+    return {
+        "template_id": t.id,
+        "template_code": t.code,
+        "template_name": t.name,
+        "items": out,
+        "items_count": len(out),
+        "missing_count": sum(1 for r in out if r["missing"]),
+    }
 
 
 @router.delete("/api/{template_id}", dependencies=[RequireEditSettings])

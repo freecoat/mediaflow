@@ -1,5 +1,45 @@
 # MediaFlow — Changelog
 
+## v3.5.0-alpha.68.6 — Capitolati↔quote foundation (A) (11 maggio 2026)
+
+Prima tappa del lavoro estensivo capitolati→quotazioni (vedi roadmap
+A/B/C). Foundation per le tappe successive: editor `suggested_items`
++ bulk-add in `/quotes`.
+
+**Backend** (3 endpoint nuovi):
+- `delivery_templates.PUT /api/{id}` ora accetta `suggested_items` JSON
+  (lista `{price_item_id, qty_hint, section, notes}`).
+- `delivery_templates.POST /api/save` idem in create.
+- `delivery_templates.GET /api/{id}/suggested-hydrated` espande
+  price_item per ogni item (name/unit/price_list/category) + flag
+  `missing` per items orfani.
+- `quotes.POST /api/{id}/load-from-template` bulk-insert `QuoteLine`
+  da template.suggested_items. Skip duplicati (stesso price_item_id)
+  + skip orfani. Idempotente. Ricalcola quote totals.
+
+**UI**:
+- `/delivery-templates` modal detail: nuovo editor "Voci listino
+  suggerite" con tabella editabile (qty_hint, section A-E, notes),
+  picker price_item con search (nome/categoria/keywords), salva
+  pulsante in footer.
+- `/quotes` editor: nuovo bottone "📋 Carica da template" sulla card
+  Voci preventivo. Modal con dropdown template + preview hydrated
+  (riga per riga con qty × prezzo + totale stimato) + conferma.
+
+**File toccati** (4):
+- `app/main.py` — VERSION
+- `app/routers/delivery_templates.py` — 3 endpoint estesi/nuovi
+- `app/routers/quotes.py` — `load-from-template`
+- `app/templates/pages/delivery_templates.html` — editor suggested_items
+- `app/templates/pages/quotes.html` — modal load + bottone
+
+334 routes (+2). No DB migration (`suggested_items` JSON field già
+nel modello da Fase 1-bis).
+
+**Tappe successive** (roadmap A/B/C confermata):
+- B — Wizard end-to-end PDF capitolato → quote+lines via AI
+- C — AI capability propose_quote_from_template
+
 ## v3.5.0-alpha.68.5 — AI capability supplier (11 maggio 2026)
 
 Copilot AI può ora creare fornitori e registrare fatture passive

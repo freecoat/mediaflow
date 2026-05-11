@@ -9,6 +9,7 @@ from app.models import (
     Quote, QuoteLine, Job, JobStatus, QuoteStatus,
     PriceItem, PriceCategory, PriceLevel, Project,
     Booking, BookingStatus, JobCostLine, TimePunch,
+    DeliveryTemplate,
 )
 from app.services.rbac import requires_permission
 from app.context import current_tenant_id
@@ -891,6 +892,121 @@ async def add_quote_line(
             sum((l.total or 0.0) for l in q.lines if l.is_optional), 2
         ),
         "job_cost_line_created": job_cost_line_created,
+    }
+
+
+@router.post("/api/{quote_id}/load-from-template", dependencies=[RequireEditQuotes])
+async def load_from_template(
+    quote_id: int,
+    template_id: int = Form(...),
+    price_level: PriceLevel = Form(PriceLevel.list_price),
+    db: Session = Depends(get_db),
+):
+    """v3.5.0-alpha.68.6 — Bulk-add quote_lines da DeliveryTemplate.suggested_items.
+
+    Per ogni item del template:
+      - skip se price_item mancante (no auto-create)
+      - skip se già esiste riga con stesso price_item_id (no duplicati)
+      - aggiunge QuoteLine con quantity=qty_hint, unit/price ereditati dal listino
+      - section dal template (A/B/C), sort_order incrementale
+
+    Idempotente: ri-eseguibile, aggiunge solo le righe mancanti."""
+    q = db.query(Quote).options(
+        joinedload(Quote.lines)
+    ).filter(
+        Quote.id == quote_id,
+        Quote.tenant_id == CURRENT_TENANT,
+    ).first()
+    if not q:
+        raise HTTPException(404, "Quote non trovata")
+    if q.status in (QuoteStatus.approved, QuoteStatus.rejected):
+        raise HTTPException(409, f"Quote in stato {q.status.value}, non modificabile")
+
+    t = db.query(DeliveryTemplate).filter(
+        DeliveryTemplate.id == template_id,
+        DeliveryTemplate.tenant_id == CURRENT_TENANT,
+    ).first()
+    if not t:
+        raise HTTPException(404, "Template non trovato")
+    items = t.suggested_items or []
+    if not items:
+        raise HTTPException(400, "Il template non ha suggested_items configurate")
+
+    existing_pi = {l.price_item_id for l in q.lines if l.price_item_id}
+    sort_order = max((l.sort_order for l in q.lines), default=0)
+    added = 0
+    skipped_dup = 0
+    skipped_missing = 0
+    section_counters: dict[str, int] = {}
+    for it in items:
+        pid = it.get("price_item_id")
+        if not pid:
+            skipped_missing += 1
+            continue
+        if pid in existing_pi:
+            skipped_dup += 1
+            continue
+        item = db.query(PriceItem).filter(
+            PriceItem.id == int(pid),
+            PriceItem.tenant_id == CURRENT_TENANT,
+            PriceItem.is_active == True,  # noqa: E712
+        ).first()
+        if not item:
+            skipped_missing += 1
+            continue
+        price = {
+            PriceLevel.list_price: item.price_list,
+            PriceLevel.average: item.price_average,
+            PriceLevel.low: item.price_low,
+        }.get(price_level, item.price_list) or 0.0
+        section = (it.get("section") or "A").strip().upper()[:1]
+        section_counters[section] = section_counters.get(section, 0) + 1
+        position = f"{section}.{section_counters[section]}"
+        sort_order += 10
+        qty = float(it.get("qty_hint") or 1)
+        line = QuoteLine(
+            quote_id=quote_id,
+            description=item.name,
+            section=section,
+            position=position,
+            detail=(it.get("notes") or None),
+            quantity=qty,
+            unit=item.unit,
+            price_level=price_level,
+            unit_price=price,
+            allowance=0.0,
+            line_discount_pct=0.0,
+            total=0.0,
+            hardcosts=0.0,
+            price_item_id=item.id,
+            sort_order=sort_order,
+            is_optional=False,
+        )
+        db.add(line)
+        added += 1
+        existing_pi.add(item.id)
+
+    if added == 0:
+        return {
+            "ok": True,
+            "added": 0,
+            "skipped_duplicate": skipped_dup,
+            "skipped_missing": skipped_missing,
+            "message": "Nessuna riga aggiunta (già presenti o price_item mancanti)",
+        }
+    db.flush()
+    db.refresh(q)
+    _recalc_quote(q)
+    db.commit()
+    return {
+        "ok": True,
+        "added": added,
+        "skipped_duplicate": skipped_dup,
+        "skipped_missing": skipped_missing,
+        "quote_total": q.total_with_vat,
+        "subtotal": q.subtotal,
+        "template_code": t.code,
+        "template_name": t.name,
     }
 
 

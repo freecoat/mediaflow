@@ -376,8 +376,9 @@
            ondragover="onLinesDragOver(event)"
            ondragleave="onLinesDragLeave(event)"
            ondrop="onLinesDrop(event)">
-        <div class="card-header">
+        <div class="card-header" style="display:flex;justify-content:space-between;align-items:center;">
           <span class="card-title">Voci preventivo</span>
+          <button class="btn btn-ghost btn-sm" onclick="openLoadFromTemplate()" title="Bulk-add voci da DeliveryTemplate (suggested_items)">📋 Carica da template</button>
         </div>
         <div class="table-wrap">
           <table id="lines-table">
@@ -610,6 +611,42 @@
     <div class="modal-footer">
       <button class="btn btn-secondary" onclick="closeModal('modal-new-quote')">Annulla</button>
       <button class="btn btn-primary" onclick="createQuote()">Crea</button>
+    </div>
+  </div>
+</div>
+
+<!-- v3.5.0-alpha.68.6 — Modal "Carica da DeliveryTemplate" -->
+<div class="modal-overlay" id="modal-load-template">
+  <div class="modal" style="max-width:640px;">
+    <div class="modal-header">
+      <span class="modal-title">📋 Carica voci da DeliveryTemplate</span>
+      <button class="btn btn-ghost btn-icon" onclick="closeModal('modal-load-template')">&times;</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-group">
+        <label class="form-label">Template *</label>
+        <select class="form-select" id="lt-template" onchange="onTemplatePicked()">
+          <option value="">— seleziona —</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Livello prezzo</label>
+        <select class="form-select" id="lt-level">
+          <option value="list_price" selected>Listino</option>
+          <option value="average">Media</option>
+          <option value="low">Basso</option>
+        </select>
+      </div>
+      <div id="lt-preview" style="background:var(--bg2);border:1px solid var(--border);border-radius:6px;padding:10px;min-height:80px;font-size:12px;">
+        <div class="text-muted">Seleziona un template per vedere l'anteprima.</div>
+      </div>
+      <div class="text-xs text-muted" style="margin-top:8px;">
+        Le righe verranno aggiunte alla quote corrente. Voci già presenti (stesso price_item_id) verranno saltate. Le voci senza price_item valido verranno saltate.
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeModal('modal-load-template')">Annulla</button>
+      <button class="btn btn-primary" id="lt-confirm" onclick="confirmLoadFromTemplate()" disabled>Carica righe</button>
     </div>
   </div>
 </div>
@@ -2399,6 +2436,133 @@ async function quoteSaveConfirm() {
   });
   await new Promise(r => setTimeout(r, 200));
   toast('✓ Tutto salvato', 'success');
+}
+
+// v3.5.0-alpha.68.6 — Carica da DeliveryTemplate (suggested_items)
+let _ltTemplates = [];
+async function openLoadFromTemplate() {
+  if (!currentQuoteId) { toast('Apri prima una quote', 'warning'); return; }
+  try {
+    _ltTemplates = await api('GET', '/delivery-templates/api/list');
+  } catch(e) {
+    toast(e.message || 'Errore caricamento templates', 'error');
+    return;
+  }
+  const sel = document.getElementById('lt-template');
+  while (sel.firstChild) sel.removeChild(sel.firstChild);
+  const def = document.createElement('option');
+  def.value = ''; def.textContent = '— seleziona —';
+  sel.appendChild(def);
+  _ltTemplates.filter(t => t.is_active !== false).forEach(t => {
+    const o = document.createElement('option');
+    o.value = t.id;
+    o.textContent = `${t.code} — ${t.name}` + (t.broadcaster ? ` (${t.broadcaster})` : '');
+    sel.appendChild(o);
+  });
+  document.getElementById('lt-confirm').disabled = true;
+  const host = document.getElementById('lt-preview');
+  while (host.firstChild) host.removeChild(host.firstChild);
+  const hint = document.createElement('div');
+  hint.className = 'text-muted';
+  hint.textContent = "Seleziona un template per vedere l'anteprima.";
+  host.appendChild(hint);
+  openModal('modal-load-template');
+}
+
+async function onTemplatePicked() {
+  const tid = document.getElementById('lt-template').value;
+  const host = document.getElementById('lt-preview');
+  const btn = document.getElementById('lt-confirm');
+  while (host.firstChild) host.removeChild(host.firstChild);
+  if (!tid) {
+    const m = document.createElement('div'); m.className = 'text-muted';
+    m.textContent = "Seleziona un template per vedere l'anteprima.";
+    host.appendChild(m);
+    btn.disabled = true;
+    return;
+  }
+  const ld = document.createElement('div'); ld.className = 'text-muted'; ld.textContent = 'Caricamento...';
+  host.appendChild(ld);
+  try {
+    const hyd = await api('GET', `/delivery-templates/api/${tid}/suggested-hydrated`);
+    while (host.firstChild) host.removeChild(host.firstChild);
+    if (!hyd.items || !hyd.items.length) {
+      const w = document.createElement('div');
+      w.style.color = 'var(--rose)';
+      w.textContent = 'Questo template non ha suggested_items. Editali da /delivery-templates → Dettaglio.';
+      host.appendChild(w);
+      btn.disabled = true;
+      return;
+    }
+    let total = 0;
+    let validCount = 0;
+    const list = document.createElement('div');
+    list.style.cssText = 'max-height:280px;overflow:auto;';
+    hyd.items.forEach(it => {
+      const valid = !it.missing && it.price_list != null;
+      if (valid) { total += (it.qty_hint||1) * (it.price_list||0); validCount++; }
+      const row = document.createElement('div');
+      row.style.cssText = 'display:flex;justify-content:space-between;padding:4px 0;border-bottom:1px solid var(--border);' + (it.missing?'color:var(--rose);':'');
+      const left = document.createElement('div');
+      const sec = document.createElement('b'); sec.textContent = `[${it.section||'A'}] `;
+      left.appendChild(sec);
+      left.appendChild(document.createTextNode(it.name || `⚠ price_item ${it.price_item_id} non trovato`));
+      row.appendChild(left);
+      const right = document.createElement('div');
+      right.className = 'mono text-xs';
+      const lineTotal = valid ? ((it.qty_hint||1) * (it.price_list||0)) : null;
+      right.textContent = `${it.qty_hint||1} × €${(it.price_list||0).toFixed(0)} = `;
+      const b = document.createElement('b');
+      b.textContent = lineTotal != null ? `€${lineTotal.toFixed(0)}` : '—';
+      right.appendChild(b);
+      row.appendChild(right);
+      list.appendChild(row);
+    });
+    host.appendChild(list);
+    const tot = document.createElement('div');
+    tot.style.cssText = 'display:flex;justify-content:space-between;padding-top:8px;margin-top:8px;border-top:2px solid var(--border);font-weight:600;';
+    tot.appendChild(document.createTextNode('Totale stimato (livello listino):'));
+    const ts = document.createElement('span'); ts.className = 'mono'; ts.textContent = `€${total.toFixed(2)}`;
+    tot.appendChild(ts);
+    host.appendChild(tot);
+    const info = document.createElement('div');
+    info.className = 'text-xs text-muted';
+    info.style.marginTop = '4px';
+    info.textContent = `${validCount} valid / ${hyd.items.length} total` + (hyd.missing_count ? ` · ⚠ ${hyd.missing_count} price_item mancanti (skip)` : '');
+    host.appendChild(info);
+    btn.disabled = validCount === 0;
+  } catch(e) {
+    while (host.firstChild) host.removeChild(host.firstChild);
+    const err = document.createElement('div');
+    err.style.color = 'var(--rose)';
+    err.textContent = 'Errore: ' + (e.message || '');
+    host.appendChild(err);
+    btn.disabled = true;
+  }
+}
+
+async function confirmLoadFromTemplate() {
+  if (!currentQuoteId) return;
+  const tid = document.getElementById('lt-template').value;
+  if (!tid) return;
+  const lvl = document.getElementById('lt-level').value;
+  const fd = new FormData();
+  fd.append('template_id', tid);
+  fd.append('price_level', lvl);
+  try {
+    const r = await fetch(`/quotes/api/${currentQuoteId}/load-from-template`, {
+      method: 'POST', body: fd, credentials: 'same-origin',
+    });
+    if (!r.ok) throw new Error((await r.json()).detail || 'Errore');
+    const res = await r.json();
+    closeModal('modal-load-template');
+    toast(`✓ ${res.added} righe aggiunte da ${res.template_code}` +
+          (res.skipped_duplicate ? ` · ${res.skipped_duplicate} duplicate saltate` : '') +
+          (res.skipped_missing ? ` · ${res.skipped_missing} mancanti saltate` : ''), 'success');
+    if (typeof reloadQuote === 'function') await reloadQuote();
+  } catch(e) {
+    toast(e.message || 'Errore', 'error');
+  }
 }
 </script>
 {% endblock %}
