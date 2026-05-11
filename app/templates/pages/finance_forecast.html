@@ -1,0 +1,310 @@
+{% extends "base.html" %}
+{% set active_page = "finance_forecast" %}
+{% block title %}Financial Forecast — MediaFlow{% endblock %}
+{% block topbar_title %}📊 Financial Model — Pipeline & Forecast{% endblock %}
+
+{% block topbar_actions %}
+  <select id="cf-client" class="form-input" style="height:32px;font-size:13px;width:170px;" onchange="onClientChange()">
+    <option value="">— tutti clienti —</option>
+  </select>
+  <select id="cf-project" class="form-input" style="height:32px;font-size:13px;width:170px;" onchange="loadAll()">
+    <option value="">— tutti progetti —</option>
+  </select>
+  <select id="cf-year" class="form-input" style="height:32px;font-size:13px;width:100px;" onchange="loadAll()"></select>
+{% endblock %}
+
+{% block content %}
+
+<div class="card mb-3" style="background:rgba(98,114,245,0.06);border-color:rgba(98,114,245,0.2);">
+  <div style="padding:14px 16px;font-size:13px;line-height:1.55;">
+    <strong>📈 Sales pipeline + cassa proiettata</strong> — Aggrega quote per stato + applica probability weighting (Salesforce-style).
+    Default: <b>draft 10% · sent 30% · approved 90% · rejected 0% · expired 5%</b> (override per quote in modifica).
+  </div>
+</div>
+
+<!-- KPI top -->
+<div class="stat-grid mb-4">
+  <div class="stat-card" style="border-left:3px solid var(--indigo);">
+    <div class="stat-label">Pipeline totale</div>
+    <div class="stat-value mono" id="kpi-pipeline">—</div>
+    <div class="stat-sub">somma quote non chiuse</div>
+  </div>
+  <div class="stat-card" style="border-left:3px solid #a78bfa;">
+    <div class="stat-label">Forecast pesato</div>
+    <div class="stat-value mono color-indigo" id="kpi-weighted">—</div>
+    <div class="stat-sub">pipeline × probability</div>
+  </div>
+  <div class="stat-card stat-card-green">
+    <div class="stat-label">Vinte (approved)</div>
+    <div class="stat-value mono" id="kpi-won">—</div>
+    <div class="stat-sub" id="kpi-won-count">— quote</div>
+  </div>
+  <div class="stat-card" style="border-left:3px solid #ef4444;">
+    <div class="stat-label">Perse (rejected)</div>
+    <div class="stat-value mono color-rose" id="kpi-lost">—</div>
+    <div class="stat-sub" id="kpi-lost-count">— quote</div>
+  </div>
+  <div class="stat-card stat-card-amber">
+    <div class="stat-label">Win rate</div>
+    <div class="stat-value mono" id="kpi-winrate">—</div>
+    <div class="stat-sub">approved / (approved+rejected)</div>
+  </div>
+  <div class="stat-card">
+    <div class="stat-label">Deal size medio</div>
+    <div class="stat-value mono" id="kpi-avg">—</div>
+    <div class="stat-sub">media quote approved</div>
+  </div>
+</div>
+
+<!-- Chart cascata mensile -->
+<div class="card mb-3">
+  <div class="card-header">
+    <span class="card-title">Cascata mensile</span>
+    <span style="color:var(--text3);font-size:12px;">
+      Incassato (verde) · Forecast committed (indigo) · Forecast soft (lilla) · Outflow (rosso) · Cassa proiettata (linea)
+    </span>
+  </div>
+  <div id="cascade-chart" class="cascade-chart"></div>
+</div>
+
+<!-- Tabella full breakdown -->
+<div class="card mb-3">
+  <div class="card-header"><span class="card-title">Breakdown mensile</span></div>
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th>Mese</th>
+          <th class="text-right" title="Σ quote sent nel mese (non pesate)">📤 Sent</th>
+          <th class="text-right" title="Σ quote approved nel mese (raw)">✅ Approved</th>
+          <th class="text-right" title="Σ quote rejected nel mese">❌ Rejected</th>
+          <th class="text-right" title="Forecast pesato (probability/100)">🎯 Forecast</th>
+          <th class="text-right" title="Pagamenti incassati nel mese">💰 Incassato</th>
+          <th class="text-right" title="Outflow fornitori">📤 Outflow</th>
+          <th class="text-right" title="Incassato + forecast_weighted - outflow">💵 Cassa proiettata</th>
+        </tr>
+      </thead>
+      <tbody id="forecast-tbody"></tbody>
+    </table>
+  </div>
+</div>
+
+<!-- Win/loss per cliente -->
+<div class="card">
+  <div class="card-header"><span class="card-title">Win/Loss per cliente (top 10)</span></div>
+  <div id="winloss-host" style="padding:14px;"></div>
+</div>
+
+<style>
+  .cascade-chart { display: grid; grid-template-columns: repeat(12, 1fr); gap: 8px; padding: 16px 6px; min-height: 280px; align-items: end; }
+  .cc-col { display: flex; flex-direction: column; align-items: center; gap: 4px; height: 100%; }
+  .cc-bars { display: flex; gap: 2px; align-items: flex-end; height: 220px; width: 100%; justify-content: center; }
+  .cc-bar { width: 10px; border-radius: 3px 3px 0 0; min-height: 1px; }
+  .cc-bar.b-paid { background: #22c55e; }
+  .cc-bar.b-committed { background: var(--indigo); }
+  .cc-bar.b-soft { background: #a78bfa; }
+  .cc-bar.b-outflow { background: #ef4444; }
+  .cc-month-label { font-size: 11px; color: var(--text3); text-transform: uppercase; padding-top: 4px; border-top: 1px solid var(--border); width: 100%; text-align: center; }
+  .cc-month-label.is-current { color: var(--indigo2); border-top-color: var(--indigo); }
+</style>
+
+<script>
+const MESI = ['Gen','Feb','Mar','Apr','Mag','Giu','Lug','Ago','Set','Ott','Nov','Dic'];
+const _curYear = new Date().getFullYear();
+let _clients = [], _projects = [];
+
+function initYear() {
+  const sel = document.getElementById('cf-year');
+  for (let y = _curYear + 1; y >= _curYear - 4; y--) {
+    const o = document.createElement('option');
+    o.value = String(y); o.textContent = String(y);
+    if (y === _curYear) o.selected = true;
+    sel.appendChild(o);
+  }
+}
+
+async function loadFilters() {
+  try {
+    [_clients, _projects] = await Promise.all([
+      api('GET', '/planning/api/clients').catch(() => []),
+      api('GET', '/projects/api').catch(() => []),
+    ]);
+  } catch(e) {}
+  const cSel = document.getElementById('cf-client');
+  _clients.forEach(c => {
+    const o = document.createElement('option'); o.value = c.id; o.textContent = c.name || ('Cliente '+c.id);
+    cSel.appendChild(o);
+  });
+  renderProjFilter();
+}
+
+function renderProjFilter() {
+  const cid = document.getElementById('cf-client').value;
+  const pSel = document.getElementById('cf-project');
+  while (pSel.children.length > 1) pSel.removeChild(pSel.lastChild);
+  const filt = cid ? _projects.filter(p => String(p.client_id) === cid) : _projects;
+  filt.forEach(p => {
+    const o = document.createElement('option'); o.value = p.id;
+    o.textContent = `${p.code} — ${p.title}`;
+    pSel.appendChild(o);
+  });
+}
+
+function onClientChange() {
+  document.getElementById('cf-project').value = '';
+  renderProjFilter();
+  loadAll();
+}
+
+async function loadAll() {
+  const year = parseInt(document.getElementById('cf-year').value || _curYear);
+  const cid = document.getElementById('cf-client').value;
+  const pid = document.getElementById('cf-project').value;
+  const qs = []; if (cid) qs.push('client_id='+cid); if (pid) qs.push('project_id='+pid);
+  const suffix = qs.length ? '?' + qs.join('&') : '';
+  let cf, forecast;
+  try {
+    [cf, forecast] = await Promise.all([
+      api('GET', `/finance/api/cashflow/${year}${suffix}`),
+      api('GET', `/finance/api/forecast/${year}${suffix}`),
+    ]);
+  } catch(e) { toast(e.message || 'Errore caricamento', 'error'); return; }
+  renderKPIs(forecast.totals);
+  renderTable(cf.months);
+  renderChart(cf.months, year);
+  await renderWinLoss(cid, pid);
+}
+
+function renderKPIs(t) {
+  document.getElementById('kpi-pipeline').textContent = fmtCurrency(t.pipeline_total || 0);
+  document.getElementById('kpi-weighted').textContent = fmtCurrency(t.weighted_forecast || 0);
+  document.getElementById('kpi-won').textContent = fmtCurrency(t.won_value || 0);
+  document.getElementById('kpi-won-count').textContent = (t.n_won || 0) + ' quote';
+  document.getElementById('kpi-lost').textContent = fmtCurrency(t.lost_value || 0);
+  document.getElementById('kpi-lost-count').textContent = (t.n_lost || 0) + ' quote';
+  document.getElementById('kpi-winrate').textContent = (t.win_rate_pct != null ? t.win_rate_pct + '%' : '—');
+  document.getElementById('kpi-avg').textContent = (t.average_deal_size != null ? fmtCurrency(t.average_deal_size) : '—');
+}
+
+function renderTable(months) {
+  const tbody = document.getElementById('forecast-tbody');
+  while (tbody.firstChild) tbody.removeChild(tbody.firstChild);
+  months.forEach(m => {
+    const tr = document.createElement('tr');
+    const td = (txt, css) => { const e = document.createElement('td'); if (css) e.className = css; e.textContent = txt; tr.appendChild(e); };
+    td(MESI[m.month-1] || '?');
+    td(fmtCurrency(m.quotes_sent || 0), 'mono text-right');
+    td(fmtCurrency(m.quotes_approved || 0), 'mono text-right');
+    td(fmtCurrency(m.quotes_rejected || 0), 'mono text-right');
+    const tdF = document.createElement('td');
+    tdF.className = 'mono text-right'; tdF.style.color = 'var(--indigo2)';
+    tdF.textContent = fmtCurrency(m.forecast_weighted || 0); tr.appendChild(tdF);
+    const tdP = document.createElement('td');
+    tdP.className = 'mono text-right'; tdP.style.color = 'var(--green)';
+    tdP.textContent = fmtCurrency(m.paid || 0); tr.appendChild(tdP);
+    const tdO = document.createElement('td');
+    tdO.className = 'mono text-right'; tdO.style.color = '#ef4444';
+    tdO.textContent = fmtCurrency(m.supplier_paid || 0); tr.appendChild(tdO);
+    const tdPC = document.createElement('td');
+    tdPC.className = 'mono text-right';
+    const pc = m.projected_cash || 0;
+    tdPC.style.color = pc >= 0 ? 'var(--green)' : 'var(--rose)';
+    tdPC.style.fontWeight = '600';
+    tdPC.textContent = fmtCurrency(pc); tr.appendChild(tdPC);
+    tbody.appendChild(tr);
+  });
+}
+
+function renderChart(months, year) {
+  const host = document.getElementById('cascade-chart');
+  while (host.firstChild) host.removeChild(host.firstChild);
+  const maxV = Math.max(1, ...months.map(m => Math.max(
+    m.paid||0, m.forecast_committed||0, m.forecast_soft||0, m.supplier_paid||0
+  )));
+  const today = (new Date().getFullYear() === year) ? new Date().getMonth() + 1 : 0;
+  months.forEach(m => {
+    const col = document.createElement('div'); col.className = 'cc-col';
+    const bars = document.createElement('div'); bars.className = 'cc-bars';
+    const tip = `Mese ${MESI[m.month-1]}: Incassato ${fmtCurrency(m.paid||0)} · Committed ${fmtCurrency(m.forecast_committed||0)} · Soft ${fmtCurrency(m.forecast_soft||0)} · Outflow ${fmtCurrency(m.supplier_paid||0)}`;
+    ['paid','committed','soft','outflow'].forEach(k => {
+      const b = document.createElement('div');
+      b.className = 'cc-bar b-' + k;
+      const v = k === 'paid' ? (m.paid||0)
+              : k === 'committed' ? (m.forecast_committed||0)
+              : k === 'soft' ? (m.forecast_soft||0)
+              : (m.supplier_paid||0);
+      b.style.height = Math.max(1, Math.round(v / maxV * 220)) + 'px';
+      b.title = tip;
+      bars.appendChild(b);
+    });
+    const lbl = document.createElement('div');
+    lbl.className = 'cc-month-label' + (m.month === today ? ' is-current' : '');
+    lbl.textContent = MESI[m.month-1];
+    col.appendChild(bars); col.appendChild(lbl);
+    host.appendChild(col);
+  });
+}
+
+async function renderWinLoss(cid, pid) {
+  // Aggrega win/loss per cliente via quote list
+  const host = document.getElementById('winloss-host');
+  while (host.firstChild) host.removeChild(host.firstChild);
+  let quotes;
+  try {
+    quotes = await api('GET', '/quotes/api');
+  } catch(e) {
+    host.textContent = 'Errore: ' + (e.message || '');
+    return;
+  }
+  // Group by client_name
+  const byClient = {};
+  quotes.forEach(q => {
+    const cn = q.client_name || q.client || ('Cliente '+q.client_id);
+    if (!byClient[cn]) byClient[cn] = { won: 0, lost: 0, won_value: 0, lost_value: 0, pipeline: 0 };
+    const tot = q.total_with_vat || q.total || 0;
+    if (q.status === 'approved') { byClient[cn].won++; byClient[cn].won_value += tot; }
+    else if (q.status === 'rejected') { byClient[cn].lost++; byClient[cn].lost_value += tot; }
+    else if (q.status === 'sent' || q.status === 'draft') { byClient[cn].pipeline += tot; }
+  });
+  const rows = Object.entries(byClient)
+    .filter(([n, v]) => v.won_value + v.lost_value + v.pipeline > 0)
+    .sort((a, b) => (b[1].won_value + b[1].lost_value) - (a[1].won_value + a[1].lost_value))
+    .slice(0, 10);
+  if (!rows.length) {
+    host.className = 'text-muted'; host.textContent = 'Nessun dato win/loss disponibile.';
+    return;
+  }
+  const tbl = document.createElement('table');
+  tbl.style.cssText = 'width:100%;font-size:13px;';
+  const thead = document.createElement('thead');
+  const trh = document.createElement('tr'); trh.style.color = 'var(--text3)';
+  ['Cliente','Vinte (€)','Perse (€)','Pipeline (€)','Win rate'].forEach(h => {
+    const th = document.createElement('th'); th.style.padding = '6px';
+    th.style.textAlign = h === 'Cliente' ? 'left' : 'right';
+    th.textContent = h; trh.appendChild(th);
+  });
+  thead.appendChild(trh); tbl.appendChild(thead);
+  const tbody = document.createElement('tbody');
+  rows.forEach(([cn, v]) => {
+    const tr = document.createElement('tr');
+    tr.style.borderBottom = '1px solid var(--border)';
+    const td = (txt, css) => { const e = document.createElement('td'); e.style.padding = '6px'; if (css) e.className = css; e.textContent = txt; tr.appendChild(e); };
+    td(cn);
+    td(fmtCurrency(v.won_value), 'mono text-right');
+    const tdL = document.createElement('td'); tdL.style.cssText = 'padding:6px;color:var(--rose);';
+    tdL.className = 'mono text-right'; tdL.textContent = fmtCurrency(v.lost_value); tr.appendChild(tdL);
+    const tdP = document.createElement('td'); tdP.style.cssText = 'padding:6px;color:var(--indigo2);';
+    tdP.className = 'mono text-right'; tdP.textContent = fmtCurrency(v.pipeline); tr.appendChild(tdP);
+    const total = v.won + v.lost;
+    const wr = total ? Math.round(v.won / total * 100) + '%' : '—';
+    td(wr, 'mono text-right');
+    tbody.appendChild(tr);
+  });
+  tbl.appendChild(tbody);
+  host.appendChild(tbl);
+}
+
+initYear();
+loadFilters().then(loadAll);
+</script>
+{% endblock %}

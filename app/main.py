@@ -331,6 +331,18 @@ def _auto_migrate_columns():
             if backfill_rows:
                 print(f"[auto-migrate] backfill InvoicePayment per {len(backfill_rows)} "
                       f"fatture legacy paid (cashflow ora le conteggia)")
+    # v3.5.0-alpha.77 — Quote forecast fields
+    if "quotes" in insp.get_table_names():
+        qcols = {c["name"] for c in insp.get_columns("quotes")}
+        q_alter = [
+            ("win_probability_pct", "REAL NULL"),
+            ("expected_close_date", "DATE NULL"),
+        ]
+        with engine.begin() as conn:
+            for col, ddl in q_alter:
+                if col not in qcols:
+                    print(f"[auto-migrate] quotes.{col} mancante -> ALTER TABLE")
+                    conn.execute(text(f"ALTER TABLE quotes ADD COLUMN {col} {ddl}"))
     # v3.5.0-alpha.73 — AssetMovement extension digital + ingest_batch
     # SQLite NOT NULL su physical_asset_id (era required in α.72.0) → richiede
     # table rebuild se DB esistente con righe. Approccio: skip rebuild se 0
@@ -725,7 +737,7 @@ async def lifespan(app: FastAPI):
     yield
 
 
-app = FastAPI(title="MediaFlow", version="3.5.0-alpha.76", lifespan=lifespan)
+app = FastAPI(title="MediaFlow", version="3.5.0-alpha.77", lifespan=lifespan)
 
 BASE_DIR = Path(__file__).parent
 app.mount("/static", StaticFiles(directory=BASE_DIR / "static"), name="static")

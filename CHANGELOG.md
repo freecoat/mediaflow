@@ -1,5 +1,67 @@
 # MediaFlow — Changelog
 
+## v3.5.0-alpha.77 — Financial model + sales pipeline forecast (11 maggio 2026)
+
+Risponde a richiesta Matteo: forecast incassi da quote sent (soft) e
+approved (committed), win/loss analysis, pipeline value, projected cash.
+
+Pattern Salesforce/HubSpot/Pipedrive: ogni quote ha probability associata
+allo stage, esposta come pipeline weighted.
+
+**Modello Quote esteso** (2 colonne, auto-migrate):
+- `win_probability_pct` Float NULL — override manuale.
+- `expected_close_date` Date NULL — data attesa firma/incasso.
+
+**Service nuovo** `quote_forecast.py`:
+- DEFAULT_WIN_PROBABILITY mapping da status:
+  draft=10 · sent=30 · approved=90 · expired=5 · rejected=0 · superseded=0.
+- `quote_probability(q)` con override.
+- `quote_weighted_value(q)` = total × probability/100.
+- `yearly_forecast(year, project_id, client_id)` → breakdown mensile
+  + stats annuali (pipeline_total, weighted_forecast, won_value,
+  lost_value, win_rate_pct, average_deal_size).
+
+**Endpoint cashflow esteso** `/finance/api/cashflow/{year}`:
+Ogni mese ora include:
+- `forecast_soft`: Σ quote sent × 30% (probability default).
+- `forecast_committed`: Σ quote approved × 90%.
+- `forecast_weighted`: pipeline pesata totale.
+- `pipeline_total`: somma raw quote non chiuse.
+- `quotes_sent` / `quotes_approved` / `quotes_rejected`: raw totals.
+- `projected_cash`: paid + forecast_weighted − supplier_paid.
++ `forecast_totals` aggregati a livello anno.
+
+**Endpoint nuovo** `/finance/api/forecast/{year}`: dedicated forecast
+breakdown.
+
+**Pagina nuova** `/finance/forecast` ("📊 Financial Model"):
+- 6 KPI top: Pipeline totale · Forecast pesato · Vinte · Perse ·
+  Win rate · Deal size medio.
+- Chart cascata mensile: 4 barre (Incassato verde / Committed indigo /
+  Soft lilla / Outflow rosso).
+- Tabella breakdown mensile: Sent / Approved / Rejected / Forecast /
+  Incassato / Outflow / Cassa proiettata.
+- Win/Loss top 10 clienti con vinte/perse/pipeline/win-rate.
+
+**Sidebar**: link "Forecast / Pipeline" sotto Cashflow.
+
+**Confronto sistemi commerciali**:
+- Salesforce CRM: Stage probability (analogo, ora MediaFlow uguaglia).
+- HubSpot: Deal pipeline (analogo).
+- Pipedrive: Revenue forecast (analogo).
+- QuickBooks: Cashflow projection (analogo + abbiamo anche pipeline).
+- Pennylane AI: forecast AI-driven (futuro α.77.1 con `propose_forecast`).
+
+**File toccati** (5):
+- `app/main.py` — VERSION + auto-migrate 2 colonne
+- `app/models/models.py` — Quote.win_probability_pct + expected_close_date
+- `app/routers/finance.py` — endpoint forecast + cashflow esteso
+- `app/services/quote_forecast.py` — NUOVO
+- `app/templates/pages/finance_forecast.html` — NUOVO
+- `app/templates/base.html` — sidebar link
+
+373 routes (+2).
+
 ## v3.5.0-alpha.76 — AI capability assets (11 maggio 2026)
 
 3 nuove AI capability per copilot asset (riusa tutto stack α.72-α.75):

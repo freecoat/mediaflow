@@ -961,6 +961,15 @@ class Quote(Base):
     total_after_discount: Mapped[float] = mapped_column(Float, default=0.0)
     total_with_vat: Mapped[float] = mapped_column(Float, default=0.0)
     
+    # v3.5.0-alpha.77 — Sales pipeline forecast.
+    # win_probability_pct: 0..100, override manuale del default-da-status.
+    # Default-da-status (vedi `DEFAULT_WIN_PROBABILITY` in quote_forecast.py):
+    #   draft=10, sent=30, approved=90, expired=5, rejected=0, superseded=0.
+    # expected_close_date: data attesa di firma/incasso (default = issue_date + 30gg
+    # se NULL). Usata da forecast mensile cashflow.
+    win_probability_pct: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
+    expected_close_date: Mapped[Optional[date]] = mapped_column(Date, nullable=True, index=True)
+
     # Tracking AI: se generata da capitolato
     generated_from_deliverables: Mapped[bool] = mapped_column(Boolean, default=False)
     source_document_name: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)

@@ -317,6 +317,24 @@ async def delete_invoice_payment(payment_id: int, db: Session = Depends(get_db))
 # ── Cashflow timeline (v3.5.0-alpha.66.20) ────────────────────────────
 
 
+@router.get("/forecast", response_class=HTMLResponse)
+async def forecast_page(request: Request, db: Session = Depends(get_db)):
+    """v3.5.0-alpha.77 — Financial model esteso (pipeline + forecast)."""
+    return _tpl().TemplateResponse("pages/finance_forecast.html", {"request": request})
+
+
+@router.get("/api/forecast/{year}")
+async def quote_forecast_year(
+    year: int,
+    project_id: Optional[int] = None,
+    client_id: Optional[int] = None,
+    db: Session = Depends(get_db),
+):
+    """Forecast pipeline da quote (sales funnel)."""
+    from app.services.quote_forecast import yearly_forecast
+    return yearly_forecast(db, year, project_id=project_id, client_id=client_id)
+
+
 @router.get("/api/cashflow/{year}")
 async def cashflow_year(
     year: int,
@@ -451,6 +469,11 @@ async def cashflow_year(
         residuo = max(0.0, (s.amount_total or 0.0) - (s.amount_paid or 0.0))
         series[m - 1]["supplier_due"] += residuo
 
+    # v3.5.0-alpha.77 — Forecast pipeline (soft+committed+lost) per mese
+    from app.services.quote_forecast import yearly_forecast
+    fc = yearly_forecast(db, year, project_id=project_id, client_id=client_id)
+    fc_by_month = {m["month"]: m for m in fc["months"]}
+
     for s in series:
         s["invoiced"] = round(s["invoiced"], 2)
         s["paid"] = round(s["paid"], 2)
@@ -459,7 +482,24 @@ async def cashflow_year(
         s["supplier_paid"] = round(s["supplier_paid"], 2)
         s["supplier_due"] = round(s["supplier_due"], 2)
         s["net_cashflow"] = round(s["paid"] - s["supplier_paid"], 2)
-    return {"year": year, "months": series}
+        # v3.5.0-alpha.77 — pipeline forecast merge
+        fcm = fc_by_month.get(s["month"], {})
+        s["forecast_soft"] = round(fcm.get("sent", 0.0) * 0.30, 2)         # sent × default 30%
+        s["forecast_committed"] = round(fcm.get("approved", 0.0) * 0.90, 2)  # approved × default 90%
+        s["forecast_weighted"] = round(fcm.get("weighted_forecast", 0.0), 2)
+        s["pipeline_total"] = round(fcm.get("pipeline_total", 0.0), 2)
+        s["quotes_approved"] = round(fcm.get("approved", 0.0), 2)
+        s["quotes_sent"] = round(fcm.get("sent", 0.0), 2)
+        s["quotes_rejected"] = round(fcm.get("rejected", 0.0), 2)
+        # Projected cash = paid + forecast_weighted - supplier_paid
+        s["projected_cash"] = round(
+            s["paid"] + s["forecast_weighted"] - s["supplier_paid"], 2
+        )
+    return {
+        "year": year,
+        "months": series,
+        "forecast_totals": fc["totals"],
+    }
 
 
 # ── Anomalie financial (v3.4.39) ──────────────────────────────────────

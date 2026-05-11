@@ -8,6 +8,31 @@
 
 ## Versione corrente
 
+**v3.5.0-alpha.77** — 11 maggio 2026 — Financial model + sales pipeline
+
+Pattern Salesforce/HubSpot per quote forecast:
+- Quote.win_probability_pct + expected_close_date.
+- Default: draft 10% · sent 30% · approved 90% · rejected 0%.
+- Service quote_forecast.py: weighted + yearly_forecast.
+- /finance/api/cashflow/{year} esteso: forecast_soft + committed +
+  weighted + pipeline + projected_cash + win/loss totals.
+- Pagina nuova /finance/forecast: 6 KPI + cascata chart + tabella +
+  win/loss top 10 clienti.
+- Sidebar link "Forecast / Pipeline".
+
+373 routes (+2).
+
+## Prossimo step
+
+- **UI per override win_probability_pct + expected_close_date** in
+  /quotes editor (form-input semplice).
+- **AI capability** `propose_forecast` (analizza trend + suggerisce
+  scenari best/worst case).
+- **Export PDF financial report** (riusa reportlab branding).
+- **R7.x continuazione planning_bookings** — quando green light.
+
+## (versione precedente)
+
 **v3.5.0-alpha.76** — 11 maggio 2026 — AI capability assets
 
 3 capability nuove copilot (riusa stack α.72-α.75):
