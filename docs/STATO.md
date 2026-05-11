@@ -8,19 +8,15 @@
 
 ## Versione corrente
 
-**v3.5.0-alpha.68.2** — 11 maggio 2026 — SupplierInvoicePayment
+**v3.5.0-alpha.68.3** — 11 maggio 2026 — UI pagamenti supplier
 
-Storicizza i pagamenti incrementali a fornitori (analogia esatta con
-InvoicePayment per fatture attive). Risolve il limite noto di α.68.1.
+Espone in UI il modello SupplierInvoicePayment di α.68.2.
 
-- **Modello**: `SupplierInvoicePayment` (tabella nuova, auto-create).
-  amount_paid sulla fattura denormalizzato; fonte verità = Σ payments.
-- **Router**: GET `/suppliers/api/invoices/{id}/payments`, POST `/pay`
-  ora storicizza riga, DELETE `/sup-payments/{id}` per rollback.
-- **Cashflow**: `supplier_paid` da SupplierInvoicePayment.payment_date,
-  pagamenti incrementali distribuiti tra i mesi correttamente.
-
-331 routes (+2). Auto-migrate idempotente.
+- **Modal fattura** in edit: nuova sezione "Pagamenti registrati"
+  sotto le note. Lista + quick-add inline + delete per riga.
+- Summary header con Pagato/Totale/Residuo colorato.
+- Auto-refresh amount_paid + status + payment_date + KPI tenant
+  + lista fatture dopo ogni add/delete.
 
 ## Prossimo step
 
@@ -29,10 +25,10 @@ InvoicePayment per fatture attive). Risolve il limite noto di α.68.1.
   light per refactor invasivo (CRUD booking + multi-move + bulk-edit)
 - **AI parser PDF fattura passiva** — upload PDF → estrazione auto
   campi → conferma utente (pattern AI propone/dispone)
-- **UI gestione payments lato /suppliers** — drawer con lista pagamenti
-  + + Aggiungi pagamento + delete (già supportato backend)
 - **Anomalies overdue supplier** — sezione /finance per fatture passive
   scadute non pagate
+- **AI capability propose_supplier_invoice** — copilot crea fattura
+  passiva dal contesto conversazionale
 - **R5/R8/R9** — split planning.html, Float→Decimal, datetime tz-aware
 - **Frontend polish** (in caldo, lo riprendiamo a richiesta)
 

@@ -247,6 +247,31 @@
         <label class="form-label">Note</label>
         <textarea class="form-textarea" id="mi-notes" rows="2"></textarea>
       </div>
+
+      <div id="mi-payments-section" style="display:none;margin-top:18px;padding-top:14px;border-top:1px solid var(--border);">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;">
+          <div style="font-weight:600;font-size:13px;">Pagamenti registrati
+            <span style="color:var(--text3);font-weight:normal;font-size:11px;">(α.68.2 — storicizzati)</span>
+          </div>
+          <div class="text-xs" id="mi-pay-summary"></div>
+        </div>
+        <div id="mi-pay-list" style="margin-bottom:10px;"></div>
+        <div style="display:flex;gap:6px;align-items:end;padding:8px 10px;background:var(--bg2);border-radius:6px;">
+          <div class="form-group" style="margin:0;flex:1;">
+            <label class="form-label" style="font-size:11px;">Importo</label>
+            <input class="form-input" id="mip-amount" type="number" step="0.01" placeholder="0.00">
+          </div>
+          <div class="form-group" style="margin:0;flex:1;">
+            <label class="form-label" style="font-size:11px;">Data</label>
+            <input class="form-input" id="mip-date" type="date">
+          </div>
+          <div class="form-group" style="margin:0;flex:1;">
+            <label class="form-label" style="font-size:11px;">Metodo</label>
+            <input class="form-input" id="mip-method" placeholder="bonifico, cassa...">
+          </div>
+          <button type="button" class="btn btn-primary btn-sm" onclick="addPayment()">+ Aggiungi</button>
+        </div>
+      </div>
     </div>
     <div class="modal-footer">
       <button class="btn btn-ghost" id="mi-delete-btn" onclick="deleteInvoice()" style="margin-right:auto;display:none;color:#ef4444;">Elimina</button>
@@ -509,6 +534,7 @@ function openInvoiceModal() {
   document.getElementById('mi-attachment').value = '';
   document.getElementById('mi-notes').value = '';
   document.getElementById('mi-delete-btn').style.display = 'none';
+  document.getElementById('mi-payments-section').style.display = 'none';
   openModal('modal-invoice');
 }
 
@@ -536,7 +562,93 @@ function editInvoice(id) {
   document.getElementById('mi-attachment').value = i.attachment_path || '';
   document.getElementById('mi-notes').value = i.notes || '';
   document.getElementById('mi-delete-btn').style.display = '';
+  document.getElementById('mi-payments-section').style.display = '';
+  document.getElementById('mip-amount').value = '';
+  document.getElementById('mip-date').value = new Date().toISOString().slice(0,10);
+  document.getElementById('mip-method').value = '';
+  loadInvoicePayments(id);
   openModal('modal-invoice');
+}
+
+async function loadInvoicePayments(invoiceId) {
+  const list = document.getElementById('mi-pay-list');
+  const summary = document.getElementById('mi-pay-summary');
+  list.innerHTML = '<div class="text-muted text-xs" style="padding:6px 0;">Caricamento...</div>';
+  try {
+    const d = await api('GET', `/suppliers/api/invoices/${invoiceId}/payments`);
+    const remaining = d.amount_remaining || 0;
+    summary.innerHTML = `Pagato <b>${fmtCurrency(d.amount_paid)}</b> / Totale <b>${fmtCurrency(d.invoice_total)}</b> · Residuo <b style="color:${remaining>0?'var(--rose)':'var(--green)'}">${fmtCurrency(remaining)}</b>`;
+    if (!d.payments.length) {
+      list.innerHTML = '<div class="text-muted text-xs" style="padding:6px 0;">Nessun pagamento registrato.</div>';
+      return;
+    }
+    list.innerHTML = `<table style="width:100%;font-size:12px;">
+      <thead><tr style="color:var(--text3);">
+        <th style="text-align:left;padding:4px;">Data</th>
+        <th style="text-align:right;padding:4px;">Importo</th>
+        <th style="text-align:left;padding:4px;">Metodo</th>
+        <th style="text-align:left;padding:4px;">Rif.</th>
+        <th></th>
+      </tr></thead>
+      <tbody>${d.payments.map(p => `<tr>
+        <td style="padding:4px;">${fmtDate(p.payment_date)}</td>
+        <td style="padding:4px;text-align:right;font-family:var(--font-mono);">${fmtCurrency(p.amount)}</td>
+        <td style="padding:4px;color:var(--text2);">${escapeHtml(p.method||'—')}</td>
+        <td style="padding:4px;color:var(--text3);font-size:11px;">${escapeHtml(p.reference||'—')}</td>
+        <td style="padding:4px;text-align:right;">
+          <button type="button" class="btn btn-ghost btn-sm" style="color:#ef4444;padding:2px 6px;font-size:11px;" onclick="deletePayment(${p.id})">Elimina</button>
+        </td>
+      </tr>`).join('')}</tbody>
+    </table>`;
+  } catch(e) {
+    list.innerHTML = `<div style="color:#ef4444;font-size:12px;padding:6px 0;">Errore: ${escapeHtml(e.message||'')}</div>`;
+  }
+}
+
+async function addPayment() {
+  const id = document.getElementById('mi-id').value;
+  if (!id) { toast('Salva prima la fattura', 'warning'); return; }
+  const amount = parseFloat(document.getElementById('mip-amount').value);
+  const date = document.getElementById('mip-date').value;
+  const method = document.getElementById('mip-method').value;
+  if (!amount || amount <= 0) { toast('Importo > 0', 'warning'); return; }
+  if (!date) { toast('Data richiesta', 'warning'); return; }
+  const fd = new FormData();
+  fd.append('amount', amount);
+  fd.append('payment_date', date);
+  if (method) fd.append('method', method);
+  try {
+    const r = await fetch(`/suppliers/api/invoices/${id}/pay`, {method:'POST', body: fd, credentials:'same-origin'});
+    if (!r.ok) throw new Error((await r.json()).detail || 'Errore');
+    document.getElementById('mip-amount').value = '';
+    document.getElementById('mip-method').value = '';
+    toast('Pagamento registrato', 'success');
+    await loadInvoicePayments(id);
+    await loadInvoices();
+    await loadSummary();
+    // Aggiorna amount_paid + status nel modal corrente
+    const fresh = await api('GET', `/suppliers/api/invoices/${id}`);
+    document.getElementById('mi-paid').value = fresh.amount_paid || 0;
+    document.getElementById('mi-status').value = fresh.payment_status || '';
+    document.getElementById('mi-paydate').value = fresh.payment_date || '';
+  } catch(e) { toast(e.message || 'Errore', 'error'); }
+}
+
+async function deletePayment(pid) {
+  if (!confirm('Eliminare questo pagamento? Rollback irreversibile.')) return;
+  const id = document.getElementById('mi-id').value;
+  try {
+    const r = await fetch(`/suppliers/api/sup-payments/${pid}`, {method:'DELETE', credentials:'same-origin'});
+    if (!r.ok) throw new Error((await r.json()).detail || 'Errore');
+    toast('Pagamento eliminato', 'success');
+    await loadInvoicePayments(id);
+    await loadInvoices();
+    await loadSummary();
+    const fresh = await api('GET', `/suppliers/api/invoices/${id}`);
+    document.getElementById('mi-paid').value = fresh.amount_paid || 0;
+    document.getElementById('mi-status').value = fresh.payment_status || '';
+    document.getElementById('mi-paydate').value = fresh.payment_date || '';
+  } catch(e) { toast(e.message || 'Errore', 'error'); }
 }
 
 function recalcInvoiceTotals() {

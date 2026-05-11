@@ -1,5 +1,24 @@
 # MediaFlow — Changelog
 
+## v3.5.0-alpha.68.3 — UI pagamenti supplier (11 maggio 2026)
+
+Espone in UI il modello SupplierInvoicePayment di α.68.2. Senza UI
+i pagamenti incrementali non erano gestibili da Matteo.
+
+**UI** `/suppliers` modal fattura (solo in edit, non in create):
+- Nuova sezione "Pagamenti registrati" sotto le note.
+- Summary header: Pagato / Totale / Residuo colorato.
+- Lista pagamenti (data, importo, metodo, riferimento, delete).
+- Quick-add inline: importo + data + metodo + bottone Aggiungi.
+- Auto-refresh amount_paid + payment_status + payment_date nel modal
+  dopo add/delete (denormalizzati lato server).
+- Auto-refresh KPI tenant + lista fatture in background.
+
+**File toccati** (2):
+- `app/main.py` — VERSION
+- `app/templates/pages/suppliers.html` — sezione payments + 3 nuove
+  funzioni JS (loadInvoicePayments, addPayment, deletePayment).
+
 ## v3.5.0-alpha.68.2 — SupplierInvoicePayment (11 maggio 2026)
 
 Risolve il limite noto di α.68.1: pagamenti incrementali a fornitori
