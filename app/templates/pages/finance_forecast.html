@@ -4,6 +4,11 @@
 {% block topbar_title %}📊 Financial Model — Pipeline & Forecast{% endblock %}
 
 {% block topbar_actions %}
+  <select id="cf-granularity" class="form-input" style="height:32px;font-size:13px;width:140px;" onchange="loadAll()">
+    <option value="month">Mensile</option>
+    <option value="quarter">Trimestrale</option>
+    <option value="year">Annuale</option>
+  </select>
   <select id="cf-client" class="form-input" style="height:32px;font-size:13px;width:170px;" onchange="onClientChange()">
     <option value="">— tutti clienti —</option>
   </select>
@@ -69,12 +74,12 @@
 
 <!-- Tabella full breakdown -->
 <div class="card mb-3">
-  <div class="card-header"><span class="card-title">Breakdown mensile</span></div>
+  <div class="card-header"><span class="card-title" id="bk-title">Breakdown mensile</span></div>
   <div class="table-wrap">
     <table>
       <thead>
         <tr>
-          <th>Mese</th>
+          <th id="bk-period-th">Mese</th>
           <th class="text-right" title="Σ quote sent nel mese (non pesate)">📤 Sent</th>
           <th class="text-right" title="Σ quote approved nel mese (raw)">✅ Approved</th>
           <th class="text-right" title="Σ quote rejected nel mese">❌ Rejected</th>
@@ -160,6 +165,7 @@ async function loadAll() {
   const year = parseInt(document.getElementById('cf-year').value || _curYear);
   const cid = document.getElementById('cf-client').value;
   const pid = document.getElementById('cf-project').value;
+  const gran = document.getElementById('cf-granularity').value || 'month';
   const qs = []; if (cid) qs.push('client_id='+cid); if (pid) qs.push('project_id='+pid);
   const suffix = qs.length ? '?' + qs.join('&') : '';
   let cf, forecast;
@@ -170,9 +176,44 @@ async function loadAll() {
     ]);
   } catch(e) { toast(e.message || 'Errore caricamento', 'error'); return; }
   renderKPIs(forecast.totals);
-  renderTable(cf.months);
-  renderChart(cf.months, year);
+  // v3.5.0-alpha.77.1 — Aggregation per granularità
+  const rows = aggregateBy(cf.months, gran);
+  document.getElementById('bk-title').textContent =
+    gran === 'quarter' ? 'Breakdown trimestrale' :
+    gran === 'year'    ? 'Breakdown annuale'    : 'Breakdown mensile';
+  document.getElementById('bk-period-th').textContent =
+    gran === 'quarter' ? 'Trimestre' : (gran === 'year' ? 'Anno' : 'Mese');
+  renderTable(rows, gran);
+  renderChart(rows, year, gran);
   await renderWinLoss(cid, pid);
+}
+
+function aggregateBy(months, gran) {
+  if (gran === 'month') return months;
+  const SUM_KEYS = [
+    'invoiced','paid','outstanding','supplier_billed','supplier_paid','supplier_due',
+    'net_cashflow','forecast_soft','forecast_committed','forecast_weighted',
+    'pipeline_total','quotes_approved','quotes_sent','quotes_rejected','projected_cash',
+  ];
+  if (gran === 'quarter') {
+    const out = [];
+    for (let q = 0; q < 4; q++) {
+      const slice = months.slice(q * 3, q * 3 + 3);
+      const row = { period_label: 'Q' + (q + 1), month: q * 3 + 1, _is_current: false };
+      SUM_KEYS.forEach(k => { row[k] = slice.reduce((a, m) => a + (m[k] || 0), 0); });
+      const today = new Date();
+      const curQ = Math.floor(today.getMonth() / 3);
+      if (today.getFullYear() === parseInt(document.getElementById('cf-year').value || _curYear) && curQ === q) row._is_current = true;
+      out.push(row);
+    }
+    return out;
+  }
+  if (gran === 'year') {
+    const row = { period_label: String(document.getElementById('cf-year').value || _curYear), month: 1, _is_current: false };
+    SUM_KEYS.forEach(k => { row[k] = months.reduce((a, m) => a + (m[k] || 0), 0); });
+    return [row];
+  }
+  return months;
 }
 
 function renderKPIs(t) {
@@ -186,13 +227,14 @@ function renderKPIs(t) {
   document.getElementById('kpi-avg').textContent = (t.average_deal_size != null ? fmtCurrency(t.average_deal_size) : '—');
 }
 
-function renderTable(months) {
+function renderTable(rows, gran) {
   const tbody = document.getElementById('forecast-tbody');
   while (tbody.firstChild) tbody.removeChild(tbody.firstChild);
-  months.forEach(m => {
+  rows.forEach(m => {
     const tr = document.createElement('tr');
     const td = (txt, css) => { const e = document.createElement('td'); if (css) e.className = css; e.textContent = txt; tr.appendChild(e); };
-    td(MESI[m.month-1] || '?');
+    const label = m.period_label || MESI[m.month-1] || '?';
+    td(label);
     td(fmtCurrency(m.quotes_sent || 0), 'mono text-right');
     td(fmtCurrency(m.quotes_approved || 0), 'mono text-right');
     td(fmtCurrency(m.quotes_rejected || 0), 'mono text-right');
@@ -215,17 +257,21 @@ function renderTable(months) {
   });
 }
 
-function renderChart(months, year) {
+function renderChart(rows, year, gran) {
   const host = document.getElementById('cascade-chart');
   while (host.firstChild) host.removeChild(host.firstChild);
-  const maxV = Math.max(1, ...months.map(m => Math.max(
+  const cols = rows.length || 1;
+  host.style.gridTemplateColumns = `repeat(${cols}, 1fr)`;
+  const maxV = Math.max(1, ...rows.map(m => Math.max(
     m.paid||0, m.forecast_committed||0, m.forecast_soft||0, m.supplier_paid||0
   )));
-  const today = (new Date().getFullYear() === year) ? new Date().getMonth() + 1 : 0;
-  months.forEach(m => {
+  const today = new Date();
+  const curMonth = (today.getFullYear() === year) ? today.getMonth() + 1 : 0;
+  rows.forEach(m => {
     const col = document.createElement('div'); col.className = 'cc-col';
     const bars = document.createElement('div'); bars.className = 'cc-bars';
-    const tip = `Mese ${MESI[m.month-1]}: Incassato ${fmtCurrency(m.paid||0)} · Committed ${fmtCurrency(m.forecast_committed||0)} · Soft ${fmtCurrency(m.forecast_soft||0)} · Outflow ${fmtCurrency(m.supplier_paid||0)}`;
+    const label = m.period_label || MESI[m.month-1] || '?';
+    const tip = `${label}: Incassato ${fmtCurrency(m.paid||0)} · Committed ${fmtCurrency(m.forecast_committed||0)} · Soft ${fmtCurrency(m.forecast_soft||0)} · Outflow ${fmtCurrency(m.supplier_paid||0)}`;
     ['paid','committed','soft','outflow'].forEach(k => {
       const b = document.createElement('div');
       b.className = 'cc-bar b-' + k;
@@ -238,8 +284,9 @@ function renderChart(months, year) {
       bars.appendChild(b);
     });
     const lbl = document.createElement('div');
-    lbl.className = 'cc-month-label' + (m.month === today ? ' is-current' : '');
-    lbl.textContent = MESI[m.month-1];
+    const isCurrent = m._is_current === true || m.month === curMonth;
+    lbl.className = 'cc-month-label' + (isCurrent ? ' is-current' : '');
+    lbl.textContent = label;
     col.appendChild(bars); col.appendChild(lbl);
     host.appendChild(col);
   });

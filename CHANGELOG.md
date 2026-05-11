@@ -1,5 +1,22 @@
 # MediaFlow — Changelog
 
+## v3.5.0-alpha.77.1 — Granularità mensile/trimestrale/annuale (11 maggio 2026)
+
+Toggle topbar in `/finance/forecast` e `/finance/cashflow`:
+- **Mensile** (default): 12 colonne (Gen→Dic).
+- **Trimestrale**: 4 colonne (Q1/Q2/Q3/Q4), aggregato somma.
+- **Annuale**: 1 colonna totale anno.
+
+Aggregation client-side `aggregateBy()`: somma per stessi periodi.
+Mark _is_current per trimestre/anno corrente.
+
+Chart grid-template-columns dinamico (`repeat(N, 1fr)`).
+
+**File toccati** (2):
+- `app/main.py` — VERSION
+- `app/templates/pages/finance_forecast.html` — toggle + aggregation
+- `app/templates/pages/cashflow.html` — toggle + aggregation
+
 ## v3.5.0-alpha.77 — Financial model + sales pipeline forecast (11 maggio 2026)
 
 Risponde a richiesta Matteo: forecast incassi da quote sent (soft) e
