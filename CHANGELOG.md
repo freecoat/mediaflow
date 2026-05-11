@@ -1,5 +1,46 @@
 # MediaFlow — Changelog
 
+## v3.5.0-alpha.66.20.1 — F15 script test corpus capitolati (11 maggio 2026)
+
+Aggiunto `scripts/test_capitolati_corpus.py` per validare parser
+DeliveryTemplate sui 17 capitolati reali in `docs/capitolati_esempio/`.
+
+**Funzionalità**:
+- Batch iterazione su tutti i file della directory
+- Per ciascuno: estrazione testo + chiamata `parse_delivery_template` +
+  conta blocchi popolati su 8 + ai_confidence + code/name/broadcaster
+- Banner colorato ANSI (verde ≥7, giallo ≥4, rosso <4 blocchi)
+- Report finale: stats aggregati + frequenza blocchi (% file con
+  ciascun blocco compilato) + lista errori
+- Output JSON opzionale (`--json out.json`) per analisi successiva
+- Filtri: `--file <name>` (singolo), `--skip <glob>` (esclusioni),
+  `--limit N` (primi N)
+- Stima costo + tempo all'avvio (~$0.20-0.40 per run completo Sonnet 4.6)
+
+**Uso tipico**:
+```bash
+# Sul Mac di Matteo, venv attivo, provider AI configurato in /settings:
+python scripts/test_capitolati_corpus.py
+
+# Singolo per debug:
+python scripts/test_capitolati_corpus.py --file Netflix_Deliverables.txt
+
+# Skip xlsx pesanti:
+python scripts/test_capitolati_corpus.py --skip "*.xlsx"
+```
+
+Output atteso: tabella per file con `n_blocchi/8 + confidence% +
+elapsed + code estratto`, riassunto finale con bar-chart frequenza
+blocchi. Permette di vedere subito quali blocchi (es. `head_format`,
+`textless_format`) sono spesso non menzionati nei capitolati e quali
+sono universali (`video_specs`, `audio_specs`).
+
+**Note**:
+- Non eseguito qui (env Windows sandbox senza fastapi installato +
+  no API key). Eseguibile sul Mac Matteo quando vuole validare.
+- Costo medio per file: ~4k token input + 1-2k output = $0.02 con
+  Sonnet 4.6 e cache attiva.
+
 ## v3.5.0-alpha.66.20 — α.66 InvoicePayment + R7.x extraction + Fase 2 step C Capitolati (11 maggio 2026)
 
 Su richiesta Matteo "procedi con tutti e 4" (post recap roadmap).

@@ -8,6 +8,20 @@
 
 ## Versione corrente
 
+**v3.5.0-alpha.66.20.1** — 11 maggio 2026 — F15 script test corpus capitolati + push
+
+Aggiunto `scripts/test_capitolati_corpus.py`: batch parser sui 17
+capitolati reali in `docs/capitolati_esempio/` con banner colorato +
+frequenza blocchi + report JSON opzionale.
+
+Eseguibile sul Mac Matteo: `python scripts/test_capitolati_corpus.py`.
+Costo stimato $0.20-0.40 per run completo.
+
+**Push GitHub fatto** su richiesta esplicita Matteo (in deroga regola
+"push solo a major bump").
+
+---
+
 **v3.5.0-alpha.66.20** — 11 maggio 2026 — α.66 InvoicePayment + R7.x + Capitolati F14
 
 3 sviluppi sostanziali post recap roadmap (α.65 già fatto da prima):
