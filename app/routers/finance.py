@@ -28,6 +28,15 @@ def _tpl():
 
 # ── Pagine HTML ───────────────────────────────────────────────────────
 
+
+@router.get("/cashflow", response_class=HTMLResponse)
+async def cashflow_page(request: Request, db: Session = Depends(get_db)):
+    """Pagina cashflow timeline 12 mesi (revenue-side)."""
+    return _tpl().TemplateResponse(
+        "pages/cashflow.html", {"request": request}
+    )
+
+
 @router.get("/", response_class=HTMLResponse)
 async def finance_page(request: Request, db: Session = Depends(get_db)):
     invoices = db.query(Invoice).options(joinedload(Invoice.client)).order_by(Invoice.issue_date.desc()).all()

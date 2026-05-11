@@ -1110,6 +1110,12 @@ class JobCostLine(Base):
     total_accrued: Mapped[float] = mapped_column(Float, default=0.0)
     total_expected: Mapped[float] = mapped_column(Float, default=0.0)
     is_billable: Mapped[bool] = mapped_column(Boolean, default=True)
+    # v3.5.0-alpha.66.21 — α.67 cost-side risorsa.
+    # Somma ore_done × Resource.internal_cost_hourly per ciascun assignment
+    # del booking associato. Permette margine reale = total_accrued − total_cost_accrued.
+    # Popolato da `recompute_cost_line_actual` insieme a `total_accrued`.
+    # 0.0 se nessun assignment ha cost_type configurato (es. tutte freelance senza tariffa).
+    total_cost_accrued: Mapped[float] = mapped_column(Float, default=0.0, server_default="0")
     # Lavorazione "extra": aggiunta dopo l'approvazione della quote (es. cliente
     # chiede un upres in più). quote_line_id è NULL per gli extra puri.
     # Una riga ereditata dalla quote può comunque generare extra senza is_extra=True

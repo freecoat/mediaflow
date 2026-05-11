@@ -1,0 +1,176 @@
+{% extends "base.html" %}
+{% set active_page = "cashflow" %}
+
+{% block title %}Cashflow — MediaFlow{% endblock %}
+{% block topbar_title %}Cashflow{% endblock %}
+
+{% block topbar_actions %}
+  <select id="cf-year" class="form-input" style="height:32px; font-size:13px; width:100px;" onchange="loadCashflow()"></select>
+{% endblock %}
+
+{% block content %}
+<div class="stat-grid" id="cf-totals">
+  <div class="stat-card stat-card-accent">
+    <div class="stat-label">Fatturato</div>
+    <div class="stat-value mono" id="tot-invoiced">—</div>
+    <div class="stat-sub">somma fatture emesse anno</div>
+  </div>
+  <div class="stat-card stat-card-green">
+    <div class="stat-label">Incassato</div>
+    <div class="stat-value mono" id="tot-paid">—</div>
+    <div class="stat-sub">pagamenti registrati anno</div>
+  </div>
+  <div class="stat-card stat-card-amber">
+    <div class="stat-label">Aperto</div>
+    <div class="stat-value mono" id="tot-outstanding">—</div>
+    <div class="stat-sub">in attesa di incasso</div>
+  </div>
+  <div class="stat-card stat-card-purple">
+    <div class="stat-label">% Incasso</div>
+    <div class="stat-value mono" id="tot-pct">—</div>
+    <div class="stat-sub">paid / invoiced</div>
+  </div>
+</div>
+
+<div class="card">
+  <div class="card-header">
+    <span class="card-title">Timeline 12 mesi</span>
+    <span style="color:var(--text3); font-size:12px;">Barre: fatturato (indigo) / incassato (verde) / aperto (amber)</span>
+  </div>
+  <div id="cf-chart" class="cf-chart">
+    <div class="text-muted text-sm" style="padding:30px; text-align:center;">Caricamento…</div>
+  </div>
+</div>
+
+<div class="card mt-3">
+  <div class="card-header">
+    <span class="card-title">Dettaglio mensile</span>
+  </div>
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th>Mese</th>
+          <th class="text-right">Fatturato</th>
+          <th class="text-right">Incassato</th>
+          <th class="text-right">Aperto</th>
+          <th class="text-right">% Incasso</th>
+        </tr>
+      </thead>
+      <tbody id="cf-tbody"></tbody>
+    </table>
+  </div>
+</div>
+
+<style>
+  .cf-chart { display: grid; grid-template-columns: repeat(12, 1fr); gap: 8px; padding: 16px 6px; min-height: 320px; align-items: end; }
+  .cf-col { display: flex; flex-direction: column; align-items: center; gap: 4px; height: 100%; }
+  .cf-bars { display: flex; gap: 2px; align-items: flex-end; height: 240px; width: 100%; justify-content: center; }
+  .cf-bar { width: 12px; border-radius: 3px 3px 0 0; transition: opacity var(--t); position: relative; min-height: 1px; }
+  .cf-bar:hover { opacity: 0.85; }
+  .cf-bar.b-invoiced   { background: var(--indigo); }
+  .cf-bar.b-paid       { background: var(--green); }
+  .cf-bar.b-outstanding { background: var(--amber); }
+  .cf-month-label { font-size: 11px; color: var(--text3); text-transform: uppercase; letter-spacing: 0.05em; font-weight: 600; padding-top: 4px; border-top: 1px solid var(--border); width: 100%; text-align: center; }
+  .cf-month-label.is-current { color: var(--indigo2); border-top-color: var(--indigo); }
+  .text-right { text-align: right; }
+  td.mono { font-family: var(--font-mono); font-variant-numeric: tabular-nums; }
+</style>
+
+<script>
+const MESI_IT = ['Gen','Feb','Mar','Apr','Mag','Giu','Lug','Ago','Set','Ott','Nov','Dic'];
+const _curYear = new Date().getFullYear();
+
+function initYearSelect() {
+  const sel = document.getElementById('cf-year');
+  for (let y = _curYear + 1; y >= _curYear - 4; y--) {
+    const opt = document.createElement('option');
+    opt.value = String(y);
+    opt.textContent = String(y);
+    if (y === _curYear) opt.selected = true;
+    sel.appendChild(opt);
+  }
+}
+
+async function loadCashflow() {
+  const year = parseInt(document.getElementById('cf-year').value || _curYear);
+  let data;
+  try {
+    data = await api('GET', `/finance/api/cashflow/${year}`);
+  } catch(e) {
+    toast(e.message || 'Errore caricamento', 'error');
+    return;
+  }
+  const months = data.months || [];
+  const totals = months.reduce((acc, m) => {
+    acc.invoiced += m.invoiced || 0;
+    acc.paid += m.paid || 0;
+    acc.outstanding += m.outstanding || 0;
+    return acc;
+  }, { invoiced:0, paid:0, outstanding:0 });
+
+  document.getElementById('tot-invoiced').textContent = fmtCurrency(totals.invoiced);
+  document.getElementById('tot-paid').textContent = fmtCurrency(totals.paid);
+  document.getElementById('tot-outstanding').textContent = fmtCurrency(totals.outstanding);
+  const pct = totals.invoiced > 0 ? Math.round(totals.paid / totals.invoiced * 100) : 0;
+  document.getElementById('tot-pct').textContent = pct + '%';
+
+  renderChart(months, year);
+  renderTable(months);
+}
+
+function renderChart(months, year) {
+  const host = document.getElementById('cf-chart');
+  while (host.firstChild) host.removeChild(host.firstChild);
+  const maxVal = Math.max(1, ...months.map(m => Math.max(m.invoiced||0, m.paid||0, m.outstanding||0)));
+  const todayMonth = (new Date().getFullYear() === year) ? new Date().getMonth() + 1 : 0;
+  for (const m of months) {
+    const col = document.createElement('div'); col.className = 'cf-col';
+    const bars = document.createElement('div'); bars.className = 'cf-bars';
+    const ti = `Fatturato ${fmtCurrency(m.invoiced||0)} · Incassato ${fmtCurrency(m.paid||0)} · Aperto ${fmtCurrency(m.outstanding||0)}`;
+
+    for (const kind of ['invoiced', 'paid', 'outstanding']) {
+      const b = document.createElement('div');
+      b.className = 'cf-bar b-' + kind;
+      const v = m[kind] || 0;
+      const h = Math.max(1, Math.round((v / maxVal) * 240));
+      b.style.height = h + 'px';
+      b.title = ti;
+      bars.appendChild(b);
+    }
+
+    const lbl = document.createElement('div');
+    lbl.className = 'cf-month-label' + (m.month === todayMonth ? ' is-current' : '');
+    lbl.textContent = MESI_IT[m.month - 1] || '?';
+    col.appendChild(bars); col.appendChild(lbl);
+    host.appendChild(col);
+  }
+}
+
+function renderTable(months) {
+  const tbody = document.getElementById('cf-tbody');
+  while (tbody.firstChild) tbody.removeChild(tbody.firstChild);
+  for (const m of months) {
+    const tr = document.createElement('tr');
+    const pct = (m.invoiced || 0) > 0 ? Math.round((m.paid || 0) / m.invoiced * 100) : 0;
+    const cells = [
+      MESI_IT[m.month - 1] || '?',
+      fmtCurrency(m.invoiced || 0),
+      fmtCurrency(m.paid || 0),
+      fmtCurrency(m.outstanding || 0),
+      pct + '%',
+    ];
+    cells.forEach((v, i) => {
+      const td = document.createElement('td');
+      if (i > 0) { td.className = 'mono text-right'; }
+      td.textContent = v;
+      tr.appendChild(td);
+    });
+    tbody.appendChild(tr);
+  }
+}
+
+initYearSelect();
+loadCashflow();
+</script>
+{% endblock %}

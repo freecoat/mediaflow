@@ -8,6 +8,34 @@
 
 ## Versione corrente
 
+**v3.5.0-alpha.66.21** — 11 maggio 2026 — UI cashflow + α.67 cost-side
+
+Autopilot post "fai tutto in autonomia e push":
+- **UI `/finance/cashflow`**: 4 stat-card + grafico 12-mesi
+  (invoiced/paid/outstanding) + tabella dettaglio. Riusa endpoint
+  `/finance/api/cashflow/{year}` esposto in α.66.20.
+- **α.67 cost-side**: `JCL.total_cost_accrued` calcolato in
+  `recompute_cost_line_actual` come Σ `ore_done × Resource.internal_cost_hourly`
+  per ogni assignment. Esposto in `/cost-report/api/list` (job aggregato)
+  e `/cost-report/api/job/{id}` (summary + per-line). Campo derivato
+  `real_margin = total_accrued − total_cost_accrued`.
+
+Auto-migrate idempotente. R7.x continuazione (planning_bookings 1500
+righe) skipped in autopilota: rischio refactor troppo alto.
+
+## Prossimo step
+
+- **UI cost-report** che mostri `real_margin` visivamente accanto a
+  `over_under_now` (badge colorato + colonna in tabella linee)
+- **α.68 Supplier/SupplierInvoice** — modulo nuovo per fatture passive
+- **R7.x continuazione planning_bookings** — quando Matteo dà green
+  light per refactor invasivo (CRUD booking + multi-move + bulk-edit)
+- **F15 esecuzione reale** sul Mac Matteo (corpus test 17 capitolati)
+- **R5/R8/R9** — split planning.html, Float→Decimal, datetime tz-aware
+- **Frontend polish** (in caldo, lo riprendiamo a richiesta)
+
+---
+
 **v3.5.0-alpha.66.20.1** — 11 maggio 2026 — F15 script test corpus capitolati + push
 
 Aggiunto `scripts/test_capitolati_corpus.py`: batch parser sui 17

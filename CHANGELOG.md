@@ -1,5 +1,56 @@
 # MediaFlow — Changelog
 
+## v3.5.0-alpha.66.21 — UI cashflow + α.67 cost-side risorsa (11 maggio 2026)
+
+Autopilot post "fai tutto in autonomia e push". 2 sviluppi:
+
+**UI Cashflow** (`/finance/cashflow`):
+- Pagina HTML che usa endpoint `GET /finance/api/cashflow/{year}` già esposto in α.66.20
+- 4 stat-card totali anno (fatturato/incassato/aperto/% incasso)
+- Grafico 12 mesi a colonne (3 barre per mese: invoiced indigo, paid
+  green, outstanding amber) con scaling proporzionale
+- Mese corrente highlighted con bordo cyan
+- Tabella dettaglio sotto con valori + % incasso mensile
+- Selector anno in topbar (range corrente-4..corrente+1)
+- Sidebar link "Cashflow" in sezione Finanza
+
+**α.67 cost-side risorsa**:
+- Nuovo campo `JobCostLine.total_cost_accrued` (Float default 0)
+- Auto-migrate boot: `ALTER TABLE job_cost_lines ADD COLUMN
+  total_cost_accrued REAL NOT NULL DEFAULT 0`
+- `recompute_cost_line_actual` (`cost_line_sync.py`) ora calcola
+  anche `total_cost_accrued`: per ogni booking done, per ogni
+  assignment, somma `(end-start) × Resource.internal_cost_hourly`
+  (property già esistente, derivata da cost_type/monthly_gross/
+  freelance_hourly_cost/studio_hourly_cost)
+- Risorse con `cost_type=external` o senza configurazione →
+  contributo 0 (no error)
+- Esposto in `/cost-report/api/list` (livello job aggregato) +
+  `/cost-report/api/job/{id}` (sia in `summary` che per ogni `line`)
+- Campo derivato: `real_margin = total_accrued − total_cost_accrued`
+  esposto entrambi i livelli (UI può mostrarlo accanto al margine
+  contrattuale `over_under_now`)
+
+**File toccati** (6):
+- `app/main.py` — VERSION + auto-migrate total_cost_accrued
+- `app/models/models.py` — JCL.total_cost_accrued
+- `app/services/cost_line_sync.py` — compute cost_accrued nel
+  recompute_cost_line_actual + return dict
+- `app/routers/cost_report.py` — esposizione list + detail
+- `app/routers/finance.py` — endpoint /cashflow HTML
+- `app/templates/base.html` — sidebar link Cashflow
+- `app/templates/pages/cashflow.html` — nuovo
+
+**Cosa NON è incluso**:
+- UI cost-report che mostra real_margin visivamente (badge/colonna)
+- R7.x continuazione (planning_bookings 1500 righe — skipped in
+  autopilota, troppo rischio refactor invasivo)
+- F15 esecuzione reale (Matteo lancia script sul Mac)
+- α.68 Supplier/SupplierInvoice (modulo nuovo, prossimo)
+- Frontend polish (in caldo per esplicita richiesta)
+
+**Smoke**: AST parse OK su 5 file. Auto-migrate idempotente.
+
 ## v3.5.0-alpha.66.20.1 — F15 script test corpus capitolati (11 maggio 2026)
 
 Aggiunto `scripts/test_capitolati_corpus.py` per validare parser

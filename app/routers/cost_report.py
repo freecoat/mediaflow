@@ -85,6 +85,9 @@ async def list_cost_reports(
         total_quoted = sum(l.total_quoted for l in j.cost_lines)
         total_accrued = sum(l.total_accrued for l in j.cost_lines)
         total_expected = sum(l.total_expected for l in j.cost_lines)
+        # v3.5.0-alpha.66.21 — α.67 cost-side risorsa
+        total_cost_accrued = sum((l.total_cost_accrued or 0.0) for l in j.cost_lines)
+        real_margin = round(total_accrued - total_cost_accrued, 2)
         # v3.5.0-alpha.55: convenzione segno positivo = OVER (sforamento).
         over_under_now = round(total_accrued - total_quoted, 2)
         over_under_forecast = round(total_expected - total_quoted, 2)
@@ -107,6 +110,9 @@ async def list_cost_reports(
             "total_quoted": round(total_quoted, 2),
             "total_accrued": round(total_accrued, 2),
             "total_expected": round(total_expected, 2),
+            # v3.5.0-alpha.66.21 — α.67 cost-side
+            "total_cost_accrued": round(total_cost_accrued, 2),
+            "real_margin": real_margin,
             "over_under_now": over_under_now,
             "over_under_forecast": over_under_forecast,
             # Alias back-compat (= forecast). Da non usare in nuovi consumer.
@@ -480,6 +486,16 @@ async def job_cost_report(job_id: int, db: Session = Depends(get_db)):
             "total_quoted": round(total_quoted, 2),
             "total_accrued": round(total_accrued, 2),
             "total_expected": round(total_expected, 2),
+            # v3.5.0-alpha.66.21 — α.67 cost-side risorsa.
+            # total_cost_accrued = Σ JCL.total_cost_accrued (ore done ×
+            #   Resource.internal_cost_hourly). 0 se nessuna risorsa con
+            #   cost_type configurato → "real_margin" sarà = total_accrued.
+            # real_margin = total_accrued − total_cost_accrued (margine reale
+            #   stimato basato sui rate interni configurati).
+            "total_cost_accrued": round(sum((l.total_cost_accrued or 0) for l in job.cost_lines), 2),
+            "real_margin": round(
+                total_accrued - sum((l.total_cost_accrued or 0) for l in job.cost_lines), 2
+            ),
             # v3.5.0-alpha.55: due viste di Over/Under.
             # NOW = maturato − quotato (extracosto certo, base fatturazione).
             # FORECAST = stima − quotato (sforamento previsto su base
@@ -539,6 +555,9 @@ async def job_cost_report(job_id: int, db: Session = Depends(get_db)):
                 "total_quoted": l.total_quoted,
                 "total_accrued": l.total_accrued,
                 "total_expected": l.total_expected,
+                # v3.5.0-alpha.66.21 — α.67 cost-side
+                "total_cost_accrued": round(l.total_cost_accrued or 0.0, 2),
+                "real_margin": round((l.total_accrued or 0.0) - (l.total_cost_accrued or 0.0), 2),
                 # v3.5.0-alpha.55: Now = maturato−quotato; Forecast = stima−quotato.
                 # Positivo = OVER (sforamento), negativo = UNDER (sotto budget).
                 "over_under_now": round(l.total_accrued - l.total_quoted, 2),

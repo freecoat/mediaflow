@@ -190,6 +190,29 @@ def recompute_cost_line_actual(db: Session, jcl) -> dict:
     new_qty_actual = _qty_from_hours(unit, done_hours, len(done_bookings))
     new_qty_planned = _qty_from_hours(unit, planned_hours, len(all_bookings))
 
+    # v3.5.0-alpha.66.21 — α.67 cost-side risorsa.
+    # Per ogni assignment dei booking done, somma ore × Resource.internal_cost_hourly.
+    # internal_cost_hourly è property derivata da cost_type:
+    #   employee → monthly_gross_salary × bonus × multiplier / annual_hours
+    #   freelance → freelance_hourly_cost
+    #   studio    → studio_hourly_cost
+    #   external/None → None (skip, non concorre al costo)
+    # Risultato: somma realistica del costo aziendale interno per la riga.
+    new_cost_accrued = 0.0
+    for b in done_bookings:
+        for a in (b.assignments or []):
+            if not a.start_datetime or not a.end_datetime:
+                continue
+            res = getattr(a, "resource", None)
+            if res is None:
+                continue
+            rate = res.internal_cost_hourly
+            if rate is None or rate <= 0:
+                continue
+            hours_a = max(0.0, (a.end_datetime - a.start_datetime).total_seconds() / 3600.0)
+            new_cost_accrued += hours_a * rate
+    new_cost_accrued = round(new_cost_accrued, 2)
+
     new_accrued = round(new_qty_actual * (jcl.unit_price or 0.0), 2)
     # Stima = quantità pianificata × prezzo. Se non ci sono booking
     # ancora pianificati, default al quotato (non a 0): la lavorazione
@@ -208,11 +231,13 @@ def recompute_cost_line_actual(db: Session, jcl) -> dict:
         abs((jcl.quantity_actual or 0) - new_qty_actual) > 1e-6
         or abs((jcl.total_accrued or 0) - new_accrued) > 1e-2
         or abs((jcl.total_expected or 0) - new_expected) > 1e-2
+        or abs((jcl.total_cost_accrued or 0) - new_cost_accrued) > 1e-2
         or jcl.work_date != new_work_date
     )
     jcl.quantity_actual = new_qty_actual
     jcl.total_accrued = new_accrued
     jcl.total_expected = new_expected
+    jcl.total_cost_accrued = new_cost_accrued
     jcl.work_date = new_work_date
     return {
         "updated": changed,
@@ -226,6 +251,7 @@ def recompute_cost_line_actual(db: Session, jcl) -> dict:
         "quantity_planned": new_qty_planned,
         "total_accrued": new_accrued,
         "total_expected": new_expected,
+        "total_cost_accrued": new_cost_accrued,
         "weighted_revenue": weighted,
     }
 
