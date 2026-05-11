@@ -95,6 +95,14 @@
     <!-- ── Pannello Aspetto ───────────────────────────────────── -->
     <div class="settings-pane active" id="pane-aspect">
       <div class="card mb-4">
+        <div class="card-title mb-3">✨ Sleek mode</div>
+        <p class="text-sm text-muted mb-3">Look refined Linear/Vercel-style: shadow morbide, border discreti, hover lift, topbar frosted, scroll bar custom.</p>
+        <label style="display:flex;align-items:center;gap:10px;cursor:pointer;font-size:13px;">
+          <input type="checkbox" id="sleek-toggle" onchange="toggleSleek(this.checked)" style="width:18px;height:18px;">
+          <span>Attiva Sleek mode (default ON)</span>
+        </label>
+      </div>
+      <div class="card mb-4">
         <div class="card-title mb-3">Tema colori</div>
         <p class="text-sm text-muted mb-3">La scelta è memorizzata nel browser corrente. Si applica subito a tutte le pagine.</p>
         <div style="display:grid; grid-template-columns:repeat(auto-fill, minmax(220px, 1fr)); gap:12px;" id="theme-grid">
@@ -1355,6 +1363,21 @@ async function cmpUploadLogo(input) {
 }
 
 cmpLoad();
+
+// v3.5.0-alpha.80 — Sleek mode toggle
+function toggleSleek(on) {
+  try { localStorage.setItem('mf_sleek', on ? '1' : '0'); } catch(e) {}
+  document.body.classList.toggle('sleek-mode', on);
+  toast(on ? '✨ Sleek mode ON' : 'Sleek mode OFF', 'success');
+}
+(function() {
+  try {
+    const v = localStorage.getItem('mf_sleek');
+    const on = v !== '0';
+    const el = document.getElementById('sleek-toggle');
+    if (el) el.checked = on;
+  } catch(e) {}
+})();
 
 // ── MFA TOTP (v3.5.0-alpha.70.4) ──────────────────────────────
 async function mfaLoadStatus() {
