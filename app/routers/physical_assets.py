@@ -652,7 +652,7 @@ async def create_movement(
         notes=(notes or "").strip() or None,
         created_by_user_id=user.id if user else None,
     )
-    db.add(m)
+    db.add(m); db.flush()
     # Update logistics_status su asset
     status_map = {
         AssetMovementType.ingest: "in_storage",
@@ -662,6 +662,13 @@ async def create_movement(
         AssetMovementType.return_from_client: "in_storage",
     }
     a.logistics_status = status_map.get(mt, a.logistics_status)
+    # v3.5.0-alpha.78.1 — TPN audit log per movimento fisico
+    from app.services.project_access import log_asset_access
+    from app.models import AssetAccessAction
+    log_asset_access(db, user=user, action=AssetAccessAction.update,
+                     project_id=a.project_id, request=request,
+                     extra=f"physical movement DDT={delivery_note_number} mt={mt.value} physical_asset_id={a.id}",
+                     commit=False)
     db.commit()
     db.refresh(m)
     return _movement_dict(m)
@@ -1200,7 +1207,16 @@ async def create_digital_ingest(
         notes=(notes or "").strip() or None,
         created_by_user_id=user.id if user else None,
     )
-    db.add(m); db.commit(); db.refresh(asset); db.refresh(m)
+    db.add(m); db.flush()
+    # v3.5.0-alpha.78.1 — TPN audit log anche per digital ingest
+    from app.services.project_access import log_asset_access
+    from app.models import AssetAccessAction
+    log_asset_access(db, user=user, action=AssetAccessAction.upload,
+                     asset_id=asset.id, project_id=asset.project_id,
+                     request=request,
+                     extra=f"digital ingest DDT={delivery_note_number} mt={movement_type}",
+                     commit=False)
+    db.commit(); db.refresh(asset); db.refresh(m)
     return {
         "ok": True,
         "movement_id": m.id,

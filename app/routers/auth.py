@@ -73,6 +73,14 @@ async def login(
         max_age=settings.access_token_expire_minutes * 60,
         samesite="lax",
     )
+    # v3.5.0-alpha.78.1 — TPN audit log login (admin compreso)
+    try:
+        from app.services.project_access import log_asset_access
+        from app.models import AssetAccessAction
+        log_asset_access(db, user=user, action=AssetAccessAction.view,
+                         request=request, extra=f"login email={user.email}")
+    except Exception:
+        pass
     return resp
 
 
