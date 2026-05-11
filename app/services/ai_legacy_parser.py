@@ -56,6 +56,10 @@ VALID_ACTION_TYPES = {
     # v3.5.0-alpha.71 — Query supplier/fatture passive
     "query_suppliers",
     "query_supplier_invoices",
+    # v3.5.0-alpha.76 — Asset/inventory
+    "query_physical_assets",
+    "query_asset_contents",
+    "propose_asset_movement",
     "web_search",
 }
 

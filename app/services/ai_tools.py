@@ -744,6 +744,77 @@ TOOLS: list[dict] = [
         },
         "handler": "query_supplier_invoices",
     },
+    # ────────── ASSET INVENTORY (v3.5.0-alpha.76) ──────────
+    {
+        "name": "query_physical_assets",
+        "category": "readonly",
+        "description": (
+            "Cerca asset fisici (LTO/HDD/CRU/Blu-Ray/case) con filtri: "
+            "kind, owner_type (internal/client/supplier), client_id, "
+            "logistics_status (in_storage/transit_out/delivered_external), "
+            "q (label/serial/barcode). USA per 'trovami l\\'HDD X', "
+            "'quali asset del cliente Y abbiamo in deposito?', 'LTO disponibili'."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "kind":             {"type": "string", "enum": ["lto","hdd","cru","bluray","dvd","case","other"]},
+                "owner_type":       {"type": "string", "enum": ["internal","client","supplier","third_party"]},
+                "client_id":        {"type": "integer"},
+                "logistics_status": {"type": "string"},
+                "q":                {"type": "string"},
+                "limit":            {"type": "integer"},
+            },
+        },
+        "handler": "query_physical_assets",
+    },
+    {
+        "name": "query_asset_contents",
+        "category": "readonly",
+        "description": (
+            "Lista digital asset contenuti in un PhysicalAsset (cosa c'è "
+            "dentro l'HDD X). Mostra storico se include_removed=true. "
+            "USA per 'cosa c\\'è sul disco del cliente X?', 'storico "
+            "contenuti dell\\'LTO 042'."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "physical_asset_id": {"type": "integer"},
+                "label":             {"type": "string", "description": "Fallback se id ignoto."},
+                "include_removed":   {"type": "boolean"},
+            },
+            "required": [],
+        },
+        "handler": "query_asset_contents",
+    },
+    {
+        "name": "propose_asset_movement",
+        "category": "mutation",
+        "description": (
+            "Registra movimento ingresso/uscita per un PhysicalAsset. "
+            "Auto-genera DDT (BB-YYYY-NNN). Esempi: 'registra ritiro disco "
+            "cliente X', 'spedisco LTO 042 al laboratorio Y'. "
+            "Conferma consegna separata (utente, post-arrivo)."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "physical_asset_id": {"type": "integer"},
+                "asset_label":       {"type": "string", "description": "Fallback se id ignoto."},
+                "movement_type":     {"type": "string", "enum": ["ingest","outgest","transfer","return_to_client","return_from_client"]},
+                "from_party":        {"type": "string"},
+                "to_party":          {"type": "string"},
+                "carrier":           {"type": "string"},
+                "tracking_number":   {"type": "string"},
+                "package_count":     {"type": "integer"},
+                "total_weight_kg":   {"type": "number"},
+                "notes":             {"type": "string"},
+            },
+            "required": ["movement_type"],
+        },
+        "handler": "propose_asset_movement",
+    },
 ]
 
 

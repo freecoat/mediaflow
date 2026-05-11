@@ -1850,6 +1850,156 @@ def _h_propose_quote_from_template(db: Session, data: dict) -> dict:
     }
 
 
+# ── Asset inventory AI (v3.5.0-alpha.76) ──────────────────────
+
+@ai_capability("query_physical_assets")
+def _h_query_physical_assets(db: Session, data: dict) -> dict:
+    from app.models import PhysicalAsset, PhysicalAssetKind, AssetOwnerType
+    q = db.query(PhysicalAsset).filter(
+        PhysicalAsset.tenant_id == CURRENT_TENANT,
+        PhysicalAsset.deleted_at.is_(None),
+    )
+    if data.get("kind"):
+        try: q = q.filter(PhysicalAsset.kind == PhysicalAssetKind(data["kind"]))
+        except ValueError: pass
+    if data.get("owner_type"):
+        try: q = q.filter(PhysicalAsset.owner_type == AssetOwnerType(data["owner_type"]))
+        except ValueError: pass
+    if data.get("client_id"):
+        q = q.filter(PhysicalAsset.owner_client_id == int(data["client_id"]))
+    if data.get("logistics_status"):
+        q = q.filter(PhysicalAsset.logistics_status == data["logistics_status"])
+    qq = (data.get("q") or "").strip().lower()
+    rows = q.order_by(PhysicalAsset.created_at.desc()).limit(int(data.get("limit") or 50)).all()
+    if qq:
+        rows = [
+            r for r in rows
+            if qq in (r.label or "").lower()
+            or qq in (r.serial_number or "").lower()
+            or qq in (r.barcode or "").lower()
+            or qq in (r.location or "").lower()
+        ]
+    return {
+        "count": len(rows),
+        "assets": [
+            {
+                "id": r.id, "label": r.label,
+                "kind": r.kind.value if r.kind else None,
+                "owner_type": r.owner_type.value if r.owner_type else None,
+                "owner_client_id": r.owner_client_id,
+                "serial_number": r.serial_number, "barcode": r.barcode,
+                "capacity_gb": r.capacity_gb, "location": r.location,
+                "logistics_status": r.logistics_status,
+            }
+            for r in rows
+        ],
+    }
+
+
+@ai_capability("query_asset_contents")
+def _h_query_asset_contents(db: Session, data: dict) -> dict:
+    from app.models import PhysicalAsset, AssetMembership, Asset
+    pa = None
+    pid = data.get("physical_asset_id")
+    if pid:
+        pa = db.query(PhysicalAsset).filter(
+            PhysicalAsset.id == int(pid),
+            PhysicalAsset.tenant_id == CURRENT_TENANT,
+        ).first()
+    if not pa:
+        lbl = (data.get("label") or "").strip()
+        if lbl:
+            pa = db.query(PhysicalAsset).filter(
+                PhysicalAsset.label == lbl,
+                PhysicalAsset.tenant_id == CURRENT_TENANT,
+            ).first()
+    if not pa:
+        raise ValueError(
+            f"Asset fisico non trovato (id={pid!r}, label={data.get('label')!r})"
+        )
+    include_removed = bool(data.get("include_removed", False))
+    q = db.query(AssetMembership).filter(
+        AssetMembership.physical_asset_id == pa.id,
+        AssetMembership.tenant_id == CURRENT_TENANT,
+    )
+    if not include_removed:
+        q = q.filter(AssetMembership.removed_at.is_(None))
+    rows = q.order_by(AssetMembership.added_at.desc()).all()
+    a_ids = list({r.asset_id for r in rows})
+    a_map = {a.id: a for a in db.query(Asset).filter(Asset.id.in_(a_ids)).all()} if a_ids else {}
+    return {
+        "physical_asset_id": pa.id,
+        "physical_asset_label": pa.label,
+        "physical_asset_kind": pa.kind.value if pa.kind else None,
+        "count": len(rows),
+        "contents": [
+            {
+                "membership_id": r.id,
+                "asset_id": r.asset_id,
+                "asset_name": (a_map.get(r.asset_id).original_name if a_map.get(r.asset_id) else None),
+                "path_on_media": r.path_on_media,
+                "checksum": r.checksum,
+                "file_size": r.file_size,
+                "added_at": str(r.added_at)[:19] if r.added_at else None,
+                "removed_at": str(r.removed_at)[:19] if r.removed_at else None,
+                "is_present": r.removed_at is None,
+            }
+            for r in rows
+        ],
+    }
+
+
+@ai_capability("propose_asset_movement")
+def _h_propose_asset_movement(db: Session, data: dict) -> dict:
+    """MUTATION. Crea AssetMovement per PhysicalAsset (DDT auto)."""
+    from app.models import PhysicalAsset, AssetMovement, AssetMovementType
+    pa = None
+    pid = data.get("physical_asset_id")
+    if pid:
+        pa = db.query(PhysicalAsset).filter(
+            PhysicalAsset.id == int(pid),
+            PhysicalAsset.tenant_id == CURRENT_TENANT,
+        ).first()
+    if not pa:
+        lbl = (data.get("asset_label") or "").strip()
+        if lbl:
+            pa = db.query(PhysicalAsset).filter(
+                PhysicalAsset.label == lbl,
+                PhysicalAsset.tenant_id == CURRENT_TENANT,
+            ).first()
+    if not pa:
+        raise ValueError("Asset fisico non trovato")
+    try:
+        mt = AssetMovementType(data.get("movement_type") or "")
+    except ValueError:
+        raise ValueError(f"movement_type non valido: {data.get('movement_type')}")
+    from app.routers.physical_assets import _next_ddt_number
+    ddt = _next_ddt_number(db)
+    m = AssetMovement(
+        tenant_id=CURRENT_TENANT,
+        physical_asset_id=pa.id,
+        movement_type=mt,
+        delivery_note_number=ddt,
+        from_party=(data.get("from_party") or "").strip() or None,
+        to_party=(data.get("to_party") or "").strip() or None,
+        carrier=(data.get("carrier") or "").strip() or None,
+        tracking_number=(data.get("tracking_number") or "").strip() or None,
+        package_count=int(data.get("package_count") or 1),
+        total_weight_kg=data.get("total_weight_kg"),
+        notes=(data.get("notes") or "").strip() or None,
+    )
+    db.add(m); db.flush()
+    return {
+        "ok": True,
+        "movement_id": m.id,
+        "delivery_note_number": ddt,
+        "physical_asset_id": pa.id,
+        "physical_asset_label": pa.label,
+        "movement_type": mt.value,
+        "message": f"Movimento {mt.value} creato per {pa.label} con DDT {ddt}. Conferma consegna a parte.",
+    }
+
+
 # ── Query supplier / fatture passive read-only (v3.5.0-alpha.71) ──
 
 @ai_capability("query_suppliers")

@@ -8,6 +8,24 @@
 
 ## Versione corrente
 
+**v3.5.0-alpha.76** — 11 maggio 2026 — AI capability assets
+
+3 capability nuove copilot (riusa stack α.72-α.75):
+- query_physical_assets (readonly, filtri completi).
+- query_asset_contents (readonly, "cosa c'è sul disco X?").
+- propose_asset_movement (mutation, DDT auto).
+
+31 AI tools (era 28). Chiude roadmap asset α.72→α.76.
+
+## Prossimo step
+
+- **UI contenuto** in physical_assets.html: tab "Contenuto" su modal
+  asset + import manifest + scan FS button.
+- **α.77 Dashboard shelf/vault** mappa storage.
+- **OCR DDT entrante** (parse PDF DDT cliente).
+
+## (versione precedente)
+
 **v3.5.0-alpha.75** — 11 maggio 2026 — AssetMembership + manifest + fs scan
 
 Risponde "storico HDD cliente + sistema legge disco + index".

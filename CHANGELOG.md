@@ -1,5 +1,29 @@
 # MediaFlow — Changelog
 
+## v3.5.0-alpha.76 — AI capability assets (11 maggio 2026)
+
+3 nuove AI capability per copilot asset (riusa tutto stack α.72-α.75):
+
+**`query_physical_assets`** (readonly): cerca asset fisici con filtri
+kind/owner_type/client_id/logistics_status/q. Risponde a "trovami HDD X",
+"asset del cliente Y in deposito", "LTO disponibili".
+
+**`query_asset_contents`** (readonly): lista digital contenuti di
+PhysicalAsset (cosa c'è sul disco). Include_removed opt per storico.
+Risponde a "cosa c'è sul disco X?", "storico contenuti LTO 042".
+
+**`propose_asset_movement`** (mutation): registra ingest/outgest per
+PhysicalAsset, DDT auto. Risponde a "registra ritiro disco cliente",
+"spedisco LTO 042 al lab Y". Conferma consegna separata user-side.
+
+**File toccati** (3):
+- `app/main.py` — VERSION
+- `app/services/ai_assistant.py` — 3 handler
+- `app/services/ai_tools.py` — 3 entry TOOLS (31 totali)
+- `app/services/ai_legacy_parser.py` — 3 voci VALID
+
+371 routes. 31 AI tools (era 28).
+
 ## v3.5.0-alpha.75 — AssetMembership + manifest + filesystem scan (11 maggio 2026)
 
 Risponde direttamente alla richiesta Matteo: "storico di cosa è stato
