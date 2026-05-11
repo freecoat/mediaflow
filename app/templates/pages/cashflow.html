@@ -25,17 +25,22 @@
     <div class="stat-value mono" id="tot-outstanding">—</div>
     <div class="stat-sub">in attesa di incasso</div>
   </div>
-  <div class="stat-card stat-card-purple">
-    <div class="stat-label">% Incasso</div>
-    <div class="stat-value mono" id="tot-pct">—</div>
-    <div class="stat-sub">paid / invoiced</div>
+  <div class="stat-card" style="border-left:3px solid #ef4444;">
+    <div class="stat-label">Outflow fornitori</div>
+    <div class="stat-value mono" id="tot-sup-paid" style="color:#ef4444;">—</div>
+    <div class="stat-sub">pagamenti passivi anno</div>
+  </div>
+  <div class="stat-card" style="border-left:3px solid var(--indigo);">
+    <div class="stat-label">Cassa netta</div>
+    <div class="stat-value mono" id="tot-net">—</div>
+    <div class="stat-sub">incassato − outflow</div>
   </div>
 </div>
 
 <div class="card">
   <div class="card-header">
     <span class="card-title">Timeline 12 mesi</span>
-    <span style="color:var(--text3); font-size:12px;">Barre: fatturato (indigo) / incassato (verde) / aperto (amber)</span>
+    <span style="color:var(--text3); font-size:12px;">Barre: fatturato (indigo) / incassato (verde) / aperto (amber) / outflow fornitori (rosso)</span>
   </div>
   <div id="cf-chart" class="cf-chart">
     <div class="text-muted text-sm" style="padding:30px; text-align:center;">Caricamento…</div>
@@ -54,6 +59,9 @@
           <th class="text-right">Fatturato</th>
           <th class="text-right">Incassato</th>
           <th class="text-right">Aperto</th>
+          <th class="text-right" title="Σ fatture passive ricevute nel mese">Fatt. passive</th>
+          <th class="text-right" title="Pagamenti a fornitori nel mese (payment_date)">Outflow</th>
+          <th class="text-right" title="Incassato − Outflow del mese">Cassa netta</th>
           <th class="text-right">% Incasso</th>
         </tr>
       </thead>
@@ -71,6 +79,7 @@
   .cf-bar.b-invoiced   { background: var(--indigo); }
   .cf-bar.b-paid       { background: var(--green); }
   .cf-bar.b-outstanding { background: var(--amber); }
+  .cf-bar.b-supplier_paid { background: #ef4444; }
   .cf-month-label { font-size: 11px; color: var(--text3); text-transform: uppercase; letter-spacing: 0.05em; font-weight: 600; padding-top: 4px; border-top: 1px solid var(--border); width: 100%; text-align: center; }
   .cf-month-label.is-current { color: var(--indigo2); border-top-color: var(--indigo); }
   .text-right { text-align: right; }
@@ -106,14 +115,19 @@ async function loadCashflow() {
     acc.invoiced += m.invoiced || 0;
     acc.paid += m.paid || 0;
     acc.outstanding += m.outstanding || 0;
+    acc.supplier_paid += m.supplier_paid || 0;
+    acc.supplier_billed += m.supplier_billed || 0;
     return acc;
-  }, { invoiced:0, paid:0, outstanding:0 });
+  }, { invoiced:0, paid:0, outstanding:0, supplier_paid:0, supplier_billed:0 });
 
   document.getElementById('tot-invoiced').textContent = fmtCurrency(totals.invoiced);
   document.getElementById('tot-paid').textContent = fmtCurrency(totals.paid);
   document.getElementById('tot-outstanding').textContent = fmtCurrency(totals.outstanding);
-  const pct = totals.invoiced > 0 ? Math.round(totals.paid / totals.invoiced * 100) : 0;
-  document.getElementById('tot-pct').textContent = pct + '%';
+  document.getElementById('tot-sup-paid').textContent = fmtCurrency(totals.supplier_paid);
+  const net = totals.paid - totals.supplier_paid;
+  const netEl = document.getElementById('tot-net');
+  netEl.textContent = fmtCurrency(net);
+  netEl.style.color = net >= 0 ? 'var(--green)' : 'var(--rose)';
 
   renderChart(months, year);
   renderTable(months);
@@ -122,14 +136,17 @@ async function loadCashflow() {
 function renderChart(months, year) {
   const host = document.getElementById('cf-chart');
   while (host.firstChild) host.removeChild(host.firstChild);
-  const maxVal = Math.max(1, ...months.map(m => Math.max(m.invoiced||0, m.paid||0, m.outstanding||0)));
+  const maxVal = Math.max(1, ...months.map(m => Math.max(
+    m.invoiced||0, m.paid||0, m.outstanding||0, m.supplier_paid||0
+  )));
   const todayMonth = (new Date().getFullYear() === year) ? new Date().getMonth() + 1 : 0;
   for (const m of months) {
     const col = document.createElement('div'); col.className = 'cf-col';
     const bars = document.createElement('div'); bars.className = 'cf-bars';
-    const ti = `Fatturato ${fmtCurrency(m.invoiced||0)} · Incassato ${fmtCurrency(m.paid||0)} · Aperto ${fmtCurrency(m.outstanding||0)}`;
+    const net = (m.paid||0) - (m.supplier_paid||0);
+    const ti = `Fatturato ${fmtCurrency(m.invoiced||0)} · Incassato ${fmtCurrency(m.paid||0)} · Aperto ${fmtCurrency(m.outstanding||0)} · Outflow ${fmtCurrency(m.supplier_paid||0)} · Cassa netta ${fmtCurrency(net)}`;
 
-    for (const kind of ['invoiced', 'paid', 'outstanding']) {
+    for (const kind of ['invoiced', 'paid', 'outstanding', 'supplier_paid']) {
       const b = document.createElement('div');
       b.className = 'cf-bar b-' + kind;
       const v = m[kind] || 0;
@@ -153,17 +170,24 @@ function renderTable(months) {
   for (const m of months) {
     const tr = document.createElement('tr');
     const pct = (m.invoiced || 0) > 0 ? Math.round((m.paid || 0) / m.invoiced * 100) : 0;
+    const net = (m.paid || 0) - (m.supplier_paid || 0);
     const cells = [
       MESI_IT[m.month - 1] || '?',
       fmtCurrency(m.invoiced || 0),
       fmtCurrency(m.paid || 0),
       fmtCurrency(m.outstanding || 0),
+      fmtCurrency(m.supplier_billed || 0),
+      fmtCurrency(m.supplier_paid || 0),
+      fmtCurrency(net),
       pct + '%',
     ];
     cells.forEach((v, i) => {
       const td = document.createElement('td');
       if (i > 0) { td.className = 'mono text-right'; }
       td.textContent = v;
+      // Color cassa netta + outflow
+      if (i === 5 && (m.supplier_paid || 0) > 0) td.style.color = '#ef4444';
+      if (i === 6) td.style.color = net >= 0 ? 'var(--green)' : 'var(--rose)';
       tr.appendChild(td);
     });
     tbody.appendChild(tr);

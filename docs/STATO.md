@@ -8,34 +8,28 @@
 
 ## Versione corrente
 
-**v3.5.0-alpha.68** — 11 maggio 2026 — Supplier + SupplierInvoice
+**v3.5.0-alpha.68.1** — 11 maggio 2026 — Cashflow ↔ supplier outflows
 
-Modulo nuovo isolato per fatture passive. Chiude punto 6 della roadmap
-billing α.65+. Cost-side esterno sbloccato.
+Estende `/finance/cashflow` con cost-side fatture passive. Cassa
+effettiva (`paid` − `supplier_paid`) ora visibile per mese.
 
-- **Modelli**: `Supplier` (anagrafica) + `SupplierInvoice` (fattura
-  passiva con FK opzionali a project/job/JCL) + enum status
-  unpaid|partial|paid|cancelled. Tabelle auto-create al boot.
-- **Router** `/suppliers/*` (13 endpoint): CRUD fornitori + CRUD
-  fatture + register-payment incrementale + aggregati per job e tenant.
-- **UI** `/suppliers`: 3 KPI card + 2 tab (Fatture/Anagrafica) +
-  modal CRUD entrambi.
-- **Cost-report**: `total_supplier_invoices` + `real_margin_full`
-  esposti nel summary; UI mostra 2 nuove KPI card (Fatture passive +
-  Margine reale ⊕).
-- **Sidebar**: link "Fornitori" sezione Finanza.
-
-Boot OK, 329 routes, tabelle create con index attesi.
+- **Backend** `cashflow_year`: 3 nuovi campi (supplier_billed/paid/due)
+  + derivato `net_cashflow`.
+- **UI**: 5 stat-card (Outflow + Cassa netta nuove), chart 4 barre
+  (4° rosso fornitori), tabella 7 colonne (Fatt. passive, Outflow,
+  Cassa netta colorata).
+- **Limite noto**: pagamenti incrementali a fornitori non storicizzati
+  (solo payment_date snapshot). Future: SupplierInvoicePayment table.
 
 ## Prossimo step
 
 - **F15 esecuzione reale** sul Mac Matteo (corpus test 17 capitolati)
 - **R7.x continuazione planning_bookings** — quando Matteo dà green
   light per refactor invasivo (CRUD booking + multi-move + bulk-edit)
-- **Integrazione cashflow** ↔ supplier outflows (mensile in
-  `/finance/cashflow`)
 - **AI parser PDF fattura passiva** — upload PDF → estrazione auto
   campi → conferma utente (pattern AI propone/dispone)
+- **SupplierInvoicePayment table** — analogia con InvoicePayment per
+  storico pagamenti incrementali
 - **R5/R8/R9** — split planning.html, Float→Decimal, datetime tz-aware
 - **Frontend polish** (in caldo, lo riprendiamo a richiesta)
 

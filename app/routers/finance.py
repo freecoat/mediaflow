@@ -9,6 +9,7 @@ from app.database import get_db
 from app.models import (
     Timesheet, Expense, Invoice, InvoiceLine, InvoiceStatus, InvoicePayment,
     Job, JobStatus, JobCostLine, Quote, QuoteStatus, Project,
+    SupplierInvoice, SupplierInvoiceStatus,
 )
 from app.services.finance import job_financial_summary, company_pl_summary, departments_pl_summary
 from app.services.rbac import requires_permission
@@ -318,21 +319,36 @@ async def delete_invoice_payment(payment_id: int, db: Session = Depends(get_db))
 
 @router.get("/api/cashflow/{year}")
 async def cashflow_year(year: int, db: Session = Depends(get_db)):
-    """Cashflow revenue-side aggregato per mese dell'anno.
+    """Cashflow completo aggregato per mese dell'anno.
 
     Per ogni mese ritorna:
-      - invoiced: somma Invoice.total emesse (status sent/paid/overdue)
+    Revenue-side:
+      - invoiced: somma Invoice.total emesse (non cancelled)
       - paid: somma InvoicePayment.amount per pagamenti del mese
-      - outstanding: somma Invoice.total ancora non pagate
-        (issue_date nel mese, status != paid)
+      - outstanding: somma Invoice residuo non pagato
 
-    Non considera costi (questi arriveranno in α.67 con Resource cost-rate
-    + supplier invoice in α.68).
+    Cost-side (v3.5.0-alpha.68.1 — supplier outflow):
+      - supplier_billed: Σ SupplierInvoice.amount_total fatture passive
+        ricevute nel mese (issue_date), non cancelled
+      - supplier_paid: Σ amount_paid per fatture passive con payment_date
+        nel mese (limite: pagamenti incrementali non storicizzati, vedi
+        memoria α.68 — futuro SupplierInvoicePayment table)
+      - supplier_due: Σ residuo (amount_total - amount_paid) per fatture
+        con due_date nel mese, ancora unpaid/partial
+
+    Derivati:
+      - net_cashflow: paid (revenue) − supplier_paid (cost) = cassa netta
+        effettiva del mese.
     """
     from sqlalchemy import extract
 
     series = [
-        {"month": m, "invoiced": 0.0, "paid": 0.0, "outstanding": 0.0}
+        {
+            "month": m,
+            "invoiced": 0.0, "paid": 0.0, "outstanding": 0.0,
+            "supplier_billed": 0.0, "supplier_paid": 0.0, "supplier_due": 0.0,
+            "net_cashflow": 0.0,
+        }
         for m in range(1, 13)
     ]
     invoices = db.query(Invoice).filter(
@@ -354,10 +370,52 @@ async def cashflow_year(year: int, db: Session = Depends(get_db)):
         m = p.payment_date.month if p.payment_date else 1
         series[m - 1]["paid"] += p.amount or 0.0
 
+    # v3.5.0-alpha.68.1 — cost-side fatture passive.
+    # Fatture passive emesse (ricevute) nel mese
+    sup_billed = db.query(SupplierInvoice).filter(
+        extract("year", SupplierInvoice.issue_date) == year,
+        SupplierInvoice.deleted_at.is_(None),
+        SupplierInvoice.payment_status != SupplierInvoiceStatus.cancelled,
+    ).all()
+    for s in sup_billed:
+        m = s.issue_date.month if s.issue_date else 1
+        series[m - 1]["supplier_billed"] += s.amount_total or 0.0
+
+    # Fatture passive pagate (amount_paid > 0) con payment_date nel mese.
+    # Limite: il modello attuale ha amount_paid denormalizzato sull'invoice,
+    # non c'è storico pagamenti per supplier (a differenza di Invoice →
+    # InvoicePayment). Quindi assumiamo il pagamento avvenuto in payment_date.
+    sup_paid_rows = db.query(SupplierInvoice).filter(
+        extract("year", SupplierInvoice.payment_date) == year,
+        SupplierInvoice.deleted_at.is_(None),
+        SupplierInvoice.payment_status != SupplierInvoiceStatus.cancelled,
+        SupplierInvoice.amount_paid > 0,
+    ).all()
+    for s in sup_paid_rows:
+        m = s.payment_date.month if s.payment_date else 1
+        series[m - 1]["supplier_paid"] += s.amount_paid or 0.0
+
+    # Fatture passive con due_date nel mese, ancora non saldate
+    sup_due_rows = db.query(SupplierInvoice).filter(
+        extract("year", SupplierInvoice.due_date) == year,
+        SupplierInvoice.deleted_at.is_(None),
+        SupplierInvoice.payment_status.in_([
+            SupplierInvoiceStatus.unpaid, SupplierInvoiceStatus.partial,
+        ]),
+    ).all()
+    for s in sup_due_rows:
+        m = s.due_date.month if s.due_date else 1
+        residuo = max(0.0, (s.amount_total or 0.0) - (s.amount_paid or 0.0))
+        series[m - 1]["supplier_due"] += residuo
+
     for s in series:
         s["invoiced"] = round(s["invoiced"], 2)
         s["paid"] = round(s["paid"], 2)
         s["outstanding"] = round(s["outstanding"], 2)
+        s["supplier_billed"] = round(s["supplier_billed"], 2)
+        s["supplier_paid"] = round(s["supplier_paid"], 2)
+        s["supplier_due"] = round(s["supplier_due"], 2)
+        s["net_cashflow"] = round(s["paid"] - s["supplier_paid"], 2)
     return {"year": year, "months": series}
 
 

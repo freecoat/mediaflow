@@ -1,5 +1,44 @@
 # MediaFlow — Changelog
 
+## v3.5.0-alpha.68.1 — Cashflow ↔ supplier outflows (11 maggio 2026)
+
+Integra le fatture passive nella timeline cashflow. Chiude il giro
+"cassa effettiva" iniziato con α.66.20 (revenue-side) e α.68
+(supplier model).
+
+**Backend** (`/finance/api/cashflow/{year}`):
+- 3 nuovi campi per mese:
+  - `supplier_billed`: Σ amount_total fatture passive ricevute nel
+    mese (issue_date), non cancelled
+  - `supplier_paid`: Σ amount_paid per fatture con payment_date nel
+    mese (limite: pagamenti incrementali non storicizzati nel modello
+    attuale → future SupplierInvoicePayment table per analogia con
+    InvoicePayment)
+  - `supplier_due`: Σ residuo per fatture con due_date nel mese,
+    ancora unpaid/partial
+- Derivato: `net_cashflow` = `paid` (revenue) − `supplier_paid` (cost)
+  = cassa netta effettiva del mese.
+
+**UI** `/finance/cashflow`:
+- 5 stat-card (era 4): aggiunti **Outflow fornitori** (rosso) e
+  **Cassa netta** (verde/rosso da segno). Rimosso "% Incasso" headline
+  (più importante avere cassa netta in alto).
+- Chart: 4° barra rossa "Outflow fornitori" per mese. Tooltip
+  esteso con tutti i 5 valori + cassa netta.
+- Tabella dettaglio: 3 colonne nuove (Fatt. passive, Outflow, Cassa
+  netta). Cassa netta colorata in base al segno. % Incasso ora in
+  fondo riga.
+
+**File toccati** (3):
+- `app/main.py` — VERSION
+- `app/routers/finance.py` — cashflow_year esteso
+- `app/templates/pages/cashflow.html` — UI 5 card + 4 barre + 7 colonne
+
+**Limite noto**: SupplierInvoice ha solo `payment_date` + `amount_paid`
+denormalizzato, no tabella separata per pagamenti incrementali. Se
+fattura X pagata 30% gennaio + 70% marzo, vediamo solo 100% nel mese
+del payment_date corrente. Future: aggiungere SupplierInvoicePayment.
+
 ## v3.5.0-alpha.68 — Supplier / SupplierInvoice modulo (11 maggio 2026)
 
 Modulo nuovo isolato per fatture passive. Punto 6 della roadmap
