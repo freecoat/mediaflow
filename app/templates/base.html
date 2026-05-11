@@ -153,6 +153,11 @@
           <span class="nav-icon"><i data-lucide="trash-2"></i></span> Cestino
         </a>
         {% endif %}
+        {% if has_permission(_user, 'manage_users') %}
+        <a href="/admin/audit-log" data-nav-id="admin_audit_log" class="nav-item {% if active_page == 'admin_audit_log' %}active{% endif %}">
+          <span class="nav-icon"><i data-lucide="shield-check"></i></span> Audit TPN
+        </a>
+        {% endif %}
       </div>
       {% endif %}
     </nav>

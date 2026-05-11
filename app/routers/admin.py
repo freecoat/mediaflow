@@ -478,6 +478,76 @@ async def delete_role(
     return {"ok": True}
 
 
+# ── Audit log TPN (v3.5.0-alpha.70.1) ──────────────────────────
+
+
+@router.get("/audit-log", response_class=HTMLResponse)
+async def audit_log_page(
+    request: Request,
+    _: User = Depends(requires_permission("manage_users")),
+):
+    """Pagina HTML audit log accessi asset DAM."""
+    return _tpl().TemplateResponse(
+        "pages/admin_audit_log.html", {"request": request}
+    )
+
+
+@router.get("/api/audit-log")
+async def list_audit_log(
+    request: Request,
+    db: Session = Depends(get_db),
+    asset_id: Optional[int] = None,
+    project_id: Optional[int] = None,
+    user_id: Optional[int] = None,
+    action: Optional[str] = None,
+    limit: int = 200,
+    offset: int = 0,
+    _: User = Depends(requires_permission("manage_users")),
+):
+    from app.models import AssetAccessLog, AssetAccessAction, Asset
+    q = db.query(AssetAccessLog).order_by(AssetAccessLog.ts.desc())
+    if asset_id: q = q.filter(AssetAccessLog.asset_id == asset_id)
+    if project_id: q = q.filter(AssetAccessLog.project_id == project_id)
+    if user_id: q = q.filter(AssetAccessLog.user_id == user_id)
+    if action:
+        try:
+            act = AssetAccessAction(action)
+            q = q.filter(AssetAccessLog.action == act)
+        except ValueError:
+            raise HTTPException(400, f"Action non valida: {action}")
+    rows = q.limit(min(limit, 500)).offset(offset).all()
+    # Hydrate user + asset names
+    user_ids = list({r.user_id for r in rows if r.user_id})
+    asset_ids = list({r.asset_id for r in rows if r.asset_id})
+    proj_ids = list({r.project_id for r in rows if r.project_id})
+    users = {u.id: u for u in db.query(User).filter(User.id.in_(user_ids)).all()} if user_ids else {}
+    assets = {a.id: a for a in db.query(Asset).filter(Asset.id.in_(asset_ids)).all()} if asset_ids else {}
+    from app.models import Project as _P
+    projects = {p.id: p for p in db.query(_P).filter(_P.id.in_(proj_ids)).all()} if proj_ids else {}
+    return {
+        "rows": [
+            {
+                "id": r.id,
+                "ts": str(r.ts)[:19] if r.ts else None,
+                "user_id": r.user_id,
+                "user_email": (users.get(r.user_id).email if users.get(r.user_id) else None),
+                "action": r.action.value if r.action else None,
+                "asset_id": r.asset_id,
+                "asset_name": (assets.get(r.asset_id).original_name if assets.get(r.asset_id) else None),
+                "project_id": r.project_id,
+                "project_code": (projects.get(r.project_id).code if projects.get(r.project_id) else None),
+                "ip_address": r.ip_address,
+                "user_agent": (r.user_agent or "")[:80],
+                "extra": r.extra,
+            }
+            for r in rows
+        ],
+        "limit": limit,
+        "offset": offset,
+        "count": len(rows),
+    }
+
+
 # ── Helpers ────────────────────────────────────────────────────
 def _gen_temp_password(length: int = 12) -> str:
     """Password temporanea sicura, alfanumerica readable."""

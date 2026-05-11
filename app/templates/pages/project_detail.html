@@ -43,6 +43,7 @@
   <div class="tab" onclick="showTab('milestones', this)">📍 Milestone <span id="tab-count-milestones" class="text-xs text-muted"></span></div>
   <div class="tab" onclick="showTab('details', this)">Dettagli progetto</div>
   <div class="tab" onclick="showTab('techsheet', this)">🛠 Scheda tecnica</div>
+  <div class="tab" onclick="showTab('access', this)">🔒 Accessi TPN <span id="tab-count-access" class="text-xs text-muted"></span></div>
 </div>
 
 <!-- Sezione Quotazioni (admin/manager/producer only) -->
@@ -171,6 +172,60 @@
       <table style="width:100%;font-size:13px;">
         <tbody id="crew-table"></tbody>
       </table>
+    </div>
+  </div>
+</div>
+
+<!-- ── Sezione Accessi TPN (v3.5.0-alpha.70.1) ──────────────── -->
+<div id="section-access" class="hidden">
+  <div class="card mb-3" style="background:rgba(98,114,245,0.06);border-color:rgba(98,114,245,0.2);">
+    <div style="padding:14px 16px;font-size:13px;line-height:1.55;">
+      <strong>🔒 Compartimentalizzazione TPN</strong> — Solo gli utenti elencati qui sotto possono accedere agli asset DAM di questo progetto.
+      Le risorse pianificate sui job del progetto ottengono <strong>auto-grant</strong> (visibile in lista sotto).
+      Admin/manager bypass globale (tracciato in audit log).
+    </div>
+  </div>
+  <div class="card mb-3">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">
+      <div class="card-title">Grant espliciti</div>
+      <button class="btn btn-primary btn-sm" onclick="openGrantModal()">+ Concedi accesso</button>
+    </div>
+    <div id="grants-host"></div>
+  </div>
+  <div class="card">
+    <div class="card-title mb-2">Auto-grant da pianificazione</div>
+    <div class="text-xs text-muted" style="margin-bottom:10px;">
+      Risorse con assignment su un job del progetto, legate a un user (Resource.user_id). Accesso automatico.
+    </div>
+    <div id="autogrants-host"></div>
+  </div>
+</div>
+
+<!-- Modal concedi access -->
+<div class="modal-overlay" id="modal-grant">
+  <div class="modal">
+    <div class="modal-header">
+      <span class="modal-title">Concedi accesso al progetto</span>
+      <button class="btn btn-ghost btn-icon" onclick="closeModal('modal-grant')">&times;</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-group">
+        <label class="form-label">User *</label>
+        <select class="form-select" id="grant-user"></select>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Ruolo nel progetto</label>
+        <input class="form-input" id="grant-role" placeholder="es. producer, external_consultant, client_observer">
+        <div class="form-hint">Informativo: non condiziona i permessi RBAC globali.</div>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Note</label>
+        <textarea class="form-textarea" id="grant-notes" rows="2"></textarea>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeModal('modal-grant')">Annulla</button>
+      <button class="btn btn-primary" onclick="confirmGrant()">Concedi</button>
     </div>
   </div>
 </div>
@@ -731,7 +786,7 @@ function renderDetails(p) {
 function showTab(name, el) {
   document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
   if (el) el.classList.add('active');
-  ['quotes', 'jobs', 'resources', 'milestones', 'details', 'techsheet'].forEach(s => {
+  ['quotes', 'jobs', 'resources', 'milestones', 'details', 'techsheet', 'access'].forEach(s => {
     const sec = document.getElementById('section-' + s);
     if (sec) sec.classList.add('hidden');
   });
@@ -740,6 +795,143 @@ function showTab(name, el) {
   if (name === 'resources') loadAssignments();
   if (name === 'techsheet') tsLoad();
   if (name === 'milestones') msLoad();
+  if (name === 'access') loadAccessGrants();
+}
+
+// v3.5.0-alpha.70.1 — TPN Access management
+let _allUsers = [];
+async function loadAccessGrants() {
+  try {
+    const d = await api('GET', `/projects/api/${PROJECT_ID}/access`);
+    document.getElementById('tab-count-access').textContent = `(${d.grants.length}+${d.auto_grants.length})`;
+    renderGrants(d.grants);
+    renderAutoGrants(d.auto_grants);
+  } catch(e) {
+    if (e.message && e.message.includes('admin')) {
+      const host = document.getElementById('grants-host');
+      while (host.firstChild) host.removeChild(host.firstChild);
+      const m = document.createElement('div'); m.className = 'text-muted text-sm';
+      m.style.cssText = 'padding:14px;text-align:center;';
+      m.textContent = 'Solo admin può vedere/gestire i grants.';
+      host.appendChild(m);
+      return;
+    }
+    toast(e.message || 'Errore caricamento accessi', 'error');
+  }
+}
+
+function renderGrants(grants) {
+  const host = document.getElementById('grants-host');
+  while (host.firstChild) host.removeChild(host.firstChild);
+  if (!grants.length) {
+    const m = document.createElement('div'); m.className = 'text-muted text-sm';
+    m.style.cssText = 'padding:14px;text-align:center;';
+    m.textContent = 'Nessun grant esplicito. Solo admin/manager + auto-grant da pianificazione hanno accesso.';
+    host.appendChild(m); return;
+  }
+  const tbl = document.createElement('table'); tbl.style.cssText = 'width:100%;font-size:12px;';
+  const thead = document.createElement('thead');
+  thead.innerHTML = '<tr style="color:var(--text3);"><th style="text-align:left;padding:6px;">User</th><th style="text-align:left;padding:6px;">Ruolo</th><th style="text-align:left;padding:6px;">Concesso da</th><th style="padding:6px;">Data</th><th style="text-align:left;padding:6px;">Note</th><th style="padding:6px;"></th></tr>';
+  tbl.appendChild(thead);
+  const tbody = document.createElement('tbody');
+  grants.forEach(g => {
+    const tr = document.createElement('tr');
+    tr.style.cssText = 'border-bottom:1px solid var(--border);';
+    const td1 = document.createElement('td'); td1.style.padding = '6px';
+    const b = document.createElement('b'); b.textContent = g.user_name || g.user_email || '?';
+    td1.appendChild(b);
+    const sub = document.createElement('div'); sub.className = 'text-xs text-muted'; sub.textContent = g.user_email||'';
+    td1.appendChild(sub); tr.appendChild(td1);
+    const td2 = document.createElement('td'); td2.style.padding = '6px';
+    if (g.role_in_project) { const bd = document.createElement('span'); bd.className = 'badge'; bd.textContent = g.role_in_project; td2.appendChild(bd); }
+    else td2.textContent = '—';
+    tr.appendChild(td2);
+    const td3 = document.createElement('td'); td3.style.cssText = 'padding:6px;color:var(--text2);'; td3.textContent = g.granted_by_email||'—'; tr.appendChild(td3);
+    const td4 = document.createElement('td'); td4.style.cssText = 'padding:6px;color:var(--text2);font-size:11px;'; td4.textContent = g.granted_at||'—'; tr.appendChild(td4);
+    const td5 = document.createElement('td'); td5.style.cssText = 'padding:6px;color:var(--text2);'; td5.textContent = g.notes||''; tr.appendChild(td5);
+    const td6 = document.createElement('td'); td6.style.cssText = 'padding:6px;text-align:right;';
+    const rb = document.createElement('button'); rb.className = 'btn btn-ghost btn-sm'; rb.style.color = '#ef4444'; rb.textContent = 'Revoca';
+    rb.onclick = () => revokeGrant(g.id); td6.appendChild(rb);
+    tr.appendChild(td6);
+    tbody.appendChild(tr);
+  });
+  tbl.appendChild(tbody); host.appendChild(tbl);
+}
+
+function renderAutoGrants(autos) {
+  const host = document.getElementById('autogrants-host');
+  while (host.firstChild) host.removeChild(host.firstChild);
+  if (!autos.length) {
+    const m = document.createElement('div'); m.className = 'text-muted text-sm';
+    m.style.padding = '8px 0';
+    m.textContent = 'Nessuna risorsa con user_id legata ai job. Configura Resource.user_id in /resources per auto-grant.';
+    host.appendChild(m); return;
+  }
+  const tbl = document.createElement('table'); tbl.style.cssText = 'width:100%;font-size:12px;';
+  const thead = document.createElement('thead');
+  thead.innerHTML = '<tr style="color:var(--text3);"><th style="text-align:left;padding:6px;">User</th><th style="text-align:left;padding:6px;">Risorsa</th></tr>';
+  tbl.appendChild(thead);
+  const tbody = document.createElement('tbody');
+  autos.forEach(a => {
+    const tr = document.createElement('tr'); tr.style.cssText = 'border-bottom:1px solid var(--border);';
+    const td1 = document.createElement('td'); td1.style.padding = '6px';
+    const b = document.createElement('b'); b.textContent = a.user_name || a.user_email || '?'; td1.appendChild(b);
+    const sub = document.createElement('div'); sub.className = 'text-xs text-muted'; sub.textContent = a.user_email||''; td1.appendChild(sub);
+    tr.appendChild(td1);
+    const td2 = document.createElement('td'); td2.style.cssText = 'padding:6px;color:var(--text2);'; td2.textContent = a.resource_name||''; tr.appendChild(td2);
+    tbody.appendChild(tr);
+  });
+  tbl.appendChild(tbody); host.appendChild(tbl);
+}
+
+async function openGrantModal() {
+  if (!_allUsers.length) {
+    try { _allUsers = await api('GET', '/admin/api/users'); } catch(e2) { _allUsers = []; }
+  }
+  const sel = document.getElementById('grant-user');
+  while (sel.firstChild) sel.removeChild(sel.firstChild);
+  const def = document.createElement('option'); def.value = ''; def.textContent = '— seleziona user —';
+  sel.appendChild(def);
+  _allUsers.forEach(u => {
+    const o = document.createElement('option'); o.value = u.id;
+    o.textContent = (u.full_name || u.email) + ' (' + u.email + ')';
+    sel.appendChild(o);
+  });
+  document.getElementById('grant-role').value = '';
+  document.getElementById('grant-notes').value = '';
+  openModal('modal-grant');
+}
+
+async function confirmGrant() {
+  const uid = document.getElementById('grant-user').value;
+  if (!uid) { toast('Seleziona user', 'warning'); return; }
+  const fd = new FormData();
+  fd.append('user_id', uid);
+  const role = document.getElementById('grant-role').value.trim();
+  if (role) fd.append('role_in_project', role);
+  const notes = document.getElementById('grant-notes').value.trim();
+  if (notes) fd.append('notes', notes);
+  try {
+    const r = await fetch(`/projects/api/${PROJECT_ID}/access`, {
+      method: 'POST', body: fd, credentials: 'same-origin',
+    });
+    if (!r.ok) throw new Error((await r.json()).detail || 'Errore');
+    closeModal('modal-grant');
+    toast('Accesso concesso', 'success');
+    await loadAccessGrants();
+  } catch(e) { toast(e.message || 'Errore', 'error'); }
+}
+
+async function revokeGrant(gid) {
+  if (!confirm('Revocare questo accesso? La revoca è soft (record mantenuto per audit).')) return;
+  try {
+    const r = await fetch(`/projects/api/${PROJECT_ID}/access/${gid}`, {
+      method: 'DELETE', credentials: 'same-origin',
+    });
+    if (!r.ok) throw new Error((await r.json()).detail || 'Errore');
+    toast('Accesso revocato', 'success');
+    await loadAccessGrants();
+  } catch(e) { toast(e.message || 'Errore', 'error'); }
 }
 
 // v3.5.0-alpha.21 — Milestones (marker deadline)
