@@ -15,7 +15,63 @@ function setTheme(theme) {
   if (!MF_THEMES.includes(theme)) return;
   localStorage.setItem('mf_theme', theme);
   applyTheme();
+  // v3.5.0-alpha.66.19: aggiorna popover topbar se montato
+  if (typeof window._topbarThemeRender === 'function') window._topbarThemeRender();
 }
+
+// v3.5.0-alpha.66.19: topbar theme switcher — cycle + popover
+const MF_THEME_META = {
+  indigo:    { name:'Indigo',    sw:['#0f1117','#1f2436','#6272f5','#e8ecf5'] },
+  slate:     { name:'Slate',     sw:['#11141a','#232730','#5b8def','#e6e9ef'] },
+  forest:    { name:'Forest',    sw:['#0c1410','#1a261f','#4ade80','#e7f0e9'] },
+  sand:      { name:'Sand',      sw:['#f5f1e8','#e1dac5','#a0522d','#2b2620'] },
+  midnight:  { name:'Midnight',  sw:['#0a0d1a','#161c39','#818cf8','#e4e9f5'] },
+  copper:    { name:'Copper',    sw:['#1a1310','#2d201d','#ea8a5b','#f0e4dc'] },
+  plum:      { name:'Plum',      sw:['#14101a','#271f33','#c084fc','#ede5f5'] },
+  teal:      { name:'Teal',      sw:['#0a1418','#182b32','#2dd4bf','#e1f0f0'] },
+  mono:      { name:'Mono',      sw:['#0d0d0d','#1f1f1f','#d4d4d4','#f0f0f0'] },
+  broadcast: { name:'Broadcast', sw:['#1c1c1f','#2a2a30','#00d4ff','#e8eaed'] },
+};
+function topbarThemeCycle() {
+  const current = localStorage.getItem('mf_theme') || 'indigo';
+  const idx = MF_THEMES.indexOf(current);
+  const next = MF_THEMES[(idx + 1) % MF_THEMES.length];
+  setTheme(next);
+  if (typeof toast === 'function') toast('Tema: ' + (MF_THEME_META[next]?.name || next), 'success');
+}
+function _topbarThemeRender() {
+  const pop = document.getElementById('topbar-theme-pop');
+  if (!pop) return;
+  const current = localStorage.getItem('mf_theme') || 'indigo';
+  while (pop.firstChild) pop.removeChild(pop.firstChild);
+  for (const id of MF_THEMES) {
+    const meta = MF_THEME_META[id]; if (!meta) continue;
+    const cell = document.createElement('button');
+    cell.type = 'button';
+    cell.className = 'tt-cell' + (id === current ? ' active' : '');
+    cell.title = meta.name;
+    cell.setAttribute('data-theme-id', id);
+    cell.addEventListener('click', () => setTheme(id));
+    const swwrap = document.createElement('div');
+    swwrap.className = 'tt-sw';
+    for (const c of meta.sw) {
+      const s = document.createElement('div');
+      s.style.background = c;
+      swwrap.appendChild(s);
+    }
+    const lbl = document.createElement('div');
+    lbl.className = 'tt-lbl';
+    lbl.textContent = meta.name;
+    cell.appendChild(swwrap);
+    cell.appendChild(lbl);
+    pop.appendChild(cell);
+  }
+}
+window._topbarThemeRender = _topbarThemeRender;
+document.addEventListener('DOMContentLoaded', () => {
+  _topbarThemeRender();
+  // Click outside chiude (gestito da CSS via :focus-within, ma fallback JS)
+});
 
 // v3.4.32.1: variante font opzionale (default = dmsans)
 function applyFont() {

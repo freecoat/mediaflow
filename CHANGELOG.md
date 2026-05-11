@@ -1,5 +1,69 @@
 # MediaFlow — Changelog
 
+## v3.5.0-alpha.66.19 — Frontend polish round 2: topbar theme switcher + dashboard widgets (11 maggio 2026)
+
+Secondo giro dopo feedback "procedi con prossimi step". Aggiunti 4
+miglioramenti, 3 frontend + 1 backend endpoint.
+
+**Topbar theme switcher** (visibile su ogni pagina):
+- Bottone palette in topbar (sx della campana notifiche)
+- Click = cycle al tema successivo (toast con nome)
+- Hover = popover 2-col con 10 swatch (Indigo/Slate/Forest/Sand/
+  Midnight/Copper/Plum/Teal/Mono/Broadcast), click su swatch =
+  switch immediato
+- Stato `active` su tema corrente, persistito localStorage
+  (riusa setTheme + applyTheme esistenti)
+
+**Dashboard capacity-week strip** (sotto stat-grid):
+- Card "Capacità settimana" con 7 celle giorno (lun-dom della
+  settimana corrente)
+- Per ogni giorno: nome (DOW), numero, ore booking totali,
+  fill-bar % capacità (8h × N risorse interne)
+- Colore per soglia: green ≤50%, indigo ≤80%, amber ≤100%, rose
+  >100% (overbooked)
+- Today highlighted con bordo cyan + indigo-bg; weekend opacity 0.7
+- Tooltip con `ore / capacità (percent%)`
+
+**Dashboard upcoming deadlines** (card sotto P&L):
+- Top 5 job con end_date entro 14 giorni (status=active)
+- Border-left urgenza: rosso ≤3gg, amber ≤7gg, indigo ≤14gg
+- Click row = redirect a /jobs/{id}
+- Empty state se nessun job in scadenza
+
+**Dashboard margine per reparto** (card affianco a deadlines):
+- Backend nuovo: `GET /finance/api/report/departments/{year}`
+- Service: `departments_pl_summary(db, year)` aggrega
+  JobCostLine.total_accrued per PriceItem.department_id, split
+  ricavi (is_billable=True) vs costi (is_billable=False), filtro
+  via Job.start_date OR Job.end_date intersezione anno
+- Bucket "_unallocated" per JCL senza price_item
+- Rows ordinati per volume desc, mostrano bar a doppia traccia
+  (revenue verde 55%, cost rosso 55% blend), margine numerico
+  pos/neg colorato
+
+**File toccati**:
+- `app/main.py` — VERSION
+- `app/templates/base.html` — nuovo `topbar-theme-wrap` + cache-buster
+- `app/static/js/global.js` — `MF_THEME_META`, `topbarThemeCycle()`,
+  `_topbarThemeRender()`, hook su DOMContentLoaded + setTheme
+- `app/static/css/main.css` — `.topbar-theme-pop` + `.tt-cell`
+- `app/templates/pages/dashboard.html` — capacity card + deadlines
+  card + dept-roi card + CSS (`.cw-*`, `.dl-*`, `.dr-*`) +
+  `loadCapacityWeek()` + `renderUpcomingDeadlines()` + `loadDeptRoi()`
+- `app/services/finance.py` — `departments_pl_summary()` + import
+  Department/JobCostLine/PriceItem
+- `app/routers/finance.py` — endpoint `/api/report/departments/{year}`
+
+**Cosa NON è incluso (giro 3)**:
+- Density preset "broadcast" come variante compatta separata
+- Timeline item dept-icon inline
+- Quick filter su capacity-week (click giorno → planning filter
+  resource/date)
+
+**Smoke**: topbar palette renderizzato, capacity-week con
+heatmap+today bordo, deadlines popolate (se DB ha job in scadenza),
+dept-roi tile fallback "non disponibile" se endpoint vuoto.
+
 ## v3.5.0-alpha.66.18 — Frontend polish: tema Broadcast + stat-card rich + timeline flat-mode (11 maggio 2026)
 
 Su richiesta Matteo "rendere il frontend più sleek, sfruttare meglio

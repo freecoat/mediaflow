@@ -36,6 +36,17 @@
   </div>
 </div>
 
+<!-- ── Capacity settimanale (v3.5.0-alpha.66.19) ─────────────── -->
+<div class="card capacity-week-card" style="margin-bottom:20px;">
+  <div class="card-header">
+    <span class="card-title">Capacità settimana</span>
+    <span id="cw-range" style="color:var(--text3); font-size:12px;"></span>
+  </div>
+  <div id="cw-strip" class="cw-strip">
+    <div class="text-muted text-sm" style="padding:20px; text-align:center;">Caricamento…</div>
+  </div>
+</div>
+
 <!-- ── Grid principale ────────────────────────────────────── -->
 <div class="grid-2" style="align-items:start;">
 
@@ -82,6 +93,28 @@
     <a href="/planning/?view=todo" class="btn btn-ghost btn-sm">Vai a "Le mie"</a>
   </div>
   <div id="my-bookings-host" style="padding:8px;"></div>
+</div>
+
+<!-- ── Upcoming deadlines + Dept ROI (v3.5.0-alpha.66.19) ─────── -->
+<div class="grid-2 mt-3" style="align-items:start;">
+  <div class="card">
+    <div class="card-header">
+      <span class="card-title">Prossime scadenze · 14 gg</span>
+      <a href="/planning" class="btn btn-ghost btn-sm">Tutti i job</a>
+    </div>
+    <div id="dl-host" class="dl-list" style="padding:8px 0;">
+      <div class="text-muted text-sm" style="padding:14px; text-align:center;">Caricamento…</div>
+    </div>
+  </div>
+  <div class="card">
+    <div class="card-header">
+      <span class="card-title">Margine per reparto · <span id="dr-year"></span></span>
+      <a href="/cost-report" class="btn btn-ghost btn-sm">Cost report</a>
+    </div>
+    <div id="dr-host" class="dr-list" style="padding:8px 0;">
+      <div class="text-muted text-sm" style="padding:14px; text-align:center;">Caricamento…</div>
+    </div>
+  </div>
 </div>
 
 <!-- ── Booking di oggi (overview manager/admin) ──────────────── -->
@@ -152,6 +185,50 @@
   .prio-badge.low    { background: rgba(107,114,128,.18); color: #9ca3af; }
   .prio-badge.normal { background: rgba(98,114,245,.18); color: #8b9aff; }
   .prio-badge.high   { background: rgba(239,68,68,.18); color: #fca5a5; }
+
+  /* v3.5.0-alpha.66.19 — capacity-week strip + deadlines */
+  .cw-strip { display: grid; grid-template-columns: repeat(7, 1fr); gap: 6px; padding: 6px 0 2px; }
+  .cw-day { background: var(--bg3); border: 1px solid var(--border); border-radius: 6px;
+    padding: 10px 8px 8px; text-align: center; transition: border-color var(--t); cursor: default; }
+  .cw-day:hover { border-color: var(--border2); }
+  .cw-day.today { border-color: var(--indigo); background: var(--indigo-bg); }
+  .cw-day.weekend { opacity: 0.7; }
+  .cw-day .cw-dow { font-size: 10px; text-transform: uppercase; letter-spacing: 0.08em; color: var(--text3); font-weight: 600; }
+  .cw-day .cw-dnum { font-size: 22px; font-weight: 700; margin-top: 2px; color: var(--text); font-family: var(--font-mono); letter-spacing: -1px; }
+  .cw-day .cw-hours { font-size: 11px; color: var(--text2); margin-top: 4px; font-variant-numeric: tabular-nums; }
+  .cw-day .cw-fill { display: block; height: 4px; border-radius: 2px; background: rgba(255,255,255,.04); margin-top: 6px; overflow: hidden; }
+  .cw-day .cw-fill > span { display: block; height: 100%; background: var(--indigo); transition: width var(--t); }
+  .cw-day.cw-low  .cw-fill > span { background: var(--green); }
+  .cw-day.cw-mid  .cw-fill > span { background: var(--indigo); }
+  .cw-day.cw-high .cw-fill > span { background: var(--amber); }
+  .cw-day.cw-over .cw-fill > span { background: var(--rose); }
+
+  /* Upcoming deadlines */
+  .dl-list { display: flex; flex-direction: column; gap: 6px; }
+  .dl-row { display: grid; grid-template-columns: auto 1fr auto; gap: 12px; align-items: center;
+    padding: 8px 10px; border-radius: 6px; background: var(--bg3); border-left: 3px solid var(--border2);
+    transition: border-left-color var(--t), background var(--t); cursor: pointer; }
+  .dl-row:hover { background: var(--surface); }
+  .dl-row.urg-soon { border-left-color: var(--rose); }
+  .dl-row.urg-week { border-left-color: var(--amber); }
+  .dl-row.urg-far  { border-left-color: var(--indigo); }
+  .dl-row .dl-days { font-family: var(--font-mono); font-weight: 700; font-size: 13px; min-width: 50px; text-align: right; font-variant-numeric: tabular-nums; }
+  .dl-row.urg-soon .dl-days { color: var(--rose); }
+  .dl-row.urg-week .dl-days { color: var(--amber); }
+  .dl-row.urg-far  .dl-days { color: var(--indigo2); }
+  .dl-row .dl-title { font-size: 13px; font-weight: 500; color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .dl-row .dl-meta  { font-size: 11px; color: var(--text3); white-space: nowrap; }
+
+  /* Dept ROI bars */
+  .dr-list { display: flex; flex-direction: column; gap: 8px; }
+  .dr-row { display: grid; grid-template-columns: 110px 1fr 90px; gap: 10px; align-items: center; }
+  .dr-row .dr-name { font-size: 12px; font-weight: 600; color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .dr-row .dr-bar { position: relative; height: 18px; background: var(--bg3); border-radius: 3px; overflow: hidden; }
+  .dr-row .dr-bar > span.dr-rev { position: absolute; left: 0; top: 0; bottom: 0; background: rgba(34,197,94,.55); }
+  .dr-row .dr-bar > span.dr-cost { position: absolute; left: 0; top: 0; bottom: 0; background: rgba(244,63,94,.55); mix-blend-mode: screen; }
+  .dr-row .dr-val { font-family: var(--font-mono); font-size: 12px; text-align: right; font-variant-numeric: tabular-nums; }
+  .dr-row .dr-val.pos { color: var(--green); }
+  .dr-row .dr-val.neg { color: var(--rose); }
 </style>
 
 {% endblock %}
@@ -170,6 +247,7 @@ setInterval(updateClock, 60000);
 
 const year = new Date().getFullYear();
 document.getElementById('pl-year').textContent = year;
+const _drYr = document.getElementById('dr-year'); if (_drYr) _drYr.textContent = year;
 
 // ── Load stats ──────────────────────────────────────────────
 async function loadDashboard() {
@@ -180,6 +258,8 @@ async function loadDashboard() {
     document.getElementById('stat-jobs').textContent = active.length;
     // v3.5.0-alpha.66.18: kpi-bar — 5 celle, riempite in proporzione al ratio attivi/totali
     renderKpiBar('kpi-bar-jobs', jobs.length ? (active.length / jobs.length) : 0);
+    // v3.5.0-alpha.66.19: upcoming deadlines da stessa lista
+    renderUpcomingDeadlines(jobs);
 
     // Ultime 5 job
     const tbody = document.getElementById('jobs-tbody');
@@ -273,6 +353,10 @@ async function loadDashboard() {
       }).join('');
     }
   } catch(e) {}
+
+  // ── Capacity settimana + Dept ROI (v3.5.0-alpha.66.19) ─────
+  try { await loadCapacityWeek(); } catch(e) {}
+  try { await loadDeptRoi(); } catch(e) {}
 
   // ── I miei booking di oggi (v3.4.32) ────────────────────────
   try {
@@ -433,6 +517,158 @@ async function myOpenDetail(bookingId) {
     body.innerHTML = html;
   } catch(e) {
     body.innerHTML = `<div class="color-rose">${escapeHtml(e.message || 'Errore')}</div>`;
+  }
+}
+
+// v3.5.0-alpha.66.19: capacity-week strip
+const DOW_IT = ['Dom','Lun','Mar','Mer','Gio','Ven','Sab']; // Date.getDay() 0=Dom
+async function loadCapacityWeek() {
+  const host = document.getElementById('cw-strip');
+  const rangeEl = document.getElementById('cw-range');
+  if (!host) return;
+  // Lunedì come start
+  const now = new Date(); now.setHours(0,0,0,0);
+  const dow = now.getDay(); // 0=Dom..6=Sab
+  const offsetToMon = (dow === 0 ? -6 : 1 - dow);
+  const monday = new Date(now); monday.setDate(now.getDate() + offsetToMon);
+  const sunday = new Date(monday); sunday.setDate(monday.getDate() + 6); sunday.setHours(23,59,59,999);
+  const nextDay = new Date(sunday); nextDay.setDate(sunday.getDate() + 1); nextDay.setHours(0,0,0,0);
+
+  let bookings = [];
+  try {
+    bookings = await api('GET', `/planning/api/bookings?from_date=${monday.toISOString()}&to_date=${nextDay.toISOString()}`);
+  } catch(e) {}
+
+  // Aggrega minuti per giorno + capacity teorica
+  let internalCount = 0;
+  try {
+    const res = await api('GET', '/resources/api');
+    internalCount = res.filter(r => (r.type || '') === 'person_internal').length;
+  } catch(e) {}
+  const dayCap = Math.max(1, internalCount * 8 * 60); // minuti
+
+  const buckets = [0,0,0,0,0,0,0]; // mon..sun
+  for (const b of bookings || []) {
+    if (!b.start || !b.end) continue;
+    const s = new Date(b.start);
+    const e = new Date(b.end);
+    const idx = Math.floor((new Date(s.getFullYear(), s.getMonth(), s.getDate()) - monday) / 86400000);
+    if (idx >= 0 && idx < 7) {
+      buckets[idx] += Math.max(0, (e - s) / 60000);
+    }
+  }
+
+  while (host.firstChild) host.removeChild(host.firstChild);
+  for (let i = 0; i < 7; i++) {
+    const d = new Date(monday); d.setDate(monday.getDate() + i);
+    const isToday = (d.getTime() === now.getTime());
+    const isWE = (d.getDay() === 0 || d.getDay() === 6);
+    const minutes = buckets[i];
+    const ratio = minutes / dayCap;
+    let urg = 'cw-low';
+    if (ratio > 1) urg = 'cw-over';
+    else if (ratio > 0.8) urg = 'cw-high';
+    else if (ratio > 0.5) urg = 'cw-mid';
+
+    const cell = document.createElement('div');
+    cell.className = 'cw-day ' + urg + (isToday ? ' today' : '') + (isWE ? ' weekend' : '');
+    cell.title = `${d.toLocaleDateString('it-IT',{weekday:'long',day:'numeric',month:'short'})} — ${(minutes/60).toFixed(1)}h / ${(dayCap/60).toFixed(0)}h (${Math.round(ratio*100)}%)`;
+    const dow = document.createElement('div'); dow.className = 'cw-dow'; dow.textContent = DOW_IT[d.getDay()];
+    const dnum = document.createElement('div'); dnum.className = 'cw-dnum'; dnum.textContent = String(d.getDate());
+    const hours = document.createElement('div'); hours.className = 'cw-hours'; hours.textContent = `${(minutes/60).toFixed(1)}h`;
+    const fill = document.createElement('div'); fill.className = 'cw-fill';
+    const fillIn = document.createElement('span'); fillIn.style.width = Math.min(100, Math.round(ratio * 100)) + '%';
+    fill.appendChild(fillIn);
+    cell.appendChild(dow); cell.appendChild(dnum); cell.appendChild(hours); cell.appendChild(fill);
+    host.appendChild(cell);
+  }
+  const fmtRange = (d) => d.toLocaleDateString('it-IT',{day:'numeric',month:'short'});
+  rangeEl.textContent = `${fmtRange(monday)} — ${fmtRange(sunday)} · capacità giornaliera ${(dayCap/60).toFixed(0)}h × ${internalCount} interni`;
+}
+
+// v3.5.0-alpha.66.19: upcoming deadlines da jobs list
+function renderUpcomingDeadlines(jobs) {
+  const host = document.getElementById('dl-host');
+  if (!host) return;
+  const today = new Date(); today.setHours(0,0,0,0);
+  const horizon = new Date(today); horizon.setDate(today.getDate() + 14);
+  const rows = (jobs || [])
+    .filter(j => j.end_date && j.status === 'active')
+    .map(j => ({ j, end: new Date(j.end_date) }))
+    .filter(x => !isNaN(x.end) && x.end >= today && x.end <= horizon)
+    .sort((a,b) => a.end - b.end)
+    .slice(0, 5);
+  while (host.firstChild) host.removeChild(host.firstChild);
+  if (!rows.length) {
+    const empty = document.createElement('div');
+    empty.className = 'text-muted text-sm';
+    empty.style.cssText = 'padding:14px; text-align:center;';
+    empty.textContent = 'Nessuna scadenza nei prossimi 14 giorni';
+    host.appendChild(empty);
+    return;
+  }
+  for (const { j, end } of rows) {
+    const days = Math.round((end - today) / 86400000);
+    let urg = 'urg-far';
+    if (days <= 3) urg = 'urg-soon';
+    else if (days <= 7) urg = 'urg-week';
+    const row = document.createElement('div');
+    row.className = 'dl-row ' + urg;
+    row.title = `Apri job ${j.code}`;
+    row.addEventListener('click', () => { window.location.href = '/jobs/' + j.id; });
+    const dd = document.createElement('div');
+    dd.className = 'dl-days';
+    dd.textContent = (days === 0 ? 'oggi' : (days === 1 ? '1 g' : days + ' gg'));
+    const ti = document.createElement('div');
+    ti.className = 'dl-title';
+    ti.textContent = j.title || j.code;
+    const me = document.createElement('div');
+    me.className = 'dl-meta';
+    me.textContent = (j.code || '') + (j.client ? ' · ' + j.client : '');
+    row.appendChild(dd); row.appendChild(ti); row.appendChild(me);
+    host.appendChild(row);
+  }
+}
+
+// v3.5.0-alpha.66.19: dept ROI dashboard
+async function loadDeptRoi() {
+  const host = document.getElementById('dr-host');
+  if (!host) return;
+  let data = null;
+  try {
+    data = await api('GET', `/finance/api/report/departments/${year}`);
+  } catch(e) {
+    while (host.firstChild) host.removeChild(host.firstChild);
+    const empty = document.createElement('div');
+    empty.className = 'text-muted text-sm';
+    empty.style.cssText = 'padding:14px; text-align:center;';
+    empty.textContent = 'Dati reparto non disponibili';
+    host.appendChild(empty);
+    return;
+  }
+  const rows = (data && data.departments) || [];
+  while (host.firstChild) host.removeChild(host.firstChild);
+  if (!rows.length) {
+    const empty = document.createElement('div');
+    empty.className = 'text-muted text-sm';
+    empty.style.cssText = 'padding:14px; text-align:center;';
+    empty.textContent = 'Nessun reparto con movimentazione';
+    host.appendChild(empty);
+    return;
+  }
+  const maxAbs = Math.max(...rows.map(r => Math.max(Math.abs(r.revenue || 0), Math.abs(r.cost || 0))), 1);
+  for (const r of rows) {
+    const row = document.createElement('div');
+    row.className = 'dr-row';
+    const name = document.createElement('div'); name.className = 'dr-name'; name.textContent = r.name || '—';
+    const bar = document.createElement('div'); bar.className = 'dr-bar'; bar.title = `Ricavi: ${fmtCurrency(r.revenue||0)} · Costi: ${fmtCurrency(r.cost||0)}`;
+    const rev = document.createElement('span'); rev.className = 'dr-rev'; rev.style.width = (Math.min(100, ((r.revenue || 0) / maxAbs) * 100)).toFixed(1) + '%';
+    const cost = document.createElement('span'); cost.className = 'dr-cost'; cost.style.width = (Math.min(100, ((r.cost || 0) / maxAbs) * 100)).toFixed(1) + '%';
+    bar.appendChild(rev); bar.appendChild(cost);
+    const margin = (r.revenue || 0) - (r.cost || 0);
+    const val = document.createElement('div'); val.className = 'dr-val ' + (margin >= 0 ? 'pos' : 'neg'); val.textContent = fmtCurrency(margin);
+    row.appendChild(name); row.appendChild(bar); row.appendChild(val);
+    host.appendChild(row);
   }
 }
 

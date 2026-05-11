@@ -10,7 +10,7 @@ from app.models import (
     Timesheet, Expense, Invoice, InvoiceLine, InvoiceStatus,
     Job, JobStatus, JobCostLine, Quote, QuoteStatus, Project,
 )
-from app.services.finance import job_financial_summary, company_pl_summary
+from app.services.finance import job_financial_summary, company_pl_summary, departments_pl_summary
 from app.services.rbac import requires_permission
 
 router = APIRouter(prefix="/finance", tags=["finance"])
@@ -182,6 +182,14 @@ async def job_report(job_id: int, db: Session = Depends(get_db)):
 @router.get("/api/report/pl/{year}")
 async def annual_pl(year: int, db: Session = Depends(get_db)):
     return company_pl_summary(db, year)
+
+
+@router.get("/api/report/departments/{year}")
+async def departments_pl(year: int, db: Session = Depends(get_db)):
+    """Aggregato ricavi/costi per reparto, anno corrente.
+    Usato dalla dashboard per il widget "Margine per reparto".
+    """
+    return departments_pl_summary(db, year)
 
 
 # ── Anomalie financial (v3.4.39) ──────────────────────────────────────

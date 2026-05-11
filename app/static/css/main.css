@@ -637,6 +637,42 @@ body.no-chrome { overflow: hidden; }
 }
 .stat-accent { color: var(--indigo2); }
 
+/* v3.5.0-alpha.66.19 — topbar theme switcher (palette button + popover) */
+.topbar-theme-wrap { position: relative; }
+.topbar-theme-pop {
+  position: absolute; top: calc(100% + 6px); right: 0;
+  background: var(--bg2); border: 1px solid var(--border);
+  border-radius: var(--radius); box-shadow: var(--shadow-lg);
+  padding: 8px; z-index: 200;
+  display: none;
+  grid-template-columns: repeat(2, minmax(140px, 1fr));
+  gap: 6px;
+  min-width: 300px;
+}
+.topbar-theme-wrap:hover .topbar-theme-pop,
+.topbar-theme-wrap:focus-within .topbar-theme-pop { display: grid; }
+.topbar-theme-pop .tt-cell {
+  display: flex; flex-direction: column; gap: 4px;
+  background: var(--bg3); border: 1px solid var(--border);
+  border-radius: 4px; padding: 6px 8px;
+  cursor: pointer; color: var(--text);
+  transition: border-color var(--t), background var(--t);
+  text-align: left; font-family: inherit;
+}
+.topbar-theme-pop .tt-cell:hover { border-color: var(--indigo); }
+.topbar-theme-pop .tt-cell.active { border-color: var(--indigo); background: var(--indigo-bg); }
+.topbar-theme-pop .tt-sw {
+  display: flex; gap: 2px;
+}
+.topbar-theme-pop .tt-sw > div {
+  width: 14px; height: 14px; border-radius: 3px;
+  border: 1px solid rgba(255,255,255,.08);
+}
+.topbar-theme-pop .tt-lbl {
+  font-size: 11px; font-weight: 500;
+  letter-spacing: 0.02em;
+}
+
 /* v3.5.0-alpha.66.18 — stat card variants + trend + mini-bar */
 .stat-card { position: relative; transition: border-color var(--t), transform var(--t); }
 .stat-card:hover { border-color: var(--border2); }

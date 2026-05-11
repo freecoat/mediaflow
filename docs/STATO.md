@@ -8,6 +8,34 @@
 
 ## Versione corrente
 
+**v3.5.0-alpha.66.19** — 11 maggio 2026 — Frontend polish round 2
+
+Dopo α.66.18 ("procedi con prossimi step"):
+- **Topbar theme switcher**: bottone palette cyclable + popover
+  swatches (10 temi), su ogni pagina via base.html.
+- **Dashboard capacity-week strip**: 7 celle lun-dom, ore/giorno +
+  fill-bar % capacità (green ≤50% / indigo ≤80% / amber ≤100% / rose
+  overbook), today highlighted cyan.
+- **Dashboard upcoming deadlines**: top 5 job end_date ≤14gg con
+  border-left urgenza (rosso ≤3gg / amber ≤7gg / indigo ≤14gg).
+- **Dashboard dept margin**: nuovo endpoint
+  `/finance/api/report/departments/{year}` + service
+  `departments_pl_summary`. Bar a doppia traccia revenue/cost +
+  margine numerico per reparto, ordinati per volume.
+
+## Prossimo step
+
+In attesa feedback Matteo:
+- Density preset "broadcast" come variante compatta separata
+  (toggle in /planning preferences)
+- Timeline item dept-icon inline (lucide via DOM injection per item)
+- Quick-filter su capacity-week strip (click giorno → planning con
+  filter date)
+- Toggle font cyclable simile al theme switcher
+- Eventuale R7.x extraction planning_diag/planning_unavailabilities
+
+---
+
 **v3.5.0-alpha.66.18** — 11 maggio 2026 — Frontend polish primo giro
 
 Su richiesta Matteo "frontend più sleek, sfruttare vis.js":
