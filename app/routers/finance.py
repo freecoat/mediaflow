@@ -522,9 +522,51 @@ async def list_discrepancies(db: Session = Depends(get_db)):
     }
 
 
+@router.get("/api/anomalies/overdue-supplier")
+async def list_overdue_supplier(db: Session = Depends(get_db)):
+    """v3.5.0-alpha.68.4 — Fatture passive scadute non pagate.
+
+    due_date < oggi e payment_status in (unpaid, partial). Ritorna anche
+    days_overdue per priorità visiva."""
+    from datetime import date as _d
+    rows = (
+        db.query(SupplierInvoice)
+        .options(joinedload(SupplierInvoice.supplier))
+        .filter(
+            SupplierInvoice.deleted_at.is_(None),
+            SupplierInvoice.due_date < _d.today(),
+            SupplierInvoice.payment_status.in_([
+                SupplierInvoiceStatus.unpaid, SupplierInvoiceStatus.partial,
+            ]),
+        )
+        .order_by(SupplierInvoice.due_date.asc())
+        .all()
+    )
+    today = _d.today()
+    return [
+        {
+            "id": i.id,
+            "number": i.number,
+            "supplier_id": i.supplier_id,
+            "supplier_name": i.supplier.name if i.supplier else None,
+            "issue_date": str(i.issue_date) if i.issue_date else None,
+            "due_date": str(i.due_date) if i.due_date else None,
+            "days_overdue": (today - i.due_date).days if i.due_date else None,
+            "amount_total": round(i.amount_total or 0, 2),
+            "amount_paid": round(i.amount_paid or 0, 2),
+            "amount_outstanding": round(
+                (i.amount_total or 0) - (i.amount_paid or 0), 2
+            ),
+            "payment_status": i.payment_status.value if i.payment_status else "unpaid",
+        }
+        for i in rows
+    ]
+
+
 @router.get("/api/anomalies/summary")
 async def anomalies_summary(db: Session = Depends(get_db)):
     """Counter aggregato per badge / topbar / dashboard."""
+    from datetime import date as _d
     floating_count = (
         db.query(func.count(Job.id))
         .filter(Job.quote_id.is_(None))
@@ -543,10 +585,23 @@ async def anomalies_summary(db: Session = Depends(get_db)):
         .filter(Quote.status == QuoteStatus.superseded)
         .scalar() or 0
     )
+    # v3.5.0-alpha.68.4 — fatture passive scadute non pagate
+    overdue_supplier_count = (
+        db.query(func.count(SupplierInvoice.id))
+        .filter(
+            SupplierInvoice.deleted_at.is_(None),
+            SupplierInvoice.due_date < _d.today(),
+            SupplierInvoice.payment_status.in_([
+                SupplierInvoiceStatus.unpaid, SupplierInvoiceStatus.partial,
+            ]),
+        )
+        .scalar() or 0
+    )
     return {
         "floating_jobs": floating_count,
         "extras": extras_count,
         "superseded_quotes": superseded_count,
+        "overdue_supplier_invoices": overdue_supplier_count,
     }
 
 

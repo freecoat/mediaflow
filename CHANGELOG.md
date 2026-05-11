@@ -1,5 +1,32 @@
 # MediaFlow — Changelog
 
+## v3.5.0-alpha.68.4 — Anomalia fatture passive scadute (11 maggio 2026)
+
+Aggiunge le fatture passive scadute alle anomalie finance. Visibilità
+proattiva per il pagamento fornitori.
+
+**Backend** (`finance.py`):
+- `GET /finance/api/anomalies/overdue-supplier` — lista SupplierInvoice
+  con due_date < oggi e payment_status in (unpaid, partial). Include
+  `days_overdue` per priorità + amount_outstanding.
+- `GET /finance/api/anomalies/summary` esteso con
+  `overdue_supplier_invoices` count → badge topbar lo include nel totale.
+
+**UI** `/finance` tab Anomalie:
+- Nuova stat-card "Fatture pass. scadute" nel summary (rosso + €
+  residuo).
+- Nuova sezione "🧾 Fatture passive scadute" con tabella: numero,
+  fornitore, scadenza, giorni ritardo (rosso), totale, pagato,
+  residuo (rosso), stato.
+- Badge anomalies in topbar finance ora conta anche overdue supplier.
+
+**File toccati** (3):
+- `app/main.py` — VERSION
+- `app/routers/finance.py` — endpoint overdue + summary esteso
+- `app/templates/pages/finance.html` — sezione + render JS
+
+332 routes (+1).
+
 ## v3.5.0-alpha.68.3 — UI pagamenti supplier (11 maggio 2026)
 
 Espone in UI il modello SupplierInvoicePayment di α.68.2. Senza UI

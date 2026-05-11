@@ -8,27 +8,25 @@
 
 ## Versione corrente
 
-**v3.5.0-alpha.68.3** — 11 maggio 2026 — UI pagamenti supplier
+**v3.5.0-alpha.68.4** — 11 maggio 2026 — Anomalia fatture passive scadute
 
-Espone in UI il modello SupplierInvoicePayment di α.68.2.
+Visibilità proattiva pagamenti fornitori. `/finance` tab Anomalie
+mostra ora fatture con due_date passata non pagate.
 
-- **Modal fattura** in edit: nuova sezione "Pagamenti registrati"
-  sotto le note. Lista + quick-add inline + delete per riga.
-- Summary header con Pagato/Totale/Residuo colorato.
-- Auto-refresh amount_paid + status + payment_date + KPI tenant
-  + lista fatture dopo ogni add/delete.
+- Endpoint `/api/anomalies/overdue-supplier` (lista + days_overdue)
+- Summary esteso con `overdue_supplier_invoices` count
+- Badge topbar Anomalie include il nuovo contatore
+- UI: stat-card + tabella dedicata in tab Anomalie
 
 ## Prossimo step
 
 - **F15 esecuzione reale** sul Mac Matteo (corpus test 17 capitolati)
 - **R7.x continuazione planning_bookings** — quando Matteo dà green
   light per refactor invasivo (CRUD booking + multi-move + bulk-edit)
-- **AI parser PDF fattura passiva** — upload PDF → estrazione auto
-  campi → conferma utente (pattern AI propone/dispone)
-- **Anomalies overdue supplier** — sezione /finance per fatture passive
-  scadute non pagate
 - **AI capability propose_supplier_invoice** — copilot crea fattura
-  passiva dal contesto conversazionale
+  passiva dal contesto conversazionale (pattern propone/dispone)
+- **AI parser PDF fattura passiva** — upload PDF → estrazione auto
+  campi → conferma utente
 - **R5/R8/R9** — split planning.html, Float→Decimal, datetime tz-aware
 - **Frontend polish** (in caldo, lo riprendiamo a richiesta)
 
