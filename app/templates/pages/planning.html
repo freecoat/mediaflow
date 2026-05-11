@@ -16,8 +16,59 @@
      indipendente del CSS. Il blocco <style> originale era 668 righe. -->
 <link rel="stylesheet" href="/static/css/planning.css?v=3.5.0-alpha.66.18">
 <style>
-  /* Stili residui SOLO se necessari come override page-level. Vuoto per ora.
-     Tutto il CSS planning vive in /static/css/planning.css. */
+  /* v3.5.0-alpha.79 — Polish timeline */
+  /* Today line emphasizzata */
+  #tl-host .vis-current-time {
+    background-color: var(--indigo) !important;
+    width: 2px !important;
+    box-shadow: 0 0 8px var(--indigo);
+    z-index: 5 !important;
+  }
+  /* Item: soft shadow + smooth transitions + better hover */
+  #tl-host .vis-item {
+    border-radius: 5px !important;
+    border-width: 1px !important;
+    transition: transform 0.12s ease, box-shadow 0.12s ease, opacity 0.12s ease !important;
+    box-shadow: 0 1px 2px rgba(0,0,0,0.18) !important;
+  }
+  #tl-host .vis-item:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 4px 10px rgba(0,0,0,0.32) !important;
+    z-index: 4 !important;
+  }
+  #tl-host .vis-item.vis-selected {
+    box-shadow: 0 0 0 2px var(--indigo), 0 4px 12px rgba(98,114,245,0.45) !important;
+  }
+  /* Density compact */
+  #tl-host[data-density="compact"] .vis-item { padding: 1px 5px !important; min-height: 16px; font-size: 10px !important; }
+  #tl-host[data-density="compact"] .vis-foreground .vis-group { height: 24px !important; min-height: 24px !important; }
+  /* Density spacious */
+  #tl-host[data-density="spacious"] .vis-item { padding: 5px 10px !important; min-height: 30px; font-size: 13px !important; }
+  #tl-host[data-density="spacious"] .vis-foreground .vis-group { height: 56px !important; min-height: 56px !important; }
+  /* Time axis subtler */
+  #tl-host .vis-time-axis .vis-text {
+    color: var(--text3) !important;
+    font-weight: 500;
+  }
+  #tl-host .vis-time-axis .vis-text.vis-major {
+    font-weight: 600;
+    color: var(--text2) !important;
+  }
+  /* Group label sticky elegant */
+  #tl-host .vis-label .vis-inner {
+    padding: 4px 8px;
+  }
+  /* Today column subtle highlight */
+  #tl-host .vis-time-axis .vis-grid.vis-today {
+    background-color: rgba(98,114,245,0.04);
+  }
+  /* Weekend subtle */
+  #tl-host .vis-time-axis .vis-grid.vis-saturday,
+  #tl-host .vis-time-axis .vis-grid.vis-sunday {
+    background-color: rgba(0,0,0,0.05);
+  }
+  /* Color-by overrides applied via data-colorby attribute on host */
+  /* Generato dinamico in tlSetColorBy() */
 </style>
 {% endblock %}
 
@@ -285,8 +336,22 @@
           {% endif %}
           <!-- v3.5.0-alpha.66: bottone Legenda — apre popover con stati visivi
                dei booking (planned/in_progress/done/not_done + tentative). -->
+          <!-- v3.5.0-alpha.79 — Density preset rapido -->
+          <div class="btn-group" id="tl-density" style="margin-left:8px;" title="Compattezza item">
+            <button class="btn btn-ghost btn-sm" data-density="compact" title="Compatto (font piccolo, righe basse)">⠿</button>
+            <button class="btn btn-ghost btn-sm active" data-density="comfortable" title="Normale">≡</button>
+            <button class="btn btn-ghost btn-sm" data-density="spacious" title="Spazioso (font grande, righe alte)">☰</button>
+          </div>
+          <!-- v3.5.0-alpha.79 — Color by selector -->
+          <select id="tl-colorby" onchange="tlSetColorBy(this.value)" class="form-select" style="height:30px; padding:2px 8px; font-size:12px; width:auto; margin-left:6px;" title="Colora item in base a">
+            <option value="status">Color: stato (default)</option>
+            <option value="client">Color: cliente</option>
+            <option value="project">Color: progetto</option>
+            <option value="department">Color: reparto</option>
+          </select>
           <button class="btn btn-ghost btn-sm" id="tl-legend-toggle" onclick="tlLegendToggle(event)" title="Mostra significato dei colori/pattern dei booking nella timeline" style="margin-left:6px;">🏷 Legenda</button>
           <button class="btn btn-ghost btn-sm" onclick="tlPrefsToggle(event)" title="Personalizza look timeline" style="margin-left:6px;">⚙</button>
+          <button class="btn btn-ghost btn-sm" onclick="tlShortcutsToggle(event)" title="Scorciatoie tastiera" style="margin-left:6px;">?</button>
         </div>
 
         <!-- v3.5.0-alpha.66: legenda stati booking -->
@@ -1389,6 +1454,103 @@ function tlPrefsApply(p) {
   }
   s.textContent = css;
 }
+// v3.5.0-alpha.79 — Density preset toggle + Color-by + Shortcuts modal
+function tlSetDensity(d) {
+  const host = document.getElementById('tl-host');
+  if (host) host.dataset.density = d;
+  try { localStorage.setItem('mf_tl_density', d); } catch(e) {}
+  document.querySelectorAll('#tl-density [data-density]').forEach(b => {
+    b.classList.toggle('active', b.dataset.density === d);
+  });
+}
+function tlInitDensity() {
+  const saved = (() => { try { return localStorage.getItem('mf_tl_density') || 'comfortable'; } catch(e) { return 'comfortable'; } })();
+  tlSetDensity(saved);
+  document.querySelectorAll('#tl-density [data-density]').forEach(b => {
+    b.onclick = () => tlSetDensity(b.dataset.density);
+  });
+}
+
+// Color by — applica classe sull'host che CSS gestisce.
+// L'item visivo viene già colorato in renderItem da classi tl-status-*.
+// Per color-by client/project/department servono classi aggiuntive
+// applicate al momento del create item. Per ora salviamo preferenza,
+// CSS dinamico generato + future hook in itemBuild.
+const TL_COLORBY_PALETTE = [
+  '#6272f5','#22c55e','#fb923c','#a78bfa','#f472b6','#fbbf24',
+  '#3b82f6','#ef4444','#14b8a6','#eab308','#8b5cf6','#10b981',
+];
+function tlSetColorBy(mode) {
+  try { localStorage.setItem('mf_tl_colorby', mode); } catch(e) {}
+  const host = document.getElementById('tl-host');
+  if (host) host.dataset.colorby = mode;
+  // Forza re-render items (se possibile)
+  if (typeof refreshTimeline === 'function') refreshTimeline();
+  else if (typeof tlReloadItems === 'function') tlReloadItems();
+}
+function tlInitColorBy() {
+  const saved = (() => { try { return localStorage.getItem('mf_tl_colorby') || 'status'; } catch(e) { return 'status'; } })();
+  const sel = document.getElementById('tl-colorby');
+  if (sel) { sel.value = saved; tlSetColorBy(saved); }
+}
+
+function tlShortcutsToggle(ev) {
+  if (ev) ev.preventDefault();
+  let pop = document.getElementById('tl-shortcuts-pop');
+  if (!pop) {
+    pop = document.createElement('div');
+    pop.id = 'tl-shortcuts-pop';
+    pop.style.cssText = 'position:fixed;right:30px;top:120px;z-index:2000;background:var(--bg2);border:1px solid var(--border);border-radius:8px;padding:16px 18px;width:380px;box-shadow:0 12px 32px rgba(0,0,0,.5);font-size:12px;';
+    const title = document.createElement('div');
+    title.style.cssText = 'font-weight:700;font-size:13px;margin-bottom:10px;color:var(--text);';
+    title.textContent = 'Scorciatoie tastiera';
+    pop.appendChild(title);
+    const shortcuts = [
+      ['Shift+click', 'Multi-selezione item'],
+      ['Ctrl/Cmd+click', 'Aggiungi/rimuovi da selezione'],
+      ['Ctrl+Z / Ctrl+Y', 'Undo / Redo'],
+      ['S', 'Modalità Area (ROI selection)'],
+      ['ESC', 'Esci da modalità Area / chiudi popover'],
+      ['Doppio click slot vuoto', 'Crea nuovo booking'],
+      ['Doppio click item', 'Apri dettaglio booking'],
+      ['Drag item', 'Sposta nel tempo o tra risorse'],
+      ['Drag bordo item', 'Resize durata'],
+      ['Shift+drag', 'Drag atomico (no snap)'],
+    ];
+    shortcuts.forEach(([k, d]) => {
+      const row = document.createElement('div');
+      row.style.cssText = 'display:flex;justify-content:space-between;padding:5px 0;border-bottom:1px solid var(--border);';
+      const kb = document.createElement('kbd');
+      kb.style.cssText = 'background:var(--bg3);padding:2px 8px;border-radius:4px;font-family:var(--font-mono);font-size:11px;color:var(--indigo2);';
+      kb.textContent = k;
+      const ds = document.createElement('span');
+      ds.style.cssText = 'color:var(--text2);';
+      ds.textContent = d;
+      row.appendChild(kb); row.appendChild(ds);
+      pop.appendChild(row);
+    });
+    const close = document.createElement('div');
+    close.style.cssText = 'margin-top:10px;text-align:center;';
+    const btn = document.createElement('button');
+    btn.className = 'btn btn-secondary btn-sm';
+    btn.textContent = 'Chiudi';
+    btn.onclick = () => pop.remove();
+    close.appendChild(btn); pop.appendChild(close);
+    document.body.appendChild(pop);
+    setTimeout(() => {
+      const off = e => { if (!pop.contains(e.target) && !e.target.closest('[onclick*="tlShortcutsToggle"]')) { pop.remove(); document.removeEventListener('mousedown', off); } };
+      document.addEventListener('mousedown', off);
+    }, 50);
+  } else {
+    pop.remove();
+  }
+}
+
+// Auto-init quando timeline è pronta
+document.addEventListener('DOMContentLoaded', () => {
+  setTimeout(() => { tlInitDensity(); tlInitColorBy(); }, 200);
+});
+
 function tlPrefsToggle(ev) {
   const pop = document.getElementById('tl-prefs-pop');
   if (!pop) return;
