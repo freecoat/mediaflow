@@ -73,6 +73,24 @@ def _ip_in_allowlist(ip: Optional[str], allowlist: Optional[list]) -> bool:
     return False
 
 
+def check_project_mfa_required(
+    user: Optional[User],
+    project_id: Optional[int],
+    db: Session,
+) -> bool:
+    """v3.5.0-alpha.70.4 — Se Project.mfa_required=True, l'user deve avere
+    mfa_enabled=True. Admin bypass? NO: TPN compliance richiede MFA per
+    chiunque sui progetti flaggati."""
+    if not project_id:
+        return True
+    p = db.query(Project).filter(Project.id == project_id).first()
+    if not p or not p.mfa_required:
+        return True
+    if not user:
+        return False
+    return bool(user.mfa_enabled)
+
+
 def check_project_ip_allowlist(
     project_id: Optional[int],
     request,

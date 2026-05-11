@@ -39,6 +39,17 @@ def _auto_migrate_columns():
             print("[auto-migrate] users.extra_permissions mancante -> ALTER TABLE")
             with engine.begin() as conn:
                 conn.execute(text("ALTER TABLE users ADD COLUMN extra_permissions TEXT NULL"))
+        # v3.5.0-alpha.70.4 — MFA TOTP
+        mfa_alter = [
+            ("mfa_secret_encrypted", "TEXT NULL"),
+            ("mfa_enabled", "BOOLEAN NOT NULL DEFAULT 0"),
+            ("mfa_enabled_at", "DATETIME NULL"),
+        ]
+        with engine.begin() as conn:
+            for col, ddl in mfa_alter:
+                if col not in cols:
+                    print(f"[auto-migrate] users.{col} mancante -> ALTER TABLE")
+                    conn.execute(text(f"ALTER TABLE users ADD COLUMN {col} {ddl}"))
     # v3.4.32 — Booking esecutivo (priority/execution_status/overtime_status/...)
     if "bookings" in insp.get_table_names():
         bcols = {c["name"] for c in insp.get_columns("bookings")}
@@ -648,7 +659,7 @@ async def lifespan(app: FastAPI):
     yield
 
 
-app = FastAPI(title="MediaFlow", version="3.5.0-alpha.70.3", lifespan=lifespan)
+app = FastAPI(title="MediaFlow", version="3.5.0-alpha.70.4", lifespan=lifespan)
 
 BASE_DIR = Path(__file__).parent
 app.mount("/static", StaticFiles(directory=BASE_DIR / "static"), name="static")

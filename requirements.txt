@@ -33,6 +33,10 @@ aiofiles>=24.1.0
 # Pillow 11+ ha wheel per Python 3.14
 pillow>=11.0.0
 
+# v3.5.0-alpha.70.4 — MFA TOTP (Google Authenticator / Authy / 1Password)
+pyotp>=2.9.0
+qrcode>=8.0
+
 # PDF & Excel
 reportlab>=4.2.5
 openpyxl>=3.1.5

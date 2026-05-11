@@ -84,6 +84,7 @@
     <div class="settings-tab" data-pane="ai" onclick="showPane('ai')"><i data-lucide="bot" style="width:14px;height:14px;vertical-align:-2px;"></i> AI</div>
     <div class="settings-tab" data-pane="hours" onclick="showPane('hours')"><i data-lucide="clock" style="width:14px;height:14px;vertical-align:-2px;"></i> Orari lavorativi</div>
     <div class="settings-tab" data-pane="account" onclick="showPane('account')"><i data-lucide="user" style="width:14px;height:14px;vertical-align:-2px;"></i> Account</div>
+    <div class="settings-tab" data-pane="mfa" onclick="showPane('mfa')"><i data-lucide="shield-check" style="width:14px;height:14px;vertical-align:-2px;"></i> 🔒 MFA TOTP</div>
     <div class="settings-tab" data-pane="company" onclick="showPane('company')"><i data-lucide="building-2" style="width:14px;height:14px;vertical-align:-2px;"></i> Azienda</div>
     {% if is_admin(user) %}
     <div class="settings-tab" data-pane="data" onclick="showPane('data')"><i data-lucide="database" style="width:14px;height:14px;vertical-align:-2px;"></i> Dati</div>
@@ -339,6 +340,43 @@
         <button class="btn btn-primary btn-sm" onclick="changePassword()">Cambia password</button>
       </div>
       {% endif %}
+    </div>
+
+    <!-- ── Pannello MFA TOTP (v3.5.0-alpha.70.4) ────────────────── -->
+    <div class="settings-pane" id="pane-mfa">
+      <div class="card mb-4" style="background:rgba(98,114,245,0.06);border-color:rgba(98,114,245,0.2);">
+        <div style="padding:14px 16px;font-size:13px;line-height:1.55;">
+          <strong>🔒 Multi-Factor Authentication (TOTP)</strong> — Aggiunge un secondo fattore al login (codice a 6 cifre da app authenticator).
+          Compatibile con Google Authenticator, Authy, Microsoft Authenticator, 1Password.
+        </div>
+      </div>
+      <div class="card">
+        <div id="mfa-status-host">
+          <div class="text-muted text-sm">Caricamento stato...</div>
+        </div>
+      </div>
+      <div id="mfa-setup-host" class="card mt-3" style="display:none;">
+        <div class="card-title mb-3">📱 Configura MFA</div>
+        <div style="display:flex;gap:20px;flex-wrap:wrap;">
+          <div style="flex:1;min-width:240px;">
+            <p class="text-sm">1. Apri la tua app authenticator.</p>
+            <p class="text-sm">2. Scansiona il QR code qui a destra <em>oppure</em> inserisci manualmente il secret.</p>
+            <div class="form-group">
+              <label class="form-label">Secret (manuale)</label>
+              <input class="form-input" id="mfa-secret" readonly style="font-family:var(--font-mono);font-size:11px;">
+            </div>
+            <p class="text-sm">3. Inserisci il primo codice a 6 cifre per verificare:</p>
+            <div class="form-group">
+              <input class="form-input" id="mfa-otp" inputmode="numeric" pattern="[0-9]{6}" maxlength="6"
+                     placeholder="000000" style="font-size:20px;letter-spacing:6px;text-align:center;font-family:var(--font-mono);">
+            </div>
+            <button class="btn btn-primary" onclick="confirmMfaSetup()">Verifica e attiva MFA</button>
+          </div>
+          <div style="text-align:center;">
+            <img id="mfa-qr" alt="QR" style="max-width:240px;border:1px solid var(--border);border-radius:8px;background:#fff;padding:8px;">
+          </div>
+        </div>
+      </div>
     </div>
 
     <!-- ── Pannello Azienda (v3.5.0-alpha.52) ──────────────────── -->
@@ -1317,5 +1355,107 @@ async function cmpUploadLogo(input) {
 }
 
 cmpLoad();
+
+// ── MFA TOTP (v3.5.0-alpha.70.4) ──────────────────────────────
+async function mfaLoadStatus() {
+  const host = document.getElementById('mfa-status-host');
+  try {
+    const s = await api('GET', '/auth/api/mfa/status');
+    while (host.firstChild) host.removeChild(host.firstChild);
+    if (s.mfa_enabled) {
+      const ok = document.createElement('div');
+      ok.style.cssText = 'padding:14px;background:rgba(34,197,94,.1);border-radius:8px;font-size:13px;';
+      const strong = document.createElement('strong'); strong.style.color = 'var(--green)';
+      strong.textContent = 'MFA attivo'; ok.appendChild(strong);
+      ok.appendChild(document.createTextNode(' dal ' + (s.mfa_enabled_at || '—')));
+      ok.appendChild(document.createElement('br'));
+      ok.appendChild(document.createElement('br'));
+      ok.appendChild(document.createTextNode('Al prossimo login ti verrà richiesto il codice a 6 cifre dall\'app authenticator.'));
+      host.appendChild(ok);
+      const dis = document.createElement('div');
+      dis.style.cssText = 'margin-top:14px;padding:12px;background:var(--bg2);border-radius:6px;';
+      const hint = document.createElement('div'); hint.style.cssText = 'font-size:12px;color:var(--text2);margin-bottom:8px;';
+      hint.textContent = "Per disattivare MFA, inserisci un codice OTP attivo come conferma:";
+      dis.appendChild(hint);
+      const row = document.createElement('div'); row.style.cssText = 'display:flex;gap:6px;';
+      const inp = document.createElement('input'); inp.className = 'form-input'; inp.id = 'mfa-disable-otp';
+      inp.inputMode = 'numeric'; inp.maxLength = 6; inp.placeholder = '000000';
+      inp.style.fontFamily = 'var(--font-mono)';
+      row.appendChild(inp);
+      const btn = document.createElement('button'); btn.className = 'btn btn-secondary'; btn.textContent = 'Disattiva';
+      btn.style.color = '#ef4444'; btn.onclick = mfaDisable;
+      row.appendChild(btn);
+      dis.appendChild(row);
+      host.appendChild(dis);
+      document.getElementById('mfa-setup-host').style.display = 'none';
+    } else {
+      const off = document.createElement('div');
+      off.style.cssText = 'padding:14px;background:rgba(251,146,60,.08);border-radius:8px;font-size:13px;';
+      const strong = document.createElement('strong'); strong.style.color = '#fb923c';
+      strong.textContent = 'MFA non attivo'; off.appendChild(strong);
+      off.appendChild(document.createElement('br'));
+      off.appendChild(document.createElement('br'));
+      off.appendChild(document.createTextNode('Aumenta la sicurezza del tuo account configurando MFA.'));
+      host.appendChild(off);
+      const btn = document.createElement('button');
+      btn.className = 'btn btn-primary mt-3';
+      btn.textContent = 'Configura MFA TOTP';
+      btn.onclick = mfaStartSetup;
+      host.appendChild(btn);
+    }
+  } catch(e) {
+    while (host.firstChild) host.removeChild(host.firstChild);
+    const err = document.createElement('div'); err.style.color = 'var(--rose)';
+    err.textContent = 'Errore: ' + (e.message || '');
+    host.appendChild(err);
+  }
+}
+
+async function mfaStartSetup() {
+  try {
+    const fd = new FormData();
+    const r = await fetch('/auth/api/mfa/setup', {method:'POST', body:fd, credentials:'same-origin'});
+    if (!r.ok) throw new Error((await r.json()).detail || 'Errore');
+    const d = await r.json();
+    document.getElementById('mfa-setup-host').style.display = '';
+    document.getElementById('mfa-secret').value = d.secret;
+    document.getElementById('mfa-qr').src = 'data:image/png;base64,' + d.qr_png_base64;
+    document.getElementById('mfa-otp').value = '';
+    document.getElementById('mfa-otp').focus();
+  } catch(e) { toast(e.message || 'Errore', 'error'); }
+}
+
+async function confirmMfaSetup() {
+  const otp = (document.getElementById('mfa-otp').value || '').trim();
+  if (otp.length !== 6) { toast('Inserisci codice 6 cifre', 'warning'); return; }
+  const fd = new FormData();
+  fd.append('otp', otp);
+  try {
+    const r = await fetch('/auth/api/mfa/verify-setup', {method:'POST', body:fd, credentials:'same-origin'});
+    if (!r.ok) throw new Error((await r.json()).detail || 'Codice non valido');
+    toast('MFA attivato', 'success');
+    await mfaLoadStatus();
+  } catch(e) { toast(e.message || 'Errore', 'error'); }
+}
+
+async function mfaDisable() {
+  const otp = (document.getElementById('mfa-disable-otp').value || '').trim();
+  if (otp.length !== 6) { toast('Inserisci codice OTP a 6 cifre', 'warning'); return; }
+  if (!confirm('Disattivare MFA? La sicurezza del tuo account si abbasserà.')) return;
+  const fd = new FormData();
+  fd.append('otp', otp);
+  try {
+    const r = await fetch('/auth/api/mfa/disable', {method:'POST', body:fd, credentials:'same-origin'});
+    if (!r.ok) throw new Error((await r.json()).detail || 'Errore');
+    toast('MFA disattivato', 'success');
+    await mfaLoadStatus();
+  } catch(e) { toast(e.message || 'Errore', 'error'); }
+}
+
+const _origShowPane = window.showPane;
+window.showPane = function(name) {
+  if (typeof _origShowPane === 'function') _origShowPane(name);
+  if (name === 'mfa') mfaLoadStatus();
+};
 </script>
 {% endblock %}

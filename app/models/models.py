@@ -318,6 +318,12 @@ class User(Base):
     last_login: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
     # Provider AI attivo per questo utente (claude|openai|gemini|perplexity|ollama|None=disabilitato)
     active_ai_provider: Mapped[Optional[str]] = mapped_column(String(32), nullable=True)
+    # v3.5.0-alpha.70.4 — MFA TOTP (pyotp). Secret Fernet-encrypted con
+    # AI_KEY_ENCRYPTION_KEY (riuso chiave per non aggiungere env var nuova).
+    # mfa_enabled è True solo dopo verify-setup riuscito.
+    mfa_secret_encrypted: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    mfa_enabled: Mapped[bool] = mapped_column(Boolean, default=False)
+    mfa_enabled_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
     resources: Mapped[List["Resource"]] = relationship(back_populates="user", cascade="all, delete-orphan")
     timesheets: Mapped[List["Timesheet"]] = relationship(back_populates="user")
     assets: Mapped[List["Asset"]] = relationship(back_populates="uploaded_by_user")

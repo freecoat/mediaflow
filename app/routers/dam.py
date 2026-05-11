@@ -22,7 +22,7 @@ from fastapi.responses import Response
 from app.services.rbac import requires_permission, current_user_optional, is_admin
 from app.services.project_access import (
     user_can_access_asset, accessible_project_ids, log_asset_access,
-    check_project_ip_allowlist,
+    check_project_ip_allowlist, check_project_mfa_required,
 )
 from app.context import current_tenant_id
 import os
@@ -261,6 +261,12 @@ async def download_asset(
                          asset_id=asset_id, project_id=a.project_id, request=request,
                          extra="ip allowlist mismatch")
         raise HTTPException(403, "IP non autorizzato per questo progetto (TPN allowlist)")
+    # v3.5.0-alpha.70.4 — MFA required check
+    if not check_project_mfa_required(user, a.project_id, db):
+        log_asset_access(db, user=user, action=AssetAccessAction.deny,
+                         asset_id=asset_id, project_id=a.project_id, request=request,
+                         extra="mfa not enabled on user, project requires MFA")
+        raise HTTPException(403, "Progetto richiede MFA. Configura MFA in /settings → 🔒 MFA TOTP")
     log_asset_access(db, user=user, action=AssetAccessAction.download,
                      asset_id=asset_id, project_id=a.project_id, request=request,
                      extra=f"watermark={'on' if watermark else 'off'}")

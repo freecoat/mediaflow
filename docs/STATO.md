@@ -8,7 +8,34 @@
 
 ## Versione corrente
 
-**v3.5.0-alpha.70.3** — 11 maggio 2026 — TPN roadmap completa (foundation→IP allowlist)
+**v3.5.0-alpha.70.4** — 11 maggio 2026 — MFA TOTP completa
+
+Chiude roadmap TPN α.70.0→α.70.4.
+
+- Dipendenze pyotp + qrcode installate (`pip install` fatto).
+- User: 3 colonne nuove (mfa_secret_encrypted Fernet, mfa_enabled,
+  mfa_enabled_at). Auto-migrate.
+- Service mfa.py: setup/verify/disable + QR PNG generation.
+- Login flow 2-step: password OK → se mfa_enabled redirect mfa-challenge.
+- UI /settings tab "🔒 MFA TOTP" con setup QR + verify + disable.
+- Enforcement DAM: project.mfa_required=True blocca download se user
+  senza MFA (errore con hint).
+
+349 routes (+6).
+
+## Prossimo step
+
+- **UI ip_allowlist + mfa_required toggle** in tab Accessi TPN del project
+- **DAM tab "Asset interni"** + bulk-assign UI per asset orfani
+- **Watermark video** (richiede ffmpeg integration)
+- **Session timeout configurabile** per tenant
+- **JobDeliverable auto-create** da template alla creazione job
+- **F15 esecuzione reale** sul Mac Matteo
+- **R7.x continuazione planning_bookings** — quando green light
+
+## (versione precedente)
+
+**v3.5.0-alpha.70.3** — 11 maggio 2026 — TPN roadmap (foundation→IP allowlist)
 
 Roadmap TPN α.70.0→α.70.3 completata in 4 commit:
 

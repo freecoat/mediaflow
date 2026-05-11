@@ -1,5 +1,61 @@
 # MediaFlow — Changelog
 
+## v3.5.0-alpha.70.4 — TPN: MFA TOTP completo (11 maggio 2026)
+
+Chiude la roadmap TPN α.70.x. Multi-Factor Authentication TOTP
+(Google Authenticator / Authy / Microsoft Authenticator / 1Password)
+attivabile per user. Enforcement opzionale per progetti sensibili.
+
+**Dipendenze nuove** (`requirements.txt`):
+- `pyotp>=2.9.0`
+- `qrcode>=8.0`
+
+**Modello User esteso** (3 colonne, auto-migrate):
+- `mfa_secret_encrypted` (Text, Fernet-encrypted con AI_KEY_ENCRYPTION_KEY)
+- `mfa_enabled` Bool default False
+- `mfa_enabled_at` DateTime
+
+**Service** `app/services/mfa.py` (NUOVO):
+- `setup_user_mfa(user)` → genera secret + QR PNG + URI provisioning.
+- `verify_user_otp(user, code)` → check OTP (window=1 per drift).
+- `confirm_setup(user, code)` → primo OTP per attivare.
+- `disable_mfa(user, code)` → richiede OTP per disattivare.
+
+**Auth flow esteso** (`/auth/login`):
+- Password OK + `user.mfa_enabled=True` → emit cookie `mfa_pending`
+  short-lived (10 min) + redirect a `/auth/mfa-challenge`.
+- `/auth/mfa-challenge` HTML mostra form OTP a 6 cifre.
+- `/auth/mfa-verify` POST verifica → se OK emit cookie access_token +
+  delete pending. Se fail → re-render form con errore.
+
+**Endpoint API user**:
+- `GET /auth/api/mfa/status` — stato + has_pending_secret.
+- `POST /auth/api/mfa/setup` — genera QR + secret + URI.
+- `POST /auth/api/mfa/verify-setup` — conferma primo OTP, enable.
+- `POST /auth/api/mfa/disable` — richiede OTP per disattivare.
+
+**UI** `/settings` tab nuovo "🔒 MFA TOTP":
+- Stato attuale (attivo verde / non attivo arancio).
+- Setup: scansiona QR + inserisci primo codice OTP.
+- Disable: input OTP + conferma esplicita.
+
+**Enforcement progetto** (`check_project_mfa_required`):
+- Se `Project.mfa_required=True` (campo α.70.3) e user senza MFA
+  → 403 + log deny su DAM download (errore con hint per attivare).
+
+**File toccati** (8):
+- `app/main.py` — VERSION + auto-migrate 3 colonne
+- `app/models/models.py` — User MFA fields
+- `app/routers/auth.py` — login flow esteso + 6 endpoint MFA
+- `app/routers/dam.py` — check_project_mfa_required
+- `app/services/mfa.py` — NUOVO
+- `app/services/project_access.py` — check_project_mfa_required
+- `app/templates/pages/mfa_challenge.html` — NUOVO
+- `app/templates/pages/settings.html` — pane MFA + JS
+- `requirements.txt` — pyotp + qrcode
+
+349 routes (+6 nuove).
+
 ## v3.5.0-alpha.70.3 — TPN: IP allowlist + security policy progetto (11 maggio 2026)
 
 **Modello Project esteso** (3 campi nuovi, auto-migrate):
