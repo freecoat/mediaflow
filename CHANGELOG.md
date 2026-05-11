@@ -1,5 +1,28 @@
 # MediaFlow — Changelog
 
+## v3.5.0-alpha.68.5 — AI capability supplier (11 maggio 2026)
+
+Copilot AI può ora creare fornitori e registrare fatture passive
+direttamente (con conferma utente via Apply, pattern propone/dispone).
+
+**2 nuove capability** (handler + tool schema + legacy parser):
+- `propose_supplier` — crea anagrafica fornitore. Solo `name`
+  obbligatorio; tutti i dati fiscali opzionali.
+- `propose_supplier_invoice` — registra fattura passiva. Risolve
+  supplier per id o per name (no auto-create — usa propose_supplier
+  prima). Calcola amount_vat + amount_total + due_date auto se
+  default_payment_terms_days configurato. Pre-check unicità
+  (supplier_id, number). FK opzionali a project/job/JCL.
+
+**File toccati** (4):
+- `app/main.py` — VERSION
+- `app/services/ai_assistant.py` — 2 handler @ai_capability
+- `app/services/ai_tools.py` — 2 entry in TOOLS (input_schema completo)
+- `app/services/ai_legacy_parser.py` — 2 voci in VALID_ACTION_TYPES
+
+25 tools totali (era 23). Action handlers registrati via decorator
+auto-discovery — VALID_ACTION_TYPES sincronizzato a import-time.
+
 ## v3.5.0-alpha.68.4 — Anomalia fatture passive scadute (11 maggio 2026)
 
 Aggiunge le fatture passive scadute alle anomalie finance. Visibilità

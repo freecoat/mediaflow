@@ -616,6 +616,66 @@ TOOLS: list[dict] = [
         },
         "handler": "query_project_finance",
     },
+    # ────────── SUPPLIER / FATTURE PASSIVE (v3.5.0-alpha.68.5) ──────────
+    {
+        "name": "propose_supplier",
+        "category": "mutation",
+        "description": (
+            "Crea un nuovo fornitore (commessa esterna / freelance fatturante / "
+            "service company). Usa quando l'utente menziona una commessa esterna "
+            "non ancora in anagrafica. Solo nome è obbligatorio. Tutti i dati "
+            "fiscali (P.IVA, CF, IBAN) e i contatti sono opzionali — l'utente "
+            "può completarli in seguito da /suppliers."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "name":             {"type": "string", "description": "Ragione sociale del fornitore."},
+                "vat_number":       {"type": "string"},
+                "tax_code":         {"type": "string"},
+                "contact_email":    {"type": "string"},
+                "contact_phone":    {"type": "string"},
+                "address":          {"type": "string"},
+                "iban":             {"type": "string"},
+                "default_payment_terms_days": {"type": "integer"},
+                "notes":            {"type": "string"},
+            },
+            "required": ["name"],
+        },
+        "handler": "propose_supplier",
+    },
+    {
+        "name": "propose_supplier_invoice",
+        "category": "mutation",
+        "description": (
+            "Registra una fattura passiva (ricevuta da un fornitore). Richiede "
+            "fornitore (per id o name; se name non esiste non crea — usa prima "
+            "propose_supplier), numero, data emissione, imponibile. IVA default 22%. "
+            "Può essere linkata a project_id (più granulare) o job_id o "
+            "job_cost_line_id per integrare nel cost-report. amount_paid opzionale "
+            "(per fatture già parzialmente saldate al momento dell'inserimento)."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "supplier_id":      {"type": "integer", "description": "PK fornitore. Preferito se conosciuto."},
+                "supplier_name":    {"type": "string", "description": "Fallback se id non noto. Deve corrispondere esattamente."},
+                "number":           {"type": "string", "description": "Numero fattura del fornitore."},
+                "issue_date":       {"type": "string", "description": "YYYY-MM-DD."},
+                "due_date":         {"type": "string", "description": "YYYY-MM-DD. Se omesso, calcolato da default_payment_terms_days del fornitore."},
+                "amount_net":       {"type": "number", "description": "Imponibile in EUR."},
+                "vat_rate":         {"type": "number", "description": "Aliquota IVA %. Default 22."},
+                "currency":         {"type": "string", "description": "Default EUR."},
+                "amount_paid":      {"type": "number", "description": "Default 0."},
+                "project_id":       {"type": "integer"},
+                "job_id":           {"type": "integer"},
+                "job_cost_line_id": {"type": "integer"},
+                "notes":            {"type": "string"},
+            },
+            "required": ["number", "issue_date", "amount_net"],
+        },
+        "handler": "propose_supplier_invoice",
+    },
 ]
 
 

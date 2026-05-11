@@ -48,6 +48,9 @@ VALID_ACTION_TYPES = {
     "propose_move_booking",
     "propose_resize_booking",
     "propose_delete_booking",
+    # v3.5.0-alpha.68.5 — Supplier / fatture passive
+    "propose_supplier",
+    "propose_supplier_invoice",
     "web_search",
 }
 

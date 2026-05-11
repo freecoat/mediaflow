@@ -1732,6 +1732,139 @@ def _h_query_project_finance(db: Session, data: dict) -> dict:
     }
 
 
+# ── Supplier / fatture passive (v3.5.0-alpha.68.5) ────────────
+
+@ai_capability("propose_supplier")
+def _h_propose_supplier(db: Session, data: dict) -> dict:
+    """MUTATION. Crea nuovo fornitore (anagrafica commessa esterna).
+    Solo `name` obbligatorio."""
+    from app.models import Supplier
+    name = (data.get("name") or "").strip()
+    if not name:
+        raise ValueError("Manca 'name'")
+    s = Supplier(
+        tenant_id=CURRENT_TENANT,
+        name=name,
+        vat_number=(data.get("vat_number") or "").strip() or None,
+        tax_code=(data.get("tax_code") or "").strip() or None,
+        contact_email=(data.get("contact_email") or "").strip() or None,
+        contact_phone=(data.get("contact_phone") or "").strip() or None,
+        address=(data.get("address") or "").strip() or None,
+        iban=(data.get("iban") or "").strip() or None,
+        default_payment_terms_days=data.get("default_payment_terms_days"),
+        notes=(data.get("notes") or "").strip() or None,
+    )
+    db.add(s)
+    db.flush()
+    return {
+        "created": True,
+        "supplier_id": s.id,
+        "name": s.name,
+        "message": f"Fornitore '{s.name}' creato con id={s.id}.",
+    }
+
+
+@ai_capability("propose_supplier_invoice")
+def _h_propose_supplier_invoice(db: Session, data: dict) -> dict:
+    """MUTATION. Registra una fattura passiva. Richiede supplier_id o
+    supplier_name esistente, number, issue_date, amount_net."""
+    from app.models import Supplier, SupplierInvoice, SupplierInvoiceStatus
+    from datetime import date as _d, timedelta
+    # Resolve supplier
+    sup_id = data.get("supplier_id")
+    sup = None
+    if sup_id:
+        sup = db.query(Supplier).filter(
+            Supplier.id == int(sup_id),
+            Supplier.tenant_id == CURRENT_TENANT,
+            Supplier.deleted_at.is_(None),
+        ).first()
+    if not sup:
+        name = (data.get("supplier_name") or "").strip()
+        if name:
+            sup = db.query(Supplier).filter(
+                Supplier.name == name,
+                Supplier.tenant_id == CURRENT_TENANT,
+                Supplier.deleted_at.is_(None),
+            ).first()
+    if not sup:
+        raise ValueError(
+            f"Fornitore non trovato (supplier_id={sup_id!r}, "
+            f"supplier_name={data.get('supplier_name')!r}). "
+            "Usa propose_supplier prima per crearlo."
+        )
+    number = (data.get("number") or "").strip()
+    if not number:
+        raise ValueError("Manca 'number'")
+    issue_str = data.get("issue_date")
+    if not issue_str:
+        raise ValueError("Manca 'issue_date' (YYYY-MM-DD)")
+    issue_date = _d.fromisoformat(issue_str) if isinstance(issue_str, str) else issue_str
+    amount_net = float(data.get("amount_net") or 0)
+    if amount_net <= 0:
+        raise ValueError("'amount_net' deve essere > 0")
+    vat_rate = float(data.get("vat_rate") if data.get("vat_rate") is not None else 22.0)
+    amount_vat = round(amount_net * (vat_rate / 100.0), 2)
+    amount_total = round(amount_net + amount_vat, 2)
+    amount_paid = float(data.get("amount_paid") or 0)
+    # Pre-check unicità (supplier+number)
+    dup = db.query(SupplierInvoice).filter(
+        SupplierInvoice.supplier_id == sup.id,
+        SupplierInvoice.number == number,
+        SupplierInvoice.tenant_id == CURRENT_TENANT,
+        SupplierInvoice.deleted_at.is_(None),
+    ).first()
+    if dup:
+        raise ValueError(f"Fattura {number} già registrata per {sup.name}")
+    # due_date: explicit, oppure derivato da terms
+    due_date = None
+    due_str = data.get("due_date")
+    if due_str:
+        due_date = _d.fromisoformat(due_str) if isinstance(due_str, str) else due_str
+    elif sup.default_payment_terms_days:
+        due_date = issue_date + timedelta(days=sup.default_payment_terms_days)
+    # status
+    if amount_paid <= 0:
+        status = SupplierInvoiceStatus.unpaid
+    elif amount_paid >= amount_total:
+        status = SupplierInvoiceStatus.paid
+    else:
+        status = SupplierInvoiceStatus.partial
+    inv = SupplierInvoice(
+        tenant_id=CURRENT_TENANT,
+        supplier_id=sup.id,
+        number=number,
+        issue_date=issue_date,
+        due_date=due_date,
+        project_id=data.get("project_id"),
+        job_id=data.get("job_id"),
+        job_cost_line_id=data.get("job_cost_line_id"),
+        amount_net=amount_net,
+        vat_rate=vat_rate,
+        amount_vat=amount_vat,
+        amount_total=amount_total,
+        currency=(data.get("currency") or "EUR").upper(),
+        payment_status=status,
+        amount_paid=amount_paid,
+        notes=(data.get("notes") or "").strip() or None,
+    )
+    db.add(inv)
+    db.flush()
+    return {
+        "created": True,
+        "supplier_invoice_id": inv.id,
+        "supplier_id": sup.id,
+        "supplier_name": sup.name,
+        "number": inv.number,
+        "amount_total": inv.amount_total,
+        "payment_status": status.value,
+        "message": (
+            f"Fattura passiva {inv.number} da {sup.name} registrata: "
+            f"€{inv.amount_total:.2f} ({status.value})."
+        ),
+    }
+
+
 @ai_capability("propose_transmit_to_billing")
 def _h_propose_transmit_to_billing(db: Session, data: dict) -> dict:
     """MUTATION. Trasmetti il maturato di un progetto come BillingBatch

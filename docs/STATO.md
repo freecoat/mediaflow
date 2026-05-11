@@ -8,25 +8,23 @@
 
 ## Versione corrente
 
-**v3.5.0-alpha.68.4** — 11 maggio 2026 — Anomalia fatture passive scadute
+**v3.5.0-alpha.68.5** — 11 maggio 2026 — AI capability supplier
 
-Visibilità proattiva pagamenti fornitori. `/finance` tab Anomalie
-mostra ora fatture con due_date passata non pagate.
+Copilot crea fornitori + fatture passive via pattern propose/Apply.
 
-- Endpoint `/api/anomalies/overdue-supplier` (lista + days_overdue)
-- Summary esteso con `overdue_supplier_invoices` count
-- Badge topbar Anomalie include il nuovo contatore
-- UI: stat-card + tabella dedicata in tab Anomalie
+- `propose_supplier` — anagrafica fornitore (solo `name` required).
+- `propose_supplier_invoice` — fattura passiva con resolve supplier
+  by id/name, calcoli IVA + due_date auto, FK opt project/job/JCL.
+
+25 tools registrati. Action handler auto-discovered via decorator.
 
 ## Prossimo step
 
 - **F15 esecuzione reale** sul Mac Matteo (corpus test 17 capitolati)
 - **R7.x continuazione planning_bookings** — quando Matteo dà green
   light per refactor invasivo (CRUD booking + multi-move + bulk-edit)
-- **AI capability propose_supplier_invoice** — copilot crea fattura
-  passiva dal contesto conversazionale (pattern propone/dispone)
 - **AI parser PDF fattura passiva** — upload PDF → estrazione auto
-  campi → conferma utente
+  campi → conferma utente (richiede pypdf/pdfplumber + prompt)
 - **R5/R8/R9** — split planning.html, Float→Decimal, datetime tz-aware
 - **Frontend polish** (in caldo, lo riprendiamo a richiesta)
 
