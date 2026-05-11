@@ -8,6 +8,29 @@
 
 ## Versione corrente
 
+**v3.5.0-alpha.71** — 11 maggio 2026 — Supplier parse PDF + AI query
+
+Crea fornitore + fattura da upload PDF in un colpo. AI query readonly.
+
+- Service `supplier_invoice_parser.py`: AI extract da testo fattura.
+- Endpoint `/suppliers/api/invoices/parse-upload` + `/create-from-parsed`.
+- UI `/suppliers` topbar "✨ Estrai da PDF" 2-step modal.
+- AI tools nuovi: `query_suppliers`, `query_supplier_invoices` (readonly).
+- Match fornitore esistente per vat_number o name.
+
+351 routes. 28 AI tools.
+
+## Prossimo step
+
+- **OCR fatture scansionate** (tesseract/cloud) — scope grosso
+- **UI tab Accessi TPN** estesa con toggle ip_allowlist + mfa_required
+- **DAM tab "Asset interni"** + bulk-assign UI
+- **JobDeliverable auto-create** da template
+- **F15 esecuzione reale** sul Mac Matteo
+- **R5/R8/R9** — tech debt
+
+## (versione precedente)
+
 **v3.5.0-alpha.70.4** — 11 maggio 2026 — MFA TOTP completa
 
 Chiude roadmap TPN α.70.0→α.70.4.

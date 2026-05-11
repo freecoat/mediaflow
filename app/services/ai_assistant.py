@@ -1850,6 +1850,128 @@ def _h_propose_quote_from_template(db: Session, data: dict) -> dict:
     }
 
 
+# ── Query supplier / fatture passive read-only (v3.5.0-alpha.71) ──
+
+@ai_capability("query_suppliers")
+def _h_query_suppliers(db: Session, data: dict) -> dict:
+    """READONLY. Lista fornitori con KPI outstanding + overdue count.
+    Filtri opzionali: q (nome contiene), only_with_outstanding."""
+    from app.models import Supplier, SupplierInvoice, SupplierInvoiceStatus
+    from datetime import date as _d
+    q_str = (data.get("q") or "").strip().lower()
+    only_outstanding = bool(data.get("only_with_outstanding", False))
+    rows = db.query(Supplier).filter(
+        Supplier.tenant_id == CURRENT_TENANT,
+        Supplier.deleted_at.is_(None),
+        Supplier.is_active == True,  # noqa: E712
+    ).all()
+    if q_str:
+        rows = [r for r in rows if q_str in (r.name or "").lower()]
+    today = _d.today()
+    out = []
+    for s in rows:
+        invs = db.query(SupplierInvoice).filter(
+            SupplierInvoice.supplier_id == s.id,
+            SupplierInvoice.tenant_id == CURRENT_TENANT,
+            SupplierInvoice.deleted_at.is_(None),
+            SupplierInvoice.payment_status != SupplierInvoiceStatus.cancelled,
+        ).all()
+        outstanding = sum(
+            (i.amount_total or 0) - (i.amount_paid or 0)
+            for i in invs
+            if i.payment_status != SupplierInvoiceStatus.paid
+        )
+        overdue = sum(
+            1 for i in invs
+            if i.due_date and i.due_date < today
+            and i.payment_status != SupplierInvoiceStatus.paid
+        )
+        if only_outstanding and outstanding <= 0:
+            continue
+        out.append({
+            "supplier_id": s.id,
+            "name": s.name,
+            "vat_number": s.vat_number,
+            "invoices_count": len(invs),
+            "outstanding": round(outstanding, 2),
+            "overdue_count": overdue,
+        })
+    out.sort(key=lambda r: r["outstanding"], reverse=True)
+    return {
+        "count": len(out),
+        "suppliers": out[:50],
+        "total_outstanding": round(sum(r["outstanding"] for r in out), 2),
+    }
+
+
+@ai_capability("query_supplier_invoices")
+def _h_query_supplier_invoices(db: Session, data: dict) -> dict:
+    """READONLY. Lista fatture passive filtrate.
+    Filtri: supplier_id|supplier_name, status (unpaid/partial/paid),
+    only_overdue, project_id, job_id, limit (default 30)."""
+    from app.models import Supplier, SupplierInvoice, SupplierInvoiceStatus
+    from datetime import date as _d
+    q = db.query(SupplierInvoice).options(
+        joinedload(SupplierInvoice.supplier)
+    ).filter(
+        SupplierInvoice.tenant_id == CURRENT_TENANT,
+        SupplierInvoice.deleted_at.is_(None),
+    )
+    sup_id = data.get("supplier_id")
+    if sup_id:
+        q = q.filter(SupplierInvoice.supplier_id == int(sup_id))
+    sup_name = (data.get("supplier_name") or "").strip()
+    if sup_name and not sup_id:
+        sup = db.query(Supplier).filter(
+            Supplier.name == sup_name,
+            Supplier.tenant_id == CURRENT_TENANT,
+            Supplier.deleted_at.is_(None),
+        ).first()
+        if sup:
+            q = q.filter(SupplierInvoice.supplier_id == sup.id)
+        else:
+            return {"count": 0, "invoices": [], "message": f"Fornitore '{sup_name}' non trovato"}
+    status = (data.get("status") or "").strip()
+    if status:
+        try:
+            st = SupplierInvoiceStatus(status)
+            q = q.filter(SupplierInvoice.payment_status == st)
+        except ValueError:
+            raise ValueError(f"Stato non valido: {status}")
+    if data.get("only_overdue"):
+        q = q.filter(
+            SupplierInvoice.due_date < _d.today(),
+            SupplierInvoice.payment_status.in_([
+                SupplierInvoiceStatus.unpaid, SupplierInvoiceStatus.partial,
+            ]),
+        )
+    if data.get("project_id"):
+        q = q.filter(SupplierInvoice.project_id == int(data["project_id"]))
+    if data.get("job_id"):
+        q = q.filter(SupplierInvoice.job_id == int(data["job_id"]))
+    limit = min(int(data.get("limit") or 30), 100)
+    rows = q.order_by(SupplierInvoice.issue_date.desc()).limit(limit).all()
+    return {
+        "count": len(rows),
+        "invoices": [
+            {
+                "id": i.id,
+                "supplier_id": i.supplier_id,
+                "supplier_name": i.supplier.name if i.supplier else None,
+                "number": i.number,
+                "issue_date": str(i.issue_date) if i.issue_date else None,
+                "due_date": str(i.due_date) if i.due_date else None,
+                "amount_net": i.amount_net,
+                "amount_total": i.amount_total,
+                "amount_paid": i.amount_paid,
+                "outstanding": round((i.amount_total or 0) - (i.amount_paid or 0), 2),
+                "status": i.payment_status.value if i.payment_status else None,
+            }
+            for i in rows
+        ],
+    }
+
+
 # ── Supplier / fatture passive (v3.5.0-alpha.68.5) ────────────
 
 @ai_capability("propose_supplier")

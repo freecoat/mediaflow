@@ -15,10 +15,10 @@ Convenzioni:
   - payment_status derivato da amount_paid: 0=unpaid, 0<x<total=partial,
     x>=total=paid. Cancelled solo via flag esplicito.
 """
-from fastapi import APIRouter, Depends, HTTPException, Request, Form
+from fastapi import APIRouter, Depends, HTTPException, Request, Form, UploadFile, File
 from fastapi.responses import HTMLResponse
 from typing import Optional
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 from sqlalchemy.orm import Session, joinedload
 from sqlalchemy import func, or_
 from app.database import get_db
@@ -535,6 +535,181 @@ async def delete_supplier_invoice(invoice_id: int, db: Session = Depends(get_db)
     i.deleted_at = datetime.utcnow()
     db.commit()
     return {"ok": True}
+
+
+# ── AI parse fattura da upload (v3.5.0-alpha.71) ──────────────
+
+
+@router.post("/api/invoices/parse-upload")
+async def parse_invoice_upload(
+    request: Request,
+    file: UploadFile = File(...),
+    db: Session = Depends(get_db),
+):
+    """Estrae campi fattura passiva da PDF/docx/xlsx/txt + matcha fornitore
+    esistente per vat_number o name. NON salva nulla — ritorna preview JSON
+    per modal conferma utente."""
+    from app.services.deliverables_parser import extract_text_from_file
+    from app.services.supplier_invoice_parser import parse_supplier_invoice
+    if not file.filename:
+        raise HTTPException(400, "Nome file mancante")
+    file_bytes = await file.read()
+    if not file_bytes:
+        raise HTTPException(400, "File vuoto")
+    if len(file_bytes) > 15 * 1024 * 1024:
+        raise HTTPException(413, "File troppo grande (max 15 MB)")
+    text = extract_text_from_file(file_bytes, file.filename)
+    if not text or len(text.strip()) < 30:
+        raise HTTPException(
+            400,
+            "Estrazione testo fallita o testo troppo breve. "
+            "Per fatture scansionate (immagini) serve OCR (scope futuro). "
+            "Inserisci manualmente."
+        )
+    user = getattr(request.state, "current_user", None)
+    user_id = user.id if user else None
+    parsed = parse_supplier_invoice(text, user_id=user_id, db=db)
+    if not parsed:
+        raise HTTPException(
+            503,
+            "AI provider non disponibile o estrazione fallita. "
+            "Configura provider in /settings → AI e riprova, oppure inserisci manualmente."
+        )
+    # Match supplier esistente per vat_number o name
+    sup_match = None
+    vat = (parsed.get("supplier_vat_number") or "").strip()
+    sup_name = (parsed.get("supplier_name") or "").strip()
+    if vat:
+        sup_match = db.query(Supplier).filter(
+            Supplier.tenant_id == CURRENT_TENANT,
+            Supplier.deleted_at.is_(None),
+            Supplier.vat_number == vat,
+        ).first()
+    if not sup_match and sup_name:
+        sup_match = db.query(Supplier).filter(
+            Supplier.tenant_id == CURRENT_TENANT,
+            Supplier.deleted_at.is_(None),
+            func.lower(Supplier.name) == sup_name.lower(),
+        ).first()
+    # Sanitize date
+    def _sanitize_date(v):
+        if not v: return None
+        if isinstance(v, str):
+            try:
+                return date.fromisoformat(v[:10]).isoformat()
+            except ValueError:
+                return None
+        return v
+    parsed["issue_date"] = _sanitize_date(parsed.get("issue_date"))
+    parsed["due_date"] = _sanitize_date(parsed.get("due_date"))
+    return {
+        "extracted": parsed,
+        "supplier_match": (
+            _supplier_to_dict(sup_match, db) if sup_match else None
+        ),
+        "source_filename": file.filename,
+        "text_preview": text[:1500],
+    }
+
+
+@router.post("/api/invoices/create-from-parsed")
+async def create_invoice_from_parsed(
+    request: Request,
+    # Supplier resolution: either id (existing) or full data (create new)
+    supplier_id: Optional[int] = Form(None),
+    supplier_name: Optional[str] = Form(None),
+    supplier_vat_number: Optional[str] = Form(None),
+    supplier_tax_code: Optional[str] = Form(None),
+    supplier_address: Optional[str] = Form(None),
+    supplier_iban: Optional[str] = Form(None),
+    supplier_email: Optional[str] = Form(None),
+    # Invoice fields
+    number: str = Form(...),
+    issue_date: date = Form(...),
+    due_date: Optional[date] = Form(None),
+    amount_net: float = Form(...),
+    vat_rate: float = Form(22.0),
+    currency: str = Form("EUR"),
+    notes: Optional[str] = Form(None),
+    project_id: Optional[int] = Form(None),
+    job_id: Optional[int] = Form(None),
+    attachment_path: Optional[str] = Form(None),
+    db: Session = Depends(get_db),
+):
+    """Crea o trova supplier + crea SupplierInvoice da dati confermati
+    dal modal di preview (post parse-upload). Idempotente sul numero
+    fattura: 409 se già presente per quel fornitore."""
+    # Resolve / create supplier
+    sup = None
+    if supplier_id:
+        sup = db.query(Supplier).filter(
+            Supplier.id == supplier_id,
+            Supplier.tenant_id == CURRENT_TENANT,
+            Supplier.deleted_at.is_(None),
+        ).first()
+        if not sup:
+            raise HTTPException(404, "Fornitore non trovato")
+    else:
+        if not (supplier_name or "").strip():
+            raise HTTPException(400, "supplier_name richiesto se supplier_id assente")
+        sup = Supplier(
+            tenant_id=CURRENT_TENANT,
+            name=supplier_name.strip(),
+            vat_number=(supplier_vat_number or "").strip() or None,
+            tax_code=(supplier_tax_code or "").strip() or None,
+            contact_email=(supplier_email or "").strip() or None,
+            address=(supplier_address or "").strip() or None,
+            iban=(supplier_iban or "").strip() or None,
+        )
+        db.add(sup)
+        db.flush()
+    # Pre-check unicità (supplier_id, number)
+    dup = db.query(SupplierInvoice).filter(
+        SupplierInvoice.supplier_id == sup.id,
+        SupplierInvoice.number == number,
+        SupplierInvoice.tenant_id == CURRENT_TENANT,
+        SupplierInvoice.deleted_at.is_(None),
+    ).first()
+    if dup:
+        raise HTTPException(
+            409, f"Fattura {number} già registrata per {sup.name} (id={dup.id})"
+        )
+    # Auto due_date da terms se omessa
+    if not due_date and sup.default_payment_terms_days:
+        due_date = issue_date + timedelta(days=sup.default_payment_terms_days)
+    amount_vat = round(amount_net * (vat_rate / 100.0), 2)
+    amount_total = round(amount_net + amount_vat, 2)
+    inv = SupplierInvoice(
+        tenant_id=CURRENT_TENANT,
+        supplier_id=sup.id,
+        number=number.strip(),
+        issue_date=issue_date,
+        due_date=due_date,
+        project_id=project_id,
+        job_id=job_id,
+        amount_net=amount_net,
+        vat_rate=vat_rate,
+        amount_vat=amount_vat,
+        amount_total=amount_total,
+        currency=(currency or "EUR").upper(),
+        payment_status=SupplierInvoiceStatus.unpaid,
+        amount_paid=0.0,
+        attachment_path=(attachment_path or "").strip() or None,
+        notes=(notes or "").strip() or None,
+    )
+    db.add(inv)
+    db.commit()
+    db.refresh(inv)
+    db.refresh(sup)
+    return {
+        "ok": True,
+        "supplier_id": sup.id,
+        "supplier_name": sup.name,
+        "supplier_created": supplier_id is None,
+        "invoice_id": inv.id,
+        "invoice_number": inv.number,
+        "amount_total": inv.amount_total,
+    }
 
 
 # ── Aggregati per cost-report / cashflow ──────────────────────

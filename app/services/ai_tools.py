@@ -700,6 +700,50 @@ TOOLS: list[dict] = [
         },
         "handler": "propose_quote_from_template",
     },
+    # ────────── QUERY SUPPLIER (v3.5.0-alpha.71) ──────────
+    {
+        "name": "query_suppliers",
+        "category": "readonly",
+        "description": (
+            "Lista fornitori con KPI outstanding + overdue count. "
+            "Filtri: q (ricerca per nome contiene), only_with_outstanding "
+            "(solo fornitori con € da pagare). USA per domande tipo "
+            "'quali fornitori devo pagare?', 'lista i fornitori con scaduto', "
+            "'cerca fornitore X'."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "q": {"type": "string", "description": "Filtro ricerca per nome."},
+                "only_with_outstanding": {"type": "boolean"},
+            },
+        },
+        "handler": "query_suppliers",
+    },
+    {
+        "name": "query_supplier_invoices",
+        "category": "readonly",
+        "description": (
+            "Lista fatture passive filtrate. Filtri: supplier_id o "
+            "supplier_name, status (unpaid/partial/paid/cancelled), "
+            "only_overdue (due_date passata e non pagate), project_id, "
+            "job_id. USA per 'quali fatture passive sono scadute?', "
+            "'fatture del fornitore X', 'fatture passive del progetto Y'."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "supplier_id":   {"type": "integer"},
+                "supplier_name": {"type": "string"},
+                "status":        {"type": "string", "enum": ["unpaid", "partial", "paid", "cancelled"]},
+                "only_overdue":  {"type": "boolean"},
+                "project_id":    {"type": "integer"},
+                "job_id":        {"type": "integer"},
+                "limit":         {"type": "integer", "description": "Default 30, max 100."},
+            },
+        },
+        "handler": "query_supplier_invoices",
+    },
 ]
 
 

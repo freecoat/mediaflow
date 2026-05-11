@@ -1,5 +1,49 @@
 # MediaFlow — Changelog
 
+## v3.5.0-alpha.71 — Supplier: parse PDF AI + 2 query AI capability (11 maggio 2026)
+
+Estrae fattura passiva da file (PDF/docx/xlsx/txt), crea fornitore +
+fattura in un colpo. AI query read-only su fornitori e fatture.
+
+**Service nuovo** `app/services/supplier_invoice_parser.py`:
+- `parse_supplier_invoice(text, user_id, db)` — AI extract con prompt
+  che identifica CEDENTE (fornitore) vs cessionario. Restituisce
+  supplier_name, vat_number, tax_code, address, iban, number, dates,
+  amount_net/vat/total, currency, payment_terms_days, confidence,
+  notes. Solo testo (no OCR per fatture scansionate, scope futuro).
+
+**Endpoint nuovi** `/suppliers/api/invoices/*`:
+- `POST /parse-upload` (multipart): extract + match supplier per
+  vat_number o name. Ritorna preview JSON (NON salva).
+- `POST /create-from-parsed`: riceve dati confermati. Trova o crea
+  Supplier + crea SupplierInvoice. Pre-check unicità (supplier, number).
+
+**AI capability readonly**:
+- `query_suppliers` — lista con KPI outstanding + overdue count.
+  Filtri: q (nome), only_with_outstanding.
+- `query_supplier_invoices` — lista fatture con filtri supplier/status/
+  only_overdue/project/job. Risponde a "fatture scadute?" "fatture
+  del fornitore X" "fatture passive del progetto Y".
+
+**UI** `/suppliers`:
+- Bottone topbar "✨ Estrai da PDF" → modal 2-step.
+- Step 1: upload file.
+- Step 2: anteprima editable con badge confidence (high/medium/low) +
+  sezione fornitore (auto-fill nuovo vs match esistente) + dati fattura
+  editabili + recalc totale.
+- Submit → crea (fornitore se nuovo) + fattura, refresh lista.
+
+**File toccati** (5):
+- `app/main.py` — VERSION
+- `app/routers/suppliers.py` — 2 endpoint parse + create
+- `app/services/supplier_invoice_parser.py` — NUOVO
+- `app/services/ai_assistant.py` — 2 handler readonly
+- `app/services/ai_tools.py` — 2 entry TOOLS (28 totali)
+- `app/services/ai_legacy_parser.py` — 2 voci VALID
+- `app/templates/pages/suppliers.html` — modal parse-pdf 2-step + JS
+
+351 routes (+2). 28 AI tools (era 26).
+
 ## v3.5.0-alpha.70.4 — TPN: MFA TOTP completo (11 maggio 2026)
 
 Chiude la roadmap TPN α.70.x. Multi-Factor Authentication TOTP

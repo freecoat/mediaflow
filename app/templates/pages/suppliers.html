@@ -4,6 +4,7 @@
 {% block topbar_title %}Fornitori & Fatture passive{% endblock %}
 {% block topbar_actions %}
   <button class="btn btn-secondary btn-sm" onclick="openSupplierModal()">+ Fornitore</button>
+  <button class="btn btn-secondary btn-sm" onclick="openParseFromPDF()">✨ Estrai da PDF</button>
   <button class="btn btn-primary btn-sm" onclick="openInvoiceModal()">+ Fattura passiva</button>
 {% endblock %}
 
@@ -159,6 +160,78 @@
       <button class="btn btn-ghost" id="ms-delete-btn" onclick="deleteSupplier()" style="margin-right:auto;display:none;color:#ef4444;">Elimina</button>
       <button class="btn btn-secondary" onclick="closeModal('modal-supplier')">Annulla</button>
       <button class="btn btn-primary" onclick="saveSupplier()">Salva</button>
+    </div>
+  </div>
+</div>
+
+<!-- v3.5.0-alpha.71 — Modal Estrai da PDF -->
+<div class="modal-overlay" id="modal-parse-pdf">
+  <div class="modal" style="max-width:720px;max-height:88vh;display:flex;flex-direction:column;">
+    <div class="modal-header">
+      <span class="modal-title">&#x2728; Estrai fattura da file</span>
+      <button class="btn btn-ghost btn-icon" onclick="closeModal('modal-parse-pdf')">&times;</button>
+    </div>
+    <div class="modal-body" style="overflow:auto;">
+      <div id="pp-step-1">
+        <div class="text-sm text-muted" style="margin-bottom:14px;">
+          Carica una fattura passiva (PDF / docx / xlsx / txt). L'AI estrae fornitore, numero, date, importi.
+          Per fatture scansionate serve OCR (scope futuro) — usa "+ Fattura passiva" manuale.
+        </div>
+        <div class="form-group">
+          <label class="form-label">File fattura *</label>
+          <input class="form-input" id="pp-file" type="file" accept=".pdf,.docx,.doc,.xlsx,.xls,.txt">
+        </div>
+        <div id="pp-progress" style="display:none;padding:14px;background:var(--bg2);border-radius:6px;text-align:center;font-size:13px;">
+          AI sta analizzando la fattura...
+        </div>
+      </div>
+      <div id="pp-step-2" style="display:none;">
+        <div id="pp-confidence" style="margin-bottom:12px;"></div>
+        <div class="card mb-3" style="background:var(--bg2);padding:12px;">
+          <div style="font-weight:600;margin-bottom:8px;font-size:13px;">Fornitore</div>
+          <div id="pp-supplier-host"></div>
+        </div>
+        <div class="card" style="padding:12px;">
+          <div style="font-weight:600;margin-bottom:8px;font-size:13px;">Dati fattura</div>
+          <div class="form-row">
+            <div class="form-group">
+              <label class="form-label">Numero *</label>
+              <input class="form-input" id="pp-number">
+            </div>
+            <div class="form-group">
+              <label class="form-label">Emissione *</label>
+              <input class="form-input" id="pp-issue" type="date">
+            </div>
+            <div class="form-group">
+              <label class="form-label">Scadenza</label>
+              <input class="form-input" id="pp-due" type="date">
+            </div>
+          </div>
+          <div class="form-row">
+            <div class="form-group">
+              <label class="form-label">Imponibile *</label>
+              <input class="form-input" id="pp-net" type="number" step="0.01" oninput="ppRecalc()">
+            </div>
+            <div class="form-group">
+              <label class="form-label">IVA %</label>
+              <input class="form-input" id="pp-vat" type="number" step="0.5" value="22" oninput="ppRecalc()">
+            </div>
+            <div class="form-group">
+              <label class="form-label">Totale</label>
+              <input class="form-input" id="pp-total" type="number" step="0.01" disabled style="opacity:.7;">
+            </div>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Note</label>
+            <textarea class="form-textarea" id="pp-notes" rows="2"></textarea>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" id="pp-back-btn" onclick="ppBack()" style="display:none;">&larr; Indietro</button>
+      <button class="btn btn-secondary" onclick="closeModal('modal-parse-pdf')">Annulla</button>
+      <button class="btn btn-primary" id="pp-next-btn" onclick="ppNext()">Analizza &rarr;</button>
     </div>
   </div>
 </div>
@@ -706,6 +779,170 @@ async function deleteInvoice() {
     toast('Fattura eliminata', 'success');
     await Promise.all([loadInvoices(), loadSuppliers(), loadSummary()]);
   } catch(e) { toast(e.message || 'Errore', 'error'); }
+}
+
+// v3.5.0-alpha.71 — Estrai fattura da PDF
+let _ppParsed = null;
+let _ppStep = 1;
+
+function openParseFromPDF() {
+  _ppStep = 1; _ppParsed = null;
+  document.getElementById('pp-file').value = '';
+  document.getElementById('pp-step-1').style.display = '';
+  document.getElementById('pp-step-2').style.display = 'none';
+  document.getElementById('pp-progress').style.display = 'none';
+  document.getElementById('pp-back-btn').style.display = 'none';
+  document.getElementById('pp-next-btn').textContent = 'Analizza →';
+  document.getElementById('pp-next-btn').disabled = false;
+  openModal('modal-parse-pdf');
+}
+
+function ppBack() {
+  if (_ppStep === 2) {
+    _ppStep = 1;
+    document.getElementById('pp-step-1').style.display = '';
+    document.getElementById('pp-step-2').style.display = 'none';
+    document.getElementById('pp-back-btn').style.display = 'none';
+    document.getElementById('pp-next-btn').textContent = 'Analizza →';
+  }
+}
+
+async function ppNext() {
+  if (_ppStep === 1) await ppParseFile();
+  else if (_ppStep === 2) await ppConfirm();
+}
+
+async function ppParseFile() {
+  const f = document.getElementById('pp-file').files[0];
+  if (!f) { toast('Carica un file', 'warning'); return; }
+  const fd = new FormData();
+  fd.append('file', f);
+  document.getElementById('pp-progress').style.display = '';
+  document.getElementById('pp-next-btn').disabled = true;
+  try {
+    const r = await fetch('/suppliers/api/invoices/parse-upload', {
+      method:'POST', body: fd, credentials:'same-origin',
+    });
+    if (!r.ok) throw new Error((await r.json()).detail || 'Errore parsing');
+    _ppParsed = await r.json();
+    ppRenderStep2();
+    _ppStep = 2;
+    document.getElementById('pp-step-1').style.display = 'none';
+    document.getElementById('pp-step-2').style.display = '';
+    document.getElementById('pp-back-btn').style.display = '';
+    document.getElementById('pp-next-btn').textContent = 'Crea fornitore + fattura';
+    document.getElementById('pp-next-btn').disabled = false;
+  } catch(e) {
+    toast(e.message || 'Errore parsing', 'error');
+    document.getElementById('pp-progress').style.display = 'none';
+    document.getElementById('pp-next-btn').disabled = false;
+  }
+}
+
+function ppRenderStep2() {
+  const ex = _ppParsed.extracted || {};
+  const match = _ppParsed.supplier_match;
+  const conf = ex.confidence || 'medium';
+  const colors = {high:'#22c55e', medium:'#3b82f6', low:'#fb923c'};
+  const cc = document.getElementById('pp-confidence');
+  while (cc.firstChild) cc.removeChild(cc.firstChild);
+  const cs = document.createElement('span');
+  cs.style.cssText = `padding:3px 10px;border-radius:10px;background:${colors[conf]}20;color:${colors[conf]};font-size:11px;font-weight:600;`;
+  cs.textContent = 'AI confidence: ' + conf;
+  cc.appendChild(cs);
+  if (ex.notes) {
+    const n = document.createElement('div'); n.className = 'text-xs'; n.style.cssText = 'color:#fb923c;margin-top:6px;';
+    n.textContent = 'Note AI: ' + ex.notes; cc.appendChild(n);
+  }
+  // Supplier section
+  const sh = document.getElementById('pp-supplier-host');
+  while (sh.firstChild) sh.removeChild(sh.firstChild);
+  if (match) {
+    const ok = document.createElement('div');
+    ok.style.cssText = 'padding:10px;background:rgba(34,197,94,.08);border:1px solid rgba(34,197,94,.3);border-radius:6px;margin-bottom:10px;';
+    const b = document.createElement('b'); b.textContent = '✓ Fornitore esistente: ' + match.name;
+    ok.appendChild(b);
+    if (match.vat_number) {
+      const sub = document.createElement('div'); sub.className = 'text-xs text-muted'; sub.textContent = 'P.IVA ' + match.vat_number;
+      ok.appendChild(sub);
+    }
+    sh.appendChild(ok);
+    const hid = document.createElement('input'); hid.type = 'hidden'; hid.id = 'pp-supplier-id'; hid.value = match.id; sh.appendChild(hid);
+  } else {
+    const w = document.createElement('div');
+    w.style.cssText = 'padding:10px;background:rgba(251,146,60,.08);border:1px solid rgba(251,146,60,.3);border-radius:6px;margin-bottom:10px;';
+    w.textContent = '+ Verrà creato nuovo fornitore con questi dati:';
+    sh.appendChild(w);
+    const fields = [
+      ['supplier_name', 'Nome *', ex.supplier_name],
+      ['supplier_vat_number', 'P.IVA', ex.supplier_vat_number],
+      ['supplier_tax_code', 'C.F.', ex.supplier_tax_code],
+      ['supplier_email', 'Email', ex.supplier_email],
+      ['supplier_address', 'Indirizzo', ex.supplier_address],
+      ['supplier_iban', 'IBAN', ex.supplier_iban],
+    ];
+    fields.forEach(([id, lbl, val]) => {
+      const fg = document.createElement('div'); fg.className = 'form-group';
+      const lb = document.createElement('label'); lb.className = 'form-label'; lb.textContent = lbl;
+      fg.appendChild(lb);
+      const inp = document.createElement('input'); inp.className = 'form-input';
+      inp.id = 'pp-' + id; inp.value = val || ''; inp.dataset.field = id;
+      fg.appendChild(inp);
+      sh.appendChild(fg);
+    });
+  }
+  document.getElementById('pp-number').value = ex.number || '';
+  document.getElementById('pp-issue').value = ex.issue_date || '';
+  document.getElementById('pp-due').value = ex.due_date || '';
+  document.getElementById('pp-net').value = ex.amount_net != null ? ex.amount_net : '';
+  document.getElementById('pp-vat').value = ex.vat_rate != null ? ex.vat_rate : 22;
+  ppRecalc();
+  document.getElementById('pp-notes').value = ex.description || '';
+}
+
+function ppRecalc() {
+  const net = parseFloat(document.getElementById('pp-net').value) || 0;
+  const rate = parseFloat(document.getElementById('pp-vat').value) || 0;
+  const vat = Math.round(net * rate) / 100;
+  document.getElementById('pp-total').value = (Math.round((net + vat) * 100) / 100).toFixed(2);
+}
+
+async function ppConfirm() {
+  const fd = new FormData();
+  const sid = document.getElementById('pp-supplier-id');
+  if (sid && sid.value) {
+    fd.append('supplier_id', sid.value);
+  } else {
+    // New supplier inputs
+    document.querySelectorAll('#pp-supplier-host [data-field]').forEach(el => {
+      if (el.value) fd.append(el.dataset.field, el.value);
+    });
+  }
+  fd.append('number', document.getElementById('pp-number').value);
+  fd.append('issue_date', document.getElementById('pp-issue').value);
+  const due = document.getElementById('pp-due').value;
+  if (due) fd.append('due_date', due);
+  fd.append('amount_net', document.getElementById('pp-net').value);
+  fd.append('vat_rate', document.getElementById('pp-vat').value);
+  fd.append('notes', document.getElementById('pp-notes').value);
+  if (_ppParsed.source_filename) fd.append('attachment_path', 'parsed/' + _ppParsed.source_filename);
+  document.getElementById('pp-next-btn').disabled = true;
+  try {
+    const r = await fetch('/suppliers/api/invoices/create-from-parsed', {
+      method:'POST', body: fd, credentials:'same-origin',
+    });
+    if (!r.ok) throw new Error((await r.json()).detail || 'Errore');
+    const res = await r.json();
+    closeModal('modal-parse-pdf');
+    toast(
+      (res.supplier_created ? '+ Fornitore ' + res.supplier_name + ' creato. ' : '')
+      + 'Fattura ' + res.invoice_number + ' registrata.', 'success');
+    await Promise.all([loadInvoices(), loadSuppliers(), loadSummary()]);
+  } catch(e) {
+    toast(e.message || 'Errore', 'error');
+  } finally {
+    document.getElementById('pp-next-btn').disabled = false;
+  }
 }
 
 init();
