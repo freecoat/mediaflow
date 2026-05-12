@@ -59,6 +59,10 @@ PERMISSIONS: Dict[str, Dict[str, List[str]]] = {
         "view_cost_report": ["Visualizza cost report"],
         "view_invoices":    ["Visualizza fatture"],
         "edit_invoices":    ["Crea/modifica fatture"],
+        # v3.5.0-alpha.87 — Pozzo costi generici / Spese aziendali (OverheadCost).
+        # Costi non fatturabili al cliente che vivono nel quadro finanziario tenant.
+        "view_overhead":    ["Visualizza spese aziendali (pozzo costi)"],
+        "edit_overhead":    ["Crea/modifica spese aziendali"],
         # v3.5.0-alpha.21: edit_cost_actuals rimosso definitivamente. Le ore
         # lavorate sono SEMPRE derivate da booking marcati `done` (cost_line_sync).
         # La fatturazione di extra/sconti/banca-ore forfait passa dal flusso
@@ -112,6 +116,8 @@ PRESET_PERMISSIONS: Dict[str, List[str]] = {
         "view_finance", "view_quotes", "edit_quotes", "delete_quotes",
         "view_pricelist", "edit_pricelist",
         "view_cost_report", "view_invoices", "edit_invoices",
+        # v3.5.0-alpha.87 — pozzo costi / spese aziendali
+        "view_overhead", "edit_overhead",
         "view_resources", "edit_resources",
         "manage_departments",
         # v3.5.0-alpha.21: manager può modificare orari lavorativi (Matteo:
@@ -129,6 +135,7 @@ PRESET_PERMISSIONS: Dict[str, List[str]] = {
         "view_finance", "view_quotes", "edit_quotes", "delete_quotes",
         "view_pricelist",
         "view_cost_report",
+        "view_overhead",  # v3.5.0-alpha.87 — producer read-only
         "view_resources",
         # v3.5.0-alpha.21: producer ha read-only sugli orari (vede regole CCNL)
         "view_settings_global",
@@ -141,6 +148,8 @@ PRESET_PERMISSIONS: Dict[str, List[str]] = {
         "view_finance", "view_quotes", "edit_quotes", "delete_quotes",
         "view_pricelist",
         "view_cost_report", "view_invoices", "edit_invoices",
+        # v3.5.0-alpha.87 — accounting cura pozzo costi
+        "view_overhead", "edit_overhead",
         "view_settings_global",
     ],
     "operator": [
@@ -374,7 +383,11 @@ def scope_resource_ids(db: Session, user: Optional[User]) -> Iterable[int]:
 def ensure_built_in_roles(db: Session, tenant_id: int = 1) -> None:
     """Assicura che esistano i 6 preset (admin, manager, producer, accounting,
     operator, viewer) come Role(is_system=True). Idempotente: aggiorna solo
-    descrizione/permessi se la riga esiste ed è is_system. Non tocca custom roles."""
+    descrizione/permessi se la riga esiste ed è is_system. Non tocca custom roles.
+
+    v3.5.0-alpha.87 — Admin role: SEMPRE re-sync con ALL_PERMISSION_KEYS.
+    L'admin è speciale: deve avere ogni nuova permission aggiunta a PERMISSIONS.
+    Niente edit manuale rispettata per admin (è by design: admin ha tutto)."""
     for code, perms in PRESET_PERMISSIONS.items():
         r = db.query(Role).filter(Role.code == code).first()
         if r is None:
@@ -388,7 +401,13 @@ def ensure_built_in_roles(db: Session, tenant_id: int = 1) -> None:
                 is_active=True,
             ))
         elif r.is_system:
-            # Non sovrascriviamo permessi (l'admin potrebbe averli editati).
+            # v3.5.0-alpha.87 — Admin role SEMPRE re-sync (deve avere ALL).
+            if code == "admin":
+                current = set(r.permissions or [])
+                expected = set(perms)
+                if current != expected:
+                    r.permissions = list(expected)
+            # Non sovrascriviamo permessi degli altri preset (l'admin potrebbe averli editati).
             # Aggiorniamo solo description se vuota e tenant_id se mancante.
             if not r.description:
                 r.description = PRESET_DESCRIPTIONS.get(code)

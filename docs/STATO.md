@@ -8,7 +8,30 @@
 
 ## Versione corrente
 
-**v3.5.0-alpha.86** — 12 maggio 2026 — Sprint S3 MFFilterBar + filtri standard 5 pagine
+**v3.5.0-alpha.87** — 12 maggio 2026 — Sprint S8 Pozzo costi / Spese aziendali
+
+- Modello nuovo `OverheadCost` standalone (cluster D.2 ticket Matteo) — costi
+  non fatturabili in 11 categorie (maintenance/software/rent/staff/capex/training/
+  marketing/legal_admin/bank_fees/tax/other).
+- Write-off restano in LossEntry (single source of truth) — summary UNION.
+- Tenant `capex_threshold_eur` configurabile (default 500€) per auto-CAPEX
+  da PhysicalAsset.
+- RBAC view_overhead + edit_overhead — admin auto-resync ALL_PERMISSION_KEYS.
+- Router /overhead CRUD + summary KPI + categories.
+- UI page /overhead/ con MFFilterBar + KPI grid + breakdown per categoria +
+  tabella + modal full (recurring/CAPEX conditional fields).
+- Cashflow extension: overhead_paid + capex_paid per mese.
+- Sidebar link "💸 Spese aziendali" in sezione Finanza.
+
+385 routes (+7). 1 nuova tabella + 1 colonna tenant.
+
+Plus Sprint S7 (config-only, stesso giorno): MCP mcp-fattura-elettronica-it
+(21 tool SDI), VoltAgent subagent marketplace globale, 3 custom skill
+(mediaflow-finance-feature-dev, italian-tax-compliance, sdi-xml-builder).
+
+## (versione precedente)
+
+**v3.5.0-alpha.86** — 12 maggio 2026 — Sprint S3 MFFilterBar + filtri standard
 
 - Helper `MFFilterBar` in global.js (autocomplete + date + select + text, dependsOn).
 - Server: estesi 7 endpoint con filtri opzionali client_id/project_id/period/tech.

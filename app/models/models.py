@@ -375,6 +375,11 @@ class Tenant(Base):
     # Counter incrementato ad ogni create. pad = zero-padding (003 vs 3).
     # Esempio risultato: "LTO-001", "LTO-002", "HDD-042".
     asset_numbering_config: Mapped[Optional[dict]] = mapped_column(JSON, nullable=True)
+    # v3.5.0-alpha.87 — Soglia auto-CAPEX per OverheadCost.
+    # PhysicalAsset acquisito con unit_cost > soglia crea OverheadCost
+    # is_capex=True (ammortamento attivo). Sotto soglia → categoria normale
+    # (spese deduc. anno). Default €500. Configurabile in /settings tenant.
+    capex_threshold_eur: Mapped[float] = mapped_column(Float, default=500.0)
     # Stato
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
     onboarding_completed: Mapped[bool] = mapped_column(Boolean, default=False)
@@ -2254,3 +2259,106 @@ class ProjectTechSheet(Base):
 
     project: Mapped["Project"] = relationship()
     delivery_template: Mapped[Optional["DeliveryTemplate"]] = relationship()
+
+
+# ── SPESE AZIENDALI / POZZO COSTI GENERICI (v3.5.0-alpha.87) ──────────
+#
+# OverheadCost = costi NON fatturabili al cliente che vivono nel quadro
+# finanziario del tenant. Riguardano: manutenzione, licenze software, affitti,
+# utenze, stipendi non-billable, formazione, marketing, legal/admin, tasse,
+# investimenti CAPEX, acquisto beni durevoli. NON include write-off
+# (che restano in LossEntry — single source of truth per perdite su
+# fatturazione, evita doppia tracciatura).
+#
+# Sorgenti possibili (popolazione):
+#   - manuale (UI form)
+#   - auto da SupplierInvoice senza project/job
+#   - auto da Booking kind=internal_maintenance/research/training
+#   - auto da PhysicalAsset.unit_cost > tenant.capex_threshold_eur
+# In reportistica P&L: aggregato per categoria + periodo + reparto.
+# Cashflow: outflow non-job (separato da supplier outflow per job).
+#
+# is_capex=True attiva tracking ammortamento (useful_life_months + linear).
+# is_recurring=True attiva schedule mensile/trimestrale/annuale via next_due_date.
+
+class OverheadCostCategory(str, enum.Enum):
+    maintenance      = "maintenance"        # manutenzione attrezzature/sale
+    software_license = "software_license"   # canoni software
+    rent_utilities   = "rent_utilities"     # affitto + bollette
+    staff_overhead   = "staff_overhead"     # stipendi non-billable
+    capex            = "capex"              # piani investimenti / beni durevoli capitalizzati
+    training         = "training"           # corsi/certificazioni staff
+    marketing        = "marketing"          # pubblicità/web/eventi
+    legal_admin      = "legal_admin"        # commercialista, avvocato, consulenza
+    bank_fees        = "bank_fees"          # commissioni bancarie
+    tax              = "tax"                # IRES/IRAP/altre tasse (non IVA)
+    other            = "other"
+
+
+class RecurrenceInterval(str, enum.Enum):
+    monthly   = "monthly"
+    quarterly = "quarterly"
+    yearly    = "yearly"
+
+
+class OverheadCost(Base):
+    __tablename__ = "overhead_costs"
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    tenant_id: Mapped[int] = mapped_column(ForeignKey("tenants.id"), default=1, index=True)
+    code: Mapped[str] = mapped_column(String(40), unique=True, index=True)  # OH-YYYY-NNNN
+    category: Mapped[OverheadCostCategory] = mapped_column(
+        SAEnum(OverheadCostCategory), index=True
+    )
+    title: Mapped[str] = mapped_column(String(255))
+    description: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    # Importi
+    amount_net: Mapped[float] = mapped_column(Float, default=0.0)
+    vat_rate: Mapped[float] = mapped_column(Float, default=22.0)
+    amount_vat: Mapped[float] = mapped_column(Float, default=0.0)
+    amount_total: Mapped[float] = mapped_column(Float, default=0.0)
+    cost_date: Mapped[date] = mapped_column(Date, index=True)
+    # Ricorrenti (template + scheduling)
+    is_recurring: Mapped[bool] = mapped_column(Boolean, default=False, index=True)
+    recurrence_interval: Mapped[Optional[RecurrenceInterval]] = mapped_column(
+        SAEnum(RecurrenceInterval), nullable=True
+    )
+    next_due_date: Mapped[Optional[date]] = mapped_column(Date, nullable=True, index=True)
+    # parent_recurring_id: punta al template "master" per istanze auto-generate
+    parent_recurring_id: Mapped[Optional[int]] = mapped_column(
+        ForeignKey("overhead_costs.id"), nullable=True
+    )
+    # CAPEX (ammortamento)
+    is_capex: Mapped[bool] = mapped_column(Boolean, default=False, index=True)
+    useful_life_months: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    amortization_method: Mapped[Optional[str]] = mapped_column(String(20), nullable=True)  # 'linear' | 'accelerated'
+    asset_acquisition_date: Mapped[Optional[date]] = mapped_column(Date, nullable=True)
+    # Link contestuali (tutti opzionali, popolati al feed automatico)
+    department_id: Mapped[Optional[int]] = mapped_column(
+        ForeignKey("departments.id"), nullable=True, index=True
+    )
+    supplier_id: Mapped[Optional[int]] = mapped_column(
+        ForeignKey("suppliers.id"), nullable=True, index=True
+    )
+    supplier_invoice_id: Mapped[Optional[int]] = mapped_column(
+        ForeignKey("supplier_invoices.id"), nullable=True, index=True
+    )
+    booking_id: Mapped[Optional[int]] = mapped_column(
+        ForeignKey("bookings.id"), nullable=True, index=True
+    )
+    physical_asset_id: Mapped[Optional[int]] = mapped_column(
+        ForeignKey("physical_assets.id"), nullable=True, index=True
+    )
+    source_project_id: Mapped[Optional[int]] = mapped_column(
+        ForeignKey("projects.id"), nullable=True, index=True
+    )
+    # Audit
+    notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    created_by_user_id: Mapped[Optional[int]] = mapped_column(ForeignKey("users.id"), nullable=True)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    deleted_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True, index=True)
+    deleted_by_user_id: Mapped[Optional[int]] = mapped_column(ForeignKey("users.id"), nullable=True)
+    # Relationships
+    department: Mapped[Optional["Department"]] = relationship(foreign_keys=[department_id])
+    supplier: Mapped[Optional["Supplier"]] = relationship(foreign_keys=[supplier_id])
+    supplier_invoice: Mapped[Optional["SupplierInvoice"]] = relationship(foreign_keys=[supplier_invoice_id])

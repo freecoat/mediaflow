@@ -575,6 +575,26 @@ def cashflow_year_sync(
     fc = yearly_forecast(db, year, project_id=project_id, client_id=client_id)
     fc_by_month = {m["month"]: m for m in fc["months"]}
 
+    # v3.5.0-alpha.87 (S8.4) — Overhead outflow per mese.
+    # Solo overhead non legato a project (overhead tenant-pure). Quelli con
+    # source_project_id si filtrano via project_id se richiesto.
+    from app.models import OverheadCost
+    oh_q = db.query(OverheadCost).filter(
+        extract("year", OverheadCost.cost_date) == year,
+        OverheadCost.deleted_at.is_(None),
+    )
+    if project_id:
+        oh_q = oh_q.filter(OverheadCost.source_project_id == project_id)
+    overheads = oh_q.all()
+    for o in overheads:
+        m = o.cost_date.month if o.cost_date else 1
+        if o.is_capex:
+            series[m - 1].setdefault("capex_paid", 0.0)
+            series[m - 1]["capex_paid"] += o.amount_total or 0.0
+        else:
+            series[m - 1].setdefault("overhead_paid", 0.0)
+            series[m - 1]["overhead_paid"] += o.amount_total or 0.0
+
     for s in series:
         s["invoiced"] = round(s["invoiced"], 2)
         s["paid"] = round(s["paid"], 2)
@@ -582,7 +602,13 @@ def cashflow_year_sync(
         s["supplier_billed"] = round(s["supplier_billed"], 2)
         s["supplier_paid"] = round(s["supplier_paid"], 2)
         s["supplier_due"] = round(s["supplier_due"], 2)
-        s["net_cashflow"] = round(s["paid"] - s["supplier_paid"], 2)
+        # v3.5.0-alpha.87 — overhead in cashflow
+        s["overhead_paid"] = round(s.get("overhead_paid", 0.0), 2)
+        s["capex_paid"] = round(s.get("capex_paid", 0.0), 2)
+        # net_cashflow ora include anche overhead+capex
+        s["net_cashflow"] = round(
+            s["paid"] - s["supplier_paid"] - s["overhead_paid"] - s["capex_paid"], 2
+        )
         # v3.5.0-alpha.77 — pipeline forecast merge
         fcm = fc_by_month.get(s["month"], {})
         s["forecast_soft"] = round(fcm.get("sent", 0.0) * 0.30, 2)         # sent × default 30%

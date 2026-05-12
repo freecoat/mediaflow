@@ -29,4 +29,6 @@ from app.models.models import (
     UserAISettings, AIAction, AIUsageLog,
     Notification, NotificationKind, NotificationSeverity,
     ProjectTechSheet,
+    # v3.5.0-alpha.87 — Pozzo costi / Spese aziendali
+    OverheadCost, OverheadCostCategory, RecurrenceInterval,
 )

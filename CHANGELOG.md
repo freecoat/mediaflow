@@ -1,6 +1,74 @@
 # MediaFlow — Changelog
 
-## v3.5.0-alpha.87 — Sprint S7 Claude Code plugin ecosystem per workflow finanziario (12 maggio 2026)
+## v3.5.0-alpha.87 — Sprint S8 Pozzo costi / Spese aziendali (OverheadCost) (12 maggio 2026)
+
+Risponde a cluster D.2 ticket Matteo: "Pozzo costi generici = database costi
+non fatturabili (esterno) — manutenzione, lavorazioni in perdita, licenze
+software, piani investimenti, acquisizioni. Rientra nel quadro finanziario
+globale."
+
+Architettura: design B (modello standalone). Naming: `OverheadCost` (codice),
+UI italiano "Spese aziendali". Write-off NON in OverheadCost — restano in
+LossEntry (single source of truth). Reportistica aggrega via UNION.
+
+**Modello nuovo `OverheadCost`** (app/models/models.py):
+- `code` auto-num OH-YYYY-NNNN univoco
+- `category`: enum 11 valori (maintenance, software_license, rent_utilities,
+  staff_overhead, capex, training, marketing, legal_admin, bank_fees, tax,
+  other)
+- `amount_net` + `vat_rate` + `amount_vat` + `amount_total`
+- `cost_date` per competenza
+- **Ricorrenti**: `is_recurring`, `recurrence_interval` (monthly/quarterly/
+  yearly), `next_due_date`, `parent_recurring_id` (template self-ref)
+- **CAPEX**: `is_capex`, `useful_life_months`, `amortization_method`
+  (linear/accelerated), `asset_acquisition_date`
+- FK contestuali (tutte opzionali): department, supplier, supplier_invoice,
+  booking, physical_asset, source_project — per auto-feed
+- Soft-delete: `deleted_at`/`deleted_by_user_id`
+
+**Tenant**: nuovo campo `capex_threshold_eur` (default 500€) — soglia
+configurabile sotto cui PhysicalAsset acquisito non genera CAPEX automatico.
+
+**RBAC**: 2 nuove permission `view_overhead` + `edit_overhead` in categoria
+"Finanza". Preset admin (re-sync auto da ALL_PERMISSION_KEYS) + manager +
+accounting hanno entrambe; producer ha solo view.
+
+**Router `/overhead`** (app/routers/overhead.py):
+- `GET /overhead/` HTML page
+- `GET /api` lista con filtri (category/department/supplier/from_date/to_date/
+  is_capex/is_recurring/q)
+- `GET /api/summary` KPI aggregato per categoria + opex/capex/write_off
+  (UNION LossEntry per quadro completo non-billable)
+- `POST /api` create
+- `PUT /api/{id}` update
+- `DELETE /api/{id}` soft-delete
+- `GET /api/categories` lista enum + label IT per dropdown
+
+**UI page `/overhead/`** (app/templates/pages/overhead.html):
+- Topbar "+ Nuova spesa" button
+- MFFilterBar standard (categoria + periodo)
+- KPI grid 5 card (Totale, OPEX, CAPEX, Write-off LossEntry, Ricorrenti)
+- Breakdown per categoria (grid card colorate)
+- Tabella sortable con flags CAPEX/recurring
+- Modal create/edit con form completo (recurring + CAPEX conditional fields,
+  recalc IVA live)
+- Sidebar link "💸 Spese aziendali" in sezione Finanza
+
+**Cashflow extension** (`/finance/api/cashflow/{year}`):
+- Aggiunti `overhead_paid` + `capex_paid` per mese
+- `net_cashflow` ora include anche overhead+capex come outflow
+
+**Migration** `scripts/migrate_overhead_costs.py`:
+- Crea tabella overhead_costs (idempotente)
+- ALTER tenants ADD capex_threshold_eur
+- Backfill opzionale `--backfill` da PhysicalAsset (> soglia tenant) + da
+  SupplierInvoice senza project/job
+
+**Cache-buster bump**: main.css + global.js ?v=3.5.0-alpha.87.
+
+385 routes (+7). 1 nuova tabella, 1 colonna su tenants.
+
+## Sprint S7 — Claude Code plugin ecosystem per workflow finanziario (12 maggio 2026, config-only)
 
 NON tocca codice MediaFlow runtime. Configura ecosistema Claude Code per
 accelerare sviluppo future feature finanziarie + sbloccare SDI/fatturapa.

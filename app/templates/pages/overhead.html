@@ -1,0 +1,497 @@
+{% extends "base.html" %}
+{% set active_page = "overhead" %}
+
+{% block title %}Spese aziendali — MediaFlow{% endblock %}
+{% block topbar_title %}💸 Spese aziendali (Pozzo costi){% endblock %}
+
+{% block topbar_actions %}
+  <button class="btn btn-primary btn-sm" onclick="openNewOverhead()">+ Nuova spesa</button>
+{% endblock %}
+
+{% block content %}
+
+<div class="card mb-3" style="background:rgba(98,114,245,0.06);border-color:rgba(98,114,245,0.2);">
+  <div style="padding:12px 16px;font-size:13px;line-height:1.55;">
+    <b>Pozzo costi generici</b> — Costi NON fatturabili al cliente: manutenzione, licenze software, affitti, stipendi non-billable, CAPEX, formazione, marketing, legale/amministrativo, commissioni bancarie, tasse.
+    <br>
+    Write-off cliente vivono in <a href="/finance#section-anomalies">/finance → Anomalie</a> (single source of truth, no doppia tracciatura).
+  </div>
+</div>
+
+<!-- Filtri standard (MFFilterBar) -->
+<div id="oh-filters" style="margin-bottom:14px;"></div>
+
+<!-- KPI grid -->
+<div class="stat-grid mb-3" id="oh-kpi">
+  <div class="stat-card stat-card-accent">
+    <div class="stat-label">Totale spese</div>
+    <div class="stat-value mono" id="kpi-total">—</div>
+    <div class="stat-sub">opex + capex nel periodo</div>
+  </div>
+  <div class="stat-card">
+    <div class="stat-label">OPEX</div>
+    <div class="stat-value mono" id="kpi-opex">—</div>
+    <div class="stat-sub">spese deducibili anno</div>
+  </div>
+  <div class="stat-card" style="border-left:3px solid #a78bfa;">
+    <div class="stat-label">CAPEX</div>
+    <div class="stat-value mono color-indigo" id="kpi-capex">—</div>
+    <div class="stat-sub">investimenti ammortizzati</div>
+  </div>
+  <div class="stat-card" style="border-left:3px solid #ef4444;">
+    <div class="stat-label">Write-off (LossEntry)</div>
+    <div class="stat-value mono color-rose" id="kpi-writeoff">—</div>
+    <div class="stat-sub">perso su fatturazione</div>
+  </div>
+  <div class="stat-card stat-card-amber">
+    <div class="stat-label">Ricorrenti attivi</div>
+    <div class="stat-value mono" id="kpi-recurring">—</div>
+    <div class="stat-sub">contratti / canoni</div>
+  </div>
+</div>
+
+<!-- Breakdown per categoria -->
+<div class="card mb-3">
+  <div class="card-header">
+    <span class="card-title">Per categoria</span>
+  </div>
+  <div id="oh-categories-grid" style="padding:14px 16px; display:grid; grid-template-columns:repeat(auto-fill, minmax(180px, 1fr)); gap:10px;">
+    <div class="text-muted text-sm">Caricamento…</div>
+  </div>
+</div>
+
+<!-- Tabella -->
+<div class="card">
+  <div class="card-header">
+    <span class="card-title">Elenco spese</span>
+    <span class="text-muted text-sm" id="oh-count"></span>
+  </div>
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th style="width:120px;">Codice</th>
+          <th>Titolo</th>
+          <th style="width:140px;">Categoria</th>
+          <th style="width:120px;">Data</th>
+          <th style="width:140px;">Reparto</th>
+          <th class="text-right" style="width:120px;">Netto</th>
+          <th class="text-right" style="width:120px;">Totale</th>
+          <th style="width:90px;">Flags</th>
+          <th style="width:90px;"></th>
+        </tr>
+      </thead>
+      <tbody id="oh-tbody">
+        <tr><td colspan="9" class="text-muted" style="text-align:center;padding:24px;">Caricamento…</td></tr>
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<!-- Modal new/edit -->
+<div class="modal-overlay" id="modal-overhead">
+  <div class="modal" style="max-width:720px;">
+    <div class="modal-header">
+      <span class="modal-title" id="oh-modal-title">Nuova spesa aziendale</span>
+      <button class="btn btn-ghost btn-icon" onclick="closeModal('modal-overhead')">&times;</button>
+    </div>
+    <div class="modal-body">
+      <input type="hidden" id="oh-id">
+      <div class="form-row">
+        <div class="form-group" style="flex:2;">
+          <label class="form-label">Titolo *</label>
+          <input class="form-input" id="oh-title" placeholder="es. Canone Adobe CC 2026">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Categoria *</label>
+          <select class="form-select" id="oh-category"></select>
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label class="form-label">Data costo *</label>
+          <input class="form-input" id="oh-cost-date" type="date">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Reparto</label>
+          <select class="form-select" id="oh-department">
+            <option value="">— nessuno —</option>
+            {% for d in departments %}
+            <option value="{{ d.id }}">{{ d.name }}</option>
+            {% endfor %}
+          </select>
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label class="form-label">Importo netto *</label>
+          <input class="form-input mono" id="oh-amount-net" type="number" step="0.01" min="0" placeholder="0.00">
+        </div>
+        <div class="form-group">
+          <label class="form-label">IVA %</label>
+          <input class="form-input mono" id="oh-vat-rate" type="number" step="0.1" min="0" max="50" value="22">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Totale</label>
+          <input class="form-input mono" id="oh-amount-total" readonly>
+        </div>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Descrizione</label>
+        <textarea class="form-textarea" id="oh-description" rows="2"></textarea>
+      </div>
+      <hr style="border:none;border-top:1px solid var(--border);margin:12px 0;">
+      <div class="form-row">
+        <div class="form-group" style="flex:1;">
+          <label class="form-label" style="display:flex;gap:6px;align-items:center;cursor:pointer;">
+            <input type="checkbox" id="oh-is-recurring" onchange="onRecurringToggle()">
+            Ricorrente
+          </label>
+        </div>
+        <div class="form-group" id="oh-recurrence-wrap" style="display:none;flex:1;">
+          <label class="form-label">Intervallo</label>
+          <select class="form-select" id="oh-recurrence">
+            <option value="monthly">Mensile</option>
+            <option value="quarterly">Trimestrale</option>
+            <option value="yearly">Annuale</option>
+          </select>
+        </div>
+        <div class="form-group" id="oh-next-due-wrap" style="display:none;flex:1;">
+          <label class="form-label">Prossima scadenza</label>
+          <input class="form-input" id="oh-next-due" type="date">
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-group" style="flex:1;">
+          <label class="form-label" style="display:flex;gap:6px;align-items:center;cursor:pointer;">
+            <input type="checkbox" id="oh-is-capex" onchange="onCapexToggle()">
+            CAPEX (ammortizzato)
+          </label>
+        </div>
+        <div class="form-group" id="oh-life-wrap" style="display:none;flex:1;">
+          <label class="form-label">Vita utile (mesi)</label>
+          <input class="form-input mono" id="oh-useful-life" type="number" min="1" max="240" value="36">
+        </div>
+        <div class="form-group" id="oh-amort-wrap" style="display:none;flex:1;">
+          <label class="form-label">Metodo amm.</label>
+          <select class="form-select" id="oh-amort-method">
+            <option value="linear">Lineare</option>
+            <option value="accelerated">Accelerato</option>
+          </select>
+        </div>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Note</label>
+        <textarea class="form-textarea" id="oh-notes" rows="2"></textarea>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeModal('modal-overhead')">Annulla</button>
+      <button class="btn btn-danger" id="oh-delete-btn" style="display:none;" onclick="deleteOverhead()">Elimina</button>
+      <button class="btn btn-primary" onclick="submitOverhead()">Salva</button>
+    </div>
+  </div>
+</div>
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+const CAT_LBL = {
+  maintenance:      'Manutenzione',
+  software_license: 'Licenze software',
+  rent_utilities:   'Affitto / Utenze',
+  staff_overhead:   'Stipendi non-billable',
+  capex:            'CAPEX',
+  training:         'Formazione',
+  marketing:        'Marketing',
+  legal_admin:      'Legale / Admin',
+  bank_fees:        'Commiss. bancarie',
+  tax:              'Tasse',
+  other:            'Altro',
+  write_off:        '⚠ Write-off (LossEntry)',
+};
+const CAT_COLOR = {
+  maintenance:'#fbbf24', software_license:'#6272f5', rent_utilities:'#a78bfa',
+  staff_overhead:'#2ec4b6', capex:'#a855f7', training:'#22c55e',
+  marketing:'#f472b6', legal_admin:'#94a3b8', bank_fees:'#0ea5e9',
+  tax:'#ef4444', other:'#64748b', write_off:'#dc2626',
+};
+
+window._ohFilters = { category: null, department_id: null, supplier_id: null, from_date: '', to_date: '' };
+let _ohList = [];
+
+function _buildOhQS() {
+  const f = window._ohFilters;
+  const p = [];
+  if (f.category) p.push('category=' + f.category);
+  if (f.department_id) p.push('department_id=' + f.department_id);
+  if (f.supplier_id) p.push('supplier_id=' + f.supplier_id);
+  if (f.from_date) p.push('from_date=' + f.from_date);
+  if (f.to_date) p.push('to_date=' + f.to_date);
+  return p.join('&');
+}
+
+async function _initFilters() {
+  let categories = [];
+  try { categories = await api('GET', '/overhead/api/categories'); } catch(e) {}
+  // Popola categoria dropdown nel modal
+  const catSel = document.getElementById('oh-category');
+  catSel.replaceChildren();
+  for (const c of categories) {
+    const o = document.createElement('option');
+    o.value = c.value; o.textContent = c.label;
+    catSel.appendChild(o);
+  }
+  MFFilterBar({
+    host: document.getElementById('oh-filters'),
+    filters: [
+      { kind: 'select', id: 'category', label: 'Categoria',
+        options: [{value:'', label:'Tutte le categorie'}].concat(
+          categories.map(c => ({value: c.value, label: c.label}))
+        ) },
+      { kind: 'date', id: 'from_date', label: 'Dal' },
+      { kind: 'date', id: 'to_date', label: 'Al' },
+    ],
+    onChange: (v) => {
+      window._ohFilters = {
+        category: v.category || null,
+        department_id: null,
+        supplier_id: null,
+        from_date: v.from_date || '',
+        to_date: v.to_date || '',
+      };
+      loadOverheadList();
+      loadSummary();
+    },
+  });
+}
+
+async function loadSummary() {
+  const qs = _buildOhQS();
+  let s;
+  try {
+    s = await api('GET', '/overhead/api/summary' + (qs ? '?' + qs : ''));
+  } catch(e) { return; }
+  document.getElementById('kpi-total').textContent = fmtCurrency(s.overhead_total);
+  document.getElementById('kpi-opex').textContent = fmtCurrency(s.opex_total);
+  document.getElementById('kpi-capex').textContent = fmtCurrency(s.capex_total);
+  document.getElementById('kpi-writeoff').textContent = fmtCurrency(s.write_off_total);
+  document.getElementById('kpi-recurring').textContent = String(s.recurring_active);
+  // breakdown per categoria
+  const grid = document.getElementById('oh-categories-grid');
+  grid.replaceChildren();
+  const entries = Object.entries(s.by_category || {}).sort((a,b) => b[1] - a[1]);
+  if (!entries.length) {
+    const empty = document.createElement('div');
+    empty.className = 'text-muted text-sm';
+    empty.textContent = 'Nessuna spesa nel periodo.';
+    grid.appendChild(empty);
+    return;
+  }
+  for (const [cat, amount] of entries) {
+    const card = document.createElement('div');
+    card.style.cssText = `padding:10px; border-left:3px solid ${CAT_COLOR[cat]||'#888'}; background:var(--bg2); border-radius:4px;`;
+    const lbl = document.createElement('div');
+    lbl.className = 'text-xs text-muted';
+    lbl.textContent = CAT_LBL[cat] || cat;
+    const amt = document.createElement('div');
+    amt.className = 'mono';
+    amt.style.cssText = 'font-weight:600; margin-top:4px;';
+    amt.textContent = fmtCurrency(amount);
+    card.appendChild(lbl); card.appendChild(amt);
+    grid.appendChild(card);
+  }
+}
+
+async function loadOverheadList() {
+  const qs = _buildOhQS();
+  const tbody = document.getElementById('oh-tbody');
+  try {
+    _ohList = await api('GET', '/overhead/api' + (qs ? '?' + qs : ''));
+  } catch(e) {
+    tbody.replaceChildren();
+    const tr = document.createElement('tr');
+    const td = document.createElement('td');
+    td.colSpan = 9; td.className = 'text-muted';
+    td.style.cssText = 'text-align:center;padding:24px;color:var(--rose);';
+    td.textContent = 'Errore: ' + (e.message || '');
+    tr.appendChild(td); tbody.appendChild(tr);
+    return;
+  }
+  document.getElementById('oh-count').textContent = `${_ohList.length} spese`;
+  tbody.replaceChildren();
+  if (!_ohList.length) {
+    const tr = document.createElement('tr');
+    const td = document.createElement('td');
+    td.colSpan = 9; td.className = 'text-muted';
+    td.style.cssText = 'text-align:center;padding:24px;';
+    td.textContent = 'Nessuna spesa trovata. Clicca "Nuova spesa" per aggiungerne una.';
+    tr.appendChild(td); tbody.appendChild(tr);
+    return;
+  }
+  for (const oc of _ohList) {
+    const tr = document.createElement('tr');
+    tr.style.cursor = 'pointer';
+    tr.addEventListener('click', () => openEditOverhead(oc.id));
+    const td = (txt, cls) => { const e = document.createElement('td'); if (cls) e.className = cls; e.textContent = txt; tr.appendChild(e); return e; };
+    td(oc.code, 'mono');
+    td(oc.title);
+    const cTd = document.createElement('td');
+    const badge = document.createElement('span');
+    badge.style.cssText = `padding:2px 8px;border-radius:10px;font-size:11px;font-weight:500;background:rgba(98,114,245,.18);color:${CAT_COLOR[oc.category]||'#888'};`;
+    badge.textContent = CAT_LBL[oc.category] || oc.category;
+    cTd.appendChild(badge); tr.appendChild(cTd);
+    td(fmtDate(oc.cost_date), 'text-sm');
+    td(oc.department_name || '—', 'text-sm text-muted');
+    td(fmtCurrency(oc.amount_net), 'mono text-right');
+    td(fmtCurrency(oc.amount_total), 'mono text-right');
+    const flagsTd = document.createElement('td');
+    flagsTd.style.fontSize = '11px';
+    if (oc.is_capex) {
+      const b = document.createElement('span');
+      b.style.cssText = 'padding:1px 5px;background:rgba(168,139,250,.18);color:#a78bfa;border-radius:3px;margin-right:3px;';
+      b.textContent = 'CAPEX'; flagsTd.appendChild(b);
+    }
+    if (oc.is_recurring) {
+      const b = document.createElement('span');
+      b.style.cssText = 'padding:1px 5px;background:rgba(34,197,94,.18);color:#22c55e;border-radius:3px;';
+      b.textContent = '↻'; flagsTd.appendChild(b);
+    }
+    tr.appendChild(flagsTd);
+    const actTd = document.createElement('td');
+    actTd.style.textAlign = 'right';
+    const ed = document.createElement('button');
+    ed.className = 'btn btn-ghost btn-sm';
+    ed.textContent = '✏';
+    ed.title = 'Modifica';
+    ed.addEventListener('click', (ev) => { ev.stopPropagation(); openEditOverhead(oc.id); });
+    actTd.appendChild(ed);
+    tr.appendChild(actTd);
+    tbody.appendChild(tr);
+  }
+}
+
+function openNewOverhead() {
+  document.getElementById('oh-modal-title').textContent = 'Nuova spesa aziendale';
+  document.getElementById('oh-id').value = '';
+  document.getElementById('oh-title').value = '';
+  document.getElementById('oh-category').value = 'other';
+  document.getElementById('oh-cost-date').value = new Date().toISOString().slice(0,10);
+  document.getElementById('oh-department').value = '';
+  document.getElementById('oh-amount-net').value = '';
+  document.getElementById('oh-vat-rate').value = '22';
+  document.getElementById('oh-amount-total').value = '';
+  document.getElementById('oh-description').value = '';
+  document.getElementById('oh-is-recurring').checked = false;
+  document.getElementById('oh-is-capex').checked = false;
+  document.getElementById('oh-notes').value = '';
+  document.getElementById('oh-delete-btn').style.display = 'none';
+  onRecurringToggle(); onCapexToggle(); recalcTotal();
+  openModal('modal-overhead');
+}
+
+function openEditOverhead(id) {
+  const oc = _ohList.find(x => x.id === id);
+  if (!oc) return;
+  document.getElementById('oh-modal-title').textContent = `Modifica spesa — ${oc.code}`;
+  document.getElementById('oh-id').value = oc.id;
+  document.getElementById('oh-title').value = oc.title || '';
+  document.getElementById('oh-category').value = oc.category;
+  document.getElementById('oh-cost-date').value = oc.cost_date || '';
+  document.getElementById('oh-department').value = oc.department_id || '';
+  document.getElementById('oh-amount-net').value = oc.amount_net;
+  document.getElementById('oh-vat-rate').value = oc.vat_rate;
+  document.getElementById('oh-amount-total').value = fmtCurrency(oc.amount_total);
+  document.getElementById('oh-description').value = oc.description || '';
+  document.getElementById('oh-is-recurring').checked = !!oc.is_recurring;
+  if (oc.recurrence_interval) document.getElementById('oh-recurrence').value = oc.recurrence_interval;
+  if (oc.next_due_date) document.getElementById('oh-next-due').value = oc.next_due_date;
+  document.getElementById('oh-is-capex').checked = !!oc.is_capex;
+  if (oc.useful_life_months) document.getElementById('oh-useful-life').value = oc.useful_life_months;
+  if (oc.amortization_method) document.getElementById('oh-amort-method').value = oc.amortization_method;
+  document.getElementById('oh-notes').value = oc.notes || '';
+  document.getElementById('oh-delete-btn').style.display = '';
+  onRecurringToggle(); onCapexToggle();
+  openModal('modal-overhead');
+}
+
+function onRecurringToggle() {
+  const on = document.getElementById('oh-is-recurring').checked;
+  document.getElementById('oh-recurrence-wrap').style.display = on ? '' : 'none';
+  document.getElementById('oh-next-due-wrap').style.display = on ? '' : 'none';
+}
+function onCapexToggle() {
+  const on = document.getElementById('oh-is-capex').checked;
+  document.getElementById('oh-life-wrap').style.display = on ? '' : 'none';
+  document.getElementById('oh-amort-wrap').style.display = on ? '' : 'none';
+}
+function recalcTotal() {
+  const net = parseFloat(document.getElementById('oh-amount-net').value) || 0;
+  const vat = parseFloat(document.getElementById('oh-vat-rate').value) || 0;
+  const total = net * (1 + vat / 100);
+  document.getElementById('oh-amount-total').value = fmtCurrency(total);
+}
+document.getElementById('oh-amount-net').addEventListener('input', recalcTotal);
+document.getElementById('oh-vat-rate').addEventListener('input', recalcTotal);
+
+async function submitOverhead() {
+  const id = document.getElementById('oh-id').value;
+  const fd = new FormData();
+  fd.append('title', document.getElementById('oh-title').value.trim());
+  fd.append('category', document.getElementById('oh-category').value);
+  fd.append('cost_date', document.getElementById('oh-cost-date').value);
+  const dept = document.getElementById('oh-department').value;
+  if (dept) fd.append('department_id', dept);
+  fd.append('amount_net', document.getElementById('oh-amount-net').value);
+  fd.append('vat_rate', document.getElementById('oh-vat-rate').value);
+  const desc = document.getElementById('oh-description').value;
+  if (desc) fd.append('description', desc);
+  const isRec = document.getElementById('oh-is-recurring').checked;
+  fd.append('is_recurring', String(isRec));
+  if (isRec) {
+    fd.append('recurrence_interval', document.getElementById('oh-recurrence').value);
+    const nd = document.getElementById('oh-next-due').value;
+    if (nd) fd.append('next_due_date', nd);
+  }
+  const isCx = document.getElementById('oh-is-capex').checked;
+  fd.append('is_capex', String(isCx));
+  if (isCx) {
+    fd.append('useful_life_months', document.getElementById('oh-useful-life').value);
+    fd.append('amortization_method', document.getElementById('oh-amort-method').value);
+  }
+  const notes = document.getElementById('oh-notes').value;
+  if (notes) fd.append('notes', notes);
+  try {
+    if (id) {
+      await api('PUT', `/overhead/api/${id}`, fd);
+      toast('Spesa aggiornata', 'success');
+    } else {
+      await api('POST', '/overhead/api', fd);
+      toast('Spesa creata', 'success');
+    }
+    closeModal('modal-overhead');
+    await loadOverheadList();
+    await loadSummary();
+  } catch(e) { toast(e.message || 'Errore', 'error'); }
+}
+
+async function deleteOverhead() {
+  const id = document.getElementById('oh-id').value;
+  if (!id || !confirm('Eliminare definitivamente questa spesa?')) return;
+  try {
+    await api('DELETE', `/overhead/api/${id}`);
+    closeModal('modal-overhead');
+    toast('Spesa eliminata', 'success');
+    await loadOverheadList();
+    await loadSummary();
+  } catch(e) { toast(e.message || 'Errore', 'error'); }
+}
+
+(async () => {
+  await _initFilters();
+  await loadOverheadList();
+  await loadSummary();
+})();
+</script>
+{% endblock %}

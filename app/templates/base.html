@@ -9,7 +9,7 @@
   <meta http-equiv="Pragma" content="no-cache">
   <meta http-equiv="Expires" content="0">
   <title>{% block title %}MediaFlow{% endblock %}</title>
-  <link rel="stylesheet" href="/static/css/main.css?v=3.5.0-alpha.86">
+  <link rel="stylesheet" href="/static/css/main.css?v=3.5.0-alpha.87">
   <link rel="stylesheet" href="/static/css/sleek.css?v=3.5.0-alpha.80">
   <script>
     // v3.5.0-alpha.80 — Sleek mode toggle (default ON)
@@ -122,6 +122,9 @@
         </a>
         <a href="/suppliers" data-nav-id="suppliers" class="nav-item {% if active_page == 'suppliers' %}active{% endif %}">
           <span class="nav-icon"><i data-lucide="receipt"></i></span> Fornitori
+        </a>
+        <a href="/overhead/" data-nav-id="overhead" class="nav-item {% if active_page == 'overhead' %}active{% endif %}">
+          <span class="nav-icon"><i data-lucide="piggy-bank"></i></span> Spese aziendali
         </a>
       </div>
       {% endif %}
@@ -251,7 +254,7 @@
 {% endif %}
 
 <script src="/static/js/lucide.min.js?v=3.5.0-alpha.30"></script>
-<script src="/static/js/global.js?v=3.5.0-alpha.86"></script>
+<script src="/static/js/global.js?v=3.5.0-alpha.87"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/fullcalendar/6.1.11/index.global.min.js"></script>
 <script>
   // v3.5.0-alpha.30: Lucide createIcons() al primo paint + helper globale
