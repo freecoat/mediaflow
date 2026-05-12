@@ -8,6 +8,30 @@
 
 ## Versione corrente
 
+**v3.5.0-alpha.88** — 12 maggio 2026 — Maratona feedback Matteo (9 batch B1→B9)
+
+Risposte alla lista 26 ticket UX/funzionali post-test sera 12 mag. Tutte in
+unica alpha (consolidamento, no nuove feature di dominio).
+
+- **B1** Cost Report: KPI compatti, Risorse sopra, Voci full-width, no Timesheet,
+  click risorsa → solo job del progetto corrente
+- **B2** Cashflow + Forecast accorpati in 2-tab (`/finance/cashflow#forecast`);
+  fix dropdown bianco-su-bianco (`color-scheme: dark`)
+- **B3** Fatture: filtro "Solo scadute" (`only_overdue=true` server-side)
+- **B4** Anomalie: chip toggle 4 categorie + isola con doppio-click + diag job orfani
+- **B5** DAM modal filtri avanzati (multi-select tag search), Physical Assets
+  filtri cliente/progetto/periodo/search aggiunti
+- **B6** Helper `mfEnableSortableTables()` (global.js) — `class="mf-sortable"`
+  applicata a 11 tabelle elenco
+- **B7** Bottone "✏ Modifica booking" in popup Storyboard/Per progetto/Le mie
+- **B8** Legenda timeline estesa (Ferie/Malattia/Festività/Weekend), filtro
+  "Nascondi non fatte" riposizionato, drop multi-move ora incrementale (5-6s → <100ms)
+- **B9** Hyperlink visibility audit (underline dotted plain anchor) + bordi card+table
+
+385 routes invariato. No DB migration.
+
+## (versione precedente)
+
 **v3.5.0-alpha.87** — 12 maggio 2026 — Sprint S8 Pozzo costi / Spese aziendali
 
 - Modello nuovo `OverheadCost` standalone (cluster D.2 ticket Matteo) — costi
@@ -29,25 +53,40 @@ Plus Sprint S7 (config-only, stesso giorno): MCP mcp-fattura-elettronica-it
 (21 tool SDI), VoltAgent subagent marketplace globale, 3 custom skill
 (mediaflow-finance-feature-dev, italian-tax-compliance, sdi-xml-builder).
 
-## RIAPERTURA (sessione chiusa 12 mag sera dopo S8)
+## RIAPERTURA (sessione chiusa 12 mag tarda notte dopo α.88)
 
-Ultimo commento Claude: **"Procedo S4? O testi prima S8 su `/overhead/` sull'app?"**
+Ultimo commento Claude: **9 batch B1→B9 completati. Aspetta test Matteo
+sulle pagine modificate prima di prossima sessione.**
 
-Cantiere aperto in ordine:
+Verifiche consigliate da Matteo (in ordine):
 
-1. **Test Matteo S8 `/overhead/` UI** sul dataset stress (oppure skip).
-2. **S4 — Anomalie fatturazione workflow** (decisione D.2 ora RISOLTA via OverheadCost).
-   Tassonomia: extra-after-billed / over-budget-rampa / quote-discrepancy /
-   mancato-recupero / sforamento-monte-ore. 3 azioni: rimanda commerciale |
-   rivaluta producer | manda al pozzo costi (LossEntry per write-off,
-   OverheadCost per costi recurring/aziendali). Multiselect.
-3. **S5 — Cashflow + Forecast/Pipeline merge** in 1 pagina con tab Combinato default.
-4. **S6 — Asset Media Hub** (BACKLOG, yoyotta/Frame.io API da indagare).
-5. **Restart Claude Code** richiesto per attivare MCP `fattura-elettronica-it`
-   + VoltAgent subagent (S7 plugin config).
+1. **Cost Report** — apri un job, controlla: KPI in 1 riga (≥1480px),
+   Risorse SOPRA Voci di costo, Voci full-width senza scroll orizzontale,
+   no più card "Ore lavorate consuntivo", click su risorsa in "Ore booking"
+   apre drill scoped al solo progetto corrente.
+2. **/finance/cashflow** — switcha tra tab Cassa/Forecast (filtri condivisi).
+   Anni dropdown leggibile (era bianco-su-bianco). Forecast lazy-load.
+   Vecchio link `/finance/forecast` redirect a `#forecast`.
+3. **Anomalie** — chip toggle + doppio-click isola. Job orfani "vuoto" è
+   atteso (richiede Job senza Quote — non presenti in dataset).
+4. **Fatture** — checkbox "Solo scadute" filtra anche sent non flaggate overdue.
+5. **DAM** — bottone "🎯 Filtri avanzati" → modal search + multi-tag.
+6. **Asset fisici** — filtri cliente/progetto/periodo + search etichetta/serial.
+7. **Liste sort** — click su qualsiasi `<th>` di clients/projects/pricelist/
+   departments/overhead/delivery_templates/cost-report-list ordina.
+8. **Storyboard/Per progetto/Le mie** — click booking → popup ha "✏ Modifica".
+9. **Timeline** — drag-drop di un booking dovrebbe essere istantaneo (<100ms,
+   era 5-6s). Legenda mostra ora Malattia/Ferie/Festività.
 
-**6 commit locali NON pushati** (b8b8bb6 → babfc79): alpha.84/85/86/87 + S7
-config. Push rinviato a major bump (policy [[feedback-push-solo-major]]).
+Aperti pre-α.88 (non toccati in questa maratona):
+
+1. **S4 — Anomalie fatturazione workflow** (decisione D.2 RISOLTA via OverheadCost).
+   Tassonomia + 3 azioni + multiselect. **NEL CANTIERE — DA RIPRENDERE.**
+2. **S6 — Asset Media Hub** (BACKLOG, yoyotta/Frame.io API da indagare).
+3. **Restart Claude Code** per attivare MCP `fattura-elettronica-it` (S7).
+
+**7 commit locali NON pushati** (b8b8bb6 → α.88): alpha.84/85/86/87 + S7
+config + α.88 maratona. Push rinviato a major bump (policy [[feedback-push-solo-major]]).
 
 **Sicurezza pending:** API key Anthropic ancora da ruotare
 (https://console.anthropic.com/settings/keys), era in chiaro nella conversation

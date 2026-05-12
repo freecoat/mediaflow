@@ -25,14 +25,63 @@
     <option value="image">🖼 Immagini</option>
     <option value="document">📄 Documenti</option>
   </select>
-  <div class="flex gap-2" style="flex-wrap:wrap;" id="tag-filters">
-    {% for tag in tags %}
-    <button class="btn btn-ghost btn-sm tag-btn" data-tag="{{ tag.name }}" onclick="toggleTag(this)">
-      # {{ tag.name }}
-    </button>
-    {% endfor %}
+  <!-- v3.5.0-alpha.88: filtri avanzati multipli (search + multi-select tag) -->
+  <button class="btn btn-secondary btn-sm" type="button" onclick="openAdvFilters()" title="Filtri avanzati con multi-select tag + search">
+    🎯 Filtri avanzati <span id="adv-filter-count" class="badge" style="display:none;margin-left:4px;background:var(--indigo);color:#fff;"></span>
+  </button>
+  <button class="btn btn-ghost btn-sm" type="button" id="adv-filter-reset" onclick="resetAdvFilters()" style="display:none;">Reset</button>
+  <!-- Chip riepilogo tag attivi (per visibilità rapida) -->
+  <div id="active-tag-chips" class="flex gap-1" style="flex-wrap:wrap;"></div>
+</div>
+
+<!-- v3.5.0-alpha.88 — Modal Filtri avanzati (multi-select tag + search) -->
+<div class="modal-overlay" id="modal-adv-filters">
+  <div class="modal" style="max-width:560px;">
+    <div class="modal-header">
+      <span class="modal-title">🎯 Filtri avanzati — Asset Library</span>
+      <button class="btn btn-ghost btn-icon" onclick="closeModal('modal-adv-filters')">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-group">
+        <label class="form-label">Ricerca tag</label>
+        <input class="form-input" id="adv-tag-search" placeholder="Filtra tag disponibili…" oninput="renderAdvTagList()">
+        <small class="text-muted">Match ANY: l'asset deve avere <b>almeno uno</b> dei tag selezionati.</small>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Tag disponibili ({{ tags|length }})</label>
+        <div id="adv-tag-list" style="max-height:280px; overflow-y:auto; border:1px solid var(--border); border-radius:6px; padding:8px; display:flex; flex-direction:column; gap:4px;"></div>
+        <div id="adv-tag-empty" class="text-muted text-sm" style="display:none; padding:6px;">Nessun tag corrisponde alla ricerca.</div>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Tipo asset (multi)</label>
+        <div id="adv-type-chips" class="flex gap-2" style="flex-wrap:wrap;">
+          <label class="an-chip-toggle"><input type="checkbox" data-adv-type="video" onchange="onAdvChange()"> 🎬 Video</label>
+          <label class="an-chip-toggle"><input type="checkbox" data-adv-type="audio" onchange="onAdvChange()"> 🎵 Audio</label>
+          <label class="an-chip-toggle"><input type="checkbox" data-adv-type="image" onchange="onAdvChange()"> 🖼 Immagini</label>
+          <label class="an-chip-toggle"><input type="checkbox" data-adv-type="document" onchange="onAdvChange()"> 📄 Documenti</label>
+        </div>
+        <small class="text-muted">Sovrascrive il select singolo "Tipo" sopra.</small>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="resetAdvFilters()">Reset</button>
+      <button class="btn btn-primary" onclick="applyAdvFilters()">Applica</button>
+    </div>
   </div>
 </div>
+<style>
+  .an-chip-toggle { display:inline-flex; align-items:center; gap:6px; padding:6px 12px; background:var(--bg3);
+                    border:1px solid var(--border); border-radius:999px; font-size:12.5px; cursor:pointer; }
+  .an-chip-toggle input { accent-color: var(--indigo); }
+  #adv-tag-list .adv-tag-row { display:flex; align-items:center; gap:8px; padding:4px 6px; border-radius:4px; cursor:pointer; }
+  #adv-tag-list .adv-tag-row:hover { background:var(--bg3); }
+  #adv-tag-list .adv-tag-row input { accent-color: var(--indigo); }
+  #active-tag-chips .tag-active { background:var(--indigo); color:#fff; border-radius:999px; padding:3px 9px 3px 12px;
+                                  font-size:11px; display:inline-flex; align-items:center; gap:4px; }
+  #active-tag-chips .tag-active button { background:transparent; border:none; color:#fff; cursor:pointer; padding:0 2px;
+                                          font-weight:600; line-height:1; opacity:.8; }
+  #active-tag-chips .tag-active button:hover { opacity:1; }
+</style>
 
 <!-- v3.5.0-alpha.86 (S3.4) — Filtri tecnici quick chips (keyword match su
      nome file + descrizione). NB: il modello Asset non ha metadata
@@ -127,7 +176,12 @@
 {% block scripts %}
 <script>
 let pendingFiles = [];
-let activeTag = null;
+// v3.5.0-alpha.88 — multi-select tag (era single-select). Set di tag names.
+let activeTags = new Set();
+// v3.5.0-alpha.88 — multi-select tipi asset (sovrascrive il select singolo)
+let _advTypes = new Set();
+// Tag disponibili — caricati via /dam/api/tags al boot.
+let ALL_TAGS = [];
 // v3.5.0-alpha.86 (S3.4)
 let _activeTechs = new Set();
 window._damFilters = { client_id: null, project_id: null, from_date: '', to_date: '' };
@@ -192,8 +246,17 @@ async function loadAssets() {
   const type = document.getElementById('dam-type').value;
   let url = '/dam/api/assets?';
   if (q)    url += `q=${encodeURIComponent(q)}&`;
-  if (type) url += `asset_type=${type}&`;
-  if (activeTag) url += `tag=${encodeURIComponent(activeTag)}&`;
+  // v3.5.0-alpha.88: tipi multi-select da filtri avanzati hanno priorità sul
+  // select singolo. Se _advTypes ha 1 elemento → asset_type singolo,
+  // altrimenti il backend non supporta multi → si fa fetch per tipo e merge.
+  // Soluzione pragmatica: se 1 tipo, mandalo. Se >1, lascia stare (mostra tutti
+  // e filtra client-side) — TODO esteso al backend in iterazione successiva.
+  if (_advTypes.size === 1) {
+    url += `asset_type=${[..._advTypes][0]}&`;
+  } else if (_advTypes.size === 0 && type) {
+    url += `asset_type=${type}&`;
+  }
+  if (activeTags.size) url += `tag=${encodeURIComponent([...activeTags].join(','))}&`;
   const f = window._damFilters;
   if (f.client_id)  url += `client_id=${f.client_id}&`;
   if (f.project_id) url += `project_id=${f.project_id}&`;
@@ -224,17 +287,118 @@ async function loadAssets() {
     </div>`).join('');
 }
 
+// v3.5.0-alpha.88 — toggleTag deprecato (single-select). I tag legacy
+// erano renderizzati nel template come .tag-btn ma sono stati rimpiazzati
+// dal modal filtri avanzati. Mantengo la funzione per compat di eventuali
+// chip rimanenti, ora aggiunge/rimuove dal Set multi.
 function toggleTag(btn) {
   const tag = btn.dataset.tag;
-  if (activeTag === tag) {
-    activeTag = null;
-    document.querySelectorAll('.tag-btn').forEach(b => b.classList.remove('active'));
+  if (activeTags.has(tag)) {
+    activeTags.delete(tag);
+    btn.classList.remove('active');
   } else {
-    activeTag = tag;
-    document.querySelectorAll('.tag-btn').forEach(b => b.classList.remove('active'));
+    activeTags.add(tag);
     btn.classList.add('active');
   }
+  _renderActiveTagChips();
   loadAssets();
+}
+
+// v3.5.0-alpha.88 — Filtri avanzati: modal con search+multi-select tag
+async function _loadAllTags() {
+  try { ALL_TAGS = await api('GET', '/dam/api/tags'); }
+  catch(e) { ALL_TAGS = []; }
+}
+function openAdvFilters() {
+  document.getElementById('adv-tag-search').value = '';
+  renderAdvTagList();
+  // Sync checkbox tipi con _advTypes
+  document.querySelectorAll('[data-adv-type]').forEach(cb => {
+    cb.checked = _advTypes.has(cb.dataset.advType);
+  });
+  openModal('modal-adv-filters');
+}
+function renderAdvTagList() {
+  const q = (document.getElementById('adv-tag-search').value || '').toLowerCase().trim();
+  const host = document.getElementById('adv-tag-list');
+  const empty = document.getElementById('adv-tag-empty');
+  while (host.firstChild) host.removeChild(host.firstChild);
+  const matched = ALL_TAGS.filter(t => !q || (t.name || '').toLowerCase().includes(q));
+  if (!matched.length) { empty.style.display = 'block'; return; }
+  empty.style.display = 'none';
+  matched.forEach(t => {
+    const row = document.createElement('label');
+    row.className = 'adv-tag-row';
+    const cb = document.createElement('input');
+    cb.type = 'checkbox';
+    cb.value = t.name;
+    cb.checked = activeTags.has(t.name);
+    cb.addEventListener('change', () => {
+      if (cb.checked) activeTags.add(t.name);
+      else activeTags.delete(t.name);
+    });
+    const lbl = document.createElement('span');
+    lbl.textContent = '#' + t.name + (t.usage_count != null ? ` (${t.usage_count})` : '');
+    row.appendChild(cb); row.appendChild(lbl);
+    host.appendChild(row);
+  });
+}
+function onAdvChange() {
+  _advTypes = new Set();
+  document.querySelectorAll('[data-adv-type]:checked').forEach(cb => {
+    _advTypes.add(cb.dataset.advType);
+  });
+}
+function applyAdvFilters() {
+  onAdvChange();
+  closeModal('modal-adv-filters');
+  _updateAdvFilterUI();
+  _renderActiveTagChips();
+  loadAssets();
+}
+function resetAdvFilters() {
+  activeTags.clear();
+  _advTypes.clear();
+  document.querySelectorAll('[data-adv-type]').forEach(cb => cb.checked = false);
+  document.querySelectorAll('.tag-btn').forEach(b => b.classList.remove('active'));
+  _updateAdvFilterUI();
+  _renderActiveTagChips();
+  loadAssets();
+}
+function _updateAdvFilterUI() {
+  const count = activeTags.size + _advTypes.size;
+  const badge = document.getElementById('adv-filter-count');
+  const reset = document.getElementById('adv-filter-reset');
+  if (count > 0) {
+    badge.textContent = count;
+    badge.style.display = '';
+    reset.style.display = '';
+  } else {
+    badge.style.display = 'none';
+    reset.style.display = 'none';
+  }
+}
+function _renderActiveTagChips() {
+  const host = document.getElementById('active-tag-chips');
+  if (!host) return;
+  while (host.firstChild) host.removeChild(host.firstChild);
+  Array.from(activeTags).sort().forEach(name => {
+    const chip = document.createElement('span');
+    chip.className = 'tag-active';
+    chip.textContent = '#' + name;
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.textContent = '×';
+    btn.title = 'Rimuovi filtro';
+    btn.addEventListener('click', () => {
+      activeTags.delete(name);
+      _renderActiveTagChips();
+      _updateAdvFilterUI();
+      loadAssets();
+    });
+    chip.appendChild(btn);
+    host.appendChild(chip);
+  });
 }
 
 // ── Upload ───────────────────────────────────────────────────
@@ -313,6 +477,8 @@ async function deleteAsset(id) {
 async function init() {
   // v3.5.0-alpha.86 S3.4 — Filtri standard (cliente/progetto/periodo)
   await _initDamFilters();
+  // v3.5.0-alpha.88: carica tutti i tag per modal filtri avanzati
+  await _loadAllTags();
   const jobs = await api('GET', '/planning/api/jobs');
   document.getElementById('up-job').innerHTML =
     '<option value="">— nessuno —</option>' +

@@ -1,25 +1,35 @@
 {% extends "base.html" %}
 {% set active_page = "cashflow" %}
 
-{% block title %}Cashflow — MediaFlow{% endblock %}
-{% block topbar_title %}Cashflow{% endblock %}
+{% block title %}Cashflow & Forecast — MediaFlow{% endblock %}
+{% block topbar_title %}💰 Cashflow & Forecast{% endblock %}
 
 {% block topbar_actions %}
-  <select id="cf-granularity" class="form-input" data-no-search="true" style="height:32px;font-size:13px;width:130px;" onchange="loadCashflow()">
+  <select id="cf-granularity" class="form-input" data-no-search="true" style="height:32px;font-size:13px;width:130px;" onchange="onFiltersChanged()">
     <option value="month">Mensile</option>
     <option value="quarter">Trimestrale</option>
     <option value="year">Annuale</option>
   </select>
-  <!-- v3.5.0-alpha.85: MFAutocomplete con typeahead esplicito + chip.
-       Sostituisce <select> nativo (typeahead browser rotto con 100+ opzioni). -->
+  <!-- v3.5.0-alpha.85: MFAutocomplete con typeahead esplicito + chip. -->
   <div id="cf-client-ac" class="mf-ac" style="width:200px;"></div>
   <input type="hidden" id="cf-client" value="">
   <div id="cf-project-ac" class="mf-ac" style="width:220px;"></div>
   <input type="hidden" id="cf-project" value="">
-  <select id="cf-year" class="form-input" data-no-search="true" style="height:32px;font-size:13px;width:100px;" onchange="loadCashflow()"></select>
+  <select id="cf-year" class="form-input" data-no-search="true" style="height:32px;font-size:13px;width:100px;" onchange="onFiltersChanged()"></select>
 {% endblock %}
 
 {% block content %}
+
+<!-- v3.5.0-alpha.88 — Merge Cashflow + Forecast in singola pagina (ticket
+     Matteo 12 mag). 2 tab che condividono i filtri topbar. Default = Cassa. -->
+<div class="cf-tabs" id="cf-tabs">
+  <button type="button" class="cf-tab is-active" data-cf-tab="cash" onclick="switchCfTab('cash')">💰 Cassa</button>
+  <button type="button" class="cf-tab" data-cf-tab="forecast" onclick="switchCfTab('forecast')">📊 Forecast / Pipeline</button>
+</div>
+
+<!-- ── TAB 1 · Cassa ───────────────────────────────────────────── -->
+<div id="cf-pane-cash" class="cf-pane">
+
 <div class="stat-grid" id="cf-totals">
   <div class="stat-card stat-card-accent">
     <div class="stat-label">Fatturato</div>
@@ -81,7 +91,100 @@
   </div>
 </div>
 
+</div>
+<!-- /TAB 1 -->
+
+<!-- ── TAB 2 · Forecast / Pipeline ─────────────────────────────── -->
+<div id="cf-pane-forecast" class="cf-pane" style="display:none;">
+
+<div class="card mb-3" style="background:rgba(98,114,245,0.06);border-color:rgba(98,114,245,0.2);">
+  <div style="padding:14px 16px;font-size:13px;line-height:1.55;">
+    <strong>📈 Sales pipeline + cassa proiettata</strong> — Aggrega quote per stato + applica probability weighting (Salesforce-style).
+    Default: <b>draft 10% · sent 30% · approved 90% · rejected 0% · expired 5%</b> (override per quote in modifica).
+  </div>
+</div>
+
+<div class="stat-grid mb-4">
+  <div class="stat-card" style="border-left:3px solid var(--indigo);">
+    <div class="stat-label">Pipeline totale</div>
+    <div class="stat-value mono" id="kpi-pipeline">—</div>
+    <div class="stat-sub">somma quote non chiuse</div>
+  </div>
+  <div class="stat-card" style="border-left:3px solid #a78bfa;">
+    <div class="stat-label">Forecast pesato</div>
+    <div class="stat-value mono color-indigo" id="kpi-weighted">—</div>
+    <div class="stat-sub">pipeline × probability</div>
+  </div>
+  <div class="stat-card stat-card-green">
+    <div class="stat-label">Vinte (approved)</div>
+    <div class="stat-value mono" id="kpi-won">—</div>
+    <div class="stat-sub" id="kpi-won-count">— quote</div>
+  </div>
+  <div class="stat-card" style="border-left:3px solid #ef4444;">
+    <div class="stat-label">Perse (rejected)</div>
+    <div class="stat-value mono color-rose" id="kpi-lost">—</div>
+    <div class="stat-sub" id="kpi-lost-count">— quote</div>
+  </div>
+  <div class="stat-card stat-card-amber">
+    <div class="stat-label">Win rate</div>
+    <div class="stat-value mono" id="kpi-winrate">—</div>
+    <div class="stat-sub">approved / (approved+rejected)</div>
+  </div>
+  <div class="stat-card">
+    <div class="stat-label">Deal size medio</div>
+    <div class="stat-value mono" id="kpi-avg">—</div>
+    <div class="stat-sub">media quote approved</div>
+  </div>
+</div>
+
+<div class="card mb-3">
+  <div class="card-header">
+    <span class="card-title">Cascata mensile</span>
+    <span style="color:var(--text3);font-size:12px;">
+      Incassato (verde) · Forecast committed (indigo) · Forecast soft (lilla) · Outflow (rosso)
+    </span>
+  </div>
+  <div id="cascade-chart" class="cascade-chart"></div>
+</div>
+
+<div class="card mb-3">
+  <div class="card-header"><span class="card-title" id="bk-title">Breakdown mensile</span></div>
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th id="bk-period-th">Mese</th>
+          <th class="text-right" title="Σ quote sent nel mese (non pesate)">📤 Sent</th>
+          <th class="text-right" title="Σ quote approved nel mese (raw)">✅ Approved</th>
+          <th class="text-right" title="Σ quote rejected nel mese">❌ Rejected</th>
+          <th class="text-right" title="Forecast pesato (probability/100)">🎯 Forecast</th>
+          <th class="text-right" title="Pagamenti incassati nel mese">💰 Incassato</th>
+          <th class="text-right" title="Outflow fornitori">📤 Outflow</th>
+          <th class="text-right" title="Incassato + forecast_weighted - outflow">💵 Cassa proiettata</th>
+        </tr>
+      </thead>
+      <tbody id="forecast-tbody"></tbody>
+    </table>
+  </div>
+</div>
+
+<div class="card">
+  <div class="card-header"><span class="card-title">Win/Loss per cliente (top 10)</span></div>
+  <div id="winloss-host" style="padding:14px;"></div>
+</div>
+
+</div>
+<!-- /TAB 2 -->
+
 <style>
+  /* v3.5.0-alpha.88 — Tab bar Cassa / Forecast */
+  .cf-tabs { display:flex; gap:6px; border-bottom:1px solid var(--border); margin-bottom:18px; }
+  .cf-tab { background:transparent; border:none; color:var(--text3); padding:10px 16px; font-size:13.5px;
+            cursor:pointer; border-bottom:2px solid transparent; margin-bottom:-1px;
+            font-family: inherit; transition: color var(--t), border-color var(--t); }
+  .cf-tab:hover { color:var(--text2); }
+  .cf-tab.is-active { color:var(--indigo2); border-bottom-color:var(--indigo); font-weight:600; }
+
   .cf-chart { display: grid; grid-template-columns: repeat(12, 1fr); gap: 8px; padding: 16px 6px; min-height: 320px; align-items: end; }
   .cf-col { display: flex; flex-direction: column; align-items: center; gap: 4px; height: 100%; }
   .cf-bars { display: flex; gap: 2px; align-items: flex-end; height: 240px; width: 100%; justify-content: center; }
@@ -95,11 +198,25 @@
   .cf-month-label.is-current { color: var(--indigo2); border-top-color: var(--indigo); }
   .text-right { text-align: right; }
   td.mono { font-family: var(--font-mono); font-variant-numeric: tabular-nums; }
+
+  .cascade-chart { display: grid; grid-template-columns: repeat(12, 1fr); gap: 8px; padding: 16px 6px; min-height: 280px; align-items: end; }
+  .cc-col { display: flex; flex-direction: column; align-items: center; gap: 4px; height: 100%; }
+  .cc-bars { display: flex; gap: 2px; align-items: flex-end; height: 220px; width: 100%; justify-content: center; }
+  .cc-bar { width: 10px; border-radius: 3px 3px 0 0; min-height: 1px; }
+  .cc-bar.b-paid { background: #22c55e; }
+  .cc-bar.b-committed { background: var(--indigo); }
+  .cc-bar.b-soft { background: #a78bfa; }
+  .cc-bar.b-outflow { background: #ef4444; }
+  .cc-month-label { font-size: 11px; color: var(--text3); text-transform: uppercase; padding-top: 4px; border-top: 1px solid var(--border); width: 100%; text-align: center; }
+  .cc-month-label.is-current { color: var(--indigo2); border-top-color: var(--indigo); }
 </style>
 
 <script>
 const MESI_IT = ['Gen','Feb','Mar','Apr','Mag','Giu','Lug','Ago','Set','Ott','Nov','Dic'];
 const _curYear = new Date().getFullYear();
+
+let _activeTab = 'cash';      // cash | forecast
+let _forecastLoaded = false;  // lazy-load forecast su primo switch
 
 function initYearSelect() {
   const sel = document.getElementById('cf-year');
@@ -124,7 +241,6 @@ async function loadFilters() {
       api('GET', '/projects/api').catch(() => []),
     ]);
   } catch(e) { _cfClients = []; _cfProjects = []; }
-  // v3.5.0-alpha.85: MFAutocomplete invece di <select> nativo.
   _cfClientAc = MFAutocomplete({
     host: document.getElementById('cf-client-ac'),
     hidden: document.getElementById('cf-client'),
@@ -145,16 +261,42 @@ async function loadFilters() {
     search: (it, q) => ((it.code||'').toLowerCase().includes(q) || (it.title||'').toLowerCase().includes(q)),
     display: it => `${it.code} — ${it.title}`,
     placeholder: 'Tutti i progetti',
-    onChange: () => loadCashflow(),
+    onChange: () => onFiltersChanged(),
   });
 }
 
 function onClientChange() {
-  // Quando cambia il cliente, resetta progetto + ricarica
   if (_cfProjectAc) _cfProjectAc.clear();
-  loadCashflow();
+  onFiltersChanged();
 }
 
+function onFiltersChanged() {
+  // Reload del tab attivo. L'altro tab sarà ricaricato quando l'utente
+  // ci passa sopra (lazy refresh).
+  if (_activeTab === 'cash') {
+    loadCashflow();
+    _forecastLoaded = false;  // forecast diventa stale → reload alla riapertura
+  } else {
+    loadForecast();
+  }
+}
+
+function switchCfTab(name) {
+  if (_activeTab === name) return;
+  _activeTab = name;
+  document.querySelectorAll('.cf-tab').forEach(b => {
+    b.classList.toggle('is-active', b.dataset.cfTab === name);
+  });
+  document.getElementById('cf-pane-cash').style.display = (name === 'cash') ? '' : 'none';
+  document.getElementById('cf-pane-forecast').style.display = (name === 'forecast') ? '' : 'none';
+  if (name === 'forecast' && !_forecastLoaded) {
+    loadForecast();
+  }
+  // Deep-link via hash per "Forecast / Pipeline" da sidebar.
+  try { history.replaceState(null, '', '#' + name); } catch(e) {}
+}
+
+// ───────── TAB Cassa ─────────
 async function loadCashflow() {
   const year = parseInt(document.getElementById('cf-year').value || _curYear);
   const cid = document.getElementById('cf-client').value;
@@ -189,12 +331,12 @@ async function loadCashflow() {
   netEl.style.color = net >= 0 ? 'var(--green)' : 'var(--rose)';
 
   const gran = document.getElementById('cf-granularity')?.value || 'month';
-  const rows = aggregateBy(months, gran, year);
-  renderChart(rows, year, gran);
-  renderTable(rows, gran);
+  const rows = aggregateCashflow(months, gran, year);
+  renderCashflowChart(rows, year, gran);
+  renderCashflowTable(rows, gran);
 }
 
-function aggregateBy(months, gran, year) {
+function aggregateCashflow(months, gran, year) {
   if (gran === 'month') return months;
   const SUM_KEYS = [
     'invoiced','paid','outstanding','supplier_billed','supplier_paid','supplier_due','net_cashflow',
@@ -219,7 +361,7 @@ function aggregateBy(months, gran, year) {
   return months;
 }
 
-function renderChart(rows, year, gran) {
+function renderCashflowChart(rows, year, gran) {
   const host = document.getElementById('cf-chart');
   while (host.firstChild) host.removeChild(host.firstChild);
   host.style.gridTemplateColumns = `repeat(${rows.length || 1}, 1fr)`;
@@ -251,7 +393,7 @@ function renderChart(rows, year, gran) {
   }
 }
 
-function renderTable(rows, gran) {
+function renderCashflowTable(rows, gran) {
   const tbody = document.getElementById('cf-tbody');
   while (tbody.firstChild) tbody.removeChild(tbody.firstChild);
   for (const m of rows) {
@@ -272,7 +414,6 @@ function renderTable(rows, gran) {
       const td = document.createElement('td');
       if (i > 0) { td.className = 'mono text-right'; }
       td.textContent = v;
-      // Color cassa netta + outflow
       if (i === 5 && (m.supplier_paid || 0) > 0) td.style.color = '#ef4444';
       if (i === 6) td.style.color = net >= 0 ? 'var(--green)' : 'var(--rose)';
       tr.appendChild(td);
@@ -281,7 +422,199 @@ function renderTable(rows, gran) {
   }
 }
 
+// ───────── TAB Forecast / Pipeline ─────────
+async function loadForecast() {
+  const year = parseInt(document.getElementById('cf-year').value || _curYear);
+  const cid = document.getElementById('cf-client').value;
+  const pid = document.getElementById('cf-project').value;
+  const gran = document.getElementById('cf-granularity').value || 'month';
+  const qs = []; if (cid) qs.push('client_id='+cid); if (pid) qs.push('project_id='+pid);
+  const suffix = qs.length ? '?' + qs.join('&') : '';
+  let cf, forecast;
+  try {
+    [cf, forecast] = await Promise.all([
+      api('GET', `/finance/api/cashflow/${year}${suffix}`),
+      api('GET', `/finance/api/forecast/${year}${suffix}`),
+    ]);
+  } catch(e) { toast(e.message || 'Errore caricamento', 'error'); return; }
+  _forecastLoaded = true;
+  renderForecastKPIs(forecast.totals);
+  const rows = aggregateForecast(cf.months, gran, year);
+  document.getElementById('bk-title').textContent =
+    gran === 'quarter' ? 'Breakdown trimestrale' :
+    gran === 'year'    ? 'Breakdown annuale'    : 'Breakdown mensile';
+  document.getElementById('bk-period-th').textContent =
+    gran === 'quarter' ? 'Trimestre' : (gran === 'year' ? 'Anno' : 'Mese');
+  renderForecastTable(rows, gran);
+  renderForecastChart(rows, year, gran);
+  await renderWinLoss(cid, pid);
+}
+
+function aggregateForecast(months, gran, year) {
+  if (gran === 'month') return months;
+  const SUM_KEYS = [
+    'invoiced','paid','outstanding','supplier_billed','supplier_paid','supplier_due',
+    'net_cashflow','forecast_soft','forecast_committed','forecast_weighted',
+    'pipeline_total','quotes_approved','quotes_sent','quotes_rejected','projected_cash',
+  ];
+  if (gran === 'quarter') {
+    const out = [];
+    for (let q = 0; q < 4; q++) {
+      const slice = months.slice(q * 3, q * 3 + 3);
+      const row = { period_label: 'Q' + (q + 1), month: q * 3 + 1, _is_current: false };
+      SUM_KEYS.forEach(k => { row[k] = slice.reduce((a, m) => a + (m[k] || 0), 0); });
+      const today = new Date();
+      const curQ = Math.floor(today.getMonth() / 3);
+      if (today.getFullYear() === year && curQ === q) row._is_current = true;
+      out.push(row);
+    }
+    return out;
+  }
+  if (gran === 'year') {
+    const row = { period_label: String(year), month: 1, _is_current: false };
+    SUM_KEYS.forEach(k => { row[k] = months.reduce((a, m) => a + (m[k] || 0), 0); });
+    return [row];
+  }
+  return months;
+}
+
+function renderForecastKPIs(t) {
+  document.getElementById('kpi-pipeline').textContent = fmtCurrency(t.pipeline_total || 0);
+  document.getElementById('kpi-weighted').textContent = fmtCurrency(t.weighted_forecast || 0);
+  document.getElementById('kpi-won').textContent = fmtCurrency(t.won_value || 0);
+  document.getElementById('kpi-won-count').textContent = (t.n_won || 0) + ' quote';
+  document.getElementById('kpi-lost').textContent = fmtCurrency(t.lost_value || 0);
+  document.getElementById('kpi-lost-count').textContent = (t.n_lost || 0) + ' quote';
+  document.getElementById('kpi-winrate').textContent = (t.win_rate_pct != null ? t.win_rate_pct + '%' : '—');
+  document.getElementById('kpi-avg').textContent = (t.average_deal_size != null ? fmtCurrency(t.average_deal_size) : '—');
+}
+
+function renderForecastTable(rows, gran) {
+  const tbody = document.getElementById('forecast-tbody');
+  while (tbody.firstChild) tbody.removeChild(tbody.firstChild);
+  rows.forEach(m => {
+    const tr = document.createElement('tr');
+    const td = (txt, css) => { const e = document.createElement('td'); if (css) e.className = css; e.textContent = txt; tr.appendChild(e); };
+    const label = m.period_label || MESI_IT[m.month-1] || '?';
+    td(label);
+    td(fmtCurrency(m.quotes_sent || 0), 'mono text-right');
+    td(fmtCurrency(m.quotes_approved || 0), 'mono text-right');
+    td(fmtCurrency(m.quotes_rejected || 0), 'mono text-right');
+    const tdF = document.createElement('td');
+    tdF.className = 'mono text-right'; tdF.style.color = 'var(--indigo2)';
+    tdF.textContent = fmtCurrency(m.forecast_weighted || 0); tr.appendChild(tdF);
+    const tdP = document.createElement('td');
+    tdP.className = 'mono text-right'; tdP.style.color = 'var(--green)';
+    tdP.textContent = fmtCurrency(m.paid || 0); tr.appendChild(tdP);
+    const tdO = document.createElement('td');
+    tdO.className = 'mono text-right'; tdO.style.color = '#ef4444';
+    tdO.textContent = fmtCurrency(m.supplier_paid || 0); tr.appendChild(tdO);
+    const tdPC = document.createElement('td');
+    tdPC.className = 'mono text-right';
+    const pc = m.projected_cash || 0;
+    tdPC.style.color = pc >= 0 ? 'var(--green)' : 'var(--rose)';
+    tdPC.style.fontWeight = '600';
+    tdPC.textContent = fmtCurrency(pc); tr.appendChild(tdPC);
+    tbody.appendChild(tr);
+  });
+}
+
+function renderForecastChart(rows, year, gran) {
+  const host = document.getElementById('cascade-chart');
+  while (host.firstChild) host.removeChild(host.firstChild);
+  const cols = rows.length || 1;
+  host.style.gridTemplateColumns = `repeat(${cols}, 1fr)`;
+  const maxV = Math.max(1, ...rows.map(m => Math.max(
+    m.paid||0, m.forecast_committed||0, m.forecast_soft||0, m.supplier_paid||0
+  )));
+  const today = new Date();
+  const curMonth = (today.getFullYear() === year) ? today.getMonth() + 1 : 0;
+  rows.forEach(m => {
+    const col = document.createElement('div'); col.className = 'cc-col';
+    const bars = document.createElement('div'); bars.className = 'cc-bars';
+    const label = m.period_label || MESI_IT[m.month-1] || '?';
+    const tip = `${label}: Incassato ${fmtCurrency(m.paid||0)} · Committed ${fmtCurrency(m.forecast_committed||0)} · Soft ${fmtCurrency(m.forecast_soft||0)} · Outflow ${fmtCurrency(m.supplier_paid||0)}`;
+    ['paid','committed','soft','outflow'].forEach(k => {
+      const b = document.createElement('div');
+      b.className = 'cc-bar b-' + k;
+      const v = k === 'paid' ? (m.paid||0)
+              : k === 'committed' ? (m.forecast_committed||0)
+              : k === 'soft' ? (m.forecast_soft||0)
+              : (m.supplier_paid||0);
+      b.style.height = Math.max(1, Math.round(v / maxV * 220)) + 'px';
+      b.title = tip;
+      bars.appendChild(b);
+    });
+    const lbl = document.createElement('div');
+    const isCurrent = m._is_current === true || m.month === curMonth;
+    lbl.className = 'cc-month-label' + (isCurrent ? ' is-current' : '');
+    lbl.textContent = label;
+    col.appendChild(bars); col.appendChild(lbl);
+    host.appendChild(col);
+  });
+}
+
+async function renderWinLoss(cid, pid) {
+  const host = document.getElementById('winloss-host');
+  while (host.firstChild) host.removeChild(host.firstChild);
+  let quotes;
+  try { quotes = await api('GET', '/quotes/api'); }
+  catch(e) { host.textContent = 'Errore: ' + (e.message || ''); return; }
+  const byClient = {};
+  quotes.forEach(q => {
+    const cn = q.client_name || q.client || ('Cliente '+q.client_id);
+    if (!byClient[cn]) byClient[cn] = { won: 0, lost: 0, won_value: 0, lost_value: 0, pipeline: 0 };
+    const tot = q.total_with_vat || q.total || 0;
+    if (q.status === 'approved') { byClient[cn].won++; byClient[cn].won_value += tot; }
+    else if (q.status === 'rejected') { byClient[cn].lost++; byClient[cn].lost_value += tot; }
+    else if (q.status === 'sent' || q.status === 'draft') { byClient[cn].pipeline += tot; }
+  });
+  const rows = Object.entries(byClient)
+    .filter(([n, v]) => v.won_value + v.lost_value + v.pipeline > 0)
+    .sort((a, b) => (b[1].won_value + b[1].lost_value) - (a[1].won_value + a[1].lost_value))
+    .slice(0, 10);
+  if (!rows.length) {
+    host.className = 'text-muted'; host.textContent = 'Nessun dato win/loss disponibile.';
+    return;
+  }
+  const tbl = document.createElement('table');
+  tbl.style.cssText = 'width:100%;font-size:13px;';
+  const thead = document.createElement('thead');
+  const trh = document.createElement('tr'); trh.style.color = 'var(--text3)';
+  ['Cliente','Vinte (€)','Perse (€)','Pipeline (€)','Win rate'].forEach(h => {
+    const th = document.createElement('th'); th.style.padding = '6px';
+    th.style.textAlign = h === 'Cliente' ? 'left' : 'right';
+    th.textContent = h; trh.appendChild(th);
+  });
+  thead.appendChild(trh); tbl.appendChild(thead);
+  const tbody = document.createElement('tbody');
+  rows.forEach(([cn, v]) => {
+    const tr = document.createElement('tr');
+    tr.style.borderBottom = '1px solid var(--border)';
+    const td = (txt, css) => { const e = document.createElement('td'); e.style.padding = '6px'; if (css) e.className = css; e.textContent = txt; tr.appendChild(e); };
+    td(cn);
+    td(fmtCurrency(v.won_value), 'mono text-right');
+    const tdL = document.createElement('td'); tdL.style.cssText = 'padding:6px;color:var(--rose);';
+    tdL.className = 'mono text-right'; tdL.textContent = fmtCurrency(v.lost_value); tr.appendChild(tdL);
+    const tdP = document.createElement('td'); tdP.style.cssText = 'padding:6px;color:var(--indigo2);';
+    tdP.className = 'mono text-right'; tdP.textContent = fmtCurrency(v.pipeline); tr.appendChild(tdP);
+    const total = v.won + v.lost;
+    const wr = total ? Math.round(v.won / total * 100) + '%' : '—';
+    td(wr, 'mono text-right');
+    tbody.appendChild(tr);
+  });
+  tbl.appendChild(tbody);
+  host.appendChild(tbl);
+}
+
 initYearSelect();
-loadFilters().then(loadCashflow);
+loadFilters().then(() => {
+  // Deep-link: #forecast switcha al tab Forecast direttamente.
+  if (window.location.hash === '#forecast') {
+    switchCfTab('forecast');
+  } else {
+    loadCashflow();
+  }
+});
 </script>
 {% endblock %}

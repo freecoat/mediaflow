@@ -17,9 +17,14 @@
   </div>
 </div>
 
-<!-- Filtri -->
+<!-- Filtri — v3.5.0-alpha.88: search + cliente + progetto + periodo via MFFilterBar -->
+<div id="pa-global-filters" style="margin-bottom:10px;"></div>
 <div class="card mb-3" style="padding:10px 14px;">
   <div style="display:flex; gap:10px; align-items:center; flex-wrap:wrap;">
+    <div class="search-bar" style="min-width:200px;">
+      <span>🔍</span>
+      <input type="text" id="f-search" placeholder="Etichetta · serial · barcode" oninput="loadAssets()">
+    </div>
     <label class="text-sm" style="display:flex; align-items:center; gap:6px;">Tipo:
       <select id="f-kind" class="form-select" onchange="loadAssets()" style="max-width:160px;">
         <option value="">Tutti</option>
@@ -44,7 +49,7 @@
 
 <div class="card">
   <div class="table-wrap">
-    <table>
+    <table class="mf-sortable">
       <thead>
         <tr>
           <th style="width:60px;">Tipo</th>
@@ -366,6 +371,14 @@ async function loadAssets() {
   const params = new URLSearchParams();
   const kind = document.getElementById('f-kind').value;
   if (kind) params.set('kind', kind);
+  // v3.5.0-alpha.88: search + filtri cliente/progetto/periodo
+  const search = document.getElementById('f-search')?.value.trim();
+  if (search) params.set('q', search);
+  const gf = window._paFilters || {};
+  if (gf.client_id)  params.set('client_id', gf.client_id);
+  if (gf.project_id) params.set('project_id', gf.project_id);
+  if (gf.from_date)  params.set('from_date', gf.from_date);
+  if (gf.to_date)    params.set('to_date', gf.to_date);
   if (document.getElementById('f-internal').checked) params.set('only_internal_archive', 'true');
   if (document.getElementById('f-delivered').checked) params.set('only_delivered_external', 'true');
   if (document.getElementById('f-deleted').checked) params.set('include_deleted', 'true');
@@ -780,6 +793,48 @@ async function mvConfirm(mid) {
   } catch(e) { toast(e.message || 'Errore', 'error'); }
 }
 
+// v3.5.0-alpha.88 — Filtri globali cliente/progetto/periodo via MFFilterBar
+window._paFilters = { client_id: null, project_id: null, from_date: '', to_date: '' };
+let _paClients = [], _paProjects = [];
+async function _initPaFilters() {
+  try {
+    [_paClients, _paProjects] = await Promise.all([
+      api('GET', '/planning/api/clients').catch(() => []),
+      api('GET', '/projects/api').catch(() => []),
+    ]);
+  } catch(e) {}
+  MFFilterBar({
+    host: document.getElementById('pa-global-filters'),
+    filters: [
+      { kind: 'autocomplete', id: 'client_id', label: 'Cliente',
+        data: () => _paClients,
+        search: (it, q) => (it.name||'').toLowerCase().includes(q),
+        display: it => it.name || ('Cliente '+it.id),
+        placeholder: 'Tutti i clienti' },
+      { kind: 'autocomplete', id: 'project_id', label: 'Progetto',
+        dependsOn: 'client_id',
+        data: () => {
+          const cid = window._paFilters.client_id;
+          return cid ? _paProjects.filter(p => p.client_id === cid) : _paProjects;
+        },
+        search: (it, q) => ((it.code||'').toLowerCase().includes(q) || (it.title||'').toLowerCase().includes(q)),
+        display: it => `${it.code} — ${it.title}`,
+        placeholder: 'Tutti i progetti' },
+      { kind: 'date', id: 'from_date', label: 'Dal' },
+      { kind: 'date', id: 'to_date',   label: 'Al' },
+    ],
+    onChange: (v) => {
+      window._paFilters = {
+        client_id: v.client_id || null,
+        project_id: v.project_id || null,
+        from_date: v.from_date || '',
+        to_date: v.to_date || '',
+      };
+      loadAssets();
+    },
+  });
+}
+_initPaFilters();
 loadAssets();
 </script>
 {% endblock %}

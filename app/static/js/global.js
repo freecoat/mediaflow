@@ -1059,6 +1059,98 @@ function MFFilterBar(opts) {
 window.MFFilterBar = MFFilterBar;
 
 
+// ── v3.5.0-alpha.88 — Generic sortable tables ──────────────────
+//
+// Aggiungere `mf-sortable` alla <table>: ogni <th> diventa cliccabile e
+// ordina la tbody secondo la colonna. Doppio click = ordine inverso.
+// Per disabilitare un <th>: `data-no-sort="true"`.
+// Per override del valore: `data-sort-value="..."` sulle <td>.
+// Auto-attach: tables aggiunte dinamicamente vengono inizializzate via
+// MutationObserver leggero (skip se già inizializzata, idempotente).
+function mfEnableSortableTables(root) {
+  (root || document).querySelectorAll('table.mf-sortable').forEach(table => {
+    if (table.dataset.mfSortInit) return;
+    table.dataset.mfSortInit = '1';
+    const ths = table.querySelectorAll('thead th');
+    ths.forEach((th, idx) => {
+      if (th.dataset.noSort === 'true') return;
+      th.style.cursor = 'pointer';
+      th.classList.add('mf-th-sortable');
+      th.addEventListener('click', (ev) => {
+        ev.preventDefault();
+        mfSortTableBy(table, idx, th);
+      });
+    });
+  });
+}
+
+function mfSortTableBy(table, idx, th) {
+  const tbody = table.querySelector('tbody');
+  if (!tbody) return;
+  const rows = Array.from(tbody.rows);
+  if (!rows.length) return;
+  const isAsc = th.dataset.sortDir !== 'asc';
+  table.querySelectorAll('thead th').forEach(t => {
+    t.dataset.sortDir = '';
+    t.classList.remove('sorted-asc', 'sorted-desc');
+  });
+  th.dataset.sortDir = isAsc ? 'asc' : 'desc';
+  th.classList.add(isAsc ? 'sorted-asc' : 'sorted-desc');
+  const cellValue = (r) => {
+    const c = r.cells[idx];
+    if (!c) return '';
+    if (c.dataset && c.dataset.sortValue != null) return c.dataset.sortValue;
+    return (c.textContent || '').trim();
+  };
+  const tryNumber = (s) => {
+    if (!s || s === '—') return NaN;
+    const cleaned = String(s).replace(/[€$\s%h]/g, '').replace(/\.(?=\d{3}(\D|$))/g, '').replace(',', '.');
+    const n = Number(cleaned);
+    return isNaN(n) ? NaN : n;
+  };
+  const isoDate = (s) => /^\d{4}-\d{2}-\d{2}$/.test(s) ? s : null;
+  const sampleVals = rows.slice(0, Math.min(rows.length, 6)).map(r => cellValue(r));
+  const isNumeric = sampleVals.length > 0 && sampleVals.every(v => v === '' || v === '—' || !isNaN(tryNumber(v)));
+  const isDate = !isNumeric && sampleVals.length > 0 && sampleVals.every(v => !v || v === '—' || isoDate(v));
+  rows.sort((a, b) => {
+    const av = cellValue(a), bv = cellValue(b);
+    let cmp;
+    if (isNumeric) {
+      const an = tryNumber(av), bn = tryNumber(bv);
+      const A = isNaN(an) ? -Infinity : an;
+      const B = isNaN(bn) ? -Infinity : bn;
+      cmp = A - B;
+    } else if (isDate) {
+      cmp = av.localeCompare(bv);
+    } else {
+      cmp = av.localeCompare(bv, 'it', { numeric: true, sensitivity: 'base' });
+    }
+    return isAsc ? cmp : -cmp;
+  });
+  const frag = document.createDocumentFragment();
+  rows.forEach(r => frag.appendChild(r));
+  tbody.appendChild(frag);
+}
+
+window.mfEnableSortableTables = mfEnableSortableTables;
+
+document.addEventListener('DOMContentLoaded', () => mfEnableSortableTables());
+// Tabelle riempite via API → riapplica al primo append in body.
+(function watchSortable() {
+  if (!('MutationObserver' in window)) return;
+  let scheduled = false;
+  const obs = new MutationObserver(() => {
+    if (scheduled) return;
+    scheduled = true;
+    (window.requestIdleCallback || setTimeout)(() => {
+      scheduled = false;
+      mfEnableSortableTables();
+    }, 80);
+  });
+  obs.observe(document.body, { childList: true, subtree: true });
+})();
+
+
 // ── v3.4.40 — Time picker popup ───────────────────────────────
 //
 // Popup HH:MM grid che si attacca a ogni <input type="time"> non

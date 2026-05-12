@@ -134,7 +134,11 @@ async def list_assets(
     if q:
         query = query.filter(Asset.original_name.ilike(f"%{q}%"))
     if tag:
-        query = query.join(AssetTag).join(Tag).filter(Tag.name == tag)
+        # v3.5.0-alpha.88 — tag ora accetta CSV per multi-select (es. tag=raw,finale).
+        # Match ANY: l'asset ha almeno uno dei tag richiesti.
+        tag_names = [t.strip() for t in tag.split(",") if t.strip()]
+        if tag_names:
+            query = query.join(AssetTag).join(Tag).filter(Tag.name.in_(tag_names))
     # v3.5.0-alpha.86 (S3.4) — client_id + period + tech filters
     if client_id:
         from app.models import Project as _Project

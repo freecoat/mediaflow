@@ -42,7 +42,7 @@
     <button class="btn btn-ghost btn-sm" onclick="resetCrFilters()">Reset</button>
   </div>
   <div class="table-wrap">
-    <table>
+    <table class="mf-sortable">
       <thead>
         <tr>
           <th style="width:120px;">Codice</th>
@@ -108,65 +108,55 @@
 </div>
 
 <div id="report-area" class="hidden">
-  <!-- KPI row -->
-  <div class="stat-grid mb-4" id="kpi-grid"></div>
+  <!-- KPI row — v3.5.0-alpha.88: variante compatta (12 KPI in singola riga) -->
+  <div class="stat-grid stat-grid-compact mb-4" id="kpi-grid"></div>
 
-  <!-- ── Voci di costo + Risorse/Timesheet (v3.5.0-alpha.86 — riordino S3.3) ──
-       Spostati SOPRA "Ore booking per fascia" per matching mentale:
-       prima il quadro economico (quote/maturato/extra), poi il dettaglio ore.
-       Era invertito pre-S3. -->
-  <div class="grid-2" style="align-items:start;gap:20px;">
-
-    <!-- v3.5.0-alpha.48: widget Fatturazione (Step 3 Cost Report → Billing) -->
-    <div class="card mb-4" id="billing-widget" style="display:none;">
-      <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:10px;">
-        <div class="card-title" style="margin:0;">Fatturazione</div>
-        <button class="btn btn-primary btn-sm" onclick="openTransmitModal()" title="Trasmetti il maturato non ancora fatturato a /finance per approvazione e fattura">
-          📤 Trasmetti a fatturazione
-        </button>
-      </div>
-      <div id="billing-summary" style="display:grid; grid-template-columns:repeat(auto-fit, minmax(140px, 1fr)); gap:10px; margin-bottom:14px;"></div>
-      <div id="billing-batches"></div>
-    </div>
-
-    <!-- Cost lines table -->
-    <div class="card">
-      <div class="card-title mb-3">Voci di costo: Quotazione vs Reale</div>
-      <div class="table-wrap">
-        <table>
-          <thead>
-            <tr>
-              <th>Voce</th><th>Unità</th>
-              <th class="text-right">Quotato</th>
-              <th class="text-right" title="Σ JCLBilledSlice — chiuso in fattura, immutabile">Fatturato</th>
-              <th class="text-right" title="Maturato eccedente il già fatturato (done senza slice)">Mat. post</th>
-              <th class="text-right" title="Stima ulteriori ore ancora da lavorare (planned − done)">Stim. fut.</th>
-              <th class="text-right">Over/Under</th>
-              <th class="text-right" title="Σ ore done × Resource.internal_cost_hourly — costo reale risorse interne (α.67)">Costo reale</th>
-              <th class="text-right" title="Maturato − Costo reale (margine reale stimato basato sui cost-rate interni)">Margine reale</th>
-              <th>Fatt.</th>
-              <th></th>
-            </tr>
-          </thead>
-          <tbody id="cost-lines-table"></tbody>
-        </table>
-      </div>
-    </div>
-
-    <!-- Risorse + Timesheet (rimangono nel grid-2 sotto i widget) -->
-    <div>
-      <div class="card mb-4">
-        <div class="card-title mb-3">Risorse assegnate al progetto</div>
-        <div id="resources-panel" class="text-muted text-sm">Nessuna risorsa assegnata</div>
-      </div>
-      <div class="card">
-        <div class="card-title mb-3">Ore lavorate (consuntivo)</div>
-        <div id="timesheet-panel" class="text-muted text-sm">Nessuna ora registrata</div>
-      </div>
-    </div>
-
+  <!-- v3.5.0-alpha.88 — Risorse assegnate SOPRA il quadro economico (ticket
+       Matteo 12 mag). Era nel grid-2 a destra di Voci di costo. -->
+  <div class="card mb-4" id="resources-card">
+    <div class="card-title mb-3">Risorse assegnate al progetto</div>
+    <div id="resources-panel" class="text-muted text-sm">Nessuna risorsa assegnata</div>
   </div>
-  <!-- /grid-2 voci di costo -->
+
+  <!-- v3.5.0-alpha.48: widget Fatturazione (Step 3 Cost Report → Billing) -->
+  <div class="card mb-4" id="billing-widget" style="display:none;">
+    <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:10px;">
+      <div class="card-title" style="margin:0;">Fatturazione</div>
+      <button class="btn btn-primary btn-sm" onclick="openTransmitModal()" title="Trasmetti il maturato non ancora fatturato a /finance per approvazione e fattura">
+        📤 Trasmetti a fatturazione
+      </button>
+    </div>
+    <div id="billing-summary" style="display:grid; grid-template-columns:repeat(auto-fit, minmax(140px, 1fr)); gap:10px; margin-bottom:14px;"></div>
+    <div id="billing-batches"></div>
+  </div>
+
+  <!-- v3.5.0-alpha.88 — Voci di costo FULL WIDTH (era 50% in grid-2).
+       11 colonne richiedevano scroll orizzontale → overlap con sezione sotto. -->
+  <div class="card mb-4">
+    <div class="card-title mb-3">Voci di costo: Quotazione vs Reale</div>
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>Voce</th><th>Unità</th>
+            <th class="text-right">Quotato</th>
+            <th class="text-right" title="Σ JCLBilledSlice — chiuso in fattura, immutabile">Fatturato</th>
+            <th class="text-right" title="Maturato eccedente il già fatturato (done senza slice)">Mat. post</th>
+            <th class="text-right" title="Stima ulteriori ore ancora da lavorare (planned − done)">Stim. fut.</th>
+            <th class="text-right">Over/Under</th>
+            <th class="text-right" title="Σ ore done × Resource.internal_cost_hourly — costo reale risorse interne (α.67)">Costo reale</th>
+            <th class="text-right" title="Maturato − Costo reale (margine reale stimato basato sui cost-rate interni)">Margine reale</th>
+            <th>Fatt.</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody id="cost-lines-table"></tbody>
+      </table>
+    </div>
+  </div>
+  <!-- v3.5.0-alpha.88: card "Ore lavorate (consuntivo)" rimossa — era sempre
+       vuota (deprecata da R3.5 v3.4.38, le ore canoniche sono in "Ore booking
+       per fascia" sotto). -->
 
   <!-- ── Booking esecutivo (v3.4.32) ───────────────────────── -->
   <!-- Aggrega ore booking per fascia (regular/overtime/notturno/festivo)
@@ -571,7 +561,8 @@ async function loadReport(jobId) {
     wrWrap.style.background = job.weighted_revenue ? 'rgba(168,85,247,0.12)' : 'transparent';
   }
   updateExportLinks();
-  renderKPIs(); renderCostLines(); renderResources(); renderTimesheets();
+  renderKPIs(); renderCostLines(); renderResources();
+  // v3.5.0-alpha.88: renderTimesheets() rimosso (pannello deprecato α.66.66).
   renderBillingWidget();  // v3.5.0-alpha.48: widget Fatturazione (Step 3)
   renderBookingSummary(id);
 }
@@ -792,7 +783,11 @@ async function poolDiscard(bid) {
 // v3.5.0-alpha.69.2 — Drill-down risorsa → job lavorati
 async function openResourceJobs(resourceId, resourceName) {
   const body = document.getElementById('rj-body');
-  document.getElementById('rj-title').textContent = `${resourceName || 'Risorsa'} — job lavorati`;
+  // v3.5.0-alpha.88 — scope al solo progetto corrente (ticket Matteo 12 mag).
+  const pid = currentReport && currentReport.job && currentReport.job.project_id;
+  const projectTitle = currentReport && currentReport.job && currentReport.job.project_title;
+  const scopeLabel = pid ? ` — solo progetto ${projectTitle || '#'+pid}` : '';
+  document.getElementById('rj-title').textContent = `${resourceName || 'Risorsa'} — job lavorati${scopeLabel}`;
   while (body.firstChild) body.removeChild(body.firstChild);
   const loading = document.createElement('div');
   loading.className = 'text-muted';
@@ -800,7 +795,8 @@ async function openResourceJobs(resourceId, resourceName) {
   body.appendChild(loading);
   openModal('modal-resource-jobs');
   try {
-    const d = await api('GET', `/cost-report/api/resource/${resourceId}/jobs`);
+    const qs = pid ? `?project_id=${pid}` : '';
+    const d = await api('GET', `/cost-report/api/resource/${resourceId}/jobs${qs}`);
     while (body.firstChild) body.removeChild(body.firstChild);
     // Header summary
     const hdr = document.createElement('div');
@@ -1396,15 +1392,8 @@ function renderResources() {
     </div>`).join('');
 }
 
-function renderTimesheets() {
-  // v3.4.38 (R3.5): timesheet_summary rimosso dal cost report (binario HR
-  // separato). Il pannello "Ore lavorate" ora rimanda alla sezione booking
-  // per fascia (v3.4.32) che mostra le ore canoniche da Booking.
-  const panel = document.getElementById('timesheet-panel');
-  if (panel) {
-    panel.innerHTML = '<div class="text-muted text-sm">Le ore lavorate sono ora visualizzate nella sezione "⏱ Ore booking per fascia" sopra (fonte canonica: Booking, non Timesheet).</div>';
-  }
-}
+// v3.5.0-alpha.88 — renderTimesheets rimosso: pannello deprecato α.66.66
+// (le ore canoniche sono in "Ore booking per fascia").
 
 function openUpdateLine(line) {
   document.getElementById('ul-id').value = line.id;

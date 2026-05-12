@@ -9,7 +9,7 @@
   <meta http-equiv="Pragma" content="no-cache">
   <meta http-equiv="Expires" content="0">
   <title>{% block title %}MediaFlow{% endblock %}</title>
-  <link rel="stylesheet" href="/static/css/main.css?v=3.5.0-alpha.87">
+  <link rel="stylesheet" href="/static/css/main.css?v=3.5.0-alpha.88">
   <link rel="stylesheet" href="/static/css/sleek.css?v=3.5.0-alpha.80">
   <script>
     // v3.5.0-alpha.80 — Sleek mode toggle (default ON)
@@ -112,11 +112,10 @@
           <span class="nav-icon"><i data-lucide="euro"></i></span> Fatturazione
         </a>
         <a href="/finance/cashflow" data-nav-id="cashflow" class="nav-item {% if active_page == 'cashflow' %}active{% endif %}">
-          <span class="nav-icon"><i data-lucide="line-chart"></i></span> Cashflow
+          <span class="nav-icon"><i data-lucide="line-chart"></i></span> Cashflow &amp; Forecast
         </a>
-        <a href="/finance/forecast" data-nav-id="finance_forecast" class="nav-item {% if active_page == 'finance_forecast' %}active{% endif %}">
-          <span class="nav-icon"><i data-lucide="trending-up"></i></span> Forecast / Pipeline
-        </a>
+        <!-- v3.5.0-alpha.88: voce "Forecast / Pipeline" rimossa, accorpata
+             in /finance/cashflow come secondo tab (#forecast deep-link). -->
         <a href="/finance/reports" data-nav-id="finance_reports" class="nav-item {% if active_page == 'finance_reports' %}active{% endif %}">
           <span class="nav-icon"><i data-lucide="file-bar-chart"></i></span> Report YoY + Export
         </a>

@@ -132,10 +132,15 @@ async def list_invoices(
     project_id: Optional[int] = None,
     from_date: Optional[date] = None,
     to_date: Optional[date] = None,
+    only_overdue: bool = False,
     db: Session = Depends(get_db),
 ):
     """v3.5.0-alpha.86 — Filtri estesi (S3.1): project + period.
-    project_id richiede join via Job."""
+    project_id richiede join via Job.
+
+    v3.5.0-alpha.88: only_overdue=true filtra fatture *davvero* scadute
+    (due_date < oggi AND status NOT IN (paid, cancelled)) anche se non
+    marcate esplicitamente come overdue."""
     q = db.query(Invoice).options(joinedload(Invoice.client))
     if status:
         q = q.filter(Invoice.status == status)
@@ -148,6 +153,14 @@ async def list_invoices(
         q = q.filter(Invoice.issue_date >= from_date)
     if to_date:
         q = q.filter(Invoice.issue_date <= to_date)
+    if only_overdue:
+        from datetime import date as _date
+        today = _date.today()
+        q = q.filter(
+            Invoice.due_date.isnot(None),
+            Invoice.due_date < today,
+            Invoice.status.notin_([InvoiceStatus.paid, InvoiceStatus.cancelled]),
+        )
     return q.all()
 
 
@@ -348,8 +361,13 @@ async def delete_invoice_payment(payment_id: int, db: Session = Depends(get_db))
 
 @router.get("/forecast", response_class=HTMLResponse)
 async def forecast_page(request: Request, db: Session = Depends(get_db)):
-    """v3.5.0-alpha.77 — Financial model esteso (pipeline + forecast)."""
-    return _tpl().TemplateResponse("pages/finance_forecast.html", {"request": request})
+    """v3.5.0-alpha.77 — Financial model esteso (pipeline + forecast).
+
+    v3.5.0-alpha.88: pagina forecast accorpata in /finance/cashflow come
+    secondo tab. La rotta resta come alias deep-link → redirect 302 al tab
+    `forecast` della pagina cashflow combinata."""
+    from fastapi.responses import RedirectResponse
+    return RedirectResponse(url="/finance/cashflow#forecast", status_code=302)
 
 
 @router.get("/reports", response_class=HTMLResponse)

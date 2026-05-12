@@ -28,18 +28,26 @@
 <!-- ── Sezione fatture ─────────────────────────────────────── -->
 <div id="section-invoices">
   <!-- Filtri -->
-  <div class="flex gap-3 mb-4">
+  <div class="flex gap-3 mb-4 items-center">
     <select class="form-select" style="width:auto;" id="inv-filter" onchange="loadInvoices()">
       <option value="">Tutti gli stati</option>
       <option value="draft">Bozza</option>
       <option value="sent">Inviata</option>
       <option value="paid">Pagata</option>
-      <option value="overdue">Scaduta</option>
+      <option value="overdue">Scaduta (marcata)</option>
     </select>
+    <!-- v3.5.0-alpha.88: filtro "Solo scadute davvero" — due_date < oggi
+         AND status NOT IN (paid, cancelled). Più ampio del marker overdue
+         esplicito perché cattura anche le "sent" mai aggiornate. -->
+    <label class="text-sm" style="display:flex; align-items:center; gap:6px; cursor:pointer;"
+           title="Filtra le fatture con scadenza nel passato non ancora pagate (anche se non flaggate overdue).">
+      <input type="checkbox" id="inv-only-overdue" onchange="loadInvoices()">
+      Solo scadute (due_date passata)
+    </label>
   </div>
   <div class="card">
     <div class="table-wrap">
-      <table>
+      <table class="mf-sortable">
         <thead>
           <tr>
             <th>Numero</th>
@@ -48,7 +56,7 @@
             <th>Scadenza</th>
             <th>Totale</th>
             <th>Stato</th>
-            <th></th>
+            <th data-no-sort="true"></th>
           </tr>
         </thead>
         <tbody id="inv-table">
@@ -77,7 +85,7 @@
   </div>
   <div class="card">
     <div class="table-wrap">
-      <table>
+      <table class="mf-sortable">
         <thead>
           <tr>
             <th>Codice</th>
@@ -88,7 +96,7 @@
             <th class="text-right">Approvato</th>
             <th class="text-right">Perso</th>
             <th>Fattura</th>
-            <th></th>
+            <th data-no-sort="true"></th>
           </tr>
         </thead>
         <tbody id="batches-table">
@@ -106,7 +114,7 @@
   </div>
   <div class="card">
     <div class="table-wrap">
-      <table>
+      <table class="mf-sortable">
         <thead>
           <tr><th>Data</th><th>Utente</th><th>Job</th><th>Ore</th><th>Tariffa</th><th>Totale</th><th>Fatturabile</th></tr>
         </thead>
@@ -139,11 +147,33 @@
 
   <div id="an-summary" class="stat-grid" style="margin-bottom:16px;"></div>
 
-  <div class="card mb-3">
+  <!-- v3.5.0-alpha.88 — Filtro categoria: limita visualizzazione a una o più
+       tassonomie. Default: tutte attive. Click chip = toggle. Doppio-click su
+       chip = SOLO quella categoria (isolazione rapida). -->
+  <div class="flex gap-2 mb-3 items-center" style="flex-wrap:wrap;">
+    <span class="text-sm text-muted" style="margin-right:6px;">Mostra:</span>
+    <button type="button" class="an-chip is-active" data-an-cat="floating" onclick="toggleAnomCat('floating', event)" ondblclick="isolateAnomCat('floating')">🛟 Job orfani</button>
+    <button type="button" class="an-chip is-active" data-an-cat="overruns" onclick="toggleAnomCat('overruns', event)" ondblclick="isolateAnomCat('overruns')">📈 Sforamenti</button>
+    <button type="button" class="an-chip is-active" data-an-cat="extras" onclick="toggleAnomCat('extras', event)" ondblclick="isolateAnomCat('extras')">➕ Extra</button>
+    <button type="button" class="an-chip is-active" data-an-cat="overdue" onclick="toggleAnomCat('overdue', event)" ondblclick="isolateAnomCat('overdue')">🧾 Fatt. pass. scadute</button>
+    <button type="button" class="btn btn-ghost btn-sm" onclick="resetAnomFilters()" style="margin-left:6px;">Reset</button>
+    <span class="text-xs text-muted" style="margin-left:auto;">Doppio-click su un chip per isolare quella categoria.</span>
+  </div>
+  <style>
+    .an-chip {
+      background:var(--bg3); border:1px solid var(--border); color:var(--text2);
+      padding:5px 12px; border-radius:999px; font-size:12px; cursor:pointer;
+      font-family:inherit; transition: all var(--t);
+    }
+    .an-chip:hover { color:var(--text); border-color:var(--border2); }
+    .an-chip.is-active { color:var(--indigo2); border-color:var(--indigo); background:var(--indigo-bg, rgba(98,114,245,.1)); }
+  </style>
+
+  <div class="card mb-3" data-an-section="floating">
     <div class="card-title mb-2">🛟 Job orfani <span class="text-muted text-sm">(senza quotazione)</span></div>
-    <div id="an-floating-empty" class="text-muted text-sm" style="display:none;">Nessun job orfano. ✅</div>
+    <div id="an-floating-empty" class="text-muted text-sm" style="display:none;">Nessun job orfano. ✅ <span class="text-xs">(I job orfani compaiono solo quando un Job esiste senza una Quote collegata, es. dopo versioning con strategia <code>floating_job</code> o cancellazione manuale della quote.)</span></div>
     <div class="table-wrap">
-      <table id="an-floating-table" style="display:none;">
+      <table class="mf-sortable" id="an-floating-table" style="display:none;">
         <thead><tr>
           <th>Codice</th><th>Titolo</th><th>Progetto</th><th>Cliente</th>
           <th>Stato</th><th>Budget</th><th>Consuntivo</th><th>Inizio</th><th></th>
@@ -153,11 +183,11 @@
     </div>
   </div>
 
-  <div class="card mb-3">
+  <div class="card mb-3" data-an-section="overruns">
     <div class="card-title mb-2">📈 Sforamenti <span class="text-muted text-sm">(quantity_actual &gt; quantity_quoted)</span></div>
     <div id="an-overruns-empty" class="text-muted text-sm" style="display:none;">Nessuno sforamento. ✅</div>
     <div class="table-wrap">
-      <table id="an-overruns-table" style="display:none;">
+      <table class="mf-sortable" id="an-overruns-table" style="display:none;">
         <thead><tr>
           <th>Job</th><th>Progetto</th><th>Voce</th><th>Pianif.</th><th>Effett.</th>
           <th>Δ</th><th>Valore extra</th>
@@ -167,11 +197,11 @@
     </div>
   </div>
 
-  <div class="card mb-3">
+  <div class="card mb-3" data-an-section="extras">
     <div class="card-title mb-2">➕ Extra <span class="text-muted text-sm">(lavorazioni aggiunte fuori quote)</span></div>
     <div id="an-extras-empty" class="text-muted text-sm" style="display:none;">Nessun extra. ✅</div>
     <div class="table-wrap">
-      <table id="an-extras-table" style="display:none;">
+      <table class="mf-sortable" id="an-extras-table" style="display:none;">
         <thead><tr>
           <th>Job</th><th>Progetto</th><th>Voce</th><th>Quantità</th><th>Valore</th>
         </tr></thead>
@@ -180,11 +210,11 @@
     </div>
   </div>
 
-  <div class="card mb-3">
+  <div class="card mb-3" data-an-section="overdue">
     <div class="card-title mb-2">🧾 Fatture passive scadute <span class="text-muted text-sm">(due_date passata, non pagate)</span></div>
     <div id="an-oversup-empty" class="text-muted text-sm" style="display:none;">Nessuna fattura passiva scaduta. ✅</div>
     <div class="table-wrap">
-      <table id="an-oversup-table" style="display:none;">
+      <table class="mf-sortable" id="an-oversup-table" style="display:none;">
         <thead><tr>
           <th>Numero</th><th>Fornitore</th><th>Scadenza</th><th>Giorni in ritardo</th>
           <th class="text-right">Totale</th><th class="text-right">Pagato</th>
@@ -931,9 +961,11 @@ async function submitEmitInvoice() {
 // ── Fatture ──────────────────────────────────────────────────
 async function loadInvoices() {
   const status = document.getElementById('inv-filter').value;
+  const onlyOverdue = document.getElementById('inv-only-overdue')?.checked;
   const finQs = buildFinQS();
   const parts = [];
   if (status) parts.push('status=' + status);
+  if (onlyOverdue) parts.push('only_overdue=true');
   if (finQs) parts.push(finQs);
   const url = '/finance/api/invoices' + (parts.length ? '?' + parts.join('&') : '');
   const invs = await api('GET', url);
@@ -1040,6 +1072,32 @@ async function loadPL() {
     <div class="stat-card"><div class="stat-label">Costi</div><div class="stat-value color-rose mono" style="font-size:22px;">${fmtCurrency(pl.costs)}</div></div>
     <div class="stat-card"><div class="stat-label">Margine lordo</div><div class="stat-value mono" style="font-size:22px;color:${pl.gross_margin>=0?'var(--green)':'var(--rose)'};">${fmtCurrency(pl.gross_margin)}</div></div>
     <div class="stat-card"><div class="stat-label">Ore totali</div><div class="stat-value color-indigo mono" style="font-size:22px;">${pl.total_hours}h</div></div>`;
+}
+
+// v3.5.0-alpha.88 — filtri categoria anomalie (chip toggle + doppio-click isola)
+function _applyAnomVisibility() {
+  document.querySelectorAll('[data-an-section]').forEach(sec => {
+    const cat = sec.dataset.anSection;
+    const chip = document.querySelector(`.an-chip[data-an-cat="${cat}"]`);
+    const active = chip && chip.classList.contains('is-active');
+    sec.style.display = active ? '' : 'none';
+  });
+}
+function toggleAnomCat(cat, ev) {
+  const chip = document.querySelector(`.an-chip[data-an-cat="${cat}"]`);
+  if (!chip) return;
+  chip.classList.toggle('is-active');
+  _applyAnomVisibility();
+}
+function isolateAnomCat(cat) {
+  document.querySelectorAll('.an-chip').forEach(c => {
+    c.classList.toggle('is-active', c.dataset.anCat === cat);
+  });
+  _applyAnomVisibility();
+}
+function resetAnomFilters() {
+  document.querySelectorAll('.an-chip').forEach(c => c.classList.add('is-active'));
+  _applyAnomVisibility();
 }
 
 // ── Anomalie (v3.4.39 + α.68.4 overdue supplier) ─────────────

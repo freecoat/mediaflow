@@ -1,5 +1,87 @@
 # MediaFlow — Changelog
 
+## v3.5.0-alpha.88 — Maratona feedback Matteo 12 mag (9 batch) (12 maggio 2026)
+
+Risponde alla lista di 26 ticket UX/funzionali post-test Matteo. 9 batch eseguiti
+in serie (B1→B9). Nessuna nuova feature di dominio: tutto consolidamento.
+
+**B1 — Cost Report layout** (`cost_report.html` + `cost_report.py` + `main.css`)
+- KPI compatti: nuova classe `.stat-grid-compact` (12 KPI in 1 riga su ≥1480px)
+- Risorse assegnate al progetto MOSSE sopra il quadro economico
+- Voci di costo FULL WIDTH (era 50% in `grid-2` → overlap orizzontale con Ore booking)
+- Card "Ore lavorate (consuntivo)" RIMOSSA (era sempre vuota da α.66.66)
+- Click risorsa in "Ore booking per fascia" → filtra solo job del progetto corrente
+  (param `project_id` opzionale su `/cost-report/api/resource/{id}/jobs`)
+- `currentReport.job.project_title` esposto per scope label drill
+
+**B2 — Cashflow + Forecast accorpati** (`cashflow.html` + `finance.py` + `base.html`)
+- Pagina `/finance/cashflow` con 2 tab: Cassa (default) + Forecast / Pipeline
+- Filtri topbar condivisi (anno, granularità, cliente, progetto)
+- Forecast lazy-load al primo switch tab; deep-link `#forecast`
+- `/finance/forecast` → 302 redirect a `/finance/cashflow#forecast` (back-compat)
+- Sidebar: voce "Forecast / Pipeline" rimossa (accorpata in "Cashflow & Forecast")
+- Fix dropdown anni bianco-su-bianco: `color-scheme: dark` + option color esplicito
+
+**B3 — Fatture filtro scadute** (`finance.py` + `finance.html`)
+- Param `only_overdue: bool` su `/finance/api/invoices` — match dinamico
+  (`due_date < today AND status NOT IN (paid, cancelled)`), più ampio del
+  marker `overdue` esplicito
+- Checkbox "Solo scadute (due_date passata)" affiancato al select stato
+
+**B4 — Anomalie filtri working** (`finance.html`)
+- 4 chip toggle (Job orfani / Sforamenti / Extra / Fatt. pass. scadute)
+- Click = toggle visibilità card; doppio-click = isola quella categoria
+- Bottone Reset; default all-on
+- Hint chiarisce quando "Job orfani" compaiono (Job senza Quote linkato — rari)
+
+**B5 — Asset Library/InOut/Fisici filtri** (`dam.html` + `dam.py` +
+`physical_assets.html` + `physical_assets.py`)
+- DAM: param `tag` accetta ora CSV (multi-select ANY-match)
+- Modal "🎯 Filtri avanzati" con search box + lista tag scrollable + multi-select
+  tipo asset; chip riepilogo tag attivi sotto i filtri principali
+- Physical Assets: aggiunti filtri `client_id` (via owner OR project.client),
+  `q` (search label/serial/barcode), `from_date`/`to_date` su `/physical-assets/api`
+- UI Physical Assets: barra MFFilterBar (cliente/progetto/periodo) + search box
+
+**B6 — Liste sort by header** (`global.js` + `main.css` + 11 templates)
+- Helper `mfEnableSortableTables()` in global.js. Tabelle con classe
+  `mf-sortable` ricevono click-to-sort su ogni `<th>` (toggle asc/desc).
+  Auto-detect numerico/date/stringa. Override via `data-sort-value` su `<td>`,
+  skip via `data-no-sort="true"` su `<th>`. MutationObserver per tabelle
+  rese asincronamente.
+- Indicatori visivi `▲▼⇅` (CSS `.mf-th-sortable` + `.sorted-asc/desc`)
+- Applicata a: clients, projects, departments, overhead, pricelist,
+  delivery_templates, cost_report list, physical_assets, assets_inout,
+  finance.invoices/batches/timesheets/anomalies (4 tabelle)
+
+**B7 — Booking edit popup** (`planning.html`)
+- Bottone "✏ Modifica booking" nel popup `modal-todo-detail` (Storyboard /
+  Per progetto / Le mie / Dashboard / drilldown job)
+- Funzione `todoEditBooking()` sintetizza `window._tlBookings` items via
+  `/planning/api/bookings/{id}/detail` se cache vuota, poi chiama
+  `tlbOpenEdit(bookingId)`. Nascosto nel drilldown lista.
+
+**B8 — Timeline perf + visioni + legenda + filtri** (`planning.html`)
+- Legenda estesa: 🏖 Ferie / 🏥 Malattia / 🎉 Festività + 🛌 Weekend con pattern
+  tratteggiato 45° illustrato; spiegazione "hard-block vs soft-block"
+- Filtro "Nascondi non fatte" spostato in sezione "Opzioni" con divider HR,
+  label allineata ai filtri sopra (era fuori griglia visiva)
+- Drop multi-move: optimistic incremental `itemsDS.update(updates)` invece di
+  full `renderTimeline(true)` — lag drag/drop da 5-6s a <100ms
+- Light mode + heatmap dedup già esistenti per perf
+
+**B9 — Hyperlink + bordi polish** (`main.css`)
+- Anchor `:not(.btn)` dentro card/table-wrap: underline dotted + solid on hover
+- Classe esplicita `.mf-link` per nomi cliccabili senza ambiguità
+- Bordo doppio card+table evitato (table `border:0` dentro card)
+
+**File toccati**: cost_report.html, cost_report.py, main.css, base.html, main.py,
+finance.py, finance.html, cashflow.html, dam.html, dam.py, assets_inout.html,
+physical_assets.html, physical_assets.py, planning.html, global.js, +6 list pages
+con `mf-sortable`.
+
+No DB migration. 385 routes (invariato).
+
 ## v3.5.0-alpha.87 — Sprint S8 Pozzo costi / Spese aziendali (OverheadCost) (12 maggio 2026)
 
 Risponde a cluster D.2 ticket Matteo: "Pozzo costi generici = database costi

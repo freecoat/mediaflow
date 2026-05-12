@@ -271,10 +271,13 @@
     </div>
 
     <!-- v3.5.0-alpha.56: filtro "nascondi non fatte". Toggle binario che
-         rimuove i booking con execution_status=not_done da tutte le viste
-         (timeline, calendario, agenda, todo, storyboard). Client-side. -->
-    <div class="form-group">
-      <label class="flex items-center gap-2" style="cursor:pointer; font-size:12px;">
+         rimuove i booking con execution_status=not_done da tutte le viste.
+         v3.5.0-alpha.88: sezione "Opzioni" separata con divider + label
+         allineata ai filtri sopra (era fuori griglia). -->
+    <hr style="border:none; border-top:1px solid var(--border); margin:10px 0 6px;">
+    <div class="form-group" style="margin-bottom:8px;">
+      <label style="display:block; font-size:11px; color:var(--text3); text-transform:uppercase; letter-spacing:.05em; margin-bottom:6px;">Opzioni</label>
+      <label class="flex items-center gap-2" style="cursor:pointer; font-size:13px; color:var(--text2); padding:4px 0;">
         <input type="checkbox" id="f-hide-not-done" onchange="onFilterChange()">
         <span>Nascondi non fatte</span>
       </label>
@@ -495,6 +498,33 @@
             <div style="display:flex; gap:8px; align-items:center;">
               <div style="width:24px; height:18px; box-shadow: inset 4px 0 0 #a855f7, 0 0 0 1px rgba(168,85,247,.5); background:#6272f5; border-radius:3px; flex-shrink:0;"></div>
               <div class="text-muted" style="font-size:11px;">Periodo già fatturato (slice-locked, drag bloccato)</div>
+            </div>
+          </div>
+          <!-- v3.5.0-alpha.88 — Indisponibilità risorsa (ferie/malattia/festività/weekend) -->
+          <hr style="margin:12px 0; border:none; border-top:1px solid var(--border);">
+          <div style="font-size:11px; color:var(--text2); font-weight:600; margin-bottom:6px;">Indisponibilità risorsa (background)</div>
+          <div style="display:flex; flex-direction:column; gap:6px;">
+            <div style="display:flex; gap:8px; align-items:center;">
+              <div style="width:54px; height:22px; border-radius:4px; flex-shrink:0;
+                          background: repeating-linear-gradient(45deg, rgba(192,132,252,.35) 0 6px, transparent 6px 12px), rgba(192,132,252,.10);
+                          border:1px dashed rgba(192,132,252,.6);"></div>
+              <div><div style="font-weight:600; font-size:12px;">🏖 Ferie</div><div class="text-muted" style="font-size:11px;">Hard-block: nuovi booking non assegnabili</div></div>
+            </div>
+            <div style="display:flex; gap:8px; align-items:center;">
+              <div style="width:54px; height:22px; border-radius:4px; flex-shrink:0;
+                          background: repeating-linear-gradient(45deg, rgba(248,113,113,.35) 0 6px, transparent 6px 12px), rgba(248,113,113,.10);
+                          border:1px dashed rgba(248,113,113,.6);"></div>
+              <div><div style="font-weight:600; font-size:12px;">🏥 Malattia</div><div class="text-muted" style="font-size:11px;">Hard-block: drag/paste rifiutati</div></div>
+            </div>
+            <div style="display:flex; gap:8px; align-items:center;">
+              <div style="width:54px; height:22px; border-radius:4px; flex-shrink:0;
+                          background: repeating-linear-gradient(45deg, rgba(251,191,36,.30) 0 6px, transparent 6px 12px), rgba(251,191,36,.08);"></div>
+              <div><div style="font-weight:600; font-size:12px;">🎉 Festività / 🛌 Weekend</div><div class="text-muted" style="font-size:11px;">Soft-block: avviso + conferma</div></div>
+            </div>
+            <div class="text-muted" style="font-size:10.5px; line-height:1.4; margin-top:4px;">
+              I pattern <b>tratteggiati 45°</b> = celle background non interattive (booking
+              non assegnabili o subordinati a conferma). Colore base × intensità diversa
+              per categoria.
             </div>
           </div>
           <div class="text-muted" style="font-size:10px; margin-top:10px; line-height:1.4;">
@@ -900,6 +930,11 @@
     </div>
     <div class="modal-footer">
       <a id="todo-detail-job-link" class="btn btn-secondary" href="#" style="display:none;">→ Apri job</a>
+      <!-- v3.5.0-alpha.88 — Modifica booking direttamente dal popup detail
+           (richiesto Matteo: Storyboard / Per progetto / Le mie). Apre il
+           modal-tl-booking in modalità edit fetching da API se _tlBookings vuoto. -->
+      <button class="btn btn-secondary" id="todo-detail-edit-btn"
+              onclick="todoEditBooking()" style="display:none;">✏ Modifica booking</button>
       <button class="btn btn-primary" onclick="closeModal('modal-todo-detail')">Chiudi</button>
     </div>
   </div>
@@ -2056,6 +2091,9 @@ async function openJobBookingsDrilldown(jobId) {
   openModal('modal-todo-detail');
   const body = document.getElementById('todo-detail-body');
   const jobLink = document.getElementById('todo-detail-job-link');
+  // v3.5.0-alpha.88: nascondi bottone Modifica nel drilldown (è una lista)
+  const editBtn = document.getElementById('todo-detail-edit-btn');
+  if (editBtn) editBtn.style.display = 'none';
   body.innerHTML = '<div class="text-muted text-sm">Caricamento booking…</div>';
   jobLink.href = '/jobs/' + jobId; jobLink.style.display = '';
   try {
@@ -2475,6 +2513,12 @@ async function todoOpenDetail(bookingId) {
   if (titleEl) titleEl.textContent = '📋 Dettaglio booking';
   const body = document.getElementById('todo-detail-body');
   const jobLink = document.getElementById('todo-detail-job-link');
+  const editBtn = document.getElementById('todo-detail-edit-btn');
+  // v3.5.0-alpha.88: bottone Modifica visibile + memorizza l'id booking
+  if (editBtn) {
+    editBtn.dataset.bookingId = String(bookingId);
+    editBtn.style.display = '';
+  }
   body.innerHTML = '<div class="text-muted text-sm">Caricamento…</div>';
   jobLink.style.display = 'none';
   try {
@@ -2603,6 +2647,50 @@ async function todoOpenDetail(bookingId) {
   } catch(e) {
     body.innerHTML = `<div class="color-rose">${escapeHtml(e.message || 'Errore caricamento dettaglio')}</div>`;
   }
+}
+
+// v3.5.0-alpha.88 — apre modifica booking dal popup detail (Storyboard /
+// "Per progetto" / "Le mie"). Sintetizza `window._tlBookings` se vuoto
+// fetchando il dettaglio via API e mappando assignments → items shape che
+// `tlbOpenEdit` si aspetta.
+async function todoEditBooking() {
+  const editBtn = document.getElementById('todo-detail-edit-btn');
+  const bookingId = parseInt(editBtn?.dataset.bookingId || '0', 10);
+  if (!bookingId) { toast('Booking non identificato', 'error'); return; }
+  // Se siamo in timeline e _tlBookings è popolato, va già.
+  const alreadyInTl = (window._tlBookings || []).some(b => b.booking_id === bookingId);
+  if (!alreadyInTl) {
+    // Fetch detail per costruire items sintetici
+    let d;
+    try { d = await api('GET', `/planning/api/bookings/${bookingId}/detail`); }
+    catch(e) { toast(e.message || 'Errore caricamento dettaglio', 'error'); return; }
+    if (!window._tlBookings) window._tlBookings = [];
+    const props = {
+      kind: d.kind,
+      job_id: d.job ? d.job.id : null,
+      job_cost_line_id: d.cost_line ? d.cost_line.id : null,
+      notes: d.notes || '',
+      priority: d.priority || 'normal',
+      execution_status: d.execution_status || 'planned',
+      status: d.status || 'tentative',
+      state: null,
+      not_done_reason: d.not_done_reason || '',
+    };
+    (d.assignments || []).forEach(a => {
+      window._tlBookings.push({
+        booking_id: bookingId,
+        start: a.start_datetime,
+        end: a.end_datetime,
+        extendedProps: { ...props, resource_id: a.resource_id },
+      });
+    });
+  }
+  closeModal('modal-todo-detail');
+  // Piccolo defer per garantire chiusura prima dell'apertura del modal edit
+  setTimeout(() => {
+    if (typeof tlbOpenEdit === 'function') tlbOpenEdit(bookingId);
+    else toast('Modal edit non disponibile in questa view', 'warning');
+  }, 80);
 }
 
 // v3.5.0-alpha.63: rimuove assignment duplicati con overlap sulla stessa
@@ -4303,7 +4391,33 @@ async function _tlApplyMultiMove(movedItem, origItem, origBooking) {
       pre: preSnaps,
     }, `Multi-move: ${res.moved} assignment${res.moved > 1 ? 's' : ''}, shift ${(dtMs/3600000).toFixed(2)}h`);
     toast(`✓ ${res.moved} spostat${res.moved === 1 ? 'o' : 'i'} (shift ${(dtMs/3600000).toFixed(2)}h). Ctrl+Z per annullare.`, 'success', 4000);
-    renderTimeline(true);
+    // v3.5.0-alpha.88 — Optimistic incremental update invece di renderTimeline(true).
+    // Riduce lag drag/drop da 5-6s (full reload backend + DOM rebuild) a <100ms.
+    // Mantiene cache coerente; heatmap/badges si ricalcolano al prossimo rangechanged.
+    let optimisticOk = false;
+    try {
+      if (typeof itemsDS !== 'undefined' && itemsDS) {
+        const updates = moves.map(m => ({
+          id: 'a' + m.assignment_id,
+          start: new Date(m.new_start),
+          end: new Date(m.new_end),
+          group: m.new_resource_id,
+        }));
+        itemsDS.update(updates);
+        if (window._tlBookings) {
+          moves.forEach(m => {
+            const b = window._tlBookings.find(x => x.assignment_id === m.assignment_id);
+            if (b) {
+              b.start = m.new_start;
+              b.end = m.new_end;
+              if (b.extendedProps) b.extendedProps.resource_id = m.new_resource_id;
+            }
+          });
+        }
+        optimisticOk = true;
+      }
+    } catch(_) { /* fallback hard reload sotto */ }
+    if (!optimisticOk) renderTimeline(true);
     return true;
   } catch(e) {
     toast(e.message || 'Errore multi-move', 'error');

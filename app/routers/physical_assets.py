@@ -96,28 +96,55 @@ async def list_physical_assets(
     kind: Optional[str] = None,
     project_id: Optional[int] = None,
     job_id: Optional[int] = None,
+    client_id: Optional[int] = None,
+    q: Optional[str] = None,
+    from_date: Optional[date] = None,
+    to_date: Optional[date] = None,
     only_internal_archive: bool = False,
     only_delivered_external: bool = False,
     include_deleted: bool = False,
     db: Session = Depends(get_db),
 ):
-    q = db.query(PhysicalAsset).filter(PhysicalAsset.tenant_id == CURRENT_TENANT)
+    """v3.5.0-alpha.88 — Filtri estesi: client_id (via owner_client_id OR
+    project.client_id), q (search su label/serial/barcode), period."""
+    query = db.query(PhysicalAsset).filter(PhysicalAsset.tenant_id == CURRENT_TENANT)
     if not include_deleted:
-        q = q.filter(PhysicalAsset.deleted_at.is_(None))
+        query = query.filter(PhysicalAsset.deleted_at.is_(None))
     if kind:
         try:
-            q = q.filter(PhysicalAsset.kind == PhysicalAssetKind(kind))
+            query = query.filter(PhysicalAsset.kind == PhysicalAssetKind(kind))
         except ValueError:
             raise HTTPException(400, f"kind invalido: {kind}")
     if project_id:
-        q = q.filter(PhysicalAsset.project_id == project_id)
+        query = query.filter(PhysicalAsset.project_id == project_id)
     if job_id:
-        q = q.filter(PhysicalAsset.job_id == job_id)
+        query = query.filter(PhysicalAsset.job_id == job_id)
+    if client_id:
+        from app.models import Project as _Project
+        query = query.outerjoin(_Project, PhysicalAsset.project_id == _Project.id).filter(
+            or_(
+                PhysicalAsset.owner_client_id == client_id,
+                _Project.client_id == client_id,
+            )
+        )
+    if q:
+        like = f"%{q}%"
+        query = query.filter(
+            or_(
+                PhysicalAsset.label.ilike(like),
+                PhysicalAsset.serial_number.ilike(like),
+                PhysicalAsset.barcode.ilike(like),
+            )
+        )
+    if from_date:
+        query = query.filter(PhysicalAsset.created_at >= datetime.combine(from_date, time.min))
+    if to_date:
+        query = query.filter(PhysicalAsset.created_at <= datetime.combine(to_date, time.max))
     if only_internal_archive:
-        q = q.filter(PhysicalAsset.is_internal_archive == True)  # noqa: E712
+        query = query.filter(PhysicalAsset.is_internal_archive == True)  # noqa: E712
     if only_delivered_external:
-        q = q.filter(PhysicalAsset.is_delivered_external == True)  # noqa: E712
-    items = q.order_by(PhysicalAsset.created_at.desc()).all()
+        query = query.filter(PhysicalAsset.is_delivered_external == True)  # noqa: E712
+    items = query.order_by(PhysicalAsset.created_at.desc()).all()
     return [_serialize(a) for a in items]
 
 

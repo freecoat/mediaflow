@@ -496,6 +496,8 @@ async def job_cost_report(job_id: int, db: Session = Depends(get_db)):
             "client_id": job.client_id,
             # v3.5.0-alpha.48: project_id necessario per trasmissione billing
             "project_id": job.project_id,
+            # v3.5.0-alpha.88: project_title per scope label in drill risorse
+            "project_title": (job.project.title if getattr(job, "project", None) else None),
             "budget_quoted": job.budget_quoted,
             "start_date": str(job.start_date) if job.start_date else None,
             "end_date": str(job.end_date) if job.end_date else None,
@@ -928,12 +930,16 @@ async def resource_job_drill(
     resource_id: int,
     period_start: Optional[date] = None,
     period_end: Optional[date] = None,
+    project_id: Optional[int] = None,
     db: Session = Depends(get_db),
 ):
     """v3.5.0-alpha.69.2 — Drill-down inverso: per una risorsa, mostra i
     job lavorati con breakdown ore + costo per ogni job. Reverse della
     vista per-line nel cost-report (`bookings_by_resource` aggrega per
-    risorsa dentro un job; questo aggrega per job di una risorsa)."""
+    risorsa dentro un job; questo aggrega per job di una risorsa).
+
+    v3.5.0-alpha.88: filtro opzionale project_id per limitare al solo
+    progetto corrente quando il drill parte da /cost-report."""
     resource = db.query(Resource).filter(
         Resource.id == resource_id,
         Resource.tenant_id == CURRENT_TENANT,
@@ -948,12 +954,15 @@ async def resource_job_drill(
             joinedload(Booking.cost_line),
         )
         .join(BookingAssignment, BookingAssignment.booking_id == Booking.id)
+        .join(Job, Job.id == Booking.job_id)
         .filter(
             BookingAssignment.resource_id == resource_id,
             Booking.status != BookingStatus.cancelled,
             Booking.job_id.isnot(None),
         )
     )
+    if project_id:
+        q = q.filter(Job.project_id == project_id)
     if period_start:
         q = q.filter(Booking.start_datetime >= period_start)
     if period_end:
@@ -1033,6 +1042,7 @@ async def resource_job_drill(
         "rate_hourly_internal_cost": cost_h or None,
         "jobs_count": len(out),
         "jobs": out,
+        "scoped_project_id": project_id,  # v3.5.0-alpha.88 — filtro applicato
     }
 
 
