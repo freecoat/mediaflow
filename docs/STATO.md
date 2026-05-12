@@ -8,6 +8,28 @@
 
 ## Versione corrente
 
+**v3.5.0-alpha.89** — 12 maggio 2026 notte — Sprint S4 Workflow anomalie fatturazione
+
+Stateful workflow per anomalie (era stateless). Tassonomia confermata:
+extra_after_billed / sforamento_monte_ore / quote_discrepancy / mancato_recupero / over_budget.
+
+- Modello nuovo `AnomalyEntry` (dedup_key idempotente)
+- Detector service `anomaly_detector.py` con 5 funzioni di detect
+- Router `/finance/api/anomalies/v2*` (list/summary/detect/handle/bulk/dismiss/reopen)
+- 4 azioni: rimanda_commerciale | rivaluta_producer | write_off_loss (→ LossEntry) | overhead_cost (→ OverheadCost)
+- UI `/finance` tab Anomalie totalmente refatturata: chip status/type, multiselect, bulk-action bar
+- RBAC: view_anomalies + handle_anomalies (admin auto-resync)
+
+390 routes (+5). 1 nuova tabella `anomaly_entries`.
+
+**Test domani**: cliccare "🔄 Rileva" sul tab Anomalie, poi selezionare 1-2
+anomalie open, applicare "Pozzo costi" o "Write-off", verificare creazione
+OverheadCost/LossEntry, riaprire l'anomalia per testare reopen.
+
+8 commit locali NON pushati (b8b8bb6 → α.89). Push a major bump.
+
+## (versione precedente)
+
 **v3.5.0-alpha.88** — 12 maggio 2026 — Maratona feedback Matteo (9 batch B1→B9)
 
 Risposte alla lista 26 ticket UX/funzionali post-test sera 12 mag. Tutte in

@@ -63,6 +63,11 @@ PERMISSIONS: Dict[str, Dict[str, List[str]]] = {
         # Costi non fatturabili al cliente che vivono nel quadro finanziario tenant.
         "view_overhead":    ["Visualizza spese aziendali (pozzo costi)"],
         "edit_overhead":    ["Crea/modifica spese aziendali"],
+        # v3.5.0-alpha.89 — Workflow anomalie fatturazione (sprint S4).
+        # view_anomalies = vede la lista; handle_anomalies = può applicare
+        # azioni (rimanda commerciale / rivaluta producer / write-off / overhead).
+        "view_anomalies":   ["Visualizza anomalie fatturazione"],
+        "handle_anomalies": ["Gestisci anomalie (azioni rimanda/write-off/overhead)"],
         # v3.5.0-alpha.21: edit_cost_actuals rimosso definitivamente. Le ore
         # lavorate sono SEMPRE derivate da booking marcati `done` (cost_line_sync).
         # La fatturazione di extra/sconti/banca-ore forfait passa dal flusso

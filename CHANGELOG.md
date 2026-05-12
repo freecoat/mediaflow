@@ -1,5 +1,63 @@
 # MediaFlow — Changelog
 
+## v3.5.0-alpha.89 — Sprint S4 Workflow anomalie fatturazione (12 maggio 2026, notte)
+
+Stateful workflow per anomalie fatturazione (era stateless, riemergeva a ogni
+refresh senza track). Tassonomia confermata da ticket Matteo 12 mag.
+
+**Modello nuovo `AnomalyEntry`** (`app/models/models.py`):
+- `anomaly_type` enum 5 valori: extra_after_billed, sforamento_monte_ore,
+  quote_discrepancy, mancato_recupero, over_budget
+- `source_kind` polymorphic (jcl/job/invoice/supplier_invoice/billed_slice) + `source_id`
+- `dedup_key` = `{type}:{kind}:{id}` univoca per tenant → idempotenza re-detect
+- `status` open/handled/dismissed
+- `handled_action` enum: rimanda_commerciale, rivaluta_producer, write_off_loss, overhead_cost
+- `handled_target_kind/_id` per tracciare LossEntry o OverheadCost creati
+- Denormalizzati: project_id/job_id/client_id/amount/description per query veloci
+
+**Detector service** (`app/services/anomaly_detector.py`):
+- 5 funzioni `detect_*` idempotenti (upsert per dedup_key)
+- `detect_all()` esegue tutti + commit unico
+- `extra_after_billed`: JCL con `quantity_actual` > Σ slice fatturate
+- `sforamento_monte_ore`: JCL non-extra con actual > quoted
+- `over_budget`: JCL is_extra=True (extra puri)
+- `mancato_recupero`: Invoice due_date < oggi AND not paid/cancelled
+- `quote_discrepancy`: Job con consuntivo vs budget oltre ±15%
+
+**Router `/finance/api/anomalies/v2`** (`app/routers/anomalies.py`):
+- `GET /v2` lista con filtri (status, type, project, client, period)
+- `GET /v2/summary` KPI per tipo (open only)
+- `POST /detect` re-scan idempotente
+- `POST /{id}/handle` applica azione singola
+- `POST /bulk-handle` multiselect (CSV ids + action + notes)
+- `POST /{id}/dismiss` chiudi senza azione
+- `POST /{id}/reopen` riapri handled/dismissed → open
+
+**Azioni operative**:
+- `rimanda_commerciale` / `rivaluta_producer`: solo cambio stato workflow + audit
+- `write_off_loss`: crea LossEntry(amount, reason=written_off, project) + linka handled_target_id
+- `overhead_cost`: crea OverheadCost(category=other, code OH-YYYY-NNNN) + linka handled_target_id
+
+**RBAC**: 2 nuove permission `view_anomalies` + `handle_anomalies` in categoria
+Finanza. Admin auto-resync via ALL_PERMISSION_KEYS.
+
+**UI `/finance` tab Anomalie** (`finance.html`):
+- Sostituita vista legacy (4 tabelle separate stateless) con tabella unica stateful
+- 4 chip status (Open default / Handled / Dismissed / Tutte) + 6 chip type filter
+- Bottone "🔄 Rileva" per re-scan on-demand
+- Multiselect checkbox + bulk action bar (action select + notes inline)
+- Per-riga: bottone azione singola (prompt-based per ora; in roadmap modal dedicato)
+- Bottone "↺ Riapri" per anomalie chiuse
+- Refactor da innerHTML → DOM helpers (security hook compliant)
+
+**Migration**: zero ALTER. `create_tables()` crea `anomaly_entries` automaticamente
+al primo boot (modello nuovo, no FK retroattive).
+
+Endpoint legacy `/finance/api/anomalies/{floating-jobs,discrepancies,overdue-supplier,summary}`
+restano attivi (back-compat); UI ora usa solo v2.
+
+385+5 routes (+5 endpoint v2). 1 nuova tabella.
+
 ## v3.5.0-alpha.88 — Maratona feedback Matteo 12 mag (9 batch) (12 maggio 2026)
 
 Risponde alla lista di 26 ticket UX/funzionali post-test Matteo. 9 batch eseguiti

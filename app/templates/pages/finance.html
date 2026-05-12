@@ -142,22 +142,33 @@
   </div>
 </div>
 
-<!-- ── Sezione Anomalie (v3.4.39) ──────────────────────────── -->
+<!-- ── Sezione Anomalie WORKFLOW (v3.5.0-alpha.89, sprint S4) ────────
+     Stateful: ogni anomalia rilevata diventa record persistente
+     (open/handled/dismissed). 4 azioni operative: rimanda commerciale,
+     rivaluta producer, write-off (LossEntry), overhead (OverheadCost).
+     Multiselect + bulk-handle. -->
 <div id="section-anomalies" class="hidden">
 
+  <!-- KPI summary per tipo (open only) -->
   <div id="an-summary" class="stat-grid" style="margin-bottom:16px;"></div>
 
-  <!-- v3.5.0-alpha.88 — Filtro categoria: limita visualizzazione a una o più
-       tassonomie. Default: tutte attive. Click chip = toggle. Doppio-click su
-       chip = SOLO quella categoria (isolazione rapida). -->
+  <!-- Toolbar -->
   <div class="flex gap-2 mb-3 items-center" style="flex-wrap:wrap;">
-    <span class="text-sm text-muted" style="margin-right:6px;">Mostra:</span>
-    <button type="button" class="an-chip is-active" data-an-cat="floating" onclick="toggleAnomCat('floating', event)" ondblclick="isolateAnomCat('floating')">🛟 Job orfani</button>
-    <button type="button" class="an-chip is-active" data-an-cat="overruns" onclick="toggleAnomCat('overruns', event)" ondblclick="isolateAnomCat('overruns')">📈 Sforamenti</button>
-    <button type="button" class="an-chip is-active" data-an-cat="extras" onclick="toggleAnomCat('extras', event)" ondblclick="isolateAnomCat('extras')">➕ Extra</button>
-    <button type="button" class="an-chip is-active" data-an-cat="overdue" onclick="toggleAnomCat('overdue', event)" ondblclick="isolateAnomCat('overdue')">🧾 Fatt. pass. scadute</button>
-    <button type="button" class="btn btn-ghost btn-sm" onclick="resetAnomFilters()" style="margin-left:6px;">Reset</button>
-    <span class="text-xs text-muted" style="margin-left:auto;">Doppio-click su un chip per isolare quella categoria.</span>
+    <span class="text-sm text-muted" style="margin-right:6px;">Stato:</span>
+    <button type="button" class="an-chip is-active" data-an-status="open" onclick="setAnomStatus('open')">🔴 Open</button>
+    <button type="button" class="an-chip" data-an-status="handled" onclick="setAnomStatus('handled')">✓ Handled</button>
+    <button type="button" class="an-chip" data-an-status="dismissed" onclick="setAnomStatus('dismissed')">⊘ Dismissed</button>
+    <button type="button" class="an-chip" data-an-status="all" onclick="setAnomStatus('all')">Tutte</button>
+    <span style="border-left:1px solid var(--border); height:18px; margin:0 8px;"></span>
+    <span class="text-sm text-muted" style="margin-right:6px;">Tipo:</span>
+    <button type="button" class="an-chip is-active" data-an-type="" onclick="setAnomType('')">Tutti</button>
+    <button type="button" class="an-chip" data-an-type="extra_after_billed" onclick="setAnomType('extra_after_billed')">📅 Extra post-fattura</button>
+    <button type="button" class="an-chip" data-an-type="sforamento_monte_ore" onclick="setAnomType('sforamento_monte_ore')">📈 Sforamenti</button>
+    <button type="button" class="an-chip" data-an-type="quote_discrepancy" onclick="setAnomType('quote_discrepancy')">📉 Quote vs consuntivo</button>
+    <button type="button" class="an-chip" data-an-type="mancato_recupero" onclick="setAnomType('mancato_recupero')">💸 Mancato recupero</button>
+    <button type="button" class="an-chip" data-an-type="over_budget" onclick="setAnomType('over_budget')">➕ Extra puri</button>
+    <span style="flex:1;"></span>
+    <button class="btn btn-secondary btn-sm" onclick="runAnomalyDetect()" title="Re-scan idempotente dei dati per popolare le anomalie">🔄 Rileva</button>
   </div>
   <style>
     .an-chip {
@@ -167,60 +178,52 @@
     }
     .an-chip:hover { color:var(--text); border-color:var(--border2); }
     .an-chip.is-active { color:var(--indigo2); border-color:var(--indigo); background:var(--indigo-bg, rgba(98,114,245,.1)); }
+    .an-action-bar {
+      display:flex; align-items:center; gap:8px; padding:8px 12px;
+      background:rgba(98,114,245,.06); border:1px solid rgba(98,114,245,.25);
+      border-radius:6px; margin-bottom:10px;
+    }
+    .an-action-bar select, .an-action-bar input { height:30px; }
   </style>
 
-  <div class="card mb-3" data-an-section="floating">
-    <div class="card-title mb-2">🛟 Job orfani <span class="text-muted text-sm">(senza quotazione)</span></div>
-    <div id="an-floating-empty" class="text-muted text-sm" style="display:none;">Nessun job orfano. ✅ <span class="text-xs">(I job orfani compaiono solo quando un Job esiste senza una Quote collegata, es. dopo versioning con strategia <code>floating_job</code> o cancellazione manuale della quote.)</span></div>
-    <div class="table-wrap">
-      <table class="mf-sortable" id="an-floating-table" style="display:none;">
-        <thead><tr>
-          <th>Codice</th><th>Titolo</th><th>Progetto</th><th>Cliente</th>
-          <th>Stato</th><th>Budget</th><th>Consuntivo</th><th>Inizio</th><th></th>
-        </tr></thead>
-        <tbody id="an-floating-body"></tbody>
-      </table>
-    </div>
+  <!-- Bulk action bar -->
+  <div id="an-action-bar" class="an-action-bar" style="display:none;">
+    <strong id="an-sel-count">0 selezionate</strong>
+    <span style="border-left:1px solid var(--border); height:20px;"></span>
+    <label class="text-sm">Azione:
+      <select id="an-bulk-action" class="form-select" style="font-size:13px; padding:2px 8px;">
+        <option value="rimanda_commerciale">↩ Rimanda al commerciale</option>
+        <option value="rivaluta_producer">🔄 Rivaluta producer</option>
+        <option value="write_off_loss">📉 Write-off (LossEntry)</option>
+        <option value="overhead_cost">📦 Pozzo costi (OverheadCost)</option>
+      </select>
+    </label>
+    <input type="text" id="an-bulk-notes" class="form-input" placeholder="Nota (opzionale)" style="flex:1; max-width:340px; font-size:13px;">
+    <button class="btn btn-primary btn-sm" onclick="bulkHandleAnomalies()">Applica</button>
+    <button class="btn btn-ghost btn-sm" onclick="bulkDismissAnomalies()" title="Chiudi senza azione (falso positivo)">⊘ Dismiss</button>
+    <button class="btn btn-ghost btn-sm" onclick="clearAnomSelection()">✕</button>
   </div>
 
-  <div class="card mb-3" data-an-section="overruns">
-    <div class="card-title mb-2">📈 Sforamenti <span class="text-muted text-sm">(quantity_actual &gt; quantity_quoted)</span></div>
-    <div id="an-overruns-empty" class="text-muted text-sm" style="display:none;">Nessuno sforamento. ✅</div>
+  <div class="card">
     <div class="table-wrap">
-      <table class="mf-sortable" id="an-overruns-table" style="display:none;">
-        <thead><tr>
-          <th>Job</th><th>Progetto</th><th>Voce</th><th>Pianif.</th><th>Effett.</th>
-          <th>Δ</th><th>Valore extra</th>
-        </tr></thead>
-        <tbody id="an-overruns-body"></tbody>
-      </table>
-    </div>
-  </div>
-
-  <div class="card mb-3" data-an-section="extras">
-    <div class="card-title mb-2">➕ Extra <span class="text-muted text-sm">(lavorazioni aggiunte fuori quote)</span></div>
-    <div id="an-extras-empty" class="text-muted text-sm" style="display:none;">Nessun extra. ✅</div>
-    <div class="table-wrap">
-      <table class="mf-sortable" id="an-extras-table" style="display:none;">
-        <thead><tr>
-          <th>Job</th><th>Progetto</th><th>Voce</th><th>Quantità</th><th>Valore</th>
-        </tr></thead>
-        <tbody id="an-extras-body"></tbody>
-      </table>
-    </div>
-  </div>
-
-  <div class="card mb-3" data-an-section="overdue">
-    <div class="card-title mb-2">🧾 Fatture passive scadute <span class="text-muted text-sm">(due_date passata, non pagate)</span></div>
-    <div id="an-oversup-empty" class="text-muted text-sm" style="display:none;">Nessuna fattura passiva scaduta. ✅</div>
-    <div class="table-wrap">
-      <table class="mf-sortable" id="an-oversup-table" style="display:none;">
-        <thead><tr>
-          <th>Numero</th><th>Fornitore</th><th>Scadenza</th><th>Giorni in ritardo</th>
-          <th class="text-right">Totale</th><th class="text-right">Pagato</th>
-          <th class="text-right">Residuo</th><th>Stato</th>
-        </tr></thead>
-        <tbody id="an-oversup-body"></tbody>
+      <table class="mf-sortable" id="an-v2-table">
+        <thead>
+          <tr>
+            <th data-no-sort="true" style="width:36px;"><input type="checkbox" id="an-select-all" onchange="toggleSelectAll(this)"></th>
+            <th style="width:140px;">Tipo</th>
+            <th>Descrizione</th>
+            <th>Cliente</th>
+            <th>Progetto</th>
+            <th>Job</th>
+            <th class="text-right">Importo</th>
+            <th>Rilevata</th>
+            <th>Stato</th>
+            <th data-no-sort="true" style="width:120px;">Azioni</th>
+          </tr>
+        </thead>
+        <tbody id="an-v2-body">
+          <tr><td colspan="10" class="text-muted" style="text-align:center;padding:24px;">Caricamento…</td></tr>
+        </tbody>
       </table>
     </div>
   </div>
@@ -1074,139 +1077,311 @@ async function loadPL() {
     <div class="stat-card"><div class="stat-label">Ore totali</div><div class="stat-value color-indigo mono" style="font-size:22px;">${pl.total_hours}h</div></div>`;
 }
 
-// v3.5.0-alpha.88 — filtri categoria anomalie (chip toggle + doppio-click isola)
-function _applyAnomVisibility() {
-  document.querySelectorAll('[data-an-section]').forEach(sec => {
-    const cat = sec.dataset.anSection;
-    const chip = document.querySelector(`.an-chip[data-an-cat="${cat}"]`);
-    const active = chip && chip.classList.contains('is-active');
-    sec.style.display = active ? '' : 'none';
+// v3.5.0-alpha.89 — Anomaly workflow (stateful) — SOSTITUISCE le funzioni
+// stateless pre-α.89 (loadAnomalies/renderFloating/renderDiscrepancies/
+// renderOverdueSupplier/renderAnomaliesSummary + chip toggle B4).
+// Endpoint: /finance/api/anomalies/v2 (vs vecchi /floating-jobs etc).
+let _anStatus = 'open';
+let _anType = '';
+const TYPE_LBL = {
+  extra_after_billed: '📅 Post-fattura',
+  sforamento_monte_ore: '📈 Sforamento',
+  quote_discrepancy: '📉 Quote vs Cons.',
+  mancato_recupero: '💸 Mancato recup.',
+  over_budget: '➕ Extra puro',
+};
+const TYPE_COLOR = {
+  extra_after_billed: '#ef4444',
+  sforamento_monte_ore: '#f59e0b',
+  quote_discrepancy: '#a78bfa',
+  mancato_recupero: '#ef4444',
+  over_budget: '#6272f5',
+};
+const ANOM_STATUS_LBL = { open: 'Open', handled: 'Handled', dismissed: 'Dismissed' };
+const ACTION_LBL = {
+  rimanda_commerciale: '↩ Rimanda commerciale',
+  rivaluta_producer: '🔄 Rivaluta producer',
+  write_off_loss: '📉 Write-off',
+  overhead_cost: '📦 Pozzo costi',
+};
+
+function setAnomStatus(s) {
+  _anStatus = s;
+  document.querySelectorAll('.an-chip[data-an-status]').forEach(c => {
+    c.classList.toggle('is-active', c.dataset.anStatus === s);
   });
+  loadAnomalies();
 }
-function toggleAnomCat(cat, ev) {
-  const chip = document.querySelector(`.an-chip[data-an-cat="${cat}"]`);
-  if (!chip) return;
-  chip.classList.toggle('is-active');
-  _applyAnomVisibility();
-}
-function isolateAnomCat(cat) {
-  document.querySelectorAll('.an-chip').forEach(c => {
-    c.classList.toggle('is-active', c.dataset.anCat === cat);
+function setAnomType(t) {
+  _anType = t;
+  document.querySelectorAll('.an-chip[data-an-type]').forEach(c => {
+    c.classList.toggle('is-active', (c.dataset.anType || '') === t);
   });
-  _applyAnomVisibility();
-}
-function resetAnomFilters() {
-  document.querySelectorAll('.an-chip').forEach(c => c.classList.add('is-active'));
-  _applyAnomVisibility();
+  loadAnomalies();
 }
 
-// ── Anomalie (v3.4.39 + α.68.4 overdue supplier) ─────────────
+async function runAnomalyDetect() {
+  try {
+    const res = await api('POST', '/finance/api/anomalies/detect');
+    toast(`✓ Detect completato: ${res.total || 0} anomalie totali rilevate/aggiornate`, 'success', 5000);
+    await loadAnomalies();
+  } catch(e) { toast(e.message || 'Errore detect', 'error'); }
+}
+
 async function loadAnomalies() {
   try {
-    const [floating, disc, overdueSup] = await Promise.all([
-      api('GET', '/finance/api/anomalies/floating-jobs'),
-      api('GET', '/finance/api/anomalies/discrepancies'),
-      api('GET', '/finance/api/anomalies/overdue-supplier'),
-    ]);
-    renderFloating(floating);
-    renderDiscrepancies(disc);
-    renderOverdueSupplier(overdueSup);
-    renderAnomaliesSummary(floating.length, disc.overruns.length, disc.extras.length,
-                           disc.total_overrun_value, disc.total_extras_value,
-                           overdueSup.length,
-                           overdueSup.reduce((a,r)=>a+(r.amount_outstanding||0),0));
-  } catch(e) { toast(e.message || 'Errore caricamento anomalie', 'error'); }
+    const summary = await api('GET', '/finance/api/anomalies/v2/summary');
+    renderAnomSummary(summary);
+  } catch(e) { /* skip summary errors */ }
+  const qs = [];
+  if (_anStatus) qs.push('status=' + _anStatus);
+  if (_anType) qs.push('anomaly_type=' + _anType);
+  const url = '/finance/api/anomalies/v2' + (qs.length ? '?' + qs.join('&') : '');
+  let rows;
+  try { rows = await api('GET', url); }
+  catch(e) { toast(e.message || 'Errore caricamento anomalie', 'error'); return; }
+  _renderAnomRows(rows);
+  updateAnomSelection();
 }
 
-function renderAnomaliesSummary(nFloating, nOver, nExtra, valOver, valExtra, nOverSup, valOverSup) {
-  document.getElementById('an-summary').innerHTML = `
-    <div class="stat-card"><div class="stat-label">Job orfani</div><div class="stat-value mono" style="font-size:22px;color:${nFloating?'var(--rose)':'var(--text-muted)'};">${nFloating}</div></div>
-    <div class="stat-card"><div class="stat-label">Sforamenti</div><div class="stat-value mono" style="font-size:22px;color:${nOver?'var(--amber, #f59e0b)':'var(--text-muted)'};">${nOver}</div><div class="text-sm text-muted mono">${fmtCurrency(valOver)}</div></div>
-    <div class="stat-card"><div class="stat-label">Extra</div><div class="stat-value mono" style="font-size:22px;color:${nExtra?'var(--indigo, #6272f5)':'var(--text-muted)'};">${nExtra}</div><div class="text-sm text-muted mono">${fmtCurrency(valExtra)}</div></div>
-    <div class="stat-card"><div class="stat-label">Fatture pass. scadute</div><div class="stat-value mono" style="font-size:22px;color:${nOverSup?'var(--rose)':'var(--text-muted)'};">${nOverSup||0}</div><div class="text-sm text-muted mono">${fmtCurrency(valOverSup||0)}</div></div>
-  `;
-}
-
-function renderOverdueSupplier(rows) {
-  const empty = document.getElementById('an-oversup-empty');
-  const table = document.getElementById('an-oversup-table');
-  const body = document.getElementById('an-oversup-body');
-  if (!rows.length) { empty.style.display='block'; table.style.display='none'; return; }
-  empty.style.display='none'; table.style.display='';
-  body.innerHTML = rows.map(r => `
-    <tr>
-      <td class="mono text-sm"><strong>${escapeHtml(r.number)}</strong></td>
-      <td class="text-sm">${escapeHtml(r.supplier_name||'—')}</td>
-      <td class="text-sm">${r.due_date?fmtDate(r.due_date):'—'}</td>
-      <td class="mono text-sm" style="color:var(--rose);"><strong>${r.days_overdue||0}gg</strong></td>
-      <td class="mono text-right">${fmtCurrency(r.amount_total)}</td>
-      <td class="mono text-right text-muted">${fmtCurrency(r.amount_paid)}</td>
-      <td class="mono text-right" style="color:var(--rose);"><strong>${fmtCurrency(r.amount_outstanding)}</strong></td>
-      <td><span class="badge">${r.payment_status==='partial'?'Parziale':'Non pagata'}</span></td>
-    </tr>`).join('');
-}
-
-function renderFloating(rows) {
-  const empty = document.getElementById('an-floating-empty');
-  const table = document.getElementById('an-floating-table');
-  const body = document.getElementById('an-floating-body');
-  if (!rows.length) { empty.style.display='block'; table.style.display='none'; return; }
-  empty.style.display='none'; table.style.display='';
-  body.innerHTML = rows.map(j => `
-    <tr>
-      <td class="mono text-sm">${escapeHtml(j.code)}</td>
-      <td>${escapeHtml(j.title || '—')}</td>
-      <td class="text-sm">${escapeHtml(j.project_title || '—')}</td>
-      <td class="text-sm">${escapeHtml(j.client || '—')}</td>
-      <td>${statusBadge(j.status)}</td>
-      <td class="mono text-sm">${fmtCurrency(j.budget_quoted || 0)}</td>
-      <td class="mono text-sm">${fmtCurrency(j.actual_total || 0)}</td>
-      <td class="text-sm">${j.start_date ? fmtDate(j.start_date) : '—'}</td>
-      <td><a href="/jobs/${j.id}" class="btn btn-ghost btn-sm">Apri</a></td>
-    </tr>`).join('');
-}
-
-function renderDiscrepancies(d) {
-  // Overruns
-  const oEmpty = document.getElementById('an-overruns-empty');
-  const oTable = document.getElementById('an-overruns-table');
-  const oBody = document.getElementById('an-overruns-body');
-  if (!d.overruns.length) { oEmpty.style.display='block'; oTable.style.display='none'; }
-  else {
-    oEmpty.style.display='none'; oTable.style.display='';
-    oBody.innerHTML = d.overruns.map(o => `
-      <tr>
-        <td class="mono text-sm"><a href="/jobs/${o.job_id}">${escapeHtml(o.job_code)}</a></td>
-        <td class="text-sm">${escapeHtml(o.project_title || '—')}</td>
-        <td>${escapeHtml(o.description)}</td>
-        <td class="mono text-sm">${o.quantity_quoted} ${escapeHtml(o.unit)}</td>
-        <td class="mono text-sm">${o.quantity_actual} ${escapeHtml(o.unit)}</td>
-        <td class="mono text-sm color-amber">+${o.delta}</td>
-        <td class="mono text-sm color-amber">${fmtCurrency(o.extra_value)}</td>
-      </tr>`).join('');
+function _renderAnomRows(rows) {
+  const tbody = document.getElementById('an-v2-body');
+  while (tbody.firstChild) tbody.removeChild(tbody.firstChild);
+  if (!rows.length) {
+    const tr = document.createElement('tr');
+    const td = document.createElement('td');
+    td.colSpan = 10; td.className = 'text-muted';
+    td.style.cssText = 'text-align:center;padding:24px;';
+    td.textContent = `Nessuna anomalia ${_anStatus === 'open' ? 'aperta' : ''}. Clicca "🔄 Rileva" per eseguire la scansione.`;
+    tr.appendChild(td); tbody.appendChild(tr);
+    document.getElementById('an-action-bar').style.display = 'none';
+    return;
   }
-  // Extras
-  const eEmpty = document.getElementById('an-extras-empty');
-  const eTable = document.getElementById('an-extras-table');
-  const eBody = document.getElementById('an-extras-body');
-  if (!d.extras.length) { eEmpty.style.display='block'; eTable.style.display='none'; }
-  else {
-    eEmpty.style.display='none'; eTable.style.display='';
-    eBody.innerHTML = d.extras.map(x => `
-      <tr>
-        <td class="mono text-sm"><a href="/jobs/${x.job_id}">${escapeHtml(x.job_code)}</a></td>
-        <td class="text-sm">${escapeHtml(x.project_title || '—')}</td>
-        <td>${escapeHtml(x.description)}</td>
-        <td class="mono text-sm">${x.quantity_actual} ${escapeHtml(x.unit)}</td>
-        <td class="mono text-sm">${fmtCurrency(x.total_value)}</td>
-      </tr>`).join('');
+  rows.forEach(a => {
+    const color = TYPE_COLOR[a.anomaly_type] || '#9aa0b8';
+    const typeLbl = TYPE_LBL[a.anomaly_type] || a.anomaly_type;
+    const stLbl = ANOM_STATUS_LBL[a.status] || a.status;
+    const stColor = a.status === 'open' ? '#ef4444' : a.status === 'handled' ? '#22c55e' : '#9aa0b8';
+    const tr = document.createElement('tr');
+    tr.dataset.anId = a.id;
+    // Checkbox
+    const tdCb = document.createElement('td');
+    const cb = document.createElement('input');
+    cb.type = 'checkbox'; cb.className = 'an-row-cb';
+    cb.dataset.anId = a.id;
+    if (a.status !== 'open') cb.disabled = true;
+    cb.addEventListener('change', updateAnomSelection);
+    tdCb.appendChild(cb);
+    tr.appendChild(tdCb);
+    // Tipo badge
+    const tdType = document.createElement('td');
+    const badge = document.createElement('span');
+    badge.style.cssText = `display:inline-block;padding:2px 8px;border-radius:4px;background:${color}20;color:${color};font-size:11px;font-weight:600;`;
+    badge.textContent = typeLbl;
+    tdType.appendChild(badge);
+    tr.appendChild(tdType);
+    // Descrizione
+    const tdDesc = document.createElement('td');
+    tdDesc.className = 'text-sm';
+    tdDesc.textContent = a.description || '';
+    tr.appendChild(tdDesc);
+    // Cliente
+    const tdClient = document.createElement('td');
+    tdClient.className = 'text-sm';
+    tdClient.textContent = a.client_name || '—';
+    tr.appendChild(tdClient);
+    // Progetto link
+    const tdProj = document.createElement('td');
+    tdProj.className = 'text-sm';
+    if (a.project_id) {
+      const lnk = document.createElement('a');
+      lnk.href = '/projects/' + a.project_id;
+      lnk.className = 'mf-link';
+      lnk.textContent = a.project_code || a.project_title || ('#' + a.project_id);
+      tdProj.appendChild(lnk);
+    } else { tdProj.textContent = '—'; }
+    tr.appendChild(tdProj);
+    // Job link
+    const tdJob = document.createElement('td');
+    if (a.job_id) {
+      const lnk = document.createElement('a');
+      lnk.href = '/jobs/' + a.job_id;
+      lnk.className = 'mf-link mono';
+      lnk.textContent = a.job_code || ('#' + a.job_id);
+      tdJob.appendChild(lnk);
+    } else { tdJob.textContent = '—'; }
+    tr.appendChild(tdJob);
+    // Importo
+    const tdAmt = document.createElement('td');
+    tdAmt.className = 'mono text-right';
+    tdAmt.textContent = fmtCurrency(a.amount || 0);
+    tr.appendChild(tdAmt);
+    // Rilevata
+    const tdDet = document.createElement('td');
+    tdDet.className = 'text-sm text-muted';
+    tdDet.textContent = a.detected_at ? fmtDate(a.detected_at) : '—';
+    tr.appendChild(tdDet);
+    // Stato + handled info
+    const tdSt = document.createElement('td');
+    const stSpan = document.createElement('span');
+    stSpan.style.cssText = `color:${stColor}; font-weight:500; font-size:12px;`;
+    stSpan.textContent = stLbl;
+    tdSt.appendChild(stSpan);
+    if (a.handled_action) {
+      const sub = document.createElement('div');
+      sub.className = 'text-xs text-muted';
+      sub.textContent = (ACTION_LBL[a.handled_action] || a.handled_action) +
+        (a.handled_target_kind ? ` → ${a.handled_target_kind}#${a.handled_target_id}` : '');
+      tdSt.appendChild(sub);
+    }
+    tr.appendChild(tdSt);
+    // Azioni
+    const tdAct = document.createElement('td');
+    const btn = document.createElement('button');
+    btn.className = 'btn btn-ghost btn-sm';
+    if (a.status === 'open') {
+      btn.textContent = '▾ Azione';
+      btn.addEventListener('click', () => openAnomActionPopover(a.id));
+    } else {
+      btn.textContent = '↺ Riapri';
+      btn.addEventListener('click', () => reopenAnomaly(a.id));
+    }
+    tdAct.appendChild(btn);
+    tr.appendChild(tdAct);
+    tbody.appendChild(tr);
+  });
+}
+
+function renderAnomSummary(s) {
+  const items = [
+    { key: 'extra_after_billed', lbl: '📅 Extra post-fattura' },
+    { key: 'sforamento_monte_ore', lbl: '📈 Sforamenti' },
+    { key: 'quote_discrepancy', lbl: '📉 Quote vs consuntivo' },
+    { key: 'mancato_recupero', lbl: '💸 Mancato recupero' },
+    { key: 'over_budget', lbl: '➕ Extra puri' },
+  ];
+  const host = document.getElementById('an-summary');
+  while (host.firstChild) host.removeChild(host.firstChild);
+  items.forEach(it => {
+    const v = s[it.key] || { n: 0, total: 0 };
+    const color = v.n ? (TYPE_COLOR[it.key] || 'var(--rose)') : 'var(--text-muted)';
+    const card = document.createElement('div');
+    card.className = 'stat-card';
+    const lbl = document.createElement('div');
+    lbl.className = 'stat-label';
+    lbl.textContent = it.lbl;
+    const val = document.createElement('div');
+    val.className = 'stat-value mono';
+    val.style.cssText = `font-size:22px;color:${color};`;
+    val.textContent = String(v.n);
+    const sub = document.createElement('div');
+    sub.className = 'text-sm text-muted mono';
+    sub.textContent = fmtCurrency(v.total);
+    card.appendChild(lbl); card.appendChild(val); card.appendChild(sub);
+    host.appendChild(card);
+  });
+}
+
+function toggleSelectAll(cb) {
+  document.querySelectorAll('.an-row-cb:not([disabled])').forEach(r => r.checked = cb.checked);
+  updateAnomSelection();
+}
+
+function updateAnomSelection() {
+  const checked = document.querySelectorAll('.an-row-cb:checked');
+  const bar = document.getElementById('an-action-bar');
+  const cnt = document.getElementById('an-sel-count');
+  if (checked.length === 0) { bar.style.display = 'none'; return; }
+  bar.style.display = 'flex';
+  cnt.textContent = `${checked.length} selezionate`;
+}
+
+function clearAnomSelection() {
+  document.querySelectorAll('.an-row-cb').forEach(c => c.checked = false);
+  const selAll = document.getElementById('an-select-all');
+  if (selAll) selAll.checked = false;
+  updateAnomSelection();
+}
+
+function _getSelectedAnomIds() {
+  return Array.from(document.querySelectorAll('.an-row-cb:checked')).map(c => parseInt(c.dataset.anId, 10));
+}
+
+async function bulkHandleAnomalies() {
+  const ids = _getSelectedAnomIds();
+  if (!ids.length) return;
+  const action = document.getElementById('an-bulk-action').value;
+  const notes = document.getElementById('an-bulk-notes').value.trim();
+  const lbl = ACTION_LBL[action] || action;
+  const detail = action === 'write_off_loss' ? 'Verranno create LossEntry per ogni anomalia.'
+    : action === 'overhead_cost' ? 'Verranno create OverheadCost per ogni anomalia.'
+    : 'Le anomalie verranno marcate handled.';
+  if (!confirm(`Applicare "${lbl}" a ${ids.length} anomalie?\n\n${detail}`)) return;
+  const fd = new FormData();
+  fd.append('anomaly_ids', ids.join(','));
+  fd.append('action', action);
+  if (notes) fd.append('notes', notes);
+  try {
+    const res = await api('POST', '/finance/api/anomalies/bulk-handle', fd);
+    toast(`✓ ${res.handled} anomalie gestite`, 'success');
+    document.getElementById('an-bulk-notes').value = '';
+    await loadAnomalies();
+  } catch(e) { toast(e.message || 'Errore bulk-handle', 'error'); }
+}
+
+async function bulkDismissAnomalies() {
+  const ids = _getSelectedAnomIds();
+  if (!ids.length) return;
+  if (!confirm(`Dismiss (chiudi senza azione) ${ids.length} anomalie?\n\nUtile per falsi positivi o anomalie già gestite altrove.`)) return;
+  let ok = 0, fail = 0;
+  for (const id of ids) {
+    try {
+      await api('POST', `/finance/api/anomalies/${id}/dismiss`, new FormData());
+      ok++;
+    } catch(e) { fail++; }
   }
+  toast(`✓ ${ok} dismissed${fail ? ` · ${fail} errori` : ''}`, fail ? 'warning' : 'success');
+  await loadAnomalies();
+}
+
+async function openAnomActionPopover(anomalyId) {
+  const action = prompt(
+    'Azione (digitare il numero):\n' +
+    '1 = ↩ Rimanda al commerciale\n' +
+    '2 = 🔄 Rivaluta producer\n' +
+    '3 = 📉 Write-off (LossEntry)\n' +
+    '4 = 📦 Pozzo costi (OverheadCost)'
+  );
+  if (!action) return;
+  const map = { '1': 'rimanda_commerciale', '2': 'rivaluta_producer', '3': 'write_off_loss', '4': 'overhead_cost' };
+  const actVal = map[action.trim()];
+  if (!actVal) { toast('Azione non valida', 'warning'); return; }
+  const notes = prompt('Note (opzionali):') || '';
+  const fd = new FormData();
+  fd.append('action', actVal);
+  if (notes) fd.append('notes', notes);
+  try {
+    const res = await api('POST', `/finance/api/anomalies/${anomalyId}/handle`, fd);
+    toast(`✓ Azione applicata${res.target_kind ? ` (creato ${res.target_kind}#${res.target_id})` : ''}`, 'success');
+    await loadAnomalies();
+  } catch(e) { toast(e.message || 'Errore azione', 'error'); }
+}
+
+async function reopenAnomaly(id) {
+  if (!confirm('Riaprire questa anomalia?\n\nLo status torna "open" — l\'azione eventuale resta in audit.')) return;
+  try {
+    await api('POST', `/finance/api/anomalies/${id}/reopen`, new FormData());
+    toast('✓ Anomalia riaperta', 'success');
+    await loadAnomalies();
+  } catch(e) { toast(e.message || 'Errore reopen', 'error'); }
 }
 
 async function refreshAnomaliesBadge() {
   try {
-    const s = await api('GET', '/finance/api/anomalies/summary');
-    const total = (s.floating_jobs || 0) + (s.extras || 0) + (s.overdue_supplier_invoices || 0);
+    // v3.5.0-alpha.89: usa /v2/summary (open only). Pre-α.89 c'era anche
+    // l'endpoint legacy /api/anomalies/summary che resta per back-compat.
+    const s = await api('GET', '/finance/api/anomalies/v2/summary');
+    const total = s._total_open || 0;
     const badge = document.getElementById('anomalies-badge');
     if (total > 0) { badge.textContent = total; badge.style.display = 'inline-block'; }
     else { badge.style.display = 'none'; }

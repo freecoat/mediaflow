@@ -31,4 +31,6 @@ from app.models.models import (
     ProjectTechSheet,
     # v3.5.0-alpha.87 — Pozzo costi / Spese aziendali
     OverheadCost, OverheadCostCategory, RecurrenceInterval,
+    # v3.5.0-alpha.89 — Anomaly workflow (sprint S4)
+    AnomalyEntry, AnomalyType, AnomalyStatus, AnomalyAction, AnomalySourceKind,
 )

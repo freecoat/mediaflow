@@ -18,6 +18,7 @@ from app.routers import (
     delivery_templates,
     suppliers as suppliers_router,
     overhead,  # v3.5.0-alpha.87 — Pozzo costi generici / Spese aziendali
+    anomalies,  # v3.5.0-alpha.89 — Workflow anomalie fatturazione (sprint S4)
 )
 
 
@@ -740,7 +741,7 @@ async def lifespan(app: FastAPI):
     yield
 
 
-app = FastAPI(title="MediaFlow", version="3.5.0-alpha.88", lifespan=lifespan)
+app = FastAPI(title="MediaFlow", version="3.5.0-alpha.89", lifespan=lifespan)
 
 BASE_DIR = Path(__file__).parent
 app.mount("/static", StaticFiles(directory=BASE_DIR / "static"), name="static")
@@ -935,6 +936,7 @@ app.include_router(physical_assets_router.router)
 app.include_router(help_router.router)
 app.include_router(suppliers_router.router)
 app.include_router(overhead.router)  # v3.5.0-alpha.87 — Pozzo costi / Spese aziendali
+app.include_router(anomalies.router)  # v3.5.0-alpha.89 — Workflow anomalie (sprint S4)
 app.include_router(billing.router)
 
 

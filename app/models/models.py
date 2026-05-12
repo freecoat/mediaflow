@@ -2362,3 +2362,102 @@ class OverheadCost(Base):
     department: Mapped[Optional["Department"]] = relationship(foreign_keys=[department_id])
     supplier: Mapped[Optional["Supplier"]] = relationship(foreign_keys=[supplier_id])
     supplier_invoice: Mapped[Optional["SupplierInvoice"]] = relationship(foreign_keys=[supplier_invoice_id])
+
+
+# ── ANOMALY WORKFLOW (v3.5.0-alpha.89, sprint S4) ──────────────────
+#
+# Stateful workflow per anomalie fatturazione. Pre-α.89 le anomalie erano
+# calcolate stateless (vedi /finance/api/anomalies/*) — riemergevano a ogni
+# refresh e non c'era track di quali fossero già gestite. Ora ogni anomalia
+# rilevata diventa una AnomalyEntry (open/handled/dismissed) con audit
+# trail dell'azione applicata (rimanda commerciale / rivaluta producer /
+# write-off perso / costo aziendale).
+#
+# Detector: scanner idempotente che genera AnomalyEntry da:
+# - JCLBilledSlice + done post-billed → extra_after_billed
+# - JobCostLine quantity_actual > quantity_quoted → sforamento_monte_ore
+# - JobCostLine is_extra=True senza quote_line_id → extra (over-budget)
+# - Invoice due_date < today + status != paid → mancato_recupero
+# - Quote vs Job consuntivo > threshold → quote_discrepancy
+#
+# `dedup_key` (anomaly_type + source_kind + source_id) garantisce
+# idempotenza: re-detect non duplica righe esistenti, riapre solo se
+# precedentemente dismissed.
+
+class AnomalyType(str, enum.Enum):
+    """5 tipi di anomalie fatturazione tracciate (tassonomia ticket Matteo
+    12 mag 2026)."""
+    extra_after_billed = "extra_after_billed"        # done emerso dopo slice fatturata
+    sforamento_monte_ore = "sforamento_monte_ore"    # quantity_actual > quoted
+    quote_discrepancy = "quote_discrepancy"          # quote ufficiale ≠ consuntivo Job
+    mancato_recupero = "mancato_recupero"            # fattura scaduta, status != paid
+    over_budget = "over_budget"                      # extra puro (is_extra=True, no quote_line)
+
+
+class AnomalyStatus(str, enum.Enum):
+    open = "open"            # rilevata, da gestire
+    handled = "handled"      # azione applicata
+    dismissed = "dismissed"  # ignorata (falso positivo o gestita altrove)
+
+
+class AnomalyAction(str, enum.Enum):
+    """Azione applicata per chiudere l'anomalia (tracking audit)."""
+    rimanda_commerciale = "rimanda_commerciale"   # ritorna al commerciale per ridiscutere col cliente
+    rivaluta_producer = "rivaluta_producer"        # producer rivaluta budget/scope
+    write_off_loss = "write_off_loss"              # → LossEntry (perso, non recuperato)
+    overhead_cost = "overhead_cost"                # → OverheadCost (spesa aziendale ricorrente/strutturale)
+
+
+class AnomalySourceKind(str, enum.Enum):
+    """Tipo dell'entità sorgente. Polymorphic: source_id punta al record di
+    questo tipo. Lookup viene fatto lato detector/action handler."""
+    jcl = "jcl"                          # JobCostLine
+    job = "job"                          # Job (per quote_discrepancy)
+    invoice = "invoice"                  # Invoice (per mancato_recupero)
+    supplier_invoice = "supplier_invoice"  # SupplierInvoice (per fatture passive scadute)
+    billed_slice = "billed_slice"        # JCLBilledSlice (per extra_after_billed)
+
+
+class AnomalyEntry(Base):
+    """Singola anomalia rilevata sul workflow fatturazione. Stateful:
+    open → handled (con action+target) | dismissed.
+
+    Idempotenza detect: `dedup_key` univoca per (tenant, type, source).
+    Re-scan non duplica; riapre solo se l'anomalia era dismissed e il
+    dato sottostante è cambiato (es. nuovo over-budget dopo aggiornamento)."""
+    __tablename__ = "anomaly_entries"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    tenant_id: Mapped[int] = mapped_column(ForeignKey("tenants.id"), default=1, index=True)
+
+    anomaly_type: Mapped[AnomalyType] = mapped_column(SAEnum(AnomalyType), index=True)
+    source_kind: Mapped[AnomalySourceKind] = mapped_column(SAEnum(AnomalySourceKind), index=True)
+    source_id: Mapped[int] = mapped_column(Integer, index=True)
+    # Idempotency key: "{type}:{source_kind}:{source_id}". UNIQUE per tenant.
+    dedup_key: Mapped[str] = mapped_column(String(120), index=True)
+
+    # Contesto denormalizzato per query veloci (no join). Aggiornato a ogni detect.
+    project_id: Mapped[Optional[int]] = mapped_column(ForeignKey("projects.id"), nullable=True, index=True)
+    job_id: Mapped[Optional[int]] = mapped_column(ForeignKey("jobs.id"), nullable=True, index=True)
+    client_id: Mapped[Optional[int]] = mapped_column(ForeignKey("clients.id"), nullable=True, index=True)
+
+    amount: Mapped[float] = mapped_column(Float, default=0.0)  # valore monetario in gioco
+    description: Mapped[str] = mapped_column(String(500))
+    detected_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, index=True)
+    last_seen_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+
+    # Stato + azione
+    status: Mapped[AnomalyStatus] = mapped_column(SAEnum(AnomalyStatus), default=AnomalyStatus.open, index=True)
+    handled_action: Mapped[Optional[AnomalyAction]] = mapped_column(SAEnum(AnomalyAction), nullable=True)
+    handled_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+    handled_by_user_id: Mapped[Optional[int]] = mapped_column(ForeignKey("users.id"), nullable=True)
+    # Target dell'azione: LossEntry.id per write_off_loss, OverheadCost.id per overhead_cost,
+    # null per rimanda_commerciale / rivaluta_producer (sono solo cambio stato workflow).
+    handled_target_kind: Mapped[Optional[str]] = mapped_column(String(40), nullable=True)
+    handled_target_id: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+
+    notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+
+    project: Mapped[Optional["Project"]] = relationship(foreign_keys=[project_id])
+    job: Mapped[Optional["Job"]] = relationship(foreign_keys=[job_id])
+    client: Mapped[Optional["Client"]] = relationship(foreign_keys=[client_id])
