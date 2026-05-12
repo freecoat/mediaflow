@@ -1,5 +1,55 @@
 # MediaFlow — Changelog
 
+## v3.5.0-alpha.91 — Audit pre-push: P0+P1 fix da 3 code review (13 maggio 2026)
+
+Multi-audit lanciato pre-push (3 agent code-reviewer paralleli su α.88/89/90).
+Risultati applicati:
+
+**P0 forecast redirect drop fragment** (`finance.py`, `cashflow.html`):
+- `/finance/forecast` ritornava `RedirectResponse(url=".../#forecast", 302)`.
+  Browser strippano il fragment dal Location header (RFC 9110) → atterravano
+  sempre sul tab Cassa. Ora redirect a `?tab=forecast` (query param sopravvive
+  al 302), JS legge sia `?tab=forecast` che `#forecast` (back-compat).
+
+**P0 AnomalyEntry dedup_key no UNIQUE** (`models.py`, `main.py`):
+- Modello aveva `index=True` ma non `unique=True` né `UniqueConstraint`.
+  Detect paralleli passavano il check `db.query().first()` e creavano duplicati.
+- Aggiunto `__table_args__ = (UniqueConstraint("tenant_id", "dedup_key"),)`.
+- Auto-migrate: CREATE UNIQUE INDEX su DB esistenti + DELETE duplicati
+  pre-fix (mantiene riga MIN(id) per coppia tenant+dedup).
+
+**P1 mancato_recupero project_id NULL** (`anomaly_detector.py`):
+- `detect_mancato_recupero` settava sempre `project_id=None` (Invoice non
+  ha project_id diretto). `_handle_single(write_off_loss)` richiede project_id
+  → 400 garantito per ogni invoice scaduta.
+- Ora deriva da `inv.job.project_id` quando job linked.
+
+**P1 DAM tag CSV duplicate rows** (`dam.py`):
+- `query.join(AssetTag).join(Tag).filter(in_(tag_names))` ritorna 1 riga per
+  tag matching (asset con 2 tag richiesti → 2 righe). Refactor a
+  `exists()` subquery: 1 riga per asset.
+
+**P1 compose_invoice billed_amount accumulo** (`billing.py`):
+- `jcl.billed_amount += bl.total_approved` (asimmetrico vs emit_invoice
+  singolo che fa `=`). Storico cumulativo già vive in JCLBilledSlice;
+  `billed_amount` deve essere snapshot ultimo. Ora overwrite.
+
+**P1 compose_invoice race su Invoice.number** (`billing.py`):
+- IntegrityError grezzo → 500. Ora wrap commit in try/except, restituisce
+  409 dedicato.
+
+**P2 lasciati per next iteration**:
+- `todoEditBooking` synthetic items missing `id`/`assignment_id` (undo/copy
+  rotti per quei item)
+- `extra_after_billed` no `is_active=True` filter (soft-deleted JCL generano
+  anomalie spurie)
+- `reopen` non resetta `handled_target_id` (orphan LossEntry/OverheadCost
+  se reopen+re-handle)
+- `mfEnableSortableTables` no `stopPropagation` (può triggerare `<tr onclick>`
+  parenti dopo il sort)
+
+7 file. +1 UNIQUE constraint. 392 routes invariato.
+
 ## v3.5.0-alpha.90 — Accrual billing + 4 fix ticket Matteo 13 mag (13 maggio 2026)
 
 Risposta a 4 ticket Matteo notte 12 mag.

@@ -8,6 +8,35 @@
 
 ## Versione corrente
 
+**v3.5.0-alpha.91** — 13 maggio 2026 — Audit pre-push: P0+P1 fix da 3 code review
+
+Multi-audit a fine giornata con 3 agent code-reviewer paralleli (uno per
+α.88/89/90). Bug confermati ad alta confidenza fixati prima del push:
+
+- **P0** `/finance/forecast` redirect 302 → `?tab=forecast` (fragment veniva
+  strippato, atterrava sempre su Cassa)
+- **P0** `AnomalyEntry.dedup_key` UniqueConstraint enforced + auto-migrate
+  con DELETE duplicati esistenti
+- **P1** `mancato_recupero` deriva project_id da `inv.job.project_id`
+- **P1** DAM tag CSV: refactor a `exists()` subquery (no più righe duplicate)
+- **P1** `compose_invoice` `jcl.billed_amount = bl.total_approved` (overwrite)
+- **P1** `compose_invoice` race su Invoice.number → 409
+
+P2 lasciati (todoEdit undo, soft-delete filter detector, reopen orphan,
+sort stopPropagation) — non-bloccanti.
+
+**Push fatto**: 11 commit (b8b8bb6 → α.91) ora su origin/main.
+
+## (sessione chiusa 13 maggio sera tardi)
+
+Matteo stanco, andiamo a dormire. Da rispondere domani:
+1. **Pass-through OT al cliente · ATTIVO** non sembra cambiare nulla.
+   Verificare dove dovrebbe mostrare differenza nel cost report (esempio
+   numerico con OT 6h × 1.30 → JCL.total_accrued gonfiato). Vedi commento
+   in [[project-pass-through-ot]] (memory da creare).
+
+## (versione precedente)
+
 **v3.5.0-alpha.90** — 13 maggio 2026 — Accrual billing + 4 fix Matteo
 
 4 ticket post-test S4:

@@ -626,8 +626,12 @@ async function renderWinLoss(cid, pid) {
 
 initYearSelect();
 loadFilters().then(() => {
-  // Deep-link: #forecast switcha al tab Forecast direttamente.
-  if (window.location.hash === '#forecast') {
+  // Deep-link: ?tab=forecast oppure #forecast (back-compat) switcha al tab.
+  // v3.5.0-alpha.91 audit fix: il fragment #forecast veniva strippato dal 302
+  // redirect HTTP. Ora /finance/forecast → 302 a ?tab=forecast (sopravvive al
+  // redirect). Mantengo anche check su hash per link diretti.
+  const params = new URLSearchParams(window.location.search);
+  if (params.get('tab') === 'forecast' || window.location.hash === '#forecast') {
     switchCfTab('forecast');
   } else {
     loadCashflow();

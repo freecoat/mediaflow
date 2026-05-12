@@ -392,9 +392,13 @@ async def forecast_page(request: Request, db: Session = Depends(get_db)):
 
     v3.5.0-alpha.88: pagina forecast accorpata in /finance/cashflow come
     secondo tab. La rotta resta come alias deep-link → redirect 302 al tab
-    `forecast` della pagina cashflow combinata."""
+    `forecast` della pagina cashflow combinata.
+
+    v3.5.0-alpha.91 audit fix: i fragment URL (#forecast) vengono strippati
+    dai browser sui redirect HTTP (Location header non li trasporta).
+    Usiamo `?tab=forecast` query param che sopravvive al 302."""
     from fastapi.responses import RedirectResponse
-    return RedirectResponse(url="/finance/cashflow#forecast", status_code=302)
+    return RedirectResponse(url="/finance/cashflow?tab=forecast", status_code=302)
 
 
 @router.get("/reports", response_class=HTMLResponse)

@@ -524,6 +524,26 @@ def _auto_migrate_columns():
                         f"ALTER TABLE {tbl} ADD COLUMN tenant_id INTEGER NOT NULL DEFAULT 1"
                     ))
 
+    # v3.5.0-alpha.91 audit fix P0: UNIQUE constraint su anomaly_entries
+    # (tenant_id, dedup_key). create_tables() la crea solo se la tabella è
+    # nuova; per DB esistenti (chi ha lanciato detect prima del fix) aggiungo
+    # qui l'indice. Idempotente via IF NOT EXISTS.
+    if "anomaly_entries" in insp.get_table_names():
+        idx_names = {ix["name"] for ix in insp.get_indexes("anomaly_entries")}
+        if "uq_anomaly_tenant_dedup" not in idx_names:
+            print("[auto-migrate] CREATE UNIQUE INDEX uq_anomaly_tenant_dedup")
+            with engine.begin() as conn:
+                # Pulizia eventuali duplicati esistenti prima della UNIQUE
+                conn.execute(text(
+                    "DELETE FROM anomaly_entries WHERE id NOT IN ("
+                    "  SELECT MIN(id) FROM anomaly_entries GROUP BY tenant_id, dedup_key"
+                    ")"
+                ))
+                conn.execute(text(
+                    "CREATE UNIQUE INDEX IF NOT EXISTS uq_anomaly_tenant_dedup "
+                    "ON anomaly_entries (tenant_id, dedup_key)"
+                ))
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -743,7 +763,7 @@ async def lifespan(app: FastAPI):
     yield
 
 
-app = FastAPI(title="MediaFlow", version="3.5.0-alpha.90", lifespan=lifespan)
+app = FastAPI(title="MediaFlow", version="3.5.0-alpha.91", lifespan=lifespan)
 
 BASE_DIR = Path(__file__).parent
 app.mount("/static", StaticFiles(directory=BASE_DIR / "static"), name="static")

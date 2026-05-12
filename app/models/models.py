@@ -2438,6 +2438,13 @@ class AnomalyEntry(Base):
     Re-scan non duplica; riapre solo se l'anomalia era dismissed e il
     dato sottostante è cambiato (es. nuovo over-budget dopo aggiornamento)."""
     __tablename__ = "anomaly_entries"
+    # v3.5.0-alpha.91 audit fix P0: la UNIQUE su (tenant_id, dedup_key)
+    # era documentata in commento ma non costruita lato DB → due detect
+    # paralleli passavano il check db.query().first() e creavano duplicati.
+    # Ora la garanzia di idempotenza è enforced dal DB.
+    __table_args__ = (
+        UniqueConstraint("tenant_id", "dedup_key", name="uq_anomaly_tenant_dedup"),
+    )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     tenant_id: Mapped[int] = mapped_column(ForeignKey("tenants.id"), default=1, index=True)
@@ -2445,7 +2452,8 @@ class AnomalyEntry(Base):
     anomaly_type: Mapped[AnomalyType] = mapped_column(SAEnum(AnomalyType), index=True)
     source_kind: Mapped[AnomalySourceKind] = mapped_column(SAEnum(AnomalySourceKind), index=True)
     source_id: Mapped[int] = mapped_column(Integer, index=True)
-    # Idempotency key: "{type}:{source_kind}:{source_id}". UNIQUE per tenant.
+    # Idempotency key: "{type}:{source_kind}:{source_id}". UNIQUE per tenant
+    # (enforced via __table_args__ UniqueConstraint).
     dedup_key: Mapped[str] = mapped_column(String(120), index=True)
 
     # Contesto denormalizzato per query veloci (no join). Aggiornato a ogni detect.

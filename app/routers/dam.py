@@ -136,9 +136,18 @@ async def list_assets(
     if tag:
         # v3.5.0-alpha.88 — tag ora accetta CSV per multi-select (es. tag=raw,finale).
         # Match ANY: l'asset ha almeno uno dei tag richiesti.
+        # v3.5.0-alpha.91 audit fix P1: uso EXISTS subquery invece di INNER JOIN
+        # per evitare righe duplicate (1 asset × N tag matching = N righe).
         tag_names = [t.strip() for t in tag.split(",") if t.strip()]
         if tag_names:
-            query = query.join(AssetTag).join(Tag).filter(Tag.name.in_(tag_names))
+            from sqlalchemy import exists
+            tag_exists = (
+                db.query(AssetTag.asset_id)
+                .join(Tag, AssetTag.tag_id == Tag.id)
+                .filter(AssetTag.asset_id == Asset.id, Tag.name.in_(tag_names))
+                .exists()
+            )
+            query = query.filter(tag_exists)
     # v3.5.0-alpha.86 (S3.4) — client_id + period + tech filters
     if client_id:
         from app.models import Project as _Project

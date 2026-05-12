@@ -209,12 +209,19 @@ def detect_over_budget(db: Session) -> int:
 
 def detect_mancato_recupero(db: Session) -> int:
     """Fatture attive scadute (due_date < oggi, status NOT IN paid/cancelled).
-    Indica mancato recupero credito."""
+    Indica mancato recupero credito.
+
+    v3.5.0-alpha.91 audit fix P1: deriva project_id da inv.job.project_id
+    quando disponibile. Era sempre NULL → handle write_off_loss falliva con
+    400 "write-off richiede project_id"."""
     n = 0
     today = date.today()
     rows = (
         db.query(Invoice)
-        .options(joinedload(Invoice.client))
+        .options(
+            joinedload(Invoice.client),
+            joinedload(Invoice.job).joinedload(Job.project),
+        )
         .filter(Invoice.tenant_id == CURRENT_TENANT)
         .filter(Invoice.due_date.isnot(None))
         .filter(Invoice.due_date < today)
@@ -236,7 +243,7 @@ def detect_mancato_recupero(db: Session) -> int:
                 f"({inv.client.name if inv.client else 'cliente'})"
             ),
             amount=amt,
-            project_id=None,
+            project_id=(inv.job.project_id if inv.job else None),
             job_id=inv.job_id,
             client_id=inv.client_id,
         )

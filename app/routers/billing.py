@@ -1038,10 +1038,13 @@ async def compose_invoice_from_batches(
             db.add(il)
             invoice_lines_count += 1
             # Marca JCL → billed
+            # v3.5.0-alpha.91 audit fix P1: overwrite invece di accumulo
+            # (asimmetria con emit_invoice singolo). Lo storico cumulativo
+            # vive nelle JCLBilledSlice; jcl.billed_amount è snapshot ultimo.
             jcl = db.query(JobCostLine).filter(JobCostLine.id == bl.job_cost_line_id).first()
             if jcl:
                 jcl.billing_status = JCLBillingStatus.billed
-                jcl.billed_amount = (jcl.billed_amount or 0) + bl.total_approved
+                jcl.billed_amount = bl.total_approved
             # JCLBilledSlice immutabile per la porzione fatturata
             slice_ = JCLBilledSlice(
                 tenant_id=CURRENT_TENANT,
@@ -1058,7 +1061,16 @@ async def compose_invoice_from_batches(
         # Linka batch → invoice
         batch.status = BillingBatchStatus.invoiced
         batch.invoice_id = invoice.id
-    db.commit()
+    # v3.5.0-alpha.91 audit fix P1: gestisce race condition su Invoice.number
+    # unique. Pre-fix: 500 IntegrityError grezzo. Ora: 409 dedicato.
+    try:
+        db.commit()
+    except Exception as e:
+        db.rollback()
+        from sqlalchemy.exc import IntegrityError
+        if isinstance(e, IntegrityError) and "UNIQUE" in str(e).upper():
+            raise HTTPException(409, f"Numero fattura {invoice_number} già esistente (race condition)")
+        raise HTTPException(500, f"Errore compose: {e}")
     return {
         "invoice_id": invoice.id,
         "invoice_number": invoice.number,
