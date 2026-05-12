@@ -1,0 +1,153 @@
+id,email,name,password,role,department,is_resource,note
+1,admin@mediaflow.it,Admin MediaFlow,admin123,admin,,False,Account principale Matteo
+2,matteo@mediaflow.it,Matteo Lepore,matteo123,admin,,False,Proprietario / manager casa di post
+3,gabriele.conti1@mediaflow.it,Gabriele Conti,pwd001,viewer,VFX,True,Dipendente Compositor
+4,paolo.luca2@mediaflow.it,Paolo De Luca,pwd002,operator,DI-VIDEO,True,Dipendente Online Editor
+5,paolo.vitali3@mediaflow.it,Paolo Vitali,pwd003,operator,AUDIO,True,Dipendente ADR Engineer
+6,eleonora.farina4@mediaflow.it,Eleonora Farina,pwd004,producer,COMMERCIAL,True,Dipendente Producer
+7,riccardo.bianchi5@mediaflow.it,Riccardo Bianchi,pwd005,producer,DI-VIDEO,True,Dipendente Online Editor
+8,lucia.giordano6@mediaflow.it,Lucia Giordano,pwd006,operator,AUDIO,True,Dipendente Dialogue Editor
+9,giulia.angelis7@mediaflow.it,Giulia De Angelis,pwd007,manager,AUDIO,True,Dipendente Sound Designer
+10,alberto.bruno8@mediaflow.it,Alberto Bruno,pwd008,operator,VFX,True,Dipendente Matte Painter
+11,pietro.mancini9@mediaflow.it,Pietro Mancini,pwd009,accounting,COMMERCIAL,True,Dipendente Producer
+12,lucia.coppola10@mediaflow.it,Lucia Coppola,pwd010,producer,COMMERCIAL,True,Dipendente Production Coordinator
+13,gabriele.galli11@mediaflow.it,Gabriele Galli,pwd011,operator,DI-VIDEO,True,Dipendente Online Editor
+14,riccardo.gallo12@mediaflow.it,Riccardo Gallo,pwd012,viewer,COMMERCIAL,True,Dipendente Producer
+15,vittorio.barbieri13@mediaflow.it,Vittorio Barbieri,pwd013,manager,COMMERCIAL,True,Dipendente Producer Senior
+16,caterina.coppola14@mediaflow.it,Caterina Coppola,pwd014,operator,DI-VIDEO,True,Dipendente DI Operator
+17,stefano.sanna15@mediaflow.it,Stefano Sanna,pwd015,viewer,DI-VIDEO,True,Dipendente Mastering Engineer
+18,anna.vitale16@mediaflow.it,Anna Vitale,pwd016,accounting,COMMERCIAL,True,Dipendente Production Coordinator
+19,greta.giordano17@mediaflow.it,Greta Giordano,pwd017,producer,COMMERCIAL,True,Dipendente Production Coordinator
+20,salvatore.caputo18@mediaflow.it,Salvatore Caputo,pwd018,operator,DI-VIDEO,True,Dipendente Colorist
+21,antonio.bianchi19@mediaflow.it,Antonio Bianchi,pwd019,operator,DI-VIDEO,True,Dipendente Mastering Engineer
+22,veronica.romano20@mediaflow.it,Veronica Romano,pwd020,operator,DI-VIDEO,True,Dipendente Dailies Operator
+23,federica.ferrara21@mediaflow.it,Federica Ferrara,pwd021,operator,DI-VIDEO,True,Dipendente DI Operator
+24,aurora.costa22@mediaflow.it,Aurora Costa,pwd022,operator,COMMERCIAL,True,Dipendente Producer Senior
+25,antonio.luca23@mediaflow.it,Antonio De Luca,pwd023,operator,DI-VIDEO,True,Dipendente Mastering Engineer
+26,elena.pellegrini24@mediaflow.it,Elena Pellegrini,pwd024,operator,AUDIO,True,Dipendente ADR Engineer
+27,cristian.marino25@mediaflow.it,Cristian Marino,pwd025,producer,VFX,True,Dipendente Compositor
+28,cristian.bruno26@mediaflow.it,Cristian Bruno,pwd026,accounting,DI-VIDEO,True,Dipendente Colorist
+29,veronica.bruno27@mediaflow.it,Veronica Bruno,pwd027,operator,AUDIO,True,Dipendente Sound Designer
+30,chiara.longo28@mediaflow.it,Chiara Longo,pwd028,manager,AUDIO,True,Dipendente ADR Engineer
+31,vittorio.sanna29@mediaflow.it,Vittorio Sanna,pwd029,operator,DI-VIDEO,True,Dipendente Online Editor
+32,massimo.romano30@mediaflow.it,Massimo Romano,pwd030,operator,DI-VIDEO,True,Dipendente QC Engineer
+33,sara.greco31@mediaflow.it,Sara Greco,pwd031,producer,COMMERCIAL,True,Dipendente Office Manager
+34,francesca.ferrari32@mediaflow.it,Francesca Ferrari,pwd032,operator,AUDIO,True,Dipendente ADR Engineer
+35,niccolò.caruso33@mediaflow.it,Niccolò Caruso,pwd033,producer,DI-VIDEO,True,Dipendente QC Engineer
+36,roberto.ferrara34@mediaflow.it,Roberto Ferrara,pwd034,accounting,DI-VIDEO,True,Dipendente Colorist
+37,greta.pisani35@mediaflow.it,Greta Pisani,pwd035,viewer,DI-VIDEO,True,Dipendente QC Engineer
+38,gabriele.riva36@mediaflow.it,Gabriele Riva,pwd036,producer,DI-VIDEO,True,Dipendente Senior Colorist
+39,laura.esposito37@mediaflow.it,Laura Esposito,pwd037,operator,COMMERCIAL,True,Dipendente Production Coordinator
+40,federico.conti38@mediaflow.it,Federico Conti,pwd038,operator,VFX,True,Dipendente Matte Painter
+41,lorenzo.moretti39@mediaflow.it,Lorenzo Moretti,pwd039,accounting,DI-VIDEO,True,Dipendente Mastering Engineer
+42,cristian.conti40@mediaflow.it,Cristian Conti,pwd040,operator,AUDIO,True,Dipendente ADR Engineer
+43,marco.marini41@mediaflow.it,Marco Marini,pwd041,operator,AUDIO,True,Dipendente Dialogue Editor
+44,veronica.bianchi42@mediaflow.it,Veronica Bianchi,pwd042,operator,COMMERCIAL,True,Dipendente Office Manager
+45,maria.coppola43@mediaflow.it,Maria Coppola,pwd043,operator,VFX,True,Dipendente 3D Artist
+46,tommaso.marino44@mediaflow.it,Tommaso Marino,pwd044,operator,COMMERCIAL,True,Dipendente Production Assistant
+47,emanuele.longo45@mediaflow.it,Emanuele Longo,pwd045,producer,AUDIO,True,Dipendente Foley Editor
+48,stefano.vitali46@mediaflow.it,Stefano Vitali,pwd046,accounting,AUDIO,True,Dipendente ADR Engineer
+49,lucia.greco47@mediaflow.it,Lucia Greco,pwd047,operator,DI-VIDEO,True,Dipendente Senior Colorist
+50,carlotta.ferrara48@mediaflow.it,Carlotta Ferrara,pwd048,operator,VFX,True,Dipendente Compositor Senior
+51,federico.romano49@mediaflow.it,Federico Romano,pwd049,operator,DI-VIDEO,True,Dipendente DI Operator
+52,mattia.ferrara50@mediaflow.it,Mattia Ferrara,pwd050,operator,VFX,True,Dipendente VFX Supervisor
+53,alberto.mariani51@mediaflow.it,Alberto Mariani,pwd051,operator,COMMERCIAL,True,Dipendente Producer Senior
+54,emanuele.fontana52@mediaflow.it,Emanuele Fontana,pwd052,producer,COMMERCIAL,True,Dipendente Production Coordinator
+55,enrico.greco53@mediaflow.it,Enrico Greco,pwd053,operator,AUDIO,True,Dipendente Music Editor
+56,vittoria.pellegrini54@mediaflow.it,Vittoria Pellegrini,pwd054,operator,VFX,True,Dipendente VFX Supervisor
+57,anna.leone55@mediaflow.it,Anna Leone,pwd055,operator,COMMERCIAL,True,Dipendente Account Manager
+58,luca.moretti56@mediaflow.it,Luca Moretti,pwd056,operator,DI-VIDEO,True,Dipendente DI Operator
+59,giulia.pellegrini57@mediaflow.it,Giulia Pellegrini,pwd057,operator,DI-VIDEO,True,Dipendente Online Editor
+60,simone.lombardo58@mediaflow.it,Simone Lombardo,pwd058,operator,DI-VIDEO,True,Dipendente Colorist Freelance
+61,daniela.greco59@mediaflow.it,Daniela Greco,pwd059,operator,AUDIO,True,Dipendente ADR Engineer
+62,emma.bianchi60@mediaflow.it,Emma Bianchi,pwd060,operator,VFX,True,Dipendente 3D Artist
+63,alessia.rossi61@mediaflow.it,Alessia Rossi,pwd061,manager,VFX,True,Dipendente Compositor Senior
+64,salvatore.fontana62@mediaflow.it,Salvatore Fontana,pwd062,viewer,AUDIO,True,Dipendente Music Editor
+65,vittorio.gatti63@mediaflow.it,Vittorio Gatti,pwd063,viewer,AUDIO,True,Dipendente Re-recording Mixer
+66,lucia.caruso64@mediaflow.it,Lucia Caruso,pwd064,operator,COMMERCIAL,True,Dipendente Accountant
+67,davide.marini65@mediaflow.it,Davide Marini,pwd065,operator,DI-VIDEO,True,Dipendente Mastering Engineer
+68,paola.gatti66@mediaflow.it,Paola Gatti,pwd066,operator,VFX,True,Dipendente FX TD
+69,veronica.greco67@mediaflow.it,Veronica Greco,pwd067,operator,DI-VIDEO,True,Dipendente Colorist Freelance
+70,gabriele.giordano68@mediaflow.it,Gabriele Giordano,pwd068,operator,COMMERCIAL,True,Dipendente Production Assistant
+71,federico.marchetti69@mediaflow.it,Federico Marchetti,pwd069,operator,VFX,True,Dipendente Matte Painter
+72,giulia.vitali70@mediaflow.it,Giulia Vitali,pwd070,operator,AUDIO,True,Dipendente Music Editor
+73,francesca.caruso71@mediaflow.it,Francesca Caruso,pwd071,operator,VFX,True,Dipendente Matte Painter
+74,matteo.bianchi72@mediaflow.it,Matteo Bianchi,pwd072,accounting,VFX,True,Dipendente FX TD
+75,sara.lombardo73@mediaflow.it,Sara Lombardo,pwd073,operator,COMMERCIAL,True,Dipendente Producer Senior
+76,paolo.farina74@mediaflow.it,Paolo Farina,pwd074,operator,COMMERCIAL,True,Dipendente Office Manager
+77,camilla.gallo75@mediaflow.it,Camilla Gallo,pwd075,operator,COMMERCIAL,True,Dipendente Account Manager
+78,niccolò.fontana76@mediaflow.it,Niccolò Fontana,pwd076,operator,DI-VIDEO,True,Dipendente Online Editor
+79,stella.conti77@mediaflow.it,Stella Conti,pwd077,operator,VFX,True,Dipendente VFX Supervisor
+80,giulio.russo78@mediaflow.it,Giulio Russo,pwd078,operator,COMMERCIAL,True,Dipendente Producer
+81,simone.giordano79@mediaflow.it,Simone Giordano,pwd079,operator,VFX,True,Dipendente Compositor Senior
+82,giulia.longo80@mediaflow.it,Giulia Longo,pwd080,producer,COMMERCIAL,True,Dipendente Producer Senior
+83,chiara.marchetti81@mediaflow.it,Chiara Marchetti,pwd081,accounting,VFX,True,Dipendente FX TD
+84,marco.bruno82@mediaflow.it,Marco Bruno,pwd082,operator,VFX,True,Dipendente 3D Artist
+85,roberto.longo83@mediaflow.it,Roberto Longo,pwd083,accounting,VFX,True,Dipendente Matte Painter
+86,marta.galli84@mediaflow.it,Marta Galli,pwd084,operator,COMMERCIAL,True,Dipendente Production Assistant
+87,lorenzo.riva85@mediaflow.it,Lorenzo Riva,pwd085,operator,AUDIO,True,Dipendente Music Editor
+88,francesco.moretti86@mediaflow.it,Francesco Moretti,pwd086,operator,AUDIO,True,Dipendente Re-recording Mixer
+89,cristian.ferrara87@mediaflow.it,Cristian Ferrara,pwd087,operator,AUDIO,True,Dipendente Foley Editor
+90,cristian.martinelli88@mediaflow.it,Cristian Martinelli,pwd088,producer,AUDIO,True,Dipendente Foley Editor
+91,roberta.fontana89@mediaflow.it,Roberta Fontana,pwd089,operator,AUDIO,True,Dipendente Dialogue Editor
+92,arianna.mariani90@mediaflow.it,Arianna Mariani,pwd090,operator,COMMERCIAL,True,Dipendente Office Manager
+93,giovanni.longo91@mediaflow.it,Giovanni Longo,pwd091,operator,DI-VIDEO,True,Dipendente Colorist
+94,alberto.gentile92@mediaflow.it,Alberto Gentile,pwd092,operator,AUDIO,True,Dipendente Foley Artist
+95,lorenzo.moretti93@mediaflow.it,Lorenzo Moretti,pwd093,operator,COMMERCIAL,True,Dipendente Production Assistant
+96,roberta.mancini94@mediaflow.it,Roberta Mancini,pwd094,operator,VFX,True,Dipendente Roto/Paint
+97,mattia.riva95@mediaflow.it,Mattia Riva,pwd095,operator,VFX,True,Dipendente Compositor
+98,silvia.rizzo96@mediaflow.it,Silvia Rizzo,pwd096,operator,DI-VIDEO,True,Dipendente Mastering Engineer
+99,giorgia.greco97@mediaflow.it,Giorgia Greco,pwd097,operator,AUDIO,True,Dipendente Re-recording Mixer
+100,marco.lombardo98@mediaflow.it,Marco Lombardo,pwd098,operator,AUDIO,True,Dipendente Dialogue Editor
+101,emanuele.mancini99@mediaflow.it,Emanuele Mancini,pwd099,producer,DI-VIDEO,True,Dipendente Colorist Freelance
+102,edoardo.caruso100@mediaflow.it,Edoardo Caruso,pwd100,operator,VFX,True,Dipendente FX TD
+103,marta.romano101@mediaflow.it,Marta Romano,pwd101,operator,COMMERCIAL,True,Dipendente Accountant
+104,niccolò.greco102@mediaflow.it,Niccolò Greco,pwd102,operator,DI-VIDEO,True,Dipendente Colorist
+105,laura.bruno103@mediaflow.it,Laura Bruno,pwd103,operator,DI-VIDEO,True,Dipendente Dailies Operator
+106,cristian.gentile104@mediaflow.it,Cristian Gentile,pwd104,operator,DI-VIDEO,True,Dipendente Mastering Engineer
+107,luca.caruso105@mediaflow.it,Luca Caruso,pwd105,operator,VFX,True,Dipendente Roto/Paint
+108,roberto.caruso106@mediaflow.it,Roberto Caruso,pwd106,operator,AUDIO,True,Dipendente Foley Artist
+109,simone.rossi107@mediaflow.it,Simone Rossi,pwd107,operator,COMMERCIAL,True,Dipendente Production Coordinator
+110,valentina.pellegrini108@mediaflow.it,Valentina Pellegrini,pwd108,operator,DI-VIDEO,True,Dipendente Colorist Freelance
+111,valentina.martinelli109@mediaflow.it,Valentina Martinelli,pwd109,operator,DI-VIDEO,True,Dipendente Senior Colorist
+112,matteo.ferrara110@mediaflow.it,Matteo Ferrara,pwd110,operator,VFX,True,Dipendente 3D Artist
+113,cristian.greco111@mediaflow.it,Cristian Greco,pwd111,operator,COMMERCIAL,True,Dipendente Office Manager
+114,valentina.farina112@mediaflow.it,Valentina Farina,pwd112,operator,DI-VIDEO,True,Dipendente Colorist
+115,emanuele.marchetti113@mediaflow.it,Emanuele Marchetti,pwd113,operator,DI-VIDEO,True,Dipendente DI Operator
+116,greta.monti114@mediaflow.it,Greta Monti,pwd114,operator,COMMERCIAL,True,Dipendente Accountant
+117,carlo.ferrara115@mediaflow.it,Carlo Ferrara,pwd115,viewer,AUDIO,True,Dipendente Re-recording Mixer
+118,daniele.sala116@mediaflow.it,Daniele Sala,pwd116,operator,COMMERCIAL,True,Dipendente Office Manager
+119,antonio.mariani117@mediaflow.it,Antonio Mariani,pwd117,operator,VFX,True,Dipendente Compositor Senior
+120,cristina.galli118@mediaflow.it,Cristina Galli,pwd118,accounting,COMMERCIAL,True,Dipendente Office Manager
+121,paola.farina119@mediaflow.it,Paola Farina,pwd119,operator,COMMERCIAL,True,Dipendente Production Assistant
+122,laura.pisani120@mediaflow.it,Laura Pisani,pwd120,viewer,DI-VIDEO,True,Dipendente Colorist
+123,vittoria.ferrara121@mediaflow.it,Vittoria Ferrara,pwd121,manager,DI-VIDEO,True,Dipendente Mastering Engineer
+124,paolo.romano122@mediaflow.it,Paolo Romano,pwd122,operator,VFX,True,Dipendente Roto/Paint
+125,chiara.bruno123@mediaflow.it,Chiara Bruno,pwd123,operator,DI-VIDEO,True,Dipendente Colorist
+126,roberto.ricci124@mediaflow.it,Roberto Ricci,pwd124,viewer,DI-VIDEO,True,Dipendente Conform Editor
+127,pietro.greco125@mediaflow.it,Pietro Greco,pwd125,producer,DI-VIDEO,True,Dipendente DI Operator
+128,paola.angelis126@mediaflow.it,Paola De Angelis,pwd126,operator,COMMERCIAL,True,Dipendente Accountant
+129,caterina.monti127@mediaflow.it,Caterina Monti,pwd127,operator,COMMERCIAL,True,Dipendente Producer
+130,salvatore.lombardo128@mediaflow.it,Salvatore Lombardo,pwd128,operator,VFX,True,Dipendente FX TD
+131,stefano.bruno129@mediaflow.it,Stefano Bruno,pwd129,operator,DI-VIDEO,True,Dipendente Senior Colorist
+132,lorenzo.conti130@mediaflow.it,Lorenzo Conti,pwd130,operator,AUDIO,True,Dipendente Foley Editor
+133,giorgia.monti131@mediaflow.it,Giorgia Monti,pwd131,operator,COMMERCIAL,True,Dipendente Accountant
+134,veronica.farina132@mediaflow.it,Veronica Farina,pwd132,operator,VFX,True,Dipendente FX TD
+135,carlo.sanna133@mediaflow.it,Carlo Sanna,pwd133,operator,DI-VIDEO,True,Dipendente Conform Editor
+136,lucia.fontana134@mediaflow.it,Lucia Fontana,pwd134,operator,AUDIO,True,Dipendente Sound Designer
+137,sofia.martini135@mediaflow.it,Sofia Martini,pwd135,operator,DI-VIDEO,True,Dipendente DI Operator
+138,simone.serra136@mediaflow.it,Simone Serra,pwd136,operator,VFX,True,Dipendente 3D Artist
+139,riccardo.marino137@mediaflow.it,Riccardo Marino,pwd137,viewer,DI-VIDEO,True,Dipendente QC Engineer
+140,emanuele.bianchi138@mediaflow.it,Emanuele Bianchi,pwd138,operator,COMMERCIAL,True,Dipendente Office Manager
+141,anna.gentile139@mediaflow.it,Anna Gentile,pwd139,operator,COMMERCIAL,True,Dipendente Production Assistant
+142,aurora.angelis140@mediaflow.it,Aurora De Angelis,pwd140,operator,COMMERCIAL,True,Dipendente Accountant
+143,giulia.riva141@mediaflow.it,Giulia Riva,pwd141,operator,VFX,True,Dipendente Render Wrangler
+144,anna.gatti142@mediaflow.it,Anna Gatti,pwd142,operator,VFX,True,Dipendente VFX Supervisor
+145,ilaria.galli143@mediaflow.it,Ilaria Galli,pwd143,producer,VFX,True,Dipendente Compositor
+146,alberto.romano144@mediaflow.it,Alberto Romano,pwd144,operator,DI-VIDEO,True,Dipendente QC Engineer
+147,lucia.monti145@mediaflow.it,Lucia Monti,pwd145,operator,DI-VIDEO,True,Dipendente QC Engineer
+148,riccardo.farina146@mediaflow.it,Riccardo Farina,pwd146,operator,DI-VIDEO,True,Dipendente Senior Colorist
+149,davide.coppola147@mediaflow.it,Davide Coppola,pwd147,operator,COMMERCIAL,True,Dipendente Production Assistant
+150,marco.russo148@mediaflow.it,Marco Russo,pwd148,operator,COMMERCIAL,True,Dipendente Production Coordinator
+151,francesco.martini149@mediaflow.it,Francesco Martini,pwd149,operator,COMMERCIAL,True,Dipendente Production Coordinator
+152,massimo.bruno150@mediaflow.it,Massimo Bruno,pwd150,operator,VFX,True,Dipendente Compositor Senior
