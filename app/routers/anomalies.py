@@ -42,8 +42,7 @@ from app.models import (
     Project,
 )
 from app.services.anomaly_detector import detect_all
-from app.services.auth import current_user_optional
-from app.services.rbac import requires_permission
+from app.services.rbac import current_user_optional, requires_permission
 
 router = APIRouter(prefix="/finance", tags=["anomalies"])
 
