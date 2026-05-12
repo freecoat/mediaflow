@@ -1,5 +1,48 @@
 # MediaFlow — Changelog
 
+## v3.5.0-alpha.84 — Sprint S1 Performance planning (12 maggio 2026)
+
+Hot-fix planning sotto carico stress (8.4k booking, 500 risorse). Pre α.84 le
+3 viste visuali erano inutilizzabili: calendario impilava 1000+ event in stesse
+celle orarie, timeline mostrava 500 row labels senza scroll, agenda caricava
+tutto il DB in 1 mega innerHTML.
+
+**S1.0 — Calendario (FullCalendar)**:
+- `events:` callback ora passa `info.startStr`/`info.endStr` come
+  `from_date`/`to_date` al server — fetch limitato alla finestra visibile.
+- Aggiunto `dayMaxEvents: 5` + `slotEventOverlap: false` → overflow "+N altri"
+  invece di stacking infinito.
+
+**S1.1 — Agenda**:
+- Default range oggi → +30gg se utente non ha specificato `f-from`/`f-to`.
+- Render lazy via `IntersectionObserver`: primi 7 giorni eager, restanti come
+  placeholder che si auto-hydrano entrando in viewport (rootMargin 300px).
+- Sostituito `innerHTML` con DOM API tipata (event listener invece di `onclick`
+  string interp).
+- Banner informativo con counts.
+
+**S1.2 — Timeline (vis-timeline)**:
+- `tlBuildResourceGroups`: con >100 risorse senza filtro dept/risorsa,
+  auto-filtra solo risorse con almeno 1 booking nel range (toast informativo).
+  Override via `localStorage.setItem('tl_show_all_resources','1')`.
+- `vis.Timeline` options: aggiunti `maxHeight` (= height) + `verticalScroll: true`
+  per garantire scroll labels quando le risorse superano la viewport.
+
+**S1.3 — Sidebar filtri auto-collapse**:
+- `setView()` auto-collapse sidebar su tab `calendar`/`timeline` (viste visuali),
+  auto-expand su `jobs`/`agenda`/`todo` (viste tabellari).
+- Override: una volta che l'utente preme il toggle manuale, viene marcato
+  `pl-filters-collapsed-user-set` in localStorage e la sua scelta vince.
+
+No DB migration. Solo `app/templates/pages/planning.html` + bump versione.
+
+Cantiere apertura ticket Matteo 12 mag (cluster B/C/D/E/F restanti):
+- B) bug search dropdown cashflow/forecast (no clienti dopo typo)
+- C) `<filter-bar>` riusabile + filtri standard fatturazione/fornitori/cost report
+- D) workflow anomalie fatturazione (tassonomia + 3 azioni)
+- E) cashflow+forecast merge (Combinato)
+- F) asset hub roadmap (long-term, backlog)
+
 ## v3.5.0-alpha.78 — Reportistica YoY + proiezioni + export CSV/XLSX (11 maggio 2026)
 
 Pattern QuickBooks/Pennylane/Salesforce Reports: anno-su-anno,

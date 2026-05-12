@@ -1257,6 +1257,18 @@ function setView(view) {
     v.classList.toggle('active', v.id === 'view-' + view);
   });
   writeFiltersToURL(view);
+  // v3.5.0-alpha.84 — Auto-collapse sidebar filtri sulle viste visuali
+  // (calendar/timeline) per dare spazio massimo al rendering. Resta aperto
+  // su jobs/agenda/todo dove i filtri sono operativi e la table è densa.
+  // Se l'utente ha già toggled manualmente (chiave 'pl-filters-collapsed-user-set')
+  // rispetta la sua scelta e non overridare.
+  try {
+    const userSet = localStorage.getItem('pl-filters-collapsed-user-set') === '1';
+    if (!userSet) {
+      const isVisualView = (view === 'calendar' || view === 'timeline');
+      setFiltersCollapsed(isVisualView, false);
+    }
+  } catch (_) {}
   renderView(view);
 }
 document.getElementById('pl-tabs').addEventListener('click', e => {
@@ -2098,13 +2110,22 @@ function renderCalendar() {
     headerToolbar: { left: 'prev,next today', center: 'title', right: 'dayGridMonth,timeGridWeek,timeGridDay' },
     height: 720, slotMinTime: '07:00', slotMaxTime: '22:00',
     allDaySlot: false, nowIndicator: true,
+    // v3.5.0-alpha.84 — overflow handling: max 5 eventi/giorno visibili + "+N altri"
+    dayMaxEvents: 5,
+    slotEventOverlap: false,
     eventSources: [
       // v3.5.0-alpha.56: source come funzione per applicare filtro client-side
       // "nascondi non fatte" (FullCalendar non offre filtri post-fetch nativi
       // sui sources URL).
+      // v3.5.0-alpha.84: passa visible range (info.startStr/endStr) come
+      // from_date/to_date al server → fetch limitato alla finestra mostrata,
+      // non più all'intero DB (su 8k+ booking causava freeze + card 4px illeggibili).
       { id:'bookings', events: async function(info, success, failure) {
           try {
-            const d = await api('GET', '/planning/api/bookings?' + qs);
+            const rangeQs = 'from_date=' + encodeURIComponent(info.startStr)
+                          + '&to_date=' + encodeURIComponent(info.endStr);
+            const fullQs = qs ? (qs + '&' + rangeQs) : rangeQs;
+            const d = await api('GET', '/planning/api/bookings?' + fullQs);
             success(filterBookingsHideNotDone(d));
           } catch(e) { failure(e); }
         }
@@ -2135,18 +2156,42 @@ function renderCalendar() {
 }
 
 // ── Agenda list ────────────────────────────────────────────
+// v3.5.0-alpha.84 — Performance fix: default range oggi → +30gg se filtri vuoti.
+// Su 8k+ booking caricava tutto + sort all + 1 mega innerHTML = browser bloccato.
+// Lazy chunks 50 booking via IntersectionObserver per giorni successivi.
 async function renderAgenda() {
   const qs = buildQS();
+  // Se utente non ha specificato from/to nel filtro sidebar → default oggi+30gg
+  const fFrom = (document.getElementById('f-from')?.value || '').trim();
+  const fTo = (document.getElementById('f-to')?.value || '').trim();
+  let rangeQs = '';
+  if (!fFrom && !fTo) {
+    const today = new Date(); today.setHours(0,0,0,0);
+    const in30 = new Date(today.getTime() + 30*24*3600*1000);
+    rangeQs = 'from_date=' + today.toISOString().substring(0,10)
+            + '&to_date=' + in30.toISOString().substring(0,10);
+  }
+  const fullQs = [qs, rangeQs].filter(Boolean).join('&');
   let [bookings, punches] = await Promise.all([
-    api('GET', '/planning/api/bookings'+(qs?'?'+qs:'')),
-    api('GET', '/hr/api/punches?format=fullcalendar'+(qs?'&'+qs:'')),
+    api('GET', '/planning/api/bookings'+(fullQs?'?'+fullQs:'')),
+    api('GET', '/hr/api/punches?format=fullcalendar'+(fullQs?'&'+fullQs:'')),
   ]);
   // v3.5.0-alpha.56: filtro client-side "nascondi non fatte"
   bookings = filterBookingsHideNotDone(bookings);
   const all = [...bookings, ...punches].filter(e => e.start);
   all.sort((a,b) => new Date(a.start) - new Date(b.start));
   const host = document.getElementById('ag-host');
-  if (!all.length) { host.innerHTML = '<div class="pl-empty">Nessun evento nel periodo</div>'; return; }
+  host.replaceChildren();
+  if (!all.length) {
+    const empty = document.createElement('div');
+    empty.className = 'pl-empty';
+    const msg = (!fFrom && !fTo)
+      ? 'Nessun evento nei prossimi 30 giorni. Estendi il range con i filtri "Da"/"A".'
+      : 'Nessun evento nel periodo';
+    empty.textContent = msg;
+    host.appendChild(empty);
+    return;
+  }
 
   // Raggruppa per giorno
   const byDay = {};
@@ -2156,30 +2201,83 @@ async function renderAgenda() {
     if (!byDay[key]) byDay[key] = [];
     byDay[key].push(e);
   }
-  const html = Object.keys(byDay).sort().map(day => {
+  const dayKeys = Object.keys(byDay).sort();
+  // Header banner se default range applicato
+  if (!fFrom && !fTo) {
+    const banner = document.createElement('div');
+    banner.className = 'pl-empty';
+    banner.style.cssText = 'background:rgba(98,114,245,0.08); padding:8px 12px; margin-bottom:10px; font-size:12px;';
+    banner.textContent = `Mostro i prossimi 30 giorni · ${all.length} eventi · ${dayKeys.length} giornate. Estendi con "Da"/"A" per altri intervalli.`;
+    host.appendChild(banner);
+  }
+  // Render lazy: primi 7 giorni subito, restanti via IntersectionObserver
+  const renderDay = (day) => {
     const dt = new Date(day+'T00:00:00');
     const head = dt.toLocaleDateString('it-IT', {weekday:'long', day:'numeric', month:'long', year:'numeric'});
-    const evs = byDay[day].map(e => {
+    const dayWrap = document.createElement('div');
+    dayWrap.className = 'agenda-day';
+    const dayHeader = document.createElement('div');
+    dayHeader.className = 'agenda-day-header';
+    dayHeader.textContent = head;
+    dayWrap.appendChild(dayHeader);
+    for (const e of byDay[day]) {
       const s = new Date(e.start);
       const e_ = e.end ? new Date(e.end) : null;
       const time = s.toLocaleTimeString('it-IT',{hour:'2-digit',minute:'2-digit'}) + (e_ ? ' – '+e_.toLocaleTimeString('it-IT',{hour:'2-digit',minute:'2-digit'}) : '');
       const src = (e.extendedProps && e.extendedProps.source) || (e.id && String(e.id).startsWith('punch-') ? 'punch' : 'booking');
       const srcLbl = src === 'punch' ? 'Timbratura' : 'Booking';
-      // v3.5.0-alpha.13: click su agenda item booking → modal dettaglio
       const bookingId = (e.extendedProps && e.extendedProps.booking_id) || null;
-      const clickAttr = bookingId ? `onclick="todoOpenDetail(${bookingId})" style="cursor:pointer;"` : '';
-      return `<div class="agenda-evt" ${clickAttr}>
-        <div class="time">${time}</div>
-        <div class="title">${escapeHtml(e.title || '')}</div>
-        <div><span class="badge-src ${src}">${srcLbl}</span></div>
-      </div>`;
-    }).join('');
-    return `<div class="agenda-day">
-      <div class="agenda-day-header">${head}</div>
-      ${evs}
-    </div>`;
-  }).join('');
-  host.innerHTML = html;
+      const item = document.createElement('div');
+      item.className = 'agenda-evt';
+      if (bookingId) {
+        item.style.cursor = 'pointer';
+        item.addEventListener('click', () => todoOpenDetail(bookingId));
+      }
+      const timeEl = document.createElement('div');
+      timeEl.className = 'time'; timeEl.textContent = time;
+      const titleEl = document.createElement('div');
+      titleEl.className = 'title'; titleEl.textContent = e.title || '';
+      const badgeWrap = document.createElement('div');
+      const badge = document.createElement('span');
+      badge.className = 'badge-src ' + src; badge.textContent = srcLbl;
+      badgeWrap.appendChild(badge);
+      item.appendChild(timeEl); item.appendChild(titleEl); item.appendChild(badgeWrap);
+      dayWrap.appendChild(item);
+    }
+    return dayWrap;
+  };
+  // First 7 days subito
+  const eagerN = Math.min(7, dayKeys.length);
+  for (let i = 0; i < eagerN; i++) {
+    host.appendChild(renderDay(dayKeys[i]));
+  }
+  // Restanti via IntersectionObserver — placeholder che si auto-render entrando in viewport
+  if (dayKeys.length > eagerN) {
+    const remaining = dayKeys.slice(eagerN);
+    const placeholders = remaining.map(day => {
+      const ph = document.createElement('div');
+      ph.className = 'agenda-day-placeholder';
+      ph.style.cssText = 'min-height:60px; display:flex; align-items:center; justify-content:center; opacity:0.5; font-size:11px;';
+      ph.textContent = '…';
+      ph.dataset.day = day;
+      return ph;
+    });
+    placeholders.forEach(ph => host.appendChild(ph));
+    const io = new IntersectionObserver((entries) => {
+      for (const ent of entries) {
+        if (ent.isIntersecting) {
+          const ph = ent.target;
+          const day = ph.dataset.day;
+          if (day && byDay[day]) {
+            const dayEl = renderDay(day);
+            ph.replaceWith(dayEl);
+          }
+          io.unobserve(ent.target);
+        }
+      }
+    }, { rootMargin: '300px' });
+    placeholders.forEach(ph => io.observe(ph));
+  }
 }
 
 // ── Todo "Le mie" (booking esecutivo, v3.4.32) ─────────────
@@ -3053,6 +3151,29 @@ function tlBuildResourceGroups(bookings, rangeStart, rangeEnd) {
   let resources = RESOURCES_SEED.slice();
   if (deptFilter) resources = resources.filter(r => r.dept === deptFilter);
   if (resFilter) resources = resources.filter(r => r.id === resFilter);
+  // v3.5.0-alpha.84 — Performance: con >100 risorse senza filtro dept/risorsa,
+  // auto-filtra solo le risorse con almeno 1 booking nel range visibile (era
+  // sempre tutte = 500 row labels = scroll rotto). Toggle "Mostra tutte" via
+  // localStorage 'tl_show_all_resources'=1 per disabilitare.
+  let _showAll = false;
+  try { _showAll = localStorage.getItem('tl_show_all_resources') === '1'; } catch(_) {}
+  if (!deptFilter && !resFilter && !_showAll && resources.length > 100 && bookings && bookings.length) {
+    const bookedIds = new Set();
+    for (const b of bookings) {
+      const rid = b.extendedProps && b.extendedProps.resource_id;
+      if (rid) bookedIds.add(rid);
+    }
+    const before = resources.length;
+    resources = resources.filter(r => bookedIds.has(r.id));
+    if (resources.length < before && typeof toast === 'function' && !window._tlAutoFilterToastShown) {
+      window._tlAutoFilterToastShown = true;
+      toast(
+        `🪶 Mostro solo ${resources.length}/${before} risorse con booking nel periodo. ` +
+        `Filtra per reparto o disattiva via console: localStorage.setItem('tl_show_all_resources','1')`,
+        'info', 6000
+      );
+    }
+  }
 
   // Raggruppa per dept usato dalle risorse filtrate
   const usedDepts = new Set(resources.map(r => r.dept));
@@ -4526,7 +4647,11 @@ async function _doRenderTimeline(preserveWindow=false) {
     // adatta al ridimensionamento finestra via tlComputeHeight + listener
     // window.resize bindato in _tlBindResize() qui sotto.
     // α.44.1: tracking last height per evitare resize loop.
+    // v3.5.0-alpha.84: maxHeight = height per garantire scroll verticale sui
+    // group labels quando le risorse superano la viewport (era unbounded).
     height: (window._tlLastHeight = tlComputeHeight(host)),
+    maxHeight: window._tlLastHeight,
+    verticalScroll: true,
     start: win.start,
     end: win.end,
     groupOrder: 'id',
@@ -7401,6 +7526,9 @@ function setFiltersCollapsed(collapsed, persist=true) {
 document.getElementById('pl-toggle-filters').addEventListener('click', () => {
   const collapsed = !document.getElementById('pl-shell').classList.contains('filters-collapsed');
   setFiltersCollapsed(collapsed);
+  // v3.5.0-alpha.84 — Marker "user-set" per disabilitare auto-collapse per-view
+  // di setView(). Una volta che l'utente preme il toggle, vince la sua scelta.
+  try { localStorage.setItem('pl-filters-collapsed-user-set', '1'); } catch (_) {}
 });
 function updateActiveFiltersBadge() {
   const n = ['q','dept','client','project','job','resource','status','kind','from','to']

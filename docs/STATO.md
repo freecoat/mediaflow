@@ -8,6 +8,30 @@
 
 ## Versione corrente
 
+**v3.5.0-alpha.84** — 12 maggio 2026 — Sprint S1 Performance planning
+
+- Calendario FullCalendar: visible-range fetch + dayMaxEvents → no più freeze
+  con 8.4k booking (stress dataset 12 mag).
+- Agenda: default 30gg + IntersectionObserver lazy + DOM-safe rendering.
+- Timeline vis-timeline: auto-filtra risorse senza booking se >100 + maxHeight
+  + verticalScroll → tabella labels scrolla.
+- Sidebar filtri: auto-collapse su calendar/timeline, auto-expand su jobs/agenda/todo.
+
+Solo template `planning.html` + bump versione. No DB migration.
+
+## Prossimo step
+
+Cluster S2-S6 da apertura ticket Matteo 12 mag:
+- **S2** — bug search dropdown (cashflow/forecast no clienti dopo typo) → root cause helper condiviso.
+- **S3** — componente `<filter-bar>` riusabile applicato a fatturazione/fornitori/cost-report/assets/movimenti + filtri tecnici asset (HDR/SDR/2K/4K/fps).
+- **S4** — workflow anomalie fatturazione: tassonomia + 3 azioni + multiselect.
+- **S5** — cashflow+forecast merge in 1 pagina (decisione utente: combinato default).
+- **S6** — asset media hub (BACKLOG, yoyotta/Frame.io/etc. da indagare separatamente).
+
+## (versione precedente)
+
+**v3.5.0-alpha.83** — 11 maggio 2026 — Custom tooltip booking
+
 **v3.5.0-alpha.78** — 11 maggio 2026 — Reportistica YoY + proiezioni + export
 
 - Service financial_reports.py: year_over_year + ytd_projection
