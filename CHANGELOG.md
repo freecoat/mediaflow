@@ -1,5 +1,44 @@
 # MediaFlow — Changelog
 
+## v3.5.0-alpha.87 — Sprint S7 Claude Code plugin ecosystem per workflow finanziario (12 maggio 2026)
+
+NON tocca codice MediaFlow runtime. Configura ecosistema Claude Code per
+accelerare sviluppo future feature finanziarie + sbloccare SDI/fatturapa.
+
+**MCP server `mcp-fattura-elettronica-it`** (locale, no API esterna):
+- 21 tool per ciclo XML FatturaPA v1.6.1 conforme SDI.
+- Header (7): build_transmission_header, validate_cedente/cessionario, P.IVA
+  checksum, generate_progressivo_invio, lookup_codice_destinatario, etc.
+- Body (7): build_dati_generali, get_tipo_documento_codes, add_linea_dettaglio,
+  compute_totali, get_natura_codes, build_dati_pagamento, add_allegato.
+- Global (7): generate_fattura_xml, validate_fattura_xsd, parse_fattura_xml,
+  export_to_json, validate_partita_iva_format, get_sdi_filename,
+  check_ritenuta_acconto.
+- Config: `.mcp.json` project-scoped + `.claude/settings.json` allowlist
+  `enabledMcpjsonServers`.
+- Launcher: `uvx mcp-fattura-elettronica-it` (uv 0.11.13 installato in
+  Python 3.14 user site).
+
+**VoltAgent subagent marketplace** (globale ~/.claude/settings.json):
+- Marketplace `voltagent`: `VoltAgent/awesome-claude-code-subagents`.
+- 4 plugin enabled: voltagent-lang, voltagent-qa-sec, voltagent-data-ai,
+  voltagent-domains. ~60 subagent specializzati (python-pro, sql-pro,
+  test-automator, payment-integration, data-engineer, fintech, etc.).
+
+**3 custom skill** project-scoped in `.claude/skills/`:
+- `mediaflow-finance-feature-dev`: checklist 13-step per feature finanziaria
+  (tenant scope, RBAC, soft-delete, JCLBilledSlice, AI capability, migration,
+  filter-bar, notification, test, cache-buster, commit). Encodes patterns
+  consolidati α.66+.
+- `italian-tax-compliance`: validazione P.IVA mod-10, CF, IBAN mod-97, codici
+  RF01-RF19, TD01-TD28, N1-N7, SDI 7-char. Delega validation a MCP quando
+  disponibile.
+- `sdi-xml-builder`: pipeline 5-step da Invoice MediaFlow → XML FatturaPA
+  via MCP tool chain. Defaults per casa post-prod (FPR12, RF01, TD01, MP05,
+  TP02). Endpoint `/finance/api/invoices/{id}/sdi-xml` proposto per S8.
+
+No bump versione app (config-only). No DB migration.
+
 ## v3.5.0-alpha.86 — Sprint S3 MFFilterBar + filtri standard 5 pagine (12 maggio 2026)
 
 Risponde al cluster C dei ticket Matteo (12 mag): "filtri standard mancanti

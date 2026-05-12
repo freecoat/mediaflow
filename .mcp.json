@@ -1,0 +1,11 @@
+{
+  "mcpServers": {
+    "fattura-elettronica-it": {
+      "command": "uvx",
+      "args": ["mcp-fattura-elettronica-it"],
+      "env": {
+        "LOG_LEVEL": "INFO"
+      }
+    }
+  }
+}
