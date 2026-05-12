@@ -4,24 +4,41 @@
 {% block title %}Cashflow & Forecast — MediaFlow{% endblock %}
 {% block topbar_title %}💰 Cashflow & Forecast{% endblock %}
 
-{% block topbar_actions %}
-  <select id="cf-granularity" class="form-input" data-no-search="true" style="height:32px;font-size:13px;width:130px;" onchange="onFiltersChanged()">
-    <option value="month">Mensile</option>
-    <option value="quarter">Trimestrale</option>
-    <option value="year">Annuale</option>
-  </select>
-  <!-- v3.5.0-alpha.85: MFAutocomplete con typeahead esplicito + chip. -->
-  <div id="cf-client-ac" class="mf-ac" style="width:200px;"></div>
-  <input type="hidden" id="cf-client" value="">
-  <div id="cf-project-ac" class="mf-ac" style="width:220px;"></div>
-  <input type="hidden" id="cf-project" value="">
-  <select id="cf-year" class="form-input" data-no-search="true" style="height:32px;font-size:13px;width:100px;" onchange="onFiltersChanged()"></select>
-{% endblock %}
-
 {% block content %}
 
+<!-- v3.5.0-alpha.90 — Filtri spostati dalla topbar a card dedicata.
+     In topbar gli mf-ac da 200/220px venivano clippati su monitor ≤1440px
+     (gap + theme switcher + user bell saturavano lo spazio). Ora visibili
+     sempre, sopra le tab. -->
+<div class="card mb-3" style="padding:10px 14px;">
+  <div style="display:flex; gap:10px; align-items:flex-end; flex-wrap:wrap;">
+    <div>
+      <label class="form-label" style="font-size:11px; margin-bottom:4px; display:block;">Granularità</label>
+      <select id="cf-granularity" class="form-input" data-no-search="true" style="height:32px;font-size:13px;width:130px;" onchange="onFiltersChanged()">
+        <option value="month">Mensile</option>
+        <option value="quarter">Trimestrale</option>
+        <option value="year">Annuale</option>
+      </select>
+    </div>
+    <div>
+      <label class="form-label" style="font-size:11px; margin-bottom:4px; display:block;">Cliente</label>
+      <div id="cf-client-ac" class="mf-ac" style="width:220px;"></div>
+      <input type="hidden" id="cf-client" value="">
+    </div>
+    <div>
+      <label class="form-label" style="font-size:11px; margin-bottom:4px; display:block;">Progetto</label>
+      <div id="cf-project-ac" class="mf-ac" style="width:240px;"></div>
+      <input type="hidden" id="cf-project" value="">
+    </div>
+    <div>
+      <label class="form-label" style="font-size:11px; margin-bottom:4px; display:block;">Anno</label>
+      <select id="cf-year" class="form-input" data-no-search="true" style="height:32px;font-size:13px;width:100px;" onchange="onFiltersChanged()"></select>
+    </div>
+  </div>
+</div>
+
 <!-- v3.5.0-alpha.88 — Merge Cashflow + Forecast in singola pagina (ticket
-     Matteo 12 mag). 2 tab che condividono i filtri topbar. Default = Cassa. -->
+     Matteo 12 mag). 2 tab che condividono i filtri sopra. Default = Cassa. -->
 <div class="cf-tabs" id="cf-tabs">
   <button type="button" class="cf-tab is-active" data-cf-tab="cash" onclick="switchCfTab('cash')">💰 Cassa</button>
   <button type="button" class="cf-tab" data-cf-tab="forecast" onclick="switchCfTab('forecast')">📊 Forecast / Pipeline</button>

@@ -140,14 +140,20 @@ async def list_invoices(
 
     v3.5.0-alpha.88: only_overdue=true filtra fatture *davvero* scadute
     (due_date < oggi AND status NOT IN (paid, cancelled)) anche se non
-    marcate esplicitamente come overdue."""
-    q = db.query(Invoice).options(joinedload(Invoice.client))
+    marcate esplicitamente come overdue.
+
+    v3.5.0-alpha.90: ritorna dict arricchito con project (via Job.project).
+    Era ORM raw → mancava il progetto in lista fatture (ticket Matteo)."""
+    from app.models import Job as _Job, Project as _Project
+    q = db.query(Invoice).options(
+        joinedload(Invoice.client),
+        joinedload(Invoice.job).joinedload(_Job.project),
+    )
     if status:
         q = q.filter(Invoice.status == status)
     if client_id:
         q = q.filter(Invoice.client_id == client_id)
     if project_id:
-        from app.models import Job as _Job
         q = q.join(_Job, Invoice.job_id == _Job.id).filter(_Job.project_id == project_id)
     if from_date:
         q = q.filter(Invoice.issue_date >= from_date)
@@ -161,7 +167,28 @@ async def list_invoices(
             Invoice.due_date < today,
             Invoice.status.notin_([InvoiceStatus.paid, InvoiceStatus.cancelled]),
         )
-    return q.all()
+    out = []
+    for inv in q.all():
+        proj = inv.job.project if (inv.job and inv.job.project) else None
+        out.append({
+            "id": inv.id,
+            "number": inv.number,
+            "client_id": inv.client_id,
+            "client": ({"id": inv.client.id, "name": inv.client.name} if inv.client else None),
+            "job_id": inv.job_id,
+            "job": ({"id": inv.job.id, "code": inv.job.code, "title": inv.job.title} if inv.job else None),
+            "project": ({"id": proj.id, "code": proj.code, "title": proj.title} if proj else None),
+            "issue_date": inv.issue_date.isoformat() if inv.issue_date else None,
+            "due_date": inv.due_date.isoformat() if inv.due_date else None,
+            "subtotal": inv.subtotal,
+            "vat_rate": inv.vat_rate,
+            "total": inv.total,
+            "status": inv.status.value if hasattr(inv.status, "value") else inv.status,
+            "notes": inv.notes,
+            "doc_type": getattr(inv, "doc_type", None),
+            "payment_method": getattr(inv, "payment_method", None),
+        })
+    return out
 
 
 @router.post("/api/invoices", dependencies=[RequireEditInvoices])

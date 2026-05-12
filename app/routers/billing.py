@@ -85,12 +85,17 @@ def _next_batch_code(db: Session) -> str:
 
 
 def _batch_to_dict(b: BillingBatch, with_lines: bool = False) -> dict:
+    # v3.5.0-alpha.90 — Esponi client_id/client_name nella lista batch
+    # (richiesta Matteo: voglio vedere il cliente anche qui).
+    _client = (b.project.client if (b.project and getattr(b.project, "client", None)) else None)
     out = {
         "id": b.id,
         "code": b.code,
         "project_id": b.project_id,
         "project_title": b.project.title if b.project else None,
         "project_code": b.project.code if b.project else None,
+        "client_id": _client.id if _client else None,
+        "client_name": _client.name if _client else None,
         "status": b.status.value,
         "period_start": b.period_start.isoformat() if b.period_start else None,
         "period_end": b.period_end.isoformat() if b.period_end else None,
@@ -458,7 +463,7 @@ async def list_batches(
     client_id richiede join con Project (Project.client_id)."""
     _require_finance(request)
     q = db.query(BillingBatch).options(
-        joinedload(BillingBatch.project),
+        joinedload(BillingBatch.project).joinedload(Project.client),  # α.90: eager client
         joinedload(BillingBatch.invoice),
     ).filter(BillingBatch.tenant_id == CURRENT_TENANT)
     if project_id:
@@ -484,7 +489,7 @@ async def get_batch(batch_id: int, request: Request, db: Session = Depends(get_d
     """Dettaglio batch con tutte le lines snapshot."""
     _require_finance(request)
     batch = db.query(BillingBatch).options(
-        joinedload(BillingBatch.project),
+        joinedload(BillingBatch.project).joinedload(Project.client),  # α.90: eager client
         joinedload(BillingBatch.invoice),
         joinedload(BillingBatch.lines),
     ).filter(
@@ -891,6 +896,222 @@ async def emit_invoice(
         "subtotal": subtotal,
         "vat_amount": vat_amount,
         "total": total,
+    }
+
+
+@router.post("/compose-invoice")
+async def compose_invoice_from_batches(
+    request: Request,
+    project_id: int = Form(...),
+    period_start: date = Form(...),
+    period_end: date = Form(...),
+    invoice_number: str = Form(...),
+    issue_date: date = Form(...),
+    due_date: Optional[date] = Form(None),
+    vat_rate: float = Form(22.0),
+    batch_ids: Optional[str] = Form(None),  # CSV opzionale: se vuoto, prende tutti gli approved
+    notes: Optional[str] = Form(None),
+    db: Session = Depends(get_db),
+):
+    """v3.5.0-alpha.90 — Accrual billing: aggrega N BillingBatch approved
+    del progetto nel periodo → 1 Invoice unica (richiesta Matteo 13 mag).
+
+    Pre-α.90 era 1 batch = 1 fattura. Ora i batch trasmessi+approvati
+    restano "in cassetto" finché l'amministrazione compone la fattura
+    aggregata (mensile/trimestrale/custom secondo Project.billing_frequency).
+
+    Algoritmo:
+    1. Trova BillingBatch del project con status=approved + period nel range
+       (o batch_ids esplicito) + invoice_id IS NULL
+    2. Crea Invoice unica con cliente del project, subtotal = Σ batch.total_approved
+    3. Per ogni batch line con total_approved>0 → InvoiceLine + JCLBilledSlice
+    4. Linka tutti i batch a Invoice + status=invoiced
+    5. Marca JCL come billed/lost come emit_invoice singolo
+    """
+    _require_manager(request)
+    # Verifica unicità numero fattura
+    existing = db.query(Invoice).join(Client, Invoice.client_id == Client.id).filter(
+        Invoice.number == invoice_number,
+        Client.tenant_id == CURRENT_TENANT,
+    ).first()
+    if existing:
+        raise HTTPException(409, f"Numero fattura {invoice_number} già esistente")
+    project = db.query(Project).filter(
+        Project.id == project_id, Project.tenant_id == CURRENT_TENANT,
+    ).first()
+    if not project or not project.client_id:
+        raise HTTPException(400, "Progetto senza cliente, impossibile fatturare")
+
+    # Trova batch da aggregare
+    q = db.query(BillingBatch).options(joinedload(BillingBatch.lines)).filter(
+        BillingBatch.tenant_id == CURRENT_TENANT,
+        BillingBatch.project_id == project_id,
+        BillingBatch.status == BillingBatchStatus.approved,
+        BillingBatch.invoice_id.is_(None),
+    )
+    if batch_ids:
+        try:
+            ids = [int(x.strip()) for x in batch_ids.split(",") if x.strip()]
+        except ValueError:
+            raise HTTPException(400, "batch_ids deve essere CSV di interi")
+        q = q.filter(BillingBatch.id.in_(ids))
+    else:
+        # Range periodo: batch il cui periodo è dentro [period_start, period_end]
+        q = q.filter(
+            BillingBatch.period_start >= period_start,
+            BillingBatch.period_end <= period_end,
+        )
+    batches = q.order_by(BillingBatch.period_start.asc()).all()
+    if not batches:
+        raise HTTPException(404, "Nessun batch approvato in cassetto per i criteri forniti")
+
+    # Subtotal cumulativo
+    subtotal = sum(b.total_approved or 0 for b in batches)
+    if subtotal <= 0:
+        raise HTTPException(400, "Subtotal aggregato ≤ 0: niente da fatturare")
+    vat_amount = subtotal * vat_rate / 100
+    total = subtotal + vat_amount
+
+    # Snapshot fiscali
+    client_obj = db.query(Client).filter(Client.id == project.client_id).first()
+    tenant_obj = db.query(Tenant).filter(Tenant.id == CURRENT_TENANT).first()
+
+    batch_codes = ", ".join(b.code for b in batches)
+    invoice = Invoice(
+        number=invoice_number,
+        client_id=project.client_id,
+        status=InvoiceStatus.draft,
+        issue_date=issue_date,
+        due_date=due_date,
+        subtotal=subtotal,
+        vat_rate=vat_rate,
+        total=total,
+        notes=(notes or "") + f"\nGenerata aggregando {len(batches)} batch ({batch_codes})",
+        doc_type="TD01",
+        payment_method=(tenant_obj.payment_method_default if tenant_obj else None),
+        payment_terms_days=(tenant_obj.payment_terms_default if tenant_obj else None),
+        iban_snapshot=(tenant_obj.iban if tenant_obj else None),
+        client_legal_name_snap=(client_obj.name if client_obj else None),
+        client_vat_snap=(client_obj.vat_number if client_obj else None),
+        client_tax_code_snap=(client_obj.tax_code if client_obj else None),
+        client_pec_snap=(client_obj.pec if client_obj else None),
+        client_sdi_snap=(client_obj.sdi_code if client_obj else None),
+        client_address_snap=(client_obj.address if client_obj else None),
+        client_zip_snap=(client_obj.zip_code if client_obj else None),
+        client_city_snap=(client_obj.city if client_obj else None),
+        client_province_snap=(client_obj.province if client_obj else None),
+        client_country_snap=(client_obj.country if client_obj else None),
+        tenant_legal_name_snap=((tenant_obj.legal_name or tenant_obj.name) if tenant_obj else None),
+        tenant_vat_snap=(tenant_obj.vat_number if tenant_obj else None),
+        tenant_tax_code_snap=(tenant_obj.tax_code if tenant_obj else None),
+        tenant_address_snap=(tenant_obj.address if tenant_obj else None),
+        tenant_email_snap=(tenant_obj.email if tenant_obj else None),
+        tenant_phone_snap=(tenant_obj.phone if tenant_obj else None),
+        tenant_iban_snap=(tenant_obj.iban if tenant_obj else None),
+        tenant_sdi_snap=(tenant_obj.sdi_code if tenant_obj else None),
+        tenant_rea_snap=(tenant_obj.rea_number if tenant_obj else None),
+        tenant_fiscal_capital_snap=(tenant_obj.fiscal_capital if tenant_obj else None),
+        tenant_fiscal_regime_snap=(tenant_obj.fiscal_regime if tenant_obj else None),
+    )
+    db.add(invoice)
+    db.flush()
+
+    invoice_lines_count = 0
+    for batch in batches:
+        for bl in batch.lines:
+            if bl.total_approved <= 0:
+                # Marca JCL azzerate come lost (manager le ha scartate)
+                jcl = db.query(JobCostLine).filter(JobCostLine.id == bl.job_cost_line_id).first()
+                if jcl and (bl.total_approved or 0) <= 0.001:
+                    jcl.billing_status = JCLBillingStatus.lost
+                    jcl.billed_amount = 0
+                continue
+            il = InvoiceLine(
+                invoice_id=invoice.id,
+                description=f"[{batch.code}] " + bl.description + (" [extra]" if bl.is_extra else ""),
+                quantity=bl.quantity,
+                unit_price=bl.unit_price,
+                total=bl.total_approved,
+                vat_rate=vat_rate,
+                discount_pct=0.0,
+            )
+            db.add(il)
+            invoice_lines_count += 1
+            # Marca JCL → billed
+            jcl = db.query(JobCostLine).filter(JobCostLine.id == bl.job_cost_line_id).first()
+            if jcl:
+                jcl.billing_status = JCLBillingStatus.billed
+                jcl.billed_amount = (jcl.billed_amount or 0) + bl.total_approved
+            # JCLBilledSlice immutabile per la porzione fatturata
+            slice_ = JCLBilledSlice(
+                tenant_id=CURRENT_TENANT,
+                job_cost_line_id=bl.job_cost_line_id,
+                billing_batch_line_id=bl.id,
+                invoice_id=invoice.id,
+                period_start=batch.period_start,
+                period_end=batch.period_end,
+                billed_quantity=bl.quantity or 0.0,
+                billed_amount=bl.total_approved,
+                unit_price_snap=bl.unit_price or 0.0,
+            )
+            db.add(slice_)
+        # Linka batch → invoice
+        batch.status = BillingBatchStatus.invoiced
+        batch.invoice_id = invoice.id
+    db.commit()
+    return {
+        "invoice_id": invoice.id,
+        "invoice_number": invoice.number,
+        "subtotal": round(subtotal, 2),
+        "vat_amount": round(vat_amount, 2),
+        "total": round(total, 2),
+        "batches_aggregated": len(batches),
+        "batch_codes": [b.code for b in batches],
+        "invoice_lines_count": invoice_lines_count,
+    }
+
+
+@router.get("/composable-batches")
+async def list_composable_batches(
+    request: Request,
+    project_id: int,
+    period_start: Optional[date] = None,
+    period_end: Optional[date] = None,
+    db: Session = Depends(get_db),
+):
+    """v3.5.0-alpha.90 — Lista batch approved "in cassetto" per un progetto.
+    Anteprima per UI `Componi fattura periodo`: mostra all'utente cosa verrà
+    aggregato prima di confermare. Senza periodo: tutti gli approved.
+
+    `billing_frequency` del project viene esposto come hint per il default
+    periodo (es. monthly = primo-ultimo del mese corrente)."""
+    _require_finance(request)
+    project = db.query(Project).filter(
+        Project.id == project_id, Project.tenant_id == CURRENT_TENANT,
+    ).first()
+    if not project:
+        raise HTTPException(404, "Progetto non trovato")
+    q = db.query(BillingBatch).options(
+        joinedload(BillingBatch.project).joinedload(Project.client),
+    ).filter(
+        BillingBatch.tenant_id == CURRENT_TENANT,
+        BillingBatch.project_id == project_id,
+        BillingBatch.status == BillingBatchStatus.approved,
+        BillingBatch.invoice_id.is_(None),
+    )
+    if period_start:
+        q = q.filter(BillingBatch.period_end >= period_start)
+    if period_end:
+        q = q.filter(BillingBatch.period_start <= period_end)
+    batches = q.order_by(BillingBatch.period_start.asc()).all()
+    return {
+        "project_id": project_id,
+        "project_code": project.code,
+        "project_title": project.title,
+        "billing_frequency": getattr(project, "billing_frequency", "monthly"),
+        "client_name": project.client.name if project.client else None,
+        "batches": [_batch_to_dict(b, with_lines=False) for b in batches],
+        "total_approved_sum": round(sum(b.total_approved or 0 for b in batches), 2),
     }
 
 

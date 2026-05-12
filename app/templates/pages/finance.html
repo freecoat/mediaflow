@@ -6,6 +6,10 @@
 
 {% block topbar_actions %}
   <button class="btn btn-primary btn-sm" onclick="openModal('modal-new-invoice')">+ Nuova fattura</button>
+  <!-- v3.5.0-alpha.90: accrual billing — aggrega N batch approved del progetto → 1 fattura -->
+  <button class="btn btn-secondary btn-sm" onclick="openComposeInvoiceModal()" title="Aggrega N batch approvati dello stesso progetto in 1 fattura unica (mensile/trimestrale/custom)">
+    📦 Componi fattura periodo
+  </button>
 {% endblock %}
 
 {% block content %}
@@ -52,6 +56,7 @@
           <tr>
             <th>Numero</th>
             <th>Cliente</th>
+            <th>Progetto</th>
             <th>Data</th>
             <th>Scadenza</th>
             <th>Totale</th>
@@ -60,7 +65,7 @@
           </tr>
         </thead>
         <tbody id="inv-table">
-          <tr><td colspan="7" class="text-muted" style="text-align:center;padding:24px;">Caricamento…</td></tr>
+          <tr><td colspan="8" class="text-muted" style="text-align:center;padding:24px;">Caricamento…</td></tr>
         </tbody>
       </table>
     </div>
@@ -89,6 +94,7 @@
         <thead>
           <tr>
             <th>Codice</th>
+            <th>Cliente</th>
             <th>Progetto</th>
             <th>Stato</th>
             <th>Periodo</th>
@@ -100,7 +106,7 @@
           </tr>
         </thead>
         <tbody id="batches-table">
-          <tr><td colspan="9" class="text-muted" style="text-align:center;padding:24px;">Caricamento…</td></tr>
+          <tr><td colspan="10" class="text-muted" style="text-align:center;padding:24px;">Caricamento…</td></tr>
         </tbody>
       </table>
     </div>
@@ -268,6 +274,70 @@
     <div class="modal-footer">
       <button class="btn btn-secondary" onclick="closeModal('modal-new-invoice')">Annulla</button>
       <button class="btn btn-primary" onclick="createInvoice()">Crea fattura</button>
+    </div>
+  </div>
+</div>
+
+<!-- v3.5.0-alpha.90 — Componi fattura periodo (aggrega N batch approved → 1 invoice) -->
+<div class="modal-overlay" id="modal-compose-invoice">
+  <div class="modal" style="max-width:680px;">
+    <div class="modal-header">
+      <span class="modal-title">📦 Componi fattura periodo</span>
+      <button class="btn btn-ghost btn-icon" onclick="closeModal('modal-compose-invoice')">✕</button>
+    </div>
+    <div class="modal-body">
+      <p class="text-sm text-muted" style="margin-top:0;">
+        Aggrega <b>più batch approvati</b> dello stesso progetto in <b>una fattura unica</b>.
+        Utile per fatturazione mensile/trimestrale/custom: l'amministrazione tiene
+        i batch in cassetto e li raggruppa al momento dell'emissione.
+      </p>
+      <div class="form-row">
+        <div class="form-group">
+          <label class="form-label">Progetto *</label>
+          <select class="form-select" id="ci-project" onchange="reloadComposablePreview()"></select>
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label class="form-label">Periodo dal *</label>
+          <input class="form-input" id="ci-period-start" type="date" onchange="reloadComposablePreview()">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Periodo al *</label>
+          <input class="form-input" id="ci-period-end" type="date" onchange="reloadComposablePreview()">
+        </div>
+      </div>
+      <div id="ci-preview" style="margin:14px 0; padding:10px 14px; background:var(--bg3); border-radius:6px; font-size:13px; min-height:40px;">
+        <span class="text-muted">Seleziona progetto + periodo per vedere i batch in cassetto.</span>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label class="form-label">Numero fattura *</label>
+          <input class="form-input" id="ci-number" placeholder="es. 2026-042">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Data emissione *</label>
+          <input class="form-input" id="ci-issue-date" type="date">
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label class="form-label">Scadenza pagamento</label>
+          <input class="form-input" id="ci-due-date" type="date">
+        </div>
+        <div class="form-group">
+          <label class="form-label">IVA %</label>
+          <input class="form-input" id="ci-vat" type="number" step="0.5" value="22">
+        </div>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Note (opzionali)</label>
+        <textarea class="form-input" id="ci-notes" rows="2" placeholder="Es. fatturazione mensile aprile 2026"></textarea>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeModal('modal-compose-invoice')">Annulla</button>
+      <button class="btn btn-primary" id="ci-submit" onclick="submitComposeInvoice()" disabled>📦 Componi fattura</button>
     </div>
   </div>
 </div>
@@ -507,11 +577,11 @@ async function loadBatches() {
   if (finQs) parts.push(finQs);
   const url = '/finance/api/billing' + (parts.length ? '?' + parts.join('&') : '');
   const tbody = document.getElementById('batches-table');
-  tbody.innerHTML = '<tr><td colspan="9" class="text-muted" style="text-align:center;padding:24px;">Caricamento…</td></tr>';
+  tbody.innerHTML = '<tr><td colspan="10" class="text-muted" style="text-align:center;padding:24px;">Caricamento…</td></tr>';
   try {
     _batchesCache = await api('GET', url);
   } catch(e) {
-    tbody.innerHTML = `<tr><td colspan="9" style="color:var(--rose); text-align:center; padding:24px;">${escapeHtml(e.message || 'Errore')}</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="10" style="color:var(--rose); text-align:center; padding:24px;">${escapeHtml(e.message || 'Errore')}</td></tr>`;
     return;
   }
   document.getElementById('batches-count').textContent =
@@ -526,9 +596,10 @@ async function loadBatches() {
     badge.style.display = 'none';
   }
   if (!_batchesCache.length) {
-    tbody.innerHTML = '<tr><td colspan="9" class="text-muted" style="text-align:center;padding:24px;">Nessun batch trovato. I batch si creano dal Cost Report del progetto, bottone 📤 Trasmetti.</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="10" class="text-muted" style="text-align:center;padding:24px;">Nessun batch trovato. I batch si creano dal Cost Report del progetto, bottone 📤 Trasmetti.</td></tr>';
     return;
   }
+  // v3.5.0-alpha.90: colonna Cliente aggiunta (richiesta Matteo).
   tbody.innerHTML = _batchesCache.map(b => {
     const period = b.period_start && b.period_end
       ? `${fmtDate(b.period_start)} → ${fmtDate(b.period_end)}` : '—';
@@ -538,8 +609,12 @@ async function loadBatches() {
     const invHtml = b.invoice_number
       ? `<b>${escapeHtml(b.invoice_number)}</b>`
       : '<span class="text-muted text-xs">—</span>';
+    const clientCell = b.client_name
+      ? escapeHtml(b.client_name)
+      : '<span class="text-muted">—</span>';
     return `<tr style="cursor:pointer;" onclick="openBatchDetail(${b.id})">
       <td><b class="mono" style="color:var(--indigo2);">${escapeHtml(b.code)}</b></td>
+      <td class="text-sm">${clientCell}</td>
       <td>
         <div style="font-weight:500;">${escapeHtml(b.project_title || '—')}</div>
         ${b.project_code ? `<div class="text-xs text-muted mono">${escapeHtml(b.project_code)}</div>` : ''}
@@ -974,13 +1049,21 @@ async function loadInvoices() {
   const invs = await api('GET', url);
   const tbody = document.getElementById('inv-table');
   if (!invs.length) {
-    tbody.innerHTML = '<tr><td colspan="7" class="text-muted" style="text-align:center;padding:24px;">Nessuna fattura</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="8" class="text-muted" style="text-align:center;padding:24px;">Nessuna fattura</td></tr>';
     return;
   }
-  tbody.innerHTML = invs.map(i => `
-    <tr>
+  // v3.5.0-alpha.90: colonna Progetto in lista fatture (richiesta Matteo).
+  // Sorgente: i.project (esposto in endpoint /api/invoices). Fallback su
+  // i.job.project se la fattura ha solo job_id.
+  tbody.innerHTML = invs.map(i => {
+    const proj = i.project || (i.job && i.job.project) || null;
+    const projCell = proj
+      ? `<a class="mf-link" href="/projects/${proj.id}">${escapeHtml(proj.code || proj.title || ('#'+proj.id))}</a>`
+      : '<span class="text-muted">—</span>';
+    return `<tr>
       <td class="mono" style="font-size:12px;">${i.number}</td>
       <td>${i.client?.name || '—'}</td>
+      <td class="text-sm">${projCell}</td>
       <td class="text-sm">${fmtDate(i.issue_date)}</td>
       <td class="text-sm ${isOverdue(i) ? 'color-rose' : ''}">${fmtDate(i.due_date)}</td>
       <td class="mono font-weight:600;">${fmtCurrency(i.total)}</td>
@@ -991,7 +1074,8 @@ async function loadInvoices() {
           ${['draft','sent','paid','overdue','cancelled'].map(s=>`<option value="${s}">${s}</option>`).join('')}
         </select>
       </td>
-    </tr>`).join('');
+    </tr>`;
+  }).join('');
 }
 
 function isOverdue(inv) {
@@ -1075,6 +1159,118 @@ async function loadPL() {
     <div class="stat-card"><div class="stat-label">Costi</div><div class="stat-value color-rose mono" style="font-size:22px;">${fmtCurrency(pl.costs)}</div></div>
     <div class="stat-card"><div class="stat-label">Margine lordo</div><div class="stat-value mono" style="font-size:22px;color:${pl.gross_margin>=0?'var(--green)':'var(--rose)'};">${fmtCurrency(pl.gross_margin)}</div></div>
     <div class="stat-card"><div class="stat-label">Ore totali</div><div class="stat-value color-indigo mono" style="font-size:22px;">${pl.total_hours}h</div></div>`;
+}
+
+// v3.5.0-alpha.90 — Compose invoice da N batch approved (accrual billing).
+let _ciProjects = [];
+async function openComposeInvoiceModal() {
+  try {
+    _ciProjects = await api('GET', '/projects/api');
+  } catch(e) { _ciProjects = []; }
+  const sel = document.getElementById('ci-project');
+  while (sel.firstChild) sel.removeChild(sel.firstChild);
+  const optDef = document.createElement('option');
+  optDef.value = ''; optDef.textContent = '— seleziona progetto —';
+  sel.appendChild(optDef);
+  _ciProjects.forEach(p => {
+    const o = document.createElement('option');
+    o.value = String(p.id);
+    o.textContent = `${p.code} — ${p.title || ''}`;
+    sel.appendChild(o);
+  });
+  // Default periodo: primo-ultimo del mese corrente
+  const now = new Date();
+  const y = now.getFullYear(), m = now.getMonth();
+  const first = new Date(y, m, 1).toISOString().slice(0,10);
+  const last  = new Date(y, m + 1, 0).toISOString().slice(0,10);
+  document.getElementById('ci-period-start').value = first;
+  document.getElementById('ci-period-end').value = last;
+  document.getElementById('ci-issue-date').value = new Date().toISOString().slice(0,10);
+  // Suggerisci scadenza +30gg
+  const due = new Date(); due.setDate(due.getDate() + 30);
+  document.getElementById('ci-due-date').value = due.toISOString().slice(0,10);
+  document.getElementById('ci-number').value = '';
+  document.getElementById('ci-notes').value = '';
+  document.getElementById('ci-submit').disabled = true;
+  document.getElementById('ci-preview').innerHTML = '<span class="text-muted">Seleziona progetto + periodo per vedere i batch in cassetto.</span>';
+  openModal('modal-compose-invoice');
+}
+
+async function reloadComposablePreview() {
+  const pid = document.getElementById('ci-project').value;
+  const ps  = document.getElementById('ci-period-start').value;
+  const pe  = document.getElementById('ci-period-end').value;
+  const host = document.getElementById('ci-preview');
+  const submitBtn = document.getElementById('ci-submit');
+  submitBtn.disabled = true;
+  if (!pid) {
+    host.innerHTML = '<span class="text-muted">Seleziona un progetto.</span>';
+    return;
+  }
+  const qs = [];
+  if (ps) qs.push('period_start=' + ps);
+  if (pe) qs.push('period_end=' + pe);
+  const url = `/finance/api/billing/composable-batches?project_id=${pid}` + (qs.length ? '&' + qs.join('&') : '');
+  let data;
+  try { data = await api('GET', url); }
+  catch(e) {
+    host.innerHTML = `<span class="color-rose">Errore: ${escapeHtml(e.message || '')}</span>`;
+    return;
+  }
+  if (!data.batches.length) {
+    host.innerHTML = `<span class="text-muted">Nessun batch approvato in cassetto per <b>${escapeHtml(data.project_title || '')}</b> nel periodo selezionato. Pattern fatturazione progetto: <b>${data.billing_frequency || 'monthly'}</b>.</span>`;
+    return;
+  }
+  const rowsHtml = data.batches.map(b => {
+    const period = b.period_start && b.period_end ? `${fmtDate(b.period_start)} → ${fmtDate(b.period_end)}` : '—';
+    return `<div style="display:flex; justify-content:space-between; padding:3px 0; border-bottom:1px dashed var(--border);">
+      <span class="mono">${escapeHtml(b.code)}</span>
+      <span class="text-xs text-muted">${period}</span>
+      <span class="mono">${fmtCurrency(b.total_approved || 0)}</span>
+    </div>`;
+  }).join('');
+  host.innerHTML = `
+    <div style="margin-bottom:8px;"><b>${data.batches.length} batch</b> in cassetto · cliente <b>${escapeHtml(data.client_name || '—')}</b> · pattern <b>${data.billing_frequency || 'monthly'}</b></div>
+    ${rowsHtml}
+    <div style="margin-top:8px; padding-top:8px; border-top:1px solid var(--border); display:flex; justify-content:space-between; font-weight:600;">
+      <span>TOTALE imponibile</span>
+      <span class="mono color-indigo">${fmtCurrency(data.total_approved_sum)}</span>
+    </div>
+  `;
+  submitBtn.disabled = false;
+}
+
+async function submitComposeInvoice() {
+  const pid = document.getElementById('ci-project').value;
+  const ps = document.getElementById('ci-period-start').value;
+  const pe = document.getElementById('ci-period-end').value;
+  const num = document.getElementById('ci-number').value.trim();
+  const issue = document.getElementById('ci-issue-date').value;
+  const due = document.getElementById('ci-due-date').value;
+  const vat = document.getElementById('ci-vat').value;
+  const notes = document.getElementById('ci-notes').value.trim();
+  if (!pid || !ps || !pe || !num || !issue) {
+    toast('Compila progetto, periodo, numero, data emissione', 'warning');
+    return;
+  }
+  const fd = new FormData();
+  fd.append('project_id', pid);
+  fd.append('period_start', ps);
+  fd.append('period_end', pe);
+  fd.append('invoice_number', num);
+  fd.append('issue_date', issue);
+  if (due) fd.append('due_date', due);
+  fd.append('vat_rate', vat || '22');
+  if (notes) fd.append('notes', notes);
+  try {
+    const res = await api('POST', '/finance/api/billing/compose-invoice', fd);
+    toast(`✓ Fattura ${res.invoice_number} composta da ${res.batches_aggregated} batch — totale ${fmtCurrency(res.total)}`, 'success', 6000);
+    closeModal('modal-compose-invoice');
+    await loadInvoices();
+    await loadBatches();
+  } catch(e) {
+    toast(e.message || 'Errore compose-invoice', 'error');
+  }
 }
 
 // v3.5.0-alpha.89 — Anomaly workflow (stateful) — SOSTITUISCE le funzioni

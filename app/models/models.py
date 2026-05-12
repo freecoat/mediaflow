@@ -702,6 +702,18 @@ class Project(Base):
     mfa_required: Mapped[bool] = mapped_column(Boolean, default=False)
     min_role_for_access: Mapped[Optional[str]] = mapped_column(String(40), nullable=True)
 
+    # v3.5.0-alpha.90 — Periodicità fatturazione (sprint accrual billing).
+    # I batch trasmessi/approvati dal cost report restano "in cassetto" e
+    # vengono aggregati in una fattura unica al fine periodo. Valori:
+    # - monthly         (default): 1 fattura/mese aggregando tutti i batch
+    # - quarterly       : 1 fattura/trimestre
+    # - milestone       : su milestone consegna (manuale)
+    # - on_completion   : 1 fattura unica alla chiusura progetto
+    # - custom          : termini pattuiti in fase di quotazione (manuale)
+    # Definito in fase di quotazione, modificabile da manager fino alla
+    # prima fattura emessa.
+    billing_frequency: Mapped[str] = mapped_column(String(20), default="monthly")
+
     client: Mapped["Client"] = relationship(back_populates="projects")
     quotes: Mapped[List["Quote"]] = relationship(back_populates="project", cascade="all, delete-orphan")
     jobs: Mapped[List["Job"]] = relationship(back_populates="project")

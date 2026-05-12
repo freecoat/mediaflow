@@ -1,5 +1,49 @@
 # MediaFlow — Changelog
 
+## v3.5.0-alpha.90 — Accrual billing + 4 fix ticket Matteo 13 mag (13 maggio 2026)
+
+Risposta a 4 ticket Matteo notte 12 mag.
+
+**C1 — Lista fatture+batch cross-show progetto/cliente**
+- `/finance/api/invoices` ora ritorna dict arricchito con `project` (via
+  Job.project) e `job`. Era ORM raw, mancava il progetto in lista.
+- Lista batch espone `client_id`/`client_name` (via Project.client).
+- Tabelle UI estese con colonne corrispondenti.
+
+**C2 — Accrual billing (richiesta strategica Matteo)**
+Pre-α.90: 1 batch = 1 fattura. Producer trasmette batch → manager approve →
+fattura emessa immediatamente.
+
+α.90: batch approvati restano "in cassetto" finché amministrazione decide
+di comporre fattura aggregata (mensile/trimestrale/custom).
+
+- Modello: `Project.billing_frequency` (default `monthly`, valori
+  monthly/quarterly/milestone/on_completion/custom). Auto-migrate.
+- Endpoint nuovo `POST /finance/api/billing/compose-invoice`:
+  prende project_id + periodo + invoice_number → trova tutti i batch
+  approved del project nel periodo (o batch_ids esplicito) con
+  invoice_id IS NULL → crea 1 Invoice unica con N InvoiceLine + N
+  JCLBilledSlice + linka tutti i batch (status→invoiced).
+- Endpoint nuovo `GET /finance/api/billing/composable-batches` anteprima
+  batch in cassetto per UI prima della conferma.
+- UI modal "📦 Componi fattura periodo" in /finance:
+  select progetto, periodo, anteprima live, numero/data/IVA.
+- Vecchio `POST /billing/{id}/invoice` (1-batch) resta per casi semplici.
+
+**C3 — Cost report list sort fix**
+- Refactor `mfEnableSortableTables` da listener per-TH a event delegation
+  globale (`document.addEventListener('click')`). Risolve casi in cui
+  l'ordine di init faceva perdere gli handler con tabelle innerHTML-replaced.
+- Una sola registrazione listener globale via flag `window.__mfSortDelegated`.
+
+**C4 — Cashflow filtri cliente/progetto invisibili**
+- Filtri spostati dalla topbar (clippati a ≤1440px dal gap+theme+bell) a
+  card dedicata sopra le tab. Width totale 730px+, sempre visibili.
+
+**File toccati**: 8 (models.py, main.py, base.html, finance.py, billing.py,
+finance.html, cashflow.html, global.js, CHANGELOG.md, STATO.md).
++1 colonna `projects.billing_frequency`. 392 routes (+2).
+
 ## v3.5.0-alpha.89 — Sprint S4 Workflow anomalie fatturazione (12 maggio 2026, notte)
 
 Stateful workflow per anomalie fatturazione (era stateless, riemergeva a ogni

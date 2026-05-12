@@ -1065,23 +1065,39 @@ window.MFFilterBar = MFFilterBar;
 // ordina la tbody secondo la colonna. Doppio click = ordine inverso.
 // Per disabilitare un <th>: `data-no-sort="true"`.
 // Per override del valore: `data-sort-value="..."` sulle <td>.
-// Auto-attach: tables aggiunte dinamicamente vengono inizializzate via
-// MutationObserver leggero (skip se già inizializzata, idempotente).
+//
+// v3.5.0-alpha.90: refactor con event delegation a livello document — risolve
+// bug "sort non funziona" in cost_report list (e altre tabelle innerHTML-replaced).
+// Era attaccato direttamente alle TH a DOMContentLoaded; dopo render asincrono
+// la tabella restava nominalmente "sortable" ma alcune pagine vedevano gli
+// handler perdersi (race/ordine init). La delegation evita il problema.
 function mfEnableSortableTables(root) {
   (root || document).querySelectorAll('table.mf-sortable').forEach(table => {
     if (table.dataset.mfSortInit) return;
     table.dataset.mfSortInit = '1';
-    const ths = table.querySelectorAll('thead th');
-    ths.forEach((th, idx) => {
+    table.querySelectorAll('thead th').forEach((th, idx) => {
       if (th.dataset.noSort === 'true') return;
       th.style.cursor = 'pointer';
       th.classList.add('mf-th-sortable');
-      th.addEventListener('click', (ev) => {
-        ev.preventDefault();
-        mfSortTableBy(table, idx, th);
-      });
+      th.dataset.mfSortIdx = String(idx);
     });
   });
+}
+
+// Delegated click handler: 1 solo listener globale, funziona anche per
+// tabelle create dinamicamente senza bisogno di re-attach.
+if (!window.__mfSortDelegated) {
+  window.__mfSortDelegated = true;
+  document.addEventListener('click', (ev) => {
+    const th = ev.target.closest && ev.target.closest('th.mf-th-sortable');
+    if (!th) return;
+    const table = th.closest('table.mf-sortable');
+    if (!table) return;
+    const idx = parseInt(th.dataset.mfSortIdx || '-1', 10);
+    if (idx < 0) return;
+    ev.preventDefault();
+    mfSortTableBy(table, idx, th);
+  }, true);
 }
 
 function mfSortTableBy(table, idx, th) {

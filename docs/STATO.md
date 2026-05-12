@@ -8,6 +8,33 @@
 
 ## Versione corrente
 
+**v3.5.0-alpha.90** — 13 maggio 2026 — Accrual billing + 4 fix Matteo
+
+4 ticket post-test S4:
+- **C1** Fatture lista mostra Progetto · Batch mostra Cliente (endpoint arricchiti)
+- **C2** Accrual billing — batch approved restano in cassetto; nuovo modal
+  "📦 Componi fattura periodo" aggrega N batch dello stesso progetto in
+  1 fattura. `Project.billing_frequency` (monthly/quarterly/milestone/
+  on_completion/custom) configurabile (UI in roadmap)
+- **C3** Cost report list sort fixato (event delegation globale)
+- **C4** Cashflow filtri spostati dalla topbar a card dedicata (erano clippati)
+
+392 routes (+2 endpoint: compose-invoice + composable-batches).
++1 colonna `projects.billing_frequency` (auto-migrate).
+
+**Da testare domani**:
+1. `/finance` tab Fatture → vedi colonna Progetto (era assente)
+2. `/finance` tab Batch → vedi colonna Cliente
+3. `/finance` topbar → bottone "📦 Componi fattura periodo": apri modal,
+   seleziona progetto con batch approved in cassetto, anteprima live,
+   conferma → fattura unica + tutti i batch linkati
+4. Cost report list → click su qualsiasi `<th>` ordina ✅
+5. `/finance/cashflow` → vedi filtri cliente/progetto in card sopra le tab
+
+9 commit locali NON pushati (b8b8bb6 → α.90). Push a major bump.
+
+## (versione precedente)
+
 **v3.5.0-alpha.89** — 12 maggio 2026 notte — Sprint S4 Workflow anomalie fatturazione
 
 Stateful workflow per anomalie (era stateless). Tassonomia confermata:
