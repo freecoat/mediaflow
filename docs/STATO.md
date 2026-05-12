@@ -29,6 +29,30 @@ Plus Sprint S7 (config-only, stesso giorno): MCP mcp-fattura-elettronica-it
 (21 tool SDI), VoltAgent subagent marketplace globale, 3 custom skill
 (mediaflow-finance-feature-dev, italian-tax-compliance, sdi-xml-builder).
 
+## RIAPERTURA (sessione chiusa 12 mag sera dopo S8)
+
+Ultimo commento Claude: **"Procedo S4? O testi prima S8 su `/overhead/` sull'app?"**
+
+Cantiere aperto in ordine:
+
+1. **Test Matteo S8 `/overhead/` UI** sul dataset stress (oppure skip).
+2. **S4 — Anomalie fatturazione workflow** (decisione D.2 ora RISOLTA via OverheadCost).
+   Tassonomia: extra-after-billed / over-budget-rampa / quote-discrepancy /
+   mancato-recupero / sforamento-monte-ore. 3 azioni: rimanda commerciale |
+   rivaluta producer | manda al pozzo costi (LossEntry per write-off,
+   OverheadCost per costi recurring/aziendali). Multiselect.
+3. **S5 — Cashflow + Forecast/Pipeline merge** in 1 pagina con tab Combinato default.
+4. **S6 — Asset Media Hub** (BACKLOG, yoyotta/Frame.io API da indagare).
+5. **Restart Claude Code** richiesto per attivare MCP `fattura-elettronica-it`
+   + VoltAgent subagent (S7 plugin config).
+
+**6 commit locali NON pushati** (b8b8bb6 → babfc79): alpha.84/85/86/87 + S7
+config. Push rinviato a major bump (policy [[feedback-push-solo-major]]).
+
+**Sicurezza pending:** API key Anthropic ancora da ruotare
+(https://console.anthropic.com/settings/keys), era in chiaro nella conversation
+log di stamattina (vedi [[project-session-12mag2026]] mattina).
+
 ## (versione precedente)
 
 **v3.5.0-alpha.86** — 12 maggio 2026 — Sprint S3 MFFilterBar + filtri standard
