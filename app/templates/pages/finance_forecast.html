@@ -4,18 +4,17 @@
 {% block topbar_title %}📊 Financial Model — Pipeline & Forecast{% endblock %}
 
 {% block topbar_actions %}
-  <select id="cf-granularity" class="form-input" style="height:32px;font-size:13px;width:140px;" onchange="loadAll()">
+  <select id="cf-granularity" class="form-input" data-no-search="true" style="height:32px;font-size:13px;width:140px;" onchange="loadAll()">
     <option value="month">Mensile</option>
     <option value="quarter">Trimestrale</option>
     <option value="year">Annuale</option>
   </select>
-  <select id="cf-client" class="form-input" style="height:32px;font-size:13px;width:170px;" onchange="onClientChange()">
-    <option value="">— tutti clienti —</option>
-  </select>
-  <select id="cf-project" class="form-input" style="height:32px;font-size:13px;width:170px;" onchange="loadAll()">
-    <option value="">— tutti progetti —</option>
-  </select>
-  <select id="cf-year" class="form-input" style="height:32px;font-size:13px;width:100px;" onchange="loadAll()"></select>
+  <!-- v3.5.0-alpha.85: MFAutocomplete (typeahead robusto con 100+ opzioni) -->
+  <div id="cf-client-ac" class="mf-ac" style="width:200px;"></div>
+  <input type="hidden" id="cf-client" value="">
+  <div id="cf-project-ac" class="mf-ac" style="width:220px;"></div>
+  <input type="hidden" id="cf-project" value="">
+  <select id="cf-year" class="form-input" data-no-search="true" style="height:32px;font-size:13px;width:100px;" onchange="loadAll()"></select>
 {% endblock %}
 
 {% block content %}
@@ -128,6 +127,9 @@ function initYear() {
   }
 }
 
+let _clientAc = null;
+let _projectAc = null;
+
 async function loadFilters() {
   try {
     [_clients, _projects] = await Promise.all([
@@ -135,29 +137,33 @@ async function loadFilters() {
       api('GET', '/projects/api').catch(() => []),
     ]);
   } catch(e) {}
-  const cSel = document.getElementById('cf-client');
-  _clients.forEach(c => {
-    const o = document.createElement('option'); o.value = c.id; o.textContent = c.name || ('Cliente '+c.id);
-    cSel.appendChild(o);
+  // v3.5.0-alpha.85: MFAutocomplete invece di <select> nativo.
+  _clientAc = MFAutocomplete({
+    host: document.getElementById('cf-client-ac'),
+    hidden: document.getElementById('cf-client'),
+    data: () => _clients,
+    search: (it, q) => (it.name||'').toLowerCase().includes(q),
+    display: it => it.name || ('Cliente '+it.id),
+    placeholder: 'Tutti i clienti',
+    onChange: () => onClientChange(),
   });
-  renderProjFilter();
-}
-
-function renderProjFilter() {
-  const cid = document.getElementById('cf-client').value;
-  const pSel = document.getElementById('cf-project');
-  while (pSel.children.length > 1) pSel.removeChild(pSel.lastChild);
-  const filt = cid ? _projects.filter(p => String(p.client_id) === cid) : _projects;
-  filt.forEach(p => {
-    const o = document.createElement('option'); o.value = p.id;
-    o.textContent = `${p.code} — ${p.title}`;
-    pSel.appendChild(o);
+  _projectAc = MFAutocomplete({
+    host: document.getElementById('cf-project-ac'),
+    hidden: document.getElementById('cf-project'),
+    data: () => {
+      const cid = (document.getElementById('cf-client').value || '').split(',').map(Number).filter(Boolean);
+      if (!cid.length) return _projects;
+      return _projects.filter(p => cid.includes(p.client_id));
+    },
+    search: (it, q) => ((it.code||'').toLowerCase().includes(q) || (it.title||'').toLowerCase().includes(q)),
+    display: it => `${it.code} — ${it.title}`,
+    placeholder: 'Tutti i progetti',
+    onChange: () => loadAll(),
   });
 }
 
 function onClientChange() {
-  document.getElementById('cf-project').value = '';
-  renderProjFilter();
+  if (_projectAc) _projectAc.clear();
   loadAll();
 }
 

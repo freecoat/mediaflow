@@ -681,6 +681,175 @@ function mfApplySearchable(root) {
 }
 
 
+// ── v3.5.0-alpha.85 — MFAutocomplete: searchable + chips reusable ────────────
+// Helper riusabile per dropdown searchable con UI esplicita (input + chip +
+// box suggerimenti). Pattern già in /planning sidebar (FA_CONFIG) ma estratto
+// per cashflow/forecast/fatturazione/cost-report dove il typeahead del
+// <select> nativo soffre con 100+ opzioni.
+//
+// Single OR multi mode. Valore in <input type=hidden>. DOM-safe (no innerHTML
+// con interpolazione).
+//
+// Usage:
+//   <div class="mf-ac" id="cf-client-ac"></div>
+//   <input type="hidden" id="cf-client" name="client_id">
+//   MFAutocomplete({
+//     host: document.getElementById('cf-client-ac'),
+//     hidden: document.getElementById('cf-client'),
+//     data: () => CLIENTS,
+//     search: (it, q) => (it.name||'').toLowerCase().includes(q),
+//     display: it => it.name,
+//     placeholder: 'Tutti i clienti',
+//     onChange: (ids) => loadCashflow(),
+//     multi: false,
+//   });
+
+function MFAutocomplete(opts) {
+  const host = opts.host;
+  const hidden = opts.hidden;
+  if (!host || !hidden) {
+    console.warn('MFAutocomplete: host + hidden required');
+    return null;
+  }
+  const multi = !!opts.multi;
+  const placeholder = opts.placeholder || 'Cerca…';
+
+  host.classList.add('mf-ac');
+  host.replaceChildren();
+  host.style.position = 'relative';
+  const wrap = document.createElement('div');
+  wrap.className = 'mf-ac-wrap fa-multi';
+  const inp = document.createElement('input');
+  inp.type = 'text';
+  inp.className = 'mf-ac-input fa-input';
+  inp.placeholder = placeholder;
+  inp.autocomplete = 'off';
+  wrap.appendChild(inp);
+  const box = document.createElement('div');
+  box.className = 'mf-ac-suggestions fa-suggestions';
+  host.appendChild(wrap);
+  host.appendChild(box);
+
+  function getIds() {
+    const v = (hidden.value || '').trim();
+    if (!v) return [];
+    return v.split(',').map(s => Number(s.trim())).filter(n => Number.isFinite(n) && n > 0);
+  }
+  function setIds(ids) {
+    const cleaned = (ids || []).filter((v, i, arr) => arr.indexOf(v) === i);
+    const prev = hidden.value;
+    hidden.value = cleaned.join(',');
+    renderChips();
+    if (prev !== hidden.value && typeof opts.onChange === 'function') {
+      opts.onChange(cleaned);
+    }
+  }
+
+  function renderChips() {
+    wrap.querySelectorAll('.mf-ac-chip, .fa-chip').forEach(c => c.remove());
+    const ids = getIds();
+    for (const id of ids) {
+      const item = (opts.data() || []).find(x => x.id === id);
+      if (!item) continue;
+      const chip = document.createElement('span');
+      chip.className = 'mf-ac-chip fa-chip';
+      const lbl = document.createElement('span');
+      lbl.textContent = opts.display ? opts.display(item) : (item.name || ('#'+id));
+      const x = document.createElement('button');
+      x.type = 'button';
+      x.className = 'mf-ac-chip-x fa-chip-x';
+      x.title = 'Rimuovi';
+      x.textContent = '✕';
+      x.addEventListener('click', (ev) => {
+        ev.preventDefault();
+        const next = getIds().filter(v => v !== id);
+        setIds(next);
+      });
+      chip.appendChild(lbl); chip.appendChild(x);
+      wrap.insertBefore(chip, inp);
+    }
+    inp.style.display = (multi || ids.length === 0) ? '' : 'none';
+  }
+
+  function search() {
+    const q = (inp.value || '').toLowerCase().trim();
+    const selected = new Set(getIds());
+    let items = (opts.data() || []).filter(it => !selected.has(it.id));
+    if (q) {
+      const matcher = opts.search || ((it, qq) => (opts.display ? opts.display(it) : (it.name || '')).toLowerCase().includes(qq));
+      items = items.filter(it => matcher(it, q));
+    }
+    items = items.slice(0, 20);
+    box.replaceChildren();
+    if (!items.length) {
+      const empty = document.createElement('div');
+      empty.className = 'mf-ac-item fa-item';
+      empty.style.color = 'var(--text3, #888)';
+      empty.style.cursor = 'default';
+      empty.textContent = q ? ('Nessun risultato per "'+q+'"') : 'Nessun elemento';
+      box.appendChild(empty);
+      box.style.display = 'block';
+      return;
+    }
+    for (const it of items) {
+      const el = document.createElement('div');
+      el.className = 'mf-ac-item fa-item';
+      if (typeof opts.render === 'function') {
+        const node = opts.render(it);
+        if (node instanceof HTMLElement) {
+          el.appendChild(node);
+        } else {
+          el.textContent = String(node);
+        }
+      } else {
+        el.textContent = opts.display ? opts.display(it) : (it.name || ('#'+it.id));
+      }
+      el.addEventListener('mousedown', (ev) => {
+        ev.preventDefault();
+        if (multi) {
+          const ids = getIds();
+          ids.push(it.id);
+          setIds(ids);
+          inp.value = '';
+          box.style.display = 'none';
+        } else {
+          setIds([it.id]);
+          inp.value = '';
+          box.style.display = 'none';
+          inp.blur();
+        }
+      });
+      box.appendChild(el);
+    }
+    box.style.display = 'block';
+  }
+
+  inp.addEventListener('input', search);
+  inp.addEventListener('focus', search);
+  inp.addEventListener('blur', () => setTimeout(() => { box.style.display = 'none'; }, 150));
+  inp.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') { box.style.display = 'none'; inp.blur(); }
+    if (e.key === 'Backspace' && !inp.value) {
+      const ids = getIds();
+      if (ids.length) setIds(ids.slice(0, -1));
+    }
+  });
+
+  const api = {
+    refresh: renderChips,
+    setIds,
+    getIds,
+    setValue(id) { setIds(id ? [id] : []); },
+    clear() { setIds([]); },
+  };
+  host._mfAutocomplete = api;
+  renderChips();
+  return api;
+}
+
+window.MFAutocomplete = MFAutocomplete;
+
+
 // ── v3.4.40 — Time picker popup ───────────────────────────────
 //
 // Popup HH:MM grid che si attacca a ogni <input type="time"> non

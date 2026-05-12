@@ -5,18 +5,18 @@
 {% block topbar_title %}Cashflow{% endblock %}
 
 {% block topbar_actions %}
-  <select id="cf-granularity" class="form-input" style="height:32px;font-size:13px;width:130px;" onchange="loadCashflow()">
+  <select id="cf-granularity" class="form-input" data-no-search="true" style="height:32px;font-size:13px;width:130px;" onchange="loadCashflow()">
     <option value="month">Mensile</option>
     <option value="quarter">Trimestrale</option>
     <option value="year">Annuale</option>
   </select>
-  <select id="cf-client" class="form-input" style="height:32px;font-size:13px;width:180px;" onchange="onClientChange()">
-    <option value="">— tutti i clienti —</option>
-  </select>
-  <select id="cf-project" class="form-input" style="height:32px;font-size:13px;width:180px;" onchange="loadCashflow()">
-    <option value="">— tutti i progetti —</option>
-  </select>
-  <select id="cf-year" class="form-input" style="height:32px;font-size:13px;width:100px;" onchange="loadCashflow()"></select>
+  <!-- v3.5.0-alpha.85: MFAutocomplete con typeahead esplicito + chip.
+       Sostituisce <select> nativo (typeahead browser rotto con 100+ opzioni). -->
+  <div id="cf-client-ac" class="mf-ac" style="width:200px;"></div>
+  <input type="hidden" id="cf-client" value="">
+  <div id="cf-project-ac" class="mf-ac" style="width:220px;"></div>
+  <input type="hidden" id="cf-project" value="">
+  <select id="cf-year" class="form-input" data-no-search="true" style="height:32px;font-size:13px;width:100px;" onchange="loadCashflow()"></select>
 {% endblock %}
 
 {% block content %}
@@ -114,6 +114,8 @@ function initYearSelect() {
 
 let _cfClients = [];
 let _cfProjects = [];
+let _cfClientAc = null;
+let _cfProjectAc = null;
 
 async function loadFilters() {
   try {
@@ -122,36 +124,34 @@ async function loadFilters() {
       api('GET', '/projects/api').catch(() => []),
     ]);
   } catch(e) { _cfClients = []; _cfProjects = []; }
-  const cSel = document.getElementById('cf-client');
-  while (cSel.children.length > 1) cSel.removeChild(cSel.lastChild);
-  _cfClients.forEach(c => {
-    const o = document.createElement('option');
-    o.value = c.id;
-    o.textContent = c.name || ('Cliente ' + c.id);
-    cSel.appendChild(o);
+  // v3.5.0-alpha.85: MFAutocomplete invece di <select> nativo.
+  _cfClientAc = MFAutocomplete({
+    host: document.getElementById('cf-client-ac'),
+    hidden: document.getElementById('cf-client'),
+    data: () => _cfClients,
+    search: (it, q) => (it.name||'').toLowerCase().includes(q),
+    display: it => it.name || ('Cliente ' + it.id),
+    placeholder: 'Tutti i clienti',
+    onChange: (ids) => onClientChange(),
   });
-  renderProjectFilter();
-}
-
-function renderProjectFilter() {
-  const cid = document.getElementById('cf-client').value;
-  const pSel = document.getElementById('cf-project');
-  while (pSel.children.length > 1) pSel.removeChild(pSel.lastChild);
-  const filtered = cid
-    ? _cfProjects.filter(p => String(p.client_id) === cid)
-    : _cfProjects;
-  filtered.forEach(p => {
-    const o = document.createElement('option');
-    o.value = p.id;
-    o.textContent = `${p.code} — ${p.title}`;
-    pSel.appendChild(o);
+  _cfProjectAc = MFAutocomplete({
+    host: document.getElementById('cf-project-ac'),
+    hidden: document.getElementById('cf-project'),
+    data: () => {
+      const cid = (document.getElementById('cf-client').value || '').split(',').map(Number).filter(Boolean);
+      if (!cid.length) return _cfProjects;
+      return _cfProjects.filter(p => cid.includes(p.client_id));
+    },
+    search: (it, q) => ((it.code||'').toLowerCase().includes(q) || (it.title||'').toLowerCase().includes(q)),
+    display: it => `${it.code} — ${it.title}`,
+    placeholder: 'Tutti i progetti',
+    onChange: () => loadCashflow(),
   });
 }
 
 function onClientChange() {
-  // Quando cambia il cliente, resetta progetto + re-render lista progetti
-  document.getElementById('cf-project').value = '';
-  renderProjectFilter();
+  // Quando cambia il cliente, resetta progetto + ricarica
+  if (_cfProjectAc) _cfProjectAc.clear();
   loadCashflow();
 }
 

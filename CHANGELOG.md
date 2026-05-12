@@ -1,5 +1,37 @@
 # MediaFlow — Changelog
 
+## v3.5.0-alpha.85 — Sprint S2 MFAutocomplete (cashflow + forecast filters fix) (12 maggio 2026)
+
+Risolve: "Filtro cashflow non mostra clienti e progetti dopo typo. Stessa cosa
+in Forecast/Pipeline" — segnalato da Matteo dopo test su dataset stress
+(100 clienti, 1000 progetti). Il `<select>` nativo gestito dal helper
+`mfMakeSearchableSelect` (auto-attach) era operativo ma l'UX era opaca: nessun
+chip visibile, search input non immediatamente focale, browser typeahead
+saltava su match ambigui con 100+ opzioni.
+
+**Helper nuovo `MFAutocomplete` in `app/static/js/global.js`**:
+- Riutilizza il pattern FA_CONFIG già usato in /planning sidebar (chip+input+suggestions).
+- API: `MFAutocomplete({host, hidden, data, search, display, render, placeholder, onChange, multi})`.
+- Single OR multi-select via `multi` flag.
+- DOM-safe: no `innerHTML` con interpolazione, solo `textContent` + `replaceChildren`.
+- Hidden `<input type="hidden">` mantiene il valore (comma-separated per multi).
+
+**CSS classi `mf-ac-*` + `fa-*` spostate in `main.css`** (erano in planning.css → solo
+caricato sulla pagina planning). Ora disponibili globalmente.
+
+**Applicato in `cashflow.html` + `finance_forecast.html`**:
+- `<select id="cf-client">` → `<div id="cf-client-ac" class="mf-ac">` + hidden.
+- `<select id="cf-project">` → idem (filtra dinamicamente per client selezionato).
+- Granularità + anno restano `<select>` nativi (3-5 opzioni, OK).
+- Cascade: cambiando cliente, autocomplete progetti si aggiorna istantaneamente.
+
+**Cache-buster bump**: `main.css?v=3.5.0-alpha.85`, `global.js?v=3.5.0-alpha.85`.
+
+No DB migration. No breaking change per chi non usa cashflow/forecast.
+
+Planning.html mantiene la sua implementazione inline FA_CONFIG (funzionante) —
+migrazione a MFAutocomplete è candidate per cleanup futuro, non urgente.
+
 ## v3.5.0-alpha.84 — Sprint S1 Performance planning (12 maggio 2026)
 
 Hot-fix planning sotto carico stress (8.4k booking, 500 risorse). Pre α.84 le

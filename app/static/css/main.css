@@ -1183,6 +1183,55 @@ input[type="number"]::-webkit-inner-spin-button {
 }
 
 
+/* ── v3.5.0-alpha.85 — MFAutocomplete (estratto da planning.css per uso globale) ── */
+/* Pattern fa-multi/fa-input/fa-suggestions/fa-chip riusabile su tutte le
+   pagine via MFAutocomplete in global.js. Le classi fa-* restano per
+   back-compat con planning.html che le ha inline. Le mf-ac-* sono aliases
+   moderni. */
+.mf-ac { display: block; position: relative; }
+.mf-ac-wrap, .fa-multi {
+  display: flex; flex-wrap: wrap; gap: 4px; align-items: center;
+  border: 1px solid var(--border); border-radius: var(--radius);
+  padding: 4px 6px; background: var(--bg3, #22253a);
+  min-height: 36px; transition: border-color .12s ease;
+}
+.mf-ac-wrap:focus-within, .fa-multi:focus-within {
+  border-color: var(--indigo); box-shadow: 0 0 0 3px rgba(98,114,245,.12);
+}
+.mf-ac-input, .fa-input {
+  border: none !important; background: transparent !important; flex: 1; min-width: 100px;
+  padding: 4px 6px; font-size: 12.5px; color: var(--text); outline: none;
+  font-family: inherit;
+}
+.mf-ac-chip, .fa-chip {
+  display: inline-flex; align-items: center; gap: 4px;
+  background: rgba(98,114,245,0.18); color: #a8b3ff;
+  border-radius: 4px; padding: 2px 4px 2px 8px; font-size: 11.5px;
+  font-weight: 500; line-height: 1.4;
+  border: 1px solid rgba(98,114,245,0.32);
+}
+.mf-ac-chip-x, .fa-chip-x {
+  background: transparent; border: none; color: var(--text2); cursor: pointer;
+  padding: 0 4px; font-size: 13px; line-height: 1; border-radius: 3px;
+}
+.mf-ac-chip-x:hover, .fa-chip-x:hover { color: #ef4444; background: rgba(239,68,68,.12); }
+.mf-ac-suggestions, .fa-suggestions {
+  display: none; position: absolute; left: 0; right: 0; top: 100%;
+  background: var(--bg-elev, #1a1d29); border: 1px solid var(--border, #2a2e3d);
+  border-radius: 6px; max-height: 260px; overflow-y: auto; z-index: 1000;
+  box-shadow: 0 4px 12px rgba(0,0,0,.35); margin-top: 2px;
+}
+.mf-ac-suggestions .mf-ac-item, .fa-suggestions .fa-item {
+  padding: 7px 10px; cursor: pointer; font-size: 12px;
+  border-bottom: 1px solid rgba(255,255,255,.04); color: var(--text, #eee);
+}
+.mf-ac-suggestions .mf-ac-item:last-child, .fa-suggestions .fa-item:last-child { border-bottom: none; }
+.mf-ac-suggestions .mf-ac-item:hover, .mf-ac-suggestions .mf-ac-item.active,
+.fa-suggestions .fa-item:hover, .fa-suggestions .fa-item.active {
+  background: rgba(98,114,245,0.18);
+}
+
+
 /* ── v3.4.40 — Wrapper datetime-local splittato (date + time) ── */
 .mf-dt {
   display: grid;
