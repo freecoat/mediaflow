@@ -8,25 +8,25 @@
 
 ## Versione corrente
 
-**v3.5.0-alpha.84** — 12 maggio 2026 — Sprint S1 Performance planning
+**v3.5.0-alpha.86** — 12 maggio 2026 — Sprint S3 MFFilterBar + filtri standard 5 pagine
 
-- Calendario FullCalendar: visible-range fetch + dayMaxEvents → no più freeze
-  con 8.4k booking (stress dataset 12 mag).
-- Agenda: default 30gg + IntersectionObserver lazy + DOM-safe rendering.
-- Timeline vis-timeline: auto-filtra risorse senza booking se >100 + maxHeight
-  + verticalScroll → tabella labels scrolla.
-- Sidebar filtri: auto-collapse su calendar/timeline, auto-expand su jobs/agenda/todo.
+- Helper `MFFilterBar` in global.js (autocomplete + date + select + text, dependsOn).
+- Server: estesi 7 endpoint con filtri opzionali client_id/project_id/period/tech.
+- finance.html: barra filtri globale sopra tab, applicata a tutti i tab.
+- suppliers.html: filtri standard cliente/progetto/periodo.
+- cost_report.html: layout swap (voci costo SOPRA ore booking) + filtri sezione.
+- dam.html: filtri standard + quick chips tecnici (HDR/SDR/4K/ProRes/DCP/IMF).
+- assets_inout.html: filtri cliente/progetto/periodo.
 
-Solo template `planning.html` + bump versione. No DB migration.
+Cache-buster bump main.css + global.js. No DB migration.
 
 ## Prossimo step
 
-Cluster S2-S6 da apertura ticket Matteo 12 mag:
-- **S2** — bug search dropdown (cashflow/forecast no clienti dopo typo) → root cause helper condiviso.
-- **S3** — componente `<filter-bar>` riusabile applicato a fatturazione/fornitori/cost-report/assets/movimenti + filtri tecnici asset (HDR/SDR/2K/4K/fps).
+Cluster S4-S6 da ticket Matteo 12 mag:
 - **S4** — workflow anomalie fatturazione: tassonomia + 3 azioni + multiselect.
 - **S5** — cashflow+forecast merge in 1 pagina (decisione utente: combinato default).
 - **S6** — asset media hub (BACKLOG, yoyotta/Frame.io/etc. da indagare separatamente).
+- Decisione semantica aperta D.2: "pozzo costi generici" (nuovo LossReason o Department "OVERHEAD"?) — da fare con Matteo prima di S4.
 
 ## (versione precedente)
 

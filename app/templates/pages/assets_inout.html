@@ -17,6 +17,8 @@
   </div>
 </div>
 
+<!-- v3.5.0-alpha.86 (S3.5) — Filtri standard cliente/progetto/periodo via MFFilterBar -->
+<div id="inout-global-filters" style="margin-bottom:10px;"></div>
 <div class="card mb-3">
   <div style="display:flex;flex-wrap:wrap;gap:10px;align-items:flex-end;">
     <div class="form-group" style="min-width:140px;">
@@ -126,6 +128,50 @@ const MOV_LBL = {
   return_from_client: 'Ritorno',
 };
 
+// v3.5.0-alpha.86 (S3.5) — Filtri standard cliente/progetto/periodo
+window._inoutFilters = { client_id: null, project_id: null, from_date: '', to_date: '' };
+let _inoutClients = [];
+let _inoutProjects = [];
+
+async function _initInoutFilters() {
+  try {
+    [_inoutClients, _inoutProjects] = await Promise.all([
+      api('GET', '/planning/api/clients').catch(() => []),
+      api('GET', '/projects/api').catch(() => []),
+    ]);
+  } catch(e) {}
+  MFFilterBar({
+    host: document.getElementById('inout-global-filters'),
+    filters: [
+      { kind: 'autocomplete', id: 'client_id', label: 'Cliente',
+        data: () => _inoutClients,
+        search: (it, q) => (it.name||'').toLowerCase().includes(q),
+        display: it => it.name || ('Cliente '+it.id),
+        placeholder: 'Tutti i clienti' },
+      { kind: 'autocomplete', id: 'project_id', label: 'Progetto',
+        dependsOn: 'client_id',
+        data: () => {
+          const cid = window._inoutFilters.client_id;
+          return cid ? _inoutProjects.filter(p => p.client_id === cid) : _inoutProjects;
+        },
+        search: (it, q) => ((it.code||'').toLowerCase().includes(q) || (it.title||'').toLowerCase().includes(q)),
+        display: it => `${it.code} — ${it.title}`,
+        placeholder: 'Tutti i progetti' },
+      { kind: 'date', id: 'from_date', label: 'Dal' },
+      { kind: 'date', id: 'to_date',   label: 'Al' },
+    ],
+    onChange: (v) => {
+      window._inoutFilters = {
+        client_id: v.client_id || null,
+        project_id: v.project_id || null,
+        from_date: v.from_date || '',
+        to_date: v.to_date || '',
+      };
+      loadList();
+    },
+  });
+}
+
 async function loadList() {
   const qs = [];
   const d = document.getElementById('f-direction').value;
@@ -134,6 +180,11 @@ async function loadList() {
   if (t) qs.push('movement_type=' + t);
   const p = document.getElementById('f-pending').value;
   if (p === '1') qs.push('only_pending=1');
+  const f = window._inoutFilters;
+  if (f.client_id)  qs.push('client_id='  + f.client_id);
+  if (f.project_id) qs.push('project_id=' + f.project_id);
+  if (f.from_date)  qs.push('from_date='  + f.from_date);
+  if (f.to_date)    qs.push('to_date='    + f.to_date);
   const url = '/physical-assets/api/movements/all' + (qs.length ? '?' + qs.join('&') : '');
   let rows = [];
   try { rows = await api('GET', url); } catch(e) {}
@@ -261,6 +312,10 @@ async function submitDigital() {
   } catch(e) { toast(e.message || 'Errore', 'error'); }
 }
 
-loadList();
+// v3.5.0-alpha.86 (S3.5) — Init filtri + lista
+(async () => {
+  await _initInoutFilters();
+  await loadList();
+})();
 </script>
 {% endblock %}

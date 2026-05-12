@@ -4,7 +4,7 @@ Router Cost Report — rendicontazione per job vs quotazione, Over/Under analysi
 from fastapi import APIRouter, Depends, HTTPException, Request, Form, Response
 from fastapi.responses import HTMLResponse
 from typing import Optional
-from datetime import date
+from datetime import date, datetime, time
 from sqlalchemy.orm import Session, joinedload
 from sqlalchemy import func
 from app.database import get_db
@@ -792,7 +792,13 @@ def _resource_policy(resource: Resource, db: Session) -> Optional[WorkingHoursPo
 
 
 @router.get("/api/job/{job_id}/booking-summary")
-async def job_booking_summary(job_id: int, db: Session = Depends(get_db)):
+async def job_booking_summary(
+    job_id: int,
+    from_date: Optional[date] = None,
+    to_date: Optional[date] = None,
+    resource_id: Optional[str] = None,
+    db: Session = Depends(get_db),
+):
     """Aggrega i booking del job per fascia oraria + pool not_done.
 
     Ritorna:
@@ -800,12 +806,25 @@ async def job_booking_summary(job_id: int, db: Session = Depends(get_db)):
       - pending_overtime: lista booking con overtime_status=pending (azione richiesta)
       - not_done_pool: lista booking not_done con count_in_costs=False (pool)
       - by_resource: breakdown per risorsa (per riga finanziaria)
+
+    v3.5.0-alpha.86 — Filtri opzionali sezione (S3.3):
+    - from_date/to_date: limita ai booking che intersecano il range
+    - resource_id: comma-separated list di Resource.id; le ore di altre risorse
+      sono escluse dal calcolo (per drill-down su specifiche persone/sale)
     """
     job = db.query(Job).filter(Job.id == job_id).first()
     if not job:
         raise HTTPException(404, "Job non trovato")
 
-    bookings = (
+    # Parse resource_id list (comma-separated)
+    resource_ids: Optional[set[int]] = None
+    if resource_id:
+        try:
+            resource_ids = {int(x.strip()) for x in resource_id.split(",") if x.strip()}
+        except ValueError:
+            resource_ids = None
+
+    q = (
         db.query(Booking)
         .options(
             joinedload(Booking.assignments).joinedload(BookingAssignment.resource),
@@ -815,8 +834,12 @@ async def job_booking_summary(job_id: int, db: Session = Depends(get_db)):
             Booking.job_id == job_id,
             Booking.status != BookingStatus.cancelled,
         )
-        .all()
     )
+    if from_date:
+        q = q.filter(Booking.end_datetime >= datetime.combine(from_date, time.min))
+    if to_date:
+        q = q.filter(Booking.start_datetime <= datetime.combine(to_date, time.max))
+    bookings = q.all()
 
     totals = BookingBreakdown()
     by_resource: dict[int, dict] = {}
@@ -865,6 +888,9 @@ async def job_booking_summary(job_id: int, db: Session = Depends(get_db)):
         # Aggrega comunque tramite breakdown (gestisce internamente pool/pending)
         for a in b.assignments:
             if not a.resource:
+                continue
+            # v3.5.0-alpha.86 S3.3 — filtro risorse opzionale
+            if resource_ids is not None and a.resource.id not in resource_ids:
                 continue
             policy = _resource_policy(a.resource, db)
             if not policy:

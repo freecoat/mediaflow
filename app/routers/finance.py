@@ -52,13 +52,30 @@ async def finance_page(request: Request, db: Session = Depends(get_db)):
 async def list_timesheets(
     job_id: Optional[int] = None,
     user_id: Optional[int] = None,
+    client_id: Optional[int] = None,
+    project_id: Optional[int] = None,
+    from_date: Optional[date] = None,
+    to_date: Optional[date] = None,
     db: Session = Depends(get_db),
 ):
+    """v3.5.0-alpha.86 — Filtri estesi (S3.1): client/project/period.
+    Filtri cliente/progetto richiedono join con Job."""
     q = db.query(Timesheet)
     if job_id:
         q = q.filter(Timesheet.job_id == job_id)
     if user_id:
         q = q.filter(Timesheet.user_id == user_id)
+    if client_id or project_id:
+        from app.models import Job as _Job
+        q = q.join(_Job, Timesheet.job_id == _Job.id)
+        if client_id:
+            q = q.filter(_Job.client_id == client_id)
+        if project_id:
+            q = q.filter(_Job.project_id == project_id)
+    if from_date:
+        q = q.filter(Timesheet.work_date >= from_date)
+    if to_date:
+        q = q.filter(Timesheet.work_date <= to_date)
     return q.all()
 
 
@@ -112,13 +129,25 @@ async def add_expense(
 async def list_invoices(
     status: Optional[InvoiceStatus] = None,
     client_id: Optional[int] = None,
+    project_id: Optional[int] = None,
+    from_date: Optional[date] = None,
+    to_date: Optional[date] = None,
     db: Session = Depends(get_db),
 ):
+    """v3.5.0-alpha.86 — Filtri estesi (S3.1): project + period.
+    project_id richiede join via Job."""
     q = db.query(Invoice).options(joinedload(Invoice.client))
     if status:
         q = q.filter(Invoice.status == status)
     if client_id:
         q = q.filter(Invoice.client_id == client_id)
+    if project_id:
+        from app.models import Job as _Job
+        q = q.join(_Job, Invoice.job_id == _Job.id).filter(_Job.project_id == project_id)
+    if from_date:
+        q = q.filter(Invoice.issue_date >= from_date)
+    if to_date:
+        q = q.filter(Invoice.issue_date <= to_date)
     return q.all()
 
 

@@ -111,32 +111,10 @@
   <!-- KPI row -->
   <div class="stat-grid mb-4" id="kpi-grid"></div>
 
-  <!-- ── Booking esecutivo (v3.4.32) ───────────────────────── -->
-  <!-- Aggrega ore booking per fascia (regular/overtime/notturno/festivo)
-       + pool not_done (booking marcati "non fatto", esclusi dai costi
-       finché manager non decide di conteggiarli). -->
-  <div class="card mb-4" id="booking-summary-card" style="display:none;">
-    <div class="card-title mb-3">⏱ Ore booking per fascia <span style="font-size:11px; color:var(--text3); font-weight:normal;">(specchio quote · cost report cliente)</span></div>
-    <div id="booking-summary-host"></div>
-  </div>
-
-  <!-- ── Pozzo ore non maturate (v3.4.32) ─────────────────── -->
-  <div class="card mb-4" id="not-done-pool-card" style="display:none;">
-    <div style="display:flex; align-items:center; justify-content:space-between; gap:10px; margin-bottom:12px;">
-      <div class="card-title" style="margin:0;">⏳ Pozzo ore non maturate
-        <span style="font-size:11px; color:var(--text3); font-weight:normal;">(booking marcati "non fatto" — non conteggiati nei costi)</span>
-      </div>
-      <!-- v3.5.0-alpha.56: scarto bulk del pool not-done. Cancella tutti i
-           booking del pool in un colpo solo (status=cancelled) — equivalente
-           a iterare il bottone "Scarta" per ogni riga. -->
-      <button class="btn btn-ghost btn-sm" onclick="poolDiscardAll()" id="btn-pool-discard-all"
-              style="color:#ef4444;" title="Scarta definitivamente tutte le righe del pool. I booking saranno cancellati.">
-        🗑 Scarta tutte
-      </button>
-    </div>
-    <div id="not-done-pool-host"></div>
-  </div>
-
+  <!-- ── Voci di costo + Risorse/Timesheet (v3.5.0-alpha.86 — riordino S3.3) ──
+       Spostati SOPRA "Ore booking per fascia" per matching mentale:
+       prima il quadro economico (quote/maturato/extra), poi il dettaglio ore.
+       Era invertito pre-S3. -->
   <div class="grid-2" style="align-items:start;gap:20px;">
 
     <!-- v3.5.0-alpha.48: widget Fatturazione (Step 3 Cost Report → Billing) -->
@@ -147,9 +125,7 @@
           📤 Trasmetti a fatturazione
         </button>
       </div>
-      <!-- Sommario per stato -->
       <div id="billing-summary" style="display:grid; grid-template-columns:repeat(auto-fit, minmax(140px, 1fr)); gap:10px; margin-bottom:14px;"></div>
-      <!-- Lista batch del progetto -->
       <div id="billing-batches"></div>
     </div>
 
@@ -177,14 +153,12 @@
       </div>
     </div>
 
-    <!-- Risorse assegnate -->
+    <!-- Risorse + Timesheet (rimangono nel grid-2 sotto i widget) -->
     <div>
       <div class="card mb-4">
         <div class="card-title mb-3">Risorse assegnate al progetto</div>
         <div id="resources-panel" class="text-muted text-sm">Nessuna risorsa assegnata</div>
       </div>
-
-      <!-- Timesheet summary -->
       <div class="card">
         <div class="card-title mb-3">Ore lavorate (consuntivo)</div>
         <div id="timesheet-panel" class="text-muted text-sm">Nessuna ora registrata</div>
@@ -192,7 +166,46 @@
     </div>
 
   </div>
+  <!-- /grid-2 voci di costo -->
+
+  <!-- ── Booking esecutivo (v3.4.32) ───────────────────────── -->
+  <!-- Aggrega ore booking per fascia (regular/overtime/notturno/festivo)
+       + pool not_done (booking marcati "non fatto", esclusi dai costi
+       finché manager non decide di conteggiarli).
+       v3.5.0-alpha.86 S3.3 layout swap: questa sezione è ora SOTTO le voci
+       di costo (era sopra). Filtri sezione (periodo/risorse/job) montati
+       da MFFilterBar in JS — applicano filter client-side sulla breakdown. -->
+  <div class="card mb-4" id="booking-summary-card" style="display:none;">
+    <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:10px;">
+      <div class="card-title" style="margin:0;">⏱ Ore booking per fascia <span style="font-size:11px; color:var(--text3); font-weight:normal;">(specchio quote · cost report cliente)</span></div>
+      <button type="button" class="btn btn-ghost btn-sm" id="bs-filters-toggle" onclick="bsFiltersToggle()">▼ Filtri sezione</button>
+    </div>
+    <!-- Barra filtri sezione (montata da MFFilterBar al primo toggle) -->
+    <div id="bs-filters-host" style="display:none;"></div>
+    <div id="booking-summary-host"></div>
+  </div>
+
+  <!-- ── Pozzo ore non maturate (v3.4.32) ─────────────────── -->
+  <div class="card mb-4" id="not-done-pool-card" style="display:none;">
+    <div style="display:flex; align-items:center; justify-content:space-between; gap:10px; margin-bottom:12px;">
+      <div class="card-title" style="margin:0;">⏳ Pozzo ore non maturate
+        <span style="font-size:11px; color:var(--text3); font-weight:normal;">(booking marcati "non fatto" — non conteggiati nei costi)</span>
+      </div>
+      <!-- v3.5.0-alpha.56: scarto bulk del pool not-done. Cancella tutti i
+           booking del pool in un colpo solo (status=cancelled) — equivalente
+           a iterare il bottone "Scarta" per ogni riga. -->
+      <button class="btn btn-ghost btn-sm" onclick="poolDiscardAll()" id="btn-pool-discard-all"
+              style="color:#ef4444;" title="Scarta definitivamente tutte le righe del pool. I booking saranno cancellati.">
+        🗑 Scarta tutte
+      </button>
+    </div>
+    <div id="not-done-pool-host"></div>
+  </div>
+
 </div>
+<!-- /report-area -->
+<!-- v3.5.0-alpha.86 S3.3: i blocchi Cost lines + Risorse/Timesheet sono ora
+     SOPRA "Ore booking per fascia" (vedi inizio report-area). Era invertito. -->
 
 <!-- Placeholder vuoto (non più visibile di default in alpha.16: la lista
      filtrabile lo sostituisce. Resta nascosto, usato solo come fallback
@@ -516,6 +529,16 @@ async function loadReport(jobId) {
   if (!id) { closeReport(); return; }
   currentJobId = id;
   document.getElementById('btn-assign').disabled = false;
+  // v3.5.0-alpha.86 — reset filtri sezione "Ore booking" su nuovo job
+  if (typeof _bsFilters !== 'undefined') {
+    _bsFilters = { from_date: '', to_date: '', resource_id: [] };
+    _bsResourcesPool = [];
+    if (_bsFilterBar) {
+      _bsFilterBar.setValue('from_date', null);
+      _bsFilterBar.setValue('to_date', null);
+      _bsFilterBar.setValue('resource_id', []);
+    }
+  }
   // Auto-reconcile (idempotente): garantisce che eventuali drift storici
   // vengano azzerati prima della visualizzazione.
   try { await api('POST', `/cost-report/api/job/${id}/reconcile-actuals`); }
@@ -554,11 +577,63 @@ async function loadReport(jobId) {
 }
 
 // ── Booking executive summary + pool not_done (v3.4.32) ─────
+// v3.5.0-alpha.86 S3.3 — Filtri sezione "Ore booking per fascia"
+let _bsFilters = { from_date: '', to_date: '', resource_id: [] };
+let _bsFilterBar = null;
+
+function bsFiltersToggle() {
+  const host = document.getElementById('bs-filters-host');
+  const btn = document.getElementById('bs-filters-toggle');
+  const open = host.style.display === 'none' || !host.style.display;
+  host.style.display = open ? '' : 'none';
+  if (btn) btn.textContent = open ? '▲ Filtri sezione' : '▼ Filtri sezione';
+  if (open && !_bsFilterBar) {
+    // Lazy mount al primo apertura. Le risorse provengono dal report
+    // corrente (data.by_resource) — popolate dopo render.
+    _bsFilterBar = MFFilterBar({
+      host,
+      filters: [
+        { kind: 'date', id: 'from_date', label: 'Dal' },
+        { kind: 'date', id: 'to_date',   label: 'Al' },
+        { kind: 'autocomplete', id: 'resource_id', label: 'Risorse',
+          multi: true,
+          data: () => _bsResourcesPool || [],
+          search: (it, q) => (it.name||'').toLowerCase().includes(q),
+          display: it => it.name,
+          placeholder: 'Tutte le risorse del job',
+        },
+      ],
+      onChange: (v) => {
+        _bsFilters = {
+          from_date: v.from_date || '',
+          to_date:   v.to_date   || '',
+          resource_id: Array.isArray(v.resource_id) ? v.resource_id : [],
+        };
+        renderBookingSummary(currentJobId);
+      },
+    });
+  }
+}
+
+// Pool risorse caricate al primo render (per autocomplete filtri sezione).
+let _bsResourcesPool = [];
+
 async function renderBookingSummary(jobId) {
   let data;
   try {
-    data = await api('GET', `/cost-report/api/job/${jobId}/booking-summary`);
+    const qs = [];
+    if (_bsFilters.from_date) qs.push('from_date=' + _bsFilters.from_date);
+    if (_bsFilters.to_date) qs.push('to_date=' + _bsFilters.to_date);
+    if (_bsFilters.resource_id && _bsFilters.resource_id.length)
+      qs.push('resource_id=' + _bsFilters.resource_id.join(','));
+    const suffix = qs.length ? ('?' + qs.join('&')) : '';
+    data = await api('GET', `/cost-report/api/job/${jobId}/booking-summary${suffix}`);
   } catch(e) { return; }
+  // Aggiorna pool risorse per autocomplete filtri (solo prima volta o se vuoto)
+  if (data && data.by_resource && (!_bsResourcesPool.length || _bsResourcesPool[0]._fromJob !== jobId)) {
+    _bsResourcesPool = data.by_resource.map(r => ({ id: r.resource_id, name: r.resource_name, _fromJob: jobId }));
+    if (_bsFilterBar) _bsFilterBar.refresh('resource_id');
+  }
 
   const sumHost = document.getElementById('booking-summary-host');
   const sumCard = document.getElementById('booking-summary-card');

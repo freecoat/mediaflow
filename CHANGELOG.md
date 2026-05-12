@@ -1,5 +1,58 @@
 # MediaFlow — Changelog
 
+## v3.5.0-alpha.86 — Sprint S3 MFFilterBar + filtri standard 5 pagine (12 maggio 2026)
+
+Risponde al cluster C dei ticket Matteo (12 mag): "filtri standard mancanti
+in 8+ pagine — fatturazione, fornitori, cost-report, assets, movimenti".
+
+**Helper nuovo `MFFilterBar` in `global.js`**:
+- API: `MFFilterBar({host, filters: [spec, ...], onChange})`.
+- Filter spec kinds: `autocomplete` (single+multi), `date`, `select`, `text`.
+- Filter `dependsOn` per filtri concatenati (project_id rinfresca quando
+  client_id cambia).
+- Bottone Reset incluso.
+- `buildQS()` produce QS pronto per fetch.
+
+**Estensioni server-side (filtri opzionali su API esistenti):**
+- `/finance/api/invoices`: +`project_id`, `from_date`, `to_date`.
+- `/finance/api/timesheets`: +`client_id`, `project_id`, `from_date`, `to_date`.
+- `/finance/api/billing`: +`client_id`, `from_date`, `to_date`.
+- `/suppliers/api/invoices`: +`client_id`, `from_date`, `to_date`.
+- `/dam/api/assets`: +`client_id`, `from_date`, `to_date`, `tech` (keyword grep).
+- `/physical-assets/api/movements/all`: +`project_id`, `from_date`, `to_date`.
+- `/cost-report/api/job/{id}/booking-summary`: +`from_date`, `to_date`, `resource_id`.
+
+**Pagine UI aggiornate (S3.1-S3.5):**
+
+**S3.1 — `/finance` (fatturazione)**:
+- Barra filtri globale sopra le tab (cliente/progetto/periodo), applicata a
+  TUTTI i tab (Fatture, Batch fatturazione, Timesheet, Report P&L, Anomalie).
+- `buildFinQS()` helper centralizza query string.
+
+**S3.2 — `/suppliers`**:
+- Aggiunti filtri standard cliente/progetto/periodo sopra i filtri esistenti
+  (search/fornitore/status).
+
+**S3.3 — `/cost-report` (riordino + filtri ore booking)**:
+- **Layout swap**: "Voci di costo: Quotazione vs Reale" + Risorse/Timesheet
+  ora SOPRA "Ore booking per fascia" (era invertito, richiesto da Matteo).
+- Filtri sezione "Ore booking" via toggle: periodo (from/to) + risorse del job
+  (multi-select autocomplete). Filtraggio server-side.
+
+**S3.4 — `/dam` (asset digital)**:
+- Filtri standard cliente/progetto/periodo sopra search/type.
+- **Filtri tecnici quick chips** (HDR/SDR/Dolby Vision/Atmos/2K/4K/UHD/24fps/
+  25fps/ProRes/DCP/IMF): match keyword case-insensitive su `original_name +
+  description` (Asset model non ha metadata strutturate; grep su filename).
+  TODO futuro: estrarre metadata da `job_deliverable.spec_json` (alpha.66.9).
+
+**S3.5 — `/physical-assets/inout` (movimenti)**:
+- Filtri standard cliente/progetto/periodo (project_id filtra via IngestBatch).
+
+**Cache-buster bump**: `main.css?v=3.5.0-alpha.86`, `global.js?v=3.5.0-alpha.86`.
+
+No DB migration. Backwards-compatible: tutti i nuovi parametri sono opzionali.
+
 ## v3.5.0-alpha.85 — Sprint S2 MFAutocomplete (cashflow + forecast filters fix) (12 maggio 2026)
 
 Risolve: "Filtro cashflow non mostra clienti e progetti dopo typo. Stessa cosa

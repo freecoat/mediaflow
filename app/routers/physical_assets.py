@@ -12,7 +12,7 @@ Pattern d'uso:
   consegnata esternamente (flag ortogonali).
 - Lega a JobDeliverable quando rappresenta "il file/supporto finale".
 """
-from datetime import datetime, date
+from datetime import datetime, date, time
 from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException, Request, Form, UploadFile, File
 from fastapi.responses import HTMLResponse, Response
@@ -494,14 +494,19 @@ async def list_all_movements(
     direction: Optional[str] = None,
     movement_type: Optional[str] = None,
     client_id: Optional[int] = None,
+    project_id: Optional[int] = None,
     supplier_id: Optional[int] = None,
+    from_date: Optional[date] = None,
+    to_date: Optional[date] = None,
     only_pending: int = 0,
     limit: int = 200,
     db: Session = Depends(get_db),
 ):
     """v3.5.0-alpha.73 — Vista unificata movimenti (physical + digital).
     Filtri: direction (ingest/outgest derivato da movement_type),
-    movement_type, client, supplier, only_pending (no conferma)."""
+    movement_type, client, supplier, only_pending (no conferma).
+    v3.5.0-alpha.86 (S3.5) — Filtri estesi: project_id + period.
+    project_id filtra via IngestBatch + via FK su Asset/PhysicalAsset."""
     from app.models import Asset
     q = db.query(AssetMovement).filter(
         AssetMovement.tenant_id == CURRENT_TENANT,
@@ -529,6 +534,15 @@ async def list_all_movements(
     if client_id: q = q.filter(AssetMovement.client_id == client_id)
     if supplier_id: q = q.filter(AssetMovement.supplier_id == supplier_id)
     if only_pending: q = q.filter(AssetMovement.confirmed_at.is_(None))
+    # v3.5.0-alpha.86 (S3.5) — project + period
+    if project_id:
+        # AssetMovement non ha project_id diretto; usiamo IngestBatch.project_id
+        from app.models import IngestBatch as _IB
+        q = q.join(_IB, AssetMovement.ingest_batch_id == _IB.id).filter(_IB.project_id == project_id)
+    if from_date:
+        q = q.filter(AssetMovement.movement_date >= datetime.combine(from_date, time.min))
+    if to_date:
+        q = q.filter(AssetMovement.movement_date <= datetime.combine(to_date, time.max))
     rows = q.order_by(AssetMovement.movement_date.desc()).limit(min(limit, 500)).all()
     pa_ids = [m.physical_asset_id for m in rows if m.physical_asset_id]
     a_ids = [m.asset_id for m in rows if m.asset_id]

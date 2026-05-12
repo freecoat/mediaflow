@@ -445,11 +445,17 @@ async def transmit_to_billing(
 async def list_batches(
     request: Request,
     project_id: Optional[int] = None,
+    client_id: Optional[int] = None,
+    from_date: Optional[date] = None,
+    to_date: Optional[date] = None,
     status: Optional[str] = None,
     db: Session = Depends(get_db),
 ):
     """Lista BillingBatch con filtri opzionali. Default: tutti del tenant
-    in ordine cronologico decrescente di trasmissione."""
+    in ordine cronologico decrescente di trasmissione.
+
+    v3.5.0-alpha.86 (S3.1) — Filtri estesi: client_id + period.
+    client_id richiede join con Project (Project.client_id)."""
     _require_finance(request)
     q = db.query(BillingBatch).options(
         joinedload(BillingBatch.project),
@@ -457,6 +463,13 @@ async def list_batches(
     ).filter(BillingBatch.tenant_id == CURRENT_TENANT)
     if project_id:
         q = q.filter(BillingBatch.project_id == project_id)
+    if client_id:
+        from app.models import Project as _Project
+        q = q.join(_Project, BillingBatch.project_id == _Project.id).filter(_Project.client_id == client_id)
+    if from_date:
+        q = q.filter(BillingBatch.period_end >= from_date)
+    if to_date:
+        q = q.filter(BillingBatch.period_start <= to_date)
     if status:
         try:
             q = q.filter(BillingBatch.status == BillingBatchStatus(status))

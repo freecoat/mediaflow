@@ -10,6 +10,12 @@
 
 {% block content %}
 
+<!-- ── Filtri globali (v3.5.0-alpha.86 S3.1) ─────────────────
+     Applicano a TUTTI i tab (fatture, batch, timesheet, P&L, anomalie).
+     Cliente + progetto + periodo. Lo stato è in window._finFilters.
+     Tab-specific filters (es. status fattura) restano accanto. -->
+<div id="fin-global-filters" class="card" style="margin-bottom:14px; padding:10px 14px;"></div>
+
 <!-- ── Tabs ──────────────────────────────────────────────────── -->
 <div class="tabs">
   <div class="tab active" onclick="showSection('invoices',this)">Fatture</div>
@@ -362,6 +368,78 @@
 
 {% block scripts %}
 <script>
+// ── v3.5.0-alpha.86 S3.1 — Filtri globali (cliente / progetto / periodo) ──
+// Applicano a TUTTI i tab. Lo stato è in window._finFilters; buildFinQS()
+// produce la query string da appendere alle API.
+window._finFilters = { client_id: null, project_id: null, from_date: '', to_date: '' };
+let _finClients = [];
+let _finProjects = [];
+let _finFilterBar = null;
+
+function buildFinQS() {
+  const f = window._finFilters;
+  const parts = [];
+  if (f.client_id)   parts.push('client_id='   + f.client_id);
+  if (f.project_id)  parts.push('project_id='  + f.project_id);
+  if (f.from_date)   parts.push('from_date='   + f.from_date);
+  if (f.to_date)     parts.push('to_date='     + f.to_date);
+  return parts.join('&');
+}
+
+async function _initFinFilters() {
+  try {
+    [_finClients, _finProjects] = await Promise.all([
+      api('GET', '/planning/api/clients').catch(() => []),
+      api('GET', '/projects/api').catch(() => []),
+    ]);
+  } catch(e) {}
+  _finFilterBar = MFFilterBar({
+    host: document.getElementById('fin-global-filters'),
+    filters: [
+      { kind: 'autocomplete', id: 'client_id', label: 'Cliente',
+        data: () => _finClients,
+        search: (it, q) => (it.name||'').toLowerCase().includes(q),
+        display: it => it.name || ('Cliente '+it.id),
+        placeholder: 'Tutti i clienti',
+      },
+      { kind: 'autocomplete', id: 'project_id', label: 'Progetto',
+        dependsOn: 'client_id',
+        data: () => {
+          const cid = window._finFilters.client_id;
+          return cid ? _finProjects.filter(p => p.client_id === cid) : _finProjects;
+        },
+        search: (it, q) => ((it.code||'').toLowerCase().includes(q) || (it.title||'').toLowerCase().includes(q)),
+        display: it => `${it.code} — ${it.title}`,
+        placeholder: 'Tutti i progetti',
+      },
+      { kind: 'date', id: 'from_date', label: 'Dal' },
+      { kind: 'date', id: 'to_date',   label: 'Al' },
+    ],
+    onChange: (v) => {
+      window._finFilters = {
+        client_id: v.client_id || null,
+        project_id: v.project_id || null,
+        from_date: v.from_date || '',
+        to_date: v.to_date || '',
+      };
+      // Re-load active tab
+      const active = document.querySelector('.tab.active');
+      const name = active ? (
+        active.textContent.includes('Fatture') ? 'invoices' :
+        active.textContent.includes('Batch') ? 'batches' :
+        active.textContent.includes('Timesheet') ? 'timesheets' :
+        active.textContent.includes('Report') ? 'report' :
+        active.textContent.includes('Anomalie') ? 'anomalies' : null
+      ) : null;
+      if (name === 'invoices') loadInvoices();
+      else if (name === 'batches') loadBatches();
+      else if (name === 'timesheets') loadTimesheets();
+      else if (name === 'report') loadPL();
+      else if (name === 'anomalies') loadAnomalies();
+    },
+  });
+}
+
 function showSection(name, el) {
   ['invoices','batches','timesheets','report','anomalies'].forEach(s => {
     document.getElementById('section-'+s).classList.add('hidden');
@@ -390,7 +468,11 @@ function bbStatusBadge(st) {
 let _batchesCache = [];
 async function loadBatches() {
   const status = document.getElementById('batch-status-filter').value;
-  const url = '/finance/api/billing' + (status ? `?status=${status}` : '');
+  const finQs = buildFinQS();
+  const parts = [];
+  if (status) parts.push('status=' + status);
+  if (finQs) parts.push(finQs);
+  const url = '/finance/api/billing' + (parts.length ? '?' + parts.join('&') : '');
   const tbody = document.getElementById('batches-table');
   tbody.innerHTML = '<tr><td colspan="9" class="text-muted" style="text-align:center;padding:24px;">Caricamento…</td></tr>';
   try {
@@ -849,7 +931,11 @@ async function submitEmitInvoice() {
 // ── Fatture ──────────────────────────────────────────────────
 async function loadInvoices() {
   const status = document.getElementById('inv-filter').value;
-  const url = '/finance/api/invoices' + (status ? `?status=${status}` : '');
+  const finQs = buildFinQS();
+  const parts = [];
+  if (status) parts.push('status=' + status);
+  if (finQs) parts.push(finQs);
+  const url = '/finance/api/invoices' + (parts.length ? '?' + parts.join('&') : '');
   const invs = await api('GET', url);
   const tbody = document.getElementById('inv-table');
   if (!invs.length) {
@@ -906,7 +992,9 @@ async function createInvoice() {
 
 // ── Timesheet ────────────────────────────────────────────────
 async function loadTimesheets() {
-  const ts = await api('GET', '/finance/api/timesheets');
+  const finQs = buildFinQS();
+  const url = '/finance/api/timesheets' + (finQs ? '?' + finQs : '');
+  const ts = await api('GET', url);
   const tbody = document.getElementById('ts-table');
   if (!ts.length) {
     tbody.innerHTML = '<tr><td colspan="7" class="text-muted" style="text-align:center;padding:24px;">Nessuna registrazione</td></tr>';
@@ -1081,6 +1169,9 @@ async function init() {
   // Data di default per timesheet
   document.getElementById('ts-date').value = new Date().toISOString().slice(0,10);
   document.getElementById('inv-issue').value = new Date().toISOString().slice(0,10);
+
+  // v3.5.0-alpha.86 S3.1 — Filtri globali sopra tab (cliente/progetto/periodo)
+  await _initFinFilters();
 
   loadInvoices();
   refreshAnomaliesBadge();

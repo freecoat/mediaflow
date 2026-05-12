@@ -86,11 +86,21 @@ async def list_assets(
     asset_type: Optional[AssetType] = None,
     job_id: Optional[int] = None,
     project_id: Optional[int] = None,
+    client_id: Optional[int] = None,
+    from_date: Optional[str] = None,
+    to_date: Optional[str] = None,
     tag: Optional[str] = None,
     q: Optional[str] = None,
+    tech: Optional[str] = None,
     include_internal: int = 0,
     db: Session = Depends(get_db),
 ):
+    """v3.5.0-alpha.70 — TPN access filter.
+    v3.5.0-alpha.86 (S3.4) — Filtri estesi: client_id + period + tech.
+    `tech` = comma-separated keyword (HDR, SDR, 2K, 4K, UHD, 24fps, 25fps...);
+    match case-insensitive su original_name + description. Asset model non ha
+    metadata strutturate, quindi grep su nome file/descrizione.
+    """
     """v3.5.0-alpha.70 — TPN access filter.
     Solo asset di progetti accessibili dall'user + opt internal queue
     propria dell'uploader."""
@@ -125,6 +135,34 @@ async def list_assets(
         query = query.filter(Asset.original_name.ilike(f"%{q}%"))
     if tag:
         query = query.join(AssetTag).join(Tag).filter(Tag.name == tag)
+    # v3.5.0-alpha.86 (S3.4) — client_id + period + tech filters
+    if client_id:
+        from app.models import Project as _Project
+        query = query.join(_Project, Asset.project_id == _Project.id).filter(_Project.client_id == client_id)
+    if from_date:
+        try:
+            from datetime import date as _date
+            d = _date.fromisoformat(from_date)
+            query = query.filter(Asset.created_at >= d)
+        except ValueError:
+            pass
+    if to_date:
+        try:
+            from datetime import date as _date, timedelta as _td
+            d = _date.fromisoformat(to_date) + _td(days=1)
+            query = query.filter(Asset.created_at < d)
+        except ValueError:
+            pass
+    if tech:
+        # Match qualunque keyword in original_name OR description (case insensitive)
+        keywords = [k.strip() for k in tech.split(",") if k.strip()]
+        if keywords:
+            conds = []
+            for kw in keywords:
+                pat = f"%{kw}%"
+                conds.append(Asset.original_name.ilike(pat) | Asset.description.ilike(pat))
+            from sqlalchemy import or_ as _or
+            query = query.filter(_or(*conds))
     assets = query.order_by(Asset.created_at.desc()).all()
     return [
         {

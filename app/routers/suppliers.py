@@ -233,10 +233,15 @@ async def list_supplier_invoices(
     supplier_id: Optional[int] = None,
     project_id: Optional[int] = None,
     job_id: Optional[int] = None,
+    client_id: Optional[int] = None,
+    from_date: Optional[date] = None,
+    to_date: Optional[date] = None,
     status: Optional[str] = None,
     include_cancelled: int = 0,
     db: Session = Depends(get_db),
 ):
+    """v3.5.0-alpha.86 — Filtri estesi (S3.2): client_id + period.
+    client_id richiede join via Project."""
     q = db.query(SupplierInvoice).options(
         joinedload(SupplierInvoice.supplier)
     ).filter(
@@ -246,6 +251,13 @@ async def list_supplier_invoices(
     if supplier_id: q = q.filter(SupplierInvoice.supplier_id == supplier_id)
     if project_id: q = q.filter(SupplierInvoice.project_id == project_id)
     if job_id: q = q.filter(SupplierInvoice.job_id == job_id)
+    if client_id:
+        from app.models import Project as _Project
+        q = q.join(_Project, SupplierInvoice.project_id == _Project.id).filter(_Project.client_id == client_id)
+    if from_date:
+        q = q.filter(SupplierInvoice.issue_date >= from_date)
+    if to_date:
+        q = q.filter(SupplierInvoice.issue_date <= to_date)
     if status:
         try:
             st_enum = SupplierInvoiceStatus(status)

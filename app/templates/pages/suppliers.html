@@ -37,6 +37,10 @@
 <div class="card" style="border-top-left-radius:0;border-top-right-radius:0;">
 
   <div id="pane-invoices">
+    <!-- v3.5.0-alpha.86 S3.2 — Filtri standard: cliente/progetto/periodo
+         (montati da MFFilterBar in JS, su _initSupFilters). Filtri custom
+         (search/fornitore/status) restano accanto. -->
+    <div id="sup-global-filters" style="margin-bottom:10px;"></div>
     <div class="cr-filters" style="display:flex;flex-wrap:wrap;gap:10px;align-items:flex-end;margin-bottom:14px;">
       <div class="form-group" style="flex:2;min-width:220px;">
         <label class="form-label" style="font-size:11px;">Ricerca</label>
@@ -364,6 +368,9 @@ let _projects = [];
 let _jobs = [];
 
 async function init() {
+  // v3.5.0-alpha.86 S3.2 — Inizializza filtri standard (cliente/progetto/periodo)
+  // PRIMA di caricare le fatture, così la prima chiamata può già averli.
+  await _initSupFilters();
   await Promise.all([loadSuppliers(), loadInvoices(), loadSummary(), loadAuxLists()]);
 }
 
@@ -416,9 +423,64 @@ function renderSuppliers() {
   `).join('');
 }
 
+// v3.5.0-alpha.86 S3.2 — Filtri standard cliente/progetto/periodo
+window._supFilters = { client_id: null, project_id: null, from_date: '', to_date: '' };
+let _supClients = [];
+let _supProjects = [];
+let _supFilterBar = null;
+
+function _supBuildQS() {
+  const f = window._supFilters;
+  const p = ['include_cancelled=1'];
+  if (f.client_id)  p.push('client_id='  + f.client_id);
+  if (f.project_id) p.push('project_id=' + f.project_id);
+  if (f.from_date)  p.push('from_date='  + f.from_date);
+  if (f.to_date)    p.push('to_date='    + f.to_date);
+  return p.join('&');
+}
+
+async function _initSupFilters() {
+  try {
+    [_supClients, _supProjects] = await Promise.all([
+      api('GET', '/planning/api/clients').catch(() => []),
+      api('GET', '/projects/api').catch(() => []),
+    ]);
+  } catch(e) {}
+  _supFilterBar = MFFilterBar({
+    host: document.getElementById('sup-global-filters'),
+    filters: [
+      { kind: 'autocomplete', id: 'client_id', label: 'Cliente',
+        data: () => _supClients,
+        search: (it, q) => (it.name||'').toLowerCase().includes(q),
+        display: it => it.name || ('Cliente '+it.id),
+        placeholder: 'Tutti i clienti' },
+      { kind: 'autocomplete', id: 'project_id', label: 'Progetto',
+        dependsOn: 'client_id',
+        data: () => {
+          const cid = window._supFilters.client_id;
+          return cid ? _supProjects.filter(p => p.client_id === cid) : _supProjects;
+        },
+        search: (it, q) => ((it.code||'').toLowerCase().includes(q) || (it.title||'').toLowerCase().includes(q)),
+        display: it => `${it.code} — ${it.title}`,
+        placeholder: 'Tutti i progetti' },
+      { kind: 'date', id: 'from_date', label: 'Dal' },
+      { kind: 'date', id: 'to_date',   label: 'Al' },
+    ],
+    onChange: (v) => {
+      window._supFilters = {
+        client_id: v.client_id || null,
+        project_id: v.project_id || null,
+        from_date: v.from_date || '',
+        to_date: v.to_date || '',
+      };
+      loadInvoices();
+    },
+  });
+}
+
 async function loadInvoices() {
   try {
-    _invoices = await api('GET', '/suppliers/api/invoices?include_cancelled=1');
+    _invoices = await api('GET', '/suppliers/api/invoices?' + _supBuildQS());
   } catch(e) {
     document.getElementById('inv-tbody').innerHTML =
       '<tr><td colspan="10" style="text-align:center;color:#ef4444;padding:24px;">Errore: ' + escapeHtml(e.message||'') + '</td></tr>';

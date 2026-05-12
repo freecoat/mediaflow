@@ -11,6 +11,8 @@
 {% block content %}
 
 <!-- ── Filtri ──────────────────────────────────────────────── -->
+<!-- v3.5.0-alpha.86 (S3.4) — Filtri standard cliente/progetto/periodo via MFFilterBar -->
+<div id="dam-global-filters" style="margin-bottom:10px;"></div>
 <div class="flex gap-3 mb-4" style="flex-wrap:wrap;align-items:center;">
   <div class="search-bar">
     <span>🔍</span>
@@ -30,6 +32,27 @@
     </button>
     {% endfor %}
   </div>
+</div>
+
+<!-- v3.5.0-alpha.86 (S3.4) — Filtri tecnici quick chips (keyword match su
+     nome file + descrizione). NB: il modello Asset non ha metadata
+     strutturate (resolution/fps/HDR) — il match è grep sul filename. -->
+<div class="flex gap-2 mb-4" style="flex-wrap:wrap;align-items:center;">
+  <span class="text-xs text-muted" style="margin-right:6px;">Filtri tecnici:</span>
+  <button class="btn btn-ghost btn-sm tech-chip" data-tech="HDR" onclick="toggleTech(this)">HDR</button>
+  <button class="btn btn-ghost btn-sm tech-chip" data-tech="SDR" onclick="toggleTech(this)">SDR</button>
+  <button class="btn btn-ghost btn-sm tech-chip" data-tech="Dolby" onclick="toggleTech(this)">Dolby Vision</button>
+  <button class="btn btn-ghost btn-sm tech-chip" data-tech="Atmos" onclick="toggleTech(this)">Atmos</button>
+  <span style="border-left:1px solid var(--border); height:18px; margin:0 4px;"></span>
+  <button class="btn btn-ghost btn-sm tech-chip" data-tech="2K" onclick="toggleTech(this)">2K</button>
+  <button class="btn btn-ghost btn-sm tech-chip" data-tech="4K" onclick="toggleTech(this)">4K</button>
+  <button class="btn btn-ghost btn-sm tech-chip" data-tech="UHD" onclick="toggleTech(this)">UHD</button>
+  <span style="border-left:1px solid var(--border); height:18px; margin:0 4px;"></span>
+  <button class="btn btn-ghost btn-sm tech-chip" data-tech="24fps" onclick="toggleTech(this)">24fps</button>
+  <button class="btn btn-ghost btn-sm tech-chip" data-tech="25fps" onclick="toggleTech(this)">25fps</button>
+  <button class="btn btn-ghost btn-sm tech-chip" data-tech="ProRes" onclick="toggleTech(this)">ProRes</button>
+  <button class="btn btn-ghost btn-sm tech-chip" data-tech="DCP" onclick="toggleTech(this)">DCP</button>
+  <button class="btn btn-ghost btn-sm tech-chip" data-tech="IMF" onclick="toggleTech(this)">IMF</button>
 </div>
 
 <!-- ── Griglia asset ───────────────────────────────────────── -->
@@ -105,6 +128,63 @@
 <script>
 let pendingFiles = [];
 let activeTag = null;
+// v3.5.0-alpha.86 (S3.4)
+let _activeTechs = new Set();
+window._damFilters = { client_id: null, project_id: null, from_date: '', to_date: '' };
+let _damClients = [];
+let _damProjects = [];
+let _damFilterBar = null;
+
+function toggleTech(btn) {
+  const t = btn.dataset.tech;
+  if (_activeTechs.has(t)) {
+    _activeTechs.delete(t);
+    btn.classList.remove('active');
+  } else {
+    _activeTechs.add(t);
+    btn.classList.add('active');
+  }
+  loadAssets();
+}
+
+async function _initDamFilters() {
+  try {
+    [_damClients, _damProjects] = await Promise.all([
+      api('GET', '/planning/api/clients').catch(() => []),
+      api('GET', '/projects/api').catch(() => []),
+    ]);
+  } catch(e) {}
+  _damFilterBar = MFFilterBar({
+    host: document.getElementById('dam-global-filters'),
+    filters: [
+      { kind: 'autocomplete', id: 'client_id', label: 'Cliente',
+        data: () => _damClients,
+        search: (it, q) => (it.name||'').toLowerCase().includes(q),
+        display: it => it.name || ('Cliente '+it.id),
+        placeholder: 'Tutti i clienti' },
+      { kind: 'autocomplete', id: 'project_id', label: 'Progetto',
+        dependsOn: 'client_id',
+        data: () => {
+          const cid = window._damFilters.client_id;
+          return cid ? _damProjects.filter(p => p.client_id === cid) : _damProjects;
+        },
+        search: (it, q) => ((it.code||'').toLowerCase().includes(q) || (it.title||'').toLowerCase().includes(q)),
+        display: it => `${it.code} — ${it.title}`,
+        placeholder: 'Tutti i progetti' },
+      { kind: 'date', id: 'from_date', label: 'Caricato dal' },
+      { kind: 'date', id: 'to_date',   label: 'Al' },
+    ],
+    onChange: (v) => {
+      window._damFilters = {
+        client_id: v.client_id || null,
+        project_id: v.project_id || null,
+        from_date: v.from_date || '',
+        to_date: v.to_date || '',
+      };
+      loadAssets();
+    },
+  });
+}
 
 // ── Carica asset ─────────────────────────────────────────────
 async function loadAssets() {
@@ -114,6 +194,12 @@ async function loadAssets() {
   if (q)    url += `q=${encodeURIComponent(q)}&`;
   if (type) url += `asset_type=${type}&`;
   if (activeTag) url += `tag=${encodeURIComponent(activeTag)}&`;
+  const f = window._damFilters;
+  if (f.client_id)  url += `client_id=${f.client_id}&`;
+  if (f.project_id) url += `project_id=${f.project_id}&`;
+  if (f.from_date)  url += `from_date=${f.from_date}&`;
+  if (f.to_date)    url += `to_date=${f.to_date}&`;
+  if (_activeTechs.size) url += `tech=${encodeURIComponent([..._activeTechs].join(','))}&`;
 
   const assets = await api('GET', url);
   const grid = document.getElementById('asset-grid');
@@ -225,6 +311,8 @@ async function deleteAsset(id) {
 
 // Init
 async function init() {
+  // v3.5.0-alpha.86 S3.4 — Filtri standard (cliente/progetto/periodo)
+  await _initDamFilters();
   const jobs = await api('GET', '/planning/api/jobs');
   document.getElementById('up-job').innerHTML =
     '<option value="">— nessuno —</option>' +

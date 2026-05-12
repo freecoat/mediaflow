@@ -850,6 +850,215 @@ function MFAutocomplete(opts) {
 window.MFAutocomplete = MFAutocomplete;
 
 
+// ── v3.5.0-alpha.86 — MFFilterBar: barra filtri componente generico ──────────
+// Costruisce una barra filtri orizzontale composta da N filter spec.
+// Pattern usato in /finance, /suppliers, /cost-report, /dam, /assets_inout
+// per uniformare cliente/progetto/periodo + filtri custom.
+//
+// Spec filter:
+//   { kind: 'autocomplete', id: 'client_id', label: 'Cliente', data, search, display, placeholder, multi }
+//   { kind: 'autocomplete', id: 'project_id', label: 'Progetto', data, search, display, placeholder, multi, dependsOn: 'client_id' }
+//   { kind: 'date', id: 'from_date', label: 'Dal' }
+//   { kind: 'date', id: 'to_date', label: 'Al' }
+//   { kind: 'select', id: 'status', label: 'Stato', options: [{value, label}] }
+//   { kind: 'text', id: 'q', label: 'Cerca', placeholder: 'codice, titolo...' }
+//
+// Output: oggetto API con getValues(), setValue(id, v), reset(), values.
+// onChange invoked con dict {id: value}.
+
+function MFFilterBar(opts) {
+  const host = opts.host;
+  if (!host) { console.warn('MFFilterBar: host required'); return null; }
+  const specs = opts.filters || [];
+  const onChange = opts.onChange || (() => {});
+
+  host.classList.add('mf-filterbar');
+  host.replaceChildren();
+  host.style.display = 'flex';
+  host.style.flexWrap = 'wrap';
+  host.style.gap = '10px';
+  host.style.alignItems = 'flex-end';
+  host.style.marginBottom = '14px';
+
+  const state = {};      // id → value (string for date/select/text, array for autocomplete)
+  const widgets = {};    // id → { spec, getValue, setValue, refresh }
+
+  function emit() {
+    const vals = {};
+    for (const id in widgets) vals[id] = widgets[id].getValue();
+    onChange(vals);
+  }
+
+  function makeFieldWrap(label, minWidth) {
+    const w = document.createElement('div');
+    w.className = 'form-group mf-fb-field';
+    w.style.cssText = 'display:flex;flex-direction:column;gap:3px;min-width:' + (minWidth||'140px') + ';';
+    if (label) {
+      const l = document.createElement('label');
+      l.className = 'form-label';
+      l.style.cssText = 'font-size:11px;color:var(--text2);';
+      l.textContent = label;
+      w.appendChild(l);
+    }
+    return w;
+  }
+
+  for (const spec of specs) {
+    if (spec.kind === 'autocomplete') {
+      const wrap = makeFieldWrap(spec.label, spec.minWidth || '180px');
+      const ac = document.createElement('div');
+      ac.className = 'mf-ac';
+      ac.style.width = '100%';
+      const hidden = document.createElement('input');
+      hidden.type = 'hidden';
+      hidden.id = 'mffb-' + spec.id;
+      wrap.appendChild(ac);
+      wrap.appendChild(hidden);
+      host.appendChild(wrap);
+      const api = MFAutocomplete({
+        host: ac, hidden,
+        data: spec.data || (() => []),
+        search: spec.search,
+        display: spec.display || (it => it.name || ('#'+it.id)),
+        render: spec.render,
+        placeholder: spec.placeholder || ('Tutti i ' + (spec.label || 'elementi').toLowerCase()),
+        multi: !!spec.multi,
+        onChange: (ids) => {
+          // refresh dependent autocompletes (e.g., project depends on client)
+          for (const id in widgets) {
+            const w = widgets[id];
+            if (w.spec.dependsOn === spec.id && w.refresh) w.refresh();
+          }
+          emit();
+        },
+      });
+      widgets[spec.id] = {
+        spec,
+        getValue: () => {
+          const v = hidden.value;
+          if (!v) return spec.multi ? [] : null;
+          const ids = v.split(',').map(Number).filter(Boolean);
+          return spec.multi ? ids : (ids[0] || null);
+        },
+        setValue: (v) => {
+          if (Array.isArray(v)) api.setIds(v);
+          else api.setValue(v);
+        },
+        refresh: () => api.refresh && api.refresh(),
+      };
+    } else if (spec.kind === 'date') {
+      const wrap = makeFieldWrap(spec.label, '130px');
+      const inp = document.createElement('input');
+      inp.type = 'date';
+      inp.className = 'form-input';
+      inp.id = 'mffb-' + spec.id;
+      inp.style.cssText = 'height:32px;font-size:13px;';
+      inp.addEventListener('change', emit);
+      wrap.appendChild(inp);
+      host.appendChild(wrap);
+      widgets[spec.id] = {
+        spec,
+        getValue: () => inp.value || null,
+        setValue: (v) => { inp.value = v || ''; },
+      };
+    } else if (spec.kind === 'select') {
+      const wrap = makeFieldWrap(spec.label, spec.minWidth || '140px');
+      const sel = document.createElement('select');
+      sel.className = 'form-select';
+      sel.id = 'mffb-' + spec.id;
+      sel.dataset.noSearch = spec.searchable === false ? 'true' : 'false';
+      sel.addEventListener('change', emit);
+      const opts = spec.options || [];
+      for (const o of opts) {
+        const opt = document.createElement('option');
+        opt.value = o.value;
+        opt.textContent = o.label || o.value;
+        sel.appendChild(opt);
+      }
+      wrap.appendChild(sel);
+      host.appendChild(wrap);
+      widgets[spec.id] = {
+        spec,
+        getValue: () => sel.value || null,
+        setValue: (v) => { sel.value = v || ''; },
+      };
+    } else if (spec.kind === 'text') {
+      const wrap = makeFieldWrap(spec.label, spec.minWidth || '180px');
+      const inp = document.createElement('input');
+      inp.type = 'text';
+      inp.className = 'form-input';
+      inp.id = 'mffb-' + spec.id;
+      inp.placeholder = spec.placeholder || 'Cerca...';
+      inp.style.cssText = 'height:32px;font-size:13px;';
+      let timer = null;
+      inp.addEventListener('input', () => {
+        if (timer) clearTimeout(timer);
+        timer = setTimeout(emit, 200);
+      });
+      wrap.appendChild(inp);
+      host.appendChild(wrap);
+      widgets[spec.id] = {
+        spec,
+        getValue: () => inp.value.trim() || null,
+        setValue: (v) => { inp.value = v || ''; },
+      };
+    }
+  }
+
+  // Reset button
+  if (opts.reset !== false) {
+    const btnWrap = makeFieldWrap('', '80px');
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'btn btn-ghost btn-sm';
+    btn.textContent = opts.resetLabel || 'Reset';
+    btn.addEventListener('click', () => {
+      for (const id in widgets) widgets[id].setValue(null);
+      emit();
+    });
+    btnWrap.appendChild(btn);
+    host.appendChild(btnWrap);
+  }
+
+  const api = {
+    getValues() {
+      const v = {};
+      for (const id in widgets) v[id] = widgets[id].getValue();
+      return v;
+    },
+    setValue(id, v) {
+      if (widgets[id]) widgets[id].setValue(v);
+    },
+    refresh(id) {
+      if (id && widgets[id] && widgets[id].refresh) widgets[id].refresh();
+      else for (const k in widgets) widgets[k].refresh && widgets[k].refresh();
+    },
+    reset() {
+      for (const id in widgets) widgets[id].setValue(null);
+      emit();
+    },
+    buildQS() {
+      const v = this.getValues();
+      const parts = [];
+      for (const id in v) {
+        const val = v[id];
+        if (val === null || val === undefined || val === '') continue;
+        if (Array.isArray(val)) {
+          if (val.length) parts.push(encodeURIComponent(id) + '=' + encodeURIComponent(val.join(',')));
+        } else {
+          parts.push(encodeURIComponent(id) + '=' + encodeURIComponent(val));
+        }
+      }
+      return parts.join('&');
+    },
+  };
+  host._mfFilterBar = api;
+  return api;
+}
+
+window.MFFilterBar = MFFilterBar;
+
+
 // ── v3.4.40 — Time picker popup ───────────────────────────────
 //
 // Popup HH:MM grid che si attacca a ogni <input type="time"> non
