@@ -74,13 +74,25 @@ def _auto_migrate_columns():
                     "ALTER TABLE users ADD COLUMN is_platform_admin "
                     "BOOLEAN NOT NULL DEFAULT 0"
                 ))
-                # Imposta is_platform_admin=1 sui primi due admin di tenant=1
-                # (bootstrap: admin@mediaflow.it + matteo@mediaflow.it).
-                conn.execute(text(
-                    "UPDATE users SET is_platform_admin = 1 "
-                    "WHERE tenant_id = 1 AND role = 'admin' "
-                    "AND email IN ('admin@mediaflow.it', 'matteo@mediaflow.it')"
-                ))
+        # v3.5.0-alpha.109 — Bootstrap idempotente platform admin per admin
+        # tenant Default. Esegue SEMPRE (no gate sul `not in cols`) per
+        # gestire il caso DB importato da export ZIP che ha colonna già
+        # presente ma flag mai aggiornato. Idempotente: UPDATE no-op se
+        # gli admin sono già platform_admin.
+        with engine.begin() as conn:
+            try:
+                # Check colonna esiste (post ALTER se necessario)
+                cols_now = {c["name"] for c in inspect(engine).get_columns("users")}
+                if "is_platform_admin" in cols_now:
+                    res = conn.execute(text(
+                        "UPDATE users SET is_platform_admin = 1 "
+                        "WHERE tenant_id = 1 AND role = 'admin' "
+                        "AND is_platform_admin = 0"
+                    ))
+                    if res.rowcount > 0:
+                        print(f"[auto-migrate] promoted {res.rowcount} admin(s) tenant=1 to platform_admin")
+            except Exception as e:
+                print(f"[auto-migrate] platform_admin bootstrap FAILED: {e}")
         # Index UNIQUE composito (tenant_id, email). Sostituisce de facto il
         # vecchio UNIQUE su solo email — SQLite tiene entrambi, ma se il
         # vecchio UNIQUE è ancora attivo bloccherà inserimenti duplicati su
@@ -861,7 +873,7 @@ async def lifespan(app: FastAPI):
     yield
 
 
-app = FastAPI(title="MediaFlow", version="3.5.0-alpha.108", lifespan=lifespan)
+app = FastAPI(title="MediaFlow", version="3.5.0-alpha.109", lifespan=lifespan)
 
 BASE_DIR = Path(__file__).parent
 app.mount("/static", StaticFiles(directory=BASE_DIR / "static"), name="static")

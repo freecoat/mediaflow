@@ -71,6 +71,8 @@ async def list_departments(db: Session = Depends(get_db)):
             "color": d.color,
             "sort_order": d.sort_order,
             "annual_budget": d.annual_budget,
+            "shipping_address": d.shipping_address,
+            "shipping_contact": d.shipping_contact,
             "is_active": d.is_active,
             "resources_count": db.query(Resource).filter(
                 Resource.department_id == d.id, Resource.is_active == True
@@ -91,6 +93,8 @@ async def create_department(
     description: Optional[str] = Form(None),
     sort_order: int = Form(0),
     annual_budget: Optional[float] = Form(None),
+    shipping_address: Optional[str] = Form(None),
+    shipping_contact: Optional[str] = Form(None),
     db: Session = Depends(get_db),
 ):
     code = code.strip().upper()
@@ -110,6 +114,8 @@ async def create_department(
         color=color, description=description,
         sort_order=sort_order,
         annual_budget=annual_budget,
+        shipping_address=(shipping_address or "").strip() or None,
+        shipping_contact=(shipping_contact or "").strip() or None,
     )
     db.add(d)
     try:
@@ -130,6 +136,8 @@ async def update_department(
     sort_order: Optional[int] = Form(None),
     annual_budget: Optional[float] = Form(None),
     is_active: Optional[bool] = Form(None),
+    shipping_address: Optional[str] = Form(None),
+    shipping_contact: Optional[str] = Form(None),
     db: Session = Depends(get_db),
 ):
     d = db.query(Department).filter(
@@ -145,6 +153,10 @@ async def update_department(
     if sort_order is not None: d.sort_order = sort_order
     if annual_budget is not None: d.annual_budget = annual_budget
     if is_active is not None: d.is_active = is_active
+    if shipping_address is not None:
+        d.shipping_address = shipping_address.strip() or None
+    if shipping_contact is not None:
+        d.shipping_contact = shipping_contact.strip() or None
 
     db.commit()
     return {"ok": True, "id": d.id}

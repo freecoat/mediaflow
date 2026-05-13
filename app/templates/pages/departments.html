@@ -35,7 +35,7 @@
       <tbody>
         {% for d in departments %}
         <tr style="cursor:pointer;"
-            onclick='editDept({{ d.id }}, {{ d.code|tojson }}, {{ d.name|tojson }}, {{ (d.description or "")|tojson }}, {{ d.color|tojson }}, {{ d.sort_order }}, {{ d.annual_budget if d.annual_budget else "null" }})'>
+            onclick='editDept({{ d.id }}, {{ d.code|tojson }}, {{ d.name|tojson }}, {{ (d.description or "")|tojson }}, {{ d.color|tojson }}, {{ d.sort_order }}, {{ d.annual_budget if d.annual_budget else "null" }}, {{ (d.shipping_address or "")|tojson }}, {{ (d.shipping_contact or "")|tojson }})'>
           <td><span style="display:inline-block;width:14px;height:14px;border-radius:4px;background:{{ d.color }};"></span></td>
           <td><code style="background:var(--bg-2);padding:2px 6px;border-radius:4px;font-size:12px;">{{ d.code }}</code></td>
           <td><strong>{{ d.name }}</strong></td>
@@ -97,6 +97,21 @@
           <input class="form-input" id="nd-budget" type="number" step="1000" placeholder="opzionale">
         </div>
       </div>
+      <fieldset style="border:1px solid var(--border);border-radius:6px;padding:10px 14px;margin-top:10px;">
+        <legend style="padding:0 8px;font-weight:600;font-size:12px;">📍 Indirizzo spedizioni (opz.)</legend>
+        <div class="text-xs text-muted" style="margin-bottom:6px;">
+          Usato come destinatario di spedizioni indirizzate al reparto
+          (sede diversa dal tenant principale).
+        </div>
+        <div class="form-group">
+          <label class="form-label">Indirizzo</label>
+          <textarea class="form-textarea" id="nd-ship-addr" rows="2" placeholder="Via, n. · CAP Città · Provincia · Paese"></textarea>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Contatto (email/tel)</label>
+          <input class="form-input" id="nd-ship-contact" placeholder="referente@reparto.it">
+        </div>
+      </fieldset>
     </div>
     <div class="modal-footer">
       <button class="btn btn-secondary" onclick="closeModal('modal-new-dept')">Annulla</button>
@@ -141,6 +156,17 @@
           <input class="form-input" id="ed-budget" type="number" step="1000">
         </div>
       </div>
+      <fieldset style="border:1px solid var(--border);border-radius:6px;padding:10px 14px;margin-top:10px;">
+        <legend style="padding:0 8px;font-weight:600;font-size:12px;">📍 Indirizzo spedizioni</legend>
+        <div class="form-group">
+          <label class="form-label">Indirizzo</label>
+          <textarea class="form-textarea" id="ed-ship-addr" rows="2" placeholder="Via, n. · CAP Città · Provincia · Paese"></textarea>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Contatto (email/tel)</label>
+          <input class="form-input" id="ed-ship-contact" placeholder="referente@reparto.it">
+        </div>
+      </fieldset>
     </div>
     <div class="modal-footer">
       <button class="btn btn-secondary" onclick="closeModal('modal-edit-dept')">Annulla</button>
@@ -162,6 +188,8 @@ async function createDept() {
   fd.append('sort_order', document.getElementById('nd-order').value || 0);
   const budget = document.getElementById('nd-budget').value;
   if (budget) fd.append('annual_budget', budget);
+  fd.append('shipping_address', document.getElementById('nd-ship-addr').value);
+  fd.append('shipping_contact', document.getElementById('nd-ship-contact').value);
   try {
     const r = await fetch('/departments/api', { method: 'POST', body: fd });
     if (!r.ok) { const e = await r.json(); throw new Error(e.detail || 'Errore'); }
@@ -169,7 +197,7 @@ async function createDept() {
   } catch (e) { alert(e.message); }
 }
 
-function editDept(id, code, name, desc, color, order, budget) {
+function editDept(id, code, name, desc, color, order, budget, shipAddr, shipContact) {
   document.getElementById('ed-id').value = id;
   document.getElementById('ed-code').value = code;
   document.getElementById('ed-name').value = name;
@@ -177,6 +205,8 @@ function editDept(id, code, name, desc, color, order, budget) {
   document.getElementById('ed-color').value = color;
   document.getElementById('ed-order').value = order;
   document.getElementById('ed-budget').value = budget !== null ? budget : '';
+  document.getElementById('ed-ship-addr').value = shipAddr || '';
+  document.getElementById('ed-ship-contact').value = shipContact || '';
   openModal('modal-edit-dept');
 }
 
@@ -189,6 +219,8 @@ async function saveDept() {
   fd.append('sort_order', document.getElementById('ed-order').value || 0);
   const budget = document.getElementById('ed-budget').value;
   if (budget) fd.append('annual_budget', budget);
+  fd.append('shipping_address', document.getElementById('ed-ship-addr').value);
+  fd.append('shipping_contact', document.getElementById('ed-ship-contact').value);
   try {
     const r = await fetch(`/departments/api/${id}`, { method: 'PUT', body: fd });
     if (!r.ok) { const e = await r.json(); throw new Error(e.detail || 'Errore'); }
