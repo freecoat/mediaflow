@@ -9,7 +9,7 @@
   <meta http-equiv="Pragma" content="no-cache">
   <meta http-equiv="Expires" content="0">
   <title>{% block title %}MediaFlow{% endblock %}</title>
-  <link rel="stylesheet" href="/static/css/main.css?v=3.5.0-alpha.107">
+  <link rel="stylesheet" href="/static/css/main.css?v=3.5.0-alpha.108">
   <link rel="stylesheet" href="/static/css/sleek.css?v=3.5.0-alpha.80">
   <script>
     // v3.5.0-alpha.80 — Sleek mode toggle (default ON)
@@ -49,7 +49,7 @@
   {% if not full_screen %}
   <!-- ── Sidebar ──────────────────────────────────────────── -->
   <aside class="sidebar" id="sidebar">
-    <div class="sidebar-logo">
+    <div class="sidebar-logo" onclick="showAboutModal()" style="cursor:pointer;" title="Info versione">
       <div class="logo-mark">MF</div>
       <span class="logo-text">MediaFlow</span>
     </div>
@@ -259,6 +259,67 @@
 <!-- Toast container -->
 <div id="toast-container"></div>
 
+<!-- v3.5.0-alpha.108 — About modal (click logo MediaFlow) -->
+<div class="modal-overlay" id="modal-about">
+  <div class="modal" style="max-width:440px;">
+    <div class="modal-header">
+      <span class="modal-title">ℹ️ About MediaFlow</span>
+      <button class="btn btn-ghost btn-icon" onclick="closeModal('modal-about')">&times;</button>
+    </div>
+    <div class="modal-body" style="text-align:center;">
+      <div style="font-size:48px;margin-bottom:8px;">🎬</div>
+      <div style="font-size:20px;font-weight:700;color:var(--text);">MediaFlow</div>
+      <div style="font-size:11px;color:var(--text2);margin-top:4px;text-transform:uppercase;letter-spacing:.08em;">Post-production management</div>
+      <div style="margin:20px 0;padding:12px;background:var(--bg3);border-radius:6px;">
+        <div style="font-size:11px;color:var(--text3);text-transform:uppercase;letter-spacing:.05em;">Versione corrente</div>
+        <div id="about-version" style="font-size:18px;font-weight:700;font-family:var(--font-mono);margin-top:4px;color:var(--indigo2);">—</div>
+        <div id="about-build" class="text-xs text-muted" style="margin-top:4px;font-family:var(--font-mono);"></div>
+      </div>
+      <div class="text-xs text-muted" style="line-height:1.6;">
+        <div id="about-user"></div>
+        <div id="about-tenant" style="margin-top:2px;"></div>
+        <div style="margin-top:10px;">
+          <a href="/manuale" style="color:var(--indigo2);text-decoration:none;">📖 Manuale</a>
+          ·
+          <a href="https://github.com/freecoat/mediaflow" target="_blank" style="color:var(--indigo2);text-decoration:none;">📦 GitHub</a>
+        </div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-primary" onclick="closeModal('modal-about')">Chiudi</button>
+    </div>
+  </div>
+</div>
+
+<script>
+async function showAboutModal() {
+  const userEl = document.getElementById('about-user');
+  const tenantEl = document.getElementById('about-tenant');
+  const verEl = document.getElementById('about-version');
+  const buildEl = document.getElementById('about-build');
+  verEl.textContent = '…';
+  try {
+    const h = await api('GET', '/health');
+    verEl.textContent = 'v' + (h.version || '?');
+    buildEl.textContent = h.app ? `${h.app}` : '';
+    if (h.ai && h.ai.configured) {
+      const aiInfo = document.createElement('div');
+      aiInfo.style.marginTop = '4px';
+      aiInfo.style.color = 'var(--text3)';
+      aiInfo.textContent = `🤖 AI: ${h.ai.provider}`;
+      buildEl.appendChild(aiInfo);
+    }
+  } catch(e) { verEl.textContent = '?'; }
+  {% if request.state.current_user %}
+  userEl.textContent = '👤 {{ request.state.current_user.email|e }}';
+  tenantEl.textContent = '🏢 Tenant id={{ request.state.current_user.tenant_id }}{% if request.state.current_user.is_platform_admin %} · super-admin platform{% endif %}';
+  {% else %}
+  userEl.textContent = '👤 Non autenticato';
+  {% endif %}
+  openModal('modal-about');
+}
+</script>
+
 <!-- Copilot AI drawer (sempre montato, attivabile via FAB) -->
 {% include "components/copilot.html" %}
 
@@ -268,7 +329,7 @@
 {% endif %}
 
 <script src="/static/js/lucide.min.js?v=3.5.0-alpha.30"></script>
-<script src="/static/js/global.js?v=3.5.0-alpha.107"></script>
+<script src="/static/js/global.js?v=3.5.0-alpha.108"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/fullcalendar/6.1.11/index.global.min.js"></script>
 <script>
   // v3.5.0-alpha.30: Lucide createIcons() al primo paint + helper globale
