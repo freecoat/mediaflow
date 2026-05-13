@@ -214,6 +214,8 @@ def detect_mancato_recupero(db: Session) -> int:
     v3.5.0-alpha.91 audit fix P1: deriva project_id da inv.job.project_id
     quando disponibile. Era sempre NULL → handle write_off_loss falliva con
     400 "write-off richiede project_id"."""
+    # v3.5.0-alpha.111.1 — Invoice non ha tenant_id diretto, scope via Client
+    from app.models import Client
     n = 0
     today = date.today()
     rows = (
@@ -222,7 +224,8 @@ def detect_mancato_recupero(db: Session) -> int:
             joinedload(Invoice.client),
             joinedload(Invoice.job).joinedload(Job.project),
         )
-        .filter(Invoice.tenant_id == CURRENT_TENANT)
+        .join(Client, Invoice.client_id == Client.id)
+        .filter(Client.tenant_id == CURRENT_TENANT)
         .filter(Invoice.due_date.isnot(None))
         .filter(Invoice.due_date < today)
         .filter(Invoice.status.notin_([InvoiceStatus.paid, InvoiceStatus.cancelled]))
@@ -260,7 +263,7 @@ def detect_quote_discrepancy(db: Session, threshold_pct: float = 15.0) -> int:
         db.query(Job)
         .options(joinedload(Job.project), joinedload(Job.cost_lines))
         .filter(Job.tenant_id == CURRENT_TENANT)
-        .filter(Job.status.in_([JobStatus.in_progress, JobStatus.completed]))
+        .filter(Job.status.in_([JobStatus.active, JobStatus.completed, JobStatus.invoiced]))
         .filter(Job.quote_id.isnot(None))
         .all()
     )

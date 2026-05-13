@@ -14,7 +14,7 @@
 <!-- v3.5.0-alpha.66.14.9: CSS estratto in /static/css/planning.css per
      ridurre planning.html da 7377 -> 6710 righe e abilitare cache HTTP
      indipendente del CSS. Il blocco <style> originale era 668 righe. -->
-<link rel="stylesheet" href="/static/css/planning.css?v=3.5.0-alpha.111">
+<link rel="stylesheet" href="/static/css/planning.css?v=3.5.0-alpha.66.18">
 <style>
   /* v3.5.0-alpha.79 — Polish timeline */
   /* Today line emphasizzata */
@@ -421,9 +421,8 @@
           <!-- v3.5.0-alpha.36: ROI riscritto con overlay-div trasparente. Toggle:
                click bottone OPPURE tasto S (no modifier). ESC esce. -->
           <button class="btn btn-ghost btn-sm" id="tl-roi-toggle" onclick="tlRoiTogglePersist()" title="Modalità area (S): trascina sulla griglia per selezionare. Selezioni multiple si sommano. ESC per uscire." style="margin-left:6px;">📦 Area</button>
-          <!-- v3.5.0-alpha.111: heatmap toggle RIMOSSO (era no-op da α.99
-               quando rimossa per fix mismatch label/foreground). Da
-               reintrodurre come overlay assoluto sul foreground in futuro. -->
+          <!-- v3.5.0-alpha.44: toggle veloce heatmap + apri standalone -->
+          <button class="btn btn-ghost btn-sm" id="tl-heatmap-toggle" onclick="tlToggleHeatmap()" title="Mostra/nascondi heatmap occupazione giornaliera sotto i nomi operatore" style="margin-left:6px;">📊 Heatmap</button>
           <button class="btn btn-ghost btn-sm" id="tl-light-toggle" onclick="tlToggleLight()" title="Modalità leggera: disabilita stack overlap (O(N²)), background items (ferie/festività/timbrature) e animazioni. Risolve freeze Chrome con 30+ booking + zoom mese. Trade-off: items sovrapposti visivamente." style="margin-left:6px;">🪶 Light</button>
           {% if not full_screen %}
           <button class="btn btn-ghost btn-sm" onclick="tlOpenStandalone()" title="Apri timeline in finestra dedicata full-screen (senza menu/topbar)" style="margin-left:6px;">⛶ Finestra</button>
@@ -589,7 +588,7 @@
             </select></div>
           <hr style="border:none; border-top:1px solid var(--border); margin:10px 0;">
           <label class="tl-pref-check"><input type="checkbox" id="tlp-anim" checked> Animazioni</label>
-          <!-- v3.5.0-alpha.111: heatmap pref RIMOSSA (era no-op da α.99). -->
+          <label class="tl-pref-check"><input type="checkbox" id="tlp-heatmap"> Heatmap capacity</label>
           <label class="tl-pref-check"><input type="checkbox" id="tlp-today-glow" checked> Linea oggi con glow</label>
           <label class="tl-pref-check"><input type="checkbox" id="tlp-weekend-bg" checked> Sfondo weekend</label>
           <!-- v3.5.0-alpha.23: ombra leggera timbrature TimePunch -->
@@ -1637,11 +1636,9 @@ function tlSetDensity(d) {
           margin: { item: { horizontal: 0, vertical: 1 }, axis: 4 },
         });
       } else {
-        // comfortable (default) — α.111: niente più stack=true; uniforma
-        // anche qui per evitare la sovrapposizione che peggiorava le righe.
         inst.setOptions({
-          stack: false,
-          stackSubgroups: false,
+          stack: true,
+          stackSubgroups: true,
           margin: { item: { horizontal: 0, vertical: 3 }, axis: 6 },
         });
       }
@@ -1665,23 +1662,17 @@ function tlBindKeyboardScroll() {
   // funziona già. Aggiungiamo Shift+wheel ovunque per scroll vertical.
   host.addEventListener('wheel', (ev) => {
     if (!ev.shiftKey) return;
-    // v3.5.0-alpha.111: vis-timeline 7.x scroll-target più robusto.
-    // Prova tutti i candidate panel, scrolla quelli con overflow effettivo.
+    const labelset = host.querySelector('.vis-labelset');
+    const contentInner = host.querySelector('.vis-panel.vis-center .vis-content')
+                       || host.querySelector('.vis-content');
     const delta = ev.deltaY;
-    const targets = [
-      host.querySelector('.vis-panel.vis-center'),
-      host.querySelector('.vis-panel.vis-left'),
-      host.querySelector('.vis-panel.vis-left .vis-vertical'),
-      host.querySelector('.vis-panel.vis-center .vis-vertical'),
-    ].filter(Boolean);
-    let scrolled = false;
-    for (const t of targets) {
-      if (t.scrollHeight > t.clientHeight) {
-        t.scrollTop = (t.scrollTop || 0) + delta;
-        scrolled = true;
-      }
+    // Scrolla il container groups (panel left)
+    const panel = host.querySelector('.vis-panel.vis-left .vis-vertical')
+               || host.querySelector('.vis-panel.vis-left');
+    if (panel) {
+      panel.scrollTop = (panel.scrollTop || 0) + delta;
     }
-    if (scrolled) ev.preventDefault();
+    ev.preventDefault();
   }, { passive: false });
   // Frecce su/giù e PgUp/PgDn quando focus è sul timeline
   document.addEventListener('keydown', (ev) => {
@@ -1832,8 +1823,7 @@ function tlPrefsToggle(ev) {
     document.getElementById('tlp-accent').value = p.accent;
     document.getElementById('tlp-sb-density').value = p.sb_density;
     document.getElementById('tlp-anim').checked = !!p.anim;
-    // v3.5.0-alpha.111: tlp-heatmap rimosso dalla UI; guard per non crashare
-    const _hm = document.getElementById('tlp-heatmap'); if (_hm) _hm.checked = !!p.heatmap;
+    document.getElementById('tlp-heatmap').checked = !!p.heatmap;
     document.getElementById('tlp-today-glow').checked = !!p.today_glow;
     document.getElementById('tlp-weekend-bg').checked = !!p.weekend_bg;
     const tpShow = document.getElementById('tlp-show-punches');
@@ -4853,18 +4843,11 @@ async function _doRenderTimeline(preserveWindow=false) {
   const _lightMode = tlIsLightMode();
   tlInstance = window._tlInstance = new vis.Timeline(host, itemsDS, groupsDS, {
     locale: 'it',
-    // v3.5.0-alpha.111: stack:false di default — righe altezze uniformi,
-    // niente expand su overlap items (Matteo: sovrapposizione peggiorava).
-    // Il toggle Density lo riabilita solo se l'utente sceglie modalità con
-    // expand (ora rimosso da tutti i preset → comfortable resta stack=false).
-    stack: false,
+    stack: !_lightMode,
     showCurrentTime: true,
     zoomable: true,
     moveable: true, // drag pan abilitato (preferenza Matteo). Create via Shift+drag.
-    // v3.5.0-alpha.111 — side scroll rimosso (richiesta Matteo: non funzionava
-    // come atteso, creava conflitti col pan drag). Navigazione via PgUp/PgDn,
-    // ↑↓, Home/End e drag-pan dell'area centrale.
-    horizontalScroll: false,
+    horizontalScroll: true,
     multiselect: true, // E4: Ctrl+click per multi-select
     multiselectPerGroup: false, // permette selezionare item in gruppi diversi
     orientation: {axis: 'top'},
@@ -4872,10 +4855,7 @@ async function _doRenderTimeline(preserveWindow=false) {
     // margin axis ridotto. Min height groups uniforme per evitare "barre alte"
     // sparse e il salto in testa.
     margin: {item: {horizontal: 0, vertical: 3}, axis: 6},
-    // v3.5.0-alpha.111: stackSubgroups false di default (overlap items
-    // riamatti senza espansione riga). Le singole risorse possono avere
-    // overlap mostrato come tooltip; per separazione visiva → density spacious.
-    stackSubgroups: false,
+    stackSubgroups: !_lightMode,
     groupHeightMode: 'fixed',
     // v3.5.0-alpha.44: altezza dinamica viewport (era hardcoded 600). Si
     // adatta al ridimensionamento finestra via tlComputeHeight + listener
