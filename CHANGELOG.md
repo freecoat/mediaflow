@@ -1,5 +1,60 @@
 # MediaFlow — Changelog
 
+## v3.5.0-alpha.97 — Portale Cliente fase A: auth magic-link + dashboard read-only (13 maggio 2026)
+
+Punto #10 della roadmap — fase A (auth + dashboard + scheda progetto).
+Le fasi B (DAM read-only filtrato + storico fatture) e C (ticket leggero,
+notifiche email) sono backlog separati.
+
+**Modello** (`models.py`): `ClientPortalAccess` nuovo:
+- `client_id` FK (cliente associato)
+- `email`, `full_name` (identità)
+- `token` (random 64-hex unique, magic link)
+- `project_scope` JSON opt (lista project_id; null = tutti del client_id)
+- `expires_at`, `is_active`, `revoked_at`, `last_seen_at`
+- `created_by_user_id` (admin che ha generato il link)
+SQLAlchemy crea tabella automaticamente; nessuna migration custom.
+
+**Router nuovo** `app/routers/portal.py` prefix `/portal`:
+- `POST /portal/api/access` (admin) — crea token + ritorna magic_link
+  completo da copiare/inviare al cliente
+- `GET /portal/api/access` (admin) — lista accessi attivi con scope
+- `POST /portal/api/access/{id}/revoke` (admin)
+- `GET /portal/login?token=X` — valida + setta cookie portal_token
+  (httponly, samesite=lax, expire=token.expires_at) + redirect /portal/
+- `POST /portal/logout`
+- `GET /portal/` — dashboard cliente (lista progetti)
+- `GET /portal/project/{id}` — scheda progetto (info + milestone + DAM)
+- `GET /portal/api/me` — info access corrente (UI debug)
+
+**Auth separata** (`main.py`):
+- `PORTAL_PUBLIC_PATHS = ("/portal/login", "/portal/logout", "/portal/",
+   "/portal/project/", "/portal/api/me")` — bypassano middleware admin.
+- `/portal/api/access*` resta sotto auth admin (creazione/revoca link).
+- Auth interna via cookie `portal_token` validato in
+  `_resolve_portal_access(token, db)`. Sicurezza: token random 64-hex,
+  expires_at check, is_active+revoked_at check.
+
+**Layout pulito**: `portal_base.html` template separato (no sidebar admin,
+no copilot, palette ridotta). Tre pagine:
+- `portal_login.html`: messaggio chiaro "contatta il tuo referente".
+- `portal_home.html`: card progetti del cliente con codice/stato/data.
+- `portal_project.html`: scheda con info tecniche + milestone + tabella
+  DAM con bottone Scarica per ogni asset.
+
+**Permessi**:
+- Cliente vede SOLO progetti del suo `client_id` (filter SQL hardcoded).
+- Se `project_scope` valorizzato → ulteriormente ristretto.
+- Niente endpoint mutator: portale è solo lettura.
+- DAM download usa endpoint esistente `/dam/download/{id}` — il file_path
+  è già protetto da TPN access ma il portale cliente bypassa il middleware
+  admin... ATTENZIONE: per fase B serve gate su /dam/download/{id}
+  che verifichi anche `portal_token` per asset di progetti accessibili.
+
+**E2E test**: admin creato access per cliente "Media Path S.a.s." →
+magic_link generato → curl GET portal/login?token=X → 200 con
+portal_home renderizzato.
+
 ## v3.5.0-alpha.96 — Capability AI #9b filesystem scan + #9d web cross-check (13 maggio 2026)
 
 Da scoping 13 mag punto #9: 2 capability AI di basso rischio + alto riuso

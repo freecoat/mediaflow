@@ -27,6 +27,7 @@ from app.models.models import (
     Quote, QuoteLine, QuoteStatus,
     AIConversation, AIMessage,
     UserAISettings, AIAction, AIUsageLog,
+    ClientPortalAccess,
     Notification, NotificationKind, NotificationSeverity,
     ProjectTechSheet,
     # v3.5.0-alpha.87 — Pozzo costi / Spese aziendali

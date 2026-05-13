@@ -1,0 +1,109 @@
+{% extends "portal_base.html" %}
+{% block title %}{{ project.title }} — Portale Cliente{% endblock %}
+{% block content %}
+
+<div style="margin-bottom:16px;">
+  <a href="/portal/" style="font-size:12px;color:var(--text2);text-decoration:none;">← Torna ai progetti</a>
+</div>
+
+<div class="portal-card" style="background:var(--indigo-bg);border-color:var(--indigo-border);">
+  <div style="font-size:11px;color:var(--indigo2);font-family:var(--font-mono);margin-bottom:4px;">
+    {{ project.code }}
+  </div>
+  <h2 style="font-size:22px;margin:0 0 8px 0;">{{ project.title }}</h2>
+  <div style="font-size:13px;color:var(--text2);">
+    {% if project.project_type %}{{ project.project_type|capitalize }}{% endif %}
+    {% if project.length_minutes %} · {{ project.length_minutes }} min{% endif %}
+    {% if project.director %} · regia {{ project.director }}{% endif %}
+    {% if project.producer %} · prod. {{ project.producer }}{% endif %}
+  </div>
+</div>
+
+<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:14px;margin-bottom:24px;">
+  <div class="portal-card">
+    <div style="font-size:11px;color:var(--text3);text-transform:uppercase;letter-spacing:.05em;">Stato</div>
+    <div style="font-size:16px;font-weight:600;margin-top:4px;">{{ project.status }}</div>
+  </div>
+  {% if project.delivery_deadline %}
+  <div class="portal-card">
+    <div style="font-size:11px;color:var(--text3);text-transform:uppercase;letter-spacing:.05em;">Consegna prevista</div>
+    <div style="font-size:16px;font-weight:600;margin-top:4px;">{{ project.delivery_deadline }}</div>
+  </div>
+  {% endif %}
+  {% if project.fps or project.delivery_format %}
+  <div class="portal-card">
+    <div style="font-size:11px;color:var(--text3);text-transform:uppercase;letter-spacing:.05em;">Specifiche</div>
+    <div style="font-size:13px;margin-top:6px;">
+      {% if project.fps %}<div>fps: {{ project.fps }}</div>{% endif %}
+      {% if project.delivery_format %}<div>delivery: {{ project.delivery_format }}</div>{% endif %}
+    </div>
+  </div>
+  {% endif %}
+</div>
+
+{% if project.milestones %}
+<h3 style="font-size:14px;margin:0 0 12px 0;color:var(--text2);text-transform:uppercase;letter-spacing:.05em;">
+  Milestone ({{ project.milestones|length }})
+</h3>
+<div class="portal-card" style="padding:0;">
+  {% for m in project.milestones %}
+  <div style="padding:14px 18px;{% if not loop.last %}border-bottom:1px solid var(--border);{% endif %}display:flex;align-items:center;gap:16px;">
+    <div style="flex:1;">
+      <div style="font-size:14px;font-weight:500;">{{ m.title }}</div>
+      {% if m.description %}<div style="font-size:12px;color:var(--text2);margin-top:2px;">{{ m.description }}</div>{% endif %}
+    </div>
+    <div style="text-align:right;">
+      <div style="font-size:12px;color:var(--text2);">{{ m.target_date }}</div>
+      {% if m.completed %}
+      <span style="font-size:10px;color:var(--green);padding:1px 6px;border-radius:8px;background:rgba(34,197,94,.15);">✓ completato</span>
+      {% endif %}
+    </div>
+  </div>
+  {% endfor %}
+</div>
+{% endif %}
+
+<h3 style="font-size:14px;margin:24px 0 12px 0;color:var(--text2);text-transform:uppercase;letter-spacing:.05em;">
+  Materiali consegnati ({{ assets|length }})
+</h3>
+
+{% if not assets %}
+<div class="portal-card" style="text-align:center;color:var(--text3);font-style:italic;">
+  Nessun materiale ancora consegnato.
+</div>
+{% else %}
+<div class="portal-card" style="padding:0;">
+  <table style="width:100%;border-collapse:collapse;">
+    <thead>
+      <tr style="background:var(--bg3);">
+        <th style="text-align:left;padding:10px 14px;font-size:11px;color:var(--text2);text-transform:uppercase;">Nome file</th>
+        <th style="text-align:left;padding:10px 14px;font-size:11px;color:var(--text2);text-transform:uppercase;">Tipo</th>
+        <th style="text-align:right;padding:10px 14px;font-size:11px;color:var(--text2);text-transform:uppercase;">Dimensione</th>
+        <th style="text-align:left;padding:10px 14px;font-size:11px;color:var(--text2);text-transform:uppercase;">Data</th>
+        <th style="padding:10px 14px;"></th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for a in assets %}
+      <tr style="border-top:1px solid var(--border);">
+        <td style="padding:10px 14px;font-size:13px;">{{ a.original_name }}</td>
+        <td style="padding:10px 14px;font-size:11px;color:var(--text2);">{{ a.asset_type }}</td>
+        <td style="padding:10px 14px;font-size:11px;text-align:right;font-family:var(--font-mono);">
+          {% if a.file_size %}
+            {% if a.file_size > 1000000000 %}{{ (a.file_size / 1000000000)|round(2) }} GB
+            {% elif a.file_size > 1000000 %}{{ (a.file_size / 1000000)|round(1) }} MB
+            {% else %}{{ (a.file_size / 1000)|round(0)|int }} KB{% endif %}
+          {% else %}—{% endif %}
+        </td>
+        <td style="padding:10px 14px;font-size:11px;color:var(--text2);">{{ a.created_at.strftime('%Y-%m-%d') if a.created_at else '—' }}</td>
+        <td style="padding:10px 14px;text-align:right;">
+          <a href="/dam/download/{{ a.id }}" target="_blank" style="color:var(--indigo2);font-size:11px;font-weight:600;text-decoration:none;">Scarica →</a>
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endif %}
+
+{% endblock %}

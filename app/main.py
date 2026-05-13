@@ -19,6 +19,7 @@ from app.routers import (
     suppliers as suppliers_router,
     overhead,  # v3.5.0-alpha.87 — Pozzo costi generici / Spese aziendali
     anomalies,  # v3.5.0-alpha.89 — Workflow anomalie fatturazione (sprint S4)
+    portal,    # v3.5.0-alpha.97 — Portale cliente (#10 fase A)
 )
 
 
@@ -785,7 +786,7 @@ async def lifespan(app: FastAPI):
     yield
 
 
-app = FastAPI(title="MediaFlow", version="3.5.0-alpha.96", lifespan=lifespan)
+app = FastAPI(title="MediaFlow", version="3.5.0-alpha.97", lifespan=lifespan)
 
 BASE_DIR = Path(__file__).parent
 app.mount("/static", StaticFiles(directory=BASE_DIR / "static"), name="static")
@@ -840,6 +841,10 @@ async def no_cache_html(request: Request, call_next):
 # manda automaticamente il cookie access_token, quindi gli URL /uploads/*
 # inline nei template continuano a funzionare. Senza login → redirect /auth.
 PUBLIC_PATHS = ("/auth/", "/static/", "/health", "/docs", "/openapi.json", "/favicon.ico", "/redoc", "/public/")
+# v3.5.0-alpha.97: portale cliente — auth proprio (cookie portal_token).
+# Path UI portale bypassano il middleware admin. Endpoint /portal/api/access*
+# restano protetti dal middleware admin (servono a creare/revocare accessi).
+PORTAL_PUBLIC_PATHS = ("/portal/login", "/portal/logout", "/portal/", "/portal/project/", "/portal/api/me")
 
 
 def _resolve_user_from_token(token: str):
@@ -879,6 +884,13 @@ async def auth_guard(request: Request, call_next):
 
     if any(path == p.rstrip("/") or path.startswith(p) for p in PUBLIC_PATHS):
         return await call_next(request)
+    # v3.5.0-alpha.97: portale cliente (UI + /api/me) bypassano l'auth admin.
+    # Gli endpoint /portal/api/access* restano sotto auth normale (admin).
+    if any(path == p.rstrip("/") or path.startswith(p) for p in PORTAL_PUBLIC_PATHS):
+        # Esattamente /portal/ è dashboard cliente. /portal/api/access/...
+        # NON deve essere bypassato (admin only).
+        if not path.startswith("/portal/api/access"):
+            return await call_next(request)
 
     if not user:
         return _unauthorized(request, path)
@@ -981,6 +993,7 @@ app.include_router(help_router.router)
 app.include_router(suppliers_router.router)
 app.include_router(overhead.router)  # v3.5.0-alpha.87 — Pozzo costi / Spese aziendali
 app.include_router(anomalies.router)  # v3.5.0-alpha.89 — Workflow anomalie (sprint S4)
+app.include_router(portal.router)  # v3.5.0-alpha.97 — Portale cliente (#10 fase A)
 app.include_router(billing.router)
 
 

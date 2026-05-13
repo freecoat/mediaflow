@@ -331,6 +331,37 @@ class User(Base):
         back_populates="user", cascade="all, delete-orphan")
 
 
+# ── PORTALE CLIENTE (v3.5.0-alpha.97 #10 fase A) ────────────────
+#
+# Auth separata dal sistema admin. Il cliente accede via magic link
+# (token JWT-like, 7gg validità default). Vede solo progetti del SUO
+# cliente_id. Layout pulito (no sidebar admin). Permessi limitati a:
+#   - Lettura progetto (scheda + milestone + deliverables)
+#   - Lettura DAM filtrato per progetto
+#   - Lettura fatture emesse al cliente
+# Niente edit, niente delete, niente sviluppo di funzionalità admin.
+class ClientPortalAccess(Base):
+    __tablename__ = "client_portal_access"
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    tenant_id: Mapped[int] = mapped_column(ForeignKey("tenants.id"), default=1, index=True)
+    client_id: Mapped[int] = mapped_column(ForeignKey("clients.id"), index=True)
+    # Identità cliente — chi accederà al portale
+    email: Mapped[str] = mapped_column(String(255), index=True)
+    full_name: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
+    # Token magic link (random 64 char hex). Singolo cookie portal_token.
+    token: Mapped[str] = mapped_column(String(128), unique=True, index=True)
+    # Scope progetti (opt: lista di project_id che può vedere; vuoto/null =
+    # TUTTI i progetti del client_id).
+    project_scope: Mapped[Optional[list]] = mapped_column(JSON, nullable=True)
+    is_active: Mapped[bool] = mapped_column(Boolean, default=True, index=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    expires_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True, index=True)
+    last_seen_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+    # Audit
+    created_by_user_id: Mapped[Optional[int]] = mapped_column(ForeignKey("users.id"), nullable=True)
+    revoked_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+
+
 # ── TENANT (multi-tenant soft) ───────────────────────────────
 #
 # Fase 1-bis: prepariamo l'architettura multi-tenant senza ancora

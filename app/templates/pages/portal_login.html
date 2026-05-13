@@ -1,0 +1,16 @@
+{% extends "portal_base.html" %}
+{% block title %}Accesso portale — MediaFlow{% endblock %}
+{% block content %}
+<div class="portal-card" style="max-width:480px;margin:60px auto;text-align:center;">
+  <h2 style="font-size:20px;margin:0 0 12px 0;">📂 Portale Cliente</h2>
+  {% if error %}
+  <div style="background:rgba(244,63,94,.08);border:1px solid rgba(244,63,94,.3);color:var(--rose);padding:14px;border-radius:6px;margin:14px 0;font-size:13px;">
+    {{ error }}
+  </div>
+  {% endif %}
+  <p style="font-size:13px;color:var(--text2);line-height:1.6;">
+    L'accesso al portale avviene tramite link diretto inviato dal tuo referente di produzione.
+    Se non hai ricevuto un link o è scaduto, contatta il tuo referente.
+  </p>
+</div>
+{% endblock %}

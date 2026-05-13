@@ -1,0 +1,83 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+  <title>{% block title %}Portale Cliente — MediaFlow{% endblock %}</title>
+  <link rel="stylesheet" href="/static/css/main.css?v=3.5.0-alpha.97">
+  <style>
+    /* Portale: layout pulito, palette ridotta. No sidebar admin. */
+    .portal-shell {
+      min-height: 100vh;
+      display: flex; flex-direction: column;
+      background: var(--bg);
+    }
+    .portal-topbar {
+      background: var(--bg2);
+      border-bottom: 1px solid var(--border);
+      padding: 14px 24px;
+      display: flex; align-items: center; gap: 16px;
+    }
+    .portal-topbar h1 {
+      font-size: 18px; font-weight: 600; margin: 0;
+      flex: 1;
+    }
+    .portal-topbar .portal-user {
+      font-size: 12px; color: var(--text2);
+      display: flex; align-items: center; gap: 8px;
+    }
+    .portal-topbar .portal-logout {
+      color: var(--text3); text-decoration: none;
+      padding: 4px 10px; border-radius: 4px;
+      font-size: 12px; border: 1px solid var(--border);
+    }
+    .portal-topbar .portal-logout:hover { color: var(--text); border-color: var(--border2); }
+    .portal-content {
+      flex: 1;
+      max-width: 1200px;
+      margin: 0 auto;
+      padding: 24px;
+      width: 100%;
+      box-sizing: border-box;
+    }
+    .portal-footer {
+      text-align: center;
+      padding: 16px;
+      color: var(--text3);
+      font-size: 11px;
+      border-top: 1px solid var(--border);
+    }
+    .portal-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 18px;
+      margin-bottom: 16px;
+    }
+  </style>
+</head>
+<body>
+<div class="portal-shell">
+  <header class="portal-topbar">
+    <h1>📂 Portale Cliente
+      {% if client %}— <span style="color:var(--text2);font-weight:400;">{{ client.name }}</span>{% endif %}
+    </h1>
+    {% if access %}
+    <div class="portal-user">
+      <span>👤 {{ access.full_name or access.email }}</span>
+      <form method="POST" action="/portal/logout" style="margin:0;">
+        <button class="portal-logout" type="submit">Esci</button>
+      </form>
+    </div>
+    {% endif %}
+  </header>
+  <main class="portal-content">
+    {% block content %}{% endblock %}
+  </main>
+  <footer class="portal-footer">
+    Portale fornito da MediaFlow. I dati sono di proprietà del produttore.
+  </footer>
+</div>
+</body>
+</html>

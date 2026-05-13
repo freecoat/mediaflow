@@ -8,6 +8,36 @@
 
 ## Versione corrente
 
+**v3.5.0-alpha.97** — 13 maggio 2026 — Portale Cliente fase A: magic-link auth + dashboard read-only
+
+Punto #10 roadmap fase A:
+- Modello `ClientPortalAccess` (token magic-link, expires, project_scope)
+- Router `/portal/*`: admin crea access → cliente accede via cookie
+  `portal_token` (auth separata da admin)
+- Pagine: login, dashboard progetti, scheda progetto con milestone + DAM
+- Layout pulito `portal_base.html` (no sidebar admin, palette minimal)
+
+Fasi B (DAM gate per portale, fatture read-only) + C (ticket, notifiche
+email, dominio vanity) sono backlog.
+
+**Da testare**:
+1. Admin: `POST /portal/api/access` con `client_id=X` + `email` →
+   ricevi `magic_link`. Forma: `http://localhost:8000/portal/login?token=...`
+2. Apri magic_link in browser (idealmente incognito) → ti porta a
+   `/portal/` con lista progetti del cliente. Cookie `portal_token` settato.
+3. Click su progetto → scheda + milestone + DAM (con bottoni Scarica).
+4. Logout → redirect a `/portal/login`.
+5. Admin: `POST /portal/api/access/{id}/revoke` → token invalidato.
+
+**ATTENZIONE sicurezza fase B**: `/dam/download/{id}` attualmente
+accessibile via portal_token bypass del middleware admin. Per fase B
+serve gate dedicato che verifichi portal_token + asset.project_id in
+accessible_project_ids del portal_access.
+
+17 commit locali NON pushati (b8b8bb6 → α.97). Push a major bump.
+
+## (versione precedente)
+
 **v3.5.0-alpha.96** — 13 maggio 2026 — Capability AI #9b filesystem scan + #9d web cross-check
 
 **#9b — Filesystem scan generico**:

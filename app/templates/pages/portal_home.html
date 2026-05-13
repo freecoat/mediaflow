@@ -1,0 +1,51 @@
+{% extends "portal_base.html" %}
+{% block title %}I tuoi progetti — Portale Cliente{% endblock %}
+{% block content %}
+
+<div class="portal-card">
+  <h2 style="font-size:18px;margin:0 0 6px 0;">Benvenuto{% if access.full_name %}, {{ access.full_name.split()[0] }}{% endif %} 👋</h2>
+  <p style="font-size:13px;color:var(--text2);margin:0;">
+    {% if client %}Stai visualizzando i progetti di <b>{{ client.name }}</b>.{% endif %}
+    Da qui puoi consultare lo stato dei tuoi progetti, scaricare i materiali consegnati e vedere lo storico fatture.
+  </p>
+</div>
+
+<h3 style="font-size:14px;margin:24px 0 12px 0;color:var(--text2);text-transform:uppercase;letter-spacing:.05em;">
+  I tuoi progetti ({{ projects|length }})
+</h3>
+
+{% if not projects %}
+<div class="portal-card" style="text-align:center;color:var(--text3);font-style:italic;">
+  Nessun progetto attivo. Contatta il tuo referente se è un errore.
+</div>
+{% endif %}
+
+{% for p in projects %}
+<a href="/portal/project/{{ p.id }}" style="text-decoration:none;color:inherit;">
+  <div class="portal-card" style="transition:border-color .15s;cursor:pointer;"
+       onmouseenter="this.style.borderColor='var(--indigo)'"
+       onmouseleave="this.style.borderColor='var(--border)'">
+    <div style="display:flex;align-items:center;gap:16px;">
+      <div style="flex:1;">
+        <div style="font-size:11px;color:var(--indigo2);font-family:var(--font-mono);margin-bottom:2px;">
+          {{ p.code }}
+        </div>
+        <div style="font-size:16px;font-weight:600;margin-bottom:4px;">{{ p.title }}</div>
+        <div style="font-size:12px;color:var(--text2);">
+          {% if p.project_type %}{{ p.project_type|capitalize }}{% endif %}
+          {% if p.length_minutes %} · {{ p.length_minutes }} min{% endif %}
+          {% if p.director %} · regia {{ p.director }}{% endif %}
+        </div>
+      </div>
+      <div style="text-align:right;">
+        <div style="font-size:11px;color:var(--text3);text-transform:uppercase;">{{ p.status }}</div>
+        {% if p.delivery_deadline %}
+        <div style="font-size:11px;color:var(--text2);margin-top:2px;">consegna {{ p.delivery_deadline }}</div>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+</a>
+{% endfor %}
+
+{% endblock %}
