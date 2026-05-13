@@ -8,6 +8,32 @@
 
 ## Versione corrente
 
+**v3.5.0-alpha.104** — 13 maggio 2026 — Super-admin GUI tenant + manuale
+
+**Console super-admin platform** (`/platform/tenants`):
+- Lista cross-tenant con KPI users/projects/clients
+- Modal crea Tenant (delega a stesso flow del CLI)
+- Edit / Sospendi / Riattiva tenant
+- Aggiungi admin user a tenant esistente
+- Auth: `User.is_platform_admin=True` (bootstrap admin@mediaflow.it +
+  matteo@mediaflow.it via auto-migrate)
+- Sidebar: sezione "Platform · Tenants" visibile solo a super-admin
+
+**Manuale aggiornato**: 5 sezioni nuove (capitolati, spedizioni, fs scan,
+cross-check, portale cliente, multi-tenant + console). TOC sidebar
+aggiornata.
+
+**Da testare**:
+1. Login admin@mediaflow.it → sidebar mostra "Platform · Tenants"
+2. Click → lista tenant (Default + acme)
+3. "+ Nuovo Tenant" → crea con slug "testco" → vedi credenziali popup
+4. Login `?tenant=testco` con email/password generate → dashboard vuota
+5. `/manuale` → vedi sezioni nuove nella TOC
+
+1 commit locale NON pushato (α.104).
+
+## (versione precedente)
+
 **v3.5.0-alpha.103** — 13 maggio 2026 — Multi-tenant HARD R-MT3 + R-MT4 (onboarding + test)
 
 **Multi-tenant HARD COMPLETO** (4 sprint chiusi: R-MT1→R-MT4).

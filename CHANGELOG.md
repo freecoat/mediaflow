@@ -1,5 +1,57 @@
 # MediaFlow — Changelog
 
+## v3.5.0-alpha.104 — Super-admin GUI tenant management + manuale aggiornato (13 maggio 2026)
+
+Console super-admin platform per gestione cross-tenant da GUI.
+Sostituisce/affianca il CLI `scripts/create_tenant.py` (resta usabile).
+
+**Modello** (`models.py` + `main.py` auto-migrate):
+- `User.is_platform_admin` Boolean default=False, indexed.
+- Auto-migrate ADD COLUMN + UPDATE bootstrap: admin@mediaflow.it +
+  matteo@mediaflow.it (tenant=1) → is_platform_admin=True.
+
+**Router nuovo** `app/routers/platform.py` prefix `/platform`:
+- `GET /platform/tenants` HTML page (gated `_require_platform_admin`)
+- `GET /platform/api/tenants` lista cross-tenant con KPI users/projects/clients
+- `POST /platform/api/tenants` crea Tenant + admin User + 4 Department +
+  cartella uploads/t{id}/ (logica identica a CLI)
+- `PATCH /platform/api/tenants/{id}` rinomina slug/name/legal/email
+- `POST /platform/api/tenants/{id}/revoke` + `/reactivate`
+  (tenant Default non revocabile)
+- `GET /platform/api/tenants/{id}/users` lista users del tenant
+- `POST /platform/api/tenants/{id}/admin-user` aggiungi admin a tenant
+  esistente (password random 12-char se non specificata)
+
+**UI** `app/templates/pages/platform_tenants.html`:
+- Tabella sortable con badge stato + KPI counters per tenant
+- Modal crea tenant (slug + nome + admin email/nome/password)
+- Modal credenziali post-creazione (copy/paste prima di chiudere)
+- Modal edit (slug, name, legal, email)
+- Modal Users con tabella + form aggiungi admin
+- Toggle sospendi/riattiva (icona 🔒/🔓, non per tenant 1)
+
+**Sidebar** (`base.html`): nuova sezione "Platform" con link Tenants,
+visibile SOLO se `request.state.current_user.is_platform_admin == True`.
+
+**Bypass tenant filter**: gli endpoint platform usano query dirette
+(no `current_tenant_id()`) → vista cross-tenant. Auth gate via
+`_require_platform_admin(request)` controlla flag → 403 se non super-admin.
+
+**Manuale aggiornato** (`pages/manuale.html`): aggiunte 5 sezioni nuove
++ relativi link TOC:
+- Capitolati → Quote bozza (wizard 3-step, α.95)
+- Spedizioni asset (payer/pickup/markup ricarico, α.93–α.94)
+- Asset Extra (FS scan whitelist, Cross-check IMDB/Boxoffice, α.96)
+- Portale Cliente (magic-link, scope progetti, α.97)
+- Multi-tenant (concetti, console super-admin, login subdomain,
+  α.101–α.104)
+
+**Test post-deploy**:
+- admin@mediaflow.it login → vede "Platform · Tenants" in sidebar
+- `/platform/tenants` → lista 2 tenant (Default + acme di test)
+- Crea nuovo tenant da modal → vede credenziali post-create
+- Sospendi tenant acme → status badge "Sospeso", login bloccato
+
 ## v3.5.0-alpha.103 — Multi-tenant HARD R-MT3+R-MT4: onboarding + uploads isolation + test cross-tenant (13 maggio 2026)
 
 Chiusi 2 sprint del piano Multi-tenant HARD (#6 roadmap, 4 sprint totali):

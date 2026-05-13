@@ -1,0 +1,408 @@
+{% extends "base.html" %}
+{% set active_page = "platform" %}
+{% block title %}Platform / Tenants — MediaFlow{% endblock %}
+{% block topbar_title %}🏢 Platform · Gestione Tenant{% endblock %}
+{% block topbar_actions %}
+  <button class="btn btn-primary btn-sm" onclick="openCreateTenantModal()">+ Nuovo Tenant</button>
+{% endblock %}
+
+{% block content %}
+
+<div class="card mb-3" style="background:var(--indigo-bg);border-color:var(--indigo-border);">
+  <div style="padding:14px 16px;font-size:13px;line-height:1.55;">
+    <b>Console super-admin platform.</b> Solo user con
+    <code>is_platform_admin=True</code> di tenant=1 vede questa pagina.
+    Cross-tenant view: bypass del normale tenant scope. Operazioni qui
+    NON sono tracciate nel log auditing del singolo tenant.
+  </div>
+</div>
+
+<div class="card">
+  <div class="table-wrap">
+    <table class="mf-sortable">
+      <thead>
+        <tr>
+          <th style="width:50px;">ID</th>
+          <th style="min-width:120px;">Slug</th>
+          <th style="min-width:180px;">Nome</th>
+          <th class="text-right">Users</th>
+          <th class="text-right">Progetti</th>
+          <th class="text-right">Clienti</th>
+          <th>Stato</th>
+          <th>Onboarding</th>
+          <th>Creato</th>
+          <th data-no-sort></th>
+        </tr>
+      </thead>
+      <tbody id="tenants-tbody">
+        <tr><td colspan="10" class="text-muted" style="text-align:center;padding:24px;">Caricamento…</td></tr>
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<!-- Modal Create Tenant -->
+<div class="modal-overlay" id="modal-create-tenant">
+  <div class="modal" style="max-width:560px;">
+    <div class="modal-header">
+      <span class="modal-title">🏢 Nuovo Tenant</span>
+      <button class="btn btn-ghost btn-icon" onclick="closeModal('modal-create-tenant')">&times;</button>
+    </div>
+    <div class="modal-body">
+      <p class="text-sm text-muted" style="margin-top:0;">
+        Crea tenant + admin user + departments default + cartella uploads
+        isolata. Listino vuoto.
+      </p>
+      <div class="form-row">
+        <div class="form-group">
+          <label class="form-label">Slug *</label>
+          <input class="form-input" id="ct-slug" placeholder="acme" pattern="[a-z0-9-]+">
+          <div class="text-xs text-muted" style="margin-top:4px;">solo a-z, 0-9, trattino</div>
+        </div>
+        <div class="form-group" style="flex:2;">
+          <label class="form-label">Nome *</label>
+          <input class="form-input" id="ct-name" placeholder="Acme Post-production">
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label class="form-label">Admin Email *</label>
+          <input class="form-input" id="ct-email" type="email" placeholder="admin@acme.it">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Admin Nome *</label>
+          <input class="form-input" id="ct-admin-name" placeholder="Nome Cognome">
+        </div>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Password admin <span class="text-muted">(vuoto = auto)</span></label>
+        <input class="form-input" id="ct-pwd" type="text" placeholder="lascia vuoto per generarla">
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeModal('modal-create-tenant')">Annulla</button>
+      <button class="btn btn-primary" onclick="submitCreateTenant()">Crea tenant</button>
+    </div>
+  </div>
+</div>
+
+<!-- Modal Edit -->
+<div class="modal-overlay" id="modal-edit-tenant">
+  <div class="modal" style="max-width:540px;">
+    <div class="modal-header">
+      <span class="modal-title">Modifica Tenant</span>
+      <button class="btn btn-ghost btn-icon" onclick="closeModal('modal-edit-tenant')">&times;</button>
+    </div>
+    <div class="modal-body">
+      <input type="hidden" id="et-id">
+      <div class="form-row">
+        <div class="form-group">
+          <label class="form-label">Slug</label>
+          <input class="form-input" id="et-slug">
+        </div>
+        <div class="form-group" style="flex:2;">
+          <label class="form-label">Nome</label>
+          <input class="form-input" id="et-name">
+        </div>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Ragione sociale</label>
+        <input class="form-input" id="et-legal">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Email contatto</label>
+        <input class="form-input" id="et-email">
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeModal('modal-edit-tenant')">Annulla</button>
+      <button class="btn btn-primary" onclick="submitEditTenant()">Salva</button>
+    </div>
+  </div>
+</div>
+
+<script>
+async function loadTenants() {
+  const tbody = document.getElementById('tenants-tbody');
+  let rows;
+  try {
+    rows = await api('GET', '/platform/api/tenants');
+  } catch(e) {
+    toast(e.message || 'Errore', 'error');
+    return;
+  }
+  while (tbody.firstChild) tbody.removeChild(tbody.firstChild);
+  if (!rows.length) {
+    const tr = document.createElement('tr');
+    const td = document.createElement('td');
+    td.colSpan = 10; td.className = 'text-muted';
+    td.style.cssText = 'text-align:center;padding:20px;';
+    td.textContent = 'Nessun tenant.';
+    tr.appendChild(td); tbody.appendChild(tr); return;
+  }
+  rows.forEach(t => {
+    const tr = document.createElement('tr');
+    const td = (txt, css) => { const e = document.createElement('td'); if (css) e.style.cssText = css; e.textContent = txt; tr.appendChild(e); return e; };
+    td(String(t.id), 'font-family:var(--font-mono);color:var(--text2);');
+    td(t.slug, 'font-family:var(--font-mono);font-weight:600;');
+    td(t.name);
+    td(String(t.users_count), 'text-align:right;font-family:var(--font-mono);');
+    td(String(t.projects_count), 'text-align:right;font-family:var(--font-mono);');
+    td(String(t.clients_count), 'text-align:right;font-family:var(--font-mono);');
+    const stTd = document.createElement('td');
+    const st = document.createElement('span');
+    const cIs = t.is_active ? '#22c55e' : '#94a3b8';
+    st.style.cssText = `padding:2px 8px;border-radius:8px;font-size:10px;font-weight:600;background:${cIs}22;color:${cIs};`;
+    st.textContent = t.is_active ? 'Attivo' : 'Sospeso';
+    stTd.appendChild(st); tr.appendChild(stTd);
+    td(t.onboarding_completed ? '✓' : '○', 'text-align:center;');
+    td((t.created_at || '').slice(0, 10), 'font-size:11px;color:var(--text2);');
+    const actTd = document.createElement('td');
+    actTd.style.whiteSpace = 'nowrap';
+    const btnEdit = document.createElement('button');
+    btnEdit.className = 'btn btn-ghost btn-sm';
+    btnEdit.textContent = '✎';
+    btnEdit.title = 'Modifica';
+    btnEdit.addEventListener('click', () => openEditTenant(t));
+    actTd.appendChild(btnEdit);
+    const btnUsers = document.createElement('a');
+    btnUsers.className = 'btn btn-ghost btn-sm';
+    btnUsers.textContent = '👥';
+    btnUsers.title = 'Users';
+    btnUsers.href = '#users-' + t.id;
+    btnUsers.addEventListener('click', (e) => { e.preventDefault(); showUsers(t); });
+    actTd.appendChild(btnUsers);
+    if (t.id !== 1) {
+      const btnTog = document.createElement('button');
+      btnTog.className = 'btn btn-ghost btn-sm';
+      btnTog.textContent = t.is_active ? '🔒' : '🔓';
+      btnTog.title = t.is_active ? 'Sospendi' : 'Riattiva';
+      btnTog.style.color = t.is_active ? 'var(--rose)' : 'var(--green)';
+      btnTog.addEventListener('click', () => toggleTenant(t));
+      actTd.appendChild(btnTog);
+    }
+    tr.appendChild(actTd);
+    tbody.appendChild(tr);
+  });
+}
+
+function openCreateTenantModal() {
+  ['ct-slug','ct-name','ct-email','ct-admin-name','ct-pwd'].forEach(id => document.getElementById(id).value = '');
+  openModal('modal-create-tenant');
+}
+
+async function submitCreateTenant() {
+  const fd = new FormData();
+  const slug = document.getElementById('ct-slug').value.trim().toLowerCase();
+  const name = document.getElementById('ct-name').value.trim();
+  const email = document.getElementById('ct-email').value.trim();
+  const adminName = document.getElementById('ct-admin-name').value.trim();
+  const pwd = document.getElementById('ct-pwd').value.trim();
+  if (!slug || !name || !email || !adminName) { toast('Compila campi obbligatori', 'warning'); return; }
+  if (!/^[a-z0-9-]+$/.test(slug)) { toast('Slug: solo a-z, 0-9, trattino', 'warning'); return; }
+  fd.append('slug', slug);
+  fd.append('name', name);
+  fd.append('admin_email', email);
+  fd.append('admin_name', adminName);
+  if (pwd) fd.append('admin_password', pwd);
+  try {
+    const res = await api('POST', '/platform/api/tenants', fd);
+    closeModal('modal-create-tenant');
+    showTenantCredentials(res);
+    await loadTenants();
+  } catch(e) { toast(e.message || 'Errore', 'error'); }
+}
+
+function showTenantCredentials(res) {
+  let modal = document.getElementById('modal-creds');
+  if (modal) modal.remove();
+  modal = document.createElement('div');
+  modal.id = 'modal-creds';
+  modal.className = 'modal-overlay';
+  const inner = document.createElement('div');
+  inner.className = 'modal';
+  inner.style.maxWidth = '560px';
+  const hdr = document.createElement('div');
+  hdr.className = 'modal-header';
+  const t = document.createElement('span'); t.className = 'modal-title';
+  t.textContent = '✓ Tenant ' + res.slug + ' creato';
+  hdr.appendChild(t);
+  const close = document.createElement('button');
+  close.className = 'btn btn-ghost btn-icon'; close.textContent = '×';
+  close.addEventListener('click', () => closeModal('modal-creds'));
+  hdr.appendChild(close);
+  inner.appendChild(hdr);
+  const body = document.createElement('div'); body.className = 'modal-body';
+  const p = document.createElement('p');
+  p.className = 'text-sm';
+  p.textContent = 'Conserva le credenziali admin (non saranno più mostrate):';
+  body.appendChild(p);
+  const pre = document.createElement('pre');
+  pre.style.cssText = 'background:var(--bg2);padding:12px;border-radius:6px;font-size:12px;user-select:text;';
+  pre.textContent =
+    `Email:    ${res.admin_email}\n` +
+    `Password: ${res.admin_password}\n\n` +
+    `Login dev:  ${res.login_url_dev}\n` +
+    `Fallback:   ${res.login_url_fallback}`;
+  body.appendChild(pre);
+  inner.appendChild(body);
+  const ftr = document.createElement('div'); ftr.className = 'modal-footer';
+  const ok = document.createElement('button');
+  ok.className = 'btn btn-primary'; ok.textContent = 'OK ho copiato';
+  ok.addEventListener('click', () => closeModal('modal-creds'));
+  ftr.appendChild(ok);
+  inner.appendChild(ftr);
+  modal.appendChild(inner);
+  document.body.appendChild(modal);
+  openModal('modal-creds');
+}
+
+function openEditTenant(t) {
+  document.getElementById('et-id').value = String(t.id);
+  document.getElementById('et-slug').value = t.slug;
+  document.getElementById('et-name').value = t.name;
+  document.getElementById('et-legal').value = t.legal_name || '';
+  document.getElementById('et-email').value = t.email || '';
+  openModal('modal-edit-tenant');
+}
+
+async function submitEditTenant() {
+  const id = document.getElementById('et-id').value;
+  const fd = new FormData();
+  fd.append('slug', document.getElementById('et-slug').value.trim().toLowerCase());
+  fd.append('name', document.getElementById('et-name').value.trim());
+  fd.append('legal_name', document.getElementById('et-legal').value.trim());
+  fd.append('email', document.getElementById('et-email').value.trim());
+  try {
+    await api('PATCH', `/platform/api/tenants/${id}`, fd);
+    closeModal('modal-edit-tenant');
+    toast('Tenant aggiornato', 'success');
+    await loadTenants();
+  } catch(e) { toast(e.message || 'Errore', 'error'); }
+}
+
+async function toggleTenant(t) {
+  const action = t.is_active ? 'sospendere' : 'riattivare';
+  if (!confirm(`Vuoi ${action} il tenant "${t.name}" (${t.slug})?`)) return;
+  const path = t.is_active ? 'revoke' : 'reactivate';
+  try {
+    await api('POST', `/platform/api/tenants/${t.id}/${path}`);
+    toast(`Tenant ${action.replace('are','ato')}`, 'success');
+    await loadTenants();
+  } catch(e) { toast(e.message || 'Errore', 'error'); }
+}
+
+async function showUsers(t) {
+  let rows;
+  try { rows = await api('GET', `/platform/api/tenants/${t.id}/users`); }
+  catch(e) { toast(e.message, 'error'); return; }
+  let modal = document.getElementById('modal-users');
+  if (modal) modal.remove();
+  modal = document.createElement('div');
+  modal.id = 'modal-users';
+  modal.className = 'modal-overlay';
+  const inner = document.createElement('div');
+  inner.className = 'modal';
+  inner.style.cssText = 'max-width:680px;max-height:80vh;display:flex;flex-direction:column;';
+  const hdr = document.createElement('div');
+  hdr.className = 'modal-header';
+  const title = document.createElement('span'); title.className = 'modal-title';
+  title.textContent = `👥 Users di ${t.slug} (${rows.length})`;
+  hdr.appendChild(title);
+  const close = document.createElement('button');
+  close.className = 'btn btn-ghost btn-icon'; close.textContent = '×';
+  close.addEventListener('click', () => closeModal('modal-users'));
+  hdr.appendChild(close);
+  inner.appendChild(hdr);
+  const body = document.createElement('div');
+  body.className = 'modal-body'; body.style.overflow = 'auto';
+  if (!rows.length) {
+    const p = document.createElement('p');
+    p.className = 'text-muted';
+    p.textContent = 'Nessun user (case di edge: tenant orphaned).';
+    body.appendChild(p);
+  } else {
+    const table = document.createElement('table');
+    table.style.width = '100%';
+    const thead = document.createElement('thead');
+    const trh = document.createElement('tr');
+    ['Email','Nome','Ruolo','Platform Adm','Last Login'].forEach(h => {
+      const th = document.createElement('th');
+      th.style.cssText = 'padding:8px;text-align:left;font-size:11px;color:var(--text2);';
+      th.textContent = h;
+      trh.appendChild(th);
+    });
+    thead.appendChild(trh); table.appendChild(thead);
+    const tbody = document.createElement('tbody');
+    rows.forEach(u => {
+      const tr = document.createElement('tr');
+      tr.style.borderTop = '1px solid var(--border)';
+      const mk = (txt) => { const td = document.createElement('td'); td.style.padding = '8px'; td.style.fontSize = '12px'; td.textContent = txt; return td; };
+      tr.appendChild(mk(u.email));
+      tr.appendChild(mk(u.full_name || ''));
+      tr.appendChild(mk(u.role));
+      tr.appendChild(mk(u.is_platform_admin ? '✓' : ''));
+      tr.appendChild(mk((u.last_login || '').slice(0, 10) || '—'));
+      tbody.appendChild(tr);
+    });
+    table.appendChild(tbody);
+    body.appendChild(table);
+  }
+  // Add admin form
+  const fset = document.createElement('fieldset');
+  fset.style.cssText = 'border:1px solid var(--border);border-radius:6px;padding:10px 14px;margin-top:16px;';
+  const lg = document.createElement('legend');
+  lg.style.cssText = 'padding:0 8px;font-size:12px;font-weight:600;';
+  lg.textContent = 'Aggiungi admin user a questo tenant';
+  fset.appendChild(lg);
+  const row = document.createElement('div');
+  row.style.cssText = 'display:grid;grid-template-columns:1fr 1fr;gap:10px;';
+  const mkInput = (id, ph) => {
+    const wrap = document.createElement('div'); wrap.className = 'form-group';
+    const lbl = document.createElement('label'); lbl.className = 'form-label';
+    lbl.textContent = ph;
+    const inp = document.createElement('input'); inp.className = 'form-input'; inp.id = 'au-' + id; inp.placeholder = ph;
+    wrap.appendChild(lbl); wrap.appendChild(inp);
+    return wrap;
+  };
+  row.appendChild(mkInput('email', 'Email'));
+  row.appendChild(mkInput('name', 'Nome completo'));
+  row.appendChild(mkInput('pwd', 'Password (vuoto = auto)'));
+  fset.appendChild(row);
+  const btn = document.createElement('button');
+  btn.className = 'btn btn-primary btn-sm';
+  btn.style.marginTop = '8px';
+  btn.textContent = '+ Aggiungi admin';
+  btn.addEventListener('click', async () => {
+    const fd = new FormData();
+    const e = document.getElementById('au-email').value.trim();
+    const n = document.getElementById('au-name').value.trim();
+    const p = document.getElementById('au-pwd').value.trim();
+    if (!e || !n) { toast('Email + nome richiesti', 'warning'); return; }
+    fd.append('email', e); fd.append('full_name', n);
+    if (p) fd.append('password', p);
+    try {
+      const res = await api('POST', `/platform/api/tenants/${t.id}/admin-user`, fd);
+      toast(`Admin ${res.email} creato. Password: ${res.password}`, 'success', 8000);
+      closeModal('modal-users');
+      showUsers(t);
+    } catch(err) { toast(err.message, 'error'); }
+  });
+  fset.appendChild(btn);
+  body.appendChild(fset);
+  inner.appendChild(body);
+  const ftr = document.createElement('div'); ftr.className = 'modal-footer';
+  const cl = document.createElement('button');
+  cl.className = 'btn btn-secondary'; cl.textContent = 'Chiudi';
+  cl.addEventListener('click', () => closeModal('modal-users'));
+  ftr.appendChild(cl);
+  inner.appendChild(ftr);
+  modal.appendChild(inner);
+  document.body.appendChild(modal);
+  openModal('modal-users');
+}
+
+loadTenants();
+</script>
+
+{% endblock %}

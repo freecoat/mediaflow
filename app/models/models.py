@@ -330,6 +330,10 @@ class User(Base):
     mfa_secret_encrypted: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     mfa_enabled: Mapped[bool] = mapped_column(Boolean, default=False)
     mfa_enabled_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+    # v3.5.0-alpha.104 — Super-admin platform: vede TUTTI i tenant.
+    # Solo user di tenant=1 (Default) con questo flag → accesso /platform/*.
+    # Bypass tenant filter su endpoint cross-tenant management.
+    is_platform_admin: Mapped[bool] = mapped_column(Boolean, default=False, index=True)
     resources: Mapped[List["Resource"]] = relationship(back_populates="user", cascade="all, delete-orphan")
     timesheets: Mapped[List["Timesheet"]] = relationship(back_populates="user")
     assets: Mapped[List["Asset"]] = relationship(back_populates="uploaded_by_user")

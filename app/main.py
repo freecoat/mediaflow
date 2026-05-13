@@ -20,6 +20,7 @@ from app.routers import (
     overhead,  # v3.5.0-alpha.87 — Pozzo costi generici / Spese aziendali
     anomalies,  # v3.5.0-alpha.89 — Workflow anomalie fatturazione (sprint S4)
     portal,    # v3.5.0-alpha.97 — Portale cliente (#10 fase A)
+    platform,  # v3.5.0-alpha.104 — Super-admin platform tenant management
 )
 
 
@@ -64,6 +65,21 @@ def _auto_migrate_columns():
                 conn.execute(text(
                     "ALTER TABLE users ADD COLUMN tenant_id INTEGER NOT NULL "
                     "DEFAULT 1 REFERENCES tenants(id)"
+                ))
+        # v3.5.0-alpha.104 — Platform admin flag
+        if "is_platform_admin" not in cols:
+            print("[auto-migrate] users.is_platform_admin mancante -> ALTER TABLE")
+            with engine.begin() as conn:
+                conn.execute(text(
+                    "ALTER TABLE users ADD COLUMN is_platform_admin "
+                    "BOOLEAN NOT NULL DEFAULT 0"
+                ))
+                # Imposta is_platform_admin=1 sui primi due admin di tenant=1
+                # (bootstrap: admin@mediaflow.it + matteo@mediaflow.it).
+                conn.execute(text(
+                    "UPDATE users SET is_platform_admin = 1 "
+                    "WHERE tenant_id = 1 AND role = 'admin' "
+                    "AND email IN ('admin@mediaflow.it', 'matteo@mediaflow.it')"
                 ))
         # Index UNIQUE composito (tenant_id, email). Sostituisce de facto il
         # vecchio UNIQUE su solo email — SQLite tiene entrambi, ma se il
@@ -826,7 +842,7 @@ async def lifespan(app: FastAPI):
     yield
 
 
-app = FastAPI(title="MediaFlow", version="3.5.0-alpha.103", lifespan=lifespan)
+app = FastAPI(title="MediaFlow", version="3.5.0-alpha.104", lifespan=lifespan)
 
 BASE_DIR = Path(__file__).parent
 app.mount("/static", StaticFiles(directory=BASE_DIR / "static"), name="static")
@@ -1115,6 +1131,7 @@ app.include_router(suppliers_router.router)
 app.include_router(overhead.router)  # v3.5.0-alpha.87 — Pozzo costi / Spese aziendali
 app.include_router(anomalies.router)  # v3.5.0-alpha.89 — Workflow anomalie (sprint S4)
 app.include_router(portal.router)  # v3.5.0-alpha.97 — Portale cliente (#10 fase A)
+app.include_router(platform.router)  # v3.5.0-alpha.104 — Super-admin platform
 app.include_router(billing.router)
 
 

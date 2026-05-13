@@ -168,6 +168,16 @@
     <a href="#cost-report">Cost Report</a>
     <a href="#dam">Asset Library</a>
     <a href="#copilot">AI Copilot</a>
+    <a href="#capitolati">Capitolati → Quote</a>
+    <a href="#spedizioni">Spedizioni</a>
+    <a href="#assets-extra">Asset · FS scan · Cross-check</a>
+    <a href="#assets-fs"            class="toc-sub">Filesystem scan</a>
+    <a href="#assets-crosscheck"    class="toc-sub">Cross-check web</a>
+    <a href="#portale-cliente">Portale Cliente</a>
+    <a href="#multitenant">Multi-tenant</a>
+    <a href="#mt-overview"          class="toc-sub">Concetti chiave</a>
+    <a href="#mt-platform"          class="toc-sub">Console super-admin</a>
+    <a href="#mt-login"             class="toc-sub">Login + subdomain</a>
     <a href="#admin">Amministrazione</a>
     <a href="#admin-utenti"         class="toc-sub">Utenti, ruoli, permessi</a>
     <a href="#admin-cestino"        class="toc-sub">Cestino e ripristino</a>
@@ -329,6 +339,198 @@
 
       <h3>Pattern AI propone, utente dispone</h3>
       <p>Per ogni azione proposta, vedrai una <strong>card di conferma</strong> nel drawer con riassunto leggibile + pulsanti "Applica" / "Rifiuta". L'azione viene eseguita solo dopo il click su "Applica". Tutte le azioni (proposte, applicate, rifiutate, fallite) sono tracciate in tabella <code>ai_actions</code> per audit.</p>
+    </section>
+
+    <section id="capitolati">
+      <h2>Capitolati → Quote bozza <span class="manuale-chip new">α.95</span></h2>
+      <p>Carica un capitolato (PDF/Word/Excel) del cliente, l'AI estrae le voci di
+      lavorazione e propone il matching col listino interno. Output: quote bozza
+      con N righe linkate ai PriceItem corretti, da revisionare e inviare al
+      cliente.</p>
+      <h3>Wizard 3-step (<a href="/delivery-templates/import">/delivery-templates/import</a>)</h3>
+      <ol>
+        <li><strong>Upload</strong>: carica capitolato (max 30k caratteri). Hint
+        opzionale (es. "documentario 52 min"). Toggle "Estrai blocchi
+        DeliveryTemplate" per salvare anche i 8 blocchi tecnici
+        (video/audio/text/head/textless/naming/archive/metadata).</li>
+        <li><strong>Preview matching</strong>: tabella editable con voci AI +
+        match listino + badge confidence (high/medium/low). Override
+        qty/unit/prezzo/sezione per riga. Checkbox per includere o no.</li>
+        <li><strong>Genera Quote bozza</strong>: scegli progetto target +
+        titolo + scadenza → crea <code>Quote.draft</code> + N QuoteLine
+        linkate ai <code>price_item_id</code>. Numero auto Q-YYYY-NNN.</li>
+      </ol>
+      <p>Capitolati di riferimento in <code>docs/capitolati_esempio/</code>
+      (17 documenti reali: A24, Netflix, Sky, RAI, Beta Film, ecc.).</p>
+    </section>
+
+    <section id="spedizioni">
+      <h2>Spedizioni asset fisici/digitali <span class="manuale-chip new">α.93–α.94</span></h2>
+      <p>Tracciamento spedizioni con costo vettore, payer, ricarico cliente,
+      auto-fatturazione. Pagina <a href="/assets/inout">/assets/inout</a> → tab
+      <strong>🚚 Spedizioni</strong>.</p>
+      <h3>Concetti chiave</h3>
+      <ul>
+        <li><strong>IngestBatch</strong>: raggruppa N AssetMovement (collo
+        digitale o fisico) con 1 DDT, 1 vettore, 1 costo. Codice
+        auto BATCH-YYYY-NNN.</li>
+        <li><strong>shipping_payer</strong> (chi paga):
+          <ul>
+            <li><code>internal</code> — costo nostro, no riaddebito (entra
+            solo in cost report del progetto)</li>
+            <li><code>client_direct</code> — cliente paga direttamente al
+            vettore (zero costo nostro, audit only)</li>
+            <li><code>charged_to_client</code> — anticipiamo, riaddebitiamo
+            via JCL Spedizioni</li>
+          </ul>
+        </li>
+        <li><strong>pickup_mode</strong>: <code>we_ship</code> /
+        <code>client_carrier_pickup</code> / <code>client_in_person</code></li>
+      </ul>
+      <h3>Ricarico al cliente</h3>
+      <p>Se <code>charged_to_client</code> + progetto valido → auto-crea
+      <strong>JCL "Spedizione standard"</strong> sul primo Job attivo:
+      <code>unit_price = shipping_cost × (1 + Project.shipping_markup_pct / 100)</code>.
+      Default markup 15%, configurabile per progetto. JCL linkata al
+      <code>PriceItem "Spedizione standard"</code> (auto-creato in
+      categoria "Spedizioni"). Entra nel prossimo BillingBatch trasmesso
+      → riga fattura cliente.</p>
+      <h3>Modal "Nuova spedizione"</h3>
+      <p>Topbar <code>/assets/inout</code> → bottone <strong>🚚 Nuova spedizione</strong>.
+      Form: direzione (ingest/outgest), vettore + tracking + costo, pickup mode,
+      payer, progetto (visibile solo se charged_to_client), asset selector
+      multi-natura (fisici + digitali). Submit → 1 batch + N movimenti +
+      eventuale JCL ricarico.</p>
+      <h3>Tab Spedizioni</h3>
+      <p>Lista IngestBatch con totali costo vettori + totale riaddebitato cliente
+      (incl. markup). Filtri direzione/payer/has_cost. Click su JCL apre
+      cost-report del Job.</p>
+    </section>
+
+    <section id="assets-extra">
+      <h2>Asset · FS scan · Cross-check</h2>
+
+      <h3 id="assets-fs">Filesystem scan <span class="manuale-chip new">α.96</span></h3>
+      <p>Scansiona cartelle filesystem esterne (NAS, disco cliente montato),
+      classifica file per tipo asset, importa selezionati come Asset DAM
+      SENZA copiare il file (file_path punta al path originale).</p>
+      <p>Pagina <a href="/dam/fs-scan">/dam/fs-scan</a>. Per sicurezza il path
+      deve essere in whitelist:
+      <code>Tenant.fs_scan_allowed_paths</code> (lista assoluti). Da
+      configurare via API <code>PUT /settings/api/tenant</code> o Copilot AI.</p>
+      <p>Esempio whitelist Mac:
+      <code>["/Volumes/StorageA", "/Users/frico/Desktop"]</code>.</p>
+      <p>Workflow: scan path → tabella file classificati per tipo
+      (video/audio/image/document/other) + filtro/search → selezione
+      checkbox → "Importa selezionati" → Asset DAM registrati col path
+      originale.</p>
+
+      <h3 id="assets-crosscheck">Cross-check web <span class="manuale-chip new">α.96</span></h3>
+      <p>Verifica dati progetto/cliente DB vs informazioni pubbliche
+      (IMDB, BoxOfficeMojo, Variety, MyMovies per progetti; Cerved,
+      LinkedIn, news per clienti).</p>
+      <ul>
+        <li>Progetti: <code>/projects/{id}</code> → bottone topbar
+        <strong>🔍 Cross-check</strong>. Modal con lista differenze
+        (current vs suggested + confidence + rationale) + external_info
+        (premi, distribuzione, box_office).</li>
+        <li>Clienti: <code>/clients</code> modal cliente → bottone
+        <strong>🔍 Cross-check</strong>. Idem per dati aziendali.</li>
+      </ul>
+      <p>Strategia AI cascata: native web search (Anthropic) → Tavily
+      → knowledge-only. NO DB write — solo preview, l'utente decide
+      cosa applicare (workflow approval enrichment).</p>
+    </section>
+
+    <section id="portale-cliente">
+      <h2>Portale Cliente <span class="manuale-chip new">α.97</span></h2>
+      <p>Portale separato dove il cliente può vedere progetti, milestone, asset
+      consegnati e (futuro) storico fatture. Auth via magic-link
+      (token 64-hex, expires default 7gg). Cliente vede SOLO progetti del
+      proprio <code>client_id</code>.</p>
+      <h3>Creazione access (admin)</h3>
+      <p>Da CLI o via API:</p>
+      <pre>POST /portal/api/access
+form: client_id=42, email="referente@cliente.it", full_name="Mario Rossi"
+      [, project_scope_json="[12,15]"]  # opt: solo questi progetti
+      [, expires_days=7]</pre>
+      <p>Response include <code>magic_link</code> da inviare al cliente
+      (oggi manuale, futuro email auto).</p>
+      <h3>Esperienza cliente</h3>
+      <p>Apre il link → <code>/portal/</code> dashboard con lista progetti
+      → click su progetto → scheda con info tecniche + milestone +
+      tabella materiali consegnati (DAM filtrato) con bottone Scarica.
+      Layout pulito separato dal pannello admin (no sidebar, no copilot,
+      palette minimale).</p>
+      <p>Revoca: <code>POST /portal/api/access/{id}/revoke</code> →
+      token invalidato.</p>
+      <p><strong>Fase B aperta</strong>: gate <code>/dam/download/{id}</code>
+      per portal_token (oggi accessibile via cookie portale), storico
+      fatture, ticket leggero, notifiche email.</p>
+    </section>
+
+    <section id="multitenant">
+      <h2>Multi-tenant <span class="manuale-chip new">α.101–α.104</span></h2>
+
+      <h3 id="mt-overview">Concetti chiave</h3>
+      <p>MediaFlow supporta più aziende clienti (tenant) sulla stessa
+      installazione. Ogni tenant ha dati isolati: clienti, progetti, listino,
+      utenti, asset, fatture.</p>
+      <ul>
+        <li><strong>Tenant resolution</strong>: dal subdomain
+        (<code>acme.mediaflow.it</code>), header <code>X-Tenant-Slug</code>,
+        query <code>?tenant=acme</code>, o JWT del cookie. Fallback tenant
+        Default (id=1).</li>
+        <li><strong>Email scoped per tenant</strong>: lo stesso indirizzo
+        email può esistere su tenant diversi come user separati. UniqueConstraint
+        composito <code>(tenant_id, email)</code>.</li>
+        <li><strong>Cross-tenant gate</strong>: JWT del cookie include
+        <code>tid</code>. Se l'utente apre una request con tenant resolved
+        diverso dal proprio tid → user invalidato, redirect a login.
+        Impedisce token reuse cross-tenant.</li>
+        <li><strong>Uploads isolati</strong>: cartelle
+        <code>uploads/t{tenant_id}/assets/</code> per asset DAM caricati.
+        Path assoluti su file legacy restano leggibili.</li>
+      </ul>
+
+      <h3 id="mt-platform">Console super-admin <span class="manuale-chip new">α.104</span></h3>
+      <p>Visibile solo a user con <code>is_platform_admin=True</code> di
+      tenant Default. Path: <a href="/platform/tenants">/platform/tenants</a>.
+      Bypass tenant scope → vede tutti i tenant.</p>
+      <p>Operazioni:</p>
+      <ul>
+        <li><strong>Lista tenant</strong>: tabella con KPI users/progetti/clienti</li>
+        <li><strong>Crea tenant</strong>: form slug + nome + admin
+        email/nome/password. Crea Tenant + admin User + 4 departments
+        default + cartella <code>uploads/t{id}/</code> isolata.
+        Listino vuoto.</li>
+        <li><strong>Edit tenant</strong>: rinomina slug, ragione sociale,
+        email contatto.</li>
+        <li><strong>Sospendi/riattiva tenant</strong>: <code>is_active=False</code>
+        blocca login (tenant Default non revocabile).</li>
+        <li><strong>Aggiungi admin user a un tenant</strong>: modal Users
+        del tenant → form email + nome + password.</li>
+      </ul>
+      <p>In alternativa CLI:
+      <code>python scripts/create_tenant.py --slug acme --name "Acme Post"
+      --admin-email admin@acme.it --admin-name "Acme Admin"</code>.</p>
+
+      <h3 id="mt-login">Login multi-tenant</h3>
+      <p>Tre modalità (in dev):</p>
+      <ol>
+        <li><strong>Subdomain</strong> (prod, quando DNS pronto):
+        <code>http://acme.mediaflow.it/auth/login</code></li>
+        <li><strong>lvh.me</strong> (dev, no DNS setup richiesto):
+        <code>http://acme.lvh.me:8000/auth/login</code> (risolve a 127.0.0.1)</li>
+        <li><strong>Query param</strong> (fallback):
+        <code>http://localhost:8000/auth/login?tenant=acme</code></li>
+      </ol>
+      <p>Login emette JWT con <code>tid=N</code>. Il middleware
+      <code>tenant_resolver</code> setta <code>contextvars.ContextVar</code>
+      ad ogni request, e ogni router filtra le query per
+      <code>current_tenant_id()</code>.</p>
+      <p><strong>Test isolation</strong>: <code>python scripts/test_multitenant.py</code>
+      (richiede server in esecuzione + tenant <code>acme</code> creato).</p>
     </section>
 
     <section id="admin">
