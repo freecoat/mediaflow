@@ -8,6 +8,20 @@
 
 ## Versione corrente
 
+**v3.5.0-alpha.100** — 13 maggio 2026 — Tint vars theme-aware per temi chiari
+
+Variabili nuove `--tint-faint/soft/medium/strong` in `:root` (dark default
+= bianco semitrasparente) + override `.theme-sand/paper/linen/sage` (nero
+semitrasparente). 5 hardcoded più visibili in planning.css sostituiti con
+var() per bordi/separatori/hover che diventavano invisibili su tema chiaro.
+
+**Da testare**: tema chiaro Paper/Sand → bordi card storyboard,
+separatori, hover ora visibili (erano "fantasma" prima).
+
+2 commit locali NON pushati (α.99, α.100).
+
+## (versione precedente)
+
 **v3.5.0-alpha.99** — 13 maggio 2026 — Timeline design fix: density funzionante + heatmap fuori da label
 
 Screenshot Matteo 15.21-15.22 → "problema di design a monte" individuato:

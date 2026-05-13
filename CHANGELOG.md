@@ -1,5 +1,32 @@
 # MediaFlow — Changelog
 
+## v3.5.0-alpha.100 — Tint vars theme-aware per temi chiari (13 maggio 2026)
+
+Audit hardcoded rgba(255,255,255,X) in planning.css (58 occorrenze).
+Sui temi chiari Sand/Paper/Linen/Sage diventavano bianco-su-bianco =
+bordi/separatori/zebra rows invisibili.
+
+**Variabili nuove** (`main.css`):
+- `--tint-faint` (.012) zebra row alternate
+- `--tint-soft` (.04) bordi sottili, hover bg
+- `--tint-medium` (.06) separatori, divider
+- `--tint-strong` (.12) bg card elevata
+
+Default `:root` indigo dark = `rgba(255,255,255,X)`. Override per
+`.theme-sand, .theme-paper, .theme-linen, .theme-sage` ribaltato a
+`rgba(0,0,0,X)`.
+
+**planning.css**: sostituito 5 hardcoded più visibili con var():
+- `.todo-card .duration-strip` background
+- `.todo-card .act-btn:hover` background
+- `.fa-suggestions .fa-item` border-bottom
+- `.sb-col-head` border-bottom
+- `.sb-card` border
+
+I restanti 53 hardcoded rgba(255,255,255,X) restano (elementi vis-timeline
+interni con regole specifiche per theme-broadcast; rischio breakage se
+sostituiti troppo aggressivamente). Audit incrementale futuro.
+
 ## v3.5.0-alpha.99 — Timeline design fix: density preset funzionante + heatmap fuori da label (13 maggio 2026)
 
 Screenshot Matteo 15.21-15.22 → "problema di design a monte" identificato.

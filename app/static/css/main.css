@@ -23,6 +23,14 @@
      temi chiari (rettangoli neri visibili sul timeline storyboard di hr).
      Alias di --surface: ogni tema lo eredita automaticamente. */
   --bg-elev:   var(--surface);
+  /* v3.5.0-alpha.100: var tint-soft/-strong per sostituire rgba(255,255,255,X)
+     hardcoded in planning.css (58 occorrenze) che su temi chiari diventavano
+     bianco-su-bianco. Default dark = bianco semitrasparente; temi chiari
+     ribaltano a nero. Usato per zebra rows, separatori, hover light, ecc. */
+  --tint-faint:   rgba(255,255,255,.012);   /* zebra row alternate */
+  --tint-soft:    rgba(255,255,255,.04);    /* bordi sottili, hover bg */
+  --tint-medium:  rgba(255,255,255,.06);    /* separatori, divider */
+  --tint-strong:  rgba(255,255,255,.12);    /* bg card elevata */
 
   --text:      #e8ecf5;
   --text2:     #9aa3bf;
@@ -100,6 +108,15 @@
   --indigo2:   #6ee7a4;
   --indigo-bg: rgba(74,222,128,.12);
   --indigo-border: rgba(74,222,128,.35);
+}
+
+/* v3.5.0-alpha.100 — Tint overrides per temi chiari (nero al posto di
+   bianco semitrasparente). Vedi commento in :root sopra per uso. */
+.theme-sand, .theme-paper, .theme-linen, .theme-sage {
+  --tint-faint:   rgba(0,0,0,.018);
+  --tint-soft:    rgba(0,0,0,.06);
+  --tint-medium:  rgba(0,0,0,.10);
+  --tint-strong:  rgba(0,0,0,.18);
 }
 
 /* ── Tema: Sand (caldo chiaro) ────────────────────────────────── */
