@@ -20,11 +20,10 @@ from sqlalchemy.orm import Session
 from app.database import get_db
 from app.models import DeliveryTemplate, PriceItem, PriceCategory
 from app.services.rbac import requires_permission
+from app.context import current_tenant_id
 
 router = APIRouter(prefix="/delivery-templates", tags=["delivery-templates"])
 
-CURRENT_TENANT = 1
-# v3.5.0-alpha.95 — Fix bug: il vecchio permesso "edit_settings" non esiste
 # nel catalogo (era residuo pre-α.66.15.3). I router mutator usano
 # "manage_settings_global" come da rbac.can_edit_settings.
 RequireEditSettings = Depends(requires_permission("manage_settings_global"))
@@ -67,7 +66,7 @@ def _dt_dict(t: DeliveryTemplate) -> dict:
 async def delivery_templates_page(request: Request, db: Session = Depends(get_db)):
     templates = (
         db.query(DeliveryTemplate)
-        .filter(DeliveryTemplate.tenant_id == CURRENT_TENANT)
+        .filter(DeliveryTemplate.tenant_id == current_tenant_id())
         .order_by(DeliveryTemplate.broadcaster.asc(), DeliveryTemplate.name.asc())
         .all()
     )
@@ -84,7 +83,7 @@ async def delivery_templates_page(request: Request, db: Session = Depends(get_db
 async def list_templates(db: Session = Depends(get_db)):
     rows = (
         db.query(DeliveryTemplate)
-        .filter(DeliveryTemplate.tenant_id == CURRENT_TENANT)
+        .filter(DeliveryTemplate.tenant_id == current_tenant_id())
         .order_by(DeliveryTemplate.broadcaster.asc(), DeliveryTemplate.name.asc())
         .all()
     )
@@ -95,7 +94,7 @@ async def list_templates(db: Session = Depends(get_db)):
 async def get_template(template_id: int, db: Session = Depends(get_db)):
     t = db.query(DeliveryTemplate).filter(
         DeliveryTemplate.id == template_id,
-        DeliveryTemplate.tenant_id == CURRENT_TENANT,
+        DeliveryTemplate.tenant_id == current_tenant_id(),
     ).first()
     if not t:
         raise HTTPException(404, "Template non trovato")
@@ -181,14 +180,14 @@ async def save_template(
         raise HTTPException(400, "code e name sono obbligatori")
 
     existing = db.query(DeliveryTemplate).filter(
-        DeliveryTemplate.tenant_id == CURRENT_TENANT,
+        DeliveryTemplate.tenant_id == current_tenant_id(),
         DeliveryTemplate.code == code,
     ).first()
     if existing:
         raise HTTPException(409, f"Esiste già un template con code='{code}'")
 
     t = DeliveryTemplate(
-        tenant_id=CURRENT_TENANT,
+        tenant_id=current_tenant_id(),
         code=code,
         name=name,
         broadcaster=(broadcaster or "").strip() or None,
@@ -236,7 +235,7 @@ async def update_template(
 ):
     t = db.query(DeliveryTemplate).filter(
         DeliveryTemplate.id == template_id,
-        DeliveryTemplate.tenant_id == CURRENT_TENANT,
+        DeliveryTemplate.tenant_id == current_tenant_id(),
     ).first()
     if not t:
         raise HTTPException(404, "Template non trovato")
@@ -287,7 +286,7 @@ async def hydrated_suggested_items(template_id: int, db: Session = Depends(get_d
     e dal selector "Carica da template" in /quotes."""
     t = db.query(DeliveryTemplate).filter(
         DeliveryTemplate.id == template_id,
-        DeliveryTemplate.tenant_id == CURRENT_TENANT,
+        DeliveryTemplate.tenant_id == current_tenant_id(),
     ).first()
     if not t:
         raise HTTPException(404, "Template non trovato")
@@ -297,7 +296,7 @@ async def hydrated_suggested_items(template_id: int, db: Session = Depends(get_d
     if pi_ids:
         rows = db.query(PriceItem).options().filter(
             PriceItem.id.in_(pi_ids),
-            PriceItem.tenant_id == CURRENT_TENANT,
+            PriceItem.tenant_id == current_tenant_id(),
         ).all()
         pi_map = {p.id: p for p in rows}
     out = []
@@ -369,7 +368,7 @@ async def parse_and_match(
     pricelist = db.query(PriceItem).options(
         # PriceItem.category è relationship → eager load
     ).filter(
-        PriceItem.tenant_id == CURRENT_TENANT,
+        PriceItem.tenant_id == current_tenant_id(),
         PriceItem.is_active == True,  # noqa: E712
     ).all()
     pi_payload = [{
@@ -446,7 +445,7 @@ async def create_quote_from_deliverables(
     from datetime import date as _date
 
     p = db.query(Project).filter(
-        Project.id == project_id, Project.tenant_id == CURRENT_TENANT,
+        Project.id == project_id, Project.tenant_id == current_tenant_id(),
     ).first()
     if not p:
         raise HTTPException(404, f"Project {project_id} non trovato")
@@ -462,7 +461,7 @@ async def create_quote_from_deliverables(
     quote_number = next_year_progressive(
         db, Quote, base="Q", code_field="number",
         include_deleted=True,
-        extra_filter=(Quote.tenant_id == CURRENT_TENANT),
+        extra_filter=(Quote.tenant_id == current_tenant_id()),
     )
 
     issue = _date.today()
@@ -473,7 +472,7 @@ async def create_quote_from_deliverables(
         except ValueError:
             pass
     q = Quote(
-        tenant_id=CURRENT_TENANT,
+        tenant_id=current_tenant_id(),
         number=quote_number,
         version=1,
         project_id=p.id,
@@ -545,7 +544,7 @@ async def import_page(request: Request, db: Session = Depends(get_db)):
     capitolato AI + matching listino + generazione Quote bozza."""
     from app.models import Project
     projects = db.query(Project).filter(
-        Project.tenant_id == CURRENT_TENANT,
+        Project.tenant_id == current_tenant_id(),
     ).order_by(Project.created_at.desc()).all()
     return _tpl().TemplateResponse(
         "pages/capitolati_import.html",
@@ -557,7 +556,7 @@ async def import_page(request: Request, db: Session = Depends(get_db)):
 async def delete_template(template_id: int, db: Session = Depends(get_db)):
     t = db.query(DeliveryTemplate).filter(
         DeliveryTemplate.id == template_id,
-        DeliveryTemplate.tenant_id == CURRENT_TENANT,
+        DeliveryTemplate.tenant_id == current_tenant_id(),
     ).first()
     if not t:
         raise HTTPException(404, "Template non trovato")

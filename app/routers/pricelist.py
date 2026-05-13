@@ -16,12 +16,10 @@ from app.models import (
 )
 from app.services import pricelist_snapshot as plsnap
 from app.services.rbac import requires_permission
+from app.context import current_tenant_id
 
 router = APIRouter(prefix="/pricelist", tags=["pricelist"])
 
-CURRENT_TENANT = 1
-
-# v3.5.0-alpha.66.16.0 — Sprint R3: gate riusabile per i 7 mutator CRUD
 # (categorie + items + import) che non avevano alcun check (audit HIGH #4).
 # Pattern identico a quotes.RequireEditQuotes / finance.RequireEditInvoices.
 RequireEditPricelist = Depends(requires_permission("edit_pricelist"))
@@ -50,13 +48,13 @@ async def pricelist_page(
 ):
     categories = (
         db.query(PriceCategory)
-        .filter(PriceCategory.tenant_id == CURRENT_TENANT)
+        .filter(PriceCategory.tenant_id == current_tenant_id())
         .order_by(PriceCategory.sort_order)
         .all()
     )
     departments = (
         db.query(Department)
-        .filter(Department.tenant_id == CURRENT_TENANT, Department.is_active == True)
+        .filter(Department.tenant_id == current_tenant_id(), Department.is_active == True)
         .order_by(Department.sort_order, Department.name)
         .all()
     )
@@ -76,7 +74,7 @@ async def pricelist_page(
 async def list_categories(db: Session = Depends(get_db)):
     cats = (
         db.query(PriceCategory)
-        .filter(PriceCategory.tenant_id == CURRENT_TENANT)
+        .filter(PriceCategory.tenant_id == current_tenant_id())
         .order_by(PriceCategory.sort_order)
         .all()
     )
@@ -92,7 +90,7 @@ async def create_category(
     db: Session = Depends(get_db),
 ):
     c = PriceCategory(
-        tenant_id=CURRENT_TENANT,
+        tenant_id=current_tenant_id(),
         name=name.strip(), description=description, sort_order=sort_order,
     )
     db.add(c); db.commit(); db.refresh(c)
@@ -109,7 +107,7 @@ async def update_category(
 ):
     c = db.query(PriceCategory).filter(
         PriceCategory.id == cat_id,
-        PriceCategory.tenant_id == CURRENT_TENANT
+        PriceCategory.tenant_id == current_tenant_id()
     ).first()
     if not c: raise HTTPException(404, "Categoria non trovata")
     if name is not None: c.name = name.strip()
@@ -123,7 +121,7 @@ async def update_category(
 async def delete_category(cat_id: int, db: Session = Depends(get_db)):
     c = db.query(PriceCategory).filter(
         PriceCategory.id == cat_id,
-        PriceCategory.tenant_id == CURRENT_TENANT
+        PriceCategory.tenant_id == current_tenant_id()
     ).first()
     if not c: raise HTTPException(404)
     if c.items:
@@ -143,7 +141,7 @@ async def list_items(
     q = (
         db.query(PriceItem)
         .options(joinedload(PriceItem.category), joinedload(PriceItem.department))
-        .filter(PriceItem.tenant_id == CURRENT_TENANT)
+        .filter(PriceItem.tenant_id == current_tenant_id())
     )
     if category_id: q = q.filter(PriceItem.category_id == category_id)
     if department_id: q = q.filter(PriceItem.department_id == department_id)
@@ -170,7 +168,7 @@ async def list_items(
 async def get_item(item_id: int, db: Session = Depends(get_db)):
     i = db.query(PriceItem).filter(
         PriceItem.id == item_id,
-        PriceItem.tenant_id == CURRENT_TENANT
+        PriceItem.tenant_id == current_tenant_id()
     ).first()
     if not i: raise HTTPException(404, "Voce non trovata")
     return {
@@ -200,7 +198,7 @@ async def create_item(
     db: Session = Depends(get_db),
 ):
     item = PriceItem(
-        tenant_id=CURRENT_TENANT,
+        tenant_id=current_tenant_id(),
         category_id=category_id,
         department_id=department_id,
         name=name.strip(),
@@ -235,7 +233,7 @@ async def update_item(
 ):
     i = db.query(PriceItem).filter(
         PriceItem.id == item_id,
-        PriceItem.tenant_id == CURRENT_TENANT
+        PriceItem.tenant_id == current_tenant_id()
     ).first()
     if not i: raise HTTPException(404, "Voce non trovata")
     if category_id is not None: i.category_id = category_id
@@ -258,7 +256,7 @@ async def update_item(
 async def delete_item(item_id: int, db: Session = Depends(get_db)):
     i = db.query(PriceItem).filter(
         PriceItem.id == item_id,
-        PriceItem.tenant_id == CURRENT_TENANT
+        PriceItem.tenant_id == current_tenant_id()
     ).first()
     if not i: raise HTTPException(404)
     i.is_active = False; db.commit()
@@ -278,20 +276,20 @@ async def export_pricelist(db: Session = Depends(get_db)):
     """
     cats = (
         db.query(PriceCategory)
-        .filter(PriceCategory.tenant_id == CURRENT_TENANT)
+        .filter(PriceCategory.tenant_id == current_tenant_id())
         .order_by(PriceCategory.sort_order)
         .all()
     )
     items = (
         db.query(PriceItem)
         .options(joinedload(PriceItem.category), joinedload(PriceItem.department))
-        .filter(PriceItem.tenant_id == CURRENT_TENANT)
+        .filter(PriceItem.tenant_id == current_tenant_id())
         .all()
     )
     payload = {
         "version": EXPORT_VERSION,
         "exported_at": datetime.utcnow().isoformat() + "Z",
-        "tenant_id": CURRENT_TENANT,
+        "tenant_id": current_tenant_id(),
         "categories": [
             {
                 "name": c.name,
@@ -332,7 +330,7 @@ def _pricelist_rows_for_export(db: Session) -> tuple[list[str], list[list]]:
     items = (
         db.query(PriceItem)
         .options(joinedload(PriceItem.category), joinedload(PriceItem.department))
-        .filter(PriceItem.tenant_id == CURRENT_TENANT)
+        .filter(PriceItem.tenant_id == current_tenant_id())
         .order_by(PriceItem.category_id, PriceItem.name)
         .all()
     )
@@ -446,9 +444,9 @@ async def import_pricelist(
 
     if mode == "replace":
         # Soft-delete dei dati esistenti per evitare cascade su QuoteLine
-        db.query(PriceItem).filter(PriceItem.tenant_id == CURRENT_TENANT).delete()
+        db.query(PriceItem).filter(PriceItem.tenant_id == current_tenant_id()).delete()
         # Categorie senza voci collegate possono essere eliminate
-        cat_ids = [c.id for c in db.query(PriceCategory).filter(PriceCategory.tenant_id == CURRENT_TENANT).all()]
+        cat_ids = [c.id for c in db.query(PriceCategory).filter(PriceCategory.tenant_id == current_tenant_id()).all()]
         for cid in cat_ids:
             db.query(PriceCategory).filter(PriceCategory.id == cid).delete()
         db.flush()
@@ -456,7 +454,7 @@ async def import_pricelist(
     # Mappa departments per codice (servono per assegnare le voci)
     dept_map = {
         d.code: d.id
-        for d in db.query(Department).filter(Department.tenant_id == CURRENT_TENANT).all()
+        for d in db.query(Department).filter(Department.tenant_id == current_tenant_id()).all()
     }
 
     # Crea/aggiorna categorie
@@ -466,7 +464,7 @@ async def import_pricelist(
         if not name: continue
         existing = (
             db.query(PriceCategory)
-            .filter(PriceCategory.tenant_id == CURRENT_TENANT, PriceCategory.name == name)
+            .filter(PriceCategory.tenant_id == current_tenant_id(), PriceCategory.name == name)
             .first()
         )
         if existing:
@@ -475,7 +473,7 @@ async def import_pricelist(
             cat_map[name] = existing.id
         else:
             new_cat = PriceCategory(
-                tenant_id=CURRENT_TENANT,
+                tenant_id=current_tenant_id(),
                 name=name,
                 description=c_data.get("description"),
                 sort_order=c_data.get("sort_order", 100),
@@ -485,7 +483,7 @@ async def import_pricelist(
     db.flush()
 
     # Aggiorna mappa con categorie già esistenti non incluse nel file
-    for c in db.query(PriceCategory).filter(PriceCategory.tenant_id == CURRENT_TENANT).all():
+    for c in db.query(PriceCategory).filter(PriceCategory.tenant_id == current_tenant_id()).all():
         cat_map.setdefault(c.name, c.id)
 
     created = updated = skipped = 0
@@ -507,7 +505,7 @@ async def import_pricelist(
         existing = (
             db.query(PriceItem)
             .filter(
-                PriceItem.tenant_id == CURRENT_TENANT,
+                PriceItem.tenant_id == current_tenant_id(),
                 PriceItem.category_id == cat_id,
                 PriceItem.name == name,
             )
@@ -528,7 +526,7 @@ async def import_pricelist(
             updated += 1
         else:
             db.add(PriceItem(
-                tenant_id=CURRENT_TENANT,
+                tenant_id=current_tenant_id(),
                 category_id=cat_id,
                 department_id=dept_id,
                 name=name,
@@ -594,7 +592,7 @@ async def list_snapshots(
 ):
     snaps = plsnap.list_snapshots(
         db,
-        tenant_id=CURRENT_TENANT,
+        tenant_id=current_tenant_id(),
         include_deleted=include_deleted,
     )
     return [_serialize_snapshot(s) for s in snaps]
@@ -614,7 +612,7 @@ async def create_snapshot(
         raise HTTPException(400, "Il nome è obbligatorio")
     snap = plsnap.create_snapshot_record(
         db,
-        tenant_id=CURRENT_TENANT,
+        tenant_id=current_tenant_id(),
         name=name,
         description=description,
         kind=PricelistSnapshotKind.manual,
@@ -631,7 +629,7 @@ async def get_snapshot(snap_id: int, db: Session = Depends(get_db)):
         db.query(PricelistSnapshot)
         .filter(
             PricelistSnapshot.id == snap_id,
-            PricelistSnapshot.tenant_id == CURRENT_TENANT,
+            PricelistSnapshot.tenant_id == current_tenant_id(),
         )
         .first()
     )
@@ -646,7 +644,7 @@ async def download_snapshot(snap_id: int, db: Session = Depends(get_db)):
         db.query(PricelistSnapshot)
         .filter(
             PricelistSnapshot.id == snap_id,
-            PricelistSnapshot.tenant_id == CURRENT_TENANT,
+            PricelistSnapshot.tenant_id == current_tenant_id(),
         )
         .first()
     )
@@ -682,7 +680,7 @@ async def restore_snapshot(
         db.query(PricelistSnapshot)
         .filter(
             PricelistSnapshot.id == snap_id,
-            PricelistSnapshot.tenant_id == CURRENT_TENANT,
+            PricelistSnapshot.tenant_id == current_tenant_id(),
             PricelistSnapshot.deleted_at.is_(None),
         )
         .first()
@@ -692,7 +690,7 @@ async def restore_snapshot(
     try:
         stats = plsnap.apply_snapshot_payload(
             db,
-            tenant_id=CURRENT_TENANT,
+            tenant_id=current_tenant_id(),
             payload=s.payload_json or {},
             mode=mode,  # type: ignore[arg-type]
             auto_backup=True,
@@ -727,7 +725,7 @@ async def delete_snapshot(
         db.query(PricelistSnapshot)
         .filter(
             PricelistSnapshot.id == snap_id,
-            PricelistSnapshot.tenant_id == CURRENT_TENANT,
+            PricelistSnapshot.tenant_id == current_tenant_id(),
         )
         .first()
     )
@@ -754,7 +752,7 @@ async def restore_deleted_snapshot(
         db.query(PricelistSnapshot)
         .filter(
             PricelistSnapshot.id == snap_id,
-            PricelistSnapshot.tenant_id == CURRENT_TENANT,
+            PricelistSnapshot.tenant_id == current_tenant_id(),
         )
         .first()
     )
@@ -788,7 +786,7 @@ async def upload_snapshot(
     snap_name = (name or "").strip() or f"Importato {datetime.utcnow().strftime('%Y-%m-%d %H:%M')}"
     snap = plsnap.create_snapshot_record(
         db,
-        tenant_id=CURRENT_TENANT,
+        tenant_id=current_tenant_id(),
         name=snap_name,
         description=description or f"Importato da file {file.filename!r}",
         kind=PricelistSnapshotKind.manual,
@@ -847,7 +845,7 @@ async def load_preset_as_snapshot(
     existing = (
         db.query(PricelistSnapshot)
         .filter(
-            PricelistSnapshot.tenant_id == CURRENT_TENANT,
+            PricelistSnapshot.tenant_id == current_tenant_id(),
             PricelistSnapshot.kind == PricelistSnapshotKind.preset,
             PricelistSnapshot.name == snap_name,
             PricelistSnapshot.deleted_at.is_(None),
@@ -858,7 +856,7 @@ async def load_preset_as_snapshot(
         return _serialize_snapshot(existing)
     snap = plsnap.create_snapshot_record(
         db,
-        tenant_id=CURRENT_TENANT,
+        tenant_id=current_tenant_id(),
         name=snap_name,
         description=payload.get("description") or f"Preset {preset_filename}",
         kind=PricelistSnapshotKind.preset,

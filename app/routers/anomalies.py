@@ -43,10 +43,10 @@ from app.models import (
 )
 from app.services.anomaly_detector import detect_all
 from app.services.rbac import current_user_optional, requires_permission
+from app.context import current_tenant_id
 
 router = APIRouter(prefix="/finance", tags=["anomalies"])
 
-CURRENT_TENANT = 1
 RequireViewAnomalies = Depends(requires_permission("view_anomalies"))
 RequireHandleAnomalies = Depends(requires_permission("handle_anomalies"))
 
@@ -97,7 +97,7 @@ async def list_anomalies(
             joinedload(AnomalyEntry.job),
             joinedload(AnomalyEntry.client),
         )
-        .filter(AnomalyEntry.tenant_id == CURRENT_TENANT)
+        .filter(AnomalyEntry.tenant_id == current_tenant_id())
     )
     if status and status != "all":
         try:
@@ -132,7 +132,7 @@ async def summary_anomalies(db: Session = Depends(get_db)):
             func.sum(AnomalyEntry.amount).label("total"),
         )
         .filter(
-            AnomalyEntry.tenant_id == CURRENT_TENANT,
+            AnomalyEntry.tenant_id == current_tenant_id(),
             AnomalyEntry.status == AnomalyStatus.open,
         )
         .group_by(AnomalyEntry.anomaly_type)
@@ -174,7 +174,7 @@ def _handle_single(
         if not entry.project_id:
             raise HTTPException(400, "write-off richiede project_id (anomalia senza progetto)")
         loss = LossEntry(
-            tenant_id=CURRENT_TENANT,
+            tenant_id=current_tenant_id(),
             project_id=entry.project_id,
             job_cost_line_id=(entry.source_id if entry.source_kind == AnomalySourceKind.jcl else None),
             amount=float(entry.amount or 0),
@@ -195,7 +195,7 @@ def _handle_single(
         last = (
             db.query(OverheadCost)
             .filter(
-                OverheadCost.tenant_id == CURRENT_TENANT,
+                OverheadCost.tenant_id == current_tenant_id(),
                 OverheadCost.code.like(f"{prefix}%"),
             )
             .order_by(OverheadCost.id.desc())
@@ -210,7 +210,7 @@ def _handle_single(
         code = f"{prefix}{next_num:04d}"
         amount_net = float(entry.amount or 0)
         oc = OverheadCost(
-            tenant_id=CURRENT_TENANT,
+            tenant_id=current_tenant_id(),
             code=code,
             category=OverheadCostCategory.other,
             title=f"Da anomalia: {entry.description[:200]}",
@@ -263,7 +263,7 @@ async def handle_anomaly(
         raise HTTPException(400, f"action invalido: {action} (atteso: {[a.value for a in AnomalyAction]})")
     entry = (
         db.query(AnomalyEntry)
-        .filter(AnomalyEntry.id == anomaly_id, AnomalyEntry.tenant_id == CURRENT_TENANT)
+        .filter(AnomalyEntry.id == anomaly_id, AnomalyEntry.tenant_id == current_tenant_id())
         .first()
     )
     if not entry:
@@ -301,7 +301,7 @@ async def bulk_handle_anomalies(
     user_id = user.id if user else None
     entries = (
         db.query(AnomalyEntry)
-        .filter(AnomalyEntry.id.in_(ids), AnomalyEntry.tenant_id == CURRENT_TENANT)
+        .filter(AnomalyEntry.id.in_(ids), AnomalyEntry.tenant_id == current_tenant_id())
         .all()
     )
     if len(entries) != len(ids):
@@ -332,7 +332,7 @@ async def dismiss_anomaly(
     """Chiudi anomalia senza applicare azione (falso positivo o gestita altrove)."""
     entry = (
         db.query(AnomalyEntry)
-        .filter(AnomalyEntry.id == anomaly_id, AnomalyEntry.tenant_id == CURRENT_TENANT)
+        .filter(AnomalyEntry.id == anomaly_id, AnomalyEntry.tenant_id == current_tenant_id())
         .first()
     )
     if not entry:
@@ -359,7 +359,7 @@ async def reopen_anomaly(
     precedente in notes; resetta status/handled_*."""
     entry = (
         db.query(AnomalyEntry)
-        .filter(AnomalyEntry.id == anomaly_id, AnomalyEntry.tenant_id == CURRENT_TENANT)
+        .filter(AnomalyEntry.id == anomaly_id, AnomalyEntry.tenant_id == current_tenant_id())
         .first()
     )
     if not entry:

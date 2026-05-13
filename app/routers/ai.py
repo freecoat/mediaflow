@@ -598,7 +598,7 @@ async def ai_usage_stats(
         user_id = u.id
 
     cutoff = datetime.utcnow() - timedelta(days=max(1, min(period_days, 365)))
-    # CURRENT_TENANT pattern come in altri router (R1 future-ready stub)
+    # current_tenant_id() pattern come in altri router (R1 future-ready stub)
     from app.context import current_tenant_id
     base_q = db.query(AIUsageLog).filter(
         AIUsageLog.tenant_id == current_tenant_id(),

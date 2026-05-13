@@ -28,10 +28,10 @@ from app.services.rbac import (
     is_elevated, current_user_optional, scope_resource_id,
     can_approve_unavailability,
 )
+from app.context import current_tenant_id
 
 router = APIRouter(prefix="/planning/api", tags=["planning-unavailabilities"])
 
-CURRENT_TENANT = 1
 
 
 def _u_dict(u: "ResourceUnavailability") -> dict:
@@ -79,7 +79,7 @@ async def list_unavailabilities(
     resource_ids = _parse_id_list(resource_id)
     out = []
     q = db.query(ResourceUnavailability).join(Resource).filter(
-        Resource.tenant_id == CURRENT_TENANT,
+        Resource.tenant_id == current_tenant_id(),
         ResourceUnavailability.end_date >= from_date,
         ResourceUnavailability.start_date <= to_date,
     )
@@ -100,7 +100,7 @@ async def list_unavailabilities(
 
     if include_holidays or include_weekends:
         resources_q = db.query(Resource).filter(
-            Resource.tenant_id == CURRENT_TENANT,
+            Resource.tenant_id == current_tenant_id(),
             Resource.is_active == True,  # noqa: E712
         )
         if resource_ids:
@@ -108,7 +108,7 @@ async def list_unavailabilities(
         all_res = resources_q.all()
 
         default_policy = db.query(WorkingHoursPolicy).filter(
-            WorkingHoursPolicy.tenant_id == CURRENT_TENANT,
+            WorkingHoursPolicy.tenant_id == current_tenant_id(),
             WorkingHoursPolicy.is_default == True,  # noqa: E712
         ).first()
         policies_by_id = {default_policy.id: default_policy} if default_policy else {}
@@ -273,7 +273,7 @@ async def list_pending_unavailabilities(request: Request, db: Session = Depends(
         db.query(ResourceUnavailability)
         .join(Resource, ResourceUnavailability.resource_id == Resource.id)
         .filter(
-            Resource.tenant_id == CURRENT_TENANT,
+            Resource.tenant_id == current_tenant_id(),
             ResourceUnavailability.status == UnavailabilityStatus.pending,
         )
         .order_by(ResourceUnavailability.created_at.desc())
@@ -289,7 +289,7 @@ async def approve_unavailability(u_id: int, request: Request, db: Session = Depe
         raise HTTPException(403, "Permesso negato")
     u = db.query(ResourceUnavailability).join(Resource).filter(
         ResourceUnavailability.id == u_id,
-        Resource.tenant_id == CURRENT_TENANT,
+        Resource.tenant_id == current_tenant_id(),
     ).first()
     if not u:
         raise HTTPException(404, "Richiesta non trovata")
@@ -346,7 +346,7 @@ async def reject_unavailability(
         raise HTTPException(403, "Permesso negato")
     u = db.query(ResourceUnavailability).join(Resource).filter(
         ResourceUnavailability.id == u_id,
-        Resource.tenant_id == CURRENT_TENANT,
+        Resource.tenant_id == current_tenant_id(),
     ).first()
     if not u:
         raise HTTPException(404, "Richiesta non trovata")
@@ -381,7 +381,7 @@ async def delete_unavailability(u_id: int, request: Request, db: Session = Depen
     user = current_user_optional(request)
     u = db.query(ResourceUnavailability).join(Resource).filter(
         ResourceUnavailability.id == u_id,
-        Resource.tenant_id == CURRENT_TENANT,
+        Resource.tenant_id == current_tenant_id(),
     ).first()
     if not u:
         raise HTTPException(404, "Unavailability non trovata")

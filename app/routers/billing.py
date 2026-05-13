@@ -44,11 +44,11 @@ from app.models import (
 from app.services.rbac import (
     current_user_optional, is_admin, is_manager, can_view_finance,
 )
+from app.context import current_tenant_id
 
 
 router = APIRouter(prefix="/finance/api/billing", tags=["billing"])
 
-CURRENT_TENANT = 1  # Multi-tenant soft (vedi CLAUDE.md)
 
 
 # ── RBAC helpers ───────────────────────────────────────────────────────
@@ -80,7 +80,7 @@ def _next_batch_code(db: Session) -> str:
     return next_year_progressive(
         db, BillingBatch, base="BB", code_field="code",
         include_deleted=True,
-        extra_filter=(BillingBatch.tenant_id == CURRENT_TENANT),
+        extra_filter=(BillingBatch.tenant_id == current_tenant_id()),
     )
 
 
@@ -219,7 +219,7 @@ async def preview_transmission(
     """
     _require_finance(request)
     proj = db.query(Project).filter(
-        Project.id == project_id, Project.tenant_id == CURRENT_TENANT,
+        Project.id == project_id, Project.tenant_id == current_tenant_id(),
     ).first()
     if not proj:
         raise HTTPException(404, f"Progetto #{project_id} non trovato")
@@ -317,7 +317,7 @@ def _transmit_core(
     in HTTPException).
     """
     proj = db.query(Project).filter(
-        Project.id == project_id, Project.tenant_id == CURRENT_TENANT,
+        Project.id == project_id, Project.tenant_id == current_tenant_id(),
     ).first()
     if not proj:
         raise ValueError(f"Progetto #{project_id} non trovato")
@@ -367,7 +367,7 @@ def _transmit_core(
         )
 
     batch = BillingBatch(
-        tenant_id=CURRENT_TENANT,
+        tenant_id=current_tenant_id(),
         code=_next_batch_code(db),
         project_id=project_id,
         status=BillingBatchStatus.draft,
@@ -465,7 +465,7 @@ async def list_batches(
     q = db.query(BillingBatch).options(
         joinedload(BillingBatch.project).joinedload(Project.client),  # α.90: eager client
         joinedload(BillingBatch.invoice),
-    ).filter(BillingBatch.tenant_id == CURRENT_TENANT)
+    ).filter(BillingBatch.tenant_id == current_tenant_id())
     if project_id:
         q = q.filter(BillingBatch.project_id == project_id)
     if client_id:
@@ -506,14 +506,14 @@ async def list_composable_batches(
     """
     _require_finance(request)
     project = db.query(Project).filter(
-        Project.id == project_id, Project.tenant_id == CURRENT_TENANT,
+        Project.id == project_id, Project.tenant_id == current_tenant_id(),
     ).first()
     if not project:
         raise HTTPException(404, "Progetto non trovato")
     q = db.query(BillingBatch).options(
         joinedload(BillingBatch.project).joinedload(Project.client),
     ).filter(
-        BillingBatch.tenant_id == CURRENT_TENANT,
+        BillingBatch.tenant_id == current_tenant_id(),
         BillingBatch.project_id == project_id,
         BillingBatch.status == BillingBatchStatus.approved,
         BillingBatch.invoice_id.is_(None),
@@ -543,7 +543,7 @@ async def get_batch(batch_id: int, request: Request, db: Session = Depends(get_d
         joinedload(BillingBatch.invoice),
         joinedload(BillingBatch.lines),
     ).filter(
-        BillingBatch.id == batch_id, BillingBatch.tenant_id == CURRENT_TENANT,
+        BillingBatch.id == batch_id, BillingBatch.tenant_id == current_tenant_id(),
     ).first()
     if not batch:
         raise HTTPException(404, "Batch non trovato")
@@ -565,7 +565,7 @@ async def edit_batch_line(
     Solo batch in stato `draft`. Manager+ richiesto."""
     user = _require_manager(request)
     batch = db.query(BillingBatch).filter(
-        BillingBatch.id == batch_id, BillingBatch.tenant_id == CURRENT_TENANT,
+        BillingBatch.id == batch_id, BillingBatch.tenant_id == current_tenant_id(),
     ).first()
     if not batch:
         raise HTTPException(404, "Batch non trovato")
@@ -602,7 +602,7 @@ async def edit_batch_line(
     ).delete(synchronize_session=False)
     if delta > 0.001:  # tolerance float
         loss = LossEntry(
-            tenant_id=CURRENT_TENANT,
+            tenant_id=current_tenant_id(),
             project_id=batch.project_id,
             job_cost_line_id=line.job_cost_line_id,
             billing_batch_line_id=line.id,
@@ -648,7 +648,7 @@ async def defer_batch_line(
     Manager+ richiesto."""
     user = _require_manager(request)
     batch = db.query(BillingBatch).filter(
-        BillingBatch.id == batch_id, BillingBatch.tenant_id == CURRENT_TENANT,
+        BillingBatch.id == batch_id, BillingBatch.tenant_id == current_tenant_id(),
     ).first()
     if not batch:
         raise HTTPException(404, "Batch non trovato")
@@ -723,7 +723,7 @@ async def refer_batch_line_to_sales(
         raise HTTPException(400, f"mode non valido: {mode}")
 
     batch = db.query(BillingBatch).filter(
-        BillingBatch.id == batch_id, BillingBatch.tenant_id == CURRENT_TENANT,
+        BillingBatch.id == batch_id, BillingBatch.tenant_id == current_tenant_id(),
     ).first()
     if not batch:
         raise HTTPException(404, "Batch non trovato")
@@ -785,7 +785,7 @@ async def approve_batch(batch_id: int, request: Request, db: Session = Depends(g
     emessa la fattura. Una volta approvato non è più modificabile."""
     user = _require_manager(request)
     batch = db.query(BillingBatch).filter(
-        BillingBatch.id == batch_id, BillingBatch.tenant_id == CURRENT_TENANT,
+        BillingBatch.id == batch_id, BillingBatch.tenant_id == current_tenant_id(),
     ).first()
     if not batch:
         raise HTTPException(404, "Batch non trovato")
@@ -819,7 +819,7 @@ async def emit_invoice(
     (non auto-numerato per non interferire col tuo gestionale fiscale)."""
     _require_manager(request)
     batch = db.query(BillingBatch).options(joinedload(BillingBatch.lines)).filter(
-        BillingBatch.id == batch_id, BillingBatch.tenant_id == CURRENT_TENANT,
+        BillingBatch.id == batch_id, BillingBatch.tenant_id == current_tenant_id(),
     ).first()
     if not batch:
         raise HTTPException(404, "Batch non trovato")
@@ -834,7 +834,7 @@ async def emit_invoice(
     # tenant via JOIN client; multi-tenant futuro non subirà collisioni)
     existing = db.query(Invoice).join(Client, Invoice.client_id == Client.id).filter(
         Invoice.number == invoice_number,
-        Client.tenant_id == CURRENT_TENANT,
+        Client.tenant_id == current_tenant_id(),
     ).first()
     if existing:
         raise HTTPException(409, f"Numero fattura {invoice_number} già esistente")
@@ -850,7 +850,7 @@ async def emit_invoice(
     # v3.5.0-alpha.52 — Snapshot dati fiscali al momento dell'emissione.
     # Modifiche successive a tenant/cliente NON corrompono la fattura storica.
     client_obj = db.query(Client).filter(Client.id == project.client_id).first()
-    tenant_obj = db.query(Tenant).filter(Tenant.id == CURRENT_TENANT).first()
+    tenant_obj = db.query(Tenant).filter(Tenant.id == current_tenant_id()).first()
 
     invoice = Invoice(
         number=invoice_number,
@@ -916,7 +916,7 @@ async def emit_invoice(
         # Foundation per α.59/α.60: la JCL non è più "billed/non-billed binaria"
         # ma ha un set di slice con periodi e importi specifici.
         slice_ = JCLBilledSlice(
-            tenant_id=CURRENT_TENANT,
+            tenant_id=current_tenant_id(),
             job_cost_line_id=bl.job_cost_line_id,
             billing_batch_line_id=bl.id,
             invoice_id=invoice.id,
@@ -982,19 +982,19 @@ async def compose_invoice_from_batches(
     # Verifica unicità numero fattura
     existing = db.query(Invoice).join(Client, Invoice.client_id == Client.id).filter(
         Invoice.number == invoice_number,
-        Client.tenant_id == CURRENT_TENANT,
+        Client.tenant_id == current_tenant_id(),
     ).first()
     if existing:
         raise HTTPException(409, f"Numero fattura {invoice_number} già esistente")
     project = db.query(Project).filter(
-        Project.id == project_id, Project.tenant_id == CURRENT_TENANT,
+        Project.id == project_id, Project.tenant_id == current_tenant_id(),
     ).first()
     if not project or not project.client_id:
         raise HTTPException(400, "Progetto senza cliente, impossibile fatturare")
 
     # Trova batch da aggregare
     q = db.query(BillingBatch).options(joinedload(BillingBatch.lines)).filter(
-        BillingBatch.tenant_id == CURRENT_TENANT,
+        BillingBatch.tenant_id == current_tenant_id(),
         BillingBatch.project_id == project_id,
         BillingBatch.status == BillingBatchStatus.approved,
         BillingBatch.invoice_id.is_(None),
@@ -1024,7 +1024,7 @@ async def compose_invoice_from_batches(
 
     # Snapshot fiscali
     client_obj = db.query(Client).filter(Client.id == project.client_id).first()
-    tenant_obj = db.query(Tenant).filter(Tenant.id == CURRENT_TENANT).first()
+    tenant_obj = db.query(Tenant).filter(Tenant.id == current_tenant_id()).first()
 
     batch_codes = ", ".join(b.code for b in batches)
     invoice = Invoice(
@@ -1097,7 +1097,7 @@ async def compose_invoice_from_batches(
                 jcl.billed_amount = bl.total_approved
             # JCLBilledSlice immutabile per la porzione fatturata
             slice_ = JCLBilledSlice(
-                tenant_id=CURRENT_TENANT,
+                tenant_id=current_tenant_id(),
                 job_cost_line_id=bl.job_cost_line_id,
                 billing_batch_line_id=bl.id,
                 invoice_id=invoice.id,
@@ -1140,7 +1140,7 @@ async def cancel_batch(batch_id: int, request: Request, db: Session = Depends(ge
     (il perso non era ancora 'reale')."""
     _require_manager(request)
     batch = db.query(BillingBatch).options(joinedload(BillingBatch.lines)).filter(
-        BillingBatch.id == batch_id, BillingBatch.tenant_id == CURRENT_TENANT,
+        BillingBatch.id == batch_id, BillingBatch.tenant_id == current_tenant_id(),
     ).first()
     if not batch:
         raise HTTPException(404, "Batch non trovato")
@@ -1189,7 +1189,7 @@ async def set_jcl_billing_status(
         Project, Job.project_id == Project.id
     ).filter(
         JobCostLine.id == jcl_id,
-        Project.tenant_id == CURRENT_TENANT,
+        Project.tenant_id == current_tenant_id(),
     ).first()
     if not jcl:
         raise HTTPException(404, "JCL non trovata")
@@ -1496,7 +1496,7 @@ async def project_loss_summary(
     rendicontazione finanziaria a chiusura progetto."""
     _require_finance(request)
     losses = db.query(LossEntry).filter(
-        LossEntry.tenant_id == CURRENT_TENANT,
+        LossEntry.tenant_id == current_tenant_id(),
         LossEntry.project_id == project_id,
     ).all()
     total = sum(l.amount for l in losses)
@@ -1543,7 +1543,7 @@ async def get_invoice_pdf(
     from app.services.invoice_pdf import generate_invoice_pdf
     _require_finance(request)
     batch = db.query(BillingBatch).options(joinedload(BillingBatch.lines)).filter(
-        BillingBatch.id == batch_id, BillingBatch.tenant_id == CURRENT_TENANT,
+        BillingBatch.id == batch_id, BillingBatch.tenant_id == current_tenant_id(),
     ).first()
     if not batch:
         raise HTTPException(404, "Batch non trovato")
@@ -1556,7 +1556,7 @@ async def get_invoice_pdf(
         raise HTTPException(404, "Fattura non trovata")
     # Fallback: se snapshot non popolati (fattura pre-α.52), passa anche
     # gli oggetti vivi per compilare il PDF dai campi attuali.
-    tenant_obj = db.query(Tenant).filter(Tenant.id == CURRENT_TENANT).first()
+    tenant_obj = db.query(Tenant).filter(Tenant.id == current_tenant_id()).first()
     client_obj = db.query(Client).filter(Client.id == invoice.client_id).first()
     pdf = generate_invoice_pdf(invoice, tenant=tenant_obj, client=client_obj)
     safe_num = (invoice.number or f"invoice-{invoice.id}").replace("/", "-")

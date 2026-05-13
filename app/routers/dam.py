@@ -30,9 +30,6 @@ import os
 router = APIRouter(prefix="/dam", tags=["dam"])
 
 # v3.5.0-alpha.66.15.2 — tenant scope (R1)
-CURRENT_TENANT = current_tenant_id()
-
-# v3.5.0-alpha.66.16.0 — Sprint R3: gate per upload/delete asset DAM.
 # Manca permesso DAM-specifico nello schema RBAC; usato `edit_planning_all`
 # come fallback ragionevole (chi gestisce la pianificazione operativa
 # tipicamente deve poter caricare e cancellare asset). Da rivedere se
@@ -55,7 +52,7 @@ async def dam_page(request: Request, db: Session = Depends(get_db)):
     user = current_user_optional(request)
     proj_ids = accessible_project_ids(user, db)
     q = db.query(Asset).filter(
-        Asset.tenant_id == CURRENT_TENANT,
+        Asset.tenant_id == current_tenant_id(),
         Asset.parent_asset_id == None,  # noqa: E711
     )
     if is_admin(user):
@@ -108,7 +105,7 @@ async def list_assets(
     user = current_user_optional(request)
     proj_ids = accessible_project_ids(user, db)
     query = db.query(Asset).filter(
-        Asset.tenant_id == CURRENT_TENANT,
+        Asset.tenant_id == current_tenant_id(),
         Asset.parent_asset_id == None,  # noqa: E711
     )
     if not is_admin(user):
@@ -217,7 +214,7 @@ async def assign_asset_to_project(
         # Only admin per ora — più avanti relaxare con permission gate
         raise HTTPException(403, "Solo admin/manager possono assegnare asset")
     a = db.query(Asset).filter(
-        Asset.id == asset_id, Asset.tenant_id == CURRENT_TENANT
+        Asset.id == asset_id, Asset.tenant_id == current_tenant_id()
     ).first()
     if not a:
         raise HTTPException(404, "Asset non trovato")
@@ -250,13 +247,13 @@ async def upload_asset(
     # v3.5.0-alpha.70 — Auto-resolve project_id da job_id se non passato
     if project_id is None and job_id is not None:
         job = db.query(Job).filter(
-            Job.id == job_id, Job.tenant_id == CURRENT_TENANT
+            Job.id == job_id, Job.tenant_id == current_tenant_id()
         ).first()
         if job:
             project_id = job.project_id
 
     asset = Asset(
-        tenant_id=CURRENT_TENANT,
+        tenant_id=current_tenant_id(),
         filename=filename,
         original_name=file.filename,
         file_path=file_path,
@@ -302,7 +299,7 @@ async def download_asset(
     db: Session = Depends(get_db),
 ):
     user = current_user_optional(request)
-    a = db.query(Asset).filter(Asset.id == asset_id, Asset.tenant_id == CURRENT_TENANT).first()
+    a = db.query(Asset).filter(Asset.id == asset_id, Asset.tenant_id == current_tenant_id()).first()
     if not a or not os.path.exists(a.file_path):
         raise HTTPException(404, "Asset non trovato")
     # v3.5.0-alpha.70 — TPN access check
@@ -349,7 +346,7 @@ async def download_asset(
 @router.get("/thumbnail/{asset_id}")
 async def get_thumbnail(asset_id: int, request: Request, db: Session = Depends(get_db)):
     user = current_user_optional(request)
-    a = db.query(Asset).filter(Asset.id == asset_id, Asset.tenant_id == CURRENT_TENANT).first()
+    a = db.query(Asset).filter(Asset.id == asset_id, Asset.tenant_id == current_tenant_id()).first()
     if not a or not a.thumbnail_path or not os.path.exists(a.thumbnail_path):
         raise HTTPException(404, "Thumbnail non disponibile")
     # v3.5.0-alpha.70 — TPN access check (no log per thumbnail per non
@@ -368,7 +365,7 @@ async def delete_asset(
     """`secure=1` → DOD wipe (random 3 pass) prima di unlink. Più lento
     ma garantisce no-recover dei dati su disco (TPN compliance)."""
     user = current_user_optional(request)
-    a = db.query(Asset).filter(Asset.id == asset_id, Asset.tenant_id == CURRENT_TENANT).first()
+    a = db.query(Asset).filter(Asset.id == asset_id, Asset.tenant_id == current_tenant_id()).first()
     if not a:
         raise HTTPException(404, "Asset non trovato")
     if not user_can_access_asset(user, a, db):
@@ -455,7 +452,7 @@ async def fs_scan(
     """
     from app.services.fs_scan import walk_filesystem
     from app.models import Tenant
-    tenant = db.query(Tenant).filter(Tenant.id == CURRENT_TENANT).first()
+    tenant = db.query(Tenant).filter(Tenant.id == current_tenant_id()).first()
     allowed = (tenant.fs_scan_allowed_paths if tenant else None) or []
     if not _is_path_allowed(path, allowed):
         raise HTTPException(
@@ -500,7 +497,7 @@ async def fs_import(
     from pathlib import Path as _Path
     import mimetypes
     from app.models import Tenant
-    tenant = db.query(Tenant).filter(Tenant.id == CURRENT_TENANT).first()
+    tenant = db.query(Tenant).filter(Tenant.id == current_tenant_id()).first()
     allowed = (tenant.fs_scan_allowed_paths if tenant else None) or []
     if not _is_path_allowed(base_path, allowed):
         raise HTTPException(403, "base_path non autorizzato")
@@ -535,7 +532,7 @@ async def fs_import(
         mime, _ = mimetypes.guess_type(full.name)
         mime = mime or "application/octet-stream"
         a = Asset(
-            tenant_id=CURRENT_TENANT,
+            tenant_id=current_tenant_id(),
             filename=full.name,
             original_name=full.name,
             file_path=str(full),  # NB: path reale, no copia
@@ -564,10 +561,10 @@ async def fs_scan_page(request: Request, db: Session = Depends(get_db)):
     """v3.5.0-alpha.96 — UI scan + import. Mostra path autorizzati,
     permette esplorazione e import selettivo come Asset DAM."""
     from app.models import Tenant
-    tenant = db.query(Tenant).filter(Tenant.id == CURRENT_TENANT).first()
+    tenant = db.query(Tenant).filter(Tenant.id == current_tenant_id()).first()
     allowed = (tenant.fs_scan_allowed_paths if tenant else None) or []
     from app.models import Project as _P
-    projects = db.query(_P).filter(_P.tenant_id == CURRENT_TENANT).order_by(_P.created_at.desc()).limit(500).all()
+    projects = db.query(_P).filter(_P.tenant_id == current_tenant_id()).order_by(_P.created_at.desc()).limit(500).all()
     return _tpl().TemplateResponse(
         "pages/fs_scan.html",
         {"request": request, "allowed_paths": allowed, "projects": projects},

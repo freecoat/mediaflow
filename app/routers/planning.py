@@ -39,7 +39,6 @@ RequireEditPlanningAll = Depends(requires_permission("edit_planning_all"))
 
 router = APIRouter(prefix="/planning", tags=["planning"])
 
-CURRENT_TENANT = 1
 
 
 def _assert_no_blocking_slice(db: Session, b: Booking, *, force: bool = False) -> None:
@@ -171,19 +170,19 @@ async def _planning_render(
     e `planning_full_screen`. Prima di α.44 era inline in planning_hub."""
     if view not in VALID_VIEWS:
         view = "jobs"
-    clients = db.query(Client).filter(Client.tenant_id == CURRENT_TENANT).order_by(Client.name).all()
+    clients = db.query(Client).filter(Client.tenant_id == current_tenant_id()).order_by(Client.name).all()
     projects = (
-        db.query(Project).filter(Project.tenant_id == CURRENT_TENANT)
+        db.query(Project).filter(Project.tenant_id == current_tenant_id())
         .order_by(Project.code).all()
     )
     departments = (
         db.query(Department).filter(
-            Department.tenant_id == CURRENT_TENANT, Department.is_active == True
+            Department.tenant_id == current_tenant_id(), Department.is_active == True
         ).order_by(Department.sort_order, Department.name).all()
     )
     resources = (
         db.query(Resource).filter(
-            Resource.tenant_id == CURRENT_TENANT, Resource.is_active == True
+            Resource.tenant_id == current_tenant_id(), Resource.is_active == True
         ).order_by(Resource.name).all()
     )
     jobs = (
@@ -567,7 +566,7 @@ def _check_assignment_conflict(db: Session, resource_id: int, start: datetime, e
     stesso booking è gestito separatamente da `_check_intra_payload_overlaps`.
     """
     q = db.query(BookingAssignment).join(Booking, BookingAssignment.booking_id == Booking.id).filter(
-        Booking.tenant_id == CURRENT_TENANT,
+        Booking.tenant_id == current_tenant_id(),
         Booking.status != BookingStatus.cancelled,
         BookingAssignment.resource_id == resource_id,
         BookingAssignment.start_datetime < end,
@@ -646,13 +645,13 @@ async def list_resource_presets(db: Session = Depends(get_db)):
     quali risorse sono ancora attive (per UI: alert su risorse rimosse)."""
     presets = (
         db.query(ResourcePreset)
-        .filter(ResourcePreset.tenant_id == CURRENT_TENANT)
+        .filter(ResourcePreset.tenant_id == current_tenant_id())
         .order_by(ResourcePreset.name).all()
     )
     # Cache nomi risorse attive per il counter "valid"
     active_ids = {
         r.id for r in db.query(Resource).filter(
-            Resource.tenant_id == CURRENT_TENANT, Resource.is_active == True  # noqa: E712
+            Resource.tenant_id == current_tenant_id(), Resource.is_active == True  # noqa: E712
         ).all()
     }
     out = []
@@ -695,14 +694,14 @@ async def create_resource_preset(
     existing = (
         db.query(ResourcePreset)
         .filter(
-            ResourcePreset.tenant_id == CURRENT_TENANT,
+            ResourcePreset.tenant_id == current_tenant_id(),
             func.lower(ResourcePreset.name) == name_clean.lower(),
         ).first()
     )
     if existing:
         raise HTTPException(409, f"Esiste già un preset con nome '{name_clean}'")
     p = ResourcePreset(
-        tenant_id=CURRENT_TENANT,
+        tenant_id=current_tenant_id(),
         name=name_clean,
         description=(description or "").strip() or None,
         resource_ids=ids,
@@ -730,7 +729,7 @@ async def update_resource_preset(
         raise HTTPException(401)
     p = db.query(ResourcePreset).filter(
         ResourcePreset.id == preset_id,
-        ResourcePreset.tenant_id == CURRENT_TENANT,
+        ResourcePreset.tenant_id == current_tenant_id(),
     ).first()
     if not p:
         raise HTTPException(404, "Preset non trovato")
@@ -762,7 +761,7 @@ async def delete_resource_preset(
         raise HTTPException(401)
     p = db.query(ResourcePreset).filter(
         ResourcePreset.id == preset_id,
-        ResourcePreset.tenant_id == CURRENT_TENANT,
+        ResourcePreset.tenant_id == current_tenant_id(),
     ).first()
     if not p:
         raise HTTPException(404)
@@ -814,7 +813,7 @@ async def list_bookings(
         joinedload(BookingAssignment.booking).joinedload(Booking.job).joinedload(Job.project),
         joinedload(BookingAssignment.booking).joinedload(Booking.cost_line).joinedload(JobCostLine.price_item),
     ).join(Booking, BookingAssignment.booking_id == Booking.id).filter(
-        Booking.tenant_id == CURRENT_TENANT,
+        Booking.tenant_id == current_tenant_id(),
     )
     job_ids = _parse_id_list(job_id)
     resource_ids = _parse_id_list(resource_id)
@@ -1038,7 +1037,7 @@ def _resolve_policy_for_resource(db: Session, resource_id: int) -> Optional[Work
         if p:
             return p
     return db.query(WorkingHoursPolicy).filter(
-        WorkingHoursPolicy.tenant_id == CURRENT_TENANT,
+        WorkingHoursPolicy.tenant_id == current_tenant_id(),
         WorkingHoursPolicy.is_default == True,
     ).first()
 
@@ -1217,7 +1216,7 @@ async def create_booking(
                            else BookingState.confirmed if status == BookingStatus.confirmed
                            else BookingState.tentative)
             b = Booking(
-                tenant_id=CURRENT_TENANT,
+                tenant_id=current_tenant_id(),
                 job_id=job_id, job_cost_line_id=job_cost_line_id,
                 start_datetime=env_s, end_datetime=env_e,
                 status=status, kind=kind, notes=notes,
@@ -1270,7 +1269,7 @@ async def create_booking(
                      else BookingState.confirmed if status == BookingStatus.confirmed
                      else BookingState.tentative)
     b = Booking(
-        tenant_id=CURRENT_TENANT,
+        tenant_id=current_tenant_id(),
         job_id=job_id,
         job_cost_line_id=job_cost_line_id,
         start_datetime=env_start, end_datetime=env_end,
@@ -1360,7 +1359,7 @@ async def submit_booking_request(
     if resource_id:
         res = db.query(Resource).filter(
             Resource.id == resource_id,
-            Resource.tenant_id == CURRENT_TENANT,
+            Resource.tenant_id == current_tenant_id(),
         ).first()
 
     quote = None
@@ -1368,7 +1367,7 @@ async def submit_booking_request(
         from app.models import Quote
         quote = db.query(Quote).filter(
             Quote.id == quote_id,
-            Quote.tenant_id == CURRENT_TENANT,
+            Quote.tenant_id == current_tenant_id(),
         ).first()
 
     cost_line = None
@@ -1438,7 +1437,7 @@ async def update_booking(
     """
     b = db.query(Booking).filter(
         Booking.id == booking_id,
-        Booking.tenant_id == CURRENT_TENANT,
+        Booking.tenant_id == current_tenant_id(),
     ).first()
     if not b:
         raise HTTPException(404, "Booking non trovato")
@@ -1482,7 +1481,7 @@ async def update_booking(
         existing_ids = [a.id for a in b.assignments]
         for i, pa in enumerate(parsed_ass):
             q = db.query(BookingAssignment).join(Booking).filter(
-                Booking.tenant_id == CURRENT_TENANT,
+                Booking.tenant_id == current_tenant_id(),
                 Booking.status != BookingStatus.cancelled,
                 BookingAssignment.resource_id == pa["resource_id"],
                 BookingAssignment.start_datetime < pa["end_datetime"],
@@ -1577,7 +1576,7 @@ async def cleanup_duplicate_overlaps(
     """
     b = db.query(Booking).options(
         joinedload(Booking.assignments)
-    ).filter(Booking.id == booking_id, Booking.tenant_id == CURRENT_TENANT).first()
+    ).filter(Booking.id == booking_id, Booking.tenant_id == current_tenant_id()).first()
     if not b:
         raise HTTPException(404, "Booking non trovato")
     _enforce_planning_scope(request, db, {a.resource_id for a in b.assignments})
@@ -1638,7 +1637,7 @@ async def extend_booking_as_series(
     """
     pattern = db.query(Booking).filter(
         Booking.id == booking_id,
-        Booking.tenant_id == CURRENT_TENANT,
+        Booking.tenant_id == current_tenant_id(),
     ).first()
     if not pattern:
         raise HTTPException(404, "Booking pattern non trovato")
@@ -1691,7 +1690,7 @@ async def extend_booking_as_series(
         env_s = min(pa["start_datetime"] for pa in shifted)
         env_e = max(pa["end_datetime"] for pa in shifted)
         b = Booking(
-            tenant_id=CURRENT_TENANT,
+            tenant_id=current_tenant_id(),
             job_id=pattern.job_id,
             job_cost_line_id=pattern.job_cost_line_id,
             start_datetime=env_s,
@@ -1749,7 +1748,7 @@ async def update_assignment(
     """Aggiorna un singolo assignment (drag/resize/reassign del singolo item timeline)."""
     a = db.query(BookingAssignment).join(Booking).filter(
         BookingAssignment.id == assignment_id,
-        Booking.tenant_id == CURRENT_TENANT,
+        Booking.tenant_id == current_tenant_id(),
     ).first()
     if not a:
         raise HTTPException(404, "Assignment non trovato")
@@ -1985,7 +1984,7 @@ async def add_assignment_to_booking(
     """
     b = db.query(Booking).filter(
         Booking.id == booking_id,
-        Booking.tenant_id == CURRENT_TENANT,
+        Booking.tenant_id == current_tenant_id(),
     ).first()
     if not b:
         raise HTTPException(404, "Booking non trovato")
@@ -2130,7 +2129,7 @@ async def bulk_edit_bookings(
 
     bookings = db.query(Booking).filter(
         Booking.id.in_(ids),
-        Booking.tenant_id == CURRENT_TENANT,
+        Booking.tenant_id == current_tenant_id(),
     ).all()
     if not bookings:
         raise HTTPException(404, "Nessun booking trovato")
@@ -2165,7 +2164,7 @@ async def bulk_edit_bookings(
     if job_cost_line_id is not None:
         new_cost_line = db.query(JobCostLine).join(Job).join(Project).filter(
             JobCostLine.id == job_cost_line_id,
-            Project.tenant_id == CURRENT_TENANT,
+            Project.tenant_id == current_tenant_id(),
         ).first()
         if not new_cost_line:
             raise HTTPException(404, f"Lavorazione #{job_cost_line_id} non trovata")
@@ -2374,7 +2373,7 @@ async def bulk_edit_eligible_cost_lines(
         joinedload(Booking.job),
     ).filter(
         Booking.id.in_(booking_ids),
-        Booking.tenant_id == CURRENT_TENANT,
+        Booking.tenant_id == current_tenant_id(),
     ).all()
     project_ids = {b.job.project_id for b in bookings if b.job and b.job.project_id is not None}
     if not project_ids or len(project_ids) > 1:
@@ -2394,7 +2393,7 @@ async def bulk_edit_eligible_cost_lines(
         db.query(JobCostLine, Job)
         .join(Job, JobCostLine.job_id == Job.id)
         .join(Project, Job.project_id == Project.id)
-        .filter(Job.project_id == pid, Project.tenant_id == CURRENT_TENANT)
+        .filter(Job.project_id == pid, Project.tenant_id == current_tenant_id())
         .order_by(Job.code, JobCostLine.id)
         .all()
     )
@@ -2493,7 +2492,7 @@ async def multi_move_assignments(
     # Carica tutti gli assignments coinvolti (filtrati su tenant)
     assignments = db.query(BookingAssignment).join(Booking).filter(
         BookingAssignment.id.in_(aids),
-        Booking.tenant_id == CURRENT_TENANT,
+        Booking.tenant_id == current_tenant_id(),
     ).all()
     by_id = {a.id: a for a in assignments}
     missing = [aid for aid in aids if aid not in by_id]
@@ -2576,7 +2575,7 @@ async def multi_move_assignments(
         conflict = db.query(BookingAssignment).join(
             Booking, BookingAssignment.booking_id == Booking.id
         ).filter(
-            Booking.tenant_id == CURRENT_TENANT,
+            Booking.tenant_id == current_tenant_id(),
             Booking.status != BookingStatus.cancelled,
             BookingAssignment.resource_id == target_rid,
             BookingAssignment.start_datetime < ne,
@@ -2675,7 +2674,7 @@ async def multi_move_assignments(
     if affected_booking_ids:
         bookings = db.query(Booking).filter(
             Booking.id.in_(affected_booking_ids),
-            Booking.tenant_id == CURRENT_TENANT,
+            Booking.tenant_id == current_tenant_id(),
         ).all()
         for b in bookings:
             _recalc_booking_envelope(b)
@@ -2705,7 +2704,7 @@ async def delete_assignment(
     """
     a = db.query(BookingAssignment).join(Booking).filter(
         BookingAssignment.id == assignment_id,
-        Booking.tenant_id == CURRENT_TENANT,
+        Booking.tenant_id == current_tenant_id(),
     ).first()
     if not a:
         raise HTTPException(404, "Assignment non trovato")
@@ -2743,7 +2742,7 @@ async def delete_booking(
     il booking appena cancellato non rientra più nel totale."""
     b = db.query(Booking).filter(
         Booking.id == booking_id,
-        Booking.tenant_id == CURRENT_TENANT,
+        Booking.tenant_id == current_tenant_id(),
     ).first()
     if not b:
         raise HTTPException(404, "Booking non trovato")
@@ -2775,7 +2774,7 @@ async def suggest_resources(
     if to_datetime <= from_datetime:
         raise HTTPException(400, "to_datetime deve essere > from_datetime")
     q = db.query(Resource).filter(
-        Resource.tenant_id == CURRENT_TENANT,
+        Resource.tenant_id == current_tenant_id(),
         Resource.is_active == True,
     )
     if department_id:
@@ -2791,7 +2790,7 @@ async def suggest_resources(
     for r in candidates:
         # Conflict booking
         conflict = db.query(BookingAssignment).join(Booking).filter(
-            Booking.tenant_id == CURRENT_TENANT,
+            Booking.tenant_id == current_tenant_id(),
             Booking.status != BookingStatus.cancelled,
             BookingAssignment.resource_id == r.id,
             BookingAssignment.start_datetime < to_datetime,
@@ -2826,7 +2825,7 @@ async def booking_audit_log(booking_id: int, db: Session = Depends(get_db)):
     """Cronologia modifiche al booking. Ordine: più recenti prima."""
     b = db.query(Booking).filter(
         Booking.id == booking_id,
-        Booking.tenant_id == CURRENT_TENANT,
+        Booking.tenant_id == current_tenant_id(),
     ).first()
     if not b:
         raise HTTPException(404, "Booking non trovato")
@@ -2854,7 +2853,7 @@ async def restore_booking(booking_id: int, db: Session = Depends(get_db)):
     """Ripristina un booking cancellato (per undo)."""
     b = db.query(Booking).filter(
         Booking.id == booking_id,
-        Booking.tenant_id == CURRENT_TENANT,
+        Booking.tenant_id == current_tenant_id(),
     ).first()
     if not b:
         raise HTTPException(404, "Booking non trovato")
@@ -2885,6 +2884,7 @@ from app.services.booking_cascade import (
     extend_booking_adaptive, split_overtime_to_next_day,
 )
 from app.services.rbac import has_permission
+from app.context import current_tenant_id
 
 
 def _booking_short_label(b: Booking) -> str:
@@ -2921,7 +2921,7 @@ async def update_booking_priority(
 ):
     b = db.query(Booking).filter(
         Booking.id == booking_id,
-        Booking.tenant_id == CURRENT_TENANT,
+        Booking.tenant_id == current_tenant_id(),
     ).first()
     if not b:
         raise HTTPException(404, "Booking non trovato")
@@ -2959,7 +2959,7 @@ async def update_booking_state(
 
     b = db.query(Booking).options(joinedload(Booking.job)).filter(
         Booking.id == booking_id,
-        Booking.tenant_id == CURRENT_TENANT,
+        Booking.tenant_id == current_tenant_id(),
     ).first()
     if not b:
         raise HTTPException(404, "Booking non trovato")
@@ -3051,7 +3051,7 @@ async def update_booking_execution(
     Su → in_progress: silenzio (rumore)."""
     b = db.query(Booking).options(joinedload(Booking.job)).filter(
         Booking.id == booking_id,
-        Booking.tenant_id == CURRENT_TENANT,
+        Booking.tenant_id == current_tenant_id(),
     ).first()
     if not b:
         raise HTTPException(404, "Booking non trovato")
@@ -3167,7 +3167,7 @@ async def extend_booking(
         joinedload(Booking.job),
     ).filter(
         Booking.id == booking_id,
-        Booking.tenant_id == CURRENT_TENANT,
+        Booking.tenant_id == current_tenant_id(),
     ).first()
     if not b:
         raise HTTPException(404, "Booking non trovato")
@@ -3317,7 +3317,7 @@ async def decide_booking_overtime(
         joinedload(Booking.job),
     ).filter(
         Booking.id == booking_id,
-        Booking.tenant_id == CURRENT_TENANT,
+        Booking.tenant_id == current_tenant_id(),
     ).first()
     if not b:
         raise HTTPException(404, "Booking non trovato")
@@ -3398,7 +3398,7 @@ async def update_booking_count_in_costs(
         raise HTTPException(403, "Solo manager/producer possono gestire il pool not_done")
     b = db.query(Booking).filter(
         Booking.id == booking_id,
-        Booking.tenant_id == CURRENT_TENANT,
+        Booking.tenant_id == current_tenant_id(),
     ).first()
     if not b:
         raise HTTPException(404, "Booking non trovato")
@@ -3455,7 +3455,7 @@ async def project_bookings(
     ).join(Booking, BookingAssignment.booking_id == Booking.id).join(
         Job, Booking.job_id == Job.id
     ).filter(
-        Booking.tenant_id == CURRENT_TENANT,
+        Booking.tenant_id == current_tenant_id(),
         Job.project_id == project_id,
         Booking.status != BookingStatus.cancelled,
     )
@@ -3508,7 +3508,7 @@ async def booking_detail(booking_id: int, db: Session = Depends(get_db)):
         joinedload(Booking.job).joinedload(Job.client),
         joinedload(Booking.cost_line),
         joinedload(Booking.assignments).joinedload(BookingAssignment.resource).joinedload(Resource.department),
-    ).filter(Booking.id == booking_id, Booking.tenant_id == CURRENT_TENANT).first()
+    ).filter(Booking.id == booking_id, Booking.tenant_id == current_tenant_id()).first()
     if not b:
         raise HTTPException(404, "Booking non trovato")
     duration_min = int(round((b.end_datetime - b.start_datetime).total_seconds() / 60)) if b.start_datetime and b.end_datetime else 0
@@ -3526,7 +3526,7 @@ async def booking_detail(booking_id: int, db: Session = Depends(get_db)):
     cl_total_planned_hours = 0.0
     if b.cost_line:
         sib_q = db.query(Booking).filter(
-            Booking.tenant_id == CURRENT_TENANT,
+            Booking.tenant_id == current_tenant_id(),
             Booking.job_cost_line_id == b.cost_line.id,
             Booking.status != BookingStatus.cancelled,
         )
@@ -3652,7 +3652,7 @@ async def my_bookings(
         joinedload(BookingAssignment.booking).joinedload(Booking.job),
         joinedload(BookingAssignment.booking).joinedload(Booking.cost_line),
     ).join(Booking, BookingAssignment.booking_id == Booking.id).filter(
-        Booking.tenant_id == CURRENT_TENANT,
+        Booking.tenant_id == current_tenant_id(),
         BookingAssignment.resource_id == rid,
         Booking.status != BookingStatus.cancelled,
     )

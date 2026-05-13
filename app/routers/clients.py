@@ -17,12 +17,12 @@ import re
 
 router = APIRouter(prefix="/clients", tags=["clients"])
 
-CURRENT_TENANT = 1  # Fase 1-bis: tenant fisso, multi-tenant hard rinviato a Fase 7
 
 
 # v3.5.0-alpha.66.14.2: alias verso il singleton in app.services.auth.
 # La logica fail-closed (settings.auth_required=True → no fallback) vive lì.
 from app.services.auth import resolve_current_user as _resolve_current_user  # noqa: E402,F401
+from app.context import current_tenant_id
 
 
 # ── Duplicate detection ──────────────────────────────────────
@@ -68,7 +68,7 @@ def find_duplicate_candidates(db: Session, name: str,
     """
     if not name or not name.strip():
         return []
-    rows = db.query(Client).filter(Client.tenant_id == CURRENT_TENANT).all()
+    rows = db.query(Client).filter(Client.tenant_id == current_tenant_id()).all()
     out = []
     for c in rows:
         if exclude_id and c.id == exclude_id:
@@ -100,7 +100,7 @@ async def clients_page(
     access_token: Optional[str] = Cookie(None),
     db: Session = Depends(get_db),
 ):
-    clients = db.query(Client).filter(Client.tenant_id == CURRENT_TENANT).order_by(Client.name).all()
+    clients = db.query(Client).filter(Client.tenant_id == current_tenant_id()).order_by(Client.name).all()
     u = _resolve_current_user(db, access_token)
     ai_enabled = get_provider_for_user(u.id if u else None, db) is not None
     return _tpl().TemplateResponse(
@@ -124,7 +124,7 @@ async def client_works_page(
     """
     c = (
         db.query(Client)
-        .filter(Client.id == client_id, Client.tenant_id == CURRENT_TENANT)
+        .filter(Client.id == client_id, Client.tenant_id == current_tenant_id())
         .first()
     )
     if not c:
@@ -141,7 +141,7 @@ async def client_works_page(
 
 @router.get("/api")
 async def list_clients(db: Session = Depends(get_db)):
-    clients = db.query(Client).filter(Client.tenant_id == CURRENT_TENANT)\
+    clients = db.query(Client).filter(Client.tenant_id == current_tenant_id())\
         .options(joinedload(Client.projects)).order_by(Client.name).all()
     return [
         {
@@ -160,7 +160,7 @@ async def list_clients(db: Session = Depends(get_db)):
 @router.get("/api/{client_id}")
 async def get_client(client_id: int, db: Session = Depends(get_db)):
     c = db.query(Client).options(joinedload(Client.projects)).filter(
-        Client.id == client_id, Client.tenant_id == CURRENT_TENANT
+        Client.id == client_id, Client.tenant_id == current_tenant_id()
     ).first()
     if not c:
         raise HTTPException(404, "Cliente non trovato")
@@ -236,7 +236,7 @@ async def create_client(
                 "hint": "Riusa il cliente esistente, oppure invia force=true per creare comunque.",
             })
     c = Client(
-        tenant_id=CURRENT_TENANT,
+        tenant_id=current_tenant_id(),
         name=name, legal_form=legal_form, contact_name=contact_name,
         contact_email=contact_email, contact_phone=contact_phone,
         vat_number=vat_number, address=address, city=city, country=country,
@@ -270,7 +270,7 @@ async def update_client(
     db: Session = Depends(get_db),
 ):
     c = db.query(Client).filter(
-        Client.id == client_id, Client.tenant_id == CURRENT_TENANT
+        Client.id == client_id, Client.tenant_id == current_tenant_id()
     ).first()
     if not c:
         raise HTTPException(404, "Cliente non trovato")
@@ -289,7 +289,7 @@ async def update_client(
 @router.delete("/api/{client_id}")
 async def delete_client(client_id: int, db: Session = Depends(get_db)):
     c = db.query(Client).filter(
-        Client.id == client_id, Client.tenant_id == CURRENT_TENANT
+        Client.id == client_id, Client.tenant_id == current_tenant_id()
     ).first()
     if not c:
         raise HTTPException(404)
@@ -312,7 +312,7 @@ async def cross_check_client(
     NO DB write."""
     from app.services.web_crosscheck import check_client
     c = db.query(Client).filter(
-        Client.id == client_id, Client.tenant_id == CURRENT_TENANT,
+        Client.id == client_id, Client.tenant_id == current_tenant_id(),
     ).first()
     if not c:
         raise HTTPException(404, "Cliente non trovato")
@@ -355,7 +355,7 @@ async def enrich_client_preview(
     (web | knowledge), `applicable` (true se proposed != current e non null).
     """
     c = db.query(Client).filter(
-        Client.id == client_id, Client.tenant_id == CURRENT_TENANT
+        Client.id == client_id, Client.tenant_id == current_tenant_id()
     ).first()
     if not c:
         raise HTTPException(404, "Cliente non trovato")
@@ -405,7 +405,7 @@ async def enrich_client_apply(
     """
     import json as _json
     c = db.query(Client).filter(
-        Client.id == client_id, Client.tenant_id == CURRENT_TENANT
+        Client.id == client_id, Client.tenant_id == current_tenant_id()
     ).first()
     if not c:
         raise HTTPException(404, "Cliente non trovato")
@@ -451,7 +451,7 @@ async def enrich_client_api(
     Se use_name_only=False, usa anche città/paese già noti per query più mirate.
     """
     c = db.query(Client).filter(
-        Client.id == client_id, Client.tenant_id == CURRENT_TENANT
+        Client.id == client_id, Client.tenant_id == current_tenant_id()
     ).first()
     if not c:
         raise HTTPException(404, "Cliente non trovato")
@@ -514,7 +514,7 @@ async def search_and_create(
         raise HTTPException(503, "AI provider non configurato")
 
     existing = db.query(Client).filter(
-        Client.tenant_id == CURRENT_TENANT,
+        Client.tenant_id == current_tenant_id(),
         Client.name.ilike(f"%{name}%"),
     ).first()
     if existing:
@@ -525,7 +525,7 @@ async def search_and_create(
         raise HTTPException(500, "Arricchimento fallito")
 
     client = Client(
-        tenant_id=CURRENT_TENANT,
+        tenant_id=current_tenant_id(),
         name=name, ai_enriched=True, ai_enriched_at=datetime.utcnow(),
     )
     for field in ("legal_form", "vat_number", "tax_code", "address", "city",
@@ -580,13 +580,13 @@ def _work_dict(w: ClientWork) -> dict:
 @router.get("/api/{client_id}/works")
 async def list_client_works(client_id: int, db: Session = Depends(get_db)):
     c = db.query(Client).filter(
-        Client.id == client_id, Client.tenant_id == CURRENT_TENANT,
+        Client.id == client_id, Client.tenant_id == current_tenant_id(),
     ).first()
     if not c:
         raise HTTPException(404, "Cliente non trovato")
     items = (
         db.query(ClientWork)
-        .filter(ClientWork.client_id == client_id, ClientWork.tenant_id == CURRENT_TENANT)
+        .filter(ClientWork.client_id == client_id, ClientWork.tenant_id == current_tenant_id())
         .order_by(ClientWork.year.desc().nullslast(), ClientWork.title.asc())
         .all()
     )
@@ -612,7 +612,7 @@ async def create_client_work(
     quello esistente con HTTP 200 (no errore) per non rompere il flusso AI
     quando l'utente importa di nuovo opere già presenti."""
     c = db.query(Client).filter(
-        Client.id == client_id, Client.tenant_id == CURRENT_TENANT,
+        Client.id == client_id, Client.tenant_id == current_tenant_id(),
     ).first()
     if not c:
         raise HTTPException(404, "Cliente non trovato")
@@ -624,7 +624,7 @@ async def create_client_work(
         db.query(ClientWork)
         .filter(
             ClientWork.client_id == client_id,
-            ClientWork.tenant_id == CURRENT_TENANT,
+            ClientWork.tenant_id == current_tenant_id(),
             ClientWork.title.ilike(title),
             ClientWork.year == year,
         )
@@ -645,7 +645,7 @@ async def create_client_work(
             sources_clean = None
 
     w = ClientWork(
-        tenant_id=CURRENT_TENANT,
+        tenant_id=current_tenant_id(),
         client_id=client_id,
         title=title[:255],
         year=year,
@@ -687,7 +687,7 @@ async def update_client_work(
         .filter(
             ClientWork.id == work_id,
             ClientWork.client_id == client_id,
-            ClientWork.tenant_id == CURRENT_TENANT,
+            ClientWork.tenant_id == current_tenant_id(),
         )
         .first()
     )
@@ -759,7 +759,7 @@ async def delete_client_work(
         .filter(
             ClientWork.id == work_id,
             ClientWork.client_id == client_id,
-            ClientWork.tenant_id == CURRENT_TENANT,
+            ClientWork.tenant_id == current_tenant_id(),
         )
         .first()
     )
@@ -783,7 +783,7 @@ async def search_filmography_api(
     `POST /api/{client_id}/works` per ogni opera selezionata.
     """
     c = db.query(Client).filter(
-        Client.id == client_id, Client.tenant_id == CURRENT_TENANT,
+        Client.id == client_id, Client.tenant_id == current_tenant_id(),
     ).first()
     if not c:
         raise HTTPException(404, "Cliente non trovato")
@@ -801,7 +801,7 @@ async def search_filmography_api(
     # Marca con ID già esistenti per UI dedup-friendly
     existing = (
         db.query(ClientWork)
-        .filter(ClientWork.client_id == client_id, ClientWork.tenant_id == CURRENT_TENANT)
+        .filter(ClientWork.client_id == client_id, ClientWork.tenant_id == current_tenant_id())
         .all()
     )
     existing_keys = {(w.title.strip().lower(), w.year) for w in existing}

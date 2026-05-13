@@ -25,7 +25,6 @@ RequireEditQuotes = Depends(requires_permission("edit_quotes"))
 
 # v3.5.0-alpha.66.15.2 — Costante locale per leggibilità. Single-tenant attuale
 # → 1. In Fase 7 sostituire con `Depends(get_tenant_id)` su ogni endpoint.
-CURRENT_TENANT = current_tenant_id()
 
 CATEGORY_FALLBACK = "Altro"
 
@@ -173,13 +172,13 @@ def _recalc_quote(quote: Quote) -> None:
 async def quotes_page(request: Request, db: Session = Depends(get_db)):
     # v3.5.0-alpha.66.15.2 — tenant scope (R1)
     quotes = db.query(Quote).filter(
-        Quote.tenant_id == CURRENT_TENANT,
+        Quote.tenant_id == current_tenant_id(),
     ).options(
         joinedload(Quote.client),
         joinedload(Quote.project),
     ).order_by(Quote.created_at.desc()).all()
     projects = db.query(Project).filter(
-        Project.tenant_id == CURRENT_TENANT,
+        Project.tenant_id == current_tenant_id(),
     ).options(joinedload(Project.client)).order_by(Project.title).all()
     return _tpl().TemplateResponse(
         "pages/quotes.html",
@@ -194,7 +193,7 @@ async def list_quotes(
 ):
     # v3.5.0-alpha.66.15.2 — tenant scope (R1)
     q = db.query(Quote).filter(
-        Quote.tenant_id == CURRENT_TENANT,
+        Quote.tenant_id == current_tenant_id(),
     ).options(joinedload(Quote.client), joinedload(Quote.project))
     if project_id:
         q = q.filter(Quote.project_id == project_id)
@@ -915,7 +914,7 @@ async def load_from_template(
         joinedload(Quote.lines)
     ).filter(
         Quote.id == quote_id,
-        Quote.tenant_id == CURRENT_TENANT,
+        Quote.tenant_id == current_tenant_id(),
     ).first()
     if not q:
         raise HTTPException(404, "Quote non trovata")
@@ -924,7 +923,7 @@ async def load_from_template(
 
     t = db.query(DeliveryTemplate).filter(
         DeliveryTemplate.id == template_id,
-        DeliveryTemplate.tenant_id == CURRENT_TENANT,
+        DeliveryTemplate.tenant_id == current_tenant_id(),
     ).first()
     if not t:
         raise HTTPException(404, "Template non trovato")
@@ -948,7 +947,7 @@ async def load_from_template(
             continue
         item = db.query(PriceItem).filter(
             PriceItem.id == int(pid),
-            PriceItem.tenant_id == CURRENT_TENANT,
+            PriceItem.tenant_id == current_tenant_id(),
             PriceItem.is_active == True,  # noqa: E712
         ).first()
         if not item:

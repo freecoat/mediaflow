@@ -1,5 +1,46 @@
 # MediaFlow — Changelog
 
+## v3.5.0-alpha.102 — Multi-tenant HARD R-MT2: 341 occorrenze CURRENT_TENANT → current_tenant_id() (13 maggio 2026)
+
+Refactor bulk delle 24 router files: rimpiazza `CURRENT_TENANT = 1`
+module-level con chiamata dinamica `current_tenant_id()` per-request.
+
+**Strategia**:
+- Sostituito `CURRENT_TENANT = 1` definizione module-level (snapshot al
+  load) con import `from app.context import current_tenant_id` + chiamata
+  funzione ad ogni uso (legge da contextvars settata dal middleware).
+- Bulk replace via script Python: 341 occorrenze su 24 file.
+- Auto-fix multi-line import breaks (4 file dove regex aveva inserito
+  import dentro statement aperto).
+
+**Files toccati** (replacements):
+- physical_assets.py (54) · planning.py (47) · pricelist.py (34)
+- suppliers.py (29) · billing.py (27) · clients.py (23)
+- hr.py (16) · delivery_templates.py (14) · dam.py (13) · jobs.py (13)
+- anomalies.py (9) · resources.py (9) · overhead.py (8)
+- planning_unavailabilities.py (7) · portal.py (7) · projects.py (5)
+- quotes.py (6) · departments.py (6) · cost_report.py (4)
+- tech_sheets.py (4) · admin.py (2) · planning_diag.py (2)
+- ai.py (1) · team.py (1)
+
+**Conseguenze**:
+- Ogni endpoint ora opera nello scope tenant resolved dal middleware
+  per-request. Senza altre modifiche, comportamento single-tenant resta
+  identico (DEFAULT_TENANT_ID=1).
+- Cross-tenant attack via cookie reuse bloccato dal gate auth_guard
+  (alpha.101): JWT.tid != resolved.tid → user invalidato.
+- Performance: 1 chiamata funzione per query invece di lettura costante.
+  Trascurabile (~ns).
+
+**E2E test post-refactor**:
+- Login admin@mediaflow.it → 303 OK, JWT con tid=1
+- `/clients/api` → 200 con lista clienti (filtro tenant ok)
+- `/finance/api/billing/composable-batches?project_id=1` → 200 con
+  payload corretto (era il bug primario di α.92)
+
+**Prossimo R-MT3**: onboarding flow CLI/UI per creare nuovi tenant +
+`uploads/t{tenant_id}/` isolation + tenant settings.
+
 ## v3.5.0-alpha.101 — Multi-tenant HARD R-MT1: User.tenant_id + JWT scope + middleware (13 maggio 2026)
 
 Primo sprint di 4 per Multi-tenant HARD (#6 roadmap). Decisioni semantiche

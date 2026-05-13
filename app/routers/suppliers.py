@@ -30,7 +30,6 @@ from app.context import current_tenant_id
 
 router = APIRouter(prefix="/suppliers", tags=["suppliers"])
 
-CURRENT_TENANT = current_tenant_id()
 
 
 def _tpl():
@@ -53,12 +52,12 @@ def _derive_status(amount_paid: float, amount_total: float, current: SupplierInv
 def _supplier_to_dict(s: Supplier, db: Session) -> dict:
     inv_count = db.query(SupplierInvoice).filter(
         SupplierInvoice.supplier_id == s.id,
-        SupplierInvoice.tenant_id == CURRENT_TENANT,
+        SupplierInvoice.tenant_id == current_tenant_id(),
         SupplierInvoice.deleted_at.is_(None),
     ).count()
     unpaid_total = db.query(func.coalesce(func.sum(SupplierInvoice.amount_total - SupplierInvoice.amount_paid), 0)).filter(
         SupplierInvoice.supplier_id == s.id,
-        SupplierInvoice.tenant_id == CURRENT_TENANT,
+        SupplierInvoice.tenant_id == current_tenant_id(),
         SupplierInvoice.deleted_at.is_(None),
         SupplierInvoice.payment_status.in_([SupplierInvoiceStatus.unpaid, SupplierInvoiceStatus.partial]),
     ).scalar() or 0.0
@@ -119,7 +118,7 @@ async def list_suppliers(
     db: Session = Depends(get_db),
 ):
     q = db.query(Supplier).filter(
-        Supplier.tenant_id == CURRENT_TENANT,
+        Supplier.tenant_id == current_tenant_id(),
         Supplier.deleted_at.is_(None),
     )
     if not include_inactive:
@@ -145,7 +144,7 @@ async def create_supplier(
     if not name:
         raise HTTPException(400, "Nome obbligatorio")
     s = Supplier(
-        tenant_id=CURRENT_TENANT,
+        tenant_id=current_tenant_id(),
         name=name,
         vat_number=(vat_number or "").strip() or None,
         tax_code=(tax_code or "").strip() or None,
@@ -179,7 +178,7 @@ async def update_supplier(
 ):
     s = db.query(Supplier).filter(
         Supplier.id == supplier_id,
-        Supplier.tenant_id == CURRENT_TENANT,
+        Supplier.tenant_id == current_tenant_id(),
         Supplier.deleted_at.is_(None),
     ).first()
     if not s:
@@ -204,14 +203,14 @@ async def delete_supplier(supplier_id: int, db: Session = Depends(get_db)):
     cancelled). L'utente deve prima cancellare/risolvere le fatture."""
     s = db.query(Supplier).filter(
         Supplier.id == supplier_id,
-        Supplier.tenant_id == CURRENT_TENANT,
+        Supplier.tenant_id == current_tenant_id(),
         Supplier.deleted_at.is_(None),
     ).first()
     if not s:
         raise HTTPException(404, "Fornitore non trovato")
     active_invoices = db.query(SupplierInvoice).filter(
         SupplierInvoice.supplier_id == s.id,
-        SupplierInvoice.tenant_id == CURRENT_TENANT,
+        SupplierInvoice.tenant_id == current_tenant_id(),
         SupplierInvoice.deleted_at.is_(None),
         SupplierInvoice.payment_status != SupplierInvoiceStatus.cancelled,
     ).count()
@@ -245,7 +244,7 @@ async def list_supplier_invoices(
     q = db.query(SupplierInvoice).options(
         joinedload(SupplierInvoice.supplier)
     ).filter(
-        SupplierInvoice.tenant_id == CURRENT_TENANT,
+        SupplierInvoice.tenant_id == current_tenant_id(),
         SupplierInvoice.deleted_at.is_(None),
     )
     if supplier_id: q = q.filter(SupplierInvoice.supplier_id == supplier_id)
@@ -276,7 +275,7 @@ async def get_supplier_invoice(invoice_id: int, db: Session = Depends(get_db)):
         joinedload(SupplierInvoice.supplier)
     ).filter(
         SupplierInvoice.id == invoice_id,
-        SupplierInvoice.tenant_id == CURRENT_TENANT,
+        SupplierInvoice.tenant_id == current_tenant_id(),
         SupplierInvoice.deleted_at.is_(None),
     ).first()
     if not i:
@@ -305,7 +304,7 @@ async def create_supplier_invoice(
     # Verifica fornitore esiste
     s = db.query(Supplier).filter(
         Supplier.id == supplier_id,
-        Supplier.tenant_id == CURRENT_TENANT,
+        Supplier.tenant_id == current_tenant_id(),
         Supplier.deleted_at.is_(None),
     ).first()
     if not s:
@@ -315,7 +314,7 @@ async def create_supplier_invoice(
     dup = db.query(SupplierInvoice).filter(
         SupplierInvoice.supplier_id == supplier_id,
         SupplierInvoice.number == number,
-        SupplierInvoice.tenant_id == CURRENT_TENANT,
+        SupplierInvoice.tenant_id == current_tenant_id(),
         SupplierInvoice.deleted_at.is_(None),
     ).first()
     if dup:
@@ -330,7 +329,7 @@ async def create_supplier_invoice(
         from datetime import timedelta
         due_date = issue_date + timedelta(days=s.default_payment_terms_days)
     i = SupplierInvoice(
-        tenant_id=CURRENT_TENANT,
+        tenant_id=current_tenant_id(),
         supplier_id=supplier_id,
         number=number.strip(),
         issue_date=issue_date,
@@ -376,7 +375,7 @@ async def update_supplier_invoice(
 ):
     i = db.query(SupplierInvoice).filter(
         SupplierInvoice.id == invoice_id,
-        SupplierInvoice.tenant_id == CURRENT_TENANT,
+        SupplierInvoice.tenant_id == current_tenant_id(),
         SupplierInvoice.deleted_at.is_(None),
     ).first()
     if not i:
@@ -431,7 +430,7 @@ async def list_invoice_payments(invoice_id: int, db: Session = Depends(get_db)):
     """Lista pagamenti per fattura passiva. v3.5.0-alpha.68.2."""
     inv = db.query(SupplierInvoice).filter(
         SupplierInvoice.id == invoice_id,
-        SupplierInvoice.tenant_id == CURRENT_TENANT,
+        SupplierInvoice.tenant_id == current_tenant_id(),
         SupplierInvoice.deleted_at.is_(None),
     ).first()
     if not inv:
@@ -474,7 +473,7 @@ async def register_payment(
     per query veloci."""
     inv = db.query(SupplierInvoice).filter(
         SupplierInvoice.id == invoice_id,
-        SupplierInvoice.tenant_id == CURRENT_TENANT,
+        SupplierInvoice.tenant_id == current_tenant_id(),
         SupplierInvoice.deleted_at.is_(None),
     ).first()
     if not inv:
@@ -491,7 +490,7 @@ async def register_payment(
         )
     user = getattr(request.state, "current_user", None)
     payment = SupplierInvoicePayment(
-        tenant_id=CURRENT_TENANT,
+        tenant_id=current_tenant_id(),
         supplier_invoice_id=invoice_id,
         amount=round(amount, 2),
         payment_date=payment_date,
@@ -518,7 +517,7 @@ async def delete_supplier_payment(payment_id: int, db: Session = Depends(get_db)
     """Elimina un pagamento singolo (rollback). Ricomputa stato fattura."""
     p = db.query(SupplierInvoicePayment).filter(
         SupplierInvoicePayment.id == payment_id,
-        SupplierInvoicePayment.tenant_id == CURRENT_TENANT,
+        SupplierInvoicePayment.tenant_id == current_tenant_id(),
     ).first()
     if not p:
         raise HTTPException(404, "Pagamento non trovato")
@@ -539,7 +538,7 @@ async def delete_supplier_invoice(invoice_id: int, db: Session = Depends(get_db)
     """Soft delete fattura passiva."""
     i = db.query(SupplierInvoice).filter(
         SupplierInvoice.id == invoice_id,
-        SupplierInvoice.tenant_id == CURRENT_TENANT,
+        SupplierInvoice.tenant_id == current_tenant_id(),
         SupplierInvoice.deleted_at.is_(None),
     ).first()
     if not i:
@@ -593,13 +592,13 @@ async def parse_invoice_upload(
     sup_name = (parsed.get("supplier_name") or "").strip()
     if vat:
         sup_match = db.query(Supplier).filter(
-            Supplier.tenant_id == CURRENT_TENANT,
+            Supplier.tenant_id == current_tenant_id(),
             Supplier.deleted_at.is_(None),
             Supplier.vat_number == vat,
         ).first()
     if not sup_match and sup_name:
         sup_match = db.query(Supplier).filter(
-            Supplier.tenant_id == CURRENT_TENANT,
+            Supplier.tenant_id == current_tenant_id(),
             Supplier.deleted_at.is_(None),
             func.lower(Supplier.name) == sup_name.lower(),
         ).first()
@@ -656,7 +655,7 @@ async def create_invoice_from_parsed(
     if supplier_id:
         sup = db.query(Supplier).filter(
             Supplier.id == supplier_id,
-            Supplier.tenant_id == CURRENT_TENANT,
+            Supplier.tenant_id == current_tenant_id(),
             Supplier.deleted_at.is_(None),
         ).first()
         if not sup:
@@ -665,7 +664,7 @@ async def create_invoice_from_parsed(
         if not (supplier_name or "").strip():
             raise HTTPException(400, "supplier_name richiesto se supplier_id assente")
         sup = Supplier(
-            tenant_id=CURRENT_TENANT,
+            tenant_id=current_tenant_id(),
             name=supplier_name.strip(),
             vat_number=(supplier_vat_number or "").strip() or None,
             tax_code=(supplier_tax_code or "").strip() or None,
@@ -679,7 +678,7 @@ async def create_invoice_from_parsed(
     dup = db.query(SupplierInvoice).filter(
         SupplierInvoice.supplier_id == sup.id,
         SupplierInvoice.number == number,
-        SupplierInvoice.tenant_id == CURRENT_TENANT,
+        SupplierInvoice.tenant_id == current_tenant_id(),
         SupplierInvoice.deleted_at.is_(None),
     ).first()
     if dup:
@@ -692,7 +691,7 @@ async def create_invoice_from_parsed(
     amount_vat = round(amount_net * (vat_rate / 100.0), 2)
     amount_total = round(amount_net + amount_vat, 2)
     inv = SupplierInvoice(
-        tenant_id=CURRENT_TENANT,
+        tenant_id=current_tenant_id(),
         supplier_id=sup.id,
         number=number.strip(),
         issue_date=issue_date,
@@ -731,13 +730,13 @@ async def supplier_summary_for_job(job_id: int, db: Session = Depends(get_db)):
     """Aggregato fatture passive linkate al job (diretto o via project).
     Usato dal cost-report per calcolare hardcost esterno + margine reale."""
     job = db.query(Job).filter(
-        Job.id == job_id, Job.tenant_id == CURRENT_TENANT
+        Job.id == job_id, Job.tenant_id == current_tenant_id()
     ).first()
     if not job:
         raise HTTPException(404, "Job non trovato")
     # Fatture linkate direttamente al job + quelle linkate al project
     q = db.query(SupplierInvoice).filter(
-        SupplierInvoice.tenant_id == CURRENT_TENANT,
+        SupplierInvoice.tenant_id == current_tenant_id(),
         SupplierInvoice.deleted_at.is_(None),
         SupplierInvoice.payment_status != SupplierInvoiceStatus.cancelled,
     )
@@ -774,21 +773,21 @@ async def supplier_summary_for_job(job_id: int, db: Session = Depends(get_db)):
 async def supplier_summary_tenant(db: Session = Depends(get_db)):
     """Aggregato globale per dashboard finance: outstanding + monthly outflow."""
     q = db.query(SupplierInvoice).filter(
-        SupplierInvoice.tenant_id == CURRENT_TENANT,
+        SupplierInvoice.tenant_id == current_tenant_id(),
         SupplierInvoice.deleted_at.is_(None),
         SupplierInvoice.payment_status != SupplierInvoiceStatus.cancelled,
     )
     total_outstanding = db.query(
         func.coalesce(func.sum(SupplierInvoice.amount_total - SupplierInvoice.amount_paid), 0)
     ).filter(
-        SupplierInvoice.tenant_id == CURRENT_TENANT,
+        SupplierInvoice.tenant_id == current_tenant_id(),
         SupplierInvoice.deleted_at.is_(None),
         SupplierInvoice.payment_status.in_([
             SupplierInvoiceStatus.unpaid, SupplierInvoiceStatus.partial,
         ]),
     ).scalar() or 0.0
     overdue_count = db.query(SupplierInvoice).filter(
-        SupplierInvoice.tenant_id == CURRENT_TENANT,
+        SupplierInvoice.tenant_id == current_tenant_id(),
         SupplierInvoice.deleted_at.is_(None),
         SupplierInvoice.payment_status.in_([
             SupplierInvoiceStatus.unpaid, SupplierInvoiceStatus.partial,

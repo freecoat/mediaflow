@@ -9,12 +9,10 @@ from app.database import get_db
 from app.models import Resource, ResourceType, ResourceUnavailability, Department, WorkingHoursPolicy
 from app.services.rbac import requires_permission
 from datetime import date
+from app.context import current_tenant_id
 
 router = APIRouter(prefix="/resources", tags=["resources"])
 
-CURRENT_TENANT = 1
-
-# v3.5.0-alpha.66.16.0 — Sprint R3: gate riusabile per i 5 mutator del
 # router resources (CRUD risorsa + ferie). Prima erano completamente aperti
 # ai viewer (audit HIGH #4: leak salary inclusi).
 RequireEditResources = Depends(requires_permission("edit_resources"))
@@ -45,7 +43,7 @@ async def resources_list(
     db: Session = Depends(get_db),
 ):
     q = db.query(Resource).filter(
-        Resource.tenant_id == CURRENT_TENANT,
+        Resource.tenant_id == current_tenant_id(),
         Resource.is_active == True,
     )
     if department_id:
@@ -58,13 +56,13 @@ async def resources_list(
 
     departments = (
         db.query(Department)
-        .filter(Department.tenant_id == CURRENT_TENANT, Department.is_active == True)
+        .filter(Department.tenant_id == current_tenant_id(), Department.is_active == True)
         .order_by(Department.sort_order, Department.name)
         .all()
     )
     wh_policies = (
         db.query(WorkingHoursPolicy)
-        .filter(WorkingHoursPolicy.tenant_id == CURRENT_TENANT)
+        .filter(WorkingHoursPolicy.tenant_id == current_tenant_id())
         .order_by(WorkingHoursPolicy.is_default.desc(), WorkingHoursPolicy.name)
         .all()
     )
@@ -92,7 +90,7 @@ async def list_resources(
     active_only: bool = True,
     db: Session = Depends(get_db),
 ):
-    q = db.query(Resource).filter(Resource.tenant_id == CURRENT_TENANT)
+    q = db.query(Resource).filter(Resource.tenant_id == current_tenant_id())
     if active_only:
         q = q.filter(Resource.is_active == True)
     if type:
@@ -134,7 +132,7 @@ async def create_resource(
         except ValueError: cost_type_enum = None
 
     r = Resource(
-        tenant_id=CURRENT_TENANT,
+        tenant_id=current_tenant_id(),
         name=name.strip(),
         type=type,
         department_id=department_id,
@@ -198,7 +196,7 @@ async def create_resource(
 async def get_resource(resource_id: int, db: Session = Depends(get_db)):
     r = db.query(Resource).filter(
         Resource.id == resource_id,
-        Resource.tenant_id == CURRENT_TENANT
+        Resource.tenant_id == current_tenant_id()
     ).first()
     if not r:
         raise HTTPException(404, "Risorsa non trovata")
@@ -251,7 +249,7 @@ async def update_resource(
 ):
     r = db.query(Resource).filter(
         Resource.id == resource_id,
-        Resource.tenant_id == CURRENT_TENANT
+        Resource.tenant_id == current_tenant_id()
     ).first()
     if not r:
         raise HTTPException(404, "Risorsa non trovata")
@@ -291,7 +289,7 @@ async def update_resource(
 async def delete_resource(resource_id: int, db: Session = Depends(get_db)):
     r = db.query(Resource).filter(
         Resource.id == resource_id,
-        Resource.tenant_id == CURRENT_TENANT
+        Resource.tenant_id == current_tenant_id()
     ).first()
     if not r:
         raise HTTPException(404, "Risorsa non trovata")
@@ -349,7 +347,7 @@ async def add_unavailability(
 async def delete_unavailability(u_id: int, db: Session = Depends(get_db)):
     u = db.query(ResourceUnavailability).join(Resource).filter(
         ResourceUnavailability.id == u_id,
-        Resource.tenant_id == CURRENT_TENANT,
+        Resource.tenant_id == current_tenant_id(),
     ).first()
     if not u:
         raise HTTPException(404, "Unavailability non trovata")

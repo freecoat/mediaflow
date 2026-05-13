@@ -29,9 +29,6 @@ from app.services.rbac import is_elevated, scope_resource_id, current_user_optio
 
 router = APIRouter(prefix="/hr", tags=["hr"])
 
-CURRENT_TENANT = 1
-
-# Tipi di Resource che rappresentano persone (rendicontano ore).
 PERSON_TYPES = (
     ResourceType.person_internal,
     ResourceType.person_freelance,
@@ -66,6 +63,7 @@ def _tpl():
 # v3.5.0-alpha.66.14.2: alias verso il singleton in app.services.auth.
 # La logica fail-closed (settings.auth_required=True → no fallback) vive lì.
 from app.services.auth import resolve_current_user as _resolve_current_user  # noqa: E402,F401
+from app.context import current_tenant_id
 
 
 def _punch_dict(p: TimePunch, *, fullcalendar: bool = False) -> dict:
@@ -143,7 +141,7 @@ async def hr_page(request: Request, db: Session = Depends(get_db)):
     persons_q = (
         db.query(Resource)
         .filter(
-            Resource.tenant_id == CURRENT_TENANT,
+            Resource.tenant_id == current_tenant_id(),
             Resource.is_active == True,
             Resource.type.in_(PERSON_TYPES),
         )
@@ -211,7 +209,7 @@ async def list_punches(
     q = (
         db.query(TimePunch)
         .options(joinedload(TimePunch.resource), joinedload(TimePunch.job))
-        .filter(TimePunch.tenant_id == CURRENT_TENANT)
+        .filter(TimePunch.tenant_id == current_tenant_id())
     )
     if resource_id:
         q = q.filter(TimePunch.resource_id == resource_id)
@@ -262,7 +260,7 @@ async def create_punch(
     resource_id = _enforce_scope(request, db, resource_id)
     r = db.query(Resource).filter(
         Resource.id == resource_id,
-        Resource.tenant_id == CURRENT_TENANT,
+        Resource.tenant_id == current_tenant_id(),
     ).first()
     if not r:
         raise HTTPException(404, "Risorsa non trovata")
@@ -277,7 +275,7 @@ async def create_punch(
     # del check; in pratica blocchiamo se start_datetime ricade dentro un'altra.
     overlap_q = db.query(TimePunch).filter(
         TimePunch.resource_id == resource_id,
-        TimePunch.tenant_id == CURRENT_TENANT,
+        TimePunch.tenant_id == current_tenant_id(),
     )
     if end_datetime:
         # Nuova chiusa: cerca overlap [start, end) vs [s, e)
@@ -350,7 +348,7 @@ async def create_punch(
     if kind != PunchKind.shift:
         bm = 0
     p = TimePunch(
-        tenant_id=CURRENT_TENANT,
+        tenant_id=current_tenant_id(),
         resource_id=resource_id,
         job_id=job_id,
         job_cost_line_id=job_cost_line_id,
@@ -385,7 +383,7 @@ async def update_punch(
 ):
     p = db.query(TimePunch).filter(
         TimePunch.id == punch_id,
-        TimePunch.tenant_id == CURRENT_TENANT,
+        TimePunch.tenant_id == current_tenant_id(),
     ).first()
     if not p:
         raise HTTPException(404, "Timbratura non trovata")
@@ -428,7 +426,7 @@ async def update_punch(
 async def delete_punch(punch_id: int, request: Request, db: Session = Depends(get_db)):
     p = db.query(TimePunch).filter(
         TimePunch.id == punch_id,
-        TimePunch.tenant_id == CURRENT_TENANT,
+        TimePunch.tenant_id == current_tenant_id(),
     ).first()
     if not p:
         raise HTTPException(404, "Timbratura non trovata")
@@ -449,7 +447,7 @@ async def punches_summary(
     """Totali ore per kind nel periodo. Esclude timbrature in corso (end NULL)."""
     resource_id = _enforce_scope(request, db, resource_id)
     q = db.query(TimePunch).filter(
-        TimePunch.tenant_id == CURRENT_TENANT,
+        TimePunch.tenant_id == current_tenant_id(),
         TimePunch.end_datetime.isnot(None),
     )
     if resource_id:
@@ -539,7 +537,7 @@ async def hr_timeline(
     pq = (
         db.query(TimePunch)
         .options(joinedload(TimePunch.resource), joinedload(TimePunch.job))
-        .filter(TimePunch.tenant_id == CURRENT_TENANT)
+        .filter(TimePunch.tenant_id == current_tenant_id())
     )
     if resource_id:
         pq = pq.filter(TimePunch.resource_id == resource_id)
@@ -739,7 +737,7 @@ async def calendar_summary(
         cur += timedelta(days=1)
 
     pq = db.query(TimePunch).options(joinedload(TimePunch.resource)).filter(
-        TimePunch.tenant_id == CURRENT_TENANT,
+        TimePunch.tenant_id == current_tenant_id(),
         TimePunch.end_datetime.isnot(None),
         TimePunch.start_datetime >= datetime.combine(from_date, datetime.min.time()),
         TimePunch.start_datetime <= datetime.combine(to_date, datetime.max.time()),
@@ -802,7 +800,7 @@ async def calendar_summary(
         uq = uq.filter(ResourceUnavailability.resource_id == resource_id)
     # Default daily hours per assenze: usa policy della risorsa o fallback 8
     default_policy = db.query(WorkingHoursPolicy).filter(
-        WorkingHoursPolicy.tenant_id == CURRENT_TENANT,
+        WorkingHoursPolicy.tenant_id == current_tenant_id(),
         WorkingHoursPolicy.is_default == True,  # noqa: E712
     ).first()
     fallback_daily = (default_policy.daily_hours_threshold if default_policy else 8.0) or 8.0
@@ -868,12 +866,12 @@ def _resolve_policy_for_resource(db: Session, resource: Optional[Resource]) -> O
     if resource and resource.working_hours_policy_id:
         p = db.query(WorkingHoursPolicy).filter(
             WorkingHoursPolicy.id == resource.working_hours_policy_id,
-            WorkingHoursPolicy.tenant_id == CURRENT_TENANT,
+            WorkingHoursPolicy.tenant_id == current_tenant_id(),
         ).first()
         if p:
             return p
     return db.query(WorkingHoursPolicy).filter(
-        WorkingHoursPolicy.tenant_id == CURRENT_TENANT,
+        WorkingHoursPolicy.tenant_id == current_tenant_id(),
         WorkingHoursPolicy.is_default == True,  # noqa: E712
     ).first()
 
@@ -895,7 +893,7 @@ async def overtime_breakdown(
     """
     res = db.query(Resource).filter(
         Resource.id == resource_id,
-        Resource.tenant_id == CURRENT_TENANT,
+        Resource.tenant_id == current_tenant_id(),
     ).first()
     if not res:
         raise HTTPException(404, "Risorsa non trovata")
@@ -908,7 +906,7 @@ async def overtime_breakdown(
         # + un warning visibile in UI. Evita di rompere /hr quando il tenant
         # non ha (ancora) configurato nessuna WorkingHoursPolicy default.
         punches = db.query(TimePunch).filter(
-            TimePunch.tenant_id == CURRENT_TENANT,
+            TimePunch.tenant_id == current_tenant_id(),
             TimePunch.resource_id == resource_id,
             TimePunch.end_datetime.isnot(None),
             TimePunch.start_datetime >= datetime.combine(from_date, datetime.min.time()),
@@ -946,7 +944,7 @@ async def overtime_breakdown(
         }
 
     punches = db.query(TimePunch).filter(
-        TimePunch.tenant_id == CURRENT_TENANT,
+        TimePunch.tenant_id == current_tenant_id(),
         TimePunch.resource_id == resource_id,
         TimePunch.end_datetime.isnot(None),
         TimePunch.start_datetime >= datetime.combine(from_date, datetime.min.time()),

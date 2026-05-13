@@ -21,10 +21,10 @@ from app.models import (
     Tenant, Department, Supplier, SupplierInvoice, Project,
 )
 from app.services.rbac import requires_permission
+from app.context import current_tenant_id
 
 router = APIRouter(prefix="/overhead", tags=["overhead"])
 
-CURRENT_TENANT = 1
 RequireViewOverhead = Depends(requires_permission("view_overhead"))
 RequireEditOverhead = Depends(requires_permission("edit_overhead"))
 
@@ -71,7 +71,7 @@ def _next_code(db: Session, year: int) -> str:
     con record cestinati (feedback_soft_delete_unique_bypass)."""
     prefix = f"OH-{year}-"
     n = db.query(func.count(OverheadCost.id)).filter(
-        OverheadCost.tenant_id == CURRENT_TENANT,
+        OverheadCost.tenant_id == current_tenant_id(),
         OverheadCost.code.like(prefix + "%"),
     ).scalar() or 0
     return f"{prefix}{n + 1:04d}"
@@ -82,7 +82,7 @@ def _next_code(db: Session, year: int) -> str:
 @router.get("/", response_class=None)
 async def overhead_page(request: Request, db: Session = Depends(get_db)):
     departments = db.query(Department).filter(
-        Department.tenant_id == CURRENT_TENANT, Department.is_active == True
+        Department.tenant_id == current_tenant_id(), Department.is_active == True
     ).all()
     return _tpl().TemplateResponse("pages/overhead.html", {
         "request": request,
@@ -109,7 +109,7 @@ async def list_overhead(
     query = db.query(OverheadCost).options(
         joinedload(OverheadCost.department),
         joinedload(OverheadCost.supplier),
-    ).filter(OverheadCost.tenant_id == CURRENT_TENANT)
+    ).filter(OverheadCost.tenant_id == current_tenant_id())
     if not include_deleted:
         query = query.filter(OverheadCost.deleted_at.is_(None))
     if category:
@@ -150,7 +150,7 @@ async def overhead_summary(
     Include anche LossEntry write-off (UNION) per quadro completo costi non-billable."""
     from app.models import LossEntry
     base = db.query(OverheadCost).filter(
-        OverheadCost.tenant_id == CURRENT_TENANT,
+        OverheadCost.tenant_id == current_tenant_id(),
         OverheadCost.deleted_at.is_(None),
     )
     if from_date:
@@ -165,7 +165,7 @@ async def overhead_summary(
     capex_total = sum(o.amount_total or 0 for o in rows if o.is_capex)
     recurring_active = sum(1 for o in rows if o.is_recurring)
     # LossEntry UNION (write-off canonical source)
-    loss_q = db.query(LossEntry).filter(LossEntry.tenant_id == CURRENT_TENANT)
+    loss_q = db.query(LossEntry).filter(LossEntry.tenant_id == current_tenant_id())
     if from_date:
         loss_q = loss_q.filter(LossEntry.created_at >= from_date)
     if to_date:
@@ -227,7 +227,7 @@ async def create_overhead(
     total = round((amount_net or 0) + vat_amount, 2)
     code = _next_code(db, cost_date.year)
     oc = OverheadCost(
-        tenant_id=CURRENT_TENANT,
+        tenant_id=current_tenant_id(),
         code=code,
         category=cat_enum,
         title=title,
@@ -280,7 +280,7 @@ async def update_overhead(
 ):
     oc = db.query(OverheadCost).filter(
         OverheadCost.id == oc_id,
-        OverheadCost.tenant_id == CURRENT_TENANT,
+        OverheadCost.tenant_id == current_tenant_id(),
     ).first()
     if not oc:
         raise HTTPException(404, "OverheadCost non trovata")
@@ -319,7 +319,7 @@ async def update_overhead(
 async def delete_overhead(oc_id: int, db: Session = Depends(get_db)):
     oc = db.query(OverheadCost).filter(
         OverheadCost.id == oc_id,
-        OverheadCost.tenant_id == CURRENT_TENANT,
+        OverheadCost.tenant_id == current_tenant_id(),
     ).first()
     if not oc:
         raise HTTPException(404, "OverheadCost non trovata")

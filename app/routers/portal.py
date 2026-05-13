@@ -29,10 +29,10 @@ from app.models import (
     ClientPortalAccess, Client, Project, Asset, Invoice,
 )
 from app.services.rbac import requires_permission
+from app.context import current_tenant_id
 
 router = APIRouter(prefix="/portal", tags=["portal"])
 
-CURRENT_TENANT = 1  # multi-tenant soft
 PORTAL_COOKIE = "portal_token"
 PORTAL_TOKEN_DAYS = 7
 
@@ -52,7 +52,7 @@ def _resolve_portal_access(token: Optional[str], db: Session) -> Optional[Client
         return None
     a = db.query(ClientPortalAccess).filter(
         ClientPortalAccess.token == token,
-        ClientPortalAccess.tenant_id == CURRENT_TENANT,
+        ClientPortalAccess.tenant_id == current_tenant_id(),
         ClientPortalAccess.is_active == True,  # noqa: E712
         ClientPortalAccess.revoked_at.is_(None),
     ).first()
@@ -75,7 +75,7 @@ def _accessible_project_ids(access: ClientPortalAccess, db: Session) -> list[int
     if access.project_scope:
         return [int(x) for x in access.project_scope]
     rows = db.query(Project.id).filter(
-        Project.tenant_id == CURRENT_TENANT,
+        Project.tenant_id == current_tenant_id(),
         Project.client_id == access.client_id,
     ).all()
     return [r[0] for r in rows]
@@ -98,7 +98,7 @@ async def create_access(
     da inviare al cliente (per ora via email manuale)."""
     import json as _json
     c = db.query(Client).filter(
-        Client.id == client_id, Client.tenant_id == CURRENT_TENANT,
+        Client.id == client_id, Client.tenant_id == current_tenant_id(),
     ).first()
     if not c:
         raise HTTPException(404, "Cliente non trovato")
@@ -114,7 +114,7 @@ async def create_access(
     expires = datetime.utcnow() + timedelta(days=max(1, min(expires_days, 365)))
     user = getattr(request.state, "current_user", None)
     a = ClientPortalAccess(
-        tenant_id=CURRENT_TENANT,
+        tenant_id=current_tenant_id(),
         client_id=c.id,
         email=email.strip().lower()[:255],
         full_name=(full_name or "").strip() or None,
@@ -147,7 +147,7 @@ async def list_access(
 ):
     """Lista accessi portale (admin view)."""
     q = db.query(ClientPortalAccess).filter(
-        ClientPortalAccess.tenant_id == CURRENT_TENANT,
+        ClientPortalAccess.tenant_id == current_tenant_id(),
     )
     if client_id:
         q = q.filter(ClientPortalAccess.client_id == client_id)
@@ -176,7 +176,7 @@ async def list_access(
 async def revoke_access(access_id: int, db: Session = Depends(get_db)):
     a = db.query(ClientPortalAccess).filter(
         ClientPortalAccess.id == access_id,
-        ClientPortalAccess.tenant_id == CURRENT_TENANT,
+        ClientPortalAccess.tenant_id == current_tenant_id(),
     ).first()
     if not a:
         raise HTTPException(404)
@@ -271,7 +271,7 @@ async def portal_project(project_id: int, request: Request, db: Session = Depend
         raise HTTPException(404)
     # Assets visibili: project_id = p.id, NO internal queue
     assets = db.query(Asset).filter(
-        Asset.tenant_id == CURRENT_TENANT,
+        Asset.tenant_id == current_tenant_id(),
         Asset.project_id == project_id,
         Asset.parent_asset_id.is_(None),
     ).order_by(Asset.created_at.desc()).limit(200).all()

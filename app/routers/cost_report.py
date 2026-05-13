@@ -29,7 +29,6 @@ router = APIRouter(prefix="/cost-report", tags=["cost_report"])
 HOURS_PER_DAY = 8.0
 
 # v3.5.0-alpha.66.15.2 — tenant scope (R1)
-CURRENT_TENANT = current_tenant_id()
 
 
 def _tpl():
@@ -44,7 +43,7 @@ async def cost_report_page(request: Request, db: Session = Depends(get_db)):
     # con ricerca + filtri (pattern allineato a /quotes).
     # v3.5.0-alpha.66.15.2 — tenant scope (R1)
     jobs = db.query(Job).filter(
-        Job.tenant_id == CURRENT_TENANT,
+        Job.tenant_id == current_tenant_id(),
     ).options(joinedload(Job.client), joinedload(Job.quote)).all()
     return _tpl().TemplateResponse("pages/cost_report.html", {"request": request, "jobs": jobs})
 
@@ -68,7 +67,7 @@ async def list_cost_reports(
             joinedload(Job.cost_lines),
         )
         .filter(
-            Job.tenant_id == CURRENT_TENANT,
+            Job.tenant_id == current_tenant_id(),
             Job.client_id.isnot(None),
         )
         .order_by(Job.created_at.desc())
@@ -465,7 +464,7 @@ async def job_cost_report(job_id: int, db: Session = Depends(get_db)):
     # project) non cancelled. Contribuisce al margine reale completo
     # come hardcost esterno (costo per il tenant pagato a fornitori).
     sup_q = db.query(SupplierInvoice).filter(
-        SupplierInvoice.tenant_id == CURRENT_TENANT,
+        SupplierInvoice.tenant_id == current_tenant_id(),
         SupplierInvoice.deleted_at.is_(None),
         SupplierInvoice.payment_status != SupplierInvoiceStatus.cancelled,
     )
@@ -942,7 +941,7 @@ async def resource_job_drill(
     progetto corrente quando il drill parte da /cost-report."""
     resource = db.query(Resource).filter(
         Resource.id == resource_id,
-        Resource.tenant_id == CURRENT_TENANT,
+        Resource.tenant_id == current_tenant_id(),
     ).first()
     if not resource:
         raise HTTPException(404, "Risorsa non trovata")

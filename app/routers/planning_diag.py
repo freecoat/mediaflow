@@ -16,10 +16,10 @@ from sqlalchemy.orm import Session, joinedload
 from app.database import get_db
 from app.models import Booking, BookingAssignment, BookingChange, BookingStatus
 from app.services.rbac import is_elevated, current_user_optional
+from app.context import current_tenant_id
 
 router = APIRouter(prefix="/planning/api/diag", tags=["planning-diag"])
 
-CURRENT_TENANT = 1
 
 
 def _detect_dup_overlap_pairs(assigns: list) -> list:
@@ -103,7 +103,7 @@ async def diag_scan_duplicate_overlaps(request: Request, db: Session = Depends(g
         db.query(Booking)
         .options(joinedload(Booking.assignments), joinedload(Booking.job))
         .filter(
-            Booking.tenant_id == CURRENT_TENANT,
+            Booking.tenant_id == current_tenant_id(),
             Booking.status != BookingStatus.cancelled,
         )
         .all()
@@ -166,7 +166,7 @@ async def diag_cleanup_all_duplicate_overlaps(
         db.query(Booking)
         .options(joinedload(Booking.assignments))
         .filter(
-            Booking.tenant_id == CURRENT_TENANT,
+            Booking.tenant_id == current_tenant_id(),
             Booking.status != BookingStatus.cancelled,
         )
         .all()

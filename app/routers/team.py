@@ -16,11 +16,11 @@ from sqlalchemy.orm import Session
 
 from app.database import get_db
 from app.models import Department
+from app.context import current_tenant_id
 
 
 router = APIRouter(prefix="/team", tags=["team"])
 
-CURRENT_TENANT = 1
 
 
 def _tpl():
@@ -32,7 +32,7 @@ def _tpl():
 async def team_page(request: Request, db: Session = Depends(get_db)):
     departments = (
         db.query(Department)
-        .filter(Department.tenant_id == CURRENT_TENANT, Department.is_active == True)  # noqa: E712
+        .filter(Department.tenant_id == current_tenant_id(), Department.is_active == True)  # noqa: E712
         .order_by(Department.name)
         .all()
     )

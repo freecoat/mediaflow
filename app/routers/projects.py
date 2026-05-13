@@ -13,6 +13,7 @@ from app.models.models import JobResourceAssignment
 from app.models import ProjectAccessGrant, User, AssetAccessAction
 from app.services.rbac import can_view_finance, current_user_optional, is_admin
 from app.services.project_access import log_asset_access
+from app.context import current_tenant_id
 
 router = APIRouter(prefix="/projects", tags=["projects"])
 
@@ -193,7 +194,7 @@ async def cross_check_project(
     from app.services.rbac import current_user_optional
     p = db.query(Project).filter(
         Project.id == project_id,
-        Project.tenant_id == CURRENT_TENANT,
+        Project.tenant_id == current_tenant_id(),
     ).first()
     if not p:
         raise HTTPException(404, "Progetto non trovato")
@@ -573,7 +574,6 @@ async def delete_milestone(project_id: int, milestone_id: int, db: Session = Dep
 
 # ── Project Access Grants (TPN compliance, v3.5.0-alpha.70) ──────────
 
-CURRENT_TENANT = 1  # local helper; multi-tenant hard quando si arriverà
 
 
 @router.get("/api/{project_id}/access")
@@ -593,7 +593,7 @@ async def list_project_access(
         raise HTTPException(404, "Progetto non trovato")
     q = db.query(ProjectAccessGrant).filter(
         ProjectAccessGrant.project_id == project_id,
-        ProjectAccessGrant.tenant_id == CURRENT_TENANT,
+        ProjectAccessGrant.tenant_id == current_tenant_id(),
     )
     if not include_revoked:
         q = q.filter(ProjectAccessGrant.revoked_at.is_(None))
@@ -672,12 +672,12 @@ async def create_project_access(
         ProjectAccessGrant.project_id == project_id,
         ProjectAccessGrant.user_id == user_id,
         ProjectAccessGrant.revoked_at.is_(None),
-        ProjectAccessGrant.tenant_id == CURRENT_TENANT,
+        ProjectAccessGrant.tenant_id == current_tenant_id(),
     ).first()
     if existing:
         raise HTTPException(409, "Grant attivo già esistente")
     g = ProjectAccessGrant(
-        tenant_id=CURRENT_TENANT,
+        tenant_id=current_tenant_id(),
         project_id=project_id,
         user_id=user_id,
         role_in_project=(role_in_project or "").strip() or None,
@@ -708,7 +708,7 @@ async def revoke_project_access(
     g = db.query(ProjectAccessGrant).filter(
         ProjectAccessGrant.id == grant_id,
         ProjectAccessGrant.project_id == project_id,
-        ProjectAccessGrant.tenant_id == CURRENT_TENANT,
+        ProjectAccessGrant.tenant_id == current_tenant_id(),
     ).first()
     if not g:
         raise HTTPException(404, "Grant non trovato")

@@ -21,11 +21,11 @@ from app.services.rbac import (
     PERMISSIONS, ALL_PERMISSION_KEYS, PRESET_PERMISSIONS, PRESET_DESCRIPTIONS,
     has_permission, current_user_optional, requires_permission,
 )
+from app.context import current_tenant_id
 
 
 router = APIRouter(prefix="/admin", tags=["admin"])
 
-CURRENT_TENANT = 1
 
 
 def _tpl():
@@ -391,7 +391,7 @@ async def list_roles(
     request: Request, db: Session = Depends(get_db),
     _: User = Depends(requires_permission("manage_roles")),
 ):
-    roles = db.query(Role).filter(Role.tenant_id == CURRENT_TENANT).order_by(Role.is_system.desc(), Role.id).all()
+    roles = db.query(Role).filter(Role.tenant_id == current_tenant_id()).order_by(Role.is_system.desc(), Role.id).all()
     counts = dict(
         (rid, n) for rid, n in db.query(User.role_id, db.func.count(User.id) if hasattr(db, 'func') else None)
         .filter(User.role_id.isnot(None)).group_by(User.role_id).all()
@@ -423,7 +423,7 @@ async def create_role(
     if invalid:
         raise HTTPException(400, f"Permessi non validi: {', '.join(invalid)}")
     r = Role(
-        tenant_id=CURRENT_TENANT, code=code, name=name, description=description,
+        tenant_id=current_tenant_id(), code=code, name=name, description=description,
         permissions=perms, is_system=False, is_active=True,
     )
     db.add(r); db.commit(); db.refresh(r)

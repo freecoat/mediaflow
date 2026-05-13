@@ -29,10 +29,10 @@ from app.models import (
     JobDeliverable, DeliverableNature, DeliverableStatus,
     PhysicalAsset, PhysicalAssetKind, Asset, DeliveryTemplate, Resource,
 )
+from app.context import current_tenant_id
 
 router = APIRouter(prefix="/jobs", tags=["jobs"])
 
-CURRENT_TENANT = 1
 
 
 def _tpl():
@@ -197,7 +197,7 @@ async def job_detail_page(job_id: int, request: Request, db: Session = Depends(g
             joinedload(Job.quote),
             joinedload(Job.cost_lines),
         )
-        .filter(Job.id == job_id, Job.tenant_id == CURRENT_TENANT)
+        .filter(Job.id == job_id, Job.tenant_id == current_tenant_id())
         .first()
     )
     if not job:
@@ -206,7 +206,7 @@ async def job_detail_page(job_id: int, request: Request, db: Session = Depends(g
     # Lista categorie per il modal "Aggiungi lavorazione extra"
     categories = (
         db.query(PriceCategory)
-        .filter(PriceCategory.tenant_id == CURRENT_TENANT)
+        .filter(PriceCategory.tenant_id == current_tenant_id())
         .order_by(PriceCategory.sort_order, PriceCategory.name)
         .all()
     )
@@ -229,7 +229,7 @@ async def get_job(job_id: int, db: Session = Depends(get_db)):
             joinedload(Job.quote),
             joinedload(Job.cost_lines),
         )
-        .filter(Job.id == job_id, Job.tenant_id == CURRENT_TENANT)
+        .filter(Job.id == job_id, Job.tenant_id == current_tenant_id())
         .first()
     )
     if not job:
@@ -360,7 +360,7 @@ async def add_cost_line(
     if not can_view_finance(current_user_optional(request)):
         raise HTTPException(403, "Permesso negato (richiede view_finance)")
     # v3.5.0-alpha.66.15.2 — tenant scope (R1)
-    job = db.query(Job).filter(Job.id == job_id, Job.tenant_id == CURRENT_TENANT).first()
+    job = db.query(Job).filter(Job.id == job_id, Job.tenant_id == current_tenant_id()).first()
     if not job:
         raise HTTPException(404, "Job non trovato")
     if quantity <= 0:
@@ -585,12 +585,12 @@ async def list_deliverables(
     db: Session = Depends(get_db),
 ):
     # v3.5.0-alpha.66.15.2 — tenant scope (R1)
-    job = db.query(Job).filter(Job.id == job_id, Job.tenant_id == CURRENT_TENANT).first()
+    job = db.query(Job).filter(Job.id == job_id, Job.tenant_id == current_tenant_id()).first()
     if not job:
         raise HTTPException(404, "Job non trovato")
     q = db.query(JobDeliverable).filter(
         JobDeliverable.job_id == job_id,
-        JobDeliverable.tenant_id == CURRENT_TENANT,
+        JobDeliverable.tenant_id == current_tenant_id(),
     )
     if not include_deleted:
         q = q.filter(JobDeliverable.deleted_at.is_(None))
@@ -634,7 +634,7 @@ async def create_deliverable(
         raise HTTPException(403, "Permesso insufficiente per creare deliverable")
 
     # v3.5.0-alpha.66.15.2 — tenant scope (R1)
-    job = db.query(Job).filter(Job.id == job_id, Job.tenant_id == CURRENT_TENANT).first()
+    job = db.query(Job).filter(Job.id == job_id, Job.tenant_id == current_tenant_id()).first()
     if not job:
         raise HTTPException(404, "Job non trovato")
 
@@ -666,7 +666,7 @@ async def create_deliverable(
     for i in range(quantity):
         suffix = f" ({i+1}/{quantity})" if quantity > 1 else ""
         d = JobDeliverable(
-            tenant_id=CURRENT_TENANT,
+            tenant_id=current_tenant_id(),
             job_id=job_id,
             job_cost_line_id=job_cost_line_id,
             price_item_id=price_item_id,
@@ -695,7 +695,7 @@ async def create_deliverable(
 async def get_deliverable(deliverable_id: int, db: Session = Depends(get_db)):
     d = db.query(JobDeliverable).filter(
         JobDeliverable.id == deliverable_id,
-        JobDeliverable.tenant_id == CURRENT_TENANT,
+        JobDeliverable.tenant_id == current_tenant_id(),
     ).first()
     if not d:
         raise HTTPException(404, "Deliverable non trovato")
@@ -734,7 +734,7 @@ async def update_deliverable(
 
     d = db.query(JobDeliverable).filter(
         JobDeliverable.id == deliverable_id,
-        JobDeliverable.tenant_id == CURRENT_TENANT,
+        JobDeliverable.tenant_id == current_tenant_id(),
     ).first()
     if not d:
         raise HTTPException(404, "Deliverable non trovato")
@@ -809,7 +809,7 @@ async def delete_deliverable(
         raise HTTPException(403, "Permesso insufficiente")
     d = db.query(JobDeliverable).filter(
         JobDeliverable.id == deliverable_id,
-        JobDeliverable.tenant_id == CURRENT_TENANT,
+        JobDeliverable.tenant_id == current_tenant_id(),
     ).first()
     if not d:
         raise HTTPException(404, "Deliverable non trovato")
@@ -830,7 +830,7 @@ async def restore_deliverable(
         raise HTTPException(403, "Permesso insufficiente")
     d = db.query(JobDeliverable).filter(
         JobDeliverable.id == deliverable_id,
-        JobDeliverable.tenant_id == CURRENT_TENANT,
+        JobDeliverable.tenant_id == current_tenant_id(),
     ).execution_options(include_deleted=True).first()
     if not d:
         raise HTTPException(404, "Deliverable non trovato")
@@ -875,7 +875,7 @@ async def preview_naming(
     if deliverable_id:
         deliverable = db.query(JobDeliverable).filter(
             JobDeliverable.id == deliverable_id,
-            JobDeliverable.tenant_id == CURRENT_TENANT,
+            JobDeliverable.tenant_id == current_tenant_id(),
         ).first()
         if deliverable:
             job = db.query(Job).filter(Job.id == deliverable.job_id).first()

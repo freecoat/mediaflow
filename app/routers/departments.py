@@ -12,11 +12,11 @@ from sqlalchemy.orm import Session
 from sqlalchemy.exc import IntegrityError
 from app.database import get_db
 from app.models import Department, Resource, PriceItem
+from app.context import current_tenant_id
 
 router = APIRouter(prefix="/departments", tags=["departments"])
 
 # Tenant corrente: in Fase 1-bis sempre 1 (multi-tenant soft).
-CURRENT_TENANT = 1
 
 
 def _tpl():
@@ -30,7 +30,7 @@ def _tpl():
 async def departments_page(request: Request, db: Session = Depends(get_db)):
     depts = (
         db.query(Department)
-        .filter(Department.tenant_id == CURRENT_TENANT)
+        .filter(Department.tenant_id == current_tenant_id())
         .order_by(Department.sort_order, Department.name)
         .all()
     )
@@ -58,7 +58,7 @@ async def departments_page(request: Request, db: Session = Depends(get_db)):
 async def list_departments(db: Session = Depends(get_db)):
     depts = (
         db.query(Department)
-        .filter(Department.tenant_id == CURRENT_TENANT)
+        .filter(Department.tenant_id == current_tenant_id())
         .order_by(Department.sort_order, Department.name)
         .all()
     )
@@ -98,14 +98,14 @@ async def create_department(
         raise HTTPException(400, "Codice e nome obbligatori")
 
     existing = db.query(Department).filter(
-        Department.tenant_id == CURRENT_TENANT,
+        Department.tenant_id == current_tenant_id(),
         Department.code == code
     ).first()
     if existing:
         raise HTTPException(400, f"Esiste già un reparto con codice {code}")
 
     d = Department(
-        tenant_id=CURRENT_TENANT,
+        tenant_id=current_tenant_id(),
         code=code, name=name.strip(),
         color=color, description=description,
         sort_order=sort_order,
@@ -134,7 +134,7 @@ async def update_department(
 ):
     d = db.query(Department).filter(
         Department.id == dept_id,
-        Department.tenant_id == CURRENT_TENANT
+        Department.tenant_id == current_tenant_id()
     ).first()
     if not d:
         raise HTTPException(404, "Reparto non trovato")
@@ -154,7 +154,7 @@ async def update_department(
 async def delete_department(dept_id: int, db: Session = Depends(get_db)):
     d = db.query(Department).filter(
         Department.id == dept_id,
-        Department.tenant_id == CURRENT_TENANT
+        Department.tenant_id == current_tenant_id()
     ).first()
     if not d:
         raise HTTPException(404, "Reparto non trovato")

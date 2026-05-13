@@ -21,10 +21,10 @@ from sqlalchemy.orm import Session, joinedload
 from app.database import get_db
 from app.models import Project, ProjectTechSheet, DeliveryTemplate, Resource, User
 from app.services.rbac import current_user_optional, can_view_finance, has_permission
+from app.context import current_tenant_id
 
 router = APIRouter(tags=["tech_sheets"])
 
-CURRENT_TENANT = 1
 
 
 def _tpl():
@@ -70,7 +70,7 @@ def _get_or_create(db: Session, project: Project) -> ProjectTechSheet:
     if not ts:
         ts = ProjectTechSheet(
             project_id=project.id,
-            tenant_id=project.tenant_id or CURRENT_TENANT,
+            tenant_id=project.tenant_id or current_tenant_id(),
             data=dict(DEFAULT_DATA),
             version="0.1",
             status="draft",
@@ -138,7 +138,7 @@ async def get_tech_sheet(
     if not has_permission(user, "view_projects") and not has_permission(user, "edit_projects"):
         raise HTTPException(403, "Permesso negato")
     p = db.query(Project).options(joinedload(Project.client)).filter(
-        Project.id == project_id, Project.tenant_id == CURRENT_TENANT,
+        Project.id == project_id, Project.tenant_id == current_tenant_id(),
     ).first()
     if not p:
         raise HTTPException(404, "Progetto non trovato")
@@ -157,7 +157,7 @@ async def update_tech_sheet(
     if not has_permission(user, "edit_projects"):
         raise HTTPException(403, "Serve permesso edit_projects")
     p = db.query(Project).filter(
-        Project.id == project_id, Project.tenant_id == CURRENT_TENANT,
+        Project.id == project_id, Project.tenant_id == current_tenant_id(),
     ).first()
     if not p:
         raise HTTPException(404, "Progetto non trovato")
@@ -214,7 +214,7 @@ async def publish_tech_sheet(
     if not has_permission(user, "edit_projects"):
         raise HTTPException(403, "Serve permesso edit_projects")
     p = db.query(Project).filter(
-        Project.id == project_id, Project.tenant_id == CURRENT_TENANT,
+        Project.id == project_id, Project.tenant_id == current_tenant_id(),
     ).first()
     if not p:
         raise HTTPException(404, "Progetto non trovato")

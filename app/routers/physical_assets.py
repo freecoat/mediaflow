@@ -24,10 +24,10 @@ from app.models import (
     AssetMovement, AssetMovementType, AssetOwnerType, Supplier,
     AssetMembership, Asset,
 )
+from app.context import current_tenant_id
 
 router = APIRouter(prefix="/physical-assets", tags=["physical_assets"])
 
-CURRENT_TENANT = 1
 
 
 def _tpl():
@@ -108,7 +108,7 @@ async def list_physical_assets(
 ):
     """v3.5.0-alpha.88 — Filtri estesi: client_id (via owner_client_id OR
     project.client_id), q (search su label/serial/barcode), period."""
-    query = db.query(PhysicalAsset).filter(PhysicalAsset.tenant_id == CURRENT_TENANT)
+    query = db.query(PhysicalAsset).filter(PhysicalAsset.tenant_id == current_tenant_id())
     if not include_deleted:
         query = query.filter(PhysicalAsset.deleted_at.is_(None))
     if kind:
@@ -173,7 +173,7 @@ async def list_ingest_batches(
     tornava 422 (int_parsing). Stesso bug di α.92 T3 su billing.py.
     """
     from app.models import IngestBatch, Client, Project as _P
-    q = db.query(IngestBatch).filter(IngestBatch.tenant_id == CURRENT_TENANT)
+    q = db.query(IngestBatch).filter(IngestBatch.tenant_id == current_tenant_id())
     if direction:
         q = q.filter(IngestBatch.direction == direction)
     if shipping_payer:
@@ -244,7 +244,7 @@ async def list_ingest_batches(
 async def get_physical_asset(asset_id: int, db: Session = Depends(get_db)):
     a = db.query(PhysicalAsset).filter(
         PhysicalAsset.id == asset_id,
-        PhysicalAsset.tenant_id == CURRENT_TENANT,
+        PhysicalAsset.tenant_id == current_tenant_id(),
     ).first()
     if not a:
         raise HTTPException(404, "Asset fisico non trovato")
@@ -331,10 +331,10 @@ async def create_physical_asset(
     # v3.5.0-alpha.72.1 — auto-numerazione se label vuoto
     from app.services.asset_numbering import next_label
     if not (label or "").strip():
-        auto = next_label(db, kind, tenant_id=CURRENT_TENANT)
+        auto = next_label(db, kind, tenant_id=current_tenant_id())
         label = auto or "(no label)"
     a = PhysicalAsset(
-        tenant_id=CURRENT_TENANT,
+        tenant_id=current_tenant_id(),
         kind=kind_enum,
         label=label.strip()[:255],
         description=(description or "").strip() or None,
@@ -407,7 +407,7 @@ async def update_physical_asset(
     _require_perm(request)
     a = db.query(PhysicalAsset).filter(
         PhysicalAsset.id == asset_id,
-        PhysicalAsset.tenant_id == CURRENT_TENANT,
+        PhysicalAsset.tenant_id == current_tenant_id(),
     ).first()
     if not a:
         raise HTTPException(404, "Asset fisico non trovato")
@@ -455,7 +455,7 @@ async def delete_physical_asset(
     _require_perm(request)
     a = db.query(PhysicalAsset).filter(
         PhysicalAsset.id == asset_id,
-        PhysicalAsset.tenant_id == CURRENT_TENANT,
+        PhysicalAsset.tenant_id == current_tenant_id(),
     ).first()
     if not a:
         raise HTTPException(404, "Asset fisico non trovato")
@@ -476,7 +476,7 @@ async def restore_physical_asset(
     _require_perm(request)
     a = db.query(PhysicalAsset).filter(
         PhysicalAsset.id == asset_id,
-        PhysicalAsset.tenant_id == CURRENT_TENANT,
+        PhysicalAsset.tenant_id == current_tenant_id(),
     ).first()
     if not a:
         raise HTTPException(404, "Asset fisico non trovato")
@@ -491,7 +491,7 @@ async def restore_physical_asset(
 @router.get("/api/numbering/config")
 async def get_numbering_config(request: Request, db: Session = Depends(get_db)):
     from app.services.asset_numbering import get_config
-    return get_config(db, tenant_id=CURRENT_TENANT)
+    return get_config(db, tenant_id=current_tenant_id())
 
 
 @router.put("/api/numbering/config")
@@ -508,7 +508,7 @@ async def update_numbering_config(
     except _json.JSONDecodeError as e:
         raise HTTPException(400, f"JSON malformato: {e}")
     from app.services.asset_numbering import save_config
-    saved = save_config(db, new, tenant_id=CURRENT_TENANT)
+    saved = save_config(db, new, tenant_id=current_tenant_id())
     db.commit()
     return saved
 
@@ -516,7 +516,7 @@ async def update_numbering_config(
 @router.get("/api/numbering/peek")
 async def peek_numbering(kind: str, offset: int = 0, db: Session = Depends(get_db)):
     from app.services.asset_numbering import peek_label
-    return {"kind": kind, "next_label": peek_label(db, kind, offset, tenant_id=CURRENT_TENANT)}
+    return {"kind": kind, "next_label": peek_label(db, kind, offset, tenant_id=current_tenant_id())}
 
 
 # ── Batch import (v3.5.0-alpha.72.1) ──────────────────────────
@@ -555,9 +555,9 @@ async def batch_import_physical_assets(
     from app.services.asset_qr import new_token
     created = []
     for _ in range(count):
-        lbl = next_label(db, kind, tenant_id=CURRENT_TENANT) or "(no label)"
+        lbl = next_label(db, kind, tenant_id=current_tenant_id()) or "(no label)"
         a = PhysicalAsset(
-            tenant_id=CURRENT_TENANT,
+            tenant_id=current_tenant_id(),
             kind=kind_enum,
             label=lbl,
             description=(description or "").strip() or None,
@@ -629,7 +629,7 @@ async def list_all_movements(
     project_id filtra via IngestBatch + via FK su Asset/PhysicalAsset."""
     from app.models import Asset
     q = db.query(AssetMovement).filter(
-        AssetMovement.tenant_id == CURRENT_TENANT,
+        AssetMovement.tenant_id == current_tenant_id(),
     )
     if movement_type:
         try:
@@ -645,7 +645,7 @@ async def list_all_movements(
             q = q.filter(AssetMovementType.outgest == AssetMovement.movement_type)
             q = q.union_all(
                 db.query(AssetMovement).filter(
-                    AssetMovement.tenant_id == CURRENT_TENANT,
+                    AssetMovement.tenant_id == current_tenant_id(),
                     AssetMovement.movement_type == AssetMovementType.return_to_client,
                 )
             ) if False else q.filter(AssetMovement.movement_type.in_([
@@ -701,13 +701,13 @@ async def list_movements_by_asset(
     from app.models import Asset
     if not physical_asset_id and not asset_id:
         raise HTTPException(400, "Specifica physical_asset_id o asset_id")
-    q = db.query(AssetMovement).filter(AssetMovement.tenant_id == CURRENT_TENANT)
+    q = db.query(AssetMovement).filter(AssetMovement.tenant_id == current_tenant_id())
     asset_label, asset_kind, asset_nature = None, None, None
     if physical_asset_id:
         q = q.filter(AssetMovement.physical_asset_id == physical_asset_id)
         pa = db.query(PhysicalAsset).filter(
             PhysicalAsset.id == physical_asset_id,
-            PhysicalAsset.tenant_id == CURRENT_TENANT,
+            PhysicalAsset.tenant_id == current_tenant_id(),
         ).first()
         if pa:
             asset_label = pa.label
@@ -716,7 +716,7 @@ async def list_movements_by_asset(
     elif asset_id:
         q = q.filter(AssetMovement.asset_id == asset_id)
         a = db.query(Asset).filter(
-            Asset.id == asset_id, Asset.tenant_id == CURRENT_TENANT,
+            Asset.id == asset_id, Asset.tenant_id == current_tenant_id(),
         ).first()
         if a:
             asset_label = a.original_name
@@ -739,7 +739,7 @@ async def list_movements(asset_id: int, db: Session = Depends(get_db)):
         db.query(AssetMovement)
         .filter(
             AssetMovement.physical_asset_id == asset_id,
-            AssetMovement.tenant_id == CURRENT_TENANT,
+            AssetMovement.tenant_id == current_tenant_id(),
         )
         .order_by(AssetMovement.movement_date.desc())
         .all()
@@ -753,7 +753,7 @@ def _next_ddt_number(db: Session) -> str:
     last = (
         db.query(AssetMovement)
         .filter(
-            AssetMovement.tenant_id == CURRENT_TENANT,
+            AssetMovement.tenant_id == current_tenant_id(),
             AssetMovement.delivery_note_number.like(f"DDT-{year}-%"),
         )
         .order_by(AssetMovement.id.desc())
@@ -796,7 +796,7 @@ async def create_movement(
 ):
     _require_perm(request)
     a = db.query(PhysicalAsset).filter(
-        PhysicalAsset.id == asset_id, PhysicalAsset.tenant_id == CURRENT_TENANT,
+        PhysicalAsset.id == asset_id, PhysicalAsset.tenant_id == current_tenant_id(),
     ).first()
     if not a:
         raise HTTPException(404, "Asset fisico non trovato")
@@ -808,7 +808,7 @@ async def create_movement(
     if not delivery_note_number:
         delivery_note_number = _next_ddt_number(db)
     m = AssetMovement(
-        tenant_id=CURRENT_TENANT,
+        tenant_id=current_tenant_id(),
         physical_asset_id=asset_id,
         movement_type=mt,
         delivery_note_number=delivery_note_number,
@@ -864,7 +864,7 @@ async def confirm_movement(
     _require_perm(request)
     m = db.query(AssetMovement).filter(
         AssetMovement.id == movement_id,
-        AssetMovement.tenant_id == CURRENT_TENANT,
+        AssetMovement.tenant_id == current_tenant_id(),
     ).first()
     if not m:
         raise HTTPException(404, "Movimento non trovato")
@@ -897,7 +897,7 @@ async def confirm_movement(
 @router.get("/api/{asset_id}/qr.png")
 async def asset_qr_png(asset_id: int, request: Request, db: Session = Depends(get_db)):
     a = db.query(PhysicalAsset).filter(
-        PhysicalAsset.id == asset_id, PhysicalAsset.tenant_id == CURRENT_TENANT,
+        PhysicalAsset.id == asset_id, PhysicalAsset.tenant_id == current_tenant_id(),
     ).first()
     if not a:
         raise HTTPException(404)
@@ -920,7 +920,7 @@ async def asset_label_png(
     db: Session = Depends(get_db),
 ):
     a = db.query(PhysicalAsset).filter(
-        PhysicalAsset.id == asset_id, PhysicalAsset.tenant_id == CURRENT_TENANT,
+        PhysicalAsset.id == asset_id, PhysicalAsset.tenant_id == current_tenant_id(),
     ).first()
     if not a:
         raise HTTPException(404)
@@ -952,7 +952,7 @@ async def movement_ddt_pdf(
 ):
     m = db.query(AssetMovement).filter(
         AssetMovement.id == movement_id,
-        AssetMovement.tenant_id == CURRENT_TENANT,
+        AssetMovement.tenant_id == current_tenant_id(),
     ).first()
     if not m:
         raise HTTPException(404)
@@ -1028,7 +1028,7 @@ async def list_contents(
     """Lista digital Asset contenuti nel PhysicalAsset (storico + presente)."""
     q = db.query(AssetMembership).filter(
         AssetMembership.physical_asset_id == asset_id,
-        AssetMembership.tenant_id == CURRENT_TENANT,
+        AssetMembership.tenant_id == current_tenant_id(),
     )
     if not include_removed:
         q = q.filter(AssetMembership.removed_at.is_(None))
@@ -1053,16 +1053,16 @@ async def add_content(
     fisicamente sul disco e lo registra qui)."""
     _require_perm(request)
     pa = db.query(PhysicalAsset).filter(
-        PhysicalAsset.id == asset_id, PhysicalAsset.tenant_id == CURRENT_TENANT,
+        PhysicalAsset.id == asset_id, PhysicalAsset.tenant_id == current_tenant_id(),
     ).first()
     if not pa: raise HTTPException(404, "Physical asset non trovato")
     da = db.query(Asset).filter(
-        Asset.id == digital_asset_id, Asset.tenant_id == CURRENT_TENANT,
+        Asset.id == digital_asset_id, Asset.tenant_id == current_tenant_id(),
     ).first()
     if not da: raise HTTPException(404, "Digital asset non trovato")
     user = getattr(request.state, "current_user", None)
     m = AssetMembership(
-        tenant_id=CURRENT_TENANT,
+        tenant_id=current_tenant_id(),
         physical_asset_id=asset_id,
         asset_id=digital_asset_id,
         path_on_media=(path_on_media or "").strip() or None,
@@ -1085,7 +1085,7 @@ async def remove_content(
     m = db.query(AssetMembership).filter(
         AssetMembership.id == membership_id,
         AssetMembership.physical_asset_id == asset_id,
-        AssetMembership.tenant_id == CURRENT_TENANT,
+        AssetMembership.tenant_id == current_tenant_id(),
     ).first()
     if not m: raise HTTPException(404)
     if m.removed_at: return {"ok": True, "already_removed": True}
@@ -1118,7 +1118,7 @@ async def scan_filesystem_content(
     """
     _require_perm(request)
     pa = db.query(PhysicalAsset).filter(
-        PhysicalAsset.id == asset_id, PhysicalAsset.tenant_id == CURRENT_TENANT,
+        PhysicalAsset.id == asset_id, PhysicalAsset.tenant_id == current_tenant_id(),
     ).first()
     if not pa: raise HTTPException(404)
     from app.services.fs_scan import walk_filesystem
@@ -1141,7 +1141,7 @@ async def scan_filesystem_content(
             elif mime.startswith("image"): a_type = AssetType.image
             elif mime == "application/pdf": a_type = AssetType.document
             da = Asset(
-                tenant_id=CURRENT_TENANT,
+                tenant_id=current_tenant_id(),
                 filename=entry["hash"] or entry["filename"],
                 original_name=entry["filename"],
                 file_path="",  # placeholder, file NON copiato
@@ -1155,7 +1155,7 @@ async def scan_filesystem_content(
             db.add(da); db.flush()
             created += 1
             m = AssetMembership(
-                tenant_id=CURRENT_TENANT,
+                tenant_id=current_tenant_id(),
                 physical_asset_id=asset_id,
                 asset_id=da.id,
                 path_on_media=entry["rel_path"],
@@ -1188,7 +1188,7 @@ async def import_manifest(
     """
     _require_perm(request)
     pa = db.query(PhysicalAsset).filter(
-        PhysicalAsset.id == asset_id, PhysicalAsset.tenant_id == CURRENT_TENANT,
+        PhysicalAsset.id == asset_id, PhysicalAsset.tenant_id == current_tenant_id(),
     ).first()
     if not pa: raise HTTPException(404)
     raw = await manifest.read()
@@ -1231,14 +1231,14 @@ async def import_manifest(
         da = None
         if cs:
             da = db.query(Asset).filter(
-                Asset.tenant_id == CURRENT_TENANT,
+                Asset.tenant_id == current_tenant_id(),
                 or_(Asset.filename == cs,
                     Asset.original_name == fn)
             ).first()
         if not da:
             # Crea placeholder
             da = Asset(
-                tenant_id=CURRENT_TENANT,
+                tenant_id=current_tenant_id(),
                 filename=cs or fn,
                 original_name=fn,
                 file_path="",
@@ -1252,7 +1252,7 @@ async def import_manifest(
             db.add(da); db.flush()
             created += 1
         m = AssetMembership(
-            tenant_id=CURRENT_TENANT,
+            tenant_id=current_tenant_id(),
             physical_asset_id=asset_id,
             asset_id=da.id,
             path_on_media=path,
@@ -1281,7 +1281,7 @@ def _next_batch_code(db: Session) -> str:
     last = (
         db.query(IngestBatch)
         .filter(
-            IngestBatch.tenant_id == CURRENT_TENANT,
+            IngestBatch.tenant_id == current_tenant_id(),
             IngestBatch.code.like(f"BATCH-{year}-%"),
         )
         .order_by(IngestBatch.id.desc())
@@ -1315,7 +1315,7 @@ async def create_ingest_batch(
     user = getattr(request.state, "current_user", None)
     code = _next_batch_code(db)
     b = IngestBatch(
-        tenant_id=CURRENT_TENANT,
+        tenant_id=current_tenant_id(),
         code=code, direction=direction,
         title=(title or "").strip() or None,
         description=(description or "").strip() or None,
@@ -1341,7 +1341,7 @@ def _get_or_create_shipping_price_item(db: Session):
     """
     from app.models import PriceItem, PriceCategory
     item = db.query(PriceItem).filter(
-        PriceItem.tenant_id == CURRENT_TENANT,
+        PriceItem.tenant_id == current_tenant_id(),
         PriceItem.name == "Spedizione standard",
         PriceItem.is_active == True,  # noqa: E712
     ).first()
@@ -1349,14 +1349,14 @@ def _get_or_create_shipping_price_item(db: Session):
         return item
     # Cerca/crea categoria
     cat = db.query(PriceCategory).filter(
-        PriceCategory.tenant_id == CURRENT_TENANT,
+        PriceCategory.tenant_id == current_tenant_id(),
         PriceCategory.name == "Spedizioni",
     ).first()
     if not cat:
-        cat = PriceCategory(tenant_id=CURRENT_TENANT, name="Spedizioni", sort_order=999)
+        cat = PriceCategory(tenant_id=current_tenant_id(), name="Spedizioni", sort_order=999)
         db.add(cat); db.flush()
     item = PriceItem(
-        tenant_id=CURRENT_TENANT,
+        tenant_id=current_tenant_id(),
         category_id=cat.id,
         name="Spedizione standard",
         description="Voce auto-generata per spedizioni riaddebitate (vettore + markup).",
@@ -1436,7 +1436,7 @@ async def create_shipment(
     if pa_ids:
         found = db.query(PhysicalAsset.id).filter(
             PhysicalAsset.id.in_(pa_ids),
-            PhysicalAsset.tenant_id == CURRENT_TENANT,
+            PhysicalAsset.tenant_id == current_tenant_id(),
             PhysicalAsset.deleted_at.is_(None),
         ).all()
         if len(found) != len(pa_ids):
@@ -1444,7 +1444,7 @@ async def create_shipment(
     if da_ids:
         found = db.query(Asset.id).filter(
             Asset.id.in_(da_ids),
-            Asset.tenant_id == CURRENT_TENANT,
+            Asset.tenant_id == current_tenant_id(),
         ).all()
         if len(found) != len(da_ids):
             raise HTTPException(404, f"Alcuni digital asset non trovati nel tenant")
@@ -1455,7 +1455,7 @@ async def create_shipment(
     # 1. Crea IngestBatch
     code = _next_batch_code(db)
     batch = IngestBatch(
-        tenant_id=CURRENT_TENANT,
+        tenant_id=current_tenant_id(),
         code=code, direction=direction,
         title=None,
         description=(notes or "").strip() or None,
@@ -1481,7 +1481,7 @@ async def create_shipment(
     movements_created = 0
     for pid in pa_ids:
         m = AssetMovement(
-            tenant_id=CURRENT_TENANT,
+            tenant_id=current_tenant_id(),
             physical_asset_id=pid,
             asset_id=None,
             ingest_batch_id=batch.id,
@@ -1498,7 +1498,7 @@ async def create_shipment(
         db.add(m); movements_created += 1
     for aid in da_ids:
         m = AssetMovement(
-            tenant_id=CURRENT_TENANT,
+            tenant_id=current_tenant_id(),
             physical_asset_id=None,
             asset_id=aid,
             ingest_batch_id=batch.id,
@@ -1520,7 +1520,7 @@ async def create_shipment(
         # Trova il primo Job attivo del project_id specificato
         job = db.query(Job).filter(
             Job.project_id == billable_to_project_id,
-            Job.tenant_id == CURRENT_TENANT,
+            Job.tenant_id == current_tenant_id(),
         ).order_by(Job.created_at.desc()).first()
         if not job:
             db.rollback()
@@ -1553,7 +1553,7 @@ async def create_shipment(
         # total_quoted=0; il maturato (total_accrued/expected) è il costo
         # spedizione (con markup) che viene riaddebitato al cliente.
         jcl = JobCostLine(
-            tenant_id=CURRENT_TENANT,
+            tenant_id=current_tenant_id(),
             job_id=job.id,
             price_item_id=ship_price_item.id if ship_price_item else None,
             description=" — ".join(desc_parts)[:255],
@@ -1620,7 +1620,7 @@ async def create_digital_ingest(
     asset_type = resolve_asset_type(mime_type)
     user = getattr(request.state, "current_user", None)
     asset = Asset(
-        tenant_id=CURRENT_TENANT,
+        tenant_id=current_tenant_id(),
         filename=filename, original_name=file.filename,
         file_path=file_path, thumbnail_path=thumbnail_path,
         asset_type=asset_type, mime_type=mime_type,
@@ -1633,7 +1633,7 @@ async def create_digital_ingest(
     if not delivery_note_number:
         delivery_note_number = _next_ddt_number(db)
     m = AssetMovement(
-        tenant_id=CURRENT_TENANT,
+        tenant_id=current_tenant_id(),
         asset_id=asset.id,
         physical_asset_id=None,
         ingest_batch_id=ingest_batch_id,
@@ -1686,7 +1686,7 @@ async def scan_asset(token: str, request: Request, db: Session = Depends(get_db)
     in possesso fisico del supporto). Future: integrare access check TPN."""
     a = db.query(PhysicalAsset).filter(
         PhysicalAsset.qr_code_token == token,
-        PhysicalAsset.tenant_id == CURRENT_TENANT,
+        PhysicalAsset.tenant_id == current_tenant_id(),
     ).first()
     if not a:
         return _tpl().TemplateResponse(

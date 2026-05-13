@@ -8,6 +8,23 @@
 
 ## Versione corrente
 
+**v3.5.0-alpha.102** — 13 maggio 2026 — Multi-tenant HARD R-MT2 (341 router refactor)
+
+24 file router refactorati: `CURRENT_TENANT = 1` rimpiazzato con
+`current_tenant_id()` (chiamata dinamica letta da contextvars
+settato dal middleware tenant_resolver). 341 occorrenze totali.
+
+E2E test post-refactor:
+- Login → JWT con tid=1 ✓
+- /clients/api → 200 ✓
+- /finance/api/billing/composable-batches → 200 ✓
+
+**Aperti**:
+- **R-MT3**: onboarding CLI/UI nuovo tenant + uploads/t{tid}/ isolation
+- **R-MT4**: test cross-tenant leak + security audit
+
+## (versione precedente)
+
 **v3.5.0-alpha.101** — 13 maggio 2026 — Multi-tenant HARD R-MT1 (auth scope)
 
 Primo sprint Multi-tenant HARD (#6 roadmap, 4 sprint totali).
