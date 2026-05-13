@@ -1,5 +1,67 @@
 # MediaFlow — Changelog
 
+## v3.5.0-alpha.105 — Storage multidomain per progetto + ENV S3 + UI multipath FS scan (13 maggio 2026)
+
+Preparazione storage S3-compatible + compartimentazione TPN per progetto.
+Decisioni Matteo:
+1. S3 + S3-compatible (MinIO/R2/Wasabi) via stesso adapter boto3
+2. Storage per-progetto (granularità fine TPN)
+3. Credenziali via ENV (no DB) per sicurezza
+4. Legacy locale sempre leggibile (lazy migration)
+5. FS scan tenant-level + override per-progetto
+
+**Modello esteso `Project`** (`models.py` + auto-migrate):
+- `storage_backend: str` (`local` | `s3` | `s3_minio` | `s3_r2` | `s3_wasabi`)
+- `storage_root: str` (path locale o S3 prefix)
+- `s3_bucket: str` (per backend S3-compatible)
+- `fs_scan_paths: JSON list` (whitelist FS scan per-progetto, override tenant)
+
+**Settings ENV** (`config.py`):
+- `aws_access_key_id`, `aws_secret_access_key`
+- `aws_s3_endpoint` (vuoto = AWS standard; valorizzato per MinIO/R2/Wasabi)
+- `aws_s3_region`, `aws_s3_use_ssl`
+- `aws_s3_default_bucket` fallback
+- `aws_s3_presigned_ttl` (default 3600s)
+
+**Endpoint nuovi** (`settings.py`):
+- `GET /settings/api/fs-scan-paths` lista paths tenant
+- `PUT /settings/api/fs-scan-paths` aggiorna lista (validation no `..`)
+
+**Endpoint esteso** `PUT /projects/api/{id}`:
+- Accetta `storage_backend`, `storage_root`, `s3_bucket`, `fs_scan_paths_json`
+- Validazione storage_backend whitelist
+- `GET /projects/api/{id}` espone i nuovi campi
+
+**FS scan compartimentato** (`dam.py`):
+- `POST /dam/api/fs-scan` accetta nuovo `project_id` opzionale.
+- TPN strict: se `Project.fs_scan_paths` valorizzato → USA SOLO QUELLA
+  whitelist (no fallback tenant). Se vuota → fallback tenant-level.
+- Path-traversal check resta attivo.
+
+**UI** (`settings.html`):
+- Nuovo tab "💾 Storage" (solo admin) con:
+  - Card "Filesystem scan — Percorsi autorizzati (tenant-level)" con
+    lista corrente, add/remove paths, validation client-side `..`.
+  - Card "Storage S3 — Stato configurazione" con istruzioni ENV +
+    workflow per attivare un Project su S3.
+
+**E2E test**: `PUT fs-scan-paths` con 2 paths → `GET` ritorna stessi.
+`PUT /projects/api/1 storage_backend=s3 s3_bucket=X` → riflette in `GET`.
+`POST fs-scan project_id=X path=Y` valida contro project paths (TPN strict)
+con fallback tenant.
+
+**Aperti α.106** (storage adapter pattern):
+- `app/services/storage/{base,local_fs,s3,factory}.py`
+- Asset upload/download routing via factory(project)
+- Presigned URL S3 per download diretto
+- Scan bucket S3 (`storage.walk(prefix)`)
+- Test E2E con MinIO container
+
+**Aperti α.107** (TPN strong isolation):
+- Audit endpoint mutator: ogni read/write Asset filtra
+  `project_id in accessible_project_ids(user)`
+- Path traversal guard cross-project per filesystem locale
+
 ## v3.5.0-alpha.104 — Super-admin GUI tenant management + manuale aggiornato (13 maggio 2026)
 
 Console super-admin platform per gestione cross-tenant da GUI.

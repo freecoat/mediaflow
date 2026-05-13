@@ -483,6 +483,11 @@ def _auto_migrate_columns():
             ("billing_frequency", "VARCHAR(20) NOT NULL DEFAULT 'monthly'"),
             # v3.5.0-alpha.94 — Markup % spedizioni riaddebitate al cliente
             ("shipping_markup_pct", "REAL NOT NULL DEFAULT 15.0"),
+            # v3.5.0-alpha.105 — Storage per-project (TPN compartimentazione)
+            ("storage_backend", "VARCHAR(20) NULL"),
+            ("storage_root",    "VARCHAR(512) NULL"),
+            ("s3_bucket",       "VARCHAR(255) NULL"),
+            ("fs_scan_paths",   "TEXT NULL"),
         ]
         with engine.begin() as conn:
             for col, ddl in proj_alter:
@@ -842,7 +847,7 @@ async def lifespan(app: FastAPI):
     yield
 
 
-app = FastAPI(title="MediaFlow", version="3.5.0-alpha.104", lifespan=lifespan)
+app = FastAPI(title="MediaFlow", version="3.5.0-alpha.105", lifespan=lifespan)
 
 BASE_DIR = Path(__file__).parent
 app.mount("/static", StaticFiles(directory=BASE_DIR / "static"), name="static")

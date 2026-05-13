@@ -8,6 +8,38 @@
 
 ## Versione corrente
 
+**v3.5.0-alpha.105** — 13 maggio 2026 — Storage multidomain per progetto + ENV S3 + UI multipath FS scan
+
+Preparazione storage S3 + compartimentazione TPN per progetto.
+
+**Modello Project** esteso (+4 colonne auto-migrate):
+- storage_backend / storage_root / s3_bucket
+- fs_scan_paths (whitelist per-project override tenant-level)
+
+**Settings ENV** per S3-compatible (MinIO/R2/Wasabi/AWS).
+
+**UI nuova tab "💾 Storage"** in `/settings`:
+- Multipath FS scan tenant-level con add/remove
+- Istruzioni ENV S3 + workflow attivazione per Project
+
+**FS scan TPN strict**: se `Project.fs_scan_paths` valorizzato → SOLO
+quella whitelist (no fallback tenant). Compartimentazione stagna.
+
+**Da testare**:
+1. `/settings` tab Storage → aggiungi 2 paths → vedi lista
+2. `PUT /projects/api/1 storage_backend=s3 s3_bucket=X fs_scan_paths_json=[...]`
+3. `POST /dam/api/fs-scan project_id=1 path=/Volumes/X` → valida contro
+   project paths
+
+**Aperti**:
+- **α.106**: storage adapter pattern (`storage/{local_fs,s3,factory}.py`),
+  upload/download routing, presigned URL
+- **α.107**: TPN strong isolation audit endpoint mutator
+
+1 commit locale NON pushato (α.105).
+
+## (versione precedente)
+
 **v3.5.0-alpha.104** — 13 maggio 2026 — Super-admin GUI tenant + manuale
 
 **Console super-admin platform** (`/platform/tenants`):

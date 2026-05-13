@@ -57,6 +57,21 @@ class Settings(BaseSettings):
     # demo single-user di sviluppo. In produzione METTERE = True.
     auth_required: bool = False
 
+    # v3.5.0-alpha.105 — Storage S3-compatible (AWS S3 / MinIO / R2 / Wasabi).
+    # Le credenziali stanno in ENV (no DB) per sicurezza. Un set di
+    # credenziali serve potenzialmente più tenant/bucket.
+    # Se aws_s3_endpoint è vuoto → AWS S3 standard (region inferito da bucket).
+    # Per MinIO/R2 specificare endpoint completo.
+    aws_access_key_id: Optional[str] = None
+    aws_secret_access_key: Optional[str] = None
+    aws_s3_endpoint: Optional[str] = None       # es. https://s3.eu-west-1.amazonaws.com, https://abc.r2.cloudflarestorage.com
+    aws_s3_region: str = "eu-west-1"
+    aws_s3_use_ssl: bool = True
+    # Default bucket fallback (se Tenant/Project non specifica)
+    aws_s3_default_bucket: Optional[str] = None
+    # Presigned URL TTL per download (secondi). Default 1h.
+    aws_s3_presigned_ttl: int = 3600
+
     class Config:
         env_file = ".env"
         env_file_encoding = "utf-8"

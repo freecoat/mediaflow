@@ -141,6 +141,11 @@ async def get_project(project_id: int, db: Session = Depends(get_db)):
         "description": p.description, "notes": p.notes,
         "billing_frequency": getattr(p, "billing_frequency", "monthly"),
         "shipping_markup_pct": getattr(p, "shipping_markup_pct", 15.0),
+        # v3.5.0-alpha.105 — Storage per-project (TPN)
+        "storage_backend": p.storage_backend,
+        "storage_root": p.storage_root,
+        "s3_bucket": p.s3_bucket,
+        "fs_scan_paths": p.fs_scan_paths or [],
         "quotes": [
             {"id": q.id, "number": q.number, "version": q.version,
              "status": q.status, "total_with_vat": q.total_with_vat,
@@ -173,16 +178,42 @@ async def update_project(
     notes: Optional[str] = Form(None),
     billing_frequency: Optional[str] = Form(None),
     shipping_markup_pct: Optional[float] = Form(None),
+    # v3.5.0-alpha.105 — Storage per-project
+    storage_backend: Optional[str] = Form(None),       # local | s3 | s3_minio | s3_r2 | s3_wasabi
+    storage_root: Optional[str] = Form(None),
+    s3_bucket: Optional[str] = Form(None),
+    fs_scan_paths_json: Optional[str] = Form(None),    # JSON array
     db: Session = Depends(get_db),
 ):
     p = db.query(Project).filter(Project.id == project_id, Project.tenant_id == current_tenant_id()).first()
     if not p:
         raise HTTPException(404)
+    # Special handling fs_scan_paths_json (JSON array → list)
+    if fs_scan_paths_json is not None:
+        import json as _json
+        try:
+            paths = _json.loads(fs_scan_paths_json) if fs_scan_paths_json else []
+        except _json.JSONDecodeError:
+            raise HTTPException(400, "fs_scan_paths_json malformato")
+        if not isinstance(paths, list):
+            raise HTTPException(400, "fs_scan_paths_json deve essere lista")
+        clean = []
+        for x in paths:
+            if isinstance(x, str) and x.strip() and ".." not in x:
+                clean.append(x.strip())
+        p.fs_scan_paths = clean or None
+    # Validazione storage_backend
+    if storage_backend is not None:
+        valid = ("", "local", "s3", "s3_minio", "s3_r2", "s3_wasabi")
+        if storage_backend not in valid:
+            raise HTTPException(400, f"storage_backend invalido. Valori: {valid}")
+        p.storage_backend = storage_backend or None
     for field in ("title", "project_type", "length_minutes", "fps",
                   "shooting_format", "delivery_format", "director",
                   "producer", "dop", "delivery_deadline",
                   "status", "description", "notes",
-                  "billing_frequency", "shipping_markup_pct"):
+                  "billing_frequency", "shipping_markup_pct",
+                  "storage_root", "s3_bucket"):
         val = locals()[field]
         if val is not None and val != "":
             setattr(p, field, val)

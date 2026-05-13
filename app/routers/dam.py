@@ -444,21 +444,45 @@ async def fs_scan(
     compute_checksum: int = Form(0),
     max_depth: int = Form(8),
     max_files: int = Form(2000),
+    project_id: Optional[int] = Form(None),
     db: Session = Depends(get_db),
 ):
     """v3.5.0-alpha.96 — Walk filesystem path autorizzato + classifica
-    file per tipo. NO DB write — solo preview JSON. Usato per UI 'Scansiona
-    cartella' che mostra contenuti + permette import selettivo.
+    file per tipo. NO DB write — solo preview JSON.
+
+    v3.5.0-alpha.105 — Whitelist composta:
+    - tenant.fs_scan_allowed_paths (cross-progetto, admin tenant)
+    - project.fs_scan_paths (override per-progetto, se project_id valorizzato)
+    Se project_id è dato, l'utente DEVE avere access al project + path
+    DEVE essere nella whitelist del project (per TPN strict).
     """
     from app.services.fs_scan import walk_filesystem
-    from app.models import Tenant
+    from app.models import Tenant, Project
     tenant = db.query(Tenant).filter(Tenant.id == current_tenant_id()).first()
-    allowed = (tenant.fs_scan_allowed_paths if tenant else None) or []
+    tenant_paths = (tenant.fs_scan_allowed_paths if tenant else None) or []
+    project_paths = []
+    if project_id:
+        p = db.query(Project).filter(
+            Project.id == project_id,
+            Project.tenant_id == current_tenant_id(),
+        ).first()
+        if not p:
+            raise HTTPException(404, f"Project {project_id} non trovato nel tenant")
+        project_paths = p.fs_scan_paths or []
+        # v3.5.0-alpha.105 TPN strict: se Project ha lista non vuota, USA
+        # SOLO quella (compartimentazione stagna). Tenant-level resta
+        # accessibile solo se Project.fs_scan_paths è null/vuota.
+        allowed = project_paths if project_paths else tenant_paths
+    else:
+        allowed = tenant_paths
     if not _is_path_allowed(path, allowed):
         raise HTTPException(
             403,
-            "Path non autorizzato. Aggiungilo a `tenant.fs_scan_allowed_paths` "
-            "via /settings → Avanzate → Filesystem scan."
+            "Path non autorizzato. " + (
+                f"Aggiungilo a Project.fs_scan_paths (id={project_id})"
+                if project_id and project_paths else
+                "Aggiungilo a tenant.fs_scan_allowed_paths via /settings → Storage."
+            )
         )
     result = walk_filesystem(
         path, compute_checksum=bool(compute_checksum),

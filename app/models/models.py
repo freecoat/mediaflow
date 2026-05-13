@@ -759,6 +759,22 @@ class Project(Base):
     # Definito in fase di quotazione, modificabile da manager fino alla
     # prima fattura emessa.
     billing_frequency: Mapped[str] = mapped_column(String(20), default="monthly")
+    # v3.5.0-alpha.105 — Storage per-project (TPN compartimentazione stagna).
+    # Default = ereditato da Tenant (storage_backend + uploads/t{tid}/).
+    # Quando settato: il progetto ha la propria area isolata. Asset.file_path
+    # punterà sotto storage_root. fs_scan_paths è una whitelist per-progetto
+    # che sovrascrive Tenant.fs_scan_allowed_paths (es. cliente A può
+    # scansionare solo /Volumes/ClienteA, cliente B solo /Volumes/ClienteB).
+    storage_backend: Mapped[Optional[str]] = mapped_column(String(20), nullable=True)
+    # local | s3 | s3_minio | s3_r2 | s3_wasabi (S3-compatibile via boto3)
+    storage_root: Mapped[Optional[str]] = mapped_column(String(512), nullable=True)
+    # Local: path assoluto (es. /Volumes/MediaFlow/p42/)
+    # S3: prefix (es. s3://mybucket/p42/)
+    s3_bucket: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
+    # Solo se storage_backend = s3*. ENV var contiene endpoint+access_key+
+    # secret per il bucket. Multi-bucket cross-tenant via singolo set credenziali.
+    fs_scan_paths: Mapped[Optional[list]] = mapped_column(JSON, nullable=True)
+    # Lista path filesystem locali autorizzati per scan (override tenant-level).
     # v3.5.0-alpha.94 — Markup % sui costi spedizione riaddebitati al cliente.
     # Quando IngestBatch ha shipping_payer=charged_to_client e questo project
     # è il billable, la JCL auto-generata applica:

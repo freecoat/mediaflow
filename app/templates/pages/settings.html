@@ -88,6 +88,7 @@
     <div class="settings-tab" data-pane="company" onclick="showPane('company')"><i data-lucide="building-2" style="width:14px;height:14px;vertical-align:-2px;"></i> Azienda</div>
     {% if is_admin(user) %}
     <div class="settings-tab" data-pane="data" onclick="showPane('data')"><i data-lucide="database" style="width:14px;height:14px;vertical-align:-2px;"></i> Dati</div>
+    <div class="settings-tab" data-pane="storage" onclick="showPane('storage')"><i data-lucide="hard-drive" style="width:14px;height:14px;vertical-align:-2px;"></i> Storage</div>
     {% endif %}
   </div>
 
@@ -528,6 +529,52 @@
     </div>
 
     {% if is_admin(user) %}
+    <!-- ── Pannello Storage (admin only, v3.5.0-alpha.105) ────── -->
+    <div class="settings-pane" id="pane-storage">
+      <div class="card mb-4">
+        <div class="card-title mb-2"><i data-lucide="folder-search" style="width:16px;height:16px;vertical-align:-3px;"></i> Filesystem scan — Percorsi autorizzati (tenant-level)</div>
+        <p class="text-sm text-muted mb-3">
+          Cartelle filesystem dove gli admin/editor possono lanciare lo scan
+          (<a href="/dam/fs-scan">/dam/fs-scan</a>) per importare Asset DAM
+          senza copiare i file. Per sicurezza solo path qui elencati sono
+          accessibili. Per <strong>scope per-progetto</strong> (sovrascrive
+          questa lista) edita il singolo Project.
+        </p>
+        <div id="fsp-list" style="margin-bottom:10px;"></div>
+        <div style="display:flex;gap:8px;align-items:center;">
+          <input class="form-input" id="fsp-new" placeholder="/Volumes/StorageA oppure D:\Asset\Cliente" style="flex:1;">
+          <button class="btn btn-secondary btn-sm" onclick="fspAddPath()">+ Aggiungi</button>
+        </div>
+        <div class="text-xs text-muted" style="margin-top:8px;">
+          Path traversal con <code>..</code> rifiutati. Usa path assoluti.
+          Per AWS S3 / S3-compatible vedi card sotto.
+        </div>
+      </div>
+
+      <div class="card mb-4">
+        <div class="card-title mb-2"><i data-lucide="cloud" style="width:16px;height:16px;vertical-align:-3px;"></i> Storage S3 — Stato configurazione</div>
+        <p class="text-sm text-muted mb-3">
+          Storage S3-compatible (AWS S3, MinIO, Cloudflare R2, Wasabi) gestito
+          a livello <strong>progetto</strong>. Per attivare:
+        </p>
+        <ol class="text-sm" style="margin-left:18px;">
+          <li>Configura credenziali in <code>.env</code>:
+            <pre style="background:var(--bg2);padding:8px;border-radius:6px;margin:6px 0;font-size:11px;">AWS_ACCESS_KEY_ID=...
+AWS_SECRET_ACCESS_KEY=...
+AWS_S3_ENDPOINT=https://s3.eu-west-1.amazonaws.com  # opt
+AWS_S3_REGION=eu-west-1
+AWS_S3_DEFAULT_BUCKET=mediaflow-prod</pre>
+          </li>
+          <li>Per ogni Project che vuoi su S3:
+            <code>storage_backend=s3</code>, <code>s3_bucket=&lt;tuo-bucket&gt;</code>,
+            <code>storage_root=&lt;prefix&gt;</code> (es. <code>p42/</code>).
+          </li>
+          <li>I file esistenti (locale) restano leggibili (lazy migration).</li>
+        </ol>
+        <div id="s3-status" class="text-sm" style="padding:10px;background:var(--bg3);border-radius:6px;font-family:var(--font-mono);font-size:11px;">Caricamento stato…</div>
+      </div>
+    </div>
+
     <!-- ── Pannello Dati (admin only, v3.5.0-alpha.34) ────────── -->
     <div class="settings-pane" id="pane-data">
       <div class="card mb-4">
@@ -682,6 +729,82 @@ function showPane(id) {
   document.querySelectorAll('.settings-tab').forEach(t => t.classList.toggle('active', t.dataset.pane === id));
   document.querySelectorAll('.settings-pane').forEach(p => p.classList.toggle('active', p.id === 'pane-' + id));
   if (id === 'hours') whReload();
+  if (id === 'storage') { fspReload(); s3StatusReload(); }
+}
+
+// v3.5.0-alpha.105 — Filesystem scan paths (tenant-level)
+async function fspReload() {
+  const host = document.getElementById('fsp-list');
+  if (!host) return;
+  let data;
+  try { data = await api('GET', '/settings/api/fs-scan-paths'); }
+  catch(e) { toast(e.message, 'error'); return; }
+  while (host.firstChild) host.removeChild(host.firstChild);
+  const paths = data.paths || [];
+  if (!paths.length) {
+    const empty = document.createElement('div');
+    empty.className = 'text-muted text-sm';
+    empty.style.cssText = 'padding:10px;background:var(--bg3);border-radius:6px;font-style:italic;';
+    empty.textContent = 'Nessun path autorizzato. Aggiungi sotto.';
+    host.appendChild(empty);
+    return;
+  }
+  paths.forEach((p, idx) => {
+    const row = document.createElement('div');
+    row.style.cssText = 'display:flex;align-items:center;gap:8px;padding:6px 10px;background:var(--bg3);border-radius:6px;margin-bottom:4px;font-size:12px;';
+    const code = document.createElement('code');
+    code.style.flex = '1';
+    code.textContent = p;
+    const btn = document.createElement('button');
+    btn.className = 'btn btn-ghost btn-sm';
+    btn.style.color = 'var(--rose)';
+    btn.textContent = '✕';
+    btn.title = 'Rimuovi';
+    btn.addEventListener('click', async () => {
+      if (!confirm(`Rimuovere ${p} dalla whitelist?`)) return;
+      const newPaths = paths.filter((_, i) => i !== idx);
+      await fspSave(newPaths);
+    });
+    row.appendChild(code);
+    row.appendChild(btn);
+    host.appendChild(row);
+  });
+}
+
+async function fspAddPath() {
+  const inp = document.getElementById('fsp-new');
+  const v = inp.value.trim();
+  if (!v) { toast('Path vuoto', 'warning'); return; }
+  if (v.includes('..')) { toast('Path con .. non ammesso', 'warning'); return; }
+  let data;
+  try { data = await api('GET', '/settings/api/fs-scan-paths'); }
+  catch(e) { toast(e.message, 'error'); return; }
+  const paths = [...(data.paths || [])];
+  if (paths.includes(v)) { toast('Path già presente', 'warning'); return; }
+  paths.push(v);
+  await fspSave(paths);
+  inp.value = '';
+}
+
+async function fspSave(paths) {
+  const fd = new FormData();
+  fd.append('paths_json', JSON.stringify(paths));
+  try {
+    await api('PUT', '/settings/api/fs-scan-paths', fd);
+    toast(`✓ ${paths.length} path autorizzati`, 'success');
+    fspReload();
+  } catch(e) { toast(e.message, 'error'); }
+}
+
+async function s3StatusReload() {
+  const el = document.getElementById('s3-status');
+  if (!el) return;
+  // Status cliente-side: legge da meta refresh data o fetch (qui meta nascosto)
+  // Per ora mostra info statiche, futuro endpoint /settings/api/s3-status
+  el.textContent =
+    'Backend disponibili: local (default), s3, s3_minio, s3_r2, s3_wasabi.\n' +
+    'Per attivare un Project su S3: edita Project.storage_backend tramite API/Copilot.\n' +
+    'ENV variables richieste: AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY, AWS_S3_* (vedi config.py).';
 }
 
 // v3.5.0-alpha.21: read-only mode per non-admin/manager

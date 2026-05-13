@@ -16,6 +16,7 @@ from app.services.ai_provider import (
     PROVIDER_LABELS, PROVIDER_MODELS, ProviderConfig, build_provider,
 )
 from app.services.crypto import encrypt_secret, decrypt_secret
+from app.context import current_tenant_id
 
 router = APIRouter(prefix="/settings", tags=["settings"])
 
@@ -560,6 +561,62 @@ async def company_update(
     db.commit()
     db.refresh(t)
     return {"ok": True, "id": t.id}
+
+
+# ── Filesystem scan whitelist (tenant-level) — α.105 ──────────────────
+
+
+@router.get("/api/fs-scan-paths")
+async def fs_scan_paths_get(
+    access_token: Optional[str] = Cookie(None),
+    db: Session = Depends(get_db),
+):
+    """Lista path autorizzati per scan filesystem a livello tenant."""
+    from app.models import Tenant
+    u = _resolve_current_user(db, access_token)
+    _require_admin(u)
+    t = db.query(Tenant).filter(Tenant.id == current_tenant_id()).first()
+    if not t:
+        raise HTTPException(404)
+    return {"paths": t.fs_scan_allowed_paths or []}
+
+
+@router.put("/api/fs-scan-paths")
+async def fs_scan_paths_set(
+    paths_json: str = Form(...),  # JSON array string
+    access_token: Optional[str] = Cookie(None),
+    db: Session = Depends(get_db),
+):
+    """Setta lista path autorizzati tenant-level. paths_json = JSON array."""
+    import json as _json
+    from pathlib import Path as _P
+    from app.models import Tenant
+    u = _resolve_current_user(db, access_token)
+    _require_admin(u)
+    try:
+        paths = _json.loads(paths_json)
+    except _json.JSONDecodeError:
+        raise HTTPException(400, "paths_json malformato")
+    if not isinstance(paths, list):
+        raise HTTPException(400, "paths_json deve essere lista")
+    # Normalize: assoluti, sanity check
+    clean = []
+    for p in paths:
+        if not isinstance(p, str):
+            continue
+        ps = p.strip()
+        if not ps:
+            continue
+        # Path traversal guard: niente .. nei path autorizzati
+        if ".." in _P(ps).parts:
+            raise HTTPException(400, f"Path con '..' non ammesso: {ps}")
+        clean.append(ps)
+    t = db.query(Tenant).filter(Tenant.id == current_tenant_id()).first()
+    if not t:
+        raise HTTPException(404)
+    t.fs_scan_allowed_paths = clean or None
+    db.commit()
+    return {"ok": True, "paths": clean}
 
 
 @router.post("/api/company/logo")
