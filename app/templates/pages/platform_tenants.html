@@ -121,6 +121,9 @@
   </div>
 </div>
 
+{% endblock %}
+
+{% block scripts %}
 <script>
 async function loadTenants() {
   const tbody = document.getElementById('tenants-tbody');
@@ -404,5 +407,4 @@ async function showUsers(t) {
 
 loadTenants();
 </script>
-
 {% endblock %}

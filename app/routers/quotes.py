@@ -548,6 +548,9 @@ async def get_quote(quote_id: int, db: Session = Depends(get_db)):
         "total_with_vat": q.total_with_vat,
         "notes": q.notes, "payment_terms": q.payment_terms,
         "shipping_markup_pct": getattr(q, "shipping_markup_pct", 15.0),
+        # v3.5.0-alpha.111 — Scadenze fatturazione (propagate a Project all'approve)
+        "billing_frequency": getattr(q, "billing_frequency", None),
+        "billing_terms_days": getattr(q, "billing_terms_days", None),
         "generated_from_deliverables": q.generated_from_deliverables,
         "source_document_name": q.source_document_name,
         "subtotal_optional": round(
@@ -603,6 +606,18 @@ async def update_quote_status(
     cancelled_job_id = None
 
     if new == QuoteStatus.approved and prev != QuoteStatus.approved:
+        # v3.5.0-alpha.111 — Propaga scadenze fatturazione Quote → Project
+        # SE Project non ha override esplicito (campi NULL).
+        if q.project:
+            if q.billing_frequency and not getattr(q.project, "billing_frequency", None):
+                q.project.billing_frequency = q.billing_frequency
+            elif q.billing_frequency:
+                # Project ha già un valore: aggiorna SOLO se il Project ha il default
+                # `monthly` (significa che non è stato ancora personalizzato).
+                if getattr(q.project, "billing_frequency", "monthly") == "monthly":
+                    q.project.billing_frequency = q.billing_frequency
+            if q.billing_terms_days and not getattr(q.project, "billing_terms_days", None):
+                q.project.billing_terms_days = q.billing_terms_days
         # Approvazione: crea il job se non esiste
         promoted_job = _create_job_from_quote(db, q)
         # v3.4.56 — warning non bloccante: se il job non ha JobResourceAssignment,
@@ -676,6 +691,9 @@ async def update_quote(
     number: Optional[str] = Form(None),
     # v3.5.0-alpha.106 — Clausola ricarico spedizioni
     shipping_markup_pct: Optional[float] = Form(None),
+    # v3.5.0-alpha.111 — Scadenze fatturazione (propagate a Project all'approve)
+    billing_frequency: Optional[str] = Form(None),
+    billing_terms_days: Optional[int] = Form(None),
     db: Session = Depends(get_db),
 ):
     # v3.4.38 (R3.2): guard permission edit_quotes
@@ -722,6 +740,15 @@ async def update_quote(
     if payment_terms is not None: q.payment_terms = payment_terms
     if shipping_markup_pct is not None:
         q.shipping_markup_pct = max(0.0, min(float(shipping_markup_pct), 100.0))
+    if billing_frequency is not None:
+        bf = billing_frequency.strip() or None
+        if bf and bf not in {"monthly", "quarterly", "milestone", "on_completion", "custom"}:
+            raise HTTPException(400, f"billing_frequency non valido: {bf}")
+        q.billing_frequency = bf
+    if billing_terms_days is not None:
+        q.billing_terms_days = (
+            int(billing_terms_days) if billing_terms_days else None
+        )
     _recalc_quote(q)
     db.commit()
     return {

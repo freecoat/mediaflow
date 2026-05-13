@@ -634,6 +634,40 @@ def _auto_migrate_columns():
                         f"ALTER TABLE {tbl} ADD COLUMN tenant_id INTEGER NOT NULL DEFAULT 1"
                     ))
 
+    # v3.5.0-alpha.111 — Storno fattura: voided_at + voided_by_invoice_id su slice
+    if "jcl_billed_slices" in insp.get_table_names():
+        scols = {c["name"] for c in insp.get_columns("jcl_billed_slices")}
+        slice_alter = [
+            ("voided_at", "DATETIME NULL"),
+            ("voided_by_invoice_id", "INTEGER NULL"),
+        ]
+        with engine.begin() as conn:
+            for col, ddl in slice_alter:
+                if col not in scols:
+                    print(f"[auto-migrate] jcl_billed_slices.{col} mancante -> ALTER TABLE (α.111 storno)")
+                    conn.execute(text(f"ALTER TABLE jcl_billed_slices ADD COLUMN {col} {ddl}"))
+
+    # v3.5.0-alpha.111 — Quote: billing_frequency + billing_terms_days mirror Project
+    if "quotes" in insp.get_table_names():
+        qcols = {c["name"] for c in insp.get_columns("quotes")}
+        quote_alter = [
+            ("billing_frequency", "VARCHAR(20) NULL"),
+            ("billing_terms_days", "INTEGER NULL"),
+        ]
+        with engine.begin() as conn:
+            for col, ddl in quote_alter:
+                if col not in qcols:
+                    print(f"[auto-migrate] quotes.{col} mancante -> ALTER TABLE (α.111 scadenze)")
+                    conn.execute(text(f"ALTER TABLE quotes ADD COLUMN {col} {ddl}"))
+
+    # v3.5.0-alpha.111 — Project: billing_terms_days (scadenza gg dal cliente)
+    if "projects" in insp.get_table_names():
+        pcols = {c["name"] for c in insp.get_columns("projects")}
+        if "billing_terms_days" not in pcols:
+            print("[auto-migrate] projects.billing_terms_days mancante -> ALTER TABLE (α.111)")
+            with engine.begin() as conn:
+                conn.execute(text("ALTER TABLE projects ADD COLUMN billing_terms_days INTEGER NULL"))
+
     # v3.5.0-alpha.91 audit fix P0: UNIQUE constraint su anomaly_entries
     # (tenant_id, dedup_key). create_tables() la crea solo se la tabella è
     # nuova; per DB esistenti (chi ha lanciato detect prima del fix) aggiungo
@@ -655,6 +689,50 @@ def _auto_migrate_columns():
                 ))
 
 
+def _backfill_resource_assignments():
+    """v3.5.0-alpha.111 — Backfill JobResourceAssignment per booking
+    storici. Risolve il caso reportato da Matteo: cost report mostra molte
+    risorse nei booking per fascia ma poche nell'assignment del progetto.
+
+    Causa: booking creati prima di α.55 (quando l'auto-assignment è stato
+    introdotto). SQL idempotente: insert solo per (job_id, resource_id) non
+    già presenti in JobResourceAssignment.
+    """
+    from sqlalchemy import text
+    from app.database import engine
+    try:
+        with engine.begin() as conn:
+            # Verifica colonne (per evitare errore su DB pre-α.55)
+            jra_cols = {r[1] for r in conn.execute(text("PRAGMA table_info(job_resource_assignments)"))}
+            res_cols = {r[1] for r in conn.execute(text("PRAGMA table_info(resources)"))}
+            if "role_in_project" not in jra_cols:
+                return
+            select_role = "r.role" if "role" in res_cols else "NULL"
+            select_daily = "r.daily_rate" if "daily_rate" in res_cols else "NULL"
+            select_hourly = "r.hourly_rate" if "hourly_rate" in res_cols else "NULL"
+            sql = text(f"""
+                INSERT INTO job_resource_assignments
+                  (job_id, resource_id, role_in_project, agreed_daily_rate, agreed_hourly_rate)
+                SELECT DISTINCT b.job_id, ba.resource_id,
+                       {select_role}, {select_daily}, {select_hourly}
+                FROM booking_assignments ba
+                JOIN bookings b ON b.id = ba.booking_id
+                LEFT JOIN resources r ON r.id = ba.resource_id
+                WHERE b.job_id IS NOT NULL
+                  AND NOT EXISTS (
+                    SELECT 1 FROM job_resource_assignments jra
+                    WHERE jra.job_id = b.job_id
+                      AND jra.resource_id = ba.resource_id
+                  )
+            """)
+            result = conn.execute(sql)
+            inserted = result.rowcount
+            if inserted and inserted > 0:
+                print(f"[backfill] {inserted} JobResourceAssignment ricostruiti da booking storici")
+    except Exception as e:
+        print(f"[backfill] resource_assignments failed: {e}")
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     create_tables()
@@ -664,6 +742,11 @@ async def lifespan(app: FastAPI):
         _auto_migrate_columns()
     except Exception as e:
         print(f"[lifespan] _auto_migrate_columns failed: {e}")
+    # v3.5.0-alpha.111 — Backfill JobResourceAssignment da booking storici
+    try:
+        _backfill_resource_assignments()
+    except Exception as e:
+        print(f"[lifespan] _backfill_resource_assignments failed: {e}")
     # v3.5.0-alpha.7 — Registra event listener per soft-delete (Quote).
     # Filtra automaticamente i record con deleted_at != NULL su tutte le
     # query SELECT, salvo execution_options(include_deleted=True).
@@ -873,7 +956,7 @@ async def lifespan(app: FastAPI):
     yield
 
 
-app = FastAPI(title="MediaFlow", version="3.5.0-alpha.110", lifespan=lifespan)
+app = FastAPI(title="MediaFlow", version="3.5.0-alpha.111", lifespan=lifespan)
 
 BASE_DIR = Path(__file__).parent
 app.mount("/static", StaticFiles(directory=BASE_DIR / "static"), name="static")

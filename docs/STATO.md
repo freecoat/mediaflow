@@ -8,6 +8,58 @@
 
 ## Versione corrente
 
+**v3.5.0-alpha.111** — 13 maggio 2026 — Billing UX cleanup + storno NC TD04 + scadenze Quote→Project + timeline polish
+
+Round chiuso a 13 richieste Matteo (5 fronti):
+
+**Billing**:
+- Tab Timesheet+P&L rimossi
+- Endpoint nuovo `/finance/api/billing/invoice/{id}/pdf` (PDF via invoice_id)
+- batch invoice-pdf fallback via JCLBilledSlice + error msg descrittivo
+- Batch list: hide-invoiced default + data fattura + "Vai alla fattura"
+  filtra alla singola (focus-bar) + bottoni storno/PDF per riga
+- "Componi fattura" mode `per progetto` (default) | `per periodo`
+- Invoice line description con `[periodo → validità]`
+- **Storno NC TD04**: endpoint `POST /finance/api/billing/invoice/{id}/storno`
+  — crea TD04, voida JCLBilledSlice, riapre batch
+- Auto due_date da Project.billing_terms_days
+
+**Quote → Project scadenze**:
+- Quote.billing_frequency + billing_terms_days (auto-migrate)
+- Project.billing_terms_days (auto-migrate)
+- UI editor quote con dropdown + input
+- Propagation all'approve
+
+**Timeline**:
+- horizontalScroll:false (side scroll rimosso)
+- Drag bordo rimosso (CSS display:none su drag-left/right)
+- stack:false default → righe uniformi
+- Heatmap toggle rimosso (era no-op)
+- Shift+wheel target multipli con scrollHeight check
+
+**Cost report**:
+- Backfill JobResourceAssignment al boot da booking storici
+- Tabelle Voci/Ore booking rese mf-sortable
+
+**Schema auto-migrate**:
+- jcl_billed_slices.voided_at + voided_by_invoice_id
+- quotes.billing_frequency + billing_terms_days
+- projects.billing_terms_days
+- slice_guard filtra voided_at IS NULL
+
+**Da testare**:
+1. `/finance` 3 tab (Fatture/Batch/Anomalie)
+2. Batch fatturati nascosti default + numero+data fattura visibili
+3. "Componi fattura" mode progetto
+4. Storno TD04: NC emessa, source annullata, batch riaperto
+5. Quote editor scadenze + propagation a Project
+6. Timeline righe uniformi, no side scroll, no drag bordo
+7. Cost report: assignment popolate (backfill) + tabelle sortable
+
+1 commit locale NON pushato (α.111).
+
+## (versione precedente)
+
 **v3.5.0-alpha.110** — 13 maggio 2026 — Storage adapter S3 + TPN strong isolation
 
 **Storage adapter pattern**:

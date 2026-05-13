@@ -109,6 +109,15 @@ def _batch_to_dict(b: BillingBatch, with_lines: bool = False) -> dict:
         "approved_at": b.approved_at.isoformat() if b.approved_at else None,
         "invoice_id": b.invoice_id,
         "invoice_number": b.invoice.number if b.invoice else None,
+        # v3.5.0-alpha.111 — date emissione + status fattura nella row batch.
+        "invoice_issue_date": (
+            b.invoice.issue_date.isoformat() if (b.invoice and b.invoice.issue_date) else None
+        ),
+        "invoice_status": (
+            b.invoice.status.value if (b.invoice and hasattr(b.invoice.status, "value"))
+            else (b.invoice.status if b.invoice else None)
+        ),
+        "invoice_doc_type": (getattr(b.invoice, "doc_type", None) if b.invoice else None),
     }
     if with_lines:
         # v3.5.0-alpha.56: hydration JCL → quotato + over (sforamento) per riga.
@@ -894,12 +903,16 @@ async def emit_invoice(
     db.flush()
 
     # Linee fattura snapshot da batch lines
+    # v3.5.0-alpha.111 — periodo validità lavorazione nella descrizione riga.
+    period_lbl = ""
+    if batch.period_start and batch.period_end:
+        period_lbl = f" [{batch.period_start.isoformat()} → {batch.period_end.isoformat()}]"
     for bl in batch.lines:
         if bl.total_approved <= 0:
             continue  # skip lines azzerate (loss totale)
         il = InvoiceLine(
             invoice_id=invoice.id,
-            description=bl.description + (" [extra]" if bl.is_extra else ""),
+            description=bl.description + period_lbl + (" [extra]" if bl.is_extra else ""),
             quantity=bl.quantity,
             unit_price=bl.unit_price,
             total=bl.total_approved,
@@ -953,10 +966,10 @@ async def emit_invoice(
 async def compose_invoice_from_batches(
     request: Request,
     project_id: int = Form(...),
-    period_start: date = Form(...),
-    period_end: date = Form(...),
     invoice_number: str = Form(...),
     issue_date: date = Form(...),
+    period_start: Optional[date] = Form(None),
+    period_end: Optional[date] = Form(None),
     due_date: Optional[date] = Form(None),
     vat_rate: float = Form(22.0),
     batch_ids: Optional[str] = Form(None),  # CSV opzionale: se vuoto, prende tutti gli approved
@@ -1006,11 +1019,13 @@ async def compose_invoice_from_batches(
             raise HTTPException(400, "batch_ids deve essere CSV di interi")
         q = q.filter(BillingBatch.id.in_(ids))
     else:
-        # Range periodo: batch il cui periodo è dentro [period_start, period_end]
-        q = q.filter(
-            BillingBatch.period_start >= period_start,
-            BillingBatch.period_end <= period_end,
-        )
+        # v3.5.0-alpha.111 — Periodo OPZIONALE + OVERLAP invece di containment.
+        # Modalità "tutti i batch aperti del progetto" → period_*=None.
+        # Modalità "per periodo" → mantieni batch il cui intervallo si sovrappone.
+        if period_start:
+            q = q.filter(BillingBatch.period_end >= period_start)
+        if period_end:
+            q = q.filter(BillingBatch.period_start <= period_end)
     batches = q.order_by(BillingBatch.period_start.asc()).all()
     if not batches:
         raise HTTPException(404, "Nessun batch approvato in cassetto per i criteri forniti")
@@ -1021,6 +1036,11 @@ async def compose_invoice_from_batches(
         raise HTTPException(400, "Subtotal aggregato ≤ 0: niente da fatturare")
     vat_amount = subtotal * vat_rate / 100
     total = subtotal + vat_amount
+
+    # v3.5.0-alpha.111 — auto due_date da Project.billing_terms_days se omessa
+    if due_date is None and getattr(project, "billing_terms_days", None):
+        from datetime import timedelta
+        due_date = issue_date + timedelta(days=int(project.billing_terms_days))
 
     # Snapshot fiscali
     client_obj = db.query(Client).filter(Client.id == project.client_id).first()
@@ -1076,9 +1096,15 @@ async def compose_invoice_from_batches(
                     jcl.billing_status = JCLBillingStatus.lost
                     jcl.billed_amount = 0
                 continue
+            # v3.5.0-alpha.111 — descrizione include periodo validità lavorazione
+            # (richiesto Matteo: "In fattura vengono riportati i periodi di
+            # validità delle lavorazioni").
+            period_lbl = ""
+            if batch.period_start and batch.period_end:
+                period_lbl = f" [{batch.period_start.isoformat()} → {batch.period_end.isoformat()}]"
             il = InvoiceLine(
                 invoice_id=invoice.id,
-                description=f"[{batch.code}] " + bl.description + (" [extra]" if bl.is_extra else ""),
+                description=f"[{batch.code}]{period_lbl} " + bl.description + (" [extra]" if bl.is_extra else ""),
                 quantity=bl.quantity,
                 unit_price=bl.unit_price,
                 total=bl.total_approved,
@@ -1528,34 +1554,9 @@ async def project_loss_summary(
 
 # ── v3.5.0-alpha.52: PDF formale fattura ─────────────────────────────
 
-@router.get("/{batch_id}/invoice-pdf")
-async def get_invoice_pdf(
-    batch_id: int,
-    request: Request,
-    db: Session = Depends(get_db),
-):
-    """Scarica il PDF della fattura collegata al batch (status=invoiced).
-
-    Usa snapshot fiscali catturati al momento dell'emissione: modifiche
-    successive a tenant/cliente NON corrompono questo PDF storico.
-    """
+def _invoice_pdf_response(invoice: Invoice, db: Session):
     from fastapi.responses import Response
     from app.services.invoice_pdf import generate_invoice_pdf
-    _require_finance(request)
-    batch = db.query(BillingBatch).options(joinedload(BillingBatch.lines)).filter(
-        BillingBatch.id == batch_id, BillingBatch.tenant_id == current_tenant_id(),
-    ).first()
-    if not batch:
-        raise HTTPException(404, "Batch non trovato")
-    if batch.status != BillingBatchStatus.invoiced or not batch.invoice_id:
-        raise HTTPException(400, "Il batch non ha ancora una fattura emessa")
-    invoice = db.query(Invoice).options(joinedload(Invoice.lines)).filter(
-        Invoice.id == batch.invoice_id,
-    ).first()
-    if not invoice:
-        raise HTTPException(404, "Fattura non trovata")
-    # Fallback: se snapshot non popolati (fattura pre-α.52), passa anche
-    # gli oggetti vivi per compilare il PDF dai campi attuali.
     tenant_obj = db.query(Tenant).filter(Tenant.id == current_tenant_id()).first()
     client_obj = db.query(Client).filter(Client.id == invoice.client_id).first()
     pdf = generate_invoice_pdf(invoice, tenant=tenant_obj, client=client_obj)
@@ -1567,3 +1568,212 @@ async def get_invoice_pdf(
             "Content-Disposition": f'inline; filename="Fattura-{safe_num}.pdf"',
         },
     )
+
+
+@router.get("/invoice/{invoice_id}/pdf")
+async def get_invoice_pdf_direct(
+    invoice_id: int,
+    request: Request,
+    db: Session = Depends(get_db),
+):
+    """v3.5.0-alpha.111 — PDF formale dato invoice_id (link diretto da
+    elenco fatture / batch list). Snapshot fiscali immutabili."""
+    _require_finance(request)
+    invoice = db.query(Invoice).options(joinedload(Invoice.lines)).join(
+        Client, Invoice.client_id == Client.id,
+    ).filter(
+        Invoice.id == invoice_id,
+        Client.tenant_id == current_tenant_id(),
+    ).first()
+    if not invoice:
+        raise HTTPException(404, "Fattura non trovata")
+    return _invoice_pdf_response(invoice, db)
+
+
+@router.get("/{batch_id}/invoice-pdf")
+async def get_invoice_pdf(
+    batch_id: int,
+    request: Request,
+    db: Session = Depends(get_db),
+):
+    """Scarica il PDF della fattura collegata al batch (status=invoiced).
+
+    Usa snapshot fiscali catturati al momento dell'emissione: modifiche
+    successive a tenant/cliente NON corrompono questo PDF storico.
+
+    v3.5.0-alpha.111: fallback via JCLBilledSlice se batch.invoice_id è NULL
+    ma le slice contengono già un invoice_id (caso batch riassegnato/
+    rollback parziale). Errore più descrittivo se davvero non c'è fattura.
+    """
+    _require_finance(request)
+    batch = db.query(BillingBatch).options(joinedload(BillingBatch.lines)).filter(
+        BillingBatch.id == batch_id, BillingBatch.tenant_id == current_tenant_id(),
+    ).first()
+    if not batch:
+        raise HTTPException(404, "Batch non trovato")
+    invoice_id = batch.invoice_id
+    if not invoice_id:
+        # Fallback: prova a recuperare via JCLBilledSlice delle righe del batch
+        slice_inv = db.query(JCLBilledSlice.invoice_id).filter(
+            JCLBilledSlice.billing_batch_line_id.in_([l.id for l in batch.lines]),
+        ).first()
+        if slice_inv:
+            invoice_id = slice_inv[0]
+    if not invoice_id:
+        raise HTTPException(
+            400,
+            f"Il batch {batch.code} (stato={batch.status.value}) non ha ancora una "
+            f"fattura emessa. Approva il batch e usa '💶 Emetti fattura' o 'Componi "
+            f"fattura periodo' per emettere la fattura.",
+        )
+    invoice = db.query(Invoice).options(joinedload(Invoice.lines)).filter(
+        Invoice.id == invoice_id,
+    ).first()
+    if not invoice:
+        raise HTTPException(404, "Fattura non trovata")
+    return _invoice_pdf_response(invoice, db)
+
+
+# ── v3.5.0-alpha.111: Storno fattura (nota di credito TD04) ─────────
+
+@router.post("/invoice/{invoice_id}/storno")
+async def storno_invoice(
+    invoice_id: int,
+    request: Request,
+    credit_number: str = Form(...),
+    issue_date: date = Form(...),
+    reason: Optional[str] = Form(None),
+    db: Session = Depends(get_db),
+):
+    """v3.5.0-alpha.111 — Emette nota di credito TD04 che storna integralmente
+    la fattura sorgente.
+
+    Effetti:
+    1. Crea Invoice TD04 con stessi line snapshot + cliente snapshot, status=draft.
+    2. Marca la fattura sorgente come `cancelled`.
+    3. Marca le JCLBilledSlice della sorgente come voided (voided_at + voided_by_invoice_id).
+       Slice voided non bloccano più i booking nel periodo: il maturato torna
+       disponibile per nuova fatturazione.
+    4. Resetta JCL.billing_status → not_billed se la slice voided era l'unica
+       della JCL (altrimenti resta billed con slice residue).
+
+    Manager+ richiesto. Numero NC manuale, univoco a livello tenant.
+    """
+    _require_manager(request)
+    src = db.query(Invoice).options(joinedload(Invoice.lines)).join(
+        Client, Invoice.client_id == Client.id,
+    ).filter(
+        Invoice.id == invoice_id,
+        Client.tenant_id == current_tenant_id(),
+    ).first()
+    if not src:
+        raise HTTPException(404, "Fattura sorgente non trovata")
+    if src.doc_type == "TD04":
+        raise HTTPException(400, "Non puoi stornare una nota di credito (TD04)")
+    if src.status == InvoiceStatus.cancelled:
+        raise HTTPException(400, "Fattura già annullata")
+    # Univocità numero NC
+    existing = db.query(Invoice).join(Client, Invoice.client_id == Client.id).filter(
+        Invoice.number == credit_number,
+        Client.tenant_id == current_tenant_id(),
+    ).first()
+    if existing:
+        raise HTTPException(409, f"Numero {credit_number} già esistente")
+
+    # NC: importi positivi con TD04 — convenzione FatturaPA. Il segno contabile
+    # è espresso dal tipo documento, non dal segno numerico.
+    nc = Invoice(
+        number=credit_number,
+        client_id=src.client_id,
+        status=InvoiceStatus.draft,
+        issue_date=issue_date,
+        subtotal=src.subtotal or 0.0,
+        vat_rate=src.vat_rate or 22.0,
+        total=src.total or 0.0,
+        notes=(
+            f"Nota di credito a storno totale della fattura {src.number} "
+            f"emessa il {src.issue_date.isoformat() if src.issue_date else '?'}."
+            + (f"\nMotivo: {reason}" if reason else "")
+        ),
+        doc_type="TD04",
+        quote_id=src.quote_id,
+        job_id=src.job_id,
+        payment_method=src.payment_method,
+        payment_terms_days=src.payment_terms_days,
+        iban_snapshot=src.iban_snapshot,
+        client_legal_name_snap=src.client_legal_name_snap,
+        client_vat_snap=src.client_vat_snap,
+        client_tax_code_snap=src.client_tax_code_snap,
+        client_pec_snap=src.client_pec_snap,
+        client_sdi_snap=src.client_sdi_snap,
+        client_address_snap=src.client_address_snap,
+        client_zip_snap=src.client_zip_snap,
+        client_city_snap=src.client_city_snap,
+        client_province_snap=src.client_province_snap,
+        client_country_snap=src.client_country_snap,
+        tenant_legal_name_snap=src.tenant_legal_name_snap,
+        tenant_vat_snap=src.tenant_vat_snap,
+        tenant_tax_code_snap=src.tenant_tax_code_snap,
+        tenant_address_snap=src.tenant_address_snap,
+        tenant_email_snap=src.tenant_email_snap,
+        tenant_phone_snap=src.tenant_phone_snap,
+        tenant_iban_snap=src.tenant_iban_snap,
+        tenant_sdi_snap=src.tenant_sdi_snap,
+        tenant_rea_snap=src.tenant_rea_snap,
+        tenant_fiscal_capital_snap=src.tenant_fiscal_capital_snap,
+        tenant_fiscal_regime_snap=src.tenant_fiscal_regime_snap,
+    )
+    db.add(nc)
+    db.flush()
+    # Copia righe
+    for l in src.lines:
+        db.add(InvoiceLine(
+            invoice_id=nc.id,
+            description=f"[Storno] {l.description}",
+            quantity=l.quantity,
+            unit_price=l.unit_price,
+            total=l.total,
+            vat_rate=l.vat_rate,
+            discount_pct=l.discount_pct,
+        ))
+
+    # Void slice + restore JCL billing_status
+    slices = db.query(JCLBilledSlice).filter(JCLBilledSlice.invoice_id == src.id).all()
+    affected_jcl_ids = set()
+    for s in slices:
+        if s.voided_at is None:
+            s.voided_at = datetime.utcnow()
+            s.voided_by_invoice_id = nc.id
+            affected_jcl_ids.add(s.job_cost_line_id)
+    # Per ogni JCL toccata, se non ha più slice attive → torna not_billed
+    for jcl_id in affected_jcl_ids:
+        live = db.query(JCLBilledSlice).filter(
+            JCLBilledSlice.job_cost_line_id == jcl_id,
+            JCLBilledSlice.voided_at.is_(None),
+        ).first()
+        jcl = db.query(JobCostLine).filter(JobCostLine.id == jcl_id).first()
+        if jcl and not live:
+            jcl.billing_status = JCLBillingStatus.not_billed
+            jcl.billed_amount = 0
+
+    # Annulla fattura sorgente
+    src.status = InvoiceStatus.cancelled
+    src.notes = (src.notes or "") + f"\nStornata con NC {credit_number} il {issue_date.isoformat()}."
+
+    # Riapre batch collegati (status → approved per consentire nuova emissione)
+    batches = db.query(BillingBatch).filter(BillingBatch.invoice_id == src.id).all()
+    for b in batches:
+        b.invoice_id = None
+        b.status = BillingBatchStatus.approved
+
+    db.commit()
+    db.refresh(nc)
+    return {
+        "credit_note_id": nc.id,
+        "credit_note_number": nc.number,
+        "source_invoice_id": src.id,
+        "source_invoice_number": src.number,
+        "voided_slices": len(slices),
+        "reopened_batches": [b.code for b in batches],
+        "total": nc.total,
+    }

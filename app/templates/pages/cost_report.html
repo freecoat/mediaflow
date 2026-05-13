@@ -135,7 +135,8 @@
   <div class="card mb-4">
     <div class="card-title mb-3">Voci di costo: Quotazione vs Reale</div>
     <div class="table-wrap">
-      <table>
+      <!-- v3.5.0-alpha.111: mf-sortable per ordinamento click-su-header -->
+      <table class="mf-sortable">
         <thead>
           <tr>
             <th>Voce</th><th>Unità</th>
@@ -147,7 +148,7 @@
             <th class="text-right" title="Σ ore done × Resource.internal_cost_hourly — costo reale risorse interne (α.67)">Costo reale</th>
             <th class="text-right" title="Maturato − Costo reale (margine reale stimato basato sui cost-rate interni)">Margine reale</th>
             <th>Fatt.</th>
-            <th></th>
+            <th data-no-sort="true"></th>
           </tr>
         </thead>
         <tbody id="cost-lines-table"></tbody>
@@ -669,7 +670,8 @@ async function renderBookingSummary(jobId) {
       </div>
       ${data.by_resource.length ? `
       <div class="table-wrap">
-        <table>
+        <!-- v3.5.0-alpha.111: mf-sortable per click-su-header → sort asc/desc -->
+        <table class="mf-sortable">
           <thead>
             <tr>
               <th>Risorsa</th>

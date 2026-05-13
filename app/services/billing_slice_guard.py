@@ -73,6 +73,8 @@ def _find_slice_for_jcl_period(
             JCLBilledSlice.job_cost_line_id == jcl_id,
             JCLBilledSlice.period_start <= end,
             JCLBilledSlice.period_end >= start,
+            # v3.5.0-alpha.111 — slice stornate (TD04) non bloccano più
+            JCLBilledSlice.voided_at.is_(None),
         )
         .order_by(JCLBilledSlice.period_start.asc())
         .first()
@@ -116,7 +118,10 @@ def billed_locked_for_jcl(db: Session, jcl_id: int) -> float:
         return 0.0
     rows = (
         db.query(JCLBilledSlice.billed_amount)
-        .filter(JCLBilledSlice.job_cost_line_id == jcl_id)
+        .filter(
+            JCLBilledSlice.job_cost_line_id == jcl_id,
+            JCLBilledSlice.voided_at.is_(None),
+        )
         .all()
     )
     return round(sum((r[0] or 0.0) for r in rows), 2)
@@ -135,7 +140,10 @@ def billed_locked_bulk(db: Session, jcl_ids) -> dict:
             JCLBilledSlice.job_cost_line_id,
             _f.coalesce(_f.sum(JCLBilledSlice.billed_amount), 0.0),
         )
-        .filter(JCLBilledSlice.job_cost_line_id.in_(jcl_ids))
+        .filter(
+            JCLBilledSlice.job_cost_line_id.in_(jcl_ids),
+            JCLBilledSlice.voided_at.is_(None),
+        )
         .group_by(JCLBilledSlice.job_cost_line_id)
         .all()
     )

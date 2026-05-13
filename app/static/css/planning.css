@@ -337,16 +337,14 @@
     margin-left: 4px;
     text-shadow: 0 0 2px rgba(0,0,0,.7);
   }
-  /* v3.4.45: Drag handles più visibili anche senza hover (chiarezza affordance) */
+  /* v3.5.0-alpha.111: drag bordo (resize handle) RIMOSSO — Matteo richiede
+     di disabilitarlo. vis-timeline non espone un flag editable.resize=false
+     dedicato, quindi si nasconde via CSS + pointer-events. Il move resta
+     attivo (editable.updateTime=true). Per resize formale → modal edit
+     booking con date precise. */
   .vis-item .vis-drag-left, .vis-item .vis-drag-right {
-    background: linear-gradient(90deg, rgba(0,0,0,.18) 0%, rgba(255,255,255,.22) 50%, rgba(0,0,0,.18) 100%);
-    width: 8px;
-    opacity: 0;
-    transition: opacity .12s ease;
-  }
-  .vis-item:hover .vis-drag-left, .vis-item:hover .vis-drag-right {
-    opacity: 1;
-    background: linear-gradient(90deg, rgba(0,0,0,.18) 0%, rgba(255,255,255,.55) 50%, rgba(0,0,0,.18) 100%);
+    display: none !important;
+    pointer-events: none !important;
   }
   .vis-item.vis-editable { cursor: move; }
   /* Punch overlay (timbrature reali — sotto i booking) */

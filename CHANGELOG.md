@@ -1,5 +1,89 @@
 # MediaFlow — Changelog
 
+## v3.5.0-alpha.111 — Billing UX cleanup + storno NC TD04 + scadenze Quote→Project + timeline polish (13 maggio 2026)
+
+Round chiuso a 13 issue Matteo. 5 fronti:
+
+**Billing / Fattura (8 fix)**
+- Tab `Timesheet` e `Report P&L` rimossi da `/finance` (obsoleti)
+- Endpoint nuovo `GET /finance/api/billing/invoice/{invoice_id}/pdf`: PDF
+  diretto via invoice_id (snapshot fiscali immutabili), bypassa il
+  vincolo `batch.invoice_id`
+- `GET /finance/api/billing/{batch_id}/invoice-pdf` con fallback via
+  `JCLBilledSlice.invoice_id` (recupera la fattura se `batch.invoice_id`
+  è NULL per rollback parziale) + errore descrittivo se davvero assente
+- Batch list: "Mostra anche fatturati" toggle (default OFF nasconde),
+  data emissione fattura accanto al numero, link "Vai alla fattura"
+  filtra alla singola fattura nel tab Fatture (focus-bar con × per reset)
+- "Componi fattura periodo" → "Componi fattura" con **mode**:
+  `per progetto` (tutti i batch aperti, default) | `per periodo`
+  (sovrapposizione intervallo, non più containment stretto)
+- Invoice line description ora include `[period_start → period_end]` per
+  riportare il periodo validità lavorazioni in fattura
+- **Storno fattura (nota di credito TD04)**: nuovo endpoint
+  `POST /finance/api/billing/invoice/{id}/storno`. Crea Invoice TD04 con
+  stessi snapshot/righe, annulla la sorgente, **void** delle
+  `JCLBilledSlice` (`voided_at` + `voided_by_invoice_id`), JCL torna
+  `not_billed` se senza slice attive residue, batch collegati riaperti
+  in `approved`. Modal UI in `/finance` con motivo opzionale
+- `due_date` auto-calcolata da `Project.billing_terms_days` quando omessa
+  in compose-invoice
+- Bottoni storno (📉) + scarica PDF (📥) per riga in lista fatture
+
+**Quote → Project: scadenze fatturazione (1 feat)**
+- `Quote.billing_frequency` + `Quote.billing_terms_days` (auto-migrate)
+- `Project.billing_terms_days` (auto-migrate)
+- UI editor quote: dropdown "Periodicità fatturazione" (mensile/
+  trimestrale/milestone/on_completion/custom) + input "Scadenza gg DF"
+- Propagation: all'approve della quote → valori finiscono su Project se
+  non già impostati (auto-merge soft)
+
+**Timeline (4 fix)**
+- `horizontalScroll: false` — side scroll rimosso (creava conflitti col
+  drag pan; Matteo: "non funzionava")
+- Drag bordo (resize handle) RIMOSSO via CSS `display:none` su
+  `.vis-drag-left/.vis-drag-right` — move resta attivo, resize formale
+  via modal edit
+- Sovrapposizione righe FIX: `stack: false` e `stackSubgroups: false` di
+  default (anche su comfortable) → righe altezze uniformi, niente
+  expand su overlap
+- Heatmap toggle button + pref popover RIMOSSI (era no-op da α.99 dopo
+  rimozione dal label cell). Da reintrodurre come overlay assoluto sul
+  foreground in futuro
+- Shift+wheel scroll verticale: target multipli + pre-check
+  `scrollHeight > clientHeight` (vis-timeline 7.x scroll quirks)
+
+**Cost report (2 fix)**
+- Backfill automatico `JobResourceAssignment` da booking storici al boot
+  (`_backfill_resource_assignments` in lifespan): risolve il caso
+  Matteo "molte risorse nei booking ma poche assegnate al progetto"
+  per dati creati prima dell'introduzione dell'auto-assignment (α.55)
+- Tabelle "Voci di costo" e "Ore booking per fascia" rese `mf-sortable`:
+  click su header → ordina (asc/desc) per qualsiasi colonna
+
+**Schema (auto-migrate al boot)**
+- `jcl_billed_slices.voided_at` (DATETIME) + `voided_by_invoice_id` (FK)
+- `quotes.billing_frequency` + `quotes.billing_terms_days`
+- `projects.billing_terms_days`
+- `billing_slice_guard._find_slice_for_jcl_period` ora filtra
+  `voided_at IS NULL` → slice stornate non bloccano più booking nel periodo
+- `billed_locked_for_jcl/bulk` esclude slice voided dai totali
+
+**Da testare** sul Mac di Matteo:
+1. `/finance` — tab Timesheet/P&L spariti, ne restano 3
+2. Batch list — fatturati nascosti di default, toggle "Mostra anche
+   fatturati" li riattiva. Numero+data fattura per ogni batch
+   fatturato. "Vai alla fattura" filtra alla riga
+3. "Componi fattura" — mode "per progetto" mostra tutti i batch aperti
+4. Fattura riga: descrizione include `[YYYY-MM-DD → YYYY-MM-DD]`
+5. Bottone "📉 Storna" su fattura → NC TD04 emessa. Source diventa
+   cancelled, slice voided, batch torna approved (visibile rimuovendo
+   "Mostra fatturati"). Booking del periodo tornano editabili
+6. Quote editor: sezione "Periodicità fatturazione" + "Scadenza gg DF".
+   All'approve → Project mostra gli stessi valori
+7. Planning timeline: niente più scroll laterale, niente drag bordo,
+   righe uniformi, niente bottone Heatmap
+
 ## v3.5.0-alpha.110 — Storage adapter S3 + TPN strong isolation audit (13 maggio 2026)
 
 Chiusi gli ultimi 2 cantieri backlog del piano Multi-tenant/TPN.

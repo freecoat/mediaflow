@@ -21,16 +21,20 @@
 <div id="fin-global-filters" class="card" style="margin-bottom:14px; padding:10px 14px;"></div>
 
 <!-- ── Tabs ──────────────────────────────────────────────────── -->
+<!-- v3.5.0-alpha.111: rimossi tab Timesheet + Report P&L (obsoleti). -->
 <div class="tabs">
   <div class="tab active" onclick="showSection('invoices',this)">Fatture</div>
   <div class="tab" onclick="showSection('batches',this)">📦 Batch fatturazione <span id="batches-badge" class="badge" style="display:none;background:#fbbf24;color:#000;margin-left:6px;"></span></div>
-  <div class="tab" onclick="showSection('timesheets',this)">Timesheet</div>
-  <div class="tab" onclick="showSection('report',this)">Report P&amp;L</div>
   <div class="tab" onclick="showSection('anomalies',this)">⚠ Anomalie <span id="anomalies-badge" class="badge" style="display:none;background:#dc2626;color:#fff;margin-left:6px;"></span></div>
 </div>
 
 <!-- ── Sezione fatture ─────────────────────────────────────── -->
 <div id="section-invoices">
+  <!-- v3.5.0-alpha.111: focus-bar quando arrivi via "Vai alla fattura" -->
+  <div id="inv-focus-bar" style="display:none; margin-bottom:10px; padding:8px 12px; background:rgba(98,114,245,.10); border:1px solid rgba(98,114,245,.30); border-radius:6px; font-size:13px;">
+    🔗 Filtro su singola fattura: <b><span class="focus-num">—</span></b>
+    <button class="btn btn-ghost btn-sm" onclick="clearInvoiceFocus()" style="margin-left:10px;">✕ Mostra tutte</button>
+  </div>
   <!-- Filtri -->
   <div class="flex gap-3 mb-4 items-center">
     <select class="form-select" style="width:auto;" id="inv-filter" onchange="loadInvoices()">
@@ -75,14 +79,20 @@
 <!-- ── Sezione Batch fatturazione (v3.5.0-alpha.49 Step 4 Cost Report → Billing) ── -->
 <div id="section-batches" class="hidden">
   <!-- Filtri -->
+  <!-- v3.5.0-alpha.111: nascondi fatturati di default + checkbox per mostrarli. -->
   <div class="flex gap-3 mb-4 items-center">
     <select class="form-select" style="width:auto;" id="batch-status-filter" onchange="loadBatches()">
-      <option value="">Tutti gli stati</option>
+      <option value="">Tutti gli stati (esclusi fatturati)</option>
       <option value="draft">📋 Bozza (in approvazione)</option>
       <option value="approved">✅ Approvato</option>
       <option value="invoiced">💶 Fatturato</option>
       <option value="cancelled">↩ Annullato</option>
     </select>
+    <label class="text-sm" style="display:flex; align-items:center; gap:6px; cursor:pointer;"
+           title="Includi anche batch già fatturati (nascosti di default per ridurre rumore).">
+      <input type="checkbox" id="batch-show-invoiced" onchange="loadBatches()">
+      Mostra anche fatturati
+    </label>
     <span class="text-sm text-muted" id="batches-count"></span>
     <span style="margin-left:auto;" class="text-sm text-muted">
       Manager+: editare importi prima dell'approvazione → ogni riduzione genera voce <b style="color:#ef4444;">perso</b>
@@ -113,40 +123,7 @@
   </div>
 </div>
 
-<!-- ── Sezione timesheet ───────────────────────────────────── -->
-<div id="section-timesheets" class="hidden">
-  <div class="flex gap-3 mb-4">
-    <button class="btn btn-primary btn-sm" onclick="openModal('modal-log-hours')">+ Registra ore</button>
-  </div>
-  <div class="card">
-    <div class="table-wrap">
-      <table class="mf-sortable">
-        <thead>
-          <tr><th>Data</th><th>Utente</th><th>Job</th><th>Ore</th><th>Tariffa</th><th>Totale</th><th>Fatturabile</th></tr>
-        </thead>
-        <tbody id="ts-table">
-          <tr><td colspan="7" class="text-muted" style="text-align:center;padding:24px;">Caricamento…</td></tr>
-        </tbody>
-      </table>
-    </div>
-  </div>
-</div>
-
-<!-- ── Sezione P&L ─────────────────────────────────────────── -->
-<div id="section-report" class="hidden">
-  <div class="flex gap-3 mb-4 items-center">
-    <select class="form-select" style="width:auto;" id="pl-year-sel" onchange="loadPL()">
-      {% for y in range(2022, 2028) %}
-      <option value="{{ y }}" {% if y == 2025 %}selected{% endif %}>{{ y }}</option>
-      {% endfor %}
-    </select>
-  </div>
-  <div id="pl-grid" class="stat-grid" style="margin-bottom:20px;"></div>
-  <div class="card">
-    <div class="card-title mb-2">Report per job</div>
-    <div id="pl-jobs-list" class="text-muted text-sm">Seleziona un job per vedere il dettaglio P&L</div>
-  </div>
-</div>
+<!-- v3.5.0-alpha.111: rimosse sezioni Timesheet + Report P&L (obsoleti). -->
 
 <!-- ── Sezione Anomalie WORKFLOW (v3.5.0-alpha.89, sprint S4) ────────
      Stateful: ogni anomalia rilevata diventa record persistente
@@ -278,37 +255,46 @@
   </div>
 </div>
 
-<!-- v3.5.0-alpha.90 — Componi fattura periodo (aggrega N batch approved → 1 invoice) -->
+<!-- v3.5.0-alpha.90/111 — Componi fattura: per progetto (tutti i batch aperti)
+     o per periodo. Modalità "per progetto" è default (richiesta Matteo: il
+     periodo non si vede mai correttamente). -->
 <div class="modal-overlay" id="modal-compose-invoice">
   <div class="modal" style="max-width:680px;">
     <div class="modal-header">
-      <span class="modal-title">📦 Componi fattura periodo</span>
+      <span class="modal-title">📦 Componi fattura</span>
       <button class="btn btn-ghost btn-icon" onclick="closeModal('modal-compose-invoice')">✕</button>
     </div>
     <div class="modal-body">
       <p class="text-sm text-muted" style="margin-top:0;">
         Aggrega <b>più batch approvati</b> dello stesso progetto in <b>una fattura unica</b>.
-        Utile per fatturazione mensile/trimestrale/custom: l'amministrazione tiene
-        i batch in cassetto e li raggruppa al momento dell'emissione.
+        Modalità "per progetto" prende tutti i batch in cassetto del progetto; modalità
+        "per periodo" filtra a quelli che si sovrappongono all'intervallo.
       </p>
       <div class="form-row">
+        <div class="form-group">
+          <label class="form-label">Modalità</label>
+          <select class="form-select" id="ci-mode" onchange="toggleCiPeriod(); reloadComposablePreview();">
+            <option value="project" selected>Per progetto — tutti i batch aperti</option>
+            <option value="period">Per periodo — filtra per intervallo</option>
+          </select>
+        </div>
         <div class="form-group">
           <label class="form-label">Progetto *</label>
           <select class="form-select" id="ci-project" onchange="reloadComposablePreview()"></select>
         </div>
       </div>
-      <div class="form-row">
+      <div class="form-row" id="ci-period-row" style="display:none;">
         <div class="form-group">
-          <label class="form-label">Periodo dal *</label>
+          <label class="form-label">Periodo dal</label>
           <input class="form-input" id="ci-period-start" type="date" onchange="reloadComposablePreview()">
         </div>
         <div class="form-group">
-          <label class="form-label">Periodo al *</label>
+          <label class="form-label">Periodo al</label>
           <input class="form-input" id="ci-period-end" type="date" onchange="reloadComposablePreview()">
         </div>
       </div>
       <div id="ci-preview" style="margin:14px 0; padding:10px 14px; background:var(--bg3); border-radius:6px; font-size:13px; min-height:40px;">
-        <span class="text-muted">Seleziona progetto + periodo per vedere i batch in cassetto.</span>
+        <span class="text-muted">Seleziona un progetto per vedere i batch in cassetto.</span>
       </div>
       <div class="form-row">
         <div class="form-group">
@@ -342,56 +328,7 @@
   </div>
 </div>
 
-<!-- Log ore -->
-<div class="modal-overlay" id="modal-log-hours">
-  <div class="modal">
-    <div class="modal-header">
-      <span class="modal-title">Registra ore</span>
-      <button class="btn btn-ghost btn-icon" onclick="closeModal('modal-log-hours')">✕</button>
-    </div>
-    <div class="modal-body">
-      <div class="form-row">
-        <div class="form-group">
-          <label class="form-label">Utente ID *</label>
-          <input class="form-input" id="ts-user" type="number" placeholder="ID utente">
-        </div>
-        <div class="form-group">
-          <label class="form-label">Job *</label>
-          <select class="form-select" id="ts-job"></select>
-        </div>
-      </div>
-      <div class="form-row">
-        <div class="form-group">
-          <label class="form-label">Data *</label>
-          <input class="form-input" id="ts-date" type="date">
-        </div>
-        <div class="form-group">
-          <label class="form-label">Ore *</label>
-          <input class="form-input" id="ts-hours" type="number" step="0.5" placeholder="8.0">
-        </div>
-      </div>
-      <div class="form-row">
-        <div class="form-group">
-          <label class="form-label">Tariffa oraria (€)</label>
-          <input class="form-input" id="ts-rate" type="number" step="0.01">
-        </div>
-        <div class="form-group" style="display:flex;align-items:flex-end;padding-bottom:4px;">
-          <label class="flex items-center gap-2" style="cursor:pointer;">
-            <input type="checkbox" id="ts-billable" checked> Fatturabile
-          </label>
-        </div>
-      </div>
-      <div class="form-group">
-        <label class="form-label">Descrizione</label>
-        <textarea class="form-textarea" id="ts-desc" placeholder="Attività svolta…"></textarea>
-      </div>
-    </div>
-    <div class="modal-footer">
-      <button class="btn btn-secondary" onclick="closeModal('modal-log-hours')">Annulla</button>
-      <button class="btn btn-primary" onclick="logHours()">Salva ore</button>
-    </div>
-  </div>
-</div>
+<!-- v3.5.0-alpha.111: rimosso modal "Registra ore" (timesheet obsoleto). -->
 
 <!-- v3.5.0-alpha.49: Modal dettaglio batch (Step 4 Cost Report → Billing) -->
 <div class="modal-overlay" id="modal-batch-detail">
@@ -467,6 +404,41 @@
   </div>
 </div>
 
+<!-- v3.5.0-alpha.111: Modal storno fattura (nota di credito TD04) -->
+<div class="modal-overlay" id="modal-storno-invoice">
+  <div class="modal" style="max-width:560px;">
+    <div class="modal-header">
+      <span class="modal-title">📉 Storna fattura</span>
+      <button class="btn btn-ghost btn-icon" onclick="closeModal('modal-storno-invoice')">✕</button>
+    </div>
+    <div class="modal-body">
+      <div id="st-info" style="margin-bottom:14px; padding:8px 12px; background:rgba(239,68,68,.06); border-left:3px solid #ef4444; border-radius:4px; font-size:13px;"></div>
+      <p class="text-sm text-muted" style="margin-top:0;">
+        Emette una <b>nota di credito TD04</b> a storno totale della fattura sorgente.
+        Effetti: fattura sorgente → annullata; slice JCL voided (booking nel periodo
+        tornano editabili); batch collegato → riapre in stato <i>approved</i>.
+      </p>
+      <div class="form-group">
+        <label class="form-label">Numero nota di credito *</label>
+        <input class="form-input" id="st-number" placeholder="es. NC-2026/007">
+        <div class="text-xs text-muted">Numerazione manuale, univoca a livello tenant.</div>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Data emissione *</label>
+        <input class="form-input" id="st-issue-date" type="date">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Motivo (opzionale)</label>
+        <textarea class="form-input" id="st-reason" rows="2" placeholder="Es. errore di fatturazione, contestazione cliente, scorporo lavorazione…"></textarea>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeModal('modal-storno-invoice')">Annulla</button>
+      <button class="btn btn-primary" onclick="submitStorno()" style="background:#ef4444;">📉 Emetti NC</button>
+    </div>
+  </div>
+</div>
+
 {% endblock %}
 
 {% block scripts %}
@@ -530,28 +502,22 @@ async function _initFinFilters() {
       const name = active ? (
         active.textContent.includes('Fatture') ? 'invoices' :
         active.textContent.includes('Batch') ? 'batches' :
-        active.textContent.includes('Timesheet') ? 'timesheets' :
-        active.textContent.includes('Report') ? 'report' :
         active.textContent.includes('Anomalie') ? 'anomalies' : null
       ) : null;
       if (name === 'invoices') loadInvoices();
       else if (name === 'batches') loadBatches();
-      else if (name === 'timesheets') loadTimesheets();
-      else if (name === 'report') loadPL();
       else if (name === 'anomalies') loadAnomalies();
     },
   });
 }
 
 function showSection(name, el) {
-  ['invoices','batches','timesheets','report','anomalies'].forEach(s => {
+  ['invoices','batches','anomalies'].forEach(s => {
     document.getElementById('section-'+s).classList.add('hidden');
   });
   document.getElementById('section-'+name).classList.remove('hidden');
   document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
   el.classList.add('active');
-  if (name === 'report') loadPL();
-  if (name === 'timesheets') loadTimesheets();
   if (name === 'anomalies') loadAnomalies();
   if (name === 'batches') loadBatches();
 }
@@ -571,6 +537,7 @@ function bbStatusBadge(st) {
 let _batchesCache = [];
 async function loadBatches() {
   const status = document.getElementById('batch-status-filter').value;
+  const showInvoiced = document.getElementById('batch-show-invoiced')?.checked;
   const finQs = buildFinQS();
   const parts = [];
   if (status) parts.push('status=' + status);
@@ -583,6 +550,12 @@ async function loadBatches() {
   } catch(e) {
     tbody.innerHTML = `<tr><td colspan="10" style="color:var(--rose); text-align:center; padding:24px;">${escapeHtml(e.message || 'Errore')}</td></tr>`;
     return;
+  }
+  // v3.5.0-alpha.111: hide invoiced default. Se utente filtra explicit
+  // `status=invoiced` o spunta "Mostra fatturati", non filtrare client-side.
+  const hideInvoiced = !showInvoiced && status !== 'invoiced';
+  if (hideInvoiced) {
+    _batchesCache = _batchesCache.filter(b => b.status !== 'invoiced');
   }
   document.getElementById('batches-count').textContent =
     _batchesCache.length ? `${_batchesCache.length} batch` : '';
@@ -606,8 +579,10 @@ async function loadBatches() {
     const lostHtml = b.total_lost > 0
       ? `<span style="color:#ef4444;">${fmtCurrency(b.total_lost)}</span>`
       : '<span class="text-muted">—</span>';
+    // v3.5.0-alpha.111: mostra numero + data emissione + link diretto alla fattura.
     const invHtml = b.invoice_number
-      ? `<b>${escapeHtml(b.invoice_number)}</b>`
+      ? `<a class="mf-link" href="#" onclick="event.stopPropagation(); goToInvoice(${b.invoice_id}); return false;" title="Apri fattura nel tab Fatture"><b>${escapeHtml(b.invoice_number)}</b></a>` +
+        (b.invoice_issue_date ? `<div class="text-xs text-muted">${fmtDate(b.invoice_issue_date)}</div>` : '')
       : '<span class="text-muted text-xs">—</span>';
     const clientCell = b.client_name
       ? escapeHtml(b.client_name)
@@ -865,9 +840,17 @@ function renderBatchFooter(b) {
     buttons += `<button class="btn btn-ghost" onclick="cancelBatch(${b.id}, '${escapeHtml(b.code)}', 'approved')" style="color:#ef4444;">↩ Annulla batch</button>`;
     buttons += `<button class="btn btn-primary" onclick="openEmitInvoice()">💶 Emetti fattura</button>`;
   } else if (b.status === 'invoiced') {
-    // v3.5.0-alpha.52 — Stampa PDF formale (snapshot fiscali immutabili)
-    buttons += `<a class="btn btn-primary" href="/finance/api/billing/${b.id}/invoice-pdf" target="_blank">📥 Stampa fattura PDF</a>`;
-    buttons += `<a class="btn btn-secondary" href="/finance#invoice-${b.invoice_id}" target="_blank">🔗 Vai alla fattura</a>`;
+    // v3.5.0-alpha.111 — PDF via invoice_id diretto (no dipendenza su batch.status)
+    // + "Vai alla fattura" filtra in-tab senza nuova tab.
+    const pdfUrl = b.invoice_id
+      ? `/finance/api/billing/invoice/${b.invoice_id}/pdf`
+      : `/finance/api/billing/${b.id}/invoice-pdf`;
+    buttons += `<a class="btn btn-primary" href="${pdfUrl}" target="_blank">📥 Stampa fattura PDF</a>`;
+    if (b.invoice_id) {
+      buttons += `<button class="btn btn-secondary" onclick="closeModal('modal-batch-detail'); goToInvoice(${b.invoice_id});">🔗 Vai alla fattura</button>`;
+      // Storno fattura (TD04) — v3.5.0-alpha.111
+      buttons += `<button class="btn btn-ghost" onclick="openStornoModal(${b.invoice_id}, '${escapeHtml(b.invoice_number || '')}')" style="color:#ef4444;" title="Emetti nota di credito (TD04) per stornare totalmente o parzialmente questa fattura.">📉 Storna fattura</button>`;
+    }
   }
   f.innerHTML = buttons;
 }
@@ -1046,29 +1029,49 @@ async function loadInvoices() {
   if (onlyOverdue) parts.push('only_overdue=true');
   if (finQs) parts.push(finQs);
   const url = '/finance/api/invoices' + (parts.length ? '?' + parts.join('&') : '');
-  const invs = await api('GET', url);
+  let invs = await api('GET', url);
+  // v3.5.0-alpha.111: focus mode → riduci a una sola fattura
+  const focusBox = document.getElementById('inv-focus-bar');
+  if (window._focusedInvoiceId) {
+    invs = invs.filter(i => i.id === window._focusedInvoiceId);
+    if (focusBox) {
+      focusBox.style.display = '';
+      const num = invs[0] ? invs[0].number : ('#' + window._focusedInvoiceId);
+      focusBox.querySelector('.focus-num').textContent = num;
+    }
+  } else if (focusBox) {
+    focusBox.style.display = 'none';
+  }
   const tbody = document.getElementById('inv-table');
   if (!invs.length) {
     tbody.innerHTML = '<tr><td colspan="8" class="text-muted" style="text-align:center;padding:24px;">Nessuna fattura</td></tr>';
     return;
   }
   // v3.5.0-alpha.90: colonna Progetto in lista fatture (richiesta Matteo).
-  // Sorgente: i.project (esposto in endpoint /api/invoices). Fallback su
-  // i.job.project se la fattura ha solo job_id.
+  // v3.5.0-alpha.111: bottoni storno (TD04) + scarica PDF + evidenzia NC.
   tbody.innerHTML = invs.map(i => {
     const proj = i.project || (i.job && i.job.project) || null;
     const projCell = proj
       ? `<a class="mf-link" href="/projects/${proj.id}">${escapeHtml(proj.code || proj.title || ('#'+proj.id))}</a>`
       : '<span class="text-muted">—</span>';
+    const isNC = i.doc_type === 'TD04';
+    const numHtml = isNC
+      ? `<span title="Nota di credito (storno)">📉 ${escapeHtml(i.number)}</span>`
+      : escapeHtml(i.number);
+    const stornoBtn = (!isNC && i.status !== 'cancelled')
+      ? `<button class="btn btn-ghost btn-sm" style="color:#ef4444;" onclick="openStornoModal(${i.id}, '${escapeHtml(i.number)}')" title="Emetti nota di credito TD04 a storno">📉</button>`
+      : '';
     return `<tr>
-      <td class="mono" style="font-size:12px;">${i.number}</td>
-      <td>${i.client?.name || '—'}</td>
+      <td class="mono" style="font-size:12px;">${numHtml}</td>
+      <td>${escapeHtml(i.client?.name || '—')}</td>
       <td class="text-sm">${projCell}</td>
       <td class="text-sm">${fmtDate(i.issue_date)}</td>
       <td class="text-sm ${isOverdue(i) ? 'color-rose' : ''}">${fmtDate(i.due_date)}</td>
       <td class="mono font-weight:600;">${fmtCurrency(i.total)}</td>
       <td>${statusBadge(i.status)}</td>
       <td>
+        <a class="btn btn-ghost btn-sm" href="/finance/api/billing/invoice/${i.id}/pdf" target="_blank" title="Stampa PDF">📥</a>
+        ${stornoBtn}
         <select class="form-select" style="width:auto;font-size:12px;padding:4px 8px;" onchange="changeInvStatus(${i.id}, this.value)">
           <option value="">Cambia…</option>
           ${['draft','sent','paid','overdue','cancelled'].map(s=>`<option value="${s}">${s}</option>`).join('')}
@@ -1109,56 +1112,53 @@ async function createInvoice() {
   } catch(e) { toast(e.message, 'error'); }
 }
 
-// ── Timesheet ────────────────────────────────────────────────
-async function loadTimesheets() {
-  const finQs = buildFinQS();
-  const url = '/finance/api/timesheets' + (finQs ? '?' + finQs : '');
-  const ts = await api('GET', url);
-  const tbody = document.getElementById('ts-table');
-  if (!ts.length) {
-    tbody.innerHTML = '<tr><td colspan="7" class="text-muted" style="text-align:center;padding:24px;">Nessuna registrazione</td></tr>';
-    return;
-  }
-  tbody.innerHTML = ts.map(t => {
-    const total = (t.hours * (t.hourly_rate || 0));
-    return `<tr>
-      <td class="text-sm">${fmtDate(t.work_date)}</td>
-      <td class="text-sm">ID ${t.user_id}</td>
-      <td class="text-sm">Job #${t.job_id}</td>
-      <td class="mono">${t.hours}h</td>
-      <td class="mono text-sm">${t.hourly_rate ? fmtCurrency(t.hourly_rate) : '—'}</td>
-      <td class="mono">${total ? fmtCurrency(total) : '—'}</td>
-      <td>${t.is_billable ? '<span class="badge badge-active">Sì</span>' : '<span class="badge badge-draft">No</span>'}</td>
-    </tr>`;
-  }).join('');
+// v3.5.0-alpha.111 — Timesheet + P&L rimossi da /finance (obsoleti).
+
+// v3.5.0-alpha.111 — Filtro "vai alla fattura": isola una singola fattura
+// nella lista. Reset via clearInvoiceFocus().
+window._focusedInvoiceId = null;
+function goToInvoice(invoiceId) {
+  window._focusedInvoiceId = invoiceId;
+  const tab = document.querySelector('.tab[onclick*="invoices"]');
+  if (tab) showSection('invoices', tab);
+  loadInvoices();
+}
+function clearInvoiceFocus() {
+  window._focusedInvoiceId = null;
+  loadInvoices();
 }
 
-async function logHours() {
+// Storno (nota di credito TD04)
+let _stornoInvoiceId = null;
+function openStornoModal(invoiceId, invoiceNumber) {
+  _stornoInvoiceId = invoiceId;
+  const info = document.getElementById('st-info');
+  info.textContent = `Stai stornando la fattura ${invoiceNumber || ('#' + invoiceId)}.`;
+  document.getElementById('st-number').value = '';
+  document.getElementById('st-issue-date').value = new Date().toISOString().slice(0,10);
+  document.getElementById('st-reason').value = '';
+  openModal('modal-storno-invoice');
+}
+async function submitStorno() {
+  if (!_stornoInvoiceId) return;
+  const num = document.getElementById('st-number').value.trim();
+  const issue = document.getElementById('st-issue-date').value;
+  const reason = document.getElementById('st-reason').value.trim();
+  if (!num || !issue) { toast('Compila numero e data emissione', 'warning'); return; }
   const fd = new FormData();
-  fd.append('user_id', document.getElementById('ts-user').value);
-  fd.append('job_id', document.getElementById('ts-job').value);
-  fd.append('work_date', document.getElementById('ts-date').value);
-  fd.append('hours', document.getElementById('ts-hours').value);
-  fd.append('hourly_rate', document.getElementById('ts-rate').value || '');
-  fd.append('description', document.getElementById('ts-desc').value);
-  fd.append('is_billable', document.getElementById('ts-billable').checked);
+  fd.append('credit_number', num);
+  fd.append('issue_date', issue);
+  if (reason) fd.append('reason', reason);
   try {
-    await api('POST', '/finance/api/timesheets', fd);
-    closeModal('modal-log-hours');
-    toast('Ore registrate', 'success');
-    loadTimesheets();
-  } catch(e) { toast(e.message, 'error'); }
-}
-
-// ── P&L ──────────────────────────────────────────────────────
-async function loadPL() {
-  const year = document.getElementById('pl-year-sel').value;
-  const pl = await api('GET', `/finance/api/report/pl/${year}`);
-  document.getElementById('pl-grid').innerHTML = `
-    <div class="stat-card"><div class="stat-label">Ricavi</div><div class="stat-value color-green mono" style="font-size:22px;">${fmtCurrency(pl.revenue)}</div></div>
-    <div class="stat-card"><div class="stat-label">Costi</div><div class="stat-value color-rose mono" style="font-size:22px;">${fmtCurrency(pl.costs)}</div></div>
-    <div class="stat-card"><div class="stat-label">Margine lordo</div><div class="stat-value mono" style="font-size:22px;color:${pl.gross_margin>=0?'var(--green)':'var(--rose)'};">${fmtCurrency(pl.gross_margin)}</div></div>
-    <div class="stat-card"><div class="stat-label">Ore totali</div><div class="stat-value color-indigo mono" style="font-size:22px;">${pl.total_hours}h</div></div>`;
+    const res = await api('POST', `/finance/api/billing/invoice/${_stornoInvoiceId}/storno`, fd);
+    toast(`✓ NC ${res.credit_note_number} emessa. ${res.voided_slices} slice annullate, ${res.reopened_batches.length} batch riaperti.`, 'success', 6000);
+    closeModal('modal-storno-invoice');
+    closeModal('modal-batch-detail');
+    await loadInvoices();
+    await loadBatches();
+  } catch(e) {
+    toast(e.message || 'Errore storno fattura', 'error', 6000);
+  }
 }
 
 // v3.5.0-alpha.90 — Compose invoice da N batch approved (accrual billing).
@@ -1178,7 +1178,10 @@ async function openComposeInvoiceModal() {
     o.textContent = `${p.code} — ${p.title || ''}`;
     sel.appendChild(o);
   });
-  // Default periodo: primo-ultimo del mese corrente
+  // v3.5.0-alpha.111 — default mode = per progetto; periodo facoltativo
+  document.getElementById('ci-mode').value = 'project';
+  toggleCiPeriod();
+  // Default periodo (visibile solo se utente switcha a "per periodo")
   const now = new Date();
   const y = now.getFullYear(), m = now.getMonth();
   const first = new Date(y, m, 1).toISOString().slice(0,10);
@@ -1192,19 +1195,25 @@ async function openComposeInvoiceModal() {
   document.getElementById('ci-number').value = '';
   document.getElementById('ci-notes').value = '';
   document.getElementById('ci-submit').disabled = true;
-  document.getElementById('ci-preview').innerHTML = '<span class="text-muted">Seleziona progetto + periodo per vedere i batch in cassetto.</span>';
+  document.getElementById('ci-preview').textContent = 'Seleziona un progetto per vedere i batch in cassetto.';
   openModal('modal-compose-invoice');
+}
+
+function toggleCiPeriod() {
+  const mode = document.getElementById('ci-mode').value;
+  document.getElementById('ci-period-row').style.display = (mode === 'period') ? '' : 'none';
 }
 
 async function reloadComposablePreview() {
   const pid = document.getElementById('ci-project').value;
-  const ps  = document.getElementById('ci-period-start').value;
-  const pe  = document.getElementById('ci-period-end').value;
+  const mode = document.getElementById('ci-mode').value;
+  const ps  = mode === 'period' ? document.getElementById('ci-period-start').value : '';
+  const pe  = mode === 'period' ? document.getElementById('ci-period-end').value : '';
   const host = document.getElementById('ci-preview');
   const submitBtn = document.getElementById('ci-submit');
   submitBtn.disabled = true;
   if (!pid) {
-    host.innerHTML = '<span class="text-muted">Seleziona un progetto.</span>';
+    host.textContent = 'Seleziona un progetto.';
     return;
   }
   const qs = [];
@@ -1242,21 +1251,26 @@ async function reloadComposablePreview() {
 
 async function submitComposeInvoice() {
   const pid = document.getElementById('ci-project').value;
-  const ps = document.getElementById('ci-period-start').value;
-  const pe = document.getElementById('ci-period-end').value;
+  const mode = document.getElementById('ci-mode').value;
+  const ps = mode === 'period' ? document.getElementById('ci-period-start').value : '';
+  const pe = mode === 'period' ? document.getElementById('ci-period-end').value : '';
   const num = document.getElementById('ci-number').value.trim();
   const issue = document.getElementById('ci-issue-date').value;
   const due = document.getElementById('ci-due-date').value;
   const vat = document.getElementById('ci-vat').value;
   const notes = document.getElementById('ci-notes').value.trim();
-  if (!pid || !ps || !pe || !num || !issue) {
-    toast('Compila progetto, periodo, numero, data emissione', 'warning');
+  if (!pid || !num || !issue) {
+    toast('Compila progetto, numero, data emissione', 'warning');
+    return;
+  }
+  if (mode === 'period' && (!ps || !pe)) {
+    toast('Compila il periodo o cambia modalità a "per progetto"', 'warning');
     return;
   }
   const fd = new FormData();
   fd.append('project_id', pid);
-  fd.append('period_start', ps);
-  fd.append('period_end', pe);
+  if (ps) fd.append('period_start', ps);
+  if (pe) fd.append('period_end', pe);
   fd.append('invoice_number', num);
   fd.append('issue_date', issue);
   if (due) fd.append('due_date', due);
@@ -1591,17 +1605,21 @@ async function init() {
   document.getElementById('inv-client').innerHTML =
     '<option value="">— cliente —</option>' + clients.map(c => `<option value="${c.id}">${c.name}</option>`).join('');
 
-  const jobs = await api('GET', '/planning/api/jobs');
-  document.getElementById('ts-job').innerHTML =
-    '<option value="">— job —</option>' + jobs.map(j => `<option value="${j.id}">${j.code} — ${j.title}</option>`).join('');
-
-  // Data di default per timesheet
-  document.getElementById('ts-date').value = new Date().toISOString().slice(0,10);
+  // v3.5.0-alpha.111 — rimossi caricamenti job/timesheet (sezione obsoleta)
   document.getElementById('inv-issue').value = new Date().toISOString().slice(0,10);
 
   // v3.5.0-alpha.86 S3.1 — Filtri globali sopra tab (cliente/progetto/periodo)
   await _initFinFilters();
 
+  // v3.5.0-alpha.111: deep-link /finance#invoice-X → focus su singola fattura
+  if (location.hash && location.hash.startsWith('#invoice-')) {
+    const id = parseInt(location.hash.replace('#invoice-', ''), 10);
+    if (id) {
+      window._focusedInvoiceId = id;
+      const tab = document.querySelector('.tab[onclick*="invoices"]');
+      if (tab) showSection('invoices', tab);
+    }
+  }
   loadInvoices();
   refreshAnomaliesBadge();
   // v3.5.0-alpha.49: pre-fetch batch per popolare badge tab + supportare

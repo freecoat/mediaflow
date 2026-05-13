@@ -764,6 +764,10 @@ class Project(Base):
     # Definito in fase di quotazione, modificabile da manager fino alla
     # prima fattura emessa.
     billing_frequency: Mapped[str] = mapped_column(String(20), default="monthly")
+    # v3.5.0-alpha.111 — Giorni scadenza fattura dal cliente. Default ereditato
+    # da Tenant.payment_terms_default se NULL. Propagato da Quote.billing_terms_days
+    # in fase di promotion Quote→Project.
+    billing_terms_days: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
     # v3.5.0-alpha.105 — Storage per-project (TPN compartimentazione stagna).
     # Default = ereditato da Tenant (storage_backend + uploads/t{tid}/).
     # Quando settato: il progetto ha la propria area isolata. Asset.file_path
@@ -1043,6 +1047,12 @@ class Quote(Base):
     vat_rate: Mapped[float] = mapped_column(Float, default=22.0)
     notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     payment_terms: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    # v3.5.0-alpha.111 — Scadenze fatturazione dichiarate in quotazione.
+    # billing_frequency: monthly/quarterly/milestone/on_completion/custom (mirror Project).
+    # billing_terms_days: giorni scadenza fattura (es. 30/60/90). All'accettazione
+    # della quote, questi campi si propagano sul Project di destinazione.
+    billing_frequency: Mapped[Optional[str]] = mapped_column(String(20), nullable=True)
+    billing_terms_days: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
     # v3.5.0-alpha.106 — Clausola ricarico spedizioni esplicita in quote.
     # Default 15% editabile, riflette Project.shipping_markup_pct ma
     # configurabile per quote (es. cliente con accordi diversi).
@@ -1749,6 +1759,13 @@ class JCLBilledSlice(Base):
     billed_amount: Mapped[float] = mapped_column(Float, default=0.0)
     unit_price_snap: Mapped[float] = mapped_column(Float, default=0.0)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    # v3.5.0-alpha.111 — Storno fattura: slice resa nulla da una nota di
+    # credito (TD04). Quando popolato, lo slice non blocca più i booking
+    # nel periodo: il maturato torna disponibile per nuova fatturazione.
+    voided_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True, index=True)
+    voided_by_invoice_id: Mapped[Optional[int]] = mapped_column(
+        ForeignKey("invoices.id"), nullable=True
+    )
     job_cost_line: Mapped["JobCostLine"] = relationship(foreign_keys=[job_cost_line_id])
     billing_batch_line: Mapped[Optional["BillingBatchLine"]] = relationship(
         foreign_keys=[billing_batch_line_id]
