@@ -93,6 +93,7 @@ async def list_assets(
     q: Optional[str] = None,
     tech: Optional[str] = None,
     include_internal: int = 0,
+    limit: Optional[int] = None,
     db: Session = Depends(get_db),
 ):
     """v3.5.0-alpha.70 — TPN access filter.
@@ -176,7 +177,11 @@ async def list_assets(
                 conds.append(Asset.original_name.ilike(pat) | Asset.description.ilike(pat))
             from sqlalchemy import or_ as _or
             query = query.filter(_or(*conds))
-    assets = query.order_by(Asset.created_at.desc()).all()
+    # v3.5.0-alpha.93 — limit opzionale per UI compatte (modal Shipment).
+    _q = query.order_by(Asset.created_at.desc())
+    if limit and limit > 0:
+        _q = _q.limit(min(limit, 1000))
+    assets = _q.all()
     return [
         {
             "id": a.id,

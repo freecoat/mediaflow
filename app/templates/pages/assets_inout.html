@@ -5,7 +5,8 @@
 
 {% block topbar_actions %}
   <button class="btn btn-secondary btn-sm" onclick="openDigitalIngest()">📥 Ingest digitale</button>
-  <button class="btn btn-primary btn-sm" onclick="openPhysicalIngest()">📥 Ingest fisico</button>
+  <button class="btn btn-secondary btn-sm" onclick="openPhysicalIngest()">📥 Ingest fisico</button>
+  <button class="btn btn-primary btn-sm" onclick="openShipment()">🚚 Nuova spedizione</button>
 {% endblock %}
 
 {% block content %}
@@ -86,6 +87,134 @@
   </div>
   <div id="hist-body" style="flex:1;overflow:auto;padding:10px 14px;">
     <div class="text-muted text-sm" style="padding:20px 0;text-align:center;">Caricamento…</div>
+  </div>
+</div>
+
+<!-- v3.5.0-alpha.93 — Modal Spedizione (batch multi-asset + costo + payer) -->
+<div class="modal-overlay" id="modal-shipment">
+  <div class="modal" style="max-width:780px;max-height:90vh;display:flex;flex-direction:column;">
+    <div class="modal-header">
+      <span class="modal-title">🚚 Nuova spedizione (batch)</span>
+      <button class="btn btn-ghost btn-icon" onclick="closeModal('modal-shipment')">&times;</button>
+    </div>
+    <div class="modal-body" style="overflow:auto;">
+      <p class="text-sm text-muted" style="margin-top:0;">
+        Raggruppa più asset (fisici + digitali) in <b>1 spedizione</b> con un solo costo,
+        un solo vettore e un solo DDT. Il sistema crea 1 batch + N movimenti +
+        eventualmente 1 voce fatturazione se ricarichi al cliente.
+      </p>
+
+      <div class="form-row">
+        <div class="form-group" style="max-width:160px;">
+          <label class="form-label">Direzione *</label>
+          <select class="form-select" id="sh-direction" onchange="onShipmentDirChange()">
+            <option value="outgest">📤 Uscita (noi → fuori)</option>
+            <option value="ingest">📥 Ingresso (fuori → noi)</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label class="form-label">DDT (auto se vuoto)</label>
+          <input class="form-input" id="sh-ddt" placeholder="DDT-2026-NNN">
+        </div>
+      </div>
+
+      <fieldset style="border:1px solid var(--border);border-radius:6px;padding:10px 14px;margin-top:10px;">
+        <legend style="padding:0 8px;font-weight:600;font-size:12px;">Vettore e costo</legend>
+        <div class="form-row" style="margin-top:6px;">
+          <div class="form-group">
+            <label class="form-label">Vettore / Corriere</label>
+            <input class="form-input" id="sh-carrier" placeholder="es. DHL, BRT, FedEx, ritiro in sede">
+          </div>
+          <div class="form-group">
+            <label class="form-label">Tracking number</label>
+            <input class="form-input" id="sh-tracking">
+          </div>
+          <div class="form-group" style="max-width:140px;">
+            <label class="form-label">Costo (€)</label>
+            <input class="form-input" id="sh-cost" type="number" step="0.01" min="0" placeholder="0">
+          </div>
+        </div>
+        <div class="form-group" style="margin-top:10px;">
+          <label class="form-label">Modalità ritiro/consegna</label>
+          <div style="display:flex;flex-direction:column;gap:6px;font-size:13px;">
+            <label style="display:flex;align-items:flex-start;gap:8px;cursor:pointer;">
+              <input type="radio" name="sh-pickup" value="we_ship" checked style="margin-top:3px;">
+              <span><b>Noi spediamo</b> — diamo i colli al nostro corriere</span>
+            </label>
+            <label style="display:flex;align-items:flex-start;gap:8px;cursor:pointer;">
+              <input type="radio" name="sh-pickup" value="client_carrier_pickup" style="margin-top:3px;">
+              <span><b>Corriere del cliente ritira</b> — DHL/BRT ecc. inviato dal cliente</span>
+            </label>
+            <label style="display:flex;align-items:flex-start;gap:8px;cursor:pointer;">
+              <input type="radio" name="sh-pickup" value="client_in_person" style="margin-top:3px;">
+              <span><b>Cliente ritira in persona</b> — niente vettore</span>
+            </label>
+          </div>
+        </div>
+        <div class="form-group" style="margin-top:10px;">
+          <label class="form-label">Chi paga la spedizione</label>
+          <div style="display:flex;flex-direction:column;gap:6px;font-size:13px;">
+            <label style="display:flex;align-items:flex-start;gap:8px;cursor:pointer;">
+              <input type="radio" name="sh-payer" value="internal" checked onchange="onPayerChange()" style="margin-top:3px;">
+              <span><b>Costo interno</b> — paghiamo noi, no riaddebito (entra in cost report del progetto, no fattura cliente)</span>
+            </label>
+            <label style="display:flex;align-items:flex-start;gap:8px;cursor:pointer;">
+              <input type="radio" name="sh-payer" value="client_direct" onchange="onPayerChange()" style="margin-top:3px;">
+              <span><b>Cliente paga diretto</b> — paga lui al vettore, noi non avanziamo nulla</span>
+            </label>
+            <label style="display:flex;align-items:flex-start;gap:8px;cursor:pointer;">
+              <input type="radio" name="sh-payer" value="charged_to_client" onchange="onPayerChange()" style="margin-top:3px;">
+              <span><b>Anticipiamo e riaddebitiamo</b> — il costo diventa una voce extra del progetto in fatturazione</span>
+            </label>
+          </div>
+        </div>
+        <div class="form-row" id="sh-billable-row" style="margin-top:10px;display:none;">
+          <div class="form-group">
+            <label class="form-label">Progetto a cui addebitare *</label>
+            <select class="form-select" id="sh-billable-project">
+              <option value="">— seleziona progetto —</option>
+            </select>
+            <div class="text-xs text-muted" style="margin-top:4px;">
+              Il costo verrà aggiunto come riga extra al primo Job attivo del progetto, categoria <code>Spedizioni</code>.
+            </div>
+          </div>
+        </div>
+      </fieldset>
+
+      <div class="form-row" style="margin-top:10px;">
+        <div class="form-group">
+          <label class="form-label">Mittente / Da</label>
+          <input class="form-input" id="sh-from" placeholder="es. MediaFlow / cliente">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Destinatario / A</label>
+          <input class="form-input" id="sh-to" placeholder="es. Sky Italia">
+        </div>
+      </div>
+
+      <fieldset style="border:1px solid var(--border);border-radius:6px;padding:10px 14px;margin-top:10px;">
+        <legend style="padding:0 8px;font-weight:600;font-size:12px;">Asset nella spedizione (colli)</legend>
+        <div style="display:flex;gap:10px;align-items:center;margin-bottom:8px;">
+          <input class="form-input" id="sh-asset-search" placeholder="🔍 Cerca per etichetta/serial/nome…" oninput="filterShAssets()" style="flex:1;">
+          <button type="button" class="btn btn-ghost btn-sm" onclick="loadShAssets()">↻ Ricarica</button>
+        </div>
+        <div id="sh-asset-list" style="max-height:240px;overflow:auto;border:1px solid var(--border);border-radius:6px;padding:6px;background:var(--bg3);">
+          <div class="text-muted text-sm" style="padding:14px;text-align:center;">Caricamento…</div>
+        </div>
+        <div class="text-xs text-muted" style="margin-top:6px;">
+          Selezionati: <span id="sh-selected-count">0</span> · totale colli stimato dal numero asset selezionati.
+        </div>
+      </fieldset>
+
+      <div class="form-group" style="margin-top:10px;">
+        <label class="form-label">Note (opzionali)</label>
+        <textarea class="form-textarea" id="sh-notes" rows="2" placeholder="Note interne / istruzioni vettore"></textarea>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeModal('modal-shipment')">Annulla</button>
+      <button class="btn btn-primary" onclick="submitShipment()" id="sh-submit-btn">🚚 Crea spedizione</button>
+    </div>
   </div>
 </div>
 
@@ -460,6 +589,217 @@ document.addEventListener('keydown', (e) => {
     if (dr && dr.style.right === '0px') closeHist();
   }
 });
+
+// v3.5.0-alpha.93 — Shipment modal (batch multi-asset + costo + payer)
+let _shPhys = [];     // PhysicalAsset pool
+let _shDigi = [];     // Digital Asset pool (sample, NON tutti i 5000)
+let _shProjects = []; // Project list per dropdown billable
+const _shSelected = { physical: new Set(), digital: new Set() };
+
+async function openShipment() {
+  // Reset form
+  document.getElementById('sh-direction').value = 'outgest';
+  ['sh-ddt','sh-carrier','sh-tracking','sh-cost','sh-from','sh-to','sh-notes','sh-asset-search'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.value = '';
+  });
+  document.querySelectorAll('input[name="sh-pickup"]').forEach(r => r.checked = r.value === 'we_ship');
+  document.querySelectorAll('input[name="sh-payer"]').forEach(r => r.checked = r.value === 'internal');
+  onPayerChange();
+  _shSelected.physical.clear(); _shSelected.digital.clear();
+  updateShCount();
+  // Carica progetti per billable dropdown (lazy)
+  if (!_shProjects.length) {
+    try { _shProjects = await api('GET', '/projects/api'); } catch(e) { _shProjects = []; }
+  }
+  const psel = document.getElementById('sh-billable-project');
+  while (psel.firstChild) psel.removeChild(psel.firstChild);
+  const def = document.createElement('option');
+  def.value = ''; def.textContent = '— seleziona progetto —';
+  psel.appendChild(def);
+  _shProjects.forEach(p => {
+    const o = document.createElement('option');
+    o.value = String(p.id);
+    o.textContent = `${p.code} — ${p.title || ''}`;
+    psel.appendChild(o);
+  });
+  // Carica asset pool
+  await loadShAssets();
+  openModal('modal-shipment');
+}
+
+function onPayerChange() {
+  const v = document.querySelector('input[name="sh-payer"]:checked')?.value || 'internal';
+  document.getElementById('sh-billable-row').style.display = (v === 'charged_to_client') ? '' : 'none';
+}
+
+function onShipmentDirChange() {
+  // Non altera la lista asset; placeholder per logica futura (filtrare
+  // physical_assets per direzione, es. solo "in archivio" per outgest).
+}
+
+async function loadShAssets() {
+  const host = document.getElementById('sh-asset-list');
+  while (host.firstChild) host.removeChild(host.firstChild);
+  const loading = document.createElement('div');
+  loading.className = 'text-muted text-sm';
+  loading.style.cssText = 'padding:14px;text-align:center;';
+  loading.textContent = 'Caricamento asset…';
+  host.appendChild(loading);
+  try {
+    // PhysicalAsset: prendiamo solo quelli attivi (no deleted). Limite ragionevole.
+    const pres = await api('GET', '/physical-assets/api?limit=300&deleted=0');
+    _shPhys = Array.isArray(pres) ? pres : (pres.items || []);
+  } catch(e) { _shPhys = []; }
+  try {
+    // Digital: lista compatta — limitata a 200 più recenti (UI manageable)
+    const dres = await api('GET', '/dam/api/assets?limit=200');
+    _shDigi = (dres && dres.items) || (Array.isArray(dres) ? dres : []);
+  } catch(e) { _shDigi = []; }
+  renderShAssets();
+}
+
+function renderShAssets() {
+  const host = document.getElementById('sh-asset-list');
+  while (host.firstChild) host.removeChild(host.firstChild);
+  const q = (document.getElementById('sh-asset-search').value || '').toLowerCase().trim();
+
+  const matchPhys = (a) =>
+    !q || (a.label||'').toLowerCase().includes(q)
+       || (a.serial_number||'').toLowerCase().includes(q)
+       || (a.barcode||'').toLowerCase().includes(q);
+  const matchDigi = (a) =>
+    !q || (a.original_name||'').toLowerCase().includes(q)
+       || (a.filename||'').toLowerCase().includes(q);
+
+  const phys = _shPhys.filter(matchPhys);
+  const digi = _shDigi.filter(matchDigi);
+
+  const mkRow = (nature, id, label, kind, extra) => {
+    const row = document.createElement('div');
+    row.style.cssText = 'display:flex;align-items:center;gap:8px;padding:4px 6px;border-radius:4px;cursor:pointer;font-size:12px;';
+    row.addEventListener('mouseenter', () => row.style.background = 'var(--surface)');
+    row.addEventListener('mouseleave', () => row.style.background = '');
+    const cb = document.createElement('input');
+    cb.type = 'checkbox';
+    cb.checked = (nature === 'physical' ? _shSelected.physical : _shSelected.digital).has(id);
+    cb.style.margin = '0';
+    const labelEl = document.createElement('span');
+    labelEl.style.flex = '1';
+    const strong = document.createElement('b');
+    strong.textContent = label;
+    labelEl.appendChild(strong);
+    if (extra) {
+      const sub = document.createElement('span');
+      sub.className = 'text-muted text-xs';
+      sub.style.marginLeft = '6px';
+      sub.textContent = extra;
+      labelEl.appendChild(sub);
+    }
+    const badge = document.createElement('span');
+    badge.style.cssText = 'padding:1px 6px;border-radius:8px;font-size:10px;font-weight:600;'
+      + (nature === 'physical'
+          ? 'background:rgba(168,139,250,.18);color:#a78bfa;'
+          : 'background:rgba(98,114,245,.18);color:var(--indigo2);');
+    badge.textContent = nature === 'physical' ? (kind || 'physical') : 'digital';
+    const onToggle = () => {
+      const set = (nature === 'physical' ? _shSelected.physical : _shSelected.digital);
+      if (set.has(id)) set.delete(id); else set.add(id);
+      cb.checked = set.has(id);
+      updateShCount();
+    };
+    cb.addEventListener('click', (e) => { e.stopPropagation(); onToggle(); });
+    row.addEventListener('click', onToggle);
+    row.appendChild(cb);
+    row.appendChild(labelEl);
+    row.appendChild(badge);
+    return row;
+  };
+
+  if (!phys.length && !digi.length) {
+    const empty = document.createElement('div');
+    empty.className = 'text-muted text-sm';
+    empty.style.cssText = 'padding:14px;text-align:center;';
+    empty.textContent = q ? 'Nessun asset corrisponde alla ricerca.' : 'Nessun asset disponibile.';
+    host.appendChild(empty);
+    return;
+  }
+  if (phys.length) {
+    const hdr = document.createElement('div');
+    hdr.style.cssText = 'font-size:11px;font-weight:600;color:var(--text2);text-transform:uppercase;letter-spacing:.04em;padding:6px 4px 2px;';
+    hdr.textContent = `Asset fisici (${phys.length})`;
+    host.appendChild(hdr);
+    phys.slice(0, 150).forEach(a => {
+      host.appendChild(mkRow('physical', a.id, a.label || `#${a.id}`, a.kind,
+        a.serial_number ? `s/n: ${a.serial_number}` : (a.location || '')));
+    });
+  }
+  if (digi.length) {
+    const hdr = document.createElement('div');
+    hdr.style.cssText = 'font-size:11px;font-weight:600;color:var(--text2);text-transform:uppercase;letter-spacing:.04em;padding:8px 4px 2px;';
+    hdr.textContent = `Asset digitali (${digi.length})`;
+    host.appendChild(hdr);
+    digi.slice(0, 150).forEach(a => {
+      host.appendChild(mkRow('digital', a.id, a.original_name || a.filename || `#${a.id}`,
+        a.asset_type || a.mime_type || '',
+        a.file_size ? (a.file_size > 1e9 ? (a.file_size/1e9).toFixed(1)+' GB' : (a.file_size/1e6).toFixed(1)+' MB') : ''));
+    });
+  }
+}
+
+function filterShAssets() { renderShAssets(); }
+
+function updateShCount() {
+  const n = _shSelected.physical.size + _shSelected.digital.size;
+  document.getElementById('sh-selected-count').textContent = String(n);
+  document.getElementById('sh-submit-btn').disabled = n === 0;
+}
+
+async function submitShipment() {
+  const phys = [..._shSelected.physical];
+  const digi = [..._shSelected.digital];
+  if (!phys.length && !digi.length) { toast('Seleziona almeno un asset', 'warning'); return; }
+  const payer = document.querySelector('input[name="sh-payer"]:checked')?.value || 'internal';
+  const billable = document.getElementById('sh-billable-project').value;
+  const cost = parseFloat(document.getElementById('sh-cost').value || '0');
+  if (payer === 'charged_to_client') {
+    if (!billable) { toast('Seleziona il progetto per il riaddebito', 'warning'); return; }
+    if (!cost || cost <= 0) { toast('Costo > 0 richiesto per riaddebito', 'warning'); return; }
+  }
+  const fd = new FormData();
+  fd.append('direction', document.getElementById('sh-direction').value);
+  fd.append('shipping_payer', payer);
+  fd.append('pickup_mode', document.querySelector('input[name="sh-pickup"]:checked')?.value || 'we_ship');
+  if (cost > 0) fd.append('shipping_cost', String(cost));
+  if (payer === 'charged_to_client') fd.append('billable_to_project_id', billable);
+  const text = (id) => {
+    const v = document.getElementById(id).value.trim();
+    if (v) fd.append(id.replace('sh-',''), v);
+  };
+  text('sh-ddt'); text('sh-carrier'); text('sh-tracking');
+  const from = document.getElementById('sh-from').value.trim();
+  if (from) fd.append('from_party', from);
+  const to = document.getElementById('sh-to').value.trim();
+  if (to) fd.append('to_party', to);
+  const notes = document.getElementById('sh-notes').value.trim();
+  if (notes) fd.append('notes', notes);
+  if (phys.length) fd.append('physical_asset_ids', phys.join(','));
+  if (digi.length) fd.append('digital_asset_ids', digi.join(','));
+  // Rename "ddt" → "delivery_note_number"
+  const ddt = document.getElementById('sh-ddt').value.trim();
+  if (ddt) fd.set('delivery_note_number', ddt);
+  fd.delete('ddt');
+
+  try {
+    const res = await api('POST', '/physical-assets/api/shipments', fd);
+    closeModal('modal-shipment');
+    const jclMsg = res.auto_billed_jcl_id
+      ? ` (riga fatturazione #${res.auto_billed_jcl_id} creata)` : '';
+    toast(`✓ Spedizione ${res.batch_code} creata: ${res.movements_created} movimenti${jclMsg}`,
+          'success', 6000);
+    await loadList();
+  } catch(e) { toast(e.message || 'Errore creazione spedizione', 'error'); }
+}
 
 // v3.5.0-alpha.86 (S3.5) — Init filtri + lista
 (async () => {

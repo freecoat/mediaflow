@@ -1,5 +1,70 @@
 # MediaFlow — Changelog
 
+## v3.5.0-alpha.93 — Spedizioni con costi + ricarico cliente (13 maggio 2026)
+
+Risposta a feature request Matteo 13 mag: le spedizioni vanno tracciate
+come entità di prima classe con costo, payer (chi paga) e ricarico
+automatico al cliente in fatturazione. Modal multi-asset per raggruppare
+più colli in una sola spedizione.
+
+**Modello** (`models.py`): esteso `IngestBatch` (era già il punto di
+raggruppamento dei movimenti) con campi shipping:
+- `carrier` / `tracking_number` / `shipping_cost` — vettore + costo a
+  livello batch (non solo per-movement come prima)
+- `shipping_payer` — `internal` (costo nostro, no riaddebito) /
+  `client_direct` (cliente paga direttamente al vettore) /
+  `charged_to_client` (anticipiamo, riaddebitiamo in fattura)
+- `pickup_mode` — `we_ship` (noi spediamo) / `client_carrier_pickup`
+  (cliente manda corriere a ritirare) / `client_in_person`
+  (cliente ritira di persona)
+- `billable_to_project_id` — FK Project per il riaddebito
+- `auto_billed_jcl_id` — FK JobCostLine generata per back-reference
+
+**Auto-migrate** (`main.py`): 7 ALTER TABLE idempotenti su `ingest_batches`
+al boot. Test sul DB esistente OK.
+
+**Endpoint nuovo** `POST /physical-assets/api/shipments`:
+- Crea 1 IngestBatch + N AssetMovement (uno per asset selezionato,
+  physical o digital) con stesso DDT/carrier/tracking
+- Se `shipping_payer=charged_to_client` AND `billable_to_project_id` valido
+  → crea JobCostLine sul primo Job attivo del project, categoria
+  `[Spedizione]` nel description, `is_extra=True`, `billing_status=not_billed`.
+  Tracciato in `IngestBatch.auto_billed_jcl_id`.
+- Transazione singola: se la JCL fallisce (es. nessun Job nel project),
+  l'intero batch viene ribaltato e ritorna 400 esplicito.
+- 400 anche per `shipping_payer=charged_to_client` senza
+  `billable_to_project_id` o `shipping_cost <= 0`.
+
+**UI modal `🚚 Nuova spedizione`** (`assets_inout.html`):
+- Bottone topbar in `/assets/inout` (ingest/outgest esistenti restano).
+- Form a fieldset chiari: direzione + DDT, vettore+costo, pickup_mode
+  radio, payer radio, dropdown progetto (visibile solo se charged_to_client).
+- Asset selector: search bar + lista compatta con header per natura
+  (fisici + digitali), checkbox toggle, badge tipo. Pool 300 fisici +
+  200 digitali più recenti (limit param aggiunto a `/physical-assets/api`
+  e `/dam/api/assets`).
+- Counter "Selezionati: N" + submit disabilitato se 0.
+- Toast successo include numero JCL generata quando ricarico attivo.
+
+**Smoke test E2E**:
+- Internal: `POST /shipments {payer=internal, 2 physical}` → batch 201,
+  2 movimenti, no JCL.
+- Charged: `POST /shipments {payer=charged_to_client, project_id=1, cost=80€}`
+  → batch 202, 1 movimento, JCL #8629 `[Spedizione] BATCH-2026-042 — BRT
+  — TRK888` total_accrued=80€, billing_status=not_billed, is_extra=True.
+
+**Decisioni di default** (backlog evolutivo se serve):
+1. Costo a livello batch (non split per asset). Edit movement singolo
+   resta possibile via API esistente.
+2. 1 shipment = 1 progetto per ricarico. Split pro-quota tra progetti
+   diversi rimandato.
+3. JCL category derivata dal description prefix `[Spedizione]` (no
+   `category_override` su JCL, no price_item dedicato auto-creato).
+4. JCL sul primo Job attivo del project (più recente per `created_at`).
+   Se nessun Job → 400.
+
+**393 routes** (+1 endpoint). **+7 colonne** auto-migrate.
+
 ## v3.5.0-alpha.92 — 6 task Matteo 13 mag (compose-invoice fix + drawer storico + light themes + sezioni quote) (13 maggio 2026)
 
 Risposta a 6 punti aperti da Matteo: 1 fix bloccante + 5 enhancement.

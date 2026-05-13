@@ -1866,6 +1866,13 @@ class IngestBatch(Base):
     Use case: cliente consegna 1 disco con 5 file digitali → 1 IngestBatch
     + 1 AssetMovement physical (il disco) + 5 AssetMovement digital (i file)
     + 1 manifest CSV/JSON con checksum.
+
+    v3.5.0-alpha.93 — Estesa a "Shipment" (spedizione vera e propria):
+    raggruppa più colli con costo unico, vettore unico, e tracking del
+    payer (internal / client_direct / charged_to_client). Se charged_to_client
+    genera JobCostLine automatica nella categoria "Spedizioni" del Job
+    referenziato in billable_to_project_id, riaddebitando il costo al
+    cliente nel ciclo di fatturazione standard.
     """
     __tablename__ = "ingest_batches"
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
@@ -1881,6 +1888,35 @@ class IngestBatch(Base):
     batch_date: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, index=True)
     manifest_path: Mapped[Optional[str]] = mapped_column(String(512), nullable=True)
     notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    # v3.5.0-alpha.93 — Spedizione (vettore + costo + payer)
+    # carrier/tracking a livello batch (sostituisce dato sparso su singolo
+    # movimento; i movement mantengono i loro per back-compat ma il batch
+    # è la sorgente canonica per spedizioni raggruppate).
+    carrier: Mapped[Optional[str]] = mapped_column(String(80), nullable=True)
+    tracking_number: Mapped[Optional[str]] = mapped_column(String(120), nullable=True, index=True)
+    shipping_cost: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
+    # shipping_payer: chi sostiene il costo della spedizione.
+    # - internal:           costo a carico nostro, no riaddebito (entra solo
+    #                       come costo interno nel cost report).
+    # - client_direct:      cliente paga DIRETTO al vettore (nostro costo = 0,
+    #                       audit only).
+    # - charged_to_client:  noi anticipiamo, riaddebitiamo via JCL Spedizioni
+    #                       sul Job di billable_to_project_id.
+    shipping_payer: Mapped[Optional[str]] = mapped_column(String(30), nullable=True)
+    # pickup_mode: chi gestisce ritiro/consegna.
+    # - we_ship:                noi diamo i colli al nostro corriere (carrier nostro).
+    # - client_carrier_pickup:  cliente manda corriere a ritirare (carrier del cliente).
+    # - client_in_person:       cliente ritira di persona (no corriere).
+    pickup_mode: Mapped[Optional[str]] = mapped_column(String(30), nullable=True)
+    # Per "charged_to_client" e "internal" che vuole tracking progetto.
+    billable_to_project_id: Mapped[Optional[int]] = mapped_column(
+        ForeignKey("projects.id"), nullable=True, index=True
+    )
+    # JCL generata automaticamente al save (se charged_to_client).
+    # Permette di evitare duplicati e tracciare il riaddebito back-ref.
+    auto_billed_jcl_id: Mapped[Optional[int]] = mapped_column(
+        ForeignKey("job_cost_lines.id"), nullable=True, index=True
+    )
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
     created_by_user_id: Mapped[Optional[int]] = mapped_column(ForeignKey("users.id"), nullable=True)
 

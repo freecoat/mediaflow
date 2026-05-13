@@ -8,6 +8,42 @@
 
 ## Versione corrente
 
+**v3.5.0-alpha.93** — 13 maggio 2026 — Spedizioni con costi + ricarico cliente
+
+Feature richiesta Matteo: spedizioni come entità di prima classe con
+tracking del payer e ricarico automatico al cliente in fatturazione.
+
+Estensione `IngestBatch` (raggruppava già movimenti per DDT) con:
+- `carrier`, `tracking_number`, `shipping_cost` — batch-level
+- `shipping_payer`: `internal` / `client_direct` / `charged_to_client`
+- `pickup_mode`: `we_ship` / `client_carrier_pickup` / `client_in_person`
+- `billable_to_project_id` + `auto_billed_jcl_id`
+
+Endpoint nuovo `POST /physical-assets/api/shipments` (transazionale).
+Se `charged_to_client`: auto-crea JobCostLine `[Spedizione]` sul primo
+Job attivo del project (is_extra=True, billing_status=not_billed). Il
+flusso fatturazione standard la includerà nel prossimo BillingBatch.
+
+Modal UI `🚚 Nuova spedizione` su `/assets/inout` topbar: form completo
+con asset selector multi (fisici + digitali), search, badge tipo.
+
+**Smoke test E2E**: 2 batch creati (internal + charged), JCL #8629
+generata correttamente, total_accrued=80€.
+
+**Da testare sul Mac**:
+1. `/assets/inout` → bottone "🚚 Nuova spedizione" (nuovo, topbar)
+2. Compila: direzione outgest, vettore DHL, costo 50€, pickup we_ship,
+   payer internal → selettore asset (alcuni fisici + digitali) → submit
+3. Verifica: appare nella lista movimenti con DDT generato, niente JCL
+4. Ripeti con payer=`charged_to_client` + progetto valido → JCL creata
+   visibile nel cost report del Job (categoria/desc inizia con `[Spedizione]`)
+5. Rifletti nel ciclo fatturazione: la JCL Spedizione entra nel prossimo
+   BillingBatch trasmesso per quel Job (categoria estratta da desc)
+
+13 commit locali NON pushati (b8b8bb6 → α.93). Push a major bump.
+
+## (versione precedente)
+
 **v3.5.0-alpha.92** — 13 maggio 2026 — 6 task Matteo (compose-invoice fix + drawer storico + light themes + sezioni quote)
 
 Risposta a 6 punti aperti da Matteo (sessione mattina 13 mag):

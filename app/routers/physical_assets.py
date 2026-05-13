@@ -103,6 +103,7 @@ async def list_physical_assets(
     only_internal_archive: bool = False,
     only_delivered_external: bool = False,
     include_deleted: bool = False,
+    limit: Optional[int] = None,
     db: Session = Depends(get_db),
 ):
     """v3.5.0-alpha.88 — Filtri estesi: client_id (via owner_client_id OR
@@ -144,7 +145,11 @@ async def list_physical_assets(
         query = query.filter(PhysicalAsset.is_internal_archive == True)  # noqa: E712
     if only_delivered_external:
         query = query.filter(PhysicalAsset.is_delivered_external == True)  # noqa: E712
-    items = query.order_by(PhysicalAsset.created_at.desc()).all()
+    query = query.order_by(PhysicalAsset.created_at.desc())
+    # v3.5.0-alpha.93 — limit per UI compatte (modal Shipment selector).
+    if limit and limit > 0:
+        query = query.limit(min(limit, 1000))
+    items = query.all()
     return [_serialize(a) for a in items]
 
 
@@ -1234,6 +1239,203 @@ async def create_ingest_batch(
     )
     db.add(b); db.commit(); db.refresh(b)
     return {"id": b.id, "code": b.code, "direction": b.direction}
+
+
+@router.post("/api/shipments")
+async def create_shipment(
+    request: Request,
+    direction: str = Form(...),                 # ingest | outgest
+    carrier: Optional[str] = Form(None),
+    tracking_number: Optional[str] = Form(None),
+    shipping_cost: Optional[float] = Form(None),
+    shipping_payer: str = Form("internal"),     # internal | client_direct | charged_to_client
+    pickup_mode: str = Form("we_ship"),         # we_ship | client_carrier_pickup | client_in_person
+    billable_to_project_id: Optional[int] = Form(None),
+    project_id: Optional[int] = Form(None),
+    client_id: Optional[int] = Form(None),
+    supplier_id: Optional[int] = Form(None),
+    delivery_note_number: Optional[str] = Form(None),
+    from_party: Optional[str] = Form(None),
+    to_party: Optional[str] = Form(None),
+    physical_asset_ids: Optional[str] = Form(None),   # CSV
+    digital_asset_ids: Optional[str] = Form(None),    # CSV
+    notes: Optional[str] = Form(None),
+    db: Session = Depends(get_db),
+):
+    """v3.5.0-alpha.93 — Spedizione raggruppata (1+ asset, 1 vettore, 1 costo).
+
+    Crea 1 IngestBatch + N AssetMovement (uno per asset selezionato, fisico
+    o digitale) con stesso DDT, carrier, tracking. Se shipping_payer =
+    `charged_to_client` AND billable_to_project_id valorizzato → genera
+    automaticamente JobCostLine nella categoria "Spedizioni" del Job attivo
+    di quel project (per riaddebito al cliente nel ciclo fatturazione).
+
+    Tutto in transazione singola: se la JCL fallisce, ribalta il batch.
+    """
+    _require_perm(request)
+    from app.models import IngestBatch, Asset, Job, JobCostLine, JCLBillingStatus
+    user = getattr(request.state, "current_user", None)
+
+    # Validazione enum string fields
+    if direction not in ("ingest", "outgest"):
+        raise HTTPException(400, f"direction invalido: {direction}")
+    if shipping_payer not in ("internal", "client_direct", "charged_to_client"):
+        raise HTTPException(400, f"shipping_payer invalido: {shipping_payer}")
+    if pickup_mode not in ("we_ship", "client_carrier_pickup", "client_in_person"):
+        raise HTTPException(400, f"pickup_mode invalido: {pickup_mode}")
+    if shipping_payer == "charged_to_client":
+        if not billable_to_project_id:
+            raise HTTPException(400, "charged_to_client richiede billable_to_project_id")
+        if not shipping_cost or shipping_cost <= 0:
+            raise HTTPException(400, "charged_to_client richiede shipping_cost > 0")
+
+    # Parse asset ids
+    def _parse_ids(csv: Optional[str]) -> list[int]:
+        if not csv:
+            return []
+        try:
+            return [int(x.strip()) for x in csv.split(",") if x.strip()]
+        except ValueError:
+            raise HTTPException(400, f"ID asset non validi: {csv}")
+    pa_ids = _parse_ids(physical_asset_ids)
+    da_ids = _parse_ids(digital_asset_ids)
+    if not pa_ids and not da_ids:
+        raise HTTPException(400, "Specifica almeno un asset (physical_asset_ids o digital_asset_ids)")
+
+    # Verifica esistenza asset (tenant scope)
+    if pa_ids:
+        found = db.query(PhysicalAsset.id).filter(
+            PhysicalAsset.id.in_(pa_ids),
+            PhysicalAsset.tenant_id == CURRENT_TENANT,
+            PhysicalAsset.deleted_at.is_(None),
+        ).all()
+        if len(found) != len(pa_ids):
+            raise HTTPException(404, f"Alcuni physical asset non trovati nel tenant")
+    if da_ids:
+        found = db.query(Asset.id).filter(
+            Asset.id.in_(da_ids),
+            Asset.tenant_id == CURRENT_TENANT,
+        ).all()
+        if len(found) != len(da_ids):
+            raise HTTPException(404, f"Alcuni digital asset non trovati nel tenant")
+
+    # DDT shared
+    ddt = (delivery_note_number or "").strip() or _next_ddt_number(db)
+
+    # 1. Crea IngestBatch
+    code = _next_batch_code(db)
+    batch = IngestBatch(
+        tenant_id=CURRENT_TENANT,
+        code=code, direction=direction,
+        title=None,
+        description=(notes or "").strip() or None,
+        project_id=project_id, client_id=client_id, supplier_id=supplier_id,
+        delivery_note_number=ddt,
+        carrier=(carrier or "").strip() or None,
+        tracking_number=(tracking_number or "").strip() or None,
+        shipping_cost=shipping_cost,
+        shipping_payer=shipping_payer,
+        pickup_mode=pickup_mode,
+        billable_to_project_id=billable_to_project_id,
+        notes=(notes or "").strip() or None,
+        created_by_user_id=user.id if user else None,
+    )
+    db.add(batch); db.flush()
+
+    # 2. Crea N AssetMovement
+    try:
+        mt = AssetMovementType(direction)
+    except ValueError:
+        raise HTTPException(400, f"direction non mappabile a movement_type: {direction}")
+
+    movements_created = 0
+    for pid in pa_ids:
+        m = AssetMovement(
+            tenant_id=CURRENT_TENANT,
+            physical_asset_id=pid,
+            asset_id=None,
+            ingest_batch_id=batch.id,
+            movement_type=mt,
+            delivery_note_number=ddt,
+            movement_date=datetime.utcnow(),
+            from_party=(from_party or "").strip() or None,
+            to_party=(to_party or "").strip() or None,
+            client_id=client_id, supplier_id=supplier_id,
+            package_count=1,
+            carrier=batch.carrier, tracking_number=batch.tracking_number,
+            created_by_user_id=user.id if user else None,
+        )
+        db.add(m); movements_created += 1
+    for aid in da_ids:
+        m = AssetMovement(
+            tenant_id=CURRENT_TENANT,
+            physical_asset_id=None,
+            asset_id=aid,
+            ingest_batch_id=batch.id,
+            movement_type=mt,
+            delivery_note_number=ddt,
+            movement_date=datetime.utcnow(),
+            from_party=(from_party or "").strip() or None,
+            to_party=(to_party or "").strip() or None,
+            client_id=client_id, supplier_id=supplier_id,
+            package_count=1,
+            carrier=batch.carrier, tracking_number=batch.tracking_number,
+            created_by_user_id=user.id if user else None,
+        )
+        db.add(m); movements_created += 1
+
+    # 3. Auto-JCL se charged_to_client
+    auto_jcl_id = None
+    if shipping_payer == "charged_to_client":
+        # Trova il primo Job attivo del project_id specificato
+        job = db.query(Job).filter(
+            Job.project_id == billable_to_project_id,
+            Job.tenant_id == CURRENT_TENANT,
+        ).order_by(Job.created_at.desc()).first()
+        if not job:
+            db.rollback()
+            raise HTTPException(
+                400,
+                f"Nessun Job trovato per project_id={billable_to_project_id}; "
+                "impossibile generare JCL Spedizioni. Crea prima un Job o usa "
+                "shipping_payer=internal."
+            )
+        desc_parts = [f"[Spedizione] {code}"]
+        if batch.carrier: desc_parts.append(batch.carrier)
+        if batch.tracking_number: desc_parts.append(batch.tracking_number)
+        # JCL "extra" (riga aggiunta dopo la quote): quantity_quoted=0,
+        # total_quoted=0; il maturato (total_accrued/expected) è il costo
+        # spedizione che viene riaddebitato al cliente nel BillingBatch.
+        jcl = JobCostLine(
+            tenant_id=CURRENT_TENANT,
+            job_id=job.id,
+            description=" — ".join(desc_parts)[:255],
+            quantity_quoted=0.0,
+            quantity_actual=1.0,
+            unit="lump",
+            unit_price=shipping_cost,
+            total_quoted=0.0,
+            total_accrued=shipping_cost,
+            total_expected=shipping_cost,
+            is_billable=True,
+            is_extra=True,
+            billing_status=JCLBillingStatus.not_billed,
+            notes=f"Auto-generata da Shipment {code} (charged_to_client).",
+        )
+        db.add(jcl); db.flush()
+        batch.auto_billed_jcl_id = jcl.id
+        auto_jcl_id = jcl.id
+
+    db.commit()
+    return {
+        "batch_id": batch.id,
+        "batch_code": batch.code,
+        "delivery_note_number": ddt,
+        "movements_created": movements_created,
+        "shipping_cost": shipping_cost,
+        "shipping_payer": shipping_payer,
+        "auto_billed_jcl_id": auto_jcl_id,
+    }
 
 
 @router.post("/api/movements/digital")

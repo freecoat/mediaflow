@@ -428,6 +428,24 @@ def _auto_migrate_columns():
                 if col not in pcols:
                     print(f"[auto-migrate] projects.{col} mancante -> ALTER TABLE")
                     conn.execute(text(f"ALTER TABLE projects ADD COLUMN {col} {ddl}"))
+    # v3.5.0-alpha.93 — Shipment fields su IngestBatch (carrier, costo, payer,
+    # pickup_mode, billable_to_project_id, auto_billed_jcl_id).
+    if "ingest_batches" in insp.get_table_names():
+        ibcols = {c["name"] for c in insp.get_columns("ingest_batches")}
+        ib_alter = [
+            ("carrier",                "VARCHAR(80) NULL"),
+            ("tracking_number",        "VARCHAR(120) NULL"),
+            ("shipping_cost",          "FLOAT NULL"),
+            ("shipping_payer",         "VARCHAR(30) NULL"),
+            ("pickup_mode",            "VARCHAR(30) NULL"),
+            ("billable_to_project_id", "INTEGER NULL REFERENCES projects(id)"),
+            ("auto_billed_jcl_id",     "INTEGER NULL REFERENCES job_cost_lines(id)"),
+        ]
+        with engine.begin() as conn:
+            for col, ddl in ib_alter:
+                if col not in ibcols:
+                    print(f"[auto-migrate] ingest_batches.{col} mancante -> ALTER TABLE")
+                    conn.execute(text(f"ALTER TABLE ingest_batches ADD COLUMN {col} {ddl}"))
     # v3.5.0-alpha.65 — Pass-through OT al cliente (opt-in per progetto).
     if "jobs" in insp.get_table_names():
         jcols = {c["name"] for c in insp.get_columns("jobs")}
@@ -763,7 +781,7 @@ async def lifespan(app: FastAPI):
     yield
 
 
-app = FastAPI(title="MediaFlow", version="3.5.0-alpha.92", lifespan=lifespan)
+app = FastAPI(title="MediaFlow", version="3.5.0-alpha.93", lifespan=lifespan)
 
 BASE_DIR = Path(__file__).parent
 app.mount("/static", StaticFiles(directory=BASE_DIR / "static"), name="static")
