@@ -8,6 +8,29 @@
 
 ## Versione corrente
 
+**v3.5.0-alpha.98** — 13 maggio 2026 — Fix timeline duplicati + label role leggibile
+
+Screenshot Matteo 12.47-12.49 → 3 bug separati:
+1. **Stefano Marini duplicato**: seed test aveva 2 Resource id=232+254
+   con stesso nome/role/dept. Script `dedup_resources.py` deduplica
+   (riassegna booking al keeper, soft-delete duplicato). 1 gruppo, 52
+   booking riassegnati.
+2. **Role illegibile**: font 9px uppercase → bumpato 11px no-uppercase.
+   Rimosso `color:#ffffff` inline su nameEl (eredita var(--text)
+   theme-aware ora).
+3. **Sale duplicate visive**: vis-timeline 7.x bug `stack:true` con item
+   overlap crea righe virtuali. NON fixable senza cambio libreria.
+   Documentato come limitazione nota in changelog.
+
+**Da testare**: ricarica `/planning` con tema scuro → vedi:
+- "Stefano Marini" UNA sola volta
+- Label risorsa: nome 14px bold + ruolo 11px sotto (era 9px illegibile)
+- Tema chiaro: nome leggibile (no più #fff invisibile)
+
+18 commit locali NON pushati (b8b8bb6 → α.98). Push a major bump.
+
+## (versione precedente)
+
 **v3.5.0-alpha.97** — 13 maggio 2026 — Portale Cliente fase A: magic-link auth + dashboard read-only
 
 Punto #10 roadmap fase A:

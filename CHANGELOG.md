@@ -1,5 +1,39 @@
 # MediaFlow — Changelog
 
+## v3.5.0-alpha.98 — Timeline fix duplicati + label role leggibile (13 maggio 2026)
+
+Risposta a screenshot Matteo 12.47/12.48/12.49 con sovrapposizioni labels.
+
+**Bug 1 — Stefano Marini duplicato** (`scripts/dedup_resources.py`):
+- Root cause: seed stress test ha creato 2 Resource record con stesso
+  nome+role+department (id 232 + id 254 per "Stefano Marini"). Visivamente
+  appaiono come 2 righe distinte sulla timeline (groups = resource_id).
+- Script nuovo `dedup_resources.py`: dry-run di default, `--apply` per
+  scrivere. Strategia: per ogni gruppo `(name, role, dept_id)` tiene il
+  record con id minore, riassegna i `BookingAssignment` al keeper,
+  soft-delete (is_active=False + name += " [DUP-of-X]") i duplicati.
+- Eseguito sul DB: 1 gruppo deduplicato (Stefano Marini), 52 booking
+  riassegnati. Le altre 8 nomi duplicati avevano role/dept diversi
+  (omonimi legittimi) — non toccati.
+
+**Bug 2 — Sub-text role illegibile** (`planning.css`, `planning.html`):
+- `.tl-res-role` font era 9px uppercase letter-spacing 0.5px → screenshot
+  12.47.47 mostra solo nome, role esiste ma non si vede.
+- Bumpato a 11px line-height 1.2 no-uppercase letter-spacing 0.2px.
+- Inline style hardcoded `color:#ffffff` in `planning.html` nameEl
+  rimosso: ora eredita CSS `.tl-res-name` con `var(--text)` theme-aware
+  (era invisibile su Sand/Paper/Linen/Sage anche dopo fix α.94).
+
+**Bug 3 — Sale duplicate**: lo screenshot 12.49 mostra "Sala Color HDR
+Dolby Vision #1" 2 volte ma il DB ne ha solo 1 record (id=271). Bug
+visivo di vis-timeline 7.x con stack:true: quando 2 item temporalmente
+overlappano sulla stessa risorsa, crea righe-virtuali per stacking che
+ripetono la label. Non fixable senza rimpiazzare libreria timeline o
+disabilitare stack:true (vedi memory [[feedback-vis-timeline-quirks]]).
+Documentato come limitazione nota; backlog: valutare Bryntum/DHTMLX.
+
+**+1 script seed cleanup**, **no DB migration**.
+
 ## v3.5.0-alpha.97 — Portale Cliente fase A: auth magic-link + dashboard read-only (13 maggio 2026)
 
 Punto #10 della roadmap — fase A (auth + dashboard + scheda progetto).

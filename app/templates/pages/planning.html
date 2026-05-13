@@ -3301,14 +3301,17 @@ function tlBuildResourceGroups(bookings, rangeStart, rangeEnd) {
 
     const nameEl = document.createElement('div');
     nameEl.className = 'tl-res-name';
-    nameEl.style.cssText = 'font-weight:800; font-size:14px; line-height:1.15; color:#ffffff; letter-spacing:0.2px;';
+    // v3.5.0-alpha.98: rimosso color:#ffffff hardcoded inline → eredita
+    // .tl-res-name CSS che ora usa var(--text) theme-aware.
+    nameEl.style.cssText = 'font-weight:800; font-size:14px; line-height:1.15; letter-spacing:0.2px;';
     nameEl.textContent = r.name;
     cell.appendChild(nameEl);
 
     if (r.role) {
       const roleEl = document.createElement('div');
       roleEl.className = 'tl-res-role';
-      roleEl.style.cssText = 'font-size:9px; line-height:1.1; margin-top:2px; font-weight:500; text-transform:uppercase; letter-spacing:0.6px; color:#9aa0b8;';
+      // v3.5.0-alpha.98: font 9px era illeggibile (Matteo screenshot 12.47).
+      // Eredita CSS .tl-res-role (ora 11px theme-aware).
       roleEl.textContent = r.role;
       cell.appendChild(roleEl);
     }

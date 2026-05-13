@@ -201,12 +201,13 @@
     letter-spacing: 0.2px;
   }
   .vis-labelset .vis-label .tl-res-role {
-    font-size: 9px !important;
-    line-height: 1.1;
-    margin-top: 1px;
-    font-weight: 400 !important;
-    text-transform: uppercase;
-    letter-spacing: 0.5px;
+    /* v3.5.0-alpha.98: bump 9px→11px (Matteo: "non si legge"). */
+    font-size: 11px !important;
+    line-height: 1.2;
+    margin-top: 2px;
+    font-weight: 500 !important;
+    text-transform: none;
+    letter-spacing: 0.2px;
     color: var(--text2, #9aa0b8) !important;
   }
   .vis-labelset .vis-label:hover { background: rgba(98,114,245,0.10); }
