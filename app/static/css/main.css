@@ -18,6 +18,11 @@
   --surface2:  #2d3347;
   --border:    #333b52;
   --border2:   #424d68;
+  /* v3.5.0-alpha.94: --bg-elev era usato in planning.css/hr.html ma mai
+     definito in nessun tema → fallback hardcoded #1a1d29 (scuro) anche su
+     temi chiari (rettangoli neri visibili sul timeline storyboard di hr).
+     Alias di --surface: ogni tema lo eredita automaticamente. */
+  --bg-elev:   var(--surface);
 
   --text:      #e8ecf5;
   --text2:     #9aa3bf;

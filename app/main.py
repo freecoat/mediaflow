@@ -422,6 +422,8 @@ def _auto_migrate_columns():
             ("min_role_for_access", "VARCHAR(40) NULL"),
             # v3.5.0-alpha.90 — Accrual billing: periodicità per project
             ("billing_frequency", "VARCHAR(20) NOT NULL DEFAULT 'monthly'"),
+            # v3.5.0-alpha.94 — Markup % spedizioni riaddebitate al cliente
+            ("shipping_markup_pct", "REAL NOT NULL DEFAULT 15.0"),
         ]
         with engine.begin() as conn:
             for col, ddl in proj_alter:
@@ -781,7 +783,7 @@ async def lifespan(app: FastAPI):
     yield
 
 
-app = FastAPI(title="MediaFlow", version="3.5.0-alpha.93", lifespan=lifespan)
+app = FastAPI(title="MediaFlow", version="3.5.0-alpha.94", lifespan=lifespan)
 
 BASE_DIR = Path(__file__).parent
 app.mount("/static", StaticFiles(directory=BASE_DIR / "static"), name="static")

@@ -8,6 +8,39 @@
 
 ## Versione corrente
 
+**v3.5.0-alpha.94** — 13 maggio 2026 — Timeline tema chiaro + spedizioni v2 + tab Spedizioni
+
+3 task in α.94:
+
+1. **Timeline tema chiaro fix** — Bug root: `--bg-elev` mai definito, fallback
+   `#1a1d29` scuro su tema chiaro causava "rettangoli neri" su /hr. Fix in
+   `:root` + audit color hardcoded planning.css (labels, time-axis,
+   nesting-group → var() theme-aware).
+
+2. **Spedizioni v2** — `Project.shipping_markup_pct` (default 15%), PriceItem
+   "Spedizione standard" + categoria "Spedizioni" auto-create. JCL applica
+   markup: 100€ + 15% = 115€ riaddebitati. UI campo markup nel modal con
+   prepopolato dal Project + persist al submit.
+
+3. **Tab Spedizioni in /assets/inout** — nuovo endpoint
+   `GET /ingest-batches` con totali (costo vettori + riaddebitato cliente).
+   3 KPI cards + filtri direction/payer/has_cost + tabella sortable + link
+   a JCL fatturazione. Pulsante "Nuova spedizione" anche in tab.
+
+**Da testare sul Mac**:
+1. `/hr` su tema chiaro Sand/Paper/Linen/Sage → niente più rettangoli neri
+2. `/storyboard` o `/planning` su tema chiaro → label risorse + header
+   reparto leggibili (no testo bianco invisibile)
+3. `/assets/inout` → vedi tab "🚚 Spedizioni" + KPI con totali
+4. Nuova spedizione con `payer=charged_to_client` + progetto → JCL ha 115€
+   se markup default 15%. Cambia markup a 25% → JCL nuova ha 125€,
+   markup persiste nel Project.
+5. Tab Spedizioni → click su #JCL apre cost-report del Job
+
+14 commit locali NON pushati (b8b8bb6 → α.94). Push a major bump.
+
+## (versione precedente)
+
 **v3.5.0-alpha.93** — 13 maggio 2026 — Spedizioni con costi + ricarico cliente
 
 Feature richiesta Matteo: spedizioni come entità di prima classe con

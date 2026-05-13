@@ -713,6 +713,14 @@ class Project(Base):
     # Definito in fase di quotazione, modificabile da manager fino alla
     # prima fattura emessa.
     billing_frequency: Mapped[str] = mapped_column(String(20), default="monthly")
+    # v3.5.0-alpha.94 — Markup % sui costi spedizione riaddebitati al cliente.
+    # Quando IngestBatch ha shipping_payer=charged_to_client e questo project
+    # è il billable, la JCL auto-generata applica:
+    #   unit_price = shipping_cost * (1 + shipping_markup_pct/100)
+    # Default 15% (decisione Matteo 13 mag). Configurabile in /quotes editor
+    # progetto-side per quote-specifico (es. cliente con accordi diversi).
+    # 0 = pass-through esatto del costo vettore (no margine).
+    shipping_markup_pct: Mapped[float] = mapped_column(Float, nullable=False, default=15.0, server_default="15.0")
 
     client: Mapped["Client"] = relationship(back_populates="projects")
     quotes: Mapped[List["Quote"]] = relationship(back_populates="project", cascade="all, delete-orphan")

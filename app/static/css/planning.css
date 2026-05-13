@@ -126,13 +126,15 @@
     padding: 2px 6px;
   }
   .vis-time-axis .vis-text.vis-major {
-    color: #cdd5ff;
+    /* v3.5.0-alpha.94: era #cdd5ff hardcoded (azzurrino chiaro) — invisibile
+       su temi chiari. Ora indigo del tema attivo per coerenza. */
+    color: var(--indigo, #cdd5ff);
     font-weight: 700;
     font-size: 11.5px;
     letter-spacing: 0.6px;
   }
-  .vis-time-axis .vis-grid { border-color: rgba(255,255,255,0.05); }
-  .vis-time-axis .vis-grid.vis-major { border-color: rgba(98,114,245,0.18); }
+  .vis-time-axis .vis-grid { border-color: var(--border, rgba(255,255,255,0.05)); }
+  .vis-time-axis .vis-grid.vis-major { border-color: var(--indigo-border, rgba(98,114,245,0.18)); }
   /* v3.4.45: weekend evidenziato su tutta la timeline (axis + foreground) */
   .vis-time-axis .vis-grid.vis-saturday,
   .vis-time-axis .vis-grid.vis-sunday {
@@ -147,8 +149,8 @@
   /* Labels (left col) — v3.4.32.2: senza min-height (rompeva allineamento
      con le righe foreground). Font più grande e chiaro, padding leggero. */
   .vis-labelset .vis-label {
-    color: #f5f5f5;
-    border-color: rgba(255,255,255,0.04);
+    color: var(--text, #f5f5f5);
+    border-color: var(--border, rgba(255,255,255,0.04));
     padding: 6px 12px;
     font-size: 13.5px;
     font-weight: 500;
@@ -168,14 +170,17 @@
      letter-spacing ridotto, no uppercase (leggibilità), Matteo
      "ingrandisci font reparto". */
   .vis-labelset .vis-label.vis-nesting-group {
-    background: linear-gradient(90deg, rgba(98,114,245,0.30) 0%, rgba(98,114,245,0.10) 70%, transparent 100%);
+    background: linear-gradient(90deg, var(--indigo-bg, rgba(98,114,245,0.30)) 0%, var(--indigo-bg, rgba(98,114,245,0.10)) 70%, transparent 100%);
     font-weight: 800 !important;
-    color: #d4daff !important;
+    /* v3.5.0-alpha.94: era #d4daff hardcoded (azzurro chiaro), invisibile
+       su temi chiari Sand/Paper/Linen/Sage. Ora usa var(--indigo) (accent
+       del tema) che mantiene contrasto sia su dark che su light. */
+    color: var(--indigo, #d4daff) !important;
     letter-spacing: 0.3px;
     font-size: 17px !important;
-    border-left: 4px solid #6272f5;
+    border-left: 4px solid var(--indigo, #6272f5);
     padding-left: 12px;
-    box-shadow: inset 0 -1px 0 rgba(98,114,245,0.15);
+    box-shadow: inset 0 -1px 0 var(--indigo-border, rgba(98,114,245,0.15));
   }
   .vis-labelset .vis-label.vis-nesting-group:nth-child(odd) {
     background: linear-gradient(90deg, rgba(98,114,245,0.18) 0%, rgba(98,114,245,0.06) 60%, transparent 100%);
@@ -192,7 +197,7 @@
     font-weight: 800 !important;
     font-size: 14px !important;
     line-height: 1.15;
-    color: #ffffff;
+    color: var(--text, #ffffff);
     letter-spacing: 0.2px;
   }
   .vis-labelset .vis-label .tl-res-role {
@@ -202,7 +207,7 @@
     font-weight: 400 !important;
     text-transform: uppercase;
     letter-spacing: 0.5px;
-    color: #9aa0b8 !important;
+    color: var(--text2, #9aa0b8) !important;
   }
   .vis-labelset .vis-label:hover { background: rgba(98,114,245,0.10); }
   .vis-foreground .vis-group:hover { background: rgba(98,114,245,0.04); }

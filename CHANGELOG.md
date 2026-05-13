@@ -1,5 +1,66 @@
 # MediaFlow — Changelog
 
+## v3.5.0-alpha.94 — Timeline tema chiaro + spedizioni v2 (voce listino + markup) + vista lista batch (13 maggio 2026)
+
+3 task da feedback Matteo post-α.93:
+
+**Timeline tema chiaro** (`main.css`, `planning.css`):
+- Bug root: `--bg-elev` usato in 10+ punti (planning.css cards, hr.html
+  totalizzatori) ma MAI definito in nessun tema → fallback hardcoded
+  `#1a1d29` (scuro) anche su Sand/Paper/Linen/Sage. Causa "rettangoli
+  neri" visibili nello screenshot 10.50 di /hr su tema chiaro.
+- Fix: `--bg-elev: var(--surface)` in `:root`. Tutti i temi ereditano.
+- Audit color hardcoded in planning.css:
+  - `.vis-labelset .vis-label color: #f5f5f5` → `var(--text)`
+  - `.tl-res-name color: #ffffff` → `var(--text)`
+  - `.tl-res-role color: #9aa0b8` → `var(--text2)`
+  - `.vis-labelset .vis-label.vis-nesting-group color: #d4daff` →
+    `var(--indigo)` (era azzurro chiaro invisibile su sfondo light)
+  - `.vis-time-axis .vis-text.vis-major color: #cdd5ff` → `var(--indigo)`
+  - `.vis-time-axis .vis-grid border-color` → `var(--border)`
+  - `.vis-time-axis .vis-grid.vis-major border-color` → `var(--indigo-border)`
+
+**Spedizioni v2 — voce listino + markup quote** (`models.py`,
+`physical_assets.py`, `projects.py`, `assets_inout.html`, `main.py`):
+- `Project.shipping_markup_pct` (default 15.0, server_default "15.0").
+  Auto-migrate ALTER TABLE idempotente.
+- Helper `_get_or_create_shipping_price_item(db)`: PriceCategory
+  "Spedizioni" + PriceItem "Spedizione standard" auto-creati al primo
+  use. La JCL auto-generata linka a questo `price_item_id`. Risultati:
+  cost report raggruppa per categoria, BillingBatch eredita name in
+  fattura SDI.
+- Markup applicato in `create_shipment`: `unit_price = shipping_cost *
+  (1 + markup/100)`. Description include nota "+15% ricarico". Notes
+  JCL trasparenti: "Costo vettore €X; markup Y% → riaddebito €Z".
+- UI modal Shipment: campo "Ricarico %" accanto al dropdown progetto.
+  Pre-popolato leggendo `Project.shipping_markup_pct` (GET dettaglio
+  project). Al submit, se diverso da originale, PUT su Project per
+  persistere. `PUT /projects/api/{id}` accetta ora i nuovi field
+  `billing_frequency` e `shipping_markup_pct`.
+- `GET /projects/api/{id}` espone `shipping_markup_pct` e
+  `billing_frequency` (mancavano).
+- Smoke test: shipment con cost=100€ → JCL #8630 con unit_price=115€,
+  description "[Spedizione] BATCH-2026-043 — DHL — TRK77 — +15% ricarico",
+  linkata a PriceItem #44 (categoria PriceCategory #13 "Spedizioni").
+
+**Vista lista IngestBatch / Spedizioni** (`physical_assets.py`,
+`assets_inout.html`):
+- Endpoint nuovo `GET /physical-assets/api/ingest-batches` con filtri
+  direction / shipping_payer / project / client / period / has_cost.
+  Ritorna `{items, total_cost, total_charged_to_client, count}` con
+  totale riaddebitato calcolato applicando il markup per progetto.
+- Tab "🚚 Spedizioni" affiancata a "📋 Movimenti" in /assets/inout.
+  3 KPI cards (Spedizioni totali / Costo vettori / Riaddebitato cliente)
+  + filtri direzione/payer + checkbox "Solo con costo > 0" + tabella
+  sortable con badge direzione + payer + link a JCL (apre cost-report).
+- Bottone "🚚 Nuova spedizione" anche nel tab Spedizioni (duplicato
+  topbar per discovery).
+- Fix route order (stesso bug T3 α.92): `/api/ingest-batches`
+  spostata sopra `/api/{asset_id}` per evitare 422 int_parsing.
+
+**+1 colonna auto-migrate**, **+1 endpoint** (`/ingest-batches` GET),
+**+2 field opzionali** su PUT projects.
+
 ## v3.5.0-alpha.93 — Spedizioni con costi + ricarico cliente (13 maggio 2026)
 
 Risposta a feature request Matteo 13 mag: le spedizioni vanno tracciate

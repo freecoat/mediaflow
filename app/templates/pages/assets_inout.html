@@ -18,6 +18,21 @@
   </div>
 </div>
 
+<!-- v3.5.0-alpha.94 — Tab Movimenti / Spedizioni -->
+<div class="card" style="margin-bottom:0;border-bottom:none;border-bottom-left-radius:0;border-bottom-right-radius:0;padding:0;">
+  <div style="display:flex;gap:0;">
+    <button class="tab-btn active" id="tab-moves" onclick="switchInoutTab('moves')"
+            style="padding:12px 20px;background:none;border:none;border-bottom:2px solid var(--indigo2);color:var(--text);cursor:pointer;font-size:13px;font-weight:600;">
+      📋 Movimenti
+    </button>
+    <button class="tab-btn" id="tab-shipments" onclick="switchInoutTab('shipments')"
+            style="padding:12px 20px;background:none;border:none;border-bottom:2px solid transparent;color:var(--text3);cursor:pointer;font-size:13px;font-weight:500;">
+      🚚 Spedizioni
+    </button>
+  </div>
+</div>
+
+<div id="pane-moves" style="border-top:0;">
 <!-- v3.5.0-alpha.86 (S3.5) — Filtri standard cliente/progetto/periodo via MFFilterBar -->
 <div id="inout-global-filters" style="margin-bottom:10px;"></div>
 <div class="card mb-3">
@@ -71,6 +86,79 @@
       </thead>
       <tbody id="list-tbody"></tbody>
     </table>
+  </div>
+</div>
+</div>
+
+<!-- v3.5.0-alpha.94 — Pane Spedizioni (IngestBatch lista con totali) -->
+<div id="pane-shipments" style="display:none;">
+  <div class="stat-grid mb-3" id="sh-kpi-grid">
+    <div class="stat-card">
+      <div class="stat-label">Spedizioni totali</div>
+      <div class="stat-value mono" id="sh-kpi-count" style="font-size:24px;">—</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">Costo vettori (€)</div>
+      <div class="stat-value mono color-amber" id="sh-kpi-cost" style="font-size:24px;">—</div>
+      <div class="stat-sub">somma costi spedizioni filtrate</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">Riaddebitato cliente (€)</div>
+      <div class="stat-value mono color-green" id="sh-kpi-charged" style="font-size:24px;">—</div>
+      <div class="stat-sub">incl. markup configurato</div>
+    </div>
+  </div>
+  <div class="card mb-3">
+    <div style="display:flex;flex-wrap:wrap;gap:10px;align-items:flex-end;padding:10px 14px;">
+      <div class="form-group" style="min-width:140px;">
+        <label class="form-label" style="font-size:11px;">Direzione</label>
+        <select class="form-select" id="shf-direction" onchange="loadShipments()">
+          <option value="">— tutte —</option>
+          <option value="ingest">Ingressi</option>
+          <option value="outgest">Uscite</option>
+        </select>
+      </div>
+      <div class="form-group" style="min-width:180px;">
+        <label class="form-label" style="font-size:11px;">Payer (chi paga)</label>
+        <select class="form-select" id="shf-payer" onchange="loadShipments()">
+          <option value="">— tutti —</option>
+          <option value="internal">Costo interno</option>
+          <option value="client_direct">Cliente paga diretto</option>
+          <option value="charged_to_client">Riaddebitato</option>
+        </select>
+      </div>
+      <label style="display:flex;align-items:center;gap:6px;font-size:12px;cursor:pointer;">
+        <input type="checkbox" id="shf-hascost" onchange="loadShipments()">
+        <span>Solo con costo &gt; 0</span>
+      </label>
+      <button class="btn btn-ghost btn-sm" onclick="resetShFilters()">Reset</button>
+      <button class="btn btn-primary btn-sm" onclick="openShipment()" style="margin-left:auto;">🚚 Nuova spedizione</button>
+    </div>
+  </div>
+  <div class="card">
+    <div class="table-wrap">
+      <table class="mf-sortable">
+        <thead>
+          <tr>
+            <th>Code</th>
+            <th>Data</th>
+            <th>DDT</th>
+            <th>Direzione</th>
+            <th>Vettore</th>
+            <th>Tracking</th>
+            <th class="text-right">Costo</th>
+            <th>Payer</th>
+            <th>Pickup</th>
+            <th>Progetto</th>
+            <th class="text-right">Colli</th>
+            <th>JCL</th>
+          </tr>
+        </thead>
+        <tbody id="shipments-tbody">
+          <tr><td colspan="12" class="text-muted" style="text-align:center;padding:24px;">Caricamento…</td></tr>
+        </tbody>
+      </table>
+    </div>
   </div>
 </div>
 
@@ -169,13 +257,20 @@
           </div>
         </div>
         <div class="form-row" id="sh-billable-row" style="margin-top:10px;display:none;">
-          <div class="form-group">
+          <div class="form-group" style="flex:2;">
             <label class="form-label">Progetto a cui addebitare *</label>
-            <select class="form-select" id="sh-billable-project">
+            <select class="form-select" id="sh-billable-project" onchange="onShBillableProjectChange()">
               <option value="">— seleziona progetto —</option>
             </select>
             <div class="text-xs text-muted" style="margin-top:4px;">
-              Il costo verrà aggiunto come riga extra al primo Job attivo del progetto, categoria <code>Spedizioni</code>.
+              Voce <code>Spedizione standard</code> (cat. Spedizioni) aggiunta al primo Job attivo del progetto.
+            </div>
+          </div>
+          <div class="form-group" style="max-width:170px;">
+            <label class="form-label">Ricarico % <span class="text-muted" style="font-weight:400;">(default 15)</span></label>
+            <input class="form-input" id="sh-markup-pct" type="number" step="0.5" min="0" max="500" placeholder="15.0">
+            <div class="text-xs text-muted" style="margin-top:4px;">
+              Salva sul progetto. Es. costo 100€ + 15% = 115€ riaddebitato.
             </div>
           </div>
         </div>
@@ -633,6 +728,21 @@ function onPayerChange() {
   document.getElementById('sh-billable-row').style.display = (v === 'charged_to_client') ? '' : 'none';
 }
 
+async function onShBillableProjectChange() {
+  const pid = document.getElementById('sh-billable-project').value;
+  const mkInput = document.getElementById('sh-markup-pct');
+  if (!pid) { mkInput.value = ''; return; }
+  // Recupera markup persistito sul Project (cache _shProjects è sintetica,
+  // chiamiamo GET /projects/api/{id} per il dettaglio con shipping_markup_pct).
+  try {
+    const p = await api('GET', `/projects/api/${pid}`);
+    mkInput.value = (p.shipping_markup_pct != null) ? String(p.shipping_markup_pct) : '15';
+    mkInput.dataset.original = mkInput.value;
+  } catch(e) {
+    mkInput.value = '15';
+  }
+}
+
 function onShipmentDirChange() {
   // Non altera la lista asset; placeholder per logica futura (filtrare
   // physical_assets per direzione, es. solo "in archivio" per outgest).
@@ -765,6 +875,19 @@ async function submitShipment() {
   if (payer === 'charged_to_client') {
     if (!billable) { toast('Seleziona il progetto per il riaddebito', 'warning'); return; }
     if (!cost || cost <= 0) { toast('Costo > 0 richiesto per riaddebito', 'warning'); return; }
+    // Persisti il markup % sul Project se l'utente lo ha cambiato. Una sola
+    // chiamata extra PUT, ignoriamo errore (non-critical: il valore di
+    // default sul backend resta valido).
+    const mkInput = document.getElementById('sh-markup-pct');
+    const mkVal = mkInput.value.trim();
+    const mkOrig = mkInput.dataset.original || '';
+    if (mkVal !== '' && mkVal !== mkOrig) {
+      try {
+        const pfd = new FormData();
+        pfd.append('shipping_markup_pct', mkVal);
+        await api('PUT', `/projects/api/${billable}`, pfd);
+      } catch(e) { /* non bloccante */ }
+    }
   }
   const fd = new FormData();
   fd.append('direction', document.getElementById('sh-direction').value);
@@ -799,6 +922,128 @@ async function submitShipment() {
           'success', 6000);
     await loadList();
   } catch(e) { toast(e.message || 'Errore creazione spedizione', 'error'); }
+}
+
+// v3.5.0-alpha.94 — Tab Movimenti / Spedizioni
+function switchInoutTab(name) {
+  const isMoves = name === 'moves';
+  document.getElementById('pane-moves').style.display = isMoves ? '' : 'none';
+  document.getElementById('pane-shipments').style.display = isMoves ? 'none' : '';
+  const tMoves = document.getElementById('tab-moves');
+  const tShips = document.getElementById('tab-shipments');
+  [tMoves, tShips].forEach(t => {
+    t.classList.remove('active');
+    t.style.borderBottomColor = 'transparent';
+    t.style.color = 'var(--text3)';
+    t.style.fontWeight = '500';
+  });
+  const active = isMoves ? tMoves : tShips;
+  active.classList.add('active');
+  active.style.borderBottomColor = 'var(--indigo2)';
+  active.style.color = 'var(--text)';
+  active.style.fontWeight = '600';
+  if (!isMoves) loadShipments();
+}
+
+const PAYER_LBL = {
+  internal: 'Interno', client_direct: 'Cliente diretto',
+  charged_to_client: 'Riaddebitato',
+};
+const PICKUP_LBL = {
+  we_ship: 'Noi spediamo', client_carrier_pickup: 'Corriere cliente',
+  client_in_person: 'Cliente in persona',
+};
+
+async function loadShipments() {
+  const qs = [];
+  const dir = document.getElementById('shf-direction').value;
+  if (dir) qs.push('direction=' + dir);
+  const payer = document.getElementById('shf-payer').value;
+  if (payer) qs.push('shipping_payer=' + payer);
+  if (document.getElementById('shf-hascost').checked) qs.push('has_cost=1');
+  qs.push('limit=300');
+  const url = '/physical-assets/api/ingest-batches' + (qs.length ? '?' + qs.join('&') : '');
+  let data;
+  try { data = await api('GET', url); }
+  catch(e) { toast(e.message || 'Errore', 'error'); return; }
+  document.getElementById('sh-kpi-count').textContent = String(data.count || 0);
+  document.getElementById('sh-kpi-cost').textContent = fmtCurrency(data.total_cost || 0);
+  document.getElementById('sh-kpi-charged').textContent = fmtCurrency(data.total_charged_to_client || 0);
+  const tbody = document.getElementById('shipments-tbody');
+  while (tbody.firstChild) tbody.removeChild(tbody.firstChild);
+  if (!data.items.length) {
+    const tr = document.createElement('tr');
+    const td = document.createElement('td');
+    td.colSpan = 12; td.className = 'text-muted';
+    td.style.cssText = 'text-align:center;padding:24px;';
+    td.textContent = 'Nessuna spedizione corrisponde ai filtri.';
+    tr.appendChild(td); tbody.appendChild(tr);
+    return;
+  }
+  data.items.forEach(b => {
+    const tr = document.createElement('tr');
+    const td = (txt, css) => { const e = document.createElement('td'); e.style.padding = '6px 8px'; if (css) e.style.cssText += ';' + css; e.textContent = txt; tr.appendChild(e); return e; };
+    td(b.code, 'font-family:var(--font-mono);font-size:11px;font-weight:600;');
+    td((b.batch_date || '').slice(0, 10), 'font-size:12px;');
+    td(b.delivery_note_number || '—', 'font-family:var(--font-mono);font-size:11px;');
+    const dirBadge = document.createElement('td');
+    dirBadge.style.padding = '6px 8px';
+    const dirSpan = document.createElement('span');
+    dirSpan.style.cssText = 'padding:2px 8px;border-radius:8px;font-size:10px;font-weight:600;'
+      + (b.direction === 'ingest'
+          ? 'background:rgba(34,197,94,.15);color:#22c55e;'
+          : 'background:rgba(251,146,60,.15);color:#fb923c;');
+    dirSpan.textContent = b.direction === 'ingest' ? '📥 Ingr.' : '📤 Uscita';
+    dirBadge.appendChild(dirSpan); tr.appendChild(dirBadge);
+    td(b.carrier || '—', 'font-size:12px;');
+    td(b.tracking_number || '—', 'font-family:var(--font-mono);font-size:11px;');
+    td(fmtCurrency(b.shipping_cost || 0), 'font-family:var(--font-mono);text-align:right;font-weight:600;');
+    const payerBadge = document.createElement('td');
+    payerBadge.style.padding = '6px 8px';
+    if (b.shipping_payer) {
+      const ps = document.createElement('span');
+      const color = b.shipping_payer === 'charged_to_client' ? '#22c55e'
+                  : b.shipping_payer === 'internal' ? '#fb923c' : '#94a3b8';
+      ps.style.cssText = `padding:2px 8px;border-radius:8px;font-size:10px;font-weight:600;background:${color}22;color:${color};`;
+      ps.textContent = PAYER_LBL[b.shipping_payer] || b.shipping_payer;
+      payerBadge.appendChild(ps);
+    } else {
+      payerBadge.textContent = '—';
+      payerBadge.className = 'text-muted';
+    }
+    tr.appendChild(payerBadge);
+    td(b.pickup_mode ? (PICKUP_LBL[b.pickup_mode] || b.pickup_mode) : '—', 'font-size:11px;');
+    td(b.project_code || '—', 'font-family:var(--font-mono);font-size:11px;');
+    td(String(b.movements_count || 0), 'text-align:right;font-size:12px;');
+    const jclTd = document.createElement('td');
+    jclTd.style.padding = '6px 8px';
+    if (b.auto_billed_jcl_id) {
+      const a = document.createElement('a');
+      a.href = '#'; a.textContent = `#${b.auto_billed_jcl_id} →`;
+      a.title = 'JCL fatturazione auto-generata';
+      a.className = 'text-xs';
+      a.style.cssText = 'color:var(--indigo2);text-decoration:none;font-weight:600;';
+      a.addEventListener('click', (e) => {
+        e.preventDefault();
+        if (b.billable_to_project_id) {
+          window.open(`/jobs/${b.billable_to_project_id}/cost-report`, '_blank');
+        }
+      });
+      jclTd.appendChild(a);
+    } else {
+      jclTd.textContent = '—';
+      jclTd.className = 'text-muted';
+    }
+    tr.appendChild(jclTd);
+    tbody.appendChild(tr);
+  });
+}
+
+function resetShFilters() {
+  document.getElementById('shf-direction').value = '';
+  document.getElementById('shf-payer').value = '';
+  document.getElementById('shf-hascost').checked = false;
+  loadShipments();
 }
 
 // v3.5.0-alpha.86 (S3.5) — Init filtri + lista

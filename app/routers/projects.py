@@ -128,6 +128,8 @@ async def get_project(project_id: int, db: Session = Depends(get_db)):
         "delivery_deadline": str(p.delivery_deadline) if p.delivery_deadline else None,
         "status": p.status,
         "description": p.description, "notes": p.notes,
+        "billing_frequency": getattr(p, "billing_frequency", "monthly"),
+        "shipping_markup_pct": getattr(p, "shipping_markup_pct", 15.0),
         "quotes": [
             {"id": q.id, "number": q.number, "version": q.version,
              "status": q.status, "total_with_vat": q.total_with_vat,
@@ -158,6 +160,8 @@ async def update_project(
     status: Optional[ProjectStatus] = Form(None),
     description: Optional[str] = Form(None),
     notes: Optional[str] = Form(None),
+    billing_frequency: Optional[str] = Form(None),
+    shipping_markup_pct: Optional[float] = Form(None),
     db: Session = Depends(get_db),
 ):
     p = db.query(Project).filter(Project.id == project_id).first()
@@ -166,7 +170,8 @@ async def update_project(
     for field in ("title", "project_type", "length_minutes", "fps",
                   "shooting_format", "delivery_format", "director",
                   "producer", "dop", "delivery_deadline",
-                  "status", "description", "notes"):
+                  "status", "description", "notes",
+                  "billing_frequency", "shipping_markup_pct"):
         val = locals()[field]
         if val is not None and val != "":
             setattr(p, field, val)

@@ -153,6 +153,93 @@ async def list_physical_assets(
     return [_serialize(a) for a in items]
 
 
+@router.get("/api/ingest-batches")
+async def list_ingest_batches(
+    direction: Optional[str] = None,
+    shipping_payer: Optional[str] = None,
+    project_id: Optional[int] = None,
+    client_id: Optional[int] = None,
+    from_date: Optional[date] = None,
+    to_date: Optional[date] = None,
+    has_cost: Optional[int] = None,
+    limit: int = 200,
+    db: Session = Depends(get_db),
+):
+    """v3.5.0-alpha.94 — Lista IngestBatch (= "spedizioni") con totali costi.
+    Tab Spedizioni nella pagina /assets/inout. Filtri per payer e periodo.
+
+    v3.5.0-alpha.94 fix: posizionata sopra `/api/{asset_id}` perché altrimenti
+    il segmento "ingest-batches" veniva matchato come asset_id e Pydantic
+    tornava 422 (int_parsing). Stesso bug di α.92 T3 su billing.py.
+    """
+    from app.models import IngestBatch, Client, Project as _P
+    q = db.query(IngestBatch).filter(IngestBatch.tenant_id == CURRENT_TENANT)
+    if direction:
+        q = q.filter(IngestBatch.direction == direction)
+    if shipping_payer:
+        q = q.filter(IngestBatch.shipping_payer == shipping_payer)
+    if project_id:
+        q = q.filter(IngestBatch.project_id == project_id)
+    if client_id:
+        q = q.filter(IngestBatch.client_id == client_id)
+    if from_date:
+        q = q.filter(IngestBatch.batch_date >= datetime.combine(from_date, time.min))
+    if to_date:
+        q = q.filter(IngestBatch.batch_date <= datetime.combine(to_date, time.max))
+    if has_cost:
+        q = q.filter(IngestBatch.shipping_cost.is_not(None), IngestBatch.shipping_cost > 0)
+    batches = q.order_by(IngestBatch.batch_date.desc()).limit(min(limit, 500)).all()
+    proj_ids = list({b.project_id for b in batches if b.project_id})
+    cli_ids = list({b.client_id for b in batches if b.client_id})
+    proj_map = {p.id: p for p in db.query(_P).filter(_P.id.in_(proj_ids)).all()} if proj_ids else {}
+    cli_map = {c.id: c for c in db.query(Client).filter(Client.id.in_(cli_ids)).all()} if cli_ids else {}
+    if batches:
+        from sqlalchemy import func as _f
+        counts = dict(db.query(
+            AssetMovement.ingest_batch_id, _f.count(AssetMovement.id)
+        ).filter(
+            AssetMovement.ingest_batch_id.in_([b.id for b in batches])
+        ).group_by(AssetMovement.ingest_batch_id).all())
+    else:
+        counts = {}
+    out = []
+    total_cost = 0.0
+    total_charged = 0.0
+    for b in batches:
+        cost = b.shipping_cost or 0.0
+        total_cost += cost
+        if b.shipping_payer == "charged_to_client" and b.project_id:
+            p = proj_map.get(b.project_id)
+            mk = float(getattr(p, "shipping_markup_pct", 15.0) or 0.0) if p else 15.0
+            total_charged += cost * (1 + mk / 100.0)
+        out.append({
+            "id": b.id,
+            "code": b.code,
+            "direction": b.direction,
+            "batch_date": str(b.batch_date)[:19] if b.batch_date else None,
+            "delivery_note_number": b.delivery_note_number,
+            "carrier": b.carrier,
+            "tracking_number": b.tracking_number,
+            "shipping_cost": cost,
+            "shipping_payer": b.shipping_payer,
+            "pickup_mode": b.pickup_mode,
+            "billable_to_project_id": b.billable_to_project_id,
+            "auto_billed_jcl_id": b.auto_billed_jcl_id,
+            "project_id": b.project_id,
+            "project_code": proj_map[b.project_id].code if b.project_id and b.project_id in proj_map else None,
+            "client_id": b.client_id,
+            "client_name": cli_map[b.client_id].name if b.client_id and b.client_id in cli_map else None,
+            "movements_count": counts.get(b.id, 0),
+            "notes": b.notes,
+        })
+    return {
+        "items": out,
+        "total_cost": round(total_cost, 2),
+        "total_charged_to_client": round(total_charged, 2),
+        "count": len(out),
+    }
+
+
 @router.get("/api/{asset_id}")
 async def get_physical_asset(asset_id: int, db: Session = Depends(get_db)):
     a = db.query(PhysicalAsset).filter(
@@ -1241,6 +1328,49 @@ async def create_ingest_batch(
     return {"id": b.id, "code": b.code, "direction": b.direction}
 
 
+def _get_or_create_shipping_price_item(db: Session):
+    """v3.5.0-alpha.94 — Auto-crea PriceItem "Spedizione standard" se
+    mancante. Idempotente per tenant. Categoria "Spedizioni" (auto-creata
+    a sua volta).
+
+    La JCL auto-generata dal flusso Shipment.charged_to_client linka a
+    questo price_item. In questo modo:
+      - Cost report raggruppa righe "Spedizioni" in una categoria dedicata
+      - BillingBatch eredita name/category al transmit
+      - Fattura SDI ha riga semantica "Spedizione" invece di free-form
+    """
+    from app.models import PriceItem, PriceCategory
+    item = db.query(PriceItem).filter(
+        PriceItem.tenant_id == CURRENT_TENANT,
+        PriceItem.name == "Spedizione standard",
+        PriceItem.is_active == True,  # noqa: E712
+    ).first()
+    if item:
+        return item
+    # Cerca/crea categoria
+    cat = db.query(PriceCategory).filter(
+        PriceCategory.tenant_id == CURRENT_TENANT,
+        PriceCategory.name == "Spedizioni",
+    ).first()
+    if not cat:
+        cat = PriceCategory(tenant_id=CURRENT_TENANT, name="Spedizioni", sort_order=999)
+        db.add(cat); db.flush()
+    item = PriceItem(
+        tenant_id=CURRENT_TENANT,
+        category_id=cat.id,
+        name="Spedizione standard",
+        description="Voce auto-generata per spedizioni riaddebitate (vettore + markup).",
+        unit_pre="costo",
+        unit="lump",
+        price_list=0.0,
+        price_average=0.0,
+        price_low=0.0,
+        is_active=True,
+    )
+    db.add(item); db.flush()
+    return item
+
+
 @router.post("/api/shipments")
 async def create_shipment(
     request: Request,
@@ -1400,27 +1530,48 @@ async def create_shipment(
                 "impossibile generare JCL Spedizioni. Crea prima un Job o usa "
                 "shipping_payer=internal."
             )
+        # v3.5.0-alpha.94 — Markup % configurabile per progetto (default 15%).
+        # Applicato sul costo vettore prima di scrivere la JCL: il cliente
+        # vede l'importo finale che riaddebita la copertura del nostro tempo
+        # di gestione spedizione.
+        project_obj = db.query(Project).filter(
+            Project.id == billable_to_project_id,
+        ).first()
+        markup = float(getattr(project_obj, "shipping_markup_pct", 15.0) or 0.0)
+        billed_unit_price = round(shipping_cost * (1 + markup / 100.0), 2)
+        # v3.5.0-alpha.94 — PriceItem dedicato "Spedizione standard" (auto-creato
+        # se mancante). Linka JCL → price_item per:
+        #   1. Cost report raggruppa per categoria "Spedizioni"
+        #   2. BillingBatch usa price_item.name come descrizione fattura
+        ship_price_item = _get_or_create_shipping_price_item(db)
         desc_parts = [f"[Spedizione] {code}"]
         if batch.carrier: desc_parts.append(batch.carrier)
         if batch.tracking_number: desc_parts.append(batch.tracking_number)
+        if markup > 0:
+            desc_parts.append(f"+{markup:g}% ricarico")
         # JCL "extra" (riga aggiunta dopo la quote): quantity_quoted=0,
         # total_quoted=0; il maturato (total_accrued/expected) è il costo
-        # spedizione che viene riaddebitato al cliente nel BillingBatch.
+        # spedizione (con markup) che viene riaddebitato al cliente.
         jcl = JobCostLine(
             tenant_id=CURRENT_TENANT,
             job_id=job.id,
+            price_item_id=ship_price_item.id if ship_price_item else None,
             description=" — ".join(desc_parts)[:255],
             quantity_quoted=0.0,
             quantity_actual=1.0,
             unit="lump",
-            unit_price=shipping_cost,
+            unit_price=billed_unit_price,
             total_quoted=0.0,
-            total_accrued=shipping_cost,
-            total_expected=shipping_cost,
+            total_accrued=billed_unit_price,
+            total_expected=billed_unit_price,
             is_billable=True,
             is_extra=True,
             billing_status=JCLBillingStatus.not_billed,
-            notes=f"Auto-generata da Shipment {code} (charged_to_client).",
+            notes=(
+                f"Auto-generata da Shipment {code}. "
+                f"Costo vettore: €{shipping_cost:.2f}; markup {markup:g}% "
+                f"(Project.shipping_markup_pct) → riaddebito €{billed_unit_price:.2f}."
+            ),
         )
         db.add(jcl); db.flush()
         batch.auto_billed_jcl_id = jcl.id
