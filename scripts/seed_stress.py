@@ -17,7 +17,11 @@ Targets:
 - Notifications + AIConversations sample
 
 Usage:
-    .venv/Scripts/python.exe scripts/seed_stress.py [--reset]
+    .venv/Scripts/python.exe scripts/seed_stress.py [--reset] [--scale 0.3]
+
+v3.5.0-alpha.111.2 — `--scale FLOAT` (default 1.0) ridimensiona il dataset
+intero linearmente. Es. --scale 0.3 → ~30 clienti, ~300 progetti, ~150
+risorse, ~45 internal users, ~900 physical assets, ~1500 asset digitali.
 """
 from __future__ import annotations
 
@@ -34,6 +38,13 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
+
+
+def S(n: int) -> int:
+    """v3.5.0-alpha.111.2 — Scale helper: applica SEED_SCALE globale.
+    Default 1.0 (no scaling). Usage: range(S(1000)) invece di range(1000)."""
+    import builtins
+    return max(1, int(round(n * getattr(builtins, "SEED_SCALE", 1.0))))
 
 from sqlalchemy import text
 from sqlalchemy.orm import Session
@@ -488,16 +499,15 @@ def stage_users_resources(db: Session) -> dict:
         "is_resource": False, "note": "Proprietario / manager casa di post",
     })
 
-    # ── 150 utenze interne (= dipendenti loggabili) ──
+    # ── 150 utenze interne (= dipendenti loggabili) — scalate via S() ──
     # Distribuzione ruoli: 5 manager, 15 producer, 10 accounting, 110 operator, 10 viewer
     role_distribution = (
-        [("manager", manager_role, UserRole.manager)] * 5 +
-        [("producer", producer_role, UserRole.producer)] * 15 +
-        [("accounting", accounting_role, UserRole.staff)] * 10 +
-        [("operator", operator_role, UserRole.staff)] * 110 +
-        [("viewer", viewer_role, UserRole.viewer)] * 10
+        [("manager", manager_role, UserRole.manager)] * S(5) +
+        [("producer", producer_role, UserRole.producer)] * S(15) +
+        [("accounting", accounting_role, UserRole.staff)] * S(10) +
+        [("operator", operator_role, UserRole.staff)] * S(110) +
+        [("viewer", viewer_role, UserRole.viewer)] * S(10)
     )
-    assert len(role_distribution) == 150
     random.shuffle(role_distribution)
 
     internal_users = []
@@ -579,7 +589,7 @@ def stage_users_resources(db: Session) -> dict:
 
     # 2) person_freelance — 120 (no user)
     freelance_count = 0
-    while freelance_count < 120:
+    while freelance_count < S(120):
         dept_code = random.choice(list(ROLES_BY_DEPT.keys()))
         role_role = random.choice(ROLES_BY_DEPT[dept_code])
         role_name, daily, hourly, _ = role_role
@@ -607,7 +617,7 @@ def stage_users_resources(db: Session) -> dict:
     # 3) studio rooms — 100 (cycle through STUDIO_DEFS, suffix index)
     studio_count = 0
     studio_idx = 0
-    while studio_count < 100:
+    while studio_count < S(100):
         dept_code, base_label, daily = STUDIO_DEFS[studio_idx % len(STUDIO_DEFS)]
         suffix = (studio_idx // len(STUDIO_DEFS)) + 1
         label = f"{base_label} #{suffix}"
@@ -631,7 +641,7 @@ def stage_users_resources(db: Session) -> dict:
     db.commit()
 
     # 4) equipment — 60
-    for i in range(60):
+    for i in range(S(60)):
         dept_code, base_label, daily, brand = EQUIPMENT_DEFS[i % len(EQUIPMENT_DEFS)]
         suffix = (i // len(EQUIPMENT_DEFS)) + 1
         label = f"{base_label} #{suffix}"
@@ -651,7 +661,7 @@ def stage_users_resources(db: Session) -> dict:
     db.commit()
 
     # 5) software seats — 40
-    for i in range(40):
+    for i in range(S(40)):
         dept_code, base_label, daily = SOFTWARE_DEFS[i % len(SOFTWARE_DEFS)]
         suffix = (i // len(SOFTWARE_DEFS)) + 1
         label = f"{base_label} #{suffix}"
@@ -671,7 +681,7 @@ def stage_users_resources(db: Session) -> dict:
     db.commit()
 
     # 6) vehicle — 30
-    for i in range(30):
+    for i in range(S(30)):
         dept_code, base_label, daily, brand = VEHICLE_DEFS[i % len(VEHICLE_DEFS)]
         suffix = (i // len(VEHICLE_DEFS)) + 1
         label = f"{base_label} #{suffix}"
@@ -722,8 +732,9 @@ def stage_clients(db: Session) -> list[Client]:
     log.info("STAGE 4 — 100 clienti + filmografie (3-12 opere ciascuno)")
     clients_created: list[Client] = []
     # 80 italiani + 20 stranieri
-    for i in range(100):
-        is_foreign = i >= 80
+    n_clients = S(100)
+    for i in range(n_clients):
+        is_foreign = i >= int(n_clients * 0.8)
         name = _rand_company_name(is_foreign=is_foreign)
         if is_foreign:
             city, country_iso, country_name = random.choice(CITIES_INT)
@@ -841,13 +852,13 @@ def stage_projects(db: Session, clients: list[Client]) -> list[Project]:
     # Status distribution:
     # 5% prospect, 15% quoting, 50% active, 25% completed, 5% archived
     STATUS_POOL = (
-        [ProjectStatus.prospect] * 50 +
-        [ProjectStatus.quoting] * 150 +
-        [ProjectStatus.active] * 500 +
-        [ProjectStatus.completed] * 250 +
-        [ProjectStatus.archived] * 50
+        [ProjectStatus.prospect] * S(50) +
+        [ProjectStatus.quoting] * S(150) +
+        [ProjectStatus.active] * S(500) +
+        [ProjectStatus.completed] * S(250) +
+        [ProjectStatus.archived] * S(50)
     )
-    assert len(STATUS_POOL) == 1000
+    n_projects = len(STATUS_POOL)
     random.shuffle(STATUS_POOL)
 
     project_type_pool = ["feature_film", "series", "documentary", "spot", "music_video", "short_film", "corporate"]
@@ -871,7 +882,7 @@ def stage_projects(db: Session, clients: list[Client]) -> list[Project]:
         "ProRes 4444 Master + H.264 screener",
     ]
 
-    for i in range(1000):
+    for i in range(n_projects):
         status = STATUS_POOL[i]
         client = random.choice(clients)
         year = random.choice([2024, 2024, 2024, 2025, 2025, 2025, 2025, 2026, 2026])
@@ -1659,7 +1670,7 @@ def stage_physical_assets(db: Session, projects: list[Project], clients: list[Cl
     counters = {k.value: 0 for k in PhysicalAssetKind}
     physical_created = []
     active_projects = [p for p in projects if p.status in (ProjectStatus.active, ProjectStatus.completed, ProjectStatus.archived)]
-    for i in range(3000):
+    for i in range(S(3000)):
         kind = random.choice(KIND_POOL)
         counters[kind.value] += 1
         prefix = kind.value.upper()
@@ -1767,7 +1778,7 @@ def stage_digital_assets(db: Session, projects: list[Project], jobs: list[Job], 
     }
 
     assets_created = []
-    for i in range(5000):
+    for i in range(S(5000)):
         proj = random.choice(active_projects) if active_projects else None
         if proj is None:
             continue
@@ -1819,7 +1830,7 @@ def stage_movements(db: Session, physical: list[PhysicalAsset], digital: list[As
     today = date.today()
 
     # 200 ingest batches (ingest + outgest mix), 5 movs ciascuno
-    for i in range(200):
+    for i in range(S(200)):
         bdir = random.choice(["ingest", "outgest"])
         client = random.choice(clients)
         proj = random.choice([p for p in projects if p.client_id == client.id] or projects)
@@ -2084,8 +2095,14 @@ def main():
     parser.add_argument("--reset", action="store_true", default=True,
                         help="Reset completo del DB (default ON per stress test)")
     parser.add_argument("--keep", action="store_true", help="Mantieni DB esistente")
+    parser.add_argument("--scale", type=float, default=1.0,
+                        help="Scale globale (1.0=full stress, 0.3=lean ~30 percent)")
     args = parser.parse_args()
     reset = args.reset and not args.keep
+    # v3.5.0-alpha.111.2 — propaga scale globale via builtins per pickup
+    # dai stage_* (evita ri-firma di N funzioni).
+    import builtins
+    builtins.SEED_SCALE = max(0.05, min(2.0, float(args.scale)))
 
     t0 = datetime.now()
     stage_setup(reset=reset)

@@ -362,14 +362,26 @@
             <div id="versions-list" style="display:flex;flex-direction:column;gap:4px;font-size:12px;"></div>
             <button id="btn-migrate-job" class="btn btn-primary btn-sm mt-2" style="width:100%;display:none;" onclick="openMigratePreview()">↪ Migra Job a questa versione</button>
           </div>
-          <!-- v3.4.34.2: IVA spostata in Riepilogo economico (editabile inline).
-               Note e Termini compatti rows=1, espandibili al focus. -->
-          <div class="form-group mt-3"><label class="form-label">Note</label>
+        </div>
+      </div>
+
+      <!-- v3.5.0-alpha.111.2: Condizioni economiche & scadenze spostate FUORI
+           dal quote-top-row per ripristinare allineamento Riepilogo↔Stato&azioni
+           (le 5 form-group caricavano la card destra rendendo la sinistra
+           "Riepilogo" sottodimensionata visivamente). -->
+      <div class="card" style="margin-top:18px;">
+        <div class="card-title mb-3">Condizioni economiche & scadenze</div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;">
+          <div class="form-group">
+            <label class="form-label">Note</label>
             <textarea class="form-textarea qe-compact-ta" id="q-notes" rows="1" onchange="saveQuoteMeta()"
-                      placeholder="Note interne / per cliente"></textarea></div>
-          <div class="form-group"><label class="form-label">Termini di pagamento</label>
+                      placeholder="Note interne / per cliente"></textarea>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Termini di pagamento</label>
             <textarea class="form-textarea qe-compact-ta" id="q-payment" rows="1"
-              placeholder="es. 20% Project Start / 40% Grading / 40% Mix" onchange="saveQuoteMeta()"></textarea></div>
+              placeholder="es. 20% Project Start / 40% Grading / 40% Mix" onchange="saveQuoteMeta()"></textarea>
+          </div>
           <!-- v3.5.0-alpha.106 — Ricarico spedizioni (clausola economica) -->
           <div class="form-group">
             <label class="form-label" style="display:flex;align-items:center;gap:8px;">
@@ -377,15 +389,27 @@
               <input class="form-input" id="q-shipping-markup" type="number" step="0.5" min="0" max="100"
                      style="width:80px;font-family:var(--font-mono);" onchange="saveQuoteMeta()"
                      value="15">
-              <span class="text-xs text-muted">applicato ai costi vettore riaddebitati</span>
+              <span class="text-xs text-muted">costi vettore riaddebitati</span>
             </label>
             <div class="text-xs text-muted" style="margin-top:4px;">
-              Default 15%. La clausola viene esplicitata in PDF/condizioni
-              quando &gt; 0. Es. costo vettore 100€ + 15% = 115€ riaddebitati.
+              Default 15%. Esplicitata in PDF/condizioni quando &gt; 0.
             </div>
           </div>
-          <!-- v3.5.0-alpha.111 — Scadenze fatturazione (propagate a Project all'approve) -->
+          <!-- v3.5.0-alpha.111 — Scadenza fatturazione gg DF -->
           <div class="form-group">
+            <label class="form-label" style="display:flex;align-items:center;gap:8px;">
+              <span>Scadenza fattura (giorni DF)</span>
+              <input class="form-input" id="q-billing-terms" type="number" step="1" min="0" max="180"
+                     style="width:90px;font-family:var(--font-mono);" onchange="saveQuoteMeta()"
+                     placeholder="30">
+              <span class="text-xs text-muted">giorni dalla data fattura</span>
+            </label>
+            <div class="text-xs text-muted" style="margin-top:4px;">
+              Es. 30/60/90. Vuoto = default Tenant.
+            </div>
+          </div>
+          <!-- v3.5.0-alpha.111 — Periodicità fatturazione (propagata a Project) -->
+          <div class="form-group" style="grid-column:1/-1;">
             <label class="form-label">Periodicità fatturazione</label>
             <select class="form-select" id="q-billing-freq" onchange="saveQuoteMeta()">
               <option value="">— eredita default Project —</option>
@@ -397,18 +421,6 @@
             </select>
             <div class="text-xs text-muted" style="margin-top:4px;">
               All'approvazione della quote, viene propagata sul Progetto.
-            </div>
-          </div>
-          <div class="form-group">
-            <label class="form-label" style="display:flex;align-items:center;gap:8px;">
-              <span>Scadenza fattura (giorni DF)</span>
-              <input class="form-input" id="q-billing-terms" type="number" step="1" min="0" max="180"
-                     style="width:90px;font-family:var(--font-mono);" onchange="saveQuoteMeta()"
-                     placeholder="30">
-              <span class="text-xs text-muted">giorni dalla data fattura</span>
-            </label>
-            <div class="text-xs text-muted" style="margin-top:4px;">
-              Esempi: 30 = 30gg DF; 60 = 60gg DF. Lascia vuoto per usare il default Tenant.
             </div>
           </div>
         </div>

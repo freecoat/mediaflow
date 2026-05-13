@@ -8,6 +8,44 @@
 
 ## Versione corrente
 
+**v3.5.0-alpha.111.2** — 14 maggio 2026 — Rollback timeline + riallineamento quadranti quote + seed lean + simulazione CR→billing
+
+Post-feedback Matteo (notte 13-14 mag):
+
+**Quote editor — disallineamento Riepilogo/Stato&azioni FIX**:
+5 form-group meta estratte dalla card destra "Stato & azioni" in
+nuova card "Condizioni economiche & scadenze" sotto top-row. Le 2
+card top ora bilanciate.
+
+**Anomalies detect 500 fix**:
+- Invoice.tenant_id (inesistente) → JOIN Client
+- JobStatus.in_progress (inesistente) → active/completed/invoiced
+Test detect_all → 3983 anomalie OK.
+
+**Rollback timeline α.111** (regressioni):
+planning.html + planning.css ripristinati a stato α.110.
+
+**Seed lean**: `seed_stress.py --scale 0.3` → ~30 clienti, ~300
+progetti, ~150 risorse, ~2600 booking. Test 34s.
+
+**Simulazione CR→billing**: `simulate_cr_to_billing.py --n 15
+--storno 3` → 15/15 fatture emesse, 3 NC TD04 stornate, slice voided,
+batch riaperti. DB finale: 614 fatture (3 TD04), 116 batch.
+
+**Da testare sul Mac di Matteo**:
+1. /quotes/{id} editor: 2 card top "Riepilogo + Stato&azioni"
+   allineate. Sotto: card "Condizioni economiche & scadenze".
+2. /finance tab Anomalie: "Rileva" → 200 OK (non più 500).
+3. Timeline planning ripristinato: side scroll, heatmap, drag bordo,
+   stack adattivo.
+4. DB lean: 300 progetti, ~150 risorse, ~2600 booking visibili.
+5. /finance: batches lean popolati con SIM-* + 3 NC stornate visibili
+   (filtro doc_type=TD04).
+
+2 commit locali NON pushati (α.111 + α.111.1 + α.111.2 incoming).
+
+## (versione precedente)
+
 **v3.5.0-alpha.111** — 13 maggio 2026 — Billing UX cleanup + storno NC TD04 + scadenze Quote→Project + timeline polish
 
 Round chiuso a 13 richieste Matteo (5 fronti):

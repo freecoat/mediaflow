@@ -1,5 +1,49 @@
 # MediaFlow — Changelog
 
+## v3.5.0-alpha.111.2 — Rollback timeline α.111 + riallineamento quadranti quotazione + seed lean + simulazione CR→billing (14 maggio 2026)
+
+Post-feedback Matteo:
+
+**Quote editor — riallineamento quadranti Riepilogo/Stato&azioni**:
+- Le 5 form-group meta (Note, Termini pagamento, Spedizioni %, Scadenza gg DF, Periodicità) erano DENTRO la card "Stato & azioni"
+  rendendo la card destra molto più alta della sinistra "Riepilogo
+  economico" → disallineamento visivo.
+- Estratte in nuova card "Condizioni economiche & scadenze" sotto al
+  `quote-top-row`, layout grid 2-col. Le 2 card top restano snelle e
+  allineate.
+
+**Anomalies detect 500 fix** (bug pre-α.111):
+- `anomaly_detector.detect_mancato_recupero`: `Invoice.tenant_id`
+  non esiste → scope via JOIN `Client.tenant_id`.
+- `detect_quote_discrepancy`: `JobStatus.in_progress` non esiste
+  → `active/completed/invoiced`.
+- Test: detect_all → 3983 anomalie rilevate, no errori.
+
+**Rollback timeline α.111** (regressioni Matteo):
+- `app/templates/pages/planning.html` + `app/static/css/planning.css`
+  ripristinati a stato α.110: horizontalScroll:true, stack:!_lightMode,
+  heatmap toggle visibile, drag handles, comportamento adattivo.
+
+**Seed lean**:
+- `scripts/seed_stress.py --scale FLOAT` (default 1.0). `--scale 0.3`
+  ridimensiona linearmente: ~30 clienti, ~300 progetti, ~150 risorse,
+  ~45 internal users, ~900 physical assets, ~1500 asset digitali.
+- Test: DB lean creato in 34s. Backfill JobResourceAssignment auto al
+  boot, anomaly index creato.
+
+**Simulazione CR → Fatturazione**:
+- `scripts/simulate_cr_to_billing.py [--n N] [--storno M]`
+- Per N progetti random eligible (JCL not_billed > 0): preview →
+  transmit → approve → emit invoice. Su M sottoinsieme: storna TD04
+  (NC + void slice + riapri batch).
+- Test: 15/15 progetti emessi (BB-2026-034 → BB-2026-048), 3 NC TD04
+  stornate. DB finale: 116 batch (113 invoiced + 3 riaperti post-NC),
+  614 invoices (3 TD04).
+
+**Modifiche α.111 mantenute** (non regressioni): billing UX cleanup,
+storno endpoint, quote scadenze, cost report mf-sortable, backfill
+JobResourceAssignment.
+
 ## v3.5.0-alpha.111 — Billing UX cleanup + storno NC TD04 + scadenze Quote→Project + timeline polish (13 maggio 2026)
 
 Round chiuso a 13 issue Matteo. 5 fronti:
