@@ -8,6 +8,29 @@
 
 ## Versione corrente
 
+**v3.5.0-alpha.99** — 13 maggio 2026 — Timeline design fix: density funzionante + heatmap fuori da label
+
+Screenshot Matteo 15.21-15.22 → "problema di design a monte" individuato:
+
+1. **Density preset ⠿/≡/☰ era decorativo**: bottoni settavano data-density
+   ma nessuna regola CSS lo applicava per #tl-host (esisteva solo per
+   #sb-host storyboard). Aggiunte regole compact/spacious che scalano
+   font name/role/item + padding. `tlSetDensity()` ora forza redraw.
+2. **Heatmap dentro label cell rompeva sync altezza** label↔foreground.
+   Rimossa. Item ora allineati. Re-introduzione come overlay foreground
+   è backlog.
+
+**Da testare**: ricarica `/planning`:
+- Click ⠿ compact → font label piccolo, righe basse. Click ☰ spacious →
+  font grande, righe alte. Click ≡ comfortable → default. Tutti
+  cambiano visibilmente.
+- Verifica: item allineati con label (vedi item arancione del 15.22.20
+  che era sfasato — ora dovrebbe stare sulla riga della sala giusta).
+
+1 commit locale NON pushato (α.99).
+
+## (versione precedente)
+
 **v3.5.0-alpha.98** — 13 maggio 2026 — Fix timeline duplicati + label role leggibile
 
 Screenshot Matteo 12.47-12.49 → 3 bug separati:
@@ -27,7 +50,7 @@ Screenshot Matteo 12.47-12.49 → 3 bug separati:
 - Label risorsa: nome 14px bold + ruolo 11px sotto (era 9px illegibile)
 - Tema chiaro: nome leggibile (no più #fff invisibile)
 
-18 commit locali NON pushati (b8b8bb6 → α.98). Push a major bump.
+**Push fatto**: 7 commit (e0f1ddf → 50f4f6e) ora su origin/main.
 
 ## (versione precedente)
 

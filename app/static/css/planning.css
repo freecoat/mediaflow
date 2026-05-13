@@ -194,21 +194,23 @@
     padding-left: 22px;
   }
   .vis-labelset .vis-label .tl-res-name {
-    font-weight: 800 !important;
-    font-size: 14px !important;
+    /* v3.5.0-alpha.99: rimosso !important per permettere override da
+       data-density. Default = comfortable (14px). */
+    font-weight: 800;
+    font-size: 14px;
     line-height: 1.15;
     color: var(--text, #ffffff);
     letter-spacing: 0.2px;
   }
   .vis-labelset .vis-label .tl-res-role {
-    /* v3.5.0-alpha.98: bump 9px→11px (Matteo: "non si legge"). */
-    font-size: 11px !important;
+    /* v3.5.0-alpha.99: rimosso !important. Density scala 9/11/13px. */
+    font-size: 11px;
     line-height: 1.2;
     margin-top: 2px;
-    font-weight: 500 !important;
+    font-weight: 500;
     text-transform: none;
     letter-spacing: 0.2px;
-    color: var(--text2, #9aa0b8) !important;
+    color: var(--text2, #9aa0b8);
   }
   .vis-labelset .vis-label:hover { background: rgba(98,114,245,0.10); }
   .vis-foreground .vis-group:hover { background: rgba(98,114,245,0.04); }
@@ -646,6 +648,21 @@
   /* Storyboard density */
   #sb-host[data-density="compact"] .sb-card { padding: 4px 6px; font-size: 10.5px; }
   #sb-host[data-density="compact"] .sb-card-time { font-size: 9px; margin-bottom: 1px; }
+
+  /* v3.5.0-alpha.99 — Density preset per timeline (#tl-host).
+     Pre-α.99 i 3 bottoni ⠿/≡/☰ settavano data-density ma nessuna regola
+     CSS lo applicava → toggle "decorativo, nullo effetto" (Matteo 13 mag).
+     Ora scalano font nome/funzione/item + altezza riga in modo coerente.
+     Default = comfortable (allineato a CSS senza data-density). */
+  #tl-host[data-density="compact"] .vis-labelset .vis-label .tl-res-name { font-size: 12px; line-height: 1.1; }
+  #tl-host[data-density="compact"] .vis-labelset .vis-label .tl-res-role { font-size: 9.5px; margin-top: 1px; }
+  #tl-host[data-density="compact"] .vis-labelset .vis-label { padding: 3px 10px; }
+  #tl-host[data-density="compact"] .vis-item { font-size: 10px; padding: 1px 6px; border-radius: 6px; }
+
+  #tl-host[data-density="spacious"] .vis-labelset .vis-label .tl-res-name { font-size: 16px; line-height: 1.2; }
+  #tl-host[data-density="spacious"] .vis-labelset .vis-label .tl-res-role { font-size: 13px; margin-top: 3px; }
+  #tl-host[data-density="spacious"] .vis-labelset .vis-label { padding: 10px 14px; }
+  #tl-host[data-density="spacious"] .vis-item { font-size: 13px; padding: 5px 12px; border-radius: 10px; }
   /* v3.4.45: Storyboard view — 7 colonne giorno (responsive collapse <960px) */
   .sb-grid { display: grid; grid-template-columns: repeat(7, minmax(140px, 1fr)); gap: 8px; }
   @media (max-width: 1100px) { .sb-grid { grid-template-columns: repeat(4, minmax(160px, 1fr)); } }

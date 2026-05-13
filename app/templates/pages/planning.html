@@ -1607,6 +1607,13 @@ function tlSetDensity(d) {
   document.querySelectorAll('#tl-density [data-density]').forEach(b => {
     b.classList.toggle('active', b.dataset.density === d);
   });
+  // v3.5.0-alpha.99: forza redraw vis-timeline. Senza, le altezze righe
+  // restano calcolate sul font precedente → mismatch label↔foreground
+  // anche se CSS è cambiato. .redraw() ricalcola layout.
+  const inst = window._tlInstance || window.tl;
+  if (inst && typeof inst.redraw === 'function') {
+    try { inst.redraw(); } catch(e) {}
+  }
 }
 function tlInitDensity() {
   const saved = (() => { try { return localStorage.getItem('mf_tl_density') || 'comfortable'; } catch(e) { return 'comfortable'; } })();
@@ -3316,11 +3323,12 @@ function tlBuildResourceGroups(bookings, rangeStart, rangeEnd) {
       cell.appendChild(roleEl);
     }
 
-    if (bookings && rangeStart && rangeEnd) {
-      const days = tlComputeHeatmap(r.id, bookings, rangeStart, rangeEnd);
-      const heatEl = tlHeatmapElement(days);
-      if (heatEl) cell.appendChild(heatEl);
-    }
+    // v3.5.0-alpha.99: heatmap RIMOSSA dalla label cell. Causava mismatch
+    // altezza label↔foreground perché aggiungeva 7px di contenuto solo
+    // sul lato sinistro, mentre il foreground (lato item) restava più
+    // piccolo → item non allineati alla riga (screenshot Matteo 15.21-15.22).
+    // Da reintrodurre come overlay assoluto sul foreground se serve.
+    // (legacy heatmap toggle prefs.heatmap resta no-op finché ridisegnata).
     // alpha.38: className `tl-res-{id}` per applicare il tint colore-risorsa
     // sia su sidebar (label) sia su foreground (riga). CSS iniettato in
     // `<style id="tl-res-tints">` da _tlInjectResourceTints().

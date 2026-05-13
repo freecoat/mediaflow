@@ -1,5 +1,43 @@
 # MediaFlow — Changelog
 
+## v3.5.0-alpha.99 — Timeline design fix: density preset funzionante + heatmap fuori da label (13 maggio 2026)
+
+Screenshot Matteo 15.21-15.22 → "problema di design a monte" identificato.
+
+**Bug a monte 1 — Density preset decorativo** (`planning.css`,
+`planning.html`):
+- Bottoni ⠿/≡/☰ (compact/comfortable/spacious) in `#tl-density` settavano
+  `tl-host.dataset.density` MA `planning.css` aveva regole SOLO per
+  `#sb-host[data-density="compact"]` (storyboard). Per `#tl-host` ZERO
+  regole. Toggle decorativo → nessun effetto visivo. Diagnosi Matteo:
+  "small/normal/large non cambiano di molto" = effetto realmente nullo,
+  era variazione font dropdown 11→13 (solo .vis-item) percepita.
+- Fix: aggiunte regole `#tl-host[data-density="compact|spacious"]` che
+  scalano font tl-res-name (12/14/16px), tl-res-role (9.5/11/13px),
+  padding label, vis-item font+padding+border-radius. Default
+  comfortable = baseline esistente.
+- `tlSetDensity()` ora chiama `_tlInstance.redraw()` per ricalcolare
+  altezze righe vis-timeline (senza, layout resta sul font precedente).
+- Rimosso `!important` da `.tl-res-name` / `.tl-res-role` per permettere
+  override dal selettore density.
+
+**Bug a monte 2 — Heatmap rompe sync label↔foreground**
+(`planning.html`):
+- Label cell aveva 3 elementi flex-column (name + role + heatmap).
+  vis-timeline 7.x sincronizza altezza riga prendendo MAX tra label e
+  foreground, ma con heatmap (7px extra) la label era più alta del
+  foreground → mismatch verticale visibile come "item non allineati alla
+  riga" (screenshot 15.22.20 con item arancione sfasato).
+- Fix: heatmap RIMOSSA dalla label cell. Prefs `heatmap` ON resta no-op
+  (toggle preservato per UI ma non riattiva). Reintroduzione futura come
+  overlay assoluto sul foreground (NON dentro label) o come riga
+  dedicata sopra timeline.
+- Rimosso `color:#ffffff` hardcoded inline su nameEl che bypassava il
+  fix theme-aware α.94.
+
+Memory `[[feedback-vis-timeline-quirks]]` confermata: vis-timeline 7.x
+pensato per label semplici 1-2 righe. Stuffing aumenta i mismatch.
+
 ## v3.5.0-alpha.98 — Timeline fix duplicati + label role leggibile (13 maggio 2026)
 
 Risposta a screenshot Matteo 12.47/12.48/12.49 con sovrapposizioni labels.
