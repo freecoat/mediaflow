@@ -301,8 +301,14 @@ class Role(Base):
 
 class User(Base):
     __tablename__ = "users"
+    # v3.5.0-alpha.101 — Multi-tenant HARD R-MT1: email UNIQUE per tenant,
+    # non più globale. Stesso email può esistere su tenant diversi (es.
+    # admin@acme.it su tenant1 e admin@acme.it su tenant2 sono DUE user
+    # distinti). UniqueConstraint composito.
+    __table_args__ = (UniqueConstraint("tenant_id", "email", name="uq_user_tenant_email"),)
     id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
-    email: Mapped[str] = mapped_column(String(255), unique=True, index=True)
+    tenant_id: Mapped[int] = mapped_column(ForeignKey("tenants.id"), default=1, index=True)
+    email: Mapped[str] = mapped_column(String(255), index=True)
     full_name: Mapped[str] = mapped_column(String(255))
     hashed_password: Mapped[str] = mapped_column(String(255))
     # Legacy enum role (kept per backward compat). Il sistema permessi v3.4.23

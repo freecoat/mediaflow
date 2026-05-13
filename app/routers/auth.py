@@ -40,7 +40,11 @@ async def login(
     form = await request.form()
     next_url = (form.get("next") or "/dashboard").strip()
 
-    user = authenticate_user(db, email, password)
+    # v3.5.0-alpha.101 R-MT1 — Scope autenticazione al tenant corrente
+    # (dal subdomain/host resolved dal middleware). Se 2 user con stessa
+    # email su tenant diversi, solo quello del tenant corrente passa.
+    request_tid = getattr(request.state, "tenant_id", None)
+    user = authenticate_user(db, email, password, tenant_id=request_tid)
     if not user:
         return templates.TemplateResponse(
             "pages/login.html",
@@ -52,7 +56,9 @@ async def login(
     # apre uno step intermedio: cookie "mfa_pending" con email (short-lived)
     # → redirect a /auth/mfa-challenge. NON setta access_token finché OTP OK.
     if user.mfa_enabled:
-        pending_token = create_access_token({"sub": user.email, "mfa_pending": True})
+        pending_token = create_access_token({
+            "sub": user.email, "tid": user.tenant_id, "mfa_pending": True,
+        })
         resp = RedirectResponse(
             url=f"/auth/mfa-challenge?next={target}", status_code=303
         )
@@ -64,7 +70,8 @@ async def login(
             samesite="lax",
         )
         return resp
-    token = create_access_token({"sub": user.email})
+    # v3.5.0-alpha.101 — JWT include tid (tenant_id) per cross-tenant gate.
+    token = create_access_token({"sub": user.email, "tid": user.tenant_id})
     resp = RedirectResponse(url=target, status_code=303)
     resp.set_cookie(
         key="access_token",

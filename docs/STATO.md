@@ -8,6 +8,40 @@
 
 ## Versione corrente
 
+**v3.5.0-alpha.101** — 13 maggio 2026 — Multi-tenant HARD R-MT1 (auth scope)
+
+Primo sprint Multi-tenant HARD (#6 roadmap, 4 sprint totali).
+
+Decisioni semantiche confermate Matteo:
+- Resolution: subdomain (`acme.mediaflow.it`)
+- Onboarding: invito only
+- Listino: vuoto per nuovo tenant
+- Uploads: per-tenant
+- Billing: backlog
+- Tenant 1 = Default
+
+**R-MT1 fatto**:
+- `User.tenant_id` FK + email UNIQUE per (tenant_id, email)
+- `context.py` con `contextvars.ContextVar` reale (era stub → 1)
+- Middleware `tenant_resolver` → host/header/query/JWT
+- Cross-tenant gate in `auth_guard`: JWT.tid != request.tid → re-login
+- JWT include `tid` claim
+- Login scope al tenant resolved
+
+**Aperti**:
+- **R-MT2**: 376 occorrenze `CURRENT_TENANT = 1` in 25 router → switch a
+  `current_tenant_id()` per-request
+- **R-MT3**: onboarding CLI/UI + uploads/t{tenant_id}/
+- **R-MT4**: test cross-tenant leak
+
+**Da testare R-MT1**: login standard funziona (verifica JWT include `tid`).
+Subdomain `acme.lvh.me:8000` (lvh.me → 127.0.0.1) → resolution tenta slug
+"acme" → cade su DEFAULT se tenant inesistente.
+
+1 commit locale NON pushato (α.101).
+
+## (versione precedente)
+
 **v3.5.0-alpha.100** — 13 maggio 2026 — Tint vars theme-aware per temi chiari
 
 Variabili nuove `--tint-faint/soft/medium/strong` in `:root` (dark default

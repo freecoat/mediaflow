@@ -43,23 +43,43 @@ def decode_token(token: str) -> Optional[dict]:
         return None
 
 
-def authenticate_user(db: Session, email: str, password: str) -> Optional[User]:
-    """Autentica utente con email + password."""
-    user = db.query(User).filter(User.email == email).first()
+def authenticate_user(
+    db: Session,
+    email: str,
+    password: str,
+    tenant_id: Optional[int] = None,
+) -> Optional[User]:
+    """Autentica utente con email + password.
+
+    v3.5.0-alpha.101 — Multi-tenant: se `tenant_id` fornito, scope al
+    tenant. Altrimenti usa primo match (back-compat single-tenant).
+    """
+    q = db.query(User).filter(User.email == email)
+    if tenant_id is not None:
+        q = q.filter(User.tenant_id == tenant_id)
+    user = q.first()
     if not user or not verify_password(password, user.hashed_password):
         return None
     return user
 
 
 def get_current_user_from_token(db: Session, token: str) -> Optional[User]:
-    """Recupera l'utente corrente dal JWT token."""
+    """Recupera l'utente corrente dal JWT token.
+
+    v3.5.0-alpha.101 — JWT include `tid` (tenant_id). Per back-compat
+    accetta anche token vecchi senza tid (usa email globale come prima).
+    """
     payload = decode_token(token)
     if not payload:
         return None
     email: str = payload.get("sub")
     if not email:
         return None
-    return db.query(User).filter(User.email == email, User.is_active == True).first()
+    tid = payload.get("tid")
+    q = db.query(User).filter(User.email == email, User.is_active == True)
+    if tid is not None:
+        q = q.filter(User.tenant_id == int(tid))
+    return q.first()
 
 
 def resolve_current_user(db: Session, token: Optional[str]) -> Optional[User]:

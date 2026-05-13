@@ -1,5 +1,68 @@
 # MediaFlow — Changelog
 
+## v3.5.0-alpha.101 — Multi-tenant HARD R-MT1: User.tenant_id + JWT scope + middleware (13 maggio 2026)
+
+Primo sprint di 4 per Multi-tenant HARD (#6 roadmap). Decisioni semantiche
+confermate Matteo 13 mag:
+- Tenant resolution: **subdomain** (`acme.mediaflow.it`)
+- Onboarding: **invito only** (admin platform crea tenant)
+- Listino nuovo tenant: **vuoto**
+- Uploads: **per-tenant** isolati (media veri passano per altri canali)
+- Subscription/billing: **backlog**
+- Tenant 1 = "Default" (admin platform)
+
+**Modello** (`models.py`):
+- `User.tenant_id` FK Tenant (default=1, indexed)
+- `UniqueConstraint("tenant_id", "email")` sostituisce vecchio
+  `unique=True` su email globale: stesso email su tenant diversi = 2 user
+  distinti
+
+**Auto-migrate** (`main.py`):
+- `ALTER TABLE users ADD COLUMN tenant_id INTEGER NOT NULL DEFAULT 1`
+- `CREATE UNIQUE INDEX uq_user_tenant_email ON users(tenant_id, email)`
+- DROP del vecchio autoindex `ix_users_email` (rilevato via sqlite_master
+  query — SQLite tiene autoindex anche dopo `unique=True` rimosso dal
+  modello)
+
+**Context module** (`app/context.py`):
+- Stub `current_tenant_id() → 1` sostituito con `contextvars.ContextVar`.
+- `set_tenant_id(tid)` / `reset_tenant_id(token)` per middleware.
+- `get_tenant_id()` FastAPI dependency, `current_tenant_id()` service.
+
+**Middleware tenant_resolver** (`main.py`):
+- Chain resolution: header `X-Tenant-Slug` → query `?tenant=X` →
+  subdomain (`acme.mediaflow.it`/`acme.lvh.me`) → JWT.tid → DEFAULT=1.
+- Setta `request.state.tenant_id` + popola contextvar.
+- Dichiarato DOPO `auth_guard` (Starlette stack LIFO: ultima decoration
+  = outermost = primo eseguito all'ingresso request).
+
+**Cross-tenant gate in auth_guard** (`main.py`):
+- Se `JWT.tid != request.state.tenant_id` → user invalidato (forzato
+  re-login sul tenant corretto). Previene token leak cross-tenant.
+
+**JWT scope** (`auth.py` service):
+- `authenticate_user(db, email, password, tenant_id=None)` filtra per
+  tenant se valorizzato.
+- `get_current_user_from_token` legge `tid` dal payload, scope query.
+- Token vecchi senza `tid` → fallback back-compat.
+
+**Login flow** (`routers/auth.py`):
+- `authenticate_user(... tenant_id=request.state.tenant_id)` → scope al
+  tenant del host corrente.
+- Token emesso con `{"sub": email, "tid": user.tenant_id}`.
+- MFA pending token idem.
+
+**E2E smoke test**:
+- Login `admin@mediaflow.it/admin123` → 303 OK, JWT decoded:
+  `{"sub":"admin@mediaflow.it","tid":1,"exp":...}`.
+- Auto-migrate eseguito senza errori. Vecchio `ix_users_email` dropped.
+
+**Prossimi sprint** (in fase di scoping):
+- **R-MT2**: 376 occorrenze `CURRENT_TENANT = 1` in 25 router → calcolo
+  per-request via `current_tenant_id()`.
+- **R-MT3**: onboarding flow CLI/UI + uploads `t{tenant_id}/` scheme.
+- **R-MT4**: test cross-tenant leak + security audit.
+
 ## v3.5.0-alpha.100 — Tint vars theme-aware per temi chiari (13 maggio 2026)
 
 Audit hardcoded rgba(255,255,255,X) in planning.css (58 occorrenze).

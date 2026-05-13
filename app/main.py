@@ -53,6 +53,46 @@ def _auto_migrate_columns():
                 if col not in cols:
                     print(f"[auto-migrate] users.{col} mancante -> ALTER TABLE")
                     conn.execute(text(f"ALTER TABLE users ADD COLUMN {col} {ddl}"))
+        # v3.5.0-alpha.101 — Multi-tenant HARD R-MT1: users.tenant_id FK.
+        # Default=1 (tenant Default). UNIQUE switch da email globale a
+        # (tenant_id, email): per SQLite serve DROP+CREATE table; qui faccio
+        # solo ADD COLUMN, lo switch UNIQUE è gestito separatamente al boot
+        # con CREATE INDEX UNIQUE composito (SQLite supporta multi-index).
+        if "tenant_id" not in cols:
+            print("[auto-migrate] users.tenant_id mancante -> ALTER TABLE")
+            with engine.begin() as conn:
+                conn.execute(text(
+                    "ALTER TABLE users ADD COLUMN tenant_id INTEGER NOT NULL "
+                    "DEFAULT 1 REFERENCES tenants(id)"
+                ))
+        # Index UNIQUE composito (tenant_id, email). Sostituisce de facto il
+        # vecchio UNIQUE su solo email — SQLite tiene entrambi, ma se il
+        # vecchio UNIQUE è ancora attivo bloccherà inserimenti duplicati su
+        # email globale anche se tenant_id diverso. Si elimina solo via
+        # script di migration esplicito (scripts/migrate_user_email_unique.py).
+        # Per ora aggiungo solo l'indice composto.
+        with engine.begin() as conn:
+            try:
+                conn.execute(text(
+                    "CREATE UNIQUE INDEX IF NOT EXISTS uq_user_tenant_email "
+                    "ON users(tenant_id, email)"
+                ))
+            except Exception as e:
+                print(f"[auto-migrate] uq_user_tenant_email FAILED: {e}")
+            # Drop vecchio UNIQUE su email globale (SQLite auto-named).
+            # Cerca indici unique su sola colonna email.
+            try:
+                rows = conn.execute(text(
+                    "SELECT name FROM sqlite_master WHERE type='index' AND tbl_name='users' "
+                    "AND sql LIKE '%CREATE UNIQUE INDEX%' AND sql LIKE '%(email)%' "
+                    "AND name != 'uq_user_tenant_email'"
+                )).fetchall()
+                for row in rows:
+                    idx_name = row[0]
+                    print(f"[auto-migrate] drop old UNIQUE index {idx_name} (email globale)")
+                    conn.execute(text(f"DROP INDEX IF EXISTS {idx_name}"))
+            except Exception as e:
+                print(f"[auto-migrate] drop old email UNIQUE FAILED (non-bloccante): {e}")
     # v3.4.32 — Booking esecutivo (priority/execution_status/overtime_status/...)
     if "bookings" in insp.get_table_names():
         bcols = {c["name"] for c in insp.get_columns("bookings")}
@@ -786,7 +826,7 @@ async def lifespan(app: FastAPI):
     yield
 
 
-app = FastAPI(title="MediaFlow", version="3.5.0-alpha.100", lifespan=lifespan)
+app = FastAPI(title="MediaFlow", version="3.5.0-alpha.101", lifespan=lifespan)
 
 BASE_DIR = Path(__file__).parent
 app.mount("/static", StaticFiles(directory=BASE_DIR / "static"), name="static")
@@ -874,12 +914,76 @@ def _resolve_user_from_token(token: str):
         db.close()
 
 
+def _resolve_tenant_from_request(request: Request) -> int:
+    """v3.5.0-alpha.101 R-MT1 — Resolution chain tenant_id per request.
+    Ordine: subdomain → header X-Tenant-Slug → query ?tenant=X → JWT.tid →
+    fallback DEFAULT_TENANT_ID=1.
+
+    Subdomain: `acme.mediaflow.it` → slug "acme". `localhost`/`127.0.0.1` →
+    fallback (dev mode senza wildcard DNS). Per dev usa `acme.lvh.me`
+    (lvh.me risolve a 127.0.0.1).
+    """
+    from app.models import Tenant
+    from app.database import SessionLocal
+    # 1. Header dev/test
+    slug = request.headers.get("X-Tenant-Slug")
+    # 2. Query param
+    if not slug:
+        slug = request.query_params.get("tenant")
+    # 3. Subdomain
+    if not slug:
+        host = (request.headers.get("host") or "").split(":")[0].lower()
+        parts = host.split(".")
+        # acme.mediaflow.it → ["acme","mediaflow","it"], slug=parts[0]
+        # acme.lvh.me → ["acme","lvh","me"], slug=parts[0]
+        # localhost / 127.0.0.1 / mediaflow.it (apex) → no slug
+        SKIP_HOSTS = {"localhost", "127.0.0.1", "0.0.0.0"}
+        if (
+            host not in SKIP_HOSTS
+            and len(parts) >= 3
+            and parts[0] not in {"www", "mediaflow"}
+        ):
+            slug = parts[0]
+    if slug:
+        db = SessionLocal()
+        try:
+            t = db.query(Tenant).filter(
+                Tenant.slug == slug,
+                Tenant.is_active == True,  # noqa: E712
+            ).first()
+            if t:
+                return t.id
+        finally:
+            db.close()
+    # 4. JWT tenant (decodifica veloce, no DB)
+    try:
+        from app.services.auth import decode_token
+        token = request.cookies.get("access_token")
+        if token:
+            payload = decode_token(token)
+            if payload and "tid" in payload:
+                return int(payload["tid"])
+    except Exception:
+        pass
+    # 5. Default
+    from app.context import DEFAULT_TENANT_ID
+    return DEFAULT_TENANT_ID
+
+
 @app.middleware("http")
 async def auth_guard(request: Request, call_next):
     path = request.url.path
     request.state.current_user = None
 
     user = _resolve_user_from_token(request.cookies.get("access_token"))
+    # v3.5.0-alpha.101 R-MT1 — Cross-tenant gate: se l'utente JWT.tid ≠
+    # tenant resolved da host, sta provando ad accedere a tenant diverso
+    # → invalida l'auth (user resta None). Forzato re-login sul tenant
+    # corretto. Solo se entrambi i valori sono valorizzati.
+    if user is not None:
+        request_tid = getattr(request.state, "tenant_id", None)
+        if request_tid is not None and getattr(user, "tenant_id", None) not in (None, request_tid):
+            user = None
     request.state.current_user = user
 
     if any(path == p.rstrip("/") or path.startswith(p) for p in PUBLIC_PATHS):
@@ -901,6 +1005,23 @@ async def auth_guard(request: Request, call_next):
         return _forbidden(request, path)
 
     return await call_next(request)
+
+
+# v3.5.0-alpha.101 R-MT1 — tenant_resolver dichiarato DOPO auth_guard.
+# Starlette stack LIFO: ultima registrazione = outermost = primo eseguito
+# all'ingresso request. Quindi tenant_resolver setta tenant_id PRIMA che
+# auth_guard provi a leggerlo da request.state.tenant_id.
+@app.middleware("http")
+async def tenant_resolver(request: Request, call_next):
+    from app.context import set_tenant_id, reset_tenant_id
+    tid = _resolve_tenant_from_request(request)
+    request.state.tenant_id = tid
+    token = set_tenant_id(tid)
+    try:
+        response = await call_next(request)
+    finally:
+        reset_tenant_id(token)
+    return response
 
 
 # Path/prefix vietati a staff/viewer (non vedono finanza, listino, quote, settings, reparti).

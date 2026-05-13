@@ -1,70 +1,56 @@
 """
-MediaFlow — Context helpers (v3.5.0-alpha.66.15.1)
+MediaFlow — Context helpers.
 
-Single source of truth per il "tenant scope corrente" + helpers di contesto
-condiviso tra router e services. Pattern dependency-injection FastAPI con
-default deterministico per la modalità single-tenant attuale.
+v3.5.0-alpha.101 — Multi-tenant HARD R-MT1: il tenant del contesto corrente
+deriva da `contextvars.ContextVar` popolata dal middleware tenant_resolver
+ad ogni request. Fallback `DEFAULT_TENANT_ID=1` per servizi background /
+script CLI (no request context).
 
-USO:
+Resolution chain nel middleware:
+  1. Subdomain del host (es. `acme.mediaflow.it` → slug "acme" → tenant.id)
+  2. Header X-Tenant-Slug (dev/test)
+  3. Query param ?tenant=X (dev/test)
+  4. JWT.tid (se utente loggato)
+  5. DEFAULT_TENANT_ID (fallback dev mode + script)
 
-    from fastapi import Depends
-    from app.context import get_tenant_id
-
-    @router.get("/api/items")
-    def list_items(
-        tenant_id: int = Depends(get_tenant_id),
-        db: Session = Depends(get_db),
-    ):
-        return db.query(Item).filter(Item.tenant_id == tenant_id).all()
-
-In service layer (no FastAPI):
-
-    from app.context import current_tenant_id
-    n = db.query(Foo).filter(Foo.tenant_id == current_tenant_id()).count()
-
-Quando arriverà multi-tenant hard (Fase 7), basterà cambiare `get_tenant_id`
-e `current_tenant_id` per derivare il tenant dal token JWT / hostname /
-sottodominio. Tutti i call site che usano questa API sono già pronti.
-
-NB: durante la migrazione R1.2, i router useranno PROGRESSIVAMENTE
-`Depends(get_tenant_id)` al posto della costante locale `CURRENT_TENANT = 1`.
-Per il sprint R1.1 esiste solo lo stub: il valore restituito è SEMPRE 1.
+Cross-tenant safety: se l'utente JWT.tid != request-resolved tenant_id,
+middleware ritorna 403 (utente sta provando ad accedere a tenant non suo).
 """
 from __future__ import annotations
 
+import contextvars
 from typing import Optional
 
 
-# Costante esposta come fallback per call site non-FastAPI (services). In
-# Fase 7 sarà sostituita da uno store contesto-locale (contextvars) popolato
-# all'inizio di ogni request via middleware.
 DEFAULT_TENANT_ID: int = 1
+
+# ContextVar settata dal middleware tenant_resolver. None se la request
+# non passa per il middleware (script CLI, test unitari isolati).
+_TENANT_CTX: contextvars.ContextVar[Optional[int]] = contextvars.ContextVar(
+    "mediaflow_tenant_id", default=None,
+)
+
+
+def set_tenant_id(tid: int) -> contextvars.Token:
+    """Set tenant_id corrente. Ritorna Token per reset()."""
+    return _TENANT_CTX.set(tid)
+
+
+def reset_tenant_id(token: contextvars.Token) -> None:
+    _TENANT_CTX.reset(token)
 
 
 def current_tenant_id() -> int:
-    """Ritorna il tenant_id del contesto corrente.
-
-    Stub R1.1: ritorna sempre `DEFAULT_TENANT_ID = 1`. In Fase 7 leggerà
-    da `contextvars.ContextVar` popolata dal middleware auth.
-    """
-    return DEFAULT_TENANT_ID
+    """Ritorna tenant_id corrente. Fallback DEFAULT_TENANT_ID se ctx vuoto."""
+    val = _TENANT_CTX.get()
+    return val if val is not None else DEFAULT_TENANT_ID
 
 
 def get_tenant_id() -> int:
-    """FastAPI dependency: `tenant_id: int = Depends(get_tenant_id)`.
-
-    Stub R1.1: ritorna sempre `DEFAULT_TENANT_ID = 1`. Quando R1 sarà
-    completato, deriverà il valore dall'utente loggato (`request.state.
-    current_user.tenant_id`) con fallback `DEFAULT_TENANT_ID` per la
-    modalità demo single-user.
-    """
-    return DEFAULT_TENANT_ID
+    """FastAPI dependency: `tenant_id: int = Depends(get_tenant_id)`."""
+    return current_tenant_id()
 
 
 def get_optional_tenant_id() -> Optional[int]:
-    """Variante non-bloccante: ritorna None se non c'è contesto tenant
-    determinabile. Per ora si comporta come `get_tenant_id` (stub).
-    Utile in endpoint pubblici (es. /tech-sheet/{token}) che non vogliono
-    il tenant scope obbligato.
-    """
-    return DEFAULT_TENANT_ID
+    """Variante non-bloccante: ritorna None se ctx vuoto (no fallback)."""
+    return _TENANT_CTX.get()
