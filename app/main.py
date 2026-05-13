@@ -211,6 +211,8 @@ def _auto_migrate_columns():
             ("document_header",         "TEXT NULL"),
             # v3.5.0-alpha.87 — Soglia auto-CAPEX per OverheadCost
             ("capex_threshold_eur",     "FLOAT NOT NULL DEFAULT 500.0"),
+            # v3.5.0-alpha.96 — Filesystem scan whitelist path autorizzati
+            ("fs_scan_allowed_paths",   "TEXT NULL"),
         ]
         with engine.begin() as conn:
             for col, ddl in t_alter:
@@ -783,7 +785,7 @@ async def lifespan(app: FastAPI):
     yield
 
 
-app = FastAPI(title="MediaFlow", version="3.5.0-alpha.95", lifespan=lifespan)
+app = FastAPI(title="MediaFlow", version="3.5.0-alpha.96", lifespan=lifespan)
 
 BASE_DIR = Path(__file__).parent
 app.mount("/static", StaticFiles(directory=BASE_DIR / "static"), name="static")

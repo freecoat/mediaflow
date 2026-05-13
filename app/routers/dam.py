@@ -399,3 +399,176 @@ async def delete_asset(
 @router.get("/api/tags")
 async def list_tags(db: Session = Depends(get_db)):
     return db.query(Tag).all()
+
+
+# ── Filesystem scan generic (v3.5.0-alpha.96, #9b) ────────────────────
+# Scopo: AI/utente scansiona cartella filesystem ESTERNA (NAS, disco
+# cliente montato), classifica file via MIME → tipo Asset, ritorna albero
+# editabile. Import bottone: registra Asset record (file_path = path
+# originale, no copia). Diverso dal `physical-assets/{id}/scan-content`
+# (legato a un PhysicalAsset specifico + AssetMembership).
+#
+# Sicurezza: path DEVE essere sotto uno dei `Tenant.fs_scan_allowed_paths`.
+# Niente arbitrary FS access (lo enforced server-side anche se UI lo accetta).
+
+
+def _is_path_allowed(path_str: str, allowed: Optional[list]) -> bool:
+    """v3.5.0-alpha.96 — Whitelist filesystem scan: path richiesto deve
+    essere uguale o sotto uno dei prefissi in allowed_paths.
+    Resolve a path reali per evitare ../ traversal."""
+    if not allowed:
+        return False
+    try:
+        from pathlib import Path as _P
+        target = _P(path_str).resolve(strict=False)
+    except (OSError, ValueError):
+        return False
+    for prefix_str in allowed:
+        if not prefix_str:
+            continue
+        try:
+            from pathlib import Path as _P
+            prefix = _P(prefix_str).resolve(strict=False)
+            # Target deve essere prefix o suo discendente
+            try:
+                target.relative_to(prefix)
+                return True
+            except ValueError:
+                continue
+        except (OSError, ValueError):
+            continue
+    return False
+
+
+@router.post("/api/fs-scan", dependencies=[RequireEditDam])
+async def fs_scan(
+    request: Request,
+    path: str = Form(...),
+    compute_checksum: int = Form(0),
+    max_depth: int = Form(8),
+    max_files: int = Form(2000),
+    db: Session = Depends(get_db),
+):
+    """v3.5.0-alpha.96 — Walk filesystem path autorizzato + classifica
+    file per tipo. NO DB write — solo preview JSON. Usato per UI 'Scansiona
+    cartella' che mostra contenuti + permette import selettivo.
+    """
+    from app.services.fs_scan import walk_filesystem
+    from app.models import Tenant
+    tenant = db.query(Tenant).filter(Tenant.id == CURRENT_TENANT).first()
+    allowed = (tenant.fs_scan_allowed_paths if tenant else None) or []
+    if not _is_path_allowed(path, allowed):
+        raise HTTPException(
+            403,
+            "Path non autorizzato. Aggiungilo a `tenant.fs_scan_allowed_paths` "
+            "via /settings → Avanzate → Filesystem scan."
+        )
+    result = walk_filesystem(
+        path, compute_checksum=bool(compute_checksum),
+        max_depth=max(1, min(int(max_depth), 16)),
+        max_files=max(1, min(int(max_files), 10000)),
+    )
+    if result.get("error"):
+        raise HTTPException(400, result["error"])
+    # Classifica per asset_type via MIME (riusa resolve_asset_type)
+    for f in result.get("files", []):
+        f["asset_type"] = resolve_asset_type(f.get("mime") or "").value
+    return {
+        "root": result["root"],
+        "file_count": result["file_count"],
+        "total_size": result["total_size"],
+        "files": result["files"],
+        "errors": result.get("errors", []),
+        "hash_algo": result.get("algo"),
+    }
+
+
+@router.post("/api/fs-import", dependencies=[RequireEditDam])
+async def fs_import(
+    request: Request,
+    base_path: str = Form(...),
+    file_paths_json: str = Form(...),   # JSON array di rel_path
+    project_id: Optional[int] = Form(None),
+    job_id: Optional[int] = Form(None),
+    db: Session = Depends(get_db),
+):
+    """v3.5.0-alpha.96 — Registra Asset DAM per i file selezionati dalla
+    scan. NON copia il contenuto: il file resta dov'è (es. su NAS), Asset
+    record punta al path reale. Utente può deciderne il progetto target.
+    """
+    import json as _json
+    from pathlib import Path as _Path
+    import mimetypes
+    from app.models import Tenant
+    tenant = db.query(Tenant).filter(Tenant.id == CURRENT_TENANT).first()
+    allowed = (tenant.fs_scan_allowed_paths if tenant else None) or []
+    if not _is_path_allowed(base_path, allowed):
+        raise HTTPException(403, "base_path non autorizzato")
+    try:
+        rel_paths = _json.loads(file_paths_json)
+    except _json.JSONDecodeError as e:
+        raise HTTPException(400, f"file_paths_json malformato: {e}")
+    if not isinstance(rel_paths, list) or not rel_paths:
+        raise HTTPException(400, "file_paths_json deve essere lista non vuota")
+    base = _Path(base_path).resolve()
+    user = current_user_optional(request)
+    uploaded_count = 0
+    skipped = []
+    for rel in rel_paths:
+        if not isinstance(rel, str):
+            continue
+        full = (base / rel).resolve()
+        # Re-check sicurezza: il file resolved deve essere sotto base
+        try:
+            full.relative_to(base)
+        except ValueError:
+            skipped.append({"rel": rel, "reason": "path traversal rejected"})
+            continue
+        if not full.exists() or not full.is_file():
+            skipped.append({"rel": rel, "reason": "file not found"})
+            continue
+        try:
+            st = full.stat()
+        except OSError as e:
+            skipped.append({"rel": rel, "reason": str(e)})
+            continue
+        mime, _ = mimetypes.guess_type(full.name)
+        mime = mime or "application/octet-stream"
+        a = Asset(
+            tenant_id=CURRENT_TENANT,
+            filename=full.name,
+            original_name=full.name,
+            file_path=str(full),  # NB: path reale, no copia
+            thumbnail_path=None,
+            asset_type=resolve_asset_type(mime),
+            mime_type=mime,
+            file_size=st.st_size,
+            project_id=project_id,
+            job_id=job_id,
+            uploaded_by=user.id if user else 1,
+            description=f"Importato da fs-scan: {rel}",
+        )
+        db.add(a)
+        uploaded_count += 1
+    db.commit()
+    return {
+        "ok": True,
+        "imported": uploaded_count,
+        "skipped": skipped,
+        "skipped_count": len(skipped),
+    }
+
+
+@router.get("/fs-scan", response_class=HTMLResponse)
+async def fs_scan_page(request: Request, db: Session = Depends(get_db)):
+    """v3.5.0-alpha.96 — UI scan + import. Mostra path autorizzati,
+    permette esplorazione e import selettivo come Asset DAM."""
+    from app.models import Tenant
+    tenant = db.query(Tenant).filter(Tenant.id == CURRENT_TENANT).first()
+    allowed = (tenant.fs_scan_allowed_paths if tenant else None) or []
+    from app.models import Project as _P
+    projects = db.query(_P).filter(_P.tenant_id == CURRENT_TENANT).order_by(_P.created_at.desc()).limit(500).all()
+    return _tpl().TemplateResponse(
+        "pages/fs_scan.html",
+        {"request": request, "allowed_paths": allowed, "projects": projects},
+    )

@@ -380,6 +380,11 @@ class Tenant(Base):
     # is_capex=True (ammortamento attivo). Sotto soglia → categoria normale
     # (spese deduc. anno). Default €500. Configurabile in /settings tenant.
     capex_threshold_eur: Mapped[float] = mapped_column(Float, default=500.0)
+    # v3.5.0-alpha.96 — Filesystem scan generic: whitelist path autorizzati
+    # per il scan ESTERNO (oltre uploads/). Lista di assoluti, validati al
+    # boot. Es. ["/Volumes/StorageA", "/mnt/nas/deliverables"]. Vuoto =
+    # nessun path autorizzato → endpoint /admin/fs-scan rifiuta tutto.
+    fs_scan_allowed_paths: Mapped[Optional[list]] = mapped_column(JSON, nullable=True)
     # Stato
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
     onboarding_completed: Mapped[bool] = mapped_column(Boolean, default=False)

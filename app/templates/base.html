@@ -9,7 +9,7 @@
   <meta http-equiv="Pragma" content="no-cache">
   <meta http-equiv="Expires" content="0">
   <title>{% block title %}MediaFlow{% endblock %}</title>
-  <link rel="stylesheet" href="/static/css/main.css?v=3.5.0-alpha.95">
+  <link rel="stylesheet" href="/static/css/main.css?v=3.5.0-alpha.96">
   <link rel="stylesheet" href="/static/css/sleek.css?v=3.5.0-alpha.80">
   <script>
     // v3.5.0-alpha.80 — Sleek mode toggle (default ON)
@@ -132,6 +132,9 @@
         <div class="nav-section-label">Media</div>
         <a href="/dam" data-nav-id="dam" class="nav-item {% if active_page == 'dam' %}active{% endif %}">
           <span class="nav-icon"><i data-lucide="film"></i></span> Asset Library
+        </a>
+        <a href="/dam/fs-scan" data-nav-id="fs_scan" class="nav-item nav-subitem {% if active_page == 'fs_scan' %}active{% endif %}" style="padding-left:36px;font-size:12px;">
+          <span class="nav-icon"><i data-lucide="folder-search"></i></span> Scan filesystem
         </a>
         <a href="/physical-assets/inout" data-nav-id="assets_inout" class="nav-item {% if active_page == 'assets_inout' %}active{% endif %}">
           <span class="nav-icon"><i data-lucide="truck"></i></span> In/Out Asset
@@ -256,7 +259,7 @@
 {% endif %}
 
 <script src="/static/js/lucide.min.js?v=3.5.0-alpha.30"></script>
-<script src="/static/js/global.js?v=3.5.0-alpha.95"></script>
+<script src="/static/js/global.js?v=3.5.0-alpha.96"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/fullcalendar/6.1.11/index.global.min.js"></script>
 <script>
   // v3.5.0-alpha.30: Lucide createIcons() al primo paint + helper globale

@@ -394,6 +394,9 @@ async function openClientDetail(id) {
     <button class="btn btn-secondary btn-sm" onclick="aiEnrich(${c.id}, this)">
       <span style="color:var(--indigo2);">✨</span> ${c.ai_enriched ? 'Rigenera con AI' : 'Arricchisci con AI'}
     </button>
+    <button class="btn btn-secondary btn-sm" onclick="aiCrossCheck(${c.id}, this)" title="Verifica info aziendali vs web (sede, P.IVA, news)">
+      <span style="color:var(--indigo2);">🔍</span> Cross-check
+    </button>
     {% endif %}
     <button class="btn btn-secondary btn-sm" onclick="window.location.href='/clients/${c.id}/works'">
       🎬 Filmografia
@@ -579,6 +582,124 @@ function showEnrichPreviewModal(data) {
   modal.appendChild(inner);
   document.body.appendChild(modal);
   openModal('modal-enrich-preview');
+}
+
+async function aiCrossCheck(id, btn) {
+  btn.disabled = true;
+  const original = btn.textContent;
+  btn.textContent = '🔍 Verifica web in corso…';
+  try {
+    const res = await api('POST', `/clients/api/${id}/cross-check`);
+    showCrossCheckModal(res, 'cliente');
+  } catch(e) {
+    toast(e.message || 'Errore cross-check', 'error');
+  } finally {
+    btn.disabled = false;
+    btn.textContent = original;
+  }
+}
+
+function showCrossCheckModal(data, kind) {
+  let modal = document.getElementById('modal-crosscheck');
+  if (modal) modal.remove();
+  modal = document.createElement('div');
+  modal.id = 'modal-crosscheck';
+  modal.className = 'modal-overlay';
+  const inner = document.createElement('div');
+  inner.className = 'modal';
+  inner.style.cssText = 'max-width:780px;max-height:90vh;display:flex;flex-direction:column;';
+  const hdr = document.createElement('div');
+  hdr.className = 'modal-header';
+  const t = document.createElement('span');
+  t.className = 'modal-title';
+  const titleVal = data.name || data.title || '';
+  t.textContent = `🔍 Cross-check ${kind} — ${titleVal}`;
+  hdr.appendChild(t);
+  const close = document.createElement('button');
+  close.className = 'btn btn-ghost btn-icon';
+  close.textContent = '×';
+  close.addEventListener('click', () => closeModal('modal-crosscheck'));
+  hdr.appendChild(close);
+  inner.appendChild(hdr);
+  const body = document.createElement('div');
+  body.className = 'modal-body';
+  body.style.overflow = 'auto';
+  const info = document.createElement('div');
+  info.className = 'text-sm text-muted';
+  info.style.marginBottom = '12px';
+  info.textContent = data.web_search_used
+    ? '🌐 Verifica con web search (fonti pubbliche)'
+    : '🧠 Knowledge AI only (no web search)';
+  body.appendChild(info);
+  const diffs = data.differences || [];
+  if (!diffs.length) {
+    const ok = document.createElement('div');
+    ok.style.cssText = 'padding:14px;background:rgba(34,197,94,.08);border:1px solid rgba(34,197,94,.3);border-radius:6px;color:#22c55e;';
+    ok.textContent = '✓ Nessuna discrepanza rilevata. Dati DB allineati alle info pubbliche.';
+    body.appendChild(ok);
+  } else {
+    const h = document.createElement('h4');
+    h.style.cssText = 'margin:0 0 8px 0;font-size:13px;';
+    h.textContent = `Differenze rilevate (${diffs.length})`;
+    body.appendChild(h);
+    diffs.forEach(d => {
+      const row = document.createElement('div');
+      row.style.cssText = 'border:1px solid var(--border);border-radius:6px;padding:10px;margin-bottom:8px;background:var(--bg3);';
+      const fld = document.createElement('div');
+      fld.style.cssText = 'font-weight:600;font-size:12px;margin-bottom:4px;';
+      fld.textContent = d.field;
+      row.appendChild(fld);
+      const cur = document.createElement('div'); cur.style.fontSize = '11px';
+      cur.innerHTML = '<span style="color:var(--text3);">Attuale:</span> ';  // eslint-disable-line
+      cur.appendChild(document.createTextNode(d.current != null ? String(d.current) : '—'));
+      row.appendChild(cur);
+      const sug = document.createElement('div'); sug.style.fontSize = '11px';
+      sug.innerHTML = '<span style="color:var(--indigo2);">Suggerito:</span> ';  // eslint-disable-line
+      const sugVal = document.createElement('b');
+      sugVal.textContent = d.suggested != null ? String(d.suggested) : '—';
+      sug.appendChild(sugVal);
+      row.appendChild(sug);
+      if (d.rationale) {
+        const r = document.createElement('div');
+        r.className = 'text-xs text-muted';
+        r.style.marginTop = '4px';
+        r.textContent = '↳ ' + d.rationale;
+        row.appendChild(r);
+      }
+      if (d.confidence) {
+        const cf = document.createElement('span');
+        const colors = { high: '#22c55e', medium: '#f59e0b', low: '#94a3b8' };
+        const c = colors[d.confidence] || '#94a3b8';
+        cf.style.cssText = `padding:1px 6px;border-radius:8px;font-size:10px;font-weight:600;background:${c}22;color:${c};margin-left:8px;`;
+        cf.textContent = d.confidence;
+        row.appendChild(cf);
+      }
+      body.appendChild(row);
+    });
+  }
+  const ext = data.external_info || {};
+  if (Object.keys(ext).length) {
+    const exth = document.createElement('h4');
+    exth.style.cssText = 'margin:16px 0 8px 0;font-size:13px;';
+    exth.textContent = 'Info esterne aggiuntive';
+    body.appendChild(exth);
+    const pre = document.createElement('pre');
+    pre.style.cssText = 'background:var(--bg3);padding:10px;border-radius:6px;font-size:11px;max-height:200px;overflow:auto;';
+    pre.textContent = JSON.stringify(ext, null, 2);
+    body.appendChild(pre);
+  }
+  inner.appendChild(body);
+  const ftr = document.createElement('div');
+  ftr.className = 'modal-footer';
+  const closebtn = document.createElement('button');
+  closebtn.className = 'btn btn-primary';
+  closebtn.textContent = 'Chiudi';
+  closebtn.addEventListener('click', () => closeModal('modal-crosscheck'));
+  ftr.appendChild(closebtn);
+  inner.appendChild(ftr);
+  modal.appendChild(inner);
+  document.body.appendChild(modal);
+  openModal('modal-crosscheck');
 }
 
 async function applyEnrichPreview() {

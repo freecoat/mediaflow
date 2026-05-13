@@ -8,6 +8,34 @@
 
 ## Versione corrente
 
+**v3.5.0-alpha.96** — 13 maggio 2026 — Capability AI #9b filesystem scan + #9d web cross-check
+
+**#9b — Filesystem scan generico**:
+- `Tenant.fs_scan_allowed_paths` whitelist obbligatoria (path NAS/dischi
+  esterni). Endpoint `/dam/api/fs-scan` + `/dam/api/fs-import` (registra
+  Asset DAM senza copiare file). Pagina `/dam/fs-scan` con KPI + tabella
+  classificata + import bulk.
+
+**#9d — Web cross-check progetti/clienti**:
+- Service `web_crosscheck.py`: confronta DB con IMDB/BoxOffice/Variety
+  (progetti) e Cerved/news (clienti). Native web search → Tavily →
+  knowledge-only cascata.
+- Endpoint `/projects/{id}/cross-check` + `/clients/{id}/cross-check`.
+- UI modal preview differenze + external_info, NO DB write.
+
+**Da testare**:
+1. `/settings` o Copilot → configura `Tenant.fs_scan_allowed_paths`
+   (esempio `["/Users/frico/Desktop"]` per test locale Mac).
+2. `/dam/fs-scan` → input path autorizzato → vedi tabella file
+   classificati → seleziona alcuni → import con/senza progetto target.
+3. `/projects/{id}` → bottone "🔍 Cross-check" topbar → modal con
+   differenze IMDB/BoxOffice.
+4. `/clients/{id}` modal → bottone "🔍 Cross-check" → idem per cliente.
+
+16 commit locali NON pushati (b8b8bb6 → α.96). Push a major bump.
+
+## (versione precedente)
+
 **v3.5.0-alpha.95** — 13 maggio 2026 — Fase 5 capitolato import + Fase 3 enrichment workflow approval
 
 Cantieri grandi 7-8 della roadmap (importanza alta, mai partiti prima):

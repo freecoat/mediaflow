@@ -301,6 +301,44 @@ async def delete_client(client_id: int, db: Session = Depends(get_db)):
 
 # ── AI Enrichment ────────────────────────────────────────────
 
+@router.post("/api/{client_id}/cross-check")
+async def cross_check_client(
+    client_id: int,
+    access_token: Optional[str] = Cookie(None),
+    db: Session = Depends(get_db),
+):
+    """v3.5.0-alpha.96 (#9d) — Cross-check cliente vs web (sede, P.IVA,
+    produzioni recenti, news aziendali). Ritorna differenze + info esterne.
+    NO DB write."""
+    from app.services.web_crosscheck import check_client
+    c = db.query(Client).filter(
+        Client.id == client_id, Client.tenant_id == CURRENT_TENANT,
+    ).first()
+    if not c:
+        raise HTTPException(404, "Cliente non trovato")
+    u = _resolve_current_user(db, access_token)
+    provider = get_provider_for_user(u.id if u else None, db)
+    if not provider:
+        raise HTTPException(503, "AI provider non configurato")
+    client_data = {
+        "id": c.id, "name": c.name,
+        "legal_form": c.legal_form, "vat_number": c.vat_number,
+        "tax_code": c.tax_code, "address": c.address,
+        "city": c.city, "country": c.country,
+        "website": c.website, "contact_email": c.contact_email,
+        "industry": c.industry, "company_size": c.company_size,
+        "founded_year": c.founded_year,
+        "ai_enriched_at": str(c.ai_enriched_at) if c.ai_enriched_at else None,
+    }
+    result = check_client(client_data, provider=provider)
+    if not result:
+        raise HTTPException(500, "Cross-check fallito")
+    return {
+        "client_id": c.id, "name": c.name,
+        **result,
+    }
+
+
 @router.post("/api/{client_id}/enrich-preview")
 async def enrich_client_preview(
     client_id: int,

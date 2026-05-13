@@ -1,5 +1,45 @@
 # MediaFlow — Changelog
 
+## v3.5.0-alpha.96 — Capability AI #9b filesystem scan + #9d web cross-check (13 maggio 2026)
+
+Da scoping 13 mag punto #9: 2 capability AI di basso rischio + alto riuso
+codice.
+
+**#9b — Filesystem scan generico → Asset DAM import** (`dam.py`,
+`fs_scan.html`, `models.py`, `main.py`):
+- `Tenant.fs_scan_allowed_paths` JSON list — whitelist obbligatoria per
+  sicurezza (no arbitrary FS access). Default vuoto. Auto-migrate idem.
+- Endpoint `POST /dam/api/fs-scan`: valida path vs whitelist + chiama
+  `walk_filesystem()` (servizio esistente α.75) + classifica file per
+  asset_type via `resolve_asset_type(mime)`. NO DB write — preview JSON.
+- Endpoint `POST /dam/api/fs-import`: registra Asset DAM per i file
+  selezionati. **NON copia** il file (file_path punta al path originale,
+  utile per NAS/dischi montati). Tenant scope + path-traversal check.
+- Pagina nuova `/dam/fs-scan`: wizard 2-step (scan path → tabella file
+  classificati per tipo con filter/search/checkbox → import bulk). KPI
+  cards file_count/total_size/selected_count. Whitelist mostrata + alert
+  rosso se vuota.
+- Sidebar: subitem "Scan filesystem" sotto "Asset Library".
+
+**#9d — Web cross-check progetti/clienti** (`web_crosscheck.py`,
+`projects.py`, `clients.py`, `project_detail.html`, `clients.html`):
+- Service nuovo `app/services/web_crosscheck.py`: funzioni
+  `check_project(p_data)` e `check_client(c_data)` confrontano dati DB
+  con info pubbliche (IMDB, BoxOffice, Variety, MyMovies per progetti;
+  Cerved, LinkedIn, news per clienti). Strategia in cascata identica a
+  client_enrichment: native web search → Tavily → knowledge-only.
+- Output normalizzato: `{differences: [{field, current, suggested,
+  confidence, source, rationale}], external_info: {imdb_url, awards,
+  box_office_usd, distribution_countries, ...}, sources: [...]}`.
+- Endpoint `POST /projects/api/{id}/cross-check` + `POST
+  /clients/api/{id}/cross-check`. NO DB write — preview interattiva.
+- UI: bottone "🔍 Cross-check" topbar `/projects/{id}` + footer modal
+  cliente in `/clients`. Apre modal con lista differences (current vs
+  suggested + confidence badge + rationale) + external_info pre-formattata.
+
+**+1 colonna auto-migrate**. **+4 endpoint**. **+1 pagina HTML** (fs_scan).
+**+1 service** (web_crosscheck).
+
 ## v3.5.0-alpha.95 — Fase 5 capitolato import + Fase 3 enrichment workflow approval (13 maggio 2026)
 
 Cantiere "Fase 5 + Fase 3" da scoping 13 mag (chiusi simultaneamente).

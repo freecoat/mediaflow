@@ -1,0 +1,268 @@
+{% extends "base.html" %}
+{% set active_page = "fs_scan" %}
+{% block title %}Filesystem scan — MediaFlow{% endblock %}
+{% block topbar_title %}📂 Scansione filesystem → import Asset DAM{% endblock %}
+{% block topbar_actions %}
+  <a href="/dam" class="btn btn-secondary btn-sm">← DAM</a>
+{% endblock %}
+
+{% block content %}
+
+<div class="card mb-3" style="background:var(--indigo-bg);border-color:var(--indigo-border);">
+  <div style="padding:14px 16px;font-size:13px;line-height:1.55;">
+    Scansiona una cartella filesystem (NAS, disco cliente montato) → classifica
+    file per tipo asset → importa selezionati come <b>Asset DAM</b> SENZA copiare
+    il file (file_path punta al path originale).
+  </div>
+</div>
+
+{% if not allowed_paths %}
+<div class="card mb-3" style="background:rgba(239,68,68,0.08);border-color:rgba(239,68,68,0.3);">
+  <div style="padding:14px 16px;font-size:13px;">
+    <b>⚠ Nessun path autorizzato configurato.</b> Per usare lo scan,
+    aggiungi i path consentiti in <code>Tenant.fs_scan_allowed_paths</code>
+    (lista JSON di assoluti) — endpoint <code>PUT /settings/api/tenant</code>
+    o via Copilot AI. Esempio: <code>["/Volumes/StorageA", "/mnt/nas/deliverables"]</code>.
+  </div>
+</div>
+{% endif %}
+
+<div class="card mb-3">
+  <div style="padding:16px;">
+    <div class="form-row">
+      <div class="form-group" style="flex:3;">
+        <label class="form-label">Path *</label>
+        <input class="form-input" id="fs-path" placeholder="es. /Volumes/StorageA/deliverables/SKY"
+               list="fs-allowed-list">
+        <datalist id="fs-allowed-list">
+          {% for p in allowed_paths %}
+          <option value="{{ p }}"></option>
+          {% endfor %}
+        </datalist>
+        {% if allowed_paths %}
+        <div class="text-xs text-muted" style="margin-top:4px;">
+          Path autorizzati: {% for p in allowed_paths %}<code>{{ p }}</code>{% if not loop.last %}, {% endif %}{% endfor %}
+        </div>
+        {% endif %}
+      </div>
+      <div class="form-group" style="max-width:120px;">
+        <label class="form-label">Max files</label>
+        <input class="form-input" id="fs-max-files" type="number" value="2000" min="1" max="10000">
+      </div>
+      <div class="form-group" style="max-width:120px;">
+        <label class="form-label">Max depth</label>
+        <input class="form-input" id="fs-max-depth" type="number" value="8" min="1" max="16">
+      </div>
+    </div>
+    <label style="display:inline-flex;align-items:center;gap:6px;font-size:12px;cursor:pointer;margin-top:8px;">
+      <input type="checkbox" id="fs-checksum">
+      <span>Calcola checksum (rallenta, utile per integrity audit)</span>
+    </label>
+    <div style="margin-top:14px;display:flex;gap:10px;">
+      <button class="btn btn-primary" id="fs-scan-btn" onclick="runFsScan()">🔍 Scansiona</button>
+      <span id="fs-scan-spin" class="text-muted text-sm" style="display:none;align-self:center;">⏳ Scansione in corso…</span>
+    </div>
+  </div>
+</div>
+
+<div class="card mb-3" id="fs-results-card" style="display:none;">
+  <div style="padding:16px;">
+    <div class="stat-grid mb-3" style="grid-template-columns:repeat(3,1fr);">
+      <div class="stat-card">
+        <div class="stat-label">File trovati</div>
+        <div class="stat-value mono" id="fs-kpi-count">—</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">Dimensione totale</div>
+        <div class="stat-value mono" id="fs-kpi-size">—</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">Selezionati per import</div>
+        <div class="stat-value mono color-indigo" id="fs-kpi-selected">0</div>
+      </div>
+    </div>
+
+    <div style="display:flex;gap:10px;align-items:center;margin-bottom:10px;flex-wrap:wrap;">
+      <input class="form-input" id="fs-filter" placeholder="🔍 Filtra per nome..." oninput="renderFsResults()" style="flex:1;">
+      <select class="form-select" id="fs-filter-type" onchange="renderFsResults()" style="max-width:180px;">
+        <option value="">— tutti i tipi —</option>
+        <option value="video">Video</option>
+        <option value="audio">Audio</option>
+        <option value="image">Image</option>
+        <option value="document">Document</option>
+        <option value="other">Altri</option>
+      </select>
+      <button class="btn btn-ghost btn-sm" onclick="toggleAllFsRows(true)">✓ Tutti</button>
+      <button class="btn btn-ghost btn-sm" onclick="toggleAllFsRows(false)">✗ Nessuno</button>
+    </div>
+
+    <div class="table-wrap" style="max-height:400px;overflow:auto;">
+      <table>
+        <thead style="position:sticky;top:0;background:var(--surface);">
+          <tr>
+            <th style="width:32px;"></th>
+            <th>Path relativo</th>
+            <th style="width:90px;">Tipo</th>
+            <th style="width:110px;text-align:right;">Dim.</th>
+            <th style="width:140px;">MIME</th>
+          </tr>
+        </thead>
+        <tbody id="fs-rows-tbody"></tbody>
+      </table>
+    </div>
+
+    <div style="margin-top:14px;border-top:1px solid var(--border);padding-top:14px;display:flex;gap:10px;align-items:flex-end;flex-wrap:wrap;">
+      <div class="form-group" style="flex:1;min-width:200px;">
+        <label class="form-label">Progetto target (opt.)</label>
+        <select class="form-select" id="fs-project">
+          <option value="">— nessuno (internal queue) —</option>
+          {% for p in projects %}
+          <option value="{{ p.id }}">{{ p.code }} — {{ p.title }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <button class="btn btn-primary" id="fs-import-btn" onclick="runFsImport()" disabled>📥 Importa selezionati come Asset</button>
+      <span id="fs-import-info" class="text-xs text-muted"></span>
+    </div>
+  </div>
+</div>
+
+<script>
+let _fsData = null;
+const _fsSelected = new Set();  // rel_path
+
+function fmtSize(n) {
+  if (!n) return '0 B';
+  if (n > 1e9) return (n/1e9).toFixed(2) + ' GB';
+  if (n > 1e6) return (n/1e6).toFixed(2) + ' MB';
+  if (n > 1e3) return (n/1e3).toFixed(1) + ' KB';
+  return n + ' B';
+}
+
+async function runFsScan() {
+  const path = document.getElementById('fs-path').value.trim();
+  if (!path) { toast('Specifica un path', 'warning'); return; }
+  const fd = new FormData();
+  fd.append('path', path);
+  fd.append('compute_checksum', document.getElementById('fs-checksum').checked ? '1' : '0');
+  fd.append('max_depth', document.getElementById('fs-max-depth').value || '8');
+  fd.append('max_files', document.getElementById('fs-max-files').value || '2000');
+  const btn = document.getElementById('fs-scan-btn');
+  const spin = document.getElementById('fs-scan-spin');
+  btn.disabled = true; spin.style.display = '';
+  try {
+    _fsData = await api('POST', '/dam/api/fs-scan', fd);
+  } catch(e) {
+    btn.disabled = false; spin.style.display = 'none';
+    toast(e.message || 'Errore scan', 'error');
+    return;
+  }
+  btn.disabled = false; spin.style.display = 'none';
+  _fsSelected.clear();
+  document.getElementById('fs-results-card').style.display = '';
+  document.getElementById('fs-kpi-count').textContent = String(_fsData.file_count || 0);
+  document.getElementById('fs-kpi-size').textContent = fmtSize(_fsData.total_size || 0);
+  renderFsResults();
+  if (_fsData.errors && _fsData.errors.length) {
+    toast(`Scansione OK con ${_fsData.errors.length} warning`, 'warning', 4000);
+  }
+}
+
+function renderFsResults() {
+  const tbody = document.getElementById('fs-rows-tbody');
+  while (tbody.firstChild) tbody.removeChild(tbody.firstChild);
+  const q = (document.getElementById('fs-filter').value || '').toLowerCase().trim();
+  const tFilter = document.getElementById('fs-filter-type').value;
+  const rows = (_fsData.files || []).filter(f => {
+    if (q && !(f.rel_path || '').toLowerCase().includes(q)) return false;
+    if (tFilter && f.asset_type !== tFilter) return false;
+    return true;
+  });
+  if (!rows.length) {
+    const tr = document.createElement('tr');
+    const td = document.createElement('td');
+    td.colSpan = 5; td.className = 'text-muted';
+    td.style.cssText = 'text-align:center;padding:14px;';
+    td.textContent = 'Nessun file corrisponde al filtro.';
+    tr.appendChild(td); tbody.appendChild(tr);
+    updateFsKpi();
+    return;
+  }
+  rows.forEach(f => {
+    const tr = document.createElement('tr');
+    const cbTd = document.createElement('td');
+    const cb = document.createElement('input');
+    cb.type = 'checkbox'; cb.checked = _fsSelected.has(f.rel_path);
+    cb.addEventListener('change', () => {
+      if (cb.checked) _fsSelected.add(f.rel_path);
+      else _fsSelected.delete(f.rel_path);
+      updateFsKpi();
+    });
+    cbTd.appendChild(cb); tr.appendChild(cbTd);
+    const pathTd = document.createElement('td');
+    pathTd.style.fontFamily = 'var(--font-mono)';
+    pathTd.style.fontSize = '11px';
+    pathTd.textContent = f.rel_path;
+    tr.appendChild(pathTd);
+    const typeTd = document.createElement('td');
+    const tBadge = document.createElement('span');
+    const colors = { video: '#a855f7', audio: '#22c55e', image: '#fb923c', document: '#6272f5', other: '#94a3b8' };
+    const c = colors[f.asset_type] || '#94a3b8';
+    tBadge.style.cssText = `padding:1px 8px;border-radius:8px;font-size:10px;font-weight:600;background:${c}22;color:${c};`;
+    tBadge.textContent = f.asset_type;
+    typeTd.appendChild(tBadge); tr.appendChild(typeTd);
+    const sizeTd = document.createElement('td');
+    sizeTd.style.cssText = 'font-family:var(--font-mono);font-size:11px;text-align:right;';
+    sizeTd.textContent = fmtSize(f.size);
+    tr.appendChild(sizeTd);
+    const mimeTd = document.createElement('td');
+    mimeTd.style.cssText = 'font-family:var(--font-mono);font-size:10px;color:var(--text2);';
+    mimeTd.textContent = f.mime;
+    tr.appendChild(mimeTd);
+    tbody.appendChild(tr);
+  });
+  updateFsKpi();
+}
+
+function updateFsKpi() {
+  document.getElementById('fs-kpi-selected').textContent = String(_fsSelected.size);
+  document.getElementById('fs-import-btn').disabled = _fsSelected.size === 0;
+}
+
+function toggleAllFsRows(select) {
+  if (!_fsData) return;
+  const q = (document.getElementById('fs-filter').value || '').toLowerCase().trim();
+  const tFilter = document.getElementById('fs-filter-type').value;
+  (_fsData.files || []).forEach(f => {
+    if (q && !(f.rel_path || '').toLowerCase().includes(q)) return;
+    if (tFilter && f.asset_type !== tFilter) return;
+    if (select) _fsSelected.add(f.rel_path);
+    else _fsSelected.delete(f.rel_path);
+  });
+  renderFsResults();
+}
+
+async function runFsImport() {
+  if (!_fsSelected.size) { toast('Nessun file selezionato', 'warning'); return; }
+  const fd = new FormData();
+  fd.append('base_path', _fsData.root);
+  fd.append('file_paths_json', JSON.stringify([..._fsSelected]));
+  const projectId = document.getElementById('fs-project').value;
+  if (projectId) fd.append('project_id', projectId);
+  const btn = document.getElementById('fs-import-btn');
+  btn.disabled = true;
+  try {
+    const res = await api('POST', '/dam/api/fs-import', fd);
+    const skippedMsg = res.skipped_count > 0 ? ` (${res.skipped_count} skip)` : '';
+    toast(`✓ Importati ${res.imported} asset${skippedMsg}`, 'success', 5000);
+    _fsSelected.clear();
+    updateFsKpi();
+    renderFsResults();
+  } catch(e) {
+    toast(e.message || 'Errore import', 'error');
+    btn.disabled = false;
+  }
+}
+</script>
+
+{% endblock %}

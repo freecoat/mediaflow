@@ -179,6 +179,52 @@ async def update_project(
     return {"id": p.id}
 
 
+@router.post("/api/{project_id}/cross-check")
+async def cross_check_project(
+    project_id: int,
+    request: Request,
+    db: Session = Depends(get_db),
+):
+    """v3.5.0-alpha.96 (#9d) — Cross-check progetto vs web (IMDB/BoxOffice/
+    Variety). Ritorna differenze + info esterne aggiornate. NO DB write —
+    la UI mostra preview, l'utente decide cosa applicare."""
+    from app.services.web_crosscheck import check_project
+    from app.services.ai_provider import get_provider_for_user
+    from app.services.rbac import current_user_optional
+    p = db.query(Project).filter(
+        Project.id == project_id,
+        Project.tenant_id == CURRENT_TENANT,
+    ).first()
+    if not p:
+        raise HTTPException(404, "Progetto non trovato")
+    u = current_user_optional(request)
+    provider = get_provider_for_user(u.id if u else None, db)
+    if not provider:
+        raise HTTPException(503, "AI provider non configurato")
+    project_data = {
+        "id": p.id, "code": p.code, "title": p.title,
+        "project_type": p.project_type,
+        "length_minutes": p.length_minutes, "fps": p.fps,
+        "shooting_format": p.shooting_format,
+        "delivery_format": p.delivery_format,
+        "director": p.director, "producer": p.producer, "dop": p.dop,
+        "shoot_start": str(p.shoot_start) if p.shoot_start else None,
+        "shoot_end": str(p.shoot_end) if p.shoot_end else None,
+        "delivery_deadline": str(p.delivery_deadline) if p.delivery_deadline else None,
+        "status": p.status.value if hasattr(p.status, "value") else str(p.status),
+        "description": p.description,
+        "notes": p.notes,
+    }
+    result = check_project(project_data, provider=provider)
+    if not result:
+        raise HTTPException(500, "Cross-check fallito (tutti i path AI hanno fallito).")
+    return {
+        "project_id": p.id,
+        "title": p.title,
+        **result,
+    }
+
+
 @router.get("/api/{project_id}/job-context")
 async def get_project_job_context(project_id: int, db: Session = Depends(get_db)):
     """Contesto quote/job di un progetto per il reverse-flow v3.4.52.
