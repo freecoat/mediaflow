@@ -153,6 +153,8 @@ def _auto_migrate_columns():
             ("is_phantom", "BOOLEAN NOT NULL DEFAULT 0"),
             # v3.5.0-alpha.66.15.0 — tenant scope (R1)
             ("tenant_id", "INTEGER NOT NULL DEFAULT 1"),
+            # v3.5.0-alpha.106 — Clausola ricarico spedizioni in quote
+            ("shipping_markup_pct", "REAL NOT NULL DEFAULT 15.0"),
         ]
         with engine.begin() as conn:
             for col, ddl in quote_alter:
@@ -496,6 +498,18 @@ def _auto_migrate_columns():
                     conn.execute(text(f"ALTER TABLE projects ADD COLUMN {col} {ddl}"))
     # v3.5.0-alpha.93 — Shipment fields su IngestBatch (carrier, costo, payer,
     # pickup_mode, billable_to_project_id, auto_billed_jcl_id).
+    # v3.5.0-alpha.106 — Department shipping_address per spedizioni dirette a reparto
+    if "departments" in insp.get_table_names():
+        dcols = {c["name"] for c in insp.get_columns("departments")}
+        d_alter = [
+            ("shipping_address", "TEXT NULL"),
+            ("shipping_contact", "VARCHAR(255) NULL"),
+        ]
+        with engine.begin() as conn:
+            for col, ddl in d_alter:
+                if col not in dcols:
+                    print(f"[auto-migrate] departments.{col} mancante -> ALTER TABLE")
+                    conn.execute(text(f"ALTER TABLE departments ADD COLUMN {col} {ddl}"))
     if "ingest_batches" in insp.get_table_names():
         ibcols = {c["name"] for c in insp.get_columns("ingest_batches")}
         ib_alter = [
@@ -847,7 +861,7 @@ async def lifespan(app: FastAPI):
     yield
 
 
-app = FastAPI(title="MediaFlow", version="3.5.0-alpha.105", lifespan=lifespan)
+app = FastAPI(title="MediaFlow", version="3.5.0-alpha.106", lifespan=lifespan)
 
 BASE_DIR = Path(__file__).parent
 app.mount("/static", StaticFiles(directory=BASE_DIR / "static"), name="static")

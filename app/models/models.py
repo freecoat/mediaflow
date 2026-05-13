@@ -456,6 +456,11 @@ class Department(Base):
     annual_budget: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
     # Head of department (collegamento a un utente)
     head_user_id: Mapped[Optional[int]] = mapped_column(ForeignKey("users.id"), nullable=True)
+    # v3.5.0-alpha.106 — Indirizzo reparto: usato come destinatario spedizione
+    # quando il reparto ha sede diversa dal tenant principale (es. sala VFX
+    # in altra città). Default: vuoto = usa tenant.address.
+    shipping_address: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    shipping_contact: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
 
@@ -1038,6 +1043,12 @@ class Quote(Base):
     vat_rate: Mapped[float] = mapped_column(Float, default=22.0)
     notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     payment_terms: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    # v3.5.0-alpha.106 — Clausola ricarico spedizioni esplicita in quote.
+    # Default 15% editabile, riflette Project.shipping_markup_pct ma
+    # configurabile per quote (es. cliente con accordi diversi).
+    # Quando >0 la clausola viene aggiunta automaticamente al PDF/UI come
+    # nota nei "Termini di pagamento" o nel blocco condizioni economiche.
+    shipping_markup_pct: Mapped[float] = mapped_column(Float, nullable=False, default=15.0, server_default="15.0")
 
     # subtotal_gross = somma qty*unit_price*(1+allowance) di tutte le voci, prima di
     # qualsiasi sconto. Mostrato in PDF/UI per visibilità del valore pieno al cliente.

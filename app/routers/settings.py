@@ -169,7 +169,15 @@ async def ai_settings_save(
         db.add(row)
 
     if api_key:
-        row.api_key_encrypted = encrypt_secret(api_key.strip())
+        # v3.5.0-alpha.106: error handling esplicito per encryption failure
+        # (es. AI_KEY_ENCRYPTION_KEY mancante nel .env del deploy). Prima
+        # ritornava 500 generico, ora 503 con messaggio chiaro.
+        try:
+            row.api_key_encrypted = encrypt_secret(api_key.strip())
+        except RuntimeError as e:
+            raise HTTPException(503, f"Cifratura API key fallita: {e}")
+        except Exception as e:
+            raise HTTPException(503, f"Errore cifratura: {e}")
         row.verified_at = None
         row.last_error = None
     if model is not None:

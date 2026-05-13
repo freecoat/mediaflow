@@ -1167,13 +1167,19 @@ document.addEventListener('DOMContentLoaded', () => mfEnableSortableTables());
 (function watchSortable() {
   if (!('MutationObserver' in window)) return;
   let scheduled = false;
+  // v3.5.0-alpha.106 fix: requestIdleCallback accetta options object, NON
+  // numero come setTimeout. Wrapper unificato per evitare TypeError
+  // "not of type IdleRequestOptions" su Chrome con SES/lockdown attivo.
+  const schedule = window.requestIdleCallback
+    ? (fn) => window.requestIdleCallback(fn, { timeout: 80 })
+    : (fn) => setTimeout(fn, 80);
   const obs = new MutationObserver(() => {
     if (scheduled) return;
     scheduled = true;
-    (window.requestIdleCallback || setTimeout)(() => {
+    schedule(() => {
       scheduled = false;
       mfEnableSortableTables();
-    }, 80);
+    });
   });
   obs.observe(document.body, { childList: true, subtree: true });
 })();

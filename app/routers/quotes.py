@@ -547,6 +547,7 @@ async def get_quote(quote_id: int, db: Session = Depends(get_db)):
         "total_after_discount": q.total_after_discount,
         "total_with_vat": q.total_with_vat,
         "notes": q.notes, "payment_terms": q.payment_terms,
+        "shipping_markup_pct": getattr(q, "shipping_markup_pct", 15.0),
         "generated_from_deliverables": q.generated_from_deliverables,
         "source_document_name": q.source_document_name,
         "subtotal_optional": round(
@@ -673,6 +674,8 @@ async def update_quote(
     # v3.5.0-alpha.7.5 — rinomina di title (sempre) e number (solo draft)
     title: Optional[str] = Form(None),
     number: Optional[str] = Form(None),
+    # v3.5.0-alpha.106 — Clausola ricarico spedizioni
+    shipping_markup_pct: Optional[float] = Form(None),
     db: Session = Depends(get_db),
 ):
     # v3.4.38 (R3.2): guard permission edit_quotes
@@ -717,6 +720,8 @@ async def update_quote(
     if vat_rate is not None: q.vat_rate = vat_rate
     if notes is not None: q.notes = notes
     if payment_terms is not None: q.payment_terms = payment_terms
+    if shipping_markup_pct is not None:
+        q.shipping_markup_pct = max(0.0, min(float(shipping_markup_pct), 100.0))
     _recalc_quote(q)
     db.commit()
     return {

@@ -276,16 +276,42 @@
         </div>
       </fieldset>
 
-      <div class="form-row" style="margin-top:10px;">
-        <div class="form-group">
-          <label class="form-label">Mittente / Da</label>
-          <input class="form-input" id="sh-from" placeholder="es. MediaFlow / cliente">
+      <fieldset style="border:1px solid var(--border);border-radius:6px;padding:10px 14px;margin-top:10px;">
+        <legend style="padding:0 8px;font-weight:600;font-size:12px;">📍 Mittente</legend>
+        <div class="form-row" style="margin-top:4px;">
+          <div class="form-group" style="flex:2;">
+            <label class="form-label">Nome/Ragione sociale</label>
+            <input class="form-input" id="sh-from" list="sh-parties-from" placeholder="Cerca cliente/reparto..." oninput="onPartyAutocomplete('from')">
+            <datalist id="sh-parties-from"></datalist>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Contatto</label>
+            <input class="form-input" id="sh-from-contact" placeholder="Email o tel">
+          </div>
         </div>
-        <div class="form-group">
-          <label class="form-label">Destinatario / A</label>
-          <input class="form-input" id="sh-to" placeholder="es. Sky Italia">
+        <div class="form-group" style="margin-top:6px;">
+          <label class="form-label">Indirizzo</label>
+          <textarea class="form-textarea" id="sh-from-address" rows="2" placeholder="Via, n. · CAP Città · Provincia · Paese"></textarea>
         </div>
-      </div>
+      </fieldset>
+      <fieldset style="border:1px solid var(--border);border-radius:6px;padding:10px 14px;margin-top:10px;">
+        <legend style="padding:0 8px;font-weight:600;font-size:12px;">🎯 Destinatario</legend>
+        <div class="form-row" style="margin-top:4px;">
+          <div class="form-group" style="flex:2;">
+            <label class="form-label">Nome/Ragione sociale</label>
+            <input class="form-input" id="sh-to" list="sh-parties-to" placeholder="Cerca cliente/reparto..." oninput="onPartyAutocomplete('to')">
+            <datalist id="sh-parties-to"></datalist>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Contatto</label>
+            <input class="form-input" id="sh-to-contact" placeholder="Email o tel">
+          </div>
+        </div>
+        <div class="form-group" style="margin-top:6px;">
+          <label class="form-label">Indirizzo</label>
+          <textarea class="form-textarea" id="sh-to-address" rows="2" placeholder="Via, n. · CAP Città · Provincia · Paese"></textarea>
+        </div>
+      </fieldset>
 
       <fieldset style="border:1px solid var(--border);border-radius:6px;padding:10px 14px;margin-top:10px;">
         <legend style="padding:0 8px;font-weight:600;font-size:12px;">Asset nella spedizione (colli)</legend>
@@ -694,10 +720,11 @@ const _shSelected = { physical: new Set(), digital: new Set() };
 async function openShipment() {
   // Reset form
   document.getElementById('sh-direction').value = 'outgest';
-  ['sh-ddt','sh-carrier','sh-tracking','sh-cost','sh-from','sh-to','sh-notes','sh-asset-search'].forEach(id => {
+  ['sh-ddt','sh-carrier','sh-tracking','sh-cost','sh-from','sh-from-address','sh-from-contact','sh-to','sh-to-address','sh-to-contact','sh-notes','sh-asset-search'].forEach(id => {
     const el = document.getElementById(id);
     if (el) el.value = '';
   });
+  _shParties = null;
   document.querySelectorAll('input[name="sh-pickup"]').forEach(r => r.checked = r.value === 'we_ship');
   document.querySelectorAll('input[name="sh-payer"]').forEach(r => r.checked = r.value === 'internal');
   onPayerChange();
@@ -718,14 +745,51 @@ async function openShipment() {
     o.textContent = `${p.code} — ${p.title || ''}`;
     psel.appendChild(o);
   });
-  // Carica asset pool
+  // Carica asset pool + parties autocomplete
   await loadShAssets();
+  await loadShParties();
   openModal('modal-shipment');
 }
 
 function onPayerChange() {
   const v = document.querySelector('input[name="sh-payer"]:checked')?.value || 'internal';
   document.getElementById('sh-billable-row').style.display = (v === 'charged_to_client') ? '' : 'none';
+}
+
+// v3.5.0-alpha.106 — Autocomplete mittente/destinatario via /shipping-parties
+let _shParties = null;
+
+async function loadShParties() {
+  if (_shParties !== null) return _shParties;
+  try {
+    _shParties = await api('GET', '/physical-assets/api/shipping-parties?include_suppliers=1');
+  } catch(e) { _shParties = []; }
+  ['from', 'to'].forEach(side => {
+    const dl = document.getElementById('sh-parties-' + side);
+    if (!dl) return;
+    while (dl.firstChild) dl.removeChild(dl.firstChild);
+    _shParties.forEach(p => {
+      const opt = document.createElement('option');
+      opt.value = p.label.replace(/^[^\s]+\s+/, '');  // rimuove emoji prefix
+      opt.dataset.partyId = p.id;
+      opt.dataset.address = p.address || '';
+      opt.dataset.contact = p.contact || '';
+      dl.appendChild(opt);
+    });
+  });
+  return _shParties;
+}
+
+function onPartyAutocomplete(side) {
+  if (!_shParties) return;
+  const inputEl = document.getElementById('sh-' + side);
+  const val = inputEl.value;
+  // Match esatto col label (datalist auto-populato senza emoji)
+  const p = _shParties.find(x => x.label.replace(/^[^\s]+\s+/, '') === val);
+  if (p) {
+    document.getElementById('sh-' + side + '-address').value = p.address || '';
+    document.getElementById('sh-' + side + '-contact').value = p.contact || '';
+  }
 }
 
 async function onShBillableProjectChange() {
@@ -902,8 +966,16 @@ async function submitShipment() {
   text('sh-ddt'); text('sh-carrier'); text('sh-tracking');
   const from = document.getElementById('sh-from').value.trim();
   if (from) fd.append('from_party', from);
+  const fromAddr = document.getElementById('sh-from-address').value.trim();
+  if (fromAddr) fd.append('from_address', fromAddr);
+  const fromContact = document.getElementById('sh-from-contact').value.trim();
+  if (fromContact) fd.append('from_contact', fromContact);
   const to = document.getElementById('sh-to').value.trim();
   if (to) fd.append('to_party', to);
+  const toAddr = document.getElementById('sh-to-address').value.trim();
+  if (toAddr) fd.append('to_address', toAddr);
+  const toContact = document.getElementById('sh-to-contact').value.trim();
+  if (toContact) fd.append('to_contact', toContact);
   const notes = document.getElementById('sh-notes').value.trim();
   if (notes) fd.append('notes', notes);
   if (phys.length) fd.append('physical_asset_ids', phys.join(','));
@@ -982,6 +1054,11 @@ async function loadShipments() {
   }
   data.items.forEach(b => {
     const tr = document.createElement('tr');
+    tr.style.cursor = 'pointer';
+    tr.addEventListener('click', (ev) => {
+      if (ev.target.closest('a,button')) return;
+      openShipmentDetail(b.id);
+    });
     const td = (txt, css) => { const e = document.createElement('td'); e.style.padding = '6px 8px'; if (css) e.style.cssText += ';' + css; e.textContent = txt; tr.appendChild(e); return e; };
     td(b.code, 'font-family:var(--font-mono);font-size:11px;font-weight:600;');
     td((b.batch_date || '').slice(0, 10), 'font-size:12px;');
@@ -1037,6 +1114,150 @@ async function loadShipments() {
     tr.appendChild(jclTd);
     tbody.appendChild(tr);
   });
+}
+
+// v3.5.0-alpha.106 — Drawer dettaglio spedizione (click su row)
+async function openShipmentDetail(batchId) {
+  let data;
+  try {
+    data = await api('GET', `/physical-assets/api/ingest-batches/${batchId}`);
+  } catch(e) { toast(e.message || 'Errore', 'error'); return; }
+  let drawer = document.getElementById('sh-detail-drawer');
+  if (drawer) drawer.remove();
+  drawer = document.createElement('div');
+  drawer.id = 'sh-detail-drawer';
+  drawer.style.cssText = 'position:fixed;top:0;right:0;width:520px;height:100vh;background:var(--bg2);border-left:1px solid var(--border);box-shadow:-4px 0 16px rgba(0,0,0,.35);z-index:90;display:flex;flex-direction:column;';
+  // Header
+  const hdr = document.createElement('div');
+  hdr.style.cssText = 'padding:14px 16px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:10px;';
+  const titleWrap = document.createElement('div');
+  titleWrap.style.flex = '1';
+  const lbl = document.createElement('div');
+  lbl.style.cssText = 'font-size:11px;text-transform:uppercase;letter-spacing:.04em;color:var(--text3);';
+  lbl.textContent = `🚚 Spedizione · ${data.direction}`;
+  titleWrap.appendChild(lbl);
+  const code = document.createElement('div');
+  code.style.cssText = 'font-weight:700;font-size:15px;margin-top:2px;font-family:var(--font-mono);';
+  code.textContent = data.code;
+  titleWrap.appendChild(code);
+  const meta = document.createElement('div');
+  meta.className = 'text-xs text-muted';
+  meta.textContent = `${(data.batch_date||'').slice(0,16).replace('T',' ')} · DDT ${data.delivery_note_number || '—'}`;
+  titleWrap.appendChild(meta);
+  hdr.appendChild(titleWrap);
+  const close = document.createElement('button');
+  close.className = 'btn btn-ghost btn-icon';
+  close.textContent = '×';
+  close.addEventListener('click', () => drawer.remove());
+  hdr.appendChild(close);
+  drawer.appendChild(hdr);
+  // Body
+  const body = document.createElement('div');
+  body.style.cssText = 'flex:1;overflow:auto;padding:14px 16px;';
+  // Card meta
+  const metaCard = document.createElement('div');
+  metaCard.style.cssText = 'background:var(--bg3);border-radius:6px;padding:10px 12px;margin-bottom:14px;font-size:12px;';
+  const ml = [];
+  if (data.carrier) ml.push(`Vettore: ${data.carrier}`);
+  if (data.tracking_number) ml.push(`Tracking: ${data.tracking_number}`);
+  if (data.shipping_cost) ml.push(`Costo: €${data.shipping_cost.toFixed(2)}`);
+  if (data.shipping_payer) ml.push(`Payer: ${data.shipping_payer}`);
+  if (data.pickup_mode) ml.push(`Pickup: ${data.pickup_mode}`);
+  metaCard.textContent = ml.join(' · ') || '—';
+  body.appendChild(metaCard);
+  if (data.auto_billed_jcl_id) {
+    const jcl = document.createElement('div');
+    jcl.style.cssText = 'background:var(--indigo-bg);border:1px solid var(--indigo-border);border-radius:6px;padding:8px 12px;margin-bottom:14px;font-size:12px;';
+    jcl.textContent = `💰 JCL fatturazione #${data.auto_billed_jcl_id} (riaddebito al cliente)`;
+    body.appendChild(jcl);
+  }
+  // Physical assets
+  if (data.physical_assets.length) {
+    const h = document.createElement('h4');
+    h.style.cssText = 'margin:0 0 10px 0;font-size:12px;color:var(--text2);text-transform:uppercase;';
+    h.textContent = `📦 Asset fisici (${data.physical_assets.length})`;
+    body.appendChild(h);
+    data.physical_assets.forEach(pa => {
+      const card = document.createElement('div');
+      card.style.cssText = 'border:1px solid var(--border);border-radius:6px;padding:10px 12px;margin-bottom:10px;background:var(--bg3);';
+      const top = document.createElement('div');
+      top.style.cssText = 'display:flex;align-items:center;gap:8px;margin-bottom:6px;';
+      const name = document.createElement('b'); name.textContent = pa.label; name.style.flex = '1';
+      top.appendChild(name);
+      const kind = document.createElement('span');
+      kind.style.cssText = 'padding:1px 8px;border-radius:8px;font-size:10px;font-weight:600;background:rgba(168,139,250,.18);color:#a78bfa;';
+      kind.textContent = pa.kind || 'physical';
+      top.appendChild(kind);
+      const link = document.createElement('a');
+      link.href = `/physical-assets#a-${pa.physical_asset_id}`;
+      link.textContent = '→';
+      link.title = 'Apri asset fisico';
+      link.className = 'btn btn-ghost btn-sm';
+      link.style.fontSize = '12px';
+      top.appendChild(link);
+      card.appendChild(top);
+      if (pa.serial_number) {
+        const sn = document.createElement('div');
+        sn.style.cssText = 'font-family:var(--font-mono);font-size:11px;color:var(--text2);margin-bottom:4px;';
+        sn.textContent = 's/n: ' + pa.serial_number;
+        card.appendChild(sn);
+      }
+      const contLabel = document.createElement('div');
+      contLabel.style.cssText = 'font-size:11px;color:var(--text2);margin-top:6px;font-weight:600;';
+      contLabel.textContent = `📂 Contenuti al momento della spedizione (${pa.contents_count})`;
+      card.appendChild(contLabel);
+      if (!pa.contents_at_shipment.length) {
+        const empty = document.createElement('div');
+        empty.className = 'text-xs text-muted';
+        empty.style.cssText = 'padding:4px 0;font-style:italic;';
+        empty.textContent = 'Nessun contenuto digitale registrato a questa data.';
+        card.appendChild(empty);
+      } else {
+        pa.contents_at_shipment.slice(0, 20).forEach(c => {
+          const row = document.createElement('div');
+          row.style.cssText = 'padding:3px 0;font-size:11px;border-bottom:1px dashed var(--border);display:flex;justify-content:space-between;';
+          const nameSp = document.createElement('span');
+          nameSp.textContent = c.asset_name || `#${c.asset_id}`;
+          nameSp.style.flex = '1';
+          const sizeSp = document.createElement('span');
+          sizeSp.style.cssText = 'font-family:var(--font-mono);font-size:10px;color:var(--text3);';
+          sizeSp.textContent = c.file_size ? (c.file_size > 1e9 ? (c.file_size/1e9).toFixed(1)+' GB' : (c.file_size/1e6).toFixed(0)+' MB') : '';
+          row.appendChild(nameSp);
+          row.appendChild(sizeSp);
+          card.appendChild(row);
+        });
+        if (pa.contents_at_shipment.length > 20) {
+          const more = document.createElement('div');
+          more.className = 'text-xs text-muted';
+          more.style.cssText = 'padding:4px 0;text-align:center;';
+          more.textContent = `+ ${pa.contents_at_shipment.length - 20} altri…`;
+          card.appendChild(more);
+        }
+      }
+      body.appendChild(card);
+    });
+  }
+  // Digital assets
+  if (data.digital_assets.length) {
+    const h = document.createElement('h4');
+    h.style.cssText = 'margin:14px 0 10px 0;font-size:12px;color:var(--text2);text-transform:uppercase;';
+    h.textContent = `📄 Asset digitali (${data.digital_assets.length})`;
+    body.appendChild(h);
+    data.digital_assets.forEach(da => {
+      const row = document.createElement('div');
+      row.style.cssText = 'border:1px solid var(--border);border-radius:6px;padding:8px 12px;margin-bottom:6px;background:var(--bg3);display:flex;align-items:center;gap:8px;';
+      const name = document.createElement('span'); name.textContent = da.original_name; name.style.flex = '1';
+      name.style.fontSize = '12px';
+      row.appendChild(name);
+      const type = document.createElement('span');
+      type.style.cssText = 'padding:1px 8px;border-radius:8px;font-size:10px;font-weight:600;background:rgba(98,114,245,.18);color:var(--indigo2);';
+      type.textContent = da.asset_type || 'digital';
+      row.appendChild(type);
+      body.appendChild(row);
+    });
+  }
+  drawer.appendChild(body);
+  document.body.appendChild(drawer);
 }
 
 function resetShFilters() {

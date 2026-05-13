@@ -153,6 +153,110 @@ async def list_physical_assets(
     return [_serialize(a) for a in items]
 
 
+@router.get("/api/ingest-batches/{batch_id}")
+async def get_ingest_batch_detail(batch_id: int, db: Session = Depends(get_db)):
+    """v3.5.0-alpha.106 — Dettaglio singolo batch/spedizione con asset
+    fisici e digitali contenuti. Per ogni PhysicalAsset incluso:
+    snapshot membership al momento della spedizione (AssetMembership
+    con added_at ≤ batch.batch_date AND (removed_at IS NULL OR
+    removed_at > batch.batch_date)) → "cosa c'era sul disco quando è
+    stato spedito".
+    """
+    from app.models import IngestBatch, Asset, AssetMembership
+    b = db.query(IngestBatch).filter(
+        IngestBatch.id == batch_id,
+        IngestBatch.tenant_id == current_tenant_id(),
+    ).first()
+    if not b:
+        raise HTTPException(404, "Spedizione non trovata")
+    movements = db.query(AssetMovement).filter(
+        AssetMovement.ingest_batch_id == batch_id,
+        AssetMovement.tenant_id == current_tenant_id(),
+    ).all()
+    pa_ids = [m.physical_asset_id for m in movements if m.physical_asset_id]
+    da_ids = [m.asset_id for m in movements if m.asset_id]
+    pa_map = {p.id: p for p in db.query(PhysicalAsset).filter(
+        PhysicalAsset.id.in_(pa_ids),
+    ).all()} if pa_ids else {}
+    da_map = {a.id: a for a in db.query(Asset).filter(
+        Asset.id.in_(da_ids),
+    ).all()} if da_ids else {}
+    # Snapshot AssetMembership al batch.batch_date per ogni physical asset
+    membership_snapshot = {}
+    if pa_ids:
+        memberships = db.query(AssetMembership).filter(
+            AssetMembership.physical_asset_id.in_(pa_ids),
+            AssetMembership.added_at <= b.batch_date,
+        ).all()
+        a_in_memb_ids = list({m.asset_id for m in memberships})
+        memb_asset_map = {a.id: a for a in db.query(Asset).filter(
+            Asset.id.in_(a_in_memb_ids),
+        ).all()} if a_in_memb_ids else {}
+        for m in memberships:
+            # Era presente al momento del batch?
+            if m.removed_at and m.removed_at <= b.batch_date:
+                continue
+            a = memb_asset_map.get(m.asset_id)
+            membership_snapshot.setdefault(m.physical_asset_id, []).append({
+                "asset_id": m.asset_id,
+                "asset_name": a.original_name if a else None,
+                "asset_type": (a.asset_type.value if a and hasattr(a.asset_type, "value") else None),
+                "file_size": a.file_size if a else None,
+                "path_on_media": m.path_on_media,
+                "added_at": str(m.added_at)[:19],
+                "removed_at": str(m.removed_at)[:19] if m.removed_at else None,
+            })
+    physical_assets = []
+    for m in movements:
+        if not m.physical_asset_id:
+            continue
+        pa = pa_map.get(m.physical_asset_id)
+        if not pa:
+            continue
+        physical_assets.append({
+            "physical_asset_id": pa.id,
+            "label": pa.label,
+            "kind": pa.kind.value if pa.kind else None,
+            "serial_number": pa.serial_number,
+            "movement_id": m.id,
+            "contents_at_shipment": membership_snapshot.get(pa.id, []),
+            "contents_count": len(membership_snapshot.get(pa.id, [])),
+        })
+    digital_assets = []
+    for m in movements:
+        if not m.asset_id:
+            continue
+        a = da_map.get(m.asset_id)
+        if not a:
+            continue
+        digital_assets.append({
+            "asset_id": a.id,
+            "original_name": a.original_name,
+            "asset_type": a.asset_type.value if hasattr(a.asset_type, "value") else None,
+            "file_size": a.file_size,
+            "movement_id": m.id,
+        })
+    return {
+        "id": b.id,
+        "code": b.code,
+        "direction": b.direction,
+        "batch_date": str(b.batch_date)[:19] if b.batch_date else None,
+        "delivery_note_number": b.delivery_note_number,
+        "carrier": b.carrier,
+        "tracking_number": b.tracking_number,
+        "shipping_cost": b.shipping_cost,
+        "shipping_payer": b.shipping_payer,
+        "pickup_mode": b.pickup_mode,
+        "billable_to_project_id": b.billable_to_project_id,
+        "auto_billed_jcl_id": b.auto_billed_jcl_id,
+        "project_id": b.project_id,
+        "notes": b.notes,
+        "physical_assets": physical_assets,
+        "digital_assets": digital_assets,
+        "total_assets": len(physical_assets) + len(digital_assets),
+    }
+
+
 @router.get("/api/ingest-batches")
 async def list_ingest_batches(
     direction: Optional[str] = None,
@@ -685,6 +789,84 @@ async def list_all_movements(
         else:
             d["asset_nature"] = "unknown"
         out.append(d)
+    return out
+
+
+@router.get("/api/shipping-parties")
+async def list_shipping_parties(
+    q: Optional[str] = None,
+    include_tenant: int = 1,
+    include_clients: int = 1,
+    include_departments: int = 1,
+    include_suppliers: int = 0,
+    db: Session = Depends(get_db),
+):
+    """v3.5.0-alpha.106 — Autocomplete mittente/destinatario per spedizioni.
+    Unifica tenant (sede principale) + departments (sede reparto) + clients +
+    suppliers (opt) con address + contact.
+    """
+    from app.models import Tenant, Client, Department, Supplier
+    qlow = (q or "").lower().strip()
+    out = []
+    if include_tenant:
+        t = db.query(Tenant).filter(Tenant.id == current_tenant_id()).first()
+        if t:
+            name = t.legal_name or t.name or ""
+            if not qlow or qlow in name.lower():
+                out.append({
+                    "id": f"tenant:{t.id}",
+                    "label": f"🏢 {name} (sede principale)",
+                    "kind": "tenant",
+                    "address": t.address or "",
+                    "contact": t.email or "",
+                })
+    if include_departments:
+        depts = db.query(Department).filter(
+            Department.tenant_id == current_tenant_id(),
+            Department.is_active == True,  # noqa: E712
+            Department.shipping_address.is_not(None),
+        ).all()
+        for d in depts:
+            if d.shipping_address:
+                lbl = f"📦 {d.name}"
+                if not qlow or qlow in lbl.lower():
+                    out.append({
+                        "id": f"department:{d.id}",
+                        "label": lbl,
+                        "kind": "department",
+                        "address": d.shipping_address,
+                        "contact": d.shipping_contact or "",
+                    })
+    if include_clients:
+        cli_q = db.query(Client).filter(Client.tenant_id == current_tenant_id())
+        if qlow:
+            cli_q = cli_q.filter(Client.name.ilike(f"%{qlow}%"))
+        clients = cli_q.order_by(Client.name).limit(20).all()
+        for c in clients:
+            addr_parts = [c.address, c.city, c.country]
+            addr = " · ".join(p for p in addr_parts if p)
+            out.append({
+                "id": f"client:{c.id}",
+                "label": f"👤 {c.name}",
+                "kind": "client",
+                "address": addr,
+                "contact": c.contact_email or c.contact_phone or "",
+                "client_id": c.id,
+            })
+    if include_suppliers:
+        sup_q = db.query(Supplier).filter(Supplier.tenant_id == current_tenant_id())
+        if qlow:
+            sup_q = sup_q.filter(Supplier.name.ilike(f"%{qlow}%"))
+        suppliers = sup_q.order_by(Supplier.name).limit(20).all()
+        for s in suppliers:
+            out.append({
+                "id": f"supplier:{s.id}",
+                "label": f"🏭 {s.name}",
+                "kind": "supplier",
+                "address": s.address or "",
+                "contact": s.contact_email or "",
+                "supplier_id": s.id,
+            })
     return out
 
 
@@ -1386,7 +1568,11 @@ async def create_shipment(
     supplier_id: Optional[int] = Form(None),
     delivery_note_number: Optional[str] = Form(None),
     from_party: Optional[str] = Form(None),
+    from_address: Optional[str] = Form(None),
+    from_contact: Optional[str] = Form(None),
     to_party: Optional[str] = Form(None),
+    to_address: Optional[str] = Form(None),
+    to_contact: Optional[str] = Form(None),
     physical_asset_ids: Optional[str] = Form(None),   # CSV
     digital_asset_ids: Optional[str] = Form(None),    # CSV
     notes: Optional[str] = Form(None),
@@ -1489,7 +1675,11 @@ async def create_shipment(
             delivery_note_number=ddt,
             movement_date=datetime.utcnow(),
             from_party=(from_party or "").strip() or None,
+            from_address=(from_address or "").strip() or None,
+            from_contact=(from_contact or "").strip() or None,
             to_party=(to_party or "").strip() or None,
+            to_address=(to_address or "").strip() or None,
+            to_contact=(to_contact or "").strip() or None,
             client_id=client_id, supplier_id=supplier_id,
             package_count=1,
             carrier=batch.carrier, tracking_number=batch.tracking_number,
@@ -1506,7 +1696,11 @@ async def create_shipment(
             delivery_note_number=ddt,
             movement_date=datetime.utcnow(),
             from_party=(from_party or "").strip() or None,
+            from_address=(from_address or "").strip() or None,
+            from_contact=(from_contact or "").strip() or None,
             to_party=(to_party or "").strip() or None,
+            to_address=(to_address or "").strip() or None,
+            to_contact=(to_contact or "").strip() or None,
             client_id=client_id, supplier_id=supplier_id,
             package_count=1,
             carrier=batch.carrier, tracking_number=batch.tracking_number,

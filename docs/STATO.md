@@ -8,6 +8,30 @@
 
 ## Versione corrente
 
+**v3.5.0-alpha.106** — 13 maggio 2026 — Spedizioni+Reparti+Quote+Bug AI
+
+5 fronti chiusi:
+1. **Bug AI 500 fix**: encrypt_secret try/except → 503 chiaro.
+   requestIdleCallback TypeError fixato (options object).
+2. **Spedizioni dettaglio**: click row apre drawer 520px con asset fisici
+   + storico contenuti AT batch.batch_date (snapshot AssetMembership).
+3. **Spedizioni indirizzi**: autocomplete unificato tenant + departments
+   + clients + suppliers. Form fieldset Mittente/Destinatario con
+   address+contact auto-popolato.
+4. **Department.shipping_address/contact**: nuovi field per reparti con
+   sede diversa (auto-migrate).
+5. **Quote.shipping_markup_pct**: campo dedicato nel card "Stato &
+   azioni" (default 15%, override Project).
+
+**Aperti** (effort esplicitato):
+- **Storage adapter S3** ~1 settimana
+- **TPN audit endpoint mutator** ~3-5gg
+- **PDF clausola markup esplicita**
+
+1 commit locale NON pushato (α.106).
+
+## (versione precedente)
+
 **v3.5.0-alpha.105** — 13 maggio 2026 — Storage multidomain per progetto + ENV S3 + UI multipath FS scan
 
 Preparazione storage S3 + compartimentazione TPN per progetto.

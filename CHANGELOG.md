@@ -1,5 +1,71 @@
 # MediaFlow — Changelog
 
+## v3.5.0-alpha.106 — Spedizioni dettaglio+autocomplete · Reparti indirizzo · Quote markup · Bug AI fix (13 maggio 2026)
+
+7 fronti chiusi insieme per feedback Matteo:
+
+**1. Bug AI 500 /settings/api/ai/save** (`settings.py`, `global.js`):
+- Encryption fallback: ora `try/except` su `encrypt_secret()` ritorna
+  503 con messaggio chiaro invece di 500 generico (es. quando
+  `AI_KEY_ENCRYPTION_KEY` manca nel .env).
+- Fix `global.js:1173` TypeError "not of type IdleRequestOptions":
+  `requestIdleCallback(fn, 80)` era sbagliato (vuole options object).
+  Wrapper unificato `schedule(fn)` con `{ timeout: 80 }`.
+
+**2. Spedizioni: dettaglio batch + storico contenuti**
+(`physical_assets.py`, `assets_inout.html`):
+- Endpoint nuovo `GET /api/ingest-batches/{id}` con:
+  - meta batch (carrier, costo, payer, JCL ricarico)
+  - lista physical_assets con `contents_at_shipment[]` (snapshot
+    `AssetMembership` AT `batch.batch_date` → "cosa c'era sul disco
+    quando è stato spedito 10/04/2025")
+  - lista digital_assets
+- UI click row su tab Spedizioni → drawer laterale 520px con tutti
+  i dettagli + link "→ Asset fisico" su ogni physical.
+
+**3. Spedizioni: indirizzi default + ricerca DB**
+(`physical_assets.py`, `assets_inout.html`):
+- Endpoint nuovo `GET /api/shipping-parties?q=&include_*` →
+  autocomplete unificato tenant + departments (con shipping_address) +
+  clients + suppliers (opt). Ogni party ritorna address+contact.
+- Form modal "Nuova spedizione" rifatto: fieldset 📍 Mittente +
+  🎯 Destinatario, ognuno con autocomplete via `<datalist>`. Selezione
+  party → popola automaticamente address+contact.
+- Endpoint `POST /shipments` accetta ora `from_address/contact` +
+  `to_address/contact` (oltre `from_party/to_party` esistenti).
+
+**4. Department: shipping_address + shipping_contact**
+(`models.py`, `main.py` auto-migrate):
+- Nuovo `Department.shipping_address` + `shipping_contact` per casi
+  in cui un reparto ha sede diversa dal tenant principale (es. sala
+  VFX in altra città). Visibili in autocomplete `/shipping-parties`.
+
+**5. Quote: clausola ricarico spedizioni**
+(`models.py`, `quotes.py`, `quotes.html`, auto-migrate):
+- `Quote.shipping_markup_pct` (default 15.0, editable per quote).
+  Riflette ma sovrascrive `Project.shipping_markup_pct`.
+- UI card "Stato & azioni" → nuovo input "Ricarico spedizioni %"
+  con help text esplicativo. Salvato via `saveQuoteMeta()`.
+- `GET /quotes/api/{id}` espone il nuovo field.
+- `PUT /quotes/api/{id}` accetta `shipping_markup_pct` (clamp 0–100).
+- (TODO α.107: explicit clausola nel PDF + serializzazione fattura SDI)
+
+**6. UI audit disallineamento card Quote**:
+- Verificato CSS `.quote-top-row { grid + align:stretch +
+  height:100% }`. Allineamento corretto strutturalmente. Eventuali
+  disallineamenti residui sono content-driven (versioning area
+  cresce). Acceptable.
+
+**Backlog roadmap α.107+ ESPLICITI**:
+- **Storage adapter S3** (~1 settimana): `services/storage/{base,
+  local_fs,s3,factory}.py`, upload/download routing per project, presigned
+  URL S3, scan bucket. Modello + ENV già pronti (α.105).
+- **TPN strong isolation audit** (~3-5gg): audit ogni endpoint Asset
+  mutator → filter `project_id in accessible_project_ids(user)`.
+  Sweep manuale dei ~30 endpoint DAM/physical_assets/shipments.
+- **PDF/SDI clausola ricarico esplicita**: append nelle condizioni
+  economiche del PDF quando `shipping_markup_pct > 0`.
+
 ## v3.5.0-alpha.105 — Storage multidomain per progetto + ENV S3 + UI multipath FS scan (13 maggio 2026)
 
 Preparazione storage S3-compatible + compartimentazione TPN per progetto.
