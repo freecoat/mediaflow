@@ -1,0 +1,392 @@
+{% extends "base.html" %}
+{% set active_page = "delivery_templates" %}
+{% block title %}Import capitolato — MediaFlow{% endblock %}
+{% block topbar_title %}📋 Import capitolato → quote bozza{% endblock %}
+{% block topbar_actions %}
+  <a href="/delivery-templates" class="btn btn-secondary btn-sm">← Template salvati</a>
+{% endblock %}
+
+{% block content %}
+
+<div class="card mb-3" style="background:var(--indigo-bg);border-color:var(--indigo-border);">
+  <div style="padding:14px 16px;font-size:13px;line-height:1.55;">
+    <b>Wizard 3-step:</b>
+    <span style="color:var(--text2);">
+      1) Carica capitolato PDF/docx/xlsx → AI estrae voci.
+      2) Rivedi tabella matching con voci listino + override.
+      3) Genera Quote bozza linkata al progetto.
+    </span>
+  </div>
+</div>
+
+<!-- STEP 1: upload -->
+<div class="card mb-3" id="step-upload">
+  <div style="padding:16px;">
+    <h3 style="margin:0 0 12px 0;font-size:15px;">1. Carica capitolato</h3>
+    <div class="form-row">
+      <div class="form-group" style="flex:2;">
+        <label class="form-label">File *</label>
+        <input class="form-input" id="ci-file" type="file" accept=".pdf,.docx,.doc,.xlsx,.xls,.txt">
+        <div class="text-xs text-muted" style="margin-top:4px;">PDF / Word / Excel / testo. Max 30k caratteri (truncate auto).</div>
+      </div>
+      <div class="form-group" style="flex:1;">
+        <label class="form-label">Hint AI (opzionale)</label>
+        <input class="form-input" id="ci-hint" placeholder="es. è un doc 52min, formato 4K">
+      </div>
+    </div>
+    <label style="display:inline-flex;align-items:center;gap:6px;font-size:12px;margin-top:8px;cursor:pointer;">
+      <input type="checkbox" id="ci-include-template" checked>
+      <span>Estrai anche gli 8 blocchi <code>DeliveryTemplate</code> (video/audio/text/head/textless/naming/archive/metadata)</span>
+    </label>
+    <div style="margin-top:14px;display:flex;gap:10px;align-items:center;">
+      <button class="btn btn-primary" id="ci-parse-btn" onclick="parseCapitolato()">✨ Analizza con AI</button>
+      <span id="ci-parse-spinner" class="text-muted text-sm" style="display:none;">⏳ AI sta analizzando il capitolato (15-40s)…</span>
+    </div>
+  </div>
+</div>
+
+<!-- STEP 2: preview + matching -->
+<div class="card mb-3" id="step-preview" style="display:none;">
+  <div style="padding:16px;">
+    <h3 style="margin:0 0 12px 0;font-size:15px;">2. Rivedi matching</h3>
+    <div id="ci-preview-info" class="text-sm text-muted" style="margin-bottom:10px;"></div>
+
+    <div class="stat-grid mb-3" style="grid-template-columns:repeat(4,1fr);">
+      <div class="stat-card"><div class="stat-label">Voci estratte</div>
+        <div class="stat-value mono" id="ci-kpi-total">—</div></div>
+      <div class="stat-card"><div class="stat-label">Match alta conf.</div>
+        <div class="stat-value mono color-green" id="ci-kpi-high">—</div></div>
+      <div class="stat-card"><div class="stat-label">Match parziali</div>
+        <div class="stat-value mono color-amber" id="ci-kpi-partial">—</div></div>
+      <div class="stat-card"><div class="stat-label">Senza match</div>
+        <div class="stat-value mono color-rose" id="ci-kpi-unmatched">—</div></div>
+    </div>
+
+    <div style="margin-bottom:10px;display:flex;gap:10px;align-items:center;">
+      <input class="form-input" id="ci-row-filter" placeholder="🔍 Filtra voci..." oninput="renderDeliverables()" style="flex:1;">
+      <label style="display:flex;align-items:center;gap:6px;font-size:12px;cursor:pointer;white-space:nowrap;">
+        <input type="checkbox" id="ci-only-unmatched" onchange="renderDeliverables()">
+        <span>Solo senza match</span>
+      </label>
+    </div>
+
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th style="width:32px;"><input type="checkbox" id="ci-sel-all" checked onchange="toggleAllRows()" title="Includi tutte"></th>
+            <th>Voce capitolato</th>
+            <th style="width:80px;">Qtà</th>
+            <th style="width:90px;">Unit</th>
+            <th>Match listino</th>
+            <th style="width:80px;">Conf.</th>
+            <th style="width:110px;text-align:right;">Prezzo unit.</th>
+            <th style="width:80px;">Sez.</th>
+          </tr>
+        </thead>
+        <tbody id="ci-rows-tbody"></tbody>
+      </table>
+    </div>
+
+    <details id="ci-template-block" style="margin-top:14px;display:none;">
+      <summary class="form-label" style="cursor:pointer;font-size:13px;">📦 Blocchi DeliveryTemplate estratti (8)</summary>
+      <pre id="ci-template-pre" style="background:var(--bg2);padding:10px;border-radius:6px;font-size:11px;max-height:240px;overflow:auto;margin-top:8px;"></pre>
+    </details>
+  </div>
+</div>
+
+<!-- STEP 3: genera quote -->
+<div class="card mb-3" id="step-generate" style="display:none;">
+  <div style="padding:16px;">
+    <h3 style="margin:0 0 12px 0;font-size:15px;">3. Genera Quote bozza</h3>
+    <div class="form-row">
+      <div class="form-group" style="flex:2;">
+        <label class="form-label">Progetto target *</label>
+        <select class="form-select" id="ci-project">
+          <option value="">— seleziona progetto —</option>
+          {% for p in projects %}
+          <option value="{{ p.id }}">{{ p.code }} — {{ p.title }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="form-group" style="flex:2;">
+        <label class="form-label">Titolo Quote *</label>
+        <input class="form-input" id="ci-title" placeholder="es. Quote da capitolato A24 - Theatrical">
+      </div>
+      <div class="form-group" style="flex:1;">
+        <label class="form-label">Valid fino al</label>
+        <input class="form-input" id="ci-valid-until" type="date">
+      </div>
+    </div>
+    <div class="form-group">
+      <label class="form-label">Note</label>
+      <textarea class="form-input" id="ci-notes" rows="2" placeholder="Note quote (es. capitolato ricevuto il...)"></textarea>
+    </div>
+    <div style="display:flex;gap:10px;align-items:center;margin-top:10px;">
+      <button class="btn btn-primary" id="ci-generate-btn" onclick="generateQuote()">📝 Crea Quote bozza</button>
+      <button class="btn btn-secondary" onclick="saveTemplateOnly()" id="ci-tpl-btn" style="display:none;">💾 Salva solo DeliveryTemplate</button>
+      <span class="text-xs text-muted" id="ci-generate-info"></span>
+    </div>
+  </div>
+</div>
+
+<script>
+let _ciData = null;
+let _ciIncluded = new Set();
+
+async function parseCapitolato() {
+  const f = document.getElementById('ci-file').files[0];
+  if (!f) { toast('Seleziona un file', 'warning'); return; }
+  const fd = new FormData();
+  fd.append('file', f);
+  const hint = document.getElementById('ci-hint').value.trim();
+  if (hint) fd.append('hint', hint);
+  fd.append('include_template', document.getElementById('ci-include-template').checked ? '1' : '0');
+  const btn = document.getElementById('ci-parse-btn');
+  const spin = document.getElementById('ci-parse-spinner');
+  btn.disabled = true; spin.style.display = '';
+  try {
+    _ciData = await api('POST', '/delivery-templates/api/parse-and-match', fd);
+    btn.disabled = false; spin.style.display = 'none';
+  } catch(e) {
+    btn.disabled = false; spin.style.display = 'none';
+    toast(e.message || 'Errore parsing', 'error');
+    return;
+  }
+  _ciIncluded = new Set((_ciData.deliverables || []).map(d => d.index));
+  showPreview();
+}
+
+function showPreview() {
+  document.getElementById('step-preview').style.display = '';
+  document.getElementById('step-generate').style.display = '';
+  const d = _ciData;
+  const info = document.getElementById('ci-preview-info');
+  while (info.firstChild) info.removeChild(info.firstChild);
+  const pi = d.project_info || {};
+  const fileSpan = document.createElement('b'); fileSpan.textContent = 'File: ';
+  info.appendChild(fileSpan);
+  const fileNameSpan = document.createElement('span'); fileNameSpan.textContent = d.filename || '';
+  info.appendChild(fileNameSpan);
+  const parts = [];
+  if (pi.title) parts.push('📽 ' + pi.title);
+  if (pi.client) parts.push('Cliente: ' + pi.client);
+  if (pi.length_minutes) parts.push(pi.length_minutes + 'min');
+  if (pi.delivery_format) parts.push(pi.delivery_format);
+  if (parts.length) {
+    const sep = document.createElement('span'); sep.textContent = ' · ';
+    info.appendChild(sep);
+    const rest = document.createElement('span');
+    rest.textContent = parts.join(' · ');
+    info.appendChild(rest);
+  }
+  document.getElementById('ci-kpi-total').textContent = String(d.deliverables_count || 0);
+  document.getElementById('ci-kpi-high').textContent = String(d.match_stats?.high_confidence || 0);
+  document.getElementById('ci-kpi-partial').textContent = String((d.match_stats?.matched || 0) - (d.match_stats?.high_confidence || 0));
+  document.getElementById('ci-kpi-unmatched').textContent = String(d.match_stats?.unmatched || 0);
+  if (pi.title && !document.getElementById('ci-title').value) {
+    document.getElementById('ci-title').value = `Quote da capitolato — ${pi.title}`;
+  }
+  const valid = new Date(); valid.setDate(valid.getDate() + 30);
+  document.getElementById('ci-valid-until').value = valid.toISOString().slice(0,10);
+  if (d.template_blocks && Object.keys(d.template_blocks).length > 0) {
+    document.getElementById('ci-template-block').style.display = '';
+    document.getElementById('ci-template-pre').textContent = JSON.stringify(d.template_blocks, null, 2);
+    document.getElementById('ci-tpl-btn').style.display = '';
+  } else {
+    document.getElementById('ci-template-block').style.display = 'none';
+    document.getElementById('ci-tpl-btn').style.display = 'none';
+  }
+  renderDeliverables();
+}
+
+function renderDeliverables() {
+  const tbody = document.getElementById('ci-rows-tbody');
+  while (tbody.firstChild) tbody.removeChild(tbody.firstChild);
+  const q = (document.getElementById('ci-row-filter').value || '').toLowerCase().trim();
+  const onlyUnm = document.getElementById('ci-only-unmatched').checked;
+  const rows = (_ciData.deliverables || []).filter(d => {
+    if (onlyUnm && d.match_price_item_id) return false;
+    if (q && !((d.description || '').toLowerCase().includes(q)
+            || (d.match_name || '').toLowerCase().includes(q))) return false;
+    return true;
+  });
+  if (!rows.length) {
+    const tr = document.createElement('tr');
+    const td = document.createElement('td');
+    td.colSpan = 8; td.className = 'text-muted';
+    td.style.cssText = 'text-align:center;padding:20px;';
+    td.textContent = 'Nessuna voce corrisponde al filtro.';
+    tr.appendChild(td); tbody.appendChild(tr); return;
+  }
+  rows.forEach(d => {
+    const tr = document.createElement('tr');
+    const cbTd = document.createElement('td');
+    const cb = document.createElement('input');
+    cb.type = 'checkbox'; cb.checked = _ciIncluded.has(d.index);
+    cb.addEventListener('change', () => {
+      if (cb.checked) _ciIncluded.add(d.index); else _ciIncluded.delete(d.index);
+    });
+    cbTd.appendChild(cb); tr.appendChild(cbTd);
+    const descTd = document.createElement('td');
+    const b = document.createElement('b'); b.textContent = d.description || '—';
+    descTd.appendChild(b);
+    if (d.detail) {
+      const sub = document.createElement('div');
+      sub.className = 'text-xs text-muted';
+      sub.style.marginTop = '2px';
+      sub.textContent = d.detail;
+      descTd.appendChild(sub);
+    }
+    if (d.notes) {
+      const note = document.createElement('div');
+      note.className = 'text-xs';
+      note.style.cssText = 'color:var(--amber);margin-top:2px;';
+      note.textContent = '⚠ ' + d.notes;
+      descTd.appendChild(note);
+    }
+    tr.appendChild(descTd);
+    const qtyTd = document.createElement('td');
+    const qtyInput = document.createElement('input');
+    qtyInput.type = 'number'; qtyInput.step = '0.5'; qtyInput.min = '0';
+    qtyInput.className = 'form-input'; qtyInput.style.cssText = 'padding:3px 6px;font-size:12px;';
+    qtyInput.value = String(d.quantity || 1);
+    qtyInput.addEventListener('change', () => { d.quantity = parseFloat(qtyInput.value) || 1; });
+    qtyTd.appendChild(qtyInput); tr.appendChild(qtyTd);
+    const unitTd = document.createElement('td');
+    const unitInput = document.createElement('input');
+    unitInput.type = 'text';
+    unitInput.className = 'form-input'; unitInput.style.cssText = 'padding:3px 6px;font-size:12px;';
+    unitInput.value = d.unit || 'pc';
+    unitInput.addEventListener('change', () => { d.unit = unitInput.value.trim(); });
+    unitTd.appendChild(unitInput); tr.appendChild(unitTd);
+    const matchTd = document.createElement('td');
+    if (d.match_price_item_id && d.match_name) {
+      const m = document.createElement('div'); m.style.fontSize = '12px';
+      const mb = document.createElement('b'); mb.textContent = d.match_name;
+      m.appendChild(mb);
+      if (d.match_category) {
+        const cat = document.createElement('span');
+        cat.className = 'text-xs text-muted';
+        cat.style.marginLeft = '6px';
+        cat.textContent = '(' + d.match_category + ')';
+        m.appendChild(cat);
+      }
+      matchTd.appendChild(m);
+      if (d.match_reasoning) {
+        const r = document.createElement('div');
+        r.className = 'text-xs text-muted';
+        r.textContent = d.match_reasoning;
+        matchTd.appendChild(r);
+      }
+    } else {
+      const span = document.createElement('span');
+      span.className = 'text-muted';
+      span.style.fontStyle = 'italic';
+      span.textContent = 'Nessun match nel listino';
+      matchTd.appendChild(span);
+    }
+    tr.appendChild(matchTd);
+    const confTd = document.createElement('td');
+    if (d.match_confidence) {
+      const badge = document.createElement('span');
+      const colors = { high: '#22c55e', medium: '#f59e0b', low: '#94a3b8' };
+      const c = colors[d.match_confidence] || '#94a3b8';
+      badge.style.cssText = `padding:2px 8px;border-radius:8px;font-size:10px;font-weight:600;background:${c}22;color:${c};`;
+      badge.textContent = d.match_confidence;
+      confTd.appendChild(badge);
+    } else {
+      confTd.textContent = '—';
+      confTd.className = 'text-muted';
+    }
+    tr.appendChild(confTd);
+    const priceTd = document.createElement('td');
+    priceTd.style.textAlign = 'right';
+    const priceInput = document.createElement('input');
+    priceInput.type = 'number'; priceInput.step = '0.01'; priceInput.min = '0';
+    priceInput.className = 'form-input mono';
+    priceInput.style.cssText = 'padding:3px 6px;font-size:12px;text-align:right;';
+    priceInput.value = (d.unit_price != null ? d.unit_price : (d.match_price_list != null ? d.match_price_list : ''));
+    priceInput.placeholder = d.match_price_list != null ? String(d.match_price_list) : '0';
+    priceInput.addEventListener('change', () => { d.unit_price = parseFloat(priceInput.value) || 0; });
+    priceTd.appendChild(priceInput); tr.appendChild(priceTd);
+    const secTd = document.createElement('td');
+    const secInput = document.createElement('input');
+    secInput.type = 'text'; secInput.maxLength = 5;
+    secInput.className = 'form-input';
+    secInput.style.cssText = 'padding:3px 6px;font-size:12px;text-transform:uppercase;text-align:center;';
+    secInput.value = d.section || 'A';
+    secInput.addEventListener('change', () => { d.section = secInput.value.trim().toUpperCase(); });
+    secTd.appendChild(secInput); tr.appendChild(secTd);
+    tbody.appendChild(tr);
+  });
+}
+
+function toggleAllRows() {
+  const all = document.getElementById('ci-sel-all').checked;
+  if (all) {
+    _ciIncluded = new Set((_ciData.deliverables || []).map(d => d.index));
+  } else {
+    _ciIncluded.clear();
+  }
+  renderDeliverables();
+}
+
+async function generateQuote() {
+  const projectId = document.getElementById('ci-project').value;
+  const title = document.getElementById('ci-title').value.trim();
+  if (!projectId) { toast('Seleziona progetto', 'warning'); return; }
+  if (!title) { toast('Inserisci titolo quote', 'warning'); return; }
+  if (!_ciIncluded.size) { toast('Nessuna voce selezionata', 'warning'); return; }
+  const selected = (_ciData.deliverables || [])
+    .filter(d => _ciIncluded.has(d.index))
+    .map(d => ({
+      description: d.description, detail: d.detail,
+      quantity: d.quantity, unit: d.unit, section: d.section,
+      price_item_id: d.match_price_item_id, unit_price: d.unit_price,
+      category: d.category,
+    }));
+  const fd = new FormData();
+  fd.append('project_id', projectId);
+  fd.append('title', title);
+  fd.append('deliverables_json', JSON.stringify(selected));
+  const validUntil = document.getElementById('ci-valid-until').value;
+  if (validUntil) fd.append('valid_until', validUntil);
+  const notes = document.getElementById('ci-notes').value.trim();
+  if (notes) fd.append('notes', notes);
+  const btn = document.getElementById('ci-generate-btn');
+  btn.disabled = true;
+  try {
+    const res = await api('POST', '/delivery-templates/api/create-quote-from-deliverables', fd);
+    toast(`✓ Quote ${res.quote_number} creata bozza con ${res.lines_created} righe`, 'success', 5000);
+    setTimeout(() => { window.location.href = `/quotes/${res.quote_id}`; }, 1200);
+  } catch(e) {
+    btn.disabled = false;
+    toast(e.message || 'Errore creazione quote', 'error');
+  }
+}
+
+async function saveTemplateOnly() {
+  if (!_ciData.template_blocks) { toast('Nessun template estratto', 'warning'); return; }
+  const tb = _ciData.template_blocks;
+  const fd = new FormData();
+  const code = (tb.code || ('TPL-' + Date.now())).toString().toUpperCase().slice(0, 50);
+  fd.append('code', code);
+  fd.append('name', tb.name || _ciData.filename || code);
+  if (tb.broadcaster) fd.append('broadcaster', tb.broadcaster);
+  if (tb.description) fd.append('description', tb.description);
+  ['video_specs','audio_specs','text_specs','head_format','textless_format',
+   'naming_convention','archive_specs','metadata_requirements'].forEach(k => {
+    if (tb[k]) fd.append(k, JSON.stringify(tb[k]));
+  });
+  fd.append('ai_generated', 'true');
+  if (tb.ai_confidence) fd.append('ai_confidence', String(tb.ai_confidence));
+  fd.append('source_document_name', _ciData.filename || '');
+  try {
+    const res = await api('POST', '/delivery-templates/api/save', fd);
+    toast(`✓ DeliveryTemplate ${res.code} salvato`, 'success', 4000);
+  } catch(e) { toast(e.message || 'Errore', 'error'); }
+}
+</script>
+
+{% endblock %}

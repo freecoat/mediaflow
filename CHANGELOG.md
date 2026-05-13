@@ -1,5 +1,55 @@
 # MediaFlow — Changelog
 
+## v3.5.0-alpha.95 — Fase 5 capitolato import + Fase 3 enrichment workflow approval (13 maggio 2026)
+
+Cantiere "Fase 5 + Fase 3" da scoping 13 mag (chiusi simultaneamente).
+
+**Fase 5 — Import capitolato → matching listino → Quote bozza**
+(`delivery_templates.py`, `capitolati_import.html`, `base.html`):
+- Endpoint nuovo `POST /delivery-templates/api/parse-and-match`: upload
+  PDF/docx/xlsx → estrae testo → `parse_deliverables` (AI) →
+  `parse_delivery_template` (8 blocchi opzionali, toggle) →
+  `match_deliverables_to_pricelist` (AI confidence high/medium/low).
+  Ritorna payload combinato: deliverables + match per indice + 8 blocchi +
+  stats (matched/unmatched/high_conf). No DB write.
+- Endpoint nuovo `POST /delivery-templates/api/create-quote-from-deliverables`:
+  Quote.draft + N QuoteLine linkate ai price_item_id matchati. Numero
+  auto `Q-{anno}-NNN`. Sezioni A/B/C dal parser. unit_price ereditato
+  da PriceItem.price_list se non override. source_hint =
+  "capitolato_ai_import".
+- Pagina nuova `/delivery-templates/import`: wizard 3-step (upload →
+  preview tabella matching con override qty/unit/price/section + filtro +
+  checkbox include → genera quote bozza). Stat cards 4 KPI. Accordion
+  blocchi DeliveryTemplate. Salva-solo-template alternativa.
+- Sidebar: subitem "Import → Quote" sotto "Capitolati".
+- E2E test su `CA_Tech_Meta_Cheat_Sheet.docx` reale → 200 OK in 64s
+  (call AI inclusa), preview popolata correttamente.
+- **Fix bug pre-esistente**: `requires_permission("edit_settings")` in
+  delivery_templates.py usava permesso INESISTENTE nel catalogo
+  (residuo pre-α.66.15.3). Tutti i POST `/api/parse`, `/api/save` ecc.
+  erano silenziosamente broken con 403. Corretto a `manage_settings_global`.
+
+**Fase 3 — Enrichment cliente workflow approval**
+(`clients.py`, `clients.html`):
+- Endpoint nuovo `POST /clients/api/{id}/enrich-preview`: chiama
+  `enrich_client()` ma ritorna preview campo-per-campo (current vs
+  proposed + differs flag) SENZA salvare.
+- Endpoint nuovo `POST /clients/api/{id}/enrich-apply`: applica i campi
+  selezionati. Accetta `fields_json` `{field: value, ...}`. Whitelist
+  dei 15 campi cliente ammessi. Set `ai_enriched=True` + timestamp.
+- `aiEnrich()` UI riscritto: prima chiamava `/enrich` (one-shot, applica
+  tutto). Ora chiama `/enrich-preview` → mostra modal interattivo
+  costruito al volo via DOM (no innerHTML, XSS-safe) con checkbox + input
+  editable per ogni campo. L'utente può:
+  - Vedere current vs proposed side-by-side
+  - Deselezionare campi sbagliati (default checked se differs)
+  - Modificare il valore proposto prima di applicare
+  - Vedere fonte (🌐 web search vs 🧠 knowledge AI)
+- Vecchio endpoint `/enrich` mantenuto back-compat (usato dal bottone
+  "Crea + popola con AI" in flow create-and-enrich).
+
+**No DB migration**. **+4 endpoint**. **+1 pagina HTML**.
+
 ## v3.5.0-alpha.94 — Timeline tema chiaro + spedizioni v2 (voce listino + markup) + vista lista batch (13 maggio 2026)
 
 3 task da feedback Matteo post-α.93:

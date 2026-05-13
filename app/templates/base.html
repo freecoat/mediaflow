@@ -9,7 +9,7 @@
   <meta http-equiv="Pragma" content="no-cache">
   <meta http-equiv="Expires" content="0">
   <title>{% block title %}MediaFlow{% endblock %}</title>
-  <link rel="stylesheet" href="/static/css/main.css?v=3.5.0-alpha.94">
+  <link rel="stylesheet" href="/static/css/main.css?v=3.5.0-alpha.95">
   <link rel="stylesheet" href="/static/css/sleek.css?v=3.5.0-alpha.80">
   <script>
     // v3.5.0-alpha.80 — Sleek mode toggle (default ON)
@@ -142,6 +142,9 @@
         <a href="/delivery-templates" data-nav-id="delivery_templates" class="nav-item {% if active_page == 'delivery_templates' %}active{% endif %}">
           <span class="nav-icon"><i data-lucide="file-output"></i></span> Capitolati
         </a>
+        <a href="/delivery-templates/import" data-nav-id="capitolati_import" class="nav-item nav-subitem {% if active_page == 'capitolati_import' %}active{% endif %}" style="padding-left:36px;font-size:12px;">
+          <span class="nav-icon"><i data-lucide="upload-cloud"></i></span> Import → Quote
+        </a>
       </div>
 
       {% if is_elevated(_user) %}
@@ -253,7 +256,7 @@
 {% endif %}
 
 <script src="/static/js/lucide.min.js?v=3.5.0-alpha.30"></script>
-<script src="/static/js/global.js?v=3.5.0-alpha.94"></script>
+<script src="/static/js/global.js?v=3.5.0-alpha.95"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/fullcalendar/6.1.11/index.global.min.js"></script>
 <script>
   // v3.5.0-alpha.30: Lucide createIcons() al primo paint + helper globale

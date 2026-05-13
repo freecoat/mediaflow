@@ -24,7 +24,10 @@ from app.services.rbac import requires_permission
 router = APIRouter(prefix="/delivery-templates", tags=["delivery-templates"])
 
 CURRENT_TENANT = 1
-RequireEditSettings = Depends(requires_permission("edit_settings"))
+# v3.5.0-alpha.95 — Fix bug: il vecchio permesso "edit_settings" non esiste
+# nel catalogo (era residuo pre-α.66.15.3). I router mutator usano
+# "manage_settings_global" come da rbac.can_edit_settings.
+RequireEditSettings = Depends(requires_permission("manage_settings_global"))
 
 
 def _tpl():
@@ -322,6 +325,232 @@ async def hydrated_suggested_items(template_id: int, db: Session = Depends(get_d
         "items_count": len(out),
         "missing_count": sum(1 for r in out if r["missing"]),
     }
+
+
+# ── Fase 5 (α.95): import capitolato → match listino → quote bozza ───
+# v3.5.0-alpha.95: cabla deliverables_parser + match_deliverables_to_pricelist
+# in un wizard 3-step:
+#   1. Upload + parse → 8 blocchi DeliveryTemplate + lista deliverables
+#   2. Match AI con listino attivo (confidence high/medium/low)
+#   3. Generazione Quote bozza con N QuoteLine linkate ai price_item
+
+
+@router.post("/api/parse-and-match", dependencies=[RequireEditSettings])
+async def parse_and_match(
+    file: UploadFile = File(...),
+    hint: Optional[str] = Form(None),
+    include_template: int = Form(1),   # 1 = parsa anche i 8 blocchi DeliveryTemplate
+    db: Session = Depends(get_db),
+):
+    """v3.5.0-alpha.95 — Estrae testo + parser AI deliverables + match listino
+    in una sola call. Ritorna preview JSON, NON salva nulla. La UI usa il
+    payload per la tabella "voci capitolato ↔ voce listino" con override.
+    """
+    from app.services.deliverables_parser import (
+        extract_text_from_file, parse_deliverables,
+        parse_delivery_template, match_deliverables_to_pricelist,
+    )
+    if not file.filename:
+        raise HTTPException(400, "Nome file mancante")
+    file_bytes = await file.read()
+    if not file_bytes:
+        raise HTTPException(400, "File vuoto")
+    text = extract_text_from_file(file_bytes, file.filename)
+    if not text or len(text.strip()) < 20:
+        raise HTTPException(400, "Estrazione testo fallita (<20 caratteri).")
+
+    # Step 1: deliverables (lista voci operative)
+    parsed = parse_deliverables(text, hint=hint)
+    if parsed is None:
+        raise HTTPException(503, "AI provider non disponibile. Configura in /settings.")
+    deliverables = parsed.get("deliverables") or []
+
+    # Step 2: matching listino
+    pricelist = db.query(PriceItem).options(
+        # PriceItem.category è relationship → eager load
+    ).filter(
+        PriceItem.tenant_id == CURRENT_TENANT,
+        PriceItem.is_active == True,  # noqa: E712
+    ).all()
+    pi_payload = [{
+        "id": p.id, "name": p.name, "category": (p.category.name if p.category else None),
+        "unit": p.unit, "price_list": p.price_list,
+    } for p in pricelist]
+    match_result = (match_deliverables_to_pricelist(deliverables, pi_payload)
+                    if deliverables else None) or {"matches": []}
+    matches_by_idx = {m["deliverable_index"]: m for m in match_result.get("matches", [])
+                      if isinstance(m, dict) and "deliverable_index" in m}
+
+    # Allinea deliverables con match
+    pi_map = {p.id: p for p in pricelist}
+    enriched_deliverables = []
+    for i, d in enumerate(deliverables):
+        m = matches_by_idx.get(i, {})
+        pid = m.get("price_item_id")
+        pi = pi_map.get(pid) if pid else None
+        enriched_deliverables.append({
+            "index": i,
+            **d,
+            "match_price_item_id": pid,
+            "match_confidence": m.get("confidence"),
+            "match_reasoning": m.get("reasoning"),
+            "match_name": pi.name if pi else None,
+            "match_unit": pi.unit if pi else None,
+            "match_price_list": pi.price_list if pi else None,
+            "match_category": (pi.category.name if (pi and pi.category) else None),
+        })
+
+    # Step 3 (opz.): 8 blocchi DeliveryTemplate
+    template_blocks = None
+    if include_template:
+        try:
+            template_blocks = parse_delivery_template(text)
+        except Exception as e:
+            import logging; logging.getLogger(__name__).warning(f"parse_delivery_template error: {e}")
+            template_blocks = None
+
+    return {
+        "filename": file.filename,
+        "text_preview": text[:1500],
+        "project_info": parsed.get("project_info") or {},
+        "global_notes": parsed.get("global_notes"),
+        "deliverables": enriched_deliverables,
+        "deliverables_count": len(enriched_deliverables),
+        "match_stats": {
+            "matched": sum(1 for d in enriched_deliverables if d["match_price_item_id"]),
+            "unmatched": sum(1 for d in enriched_deliverables if not d["match_price_item_id"]),
+            "high_confidence": sum(1 for d in enriched_deliverables if d["match_confidence"] == "high"),
+        },
+        "template_blocks": template_blocks,
+        "pricelist_size": len(pi_payload),
+    }
+
+
+@router.post("/api/create-quote-from-deliverables", dependencies=[RequireEditSettings])
+async def create_quote_from_deliverables(
+    request: Request,
+    project_id: int = Form(...),
+    title: str = Form(...),
+    deliverables_json: str = Form(...),   # JSON array {description, detail, quantity, unit, section, price_item_id?, unit_price?}
+    valid_until: Optional[str] = Form(None),
+    notes: Optional[str] = Form(None),
+    db: Session = Depends(get_db),
+):
+    """v3.5.0-alpha.95 — Genera una Quote BOZZA con N QuoteLine partendo
+    dai deliverables AI-matchati. L'utente ha già confermato i match nella
+    UI; qui crea l'oggetto in stato draft. La quote non è inviata.
+
+    Numero quote auto (Q-{anno}-NNN, riusa pattern di /quotes).
+    """
+    from app.models import Quote, QuoteLine, QuoteStatus, Project, PriceLevel
+    from datetime import date as _date
+
+    p = db.query(Project).filter(
+        Project.id == project_id, Project.tenant_id == CURRENT_TENANT,
+    ).first()
+    if not p:
+        raise HTTPException(404, f"Project {project_id} non trovato")
+    try:
+        deliverables = json.loads(deliverables_json)
+    except json.JSONDecodeError as e:
+        raise HTTPException(400, f"deliverables_json malformato: {e}")
+    if not isinstance(deliverables, list) or not deliverables:
+        raise HTTPException(400, "deliverables_json deve essere lista non vuota")
+
+    # Auto-numero Q-YYYY-NNN (riusa pattern numbering)
+    from app.services.numbering import next_year_progressive
+    quote_number = next_year_progressive(
+        db, Quote, base="Q", code_field="number",
+        include_deleted=True,
+        extra_filter=(Quote.tenant_id == CURRENT_TENANT),
+    )
+
+    issue = _date.today()
+    valid = None
+    if valid_until:
+        try:
+            valid = _date.fromisoformat(valid_until)
+        except ValueError:
+            pass
+    q = Quote(
+        tenant_id=CURRENT_TENANT,
+        number=quote_number,
+        version=1,
+        project_id=p.id,
+        client_id=p.client_id,
+        title=title.strip()[:255],
+        status=QuoteStatus.draft,
+        issue_date=issue,
+        valid_until=valid,
+        notes=(notes or "").strip() or None,
+    )
+    db.add(q); db.flush()
+
+    lines_created = 0
+    section_counters = {}  # per section, increment position
+    for d in deliverables:
+        if not isinstance(d, dict):
+            continue
+        desc = (d.get("description") or "").strip()
+        if not desc:
+            continue
+        section = (d.get("section") or "A").upper()[:5]
+        section_counters[section] = section_counters.get(section, 0) + 1
+        position = f"{section}.{section_counters[section]}"
+        unit_price = d.get("unit_price")
+        pid = d.get("price_item_id")
+        # Se non override esplicito e c'è price_item, eredita prezzo listino
+        if (unit_price is None or unit_price == "") and pid:
+            pi = db.query(PriceItem).filter(PriceItem.id == int(pid)).first()
+            if pi and pi.price_list is not None:
+                unit_price = pi.price_list
+        try:
+            unit_price = float(unit_price) if unit_price is not None else 0.0
+        except (TypeError, ValueError):
+            unit_price = 0.0
+        qty = float(d.get("quantity") or 1.0)
+        total = round(qty * unit_price, 2)
+        line = QuoteLine(
+            quote_id=q.id,
+            price_item_id=int(pid) if pid else None,
+            section=section,
+            position=position,
+            description=desc[:255],
+            detail=(d.get("detail") or None),
+            quantity=qty,
+            unit=(d.get("unit") or "pc")[:20],
+            price_level=PriceLevel.list_price,
+            unit_price=unit_price,
+            total=total,
+            category_override=(d.get("category") or None),
+            source_hint="capitolato_ai_import",
+            section_label=(d.get("section_label") or None),
+        )
+        db.add(line)
+        lines_created += 1
+    db.commit()
+    db.refresh(q)
+    return {
+        "quote_id": q.id,
+        "quote_number": q.number,
+        "project_id": q.project_id,
+        "lines_created": lines_created,
+        "status": q.status.value if hasattr(q.status, "value") else str(q.status),
+    }
+
+
+@router.get("/import", response_class=HTMLResponse)
+async def import_page(request: Request, db: Session = Depends(get_db)):
+    """v3.5.0-alpha.95 — Wizard `/delivery-templates/import` per import
+    capitolato AI + matching listino + generazione Quote bozza."""
+    from app.models import Project
+    projects = db.query(Project).filter(
+        Project.tenant_id == CURRENT_TENANT,
+    ).order_by(Project.created_at.desc()).all()
+    return _tpl().TemplateResponse(
+        "pages/capitolati_import.html",
+        {"request": request, "projects": projects},
+    )
 
 
 @router.delete("/api/{template_id}", dependencies=[RequireEditSettings])

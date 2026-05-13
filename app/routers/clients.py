@@ -301,6 +301,106 @@ async def delete_client(client_id: int, db: Session = Depends(get_db)):
 
 # ── AI Enrichment ────────────────────────────────────────────
 
+@router.post("/api/{client_id}/enrich-preview")
+async def enrich_client_preview(
+    client_id: int,
+    use_name_only: bool = Form(True),
+    access_token: Optional[str] = Cookie(None),
+    db: Session = Depends(get_db),
+):
+    """v3.5.0-alpha.95 — Workflow approval Fase 3: ritorna i dati arricchiti
+    SENZA salvare. La UI mostra preview campo-per-campo con checkbox; l'utente
+    seleziona quali campi applicare e chiama POST `/enrich-apply` con i field.
+
+    Output: per ogni campo del modello Client che enrich_client compila,
+    ritorna `current` (valore attuale DB), `proposed` (valore AI), `source`
+    (web | knowledge), `applicable` (true se proposed != current e non null).
+    """
+    c = db.query(Client).filter(
+        Client.id == client_id, Client.tenant_id == CURRENT_TENANT
+    ).first()
+    if not c:
+        raise HTTPException(404, "Cliente non trovato")
+    u = _resolve_current_user(db, access_token)
+    provider = get_provider_for_user(u.id if u else None, db)
+    if not provider:
+        raise HTTPException(503, "AI provider non configurato")
+    known_info = None if use_name_only else {"city": c.city, "country": c.country}
+    enriched = enrich_client(c.name, known_info=known_info, provider=provider)
+    if not enriched:
+        raise HTTPException(500, "Arricchimento fallito")
+    fields = ("legal_form", "vat_number", "tax_code", "address", "city",
+              "country", "website", "contact_email", "contact_phone",
+              "industry", "company_size", "founded_year", "notes",
+              "recent_productions", "ai_sources")
+    preview = []
+    for f in fields:
+        proposed = enriched.get(f)
+        current = getattr(c, f, None)
+        if proposed in (None, "", []):
+            continue
+        differs = (current in (None, "", [])) or (str(proposed) != str(current))
+        preview.append({
+            "field": f,
+            "current": current,
+            "proposed": proposed,
+            "differs": differs,
+        })
+    return {
+        "client_id": c.id,
+        "client_name": c.name,
+        "web_search_used": bool(enriched.get("web_search_used")),
+        "ai_enriched_at": enriched.get("ai_enriched_at"),
+        "preview": preview,
+    }
+
+
+@router.post("/api/{client_id}/enrich-apply")
+async def enrich_client_apply(
+    client_id: int,
+    fields_json: str = Form(...),  # JSON: {field: proposed_value, ...}
+    access_token: Optional[str] = Cookie(None),
+    db: Session = Depends(get_db),
+):
+    """v3.5.0-alpha.95 — Applica i campi selezionati dall'utente dopo preview.
+    L'utente ha già rivisto i valori (può anche editarli prima dell'invio).
+    """
+    import json as _json
+    c = db.query(Client).filter(
+        Client.id == client_id, Client.tenant_id == CURRENT_TENANT
+    ).first()
+    if not c:
+        raise HTTPException(404, "Cliente non trovato")
+    try:
+        fields = _json.loads(fields_json)
+    except _json.JSONDecodeError as e:
+        raise HTTPException(400, f"fields_json malformato: {e}")
+    if not isinstance(fields, dict) or not fields:
+        raise HTTPException(400, "fields_json deve essere oggetto non vuoto")
+    allowed = {"legal_form", "vat_number", "tax_code", "address", "city",
+               "country", "website", "contact_email", "contact_phone",
+               "industry", "company_size", "founded_year", "notes",
+               "recent_productions", "ai_sources"}
+    applied = []
+    for k, v in fields.items():
+        if k not in allowed:
+            continue
+        if v in (None, "", []):
+            continue
+        setattr(c, k, v)
+        applied.append(k)
+    c.ai_enriched = True
+    c.ai_enriched_at = datetime.utcnow()
+    db.commit()
+    db.refresh(c)
+    return {
+        "ok": True,
+        "client_id": c.id,
+        "fields_applied": applied,
+        "count": len(applied),
+    }
+
+
 @router.post("/api/{client_id}/enrich")
 async def enrich_client_api(
     client_id: int,

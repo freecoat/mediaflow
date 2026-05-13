@@ -8,6 +8,39 @@
 
 ## Versione corrente
 
+**v3.5.0-alpha.95** — 13 maggio 2026 — Fase 5 capitolato import + Fase 3 enrichment workflow approval
+
+Cantieri grandi 7-8 della roadmap (importanza alta, mai partiti prima):
+
+**Fase 5 — Import capitolato → Quote bozza**:
+- Wizard `/delivery-templates/import`: upload PDF/docx/xlsx → AI parsa
+  voci capitolato + 8 blocchi DeliveryTemplate (opt) → matching auto
+  voci listino con confidence → preview tabella editable → "Crea Quote
+  bozza" genera Quote.draft con N QuoteLine linkate ai PriceItem.
+- 2 endpoint nuovi (`parse-and-match`, `create-quote-from-deliverables`).
+- Fix bug latente: `requires_permission("edit_settings")` non esisteva
+  → tutti i mutator delivery_templates erano broken con 403.
+
+**Fase 3 — Enrichment cliente workflow approval**:
+- Modal interattivo campo-per-campo: vedi current vs proposed, decheck
+  campi sbagliati, edit inline prima di applicare.
+- 2 endpoint nuovi (`enrich-preview`, `enrich-apply`). Vecchio `/enrich`
+  back-compat per flow create-and-enrich.
+
+**Da testare sul Mac**:
+1. Sidebar Capitolati → "Import → Quote" → upload uno dei 17 capitolati
+   in `docs/capitolati_esempio/` (es. Netflix/A24/Vision). Aspettare
+   ~30-60s. Vedere preview con KPI + tabella matching.
+2. Override prezzo/qty/sezione su qualche riga, decheck quelle non
+   pertinenti, selezionare progetto target, "Crea Quote bozza".
+3. Vai a `/quotes/{id}` → vedi quote draft con righe categorizzate.
+4. `/clients/{id}` → "Arricchisci con AI" → modal preview campo-per-campo.
+   Decheck/edit, "Applica selezionati".
+
+15 commit locali NON pushati (b8b8bb6 → α.95). Push a major bump.
+
+## (versione precedente)
+
 **v3.5.0-alpha.94** — 13 maggio 2026 — Timeline tema chiaro + spedizioni v2 + tab Spedizioni
 
 3 task in α.94:

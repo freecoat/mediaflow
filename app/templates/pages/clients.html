@@ -449,25 +449,164 @@ async function deleteClient(btn) {
 }
 
 {% if ai_enabled %}
+// v3.5.0-alpha.95 — Workflow approval Fase 3: preview campi → checkbox →
+// edit inline → apply. Sostituisce il vecchio one-shot enrich.
+let _enrichPreview = null;
+let _enrichClientId = null;
+
 async function aiEnrich(id, btn) {
-  // btn è il <button> passato via onclick="aiEnrich(id, this)"
   btn.disabled = true;
-  const originalLabel = btn.innerHTML;
-  btn.innerHTML = '<span style="color:var(--indigo2);">✨</span> Ricerca in corso…';
+  const originalLabel = btn.textContent;
+  btn.textContent = '✨ Ricerca in corso…';
   try {
     const fd = new FormData(); fd.append('use_name_only', 'false');
-    const res = await api('POST', `/clients/api/${id}/enrich`, fd);
-    const msg = res.web_search_used === false
-      ? 'Cliente arricchito (senza ricerca web — fonti AI)'
-      : 'Cliente arricchito con AI';
-    toast(msg, 'success');
-    closeModal('modal-client-detail');
-    await loadClients();
-    openClientDetail(id);
+    const res = await api('POST', `/clients/api/${id}/enrich-preview`, fd);
+    _enrichPreview = res;
+    _enrichClientId = id;
+    showEnrichPreviewModal(res);
   } catch(e) {
     toast(e.message, 'error');
+  } finally {
     btn.disabled = false;
-    btn.innerHTML = originalLabel;
+    btn.textContent = originalLabel;
+  }
+}
+
+const ENRICH_FIELD_LABELS = {
+  legal_form: 'Forma giuridica', vat_number: 'P.IVA',
+  tax_code: 'Cod. Fiscale', address: 'Indirizzo',
+  city: 'Città', country: 'Paese', website: 'Sito web',
+  contact_email: 'Email', contact_phone: 'Telefono',
+  industry: 'Settore', company_size: 'Dimensione',
+  founded_year: 'Anno fondazione', notes: 'Note AI',
+  recent_productions: 'Produzioni recenti', ai_sources: 'Fonti web',
+};
+
+function showEnrichPreviewModal(data) {
+  let modal = document.getElementById('modal-enrich-preview');
+  if (modal) modal.remove();
+  modal = document.createElement('div');
+  modal.id = 'modal-enrich-preview';
+  modal.className = 'modal-overlay';
+  const inner = document.createElement('div');
+  inner.className = 'modal';
+  inner.style.cssText = 'max-width:780px;max-height:90vh;display:flex;flex-direction:column;';
+  const hdr = document.createElement('div');
+  hdr.className = 'modal-header';
+  const t = document.createElement('span');
+  t.className = 'modal-title';
+  t.textContent = `✨ Anteprima arricchimento — ${data.client_name}`;
+  hdr.appendChild(t);
+  const close = document.createElement('button');
+  close.className = 'btn btn-ghost btn-icon';
+  close.textContent = '×';
+  close.addEventListener('click', () => closeModal('modal-enrich-preview'));
+  hdr.appendChild(close);
+  inner.appendChild(hdr);
+  const body = document.createElement('div');
+  body.className = 'modal-body';
+  body.style.overflow = 'auto';
+  const info = document.createElement('p');
+  info.className = 'text-sm text-muted';
+  info.style.marginTop = '0';
+  info.textContent = data.web_search_used
+    ? '🌐 Risultati da ricerca web. Rivedi e applica solo i campi corretti.'
+    : '🧠 Risultati dalla knowledge AI (no web). Verifica la correttezza.';
+  body.appendChild(info);
+  if (!data.preview.length) {
+    const empty = document.createElement('div');
+    empty.className = 'text-muted';
+    empty.style.cssText = 'padding:20px;text-align:center;font-style:italic;';
+    empty.textContent = 'Nessun campo arricchibile diverso dal valore attuale.';
+    body.appendChild(empty);
+  } else {
+    data.preview.forEach((p, idx) => {
+      const row = document.createElement('div');
+      row.style.cssText = 'border:1px solid var(--border);border-radius:6px;padding:10px;margin-bottom:8px;'
+        + (p.differs ? 'background:var(--indigo-bg);' : 'opacity:.6;');
+      const top = document.createElement('div');
+      top.style.cssText = 'display:flex;align-items:center;gap:8px;margin-bottom:6px;';
+      const cb = document.createElement('input');
+      cb.type = 'checkbox'; cb.checked = p.differs;
+      cb.dataset.field = p.field; cb.id = 'enrich-cb-' + idx;
+      top.appendChild(cb);
+      const lbl = document.createElement('label');
+      lbl.htmlFor = cb.id;
+      lbl.style.cssText = 'font-weight:600;flex:1;cursor:pointer;';
+      lbl.textContent = ENRICH_FIELD_LABELS[p.field] || p.field;
+      top.appendChild(lbl);
+      if (!p.differs) {
+        const sameTag = document.createElement('span');
+        sameTag.className = 'text-xs text-muted';
+        sameTag.textContent = '✓ già uguale';
+        top.appendChild(sameTag);
+      }
+      row.appendChild(top);
+      if (p.current !== null && p.current !== undefined && p.current !== '') {
+        const cur = document.createElement('div');
+        cur.style.cssText = 'font-size:11px;color:var(--text3);margin-bottom:4px;';
+        cur.textContent = 'Attuale: ' + (typeof p.current === 'object' ? JSON.stringify(p.current) : String(p.current));
+        row.appendChild(cur);
+      }
+      const proposed = (typeof p.proposed === 'object')
+        ? JSON.stringify(p.proposed) : String(p.proposed);
+      const isLong = proposed.length > 80;
+      const input = document.createElement(isLong ? 'textarea' : 'input');
+      if (isLong) { input.rows = 3; input.className = 'form-input'; }
+      else { input.type = 'text'; input.className = 'form-input'; }
+      input.value = proposed;
+      input.dataset.field = p.field;
+      input.dataset.proposedInput = '1';
+      input.style.fontSize = '12px';
+      row.appendChild(input);
+      body.appendChild(row);
+    });
+  }
+  inner.appendChild(body);
+  const ftr = document.createElement('div');
+  ftr.className = 'modal-footer';
+  const cancel = document.createElement('button');
+  cancel.className = 'btn btn-secondary';
+  cancel.textContent = 'Annulla';
+  cancel.addEventListener('click', () => closeModal('modal-enrich-preview'));
+  ftr.appendChild(cancel);
+  const apply = document.createElement('button');
+  apply.className = 'btn btn-primary';
+  apply.textContent = '✓ Applica selezionati';
+  apply.addEventListener('click', applyEnrichPreview);
+  ftr.appendChild(apply);
+  inner.appendChild(ftr);
+  modal.appendChild(inner);
+  document.body.appendChild(modal);
+  openModal('modal-enrich-preview');
+}
+
+async function applyEnrichPreview() {
+  const modal = document.getElementById('modal-enrich-preview');
+  if (!modal || !_enrichClientId) return;
+  const cbs = modal.querySelectorAll('input[type="checkbox"][data-field]');
+  const selected = {};
+  cbs.forEach(cb => {
+    if (!cb.checked) return;
+    const field = cb.dataset.field;
+    const input = modal.querySelector(`[data-field="${field}"][data-proposed-input="1"]`);
+    if (input) selected[field] = input.value;
+  });
+  if (!Object.keys(selected).length) {
+    toast('Nessun campo selezionato', 'warning');
+    return;
+  }
+  const fd = new FormData();
+  fd.append('fields_json', JSON.stringify(selected));
+  try {
+    const res = await api('POST', `/clients/api/${_enrichClientId}/enrich-apply`, fd);
+    toast(`✓ Applicati ${res.count} campi`, 'success');
+    closeModal('modal-enrich-preview');
+    closeModal('modal-client-detail');
+    await loadClients();
+    openClientDetail(_enrichClientId);
+  } catch(e) {
+    toast(e.message || 'Errore', 'error');
   }
 }
 {% endif %}
