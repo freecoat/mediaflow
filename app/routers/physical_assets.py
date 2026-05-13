@@ -1602,6 +1602,11 @@ async def create_shipment(
     if shipping_payer == "charged_to_client":
         if not billable_to_project_id:
             raise HTTPException(400, "charged_to_client richiede billable_to_project_id")
+        # v3.5.0-alpha.110 TPN: user deve avere accesso al project target
+        from app.services.project_access import user_can_access_project
+        from app.services.rbac import is_admin as _is_adm
+        if not _is_adm(user) and not user_can_access_project(user, billable_to_project_id, db):
+            raise HTTPException(403, "Non hai accesso al progetto per riaddebito (TPN)")
         if not shipping_cost or shipping_cost <= 0:
             raise HTTPException(400, "charged_to_client richiede shipping_cost > 0")
 

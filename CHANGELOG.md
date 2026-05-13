@@ -1,5 +1,64 @@
 # MediaFlow — Changelog
 
+## v3.5.0-alpha.110 — Storage adapter S3 + TPN strong isolation audit (13 maggio 2026)
+
+Chiusi gli ultimi 2 cantieri backlog del piano Multi-tenant/TPN.
+
+**Storage adapter S3-compatible**:
+- `boto3 1.43.6` installato
+- `app/services/storage/{__init__,base,local_fs,s3,factory}.py`
+- Pattern: `StorageBackend` ABC con `upload/download/delete/exists/
+  stat/list/presigned_url/resolve_path`
+- `LocalFSBackend`: filesystem locale con path-traversal guard
+- `S3Backend`: boto3 client S3-compatible (AWS/MinIO/R2/Wasabi),
+  signature v4, presigned URL TTL configurabile da
+  `settings.aws_s3_presigned_ttl`
+- `factory.get_storage_for_project(project)`:
+  - storage_backend=`s3*` + bucket → S3Backend con credenziali ENV
+  - else → LocalFSBackend per-project (`uploads/t{tid}/p{pid}/`) o tenant
+- `/dam/download/{id}` esteso: se `Asset.file_path` inizia con `s3://`
+  → redirect 302 a presigned URL via storage factory
+- Lazy migration: file legacy locali restano leggibili invariati
+
+**TPN strong isolation audit (scope mutator critici)**:
+- `/dam/api/assets/{id}/assign-project`: check
+  `user_can_access_project(user, target)` + fix `db.commit()` mancante
+- `/dam/api/assets/upload`: check accesso al `project_id` target prima
+  di salvare Asset
+- `/dam/api/fs-import`: check accesso al `project_id` target
+- `/physical-assets/api/shipments` con `shipping_payer=charged_to_client`:
+  check accesso a `billable_to_project_id`
+- Skip per `is_admin(user)` (super-admin bypass coerente)
+
+## v3.5.0-alpha.109 — Fix UI departments indirizzo + bootstrap platform admin idempotente (13 maggio 2026)
+
+1. **UI Department.shipping_address/contact MANCAVA** (era solo modello α.106):
+   - Router `/departments` accetta+ritorna i nuovi field
+   - `departments.html` modal new + edit con fieldset
+     "📍 Indirizzo spedizioni (opz.)"
+   - `editDept()` esteso con shipAddr+shipContact, call Jinja aggiornata
+
+2. **Bootstrap platform admin idempotente**:
+   - α.104 UPDATE eseguito solo dentro `if column not in cols`. DB
+     importato da export ZIP α.107+ aveva già colonna, UPDATE saltato.
+   - α.109: blocco SEMPRE eseguito (idempotente). Print "promoted N
+     admin(s)" nei log.
+   - Allargato a TUTTI admin tenant=1 (non solo email hardcoded).
+
+3. **Script CLI `scripts/grant_platform_admin.py`**:
+   - `--email X` promuove · `--revoke` revoca · `--list` lista
+
+## v3.5.0-alpha.108 — About modal su click logo MediaFlow (13 maggio 2026)
+
+Click su logo "MF MediaFlow" sidebar → modal About con:
+- Versione corrente (da `/health`)
+- App name + AI provider configurato
+- User loggato + tenant_id + flag is_platform_admin
+- Link rapidi: `/manuale` + GitHub repo
+
+Risolve confusione su versione attiva quando codice locale Mac obsoleto
+vs DB importato da export ZIP più recente.
+
 ## v3.5.0-alpha.107 — Timeline: legenda aggiornata + density attiva stack + scroll keyboard (13 maggio 2026)
 
 Risposta screenshot Matteo su righe altezze diverse 138/50/69/54px.

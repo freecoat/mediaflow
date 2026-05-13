@@ -23,6 +23,7 @@ from app.services.rbac import requires_permission, current_user_optional, is_adm
 from app.services.project_access import (
     user_can_access_asset, accessible_project_ids, log_asset_access,
     check_project_ip_allowlist, check_project_mfa_required,
+    user_can_access_project,
 )
 from app.context import current_tenant_id
 import os
@@ -218,10 +219,19 @@ async def assign_asset_to_project(
     ).first()
     if not a:
         raise HTTPException(404, "Asset non trovato")
+    # v3.5.0-alpha.110 TPN: check user può accedere al PROGETTO target
+    # (non basta essere admin tenant; user deve avere grant sul project
+    # per TPN compart). Skip per admin elevati globali.
+    if not is_admin(user) and not user_can_access_project(user, project_id, db):
+        log_asset_access(db, user=user, action=AssetAccessAction.deny,
+                         asset_id=asset_id, project_id=project_id, request=request,
+                         extra="assign target project not in user grants")
+        raise HTTPException(403, "Non hai accesso al progetto target (TPN)")
     a.project_id = project_id
     log_asset_access(db, user=user, action=AssetAccessAction.update,
                      asset_id=asset_id, project_id=project_id, request=request,
                      extra="assigned to project")
+    db.commit()
     return {"ok": True, "asset_id": asset_id, "project_id": project_id}
 
 
@@ -251,6 +261,14 @@ async def upload_asset(
         ).first()
         if job:
             project_id = job.project_id
+
+    # v3.5.0-alpha.110 TPN: check user può uploadare al project specificato
+    user = current_user_optional(request)
+    if project_id and not is_admin(user) and not user_can_access_project(user, project_id, db):
+        log_asset_access(db, user=user, action=AssetAccessAction.deny,
+                         project_id=project_id, request=request,
+                         extra="upload target project not in user grants")
+        raise HTTPException(403, "Non hai accesso al progetto target (TPN)")
 
     asset = Asset(
         tenant_id=current_tenant_id(),
@@ -300,7 +318,12 @@ async def download_asset(
 ):
     user = current_user_optional(request)
     a = db.query(Asset).filter(Asset.id == asset_id, Asset.tenant_id == current_tenant_id()).first()
-    if not a or not os.path.exists(a.file_path):
+    # v3.5.0-alpha.110 — Asset.file_path può essere "s3://bucket/key" se
+    # storage_backend=s3. In quel caso non c'è file locale → check via storage.
+    is_s3 = a and a.file_path and a.file_path.startswith("s3://")
+    if not a:
+        raise HTTPException(404, "Asset non trovato")
+    if not is_s3 and not os.path.exists(a.file_path):
         raise HTTPException(404, "Asset non trovato")
     # v3.5.0-alpha.70 — TPN access check
     if not user_can_access_asset(user, a, db):
@@ -339,8 +362,41 @@ async def download_asset(
                          + "_wm.jpg") if "." in a.original_name else a.original_name + "_wm.jpg"
                 return Response(content=wm_bytes, media_type="image/jpeg",
                                 headers={"Content-Disposition": f'attachment; filename="{fname}"'})
+    # v3.5.0-alpha.110 — Se file su S3 → redirect a presigned URL.
+    if is_s3:
+        try:
+            from app.services.storage import get_storage_for_project
+            from app.models import Project as _P
+            from fastapi.responses import RedirectResponse
+            proj = (db.query(_P).filter(_P.id == a.project_id).first()
+                    if a.project_id else None)
+            storage = get_storage_for_project(proj, fallback_tenant_id=current_tenant_id())
+            # Estrai key da "s3://bucket/prefix/key" → key relativa
+            url = storage.presigned_url(_s3_key_from_path(a.file_path, storage))
+            if url:
+                return RedirectResponse(url, status_code=302)
+            raise HTTPException(503, "Presigned URL S3 non disponibile")
+        except Exception as e:
+            raise HTTPException(503, f"S3 access error: {e}")
     # Non-image o watermark disabilitato by admin
     return FileResponse(a.file_path, filename=a.original_name, media_type=a.mime_type)
+
+
+def _s3_key_from_path(file_path: str, storage) -> str:
+    """v3.5.0-alpha.110 — Estrae key relativa da `s3://bucket/prefix/...`
+    rimuovendo `bucket/prefix/`. Storage.presigned_url aggiunge prefix da sé.
+    """
+    # file_path = "s3://bucket/prefix/key/sub.jpg"
+    # Vogliamo "key/sub.jpg" (la prefix verrà ri-aggiunta da S3Backend._key)
+    rest = file_path[5:]  # rimuovi "s3://"
+    parts = rest.split("/", 1)
+    if len(parts) < 2:
+        return rest
+    after_bucket = parts[1]
+    prefix = getattr(storage, "prefix", "")
+    if prefix and after_bucket.startswith(prefix + "/"):
+        return after_bucket[len(prefix) + 1:]
+    return after_bucket
 
 
 @router.get("/thumbnail/{asset_id}")
@@ -533,6 +589,9 @@ async def fs_import(
         raise HTTPException(400, "file_paths_json deve essere lista non vuota")
     base = _Path(base_path).resolve()
     user = current_user_optional(request)
+    # v3.5.0-alpha.110 TPN: user deve avere accesso al project target
+    if project_id and not is_admin(user) and not user_can_access_project(user, project_id, db):
+        raise HTTPException(403, "Non hai accesso al progetto target (TPN)")
     uploaded_count = 0
     skipped = []
     for rel in rel_paths:

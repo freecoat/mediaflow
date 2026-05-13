@@ -8,6 +8,38 @@
 
 ## Versione corrente
 
+**v3.5.0-alpha.110** — 13 maggio 2026 — Storage adapter S3 + TPN strong isolation
+
+**Storage adapter pattern**:
+- `app/services/storage/` con LocalFS + S3 (boto3 1.43.6, signature v4)
+- factory routing per Project.storage_backend
+- `/dam/download/{id}` ritorna redirect 302 a presigned URL per file su S3
+- Legacy locale sempre leggibile
+
+**TPN strong isolation (mutator critici)**:
+- DAM assign-project / upload / fs-import: check
+  `user_can_access_project(user, target)` per target progetto
+- Physical-assets shipments charged_to_client: idem per billable project
+- Skip per is_admin (super-admin bypass)
+
+**Da testare**:
+1. `pip install boto3` (locale) — necessario solo se attivi S3 backend
+2. Configura .env: AWS_ACCESS_KEY_ID + AWS_SECRET_ACCESS_KEY + 
+   AWS_S3_DEFAULT_BUCKET + AWS_S3_ENDPOINT (per MinIO/R2)
+3. Crea project con `storage_backend=s3 s3_bucket=...` via API
+4. Upload asset al project → file_path = `s3://bucket/...`
+5. Download asset → redirect 302 a presigned URL S3
+6. Non-admin user non in grants progetto → upload bloccato 403
+
+**Aperti R12 backlog**:
+- Sostituzione vis-timeline (cantiere settimane)
+- PDF clausola markup esplicita
+- UI editor storage_backend per project
+
+1 commit locale NON pushato (α.110).
+
+## (versione precedente)
+
 **v3.5.0-alpha.107** — 13 maggio 2026 — Timeline density attiva stack + scroll keyboard + legenda
 
 Risposta screenshot Matteo righe altezze diverse (138/50/69/54px):
