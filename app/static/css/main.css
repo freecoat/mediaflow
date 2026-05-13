@@ -117,6 +117,66 @@
   --indigo-border: rgba(160,82,45,.35);
 }
 
+/* ── Tema: Paper (bianco neutro, accent slate) — v3.5.0-alpha.92 ─ */
+.theme-paper {
+  --bg:        #fafafa;
+  --bg2:       #f1f1f2;
+  --bg3:       #e7e7ea;
+  --surface:   #ffffff;
+  --surface2:  #f5f5f7;
+  --border:    #d9d9de;
+  --border2:   #bcbcc4;
+
+  --text:      #1d1d1f;
+  --text2:     #565660;
+  --text3:     #8a8a93;
+
+  --indigo:    #475569;
+  --indigo2:   #334155;
+  --indigo-bg: rgba(71,85,105,.10);
+  --indigo-border: rgba(71,85,105,.30);
+}
+
+/* ── Tema: Linen (off-white caldo, accent terracotta) — v3.5.0-alpha.92 ─ */
+.theme-linen {
+  --bg:        #faf6f1;
+  --bg2:       #f1ebe2;
+  --bg3:       #e7ddd0;
+  --surface:   #fefcf9;
+  --surface2:  #f5efe6;
+  --border:    #d8c9b4;
+  --border2:   #b6a385;
+
+  --text:      #2a221b;
+  --text2:     #65574a;
+  --text3:     #948272;
+
+  --indigo:    #c2410c;
+  --indigo2:   #9a3412;
+  --indigo-bg: rgba(194,65,12,.10);
+  --indigo-border: rgba(194,65,12,.30);
+}
+
+/* ── Tema: Sage (verde salvia tenue, accent verde scuro) — v3.5.0-alpha.92 ─ */
+.theme-sage {
+  --bg:        #f0f3ee;
+  --bg2:       #e6ebe2;
+  --bg3:       #d9e0d2;
+  --surface:   #f6f8f3;
+  --surface2:  #eaefe5;
+  --border:    #c8d2bf;
+  --border2:   #a5b297;
+
+  --text:      #1c2a1c;
+  --text2:     #4d5d4a;
+  --text3:     #7a8a76;
+
+  --indigo:    #15803d;
+  --indigo2:   #166534;
+  --indigo-bg: rgba(21,128,61,.10);
+  --indigo-border: rgba(21,128,61,.30);
+}
+
 /* ── Tema: Midnight (blu profondo) — v3.4.32.1 ─────────────────── */
 .theme-midnight {
   --bg:        #0a0d1a;
@@ -868,10 +928,19 @@ tr:hover td { background: var(--bg3); }
 
 /* v3.5.0-alpha.88 — fix dropdown bianco-su-bianco in Chrome/macOS dark theme.
    color-scheme: dark dice al browser di renderizzare la lista nativa con
-   tema scuro. Fallback esplicito su option per browser legacy. */
+   tema scuro. Fallback esplicito su option per browser legacy.
+   v3.5.0-alpha.92 — i temi chiari (.theme-sand/paper/linen/sage) sovrascrivono
+   con color-scheme: light. Inoltre option ora usa var(--surface) / var(--text)
+   coerente col tema attivo invece di fallback hardcoded. */
 .form-input, .form-select { color-scheme: dark; }
+.theme-sand .form-input, .theme-sand .form-select,
+.theme-paper .form-input, .theme-paper .form-select,
+.theme-linen .form-input, .theme-linen .form-select,
+.theme-sage .form-input, .theme-sage .form-select {
+  color-scheme: light;
+}
 select.form-input option, select.form-select option, select option {
-  background: var(--bg3, #1a1d29);
+  background: var(--surface, #1a1d29);
   color: var(--text, #e6e8ef);
 }
 .form-textarea { resize: vertical; min-height: 80px; }

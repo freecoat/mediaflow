@@ -686,6 +686,41 @@
 </div>
 
 <!-- v3.5.0-alpha.68.6 — Modal "Carica da DeliveryTemplate" -->
+<!-- v3.5.0-alpha.92 — Modal "Sezione voce" (sostituisce prompt() in editLineSection) -->
+<div class="modal-overlay" id="modal-line-section">
+  <div class="modal" style="max-width:520px;">
+    <div class="modal-header">
+      <span class="modal-title">📦 Sezione / sottocategoria voce</span>
+      <button class="btn btn-ghost btn-icon" onclick="closeModal('modal-line-section')">&times;</button>
+    </div>
+    <div class="modal-body">
+      <p class="text-sm text-muted" style="margin-top:0;">
+        Le sezioni raggruppano voci con un'<b>etichetta condivisa</b> dentro una categoria
+        (es. <b>SKY Originals</b> raggruppa MXF + ProRes; <b>NBCU TechOps</b> raggruppa ProRes + DCP).
+        L'header e il subtotale di sezione appaiono automaticamente nel preventivo.
+      </p>
+      <input type="hidden" id="ls-line-id">
+      <div class="form-group">
+        <label class="form-label">Sezione esistente (clic per usarla)</label>
+        <div id="ls-existing-host" style="display:flex;flex-wrap:wrap;gap:6px;padding:6px;background:var(--bg3);border-radius:6px;min-height:40px;">
+          <span class="text-muted text-xs" style="align-self:center;">— nessuna sezione ancora definita —</span>
+        </div>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Nuova sezione (oppure modifica esistente)</label>
+        <input class="form-input" id="ls-name" list="ls-suggest" placeholder="es. SKY Originals, NBCU TechOps, Beta Film…" maxlength="120">
+        <datalist id="ls-suggest"></datalist>
+        <div class="text-xs text-muted" style="margin-top:4px;">Lascia vuoto e premi "Rimuovi" per togliere la sezione dalla voce.</div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="clearLineSection()" style="margin-right:auto;color:var(--rose);">Rimuovi sezione</button>
+      <button class="btn btn-secondary" onclick="closeModal('modal-line-section')">Annulla</button>
+      <button class="btn btn-primary" onclick="saveLineSection()">Salva</button>
+    </div>
+  </div>
+</div>
+
 <div class="modal-overlay" id="modal-load-template">
   <div class="modal" style="max-width:640px;">
     <div class="modal-header">
@@ -1540,6 +1575,13 @@ function renderLineRow(l) {
   const refBadge = l.referred_from_jcl_id
     ? `<a href="#" onclick="openOriginCostReport(${l.referred_from_jcl_id});event.preventDefault();" class="text-xs" style="margin-left:6px; padding:1px 6px; background:rgba(168,85,247,0.15); color:#c084fc; border-radius:8px; text-decoration:none; font-weight:600; font-size:10px;" title="Riga generata da Rimanda al commerciale (JCL #${l.referred_from_jcl_id}) — apri cost report">↪ Da JCL #${l.referred_from_jcl_id}</a>`
     : '';
+  // v3.5.0-alpha.92 — badge sezione attuale (cliccabile per cambiare).
+  // Pre-α.92 era visibile solo nell'header sezione raggruppato; ora ogni
+  // riga porta in chiaro la propria appartenenza, così è ovvio cosa fa il
+  // pulsante 🏷 e si può cambiare sezione con un click.
+  const secBadge = l.section_label
+    ? `<button onclick="editLineSection(${l.id})" class="text-xs" style="margin-left:6px; padding:1px 6px; background:rgba(167,139,250,0.15); color:#a78bfa; border:1px solid rgba(167,139,250,0.3); border-radius:8px; font-weight:600; font-size:10px; cursor:pointer;" title="Sezione attuale — click per cambiare">📦 ${escapeHtml(l.section_label)}</button>`
+    : '';
   return `
     <tr class="ql-row${isOpt ? ' ql-row-optional' : ''}" data-line-id="${l.id}" data-optional="${isOpt ? '1' : '0'}">
       <td><span class="drag-handle" title="Trascina per riordinare">⠿</span></td>
@@ -1548,6 +1590,7 @@ function renderLineRow(l) {
           <input class="inline-edit" data-field="description" value="${desc}" onblur="saveLineField(this)" style="flex:1;min-width:160px;">
           ${optBadge}
           ${refBadge}
+          ${secBadge}
         </div>
         <input class="inline-edit" data-field="detail" value="${detail}" placeholder="dettaglio…"
                onblur="saveLineField(this)" style="font-size:11px;color:var(--text2);margin-top:2px;">
@@ -2173,28 +2216,79 @@ async function toggleLineOptional(lineId) {
   } catch(e) { toast(e.message, 'error'); }
 }
 
-// ── Edit etichetta sezione (v3.5.0-alpha.27) ──────────────────
-async function editLineSection(lineId) {
+// ── Edit etichetta sezione (v3.5.0-alpha.27 → modal in v3.5.0-alpha.92) ──
+// L'etichetta `section_label` raggruppa voci consecutive con stessa label
+// dentro la stessa categoria, generando header + subtotale (es. dentro
+// "Video Deliverables" → sezioni "SKY", "NBCU", "Beta Film").
+function editLineSection(lineId) {
   const line = (currentQuote.lines || []).find(l => l.id === lineId);
   if (!line) return;
-  // Suggerisci sezioni già presenti nella quote
+  document.getElementById('ls-line-id').value = String(lineId);
+  document.getElementById('ls-name').value = line.section_label || '';
+  // Lista sezioni già presenti nella quote (chip clickable + datalist)
   const existing = [...new Set((currentQuote.lines || [])
-    .map(l => l.section_label).filter(s => s && s.trim()))];
-  const hint = existing.length
-    ? `\n\nSezioni già usate: ${existing.join(', ')}`
-    : '\n\nEsempi: SKY Originals, NBCU TechOps, Beta Film';
-  const current = line.section_label || '';
-  const value = prompt(
-    `Etichetta sezione (intra-categoria):${hint}\n\nLascia vuoto per rimuovere.`,
-    current
-  );
-  if (value === null) return;
-  const trimmed = value.trim();
+    .map(l => l.section_label).filter(s => s && s.trim()))].sort((a,b) => a.localeCompare(b));
+  const host = document.getElementById('ls-existing-host');
+  while (host.firstChild) host.removeChild(host.firstChild);
+  if (!existing.length) {
+    const empty = document.createElement('span');
+    empty.className = 'text-muted text-xs';
+    empty.style.alignSelf = 'center';
+    empty.textContent = '— nessuna sezione ancora definita —';
+    host.appendChild(empty);
+  } else {
+    existing.forEach(name => {
+      const chip = document.createElement('button');
+      chip.type = 'button';
+      chip.className = 'btn btn-ghost btn-sm';
+      chip.style.cssText = 'padding:3px 10px;font-size:12px;border:1px solid var(--border);';
+      if (name === (line.section_label || '')) {
+        chip.style.borderColor = 'var(--indigo)';
+        chip.style.color = 'var(--indigo2)';
+      }
+      chip.textContent = '📦 ' + name;
+      chip.addEventListener('click', () => {
+        document.getElementById('ls-name').value = name;
+      });
+      host.appendChild(chip);
+    });
+  }
+  // Popola datalist autocomplete
+  const dl = document.getElementById('ls-suggest');
+  while (dl.firstChild) dl.removeChild(dl.firstChild);
+  existing.forEach(name => {
+    const opt = document.createElement('option');
+    opt.value = name;
+    dl.appendChild(opt);
+  });
+  openModal('modal-line-section');
+  // Focus input dopo apertura
+  setTimeout(() => document.getElementById('ls-name').focus(), 50);
+}
+
+async function saveLineSection() {
+  const lineId = parseInt(document.getElementById('ls-line-id').value, 10);
+  const value = document.getElementById('ls-name').value.trim();
+  if (!lineId) return;
   try {
     const fd = new FormData();
-    fd.append('section_label', trimmed === '' ? '__CLEAR__' : trimmed);
+    fd.append('section_label', value === '' ? '__CLEAR__' : value);
     await api('PUT', `/quotes/api/${currentQuoteId}/lines/${lineId}`, fd);
-    toast(trimmed ? `Sezione: ${trimmed}` : 'Sezione rimossa', 'success');
+    toast(value ? `Sezione: ${value}` : 'Sezione rimossa', 'success');
+    closeModal('modal-line-section');
+    await reloadQuote();
+  } catch(e) { toast(e.message, 'error'); }
+}
+
+async function clearLineSection() {
+  const lineId = parseInt(document.getElementById('ls-line-id').value, 10);
+  if (!lineId) return;
+  try {
+    const fd = new FormData();
+    fd.append('section_label', '__CLEAR__');
+    await api('PUT', `/quotes/api/${currentQuoteId}/lines/${lineId}`, fd);
+    toast('Sezione rimossa', 'success');
+    closeModal('modal-line-section');
     await reloadQuote();
   } catch(e) { toast(e.message, 'error'); }
 }

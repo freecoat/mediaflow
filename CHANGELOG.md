@@ -1,6 +1,81 @@
 # MediaFlow — Changelog
 
-## v3.5.0-alpha.91 — Audit pre-push: P0+P1 fix da 3 code review (13 maggio 2026)
+## v3.5.0-alpha.92 — 6 task Matteo 13 mag (compose-invoice fix + drawer storico + light themes + sezioni quote) (13 maggio 2026)
+
+Risposta a 6 punti aperti da Matteo: 1 fix bloccante + 5 enhancement.
+
+**T3 compose-invoice "Errore sconosciuto" fix bloccante** (`billing.py`,
+`global.js`, `base.html`):
+- Causa: `@router.get("/{batch_id}")` (line 487) era definita PRIMA di
+  `@router.get("/composable-batches")` (line 1086). FastAPI matcha le route
+  per ordine di registrazione → `composable-batches` parsato come
+  `batch_id="composable-batches"` → 422 `int_parsing`.
+- Fix: spostata `composable-batches` SOPRA `/{batch_id}` (le route specifiche
+  vanno prima delle catch-all). Audit altri router: nessun altro caso.
+- Bonus: `global.js _parseError` ora gestisce array `detail` di Pydantic
+  (422) — pre-α.92 cadeva in "Errore sconosciuto". Concatena
+  `[loc] msg · …` per UI leggibile.
+
+**T6 suppliers sort + filtro fatture scadute** (`suppliers.html`):
+- `<table class="mf-sortable">` su tab Fatture e Anagrafica → click `<th>`
+  ordina (auto-attivato da `mfEnableSortableTables` global).
+- Chip `Solo scadute` (checkbox) filtra `due_date < today` AND
+  `payment_status in (unpaid, partial)`. Reset incluso.
+
+**T1 In/Out asset → drawer storico** (`assets_inout.html`,
+`physical_assets.py`):
+- Click su riga apre drawer laterale 420px (slide-right) con timeline
+  verticale di TUTTI i movimenti di quell'asset (no limit della lista
+  globale). Card per movimento: tipo, DDT, data, from→to, contenuto,
+  tracking, stato confermato, link PDF.
+- Endpoint nuovo `GET /physical-assets/api/movements/by-asset?
+  physical_asset_id=&asset_id=` — accetta solo uno dei due (mutex).
+- Link "→ Asset fisico" nel drawer rimanda a `/physical-assets#a-{id}`
+  per il dettaglio supporto.
+- ESC chiude drawer. `_movement_dict` ora include `asset_id` per UI.
+
+**T2 PhysicalAsset Contents tab + seed simulato**
+(`physical_assets.html`, `scripts/seed_asset_memberships.py`):
+- Sezione "📦 Contenuti del supporto" nel modal Edit PhysicalAsset:
+  tabella file presenti (`AssetMembership.removed_at IS NULL`) con
+  path, dimensione, data aggiunta.
+- Checkbox "Mostra anche storico rimosso" → mostra anche file passati
+  (riga opacity 50% + data rimozione in rosso).
+- Counter "N presenti · M rimossi" in summary.
+- Endpoint pre-esistente `/api/{asset_id}/contents` (era già pronto
+  da α.74). Solo UI nuova.
+- Script seed `scripts/seed_asset_memberships.py` popola 40 PhysicalAsset
+  con 3-10 file ciascuno, mix presente/rimosso 60/40. Path realistici
+  per kind (LTO=/DPX_GRADED/, HDD=/DCP/, CRU=/RAW_DAILIES/, ecc.).
+  Idempotente: salta asset già popolati salvo `--force`.
+
+**T5 3 nuovi light themes + color-scheme fix** (`main.css`, `global.js`):
+- Aggiunti `.theme-paper` (bianco neutro, accent slate), `.theme-linen`
+  (off-white caldo, accent terracotta), `.theme-sage` (verde salvia tenue,
+  accent verde scuro). Già esisteva `.theme-sand`.
+- Bug fix: `color-scheme: dark` era hardcoded su `.form-input/.form-select`
+  per TUTTI i temi → dropdown nativi neri su tema chiaro Sand (screenshot
+  Matteo confermava). Ora override `color-scheme: light` per
+  `.theme-sand/paper/linen/sage`. `option` background usa `var(--surface)`
+  invece di fallback hardcoded.
+- Aggiornati `MF_THEMES` array + `MF_THEME_META` swatches in topbar
+  palette popover (cycle + selettore).
+
+**T4 Quote sezioni: modal pulito + badge per riga** (`quotes.html`):
+- `section_label` esisteva dal α.27 ma editing via `prompt()` browser
+  nativo (poco scopribile). Sostituito con modal `modal-line-section`:
+  - chip cliccabili con sezioni già presenti nella quote (suggerimenti)
+  - input testo libero con `<datalist>` autocomplete
+  - bottone "Rimuovi sezione" dedicato
+- Badge `📦 Nome sezione` ora visibile su OGNI riga (era solo
+  nell'header del gruppo). Click sul badge riapre il modal — ovvio.
+- Funzione `editLineSection` ora apre modal invece di prompt.
+  `saveLineSection` + `clearLineSection` con UX coerente.
+
+**392 routes** invariato (T3 sposta, T1 aggiunge `by-asset`).
+**+1 script seed** standalone.
+
+
 
 Multi-audit lanciato pre-push (3 agent code-reviewer paralleli su α.88/89/90).
 Risultati applicati:

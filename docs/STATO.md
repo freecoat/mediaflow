@@ -8,6 +8,42 @@
 
 ## Versione corrente
 
+**v3.5.0-alpha.92** — 13 maggio 2026 — 6 task Matteo (compose-invoice fix + drawer storico + light themes + sezioni quote)
+
+Risposta a 6 punti aperti da Matteo (sessione mattina 13 mag):
+
+1. **T1** In/out Asset: click row apre drawer laterale 420px con storico
+   completo movimenti + link "→ Asset fisico" per i physical.
+2. **T2** PhysicalAsset: tab "📦 Contenuti del supporto" nel modal Edit con
+   current + history (checkbox "Mostra rimosso"). Seed simulato 40 asset
+   × 3-10 file via `scripts/seed_asset_memberships.py`.
+3. **T3** Compose-invoice "Errore sconosciuto": route order bug.
+   `/composable-batches` veniva catturato da `/{batch_id}` → 422. Spostata
+   sopra. Bonus parsing 422 in `global.js`.
+4. **T4** Quote sezioni: modal pulito sostituisce `prompt()` per
+   `section_label`. Badge `📦 Nome` visibile su ogni riga (cliccabile).
+   Chip suggeriti delle sezioni esistenti.
+5. **T5** 3 nuovi temi chiari (Paper/Linen/Sage) + fix `color-scheme: light`
+   per dropdown su temi chiari (era hardcoded `dark`).
+6. **T6** Suppliers: `mf-sortable` su entrambe le tabelle + chip
+   "Solo scadute" su fatture passive.
+
+**Da testare**:
+1. `/finance` → "Componi fattura periodo": ora vede batch in cassetto (o
+   "nessuno"); niente più "Errore sconosciuto".
+2. `/assets/inout` → click su riga apre drawer storico per quell'asset.
+3. `/physical-assets` → apri un asset (es. CRU-0003 / HDD-0008): vedi
+   "Contenuti del supporto" con file mock + storico rimossi.
+4. Topbar palette → vedi 3 nuovi temi chiari (Paper/Linen/Sage). Attiva
+   uno qualsiasi: dropdown nativi (es. Cliente in Asset fisici) ora chiari.
+5. `/quotes/X` → click sul pulsante 🏷 su una riga: si apre modal Sezioni
+   invece del prompt vecchio. Badge `📦 Nome` visibile sulla riga.
+6. `/suppliers` → click su un `<th>` ordina. Checkbox "Solo scadute" filtra.
+
+12 commit locali NON pushati (b8b8bb6 → α.92). Push a major bump.
+
+## (versione precedente)
+
 **v3.5.0-alpha.91** — 13 maggio 2026 — Audit pre-push: P0+P1 fix da 3 code review
 
 Multi-audit a fine giornata con 3 agent code-reviewer paralleli (uno per

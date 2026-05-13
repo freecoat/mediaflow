@@ -3,7 +3,7 @@
 */
 
 // ── Tema (preset CSS variables) ────────────────────────────────
-const MF_THEMES = ['indigo', 'slate', 'forest', 'sand', 'midnight', 'copper', 'plum', 'teal', 'mono', 'broadcast'];
+const MF_THEMES = ['indigo', 'slate', 'forest', 'sand', 'paper', 'linen', 'sage', 'midnight', 'copper', 'plum', 'teal', 'mono', 'broadcast'];
 const MF_FONTS = ['dmsans', 'inter', 'roboto', 'ibmplex', 'source', 'system'];
 
 function applyTheme() {
@@ -25,6 +25,9 @@ const MF_THEME_META = {
   slate:     { name:'Slate',     sw:['#11141a','#232730','#5b8def','#e6e9ef'] },
   forest:    { name:'Forest',    sw:['#0c1410','#1a261f','#4ade80','#e7f0e9'] },
   sand:      { name:'Sand',      sw:['#f5f1e8','#e1dac5','#a0522d','#2b2620'] },
+  paper:     { name:'Paper',     sw:['#fafafa','#e7e7ea','#475569','#1d1d1f'] },
+  linen:     { name:'Linen',     sw:['#faf6f1','#e7ddd0','#c2410c','#2a221b'] },
+  sage:      { name:'Sage',      sw:['#f0f3ee','#d9e0d2','#15803d','#1c2a1c'] },
   midnight:  { name:'Midnight',  sw:['#0a0d1a','#161c39','#818cf8','#e4e9f5'] },
   copper:    { name:'Copper',    sw:['#1a1310','#2d201d','#ea8a5b','#f0e4dc'] },
   plum:      { name:'Plum',      sw:['#14101a','#271f33','#c084fc','#ede5f5'] },
@@ -385,10 +388,19 @@ async function api(method, url, body, options) {
     let humanMsg;
     if (typeof err.detail === 'string') {
       humanMsg = err.detail;
+    } else if (Array.isArray(err.detail)) {
+      // v3.5.0-alpha.92 — Pydantic validation 422: detail è array di
+      // {type, loc, msg, input}. Concatena msg leggibili per UI.
+      humanMsg = err.detail.map(d => {
+        const where = Array.isArray(d.loc) ? d.loc.slice(-2).join('.') : '';
+        return `[${where}] ${d.msg || d.type || 'invalid'}`;
+      }).join(' · ') || `Validation error (${resp.status})`;
     } else if (err.detail && typeof err.detail === 'object') {
-      humanMsg = err.detail.message || err.detail.code || 'Errore sconosciuto';
+      humanMsg = err.detail.message || err.detail.code || JSON.stringify(err.detail);
+    } else if (err.message) {
+      humanMsg = String(err.message);
     } else {
-      humanMsg = 'Errore sconosciuto';
+      humanMsg = `HTTP ${resp.status} ${resp.statusText || ''}`.trim();
     }
     const e = new Error(humanMsg);
     e.detail = err.detail;

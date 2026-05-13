@@ -484,6 +484,56 @@ async def list_batches(
     return [_batch_to_dict(b, with_lines=False) for b in batches]
 
 
+@router.get("/composable-batches")
+async def list_composable_batches(
+    request: Request,
+    project_id: int,
+    period_start: Optional[date] = None,
+    period_end: Optional[date] = None,
+    db: Session = Depends(get_db),
+):
+    """v3.5.0-alpha.90 — Lista batch approved "in cassetto" per un progetto.
+    Anteprima per UI `Componi fattura periodo`: mostra all'utente cosa verrà
+    aggregato prima di confermare. Senza periodo: tutti gli approved.
+
+    `billing_frequency` del project viene esposto come hint per il default
+    periodo (es. monthly = primo-ultimo del mese corrente).
+
+    v3.5.0-alpha.92 fix: spostata sopra `/{batch_id}` perché altrimenti il
+    segmento "composable-batches" veniva matchato dalla route parametrica
+    e Pydantic tornava 422 (int_parsing). FastAPI matcha le route in ordine
+    di registrazione; le route specifiche vanno prima delle catch-all.
+    """
+    _require_finance(request)
+    project = db.query(Project).filter(
+        Project.id == project_id, Project.tenant_id == CURRENT_TENANT,
+    ).first()
+    if not project:
+        raise HTTPException(404, "Progetto non trovato")
+    q = db.query(BillingBatch).options(
+        joinedload(BillingBatch.project).joinedload(Project.client),
+    ).filter(
+        BillingBatch.tenant_id == CURRENT_TENANT,
+        BillingBatch.project_id == project_id,
+        BillingBatch.status == BillingBatchStatus.approved,
+        BillingBatch.invoice_id.is_(None),
+    )
+    if period_start:
+        q = q.filter(BillingBatch.period_end >= period_start)
+    if period_end:
+        q = q.filter(BillingBatch.period_start <= period_end)
+    batches = q.order_by(BillingBatch.period_start.asc()).all()
+    return {
+        "project_id": project_id,
+        "project_code": project.code,
+        "project_title": project.title,
+        "billing_frequency": getattr(project, "billing_frequency", "monthly"),
+        "client_name": project.client.name if project.client else None,
+        "batches": [_batch_to_dict(b, with_lines=False) for b in batches],
+        "total_approved_sum": round(sum(b.total_approved or 0 for b in batches), 2),
+    }
+
+
 @router.get("/{batch_id}")
 async def get_batch(batch_id: int, request: Request, db: Session = Depends(get_db)):
     """Dettaglio batch con tutte le lines snapshot."""
@@ -1080,50 +1130,6 @@ async def compose_invoice_from_batches(
         "batches_aggregated": len(batches),
         "batch_codes": [b.code for b in batches],
         "invoice_lines_count": invoice_lines_count,
-    }
-
-
-@router.get("/composable-batches")
-async def list_composable_batches(
-    request: Request,
-    project_id: int,
-    period_start: Optional[date] = None,
-    period_end: Optional[date] = None,
-    db: Session = Depends(get_db),
-):
-    """v3.5.0-alpha.90 — Lista batch approved "in cassetto" per un progetto.
-    Anteprima per UI `Componi fattura periodo`: mostra all'utente cosa verrà
-    aggregato prima di confermare. Senza periodo: tutti gli approved.
-
-    `billing_frequency` del project viene esposto come hint per il default
-    periodo (es. monthly = primo-ultimo del mese corrente)."""
-    _require_finance(request)
-    project = db.query(Project).filter(
-        Project.id == project_id, Project.tenant_id == CURRENT_TENANT,
-    ).first()
-    if not project:
-        raise HTTPException(404, "Progetto non trovato")
-    q = db.query(BillingBatch).options(
-        joinedload(BillingBatch.project).joinedload(Project.client),
-    ).filter(
-        BillingBatch.tenant_id == CURRENT_TENANT,
-        BillingBatch.project_id == project_id,
-        BillingBatch.status == BillingBatchStatus.approved,
-        BillingBatch.invoice_id.is_(None),
-    )
-    if period_start:
-        q = q.filter(BillingBatch.period_end >= period_start)
-    if period_end:
-        q = q.filter(BillingBatch.period_start <= period_end)
-    batches = q.order_by(BillingBatch.period_start.asc()).all()
-    return {
-        "project_id": project_id,
-        "project_code": project.code,
-        "project_title": project.title,
-        "billing_frequency": getattr(project, "billing_frequency", "monthly"),
-        "client_name": project.client.name if project.client else None,
-        "batches": [_batch_to_dict(b, with_lines=False) for b in batches],
-        "total_approved_sum": round(sum(b.total_approved or 0 for b in batches), 2),
     }
 
 

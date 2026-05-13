@@ -62,10 +62,14 @@
           <option value="cancelled">Annullata</option>
         </select>
       </div>
+      <label class="form-group" style="display:flex;align-items:center;gap:6px;min-width:120px;cursor:pointer;font-size:12px;">
+        <input type="checkbox" id="inv-f-overdue" onchange="renderInvoices()" style="margin:0;">
+        <span>Solo scadute</span>
+      </label>
       <button class="btn btn-ghost btn-sm" onclick="resetInvoiceFilters()">Reset</button>
     </div>
     <div class="table-wrap">
-      <table>
+      <table class="mf-sortable">
         <thead>
           <tr>
             <th style="min-width:120px;">Numero</th>
@@ -77,7 +81,7 @@
             <th class="text-right">Totale</th>
             <th class="text-right">Pagato</th>
             <th>Stato</th>
-            <th></th>
+            <th data-no-sort></th>
           </tr>
         </thead>
         <tbody id="inv-tbody">
@@ -89,7 +93,7 @@
 
   <div id="pane-suppliers" style="display:none;">
     <div class="table-wrap">
-      <table>
+      <table class="mf-sortable">
         <thead>
           <tr>
             <th style="min-width:220px;">Nome</th>
@@ -97,7 +101,7 @@
             <th>Contatto</th>
             <th class="text-right">Fatture</th>
             <th class="text-right">Outstanding</th>
-            <th></th>
+            <th data-no-sort></th>
           </tr>
         </thead>
         <tbody id="sup-tbody">
@@ -504,9 +508,14 @@ function renderInvoices() {
   const q = (document.getElementById('inv-search').value||'').toLowerCase().trim();
   const fSup = document.getElementById('inv-f-supplier').value;
   const fStat = document.getElementById('inv-f-status').value;
+  const fOver = document.getElementById('inv-f-overdue').checked;
+  const today = new Date().toISOString().slice(0,10);
   let rows = _invoices.slice();
   if (fSup) rows = rows.filter(r => String(r.supplier_id) === fSup);
   if (fStat) rows = rows.filter(r => r.payment_status === fStat);
+  if (fOver) rows = rows.filter(r =>
+    r.due_date && r.due_date < today &&
+    (r.payment_status === 'unpaid' || r.payment_status === 'partial'));
   if (q) rows = rows.filter(r =>
     (r.number||'').toLowerCase().includes(q) ||
     (r.supplier_name||'').toLowerCase().includes(q) ||
@@ -516,8 +525,7 @@ function renderInvoices() {
     tbody.innerHTML = '<tr><td colspan="10" class="text-muted" style="text-align:center;padding:24px;">Nessuna fattura corrisponde ai filtri</td></tr>';
     return;
   }
-  const today = new Date().toISOString().slice(0,10);
-  tbody.innerHTML = rows.map(r => {
+  tbody.innerHTML = rows.map(r => {  // eslint-disable-line
     const isOverdue = r.due_date && r.due_date < today &&
                       (r.payment_status === 'unpaid' || r.payment_status === 'partial');
     return `<tr style="cursor:pointer;" onclick="editInvoice(${r.id})">
@@ -539,6 +547,7 @@ function resetInvoiceFilters() {
   document.getElementById('inv-search').value = '';
   document.getElementById('inv-f-supplier').value = '';
   document.getElementById('inv-f-status').value = '';
+  document.getElementById('inv-f-overdue').checked = false;
   renderInvoices();
 }
 

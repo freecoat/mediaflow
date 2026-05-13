@@ -73,6 +73,22 @@
   </div>
 </div>
 
+<!-- v3.5.0-alpha.92 — Drawer storico In/Out per singolo asset -->
+<div id="hist-drawer" style="position:fixed;top:0;right:-440px;width:420px;height:100vh;background:var(--bg2);border-left:1px solid var(--border);box-shadow:-4px 0 16px rgba(0,0,0,.35);transition:right .25s ease;z-index:90;display:flex;flex-direction:column;">
+  <div style="padding:14px 16px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:10px;">
+    <div style="flex:1;">
+      <div style="font-size:11px;text-transform:uppercase;letter-spacing:.04em;color:var(--text3);">Storico movimenti</div>
+      <div id="hist-title" style="font-weight:600;font-size:14px;margin-top:2px;">—</div>
+      <div id="hist-meta" class="text-xs text-muted"></div>
+    </div>
+    <a id="hist-link-asset" class="btn btn-ghost btn-sm" style="font-size:11px;display:none;" title="Vai all'asset fisico">→ Asset</a>
+    <button class="btn btn-ghost btn-icon" onclick="closeHist()" title="Chiudi">&times;</button>
+  </div>
+  <div id="hist-body" style="flex:1;overflow:auto;padding:10px 14px;">
+    <div class="text-muted text-sm" style="padding:20px 0;text-align:center;">Caricamento…</div>
+  </div>
+</div>
+
 <!-- Modal Digital ingest -->
 <div class="modal-overlay" id="modal-digital">
   <div class="modal" style="max-width:680px;">
@@ -204,6 +220,18 @@ function renderRows(rows) {
   }
   rows.forEach(m => {
     const tr = document.createElement('tr');
+    tr.style.cursor = 'pointer';
+    // v3.5.0-alpha.92 — click row apre drawer storico asset
+    tr.addEventListener('click', (ev) => {
+      // Skip se click su bottoni/link interni (PDF / Conferma)
+      if (ev.target.closest('a,button')) return;
+      openHist({
+        physical_asset_id: m.physical_asset_id,
+        asset_id: m.asset_id,
+        asset_label: m.asset_label,
+        asset_nature: m.asset_nature,
+      });
+    });
     const td = (txt, css) => { const e = document.createElement('td'); e.style.padding = '6px'; if (css) e.style.cssText += ';' + css; e.textContent = txt; tr.appendChild(e); return e; };
     td(m.delivery_note_number || '—', 'font-family:var(--font-mono);font-size:12px;');
     td(MOV_LBL[m.movement_type] || m.movement_type, 'font-size:12px;');
@@ -311,6 +339,127 @@ async function submitDigital() {
     await loadList();
   } catch(e) { toast(e.message || 'Errore', 'error'); }
 }
+
+// v3.5.0-alpha.92 — Drawer storico In/Out per asset
+async function openHist(ctx) {
+  const drawer = document.getElementById('hist-drawer');
+  const title = document.getElementById('hist-title');
+  const meta  = document.getElementById('hist-meta');
+  const body  = document.getElementById('hist-body');
+  const linkA = document.getElementById('hist-link-asset');
+  title.textContent = ctx.asset_label || '—';
+  meta.textContent = ctx.asset_nature ? `Natura: ${ctx.asset_nature}` : '';
+  while (body.firstChild) body.removeChild(body.firstChild);
+  const loading = document.createElement('div');
+  loading.className = 'text-muted text-sm';
+  loading.style.cssText = 'padding:20px 0;text-align:center;';
+  loading.textContent = 'Caricamento…';
+  body.appendChild(loading);
+  // Mostra subito (slide in)
+  drawer.style.right = '0';
+  // Link "→ Asset" solo per physical
+  if (ctx.physical_asset_id) {
+    linkA.style.display = '';
+    linkA.href = `/physical-assets#a-${ctx.physical_asset_id}`;
+    linkA.textContent = '→ Asset fisico';
+  } else {
+    linkA.style.display = 'none';
+  }
+  // Fetch storico
+  const qs = ctx.physical_asset_id
+    ? `physical_asset_id=${ctx.physical_asset_id}`
+    : `asset_id=${ctx.asset_id}`;
+  let data;
+  try {
+    data = await api('GET', '/physical-assets/api/movements/by-asset?' + qs);
+  } catch(e) {
+    body.removeChild(loading);
+    const err = document.createElement('div');
+    err.className = 'color-rose text-sm';
+    err.style.cssText = 'padding:14px;';
+    err.textContent = 'Errore: ' + (e.message || 'sconosciuto');
+    body.appendChild(err);
+    return;
+  }
+  body.removeChild(loading);
+  // Aggiorna intestazione con label canonico dal server (più affidabile)
+  if (data.asset_label) title.textContent = data.asset_label;
+  if (data.asset_kind) {
+    meta.textContent = `${data.asset_nature || '—'} · ${data.asset_kind}`;
+  }
+  if (!data.movements || !data.movements.length) {
+    const empty = document.createElement('div');
+    empty.className = 'text-muted text-sm';
+    empty.style.cssText = 'padding:20px 0;text-align:center;';
+    empty.textContent = 'Nessun movimento registrato per questo asset.';
+    body.appendChild(empty);
+    return;
+  }
+  // Timeline verticale (più recente in alto)
+  data.movements.forEach(m => {
+    const card = document.createElement('div');
+    card.style.cssText = 'border-left:3px solid var(--indigo);background:var(--bg3);padding:10px 12px;margin-bottom:10px;border-radius:0 6px 6px 0;font-size:12px;';
+    const row1 = document.createElement('div');
+    row1.style.cssText = 'display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;';
+    const lbl = document.createElement('b');
+    lbl.textContent = MOV_LBL[m.movement_type] || m.movement_type;
+    const date = document.createElement('span');
+    date.className = 'text-xs text-muted';
+    date.textContent = (m.movement_date || '').slice(0,16).replace('T', ' ');
+    row1.appendChild(lbl); row1.appendChild(date);
+    card.appendChild(row1);
+    const ddt = document.createElement('div');
+    ddt.style.cssText = 'font-family:var(--font-mono);font-size:11px;color:var(--text2);margin-bottom:4px;';
+    ddt.textContent = 'DDT ' + (m.delivery_note_number || '—');
+    card.appendChild(ddt);
+    const flow = document.createElement('div');
+    flow.style.fontSize = '12px';
+    flow.textContent = (m.from_party || '—') + ' → ' + (m.to_party || '—');
+    card.appendChild(flow);
+    if (m.contents_description) {
+      const desc = document.createElement('div');
+      desc.className = 'text-xs text-muted';
+      desc.style.marginTop = '4px';
+      desc.textContent = m.contents_description;
+      card.appendChild(desc);
+    }
+    if (m.tracking_number) {
+      const tr = document.createElement('div');
+      tr.style.cssText = 'font-family:var(--font-mono);font-size:11px;color:var(--text3);margin-top:4px;';
+      tr.textContent = 'Track: ' + m.tracking_number;
+      card.appendChild(tr);
+    }
+    const foot = document.createElement('div');
+    foot.style.cssText = 'display:flex;justify-content:space-between;align-items:center;margin-top:6px;';
+    const state = document.createElement('span');
+    if (m.confirmed_at) { state.style.color = 'var(--green)'; state.textContent = '✓ Confermato ' + (m.confirmed_at||'').slice(0,16).replace('T', ' '); }
+    else { state.style.color = 'var(--amber)'; state.textContent = '⏳ In attesa'; }
+    state.style.fontSize = '11px';
+    foot.appendChild(state);
+    const ddtLink = document.createElement('a');
+    ddtLink.href = `/physical-assets/api/movements/${m.id}/ddt.pdf`;
+    ddtLink.target = '_blank';
+    ddtLink.className = 'btn btn-ghost btn-sm';
+    ddtLink.style.cssText = 'font-size:11px;padding:2px 6px;';
+    ddtLink.textContent = 'PDF';
+    foot.appendChild(ddtLink);
+    card.appendChild(foot);
+    body.appendChild(card);
+  });
+}
+
+function closeHist() {
+  const drawer = document.getElementById('hist-drawer');
+  drawer.style.right = '-440px';
+}
+
+// Escape: chiudi drawer
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape') {
+    const dr = document.getElementById('hist-drawer');
+    if (dr && dr.style.right === '0px') closeHist();
+  }
+});
 
 // v3.5.0-alpha.86 (S3.5) — Init filtri + lista
 (async () => {

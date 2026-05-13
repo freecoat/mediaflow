@@ -493,6 +493,7 @@ def _movement_dict(m: AssetMovement) -> dict:
     return {
         "id": m.id,
         "physical_asset_id": m.physical_asset_id,
+        "asset_id": m.asset_id,
         "movement_type": m.movement_type.value if m.movement_type else None,
         "delivery_note_number": m.delivery_note_number,
         "movement_date": str(m.movement_date)[:19] if m.movement_date else None,
@@ -593,6 +594,51 @@ async def list_all_movements(
             d["asset_nature"] = "unknown"
         out.append(d)
     return out
+
+
+@router.get("/api/movements/by-asset")
+async def list_movements_by_asset(
+    physical_asset_id: Optional[int] = None,
+    asset_id: Optional[int] = None,
+    db: Session = Depends(get_db),
+):
+    """v3.5.0-alpha.92 — Storico In/Out completo di un asset (physical o digital).
+    Usato dal drawer "Storico" nella pagina /assets/inout: click su row
+    apre cronologia di QUEL specifico asset, senza limite 200 della lista globale.
+    """
+    from app.models import Asset
+    if not physical_asset_id and not asset_id:
+        raise HTTPException(400, "Specifica physical_asset_id o asset_id")
+    q = db.query(AssetMovement).filter(AssetMovement.tenant_id == CURRENT_TENANT)
+    asset_label, asset_kind, asset_nature = None, None, None
+    if physical_asset_id:
+        q = q.filter(AssetMovement.physical_asset_id == physical_asset_id)
+        pa = db.query(PhysicalAsset).filter(
+            PhysicalAsset.id == physical_asset_id,
+            PhysicalAsset.tenant_id == CURRENT_TENANT,
+        ).first()
+        if pa:
+            asset_label = pa.label
+            asset_kind = pa.kind.value if pa.kind else None
+            asset_nature = "physical"
+    elif asset_id:
+        q = q.filter(AssetMovement.asset_id == asset_id)
+        a = db.query(Asset).filter(
+            Asset.id == asset_id, Asset.tenant_id == CURRENT_TENANT,
+        ).first()
+        if a:
+            asset_label = a.original_name
+            asset_kind = a.asset_type.value if hasattr(a.asset_type, "value") else str(a.asset_type)
+            asset_nature = "digital"
+    rows = q.order_by(AssetMovement.movement_date.desc()).all()
+    return {
+        "asset_label": asset_label,
+        "asset_kind": asset_kind,
+        "asset_nature": asset_nature,
+        "physical_asset_id": physical_asset_id,
+        "asset_id": asset_id,
+        "movements": [_movement_dict(m) for m in rows],
+    }
 
 
 @router.get("/api/{asset_id}/movements")
