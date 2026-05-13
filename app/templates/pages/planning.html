@@ -635,7 +635,18 @@
         </div>
         <div id="tl-week-label" style="font-size:13px; font-weight:500; color:var(--text2,#aaa); padding:6px 14px; background:var(--bg3,#22253a); border-radius:6px 6px 0 0; border-bottom:1px solid var(--border,#2a2e3d);"></div>
         <div style="font-size:11px; color:var(--text3,#888); padding:4px 14px 0;">
-          Drag = pan · Drag item = sposta · <kbd style="background:rgba(255,255,255,.05); border:1px solid var(--border); border-radius:3px; padding:0 4px; font-size:10px;">Shift</kbd>+drag su vuoto = nuovo booking · doppio click item = modifica · doppio click vuoto = nuovo · <kbd style="background:rgba(255,255,255,.05); border:1px solid var(--border); border-radius:3px; padding:0 4px; font-size:10px;">Alt</kbd>+drag = duplica · <kbd style="background:rgba(255,255,255,.05); border:1px solid var(--border); border-radius:3px; padding:0 4px; font-size:10px;">Ctrl</kbd>+click = multi-select · <kbd style="background:rgba(255,255,255,.05); border:1px solid var(--border); border-radius:3px; padding:0 4px; font-size:10px;">Canc</kbd>/<kbd style="background:rgba(255,255,255,.05); border:1px solid var(--border); border-radius:3px; padding:0 4px; font-size:10px;">⌘C/V</kbd>/<kbd style="background:rgba(255,255,255,.05); border:1px solid var(--border); border-radius:3px; padding:0 4px; font-size:10px;">⌘Z</kbd>
+          <!-- v3.5.0-alpha.107 — Legenda aggiornata con shortcuts reali. -->
+          Drag item = sposta · Drag bordo = resize ·
+          <kbd style="background:var(--tint-soft,rgba(255,255,255,.05)); border:1px solid var(--border); border-radius:3px; padding:0 4px; font-size:10px;">Shift</kbd>+drag spazio vuoto = crea booking ·
+          doppio click item = modifica ·
+          <kbd style="background:var(--tint-soft,rgba(255,255,255,.05)); border:1px solid var(--border); border-radius:3px; padding:0 4px; font-size:10px;">Alt</kbd>+drag = duplica ·
+          <kbd style="background:var(--tint-soft,rgba(255,255,255,.05)); border:1px solid var(--border); border-radius:3px; padding:0 4px; font-size:10px;">S</kbd> area-select ·
+          <kbd style="background:var(--tint-soft,rgba(255,255,255,.05)); border:1px solid var(--border); border-radius:3px; padding:0 4px; font-size:10px;">Shift</kbd>+click = multi-sel ·
+          <kbd style="background:var(--tint-soft,rgba(255,255,255,.05)); border:1px solid var(--border); border-radius:3px; padding:0 4px; font-size:10px;">Ctrl</kbd>+click = toggle ·
+          <kbd style="background:var(--tint-soft,rgba(255,255,255,.05)); border:1px solid var(--border); border-radius:3px; padding:0 4px; font-size:10px;">Canc</kbd> cancella ·
+          <kbd style="background:var(--tint-soft,rgba(255,255,255,.05)); border:1px solid var(--border); border-radius:3px; padding:0 4px; font-size:10px;">Ctrl+Z</kbd> undo ·
+          <kbd style="background:var(--tint-soft,rgba(255,255,255,.05)); border:1px solid var(--border); border-radius:3px; padding:0 4px; font-size:10px;">↑↓</kbd> scroll ·
+          <kbd style="background:var(--tint-soft,rgba(255,255,255,.05)); border:1px solid var(--border); border-radius:3px; padding:0 4px; font-size:10px;">PgUp/PgDn</kbd> scroll fast
         </div>
         <!-- v3.5.0-alpha.46.1: anti-autofill estensioni browser (Bitwarden,
              1Password, LastPass). Diagnosi performance trace 7/5/2026:
@@ -1607,13 +1618,89 @@ function tlSetDensity(d) {
   document.querySelectorAll('#tl-density [data-density]').forEach(b => {
     b.classList.toggle('active', b.dataset.density === d);
   });
-  // v3.5.0-alpha.99: forza redraw vis-timeline. Senza, le altezze righe
-  // restano calcolate sul font precedente → mismatch label↔foreground
-  // anche se CSS è cambiato. .redraw() ricalcola layout.
+  // v3.5.0-alpha.107: spacious anche cambia opzioni vis-timeline per
+  // altezze righe uniformi (stack:false → no expand su overlap items).
   const inst = window._tlInstance || window.tl;
+  if (inst && typeof inst.setOptions === 'function') {
+    try {
+      if (d === 'spacious') {
+        inst.setOptions({
+          stack: false,
+          stackSubgroups: false,
+          margin: { item: { horizontal: 0, vertical: 6 }, axis: 10 },
+        });
+      } else if (d === 'compact') {
+        inst.setOptions({
+          stack: false,
+          stackSubgroups: false,
+          margin: { item: { horizontal: 0, vertical: 1 }, axis: 4 },
+        });
+      } else {
+        inst.setOptions({
+          stack: true,
+          stackSubgroups: true,
+          margin: { item: { horizontal: 0, vertical: 3 }, axis: 6 },
+        });
+      }
+    } catch(e) {}
+  }
+  // v3.5.0-alpha.99: forza redraw vis-timeline.
   if (inst && typeof inst.redraw === 'function') {
     try { inst.redraw(); } catch(e) {}
   }
+}
+
+// v3.5.0-alpha.107 — Scroll verticale timeline via rotella mouse + frecce.
+// Vis-timeline ha verticalScroll:true ma rotella default zooma (timeline
+// behaviour). Wheel su area label = scroll group. Wheel su foreground +
+// shift = scroll groups (lasciamo zoom standard senza shift).
+function tlBindKeyboardScroll() {
+  const host = document.getElementById('tl-host');
+  if (!host || host._tlScrollBound) return;
+  host._tlScrollBound = true;
+  // Scroll wheel su .vis-labelset (lato sinistro) = scroll group nativo
+  // funziona già. Aggiungiamo Shift+wheel ovunque per scroll vertical.
+  host.addEventListener('wheel', (ev) => {
+    if (!ev.shiftKey) return;
+    const labelset = host.querySelector('.vis-labelset');
+    const contentInner = host.querySelector('.vis-panel.vis-center .vis-content')
+                       || host.querySelector('.vis-content');
+    const delta = ev.deltaY;
+    // Scrolla il container groups (panel left)
+    const panel = host.querySelector('.vis-panel.vis-left .vis-vertical')
+               || host.querySelector('.vis-panel.vis-left');
+    if (panel) {
+      panel.scrollTop = (panel.scrollTop || 0) + delta;
+    }
+    ev.preventDefault();
+  }, { passive: false });
+  // Frecce su/giù e PgUp/PgDn quando focus è sul timeline
+  document.addEventListener('keydown', (ev) => {
+    // Skip se input field attivo
+    const tag = (ev.target.tagName || '').toLowerCase();
+    if (tag === 'input' || tag === 'textarea' || tag === 'select') return;
+    // Solo se vista timeline visibile (no storyboard/agenda)
+    const tlVisible = host && host.offsetParent !== null;
+    if (!tlVisible) return;
+    const panel = host.querySelector('.vis-panel.vis-left .vis-vertical')
+               || host.querySelector('.vis-panel.vis-left');
+    if (!panel) return;
+    const step = 60;     // 1 riga ~50-70px
+    const pageStep = panel.clientHeight - 80;
+    if (ev.key === 'ArrowUp') {
+      panel.scrollTop -= step; ev.preventDefault();
+    } else if (ev.key === 'ArrowDown') {
+      panel.scrollTop += step; ev.preventDefault();
+    } else if (ev.key === 'PageUp') {
+      panel.scrollTop -= pageStep; ev.preventDefault();
+    } else if (ev.key === 'PageDown') {
+      panel.scrollTop += pageStep; ev.preventDefault();
+    } else if (ev.key === 'Home' && !ev.ctrlKey && !ev.metaKey) {
+      panel.scrollTop = 0; ev.preventDefault();
+    } else if (ev.key === 'End' && !ev.ctrlKey && !ev.metaKey) {
+      panel.scrollTop = panel.scrollHeight; ev.preventDefault();
+    }
+  });
 }
 function tlInitDensity() {
   const saved = (() => { try { return localStorage.getItem('mf_tl_density') || 'comfortable'; } catch(e) { return 'comfortable'; } })();
@@ -1621,6 +1708,8 @@ function tlInitDensity() {
   document.querySelectorAll('#tl-density [data-density]').forEach(b => {
     b.onclick = () => tlSetDensity(b.dataset.density);
   });
+  // v3.5.0-alpha.107 — Bind scroll keyboard handlers
+  tlBindKeyboardScroll();
 }
 
 // Color by — applica classe sull'host che CSS gestisce.

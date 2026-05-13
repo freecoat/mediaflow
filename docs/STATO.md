@@ -8,6 +8,31 @@
 
 ## Versione corrente
 
+**v3.5.0-alpha.107** — 13 maggio 2026 — Timeline density attiva stack + scroll keyboard + legenda
+
+Risposta screenshot Matteo righe altezze diverse (138/50/69/54px):
+
+**Root cause**: vis-timeline 7.x `stack:true` espande righe su item
+overlap. Limite strutturale libreria (sostituzione = backlog R12).
+
+**Fix α.107**:
+1. Density toggle ora cambia `inst.setOptions({stack: false/true})`:
+   - compact/spacious = stack:false (uniformi)
+   - comfortable = stack:true (expand su overlap)
+2. Scroll keyboard: ↑↓ step, PgUp/PgDn fast, Home/End jump,
+   Shift+wheel = scroll verticale
+3. Legenda aggiornata con shortcuts reali
+
+**Da testare**: planning → click bottone "☰ Spazioso" → righe ora
+uniformi 50-70px tutte. Scroll con ↑↓ e PgUp/PgDn.
+
+**Su "ripensare GUI timeline da zero"**: vis-timeline limiti
+documentati. Sostituzione Bryntum/DHTMLX = cantiere 2-3 settimane (R12).
+
+1 commit locale NON pushato (α.107).
+
+## (versione precedente)
+
 **v3.5.0-alpha.106** — 13 maggio 2026 — Spedizioni+Reparti+Quote+Bug AI
 
 5 fronti chiusi:

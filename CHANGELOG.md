@@ -1,5 +1,49 @@
 # MediaFlow — Changelog
 
+## v3.5.0-alpha.107 — Timeline: legenda aggiornata + density attiva stack + scroll keyboard (13 maggio 2026)
+
+Risposta screenshot Matteo su righe altezze diverse 138/50/69/54px.
+
+**Root cause confermato**: vis-timeline 7.x con `stack:true` espande
+righe quando item temporali si sovrappongono. Memory
+`[[feedback-vis-timeline-quirks]]` cita questo come limite strutturale
+della libreria (sostituzione = backlog R12 cantiere grande).
+
+**Fix mirato α.107** senza sostituire libreria:
+
+**1. Density toggle ora cambia anche stack mode** (`planning.html`):
+- `compact` / `spacious` → `stack: false` (overlay items, altezze
+  righe uniformi)
+- `comfortable` → `stack: true` (default, expand su overlap)
+- Chiamato `inst.setOptions()` + `redraw()` per applicare a runtime
+- Risolve disallineamenti label↔foreground visti negli screenshot
+
+**2. Scroll keyboard + Shift+wheel** (`planning.html`):
+- `tlBindKeyboardScroll()` registra handler:
+  - `↑/↓` step 60px (≈1 riga)
+  - `PageUp/PageDown` step `clientHeight - 80px`
+  - `Home/End` jump inizio/fine
+  - `Shift + wheel mouse` scroll verticale (default wheel resta zoom
+    timeline standard, no perdita)
+- Skip se focus su input/textarea/select
+- Skip se vista timeline non visibile (storyboard/agenda)
+
+**3. Legenda aggiornata** (`planning.html`):
+- Vecchia: "Drag = pan · ... Canc/⌘C/V/⌘Z" (obsoleta, Drag pan rimosso)
+- Nuova: Drag item / Drag bordo resize / Shift+drag crea / dblclick
+  modifica / Alt+drag duplica / `S` area-select / Shift+click multi /
+  Ctrl+click toggle / Canc / Ctrl+Z / ↑↓ scroll / PgUp/PgDn fast.
+- Anche `<kbd>` style usa `var(--tint-soft)` (theme-aware).
+
+**Su "ripensare GUI timeline dalle basi"**:
+- vis-timeline 7.x ha limiti strutturali documentati (stack O(N²),
+  sanitization HTML annidato, mismatch label↔foreground, wheel-zoom-only).
+- Sostituzione candidate: Bryntum Scheduler (commerciale), DHTMLX
+  (commerciale), Frappe Gantt (limited), custom canvas-based.
+- Tempo stimato cantiere R12: 2-3 settimane.
+- Per ora: fix mirati incrementali. Density toggle stack:false è il
+  workaround pulito per disallineamenti.
+
 ## v3.5.0-alpha.106 — Spedizioni dettaglio+autocomplete · Reparti indirizzo · Quote markup · Bug AI fix (13 maggio 2026)
 
 7 fronti chiusi insieme per feedback Matteo:
