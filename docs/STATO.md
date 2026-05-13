@@ -8,6 +8,46 @@
 
 ## Versione corrente
 
+**v3.5.0-alpha.103** — 13 maggio 2026 — Multi-tenant HARD R-MT3 + R-MT4 (onboarding + test)
+
+**Multi-tenant HARD COMPLETO** (4 sprint chiusi: R-MT1→R-MT4).
+
+R-MT3 onboarding:
+- `scripts/create_tenant.py` CLI: Tenant + admin User + 4 Department +
+  `uploads/t{id}/` isolata. Listino vuoto. Password admin random.
+- `save_upload` ora usa `uploads/t{tid}/assets/` invece di globale.
+
+R-MT4 test + audit:
+- Script `scripts/test_multitenant.py`: 8 check E2E via HTTP urllib.
+- **8/8 PASS**: login scope, cross-tenant block, isolation clienti +
+  projects, leak detection.
+- Fix bulk `projects.py`: 8 `.filter(Project.id == X)` aggiunti tenant
+  scope. Era leak cross-tenant.
+
+**Tenant Acme** già creato in DB (id=2) per testing:
+- admin@acme.it / acmepw123
+- Login: `http://localhost:8000/auth/login?tenant=acme`
+- O via lvh.me: `http://acme.lvh.me:8000/auth/login`
+
+**Da testare sul Mac**:
+1. Crea tenant via script: `python scripts/create_tenant.py --slug myco
+   --name "MyCo Post" --admin-email admin@myco.it --admin-name "Test"`
+2. Login `?tenant=myco` con credenziali stampate
+3. Verifica lista clienti vuota, listino vuoto, departments default
+4. Logout, login `?tenant=acme` (dovrebbe vedere altri dati = []  )
+5. Cross-test: login senza ?tenant=, modifica cookie a /clients/api con
+   header `X-Tenant-Slug: myco` → atteso 303 redirect login
+
+**Backlog post-MT**:
+- Audit altri router con `.filter(X.id == y).first()` no tenant filter
+- UI gestione tenant (oggi solo CLI)
+- Subdomain DNS wildcard + cert SSL (quando dominio scelto)
+- `Tenant.onboarding_completed` flag setting workflow
+
+2 commit locali NON pushati (α.102 già pushato, α.103 pendente).
+
+## (versione precedente)
+
 **v3.5.0-alpha.102** — 13 maggio 2026 — Multi-tenant HARD R-MT2 (341 router refactor)
 
 24 file router refactorati: `CURRENT_TENANT = 1` rimpiazzato con

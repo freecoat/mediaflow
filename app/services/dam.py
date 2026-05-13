@@ -30,13 +30,24 @@ def resolve_asset_type(mime_type: str) -> AssetType:
     return AssetType.other
 
 
+def _tenant_upload_dir() -> Path:
+    """v3.5.0-alpha.103 R-MT3 — Upload dir tenant-scoped.
+    Schema: `uploads/t{tenant_id}/assets/` + `uploads/t{tenant_id}/thumbnails/`.
+    Isolato per tenant (decisione Matteo: per-tenant). File legacy
+    `uploads/assets/...` restano accessibili via file_path salvato in
+    Asset.file_path (path assoluto). Nuovi upload vanno in nuova dir.
+    """
+    from app.context import current_tenant_id
+    return settings.upload_dir / f"t{current_tenant_id()}"
+
+
 def save_upload(file_bytes: bytes, original_name: str) -> tuple[str, str, str]:
     """
     Salva il file su disco e restituisce (filename, file_path, mime_type).
     """
     ext = Path(original_name).suffix.lower()
     unique_name = f"{uuid.uuid4().hex}{ext}"
-    dest_dir: Path = settings.upload_dir / "assets"
+    dest_dir: Path = _tenant_upload_dir() / "assets"
     dest_dir.mkdir(parents=True, exist_ok=True)
     dest_path = dest_dir / unique_name
 
@@ -54,7 +65,7 @@ def generate_thumbnail(file_path: str, mime_type: str) -> Optional[str]:
     if not mime_type.startswith("image"):
         return None
     try:
-        thumb_dir: Path = settings.upload_dir / "thumbnails"
+        thumb_dir: Path = _tenant_upload_dir() / "thumbnails"
         thumb_dir.mkdir(parents=True, exist_ok=True)
         stem = Path(file_path).stem
         thumb_path = thumb_dir / f"{stem}_thumb.jpg"

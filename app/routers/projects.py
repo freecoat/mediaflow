@@ -25,8 +25,11 @@ def _tpl():
 
 @router.get("/", response_class=HTMLResponse)
 async def projects_page(request: Request, db: Session = Depends(get_db)):
-    projects = db.query(Project).options(joinedload(Project.client)).order_by(Project.created_at.desc()).all()
-    clients = db.query(Client).order_by(Client.name).all()
+    tid = current_tenant_id()
+    projects = db.query(Project).options(joinedload(Project.client)).filter(
+        Project.tenant_id == tid,
+    ).order_by(Project.created_at.desc()).all()
+    clients = db.query(Client).filter(Client.tenant_id == tid).order_by(Client.name).all()
     return _tpl().TemplateResponse(
         "pages/projects.html",
         {"request": request, "projects": projects, "clients": clients},
@@ -43,7 +46,10 @@ async def list_projects(
     status: Optional[ProjectStatus] = None,
     db: Session = Depends(get_db),
 ):
-    q = db.query(Project).options(joinedload(Project.client))
+    # v3.5.0-alpha.103 R-MT4: tenant scope (era leak)
+    q = db.query(Project).options(joinedload(Project.client)).filter(
+        Project.tenant_id == current_tenant_id(),
+    )
     if client_id:
         q = q.filter(Project.client_id == client_id)
     if status:
@@ -108,11 +114,15 @@ async def create_project(
 
 @router.get("/api/{project_id}")
 async def get_project(project_id: int, db: Session = Depends(get_db)):
+    # v3.5.0-alpha.103 R-MT4: tenant scope filter (era leak cross-tenant).
     p = db.query(Project).options(
         joinedload(Project.client),
         joinedload(Project.quotes),
         joinedload(Project.jobs),
-    ).filter(Project.id == project_id).first()
+    ).filter(
+        Project.id == project_id,
+        Project.tenant_id == current_tenant_id(),
+    ).first()
     if not p:
         raise HTTPException(404, "Progetto non trovato")
     return {
@@ -165,7 +175,7 @@ async def update_project(
     shipping_markup_pct: Optional[float] = Form(None),
     db: Session = Depends(get_db),
 ):
-    p = db.query(Project).filter(Project.id == project_id).first()
+    p = db.query(Project).filter(Project.id == project_id, Project.tenant_id == current_tenant_id()).first()
     if not p:
         raise HTTPException(404)
     for field in ("title", "project_type", "length_minutes", "fps",
@@ -243,7 +253,7 @@ async def get_project_job_context(project_id: int, db: Session = Depends(get_db)
     from app.models import Quote
     p = db.query(Project).options(
         joinedload(Project.quotes), joinedload(Project.jobs)
-    ).filter(Project.id == project_id).first()
+    ).filter(Project.id == project_id, Project.tenant_id == current_tenant_id()).first()
     if not p:
         raise HTTPException(404, "Progetto non trovato")
 
@@ -354,7 +364,7 @@ async def list_project_assignments(project_id: int, db: Session = Depends(get_db
     p = db.query(Project).options(
         joinedload(Project.jobs).joinedload(Job.resource_assignments)
         .joinedload(JobResourceAssignment.resource),
-    ).filter(Project.id == project_id).first()
+    ).filter(Project.id == project_id, Project.tenant_id == current_tenant_id()).first()
     if not p:
         raise HTTPException(404, "Progetto non trovato")
     jobs_out = []
@@ -514,7 +524,7 @@ async def create_milestone(
     color: Optional[str] = Form(None),
     db: Session = Depends(get_db),
 ):
-    p = db.query(Project).filter(Project.id == project_id).first()
+    p = db.query(Project).filter(Project.id == project_id, Project.tenant_id == current_tenant_id()).first()
     if not p:
         raise HTTPException(404, "Progetto non trovato")
     user = current_user_optional(request)
@@ -588,7 +598,7 @@ async def list_project_access(
     user = current_user_optional(request)
     if not is_admin(user):
         raise HTTPException(403, "Solo admin può vedere la lista access grants")
-    p = db.query(Project).filter(Project.id == project_id).first()
+    p = db.query(Project).filter(Project.id == project_id, Project.tenant_id == current_tenant_id()).first()
     if not p:
         raise HTTPException(404, "Progetto non trovato")
     q = db.query(ProjectAccessGrant).filter(
@@ -663,7 +673,7 @@ async def create_project_access(
     actor = current_user_optional(request)
     if not is_admin(actor):
         raise HTTPException(403, "Solo admin può concedere access")
-    if not db.query(Project).filter(Project.id == project_id).first():
+    if not db.query(Project).filter(Project.id == project_id, Project.tenant_id == current_tenant_id()).first():
         raise HTTPException(404, "Progetto non trovato")
     if not db.query(User).filter(User.id == user_id).first():
         raise HTTPException(404, "User non trovato")
@@ -739,7 +749,7 @@ async def update_project_security(
     actor = current_user_optional(request)
     if not is_admin(actor):
         raise HTTPException(403, "Solo admin può modificare security")
-    p = db.query(Project).filter(Project.id == project_id).first()
+    p = db.query(Project).filter(Project.id == project_id, Project.tenant_id == current_tenant_id()).first()
     if not p:
         raise HTTPException(404, "Progetto non trovato")
     if ip_allowlist is not None:
@@ -784,7 +794,7 @@ async def get_project_security(
     actor = current_user_optional(request)
     if not is_admin(actor):
         raise HTTPException(403, "Solo admin può vedere security")
-    p = db.query(Project).filter(Project.id == project_id).first()
+    p = db.query(Project).filter(Project.id == project_id, Project.tenant_id == current_tenant_id()).first()
     if not p:
         raise HTTPException(404, "Progetto non trovato")
     return {

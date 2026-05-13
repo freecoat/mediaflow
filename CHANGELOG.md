@@ -1,5 +1,57 @@
 # MediaFlow — Changelog
 
+## v3.5.0-alpha.103 — Multi-tenant HARD R-MT3+R-MT4: onboarding + uploads isolation + test cross-tenant (13 maggio 2026)
+
+Chiusi 2 sprint del piano Multi-tenant HARD (#6 roadmap, 4 sprint totali):
+
+**R-MT3 — Onboarding + uploads isolation** (`scripts/create_tenant.py`,
+`app/services/dam.py`):
+- CLI script `scripts/create_tenant.py`: crea Tenant + admin User +
+  4 Department default + cartella `uploads/t{id}/` isolata.
+  Listino vuoto (decisione Matteo). Password admin random 12-char se
+  non specificata (stampata per copy/paste).
+- Usage:
+  `python scripts/create_tenant.py --slug acme --name "Acme Post" --admin-email admin@acme.it --admin-name "Acme Admin"`
+- Login URL dev: `http://acme.lvh.me:8000/auth/login` (lvh.me → 127.0.0.1)
+- Login URL prod: `http://acme.mediaflow.it/auth/login` (quando DNS pronto)
+- Fallback dev: `http://localhost:8000/auth/login?tenant=acme`
+- `app/services/dam.py.save_upload` + `generate_thumbnail` ora usano
+  `uploads/t{current_tenant_id()}/assets/` + `/thumbnails/` invece di
+  `uploads/assets/` globale. Path file_path in Asset.file_path resta
+  assoluto: file legacy `uploads/assets/...` di tenant 1 restano
+  accessibili invariati.
+
+**R-MT4 — Test cross-tenant leak + fix discoveries**
+(`scripts/test_multitenant.py`, `app/routers/projects.py`):
+- Test E2E `scripts/test_multitenant.py` con 8 check via HTTP urllib:
+  - T1: login `admin@acme.it?tenant=acme` → 303 + JWT.tid=2
+  - T2: login `admin@mediaflow.it?tenant=acme` → 401 (gate)
+  - T3a: cookie tenant 1 senza header → 200 con lista clienti
+  - T3b: cookie tenant 1 + header `X-Tenant-Slug: acme` → 303 (gate)
+  - T4: GET `/clients/api` con cookie acme → 200 con `[]` (isolato)
+  - T5: GET `/clients/api` con cookie tenant 1 → 200 con dati
+  - T6: GET `/projects/api/1` con cookie acme → 404 (no leak)
+- **RESULT: 8/8 PASS**.
+- **Bug scoperto durante test**: `/projects/api/{id}` GET + altri 7
+  endpoint in projects.py filtravano solo per `Project.id`, leak
+  cross-tenant. Fix bulk: `.filter(Project.id == project_id)` →
+  `.filter(Project.id == project_id, Project.tenant_id == current_tenant_id())`.
+  8 occorrenze sistemate via regex script.
+- `list_projects` (`GET /projects/api`) e `projects_page` (`GET /projects/`)
+  ora filtrano per `current_tenant_id()`.
+
+**Smoke test E2E completo**:
+- Tenant `acme` (id=2) creato → admin@acme.it login OK
+- Cross-tenant access bloccato (cookie reuse, header injection)
+- Isolation perfetta tra acme e Default
+
+**Aperti** (post-MT):
+- Audit altri router con `.filter(X.id == y).first()` senza tenant filter
+  (necessario sweep manuale, projects.py era il primo trovato)
+- UI per gestione tenant (oggi solo CLI)
+- Tenant onboarding completion (Tenant.onboarding_completed flag setting)
+- Subdomain DNS wildcard + cert SSL (quando dominio scelto)
+
 ## v3.5.0-alpha.102 — Multi-tenant HARD R-MT2: 341 occorrenze CURRENT_TENANT → current_tenant_id() (13 maggio 2026)
 
 Refactor bulk delle 24 router files: rimpiazza `CURRENT_TENANT = 1`
