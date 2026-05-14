@@ -976,13 +976,24 @@ async def overtime_breakdown(
             sick_days += ndays
         else:
             other_days += ndays
+    # v3.5.0-alpha.111.19 — Ore di permesso (other) con moltiplicatore ROL
+    # opzionale per report HR consulente lavoro. NON tocca costi.
+    permit_mult = float(getattr(policy, "permit_multiplier", 1.0) or 1.0)
+    other_hours_raw = round(other_days * daily_h, 2)
+    permit_weighted = round(other_hours_raw * permit_mult, 2)
+
     unavailability = {
         "vacation_days": vacation_days,
         "sick_days": sick_days,
         "other_days": other_days,
         "vacation_hours": round(vacation_days * daily_h, 2),
         "sick_hours": round(sick_days * daily_h, 2),
-        "other_hours": round(other_days * daily_h, 2),
+        "other_hours": other_hours_raw,
+        # Ore permesso ponderate (ROL). Coincide con other_hours quando
+        # permit_multiplier=1.0. Sempre presenti: la UI decide se mostrare
+        # entrambi i valori solo se mult != 1.0.
+        "permit_hours_weighted": permit_weighted,
+        "permit_multiplier": permit_mult,
     }
     grand_total = round(
         breakdown.total_hours
@@ -1006,6 +1017,7 @@ async def overtime_breakdown(
             "night_multiplier": policy.night_multiplier,
             "sunday_multiplier": policy.sunday_multiplier,
             "holiday_multiplier": policy.holiday_multiplier,
+            "permit_multiplier": permit_mult,
             "night_start": policy.night_start.strftime("%H:%M") if policy.night_start else None,
             "night_end": policy.night_end.strftime("%H:%M") if policy.night_end else None,
         },

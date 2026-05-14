@@ -298,6 +298,7 @@ def _serialize_policy(p: WorkingHoursPolicy) -> dict:
         "night_multiplier": p.night_multiplier,
         "sunday_multiplier": p.sunday_multiplier,
         "holiday_multiplier": p.holiday_multiplier,
+        "permit_multiplier": getattr(p, "permit_multiplier", 1.0),
         "night_start": p.night_start.strftime("%H:%M") if p.night_start else None,
         "night_end": p.night_end.strftime("%H:%M") if p.night_end else None,
         "overtime_brackets": p.overtime_brackets or [],
@@ -376,6 +377,7 @@ async def update_working_hours(
     night_multiplier: Optional[float] = Form(None),
     sunday_multiplier: Optional[float] = Form(None),
     holiday_multiplier: Optional[float] = Form(None),
+    permit_multiplier: Optional[float] = Form(None),
     night_start: Optional[str] = Form(None),
     night_end: Optional[str] = Form(None),
     overtime_brackets: Optional[str] = Form(None),  # JSON string
@@ -410,6 +412,7 @@ async def update_working_hours(
     if night_multiplier is not None: p.night_multiplier = night_multiplier
     if sunday_multiplier is not None: p.sunday_multiplier = sunday_multiplier
     if holiday_multiplier is not None: p.holiday_multiplier = holiday_multiplier
+    if permit_multiplier is not None: p.permit_multiplier = permit_multiplier
     if night_start is not None: p.night_start = _parse_time(night_start) if night_start else None
     if night_end is not None: p.night_end = _parse_time(night_end) if night_end else None
     # v3.4.32.2 — scaglioni overtime + ccnl label

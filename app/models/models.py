@@ -988,6 +988,12 @@ class WorkingHoursPolicy(Base):
     night_multiplier: Mapped[float] = mapped_column(Float, default=1.50)
     sunday_multiplier: Mapped[float] = mapped_column(Float, default=1.50)
     holiday_multiplier: Mapped[float] = mapped_column(Float, default=2.00)
+    # v3.5.0-alpha.111.19 — Moltiplicatore ore di permesso ROL (Riduzione
+    # Orario di Lavoro). Applicato SOLO al report HR per consulente lavoro,
+    # NON al cost report / billing. Default 1.0 = neutro (nessun coefficiente).
+    # Standard italiano comune: 1.33 (copre TFR + 13ª/14ª proporzionali +
+    # ferie accrual). Facoltativo per contratto.
+    permit_multiplier: Mapped[float] = mapped_column(Float, default=1.0)
     # Fascia notturna: ore tra night_start e night_end del giorno dopo
     # ricevono il night_multiplier (anche se non eccedono soglia diurna).
     night_start: Mapped[Optional[time]] = mapped_column(Time, nullable=True, default=time(22, 0))

@@ -1,5 +1,52 @@
 # MediaFlow — Changelog
 
+## v3.5.0-alpha.111.19 — Permit multiplier ROL ore permesso (14 maggio 2026)
+
+**Richiesta Matteo**: ore di permesso (ROL) calcolate nelle timbrature
+possono avere moltiplicatore opzionale (standard italiano 1.33 = TFR +
+13ª/14ª + ferie accrual). Solo per report HR consulente lavoro, NON
+tocca cost report né billing.
+
+Implementazione:
+- `WorkingHoursPolicy.permit_multiplier` Float default 1.0 (neutro).
+- Migrazione auto-boot ALTER TABLE working_hours_policies.
+- `/hr/api/overtime` ritorna `unavailability.permit_hours_weighted` +
+  `permit_multiplier`. Calcolato come `other_hours * permit_multiplier`.
+- UI HR pagina `/hr` riepilogo: card "Permessi" mostra ore ponderate
+  + ore reali (sub-label) quando mult != 1.0. Quando 1.0 mostra solo
+  ore reali (back-compat).
+- UI `/settings#hours` form aggiunto campo "Moltiplicatore ore
+  permesso (ROL)" con descrizione.
+
+Casi d'uso:
+- Contratti CCNL Cinema con ROL 1.33 → settare nel preset.
+- Contratti senza ROL retribuito → lasciare 1.0.
+- Freelance/co.co.co. → 1.0 (nessun ROL).
+
+## v3.5.0-alpha.111.18 — Propaga Invoice paid → JCL.billing_status (14 maggio 2026)
+
+Diagnosi user: cost report mostrava "Da fatturare" mentre fatture
+"pagate". Gap: JCLBillingStatus.paid esisteva ma mai transito.
+
+Fix 2 parti:
+1) finance.py _refresh_invoice_payment_state propaga transizione
+   Invoice.status → JCL.billing_status via JCLBilledSlice.
+2) Backfill one-shot lifespan boot per DB esistente (marker
+   uploads/.jcl_status_backfilled_v1).
+
+## v3.5.0-alpha.111.17 — Timeline day/hour separator + quote versions extracted (14 maggio 2026)
+
+Separatore giorno (vis-major) 2px indigo contrastato vs separatore
+ora (vis-minor) 1px tenue. Su axis + foreground body.
+Quote editor: sezione Versioni estratta fuori da quote-top-row.
+
+## v3.5.0-alpha.111.13 → 111.16 — Cycle timeline fix density + heatmap + shift (14 maggio 2026)
+
+Rimozione density compact/spacious (rotti). Heatmap rimossa
+completamente (overlay sovrapposto al testo). Revert α.111.15
+pointerdown (rompeva multi-select). Shift+drag (create) e
+shift+wheel restano da fixare (bug strutturale, task #8).
+
 ## v3.5.0-alpha.111.12 — Density compact/spacious rimossi + heatmap su label (14 maggio 2026)
 
 **Density Compact + Spacious rimossi**:

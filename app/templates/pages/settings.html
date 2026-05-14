@@ -285,6 +285,11 @@
               <p class="text-sm text-muted" style="margin-top:4px;">Es. 2.00 = raddoppio.</p>
             </div>
             <div class="form-group">
+              <label class="form-label">Moltiplicatore ore permesso (ROL)</label>
+              <input type="number" step="0.01" min="1" id="wh-permit-mult" class="form-input">
+              <p class="text-sm text-muted" style="margin-top:4px;">Solo report HR per consulente lavoro. NON tocca cost report/billing. 1.0=neutro, 1.33=standard italiano (TFR+13ª+14ª accrual). Facoltativo per contratto.</p>
+            </div>
+            <div class="form-group">
               <label class="form-label">Notturno · da</label>
               <input type="time" id="wh-night-start" class="form-input" step="900">
             </div>
@@ -840,6 +845,7 @@ async function whReload() {
     document.getElementById('wh-night-mult').value = p.night_multiplier ?? 1.5;
     document.getElementById('wh-sun-mult').value = p.sunday_multiplier ?? 1.5;
     document.getElementById('wh-hol-mult').value = p.holiday_multiplier ?? 2.0;
+    document.getElementById('wh-permit-mult').value = p.permit_multiplier ?? 1.0;
     document.getElementById('wh-night-start').value = p.night_start || '22:00';
     document.getElementById('wh-night-end').value = p.night_end || '06:00';
     // v3.4.32.2 — scaglioni overtime + ccnl label
@@ -921,6 +927,7 @@ async function whSave() {
   fd.append('night_multiplier', document.getElementById('wh-night-mult').value);
   fd.append('sunday_multiplier', document.getElementById('wh-sun-mult').value);
   fd.append('holiday_multiplier', document.getElementById('wh-hol-mult').value);
+  fd.append('permit_multiplier', document.getElementById('wh-permit-mult').value);
   fd.append('night_start', document.getElementById('wh-night-start').value);
   fd.append('night_end', document.getElementById('wh-night-end').value);
   // v3.4.32.2: scaglioni + ccnl_label

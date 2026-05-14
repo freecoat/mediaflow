@@ -1091,7 +1091,18 @@ function renderMyHoursSummary(summary, fromIso, toIso) {
   // sunday_multiplier), distinti dall'overtime giornaliero/settimanale.
   // Le ore festive non sovrapposte alla domenica vanno solo in "Festivo".
   const sundayNonHoliday = Math.max(0, (b.sunday_hours || 0) - (b.holiday_hours || 0));
-  host.innerHTML = `<div class="card">
+  // v3.5.0-alpha.111.19 — Permesso con moltiplicatore opzionale (1.33 std IT)
+  const permitMult = u.permit_multiplier || 1.0;
+  const otherH = (u.other_hours || 0);
+  const otherW = (u.permit_hours_weighted != null ? u.permit_hours_weighted : otherH);
+  const permitLbl = (permitMult > 1.001)
+    ? 'Permessi (×' + permitMult.toFixed(2) + ')'
+    : 'Permessi';
+  const permitVal = (permitMult > 1.001)
+    ? otherW.toFixed(1) + 'h <span style="font-size:10px; color:var(--text3); font-weight:400;">(' + otherH.toFixed(1) + 'h reali)</span>'
+    : otherH.toFixed(1) + 'h';
+  const permitCell = cell(permitLbl, permitVal, '#9ca3af');
+  const summaryCardHtml = `<div class="card">
     <h3 style="font-size:14px; margin:0 0 10px;">📊 Riepilogo ore — ${escapeHtml(periodLabel)}</h3>
     <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(110px, 1fr)); gap:8px;">
       ${cell('Regolari', b.regular_hours.toFixed(1)+'h')}
@@ -1101,9 +1112,11 @@ function renderMyHoursSummary(summary, fromIso, toIso) {
       ${cell('Notturne', b.night_hours.toFixed(1)+'h', '#a78bfa')}
       ${cell('Ferie', (u.vacation_hours||0).toFixed(1)+'h', '#6272f5')}
       ${cell('Malattia', (u.sick_hours||0).toFixed(1)+'h', '#ef4444')}
+      ${permitCell}
       ${cell('Totale', (summary.grand_total_hours||0).toFixed(1)+'h', null, true)}
     </div>
   </div>`;
+  host.innerHTML = summaryCardHtml;
 }
 
 function renderMyUnavList(rows) {

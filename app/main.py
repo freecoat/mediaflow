@@ -138,11 +138,13 @@ def _auto_migrate_columns():
                     print(f"[auto-migrate] bookings.{col} mancante -> ALTER TABLE")
                     conn.execute(text(f"ALTER TABLE bookings ADD COLUMN {col} {ddl}"))
     # v3.4.32.2 — WorkingHoursPolicy: overtime_brackets JSON + ccnl_label
+    # v3.5.0-alpha.111.19 — permit_multiplier ROL ore di permesso
     if "working_hours_policies" in insp.get_table_names():
         wcols = {c["name"] for c in insp.get_columns("working_hours_policies")}
         whp_alter = [
             ("overtime_brackets", "TEXT NULL"),
             ("ccnl_label", "VARCHAR(120) NULL"),
+            ("permit_multiplier", "FLOAT NOT NULL DEFAULT 1.0"),
         ]
         with engine.begin() as conn:
             for col, ddl in whp_alter:
@@ -1017,7 +1019,7 @@ async def lifespan(app: FastAPI):
     yield
 
 
-app = FastAPI(title="MediaFlow", version="3.5.0-alpha.111.18", lifespan=lifespan)
+app = FastAPI(title="MediaFlow", version="3.5.0-alpha.111.19", lifespan=lifespan)
 
 BASE_DIR = Path(__file__).parent
 app.mount("/static", StaticFiles(directory=BASE_DIR / "static"), name="static")
