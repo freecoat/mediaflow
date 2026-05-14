@@ -664,27 +664,33 @@
   #tl-host[data-density="spacious"] .vis-labelset .vis-label { padding: 10px 14px; }
   #tl-host[data-density="spacious"] .vis-item { font-size: 13px; padding: 5px 12px; border-radius: 10px; }
 
-  /* v3.5.0-alpha.111.7 — Min-height uniforme cross-row leaf + nesting.
-     v3.5.0-alpha.111.6 metteva min-height a ENTRAMBI label+foreground LEAF
-     ma a TUTTI i foreground (anche nesting parents DI/Video, Audio) →
-     parents in foreground prendevano 48px mentre label parents naturali
-     ~35px → drift cumulativo. User confermato "altezza righe dipartimenti
-     non corrisponde a quella nel planning".
-     Vis-timeline aggiunge .vis-nesting-group SIA a label SIA a foreground
-     group corrispondente → uso `:not(.vis-nesting-group)` su entrambi lati.
-     Storia: min-height SOLO label rompe sync (α.32.2). Su entrambi lati
-     E con stessa condizione leaf-only vis allinea correttamente. */
+  /* v3.5.0-alpha.111.9 — Min-height leaf-only sync corretto.
+     Lezione α.111.6-8: vis-timeline aggiunge `.vis-nesting-group` SOLO al
+     label set (non al foreground group). Foreground rows distinte per
+     className custom dal dataset: parent='tl-dept-N' / 'tl-project-N'-parent,
+     leaf='tl-res-N' / 'tl-project-N' (in project mode entrambi hanno
+     tl-project-, distinguibili solo per ID prefix 'p'/'j'). Per resource
+     mode: parents=tl-dept-*, leaves=tl-res-*. Target diretto via attr selector.
+     tlDebugAlign() α.111.8 ha mostrato: foreground parents prendevano 48
+     mentre label parents 35 → drift cumulativo +13 per header attraversato
+     (Luca diff=-13, Davide diff=-26).
+     Fix: applico min-height SOLO a foreground groups leaf via [class*="tl-res-"]
+     o [class*="tl-project-"]. Parents (tl-dept-*) lasciati a natural height
+     matchato dal label parent (~35px). */
   .vis-labelset .vis-label:not(.vis-nesting-group),
-  .vis-foreground .vis-group:not(.vis-nesting-group) {
+  .vis-foreground .vis-group[class*="tl-res-"],
+  .vis-foreground .vis-group[class*="tl-project-"] {
     min-height: 48px;
     box-sizing: border-box;
   }
   #tl-host[data-density="compact"] .vis-labelset .vis-label:not(.vis-nesting-group),
-  #tl-host[data-density="compact"] .vis-foreground .vis-group:not(.vis-nesting-group) {
+  #tl-host[data-density="compact"] .vis-foreground .vis-group[class*="tl-res-"],
+  #tl-host[data-density="compact"] .vis-foreground .vis-group[class*="tl-project-"] {
     min-height: 34px;
   }
   #tl-host[data-density="spacious"] .vis-labelset .vis-label:not(.vis-nesting-group),
-  #tl-host[data-density="spacious"] .vis-foreground .vis-group:not(.vis-nesting-group) {
+  #tl-host[data-density="spacious"] .vis-foreground .vis-group[class*="tl-res-"],
+  #tl-host[data-density="spacious"] .vis-foreground .vis-group[class*="tl-project-"] {
     min-height: 62px;
   }
   /* v3.4.45: Storyboard view — 7 colonne giorno (responsive collapse <960px) */
