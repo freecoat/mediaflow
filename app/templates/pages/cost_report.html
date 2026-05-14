@@ -1015,10 +1015,44 @@ function renderCostLines() {
     const pendBadge = pendH > 0
       ? `<span class="text-xs" style="display:inline-block; margin-left:6px; padding:1px 6px; background:rgba(251,191,36,0.18); color:#fbbf24; border-radius:8px; font-weight:600; font-size:10px;" title="${pendHTxt}h overtime in attesa di approvazione${pendAmt>0?` — stima delta maturato: +${fmtCurrency(pendAmt)} (post-approvazione)`:' — non rifatturate al cliente con questa configurazione'}.">⏳ ${pendHTxt}h pending</span>`
       : '';
+    // v3.5.0-alpha.111.24 — Barra percentuale maturato/stimato/quotato + badge stato trasmissione
+    const tq = l.total_quoted || 0;
+    const tAcc = l.total_accrued || 0;
+    const tExp = l.total_expected || 0;
+    const tBilled = billedLocked;
+    const tAccPost = accruedPost;
+    const tFcast = forecastFut;
+    const denom = Math.max(tq, tBilled + tAccPost + tFcast) || 1;
+    const pctBilled = Math.min(100, (tBilled / denom) * 100);
+    const pctAccPost = Math.min(100, (tAccPost / denom) * 100);
+    const pctFcast = Math.min(100, (tFcast / denom) * 100);
+    const pctQuoted = Math.min(100, (tq / denom) * 100);
+    // Over-budget (maturato + stimato > quotato)
+    const overBudget = (tBilled + tAccPost + tFcast) > tq && tq > 0;
+    const pctOver = overBudget ? Math.min(100, ((tBilled + tAccPost + tFcast - tq) / denom) * 100) : 0;
+    const bar = `
+      <div title="Quotato ${fmtCurrency(tq)} · Fatturato ${fmtCurrency(tBilled)} · Maturato ${fmtCurrency(tAccPost)} · Stimato ${fmtCurrency(tFcast)}" style="position:relative; height:6px; background:rgba(255,255,255,0.05); border-radius:3px; margin-top:6px; overflow:visible;">
+        <div style="position:absolute; left:0; top:0; height:100%; width:${pctBilled}%; background:#22c55e; border-radius:3px 0 0 3px;"></div>
+        <div style="position:absolute; left:${pctBilled}%; top:0; height:100%; width:${pctAccPost}%; background:#6272f5;"></div>
+        <div style="position:absolute; left:${pctBilled + pctAccPost}%; top:0; height:100%; width:${pctFcast}%; background:repeating-linear-gradient(90deg, #fb923c 0 3px, #fb923c44 3px 6px);"></div>
+        ${tq > 0 ? `<div style="position:absolute; left:${pctQuoted}%; top:-2px; bottom:-2px; width:2px; background:#fff; opacity:.85;" title="Quotato ${fmtCurrency(tq)}"></div>` : ''}
+        ${overBudget ? `<div style="position:absolute; left:${pctQuoted}%; top:0; height:100%; width:${pctOver}%; background:rgba(239,68,68,0.65); border-radius:0 3px 3px 0;"></div>` : ''}
+      </div>`;
+    // Badge stato trasmissione (solo se not_billed → utile per planning batch)
+    let txBadge = '';
+    if (l.billing_status === 'not_billed' && tq > 0) {
+      const ratio = tAcc / tq;
+      if (ratio >= 1.0) {
+        txBadge = `<span class="text-xs" style="display:inline-block; margin-left:6px; padding:1px 6px; background:rgba(34,197,94,0.18); color:#22c55e; border-radius:8px; font-weight:600; font-size:10px;" title="Maturato raggiunge/supera il quotato → pronto da trasmettere">✓ Pronto trasmettere</span>`;
+      } else if (ratio < 0.95) {
+        txBadge = `<span class="text-xs" style="display:inline-block; margin-left:6px; padding:1px 6px; background:rgba(251,191,36,0.18); color:#fbbf24; border-radius:8px; font-weight:600; font-size:10px;" title="Maturato ${(ratio*100).toFixed(0)}% del quotato — richiede conferma esplicita in trasmissione (sotto-quotato)">⚠ Sotto-quotato (${(ratio*100).toFixed(0)}%)</span>`;
+      }
+    }
     return `<tr onclick='openLineDetailHere(${l.id})' style="cursor:pointer;">
-      <td>
-        <div style="font-weight:500;font-size:13px;">${l.description}${l.is_extra ? ' <span class="text-xs" style="color:#fb923c;">[extra]</span>' : ''}${refsBadge}${pendBadge}</div>
+      <td style="min-width:240px;">
+        <div style="font-weight:500;font-size:13px;">${l.description}${l.is_extra ? ' <span class="text-xs" style="color:#fb923c;">[extra]</span>' : ''}${refsBadge}${pendBadge}${txBadge}</div>
         ${l.category ? `<div class="text-xs text-muted">${l.category}</div>` : ''}
+        ${bar}
       </td>
       <td class="text-sm text-muted">${l.unit}</td>
       <td class="mono text-right">${fmtCurrency(l.total_quoted)}</td>
