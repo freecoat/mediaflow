@@ -280,14 +280,42 @@ def _refresh_invoice_payment_state(db: Session, invoice: Invoice) -> None:
     - amount_paid in (0, total) → resta sent (parziale, UI mostra residuo)
     - amount_paid == 0 e era paid → torna a sent (rollback pagamento)
     Idempotente. Chiamato dopo INSERT/DELETE InvoicePayment.
+
+    v3.5.0-alpha.111.18 — Propaga lo stato pagamento ai JCL collegati via
+    JCLBilledSlice. Senza questa propagazione il cost report mostrava
+    "Da fatturare" anche per cost line con fattura già "pagata" (gap
+    diagnosticato: JCLBillingStatus.paid esisteva ma mai transito).
     """
+    from app.models.models import JCLBilledSlice, JCLBillingStatus
     total_paid = sum((p.amount or 0.0) for p in invoice.payments)
     invoice.amount_paid = round(total_paid, 2)
     inv_total = invoice.total or 0.0
+    prev_status = invoice.status
     if invoice.amount_paid >= inv_total - 0.01 and inv_total > 0:
         invoice.status = InvoiceStatus.paid
     elif invoice.status == InvoiceStatus.paid and invoice.amount_paid < inv_total - 0.01:
         invoice.status = InvoiceStatus.sent
+
+    # Propagazione JCL — solo su transizione effettiva di stato.
+    if prev_status != invoice.status:
+        slices = (
+            db.query(JCLBilledSlice)
+            .filter(JCLBilledSlice.invoice_id == invoice.id)
+            .all()
+        )
+        jcl_ids = {s.job_cost_line_id for s in slices if s.job_cost_line_id}
+        if jcl_ids:
+            jcls = db.query(JobCostLine).filter(JobCostLine.id.in_(jcl_ids)).all()
+            for jcl in jcls:
+                cur = jcl.billing_status
+                if invoice.status == InvoiceStatus.paid:
+                    # billed → paid (solo se era in stato avanzato)
+                    if cur in (JCLBillingStatus.billed, JCLBillingStatus.in_batch):
+                        jcl.billing_status = JCLBillingStatus.paid
+                elif prev_status == InvoiceStatus.paid:
+                    # paid → sent rollback: paid → billed
+                    if cur == JCLBillingStatus.paid:
+                        jcl.billing_status = JCLBillingStatus.billed
 
 
 @router.get("/api/invoices/{invoice_id}/payments")

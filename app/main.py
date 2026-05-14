@@ -953,10 +953,71 @@ async def lifespan(app: FastAPI):
                 _db.close()
     except Exception as e:
         print(f"[lifespan] backfill JCLBilledSlice failed: {e}")
+
+    # v3.5.0-alpha.111.18 — Backfill JCL.billing_status da JCLBilledSlice +
+    # Invoice.status. Causa diagnosticata: user vedeva "Da fatturare" su CR
+    # mentre fatture risultavano "pagate". JCLBilledSlice backfill (precedente)
+    # creava slice ma non aggiornava JCL.billing_status → restava not_billed.
+    # Inoltre transizione paid (nuova α.111.18) non si applicava a fatture
+    # già paid.
+    # Logica per ogni JCL con almeno 1 slice:
+    #   - se TUTTE le invoice linkate sono paid → JCL.billing_status = paid
+    #   - altrimenti se almeno 1 slice esiste → JCL.billing_status = billed
+    # Idempotente: marker uploads/.jcl_status_backfilled_v1.
+    try:
+        from pathlib import Path
+        marker = Path("uploads") / ".jcl_status_backfilled_v1"
+        if not marker.exists():
+            marker.parent.mkdir(parents=True, exist_ok=True)
+            from app.database import SessionLocal
+            from app.models.models import (
+                JCLBilledSlice, JobCostLine, Invoice, InvoiceStatus,
+                JCLBillingStatus,
+            )
+            _db = SessionLocal()
+            try:
+                slices = _db.query(JCLBilledSlice).all()
+                # Map jcl_id → set di invoice status
+                jcl_to_inv_statuses = {}
+                for s in slices:
+                    if not s.job_cost_line_id or not s.invoice_id:
+                        continue
+                    inv = _db.query(Invoice).filter(Invoice.id == s.invoice_id).first()
+                    if not inv:
+                        continue
+                    jcl_to_inv_statuses.setdefault(s.job_cost_line_id, []).append(inv.status)
+                touched_paid = 0
+                touched_billed = 0
+                for jcl_id, statuses in jcl_to_inv_statuses.items():
+                    jcl = _db.query(JobCostLine).filter(JobCostLine.id == jcl_id).first()
+                    if not jcl:
+                        continue
+                    all_paid = bool(statuses) and all(st == InvoiceStatus.paid for st in statuses)
+                    if all_paid:
+                        if jcl.billing_status != JCLBillingStatus.paid:
+                            jcl.billing_status = JCLBillingStatus.paid
+                            touched_paid += 1
+                    else:
+                        if jcl.billing_status not in (JCLBillingStatus.billed, JCLBillingStatus.paid):
+                            jcl.billing_status = JCLBillingStatus.billed
+                            touched_billed += 1
+                _db.commit()
+                marker.write_text("ok")
+                if touched_paid or touched_billed:
+                    print(
+                        f"[lifespan] backfill JCL.billing_status: "
+                        f"{touched_paid} → paid, {touched_billed} → billed "
+                        f"({len(jcl_to_inv_statuses)} JCL scansionati)"
+                    )
+            finally:
+                _db.close()
+    except Exception as e:
+        print(f"[lifespan] backfill JCL paid failed: {e}")
+
     yield
 
 
-app = FastAPI(title="MediaFlow", version="3.5.0-alpha.111.17", lifespan=lifespan)
+app = FastAPI(title="MediaFlow", version="3.5.0-alpha.111.18", lifespan=lifespan)
 
 BASE_DIR = Path(__file__).parent
 app.mount("/static", StaticFiles(directory=BASE_DIR / "static"), name="static")
