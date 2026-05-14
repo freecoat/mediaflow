@@ -1,5 +1,54 @@
 # MediaFlow — Changelog
 
+## v3.5.0-alpha.111.10 — Fix hover tooltip + reintroduzione heatmap (14 maggio 2026)
+
+**Tooltip hover item — fix bug invisibile da α.83**:
+- `tlTooltipShow()` line 3129 referenziava `bookings` (variabile
+  non globale). `bookings` esiste come `let` locale dentro `tlRender()`
+  ma NON su window (solo `window._tlBookings`).
+- `typeof bookings === 'undefined'` → early return silenzioso →
+  tooltip MAI mostrato.
+- Fix: usa `window._tlBookings` esplicitamente. Skip background items
+  inclusi `hm-` (heatmap nuovi).
+
+**Heatmap reintrodotta come background items**:
+- α.99 aveva rimosso heatmap da label cell (causava mismatch label↔
+  group height). Toggle restava no-op.
+- Reintroduzione architetturalmente corretta: 1 background item per
+  giorno per risorsa nel range visibile. Colore = ore/8 ratio
+  (verde<50%, verde scuro<100%, arancio<150%, rosso>150%).
+- Vis-timeline renderizza background items dietro items normali
+  senza alterare row height (problema risolto).
+- `tlToggleHeatmap()` ora chiama `renderTimeline(true)` per ricaricare
+  dataset con/senza heatmap items.
+- Skip filters `hm-` aggiunti in onMoving, doubleClick, tlTooltipShow.
+- CSS `.vis-item.tl-bg-heat`: no border, no shadow, opacity 0.65.
+
+**Visualizzazione compatta/spaziosa**: ancora con bug visivi (Matteo
+si accontenta della "normale"). Da riaffrontare se necessario.
+
+Cache-bust planning.css?v=3.5.0-alpha.111.10.
+
+## v3.5.0-alpha.111.9 — Min-height leaf-only via className custom (14 maggio 2026)
+
+vis-timeline aggiunge `.vis-nesting-group` SOLO al label set, NON
+al foreground group corrispondente. Filtro su entrambi lati
+impossibile. Target foreground leaf-only via `[class*="tl-res-"]` /
+`[class*="tl-project-"]`. Parents `tl-dept-*` lasciati a natural
+height (~35px). User: "visualizzazione normale ora funziona".
+
+## v3.5.0-alpha.111.8 — Debug: tlDebugAlign() dump className (14 maggio 2026)
+
+Esteso dump per verificare DOM. Output rivelava:
+- labelCls parent: `vis-label vis-nesting-group expanded`
+- groupCls parent: `vis-group tl-dept-1` (no nesting-group class)
+- Drift cumulativo +13 per header attraversato.
+
+## v3.5.0-alpha.111.7 — Min-height leaf-only anche su foreground groups (14 maggio 2026)
+
+Tentativo fallito. Assumeva vis-timeline aggiunge `.vis-nesting-group`
+anche a foreground. Sbagliato.
+
 ## v3.5.0-alpha.111.6 — Timeline min-height uniforme cross-row (14 maggio 2026)
 
 **Sintomo Matteo (post α.111.3)**:

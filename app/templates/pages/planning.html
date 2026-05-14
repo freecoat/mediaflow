@@ -14,7 +14,7 @@
 <!-- v3.5.0-alpha.66.14.9: CSS estratto in /static/css/planning.css per
      ridurre planning.html da 7377 -> 6710 righe e abilitare cache HTTP
      indipendente del CSS. Il blocco <style> originale era 668 righe. -->
-<link rel="stylesheet" href="/static/css/planning.css?v=3.5.0-alpha.111.9">
+<link rel="stylesheet" href="/static/css/planning.css?v=3.5.0-alpha.111.10">
 <style>
   /* v3.5.0-alpha.79 — Polish timeline */
   /* Today line emphasizzata */
@@ -1986,6 +1986,11 @@ function tlToggleHeatmap() {
   const cb = document.getElementById('tlp-heatmap');
   if (cb) cb.checked = p.heatmap;
   _tlSyncHeatmapBtn(p.heatmap);
+  // v3.5.0-alpha.111.10 — Riapplica al dataset (heatmap = background items).
+  // Senza renderTimeline il toggle non aveva effetto visibile dal α.99.
+  if (typeof renderTimeline === 'function') {
+    try { renderTimeline(true); } catch(_) {}
+  }
 }
 function _tlSyncHeatmapBtn(on) {
   const btn = document.getElementById('tl-heatmap-toggle');
@@ -3126,10 +3131,14 @@ function _tlEnsureTooltipEl() {
 }
 
 function tlTooltipShow(itemId, evt) {
-  if (!itemId || typeof bookings === 'undefined') return;
-  // Skip background items (vacanze/timbrature)
-  if (typeof itemId === 'string' && (itemId.startsWith('u-') || itemId.startsWith('tp-'))) return;
-  const b = bookings.find(x => x.id === itemId);
+  if (!itemId) return;
+  // Skip background items (vacanze/timbrature/heatmap)
+  if (typeof itemId === 'string' && (itemId.startsWith('u-') || itemId.startsWith('tp-') || itemId.startsWith('hm-'))) return;
+  // v3.5.0-alpha.111.10: usa window._tlBookings (esposto da tlRender).
+  // `bookings` plain era `let` locale di tlRender → typeof undef → early
+  // return silenzioso → tooltip mai mostrato. Bug introdotto α.83-α.??.
+  const _bks = window._tlBookings || [];
+  const b = _bks.find(x => String(x.id) === String(itemId));
   if (!b) return;
   const p = b.extendedProps || {};
   const tt = _tlEnsureTooltipEl();
@@ -4860,6 +4869,46 @@ async function _doRenderTimeline(preserveWindow=false) {
     b._blocking = b._blocking_hard;
   });
 
+  // v3.5.0-alpha.111.10 — Heatmap capacity reintrodotta come background items.
+  // α.99 ha rimosso heatmap da label cell (causava mismatch label↔group height).
+  // Reintroduzione come background items: 1 item per giorno per risorsa,
+  // colore in base a ore prenotate / 8 (full day). Vis-timeline renderizza
+  // dietro gli items normali senza alterare row height.
+  const _prefsH = (typeof tlPrefsLoad === 'function') ? tlPrefsLoad() : { heatmap: false };
+  if (_prefsH.heatmap && Array.isArray(RESOURCES_SEED) && RESOURCES_SEED.length) {
+    const _winH = savedWin || tlWindowFor(tlZoom, new Date());
+    const _hStart = new Date(_winH.start); _hStart.setHours(0,0,0,0);
+    const _hEnd = new Date(_winH.end); _hEnd.setHours(0,0,0,0);
+    const _dayMs = 86400000;
+    for (const r of RESOURCES_SEED) {
+      const days = tlComputeHeatmap(r.id, bookings, _hStart, _hEnd);
+      for (const d of days) {
+        const ratio = d.hours / 8;
+        let bg = null;
+        if (ratio > 0 && ratio <= 0.5) bg = 'rgba(34,197,94,0.20)';
+        else if (ratio > 0.5 && ratio <= 1) bg = 'rgba(34,197,94,0.45)';
+        else if (ratio > 1 && ratio <= 1.5) bg = 'rgba(251,146,60,0.45)';
+        else if (ratio > 1.5) bg = 'rgba(220,38,38,0.55)';
+        if (!bg) continue;  // skip giorni a zero ore
+        const ds = new Date(d.date); ds.setHours(0,0,0,0);
+        const de = new Date(ds.getTime() + _dayMs - 1);
+        bgItems.push({
+          id: 'hm-' + r.id + '-' + ds.toISOString().substring(0,10),
+          group: r.id,
+          start: ds.toISOString(),
+          end: de.toISOString(),
+          type: 'background',
+          className: 'tl-bg-heat',
+          style: 'background-color:'+bg+';',
+          title: `${r.name} · ${d.date.toLocaleDateString('it-IT',{weekday:'short',day:'numeric',month:'short'})} · ${d.hours.toFixed(1)}h`,
+          _blocking_hard: false,
+          _blocking_soft: false,
+          _blocking: false,
+        });
+      }
+    }
+  }
+
   // v3.4.22 cantiere C: overlay timbrature TimePunch sopra le righe risorsa.
   // Visibile in modo sottile per non disturbare i booking pianificati.
   // v3.5.0-alpha.23: toggle per visualizzazione (default ON, ombra leggera).
@@ -4959,8 +5008,8 @@ async function _doRenderTimeline(preserveWindow=false) {
         const orig = items.find(x => x.id === item.id);
         if (orig) item.group = orig.group;
       }
-      // Skip background items (ferie/festa/timbrature) — non si possono trascinare
-      if (typeof item.id === 'string' && (item.id.startsWith('u-') || item.id.startsWith('tp-'))) {
+      // Skip background items (ferie/festa/timbrature/heatmap) — non si possono trascinare
+      if (typeof item.id === 'string' && (item.id.startsWith('u-') || item.id.startsWith('tp-') || item.id.startsWith('hm-'))) {
         callback(null);
         return;
       }
@@ -5211,8 +5260,8 @@ async function _doRenderTimeline(preserveWindow=false) {
     if (props.item) {
       const it = items.find(x => x.id === props.item) || (itemsDS.get(props.item));
       if (!it) return;
-      // Background items (ferie/festa/timbrature) non hanno booking_id
-      if (typeof props.item === 'string' && (props.item.startsWith('u-') || props.item.startsWith('tp-'))) return;
+      // Background items (ferie/festa/timbrature/heatmap) non hanno booking_id
+      if (typeof props.item === 'string' && (props.item.startsWith('u-') || props.item.startsWith('tp-') || props.item.startsWith('hm-'))) return;
       const bid = it.booking_id || (bookings.find(b => b.id === props.item) || {}).booking_id;
       if (bid) {
         try { await tlbOpenEdit(bid); }

@@ -8,6 +8,32 @@
 
 ## Versione corrente
 
+**v3.5.0-alpha.111.10** — 14 maggio 2026 — Fix hover tooltip + heatmap reintrodotta
+
+**Tooltip hover items**: bug pre-esistente da α.83. `tlTooltipShow`
+referenziava `bookings` (let locale di `tlRender`) invece di
+`window._tlBookings`. Early return silenzioso. Fix puntuale.
+
+**Heatmap capacity**: reintrodotta come background items (1 per giorno
+per risorsa, colore = ore/8 ratio). Architettura corretta: vis renderizza
+dietro items normali senza toccare row height. Toggle ricarica dataset.
+
+**Stato density**:
+- ✓ Comfortable (normale): funziona (Matteo OK)
+- ✗ Compact: ancora rotta
+- ✗ Spacious: ancora rotta
+- Matteo si accontenta della normale per ora.
+
+**Da testare Matteo**:
+1. Hover item timeline → tooltip rich (titolo, durata, stato, progetto, job, note)
+2. Toggle 📊 Heatmap in toolbar → background colorato per giorno (verde/arancio/rosso)
+3. Re-toggle off → background eliminato
+
+**Tutta sessione α.111.3→α.111.10** focused timeline fix. Push fatto
+ogni commit. Export ZIP allegato. Heatmap bug aperto dal α.99 ora chiuso.
+
+## (versione precedente)
+
 **v3.5.0-alpha.111.6** — 14 maggio 2026 — Timeline min-height uniforme cross-row
 
 **Round timeline fix (4 commit incrementali oggi)**:
