@@ -266,6 +266,8 @@ class NotificationKind(str, enum.Enum):
     booking_request = "booking_request"  # → can_create_booking (admin/manager/producer)
     # v3.5.0-alpha.61 — extra emerso su progetto già fatturato in periodo X
     extra_after_billed = "extra_after_billed"  # → accounting + producer/manager
+    # v3.5.0-alpha.111.26 — fine mese: verifica CR completati da trasmettere
+    cr_eom_review = "cr_eom_review"  # → producer (ultimo giorno mese)
     custom = "custom"
 
 

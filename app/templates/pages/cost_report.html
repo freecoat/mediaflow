@@ -1264,18 +1264,35 @@ async function refreshTransmitPreview() {
       </div>`;
     // v3.5.0-alpha.64: tabella editable con checkbox per riga (selezione granulare).
     // Default: tutte le righe checked. Subtotale aggiornato in tempo reale.
+    // v3.5.0-alpha.111.25: voci UNDER (maturato < quotato * 0.95) → checkbox
+    // UNCHECKED di default + badge "conferma richiesta". Voci che hanno
+    // raggiunto/superato il quotato → checked + badge "✓ raggiunto".
     const linesHtml = (p.lines || []).map(l => {
+      const tq = l.total_quoted || 0;
+      const tAcc = l.total_accrued || 0;
+      const ratio = tq > 0 ? (tAcc / tq) : 1.0;
+      const isUnder = !l.is_extra && tq > 0 && ratio < 0.95;
+      const isReached = !l.is_extra && tq > 0 && ratio >= 1.0;
+      const checkedAttr = isUnder ? '' : 'checked';
       const overBadge = l.overrun > 0
         ? ` <span class="text-xs" style="color:#ef4444;" title="Sforamento sul quotato">+${fmtCurrency(l.overrun)}</span>`
         : '';
       const extraBadge = l.is_extra
         ? ` <span class="text-xs" style="color:#fb923c;">[extra]</span>`
         : '';
+      let stateBadge = '';
+      if (isUnder) {
+        stateBadge = ` <span class="text-xs" style="display:inline-block; padding:1px 6px; background:rgba(251,191,36,0.18); color:#fbbf24; border-radius:8px; font-weight:600; font-size:10px;" title="Maturato ${(ratio*100).toFixed(0)}% del quotato. Conferma manualmente per includere nel batch.">⚠ Sotto-quotato (${(ratio*100).toFixed(0)}%) — conferma</span>`;
+      } else if (isReached) {
+        stateBadge = ` <span class="text-xs" style="display:inline-block; padding:1px 6px; background:rgba(34,197,94,0.18); color:#22c55e; border-radius:8px; font-weight:600; font-size:10px;">✓ Raggiunto</span>`;
+      }
       const jobLbl = l.job_code ? `<span class="text-xs text-muted mono">${escapeHtml(l.job_code)}</span>` : '';
-      return `<tr data-jcl-id="${l.id}" data-total="${l.total_accrued}" data-extra="${l.is_extra ? '1' : '0'}">
-        <td style="width:24px;"><input type="checkbox" class="tm-line-cb" checked onchange="updateTransmitSubtotal()"></td>
+      // v3.5.0-alpha.111.25: row class per differenziare under (giallino subtle bg)
+      const rowStyle = isUnder ? ' style="background:rgba(251,191,36,0.04);"' : '';
+      return `<tr data-jcl-id="${l.id}" data-total="${l.total_accrued}" data-extra="${l.is_extra ? '1' : '0'}" data-under="${isUnder ? '1' : '0'}"${rowStyle}>
+        <td style="width:24px;"><input type="checkbox" class="tm-line-cb" ${checkedAttr} onchange="updateTransmitSubtotal()"></td>
         <td>
-          <div style="font-size:12px;">${escapeHtml(l.description || '')}${extraBadge}${overBadge}</div>
+          <div style="font-size:12px;">${escapeHtml(l.description || '')}${extraBadge}${overBadge}${stateBadge}</div>
           <div style="margin-top:2px;">${jobLbl}</div>
         </td>
         <td class="mono text-right text-xs">${(l.quantity || 0).toFixed(2)} ${escapeHtml(l.unit || '')}</td>

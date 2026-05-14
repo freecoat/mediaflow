@@ -390,6 +390,17 @@ def _transmit_core(
     db.flush()
 
     for jcl in candidates:
+        # v3.5.0-alpha.111.25 — Default total_approved:
+        # - UNDER (accrued < quoted): default = quoted (admin decide perso)
+        # - OVER (accrued > quoted): default = accrued (la realtà, admin
+        #   può eventualmente ridurre a quoted come sconto cliente)
+        # - extras (quoted=0): default = accrued
+        _accrued = jcl.total_accrued or 0.0
+        _quoted = jcl.total_quoted or 0.0
+        if _quoted > 0 and _accrued < _quoted:
+            _approved_default = _quoted
+        else:
+            _approved_default = _accrued
         line = BillingBatchLine(
             batch_id=batch.id,
             job_cost_line_id=jcl.id,
@@ -397,8 +408,8 @@ def _transmit_core(
             quantity=jcl.quantity_actual,
             unit=jcl.unit,
             unit_price=jcl.unit_price,
-            total_proposed=jcl.total_accrued,
-            total_approved=jcl.total_accrued,
+            total_proposed=_accrued,
+            total_approved=_approved_default,
             is_extra=jcl.is_extra,
         )
         db.add(line)

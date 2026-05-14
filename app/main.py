@@ -1016,10 +1016,57 @@ async def lifespan(app: FastAPI):
     except Exception as e:
         print(f"[lifespan] backfill JCL paid failed: {e}")
 
+    # v3.5.0-alpha.111.26 — Notifica producer ultimo giorno del mese per
+    # verifica CR completati da trasmettere a fatturazione.
+    # Idempotente via marker file per anno-mese (boot multipli stesso giorno
+    # non rinotificano).
+    try:
+        from datetime import date as _date
+        today = _date.today()
+        # Ultimo giorno del mese: today.month != (today + 1d).month
+        from datetime import timedelta as _td
+        is_last_day = (today + _td(days=1)).month != today.month
+        # Oppure primo giorno del mese (catch boot tardivo)
+        is_first_day = today.day == 1
+        if is_last_day or is_first_day:
+            ref_month = today if is_last_day else (today - _td(days=1))
+            marker = Path("uploads") / f".crcheck_notif_{ref_month.year:04d}-{ref_month.month:02d}.flag"
+            if not marker.exists():
+                marker.parent.mkdir(parents=True, exist_ok=True)
+                from app.database import SessionLocal
+                from app.services import notifications as notif_svc
+                from app.models import NotificationKind, NotificationSeverity
+                _db = SessionLocal()
+                try:
+                    mese_lbl = f"{ref_month.year}-{ref_month.month:02d}"
+                    notif_svc.notify_role(
+                        _db,
+                        role_codes=["producer", "manager", "admin"],
+                        kind=NotificationKind.cr_eom_review.value,
+                        severity=NotificationSeverity.action_required.value,
+                        title=f"📅 Verifica CR fine mese {mese_lbl}",
+                        body=(
+                            "Ultimo giorno del mese: verifica i Cost Report "
+                            "dei progetti completati da trasmettere a "
+                            "fatturazione. Le voci che hanno raggiunto il "
+                            "quotato sono pronte; le voci sotto-quotato "
+                            "richiedono conferma esplicita nel batch."
+                        ),
+                        link="/finance#billing",
+                        payload={"reference_month": mese_lbl},
+                    )
+                    _db.commit()
+                    marker.write_text("ok")
+                    print(f"[lifespan] notifica CR EOM emessa per {mese_lbl}")
+                finally:
+                    _db.close()
+    except Exception as e:
+        print(f"[lifespan] notifica CR EOM failed: {e}")
+
     yield
 
 
-app = FastAPI(title="MediaFlow", version="3.5.0-alpha.111.24", lifespan=lifespan)
+app = FastAPI(title="MediaFlow", version="3.5.0-alpha.111.26", lifespan=lifespan)
 
 BASE_DIR = Path(__file__).parent
 app.mount("/static", StaticFiles(directory=BASE_DIR / "static"), name="static")
