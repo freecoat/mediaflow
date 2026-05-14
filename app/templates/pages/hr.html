@@ -198,32 +198,38 @@
 </div>
 {% endif %}
 
+<!-- v3.5.0-alpha.111.23.1 — Export ore SEMPRE visibile (manager+ vede tutto;
+     staff con Resource vede solo "mie ore"; staff senza Resource niente). -->
+{% if scoped_resource_id or can_approve_unavailability(_user) %}
+<div class="card" style="margin-bottom:16px; padding:12px;">
+  <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
+    <span style="font-weight:600; font-size:13px;">📤 Esporta foglio ore</span>
+    <input type="date" id="exp-from" class="form-input" style="width:140px;" title="Dal">
+    <input type="date" id="exp-to" class="form-input" style="width:140px;" title="Al">
+    {% if scoped_resource_id %}
+    <button class="btn btn-secondary btn-sm" onclick="exportTimesheet('self','csv')" title="Le mie ore CSV per consulente">CSV mie ore</button>
+    <button class="btn btn-secondary btn-sm" onclick="exportTimesheet('self','xlsx')">XLSX mie ore</button>
+    {% endif %}
+    {% if can_approve_unavailability(_user) %}
+    {% if scoped_resource_id %}<span style="color:var(--text3); margin:0 4px;">|</span>{% endif %}
+    <select id="exp-dept" class="form-select" style="width:170px;" title="Reparto">
+      <option value="">— Reparto —</option>
+    </select>
+    <button class="btn btn-secondary btn-sm" onclick="exportTimesheet('department','csv')">CSV reparto</button>
+    <button class="btn btn-secondary btn-sm" onclick="exportTimesheet('department','xlsx')">XLSX reparto</button>
+    <span style="color:var(--text3); margin:0 4px;">|</span>
+    <button class="btn btn-primary btn-sm" onclick="exportTimesheet('all','csv')" title="Tutti i dipendenti azienda">CSV azienda</button>
+    <button class="btn btn-primary btn-sm" onclick="exportTimesheet('all','xlsx')">XLSX azienda</button>
+    {% endif %}
+  </div>
+  <p class="text-sm text-muted" style="margin-top:8px; margin-bottom:0;">XLSX include 2 fogli (Dettaglio + Totali per Risorsa×Mese×Tipo). Range default = mese corrente.</p>
+</div>
+{% endif %}
+
 {% if scoped_resource_id %}
 <!-- ── Riepilogo ore + richieste ferie/malattia (v3.4.26) ──── -->
 <!-- Visibile solo a chi ha una Resource collegata (staff con propria scheda HR) -->
 <div id="my-hours-block" style="margin-bottom:16px;">
-  <!-- v3.5.0-alpha.111.21 — Export ore (consulente lavoro) -->
-  <div class="card" style="margin-bottom:12px; padding:12px;">
-    <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
-      <span style="font-weight:600; font-size:13px;">📤 Esporta foglio ore</span>
-      <input type="date" id="exp-from" class="form-input" style="width:140px;" title="Dal">
-      <input type="date" id="exp-to" class="form-input" style="width:140px;" title="Al">
-      <button class="btn btn-secondary btn-sm" onclick="exportTimesheet('self','csv')" title="Le mie ore CSV per consulente">CSV mie ore</button>
-      <button class="btn btn-secondary btn-sm" onclick="exportTimesheet('self','xlsx')">XLSX mie ore</button>
-      {% if can_approve_unavailability(_user) %}
-      <span style="color:var(--text3); margin:0 4px;">|</span>
-      <select id="exp-dept" class="form-select" style="width:170px;" title="Reparto">
-        <option value="">— Reparto —</option>
-      </select>
-      <button class="btn btn-secondary btn-sm" onclick="exportTimesheet('department','csv')">CSV reparto</button>
-      <button class="btn btn-secondary btn-sm" onclick="exportTimesheet('department','xlsx')">XLSX reparto</button>
-      <span style="color:var(--text3); margin:0 4px;">|</span>
-      <button class="btn btn-primary btn-sm" onclick="exportTimesheet('all','csv')" title="Tutti i dipendenti azienda">CSV azienda</button>
-      <button class="btn btn-primary btn-sm" onclick="exportTimesheet('all','xlsx')">XLSX azienda</button>
-      {% endif %}
-    </div>
-    <p class="text-sm text-muted" style="margin-top:8px; margin-bottom:0;">Una riga per timbratura + una riga per giorno di ferie/malattia/permesso. Range default = mese corrente.</p>
-  </div>
   <div id="my-hours-summary"></div>
   <div class="card" style="margin-top:12px;">
     <h3 style="font-size:14px; margin:0 0 10px;">🏖 Le mie ferie e malattie</h3>
@@ -1214,7 +1220,13 @@ async function myUnavDelete(id) {
   } catch(e) { toast(e.message, 'error'); }
 }
 
-// v3.5.0-alpha.111.21 — Export ore consulente lavoro (CSV / XLSX)
+reloadMyHours();
+{% endif %}
+
+// v3.5.0-alpha.111.21 — Export ore consulente lavoro (CSV / XLSX).
+// v3.5.0-alpha.111.23.1 — Spostato fuori dal blocco {% if scoped_resource_id %}
+// per essere visibile anche per admin/manager senza Resource collegata.
+{% if scoped_resource_id or can_approve_unavailability(_user) %}
 function _expDefaultMonth() {
   const today = new Date();
   const first = new Date(today.getFullYear(), today.getMonth(), 1);
@@ -1256,14 +1268,11 @@ async function exportTimesheet(scope, fmt) {
   } else {
     params.set('scope', 'all');
   }
-  // Trigger download via anchor
   const url = '/hr/api/export/timesheet?' + params.toString();
   window.location.href = url;
 }
 _expDefaultMonth();
 _expLoadDepts();
-
-reloadMyHours();
 {% endif %}
 
 // v3.5.0-alpha.111.22 — Allarme timesheet non compilato fine mese
