@@ -1618,20 +1618,18 @@ function tlBindKeyboardScroll() {
   const host = document.getElementById('tl-host');
   if (!host || host._tlScrollBound) return;
   host._tlScrollBound = true;
-  // v3.5.0-alpha.111.15 — Capture phase + log. Vis-timeline + Hammer.js
-  // possono consumare wheel prima del bubble. Capture true fires prima.
+  // v3.5.0-alpha.111.16 — Revert capture phase (rompeva qualcosa α.111.15).
+  // Wheel bubble standard.
   host.addEventListener('wheel', (ev) => {
     if (!ev.shiftKey) return;
     const delta = ev.deltaY;
-    // Scrolla il container groups (panel left vertical)
     const panel = host.querySelector('.vis-panel.vis-left .vis-vertical')
                || host.querySelector('.vis-panel.vis-left');
     if (panel) {
       panel.scrollTop = (panel.scrollTop || 0) + delta;
-      ev.preventDefault();
-      ev.stopPropagation();
     }
-  }, { passive: false, capture: true });
+    ev.preventDefault();
+  }, { passive: false });
   // Frecce su/giù e PgUp/PgDn quando focus è sul timeline
   document.addEventListener('keydown', (ev) => {
     // Skip se input field attivo
@@ -5439,9 +5437,8 @@ async function _doRenderTimeline(preserveWindow=false) {
   // Disabilita pan/zoom durante il drag come fa la vecchia ROI per evitare
   // conflitto Hammer.js. UX: l'utente vede un overlay rettangolo, al mouseup
   // si apre il modal con le date pre-impostate.
-  // v3.5.0-alpha.111.15 — pointerdown invece di mousedown.
-  // Hammer.js (vis-timeline) chiama preventDefault() su pointerdown → blocca
-  // mousedown successivo. Capture phase pointerdown fires PRIMA di Hammer.
+  // v3.5.0-alpha.111.16 — Revert α.111.15 pointerdown (rompeva multi-select).
+  // Torna a mousedown. Shift+drag rimane da rinvestigare via overlay approach.
   if (window._tlCreateDragHandler) {
     host.removeEventListener('pointerdown', window._tlCreateDragHandler, true);
     host.removeEventListener('mousedown', window._tlCreateDragHandler, true);
@@ -5527,7 +5524,7 @@ async function _doRenderTimeline(preserveWindow=false) {
     document.addEventListener('mouseup', finalize, true);
     document.addEventListener('keydown', onEsc, true);
   };
-  host.addEventListener('pointerdown', window._tlCreateDragHandler, true);
+  host.addEventListener('mousedown', window._tlCreateDragHandler, true);
 
   tlUpdateRangeLabel();
 }
