@@ -4402,9 +4402,14 @@ async function _tlApplyMultiMove(movedItem, origItem, origBooking) {
   if (!origItem) return false;
 
   const dtMs = new Date(movedItem.start).getTime() - new Date(origItem.start).getTime();
+  const dtEndMs = new Date(movedItem.end).getTime() - new Date(origItem.end).getTime();
   const crossResource = movedItem.group !== origItem.group;
-  // No-op se nessuno spostamento significativo e nessun cambio risorsa
-  if (Math.abs(dtMs) < 30000 && !crossResource) return false;
+  // v3.5.0-alpha.111.14: anche resize-end (dtMs=0 ma dtEndMs!=0) deve passare.
+  // Pre-α.111.14 il guard guardava SOLO dtMs → resize-end veniva scartato
+  // silentemente (Matteo: "drag su bordo produce resize ma non modifica
+  // l'orario del booking").
+  const sigShift = Math.abs(dtMs) >= 30000 || Math.abs(dtEndMs) >= 30000;
+  if (!sigShift && !crossResource) return false;
 
   const allBookings = window._tlBookings || [];
   const movedAidStr = String(movedItem.id);
@@ -4912,11 +4917,11 @@ async function _doRenderTimeline(preserveWindow=false) {
     tooltip: {followMouse: true, overflowMethod: 'flip'},
     editable: {updateTime: true, updateGroup: true, remove: true, add: false, overrideItems: true},
     snap: tlSnap,
-    // v3.5.0-alpha.13: multiselect = Shift+click (default vis-timeline è
-    // Ctrl/Cmd+click; multiselectPerGroup permette anche cross-resource).
-    // Tasto Delete su una selezione multipla → bulk delete con conferma.
-    multiselect: true,
-    multiselectPerGroup: true,
+    // v3.5.0-alpha.111.14 — Duplicate `multiselect`+`multiselectPerGroup`
+    // rimossi (oggetto letterale: ultimo wins). multiselectPerGroup:true
+    // qui sotto limitava cross-resource. Già definiti sopra: multiselect:true,
+    // multiselectPerGroup:false (cross-group OK). Tasto Delete su selezione
+    // multipla → bulk delete con conferma (gestito a parte sotto).
     // onMoving live: durante drag/resize, valida conflict client-side e applica style
     onMoving: function(item, callback) {
       // Blocca drop su gruppi reparto (id stringa 'dN'). Solo risorse foglia (id numerico) consentite.
