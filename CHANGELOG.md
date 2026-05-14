@@ -1,5 +1,51 @@
 # MediaFlow — Changelog
 
+## v3.5.0-alpha.111.6 — Timeline min-height uniforme cross-row (14 maggio 2026)
+
+**Sintomo Matteo (post α.111.3)**:
+- Modalità Spacious: "Online Editor" (role text) di Luca Bianchi
+  sovrapposto a linea bianca di demarcazione timeline.
+- Modalità Compact: testi label troncati.
+- Modalità Comfortable: parziale overlap.
+- Specifico per Luca Bianchi → unica risorsa senza items nel DB lean.
+
+**Causa**:
+- `tlDebugAlign()` confermava diff=0.0 label↔group (allineamento coord
+  OK). Ma labelH variava per row: Luca=56px, Sara/Davide/Studio=69px.
+- vis-timeline calcola row height = `max(items_h, label_h)` PER GRUPPO.
+  Risorse senza items → row collassa su intrinsic label height.
+  Risorse con items → row più alta perché items+margin pushano.
+- `groupHeightMode: 'fixed'` è naming ambiguo vis-timeline: "fissa nel
+  tempo", non "uniforma fra groups". Tra groups le altezze divergono.
+- Label content in Spacious (~58px) > row Luca (56px) → overflow.
+
+**Fix `planning.css`** — min-height APPLICATO SIMULTANEAMENTE a label
+leaf E foreground group, per ogni density:
+- compact: 34px
+- comfortable (default): 48px
+- spacious: 62px
+
+Storia α.32.2 sconsigliava min-height SOLO su label (rompeva sync). Qui
+applicato a entrambi lati: vis allinea perché entrambi vincolati.
+
+**Cache-bust** `planning.css?v=3.5.0-alpha.111.6` in `planning.html:17`.
+
+## v3.5.0-alpha.111.5 — Debug: tlDebugItems() per dump items + group dataset (14 maggio 2026)
+
+Helper console esposto su `window.tlDebugItems()`: dump per ogni item
+DOM Y, visualGroup (in che row ricade), dsGroup (group ID dataset),
+dsGroupName (nome group). Confronto rivela mismatch items↔row.
+Test Matteo: 5 items tutti in row corretto (Sara/Davide/Studio A).
+Bug era altrove (min-height row cross-group, vedi α.111.6).
+
+## v3.5.0-alpha.111.4 — Debug: tlDebugAlign() per diagnosi allineamento (14 maggio 2026)
+
+Helper console esposto su `window.tlDebugAlign()`: dump per row labelTop,
+labelH, groupTop, groupH, diff. Paste snippet in DevTools mangiava
+spazi Chrome → workaround via funzione server-side.
+Test Matteo: diff=0.0 ovunque (coord allineate); labelH variabile fra
+row (56-69px) → indizio min-height bug (α.111.6).
+
 ## v3.5.0-alpha.111.3 — Fix allineamento timeline planning (14 maggio 2026)
 
 **Timeline planning — labels disallineate / righe ammucchiate in fondo**:

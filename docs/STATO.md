@@ -8,19 +8,31 @@
 
 ## Versione corrente
 
-**v3.5.0-alpha.111.3** — 14 maggio 2026 — Fix allineamento timeline planning
+**v3.5.0-alpha.111.6** — 14 maggio 2026 — Timeline min-height uniforme cross-row
 
-**Timeline label/righe disallineate** (3 screenshot Matteo):
-- Causa: `orientation: {axis: 'top'}` lasciava `orientation.item` al
-  default `bottom` di vis-timeline 7.x. Con poche risorse + panel alto
-  (db lean), groups ancorati al fondo + spazio vuoto sopra.
-- Fix 1 riga `planning.html:4853`: `orientation: {axis: 'top', item: 'top'}`.
-- Heatmap toggle resta no-op (rimosso α.99, mai ridisegnato come overlay
-  sul foreground). Da affrontare in sessione successiva.
+**Round timeline fix (4 commit incrementali oggi)**:
+1. α.111.3: `orientation:{axis:'top', item:'top'}` fix groups ancorati
+   al fondo. ✓ Confermato da Matteo "allineamento top sicuramente migliore".
+2. α.111.4: helper `tlDebugAlign()` per dump label/group coord. Output:
+   diff=0.0 ovunque, ma labelH variabile (56-69px).
+3. α.111.5: helper `tlDebugItems()` per dump items. Tutti 5 items in
+   row corretto del dataset. Bug NON è items↔group mismatch.
+4. α.111.6: causa vera — `max(items, label) per group`. Risorse senza
+   items collassano + Spacious overflow label content.
+
+**Fix**: min-height su BOTH `.vis-label` + `.vis-foreground .vis-group`
+(planning.css). 3 valori per density: compact 34, comfortable 48,
+spacious 62. Cache-bust planning.css?v=3.5.0-alpha.111.6.
+
+**Heatmap toggle**: ancora no-op (commit α.99). Da affrontare in
+sessione separata: reintrodurre come overlay assoluto sul foreground.
 
 **Da testare Matteo**:
-1. /planning → tab Timeline → labels in cima, no spazio vuoto sopra
-2. Item bar Y combacia con label Y di ogni risorsa
+1. /planning → Timeline → Spacious: "Online Editor" NON deve overfloware
+2. Compact: testi label non più tagliati
+3. Comfortable: nessun parziale overlap con linea demarcazione
+4. Risorse senza items (es Luca Bianchi) hanno row con stessa altezza
+   delle risorse con items
 
 Push: SÌ (Matteo in remoto). Export ZIP DB allegato.
 
