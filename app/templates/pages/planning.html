@@ -2021,6 +2021,33 @@ function tlComputeHeight(host) {
   const avail = window.innerHeight - rect.top - 24;
   return Math.max(400, Math.floor(avail));
 }
+
+// v3.5.0-alpha.111.4 — Diagnostica allineamento label↔group timeline.
+// Uso console: tlDebugAlign()  → console.table(rows) + ritorna array.
+window.tlDebugAlign = function() {
+  const host = document.getElementById('tl-host');
+  if (!host) { console.error('no #tl-host'); return; }
+  const labels = [...host.querySelectorAll('.vis-labelset .vis-label')];
+  const groups = [...host.querySelectorAll('.vis-foreground .vis-group')];
+  const hostTop = host.getBoundingClientRect().top;
+  const rows = [];
+  for (let i = 0; i < Math.max(labels.length, groups.length); i++) {
+    const l = labels[i] ? labels[i].getBoundingClientRect() : null;
+    const g = groups[i] ? groups[i].getBoundingClientRect() : null;
+    rows.push({
+      i: i,
+      txt: labels[i] ? (labels[i].innerText || '').slice(0, 30) : '-',
+      labelTop: l ? (l.top - hostTop).toFixed(1) : '-',
+      labelH: l ? l.height.toFixed(1) : '-',
+      groupTop: g ? (g.top - hostTop).toFixed(1) : '-',
+      groupH: g ? g.height.toFixed(1) : '-',
+      diff: (l && g) ? (l.top - g.top).toFixed(1) : '-',
+    });
+  }
+  console.log('labels:', labels.length, 'groups:', groups.length);
+  console.table(rows);
+  return rows;
+};
 let _tlResizeTimer = null;
 function _tlBindResize() {
   if (window._tlResizeBound) return;
