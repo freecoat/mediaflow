@@ -4850,7 +4850,10 @@ async function _doRenderTimeline(preserveWindow=false) {
     horizontalScroll: true,
     multiselect: true, // E4: Ctrl+click per multi-select
     multiselectPerGroup: false, // permette selezionare item in gruppi diversi
-    orientation: {axis: 'top'},
+    // v3.5.0-alpha.111.3: item:'top' esplicito. Default vis-timeline 7.x è
+    // item:'bottom' → con poche risorse + panel alto le righe si ammucchiano
+    // in fondo lasciando spazio vuoto sopra (visibile su db lean post-purge).
+    orientation: {axis: 'top', item: 'top'},
     // v3.4.32.1: stack offset più contenuto (overlap leggero invece che totale),
     // margin axis ridotto. Min height groups uniforme per evitare "barre alte"
     // sparse e il salto in testa.

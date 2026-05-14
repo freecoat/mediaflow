@@ -8,6 +8,24 @@
 
 ## Versione corrente
 
+**v3.5.0-alpha.111.3** — 14 maggio 2026 — Fix allineamento timeline planning
+
+**Timeline label/righe disallineate** (3 screenshot Matteo):
+- Causa: `orientation: {axis: 'top'}` lasciava `orientation.item` al
+  default `bottom` di vis-timeline 7.x. Con poche risorse + panel alto
+  (db lean), groups ancorati al fondo + spazio vuoto sopra.
+- Fix 1 riga `planning.html:4853`: `orientation: {axis: 'top', item: 'top'}`.
+- Heatmap toggle resta no-op (rimosso α.99, mai ridisegnato come overlay
+  sul foreground). Da affrontare in sessione successiva.
+
+**Da testare Matteo**:
+1. /planning → tab Timeline → labels in cima, no spazio vuoto sopra
+2. Item bar Y combacia con label Y di ogni risorsa
+
+Push: SÌ (Matteo in remoto). Export ZIP DB allegato.
+
+## (versione precedente)
+
 **v3.5.0-alpha.111.2** — 14 maggio 2026 — Rollback timeline + riallineamento quadranti quote + seed lean + simulazione CR→billing
 
 Post-feedback Matteo (notte 13-14 mag):

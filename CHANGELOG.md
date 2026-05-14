@@ -1,5 +1,28 @@
 # MediaFlow — Changelog
 
+## v3.5.0-alpha.111.3 — Fix allineamento timeline planning (14 maggio 2026)
+
+**Timeline planning — labels disallineate / righe ammucchiate in fondo**:
+- Sintomo Matteo (3 screenshot): con DB lean (poche risorse) le righe
+  label+items si schiacciavano nel fondo del pannello, lasciando area
+  vuota grande sopra. Visibile su Chrome Mac retina, stato post-load.
+- Causa: `orientation: {axis: 'top'}` settava solo asse. Default
+  vis-timeline 7.x `orientation.item = 'bottom'` → groups ancorati al
+  fondo del pannello quando height totale groups < panel height.
+- Fix `app/templates/pages/planning.html:4853`:
+  `orientation: {axis: 'top', item: 'top'}` esplicito.
+- Spiega anche perché in passato con tanti bookings il bug era invisibile
+  (rows riempivano il panel, item:bottom innocuo).
+
+**Heatmap toggle no-op — non risolto, da fare**:
+- α.99 ha rimosso il render heatmap dalla label cell (causava mismatch
+  altezze label↔foreground). Commento esplicito a planning.html:3415-3420
+  `(legacy heatmap toggle prefs.heatmap resta no-op finché ridisegnata)`.
+- CSS `.tl-heat` (planning.css:427-441) orfano. Bottone toolbar e
+  pref checkbox restano vivi ma non producono rendering.
+- Da reintrodurre come overlay assoluto sul foreground (vedi sessione
+  successiva).
+
 ## v3.5.0-alpha.111.2 — Rollback timeline α.111 + riallineamento quadranti quotazione + seed lean + simulazione CR→billing (14 maggio 2026)
 
 Post-feedback Matteo:
