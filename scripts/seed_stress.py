@@ -501,13 +501,24 @@ def stage_users_resources(db: Session) -> dict:
 
     # ── 150 utenze interne (= dipendenti loggabili) — scalate via S() ──
     # Distribuzione ruoli: 5 manager, 15 producer, 10 accounting, 110 operator, 10 viewer
-    role_distribution = (
-        [("manager", manager_role, UserRole.manager)] * S(5) +
-        [("producer", producer_role, UserRole.producer)] * S(15) +
-        [("accounting", accounting_role, UserRole.staff)] * S(10) +
-        [("operator", operator_role, UserRole.staff)] * S(110) +
-        [("viewer", viewer_role, UserRole.viewer)] * S(10)
-    )
+    import builtins
+    if getattr(builtins, "FOCUSED_MODE", False):
+        # v3.5.0-alpha.111.20 — 25 utenti interni (target 40 risorse totali)
+        role_distribution = (
+            [("manager", manager_role, UserRole.manager)] * 2 +
+            [("producer", producer_role, UserRole.producer)] * 3 +
+            [("accounting", accounting_role, UserRole.staff)] * 2 +
+            [("operator", operator_role, UserRole.staff)] * 16 +
+            [("viewer", viewer_role, UserRole.viewer)] * 2
+        )
+    else:
+        role_distribution = (
+            [("manager", manager_role, UserRole.manager)] * S(5) +
+            [("producer", producer_role, UserRole.producer)] * S(15) +
+            [("accounting", accounting_role, UserRole.staff)] * S(10) +
+            [("operator", operator_role, UserRole.staff)] * S(110) +
+            [("viewer", viewer_role, UserRole.viewer)] * S(10)
+        )
     random.shuffle(role_distribution)
 
     internal_users = []
@@ -588,8 +599,10 @@ def stage_users_resources(db: Session) -> dict:
         db.refresh(r)
 
     # 2) person_freelance — 120 (no user)
+    _focused_res = getattr(builtins, "FOCUSED_MODE", False)
+    _max_freelance = 10 if _focused_res else S(120)
     freelance_count = 0
-    while freelance_count < S(120):
+    while freelance_count < _max_freelance:
         dept_code = random.choice(list(ROLES_BY_DEPT.keys()))
         role_role = random.choice(ROLES_BY_DEPT[dept_code])
         role_name, daily, hourly, _ = role_role
@@ -615,9 +628,10 @@ def stage_users_resources(db: Session) -> dict:
     db.commit()
 
     # 3) studio rooms — 100 (cycle through STUDIO_DEFS, suffix index)
+    _max_studio = 3 if _focused_res else S(100)
     studio_count = 0
     studio_idx = 0
-    while studio_count < S(100):
+    while studio_count < _max_studio:
         dept_code, base_label, daily = STUDIO_DEFS[studio_idx % len(STUDIO_DEFS)]
         suffix = (studio_idx // len(STUDIO_DEFS)) + 1
         label = f"{base_label} #{suffix}"
@@ -641,7 +655,8 @@ def stage_users_resources(db: Session) -> dict:
     db.commit()
 
     # 4) equipment — 60
-    for i in range(S(60)):
+    _max_equip = 2 if _focused_res else S(60)
+    for i in range(_max_equip):
         dept_code, base_label, daily, brand = EQUIPMENT_DEFS[i % len(EQUIPMENT_DEFS)]
         suffix = (i // len(EQUIPMENT_DEFS)) + 1
         label = f"{base_label} #{suffix}"
@@ -661,7 +676,8 @@ def stage_users_resources(db: Session) -> dict:
     db.commit()
 
     # 5) software seats — 40
-    for i in range(S(40)):
+    _max_sw = 0 if _focused_res else S(40)
+    for i in range(_max_sw):
         dept_code, base_label, daily = SOFTWARE_DEFS[i % len(SOFTWARE_DEFS)]
         suffix = (i // len(SOFTWARE_DEFS)) + 1
         label = f"{base_label} #{suffix}"
@@ -681,7 +697,8 @@ def stage_users_resources(db: Session) -> dict:
     db.commit()
 
     # 6) vehicle — 30
-    for i in range(S(30)):
+    _max_veh = 0 if _focused_res else S(30)
+    for i in range(_max_veh):
         dept_code, base_label, daily, brand = VEHICLE_DEFS[i % len(VEHICLE_DEFS)]
         suffix = (i // len(VEHICLE_DEFS)) + 1
         label = f"{base_label} #{suffix}"
@@ -732,7 +749,11 @@ def stage_clients(db: Session) -> list[Client]:
     log.info("STAGE 4 — 100 clienti + filmografie (3-12 opere ciascuno)")
     clients_created: list[Client] = []
     # 80 italiani + 20 stranieri
-    n_clients = S(100)
+    import builtins
+    if getattr(builtins, "FOCUSED_MODE", False):
+        n_clients = 10  # v3.5.0-alpha.111.20 — fix esatto focused
+    else:
+        n_clients = S(100)
     for i in range(n_clients):
         is_foreign = i >= int(n_clients * 0.8)
         name = _rand_company_name(is_foreign=is_foreign)
@@ -851,13 +872,24 @@ def stage_projects(db: Session, clients: list[Client]) -> list[Project]:
     projects_created: list[Project] = []
     # Status distribution:
     # 5% prospect, 15% quoting, 50% active, 25% completed, 5% archived
-    STATUS_POOL = (
-        [ProjectStatus.prospect] * S(50) +
-        [ProjectStatus.quoting] * S(150) +
-        [ProjectStatus.active] * S(500) +
-        [ProjectStatus.completed] * S(250) +
-        [ProjectStatus.archived] * S(50)
-    )
+    import builtins
+    if getattr(builtins, "FOCUSED_MODE", False):
+        # v3.5.0-alpha.111.20 — 5 progetti × 10 clienti = 50, status realistic mix
+        STATUS_POOL = (
+            [ProjectStatus.quoting] * 5 +
+            [ProjectStatus.active] * 25 +
+            [ProjectStatus.completed] * 18 +
+            [ProjectStatus.archived] * 2
+        )
+        random.shuffle(STATUS_POOL)
+    else:
+        STATUS_POOL = (
+            [ProjectStatus.prospect] * S(50) +
+            [ProjectStatus.quoting] * S(150) +
+            [ProjectStatus.active] * S(500) +
+            [ProjectStatus.completed] * S(250) +
+            [ProjectStatus.archived] * S(50)
+        )
     n_projects = len(STATUS_POOL)
     random.shuffle(STATUS_POOL)
 
@@ -882,9 +914,14 @@ def stage_projects(db: Session, clients: list[Client]) -> list[Project]:
         "ProRes 4444 Master + H.264 screener",
     ]
 
+    _focused = getattr(builtins, "FOCUSED_MODE", False)
     for i in range(n_projects):
         status = STATUS_POOL[i]
-        client = random.choice(clients)
+        if _focused:
+            # 5 progetti × 10 clienti = 50, distribuzione esatta
+            client = clients[i // 5]
+        else:
+            client = random.choice(clients)
         year = random.choice([2024, 2024, 2024, 2025, 2025, 2025, 2025, 2026, 2026])
         proj_num = i + 1
         code = f"P-{year}-{proj_num:04d}"
@@ -1197,11 +1234,24 @@ def stage_quotes_jobs(db: Session, projects: list[Project]) -> dict:
 
 
 def stage_bookings(db: Session, jobs: list[Job], all_resources: list[Resource]) -> None:
-    log.info("STAGE 7 — Bookings + assignments su 3 anni (2024-2026)")
+    import builtins
+    _focused = getattr(builtins, "FOCUSED_MODE", False)
+    log.info(
+        "STAGE 7 — Bookings + assignments su "
+        + ("1 anno (focused)" if _focused else "3 anni (2024-2026)")
+    )
     person_resources = [r for r in all_resources
                         if r.type in (ResourceType.person_internal, ResourceType.person_freelance)]
     studio_resources = [r for r in all_resources if r.type == ResourceType.studio]
     today = date.today()
+    # v3.5.0-alpha.111.20 — Pre-fetch JCL per job per linkare bookings a lavorazione
+    jcl_by_job = {}
+    if _focused:
+        all_jcls = db.query(JobCostLine).filter(
+            JobCostLine.job_id.in_([j.id for j in jobs])
+        ).all()
+        for jcl in all_jcls:
+            jcl_by_job.setdefault(jcl.job_id, []).append(jcl)
 
     bookings_count = 0
     assignments_count = 0
@@ -1211,11 +1261,24 @@ def stage_bookings(db: Session, jobs: list[Job], all_resources: list[Resource]) 
         days_span = (job.end_date - job.start_date).days
         if days_span <= 0:
             continue
-        # 6-25 booking per job
-        n_bookings = random.randint(6, 25)
+        if _focused:
+            # 12-25 bookings per progetto, range schiacciato in 1 anno
+            n_bookings = random.randint(12, 25)
+            # Comprimi range progetto a max 365 giorni (cycle se job_span > 1y)
+            if days_span > 365:
+                effective_start = max(job.start_date, today - timedelta(days=300))
+                effective_end = min(job.end_date, today + timedelta(days=60))
+                days_span = max(1, (effective_end - effective_start).days)
+            else:
+                effective_start = job.start_date
+            job_start_for_offset = effective_start
+        else:
+            # 6-25 booking per job
+            n_bookings = random.randint(6, 25)
+            job_start_for_offset = job.start_date
         for _ in range(n_bookings):
             offset = random.randint(0, max(1, days_span - 1))
-            d = job.start_date + timedelta(days=offset)
+            d = job_start_for_offset + timedelta(days=offset)
             if d.weekday() >= 5 and random.random() > 0.05:
                 continue  # bias to weekdays
             start_hour = random.choice([9, 10, 14, 15])
@@ -1235,8 +1298,16 @@ def stage_bookings(db: Session, jobs: list[Job], all_resources: list[Resource]) 
                 state = random.choice([BookingState.confirmed, BookingState.tentative, BookingState.confirmed])
             status_legacy = BOOKING_STATE_MAP[state][0]
             exec_legacy = BOOKING_STATE_MAP[state][1]
+            # v3.5.0-alpha.111.20 — Link booking a JobCostLine (lavorazione)
+            # User: "Al momento nessun job che vedo è assegnato ad una lavorazione".
+            jcl_pick = None
+            if _focused:
+                pool = jcl_by_job.get(job.id, [])
+                if pool:
+                    jcl_pick = random.choice(pool)
             b = Booking(
                 tenant_id=1, job_id=job.id,
+                job_cost_line_id=jcl_pick.id if jcl_pick else None,
                 start_datetime=start_dt, end_datetime=end_dt,
                 kind=BookingKind.project,
                 status=getattr(BookingStatus, status_legacy),
@@ -1298,7 +1369,12 @@ HOLIDAYS.update([date(2024, 4, 1), date(2025, 4, 21), date(2026, 4, 6)])
 
 
 def stage_timepunches_leaves(db: Session, internal_users: list[User], resources: list[Resource]) -> None:
-    log.info("STAGE 8 — 3 anni TimePunch + ResourceUnavailability (ferie/malattia)")
+    import builtins
+    _focused = getattr(builtins, "FOCUSED_MODE", False)
+    log.info(
+        "STAGE 8 — TimePunch + ResourceUnavailability "
+        + ("(1 anno, copertura completa)" if _focused else "3 anni (2024-2026)")
+    )
     # Map user.id → resource.id (solo person_internal con user_id)
     user_to_resource = {r.user_id: r for r in resources
                         if r.user_id is not None and r.type == ResourceType.person_internal}
@@ -1309,9 +1385,19 @@ def stage_timepunches_leaves(db: Session, internal_users: list[User], resources:
     all_jobs = db.query(Job).filter(Job.tenant_id == 1).all()
     if not all_jobs:
         issue("Niente job, TimePunch senza job_id")
+    # v3.5.0-alpha.111.20 — JCL pool per linkare punch a lavorazione
+    jcl_by_job = {}
+    if _focused:
+        for jcl in db.query(JobCostLine).all():
+            jcl_by_job.setdefault(jcl.job_id, []).append(jcl)
 
-    start_date = date(2024, 1, 1)
-    end_date = min(date.today(), date(2026, 12, 31))
+    if _focused:
+        # Solo ultimi 365 giorni, copertura completa fine mese
+        end_date = date.today()
+        start_date = end_date - timedelta(days=365)
+    else:
+        start_date = date(2024, 1, 1)
+        end_date = min(date.today(), date(2026, 12, 31))
 
     # Ferie: 25 giorni/anno × 3 anni × 150 = 11250 records circa
     # Genera blocchi di 5-10 giorni
@@ -1332,10 +1418,17 @@ def stage_timepunches_leaves(db: Session, internal_users: list[User], resources:
                 e = s + timedelta(days=dur)
                 if e > end_date:
                     continue
-                kind = random.choices(
-                    [UnavailabilityKind.vacation, UnavailabilityKind.sick, UnavailabilityKind.holiday],
-                    weights=[70, 15, 15],
-                )[0]
+                # v3.5.0-alpha.111.20 — include 'other' (permesso) in focused mode
+                if _focused:
+                    kind = random.choices(
+                        [UnavailabilityKind.vacation, UnavailabilityKind.sick, UnavailabilityKind.other],
+                        weights=[55, 15, 30],
+                    )[0]
+                else:
+                    kind = random.choices(
+                        [UnavailabilityKind.vacation, UnavailabilityKind.sick, UnavailabilityKind.holiday],
+                        weights=[70, 15, 15],
+                    )[0]
                 u_status = (UnavailabilityStatus.approved if kind != UnavailabilityKind.sick
                             else random.choice([UnavailabilityStatus.approved, UnavailabilityStatus.pending]))
                 db.add(ResourceUnavailability(
@@ -1415,22 +1508,33 @@ def stage_timepunches_leaves(db: Session, internal_users: list[User], resources:
                 # 5% chance di shift weekend (overtime)
                 if random.random() > 0.05:
                     continue
-            # normale giorno lavorativo
-            # 70% shift normale, 10% idle, 8% overtime, 12% nulla (assenza non registrata)
-            roll = random.random()
-            if roll < 0.7:
+            # v3.5.0-alpha.111.20 — focused: 95% shift, 5% overtime (copertura
+            # piena workday richiesta da Matteo per report HR realistico)
+            # default: 70% shift, 10% idle, 8% overtime, 12% gap
+            if _focused:
+                roll = random.random()
+                thr_shift, thr_idle, thr_ot = 0.93, 0.93, 1.00
+            else:
+                roll = random.random()
+                thr_shift, thr_idle, thr_ot = 0.70, 0.80, 0.88
+            if roll < thr_shift:
                 start_h = random.choices([8, 9, 10], weights=[20, 70, 10])[0]
                 hours = random.choices([8, 8, 8, 9, 7], weights=[60, 15, 10, 10, 5])[0]
                 start_dt = datetime.combine(d, time(start_h, 0))
                 end_dt = start_dt + timedelta(hours=hours + 1)  # +1h pausa
-                # opzionale job_id
+                # opzionale job_id + jcl per focused
                 jobs_for_res = job_by_user_resource.get(r.id, [])
                 job_id = random.choice(jobs_for_res) if jobs_for_res and random.random() < 0.75 else None
+                jcl_id = None
+                if _focused and job_id:
+                    pool = jcl_by_job.get(job_id, [])
+                    if pool:
+                        jcl_id = random.choice(pool).id
                 punches_bulk.append({
                     "tenant_id": 1,
                     "resource_id": r.id,
                     "job_id": job_id,
-                    "job_cost_line_id": None,
+                    "job_cost_line_id": jcl_id,
                     "start_datetime": start_dt,
                     "end_datetime": end_dt,
                     "kind": PunchKind.shift.value,
@@ -1439,7 +1543,7 @@ def stage_timepunches_leaves(db: Session, internal_users: list[User], resources:
                     "created_by_user_id": u.id,
                     "created_at": datetime.utcnow(),
                 })
-            elif roll < 0.8:
+            elif roll < thr_idle:
                 # idle (presente, non allocato)
                 start_dt = datetime.combine(d, time(9, 0))
                 end_dt = start_dt + timedelta(hours=8)
@@ -1451,21 +1555,26 @@ def stage_timepunches_leaves(db: Session, internal_users: list[User], resources:
                     "notes": None, "created_by_user_id": u.id,
                     "created_at": datetime.utcnow(),
                 })
-            elif roll < 0.88:
+            elif roll < thr_ot:
                 # overtime giornaliero
                 start_dt = datetime.combine(d, time(9, 0))
                 end_dt = start_dt + timedelta(hours=11)
                 jobs_for_res = job_by_user_resource.get(r.id, [])
                 job_id = random.choice(jobs_for_res) if jobs_for_res else None
+                jcl_id = None
+                if _focused and job_id:
+                    pool = jcl_by_job.get(job_id, [])
+                    if pool:
+                        jcl_id = random.choice(pool).id
                 punches_bulk.append({
                     "tenant_id": 1, "resource_id": r.id, "job_id": job_id,
-                    "job_cost_line_id": None,
+                    "job_cost_line_id": jcl_id,
                     "start_datetime": start_dt, "end_datetime": end_dt,
                     "kind": PunchKind.shift.value, "break_minutes": 30,
                     "notes": "Overtime", "created_by_user_id": u.id,
                     "created_at": datetime.utcnow(),
                 })
-            # else: nessun punch (assenza non registrata)
+            # else: nessun punch (default mode = 12% gap; focused = ~0% gap)
         d += timedelta(days=1)
         # bulk flush every 5000
         if len(punches_bulk) >= 5000:
@@ -1901,9 +2010,27 @@ def stage_movements(db: Session, physical: list[PhysicalAsset], digital: list[As
 
 
 def stage_billing_batches(db: Session, jobs: list[Job]) -> None:
+    import builtins
+    _focused = getattr(builtins, "FOCUSED_MODE", False)
     log.info("STAGE 14 — BillingBatch + JCLBilledSlice per closed periods")
-    closed = [j for j in jobs if j.status in (JobStatus.completed, JobStatus.invoiced)]
-    sample = random.sample(closed, min(50, len(closed)))
+    # v3.5.0-alpha.111.20 — pre-fetch invoices per project per linkare batch+slice
+    invoices_by_project = {}
+    for inv in db.query(Invoice).all():
+        if inv.job_id:
+            j = db.query(Job).filter(Job.id == inv.job_id).first()
+            if j and j.project_id:
+                invoices_by_project.setdefault(j.project_id, []).append(inv)
+    if _focused:
+        # v3.5.0-alpha.111.20 — mix status: alcuni progetti active hanno
+        # batch in_batch/proposed (non emessi), altri completed hanno
+        # batch invoiced. Già completed → JCL billed; user vuole
+        # diversificazione.
+        closed = [j for j in jobs if j.status in (JobStatus.completed, JobStatus.invoiced)]
+        active = [j for j in jobs if j.status == JobStatus.active]
+        sample = closed + random.sample(active, min(8, len(active)))
+    else:
+        closed = [j for j in jobs if j.status in (JobStatus.completed, JobStatus.invoiced)]
+        sample = random.sample(closed, min(50, len(closed)))
     batch_count = 0
     line_count = 0
     slice_count = 0
@@ -1923,13 +2050,30 @@ def stage_billing_batches(db: Session, jobs: list[Job]) -> None:
             year = period_start.year
             year_seq[year] = year_seq.get(year, 0) + 1
             code = f"BB-{year}-{year_seq[year]:04d}"
+            # v3.5.0-alpha.111.20 — Status mix in focused: draft/approved/invoiced
+            if _focused and job.status == JobStatus.active:
+                bb_status = random.choices(
+                    [BillingBatchStatus.draft, BillingBatchStatus.approved, BillingBatchStatus.invoiced],
+                    weights=[30, 40, 30],
+                )[0]
+            else:
+                bb_status = BillingBatchStatus.invoiced
+            # v3.5.0-alpha.111.20 — Link invoice se batch invoiced
+            linked_invoice = None
+            if bb_status == BillingBatchStatus.invoiced:
+                inv_pool = invoices_by_project.get(job.project_id, [])
+                if inv_pool:
+                    linked_invoice = random.choice(inv_pool)
             bb = BillingBatch(
                 tenant_id=1, code=code, project_id=job.project_id,
-                status=BillingBatchStatus.invoiced,
+                status=bb_status,
                 period_start=period_start, period_end=period_end,
                 total_proposed=0, total_approved=0, total_lost=0,
-                transmitted_at=datetime.combine(period_end, time(18, 0)),
-                approved_at=datetime.combine(period_end + timedelta(days=2), time(10, 0)),
+                transmitted_at=(datetime.combine(period_end, time(18, 0))
+                               if bb_status != BillingBatchStatus.draft else None),
+                approved_at=(datetime.combine(period_end + timedelta(days=2), time(10, 0))
+                            if bb_status in (BillingBatchStatus.approved, BillingBatchStatus.invoiced) else None),
+                invoice_id=linked_invoice.id if linked_invoice else None,
             )
             db.add(bb)
             db.flush()
@@ -1953,9 +2097,11 @@ def stage_billing_batches(db: Session, jobs: list[Job]) -> None:
                 db.flush()
                 line_count += 1
                 # JCLBilledSlice (slice approvata)
+                # v3.5.0-alpha.111.20 — propaga invoice_id se batch è linked
                 slice_ = JCLBilledSlice(
                     tenant_id=1, job_cost_line_id=jcl.id,
                     billing_batch_line_id=bbl.id,
+                    invoice_id=linked_invoice.id if linked_invoice else None,
                     period_start=period_start, period_end=period_end,
                     billed_quantity=bbl.quantity, billed_amount=line_appr,
                     unit_price_snap=jcl.unit_price,
@@ -1971,7 +2117,11 @@ def stage_billing_batches(db: Session, jobs: list[Job]) -> None:
                         reason=random.choice([LossReason.manager_discount, LossReason.rounding]),
                         notes="Auto-generato seed_stress",
                     ))
-                jcl.billing_status = JCLBillingStatus.billed
+                # v3.5.0-alpha.111.20 — match JCL status a batch status
+                if bb_status == BillingBatchStatus.invoiced:
+                    jcl.billing_status = JCLBillingStatus.billed
+                elif bb_status in (BillingBatchStatus.draft, BillingBatchStatus.approved):
+                    jcl.billing_status = JCLBillingStatus.in_batch
             bb.total_proposed = round(tot_prop, 2)
             bb.total_approved = round(tot_appr, 2)
             bb.total_lost = round(tot_prop - tot_appr, 2)
@@ -2097,12 +2247,25 @@ def main():
     parser.add_argument("--keep", action="store_true", help="Mantieni DB esistente")
     parser.add_argument("--scale", type=float, default=1.0,
                         help="Scale globale (1.0=full stress, 0.3=lean ~30 percent)")
+    parser.add_argument("--focused", action="store_true",
+                        help="v3.5.0-alpha.111.20: 10 clienti, 5 progetti cad, 40 risorse, "
+                             "bookings densi 1 anno, status billing variati. Override scale.")
     args = parser.parse_args()
     reset = args.reset and not args.keep
     # v3.5.0-alpha.111.2 — propaga scale globale via builtins per pickup
     # dai stage_* (evita ri-firma di N funzioni).
     import builtins
     builtins.SEED_SCALE = max(0.05, min(2.0, float(args.scale)))
+    # v3.5.0-alpha.111.20 — focused mode: forza scale a valori esatti.
+    if args.focused:
+        # 10/50/40 sui counter base (clients=100, projects=1000, resources=500)
+        # 10/100=0.10, 50/1000=0.05, 40/500=0.08 → scegli 0.10, poi
+        # patchiamo manualmente projects/resources via builtins.
+        builtins.SEED_SCALE = 0.10
+        builtins.FOCUSED_MODE = True
+        log.info("FOCUSED MODE: 10 clienti × 5 progetti × 40 risorse + bookings 1y densi")
+    else:
+        builtins.FOCUSED_MODE = False
 
     t0 = datetime.now()
     stage_setup(reset=reset)
