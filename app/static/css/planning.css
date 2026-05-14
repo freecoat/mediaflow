@@ -133,8 +133,27 @@
     font-size: 11.5px;
     letter-spacing: 0.6px;
   }
-  .vis-time-axis .vis-grid { border-color: var(--border, rgba(255,255,255,0.05)); }
-  .vis-time-axis .vis-grid.vis-major { border-color: var(--indigo-border, rgba(98,114,245,0.18)); }
+  /* v3.5.0-alpha.111.17 — Differenzia separatore giorno (major) vs ora (minor).
+     Day boundary: bordo sinistro 2px solido più contrastato.
+     Hour boundary: bordo sinistro 1px tenue.
+     Applicato sia su time-axis che su foreground (linee verticali nel body). */
+  .vis-time-axis .vis-grid {
+    border-left-color: var(--border, rgba(255,255,255,0.05)) !important;
+    border-left-width: 1px !important;
+  }
+  .vis-time-axis .vis-grid.vis-major {
+    border-left-color: var(--indigo-border, rgba(98,114,245,0.45)) !important;
+    border-left-width: 2px !important;
+  }
+  /* Linee verticali nel foreground (body timeline) */
+  .vis-foreground .vis-group .vis-grid.vis-vertical {
+    border-left-color: rgba(255,255,255,0.04) !important;
+    border-left-width: 1px !important;
+  }
+  .vis-foreground .vis-group .vis-grid.vis-vertical.vis-major {
+    border-left-color: rgba(98,114,245,0.22) !important;
+    border-left-width: 2px !important;
+  }
   /* v3.4.45: weekend evidenziato su tutta la timeline (axis + foreground) */
   .vis-time-axis .vis-grid.vis-saturday,
   .vis-time-axis .vis-grid.vis-sunday {

@@ -356,13 +356,17 @@
             <button class="btn btn-secondary btn-sm" onclick="setQuoteStatus('expired')">⏰ Scaduta</button>
           </div>
           <button class="btn btn-primary btn-sm mt-3" style="width:100%;" onclick="approveAndCreateJob()">✓ Approva quote → Job</button>
-          <!-- v3.4.39: sezione Versioni (catena) -->
-          <div id="versions-area" class="mt-3" style="display:none;">
-            <div class="card-title" style="font-size:11px;text-transform:uppercase;letter-spacing:.6px;color:var(--text-muted);margin-bottom:6px;">Versioni</div>
-            <div id="versions-list" style="display:flex;flex-direction:column;gap:4px;font-size:12px;"></div>
-            <button id="btn-migrate-job" class="btn btn-primary btn-sm mt-2" style="width:100%;display:none;" onclick="openMigratePreview()">↪ Migra Job a questa versione</button>
-          </div>
         </div>
+      </div>
+
+      <!-- v3.5.0-alpha.111.17: Versioni estratte FUORI dal quote-top-row.
+           Con 2+ versioni la card destra diventava più alta della sinistra
+           (Riepilogo economico = totals compatti). Stessa logica α.111.2
+           per Condizioni economiche. -->
+      <div id="versions-area" class="card" style="margin-top:18px;display:none;">
+        <div class="card-title mb-3">Versioni quotazione</div>
+        <div id="versions-list" style="display:flex;flex-direction:column;gap:4px;font-size:12px;"></div>
+        <button id="btn-migrate-job" class="btn btn-primary btn-sm mt-2" style="display:none;" onclick="openMigratePreview()">↪ Migra Job a questa versione</button>
       </div>
 
       <!-- v3.5.0-alpha.111.2: Condizioni economiche & scadenze spostate FUORI
