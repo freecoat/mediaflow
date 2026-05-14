@@ -423,11 +423,23 @@ async function api(method, url, body, options) {
       const inv = slc.invoice_number ? ` (fattura ${slc.invoice_number})` : '';
       const period = (slc.period_start && slc.period_end)
         ? ` ${slc.period_start} → ${slc.period_end}` : '';
+      // v3.5.0-alpha.111.23 — Solo admin può sbloccare. Non-admin: messaggio
+      // chiaro, nessun confirm fuorviante.
+      const isAdmin = typeof window.mfIsAdmin === 'function' ? window.mfIsAdmin() : false;
+      if (!isAdmin) {
+        const blockE = new Error(
+          '🔒 Booking bloccato — periodo fatturato' + period + inv + '.\n\n' +
+          'Solo amministratore può sbloccare. Contattare admin per modifica.'
+        );
+        blockE.detail = det;
+        blockE.status = 403;
+        throw blockE;
+      }
       const ok = confirm(
-        'Stai modificando un booking CONFERMATO in periodo già fatturato' + period + inv + '.\n\n' +
+        '⚠ ADMIN OVERRIDE — Sblocco booking in periodo fatturato' + period + inv + '.\n\n' +
         'Il maturato ricalcolato potrebbe divergere da quello già fatturato.\n' +
         'La fattura emessa resta inalterata, ma il cost-report può cambiare.\n\n' +
-        'Confermi la modifica?'
+        'Confermi sblocco e modifica?'
       );
       if (!ok) throw e;
       // Retry con force_slice_unlock=true. Per FormData clona; per object

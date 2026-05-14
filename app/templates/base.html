@@ -329,7 +329,22 @@ async function showAboutModal() {
 {% endif %}
 
 <script src="/static/js/lucide.min.js?v=3.5.0-alpha.30"></script>
-<script src="/static/js/global.js?v=3.5.0-alpha.111.2"></script>
+<script>
+  // v3.5.0-alpha.111.23 — User context globale per JS (admin gate slice-lock + altri)
+  window._mfUser = {
+    {% if request.state.current_user %}
+    id: {{ request.state.current_user.id }},
+    email: "{{ request.state.current_user.email|e }}",
+    role: "{{ request.state.current_user.role.value if request.state.current_user.role else '' }}",
+    is_platform_admin: {{ 'true' if request.state.current_user.is_platform_admin else 'false' }},
+    {% endif %}
+  };
+  window.mfIsAdmin = function() {
+    const u = window._mfUser || {};
+    return u.role === 'admin' || u.is_platform_admin === true;
+  };
+</script>
+<script src="/static/js/global.js?v=3.5.0-alpha.111.23"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/fullcalendar/6.1.11/index.global.min.js"></script>
 <script>
   // v3.5.0-alpha.30: Lucide createIcons() al primo paint + helper globale

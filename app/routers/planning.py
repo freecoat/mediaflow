@@ -41,6 +41,40 @@ router = APIRouter(prefix="/planning", tags=["planning"])
 
 
 
+def _gate_force_unlock(request: Request, force: bool) -> bool:
+    """v3.5.0-alpha.111.23 — Solo admin può forzare sblocco slice billed.
+    Ritorna `force` validato. Solleva 403 se non-admin tenta force=True.
+    """
+    if not force:
+        return False
+    from app.services.rbac import current_user_optional, is_admin
+    user = current_user_optional(request)
+    if not is_admin(user):
+        raise HTTPException(
+            status_code=403,
+            detail={
+                "code": "ADMIN_REQUIRED_FOR_UNLOCK",
+                "message": (
+                    "Solo amministratore può sbloccare booking di periodi "
+                    "già fatturati. Contattare admin."
+                ),
+            },
+        )
+    return True
+
+
+async def _force_unlock_dep(
+    request: Request,
+    force_slice_unlock: bool = Form(False),
+) -> bool:
+    """FastAPI dependency: parses force_slice_unlock Form + applies admin gate.
+    Sostituisce `force_slice_unlock: bool = Form(False)` nei mutator
+    booking. Trasparente all'utente: se force_slice_unlock=False (default)
+    nessun cambio. Se True senza admin → 403 con code ADMIN_REQUIRED_FOR_UNLOCK.
+    """
+    return _gate_force_unlock(request, force_slice_unlock)
+
+
 def _assert_no_blocking_slice(db: Session, b: Booking, *, force: bool = False) -> None:
     """v3.5.0-alpha.59 — HARD-BLOCK 409 se il booking ricade in un periodo
     già fatturato (esiste una `JCLBilledSlice` la cui finestra si sovrappone
@@ -1428,7 +1462,7 @@ async def update_booking(
     notes: Optional[str] = Form(None),
     priority: Optional[str] = Form(None),  # v3.5.0-alpha.22
     assignments: Optional[str] = Form(None),  # se passato, replace-all
-    force_slice_unlock: bool = Form(False),  # v3.5.0-alpha.66.3
+    force_slice_unlock: bool = Depends(_force_unlock_dep),  # α.66.3 + α.111.23 admin-gate
     db: Session = Depends(get_db),
 ):
     """Aggiorna metadata booking (kind/job/status/notes) e/o sostituisce assignments.
@@ -1742,7 +1776,7 @@ async def update_assignment(
     resource_id: Optional[int] = Form(None),
     start_datetime: Optional[datetime] = Form(None),
     end_datetime: Optional[datetime] = Form(None),
-    force_slice_unlock: bool = Form(False),  # v3.5.0-alpha.66.3
+    force_slice_unlock: bool = Depends(_force_unlock_dep),  # α.66.3 + α.111.23 admin-gate
     db: Session = Depends(get_db),
 ):
     """Aggiorna un singolo assignment (drag/resize/reassign del singolo item timeline)."""
@@ -2420,7 +2454,7 @@ async def bulk_edit_eligible_cost_lines(
 async def multi_move_assignments(
     request: Request,
     moves: str = Form(...),  # JSON array
-    force_slice_unlock: bool = Form(False),  # v3.5.0-alpha.66.3
+    force_slice_unlock: bool = Depends(_force_unlock_dep),  # α.66.3 + α.111.23 admin-gate
     db: Session = Depends(get_db),
 ):
     """v3.5.0-alpha.42: multi-move atomico transazionale.
@@ -2940,7 +2974,7 @@ async def update_booking_state(
     request: Request,
     state: BookingState = Form(...),
     not_done_reason: Optional[str] = Form(None),
-    force_slice_unlock: bool = Form(False),
+    force_slice_unlock: bool = Depends(_force_unlock_dep),  # α.111.23 admin-gate
     db: Session = Depends(get_db),
 ):
     """v3.5.0-alpha.66.5 — Cambio stato unificato del booking.
@@ -3043,7 +3077,7 @@ async def update_booking_execution(
     request: Request,
     execution_status: BookingExecutionStatus = Form(...),
     not_done_reason: Optional[str] = Form(None),
-    force_slice_unlock: bool = Form(False),  # v3.5.0-alpha.66.3
+    force_slice_unlock: bool = Depends(_force_unlock_dep),  # α.66.3 + α.111.23 admin-gate
     db: Session = Depends(get_db),
 ):
     """Cambio stato esecuzione del booking. Su not_done richiede motivazione.
