@@ -1325,6 +1325,50 @@ def _export_rows_for_scope(
     return header, rows
 
 
+def _compute_totals(header: list[str], rows: list[list]) -> dict:
+    """v3.5.0-alpha.111.21.1 — Totali mensili (uso prevalente Excel).
+    Aggrega per (Risorsa, Mese, Tipo) e per Risorsa, e grand total.
+    Indici colonne (header):
+      0=Data, 1=Risorsa, 2=Reparto, 3=Tipo, 6=Ore, 7=Ore ponderate
+    """
+    by_res_month_kind = {}  # (risorsa, yyyy-mm, tipo) → {ore, ore_pond, count}
+    by_res = {}             # risorsa → {ore, ore_pond}
+    by_month = {}           # yyyy-mm → {ore, ore_pond}
+    grand = {"ore": 0.0, "ore_pond": 0.0, "count": 0}
+    for r in rows:
+        if len(r) < 8:
+            continue
+        try:
+            data = str(r[0])
+            risorsa = str(r[1])
+            tipo = str(r[3])
+            ore = float(r[6] or 0)
+            ore_pond = float(r[7] or 0)
+        except (ValueError, TypeError):
+            continue
+        ym = data[:7] if len(data) >= 7 else "?"
+        key3 = (risorsa, ym, tipo)
+        bucket = by_res_month_kind.setdefault(key3, {"ore": 0.0, "ore_pond": 0.0, "count": 0})
+        bucket["ore"] += ore
+        bucket["ore_pond"] += ore_pond
+        bucket["count"] += 1
+        bres = by_res.setdefault(risorsa, {"ore": 0.0, "ore_pond": 0.0})
+        bres["ore"] += ore
+        bres["ore_pond"] += ore_pond
+        bmonth = by_month.setdefault(ym, {"ore": 0.0, "ore_pond": 0.0})
+        bmonth["ore"] += ore
+        bmonth["ore_pond"] += ore_pond
+        grand["ore"] += ore
+        grand["ore_pond"] += ore_pond
+        grand["count"] += 1
+    return {
+        "by_res_month_kind": by_res_month_kind,
+        "by_res": by_res,
+        "by_month": by_month,
+        "grand": grand,
+    }
+
+
 def _build_csv(header: list[str], rows: list[list]) -> bytes:
     import csv
     from io import StringIO
@@ -1333,6 +1377,26 @@ def _build_csv(header: list[str], rows: list[list]) -> bytes:
     writer.writerow(header)
     for row in rows:
         writer.writerow(row)
+    # v3.5.0-alpha.111.21.1 — Totali mensili in coda
+    totals = _compute_totals(header, rows)
+    writer.writerow([])
+    writer.writerow(["=== TOTALI PER RISORSA × MESE × TIPO ==="])
+    writer.writerow(["Risorsa", "Mese", "Tipo", "Ore", "Ore ponderate", "N. record"])
+    for (res, ym, tipo), v in sorted(totals["by_res_month_kind"].items()):
+        writer.writerow([res, ym, tipo, round(v["ore"], 2), round(v["ore_pond"], 2), v["count"]])
+    writer.writerow([])
+    writer.writerow(["=== TOTALI PER RISORSA ==="])
+    writer.writerow(["Risorsa", "Ore totali", "Ore ponderate totali"])
+    for res, v in sorted(totals["by_res"].items()):
+        writer.writerow([res, round(v["ore"], 2), round(v["ore_pond"], 2)])
+    writer.writerow([])
+    writer.writerow(["=== TOTALI PER MESE ==="])
+    writer.writerow(["Mese", "Ore totali", "Ore ponderate totali"])
+    for ym, v in sorted(totals["by_month"].items()):
+        writer.writerow([ym, round(v["ore"], 2), round(v["ore_pond"], 2)])
+    writer.writerow([])
+    g = totals["grand"]
+    writer.writerow(["GRAND TOTAL", "", "", round(g["ore"], 2), round(g["ore_pond"], 2), g["count"]])
     return buf.getvalue().encode("utf-8-sig")  # BOM Excel-friendly
 
 
@@ -1341,8 +1405,9 @@ def _build_xlsx(header: list[str], rows: list[list], title: str) -> bytes:
     from openpyxl.styles import Font, PatternFill, Alignment
     from io import BytesIO
     wb = Workbook()
+    # ── Sheet 1: Dettaglio ───────────────────────────────
     ws = wb.active
-    ws.title = "Timesheet"
+    ws.title = "Dettaglio"
     ws.append([title])
     ws["A1"].font = Font(bold=True, size=14, color="6272F5")
     ws.append([f"Generato: {datetime.utcnow().strftime('%Y-%m-%d %H:%M UTC')}"])
@@ -1351,6 +1416,8 @@ def _build_xlsx(header: list[str], rows: list[list], title: str) -> bytes:
     header_row = ws.max_row
     indigo = PatternFill(start_color="6272F5", end_color="6272F5", fill_type="solid")
     white_bold = Font(bold=True, color="FFFFFF")
+    bold = Font(bold=True)
+    grey_fill = PatternFill(start_color="EEF0FB", end_color="EEF0FB", fill_type="solid")
     for cell in ws[header_row]:
         cell.font = white_bold
         cell.fill = indigo
@@ -1361,9 +1428,222 @@ def _build_xlsx(header: list[str], rows: list[list], title: str) -> bytes:
     for i, w in enumerate(widths[:len(header)], start=1):
         col = ws.cell(row=header_row, column=i).column_letter
         ws.column_dimensions[col].width = w
+
+    # ── Sheet 2: Totali (mensili) ────────────────────────
+    # v3.5.0-alpha.111.21.1 — Excel viene esportato ~mensilmente per
+    # consulente lavoro. Totali in sheet separato per consultazione rapida.
+    totals = _compute_totals(header, rows)
+    ws2 = wb.create_sheet("Totali")
+    ws2.append([title])
+    ws2["A1"].font = Font(bold=True, size=14, color="6272F5")
+    ws2.append([])
+
+    ws2.append(["RIEPILOGO PER RISORSA × MESE × TIPO"])
+    ws2.cell(row=ws2.max_row, column=1).font = Font(bold=True, size=12, color="2A2E3D")
+    head3 = ["Risorsa", "Mese", "Tipo", "Ore", "Ore ponderate", "N. record"]
+    ws2.append(head3)
+    h3_row = ws2.max_row
+    for cell in ws2[h3_row]:
+        cell.font = white_bold
+        cell.fill = indigo
+        cell.alignment = Alignment(horizontal="center")
+    for (res, ym, tipo), v in sorted(totals["by_res_month_kind"].items()):
+        ws2.append([res, ym, tipo, round(v["ore"], 2), round(v["ore_pond"], 2), v["count"]])
+    ws2.append([])
+
+    ws2.append(["RIEPILOGO PER RISORSA"])
+    ws2.cell(row=ws2.max_row, column=1).font = Font(bold=True, size=12, color="2A2E3D")
+    head_r = ["Risorsa", "Ore totali", "Ore ponderate totali"]
+    ws2.append(head_r)
+    hr_row = ws2.max_row
+    for cell in ws2[hr_row]:
+        cell.font = white_bold
+        cell.fill = indigo
+        cell.alignment = Alignment(horizontal="center")
+    for res, v in sorted(totals["by_res"].items()):
+        ws2.append([res, round(v["ore"], 2), round(v["ore_pond"], 2)])
+    ws2.append([])
+
+    ws2.append(["RIEPILOGO PER MESE"])
+    ws2.cell(row=ws2.max_row, column=1).font = Font(bold=True, size=12, color="2A2E3D")
+    head_m = ["Mese", "Ore totali", "Ore ponderate totali"]
+    ws2.append(head_m)
+    hm_row = ws2.max_row
+    for cell in ws2[hm_row]:
+        cell.font = white_bold
+        cell.fill = indigo
+        cell.alignment = Alignment(horizontal="center")
+    for ym, v in sorted(totals["by_month"].items()):
+        ws2.append([ym, round(v["ore"], 2), round(v["ore_pond"], 2)])
+    ws2.append([])
+
+    g = totals["grand"]
+    ws2.append(["GRAND TOTAL", round(g["ore"], 2), round(g["ore_pond"], 2), f"({g['count']} record)"])
+    for cell in ws2[ws2.max_row]:
+        cell.font = bold
+        cell.fill = grey_fill
+
+    # Widths sheet 2
+    for col_letter, w in zip(["A", "B", "C", "D", "E", "F"], [26, 12, 22, 14, 16, 12]):
+        ws2.column_dimensions[col_letter].width = w
+
     buf = BytesIO()
     wb.save(buf)
     return buf.getvalue()
+
+
+@router.get("/api/timesheet-completion")
+async def timesheet_completion(
+    request: Request,
+    year: Optional[int] = None,
+    month: Optional[int] = None,
+    threshold_pct: float = 95.0,
+    db: Session = Depends(get_db),
+):
+    """v3.5.0-alpha.111.22 — Allarme dipendenti senza timesheet completo.
+
+    Per ogni person_internal: confronta ore attese (giorni lavorativi del
+    mese × daily_hours_threshold) vs ore loggate (punches + ore di
+    ferie/malattia/permesso). Sotto threshold_pct → incomplete.
+
+    Permission: manager+ per scope intero. Non-manager vede solo self.
+    """
+    user = current_user_optional(request)
+    today = date.today()
+    yr = year or today.year
+    mo = month or today.month
+    if mo < 1 or mo > 12:
+        raise HTTPException(400, "mese non valido")
+    # Range del mese
+    from_d = date(yr, mo, 1)
+    if mo == 12:
+        to_d = date(yr + 1, 1, 1) - timedelta(days=1)
+    else:
+        to_d = date(yr, mo + 1, 1) - timedelta(days=1)
+
+    policy = db.query(WorkingHoursPolicy).filter(
+        WorkingHoursPolicy.tenant_id == 1,
+        WorkingHoursPolicy.is_default == True,  # noqa: E712
+    ).first()
+    if not policy:
+        raise HTTPException(404, "WorkingHoursPolicy default mancante")
+    daily_h = float(policy.daily_hours_threshold or 8.0)
+    working_days_bits = int(policy.working_days or 31)  # default lun-ven
+
+    # Festività nel mese
+    from app.services.working_hours import get_holidays
+    holidays_set = get_holidays(policy, yr, yr)
+
+    # Giorni lavorativi attesi nel mese (escludendo weekend per policy + festività)
+    expected_workdays = 0
+    d = from_d
+    while d <= to_d:
+        bit = 1 << d.weekday()
+        if (working_days_bits & bit) and d not in holidays_set:
+            expected_workdays += 1
+        d += timedelta(days=1)
+    expected_hours = round(expected_workdays * daily_h, 2)
+
+    # Permission scope
+    q_res = db.query(Resource).filter(
+        Resource.tenant_id == 1,
+        Resource.type == ResourceType.person_internal,
+        Resource.is_active.is_(True),
+    )
+    if not is_elevated(user):
+        my_rid = scope_resource_id(db, user)
+        if not my_rid:
+            return {"year": yr, "month": mo, "expected_hours": expected_hours,
+                    "expected_workdays": expected_workdays, "resources": []}
+        q_res = q_res.filter(Resource.id == my_rid)
+    resources = q_res.all()
+    res_ids = [r.id for r in resources]
+    if not res_ids:
+        return {"year": yr, "month": mo, "expected_hours": expected_hours,
+                "expected_workdays": expected_workdays, "resources": []}
+
+    # Punches
+    punches = (
+        db.query(TimePunch)
+        .filter(
+            TimePunch.tenant_id == 1,
+            TimePunch.resource_id.in_(res_ids),
+            TimePunch.start_datetime >= datetime.combine(from_d, time.min),
+            TimePunch.start_datetime <= datetime.combine(to_d, time.max),
+        )
+        .all()
+    )
+    punch_h_by_res: dict[int, float] = {}
+    for p in punches:
+        if not p.end_datetime:
+            continue
+        kind_str = p.kind.value if hasattr(p.kind, "value") else str(p.kind)
+        if kind_str not in ("shift", "overtime"):
+            continue
+        ms = (p.end_datetime - p.start_datetime).total_seconds() / 3600.0
+        ore = max(0.0, ms - (p.break_minutes or 0) / 60.0)
+        punch_h_by_res[p.resource_id] = punch_h_by_res.get(p.resource_id, 0.0) + ore
+
+    # Unavailability hours nel mese (ferie/malattia/permesso)
+    unavs = (
+        db.query(ResourceUnavailability)
+        .filter(
+            ResourceUnavailability.resource_id.in_(res_ids),
+            ResourceUnavailability.start_date <= to_d,
+            ResourceUnavailability.end_date >= from_d,
+            ResourceUnavailability.status == UnavailabilityStatus.approved,
+        )
+        .all()
+    )
+    unav_h_by_res: dict[int, float] = {}
+    for u in unavs:
+        d = max(u.start_date, from_d)
+        e = min(u.end_date, to_d)
+        days = 0
+        while d <= e:
+            bit = 1 << d.weekday()
+            if (working_days_bits & bit) and d not in holidays_set:
+                days += 1
+            d += timedelta(days=1)
+        unav_h_by_res[u.resource_id] = unav_h_by_res.get(u.resource_id, 0.0) + days * daily_h
+
+    # Dept lookup
+    from app.models.models import Department as _Dept
+    dept_by_id = {d.id: d.name for d in db.query(_Dept).all()}
+
+    rows = []
+    incomplete_count = 0
+    for r in resources:
+        punched = round(punch_h_by_res.get(r.id, 0.0), 2)
+        unaved = round(unav_h_by_res.get(r.id, 0.0), 2)
+        logged = round(punched + unaved, 2)
+        pct = round((logged / expected_hours * 100.0) if expected_hours > 0 else 100.0, 1)
+        is_complete = pct >= threshold_pct
+        if not is_complete:
+            incomplete_count += 1
+        rows.append({
+            "resource_id": r.id,
+            "resource_name": r.name,
+            "department": dept_by_id.get(r.department_id, ""),
+            "expected_hours": expected_hours,
+            "punched_hours": punched,
+            "unav_hours": unaved,
+            "logged_hours": logged,
+            "completion_pct": pct,
+            "is_complete": is_complete,
+            "missing_hours": round(max(0.0, expected_hours - logged), 2),
+        })
+    rows.sort(key=lambda x: (x["is_complete"], -x["missing_hours"]))
+    return {
+        "year": yr, "month": mo,
+        "from_date": from_d.isoformat(), "to_date": to_d.isoformat(),
+        "expected_workdays": expected_workdays,
+        "expected_hours": expected_hours,
+        "threshold_pct": threshold_pct,
+        "incomplete_count": incomplete_count,
+        "resources_count": len(rows),
+        "resources": rows,
+    }
 
 
 @router.get("/api/export/timesheet")
@@ -1400,7 +1680,7 @@ async def export_timesheet(
     # Determina scope effettivo
     if scope == "resource" and resource_id:
         # Self vs altri
-        my_res_id = scope_resource_id(user)
+        my_res_id = scope_resource_id(db, user)
         if my_res_id != resource_id and not is_elevated(user):
             raise HTTPException(403, "Servono permessi manager+ per esportare ore altrui")
     elif scope in ("department", "all"):
