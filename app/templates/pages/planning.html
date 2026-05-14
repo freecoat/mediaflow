@@ -14,7 +14,7 @@
 <!-- v3.5.0-alpha.66.14.9: CSS estratto in /static/css/planning.css per
      ridurre planning.html da 7377 -> 6710 righe e abilitare cache HTTP
      indipendente del CSS. Il blocco <style> originale era 668 righe. -->
-<link rel="stylesheet" href="/static/css/planning.css?v=3.5.0-alpha.111.12">
+<link rel="stylesheet" href="/static/css/planning.css?v=3.5.0-alpha.111.13">
 <style>
   /* v3.5.0-alpha.79 — Polish timeline */
   /* Today line emphasizzata */
@@ -401,8 +401,7 @@
           <!-- v3.5.0-alpha.36: ROI riscritto con overlay-div trasparente. Toggle:
                click bottone OPPURE tasto S (no modifier). ESC esce. -->
           <button class="btn btn-ghost btn-sm" id="tl-roi-toggle" onclick="tlRoiTogglePersist()" title="Modalità area (S): trascina sulla griglia per selezionare. Selezioni multiple si sommano. ESC per uscire." style="margin-left:6px;">📦 Area</button>
-          <!-- v3.5.0-alpha.44: toggle veloce heatmap + apri standalone -->
-          <button class="btn btn-ghost btn-sm" id="tl-heatmap-toggle" onclick="tlToggleHeatmap()" title="Mostra/nascondi heatmap occupazione giornaliera sotto i nomi operatore" style="margin-left:6px;">📊 Heatmap</button>
+          <!-- v3.5.0-alpha.111.13 — Heatmap button rimosso (feature stripped). -->
           <button class="btn btn-ghost btn-sm" id="tl-light-toggle" onclick="tlToggleLight()" title="Modalità leggera: disabilita stack overlap (O(N²)), background items (ferie/festività/timbrature) e animazioni. Risolve freeze Chrome con 30+ booking + zoom mese. Trade-off: items sovrapposti visivamente." style="margin-left:6px;">🪶 Light</button>
           {% if not full_screen %}
           <button class="btn btn-ghost btn-sm" onclick="tlOpenStandalone()" title="Apri timeline in finestra dedicata full-screen (senza menu/topbar)" style="margin-left:6px;">⛶ Finestra</button>
@@ -3450,35 +3449,8 @@ function tlBuildResourceGroups(bookings, rangeStart, rangeEnd) {
       cell.appendChild(roleEl);
     }
 
-    // v3.5.0-alpha.111.12 — Heatmap REINTRODOTTA come overlay abs-bottom.
-    // α.99 l'aveva rimossa perché aggiungeva +7px content sopra il flow
-    // della label e rompeva sync con foreground. Ora `position:absolute`
-    // → no impatto altezza label, problema risolto. Cell wrapper è
-    // position:relative (CSS planning.css) per anchor degli abs children.
-    try {
-      const _prefsH = (typeof tlPrefsLoad === 'function') ? tlPrefsLoad() : { heatmap: false };
-      if (_prefsH.heatmap && rangeStart && rangeEnd) {
-        const days = tlComputeHeatmap(r.id, bookings || [], rangeStart, rangeEnd);
-        if (days && days.length && days.length <= 120) {
-          const overlay = document.createElement('div');
-          overlay.className = 'tl-heat-overlay';
-          for (const d of days) {
-            const ratio = d.hours / 8;
-            let bg = 'rgba(255,255,255,0.04)';
-            if (ratio > 0 && ratio <= 0.5) bg = 'rgba(34,197,94,0.55)';
-            else if (ratio > 0.5 && ratio <= 1) bg = 'rgba(34,197,94,0.9)';
-            else if (ratio > 1 && ratio <= 1.5) bg = 'rgba(251,146,60,0.9)';
-            else if (ratio > 1.5) bg = 'rgba(220,38,38,0.95)';
-            const c = document.createElement('div');
-            c.className = 'tl-heat-cell';
-            c.style.background = bg;
-            c.title = `${d.date.toLocaleDateString('it-IT',{weekday:'short',day:'numeric',month:'short'})} · ${d.hours.toFixed(1)}h`;
-            overlay.appendChild(c);
-          }
-          cell.appendChild(overlay);
-        }
-      }
-    } catch(_) {}
+    // v3.5.0-alpha.111.13 — Heatmap COMPLETAMENTE rimossa (Matteo: "togli
+    // completamente per ora"). Overlay si sovrapponeva al testo label.
     // alpha.38: className `tl-res-{id}` per applicare il tint colore-risorsa
     // sia su sidebar (label) sia su foreground (riga). CSS iniettato in
     // `<style id="tl-res-tints">` da _tlInjectResourceTints().

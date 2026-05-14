@@ -666,35 +666,7 @@
     box-sizing: border-box;
   }
 
-  /* v3.5.0-alpha.111.12 — Heatmap overlay sulla label risorsa.
-     α.111.10 metteva heatmap come background items in foreground
-     (interferiva con hover items + Matteo: "doveva apparire sulla
-     risorsa"). Ora torna sulla label MA come abs-positioned bottom
-     strip → no impatto row height (problema α.99 evitato).
-     Cell wrapper deve essere position:relative per anchor abs. */
-  .vis-labelset .vis-label .tl-res-cell {
-    position: relative;
-  }
-  .vis-labelset .vis-label .tl-heat-overlay {
-    position: absolute;
-    bottom: 0;
-    left: 0;
-    right: 0;
-    height: 5px;
-    display: flex;
-    gap: 1px;
-    pointer-events: auto;
-    border-radius: 2px;
-    overflow: hidden;
-  }
-  .vis-labelset .vis-label .tl-heat-overlay > .tl-heat-cell {
-    flex: 1;
-    min-width: 2px;
-    border-radius: 1px;
-    transition: opacity .12s ease;
-  }
-  .vis-labelset .vis-label .tl-heat-overlay > .tl-heat-cell:hover { opacity: 0.7; }
-  #tl-host[data-heatmap="off"] .vis-labelset .vis-label .tl-heat-overlay { display: none !important; }
+  /* v3.5.0-alpha.111.13 — Heatmap CSS rimosso (Matteo: togli per ora). */
   /* v3.4.45: Storyboard view — 7 colonne giorno (responsive collapse <960px) */
   .sb-grid { display: grid; grid-template-columns: repeat(7, minmax(140px, 1fr)); gap: 8px; }
   @media (max-width: 1100px) { .sb-grid { grid-template-columns: repeat(4, minmax(160px, 1fr)); } }
