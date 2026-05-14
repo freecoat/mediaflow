@@ -2037,9 +2037,9 @@ window.tlDebugAlign = function() {
     rows.push({
       i: i,
       txt: labels[i] ? (labels[i].innerText || '').slice(0, 30) : '-',
-      labelTop: l ? (l.top - hostTop).toFixed(1) : '-',
+      labelCls: labels[i] ? labels[i].className.slice(0, 40) : '-',
+      groupCls: groups[i] ? groups[i].className.slice(0, 40) : '-',
       labelH: l ? l.height.toFixed(1) : '-',
-      groupTop: g ? (g.top - hostTop).toFixed(1) : '-',
       groupH: g ? g.height.toFixed(1) : '-',
       diff: (l && g) ? (l.top - g.top).toFixed(1) : '-',
     });
