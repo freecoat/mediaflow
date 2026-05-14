@@ -1,5 +1,36 @@
 # MediaFlow — Changelog
 
+## v3.5.0-alpha.111.12 — Density compact/spacious rimossi + heatmap su label (14 maggio 2026)
+
+**Density Compact + Spacious rimossi**:
+- Matteo: "non funzionano. Direi di toglierle a questo punto".
+- Buttons UI `⠿` `☰` rimossi da toolbar (resta solo Comfortable, ora
+  default implicito senza bottoni).
+- CSS density rules rimosse (inline planning.html + planning.css).
+- `tlSetDensity()` reso no-op idempotente (sempre 'comfortable').
+- `tlInitDensity()` semplificato (no event binding).
+
+**Heatmap spostata da background items a overlay su label**:
+- α.111.10 metteva heatmap come `type:background` items in foreground.
+  Interferiva con hover items (vis-timeline triggava itemover su bg).
+  Matteo: "doveva apparire sulla risorsa, non sulla timeline".
+- α.99 l'aveva originariamente rimossa da label perché +7px content
+  sopra il flow rompeva sync con foreground.
+- Soluzione α.111.12: `position: absolute; bottom: 0; left:0; right:0`
+  inside `.tl-res-cell` (con `position: relative` su wrapper). No
+  impatto altezza label → problema α.99 evitato.
+- 1 cell per giorno nel range visibile, colore = ore/8 ratio
+  (verde<50% / verde<100% / arancio<150% / rosso>150%).
+- Skip se days.length > 120 (perf guard).
+- CSS `.tl-heat-overlay` height 5px, `data-heatmap="off"` nasconde.
+
+Cache-bust planning.css?v=3.5.0-alpha.111.12.
+
+## v3.5.0-alpha.111.11 — Fix min-height density Compact + Spacious + nesting (14 maggio 2026)
+
+Tentativo (poi obsoleto da α.111.12 che rimuove i due density).
+Bump min-height compact 34→42, spacious 62→72 + parent nesting fix.
+
 ## v3.5.0-alpha.111.10 — Fix hover tooltip + reintroduzione heatmap (14 maggio 2026)
 
 **Tooltip hover item — fix bug invisibile da α.83**:

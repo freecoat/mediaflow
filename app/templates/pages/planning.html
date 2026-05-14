@@ -14,7 +14,7 @@
 <!-- v3.5.0-alpha.66.14.9: CSS estratto in /static/css/planning.css per
      ridurre planning.html da 7377 -> 6710 righe e abilitare cache HTTP
      indipendente del CSS. Il blocco <style> originale era 668 righe. -->
-<link rel="stylesheet" href="/static/css/planning.css?v=3.5.0-alpha.111.11">
+<link rel="stylesheet" href="/static/css/planning.css?v=3.5.0-alpha.111.12">
 <style>
   /* v3.5.0-alpha.79 — Polish timeline */
   /* Today line emphasizzata */
@@ -39,28 +39,8 @@
   #tl-host .vis-item.vis-selected {
     box-shadow: 0 0 0 2px var(--indigo), 0 4px 12px rgba(98,114,245,0.45) !important;
   }
-  /* Density compact — v3.5.0-alpha.82: anche label row + nesting groups */
-  #tl-host[data-density="compact"] .vis-item { padding: 1px 5px !important; min-height: 16px; font-size: 10px !important; }
-  #tl-host[data-density="compact"] .vis-foreground .vis-group,
-  #tl-host[data-density="compact"] .vis-labelset .vis-label {
-    min-height: 24px !important;
-    line-height: 22px !important;
-  }
-  #tl-host[data-density="compact"] .vis-labelset .vis-label .vis-inner {
-    font-size: 11px !important;
-    padding: 2px 8px !important;
-  }
-  /* Density spacious */
-  #tl-host[data-density="spacious"] .vis-item { padding: 5px 10px !important; min-height: 30px; font-size: 13px !important; }
-  #tl-host[data-density="spacious"] .vis-foreground .vis-group,
-  #tl-host[data-density="spacious"] .vis-labelset .vis-label {
-    min-height: 56px !important;
-    line-height: 54px !important;
-  }
-  #tl-host[data-density="spacious"] .vis-labelset .vis-label .vis-inner {
-    font-size: 14px !important;
-    padding: 6px 10px !important;
-  }
+  /* v3.5.0-alpha.111.12 — Density compact + spacious CSS rimossi.
+     Solo comfortable supportato. */
   /* v3.5.0-alpha.82 — Top-align contenuto gruppi collassati
      (vis-timeline default è bottom-align; preferiamo top per leggibilità). */
   #tl-host .vis-foreground .vis-group {
@@ -429,12 +409,9 @@
           {% endif %}
           <!-- v3.5.0-alpha.66: bottone Legenda — apre popover con stati visivi
                dei booking (planned/in_progress/done/not_done + tentative). -->
-          <!-- v3.5.0-alpha.79 — Density preset rapido -->
-          <div class="btn-group" id="tl-density" style="margin-left:8px;" title="Compattezza item">
-            <button class="btn btn-ghost btn-sm" data-density="compact" title="Compatto (font piccolo, righe basse)">⠿</button>
-            <button class="btn btn-ghost btn-sm active" data-density="comfortable" title="Normale">≡</button>
-            <button class="btn btn-ghost btn-sm" data-density="spacious" title="Spazioso (font grande, righe alte)">☰</button>
-          </div>
+          <!-- v3.5.0-alpha.111.12 — Density compact + spacious rimossi.
+               Comfortable era l'unico funzionante (Matteo: "togliamole"). -->
+
           <!-- v3.5.0-alpha.79 — Color by selector -->
           <select id="tl-colorby" onchange="tlSetColorBy(this.value)" class="form-select" style="height:30px; padding:2px 8px; font-size:12px; width:auto; margin-left:6px;" title="Colora item in base a">
             <option value="status">Color: stato (default)</option>
@@ -1612,36 +1589,20 @@ function tlPrefsApply(p) {
 }
 // v3.5.0-alpha.79 — Density preset toggle + Color-by + Shortcuts modal
 function tlSetDensity(d) {
+  // v3.5.0-alpha.111.12 — Compact + Spacious rimossi. Solo comfortable.
+  // Funzione kept come no-op idempotente: legacy chiamanti non rompono.
+  d = 'comfortable';
   const host = document.getElementById('tl-host');
   if (host) host.dataset.density = d;
   try { localStorage.setItem('mf_tl_density', d); } catch(e) {}
-  document.querySelectorAll('#tl-density [data-density]').forEach(b => {
-    b.classList.toggle('active', b.dataset.density === d);
-  });
-  // v3.5.0-alpha.107: spacious anche cambia opzioni vis-timeline per
-  // altezze righe uniformi (stack:false → no expand su overlap items).
   const inst = window._tlInstance || window.tl;
   if (inst && typeof inst.setOptions === 'function') {
     try {
-      if (d === 'spacious') {
-        inst.setOptions({
-          stack: false,
-          stackSubgroups: false,
-          margin: { item: { horizontal: 0, vertical: 6 }, axis: 10 },
-        });
-      } else if (d === 'compact') {
-        inst.setOptions({
-          stack: false,
-          stackSubgroups: false,
-          margin: { item: { horizontal: 0, vertical: 1 }, axis: 4 },
-        });
-      } else {
-        inst.setOptions({
-          stack: true,
-          stackSubgroups: true,
-          margin: { item: { horizontal: 0, vertical: 3 }, axis: 6 },
-        });
-      }
+      inst.setOptions({
+        stack: true,
+        stackSubgroups: true,
+        margin: { item: { horizontal: 0, vertical: 3 }, axis: 6 },
+      });
     } catch(e) {}
   }
   // v3.5.0-alpha.99: forza redraw vis-timeline.
@@ -1703,12 +1664,8 @@ function tlBindKeyboardScroll() {
   });
 }
 function tlInitDensity() {
-  const saved = (() => { try { return localStorage.getItem('mf_tl_density') || 'comfortable'; } catch(e) { return 'comfortable'; } })();
-  tlSetDensity(saved);
-  document.querySelectorAll('#tl-density [data-density]').forEach(b => {
-    b.onclick = () => tlSetDensity(b.dataset.density);
-  });
-  // v3.5.0-alpha.107 — Bind scroll keyboard handlers
+  // v3.5.0-alpha.111.12 — Density buttons rimossi, applicare comfortable.
+  tlSetDensity('comfortable');
   tlBindKeyboardScroll();
 }
 
@@ -3493,12 +3450,35 @@ function tlBuildResourceGroups(bookings, rangeStart, rangeEnd) {
       cell.appendChild(roleEl);
     }
 
-    // v3.5.0-alpha.99: heatmap RIMOSSA dalla label cell. Causava mismatch
-    // altezza label↔foreground perché aggiungeva 7px di contenuto solo
-    // sul lato sinistro, mentre il foreground (lato item) restava più
-    // piccolo → item non allineati alla riga (screenshot Matteo 15.21-15.22).
-    // Da reintrodurre come overlay assoluto sul foreground se serve.
-    // (legacy heatmap toggle prefs.heatmap resta no-op finché ridisegnata).
+    // v3.5.0-alpha.111.12 — Heatmap REINTRODOTTA come overlay abs-bottom.
+    // α.99 l'aveva rimossa perché aggiungeva +7px content sopra il flow
+    // della label e rompeva sync con foreground. Ora `position:absolute`
+    // → no impatto altezza label, problema risolto. Cell wrapper è
+    // position:relative (CSS planning.css) per anchor degli abs children.
+    try {
+      const _prefsH = (typeof tlPrefsLoad === 'function') ? tlPrefsLoad() : { heatmap: false };
+      if (_prefsH.heatmap && rangeStart && rangeEnd) {
+        const days = tlComputeHeatmap(r.id, bookings || [], rangeStart, rangeEnd);
+        if (days && days.length && days.length <= 120) {
+          const overlay = document.createElement('div');
+          overlay.className = 'tl-heat-overlay';
+          for (const d of days) {
+            const ratio = d.hours / 8;
+            let bg = 'rgba(255,255,255,0.04)';
+            if (ratio > 0 && ratio <= 0.5) bg = 'rgba(34,197,94,0.55)';
+            else if (ratio > 0.5 && ratio <= 1) bg = 'rgba(34,197,94,0.9)';
+            else if (ratio > 1 && ratio <= 1.5) bg = 'rgba(251,146,60,0.9)';
+            else if (ratio > 1.5) bg = 'rgba(220,38,38,0.95)';
+            const c = document.createElement('div');
+            c.className = 'tl-heat-cell';
+            c.style.background = bg;
+            c.title = `${d.date.toLocaleDateString('it-IT',{weekday:'short',day:'numeric',month:'short'})} · ${d.hours.toFixed(1)}h`;
+            overlay.appendChild(c);
+          }
+          cell.appendChild(overlay);
+        }
+      }
+    } catch(_) {}
     // alpha.38: className `tl-res-{id}` per applicare il tint colore-risorsa
     // sia su sidebar (label) sia su foreground (riga). CSS iniettato in
     // `<style id="tl-res-tints">` da _tlInjectResourceTints().
@@ -4869,45 +4849,9 @@ async function _doRenderTimeline(preserveWindow=false) {
     b._blocking = b._blocking_hard;
   });
 
-  // v3.5.0-alpha.111.10 — Heatmap capacity reintrodotta come background items.
-  // α.99 ha rimosso heatmap da label cell (causava mismatch label↔group height).
-  // Reintroduzione come background items: 1 item per giorno per risorsa,
-  // colore in base a ore prenotate / 8 (full day). Vis-timeline renderizza
-  // dietro gli items normali senza alterare row height.
-  const _prefsH = (typeof tlPrefsLoad === 'function') ? tlPrefsLoad() : { heatmap: false };
-  if (_prefsH.heatmap && Array.isArray(RESOURCES_SEED) && RESOURCES_SEED.length) {
-    const _winH = savedWin || tlWindowFor(tlZoom, new Date());
-    const _hStart = new Date(_winH.start); _hStart.setHours(0,0,0,0);
-    const _hEnd = new Date(_winH.end); _hEnd.setHours(0,0,0,0);
-    const _dayMs = 86400000;
-    for (const r of RESOURCES_SEED) {
-      const days = tlComputeHeatmap(r.id, bookings, _hStart, _hEnd);
-      for (const d of days) {
-        const ratio = d.hours / 8;
-        let bg = null;
-        if (ratio > 0 && ratio <= 0.5) bg = 'rgba(34,197,94,0.20)';
-        else if (ratio > 0.5 && ratio <= 1) bg = 'rgba(34,197,94,0.45)';
-        else if (ratio > 1 && ratio <= 1.5) bg = 'rgba(251,146,60,0.45)';
-        else if (ratio > 1.5) bg = 'rgba(220,38,38,0.55)';
-        if (!bg) continue;  // skip giorni a zero ore
-        const ds = new Date(d.date); ds.setHours(0,0,0,0);
-        const de = new Date(ds.getTime() + _dayMs - 1);
-        bgItems.push({
-          id: 'hm-' + r.id + '-' + ds.toISOString().substring(0,10),
-          group: r.id,
-          start: ds.toISOString(),
-          end: de.toISOString(),
-          type: 'background',
-          className: 'tl-bg-heat',
-          style: 'background-color:'+bg+';',
-          title: `${r.name} · ${d.date.toLocaleDateString('it-IT',{weekday:'short',day:'numeric',month:'short'})} · ${d.hours.toFixed(1)}h`,
-          _blocking_hard: false,
-          _blocking_soft: false,
-          _blocking: false,
-        });
-      }
-    }
-  }
+  // v3.5.0-alpha.111.12 — Heatmap reintrodotta come overlay sulla label
+  // risorsa (abs-positioned bottom strip), NON background items.
+  // Vedi tlBuildResourceGroups injection inside cell.
 
   // v3.4.22 cantiere C: overlay timbrature TimePunch sopra le righe risorsa.
   // Visibile in modo sottile per non disturbare i booking pianificati.

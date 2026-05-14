@@ -8,6 +8,30 @@
 
 ## Versione corrente
 
+**v3.5.0-alpha.111.12** — 14 maggio 2026 — Density compact/spacious tagliati + heatmap su label
+
+**Density buttons rimossi** (Matteo: "togliamole"):
+- ⠿ Compact + ☰ Spacious mai funzionanti correttamente
+- Solo Comfortable rimane (implicito, no button toolbar)
+- CSS + JS density code semplificato
+
+**Heatmap su label risorsa** (Matteo: "doveva apparire sulla risorsa"):
+- α.111.10 (bg items in foreground) interferiva con hover items
+- Ora overlay abs-positioned bottom strip dentro `.tl-res-cell` label
+- `position:relative` su wrapper cell + `position:absolute` overlay →
+  no impatto altezza label (problema α.99 originale evitato)
+- Cache-bust planning.css?v=3.5.0-alpha.111.12
+
+**Da testare Matteo**:
+1. Toolbar timeline: niente più ⠿/☰, solo opzioni utili (font, etc)
+2. Hover item: tooltip rich (no interferenza heatmap)
+3. Toggle 📊 Heatmap → barra colorata sotto nome risorsa (sotto Online Editor)
+4. No bg colorato strisce nel foreground timeline
+
+**Round timeline α.111.3→α.111.12 chiuso**. 10 commit pushati.
+
+## (versione precedente)
+
 **v3.5.0-alpha.111.10** — 14 maggio 2026 — Fix hover tooltip + heatmap reintrodotta
 
 **Tooltip hover items**: bug pre-esistente da α.83. `tlTooltipShow`

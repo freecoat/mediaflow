@@ -476,16 +476,7 @@
   .vis-item.tl-bg-other { background: rgba(156,163,175,0.10) !important; border: none !important; }
   .vis-item.tl-bg-other::before { content: ''; position: absolute; inset: 0; background: repeating-linear-gradient(45deg, transparent 0 4px, rgba(156,163,175,0.18) 4px 8px); }
   .vis-item.tl-bg-weekend { background: rgba(255,255,255,0.025) !important; border: none !important; }
-  /* v3.5.0-alpha.111.10 — Heatmap capacity reintrodotta come background items.
-     α.99 aveva rimosso heatmap dalla label cell (rompeva sync altezze).
-     Ora 1 background item per giorno per risorsa, colore = ore/8h ratio.
-     No border, no shadow, dietro items normali. */
-  .vis-item.tl-bg-heat {
-    border: none !important;
-    box-shadow: none !important;
-    opacity: 0.65;
-  }
-  .vis-item.tl-bg-heat:hover { opacity: 0.85; }
+  /* v3.5.0-alpha.111.12 — Heatmap bg items rimossa. Ora overlay su label. */
   /* Hard conflict (drop su ferie/festa) */
   .vis-item.tl-conflict-hard { background: #991b1b !important; border-color: #7f1d1d !important; box-shadow: 0 0 0 3px rgba(220,38,38,.6) !important; animation: tl-shake .25s; }
   /* E5: Tentative bookings — bordo tratteggiato, opacità ridotta */
@@ -659,34 +650,10 @@
   #sb-host[data-density="compact"] .sb-card { padding: 4px 6px; font-size: 10.5px; }
   #sb-host[data-density="compact"] .sb-card-time { font-size: 9px; margin-bottom: 1px; }
 
-  /* v3.5.0-alpha.99 — Density preset per timeline (#tl-host).
-     Pre-α.99 i 3 bottoni ⠿/≡/☰ settavano data-density ma nessuna regola
-     CSS lo applicava → toggle "decorativo, nullo effetto" (Matteo 13 mag).
-     Ora scalano font nome/funzione/item + altezza riga in modo coerente.
-     Default = comfortable (allineato a CSS senza data-density). */
-  #tl-host[data-density="compact"] .vis-labelset .vis-label .tl-res-name { font-size: 12px; line-height: 1.1; }
-  #tl-host[data-density="compact"] .vis-labelset .vis-label .tl-res-role { font-size: 9.5px; margin-top: 1px; }
-  #tl-host[data-density="compact"] .vis-labelset .vis-label { padding: 3px 10px; }
-  #tl-host[data-density="compact"] .vis-item { font-size: 10px; padding: 1px 6px; border-radius: 6px; }
+  /* v3.5.0-alpha.111.12 — Density compact + spacious rimossi. */
 
-  #tl-host[data-density="spacious"] .vis-labelset .vis-label .tl-res-name { font-size: 16px; line-height: 1.2; }
-  #tl-host[data-density="spacious"] .vis-labelset .vis-label .tl-res-role { font-size: 13px; margin-top: 3px; }
-  #tl-host[data-density="spacious"] .vis-labelset .vis-label { padding: 10px 14px; }
-  #tl-host[data-density="spacious"] .vis-item { font-size: 13px; padding: 5px 12px; border-radius: 10px; }
-
-  /* v3.5.0-alpha.111.11 — Min-height leaf + nesting per density.
-     α.111.9 funzionava per Comfortable (calcoli OK per coincidenza) ma
-     Compact e Spacious avevano label content > row height → overflow
-     ("div class tagliate" in compact, "Online Editor sopra linea
-     bianca" in spacious). Anche nesting parent header in densities
-     ridondanti rispetto a foreground parent (no min-height su parent fg
-     → mismatch).
-     Bump:
-     - Compact: 34 → 42 (margine +8 per browser line-height variance)
-     - Comfortable: 48 (lasciato, funzionava)
-     - Spacious: 62 → 72 (margine +10)
-     Aggiunta min-height anche su nesting parent label + foreground
-     parent dept group, per simmetria cross-row. */
+  /* v3.5.0-alpha.111.12 — Min-height leaf + nesting (comfortable only).
+     Comfortable era l'unica funzionante. Compact e Spacious rimosse. */
   .vis-labelset .vis-label:not(.vis-nesting-group),
   .vis-foreground .vis-group[class*="tl-res-"],
   .vis-foreground .vis-group[class*="tl-project-"] {
@@ -698,24 +665,36 @@
     min-height: 38px;
     box-sizing: border-box;
   }
-  #tl-host[data-density="compact"] .vis-labelset .vis-label:not(.vis-nesting-group),
-  #tl-host[data-density="compact"] .vis-foreground .vis-group[class*="tl-res-"],
-  #tl-host[data-density="compact"] .vis-foreground .vis-group[class*="tl-project-"] {
-    min-height: 42px;
+
+  /* v3.5.0-alpha.111.12 — Heatmap overlay sulla label risorsa.
+     α.111.10 metteva heatmap come background items in foreground
+     (interferiva con hover items + Matteo: "doveva apparire sulla
+     risorsa"). Ora torna sulla label MA come abs-positioned bottom
+     strip → no impatto row height (problema α.99 evitato).
+     Cell wrapper deve essere position:relative per anchor abs. */
+  .vis-labelset .vis-label .tl-res-cell {
+    position: relative;
   }
-  #tl-host[data-density="compact"] .vis-labelset .vis-label.vis-nesting-group,
-  #tl-host[data-density="compact"] .vis-foreground .vis-group[class*="tl-dept-"] {
-    min-height: 32px;
+  .vis-labelset .vis-label .tl-heat-overlay {
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    height: 5px;
+    display: flex;
+    gap: 1px;
+    pointer-events: auto;
+    border-radius: 2px;
+    overflow: hidden;
   }
-  #tl-host[data-density="spacious"] .vis-labelset .vis-label:not(.vis-nesting-group),
-  #tl-host[data-density="spacious"] .vis-foreground .vis-group[class*="tl-res-"],
-  #tl-host[data-density="spacious"] .vis-foreground .vis-group[class*="tl-project-"] {
-    min-height: 72px;
+  .vis-labelset .vis-label .tl-heat-overlay > .tl-heat-cell {
+    flex: 1;
+    min-width: 2px;
+    border-radius: 1px;
+    transition: opacity .12s ease;
   }
-  #tl-host[data-density="spacious"] .vis-labelset .vis-label.vis-nesting-group,
-  #tl-host[data-density="spacious"] .vis-foreground .vis-group[class*="tl-dept-"] {
-    min-height: 44px;
-  }
+  .vis-labelset .vis-label .tl-heat-overlay > .tl-heat-cell:hover { opacity: 0.7; }
+  #tl-host[data-heatmap="off"] .vis-labelset .vis-label .tl-heat-overlay { display: none !important; }
   /* v3.4.45: Storyboard view — 7 colonne giorno (responsive collapse <960px) */
   .sb-grid { display: grid; grid-template-columns: repeat(7, minmax(140px, 1fr)); gap: 8px; }
   @media (max-width: 1100px) { .sb-grid { grid-template-columns: repeat(4, minmax(160px, 1fr)); } }
