@@ -2048,6 +2048,51 @@ window.tlDebugAlign = function() {
   console.table(rows);
   return rows;
 };
+
+// v3.5.0-alpha.111.5 — Diagnostica items: dump posizione DOM + group dataset.
+// Uso console: tlDebugItems() → console.table.
+window.tlDebugItems = function() {
+  const host = document.getElementById('tl-host');
+  if (!host) { console.error('no #tl-host'); return; }
+  const inst = window._tlInstance;
+  if (!inst) { console.error('no _tlInstance'); return; }
+  const groupEls = [...host.querySelectorAll('.vis-foreground .vis-group')];
+  const groupRanges = groupEls.map(g => {
+    const r = g.getBoundingClientRect();
+    return { visGroup: g.getAttribute('data-id') || g.className || '?', top: r.top, bottom: r.bottom };
+  });
+  const dsItems = inst.itemsData ? inst.itemsData.get() : [];
+  const dsGroups = inst.groupsData ? inst.groupsData.get() : [];
+  const groupNameById = {};
+  for (const g of dsGroups) {
+    let n = '';
+    if (typeof g.content === 'string') n = g.content.replace(/<[^>]+>/g, '').slice(0, 25);
+    else if (g.content && g.content.textContent) n = g.content.textContent.slice(0, 25);
+    groupNameById[g.id] = n;
+  }
+  const itemsDom = [...host.querySelectorAll('.vis-foreground .vis-item')];
+  const out = [];
+  for (const el of itemsDom) {
+    const r = el.getBoundingClientRect();
+    const cy = (r.top + r.bottom) / 2;
+    const inGroup = groupRanges.find(gr => cy >= gr.top && cy <= gr.bottom);
+    const itemId = el.getAttribute('data-id') || (el.dataset ? el.dataset.id : null);
+    const dsRec = dsItems.find(x => String(x.id) === String(itemId));
+    out.push({
+      itemId: itemId || '?',
+      label: (el.innerText || '').slice(0, 25),
+      domY: r.top.toFixed(1),
+      visualGrp: inGroup ? inGroup.visGroup : '???',
+      dsGrp: dsRec ? dsRec.group : '???',
+      dsGrpName: dsRec ? (groupNameById[dsRec.group] || '?') : '?',
+    });
+  }
+  console.log('items DOM:', itemsDom.length, 'DS items:', dsItems.length, 'groups:', dsGroups.length);
+  console.table(out);
+  console.log('Group names by ID:', groupNameById);
+  return out;
+};
+
 let _tlResizeTimer = null;
 function _tlBindResize() {
   if (window._tlResizeBound) return;
