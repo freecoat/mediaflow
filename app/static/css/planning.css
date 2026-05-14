@@ -664,27 +664,27 @@
   #tl-host[data-density="spacious"] .vis-labelset .vis-label { padding: 10px 14px; }
   #tl-host[data-density="spacious"] .vis-item { font-size: 13px; padding: 5px 12px; border-radius: 10px; }
 
-  /* v3.5.0-alpha.111.6 — Min-height uniforme cross-row.
-     vis-timeline calcola row height = max(items_h, label_h) PER GRUPPO,
-     non across-groups (groupHeightMode:'fixed' è naming ambiguo: fissa
-     nel tempo, non uniforma fra groups). Risorse senza items → row più
-     corta del label content in modalità Spacious → "Online Editor"
-     overflowa sotto la linea di demarcazione. Risorse con items → row
-     più alta perché items+margin pushano. Diff visibile ~13px.
-     Fix: min-height applicato SIMULTANEAMENTE a label leaf E foreground
-     group. Storia α.32.2 sconsigliava min-height SOLO su label
-     (rompeva sync), ma applicato a entrambi lati vis allinea. */
+  /* v3.5.0-alpha.111.7 — Min-height uniforme cross-row leaf + nesting.
+     v3.5.0-alpha.111.6 metteva min-height a ENTRAMBI label+foreground LEAF
+     ma a TUTTI i foreground (anche nesting parents DI/Video, Audio) →
+     parents in foreground prendevano 48px mentre label parents naturali
+     ~35px → drift cumulativo. User confermato "altezza righe dipartimenti
+     non corrisponde a quella nel planning".
+     Vis-timeline aggiunge .vis-nesting-group SIA a label SIA a foreground
+     group corrispondente → uso `:not(.vis-nesting-group)` su entrambi lati.
+     Storia: min-height SOLO label rompe sync (α.32.2). Su entrambi lati
+     E con stessa condizione leaf-only vis allinea correttamente. */
   .vis-labelset .vis-label:not(.vis-nesting-group),
-  .vis-foreground .vis-group {
+  .vis-foreground .vis-group:not(.vis-nesting-group) {
     min-height: 48px;
     box-sizing: border-box;
   }
   #tl-host[data-density="compact"] .vis-labelset .vis-label:not(.vis-nesting-group),
-  #tl-host[data-density="compact"] .vis-foreground .vis-group {
+  #tl-host[data-density="compact"] .vis-foreground .vis-group:not(.vis-nesting-group) {
     min-height: 34px;
   }
   #tl-host[data-density="spacious"] .vis-labelset .vis-label:not(.vis-nesting-group),
-  #tl-host[data-density="spacious"] .vis-foreground .vis-group {
+  #tl-host[data-density="spacious"] .vis-foreground .vis-group:not(.vis-nesting-group) {
     min-height: 62px;
   }
   /* v3.4.45: Storyboard view — 7 colonne giorno (responsive collapse <960px) */
