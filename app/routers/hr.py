@@ -1167,3 +1167,283 @@ async def internal_bookings_report(
         "by_resource": by_resource_out,
         "by_kind": by_kind_out,
     }
+
+
+# ── Export ore per consulente lavoro (v3.5.0-alpha.111.21) ──────────
+# CSV + XLSX per singolo lavoratore / reparto / azienda.
+# Permission gate: scope='resource' senza filtri = solo manager+.
+# Output 1 riga per punch + 1 riga per giorno di unavailability nel range.
+
+_PUNCH_KIND_LABEL = {
+    "shift": "Turno",
+    "overtime": "Straordinario",
+    "idle": "Idle (presente non allocato)",
+    "leave": "Permesso",
+    "sick": "Malattia",
+    "break_": "Pausa",
+}
+_UNAV_KIND_LABEL = {
+    "vacation": "Ferie",
+    "sick": "Malattia",
+    "holiday": "Festività",
+    "other": "Permesso",
+    "weekend": "Weekend",
+}
+
+
+def _export_rows_for_scope(
+    db: Session,
+    *,
+    from_date: date,
+    to_date: date,
+    resource_id: Optional[int] = None,
+    department_id: Optional[int] = None,
+) -> tuple[list[str], list[list]]:
+    """Costruisce header + rows per export ore.
+    Una riga per ogni TimePunch nel range + una riga per ogni giorno di
+    ResourceUnavailability (ferie/malattia/permesso) nel range.
+    """
+    q_res = db.query(Resource).filter(
+        Resource.tenant_id == 1,
+        Resource.type == ResourceType.person_internal,
+    )
+    if resource_id:
+        q_res = q_res.filter(Resource.id == resource_id)
+    if department_id:
+        q_res = q_res.filter(Resource.department_id == department_id)
+    resources = q_res.all()
+    if not resources:
+        return [], []
+    res_ids = [r.id for r in resources]
+    res_by_id = {r.id: r for r in resources}
+
+    # Pre-fetch dept names + policy permit_multiplier
+    from app.models.models import Department as _Dept
+    dept_by_id = {d.id: d.name for d in db.query(_Dept).all()}
+    policy = db.query(WorkingHoursPolicy).filter(
+        WorkingHoursPolicy.tenant_id == 1,
+        WorkingHoursPolicy.is_default == True,  # noqa: E712
+    ).first()
+    permit_mult = float(getattr(policy, "permit_multiplier", 1.0) or 1.0) if policy else 1.0
+    daily_h = 8.0
+    if policy and policy.daily_hours_threshold:
+        daily_h = float(policy.daily_hours_threshold)
+
+    # Punches in range
+    punches = (
+        db.query(TimePunch)
+        .filter(
+            TimePunch.tenant_id == 1,
+            TimePunch.resource_id.in_(res_ids),
+            TimePunch.start_datetime >= datetime.combine(from_date, time.min),
+            TimePunch.start_datetime <= datetime.combine(to_date, time.max),
+        )
+        .order_by(TimePunch.start_datetime)
+        .all()
+    )
+    # Job + cost line lookup
+    job_ids = {p.job_id for p in punches if p.job_id}
+    jcl_ids = {p.job_cost_line_id for p in punches if p.job_cost_line_id}
+    job_by_id = {j.id: j for j in db.query(Job).filter(Job.id.in_(job_ids)).all()} if job_ids else {}
+    jcl_by_id = {j.id: j for j in db.query(JobCostLine).filter(JobCostLine.id.in_(jcl_ids)).all()} if jcl_ids else {}
+
+    # Unavailability in range
+    unavs = (
+        db.query(ResourceUnavailability)
+        .filter(
+            ResourceUnavailability.resource_id.in_(res_ids),
+            ResourceUnavailability.start_date <= to_date,
+            ResourceUnavailability.end_date >= from_date,
+        )
+        .all()
+    )
+
+    header = [
+        "Data", "Risorsa", "Reparto", "Tipo",
+        "Inizio", "Fine", "Ore", "Ore ponderate",
+        "Pausa (min)", "Job", "Lavorazione", "Note",
+    ]
+    rows: list[list] = []
+
+    for p in punches:
+        r = res_by_id.get(p.resource_id)
+        if not r:
+            continue
+        kind_str = p.kind.value if hasattr(p.kind, "value") else str(p.kind)
+        kind_lbl = _PUNCH_KIND_LABEL.get(kind_str, kind_str)
+        start_iso = p.start_datetime.strftime("%Y-%m-%d")
+        start_t = p.start_datetime.strftime("%H:%M")
+        end_t = p.end_datetime.strftime("%H:%M") if p.end_datetime else ""
+        hours = 0.0
+        if p.end_datetime:
+            ms = (p.end_datetime - p.start_datetime).total_seconds() / 3600.0
+            hours = round(max(0.0, ms - (p.break_minutes or 0) / 60.0), 2)
+        job = job_by_id.get(p.job_id) if p.job_id else None
+        jcl = jcl_by_id.get(p.job_cost_line_id) if p.job_cost_line_id else None
+        rows.append([
+            start_iso,
+            r.name,
+            dept_by_id.get(r.department_id, ""),
+            kind_lbl,
+            start_t,
+            end_t,
+            hours,
+            hours,  # ore ponderate = identiche per turno/overtime (multiplier applicato in altre viste)
+            p.break_minutes or 0,
+            job.code if job else "",
+            (jcl.description or "")[:80] if jcl else "",
+            p.notes or "",
+        ])
+
+    for u in unavs:
+        r = res_by_id.get(u.resource_id)
+        if not r:
+            continue
+        kind_str = u.kind.value if hasattr(u.kind, "value") else str(u.kind)
+        kind_lbl = _UNAV_KIND_LABEL.get(kind_str, kind_str)
+        is_permit = (kind_str == "other")
+        # 1 riga per giorno nel range
+        d = max(u.start_date, from_date)
+        e = min(u.end_date, to_date)
+        while d <= e:
+            ore = daily_h
+            ore_pond = round(ore * permit_mult, 2) if is_permit else ore
+            rows.append([
+                d.isoformat(),
+                r.name,
+                dept_by_id.get(r.department_id, ""),
+                kind_lbl,
+                "", "",
+                ore, ore_pond,
+                0, "", "",
+                u.reason or "",
+            ])
+            d += timedelta(days=1)
+
+    # Sort by Data + Risorsa
+    rows.sort(key=lambda x: (x[0], x[1]))
+    return header, rows
+
+
+def _build_csv(header: list[str], rows: list[list]) -> bytes:
+    import csv
+    from io import StringIO
+    buf = StringIO()
+    writer = csv.writer(buf, delimiter=";", quoting=csv.QUOTE_MINIMAL)
+    writer.writerow(header)
+    for row in rows:
+        writer.writerow(row)
+    return buf.getvalue().encode("utf-8-sig")  # BOM Excel-friendly
+
+
+def _build_xlsx(header: list[str], rows: list[list], title: str) -> bytes:
+    from openpyxl import Workbook
+    from openpyxl.styles import Font, PatternFill, Alignment
+    from io import BytesIO
+    wb = Workbook()
+    ws = wb.active
+    ws.title = "Timesheet"
+    ws.append([title])
+    ws["A1"].font = Font(bold=True, size=14, color="6272F5")
+    ws.append([f"Generato: {datetime.utcnow().strftime('%Y-%m-%d %H:%M UTC')}"])
+    ws.append([])
+    ws.append(header)
+    header_row = ws.max_row
+    indigo = PatternFill(start_color="6272F5", end_color="6272F5", fill_type="solid")
+    white_bold = Font(bold=True, color="FFFFFF")
+    for cell in ws[header_row]:
+        cell.font = white_bold
+        cell.fill = indigo
+        cell.alignment = Alignment(horizontal="center", vertical="center")
+    for r in rows:
+        ws.append(r)
+    widths = [11, 26, 22, 22, 7, 7, 7, 11, 9, 14, 40, 30]
+    for i, w in enumerate(widths[:len(header)], start=1):
+        col = ws.cell(row=header_row, column=i).column_letter
+        ws.column_dimensions[col].width = w
+    buf = BytesIO()
+    wb.save(buf)
+    return buf.getvalue()
+
+
+@router.get("/api/export/timesheet")
+async def export_timesheet(
+    request: Request,
+    scope: str = "resource",  # 'resource' | 'department' | 'all'
+    resource_id: Optional[int] = None,
+    department_id: Optional[int] = None,
+    from_date: str = "",
+    to_date: str = "",
+    format: str = "csv",  # 'csv' | 'xlsx'
+    db: Session = Depends(get_db),
+):
+    """Export ore per consulente lavoro. Scope: singolo / reparto / azienda.
+
+    v3.5.0-alpha.111.21 — CSV (UTF-8 BOM) o XLSX. Una riga per TimePunch +
+    una riga per giorno ResourceUnavailability nel range.
+
+    Permission gate:
+    - scope='resource' + resource_id == proprio user.resource_id → sempre OK
+    - scope='resource' altrui / 'department' / 'all' → solo manager+ (`is_elevated`).
+    """
+    from fastapi.responses import Response
+    # Parse date
+    try:
+        fd = date.fromisoformat(from_date) if from_date else date.today().replace(day=1)
+        td = date.fromisoformat(to_date) if to_date else date.today()
+    except ValueError:
+        raise HTTPException(400, "Date non valide (formato YYYY-MM-DD)")
+    if td < fd:
+        raise HTTPException(400, "to_date precedente a from_date")
+
+    user = current_user_optional(request)
+    # Determina scope effettivo
+    if scope == "resource" and resource_id:
+        # Self vs altri
+        my_res_id = scope_resource_id(user)
+        if my_res_id != resource_id and not is_elevated(user):
+            raise HTTPException(403, "Servono permessi manager+ per esportare ore altrui")
+    elif scope in ("department", "all"):
+        if not is_elevated(user):
+            raise HTTPException(403, "Servono permessi manager+ per esportare reparto/azienda")
+    else:
+        raise HTTPException(400, "scope non valido o resource_id mancante")
+
+    # Filtra args
+    rid = resource_id if scope == "resource" else None
+    did = department_id if scope == "department" else None
+
+    header, rows = _export_rows_for_scope(
+        db, from_date=fd, to_date=td, resource_id=rid, department_id=did,
+    )
+    if not header:
+        raise HTTPException(404, "Nessun dato per il range/scope selezionato")
+
+    # Build title + filename
+    if scope == "resource":
+        r = db.query(Resource).filter(Resource.id == resource_id).first()
+        title = f"Ore lavoro · {r.name if r else f'#{resource_id}'} · {fd}→{td}"
+        fname_stem = f"timesheet_{r.name.replace(' ', '_') if r else resource_id}_{fd}_{td}"
+    elif scope == "department":
+        from app.models.models import Department
+        d = db.query(Department).filter(Department.id == department_id).first()
+        title = f"Ore lavoro · Reparto {d.name if d else f'#{department_id}'} · {fd}→{td}"
+        fname_stem = f"timesheet_dept_{d.name.replace(' ', '_') if d else department_id}_{fd}_{td}"
+    else:
+        title = f"Ore lavoro · Azienda · {fd}→{td}"
+        fname_stem = f"timesheet_azienda_{fd}_{td}"
+
+    if format == "xlsx":
+        body = _build_xlsx(header, rows, title)
+        return Response(
+            content=body,
+            media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            headers={"Content-Disposition": f'attachment; filename="{fname_stem}.xlsx"'},
+        )
+    else:
+        body = _build_csv(header, rows)
+        return Response(
+            content=body,
+            media_type="text/csv; charset=utf-8",
+            headers={"Content-Disposition": f'attachment; filename="{fname_stem}.csv"'},
+        )
