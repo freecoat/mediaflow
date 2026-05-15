@@ -244,6 +244,18 @@ async def preview_transmission(
         q = q.filter(JobCostLine.is_extra == False)
     candidates = q.all()
 
+    # v3.5.0-alpha.112 — conteggio esclusioni per UX (chiarezza stato)
+    excl_in_batch = db.query(JobCostLine).join(Job).filter(
+        Job.project_id == project_id,
+        JobCostLine.billing_status == JCLBillingStatus.in_batch,
+    ).count()
+    excl_billed = db.query(JobCostLine).join(Job).filter(
+        Job.project_id == project_id,
+        JobCostLine.billing_status.in_([
+            JCLBillingStatus.billed, JCLBillingStatus.paid
+        ]),
+    ).count()
+
     period_start, period_end, period_source = _period_from_bookings(
         db, [c.id for c in candidates]
     )
@@ -274,6 +286,9 @@ async def preview_transmission(
         "extra_count": len(extra_lines),
         "extra_total": extra_total,
         "overrun_total": overrun_total,
+        # v3.5.0-alpha.112 — esclusioni esplicite per UX
+        "excluded_in_batch": excl_in_batch,
+        "excluded_billed": excl_billed,
         "lines": [
             {
                 "id": c.id,
@@ -1170,6 +1185,253 @@ async def compose_invoice_from_batches(
     }
 
 
+# ── v3.5.0-alpha.112 — Fattura di chiusura progetto ────────────────────
+@router.get("/closing-precheck/{project_id}")
+async def closing_invoice_precheck(
+    project_id: int,
+    request: Request,
+    db: Session = Depends(get_db),
+):
+    """Verifica se il progetto può essere chiuso finanziariamente.
+
+    Condizione: tutte le JobCostLine del progetto devono avere
+    billing_status in (billed, paid, lost). Voci ancora in `not_billed`
+    o `in_batch` bloccano la chiusura.
+    Ritorna l'elenco fatture emesse per il riepilogo.
+    """
+    _require_finance(request)
+    proj = db.query(Project).filter(
+        Project.id == project_id, Project.tenant_id == current_tenant_id(),
+    ).first()
+    if not proj:
+        raise HTTPException(404, "Progetto non trovato")
+    if proj.finance_status == "closed":
+        raise HTTPException(409, "Progetto già finanziariamente chiuso")
+    # JCL non-pronte = blocco
+    pending = db.query(JobCostLine).join(Job).filter(
+        Job.project_id == project_id,
+        Job.status != JobStatus.cancelled,
+        JobCostLine.billing_status.in_([
+            JCLBillingStatus.not_billed,
+            JCLBillingStatus.in_batch,
+        ]),
+        JobCostLine.is_billable == True,
+        JobCostLine.total_accrued > 0,
+    ).all()
+    # Riepilogo fatture progetto
+    invoices = db.query(Invoice).join(Job, Invoice.job_id == Job.id).filter(
+        Job.project_id == project_id,
+    ).order_by(Invoice.issue_date.asc()).all()
+    inv_summary = [
+        {
+            "id": i.id, "number": i.number,
+            "issue_date": i.issue_date.isoformat() if i.issue_date else None,
+            "subtotal": i.subtotal, "total": i.total,
+            "status": i.status.value if hasattr(i.status, "value") else i.status,
+            "amount_paid": i.amount_paid or 0,
+            "is_closing": bool(getattr(i, "is_closing", False)),
+            "doc_type": i.doc_type,
+        }
+        for i in invoices
+    ]
+    total_billed = round(sum((i["total"] or 0) for i in inv_summary if i["doc_type"] != "TD04"), 2)
+    total_paid = round(sum((i["amount_paid"] or 0) for i in inv_summary if i["doc_type"] != "TD04"), 2)
+    return {
+        "project_id": project_id,
+        "project_code": proj.code,
+        "project_title": proj.title,
+        "can_close": len(pending) == 0,
+        "pending_lines_count": len(pending),
+        "pending_sample": [
+            {"id": p.id, "description": p.description,
+             "status": p.billing_status.value if hasattr(p.billing_status, "value") else p.billing_status,
+             "total_accrued": p.total_accrued}
+            for p in pending[:10]
+        ],
+        "invoices": inv_summary,
+        "invoices_count": len(inv_summary),
+        "total_billed": total_billed,
+        "total_paid": total_paid,
+        "residual_to_pay": round(total_billed - total_paid, 2),
+    }
+
+
+@router.post("/closing-invoice/{project_id}")
+async def emit_closing_invoice(
+    project_id: int,
+    request: Request,
+    invoice_number: str = Form(...),
+    issue_date: date = Form(...),
+    due_date: Optional[date] = Form(None),
+    vat_rate: float = Form(22.0),
+    notes: Optional[str] = Form(None),
+    db: Session = Depends(get_db),
+):
+    """Emette la fattura di chiusura progetto.
+
+    - Aggrega tutti i batch ancora aperti (approved, invoice_id IS NULL) del
+      progetto come ultima fattura "reale" (NON €0).
+    - Marca Project.finance_status='closed' + finance_closed_at + link a
+      questa invoice (finance_closing_invoice_id).
+    - Invoice.is_closing=True per il PDF (sezione riepilogo).
+    """
+    _require_manager(request)
+    proj = db.query(Project).filter(
+        Project.id == project_id, Project.tenant_id == current_tenant_id(),
+    ).first()
+    if not proj:
+        raise HTTPException(404, "Progetto non trovato")
+    if proj.finance_status == "closed":
+        raise HTTPException(409, "Progetto già chiuso finanziariamente")
+
+    # Precheck pending lines (HARD BLOCK)
+    pending = db.query(JobCostLine).join(Job).filter(
+        Job.project_id == project_id,
+        Job.status != JobStatus.cancelled,
+        JobCostLine.billing_status.in_([
+            JCLBillingStatus.not_billed,
+            JCLBillingStatus.in_batch,
+        ]),
+        JobCostLine.is_billable == True,
+        JobCostLine.total_accrued > 0,
+    ).count()
+    if pending > 0:
+        raise HTTPException(409, f"{pending} JCL ancora da fatturare/in approvazione — non si può chiudere")
+
+    # Unicità numero
+    existing = db.query(Invoice).join(Client, Invoice.client_id == Client.id).filter(
+        Invoice.number == invoice_number,
+        Client.tenant_id == current_tenant_id(),
+    ).first()
+    if existing:
+        raise HTTPException(409, f"Numero fattura {invoice_number} già esistente")
+
+    # Batch aperti residui → confluiscono nella closing
+    open_batches = db.query(BillingBatch).options(joinedload(BillingBatch.lines)).filter(
+        BillingBatch.tenant_id == current_tenant_id(),
+        BillingBatch.project_id == project_id,
+        BillingBatch.status == BillingBatchStatus.approved,
+        BillingBatch.invoice_id.is_(None),
+    ).all()
+
+    subtotal = sum(b.total_approved or 0 for b in open_batches)
+    vat_amount = subtotal * vat_rate / 100
+    total = subtotal + vat_amount
+
+    client_obj = db.query(Client).filter(Client.id == proj.client_id).first()
+    tenant_obj = db.query(Tenant).filter(Tenant.id == current_tenant_id()).first()
+
+    closing_note = (notes or "") + f"\nFATTURA DI CHIUSURA PROGETTO {proj.code}"
+    invoice = Invoice(
+        number=invoice_number,
+        client_id=proj.client_id,
+        status=InvoiceStatus.draft,
+        issue_date=issue_date,
+        due_date=due_date,
+        subtotal=subtotal,
+        vat_rate=vat_rate,
+        total=total,
+        notes=closing_note,
+        doc_type="TD01",
+        is_closing=True,
+        closing_project_id=project_id,
+        payment_method=(tenant_obj.payment_method_default if tenant_obj else None),
+        payment_terms_days=(tenant_obj.payment_terms_default if tenant_obj else None),
+        iban_snapshot=(tenant_obj.iban if tenant_obj else None),
+        client_legal_name_snap=(client_obj.name if client_obj else None),
+        client_vat_snap=(client_obj.vat_number if client_obj else None),
+        client_tax_code_snap=(client_obj.tax_code if client_obj else None),
+        client_pec_snap=(client_obj.pec if client_obj else None),
+        client_sdi_snap=(client_obj.sdi_code if client_obj else None),
+        client_address_snap=(client_obj.address if client_obj else None),
+        client_zip_snap=(client_obj.zip_code if client_obj else None),
+        client_city_snap=(client_obj.city if client_obj else None),
+        client_province_snap=(client_obj.province if client_obj else None),
+        client_country_snap=(client_obj.country if client_obj else None),
+        tenant_legal_name_snap=((tenant_obj.legal_name or tenant_obj.name) if tenant_obj else None),
+        tenant_vat_snap=(tenant_obj.vat_number if tenant_obj else None),
+        tenant_tax_code_snap=(tenant_obj.tax_code if tenant_obj else None),
+        tenant_address_snap=(tenant_obj.address if tenant_obj else None),
+        tenant_email_snap=(tenant_obj.email if tenant_obj else None),
+        tenant_phone_snap=(tenant_obj.phone if tenant_obj else None),
+        tenant_iban_snap=(tenant_obj.iban if tenant_obj else None),
+        tenant_sdi_snap=(tenant_obj.sdi_code if tenant_obj else None),
+        tenant_rea_snap=(tenant_obj.rea_number if tenant_obj else None),
+        tenant_fiscal_capital_snap=(tenant_obj.fiscal_capital if tenant_obj else None),
+        tenant_fiscal_regime_snap=(tenant_obj.fiscal_regime if tenant_obj else None),
+    )
+    db.add(invoice)
+    db.flush()
+
+    invoice_lines_count = 0
+    for batch in open_batches:
+        for bl in batch.lines:
+            if bl.total_approved <= 0:
+                jcl = db.query(JobCostLine).filter(JobCostLine.id == bl.job_cost_line_id).first()
+                if jcl:
+                    jcl.billing_status = JCLBillingStatus.lost
+                    jcl.billed_amount = 0
+                continue
+            period_lbl = ""
+            if batch.period_start and batch.period_end:
+                period_lbl = f" [{batch.period_start.isoformat()} → {batch.period_end.isoformat()}]"
+            il = InvoiceLine(
+                invoice_id=invoice.id,
+                description=f"[{batch.code}]{period_lbl} " + bl.description + (" [extra]" if bl.is_extra else ""),
+                quantity=bl.quantity,
+                unit_price=bl.unit_price,
+                total=bl.total_approved,
+                vat_rate=vat_rate,
+                discount_pct=0.0,
+            )
+            db.add(il)
+            invoice_lines_count += 1
+            jcl = db.query(JobCostLine).filter(JobCostLine.id == bl.job_cost_line_id).first()
+            if jcl:
+                jcl.billing_status = JCLBillingStatus.billed
+                jcl.billed_amount = bl.total_approved
+            slice_ = JCLBilledSlice(
+                tenant_id=current_tenant_id(),
+                job_cost_line_id=bl.job_cost_line_id,
+                billing_batch_line_id=bl.id,
+                invoice_id=invoice.id,
+                period_start=batch.period_start,
+                period_end=batch.period_end,
+                billed_quantity=bl.quantity or 0.0,
+                billed_amount=bl.total_approved,
+                unit_price_snap=bl.unit_price or 0.0,
+            )
+            db.add(slice_)
+        batch.status = BillingBatchStatus.invoiced
+        batch.invoice_id = invoice.id
+
+    # Marca progetto chiuso
+    proj.finance_status = "closed"
+    proj.finance_closed_at = datetime.utcnow()
+    proj.finance_closing_invoice_id = invoice.id
+
+    try:
+        db.commit()
+    except Exception as e:
+        db.rollback()
+        from sqlalchemy.exc import IntegrityError
+        if isinstance(e, IntegrityError) and "UNIQUE" in str(e).upper():
+            raise HTTPException(409, f"Numero fattura {invoice_number} già esistente (race)")
+        raise HTTPException(500, f"Errore chiusura: {e}")
+
+    return {
+        "invoice_id": invoice.id,
+        "invoice_number": invoice.number,
+        "project_id": project_id,
+        "subtotal": round(subtotal, 2),
+        "vat_amount": round(vat_amount, 2),
+        "total": round(total, 2),
+        "invoice_lines_count": invoice_lines_count,
+        "batches_aggregated": len(open_batches),
+        "project_finance_status": "closed",
+    }
+
+
 @router.post("/{batch_id}/cancel")
 async def cancel_batch(batch_id: int, request: Request, db: Session = Depends(get_db)):
     """Annulla un batch ancora non fatturato. Riporta le JCL → not_billed
@@ -1777,6 +2039,17 @@ async def storno_invoice(
         b.invoice_id = None
         b.status = BillingBatchStatus.approved
 
+    # v3.5.0-alpha.112 — se la fattura stornata era CLOSING di un progetto:
+    # riapri il progetto finanziariamente (finance_status='active').
+    reopened_project_id = None
+    if bool(getattr(src, "is_closing", False)) and getattr(src, "closing_project_id", None):
+        pr = db.query(Project).filter(Project.id == src.closing_project_id).first()
+        if pr and pr.finance_status == "closed":
+            pr.finance_status = "active"
+            pr.finance_closed_at = None
+            pr.finance_closing_invoice_id = None
+            reopened_project_id = pr.id
+
     db.commit()
     db.refresh(nc)
     return {
@@ -1786,5 +2059,6 @@ async def storno_invoice(
         "source_invoice_number": src.number,
         "voided_slices": len(slices),
         "reopened_batches": [b.code for b in batches],
+        "reopened_project_id": reopened_project_id,
         "total": nc.total,
     }

@@ -10,6 +10,10 @@
   <button class="btn btn-secondary btn-sm" onclick="openComposeInvoiceModal()" title="Aggrega N batch approvati dello stesso progetto in 1 fattura unica (mensile/trimestrale/custom)">
     📦 Componi fattura periodo
   </button>
+  <!-- v3.5.0-alpha.112: fattura di chiusura progetto -->
+  <button class="btn btn-secondary btn-sm" onclick="openClosingInvoiceModal()" title="Emetti la fattura finale del progetto: include ultimi batch aperti + riepilogo storico. Chiude finanziariamente il progetto.">
+    🏁 Fattura chiusura
+  </button>
 {% endblock %}
 
 {% block content %}
@@ -52,6 +56,9 @@
       <input type="checkbox" id="inv-only-overdue" onchange="loadInvoices()">
       Solo scadute (due_date passata)
     </label>
+    <!-- v3.5.0-alpha.112 — ricerca per numero fattura -->
+    <input type="text" class="form-input" id="inv-search-number" placeholder="🔍 N. fattura…"
+           style="width:200px;" oninput="_debInvSearch()">
   </div>
   <div class="card">
     <div class="table-wrap">
@@ -376,6 +383,8 @@
     </div>
     <div class="modal-body">
       <div id="ei-batch-info" style="margin-bottom:14px;"></div>
+      <!-- v3.5.0-alpha.112: banner suggerimento "altri batch aperti" -->
+      <div id="ei-multi-batch-banner" style="display:none; margin-bottom:14px;"></div>
       <div class="form-group">
         <label class="form-label">Numero fattura *</label>
         <input class="form-input" id="ei-number" placeholder="es. 2026/042" required>
@@ -400,6 +409,53 @@
     <div class="modal-footer">
       <button class="btn btn-secondary" onclick="closeModal('modal-emit-invoice')">Annulla</button>
       <button class="btn btn-primary" onclick="submitEmitInvoice()">💶 Emetti fattura</button>
+    </div>
+  </div>
+</div>
+
+<!-- v3.5.0-alpha.112: Modal Fattura di chiusura progetto -->
+<div class="modal-overlay" id="modal-closing-invoice">
+  <div class="modal" style="max-width:760px;">
+    <div class="modal-header">
+      <span class="modal-title">🏁 Fattura di chiusura progetto</span>
+      <button class="btn btn-ghost btn-icon" onclick="closeModal('modal-closing-invoice')">✕</button>
+    </div>
+    <div class="modal-body">
+      <p class="text-sm text-muted" style="margin-top:0;">
+        Emette la fattura <b>finale</b> del progetto. Include i batch ancora aperti
+        come ultima fattura "reale" + un <b>riepilogo</b> di tutte le fatture precedenti
+        nel PDF. Lo storno via nota di credito TD04 riapre il progetto.
+      </p>
+      <div id="cl-precheck" style="margin-bottom:14px;"></div>
+      <div class="form-row">
+        <div class="form-group">
+          <label class="form-label">Numero fattura *</label>
+          <input class="form-input" id="cl-number" placeholder="es. CL-2026-PRJX">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Data emissione *</label>
+          <input class="form-input" id="cl-issue-date" type="date">
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label class="form-label">Scadenza</label>
+          <input class="form-input" id="cl-due-date" type="date">
+        </div>
+        <div class="form-group">
+          <label class="form-label">IVA %</label>
+          <input class="form-input" id="cl-vat" type="number" step="0.5" value="22">
+        </div>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Note (opzionali)</label>
+        <textarea class="form-input" id="cl-notes" rows="2"
+          placeholder="Es. chiusura progetto, saldo finale"></textarea>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeModal('modal-closing-invoice')">Annulla</button>
+      <button class="btn btn-primary" id="cl-submit" onclick="submitClosingInvoice()" disabled>🏁 Emetti chiusura</button>
     </div>
   </div>
 </div>
@@ -970,7 +1026,53 @@ function openEmitInvoice() {
       <div class="text-sm">Batch <b class="mono" style="color:var(--indigo2);">${escapeHtml(_currentBatch.code)}</b> · ${escapeHtml(_currentBatch.project_title || '')}</div>
       <div class="text-sm" style="margin-top:4px;">Importo approvato: <b>${fmtCurrency(_currentBatch.total_approved)}</b> (${_currentBatch.lines.length} righe)</div>
     </div>`;
+  // v3.5.0-alpha.112 — check altri batch aperti per stesso progetto
+  _checkOtherBatchesForProject(_currentBatch.project_id, _currentBatch.id);
   openModal('modal-emit-invoice');
+}
+
+// v3.5.0-alpha.112 — banner se ci sono altri batch approved aperti
+async function _checkOtherBatchesForProject(projectId, currentBatchId) {
+  const banner = document.getElementById('ei-multi-batch-banner');
+  if (!banner) return;
+  banner.style.display = 'none';
+  banner.textContent = '';
+  if (!projectId) return;
+  try {
+    const all = await api('GET', `/finance/api/billing?project_id=${projectId}&status=approved`);
+    const others = (all || []).filter(b => b.id !== currentBatchId && !b.invoice_id);
+    if (!others.length) return;
+    const total = others.reduce((s, b) => s + (b.total_approved || 0), 0);
+    const otherCodes = others.map(b => b.code).join(', ');
+    const html = `
+      <div style="background:rgba(98,114,245,.10); border:1px solid rgba(98,114,245,.35); border-radius:8px; padding:10px 12px;">
+        <div class="text-sm">
+          📦 <b>${others.length}</b> altr${others.length === 1 ? 'o batch aperto' : 'i batch aperti'} per questo progetto:
+          <span class="mono text-xs">${escapeHtml(otherCodes)}</span> · totale aggiuntivo <b>${fmtCurrency(total)}</b>.
+        </div>
+        <div style="margin-top:8px;">
+          <button type="button" class="btn btn-sm btn-secondary" onclick="_switchToComposeFromEmit(${projectId})">
+            ↪ Aggrega tutti in una fattura unica
+          </button>
+        </div>
+      </div>`;
+    // contenuto già escapato; pattern usato altrove nello stesso file
+    banner.innerHTML = html;  // eslint-disable-line
+    banner.style.display = 'block';
+  } catch(e) {
+    // silenzioso — se l'endpoint fallisce non bloccare emit singolo
+  }
+}
+
+function _switchToComposeFromEmit(projectId) {
+  closeModal('modal-emit-invoice');
+  if (typeof openComposeInvoiceModal === 'function') {
+    openComposeInvoiceModal();
+    setTimeout(() => {
+      const sel = document.getElementById('ci-project');
+      if (sel) { sel.value = String(projectId); reloadComposablePreview(); }
+    }, 100);
+  }
 }
 
 function recalcEmitTotals() {
@@ -1012,6 +1114,10 @@ async function submitEmitInvoice() {
     toast(`✓ Fattura ${res.invoice_number} emessa: ${fmtCurrency(res.total)} totale (${fmtCurrency(res.subtotal)} + IVA ${fmtCurrency(res.vat_amount)})`, 'success', 6000);
     closeModal('modal-emit-invoice');
     closeModal('modal-batch-detail');
+    // v3.5.0-alpha.112 — apri PDF subito (in nuova tab) dopo emissione
+    if (res.invoice_id) {
+      window.open(`/finance/api/invoices/${res.invoice_id}/pdf`, '_blank');
+    }
     await loadBatches();
     await loadInvoices();  // refresh anche elenco fatture
   } catch(e) {
@@ -1020,13 +1126,21 @@ async function submitEmitInvoice() {
 }
 
 // ── Fatture ──────────────────────────────────────────────────
+// v3.5.0-alpha.112 — debounce ricerca numero fattura
+let _invSearchT = null;
+function _debInvSearch() {
+  clearTimeout(_invSearchT);
+  _invSearchT = setTimeout(() => loadInvoices(), 250);
+}
 async function loadInvoices() {
   const status = document.getElementById('inv-filter').value;
   const onlyOverdue = document.getElementById('inv-only-overdue')?.checked;
+  const numberQ = document.getElementById('inv-search-number')?.value.trim();
   const finQs = buildFinQS();
   const parts = [];
   if (status) parts.push('status=' + status);
   if (onlyOverdue) parts.push('only_overdue=true');
+  if (numberQ) parts.push('number=' + encodeURIComponent(numberQ));
   if (finQs) parts.push(finQs);
   const url = '/finance/api/invoices' + (parts.length ? '?' + parts.join('&') : '');
   let invs = await api('GET', url);
@@ -1158,6 +1272,115 @@ async function submitStorno() {
     await loadBatches();
   } catch(e) {
     toast(e.message || 'Errore storno fattura', 'error', 6000);
+  }
+}
+
+// v3.5.0-alpha.112 — Fattura di chiusura progetto
+let _clProjectId = null;
+async function openClosingInvoiceModal() {
+  let projects = [];
+  try { projects = await api('GET', '/projects/api'); } catch(e) {}
+  // costruisco un select volante nel precheck e disabilito submit finché non ok
+  const pre = document.getElementById('cl-precheck');
+  while (pre.firstChild) pre.removeChild(pre.firstChild);
+  const wrap = document.createElement('div');
+  wrap.style.cssText = 'display:flex; gap:8px; align-items:center; flex-wrap:wrap;';
+  const lbl = document.createElement('span');
+  lbl.className = 'text-sm';
+  lbl.textContent = 'Progetto da chiudere:';
+  const sel = document.createElement('select');
+  sel.className = 'form-select';
+  sel.style.minWidth = '260px';
+  const optDef = document.createElement('option');
+  optDef.value = ''; optDef.textContent = '— seleziona —';
+  sel.appendChild(optDef);
+  projects.filter(p => p.finance_status !== 'closed').forEach(p => {
+    const o = document.createElement('option');
+    o.value = String(p.id);
+    o.textContent = `${p.code} — ${p.title || ''}`;
+    sel.appendChild(o);
+  });
+  sel.onchange = () => _clRunPrecheck(sel.value);
+  wrap.appendChild(lbl); wrap.appendChild(sel);
+  pre.appendChild(wrap);
+  const detail = document.createElement('div');
+  detail.id = 'cl-precheck-detail';
+  detail.style.marginTop = '10px';
+  pre.appendChild(detail);
+  // default issue date oggi
+  document.getElementById('cl-issue-date').value = new Date().toISOString().slice(0,10);
+  document.getElementById('cl-number').value = '';
+  document.getElementById('cl-due-date').value = '';
+  document.getElementById('cl-vat').value = 22;
+  document.getElementById('cl-notes').value = '';
+  document.getElementById('cl-submit').disabled = true;
+  _clProjectId = null;
+  openModal('modal-closing-invoice');
+}
+
+async function _clRunPrecheck(projectId) {
+  const detail = document.getElementById('cl-precheck-detail');
+  while (detail.firstChild) detail.removeChild(detail.firstChild);
+  _clProjectId = null;
+  document.getElementById('cl-submit').disabled = true;
+  if (!projectId) return;
+  let r;
+  try {
+    r = await api('GET', `/finance/api/billing/closing-precheck/${projectId}`);
+  } catch(e) {
+    detail.textContent = '⚠ ' + (e.message || 'errore precheck');
+    return;
+  }
+  const box = document.createElement('div');
+  box.style.cssText = 'padding:10px 12px; background:var(--bg3); border-radius:8px; font-size:13px;';
+  const head = document.createElement('div');
+  head.style.cssText = 'display:flex; justify-content:space-between; align-items:center; gap:8px;';
+  const t1 = document.createElement('div');
+  t1.textContent = `📂 ${r.project_code} — ${r.project_title}`;
+  t1.style.fontWeight = '600';
+  const t2 = document.createElement('div');
+  t2.className = 'mono text-xs';
+  t2.textContent = `${r.invoices_count} fatture · Tot. ${fmtCurrency(r.total_billed)} · Pagato ${fmtCurrency(r.total_paid)}`;
+  head.appendChild(t1); head.appendChild(t2);
+  box.appendChild(head);
+  const status = document.createElement('div');
+  status.style.cssText = 'margin-top:8px; font-size:12px;';
+  if (r.can_close) {
+    status.style.color = '#22c55e';
+    status.textContent = '✓ Tutte le JCL del progetto sono fatturate. Si può chiudere.';
+    _clProjectId = projectId;
+    document.getElementById('cl-submit').disabled = false;
+  } else {
+    status.style.color = '#ef4444';
+    status.textContent = `⚠ ${r.pending_lines_count} righe ancora da fatturare/in approvazione. Risolvi prima.`;
+  }
+  box.appendChild(status);
+  detail.appendChild(box);
+}
+
+async function submitClosingInvoice() {
+  if (!_clProjectId) return;
+  const number = document.getElementById('cl-number').value.trim();
+  const issueDate = document.getElementById('cl-issue-date').value;
+  const dueDate = document.getElementById('cl-due-date').value;
+  const vat = document.getElementById('cl-vat').value;
+  const notes = document.getElementById('cl-notes').value.trim();
+  if (!number || !issueDate) { toast('Numero + data emissione obbligatori', 'warning'); return; }
+  const fd = new FormData();
+  fd.append('invoice_number', number);
+  fd.append('issue_date', issueDate);
+  if (dueDate) fd.append('due_date', dueDate);
+  fd.append('vat_rate', vat);
+  if (notes) fd.append('notes', notes);
+  try {
+    const r = await api('POST', `/finance/api/billing/closing-invoice/${_clProjectId}`, fd);
+    toast(`🏁 Chiusura emessa: ${r.invoice_number} · ${fmtCurrency(r.total)}`, 'success', 6000);
+    closeModal('modal-closing-invoice');
+    if (r.invoice_id) window.open(`/finance/api/invoices/${r.invoice_id}/pdf`, '_blank');
+    await loadBatches();
+    await loadInvoices();
+  } catch(e) {
+    toast(e.message || 'Errore emissione chiusura', 'error');
   }
 }
 

@@ -23,11 +23,16 @@
     </div>
     <div class="form-group" style="min-width:140px;">
       <label class="form-label" style="font-size:11px;">Stato job</label>
+      <!-- v3.5.0-alpha.112: allineati ai valori reali di JobStatus enum -->
       <select class="form-select" id="cr-f-status" onchange="renderCrList()">
         <option value="">— tutti —</option>
-        <option value="open">Aperto</option>
-        <option value="in_progress">In corso</option>
+        <option value="draft">Bozza</option>
+        <option value="quoting">In quotazione</option>
+        <option value="approved">Approvato</option>
+        <option value="active">Attivo</option>
+        <option value="on_hold">In pausa</option>
         <option value="completed">Completato</option>
+        <option value="invoiced">Fatturato</option>
         <option value="cancelled">Annullato</option>
       </select>
     </div>
@@ -50,7 +55,7 @@
           <th style="min-width:160px;">Cliente</th>
           <th style="width:90px;">Stato</th>
           <th class="text-right" style="width:120px;">Quotato</th>
-          <th class="text-right" style="width:120px;">Maturato</th>
+          <th class="text-right" style="width:120px;" title="Maturato totale del job = Σ JCL.total_accrued (include il già fatturato in slice + il post-periodo). Nel dettaglio CR la colonna 'Maturato post' mostra solo la parte non ancora fatturata.">Maturato</th>
           <th class="text-right" style="width:120px;">Stimato</th>
           <th class="text-right" style="width:120px;">Over/Under</th>
           <th class="text-right" style="width:120px;" title="Maturato − Costo reale risorse (α.67)">Marg. reale</th>
@@ -141,9 +146,12 @@
           <tr>
             <th>Voce</th><th>Unità</th>
             <th class="text-right">Quotato</th>
-            <th class="text-right" title="Σ JCLBilledSlice — chiuso in fattura, immutabile">Fatturato</th>
-            <th class="text-right" title="Maturato eccedente il già fatturato (done senza slice)">Mat. post</th>
-            <th class="text-right" title="Stima ulteriori ore ancora da lavorare (planned − done)">Stim. fut.</th>
+            <!-- v3.5.0-alpha.112: nomi più espliciti per distinguere
+                 "Maturato totale" (lista CR) vs "Maturato post-periodo" (qui).
+                 Sono valori diversi: post-periodo = totale − già-fatturato. -->
+            <th class="text-right" title="Già fatturato — Σ delle slice JCLBilledSlice (immutabile)">Fatturato</th>
+            <th class="text-right" title="Maturato non ancora fatturato — done senza slice. Nella lista CR la colonna 'Maturato' è invece il TOTALE (fatturato + post).">Maturato post</th>
+            <th class="text-right" title="Stima ulteriori ore ancora da lavorare (planned − done)">Stim. futuro</th>
             <th class="text-right">Over/Under</th>
             <th class="text-right" title="Σ ore done × Resource.internal_cost_hourly — costo reale risorse interne (α.67)">Costo reale</th>
             <th class="text-right" title="Maturato − Costo reale (margine reale stimato basato sui cost-rate interni)">Margine reale</th>
@@ -300,7 +308,7 @@
 
 <!-- v3.5.0-alpha.48: Trasmetti a fatturazione (Step 3 Cost Report → Billing) -->
 <div class="modal-overlay" id="modal-transmit">
-  <div class="modal">
+  <div class="modal" style="max-width:980px;">
     <div class="modal-header"><span class="modal-title">📤 Trasmetti a fatturazione</span>
       <button class="btn btn-ghost btn-icon" onclick="closeModal('modal-transmit')">✕</button></div>
     <div class="modal-body">
@@ -409,7 +417,12 @@ function renderCrList() {
     tbody.innerHTML = '<tr><td colspan="9" class="text-muted" style="text-align:center;padding:24px;">Nessun cost report corrisponde ai filtri</td></tr>';
     return;
   }
-  const STATUS_LBL = { open:'Aperto', in_progress:'In corso', completed:'Completato', cancelled:'Annullato' };
+  // v3.5.0-alpha.112: allineato a JobStatus enum
+  const STATUS_LBL = {
+    draft:'Bozza', quoting:'In quotazione', approved:'Approvato',
+    active:'Attivo', on_hold:'In pausa', completed:'Completato',
+    invoiced:'Fatturato', cancelled:'Annullato',
+  };
   tbody.innerHTML = rows.map(r => {
     // v3.5.0-alpha.55: segno positivo = OVER (rosso), negativo = UNDER (verde).
     const oVal = (r[_viewKey] ?? r.over_under) || 0;
@@ -1300,8 +1313,16 @@ async function refreshTransmitPreview() {
         <td class="mono text-right" style="font-weight:600;">${fmtCurrency(l.total_accrued)}</td>
       </tr>`;
     }).join('');
+    // v3.5.0-alpha.112 — banner esclusioni: voci in_batch/billed escluse di default
+    const exB = p.excluded_in_batch || 0;
+    const exF = p.excluded_billed || 0;
+    const exclusionsHtml = (exB + exF > 0)
+      ? `<div style="margin-bottom:8px; padding:6px 10px; background:rgba(148,163,184,.10); border:1px solid rgba(148,163,184,.25); border-radius:6px; font-size:11px; color:var(--text2);">
+          ℹ Escluse automaticamente: ${exB > 0 ? `<b>${exB}</b> in approvazione (in_batch)` : ''}${(exB > 0 && exF > 0) ? ' · ' : ''}${exF > 0 ? `<b>${exF}</b> già fatturate (billed/paid)` : ''}.
+        </div>`
+      : '';
     const previewHtml = p.candidate_count > 0
-      ? `<div style="background:var(--bg3); border:1px solid var(--border); border-radius:8px; padding:10px 12px;">
+      ? `${exclusionsHtml}<div style="background:var(--bg3); border:1px solid var(--border); border-radius:8px; padding:10px 12px;">
           <div style="display:flex; justify-content:space-between; align-items:center; gap:10px; margin-bottom:6px;">
             <div>
               <div style="font-size:13px;">
@@ -1331,10 +1352,14 @@ async function refreshTransmitPreview() {
             </table>
           </div>
         </div>`
-      : `<div style="background:rgba(251,146,60,.10); border:1px solid rgba(251,146,60,.3); border-radius:8px; padding:10px 12px; color:#fb923c; font-size:13px;">
+      : `${exclusionsHtml}<div style="background:rgba(251,146,60,.10); border:1px solid rgba(251,146,60,.3); border-radius:8px; padding:10px 12px; color:#fb923c; font-size:13px;">
           ⚠ Nessuna riga maturata da fatturare (filtro: not_billed + total_accrued > 0${includeExtras ? '' : ' + non extra'})
         </div>`;
     document.getElementById('tm-preview').innerHTML = previewHtml;
+    // v3.5.0-alpha.112 — ricalcola subito subtotale sulle sole righe checked
+    // (server invia total_proposed = somma di TUTTE; α.111.25 voci UNDER
+    //  unchecked default → mismatch finché user non toggla).
+    if (p.candidate_count > 0) updateTransmitSubtotal();
     // Disabilita submit se nessuna candidata
     const submitBtn = document.getElementById('tm-submit-btn');
     if (submitBtn) submitBtn.disabled = (p.candidate_count === 0);

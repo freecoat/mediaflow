@@ -34,4 +34,6 @@ from app.models.models import (
     OverheadCost, OverheadCostCategory, RecurrenceInterval,
     # v3.5.0-alpha.89 — Anomaly workflow (sprint S4)
     AnomalyEntry, AnomalyType, AnomalyStatus, AnomalyAction, AnomalySourceKind,
+    # v3.5.0-alpha.112 — Numbering rules
+    NumberingConfig,
 )

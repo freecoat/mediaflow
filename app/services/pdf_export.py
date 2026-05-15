@@ -136,10 +136,15 @@ def generate_invoice_pdf(invoice: dict, lines: list[dict], company: dict = None)
     story.append(Spacer(1, 5*mm))
 
     # ── Totali ────────────────────────────────────────────────
-    subtotal = invoice.get("subtotal", 0)
+    # v3.5.0-alpha.112 — autorevole: ricalcola subtotal da Σ lines per
+    # evitare drift fattura-stampata vs lista/report (Matteo P7).
+    # invoice.subtotal/total stored sono solo fallback se lines vuote.
+    lines_sum = round(sum((l.get("total") or 0) for l in lines), 2)
+    stored_subtotal = invoice.get("subtotal", 0) or 0
+    subtotal = lines_sum if lines_sum > 0 else stored_subtotal
     vat_rate = invoice.get("vat_rate", 22)
-    vat_amt  = subtotal * vat_rate / 100
-    total    = invoice.get("total", subtotal + vat_amt)
+    vat_amt  = round(subtotal * vat_rate / 100, 2)
+    total    = round(subtotal + vat_amt, 2)
 
     def fmt(n):
         return f"€ {n:,.2f}".replace(",","X").replace(".",",").replace("X",".")
@@ -160,6 +165,76 @@ def generate_invoice_pdf(invoice: dict, lines: list[dict], company: dict = None)
         ("LINEABOVE",    (1,2), (-1,2), 1, INDIGO),
     ]))
     story.append(totals_table)
+
+    # ── Sezione chiusura progetto (v3.5.0-alpha.112) ──────────
+    if invoice.get("is_closing"):
+        story.append(Spacer(1, 10*mm))
+        story.append(HRFlowable(width="100%", thickness=1, color=INDIGO, spaceAfter=3*mm))
+        proj_code = invoice.get("project_code", "—")
+        proj_title = invoice.get("project_title", "")
+        story.append(Paragraph(
+            f"<b>FATTURA DI CHIUSURA PROGETTO</b> — {proj_code} · {proj_title}",
+            h2,
+        ))
+        story.append(Paragraph(
+            "Riepilogo di tutte le fatture emesse sul progetto:", muted
+        ))
+        story.append(Spacer(1, 3*mm))
+        summary = invoice.get("closing_summary", []) or []
+        if summary:
+            sum_header = [
+                Paragraph("<b>N°</b>", ParagraphStyle("sh", fontSize=8, fontName="Helvetica-Bold", textColor=WHITE)),
+                Paragraph("<b>Data</b>", ParagraphStyle("sh", fontSize=8, fontName="Helvetica-Bold", textColor=WHITE)),
+                Paragraph("<b>Tipo</b>", ParagraphStyle("sh", fontSize=8, fontName="Helvetica-Bold", textColor=WHITE)),
+                Paragraph("<b>Stato</b>", ParagraphStyle("sh", fontSize=8, fontName="Helvetica-Bold", textColor=WHITE)),
+                Paragraph("<b>Totale</b>", ParagraphStyle("sh", fontSize=8, fontName="Helvetica-Bold", textColor=WHITE, alignment=TA_RIGHT)),
+                Paragraph("<b>Pagato</b>", ParagraphStyle("sh", fontSize=8, fontName="Helvetica-Bold", textColor=WHITE, alignment=TA_RIGHT)),
+            ]
+            sum_rows = [sum_header]
+            for s in summary:
+                sum_rows.append([
+                    Paragraph(str(s.get("number", "")), body),
+                    Paragraph(str(s.get("issue_date", "")), body),
+                    Paragraph(str(s.get("doc_type", "")), body),
+                    Paragraph(str(s.get("status", "")), body),
+                    Paragraph(
+                        f"€ {s.get('total',0):,.2f}".replace(",","X").replace(".",",").replace("X","."),
+                        right,
+                    ),
+                    Paragraph(
+                        f"€ {s.get('amount_paid',0):,.2f}".replace(",","X").replace(".",",").replace("X","."),
+                        right,
+                    ),
+                ])
+            t_total = sum((s.get("total") or 0) for s in summary)
+            t_paid = sum((s.get("amount_paid") or 0) for s in summary)
+            sum_rows.append([
+                Paragraph("<b>Tot.</b>", body), "", "", "",
+                Paragraph(
+                    f"<b>€ {t_total:,.2f}</b>".replace(",","X").replace(".",",").replace("X","."),
+                    right,
+                ),
+                Paragraph(
+                    f"<b>€ {t_paid:,.2f}</b>".replace(",","X").replace(".",",").replace("X","."),
+                    right,
+                ),
+            ])
+            sum_col_w = [28*mm, 22*mm, 16*mm, 24*mm, 25*mm, 25*mm]
+            sum_table = Table(sum_rows, colWidths=sum_col_w, repeatRows=1)
+            sum_table.setStyle(TableStyle([
+                ("BACKGROUND",    (0,0), (-1,0), INDIGO),
+                ("ROWBACKGROUNDS",(0,1), (-1,-2), [WHITE, LIGHT]),
+                ("GRID",          (0,0), (-1,-1), 0.3, colors.HexColor("#e0e3f0")),
+                ("TOPPADDING",    (0,0), (-1,-1), 2*mm),
+                ("BOTTOMPADDING", (0,0), (-1,-1), 2*mm),
+                ("LEFTPADDING",   (0,0), (-1,-1), 2*mm),
+                ("RIGHTPADDING",  (0,0), (-1,-1), 2*mm),
+                ("LINEABOVE",     (0,-1),(-1,-1), 1, INDIGO),
+                ("FONTNAME",      (0,-1),(-1,-1), "Helvetica-Bold"),
+            ]))
+            story.append(sum_table)
+        else:
+            story.append(Paragraph("Nessuna fattura precedente.", muted))
 
     # ── Note ──────────────────────────────────────────────────
     notes = invoice.get("notes")

@@ -133,6 +133,7 @@ async def list_invoices(
     from_date: Optional[date] = None,
     to_date: Optional[date] = None,
     only_overdue: bool = False,
+    number: Optional[str] = None,  # v3.5.0-alpha.112 — search by invoice number
     db: Session = Depends(get_db),
 ):
     """v3.5.0-alpha.86 — Filtri estesi (S3.1): project + period.
@@ -167,6 +168,10 @@ async def list_invoices(
             Invoice.due_date < today,
             Invoice.status.notin_([InvoiceStatus.paid, InvoiceStatus.cancelled]),
         )
+    # v3.5.0-alpha.112 — ricerca libera su numero fattura (ilike)
+    if number:
+        like = f"%{number.strip()}%"
+        q = q.filter(Invoice.number.ilike(like))
     out = []
     for inv in q.all():
         proj = inv.job.project if (inv.job and inv.job.project) else None
@@ -913,6 +918,19 @@ async def download_invoice_pdf(invoice_id: int, db: Session = Depends(get_db)):
     if not inv:
         raise HTTPException(404, "Fattura non trovata")
 
+    # v3.5.0-alpha.112 — drift detection: confronta stored vs computed.
+    # In caso di drift, ricomputa anche subtotal/total dell'Invoice ORM
+    # così lista/report mostrano la cifra reale (allineata al PDF).
+    lines_sum = round(sum((l.total or 0) for l in inv.lines), 2)
+    if inv.lines and inv.subtotal and abs((inv.subtotal or 0) - lines_sum) > 0.01:
+        import logging
+        logging.warning(
+            f"[invoice-drift] inv#{inv.id} stored_subtotal={inv.subtotal} "
+            f"!= Σ_lines={lines_sum} — auto-recompute"
+        )
+        inv.subtotal = lines_sum
+        inv.total = round(lines_sum * (1 + (inv.vat_rate or 0) / 100), 2)
+        db.commit()
     invoice_data = {
         "number":      inv.number,
         "issue_date":  inv.issue_date.strftime("%d/%m/%Y") if inv.issue_date else "—",
@@ -923,7 +941,31 @@ async def download_invoice_pdf(invoice_id: int, db: Session = Depends(get_db)):
         "vat_rate":    inv.vat_rate,
         "total":       inv.total,
         "notes":       inv.notes,
+        "is_closing":  bool(getattr(inv, "is_closing", False)),
     }
+    # v3.5.0-alpha.112 — Fattura di chiusura: aggiungi riepilogo storico
+    if getattr(inv, "is_closing", False) and getattr(inv, "closing_project_id", None):
+        from app.models import Project as _Project, Job as _Job
+        proj = db.query(_Project).filter(_Project.id == inv.closing_project_id).first()
+        if proj:
+            invoice_data["project_code"] = proj.code
+            invoice_data["project_title"] = proj.title
+            prev_invs = db.query(Invoice).join(_Job, Invoice.job_id == _Job.id).filter(
+                _Job.project_id == proj.id,
+                Invoice.id != inv.id,
+            ).order_by(Invoice.issue_date.asc()).all()
+            invoice_data["closing_summary"] = [
+                {
+                    "number": pi.number,
+                    "issue_date": pi.issue_date.strftime("%d/%m/%Y") if pi.issue_date else "—",
+                    "subtotal": pi.subtotal or 0,
+                    "total": pi.total or 0,
+                    "amount_paid": pi.amount_paid or 0,
+                    "doc_type": pi.doc_type or "TD01",
+                    "status": pi.status.value if hasattr(pi.status, "value") else pi.status,
+                }
+                for pi in prev_invs
+            ]
     lines_data = [
         {
             "description": l.description,

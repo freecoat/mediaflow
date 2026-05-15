@@ -87,6 +87,7 @@
     <div class="settings-tab" data-pane="mfa" onclick="showPane('mfa')"><i data-lucide="shield-check" style="width:14px;height:14px;vertical-align:-2px;"></i> 🔒 MFA TOTP</div>
     <div class="settings-tab" data-pane="company" onclick="showPane('company')"><i data-lucide="building-2" style="width:14px;height:14px;vertical-align:-2px;"></i> Azienda</div>
     {% if is_admin(user) %}
+    <div class="settings-tab" data-pane="numbering" onclick="showPane('numbering')"><i data-lucide="hash" style="width:14px;height:14px;vertical-align:-2px;"></i> Numerazione</div>
     <div class="settings-tab" data-pane="data" onclick="showPane('data')"><i data-lucide="database" style="width:14px;height:14px;vertical-align:-2px;"></i> Dati</div>
     <div class="settings-tab" data-pane="storage" onclick="showPane('storage')"><i data-lucide="hard-drive" style="width:14px;height:14px;vertical-align:-2px;"></i> Storage</div>
     {% endif %}
@@ -580,6 +581,26 @@ AWS_S3_DEFAULT_BUCKET=mediaflow-prod</pre>
       </div>
     </div>
 
+    <!-- ── Pannello Numerazione (admin only, v3.5.0-alpha.112) ── -->
+    <div class="settings-pane" id="pane-numbering">
+      <div class="card mb-4">
+        <div class="card-title mb-2"><i data-lucide="hash" style="width:16px;height:16px;vertical-align:-3px;"></i> Regole di numerazione</div>
+        <p class="text-sm text-muted mb-3">
+          Definisci il formato dei codici e numerazioni emessi (quote, batch
+          fatturazione, fatture, job, export). Le regole impostate qui valgono
+          solo per i <b>documenti emessi dopo la modifica</b>: lo storico
+          esistente NON viene rinumerato. Reset annuale: il progressivo riparte
+          da 1 a inizio anno solare.
+        </p>
+        <div class="text-xs text-muted mb-3" id="nmb-vars-help">
+          Variabili supportate: caricamento…
+        </div>
+        <div id="nmb-list">
+          <div class="text-sm text-muted">Caricamento regole…</div>
+        </div>
+      </div>
+    </div>
+
     <!-- ── Pannello Dati (admin only, v3.5.0-alpha.34) ────────── -->
     <div class="settings-pane" id="pane-data">
       <div class="card mb-4">
@@ -711,6 +732,12 @@ const THEMES = [
     swatches:['#0d0d0d','#1f1f1f','#d4d4d4','#ededed','#f0f0f0'] },
   { id:'sand',   name:'Sand', desc:'Caldo chiaro — contrasto',
     swatches:['#f5f1e8','#e1dac5','#a0522d','#b97350','#2b2620'] },
+  { id:'paper',  name:'Paper', desc:'Bianco neutro — minimal',
+    swatches:['#fafafa','#e7e7ea','#475569','#1d1d1f'] },
+  { id:'linen',  name:'Linen', desc:'Avorio caldo — editoriale',
+    swatches:['#faf6f1','#e7ddd0','#c2410c','#2a221b'] },
+  { id:'sage',   name:'Sage', desc:'Salvia chiaro — riposante',
+    swatches:['#f0f3ee','#d9e0d2','#15803d','#1c2a1c'] },
   { id:'broadcast', name:'Broadcast', desc:'DaVinci/Avid — denso, flat, cyan',
     swatches:['#1c1c1f','#2a2a30','#00d4ff','#4de3ff','#e8eaed'] },
 ];
@@ -735,6 +762,103 @@ function showPane(id) {
   document.querySelectorAll('.settings-pane').forEach(p => p.classList.toggle('active', p.id === 'pane-' + id));
   if (id === 'hours') whReload();
   if (id === 'storage') { fspReload(); s3StatusReload(); }
+  if (id === 'numbering') nmbReload();
+}
+
+// v3.5.0-alpha.112 — Regole di numerazione documenti
+async function nmbReload() {
+  const list = document.getElementById('nmb-list');
+  const help = document.getElementById('nmb-vars-help');
+  if (!list) return;
+  let data;
+  try { data = await api('GET', '/settings/api/numbering'); }
+  catch(e) { toast(e.message, 'error'); return; }
+  if (help) {
+    help.textContent = 'Variabili: ' + (data.vars || []).map(v => v.v + ' (' + v.desc + ')').join(' · ');
+  }
+  // Costruisco le card via DOM (no innerHTML su untrusted: dati provengono
+  // dall'endpoint server in /settings/api/numbering — controllato).
+  while (list.firstChild) list.removeChild(list.firstChild);
+  (data.configs || []).forEach(c => {
+    const card = document.createElement('div');
+    card.className = 'card';
+    card.style.cssText = 'margin-bottom:10px; padding:14px;';
+    const row = document.createElement('div');
+    row.style.cssText = 'display:flex; justify-content:space-between; align-items:start; gap:12px; flex-wrap:wrap;';
+    const leftCol = document.createElement('div');
+    leftCol.style.cssText = 'flex:1; min-width:240px;';
+    const title = document.createElement('div');
+    title.style.cssText = 'font-weight:600; font-size:13px;';
+    title.textContent = c.label;
+    const sub = document.createElement('div');
+    sub.className = 'text-xs text-muted';
+    sub.style.cssText = 'margin-top:2px;';
+    sub.textContent = 'Default: ' + c.default_pattern + (c.configured ? '' : ' (non personalizzato)');
+    leftCol.appendChild(title);
+    leftCol.appendChild(sub);
+    const rightCol = document.createElement('div');
+    rightCol.style.cssText = 'display:flex; gap:8px; flex-wrap:wrap; flex:2; min-width:280px;';
+    const fmtInput = document.createElement('input');
+    fmtInput.className = 'form-input mono';
+    fmtInput.id = 'nmb-' + c.doc_type + '-fmt';
+    fmtInput.value = c.format_pattern;
+    fmtInput.style.cssText = 'flex:1; min-width:200px;';
+    const resetLbl = document.createElement('label');
+    resetLbl.className = 'text-xs';
+    resetLbl.style.cssText = 'display:flex; align-items:center; gap:6px;';
+    const resetCb = document.createElement('input');
+    resetCb.type = 'checkbox';
+    resetCb.id = 'nmb-' + c.doc_type + '-reset';
+    resetCb.checked = !!c.reset_yearly;
+    resetLbl.appendChild(resetCb);
+    resetLbl.appendChild(document.createTextNode(' Reset annuale'));
+    const previewBtn = document.createElement('button');
+    previewBtn.type = 'button';
+    previewBtn.className = 'btn btn-sm btn-ghost';
+    previewBtn.textContent = '👁 Preview';
+    previewBtn.onclick = () => nmbPreview(c.doc_type);
+    const saveBtn = document.createElement('button');
+    saveBtn.type = 'button';
+    saveBtn.className = 'btn btn-sm btn-primary';
+    saveBtn.textContent = 'Salva';
+    saveBtn.onclick = () => nmbSave(c.doc_type);
+    rightCol.appendChild(fmtInput);
+    rightCol.appendChild(resetLbl);
+    rightCol.appendChild(previewBtn);
+    rightCol.appendChild(saveBtn);
+    row.appendChild(leftCol);
+    row.appendChild(rightCol);
+    card.appendChild(row);
+    const previewLine = document.createElement('div');
+    previewLine.className = 'text-xs mono';
+    previewLine.id = 'nmb-' + c.doc_type + '-preview';
+    previewLine.style.cssText = 'margin-top:6px; color:var(--text3);';
+    card.appendChild(previewLine);
+    list.appendChild(card);
+  });
+}
+
+async function nmbPreview(doc_type) {
+  try {
+    const fd = new FormData();
+    const r = await api('POST', `/settings/api/numbering/${doc_type}/preview`, fd);
+    const el = document.getElementById('nmb-' + doc_type + '-preview');
+    if (el) el.textContent = '→ Prossimo: ' + r.preview;
+  } catch(e) { toast(e.message, 'error'); }
+}
+
+async function nmbSave(doc_type) {
+  const fmt = document.getElementById('nmb-' + doc_type + '-fmt')?.value.trim();
+  const reset = document.getElementById('nmb-' + doc_type + '-reset')?.checked;
+  if (!fmt) { toast('Format obbligatorio', 'warning'); return; }
+  try {
+    const fd = new FormData();
+    fd.append('format_pattern', fmt);
+    fd.append('reset_yearly', reset ? 'true' : 'false');
+    await api('PUT', `/settings/api/numbering/${doc_type}`, fd);
+    toast('Regola salvata', 'success');
+    await nmbReload();
+  } catch(e) { toast(e.message, 'error'); }
 }
 
 // v3.5.0-alpha.105 — Filesystem scan paths (tenant-level)

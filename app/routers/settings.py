@@ -673,3 +673,126 @@ async def company_logo_upload(
     t.logo_path = str(target.as_posix())
     db.commit()
     return {"ok": True, "logo_path": t.logo_path}
+
+
+# ── v3.5.0-alpha.112 — Numerazione documenti ──────────────────────────
+# CRUD su NumberingConfig per tenant. Lo storico non viene rinumerato:
+# le regole influenzano solo gli emessi futuri (quando il numbering
+# service verrà cabled in iterazione successiva). Per ora UI + persistenza
+# delle regole + endpoint preview format.
+
+NUMBERING_DOC_TYPES = [
+    {"key": "quote",                "label": "Quotazioni",            "default": "Q-{YYYY}-{NNN}"},
+    {"key": "billing_batch",        "label": "Batch fatturazione",    "default": "BB-{YYYY}-{NNN}"},
+    {"key": "invoice",              "label": "Fattura standard",      "default": "{NNN}/{YYYY}"},
+    {"key": "invoice_closing",      "label": "Fattura di chiusura",   "default": "CL-{PROJECT_CODE}-{YYYY}"},
+    {"key": "invoice_credit_note",  "label": "Nota di credito (TD04)","default": "NC-{YYYY}-{NNN}"},
+    {"key": "job",                  "label": "Job",                   "default": "{PROJECT_CODE}-J{NNN}"},
+    {"key": "cost_report_export",   "label": "Export Cost Report",    "default": "CR-{PROJECT_CODE}-{YYYYMMDD}"},
+    {"key": "supplier_invoice",     "label": "Fattura passiva",       "default": "FP-{YYYY}-{NNN}"},
+]
+
+NUMBERING_VARS = [
+    {"v": "{YYYY}",           "desc": "Anno 4 cifre (2026)"},
+    {"v": "{YY}",             "desc": "Anno 2 cifre (26)"},
+    {"v": "{MM}",             "desc": "Mese 2 cifre (05)"},
+    {"v": "{DD}",             "desc": "Giorno 2 cifre (15)"},
+    {"v": "{YYYYMMDD}",       "desc": "Data compatta (20260515)"},
+    {"v": "{NNN}",            "desc": "Progressivo 3 cifre (001)"},
+    {"v": "{NN}",             "desc": "Progressivo 2 cifre (01)"},
+    {"v": "{NNNN}",           "desc": "Progressivo 4 cifre (0001)"},
+    {"v": "{PROJECT_CODE}",   "desc": "Codice progetto (se applicabile)"},
+    {"v": "{CLIENT_CODE}",    "desc": "Codice cliente (se applicabile)"},
+]
+
+
+@router.get("/api/numbering")
+async def list_numbering(db: Session = Depends(get_db)):
+    """Restituisce configurazione attuale + default per ogni doc_type.
+    Se record assenti per tenant, ritorna default come placeholder."""
+    from app.models.models import NumberingConfig
+    tid = current_tenant_id()
+    existing = {n.doc_type: n for n in db.query(NumberingConfig).filter(
+        NumberingConfig.tenant_id == tid
+    ).all()}
+    rows = []
+    for spec in NUMBERING_DOC_TYPES:
+        rec = existing.get(spec["key"])
+        rows.append({
+            "doc_type": spec["key"],
+            "label": spec["label"],
+            "format_pattern": rec.format_pattern if rec else spec["default"],
+            "default_pattern": spec["default"],
+            "reset_yearly": rec.reset_yearly if rec else True,
+            "current_year": rec.current_year if rec else None,
+            "current_seq": rec.current_seq if rec else 0,
+            "configured": bool(rec),
+            "notes": (rec.notes if rec else None),
+        })
+    return {"vars": NUMBERING_VARS, "configs": rows}
+
+
+@router.put("/api/numbering/{doc_type}")
+async def upsert_numbering(
+    doc_type: str,
+    format_pattern: str = Form(...),
+    reset_yearly: bool = Form(True),
+    notes: Optional[str] = Form(None),
+    db: Session = Depends(get_db),
+):
+    from app.models.models import NumberingConfig
+    valid = {s["key"] for s in NUMBERING_DOC_TYPES}
+    if doc_type not in valid:
+        raise HTTPException(400, f"doc_type non valido: {doc_type}")
+    if not format_pattern.strip():
+        raise HTTPException(400, "format_pattern obbligatorio")
+    tid = current_tenant_id()
+    rec = db.query(NumberingConfig).filter(
+        NumberingConfig.tenant_id == tid,
+        NumberingConfig.doc_type == doc_type,
+    ).first()
+    if rec is None:
+        rec = NumberingConfig(tenant_id=tid, doc_type=doc_type)
+        db.add(rec)
+    rec.format_pattern = format_pattern.strip()
+    rec.reset_yearly = bool(reset_yearly)
+    rec.notes = notes
+    db.commit()
+    db.refresh(rec)
+    return {"ok": True, "doc_type": rec.doc_type, "format_pattern": rec.format_pattern}
+
+
+@router.post("/api/numbering/{doc_type}/preview")
+async def preview_numbering(
+    doc_type: str,
+    project_code: Optional[str] = Form(None),
+    client_code: Optional[str] = Form(None),
+    db: Session = Depends(get_db),
+):
+    """Renderizza il prossimo codice secondo il format corrente — solo preview."""
+    from app.models.models import NumberingConfig
+    from datetime import date
+    tid = current_tenant_id()
+    spec = next((s for s in NUMBERING_DOC_TYPES if s["key"] == doc_type), None)
+    if not spec:
+        raise HTTPException(400, "doc_type non valido")
+    rec = db.query(NumberingConfig).filter(
+        NumberingConfig.tenant_id == tid,
+        NumberingConfig.doc_type == doc_type,
+    ).first()
+    fmt = (rec.format_pattern if rec else spec["default"])
+    seq = ((rec.current_seq if rec else 0) or 0) + 1
+    today = date.today()
+    out = (
+        fmt.replace("{YYYY}", f"{today.year:04d}")
+           .replace("{YY}",   f"{today.year % 100:02d}")
+           .replace("{MM}",   f"{today.month:02d}")
+           .replace("{DD}",   f"{today.day:02d}")
+           .replace("{YYYYMMDD}", today.strftime("%Y%m%d"))
+           .replace("{NNNN}", f"{seq:04d}")
+           .replace("{NNN}",  f"{seq:03d}")
+           .replace("{NN}",   f"{seq:02d}")
+           .replace("{PROJECT_CODE}", (project_code or "PRJCODE"))
+           .replace("{CLIENT_CODE}",  (client_code or "CLI"))
+    )
+    return {"preview": out, "format": fmt, "next_seq": seq}

@@ -370,6 +370,29 @@ def _auto_migrate_columns():
                     "ALTER TABLE invoices ADD COLUMN amount_paid "
                     "REAL NOT NULL DEFAULT 0"
                 ))
+        # v3.5.0-alpha.112 — Closing invoice flag + project link
+        inv_alter_112 = [
+            ("is_closing", "BOOLEAN NOT NULL DEFAULT 0"),
+            ("closing_project_id", "INTEGER NULL REFERENCES projects(id)"),
+        ]
+        with engine.begin() as conn:
+            for col, ddl in inv_alter_112:
+                if col not in icols:
+                    print(f"[auto-migrate] invoices.{col} mancante -> ALTER TABLE")
+                    conn.execute(text(f"ALTER TABLE invoices ADD COLUMN {col} {ddl}"))
+    # v3.5.0-alpha.112 — Project finance closure
+    if "projects" in insp.get_table_names():
+        pcols = {c["name"] for c in insp.get_columns("projects")}
+        proj_alter_112 = [
+            ("finance_status", "VARCHAR(20) NOT NULL DEFAULT 'active'"),
+            ("finance_closed_at", "DATETIME NULL"),
+            ("finance_closing_invoice_id", "INTEGER NULL REFERENCES invoices(id)"),
+        ]
+        with engine.begin() as conn:
+            for col, ddl in proj_alter_112:
+                if col not in pcols:
+                    print(f"[auto-migrate] projects.{col} mancante -> ALTER TABLE")
+                    conn.execute(text(f"ALTER TABLE projects ADD COLUMN {col} {ddl}"))
     # v3.5.0-alpha.69.1 — Backfill InvoicePayment per fatture legacy pagate
     # senza riga di pagamento. Senza questo backfill, /finance/cashflow
     # mostra 0 incassato per fatture marcate paid pre-α.66.20 (rotture
@@ -1066,7 +1089,7 @@ async def lifespan(app: FastAPI):
     yield
 
 
-app = FastAPI(title="MediaFlow", version="3.5.0-alpha.111.26", lifespan=lifespan)
+app = FastAPI(title="MediaFlow", version="3.5.0-alpha.112", lifespan=lifespan)
 
 BASE_DIR = Path(__file__).parent
 app.mount("/static", StaticFiles(directory=BASE_DIR / "static"), name="static")

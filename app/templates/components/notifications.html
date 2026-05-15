@@ -1,12 +1,16 @@
 {# Notifiche drawer + bell + polling — v3.4.27 #}
 <style>
+  /* v3.5.0-alpha.112: color/hover su token tema per leggibilità cross-theme.
+     Bug precedente: SVG con stroke=currentColor + button senza `color` →
+     ereditava nero default del browser → invisibile su temi scuri.
+     Hover bg hardcoded rgba(255,255,255,.06) → invisibile su temi chiari. */
   .topbar-bell {
     position: relative; background: transparent; border: none; cursor: pointer;
     width: 36px; height: 36px; border-radius: 50%; display: flex;
-    align-items: center; justify-content: center; transition: background 0.12s;
-    margin-right: 6px;
+    align-items: center; justify-content: center; transition: background 0.12s, color 0.12s;
+    margin-right: 6px; color: var(--text2);
   }
-  .topbar-bell:hover { background: rgba(255,255,255,0.06); }
+  .topbar-bell:hover { background: var(--bg3); color: var(--text); }
   .topbar-bell-icon { font-size: 18px; line-height: 1; }
   .topbar-bell-badge {
     position: absolute; top: 2px; right: 2px;

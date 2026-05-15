@@ -1224,7 +1224,7 @@ reloadMyHours();
 {% endif %}
 
 // v3.5.0-alpha.111.21 — Export ore consulente lavoro (CSV / XLSX).
-// v3.5.0-alpha.111.23.1 — Spostato fuori dal blocco {% if scoped_resource_id %}
+// v3.5.0-alpha.111.23.1 — Spostato fuori dal blocco scoped_resource_id
 // per essere visibile anche per admin/manager senza Resource collegata.
 {% if scoped_resource_id or can_approve_unavailability(_user) %}
 function _expDefaultMonth() {

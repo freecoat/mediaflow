@@ -795,6 +795,15 @@ class Project(Base):
     # 0 = pass-through esatto del costo vettore (no margine).
     shipping_markup_pct: Mapped[float] = mapped_column(Float, nullable=False, default=15.0, server_default="15.0")
 
+    # v3.5.0-alpha.112 — Chiusura finanziaria progetto.
+    # Stato indipendente da `status` operativo (Job.status / ProjectStatus).
+    # `active` (default) → progetto operativamente vivo; `closed` → emessa
+    # fattura di chiusura, lato finanza non si fattura più nulla.
+    # Riapertura solo via storno NC TD04 sulla closing invoice.
+    finance_status: Mapped[str] = mapped_column(String(20), nullable=False, default="active", server_default="active")
+    finance_closed_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+    finance_closing_invoice_id: Mapped[Optional[int]] = mapped_column(ForeignKey("invoices.id"), nullable=True)
+
     client: Mapped["Client"] = relationship(back_populates="projects")
     quotes: Mapped[List["Quote"]] = relationship(back_populates="project", cascade="all, delete-orphan")
     jobs: Mapped[List["Job"]] = relationship(back_populates="project")
@@ -1587,6 +1596,12 @@ class Invoice(Base):
     tenant_fiscal_regime_snap: Mapped[Optional[str]] = mapped_column(String(8), nullable=True)
     # v3.5.0-alpha.66.20 — pagamenti denormalizzati
     amount_paid: Mapped[float] = mapped_column(Float, default=0.0, server_default="0")
+    # v3.5.0-alpha.112 — Fattura di chiusura progetto.
+    # Quando True, è l'ultima fattura del Project: il PDF include sezione
+    # riepilogo di tutte le fatture precedenti del progetto. L'emissione
+    # marca Project.finance_status='closed'. Storno via NC TD04 → riapre.
+    is_closing: Mapped[bool] = mapped_column(Boolean, default=False, server_default="0", nullable=False)
+    closing_project_id: Mapped[Optional[int]] = mapped_column(ForeignKey("projects.id"), nullable=True)
     client: Mapped["Client"] = relationship(back_populates="invoices")
     job: Mapped[Optional["Job"]] = relationship(back_populates="invoices")
     lines: Mapped[List["InvoiceLine"]] = relationship(back_populates="invoice", cascade="all, delete-orphan")
@@ -2623,3 +2638,42 @@ class AnomalyEntry(Base):
     project: Mapped[Optional["Project"]] = relationship(foreign_keys=[project_id])
     job: Mapped[Optional["Job"]] = relationship(foreign_keys=[job_id])
     client: Mapped[Optional["Client"]] = relationship(foreign_keys=[client_id])
+
+
+# ── v3.5.0-alpha.112 — Regole di nomenclatura documenti ─────────────────
+# Pannello in /settings consente di definire format dinamici per codici/numeri
+# emessi (Quote, BillingBatch, Invoice, Job, ClosingInvoice, ecc.). Le regole
+# sono persistite per-tenant e per-doc_type. Il numbering service le legge a
+# runtime; se mancanti applica il default storico (back-compat retroattiva).
+# Storico NON viene rinumerato.
+#
+# Variabili supportate nel format_pattern:
+#   {YYYY}  anno corrente (4 cifre)
+#   {YY}    anno corrente (2 cifre)
+#   {MM}    mese (zero-padded)
+#   {DD}    giorno (zero-padded)
+#   {NNN}   progressivo zero-padded (default 3 cifre)
+#   {NN}    progressivo (2 cifre)
+#   {NNNN}  progressivo (4 cifre)
+#   {PROJECT_CODE}  codice progetto del documento (se applicabile)
+#   {CLIENT_CODE}   codice cliente (se applicabile)
+class NumberingConfig(Base):
+    __tablename__ = "numbering_configs"
+    __table_args__ = (
+        UniqueConstraint("tenant_id", "doc_type", name="uq_numbering_tenant_doctype"),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    tenant_id: Mapped[int] = mapped_column(ForeignKey("tenants.id"), default=1, index=True)
+    # Identificatore canonico del tipo doc — uno tra:
+    #   quote, billing_batch, invoice, invoice_closing, invoice_credit_note,
+    #   job, cost_report_export, supplier_invoice.
+    doc_type: Mapped[str] = mapped_column(String(40), index=True)
+    format_pattern: Mapped[str] = mapped_column(String(200))
+    reset_yearly: Mapped[bool] = mapped_column(Boolean, default=True)
+    # Stato sequenza
+    current_year: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    current_seq: Mapped[int] = mapped_column(Integer, default=0)
+    notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)

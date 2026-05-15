@@ -8,6 +8,42 @@
 
 ## Versione corrente
 
+**v3.5.0-alpha.112** — 15 maggio 2026 — Round revisione Matteo (12 punti P1-P12)
+
+**12 punti chiusi in single bump**:
+- P1: 13 look in /settings#aspect (aggiunti paper/linen/sage)
+- P2: header topbar leggibile su temi chiari (color var(--text2))
+- P3: /hr 500 fix (Jinja tag dentro commento JS → mismatch endif)
+- P4: modal Trasmetti CR 980px + totale iniziale corretto
+- P5: banner "altri batch aperti progetto" in modal emit + switch compose
+- P6: PDF si apre subito post-emit (window.open)
+- P7: PDF ricomputa Σ lines + drift-detection auto-fix ORM
+- P8: ricerca per numero fattura (backend ilike + UI debounce)
+- P9: fattura chiusura progetto (modelli + endpoint + PDF riepilogo +
+  storno NC riapre automaticamente)
+- P10: filtro stato job CR allineato a JobStatus enum reale
+- P11: stati CR chiariti (tooltip Maturato totale vs post + banner
+  esclusioni transmit modal)
+- P12: regole nomenclatura in /settings#numbering (scaffolding solo;
+  cabling effettivo nel numbering service in iterazione futura)
+
+**Da testare Matteo**:
+1. /hr deve caricare (no 500)
+2. Modal Trasmetti CR: larga + totale iniziale corretto + banner esclusioni
+3. Tema paper/sand: icone topbar visibili
+4. Settings > Aspetto: 13 temi presenti
+5. Settings > Numerazione: nuovo tab (admin only)
+6. Emit fattura: PDF si apre subito + se batch multipli → banner compose
+7. /finance: bottone topbar `🏁 Fattura chiusura` → modal precheck
+8. CR detail line: header "Maturato post" tooltip esplicito
+9. Storno NC su closing → progetto riapre automaticamente
+
+**Cabling pendente** (alpha.113+):
+- `NumberingConfig` salvato ma non ancora usato. Quote/Batch/Job code
+  ancora generati da default storico.
+
+## (versione precedente)
+
 **v3.5.0-alpha.111.12** — 14 maggio 2026 — Density compact/spacious tagliati + heatmap su label
 
 **Density buttons rimossi** (Matteo: "togliamole"):

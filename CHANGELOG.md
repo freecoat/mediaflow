@@ -1,5 +1,98 @@
 # MediaFlow — Changelog
 
+## v3.5.0-alpha.112 — Round revisione Matteo 15 maggio (12 punti) (15 maggio 2026)
+
+Maratona bug + feature dopo revisione Matteo. 12 punti dal log mattutino.
+
+**P3 — /hr 500 fix critico**
+- `hr.html:1227` aveva tag `{% if scoped_resource_id %}` letterale dentro
+  commento `//` JS — Jinja non sa che è JS comment, parsava come tag
+  aperto → mismatch endif/endblock → 500 al rendering template.
+- Fix: riscritto commento per non contenere sintassi Jinja.
+
+**P4 — Modal Trasmetti a fatturazione**
+- Larghezza 980px (era 520px default illeggibile con tabella interna).
+- Bug totale iniziale: server invia `total_proposed` = somma TUTTE
+  candidate, ma α.111.25 imposta voci UNDER unchecked di default →
+  totale mostrato includeva voci non spuntate finché user non toggla.
+  Fix: chiama `updateTransmitSubtotal()` subito dopo render.
+
+**P8 — Ricerca per numero fattura**
+- Backend: `/finance/api/invoices?number=...` (ilike).
+- UI: input `🔍 N. fattura…` accanto ai filtri esistenti, debounce 250ms.
+
+**P10 — Filtro stato job CR allineato a enum**
+- Filtro CR aveva valori inventati (open/in_progress) ≠ JobStatus reale.
+- Aggiunti tutti i valori dell'enum: draft/quoting/approved/active/
+  on_hold/completed/invoiced/cancelled.
+
+**P1 — Look mancanti in /settings#aspect**
+- Topbar palette mostrava 13 temi; settings.html ne mostrava 10.
+- Aggiunti paper, linen, sage al `THEMES` di settings.
+
+**P2 — Header leggibile su temi chiari E scuri**
+- `.topbar-bell` non aveva `color` → SVG stroke=currentColor ereditava
+  nero browser default → invisibile su sfondi scuri.
+- Fix: `color: var(--text2)` su button, hover `var(--bg3)` invece di
+  rgba(255,255,255,.06) hardcoded.
+
+**P6 — Stampa fattura immediata post-emit**
+- Dopo emit batch→fattura, `window.open(/pdf, '_blank')` subito.
+
+**P11 — Stati CR chiariti**
+- Header "Mat. post" in detail → tooltip esplicito: "Maturato non
+  ancora fatturato. Nella lista CR la colonna Maturato è il TOTALE".
+- Header "Maturato" in list → tooltip simmetrico.
+- Modal trasmissione: banner esclusioni "X righe in approvazione, Y già
+  fatturate escluse automaticamente" per ridurre confusione stato.
+
+**P7 — Fattura PDF ≠ Report**
+- PDF: ricomputa `subtotal = Σ lines.total` invece di trustare
+  `invoice.subtotal` stored (drift recovery).
+- `download_invoice_pdf` aggiunge drift-detection: se stored differisce
+  da Σ lines più di 0.01 → log warning + auto-update ORM per allineare
+  lista/report al PDF.
+
+**P5 — Multi-batch progetto**
+- Modal "Emetti fattura": banner se ci sono altri batch approved aperti
+  per lo stesso progetto + bottone "↪ Aggrega tutti in fattura unica"
+  che apre compose-invoice pre-popolato.
+
+**P12 — Regole nomenclatura in Impostazioni** (scaffolding)
+- Nuovo modello `NumberingConfig` (tenant_id + doc_type + format_pattern
+  + reset_yearly + current_seq + current_year).
+- Nuovo tab `Numerazione` in /settings (admin) con form per ogni doc
+  type (quote, billing_batch, invoice, invoice_closing,
+  invoice_credit_note, job, cost_report_export, supplier_invoice).
+- Variabili supportate nel format: {YYYY}, {YY}, {MM}, {DD}, {YYYYMMDD},
+  {NNN}, {NN}, {NNNN}, {PROJECT_CODE}, {CLIENT_CODE}.
+- Endpoint GET/PUT/preview funzionanti. Storico NON viene rinumerato:
+  le regole valgono solo per emissioni future. **Cabling nel numbering
+  service in iterazione successiva** (per ora MVP UI + persistenza).
+
+**P9 — Fattura di chiusura progetto**
+- Nuovo `Project.finance_status` ('active' | 'closed') + `finance_closed_at`
+  + `finance_closing_invoice_id`. Indipendente da `Job.status` operativo.
+- Nuovo `Invoice.is_closing` boolean + `closing_project_id` FK.
+- Endpoint `GET /finance/api/billing/closing-precheck/{project_id}`:
+  verifica che tutte le JCL siano billed/paid/lost (no `not_billed` o
+  `in_batch`). Ritorna riepilogo fatture esistenti del progetto.
+- Endpoint `POST /finance/api/billing/closing-invoice/{project_id}`:
+  emette la fattura finale aggregando i batch ancora aperti come
+  ultima emissione REALE (non €0). Marca `finance_status='closed'`.
+- PDF: sezione "FATTURA DI CHIUSURA PROGETTO {CODICE}" con tabella
+  riepilogativa di tutte le fatture precedenti (numero/data/tipo/stato/
+  totale/pagato) + totali Σ in fondo.
+- Storno NC TD04 sulla closing → `Project.finance_status` torna
+  ad `active` automaticamente.
+- UI: nuovo bottone topbar `🏁 Fattura chiusura` apre modal con
+  precheck progetto + form numero/date/IVA, submit disabilitato finché
+  precheck non OK.
+
+Note migrazione:
+- 2 nuovi modelli `NumberingConfig` + 5 nuove colonne via auto-migrate
+  al boot (idempotente). DB esistenti supportati automaticamente.
+
 ## v3.5.0-alpha.111.19 — Permit multiplier ROL ore permesso (14 maggio 2026)
 
 **Richiesta Matteo**: ore di permesso (ROL) calcolate nelle timbrature
