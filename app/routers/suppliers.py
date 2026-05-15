@@ -670,8 +670,26 @@ async def delete_supplier_invoice(invoice_id: int, db: Session = Depends(get_db)
     ).first()
     if not i:
         raise HTTPException(404, "Fattura non trovata")
+    # v3.5.0-alpha.118 — snapshot link prima del soft-delete per ricomputo
+    # cost_external delle JCL coinvolte (senza il link, l'aggregazione resta
+    # sporca col valore della fattura cestinata).
+    snapshot_data = {
+        "resource_id": i.resource_id,
+        "project_id": i.project_id,
+        "job_id": i.job_id,
+        "job_cost_line_id": i.job_cost_line_id,
+    }
     i.deleted_at = datetime.utcnow()
     db.commit()
+    # Trigger recompute usando snapshot (fattura ora soft-deleted, query
+    # cost_external la esclude → JCL ridotte).
+    if snapshot_data["resource_id"]:
+        try:
+            from types import SimpleNamespace
+            stub = SimpleNamespace(**snapshot_data)
+            _mark_jcl_stale_for_supplier_invoice(db, stub)
+        except Exception as _e:
+            print(f"[delete_supplier_invoice] mark stale failed: {_e}")
     return {"ok": True}
 
 

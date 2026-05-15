@@ -8,6 +8,30 @@
 
 ## Versione corrente
 
+**v3.5.0-alpha.118** — 15 maggio 2026 tardi notte — Audit M-finding chiusi (delete supplier hook + preview placeholder + quote pattern guard)
+
+**3 fix audit minori chiusi (cleanup roadmap)**:
+- Delete SupplierInvoice → trigger recompute cost_external (bug Q11)
+- Preview placeholder `«PROJ»`/`«CLI»` esplicito + nota UI
+- Quote pattern validation: deve terminare con {NNN}/{NN}/{NNNN}
+
+**Roadmap audit completamente chiusa**. 6 round consecutivi:
+- α.113: 11 punti revisione Q1-Q11
+- α.114: 16 fix audit deep-dive
+- α.115: Q11 cost-side + NumberingConfig core + reconcile dirty flag
+- α.116: NumberingConfig cabling 6 generator + UI vars validation
+- α.117: anomaly cost_drift + UI background reconcile
+- α.118: 3 audit M-findings (delete supplier, preview, quote pattern)
+
+**Lista test post-audit completa salvata in memoria**:
+[[test_checklist_post_audit_alpha114_118]]
+
+**Pendente alpha.119+**:
+- Test Matteo (lista completa in memoria)
+- Bug emersi da uso reale
+
+## (versione precedente)
+
 **v3.5.0-alpha.117** — 15 maggio 2026 tarda notte — Anomaly cost_drift + UI background reconcile
 
 **Roadmap alpha.114-117 completata**. Tutti i pendenti dell'audit chiusi.

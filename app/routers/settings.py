@@ -764,6 +764,23 @@ async def upsert_numbering(
             f"Variabile {{{bad_var}}} non supportata per {doc_type}. "
             f"Variabili valide: {', '.join('{'+v+'}' for v in allowed)}."
         )
+    # v3.5.0-alpha.118 (audit M4): quote versioning -v2 suffix richiede
+    # che il pattern termini con un blocco progressivo numerico chiaro.
+    # Senza, il parser tail rsplit("-",1)[1] cerca cifre dopo l'ultimo "-"
+    # e fallisce se l'ultimo blocco è {PROJECT_CODE} o testo.
+    # Es. "Q-{PROJECT_CODE}-{NNN}" OK (termina in NNN).
+    #     "{PROJECT_CODE}-J{NNN}" OK.
+    #     "Q-{PROJECT_CODE}" NO (no {NNN/NN/NNNN} finale).
+    if doc_type == "quote":
+        # accept pattern that ENDS with {NNN}/{NN}/{NNNN}
+        import re as _re
+        if not _re.search(r"\{N{2,4}\}\s*$", format_pattern.strip()):
+            raise HTTPException(
+                400,
+                f"Per quote il pattern DEVE terminare con un blocco progressivo "
+                f"({{NNN}}/{{NN}}/{{NNNN}}) per supportare il versioning -v2/-v3. "
+                f"Pattern attuale: {format_pattern.strip()}"
+            )
     tid = current_tenant_id()
     rec = db.query(NumberingConfig).filter(
         NumberingConfig.tenant_id == tid,
@@ -801,6 +818,10 @@ async def preview_numbering(
     fmt = (rec.format_pattern if rec else spec["default"])
     seq = ((rec.current_seq if rec else 0) or 0) + 1
     today = date.today()
+    # v3.5.0-alpha.118: placeholder esplicito tra «...» così user vede che è
+    # un valore esempio (non un vero codice progetto/cliente).
+    used_proj_placeholder = not project_code
+    used_cli_placeholder = not client_code
     out = (
         fmt.replace("{YYYY}", f"{today.year:04d}")
            .replace("{YY}",   f"{today.year % 100:02d}")
@@ -810,7 +831,18 @@ async def preview_numbering(
            .replace("{NNNN}", f"{seq:04d}")
            .replace("{NNN}",  f"{seq:03d}")
            .replace("{NN}",   f"{seq:02d}")
-           .replace("{PROJECT_CODE}", (project_code or "PRJCODE"))
-           .replace("{CLIENT_CODE}",  (client_code or "CLI"))
+           .replace("{PROJECT_CODE}", (project_code or "«PROJ»"))
+           .replace("{CLIENT_CODE}",  (client_code or "«CLI»"))
     )
-    return {"preview": out, "format": fmt, "next_seq": seq}
+    return {
+        "preview": out,
+        "format": fmt,
+        "next_seq": seq,
+        "uses_placeholder": used_proj_placeholder or used_cli_placeholder,
+        "placeholder_note": (
+            "I valori «PROJ»/«CLI» sono placeholder esempio: al momento "
+            "della creazione del documento saranno sostituiti dai codici "
+            "reali progetto/cliente."
+            if (used_proj_placeholder or used_cli_placeholder) else None
+        ),
+    }

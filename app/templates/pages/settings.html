@@ -975,7 +975,24 @@ async function _nmbServerPreview() {
   try {
     const fd = new FormData();
     const r = await api('POST', '/settings/api/numbering/' + _nmbCurrent + '/preview', fd);
-    document.getElementById('nmb-builder-preview').textContent = '→ ' + (r.preview || '');
+    const el = document.getElementById('nmb-builder-preview');
+    if (el) {
+      el.textContent = '→ ' + (r.preview || '');
+      // v3.5.0-alpha.118: nota placeholder esplicita se usato
+      let note = document.getElementById('nmb-placeholder-note');
+      if (r.uses_placeholder && r.placeholder_note) {
+        if (!note) {
+          note = document.createElement('div');
+          note.id = 'nmb-placeholder-note';
+          note.className = 'text-xs text-muted';
+          note.style.cssText = 'margin-top:4px; font-style:italic;';
+          el.parentNode.insertBefore(note, el.nextSibling);
+        }
+        note.textContent = r.placeholder_note;
+      } else if (note) {
+        note.remove();
+      }
+    }
   } catch(e) {}
 }
 

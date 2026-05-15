@@ -1,5 +1,34 @@
 # MediaFlow — Changelog
 
+## v3.5.0-alpha.118 — Audit M-finding chiusi: delete supplier hook + preview placeholder + quote pattern guard (15 mag 2026 tardi notte)
+
+**Delete SupplierInvoice → recompute cost_external**:
+- `delete_supplier_invoice` non triggerava `_mark_jcl_stale_for_supplier_invoice`.
+  Risultato: dopo soft-delete della fattura passiva, JCL.total_cost_external
+  restava col valore sporco (sommava ancora la fattura cestinata).
+- Fix: snapshot link prima del soft-delete, trigger recompute usando stub
+  SimpleNamespace. La query cost_external filtra `deleted_at.is_(None)`
+  quindi dopo recompute il valore si riduce correttamente.
+
+**Audit M3 — Preview placeholder fake**:
+- Pre-fix: `/settings/api/numbering/{doc_type}/preview` sostituiva
+  PROJECT_CODE/CLIENT_CODE mancanti con literal "PRJCODE"/"CLI" senza
+  segnalazione → user pensava fosse parte del format.
+- Fix: placeholder ora `«PROJ»`/`«CLI»` con guillemets per visivo. Response
+  include `uses_placeholder: bool` + `placeholder_note` esplicita.
+- UI builder: nota italic sotto preview "I valori «PROJ»/«CLI» sono
+  placeholder esempio: al momento della creazione del documento saranno
+  sostituiti dai codici reali progetto/cliente.".
+
+**Audit M4 — Quote pattern guard versioning**:
+- Pre-fix: `next_progressive_code` parsa tail `rsplit("-",1)[1]` per skip
+  `-v2`/`-v3` suffix. Format custom es. `Q-{PROJECT_CODE}` (no NNN finale)
+  → ValueError → fallback n=1 → tutte le quote nuove con `Q-MEDUSA-001`.
+- Fix: backend validate_pattern rifiuta 400 se doc_type="quote" e pattern
+  NON termina con `{NNN}`/`{NN}`/`{NNNN}`. Errore esplicito.
+- Esempio valido: `Q-{PROJECT_CODE}-{YYYY}-{NNN}`. Non valido:
+  `Q-{PROJECT_CODE}` o `{YYYY}-Q-{PROJECT_CODE}`.
+
 ## v3.5.0-alpha.117 — Anomaly cost_drift + UI background reconcile (15 mag 2026 tarda notte)
 
 Chiusi gli ultimi 2 pendenti roadmap.
