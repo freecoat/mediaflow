@@ -1,5 +1,44 @@
 # MediaFlow — Changelog
 
+## v3.5.0-alpha.117 — Anomaly cost_drift + UI background reconcile (15 mag 2026 tarda notte)
+
+Chiusi gli ultimi 2 pendenti roadmap.
+
+**Anomaly cost_estimate_vs_real_drift**:
+- Nuovo `AnomalyType.cost_estimate_vs_real_drift` (6° tipo, prima 5).
+- Detector `detect_cost_estimate_vs_real_drift(threshold_pct=15.0)`:
+  - Filtra JCL con `total_cost_external > 0` (esistono fatture passive
+    linkate via SupplierInvoice.resource_id).
+  - Calcola drift_pct = |external − accrued| / max(accrued, external).
+  - Se drift >= threshold → emit anomaly con descrizione esplicita
+    "stimato €X vs reale €Y (+€Z, W% off)".
+- Integrato in `detect_all()` (incluso in scan periodic + manuale).
+- UI finance#anomalies:
+  - Nuovo chip filtro "⚖ Drift costo"
+  - Label `TYPE_LBL.cost_estimate_vs_real_drift = '⚖ Drift costo'`
+  - Color `#f59e0b` (giallo, severity media)
+  - Voce in summary "Drift costo (Q11)"
+
+Esempio: JCL "Color 5gg" — booking Marco rate €50/h × 40h = €2000 stimato.
+Marco fattura €2500. Drift 25% → anomaly emessa. Producer rivede rate o
+chiede sconto. Manager passa azione: `rivaluta_producer` (rivedi rate)
+o `write_off_loss` (assorbi delta).
+
+**UI background reconcile (Strategy C)**:
+- `loadCrList()` ora trigger `_crStartBackgroundSync()` non-blocking.
+  Page load CR immediato con valori stored (anche stale).
+- Background polling `/api/reconcile-status` ogni 2 sec finché
+  stale_count > 0.
+- UI indicator fixed top-right: "🔄 Sincronizzazione cost report (N righe)"
+  con spinner animato (CSS @keyframes inject lazy).
+- Auto-refresh lista quando stale=0 (solo se utente è ancora in vista
+  lista, no se ha aperto dettaglio).
+- Strategy A (dirty flag α.115) + Strategy C (UI async) combinati =
+  no più freeze stress DB. Page load <100ms, sync visibile in
+  background.
+
+Auto-migrate al boot: nessuna (solo enum value Python aggiunto).
+
 ## v3.5.0-alpha.116 — NumberingConfig cabling completato (Job/OverheadCost/IngestBatch/DDT) + UI vars validation (15 mag 2026 notte)
 
 Completato il cabling NumberingConfig per tutti i 4 generator residui +

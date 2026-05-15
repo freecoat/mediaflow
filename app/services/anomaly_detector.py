@@ -298,6 +298,57 @@ def detect_quote_discrepancy(db: Session, threshold_pct: float = 15.0) -> int:
     return n
 
 
+def detect_cost_estimate_vs_real_drift(db: Session, threshold_pct: float = 15.0) -> int:
+    """v3.5.0-alpha.117 — JobCostLine con discrepanza significativa tra
+    cost stimato (rate × ore done) e cost reale da fatture passive
+    (Σ SupplierInvoice linkate).
+
+    Condizione: total_cost_external > 0 (esistono fatture linkate) E
+    |external - accrued| / max(accrued, external) > threshold_pct/100.
+
+    Esempio: JCL ha cost stimato €2000 (booking × rate freelance), fatture
+    passive linkate sommano €2500 → drift 25% → anomaly. Producer/finance
+    rivede stime o aggiusta rate risorsa.
+    """
+    n = 0
+    rows = (
+        db.query(JobCostLine)
+        .options(joinedload(JobCostLine.job).joinedload(Job.project))
+        .filter(JobCostLine.tenant_id == CURRENT_TENANT)
+        .filter(JobCostLine.job_id.isnot(None))
+        .filter(JobCostLine.total_cost_external > 0)
+        .all()
+    )
+    for jcl in rows:
+        accrued = jcl.total_cost_accrued or 0.0
+        external = jcl.total_cost_external or 0.0
+        if accrued == 0 and external == 0:
+            continue
+        delta = external - accrued
+        base = max(abs(accrued), abs(external))
+        drift_pct = (abs(delta) / base * 100.0) if base > 0 else 0.0
+        if drift_pct < threshold_pct:
+            continue
+        sign = "+" if delta >= 0 else "-"
+        _upsert(
+            db,
+            anomaly_type=AnomalyType.cost_estimate_vs_real_drift,
+            source_kind=AnomalySourceKind.jcl,
+            source_id=jcl.id,
+            description=(
+                f"Drift costo JCL #{jcl.id} ({jcl.description[:40] if jcl.description else ''}): "
+                f"stimato €{accrued:.2f} vs reale €{external:.2f} "
+                f"({sign}€{abs(delta):.2f}, {drift_pct:.1f}% off)"
+            ),
+            amount=round(abs(delta), 2),
+            project_id=jcl.job.project_id if jcl.job else None,
+            job_id=jcl.job_id,
+            client_id=jcl.job.client_id if jcl.job else None,
+        )
+        n += 1
+    return n
+
+
 def detect_all(db: Session) -> dict:
     """Esegue tutti i detector in sequenza. Ritorna conteggi per tipo.
     Idempotente: re-run su stesso dataset non duplica. Esegue commit unico
@@ -308,6 +359,8 @@ def detect_all(db: Session) -> dict:
         "over_budget": detect_over_budget(db),
         "mancato_recupero": detect_mancato_recupero(db),
         "quote_discrepancy": detect_quote_discrepancy(db),
+        # v3.5.0-alpha.117
+        "cost_estimate_vs_real_drift": detect_cost_estimate_vs_real_drift(db),
     }
     db.commit()
     counts["total"] = sum(counts.values())

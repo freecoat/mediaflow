@@ -8,6 +8,48 @@
 
 ## Versione corrente
 
+**v3.5.0-alpha.117** — 15 maggio 2026 tarda notte — Anomaly cost_drift + UI background reconcile
+
+**Roadmap alpha.114-117 completata**. Tutti i pendenti dell'audit chiusi.
+
+**Anomaly cost_drift**:
+- 6° tipo: `cost_estimate_vs_real_drift`
+- Detector con threshold 15% drift su (external vs accrued)
+- UI: chip filtro + summary card + label
+- Esempio: cost stimato €2000 vs fattura passiva €2500 → drift 25% →
+  anomaly. Manager rivede rate o assorbe via write_off.
+
+**UI background reconcile (Strategy C combinata con A dirty flag α.115)**:
+- Page load CR immediato (no più blocco reconcile sincrono)
+- Background polling /api/reconcile-status ogni 2s
+- Indicator fixed top-right: "🔄 Sincronizzazione (N righe)"
+- Auto-refresh lista quando stale=0
+- Stress DB 80k JCL: page load <100ms, sync visibile in background
+
+**Da testare Matteo**:
+1. /finance#anomalies: nuovo chip "⚖ Drift costo".
+2. Crea fattura passiva con resource_id linked > stima → click "🔄 Rileva"
+   → vedi anomaly emessa.
+3. /cost-report apertura: deve essere IMMEDIATA + indicator sync top-right
+   (se ci sono JCL stale).
+
+**Summary 5 round alpha.113-117**:
+- α.113: 11 punti Q1-Q11 (header, project filter, admin email, naming
+  builder, CR reconcile, overhead detail, supplier→project, job select,
+  resource link)
+- α.114: 16 fix da audit (immutability, cashflow NC, Q5 root, NC closing
+  reset, race lock, COUNT bug, re-assign recompute, drift read-only,
+  tenant sweep, ...)
+- α.115: Q11 cost-side + NumberingConfig core + reconcile dirty flag
+- α.116: NumberingConfig cabling completo (6 generator) + UI validation
+- α.117: anomaly cost_drift + UI background reconcile
+
+**Pendente alpha.118+**:
+- Test estensivi Matteo
+- Eventuali bug emersi da uso reale
+
+## (versione precedente)
+
 **v3.5.0-alpha.116** — 15 maggio 2026 notte — NumberingConfig cabling completato + UI vars validation
 
 **Cabling completato per tutti i generator**:

@@ -371,12 +371,85 @@ async function init() {
   await loadCrList();
 }
 
+// v3.5.0-alpha.117 — Background reconcile sync (Strategy C).
+// Polling /api/reconcile-status finché stale_count=0. UI mostra indicator
+// nel topbar/toolbar durante sync. Auto-refresh lista al termine.
+let _crSyncTimer = null;
+let _crSyncPolling = false;
+
+function _crShowSyncIndicator(show, stale_count = 0) {
+  let el = document.getElementById('cr-sync-indicator');
+  if (show) {
+    if (!el) {
+      el = document.createElement('div');
+      el.id = 'cr-sync-indicator';
+      el.style.cssText =
+        'position:fixed; top:70px; right:20px; z-index:99;' +
+        'padding:6px 12px; background:rgba(98,114,245,.12);' +
+        'border:1px solid rgba(98,114,245,.35); border-radius:20px;' +
+        'font-size:12px; color:var(--indigo2); display:flex; align-items:center; gap:6px;';
+      const spinner = document.createElement('span');
+      spinner.textContent = '🔄';
+      spinner.style.cssText = 'animation: spin 1.2s linear infinite; display:inline-block;';
+      const txt = document.createElement('span');
+      txt.id = 'cr-sync-text';
+      el.appendChild(spinner); el.appendChild(txt);
+      // Inject @keyframes spin se non già presente
+      if (!document.getElementById('cr-spin-style')) {
+        const st = document.createElement('style');
+        st.id = 'cr-spin-style';
+        st.textContent = '@keyframes spin { to { transform: rotate(360deg); } }';
+        document.head.appendChild(st);
+      }
+      document.body.appendChild(el);
+    }
+    const txt = document.getElementById('cr-sync-text');
+    if (txt) txt.textContent = `Sincronizzazione cost report (${stale_count} righe)`;
+  } else if (el) {
+    el.remove();
+  }
+}
+
+async function _crStartBackgroundSync() {
+  if (_crSyncPolling) return;
+  _crSyncPolling = true;
+  try {
+    // Trigger reconcile (non-blocking — il backend processa solo le stale)
+    await api('POST', '/cost-report/api/reconcile-all').catch(() => {});
+    // Poll status finché stale_count = 0
+    const poll = async () => {
+      try {
+        const r = await api('GET', '/cost-report/api/reconcile-status');
+        const stale = r.stale_count || 0;
+        if (stale > 0) {
+          _crShowSyncIndicator(true, stale);
+          _crSyncTimer = setTimeout(poll, 2000);
+        } else {
+          _crShowSyncIndicator(false);
+          _crSyncPolling = false;
+          // Auto-refresh lista solo se l'utente è ancora nella vista lista (non in dettaglio)
+          if (document.getElementById('cr-list-card')?.style.display !== 'none') {
+            try {
+              const fresh = await api('GET', '/cost-report/api/list');
+              _crAll = fresh;
+              renderCrList();
+            } catch(e) { /* silente */ }
+          }
+        }
+      } catch(e) {
+        _crShowSyncIndicator(false);
+        _crSyncPolling = false;
+      }
+    };
+    setTimeout(poll, 500);
+  } catch(e) {
+    _crSyncPolling = false;
+  }
+}
+
 async function loadCrList() {
-  // v3.5.0-alpha.113 — Q5 fix: reconcile-all prima di leggere la lista,
-  // così total_accrued stored è coerente coi booking done (idempotente).
-  // Evita il gap "lista mostra cifra vecchia finché non apri dettaglio".
-  try { await api('POST', '/cost-report/api/reconcile-all'); }
-  catch(e) { /* non blocking — la lista mostra comunque stored */ }
+  // v3.5.0-alpha.117 — Strategy C: reconcile in background, page load immediato.
+  _crStartBackgroundSync();
   try {
     _crAll = await api('GET', '/cost-report/api/list');
   } catch(e) {

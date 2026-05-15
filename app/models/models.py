@@ -2589,13 +2589,15 @@ class OverheadCost(Base):
 # precedentemente dismissed.
 
 class AnomalyType(str, enum.Enum):
-    """5 tipi di anomalie fatturazione tracciate (tassonomia ticket Matteo
-    12 mag 2026)."""
+    """6 tipi di anomalie fatturazione tracciate (tassonomia ticket Matteo
+    12 mag 2026 + cost_drift α.117)."""
     extra_after_billed = "extra_after_billed"        # done emerso dopo slice fatturata
     sforamento_monte_ore = "sforamento_monte_ore"    # quantity_actual > quoted
     quote_discrepancy = "quote_discrepancy"          # quote ufficiale ≠ consuntivo Job
     mancato_recupero = "mancato_recupero"            # fattura scaduta, status != paid
     over_budget = "over_budget"                      # extra puro (is_extra=True, no quote_line)
+    # v3.5.0-alpha.117 — cost stimato vs reale da fatture passive (Q11 finance)
+    cost_estimate_vs_real_drift = "cost_estimate_vs_real_drift"  # |external-accrued|/accrued > threshold
 
 
 class AnomalyStatus(str, enum.Enum):

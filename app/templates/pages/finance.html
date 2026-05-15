@@ -157,6 +157,7 @@
     <button type="button" class="an-chip" data-an-type="quote_discrepancy" onclick="setAnomType('quote_discrepancy')">📉 Quote vs consuntivo</button>
     <button type="button" class="an-chip" data-an-type="mancato_recupero" onclick="setAnomType('mancato_recupero')">💸 Mancato recupero</button>
     <button type="button" class="an-chip" data-an-type="over_budget" onclick="setAnomType('over_budget')">➕ Extra puri</button>
+    <button type="button" class="an-chip" data-an-type="cost_estimate_vs_real_drift" onclick="setAnomType('cost_estimate_vs_real_drift')">⚖ Drift costo</button>
     <span style="flex:1;"></span>
     <button class="btn btn-secondary btn-sm" onclick="runAnomalyDetect()" title="Re-scan idempotente dei dati per popolare le anomalie">🔄 Rileva</button>
   </div>
@@ -1563,6 +1564,7 @@ const TYPE_LBL = {
   quote_discrepancy: '📉 Quote vs Cons.',
   mancato_recupero: '💸 Mancato recup.',
   over_budget: '➕ Extra puro',
+  cost_estimate_vs_real_drift: '⚖ Drift costo',  // v3.5.0-alpha.117
 };
 const TYPE_COLOR = {
   extra_after_billed: '#ef4444',
@@ -1570,6 +1572,7 @@ const TYPE_COLOR = {
   quote_discrepancy: '#a78bfa',
   mancato_recupero: '#ef4444',
   over_budget: '#6272f5',
+  cost_estimate_vs_real_drift: '#f59e0b',  // v3.5.0-alpha.117
 };
 const ANOM_STATUS_LBL = { open: 'Open', handled: 'Handled', dismissed: 'Dismissed' };
 const ACTION_LBL = {
@@ -1733,6 +1736,7 @@ function renderAnomSummary(s) {
     { key: 'quote_discrepancy', lbl: '📉 Quote vs consuntivo' },
     { key: 'mancato_recupero', lbl: '💸 Mancato recupero' },
     { key: 'over_budget', lbl: '➕ Extra puri' },
+    { key: 'cost_estimate_vs_real_drift', lbl: '⚖ Drift costo (Q11)' },  // v3.5.0-alpha.117
   ];
   const host = document.getElementById('an-summary');
   while (host.firstChild) host.removeChild(host.firstChild);
