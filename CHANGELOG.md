@@ -1,5 +1,55 @@
 # MediaFlow — Changelog
 
+## v3.5.0-alpha.115 — Q11 cost-side + NumberingConfig cabling + reconcile-all perf (15 mag 2026 notte)
+
+3 punti pesanti dall'audit deep-dive.
+
+**Q11 — Cost-side aggregation (vista stimato vs reale)**:
+- Nuovo `JobCostLine.total_cost_external` = Σ SupplierInvoice.amount_total
+  delle fatture passive linkate a risorse con booking sulla JCL.
+- Match scope: SupplierInvoice deve essere linkata a (jcl O job O project)
+  E avere `resource_id` ∈ risorse dei booking della JCL.
+- Recompute hook in `cost_line_sync.recompute_cost_line_actual` aggrega
+  cost_external accanto a cost_accrued (stima).
+- Trigger: salvataggio/update SupplierInvoice marca JCL coinvolte stale +
+  recompute immediato delle JCL direttamente linkate via
+  `_mark_jcl_stale_for_supplier_invoice`.
+- API response cost_report:
+  - List view: `total_cost_external`, `cost_drift`, `real_margin_effective`
+  - Detail view: same + per-line `total_cost_external` + `cost_drift`
+- UI dettaglio CR: aggiunta stat card "Costo reale (fatture)" accanto a
+  "Costo stimato risorse" con Δ delta vs stima.
+- Vista cliente NON tocca cost_external (resta business logic interna).
+
+**NumberingConfig cabling**:
+- Helper `expand_pattern(fmt, seq, project_code, client_code, today)`
+  estratto in `numbering.py` — sostituisce logica inline duplicata.
+- Helper `gen_doc_code(db, doc_type, tenant_id, ...)` legge NumberingConfig
+  + incrementa `current_seq` atomico + reset annuale.
+- Cablato Quote.number e BillingBatch.code:
+  - Genera con `gen_doc_code` se config presente.
+  - Verifica uniqueness vs DB (con soft-delete).
+  - Fallback automatico a `next_year_progressive` su collision o errore.
+- `supported_vars` dict per ogni doc_type. `validate_pattern()` returna la
+  prima variabile non supportata (per UI validation).
+- Storico NON rinumerato (back-compat assoluta).
+- Pendente: cabling Job/OverheadCost/IngestBatch/DDT (low priority — quei
+  generator hanno logica custom diversa).
+
+**Reconcile-all perf (dirty flag + lazy)**:
+- Nuovo `JobCostLine.accrued_stale` boolean (default False).
+- `recompute_cost_line_actual` resetta a False al completamento.
+- `mark_jcl_stale()` / `mark_booking_jcl_stale()` helper compatti per
+  marcare stale senza ricomputare (pattern lazy).
+- `/cost-report/api/reconcile-all` ora WHERE accrued_stale=True →
+  performance costante invece di O(jobs × JCL).
+- Nuovo `/cost-report/api/reconcile-status` per UI polling background.
+- Pre-115 su stress DB 80k JCL: 15-30 sec freeze.
+- Post-115: ~50ms se 0 stale, lineare con N stale (tipicamente <100).
+
+Auto-migrate al boot: 3 nuove colonne JCL (`total_cost_external`,
+`accrued_stale`, fix `total_cost_accrued` IF NOT EXISTS). Idempotente.
+
 ## v3.5.0-alpha.114 — Audit deep-dive: 16 fix bug+architettura (15 maggio 2026 sera)
 
 Round bug fixes da audit multi-agent in-depth su billing/CR/UI workflow.

@@ -396,7 +396,61 @@ async def create_supplier_invoice(
     db.add(i)
     db.commit()
     db.refresh(i)
+    # v3.5.0-alpha.115 — Q11: trigger recompute cost_external sulle JCL
+    # legate alla risorsa indicata nel job/progetto coinvolto. Mark stale.
+    _mark_jcl_stale_for_supplier_invoice(db, i)
     return _invoice_to_dict(i)
+
+
+def _mark_jcl_stale_for_supplier_invoice(db: Session, si: SupplierInvoice):
+    """v3.5.0-alpha.115 — marca le JCL coinvolte come stale per ricomputo
+    lazy del total_cost_external. Triggera anche un recompute immediato
+    delle JCL direttamente linkate (project/job/jcl + resource_id)."""
+    if not si.resource_id:
+        return
+    from app.models import JobCostLine as _JCL, Job as _Job, Booking, BookingAssignment as _BA
+    affected_jcl_ids: set[int] = set()
+    # 1. JCL diretta
+    if si.job_cost_line_id:
+        affected_jcl_ids.add(si.job_cost_line_id)
+    # 2. JCL di job (se job specificato): tutte con booking della risorsa
+    if si.job_id:
+        rows = (
+            db.query(_JCL.id)
+            .join(Booking, Booking.job_cost_line_id == _JCL.id)
+            .join(_BA, _BA.booking_id == Booking.id)
+            .filter(_JCL.job_id == si.job_id, _BA.resource_id == si.resource_id)
+            .distinct()
+            .all()
+        )
+        for (jcl_id,) in rows:
+            affected_jcl_ids.add(jcl_id)
+    # 3. JCL del project (se solo project specificato): JCL con booking della risorsa
+    elif si.project_id:
+        rows = (
+            db.query(_JCL.id)
+            .join(_Job, _Job.id == _JCL.job_id)
+            .join(Booking, Booking.job_cost_line_id == _JCL.id)
+            .join(_BA, _BA.booking_id == Booking.id)
+            .filter(_Job.project_id == si.project_id, _BA.resource_id == si.resource_id)
+            .distinct()
+            .all()
+        )
+        for (jcl_id,) in rows:
+            affected_jcl_ids.add(jcl_id)
+    if not affected_jcl_ids:
+        return
+    # Recompute immediato + mark stale (idempotente)
+    from app.services.cost_line_sync import recompute_cost_line_actual
+    for jid in affected_jcl_ids:
+        jcl = db.query(_JCL).filter(_JCL.id == jid).first()
+        if jcl:
+            try:
+                recompute_cost_line_actual(db, jcl)
+            except Exception as _e:
+                print(f"[supplier_invoice→jcl_cost_external] recompute jcl#{jid} failed: {_e}")
+                jcl.accrued_stale = True
+    db.commit()
 
 
 @router.put("/api/invoices/{invoice_id}")
@@ -454,6 +508,7 @@ async def update_supplier_invoice(
     if job_id is not None: i.job_id = job_id or None
     if job_cost_line_id is not None: i.job_cost_line_id = job_cost_line_id or None
     if resource_id is not None: i.resource_id = resource_id or None  # v3.5.0-alpha.113
+    # v3.5.0-alpha.115: trigger recompute cost_external dopo update
     if currency is not None: i.currency = currency
     if attachment_path is not None: i.attachment_path = attachment_path.strip() or None
     if notes is not None: i.notes = notes.strip() or None
@@ -475,6 +530,11 @@ async def update_supplier_invoice(
             i.amount_paid or 0, i.amount_total or 0, i.payment_status
         )
     db.commit()
+    # v3.5.0-alpha.115 — trigger recompute cost_external (Q11)
+    try:
+        _mark_jcl_stale_for_supplier_invoice(db, i)
+    except Exception as _e:
+        print(f"[update_supplier_invoice] mark stale failed: {_e}")
     return _invoice_to_dict(i)
 
 

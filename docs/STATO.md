@@ -8,6 +8,49 @@
 
 ## Versione corrente
 
+**v3.5.0-alpha.115** — 15 maggio 2026 notte — Q11 cost-side + NumberingConfig cabling + reconcile-all perf
+
+**3 punti pesanti dall'audit chiusi**:
+
+1. **Q11 cost-side aggregation (vista doppia stimato vs reale)**:
+   - `JobCostLine.total_cost_external` aggrega Σ SupplierInvoice del progetto
+     dove resource_id ∈ risorse dei booking della JCL.
+   - Recompute hook in cost_line_sync + trigger su save/update SupplierInvoice.
+   - CR dettaglio: stat card "Costo reale (fatture)" + Δ vs stima.
+   - Esempio: JCL "Color 5gg" - revenue €5000, cost stimato €2000 (booking ×
+     rate), cost reale €2500 (fatture passive Marco linkate). Margin reale
+     vero = €5000-2500 = €2500 (non più €3000 ingannevole).
+
+2. **NumberingConfig cabling**:
+   - Helper `expand_pattern()` + `gen_doc_code()` in numbering.py.
+   - Quote.number e BillingBatch.code leggono NumberingConfig + fallback
+     automatico su default storico se config assente o collision.
+   - Esempio: admin imposta `Q-{PROJECT_CODE}-{YYYY}-{NNN}` → nuova quote
+     su progetto MEDUSA_2026 → `Q-MEDUSA_2026-2026-001`.
+   - Reset annuale automatico.
+   - Pendente cabling: Job/OverheadCost/IngestBatch (logica custom).
+
+3. **Reconcile-all perf (dirty flag pattern)**:
+   - `JobCostLine.accrued_stale` boolean.
+   - reconcile-all ora WHERE stale=True → ~50ms invece di 15-30sec freeze.
+   - Endpoint `/api/reconcile-status` per UI polling.
+
+**Da testare Matteo**:
+1. Settings#numbering: cambia Quote format con `{PROJECT_CODE}` → crea
+   nuova quote → verifica codice contenga project_code.
+2. /suppliers nuova fattura passiva: imposta resource_id linkata a una
+   risorsa con booking → vedi CR dettaglio quel job → stat "Costo reale"
+   mostra Σ fatture + Δ vs stima.
+3. /cost-report apertura: deve essere immediata (no più freeze).
+4. /cost-report dopo move booking done: lista immediato allineata.
+
+**Pendente alpha.116+**:
+- Cabling NumberingConfig su Job/OverheadCost/IngestBatch/DDT
+- Anomaly type "cost_estimate_vs_real_drift" per forecast (esempio Matteo)
+- UI background indicator durante reconcile (Strategy C async polling)
+
+## (versione precedente)
+
 **v3.5.0-alpha.114** — 15 maggio 2026 sera — Audit deep-dive: 16 fix bug+architettura
 
 Audit multi-agent in-depth ha trovato BLOCKER + HIGH bugs su:

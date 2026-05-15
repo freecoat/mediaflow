@@ -227,18 +227,62 @@ def recompute_cost_line_actual(db: Session, jcl) -> dict:
         default=None,
     )
 
+    # v3.5.0-alpha.115 — Cost reale da fatture passive (Σ SupplierInvoice
+    # con resource_id ∈ risorse dei booking di questa JCL).
+    # Solo le fatture non cancelled/soft-deleted contano.
+    new_cost_external = 0.0
+    try:
+        from app.models import SupplierInvoice, BookingAssignment as _BA
+        # Risorse coinvolte = quelle dei booking della JCL
+        resource_ids = set()
+        for b in all_bookings:
+            for a in (b.assignments or []):
+                if a.resource_id:
+                    resource_ids.add(a.resource_id)
+        if resource_ids and jcl.job_id:
+            # Job → project per filtro fattura
+            from app.models import Job as _Job
+            job_row = db.query(_Job).filter(_Job.id == jcl.job_id).first()
+            if job_row:
+                # Match: SupplierInvoice deve essere linkata a (project del job O job stesso O JCL stesso)
+                # E resource_id ∈ resource_ids della JCL.
+                q = db.query(SupplierInvoice).filter(
+                    SupplierInvoice.resource_id.in_(resource_ids),
+                    SupplierInvoice.deleted_at.is_(None),
+                )
+                # Filtro scope: prioritize JCL link diretto, poi job, poi project.
+                # Per evitare doppio conteggio: solo fatture linkate ALMENO a uno
+                # tra (jcl.id, job.id, project.id).
+                from sqlalchemy import or_ as _or
+                q = q.filter(_or(
+                    SupplierInvoice.job_cost_line_id == jcl.id,
+                    SupplierInvoice.job_id == jcl.job_id,
+                    SupplierInvoice.project_id == job_row.project_id,
+                ))
+                new_cost_external = round(
+                    sum((si.amount_total or si.amount_net or 0) for si in q.all()), 2
+                )
+    except Exception as _e:
+        # Non bloccare il recompute se l'aggregazione fallisce
+        print(f"[recompute] cost_external aggregation failed for jcl#{jcl.id}: {_e}")
+        new_cost_external = jcl.total_cost_external or 0.0
+
     changed = (
         abs((jcl.quantity_actual or 0) - new_qty_actual) > 1e-6
         or abs((jcl.total_accrued or 0) - new_accrued) > 1e-2
         or abs((jcl.total_expected or 0) - new_expected) > 1e-2
         or abs((jcl.total_cost_accrued or 0) - new_cost_accrued) > 1e-2
+        or abs((jcl.total_cost_external or 0) - new_cost_external) > 1e-2
         or jcl.work_date != new_work_date
     )
     jcl.quantity_actual = new_qty_actual
     jcl.total_accrued = new_accrued
     jcl.total_expected = new_expected
     jcl.total_cost_accrued = new_cost_accrued
+    jcl.total_cost_external = new_cost_external
     jcl.work_date = new_work_date
+    # v3.5.0-alpha.115 — reset stale flag dopo recompute (dirty flag pattern)
+    jcl.accrued_stale = False
     return {
         "updated": changed,
         "jcl_id": jcl.id,
@@ -252,8 +296,36 @@ def recompute_cost_line_actual(db: Session, jcl) -> dict:
         "total_accrued": new_accrued,
         "total_expected": new_expected,
         "total_cost_accrued": new_cost_accrued,
+        "total_cost_external": new_cost_external,
         "weighted_revenue": weighted,
     }
+
+
+# v3.5.0-alpha.115 — Dirty flag pattern: hook leggero da chiamare su tutti
+# i path booking-mutate. Setta stale=True senza ricomputare subito.
+# reconcile-all bulk userà solo le righe stale.
+def mark_jcl_stale(db: Session, jcl_ids) -> int:
+    """Marca una o più JCL come stale (lazy reconcile pattern).
+    Accetta int singolo o lista. No-op se id None/vuoti."""
+    from app.models import JobCostLine
+    if not jcl_ids:
+        return 0
+    if isinstance(jcl_ids, int):
+        jcl_ids = [jcl_ids]
+    ids = [i for i in jcl_ids if i]
+    if not ids:
+        return 0
+    db.query(JobCostLine).filter(JobCostLine.id.in_(ids)).update(
+        {JobCostLine.accrued_stale: True}, synchronize_session=False
+    )
+    return len(ids)
+
+
+def mark_booking_jcl_stale(db: Session, booking) -> int:
+    """Helper specifico: marca la JCL associata al booking come stale."""
+    if booking is None or not booking.job_cost_line_id:
+        return 0
+    return mark_jcl_stale(db, [booking.job_cost_line_id])
 
 
 def recompute_for_booking(db: Session, booking) -> Optional[dict]:

@@ -85,9 +85,15 @@ async def list_cost_reports(
         total_quoted = sum(l.total_quoted for l in j.cost_lines)
         total_accrued = sum(l.total_accrued for l in j.cost_lines)
         total_expected = sum(l.total_expected for l in j.cost_lines)
-        # v3.5.0-alpha.66.21 — α.67 cost-side risorsa
+        # v3.5.0-alpha.66.21 — α.67 cost-side risorsa (STIMA: rate × ore done)
         total_cost_accrued = sum((l.total_cost_accrued or 0.0) for l in j.cost_lines)
+        # v3.5.0-alpha.115 — Cost REALE da fatture passive (Σ supplier invoices)
+        total_cost_external = sum((l.total_cost_external or 0.0) for l in j.cost_lines)
         real_margin = round(total_accrued - total_cost_accrued, 2)
+        # v3.5.0-alpha.115 — Margine reale RIVISTO: prefer external se disponibile
+        # (stima vs reale: se ho fatture passive, usa quelle come ground truth).
+        cost_effective = total_cost_external if total_cost_external > 0 else total_cost_accrued
+        real_margin_effective = round(total_accrued - cost_effective, 2)
         # v3.5.0-alpha.55: convenzione segno positivo = OVER (sforamento).
         over_under_now = round(total_accrued - total_quoted, 2)
         over_under_forecast = round(total_expected - total_quoted, 2)
@@ -112,6 +118,10 @@ async def list_cost_reports(
             "total_expected": round(total_expected, 2),
             # v3.5.0-alpha.66.21 — α.67 cost-side
             "total_cost_accrued": round(total_cost_accrued, 2),
+            # v3.5.0-alpha.115 — Cost reale da fatture passive
+            "total_cost_external": round(total_cost_external, 2),
+            "real_margin_effective": real_margin_effective,
+            "cost_drift": round((total_cost_external or 0) - (total_cost_accrued or 0), 2),
             "real_margin": real_margin,
             "over_under_now": over_under_now,
             "over_under_forecast": over_under_forecast,
@@ -518,6 +528,20 @@ async def job_cost_report(job_id: int, db: Session = Depends(get_db)):
             "real_margin": round(
                 total_accrued - sum((l.total_cost_accrued or 0) for l in job.cost_lines), 2
             ),
+            # v3.5.0-alpha.115 — Cost reale da fatture passive (Σ JCL.total_cost_external)
+            "total_cost_external": round(sum((l.total_cost_external or 0) for l in job.cost_lines), 2),
+            "real_margin_effective": round(
+                total_accrued - sum(
+                    max((l.total_cost_external or 0), (l.total_cost_accrued or 0))
+                    if (l.total_cost_external or 0) > 0
+                    else (l.total_cost_accrued or 0)
+                    for l in job.cost_lines
+                ), 2
+            ),
+            "cost_drift": round(
+                sum((l.total_cost_external or 0) - (l.total_cost_accrued or 0)
+                    for l in job.cost_lines), 2
+            ),
             # v3.5.0-alpha.68 — Fatture passive (Supplier) linkate al job
             # o al project. real_margin_full sottrae anche queste.
             "total_supplier_invoices": round(total_supplier_invoices, 2),
@@ -585,9 +609,12 @@ async def job_cost_report(job_id: int, db: Session = Depends(get_db)):
                 "total_quoted": l.total_quoted,
                 "total_accrued": l.total_accrued,
                 "total_expected": l.total_expected,
-                # v3.5.0-alpha.66.21 — α.67 cost-side
+                # v3.5.0-alpha.66.21 — α.67 cost-side (STIMATO da rate × ore)
                 "total_cost_accrued": round(l.total_cost_accrued or 0.0, 2),
                 "real_margin": round((l.total_accrued or 0.0) - (l.total_cost_accrued or 0.0), 2),
+                # v3.5.0-alpha.115 — Cost REALE da fatture passive
+                "total_cost_external": round(l.total_cost_external or 0.0, 2),
+                "cost_drift": round((l.total_cost_external or 0.0) - (l.total_cost_accrued or 0.0), 2),
                 # v3.5.0-alpha.55: Now = maturato−quotato; Forecast = stima−quotato.
                 # Positivo = OVER (sforamento), negativo = UNDER (sotto budget).
                 "over_under_now": round(l.total_accrued - l.total_quoted, 2),
@@ -699,28 +726,41 @@ async def reconcile_actuals(job_id: int, db: Session = Depends(get_db)):
 
 
 # v3.5.0-alpha.113 — bulk reconcile per allineare lista CR.
-# Q5: la lista mostra `total_accrued` stored; il dettaglio chiama
-# reconcile e aggiorna stored → ritornando alla lista i numeri appaiono
-# allineati. Causa: hook recompute_for_booking non copre tutti i path
-# che modificano il booking (es. shift bulk multi-select, import,
-# punch import). Fix: bulk reconcile lazy all'apertura della lista CR.
+# v3.5.0-alpha.115 — PERF FIX: usa dirty flag pattern.
+# Pre-115: iterava TUTTI i job del tenant × tutte le JCL = 80k query su stress
+# DB → freeze pagina. Ora: WHERE accrued_stale=True → solo le JCL toccate
+# dall'ultimo recompute. Booking-mutate paths settano stale=True via hook.
 @router.post("/api/reconcile-all")
 async def reconcile_all_jobs(db: Session = Depends(get_db)):
-    """Ricomputa tutti i job del tenant. Idempotente. Più costoso del
-    singolo job ma deterministico — invoke su page-load lista CR."""
-    from app.services.cost_line_sync import recompute_for_job
-    job_ids = [
-        j.id for j in db.query(Job.id).filter(
-            Job.tenant_id == current_tenant_id(),
-            Job.client_id.isnot(None),
-        ).all()
-    ]
-    total_updated = 0
-    for jid in job_ids:
-        r = recompute_for_job(db, jid)
-        total_updated += r.get("lines_updated", 0)
+    """Ricomputa solo le JCL marcate stale (lazy reconcile pattern).
+    Idempotente. Invoke su page-load lista CR — ora costante invece di O(N²)."""
+    from app.services.cost_line_sync import recompute_cost_line_actual
+    stale_jcls = db.query(JobCostLine).filter(
+        JobCostLine.tenant_id == current_tenant_id(),
+        JobCostLine.accrued_stale == True,  # noqa: E712
+    ).all()
+    updated = 0
+    for jcl in stale_jcls:
+        try:
+            r = recompute_cost_line_actual(db, jcl)
+            if r.get("updated"):
+                updated += 1
+        except Exception as e:
+            print(f"[reconcile-all] jcl#{jcl.id} failed: {e}")
     db.commit()
-    return {"jobs": len(job_ids), "lines_updated": total_updated}
+    return {"stale_count": len(stale_jcls), "lines_updated": updated}
+
+
+# v3.5.0-alpha.115 — endpoint diagnostico stato sync
+@router.get("/api/reconcile-status")
+async def reconcile_status(db: Session = Depends(get_db)):
+    """Quante JCL sono attualmente stale (in attesa di reconcile)."""
+    from sqlalchemy import func as _func
+    stale = db.query(_func.count(JobCostLine.id)).filter(
+        JobCostLine.tenant_id == current_tenant_id(),
+        JobCostLine.accrued_stale == True,  # noqa: E712
+    ).scalar() or 0
+    return {"stale_count": int(stale)}
 
 
 @router.put("/api/job/{job_id}/cost-lines/{line_id}")

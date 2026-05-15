@@ -119,6 +119,139 @@ def next_year_progressive(
     )
 
 
+# v3.5.0-alpha.115 — NumberingConfig cabling.
+# Variabili supportate per ogni doc_type. UI greys-out quelle non in lista.
+_DOC_VARS_SUPPORTED: dict[str, set[str]] = {
+    "quote":               {"YYYY","YY","MM","DD","YYYYMMDD","NNN","NN","NNNN","PROJECT_CODE","CLIENT_CODE"},
+    "billing_batch":       {"YYYY","YY","MM","DD","YYYYMMDD","NNN","NN","NNNN","PROJECT_CODE","CLIENT_CODE"},
+    "invoice":             {"YYYY","YY","MM","DD","YYYYMMDD","NNN","NN","NNNN","CLIENT_CODE","PROJECT_CODE"},
+    "invoice_closing":     {"YYYY","YY","MM","DD","YYYYMMDD","NNN","NN","NNNN","PROJECT_CODE","CLIENT_CODE"},
+    "invoice_credit_note": {"YYYY","YY","MM","DD","YYYYMMDD","NNN","NN","NNNN","CLIENT_CODE"},
+    "job":                 {"YYYY","YY","MM","DD","YYYYMMDD","NNN","NN","NNNN","PROJECT_CODE"},
+    "cost_report_export":  {"YYYY","YY","MM","DD","YYYYMMDD","NNN","NN","NNNN","PROJECT_CODE"},
+    "supplier_invoice":    {"YYYY","YY","MM","DD","YYYYMMDD","NNN","NN","NNNN"},
+    "overhead_cost":       {"YYYY","YY","MM","DD","YYYYMMDD","NNN","NN","NNNN"},
+}
+
+_DOC_DEFAULTS: dict[str, str] = {
+    "quote":               "Q-{YYYY}-{NNN}",
+    "billing_batch":       "BB-{YYYY}-{NNN}",
+    "invoice":             "{NNN}/{YYYY}",
+    "invoice_closing":     "CL-{PROJECT_CODE}-{YYYY}",
+    "invoice_credit_note": "NC-{YYYY}-{NNN}",
+    "job":                 "{PROJECT_CODE}-J{NNN}",
+    "cost_report_export":  "CR-{PROJECT_CODE}-{YYYYMMDD}",
+    "supplier_invoice":    "FP-{YYYY}-{NNN}",
+    "overhead_cost":       "OH-{YYYY}-{NNNN}",
+}
+
+
+def supported_vars(doc_type: str) -> set[str]:
+    """Variabili lecite nel format_pattern di un doc_type."""
+    return _DOC_VARS_SUPPORTED.get(doc_type, set())
+
+
+def default_pattern(doc_type: str) -> str:
+    """Pattern default per back-compat se NumberingConfig non personalizzato."""
+    return _DOC_DEFAULTS.get(doc_type, "{NNN}")
+
+
+def validate_pattern(doc_type: str, pattern: str) -> Optional[str]:
+    """Verifica che il pattern contenga solo variabili supportate per il doc_type.
+    Ritorna None se valido, altrimenti il nome della variabile non supportata."""
+    import re
+    allowed = _DOC_VARS_SUPPORTED.get(doc_type, set())
+    if not allowed:
+        return None
+    for var in re.findall(r"\{([A-Z_]+)\}", pattern):
+        if var not in allowed:
+            return var
+    return None
+
+
+def expand_pattern(
+    fmt: str,
+    seq: int,
+    *,
+    project_code: Optional[str] = None,
+    client_code: Optional[str] = None,
+    today: Optional[_date] = None,
+) -> str:
+    """Sostituisci tutte le variabili del format_pattern.
+    Variabili date e seq sono sempre disponibili. PROJECT_CODE/CLIENT_CODE
+    fallback a "" se non passati (eviting placeholder fake)."""
+    if today is None:
+        today = _date.today()
+    return (
+        fmt
+        .replace("{YYYY}", f"{today.year:04d}")
+        .replace("{YY}",   f"{today.year % 100:02d}")
+        .replace("{MM}",   f"{today.month:02d}")
+        .replace("{DD}",   f"{today.day:02d}")
+        .replace("{YYYYMMDD}", today.strftime("%Y%m%d"))
+        .replace("{NNNN}", f"{seq:04d}")
+        .replace("{NNN}",  f"{seq:03d}")
+        .replace("{NN}",   f"{seq:02d}")
+        .replace("{PROJECT_CODE}", (project_code or ""))
+        .replace("{CLIENT_CODE}",  (client_code or ""))
+    )
+
+
+def gen_doc_code(
+    db: Session,
+    doc_type: str,
+    *,
+    tenant_id: int,
+    project_code: Optional[str] = None,
+    client_code: Optional[str] = None,
+    today: Optional[_date] = None,
+) -> tuple[str, int]:
+    """Generatore unificato che legge NumberingConfig + incrementa seq atomico.
+
+    Ritorna (code_generato, seq_usata).
+
+    Algoritmo:
+    1. Cerca NumberingConfig(tenant_id, doc_type). Se assente: usa default.
+    2. Se reset_yearly e current_year != today.year: reset seq=0.
+    3. seq = current_seq + 1.
+    4. Espande variabili + ritorna codice.
+    5. Aggiorna current_seq + current_year nel record (caller commit).
+    6. NB: caller deve gestire UNIQUE collision via with_retry_on_unique.
+    """
+    if today is None:
+        today = _date.today()
+    from app.models.models import NumberingConfig
+    rec = db.query(NumberingConfig).filter(
+        NumberingConfig.tenant_id == tenant_id,
+        NumberingConfig.doc_type == doc_type,
+    ).first()
+    if rec is None:
+        fmt = default_pattern(doc_type)
+        reset_yearly = True
+        last_seq = 0
+    else:
+        fmt = rec.format_pattern or default_pattern(doc_type)
+        reset_yearly = bool(rec.reset_yearly)
+        last_seq = rec.current_seq or 0
+        if reset_yearly and (rec.current_year or 0) != today.year:
+            last_seq = 0
+    seq = last_seq + 1
+    code = expand_pattern(fmt, seq, project_code=project_code,
+                          client_code=client_code, today=today)
+    # Atomically update record (or create if missing)
+    if rec is None:
+        rec = NumberingConfig(
+            tenant_id=tenant_id, doc_type=doc_type,
+            format_pattern=fmt, reset_yearly=reset_yearly,
+            current_year=today.year, current_seq=seq,
+        )
+        db.add(rec)
+    else:
+        rec.current_year = today.year
+        rec.current_seq = seq
+    return code, seq
+
+
 def with_retry_on_unique(
     fn: Callable[[], Any],
     *,

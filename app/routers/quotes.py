@@ -7,7 +7,7 @@ from sqlalchemy.orm import Session, joinedload
 from app.database import get_db
 from app.models import (
     Quote, QuoteLine, Job, JobStatus, QuoteStatus,
-    PriceItem, PriceCategory, PriceLevel, Project,
+    PriceItem, PriceCategory, PriceLevel, Project, Client,
     Booking, BookingStatus, JobCostLine, TimePunch,
     DeliveryTemplate,
 )
@@ -1523,17 +1523,39 @@ def _quote_chain(db: Session, root: Quote) -> list[Quote]:
     return chain
 
 
-def _next_quote_number_progressive(db: Session) -> str:
+def _next_quote_number_progressive(db: Session, project: Optional[Project] = None, client = None) -> str:
     """v3.5.0-alpha.66.14.8 — wrapper sul numbering service unificato.
-
-    Bypassa soft-delete (le quote in cestino occupano il number UNIQUE) e
-    gestisce tail vNN (versioning quote). Comportamento identico al
-    pre-α.66.14.8 ma centralizzato in app/services/numbering.py.
+    v3.5.0-alpha.115 — Cabling NumberingConfig: legge format custom dal
+    pannello /settings#numbering. Variabili supportate per "quote":
+    YYYY/YY/MM/DD/YYYYMMDD/NNN/NN/NNNN/PROJECT_CODE/CLIENT_CODE.
+    Fallback al pattern default Q-{YYYY}-{NNN} se config assente.
     """
-    from app.services.numbering import next_year_progressive
-    return next_year_progressive(
-        db, Quote, base="Q", code_field="number", include_deleted=True,
-    )
+    from app.services.numbering import gen_doc_code, next_year_progressive
+    from app.context import current_tenant_id
+    try:
+        code, _ = gen_doc_code(
+            db, "quote",
+            tenant_id=current_tenant_id(),
+            project_code=(project.code if project else None),
+            client_code=(client.name[:8].upper() if client and getattr(client, "name", None) else None),
+        )
+        # Verifica uniqueness vs DB esistente (con soft-delete)
+        from app.models import Quote as _Q
+        exists = (
+            db.query(_Q).execution_options(include_deleted=True)
+            .filter(_Q.number == code).first()
+        )
+        if exists:
+            # Fallback: incrementa con il vecchio metodo (sicuro su collision)
+            return next_year_progressive(
+                db, Quote, base="Q", code_field="number", include_deleted=True,
+            )
+        return code
+    except Exception as _e:
+        print(f"[quote_numbering] gen_doc_code failed, fallback: {_e}")
+        return next_year_progressive(
+            db, Quote, base="Q", code_field="number", include_deleted=True,
+        )
 
 
 def _copy_quote_lines(src_lines: list, dest_quote_id: int, track_parent: bool) -> list[QuoteLine]:
@@ -1602,8 +1624,11 @@ async def duplicate_quote(
             raise HTTPException(404, f"Progetto target #{project_id} non trovato")
         target_client_id = target_project.client_id
 
+    # v3.5.0-alpha.115 — passa project+client per espandere {PROJECT_CODE}/{CLIENT_CODE}
+    _proj_for_num = target_project if (project_id and project_id != src.project_id) else (src.project if src else None)
+    _cli_for_num = db.query(Client).filter(Client.id == target_client_id).first() if target_client_id else None
     new_q = Quote(
-        number=_next_quote_number_progressive(db),
+        number=_next_quote_number_progressive(db, project=_proj_for_num, client=_cli_for_num),
         version=1,
         project_id=target_project_id,
         client_id=target_client_id,

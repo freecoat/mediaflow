@@ -1285,7 +1285,17 @@ class JobCostLine(Base):
     # del booking associato. Permette margine reale = total_accrued − total_cost_accrued.
     # Popolato da `recompute_cost_line_actual` insieme a `total_accrued`.
     # 0.0 se nessun assignment ha cost_type configurato (es. tutte freelance senza tariffa).
+    # v3.5.0-alpha.115 — Cost STIMATO (rate × ore done teorico).
     total_cost_accrued: Mapped[float] = mapped_column(Float, default=0.0, server_default="0")
+    # v3.5.0-alpha.115 — Cost REALE: Σ SupplierInvoice.amount_total delle
+    # fatture passive linkate via SupplierInvoice.resource_id a risorse che
+    # hanno booking su questa JCL. Permette confronto stimato vs reale:
+    # discrepanza = forecast anomaly (sezione finance).
+    # 0.0 se nessuna fattura passiva linkata.
+    total_cost_external: Mapped[float] = mapped_column(Float, default=0.0, server_default="0")
+    # v3.5.0-alpha.115 — Dirty flag per reconcile lazy (perf).
+    # Booking-mutate paths settano True; reconcile-all WHERE stale=True ricomputa.
+    accrued_stale: Mapped[bool] = mapped_column(Boolean, default=False, server_default="0")
     # Lavorazione "extra": aggiunta dopo l'approvazione della quote (es. cliente
     # chiede un upres in più). quote_line_id è NULL per gli extra puri.
     # Una riga ereditata dalla quote può comunque generare extra senza is_extra=True

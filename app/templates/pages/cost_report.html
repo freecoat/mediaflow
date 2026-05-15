@@ -971,9 +971,13 @@ function renderKPIs() {
     <div class="stat-card"><div class="stat-label">Margine stimato</div>
       <div class="stat-value mono" style="font-size:20px;color:${margin>=0?'var(--green)':'var(--rose)'};">${fmtCurrency(margin)}</div>
       <div class="stat-sub">Σ quotato vivo − (costo ore + spese)</div></div>
-    <div class="stat-card" title="Σ ore done × Resource.internal_cost_hourly. Risorse senza cost_type configurato → contributo 0."><div class="stat-label">Costo reale risorse</div>
+    <div class="stat-card" title="STIMA: Σ ore done × Resource.internal_cost_hourly. Risorse senza cost_type → contributo 0. Confronto reale (fatture passive) sotto."><div class="stat-label">Costo stimato risorse</div>
       <div class="stat-value mono" style="font-size:20px;color:${hasCostData?'var(--text)':'var(--text3)'};">${hasCostData?fmtCurrency(costAccrued):'—'}</div>
-      <div class="stat-sub">${hasCostData?'α.67 cost-side':'cost-rate non configurati'}</div></div>
+      <div class="stat-sub">${hasCostData?'α.67 — stima da rate × ore':'cost-rate non configurati'}</div></div>
+    <!-- v3.5.0-alpha.115 — Cost REALE da fatture passive -->
+    <div class="stat-card" title="REALE: Σ SupplierInvoice linkate ai booking delle risorse di questo job. 0 se nessuna fattura passiva ha resource_id linkato."><div class="stat-label">Costo reale (fatture)</div>
+      <div class="stat-value mono" style="font-size:20px;color:${(s.total_cost_external||0)>0?'var(--text)':'var(--text3)'};">${(s.total_cost_external||0)>0?fmtCurrency(s.total_cost_external):'—'}</div>
+      <div class="stat-sub">${(s.total_cost_external||0)>0?('Δ vs stima: '+(s.cost_drift>=0?'+':'')+fmtCurrency(s.cost_drift)):'no fatture passive linked'}</div></div>
     <div class="stat-card" title="Maturato − Costo reale. Margine reale basato sui cost-rate interni delle risorse."><div class="stat-label">Margine reale</div>
       <div class="stat-value mono" style="font-size:20px;color:${hasCostData?(realMargin>=0?'var(--green)':'var(--rose)'):'var(--text3)'};">${hasCostData?fmtCurrency(realMargin):'—'}</div>
       <div class="stat-sub">${hasCostData?'maturato − costo reale':'attiva cost_type su /resources'}</div></div>

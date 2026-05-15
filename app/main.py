@@ -349,15 +349,19 @@ def _auto_migrate_columns():
                     print(f"[auto-migrate] invoice_lines.{col} mancante -> ALTER TABLE")
                     conn.execute(text(f"ALTER TABLE invoice_lines ADD COLUMN {col} {ddl}"))
     # v3.5.0-alpha.66.21 — α.67 cost-side: JobCostLine.total_cost_accrued.
+    # v3.5.0-alpha.115 — total_cost_external (Σ supplier invoices) + accrued_stale flag
     if "job_cost_lines" in insp.get_table_names():
         jclcols = {c["name"] for c in insp.get_columns("job_cost_lines")}
-        if "total_cost_accrued" not in jclcols:
-            print("[auto-migrate] job_cost_lines.total_cost_accrued mancante -> ALTER TABLE")
-            with engine.begin() as conn:
-                conn.execute(text(
-                    "ALTER TABLE job_cost_lines ADD COLUMN total_cost_accrued "
-                    "REAL NOT NULL DEFAULT 0"
-                ))
+        jcl_alter_115 = [
+            ("total_cost_accrued", "REAL NOT NULL DEFAULT 0"),
+            ("total_cost_external", "REAL NOT NULL DEFAULT 0"),
+            ("accrued_stale", "BOOLEAN NOT NULL DEFAULT 0"),
+        ]
+        with engine.begin() as conn:
+            for col, ddl in jcl_alter_115:
+                if col not in jclcols:
+                    print(f"[auto-migrate] job_cost_lines.{col} mancante -> ALTER TABLE")
+                    conn.execute(text(f"ALTER TABLE job_cost_lines ADD COLUMN {col} {ddl}"))
     # v3.5.0-alpha.66.20 — Pagamenti fattura (cashflow revenue-side).
     # Tabella invoice_payments creata automaticamente da create_all() su DB nuovi;
     # qui solo l'ALTER per la colonna denormalizzata sulla tabella esistente.
@@ -1119,7 +1123,7 @@ async def lifespan(app: FastAPI):
     yield
 
 
-app = FastAPI(title="MediaFlow", version="3.5.0-alpha.114", lifespan=lifespan)
+app = FastAPI(title="MediaFlow", version="3.5.0-alpha.115", lifespan=lifespan)
 
 BASE_DIR = Path(__file__).parent
 app.mount("/static", StaticFiles(directory=BASE_DIR / "static"), name="static")

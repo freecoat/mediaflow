@@ -69,19 +69,41 @@ def _require_manager(request: Request):
 
 # ── Helpers ────────────────────────────────────────────────────────────
 
-def _next_batch_code(db: Session) -> str:
+def _next_batch_code(db: Session, project=None) -> str:
     """v3.5.0-alpha.66.14.8 — Wrapper sul numbering service unificato.
-
-    Genera prossimo BB-{anno}-{NNN} per tenant. Ora bypassa soft-delete
-    (i batch cestinati occupano il code UNIQUE) — prima includeva solo
-    cancelled. Coerente con quote.number e job.code policy.
+    v3.5.0-alpha.115 — Cabling NumberingConfig "billing_batch".
+    Variabili supportate: YYYY/YY/MM/DD/NNN/NN/NNNN/PROJECT_CODE/CLIENT_CODE.
+    Fallback default BB-{YYYY}-{NNN}.
     """
-    from app.services.numbering import next_year_progressive
-    return next_year_progressive(
-        db, BillingBatch, base="BB", code_field="code",
-        include_deleted=True,
-        extra_filter=(BillingBatch.tenant_id == current_tenant_id()),
-    )
+    from app.services.numbering import gen_doc_code, next_year_progressive
+    client = (project.client if project and getattr(project, "client", None) else None)
+    try:
+        code, _ = gen_doc_code(
+            db, "billing_batch",
+            tenant_id=current_tenant_id(),
+            project_code=(project.code if project else None),
+            client_code=(client.name[:8].upper() if client and getattr(client, "name", None) else None),
+        )
+        # Verifica uniqueness vs DB
+        exists = (
+            db.query(BillingBatch).execution_options(include_deleted=True)
+            .filter(BillingBatch.code == code,
+                    BillingBatch.tenant_id == current_tenant_id()).first()
+        )
+        if exists:
+            return next_year_progressive(
+                db, BillingBatch, base="BB", code_field="code",
+                include_deleted=True,
+                extra_filter=(BillingBatch.tenant_id == current_tenant_id()),
+            )
+        return code
+    except Exception as _e:
+        print(f"[batch_numbering] gen_doc_code failed, fallback: {_e}")
+        return next_year_progressive(
+            db, BillingBatch, base="BB", code_field="code",
+            include_deleted=True,
+            extra_filter=(BillingBatch.tenant_id == current_tenant_id()),
+        )
 
 
 def _batch_to_dict(b: BillingBatch, with_lines: bool = False) -> dict:
@@ -390,9 +412,11 @@ def _transmit_core(
             f"{period_start.isoformat()} → {period_end.isoformat()}"
         )
 
+    # v3.5.0-alpha.115 — passa project per espandere {PROJECT_CODE}/{CLIENT_CODE}
+    _proj = db.query(Project).filter(Project.id == project_id).first()
     batch = BillingBatch(
         tenant_id=current_tenant_id(),
-        code=_next_batch_code(db),
+        code=_next_batch_code(db, project=_proj),
         project_id=project_id,
         status=BillingBatchStatus.draft,
         period_start=period_start,
