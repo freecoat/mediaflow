@@ -8,6 +8,61 @@
 
 ## Versione corrente
 
+**v3.5.0-alpha.114** — 15 maggio 2026 sera — Audit deep-dive: 16 fix bug+architettura
+
+Audit multi-agent in-depth ha trovato BLOCKER + HIGH bugs su:
+- Q5 ROOT CAUSE: bulk_edit shift temporale su done bookings no recompute
+- Storno NC closing → JCL lost orfani
+- Race double-close per project
+- PDF drift mutava Invoice (regressione alpha.112)
+- Cashflow ignorava storno NC TD04
+- OverheadCost code COUNT collide con soft-delete
+- update_booking re-assign JCL senza touch assignments → stale
+- Resource delink missing su supplier save
+- Tenant scope mancante su nuovi FK alpha.112+113
+
+**Decisioni di prodotto recepite**:
+1. Fatture IMMUTABILI post-draft. AI no touch. Solo storno NC.
+2. Cashflow include TD01 cancelled + NC TD04 segno negativo (storico).
+3. Q11 cost-side aggregation: vista doppia stimato/maturato (alpha.115).
+4. NumberingConfig cabling (alpha.115).
+5. reconcile-all perf: dirty flag + async UI (alpha.115).
+
+**16 fix in alpha.114**:
+- A1: card grid alignment (`.card+.card` scoped)
+- A2: PDF drift read-only + UI badge ⚠
+- A3: Invoice immutability guard (409 su PUT post-draft)
+- A4: cashflow include storno NC con segno
+- A5: bulk_edit recompute on done bookings (Q5 root)
+- A6: storno NC closing → reset JCL lost zero-approved
+- A7: with_for_update Project precheck (race lock)
+- A8: OverheadCost.code via canonical generator (no COUNT bug)
+- A9: update_booking re-assign JCL → recompute vecchia+nuova
+- A10: resource delink su supplier save
+- A11: job_id senza project_id form fix
+- A12: /projects?client_id sconosciuto → warning
+- A13: + Crea risorsa deferred (disabled finché supplier salvato)
+- A14: drawer naming flush right sidebar
+- A15: tenant scope sweep nuovi FK
+- A16: zero-accrued JCL nel closing precheck (double-check)
+
+**Da testare Matteo**:
+1. CR list maturato deve essere allineato SUBITO senza reconcile-all
+   (A5 root cause). Verifica spostando booking done.
+2. PUT Invoice post-emit deve dare 409 (no più auto-modifica).
+3. Cashflow: emetti TD01, storna via NC TD04 stesso anno → saldo netto 0.
+4. Emit chiusura progetto, storno NC, riemetti closing → no orfani lost.
+5. Modal supplier: cambia risorsa associata → vecchia deve essere delinked.
+6. /projects?client_id=99999 → toast warning.
+7. /settings#numbering builder drawer → flush a destra sidebar.
+
+**Roadmap alpha.115** (next round):
+- Q11 vista doppia maturato/stimato + SupplierInvoice aggregation cost-side
+- NumberingConfig cabling (refactor numbering.py + 7 callers)
+- reconcile-all: dirty flag + background async UI
+
+## (versione precedente)
+
 **v3.5.0-alpha.113** — 15 maggio 2026 — Round revisione Matteo pomeriggio (11 punti Q1-Q11)
 
 **Hotfix critico**: alpha.112 aveva `<script src=".../global.js">` senza

@@ -330,6 +330,29 @@ async def create_supplier_invoice(
     ).first()
     if not s:
         raise HTTPException(404, "Fornitore non trovato")
+    # v3.5.0-alpha.114 A15: tenant scope validation su FK opzionali
+    from app.models import Resource as _Resource, Project as _Project, Job as _Job
+    if resource_id:
+        r = db.query(_Resource).filter(
+            _Resource.id == resource_id,
+            _Resource.tenant_id == current_tenant_id(),
+        ).first()
+        if not r:
+            raise HTTPException(400, f"Risorsa #{resource_id} non trovata o non accessibile")
+    if project_id:
+        p = db.query(_Project).filter(
+            _Project.id == project_id,
+            _Project.tenant_id == current_tenant_id(),
+        ).first()
+        if not p:
+            raise HTTPException(400, f"Progetto #{project_id} non trovato")
+    if job_id:
+        j = db.query(_Job).filter(
+            _Job.id == job_id,
+            _Job.tenant_id == current_tenant_id(),
+        ).first()
+        if not j:
+            raise HTTPException(400, f"Job #{job_id} non trovato")
     # Pre-check unicità number+supplier (manuale, no UNIQUE index — il numero
     # è scelto dal fornitore, può capitare di doverlo correggere via cestino)
     dup = db.query(SupplierInvoice).filter(
@@ -407,6 +430,26 @@ async def update_supplier_invoice(
     if issue_date is not None: i.issue_date = issue_date
     if due_date is not None: i.due_date = due_date
     if payment_date is not None: i.payment_date = payment_date
+    # v3.5.0-alpha.114 A15: tenant scope validation prima dell'assegnazione
+    from app.models import Resource as _Resource, Project as _Project, Job as _Job
+    if project_id:
+        p = db.query(_Project).filter(
+            _Project.id == project_id, _Project.tenant_id == current_tenant_id()
+        ).first()
+        if not p:
+            raise HTTPException(400, f"Progetto #{project_id} non trovato")
+    if job_id:
+        j = db.query(_Job).filter(
+            _Job.id == job_id, _Job.tenant_id == current_tenant_id()
+        ).first()
+        if not j:
+            raise HTTPException(400, f"Job #{job_id} non trovato")
+    if resource_id:
+        rr = db.query(_Resource).filter(
+            _Resource.id == resource_id, _Resource.tenant_id == current_tenant_id()
+        ).first()
+        if not rr:
+            raise HTTPException(400, f"Risorsa #{resource_id} non trovata")
     if project_id is not None: i.project_id = project_id or None
     if job_id is not None: i.job_id = job_id or None
     if job_cost_line_id is not None: i.job_cost_line_id = job_cost_line_id or None

@@ -1220,6 +1220,17 @@ async def closing_invoice_precheck(
         JobCostLine.is_billable == True,
         JobCostLine.total_accrued > 0,
     ).all()
+    # v3.5.0-alpha.114 A16: JCL not_billed con total_accrued=0 ma total_quoted>0
+    # (= preventivato ma mai eseguito). Non bloccano, ma vanno mostrate per
+    # double-check pre-chiusura: forse vanno lost esplicito, forse vanno revise.
+    zero_accrued = db.query(JobCostLine).join(Job).filter(
+        Job.project_id == project_id,
+        Job.status != JobStatus.cancelled,
+        JobCostLine.billing_status == JCLBillingStatus.not_billed,
+        JobCostLine.is_billable == True,
+        (JobCostLine.total_accrued == 0) | (JobCostLine.total_accrued.is_(None)),
+        JobCostLine.total_quoted > 0,
+    ).all()
     # Riepilogo fatture progetto
     invoices = db.query(Invoice).join(Job, Invoice.job_id == Job.id).filter(
         Job.project_id == project_id,
@@ -1238,6 +1249,9 @@ async def closing_invoice_precheck(
     ]
     total_billed = round(sum((i["total"] or 0) for i in inv_summary if i["doc_type"] != "TD04"), 2)
     total_paid = round(sum((i["amount_paid"] or 0) for i in inv_summary if i["doc_type"] != "TD04"), 2)
+    # v3.5.0-alpha.114 A16: confronto quotato vs maturato per JCL zero-accrued.
+    # Mostra dettaglio per double-check pre-emissione closing.
+    zero_accrued_total_quoted = round(sum((j.total_quoted or 0) for j in zero_accrued), 2)
     return {
         "project_id": project_id,
         "project_code": proj.code,
@@ -1249,6 +1263,15 @@ async def closing_invoice_precheck(
              "status": p.billing_status.value if hasattr(p.billing_status, "value") else p.billing_status,
              "total_accrued": p.total_accrued}
             for p in pending[:10]
+        ],
+        # v3.5.0-alpha.114 A16: zero-accrued JCL (quotate ma non eseguite)
+        "zero_accrued_count": len(zero_accrued),
+        "zero_accrued_total_quoted": zero_accrued_total_quoted,
+        "zero_accrued_sample": [
+            {"id": z.id, "description": z.description,
+             "total_quoted": z.total_quoted, "total_accrued": z.total_accrued or 0,
+             "is_extra": z.is_extra}
+            for z in zero_accrued[:20]
         ],
         "invoices": inv_summary,
         "invoices_count": len(inv_summary),
@@ -1278,9 +1301,12 @@ async def emit_closing_invoice(
     - Invoice.is_closing=True per il PDF (sezione riepilogo).
     """
     _require_manager(request)
+    # v3.5.0-alpha.114 A7: row-lock per prevenire double-close race.
+    # SQLite WAL serializza i writer; with_for_update no-op su SQLite ma
+    # forward-compatible con PostgreSQL.
     proj = db.query(Project).filter(
         Project.id == project_id, Project.tenant_id == current_tenant_id(),
-    ).first()
+    ).with_for_update().first()
     if not proj:
         raise HTTPException(404, "Progetto non trovato")
     if proj.finance_status == "closed":
@@ -2045,6 +2071,10 @@ async def storno_invoice(
 
     # v3.5.0-alpha.112 — se la fattura stornata era CLOSING di un progetto:
     # riapri il progetto finanziariamente (finance_status='active').
+    # v3.5.0-alpha.114 A6: ALSO reset JCL lost zero-approved → not_billed.
+    # Le JCL marcate lost durante closing emit con total_approved=0 non hanno
+    # JCLBilledSlice (lo storno NC sopra non le vede in affected_jcl_ids) →
+    # restavano "lost" permanente mentre il progetto era riaperto. Bug audit.
     reopened_project_id = None
     if bool(getattr(src, "is_closing", False)) and getattr(src, "closing_project_id", None):
         pr = db.query(Project).filter(Project.id == src.closing_project_id).first()
@@ -2053,6 +2083,14 @@ async def storno_invoice(
             pr.finance_closed_at = None
             pr.finance_closing_invoice_id = None
             reopened_project_id = pr.id
+            # Reset JCL lost (zero-approved durante closing) → not_billed
+            jcls_lost = db.query(JobCostLine).join(Job).filter(
+                Job.project_id == pr.id,
+                JobCostLine.billing_status == JCLBillingStatus.lost,
+                (JobCostLine.billed_amount == 0) | (JobCostLine.billed_amount.is_(None)),
+            ).all()
+            for jcl in jcls_lost:
+                jcl.billing_status = JCLBillingStatus.not_billed
 
     db.commit()
     db.refresh(nc)

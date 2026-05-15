@@ -149,6 +149,7 @@ async def list_invoices(
     q = db.query(Invoice).options(
         joinedload(Invoice.client),
         joinedload(Invoice.job).joinedload(_Job.project),
+        joinedload(Invoice.lines),  # v3.5.0-alpha.114 — per drift detection
     )
     if status:
         q = q.filter(Invoice.status == status)
@@ -175,6 +176,12 @@ async def list_invoices(
     out = []
     for inv in q.all():
         proj = inv.job.project if (inv.job and inv.job.project) else None
+        # v3.5.0-alpha.114 — drift detection per UI badge ⚠
+        lines_sum = round(sum((l.total or 0) for l in inv.lines), 2) if inv.lines else 0
+        has_drift = (
+            bool(inv.lines) and (inv.subtotal or 0) > 0
+            and abs((inv.subtotal or 0) - lines_sum) > 0.01
+        )
         out.append({
             "id": inv.id,
             "number": inv.number,
@@ -192,6 +199,9 @@ async def list_invoices(
             "notes": inv.notes,
             "doc_type": getattr(inv, "doc_type", None),
             "payment_method": getattr(inv, "payment_method", None),
+            # v3.5.0-alpha.114 — drift fields
+            "lines_sum": lines_sum,
+            "has_drift": has_drift,
         })
     return out
 
@@ -218,6 +228,24 @@ async def create_invoice(
     return inv
 
 
+# v3.5.0-alpha.114 — Immutabilità fattura: una volta uscita da draft,
+# nessuna modifica al contenuto. Solo storno via NC TD04 + riemissione.
+# Stati MUTABLE: draft. Tutti gli altri (sent/paid/overdue/cancelled): IMMUTABLE.
+_MUTABLE_INVOICE_STATES = (InvoiceStatus.draft,)
+
+
+def _enforce_invoice_mutable(inv: Invoice):
+    """Solleva 409 se la fattura non è più modificabile (post-emissione).
+    Da chiamare in tutti i mutator di Invoice/InvoiceLine."""
+    if inv.status not in _MUTABLE_INVOICE_STATES:
+        raise HTTPException(
+            409,
+            f"Fattura {inv.number} è in stato '{inv.status.value if hasattr(inv.status, 'value') else inv.status}' "
+            "e non è più modificabile. Le fatture emesse sono immutabili. "
+            "Per correggere: storna via Nota di Credito (TD04) e riemetti."
+        )
+
+
 @router.post("/api/invoices/{invoice_id}/lines", dependencies=[RequireEditInvoices])
 async def add_invoice_line(
     invoice_id: int,
@@ -229,6 +257,7 @@ async def add_invoice_line(
     inv = db.query(Invoice).filter(Invoice.id == invoice_id).first()
     if not inv:
         raise HTTPException(404, "Fattura non trovata")
+    _enforce_invoice_mutable(inv)  # v3.5.0-alpha.114
     total = quantity * unit_price
     line = InvoiceLine(
         invoice_id=invoice_id, description=description,
@@ -251,6 +280,26 @@ async def update_invoice_status(
     inv = db.query(Invoice).filter(Invoice.id == invoice_id).first()
     if not inv:
         raise HTTPException(404, "Fattura non trovata")
+    # v3.5.0-alpha.114 — transizioni stato consentite:
+    #   draft → sent (emissione)
+    #   sent → paid (pagamento)
+    #   sent → overdue (auto/manuale)
+    #   sent/paid/overdue → cancelled (solo via storno NC TD04 — vedi billing)
+    # Bloccare regressioni (paid → draft, cancelled → sent, etc.)
+    _ALLOWED = {
+        InvoiceStatus.draft: {InvoiceStatus.sent, InvoiceStatus.cancelled},
+        InvoiceStatus.sent: {InvoiceStatus.paid, InvoiceStatus.overdue, InvoiceStatus.cancelled},
+        InvoiceStatus.overdue: {InvoiceStatus.paid, InvoiceStatus.cancelled},
+        InvoiceStatus.paid: set(),  # paid è terminal: solo storno NC
+        InvoiceStatus.cancelled: set(),  # cancelled terminal
+    }
+    cur = inv.status
+    if status != cur and status not in _ALLOWED.get(cur, set()):
+        raise HTTPException(
+            409,
+            f"Transizione stato {cur} → {status} non consentita. "
+            "Le fatture emesse sono immutabili: per correggere usa storno NC TD04."
+        )
     inv.status = status
     db.commit()
     return {"id": inv.id, "status": inv.status}
@@ -559,9 +608,13 @@ def cashflow_year_sync(
     ]
     # v3.5.0-alpha.69.1 — filtri project_id + client_id.
     # Invoice → filter by client_id direct + project_id via job
+    # v3.5.0-alpha.114 — Storico contabile: include TD01 cancelled (post-storno)
+    # per preservare la registrazione nel mese di emissione. La NC TD04 sotto
+    # storna come negativo nel mese di emissione NC. Esclude solo le draft
+    # mai emesse (status=draft).
     inv_q = db.query(Invoice).filter(
         extract("year", Invoice.issue_date) == year,
-        Invoice.status != InvoiceStatus.cancelled,
+        Invoice.status != InvoiceStatus.draft,
     )
     if client_id:
         inv_q = inv_q.filter(Invoice.client_id == client_id)
@@ -571,11 +624,18 @@ def cashflow_year_sync(
     invoice_ids = [i.id for i in invoices]
     for inv in invoices:
         m = inv.issue_date.month if inv.issue_date else 1
-        if inv.status in (InvoiceStatus.sent, InvoiceStatus.paid, InvoiceStatus.overdue, InvoiceStatus.draft):
-            series[m - 1]["invoiced"] += inv.total or 0.0
-        remaining = max(0.0, (inv.total or 0.0) - (inv.amount_paid or 0.0))
-        if remaining > 0 and inv.status != InvoiceStatus.paid:
-            series[m - 1]["outstanding"] += remaining
+        # v3.5.0-alpha.114 — include anche cancelled (post-storno): la fattura
+        # originale resta nel cashflow storico del suo mese di emissione, e
+        # la NC TD04 storna come negativo nel mese del NC. Saldo finale netto.
+        if inv.status in (InvoiceStatus.sent, InvoiceStatus.paid,
+                          InvoiceStatus.overdue, InvoiceStatus.cancelled):
+            sign = -1 if (getattr(inv, "doc_type", None) == "TD04") else 1
+            series[m - 1]["invoiced"] += sign * (inv.total or 0.0)
+        # outstanding: NC TD04 non genera outstanding (è un credito, non un debito da incassare)
+        if getattr(inv, "doc_type", None) != "TD04":
+            remaining = max(0.0, (inv.total or 0.0) - (inv.amount_paid or 0.0))
+            if remaining > 0 and inv.status != InvoiceStatus.paid:
+                series[m - 1]["outstanding"] += remaining
 
     pay_q = db.query(InvoicePayment).filter(
         extract("year", InvoicePayment.payment_date) == year,
@@ -918,19 +978,18 @@ async def download_invoice_pdf(invoice_id: int, db: Session = Depends(get_db)):
     if not inv:
         raise HTTPException(404, "Fattura non trovata")
 
-    # v3.5.0-alpha.112 — drift detection: confronta stored vs computed.
-    # In caso di drift, ricomputa anche subtotal/total dell'Invoice ORM
-    # così lista/report mostrano la cifra reale (allineata al PDF).
+    # v3.5.0-alpha.114 — drift detection READ-ONLY (no mutation).
+    # Decisione Matteo: fatture emesse sono IMMUTABILI. Una volta sent/paid
+    # solo storno via NC TD04 le tocca. Non mutiamo MAI Invoice da download
+    # PDF (regressione alpha.112 corretta). Drift = log warning + il PDF
+    # mostra cifra "live" (Σ lines) ma stored ORM resta intatto.
     lines_sum = round(sum((l.total or 0) for l in inv.lines), 2)
     if inv.lines and inv.subtotal and abs((inv.subtotal or 0) - lines_sum) > 0.01:
         import logging
         logging.warning(
-            f"[invoice-drift] inv#{inv.id} stored_subtotal={inv.subtotal} "
-            f"!= Σ_lines={lines_sum} — auto-recompute"
+            f"[invoice-drift] inv#{inv.id} status={inv.status} doc={inv.doc_type} "
+            f"stored_subtotal={inv.subtotal} != Σ_lines={lines_sum} — NO auto-fix"
         )
-        inv.subtotal = lines_sum
-        inv.total = round(lines_sum * (1 + (inv.vat_rate or 0) / 100), 2)
-        db.commit()
     # v3.5.0-alpha.113 — intestazione completa con email amministrazione
     # (snapshot al momento dell'emissione, fallback al campo live del cliente).
     admin_email = (

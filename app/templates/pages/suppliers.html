@@ -171,8 +171,8 @@
         </label>
         <div style="display:flex; gap:8px; align-items:end;">
           <select class="form-select" id="ms-resource" style="flex:1;"><option value="">— nessuna —</option></select>
-          <button type="button" class="btn btn-ghost btn-sm" onclick="msCreateResourceFromSupplier()"
-                  title="Crea una nuova Resource freelance pre-popolata dai dati del fornitore">+ Crea risorsa</button>
+          <button type="button" id="ms-create-resource-btn" class="btn btn-ghost btn-sm" onclick="msCreateResourceFromSupplier()"
+                  title="Crea una nuova Resource freelance pre-popolata dai dati del fornitore. Disponibile dopo aver salvato il fornitore.">+ Crea risorsa</button>
         </div>
         <div class="text-xs text-muted" style="margin-top:4px;">
           Quando associato, le fatture passive di questo fornitore propongono di default questa risorsa nel campo "Risorsa esterna associata".
@@ -401,6 +401,7 @@ let _invoices = [];
 let _projects = [];
 let _jobs = [];
 let _resources = [];  // v3.5.0-alpha.113 — per match opzionale fattura↔risorsa
+let _prevLinkedResourceId = null;  // v3.5.0-alpha.114 — tracciare delink su cambio
 
 async function init() {
   // v3.5.0-alpha.86 S3.2 — Inizializza filtri standard (cliente/progetto/periodo)
@@ -629,13 +630,25 @@ function openSupplierModal() {
     document.getElementById(id).value = '';
   });
   _populateSupplierResourceSelect(null);
+  _prevLinkedResourceId = null;  // v3.5.0-alpha.114
   document.getElementById('ms-delete-btn').style.display = 'none';
+  // v3.5.0-alpha.114 A13: bottone "+ Crea risorsa" disabilitato finché
+  // fornitore non salvato (serve supplier_id reale per link inverso)
+  const crBtn = document.getElementById('ms-create-resource-btn');
+  if (crBtn) {
+    crBtn.disabled = true;
+    crBtn.title = 'Salva prima il fornitore, poi qui per creare risorsa freelance prepopolata dai suoi dati.';
+    crBtn.style.opacity = '0.5';
+  }
   openModal('modal-supplier');
 }
 
 function editSupplier(id) {
   const s = _suppliers.find(x => x.id === id);
   if (!s) return;
+  // v3.5.0-alpha.114 A13: editing → "+ Crea risorsa" abilitato
+  const crBtn = document.getElementById('ms-create-resource-btn');
+  if (crBtn) { crBtn.disabled = false; crBtn.style.opacity = ''; crBtn.title = 'Crea una nuova Resource freelance pre-popolata dai dati del fornitore'; }
   document.getElementById('ms-id').value = s.id;
   document.getElementById('ms-title').textContent = `Fornitore: ${s.name}`;
   document.getElementById('ms-name').value = s.name || '';
@@ -649,6 +662,8 @@ function editSupplier(id) {
   document.getElementById('ms-notes').value = s.notes || '';
   // v3.5.0-alpha.113 — preseleziona risorsa linkata (se backend ritorna resource_id)
   _populateSupplierResourceSelect(s.resource_id || null);
+  // v3.5.0-alpha.114 A10: traccia link precedente per delink corretto su cambio
+  _prevLinkedResourceId = s.resource_id || null;
   document.getElementById('ms-delete-btn').style.display = '';
   openModal('modal-supplier');
 }
@@ -696,12 +711,28 @@ async function saveSupplier() {
     const r = await fetch(url, {method, body: fd, credentials:'same-origin'});
     if (!r.ok) throw new Error((await r.json()).detail || 'Errore');
     const saved = await r.json();
+    const linkedResId = document.getElementById('ms-resource')?.value || null;
+    const supplierIdFinal = saved.id || id;
+    // v3.5.0-alpha.114 A13: dopo save, abilita "+ Crea risorsa" + popola ms-id
+    document.getElementById('ms-id').value = supplierIdFinal;
+    const crBtn = document.getElementById('ms-create-resource-btn');
+    if (crBtn) { crBtn.disabled = false; crBtn.style.opacity = ''; crBtn.title = 'Crea Resource freelance da dati fornitore'; }
+    // v3.5.0-alpha.114 A10: cleanup risorsa precedente se cambiata.
+    // Senza questo, A.supplier_id resta puntato dopo che user cambia link a B.
+    if (_prevLinkedResourceId && String(_prevLinkedResourceId) !== String(linkedResId)) {
+      try {
+        const fdClear = new FormData();
+        fdClear.append('supplier_id', '');  // empty → backend setta NULL
+        await api('PUT', `/resources/api/${_prevLinkedResourceId}`, fdClear);
+      } catch(e) {
+        toast('Delink risorsa precedente fallito: ' + (e.message || ''), 'warning');
+      }
+    }
     // v3.5.0-alpha.113 — link inverso Resource.supplier_id se selezionato
-    const linkedResId = document.getElementById('ms-resource')?.value;
     if (linkedResId) {
       try {
         const fdR = new FormData();
-        fdR.append('supplier_id', saved.id || id);
+        fdR.append('supplier_id', supplierIdFinal);
         await api('PUT', `/resources/api/${linkedResId}`, fdR);
       } catch(e) {
         toast('Fornitore salvato ma link risorsa fallito: ' + (e.message || ''), 'warning');
@@ -743,7 +774,14 @@ function _populateProjectSelect() {
       `<option value="${p.id}">${escapeHtml(p.code || '')} · ${escapeHtml(p.title || '')}</option>`
     ).join('');
   // v3.5.0-alpha.113: cambio progetto → filtra job select
-  sel.onchange = () => _populateJobSelect();
+  // v3.5.0-alpha.114 A11: se progetto cleared, anche job select va resettato a vuoto
+  sel.onchange = () => {
+    if (!sel.value) {
+      const jobSel = document.getElementById('mi-job');
+      if (jobSel) jobSel.value = '';
+    }
+    _populateJobSelect();
+  };
 }
 // v3.5.0-alpha.113: job filtrato per progetto selezionato; se nessun
 // progetto, mostra tutti i job (rara casistica).
@@ -943,9 +981,13 @@ async function saveInvoice() {
   const status = document.getElementById('mi-status').value;
   if (status) fd.append('payment_status', status);
   const proj = document.getElementById('mi-project').value;
-  if (proj) fd.append('project_id', proj);
   const job = document.getElementById('mi-job').value;
-  if (job) fd.append('job_id', job);
+  // v3.5.0-alpha.114 A11: job richiede sempre un progetto. Senza project_id,
+  // ignora job_id (era inviato comunque dopo che user clearava progetto).
+  if (proj) {
+    fd.append('project_id', proj);
+    if (job) fd.append('job_id', job);
+  }
   // v3.5.0-alpha.113: resource match opzionale
   const resVal = document.getElementById('mi-resource')?.value;
   if (resVal) fd.append('resource_id', resVal);

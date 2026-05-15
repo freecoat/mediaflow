@@ -1173,9 +1173,13 @@ async function loadInvoices() {
          </a>`
       : '<span class="text-muted">—</span>';
     const isNC = i.doc_type === 'TD04';
+    // v3.5.0-alpha.114: badge drift se Σ lines ≠ stored subtotal
+    const driftBadge = i.has_drift
+      ? ` <span title="⚠ Drift: somma righe ${fmtCurrency(i.lines_sum)} ≠ totale registrato ${fmtCurrency(i.subtotal)}. Fattura non modificabile post-emissione. Per correggere: storna via NC TD04 + riemetti." style="display:inline-block;padding:1px 4px;background:rgba(251,191,36,.18);color:#fbbf24;border-radius:4px;font-size:10px;font-weight:600;">⚠ drift</span>`
+      : '';
     const numHtml = isNC
-      ? `<span title="Nota di credito (storno)">📉 ${escapeHtml(i.number)}</span>`
-      : escapeHtml(i.number);
+      ? `<span title="Nota di credito (storno)">📉 ${escapeHtml(i.number)}</span>${driftBadge}`
+      : escapeHtml(i.number) + driftBadge;
     const stornoBtn = (!isNC && i.status !== 'cancelled')
       ? `<button class="btn btn-ghost btn-sm" style="color:#ef4444;" onclick="openStornoModal(${i.id}, '${escapeHtml(i.number)}')" title="Emetti nota di credito TD04 a storno">📉</button>`
       : '';
@@ -1351,7 +1355,7 @@ async function _clRunPrecheck(projectId) {
   status.style.cssText = 'margin-top:8px; font-size:12px;';
   if (r.can_close) {
     status.style.color = '#22c55e';
-    status.textContent = '✓ Tutte le JCL del progetto sono fatturate. Si può chiudere.';
+    status.textContent = '✓ Tutte le JCL maturate sono fatturate. Si può chiudere.';
     _clProjectId = projectId;
     document.getElementById('cl-submit').disabled = false;
   } else {
@@ -1359,6 +1363,39 @@ async function _clRunPrecheck(projectId) {
     status.textContent = `⚠ ${r.pending_lines_count} righe ancora da fatturare/in approvazione. Risolvi prima.`;
   }
   box.appendChild(status);
+  // v3.5.0-alpha.114 A16: zero-accrued JCL (quotate ma non eseguite) per double-check
+  if (r.zero_accrued_count > 0) {
+    const za = document.createElement('div');
+    za.style.cssText = 'margin-top:10px; padding:8px 10px; background:rgba(251,191,36,.10); border:1px solid rgba(251,191,36,.30); border-radius:6px; font-size:12px;';
+    const zaHead = document.createElement('div');
+    zaHead.style.cssText = 'font-weight:600; color:#fbbf24; margin-bottom:4px;';
+    zaHead.textContent = `⚠ ${r.zero_accrued_count} voci preventivate ma non eseguite (totale quotato ${fmtCurrency(r.zero_accrued_total_quoted)})`;
+    za.appendChild(zaHead);
+    const zaSub = document.createElement('div');
+    zaSub.className = 'text-xs text-muted';
+    zaSub.style.marginBottom = '6px';
+    zaSub.textContent = 'Verifica se vanno scartate (esplicito lost) o riprese prima della chiusura. Non bloccano l\'emissione.';
+    za.appendChild(zaSub);
+    (r.zero_accrued_sample || []).slice(0, 6).forEach(z => {
+      const row = document.createElement('div');
+      row.style.cssText = 'padding:3px 6px; border-top:1px solid var(--border); display:flex; justify-content:space-between; gap:8px; font-size:11px;';
+      const lhs = document.createElement('span');
+      lhs.textContent = (z.is_extra ? '[extra] ' : '') + (z.description || '');
+      const rhs = document.createElement('span');
+      rhs.className = 'mono';
+      rhs.textContent = 'quotato ' + fmtCurrency(z.total_quoted) + ' · maturato 0';
+      row.appendChild(lhs); row.appendChild(rhs);
+      za.appendChild(row);
+    });
+    if (r.zero_accrued_count > 6) {
+      const more = document.createElement('div');
+      more.className = 'text-xs text-muted';
+      more.style.cssText = 'margin-top:4px; text-align:right;';
+      more.textContent = `… e altre ${r.zero_accrued_count - 6}`;
+      za.appendChild(more);
+    }
+    box.appendChild(za);
+  }
   detail.appendChild(box);
 }
 

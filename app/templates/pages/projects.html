@@ -188,11 +188,18 @@ async function loadProjects() {
   allProjects = await api('GET', '/projects/api');
   // v3.5.0-alpha.113 — applica filtro cliente da querystring (?client_id=N)
   // arrivando da scheda cliente → "Vedi progetti".
+  // v3.5.0-alpha.114 A12: se client_id non esiste nella select (cliente
+  // cestinato, cross-tenant, etc.), mostra warning invece di silent show-all.
   const qs = new URLSearchParams(window.location.search);
   const clientFilter = qs.get('client_id');
   if (clientFilter) {
     const sel = document.getElementById('filter-client');
     if (sel) sel.value = clientFilter;
+    if (sel && sel.value !== clientFilter) {
+      // Cliente non in select → option non esiste
+      toast(`Cliente #${clientFilter} non trovato (può essere stato cestinato o non accessibile). Mostro tutti i progetti.`, 'warning', 5000);
+      sel.value = '';
+    }
     filterProjects();
     return;
   }

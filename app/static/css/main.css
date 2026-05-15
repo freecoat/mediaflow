@@ -463,8 +463,21 @@ a:hover { text-decoration: underline; }
 .mf-link:hover { text-decoration: underline solid var(--indigo2); color: var(--indigo); }
 
 /* v3.5.0-alpha.88 — Bordi sovrapposti: card adiacenti con border-collapse
-   visivo. Margin bottom riconciliato + box-sizing audit. */
+   visivo. Margin bottom riconciliato + box-sizing audit.
+   v3.5.0-alpha.114 — Bug report Matteo: `.card + .card` applicato globale
+   rompe layout grid 2-col (es. quote-top-row Riepilogo↔Stato&azioni). Su
+   grid il gap già gestisce lo spacing; il margin-top forza la 2ª card più
+   in basso e disallinea visivamente. Limito a flow normale (no flex/grid). */
 .card + .card { margin-top: 14px; }
+/* Override per cards dentro container flex/grid: gap è il source of truth */
+.flex > .card + .card,
+[style*="display:grid"] > .card + .card,
+[style*="display: grid"] > .card + .card,
+.quote-top-row > .card + .card,
+.stat-grid > .card + .card,
+.modal-body > .card + .card {
+  margin-top: 0;
+}
 .card .table-wrap + .card-header { margin-top: 12px; border-top: 1px solid var(--border); padding-top: 12px; }
 /* Tabella dentro card: evita doppio bordo (card border + table border). */
 .card .table-wrap > table { border: 0; }

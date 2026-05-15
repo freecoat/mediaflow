@@ -1538,6 +1538,9 @@ async def update_booking(
                 end_datetime=pa["end_datetime"],
             ))
 
+    # v3.5.0-alpha.114 — A9: traccia old JCL prima del cambio per recompute
+    # cross-JCL su re-assign senza touch assignments (gap audit).
+    _old_jcl_id_for_resync = b.job_cost_line_id if b.execution_status == BookingExecutionStatus.done else None
     b.kind = new_kind
     b.job_id = new_job_id
     b.job_cost_line_id = new_line_id
@@ -1559,9 +1562,22 @@ async def update_booking(
     _recalc_booking_envelope(b)
     _log_change(db, b.id, "update", "Booking aggiornato", None)
     # v3.5.0-alpha.9: replace-all assignments cambia man-hours → recompute
-    if assignments is not None and b.execution_status == BookingExecutionStatus.done:
+    # v3.5.0-alpha.114 A9: triggera anche su re-assign JCL senza assignments:
+    # old JCL e new JCL vanno ricomputate entrambe (vecchia perde ore, nuova
+    # le acquisisce). Pattern uguale a bulk_edit new_cost_line.
+    _need_recompute = (
+        b.execution_status == BookingExecutionStatus.done
+        and (assignments is not None or (_old_jcl_id_for_resync != b.job_cost_line_id))
+    )
+    if _need_recompute:
         try:
-            from app.services.cost_line_sync import recompute_for_booking
+            from app.services.cost_line_sync import recompute_for_booking, recompute_cost_line_actual
+            # Old JCL (se cambiata)
+            if _old_jcl_id_for_resync and _old_jcl_id_for_resync != b.job_cost_line_id:
+                old_jcl = db.query(JobCostLine).filter(JobCostLine.id == _old_jcl_id_for_resync).first()
+                if old_jcl:
+                    recompute_cost_line_actual(db, old_jcl)
+            # New JCL (booking corrente)
             recompute_for_booking(db, b)
         except Exception as e:
             print(f"[update_booking] cost line sync failed: {e}")
@@ -2305,6 +2321,18 @@ async def bulk_edit_bookings(
                     a.start_datetime = ns
                     a.end_datetime = ne
                 _recalc_booking_envelope(b)
+                # v3.5.0-alpha.114 — Q5 ROOT CAUSE FIX: shift temporale su
+                # booking GIÀ done aggiornava timestamp ma NON ricomputava
+                # total_accrued della JCL (recompute era gated su
+                # target_state==done, che è None per pure-temporal shift).
+                # Sintomo: lista CR mostrava maturato vecchio finché user
+                # non apriva dettaglio (che ha auto-reconcile).
+                if b.execution_status == BookingExecutionStatus.done and b.job_cost_line_id:
+                    try:
+                        from app.services.cost_line_sync import recompute_for_booking
+                        recompute_for_booking(db, b)
+                    except Exception as e:
+                        print(f"[bulk_edit] cost sync (temporal-shift on done) failed for #{b.id}: {e}")
 
             # v3.5.0-alpha.66.5.1: applica state via apply_state_to_booking
             # (sincronizza state + status + execution_status atomicamente).

@@ -599,9 +599,11 @@ AWS_S3_DEFAULT_BUCKET=mediaflow-prod</pre>
 
     <!-- v3.5.0-alpha.113: Drawer left builder drag&drop naming -->
     <div class="modal-overlay" id="modal-naming-builder" style="background:rgba(0,0,0,0.45);">
+      <!-- v3.5.0-alpha.114 A14: flush a destra sidebar (left=var(--sidebar-w))
+           invece di left:0 → non copre la sidebar, drawer affianca. -->
       <div class="modal" id="nmb-builder-drawer"
            style="max-width:520px; width:520px; height:100vh; max-height:100vh;
-                  position:fixed; top:0; left:0; right:auto; border-radius:0;
+                  position:fixed; top:0; left:var(--sidebar-w); right:auto; border-radius:0;
                   border-left:none; border-right:1px solid var(--border2);
                   display:flex; flex-direction:column; animation:none;">
         <div class="modal-header">

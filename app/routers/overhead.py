@@ -67,14 +67,32 @@ def _overhead_to_dict(o: OverheadCost) -> dict:
 
 
 def _next_code(db: Session, year: int) -> str:
-    """Auto-numero OH-YYYY-NNNN. Conta include_deleted per evitare collision
-    con record cestinati (feedback_soft_delete_unique_bypass)."""
+    """Auto-numero OH-YYYY-NNNN.
+    v3.5.0-alpha.114 A8: COUNT(*) era buggy — soft-delete listener filtra i
+    cestinati dalla count, ma il record cestinato MANTIENE il codice nel DB
+    (UNIQUE). Risultato: collision al next INSERT se l'ultimo era cestinato.
+    Pattern già documentato in feedback_soft_delete_unique_bypass.md.
+    Fix: order_by id desc + parse tail, con execution_options include_deleted=True.
+    """
     prefix = f"OH-{year}-"
-    n = db.query(func.count(OverheadCost.id)).filter(
-        OverheadCost.tenant_id == current_tenant_id(),
-        OverheadCost.code.like(prefix + "%"),
-    ).scalar() or 0
-    return f"{prefix}{n + 1:04d}"
+    last = (
+        db.query(OverheadCost)
+        .filter(
+            OverheadCost.tenant_id == current_tenant_id(),
+            OverheadCost.code.like(prefix + "%"),
+        )
+        .execution_options(include_deleted=True)
+        .order_by(OverheadCost.id.desc())
+        .first()
+    )
+    n = 1
+    if last is not None:
+        try:
+            tail = last.code.rsplit("-", 1)[1]
+            n = int(tail) + 1
+        except (ValueError, IndexError):
+            n = 1
+    return f"{prefix}{n:04d}"
 
 
 # ── Pagina ───────────────────────────────────────────────────────────

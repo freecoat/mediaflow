@@ -189,25 +189,11 @@ def _handle_single(
         target_id = loss.id
 
     elif action == AnomalyAction.overhead_cost:
-        # Genera codice OH auto-incrementale
+        # v3.5.0-alpha.114 A8: delego al generatore canonico in overhead._next_code
+        # che gestisce soft-delete bypass (era duplicato e poteva divergere).
+        from app.routers.overhead import _next_code
         year = datetime.utcnow().year
-        prefix = f"OH-{year}-"
-        last = (
-            db.query(OverheadCost)
-            .filter(
-                OverheadCost.tenant_id == current_tenant_id(),
-                OverheadCost.code.like(f"{prefix}%"),
-            )
-            .order_by(OverheadCost.id.desc())
-            .first()
-        )
-        next_num = 1
-        if last and last.code.startswith(prefix):
-            try:
-                next_num = int(last.code[len(prefix):]) + 1
-            except ValueError:
-                pass
-        code = f"{prefix}{next_num:04d}"
+        code = _next_code(db, year)
         amount_net = float(entry.amount or 0)
         oc = OverheadCost(
             tenant_id=current_tenant_id(),

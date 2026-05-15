@@ -1,5 +1,118 @@
 # MediaFlow — Changelog
 
+## v3.5.0-alpha.114 — Audit deep-dive: 16 fix bug+architettura (15 maggio 2026 sera)
+
+Round bug fixes da audit multi-agent in-depth su billing/CR/UI workflow.
+Decisioni di prodotto da Matteo recepite:
+- **Fatture immutabili**: una volta uscite da draft NON modificabili. Solo
+  storno via NC TD04 le tocca. AI no touch invoice emesse.
+- **Cashflow**: TD01 cancelled + NC TD04 incluse con segno (storno storico
+  preservato nel mese di emissione).
+
+**A1 — Card alignment quote**:
+- `.card + .card { margin-top: 14px }` regola globale rompeva grid layouts
+  (es. `.quote-top-row` Riepilogo↔Stato&azioni). Override scoped: no
+  margin-top dentro flex/grid/quote-top-row/stat-grid/modal-body.
+
+**A2 — PDF drift READ-ONLY**:
+- Rimosso auto-commit `Invoice.subtotal/total` da `download_invoice_pdf`.
+  Decisione Matteo: fatture immutabili. Drift = solo log warning.
+- Aggiunto badge UI `⚠ drift` in lista fatture con tooltip esplicativo
+  "Fattura non modificabile post-emissione. Storna via NC + riemetti".
+- Backend `list_invoices` ritorna `lines_sum` + `has_drift` boolean.
+
+**A3 — Invoice immutability guard**:
+- Helper `_enforce_invoice_mutable()` blocca PUT su Invoice/InvoiceLine
+  se status != draft (409 con messaggio chiaro).
+- Transizioni stato consentite mapped: draft→{sent,cancelled};
+  sent→{paid,overdue,cancelled}; overdue→{paid,cancelled}; paid/cancelled
+  terminali (solo storno NC le riapre).
+
+**A4 — Cashflow include storno NC**:
+- Query include TD01 cancelled (storia contabile nel mese emissione).
+- Esclude solo draft (mai emesse).
+- NC TD04 sommata con segno NEGATIVO nel mese del NC.
+- Esempio: gennaio TD01 +1000 + marzo NC TD04 -1000 = saldo 0 netto.
+- Pre-fix: gennaio cancellato sparito + NC TD04 +1000 = saldo errato.
+- outstanding non più sporcato da NC (era credito, non debito da incassare).
+
+**A5 — Q5 root cause vero**:
+- `planning.py:2301 bulk_edit_bookings`: shift temporale su booking già
+  `done` NON chiamava `recompute_for_booking` (era gated solo su
+  state==done target). Causa Q5 reported Matteo (CR list maturato stale
+  finché si apre dettaglio).
+- Fix: dopo applicazione shift temporale, se booking è already done,
+  chiama recompute. Patch alpha.113 (reconcile-all su page load) ora è
+  fallback, root cause risolto.
+
+**A6 — Storno NC closing reset JCL lost**:
+- Storno NC TD04 di closing invoice riapriva Project a `active` ma le
+  JCL marcate `lost` con `billed_amount=0` durante closing (zero-approved
+  in batch) restavano `lost` permanente.
+- Fix: dopo reset Project.finance_status, query JCL lost+billed_amount=0
+  → reset a `not_billed`.
+
+**A7 — Double-close race lock**:
+- `emit_closing_invoice`: `with_for_update()` su Project precheck per
+  prevenire 2 admin concorrenti che emettono 2 closing per stesso
+  progetto. No-op su SQLite WAL (writer serializzato) ma forward-compat
+  PostgreSQL.
+
+**A8 — OverheadCost code COUNT bug**:
+- `overhead._next_code` usava `func.count()` filtrato da soft-delete
+  listener → record cestinati invisibili ma codice UNIQUE già usato →
+  collision al next INSERT (pattern feedback_soft_delete_unique_bypass).
+- Fix: `order_by id desc` + `execution_options(include_deleted=True)`.
+- `anomalies.py` duplicato → delego al generatore canonico.
+
+**A9 — update_booking JCL re-assign recompute**:
+- PUT /api/bookings/{id} con cambio `job_cost_line_id` SENZA touch
+  assignments saltava recompute (gate solo su `assignments is not None`).
+- Fix: traccia `_old_jcl_id_for_resync` prima del cambio. Se booking
+  done E (assignments OR JCL changed), ricomputa vecchia + nuova.
+
+**A10 — Resource delink supplier save**:
+- Cambiare risorsa associata a fornitore lasciava la precedente con
+  `supplier_id` puntato (dirty link).
+- Fix: traccia `_prevLinkedResourceId` in editSupplier. Su save, se
+  diversa da nuova, PUT Resource precedente con supplier_id vuoto.
+
+**A11 — job_id senza project_id**:
+- Modal fattura passiva: clearare progetto lasciava job select valued →
+  submit inviava `job_id` orfano (no project).
+- Fix: progetto onchange resetta job select. saveInvoice append job_id
+  solo se project_id presente.
+
+**A12 — /projects?client_id sconosciuto**:
+- Se filter-client option non esiste (cliente cestinato, cross-tenant),
+  `sel.value = X` silent no-op → mostrava tutti i progetti senza warning.
+- Fix: confronta sel.value !== clientFilter → toast warning.
+
+**A13 — + Crea risorsa deferred new supplier**:
+- Bottone "+ Crea risorsa" era sempre enabled ma `msCreateResourceFromSupplier`
+  bloccava con toast se supplier_id mancante (UX dead-end).
+- Fix: disabilitato + opacity 0.5 + tooltip esplicativo finché fornitore
+  non salvato. Si abilita auto in editSupplier() e dopo save.
+
+**A14 — Drawer naming flush right sidebar**:
+- Drawer naming builder aveva `left:0` → copriva sidebar.
+- Fix: `left: var(--sidebar-w)`.
+
+**A15 — Tenant scope sweep nuovi FK**:
+- `SupplierInvoice.resource_id/project_id/job_id`: validate tenant in
+  POST + PUT (era cross-tenant bypass).
+- `Resource.supplier_id`: validate tenant in CREATE + UPDATE.
+- Closing precheck/emit + NumberingConfig + Client.admin_email: già
+  tenant-safe via filtri esistenti.
+
+**A16 — Zero-accrued JCL precheck closing**:
+- Closing precheck ora ritorna `zero_accrued_count`, `zero_accrued_total_quoted`,
+  `zero_accrued_sample`: JCL con `not_billed` + `total_quoted>0` +
+  `total_accrued=0` (preventivate ma mai eseguite).
+- UI mostra banner ⚠ "X voci preventivate ma non eseguite" con confronto
+  quotato vs maturato (0) per double-check pre-chiusura. Non bloccano.
+- Decisione Matteo: vanno comparate con quotazione prima di lost.
+
 ## v3.5.0-alpha.113 — Round revisione Matteo 15 mag pomeriggio (11 punti Q1-Q11) (15 maggio 2026)
 
 Continuazione audit. 11 nuovi punti Q1-Q11.

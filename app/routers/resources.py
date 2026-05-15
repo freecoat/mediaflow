@@ -132,6 +132,16 @@ async def create_resource(
         try: cost_type_enum = ResourceCostType(cost_type)
         except ValueError: cost_type_enum = None
 
+    # v3.5.0-alpha.114 A15: tenant scope su supplier_id (create path)
+    if supplier_id:
+        from app.models import Supplier as _Supplier
+        sup_check = db.query(_Supplier).filter(
+            _Supplier.id == supplier_id,
+            _Supplier.tenant_id == current_tenant_id(),
+        ).first()
+        if not sup_check:
+            raise HTTPException(400, f"Fornitore #{supplier_id} non trovato")
+
     r = Resource(
         tenant_id=current_tenant_id(),
         name=name.strip(),
@@ -257,6 +267,15 @@ async def update_resource(
     if not r:
         raise HTTPException(404, "Risorsa non trovata")
     if supplier_id is not None:
+        # v3.5.0-alpha.114 A15: tenant scope su supplier_id
+        if supplier_id:
+            from app.models import Supplier as _Supplier
+            sup = db.query(_Supplier).filter(
+                _Supplier.id == supplier_id,
+                _Supplier.tenant_id == current_tenant_id(),
+            ).first()
+            if not sup:
+                raise HTTPException(400, f"Fornitore #{supplier_id} non trovato")
         r.supplier_id = supplier_id or None
     if name is not None: r.name = name.strip()
     if type is not None: r.type = type
