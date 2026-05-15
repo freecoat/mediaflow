@@ -929,9 +929,32 @@ async def list_movements(asset_id: int, db: Session = Depends(get_db)):
     return [_movement_dict(m) for m in rows]
 
 
-def _next_ddt_number(db: Session) -> str:
-    """Auto-incrementale 'DDT-YYYY-NNN' per tenant."""
+def _next_ddt_number(db: Session, project_code: Optional[str] = None) -> str:
+    """Auto-incrementale 'DDT-YYYY-NNN' per tenant.
+    v3.5.0-alpha.116: cabling NumberingConfig "ddt". Variabili supportate:
+    YYYY/.../NNN/PROJECT_CODE. Fallback legacy."""
     year = datetime.utcnow().year
+    # Try NumberingConfig first
+    try:
+        from app.services.numbering import gen_doc_code
+        code, _ = gen_doc_code(
+            db, "ddt",
+            tenant_id=current_tenant_id(),
+            project_code=project_code,
+        )
+        exists = (
+            db.query(AssetMovement)
+            .filter(
+                AssetMovement.tenant_id == current_tenant_id(),
+                AssetMovement.delivery_note_number == code,
+            )
+            .first()
+        )
+        if not exists:
+            return code
+    except Exception as _e:
+        print(f"[ddt_numbering] gen_doc_code failed, fallback: {_e}")
+    # Fallback legacy: DDT-YYYY-NNN
     last = (
         db.query(AssetMovement)
         .filter(
@@ -1457,9 +1480,32 @@ async def import_manifest(
 # ── Digital ingest + IngestBatch (v3.5.0-alpha.73) ───────────
 
 
-def _next_batch_code(db: Session) -> str:
-    year = datetime.utcnow().year
+def _next_batch_code(db: Session, project_code: Optional[str] = None) -> str:
+    """v3.5.0-alpha.116: cabling NumberingConfig "ingest_batch".
+    Variabili supportate: YYYY/.../NNN/PROJECT_CODE. Fallback legacy."""
     from app.models import IngestBatch
+    year = datetime.utcnow().year
+    # Try NumberingConfig
+    try:
+        from app.services.numbering import gen_doc_code
+        code, _ = gen_doc_code(
+            db, "ingest_batch",
+            tenant_id=current_tenant_id(),
+            project_code=project_code,
+        )
+        exists = (
+            db.query(IngestBatch)
+            .filter(
+                IngestBatch.tenant_id == current_tenant_id(),
+                IngestBatch.code == code,
+            )
+            .first()
+        )
+        if not exists:
+            return code
+    except Exception as _e:
+        print(f"[ingest_batch_numbering] gen_doc_code failed, fallback: {_e}")
+    # Fallback legacy: BATCH-YYYY-NNN
     last = (
         db.query(IngestBatch)
         .filter(

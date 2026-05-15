@@ -1,5 +1,47 @@
 # MediaFlow — Changelog
 
+## v3.5.0-alpha.116 — NumberingConfig cabling completato (Job/OverheadCost/IngestBatch/DDT) + UI vars validation (15 mag 2026 notte)
+
+Completato il cabling NumberingConfig per tutti i 4 generator residui +
+validation lato server e UI greying-out variabili non supportate.
+
+**Nuovi doc_type supportati**:
+- `overhead_cost` — Spese aziendali (default OH-{YYYY}-{NNNN})
+- `ingest_batch` — Batch ingest fisico (default BATCH-{YYYY}-{NNN})
+- `ddt` — DDT spedizione (default DDT-{YYYY}-{NNN})
+- `job` — già supportato in α.115, ora wired
+
+Aggiunti a `NUMBERING_DOC_TYPES` (UI /settings#numbering) + a
+`_DOC_VARS_SUPPORTED` / `_DOC_DEFAULTS` in `numbering.py`.
+
+**Cabling per generator**:
+- `_next_job_code` (quotes.py): prova `gen_doc_code("job")`, fallback
+  al while-loop legacy su collision con job esistente.
+- `_next_code` (overhead.py): prova `gen_doc_code("overhead_cost")`,
+  fallback order_by id desc legacy se config assente/collision.
+- `_next_batch_code` (physical_assets.py): prova `gen_doc_code("ingest_batch")`,
+  fallback BATCH-YYYY-NNN legacy.
+- `_next_ddt_number` (physical_assets.py): prova `gen_doc_code("ddt")`,
+  fallback DDT-YYYY-NNN legacy.
+
+**Variabili supportate per doc_type**:
+- `overhead_cost`: solo date+seq (no project/client)
+- `ingest_batch` / `ddt`: date+seq+PROJECT_CODE
+- `job`: date+seq+PROJECT_CODE (sempre disponibile)
+
+**UI validation**:
+- `/settings/api/numbering` ritorna ora `supported_vars` per ogni doc_type.
+- Builder drag&drop: variabili non supportate per il doc_type aperto
+  vengono mostrate **greyed-out + disabled + tooltip esplicativo**.
+- `PUT /settings/api/numbering/{doc_type}`: backend valida pattern via
+  `validate_pattern()`. Rifiuta 400 con messaggio chiaro se variabile
+  fuori supportate (es. `{PROJECT_CODE}` in pattern di `overhead_cost`).
+
+**Pattern collision safety**:
+- Tutti i generator verificano uniqueness pre-INSERT. Se NumberingConfig
+  produce un codice già usato, fallback automatico a logica legacy. Zero
+  rischio crash da config mal configurata.
+
 ## v3.5.0-alpha.115 — Q11 cost-side + NumberingConfig cabling + reconcile-all perf (15 mag 2026 notte)
 
 3 punti pesanti dall'audit deep-dive.

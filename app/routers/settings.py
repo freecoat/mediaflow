@@ -690,6 +690,10 @@ NUMBERING_DOC_TYPES = [
     {"key": "job",                  "label": "Job",                   "default": "{PROJECT_CODE}-J{NNN}"},
     {"key": "cost_report_export",   "label": "Export Cost Report",    "default": "CR-{PROJECT_CODE}-{YYYYMMDD}"},
     {"key": "supplier_invoice",     "label": "Fattura passiva",       "default": "FP-{YYYY}-{NNN}"},
+    # v3.5.0-alpha.116 — spese aziendali + logistica fisica
+    {"key": "overhead_cost",        "label": "Spese aziendali (overhead)", "default": "OH-{YYYY}-{NNNN}"},
+    {"key": "ingest_batch",         "label": "Batch ingest fisico",   "default": "BATCH-{YYYY}-{NNN}"},
+    {"key": "ddt",                  "label": "DDT spedizione",        "default": "DDT-{YYYY}-{NNN}"},
 ]
 
 NUMBERING_VARS = [
@@ -711,6 +715,7 @@ async def list_numbering(db: Session = Depends(get_db)):
     """Restituisce configurazione attuale + default per ogni doc_type.
     Se record assenti per tenant, ritorna default come placeholder."""
     from app.models.models import NumberingConfig
+    from app.services.numbering import supported_vars
     tid = current_tenant_id()
     existing = {n.doc_type: n for n in db.query(NumberingConfig).filter(
         NumberingConfig.tenant_id == tid
@@ -728,6 +733,8 @@ async def list_numbering(db: Session = Depends(get_db)):
             "current_seq": rec.current_seq if rec else 0,
             "configured": bool(rec),
             "notes": (rec.notes if rec else None),
+            # v3.5.0-alpha.116: variabili supportate per questo doc_type
+            "supported_vars": sorted(list(supported_vars(spec["key"]))),
         })
     return {"vars": NUMBERING_VARS, "configs": rows}
 
@@ -741,11 +748,22 @@ async def upsert_numbering(
     db: Session = Depends(get_db),
 ):
     from app.models.models import NumberingConfig
+    from app.services.numbering import validate_pattern
     valid = {s["key"] for s in NUMBERING_DOC_TYPES}
     if doc_type not in valid:
         raise HTTPException(400, f"doc_type non valido: {doc_type}")
     if not format_pattern.strip():
         raise HTTPException(400, "format_pattern obbligatorio")
+    # v3.5.0-alpha.116: validate variabili supportate per doc_type
+    bad_var = validate_pattern(doc_type, format_pattern.strip())
+    if bad_var:
+        from app.services.numbering import supported_vars
+        allowed = sorted(supported_vars(doc_type))
+        raise HTTPException(
+            400,
+            f"Variabile {{{bad_var}}} non supportata per {doc_type}. "
+            f"Variabili valide: {', '.join('{'+v+'}' for v in allowed)}."
+        )
     tid = current_tenant_id()
     rec = db.query(NumberingConfig).filter(
         NumberingConfig.tenant_id == tid,

@@ -131,6 +131,9 @@ _DOC_VARS_SUPPORTED: dict[str, set[str]] = {
     "cost_report_export":  {"YYYY","YY","MM","DD","YYYYMMDD","NNN","NN","NNNN","PROJECT_CODE"},
     "supplier_invoice":    {"YYYY","YY","MM","DD","YYYYMMDD","NNN","NN","NNNN"},
     "overhead_cost":       {"YYYY","YY","MM","DD","YYYYMMDD","NNN","NN","NNNN"},
+    # v3.5.0-alpha.116 — Ingest batch + DDT (logistica fisica)
+    "ingest_batch":        {"YYYY","YY","MM","DD","YYYYMMDD","NNN","NN","NNNN","PROJECT_CODE"},
+    "ddt":                 {"YYYY","YY","MM","DD","YYYYMMDD","NNN","NN","NNNN","PROJECT_CODE"},
 }
 
 _DOC_DEFAULTS: dict[str, str] = {
@@ -143,6 +146,8 @@ _DOC_DEFAULTS: dict[str, str] = {
     "cost_report_export":  "CR-{PROJECT_CODE}-{YYYYMMDD}",
     "supplier_invoice":    "FP-{YYYY}-{NNN}",
     "overhead_cost":       "OH-{YYYY}-{NNNN}",
+    "ingest_batch":        "BATCH-{YYYY}-{NNN}",
+    "ddt":                 "DDT-{YYYY}-{NNN}",
 }
 
 

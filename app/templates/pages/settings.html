@@ -943,15 +943,28 @@ function _nmbRenderBuilder() {
   document.getElementById('nmb-pattern-preview').textContent = _nmbBlocks.join('') || '(vuoto)';
   const pal = document.getElementById('nmb-blocks-palette');
   while (pal.firstChild) pal.removeChild(pal.firstChild);
+  // v3.5.0-alpha.116: filtra/greys-out variabili non supportate per doc_type
+  const currentDoc = (_nmbData.configs || []).find(c => c.doc_type === _nmbCurrent);
+  const supportedSet = new Set(currentDoc?.supported_vars || []);
   (_nmbData.vars || []).forEach(v => {
+    const varName = v.v.replace(/[{}]/g, '');
+    const isSupported = supportedSet.size === 0 || supportedSet.has(varName);
     const btn = document.createElement('button');
     btn.type = 'button';
-    btn.style.cssText = 'padding:5px 9px; background:rgba(98,114,245,.08); color:var(--indigo2); ' +
-      'border:1px solid rgba(98,114,245,.30); border-radius:14px; font-family:monospace; ' +
-      'font-size:11px; cursor:pointer;';
+    if (isSupported) {
+      btn.style.cssText = 'padding:5px 9px; background:rgba(98,114,245,.08); color:var(--indigo2); ' +
+        'border:1px solid rgba(98,114,245,.30); border-radius:14px; font-family:monospace; ' +
+        'font-size:11px; cursor:pointer;';
+      btn.title = v.desc;
+      btn.onclick = () => { _nmbBlocks.push(v.v); _nmbRenderBuilder(); };
+    } else {
+      btn.style.cssText = 'padding:5px 9px; background:rgba(148,163,184,.10); color:var(--text3); ' +
+        'border:1px dashed var(--border); border-radius:14px; font-family:monospace; ' +
+        'font-size:11px; cursor:not-allowed; opacity:.5;';
+      btn.title = v.desc + ' — non disponibile per questo tipo di documento';
+      btn.disabled = true;
+    }
     btn.textContent = v.v;
-    btn.title = v.desc;
-    btn.onclick = () => { _nmbBlocks.push(v.v); _nmbRenderBuilder(); };
     pal.appendChild(btn);
   });
   _nmbServerPreview();

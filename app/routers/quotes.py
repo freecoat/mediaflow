@@ -32,10 +32,9 @@ CATEGORY_FALLBACK = "Altro"
 def _next_job_code(db: Session, project: Project) -> str:
     """v3.5.0-alpha.66.14.8 — Genera codice job '{PROJECT_CODE}-J{N}'
     progressivo per il progetto.
-
-    BYPASS soft-delete via numbering service (i job cestinati occupano il
-    code UNIQUE). Pattern format diverso da prefix-{NNN}: qui usiamo
-    while-loop sul SET completo dei code esistenti per il progetto.
+    v3.5.0-alpha.116 — Cabling NumberingConfig "job". Variabili supportate:
+    YYYY/.../NNN/PROJECT_CODE. Fallback al pattern legacy se config assente
+    o se produce collision (job già esiste con quel code).
     """
     base = (project.code or f"P{project.id}").strip()
     # include_deleted=True così i job in cestino non liberano il code
@@ -45,8 +44,24 @@ def _next_job_code(db: Session, project: Project) -> str:
         .filter(Job.project_id == project.id)
         .all()
     )
-    n = 1
     used = {j.code for j in existing if j.code}
+
+    # Try NumberingConfig first
+    try:
+        from app.services.numbering import gen_doc_code
+        code, _ = gen_doc_code(
+            db, "job",
+            tenant_id=current_tenant_id(),
+            project_code=base,
+        )
+        # Se collision con un job esistente, fallback al while-loop
+        if code not in used:
+            return code
+    except Exception as _e:
+        print(f"[job_numbering] gen_doc_code failed, fallback: {_e}")
+
+    # Fallback legacy: while-loop pattern {BASE}-J{N}
+    n = 1
     while f"{base}-J{n}" in used:
         n += 1
     return f"{base}-J{n}"

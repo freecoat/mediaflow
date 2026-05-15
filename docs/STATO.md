@@ -8,6 +8,47 @@
 
 ## Versione corrente
 
+**v3.5.0-alpha.116** — 15 maggio 2026 notte — NumberingConfig cabling completato + UI vars validation
+
+**Cabling completato per tutti i generator**:
+- Quote.number (α.115)
+- BillingBatch.code (α.115)
+- Job.code (α.116)
+- OverheadCost.code (α.116)
+- IngestBatch.code (α.116)
+- DDT delivery_note_number (α.116)
+
+**3 nuovi doc_type esposti in /settings#numbering**:
+- overhead_cost (date+seq, no project/client)
+- ingest_batch (date+seq+PROJECT_CODE)
+- ddt (date+seq+PROJECT_CODE)
+
+**UI validation greyed-out**:
+- Builder drag&drop mostra variabili non supportate come greyed/disabled
+  con tooltip "non disponibile per questo tipo".
+- Backend `validate_pattern()` rifiuta 400 su variabili fuori scope.
+
+**Pattern collision safety**:
+- Tutti i 6 generator usano `gen_doc_code()` con verifica uniqueness +
+  fallback automatico alla logica legacy in caso di config errata o
+  collision. Zero risk crash.
+
+**Da testare Matteo**:
+1. /settings#numbering: vedi 11 doc_type (era 8). Per overhead_cost
+   PROJECT_CODE/CLIENT_CODE greyed-out con tooltip.
+2. Salva `OH-{PROJECT_CODE}-{NNNN}` per overhead → backend rifiuta 400.
+3. Crea nuova spesa azienda → codice OH-2026-0001 (o custom se hai
+   impostato format).
+4. Crea ingest batch / DDT → codici riflettono config se presente.
+5. Crea Job da quote → code segue config "job" (fallback {PROJECT_CODE}-J{N}).
+
+**Pendente alpha.117+**:
+- Anomaly type "cost_estimate_vs_real_drift" per forecast.
+- UI background indicator durante reconcile-all (Strategy C async).
+- Test estensivi alpha.114 + alpha.115 + alpha.116.
+
+## (versione precedente)
+
 **v3.5.0-alpha.115** — 15 maggio 2026 notte — Q11 cost-side + NumberingConfig cabling + reconcile-all perf
 
 **3 punti pesanti dall'audit chiusi**:

@@ -68,12 +68,33 @@ def _overhead_to_dict(o: OverheadCost) -> dict:
 
 def _next_code(db: Session, year: int) -> str:
     """Auto-numero OH-YYYY-NNNN.
-    v3.5.0-alpha.114 A8: COUNT(*) era buggy — soft-delete listener filtra i
-    cestinati dalla count, ma il record cestinato MANTIENE il codice nel DB
-    (UNIQUE). Risultato: collision al next INSERT se l'ultimo era cestinato.
-    Pattern già documentato in feedback_soft_delete_unique_bypass.md.
-    Fix: order_by id desc + parse tail, con execution_options include_deleted=True.
+    v3.5.0-alpha.114 A8: fix soft-delete bypass (era COUNT buggy).
+    v3.5.0-alpha.116: cabling NumberingConfig "overhead_cost". Variabili
+    supportate: YYYY/.../NNNN. Fallback legacy se config assente/collision.
     """
+    # Try NumberingConfig first
+    try:
+        from app.services.numbering import gen_doc_code
+        code, _ = gen_doc_code(
+            db, "overhead_cost",
+            tenant_id=current_tenant_id(),
+        )
+        # Verifica uniqueness vs DB esistente (include_deleted: cestinati occupano UNIQUE)
+        exists = (
+            db.query(OverheadCost)
+            .execution_options(include_deleted=True)
+            .filter(
+                OverheadCost.tenant_id == current_tenant_id(),
+                OverheadCost.code == code,
+            )
+            .first()
+        )
+        if not exists:
+            return code
+    except Exception as _e:
+        print(f"[overhead_numbering] gen_doc_code failed, fallback: {_e}")
+
+    # Fallback legacy: order_by id desc + parse tail
     prefix = f"OH-{year}-"
     last = (
         db.query(OverheadCost)
