@@ -87,7 +87,7 @@
     <div class="settings-tab" data-pane="mfa" onclick="showPane('mfa')"><i data-lucide="shield-check" style="width:14px;height:14px;vertical-align:-2px;"></i> 🔒 MFA TOTP</div>
     <div class="settings-tab" data-pane="company" onclick="showPane('company')"><i data-lucide="building-2" style="width:14px;height:14px;vertical-align:-2px;"></i> Azienda</div>
     {% if is_admin(user) %}
-    <div class="settings-tab" data-pane="numbering" onclick="showPane('numbering')"><i data-lucide="hash" style="width:14px;height:14px;vertical-align:-2px;"></i> Numerazione</div>
+    <div class="settings-tab" data-pane="numbering" onclick="showPane('numbering')"><i data-lucide="hash" style="width:14px;height:14px;vertical-align:-2px;"></i> Naming conventions</div>
     <div class="settings-tab" data-pane="data" onclick="showPane('data')"><i data-lucide="database" style="width:14px;height:14px;vertical-align:-2px;"></i> Dati</div>
     <div class="settings-tab" data-pane="storage" onclick="showPane('storage')"><i data-lucide="hard-drive" style="width:14px;height:14px;vertical-align:-2px;"></i> Storage</div>
     {% endif %}
@@ -581,22 +581,74 @@ AWS_S3_DEFAULT_BUCKET=mediaflow-prod</pre>
       </div>
     </div>
 
-    <!-- ── Pannello Numerazione (admin only, v3.5.0-alpha.112) ── -->
+    <!-- ── Pannello Naming conventions (admin only, v3.5.0-alpha.113) ── -->
     <div class="settings-pane" id="pane-numbering">
       <div class="card mb-4">
-        <div class="card-title mb-2"><i data-lucide="hash" style="width:16px;height:16px;vertical-align:-3px;"></i> Regole di numerazione</div>
+        <div class="card-title mb-2"><i data-lucide="hash" style="width:16px;height:16px;vertical-align:-3px;"></i> Naming conventions</div>
         <p class="text-sm text-muted mb-3">
-          Definisci il formato dei codici e numerazioni emessi (quote, batch
-          fatturazione, fatture, job, export). Le regole impostate qui valgono
-          solo per i <b>documenti emessi dopo la modifica</b>: lo storico
-          esistente NON viene rinumerato. Reset annuale: il progressivo riparte
-          da 1 a inizio anno solare.
+          Definisci il formato dei codici per ogni documento (quote, batch,
+          fatture, job, export). Le regole valgono solo per i documenti
+          emessi <b>dopo la modifica</b>: lo storico NON viene rinumerato.
+          <b>Click su una regola → si apre il builder drag&drop sulla sinistra.</b>
         </p>
-        <div class="text-xs text-muted mb-3" id="nmb-vars-help">
-          Variabili supportate: caricamento…
-        </div>
         <div id="nmb-list">
           <div class="text-sm text-muted">Caricamento regole…</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- v3.5.0-alpha.113: Drawer left builder drag&drop naming -->
+    <div class="modal-overlay" id="modal-naming-builder" style="background:rgba(0,0,0,0.45);">
+      <div class="modal" id="nmb-builder-drawer"
+           style="max-width:520px; width:520px; height:100vh; max-height:100vh;
+                  position:fixed; top:0; left:0; right:auto; border-radius:0;
+                  border-left:none; border-right:1px solid var(--border2);
+                  display:flex; flex-direction:column; animation:none;">
+        <div class="modal-header">
+          <span class="modal-title">🧩 <span id="nmb-builder-title">Naming builder</span></span>
+          <button class="btn btn-ghost btn-icon" onclick="nmbCloseBuilder()">✕</button>
+        </div>
+        <div class="modal-body" style="overflow-y:auto;">
+          <div class="text-xs text-muted mb-2">Pattern attuale:</div>
+          <div id="nmb-pattern-preview" class="mono"
+               style="padding:10px 12px; background:var(--bg3); border:1px dashed var(--border);
+                      border-radius:6px; min-height:44px; font-size:14px; line-height:1.5;
+                      word-break:break-all; margin-bottom:10px;"></div>
+          <div class="text-xs text-muted mb-2">→ Prossimo emesso:</div>
+          <div id="nmb-builder-preview" class="mono"
+               style="padding:6px 10px; background:var(--bg2); border-radius:4px;
+                      font-size:12px; color:var(--indigo2); margin-bottom:14px;"></div>
+
+          <div class="card-title" style="font-size:12px; margin-top:8px;">Blocchi attivi (riordina, rimuovi)</div>
+          <div class="text-xs text-muted mb-2">Drag per riordinare. Click ✕ per togliere.</div>
+          <div id="nmb-blocks-active"
+               style="min-height:60px; padding:8px; background:var(--bg2);
+                      border:1px dashed var(--border); border-radius:6px;
+                      margin-bottom:14px; display:flex; flex-wrap:wrap; gap:6px;"></div>
+
+          <div class="card-title" style="font-size:12px; margin-top:14px;">Variabili disponibili</div>
+          <div class="text-xs text-muted mb-2">Click per aggiungere alla fine. Oppure inserisci testo libero qui sotto.</div>
+          <div id="nmb-blocks-palette"
+               style="display:flex; flex-wrap:wrap; gap:6px; margin-bottom:14px;"></div>
+
+          <div class="form-group">
+            <label class="form-label text-xs">Inserisci testo/separatore custom</label>
+            <div style="display:flex; gap:6px;">
+              <input type="text" class="form-input" id="nmb-custom-text" placeholder="es. -" maxlength="20" style="flex:1;">
+              <button class="btn btn-secondary btn-sm" type="button" onclick="nmbAddCustom()">+ Aggiungi</button>
+            </div>
+          </div>
+
+          <div class="form-group" style="margin-top:14px;">
+            <label class="form-label" style="display:flex; align-items:center; gap:8px;">
+              <input type="checkbox" id="nmb-builder-reset">
+              Reset progressivo a inizio anno
+            </label>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button class="btn btn-secondary" onclick="nmbCloseBuilder()">Annulla</button>
+          <button class="btn btn-primary" onclick="nmbSaveFromBuilder()">💾 Salva regola</button>
         </div>
       </div>
     </div>
@@ -765,98 +817,173 @@ function showPane(id) {
   if (id === 'numbering') nmbReload();
 }
 
-// v3.5.0-alpha.112 — Regole di numerazione documenti
+// v3.5.0-alpha.113 — Naming conventions builder drag&drop
+let _nmbData = null;
+let _nmbCurrent = null;
+let _nmbBlocks = [];
+
 async function nmbReload() {
   const list = document.getElementById('nmb-list');
-  const help = document.getElementById('nmb-vars-help');
   if (!list) return;
-  let data;
-  try { data = await api('GET', '/settings/api/numbering'); }
+  try { _nmbData = await api('GET', '/settings/api/numbering'); }
   catch(e) { toast(e.message, 'error'); return; }
-  if (help) {
-    help.textContent = 'Variabili: ' + (data.vars || []).map(v => v.v + ' (' + v.desc + ')').join(' · ');
-  }
-  // Costruisco le card via DOM (no innerHTML su untrusted: dati provengono
-  // dall'endpoint server in /settings/api/numbering — controllato).
+  const data = _nmbData;
   while (list.firstChild) list.removeChild(list.firstChild);
   (data.configs || []).forEach(c => {
     const card = document.createElement('div');
     card.className = 'card';
-    card.style.cssText = 'margin-bottom:10px; padding:14px;';
+    card.style.cssText = 'margin-bottom:8px; padding:12px 14px; cursor:pointer; transition:border-color .12s;';
+    card.onmouseenter = () => card.style.borderColor = 'var(--indigo)';
+    card.onmouseleave = () => card.style.borderColor = '';
+    card.onclick = () => nmbOpenBuilder(c.doc_type);
     const row = document.createElement('div');
-    row.style.cssText = 'display:flex; justify-content:space-between; align-items:start; gap:12px; flex-wrap:wrap;';
-    const leftCol = document.createElement('div');
-    leftCol.style.cssText = 'flex:1; min-width:240px;';
+    row.style.cssText = 'display:flex; justify-content:space-between; align-items:center; gap:12px;';
+    const left = document.createElement('div');
     const title = document.createElement('div');
     title.style.cssText = 'font-weight:600; font-size:13px;';
     title.textContent = c.label;
     const sub = document.createElement('div');
     sub.className = 'text-xs text-muted';
     sub.style.cssText = 'margin-top:2px;';
-    sub.textContent = 'Default: ' + c.default_pattern + (c.configured ? '' : ' (non personalizzato)');
-    leftCol.appendChild(title);
-    leftCol.appendChild(sub);
-    const rightCol = document.createElement('div');
-    rightCol.style.cssText = 'display:flex; gap:8px; flex-wrap:wrap; flex:2; min-width:280px;';
-    const fmtInput = document.createElement('input');
-    fmtInput.className = 'form-input mono';
-    fmtInput.id = 'nmb-' + c.doc_type + '-fmt';
-    fmtInput.value = c.format_pattern;
-    fmtInput.style.cssText = 'flex:1; min-width:200px;';
-    const resetLbl = document.createElement('label');
-    resetLbl.className = 'text-xs';
-    resetLbl.style.cssText = 'display:flex; align-items:center; gap:6px;';
-    const resetCb = document.createElement('input');
-    resetCb.type = 'checkbox';
-    resetCb.id = 'nmb-' + c.doc_type + '-reset';
-    resetCb.checked = !!c.reset_yearly;
-    resetLbl.appendChild(resetCb);
-    resetLbl.appendChild(document.createTextNode(' Reset annuale'));
-    const previewBtn = document.createElement('button');
-    previewBtn.type = 'button';
-    previewBtn.className = 'btn btn-sm btn-ghost';
-    previewBtn.textContent = '👁 Preview';
-    previewBtn.onclick = () => nmbPreview(c.doc_type);
-    const saveBtn = document.createElement('button');
-    saveBtn.type = 'button';
-    saveBtn.className = 'btn btn-sm btn-primary';
-    saveBtn.textContent = 'Salva';
-    saveBtn.onclick = () => nmbSave(c.doc_type);
-    rightCol.appendChild(fmtInput);
-    rightCol.appendChild(resetLbl);
-    rightCol.appendChild(previewBtn);
-    rightCol.appendChild(saveBtn);
-    row.appendChild(leftCol);
-    row.appendChild(rightCol);
+    const patSpan = document.createElement('span');
+    patSpan.className = 'mono';
+    patSpan.textContent = c.format_pattern;
+    sub.appendChild(patSpan);
+    if (!c.configured) {
+      const def = document.createElement('span');
+      def.textContent = ' · default';
+      def.style.opacity = '0.65';
+      sub.appendChild(def);
+    }
+    left.appendChild(title); left.appendChild(sub);
+    const arrow = document.createElement('div');
+    arrow.style.cssText = 'color:var(--text3); font-size:18px;';
+    arrow.textContent = '🧩';
+    arrow.title = 'Apri builder drag&drop';
+    row.appendChild(left); row.appendChild(arrow);
     card.appendChild(row);
-    const previewLine = document.createElement('div');
-    previewLine.className = 'text-xs mono';
-    previewLine.id = 'nmb-' + c.doc_type + '-preview';
-    previewLine.style.cssText = 'margin-top:6px; color:var(--text3);';
-    card.appendChild(previewLine);
     list.appendChild(card);
   });
 }
 
-async function nmbPreview(doc_type) {
-  try {
-    const fd = new FormData();
-    const r = await api('POST', `/settings/api/numbering/${doc_type}/preview`, fd);
-    const el = document.getElementById('nmb-' + doc_type + '-preview');
-    if (el) el.textContent = '→ Prossimo: ' + r.preview;
-  } catch(e) { toast(e.message, 'error'); }
+// Tokenizza pattern in blocchi: {VAR} o testo
+function _nmbTokenize(pattern) {
+  const tokens = [];
+  const re = /(\{[A-Z]+\})/g;
+  let last = 0;
+  let m;
+  while ((m = re.exec(pattern)) !== null) {
+    if (m.index > last) tokens.push(pattern.substring(last, m.index));
+    tokens.push(m[1]);
+    last = m.index + m[1].length;
+  }
+  if (last < pattern.length) tokens.push(pattern.substring(last));
+  return tokens.filter(t => t.length > 0);
 }
 
-async function nmbSave(doc_type) {
-  const fmt = document.getElementById('nmb-' + doc_type + '-fmt')?.value.trim();
-  const reset = document.getElementById('nmb-' + doc_type + '-reset')?.checked;
-  if (!fmt) { toast('Format obbligatorio', 'warning'); return; }
+function nmbOpenBuilder(doc_type) {
+  const c = (_nmbData.configs || []).find(x => x.doc_type === doc_type);
+  if (!c) return;
+  _nmbCurrent = doc_type;
+  _nmbBlocks = _nmbTokenize(c.format_pattern);
+  document.getElementById('nmb-builder-title').textContent = c.label;
+  document.getElementById('nmb-builder-reset').checked = !!c.reset_yearly;
+  _nmbRenderBuilder();
+  openModal('modal-naming-builder');
+}
+
+function nmbCloseBuilder() {
+  closeModal('modal-naming-builder');
+  _nmbCurrent = null;
+  _nmbBlocks = [];
+}
+
+function _nmbRenderBuilder() {
+  const act = document.getElementById('nmb-blocks-active');
+  while (act.firstChild) act.removeChild(act.firstChild);
+  _nmbBlocks.forEach((tok, idx) => {
+    const chip = document.createElement('div');
+    chip.draggable = true;
+    chip.dataset.idx = String(idx);
+    const isVar = tok.startsWith('{') && tok.endsWith('}');
+    chip.style.cssText = 'display:inline-flex; align-items:center; gap:4px; padding:5px 9px; ' +
+      'background:' + (isVar ? 'rgba(98,114,245,.15)' : 'var(--bg3)') + '; ' +
+      'color:' + (isVar ? 'var(--indigo2)' : 'var(--text)') + '; ' +
+      'border:1px solid ' + (isVar ? 'rgba(98,114,245,.4)' : 'var(--border)') + '; ' +
+      'border-radius:14px; font-family:monospace; font-size:12px; cursor:grab; user-select:none;';
+    chip.textContent = tok;
+    const x = document.createElement('span');
+    x.textContent = '✕';
+    x.style.cssText = 'opacity:0.6; cursor:pointer; padding:0 2px;';
+    x.onclick = (e) => { e.stopPropagation(); _nmbBlocks.splice(idx, 1); _nmbRenderBuilder(); };
+    chip.appendChild(x);
+    chip.ondragstart = (e) => { e.dataTransfer.setData('text/plain', String(idx)); chip.style.opacity = '0.5'; };
+    chip.ondragend = () => { chip.style.opacity = '1'; };
+    chip.ondragover = (e) => e.preventDefault();
+    chip.ondrop = (e) => {
+      e.preventDefault();
+      const fromIdx = parseInt(e.dataTransfer.getData('text/plain'), 10);
+      const toIdx = idx;
+      if (Number.isNaN(fromIdx) || fromIdx === toIdx) return;
+      const [moved] = _nmbBlocks.splice(fromIdx, 1);
+      _nmbBlocks.splice(toIdx, 0, moved);
+      _nmbRenderBuilder();
+    };
+    act.appendChild(chip);
+  });
+  if (!_nmbBlocks.length) {
+    const hint = document.createElement('div');
+    hint.className = 'text-xs text-muted';
+    hint.style.cssText = 'padding:10px; font-style:italic;';
+    hint.textContent = 'Nessun blocco. Click su una variabile sotto per aggiungere.';
+    act.appendChild(hint);
+  }
+  document.getElementById('nmb-pattern-preview').textContent = _nmbBlocks.join('') || '(vuoto)';
+  const pal = document.getElementById('nmb-blocks-palette');
+  while (pal.firstChild) pal.removeChild(pal.firstChild);
+  (_nmbData.vars || []).forEach(v => {
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.style.cssText = 'padding:5px 9px; background:rgba(98,114,245,.08); color:var(--indigo2); ' +
+      'border:1px solid rgba(98,114,245,.30); border-radius:14px; font-family:monospace; ' +
+      'font-size:11px; cursor:pointer;';
+    btn.textContent = v.v;
+    btn.title = v.desc;
+    btn.onclick = () => { _nmbBlocks.push(v.v); _nmbRenderBuilder(); };
+    pal.appendChild(btn);
+  });
+  _nmbServerPreview();
+}
+
+async function _nmbServerPreview() {
+  if (!_nmbCurrent) return;
   try {
     const fd = new FormData();
-    fd.append('format_pattern', fmt);
+    const r = await api('POST', '/settings/api/numbering/' + _nmbCurrent + '/preview', fd);
+    document.getElementById('nmb-builder-preview').textContent = '→ ' + (r.preview || '');
+  } catch(e) {}
+}
+
+function nmbAddCustom() {
+  const txt = document.getElementById('nmb-custom-text').value;
+  if (!txt) return;
+  _nmbBlocks.push(txt);
+  document.getElementById('nmb-custom-text').value = '';
+  _nmbRenderBuilder();
+}
+
+async function nmbSaveFromBuilder() {
+  if (!_nmbCurrent) return;
+  const pattern = _nmbBlocks.join('');
+  if (!pattern) { toast('Pattern vuoto', 'warning'); return; }
+  const reset = document.getElementById('nmb-builder-reset').checked;
+  try {
+    const fd = new FormData();
+    fd.append('format_pattern', pattern);
     fd.append('reset_yearly', reset ? 'true' : 'false');
-    await api('PUT', `/settings/api/numbering/${doc_type}`, fd);
+    await api('PUT', '/settings/api/numbering/' + _nmbCurrent, fd);
     toast('Regola salvata', 'success');
+    nmbCloseBuilder();
     await nmbReload();
   } catch(e) { toast(e.message, 'error'); }
 }

@@ -210,12 +210,14 @@ const CAT_LBL = {
   tax:              'Tasse',
   other:            'Altro',
   write_off:        '⚠ Write-off (LossEntry)',
+  supplier_no_project: '📄 Fatture passive (no progetto)',
 };
 const CAT_COLOR = {
   maintenance:'#fbbf24', software_license:'#6272f5', rent_utilities:'#a78bfa',
   staff_overhead:'#2ec4b6', capex:'#a855f7', training:'#22c55e',
   marketing:'#f472b6', legal_admin:'#94a3b8', bank_fees:'#0ea5e9',
   tax:'#ef4444', other:'#64748b', write_off:'#dc2626',
+  supplier_no_project:'#f59e0b',
 };
 
 window._ohFilters = { category: null, department_id: null, supplier_id: null, from_date: '', to_date: '' };
@@ -291,7 +293,10 @@ async function loadSummary() {
   }
   for (const [cat, amount] of entries) {
     const card = document.createElement('div');
-    card.style.cssText = `padding:10px; border-left:3px solid ${CAT_COLOR[cat]||'#888'}; background:var(--bg2); border-radius:4px;`;
+    card.style.cssText = `padding:10px; border-left:3px solid ${CAT_COLOR[cat]||'#888'}; background:var(--bg2); border-radius:4px; cursor:pointer; transition:transform .12s;`;
+    card.onmouseenter = () => card.style.transform = 'translateY(-1px)';
+    card.onmouseleave = () => card.style.transform = '';
+    card.onclick = () => ohOpenCategoryDetail(cat);
     const lbl = document.createElement('div');
     lbl.className = 'text-xs text-muted';
     lbl.textContent = CAT_LBL[cat] || cat;
@@ -302,6 +307,125 @@ async function loadSummary() {
     card.appendChild(lbl); card.appendChild(amt);
     grid.appendChild(card);
   }
+}
+
+// v3.5.0-alpha.113 — Q6/Q7: drawer dettaglio voci per categoria.
+// Per la categoria virtuale supplier_no_project carica fatture passive
+// del tenant SENZA project_id (non legate ai progetti).
+async function ohOpenCategoryDetail(cat) {
+  let items;
+  if (cat === 'supplier_no_project') {
+    try {
+      const all = await api('GET', '/suppliers/api/invoices');
+      items = (all || []).filter(i => !i.project_id).map(i => ({
+        id: i.id,
+        code: i.number,
+        title: (i.supplier_name || '—') + (i.notes ? (' · ' + i.notes.substring(0, 40)) : ''),
+        cost_date: i.issue_date,
+        amount_net: i.amount_net,
+        amount_total: i.amount_total,
+        category: 'supplier_no_project',
+        _is_supplier: true,
+      }));
+    } catch(e) { toast(e.message || 'Errore caricamento fatture', 'error'); return; }
+  } else {
+    items = (_ohList || []).filter(o => o.category === cat);
+  }
+  let modal = document.getElementById('modal-cat-detail');
+  if (modal) modal.remove();
+  modal = document.createElement('div');
+  modal.id = 'modal-cat-detail';
+  modal.className = 'modal-overlay';
+  modal.style.display = 'flex';
+  const mc = document.createElement('div');
+  mc.className = 'modal';
+  mc.style.maxWidth = '780px';
+  const hdr = document.createElement('div');
+  hdr.className = 'modal-header';
+  const ttl = document.createElement('span');
+  ttl.className = 'modal-title';
+  ttl.textContent = '📊 ' + (CAT_LBL[cat] || cat) + ' · ' + items.length + ' voci';
+  const cls = document.createElement('button');
+  cls.className = 'btn btn-ghost btn-icon';
+  cls.textContent = '✕';
+  cls.onclick = () => modal.remove();
+  hdr.appendChild(ttl); hdr.appendChild(cls);
+  const body = document.createElement('div');
+  body.className = 'modal-body';
+  if (!items.length) {
+    body.textContent = 'Nessuna voce in questa categoria nel periodo selezionato.';
+    body.className += ' text-muted';
+  } else {
+    const table = document.createElement('table');
+    table.className = 'mf-sortable';
+    table.style.width = '100%';
+    const thead = document.createElement('thead');
+    const trH = document.createElement('tr');
+    ['Codice','Titolo','Data','Netto','Totale'].forEach((h,i) => {
+      const th = document.createElement('th');
+      th.textContent = h;
+      if (i >= 3) th.className = 'text-right';
+      trH.appendChild(th);
+    });
+    thead.appendChild(trH);
+    table.appendChild(thead);
+    const tb = document.createElement('tbody');
+    items.sort((a,b) => (b.cost_date || '').localeCompare(a.cost_date || ''));
+    let totN = 0, totT = 0;
+    items.forEach(o => {
+      const aN = o.amount_net || 0;
+      const aT = o.amount_total || aN;
+      totN += aN; totT += aT;
+      const tr = document.createElement('tr');
+      tr.style.cursor = 'pointer';
+      tr.onclick = () => {
+        modal.remove();
+        if (o._is_supplier) {
+          window.location.href = '/suppliers#fattura-' + o.id;
+        } else {
+          editOverhead(o.id);
+        }
+      };
+      const td1 = document.createElement('td');
+      td1.className = 'mono text-xs';
+      td1.textContent = o.code || ('#'+o.id);
+      const td2 = document.createElement('td');
+      td2.textContent = o.title || '';
+      const td3 = document.createElement('td');
+      td3.className = 'text-sm';
+      td3.textContent = o.cost_date || '—';
+      const td4 = document.createElement('td');
+      td4.className = 'mono text-right';
+      td4.textContent = fmtCurrency(aN);
+      const td5 = document.createElement('td');
+      td5.className = 'mono text-right';
+      td5.style.fontWeight = '600';
+      td5.textContent = fmtCurrency(aT);
+      tr.appendChild(td1); tr.appendChild(td2); tr.appendChild(td3);
+      tr.appendChild(td4); tr.appendChild(td5);
+      tb.appendChild(tr);
+    });
+    const trTot = document.createElement('tr');
+    trTot.style.cssText = 'font-weight:700; background:var(--bg3);';
+    const tdLbl = document.createElement('td');
+    tdLbl.colSpan = 3;
+    tdLbl.className = 'text-right';
+    tdLbl.textContent = 'Totale';
+    const tdN = document.createElement('td');
+    tdN.className = 'mono text-right';
+    tdN.textContent = fmtCurrency(totN);
+    const tdT = document.createElement('td');
+    tdT.className = 'mono text-right';
+    tdT.style.color = 'var(--indigo2)';
+    tdT.textContent = fmtCurrency(totT);
+    trTot.appendChild(tdLbl); trTot.appendChild(tdN); trTot.appendChild(tdT);
+    tb.appendChild(trTot);
+    table.appendChild(tb);
+    body.appendChild(table);
+  }
+  mc.appendChild(hdr); mc.appendChild(body);
+  modal.appendChild(mc);
+  document.body.appendChild(modal);
 }
 
 async function loadOverheadList() {

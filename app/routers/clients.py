@@ -183,6 +183,7 @@ async def get_client(client_id: int, db: Session = Depends(get_db)):
         "id": c.id, "name": c.name, "legal_form": c.legal_form,
         "contact_name": c.contact_name, "contact_role": c.contact_role,
         "contact_email": c.contact_email, "contact_phone": c.contact_phone,
+        "admin_email": getattr(c, "admin_email", None),  # v3.5.0-alpha.113
         "vat_number": c.vat_number, "tax_code": c.tax_code,
         "sdi_code": c.sdi_code, "pec": c.pec,
         "address": c.address, "city": c.city, "country": c.country,
@@ -255,6 +256,7 @@ async def update_client(
     contact_role: Optional[str] = Form(None),
     contact_email: Optional[str] = Form(None),
     contact_phone: Optional[str] = Form(None),
+    admin_email: Optional[str] = Form(None),  # v3.5.0-alpha.113
     vat_number: Optional[str] = Form(None),
     tax_code: Optional[str] = Form(None),
     sdi_code: Optional[str] = Form(None),
@@ -276,7 +278,8 @@ async def update_client(
         raise HTTPException(404, "Cliente non trovato")
 
     for field in ("name", "legal_form", "contact_name", "contact_role",
-                  "contact_email", "contact_phone", "vat_number", "tax_code",
+                  "contact_email", "contact_phone", "admin_email",
+                  "vat_number", "tax_code",
                   "sdi_code", "pec", "address", "city", "country",
                   "website", "industry", "company_size", "founded_year", "notes"):
         val = locals()[field]

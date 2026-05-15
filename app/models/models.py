@@ -607,6 +607,10 @@ class Client(Base):
     contact_role: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
     contact_email: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
     contact_phone: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
+    # v3.5.0-alpha.113 — Email amministrazione/ufficio fatturazione.
+    # Usato come destinatario in intestazione fattura (separato dal
+    # contact_email del referente commerciale).
+    admin_email: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
     
     # Dati fiscali
     vat_number: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
@@ -877,6 +881,12 @@ class Resource(Base):
     email: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
     phone: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
     internal_phone: Mapped[Optional[str]] = mapped_column(String(20), nullable=True)
+    # v3.5.0-alpha.113 — link a fornitore esterno (la P.IVA che emette
+    # fatture passive per questa risorsa). Permette il matching automatico
+    # delle fatture ricevute con i booking della risorsa nei job.
+    supplier_id: Mapped[Optional[int]] = mapped_column(
+        ForeignKey("suppliers.id"), nullable=True, index=True
+    )
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
     color: Mapped[str] = mapped_column(String(7), default="#6272f5")
     user_id: Mapped[Optional[int]] = mapped_column(ForeignKey("users.id"), nullable=True)
@@ -890,6 +900,8 @@ class Resource(Base):
     working_hours_policy: Mapped[Optional["WorkingHoursPolicy"]] = relationship(foreign_keys=[working_hours_policy_id])
     job_assignments: Mapped[List["JobResourceAssignment"]] = relationship(back_populates="resource")
     time_punches: Mapped[List["TimePunch"]] = relationship(back_populates="resource")
+    # v3.5.0-alpha.113 — relationship verso fornitore esterno
+    supplier: Mapped[Optional["Supplier"]] = relationship(foreign_keys=[supplier_id])
 
     @property
     def internal_cost_hourly(self) -> Optional[float]:
@@ -1510,6 +1522,13 @@ class SupplierInvoice(Base):
     job_cost_line_id: Mapped[Optional[int]] = mapped_column(
         ForeignKey("job_cost_lines.id"), nullable=True, index=True
     )
+    # v3.5.0-alpha.113 — link a risorsa esterna (freelance/studio/equipment).
+    # Permette di marcare la fattura passiva come "costo di QUESTA risorsa",
+    # così il match con i booking del job genera la quadratura preventivo/
+    # consuntivo costo-side. Opzionale.
+    resource_id: Mapped[Optional[int]] = mapped_column(
+        ForeignKey("resources.id"), nullable=True, index=True
+    )
     amount_net: Mapped[float] = mapped_column(Float, default=0.0)
     vat_rate: Mapped[float] = mapped_column(Float, default=22.0)
     amount_vat: Mapped[float] = mapped_column(Float, default=0.0)
@@ -1524,6 +1543,10 @@ class SupplierInvoice(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
     deleted_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True, index=True)
     supplier: Mapped["Supplier"] = relationship(back_populates="invoices")
+    # v3.5.0-alpha.113 — relationship per joinedload in lista
+    project: Mapped[Optional["Project"]] = relationship(foreign_keys=[project_id])
+    job: Mapped[Optional["Job"]] = relationship(foreign_keys=[job_id])
+    resource: Mapped[Optional["Resource"]] = relationship(foreign_keys=[resource_id])
     payments: Mapped[List["SupplierInvoicePayment"]] = relationship(
         back_populates="invoice", cascade="all, delete-orphan"
     )
@@ -1577,6 +1600,8 @@ class Invoice(Base):
     client_tax_code_snap: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
     client_pec_snap: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
     client_sdi_snap: Mapped[Optional[str]] = mapped_column(String(20), nullable=True)
+    # v3.5.0-alpha.113 — Email amministrazione cliente snapshot
+    client_admin_email_snap: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
     client_address_snap: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     client_zip_snap: Mapped[Optional[str]] = mapped_column(String(20), nullable=True)
     client_city_snap: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)

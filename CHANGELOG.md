@@ -1,5 +1,88 @@
 # MediaFlow — Changelog
 
+## v3.5.0-alpha.113 — Round revisione Matteo 15 mag pomeriggio (11 punti Q1-Q11) (15 maggio 2026)
+
+Continuazione audit. 11 nuovi punti Q1-Q11.
+
+**Hotfix critico nel commit (regressione α.112)**:
+- `base.html:347`: `<script src=".../global.js?v=...">` MANCAVA `</script>`
+  chiusura → tag script aperto rompeva tutto il JS sotto in alcuni
+  browser. Fixato.
+
+**Q1 — Header look temi chiari**:
+- `.topbar-bell`, `.topbar-sidebar-toggle`: color `var(--text)` invece
+  di `--text2` (contrasto pieno cross-theme). Hover usa `var(--indigo)`
+  come accent invece di solo bg-flip.
+- `.topbar-user-role` bg `var(--bg3)` invece di `var(--bg)` (su temi
+  chiari `--bg` era quasi white = badge invisibile).
+- `.topbar-user-logout` color `var(--text)`.
+- `.topbar svg { color: inherit; }` per forzare cascade currentColor.
+
+**Q2 — Vedi Progetti con filtro cliente**:
+- `/projects` legge `?client_id=N` da QS → preseleziona filtro +
+  esegue filterProjects(). Bottone "Vedi progetti" da scheda cliente
+  ora landa con filtro attivo.
+
+**Q3 — Email amministrazione cliente per intestazione fattura**:
+- Nuovo `Client.admin_email` + UI modal cliente (campo separato).
+- Nuovo `Invoice.client_admin_email_snap` (snapshot all'emissione).
+- PDF intestazione include "Att.ne Amministrazione · <email>".
+- Storno NC propaga il snap dalla fattura sorgente.
+
+**Q4 — Naming conventions (rename + builder)**:
+- Tab `/settings#numbering` rinominato `Naming conventions`.
+- Click su regola → drawer LEFT-SIDE 520px con builder drag&drop:
+  blocchi chips draggable (variabili + testo custom). Click variabile
+  in palette → aggiunge al pattern. ✕ rimuove. Drag riordina.
+- Preview live "→ Prossimo emesso" dal server.
+- Toggle "Reset progressivo a inizio anno".
+
+**Q5 — CR list maturato stale**:
+- Nuovo endpoint `POST /cost-report/api/reconcile-all` (bulk).
+- `loadCrList()` chiama reconcile-all PRIMA del GET list → cifre lista
+  allineate dal primo render (no più gap "apri dettaglio per allineare").
+
+**Q6 — Dettaglio voce categoria spese**:
+- Click su card categoria in /overhead → drawer con tabella voci
+  che la compongono (codice/titolo/data/netto/totale) + riga Σ totale.
+- Click riga → apre modal edit della voce.
+
+**Q7 — Fatture passive senza progetto in spese aziendali**:
+- `overhead_summary` include SupplierInvoice con project_id NULL come
+  categoria virtuale `supplier_no_project` nel KPI totale + breakdown.
+- Click sulla card → drawer fetch live `/suppliers/api/invoices` filtrate
+  no-project. Click riga → naviga a /suppliers.
+
+**Q8 — Lista fatturazione mostra titolo progetto**:
+- Cella progetto ora 2 righe: codice mono + titolo text-muted.
+
+**Q9 — Lista fornitori mostra progetto codice+titolo**:
+- Backend `_invoice_to_dict` ora restituisce project dict + job dict.
+- Eager load `Project`/`Job` nella query list_supplier_invoices.
+- UI tabella suppliers: nuova colonna "Progetto" stessa convenzione.
+
+**Q10 — Job select fattura passiva non popolato**:
+- Bug: `loadAuxLists()` chiamava `/jobs/api` (404, endpoint inesistente)
+  → _jobs=[] → select vuota.
+- Fix: usa `/planning/api/jobs` (endpoint corretto).
+- BONUS: filtro job per progetto selezionato (cambio mi-project
+  filtra mi-job).
+
+**Q11 — Match fattura ↔ risorsa esterna + supplier↔resource link**:
+- Nuovo `SupplierInvoice.resource_id` (link opzionale a Resource).
+- Nuovo `Resource.supplier_id` (link inverso 1:1).
+- Modal fattura passiva: campo "Risorsa esterna associata" (select).
+  Permette di marcare la fattura come costo specifico di una risorsa
+  che ha booking nel job. Foundation per match preventivo↔consuntivo.
+- Modal fornitore: campo "Risorsa associata" + bottone "+ Crea risorsa"
+  che genera Resource tipo `person_freelance` pre-popolata da dati
+  fornitore (nome/email/phone) + supplier_id già impostato.
+- Salvataggio fornitore propaga link inverso a Resource.supplier_id.
+
+Auto-migrate al boot: 4 nuove colonne (clients.admin_email,
+invoices.client_admin_email_snap, supplier_invoices.resource_id,
+resources.supplier_id). Idempotente.
+
 ## v3.5.0-alpha.112 — Round revisione Matteo 15 maggio (12 punti) (15 maggio 2026)
 
 Maratona bug + feature dopo revisione Matteo. 12 punti dal log mattutino.

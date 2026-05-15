@@ -601,11 +601,14 @@ a:hover { text-decoration: underline; }
 /* Topbar left side (toggle + title) (v3.5.0-alpha.43) */
 .topbar-left { display: flex; align-items: center; min-width: 0; }
 
-/* Toggle button in topbar (v3.5.0-alpha.43) */
+/* Toggle button in topbar (v3.5.0-alpha.43)
+   v3.5.0-alpha.113: contrasto pieno (var(--text)) per icone topbar,
+   coerente su tutti i temi (chiari e scuri). Hover usa --indigo come
+   accent invece di solo cambio bg, più riconoscibile. */
 .topbar-sidebar-toggle {
   background: transparent;
   border: 1px solid transparent;
-  color: var(--text2);
+  color: var(--text);
   width: 36px; height: 36px;
   display: inline-flex; align-items: center; justify-content: center;
   border-radius: 8px;
@@ -615,10 +618,13 @@ a:hover { text-decoration: underline; }
 }
 .topbar-sidebar-toggle:hover {
   background: var(--bg3);
-  color: var(--text);
+  color: var(--indigo);
   border-color: var(--border);
 }
 .topbar-sidebar-toggle svg { width: 18px; height: 18px; }
+/* v3.5.0-alpha.113: garanzia SVG topbar usa currentColor via stroke,
+   anche se i lucide injettano fill="none" stroke. Forza color cascade. */
+.topbar svg { color: inherit; }
 
 /* ── Main content ─────────────────────────────────────────── */
 .main-area {
@@ -671,11 +677,14 @@ body.no-chrome { overflow: hidden; }
   font-size: 10px;
   letter-spacing: 0.5px;
   padding: 2px 6px;
-  background: var(--bg);
+  /* v3.5.0-alpha.113: --bg3 invece di --bg per contrasto reale su temi
+     chiari (paper/linen/sand) dove --bg è quasi white e identico al
+     bg badge → spariva. --bg3 è sempre 1 livello più scuro/strong. */
+  background: var(--bg3);
   border-radius: 4px;
 }
 .topbar-user-logout {
-  color: var(--text2);
+  color: var(--text);
   text-decoration: none;
   font-size: 14px;
   padding: 0 4px;

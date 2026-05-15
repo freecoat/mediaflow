@@ -366,6 +366,8 @@ async function openClientDetail(id) {
         ${inp('Ruolo', 'contact_role', c.contact_role, {placeholder: 'Producer, Head of Post…'})}
         ${inp('Email', 'contact_email', c.contact_email, {type: 'email'})}
         ${inp('Telefono', 'contact_phone', c.contact_phone)}
+        <!-- v3.5.0-alpha.113: email amministrazione (intestazione fattura) -->
+        ${inp('Email amministrazione', 'admin_email', c.admin_email, {type: 'email', placeholder: 'amministrazione@cliente.it · intestazione fattura'})}
       </div>
     </div>
 

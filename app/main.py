@@ -371,9 +371,11 @@ def _auto_migrate_columns():
                     "REAL NOT NULL DEFAULT 0"
                 ))
         # v3.5.0-alpha.112 — Closing invoice flag + project link
+        # v3.5.0-alpha.113 — Client admin email snapshot
         inv_alter_112 = [
             ("is_closing", "BOOLEAN NOT NULL DEFAULT 0"),
             ("closing_project_id", "INTEGER NULL REFERENCES projects(id)"),
+            ("client_admin_email_snap", "VARCHAR(255) NULL"),
         ]
         with engine.begin() as conn:
             for col, ddl in inv_alter_112:
@@ -393,6 +395,34 @@ def _auto_migrate_columns():
                 if col not in pcols:
                     print(f"[auto-migrate] projects.{col} mancante -> ALTER TABLE")
                     conn.execute(text(f"ALTER TABLE projects ADD COLUMN {col} {ddl}"))
+    # v3.5.0-alpha.113 — SupplierInvoice.resource_id + Resource.supplier_id +
+    # Client.admin_email (intestazione fattura)
+    if "supplier_invoices" in insp.get_table_names():
+        sicols = {c["name"] for c in insp.get_columns("supplier_invoices")}
+        if "resource_id" not in sicols:
+            print("[auto-migrate] supplier_invoices.resource_id mancante -> ALTER TABLE")
+            with engine.begin() as conn:
+                conn.execute(text(
+                    "ALTER TABLE supplier_invoices ADD COLUMN resource_id "
+                    "INTEGER NULL REFERENCES resources(id)"
+                ))
+    if "resources" in insp.get_table_names():
+        rcols = {c["name"] for c in insp.get_columns("resources")}
+        if "supplier_id" not in rcols:
+            print("[auto-migrate] resources.supplier_id mancante -> ALTER TABLE")
+            with engine.begin() as conn:
+                conn.execute(text(
+                    "ALTER TABLE resources ADD COLUMN supplier_id "
+                    "INTEGER NULL REFERENCES suppliers(id)"
+                ))
+    if "clients" in insp.get_table_names():
+        ccols = {c["name"] for c in insp.get_columns("clients")}
+        if "admin_email" not in ccols:
+            print("[auto-migrate] clients.admin_email mancante -> ALTER TABLE")
+            with engine.begin() as conn:
+                conn.execute(text(
+                    "ALTER TABLE clients ADD COLUMN admin_email VARCHAR(255) NULL"
+                ))
     # v3.5.0-alpha.69.1 — Backfill InvoicePayment per fatture legacy pagate
     # senza riga di pagamento. Senza questo backfill, /finance/cashflow
     # mostra 0 incassato per fatture marcate paid pre-α.66.20 (rotture
@@ -1089,7 +1119,7 @@ async def lifespan(app: FastAPI):
     yield
 
 
-app = FastAPI(title="MediaFlow", version="3.5.0-alpha.112", lifespan=lifespan)
+app = FastAPI(title="MediaFlow", version="3.5.0-alpha.113", lifespan=lifespan)
 
 BASE_DIR = Path(__file__).parent
 app.mount("/static", StaticFiles(directory=BASE_DIR / "static"), name="static")

@@ -698,6 +698,31 @@ async def reconcile_actuals(job_id: int, db: Session = Depends(get_db)):
     return result
 
 
+# v3.5.0-alpha.113 — bulk reconcile per allineare lista CR.
+# Q5: la lista mostra `total_accrued` stored; il dettaglio chiama
+# reconcile e aggiorna stored → ritornando alla lista i numeri appaiono
+# allineati. Causa: hook recompute_for_booking non copre tutti i path
+# che modificano il booking (es. shift bulk multi-select, import,
+# punch import). Fix: bulk reconcile lazy all'apertura della lista CR.
+@router.post("/api/reconcile-all")
+async def reconcile_all_jobs(db: Session = Depends(get_db)):
+    """Ricomputa tutti i job del tenant. Idempotente. Più costoso del
+    singolo job ma deterministico — invoke su page-load lista CR."""
+    from app.services.cost_line_sync import recompute_for_job
+    job_ids = [
+        j.id for j in db.query(Job.id).filter(
+            Job.tenant_id == current_tenant_id(),
+            Job.client_id.isnot(None),
+        ).all()
+    ]
+    total_updated = 0
+    for jid in job_ids:
+        r = recompute_for_job(db, jid)
+        total_updated += r.get("lines_updated", 0)
+    db.commit()
+    return {"jobs": len(job_ids), "lines_updated": total_updated}
+
+
 @router.put("/api/job/{job_id}/cost-lines/{line_id}")
 async def update_cost_line(
     job_id: int, line_id: int,

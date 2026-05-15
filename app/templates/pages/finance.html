@@ -1165,8 +1165,12 @@ async function loadInvoices() {
   // v3.5.0-alpha.111: bottoni storno (TD04) + scarica PDF + evidenzia NC.
   tbody.innerHTML = invs.map(i => {
     const proj = i.project || (i.job && i.job.project) || null;
+    // v3.5.0-alpha.113: mostra codice E titolo progetto (richiesta Matteo).
     const projCell = proj
-      ? `<a class="mf-link" href="/projects/${proj.id}">${escapeHtml(proj.code || proj.title || ('#'+proj.id))}</a>`
+      ? `<a class="mf-link" href="/projects/${proj.id}" title="${escapeHtml(proj.title || '')}">
+           <span class="mono text-xs">${escapeHtml(proj.code || ('#'+proj.id))}</span>
+           ${proj.title ? `<span class="text-xs text-muted" style="display:block;">${escapeHtml(proj.title)}</span>` : ''}
+         </a>`
       : '<span class="text-muted">—</span>';
     const isNC = i.doc_type === 'TD04';
     const numHtml = isNC

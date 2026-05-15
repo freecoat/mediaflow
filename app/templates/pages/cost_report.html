@@ -372,6 +372,11 @@ async function init() {
 }
 
 async function loadCrList() {
+  // v3.5.0-alpha.113 — Q5 fix: reconcile-all prima di leggere la lista,
+  // così total_accrued stored è coerente coi booking done (idempotente).
+  // Evita il gap "lista mostra cifra vecchia finché non apri dettaglio".
+  try { await api('POST', '/cost-report/api/reconcile-all'); }
+  catch(e) { /* non blocking — la lista mostra comunque stored */ }
   try {
     _crAll = await api('GET', '/cost-report/api/list');
   } catch(e) {

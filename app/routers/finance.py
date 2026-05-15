@@ -931,12 +931,24 @@ async def download_invoice_pdf(invoice_id: int, db: Session = Depends(get_db)):
         inv.subtotal = lines_sum
         inv.total = round(lines_sum * (1 + (inv.vat_rate or 0) / 100), 2)
         db.commit()
+    # v3.5.0-alpha.113 — intestazione completa con email amministrazione
+    # (snapshot al momento dell'emissione, fallback al campo live del cliente).
+    admin_email = (
+        getattr(inv, "client_admin_email_snap", None)
+        or (inv.client.admin_email if inv.client and getattr(inv.client, "admin_email", None) else None)
+        or (inv.client.contact_email if inv.client and inv.client.contact_email else None)
+    )
+    client_info_parts = []
+    if inv.client and inv.client.vat_number:
+        client_info_parts.append(f"P.IVA {inv.client.vat_number}")
+    if admin_email:
+        client_info_parts.append(f"Att.ne Amministrazione · {admin_email}")
     invoice_data = {
         "number":      inv.number,
         "issue_date":  inv.issue_date.strftime("%d/%m/%Y") if inv.issue_date else "—",
         "due_date":    inv.due_date.strftime("%d/%m/%Y") if inv.due_date else None,
         "client_name": inv.client.name if inv.client else "—",
-        "client_info": f"P.IVA {inv.client.vat_number}" if inv.client and inv.client.vat_number else "",
+        "client_info": "<br/>".join(client_info_parts),
         "subtotal":    inv.subtotal,
         "vat_rate":    inv.vat_rate,
         "total":       inv.total,

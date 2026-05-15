@@ -186,6 +186,16 @@ const STATUS_LABELS = {
 
 async function loadProjects() {
   allProjects = await api('GET', '/projects/api');
+  // v3.5.0-alpha.113 — applica filtro cliente da querystring (?client_id=N)
+  // arrivando da scheda cliente → "Vedi progetti".
+  const qs = new URLSearchParams(window.location.search);
+  const clientFilter = qs.get('client_id');
+  if (clientFilter) {
+    const sel = document.getElementById('filter-client');
+    if (sel) sel.value = clientFilter;
+    filterProjects();
+    return;
+  }
   renderProjects(allProjects);
 }
 

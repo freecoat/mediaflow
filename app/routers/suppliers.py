@@ -61,6 +61,13 @@ def _supplier_to_dict(s: Supplier, db: Session) -> dict:
         SupplierInvoice.deleted_at.is_(None),
         SupplierInvoice.payment_status.in_([SupplierInvoiceStatus.unpaid, SupplierInvoiceStatus.partial]),
     ).scalar() or 0.0
+    # v3.5.0-alpha.113 — risorsa linkata (1:1 via Resource.supplier_id)
+    from app.models import Resource as _Resource
+    linked_res = db.query(_Resource).filter(
+        _Resource.supplier_id == s.id,
+        _Resource.tenant_id == current_tenant_id(),
+        _Resource.is_active == True,  # noqa: E712
+    ).first()
     return {
         "id": s.id,
         "name": s.name,
@@ -75,10 +82,15 @@ def _supplier_to_dict(s: Supplier, db: Session) -> dict:
         "is_active": s.is_active,
         "invoices_count": inv_count,
         "outstanding_total": round(unpaid_total, 2),
+        "resource_id": linked_res.id if linked_res else None,
+        "resource_name": linked_res.name if linked_res else None,
     }
 
 
 def _invoice_to_dict(i: SupplierInvoice) -> dict:
+    # v3.5.0-alpha.113 — project + job snapshot per visualizzazione lista
+    proj = getattr(i, "project", None)
+    job = getattr(i, "job", None)
     return {
         "id": i.id,
         "supplier_id": i.supplier_id,
@@ -88,8 +100,12 @@ def _invoice_to_dict(i: SupplierInvoice) -> dict:
         "due_date": str(i.due_date) if i.due_date else None,
         "payment_date": str(i.payment_date) if i.payment_date else None,
         "project_id": i.project_id,
+        "project": ({"id": proj.id, "code": proj.code, "title": proj.title} if proj else None),
         "job_id": i.job_id,
+        "job": ({"id": job.id, "code": job.code, "title": job.title} if job else None),
         "job_cost_line_id": i.job_cost_line_id,
+        # v3.5.0-alpha.113 — resource_id (link risorsa esterna)
+        "resource_id": getattr(i, "resource_id", None),
         "amount_net": round(i.amount_net or 0, 2),
         "vat_rate": i.vat_rate,
         "amount_vat": round(i.amount_vat or 0, 2),
@@ -241,8 +257,12 @@ async def list_supplier_invoices(
 ):
     """v3.5.0-alpha.86 — Filtri estesi (S3.2): client_id + period.
     client_id richiede join via Project."""
+    # v3.5.0-alpha.113 — eager load project + job per UI lista
+    from app.models import Project as _Project, Job as _Job
     q = db.query(SupplierInvoice).options(
-        joinedload(SupplierInvoice.supplier)
+        joinedload(SupplierInvoice.supplier),
+        joinedload(SupplierInvoice.project),
+        joinedload(SupplierInvoice.job),
     ).filter(
         SupplierInvoice.tenant_id == current_tenant_id(),
         SupplierInvoice.deleted_at.is_(None),
@@ -295,6 +315,7 @@ async def create_supplier_invoice(
     project_id: Optional[int] = Form(None),
     job_id: Optional[int] = Form(None),
     job_cost_line_id: Optional[int] = Form(None),
+    resource_id: Optional[int] = Form(None),  # v3.5.0-alpha.113 — match fattura↔risorsa
     currency: str = Form("EUR"),
     amount_paid: float = Form(0.0),
     attachment_path: Optional[str] = Form(None),
@@ -338,6 +359,7 @@ async def create_supplier_invoice(
         project_id=project_id,
         job_id=job_id,
         job_cost_line_id=job_cost_line_id,
+        resource_id=resource_id,
         amount_net=amount_net,
         vat_rate=vat_rate,
         amount_vat=amount_vat,
@@ -366,6 +388,7 @@ async def update_supplier_invoice(
     project_id: Optional[int] = Form(None),
     job_id: Optional[int] = Form(None),
     job_cost_line_id: Optional[int] = Form(None),
+    resource_id: Optional[int] = Form(None),  # v3.5.0-alpha.113
     currency: Optional[str] = Form(None),
     amount_paid: Optional[float] = Form(None),
     attachment_path: Optional[str] = Form(None),
@@ -387,6 +410,7 @@ async def update_supplier_invoice(
     if project_id is not None: i.project_id = project_id or None
     if job_id is not None: i.job_id = job_id or None
     if job_cost_line_id is not None: i.job_cost_line_id = job_cost_line_id or None
+    if resource_id is not None: i.resource_id = resource_id or None  # v3.5.0-alpha.113
     if currency is not None: i.currency = currency
     if attachment_path is not None: i.attachment_path = attachment_path.strip() or None
     if notes is not None: i.notes = notes.strip() or None

@@ -8,6 +8,44 @@
 
 ## Versione corrente
 
+**v3.5.0-alpha.113** — 15 maggio 2026 — Round revisione Matteo pomeriggio (11 punti Q1-Q11)
+
+**Hotfix critico**: alpha.112 aveva `<script src=".../global.js">` senza
+`</script>` chiusura in base.html → JS rotto. Fixato in alpha.113.
+
+**11 punti chiusi Q1-Q11**:
+- Q1: header topbar contrasto pieno (var(--text) + indigo hover)
+- Q2: /projects?client_id=N preseleziona filtro
+- Q3: Client.admin_email + snapshot + intestazione PDF
+- Q4: Naming conventions builder drag&drop drawer left
+- Q5: reconcile-all bulk all'apertura lista CR
+- Q6: drawer dettaglio voci per categoria in /overhead
+- Q7: supplier_invoice senza project = categoria virtuale in /overhead
+- Q8: lista fatturazione mostra codice + titolo progetto
+- Q9: lista suppliers mostra Progetto colonna
+- Q10: job select fattura passiva (era 404 /jobs/api → /planning/api/jobs)
+- Q11: SupplierInvoice.resource_id + Resource.supplier_id + UI link
+
+**Da testare Matteo**:
+1. Header su temi paper/sand/linen/sage: icone visibili
+2. /clients → "Vedi progetti" lancia /projects con filtro cliente
+3. /clients edit: nuovo campo "Email amministrazione" → emit fattura → PDF mostra "Att.ne Amministrazione"
+4. /settings#numbering rinominato "Naming conventions" → click regola → drawer left con drag&drop chips
+5. /cost-report apertura: numeri lista corretti SUBITO (no più gap dopo apri-dettaglio)
+6. /overhead: click card categoria → drawer con voci che compongono
+7. /overhead: card "Fatture passive (no progetto)" se presenti
+8. /finance lista fatture: colonna Progetto con codice + titolo
+9. /suppliers lista: nuova colonna Progetto
+10. /suppliers nuova fattura: dropdown Job ora popolato + filtra per progetto
+11. /suppliers modal fornitore: "Risorsa associata" + "+ Crea risorsa"
+
+**Cabling pendente** (alpha.114+):
+- NumberingConfig non ancora letto dal numbering service.
+- Match SupplierInvoice.resource_id ↔ Booking.resources nei CR (UI ok,
+  aggregazione cost-side ancora non implementata).
+
+## (versione precedente)
+
 **v3.5.0-alpha.112** — 15 maggio 2026 — Round revisione Matteo (12 punti P1-P12)
 
 **12 punti chiusi in single bump**:

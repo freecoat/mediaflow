@@ -123,6 +123,7 @@ async def create_resource(
     studio_hourly_cost: Optional[float] = Form(None),
     create_user: bool = Form(False),
     user_role_code: Optional[str] = Form(None),  # default: operator
+    supplier_id: Optional[int] = Form(None),  # v3.5.0-alpha.113 — link a fornitore esterno
     db: Session = Depends(get_db),
 ):
     from app.models import ResourceCostType
@@ -151,6 +152,7 @@ async def create_resource(
         annual_working_hours=annual_working_hours,
         freelance_hourly_cost=freelance_hourly_cost,
         studio_hourly_cost=studio_hourly_cost,
+        supplier_id=supplier_id,
     )
     db.add(r); db.flush()
 
@@ -245,6 +247,7 @@ async def update_resource(
     annual_working_hours: Optional[float] = Form(None),
     freelance_hourly_cost: Optional[float] = Form(None),
     studio_hourly_cost: Optional[float] = Form(None),
+    supplier_id: Optional[int] = Form(None),  # v3.5.0-alpha.113
     db: Session = Depends(get_db),
 ):
     r = db.query(Resource).filter(
@@ -253,6 +256,8 @@ async def update_resource(
     ).first()
     if not r:
         raise HTTPException(404, "Risorsa non trovata")
+    if supplier_id is not None:
+        r.supplier_id = supplier_id or None
     if name is not None: r.name = name.strip()
     if type is not None: r.type = type
     if department_id is not None: r.department_id = department_id or None

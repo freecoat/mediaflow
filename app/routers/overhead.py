@@ -175,11 +175,30 @@ async def overhead_summary(
     # Includi anche write_off nel by_category per UI uniforme
     if write_off_total > 0:
         by_category["write_off"] = write_off_total
+    # v3.5.0-alpha.113 — Q7: includi anche fatture passive SENZA progetto
+    # (= "spese aziendali" non legate ai progetti). UNION nel KPI totale +
+    # categoria virtuale "supplier_no_project".
+    from app.models import SupplierInvoice
+    sup_q = db.query(SupplierInvoice).filter(
+        SupplierInvoice.tenant_id == current_tenant_id(),
+        SupplierInvoice.deleted_at.is_(None),
+        SupplierInvoice.project_id.is_(None),
+    )
+    if from_date:
+        sup_q = sup_q.filter(SupplierInvoice.issue_date >= from_date)
+    if to_date:
+        sup_q = sup_q.filter(SupplierInvoice.issue_date <= to_date)
+    supplier_no_project_total = sum(
+        (s.amount_total or s.amount_net or 0) for s in sup_q.all()
+    )
+    if supplier_no_project_total > 0:
+        by_category["supplier_no_project"] = round(supplier_no_project_total, 2)
     return {
-        "overhead_total":    round(opex_total + capex_total, 2),
+        "overhead_total":    round(opex_total + capex_total + supplier_no_project_total, 2),
         "opex_total":        round(opex_total, 2),
         "capex_total":       round(capex_total, 2),
         "write_off_total":   round(write_off_total, 2),
+        "supplier_no_project_total": round(supplier_no_project_total, 2),
         "recurring_active":  recurring_active,
         "by_category":       {k: round(v, 2) for k, v in by_category.items()},
         "count":             len(rows),

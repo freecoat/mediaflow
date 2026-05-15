@@ -74,6 +74,8 @@
           <tr>
             <th style="min-width:120px;">Numero</th>
             <th style="min-width:200px;">Fornitore</th>
+            <!-- v3.5.0-alpha.113: colonna Progetto (richiesta Matteo) -->
+            <th style="min-width:200px;">Progetto</th>
             <th>Emissione</th>
             <th>Scadenza</th>
             <th class="text-right">Imponibile</th>
@@ -85,7 +87,7 @@
           </tr>
         </thead>
         <tbody id="inv-tbody">
-          <tr><td colspan="10" class="text-muted" style="text-align:center;padding:24px;">Caricamento...</td></tr>
+          <tr><td colspan="11" class="text-muted" style="text-align:center;padding:24px;">Caricamento...</td></tr>
         </tbody>
       </table>
     </div>
@@ -157,6 +159,23 @@
         <div class="form-group">
           <label class="form-label">Termini pagamento (gg)</label>
           <input class="form-input" id="ms-terms" type="number" placeholder="30">
+        </div>
+      </div>
+      <!-- v3.5.0-alpha.113 — link risorsa esterna (opzionale).
+           Associa questo fornitore a una Resource esistente (la P.IVA
+           che emette fatture per quella risorsa). Permette il match
+           automatico fattura→risorsa nel CR. -->
+      <div class="form-group">
+        <label class="form-label">Risorsa associata
+          <span class="text-xs text-muted">(opzionale — link al booking nel cost report)</span>
+        </label>
+        <div style="display:flex; gap:8px; align-items:end;">
+          <select class="form-select" id="ms-resource" style="flex:1;"><option value="">— nessuna —</option></select>
+          <button type="button" class="btn btn-ghost btn-sm" onclick="msCreateResourceFromSupplier()"
+                  title="Crea una nuova Resource freelance pre-popolata dai dati del fornitore">+ Crea risorsa</button>
+        </div>
+        <div class="text-xs text-muted" style="margin-top:4px;">
+          Quando associato, le fatture passive di questo fornitore propongono di default questa risorsa nel campo "Risorsa esterna associata".
         </div>
       </div>
       <div class="form-group">
@@ -313,11 +332,22 @@
       <div class="form-row">
         <div class="form-group">
           <label class="form-label">Progetto</label>
-          <select class="form-select" id="mi-project"><option value="">— nessuno —</option></select>
+          <select class="form-select" id="mi-project"><option value="">— nessuno (spese aziendali) —</option></select>
         </div>
         <div class="form-group">
           <label class="form-label">Job</label>
           <select class="form-select" id="mi-job"><option value="">— nessuno —</option></select>
+        </div>
+      </div>
+      <!-- v3.5.0-alpha.113 — match opzionale fattura↔risorsa esterna -->
+      <div class="form-group">
+        <label class="form-label">Risorsa esterna associata
+          <span class="text-xs text-muted">(opzionale — match per cost report)</span>
+        </label>
+        <select class="form-select" id="mi-resource"><option value="">— nessuna —</option></select>
+        <div class="text-xs text-muted" style="margin-top:4px;">
+          Marca questa fattura come <b>costo della risorsa selezionata</b>. Utile quando un freelance/studio/equipment
+          ha booking sul job: la fattura passiva viene contabilizzata come costo reale di quella risorsa nel CR.
         </div>
       </div>
       <div class="form-group">
@@ -370,6 +400,7 @@ let _suppliers = [];
 let _invoices = [];
 let _projects = [];
 let _jobs = [];
+let _resources = [];  // v3.5.0-alpha.113 — per match opzionale fattura↔risorsa
 
 async function init() {
   // v3.5.0-alpha.86 S3.2 — Inizializza filtri standard (cliente/progetto/periodo)
@@ -389,10 +420,12 @@ async function loadSummary() {
 
 async function loadAuxLists() {
   try { _projects = await api('GET', '/projects/api'); } catch(e) { _projects = []; }
-  try {
-    const r = await fetch('/jobs/api', {credentials:'same-origin'});
-    _jobs = r.ok ? await r.json() : [];
-  } catch(e) { _jobs = []; }
+  // v3.5.0-alpha.113 — bug Q10 fix: `/jobs/api` non esiste (404),
+  // endpoint corretto è `/planning/api/jobs`. Senza questo, _jobs=[] e
+  // il select Job nella modal fattura passiva restava vuoto.
+  try { _jobs = await api('GET', '/planning/api/jobs'); } catch(e) { _jobs = []; }
+  // v3.5.0-alpha.113 — anche risorse per match opzionale (Q11)
+  try { _resources = await api('GET', '/resources/api'); } catch(e) { _resources = []; }
 }
 
 async function loadSuppliers() {
@@ -525,12 +558,20 @@ function renderInvoices() {
     tbody.innerHTML = '<tr><td colspan="10" class="text-muted" style="text-align:center;padding:24px;">Nessuna fattura corrisponde ai filtri</td></tr>';
     return;
   }
-  tbody.innerHTML = rows.map(r => {  // eslint-disable-line
+  // v3.5.0-alpha.113: cella progetto con codice + titolo per ogni riga
+  const html = rows.map(r => {
     const isOverdue = r.due_date && r.due_date < today &&
                       (r.payment_status === 'unpaid' || r.payment_status === 'partial');
+    const projCell = r.project
+      ? `<a class="mf-link" href="/projects/${r.project.id}" onclick="event.stopPropagation()" title="${escapeHtml(r.project.title || '')}">
+           <span class="mono text-xs">${escapeHtml(r.project.code || '#'+r.project.id)}</span>
+           ${r.project.title ? `<span class="text-xs text-muted" style="display:block;">${escapeHtml(r.project.title)}</span>` : ''}
+         </a>`
+      : '<span class="text-muted text-xs">— spese aziendali</span>';
     return `<tr style="cursor:pointer;" onclick="editInvoice(${r.id})">
       <td class="mono"><strong>${escapeHtml(r.number)}</strong></td>
       <td>${escapeHtml(r.supplier_name||'—')}</td>
+      <td>${projCell}</td>
       <td class="text-sm">${fmtDate(r.issue_date)}</td>
       <td class="text-sm" style="${isOverdue?'color:var(--rose);font-weight:600;':''}">${r.due_date?fmtDate(r.due_date):'—'}${isOverdue?' &#9888;':''}</td>
       <td class="mono text-right">${fmtCurrency(r.amount_net)}</td>
@@ -541,6 +582,7 @@ function renderInvoices() {
       <td class="text-right text-muted">&rarr;</td>
     </tr>`;
   }).join('');
+  tbody.innerHTML = html;  // eslint-disable-line
 }
 
 function resetInvoiceFilters() {
@@ -569,12 +611,24 @@ function switchTab(tab) {
   active.style.fontWeight = '600';
 }
 
+// v3.5.0-alpha.113 — popola select risorse nel modal fornitore
+function _populateSupplierResourceSelect(selectedId) {
+  const sel = document.getElementById('ms-resource');
+  if (!sel) return;
+  sel.innerHTML = '<option value="">— nessuna —</option>' +
+    (_resources || []).filter(r => r.is_active !== false).map(r =>
+      `<option value="${r.id}">${escapeHtml(r.name || '')}${r.role ? ' · '+escapeHtml(r.role) : ''}</option>`
+    ).join('');
+  if (selectedId) sel.value = String(selectedId);
+}
+
 function openSupplierModal() {
   document.getElementById('ms-id').value = '';
   document.getElementById('ms-title').textContent = 'Nuovo fornitore';
   ['ms-name','ms-vat','ms-cf','ms-email','ms-phone','ms-addr','ms-iban','ms-terms','ms-notes'].forEach(id => {
     document.getElementById(id).value = '';
   });
+  _populateSupplierResourceSelect(null);
   document.getElementById('ms-delete-btn').style.display = 'none';
   openModal('modal-supplier');
 }
@@ -593,8 +647,34 @@ function editSupplier(id) {
   document.getElementById('ms-iban').value = s.iban || '';
   document.getElementById('ms-terms').value = s.default_payment_terms_days || '';
   document.getElementById('ms-notes').value = s.notes || '';
+  // v3.5.0-alpha.113 — preseleziona risorsa linkata (se backend ritorna resource_id)
+  _populateSupplierResourceSelect(s.resource_id || null);
   document.getElementById('ms-delete-btn').style.display = '';
   openModal('modal-supplier');
+}
+
+// v3.5.0-alpha.113 — crea una nuova Resource freelance prepopolata dal fornitore
+async function msCreateResourceFromSupplier() {
+  const name = document.getElementById('ms-name')?.value.trim();
+  const email = document.getElementById('ms-email')?.value.trim();
+  const phone = document.getElementById('ms-phone')?.value.trim();
+  const supplierId = document.getElementById('ms-id')?.value;
+  if (!name) { toast('Inserisci prima il nome del fornitore', 'warning'); return; }
+  if (!supplierId) { toast('Salva prima il fornitore, poi crea la risorsa', 'warning'); return; }
+  if (!confirm(`Creare una nuova risorsa freelance "${name}" linkata a questo fornitore?`)) return;
+  const fd = new FormData();
+  fd.append('name', name);
+  fd.append('type', 'person_freelance');
+  if (email) fd.append('email', email);
+  if (phone) fd.append('phone', phone);
+  fd.append('supplier_id', supplierId);
+  try {
+    const r = await api('POST', '/resources/api', fd);
+    toast(`Risorsa "${r.name}" creata e linkata`, 'success');
+    // Refresh elenco risorse + select
+    try { _resources = await api('GET', '/resources/api'); } catch(e) {}
+    _populateSupplierResourceSelect(r.id);
+  } catch(e) { toast(e.message || 'Errore creazione risorsa', 'error'); }
 }
 
 async function saveSupplier() {
@@ -615,6 +695,18 @@ async function saveSupplier() {
     const method = id ? 'PUT' : 'POST';
     const r = await fetch(url, {method, body: fd, credentials:'same-origin'});
     if (!r.ok) throw new Error((await r.json()).detail || 'Errore');
+    const saved = await r.json();
+    // v3.5.0-alpha.113 — link inverso Resource.supplier_id se selezionato
+    const linkedResId = document.getElementById('ms-resource')?.value;
+    if (linkedResId) {
+      try {
+        const fdR = new FormData();
+        fdR.append('supplier_id', saved.id || id);
+        await api('PUT', `/resources/api/${linkedResId}`, fdR);
+      } catch(e) {
+        toast('Fornitore salvato ma link risorsa fallito: ' + (e.message || ''), 'warning');
+      }
+    }
     closeModal('modal-supplier');
     toast(id ? 'Fornitore aggiornato' : 'Fornitore creato', 'success');
     await loadSuppliers();
@@ -646,16 +738,34 @@ function _populateSupplierSelect() {
 }
 function _populateProjectSelect() {
   const sel = document.getElementById('mi-project');
-  sel.innerHTML = '<option value="">— nessuno —</option>' +
+  sel.innerHTML = '<option value="">— nessuno (spese aziendali) —</option>' +
     _projects.map(p =>
       `<option value="${p.id}">${escapeHtml(p.code || '')} · ${escapeHtml(p.title || '')}</option>`
     ).join('');
+  // v3.5.0-alpha.113: cambio progetto → filtra job select
+  sel.onchange = () => _populateJobSelect();
 }
+// v3.5.0-alpha.113: job filtrato per progetto selezionato; se nessun
+// progetto, mostra tutti i job (rara casistica).
 function _populateJobSelect() {
   const sel = document.getElementById('mi-job');
+  const projId = document.getElementById('mi-project')?.value || '';
+  const filtered = projId ? _jobs.filter(j => String(j.project_id) === projId) : _jobs;
   sel.innerHTML = '<option value="">— nessuno —</option>' +
-    _jobs.map(j =>
+    filtered.map(j =>
       `<option value="${j.id}">${escapeHtml(j.code || '')} · ${escapeHtml(j.title || '')}</option>`
+    ).join('');
+}
+// v3.5.0-alpha.113: risorse del job selezionato (per match opzionale fattura↔risorsa)
+function _populateResourceSelect() {
+  const sel = document.getElementById('mi-resource');
+  if (!sel) return;
+  const jobId = document.getElementById('mi-job')?.value || '';
+  // Mostro risorse di tipo esterno (freelance/studio/equipment) o tutte
+  const externals = _resources.filter(r => r.is_active !== false);
+  sel.innerHTML = '<option value="">— nessuna —</option>' +
+    externals.map(r =>
+      `<option value="${r.id}">${escapeHtml(r.name || '')}${r.role ? ' · '+escapeHtml(r.role) : ''}</option>`
     ).join('');
 }
 
@@ -665,6 +775,11 @@ function openInvoiceModal() {
   _populateSupplierSelect();
   _populateProjectSelect();
   _populateJobSelect();
+  _populateResourceSelect();
+  // v3.5.0-alpha.113: bind change job → re-populate resource (futuro:
+  // filtra solo risorse con booking nel job).
+  const jobSel = document.getElementById('mi-job');
+  if (jobSel) jobSel.onchange = () => _populateResourceSelect();
   document.getElementById('mi-number').value = '';
   document.getElementById('mi-issue').value = new Date().toISOString().slice(0,10);
   document.getElementById('mi-due').value = '';
@@ -687,7 +802,10 @@ function editInvoice(id) {
   if (!i) return;
   _populateSupplierSelect();
   _populateProjectSelect();
+  // job select dipende da progetto: setto prima il progetto, poi popolo job
+  document.getElementById('mi-project').value = i.project_id || '';
   _populateJobSelect();
+  _populateResourceSelect();
   document.getElementById('mi-id').value = i.id;
   document.getElementById('mi-title').textContent = `Fattura ${i.number}`;
   document.getElementById('mi-supplier').value = i.supplier_id || '';
@@ -701,8 +819,11 @@ function editInvoice(id) {
   document.getElementById('mi-paid').value = i.amount_paid || 0;
   document.getElementById('mi-currency').value = i.currency || 'EUR';
   document.getElementById('mi-status').value = i.payment_status || '';
-  document.getElementById('mi-project').value = i.project_id || '';
+  // project già settato sopra prima di _populateJobSelect
   document.getElementById('mi-job').value = i.job_id || '';
+  // v3.5.0-alpha.113: setta risorsa se presente
+  const resSel = document.getElementById('mi-resource');
+  if (resSel) resSel.value = i.resource_id || '';
   document.getElementById('mi-attachment').value = i.attachment_path || '';
   document.getElementById('mi-notes').value = i.notes || '';
   document.getElementById('mi-delete-btn').style.display = '';
@@ -825,6 +946,9 @@ async function saveInvoice() {
   if (proj) fd.append('project_id', proj);
   const job = document.getElementById('mi-job').value;
   if (job) fd.append('job_id', job);
+  // v3.5.0-alpha.113: resource match opzionale
+  const resVal = document.getElementById('mi-resource')?.value;
+  if (resVal) fd.append('resource_id', resVal);
   const att = document.getElementById('mi-attachment').value;
   if (att) fd.append('attachment_path', att);
   fd.append('notes', document.getElementById('mi-notes').value);
