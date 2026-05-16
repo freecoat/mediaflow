@@ -1,5 +1,39 @@
 # MediaFlow — Changelog
 
+## v3.5.0-alpha.119 — Cost_external priority ranking + auto-dismiss drift self-healed (16 mag 2026)
+
+Smoke E2E server-side post-α.118 ha individuato 2 finding sui meccanismi α.115–α.117 (Q11 cost_external + cost_drift detector). Entrambi risolti in questo round.
+
+**Finding 1 — Double-count `total_cost_external` su JCL multiple dello stesso job**
+
+- Pre-fix: `cost_line_sync._recompute_actuals_for` filtrava le SupplierInvoice in OR-soup `(jcl OR job OR project)`. Una fattura passiva linkata esplicitamente a una JCL veniva sommata anche su tutte le altre JCL dello stesso job che avessero resource matching → cost_external job-level raddoppiato/triplicato. Aggravato dal cost_drift detector che emetteva una anomaly per ciascuna JCL contaminata invece di una sola.
+- Fix: priority ranking con esclusività.
+  - Livello 1 (jcl): `SupplierInvoice.job_cost_line_id IS NOT NULL` → attribuita esclusivamente a quella JCL.
+  - Livello 2 (job): solo `job_id` → distribuita pro-quota su JCL del job con resource_id matching.
+  - Livello 3 (project): solo `project_id` → distribuita pro-quota su JCL del progetto con resource_id matching.
+- Garanzia: la somma dei contributi su tutte le JCL del job/project resta sempre = total fattura. Nessun double-count.
+- Helper interno `_count_jcl_matching_resources()` calcola il denominatore della pro-quota.
+
+**Finding 2 — Auto-dismiss anomalie `cost_estimate_vs_real_drift` self-healed**
+
+- Pre-fix: il detector emetteva nuove entry idempotenti (via `dedup_key`) ma non chiudeva mai quelle vecchie. Se la causa veniva rimossa (fattura cestinata, drift rientrato sotto soglia 15%), le entry restavano `status=open` come zombie finché l'operatore non le gestiva manualmente.
+- Fix: `detect_cost_estimate_vs_real_drift` ora marca le entry open NON ri-emesse in questo round come `status=dismissed` + `handled_action=auto_resolved` + nota "[auto-resolved alpha.119]". Idempotente: re-run non riapre.
+- Nuovo enum: `AnomalyAction.auto_resolved` (per distinguere chiusure detector vs azioni operatore).
+- Pattern resta stateful per gli altri 5 tipi: nessuna self-resolution per `sforamento_monte_ore`, `over_budget`, `mancato_recupero`, `quote_discrepancy`, `extra_after_billed` (azione manager sempre richiesta).
+
+**Smoke E2E post-fix**:
+
+1. Crea SupplierInvoice linked a JCL 422 (job 37, resource Paola Fontana).
+2. Reconcile-actuals job 37: JCL 422 ext = €12'200 (= €10'000 + IVA 22%), JCL 425 (extra stesso job) ext = €0. **No double-count.**
+3. Detect: `cost_estimate_vs_real_drift = 1` (era 2 in α.118).
+4. Entry zombie JCL 425 (residuo del test α.118): auto-dismissed `auto_resolved`.
+5. Delete SupplierInvoice + re-detect: drift=0, entry JCL 422 auto-dismissed `auto_resolved`.
+
+**File toccati**:
+- `app/services/cost_line_sync.py` — priority ranking + helper `_count_jcl_matching_resources`.
+- `app/services/anomaly_detector.py` — auto-dismiss block in `detect_cost_estimate_vs_real_drift`.
+- `app/models/models.py` — `AnomalyAction.auto_resolved` aggiunto.
+
 ## v3.5.0-alpha.118 — Audit M-finding chiusi: delete supplier hook + preview placeholder + quote pattern guard (15 mag 2026 tardi notte)
 
 **Delete SupplierInvoice → recompute cost_external**:

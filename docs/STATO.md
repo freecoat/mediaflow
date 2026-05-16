@@ -8,6 +8,26 @@
 
 ## Versione corrente
 
+**v3.5.0-alpha.119** — 16 maggio 2026 — Cost_external priority ranking + auto-dismiss drift self-healed
+
+**2 finding chiusi (smoke E2E post-α.118)**:
+- Finding 1: `total_cost_external` double-counted su JCL multiple stesso job (OR-soup filter) → fix priority ranking esclusivo jcl > job > project con pro-quota distribution.
+- Finding 2: anomaly `cost_estimate_vs_real_drift` open zombie dopo fix causa → detect ora marca `dismissed` + `handled_action=auto_resolved` le entry non ri-emesse nel round corrente.
+
+**Smoke E2E server-side completato**: 17 punti checklist α.113→α.118 verificati (schema, numbering, immutability, pattern guard, reconcile, anomaly types). Tutti pass tranne i 2 finding ora risolti in α.119.
+
+**Lista test UI Matteo**: [[test_checklist_post_audit_alpha114_118]] (60+ punti) — server up su `http://127.0.0.1:8000`, snapshot DB importato.
+
+**Architettura doc generato**: `docs/ARCHITETTURA.md` + `docs/ARCHITETTURA.pdf` (476 KB, 8 diagrammi mermaid embedded) per condivisione con team. Script riproducibile `scripts/build_arch_pdf.py`.
+
+**Pendente alpha.120+**:
+- Esecuzione test UI Matteo su checklist.
+- Bug emersi da uso reale.
+- Knowledge Base capitolati F14/F15 (parser deliverables → DeliveryTemplate).
+- Capability AI estese (email/Drive/Office OAuth, filesystem Asset Library).
+
+## (versione precedente)
+
 **v3.5.0-alpha.118** — 15 maggio 2026 tardi notte — Audit M-finding chiusi (delete supplier hook + preview placeholder + quote pattern guard)
 
 **3 fix audit minori chiusi (cleanup roadmap)**:
@@ -22,13 +42,6 @@
 - α.116: NumberingConfig cabling 6 generator + UI vars validation
 - α.117: anomaly cost_drift + UI background reconcile
 - α.118: 3 audit M-findings (delete supplier, preview, quote pattern)
-
-**Lista test post-audit completa salvata in memoria**:
-[[test_checklist_post_audit_alpha114_118]]
-
-**Pendente alpha.119+**:
-- Test Matteo (lista completa in memoria)
-- Bug emersi da uso reale
 
 ## (versione precedente)
 

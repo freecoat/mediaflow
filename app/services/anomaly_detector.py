@@ -309,8 +309,15 @@ def detect_cost_estimate_vs_real_drift(db: Session, threshold_pct: float = 15.0)
     Esempio: JCL ha cost stimato €2000 (booking × rate freelance), fatture
     passive linkate sommano €2500 → drift 25% → anomaly. Producer/finance
     rivede stime o aggiusta rate risorsa.
+
+    v3.5.0-alpha.119 (Finding 2) — Auto-dismiss self-healed:
+    le entry open di questo tipo NON ri-emesse in questo round (perché la
+    fattura passiva è stata cancellata o il drift è rientrato sotto soglia)
+    vengono marcate status=dismissed con handled_action=auto_resolved.
+    Idempotente: re-run mantiene il dismiss.
     """
     n = 0
+    detected_jcl_ids: set[int] = set()
     rows = (
         db.query(JobCostLine)
         .options(joinedload(JobCostLine.job).joinedload(Job.project))
@@ -345,7 +352,28 @@ def detect_cost_estimate_vs_real_drift(db: Session, threshold_pct: float = 15.0)
             job_id=jcl.job_id,
             client_id=jcl.job.client_id if jcl.job else None,
         )
+        detected_jcl_ids.add(jcl.id)
         n += 1
+
+    # v3.5.0-alpha.119 — Auto-dismiss entries non più rilevate (self-healed).
+    stale = (
+        db.query(AnomalyEntry)
+        .filter(
+            AnomalyEntry.tenant_id == CURRENT_TENANT,
+            AnomalyEntry.anomaly_type == AnomalyType.cost_estimate_vs_real_drift,
+            AnomalyEntry.source_kind == AnomalySourceKind.jcl,
+            AnomalyEntry.status == AnomalyStatus.open,
+        )
+        .all()
+    )
+    now = datetime.utcnow()
+    for e in stale:
+        if e.source_id in detected_jcl_ids:
+            continue
+        e.status = AnomalyStatus.dismissed
+        e.handled_action = AnomalyAction.auto_resolved
+        e.handled_at = now
+        e.notes = (e.notes or "") + "\n[auto-resolved alpha.119]: drift rientrato sotto soglia o fattura rimossa"
     return n
 
 

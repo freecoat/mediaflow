@@ -2612,6 +2612,7 @@ class AnomalyAction(str, enum.Enum):
     rivaluta_producer = "rivaluta_producer"        # producer rivaluta budget/scope
     write_off_loss = "write_off_loss"              # → LossEntry (perso, non recuperato)
     overhead_cost = "overhead_cost"                # → OverheadCost (spesa aziendale ricorrente/strutturale)
+    auto_resolved = "auto_resolved"                # v3.5.0-alpha.119 — chiusa dal detector (causa rimossa, drift rientrato, ecc.)
 
 
 class AnomalySourceKind(str, enum.Enum):

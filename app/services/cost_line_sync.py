@@ -43,6 +43,37 @@ TIME_UNITS_DAY = {"day", "giorno", "giornate", "giornata", "d"}
 TIME_UNITS = TIME_UNITS_HOUR | TIME_UNITS_DAY
 
 
+def _count_jcl_matching_resources(db, *, job_id, project_id, invoices) -> int:
+    """v3.5.0-alpha.119 — Conta le JCL nel job/project che hanno almeno un
+    booking_assignment con resource_id in (invoices.resource_id). Usato
+    come denominatore per pro-quota distribution di SupplierInvoice ai
+    livelli 2 (job) e 3 (project) della priority ranking.
+
+    Garantisce che ogni fattura si spalmi in modo conservativo: la somma
+    dei contributi su tutte le JCL = total fattura, no double-count.
+    """
+    from app.models import (
+        JobCostLine as _JCL,
+        Booking as _Booking,
+        BookingAssignment as _BA,
+        Job as _Job,
+    )
+    res_ids = {si.resource_id for si in invoices if si.resource_id}
+    if not res_ids:
+        return 0
+    q = (
+        db.query(_JCL.id)
+        .join(_Booking, _Booking.job_cost_line_id == _JCL.id)
+        .join(_BA, _BA.booking_id == _Booking.id)
+        .filter(_BA.resource_id.in_(res_ids))
+    )
+    if job_id is not None:
+        q = q.filter(_JCL.job_id == job_id)
+    elif project_id is not None:
+        q = q.join(_Job, _Job.id == _JCL.job_id).filter(_Job.project_id == project_id)
+    return q.distinct().count()
+
+
 def is_time_based_unit(unit: Optional[str]) -> bool:
     """True se l'unità implica monte ore (day/hr/h/ore...). False per
     deliverable/materiale/forfait (pc/min/TB/GB/shot/version/allow/lump)."""
@@ -227,9 +258,26 @@ def recompute_cost_line_actual(db: Session, jcl) -> dict:
         default=None,
     )
 
-    # v3.5.0-alpha.115 — Cost reale da fatture passive (Σ SupplierInvoice
-    # con resource_id ∈ risorse dei booking di questa JCL).
-    # Solo le fatture non cancelled/soft-deleted contano.
+    # v3.5.0-alpha.119 — Cost reale da fatture passive con priority ranking.
+    # Fix double-count del Finding 1 smoke α.118: il vecchio filtro OR-soup
+    # (jcl OR job OR project) sommava la stessa fattura su tutte le JCL del
+    # job se più JCL avevano resource_id matching → cost_external job-level
+    # raddoppiato/triplicato.
+    #
+    # Nuovo modello di attribuzione (priority + esclusività):
+    #   livello 1 (jcl):     SupplierInvoice.job_cost_line_id IS NOT NULL
+    #                        → attribuita a quella JCL esclusivamente
+    #   livello 2 (job):     SupplierInvoice.job_cost_line_id IS NULL AND
+    #                        SupplierInvoice.job_id IS NOT NULL
+    #                        → distribuita pro-quota sulle JCL del job con
+    #                          resource_id matching (somma a quota uguale)
+    #   livello 3 (project): solo project_id, no job/jcl
+    #                        → distribuita pro-quota sulle JCL del progetto
+    #                          (qualsiasi job) con resource_id matching
+    #
+    # Vincolo: una fattura contribuisce a UNA sola JCL al livello 1, o si
+    # spalma su N JCL ai livelli 2/3 — la somma su tutte le JCL del job/
+    # project resta sempre = total fattura.
     new_cost_external = 0.0
     try:
         from app.models import SupplierInvoice, BookingAssignment as _BA
@@ -240,27 +288,55 @@ def recompute_cost_line_actual(db: Session, jcl) -> dict:
                 if a.resource_id:
                     resource_ids.add(a.resource_id)
         if resource_ids and jcl.job_id:
-            # Job → project per filtro fattura
-            from app.models import Job as _Job
+            from app.models import Job as _Job, JobCostLine as _JCL
             job_row = db.query(_Job).filter(_Job.id == jcl.job_id).first()
             if job_row:
-                # Match: SupplierInvoice deve essere linkata a (project del job O job stesso O JCL stesso)
-                # E resource_id ∈ resource_ids della JCL.
-                q = db.query(SupplierInvoice).filter(
+                base_q = db.query(SupplierInvoice).filter(
                     SupplierInvoice.resource_id.in_(resource_ids),
                     SupplierInvoice.deleted_at.is_(None),
                 )
-                # Filtro scope: prioritize JCL link diretto, poi job, poi project.
-                # Per evitare doppio conteggio: solo fatture linkate ALMENO a uno
-                # tra (jcl.id, job.id, project.id).
-                from sqlalchemy import or_ as _or
-                q = q.filter(_or(
-                    SupplierInvoice.job_cost_line_id == jcl.id,
+
+                # Livello 1: fatture linkate ESATTAMENTE a questa JCL
+                lvl1 = base_q.filter(SupplierInvoice.job_cost_line_id == jcl.id).all()
+                total_lvl1 = sum((si.amount_total or si.amount_net or 0) for si in lvl1)
+
+                # Livello 2: fatture linkate al job (no jcl), pro-quota fra
+                # JCL del job con almeno una resource matching
+                lvl2_invoices = base_q.filter(
+                    SupplierInvoice.job_cost_line_id.is_(None),
                     SupplierInvoice.job_id == jcl.job_id,
+                ).all()
+                total_lvl2_share = 0.0
+                if lvl2_invoices:
+                    n_share = _count_jcl_matching_resources(
+                        db, job_id=jcl.job_id, project_id=None, invoices=lvl2_invoices
+                    )
+                    if n_share > 0:
+                        total_lvl2_share = sum(
+                            (si.amount_total or si.amount_net or 0)
+                            for si in lvl2_invoices
+                        ) / n_share
+
+                # Livello 3: fatture solo project (no jcl, no job)
+                lvl3_invoices = base_q.filter(
+                    SupplierInvoice.job_cost_line_id.is_(None),
+                    SupplierInvoice.job_id.is_(None),
                     SupplierInvoice.project_id == job_row.project_id,
-                ))
+                ).all()
+                total_lvl3_share = 0.0
+                if lvl3_invoices:
+                    n_share = _count_jcl_matching_resources(
+                        db, job_id=None, project_id=job_row.project_id,
+                        invoices=lvl3_invoices,
+                    )
+                    if n_share > 0:
+                        total_lvl3_share = sum(
+                            (si.amount_total or si.amount_net or 0)
+                            for si in lvl3_invoices
+                        ) / n_share
+
                 new_cost_external = round(
-                    sum((si.amount_total or si.amount_net or 0) for si in q.all()), 2
+                    total_lvl1 + total_lvl2_share + total_lvl3_share, 2
                 )
     except Exception as _e:
         # Non bloccare il recompute se l'aggregazione fallisce
