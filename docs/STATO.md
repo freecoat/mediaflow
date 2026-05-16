@@ -8,6 +8,21 @@
 
 ## Versione corrente
 
+**v3.5.0-alpha.122** — 16 maggio 2026 notte — F17/F24 sweep terminologia JCL→Lavorazione + nascondi id interni
+
+**Primo step backlog P2 architetturale** (gruppo A "Visualizzazione globale").
+
+**Sweep parziale**: 5 rinomine user-facing nei template più impattanti (assets_inout, cost_report, manuale, quotes). "Lavorazione" come termine UI canonico per JobCostLine. Rimossi `#${id}` numerici dai badge.
+
+**Backlog P2 rimanente per α.123+**:
+- P2.A.2: audit globale fallback `#${id}` (assets_inout, planning)
+- P2.B: cashflow architettura (F16 IVA default off, F19 split reparti)
+- P2.C: flusso resource/supplier (F11 inverse, F6 admin_email send + SMTP)
+- P2.D: naming drawer (F7a center popup, F7b inserimento blocchi inline)
+- P2.E: revamp /team /resources /departments (F21)
+
+## (versione precedente)
+
 **v3.5.0-alpha.121** — 16 maggio 2026 tarda notte — 7 fix UX P1 da backlog α.120
 
 **7 finding P1 UX chiusi**:

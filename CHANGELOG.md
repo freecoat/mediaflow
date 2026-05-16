@@ -1,5 +1,39 @@
 # MediaFlow — Changelog
 
+## v3.5.0-alpha.122 — F17/F24 sweep terminologia JCL→Lavorazione + nascondi id interni (16 mag 2026 notte)
+
+Primo step del backlog P2 architetturale (gruppo A "Visualizzazione globale" da α.120 backlog). Focus su sweep terminologia e codici DB visibili user. Sweep parziale sui punti più impattanti — F24/F9 audit globale completo richiede passi successivi (P2.A.2).
+
+**F17 — Terminologia "JCL" → "Lavorazione" UI globale (parziale)**
+
+Audit `app/templates/`: 64 occorrenze di "JCL", "jcl_id", "JobCostLine" in 8 template, la maggior parte in commenti JS o param interni. User-facing visibili rinominati:
+
+- `assets_inout.html`: header tabella `<th>JCL</th>` → `<th>Lavorazione</th>`
+- `cost_report.html`: tooltip "Σ JCL.total_accrued" → "Σ lavorazioni maturate"
+- `manuale.html`: passaggio narrativo "JCL Spedizione standard" → "Lavorazione Spedizione standard" (2 occorrenze stesso paragrafo)
+- `quotes.html`: badge `↪ Da JCL #X` → `↪ Da lavorazione` (F24: id numerico DB rimosso). Toast errore "JCL #X senza job" → "Lavorazione senza job"
+
+Convenzione confermata: "Lavorazione" è il termine UI italiano canonico per JobCostLine. "Voce di costo" rimane sinonimo accettabile (usato già in suppliers.html label α.121). Commenti JS interni mantengono "JCL" per brevità (no user-facing).
+
+**F24/F9 — Sweep codici DB visibili (parziale)**
+
+Rimosso `#${id}` numerico interno DB dai punti più visibili (badges, toast). Resta auditing globale per fallback id (es. `#${asset.id}` quando label è null, planning fallback `#${f.id}`) — sono fallback "graceful degrade" e probabilmente accettabili come internal ref. Decisione definitiva su questi rinviata a P2.A.2.
+
+**Backlog P2 rimanente per α.123+**:
+- P2.A.2: audit globale ID interni visibili (fallback `#${id}` in assets_inout, planning)
+- P2.B: cashflow architettura (F16 IVA default off + toggle, F19 split reparti)
+- P2.C: flusso resource/supplier (F11 inverse, F6 admin_email send + SMTP)
+- P2.D: naming drawer (F7a center popup, F7b inserimento blocchi inline)
+- P2.E: revamp /team /resources /departments (F21)
+
+**File toccati**:
+- `app/templates/pages/assets_inout.html`
+- `app/templates/pages/cost_report.html`
+- `app/templates/pages/manuale.html`
+- `app/templates/pages/quotes.html`
+- `app/main.py`
+- CHANGELOG.md + docs/STATO.md
+
 ## v3.5.0-alpha.121 — 7 fix UX P1 da backlog α.120 (16 mag 2026 tarda notte)
 
 Round P1 dal backlog α.120 (24 finding totali). Chiusi 7 dei 8 P1 UX bug:

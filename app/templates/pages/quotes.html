@@ -1637,10 +1637,11 @@ function renderLineRow(l) {
   const optBadge = isOpt
     ? `<span class="ql-opt-badge" title="Voce opzionale: totale escluso dal subtotale">Opzionale</span>`
     : '';
-  // v3.5.0-alpha.64: badge "↪ Da JCL #X" cliccabile per righe nate da
-  // refer-to-sales (link al cost report del job d'origine).
+  // v3.5.0-alpha.64: badge cliccabile per righe nate da refer-to-sales
+  // (link al cost report del job d'origine).
+  // v3.5.0-alpha.122 (F17): rinomina "JCL" → "Lavorazione" (terminologia UI).
   const refBadge = l.referred_from_jcl_id
-    ? `<a href="#" onclick="openOriginCostReport(${l.referred_from_jcl_id});event.preventDefault();" class="text-xs" style="margin-left:6px; padding:1px 6px; background:rgba(168,85,247,0.15); color:#c084fc; border-radius:8px; text-decoration:none; font-weight:600; font-size:10px;" title="Riga generata da Rimanda al commerciale (JCL #${l.referred_from_jcl_id}) — apri cost report">↪ Da JCL #${l.referred_from_jcl_id}</a>`
+    ? `<a href="#" onclick="openOriginCostReport(${l.referred_from_jcl_id});event.preventDefault();" class="text-xs" style="margin-left:6px; padding:1px 6px; background:rgba(168,85,247,0.15); color:#c084fc; border-radius:8px; text-decoration:none; font-weight:600; font-size:10px;" title="Riga generata da Rimanda al commerciale — apri cost report">↪ Da lavorazione</a>`
     : '';
   // v3.5.0-alpha.92 — badge sezione attuale (cliccabile per cambiare).
   // Pre-α.92 era visibile solo nell'header sezione raggruppato; ora ogni
@@ -1699,10 +1700,10 @@ async function openOriginCostReport(jclId) {
     if (info.cost_report_url) {
       window.open(info.cost_report_url, '_blank');
     } else {
-      toast(`JCL #${jclId} senza job collegato`, 'warning');
+      toast(`Lavorazione senza job collegato`, 'warning');
     }
   } catch(e) {
-    toast(e.message || `JCL #${jclId} non più trovata`, 'error');
+    toast(e.message || `Lavorazione non più trovata`, 'error');
   }
 }
 
