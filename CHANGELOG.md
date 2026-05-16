@@ -1,5 +1,53 @@
 # MediaFlow — Changelog
 
+## v3.5.0-alpha.134 — F25 widget Quotato vs Fatturato per progetto + analisi anomalie Shadow (16 mag 2026 notte tarda)
+
+Finding emerso da Matteo uso reale 16 mag tarda: incongruenza Cost Report vs Fatturazione su progetto Shadow Stagione 3. Investigato + soluzione immediata F25 + documentazione anomalie architetturali per α.135+.
+
+**Analisi Shadow Stagione 3 (project 12)**
+
+Setup: Quote €44'889 (€36'795 imponibile) → 3 fatture paid (€44'889 incassati) → BUT:
+- JCL.total_accrued = €0 (zero ore maturate)
+- Bookings done = 0/14 (nessun booking executed)
+- Σ JCLBilledSlice.billed_amount = €11'975 (solo 14 slice da 2 batch)
+- "Fatturato fantasma" (€36'795 - €11'975 = €24'820, 67% del quotato) non agganciato a JCL via slice
+
+Pattern: fatture create con line manuali "Acconto 20%", "SAL 2/3", "Saldo finale" disaccoppiate dalle slice batch-generate.
+
+**F25 — Widget "Quotato vs Fatturato per progetto" in /finance#invoices**
+
+Card collassabile (default chiusa) sopra la tabella fatture. Click sul header espande + carica.
+
+Backend `GET /finance/api/project-billing-summary`:
+- Quote totals per project (Quote.total_with_vat, status approved/sent/superseded)
+- Invoice totals via Job (subtotal/total/amount_paid, NC TD04 sottrae con sign -1)
+- Σ JCLBilledSlice.billed_amount per project (solo non voided)
+- Calcola `admin_net = invoiced_net - slice_linked_net` (= fatturato amministrativo extra-JCL)
+- `delta_vat = invoiced_vat - quoted_vat` (over/under-billing)
+- Ordinato per quoted_vat desc
+
+UI: tabella 8 colonne (Progetto · Quotato IVA · Fatturato IVA · Pagato · Aperto · Slice-linked · Admin · Δ vs Quote).
+
+**Evidenze visive**:
+- **Admin** in arancione `#f59e0b` se > 5% del quotato → "potenziale incongruenza Cost Report"
+- **Δ vs Quote** in rosso se positivo (over-billed), grigio se negativo (sotto-fatturato), verde se zero
+- **Pagato** sempre verde, **Aperto** ambra se > 0
+
+**Smoke**: 43 progetti listati con fatture. Shadow Stagione 3 confermato: admin_net €24'819 (67% del quotato), warning arancione.
+
+**Anomalie architetturali documentate** (decision design α.135+):
+
+Findings salvati in memoria `project_alpha134_findings.md`:
+- **F26**: disaccoppiamento `Invoice.lines` vs `JCLBilledSlice` (3 soluzioni candidate, raccomandato pattern B = visibilità UI senza riarchitettura)
+- **F27**: bookings 0 done + JCL `billing_status='paid'` → semantica fuorviante. Distinguere billing_status da execution_status.
+- **F28**: mismatch slice billed_amount vs Invoice.subtotal quando emit usa line manuale invece di derivare dalle slice. Investigare flow batch → invoice.
+
+**File toccati**:
+- `app/routers/finance.py` (endpoint `project-billing-summary` + import `case`)
+- `app/templates/pages/finance.html` (card riepilogo + `pbsToggle` + `pbsLoad`)
+- `app/main.py` (version bump)
+- CHANGELOG.md + docs/STATO.md + memory `project_alpha134_findings.md`
+
 ## v3.5.0-alpha.133 — i18n GUI base (IT/EN/FR/DE) — switcher topbar (16 mag 2026 notte tarda)
 
 Sistema i18n GUI client-side per supporto multilingua. Lingue iniziali: IT (sorgente), EN, FR, DE. Espandibile via dictionary + `data-i18n` attributes.

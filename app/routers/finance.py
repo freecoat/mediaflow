@@ -384,6 +384,109 @@ def _refresh_invoice_payment_state(db: Session, invoice: Invoice) -> None:
                         jcl.billing_status = JCLBillingStatus.billed
 
 
+@router.get("/api/project-billing-summary")
+async def project_billing_summary(db: Session = Depends(get_db)):
+    """v3.5.0-alpha.134 (F25) — Riepilogo per progetto: Quotato vs Fatturato
+    vs Pagato vs slice-linked. Visualizza in /finance le incongruenze fra
+    fatturato totale (Σ Invoice.subtotal) e fatturato linkato a JCL (Σ slice).
+
+    Ritorna lista progetti con almeno una fattura non-cancelled, ordinati
+    per quoted_total desc.
+    """
+    from app.models import JCLBilledSlice, JobCostLine as _JCL
+    from sqlalchemy import func as _func, case as _case
+    tid = current_tenant_id()
+
+    # Quote totals per project (somma quote approved/sent del progetto)
+    quote_q = (
+        db.query(
+            Project.id, Project.code, Project.title,
+            _func.coalesce(_func.sum(Quote.total_with_vat), 0.0).label("quoted_vat"),
+        )
+        .select_from(Quote)
+        .join(Project, Project.id == Quote.project_id)
+        .filter(
+            Project.tenant_id == tid,
+            Quote.status.in_([QuoteStatus.approved, QuoteStatus.sent, QuoteStatus.superseded]),
+        )
+        .group_by(Project.id, Project.code, Project.title)
+        .all()
+    )
+    quoted_by_project = {r.id: {"code": r.code, "title": r.title, "quoted": float(r.quoted_vat or 0)} for r in quote_q}
+
+    # Invoiced + paid per project via Job
+    inv_q = (
+        db.query(
+            Project.id,
+            _func.coalesce(_func.sum(
+                _case((Invoice.doc_type == "TD04", -1), else_=1) * Invoice.subtotal
+            ), 0.0).label("invoiced_net"),
+            _func.coalesce(_func.sum(
+                _case((Invoice.doc_type == "TD04", -1), else_=1) * Invoice.total
+            ), 0.0).label("invoiced_vat"),
+            _func.coalesce(_func.sum(
+                _case((Invoice.doc_type == "TD04", -1), else_=1) * Invoice.amount_paid
+            ), 0.0).label("paid_vat"),
+        )
+        .select_from(Invoice)
+        .join(Job, Job.id == Invoice.job_id)
+        .join(Project, Project.id == Job.project_id)
+        .filter(
+            Project.tenant_id == tid,
+            Invoice.status != InvoiceStatus.draft,
+        )
+        .group_by(Project.id)
+        .all()
+    )
+
+    # Slice-linked subtotal per project
+    slice_q = (
+        db.query(
+            Project.id,
+            _func.coalesce(_func.sum(JCLBilledSlice.billed_amount), 0.0).label("slice_total"),
+        )
+        .select_from(JCLBilledSlice)
+        .join(_JCL, _JCL.id == JCLBilledSlice.job_cost_line_id)
+        .join(Job, Job.id == _JCL.job_id)
+        .join(Project, Project.id == Job.project_id)
+        .filter(
+            JCLBilledSlice.tenant_id == tid,
+            JCLBilledSlice.voided_at.is_(None),
+        )
+        .group_by(Project.id)
+        .all()
+    )
+    slice_by_project = {r.id: float(r.slice_total or 0) for r in slice_q}
+
+    rows = []
+    for inv_row in inv_q:
+        pid = inv_row.id
+        meta = quoted_by_project.get(pid, {"code": None, "title": "(progetto)", "quoted": 0.0})
+        invoiced_net = float(inv_row.invoiced_net or 0)
+        invoiced_vat = float(inv_row.invoiced_vat or 0)
+        paid_vat = float(inv_row.paid_vat or 0)
+        slice_total = slice_by_project.get(pid, 0.0)
+        # "amministrativo" = imponibile fatturato non agganciato a slice JCL
+        admin_net = round(invoiced_net - slice_total, 2)
+        outstanding_vat = round(invoiced_vat - paid_vat, 2)
+        rows.append({
+            "project_id": pid,
+            "project_code": meta["code"],
+            "project_title": meta["title"],
+            "quoted_vat": round(meta["quoted"], 2),
+            "invoiced_net": round(invoiced_net, 2),
+            "invoiced_vat": round(invoiced_vat, 2),
+            "paid_vat": round(paid_vat, 2),
+            "outstanding_vat": outstanding_vat,
+            "slice_linked_net": round(slice_total, 2),
+            "admin_net": admin_net,
+            # delta_vat: invoice IVA inclusa vs quote IVA inclusa (positivo = over-billed)
+            "delta_vat": round(invoiced_vat - meta["quoted"], 2),
+        })
+    rows.sort(key=lambda r: -r["quoted_vat"])
+    return {"rows": rows, "count": len(rows)}
+
+
 @router.get("/api/invoices/{invoice_id}")
 async def get_invoice_detail(invoice_id: int, db: Session = Depends(get_db)):
     """v3.5.0-alpha.121 (F18) — dettaglio fattura per drawer UI lista.

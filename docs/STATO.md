@@ -8,6 +8,29 @@
 
 ## Versione corrente
 
+**v3.5.0-alpha.134** — 16 maggio 2026 notte tarda — F25 widget Quotato vs Fatturato + analisi Shadow
+
+**Finding architetturale Shadow Stagione 3**:
+- Quote €44'889 fatturato €44'889 incassato €44'889 — apparentemente coerente.
+- MA: bookings done 0/14, JCL accrued €0, Σ slice solo €11'975 (= 27% del fatturato).
+- €24'820 (67%) "fatturato fantasma" non agganciato a JCL via slice → fatture manuali "Acconto/SAL/Saldo".
+
+**F25 fix immediato**: card "📊 Quotato vs Fatturato per progetto" in /finance#invoices (collassabile, lazy load). 8 colonne con warning visivo se admin_net > 5% quotato. Endpoint `GET /finance/api/project-billing-summary` (43 progetti listati su DB demo).
+
+**F26/F27/F28 documentati per α.135+** (decision design):
+- F26 disaccoppiamento Invoice.lines vs JCLBilledSlice
+- F27 JCL billing_status="paid" + booking 0 done → semantica fuorviante
+- F28 mismatch slice billed_amount vs Invoice.subtotal
+
+Findings completi in memoria [[project_alpha134_findings]].
+
+**Backlog α.135+**:
+- Design F26/F27/F28 → implementare pattern decision
+- Estensione i18n a dashboard/pagine principali (α.133 sweep)
+- Continuazione capitolati / OAuth / portali
+
+## (versione precedente)
+
 **v3.5.0-alpha.133** — 16 maggio 2026 notte tarda — i18n GUI base IT/EN/FR/DE
 
 **Sistema i18n client-side**:

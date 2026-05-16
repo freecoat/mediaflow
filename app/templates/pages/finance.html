@@ -39,6 +39,38 @@
     🔗 Filtro su singola fattura: <b><span class="focus-num">—</span></b>
     <button class="btn btn-ghost btn-sm" onclick="clearInvoiceFocus()" style="margin-left:10px;">✕ Mostra tutte</button>
   </div>
+
+  <!-- v3.5.0-alpha.134 (F25) — Riepilogo Quotato vs Fatturato vs Pagato per progetto -->
+  <div class="card mb-3" id="pbs-card">
+    <div class="card-header" style="display:flex; align-items:center; justify-content:space-between;">
+      <span class="card-title">📊 Quotato vs Fatturato per progetto</span>
+      <button class="btn btn-ghost btn-sm" onclick="pbsToggle()" title="Mostra/nascondi tabella" id="pbs-toggle-btn">▼</button>
+    </div>
+    <div id="pbs-body" style="display:none;">
+      <div class="text-xs text-muted" style="padding:6px 16px 4px;">
+        Colonna <b>Admin</b> = imponibile fatturato non agganciato a slice JCL (fatture acconto/SAL/saldo manuali). Delta alto = potenziale incongruenza Cost Report. <span style="color:#f59e0b;">⚠</span> evidenzia delta &gt; 5% del quotato.
+      </div>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Progetto</th>
+              <th class="text-right">Quotato (IVA)</th>
+              <th class="text-right">Fatturato (IVA)</th>
+              <th class="text-right">Pagato</th>
+              <th class="text-right">Aperto</th>
+              <th class="text-right" title="Σ JCLBilledSlice imponibile">Slice-linked</th>
+              <th class="text-right" title="Imponibile - Slice = fatturato amministrativo">Admin</th>
+              <th class="text-right" title="Fatturato - Quotato">Δ vs Quote</th>
+            </tr>
+          </thead>
+          <tbody id="pbs-tbody">
+            <tr><td colspan="8" class="text-muted" style="text-align:center;padding:14px;">Caricamento…</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
   <!-- Filtri -->
   <div class="flex gap-3 mb-4 items-center">
     <select class="form-select" style="width:auto;" id="inv-filter" onchange="loadInvoices()">
@@ -1262,6 +1294,99 @@ async function changeInvStatus(id, status) {
     toast('Stato fattura aggiornato', 'success');
     loadInvoices();
   } catch(e) { toast(e.message, 'error'); }
+}
+
+// v3.5.0-alpha.134 (F25) — Riepilogo Quotato vs Fatturato per progetto.
+// Card collassabile in /finance#invoices. Evidenzia delta + admin_net
+// per individuare progetti con incongruenze (fatturato non linkato a JCL).
+let _pbsLoaded = false;
+function pbsToggle() {
+  const body = document.getElementById('pbs-body');
+  const btn = document.getElementById('pbs-toggle-btn');
+  if (!body) return;
+  const open = body.style.display !== 'none';
+  body.style.display = open ? 'none' : '';
+  if (btn) btn.textContent = open ? '▼' : '▲';
+  if (!open && !_pbsLoaded) {
+    pbsLoad();
+    _pbsLoaded = true;
+  }
+}
+async function pbsLoad() {
+  const tbody = document.getElementById('pbs-tbody');
+  if (!tbody) return;
+  let data;
+  try {
+    data = await api('GET', '/finance/api/project-billing-summary');
+  } catch (e) {
+    while (tbody.firstChild) tbody.removeChild(tbody.firstChild);
+    const tr = document.createElement('tr');
+    const td = document.createElement('td');
+    td.colSpan = 8; td.className = 'text-muted';
+    td.style.cssText = 'text-align:center;padding:14px;color:var(--rose);';
+    td.textContent = 'Errore: ' + (e.message || '');
+    tr.appendChild(td); tbody.appendChild(tr);
+    return;
+  }
+  const rows = data.rows || [];
+  while (tbody.firstChild) tbody.removeChild(tbody.firstChild);
+  if (!rows.length) {
+    const tr = document.createElement('tr');
+    const td = document.createElement('td');
+    td.colSpan = 8; td.className = 'text-muted';
+    td.style.cssText = 'text-align:center;padding:14px;';
+    td.textContent = 'Nessuna fattura emessa con progetto collegato.';
+    tr.appendChild(td); tbody.appendChild(tr);
+    return;
+  }
+  rows.forEach(r => {
+    const tr = document.createElement('tr');
+    const tdP = document.createElement('td');
+    const code = document.createElement('span'); code.className = 'mono'; code.style.fontSize = '12px';
+    code.textContent = r.project_code || '—';
+    tdP.appendChild(code);
+    const ttl = document.createElement('div'); ttl.className = 'text-xs text-muted'; ttl.textContent = r.project_title || '';
+    tdP.appendChild(ttl);
+    tr.appendChild(tdP);
+    const mk = (val, cls) => {
+      const td = document.createElement('td');
+      td.className = 'text-right mono' + (cls ? ' ' + cls : '');
+      td.textContent = fmtCurrency(val);
+      return td;
+    };
+    tr.appendChild(mk(r.quoted_vat));
+    tr.appendChild(mk(r.invoiced_vat));
+    tr.appendChild(mk(r.paid_vat, 'color-green'));
+    tr.appendChild(mk(r.outstanding_vat, r.outstanding_vat > 0.01 ? 'color-amber' : ''));
+    tr.appendChild(mk(r.slice_linked_net));
+    // Admin column: evidenzia se > 5% del quotato
+    const adminTd = document.createElement('td');
+    adminTd.className = 'text-right mono';
+    adminTd.textContent = fmtCurrency(r.admin_net);
+    const adminPct = r.quoted_vat > 0 ? Math.abs(r.admin_net / r.quoted_vat) : 0;
+    if (adminPct > 0.05) {
+      adminTd.style.color = '#f59e0b';
+      adminTd.style.fontWeight = '600';
+      adminTd.title = `${(adminPct*100).toFixed(0)}% del quotato non agganciato a JCL slice — possibile incongruenza Cost Report`;
+    }
+    tr.appendChild(adminTd);
+    // Delta vs quote
+    const deltaTd = document.createElement('td');
+    deltaTd.className = 'text-right mono';
+    deltaTd.style.fontWeight = '600';
+    if (r.delta_vat > 0.01) {
+      deltaTd.style.color = 'var(--rose)';
+      deltaTd.textContent = '+' + fmtCurrency(r.delta_vat);
+    } else if (r.delta_vat < -0.01) {
+      deltaTd.style.color = 'var(--text2)';
+      deltaTd.textContent = fmtCurrency(r.delta_vat);
+    } else {
+      deltaTd.style.color = 'var(--green)';
+      deltaTd.textContent = '0';
+    }
+    tr.appendChild(deltaTd);
+    tbody.appendChild(tr);
+  });
 }
 
 // v3.5.0-alpha.127 (F6) — Invia fattura via email cliente (admin_email).
