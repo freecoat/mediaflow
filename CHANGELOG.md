@@ -1,5 +1,43 @@
 # MediaFlow — Changelog
 
+## v3.5.0-alpha.124 — F7a/F7b naming builder: modal centrato + editor inline (16 mag 2026 notte tardi)
+
+Gruppo P2.D del backlog α.120. Refactor builder naming conventions in `/settings#numbering`.
+
+**F7a — Builder modal centrato (no più drawer sinistra)**
+
+- Pre-fix (α.114 A14): drawer fisso a sinistra flush con sidebar (`position:fixed; left:var(--sidebar-w); height:100vh; border-radius:0`). Matteo: "non avevamo detto a destra? Puoi anche metterlo al centro per me in stile pop-up".
+- Fix: rimosso CSS `position:fixed`, drawer ora usa CSS default `.modal` (centrato in viewport, max-width 560px, max-height 88vh, border-radius standard). Modal-overlay style standard (no più background rgba(0,0,0,0.45) override).
+
+**F7b — Editor inline + palette click-to-insert (no più drag&drop)**
+
+- Pre-fix: builder con "Blocchi attivi" drag&drop riordinabili + "Variabili disponibili" che spinge alla fine + input separato "Inserisci testo/separatore custom" con bottone "+ Aggiungi". Matteo: "macchinoso il metodo di inserimento dei caratteri aggiuntivi. Forse si poteva digitare direttamente nel riquadro blocchi attivi".
+- Fix: input text raw editabile direttamente (`<input id="nmb-pattern-input">`). Click su una variabile della palette la inserisce **nella posizione del cursore** (via `selectionStart/selectionEnd` + setSelectionRange). Preview server `_nmbServerPreview()` debounced (250ms) chiamato a ogni input.
+- Palette `nmb-blocks-palette` mantenuta con greys-out per variabili non supportate per doc_type (α.116 — `supported_vars` filter).
+- Dead code rimosso: `_nmbBlocks` state, `_nmbTokenize()`, `_nmbRenderBuilder()`, `nmbAddCustom()`, sezione "Blocchi attivi" + "Inserisci testo custom".
+- `nmbSaveFromBuilder()` legge ora `nmb-pattern-input.value` invece di `_nmbBlocks.join('')`.
+
+Comportamento utente:
+1. Click su una regola → modal centrato si apre con input pre-popolato dal `format_pattern` salvato.
+2. Edit raw oppure click variabili → testo inserito al cursore.
+3. Preview live mostra il prossimo codice emesso a ogni keystroke.
+4. Save invia il pattern raw al backend (validazione `validate_pattern` α.116 + quote progressivo finale α.118 invariata).
+
+**Smoke**:
+- `/settings` page: 0 occorrenze `nmb-blocks-active`, 0 di `nmb-custom-text`, 5 di `nmb-pattern-input`, 3 di `nmbOnPatternInput`.
+- Boot α.124 OK.
+
+**Backlog P2 rimanente per α.125+**:
+- P2.A.2: audit globale fallback `#${id}` user-facing
+- P2.C: F11 supplier↔resource inverso + F6 admin_email SMTP send
+- P2.E: revamp /team /resources /departments (F21)
+- F19 ratio_net precision
+
+**File toccati**:
+- `app/templates/pages/settings.html` (markup builder + JS refactor)
+- `app/main.py` (version bump)
+- CHANGELOG.md + docs/STATO.md
+
 ## v3.5.0-alpha.123 — F16 IVA toggle + F19 split cashflow per reparto (16 mag 2026 notte tardi)
 
 Gruppo P2.B del backlog α.120. Implementati F16 (totali fatture+cashflow SENZA IVA di default + toggle) e F19 (breakdown cashflow per Department).

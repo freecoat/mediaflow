@@ -8,6 +8,22 @@
 
 ## Versione corrente
 
+**v3.5.0-alpha.124** — 16 maggio 2026 notte tardi — F7a/F7b naming builder: modal centrato + editor inline
+
+**Gruppo P2.D chiuso**:
+- F7a: builder ora modal centrato (no più drawer fisso a sinistra). Stile standard `.modal`.
+- F7b: editor inline. Input text raw editabile + palette variabili click-to-insert al caret position. Preview live debounced. Dead code drag&drop rimosso.
+
+**Smoke**: /settings render OK, 0 occorrenze codici legacy `nmb-blocks-active` / `nmb-custom-text`.
+
+**Backlog P2 rimanente per α.125+**:
+- P2.A.2: audit globale `#${id}` user-facing
+- P2.C: F11 supplier↔resource inverso + F6 admin_email SMTP send
+- P2.E: revamp /team /resources /departments (F21)
+- F19 ratio_net precision
+
+## (versione precedente)
+
 **v3.5.0-alpha.123** — 16 maggio 2026 notte tardi — F16 IVA toggle + F19 split cashflow per reparto
 
 **Gruppo P2.B chiuso**:

@@ -589,7 +589,7 @@ AWS_S3_DEFAULT_BUCKET=mediaflow-prod</pre>
           Definisci il formato dei codici per ogni documento (quote, batch,
           fatture, job, export). Le regole valgono solo per i documenti
           emessi <b>dopo la modifica</b>: lo storico NON viene rinumerato.
-          <b>Click su una regola → si apre il builder drag&drop sulla sinistra.</b>
+          <b>Click su una regola → si apre il builder.</b> Pattern editabile direttamente, le variabili disponibili sono cliccabili per inserirle al cursore.
         </p>
         <div id="nmb-list">
           <div class="text-sm text-muted">Caricamento regole…</div>
@@ -597,49 +597,35 @@ AWS_S3_DEFAULT_BUCKET=mediaflow-prod</pre>
       </div>
     </div>
 
-    <!-- v3.5.0-alpha.113: Drawer left builder drag&drop naming -->
-    <div class="modal-overlay" id="modal-naming-builder" style="background:rgba(0,0,0,0.45);">
-      <!-- v3.5.0-alpha.114 A14: flush a destra sidebar (left=var(--sidebar-w))
-           invece di left:0 → non copre la sidebar, drawer affianca. -->
+    <!-- v3.5.0-alpha.124 (F7a/F7b): builder come modal centrato (popup) +
+         editor textarea con palette click-to-insert al caret position.
+         Pre-fix: drawer a sinistra flush sidebar (α.114 A14) + drag&drop
+         blocchi con inserimento separato per char custom — Matteo "macchinoso".
+         Ora: input text raw editabile direttamente, click su var la inserisce
+         nella posizione del cursore, preview live aggiornato a ogni input. -->
+    <div class="modal-overlay" id="modal-naming-builder">
       <div class="modal" id="nmb-builder-drawer"
-           style="max-width:520px; width:520px; height:100vh; max-height:100vh;
-                  position:fixed; top:0; left:var(--sidebar-w); right:auto; border-radius:0;
-                  border-left:none; border-right:1px solid var(--border2);
-                  display:flex; flex-direction:column; animation:none;">
+           style="max-width:560px; width:560px; max-height:88vh;
+                  display:flex; flex-direction:column;">
         <div class="modal-header">
           <span class="modal-title">🧩 <span id="nmb-builder-title">Naming builder</span></span>
           <button class="btn btn-ghost btn-icon" onclick="nmbCloseBuilder()">✕</button>
         </div>
         <div class="modal-body" style="overflow-y:auto;">
-          <div class="text-xs text-muted mb-2">Pattern attuale:</div>
-          <div id="nmb-pattern-preview" class="mono"
-               style="padding:10px 12px; background:var(--bg3); border:1px dashed var(--border);
-                      border-radius:6px; min-height:44px; font-size:14px; line-height:1.5;
-                      word-break:break-all; margin-bottom:10px;"></div>
+          <div class="text-xs text-muted mb-2">Pattern (modifica liberamente, oppure clicca le variabili sotto per inserirle):</div>
+          <input type="text" id="nmb-pattern-input" class="form-input mono"
+                 style="font-size:14px; padding:10px 12px; margin-bottom:10px;"
+                 placeholder="es. Q-{YYYY}-{NNN}"
+                 oninput="nmbOnPatternInput()" />
           <div class="text-xs text-muted mb-2">→ Prossimo emesso:</div>
           <div id="nmb-builder-preview" class="mono"
                style="padding:6px 10px; background:var(--bg2); border-radius:4px;
                       font-size:12px; color:var(--indigo2); margin-bottom:14px;"></div>
 
-          <div class="card-title" style="font-size:12px; margin-top:8px;">Blocchi attivi (riordina, rimuovi)</div>
-          <div class="text-xs text-muted mb-2">Drag per riordinare. Click ✕ per togliere.</div>
-          <div id="nmb-blocks-active"
-               style="min-height:60px; padding:8px; background:var(--bg2);
-                      border:1px dashed var(--border); border-radius:6px;
-                      margin-bottom:14px; display:flex; flex-wrap:wrap; gap:6px;"></div>
-
-          <div class="card-title" style="font-size:12px; margin-top:14px;">Variabili disponibili</div>
-          <div class="text-xs text-muted mb-2">Click per aggiungere alla fine. Oppure inserisci testo libero qui sotto.</div>
+          <div class="card-title" style="font-size:12px; margin-top:8px;">Variabili disponibili</div>
+          <div class="text-xs text-muted mb-2">Click per inserire nella posizione del cursore. Le variabili non supportate per questo tipo documento sono disabilitate.</div>
           <div id="nmb-blocks-palette"
                style="display:flex; flex-wrap:wrap; gap:6px; margin-bottom:14px;"></div>
-
-          <div class="form-group">
-            <label class="form-label text-xs">Inserisci testo/separatore custom</label>
-            <div style="display:flex; gap:6px;">
-              <input type="text" class="form-input" id="nmb-custom-text" placeholder="es. -" maxlength="20" style="flex:1;">
-              <button class="btn btn-secondary btn-sm" type="button" onclick="nmbAddCustom()">+ Aggiungi</button>
-            </div>
-          </div>
 
           <div class="form-group" style="margin-top:14px;">
             <label class="form-label" style="display:flex; align-items:center; gap:8px;">
@@ -822,7 +808,6 @@ function showPane(id) {
 // v3.5.0-alpha.113 — Naming conventions builder drag&drop
 let _nmbData = null;
 let _nmbCurrent = null;
-let _nmbBlocks = [];
 
 async function nmbReload() {
   const list = document.getElementById('nmb-list');
@@ -861,89 +846,65 @@ async function nmbReload() {
     const arrow = document.createElement('div');
     arrow.style.cssText = 'color:var(--text3); font-size:18px;';
     arrow.textContent = '🧩';
-    arrow.title = 'Apri builder drag&drop';
+    arrow.title = 'Apri builder';
     row.appendChild(left); row.appendChild(arrow);
     card.appendChild(row);
     list.appendChild(card);
   });
 }
 
-// Tokenizza pattern in blocchi: {VAR} o testo
-function _nmbTokenize(pattern) {
-  const tokens = [];
-  const re = /(\{[A-Z]+\})/g;
-  let last = 0;
-  let m;
-  while ((m = re.exec(pattern)) !== null) {
-    if (m.index > last) tokens.push(pattern.substring(last, m.index));
-    tokens.push(m[1]);
-    last = m.index + m[1].length;
-  }
-  if (last < pattern.length) tokens.push(pattern.substring(last));
-  return tokens.filter(t => t.length > 0);
-}
+// v3.5.0-alpha.124 (F7a/F7b) — builder semplificato:
+// - drawer → modal centrato (CSS in markup)
+// - input text raw editabile direttamente
+// - click su variabile la inserisce al caret position (no drag&drop)
+// - preview server live a ogni input (debounced)
 
 function nmbOpenBuilder(doc_type) {
   const c = (_nmbData.configs || []).find(x => x.doc_type === doc_type);
   if (!c) return;
   _nmbCurrent = doc_type;
-  _nmbBlocks = _nmbTokenize(c.format_pattern);
   document.getElementById('nmb-builder-title').textContent = c.label;
   document.getElementById('nmb-builder-reset').checked = !!c.reset_yearly;
-  _nmbRenderBuilder();
+  document.getElementById('nmb-pattern-input').value = c.format_pattern || '';
+  _nmbRenderPalette();
+  _nmbServerPreview();
   openModal('modal-naming-builder');
+  setTimeout(() => {
+    const inp = document.getElementById('nmb-pattern-input');
+    if (inp) inp.focus();
+  }, 50);
 }
 
 function nmbCloseBuilder() {
   closeModal('modal-naming-builder');
   _nmbCurrent = null;
-  _nmbBlocks = [];
 }
 
-function _nmbRenderBuilder() {
-  const act = document.getElementById('nmb-blocks-active');
-  while (act.firstChild) act.removeChild(act.firstChild);
-  _nmbBlocks.forEach((tok, idx) => {
-    const chip = document.createElement('div');
-    chip.draggable = true;
-    chip.dataset.idx = String(idx);
-    const isVar = tok.startsWith('{') && tok.endsWith('}');
-    chip.style.cssText = 'display:inline-flex; align-items:center; gap:4px; padding:5px 9px; ' +
-      'background:' + (isVar ? 'rgba(98,114,245,.15)' : 'var(--bg3)') + '; ' +
-      'color:' + (isVar ? 'var(--indigo2)' : 'var(--text)') + '; ' +
-      'border:1px solid ' + (isVar ? 'rgba(98,114,245,.4)' : 'var(--border)') + '; ' +
-      'border-radius:14px; font-family:monospace; font-size:12px; cursor:grab; user-select:none;';
-    chip.textContent = tok;
-    const x = document.createElement('span');
-    x.textContent = '✕';
-    x.style.cssText = 'opacity:0.6; cursor:pointer; padding:0 2px;';
-    x.onclick = (e) => { e.stopPropagation(); _nmbBlocks.splice(idx, 1); _nmbRenderBuilder(); };
-    chip.appendChild(x);
-    chip.ondragstart = (e) => { e.dataTransfer.setData('text/plain', String(idx)); chip.style.opacity = '0.5'; };
-    chip.ondragend = () => { chip.style.opacity = '1'; };
-    chip.ondragover = (e) => e.preventDefault();
-    chip.ondrop = (e) => {
-      e.preventDefault();
-      const fromIdx = parseInt(e.dataTransfer.getData('text/plain'), 10);
-      const toIdx = idx;
-      if (Number.isNaN(fromIdx) || fromIdx === toIdx) return;
-      const [moved] = _nmbBlocks.splice(fromIdx, 1);
-      _nmbBlocks.splice(toIdx, 0, moved);
-      _nmbRenderBuilder();
-    };
-    act.appendChild(chip);
-  });
-  if (!_nmbBlocks.length) {
-    const hint = document.createElement('div');
-    hint.className = 'text-xs text-muted';
-    hint.style.cssText = 'padding:10px; font-style:italic;';
-    hint.textContent = 'Nessun blocco. Click su una variabile sotto per aggiungere.';
-    act.appendChild(hint);
-  }
-  document.getElementById('nmb-pattern-preview').textContent = _nmbBlocks.join('') || '(vuoto)';
+let _nmbPreviewTimer = null;
+function nmbOnPatternInput() {
+  // Debounce preview (avoid hammer su backend a ogni keystroke)
+  if (_nmbPreviewTimer) clearTimeout(_nmbPreviewTimer);
+  _nmbPreviewTimer = setTimeout(_nmbServerPreview, 250);
+}
+
+function _nmbInsertAtCaret(text) {
+  const inp = document.getElementById('nmb-pattern-input');
+  if (!inp) return;
+  const start = inp.selectionStart ?? inp.value.length;
+  const end = inp.selectionEnd ?? inp.value.length;
+  const before = inp.value.substring(0, start);
+  const after = inp.value.substring(end);
+  inp.value = before + text + after;
+  const pos = start + text.length;
+  inp.focus();
+  inp.setSelectionRange(pos, pos);
+  nmbOnPatternInput();
+}
+
+function _nmbRenderPalette() {
   const pal = document.getElementById('nmb-blocks-palette');
   while (pal.firstChild) pal.removeChild(pal.firstChild);
-  // v3.5.0-alpha.116: filtra/greys-out variabili non supportate per doc_type
+  // v3.5.0-alpha.116: greys-out variabili non supportate per doc_type
   const currentDoc = (_nmbData.configs || []).find(c => c.doc_type === _nmbCurrent);
   const supportedSet = new Set(currentDoc?.supported_vars || []);
   (_nmbData.vars || []).forEach(v => {
@@ -955,8 +916,8 @@ function _nmbRenderBuilder() {
       btn.style.cssText = 'padding:5px 9px; background:rgba(98,114,245,.08); color:var(--indigo2); ' +
         'border:1px solid rgba(98,114,245,.30); border-radius:14px; font-family:monospace; ' +
         'font-size:11px; cursor:pointer;';
-      btn.title = v.desc;
-      btn.onclick = () => { _nmbBlocks.push(v.v); _nmbRenderBuilder(); };
+      btn.title = v.desc + ' — click per inserire al cursore';
+      btn.onclick = () => _nmbInsertAtCaret(v.v);
     } else {
       btn.style.cssText = 'padding:5px 9px; background:rgba(148,163,184,.10); color:var(--text3); ' +
         'border:1px dashed var(--border); border-radius:14px; font-family:monospace; ' +
@@ -967,7 +928,6 @@ function _nmbRenderBuilder() {
     btn.textContent = v.v;
     pal.appendChild(btn);
   });
-  _nmbServerPreview();
 }
 
 async function _nmbServerPreview() {
@@ -996,17 +956,9 @@ async function _nmbServerPreview() {
   } catch(e) {}
 }
 
-function nmbAddCustom() {
-  const txt = document.getElementById('nmb-custom-text').value;
-  if (!txt) return;
-  _nmbBlocks.push(txt);
-  document.getElementById('nmb-custom-text').value = '';
-  _nmbRenderBuilder();
-}
-
 async function nmbSaveFromBuilder() {
   if (!_nmbCurrent) return;
-  const pattern = _nmbBlocks.join('');
+  const pattern = (document.getElementById('nmb-pattern-input').value || '').trim();
   if (!pattern) { toast('Pattern vuoto', 'warning'); return; }
   const reset = document.getElementById('nmb-builder-reset').checked;
   try {
