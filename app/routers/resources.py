@@ -40,12 +40,16 @@ async def resources_list(
     request: Request,
     department_id: Optional[int] = None,
     type: Optional[str] = None,
+    include_inactive: int = 0,
     db: Session = Depends(get_db),
 ):
+    # v3.5.0-alpha.126 (P2.E/F21) — param include_inactive per toggle UI
+    # "Mostra inattive" nella pagina /resources. Default 0 = solo attive.
     q = db.query(Resource).filter(
         Resource.tenant_id == current_tenant_id(),
-        Resource.is_active == True,
     )
+    if not include_inactive:
+        q = q.filter(Resource.is_active == True)
     if department_id:
         q = q.filter(Resource.department_id == department_id)
     if type:
@@ -76,6 +80,7 @@ async def resources_list(
             "wh_policies": wh_policies,
             "selected_dept_id": department_id,
             "selected_type": type,
+            "include_inactive": bool(include_inactive),
             "TYPE_LABEL": TYPE_LABEL,
         }
     )

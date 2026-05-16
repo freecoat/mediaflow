@@ -1,5 +1,53 @@
 # MediaFlow — Changelog
 
+## v3.5.0-alpha.126 — P2.E revamp /team /resources /departments + filtri (16 mag 2026 notte tardi)
+
+Gruppo P2.E del backlog α.120. Matteo F21: "non mi piace come funziona /team vs /resources. Rendi più chiara la struttura. Elabora impaginazione più chiara fra le tre pagine e metti i filtri per la lista risorse".
+
+**Chiarezza purpose delle 3 pagine**
+
+Titoli topbar aggiornati con sub-title esplicativo:
+- `/resources` → "Risorse · Lista" (lista flat tutte le risorse)
+- `/team` → "Team · Vista per reparto" (raggruppamento visuale)
+- `/departments` → "Reparti · Configurazione"
+
+Banner header esplicativo su /resources e /team (info ribbon indaco) descrive lo scope e linka le altre due pagine. /departments aveva già banner descrittivo invariato.
+
+**Navigazione bidirezionale fra le 3 pagine**
+
+Topbar di ogni pagina ora contiene link alle altre due:
+- /resources topbar: `👥 Vista per reparto` + `🗂 Reparti`
+- /team topbar: `📋 Lista risorse` + `🗂 Reparti` (testi rinominati da "Lista (legacy)")
+- /departments topbar (nuovo): `👥 Team` + `📋 Lista risorse`
+
+**Filtri estesi /resources**
+
+Aggiunti i filtri richiesti:
+- **Search live** (`#filter-q`): input testuale, filter client-side della tabella già renderizzata (no reload). Match su tutto il contenuto della riga (nome, ruolo, reparto, contatti). Count aggiornato dinamicamente "X su Y (filtrate da ricerca)".
+- **Toggle "Mostra inattive"** (`#filter-inactive`): checkbox che ricarica server-side con param `include_inactive=1`. Pre-popolato dal context.
+- Filtri esistenti (reparto, tab tipo) preservati.
+
+**Backend `/resources` GET**
+
+- Nuovo param `include_inactive: int = 0`. Se truthy, filtro `is_active == True` non applicato → mostra anche risorse soft-deleted/disabilitate.
+- Template context passa `include_inactive` per pre-popolare checkbox.
+
+**JS refactor**
+
+- `applyFilters()` → client-side filter testuale (no reload, performance).
+- `applyFiltersServer()` → reload con querystring (dept + include_inactive). Chiamata da onchange su filter-dept e filter-inactive.
+
+**Backlog P2 rimanente per α.127+**:
+- P2.C: F11 supplier↔resource flusso inverso + F6 admin_email SMTP (provider scelto?)
+
+**File toccati**:
+- `app/routers/resources.py` (param include_inactive)
+- `app/templates/pages/resources.html` (topbar + banner + filter-q + filter-inactive + JS split client/server)
+- `app/templates/pages/team.html` (topbar testi + banner purpose)
+- `app/templates/pages/departments.html` (topbar bidirezionale)
+- `app/main.py` (version bump)
+- CHANGELOG.md + docs/STATO.md
+
 ## v3.5.0-alpha.125 — P2.A.2 sweep fallback id assets + F19 ratio_net precision (16 mag 2026 notte tardi)
 
 Bundle leggero: chiusura P2.A.2 (audit `#${id}` user-facing residui) + precisione query ratio_net su endpoint by-department.

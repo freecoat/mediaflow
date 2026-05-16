@@ -1,10 +1,10 @@
 {% extends "base.html" %}
 {% set active_page = "team" %}
 {% block title %}Team — MediaFlow{% endblock %}
-{% block topbar_title %}Team · Risorse + Reparti{% endblock %}
+{% block topbar_title %}Team · Vista per reparto{% endblock %}
 {% block topbar_actions %}
-  <a href="/resources/" class="btn btn-ghost btn-sm" title="Vista flat (legacy)">📋 Lista</a>
-  <a href="/departments/" class="btn btn-ghost btn-sm" title="Solo reparti (admin)">🗂 Reparti</a>
+  <a href="/resources/" class="btn btn-ghost btn-sm" title="Lista flat di tutte le risorse">📋 Lista risorse</a>
+  <a href="/departments/" class="btn btn-ghost btn-sm" title="Configurazione reparti">🗂 Reparti</a>
 {% endblock %}
 
 {% block head %}
@@ -90,6 +90,11 @@
 {% endblock %}
 
 {% block content %}
+<!-- v3.5.0-alpha.126 (P2.E/F21) — Banner purpose -->
+<div style="background:rgba(98,114,245,0.06); border-left:3px solid var(--indigo); border-radius:4px; padding:8px 14px; margin-bottom:14px; font-size:12px;">
+  <b>Vista visuale</b> delle risorse raggruppate per reparto (sidebar a sinistra). Per la lista flat con filtri va a <a href="/resources/" style="color:var(--indigo2);">Lista risorse</a>, per gestire i reparti <a href="/departments/" style="color:var(--indigo2);">Reparti</a>.
+</div>
+
 <div class="team-layout">
 
   <!-- Sidebar reparti ───────────────────────────────────── -->

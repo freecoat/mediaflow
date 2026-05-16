@@ -8,6 +8,19 @@
 
 ## Versione corrente
 
+**v3.5.0-alpha.126** — 16 maggio 2026 notte tardi — P2.E revamp /team /resources /departments + filtri
+
+**Gruppo P2.E chiuso**:
+- Purpose chiarito via sub-title topbar (Lista / Vista per reparto / Configurazione)
+- Banner header esplicativo + navigazione bidirezionale topbar fra le 3 pagine
+- Filtri /resources estesi: search live client-side + toggle "Mostra inattive" server-side
+- Backend param include_inactive su GET /resources
+
+**Backlog P2 rimanente per α.127+**:
+- P2.C: F11 supplier↔resource inverso + F6 admin_email SMTP send (richiede design SMTP provider)
+
+## (versione precedente)
+
 **v3.5.0-alpha.125** — 16 maggio 2026 notte tardi — P2.A.2 sweep fallback id + F19 ratio_net precision
 
 **Bundle leggero**:

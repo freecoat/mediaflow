@@ -2,18 +2,28 @@
 {% set active_page = "resources" %}
 
 {% block title %}Risorse — MediaFlow{% endblock %}
-{% block topbar_title %}Gestione Risorse{% endblock %}
+{% block topbar_title %}Risorse · Lista{% endblock %}
 
 {% block topbar_actions %}
+  <a href="/team/" class="btn btn-ghost btn-sm" title="Vista risorse raggruppate per reparto">👥 Vista per reparto</a>
+  <a href="/departments/" class="btn btn-ghost btn-sm" title="Configurazione reparti">🗂 Reparti</a>
   <button class="btn btn-primary btn-sm" onclick="openNewResource()">+ Nuova risorsa</button>
 {% endblock %}
 
 {% block content %}
 
+<!-- v3.5.0-alpha.126 (P2.E/F21) — Banner purpose + navigazione esplicita fra le 3 pagine -->
+<div style="background:rgba(98,114,245,0.06); border-left:3px solid var(--indigo); border-radius:4px; padding:8px 14px; margin-bottom:14px; font-size:12px;">
+  <b>Lista flat</b> di tutte le risorse del tenant: persone interne, freelance, studi, attrezzature, software, veicoli. Per la vista organizzata per reparto vai a <a href="/team/" style="color:var(--indigo2);">Team</a>, per gestire i reparti <a href="/departments/" style="color:var(--indigo2);">Reparti</a>.
+</div>
+
 <!-- Filtri -->
 <div class="flex items-center gap-3 mb-3" style="flex-wrap:wrap;">
   <div class="form-group" style="margin:0;">
-    <select class="form-select" id="filter-dept" onchange="applyFilters()" style="min-width:180px;">
+    <input type="text" id="filter-q" class="form-input" placeholder="🔍 Cerca per nome/ruolo…" oninput="applyFilters()" style="width:220px;">
+  </div>
+  <div class="form-group" style="margin:0;">
+    <select class="form-select" id="filter-dept" onchange="applyFiltersServer()" style="min-width:180px;">
       <option value="">Tutti i reparti</option>
       {% for d in departments %}
       <option value="{{ d.id }}" {% if selected_dept_id == d.id %}selected{% endif %}>{{ d.name }}</option>
@@ -28,7 +38,11 @@
     <div class="tab {% if selected_type == 'software' %}active{% endif %}" onclick="setTypeFilter('software')">💾 Software</div>
     <div class="tab {% if selected_type == 'vehicle' %}active{% endif %}" onclick="setTypeFilter('vehicle')">🚐 Veicoli</div>
   </div>
-  <span class="text-xs text-muted">{{ resources|length }} risors{% if resources|length == 1 %}a{% else %}e{% endif %}</span>
+  <label style="display:inline-flex; align-items:center; gap:6px; font-size:12px; color:var(--text2); cursor:pointer;">
+    <input type="checkbox" id="filter-inactive" onchange="applyFiltersServer()" style="margin:0;" {% if include_inactive %}checked{% endif %}>
+    Mostra inattive
+  </label>
+  <span class="text-xs text-muted" id="resources-count">{{ resources|length }} risors{% if resources|length == 1 %}a{% else %}e{% endif %}</span>
 </div>
 
 <div class="card">
@@ -313,10 +327,32 @@ const TYPE_LABEL = {
   vehicle: 'Veicolo',
 };
 
+// v3.5.0-alpha.126 (P2.E/F21) — applyFilters esteso con include_inactive.
+// filter-q (search testo) gira client-side per evitare reload a ogni keystroke.
 function applyFilters() {
+  // Search testuale: filter client-side della tabella già renderizzata
+  const q = (document.getElementById('filter-q')?.value || '').toLowerCase().trim();
+  if (q !== '_serverReload') {
+    const rows = document.querySelectorAll('tbody tr');
+    let visibleCount = 0;
+    rows.forEach(tr => {
+      const txt = tr.textContent.toLowerCase();
+      const match = !q || txt.includes(q);
+      tr.style.display = match ? '' : 'none';
+      if (match) visibleCount++;
+    });
+    const cntEl = document.getElementById('resources-count');
+    if (cntEl && q) cntEl.textContent = visibleCount + ' su ' + rows.length + ' (filtrate da ricerca)';
+  }
+}
+
+// Filter server-side per cambi che richiedono nuovo SQL (reparto, include_inactive)
+function applyFiltersServer() {
   const dept = document.getElementById('filter-dept').value;
+  const inactive = document.getElementById('filter-inactive')?.checked;
   const params = new URLSearchParams();
   if (dept) params.set('department_id', dept);
+  if (inactive) params.set('include_inactive', '1');
   const currentType = new URLSearchParams(location.search).get('type');
   if (currentType) params.set('type', currentType);
   location.href = '/resources' + (params.toString() ? '?' + params.toString() : '');
