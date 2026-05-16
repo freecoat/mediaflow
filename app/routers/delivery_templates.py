@@ -90,6 +90,62 @@ async def list_templates(db: Session = Depends(get_db)):
     return [_dt_dict(t) for t in rows]
 
 
+# v3.5.0-alpha.131 (Fase 5) — Diagnostica corpus capitolati: incrocia
+# file fisici in docs/capitolati_esempio/ con DeliveryTemplate salvati
+# nel DB (match per source_document_name). UI mostra ✓ parsato / ⏳ no.
+@router.get("/api/samples-status", dependencies=[RequireEditSettings])
+async def samples_corpus_status(db: Session = Depends(get_db)):
+    """Report status corpus capitolati. Per ogni file in
+    docs/capitolati_esempio/ ritorna: filename, size, ext, parsed (bool),
+    template_id (se DeliveryTemplate esistente per quel source_document)."""
+    from pathlib import Path as _Path
+    proj_root = _Path(__file__).resolve().parents[2]
+    samples_dir = proj_root / "docs" / "capitolati_esempio"
+    if not samples_dir.is_dir():
+        return {"samples": [], "stats": {"total": 0, "parsed": 0}}
+    allowed_ext = {".pdf", ".docx", ".doc", ".xlsx", ".xls", ".txt", ".md"}
+    # Lookup template per source_document_name (case-insensitive)
+    templates = (
+        db.query(DeliveryTemplate)
+        .filter(DeliveryTemplate.tenant_id == current_tenant_id())
+        .filter(DeliveryTemplate.is_active == True)  # noqa: E712
+        .all()
+    )
+    parsed_by_src = {
+        (t.source_document_name or "").lower(): t
+        for t in templates if t.source_document_name
+    }
+    out = []
+    n_parsed = 0
+    for p in sorted(samples_dir.iterdir()):
+        if not p.is_file() or p.suffix.lower() not in allowed_ext:
+            continue
+        size = p.stat().st_size
+        if size == 0:
+            continue
+        tpl = parsed_by_src.get(p.name.lower())
+        if tpl:
+            n_parsed += 1
+        out.append({
+            "filename": p.name,
+            "size": size,
+            "size_human": f"{size / 1024:.0f} KB" if size < 1024*1024 else f"{size / (1024*1024):.1f} MB",
+            "ext": p.suffix.lower().lstrip("."),
+            "parsed": tpl is not None,
+            "template_id": tpl.id if tpl else None,
+            "template_name": tpl.name if tpl else None,
+            "template_broadcaster": tpl.broadcaster if tpl else None,
+        })
+    return {
+        "samples": out,
+        "stats": {
+            "total": len(out),
+            "parsed": n_parsed,
+            "pending": len(out) - n_parsed,
+        },
+    }
+
+
 # v3.5.0-alpha.128 (Fase 5) — IMPORTANTE: deve stare PRIMA di /api/{template_id}
 # altrimenti FastAPI lo cattura come template_id="sample-files" → 422.
 @router.get("/api/sample-files", dependencies=[RequireEditSettings])

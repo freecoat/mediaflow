@@ -67,6 +67,34 @@
   </div>
 </div>
 
+<!-- v3.5.0-alpha.131 (Fase 5) — Corpus diagnostica capitolati di riferimento -->
+<div class="card mt-3" id="samples-corpus-card">
+  <div class="card-header">
+    <span class="card-title">📚 Corpus capitolati di riferimento</span>
+    <span style="color:var(--text3); font-size:12px;" id="samples-stats">caricamento…</span>
+  </div>
+  <div style="padding:8px 16px 4px; font-size:12px; color:var(--text2);">
+    File presenti in <code>docs/capitolati_esempio/</code> (17 capitolati reali — Netflix/Sky/RAI/A24/etc). Click "✨ Parse" per analizzare con AI e salvare come template.
+  </div>
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th>File</th>
+          <th class="text-right">Size</th>
+          <th>Ext</th>
+          <th>Status</th>
+          <th>Template</th>
+          <th style="width:90px;">Azione</th>
+        </tr>
+      </thead>
+      <tbody id="samples-tbody">
+        <tr><td colspan="6" class="text-muted" style="text-align:center;padding:20px;">Caricamento…</td></tr>
+      </tbody>
+    </table>
+  </div>
+</div>
+
 <!-- Modal Import capitolato -->
 <div id="modal-import" class="modal-overlay">
   <div class="modal" style="max-width:760px;">
@@ -165,6 +193,115 @@ const BLOCK_DEFS = [
   ['archive_specs', 'Archive specs'],
   ['metadata_requirements', 'Metadata requirements'],
 ];
+
+// v3.5.0-alpha.131 (Fase 5) — Carica e renderizza corpus diagnostica.
+async function dtLoadSamplesStatus() {
+  const tbody = document.getElementById('samples-tbody');
+  const statsEl = document.getElementById('samples-stats');
+  if (!tbody) return;
+  let data;
+  try {
+    data = await api('GET', '/delivery-templates/api/samples-status');
+  } catch (e) {
+    while (tbody.firstChild) tbody.removeChild(tbody.firstChild);
+    const tr = document.createElement('tr');
+    const td = document.createElement('td');
+    td.colSpan = 6; td.className = 'text-muted';
+    td.style.cssText = 'text-align:center;padding:14px;color:var(--rose);';
+    td.textContent = 'Errore: ' + (e.message || '');
+    tr.appendChild(td); tbody.appendChild(tr);
+    return;
+  }
+  const samples = data.samples || [];
+  const stats = data.stats || { total: 0, parsed: 0, pending: 0 };
+  if (statsEl) {
+    statsEl.textContent = `${stats.total} file · ${stats.parsed} parsati · ${stats.pending} non parsati`;
+  }
+  while (tbody.firstChild) tbody.removeChild(tbody.firstChild);
+  if (!samples.length) {
+    const tr = document.createElement('tr');
+    const td = document.createElement('td');
+    td.colSpan = 6; td.className = 'text-muted';
+    td.style.cssText = 'text-align:center;padding:14px;';
+    td.textContent = 'Nessun capitolato in docs/capitolati_esempio/';
+    tr.appendChild(td); tbody.appendChild(tr);
+    return;
+  }
+  samples.forEach(s => {
+    const tr = document.createElement('tr');
+    const tdN = document.createElement('td');
+    tdN.className = 'mono';
+    tdN.style.fontSize = '12px';
+    tdN.textContent = s.filename.length > 55 ? s.filename.substring(0, 52) + '…' : s.filename;
+    tdN.title = s.filename;
+    tr.appendChild(tdN);
+    const tdS = document.createElement('td'); tdS.className = 'text-right mono text-sm'; tdS.textContent = s.size_human; tr.appendChild(tdS);
+    const tdE = document.createElement('td'); tdE.className = 'text-sm text-muted'; tdE.textContent = s.ext; tr.appendChild(tdE);
+    const tdSt = document.createElement('td');
+    const badge = document.createElement('span');
+    if (s.parsed) {
+      badge.style.cssText = 'padding:2px 8px;border-radius:10px;font-size:11px;font-weight:500;background:rgba(34,197,94,.18);color:#22c55e;';
+      badge.textContent = '✓ Parsato';
+    } else {
+      badge.style.cssText = 'padding:2px 8px;border-radius:10px;font-size:11px;font-weight:500;background:rgba(148,163,184,.18);color:var(--text3);';
+      badge.textContent = '⏳ Non parsato';
+    }
+    tdSt.appendChild(badge); tr.appendChild(tdSt);
+    const tdT = document.createElement('td'); tdT.className = 'text-sm';
+    if (s.parsed && s.template_id) {
+      const a = document.createElement('a');
+      a.href = '#'; a.textContent = `${s.template_broadcaster || '?'} · ${s.template_name || ''}`.substring(0, 50);
+      a.onclick = (e) => { e.preventDefault(); openDetail(s.template_id); };
+      a.style.color = 'var(--indigo2)';
+      tdT.appendChild(a);
+    } else {
+      tdT.textContent = '—';
+      tdT.style.color = 'var(--text3)';
+    }
+    tr.appendChild(tdT);
+    const tdA = document.createElement('td');
+    if (!s.parsed) {
+      const btn = document.createElement('button');
+      btn.className = 'btn btn-primary btn-sm';
+      btn.style.fontSize = '11px';
+      btn.textContent = '✨ Parse';
+      btn.title = 'Analizza con AI e salva come template (15-40s)';
+      btn.onclick = () => dtParseSample(s.filename);
+      tdA.appendChild(btn);
+    } else {
+      tdA.textContent = '—';
+      tdA.style.color = 'var(--text3)';
+    }
+    tr.appendChild(tdA);
+    tbody.appendChild(tr);
+  });
+}
+
+async function dtParseSample(filename) {
+  if (!confirm(`Analizzare con AI "${filename}" e salvare come template?\n\nL'AI impiegherà 15-40s.`)) return;
+  try {
+    const fd = new FormData();
+    fd.append('filename', filename);
+    const parsed = await api('POST', '/delivery-templates/api/parse-sample', fd);
+    // Save direct via /api/save (no preview step per corpus)
+    const fdSave = new FormData();
+    for (const k of ['code','name','broadcaster','description','source_document_name']) {
+      if (parsed[k]) fdSave.append(k, parsed[k]);
+    }
+    for (const k of ['video_specs','audio_specs','text_specs','head_format','textless_format','naming_convention','archive_specs','metadata_requirements']) {
+      if (parsed[k]) fdSave.append(k, JSON.stringify(parsed[k]));
+    }
+    if (parsed.ai_confidence != null) fdSave.append('ai_confidence', String(parsed.ai_confidence));
+    fdSave.append('ai_generated', '1');
+    await api('POST', '/delivery-templates/api/save', fdSave);
+    toast(`✓ Template "${parsed.name || filename}" salvato (AI conf ${(parsed.ai_confidence || 0) * 100 | 0}%)`, 'success', 6000);
+    location.reload();
+  } catch (e) {
+    toast('Errore parse: ' + (e.message || ''), 'error', 8000);
+  }
+}
+
+document.addEventListener('DOMContentLoaded', dtLoadSamplesStatus);
 
 function openImportModal() {
   document.getElementById('import-step1').style.display = '';

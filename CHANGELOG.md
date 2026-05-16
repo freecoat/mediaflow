@@ -1,5 +1,43 @@
 # MediaFlow — Changelog
 
+## v3.5.0-alpha.131 — Fase 5 corpus diagnostica capitolati + parse on-demand (16 mag 2026 notte tarda)
+
+Diagnostica corpus capitolati con UI tabella status + bottone parse on-demand per ogni capitolato. Permette di vedere a colpo d'occhio quali capitolati del corpus sono già parsati come `DeliveryTemplate` e quali no.
+
+**Endpoint `GET /delivery-templates/api/samples-status`**
+
+Report status corpus capitolati. Per ogni file in `docs/capitolati_esempio/` (extension whitelist + size > 0):
+- `filename`, `size`, `size_human`, `ext`
+- `parsed`: bool (match per `DeliveryTemplate.source_document_name` case-insensitive)
+- `template_id`, `template_name`, `template_broadcaster` (se parsato)
+
+Stats aggregato: `{total, parsed, pending}`.
+
+**UI tabella corpus in `/delivery-templates`**
+
+Card "📚 Corpus capitolati di riferimento" sotto la tabella template attivi. 6 colonne:
+- File (mono, truncate 55 char + tooltip)
+- Size (human-readable)
+- Ext (.pdf/.docx/.xlsx/etc)
+- Status (badge ✓ Parsato verde / ⏳ Non parsato muted)
+- Template (link al detail se parsato)
+- Azione (bottone `✨ Parse` se non ancora parsato)
+
+`dtParseSample(filename)`: chiama `/api/parse-sample` (α.128) + auto-save via `/api/save` (α.95) → toast con AI confidence + reload page. Conferma user prima del run AI (costo 15-40s).
+
+**Smoke**: stats endpoint ritorna 15 sample, 0 parsed, 15 pending (DB demo vuoto di template).
+
+**Backlog α.132+**:
+- Esecuzione parse batch (utente runs UI 1-by-1 per controllare AI cost)
+- OAuth integrazioni vere (Gmail/Outlook ricezione+reply, Drive/OneDrive)
+- Automazione portali consegne
+
+**File toccati**:
+- `app/routers/delivery_templates.py` (endpoint `/api/samples-status`)
+- `app/templates/pages/delivery_templates.html` (card corpus + `dtLoadSamplesStatus` + `dtParseSample`)
+- `app/main.py` (version bump)
+- CHANGELOG.md + docs/STATO.md
+
 ## v3.5.0-alpha.130 — AI capability propose_send_invoice_email + refactor invoice email helper (16 mag 2026 notte tarda)
 
 Seconda capability AI estesa: invio fattura via email da copilot. Niente OAuth — riusa l'infrastruttura SMTP α.127 (provider-agnostic via .env).

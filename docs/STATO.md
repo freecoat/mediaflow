@@ -8,6 +8,22 @@
 
 ## Versione corrente
 
+**v3.5.0-alpha.131** — 16 maggio 2026 notte tarda — Fase 5 corpus diagnostica + parse on-demand
+
+**Diagnostica corpus capitolati**:
+- Endpoint `GET /delivery-templates/api/samples-status` (15 file, stats parsati/pending)
+- UI card "📚 Corpus capitolati di riferimento" in /delivery-templates con tabella 6 colonne
+- Bottone "✨ Parse" per ogni capitolato non ancora analizzato → auto-save template
+
+**Smoke**: stats endpoint = 15 total / 0 parsed / 15 pending (DB demo vuoto).
+
+**Backlog α.132+**:
+- Esecuzione parse batch (manuale 1-by-1 da UI per controllare costo AI)
+- OAuth integrazioni (Gmail/Outlook, Drive/OneDrive)
+- Automazione portali consegne
+
+## (versione precedente)
+
 **v3.5.0-alpha.130** — 16 maggio 2026 notte tarda — AI capability propose_send_invoice_email + refactor email helper
 
 **Seconda capability AI estesa (no OAuth, riusa SMTP α.127)**:
