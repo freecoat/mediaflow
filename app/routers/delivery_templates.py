@@ -90,6 +90,80 @@ async def list_templates(db: Session = Depends(get_db)):
     return [_dt_dict(t) for t in rows]
 
 
+# v3.5.0-alpha.128 (Fase 5) — IMPORTANTE: deve stare PRIMA di /api/{template_id}
+# altrimenti FastAPI lo cattura come template_id="sample-files" → 422.
+@router.get("/api/sample-files", dependencies=[RequireEditSettings])
+async def list_sample_capitolati():
+    """v3.5.0-alpha.128 (Fase 5) — Lista i capitolati di esempio del
+    repository (docs/capitolati_esempio/) per quick-load nella UI import
+    senza upload manuale. Solo file non vuoti, estensioni supportate
+    dal parser AI."""
+    from pathlib import Path as _Path
+    proj_root = _Path(__file__).resolve().parents[2]
+    samples_dir = proj_root / "docs" / "capitolati_esempio"
+    if not samples_dir.is_dir():
+        return {"samples": []}
+    allowed_ext = {".pdf", ".docx", ".doc", ".xlsx", ".xls", ".txt", ".md"}
+    out = []
+    for p in sorted(samples_dir.iterdir()):
+        if not p.is_file():
+            continue
+        if p.suffix.lower() not in allowed_ext:
+            continue
+        size = p.stat().st_size
+        if size == 0:
+            continue
+        out.append({
+            "filename": p.name,
+            "size": size,
+            "size_human": f"{size / 1024:.0f} KB" if size < 1024*1024 else f"{size / (1024*1024):.1f} MB",
+            "ext": p.suffix.lower().lstrip("."),
+        })
+    return {"samples": out}
+
+
+@router.post("/api/parse-sample", dependencies=[RequireEditSettings])
+async def parse_sample_capitolato(filename: str = Form(...)):
+    """v3.5.0-alpha.128 (Fase 5) — Parse capitolato dalla directory di
+    esempio docs/capitolati_esempio/ senza upload. Sicurezza: filename
+    valida via whitelist directory + no path traversal."""
+    from pathlib import Path as _Path
+    proj_root = _Path(__file__).resolve().parents[2]
+    samples_dir = (proj_root / "docs" / "capitolati_esempio").resolve()
+    # Sanitize: no path separators o ".." nel filename
+    if "/" in filename or "\\" in filename or ".." in filename:
+        raise HTTPException(400, "filename non valido")
+    fpath = (samples_dir / filename).resolve()
+    # Verifica path è dentro samples_dir (no traversal)
+    try:
+        fpath.relative_to(samples_dir)
+    except ValueError:
+        raise HTTPException(400, "filename fuori scope")
+    if not fpath.is_file():
+        raise HTTPException(404, f"Esempio non trovato: {filename}")
+    if fpath.stat().st_size == 0:
+        raise HTTPException(400, "File esempio vuoto")
+    # Riusa parser via bytes diretti
+    content = fpath.read_bytes()
+    from app.services.deliverables_parser import (
+        extract_text_from_file, parse_delivery_template,
+    )
+    text = extract_text_from_file(content, filename)
+    if not text or len(text.strip()) < 20:
+        raise HTTPException(400, "Estrazione testo fallita o testo troppo breve (<20 caratteri)")
+    try:
+        result = parse_delivery_template(text)
+    except Exception as e:
+        raise HTTPException(500, f"Parser error: {e}")
+    if not result:
+        raise HTTPException(500, "Parser AI ha restituito risposta vuota")
+    result["source_document_name"] = filename
+    result["text_preview"] = text[:200]
+    return result
+
+
+# v3.5.0-alpha.128 — get_template spostato DOPO sample-files/parse-sample
+# per evitare path conflict con /api/{template_id} che catturava "sample-files".
 @router.get("/api/{template_id}")
 async def get_template(template_id: int, db: Session = Depends(get_db)):
     t = db.query(DeliveryTemplate).filter(

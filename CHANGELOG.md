@@ -1,5 +1,58 @@
 # MediaFlow — Changelog
 
+## v3.5.0-alpha.128 — Fase 5 capitolati: quick-load esempi nel wizard import (16 mag 2026 notte tarda)
+
+Audit Fase 5 (capitolati F14/F15). Codice scaffolded già presente:
+- `app/services/deliverables_parser.py` (287 LOC): parser AI 8 blocchi DeliveryTemplate
+- `app/routers/delivery_templates.py` (566 LOC): CRUD + parse + match-listino + create-quote
+- `app/templates/pages/capitolati_import.html` (392 LOC): wizard 3-step UI
+- 15 capitolati reali (su 17 totali, 2 vuoti) in `docs/capitolati_esempio/`
+
+Smoke E2E parser AI: parse di "A24 Queer Delivery Schedule" (DOCX 2.1MB) → AI confidence 0.88, 8 blocchi popolati correttamente (video_specs 19 keys, audio_specs 10, text_specs 4, head_format 13, textless 10, naming 3 con patterns DCNC e UHD HDR/SDR, archive 11 con LTO7/8, metadata 9 con Dolby Vision XML).
+
+Bundle aggiunte α.128:
+
+**Endpoint `GET /delivery-templates/api/sample-files`**
+
+Lista i capitolati di esempio del repo (`docs/capitolati_esempio/`) filtrati per:
+- estensione supportata (.pdf, .docx, .doc, .xlsx, .xls, .txt, .md)
+- size > 0 (esclude file vuoti — Netflix + Amazon erano vuoti)
+- formato result: `{filename, size, size_human (KB/MB), ext}`
+- Ordinato alfabeticamente.
+
+**Endpoint `POST /delivery-templates/api/parse-sample`**
+
+Parse di un capitolato dalla directory esempi senza upload manuale. Param `filename` form. Sicurezza:
+- Reject path traversal (`/`, `\\`, `..` nel filename)
+- Verifica path resolved è dentro `samples_dir` (no escape)
+- 400 se file vuoto, 404 se non esistente, 500 se parser AI fallisce
+- Risposta identica a `/api/parse` (8 blocchi DeliveryTemplate)
+
+**Path conflict fix**
+
+`@router.get("/api/{template_id}")` (in get_template) catturava la stringa `"sample-files"` come template_id integer → 422 parsing error. Riordinato: `/api/list` + `/api/sample-files` + `/api/parse-sample` PRIMA di `/api/{template_id}`. Pattern FastAPI standard (specific paths before parameterized).
+
+**UI Wizard `/delivery-templates/import`**
+
+Card nuova "Capitolati di esempio" sotto lo step upload manuale. Pill cliccabili per ognuno dei 15 capitolati disponibili. Click → conferma → `parseCapitolatoSample(filename)` chiama `/api/parse-sample` → riusa flow `showPreview()` per visualizzazione. Truncate nome a 40 char, tooltip con full filename + size.
+
+**Note Fase 5 progressi**:
+- F14 (upload → parser → preview → save) era già completo pre-α.128
+- F15 (test 17 capitolati): smoke E2E A24 PASS, restanti 14 testabili via quick-load
+- Tabella `delivery_templates` ancora vuota nel DB demo: nessun template seedato
+- `parse-and-match` (capitolato → matching listino → quote bozza) già funzionante via wizard
+
+**Backlog α.129+**:
+- Test sistematico parse dei 15 capitolati restanti
+- Seed batch DeliveryTemplate dai capitolati corpus (opzionale, costo AI)
+- Capability AI estese (email/Drive/Office OAuth, filesystem Asset Library)
+
+**File toccati**:
+- `app/routers/delivery_templates.py` (sample-files + parse-sample + reorder routes)
+- `app/templates/pages/capitolati_import.html` (card esempi + ciLoadSamples + parseCapitolatoSample)
+- `app/main.py` (version bump)
+- CHANGELOG.md + docs/STATO.md
+
 ## v3.5.0-alpha.127 — P2.C F11 supplier↔resource flusso inverso + F6 invio email SMTP (16 mag 2026 notte tarda)
 
 Gruppo P2.C del backlog α.120. Chiusura backlog architetturale.

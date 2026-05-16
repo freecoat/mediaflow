@@ -42,6 +42,15 @@
       <button class="btn btn-primary" id="ci-parse-btn" onclick="parseCapitolato()">✨ Analizza con AI</button>
       <span id="ci-parse-spinner" class="text-muted text-sm" style="display:none;">⏳ AI sta analizzando il capitolato (15-40s)…</span>
     </div>
+
+    <!-- v3.5.0-alpha.128 (Fase 5) — Quick-load esempi dal corpus
+         docs/capitolati_esempio/. 17 capitolati reali pre-caricati. -->
+    <div style="margin-top:18px; padding-top:14px; border-top:1px dashed var(--border);">
+      <div class="text-xs text-muted" style="margin-bottom:6px;">Oppure carica da <b>capitolati di esempio</b> già nel repository:</div>
+      <div id="ci-samples" style="display:flex; flex-wrap:wrap; gap:6px;">
+        <span class="text-xs text-muted">Caricamento…</span>
+      </div>
+    </div>
   </div>
 </div>
 
@@ -133,6 +142,70 @@
 <script>
 let _ciData = null;
 let _ciIncluded = new Set();
+
+// v3.5.0-alpha.128 (Fase 5) — Carica e mostra i capitolati di esempio
+// disponibili in docs/capitolati_esempio/. Click su una pill = parse via
+// endpoint dedicato senza upload manuale.
+async function ciLoadSamples() {
+  const host = document.getElementById('ci-samples');
+  if (!host) return;
+  while (host.firstChild) host.removeChild(host.firstChild);
+  let data;
+  try {
+    data = await api('GET', '/delivery-templates/api/sample-files');
+  } catch (e) {
+    const span = document.createElement('span');
+    span.className = 'text-xs text-muted';
+    span.textContent = 'Errore caricamento esempi: ' + (e.message || '');
+    host.appendChild(span);
+    return;
+  }
+  const samples = data.samples || [];
+  if (!samples.length) {
+    const span = document.createElement('span');
+    span.className = 'text-xs text-muted';
+    span.textContent = '(nessun esempio in docs/capitolati_esempio/)';
+    host.appendChild(span);
+    return;
+  }
+  samples.forEach(s => {
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'btn btn-ghost btn-sm';
+    btn.style.cssText = 'font-size:11px; padding:4px 9px;';
+    btn.title = `${s.filename} · ${s.size_human}`;
+    // Nome breve: tronca a 40 char
+    const short = s.filename.length > 40 ? s.filename.substring(0, 37) + '…' : s.filename;
+    btn.textContent = `📄 ${short}`;
+    btn.onclick = () => parseCapitolatoSample(s.filename);
+    host.appendChild(btn);
+  });
+}
+
+async function parseCapitolatoSample(filename) {
+  if (!confirm(`Analizzare il capitolato di esempio "${filename}"?\n\nL'AI estrarrà gli 8 blocchi DeliveryTemplate (15-40s).`)) return;
+  const btn = document.getElementById('ci-parse-btn');
+  const spin = document.getElementById('ci-parse-spinner');
+  btn.disabled = true; spin.style.display = '';
+  try {
+    const fd = new FormData();
+    fd.append('filename', filename);
+    _ciData = await api('POST', '/delivery-templates/api/parse-sample', fd);
+    // parse-sample ritorna solo template (no deliverables matching).
+    // Adatta payload per showPreview che si aspetta deliverables.
+    _ciData.deliverables = _ciData.deliverables || [];
+    _ciData.match_summary = _ciData.match_summary || { high: 0, partial: 0, none: 0 };
+    btn.disabled = false; spin.style.display = 'none';
+  } catch (e) {
+    btn.disabled = false; spin.style.display = 'none';
+    toast(e.message || 'Errore parsing esempio', 'error');
+    return;
+  }
+  _ciIncluded = new Set();
+  showPreview();
+}
+
+document.addEventListener('DOMContentLoaded', ciLoadSamples);
 
 async function parseCapitolato() {
   const f = document.getElementById('ci-file').files[0];

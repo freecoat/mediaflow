@@ -8,6 +8,23 @@
 
 ## Versione corrente
 
+**v3.5.0-alpha.128** — 16 maggio 2026 notte tarda — Fase 5 capitolati quick-load esempi
+
+**Fase 5 audit + bundle**:
+- Codice scaffolded già presente (deliverables_parser, delivery_templates router, wizard 3-step).
+- Smoke parser AI: A24 Queer DOCX → confidence 0.88, 8 blocchi popolati.
+- Nuovo endpoint `GET /api/sample-files` lista 15 capitolati corpus.
+- Nuovo endpoint `POST /api/parse-sample` parse senza upload (path traversal safe).
+- UI wizard: card "Capitolati di esempio" con pill cliccabili per quick-load.
+- Path conflict fix: sample-files PRIMA di {template_id} per evitare 422.
+
+**Backlog α.129+**:
+- Test sistematico parse dei 15 capitolati restanti
+- Seed batch DeliveryTemplate dal corpus
+- Capability AI estese (email/Drive/Office OAuth)
+
+## (versione precedente)
+
 **v3.5.0-alpha.127** — 16 maggio 2026 notte tarda — P2.C F11 supplier↔resource inverso + F6 invio email SMTP
 
 **Gruppo P2.C chiuso. BACKLOG P2 COMPLETAMENTE CHIUSO** (24/24 finding del 16 mag).
