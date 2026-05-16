@@ -169,13 +169,15 @@
         <label class="form-label">Risorsa associata
           <span class="text-xs text-muted">(opzionale — link al booking nel cost report)</span>
         </label>
+        <!-- v3.5.0-alpha.127 (F11) — Bottone "+ Crea risorsa" rimosso.
+             Flusso inverso: il supplier viene generato DA una Resource freelance
+             via /resources, no da supplier. Dropdown filtrato solo a freelance
+             per evitare link a persone interne/studi/attrezzature. -->
         <div style="display:flex; gap:8px; align-items:end;">
           <select class="form-select" id="ms-resource" style="flex:1;"><option value="">— nessuna —</option></select>
-          <button type="button" id="ms-create-resource-btn" class="btn btn-ghost btn-sm" onclick="msCreateResourceFromSupplier()"
-                  title="Crea una nuova Resource freelance pre-popolata dai dati del fornitore. Disponibile dopo aver salvato il fornitore.">+ Crea risorsa</button>
         </div>
         <div class="text-xs text-muted" style="margin-top:4px;">
-          Quando associato, le fatture passive di questo fornitore propongono di default questa risorsa nel campo "Risorsa esterna associata".
+          Solo risorse di tipo <b>freelance</b> linkabili. Per generare un fornitore da una risorsa esistente vai a <a href="/resources/" style="color:var(--indigo2);">Risorse</a>, apri la risorsa freelance e clicca "Genera fornitore collegato".
         </div>
       </div>
       <div class="form-group">
@@ -628,13 +630,17 @@ function switchTab(tab) {
 }
 
 // v3.5.0-alpha.113 — popola select risorse nel modal fornitore
+// v3.5.0-alpha.127 (F11) — filtro SOLO person_freelance (flusso inverso:
+// supplier appartiene a freelance esterni, no a persone interne/studi/etc).
 function _populateSupplierResourceSelect(selectedId) {
   const sel = document.getElementById('ms-resource');
   if (!sel) return;
   sel.innerHTML = '<option value="">— nessuna —</option>' +
-    (_resources || []).filter(r => r.is_active !== false).map(r =>
-      `<option value="${r.id}">${escapeHtml(r.name || '')}${r.role ? ' · '+escapeHtml(r.role) : ''}</option>`
-    ).join('');
+    (_resources || [])
+      .filter(r => r.is_active !== false && r.type === 'person_freelance')
+      .map(r =>
+        `<option value="${r.id}">${escapeHtml(r.name || '')}${r.role ? ' · '+escapeHtml(r.role) : ''}</option>`
+      ).join('');
   if (selectedId) sel.value = String(selectedId);
 }
 

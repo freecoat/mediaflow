@@ -341,6 +341,58 @@ async def delete_resource(resource_id: int, db: Session = Depends(get_db)):
     return {"ok": True}
 
 
+@router.post("/api/{resource_id}/generate-supplier", dependencies=[RequireEditResources])
+async def generate_supplier_from_resource(resource_id: int, db: Session = Depends(get_db)):
+    """v3.5.0-alpha.127 (F11) — Genera un Supplier collegato a questa
+    Resource freelance. Pre-popola name/email/phone dalla resource e setta
+    `resource.supplier_id` per il link inverso.
+
+    Idempotente: se la resource ha già supplier_id valido, ritorna lo
+    stesso (no double-create).
+
+    Restrizione: solo per risorse di tipo `person_freelance`. Altri tipi
+    (internal/studio/equipment/etc) non hanno semantica supplier.
+    """
+    r = db.query(Resource).filter(
+        Resource.id == resource_id,
+        Resource.tenant_id == current_tenant_id(),
+    ).first()
+    if not r:
+        raise HTTPException(404, "Risorsa non trovata")
+    if r.type != ResourceType.person_freelance:
+        raise HTTPException(
+            400,
+            "Solo risorse di tipo 'freelance' possono generare un fornitore collegato. "
+            "Le altre risorse non hanno semantica supplier."
+        )
+    from app.models import Supplier as _Supplier
+    # Se già linked, ritorna esistente.
+    if r.supplier_id:
+        existing = db.query(_Supplier).filter(
+            _Supplier.id == r.supplier_id,
+            _Supplier.tenant_id == current_tenant_id(),
+            _Supplier.deleted_at.is_(None),
+        ).first()
+        if existing:
+            return {"already_linked": True, "supplier_id": existing.id, "name": existing.name}
+        # Stale link → ripulisci.
+        r.supplier_id = None
+
+    sup = _Supplier(
+        tenant_id=current_tenant_id(),
+        name=r.name or f"Fornitore #{r.id}",
+        contact_email=r.email,
+        contact_phone=r.phone,
+        notes=f"Generato da risorsa freelance #{r.id} ({r.name})",
+        is_active=True,
+    )
+    db.add(sup)
+    db.flush()
+    r.supplier_id = sup.id
+    db.commit()
+    return {"already_linked": False, "supplier_id": sup.id, "name": sup.name}
+
+
 @router.get("/api/{resource_id}/unavailabilities")
 async def list_unavailabilities_for_resource(resource_id: int, db: Session = Depends(get_db)):
     """Lista ferie/malattia di una risorsa (esplicite, no festività auto)."""

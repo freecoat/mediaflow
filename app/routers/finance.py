@@ -8,7 +8,7 @@ from sqlalchemy import func
 from app.database import get_db
 from app.models import (
     Timesheet, Expense, Invoice, InvoiceLine, InvoiceStatus, InvoicePayment,
-    Job, JobStatus, JobCostLine, Quote, QuoteStatus, Project,
+    Job, JobStatus, JobCostLine, Quote, QuoteStatus, Project, Tenant,
     SupplierInvoice, SupplierInvoiceStatus, SupplierInvoicePayment,
 )
 from app.services.finance import job_financial_summary, company_pl_summary, departments_pl_summary
@@ -1177,6 +1177,121 @@ async def anomalies_summary(db: Session = Depends(get_db)):
 
 
 # ── PDF Export ────────────────────────────────────────────────────────
+
+@router.post("/api/invoices/{invoice_id}/send-email", dependencies=[RequireEditInvoices])
+async def send_invoice_email(invoice_id: int, db: Session = Depends(get_db)):
+    """v3.5.0-alpha.127 (F6) — Invia la fattura via email all'admin_email
+    del cliente (fallback contact_email) con PDF allegato.
+
+    Configurazione SMTP via .env (provider-agnostic, stdlib smtplib):
+      SMTP_HOST       — host server SMTP (es. smtp.gmail.com)
+      SMTP_PORT       — porta (587 STARTTLS, 465 SSL, 25 plain)
+      SMTP_USER       — username auth
+      SMTP_PASS       — password / app-specific key
+      SMTP_FROM       — indirizzo From (es. fatture@mediaflow.it)
+      SMTP_USE_TLS    — "1" per STARTTLS (587), "0" per SSL diretto (465)
+
+    Compatibile con qualsiasi provider SMTP standard: Gmail (con app-pass),
+    Microsoft 365, AWS SES, Mailgun, SendGrid, Postmark, etc.
+
+    Errori:
+      503 se SMTP non configurato (no SMTP_HOST)
+      400 se cliente senza email admin/contact
+      409 se fattura cancelled (non-stampabile, no invio)
+    """
+    import os
+    smtp_host = os.environ.get("SMTP_HOST", "").strip()
+    if not smtp_host:
+        raise HTTPException(
+            503,
+            "SMTP non configurato. Imposta SMTP_HOST/PORT/USER/PASS/FROM "
+            "in .env per abilitare l'invio email."
+        )
+    inv = db.query(Invoice).options(
+        joinedload(Invoice.client),
+        joinedload(Invoice.lines),
+        joinedload(Invoice.job).joinedload(Job.project),
+    ).filter(Invoice.id == invoice_id).first()
+    if not inv:
+        raise HTTPException(404, "Fattura non trovata")
+    if inv.status == InvoiceStatus.cancelled:
+        raise HTTPException(409, "Fattura annullata: non inviabile via email.")
+    # Risolvi destinatario: admin_email snapshot (α.113) > live admin_email >
+    # contact_email come fallback.
+    admin_email = (
+        getattr(inv, "client_admin_email_snap", None)
+        or (inv.client.admin_email if inv.client and getattr(inv.client, "admin_email", None) else None)
+        or (inv.client.contact_email if inv.client and inv.client.contact_email else None)
+    )
+    if not admin_email:
+        raise HTTPException(
+            400,
+            f"Cliente {inv.client.name if inv.client else '?'} senza admin_email/contact_email. "
+            "Imposta un indirizzo email amministrazione sul cliente prima dell'invio."
+        )
+    # Genera PDF
+    from app.services.invoice_pdf import generate_invoice_pdf
+    tenant_obj = db.query(Tenant).filter(Tenant.id == current_tenant_id()).first()
+    project_obj = None
+    if inv.job and inv.job.project:
+        project_obj = inv.job.project
+    pdf_bytes = generate_invoice_pdf(inv, tenant=tenant_obj, client=inv.client, project=project_obj)
+
+    # SMTP send
+    import smtplib
+    from email.message import EmailMessage
+    smtp_port = int(os.environ.get("SMTP_PORT", "587"))
+    smtp_user = os.environ.get("SMTP_USER", "").strip()
+    smtp_pass = os.environ.get("SMTP_PASS", "")
+    smtp_from = os.environ.get("SMTP_FROM", smtp_user).strip()
+    use_tls = os.environ.get("SMTP_USE_TLS", "1") == "1"
+    if not smtp_from:
+        raise HTTPException(503, "SMTP_FROM non configurato in .env.")
+
+    msg = EmailMessage()
+    msg["Subject"] = f"Fattura {inv.number} — {tenant_obj.name if tenant_obj else 'MediaFlow'}"
+    msg["From"] = smtp_from
+    msg["To"] = admin_email
+    doc_label = "Nota di credito" if inv.doc_type == "TD04" else "Fattura"
+    proj_line = ""
+    if project_obj:
+        proj_line = f"\nProgetto: {project_obj.code} · {project_obj.title}"
+    msg.set_content(
+        f"Buongiorno,\n\n"
+        f"in allegato {doc_label.lower()} {inv.number} del "
+        f"{inv.issue_date.strftime('%d/%m/%Y') if inv.issue_date else '?'}.\n"
+        f"Cliente: {inv.client.name if inv.client else '?'}"
+        f"{proj_line}\n"
+        f"Imponibile: {(inv.subtotal or 0):.2f} €\n"
+        f"Totale (IVA inclusa): {(inv.total or 0):.2f} €\n\n"
+        f"Cordiali saluti."
+    )
+    safe_num = (inv.number or f"invoice-{inv.id}").replace("/", "-")
+    msg.add_attachment(
+        pdf_bytes, maintype="application", subtype="pdf",
+        filename=f"{doc_label}-{safe_num}.pdf"
+    )
+    try:
+        if use_tls:
+            with smtplib.SMTP(smtp_host, smtp_port, timeout=20) as srv:
+                srv.starttls()
+                if smtp_user:
+                    srv.login(smtp_user, smtp_pass)
+                srv.send_message(msg)
+        else:
+            with smtplib.SMTP_SSL(smtp_host, smtp_port, timeout=20) as srv:
+                if smtp_user:
+                    srv.login(smtp_user, smtp_pass)
+                srv.send_message(msg)
+    except Exception as e:
+        raise HTTPException(502, f"Invio SMTP fallito: {e}")
+    return {
+        "ok": True,
+        "invoice_number": inv.number,
+        "recipient": admin_email,
+        "subject": msg["Subject"],
+    }
+
 
 @router.get("/api/invoices/{invoice_id}/pdf")
 async def download_invoice_pdf(invoice_id: int, db: Session = Depends(get_db)):

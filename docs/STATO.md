@@ -8,6 +8,43 @@
 
 ## Versione corrente
 
+**v3.5.0-alpha.127** — 16 maggio 2026 notte tarda — P2.C F11 supplier↔resource inverso + F6 invio email SMTP
+
+**Gruppo P2.C chiuso. BACKLOG P2 COMPLETAMENTE CHIUSO** (24/24 finding del 16 mag).
+
+**F11 — Flusso inverso supplier↔resource**:
+- Rimosso bottone "+ Crea risorsa" da modal supplier (era flusso sbagliato).
+- Dropdown supplier filtra SOLO freelance.
+- Nuovo endpoint `POST /resources/api/{id}/generate-supplier` (solo freelance, idempotente). UI: bottone "🏢 Genera fornitore collegato" in modal resource (visibile solo per freelance già salvati).
+
+**F6 — Invio fattura via email cliente**:
+- Endpoint `POST /finance/api/invoices/{id}/send-email`. SMTP stdlib, provider-agnostic via .env (SMTP_HOST/PORT/USER/PASS/FROM/USE_TLS). Compatibile Gmail, Microsoft 365, AWS SES, Mailgun, SendGrid, Postmark, etc.
+- Risolve destinatario: admin_email_snap > admin_email live > contact_email.
+- Subject auto + body con totali + PDF allegato.
+- UI: bottone ✉ in lista fatture e detail modal.
+- Skip-graceful: 503 se SMTP non configurato, 400 se cliente senza email, 502 SMTP fallito.
+
+**Storia 16 mag 2026** (10 commit):
+- α.119 cost_external priority + auto-dismiss drift
+- α.120 6 fix P0
+- α.121 7 fix P1
+- α.122 sweep JCL→Lavorazione
+- α.123 IVA toggle + split reparti
+- α.124 naming builder modal
+- α.125 fallback id + ratio precise
+- α.126 revamp 3 pagine + filtri
+- α.127 supplier↔resource + SMTP send
+- + docs ARCHITETTURA.md
+
+**Backlog α.128+**:
+- Test UI Matteo dei fix accumulati
+- Bug emersi da uso reale
+- Eventuali feature nuove (Fase 5 capitolati F14/F15, AI capability estese)
+
+**Side-effect DB α.127**: Supplier #11 "Francesca Ferrari" creato + linkato Resource #26 (test E2E).
+
+## (versione precedente)
+
 **v3.5.0-alpha.126** — 16 maggio 2026 notte tardi — P2.E revamp /team /resources /departments + filtri
 
 **Gruppo P2.E chiuso**:

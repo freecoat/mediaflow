@@ -1,5 +1,73 @@
 # MediaFlow — Changelog
 
+## v3.5.0-alpha.127 — P2.C F11 supplier↔resource flusso inverso + F6 invio email SMTP (16 mag 2026 notte tarda)
+
+Gruppo P2.C del backlog α.120. Chiusura backlog architetturale.
+
+**F11 — Flusso inverso supplier↔resource**
+
+Pre-fix: bottone "+ Crea risorsa" nel modal supplier (α.114 A13) generava una Resource freelance dai dati supplier. Matteo F11: "Mantenere link SOLO con risorse esterne (freelance) e togliere Crea Risorsa. Il meccanismo è inverso: è il fornitore che viene creato dal menu risorsa, non il contrario".
+
+Fix:
+- Rimosso `<button id="ms-create-resource-btn">` dal modal supplier.
+- Dropdown `#ms-resource` filtra ora SOLO `r.type === 'person_freelance'` (no internal/studio/equipment/etc) — la semantica supplier appartiene a freelance esterni.
+- Nuovo endpoint `POST /resources/api/{resource_id}/generate-supplier` (dependencies RequireEditResources):
+  - 400 se `r.type != person_freelance` (semantica deny)
+  - 200 + `already_linked=true` se `r.supplier_id` valido (idempotente)
+  - 200 + `already_linked=false` se nuovo: crea `Supplier(name, contact_email, contact_phone)` pre-popolato da resource + setta `r.supplier_id` bidirezionale + notes "Generato da risorsa freelance #X (name)"
+- UI `/resources` modal: nuovo bottone footer `🏢 Genera fornitore collegato` (`#rs-gen-supplier-btn`) visibile solo per resource freelance già salvata (no create mode, no altri tipi). Conferma user prima della creazione.
+
+Smoke E2E:
+- POST /resources/api/1/generate-supplier (person_internal Vittorio Bruno) → 400 deny ✓
+- POST /resources/api/26/generate-supplier (freelance Francesca Ferrari) → 200, supplier #11 creato con contact_email da resource, resource.supplier_id=11 bidirezionale ✓
+- Re-run: already_linked=true ✓
+
+**F6 — Invio fattura via email cliente (SMTP provider-agnostic)**
+
+Pre-fix: campo `Client.admin_email` (α.113 Q3) usato per snapshot intestazione PDF "Att.ne Amministrazione". Matteo F6: "intendevo di usare l'email per inviare direttamente la fattura, e non per l'intestazione". Mantenuta intestazione PDF (legittima); aggiunta funzionalità send via email.
+
+Backend `POST /finance/api/invoices/{id}/send-email` (RequireEditInvoices):
+- Risolve destinatario: `client_admin_email_snap > Client.admin_email > Client.contact_email`. 400 se nessuno presente.
+- Genera PDF via `generate_invoice_pdf(invoice, tenant, client, project)` (riusa banner project F15 + righe NC aggregate).
+- SMTP send via stdlib `smtplib` + `email.message.EmailMessage`. Provider-agnostic, .env config:
+  - `SMTP_HOST` (richiesto, 503 se mancante)
+  - `SMTP_PORT` (default 587)
+  - `SMTP_USER`, `SMTP_PASS` (opzionali per server no-auth)
+  - `SMTP_FROM` (default = SMTP_USER)
+  - `SMTP_USE_TLS` (default "1" → STARTTLS; "0" → SMTP_SSL diretto su 465)
+- Compatibile con qualsiasi provider standard: Gmail (app-pass), Microsoft 365, AWS SES, Mailgun, SendGrid, Postmark, etc.
+- Subject: "Fattura {number} — {tenant_name}" (NC se TD04 → "Nota di credito").
+- Body plain text con numero, data emissione, cliente, progetto, imponibile, totale IVA inclusa.
+- Attachment: PDF formale standard.
+- 409 se fattura cancelled, 502 se SMTP fallisce, 503 se non configurato.
+
+UI:
+- Lista fatture in /finance#invoices: bottone `✉` accanto a `📥` (solo per fatture non-draft non-cancelled).
+- Modal detail F18: bottone `✉ Invia email` accanto a `📥 Scarica PDF` nel footer.
+- `sendInvoiceEmail(id)` con confirm + toast risultato (mostra recipient + subject).
+
+Smoke: SMTP non configurato → 503 con messaggio "Imposta SMTP_HOST/PORT/USER/PASS/FROM in .env".
+
+**Backlog P2 — CHIUSO**
+
+24 finding totali raccolti il 16 mag, ora tutti chiusi nei round α.119 → α.127.
+
+Backlog rimanente per α.128+:
+- Test UI Matteo dei fix accumulati
+- Bug emersi da uso reale
+
+**Side-effect DB test α.127** (informativi):
+- Supplier #11 "Francesca Ferrari" creato + linked a Resource #26 (test E2E generate-supplier).
+
+**File toccati**:
+- `app/routers/finance.py` (endpoint send-email + import Tenant)
+- `app/routers/resources.py` (endpoint generate-supplier)
+- `app/templates/pages/finance.html` (bottone ✉ lista + detail modal + sendInvoiceEmail)
+- `app/templates/pages/resources.html` (bottone "Genera fornitore" footer modal + rsGenerateSupplierFromResource + toggle in rsToggleCreateUserSection)
+- `app/templates/pages/suppliers.html` (rimosso bottone "+ Crea risorsa" + filtro freelance dropdown)
+- `app/main.py` (version bump)
+- CHANGELOG.md + docs/STATO.md
+
 ## v3.5.0-alpha.126 — P2.E revamp /team /resources /departments + filtri (16 mag 2026 notte tardi)
 
 Gruppo P2.E del backlog α.120. Matteo F21: "non mi piace come funziona /team vs /resources. Rendi più chiara la struttura. Elabora impaginazione più chiara fra le tre pagine e metti i filtri per la lista risorse".

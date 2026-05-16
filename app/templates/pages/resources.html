@@ -308,6 +308,14 @@
     </div>
     <div class="modal-footer">
       <button class="btn btn-secondary" onclick="closeModal('modal-resource')">Annulla</button>
+      <!-- v3.5.0-alpha.127 (F11) — Genera fornitore collegato. Solo per
+           risorse freelance già salvate. Toggle visibilità da rsToggleSupplierBtn(). -->
+      <button class="btn btn-ghost" id="rs-gen-supplier-btn" type="button"
+              onclick="rsGenerateSupplierFromResource()"
+              title="Crea un fornitore con dati pre-popolati da questa risorsa freelance e linka i due"
+              style="display:none;">
+        🏢 Genera fornitore collegato
+      </button>
       <button class="btn btn-primary" onclick="saveResource()">Salva</button>
     </div>
   </div>
@@ -394,6 +402,13 @@ function rsToggleCreateUserSection() {
   const isPerson = ['person_internal', 'person_freelance'].includes(t);
   const sec = document.getElementById('rs-create-user-section');
   if (sec) sec.style.display = (isCreate && isPerson) ? '' : 'none';
+  // v3.5.0-alpha.127 (F11) — "Genera fornitore collegato" solo per
+  // freelance già salvati (no in create mode, no per altri tipi).
+  const genBtn = document.getElementById('rs-gen-supplier-btn');
+  if (genBtn) {
+    const showGen = !isCreate && t === 'person_freelance';
+    genBtn.style.display = showGen ? '' : 'none';
+  }
 }
 
 document.addEventListener('DOMContentLoaded', () => {
@@ -404,6 +419,28 @@ document.addEventListener('DOMContentLoaded', () => {
     document.getElementById('rs-user-fields').style.display = cu.checked ? '' : 'none';
   });
 });
+
+// v3.5.0-alpha.127 (F11) — Genera fornitore da risorsa freelance.
+// Crea Supplier con dati pre-popolati dalla resource (name, email, phone)
+// + setta resource.supplier_id come link inverso. Idempotente: se la resource
+// ha già supplier_id, mostra warning + apre supplier esistente.
+async function rsGenerateSupplierFromResource() {
+  const id = document.getElementById('rs-id').value;
+  if (!id) { toast('Salva prima la risorsa', 'warning'); return; }
+  if (!confirm('Genera un fornitore collegato a questa risorsa? Verranno pre-popolati nome ed email dal record corrente.')) return;
+  try {
+    const r = await api('POST', `/resources/api/${id}/generate-supplier`);
+    if (r.already_linked) {
+      toast('Risorsa già linkata al fornitore #' + r.supplier_id + ': aprilo da /suppliers', 'info', 5000);
+    } else {
+      toast('✓ Fornitore creato e linkato. Apri /suppliers per finalizzare P.IVA, IBAN, etc.', 'success', 5000);
+    }
+    closeModal('modal-resource');
+    location.reload();
+  } catch (e) {
+    toast(e.message || 'Errore generazione fornitore', 'error');
+  }
+}
 
 async function editResource(id) {
   try {

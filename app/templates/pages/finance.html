@@ -1207,6 +1207,12 @@ async function loadInvoices() {
     const pdfBtn = (i.status === 'cancelled')
       ? `<button class="btn btn-ghost btn-sm" disabled style="opacity:0.4;cursor:not-allowed;" title="Fattura annullata: non stampabile">📥</button>`
       : `<a class="btn btn-ghost btn-sm" href="/finance/api/billing/invoice/${i.id}/pdf" target="_blank" onclick="event.stopPropagation();" title="Stampa PDF">📥</a>`;
+    // v3.5.0-alpha.127 (F6) — invia email cliente. Disponibile su fatture
+    // non-draft non-cancelled. Endpoint backend rispira 503 se SMTP non
+    // configurato, 400 se cliente senza admin_email.
+    const sendBtn = (i.status !== 'cancelled' && i.status !== 'draft')
+      ? `<button class="btn btn-ghost btn-sm" onclick="event.stopPropagation(); sendInvoiceEmail(${i.id});" title="Invia fattura via email all'amministrazione cliente (richiede SMTP in .env)">✉</button>`
+      : '';
     // v3.5.0-alpha.121 (F18) — Hide select cambio stato se status terminal
     // (paid/cancelled). Allowed transitions:
     //   draft → sent, cancelled
@@ -1236,6 +1242,7 @@ async function loadInvoices() {
       <td>${statusBadge(i.status)}</td>
       <td onclick="event.stopPropagation();">
         ${pdfBtn}
+        ${sendBtn}
         ${stornoBtn}
         ${statusSelect}
       </td>
@@ -1255,6 +1262,19 @@ async function changeInvStatus(id, status) {
     toast('Stato fattura aggiornato', 'success');
     loadInvoices();
   } catch(e) { toast(e.message, 'error'); }
+}
+
+// v3.5.0-alpha.127 (F6) — Invia fattura via email cliente (admin_email).
+// Backend usa SMTP da .env. Errori espliciti: 503 SMTP non configurato,
+// 400 cliente senza email, 409 fattura cancelled, 502 SMTP fallito.
+async function sendInvoiceEmail(invoiceId) {
+  if (!confirm('Inviare la fattura via email all\'amministrazione cliente?\n\nIl PDF verrà allegato automaticamente.')) return;
+  try {
+    const r = await api('POST', `/finance/api/invoices/${invoiceId}/send-email`);
+    toast(`✓ Email inviata a ${r.recipient}: "${r.subject}"`, 'success', 6000);
+  } catch (e) {
+    toast(e.message || 'Errore invio email', 'error', 8000);
+  }
 }
 
 // v3.5.0-alpha.121 (F18) — Dettaglio fattura cliccando sulla riga.
@@ -1366,6 +1386,14 @@ async function openInvoiceDetail(id) {
     dl.href = `/finance/api/billing/invoice/${inv.id}/pdf`; dl.target = '_blank';
     dl.textContent = '📥 Scarica PDF';
     ftr.appendChild(dl);
+    // v3.5.0-alpha.127 (F6) — bottone invio email anche da detail.
+    if (inv.status !== 'draft') {
+      const send = document.createElement('button');
+      send.className = 'btn btn-secondary btn-sm'; send.textContent = '✉ Invia email';
+      send.title = 'Invia PDF via email all\'amministrazione cliente';
+      send.onclick = () => sendInvoiceEmail(inv.id);
+      ftr.appendChild(send);
+    }
   }
   const close = document.createElement('button');
   close.className = 'btn btn-primary btn-sm'; close.textContent = 'Chiudi';
