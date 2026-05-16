@@ -58,6 +58,9 @@
           </td>
           <td>
             <button class="btn btn-ghost btn-sm" onclick="openDetail({{ t.id }})" title="Vedi dettagli">👁</button>
+            <!-- v3.5.0-alpha.132 (Fase 5 QoL) — export JSON + duplica -->
+            <a class="btn btn-ghost btn-sm" href="/delivery-templates/api/{{ t.id }}/export-json" target="_blank" title="Esporta come JSON">⬇</a>
+            <button class="btn btn-ghost btn-sm" onclick="duplicateTemplate({{ t.id }}, '{{ t.code|e }}')" title="Duplica come bozza modificabile">📋</button>
             <button class="btn btn-ghost btn-sm" onclick="confirmDelete({{ t.id }}, '{{ t.code|e }}')" title="Cestina">🗑</button>
           </td>
         </tr>
@@ -686,6 +689,18 @@ async function confirmDelete(tid, code) {
     setTimeout(() => window.location.reload(), 400);
   } catch(e) {
     toast(e.message || 'Errore', 'error');
+  }
+}
+
+// v3.5.0-alpha.132 (Fase 5 QoL) — duplica template come bozza modificabile.
+async function duplicateTemplate(tid, code) {
+  if (!confirm(`Duplicare template "${code}" come nuova bozza?\n\nIl duplicato eredita gli 8 blocchi ma viene marcato come manuale (no AI confidence) e con suffix "-copy".`)) return;
+  try {
+    const r = await api('POST', '/delivery-templates/api/' + tid + '/duplicate');
+    toast(`✓ Duplicato come "${r.code}" (id ${r.id})`, 'success', 5000);
+    setTimeout(() => window.location.reload(), 600);
+  } catch (e) {
+    toast(e.message || 'Errore duplicazione', 'error');
   }
 }
 </script>

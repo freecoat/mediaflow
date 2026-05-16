@@ -8,6 +8,22 @@
 
 ## Versione corrente
 
+**v3.5.0-alpha.132** — 16 maggio 2026 notte tarda — DeliveryTemplate export JSON + duplica
+
+**QoL /delivery-templates**:
+- `GET /api/{id}/export-json`: download template come JSON (backup/share)
+- `POST /api/{id}/duplicate`: deepcopy 8 blocchi + suggested_items, code/name suffix "-copy"/"(copia)", ai_generated=False (è bozza manuale)
+- UI bottoni ⬇ (export) + 📋 (duplica) nella tabella
+
+**Smoke**: 404 corretti su id inesistente, routes registrate.
+
+**Backlog α.133+**:
+- Parse batch UI 1-by-1
+- OAuth Gmail/Outlook + Drive/OneDrive
+- Automazione portali consegne
+
+## (versione precedente)
+
 **v3.5.0-alpha.131** — 16 maggio 2026 notte tarda — Fase 5 corpus diagnostica + parse on-demand
 
 **Diagnostica corpus capitolati**:

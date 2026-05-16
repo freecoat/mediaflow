@@ -1,5 +1,44 @@
 # MediaFlow — Changelog
 
+## v3.5.0-alpha.132 — DeliveryTemplate export JSON + duplica (16 mag 2026 notte tarda)
+
+QoL su `/delivery-templates`: 2 nuove operazioni per ogni template salvato.
+
+**`GET /delivery-templates/api/{id}/export-json`**
+
+Scarica template come JSON file (8 blocchi + metadata). Use case: backup, share con altre installazioni MediaFlow, audit human-readable, importazione manuale altrove. Content-Disposition `attachment; filename="{code}.json"`. JSON indented + ensure_ascii=False per leggibilità caratteri italiani.
+
+**`POST /delivery-templates/api/{id}/duplicate`** (RequireEditSettings)
+
+Duplica template esistente come nuova bozza modificabile. Comportamento:
+- Deepcopy degli 8 blocchi JSON + suggested_items
+- `code += '-copy'`, `name += ' (copia)'`
+- `ai_generated=False`, `ai_confidence=None`, `source_document_name=None` (è manipolazione manuale, non più collegato al doc sorgente)
+- `is_active=True`
+
+Use case: partire da un template AI-generated, ritoccarlo per esigenze specifiche cliente senza intaccare l'originale.
+
+**UI nella tabella template**
+
+Aggiunti 2 bottoni accanto a `👁` (detail) e `🗑` (cestina):
+- `⬇` link a `/api/{id}/export-json` (download diretto)
+- `📋` chiama `duplicateTemplate(id, code)` con conferma + reload page
+
+Handler JS `duplicateTemplate(tid, code)`: confirm → POST duplicate → toast con nuovo code+id → reload.
+
+**Smoke**: endpoint 404 corretti per template inesistente. Routes count `/delivery-templates/api/{template_id}/duplicate` e `/export-json` registrate.
+
+**Backlog α.133+**:
+- Parse batch UI 1-by-1 (manual da utente)
+- OAuth Gmail/Outlook + Drive/OneDrive
+- Automazione portali consegne
+
+**File toccati**:
+- `app/routers/delivery_templates.py` (endpoint export-json + duplicate)
+- `app/templates/pages/delivery_templates.html` (bottoni ⬇📋 + `duplicateTemplate`)
+- `app/main.py` (version bump)
+- CHANGELOG.md + docs/STATO.md
+
 ## v3.5.0-alpha.131 — Fase 5 corpus diagnostica capitolati + parse on-demand (16 mag 2026 notte tarda)
 
 Diagnostica corpus capitolati con UI tabella status + bottone parse on-demand per ogni capitolato. Permette di vedere a colpo d'occhio quali capitolati del corpus sono già parsati come `DeliveryTemplate` e quali no.

@@ -231,6 +231,72 @@ async def get_template(template_id: int, db: Session = Depends(get_db)):
     return _dt_dict(t)
 
 
+# v3.5.0-alpha.132 — QoL: export JSON + duplica template
+@router.get("/api/{template_id}/export-json")
+async def export_template_json(template_id: int, db: Session = Depends(get_db)):
+    """Scarica template DeliveryTemplate come JSON file (8 blocchi +
+    metadata). Utile per backup, share con altre installazioni, audit."""
+    import json as _json
+    from fastapi.responses import Response
+    t = db.query(DeliveryTemplate).filter(
+        DeliveryTemplate.id == template_id,
+        DeliveryTemplate.tenant_id == current_tenant_id(),
+    ).first()
+    if not t:
+        raise HTTPException(404, "Template non trovato")
+    data = _dt_dict(t)
+    safe_code = (t.code or f"template-{t.id}").replace("/", "-").replace(" ", "_")
+    payload = _json.dumps(data, indent=2, ensure_ascii=False, default=str)
+    return Response(
+        content=payload,
+        media_type="application/json",
+        headers={"Content-Disposition": f'attachment; filename="{safe_code}.json"'},
+    )
+
+
+@router.post("/api/{template_id}/duplicate", dependencies=[RequireEditSettings])
+async def duplicate_template(template_id: int, db: Session = Depends(get_db)):
+    """Duplica un DeliveryTemplate esistente. Il duplicato:
+    - eredita tutti gli 8 blocchi (deepcopy)
+    - code += '-copy', name += ' (copia)'
+    - ai_generated=False (è una manipolazione manuale)
+    - source_document_name=None (non eredita link a file sorgente)
+    - is_active=True
+    """
+    import copy
+    src = db.query(DeliveryTemplate).filter(
+        DeliveryTemplate.id == template_id,
+        DeliveryTemplate.tenant_id == current_tenant_id(),
+    ).first()
+    if not src:
+        raise HTTPException(404, "Template sorgente non trovato")
+    new = DeliveryTemplate(
+        tenant_id=current_tenant_id(),
+        code=(src.code or "TEMPLATE") + "-copy",
+        name=(src.name or "Senza nome") + " (copia)",
+        broadcaster=src.broadcaster,
+        description=src.description,
+        version=src.version,
+        video_specs=copy.deepcopy(src.video_specs) if src.video_specs else None,
+        audio_specs=copy.deepcopy(src.audio_specs) if src.audio_specs else None,
+        text_specs=copy.deepcopy(src.text_specs) if src.text_specs else None,
+        head_format=copy.deepcopy(src.head_format) if src.head_format else None,
+        textless_format=copy.deepcopy(src.textless_format) if src.textless_format else None,
+        naming_convention=copy.deepcopy(src.naming_convention) if src.naming_convention else None,
+        archive_specs=copy.deepcopy(src.archive_specs) if src.archive_specs else None,
+        metadata_requirements=copy.deepcopy(src.metadata_requirements) if src.metadata_requirements else None,
+        suggested_items=copy.deepcopy(src.suggested_items) if src.suggested_items else None,
+        ai_generated=False,
+        ai_confidence=None,
+        source_document_name=None,
+        is_active=True,
+    )
+    db.add(new)
+    db.commit()
+    db.refresh(new)
+    return _dt_dict(new)
+
+
 @router.post("/api/parse", dependencies=[RequireEditSettings])
 async def parse_capitolato(file: UploadFile = File(...)):
     """Estrae da un capitolato (PDF/docx/xlsx/txt) gli 8 blocchi DeliveryTemplate
