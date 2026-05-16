@@ -1,5 +1,35 @@
 # MediaFlow — Changelog
 
+## v3.5.0-alpha.125 — P2.A.2 sweep fallback id assets + F19 ratio_net precision (16 mag 2026 notte tardi)
+
+Bundle leggero: chiusura P2.A.2 (audit `#${id}` user-facing residui) + precisione query ratio_net su endpoint by-department.
+
+**P2.A.2 — Fallback descrittivo invece di `#${id}` numerico**
+
+In `/assets/inout` per la lista asset (fisici + digitali), quando l'asset non aveva `label`/`original_name`/`filename`, il fallback era `#${a.id}` (id DB numerico). Sostituito con fallback descrittivo:
+- Asset fisici: `a.label || a.serial_number || a.barcode || '(asset senza nome)'`
+- Asset digitali: `a.original_name || a.filename || '(file senza nome)'`
+
+`planning.html:5941` (lista booking falliti dopo bulk operation) lascia `#${id}` perché è ID booking necessario per debug/identificazione del record che ha fallito — utile contesto pratico. Skip cosciente.
+
+**F19 — Revenue net query precisa (no più /1.22)**
+
+In `cashflow_by_department`, il `revenue_net` era calcolato `revenue_total / 1.22` (IVA standard 22%). Errato per fatture con vat_rate diverso (es. forfettario esente, IVA ridotta 10%, esportazione 0%).
+
+Fix: espressione SQL `CASE WHEN invoice.total > 0 THEN slice.billed_amount × invoice.subtotal / invoice.total ELSE slice.billed_amount / 1.22 END` aggregata via `SUM`. Calcolo preciso per ogni slice usando il ratio reale dell'invoice associata. Fallback `/1.22` solo per invoice con total=0 (caso degenerato).
+
+Smoke su DB attuale: risultati identici al pre-fix perché tutte le fatture demo hanno vat 22% esatto, ma la query ora è corretta anche per vat diversi. Nessuna regressione.
+
+**Backlog P2 rimanente per α.126+** (gruppi richiedono design discussion):
+- P2.C: F11 supplier↔resource flusso inverso + F6 admin_email send SMTP (provider scelto?)
+- P2.E: revamp /team /resources /departments (F21)
+
+**File toccati**:
+- `app/routers/finance.py` (cashflow_by_department case-when precision)
+- `app/templates/pages/assets_inout.html` (fallback label asset fisici + digitali)
+- `app/main.py` (version bump)
+- CHANGELOG.md + docs/STATO.md
+
 ## v3.5.0-alpha.124 — F7a/F7b naming builder: modal centrato + editor inline (16 mag 2026 notte tardi)
 
 Gruppo P2.D del backlog α.120. Refactor builder naming conventions in `/settings#numbering`.

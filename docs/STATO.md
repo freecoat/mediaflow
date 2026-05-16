@@ -8,6 +8,20 @@
 
 ## Versione corrente
 
+**v3.5.0-alpha.125** — 16 maggio 2026 notte tardi — P2.A.2 sweep fallback id + F19 ratio_net precision
+
+**Bundle leggero**:
+- P2.A.2: assets_inout fallback `#${id}` → label/serial_number/barcode descrittivo, oppure "(senza nome)".
+- F19: revenue_net da `/1.22` medio a query precisa `CASE WHEN total>0 THEN amount × subtotal/total` SQL. Corretto per vat ≠ 22%.
+
+**Smoke**: numeri identici su DB attuale (tutte fatture vat 22%) ma query coerente per casi non-standard.
+
+**Backlog P2 rimanente per α.126+** (design discussion preliminare):
+- P2.C: F11 supplier↔resource inverso + F6 admin_email SMTP send (provider?)
+- P2.E: revamp /team /resources /departments (F21)
+
+## (versione precedente)
+
 **v3.5.0-alpha.124** — 16 maggio 2026 notte tardi — F7a/F7b naming builder: modal centrato + editor inline
 
 **Gruppo P2.D chiuso**:

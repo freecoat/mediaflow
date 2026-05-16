@@ -651,13 +651,21 @@ async def cashflow_by_department(year: int, db: Session = Depends(get_db)):
     from app.models import (
         JCLBilledSlice, JobCostLine as _JCL, Department, Resource, PriceItem,
     )
-    from sqlalchemy import extract, func as _func
+    from sqlalchemy import extract, func as _func, case as _case
     tid = current_tenant_id()
-    # Revenue per dept: somma billed_amount per dept attraverso slice→jcl→item
+    # v3.5.0-alpha.125 (P2.B precision) — revenue_net calcolato preciso per
+    # slice via ratio (subtotal/total) di ogni invoice, invece di /1.22 medio.
+    # Espressione: Σ (slice.billed_amount × invoice.subtotal / invoice.total)
+    # Per invoice con total=0 (caso degenerato): fallback a billed_amount/1.22.
+    ratio_net_expr = _case(
+        (Invoice.total > 0, JCLBilledSlice.billed_amount * Invoice.subtotal / Invoice.total),
+        else_=JCLBilledSlice.billed_amount / 1.22,
+    )
     revenue_rows = (
         db.query(
             Department.id, Department.name,
             _func.coalesce(_func.sum(JCLBilledSlice.billed_amount), 0.0),
+            _func.coalesce(_func.sum(ratio_net_expr), 0.0),
         )
         .select_from(JCLBilledSlice)
         .join(Invoice, Invoice.id == JCLBilledSlice.invoice_id)
@@ -674,17 +682,13 @@ async def cashflow_by_department(year: int, db: Session = Depends(get_db)):
         .all()
     )
     by_dept = {}
-    for did, dname, total in revenue_rows:
+    for did, dname, total, net in revenue_rows:
         key = did if did else 0
         by_dept[key] = {
             "department_id": did,
             "department_name": dname or "(senza reparto)",
             "revenue_total": round(float(total or 0), 2),
-            # Imponibile pro-quota: applica rapporto medio Invoice subtotal/total.
-            # Per semplicità approssima 1/1.22 (IVA standard 22%). Per precisione
-            # serve join supplementare a Invoice.subtotal — costo computazionale
-            # elevato, skip per α.123. Documentato per α.124+.
-            "revenue_net": round(float(total or 0) / 1.22, 2),
+            "revenue_net": round(float(net or 0), 2),
             "supplier_total": 0.0,
             "supplier_net": 0.0,
         }

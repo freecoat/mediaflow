@@ -904,7 +904,10 @@ function renderShAssets() {
     hdr.textContent = `Asset fisici (${phys.length})`;
     host.appendChild(hdr);
     phys.slice(0, 150).forEach(a => {
-      host.appendChild(mkRow('physical', a.id, a.label || `#${a.id}`, a.kind,
+      // v3.5.0-alpha.125 (P2.A.2/F24) — fallback descrittivo invece di id DB
+      // ($#{a.id}) quando asset non ha label/serial. Più utile per l'utente.
+      const physLabel = a.label || a.serial_number || a.barcode || '(asset senza nome)';
+      host.appendChild(mkRow('physical', a.id, physLabel, a.kind,
         a.serial_number ? `s/n: ${a.serial_number}` : (a.location || '')));
     });
   }
@@ -914,7 +917,9 @@ function renderShAssets() {
     hdr.textContent = `Asset digitali (${digi.length})`;
     host.appendChild(hdr);
     digi.slice(0, 150).forEach(a => {
-      host.appendChild(mkRow('digital', a.id, a.original_name || a.filename || `#${a.id}`,
+      // v3.5.0-alpha.125 (P2.A.2/F24) — stesso pattern
+      const digiLabel = a.original_name || a.filename || '(file senza nome)';
+      host.appendChild(mkRow('digital', a.id, digiLabel,
         a.asset_type || a.mime_type || '',
         a.file_size ? (a.file_size > 1e9 ? (a.file_size/1e9).toFixed(1)+' GB' : (a.file_size/1e6).toFixed(1)+' MB') : ''));
     });
