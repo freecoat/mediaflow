@@ -8,6 +8,23 @@
 
 ## Versione corrente
 
+**v3.5.0-alpha.123** — 16 maggio 2026 notte tardi — F16 IVA toggle + F19 split cashflow per reparto
+
+**Gruppo P2.B chiuso**:
+- F16 totali fatture+cashflow SENZA IVA di default. Toggle "Mostra IVA" persistente localStorage. Backend ritorna campi paralleli `*_net` (imponibile) accanto a totali.
+- F19 split cashflow per reparto annuale. Endpoint `/api/cashflow/{year}/by-department` (revenue via JCLBilledSlice→JCL→PriceItem.department, supplier via Resource.department). Card UI nuovo sotto chart.
+
+**Smoke E2E**: cashflow `_net` coerente (~82% ratio), 4 reparti aggregati ordinati per revenue_net.
+
+**Backlog P2 rimanente per α.124+**:
+- P2.A.2: audit globale `#${id}` user-facing
+- P2.C: F11 supplier↔resource inverso + F6 admin_email send SMTP
+- P2.D: naming drawer (F7a center popup, F7b inserimento inline)
+- P2.E: revamp /team /resources /departments (F21)
+- F19 ratio_net precision (join per invoice per ratio esatto invece di /1.22)
+
+## (versione precedente)
+
 **v3.5.0-alpha.122** — 16 maggio 2026 notte — F17/F24 sweep terminologia JCL→Lavorazione + nascondi id interni
 
 **Primo step backlog P2 architetturale** (gruppo A "Visualizzazione globale").

@@ -34,6 +34,15 @@
       <label class="form-label" style="font-size:11px; margin-bottom:4px; display:block;">Anno</label>
       <select id="cf-year" class="form-input" data-no-search="true" style="height:32px;font-size:13px;width:100px;" onchange="onFiltersChanged()"></select>
     </div>
+    <!-- v3.5.0-alpha.123 (F16) — toggle IVA. Default OFF (mostra imponibile).
+         Persistente in localStorage mf_cf_show_vat. -->
+    <div>
+      <label class="form-label" style="font-size:11px; margin-bottom:4px; display:block;">IVA</label>
+      <label style="display:inline-flex; align-items:center; gap:6px; height:32px; font-size:13px; padding:0 12px; border:1px solid var(--border); border-radius:6px; cursor:pointer;">
+        <input type="checkbox" id="cf-show-vat" onchange="onToggleVat()" style="margin:0;">
+        Mostra IVA
+      </label>
+    </div>
   </div>
 </div>
 
@@ -82,6 +91,28 @@
   </div>
   <div id="cf-chart" class="cf-chart">
     <div class="text-muted text-sm" style="padding:30px; text-align:center;">Caricamento…</div>
+  </div>
+</div>
+
+<!-- v3.5.0-alpha.123 (F19) — Breakdown annuale per reparto -->
+<div class="card mt-3" id="cf-dept-card">
+  <div class="card-header">
+    <span class="card-title">Split per reparto (anno)</span>
+    <span style="color:var(--text3); font-size:12px;">Revenue (fatture cliente) − Outflow (fatture passive) = Margine per reparto</span>
+  </div>
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th>Reparto</th>
+          <th class="text-right">Revenue</th>
+          <th class="text-right">Outflow fornitori</th>
+          <th class="text-right">Margine</th>
+          <th class="text-right">% margine</th>
+        </tr>
+      </thead>
+      <tbody id="cf-dept-tbody"><tr><td colspan="5" class="text-muted" style="text-align:center;padding:14px;">Caricamento…</td></tr></tbody>
+    </table>
   </div>
 </div>
 
@@ -287,6 +318,13 @@ function onClientChange() {
   onFiltersChanged();
 }
 
+// v3.5.0-alpha.123 (F16) — toggle IVA: salva in localStorage e ricarica.
+function onToggleVat() {
+  const cb = document.getElementById('cf-show-vat');
+  localStorage.setItem('mf_cf_show_vat', cb.checked ? '1' : '0');
+  onFiltersChanged();
+}
+
 function onFiltersChanged() {
   // Reload del tab attivo. L'altro tab sarà ricaricato quando l'utente
   // ci passa sopra (lazy refresh).
@@ -329,6 +367,22 @@ async function loadCashflow() {
     return;
   }
   const months = data.months || [];
+  // v3.5.0-alpha.123 (F16) — switch tra campi total (con IVA) e _net (imponibile).
+  // Default OFF (mostra imponibile). Salvato in localStorage mf_cf_show_vat.
+  // Per coerenza chart+tabella+stat cards: sovrascrivo i campi base con i
+  // _net se IVA è disattivata, così a valle nessuna funzione vede valori IVA.
+  const showVat = (localStorage.getItem('mf_cf_show_vat') === '1');
+  if (!showVat) {
+    months.forEach(m => {
+      m.invoiced = m.invoiced_net || 0;
+      m.paid = m.paid_net || 0;
+      m.outstanding = m.outstanding_net || 0;
+      m.supplier_billed = m.supplier_billed_net || 0;
+      m.supplier_paid = m.supplier_paid_net || 0;
+      m.supplier_due = m.supplier_due_net || 0;
+      m.net_cashflow = m.net_cashflow_net || 0;
+    });
+  }
   const totals = months.reduce((acc, m) => {
     acc.invoiced += m.invoiced || 0;
     acc.paid += m.paid || 0;
@@ -338,6 +392,7 @@ async function loadCashflow() {
     return acc;
   }, { invoiced:0, paid:0, outstanding:0, supplier_paid:0, supplier_billed:0 });
 
+  const vatNote = showVat ? '' : ' <span class="text-xs text-muted">(imponibile)</span>';
   document.getElementById('tot-invoiced').textContent = fmtCurrency(totals.invoiced);
   document.getElementById('tot-paid').textContent = fmtCurrency(totals.paid);
   document.getElementById('tot-outstanding').textContent = fmtCurrency(totals.outstanding);
@@ -351,6 +406,63 @@ async function loadCashflow() {
   const rows = aggregateCashflow(months, gran, year);
   renderCashflowChart(rows, year, gran);
   renderCashflowTable(rows, gran);
+  // v3.5.0-alpha.123 (F19) — split per reparto: caricamento parallelo
+  loadDeptBreakdown(year, showVat);
+}
+
+// v3.5.0-alpha.123 (F19) — Carica e renderizza split per reparto.
+async function loadDeptBreakdown(year, showVat) {
+  const tbody = document.getElementById('cf-dept-tbody');
+  if (!tbody) return;
+  let data;
+  try {
+    data = await api('GET', `/finance/api/cashflow/${year}/by-department`);
+  } catch (e) {
+    while (tbody.firstChild) tbody.removeChild(tbody.firstChild);
+    const tr = document.createElement('tr');
+    const td = document.createElement('td');
+    td.colSpan = 5; td.className = 'text-muted'; td.style.cssText = 'text-align:center;padding:14px;';
+    td.textContent = 'Errore caricamento: ' + (e.message || '');
+    tr.appendChild(td); tbody.appendChild(tr);
+    return;
+  }
+  const depts = data.departments || [];
+  while (tbody.firstChild) tbody.removeChild(tbody.firstChild);
+  if (!depts.length) {
+    const tr = document.createElement('tr');
+    const td = document.createElement('td');
+    td.colSpan = 5; td.className = 'text-muted'; td.style.cssText = 'text-align:center;padding:14px;';
+    td.textContent = 'Nessun dato per reparto nell\'anno.';
+    tr.appendChild(td); tbody.appendChild(tr);
+    return;
+  }
+  const revKey = showVat ? 'revenue_total' : 'revenue_net';
+  const supKey = showVat ? 'supplier_total' : 'supplier_net';
+  const marKey = showVat ? 'margin_total' : 'margin_net';
+  let totRev = 0, totSup = 0, totMar = 0;
+  depts.forEach(d => {
+    totRev += d[revKey] || 0;
+    totSup += d[supKey] || 0;
+    totMar += d[marKey] || 0;
+    const tr = document.createElement('tr');
+    const tdName = document.createElement('td'); tdName.textContent = d.department_name; tr.appendChild(tdName);
+    const tdRev = document.createElement('td'); tdRev.className = 'text-right mono'; tdRev.textContent = fmtCurrency(d[revKey] || 0); tr.appendChild(tdRev);
+    const tdSup = document.createElement('td'); tdSup.className = 'text-right mono'; tdSup.style.color = '#ef4444'; tdSup.textContent = fmtCurrency(d[supKey] || 0); tr.appendChild(tdSup);
+    const tdMar = document.createElement('td'); tdMar.className = 'text-right mono'; tdMar.style.color = (d[marKey] || 0) >= 0 ? 'var(--green)' : 'var(--rose)'; tdMar.style.fontWeight = '600'; tdMar.textContent = fmtCurrency(d[marKey] || 0); tr.appendChild(tdMar);
+    const pct = (d[revKey] || 0) > 0 ? ((d[marKey] || 0) / d[revKey] * 100).toFixed(1) + '%' : '—';
+    const tdPct = document.createElement('td'); tdPct.className = 'text-right text-muted text-sm'; tdPct.textContent = pct; tr.appendChild(tdPct);
+    tbody.appendChild(tr);
+  });
+  // Totale row
+  const trT = document.createElement('tr');
+  trT.style.borderTop = '2px solid var(--border)';
+  trT.style.fontWeight = '700';
+  const trtName = document.createElement('td'); trtName.textContent = 'TOTALE'; trT.appendChild(trtName);
+  const trtRev = document.createElement('td'); trtRev.className = 'text-right mono'; trtRev.textContent = fmtCurrency(totRev); trT.appendChild(trtRev);
+  const trtSup = document.createElement('td'); trtSup.className = 'text-right mono'; trtSup.style.color = '#ef4444'; trtSup.textContent = fmtCurrency(totSup); trT.appendChild(trtSup);
+  const trtMar = document.createElement('td'); trtMar.className = 'text-right mono'; trtMar.style.color = totMar >= 0 ? 'var(--green)' : 'var(--rose)'; trtMar.textContent = fmtCurrency(totMar); trT.appendChild(trtMar);
+  const trtPct = document.createElement('td'); trtPct.className = 'text-right text-muted text-sm'; trtPct.textContent = totRev > 0 ? (totMar / totRev * 100).toFixed(1) + '%' : '—'; trT.appendChild(trtPct);
+  tbody.appendChild(trT);
 }
 
 function aggregateCashflow(months, gran, year) {
@@ -625,6 +737,11 @@ async function renderWinLoss(cid, pid) {
 }
 
 initYearSelect();
+// v3.5.0-alpha.123 (F16) — restore preferenza IVA da localStorage (default OFF).
+(function _initVatToggle() {
+  const cb = document.getElementById('cf-show-vat');
+  if (cb) cb.checked = (localStorage.getItem('mf_cf_show_vat') === '1');
+})();
 loadFilters().then(() => {
   // Deep-link: ?tab=forecast oppure #forecast (back-compat) switcha al tab.
   // v3.5.0-alpha.91 audit fix: il fragment #forecast veniva strippato dal 302

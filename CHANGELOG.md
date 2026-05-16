@@ -1,5 +1,49 @@
 # MediaFlow — Changelog
 
+## v3.5.0-alpha.123 — F16 IVA toggle + F19 split cashflow per reparto (16 mag 2026 notte tardi)
+
+Gruppo P2.B del backlog α.120. Implementati F16 (totali fatture+cashflow SENZA IVA di default + toggle) e F19 (breakdown cashflow per Department).
+
+**F16 — Totali fatture/cashflow SENZA IVA di default + toggle Mostra IVA**
+
+Backend `cashflow_year_sync` ora ritorna campi paralleli `*_net` (imponibile) accanto a quelli con IVA inclusa:
+- `invoiced_net` = Σ Invoice.subtotal (con segno -1 per NC TD04)
+- `paid_net` = Σ InvoicePayment.amount × (subtotal/total) dell'invoice associata (fallback 1/1.22 se invoice non trovata)
+- `outstanding_net` = (total − paid) × ratio_net dell'invoice
+- `supplier_billed_net` = Σ SupplierInvoice.amount_net
+- `supplier_paid_net` = Σ SupplierInvoicePayment.amount × ratio_net del supplier_invoice
+- `supplier_due_net` = residuo × ratio_net
+- `net_cashflow_net` = paid_net − supplier_paid_net − overhead_paid − capex_paid
+
+UI cashflow: nuovo toggle "Mostra IVA" in topbar filtri, persistente in `localStorage.mf_cf_show_vat`. Default OFF → mostra imponibile. Se OFF, `months` vengono sovrascritti coi valori `_net` prima del render (chart + tabella + stat cards). Coerenza garantita: nessuna funzione downstream vede valori con IVA quando toggle è OFF.
+
+**F19 — Split cashflow per reparto**
+
+Nuovo endpoint `GET /finance/api/cashflow/{year}/by-department` che aggrega annuale per Department:
+- **Revenue side**: Invoice → JCLBilledSlice → JobCostLine → PriceItem.department_id. Considera solo slice non voided (post-storno NC) di fatture non draft.
+- **Cost side**: SupplierInvoice → Resource → Resource.department_id. Esclude cancelled/deleted.
+- **Margine**: revenue − supplier per department.
+- **`_net` ratio**: per α.123 approssimato a `total / 1.22` (IVA standard). Calcolo preciso ratio per ogni invoice richiede join supplementare costoso, rinviato a α.124+.
+
+UI cashflow: nuovo card "Split per reparto (anno)" sotto il chart timeline, prima del dettaglio mensile. Tabella con 5 colonne (Reparto, Revenue, Outflow fornitori, Margine, % margine). Riga TOTALE finale con bordo top spesso. Margine colorato verde/rosso secondo segno. `loadDeptBreakdown(year, showVat)` chiamata da `loadCashflow()` parallel al chart, riusa il toggle IVA per scegliere campi.
+
+**Smoke E2E**:
+- `/finance/api/cashflow/2026` con `_net` fields: invoiced 254911 → net 208943, paid 342621 → net 280837, supplier_paid 10663 → net 8741, net_cashflow 331957 → net_cashflow_net 272096. Ratio coerente (~82%).
+- `/finance/api/cashflow/2026/by-department`: 4 reparti ordinati per revenue_net desc. Audio €16'892 net rev (con €1'898 outflow), VFX €9'883, DI/Video €8'112, Commercial €2'199. Margine coerente con ratio applicato.
+
+**Backlog P2 rimanente per α.124+**:
+- P2.A.2: audit globale fallback `#${id}` user-facing
+- P2.C: F11 supplier↔resource flusso inverso + F6 admin_email send SMTP (richiede design provider scelto)
+- P2.D: naming drawer (F7a center popup, F7b inserimento blocchi inline)
+- P2.E: revamp /team /resources /departments (F21)
+- F19 precision ratio_net: join per invoice/supplier-invoice per calcolare ratio_net esatto invece di /1.22
+
+**File toccati**:
+- `app/routers/finance.py` (cashflow_year_sync `_net` fields + nuovo endpoint by-department + import current_tenant_id)
+- `app/templates/pages/cashflow.html` (toggle IVA + card dept breakdown + loadDeptBreakdown)
+- `app/main.py` (version bump)
+- CHANGELOG.md + docs/STATO.md
+
 ## v3.5.0-alpha.122 — F17/F24 sweep terminologia JCL→Lavorazione + nascondi id interni (16 mag 2026 notte)
 
 Primo step del backlog P2 architetturale (gruppo A "Visualizzazione globale" da α.120 backlog). Focus su sweep terminologia e codici DB visibili user. Sweep parziale sui punti più impattanti — F24/F9 audit globale completo richiede passi successivi (P2.A.2).

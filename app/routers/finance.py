@@ -13,6 +13,7 @@ from app.models import (
 )
 from app.services.finance import job_financial_summary, company_pl_summary, departments_pl_summary
 from app.services.rbac import requires_permission
+from app.context import current_tenant_id
 
 router = APIRouter(prefix="/finance", tags=["finance"])
 
@@ -638,6 +639,98 @@ async def cashflow_year(
     return cashflow_year_sync(year, project_id, client_id, db)
 
 
+@router.get("/api/cashflow/{year}/by-department")
+async def cashflow_by_department(year: int, db: Session = Depends(get_db)):
+    """v3.5.0-alpha.123 (F19) — Breakdown annuale per Department.
+    Revenue side: Invoice → JCLBilledSlice → JobCostLine → PriceItem.department_id.
+    Cost side (supplier): SupplierInvoice → Resource → Resource.department_id.
+    Annuale (no mensile per ora) per evitare query O(N×12) sul DB.
+    Ritorna sia campi total (IVA inclusa) sia _net (imponibile). UI sceglie
+    via toggle Mostra IVA.
+    """
+    from app.models import (
+        JCLBilledSlice, JobCostLine as _JCL, Department, Resource, PriceItem,
+    )
+    from sqlalchemy import extract, func as _func
+    tid = current_tenant_id()
+    # Revenue per dept: somma billed_amount per dept attraverso slice→jcl→item
+    revenue_rows = (
+        db.query(
+            Department.id, Department.name,
+            _func.coalesce(_func.sum(JCLBilledSlice.billed_amount), 0.0),
+        )
+        .select_from(JCLBilledSlice)
+        .join(Invoice, Invoice.id == JCLBilledSlice.invoice_id)
+        .join(_JCL, _JCL.id == JCLBilledSlice.job_cost_line_id)
+        .outerjoin(PriceItem, PriceItem.id == _JCL.price_item_id)
+        .outerjoin(Department, Department.id == PriceItem.department_id)
+        .filter(
+            JCLBilledSlice.tenant_id == tid,
+            extract("year", Invoice.issue_date) == year,
+            Invoice.status != InvoiceStatus.draft,
+            JCLBilledSlice.voided_at.is_(None),
+        )
+        .group_by(Department.id, Department.name)
+        .all()
+    )
+    by_dept = {}
+    for did, dname, total in revenue_rows:
+        key = did if did else 0
+        by_dept[key] = {
+            "department_id": did,
+            "department_name": dname or "(senza reparto)",
+            "revenue_total": round(float(total or 0), 2),
+            # Imponibile pro-quota: applica rapporto medio Invoice subtotal/total.
+            # Per semplicità approssima 1/1.22 (IVA standard 22%). Per precisione
+            # serve join supplementare a Invoice.subtotal — costo computazionale
+            # elevato, skip per α.123. Documentato per α.124+.
+            "revenue_net": round(float(total or 0) / 1.22, 2),
+            "supplier_total": 0.0,
+            "supplier_net": 0.0,
+        }
+
+    # Cost side per dept: SupplierInvoice.resource → Resource.department_id
+    cost_rows = (
+        db.query(
+            Resource.department_id,
+            _func.coalesce(_func.sum(SupplierInvoice.amount_total), 0.0),
+            _func.coalesce(_func.sum(SupplierInvoice.amount_net), 0.0),
+        )
+        .join(SupplierInvoice, SupplierInvoice.resource_id == Resource.id)
+        .filter(
+            SupplierInvoice.tenant_id == tid,
+            extract("year", SupplierInvoice.issue_date) == year,
+            SupplierInvoice.deleted_at.is_(None),
+            SupplierInvoice.payment_status != SupplierInvoiceStatus.cancelled,
+        )
+        .group_by(Resource.department_id)
+        .all()
+    )
+    dept_names = {d.id: d.name for d in db.query(Department).filter(Department.tenant_id == tid).all()}
+    for did, total, net in cost_rows:
+        key = did if did else 0
+        entry = by_dept.setdefault(key, {
+            "department_id": did,
+            "department_name": dept_names.get(did) or "(senza reparto)",
+            "revenue_total": 0.0,
+            "revenue_net": 0.0,
+            "supplier_total": 0.0,
+            "supplier_net": 0.0,
+        })
+        entry["supplier_total"] = round(float(total or 0), 2)
+        entry["supplier_net"] = round(float(net or 0), 2)
+
+    # Margin = revenue - supplier (sia total che net)
+    out = []
+    for k, e in by_dept.items():
+        e["margin_total"] = round(e["revenue_total"] - e["supplier_total"], 2)
+        e["margin_net"] = round(e["revenue_net"] - e["supplier_net"], 2)
+        out.append(e)
+    # Ordina per revenue_net desc
+    out.sort(key=lambda r: -r["revenue_net"])
+    return {"year": year, "departments": out}
+
+
 def cashflow_year_sync(
     year: int, project_id: Optional[int], client_id: Optional[int], db: Session,
 ):
@@ -664,12 +757,20 @@ def cashflow_year_sync(
     """
     from sqlalchemy import extract
 
+    # v3.5.0-alpha.123 (F16) — Affianco campi *_net (imponibile, no IVA) ai
+    # campi totali (IVA inclusa). Default UI mostra _net; toggle "Mostra IVA"
+    # switcha al totale. Senza i campi net non era possibile rappresentare
+    # cashflow al netto IVA — Matteo: "i totali fatture e cashflow dovrebbero
+    # essere SENZA IVA di default".
     series = [
         {
             "month": m,
             "invoiced": 0.0, "paid": 0.0, "outstanding": 0.0,
+            "invoiced_net": 0.0, "paid_net": 0.0, "outstanding_net": 0.0,
             "supplier_billed": 0.0, "supplier_paid": 0.0, "supplier_due": 0.0,
+            "supplier_billed_net": 0.0, "supplier_paid_net": 0.0, "supplier_due_net": 0.0,
             "net_cashflow": 0.0,
+            "net_cashflow_net": 0.0,
         }
         for m in range(1, 13)
     ]
@@ -698,11 +799,17 @@ def cashflow_year_sync(
                           InvoiceStatus.overdue, InvoiceStatus.cancelled):
             sign = -1 if (getattr(inv, "doc_type", None) == "TD04") else 1
             series[m - 1]["invoiced"] += sign * (inv.total or 0.0)
+            series[m - 1]["invoiced_net"] += sign * (inv.subtotal or 0.0)
         # outstanding: NC TD04 non genera outstanding (è un credito, non un debito da incassare)
         if getattr(inv, "doc_type", None) != "TD04":
             remaining = max(0.0, (inv.total or 0.0) - (inv.amount_paid or 0.0))
             if remaining > 0 and inv.status != InvoiceStatus.paid:
                 series[m - 1]["outstanding"] += remaining
+                # v3.5.0-alpha.123 (F16) — outstanding_net pro-quota
+                total_v = inv.total or 0.0
+                if total_v > 0:
+                    ratio_net = (inv.subtotal or 0.0) / total_v
+                    series[m - 1]["outstanding_net"] += remaining * ratio_net
 
     pay_q = db.query(InvoicePayment).filter(
         extract("year", InvoicePayment.payment_date) == year,
@@ -714,9 +821,19 @@ def cashflow_year_sync(
         else:
             pay_q = pay_q.filter(InvoicePayment.id < 0)  # zero rows
     payments = pay_q.all()
+    # v3.5.0-alpha.123 (F16) — paid_net via ratio subtotal/total dell'invoice
+    inv_by_id = {inv.id: inv for inv in invoices}
     for p in payments:
         m = p.payment_date.month if p.payment_date else 1
-        series[m - 1]["paid"] += p.amount or 0.0
+        amt = p.amount or 0.0
+        series[m - 1]["paid"] += amt
+        inv_ref = inv_by_id.get(p.invoice_id)
+        if inv_ref and (inv_ref.total or 0) > 0:
+            ratio_net = (inv_ref.subtotal or 0.0) / inv_ref.total
+            series[m - 1]["paid_net"] += amt * ratio_net
+        else:
+            # fallback: assume 22% IVA default
+            series[m - 1]["paid_net"] += amt / 1.22
 
     # v3.5.0-alpha.68.1 — cost-side fatture passive.
     # SupplierInvoice → filter by project_id direct + client_id via job
@@ -736,9 +853,11 @@ def cashflow_year_sync(
         ).filter(Project.client_id == client_id)
     sup_billed = sup_billed_q.all()
     sup_billed_ids = [s.id for s in sup_billed]
+    sup_by_id = {s.id: s for s in sup_billed}
     for s in sup_billed:
         m = s.issue_date.month if s.issue_date else 1
         series[m - 1]["supplier_billed"] += s.amount_total or 0.0
+        series[m - 1]["supplier_billed_net"] += s.amount_net or 0.0
 
     # Pagamenti a fornitori del mese (fonte verità: SupplierInvoicePayment).
     # v3.5.0-alpha.68.2 — pagamenti incrementali storicizzati.
@@ -755,7 +874,14 @@ def cashflow_year_sync(
     sup_payments = sup_pay_q.all()
     for p in sup_payments:
         m = p.payment_date.month if p.payment_date else 1
-        series[m - 1]["supplier_paid"] += p.amount or 0.0
+        amt = p.amount or 0.0
+        series[m - 1]["supplier_paid"] += amt
+        sup_ref = sup_by_id.get(p.supplier_invoice_id)
+        if sup_ref and (sup_ref.amount_total or 0) > 0:
+            ratio_net = (sup_ref.amount_net or 0.0) / sup_ref.amount_total
+            series[m - 1]["supplier_paid_net"] += amt * ratio_net
+        else:
+            series[m - 1]["supplier_paid_net"] += amt / 1.22
 
     # Fatture passive con due_date nel mese, ancora non saldate
     sup_due_q = db.query(SupplierInvoice).filter(
@@ -778,6 +904,9 @@ def cashflow_year_sync(
         m = s.due_date.month if s.due_date else 1
         residuo = max(0.0, (s.amount_total or 0.0) - (s.amount_paid or 0.0))
         series[m - 1]["supplier_due"] += residuo
+        if (s.amount_total or 0) > 0:
+            ratio_net = (s.amount_net or 0.0) / s.amount_total
+            series[m - 1]["supplier_due_net"] += residuo * ratio_net
 
     # v3.5.0-alpha.77 — Forecast pipeline (soft+committed+lost) per mese
     from app.services.quote_forecast import yearly_forecast
@@ -811,12 +940,26 @@ def cashflow_year_sync(
         s["supplier_billed"] = round(s["supplier_billed"], 2)
         s["supplier_paid"] = round(s["supplier_paid"], 2)
         s["supplier_due"] = round(s["supplier_due"], 2)
+        # v3.5.0-alpha.123 (F16) — round dei campi _net
+        s["invoiced_net"] = round(s["invoiced_net"], 2)
+        s["paid_net"] = round(s["paid_net"], 2)
+        s["outstanding_net"] = round(s["outstanding_net"], 2)
+        s["supplier_billed_net"] = round(s["supplier_billed_net"], 2)
+        s["supplier_paid_net"] = round(s["supplier_paid_net"], 2)
+        s["supplier_due_net"] = round(s["supplier_due_net"], 2)
         # v3.5.0-alpha.87 — overhead in cashflow
         s["overhead_paid"] = round(s.get("overhead_paid", 0.0), 2)
         s["capex_paid"] = round(s.get("capex_paid", 0.0), 2)
         # net_cashflow ora include anche overhead+capex
         s["net_cashflow"] = round(
             s["paid"] - s["supplier_paid"] - s["overhead_paid"] - s["capex_paid"], 2
+        )
+        # v3.5.0-alpha.123 — variante net_cashflow al netto IVA (overhead/capex
+        # sono già imponibile fattura passiva, ma per coerenza UI: usiamo
+        # supplier_paid_net invece di supplier_paid; overhead resta total
+        # poiché non distingue IVA).
+        s["net_cashflow_net"] = round(
+            s["paid_net"] - s["supplier_paid_net"] - s["overhead_paid"] - s["capex_paid"], 2
         )
         # v3.5.0-alpha.77 — pipeline forecast merge
         fcm = fc_by_month.get(s["month"], {})
