@@ -1,5 +1,54 @@
 # MediaFlow — Changelog
 
+## v3.5.0-alpha.130 — AI capability propose_send_invoice_email + refactor invoice email helper (16 mag 2026 notte tarda)
+
+Seconda capability AI estesa: invio fattura via email da copilot. Niente OAuth — riusa l'infrastruttura SMTP α.127 (provider-agnostic via .env).
+
+**Refactor invoice email helper**
+
+Estratta la logica SMTP in `app/services/invoice_email.py`:
+- `send_invoice_via_smtp(db, invoice_id, recipient_override=None) → dict`
+- `InvoiceEmailError(code, message)` exception per error propagation strutturata
+- Riusato sia dall'endpoint HTTP `POST /finance/api/invoices/{id}/send-email` (era 70+ righe inline) che dal handler AI capability
+- ~100 righe deduplicate, zero regressione: endpoint HTTP riritorna stesso shape `{ok, invoice_id, invoice_number, recipient, subject}`
+
+**AI capability `propose_send_invoice_email`** (mutation, conferma utente Apply):
+
+Args:
+- `invoice_id` (preferito)
+- `invoice_number` (fallback: lookup per number se ID ignoto)
+- `recipient_override` (opzionale: email diverso dall'admin_email cliente)
+
+Pattern uso copilot:
+- "Invia fattura 2026-00042 al cliente" → AI invoca `propose_send_invoice_email({invoice_number:'2026-00042'})` → AIAction proposed → user click Apply → send SMTP
+- "Manda la NC TD04 a admin@horizon.it" → `{invoice_number:'NC-...', recipient_override:'admin@horizon.it'}`
+- Errori SMTP propagati come `ValueError("[503] SMTP non configurato.")` per integration con `apply_action` exception handling.
+
+Tool descriptor in `ai_tools.py` con input_schema completo. Category `mutation` → confirmation flow standard (Apply/Reject card nel drawer copilot).
+
+**Smoke E2E (3 casi)**:
+
+1. Handler senza invoice_id/invoice_number → `ValueError("Manca invoice_id o invoice_number")` ✓
+2. Lookup invoice_number 'INVALID-XXX' → `ValueError("Fattura non trovata")` ✓
+3. invoice_id valid 113 + no SMTP env → `ValueError("[503] SMTP non configurato")` ✓
+4. Endpoint HTTP refactored: stesso shape error 503 ✓
+
+**Capabilities totali ora 33** (era 32 in α.129, +1).
+
+**Backlog α.131+**:
+- AI capability email integrazione OAuth (Gmail/Outlook) per ricezione email + reply
+- AI capability Drive/OneDrive (OAuth) per upload/download asset
+- Automazione portali consegne (per portale)
+- Test sistematico 14 capitolati restanti
+
+**File toccati**:
+- `app/services/invoice_email.py` (NEW: helper SMTP estratto + InvoiceEmailError)
+- `app/services/ai_assistant.py` (handler `_h_propose_send_invoice_email`)
+- `app/services/ai_tools.py` (tool descriptor `propose_send_invoice_email`)
+- `app/routers/finance.py` (endpoint refactored a usare helper)
+- `app/main.py` (version bump)
+- CHANGELOG.md + docs/STATO.md
+
 ## v3.5.0-alpha.129 — AI capability query_filesystem (asset library locale) (16 mag 2026 notte tarda)
 
 Prima capability AI estesa "filesystem". Permette al copilot AI di leggere file/cartelle in path locali autorizzati (asset library mounted, deposito disco cliente, archivi LTO digitali).

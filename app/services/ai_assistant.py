@@ -2122,6 +2122,41 @@ def _h_query_supplier_invoices(db: Session, data: dict) -> dict:
     }
 
 
+# ── Send invoice email (v3.5.0-alpha.130) ─────────────────────
+
+@ai_capability("propose_send_invoice_email")
+def _h_propose_send_invoice_email(db: Session, data: dict) -> dict:
+    """MUTATION. Invia fattura via email cliente con PDF allegato.
+
+    Args (uno fra invoice_id/invoice_number richiesto):
+    - invoice_id: ID fattura
+    - invoice_number: fallback se ID ignoto, cerca per number
+    - recipient_override: email diverso da admin_email cliente (opzionale)
+
+    Riusa `app.services.invoice_email.send_invoice_via_smtp`. Errori
+    sollevati come ValueError per integration con apply_action.
+    """
+    from app.services.invoice_email import send_invoice_via_smtp, InvoiceEmailError
+    invoice_id = data.get("invoice_id")
+    invoice_number = (data.get("invoice_number") or "").strip()
+    if not invoice_id and invoice_number:
+        from app.models import Invoice as _Inv
+        row = db.query(_Inv).filter(
+            _Inv.number == invoice_number,
+        ).first()
+        if not row:
+            raise ValueError(f"Fattura con numero '{invoice_number}' non trovata")
+        invoice_id = row.id
+    if not invoice_id:
+        raise ValueError("Manca invoice_id o invoice_number")
+    recipient = (data.get("recipient_override") or "").strip() or None
+    try:
+        result = send_invoice_via_smtp(db, int(invoice_id), recipient_override=recipient)
+    except InvoiceEmailError as e:
+        raise ValueError(f"[{e.code}] {e.message}")
+    return result
+
+
 # ── Filesystem asset library query (v3.5.0-alpha.129) ────────
 
 @ai_capability("query_filesystem")

@@ -8,6 +8,25 @@
 
 ## Versione corrente
 
+**v3.5.0-alpha.130** — 16 maggio 2026 notte tarda — AI capability propose_send_invoice_email + refactor email helper
+
+**Seconda capability AI estesa (no OAuth, riusa SMTP α.127)**:
+- `propose_send_invoice_email` (mutation): invio fattura via email cliente con PDF allegato. Conferma utente Apply.
+- Args: invoice_id | invoice_number (lookup fallback) | recipient_override
+- Refactor logica SMTP in `app/services/invoice_email.py` (`send_invoice_via_smtp` + `InvoiceEmailError`). ~100 righe deduplicate.
+- Endpoint HTTP α.127 riusa helper, zero regressione shape response.
+
+**Smoke E2E**: 3 casi pass (missing args, lookup miss, SMTP not configured).
+
+**Capabilities totali: 33** (era 32, +1 send_invoice_email).
+
+**Backlog α.131+**:
+- OAuth integrazioni vere (Gmail/Outlook ricezione+reply, Drive/OneDrive upload)
+- Automazione portali consegne
+- Test parse 14 capitolati restanti
+
+## (versione precedente)
+
 **v3.5.0-alpha.129** — 16 maggio 2026 notte tarda — AI capability query_filesystem
 
 **Prima capability AI estesa "filesystem"**:

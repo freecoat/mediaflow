@@ -788,6 +788,29 @@ TOOLS: list[dict] = [
         },
         "handler": "query_asset_contents",
     },
+    # ────────── EMAIL SEND (v3.5.0-alpha.130) ──────────
+    {
+        "name": "propose_send_invoice_email",
+        "category": "mutation",
+        "description": (
+            "Invia una fattura via email al cliente (admin_email + fallback "
+            "contact_email) con PDF allegato. Richiede SMTP configurato in "
+            ".env (SMTP_HOST/PORT/USER/PASS/FROM). Esempi: 'invia fattura "
+            "2026-00042 al cliente', 'manda la NC TD04 a admin@horizon.it'. "
+            "Conferma utente obbligatoria (Apply). 409 se fattura cancelled, "
+            "400 se cliente senza email."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "invoice_id": {"type": "integer", "description": "ID fattura."},
+                "invoice_number": {"type": "string", "description": "Fallback se ID ignoto: cerca per number."},
+                "recipient_override": {"type": "string", "description": "Email destinatario diverso da admin_email del cliente. Opzionale."},
+            },
+            "required": [],
+        },
+        "handler": "propose_send_invoice_email",
+    },
     # ────────── FILESYSTEM (v3.5.0-alpha.129) ──────────
     {
         "name": "query_filesystem",
