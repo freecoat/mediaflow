@@ -301,6 +301,17 @@ async def update_invoice_status(
             "Le fatture emesse sono immutabili: per correggere usa storno NC TD04."
         )
     inv.status = status
+    # v3.5.0-alpha.120 (F13) — Quando l'utente marca la fattura paid via UI
+    # senza creare un InvoicePayment esplicito, allinea amount_paid = total
+    # così outstanding nel cashflow scende a 0. Prima il cambio status era
+    # cosmetico per il cashflow: amount_paid restava 0 → remaining = total →
+    # outstanding contribuiva ancora come "aperto" anche se status=paid.
+    # Idempotente: se l'utente registra un InvoicePayment in seguito, il
+    # ricalcolo amount_paid lo sovrascrive correttamente.
+    if status == InvoiceStatus.paid:
+        total = inv.total or 0.0
+        if (inv.amount_paid or 0.0) < total:
+            inv.amount_paid = total
     db.commit()
     return {"id": inv.id, "status": inv.status}
 
@@ -977,6 +988,16 @@ async def download_invoice_pdf(invoice_id: int, db: Session = Depends(get_db)):
 
     if not inv:
         raise HTTPException(404, "Fattura non trovata")
+
+    # v3.5.0-alpha.120 (F14) — Una fattura cancelled non deve essere stampabile:
+    # rappresenta un documento annullato, eventualmente già stornato via NC TD04.
+    # Riemissione del PDF rischia di confondere fornitori/clienti.
+    if inv.status == InvoiceStatus.cancelled:
+        raise HTTPException(
+            409,
+            f"Fattura {inv.number} è in stato 'cancelled' e non può essere stampata. "
+            "Le fatture annullate non sono stampabili: stornare via Nota di Credito (TD04) e riemettere se necessario."
+        )
 
     # v3.5.0-alpha.114 — drift detection READ-ONLY (no mutation).
     # Decisione Matteo: fatture emesse sono IMMUTABILI. Una volta sent/paid

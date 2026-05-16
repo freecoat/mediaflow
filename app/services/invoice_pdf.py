@@ -123,6 +123,7 @@ def generate_invoice_pdf(
     invoice,
     tenant=None,
     client=None,
+    project=None,
     bollo_virtuale: bool = False,
 ) -> bytes:
     """Genera il PDF della fattura `invoice` (SQLAlchemy Invoice).
@@ -131,6 +132,9 @@ def generate_invoice_pdf(
         invoice: oggetto Invoice con relazione `lines` caricata.
         tenant: opzionale, Tenant corrente (fallback se snapshot missing).
         client: opzionale, Client corrente (fallback se snapshot missing).
+        project: v3.5.0-alpha.120 (F15) — opzionale, Project per intestazione.
+            Stampato come banner sotto il destinatario. Risolto dal caller
+            via invoice.job.project (se job_id presente).
         bollo_virtuale: se True, aggiunge la voce "Bollo virtuale 2€".
             Default False — il bollo è obbligatorio solo per fatture esenti
             con imponibile > 77.47€ (es. forfettari).
@@ -276,6 +280,30 @@ def generate_invoice_pdf(
     story.append(cli_box)
     story.append(Spacer(1, 4 * mm))
 
+    # ── 2.5) Banner Progetto (v3.5.0-alpha.120 F15) ────────────
+    # NC/fattura senza progetto: skip banner.
+    if project is not None:
+        proj_bits = []
+        if getattr(project, "code", None):
+            proj_bits.append(f"<b>{project.code}</b>")
+        if getattr(project, "title", None):
+            proj_bits.append(str(project.title))
+        if proj_bits:
+            proj_html = " · ".join(proj_bits)
+            proj_box = Table([
+                [_p("PROGETTO", size=7, color=GRAY, bold=True), _p(proj_html, size=9, align=TA_RIGHT)],
+            ], colWidths=[40 * mm, 142 * mm])
+            proj_box.setStyle(TableStyle([
+                ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+                ("LEFTPADDING", (0, 0), (-1, -1), 4 * mm),
+                ("RIGHTPADDING", (0, 0), (-1, -1), 4 * mm),
+                ("TOPPADDING", (0, 0), (-1, -1), 2 * mm),
+                ("BOTTOMPADDING", (0, 0), (-1, -1), 2 * mm),
+                ("LINEBELOW", (0, 0), (-1, -1), 0.3, GRAY),
+            ]))
+            story.append(proj_box)
+            story.append(Spacer(1, 3 * mm))
+
     # ── 3) Righe fattura ───────────────────────────────────────
     th = lambda t, a=TA_LEFT: Paragraph(
         f"<b>{t}</b>",
@@ -302,25 +330,77 @@ def generate_invoice_pdf(
     vat_aggr: dict[float, dict[str, float]] = defaultdict(lambda: {"imponibile": 0.0, "imposta": 0.0})
     subtotal = 0.0
 
-    for line in invoice.lines:
-        qty = line.quantity or 0.0
-        up = line.unit_price or 0.0
-        disc = line.discount_pct or 0.0
-        vat = line.vat_rate if line.vat_rate is not None else 22.0
-        gross = qty * up
-        net = gross * (1.0 - disc / 100.0) if disc else gross
-        subtotal += net
-        vat_amount = net * vat / 100.0
-        vat_aggr[vat]["imponibile"] += net
-        vat_aggr[vat]["imposta"] += vat_amount
+    # v3.5.0-alpha.120 (F15) — NC TD04: aggrega tutte le righe in UNA sola
+    # "Storno integrale fattura X del Y". Prima il PDF NC duplicava ogni riga
+    # della fattura sorgente con prefisso "[Storno]" — verboso e ridondante:
+    # le righe di dettaglio appartengono alla fattura originale, la NC è un
+    # documento contabile di storno globale (TD04 è "Nota di credito").
+    # I totali e l'IVA per aliquota restano corretti perché aggregati dalle
+    # lines (stesso netto e vat_amount).
+    is_credit_note = (invoice.doc_type == "TD04")
+    if is_credit_note and invoice.lines:
+        # Calcola netto + IVA aggregati dalle righe esistenti.
+        agg_net = 0.0
+        agg_vat_by_rate: dict[float, float] = defaultdict(float)
+        for line in invoice.lines:
+            qty = line.quantity or 0.0
+            up = line.unit_price or 0.0
+            disc = line.discount_pct or 0.0
+            vat = line.vat_rate if line.vat_rate is not None else 22.0
+            gross = qty * up
+            net = gross * (1.0 - disc / 100.0) if disc else gross
+            agg_net += net
+            agg_vat_by_rate[vat] += net
+        # Estrai riferimento source da notes (pattern: "fattura X emessa il Y")
+        import re as _re
+        src_ref = ""
+        src_notes = invoice.notes or ""
+        m = _re.search(r"fattura\s+(\S+)\s+emessa\s+il\s+(\S+)", src_notes, _re.IGNORECASE)
+        if m:
+            src_ref = f"fattura {m.group(1)} del {m.group(2)}"
+        else:
+            src_ref = "fattura sorgente"
+        nc_desc = f"<b>Storno integrale {src_ref}</b>"
+        if invoice.notes:
+            extra_notes = invoice.notes.split("\nMotivo:", 1)
+            if len(extra_notes) == 2:
+                nc_desc += f"<br/><font size=8 color='#6c7287'>Motivo: {extra_notes[1].strip()}</font>"
+        # Una sola riga aggregata. Usa la prima aliquota IVA (se mix, riepilogo
+        # IVA sotto mostra il dettaglio per aliquota).
+        primary_vat = max(agg_vat_by_rate.keys(), key=lambda k: agg_vat_by_rate[k]) if agg_vat_by_rate else 22.0
+        subtotal = round(agg_net, 2)
+        for rate, n in agg_vat_by_rate.items():
+            vat_amount = n * rate / 100.0
+            vat_aggr[rate]["imponibile"] += n
+            vat_aggr[rate]["imposta"] += vat_amount
         rows.append([
-            body_p(line.description or "—"),
-            right_p(f"{qty:g}"),
-            right_p(_money(up)),
-            right_p(f"{disc:g}%" if disc else "—"),
-            right_p(f"{vat:g}%"),
-            right_p(_money(net)),
+            body_p(nc_desc),
+            right_p("1"),
+            right_p(_money(agg_net)),
+            right_p("—"),
+            right_p(f"{primary_vat:g}%"),
+            right_p(_money(agg_net)),
         ])
+    else:
+        for line in invoice.lines:
+            qty = line.quantity or 0.0
+            up = line.unit_price or 0.0
+            disc = line.discount_pct or 0.0
+            vat = line.vat_rate if line.vat_rate is not None else 22.0
+            gross = qty * up
+            net = gross * (1.0 - disc / 100.0) if disc else gross
+            subtotal += net
+            vat_amount = net * vat / 100.0
+            vat_aggr[vat]["imponibile"] += net
+            vat_aggr[vat]["imposta"] += vat_amount
+            rows.append([
+                body_p(line.description or "—"),
+                right_p(f"{qty:g}"),
+                right_p(_money(up)),
+                right_p(f"{disc:g}%" if disc else "—"),
+                right_p(f"{vat:g}%"),
+                right_p(_money(net)),
+            ])
 
     line_table = Table(rows, colWidths=[78 * mm, 18 * mm, 26 * mm, 18 * mm, 16 * mm, 26 * mm], repeatRows=1)
     line_table.setStyle(TableStyle([

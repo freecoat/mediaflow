@@ -413,9 +413,30 @@ function _crShowSyncIndicator(show, stale_count = 0) {
 async function _crStartBackgroundSync() {
   if (_crSyncPolling) return;
   _crSyncPolling = true;
+  // v3.5.0-alpha.120 (F3) — Anche se stale_count è 0 dopo reconcile-all, fai
+  // SEMPRE un refresh della lista almeno una volta. Pre-fix: se al primo
+  // poll stale=0 (perché dirty flag non era settato per modifiche pre-α.115
+  // o per path che non passano da booking_mutate), il refresh NON scattava
+  // e la lista mostrava valori stale al primo render. Una flag locale
+  // garantisce un refresh post-reconcile indipendentemente da stale_count.
+  let _didPostReconcileRefresh = false;
+  const _refreshListIfVisible = async () => {
+    if (document.getElementById('cr-list-card')?.style.display !== 'none') {
+      try {
+        const fresh = await api('GET', '/cost-report/api/list');
+        _crAll = fresh;
+        renderCrList();
+      } catch(e) { /* silente */ }
+    }
+  };
   try {
-    // Trigger reconcile (non-blocking — il backend processa solo le stale)
-    await api('POST', '/cost-report/api/reconcile-all').catch(() => {});
+    // Trigger reconcile. v3.5.0-alpha.120 (F3) force=1 al primo sync della
+    // sessione → ricomputa anche le JCL non flagged stale (modifiche pre-α.115
+    // o path indiretti). I sync successivi nella stessa sessione restano lazy
+    // (solo stale) per non penalizzare.
+    const forceParam = window._crFirstSyncDone ? '' : '?force=1';
+    window._crFirstSyncDone = true;
+    await api('POST', `/cost-report/api/reconcile-all${forceParam}`).catch(() => {});
     // Poll status finché stale_count = 0
     const poll = async () => {
       try {
@@ -427,13 +448,11 @@ async function _crStartBackgroundSync() {
         } else {
           _crShowSyncIndicator(false);
           _crSyncPolling = false;
-          // Auto-refresh lista solo se l'utente è ancora nella vista lista (non in dettaglio)
-          if (document.getElementById('cr-list-card')?.style.display !== 'none') {
-            try {
-              const fresh = await api('GET', '/cost-report/api/list');
-              _crAll = fresh;
-              renderCrList();
-            } catch(e) { /* silente */ }
+          // v3.5.0-alpha.120 F3 — refresh anche se non c'erano stale (potrebbe
+          // esserci stato un reconcile invisible o dati pre-α.115 mai dirty).
+          if (!_didPostReconcileRefresh) {
+            _didPostReconcileRefresh = true;
+            await _refreshListIfVisible();
           }
         }
       } catch(e) {

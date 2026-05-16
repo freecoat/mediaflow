@@ -236,6 +236,12 @@ async def get_resource(resource_id: int, db: Session = Depends(get_db)):
 @router.put("/api/{resource_id}", dependencies=[RequireEditResources])
 async def update_resource(
     resource_id: int,
+    request: Request,
+    # v3.5.0-alpha.120 (F22) — supplier_id letto da Request.form() raw per
+    # distinguere "key non passata" (no change) da "key vuota" (clear esplicito).
+    # FastAPI con Optional[int]/Optional[str] converte '' → None, perdendo
+    # la distinzione. Pattern frontend modal supplier cleanup A.supplier_id=NULL
+    # falliva silenziosamente. Vedi parsing più sotto.
     name: Optional[str] = Form(None),
     type: Optional[ResourceType] = Form(None),
     department_id: Optional[int] = Form(None),
@@ -257,7 +263,6 @@ async def update_resource(
     annual_working_hours: Optional[float] = Form(None),
     freelance_hourly_cost: Optional[float] = Form(None),
     studio_hourly_cost: Optional[float] = Form(None),
-    supplier_id: Optional[int] = Form(None),  # v3.5.0-alpha.113
     db: Session = Depends(get_db),
 ):
     r = db.query(Resource).filter(
@@ -266,17 +271,26 @@ async def update_resource(
     ).first()
     if not r:
         raise HTTPException(404, "Risorsa non trovata")
-    if supplier_id is not None:
-        # v3.5.0-alpha.114 A15: tenant scope su supplier_id
-        if supplier_id:
+    # v3.5.0-alpha.120 F22 — Parse supplier_id da form raw (no FastAPI Form
+    # type-coercion che cancella la differenza '' vs missing).
+    form_raw = await request.form()
+    if "supplier_id" in form_raw:
+        sid_raw = (form_raw.get("supplier_id") or "").strip()
+        if sid_raw == "":
+            r.supplier_id = None
+        else:
+            try:
+                sid = int(sid_raw)
+            except ValueError:
+                raise HTTPException(400, f"supplier_id non valido: '{sid_raw}'")
             from app.models import Supplier as _Supplier
             sup = db.query(_Supplier).filter(
-                _Supplier.id == supplier_id,
+                _Supplier.id == sid,
                 _Supplier.tenant_id == current_tenant_id(),
             ).first()
             if not sup:
-                raise HTTPException(400, f"Fornitore #{supplier_id} non trovato")
-        r.supplier_id = supplier_id or None
+                raise HTTPException(400, f"Fornitore #{sid} non trovato")
+            r.supplier_id = sid
     if name is not None: r.name = name.strip()
     if type is not None: r.type = type
     if department_id is not None: r.department_id = department_id or None

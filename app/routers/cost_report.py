@@ -9,7 +9,7 @@ from sqlalchemy.orm import Session, joinedload
 from sqlalchemy import func
 from app.database import get_db
 from app.models import (
-    Job, JobCostLine, Expense, Invoice, InvoiceStatus, JobResourceAssignment,
+    Job, JobCostLine, JobStatus, Expense, Invoice, InvoiceStatus, JobResourceAssignment,
     Booking, BookingAssignment, BookingExecutionStatus, BookingOvertimeStatus, BookingStatus,
     Resource, WorkingHoursPolicy,
     BillingBatch, BillingBatchStatus, JCLBillingStatus,
@@ -731,16 +731,30 @@ async def reconcile_actuals(job_id: int, db: Session = Depends(get_db)):
 # DB → freeze pagina. Ora: WHERE accrued_stale=True → solo le JCL toccate
 # dall'ultimo recompute. Booking-mutate paths settano stale=True via hook.
 @router.post("/api/reconcile-all")
-async def reconcile_all_jobs(db: Session = Depends(get_db)):
+async def reconcile_all_jobs(force: int = 0, db: Session = Depends(get_db)):
     """Ricomputa solo le JCL marcate stale (lazy reconcile pattern).
-    Idempotente. Invoke su page-load lista CR — ora costante invece di O(N²)."""
+    Idempotente. Invoke su page-load lista CR — ora costante invece di O(N²).
+
+    v3.5.0-alpha.120 (F3) — param `force=1`: ricomputa anche le JCL non stale
+    appartenenti a Job con status attivo (active, approved, draft, completed).
+    Esclude solo cancelled/archived. Pensato per la pagina lista CR al primo
+    render, per evitare valori falsi quando il dirty flag non è stato settato
+    (modifiche pre-α.115, path indiretti, drift propagation). Non itera mai
+    sui Job cancelled per non ricaricare 80k JCL storiche.
+    """
     from app.services.cost_line_sync import recompute_cost_line_actual
-    stale_jcls = db.query(JobCostLine).filter(
+    q = db.query(JobCostLine).filter(
         JobCostLine.tenant_id == current_tenant_id(),
-        JobCostLine.accrued_stale == True,  # noqa: E712
-    ).all()
+    )
+    if force:
+        q = q.join(Job, Job.id == JobCostLine.job_id).filter(
+            Job.status.in_([JobStatus.active, JobStatus.approved, JobStatus.draft, JobStatus.completed])
+        )
+    else:
+        q = q.filter(JobCostLine.accrued_stale == True)  # noqa: E712
+    target_jcls = q.all()
     updated = 0
-    for jcl in stale_jcls:
+    for jcl in target_jcls:
         try:
             r = recompute_cost_line_actual(db, jcl)
             if r.get("updated"):
@@ -748,7 +762,7 @@ async def reconcile_all_jobs(db: Session = Depends(get_db)):
         except Exception as e:
             print(f"[reconcile-all] jcl#{jcl.id} failed: {e}")
     db.commit()
-    return {"stale_count": len(stale_jcls), "lines_updated": updated}
+    return {"stale_count": len(target_jcls), "lines_updated": updated, "forced": bool(force)}
 
 
 # v3.5.0-alpha.115 — endpoint diagnostico stato sync

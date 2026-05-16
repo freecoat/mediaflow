@@ -8,6 +8,28 @@
 
 ## Versione corrente
 
+**v3.5.0-alpha.120** — 16 maggio 2026 tarda sera — 6 fix P0 da checklist post-audit α.114-118
+
+**6 finding bloccanti chiusi**:
+- F3 CR lista valori falsi al primo render (force=1 reconcile per JCL job attivi)
+- F12 Cashflow NC TD04 ignorata (NC nasce sent, non draft)
+- F13 Cashflow no aggiornamento outstanding post status paid (auto amount_paid=total)
+- F14 PDF fattura cancelled stampabile (backend 409 + UI bottone disabled)
+- F15 PDF NC manca progetto + voci duplicate (banner project + aggregazione TD04 in 1 riga)
+- F22 Resource.supplier_id delink form vuoto (Request.form() raw parsing)
+
+**Smoke E2E**: tutti 6 fix verificati server-side. Esempi: F22 5 casi pass, F3 350/484 JCL aggiornate al force, Voice of Tide Ep. 3 ora coerente al primo render.
+
+**Backlog α.121 — P1 UX (8 finding)**:
+F4 palette sticky, F5 chip filtro cliente nome, F7c naming pattern non riflesso UI, F8 overhead write-off mismatch, F10/F23 fattura passiva dropdown lavorazione JCL, F18 lista fatture detail on click, F20 batch aggrega tasto sparisce, B5 chip drift sempre visibile.
+
+**Backlog α.122+ — P2 architetturale (10 finding, design discussion)**:
+F6 admin_email send semantica, F7a drawer center popup, F7b inserimento blocchi inline, F11 supplier↔resource flusso inverso, F16 IVA default off, F17 terminologia JCL→lavorazione, F19 cashflow split reparti, F21 UX revamp team/resources/departments, F24/F9 sweep codici DB.
+
+Backlog completo: [[project_alpha120_backlog]] in memoria progetto.
+
+## (versione precedente)
+
 **v3.5.0-alpha.119** — 16 maggio 2026 — Cost_external priority ranking + auto-dismiss drift self-healed
 
 **2 finding chiusi (smoke E2E post-α.118)**:

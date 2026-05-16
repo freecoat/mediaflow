@@ -1885,7 +1885,15 @@ def _invoice_pdf_response(invoice: Invoice, db: Session):
     from app.services.invoice_pdf import generate_invoice_pdf
     tenant_obj = db.query(Tenant).filter(Tenant.id == current_tenant_id()).first()
     client_obj = db.query(Client).filter(Client.id == invoice.client_id).first()
-    pdf = generate_invoice_pdf(invoice, tenant=tenant_obj, client=client_obj)
+    # v3.5.0-alpha.120 (F15) — Prefetch project per intestazione PDF.
+    # Senza questo la NC non mostrava il progetto di riferimento.
+    project_obj = None
+    if invoice.job_id:
+        from app.models import Job as _Job, Project as _Project
+        job_row = db.query(_Job).filter(_Job.id == invoice.job_id).first()
+        if job_row and job_row.project_id:
+            project_obj = db.query(_Project).filter(_Project.id == job_row.project_id).first()
+    pdf = generate_invoice_pdf(invoice, tenant=tenant_obj, client=client_obj, project=project_obj)
     safe_num = (invoice.number or f"invoice-{invoice.id}").replace("/", "-")
     return Response(
         content=pdf,
@@ -1913,6 +1921,13 @@ async def get_invoice_pdf_direct(
     ).first()
     if not invoice:
         raise HTTPException(404, "Fattura non trovata")
+    # v3.5.0-alpha.120 (F14) — cancelled non stampabile
+    if invoice.status == InvoiceStatus.cancelled:
+        raise HTTPException(
+            409,
+            f"Fattura {invoice.number} è in stato 'cancelled' e non può essere stampata. "
+            "Stornare via Nota di Credito (TD04) e riemettere se necessario."
+        )
     return _invoice_pdf_response(invoice, db)
 
 
@@ -2008,10 +2023,15 @@ async def storno_invoice(
 
     # NC: importi positivi con TD04 — convenzione FatturaPA. Il segno contabile
     # è espresso dal tipo documento, non dal segno numerico.
+    # v3.5.0-alpha.120 (F12) — NC nasce sent (non draft): rappresenta uno storno
+    # ufficiale di una fattura già emessa, quindi è un documento già "vivo" dal
+    # punto di vista contabile. Prima la NC restava draft e cashflow_year_sync
+    # filtrava draft → la NC non veniva mai conteggiata come storno, lasciando
+    # la fattura sorgente cancelled visibile come fatturato senza compensazione.
     nc = Invoice(
         number=credit_number,
         client_id=src.client_id,
-        status=InvoiceStatus.draft,
+        status=InvoiceStatus.sent,
         issue_date=issue_date,
         subtotal=src.subtotal or 0.0,
         vat_rate=src.vat_rate or 22.0,

@@ -1184,6 +1184,11 @@ async function loadInvoices() {
     const stornoBtn = (!isNC && i.status !== 'cancelled')
       ? `<button class="btn btn-ghost btn-sm" style="color:#ef4444;" onclick="openStornoModal(${i.id}, '${escapeHtml(i.number)}')" title="Emetti nota di credito TD04 a storno">📉</button>`
       : '';
+    // v3.5.0-alpha.120 (F14) — fatture cancelled non stampabili (backend 409).
+    // Mostra bottone disabled con tooltip esplicativo per evitare click confusi.
+    const pdfBtn = (i.status === 'cancelled')
+      ? `<button class="btn btn-ghost btn-sm" disabled style="opacity:0.4;cursor:not-allowed;" title="Fattura annullata: non stampabile">📥</button>`
+      : `<a class="btn btn-ghost btn-sm" href="/finance/api/billing/invoice/${i.id}/pdf" target="_blank" title="Stampa PDF">📥</a>`;
     return `<tr>
       <td class="mono" style="font-size:12px;">${numHtml}</td>
       <td>${escapeHtml(i.client?.name || '—')}</td>
@@ -1193,7 +1198,7 @@ async function loadInvoices() {
       <td class="mono font-weight:600;">${fmtCurrency(i.total)}</td>
       <td>${statusBadge(i.status)}</td>
       <td>
-        <a class="btn btn-ghost btn-sm" href="/finance/api/billing/invoice/${i.id}/pdf" target="_blank" title="Stampa PDF">📥</a>
+        ${pdfBtn}
         ${stornoBtn}
         <select class="form-select" style="width:auto;font-size:12px;padding:4px 8px;" onchange="changeInvStatus(${i.id}, this.value)">
           <option value="">Cambia…</option>

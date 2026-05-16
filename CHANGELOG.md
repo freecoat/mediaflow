@@ -1,5 +1,60 @@
 # MediaFlow — Changelog
 
+## v3.5.0-alpha.120 — 6 fix bloccanti P0 da checklist post-audit α.114-118 (16 mag 2026 tarda sera)
+
+Sessione test UI Matteo completa (60+ punti). 24 finding raccolti, classificati P0/P1/P2. Questo round chiude i 6 bloccanti P0. P1 (8 UX bug) → α.121. P2 (10 architetturali, design discussion) → α.122+.
+
+**F3 — CR lista mostra valori falsi al primo render**
+- Sintomo: lista cost report apre con maturato/fatturato palesemente sbagliati. Solo aprire detail + back rinfresca i valori. Esempio Voice of Tide Ep. 3: pre-apertura maturato €117'690, post-apertura €2'875 (drift −98%).
+- Root cause: `POST /cost-report/api/reconcile-all` filtrava `accrued_stale==True`. Le JCL mai flagged stale (modifiche pre-α.115, path indiretti, drift propagation) restavano stale all'infinito. Il poll background detectava `stale_count=0` e NON triggera refresh lista.
+- Fix backend: param `force=1` aggiunto a reconcile-all. Ricomputa tutte le JCL dei Job in stato attivo (active/approved/draft/completed), escludendo cancelled/archived per non degradare su 80k JCL storici.
+- Fix frontend: al primo sync della sessione (`window._crFirstSyncDone` flag) usa `force=1`. Sync successivi restano lazy. Refresh lista incondizionato dopo reconcile, anche se `stale_count=0`.
+- Smoke: force=1 su DB di test → 350 su 484 JCL aggiornate (= 72% erano stale). Voice of Tide Ep. 3 lista pre-render ora corretto.
+
+**F12 — Cashflow NC TD04 ignorata**
+- Sintomo: emit fattura gennaio, storno NC marzo → cashflow segna ancora invoiced gen + outstanding ancora aperto. Saldo annuale errato.
+- Root cause: `storno_invoice` creava la NC con `status=draft`. `cashflow_year_sync` filtra `status != draft` → NC mai conteggiata come storno.
+- Fix: NC TD04 nasce `status=sent` (è uno strumento contabile ufficiale, mai bozza). Cashflow vede correttamente il segno negativo nel mese di emissione NC.
+
+**F13 — Cashflow non aggiorna outstanding dopo cambio status sent → paid**
+- Sintomo: cambio status fattura via dropdown UI non riflette il pagamento nel cashflow (outstanding resta aperto).
+- Root cause: `update_invoice_status` cambiava solo `Invoice.status` senza toccare `amount_paid`. Il cashflow calcola `outstanding = total - amount_paid` con guard `status != paid`, ma se `amount_paid=0` il guard non basta a evitare l'inflazione su altre query.
+- Fix: in `update_invoice_status`, quando si passa a `paid` senza payment record esplicito, auto-imposta `amount_paid = total`. Idempotente: se l'utente registra InvoicePayment in seguito, il recalc sovrascrive.
+
+**F14 — PDF fattura cancelled stampabile (regola sbagliata)**
+- Sintomo: una fattura `cancelled` (es. post-storno NC) era stampabile via lista finance.
+- Fix backend: entrambi gli endpoint `/finance/api/invoices/{id}/pdf` e `/finance/api/billing/invoice/{id}/pdf` ritornano 409 con messaggio esplicito se status=cancelled.
+- Fix UI: in `finance.html` riga 1196, bottone `📥` PDF mostrato disabled (opacity 0.4, cursor:not-allowed) con tooltip "Fattura annullata: non stampabile" quando `i.status === 'cancelled'`.
+
+**F15 — PDF NC mancava intestazione progetto + duplicava voci con [Storno]**
+- Sintomo (Matteo): "la nota di credito riporta tutte le voci di quotazione sul progetto con [Storno], ma non c'è informazione sul nome progetto".
+- Fix 1: `invoice_pdf.py` accetta nuovo param `project=None`. Banner "PROGETTO: <code> · <title>" stampato dopo il box destinatario per qualsiasi tipo di fattura quando il progetto è collegato (via `invoice.job.project`).
+- Fix 2: per `doc_type=TD04` le righe vengono aggregate in UNA sola "Storno integrale fattura X del Y" + totale netto + IVA per aliquota. Estrazione del riferimento source via regex su `invoice.notes` (pattern α.111 storno_invoice).
+- Caller: `billing.py:_invoice_pdf_response` prefetcha project da invoice.job_id → invoice.job.project e lo passa al generator.
+
+**F22 — Resource.supplier_id delink non funziona via PUT form vuoto**
+- Sintomo: cambio risorsa nel modal supplier non scollega la risorsa precedente. Pattern frontend `PUT /resources/api/{prev}` con `supplier_id=''` veniva silently ignorato.
+- Root cause: `supplier_id: Optional[int] = Form(None)` convertiva la stringa vuota a None. Il check `if supplier_id is not None` saltava → resource resta linked.
+- Fix: `request: Request` come dependency + `await request.form()` raw. Check `"supplier_id" in form` distingue "key non passata" da "key vuota". Comportamento:
+  - missing → no change
+  - '' → clear esplicito (set NULL)
+  - 'N' → set int (validazione 400 se non parseable)
+  - tenant scope su FK supplier (400 se cross-tenant)
+- Smoke E2E: tutti 5 casi pass (clear, set, unchanged, invalid, tenant scope).
+
+**Architettura — finding accumulati α.120 backlog**: 24 finding (F3-F24 + B5 nota) salvati in memoria progetto. P1 da affrontare in α.121 (8 UX bug). P2 in α.122+ (10 architetturali, richiedono design discussion: F6 admin_email semantica, F16 IVA default, F17 terminologia "lavorazione", F21 UX team/resources/departments, F24 sweep visualizzazione codici DB).
+
+**File toccati**:
+- `app/routers/resources.py` (F22)
+- `app/routers/finance.py` (F13 + F14 parte 1)
+- `app/routers/billing.py` (F12 + F14 parte 2 + F15 prefetch project)
+- `app/routers/cost_report.py` (F3 backend `force=1`)
+- `app/services/invoice_pdf.py` (F15 project banner + NC aggregata)
+- `app/templates/pages/cost_report.html` (F3 frontend force first sync)
+- `app/templates/pages/finance.html` (F14 UI hide bottone)
+- `app/main.py` (version bump)
+- CHANGELOG.md + docs/STATO.md
+
 ## v3.5.0-alpha.119 — Cost_external priority ranking + auto-dismiss drift self-healed (16 mag 2026)
 
 Smoke E2E server-side post-α.118 ha individuato 2 finding sui meccanismi α.115–α.117 (Q11 cost_external + cost_drift detector). Entrambi risolti in questo round.
