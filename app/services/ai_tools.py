@@ -788,6 +788,31 @@ TOOLS: list[dict] = [
         },
         "handler": "query_asset_contents",
     },
+    # ────────── FILESYSTEM (v3.5.0-alpha.129) ──────────
+    {
+        "name": "query_filesystem",
+        "category": "readonly",
+        "description": (
+            "Lista file/cartelle in un path filesystem (asset library locale). "
+            "Solo path autorizzati nella whitelist tenant (configurati in "
+            "/settings → fs-scan-paths). Filtri: glob_pattern (es. '*.mov', "
+            "'**/dolby_*.xml'), max_depth, max_results. Ritorna metadata: "
+            "nome, size, mtime, mime_type. USA per: 'cosa c\\'è in "
+            "/mnt/asset_library/PROJ-2024-0001/?', 'cerca tutti i .mov "
+            "consegnati', 'lista deliverable nel deposito disco'."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "path": {"type": "string", "description": "Path assoluto (deve essere dentro la whitelist tenant)."},
+                "glob_pattern": {"type": "string", "description": "Pattern glob opzionale (es. '*.mov', '*.xml'). Default: tutti."},
+                "max_depth": {"type": "integer", "description": "Profondità max ricorsione. Default 4, max 8."},
+                "max_results": {"type": "integer", "description": "Limite risultati. Default 100, max 500."},
+            },
+            "required": ["path"],
+        },
+        "handler": "query_filesystem",
+    },
     {
         "name": "propose_asset_movement",
         "category": "mutation",

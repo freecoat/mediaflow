@@ -8,6 +8,25 @@
 
 ## Versione corrente
 
+**v3.5.0-alpha.129** — 16 maggio 2026 notte tarda — AI capability query_filesystem
+
+**Prima capability AI estesa "filesystem"**:
+- `query_filesystem` (readonly): list path locale con whitelist tenant + glob + depth/results limits
+- Sicurezza: path traversal protection, hard cap depth ≤ 8 e results ≤ 500
+- Tool descriptor `ai_tools.py` con input_schema completo
+- Pattern uso: "cosa c'è in /mnt/asset_library/PROJ-X/", "elenca .mov consegnati", ecc.
+- Capabilities totali: 32 (era 31)
+
+**Smoke E2E**: 4 casi pass (no whitelist→reject, autorizzato→OK, glob→filtra, fuori whitelist→reject).
+
+**Backlog α.130+**:
+- AI capability email (OAuth) - design preliminare
+- AI capability Drive/OneDrive (OAuth)
+- Automazione portali consegne
+- Test parse 14 capitolati restanti
+
+## (versione precedente)
+
 **v3.5.0-alpha.128** — 16 maggio 2026 notte tarda — Fase 5 capitolati quick-load esempi
 
 **Fase 5 audit + bundle**:

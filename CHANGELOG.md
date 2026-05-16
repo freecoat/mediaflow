@@ -1,5 +1,55 @@
 # MediaFlow — Changelog
 
+## v3.5.0-alpha.129 — AI capability query_filesystem (asset library locale) (16 mag 2026 notte tarda)
+
+Prima capability AI estesa "filesystem". Permette al copilot AI di leggere file/cartelle in path locali autorizzati (asset library mounted, deposito disco cliente, archivi LTO digitali).
+
+**Capability `query_filesystem`** (readonly, esecuzione immediata):
+
+Argomenti:
+- `path` (richiesto): path assoluto da listare
+- `glob_pattern` (opzionale): es. `*.mov`, `*.xml`, `dolby_*.xml`
+- `max_depth` (default 4, max 8): profondità ricorsione
+- `max_results` (default 100, max 500): limite risultati
+
+Risposta: `{count, files: [{name, relative_path, is_dir, size, size_human, mtime, mime_type}], base_path, glob_pattern, truncated}`.
+
+**Sicurezza multi-strato**:
+
+1. **Whitelist tenant-level** (`Tenant.fs_scan_allowed_paths`, JSON list): senza configurazione → reject con istruzioni `/settings → fs-scan-paths`.
+2. **Path traversal protection**: `Path.resolve(strict=False)` + `relative_to()` check. Fallback case-insensitive prefix match per Windows (resolve può differire da prefix originale).
+3. **Limit hard cap**: max_depth ≤ 8, max_results ≤ 500 per evitare scan invasivi su volumi grandi.
+4. **Permission errors silenti**: directory non leggibili skippate senza crash.
+
+**Pattern uso AI**:
+
+User chiede al copilot: "cosa c'è in `/mnt/asset_library/PROJ-2024-0001/`?" → AI invoca `query_filesystem({path:'/mnt/asset_library/PROJ-2024-0001/'})` → ritorna lista deliverable. Filtraggio: "elenca i .mov consegnati" → `glob_pattern: '*.mov'`. Profondità: "cerca .xml in sottocartelle" → `max_depth: 6`.
+
+Tool registrato in `ai_tools.py:TOOLS` con category `readonly`, descrizione esplicita degli use case (asset library, deliverable check). Capability descriptor schema completo (input_schema + handler).
+
+**Smoke E2E**:
+
+1. No whitelist tenant → error "Configura whitelist in /settings → fs-scan-paths" + lista vuota ✓
+2. Path autorizzato `docs/capitolati_esempio/` → 15 file listati con metadata ✓
+3. Glob `*.pdf` → 6 file PDF filtrati correttamente ✓
+4. Path fuori whitelist `C:/Windows` → reject con messaggio + lista vuota ✓
+
+**Helper `_human_size`** (interno): formatta byte in B/KB/MB/GB/TB human-readable.
+
+**Capabilities totali ora 32** (era 31 in α.128, +1).
+
+**Backlog α.130+**:
+- AI capability: integrazione email (OAuth Gmail/Outlook) — design provider preliminare
+- AI capability: integrazione Drive/OneDrive — OAuth
+- Automazione portali consegne (per portale + per cliente)
+- Test sistematico 14 capitolati restanti
+
+**File toccati**:
+- `app/services/ai_assistant.py` (handler `_h_query_filesystem` + helper `_human_size`)
+- `app/services/ai_tools.py` (tool descriptor `query_filesystem` con input_schema)
+- `app/main.py` (version bump)
+- CHANGELOG.md + docs/STATO.md
+
 ## v3.5.0-alpha.128 — Fase 5 capitolati: quick-load esempi nel wizard import (16 mag 2026 notte tarda)
 
 Audit Fase 5 (capitolati F14/F15). Codice scaffolded già presente:

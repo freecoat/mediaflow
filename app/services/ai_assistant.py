@@ -2122,6 +2122,160 @@ def _h_query_supplier_invoices(db: Session, data: dict) -> dict:
     }
 
 
+# ── Filesystem asset library query (v3.5.0-alpha.129) ────────
+
+@ai_capability("query_filesystem")
+def _h_query_filesystem(db: Session, data: dict) -> dict:
+    """READONLY. Lista file/cartelle in un path filesystem.
+
+    Sicurezza:
+    - Path richiesto deve essere ENTRO la whitelist `Tenant.fs_scan_allowed_paths`.
+    - No path traversal (resolve + relative_to check).
+    - Limite max_depth (≤8) e max_results (≤500) per evitare scan invasivi.
+
+    Pattern uso: AI assistente domanda "cosa c'è in X" e fornisce path
+    autorizzato. Risposta include nome relativo, size, mtime, mime_type.
+    """
+    from pathlib import Path as _P
+    import fnmatch as _fnm
+    import mimetypes as _mime
+    from datetime import datetime as _dt
+    from app.models import Tenant as _Tenant
+
+    raw_path = (data.get("path") or "").strip()
+    if not raw_path:
+        raise ValueError("Manca 'path'")
+    glob_pattern = (data.get("glob_pattern") or "").strip()
+    max_depth = max(1, min(int(data.get("max_depth") or 4), 8))
+    max_results = max(1, min(int(data.get("max_results") or 100), 500))
+
+    # Whitelist tenant
+    t = db.query(_Tenant).filter(_Tenant.id == CURRENT_TENANT).first()
+    allowed = t.fs_scan_allowed_paths if t else None
+    if not allowed:
+        return {
+            "error": "Nessun path filesystem autorizzato per questo tenant. "
+                     "Configura whitelist in /settings → fs-scan-paths.",
+            "files": [],
+            "count": 0,
+        }
+
+    try:
+        target = _P(raw_path).expanduser().resolve(strict=False)
+    except (OSError, RuntimeError) as e:
+        return {"error": f"Path non valido: {e}", "files": [], "count": 0}
+
+    # Verifica target sia dentro almeno uno dei path autorizzati
+    target_str = str(target).lower()
+    authorized = False
+    for p in allowed:
+        try:
+            allow_p = _P(p).expanduser().resolve(strict=False)
+        except Exception:
+            continue
+        try:
+            target.relative_to(allow_p)
+            authorized = True
+            break
+        except ValueError:
+            # match prefix case-insensitive su windows (resolve può differire)
+            if target_str.startswith(str(allow_p).lower()):
+                authorized = True
+                break
+    if not authorized:
+        return {
+            "error": f"Path '{raw_path}' fuori dalla whitelist autorizzata "
+                     f"(consentiti: {allowed}).",
+            "files": [],
+            "count": 0,
+        }
+
+    if not target.exists():
+        return {"error": f"Path non esistente: {target}", "files": [], "count": 0}
+    if not target.is_dir():
+        # Singolo file: ritorna metadata
+        try:
+            st = target.stat()
+            mime, _ = _mime.guess_type(target.name)
+            return {
+                "count": 1,
+                "files": [{
+                    "name": target.name,
+                    "relative_path": target.name,
+                    "is_dir": False,
+                    "size": st.st_size,
+                    "size_human": _human_size(st.st_size),
+                    "mtime": _dt.fromtimestamp(st.st_mtime).isoformat(),
+                    "mime_type": mime,
+                }],
+                "base_path": str(target.parent),
+            }
+        except OSError as e:
+            return {"error": str(e), "files": [], "count": 0}
+
+    # Walk con depth limit
+    results: list[dict] = []
+    base = target
+
+    def _walk(d: _P, depth: int):
+        if len(results) >= max_results:
+            return
+        if depth > max_depth:
+            return
+        try:
+            for child in sorted(d.iterdir()):
+                if len(results) >= max_results:
+                    return
+                try:
+                    st = child.stat()
+                except OSError:
+                    continue
+                is_dir = child.is_dir()
+                rel = child.relative_to(base).as_posix()
+                if glob_pattern and not is_dir:
+                    if not _fnm.fnmatch(child.name, glob_pattern):
+                        if depth < max_depth:
+                            continue
+                        continue
+                mime = None
+                if not is_dir:
+                    mime, _ = _mime.guess_type(child.name)
+                results.append({
+                    "name": child.name,
+                    "relative_path": rel,
+                    "is_dir": is_dir,
+                    "size": st.st_size if not is_dir else None,
+                    "size_human": _human_size(st.st_size) if not is_dir else None,
+                    "mtime": _dt.fromtimestamp(st.st_mtime).isoformat(),
+                    "mime_type": mime,
+                })
+                if is_dir:
+                    _walk(child, depth + 1)
+        except PermissionError:
+            return
+
+    _walk(base, 1)
+    truncated = len(results) >= max_results
+    return {
+        "count": len(results),
+        "files": results,
+        "base_path": str(base),
+        "glob_pattern": glob_pattern or None,
+        "truncated": truncated,
+    }
+
+
+def _human_size(size: int) -> str:
+    """Formatta byte in KB/MB/GB human-readable."""
+    if size is None:
+        return ""
+    for unit in ("B", "KB", "MB", "GB", "TB"):
+        if size < 1024:
+            return f"{size:.1f} {unit}" if unit != "B" else f"{size} B"
+        size /= 1024
+    return f"{size:.1f} PB"
+
+
 # ── Supplier / fatture passive (v3.5.0-alpha.68.5) ────────────
 
 @ai_capability("propose_supplier")
