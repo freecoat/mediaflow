@@ -1,5 +1,51 @@
 # MediaFlow — Changelog
 
+## v3.5.0-alpha.133 — i18n GUI base (IT/EN/FR/DE) — switcher topbar (16 mag 2026 notte tarda)
+
+Sistema i18n GUI client-side per supporto multilingua. Lingue iniziali: IT (sorgente), EN, FR, DE. Espandibile via dictionary + `data-i18n` attributes.
+
+**Architettura**
+
+- `app/static/js/i18n.js` (NEW, ~12 KB): dictionary `window.MF_I18N = {key: {it, en, fr, de}}` + `applyI18n()` DOM scanner + `mfSetLang(lang)` switcher + popover handler.
+- Persistenza: `localStorage.mf_lang`. Default `'it'`. Fallback per key mancante: `it` → key letterale.
+- Markup: `data-i18n="key"` su elementi da tradurre. Opzionalmente `data-i18n-attr="placeholder|title|aria-label"` per attributi invece di textContent.
+- I18n preserva figli (es. `<span class="nav-icon">` interno a nav link): modifica solo il primo text node trovato. Fallback `textContent` se nessun text node esiste.
+
+**Switcher topbar**
+
+Nuovo bottone bandiera 🇮🇹/🇬🇧/🇫🇷/🇩🇪 (current lang) accanto a theme picker + bell. Click → popover sticky toggle con 4 celle (flag + nome lingua). Selezione cella → `mfSetLang` + applyI18n + toast + close popover. Click outside chiude. Pattern identico a F4 theme picker (α.121).
+
+**CSS**: `.topbar-lang-wrap`, `.topbar-lang-pop`, `.tl-cell`, `.tl-flag`, `.tl-lbl` in `main.css`.
+
+**Scope α.133**
+
+Subset stringhe tradotte (~50 chiavi): sidebar nav (sezioni + voci) + topbar (theme, notifications, logout, language) + login page (title, email, password, submit, invalid).
+
+Resto della UI continua in italiano (hardcoded nei template). Espansione futura: marcare con `data-i18n` + aggiungere chiave al dictionary.
+
+**Cache buster**: bump `?v=3.5.0-alpha.133` su `global.js`, `main.css`, `i18n.js`.
+
+**Smoke**:
+- `/static/js/i18n.js` servito (12 KB, HTTP 200)
+- Dashboard render: 37 elementi con `data-i18n` (sidebar + topbar)
+- Switcher topbar presente
+- Script tag i18n.js incluso in base.html + login.html
+
+**Backlog α.134+**:
+- Estensione i18n: dashboard, login messaggi server-side, copilot prompt
+- Server-side i18n per messaggi error/toast da backend (oggi sono in italiano hardcoded)
+- Date/numeri locale-aware (Intl API)
+- Parse batch UI capitolati
+- OAuth integrazioni vere
+
+**File toccati**:
+- `app/static/js/i18n.js` (NEW: dictionary + switcher + DOM scanner)
+- `app/static/css/main.css` (CSS popover lingua + cache buster bump)
+- `app/templates/base.html` (sidebar nav data-i18n + topbar lang switcher + script tag + cache buster)
+- `app/templates/pages/login.html` (data-i18n form auth)
+- `app/main.py` (version bump)
+- CHANGELOG.md + docs/STATO.md
+
 ## v3.5.0-alpha.132 — DeliveryTemplate export JSON + duplica (16 mag 2026 notte tarda)
 
 QoL su `/delivery-templates`: 2 nuove operazioni per ogni template salvato.

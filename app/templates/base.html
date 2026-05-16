@@ -9,7 +9,7 @@
   <meta http-equiv="Pragma" content="no-cache">
   <meta http-equiv="Expires" content="0">
   <title>{% block title %}MediaFlow{% endblock %}</title>
-  <link rel="stylesheet" href="/static/css/main.css?v=3.5.0-alpha.121">
+  <link rel="stylesheet" href="/static/css/main.css?v=3.5.0-alpha.133">
   <link rel="stylesheet" href="/static/css/sleek.css?v=3.5.0-alpha.80">
   <script>
     // v3.5.0-alpha.80 — Sleek mode toggle (default ON)
@@ -56,127 +56,125 @@
 
     <nav class="sidebar-nav">
       <div class="nav-section">
-        <div class="nav-section-label">Principale</div>
+        <div class="nav-section-label" data-i18n="nav.section.main">Principale</div>
         <a href="/dashboard" data-nav-id="dashboard" class="nav-item {% if active_page == 'dashboard' %}active{% endif %}">
-          <span class="nav-icon"><i data-lucide="layout-dashboard"></i></span> Dashboard
+          <span class="nav-icon"><i data-lucide="layout-dashboard"></i></span> <span data-i18n="nav.dashboard">Dashboard</span>
         </a>
       </div>
 
       {% set _user = request.state.current_user %}
       <div class="nav-section">
-        <div class="nav-section-label">Anagrafica</div>
+        <div class="nav-section-label" data-i18n="nav.section.records">Anagrafica</div>
         {% if can_view_finance(_user) %}
         <a href="/clients" data-nav-id="clients" class="nav-item {% if active_page == 'clients' %}active{% endif %}">
-          <span class="nav-icon"><i data-lucide="building-2"></i></span> Clienti
+          <span class="nav-icon"><i data-lucide="building-2"></i></span> <span data-i18n="nav.clients">Clienti</span>
         </a>
         {% endif %}
         <a href="/projects" data-nav-id="projects" class="nav-item {% if active_page == 'projects' %}active{% endif %}">
-          <span class="nav-icon"><i data-lucide="clapperboard"></i></span> Progetti
+          <span class="nav-icon"><i data-lucide="clapperboard"></i></span> <span data-i18n="nav.projects">Progetti</span>
         </a>
       </div>
 
       <div class="nav-section">
-        <div class="nav-section-label">Operativo</div>
+        <div class="nav-section-label" data-i18n="nav.section.operations">Operativo</div>
         <a href="/planning" data-nav-id="planning" class="nav-item {% if active_page == 'planning' %}active{% endif %}">
-          <span class="nav-icon"><i data-lucide="calendar-range"></i></span> Pianificazione
+          <span class="nav-icon"><i data-lucide="calendar-range"></i></span> <span data-i18n="nav.planning">Pianificazione</span>
         </a>
         {% if can_assign_resources(_user) %}
         <a href="/team" data-nav-id="team" class="nav-item {% if active_page == 'team' %}active{% endif %}">
-          <span class="nav-icon"><i data-lucide="users"></i></span> Team
+          <span class="nav-icon"><i data-lucide="users"></i></span> <span data-i18n="nav.team">Team</span>
         </a>
         {% endif %}
         <a href="/hr" data-nav-id="hr" class="nav-item {% if active_page == 'hr' %}active{% endif %}">
-          <span class="nav-icon"><i data-lucide="clock"></i></span> {% if is_staff(_user) %}Le mie ore{% else %}Ore lavoro{% endif %}
+          <span class="nav-icon"><i data-lucide="clock"></i></span> <span data-i18n="{% if is_staff(_user) %}nav.my_hours{% else %}nav.hours{% endif %}">{% if is_staff(_user) %}Le mie ore{% else %}Ore lavoro{% endif %}</span>
         </a>
       </div>
 
       {% if can_view_finance(_user) %}
       <div class="nav-section">
-        <div class="nav-section-label">Preventivi</div>
+        <div class="nav-section-label" data-i18n="nav.section.quotes">Preventivi</div>
         {% if can_edit_pricelist(_user) %}
         <a href="/pricelist" data-nav-id="pricelist" class="nav-item {% if active_page == 'pricelist' %}active{% endif %}">
-          <span class="nav-icon"><i data-lucide="list-ordered"></i></span> Listino Prezzi
+          <span class="nav-icon"><i data-lucide="list-ordered"></i></span> <span data-i18n="nav.pricelist">Listino Prezzi</span>
         </a>
         {% endif %}
         <a href="/quotes" data-nav-id="quotes" class="nav-item {% if active_page == 'quotes' %}active{% endif %}">
-          <span class="nav-icon"><i data-lucide="file-spreadsheet"></i></span> Quotazioni
+          <span class="nav-icon"><i data-lucide="file-spreadsheet"></i></span> <span data-i18n="nav.quotes">Quotazioni</span>
         </a>
       </div>
 
       <div class="nav-section">
-        <div class="nav-section-label">Finanza</div>
+        <div class="nav-section-label" data-i18n="nav.section.finance">Finanza</div>
         <a href="/cost-report" data-nav-id="cost_report" class="nav-item {% if active_page == 'cost_report' %}active{% endif %}">
-          <span class="nav-icon"><i data-lucide="bar-chart-3"></i></span> Cost Report
+          <span class="nav-icon"><i data-lucide="bar-chart-3"></i></span> <span data-i18n="nav.cost_report">Cost Report</span>
         </a>
         <a href="/finance" data-nav-id="finance" class="nav-item {% if active_page == 'finance' %}active{% endif %}">
-          <span class="nav-icon"><i data-lucide="euro"></i></span> Fatturazione
+          <span class="nav-icon"><i data-lucide="euro"></i></span> <span data-i18n="nav.finance">Fatturazione</span>
         </a>
         <a href="/finance/cashflow" data-nav-id="cashflow" class="nav-item {% if active_page == 'cashflow' %}active{% endif %}">
-          <span class="nav-icon"><i data-lucide="line-chart"></i></span> Cashflow &amp; Forecast
+          <span class="nav-icon"><i data-lucide="line-chart"></i></span> <span data-i18n="nav.cashflow">Cashflow &amp; Forecast</span>
         </a>
-        <!-- v3.5.0-alpha.88: voce "Forecast / Pipeline" rimossa, accorpata
-             in /finance/cashflow come secondo tab (#forecast deep-link). -->
         <a href="/finance/reports" data-nav-id="finance_reports" class="nav-item {% if active_page == 'finance_reports' %}active{% endif %}">
-          <span class="nav-icon"><i data-lucide="file-bar-chart"></i></span> Report YoY + Export
+          <span class="nav-icon"><i data-lucide="file-bar-chart"></i></span> <span data-i18n="nav.finance_reports">Report YoY + Export</span>
         </a>
         <a href="/suppliers" data-nav-id="suppliers" class="nav-item {% if active_page == 'suppliers' %}active{% endif %}">
-          <span class="nav-icon"><i data-lucide="receipt"></i></span> Fornitori
+          <span class="nav-icon"><i data-lucide="receipt"></i></span> <span data-i18n="nav.suppliers">Fornitori</span>
         </a>
         <a href="/overhead/" data-nav-id="overhead" class="nav-item {% if active_page == 'overhead' %}active{% endif %}">
-          <span class="nav-icon"><i data-lucide="piggy-bank"></i></span> Spese aziendali
+          <span class="nav-icon"><i data-lucide="piggy-bank"></i></span> <span data-i18n="nav.overhead">Spese aziendali</span>
         </a>
       </div>
       {% endif %}
 
       <div class="nav-section">
-        <div class="nav-section-label">Media</div>
+        <div class="nav-section-label" data-i18n="nav.section.media">Media</div>
         <a href="/dam" data-nav-id="dam" class="nav-item {% if active_page == 'dam' %}active{% endif %}">
-          <span class="nav-icon"><i data-lucide="film"></i></span> Asset Library
+          <span class="nav-icon"><i data-lucide="film"></i></span> <span data-i18n="nav.dam">Asset Library</span>
         </a>
         <a href="/dam/fs-scan" data-nav-id="fs_scan" class="nav-item nav-subitem {% if active_page == 'fs_scan' %}active{% endif %}" style="padding-left:36px;font-size:12px;">
-          <span class="nav-icon"><i data-lucide="folder-search"></i></span> Scan filesystem
+          <span class="nav-icon"><i data-lucide="folder-search"></i></span> <span data-i18n="nav.fs_scan">Scan filesystem</span>
         </a>
         <a href="/physical-assets/inout" data-nav-id="assets_inout" class="nav-item {% if active_page == 'assets_inout' %}active{% endif %}">
-          <span class="nav-icon"><i data-lucide="truck"></i></span> In/Out Asset
+          <span class="nav-icon"><i data-lucide="truck"></i></span> <span data-i18n="nav.assets_inout">In/Out Asset</span>
         </a>
         <a href="/physical-assets" data-nav-id="physical_assets" class="nav-item {% if active_page == 'physical_assets' %}active{% endif %}">
-          <span class="nav-icon"><i data-lucide="hard-drive"></i></span> Asset Fisici
+          <span class="nav-icon"><i data-lucide="hard-drive"></i></span> <span data-i18n="nav.physical_assets">Asset Fisici</span>
         </a>
         <a href="/delivery-templates" data-nav-id="delivery_templates" class="nav-item {% if active_page == 'delivery_templates' %}active{% endif %}">
-          <span class="nav-icon"><i data-lucide="file-output"></i></span> Capitolati
+          <span class="nav-icon"><i data-lucide="file-output"></i></span> <span data-i18n="nav.delivery_templates">Capitolati</span>
         </a>
         <a href="/delivery-templates/import" data-nav-id="capitolati_import" class="nav-item nav-subitem {% if active_page == 'capitolati_import' %}active{% endif %}" style="padding-left:36px;font-size:12px;">
-          <span class="nav-icon"><i data-lucide="upload-cloud"></i></span> Import → Quote
+          <span class="nav-icon"><i data-lucide="upload-cloud"></i></span> <span data-i18n="nav.capitolati_import">Import → Quote</span>
         </a>
       </div>
 
       {% if request.state.current_user and request.state.current_user.is_platform_admin %}
       <div class="nav-section">
-        <div class="nav-section-label">Platform</div>
+        <div class="nav-section-label" data-i18n="nav.section.platform">Platform</div>
         <a href="/platform/tenants" data-nav-id="platform" class="nav-item {% if active_page == 'platform' %}active{% endif %}">
-          <span class="nav-icon"><i data-lucide="building-2"></i></span> Tenants
+          <span class="nav-icon"><i data-lucide="building-2"></i></span> <span data-i18n="nav.tenants">Tenants</span>
         </a>
       </div>
       {% endif %}
 
       {% if is_elevated(_user) %}
       <div class="nav-section">
-        <div class="nav-section-label">Configurazione</div>
+        <div class="nav-section-label" data-i18n="nav.section.configuration">Configurazione</div>
         {% if can_edit_settings(_user) %}
         <a href="/departments" data-nav-id="departments" class="nav-item {% if active_page == 'departments' %}active{% endif %}">
-          <span class="nav-icon"><i data-lucide="layers"></i></span> Reparti
+          <span class="nav-icon"><i data-lucide="layers"></i></span> <span data-i18n="nav.departments">Reparti</span>
         </a>
         {% endif %}
         <a href="/settings" data-nav-id="settings" class="nav-item {% if active_page == 'settings' %}active{% endif %}">
-          <span class="nav-icon"><i data-lucide="settings"></i></span> Impostazioni
+          <span class="nav-icon"><i data-lucide="settings"></i></span> <span data-i18n="nav.settings">Impostazioni</span>
         </a>
       </div>
       {% endif %}
 
       <div class="nav-section">
-        <div class="nav-section-label">Aiuto</div>
+        <div class="nav-section-label" data-i18n="nav.section.help">Aiuto</div>
         <a href="/manuale" data-nav-id="manuale" class="nav-item {% if active_page == 'manuale' %}active{% endif %}">
-          <span class="nav-icon"><i data-lucide="book-open"></i></span> Manuale
+          <span class="nav-icon"><i data-lucide="book-open"></i></span> <span data-i18n="nav.manual">Manuale</span>
         </a>
       </div>
 
@@ -230,19 +228,27 @@
         {% if request.state.current_user %}
         <!-- v3.5.0-alpha.66.19: theme switcher rapido (cycle + popover swatches) -->
         <div class="topbar-theme-wrap" id="topbar-theme-wrap">
-          <button id="topbar-theme-btn" class="topbar-bell" title="Apri palette tema" onclick="topbarThemeToggleOpen(event)">
+          <button id="topbar-theme-btn" class="topbar-bell" data-i18n="topbar.theme" data-i18n-attr="title" title="Apri palette tema" onclick="topbarThemeToggleOpen(event)">
             <span class="topbar-bell-icon"><i data-lucide="palette"></i></span>
           </button>
           <div class="topbar-theme-pop" id="topbar-theme-pop"></div>
         </div>
-        <button id="notif-bell-btn" class="topbar-bell" title="Notifiche" onclick="notifToggleDrawer()">
+        <!-- v3.5.0-alpha.133 (i18n): switcher lingua. Popover sticky toggle
+             come theme picker. Default 🇮🇹 (IT lingua sorgente). -->
+        <div class="topbar-lang-wrap" id="topbar-lang-wrap">
+          <button class="topbar-bell" data-i18n="topbar.language" data-i18n-attr="title" title="Lingua" onclick="topbarLangToggleOpen(event)">
+            <span class="topbar-bell-icon" id="topbar-lang-current" style="font-size:16px;">🇮🇹</span>
+          </button>
+          <div class="topbar-lang-pop" id="topbar-lang-pop"></div>
+        </div>
+        <button id="notif-bell-btn" class="topbar-bell" data-i18n="topbar.notifications" data-i18n-attr="title" title="Notifiche" onclick="notifToggleDrawer()">
           <span class="topbar-bell-icon"><i data-lucide="bell"></i></span>
           <span id="notif-badge" class="topbar-bell-badge" style="display:none;">0</span>
         </button>
         <div class="topbar-user" title="{{ request.state.current_user.email }}">
           <span class="topbar-user-name">{{ request.state.current_user.full_name or request.state.current_user.email }}</span>
           <span class="topbar-user-role">{{ request.state.current_user.role.value if request.state.current_user.role else '' }}</span>
-          <a href="/auth/logout" class="topbar-user-logout" title="Logout"><i data-lucide="log-out"></i></a>
+          <a href="/auth/logout" class="topbar-user-logout" data-i18n="topbar.logout" data-i18n-attr="title" title="Logout"><i data-lucide="log-out"></i></a>
         </div>
         {% endif %}
       </div>
@@ -344,7 +350,8 @@ async function showAboutModal() {
     return u.role === 'admin' || u.is_platform_admin === true;
   };
 </script>
-<script src="/static/js/global.js?v=3.5.0-alpha.121"></script>
+<script src="/static/js/global.js?v=3.5.0-alpha.133"></script>
+<script src="/static/js/i18n.js?v=3.5.0-alpha.133"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/fullcalendar/6.1.11/index.global.min.js"></script>
 <script>
   // v3.5.0-alpha.30: Lucide createIcons() al primo paint + helper globale

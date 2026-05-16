@@ -796,6 +796,33 @@ body.no-chrome { overflow: hidden; }
    Ora: classe .is-open aggiunta dal handler JS su click → resta aperta
    finché si clicca fuori o si seleziona un tema. */
 .topbar-theme-wrap.is-open .topbar-theme-pop { display: grid; }
+
+/* v3.5.0-alpha.133 (i18n) — language switcher popover. Stesso pattern
+   sticky toggle del theme picker. */
+.topbar-lang-wrap { position: relative; }
+.topbar-lang-pop {
+  position: absolute; top: calc(100% + 6px); right: 0;
+  background: var(--bg2); border: 1px solid var(--border);
+  border-radius: var(--radius); box-shadow: var(--shadow-lg);
+  padding: 6px; z-index: 200;
+  display: none;
+  grid-template-columns: 1fr;
+  gap: 3px;
+  min-width: 180px;
+}
+.topbar-lang-wrap.is-open .topbar-lang-pop { display: grid; }
+.topbar-lang-pop .tl-cell {
+  display: flex; align-items: center; gap: 8px;
+  background: transparent; border: 1px solid transparent;
+  border-radius: 4px; padding: 6px 10px;
+  cursor: pointer; color: var(--text);
+  transition: background var(--t), border-color var(--t);
+  text-align: left; font-family: inherit; font-size: 13px;
+}
+.topbar-lang-pop .tl-cell:hover { background: var(--bg3); border-color: var(--border); }
+.topbar-lang-pop .tl-cell.active { background: var(--indigo-bg); border-color: var(--indigo); color: var(--indigo2); }
+.topbar-lang-pop .tl-flag { font-size: 18px; line-height: 1; }
+.topbar-lang-pop .tl-lbl { flex: 1; }
 .topbar-theme-pop .tt-cell {
   display: flex; flex-direction: column; gap: 4px;
   background: var(--bg3); border: 1px solid var(--border);

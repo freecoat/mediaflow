@@ -14,7 +14,7 @@
       <span style="font-size:20px;font-weight:700;letter-spacing:-0.5px;">MediaFlow</span>
     </div>
 
-    <p style="font-size:14px;color:var(--text2);margin-bottom:28px;">Accedi alla piattaforma</p>
+    <p style="font-size:14px;color:var(--text2);margin-bottom:28px;" data-i18n="auth.title">Accedi alla piattaforma</p>
 
     {% if error %}
     <div style="background:rgba(244,63,94,.1);border:1px solid rgba(244,63,94,.3);border-radius:var(--radius);padding:10px 14px;font-size:13px;color:var(--rose);margin-bottom:16px;">
@@ -25,14 +25,14 @@
     <form method="post" action="/auth/login">
       <input type="hidden" name="next" value="{{ next or '/dashboard' }}">
       <div class="form-group">
-        <label class="form-label">Email</label>
+        <label class="form-label" data-i18n="auth.email">Email</label>
         <input class="form-input" type="email" name="email" placeholder="nome@azienda.it" value="{{ email or '' }}" required autofocus>
       </div>
       <div class="form-group">
-        <label class="form-label">Password</label>
+        <label class="form-label" data-i18n="auth.password">Password</label>
         <input class="form-input" type="password" name="password" placeholder="••••••••" required>
       </div>
-      <button type="submit" class="btn btn-primary w-full" style="justify-content:center;margin-top:8px;">
+      <button type="submit" class="btn btn-primary w-full" style="justify-content:center;margin-top:8px;" data-i18n="auth.submit">
         Accedi
       </button>
     </form>
@@ -45,6 +45,7 @@
   </div>
 </div>
 <div id="toast-container"></div>
-<script src="/static/js/global.js"></script>
+<script src="/static/js/global.js?v=3.5.0-alpha.133"></script>
+<script src="/static/js/i18n.js?v=3.5.0-alpha.133"></script>
 </body>
 </html>

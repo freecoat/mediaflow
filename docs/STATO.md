@@ -8,6 +8,29 @@
 
 ## Versione corrente
 
+**v3.5.0-alpha.133** — 16 maggio 2026 notte tarda — i18n GUI base IT/EN/FR/DE
+
+**Sistema i18n client-side**:
+- `app/static/js/i18n.js` (NEW): dictionary `MF_I18N = {key: {it,en,fr,de}}` + `applyI18n()` DOM scanner + `mfSetLang(lang)` + popover handler.
+- Persistenza `localStorage.mf_lang`. Default IT. Fallback IT → key letterale.
+- Markup: `data-i18n="key"` su elementi. Opzionale `data-i18n-attr="placeholder|title"` per attributi.
+- Preserva figli (nav-icon interno): modifica solo primo text node.
+
+**Switcher topbar**: 🇮🇹/🇬🇧/🇫🇷/🇩🇪 popover sticky. Stesso pattern F4 theme picker.
+
+**Scope α.133**: ~50 chiavi (sidebar nav + topbar + login). Resto UI in IT, espandibile via data-i18n.
+
+**Smoke**: 37 data-i18n in /dashboard, switcher presente, scripts caricati.
+
+**Backlog α.134+**:
+- Estensione i18n a dashboard/pagine principali
+- Server-side i18n per messaggi error toast
+- Date/numeri locale-aware (Intl API)
+- Parse batch capitolati
+- OAuth integrazioni
+
+## (versione precedente)
+
 **v3.5.0-alpha.132** — 16 maggio 2026 notte tarda — DeliveryTemplate export JSON + duplica
 
 **QoL /delivery-templates**:
