@@ -403,3 +403,41 @@ async def list_categories():
         "other":            "Altro",
     }
     return [{"value": k, "label": v} for k, v in labels.items()]
+
+
+# v3.5.0-alpha.121 (F8) — Drawer "Write-off (LossEntry)" mostrava 0 voci anche
+# se la card KPI riportava un totale > 0. Root cause: il drawer filtrava OverheadCost
+# per category='write_off' ma le voci write-off vivono in LossEntry (single
+# source of truth), non in OverheadCost. Endpoint dedicato che lista le
+# LossEntry del tenant in formato compatibile con la UI drawer.
+@router.get("/api/losses")
+async def list_losses(
+    from_date: Optional[date] = None,
+    to_date: Optional[date] = None,
+    db: Session = Depends(get_db),
+):
+    """Lista LossEntry del tenant (write-off cliente, non-recoverable).
+    Formato compatibile con drawer ohOpenCategoryDetail."""
+    from app.models import LossEntry
+    from datetime import datetime as _dt, time as _time
+    q = db.query(LossEntry).filter(LossEntry.tenant_id == current_tenant_id())
+    if from_date:
+        q = q.filter(LossEntry.created_at >= from_date)
+    if to_date:
+        q = q.filter(LossEntry.created_at <= _dt.combine(to_date, _time.max))
+    rows = q.order_by(LossEntry.created_at.desc()).all()
+    return [
+        {
+            "id": l.id,
+            "code": f"LOSS-{l.id}",
+            "title": (l.reason.value if hasattr(l.reason, "value") else str(l.reason or "")) + (
+                f" · {l.notes[:50]}" if l.notes else ""
+            ),
+            "cost_date": l.created_at.date().isoformat() if l.created_at else None,
+            "amount_net": l.amount or 0.0,
+            "amount_total": l.amount or 0.0,
+            "category": "write_off",
+            "_is_loss": True,
+        }
+        for l in rows
+    ]

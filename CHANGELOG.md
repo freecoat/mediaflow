@@ -1,5 +1,129 @@
 # MediaFlow — Changelog
 
+## v3.5.0-alpha.121 — 7 fix UX P1 da backlog α.120 (16 mag 2026 tarda notte)
+
+Round P1 dal backlog α.120 (24 finding totali). Chiusi 7 dei 8 P1 UX bug:
+F4 + F5 + F7c + F8 + F18 + F20 + F10/F23. Restano P2 architetturali per
+α.122+ (10 finding: F6, F7a, F7b, F11, F16, F17, F19, F21, F24/F9 +
+discussion). B5 (chip drift sempre visibile) verificato già funzionante,
+no actionable change.
+
+**F4 — Palette tema sticky toggle (no hover)**
+- Pre-fix: popover swatches apriva su mouseenter del wrapper e si chiudeva
+  immediatamente su mouseleave. Forzava click rapidissimo per selezionare.
+- Fix: rimossa regola CSS `.topbar-theme-wrap:hover` e `:focus-within`.
+  Aggiunta classe `.is-open` togglata via JS `topbarThemeToggleOpen(event)`.
+  Click outside chiude (one-shot document listener). Selezione tema da
+  cella chiude pure (setTheme + remove classe).
+- onclick handler aggiornato in base.html da `topbarThemeCycle()` a
+  `topbarThemeToggleOpen(event)`. Title aggiornato "Apri palette tema".
+- Cache-buster bump `?v=3.5.0-alpha.121` per global.js + main.css.
+
+**F5 — Chip filtro cliente in /projects?client_id=N**
+- Pre-fix: filtro applicato (lista filtrata) ma riquadro filtri non
+  mostrava chiaramente che il filtro cliente era attivo. La select
+  `#filter-client` settava `sel.value = clientFilter` ma visivamente
+  non risaltava — utente non capiva.
+- Fix: aggiunta `<span id="filter-client-chip">` accanto alla select.
+  Quando filtro attivo via querystring, JS popola label "Cliente: <nome>"
+  + link × a `/projects` per rimuovere filtro. Visivamente pill indaco
+  pronunciata. Display none di default; inline-flex quando attivo.
+
+**F7c — Naming pattern attivo riflesso UI Quotes**
+- Pre-fix: modal "Nuova quotazione" placeholder hardcoded "Q-2025-0001-v1"
+  senza riferimento al pattern realmente configurato in /settings#numbering.
+- Fix: wrapper `openNewQuoteModal()` chiama `POST /settings/api/numbering/
+  quote/preview`, popola hint `#nq-number-hint` con "Pattern attivo: <fmt>
+  (esempio: <preview>)". Silente in caso errore. Bottone "+ Nuova
+  quotazione" cambiato da `onclick="openModal('modal-new-quote')"` a
+  `onclick="openNewQuoteModal()"`.
+- Limite scope: solo /quotes per α.121. Estensione ad altri modal (jobs,
+  fatture, batch, ddt, overhead) in round successivo.
+
+**F8 — Overhead write-off mismatch lista vs drawer**
+- Pre-fix: card "Write-off (LossEntry)" mostrava total > 0 (es. €33'895)
+  da `s.write_off_total`. Cliccando per drawer detail: "0 voci · Nessuna
+  voce nella categoria nel periodo". Root cause: drawer filtrava
+  `_ohList.filter(o => o.category === cat)` su OverheadCost, ma write-off
+  vive in LossEntry (single source of truth), non in OverheadCost.
+- Fix backend: nuovo endpoint `GET /overhead/api/losses` ritorna LossEntry
+  del tenant in formato compatibile UI drawer (code=LOSS-id, title,
+  cost_date, amount_net/total, category='write_off', _is_loss=true).
+  Filtri opzionali from_date/to_date.
+- Fix UI: branch in `ohOpenCategoryDetail()` per `cat === 'write_off'`
+  che fetcha l'endpoint dedicato invece di filtrare la lista OverheadCost.
+
+**F18 — Lista fatture: detail on click + hide select status se terminale**
+- Pre-fix: lista finance#invoices senza drilldown drawer. Drillanto solo
+  via PDF. Select cambio stato sempre presente, anche per fatture paid o
+  cancelled (entrambi stati terminal). Cambio status che falliva con 409
+  visibile solo come toast errore tardivo.
+- Fix backend: nuovo `GET /finance/api/invoices/{id}` ritorna detail
+  invoice + lines + payments + allowed_transitions + is_terminal flag.
+  Allowed transitions calcolati da state machine (mirror update_status):
+  draft→sent/cancelled, sent→paid/overdue/cancelled, overdue→paid/
+  cancelled, paid+cancelled→[] terminal.
+- Fix UI:
+  - Row click apre modal con righe + meta (cliente, progetto, totali,
+    payments). DOM API (no innerHTML user-injected) per evitare XSS.
+  - Select cambio stato hide se status terminal (mostra "—" col tooltip
+    "Stato terminale: nessuna transizione consentita"). Allowed
+    transitions inserite dinamicamente come opzioni.
+  - Bottone PDF disabled se cancelled (già fixato in F14 α.120).
+  - Bottone storno hide se cancelled.
+
+**F20 — Componi fattura: tasto aggrega batch sparisce dopo close popup**
+- Pre-fix: aggregazione N batch → 1 fattura era accessibile solo dal
+  modal compose-invoice top-level. Da batch detail (single batch),
+  l'utente non vedeva opzione "aggrega con altri batch dello stesso
+  progetto" anche se i batch composable erano > 1.
+- Fix: in `openBatchDetail()` aggiunto fetch `composable-batches` per
+  contare quanti batch approvati del progetto sono in cassetto. Salvato
+  in `b._composableCount`. In `renderBatchFooter()`, per status='approved'
+  e composableCount > 1, aggiunto bottone "🔗 Aggrega con altri batch
+  (N composable)" che apre `openComposeInvoiceModalForProject(pid)` —
+  wrapper che pre-popola compose-invoice col progetto del batch corrente.
+
+**F10/F23 — Fattura passiva: dropdown Lavorazione (JCL) cascata**
+- Pre-fix: modal nuova/edit fattura passiva aveva cascata Project→Job ma
+  senza link JCL. cost_external veniva attribuito a tutte le JCL del job
+  con resource matching (anche con priority ranking α.119, era distribuzione
+  pro-quota, meno preciso del link diretto).
+- Fix UI:
+  - Nuovo dropdown `#mi-jcl` "Lavorazione" sotto la riga Project/Job in
+    modal supplier invoice. Hint esplicito: "Selezionando una lavorazione,
+    la fattura passiva sarà attribuita esclusivamente a quella riga del
+    cost report. Lasciando vuoto, l'importo viene distribuito pro-quota."
+  - `_populateJclSelect()` async: fetch `GET /cost-report/api/job/{id}`
+    e popola con cost_lines del job selezionato (description + qty + unit).
+  - Cascata: `_populateJobSelect().onchange` triggera populate JCL +
+    populate resource.
+  - `editInvoice(id)` ora async: pre-popola JCL select da `i.job_cost_line_id`.
+  - `saveInvoice()`: append `job_cost_line_id` al FormData se valued.
+- Smoke endpoint backend: GET `/finance/api/invoices/113` ritorna lines
+  + allowed_transitions OK, GET `/overhead/api/losses` ritorna 458+ LossEntry.
+
+**Architettura — backlog rimanente**: 10 finding P2 architetturali
+preservati per α.122+ (design discussion: F6 admin_email send semantica,
+F7a drawer center popup, F7b inserimento blocchi inline, F11 supplier↔
+resource flusso inverso, F16 IVA default off, F17 terminologia JCL→
+lavorazione globale, F19 cashflow split reparti, F21 UX revamp team/
+resources/departments, F24/F9 sweep codici DB).
+
+**File toccati**:
+- `app/routers/finance.py` (F18 endpoint dettaglio invoice)
+- `app/routers/overhead.py` (F8 endpoint losses)
+- `app/templates/pages/finance.html` (F18 row click + status select hide + batch detail F20 aggrega)
+- `app/templates/pages/projects.html` (F5 chip filtro cliente)
+- `app/templates/pages/quotes.html` (F7c openNewQuoteModal con preview pattern)
+- `app/templates/pages/overhead.html` (F8 branch write_off in drawer)
+- `app/templates/pages/suppliers.html` (F10/F23 dropdown JCL cascata)
+- `app/templates/base.html` (F4 onclick + cache-buster v=alpha.121)
+- `app/static/js/global.js` (F4 topbarThemeToggleOpen + cell click close)
+- `app/static/css/main.css` (F4 sticky .is-open vs hover)
+- `app/main.py` (version bump)
+- CHANGELOG.md + docs/STATO.md
+
 ## v3.5.0-alpha.120 — 6 fix bloccanti P0 da checklist post-audit α.114-118 (16 mag 2026 tarda sera)
 
 Sessione test UI Matteo completa (60+ punti). 24 finding raccolti, classificati P0/P1/P2. Questo round chiude i 6 bloccanti P0. P1 (8 UX bug) → α.121. P2 (10 architetturali, design discussion) → α.122+.

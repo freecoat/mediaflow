@@ -42,6 +42,34 @@ function topbarThemeCycle() {
   setTheme(next);
   if (typeof toast === 'function') toast('Tema: ' + (MF_THEME_META[next]?.name || next), 'success');
 }
+
+// v3.5.0-alpha.121 (F4) — Palette tema sticky toggle.
+// Pre-fix: popover apriva su hover e si chiudeva su mouseleave (CSS :hover).
+// Ora: click apre/chiude esplicitamente; click outside chiude; selezione
+// tema da una cella chiude pure (la cella attiva setTheme + close).
+function topbarThemeToggleOpen(ev) {
+  if (ev) ev.stopPropagation();
+  const wrap = document.getElementById('topbar-theme-wrap');
+  if (!wrap) return;
+  const wasOpen = wrap.classList.contains('is-open');
+  // Chiudi altri popover sticky se presenti (estendibile in futuro)
+  document.querySelectorAll('.topbar-theme-wrap.is-open').forEach(w => w.classList.remove('is-open'));
+  if (!wasOpen) {
+    wrap.classList.add('is-open');
+    _topbarThemeRender();
+    // Click outside chiude (handler one-shot)
+    setTimeout(() => {
+      const off = (e) => {
+        if (!wrap.contains(e.target)) {
+          wrap.classList.remove('is-open');
+          document.removeEventListener('click', off);
+        }
+      };
+      document.addEventListener('click', off);
+    }, 0);
+  }
+}
+window.topbarThemeToggleOpen = topbarThemeToggleOpen;
 function _topbarThemeRender() {
   const pop = document.getElementById('topbar-theme-pop');
   if (!pop) return;
@@ -54,7 +82,12 @@ function _topbarThemeRender() {
     cell.className = 'tt-cell' + (id === current ? ' active' : '');
     cell.title = meta.name;
     cell.setAttribute('data-theme-id', id);
-    cell.addEventListener('click', () => setTheme(id));
+    // v3.5.0-alpha.121 (F4) — selezione tema chiude popover sticky
+    cell.addEventListener('click', () => {
+      setTheme(id);
+      const wrap = document.getElementById('topbar-theme-wrap');
+      if (wrap) wrap.classList.remove('is-open');
+    });
     const swwrap = document.createElement('div');
     swwrap.className = 'tt-sw';
     for (const c of meta.sw) {

@@ -32,6 +32,13 @@
     <option value="{{ c.id }}">{{ c.name }}</option>
     {% endfor %}
   </select>
+  <!-- v3.5.0-alpha.121 (F5) — chip visiva quando filtro cliente attivo via querystring.
+       Pre-fix: la select mostrava il nome cliente solo a popover aperto, restando vuota
+       all'apertura iniziale → user non capiva che il filtro era già attivo. -->
+  <span id="filter-client-chip" style="display:none; padding:4px 10px; background:var(--indigo-bg); border:1px solid var(--indigo); border-radius:999px; font-size:12px; color:var(--indigo2); align-items:center; gap:6px;">
+    <span id="filter-client-chip-label">Cliente</span>
+    <a href="/projects" title="Rimuovi filtro" style="text-decoration:none; color:var(--indigo2); font-weight:600;">×</a>
+  </span>
   <select class="form-select" style="width:auto;" id="filter-type" onchange="filterProjects()">
     <option value="">Tutti i tipi</option>
     <option value="feature_film">Lungometraggio</option>
@@ -199,6 +206,15 @@ async function loadProjects() {
       // Cliente non in select → option non esiste
       toast(`Cliente #${clientFilter} non trovato (può essere stato cestinato o non accessibile). Mostro tutti i progetti.`, 'warning', 5000);
       sel.value = '';
+    } else if (sel) {
+      // v3.5.0-alpha.121 (F5) — popola chip visiva con nome cliente.
+      const opt = sel.options[sel.selectedIndex];
+      const chip = document.getElementById('filter-client-chip');
+      const lbl = document.getElementById('filter-client-chip-label');
+      if (chip && lbl && opt && opt.text) {
+        lbl.textContent = 'Cliente: ' + opt.text;
+        chip.style.display = 'inline-flex';
+      }
     }
     filterProjects();
     return;

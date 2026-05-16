@@ -339,6 +339,21 @@
           <select class="form-select" id="mi-job"><option value="">— nessuno —</option></select>
         </div>
       </div>
+      <!-- v3.5.0-alpha.121 (F10/F23) — dropdown Lavorazione (JCL): consente di
+           linkare la fattura passiva a una singola JobCostLine. Senza questo
+           link, cost_external veniva attribuito a tutte le JCL del job con
+           resource matching (anche con priority ranking α.119, era meno
+           preciso). Cascata: project → job → lavorazione. -->
+      <div class="form-group">
+        <label class="form-label">Lavorazione (voce di costo del job)
+          <span class="text-xs text-muted">(opzionale — link diretto a JCL)</span>
+        </label>
+        <select class="form-select" id="mi-jcl"><option value="">— nessuna —</option></select>
+        <div class="text-xs text-muted" style="margin-top:4px;">
+          Selezionando una lavorazione, la fattura passiva sarà attribuita esclusivamente a quella riga del cost report.
+          Lasciando vuoto, l'importo viene distribuito pro-quota sulle JCL del job con risorse matching.
+        </div>
+      </div>
       <!-- v3.5.0-alpha.113 — match opzionale fattura↔risorsa esterna -->
       <div class="form-group">
         <label class="form-label">Risorsa esterna associata
@@ -793,6 +808,43 @@ function _populateJobSelect() {
     filtered.map(j =>
       `<option value="${j.id}">${escapeHtml(j.code || '')} · ${escapeHtml(j.title || '')}</option>`
     ).join('');
+  // v3.5.0-alpha.121 (F10/F23) — cambio job → ricarica JCL e risorse
+  sel.onchange = () => {
+    const jclSel = document.getElementById('mi-jcl');
+    if (jclSel) jclSel.value = '';
+    _populateJclSelect();
+    _populateResourceSelect();
+  };
+}
+
+// v3.5.0-alpha.121 (F10/F23) — Dropdown Lavorazione (JCL) cascata dal job.
+async function _populateJclSelect() {
+  const sel = document.getElementById('mi-jcl');
+  if (!sel) return;
+  while (sel.firstChild) sel.removeChild(sel.firstChild);
+  const def = document.createElement('option');
+  def.value = ''; def.textContent = '— nessuna —';
+  sel.appendChild(def);
+  const jobId = document.getElementById('mi-job')?.value || '';
+  if (!jobId) return;
+  try {
+    const data = await api('GET', `/cost-report/api/job/${jobId}`);
+    const lines = data.cost_lines || [];
+    if (lines.length === 0) {
+      const opt = document.createElement('option');
+      opt.value = ''; opt.textContent = '(nessuna lavorazione nel job)'; opt.disabled = true;
+      sel.appendChild(opt);
+      return;
+    }
+    lines.forEach(l => {
+      const opt = document.createElement('option');
+      opt.value = String(l.id);
+      const desc = (l.description || '—').substring(0, 60);
+      const qty = l.quantity_quoted != null ? (' · ' + l.quantity_quoted + ' ' + (l.unit || '')) : '';
+      opt.textContent = desc + qty;
+      sel.appendChild(opt);
+    });
+  } catch (e) { /* silente */ }
 }
 // v3.5.0-alpha.113: risorse del job selezionato (per match opzionale fattura↔risorsa)
 function _populateResourceSelect() {
@@ -835,7 +887,7 @@ function openInvoiceModal() {
   openModal('modal-invoice');
 }
 
-function editInvoice(id) {
+async function editInvoice(id) {
   const i = _invoices.find(x => x.id === id);
   if (!i) return;
   _populateSupplierSelect();
@@ -859,6 +911,12 @@ function editInvoice(id) {
   document.getElementById('mi-status').value = i.payment_status || '';
   // project già settato sopra prima di _populateJobSelect
   document.getElementById('mi-job').value = i.job_id || '';
+  // v3.5.0-alpha.121 (F10/F23) — pre-popola JCL dropdown se job presente
+  if (i.job_id) {
+    await _populateJclSelect();
+    const jclSel = document.getElementById('mi-jcl');
+    if (jclSel) jclSel.value = i.job_cost_line_id || '';
+  }
   // v3.5.0-alpha.113: setta risorsa se presente
   const resSel = document.getElementById('mi-resource');
   if (resSel) resSel.value = i.resource_id || '';
@@ -988,6 +1046,10 @@ async function saveInvoice() {
     fd.append('project_id', proj);
     if (job) fd.append('job_id', job);
   }
+  // v3.5.0-alpha.121 (F10/F23) — job_cost_line_id: link diretto a JCL.
+  // Richiede job selezionato; senza job, ignorato (cascata).
+  const jclVal = document.getElementById('mi-jcl')?.value;
+  if (jclVal && job) fd.append('job_cost_line_id', jclVal);
   // v3.5.0-alpha.113: resource match opzionale
   const resVal = document.getElementById('mi-resource')?.value;
   if (resVal) fd.append('resource_id', resVal);

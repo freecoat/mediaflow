@@ -9,7 +9,7 @@
   <meta http-equiv="Pragma" content="no-cache">
   <meta http-equiv="Expires" content="0">
   <title>{% block title %}MediaFlow{% endblock %}</title>
-  <link rel="stylesheet" href="/static/css/main.css?v=3.5.0-alpha.118">
+  <link rel="stylesheet" href="/static/css/main.css?v=3.5.0-alpha.121">
   <link rel="stylesheet" href="/static/css/sleek.css?v=3.5.0-alpha.80">
   <script>
     // v3.5.0-alpha.80 — Sleek mode toggle (default ON)
@@ -230,7 +230,7 @@
         {% if request.state.current_user %}
         <!-- v3.5.0-alpha.66.19: theme switcher rapido (cycle + popover swatches) -->
         <div class="topbar-theme-wrap" id="topbar-theme-wrap">
-          <button id="topbar-theme-btn" class="topbar-bell" title="Cambia tema (click) — apri palette (hover)" onclick="topbarThemeCycle()">
+          <button id="topbar-theme-btn" class="topbar-bell" title="Apri palette tema" onclick="topbarThemeToggleOpen(event)">
             <span class="topbar-bell-icon"><i data-lucide="palette"></i></span>
           </button>
           <div class="topbar-theme-pop" id="topbar-theme-pop"></div>
@@ -344,7 +344,7 @@ async function showAboutModal() {
     return u.role === 'admin' || u.is_platform_admin === true;
   };
 </script>
-<script src="/static/js/global.js?v=3.5.0-alpha.118"></script>
+<script src="/static/js/global.js?v=3.5.0-alpha.121"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/fullcalendar/6.1.11/index.global.min.js"></script>
 <script>
   // v3.5.0-alpha.30: Lucide createIcons() al primo paint + helper globale

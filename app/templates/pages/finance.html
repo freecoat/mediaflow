@@ -683,6 +683,19 @@ async function openBatchDetail(batchId) {
     return;
   }
   const b = _currentBatch;
+  // v3.5.0-alpha.121 (F20) — Fetch n batch approvati composable dello stesso
+  // progetto (incluso il corrente). Se >1, renderBatchFooter mostra bottone
+  // "🔗 Aggrega con N batch" che apre compose-invoice pre-popolato.
+  // Pre-fix: bottone aggrega visibile solo in lista batch + modal compose,
+  // mai dentro la singola batch detail → utente lo perdeva chiudendo popup.
+  b._composableCount = 1;
+  if (b.status === 'approved' && b.project_id) {
+    try {
+      const composable = await api('GET',
+        `/finance/api/billing/composable-batches?project_id=${b.project_id}`);
+      b._composableCount = (composable && composable.batches) ? composable.batches.length : 1;
+    } catch(_) { /* silent: fallback 1 */ }
+  }
   document.getElementById('bd-title').innerHTML =
     `Batch <span class="mono" style="color:var(--indigo2);">${escapeHtml(b.code)}</span> · ${escapeHtml(b.project_title || '')} ${bbStatusBadge(b.status)}`;
   // Meta box
@@ -895,6 +908,12 @@ function renderBatchFooter(b) {
     buttons += `<button class="btn btn-primary" onclick="approveBatch(${b.id})">✅ Approva</button>`;
   } else if (b.status === 'approved') {
     buttons += `<button class="btn btn-ghost" onclick="cancelBatch(${b.id}, '${escapeHtml(b.code)}', 'approved')" style="color:#ef4444;">↩ Annulla batch</button>`;
+    // v3.5.0-alpha.121 (F20) — Se ci sono ≥2 batch approvati composable
+    // sullo stesso progetto, propone aggregazione invece di emit singolo.
+    const composableN = b._composableCount || 1;
+    if (composableN > 1) {
+      buttons += `<button class="btn btn-secondary" onclick="closeModal('modal-batch-detail'); openComposeInvoiceModalForProject(${b.project_id})" title="Apri compose-invoice pre-popolato con questo progetto">🔗 Aggrega con altri batch (${composableN} composable)</button>`;
+    }
     buttons += `<button class="btn btn-primary" onclick="openEmitInvoice()">💶 Emetti fattura</button>`;
   } else if (b.status === 'invoiced') {
     // v3.5.0-alpha.111 — PDF via invoice_id diretto (no dipendenza su batch.status)
@@ -1185,11 +1204,29 @@ async function loadInvoices() {
       ? `<button class="btn btn-ghost btn-sm" style="color:#ef4444;" onclick="openStornoModal(${i.id}, '${escapeHtml(i.number)}')" title="Emetti nota di credito TD04 a storno">📉</button>`
       : '';
     // v3.5.0-alpha.120 (F14) — fatture cancelled non stampabili (backend 409).
-    // Mostra bottone disabled con tooltip esplicativo per evitare click confusi.
     const pdfBtn = (i.status === 'cancelled')
       ? `<button class="btn btn-ghost btn-sm" disabled style="opacity:0.4;cursor:not-allowed;" title="Fattura annullata: non stampabile">📥</button>`
-      : `<a class="btn btn-ghost btn-sm" href="/finance/api/billing/invoice/${i.id}/pdf" target="_blank" title="Stampa PDF">📥</a>`;
-    return `<tr>
+      : `<a class="btn btn-ghost btn-sm" href="/finance/api/billing/invoice/${i.id}/pdf" target="_blank" onclick="event.stopPropagation();" title="Stampa PDF">📥</a>`;
+    // v3.5.0-alpha.121 (F18) — Hide select cambio stato se status terminal
+    // (paid/cancelled). Allowed transitions:
+    //   draft → sent, cancelled
+    //   sent → paid, overdue, cancelled
+    //   overdue → paid, cancelled
+    //   paid / cancelled → terminal (no UI)
+    const _ALLOWED_TR = {
+      draft: ['sent','cancelled'],
+      sent: ['paid','overdue','cancelled'],
+      overdue: ['paid','cancelled'],
+      paid: [], cancelled: [],
+    };
+    const allowed = _ALLOWED_TR[i.status] || [];
+    const statusSelect = allowed.length === 0
+      ? `<span class="text-xs text-muted" title="Stato terminale: nessuna transizione consentita">—</span>`
+      : `<select class="form-select" style="width:auto;font-size:12px;padding:4px 8px;" onclick="event.stopPropagation();" onchange="changeInvStatus(${i.id}, this.value)">
+          <option value="">Cambia…</option>
+          ${allowed.map(s=>`<option value="${s}">${s}</option>`).join('')}
+        </select>`;
+    return `<tr style="cursor:pointer;" onclick="openInvoiceDetail(${i.id})">
       <td class="mono" style="font-size:12px;">${numHtml}</td>
       <td>${escapeHtml(i.client?.name || '—')}</td>
       <td class="text-sm">${projCell}</td>
@@ -1197,13 +1234,10 @@ async function loadInvoices() {
       <td class="text-sm ${isOverdue(i) ? 'color-rose' : ''}">${fmtDate(i.due_date)}</td>
       <td class="mono font-weight:600;">${fmtCurrency(i.total)}</td>
       <td>${statusBadge(i.status)}</td>
-      <td>
+      <td onclick="event.stopPropagation();">
         ${pdfBtn}
         ${stornoBtn}
-        <select class="form-select" style="width:auto;font-size:12px;padding:4px 8px;" onchange="changeInvStatus(${i.id}, this.value)">
-          <option value="">Cambia…</option>
-          ${['draft','sent','paid','overdue','cancelled'].map(s=>`<option value="${s}">${s}</option>`).join('')}
-        </select>
+        ${statusSelect}
       </td>
     </tr>`;
   }).join('');
@@ -1221,6 +1255,125 @@ async function changeInvStatus(id, status) {
     toast('Stato fattura aggiornato', 'success');
     loadInvoices();
   } catch(e) { toast(e.message, 'error'); }
+}
+
+// v3.5.0-alpha.121 (F18) — Dettaglio fattura cliccando sulla riga.
+// Mostra modal con righe + meta. Pre-fix: solo lista, drilldown via PDF.
+// DOM API per evitare XSS injection — tutti i campi passano da textContent.
+async function openInvoiceDetail(id) {
+  let inv;
+  try {
+    inv = await api('GET', `/finance/api/invoices/${id}`);
+  } catch(e) { toast(e.message || 'Errore caricamento fattura', 'error'); return; }
+  const prev = document.getElementById('modal-inv-detail');
+  if (prev) prev.remove();
+  const modal = document.createElement('div');
+  modal.id = 'modal-inv-detail';
+  modal.className = 'modal-overlay';
+  modal.style.display = 'flex';
+  const mc = document.createElement('div');
+  mc.className = 'modal';
+  mc.style.maxWidth = '820px';
+  mc.style.maxHeight = '88vh';
+  mc.style.display = 'flex';
+  mc.style.flexDirection = 'column';
+
+  // Header
+  const hdr = document.createElement('div'); hdr.className = 'modal-header';
+  const ttl = document.createElement('span'); ttl.className = 'modal-title';
+  const docLbl = inv.doc_type === 'TD04' ? '📉 NC' : 'Fattura';
+  ttl.textContent = `${docLbl} ${inv.number || ''} — ${inv.status}`;
+  const cls = document.createElement('button');
+  cls.className = 'btn btn-ghost btn-icon'; cls.textContent = '×';
+  cls.onclick = () => modal.remove();
+  hdr.appendChild(ttl); hdr.appendChild(cls);
+
+  // Body
+  const body = document.createElement('div'); body.className = 'modal-body'; body.style.overflow = 'auto';
+  const meta = document.createElement('div'); meta.className = 'text-sm';
+  const cli = document.createElement('div');
+  cli.appendChild(document.createTextNode('Cliente: '));
+  const cliVal = document.createElement('b'); cliVal.textContent = inv.client?.name || '—';
+  cli.appendChild(cliVal);
+  meta.appendChild(cli);
+  if (inv.project) {
+    const proj = document.createElement('div'); proj.style.marginTop = '4px'; proj.className = 'text-sm';
+    proj.appendChild(document.createTextNode('Progetto: '));
+    const pc = document.createElement('b'); pc.textContent = inv.project.code;
+    proj.appendChild(pc); proj.appendChild(document.createTextNode(' · ' + (inv.project.title || '')));
+    meta.appendChild(proj);
+  }
+  const dates = document.createElement('div'); dates.style.marginTop = '6px'; dates.style.color = 'var(--text-muted)';
+  dates.textContent = `Emessa ${fmtDate(inv.issue_date)} · Scadenza ${fmtDate(inv.due_date)} · IVA ${inv.vat_rate ?? '?'}%`;
+  meta.appendChild(dates);
+  const totals = document.createElement('div'); totals.style.marginTop = '4px'; totals.style.color = 'var(--text-muted)';
+  totals.textContent = `Imponibile ${fmtCurrency(inv.subtotal)} · Totale ${fmtCurrency(inv.total)} · Pagato ${fmtCurrency(inv.amount_paid)}`;
+  meta.appendChild(totals);
+  const trInfo = document.createElement('div'); trInfo.style.marginTop = '6px'; trInfo.className = 'text-xs text-muted';
+  trInfo.textContent = inv.is_terminal
+    ? 'Stato terminale: nessuna transizione consentita.'
+    : (inv.allowed_transitions.length ? `Transizioni consentite: ${inv.allowed_transitions.join(', ')}` : '');
+  meta.appendChild(trInfo);
+  body.appendChild(meta);
+
+  // Lines
+  const linesTitle = document.createElement('h4');
+  linesTitle.style.marginTop = '16px'; linesTitle.style.marginBottom = '4px';
+  linesTitle.textContent = 'Righe';
+  body.appendChild(linesTitle);
+  if (!inv.lines || !inv.lines.length) {
+    const empty = document.createElement('div'); empty.className = 'text-muted';
+    empty.style.cssText = 'padding:14px;text-align:center;';
+    empty.textContent = 'Nessuna riga';
+    body.appendChild(empty);
+  } else {
+    const tbl = document.createElement('table');
+    tbl.className = 'mf-table'; tbl.style.width = '100%'; tbl.style.fontSize = '12px';
+    const thead = document.createElement('thead');
+    const trH = document.createElement('tr');
+    ['Descrizione','Q.tà','Prezzo','Sconto','IVA%','Totale'].forEach((h,i) => {
+      const th = document.createElement('th');
+      th.textContent = h;
+      if (i >= 1) th.className = 'text-right';
+      trH.appendChild(th);
+    });
+    thead.appendChild(trH); tbl.appendChild(thead);
+    const tbd = document.createElement('tbody');
+    inv.lines.forEach(l => {
+      const tr = document.createElement('tr');
+      const tdDesc = document.createElement('td'); tdDesc.textContent = l.description || '—'; tr.appendChild(tdDesc);
+      const tdQ = document.createElement('td'); tdQ.className = 'text-right mono'; tdQ.textContent = l.quantity; tr.appendChild(tdQ);
+      const tdU = document.createElement('td'); tdU.className = 'text-right mono'; tdU.textContent = fmtCurrency(l.unit_price); tr.appendChild(tdU);
+      const tdD = document.createElement('td'); tdD.className = 'text-right mono'; tdD.textContent = l.discount_pct ? (l.discount_pct + '%') : '—'; tr.appendChild(tdD);
+      const tdV = document.createElement('td'); tdV.className = 'text-right mono'; tdV.textContent = l.vat_rate ?? '—'; tr.appendChild(tdV);
+      const tdT = document.createElement('td'); tdT.className = 'text-right mono'; const tdTB = document.createElement('b'); tdTB.textContent = fmtCurrency(l.total); tdT.appendChild(tdTB); tr.appendChild(tdT);
+      tbd.appendChild(tr);
+    });
+    tbl.appendChild(tbd); body.appendChild(tbl);
+  }
+
+  if (inv.notes) {
+    const notes = document.createElement('div');
+    notes.style.cssText = 'margin-top:14px;padding:8px;background:var(--bg3);border-radius:4px;font-size:12px;white-space:pre-wrap;';
+    notes.textContent = inv.notes;
+    body.appendChild(notes);
+  }
+
+  // Footer
+  const ftr = document.createElement('div'); ftr.className = 'modal-footer';
+  if (inv.status !== 'cancelled') {
+    const dl = document.createElement('a'); dl.className = 'btn btn-secondary btn-sm';
+    dl.href = `/finance/api/billing/invoice/${inv.id}/pdf`; dl.target = '_blank';
+    dl.textContent = '📥 Scarica PDF';
+    ftr.appendChild(dl);
+  }
+  const close = document.createElement('button');
+  close.className = 'btn btn-primary btn-sm'; close.textContent = 'Chiudi';
+  close.onclick = () => modal.remove();
+  ftr.appendChild(close);
+
+  mc.appendChild(hdr); mc.appendChild(body); mc.appendChild(ftr);
+  modal.appendChild(mc); document.body.appendChild(modal);
 }
 
 async function createInvoice() {
@@ -1433,6 +1586,20 @@ async function submitClosingInvoice() {
 
 // v3.5.0-alpha.90 — Compose invoice da N batch approved (accrual billing).
 let _ciProjects = [];
+// v3.5.0-alpha.121 (F20) — apertura compose-invoice pre-popolato col progetto
+// di un batch già aperto. Chiamato dal footer del batch detail quando ci
+// sono ≥2 batch approvati composable sullo stesso progetto.
+async function openComposeInvoiceModalForProject(projectId) {
+  await openComposeInvoiceModal();
+  if (projectId) {
+    const sel = document.getElementById('ci-project');
+    if (sel) {
+      sel.value = String(projectId);
+      await reloadComposablePreview();
+    }
+  }
+}
+
 async function openComposeInvoiceModal() {
   try {
     _ciProjects = await api('GET', '/projects/api');

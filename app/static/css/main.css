@@ -791,8 +791,11 @@ body.no-chrome { overflow: hidden; }
   gap: 6px;
   min-width: 300px;
 }
-.topbar-theme-wrap:hover .topbar-theme-pop,
-.topbar-theme-wrap:focus-within .topbar-theme-pop { display: grid; }
+/* v3.5.0-alpha.121 (F4) — sticky toggle. Pre-fix il popover compariva su
+   hover e si chiudeva su mouseleave, forzando l'utente a un click rapido.
+   Ora: classe .is-open aggiunta dal handler JS su click → resta aperta
+   finché si clicca fuori o si seleziona un tema. */
+.topbar-theme-wrap.is-open .topbar-theme-pop { display: grid; }
 .topbar-theme-pop .tt-cell {
   display: flex; flex-direction: column; gap: 4px;
   background: var(--bg3); border: 1px solid var(--border);

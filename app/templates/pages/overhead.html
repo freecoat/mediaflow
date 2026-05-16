@@ -328,6 +328,12 @@ async function ohOpenCategoryDetail(cat) {
         _is_supplier: true,
       }));
     } catch(e) { toast(e.message || 'Errore caricamento fatture', 'error'); return; }
+  } else if (cat === 'write_off') {
+    // v3.5.0-alpha.121 (F8) — Write-off vive in LossEntry, no OverheadCost.
+    // Carica dall'endpoint dedicato /overhead/api/losses.
+    try {
+      items = await api('GET', '/overhead/api/losses');
+    } catch(e) { toast(e.message || 'Errore caricamento write-off', 'error'); return; }
   } else {
     items = (_ohList || []).filter(o => o.category === cat);
   }

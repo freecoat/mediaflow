@@ -4,7 +4,7 @@
 {% block topbar_title %}Quotazioni{% endblock %}
 {% block topbar_actions %}
   <button class="btn btn-secondary btn-sm" onclick="openWizardCapitolato()">✨ Crea da capitolato</button>
-  <button class="btn btn-primary btn-sm" onclick="openModal('modal-new-quote')">+ Nuova quotazione</button>
+  <button class="btn btn-primary btn-sm" onclick="openNewQuoteModal()">+ Nuova quotazione</button>
 {% endblock %}
 
 {% block head %}
@@ -655,7 +655,11 @@
       </div>
       <div class="form-row">
         <div class="form-group"><label class="form-label">Numero *</label>
-          <input class="form-input" id="nq-number" placeholder="Q-2025-0001-v1"></div>
+          <input class="form-input" id="nq-number" placeholder="Q-2025-0001-v1">
+          <!-- v3.5.0-alpha.121 (F7c) — hint che riflette il pattern naming attivo
+               configurato in /settings#numbering. Popolato da openNewQuoteModal(). -->
+          <div class="form-hint" id="nq-number-hint" style="font-size:11px; color:var(--text-muted); margin-top:3px;"></div>
+        </div>
         <div class="form-group"><label class="form-label">Titolo quotazione</label>
           <input class="form-input" id="nq-title" placeholder="(default: titolo progetto)"></div>
       </div>
@@ -2453,6 +2457,26 @@ function onProjectSelect() {
       numInput.value = `Q-${projectCode[1]}-v1`;
     }
   }
+}
+
+// v3.5.0-alpha.121 (F7c) — Wrapper apertura modal Nuova quotazione che
+// fetcha il pattern numbering attivo da /settings/api/numbering/quote/preview
+// e lo mostra come hint sotto il campo Numero. Pre-fix: placeholder hardcoded
+// "Q-2025-0001-v1" senza riferimento al pattern realmente configurato.
+async function openNewQuoteModal() {
+  const hint = document.getElementById('nq-number-hint');
+  if (hint) hint.textContent = '';
+  openModal('modal-new-quote');
+  try {
+    const fd = new FormData();
+    const prev = await fetch('/settings/api/numbering/quote/preview', {
+      method: 'POST', credentials: 'same-origin', body: fd,
+    }).then(r => r.json());
+    if (hint && prev && prev.format) {
+      const exMsg = prev.preview ? ` (esempio: ${prev.preview})` : '';
+      hint.textContent = `Pattern attivo: ${prev.format}${exMsg}.`;
+    }
+  } catch (e) { /* silente: hint resta vuoto, no break */ }
 }
 
 async function createQuote() {

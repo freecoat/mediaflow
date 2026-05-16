@@ -8,6 +8,26 @@
 
 ## Versione corrente
 
+**v3.5.0-alpha.121** — 16 maggio 2026 tarda notte — 7 fix UX P1 da backlog α.120
+
+**7 finding P1 UX chiusi**:
+- F4 palette tema sticky toggle (no più hover-driven close)
+- F5 chip filtro cliente visibile in /projects?client_id
+- F7c naming pattern riflesso nel modal Nuova Quotazione (esteso ad altri modal in round successivi)
+- F8 overhead write-off drawer: endpoint `/overhead/api/losses` dedicato (LossEntry source)
+- F18 lista fatture: click row → drawer dettaglio + hide select status se terminal
+- F20 componi fattura: bottone "Aggrega con N batch" in batch detail se composable > 1
+- F10/F23 fattura passiva: dropdown "Lavorazione" (JCL) cascata Project→Job→JCL
+
+**B5 verificato già funzionante**: chip "Drift costo" presente statico, summary card sempre renderizzata (no actionable change).
+
+**Smoke E2E**: endpoint nuovi `/overhead/api/losses` (458+ LossEntry) e `/finance/api/invoices/{id}` (113 paid con allowed_transitions=[] terminal) OK.
+
+**Backlog α.122+ — P2 architetturale (10 finding, design discussion)**:
+F6 admin_email send semantica, F7a drawer center popup, F7b inserimento blocchi inline, F11 supplier↔resource flusso inverso, F16 IVA default off, F17 terminologia JCL→lavorazione globale, F19 cashflow split reparti, F21 UX revamp team/resources/departments, F24/F9 sweep codici DB.
+
+## (versione precedente)
+
 **v3.5.0-alpha.120** — 16 maggio 2026 tarda sera — 6 fix P0 da checklist post-audit α.114-118
 
 **6 finding bloccanti chiusi**:

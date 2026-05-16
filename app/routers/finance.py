@@ -383,6 +383,62 @@ def _refresh_invoice_payment_state(db: Session, invoice: Invoice) -> None:
                         jcl.billing_status = JCLBillingStatus.billed
 
 
+@router.get("/api/invoices/{invoice_id}")
+async def get_invoice_detail(invoice_id: int, db: Session = Depends(get_db)):
+    """v3.5.0-alpha.121 (F18) — dettaglio fattura per drawer UI lista.
+    Ritorna invoice + lines + payments + transitions allowed (UI hide
+    cambio status se terminal)."""
+    inv = db.query(Invoice).options(
+        joinedload(Invoice.client),
+        joinedload(Invoice.lines),
+        joinedload(Invoice.job).joinedload(Job.project),
+    ).filter(Invoice.id == invoice_id).first()
+    if not inv:
+        raise HTTPException(404, "Fattura non trovata")
+    # transitions allowed da _ALLOWED in update_invoice_status (F18)
+    _allowed_map = {
+        InvoiceStatus.draft: ["sent", "cancelled"],
+        InvoiceStatus.sent: ["paid", "overdue", "cancelled"],
+        InvoiceStatus.overdue: ["paid", "cancelled"],
+        InvoiceStatus.paid: [],
+        InvoiceStatus.cancelled: [],
+    }
+    cur = inv.status
+    allowed = _allowed_map.get(cur, [])
+    is_terminal = (cur in (InvoiceStatus.paid, InvoiceStatus.cancelled))
+    proj = inv.job.project if (inv.job and inv.job.project) else None
+    return {
+        "id": inv.id,
+        "number": inv.number,
+        "doc_type": getattr(inv, "doc_type", None),
+        "status": cur.value if hasattr(cur, "value") else cur,
+        "issue_date": inv.issue_date.isoformat() if inv.issue_date else None,
+        "due_date": inv.due_date.isoformat() if inv.due_date else None,
+        "subtotal": inv.subtotal,
+        "vat_rate": inv.vat_rate,
+        "total": inv.total,
+        "amount_paid": inv.amount_paid or 0.0,
+        "notes": inv.notes,
+        "client": ({"id": inv.client.id, "name": inv.client.name} if inv.client else None),
+        "project": ({"id": proj.id, "code": proj.code, "title": proj.title} if proj else None),
+        "job": ({"id": inv.job.id, "code": inv.job.code} if inv.job else None),
+        "lines": [
+            {
+                "id": l.id,
+                "description": l.description,
+                "quantity": l.quantity,
+                "unit_price": l.unit_price,
+                "total": l.total,
+                "discount_pct": l.discount_pct,
+                "vat_rate": l.vat_rate,
+            }
+            for l in inv.lines
+        ],
+        "allowed_transitions": allowed,
+        "is_terminal": is_terminal,
+    }
+
+
 @router.get("/api/invoices/{invoice_id}/payments")
 async def list_invoice_payments(invoice_id: int, db: Session = Depends(get_db)):
     """Lista pagamenti registrati per una fattura."""
