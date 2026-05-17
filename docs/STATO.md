@@ -8,6 +8,22 @@
 
 ## Versione corrente
 
+**v3.5.0-alpha.159** — 17 maggio 2026 notte — Acconti UX: summary % + Invoice project + CR Pagato/Scomputato
+
+3 fix:
+- Modal Gestisci: summary live "N voci · quotato selezionato €X = Y% del progetto"
+- Lista fatture: fix acconti project-level (no job_id) ora mostrano progetto. Filter project_id supporta OR via job O diretto.
+- CR card Acconti: 4 stat-card (was 3) — distinguono "Pagato (cassa)" da "Scomputato in fatture SAL" (uso contabile ledger).
+
+Semantica: Pagato ≠ Scomputato. Pagato = incassato (cassa). Scomputato = ledger consumato in fatture batch successive.
+
+Backlog α.160:
+- Modal Emit preview allocazioni
+- CR include fatture project-level (no job)
+- Warning over-billing
+
+## (versione precedente)
+
 **v3.5.0-alpha.158** — 17 maggio 2026 notte — Acconti: gestione allocazioni completa
 
 Bug pre-α.158: modal Gestisci mostrava solo allocations esistenti, no add/remove possibile.

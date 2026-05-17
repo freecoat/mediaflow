@@ -1,5 +1,44 @@
 # MediaFlow — Changelog
 
+## v3.5.0-alpha.159 — Acconti UX: totale% summary + Invoice project + CR Scomputato vs Pagato (17 mag 2026 notte)
+
+3 fix post-test Matteo.
+
+**#1 Modal "Gestisci acconto" — Summary live totale + percentuale**:
+- Sotto picker JCL: riepilogo dinamico "N voci · quotato selezionato €X = Y% del totale progetto €Z".
+- Aggiorna onchange checkbox + oninput pct.
+- Warning amber se Σ pct allocazioni > 100% (overflow).
+- Replica pattern modal termini quote (α.139 summary).
+
+**#2 Lista fatture — Acconto progetto-level non mostrava progetto**:
+- ROOT CAUSE: `list_invoices` cercava `inv.job.project`, ma acconti α.143+ hanno `project_id` diretto e `job_id=None`. → cella "Progetto" mostrava "—".
+- Fix backend:
+  - Pre-fetch direct project map per Invoice senza job_id (`{i.project_id}` set).
+  - Response builder: fallback `inv.project_id` se `inv.job.project` missing.
+  - Filter `project_id=X` query param: usa `OR` (job.project_id OR Invoice.project_id) per includere acconti project-level.
+
+**#3 CR card "Acconti del progetto" — distinguere Scomputato vs Pagato**:
+- ROOT CAUSE: una sola colonna "Già scomputato" confondeva `consumption.amount_consumed` (uso contabile in fatture SAL successive) con `invoice.amount_paid` (cassa incassata).
+- Fix backend `list_project_advances`: aggiunge campo `paid` ai totals = Σ Invoice.amount_paid degli AP non-cancelled.
+- Fix UI: 4 stat-card (era 3):
+  - "Totale acconti" (Σ amount emesso, indigo)
+  - "Pagato (cassa)" (Σ invoice.amount_paid, verde) — tooltip: "cassa effettivamente incassata"
+  - "Scomputato in fatture SAL" (Σ consumption.amount_consumed, viola) — tooltip: "quota ledger consumata nelle fatture batch successive, NON cassa"
+  - "Residuo aperto" (Σ balance_remaining, ambra)
+- Grid template forzato a 4 colonne.
+
+**Semantica chiarita**:
+- **Pagato** = cash flow incassato (Invoice.amount_paid)
+- **Scomputato** = uso contabile del ledger acconto in fatture successive (consumption)
+- Sono indipendenti: un acconto può essere pagato ma non scomputato (cliente ha pagato ma SAL non ancora emessi), o scomputato non pagato (caso anomalo: si è scomputato in SAL prima che cliente pagasse l'acconto).
+
+**Backlog α.160**:
+- UI modal Emit acconto: preview allocazioni read-only
+- CR: includere fatture project-level (no job_id) nei totali invoiced_net del job (oggi solo Invoice.job_id == j.id)
+- Warning UI over-billing (billed >> accrued)
+
+---
+
 ## v3.5.0-alpha.158 — Acconti: gestione allocazioni completa (add/remove/modify) (17 mag 2026 notte)
 
 Fix gestione allocazioni acconti in /finance "Bozze acconti".

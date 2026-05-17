@@ -347,8 +347,10 @@
       </div>
       <div class="form-group">
         <label class="form-label">Allocazioni a voci di costo (JCL)</label>
-        <div id="adv-conf-allocs-host" style="background:var(--bg2); border:1px solid var(--border); border-radius:6px; padding:8px; max-height:200px; overflow:auto;"></div>
-        <div class="text-xs text-muted" style="margin-top:4px;">Adjust % di copertura per ogni JCL coperto da questo acconto.</div>
+        <div id="adv-conf-allocs-host" style="background:var(--bg2); border:1px solid var(--border); border-radius:6px; padding:8px; max-height:240px; overflow:auto;"></div>
+        <!-- v3.5.0-alpha.159 — Summary live: totale selezionato + % su quote progetto -->
+        <div id="adv-conf-allocs-summary" style="margin-top:6px; padding:6px 10px; background:rgba(98,114,245,0.10); border-radius:4px; font-size:12px;"></div>
+        <div class="text-xs text-muted" style="margin-top:4px;">Spunta JCL + % copertura. Riepilogo live: totale allocato + percentuale su quotato.</div>
       </div>
       <hr style="border-color:var(--border); margin:14px 0;">
       <div class="form-group">
@@ -995,14 +997,65 @@ async function openAdvConfirmModal(ap) {
       pctInp.dataset.jclPct = j.jcl_id;
       pctInp.style.cssText = 'width:70px; padding:2px 4px; background:var(--bg3); border:1px solid var(--border); color:var(--text); border-radius:3px; font-family:DM Mono,monospace; font-size:11px;';
       pctInp.disabled = !cb.checked;
-      cb.onchange = () => { pctInp.disabled = !cb.checked; };
+      cb.onchange = () => { pctInp.disabled = !cb.checked; _refreshAdvConfSummary(); };
+      pctInp.oninput = () => _refreshAdvConfSummary();
       row.appendChild(pctInp);
       const u = document.createElement('span'); u.className = 'text-xs text-muted'; u.textContent = '%';
       row.appendChild(u);
       host.appendChild(row);
     });
   });
+  // v3.5.0-alpha.159 — Cache JCL data per summary live
+  window._advConfJcls = jcls;
+  _refreshAdvConfSummary();
   openModal('modal-advance-confirm');
+}
+
+// v3.5.0-alpha.159 — Riepilogo live: somma allocato + % su quotato progetto.
+function _refreshAdvConfSummary() {
+  const summary = document.getElementById('adv-conf-allocs-summary');
+  if (!summary) return;
+  const host = document.getElementById('adv-conf-allocs-host');
+  const jcls = window._advConfJcls || [];
+  const apAmount = parseFloat(document.getElementById('adv-conf-amount').value) || 0;
+  let totalQuotedSel = 0;
+  let totalAllocAmount = 0;
+  let countSel = 0;
+  host.querySelectorAll('input[type=checkbox]').forEach(cb => {
+    if (!cb.checked) return;
+    const jclId = parseInt(cb.dataset.jclId, 10);
+    const j = jcls.find(x => x.jcl_id === jclId);
+    if (!j) return;
+    const inp = host.querySelector('input[type=number][data-jcl-pct="' + jclId + '"]');
+    const pct = parseFloat(inp ? inp.value : 100) / 100;
+    if (pct <= 0) return;
+    totalQuotedSel += (j.total_quoted || 0) * pct;
+    totalAllocAmount += apAmount * pct;
+    countSel += 1;
+  });
+  const quotedAllProj = jcls.reduce((s, j) => s + (j.total_quoted || 0), 0);
+  const pctOfQuote = quotedAllProj > 0 ? (totalQuotedSel / quotedAllProj * 100) : 0;
+  if (countSel === 0) {
+    summary.textContent = 'Nessuna allocazione · totale quotato progetto: ' + fmtCurrency(quotedAllProj);
+    summary.style.color = 'var(--text-muted)';
+    return;
+  }
+  let txt = countSel + ' voce/i · quotato selezionato ' + fmtCurrency(totalQuotedSel) +
+    ' = ' + pctOfQuote.toFixed(2) + '% del totale progetto ' + fmtCurrency(quotedAllProj);
+  // Warning se Σ pct allocazioni > 100% (= ap.amount totale)
+  const pctSum = jcls.reduce((s, j) => {
+    const cb = host.querySelector('input[type=checkbox][data-jcl-id="' + j.jcl_id + '"]');
+    if (!cb || !cb.checked) return s;
+    const inp = host.querySelector('input[type=number][data-jcl-pct="' + j.jcl_id + '"]');
+    return s + (parseFloat(inp ? inp.value : 0) || 0);
+  }, 0);
+  if (pctSum > 100.5) {
+    txt += ' · ⚠ Σ pct ' + pctSum.toFixed(1) + '% > 100%';
+    summary.style.color = '#f59e0b';
+  } else {
+    summary.style.color = 'var(--text)';
+  }
+  summary.textContent = txt;
 }
 
 // v3.5.0-alpha.158 — Raccoglie allocations_set CSV "jcl_id:pct,..." per

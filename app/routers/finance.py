@@ -158,7 +158,13 @@ async def list_invoices(
     if client_id:
         q = q.filter(Invoice.client_id == client_id)
     if project_id:
-        q = q.join(_Job, Invoice.job_id == _Job.id).filter(_Job.project_id == project_id)
+        # v3.5.0-alpha.159 — Filter project via job_id OR project_id diretto
+        # (acconti project-level hanno solo project_id, no job_id).
+        from sqlalchemy import or_
+        from sqlalchemy.orm import outerjoin
+        q = q.outerjoin(_Job, Invoice.job_id == _Job.id).filter(
+            or_(_Job.project_id == project_id, Invoice.project_id == project_id)
+        )
     if from_date:
         q = q.filter(Invoice.issue_date >= from_date)
     if to_date:
@@ -176,8 +182,19 @@ async def list_invoices(
         like = f"%{number.strip()}%"
         q = q.filter(Invoice.number.ilike(like))
     out = []
-    for inv in q.all():
+    # v3.5.0-alpha.159 — Pre-fetch Project per Invoice.project_id diretto
+    # (acconti project-level senza job).
+    inv_list = q.all()
+    direct_proj_ids = {i.project_id for i in inv_list if i.project_id and not i.job_id}
+    direct_proj_map: dict[int, "Project"] = {}
+    if direct_proj_ids:
+        proj_rows = db.query(Project).filter(Project.id.in_(direct_proj_ids)).all()
+        direct_proj_map = {p.id: p for p in proj_rows}
+    for inv in inv_list:
+        # Priorità: job.project (back-compat) → project_id diretto (α.143+)
         proj = inv.job.project if (inv.job and inv.job.project) else None
+        if not proj and inv.project_id:
+            proj = direct_proj_map.get(inv.project_id)
         # v3.5.0-alpha.114 — drift detection per UI badge ⚠
         lines_sum = round(sum((l.total or 0) for l in inv.lines), 2) if inv.lines else 0
         has_drift = (
@@ -533,6 +550,7 @@ async def list_project_advances(project_id: int, db: Session = Depends(get_db)):
     total_amount = 0.0
     total_balance = 0.0
     total_consumed = 0.0
+    total_paid = 0.0
     for ap in rows:
         consumed = sum((c.amount_consumed or 0) for c in ap.consumptions)
         inv = ap.invoice
@@ -541,6 +559,10 @@ async def list_project_advances(project_id: int, db: Session = Depends(get_db)):
             total_amount += ap.amount or 0
             total_balance += ap.balance_remaining or 0
             total_consumed += consumed
+            # v3.5.0-alpha.159 — Pagato = invoice.amount_paid (cassa incassata)
+            # Distinto da consumed (= scomputato in fatture batch successive).
+            if inv and inv.amount_paid:
+                total_paid += inv.amount_paid
         out.append({
             "id": ap.id,
             "status": ap.status.value,
@@ -563,6 +585,7 @@ async def list_project_advances(project_id: int, db: Session = Depends(get_db)):
         "totals": {
             "amount": round(total_amount, 2),
             "consumed": round(total_consumed, 2),
+            "paid": round(total_paid, 2),
             "balance_remaining": round(total_balance, 2),
         },
     }

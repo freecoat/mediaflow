@@ -789,8 +789,22 @@ async function renderAdvancesCard() {
     d.appendChild(lbl); d.appendChild(val);
     return d;
   };
+  // v3.5.0-alpha.159 — 4 stat card:
+  //   Totale acconti = Σ AdvancePayment.amount (imponibile emesso)
+  //   Pagato = Σ Invoice.amount_paid (cassa effettivamente incassata dal cliente)
+  //   Scomputato in fatture = Σ AdvancePaymentConsumption.amount_consumed
+  //     (acconto già "consumato" come riduzione nelle fatture batch successive)
+  //   Residuo aperto = Σ AP.balance_remaining (non ancora scomputato)
+  // Pagato ≠ Scomputato! Pagato = cash flow incassato. Scomputato = uso contabile
+  // nelle fatture SAL/saldo successive (riduce balance_remaining ledger).
+  totalsEl.style.gridTemplateColumns = 'repeat(4, 1fr)';
   totalsEl.appendChild(mkTotCard('Totale acconti', 'var(--indigo2)', 'rgba(98,114,245,0.12)', tot.amount));
-  totalsEl.appendChild(mkTotCard('Già scomputato', '#22c55e', 'rgba(34,197,94,0.12)', tot.consumed));
+  const paidCard = mkTotCard('Pagato (cassa)', '#22c55e', 'rgba(34,197,94,0.12)', tot.paid || 0);
+  paidCard.title = 'Σ Invoice.amount_paid: cassa effettivamente incassata dal cliente sulle fatture acconto.';
+  totalsEl.appendChild(paidCard);
+  const consCard = mkTotCard('Scomputato in fatture SAL', '#a78bfa', 'rgba(168,85,247,0.12)', tot.consumed);
+  consCard.title = 'Σ AdvancePaymentConsumption.amount_consumed: quota dell\'acconto già "consumata" come riduzione nelle fatture batch successive (SAL/saldo). NON è cassa: è uso contabile del ledger acconto.';
+  totalsEl.appendChild(consCard);
   totalsEl.appendChild(mkTotCard('Residuo aperto', '#fbbf24', 'rgba(251,191,36,0.12)', tot.balance_remaining));
 
   const rows = data.rows || [];
