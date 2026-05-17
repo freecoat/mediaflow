@@ -343,13 +343,13 @@
          affiancati. Sotto: Voci preventivo. -->
     <div>
       <div class="quote-top-row">
-        <div class="card">
+        <div class="card" data-collapsible="quote-summary">
           <div class="card-title mb-3">Riepilogo economico</div>
           <!-- v3.5.0-alpha.137 — Card valuta + tasso (multi-currency quote) -->
           <div id="quote-currency-host"></div>
           <div id="totals-panel"></div>
         </div>
-        <div class="card">
+        <div class="card" data-collapsible="quote-actions">
           <div class="card-title mb-2">Stato &amp; azioni</div>
           <div class="flex gap-2" style="flex-wrap:wrap;">
             <button class="btn btn-secondary btn-sm" onclick="setQuoteStatus('sent')">📤 Inviata</button>
@@ -365,7 +365,7 @@
            Con 2+ versioni la card destra diventava più alta della sinistra
            (Riepilogo economico = totals compatti). Stessa logica α.111.2
            per Condizioni economiche. -->
-      <div id="versions-area" class="card" style="margin-top:18px;display:none;">
+      <div id="versions-area" class="card" data-collapsible="quote-versions" style="margin-top:18px;display:none;">
         <div class="card-title mb-3">Versioni quotazione</div>
         <div id="versions-list" style="display:flex;flex-direction:column;gap:4px;font-size:12px;"></div>
         <button id="btn-migrate-job" class="btn btn-primary btn-sm mt-2" style="display:none;" onclick="openMigratePreview()">↪ Migra Job a questa versione</button>
@@ -375,7 +375,7 @@
            dal quote-top-row per ripristinare allineamento Riepilogo↔Stato&azioni
            (le 5 form-group caricavano la card destra rendendo la sinistra
            "Riepilogo" sottodimensionata visivamente). -->
-      <div class="card" style="margin-top:18px;">
+      <div class="card" data-collapsible="quote-conditions" style="margin-top:18px;">
         <div class="card-title mb-3">Condizioni economiche & scadenze</div>
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;">
           <div class="form-group">
@@ -427,21 +427,24 @@
             </select>
             <div class="text-xs text-muted" style="margin-top:4px;">
               All'approvazione della quote, viene propagata sul Progetto.
+              Strettamente collegata ai <b>Termini di acconto</b> sotto: rate strutturate per periodo.
             </div>
           </div>
         </div>
-      </div>
-
-      <!-- v3.5.0-alpha.139 — Termini acconto strutturati (QuoteAdvanceSchedule).
-           Sostituisce il pattern testo libero in payment_terms: rate definite con
-           pct/importo + scadenza + opzionale allocazione a QuoteLine. Al converti
-           quote→job genererà AdvancePayment(status=pending) per ogni schedule (α.140). -->
-      <div class="card quote-editor-card" id="advance-schedules-card" style="margin-top:18px;">
-        <div class="card-header" style="display:flex;justify-content:space-between;align-items:center;">
-          <span class="card-title">💰 Termini di acconto</span>
-          <button class="btn btn-primary btn-sm" onclick="openAdvanceScheduleModal()" title="Aggiungi rata di acconto strutturata">+ Aggiungi rata</button>
+        <!-- v3.5.0-alpha.140 — Termini di acconto STRUTTURATI accorpati qui
+             (era card separata in α.139). Logicamente legati a periodicità
+             fatturazione. -->
+        <div style="margin-top:14px; padding-top:14px; border-top:1px dashed var(--border);">
+          <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:8px;">
+            <div style="font-weight:600; font-size:13px;">💰 Termini di acconto strutturati</div>
+            <button class="btn btn-primary btn-sm" onclick="openAdvanceScheduleModal()" title="Aggiungi rata di acconto strutturata">+ Aggiungi rata</button>
+          </div>
+          <div id="advance-schedules-host"></div>
+          <div class="text-xs text-muted" style="margin-top:6px;">
+            Rate con pct/importo, ancora scadenza (approvazione/inizio/data/milestone), opzionale allocazione a voci specifiche del preventivo.
+            Al converti quote→job verranno generati AdvancePayment pending per ogni rata.
+          </div>
         </div>
-        <div id="advance-schedules-host" style="padding:10px 14px;"></div>
       </div>
 
       <!-- v3.5.0-alpha.139 — Modal nuovo/edit schedule -->
@@ -460,13 +463,15 @@
             <div class="form-row">
               <div class="form-group">
                 <label class="form-label">Percentuale quote (%)</label>
-                <input class="form-input mono" id="as-pct" type="number" step="0.5" min="0" max="100" placeholder="30">
+                <input class="form-input mono" id="as-pct" type="number" step="0.5" min="0" max="100" placeholder="30" oninput="onAdvancePctInput()">
                 <div class="text-xs text-muted">Es. 30 = 30% del totale quote.</div>
+                <div class="text-xs mono" id="as-pct-equiv" style="margin-top:3px; color:var(--indigo2);"></div>
               </div>
               <div class="form-group">
-                <label class="form-label">OPPURE importo fisso (€)</label>
-                <input class="form-input mono" id="as-amount" type="number" step="0.01" min="0" placeholder="5000.00">
-                <div class="text-xs text-muted">Override del pct se entrambi.</div>
+                <label class="form-label">OPPURE importo fisso</label>
+                <input class="form-input mono" id="as-amount" type="number" step="0.01" min="0" placeholder="5000.00" oninput="onAdvanceAmountInput()">
+                <div class="text-xs text-muted">Bidirezionale: si aggiornano a vicenda.</div>
+                <div class="text-xs mono" id="as-amount-equiv" style="margin-top:3px; color:var(--indigo2);"></div>
               </div>
             </div>
             <div class="form-row">
@@ -499,7 +504,9 @@
             </div>
             <div class="form-group">
               <label class="form-label">Allocazione a voci di quote (opzionale)</label>
-              <div id="as-allocations-host" style="background:var(--bg2); border:1px solid var(--border); border-radius:6px; padding:8px; max-height:200px; overflow:auto;"></div>
+              <div id="as-allocations-host" style="background:var(--bg2); border:1px solid var(--border); border-radius:6px; padding:8px; max-height:240px; overflow:auto;"></div>
+              <!-- v3.5.0-alpha.140 — Display riepilogo selezione voci -->
+              <div id="as-allocations-summary" style="margin-top:6px; padding:6px 10px; background:rgba(98,114,245,0.10); border-radius:4px; font-size:12px; display:none;"></div>
               <div class="text-xs text-muted" style="margin-top:4px;">
                 Se nessuna allocazione → l'acconto copre l'intero progetto pro-quota.
                 Se selezionata almeno una voce → l'acconto copre SOLO quelle voci (pct=% della voce coperta).
@@ -513,7 +520,7 @@
         </div>
       </div>
 
-      <div class="card quote-editor-card" style="margin-top:18px;" id="lines-card"
+      <div class="card quote-editor-card" data-collapsible="quote-lines" style="margin-top:18px;" id="lines-card"
            ondragover="onLinesDragOver(event)"
            ondragleave="onLinesDragLeave(event)"
            ondrop="onLinesDrop(event)">
@@ -1218,6 +1225,7 @@ async function reloadQuote() {
   renderTotals();
   renderAdvanceSchedules();  // v3.5.0-alpha.139 — Termini acconto strutturati
   loadVersionsArea();
+  initCollapsibles();  // v3.5.0-alpha.140 — Cards collassabili con persistenza
   // v3.4.43: visibilità "Sposta progetto" — solo draft. La verifica
   // "no job" viene fatta server-side al click, qui basta il flag draft.
   const btnMove = document.getElementById('btn-move-quote');
@@ -1810,6 +1818,10 @@ function renderCurrencyHeader() {
   lbl.textContent = 'Valuta:';
   wrap.appendChild(lbl);
   if (isDraft) {
+    // v3.5.0-alpha.140 — Nota: il cambio valuta NON converte voci/totali/PDF.
+    // I valori restano espressi nella valuta selezionata. Il tasso è solo snapshot
+    // di riferimento per report aggregati in valuta base.
+    wrap.title = "Cambio valuta: NON converte voci/totali/PDF. I valori restano espressi nella nuova valuta. Il tasso è solo snapshot di riferimento.";
     const sel = document.createElement('select');
     sel.id = 'q-currency';
     sel.style.cssText = "background:var(--bg2); border:1px solid var(--border); color:var(--text); border-radius:4px; padding:3px 6px; font-family:'DM Mono',monospace;";
@@ -1884,6 +1896,56 @@ async function refreshQuoteFx() {
     toast('✓ Tasso aggiornato: 1 ' + data.currency + ' = ' + data.fx_rate_to_base.toFixed(4) + ' base', 'success');
     await loadQuote(currentQuote.id);
   } catch (e) { toast(e.message || 'Errore', 'error'); }
+}
+
+// v3.5.0-alpha.140 — Helper cards collassabili con persistenza localStorage.
+// Scansiona elementi con data-collapsible="key" e aggiunge toggle button nel
+// card-title (o card-header se presente). Stato salvato in localStorage
+// con prefisso "mfQuoteCollapse_". Idempotente: doppia invocazione no-op.
+function initCollapsibles() {
+  document.querySelectorAll('[data-collapsible]').forEach(card => {
+    if (card.dataset.collapsibleInit === '1') return;
+    const key = card.dataset.collapsible;
+    const storageKey = 'mfQuoteCollapse_' + key;
+    let titleEl = card.querySelector('.card-header .card-title') || card.querySelector('.card-title');
+    if (!titleEl) return;
+    // Wrappa contenuto post-title in body collassabile (se non già wrappato)
+    let bodyEl = card.querySelector('[data-collapsible-body="' + key + '"]');
+    if (!bodyEl) {
+      bodyEl = document.createElement('div');
+      bodyEl.dataset.collapsibleBody = key;
+      const siblings = [];
+      let cursor = titleEl.parentElement === card ? titleEl.nextSibling : titleEl.parentElement.nextSibling;
+      while (cursor) {
+        const next = cursor.nextSibling;
+        siblings.push(cursor);
+        cursor = next;
+      }
+      siblings.forEach(s => bodyEl.appendChild(s));
+      card.appendChild(bodyEl);
+    }
+    // Toggle button (chevron) inserito nel title
+    const toggleBtn = document.createElement('button');
+    toggleBtn.type = 'button';
+    toggleBtn.className = 'btn btn-ghost btn-sm';
+    toggleBtn.style.cssText = 'float:right; padding:1px 8px; font-size:11px; font-weight:600;';
+    toggleBtn.dataset.collapsibleToggle = key;
+    const apply = (collapsed) => {
+      bodyEl.style.display = collapsed ? 'none' : '';
+      toggleBtn.textContent = collapsed ? '▼ espandi' : '▲ comprimi';
+    };
+    toggleBtn.onclick = (e) => {
+      e.stopPropagation();
+      const newState = bodyEl.style.display !== 'none';
+      apply(newState);
+      try { localStorage.setItem(storageKey, newState ? '1' : '0'); } catch(_) {}
+    };
+    titleEl.appendChild(toggleBtn);
+    let initial = '0';
+    try { initial = localStorage.getItem(storageKey) || '0'; } catch(_) {}
+    apply(initial === '1');
+    card.dataset.collapsibleInit = '1';
+  });
 }
 
 // v3.5.0-alpha.139 — Termini di acconto strutturati (QuoteAdvanceSchedule).
@@ -2023,7 +2085,8 @@ function openAdvanceScheduleModal(existing) {
       pctInp.value = (l.id in allocMap) ? (allocMap[l.id] * 100).toFixed(1) : '100';
       pctInp.style.cssText = 'width:70px; padding:2px 4px; background:var(--bg3); border:1px solid var(--border); color:var(--text); border-radius:3px; font-family:DM Mono,monospace; font-size:11px;';
       pctInp.disabled = !cb.checked;
-      cb.onchange = () => { pctInp.disabled = !cb.checked; };
+      cb.onchange = () => { pctInp.disabled = !cb.checked; refreshAdvanceAllocationSummary(); };
+      pctInp.oninput = () => refreshAdvanceAllocationSummary();
       row.appendChild(lbl);
       row.appendChild(pctInp);
       const pctLbl = document.createElement('span');
@@ -2033,7 +2096,96 @@ function openAdvanceScheduleModal(existing) {
       allocHost.appendChild(row);
     });
   }
+  // Trigger init dei display equiv pct/amount + summary allocazioni
+  onAdvancePctInput();
+  refreshAdvanceAllocationSummary();
   openModal('modal-advance-schedule');
+}
+
+// v3.5.0-alpha.140 — Bidirezionale pct ↔ amount in modal rata.
+// Cambio pct → ricalcola amount = pct * quote_total. Cambio amount → ricalcola pct.
+function _quoteSubtotalForAdvance() {
+  return (currentQuote && currentQuote.total_after_discount) || 0;
+}
+
+function _quoteCurrencyForAdvance() {
+  return (currentQuote && currentQuote.currency) || 'EUR';
+}
+
+function onAdvancePctInput() {
+  const pctEl = document.getElementById('as-pct');
+  const amtEl = document.getElementById('as-amount');
+  const eqEl = document.getElementById('as-pct-equiv');
+  const pct = parseFloat(pctEl.value);
+  const sub = _quoteSubtotalForAdvance();
+  const ccy = _quoteCurrencyForAdvance();
+  if (!isNaN(pct) && pct > 0 && sub > 0) {
+    const calc = (pct / 100) * sub;
+    amtEl.value = calc.toFixed(2);
+    eqEl.textContent = '= ' + fmtCurrency(calc) + ' ' + ccy;
+    document.getElementById('as-amount-equiv').textContent = '(' + pct.toFixed(1) + '% del quote)';
+  } else {
+    eqEl.textContent = '';
+    if (!pctEl.value) document.getElementById('as-amount-equiv').textContent = '';
+  }
+}
+
+function onAdvanceAmountInput() {
+  const pctEl = document.getElementById('as-pct');
+  const amtEl = document.getElementById('as-amount');
+  const eqEl = document.getElementById('as-amount-equiv');
+  const amt = parseFloat(amtEl.value);
+  const sub = _quoteSubtotalForAdvance();
+  const ccy = _quoteCurrencyForAdvance();
+  if (!isNaN(amt) && amt > 0 && sub > 0) {
+    const pct = (amt / sub) * 100;
+    pctEl.value = pct.toFixed(2);
+    eqEl.textContent = '(' + pct.toFixed(2) + '% del quote ' + fmtCurrency(sub) + ' ' + ccy + ')';
+    document.getElementById('as-pct-equiv').textContent = '= ' + fmtCurrency(amt) + ' ' + ccy;
+  } else {
+    eqEl.textContent = '';
+    if (!amtEl.value) document.getElementById('as-pct-equiv').textContent = '';
+  }
+}
+
+// v3.5.0-alpha.140 — Riepilogo voci allocate: somma + % sul totale quote.
+// Triggerato da change su checkbox/input nella sezione allocazioni.
+function refreshAdvanceAllocationSummary() {
+  const host = document.getElementById('as-allocations-host');
+  const sumEl = document.getElementById('as-allocations-summary');
+  if (!host || !sumEl) return;
+  let totalSelected = 0;
+  let countSelected = 0;
+  host.querySelectorAll('input[type=checkbox]').forEach(cb => {
+    if (!cb.checked) return;
+    const lineId = parseInt(cb.dataset.lineId, 10);
+    const inp = cb.parentElement.parentElement.querySelector('input[type=number]');
+    const pct = parseFloat(inp.value || 100) / 100;
+    const line = (currentQuote.lines || []).find(l => l.id === lineId);
+    if (line && pct > 0) {
+      totalSelected += (line.total || 0) * pct;
+      countSelected += 1;
+    }
+  });
+  if (countSelected === 0) {
+    sumEl.style.display = 'none';
+    return;
+  }
+  const sub = _quoteSubtotalForAdvance();
+  const ccy = _quoteCurrencyForAdvance();
+  const pctOfQuote = sub > 0 ? (totalSelected / sub) * 100 : 0;
+  sumEl.style.display = 'block';
+  sumEl.textContent = countSelected + ' voce/i selezionate · totale ' +
+    fmtCurrency(totalSelected) + ' ' + ccy +
+    ' = ' + pctOfQuote.toFixed(2) + '% del preventivo';
+  // Match warning: se pct manuale differisce da pct allocato → segnala
+  const pctManual = parseFloat(document.getElementById('as-pct').value);
+  if (!isNaN(pctManual) && Math.abs(pctManual - pctOfQuote) > 0.5) {
+    sumEl.textContent += ' · ⚠ pct manuale ' + pctManual.toFixed(2) + '% ≠ pct allocato';
+    sumEl.style.color = '#f59e0b';
+  } else {
+    sumEl.style.color = 'var(--text)';
+  }
 }
 
 function _collectAllocations() {

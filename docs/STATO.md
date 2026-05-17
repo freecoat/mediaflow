@@ -8,6 +8,25 @@
 
 ## Versione corrente
 
+**v3.5.0-alpha.140** — 17 maggio 2026 mattina — UX quote: accorpamento condizioni + modal rata bidirezionale + cards collassabili
+
+5 fix UX richiesti Matteo prima di procedere con hook auto-create AP (slittato a α.141):
+
+- **q1** Card "Termini acconto" separata RIMOSSA. Accorpata in card "Condizioni economiche & scadenze" (periodicità + acconti vivono insieme).
+- **q2** Modal rata bidirezionale pct↔amount via oninput. Display selezione voci: "N voci · totale €X = Y% del preventivo" + warning ⚠ se pct manuale ≠ pct allocato.
+- **q3** Rata salvata visibile: verificato già funziona (loadQuote post-save).
+- **q4** Cards collassabili con persistenza localStorage. 6 cards taggate `data-collapsible="key"`. Helper `initCollapsibles()` idempotente.
+- **q5** Audit cambio valuta: `_recalc_quote` + `quote_pdf.py` NON usano fx_rate/currency. Solo snapshot tasso. Tooltip esplicativo aggiunto.
+
+**Backlog α.141+**:
+- α.141 hook converti quote→job auto-create AP(pending) + notifica admin (slittato da α.140)
+- α.142 UI /finance "Bozze acconti" + workflow conferma + emit (deprecazione modal CR)
+- α.143 CR fill mode (Coperto/Maturato/Drift)
+- F29 i18n sweep TUTTA UI
+- OAuth integrazioni
+
+## (versione precedente)
+
 **v3.5.0-alpha.139** — 17 maggio 2026 mattina — Revisione architetturale acconti: termini in quote + workflow stateful
 
 **Cambio scope architetturale richiesto Matteo** dopo α.138: acconti vanno definiti in quotazione (no manuale in CR), emessi da /finance (notifica + bozza + conferma + emit), CR visualizza fill maturato/drift.

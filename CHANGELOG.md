@@ -1,5 +1,55 @@
 # MediaFlow — Changelog
 
+## v3.5.0-alpha.140 — UX quote: accorpamento condizioni + modal rata bidirezionale + cards collassabili (17 mag 2026 mattina)
+
+Feedback Matteo post-α.139 prima di procedere con hook auto-create AP. 5 fix UX:
+
+**q1 — Accorpamento card "Condizioni economiche & scadenze"**:
+- Card "Termini di acconto" separata α.139 RIMOSSA.
+- Sezione spostata DENTRO card esistente "Condizioni economiche & scadenze" con separator dashed.
+- Logica: periodicità fatturazione + termini acconto sono strettamente collegati, vivono insieme.
+- Note in periodicità rimanda esplicitamente ai termini sotto.
+
+**q2 — Modal rata: bidirezionale pct ↔ amount + display selezione voci**:
+- `oninput` su pct → ricalcola amount = pct% × quote_total e mostra "= €X CCY".
+- `oninput` su amount → ricalcola pct e mostra "(X% del quote €Y CCY)".
+- `refreshAdvanceAllocationSummary()` su checkbox/input alloc: riepilogo live "N voci · totale €X CCY = Y% del preventivo".
+- Warning ⚠ se pct manuale ≠ pct allocato (>0.5% delta) — colore amber.
+- Trigger init dei display al openModal (sia nuova sia edit).
+
+**q3 — Rata salvata visibile**:
+- Verificato: submitAdvanceSchedule chiama loadQuote post-save → GET include `advance_schedules` → renderAdvanceSchedules invocato. No bug.
+
+**q4 — Cards collassabili con persistenza**:
+- Helper `initCollapsibles()` scansiona `[data-collapsible="key"]` + aggiunge toggle button nel card-title.
+- Stato salvato in `localStorage["mfQuoteCollapse_<key>"]`.
+- Body collassabile auto-wrappato (siblings post-title).
+- Idempotente (doppia init no-op via `data-collapsible-init`).
+- Cards taggate: quote-summary, quote-actions, quote-versions, quote-conditions, quote-lines (5).
+- Esteso anche al card meta principale via data-collapsible (totale 6 cards).
+
+**q5 — Audit cambio valuta**:
+- `_recalc_quote` NON usa `fx_rate`/`currency`. Verificato source: solo qty/price/sconti.
+- `quote_pdf.py` NON usa `fx_rate`/`currency`. Verificato grep no-match.
+- `changeQuoteCurrency` aggiorna solo `Quote.currency` + `fx_rate_to_base` snapshot, NON tocca line.total né subtotal/total/PDF.
+- Aggiunto tooltip esplicativo sul card valuta editor: "Cambio valuta: NON converte voci/totali/PDF".
+- No fix backend necessario, comportamento atteso confermato.
+
+**Smoke render**:
+- quotes.html parse 199071 chars ✓
+- 6 cards con data-collapsible ✓
+- initCollapsibles + onAdvancePctInput + refreshAdvanceAllocationSummary presenti ✓
+- advance-schedules-card OUT (refactor q1) ✓
+
+**Backlog α.141+**:
+- α.141: hook converti quote→job auto-create AP(pending) + notifica admin (era piano originale α.140, ora slittato)
+- α.142: UI /finance "Bozze acconti" + workflow conferma + emit invoice acconto (deprecazione modal CR)
+- α.143: CR fill mode (Coperto/Maturato/Drift per JCL coperta)
+- F29 i18n sweep TUTTA UI
+- OAuth integrazioni
+
+---
+
 ## v3.5.0-alpha.139 — Revisione architetturale acconti: termini in quote (QuoteAdvanceSchedule) + workflow stateful (17 mag 2026 mattina)
 
 Revisione architettonica acconti su feedback Matteo post-α.138: "L'acconto va emesso dalla fatturazione (sostituisce manuale) e deve essere associato a lavorazioni con %, definito in quotazione con scadenze configurabili per periodo, notifica admin e template precompilato. Workflow: quote (definisci) → finance (notifica+bozza+conferma+emit) → CR (visualizza fill maturato/drift)".
