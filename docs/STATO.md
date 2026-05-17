@@ -8,6 +8,19 @@
 
 ## Versione corrente
 
+**v3.5.0-alpha.148** — 17 maggio 2026 sera — F29 i18n round 2: clients + projects + quotes
+
+~40 chiavi nuove (clients 11 + projects 11 + quotes 19). Tot dict ~160 chiavi.
+data-i18n applicati a clients.html, projects.html, quotes.html (titoli card, bottoni, search placeholder, table headers).
+Cache buster bumpato 147→148.
+
+Backlog F29:
+- Round 3 (α.149): planning + finance + cost-report
+- Round 4 (α.150): suppliers + resources + departments + settings
+- JS dinamico via mfT() finale
+
+## (versione precedente)
+
 **v3.5.0-alpha.147** — 17 maggio 2026 sera — F29 i18n round 1: dashboard + common keys
 
 ~60 chiavi i18n nuove (dashboard 20 + col headers 12 + buttons 14 + status 11 + misc).

@@ -344,7 +344,7 @@
     <div>
       <div class="quote-top-row">
         <div class="card" data-collapsible="quote-summary">
-          <div class="card-title mb-3">Riepilogo economico</div>
+          <div class="card-title mb-3" data-i18n="quotes.economic_summary">Riepilogo economico</div>
           <!-- v3.5.0-alpha.137 — Card valuta + tasso (multi-currency quote) -->
           <div id="quote-currency-host"></div>
           <div id="totals-panel"></div>
@@ -376,7 +376,7 @@
            (le 5 form-group caricavano la card destra rendendo la sinistra
            "Riepilogo" sottodimensionata visivamente). -->
       <div class="card" data-collapsible="quote-conditions" style="margin-top:18px;">
-        <div class="card-title mb-3">Condizioni economiche & scadenze</div>
+        <div class="card-title mb-3" data-i18n="quotes.conditions">Condizioni economiche & scadenze</div>
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;">
           <div class="form-group">
             <label class="form-label">Note</label>
@@ -436,8 +436,8 @@
              fatturazione. -->
         <div style="margin-top:14px; padding-top:14px; border-top:1px dashed var(--border);">
           <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:8px;">
-            <div style="font-weight:600; font-size:13px;">💰 Termini di acconto strutturati</div>
-            <button class="btn btn-primary btn-sm" onclick="openAdvanceScheduleModal()" title="Aggiungi rata di acconto strutturata">+ Aggiungi rata</button>
+            <div style="font-weight:600; font-size:13px;" data-i18n="quotes.advance_terms">💰 Termini di acconto strutturati</div>
+            <button class="btn btn-primary btn-sm" onclick="openAdvanceScheduleModal()" title="Aggiungi rata di acconto strutturata" data-i18n="quotes.add_installment">+ Aggiungi rata</button>
           </div>
           <div id="advance-schedules-host"></div>
           <div class="text-xs text-muted" style="margin-top:6px;">

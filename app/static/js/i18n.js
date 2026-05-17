@@ -149,6 +149,55 @@ window.MF_I18N = {
   // ── Common misc ────────────────────────────────────
   'misc.no_data':            {it: 'Nessun dato',       en: 'No data',           fr: 'Aucune donnée',    de: 'Keine Daten'},
   'misc.loading':            {it: 'Caricamento…',      en: 'Loading…',          fr: 'Chargement…',      de: 'Wird geladen…'},
+
+  // ── Clients page (v3.5.0-alpha.148 F29 round 2) ──
+  'clients.title':           {it: 'Clienti',           en: 'Clients',           fr: 'Clients',          de: 'Kunden'},
+  'clients.new':             {it: '+ Nuovo cliente',   en: '+ New client',      fr: '+ Nouveau client', de: '+ Neuer Kunde'},
+  'clients.col.name':        {it: 'Nome',              en: 'Name',              fr: 'Nom',              de: 'Name'},
+  'clients.col.vat':         {it: 'P.IVA',             en: 'VAT',               fr: 'TVA',              de: 'USt-IdNr'},
+  'clients.col.email':       {it: 'Email',             en: 'Email',             fr: 'E-mail',           de: 'E-Mail'},
+  'clients.col.phone':       {it: 'Telefono',          en: 'Phone',             fr: 'Téléphone',        de: 'Telefon'},
+  'clients.col.projects':    {it: 'Progetti',          en: 'Projects',          fr: 'Projets',          de: 'Projekte'},
+  'clients.col.industry':    {it: 'Settore',           en: 'Industry',          fr: 'Secteur',          de: 'Branche'},
+  'clients.search':          {it: 'Cerca cliente…',    en: 'Search client…',    fr: 'Rechercher client…', de: 'Kunde suchen…'},
+  'clients.ai_enrich':       {it: '✨ Crea + popola con AI', en: '✨ Create + AI-enrich', fr: '✨ Créer + enrichir IA', de: '✨ Erstellen + KI'},
+  'clients.empty':           {it: 'Nessun cliente. Crea il primo.', en: 'No clients. Create the first.', fr: 'Aucun client. Créer le premier.', de: 'Keine Kunden. Erstelle den ersten.'},
+
+  // ── Projects page ─────────────────────────────────
+  'projects.title':          {it: 'Progetti',          en: 'Projects',          fr: 'Projets',          de: 'Projekte'},
+  'projects.new':            {it: '+ Nuovo progetto',  en: '+ New project',     fr: '+ Nouveau projet', de: '+ Neues Projekt'},
+  'projects.search':         {it: 'Cerca progetto…',   en: 'Search project…',   fr: 'Rechercher projet…', de: 'Projekt suchen…'},
+  'projects.col.start':      {it: 'Inizio',            en: 'Start',             fr: 'Début',            de: 'Beginn'},
+  'projects.col.end':        {it: 'Fine',              en: 'End',               fr: 'Fin',              de: 'Ende'},
+  'projects.col.budget':     {it: 'Budget',            en: 'Budget',            fr: 'Budget',           de: 'Budget'},
+  'projects.status.active':  {it: 'Attivo',            en: 'Active',            fr: 'Actif',            de: 'Aktiv'},
+  'projects.status.on_hold': {it: 'In pausa',          en: 'On hold',           fr: 'En pause',         de: 'Pausiert'},
+  'projects.status.completed': {it: 'Completato',      en: 'Completed',         fr: 'Terminé',          de: 'Abgeschlossen'},
+  'projects.status.cancelled': {it: 'Annullato',       en: 'Cancelled',         fr: 'Annulé',           de: 'Abgebrochen'},
+  'projects.empty':          {it: 'Nessun progetto. Crea il primo.', en: 'No projects. Create the first.', fr: 'Aucun projet. Créer le premier.', de: 'Keine Projekte. Erstelle das erste.'},
+
+  // ── Quotes page ───────────────────────────────────
+  'quotes.title':            {it: 'Quotazioni',        en: 'Quotes',            fr: 'Devis',            de: 'Angebote'},
+  'quotes.new':              {it: '+ Nuova quotazione', en: '+ New quote',      fr: '+ Nouveau devis',  de: '+ Neues Angebot'},
+  'quotes.search':           {it: 'Cerca quotazione…', en: 'Search quote…',     fr: 'Rechercher devis…', de: 'Angebot suchen…'},
+  'quotes.col.number':       {it: 'Numero',            en: 'Number',            fr: 'Numéro',           de: 'Nummer'},
+  'quotes.col.version':      {it: 'Ver.',              en: 'Ver.',              fr: 'Vers.',            de: 'Ver.'},
+  'quotes.col.total':        {it: 'Totale',            en: 'Total',             fr: 'Total',            de: 'Gesamt'},
+  'quotes.col.issue_date':   {it: 'Data emiss.',       en: 'Issue date',        fr: 'Date émission',    de: 'Ausstellungsdatum'},
+  'quotes.col.valid_until':  {it: 'Valido fino',       en: 'Valid until',       fr: 'Valable jusqu\'à', de: 'Gültig bis'},
+  'quotes.economic_summary': {it: 'Riepilogo economico', en: 'Economic summary', fr: 'Résumé économique', de: 'Wirtschaftliche Übersicht'},
+  'quotes.conditions':       {it: 'Condizioni economiche & scadenze', en: 'Economic conditions & deadlines', fr: 'Conditions économiques & échéances', de: 'Wirtschaftliche Bedingungen & Fristen'},
+  'quotes.advance_terms':    {it: '💰 Termini di acconto strutturati', en: '💰 Structured advance terms', fr: '💰 Conditions d\'acompte structurées', de: '💰 Strukturierte Anzahlungsbedingungen'},
+  'quotes.add_installment':  {it: '+ Aggiungi rata',   en: '+ Add installment', fr: '+ Ajouter échéance', de: '+ Rate hinzufügen'},
+  'quotes.items':            {it: 'Voci preventivo',   en: 'Quote items',       fr: 'Postes devis',     de: 'Angebotspositionen'},
+  'quotes.actions':          {it: 'Stato & azioni',    en: 'Status & actions',  fr: 'Statut & actions', de: 'Status & Aktionen'},
+  'quotes.versions':         {it: 'Versioni quotazione', en: 'Quote versions',  fr: 'Versions devis',   de: 'Angebotsversionen'},
+  'quotes.payment_terms':    {it: 'Termini di pagamento', en: 'Payment terms',  fr: 'Conditions paiement', de: 'Zahlungsbedingungen'},
+  'quotes.billing_frequency': {it: 'Periodicità fatturazione', en: 'Billing frequency', fr: 'Fréquence facturation', de: 'Abrechnungsfrequenz'},
+  'quotes.vat':              {it: 'IVA',               en: 'VAT',               fr: 'TVA',              de: 'USt'},
+  'quotes.subtotal':         {it: 'Subtotale',         en: 'Subtotal',          fr: 'Sous-total',       de: 'Zwischensumme'},
+  'quotes.total_net':        {it: 'Totale netto (base IVA)', en: 'Net total (VAT base)', fr: 'Total net (base TVA)', de: 'Nettogesamt (USt-Basis)'},
+  'quotes.total_final':      {it: 'TOTALE',            en: 'TOTAL',             fr: 'TOTAL',            de: 'GESAMT'},
 };
 
 /**

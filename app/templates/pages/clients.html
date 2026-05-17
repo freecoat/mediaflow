@@ -8,7 +8,7 @@
     <span style="color:var(--indigo2);">✨</span> Cerca con AI
   </button>
   {% endif %}
-  <button class="btn btn-primary btn-sm" onclick="openModal('modal-new-client')">+ Nuovo cliente</button>
+  <button class="btn btn-primary btn-sm" onclick="openModal('modal-new-client')" data-i18n="clients.new">+ Nuovo cliente</button>
 {% endblock %}
 
 {% block content %}
@@ -16,7 +16,7 @@
 <div class="flex items-center gap-3 mb-4">
   <div class="search-bar" style="flex:1;max-width:320px;">
     <span>🔍</span>
-    <input type="text" id="search-input" placeholder="Cerca cliente…" oninput="filterClients()">
+    <input type="text" id="search-input" placeholder="Cerca cliente…" oninput="filterClients()" data-i18n="clients.search" data-i18n-attr="placeholder">
   </div>
   <span class="text-xs text-muted" id="client-count"></span>
 </div>
@@ -26,16 +26,16 @@
     <table class="mf-sortable">
       <thead>
         <tr>
-          <th>Cliente</th>
-          <th>Settore</th>
+          <th data-i18n="col.client">Cliente</th>
+          <th data-i18n="clients.col.industry">Settore</th>
           <th>Sede</th>
           <th>Contatto</th>
-          <th>Progetti</th>
+          <th data-i18n="clients.col.projects">Progetti</th>
           <th></th>
         </tr>
       </thead>
       <tbody id="clients-table">
-        <tr><td colspan="6" class="text-muted" style="text-align:center;padding:24px;">Caricamento…</td></tr>
+        <tr><td colspan="6" class="text-muted" style="text-align:center;padding:24px;" data-i18n="misc.loading">Caricamento…</td></tr>
       </tbody>
     </table>
   </div>

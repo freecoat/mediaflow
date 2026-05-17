@@ -1,5 +1,27 @@
 # MediaFlow — Changelog
 
+## v3.5.0-alpha.148 — F29 i18n round 2: clients + projects + quotes (17 mag 2026 sera)
+
+Sweep i18n round 2: ~40 chiavi nuove per pagine clients/projects/quotes.
+
+**Dictionary MF_I18N estesa**:
+- Clients (11 chiavi): title, new, col.name/vat/email/phone/projects/industry, search placeholder, ai_enrich, empty.
+- Projects (11 chiavi): title, new, search, col.start/end/budget, 4 status (active/on_hold/completed/cancelled), empty.
+- Quotes (19 chiavi): title, new, search, col.number/version/total/issue_date/valid_until, sezioni (economic_summary, conditions, advance_terms, items, actions, versions), totali (subtotal, total_net, total_final, vat), bottoni (add_installment, payment_terms, billing_frequency).
+
+**Template data-i18n applicati**:
+- `clients.html`: bottone "+ Nuovo cliente", search placeholder, table headers, loading.
+- `projects.html`: bottone "+ Nuovo progetto", search placeholder, table headers (Codice/Titolo/Cliente/Stato), loading.
+- `quotes.html`: card titoli "Riepilogo economico" / "Condizioni economiche & scadenze" / "Termini di acconto strutturati" + bottone "+ Aggiungi rata".
+
+Cache buster `i18n.js?v=3.5.0-alpha.148`.
+
+**Tot dictionary**: ~160 chiavi cumulate.
+
+**Backlog F29 round 3** (α.149): planning + finance + cost-report.
+
+---
+
 ## v3.5.0-alpha.147 — F29 i18n round 1: dashboard + common keys (17 mag 2026 sera)
 
 Inizio sweep i18n completo (F29 backlog α.132). Round 1: dashboard + chiavi comuni riusabili.

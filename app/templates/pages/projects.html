@@ -6,7 +6,7 @@
 
 {% block topbar_actions %}
   {% if can_view_finance(request.state.current_user) %}
-  <button class="btn btn-primary btn-sm" onclick="openModal('modal-new-project')">+ Nuovo progetto</button>
+  <button class="btn btn-primary btn-sm" onclick="openModal('modal-new-project')" data-i18n="projects.new">+ Nuovo progetto</button>
   {% endif %}
 {% endblock %}
 
@@ -16,7 +16,7 @@
 <div class="flex items-center gap-3 mb-4" style="flex-wrap:wrap;">
   <div class="search-bar" style="flex:1;max-width:320px;">
     <span>🔍</span>
-    <input type="text" id="search-input" placeholder="Cerca progetto…" oninput="filterProjects()">
+    <input type="text" id="search-input" placeholder="Cerca progetto…" oninput="filterProjects()" data-i18n="projects.search" data-i18n-attr="placeholder">
   </div>
   <select class="form-select" style="width:auto;" id="filter-status" onchange="filterProjects()">
     <option value="">Tutti gli stati</option>
@@ -58,19 +58,19 @@
     <table class="mf-sortable">
       <thead>
         <tr>
-          <th>Codice</th>
-          <th>Titolo</th>
-          <th>Cliente</th>
+          <th data-i18n="col.code">Codice</th>
+          <th data-i18n="col.title">Titolo</th>
+          <th data-i18n="col.client">Cliente</th>
           <th>Tipo</th>
           <th class="text-right">Durata</th>
           <th>Consegna</th>
           <th>Quote / Job</th>
-          <th>Stato</th>
+          <th data-i18n="col.status">Stato</th>
           <th></th>
         </tr>
       </thead>
       <tbody id="projects-table">
-        <tr><td colspan="9" class="text-muted" style="text-align:center;padding:24px;">Caricamento…</td></tr>
+        <tr><td colspan="9" class="text-muted" style="text-align:center;padding:24px;" data-i18n="misc.loading">Caricamento…</td></tr>
       </tbody>
     </table>
   </div>
