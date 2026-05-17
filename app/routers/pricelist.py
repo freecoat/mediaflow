@@ -181,6 +181,9 @@ async def get_item(item_id: int, db: Session = Depends(get_db)):
         "price_low": i.price_low, "hardcosts": i.hardcosts,
         "keywords": i.keywords or [],
         "is_active": i.is_active,
+        # v3.5.0-alpha.164 — Voce trasversale + multi-dept allocation
+        "cross_dept": bool(getattr(i, "cross_dept", False)),
+        "additional_department_ids": getattr(i, "additional_department_ids", None) or [],
     }
 
 
@@ -243,7 +246,8 @@ async def update_item(
     ).first()
     if not i: raise HTTPException(404, "Voce non trovata")
     if category_id is not None: i.category_id = category_id
-    if department_id is not None: i.department_id = department_id or None
+    # v3.5.0-alpha.164 — department_id=0 dal frontend signala "rimuovi dept" (NULL)
+    if department_id is not None: i.department_id = department_id if department_id else None
     if name is not None: i.name = name.strip()
     if description is not None: i.description = description
     if unit is not None: i.unit = unit

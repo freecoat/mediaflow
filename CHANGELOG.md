@@ -1,5 +1,41 @@
 # MediaFlow — Changelog
 
+## v3.5.0-alpha.164 — UI listino: dropdown Reparto + checkbox Voce trasversale (17 mag 2026 notte)
+
+UI granulare per backend α.163.
+
+**Modal "Nuova/Modifica voce" `/pricelist`**:
+- Nuova form-row con 2 campi:
+  - `Reparto` dropdown (select): "— Nessuno (trasversale) —" + lista da `/departments/api`
+  - `Voce trasversale` checkbox: tooltip "assegnabile a qualsiasi reparto in booking"
+
+**JS handlers**:
+- `_loadDepts()` cache lazy via `/departments/api`
+- `_populateDeptSelect(currentId)` populate dropdown + preselezione
+- `openNewItem()` async (await _loadDepts), reset cross_dept=false
+- `editItem(id)` carica dept + cross_dept dal GET item
+- `saveItem()` invia `department_id` + `cross_dept` Form.
+  - `dept=0` su edit signala "rimuovi dept" (NULL).
+
+**Backend**:
+- `GET /pricelist/api/items/{id}` espone `cross_dept` + `additional_department_ids`.
+- `PUT /pricelist/api/items/{id}` accetta `department_id=0` come "set NULL" (fix).
+
+**Smoke**: render pricelist.html 59979 chars, it-dept/it-cross-dept/_loadDepts presenti.
+
+**Per sbloccare Production Management**:
+- Apri /pricelist → cerca "Production Management" → click ✎
+- Spunta checkbox "Voce trasversale"
+- Salva
+- Booking modal accetterà qualsiasi risorsa
+
+**Backlog α.165**:
+- Multi-select reparti aggiuntivi (`additional_department_ids`) in modal
+- CR dept breakdown ripartizione voci trasversali
+- AI capability propose_mark_cross_dept
+
+---
+
 ## v3.5.0-alpha.163 — Voci listino trasversali (cross_dept) — Production Management ecc. (17 mag 2026 notte)
 
 Caso Matteo: voce "Production Management" quotata su progetto Time non assegnabile a nessuna risorsa via booking (filtro reparto rigido).

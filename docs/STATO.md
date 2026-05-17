@@ -8,6 +8,24 @@
 
 ## Versione corrente
 
+**v3.5.0-alpha.164** — 17 maggio 2026 notte — UI listino: dropdown Reparto + checkbox Voce trasversale
+
+UI granulare backend α.163. Modal voce listino con:
+- Dropdown Reparto (da /departments/api)
+- Checkbox "Voce trasversale" + tooltip
+
+JS: _loadDepts cache + _populateDeptSelect + openNewItem/editItem/saveItem aggiornati.
+Backend: GET item espone cross_dept + additional_department_ids. PUT accetta dept=0 → NULL.
+
+Per sbloccare Production Management: /pricelist → modifica voce → spunta "Voce trasversale" → save.
+
+Backlog α.165:
+- Multi-select additional_department_ids in modal
+- CR dept breakdown ripartizione trasversali
+- AI propose_mark_cross_dept
+
+## (versione precedente)
+
 **v3.5.0-alpha.163** — 17 maggio 2026 notte — Voci listino trasversali (cross_dept)
 
 Caso Production Management: voce non assegnabile a risorsa via booking (filtro reparto rigido). Soluzione strutturale: price_item.cross_dept=True bypassa filtro.

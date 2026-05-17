@@ -277,6 +277,23 @@
           Inserisci 3-8 termini in italiano e/o inglese.
         </div>
       </div>
+      <!-- v3.5.0-alpha.164 — Dipartimento + Voce trasversale -->
+      <div class="form-row">
+        <div class="form-group">
+          <label class="form-label">Reparto</label>
+          <select class="form-select" id="it-dept">
+            <option value="">— Nessuno (trasversale) —</option>
+          </select>
+          <div class="form-hint">Reparto principale di responsabilità per CR/cashflow. Lascia vuoto se voce trasversale.</div>
+        </div>
+        <div class="form-group">
+          <label class="form-label" style="display:flex; align-items:center; gap:8px;">
+            <input type="checkbox" id="it-cross-dept" style="margin:0;">
+            <span>Voce trasversale</span>
+          </label>
+          <div class="form-hint">Se attivato, voce assegnabile a qualsiasi reparto in booking (Production Management, Coordinamento, Overhead).</div>
+        </div>
+      </div>
     </div>
     <div class="modal-footer">
       <button class="btn btn-secondary" onclick="closeModal('modal-item')">Annulla</button>
@@ -448,7 +465,33 @@ async function createCategory() {
   } catch(e) { alert(e.message); }
 }
 
-function openNewItem() {
+// v3.5.0-alpha.164 — Cache depts per dropdown modal voce listino
+let _allDepts = [];
+
+async function _loadDepts() {
+  if (_allDepts.length) return _allDepts;
+  try {
+    _allDepts = await fetch('/departments/api').then(r => r.json());
+  } catch (e) { _allDepts = []; }
+  return _allDepts;
+}
+
+function _populateDeptSelect(currentId) {
+  const sel = document.getElementById('it-dept');
+  if (!sel) return;
+  // Clear options preservando il primo (placeholder)
+  while (sel.children.length > 1) sel.removeChild(sel.lastChild);
+  _allDepts.forEach(d => {
+    const o = document.createElement('option');
+    o.value = String(d.id);
+    o.textContent = (d.code ? d.code + ' — ' : '') + d.name;
+    if (currentId && String(d.id) === String(currentId)) o.selected = true;
+    sel.appendChild(o);
+  });
+}
+
+async function openNewItem() {
+  await _loadDepts();
   document.getElementById('modal-title').textContent = 'Nuova voce';
   document.getElementById('it-id').value = '';
   document.getElementById('it-name').value = '';
@@ -458,11 +501,14 @@ function openNewItem() {
   document.getElementById('it-list').value = '';
   document.getElementById('it-hard').value = '';
   document.getElementById('it-keywords').value = '';
+  _populateDeptSelect(null);
+  document.getElementById('it-cross-dept').checked = false;
   openModal('modal-item');
 }
 
 async function editItem(id) {
   try {
+    await _loadDepts();
     const i = await fetch(`/pricelist/api/items/${id}`).then(r => r.json());
     document.getElementById('modal-title').textContent = 'Modifica voce';
     document.getElementById('it-id').value = i.id;
@@ -473,6 +519,8 @@ async function editItem(id) {
     document.getElementById('it-list').value = i.price_list || '';
     document.getElementById('it-hard').value = i.hardcosts || '';
     document.getElementById('it-keywords').value = (i.keywords || []).join(', ');
+    _populateDeptSelect(i.department_id);
+    document.getElementById('it-cross-dept').checked = !!i.cross_dept;
     openModal('modal-item');
   } catch(e) { alert(e.message); }
 }
@@ -493,6 +541,14 @@ async function saveItem() {
   const hc = document.getElementById('it-hard').value;
   if (hc) fd.append('hardcosts', hc);
   fd.append('keywords', document.getElementById('it-keywords').value);
+  // v3.5.0-alpha.164 — dipartimento + cross_dept
+  const deptVal = document.getElementById('it-dept').value;
+  if (deptVal) fd.append('department_id', deptVal);
+  // NB: backend update_item usa `if department_id is not None`. Per "rimuovi dept"
+  // su edit, manda 0 (codice converte 0 → None nella row). Per nuova voce senza
+  // dept, semplicemente non aggiungere.
+  else if (id) fd.append('department_id', '0');
+  fd.append('cross_dept', document.getElementById('it-cross-dept').checked ? 'true' : 'false');
 
   try {
     const url = id ? `/pricelist/api/items/${id}` : '/pricelist/api/items';
