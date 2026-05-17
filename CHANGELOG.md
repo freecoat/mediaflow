@@ -1,5 +1,38 @@
 # MediaFlow — Changelog
 
+## v3.5.0-alpha.142 — Cashflow: 3 fix (17 mag 2026 pomeriggio)
+
+**#1 Year dropdown vuoto in apertura**:
+- `initYearSelect()` non veniva mai chiamato → dropdown vuoto → utente non vedeva l'anno default selezionato (i dati caricavano comunque via `_curYear` fallback).
+- Fix: chiamata aggiunta PRIMA di `loadFilters()`.
+
+**#2 Filtri cliente/progetto non funzionanti**:
+- ROOT CAUSE: MFAutocomplete usa multi-select → `cf-client.value` è CSV `"1,2,3"` → FastAPI rifiutava parse `int` → 422 silenzioso → cashflow non si aggiornava.
+- Fix backend `cashflow_year` endpoint:
+  - `project_id`/`client_id` ora `Optional[str]` (era `Optional[int]`)
+  - Helper `_parse_csv_ids` parsa CSV → lista
+- Fix `cashflow_year_sync` accetta sia int singolo (back-compat) sia lista:
+  - `_to_id_list()` normalizza input
+  - 5 filtri SQL convertiti da `== id` a `.in_(ids)`:
+    - Invoice.client_id, Job.project_id (revenue)
+    - SupplierInvoice.project_id, Project.client_id (cost)
+    - OverheadCost.source_project_id (capex)
+- `yearly_forecast` passa primo id (no multi support, low-impact).
+
+**#3 NC/storno senza data permane in cashflow**:
+- ROOT CAUSE: Invoice con `issue_date=None` finivano nel bucket gennaio (fallback `if inv.issue_date else 1`).
+- Fix backend: skip Invoice senza issue_date dal bucket (no più fallback fuorviante).
+- Tracciamento: lista `invoices_missing_date` esposta nel response.
+- UI banner amber: "⚠ N fattura/e senza data esclusa/e dal cashflow. Vai a /finance#invoices per correggere."
+
+**Smoke**: `cashflow_year(2026, project_id='12,8')` → 12 months + 0 missing_date ✓. CSV `client_id='1'` → 12 months ✓.
+
+**Backlog α.143**:
+- Crea fattura ampliato (cliente/progetto/quote/job/lavorazione + force se senza link)
+- Acconti visibili in fatturazione (lista pending/draft AP)
+
+---
+
 ## v3.5.0-alpha.141 — Anomalie: 7 fix UX/workflow (17 mag 2026 mattina)
 
 Feedback Matteo: lista anomalie + azioni vanno migliorate. 7 punti chiusi.

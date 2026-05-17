@@ -8,6 +8,20 @@
 
 ## Versione corrente
 
+**v3.5.0-alpha.142** — 17 maggio 2026 pomeriggio — Cashflow 3 fix
+
+- **#1** Year dropdown vuoto in apertura: `initYearSelect()` mai chiamato. Fix.
+- **#2** Filtri cli/proj non funzionanti: MFAutocomplete CSV → FastAPI int rifiuta 422. Backend → str + parse CSV + `.in_(ids)` su 5 filtri SQL.
+- **#3** NC senza data permaneva in cashflow gennaio fallback. Fix: skip + banner amber UI con lista invoices_missing_date.
+
+**Smoke**: filtri CSV `project_id='12,8'` + `client_id='1'` → 12 months OK.
+
+**Backlog α.143**:
+- Crea fattura ampliato (dropdown cli/proj/quote/job/lavorazione + force no-link)
+- Acconti visibili in fatturazione (lista AP pending/draft)
+
+## (versione precedente)
+
 **v3.5.0-alpha.141** — 17 maggio 2026 mattina — Anomalie: 7 fix UX/workflow
 
 Backend:

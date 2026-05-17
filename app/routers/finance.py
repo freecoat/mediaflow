@@ -1020,11 +1020,24 @@ async def quote_forecast_year(
 @router.get("/api/cashflow/{year}")
 async def cashflow_year(
     year: int,
-    project_id: Optional[int] = None,
-    client_id: Optional[int] = None,
+    project_id: Optional[str] = None,
+    client_id: Optional[str] = None,
     db: Session = Depends(get_db),
 ):
-    return cashflow_year_sync(year, project_id, client_id, db)
+    """v3.5.0-alpha.142 — Accetta CSV per cli/proj (multiselect autocomplete).
+    Fix bug: UI inviava "1,2,3" come stringa, FastAPI parser int rifiutava → 422.
+    Ora supporto CSV: backend parsa lista e usa IN clause invece di =.
+    """
+    def _parse_csv_ids(v: Optional[str]) -> Optional[list[int]]:
+        if not v:
+            return None
+        try:
+            return [int(x.strip()) for x in v.split(",") if x.strip()]
+        except ValueError:
+            return None
+    pids = _parse_csv_ids(project_id)
+    cids = _parse_csv_ids(client_id)
+    return cashflow_year_sync(year, pids, cids, db)
 
 
 @router.get("/api/cashflow/{year}/by-department")
@@ -1124,8 +1137,24 @@ async def cashflow_by_department(year: int, db: Session = Depends(get_db)):
 
 
 def cashflow_year_sync(
-    year: int, project_id: Optional[int], client_id: Optional[int], db: Session,
+    year: int, project_id, client_id, db: Session,
 ):
+    # v3.5.0-alpha.142 — Accetta sia int singolo (back-compat) sia lista/CSV
+    def _to_id_list(v):
+        if v is None or v == "":
+            return None
+        if isinstance(v, list):
+            return [int(x) for x in v if x]
+        if isinstance(v, int):
+            return [v]
+        if isinstance(v, str):
+            try:
+                return [int(x.strip()) for x in v.split(",") if x.strip()]
+            except ValueError:
+                return None
+        return None
+    project_ids = _to_id_list(project_id)
+    client_ids = _to_id_list(client_id)
     """Cashflow completo aggregato per mese dell'anno.
 
     Per ogni mese ritorna:
@@ -1176,14 +1205,22 @@ def cashflow_year_sync(
         extract("year", Invoice.issue_date) == year,
         Invoice.status != InvoiceStatus.draft,
     )
-    if client_id:
-        inv_q = inv_q.filter(Invoice.client_id == client_id)
-    if project_id:
-        inv_q = inv_q.join(Job, Invoice.job_id == Job.id).filter(Job.project_id == project_id)
+    if client_ids:
+        inv_q = inv_q.filter(Invoice.client_id.in_(client_ids))
+    if project_ids:
+        inv_q = inv_q.join(Job, Invoice.job_id == Job.id).filter(Job.project_id.in_(project_ids))
     invoices = inv_q.all()
     invoice_ids = [i.id for i in invoices]
+    invoices_missing_date: list[int] = []
     for inv in invoices:
-        m = inv.issue_date.month if inv.issue_date else 1
+        if not inv.issue_date:
+            # v3.5.0-alpha.142 (#3 cashflow fix) — Invoice senza issue_date
+            # (incluse NC TD04 mal-create) NON vengono buccatate in gennaio
+            # fallback. Skip + log. UI mostrerà notice "N fatture senza data
+            # — escluse dal cashflow, vai a /finance#invoices per correggere".
+            invoices_missing_date.append(inv.id)
+            continue
+        m = inv.issue_date.month
         # v3.5.0-alpha.114 — include anche cancelled (post-storno): la fattura
         # originale resta nel cashflow storico del suo mese di emissione, e
         # la NC TD04 storna come negativo nel mese del NC. Saldo finale netto.
@@ -1206,7 +1243,7 @@ def cashflow_year_sync(
     pay_q = db.query(InvoicePayment).filter(
         extract("year", InvoicePayment.payment_date) == year,
     )
-    if client_id or project_id:
+    if client_ids or project_ids:
         # Restrict payments alle stesse invoice filtrate sopra
         if invoice_ids:
             pay_q = pay_q.filter(InvoicePayment.invoice_id.in_(invoice_ids))
@@ -1234,15 +1271,15 @@ def cashflow_year_sync(
         SupplierInvoice.deleted_at.is_(None),
         SupplierInvoice.payment_status != SupplierInvoiceStatus.cancelled,
     )
-    if project_id:
-        sup_billed_q = sup_billed_q.filter(SupplierInvoice.project_id == project_id)
-    elif client_id:
+    if project_ids:
+        sup_billed_q = sup_billed_q.filter(SupplierInvoice.project_id.in_(project_ids))
+    elif client_ids:
         # SupplierInvoice non ha client_id diretto: join via job → client
         sup_billed_q = sup_billed_q.join(
             Job, SupplierInvoice.job_id == Job.id
         ).join(
             Project, Job.project_id == Project.id
-        ).filter(Project.client_id == client_id)
+        ).filter(Project.client_id.in_(client_ids))
     sup_billed = sup_billed_q.all()
     sup_billed_ids = [s.id for s in sup_billed]
     sup_by_id = {s.id: s for s in sup_billed}
@@ -1256,7 +1293,7 @@ def cashflow_year_sync(
     sup_pay_q = db.query(SupplierInvoicePayment).filter(
         extract("year", SupplierInvoicePayment.payment_date) == year,
     )
-    if client_id or project_id:
+    if client_ids or project_ids:
         if sup_billed_ids:
             sup_pay_q = sup_pay_q.filter(
                 SupplierInvoicePayment.supplier_invoice_id.in_(sup_billed_ids)
@@ -1283,14 +1320,14 @@ def cashflow_year_sync(
             SupplierInvoiceStatus.unpaid, SupplierInvoiceStatus.partial,
         ]),
     )
-    if project_id:
-        sup_due_q = sup_due_q.filter(SupplierInvoice.project_id == project_id)
-    elif client_id:
+    if project_ids:
+        sup_due_q = sup_due_q.filter(SupplierInvoice.project_id.in_(project_ids))
+    elif client_ids:
         sup_due_q = sup_due_q.join(
             Job, SupplierInvoice.job_id == Job.id
         ).join(
             Project, Job.project_id == Project.id
-        ).filter(Project.client_id == client_id)
+        ).filter(Project.client_id.in_(client_ids))
     sup_due_rows = sup_due_q.all()
     for s in sup_due_rows:
         m = s.due_date.month if s.due_date else 1
@@ -1301,8 +1338,11 @@ def cashflow_year_sync(
             series[m - 1]["supplier_due_net"] += residuo * ratio_net
 
     # v3.5.0-alpha.77 — Forecast pipeline (soft+committed+lost) per mese
+    # v3.5.0-alpha.142 — passa primo id da lista (forecast non supporta multi)
     from app.services.quote_forecast import yearly_forecast
-    fc = yearly_forecast(db, year, project_id=project_id, client_id=client_id)
+    _first_pid = project_ids[0] if project_ids else None
+    _first_cid = client_ids[0] if client_ids else None
+    fc = yearly_forecast(db, year, project_id=_first_pid, client_id=_first_cid)
     fc_by_month = {m["month"]: m for m in fc["months"]}
 
     # v3.5.0-alpha.87 (S8.4) — Overhead outflow per mese.
@@ -1313,8 +1353,8 @@ def cashflow_year_sync(
         extract("year", OverheadCost.cost_date) == year,
         OverheadCost.deleted_at.is_(None),
     )
-    if project_id:
-        oh_q = oh_q.filter(OverheadCost.source_project_id == project_id)
+    if project_ids:
+        oh_q = oh_q.filter(OverheadCost.source_project_id.in_(project_ids))
     overheads = oh_q.all()
     for o in overheads:
         m = o.cost_date.month if o.cost_date else 1
@@ -1370,6 +1410,9 @@ def cashflow_year_sync(
         "year": year,
         "months": series,
         "forecast_totals": fc["totals"],
+        # v3.5.0-alpha.142 (#3) — Invoice senza issue_date escluse dal cashflow
+        # (no fallback gennaio fuorviante). UI mostra warning con link a /finance#invoices.
+        "invoices_missing_date": invoices_missing_date,
     }
 
 

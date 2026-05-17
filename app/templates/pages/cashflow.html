@@ -56,6 +56,9 @@
 <!-- ── TAB 1 · Cassa ───────────────────────────────────────────── -->
 <div id="cf-pane-cash" class="cf-pane">
 
+<!-- v3.5.0-alpha.142 (#3) — Banner avviso fatture senza issue_date -->
+<div id="cf-missing-date-banner" style="display:none; padding:10px 14px; background:rgba(245,158,11,0.15); border:1px solid rgba(245,158,11,0.45); border-radius:6px; color:#f59e0b; margin-bottom:12px; font-size:13px;"></div>
+
 <div class="stat-grid" id="cf-totals">
   <div class="stat-card stat-card-accent">
     <div class="stat-label">Fatturato</div>
@@ -365,6 +368,17 @@ async function loadCashflow() {
   } catch(e) {
     toast(e.message || 'Errore caricamento', 'error');
     return;
+  }
+  // v3.5.0-alpha.142 (#3) — banner se ci sono fatture senza issue_date escluse
+  const missing = data.invoices_missing_date || [];
+  const banner = document.getElementById('cf-missing-date-banner');
+  if (banner) {
+    if (missing.length > 0) {
+      banner.style.display = 'block';
+      banner.textContent = '⚠ ' + missing.length + ' fattura/e senza data di emissione esclusa/e dal cashflow. Vai a /finance#invoices per correggere.';
+    } else {
+      banner.style.display = 'none';
+    }
   }
   const months = data.months || [];
   // v3.5.0-alpha.123 (F16) — switch tra campi total (con IVA) e _net (imponibile).
@@ -742,6 +756,9 @@ initYearSelect();
   const cb = document.getElementById('cf-show-vat');
   if (cb) cb.checked = (localStorage.getItem('mf_cf_show_vat') === '1');
 })();
+// v3.5.0-alpha.142 — Init year dropdown (mancava in α.123, dropdown era vuoto
+// e l'utente non vedeva l'anno selezionato all'apertura).
+initYearSelect();
 loadFilters().then(() => {
   // Deep-link: ?tab=forecast oppure #forecast (back-compat) switcha al tab.
   // v3.5.0-alpha.91 audit fix: il fragment #forecast veniva strippato dal 302
