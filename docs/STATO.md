@@ -8,6 +8,21 @@
 
 ## Versione corrente
 
+**v3.5.0-alpha.157** — 17 maggio 2026 sera tarda — Cost report OU usa max(accrued, billed)
+
+Fix logico Matteo: OU pre-α.157 usava solo `total_accrued`, ignorando billed_locked > accrued (over-billing). Ora `effective_accrued = max(accrued, billed)` → OU finanziario corretto.
+
+Smoke Vento Aperto Ep. 3 Re-recording: OU_now -37'874 ✓ (era -52'920 fuorviante).
+
+3 punti fix: list_cost_reports, job_cost_report summary, JCL response.
+
+Backlog α.158:
+- Colonna "Maturato JCL" + "Effective" esplicite in CR
+- Warning UI over-billing (billed >> accrued)
+- F29 round 6 granulare
+
+## (versione precedente)
+
 **v3.5.0-alpha.156** — 17 maggio 2026 sera tarda — Dashboard layout + i18n sidebar admin + quotes superseded + CR tooltip
 
 4 fix post-test Matteo:

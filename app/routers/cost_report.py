@@ -160,13 +160,19 @@ async def list_cost_reports(
         # (stima vs reale: se ho fatture passive, usa quelle come ground truth).
         cost_effective = total_cost_external if total_cost_external > 0 else total_cost_accrued
         real_margin_effective = round(total_accrued - cost_effective, 2)
-        # v3.5.0-alpha.55: convenzione segno positivo = OVER (sforamento).
-        over_under_now = round(total_accrued - total_quoted, 2)
-        over_under_forecast = round(total_expected - total_quoted, 2)
         # v3.5.0-alpha.60: 3 colonne aggregate per job.
         billed_locked = round(sum(billed_map.get(l.id, 0.0) for l in j.cost_lines), 2)
         accrued_post_period = round(max(0.0, total_accrued - billed_locked), 2)
         forecast_future = round(max(0.0, total_expected - total_accrued), 2)
+        # v3.5.0-alpha.157 — OU finanziario: effective_accrued = max(total_accrued, billed_locked).
+        # Pre-α.157: OU usava solo total_accrued (work effettivo da booking done),
+        # ignorando billed_locked > accrued (over-billing storico). Caso Vento Aperto Ep. 3:
+        # fatturato €19'246 ma work effettivo €4'200 → OU operativo -52'920 fuorviante.
+        # Ora OU finanziario considera il fatturato come "maturato" (cassa già passata).
+        effective_accrued = max(total_accrued, billed_locked)
+        effective_expected = max(total_expected, billed_locked)
+        over_under_now = round(effective_accrued - total_quoted, 2)
+        over_under_forecast = round(effective_expected - total_quoted, 2)
         # v3.5.0-alpha.135 (F26): split fatturato linked-to-slice vs amministrativo.
         # invoiced_net = Σ Invoice.subtotal (no draft/cancelled, TD04 sottratto).
         # billed_admin_net = invoiced_net − billed_locked (= fatture senza JCL link:
@@ -711,13 +717,14 @@ async def job_cost_report(job_id: int, db: Session = Depends(get_db)):
                 - total_supplier_invoices, 2
             ),
             # v3.5.0-alpha.55: due viste di Over/Under.
-            # NOW = maturato − quotato (extracosto certo, base fatturazione).
-            # FORECAST = stima − quotato (sforamento previsto su base
-            # pianificato, base report cliente).
+            # v3.5.0-alpha.157: OU finanziario = max(accrued, billed) - quoted.
+            # Pre-α.157 ignorava billed_locked > accrued (over-billing storico).
+            # NOW = max(maturato, fatturato) − quotato (extracosto/cassa certo).
+            # FORECAST = max(stima, fatturato) − quotato (sforamento previsto).
             # Convenzione segno: positivo = OVER (sforamento, problema),
             # negativo = UNDER (sotto budget, ok).
-            "over_under_now": round(total_accrued - total_quoted, 2),
-            "over_under_forecast": round(total_expected - total_quoted, 2),
+            "over_under_now": round(max(total_accrued, sum_billed_locked) - total_quoted, 2),
+            "over_under_forecast": round(max(total_expected, sum_billed_locked) - total_quoted, 2),
             # Back-compat: vecchio campo `over_under` lasciato come alias di
             # forecast (con segno invertito ex-API). Da non usare in nuovi
             # consumer: leggere over_under_now / over_under_forecast.
@@ -798,9 +805,11 @@ async def job_cost_report(job_id: int, db: Session = Depends(get_db)):
                 "total_cost_external": round(l.total_cost_external or 0.0, 2),
                 "cost_drift": round((l.total_cost_external or 0.0) - (l.total_cost_accrued or 0.0), 2),
                 # v3.5.0-alpha.55: Now = maturato−quotato; Forecast = stima−quotato.
+                # v3.5.0-alpha.157: OU finanziario per riga = max(accrued, billed_locked) - quoted.
+                # Riallinea con vista Matteo: se fatturato > work, OU usa fatturato.
                 # Positivo = OVER (sforamento), negativo = UNDER (sotto budget).
-                "over_under_now": round(l.total_accrued - l.total_quoted, 2),
-                "over_under_forecast": round(l.total_expected - l.total_quoted, 2),
+                "over_under_now": round(max((l.total_accrued or 0), billed_map.get(l.id, 0.0)) - (l.total_quoted or 0), 2),
+                "over_under_forecast": round(max((l.total_expected or 0), billed_map.get(l.id, 0.0)) - (l.total_quoted or 0), 2),
                 # Alias back-compat (= forecast). Da non usare in nuovi consumer.
                 "over_under": round(l.total_expected - l.total_quoted, 2),
                 "is_billable": l.is_billable,

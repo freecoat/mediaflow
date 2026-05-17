@@ -1,5 +1,38 @@
 # MediaFlow — Changelog
 
+## v3.5.0-alpha.157 — Cost report OU usa max(accrued, billed) — fix logico (17 mag 2026 sera tarda)
+
+Fix logico richiesto Matteo dopo α.156. OU = `effective_accrued - quoted` dove `effective_accrued = max(JCL.total_accrued, billed_locked)`.
+
+**Bug pre-α.157**: OU usava solo `total_accrued` (work effettivo da booking done), ignorando `billed_locked` > accrued (over-billing storico). Interpretazione corretta: quando fatturato > work, il fatturato conta come "maturato finanziario" — cassa già passata, conta per il bilancio quote vs fatturato.
+
+**Esempio Vento Aperto Ep. 3 / Re-recording mix Dolby Atmos**:
+- quoted = €57'120
+- total_accrued = €4'200 (work effettivo)
+- billed_locked = €19'246 (slice immutable)
+- Pre-α.157: OU_now = 4'200 - 57'120 = **-52'920** (fuorviante)
+- Post-α.157: OU_now = max(4'200, 19'246) - 57'120 = **-37'874** ✓ (= interpretazione Matteo)
+
+**Fix in 3 punti** (`cost_report.py`):
+1. `list_cost_reports` (job level): `effective_accrued = max(total_accrued, billed_locked)` + `effective_expected = max(total_expected, billed_locked)`.
+2. `job_cost_report` summary (job level): `max(total_accrued, sum_billed_locked) - total_quoted`.
+3. JCL response per riga: `max(l.total_accrued, billed_map[l.id]) - l.total_quoted`.
+
+**Smoke**: Vento Aperto Ep. 3 / Re-recording mix → OU_now = -37'874 ✓ match interpretazione Matteo.
+
+**Semantica chiarita**:
+- `total_accrued` = work effettivo (ore done × prezzo) — quanto HAI lavorato
+- `billed_locked` = slice fatturate — quanto HAI EMESSO fattura
+- `effective_accrued = max(...)` = quanto vale "contabilmente come maturato" (work O fatturato, il maggiore)
+- OU = effective_accrued - quoted = sforamento finanziario reale
+
+**Backlog α.158**:
+- Colonna esplicita "Maturato JCL" + "Effective" in CR dettaglio
+- Warning UI quando billed_locked >> total_accrued (over-billing)
+- F29 round 6 granulare modal/form
+
+---
+
 ## v3.5.0-alpha.156 — Dashboard layout + i18n sidebar admin + quotes nasconde superseded + CR tooltip aritmetica (17 mag 2026 sera tarda)
 
 4 fix dopo test Matteo.
