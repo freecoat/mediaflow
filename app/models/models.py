@@ -1902,6 +1902,31 @@ class AdvancePaymentAllocation(Base):
 # Provider primario: Frankfurter (api.frankfurter.app), BCE-based, free, no key.
 # Cache locale per ridurre chiamate (TTL default 1h, refresh on-demand via API).
 # Coppia FROM→TO univoca: 1 row per coppia, update in place al refresh.
+# v3.5.0-alpha.152 — OAuth token storage per user×provider.
+# Provider supportati: google (Gmail+Drive), microsoft (Outlook+OneDrive).
+# Stessi scope possono essere richiesti separatamente per ogni servizio
+# all'authorize URL del provider.
+#
+# access_token: storage in chiaro (ha TTL breve ~1h, mitigato).
+# refresh_token: cifrato via Fernet AI_KEY_ENCRYPTION_KEY (riuso α.137).
+# Idempotenza: 1 token per (user_id, provider) — UniqueConstraint.
+class UserOAuthToken(Base):
+    __tablename__ = "user_oauth_tokens"
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), index=True)
+    provider: Mapped[str] = mapped_column(String(40), index=True)  # 'google', 'microsoft'
+    access_token: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    refresh_token_enc: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    expires_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+    scopes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    account_email: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    __table_args__ = (
+        UniqueConstraint("user_id", "provider", name="uq_user_oauth_provider"),
+    )
+
+
 class FXRate(Base):
     __tablename__ = "fx_rates"
     id: Mapped[int] = mapped_column(Integer, primary_key=True)

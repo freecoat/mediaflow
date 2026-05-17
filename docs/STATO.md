@@ -8,6 +8,31 @@
 
 ## Versione corrente
 
+**v3.5.0-alpha.152** — 17 maggio 2026 sera — OAuth scaffold: Google + Microsoft
+
+Foundation OAuth 2 Authorization Code flow.
+
+**Modello**: `UserOAuthToken` (user_id, provider, access_token, refresh_token_enc Fernet, expires_at, scopes, account_email).
+
+**Servizio**: `app/services/oauth_providers.py` con dict PROVIDERS + flow start/exchange/userinfo + DB helpers + refresh token encryption.
+
+**Router**: `app/routers/oauth.py` — 4 endpoint (`/status`, `/{provider}/start`, `/{provider}/callback`, `/{provider}/disconnect`).
+
+**Env vars**: `GOOGLE_OAUTH_CLIENT_ID/SECRET`, `MICROSOFT_OAUTH_CLIENT_ID/SECRET`, `OAUTH_REDIRECT_BASE_URL`.
+
+466 routes totale. Smoke tabella + 4 routes ✓.
+
+**Backlog α.153+**:
+- UI /settings tab "Integrazioni"
+- Servizi send_email/list_drive/upload
+- Token refresh auto
+- AI capability propose_send_email_oauth
+- Cross-currency CR aggregati
+- Test parse 14 capitolati
+- Automazione portali
+
+## (versione precedente)
+
 **v3.5.0-alpha.151** — 17 maggio 2026 sera — F29 i18n round 5 (finale): modal/form/JS dinamico
 
 ~50 chiavi nuove (modal commons 4 + form labels 22 + toast 11 + badge dinamici 5 + generic 12). Tot dict cumulata **~300 chiavi × 4 lingue = ~1200 traduzioni**.

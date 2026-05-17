@@ -1188,7 +1188,7 @@ async def lifespan(app: FastAPI):
     yield
 
 
-app = FastAPI(title="MediaFlow", version="3.5.0-alpha.151", lifespan=lifespan)
+app = FastAPI(title="MediaFlow", version="3.5.0-alpha.152", lifespan=lifespan)
 
 BASE_DIR = Path(__file__).parent
 app.mount("/static", StaticFiles(directory=BASE_DIR / "static"), name="static")
@@ -1476,6 +1476,8 @@ app.include_router(help_router.router)
 app.include_router(suppliers_router.router)
 app.include_router(overhead.router)  # v3.5.0-alpha.87 — Pozzo costi / Spese aziendali
 app.include_router(anomalies.router)  # v3.5.0-alpha.89 — Workflow anomalie (sprint S4)
+from app.routers import oauth as oauth_router  # v3.5.0-alpha.152 — OAuth Gmail/Outlook
+app.include_router(oauth_router.router)
 app.include_router(portal.router)  # v3.5.0-alpha.97 — Portale cliente (#10 fase A)
 app.include_router(platform.router)  # v3.5.0-alpha.104 — Super-admin platform
 app.include_router(billing.router)

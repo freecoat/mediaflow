@@ -1,5 +1,53 @@
 # MediaFlow — Changelog
 
+## v3.5.0-alpha.152 — OAuth scaffold: Google (Gmail+Drive) + Microsoft (Outlook+OneDrive) (17 mag 2026 sera)
+
+Foundation OAuth 2 Authorization Code flow per integrazione email + cloud storage. UI Settings + send/upload features in versioni successive.
+
+**Modello `UserOAuthToken`**:
+- `user_id`, `provider` (google/microsoft), `access_token`, `refresh_token_enc` (Fernet cifrato), `expires_at`, `scopes`, `account_email`.
+- UniqueConstraint coppia (user_id, provider) — 1 token per coppia.
+
+**Servizio `app/services/oauth_providers.py`**:
+- Dict `PROVIDERS` con auth_url, token_url, userinfo_url, scopes default, env var names per ogni provider.
+- `authorization_url(provider, state)` — costruisce URL OAuth flow.
+- `exchange_code_for_token(provider, code)` — POST a token endpoint del provider.
+- `fetch_userinfo(provider, access_token)` — GET userinfo per `account_email`.
+- `save_token` / `get_token` / `revoke_token` — DB helpers.
+- Refresh token cifrato via Fernet `AI_KEY_ENCRYPTION_KEY` (riuso α.137).
+- urllib stdlib (no deps esterne).
+
+**Router `app/routers/oauth.py`**:
+- `GET /auth/oauth/status` — JSON stato providers + connessioni utente corrente
+- `GET /auth/oauth/{provider}/start` — redirect a authorization URL (genera state CSRF)
+- `GET /auth/oauth/{provider}/callback` — scambio code→token + save + HTML success page con redirect a /settings
+- `POST /auth/oauth/{provider}/disconnect` — revoca token locale
+
+**Scope di default**:
+- Google: `openid email profile gmail.send drive.file`
+- Microsoft: `openid email profile offline_access User.Read Mail.Send Files.ReadWrite`
+
+**Env vars necessarie** (`.env`):
+```
+GOOGLE_OAUTH_CLIENT_ID=...
+GOOGLE_OAUTH_CLIENT_SECRET=...
+MICROSOFT_OAUTH_CLIENT_ID=...
+MICROSOFT_OAUTH_CLIENT_SECRET=...
+OAUTH_REDIRECT_BASE_URL=http://localhost:8000  # production: il tuo dominio
+```
+
+Setup Google: console.cloud.google.com → APIs & Services → OAuth consent screen + Credentials → OAuth 2.0 Client ID (Web app) → redirect URI: `{base}/auth/oauth/google/callback`.
+
+Setup Microsoft: portal.azure.com → Entra ID → App registrations → New + Web platform → redirect URI: `{base}/auth/oauth/microsoft/callback`.
+
+**Backlog α.153+**:
+- UI tab "Integrazioni" in /settings con stato connesso + bottoni Collega/Scollega
+- Servizi feature: `send_email(google)`, `send_email(microsoft)`, `list_drive_files`, `upload_to_drive`, etc.
+- Token refresh auto via refresh_token
+- AI capability `propose_send_email_oauth` (alternativa a SMTP)
+
+---
+
 ## v3.5.0-alpha.151 — F29 i18n round 5: modal/form/JS dinamico — chiusura sweep (17 mag 2026 sera)
 
 Sweep i18n round 5 finale: chiavi modal/form/toast/badge per coverage UI completa.
