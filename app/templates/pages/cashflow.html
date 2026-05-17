@@ -20,15 +20,20 @@
         <option value="year">Annuale</option>
       </select>
     </div>
+    <!-- v3.5.0-alpha.143.1 — Filtri cli/proj con <select> nativo (era MFAutocomplete
+         che non rispondeva live). MFAutocomplete preserva CSV ma onChange non
+         sempre triggera reload. Soluzione: select singolo + onchange diretto. -->
     <div>
       <label class="form-label" style="font-size:11px; margin-bottom:4px; display:block;">Cliente</label>
-      <div id="cf-client-ac" class="mf-ac" style="width:220px;"></div>
-      <input type="hidden" id="cf-client" value="">
+      <select id="cf-client" class="form-input" style="height:32px;font-size:13px;width:220px;" onchange="onCfClientChange()">
+        <option value="">— Tutti i clienti —</option>
+      </select>
     </div>
     <div>
       <label class="form-label" style="font-size:11px; margin-bottom:4px; display:block;">Progetto</label>
-      <div id="cf-project-ac" class="mf-ac" style="width:240px;"></div>
-      <input type="hidden" id="cf-project" value="">
+      <select id="cf-project" class="form-input" style="height:32px;font-size:13px;width:240px;" onchange="onFiltersChanged()">
+        <option value="">— Tutti i progetti —</option>
+      </select>
     </div>
     <div>
       <label class="form-label" style="font-size:11px; margin-bottom:4px; display:block;">Anno</label>
@@ -271,6 +276,10 @@ let _forecastLoaded = false;  // lazy-load forecast su primo switch
 
 function initYearSelect() {
   const sel = document.getElementById('cf-year');
+  if (!sel) return;
+  // v3.5.0-alpha.143.1 — Guard idempotente: rimuove opzioni esistenti prima di
+  // ricreare. Pre-fix, doppia invocazione produceva anni duplicati.
+  while (sel.firstChild) sel.removeChild(sel.firstChild);
   for (let y = _curYear + 1; y >= _curYear - 4; y--) {
     const opt = document.createElement('option');
     opt.value = String(y);
@@ -292,34 +301,51 @@ async function loadFilters() {
       api('GET', '/projects/api').catch(() => []),
     ]);
   } catch(e) { _cfClients = []; _cfProjects = []; }
-  _cfClientAc = MFAutocomplete({
-    host: document.getElementById('cf-client-ac'),
-    hidden: document.getElementById('cf-client'),
-    data: () => _cfClients,
-    search: (it, q) => (it.name||'').toLowerCase().includes(q),
-    display: it => it.name || ('Cliente ' + it.id),
-    placeholder: 'Tutti i clienti',
-    onChange: (ids) => onClientChange(),
+  // v3.5.0-alpha.143.1 — Popola select nativo cli/proj.
+  const cliSel = document.getElementById('cf-client');
+  const projSel = document.getElementById('cf-project');
+  // Reset: rimuove opzioni esistenti tranne il placeholder
+  while (cliSel.children.length > 1) cliSel.removeChild(cliSel.lastChild);
+  while (projSel.children.length > 1) projSel.removeChild(projSel.lastChild);
+  // Sort clients alfabetico
+  (_cfClients || []).slice().sort((a, b) => (a.name || '').localeCompare(b.name || '')).forEach(c => {
+    const o = document.createElement('option');
+    o.value = String(c.id);
+    o.textContent = c.name || ('Cliente ' + c.id);
+    cliSel.appendChild(o);
   });
-  _cfProjectAc = MFAutocomplete({
-    host: document.getElementById('cf-project-ac'),
-    hidden: document.getElementById('cf-project'),
-    data: () => {
-      const cid = (document.getElementById('cf-client').value || '').split(',').map(Number).filter(Boolean);
-      if (!cid.length) return _cfProjects;
-      return _cfProjects.filter(p => cid.includes(p.client_id));
-    },
-    search: (it, q) => ((it.code||'').toLowerCase().includes(q) || (it.title||'').toLowerCase().includes(q)),
-    display: it => `${it.code} — ${it.title}`,
-    placeholder: 'Tutti i progetti',
-    onChange: () => onFiltersChanged(),
-  });
+  _renderCfProjectOptions();
 }
 
-function onClientChange() {
-  if (_cfProjectAc) _cfProjectAc.clear();
+function _renderCfProjectOptions() {
+  const projSel = document.getElementById('cf-project');
+  if (!projSel) return;
+  const currentVal = projSel.value;
+  while (projSel.children.length > 1) projSel.removeChild(projSel.lastChild);
+  const cid = parseInt(document.getElementById('cf-client').value || 0);
+  const filtered = (_cfProjects || []).filter(p => !cid || p.client_id === cid);
+  filtered.slice().sort((a, b) => (a.code || '').localeCompare(b.code || '')).forEach(p => {
+    const o = document.createElement('option');
+    o.value = String(p.id);
+    o.textContent = (p.code || '?') + ' — ' + (p.title || '');
+    projSel.appendChild(o);
+  });
+  // Preserva selezione se ancora valida nei nuovi filtrati
+  if (currentVal && filtered.some(p => String(p.id) === currentVal)) {
+    projSel.value = currentVal;
+  } else {
+    projSel.value = '';
+  }
+}
+
+function onCfClientChange() {
+  // Refresha lista progetti filtrata per cliente + reload cashflow
+  _renderCfProjectOptions();
   onFiltersChanged();
 }
+
+// v3.5.0-alpha.143.1 — Stub back-compat: vecchio onClientChange referenziato altrove
+function onClientChange() { onCfClientChange(); }
 
 // v3.5.0-alpha.123 (F16) — toggle IVA: salva in localStorage e ricarica.
 function onToggleVat() {
@@ -369,13 +395,22 @@ async function loadCashflow() {
     toast(e.message || 'Errore caricamento', 'error');
     return;
   }
-  // v3.5.0-alpha.142 (#3) — banner se ci sono fatture senza issue_date escluse
+  // v3.5.0-alpha.143.1 — banner con link cliccabile + lista ID per debugging.
   const missing = data.invoices_missing_date || [];
   const banner = document.getElementById('cf-missing-date-banner');
   if (banner) {
+    banner.textContent = '';
     if (missing.length > 0) {
       banner.style.display = 'block';
-      banner.textContent = '⚠ ' + missing.length + ' fattura/e senza data di emissione esclusa/e dal cashflow. Vai a /finance#invoices per correggere.';
+      const span = document.createElement('span');
+      span.textContent = '⚠ ' + missing.length + ' fattura/e senza data di emissione esclusa/e dal cashflow (IDs: ' +
+        missing.slice(0, 10).join(', ') + (missing.length > 10 ? ', …' : '') + '). ';
+      banner.appendChild(span);
+      const lnk = document.createElement('a');
+      lnk.href = '/finance#section-invoices';
+      lnk.style.cssText = 'color:#f59e0b; font-weight:600; text-decoration:underline;';
+      lnk.textContent = '→ Apri lista fatture per correggere';
+      banner.appendChild(lnk);
     } else {
       banner.style.display = 'none';
     }
@@ -756,9 +791,17 @@ initYearSelect();
   const cb = document.getElementById('cf-show-vat');
   if (cb) cb.checked = (localStorage.getItem('mf_cf_show_vat') === '1');
 })();
-// v3.5.0-alpha.142 — Init year dropdown (mancava in α.123, dropdown era vuoto
-// e l'utente non vedeva l'anno selezionato all'apertura).
-initYearSelect();
+// v3.5.0-alpha.143.1 — Re-bind esplicito onchange dei filtri (oltre all'onchange
+// HTML attributes già presenti). Aggiunge live debounce + reload garantito.
+(function _wireFilterEvents() {
+  const yearSel = document.getElementById('cf-year');
+  if (yearSel) {
+    yearSel.addEventListener('change', () => {
+      console.log('[cashflow] year changed →', yearSel.value);
+      onFiltersChanged();
+    });
+  }
+})();
 loadFilters().then(() => {
   // Deep-link: ?tab=forecast oppure #forecast (back-compat) switcha al tab.
   // v3.5.0-alpha.91 audit fix: il fragment #forecast veniva strippato dal 302

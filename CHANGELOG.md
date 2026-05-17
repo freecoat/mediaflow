@@ -1,5 +1,34 @@
 # MediaFlow — Changelog
 
+## v3.5.0-alpha.143.1 — HOTFIX cashflow filtri + anni dup (17 mag 2026 pomeriggio tarda)
+
+Matteo segnala 4 problemi non risolti da α.142 + 1 nuovo bug introdotto.
+
+**#1 BUG α.142: anni duplicati in select anno**:
+- ROOT CAUSE: `initYearSelect()` chiamato 2 volte (preesistente line 753 + mia aggiunta α.142 line 761). 2 iterazioni for → 10 anni duplicati.
+- Fix: rimozione doppia chiamata + guard idempotente `while (sel.firstChild) sel.removeChild(...)` prima di popolare.
+
+**#2 Filtri cliente/progetto cashflow non funzionanti**:
+- ROOT CAUSE: MFAutocomplete (multi) usato per filtri singoli. `hidden.value` CSV ok backend ma onChange triggera reload incoerente. UI dropdown non rispondevano live.
+- Fix: sostituito `<div class="mf-ac">` + `<input hidden>` con `<select>` nativo single-choice. Auto-filter progetti per cliente selezionato. `onCfClientChange()` triggera reload diretto.
+- `loadFilters()` popola `<option>` ordinati alfabeticamente.
+- `_renderCfProjectOptions()` filtra progetti per cliente + preserva selezione se valida.
+
+**#3 Cashflow non si aggiorna su anno selezionato**:
+- Aggiunto `addEventListener('change')` esplicito su `cf-year` con log console (oltre all'onchange attributo HTML).
+
+**#4 BUG α.143: `/jobs/api` inesistente**:
+- ROOT CAUSE: modal nuova fattura usava endpoint `/jobs/api` che non esiste. Endpoint corretto: `/planning/api/jobs`. Cascade job→JCL non funzionava.
+- Fix: sostituito endpoint.
+
+**#5 NC senza data permane banner**:
+- DB check: 0 invoice attualmente senza issue_date nel DB demo. Banner non appare a meno che count > 0.
+- Banner reso più dettagliato: lista primi 10 IDs + link cliccabile `/finance#section-invoices` per correggere direttamente.
+
+**Smoke**: render cashflow.html, endpoint `/planning/api/jobs` esiste in routes.
+
+---
+
 ## v3.5.0-alpha.143 — Fatturazione: crea fattura ampliato + acconti visibili (17 mag 2026 pomeriggio)
 
 **Crea fattura modal**: ampliato con dropdown cliente/progetto/quotazione/job/JCL (cascade).

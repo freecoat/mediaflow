@@ -1802,7 +1802,7 @@ async function _ensureInvCascadeData() {
     [_invAllProjects, _invAllQuotes, _invAllJobs] = await Promise.all([
       api('GET', '/projects/api').catch(() => []),
       api('GET', '/quotes/api').catch(() => []),
-      api('GET', '/jobs/api').catch(() => []),
+      api('GET', '/planning/api/jobs').catch(() => []),
     ]);
   } catch (e) { /* silent */ }
 }

@@ -8,6 +8,17 @@
 
 ## Versione corrente
 
+**v3.5.0-alpha.143.1** — 17 maggio 2026 pomeriggio tarda — HOTFIX cashflow filtri + anni dup
+
+Matteo segnala α.142 NON risolti + 1 nuovo bug:
+- **Anni duplicati** select: `initYearSelect()` chiamato 2 volte. Fix: guard idempotente + rimossa doppia chiamata.
+- **Filtri cli/proj non funzionanti**: MFAutocomplete → sostituito con `<select>` nativo. Auto-filter progetti per cliente.
+- **Anno onchange**: addEventListener esplicito + log.
+- **`/jobs/api` inesistente** α.143 modal fattura → fix `/planning/api/jobs`.
+- **NC banner**: link cliccabile + lista primi 10 ID. DB demo: 0 invoice senza date (banner non appare se count=0).
+
+## (versione precedente)
+
 **v3.5.0-alpha.143** — 17 maggio 2026 pomeriggio — Fatturazione: crea fattura ampliato + acconti visibili
 
 **Crea fattura**: modal con cascade cliente→progetto→quote→job→JCL. Force checkbox se senza link strutturato (400 sconsigliato).
