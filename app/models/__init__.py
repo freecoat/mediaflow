@@ -13,6 +13,7 @@ from app.models.models import (
     TimePunch, PunchKind,
     Timesheet, Expense, Invoice, InvoiceLine, InvoiceStatus, InvoiceKind, InvoicePayment,
     AdvancePayment, AdvancePaymentConsumption, AdvancePaymentStatus,
+    AdvancePaymentAllocation,
     AdvanceDueAnchor, QuoteAdvanceSchedule, QuoteAdvanceAllocation,
     FXRate,
     Supplier, SupplierInvoice, SupplierInvoiceStatus, SupplierInvoicePayment,

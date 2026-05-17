@@ -8,6 +8,31 @@
 
 ## Versione corrente
 
+**v3.5.0-alpha.144** — 17 maggio 2026 pomeriggio tarda — Workflow acconti: hook converti quote→job
+
+Step 2/4 revisione architetturale acconti (piano α.139). Hook al converti quote→job materializza schedule → AP(pending) + alloc + Notification admin.
+
+**Modelli**:
+- `AdvancePaymentAllocation` M:N AP↔JCL (foundation CR fill mode α.145).
+- AP esteso: `invoice_id` NULLABLE (SQLite table rebuild runtime), `quote_advance_schedule_id` (origine), `scheduled_due_date`, `label`.
+
+**Servizio `advance_schedule_to_payment.materialize_schedules`**:
+- Idempotente (skip se `quote_advance_schedule_id` già materializzato).
+- Compute due_date da anchor (4 opzioni: quote_approved/project_start/specific_date/milestone).
+- Mappa QuoteLine→JCL via JCL.quote_line_id.
+- Notification admin/manager con body completo + link `/finance#section-invoices`.
+
+**Hook `_create_job_from_quote`** chiama materialize fail-soft post-flush.
+
+**Smoke E2E**: Quote 47 + schedule 30% + 2 alloc → 2 AP pending €43k cad. + 2 alloc cad. + 4 notify ✓. Re-run idempotente skip ✓.
+
+**Backlog α.145+**:
+- UI /finance "Bozze acconti" + workflow conferma/emit (deprecazione modal CR)
+- CR fill mode (Coperto/Maturato/Drift per JCL)
+- F29 i18n sweep, OAuth, cross-currency aggregati
+
+## (versione precedente)
+
 **v3.5.0-alpha.143.1** — 17 maggio 2026 pomeriggio tarda — HOTFIX cashflow filtri + anni dup
 
 Matteo segnala α.142 NON risolti + 1 nuovo bug:

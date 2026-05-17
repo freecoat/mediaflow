@@ -725,6 +725,64 @@ def _auto_migrate_columns():
                 if col not in qcols:
                     print(f"[auto-migrate] quotes.{col} mancante -> ALTER TABLE")
                     conn.execute(text(f"ALTER TABLE quotes ADD COLUMN {col} {ddl}"))
+    # v3.5.0-alpha.144 — AdvancePayment: workflow stateful (pending al converti
+    # quote→job) richiede invoice_id NULLABLE + nuovi campi origine schedule.
+    if "advance_payments" in insp.get_table_names():
+        apcols_info = insp.get_columns("advance_payments")
+        apcols = {c["name"] for c in apcols_info}
+        ap_alter = [
+            ("quote_advance_schedule_id", "INTEGER NULL REFERENCES quote_advance_schedules(id)"),
+            ("scheduled_due_date", "DATE NULL"),
+            ("label", "VARCHAR(120) NULL"),
+        ]
+        with engine.begin() as conn:
+            for col, ddl in ap_alter:
+                if col not in apcols:
+                    print(f"[auto-migrate] advance_payments.{col} mancante -> ALTER TABLE")
+                    conn.execute(text(f"ALTER TABLE advance_payments ADD COLUMN {col} {ddl}"))
+        # v3.5.0-alpha.144 — invoice_id era NOT NULL UNIQUE in α.136. Workflow
+        # nuovo richiede NULLABLE (AP pending non ha ancora Invoice). SQLite
+        # non supporta ALTER COLUMN → rebuild tabella se la colonna è ancora NOT NULL.
+        inv_col = next((c for c in apcols_info if c["name"] == "invoice_id"), None)
+        if inv_col is not None and not inv_col.get("nullable", True):
+            print("[auto-migrate] advance_payments.invoice_id: rebuild table per NULLABLE")
+            with engine.begin() as conn:
+                # Verifica esistenza tabella temp da rebuild precedente fallito
+                conn.execute(text("DROP TABLE IF EXISTS _ap_new"))
+                conn.execute(text("""
+                    CREATE TABLE _ap_new (
+                      id INTEGER PRIMARY KEY,
+                      tenant_id INTEGER NOT NULL DEFAULT 1 REFERENCES tenants(id),
+                      project_id INTEGER NOT NULL REFERENCES projects(id),
+                      invoice_id INTEGER NULL REFERENCES invoices(id),
+                      amount REAL NOT NULL DEFAULT 0,
+                      balance_remaining REAL NOT NULL DEFAULT 0,
+                      status VARCHAR(16) NOT NULL DEFAULT 'pending',
+                      quote_advance_schedule_id INTEGER NULL REFERENCES quote_advance_schedules(id),
+                      scheduled_due_date DATE NULL,
+                      label VARCHAR(120) NULL,
+                      notes TEXT NULL,
+                      created_by_user_id INTEGER NULL REFERENCES users(id),
+                      created_at DATETIME
+                    )
+                """))
+                conn.execute(text("""
+                    INSERT INTO _ap_new (id, tenant_id, project_id, invoice_id, amount,
+                      balance_remaining, status, quote_advance_schedule_id,
+                      scheduled_due_date, label, notes, created_by_user_id, created_at)
+                    SELECT id, tenant_id, project_id, invoice_id, amount,
+                      balance_remaining, status, quote_advance_schedule_id,
+                      scheduled_due_date, label, notes, created_by_user_id, created_at
+                    FROM advance_payments
+                """))
+                conn.execute(text("DROP TABLE advance_payments"))
+                conn.execute(text("ALTER TABLE _ap_new RENAME TO advance_payments"))
+                conn.execute(text("CREATE INDEX ix_advance_payments_tenant_id ON advance_payments(tenant_id)"))
+                conn.execute(text("CREATE INDEX ix_advance_payments_project_id ON advance_payments(project_id)"))
+                conn.execute(text("CREATE INDEX ix_advance_payments_invoice_id ON advance_payments(invoice_id)"))
+                conn.execute(text("CREATE INDEX ix_advance_payments_status ON advance_payments(status)"))
+                conn.execute(text("CREATE INDEX ix_advance_payments_quote_advance_schedule_id ON advance_payments(quote_advance_schedule_id)"))
+            print("[auto-migrate] advance_payments rebuilt: invoice_id NULLABLE")
 
     # v3.5.0-alpha.111 — Project: billing_terms_days (scadenza gg dal cliente)
     if "projects" in insp.get_table_names():
@@ -1130,7 +1188,7 @@ async def lifespan(app: FastAPI):
     yield
 
 
-app = FastAPI(title="MediaFlow", version="3.5.0-alpha.143.1", lifespan=lifespan)
+app = FastAPI(title="MediaFlow", version="3.5.0-alpha.144", lifespan=lifespan)
 
 BASE_DIR = Path(__file__).parent
 app.mount("/static", StaticFiles(directory=BASE_DIR / "static"), name="static")

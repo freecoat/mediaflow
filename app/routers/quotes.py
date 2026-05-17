@@ -67,18 +67,30 @@ def _next_job_code(db: Session, project: Project) -> str:
     return f"{base}-J{n}"
 
 
-def _create_job_from_quote(db: Session, q: Quote) -> Job:
+def _create_job_from_quote(db: Session, q: Quote, user_id: Optional[int] = None) -> Job:
     """Crea il Job dalla Quote approvata + JobCostLine da ogni QuoteLine.
 
     Eredita titolo dal progetto (non dalla quote: spesso coincidono ma il
     riferimento canonico è il progetto). Codice auto-generato {PROJECT}-J{N}.
     Idempotenza: se la quote ha già `q.job` ritorna quello.
+
+    v3.5.0-alpha.144 — Hook materializzazione QuoteAdvanceSchedule → AdvancePayment(pending)
+    + AdvancePaymentAllocation (mappa QuoteLine→JCL) + Notification admin/manager.
+    Idempotente: skip schedule già materializzati.
     """
     if q.job:
         # Job già collegato: se cancelled lo ri-attivo (riapprovazione della stessa quote
         # dopo un rollback). Se in qualunque altro stato lo ritorno così com'è.
         if q.job.status == JobStatus.cancelled:
             q.job.status = JobStatus.approved
+        # v3.5.0-alpha.144 — Anche su re-converti, materializza schedule (idempotente)
+        try:
+            from app.services.advance_schedule_to_payment import materialize_schedules
+            db.flush()
+            materialize_schedules(db, q, q.job, user_id, current_tenant_id())
+        except Exception as e:
+            import logging
+            logging.getLogger(__name__).exception(f"materialize_schedules failed (re-converti): {e}")
         return q.job
     project = q.project
     if not project:
@@ -107,6 +119,23 @@ def _create_job_from_quote(db: Session, q: Quote) -> Job:
             total_quoted=line.total,
             total_expected=line.total,
         ))
+    db.flush()  # Necessario: JCL.id servono al materialize_schedules
+
+    # v3.5.0-alpha.144 — Materializza AdvancePayment(pending) da schedule quote.
+    # Fail-soft: errori loggati, non bloccano la conversione quote→job.
+    try:
+        from app.services.advance_schedule_to_payment import materialize_schedules
+        result = materialize_schedules(db, q, job, user_id, current_tenant_id())
+        if result["created"]:
+            import logging
+            logging.getLogger(__name__).info(
+                f"[quote→job] materialized {len(result['created'])} AdvancePayment(pending) "
+                f"from quote {q.number} (notified {result['notified']} users)"
+            )
+    except Exception as e:
+        import logging
+        logging.getLogger(__name__).exception(f"materialize_schedules failed: {e}")
+
     return job
 
 

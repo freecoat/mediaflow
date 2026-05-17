@@ -1,5 +1,55 @@
 # MediaFlow — Changelog
 
+## v3.5.0-alpha.144 — Workflow acconti: hook converti quote→job auto-create AP(pending) (17 mag 2026 pomeriggio tarda)
+
+Step 2/4 della revisione architetturale acconti (piano α.139). Hook al converti quote→job materializza QuoteAdvanceSchedule → AdvancePayment(pending) + AdvancePaymentAllocation (mappa QuoteLine→JCL) + Notification admin/manager.
+
+**Modello nuovo `AdvancePaymentAllocation`** (M:N AP↔JCL):
+- `advance_payment_id`, `job_cost_line_id`, `pct` (0..1), `amount` (snapshot).
+- UniqueConstraint coppia.
+- Foundation per α.145 CR "fill mode" (Coperto/Maturato/Drift per JCL).
+
+**`AdvancePayment` esteso**:
+- `invoice_id` ora NULLABLE (AP pending nasce senza fattura). SQLite rebuild table runtime in `_auto_migrate_columns` (CREATE _ap_new + COPY + DROP+RENAME).
+- `quote_advance_schedule_id` (FK origine, NULL per AP α.136 manuali).
+- `scheduled_due_date` (date, computata da anchor+offset).
+- `label` (snapshot da schedule).
+- Relationship `allocations` con cascade delete.
+
+**Servizio `app/services/advance_schedule_to_payment.py`**:
+- `materialize_schedules(db, quote, job, user_id, tenant_id)`:
+  - Per ogni QuoteAdvanceSchedule della quote → AP(pending) idempotente (skip se `quote_advance_schedule_id` già esiste).
+  - Amount: `amount_fixed` prevale su `pct × quote_total_after_discount`.
+  - Due date computata da `due_anchor` (4 opzioni):
+    - quote_approved → today + offset
+    - project_start → job.start_date + offset (fallback today)
+    - specific_date → schedule.due_date
+    - milestone → None (futuro)
+  - AdvancePaymentAllocation: risolve QuoteAdvanceAllocation.quote_line_id → JCL.id via `JCL.quote_line_id`.
+  - Notification a admin/manager con body composto: quote+job+lista rate+due+importi+link `/finance#section-invoices`.
+- Fail-soft: errori loggati ma non bloccano conversione quote→job.
+
+**Hook `_create_job_from_quote`** (quotes.py):
+- Parametro nuovo `user_id` opzionale.
+- Dopo job+JCL creati + db.flush, chiama `materialize_schedules`.
+- Try/except fail-soft.
+- Anche su re-converti (job già esistente): re-invoca materialize (idempotente skippa).
+
+**Smoke E2E**:
+- Quote 47 Q-2024-0018 (total €143'377) + 1 schedule 30% pct + 2 allocations 50% su 2 QuoteLine
+- materialize → 2 AP pending (€43'013 cad.) + 2 allocations cad. + 4 utenti admin/manager notificati ✓
+- Re-run idempotente: created 0, skipped 2 ✓
+- Cleanup ✓
+
+**Backlog α.145+**:
+- UI /finance "Bozze acconti" + workflow conferma + emit invoice acconto (deprecazione modal /cost-report)
+- CR fill mode: per JCL coperta mostra "Coperto da acconto: €X · Maturato: €Y · Drift: €Z" + warning sforamento
+- F29 i18n sweep TUTTA UI
+- OAuth integrazioni
+- Cross-currency cost-report aggregati
+
+---
+
 ## v3.5.0-alpha.143.1 — HOTFIX cashflow filtri + anni dup (17 mag 2026 pomeriggio tarda)
 
 Matteo segnala 4 problemi non risolti da α.142 + 1 nuovo bug introdotto.

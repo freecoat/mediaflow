@@ -1836,7 +1836,10 @@ class AdvancePayment(Base):
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     tenant_id: Mapped[int] = mapped_column(ForeignKey("tenants.id"), default=1, index=True)
     project_id: Mapped[int] = mapped_column(ForeignKey("projects.id"), index=True)
-    invoice_id: Mapped[int] = mapped_column(ForeignKey("invoices.id"), unique=True, index=True)
+    # v3.5.0-alpha.144 — invoice_id NULLABLE: AP nasce in stato pending al
+    # converti quote→job (senza invoice). Invoice creata in α.141+ workflow
+    # quando admin emette fattura acconto. Per AP pre-α.144 (α.136) resta univocità.
+    invoice_id: Mapped[Optional[int]] = mapped_column(ForeignKey("invoices.id"), nullable=True, index=True)
     # Importo imponibile dell'acconto (= Invoice.subtotal della invoice advance).
     # Snapshot al momento creazione: cambi successivi a Invoice NON propagano qui.
     amount: Mapped[float] = mapped_column(Float, default=0.0)
@@ -1846,13 +1849,52 @@ class AdvancePayment(Base):
     status: Mapped[AdvancePaymentStatus] = mapped_column(
         SAEnum(AdvancePaymentStatus), default=AdvancePaymentStatus.open, index=True
     )
+    # v3.5.0-alpha.144 — FK al QuoteAdvanceSchedule da cui è stato materializzato
+    # (NULL per AP creati manualmente α.136). Permette tracking origine + dedup.
+    quote_advance_schedule_id: Mapped[Optional[int]] = mapped_column(
+        ForeignKey("quote_advance_schedules.id"), nullable=True, index=True
+    )
+    # v3.5.0-alpha.144 — Data scadenza prevista (computata da anchor+offset al
+    # materialize quote→job). NULL = no scadenza (es. milestone non risolta).
+    scheduled_due_date: Mapped[Optional[date]] = mapped_column(Date, nullable=True)
+    label: Mapped[Optional[str]] = mapped_column(String(120), nullable=True)
     notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     created_by_user_id: Mapped[Optional[int]] = mapped_column(ForeignKey("users.id"), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
     project: Mapped["Project"] = relationship(foreign_keys=[project_id])
-    invoice: Mapped["Invoice"] = relationship(foreign_keys=[invoice_id])
+    invoice: Mapped[Optional["Invoice"]] = relationship(foreign_keys=[invoice_id])
     consumptions: Mapped[List["AdvancePaymentConsumption"]] = relationship(
         back_populates="advance_payment", cascade="all, delete-orphan"
+    )
+    # v3.5.0-alpha.144 — Allocazioni AP→JCL (M:N) per "fill mode" cost report.
+    allocations: Mapped[List["AdvancePaymentAllocation"]] = relationship(
+        back_populates="advance_payment", cascade="all, delete-orphan"
+    )
+
+
+# v3.5.0-alpha.144 — Allocazione M:N AP↔JobCostLine.
+# Generata al materialize_schedules (converti quote→job) copiando da
+# QuoteAdvanceAllocation: per ogni allocation alla QuoteLine sorgente, risolve
+# la JobCostLine corrispondente (mapping JCL.quote_line_id == QuoteLine.id).
+# Permette al cost report "fill mode" di mostrare "Coperto da acconto: €X"
+# per ogni JCL (Σ AP_allocation.amount per JCL).
+class AdvancePaymentAllocation(Base):
+    __tablename__ = "advance_payment_allocations"
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    advance_payment_id: Mapped[int] = mapped_column(
+        ForeignKey("advance_payments.id", ondelete="CASCADE"), index=True
+    )
+    job_cost_line_id: Mapped[int] = mapped_column(
+        ForeignKey("job_cost_lines.id", ondelete="CASCADE"), index=True
+    )
+    # Quota % della JCL coperta da questo AP (0..1). Default 1.0 = copre tutta.
+    pct: Mapped[float] = mapped_column(Float, default=1.0)
+    # Importo derivato (snapshot al materialize). Ricalcolabile come AP.amount × pct.
+    amount: Mapped[float] = mapped_column(Float, default=0.0)
+    advance_payment: Mapped["AdvancePayment"] = relationship(back_populates="allocations")
+    job_cost_line: Mapped["JobCostLine"] = relationship(foreign_keys=[job_cost_line_id])
+    __table_args__ = (
+        UniqueConstraint("advance_payment_id", "job_cost_line_id", name="uq_ap_alloc"),
     )
 
 
