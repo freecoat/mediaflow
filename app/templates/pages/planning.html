@@ -4884,6 +4884,10 @@ async function _doRenderTimeline(preserveWindow=false) {
     stack: !_lightMode,
     showCurrentTime: true,
     zoomable: true,
+    // v3.5.0-alpha.162 — Fix conflitto zoom+scroll su wheel rotella.
+    // Pre-α.162: wheel default = zoom, ma horizontalScroll:true reagiva pure
+    // → simultaneo zoom + scroll. Ora zoom richiede Ctrl, wheel solo = scroll naturale.
+    zoomKey: 'ctrlKey',
     moveable: true, // drag pan abilitato (preferenza Matteo). Create via Shift+drag.
     horizontalScroll: true,
     multiselect: true, // E4: Ctrl+click per multi-select

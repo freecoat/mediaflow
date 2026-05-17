@@ -1,5 +1,20 @@
 # MediaFlow — Changelog
 
+## v3.5.0-alpha.162 — Timeline planning: fix conflitto zoom+scroll su wheel (17 mag 2026 notte)
+
+Bug: in /planning timeline risorse, rotella mouse triggerava ZOOM (asse tempo) E SCROLL (orizzontale) contemporaneamente — comportamento illeggibile.
+
+ROOT CAUSE: vis-timeline config aveva `zoomable: true` + `horizontalScroll: true` senza `zoomKey`. Wheel default → entrambi reagivano.
+
+Fix: `zoomKey: 'ctrlKey'` aggiunto. Pattern standard.
+
+**Comportamento ora**:
+- Wheel solo → scroll orizzontale naturale (pan timeline)
+- Ctrl+Wheel → zoom asse tempo
+- Shift+Wheel → scroll verticale gruppi (preesistente)
+
+---
+
 ## v3.5.0-alpha.161 — Colonna Fatturato include acconto pagato (billed_total unificato) (17 mag 2026 notte)
 
 Risposta domanda Matteo: "perché non vedo l'acconto nella cifra fatturata?".
