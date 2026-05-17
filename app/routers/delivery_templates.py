@@ -19,7 +19,7 @@ from fastapi.responses import HTMLResponse
 from sqlalchemy.orm import Session
 from app.database import get_db
 from app.models import DeliveryTemplate, PriceItem, PriceCategory
-from app.services.rbac import requires_permission
+from app.services.rbac import requires_permission, current_user_optional
 from app.context import current_tenant_id
 
 router = APIRouter(prefix="/delivery-templates", tags=["delivery-templates"])
@@ -176,6 +176,111 @@ async def list_sample_capitolati():
             "ext": p.suffix.lower().lstrip("."),
         })
     return {"samples": out}
+
+
+@router.post("/api/parse-batch-pending", dependencies=[RequireEditSettings])
+async def parse_batch_pending(request: Request, db: Session = Depends(get_db),
+                              auto_save: bool = False):
+    """v3.5.0-alpha.154 — Parse batch di tutti i capitolati pending nel corpus.
+    Pending = file in docs/capitolati_esempio/ senza DeliveryTemplate creato
+    (no match su source_document_name). Idempotente: skippa già parsati.
+
+    Param `auto_save=True` salva i DeliveryTemplate generati. Default False
+    (dry-run: ritorna risultati senza persisterli)."""
+    from pathlib import Path as _Path
+    proj_root = _Path(__file__).resolve().parents[2]
+    samples_dir = (proj_root / "docs" / "capitolati_esempio").resolve()
+    if not samples_dir.is_dir():
+        return {"processed": [], "skipped": [], "errors": []}
+    from app.services.deliverables_parser import (
+        extract_text_from_file, parse_delivery_template,
+    )
+    # Lista file + esclude quelli già parsati
+    existing_names = {
+        t.source_document_name for t in db.query(DeliveryTemplate.source_document_name).filter(
+            DeliveryTemplate.source_document_name.isnot(None)
+        ).all() if t.source_document_name
+    }
+    processed = []
+    skipped = []
+    errors = []
+    user = current_user_optional(request)
+    for fpath in sorted(samples_dir.iterdir()):
+        if not fpath.is_file():
+            continue
+        if fpath.name in existing_names:
+            skipped.append({"file": fpath.name, "reason": "già parsato"})
+            continue
+        try:
+            content = fpath.read_bytes()
+            if len(content) == 0:
+                errors.append({"file": fpath.name, "error": "file vuoto"})
+                continue
+            text = extract_text_from_file(content, fpath.name)
+            if not text or len(text.strip()) < 20:
+                errors.append({"file": fpath.name, "error": "testo estratto troppo breve"})
+                continue
+            result = parse_delivery_template(text)
+            if not result:
+                errors.append({"file": fpath.name, "error": "parser AI ritornato vuoto"})
+                continue
+            result["source_document_name"] = fpath.name
+            if auto_save:
+                # Inline save (no helper esterno). Replica pattern create_template.
+                code = (result.get("code") or "").strip().upper() or f"AI-{fpath.stem[:30]}".upper()
+                name = (result.get("name") or "").strip() or fpath.stem
+                # Skip se code esiste già (idempotente)
+                existing_code = db.query(DeliveryTemplate).filter(
+                    DeliveryTemplate.tenant_id == current_tenant_id(),
+                    DeliveryTemplate.code == code,
+                ).first()
+                if existing_code:
+                    skipped.append({"file": fpath.name, "reason": f"code '{code}' già esistente"})
+                    continue
+                try:
+                    tpl = DeliveryTemplate(
+                        tenant_id=current_tenant_id(),
+                        code=code, name=name,
+                        broadcaster=result.get("broadcaster"),
+                        description=result.get("description"),
+                        version=result.get("version", "1.0"),
+                        video_specs=result.get("video_specs"),
+                        audio_specs=result.get("audio_specs"),
+                        text_specs=result.get("text_specs"),
+                        head_format=result.get("head_format"),
+                        textless_format=result.get("textless_format"),
+                        naming_convention=result.get("naming_convention"),
+                        archive_specs=result.get("archive_specs"),
+                        metadata_requirements=result.get("metadata_requirements"),
+                        suggested_items=result.get("suggested_items"),
+                        source_document_name=fpath.name,
+                        ai_generated=True,
+                        ai_confidence=result.get("ai_confidence"),
+                    )
+                    db.add(tpl)
+                    db.commit()
+                    db.refresh(tpl)
+                    processed.append({"file": fpath.name, "template_id": tpl.id,
+                                      "code": code, "name": name,
+                                      "confidence": result.get("ai_confidence")})
+                except Exception as e:
+                    db.rollback()
+                    errors.append({"file": fpath.name, "error": f"save failed: {str(e)[:160]}"})
+            else:
+                processed.append({"file": fpath.name,
+                                  "confidence": result.get("ai_confidence"),
+                                  "code": result.get("code"),
+                                  "name": result.get("name"),
+                                  "dry_run": True})
+        except Exception as e:
+            errors.append({"file": fpath.name, "error": str(e)[:200]})
+    return {
+        "processed": processed,
+        "skipped": skipped,
+        "errors": errors,
+        "auto_save": auto_save,
+        "summary": f"{len(processed)} processati, {len(skipped)} skip, {len(errors)} errori",
+    }
 
 
 @router.post("/api/parse-sample", dependencies=[RequireEditSettings])

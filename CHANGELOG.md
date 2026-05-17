@@ -1,5 +1,35 @@
 # MediaFlow — Changelog
 
+## v3.5.0-alpha.154 — Parse batch capitolati pendenti (17 mag 2026 sera)
+
+Endpoint nuovo per parse batch del corpus capitolati esempio (17 file in `docs/capitolati_esempio/`).
+
+**`POST /delivery-templates/api/parse-batch-pending`**:
+- Param `auto_save` (bool, default False) — dry-run vs persistenza.
+- Itera `docs/capitolati_esempio/`, skippa file già parsati (matching su `source_document_name`).
+- Per ogni file pending: extract_text + parse_delivery_template (AI provider).
+- Se auto_save=True: crea DeliveryTemplate inline (code skip se già esistente).
+- Idempotente: re-run skippa già processati.
+
+**Response**:
+- `processed[]`: file + template_id (se saved) + code/name + confidence
+- `skipped[]`: file + reason ("già parsato" o "code esistente")
+- `errors[]`: file + error (extract/parse/save fail)
+- `summary` stringa "{n} processati, {s} skip, {e} errori"
+
+**Uso**:
+- Dry-run: `POST /delivery-templates/api/parse-batch-pending` (default)
+- Salva: `POST /delivery-templates/api/parse-batch-pending?auto_save=true`
+
+Nota: richiede AI provider attivo (config /settings#ai). Senza AI configurata, gli errori riportano "parser AI ritornato vuoto".
+
+**Backlog α.155+**:
+- UI bottone "🤖 Parse tutti pendenti" in /delivery-templates con progress + summary
+- Automazione portali consegne
+- UI tab Integrazioni OAuth /settings
+
+---
+
 ## v3.5.0-alpha.153 — Cross-currency cost-report aggregati (17 mag 2026 sera)
 
 Foundation per aggregati cross-currency in cost-report. Pre-α.153, totali progetto con quote in USD non erano sommabili a base EUR (mostrava valori "raw" senza conversione).

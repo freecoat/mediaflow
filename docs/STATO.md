@@ -8,6 +8,19 @@
 
 ## Versione corrente
 
+**v3.5.0-alpha.154** — 17 maggio 2026 sera — Parse batch capitolati pendenti
+
+Endpoint `POST /delivery-templates/api/parse-batch-pending?auto_save=true|false`.
+Itera corpus 17 file, skippa già parsati, AI parse + auto-save opzionale.
+Idempotente. Response: processed[], skipped[], errors[], summary.
+
+Backlog α.155+:
+- UI bottone batch parse + progress
+- Automazione portali consegne
+- UI Integrazioni OAuth
+
+## (versione precedente)
+
 **v3.5.0-alpha.153** — 17 maggio 2026 sera — Cross-currency cost-report aggregati
 
 Cost report list endpoint esteso con `quote_currency`, `quote_fx_rate_to_base`, `base_currency`, `total_quoted_base`, `total_accrued_base`. Pre-fetch tenant.default_currency.
