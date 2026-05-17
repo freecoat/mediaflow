@@ -13,37 +13,37 @@
 <!-- ── Stat cards ─────────────────────────────────────────── -->
 <div class="stat-grid" id="stat-grid">
   <div class="stat-card stat-card-accent">
-    <div class="stat-label">Job attivi</div>
+    <div class="stat-label" data-i18n="dash.stat.jobs">Job attivi</div>
     <div class="stat-value stat-accent" id="stat-jobs">—</div>
-    <div class="stat-sub">in corso questo mese</div>
+    <div class="stat-sub" data-i18n="dash.stat.jobs.sub">in corso questo mese</div>
     <div class="kpi-bar" id="kpi-bar-jobs" title="Distribuzione job per stato"></div>
   </div>
   <div class="stat-card stat-card-purple">
-    <div class="stat-label">Risorse</div>
+    <div class="stat-label" data-i18n="dash.stat.resources">Risorse</div>
     <div class="stat-value" id="stat-resources">—</div>
-    <div class="stat-sub">persone e attrezzature</div>
+    <div class="stat-sub" data-i18n="dash.stat.resources.sub">persone e attrezzature</div>
     <div class="kpi-bar" id="kpi-bar-resources" title="Capacity settimana corrente"></div>
   </div>
   <div class="stat-card stat-card-green">
-    <div class="stat-label">Fatturato (anno)</div>
+    <div class="stat-label" data-i18n="dash.stat.revenue">Fatturato (anno)</div>
     <div class="stat-value" id="stat-revenue">—</div>
-    <div class="stat-sub">fatture emesse/pagate</div>
+    <div class="stat-sub" data-i18n="dash.stat.revenue.sub">fatture emesse/pagate</div>
   </div>
   <div class="stat-card stat-card-amber">
-    <div class="stat-label">Asset in libreria</div>
+    <div class="stat-label" data-i18n="dash.stat.assets">Asset in libreria</div>
     <div class="stat-value" id="stat-assets">—</div>
-    <div class="stat-sub">video, audio, immagini</div>
+    <div class="stat-sub" data-i18n="dash.stat.assets.sub">video, audio, immagini</div>
   </div>
 </div>
 
 <!-- ── Capacity settimanale (v3.5.0-alpha.66.19) ─────────────── -->
 <div class="card capacity-week-card" style="margin-bottom:20px;">
   <div class="card-header">
-    <span class="card-title">Capacità settimana</span>
+    <span class="card-title" data-i18n="dash.capacity_week">Capacità settimana</span>
     <span id="cw-range" style="color:var(--text3); font-size:12px;"></span>
   </div>
   <div id="cw-strip" class="cw-strip">
-    <div class="text-muted text-sm" style="padding:20px; text-align:center;">Caricamento…</div>
+    <div class="text-muted text-sm" style="padding:20px; text-align:center;" data-i18n="misc.loading">Caricamento…</div>
   </div>
 </div>
 
@@ -53,21 +53,21 @@
   <!-- Job recenti -->
   <div class="card">
     <div class="card-header">
-      <span class="card-title">Job recenti</span>
-      <a href="/planning" class="btn btn-ghost btn-sm">Vedi tutti</a>
+      <span class="card-title" data-i18n="dash.recent_jobs">Job recenti</span>
+      <a href="/planning" class="btn btn-ghost btn-sm" data-i18n="dash.see_all">Vedi tutti</a>
     </div>
     <div class="table-wrap">
       <table>
         <thead>
           <tr>
-            <th>Codice</th>
-            <th>Titolo</th>
-            <th>Cliente</th>
-            <th>Stato</th>
+            <th data-i18n="col.code">Codice</th>
+            <th data-i18n="col.title">Titolo</th>
+            <th data-i18n="col.client">Cliente</th>
+            <th data-i18n="col.status">Stato</th>
           </tr>
         </thead>
         <tbody id="jobs-tbody">
-          <tr><td colspan="4" class="text-muted" style="text-align:center;padding:20px;">Caricamento…</td></tr>
+          <tr><td colspan="4" class="text-muted" style="text-align:center;padding:20px;" data-i18n="misc.loading">Caricamento…</td></tr>
         </tbody>
       </table>
     </div>
@@ -76,11 +76,11 @@
   <!-- P&L anno corrente -->
   <div class="card">
     <div class="card-header">
-      <span class="card-title">P&amp;L <span id="pl-year"></span></span>
-      <a href="/finance" class="btn btn-ghost btn-sm">Dettaglio</a>
+      <span class="card-title"><span data-i18n="dash.pl_year">P&amp;L</span> <span id="pl-year"></span></span>
+      <a href="/finance" class="btn btn-ghost btn-sm" data-i18n="dash.detail">Dettaglio</a>
     </div>
     <div id="pl-content" style="padding:8px 0;">
-      <div class="text-muted text-sm">Caricamento…</div>
+      <div class="text-muted text-sm" data-i18n="misc.loading">Caricamento…</div>
     </div>
   </div>
 
@@ -89,8 +89,8 @@
 <!-- ── I miei booking di oggi (v3.4.32, visibile se utente ha resource) ── -->
 <div class="card mt-3" id="my-bookings-card" style="display:none;">
   <div class="card-header">
-    <span class="card-title">I miei booking di oggi</span>
-    <a href="/planning/?view=todo" class="btn btn-ghost btn-sm">Vai a "Le mie"</a>
+    <span class="card-title" data-i18n="dash.my_bookings">I miei booking di oggi</span>
+    <a href="/planning/?view=todo" class="btn btn-ghost btn-sm" data-i18n="dash.go_my_tasks">Vai a "Le mie"</a>
   </div>
   <div id="my-bookings-host" style="padding:8px;"></div>
 </div>
@@ -99,20 +99,20 @@
 <div class="grid-2 mt-3" style="align-items:start;">
   <div class="card">
     <div class="card-header">
-      <span class="card-title">Prossime scadenze · 14 gg</span>
-      <a href="/planning" class="btn btn-ghost btn-sm">Tutti i job</a>
+      <span class="card-title" data-i18n="dash.upcoming">Prossime scadenze · 14 gg</span>
+      <a href="/planning" class="btn btn-ghost btn-sm" data-i18n="dash.all_jobs">Tutti i job</a>
     </div>
     <div id="dl-host" class="dl-list" style="padding:8px 0;">
-      <div class="text-muted text-sm" style="padding:14px; text-align:center;">Caricamento…</div>
+      <div class="text-muted text-sm" style="padding:14px; text-align:center;" data-i18n="misc.loading">Caricamento…</div>
     </div>
   </div>
   <div class="card">
     <div class="card-header">
-      <span class="card-title">Margine per reparto · <span id="dr-year"></span></span>
-      <a href="/cost-report" class="btn btn-ghost btn-sm">Cost report</a>
+      <span class="card-title"><span data-i18n="dash.margin_dept">Margine per reparto</span> · <span id="dr-year"></span></span>
+      <a href="/cost-report" class="btn btn-ghost btn-sm" data-i18n="dash.cost_report">Cost report</a>
     </div>
     <div id="dr-host" class="dr-list" style="padding:8px 0;">
-      <div class="text-muted text-sm" style="padding:14px; text-align:center;">Caricamento…</div>
+      <div class="text-muted text-sm" style="padding:14px; text-align:center;" data-i18n="misc.loading">Caricamento…</div>
     </div>
   </div>
 </div>
@@ -120,8 +120,8 @@
 <!-- ── Booking di oggi (overview manager/admin) ──────────────── -->
 <div class="card mt-3">
   <div class="card-header">
-    <span class="card-title">Booking di oggi · tutti</span>
-    <a href="/planning/?view=calendar" class="btn btn-ghost btn-sm">Vai al calendario</a>
+    <span class="card-title" data-i18n="dash.today_bookings">Booking di oggi · tutti</span>
+    <a href="/planning/?view=calendar" class="btn btn-ghost btn-sm" data-i18n="dash.go_calendar">Vai al calendario</a>
   </div>
   <div class="table-wrap">
     <table>

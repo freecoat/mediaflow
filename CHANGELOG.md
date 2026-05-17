@@ -1,5 +1,32 @@
 # MediaFlow — Changelog
 
+## v3.5.0-alpha.147 — F29 i18n round 1: dashboard + common keys (17 mag 2026 sera)
+
+Inizio sweep i18n completo (F29 backlog α.132). Round 1: dashboard + chiavi comuni riusabili.
+
+**Dictionary `MF_I18N` esteso** (`app/static/js/i18n.js`):
+- **Dashboard** (20 chiavi): stat cards + sub-labels, card titoli (capacity_week, recent_jobs, my_bookings, upcoming, margin_dept, today_bookings), bottoni (see_all, detail, go_my_tasks, etc).
+- **Column headers comuni** (12 chiavi): col.code/title/client/status/time/amount/date/project/job/description/actions/notes.
+- **Common buttons** (14 chiavi): btn.save/cancel/delete/edit/new/add/confirm/close/search/export/import/filter/reset/refresh/loading.
+- **Status commons** (11 chiavi): status.active/inactive/draft/sent/approved/rejected/expired/cancelled/paid/overdue/completed.
+- **Misc** (2 chiavi): misc.no_data, misc.loading.
+
+**Template dashboard.html**:
+- `data-i18n` su tutte stat cards + card titoli + table headers + "Caricamento…" placeholders.
+- Preserva markup misto (span figli per icone) via primo text node logic.
+
+**Cache buster**: `i18n.js?v=3.5.0-alpha.147` in base.html + login.html.
+
+**Coverage**: ~60 chiavi nuove. Tot dictionary ora ~120 chiavi (incluse sidebar α.133 + dashboard + common).
+
+**Backlog F29 successivi**:
+- Round 2 (α.148): clients + projects + quotes
+- Round 3 (α.149): planning + finance + cost-report
+- Round 4 (α.150): suppliers + resources + departments + settings
+- JS dinamico via `mfT()` helper (toast/render dinamici) — round finale
+
+---
+
 ## v3.5.0-alpha.146 — Workflow acconti Step 4/4: CR fill mode + badge JCL (17 mag 2026 pomeriggio tarda)
 
 Chiusura ciclo acconti. Cost report mostra ora copertura acconti per JCL.

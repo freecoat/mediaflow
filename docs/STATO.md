@@ -8,6 +8,19 @@
 
 ## Versione corrente
 
+**v3.5.0-alpha.147** — 17 maggio 2026 sera — F29 i18n round 1: dashboard + common keys
+
+~60 chiavi i18n nuove (dashboard 20 + col headers 12 + buttons 14 + status 11 + misc).
+Cache buster i18n.js bump 133→147.
+
+Backlog F29:
+- Round 2 (α.148): clients + projects + quotes
+- Round 3 (α.149): planning + finance + cost-report
+- Round 4 (α.150): suppliers + resources + departments + settings
+- JS dinamico (toast/render) via mfT() helper finale
+
+## (versione precedente)
+
 **v3.5.0-alpha.146** — 17 maggio 2026 pomeriggio tarda — Workflow acconti Step 4/4: CR fill mode + badge JCL
 
 Chiusura ciclo acconti Pattern B end-to-end (4 step completati: α.139 termini quote → α.144 hook auto-create → α.145 UI bozze + emit → α.146 fill mode CR).
