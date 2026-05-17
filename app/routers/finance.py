@@ -573,6 +573,35 @@ async def cancel_advance_payment(advance_id: int, db: Session = Depends(get_db))
     return {"id": ap.id, "status": ap.status.value}
 
 
+# ── FX rate (v3.5.0-alpha.137) ─────────────────────────────────────
+
+
+@router.get("/api/fx/{from_ccy}/{to_ccy}")
+async def fx_rate(from_ccy: str, to_ccy: str, refresh: bool = False, db: Session = Depends(get_db)):
+    """Ritorna tasso cambio from→to. Cache 1h, refresh on-demand via ?refresh=true.
+    Provider: Frankfurter (BCE, free, no key). Fail-soft: ritorna 503 se provider down e no cache."""
+    from app.services.fx import get_fx_rate, refresh_fx_rate
+    from_u = (from_ccy or "").upper().strip()
+    to_u = (to_ccy or "").upper().strip()
+    if len(from_u) != 3 or len(to_u) != 3:
+        raise HTTPException(400, "Valuta deve essere codice ISO 4217 (3 caratteri)")
+    rate = (refresh_fx_rate(db, from_u, to_u) if refresh
+            else get_fx_rate(db, from_u, to_u))
+    if rate is None:
+        raise HTTPException(503, f"Provider FX non raggiungibile e cache vuota per {from_u}->{to_u}")
+    # Cerco metadata: fetched_at + provider per UI
+    from app.models import FXRate
+    row = db.query(FXRate).filter(
+        FXRate.from_currency == from_u, FXRate.to_currency == to_u,
+    ).first()
+    return {
+        "from": from_u, "to": to_u, "rate": rate,
+        "fetched_at": row.fetched_at.isoformat() if row and row.fetched_at else None,
+        "provider": row.provider if row else "frankfurter",
+        "same_currency": from_u == to_u,
+    }
+
+
 # ── Report API ────────────────────────────────────────────────────────
 
 @router.get("/api/report/job/{job_id}")

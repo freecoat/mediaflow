@@ -8,6 +8,31 @@
 
 ## Versione corrente
 
+**v3.5.0-alpha.137** — 17 maggio 2026 mattina — Multi-currency Quote + Settings valuta base + FX live (Frankfurter BCE)
+
+Richiesta diretta Matteo: valuta base nelle impostazioni + quotazioni in dollari con conversione live.
+
+**Implementato**:
+- Modello `FXRate` (cache 1h, single row per coppia, UniqueConstraint).
+- Quote estesa: `currency` + `fx_rate_to_base` + `fx_rate_fixed_at`.
+- Servizio `app/services/fx.py` provider Frankfurter (free, no key, fail-soft).
+- Auto-migrate: fx_rates created + quotes ALTER.
+- Endpoint `/finance/api/fx/{from}/{to}` (refresh on-demand).
+- POST/PUT /quotes accettano `currency` + `refresh_fx`. Cambio bloccato post-emissione.
+- UI Settings tab Azienda: dropdown 8 valute.
+- UI Quote editor: card valuta + dropdown live + bottone 🔄 refresh tasso (createElement, no XSS).
+
+**Smoke FX live**: USD→EUR 0.85999, EUR→USD 1.1628, GBP→EUR 1.1488, convert 1000 USD = €859.99 ✓.
+
+**Backlog α.138+**:
+- Acconti Step 2 (scomputo automatico nelle fatture batch successive + closing auto-scompute).
+- F29 i18n sweep TUTTA UI (~500-1000 chiavi IT/EN/FR/DE).
+- Conversione cross-currency in cost-report aggregati (project quote USD vs base EUR).
+- OAuth Gmail/Outlook/Drive/OneDrive.
+- Test parse 14 capitolati restanti.
+
+## (versione precedente)
+
 **v3.5.0-alpha.136** — 17 maggio 2026 mattina — Acconti progetto Step 1 (Pattern B ledger AdvancePayment)
 
 Risposta al gap evidenziato da Matteo dopo α.135: "fattura manuale non si lega a progetto/lavorazione, serve modalità pagamento anticipato nel CR".

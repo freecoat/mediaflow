@@ -345,6 +345,8 @@
       <div class="quote-top-row">
         <div class="card">
           <div class="card-title mb-3">Riepilogo economico</div>
+          <!-- v3.5.0-alpha.137 — Card valuta + tasso (multi-currency quote) -->
+          <div id="quote-currency-host"></div>
           <div id="totals-panel"></div>
         </div>
         <div class="card">
@@ -1707,8 +1709,104 @@ async function openOriginCostReport(jclId) {
   }
 }
 
+// v3.5.0-alpha.137 — Renderer header valuta quote (multi-currency).
+// Mostra card sopra totals-panel. Dropdown editabile in draft, badge readonly
+// post-emissione. Tutti i valori dinamici via textContent (no XSS surface).
+function renderCurrencyHeader() {
+  const q = currentQuote;
+  const host = document.getElementById('quote-currency-host');
+  if (!host) return;
+  host.textContent = '';
+  const ccy = q.currency || 'EUR';
+  const rate = q.fx_rate_to_base || 1.0;
+  const fxAt = q.fx_rate_fixed_at ? new Date(q.fx_rate_fixed_at).toLocaleString('it-IT') : null;
+  const isDraft = (q.status === 'draft');
+  const wrap = document.createElement('div');
+  wrap.style.cssText = 'display:flex; align-items:center; gap:10px; padding:8px 10px; background:var(--bg2); border:1px solid var(--border); border-radius:6px; margin-bottom:10px; font-size:12px;';
+  const lbl = document.createElement('span');
+  lbl.className = 'text-muted';
+  lbl.textContent = 'Valuta:';
+  wrap.appendChild(lbl);
+  if (isDraft) {
+    const sel = document.createElement('select');
+    sel.id = 'q-currency';
+    sel.style.cssText = "background:var(--bg2); border:1px solid var(--border); color:var(--text); border-radius:4px; padding:3px 6px; font-family:'DM Mono',monospace;";
+    ['EUR','USD','GBP','CHF','JPY','CAD','AUD','CNY'].forEach(c => {
+      const o = document.createElement('option');
+      o.value = c; o.textContent = c;
+      if (c === ccy) o.selected = true;
+      sel.appendChild(o);
+    });
+    sel.onchange = () => changeQuoteCurrency(sel.value);
+    wrap.appendChild(sel);
+  } else {
+    const badge = document.createElement('span');
+    badge.className = 'mono';
+    badge.style.fontWeight = '600';
+    badge.textContent = ccy;
+    wrap.appendChild(badge);
+    const lock = document.createElement('span');
+    lock.className = 'text-xs text-muted';
+    lock.textContent = '(immutabile post-emissione)';
+    wrap.appendChild(lock);
+  }
+  const rateInfo = document.createElement('span');
+  rateInfo.className = 'text-xs text-muted';
+  rateInfo.style.marginLeft = 'auto';
+  if (rate !== 1.0) {
+    rateInfo.textContent = '1 ' + ccy + ' = ' + rate.toFixed(4) + ' base · snapshot ' + (fxAt || '—');
+  } else {
+    rateInfo.textContent = 'stesso della base · no conversione';
+  }
+  wrap.appendChild(rateInfo);
+  if (isDraft && rate !== 1.0) {
+    const reload = document.createElement('button');
+    reload.className = 'btn btn-ghost btn-sm';
+    reload.title = 'Forza refresh tasso dal provider (Frankfurter BCE)';
+    reload.textContent = '🔄';
+    reload.onclick = () => refreshQuoteFx();
+    wrap.appendChild(reload);
+  }
+  host.appendChild(wrap);
+}
+
+async function changeQuoteCurrency(newCcy) {
+  if (!currentQuote || !currentQuote.id) return;
+  const ok = (newCcy === (currentQuote.currency || 'EUR')) ? true : confirm(
+    'Cambiare valuta a ' + newCcy + '?\n\nIl tasso di cambio verrà fissato adesso e i totali resteranno espressi in ' + newCcy + '.\nConsentito solo in stato draft.'
+  );
+  if (!ok) return;
+  try {
+    const fd = new FormData();
+    fd.append('currency', newCcy);
+    const r = await fetch('/quotes/api/' + currentQuote.id, {
+      method: 'PUT', body: fd, credentials: 'same-origin',
+    });
+    if (!r.ok) throw new Error((await r.json()).detail || 'Errore');
+    const data = await r.json();
+    toast('✓ Valuta ' + data.currency + ' (tasso ' + (data.fx_rate_to_base || 1).toFixed(4) + ')', 'success');
+    await loadQuote(currentQuote.id);
+  } catch (e) { toast(e.message || 'Errore', 'error'); }
+}
+
+async function refreshQuoteFx() {
+  if (!currentQuote || !currentQuote.id) return;
+  try {
+    const fd = new FormData();
+    fd.append('refresh_fx', 'true');
+    const r = await fetch('/quotes/api/' + currentQuote.id, {
+      method: 'PUT', body: fd, credentials: 'same-origin',
+    });
+    if (!r.ok) throw new Error((await r.json()).detail || 'Errore');
+    const data = await r.json();
+    toast('✓ Tasso aggiornato: 1 ' + data.currency + ' = ' + data.fx_rate_to_base.toFixed(4) + ' base', 'success');
+    await loadQuote(currentQuote.id);
+  } catch (e) { toast(e.message || 'Errore', 'error'); }
+}
+
 // ── Render totali ─────────────────────────────────────────────
 function renderTotals() {
+  renderCurrencyHeader();  // v3.5.0-alpha.137 — header valuta quote
   const q = currentQuote;
   const grossDiscountTotal = (q.subtotal_gross || 0) - (q.subtotal || 0);
   const pkgPct = -(q.package_discount || 0) * 100; // mostra positivo

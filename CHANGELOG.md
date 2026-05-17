@@ -1,5 +1,69 @@
 # MediaFlow — Changelog
 
+## v3.5.0-alpha.137 — Multi-currency Quote + Settings valuta base + FX rate live (17 mag 2026 mattina)
+
+Richiesta diretta Matteo post α.136: "Prevedi anche nelle impostazioni la valuta base. Inoltre prevedi di emettere quotazioni in dollari (strumento di conversione automatica sulla base del prezzo attuale del dollaro da implementare in quotazione in tempo reale)".
+
+**Modelli nuovi**:
+- `FXRate(from_currency, to_currency, rate, fetched_at, provider)` con UniqueConstraint coppia.
+- Cache 1h TTL configurabile, refresh on-demand.
+- Single row per coppia, update in place al refresh.
+
+**Quote estesa**:
+- `currency` (ISO 4217, default 'EUR') + `fx_rate_to_base` (snapshot al momento creazione) + `fx_rate_fixed_at` (timestamp).
+- Subtotal/total memorizzati nella `currency` della quote (NON convertiti). Conversione a base on-the-fly per report aggregati.
+
+**Tenant estesa** (campo già esistente, ora esposto in UI):
+- `default_currency` (ISO 4217, default 'EUR').
+
+**Servizio FX** (`app/services/fx.py`):
+- Provider: **Frankfurter** (api.frankfurter.app, BCE-based, **free, no API key**).
+- `get_fx_rate(db, from, to, max_age_minutes=60)` — cache+refresh.
+- `refresh_fx_rate(db, from, to)` — forza refresh.
+- `convert(amount, from, to, db)` — converte importo.
+- Fail-soft: stale fallback se provider down + cache presente, None se entrambi mancano.
+- Same-currency shortcut (rate=1.0).
+
+**Auto-migrate al boot**:
+- Tabella `fx_rates` creata da `create_all()`.
+- ALTER `quotes` ADD `currency`/`fx_rate_to_base`/`fx_rate_fixed_at`.
+- Idempotente.
+
+**Endpoint** (`/finance/api/...`):
+- `GET /fx/{from}/{to}?refresh=true` — rate cached (default) o force refresh. 503 se provider down + no cache.
+
+**Quote API estesa**:
+- `POST /quotes/api/quotes` accetta `currency` (Form, default = tenant.default_currency). Setup automatico fx_rate da Frankfurter (snapshot immutabile).
+- `PUT /quotes/api/{id}` accetta `currency` + `refresh_fx=true`. Cambio valuta o refresh tasso **bloccato post-emissione** (solo draft). Refresh forza pull dal provider.
+- `GET /quotes/api/{id}` espone `currency`, `fx_rate_to_base`, `fx_rate_fixed_at`.
+
+**UI Settings** (tab Azienda):
+- Dropdown "Valuta base" (8 valute: EUR/USD/GBP/CHF/JPY/CAD/AUD/CNY).
+- Salvato via `default_currency` Form param in PUT /api/company.
+
+**UI Quote** (editor):
+- Nuova card "Valuta" sopra Riepilogo economico.
+- Draft: dropdown valuta + info tasso (live "1 USD = 0.8599 base · snapshot 17/05/2026 10:30") + bottone 🔄 refresh.
+- Post-emissione (sent/approved/...): badge readonly "(immutabile post-emissione)".
+- DOM via createElement/textContent (no innerHTML su dati esterni) → no XSS surface.
+
+**Smoke FX provider live**:
+- USD→EUR 0.85999, EUR→USD 1.1628, GBP→EUR 1.1488, EUR→EUR 1.0 ✓
+- Convert 1000 USD = €859.99 / 1000 EUR = $1162.80 ✓
+- Cache hit dopo prima fetch ✓
+- Endpoint `/finance/api/fx/USD/EUR` ritorna `{rate: 0.85999, fetched_at: ..., provider: frankfurter, same_currency: false}` ✓
+
+**Smoke template**: quotes.html parse 175984 chars con `quote-currency-host` + `changeQuoteCurrency` presenti ✓.
+
+**Backlog α.138+**:
+- Acconti Step 2 (scomputo automatico nelle fatture batch successive + closing auto-scompute)
+- F29 i18n sweep TUTTA UI (~500-1000 chiavi)
+- Conversione importi cross-currency in cost-report aggregati (project con quote USD vs base EUR)
+- OAuth integrazioni
+- Test parse 14 capitolati restanti
+
+---
+
 ## v3.5.0-alpha.136 — Acconti progetto Step 1 (Pattern B ledger AdvancePayment) (17 mag 2026 mattina)
 
 Risposta strutturata al gap evidenziato da Matteo dopo α.135: "fattura manuale non si lega a progetto/lavorazione. Serve modalità pagamento anticipato in CR, lavoro futuro copre la cifra emessa". Pattern B — ledger separato — implementato in Step 1.

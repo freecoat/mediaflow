@@ -521,6 +521,8 @@ async def company_update(
     payment_method_default: Optional[str] = Form(None),
     invoice_footer: Optional[str] = Form(None),
     default_vat_rate: Optional[float] = Form(None),
+    # v3.5.0-alpha.137 — Valuta base tenant (ISO 4217: EUR/USD/GBP/...)
+    default_currency: Optional[str] = Form(None),
     # v3.5.0-alpha.66.13 — Branding
     tagline: Optional[str] = Form(None),
     brand_color: Optional[str] = Form(None),
@@ -550,6 +552,8 @@ async def company_update(
         payment_terms_default=payment_terms_default,
         payment_method_default=payment_method_default,
         invoice_footer=invoice_footer, default_vat_rate=default_vat_rate,
+        # α.137 valuta base
+        default_currency=(default_currency.upper().strip() if default_currency else None),
         # Branding
         tagline=tagline, brand_color=brand_color,
         document_header=document_header,

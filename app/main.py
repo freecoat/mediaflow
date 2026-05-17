@@ -710,16 +710,20 @@ def _auto_migrate_columns():
                     conn.execute(text(f"ALTER TABLE jcl_billed_slices ADD COLUMN {col} {ddl}"))
 
     # v3.5.0-alpha.111 — Quote: billing_frequency + billing_terms_days mirror Project
+    # v3.5.0-alpha.137 — Quote: currency + fx_rate_to_base + fx_rate_fixed_at
     if "quotes" in insp.get_table_names():
         qcols = {c["name"] for c in insp.get_columns("quotes")}
         quote_alter = [
             ("billing_frequency", "VARCHAR(20) NULL"),
             ("billing_terms_days", "INTEGER NULL"),
+            ("currency", "VARCHAR(3) NOT NULL DEFAULT 'EUR'"),
+            ("fx_rate_to_base", "REAL NOT NULL DEFAULT 1.0"),
+            ("fx_rate_fixed_at", "DATETIME NULL"),
         ]
         with engine.begin() as conn:
             for col, ddl in quote_alter:
                 if col not in qcols:
-                    print(f"[auto-migrate] quotes.{col} mancante -> ALTER TABLE (α.111 scadenze)")
+                    print(f"[auto-migrate] quotes.{col} mancante -> ALTER TABLE")
                     conn.execute(text(f"ALTER TABLE quotes ADD COLUMN {col} {ddl}"))
 
     # v3.5.0-alpha.111 — Project: billing_terms_days (scadenza gg dal cliente)
@@ -1126,7 +1130,7 @@ async def lifespan(app: FastAPI):
     yield
 
 
-app = FastAPI(title="MediaFlow", version="3.5.0-alpha.136", lifespan=lifespan)
+app = FastAPI(title="MediaFlow", version="3.5.0-alpha.137", lifespan=lifespan)
 
 BASE_DIR = Path(__file__).parent
 app.mount("/static", StaticFiles(directory=BASE_DIR / "static"), name="static")

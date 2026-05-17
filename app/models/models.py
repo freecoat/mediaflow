@@ -1111,6 +1111,17 @@ class Quote(Base):
     # Quando >0 la clausola viene aggiunta automaticamente al PDF/UI come
     # nota nei "Termini di pagamento" o nel blocco condizioni economiche.
     shipping_markup_pct: Mapped[float] = mapped_column(Float, nullable=False, default=15.0, server_default="15.0")
+    # v3.5.0-alpha.137 — Multi-currency quote.
+    # currency: ISO 4217 (EUR/USD/GBP/...). Default = Tenant.default_currency.
+    # fx_rate_to_base: tasso al momento della creazione quote (currency→base).
+    #   Es. quote USD con base EUR: fx_rate_to_base = 0.92 (1 USD = 0.92 EUR).
+    #   Tutti i subtotal_*/total_* sono memorizzati nella `currency` della quote
+    #   (NON convertiti). Conversione a base avviene on-the-fly in report aggregati.
+    # fx_rate_fixed_at: timestamp del tasso (snapshot immutabile post-emissione).
+    # Quando currency == tenant base, fx_rate_to_base = 1.0.
+    currency: Mapped[str] = mapped_column(String(3), nullable=False, default="EUR", server_default="EUR")
+    fx_rate_to_base: Mapped[float] = mapped_column(Float, nullable=False, default=1.0, server_default="1.0")
+    fx_rate_fixed_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
 
     # subtotal_gross = somma qty*unit_price*(1+allowance) di tutte le voci, prima di
     # qualsiasi sconto. Mostrato in PDF/UI per visibilità del valore pieno al cliente.
@@ -1756,6 +1767,24 @@ class AdvancePayment(Base):
     invoice: Mapped["Invoice"] = relationship(foreign_keys=[invoice_id])
     consumptions: Mapped[List["AdvancePaymentConsumption"]] = relationship(
         back_populates="advance_payment", cascade="all, delete-orphan"
+    )
+
+
+# v3.5.0-alpha.137 — Cache tassi di cambio (FX rate).
+# Provider primario: Frankfurter (api.frankfurter.app), BCE-based, free, no key.
+# Cache locale per ridurre chiamate (TTL default 1h, refresh on-demand via API).
+# Coppia FROM→TO univoca: 1 row per coppia, update in place al refresh.
+class FXRate(Base):
+    __tablename__ = "fx_rates"
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    from_currency: Mapped[str] = mapped_column(String(3), index=True)
+    to_currency: Mapped[str] = mapped_column(String(3), index=True)
+    rate: Mapped[float] = mapped_column(Float)
+    fetched_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, index=True)
+    provider: Mapped[str] = mapped_column(String(40), default="frankfurter")
+    # Indice composto per unicità coppia (gestito a livello applicativo: 1 row per coppia)
+    __table_args__ = (
+        UniqueConstraint("from_currency", "to_currency", name="uq_fx_pair"),
     )
 
 

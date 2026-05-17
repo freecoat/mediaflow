@@ -514,11 +514,32 @@ async def create_quote(
     vat_rate: float = Form(22.0),
     notes: Optional[str] = Form(None),
     payment_terms: Optional[str] = Form(None),
+    # v3.5.0-alpha.137 — Multi-currency quote
+    currency: Optional[str] = Form(None),
     db: Session = Depends(get_db),
 ):
     project = db.query(Project).filter(Project.id == project_id).first()
     if not project:
         raise HTTPException(404, "Progetto non trovato")
+    # v3.5.0-alpha.137 — Currency setup: default = tenant base, fx_rate fixed snapshot
+    from app.models import Tenant
+    from app.services.fx import get_fx_rate
+    from datetime import datetime as _dt
+    tenant = db.query(Tenant).filter(Tenant.id == current_tenant_id()).first()
+    base_ccy = (tenant.default_currency if tenant else "EUR").upper()
+    q_ccy = (currency or base_ccy).upper().strip()
+    if len(q_ccy) != 3:
+        q_ccy = base_ccy
+    if q_ccy == base_ccy:
+        fx_rate, fx_at = 1.0, None
+    else:
+        fx_rate = get_fx_rate(db, q_ccy, base_ccy)
+        if fx_rate is None:
+            # Fallback: salva quote in valuta non-base ma con rate=1.0 + warning
+            # (UI può segnalare "tasso non disponibile, ricaricare").
+            fx_rate, fx_at = 1.0, None
+        else:
+            fx_at = _dt.utcnow()
     q = Quote(
         number=number, project_id=project_id, client_id=project.client_id,
         title=title, issue_date=issue_date, valid_until=valid_until,
@@ -529,9 +550,11 @@ async def create_quote(
         shooting_days=shooting_days,
         package_discount=package_discount, vat_rate=vat_rate,
         notes=notes, payment_terms=payment_terms,
+        currency=q_ccy, fx_rate_to_base=fx_rate, fx_rate_fixed_at=fx_at,
     )
     db.add(q); db.commit(); db.refresh(q)
-    return {"id": q.id, "number": q.number}
+    return {"id": q.id, "number": q.number, "currency": q.currency,
+            "fx_rate_to_base": q.fx_rate_to_base}
 
 
 @router.get("/api/{quote_id}")
@@ -566,6 +589,10 @@ async def get_quote(quote_id: int, db: Session = Depends(get_db)):
         # v3.5.0-alpha.111 — Scadenze fatturazione (propagate a Project all'approve)
         "billing_frequency": getattr(q, "billing_frequency", None),
         "billing_terms_days": getattr(q, "billing_terms_days", None),
+        # v3.5.0-alpha.137 — Multi-currency
+        "currency": getattr(q, "currency", "EUR"),
+        "fx_rate_to_base": getattr(q, "fx_rate_to_base", 1.0),
+        "fx_rate_fixed_at": q.fx_rate_fixed_at.isoformat() if getattr(q, "fx_rate_fixed_at", None) else None,
         "generated_from_deliverables": q.generated_from_deliverables,
         "source_document_name": q.source_document_name,
         "subtotal_optional": round(
@@ -709,6 +736,9 @@ async def update_quote(
     # v3.5.0-alpha.111 — Scadenze fatturazione (propagate a Project all'approve)
     billing_frequency: Optional[str] = Form(None),
     billing_terms_days: Optional[int] = Form(None),
+    # v3.5.0-alpha.137 — Multi-currency: cambio valuta = refresh fx + snapshot
+    currency: Optional[str] = Form(None),
+    refresh_fx: Optional[str] = Form(None),  # "true" → forza refresh tasso
     db: Session = Depends(get_db),
 ):
     # v3.4.38 (R3.2): guard permission edit_quotes
@@ -764,6 +794,37 @@ async def update_quote(
         q.billing_terms_days = (
             int(billing_terms_days) if billing_terms_days else None
         )
+    # v3.5.0-alpha.137 — Cambio valuta quote + refresh tasso on-demand.
+    # Rifiuta cambio se quote NON in draft (immutabilità imponibile post-emissione).
+    want_refresh = (refresh_fx or "").strip().lower() == "true"
+    new_ccy = (currency or "").upper().strip() if currency else None
+    if (new_ccy and new_ccy != (q.currency or "EUR")) or want_refresh:
+        if q.status != QuoteStatus.draft:
+            raise HTTPException(
+                409,
+                f"Valuta o tasso modificabili solo in stato draft (attuale: {q.status.value}). "
+                "Per nuovo tasso: clona la quote in draft."
+            )
+        from app.models import Tenant
+        from app.services.fx import get_fx_rate, refresh_fx_rate
+        from datetime import datetime as _dt
+        tenant = db.query(Tenant).filter(Tenant.id == current_tenant_id()).first()
+        base_ccy = (tenant.default_currency if tenant else "EUR").upper()
+        target_ccy = new_ccy or q.currency or base_ccy
+        if len(target_ccy) != 3:
+            raise HTTPException(400, f"Valuta non valida: {target_ccy}")
+        if target_ccy == base_ccy:
+            q.currency = target_ccy
+            q.fx_rate_to_base = 1.0
+            q.fx_rate_fixed_at = None
+        else:
+            rate = (refresh_fx_rate(db, target_ccy, base_ccy) if want_refresh
+                    else get_fx_rate(db, target_ccy, base_ccy))
+            if rate is None:
+                raise HTTPException(503, f"Tasso FX {target_ccy}->{base_ccy} non disponibile (provider down)")
+            q.currency = target_ccy
+            q.fx_rate_to_base = rate
+            q.fx_rate_fixed_at = _dt.utcnow()
     _recalc_quote(q)
     db.commit()
     return {
@@ -774,6 +835,10 @@ async def update_quote(
         "subtotal": q.subtotal,
         "total_after_discount": q.total_after_discount,
         "total_with_vat": q.total_with_vat,
+        # v3.5.0-alpha.137 — restituisce valuta + tasso aggiornato per UI
+        "currency": q.currency or "EUR",
+        "fx_rate_to_base": q.fx_rate_to_base or 1.0,
+        "fx_rate_fixed_at": q.fx_rate_fixed_at.isoformat() if q.fx_rate_fixed_at else None,
     }
 
 

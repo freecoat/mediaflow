@@ -468,6 +468,21 @@
           <div class="form-group">
             <label class="form-label">Aliquota IVA default (%)</label>
             <input class="form-input" id="cmp-default_vat_rate" type="number" step="0.5" min="0" max="100"></div>
+          <!-- v3.5.0-alpha.137 — Valuta base tenant -->
+          <div class="form-group">
+            <label class="form-label">Valuta base (ISO 4217)</label>
+            <select class="form-input" id="cmp-default_currency">
+              <option value="EUR">EUR — Euro</option>
+              <option value="USD">USD — US Dollar</option>
+              <option value="GBP">GBP — British Pound</option>
+              <option value="CHF">CHF — Swiss Franc</option>
+              <option value="JPY">JPY — Japanese Yen</option>
+              <option value="CAD">CAD — Canadian Dollar</option>
+              <option value="AUD">AUD — Australian Dollar</option>
+              <option value="CNY">CNY — Chinese Yuan</option>
+            </select>
+            <div class="text-xs text-muted" style="margin-top:3px;">Valuta predefinita per nuove quotazioni e report aggregati. Le quote possono comunque essere emesse in valuta diversa.</div>
+          </div>
           <div class="form-group" style="grid-column:1/-1;">
             <label class="form-label">Footer fattura (note legali, condizioni, ecc.)</label>
             <textarea class="form-input" id="cmp-invoice_footer" rows="2" placeholder="Pagamento entro la data di scadenza. In caso di ritardo si applicano interessi ex D.Lgs. 231/2002."></textarea></div>
@@ -1618,7 +1633,7 @@ const CMP_FIELDS = [
   'name', 'legal_name', 'vat_number', 'tax_code', 'address',
   'email', 'phone', 'website', 'rea_number', 'fiscal_capital',
   'fiscal_regime', 'sdi_code', 'iban', 'payment_method_default',
-  'payment_terms_default', 'default_vat_rate', 'invoice_footer',
+  'payment_terms_default', 'default_vat_rate', 'default_currency', 'invoice_footer',
   'tagline', 'brand_color', 'document_header',
 ];
 // Boolean separati: serializzati come 'true'/'false' nel form
