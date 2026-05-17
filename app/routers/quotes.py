@@ -593,6 +593,8 @@ async def get_quote(quote_id: int, db: Session = Depends(get_db)):
         "currency": getattr(q, "currency", "EUR"),
         "fx_rate_to_base": getattr(q, "fx_rate_to_base", 1.0),
         "fx_rate_fixed_at": q.fx_rate_fixed_at.isoformat() if getattr(q, "fx_rate_fixed_at", None) else None,
+        # v3.5.0-alpha.139 — Termini di acconto definiti in quote
+        "advance_schedules": _get_schedules_serialized(db, q.id),
         "generated_from_deliverables": q.generated_from_deliverables,
         "source_document_name": q.source_document_name,
         "subtotal_optional": round(
@@ -840,6 +842,188 @@ async def update_quote(
         "fx_rate_to_base": q.fx_rate_to_base or 1.0,
         "fx_rate_fixed_at": q.fx_rate_fixed_at.isoformat() if q.fx_rate_fixed_at else None,
     }
+
+
+# ── Advance schedule (v3.5.0-alpha.139) ────────────────────────────
+# Termini di acconto definiti in quote. Sostituisce il pattern "fattura manuale"
+# di α.136-138: ora gli acconti nascono qui, strutturati con scadenze e pct,
+# poi al converti quote→job (α.140) verranno auto-creati AdvancePayment pending.
+
+
+def _get_schedules_serialized(db: Session, quote_id: int) -> list:
+    from app.models import QuoteAdvanceSchedule
+    rows = (
+        db.query(QuoteAdvanceSchedule)
+        .options(joinedload(QuoteAdvanceSchedule.allocations))
+        .filter(QuoteAdvanceSchedule.quote_id == quote_id)
+        .order_by(QuoteAdvanceSchedule.sort_order.asc(), QuoteAdvanceSchedule.id.asc())
+        .all()
+    )
+    return [_serialize_schedule(s) for s in rows]
+
+
+def _serialize_schedule(s):
+    return {
+        "id": s.id,
+        "label": s.label,
+        "pct": s.pct,
+        "amount_fixed": s.amount_fixed,
+        "due_anchor": s.due_anchor.value if hasattr(s.due_anchor, "value") else s.due_anchor,
+        "due_offset_days": s.due_offset_days,
+        "due_date": str(s.due_date) if s.due_date else None,
+        "milestone_label": s.milestone_label,
+        "sort_order": s.sort_order,
+        "notes": s.notes,
+        "allocations": [
+            {"id": a.id, "quote_line_id": a.quote_line_id, "pct": a.pct}
+            for a in (s.allocations or [])
+        ],
+    }
+
+
+@router.get("/api/{quote_id}/advance-schedules")
+async def list_advance_schedules(quote_id: int, db: Session = Depends(get_db)):
+    from app.models import QuoteAdvanceSchedule
+    q = db.query(Quote).filter(
+        Quote.id == quote_id, Quote.tenant_id == current_tenant_id(),
+    ).first()
+    if not q:
+        raise HTTPException(404, "Quote non trovata")
+    schedules = (
+        db.query(QuoteAdvanceSchedule)
+        .options(joinedload(QuoteAdvanceSchedule.allocations))
+        .filter(QuoteAdvanceSchedule.quote_id == quote_id)
+        .order_by(QuoteAdvanceSchedule.sort_order.asc(), QuoteAdvanceSchedule.id.asc())
+        .all()
+    )
+    return {"quote_id": quote_id, "schedules": [_serialize_schedule(s) for s in schedules]}
+
+
+@router.post("/api/{quote_id}/advance-schedules", dependencies=[RequireEditQuotes])
+async def create_advance_schedule(
+    quote_id: int,
+    label: str = Form(...),
+    pct: Optional[float] = Form(None),
+    amount_fixed: Optional[float] = Form(None),
+    due_anchor: str = Form("quote_approved"),
+    due_offset_days: int = Form(0),
+    due_date: Optional[date] = Form(None),
+    milestone_label: Optional[str] = Form(None),
+    sort_order: int = Form(0),
+    notes: Optional[str] = Form(None),
+    # CSV "line_id:pct,line_id:pct" — allocazione opzionale a QuoteLine
+    allocations: Optional[str] = Form(None),
+    db: Session = Depends(get_db),
+):
+    from app.models import QuoteAdvanceSchedule, QuoteAdvanceAllocation, AdvanceDueAnchor
+    q = db.query(Quote).filter(
+        Quote.id == quote_id, Quote.tenant_id == current_tenant_id(),
+    ).first()
+    if not q:
+        raise HTTPException(404, "Quote non trovata")
+    if pct is None and amount_fixed is None:
+        raise HTTPException(400, "Specificare pct o amount_fixed")
+    if pct is not None and (pct < 0 or pct > 1.0):
+        raise HTTPException(400, "pct deve essere tra 0 e 1.0 (es. 0.30 = 30%)")
+    if amount_fixed is not None and amount_fixed < 0:
+        raise HTTPException(400, "amount_fixed deve essere >= 0")
+    try:
+        anchor_enum = AdvanceDueAnchor(due_anchor)
+    except ValueError:
+        raise HTTPException(400, f"due_anchor non valido: {due_anchor}")
+    sched = QuoteAdvanceSchedule(
+        tenant_id=current_tenant_id(),
+        quote_id=quote_id,
+        label=label.strip(),
+        pct=pct, amount_fixed=amount_fixed,
+        due_anchor=anchor_enum, due_offset_days=due_offset_days,
+        due_date=due_date, milestone_label=milestone_label,
+        sort_order=sort_order, notes=notes,
+    )
+    db.add(sched)
+    db.flush()
+    # Parse e crea allocations opzionali (formato "id:pct,id:pct")
+    if allocations:
+        for token in allocations.split(","):
+            token = token.strip()
+            if not token:
+                continue
+            if ":" not in token:
+                raise HTTPException(400, f"allocations formato invalido: '{token}' (atteso line_id:pct)")
+            l_id_s, pct_s = token.split(":", 1)
+            try:
+                l_id = int(l_id_s.strip())
+                a_pct = float(pct_s.strip())
+            except ValueError:
+                raise HTTPException(400, f"allocations parse error: '{token}'")
+            if a_pct <= 0 or a_pct > 1.0:
+                raise HTTPException(400, f"allocation pct deve essere tra 0 e 1.0 (line #{l_id})")
+            alloc = QuoteAdvanceAllocation(
+                schedule_id=sched.id, quote_line_id=l_id, pct=a_pct,
+            )
+            db.add(alloc)
+    db.commit()
+    db.refresh(sched)
+    return _serialize_schedule(sched)
+
+
+@router.put("/api/advance-schedules/{schedule_id}", dependencies=[RequireEditQuotes])
+async def update_advance_schedule(
+    schedule_id: int,
+    label: Optional[str] = Form(None),
+    pct: Optional[float] = Form(None),
+    amount_fixed: Optional[float] = Form(None),
+    due_anchor: Optional[str] = Form(None),
+    due_offset_days: Optional[int] = Form(None),
+    due_date: Optional[date] = Form(None),
+    milestone_label: Optional[str] = Form(None),
+    sort_order: Optional[int] = Form(None),
+    notes: Optional[str] = Form(None),
+    db: Session = Depends(get_db),
+):
+    from app.models import QuoteAdvanceSchedule, AdvanceDueAnchor
+    s = db.query(QuoteAdvanceSchedule).filter(
+        QuoteAdvanceSchedule.id == schedule_id,
+        QuoteAdvanceSchedule.tenant_id == current_tenant_id(),
+    ).first()
+    if not s:
+        raise HTTPException(404, "Schedule non trovato")
+    if label is not None: s.label = label.strip()
+    if pct is not None:
+        if pct < 0 or pct > 1.0:
+            raise HTTPException(400, "pct deve essere tra 0 e 1.0")
+        s.pct = pct
+    if amount_fixed is not None:
+        if amount_fixed < 0:
+            raise HTTPException(400, "amount_fixed deve essere >= 0")
+        s.amount_fixed = amount_fixed
+    if due_anchor is not None:
+        try:
+            s.due_anchor = AdvanceDueAnchor(due_anchor)
+        except ValueError:
+            raise HTTPException(400, f"due_anchor non valido: {due_anchor}")
+    if due_offset_days is not None: s.due_offset_days = due_offset_days
+    if due_date is not None: s.due_date = due_date
+    if milestone_label is not None: s.milestone_label = milestone_label
+    if sort_order is not None: s.sort_order = sort_order
+    if notes is not None: s.notes = notes
+    db.commit()
+    db.refresh(s)
+    return _serialize_schedule(s)
+
+
+@router.delete("/api/advance-schedules/{schedule_id}", dependencies=[RequireEditQuotes])
+async def delete_advance_schedule(schedule_id: int, db: Session = Depends(get_db)):
+    from app.models import QuoteAdvanceSchedule
+    s = db.query(QuoteAdvanceSchedule).filter(
+        QuoteAdvanceSchedule.id == schedule_id,
+        QuoteAdvanceSchedule.tenant_id == current_tenant_id(),
+    ).first()
+    if not s:
+        raise HTTPException(404, "Schedule non trovato")
+    db.delete(s)  # cascade su allocations
+    db.commit()
+    return {"id": schedule_id, "deleted": True}
 
 
 @router.put("/api/{quote_id}/category-discount", dependencies=[RequireEditQuotes])

@@ -8,6 +8,38 @@
 
 ## Versione corrente
 
+**v3.5.0-alpha.139** — 17 maggio 2026 mattina — Revisione architetturale acconti: termini in quote + workflow stateful
+
+**Cambio scope architetturale richiesto Matteo** dopo α.138: acconti vanno definiti in quotazione (no manuale in CR), emessi da /finance (notifica + bozza + conferma + emit), CR visualizza fill maturato/drift.
+
+**Piano** (4 versioni):
+- α.139 (questa): foundation termini in quote
+- α.140: auto-create AP pending al converti + notifica admin
+- α.141: UI /finance bozze acconti + workflow conferma/emit
+- α.142: CR fill mode (Coperto/Maturato/Drift per JCL coperta)
+
+**α.139 deliverables**:
+- Modelli `QuoteAdvanceSchedule` + `QuoteAdvanceAllocation` + `AdvanceDueAnchor` enum.
+- `AdvancePaymentStatus` esteso workflow stateful: pending → draft → confirmed → invoiced → paid → consumed (open legacy alias).
+- Auto-migrate create_all (no ALTER, tabelle nuove).
+- 4 endpoint CRUD `/quotes/api/.../advance-schedules` + GET quote esposto `advance_schedules`.
+- UI quote editor: card "💰 Termini di acconto" + modal add/edit (label, pct/amount, anchor 4 opzioni, offset/date/milestone, allocation opz. a QuoteLine via checkbox+%).
+- DOM via createElement/textContent.
+
+**Smoke E2E** (quote 7 Q-2024-0003): create schedule 30%+2 alloc ✓ update pct 0.30→0.35 ✓ serialize via GET quote ✓ delete cascade ✓.
+
+**Compat**: α.136-138 ledger AdvancePayment + scomputi consumption restano attivi. UI cost-report "Crea acconto" sarà deprecato in α.141.
+
+**Backlog α.140+**:
+- α.140 hook converti quote→job: auto-create AP(pending) + Notification advance_pending
+- α.141 UI finance bozze + emit
+- α.142 CR fill mode
+- F29 i18n sweep TUTTA UI
+- Conversione cross-currency cost-report aggregati
+- OAuth Gmail/Outlook/Drive/OneDrive
+
+## (versione precedente)
+
 **v3.5.0-alpha.138** — 17 maggio 2026 mattina — Acconti Step 2: scomputo automatico + auto-scompute closing
 
 Chiude il ciclo acconti aperto in α.136. Pattern B completo end-to-end.

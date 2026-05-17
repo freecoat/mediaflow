@@ -224,9 +224,34 @@ class InvoiceKind(str, enum.Enum):
 # consumed = balance = 0 (tutto consumato in batch successivi o closing).
 # cancelled = annullato (solo se nessun consumo) — l'invoice resta ma slegata.
 class AdvancePaymentStatus(str, enum.Enum):
-    open = "open"
+    # v3.5.0-alpha.139 — Workflow esteso (revisione architetturale acconti).
+    # pending = auto-creato da QuoteAdvanceSchedule al converti quote→job
+    # draft = preso in carico amministrazione (visibile in /finance "Bozze")
+    # confirmed = allocation a JCL confermata, pronto per emit fattura
+    # invoiced = fattura kind=advance emessa (Invoice creata)
+    # paid = incassato (auto-update da InvoicePayment)
+    # consumed = scomputato in fatture batch successive (balance=0)
+    # cancelled = annullato (solo se nessun consumo)
+    pending = "pending"
+    draft = "draft"
+    confirmed = "confirmed"
+    invoiced = "invoiced"
+    paid = "paid"
+    open = "open"          # legacy α.136 — deprecato, alias di "invoiced"
     consumed = "consumed"
     cancelled = "cancelled"
+
+
+# v3.5.0-alpha.139 — Anchor temporale per scadenza acconto.
+# quote_approved = X giorni dall'approvazione quote
+# project_start = X giorni da Project.start_date (o Job.start_date)
+# specific_date = data assoluta (due_offset_days ignorato, usa schedule.due_date)
+# milestone = legato a ProjectMilestone (future, schedule.milestone_id)
+class AdvanceDueAnchor(str, enum.Enum):
+    quote_approved = "quote_approved"
+    project_start = "project_start"
+    specific_date = "specific_date"
+    milestone = "milestone"
 
 
 # ── Cost report → Billing flow (v3.5.0-alpha.46) ──────────────
@@ -1235,6 +1260,67 @@ class QuoteLine(Base):
         foreign_keys=[parent_line_id], remote_side=[id], post_update=True)
     referred_from_jcl: Mapped[Optional["JobCostLine"]] = relationship(
         foreign_keys=[referred_from_jcl_id])
+
+
+# v3.5.0-alpha.139 — Termini di acconto definiti nella quote.
+# Sostituisce il pattern α.136-138 dove l'acconto nasceva manuale nel cost-report.
+# Workflow: definito qui in quote → al converti quote→job genera AdvancePayment
+# (status=pending) → amministrazione conferma/emette fattura in /finance.
+#
+# Esempi:
+# - "Acconto 30% all'avvio" → pct=0.30, due_anchor=project_start, due_offset_days=15
+# - "SAL 30% a 60gg" → pct=0.30, due_anchor=project_start, due_offset_days=60
+# - "Saldo 40% alla consegna" → pct=0.40, due_anchor=milestone, milestone_label="delivery"
+#
+# Una schedule può essere ALLOCATA opzionalmente a 1+ QuoteLine specifiche
+# (via QuoteAdvanceAllocation): "questo acconto copre solo le righe X,Y,Z".
+# Se nessuna allocation → acconto copre l'intero progetto pro-quota maturato.
+class QuoteAdvanceSchedule(Base):
+    __tablename__ = "quote_advance_schedules"
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    tenant_id: Mapped[int] = mapped_column(ForeignKey("tenants.id"), default=1, index=True)
+    quote_id: Mapped[int] = mapped_column(ForeignKey("quotes.id", ondelete="CASCADE"), index=True)
+    label: Mapped[str] = mapped_column(String(120))
+    # pct OR amount_fixed (mutually exclusive — UI valida; non hard constraint DB
+    # per flessibilità: amount_fixed può override pct in casi specifici).
+    pct: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
+    amount_fixed: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
+    due_anchor: Mapped[AdvanceDueAnchor] = mapped_column(
+        SAEnum(AdvanceDueAnchor), default=AdvanceDueAnchor.quote_approved
+    )
+    due_offset_days: Mapped[int] = mapped_column(Integer, default=0)
+    # Per due_anchor=specific_date: data assoluta (override calcolo dinamico).
+    due_date: Mapped[Optional[date]] = mapped_column(Date, nullable=True)
+    # Per due_anchor=milestone (futuro): link a ProjectMilestone.label
+    milestone_label: Mapped[Optional[str]] = mapped_column(String(120), nullable=True)
+    sort_order: Mapped[int] = mapped_column(Integer, default=0)
+    notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    quote: Mapped["Quote"] = relationship(foreign_keys=[quote_id])
+    allocations: Mapped[List["QuoteAdvanceAllocation"]] = relationship(
+        back_populates="schedule", cascade="all, delete-orphan"
+    )
+
+
+# v3.5.0-alpha.139 — Allocazione M:N schedule ↔ quote line.
+# Opzionale: se schedule NON ha allocazioni → acconto copre tutto progetto.
+# Se schedule ha N allocazioni → acconto copre SOLO quelle righe (per pct sulla riga).
+class QuoteAdvanceAllocation(Base):
+    __tablename__ = "quote_advance_allocations"
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    schedule_id: Mapped[int] = mapped_column(
+        ForeignKey("quote_advance_schedules.id", ondelete="CASCADE"), index=True
+    )
+    quote_line_id: Mapped[int] = mapped_column(
+        ForeignKey("quote_lines.id", ondelete="CASCADE"), index=True
+    )
+    # Quota % della line coperta da questo acconto (0..1). Default 1.0 = copre tutta la riga.
+    pct: Mapped[float] = mapped_column(Float, default=1.0)
+    schedule: Mapped["QuoteAdvanceSchedule"] = relationship(back_populates="allocations")
+    quote_line: Mapped["QuoteLine"] = relationship(foreign_keys=[quote_line_id])
+    __table_args__ = (
+        UniqueConstraint("schedule_id", "quote_line_id", name="uq_quote_advance_alloc"),
+    )
 
 
 # ── JOB (collegato a Progetto) ───────────────────────────────

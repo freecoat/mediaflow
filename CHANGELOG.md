@@ -1,5 +1,57 @@
 # MediaFlow — Changelog
 
+## v3.5.0-alpha.139 — Revisione architetturale acconti: termini in quote (QuoteAdvanceSchedule) + workflow stateful (17 mag 2026 mattina)
+
+Revisione architettonica acconti su feedback Matteo post-α.138: "L'acconto va emesso dalla fatturazione (sostituisce manuale) e deve essere associato a lavorazioni con %, definito in quotazione con scadenze configurabili per periodo, notifica admin e template precompilato. Workflow: quote (definisci) → finance (notifica+bozza+conferma+emit) → CR (visualizza fill maturato/drift)".
+
+**Piano** (4 versioni α.139-142):
+- **α.139** (questa): foundation termini in quote (modelli + endpoint + UI)
+- **α.140**: auto-create AdvancePayment(pending) al converti quote→job + notifica admin
+- **α.141**: UI /finance "Bozze acconti" + workflow conferma/assign-JCL + emit invoice acconto
+- **α.142**: CR fill mode (Coperto/Maturato/Drift per JCL coperta)
+
+**α.139 deliverables**:
+
+**Modelli nuovi**:
+- `QuoteAdvanceSchedule(quote_id, label, pct, amount_fixed, due_anchor, due_offset_days, due_date, milestone_label, sort_order, notes)`. pct OR amount_fixed; due_anchor enum (quote_approved/project_start/specific_date/milestone).
+- `QuoteAdvanceAllocation(schedule_id, quote_line_id, pct)` M:N con UniqueConstraint coppia. Opzionale: se assente → acconto copre intero progetto.
+- `AdvanceDueAnchor` enum (4 valori).
+- **`AdvancePaymentStatus` esteso** con workflow stateful: `pending` (auto α.140) → `draft` → `confirmed` → `invoiced` → `paid` → `consumed`. `open` legacy mantenuto come alias di `invoiced`.
+
+**Auto-migrate**: `create_all()` crea le 2 nuove tabelle. Nessun ALTER (le tabelle sono nuove).
+
+**Endpoint** (`/quotes/api/...`):
+- `GET /{quote_id}/advance-schedules` — lista schedule + allocations.
+- `POST /{quote_id}/advance-schedules` — crea con validazione (pct 0-1, amount ≥ 0, anchor enum) + allocations CSV `"line_id:pct,line_id:pct"`.
+- `PUT /advance-schedules/{id}` — update parziale (label/pct/amount/anchor/offset/date/milestone/notes/sort).
+- `DELETE /advance-schedules/{id}` — cascade su allocations.
+- GET quote esposto `advance_schedules: [...]` nella response.
+
+**UI Quote editor**:
+- Nuova card "💰 Termini di acconto" tra meta-blocco e voci preventivo.
+- Lista rate con label/pct/scadenza/allocations count/importo calcolato + bottoni ✎/✕.
+- Riepilogo totale rate (% + fissi + €) con warning se > 100% quote.
+- Modal "Aggiungi/Modifica rata": label, pct OR amount, ancora scadenza (4 opzioni), offset/data/milestone (UI condizionale), note, allocazione opzionale a QuoteLine via checkbox + input % per riga.
+- DOM via createElement/textContent (no XSS surface).
+
+**Compat**:
+- α.136-138 ledger AdvancePayment + scomputi consumption rimangono attivi e usati da emit_invoice batch.
+- α.141 prevede deprecazione "Crea acconto" manuale da /cost-report (verrà rimosso quando workflow nuovo è completo).
+
+**Smoke E2E**:
+- Create schedule "Acconto 30%" (pct=0.30, anchor=project_start, offset=15gg) + 2 allocations (line 66:50%, line 67:50%) ✓
+- LIST quote ritorna 2 schedule (esistente + nuova) ✓
+- UPDATE pct 0.30 → 0.35 ✓
+- _get_schedules_serialized via GET quote → allocations preservate ✓
+- DELETE cascade su allocations ✓
+
+**Backlog α.140**:
+- Hook converti quote→job: per ogni schedule auto-crea AdvancePayment(status=pending, project_id, scheduled_due_date computato da anchor+offset) + copia QuoteAdvanceAllocation → AdvancePaymentAllocation
+- Notifica admin: NotificationKind nuovo `advance_pending` (severity=warning) con link a `/finance#advances-draft`
+- Endpoint `/finance/api/advances/pending` (lista bozze tenant) per α.141 UI
+
+---
+
 ## v3.5.0-alpha.138 — Acconti Step 2: scomputo automatico in batch + auto-scompute closing + CR aggregati (17 mag 2026 mattina)
 
 Chiude il ciclo acconti aperto in α.136. Pattern B completo end-to-end:

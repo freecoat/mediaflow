@@ -432,6 +432,87 @@
         </div>
       </div>
 
+      <!-- v3.5.0-alpha.139 — Termini acconto strutturati (QuoteAdvanceSchedule).
+           Sostituisce il pattern testo libero in payment_terms: rate definite con
+           pct/importo + scadenza + opzionale allocazione a QuoteLine. Al converti
+           quote→job genererà AdvancePayment(status=pending) per ogni schedule (α.140). -->
+      <div class="card quote-editor-card" id="advance-schedules-card" style="margin-top:18px;">
+        <div class="card-header" style="display:flex;justify-content:space-between;align-items:center;">
+          <span class="card-title">💰 Termini di acconto</span>
+          <button class="btn btn-primary btn-sm" onclick="openAdvanceScheduleModal()" title="Aggiungi rata di acconto strutturata">+ Aggiungi rata</button>
+        </div>
+        <div id="advance-schedules-host" style="padding:10px 14px;"></div>
+      </div>
+
+      <!-- v3.5.0-alpha.139 — Modal nuovo/edit schedule -->
+      <div class="modal-overlay" id="modal-advance-schedule">
+        <div class="modal" style="max-width:640px;">
+          <div class="modal-header">
+            <span class="modal-title" id="as-title">💰 Aggiungi rata acconto</span>
+            <button class="btn btn-ghost btn-icon" onclick="closeModal('modal-advance-schedule')">✕</button>
+          </div>
+          <div class="modal-body">
+            <input type="hidden" id="as-id">
+            <div class="form-group">
+              <label class="form-label">Etichetta *</label>
+              <input class="form-input" id="as-label" placeholder="es. Acconto 30% all'avvio, SAL 30%, Saldo 40%" maxlength="120">
+            </div>
+            <div class="form-row">
+              <div class="form-group">
+                <label class="form-label">Percentuale quote (%)</label>
+                <input class="form-input mono" id="as-pct" type="number" step="0.5" min="0" max="100" placeholder="30">
+                <div class="text-xs text-muted">Es. 30 = 30% del totale quote.</div>
+              </div>
+              <div class="form-group">
+                <label class="form-label">OPPURE importo fisso (€)</label>
+                <input class="form-input mono" id="as-amount" type="number" step="0.01" min="0" placeholder="5000.00">
+                <div class="text-xs text-muted">Override del pct se entrambi.</div>
+              </div>
+            </div>
+            <div class="form-row">
+              <div class="form-group">
+                <label class="form-label">Ancora scadenza *</label>
+                <select class="form-input" id="as-anchor" onchange="onAdvanceAnchorChange()">
+                  <option value="quote_approved">Dall'approvazione quote</option>
+                  <option value="project_start">Dall'inizio progetto</option>
+                  <option value="specific_date">Data specifica</option>
+                  <option value="milestone">Su milestone (futuro)</option>
+                </select>
+              </div>
+              <div class="form-group" id="as-offset-wrap">
+                <label class="form-label">Giorni dopo l'ancora</label>
+                <input class="form-input mono" id="as-offset" type="number" step="1" min="0" value="0">
+                <div class="text-xs text-muted">0 = subito all'ancora.</div>
+              </div>
+              <div class="form-group" id="as-date-wrap" style="display:none;">
+                <label class="form-label">Data specifica</label>
+                <input class="form-input" id="as-date" type="date">
+              </div>
+              <div class="form-group" id="as-milestone-wrap" style="display:none;">
+                <label class="form-label">Milestone (label)</label>
+                <input class="form-input" id="as-milestone" placeholder="delivery / approval / ...">
+              </div>
+            </div>
+            <div class="form-group">
+              <label class="form-label">Note</label>
+              <textarea class="form-input" id="as-notes" rows="2" placeholder="Condizioni, riferimento PO, ecc."></textarea>
+            </div>
+            <div class="form-group">
+              <label class="form-label">Allocazione a voci di quote (opzionale)</label>
+              <div id="as-allocations-host" style="background:var(--bg2); border:1px solid var(--border); border-radius:6px; padding:8px; max-height:200px; overflow:auto;"></div>
+              <div class="text-xs text-muted" style="margin-top:4px;">
+                Se nessuna allocazione → l'acconto copre l'intero progetto pro-quota.
+                Se selezionata almeno una voce → l'acconto copre SOLO quelle voci (pct=% della voce coperta).
+              </div>
+            </div>
+          </div>
+          <div class="modal-footer">
+            <button class="btn btn-secondary" onclick="closeModal('modal-advance-schedule')">Annulla</button>
+            <button class="btn btn-primary" id="as-submit-btn" onclick="submitAdvanceSchedule()">💾 Salva rata</button>
+          </div>
+        </div>
+      </div>
+
       <div class="card quote-editor-card" style="margin-top:18px;" id="lines-card"
            ondragover="onLinesDragOver(event)"
            ondragleave="onLinesDragLeave(event)"
@@ -1135,6 +1216,7 @@ async function reloadQuote() {
   document.getElementById('qa-fps').value = currentQuote.fps || '';
   renderLines();
   renderTotals();
+  renderAdvanceSchedules();  // v3.5.0-alpha.139 — Termini acconto strutturati
   loadVersionsArea();
   // v3.4.43: visibilità "Sposta progetto" — solo draft. La verifica
   // "no job" viene fatta server-side al click, qui basta il flag draft.
@@ -1800,6 +1882,235 @@ async function refreshQuoteFx() {
     if (!r.ok) throw new Error((await r.json()).detail || 'Errore');
     const data = await r.json();
     toast('✓ Tasso aggiornato: 1 ' + data.currency + ' = ' + data.fx_rate_to_base.toFixed(4) + ' base', 'success');
+    await loadQuote(currentQuote.id);
+  } catch (e) { toast(e.message || 'Errore', 'error'); }
+}
+
+// v3.5.0-alpha.139 — Termini di acconto strutturati (QuoteAdvanceSchedule).
+// Card sotto i meta + modal add/edit + opzionale allocation a QuoteLine.
+// DOM via createElement/textContent (no XSS surface).
+const ADVANCE_ANCHOR_LBL = {
+  quote_approved: 'Approvazione quote',
+  project_start: 'Inizio progetto',
+  specific_date: 'Data specifica',
+  milestone: 'Milestone',
+};
+
+function renderAdvanceSchedules() {
+  const host = document.getElementById('advance-schedules-host');
+  if (!host) return;
+  host.textContent = '';
+  const list = (currentQuote && currentQuote.advance_schedules) || [];
+  if (!list.length) {
+    const d = document.createElement('div');
+    d.className = 'text-muted text-sm';
+    d.textContent = 'Nessuna rata di acconto. Click "+ Aggiungi rata" per definire i termini.';
+    host.appendChild(d);
+    return;
+  }
+  const subtotalQuote = (currentQuote && currentQuote.total_after_discount) || 0;
+  list.forEach(s => {
+    const row = document.createElement('div');
+    row.style.cssText = 'display:flex; align-items:center; gap:10px; padding:8px; background:var(--bg2); border:1px solid var(--border); border-radius:6px; margin-bottom:6px;';
+    const label = document.createElement('div');
+    label.style.cssText = 'flex:1; font-size:13px;';
+    const lblStrong = document.createElement('b');
+    lblStrong.textContent = s.label;
+    label.appendChild(lblStrong);
+    const meta = document.createElement('div');
+    meta.className = 'text-xs text-muted';
+    let due = ADVANCE_ANCHOR_LBL[s.due_anchor] || s.due_anchor;
+    if (s.due_anchor === 'specific_date' && s.due_date) due += ': ' + s.due_date;
+    else if (s.due_offset_days) due += ' +' + s.due_offset_days + 'gg';
+    if (s.due_anchor === 'milestone' && s.milestone_label) due += ' (' + s.milestone_label + ')';
+    meta.textContent = due + (s.allocations && s.allocations.length ? ' · ' + s.allocations.length + ' voce/i allocate' : '');
+    label.appendChild(meta);
+    const amt = document.createElement('div');
+    amt.className = 'mono';
+    amt.style.cssText = 'text-align:right; min-width:140px;';
+    if (s.amount_fixed != null && s.amount_fixed > 0) {
+      amt.textContent = fmtCurrency(s.amount_fixed);
+    } else if (s.pct != null) {
+      const calc = subtotalQuote * s.pct;
+      amt.textContent = (s.pct * 100).toFixed(1) + '% · ' + fmtCurrency(calc);
+    } else {
+      amt.textContent = '—';
+    }
+    row.appendChild(label);
+    row.appendChild(amt);
+    const edit = document.createElement('button');
+    edit.className = 'btn btn-ghost btn-sm';
+    edit.textContent = '✎';
+    edit.title = 'Modifica rata';
+    edit.onclick = () => openAdvanceScheduleModal(s);
+    const del = document.createElement('button');
+    del.className = 'btn btn-ghost btn-sm';
+    del.style.color = '#ef4444';
+    del.textContent = '✕';
+    del.title = 'Elimina rata';
+    del.onclick = () => deleteAdvanceSchedule(s.id);
+    row.appendChild(edit);
+    row.appendChild(del);
+    host.appendChild(row);
+  });
+  // Riepilogo totale
+  const totalPct = list.reduce((acc, s) => acc + (s.pct || 0), 0);
+  const totalFixed = list.reduce((acc, s) => acc + (s.amount_fixed || 0), 0);
+  const totalCalc = subtotalQuote * totalPct + totalFixed;
+  const summary = document.createElement('div');
+  summary.style.cssText = 'margin-top:6px; padding:6px 10px; background:rgba(98,114,245,0.08); border-radius:4px; font-size:12px; color:var(--text2);';
+  summary.textContent = 'Totale rate: ' + (totalPct * 100).toFixed(1) + '% del quote' +
+    (totalFixed > 0 ? ' + ' + fmtCurrency(totalFixed) + ' fissi' : '') +
+    ' = ' + fmtCurrency(totalCalc);
+  if (totalPct > 1.001 || totalCalc > subtotalQuote * 1.001) {
+    summary.style.color = '#ef4444';
+    summary.textContent += ' ⚠ supera il totale quote';
+  }
+  host.appendChild(summary);
+}
+
+function onAdvanceAnchorChange() {
+  const v = document.getElementById('as-anchor').value;
+  document.getElementById('as-offset-wrap').style.display = (v === 'specific_date') ? 'none' : '';
+  document.getElementById('as-date-wrap').style.display = (v === 'specific_date') ? '' : 'none';
+  document.getElementById('as-milestone-wrap').style.display = (v === 'milestone') ? '' : 'none';
+}
+
+function openAdvanceScheduleModal(existing) {
+  document.getElementById('as-title').textContent = existing ? '💰 Modifica rata acconto' : '💰 Aggiungi rata acconto';
+  document.getElementById('as-id').value = existing ? existing.id : '';
+  document.getElementById('as-label').value = existing ? existing.label : '';
+  document.getElementById('as-pct').value = (existing && existing.pct != null) ? (existing.pct * 100).toFixed(1) : '';
+  document.getElementById('as-amount').value = (existing && existing.amount_fixed != null) ? existing.amount_fixed : '';
+  document.getElementById('as-anchor').value = (existing && existing.due_anchor) || 'quote_approved';
+  document.getElementById('as-offset').value = (existing && existing.due_offset_days != null) ? existing.due_offset_days : 0;
+  document.getElementById('as-date').value = (existing && existing.due_date) || '';
+  document.getElementById('as-milestone').value = (existing && existing.milestone_label) || '';
+  document.getElementById('as-notes').value = (existing && existing.notes) || '';
+  onAdvanceAnchorChange();
+  // Render allocations list
+  const allocHost = document.getElementById('as-allocations-host');
+  allocHost.textContent = '';
+  const lines = (currentQuote && currentQuote.lines) || [];
+  const existingAllocs = existing && existing.allocations ? existing.allocations : [];
+  const allocMap = {};
+  existingAllocs.forEach(a => { allocMap[a.quote_line_id] = a.pct; });
+  if (!lines.length) {
+    const d = document.createElement('div');
+    d.className = 'text-xs text-muted';
+    d.textContent = 'Quote senza voci.';
+    allocHost.appendChild(d);
+  } else {
+    lines.forEach(l => {
+      const row = document.createElement('div');
+      row.style.cssText = 'display:flex; align-items:center; gap:6px; padding:3px 0; border-bottom:1px solid var(--border);';
+      const cb = document.createElement('input');
+      cb.type = 'checkbox';
+      cb.dataset.lineId = l.id;
+      cb.checked = (l.id in allocMap);
+      const lbl = document.createElement('label');
+      lbl.style.cssText = 'flex:1; cursor:pointer; font-size:12px;';
+      lbl.appendChild(cb);
+      const sp = document.createElement('span');
+      sp.style.marginLeft = '6px';
+      sp.textContent = (l.description || '').substring(0, 60) + ' · ' + fmtCurrency(l.total || 0);
+      lbl.appendChild(sp);
+      const pctInp = document.createElement('input');
+      pctInp.type = 'number';
+      pctInp.step = '0.1';
+      pctInp.min = '0';
+      pctInp.max = '100';
+      pctInp.value = (l.id in allocMap) ? (allocMap[l.id] * 100).toFixed(1) : '100';
+      pctInp.style.cssText = 'width:70px; padding:2px 4px; background:var(--bg3); border:1px solid var(--border); color:var(--text); border-radius:3px; font-family:DM Mono,monospace; font-size:11px;';
+      pctInp.disabled = !cb.checked;
+      cb.onchange = () => { pctInp.disabled = !cb.checked; };
+      row.appendChild(lbl);
+      row.appendChild(pctInp);
+      const pctLbl = document.createElement('span');
+      pctLbl.className = 'text-xs text-muted';
+      pctLbl.textContent = '%';
+      row.appendChild(pctLbl);
+      allocHost.appendChild(row);
+    });
+  }
+  openModal('modal-advance-schedule');
+}
+
+function _collectAllocations() {
+  const host = document.getElementById('as-allocations-host');
+  if (!host) return '';
+  const out = [];
+  host.querySelectorAll('input[type=checkbox]').forEach(cb => {
+    if (!cb.checked) return;
+    const lineId = cb.dataset.lineId;
+    const inp = cb.parentElement.parentElement.querySelector('input[type=number]');
+    const pct = parseFloat(inp.value || 100) / 100;
+    if (pct > 0 && pct <= 1.0) out.push(lineId + ':' + pct);
+  });
+  return out.join(',');
+}
+
+async function submitAdvanceSchedule() {
+  if (!currentQuote || !currentQuote.id) return;
+  const id = document.getElementById('as-id').value;
+  const label = document.getElementById('as-label').value.trim();
+  if (!label) { toast('Etichetta obbligatoria', 'warning'); return; }
+  const pctRaw = document.getElementById('as-pct').value;
+  const amountRaw = document.getElementById('as-amount').value;
+  const pct = pctRaw ? parseFloat(pctRaw) / 100 : null;
+  const amount = amountRaw ? parseFloat(amountRaw) : null;
+  if (pct == null && amount == null) {
+    toast('Specificare pct o importo fisso', 'warning'); return;
+  }
+  const anchor = document.getElementById('as-anchor').value;
+  const fd = new FormData();
+  fd.append('label', label);
+  if (pct != null) fd.append('pct', pct);
+  if (amount != null) fd.append('amount_fixed', amount);
+  fd.append('due_anchor', anchor);
+  if (anchor !== 'specific_date') {
+    fd.append('due_offset_days', document.getElementById('as-offset').value || 0);
+  } else {
+    const d = document.getElementById('as-date').value;
+    if (d) fd.append('due_date', d);
+  }
+  if (anchor === 'milestone') {
+    const m = document.getElementById('as-milestone').value.trim();
+    if (m) fd.append('milestone_label', m);
+  }
+  const notes = document.getElementById('as-notes').value.trim();
+  if (notes) fd.append('notes', notes);
+  const btn = document.getElementById('as-submit-btn');
+  btn.disabled = true; btn.textContent = '...';
+  try {
+    let res;
+    if (id) {
+      res = await fetch('/quotes/api/advance-schedules/' + id, {
+        method: 'PUT', body: fd, credentials: 'same-origin',
+      });
+    } else {
+      const allocCsv = _collectAllocations();
+      if (allocCsv) fd.append('allocations', allocCsv);
+      res = await fetch('/quotes/api/' + currentQuote.id + '/advance-schedules', {
+        method: 'POST', body: fd, credentials: 'same-origin',
+      });
+    }
+    if (!res.ok) throw new Error((await res.json()).detail || 'Errore');
+    toast(id ? '✓ Rata aggiornata' : '✓ Rata creata', 'success');
+    closeModal('modal-advance-schedule');
+    await loadQuote(currentQuote.id);
+  } catch (e) { toast(e.message || 'Errore', 'error'); }
+  finally { btn.disabled = false; btn.textContent = '💾 Salva rata'; }
+}
+
+async function deleteAdvanceSchedule(scheduleId) {
+  if (!confirm('Eliminare questa rata di acconto?')) return;
+  try {
+    const res = await fetch('/quotes/api/advance-schedules/' + scheduleId, {
+      method: 'DELETE', credentials: 'same-origin',
+    });
+    if (!res.ok) throw new Error((await res.json()).detail || 'Errore');
+    toast('✓ Rata eliminata', 'success');
     await loadQuote(currentQuote.id);
   } catch (e) { toast(e.message || 'Errore', 'error'); }
 }
