@@ -47,7 +47,8 @@
   </div>
 </div>
 
-<!-- ── Grid principale ────────────────────────────────────── -->
+<!-- v3.5.0-alpha.156 — Riordino dashboard: Job recenti + Prossime scadenze
+     (vista operativa). P&L + Margine reparto in row dedicata sotto. -->
 <div class="grid-2" style="align-items:start;">
 
   <!-- Job recenti -->
@@ -73,14 +74,14 @@
     </div>
   </div>
 
-  <!-- P&L anno corrente -->
+  <!-- Prossime scadenze (era in row separata pre-α.156) -->
   <div class="card">
     <div class="card-header">
-      <span class="card-title"><span data-i18n="dash.pl_year">P&amp;L</span> <span id="pl-year"></span></span>
-      <a href="/finance" class="btn btn-ghost btn-sm" data-i18n="dash.detail">Dettaglio</a>
+      <span class="card-title" data-i18n="dash.upcoming">Prossime scadenze · 14 gg</span>
+      <a href="/planning" class="btn btn-ghost btn-sm" data-i18n="dash.all_jobs">Tutti i job</a>
     </div>
-    <div id="pl-content" style="padding:8px 0;">
-      <div class="text-muted text-sm" data-i18n="misc.loading">Caricamento…</div>
+    <div id="dl-host" class="dl-list" style="padding:8px 0;">
+      <div class="text-muted text-sm" style="padding:14px; text-align:center;" data-i18n="misc.loading">Caricamento…</div>
     </div>
   </div>
 
@@ -95,17 +96,8 @@
   <div id="my-bookings-host" style="padding:8px;"></div>
 </div>
 
-<!-- ── Upcoming deadlines + Dept ROI (v3.5.0-alpha.66.19) ─────── -->
+<!-- v3.5.0-alpha.156 — P&L + Margine reparto INSIEME (row dedicata finanza). -->
 <div class="grid-2 mt-3" style="align-items:start;">
-  <div class="card">
-    <div class="card-header">
-      <span class="card-title" data-i18n="dash.upcoming">Prossime scadenze · 14 gg</span>
-      <a href="/planning" class="btn btn-ghost btn-sm" data-i18n="dash.all_jobs">Tutti i job</a>
-    </div>
-    <div id="dl-host" class="dl-list" style="padding:8px 0;">
-      <div class="text-muted text-sm" style="padding:14px; text-align:center;" data-i18n="misc.loading">Caricamento…</div>
-    </div>
-  </div>
   <div class="card">
     <div class="card-header">
       <span class="card-title"><span data-i18n="dash.margin_dept">Margine per reparto</span> · <span id="dr-year"></span></span>
@@ -113,6 +105,15 @@
     </div>
     <div id="dr-host" class="dr-list" style="padding:8px 0;">
       <div class="text-muted text-sm" style="padding:14px; text-align:center;" data-i18n="misc.loading">Caricamento…</div>
+    </div>
+  </div>
+  <div class="card">
+    <div class="card-header">
+      <span class="card-title"><span data-i18n="dash.pl_year">P&amp;L</span> <span id="pl-year"></span></span>
+      <a href="/finance" class="btn btn-ghost btn-sm" data-i18n="dash.detail">Dettaglio</a>
+    </div>
+    <div id="pl-content" style="padding:8px 0;">
+      <div class="text-muted text-sm" data-i18n="misc.loading">Caricamento…</div>
     </div>
   </div>
 </div>

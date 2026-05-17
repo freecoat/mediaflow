@@ -8,6 +8,20 @@
 
 ## Versione corrente
 
+**v3.5.0-alpha.156** — 17 maggio 2026 sera tarda — Dashboard layout + i18n sidebar admin + quotes superseded + CR tooltip
+
+4 fix post-test Matteo:
+- Dashboard: row 3 Job+Scadenze (operativo), row 5 Margine reparto+P&L (finanza).
+- i18n sidebar Amministrazione (4 voci) + Logout footer (data-i18n aggiunto, chiavi già esistenti).
+- `GET /quotes/api` default nasconde superseded (`superseded_by_id IS NULL`), `?include_superseded=true` per drill storico.
+- CR tooltip estesi su Fatturato/Maturato post/Over-Under/Margine reale: chiarisce billed_locked (slice immutable) vs total_accrued (work effettivo). Caso "Vento Aperto Ep. 3" = over-billing storico simile Shadow Stagione 3 α.134.
+
+Backlog α.157:
+- Colonna "Maturato JCL" esplicito in CR dettaglio
+- F29 round 6 granulare modal/form
+
+## (versione precedente)
+
 **v3.5.0-alpha.155** — 17 maggio 2026 sera tarda — Automazione portali consegne foundation
 
 2 modelli nuovi:

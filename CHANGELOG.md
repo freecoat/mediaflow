@@ -1,5 +1,34 @@
 # MediaFlow — Changelog
 
+## v3.5.0-alpha.156 — Dashboard layout + i18n sidebar admin + quotes nasconde superseded + CR tooltip aritmetica (17 mag 2026 sera tarda)
+
+4 fix dopo test Matteo.
+
+**Dashboard riordino**:
+- Row 3: "Job recenti | Prossime scadenze" (vista operativa).
+- Row 5: "Margine per reparto | P&L" (vista finanza accorpata).
+- Era: row 3 Job+P&L, row 5 Scadenze+Margine. Ora insieme i 2 finanziari + i 2 operativi.
+
+**i18n sidebar Amministrazione**:
+- 4 voci ancora in italiano hard-coded: "Amministrazione" sezione + Utenti / Ruoli e permessi / Cestino / Audit TPN / Logout footer.
+- Fix: `data-i18n` aggiunto (chiavi già esistenti nel dictionary α.133+).
+
+**Lista quotazioni nasconde superseded**:
+- `GET /quotes/api` default filtra `Quote.superseded_by_id IS NULL` (solo ultime versioni).
+- Nuovo param `?include_superseded=true` per drill versioning storico.
+
+**Cost Report tooltip aritmetica**:
+- Caso reale Matteo: JCL "Re-recording mix Dolby Atmos" mostrava billed=€19'246, cost=€734, margin=€3'465 → apparente impossibilità.
+- ROOT CAUSE: `JCL.total_accrued` (DB) = €4'200 (ore done × prezzo, work effettivo). billed_locked = €19'246 (Σ slice fatturate in passato, immutable). Quando billed > total_accrued → over-billing storico (slice fatturate per più del lavoro effettivo).
+- `real_margin = total_accrued (4'200) - cost_accrued (734) = 3'465` ✓
+- Fix UI: tooltip estesi su Fatturato/Maturato post/Over-Under/Margine reale che spiegano formula esatta + caso over-billing storico.
+
+**Backlog α.157**:
+- Colonna esplicita "Maturato JCL" (= total_accrued) nel cost report dettaglio per evitare confusione billed vs maturato.
+- F29 round 6: data-i18n granulare su modal/form per ogni template.
+
+---
+
 ## v3.5.0-alpha.155 — Automazione portali consegne: foundation + plugin architecture (17 mag 2026 sera tarda)
 
 Foundation per automazione upload ai portali broadcaster (Netflix/Amazon/A24/Sky/...). UI + endpoint + plugin specifici in versioni successive.

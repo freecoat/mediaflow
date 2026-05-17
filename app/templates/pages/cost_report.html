@@ -161,12 +161,12 @@
             <!-- v3.5.0-alpha.112: nomi più espliciti per distinguere
                  "Maturato totale" (lista CR) vs "Maturato post-periodo" (qui).
                  Sono valori diversi: post-periodo = totale − già-fatturato. -->
-            <th class="text-right" title="Già fatturato — Σ delle slice JCLBilledSlice (immutabile)">Fatturato</th>
-            <th class="text-right" title="Maturato non ancora fatturato — done senza slice. Nella lista CR la colonna 'Maturato' è invece il TOTALE (fatturato + post).">Maturato post</th>
+            <th class="text-right" title="Già fatturato — Σ delle slice JCLBilledSlice (immutabile). NOTA: può differire dal Maturato JCL effettivo (over-billing).">Fatturato</th>
+            <th class="text-right" title="Maturato non ancora fatturato — done senza slice. Nella lista CR la colonna 'Maturato' è invece il TOTALE (fatturato + post). =0 se JCL.total_accrued < billed (over-billing storico).">Maturato post</th>
             <th class="text-right" title="Stima ulteriori ore ancora da lavorare (planned − done)">Stim. futuro</th>
-            <th class="text-right">Over/Under</th>
-            <th class="text-right" title="Σ ore done × Resource.internal_cost_hourly — costo reale risorse interne (α.67)">Costo reale</th>
-            <th class="text-right" title="Maturato − Costo reale (margine reale stimato basato sui cost-rate interni)">Margine reale</th>
+            <th class="text-right" title="Maturato JCL − Quotato. NB: 'Maturato JCL' è ore done × prezzo (cifra effettiva work), NON billed_locked. Vedi tooltip Margine reale.">Over/Under</th>
+            <th class="text-right" title="Σ ore done × Resource.internal_cost_hourly — costo reale risorse interne stimato (α.67)">Costo reale</th>
+            <th class="text-right" title="Formula: Maturato JCL − Costo reale = (qty_actual × unit_price) − (ore done × cost_hourly). NON usa billed_locked. Se billed_locked > Maturato JCL = over-billing storico, il margine resta calcolato sul work effettivo.">Margine reale</th>
             <th>Fatt.</th>
             <th data-no-sort="true"></th>
           </tr>

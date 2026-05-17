@@ -180,25 +180,25 @@
 
       {% if can_manage_users(_user) or can_manage_roles(_user) or has_permission(_user, 'view_trash') %}
       <div class="nav-section">
-        <div class="nav-section-label">Amministrazione</div>
+        <div class="nav-section-label" data-i18n="nav.section.administration">Amministrazione</div>
         {% if can_manage_users(_user) %}
         <a href="/admin/users" data-nav-id="admin_users" class="nav-item {% if active_page == 'admin_users' %}active{% endif %}">
-          <span class="nav-icon"><i data-lucide="user"></i></span> Utenti
+          <span class="nav-icon"><i data-lucide="user"></i></span> <span data-i18n="nav.users">Utenti</span>
         </a>
         {% endif %}
         {% if can_manage_roles(_user) %}
         <a href="/admin/roles" data-nav-id="admin_roles" class="nav-item {% if active_page == 'admin_roles' %}active{% endif %}">
-          <span class="nav-icon"><i data-lucide="shield-check"></i></span> Ruoli e permessi
+          <span class="nav-icon"><i data-lucide="shield-check"></i></span> <span data-i18n="nav.roles">Ruoli e permessi</span>
         </a>
         {% endif %}
         {% if has_permission(_user, 'view_trash') %}
         <a href="/admin/cestino" data-nav-id="admin_trash" class="nav-item {% if active_page == 'admin_trash' %}active{% endif %}">
-          <span class="nav-icon"><i data-lucide="trash-2"></i></span> Cestino
+          <span class="nav-icon"><i data-lucide="trash-2"></i></span> <span data-i18n="nav.trash">Cestino</span>
         </a>
         {% endif %}
         {% if has_permission(_user, 'manage_users') %}
         <a href="/admin/audit-log" data-nav-id="admin_audit_log" class="nav-item {% if active_page == 'admin_audit_log' %}active{% endif %}">
-          <span class="nav-icon"><i data-lucide="shield-check"></i></span> Audit TPN
+          <span class="nav-icon"><i data-lucide="shield-check"></i></span> <span data-i18n="nav.audit_log">Audit TPN</span>
         </a>
         {% endif %}
       </div>
@@ -207,7 +207,7 @@
 
     <div class="sidebar-footer">
       <a href="/auth/logout" class="nav-item">
-        <span class="nav-icon"><i data-lucide="log-out"></i></span> Logout
+        <span class="nav-icon"><i data-lucide="log-out"></i></span> <span data-i18n="topbar.logout">Logout</span>
       </a>
     </div>
   </aside>
@@ -351,7 +351,7 @@ async function showAboutModal() {
   };
 </script>
 <script src="/static/js/global.js?v=3.5.0-alpha.133"></script>
-<script src="/static/js/i18n.js?v=3.5.0-alpha.151"></script>
+<script src="/static/js/i18n.js?v=3.5.0-alpha.156"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/fullcalendar/6.1.11/index.global.min.js"></script>
 <script>
   // v3.5.0-alpha.30: Lucide createIcons() al primo paint + helper globale

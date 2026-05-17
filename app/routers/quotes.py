@@ -233,12 +233,19 @@ async def quotes_page(request: Request, db: Session = Depends(get_db)):
 @router.get("/api")
 async def list_quotes(
     project_id: Optional[int] = None,
+    include_superseded: bool = False,
     db: Session = Depends(get_db),
 ):
+    """v3.5.0-alpha.156 — Default: nasconde versioni superseded (Quote.superseded_by_id
+    is None = ultima versione della catena). Param `include_superseded=true` per
+    forzare visualizzazione storica completa (drill versioning).
+    """
     # v3.5.0-alpha.66.15.2 — tenant scope (R1)
     q = db.query(Quote).filter(
         Quote.tenant_id == current_tenant_id(),
     ).options(joinedload(Quote.client), joinedload(Quote.project))
+    if not include_superseded:
+        q = q.filter(Quote.superseded_by_id.is_(None))
     if project_id:
         q = q.filter(Quote.project_id == project_id)
     qs = q.order_by(Quote.created_at.desc()).all()
