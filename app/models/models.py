@@ -206,6 +206,29 @@ class InvoiceStatus(str, enum.Enum):
     overdue = "overdue"; cancelled = "cancelled"
 
 
+# v3.5.0-alpha.136 — Tipologia funzionale Invoice.
+# regular = fattura normale (da batch billing, copre lavorazioni JCL).
+# advance = acconto/anticipo (cassa ricevuta prima del lavoro maturato;
+#   il sistema apre un AdvancePayment ledger che si scompute nelle fatture
+#   successive emesse sullo stesso progetto).
+# balance = fattura di saldo finale (es. closing invoice).
+# Distinta da `doc_type` (TD01/TD04/TD06 = tipologia fiscale SDI).
+class InvoiceKind(str, enum.Enum):
+    regular = "regular"
+    advance = "advance"
+    balance = "balance"
+
+
+# v3.5.0-alpha.136 — Stato del ledger acconto.
+# open = balance > 0, ancora scomputabile.
+# consumed = balance = 0 (tutto consumato in batch successivi o closing).
+# cancelled = annullato (solo se nessun consumo) — l'invoice resta ma slegata.
+class AdvancePaymentStatus(str, enum.Enum):
+    open = "open"
+    consumed = "consumed"
+    cancelled = "cancelled"
+
+
 # ── Cost report → Billing flow (v3.5.0-alpha.46) ──────────────
 class JCLBillingStatus(str, enum.Enum):
     """Stato fatturazione di una JobCostLine.
@@ -1637,6 +1660,17 @@ class Invoice(Base):
     # marca Project.finance_status='closed'. Storno via NC TD04 → riapre.
     is_closing: Mapped[bool] = mapped_column(Boolean, default=False, server_default="0", nullable=False)
     closing_project_id: Mapped[Optional[int]] = mapped_column(ForeignKey("projects.id"), nullable=True)
+    # v3.5.0-alpha.136 — Tipologia funzionale invoice (regular/advance/balance).
+    # Ortogonale a doc_type SDI. advance crea AdvancePayment ledger.
+    kind: Mapped[InvoiceKind] = mapped_column(
+        SAEnum(InvoiceKind), default=InvoiceKind.regular, server_default="regular", index=True
+    )
+    # v3.5.0-alpha.136 — Project link diretto (acconti su progetto multi-job).
+    # Distinto da job_id (che può essere NULL per acconti project-level).
+    # Usato anche per fatture aggregate cross-job nello stesso progetto.
+    project_id: Mapped[Optional[int]] = mapped_column(
+        ForeignKey("projects.id"), nullable=True, index=True
+    )
     client: Mapped["Client"] = relationship(back_populates="invoices")
     job: Mapped[Optional["Job"]] = relationship(back_populates="invoices")
     lines: Mapped[List["InvoiceLine"]] = relationship(back_populates="invoice", cascade="all, delete-orphan")
@@ -1677,6 +1711,77 @@ class InvoicePayment(Base):
     recorded_by_user_id: Mapped[Optional[int]] = mapped_column(ForeignKey("users.id"), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
     invoice: Mapped["Invoice"] = relationship(back_populates="payments")
+
+
+# v3.5.0-alpha.136 — Ledger acconti progetto.
+# Pattern B della decision tree α.135 findings (Shadow Stagione 3).
+#
+# Semantica: acconto = cassa anticipata + obbligazione di lavoro futura.
+# NON è revenue maturato. Il revenue maturato resta sui JCL via batch billing.
+# Acconto è ledger separato che si scompute progressivamente nelle fatture
+# batch successive (SAL) e nella closing invoice.
+#
+# Workflow:
+#   1. Utente "Crea acconto" su progetto → Invoice(kind=advance, project_id=X)
+#      + AdvancePayment(amount=full, balance_remaining=full, status=open).
+#   2. Cliente paga acconto → InvoicePayment normale → cassa entrata.
+#   3. Mesi successivi, manager emette batch SAL/saldo → in fase emit_invoice
+#      sceglie quali AdvancePayment open scomputare e quanto.
+#      → AdvancePaymentConsumption registra il delta + riduce balance_remaining.
+#      → Nuova Invoice ha InvoiceLine "Scomputo acconto" con importo negativo.
+#   4. Quando balance_remaining=0 → status=consumed.
+#   5. Closing invoice: auto-scompute residuo aperto del progetto.
+#
+# Invariante: Σ AdvancePaymentConsumption.amount_consumed ≤ AdvancePayment.amount.
+# Invariante: balance_remaining = amount − Σ consumptions.amount_consumed.
+class AdvancePayment(Base):
+    __tablename__ = "advance_payments"
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    tenant_id: Mapped[int] = mapped_column(ForeignKey("tenants.id"), default=1, index=True)
+    project_id: Mapped[int] = mapped_column(ForeignKey("projects.id"), index=True)
+    invoice_id: Mapped[int] = mapped_column(ForeignKey("invoices.id"), unique=True, index=True)
+    # Importo imponibile dell'acconto (= Invoice.subtotal della invoice advance).
+    # Snapshot al momento creazione: cambi successivi a Invoice NON propagano qui.
+    amount: Mapped[float] = mapped_column(Float, default=0.0)
+    # Residuo scomputabile. Decresce a ogni AdvancePaymentConsumption.
+    # Quando = 0 → status=consumed. Cache: ricalcolabile da consumptions.
+    balance_remaining: Mapped[float] = mapped_column(Float, default=0.0)
+    status: Mapped[AdvancePaymentStatus] = mapped_column(
+        SAEnum(AdvancePaymentStatus), default=AdvancePaymentStatus.open, index=True
+    )
+    notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    created_by_user_id: Mapped[Optional[int]] = mapped_column(ForeignKey("users.id"), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    project: Mapped["Project"] = relationship(foreign_keys=[project_id])
+    invoice: Mapped["Invoice"] = relationship(foreign_keys=[invoice_id])
+    consumptions: Mapped[List["AdvancePaymentConsumption"]] = relationship(
+        back_populates="advance_payment", cascade="all, delete-orphan"
+    )
+
+
+class AdvancePaymentConsumption(Base):
+    """Scomputo di un acconto in una fattura batch successiva.
+    Generato in emit_invoice (batch) quando manager seleziona acconto da scomputare,
+    oppure in emit_closing_invoice (auto-scompute residuo)."""
+    __tablename__ = "advance_payment_consumptions"
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    tenant_id: Mapped[int] = mapped_column(ForeignKey("tenants.id"), default=1, index=True)
+    advance_payment_id: Mapped[int] = mapped_column(
+        ForeignKey("advance_payments.id", ondelete="CASCADE"), index=True
+    )
+    # Fattura che ha consumato l'acconto (creata dal batch o closing).
+    # Una invoice può consumare N acconti diversi (es. SAL scompute 2 acconti).
+    invoice_id: Mapped[int] = mapped_column(ForeignKey("invoices.id"), index=True)
+    # Batch che ha generato la invoice (opzionale: closing invoice non ha batch).
+    billing_batch_id: Mapped[Optional[int]] = mapped_column(
+        ForeignKey("billing_batches.id"), nullable=True, index=True
+    )
+    # Importo scomputato (positivo). InvoiceLine corrispondente ha total negativo.
+    amount_consumed: Mapped[float] = mapped_column(Float, default=0.0)
+    notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    advance_payment: Mapped["AdvancePayment"] = relationship(back_populates="consumptions")
+    invoice: Mapped["Invoice"] = relationship(foreign_keys=[invoice_id])
 
 
 # ── Cost report → Billing flow (v3.5.0-alpha.46) ──────────────

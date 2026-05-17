@@ -1,5 +1,61 @@
 # MediaFlow — Changelog
 
+## v3.5.0-alpha.136 — Acconti progetto Step 1 (Pattern B ledger AdvancePayment) (17 mag 2026 mattina)
+
+Risposta strutturata al gap evidenziato da Matteo dopo α.135: "fattura manuale non si lega a progetto/lavorazione. Serve modalità pagamento anticipato in CR, lavoro futuro copre la cifra emessa". Pattern B — ledger separato — implementato in Step 1.
+
+**Modelli nuovi**:
+- `AdvancePayment(tenant_id, project_id, invoice_id UNIQUE, amount, balance_remaining, status, notes, created_by_user_id, created_at)`
+- `AdvancePaymentConsumption(tenant_id, advance_payment_id, invoice_id, billing_batch_id, amount_consumed, notes, created_at)` (cascade da AdvancePayment)
+- `InvoiceKind` enum: `regular | advance | balance` (semantica funzionale, ortogonale a doc_type SDI)
+- `AdvancePaymentStatus` enum: `open | consumed | cancelled`
+
+**Invoice estesa**:
+- `kind` (default regular) + `project_id` (nullable, link diretto a progetto per fatture multi-job o project-level come acconti).
+
+**Migrazione auto al boot**:
+- `Base.metadata.create_all()` crea le 2 nuove tabelle (advance_payments, advance_payment_consumptions).
+- `_auto_migrate_columns` aggiunge `invoices.kind` (default 'regular') + `invoices.project_id` (nullable FK).
+- Idempotente. Compatibile con DB esistenti.
+
+**Endpoint** (`/finance/api/...`):
+- `POST /projects/{id}/advances` — crea Invoice(kind=advance, project_id=X, doc_type=TD01) + 1 InvoiceLine descrittiva + apre AdvancePayment(balance=full, status=open). Snapshot fiscali completi (immutabilità post-emissione). Auto-numero `{anno}-{NNNNN}` se non fornito.
+- `GET /projects/{id}/advances` — lista acconti + totali (amount/consumed/balance_remaining). Per UI card.
+- `POST /advances/{id}/cancel` — annulla acconto (consentito SOLO se balance==amount, nessun consumo). L'invoice resta — NC TD04 a parte se serve stornare.
+
+**UI Cost Report dettaglio**:
+- Nuova card "💰 Acconti del progetto" sopra il widget Fatturazione (visibile solo se job ha project_id).
+- 3 stat-card: Totale acconti / Già scomputato / Residuo aperto.
+- Lista acconti con badge stato (Aperto/Consumato/Annullato), numero fattura, data emissione, note, importi (importo · −scomputato · residuo), bottone "✕ Annulla" solo se open + no consumi.
+- Modal "💰 Crea acconto": importo imponibile, IVA, descrizione riga, data emissione, scadenza, numero (auto), note.
+- Toaster + refresh auto card dopo create/cancel.
+- Tutti i contenuti dinamici via textContent/createElement (no innerHTML su dati esterni) → no XSS surface.
+
+**Smoke E2E** (job 9 = Shadow Stagione 3, progetto 12):
+- Create acconto €5'000 + 22% IVA → invoice 2026-00112 + AdvancePayment id=1 ✓
+- List → 1 row, totals (amount 5000, consumed 0, balance 5000) ✓
+- Cancel → status=cancelled ✓
+- Cleanup invoice ✓
+
+**Step 2 (α.137+) — scomputo nelle fatture batch successive**:
+- Estensione `emit_invoice` (batch): dropdown "scompute acconti aperti?" + InvoiceLine "Scomputo acconto" auto-generata negativa + AdvancePaymentConsumption registrata.
+- Closing invoice auto-scompute residuo aperto del progetto.
+- Cost Report: colonna "Coperto da acconto" per JCL.
+- Warning UI se Σ batch + Σ acconti > quote_total.
+
+**Backlog α.137**:
+- Step 2 acconti (scomputo automatico)
+- Settings valuta base (Tenant.base_currency)
+- Quote multi-currency + FX rate live (Frankfurter BCE, free, no key)
+
+**Backlog α.138+**:
+- F29 i18n sweep completo tutta UI (~500-1000 chiavi, IT/EN/FR/DE)
+- Test parse 14 capitolati restanti
+- OAuth integrazioni
+- Automazione portali consegne
+
+---
+
 ## v3.5.0-alpha.135 — F26/F27/F30 coerenza CR↔Fatturazione (pattern B) + F28 root cause (17 mag 2026 mattina)
 
 Chiusura bundle anomalie architetturali emerse α.134 su Shadow Stagione 3. Pattern B: trasparenza UI senza riarchitettura. Visibilità immediata in /cost-report lista + dettaglio.

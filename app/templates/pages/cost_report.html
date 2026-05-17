@@ -123,6 +123,20 @@
     <div id="resources-panel" class="text-muted text-sm">Nessuna risorsa assegnata</div>
   </div>
 
+  <!-- v3.5.0-alpha.136: card Acconti del progetto (Pattern B ledger) -->
+  <div class="card mb-4" id="advances-card" style="display:none;">
+    <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:10px;">
+      <div class="card-title" style="margin:0;">💰 Acconti del progetto
+        <span style="font-size:11px; color:var(--text3); font-weight:normal;">(cassa anticipata, scomputo nelle fatture successive)</span>
+      </div>
+      <button class="btn btn-primary btn-sm" onclick="openAdvanceModal()" title="Crea acconto su questo progetto. Genera fattura kind=advance + ledger AdvancePayment.">
+        + Crea acconto
+      </button>
+    </div>
+    <div id="advances-totals" style="display:grid; grid-template-columns:repeat(3, 1fr); gap:10px; margin-bottom:14px;"></div>
+    <div id="advances-table"></div>
+  </div>
+
   <!-- v3.5.0-alpha.48: widget Fatturazione (Step 3 Cost Report → Billing) -->
   <div class="card mb-4" id="billing-widget" style="display:none;">
     <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:10px;">
@@ -349,6 +363,59 @@
     <div class="modal-footer">
       <button class="btn btn-secondary" onclick="closeModal('modal-transmit')">Annulla</button>
       <button class="btn btn-primary" id="tm-submit-btn" onclick="submitTransmit()">📤 Trasmetti</button>
+    </div>
+  </div>
+</div>
+
+<!-- v3.5.0-alpha.136: Crea acconto progetto (Pattern B AdvancePayment) -->
+<div class="modal-overlay" id="modal-advance">
+  <div class="modal" style="max-width:560px;">
+    <div class="modal-header"><span class="modal-title">💰 Crea acconto progetto</span>
+      <button class="btn btn-ghost btn-icon" onclick="closeModal('modal-advance')">✕</button></div>
+    <div class="modal-body">
+      <p class="text-sm text-muted" style="margin-top:0;">
+        Genera <b>Invoice kind=advance</b> + <b>AdvancePayment ledger</b> (balance scomputabile
+        nelle fatture batch successive). L'acconto NON è revenue maturato: si scompute al saldo
+        finale (closing) o nei SAL intermedi quando il lavoro effettivo raggiunge la cifra.
+      </p>
+      <div class="form-row">
+        <div class="form-group">
+          <label class="form-label">Importo imponibile (€) *</label>
+          <input class="form-input mono" id="ap-amount" type="number" step="0.01" min="0.01" required>
+          <div class="text-xs text-muted">Es. 20% di €36'000 quotato = €7'200.</div>
+        </div>
+        <div class="form-group">
+          <label class="form-label">IVA % *</label>
+          <input class="form-input mono" id="ap-vat" type="number" step="0.01" value="22" required>
+        </div>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Descrizione riga fattura</label>
+        <input class="form-input" id="ap-description" placeholder="Acconto 20% project start" maxlength="255">
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label class="form-label">Data emissione *</label>
+          <input class="form-input" id="ap-issue-date" type="date" required>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Scadenza pagamento</label>
+          <input class="form-input" id="ap-due-date" type="date">
+        </div>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Numero fattura (vuoto = auto)</label>
+        <input class="form-input mono" id="ap-number" placeholder="Es. 2026-00050">
+        <div class="text-xs text-muted">Auto-progressivo per anno se vuoto. Tenant-scoped.</div>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Note (opzionali)</label>
+        <textarea class="form-input" id="ap-notes" rows="2" placeholder="Riferimento PO, condizioni speciali…"></textarea>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeModal('modal-advance')">Annulla</button>
+      <button class="btn btn-primary" id="ap-submit-btn" onclick="submitAdvance()">💰 Crea acconto</button>
     </div>
   </div>
 </div>
@@ -688,7 +755,158 @@ async function loadReport(jobId) {
   renderKPIs(); renderCostLines(); renderResources();
   // v3.5.0-alpha.88: renderTimesheets() rimosso (pannello deprecato α.66.66).
   renderBillingWidget();  // v3.5.0-alpha.48: widget Fatturazione (Step 3)
+  renderAdvancesCard();   // v3.5.0-alpha.136: card Acconti progetto (Pattern B)
   renderBookingSummary(id);
+}
+
+// v3.5.0-alpha.136 — Acconti progetto (ledger AdvancePayment).
+// Tutti i contenuti dinamici passano per escapeHtml() (notes, invoice.number).
+// I numerici (importi, id) sono numeri puri non-iniettabili.
+async function renderAdvancesCard() {
+  const card = document.getElementById('advances-card');
+  if (!card) return;
+  const projectId = currentReport && currentReport.job && currentReport.job.project_id;
+  if (!projectId) { card.style.display = 'none'; return; }
+  card.style.display = '';
+  let data;
+  try {
+    data = await api('GET', '/finance/api/projects/' + projectId + '/advances');
+  } catch (e) {
+    document.getElementById('advances-table').textContent = 'Impossibile caricare acconti.';
+    return;
+  }
+  const tot = data.totals || {};
+  const totalsEl = document.getElementById('advances-totals');
+  totalsEl.textContent = '';
+  const mkTotCard = (label, color, bg, amt) => {
+    const d = document.createElement('div');
+    d.style.cssText = 'background:' + bg + '; border:1px solid ' + color + '55; border-radius:8px; padding:10px 12px;';
+    const lbl = document.createElement('div');
+    lbl.style.cssText = 'font-size:11px; color:' + color + '; font-weight:600; text-transform:uppercase; letter-spacing:0.04em;';
+    lbl.textContent = label;
+    const val = document.createElement('div');
+    val.className = 'mono';
+    val.style.cssText = 'font-size:18px; color:var(--text); margin-top:2px;';
+    val.textContent = fmtCurrency(amt || 0);
+    d.appendChild(lbl); d.appendChild(val);
+    return d;
+  };
+  totalsEl.appendChild(mkTotCard('Totale acconti', 'var(--indigo2)', 'rgba(98,114,245,0.12)', tot.amount));
+  totalsEl.appendChild(mkTotCard('Già scomputato', '#22c55e', 'rgba(34,197,94,0.12)', tot.consumed));
+  totalsEl.appendChild(mkTotCard('Residuo aperto', '#fbbf24', 'rgba(251,191,36,0.12)', tot.balance_remaining));
+
+  const rows = data.rows || [];
+  const tableEl = document.getElementById('advances-table');
+  tableEl.textContent = '';
+  if (!rows.length) {
+    const d = document.createElement('div');
+    d.className = 'text-muted text-sm';
+    d.style.padding = '10px 0';
+    d.textContent = 'Nessun acconto aperto. Crea il primo con il bottone qui sopra.';
+    tableEl.appendChild(d);
+    return;
+  }
+  const STATUS_LBL = { open: 'Aperto', consumed: 'Consumato', cancelled: 'Annullato' };
+  const STATUS_COLOR = { open: '#fbbf24', consumed: '#22c55e', cancelled: '#9aa0b8' };
+  const wrap = document.createElement('div');
+  wrap.style.cssText = 'display:flex; flex-direction:column; gap:6px;';
+  rows.forEach(r => {
+    const inv = r.invoice || {};
+    const c = STATUS_COLOR[r.status] || '#9aa0b8';
+    const row = document.createElement('div');
+    row.style.cssText = 'display:flex; align-items:center; gap:12px; padding:10px 12px; background:var(--bg2); border:1px solid var(--border); border-radius:8px;';
+    const num = document.createElement('div');
+    num.style.cssText = "font-weight:600; font-family:'DM Mono', monospace; font-size:13px; color:var(--indigo2);";
+    num.textContent = inv.number || '?';
+    const badge = document.createElement('span');
+    badge.style.cssText = 'display:inline-block; padding:2px 8px; border-radius:10px; font-size:11px; font-weight:600; color:' + c + '; background:' + c + '26;';
+    badge.textContent = STATUS_LBL[r.status] || r.status;
+    const mid = document.createElement('div');
+    mid.className = 'text-sm text-muted';
+    mid.style.flex = '1';
+    mid.textContent = (inv.issue_date ? fmtDate(inv.issue_date) : '—') + (r.notes ? ' · ' + r.notes : '');
+    const amts = document.createElement('div');
+    amts.className = 'text-xs text-muted';
+    amts.title = 'Importo / scomputato / residuo';
+    amts.textContent = fmtCurrency(r.amount) + ' · −' + fmtCurrency(r.consumed) + ' · ' + fmtCurrency(r.balance_remaining);
+    row.appendChild(num); row.appendChild(badge); row.appendChild(mid); row.appendChild(amts);
+    if (r.status === 'open' && r.consumed === 0) {
+      const btn = document.createElement('button');
+      btn.className = 'btn btn-ghost btn-sm';
+      btn.style.color = '#ef4444';
+      btn.title = "Annulla acconto (solo se nessuno scomputo). L'invoice resta — usa NC TD04 separatamente.";
+      btn.textContent = '✕ Annulla';
+      btn.onclick = (e) => { e.stopPropagation(); cancelAdvance(r.id); };
+      row.appendChild(btn);
+    }
+    wrap.appendChild(row);
+  });
+  tableEl.appendChild(wrap);
+}
+
+function openAdvanceModal() {
+  if (!currentReport || !currentReport.job || !currentReport.job.project_id) {
+    toast('Job senza progetto associato', 'warning'); return;
+  }
+  document.getElementById('ap-amount').value = '';
+  document.getElementById('ap-vat').value = '22';
+  document.getElementById('ap-description').value = '';
+  document.getElementById('ap-issue-date').value = new Date().toISOString().slice(0, 10);
+  document.getElementById('ap-due-date').value = '';
+  document.getElementById('ap-number').value = '';
+  document.getElementById('ap-notes').value = '';
+  openModal('modal-advance');
+}
+
+async function submitAdvance() {
+  const projectId = currentReport.job.project_id;
+  const amount = parseFloat(document.getElementById('ap-amount').value);
+  const vat = parseFloat(document.getElementById('ap-vat').value);
+  const desc = document.getElementById('ap-description').value.trim();
+  const issue = document.getElementById('ap-issue-date').value;
+  const due = document.getElementById('ap-due-date').value;
+  const num = document.getElementById('ap-number').value.trim();
+  const notes = document.getElementById('ap-notes').value.trim();
+  if (!amount || amount <= 0) { toast('Importo deve essere positivo', 'warning'); return; }
+  if (!issue) { toast('Data emissione obbligatoria', 'warning'); return; }
+  const btn = document.getElementById('ap-submit-btn');
+  btn.disabled = true; btn.textContent = '...';
+  try {
+    const fd = new FormData();
+    fd.append('amount', amount);
+    fd.append('vat_rate', vat || 22);
+    if (desc) fd.append('description', desc);
+    fd.append('issue_date', issue);
+    if (due) fd.append('due_date', due);
+    if (num) fd.append('invoice_number', num);
+    if (notes) fd.append('notes', notes);
+    const res = await fetch('/finance/api/projects/' + projectId + '/advances', {
+      method: 'POST', body: fd, credentials: 'same-origin',
+    });
+    if (!res.ok) throw new Error((await res.json()).detail || 'Errore creazione acconto');
+    const data = await res.json();
+    toast('✓ Acconto ' + data.invoice_number + ' creato (€' + data.amount.toFixed(2) + ' + IVA)', 'success');
+    closeModal('modal-advance');
+    await renderAdvancesCard();
+  } catch (e) {
+    toast(e.message || 'Errore', 'error');
+  } finally {
+    btn.disabled = false; btn.textContent = '💰 Crea acconto';
+  }
+}
+
+async function cancelAdvance(advanceId) {
+  if (!confirm("Annullare questo acconto?\n\nConsentito solo se nessuno scomputo è stato registrato.\nL'invoice associata NON viene toccata: usa NC TD04 separatamente se serve stornare la fattura.")) return;
+  try {
+    const res = await fetch('/finance/api/advances/' + advanceId + '/cancel', {
+      method: 'POST', credentials: 'same-origin',
+    });
+    if (!res.ok) throw new Error((await res.json()).detail || 'Errore');
+    toast('✓ Acconto annullato', 'success');
+    await renderAdvancesCard();
+  } catch (e) {
+    toast(e.message || 'Errore', 'error');
+  }
 }
 
 // ── Booking executive summary + pool not_done (v3.4.32) ─────

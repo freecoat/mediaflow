@@ -7,8 +7,9 @@ from sqlalchemy.orm import Session, joinedload
 from sqlalchemy import func
 from app.database import get_db
 from app.models import (
-    Timesheet, Expense, Invoice, InvoiceLine, InvoiceStatus, InvoicePayment,
-    Job, JobStatus, JobCostLine, Quote, QuoteStatus, Project, Tenant,
+    Timesheet, Expense, Invoice, InvoiceLine, InvoiceStatus, InvoiceKind, InvoicePayment,
+    AdvancePayment, AdvancePaymentConsumption, AdvancePaymentStatus,
+    Job, JobStatus, JobCostLine, Quote, QuoteStatus, Project, Tenant, Client,
     SupplierInvoice, SupplierInvoiceStatus, SupplierInvoicePayment,
 )
 from app.services.finance import job_financial_summary, company_pl_summary, departments_pl_summary
@@ -315,6 +316,261 @@ async def update_invoice_status(
             inv.amount_paid = total
     db.commit()
     return {"id": inv.id, "status": inv.status}
+
+
+# ── Acconti progetto (v3.5.0-alpha.136) ────────────────────────────
+# Pattern B della decision tree F26/F28: ledger AdvancePayment separato
+# che lega Invoice(kind=advance) a Project. Si scompute progressivamente nelle
+# fatture batch successive (SAL) e nella closing invoice.
+# Vedi app/models/models.py AdvancePayment per semantica completa.
+
+
+def _next_invoice_number_for_advance(db: Session, year: int) -> str:
+    """Genera prossimo numero progressivo formato `{year}-{NNN}` per acconto.
+    Stessa convenzione di emit_invoice (manuale via UI). Tenant-scoped.
+    Idempotente: re-genera incrementando finché non collide con numero esistente."""
+    from sqlalchemy import desc
+    # Pesca ultimo numero del tenant per l'anno
+    last = (
+        db.query(Invoice.number)
+        .join(Client, Invoice.client_id == Client.id)
+        .filter(
+            Client.tenant_id == current_tenant_id(),
+            Invoice.number.like(f"{year}-%"),
+        )
+        .order_by(desc(Invoice.number))
+        .first()
+    )
+    if not last:
+        return f"{year}-00001"
+    try:
+        seq = int(last[0].split("-")[1]) + 1
+    except (ValueError, IndexError):
+        seq = 1
+    # Loop di sicurezza fino a slot libero
+    for _ in range(1000):
+        candidate = f"{year}-{seq:05d}"
+        exists = (
+            db.query(Invoice.id)
+            .join(Client, Invoice.client_id == Client.id)
+            .filter(
+                Client.tenant_id == current_tenant_id(),
+                Invoice.number == candidate,
+            )
+            .first()
+        )
+        if not exists:
+            return candidate
+        seq += 1
+    raise HTTPException(500, "Impossibile generare numero progressivo univoco")
+
+
+@router.post("/api/projects/{project_id}/advances", dependencies=[RequireEditInvoices])
+async def create_advance_payment(
+    project_id: int,
+    request: Request,
+    amount: float = Form(...),
+    description: str = Form("Acconto"),
+    vat_rate: float = Form(22.0),
+    issue_date: date = Form(...),
+    due_date: Optional[date] = Form(None),
+    invoice_number: Optional[str] = Form(None),
+    notes: Optional[str] = Form(None),
+    db: Session = Depends(get_db),
+):
+    """v3.5.0-alpha.136 — Crea acconto su progetto.
+
+    Genera 1 Invoice(kind=advance, project_id=X, doc_type=TD01) con 1 InvoiceLine
+    descrittiva + apre 1 AdvancePayment(balance=amount, status=open).
+    L'invoice nasce in stato draft come tutte le fatture: il manager dovrà
+    transire a sent/paid via /api/invoices/{id}/status quando appropriato.
+
+    Snapshot fiscali client+tenant come emit_invoice (immutabilità post-emissione)."""
+    if amount <= 0:
+        raise HTTPException(400, "Importo deve essere positivo")
+    proj = db.query(Project).filter(
+        Project.id == project_id, Project.tenant_id == current_tenant_id(),
+    ).first()
+    if not proj:
+        raise HTTPException(404, "Progetto non trovato")
+    if not proj.client_id:
+        raise HTTPException(400, "Progetto senza cliente: assegna cliente prima di creare acconto")
+    client_obj = db.query(Client).filter(Client.id == proj.client_id).first()
+    tenant_obj = db.query(Tenant).filter(Tenant.id == current_tenant_id()).first()
+
+    # Numero: auto se non fornito (formato {year}-{NNNNN} come emit_invoice manuale)
+    if invoice_number:
+        existing = (
+            db.query(Invoice)
+            .join(Client, Invoice.client_id == Client.id)
+            .filter(
+                Invoice.number == invoice_number,
+                Client.tenant_id == current_tenant_id(),
+            )
+            .first()
+        )
+        if existing:
+            raise HTTPException(409, f"Numero fattura {invoice_number} già esistente")
+        num = invoice_number
+    else:
+        num = _next_invoice_number_for_advance(db, issue_date.year)
+
+    subtotal = round(amount, 2)
+    vat_amount = round(subtotal * vat_rate / 100, 2)
+    total = round(subtotal + vat_amount, 2)
+
+    inv = Invoice(
+        number=num,
+        client_id=proj.client_id,
+        project_id=project_id,
+        kind=InvoiceKind.advance,
+        status=InvoiceStatus.draft,
+        issue_date=issue_date,
+        due_date=due_date,
+        subtotal=subtotal,
+        vat_rate=vat_rate,
+        total=total,
+        notes=(notes or f"Acconto progetto {proj.code}"),
+        doc_type="TD01",
+        payment_method=(tenant_obj.payment_method_default if tenant_obj else None),
+        payment_terms_days=(tenant_obj.payment_terms_default if tenant_obj else None),
+        iban_snapshot=(tenant_obj.iban if tenant_obj else None),
+        client_legal_name_snap=(client_obj.name if client_obj else None),
+        client_vat_snap=(client_obj.vat_number if client_obj else None),
+        client_tax_code_snap=(client_obj.tax_code if client_obj else None),
+        client_pec_snap=(client_obj.pec if client_obj else None),
+        client_admin_email_snap=(getattr(client_obj, "admin_email", None) if client_obj else None),
+        client_sdi_snap=(client_obj.sdi_code if client_obj else None),
+        client_address_snap=(client_obj.address if client_obj else None),
+        client_zip_snap=(client_obj.zip_code if client_obj else None),
+        client_city_snap=(client_obj.city if client_obj else None),
+        client_province_snap=(client_obj.province if client_obj else None),
+        client_country_snap=(client_obj.country if client_obj else None),
+        tenant_legal_name_snap=((tenant_obj.legal_name or tenant_obj.name) if tenant_obj else None),
+        tenant_vat_snap=(tenant_obj.vat_number if tenant_obj else None),
+        tenant_tax_code_snap=(tenant_obj.tax_code if tenant_obj else None),
+        tenant_address_snap=(tenant_obj.address if tenant_obj else None),
+        tenant_email_snap=(tenant_obj.email if tenant_obj else None),
+        tenant_phone_snap=(tenant_obj.phone if tenant_obj else None),
+        tenant_iban_snap=(tenant_obj.iban if tenant_obj else None),
+        tenant_sdi_snap=(tenant_obj.sdi_code if tenant_obj else None),
+    )
+    db.add(inv)
+    db.flush()
+    line = InvoiceLine(
+        invoice_id=inv.id,
+        description=description or f"Acconto progetto {proj.code}",
+        quantity=1.0, unit_price=subtotal, total=subtotal,
+        vat_rate=vat_rate, discount_pct=0.0,
+    )
+    db.add(line)
+    # Ledger: open con balance = full amount
+    user_id = getattr(getattr(request.state, "user", None), "id", None)
+    ap = AdvancePayment(
+        tenant_id=current_tenant_id(),
+        project_id=project_id,
+        invoice_id=inv.id,
+        amount=subtotal,
+        balance_remaining=subtotal,
+        status=AdvancePaymentStatus.open,
+        notes=notes,
+        created_by_user_id=user_id,
+    )
+    db.add(ap)
+    db.commit()
+    db.refresh(inv)
+    db.refresh(ap)
+    return {
+        "advance_payment_id": ap.id,
+        "invoice_id": inv.id,
+        "invoice_number": inv.number,
+        "amount": subtotal, "vat_rate": vat_rate, "total": total,
+        "balance_remaining": ap.balance_remaining,
+        "status": ap.status.value,
+    }
+
+
+@router.get("/api/projects/{project_id}/advances")
+async def list_project_advances(project_id: int, db: Session = Depends(get_db)):
+    """Lista acconti del progetto + totali. Usata in cost-report card "Acconti"."""
+    proj = db.query(Project).filter(
+        Project.id == project_id, Project.tenant_id == current_tenant_id(),
+    ).first()
+    if not proj:
+        raise HTTPException(404, "Progetto non trovato")
+    rows = (
+        db.query(AdvancePayment)
+        .options(joinedload(AdvancePayment.invoice), joinedload(AdvancePayment.consumptions))
+        .filter(
+            AdvancePayment.tenant_id == current_tenant_id(),
+            AdvancePayment.project_id == project_id,
+        )
+        .order_by(AdvancePayment.created_at.asc())
+        .all()
+    )
+    out = []
+    total_amount = 0.0
+    total_balance = 0.0
+    total_consumed = 0.0
+    for ap in rows:
+        consumed = sum((c.amount_consumed or 0) for c in ap.consumptions)
+        inv = ap.invoice
+        is_cancelled = (ap.status == AdvancePaymentStatus.cancelled)
+        if not is_cancelled:
+            total_amount += ap.amount or 0
+            total_balance += ap.balance_remaining or 0
+            total_consumed += consumed
+        out.append({
+            "id": ap.id,
+            "status": ap.status.value,
+            "amount": round(ap.amount or 0, 2),
+            "balance_remaining": round(ap.balance_remaining or 0, 2),
+            "consumed": round(consumed, 2),
+            "notes": ap.notes,
+            "created_at": ap.created_at.isoformat() if ap.created_at else None,
+            "invoice": {
+                "id": inv.id, "number": inv.number,
+                "status": inv.status.value if hasattr(inv.status, "value") else inv.status,
+                "issue_date": str(inv.issue_date) if inv.issue_date else None,
+                "due_date": str(inv.due_date) if inv.due_date else None,
+                "amount_paid": round(inv.amount_paid or 0, 2),
+                "total": round(inv.total or 0, 2),
+            } if inv else None,
+        })
+    return {
+        "project_id": project_id, "rows": out,
+        "totals": {
+            "amount": round(total_amount, 2),
+            "consumed": round(total_consumed, 2),
+            "balance_remaining": round(total_balance, 2),
+        },
+    }
+
+
+@router.post("/api/advances/{advance_id}/cancel", dependencies=[RequireEditInvoices])
+async def cancel_advance_payment(advance_id: int, db: Session = Depends(get_db)):
+    """Annulla acconto. Consentito solo se balance_remaining == amount (nessun consumo).
+    Marca AdvancePayment.status=cancelled. L'Invoice associata NON viene toccata
+    (l'utente userà /api/invoices/{id}/status separatamente per cancellarla via NC TD04)."""
+    ap = db.query(AdvancePayment).filter(
+        AdvancePayment.id == advance_id,
+        AdvancePayment.tenant_id == current_tenant_id(),
+    ).first()
+    if not ap:
+        raise HTTPException(404, "Acconto non trovato")
+    if ap.status == AdvancePaymentStatus.cancelled:
+        raise HTTPException(409, "Acconto già annullato")
+    consumed = sum((c.amount_consumed or 0) for c in ap.consumptions)
+    if consumed > 0.001:
+        raise HTTPException(
+            409,
+            f"Acconto ha già consumi per €{consumed:.2f}. Annullamento bloccato. "
+            "Per stornare: emetti NC TD04 sull'invoice associata."
+        )
+    ap.status = AdvancePaymentStatus.cancelled
+    ap.balance_remaining = 0.0
+    db.commit()
+    return {"id": ap.id, "status": ap.status.value}
 
 
 # ── Report API ────────────────────────────────────────────────────────

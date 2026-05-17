@@ -8,6 +8,33 @@
 
 ## Versione corrente
 
+**v3.5.0-alpha.136** — 17 maggio 2026 mattina — Acconti progetto Step 1 (Pattern B ledger AdvancePayment)
+
+Risposta al gap evidenziato da Matteo dopo α.135: "fattura manuale non si lega a progetto/lavorazione, serve modalità pagamento anticipato nel CR".
+
+**Step 1 implementato**:
+- Modelli: `AdvancePayment` + `AdvancePaymentConsumption` + `InvoiceKind` + `AdvancePaymentStatus`.
+- Invoice estesa: `kind` (regular/advance/balance) + `project_id` (link diretto, multi-job).
+- Auto-migrate al boot: create_all + ALTER invoices.
+- 3 endpoint: `POST /finance/api/projects/{id}/advances` (crea Invoice kind=advance + ledger), `GET /finance/api/projects/{id}/advances` (lista + totali), `POST /finance/api/advances/{id}/cancel`.
+- UI cost-report dettaglio: card "💰 Acconti del progetto" + modal "Crea acconto" + bottone Annulla.
+
+**Smoke E2E** su Shadow (job 9): create €5'000 → invoice 2026-00112 + AP id=1 ✓ list ✓ cancel ✓ cleanup ✓.
+
+**Backlog α.137 (Step 2 acconti + multi-currency)**:
+- Scomputo nelle fatture batch successive (estensione emit_invoice + closing auto-scompute residuo + UI cost report colonna "coperto da acconto").
+- Settings valuta base: `Tenant.base_currency` (EUR default).
+- FXRate cache + provider Frankfurter (BCE, free, no key).
+- Quote multi-currency: `Quote.currency` + `Quote.fx_rate_used` + UI dropdown valuta con conversione live.
+
+**Backlog α.138+**:
+- F29 i18n sweep TUTTA UI (~500-1000 chiavi, IT/EN/FR/DE per pagina), aggiunge anche stringhe JS dinamiche via `mfT()` helper.
+- Test parse 14 capitolati restanti.
+- OAuth integrazioni.
+- Automazione portali consegne.
+
+## (versione precedente)
+
 **v3.5.0-alpha.135** — 17 maggio 2026 mattina — F26/F27/F30 coerenza CR↔Fatturazione (pattern B) + F28 root cause
 
 **Bundle architetturale "Coerenza CR↔Fatturazione"** chiuso con pattern B (trasparenza UI, no riarchitettura).

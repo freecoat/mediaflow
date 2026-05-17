@@ -376,10 +376,13 @@ def _auto_migrate_columns():
                 ))
         # v3.5.0-alpha.112 — Closing invoice flag + project link
         # v3.5.0-alpha.113 — Client admin email snapshot
+        # v3.5.0-alpha.136 — Invoice.kind (regular/advance/balance) + project_id
         inv_alter_112 = [
             ("is_closing", "BOOLEAN NOT NULL DEFAULT 0"),
             ("closing_project_id", "INTEGER NULL REFERENCES projects(id)"),
             ("client_admin_email_snap", "VARCHAR(255) NULL"),
+            ("kind", "VARCHAR(16) NOT NULL DEFAULT 'regular'"),
+            ("project_id", "INTEGER NULL REFERENCES projects(id)"),
         ]
         with engine.begin() as conn:
             for col, ddl in inv_alter_112:
@@ -1123,7 +1126,7 @@ async def lifespan(app: FastAPI):
     yield
 
 
-app = FastAPI(title="MediaFlow", version="3.5.0-alpha.135", lifespan=lifespan)
+app = FastAPI(title="MediaFlow", version="3.5.0-alpha.136", lifespan=lifespan)
 
 BASE_DIR = Path(__file__).parent
 app.mount("/static", StaticFiles(directory=BASE_DIR / "static"), name="static")
