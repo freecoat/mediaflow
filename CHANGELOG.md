@@ -1,5 +1,21 @@
 # MediaFlow — Changelog
 
+## v3.5.0-alpha.140.1 — HOTFIX: loadQuote → reloadQuote (17 mag 2026 mattina)
+
+**Bug**: aggiunta/cancellazione/modifica rata acconto + cambio valuta non aggiornavano visualizzazione.
+
+**Root cause**: introdotto α.137 + α.139, chiamate a `loadQuote(currentQuote.id)` — funzione INESISTENTE nel template. Nome corretto è `reloadQuote()` (no arg, usa `currentQuoteId` globale). Errori JS silenti in console.
+
+**Fix**: replace 4 occorrenze in:
+- `changeQuoteCurrency` (α.137)
+- `refreshQuoteFx` (α.137)
+- `submitAdvanceSchedule` (α.139)
+- `deleteAdvanceSchedule` (α.139)
+
+**Smoke backend** (pre-fix): GET quote `_get_schedules_serialized` ritornava schedules corretti. POST/DELETE schedule funzionavano. Bug era SOLO refresh UI post-azione.
+
+---
+
 ## v3.5.0-alpha.140 — UX quote: accorpamento condizioni + modal rata bidirezionale + cards collassabili (17 mag 2026 mattina)
 
 Feedback Matteo post-α.139 prima di procedere con hook auto-create AP. 5 fix UX:

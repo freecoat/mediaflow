@@ -1879,7 +1879,7 @@ async function changeQuoteCurrency(newCcy) {
     if (!r.ok) throw new Error((await r.json()).detail || 'Errore');
     const data = await r.json();
     toast('✓ Valuta ' + data.currency + ' (tasso ' + (data.fx_rate_to_base || 1).toFixed(4) + ')', 'success');
-    await loadQuote(currentQuote.id);
+    await reloadQuote();
   } catch (e) { toast(e.message || 'Errore', 'error'); }
 }
 
@@ -1894,7 +1894,7 @@ async function refreshQuoteFx() {
     if (!r.ok) throw new Error((await r.json()).detail || 'Errore');
     const data = await r.json();
     toast('✓ Tasso aggiornato: 1 ' + data.currency + ' = ' + data.fx_rate_to_base.toFixed(4) + ' base', 'success');
-    await loadQuote(currentQuote.id);
+    await reloadQuote();
   } catch (e) { toast(e.message || 'Errore', 'error'); }
 }
 
@@ -2250,7 +2250,7 @@ async function submitAdvanceSchedule() {
     if (!res.ok) throw new Error((await res.json()).detail || 'Errore');
     toast(id ? '✓ Rata aggiornata' : '✓ Rata creata', 'success');
     closeModal('modal-advance-schedule');
-    await loadQuote(currentQuote.id);
+    await reloadQuote();
   } catch (e) { toast(e.message || 'Errore', 'error'); }
   finally { btn.disabled = false; btn.textContent = '💾 Salva rata'; }
 }
@@ -2263,7 +2263,7 @@ async function deleteAdvanceSchedule(scheduleId) {
     });
     if (!res.ok) throw new Error((await res.json()).detail || 'Errore');
     toast('✓ Rata eliminata', 'success');
-    await loadQuote(currentQuote.id);
+    await reloadQuote();
   } catch (e) { toast(e.message || 'Errore', 'error'); }
 }
 

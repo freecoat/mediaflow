@@ -8,6 +8,16 @@
 
 ## Versione corrente
 
+**v3.5.0-alpha.140.1** — 17 maggio 2026 mattina — HOTFIX loadQuote → reloadQuote
+
+**Bug**: aggiunta/cancellazione/modifica rata acconto + cambio valuta non aggiornavano UI.
+**Root cause**: `loadQuote(id)` inesistente, era `reloadQuote()`. Introdotto α.137 + α.139.
+**Fix**: 4 replace (changeQuoteCurrency, refreshQuoteFx, submitAdvanceSchedule, deleteAdvanceSchedule).
+
+Backend OK (smoke pre-fix confermava GET/POST/DELETE corretti).
+
+## (versione precedente)
+
 **v3.5.0-alpha.140** — 17 maggio 2026 mattina — UX quote: accorpamento condizioni + modal rata bidirezionale + cards collassabili
 
 5 fix UX richiesti Matteo prima di procedere con hook auto-create AP (slittato a α.141):
