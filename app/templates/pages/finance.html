@@ -940,7 +940,7 @@ async function loadAdvancesDrafts() {
   });
 }
 
-function openAdvConfirmModal(ap) {
+async function openAdvConfirmModal(ap) {
   document.getElementById('adv-conf-id').value = ap.id;
   document.getElementById('adv-conf-label').value = ap.label || '';
   document.getElementById('adv-conf-amount').value = (ap.amount || 0).toFixed(2);
@@ -948,33 +948,75 @@ function openAdvConfirmModal(ap) {
   const meta = document.getElementById('adv-conf-meta');
   meta.textContent = 'AP #' + ap.id + ' · ' + (ap.project_code || '?') + ' · status ' + ap.status +
     (ap.scheduled_due_date ? ' · scad. ' + ap.scheduled_due_date : '');
+  // v3.5.0-alpha.158 — Fetch TUTTE JCL del progetto via /jcls-available
+  // → picker completo, l'utente può add/remove/modify allocazioni.
   const host = document.getElementById('adv-conf-allocs-host');
   host.textContent = '';
-  (ap.allocations || []).forEach(a => {
-    const row = document.createElement('div');
-    row.style.cssText = 'display:flex; align-items:center; gap:8px; padding:4px 0; border-bottom:1px solid var(--border);';
-    const lbl = document.createElement('div');
-    lbl.style.cssText = 'flex:1; font-size:12px;';
-    lbl.textContent = (a.jcl_description || ('JCL #' + a.job_cost_line_id)).substring(0, 70);
-    const pctInp = document.createElement('input');
-    pctInp.type = 'number'; pctInp.step = '0.1'; pctInp.min = '0'; pctInp.max = '100';
-    pctInp.value = ((a.pct || 1) * 100).toFixed(1);
-    pctInp.dataset.allocId = a.id;
-    pctInp.style.cssText = 'width:70px; padding:2px 4px; background:var(--bg3); border:1px solid var(--border); color:var(--text); border-radius:3px; font-family:DM Mono,monospace; font-size:11px;';
-    row.appendChild(lbl); row.appendChild(pctInp);
-    const u = document.createElement('span'); u.className = 'text-xs text-muted'; u.textContent = '%'; row.appendChild(u);
-    host.appendChild(row);
+  let data;
+  try {
+    data = await api('GET', '/finance/api/advances/' + ap.id + '/jcls-available');
+  } catch (e) {
+    host.textContent = 'Errore caricamento JCL: ' + (e.message || '');
+    openModal('modal-advance-confirm'); return;
+  }
+  const jcls = data.jcls || [];
+  if (!jcls.length) {
+    const d = document.createElement('div'); d.className = 'text-muted text-sm';
+    d.textContent = 'Progetto senza JCL — allocazione non possibile.';
+    host.appendChild(d);
+    openModal('modal-advance-confirm'); return;
+  }
+  // Aggrega per Job
+  const byJob = {};
+  jcls.forEach(j => { (byJob[j.job_code || ('#' + j.job_id)] ||= []).push(j); });
+  Object.entries(byJob).forEach(([jobCode, items]) => {
+    const grpHdr = document.createElement('div');
+    grpHdr.style.cssText = 'font-weight:600; font-size:11px; color:var(--indigo2); margin-top:8px; padding-bottom:3px; border-bottom:1px solid var(--border); text-transform:uppercase; letter-spacing:0.04em;';
+    grpHdr.textContent = jobCode + ' — ' + items.length + ' voce/i';
+    host.appendChild(grpHdr);
+    items.forEach(j => {
+      const row = document.createElement('div');
+      row.style.cssText = 'display:flex; align-items:center; gap:8px; padding:5px 0; border-bottom:1px dashed var(--border); font-size:12px;';
+      const cb = document.createElement('input');
+      cb.type = 'checkbox';
+      cb.dataset.jclId = j.jcl_id;
+      cb.checked = !!j.allocated;
+      const lbl = document.createElement('label');
+      lbl.style.cssText = 'flex:1; cursor:pointer;';
+      lbl.appendChild(cb);
+      const sp = document.createElement('span');
+      sp.style.marginLeft = '6px';
+      sp.textContent = (j.description || '').substring(0, 60) + ' · ' + fmtCurrency(j.total_quoted);
+      lbl.appendChild(sp);
+      row.appendChild(lbl);
+      const pctInp = document.createElement('input');
+      pctInp.type = 'number'; pctInp.step = '0.1'; pctInp.min = '0'; pctInp.max = '100';
+      pctInp.value = j.allocated ? ((j.alloc_pct || 1) * 100).toFixed(1) : '100';
+      pctInp.dataset.jclPct = j.jcl_id;
+      pctInp.style.cssText = 'width:70px; padding:2px 4px; background:var(--bg3); border:1px solid var(--border); color:var(--text); border-radius:3px; font-family:DM Mono,monospace; font-size:11px;';
+      pctInp.disabled = !cb.checked;
+      cb.onchange = () => { pctInp.disabled = !cb.checked; };
+      row.appendChild(pctInp);
+      const u = document.createElement('span'); u.className = 'text-xs text-muted'; u.textContent = '%';
+      row.appendChild(u);
+      host.appendChild(row);
+    });
   });
   openModal('modal-advance-confirm');
 }
 
-function _collectAllocUpdates() {
+// v3.5.0-alpha.158 — Raccoglie allocations_set CSV "jcl_id:pct,..." per
+// sostituzione totale via backend confirm.allocations_set (add/remove/modify).
+function _collectAllocSet() {
   const host = document.getElementById('adv-conf-allocs-host');
   const out = [];
-  host.querySelectorAll('input[type=number]').forEach(inp => {
-    const aid = inp.dataset.allocId;
+  host.querySelectorAll('input[type=checkbox]').forEach(cb => {
+    if (!cb.checked) return;
+    const jclId = cb.dataset.jclId;
+    const inp = host.querySelector('input[type=number][data-jcl-pct="' + jclId + '"]');
+    if (!inp) return;
     const pct = parseFloat(inp.value || 100) / 100;
-    if (!isNaN(pct) && pct >= 0 && pct <= 1.0) out.push(aid + ':' + pct);
+    if (!isNaN(pct) && pct > 0 && pct <= 1.0) out.push(jclId + ':' + pct);
   });
   return out.join(',');
 }
@@ -986,8 +1028,9 @@ async function submitAdvConfirm(nextStatus) {
   fd.append('label', document.getElementById('adv-conf-label').value.trim());
   fd.append('notes', document.getElementById('adv-conf-notes').value.trim());
   fd.append('amount', document.getElementById('adv-conf-amount').value);
-  const aupd = _collectAllocUpdates();
-  if (aupd) fd.append('allocations_update', aupd);
+  // v3.5.0-alpha.158 — allocations_set sostituisce TUTTE le esistenti
+  const aset = _collectAllocSet();
+  fd.append('allocations_set', aset);  // string vuota = drop all
   fd.append('next_status', nextStatus || 'draft');
   try {
     const res = await api('POST', '/finance/api/advances/' + id + '/confirm', fd);

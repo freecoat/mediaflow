@@ -1,5 +1,47 @@
 # MediaFlow — Changelog
 
+## v3.5.0-alpha.158 — Acconti: gestione allocazioni completa (add/remove/modify) (17 mag 2026 notte)
+
+Fix gestione allocazioni acconti in /finance "Bozze acconti".
+
+**Bug pre-α.158**:
+- Modal "Gestisci acconto" mostrava SOLO le allocations già esistenti su AP.
+- Impossibile aggiungere allocazioni a JCL non già allocate.
+- Impossibile rimuovere allocazioni esistenti.
+- Per AP creati manualmente α.136 (senza schedule origine) il picker era vuoto.
+
+**Fix**:
+
+Backend nuovi:
+- `GET /finance/api/advances/{id}/jcls-available` — ritorna TUTTE le JCL del progetto associato all'AP, con flag `allocated` + `alloc_pct` + `alloc_amount` correnti.
+- Response per JCL: jcl_id, job_id, job_code, description, unit, total_quoted, total_accrued, billing_status, allocated, alloc_id, alloc_pct, alloc_amount.
+
+Backend `confirm_advance_payment` esteso:
+- Param nuovo `allocations_set` (CSV "jcl_id:pct,...") — sostituzione TOTALE: drop tutte le allocations esistenti + crea nuove dal CSV.
+- Validazione: pct ∈ (0,1], JCL deve appartenere al progetto dell'AP.
+- Distinto da `allocations_update` (legacy α.145, modifica pct esistenti per alloc_id).
+
+UI modal "Gestisci acconto":
+- `openAdvConfirmModal` ora async: fetch `/jcls-available` + popola picker completo.
+- Lista JCL raggruppate per Job (header "JOB_CODE — N voci").
+- Per ogni JCL: checkbox (allocato sì/no) + input % (disabled se unchecked).
+- Description JCL + total_quoted visualizzati.
+- Submit usa `_collectAllocSet()` → CSV jcl_id:pct → backend `allocations_set` (sostituzione totale).
+
+**Project_id propagation verificata**:
+- AP.project_id impostato sia in create_advance_payment (α.136) sia in materialize_schedules (α.144).
+- Invoice.project_id impostato in emit_invoice_from_advance (α.145, line 878: `project_id=ap.project_id`).
+- Stato OK, no fix necessario.
+
+**Smoke**: endpoint `/jcls-available` registrato (468 routes totali).
+
+**Backlog α.159**:
+- UI modal emit con preview allocazioni read-only + bottone "modifica" che apre confirm
+- Cost Report: includere Invoice project-level (no job_id) nei totali invoiced_net (oggi solo Invoice.job_id == j.id, le acconti project-level non si vedono per job)
+- Warning UI quando billed >> accrued (over-billing storico, simile Vento Aperto Ep. 3)
+
+---
+
 ## v3.5.0-alpha.157 — Cost report OU usa max(accrued, billed) — fix logico (17 mag 2026 sera tarda)
 
 Fix logico richiesto Matteo dopo α.156. OU = `effective_accrued - quoted` dove `effective_accrued = max(JCL.total_accrued, billed_locked)`.

@@ -664,14 +664,62 @@ async def list_pending_draft_advances(db: Session = Depends(get_db)):
     return {"count": len(out), "rows": out}
 
 
+@router.get("/api/advances/{advance_id}/jcls-available")
+async def list_jcls_for_advance(advance_id: int, db: Session = Depends(get_db)):
+    """v3.5.0-alpha.158 — Lista TUTTE le JCL del progetto associato a questo AP +
+    flag `allocated` (true se già in AdvancePaymentAllocation) + pct corrente.
+    UI usa per popolare picker JCL nel modal "Gestisci acconto" — l'utente
+    può add/remove/modify allocazioni a piacere."""
+    from app.models import AdvancePaymentAllocation as _APA
+    ap = db.query(AdvancePayment).filter(
+        AdvancePayment.id == advance_id,
+        AdvancePayment.tenant_id == current_tenant_id(),
+    ).first()
+    if not ap:
+        raise HTTPException(404, "Acconto non trovato")
+    # Tutti JCL del progetto via Job
+    jcls = (
+        db.query(JobCostLine)
+        .join(Job, JobCostLine.job_id == Job.id)
+        .filter(Job.project_id == ap.project_id, Job.tenant_id == current_tenant_id())
+        .order_by(Job.code.asc(), JobCostLine.id.asc())
+        .all()
+    )
+    # Map alloc esistenti su questo AP
+    allocs = db.query(_APA).filter(_APA.advance_payment_id == advance_id).all()
+    alloc_map = {a.job_cost_line_id: a for a in allocs}
+    out = []
+    for jcl in jcls:
+        a = alloc_map.get(jcl.id)
+        out.append({
+            "jcl_id": jcl.id,
+            "job_id": jcl.job_id,
+            "job_code": jcl.job.code if jcl.job else None,
+            "description": jcl.description,
+            "unit": jcl.unit,
+            "total_quoted": round(jcl.total_quoted or 0, 2),
+            "total_accrued": round(jcl.total_accrued or 0, 2),
+            "billing_status": jcl.billing_status.value if jcl.billing_status else None,
+            "allocated": bool(a),
+            "alloc_id": a.id if a else None,
+            "alloc_pct": (a.pct if a else 0.0),
+            "alloc_amount": (a.amount if a else 0.0),
+        })
+    return {"advance_id": ap.id, "project_id": ap.project_id,
+            "amount": ap.amount, "jcls": out}
+
+
 @router.post("/api/advances/{advance_id}/confirm", dependencies=[RequireEditInvoices])
 async def confirm_advance_payment(
     advance_id: int,
     label: Optional[str] = Form(None),
     notes: Optional[str] = Form(None),
     amount: Optional[float] = Form(None),
-    # CSV "alloc_id:pct,alloc_id:pct" per update pct allocazioni
+    # v3.5.0-alpha.145 — CSV "alloc_id:pct,alloc_id:pct" per update pct allocazioni esistenti
     allocations_update: Optional[str] = Form(None),
+    # v3.5.0-alpha.158 — CSV "jcl_id:pct,jcl_id:pct" sostituzione TOTALE allocazioni.
+    # Override completo: drop tutte le esistenti + crea nuove. Per add/remove/modify.
+    allocations_set: Optional[str] = Form(None),
     next_status: Optional[str] = Form("confirmed"),  # confirmed | draft
     db: Session = Depends(get_db),
 ):
@@ -723,6 +771,41 @@ async def confirm_advance_payment(
                 raise HTTPException(404, f"Allocation #{a_id} non trovata per AP {ap.id}")
             alloc.pct = pct_v
             alloc.amount = round((ap.amount or 0) * pct_v, 2)
+    # v3.5.0-alpha.158 — allocations_set: sostituzione totale add/remove/modify.
+    # Drop tutte le esistenti + crea nuove dal CSV "jcl_id:pct,jcl_id:pct".
+    if allocations_set is not None:
+        # Valida JCL appartengono al progetto dell'AP
+        from app.models import AdvancePaymentAllocation as _APA2
+        new_pairs: list[tuple[int, float]] = []
+        for token in allocations_set.split(","):
+            token = token.strip()
+            if not token:
+                continue
+            if ":" not in token:
+                raise HTTPException(400, f"allocations_set parse error: '{token}' (atteso jcl_id:pct)")
+            jid_s, pct_s = token.split(":", 1)
+            try:
+                jid = int(jid_s.strip())
+                pct_v = float(pct_s.strip())
+            except ValueError:
+                raise HTTPException(400, f"allocations_set parse: '{token}'")
+            if pct_v <= 0 or pct_v > 1.0:
+                raise HTTPException(400, f"allocations_set pct fuori range (0,1]: {pct_v} per JCL {jid}")
+            # Verifica JCL esiste + appartiene al progetto AP
+            jcl = db.query(JobCostLine).join(Job, JobCostLine.job_id == Job.id).filter(
+                JobCostLine.id == jid, Job.project_id == ap.project_id,
+            ).first()
+            if not jcl:
+                raise HTTPException(404, f"JCL {jid} non trovata o non nel progetto {ap.project_id}")
+            new_pairs.append((jid, pct_v))
+        # Drop existing
+        db.query(_APA2).filter(_APA2.advance_payment_id == ap.id).delete()
+        # Crea nuove
+        for jid, pct_v in new_pairs:
+            db.add(_APA2(
+                advance_payment_id=ap.id, job_cost_line_id=jid,
+                pct=pct_v, amount=round((ap.amount or 0) * pct_v, 2),
+            ))
     if next_status:
         if next_status not in ("draft", "confirmed"):
             raise HTTPException(400, f"next_status '{next_status}' non valido (atteso draft|confirmed)")

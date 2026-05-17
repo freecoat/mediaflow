@@ -8,6 +8,26 @@
 
 ## Versione corrente
 
+**v3.5.0-alpha.158** — 17 maggio 2026 notte — Acconti: gestione allocazioni completa
+
+Bug pre-α.158: modal Gestisci mostrava solo allocations esistenti, no add/remove possibile.
+
+Fix:
+- Endpoint nuovo `GET /finance/api/advances/{id}/jcls-available` ritorna TUTTE JCL progetto + flag allocated/pct/amount
+- `confirm_advance_payment` accetta `allocations_set` CSV "jcl_id:pct,..." sostituzione totale
+- UI modal Gestisci: picker JCL completo raggruppato per Job, checkbox + pct input
+
+Verificato: AP.project_id + Invoice.project_id propagation OK in tutti i flow.
+
+468 routes.
+
+Backlog α.159:
+- UI modal emit con preview allocazioni
+- CR include Invoice project-level
+- Warning over-billing
+
+## (versione precedente)
+
 **v3.5.0-alpha.157** — 17 maggio 2026 sera tarda — Cost report OU usa max(accrued, billed)
 
 Fix logico Matteo: OU pre-α.157 usava solo `total_accrued`, ignorando billed_locked > accrued (over-billing). Ora `effective_accrued = max(accrued, billed)` → OU finanziario corretto.
