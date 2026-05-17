@@ -1363,7 +1363,12 @@ function renderCostLines() {
   tbody.innerHTML = currentReport.cost_lines.map(l => {
     const ov = (l[_viewKey2] ?? l.over_under) || 0;
     const ovSign = ov > 0 ? '+' : '';
-    const billedLocked = l.billed_locked || 0;
+    // v3.5.0-alpha.161 — billed_total unifica slice + advance_paid_coverage.
+    // billedLocked legge billed_total (cassa effettivamente incassata sulla JCL).
+    const billedTotal = (typeof l.billed_total === 'number') ? l.billed_total : (l.billed_locked || 0);
+    const billedFromSlice = l.billed_from_slice || (l.billed_locked || 0);
+    const billedFromAdvance = l.billed_from_advance || 0;
+    const billedLocked = billedTotal;  // alias retro-compatibile per resto codice
     const accruedPost = l.accrued_post_period || 0;
     const forecastFut = l.forecast_future || 0;
     // v3.5.0-alpha.64: badge "↪ Riferita su Q-..." per JCL già rimandate al commerciale.
@@ -1443,7 +1448,7 @@ function renderCostLines() {
       </td>
       <td class="text-sm text-muted">${l.unit}</td>
       <td class="mono text-right">${fmtCurrency(l.total_quoted)}</td>
-      <td class="mono text-right color-green">${fmtCurrency(billedLocked)}</td>
+      <td class="mono text-right color-green" title="${billedFromAdvance > 0.005 ? 'Slice batch: ' + fmtCurrency(billedFromSlice) + ' · Acconto pagato: ' + fmtCurrency(billedFromAdvance) : 'Σ slice batch fatturate (immutabile)'}">${fmtCurrency(billedTotal)}${billedFromAdvance > 0.005 ? ' <span class="text-xs" style="color:#a78bfa;">💰</span>' : ''}</td>
       <td class="mono text-right color-amber">${fmtCurrency(accruedPost)}</td>
       <td class="mono text-right">${fmtCurrency(forecastFut)}</td>
       <td class="mono text-right" style="color:${ov>0?'var(--rose)':(ov<0?'var(--green)':'var(--text3)')};">${ovSign}${fmtCurrency(ov)}</td>

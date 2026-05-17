@@ -1,5 +1,35 @@
 # MediaFlow — Changelog
 
+## v3.5.0-alpha.161 — Colonna Fatturato include acconto pagato (billed_total unificato) (17 mag 2026 notte)
+
+Risposta domanda Matteo: "perché non vedo l'acconto nella cifra fatturata?".
+
+Pre-α.161: colonna "Fatturato" per JCL = `billed_locked` (Σ JCLBilledSlice, solo slice batch). Acconto pagato + allocato NON contribuiva. Architettura distingueva slice (work effettivo) da acconto (cassa anticipata) — corretta semanticamente ma UX confusa.
+
+Fix:
+
+**Backend** `job_cost_report` JCL response:
+- `billed_total = billed_locked + advance_paid_coverage` (cassa effettivamente incassata su JCL).
+- `billed_from_slice` = quota da batch (slice immutable).
+- `billed_from_advance` = quota da acconto pagato allocato.
+
+**UI cost report**:
+- `billedLocked` alias retro-compat ora legge `billed_total`.
+- Colonna "Fatturato" mostra billed_total con icona 💰 se billed_from_advance > 0.
+- Tooltip: "Slice batch: €X · Acconto pagato: €Y" (se misto).
+
+**Esempio**:
+- JCL Re-recording mix: slice = 19'246, acconto allocato pagato = 0 → billed_total = 19'246 ✓
+- JCL X: slice = 0, acconto allocato 100% pagato = 5'000 → billed_total = 5'000 ✓ (era 0 pre-α.161)
+- JCL Y: slice = 3'000, acconto pagato = 2'000 → billed_total = 5'000 (tooltip mostra split)
+
+**Backlog α.162**:
+- Sum billed_total a livello job summary (KPI card "Fatturato chiuso")
+- Eventuali aggiustamenti `accrued_post_period`/over_under con effective_billed
+- F29 round 6 modal/form granulare
+
+---
+
 ## v3.5.0-alpha.160.1 — HOTFIX: variable shadowing `paid` in cost_report.py (17 mag 2026 notte)
 
 Bug introdotto α.160: nel for loop `paid_rows` ho usato `paid` come loop var, shadowing variabile esterna omonima (`paid = Σ Invoice.total status=paid`).

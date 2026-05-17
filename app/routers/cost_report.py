@@ -875,6 +875,14 @@ async def job_cost_report(job_id: int, db: Session = Depends(get_db)):
                 ),
                 # v3.5.0-alpha.60: 3 colonne per riga (slice-based).
                 **three_column_view(l, billed_map.get(l.id, 0.0)),
+                # v3.5.0-alpha.161 — billed_total unifica slice + advance_paid_coverage.
+                # Colonna "Fatturato" UI legge billed_total: cassa effettivamente
+                # incassata sulla JCL (slice batch + quota acconto pagato).
+                "billed_total": round(
+                    billed_map.get(l.id, 0.0) + advance_paid_coverage_by_jcl.get(l.id, 0.0), 2
+                ),
+                "billed_from_slice": round(billed_map.get(l.id, 0.0), 2),
+                "billed_from_advance": round(advance_paid_coverage_by_jcl.get(l.id, 0.0), 2),
                 # v3.5.0-alpha.64: lista quote-line che referenziano questa JCL
                 # (refer-to-sales). UI mostra badge "↪ Riferita su Q-NNN-NN v2".
                 "referrals": refs_map.get(l.id, []),
