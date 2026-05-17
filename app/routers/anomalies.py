@@ -35,13 +35,17 @@ from app.models import (
     AnomalyStatus,
     AnomalyType,
     Job,
+    JobCostLine,
     LossEntry,
     LossReason,
     OverheadCost,
     OverheadCostCategory,
+    PriceItem,
     Project,
+    User,
 )
 from app.services.anomaly_detector import detect_all
+from app.services.notifications import notify
 from app.services.rbac import current_user_optional, requires_permission
 from app.context import current_tenant_id
 
@@ -85,11 +89,18 @@ async def list_anomalies(
     anomaly_type: Optional[str] = None,
     project_id: Optional[int] = None,
     client_id: Optional[int] = None,
+    department_id: Optional[int] = None,
     from_date: Optional[date] = None,
     to_date: Optional[date] = None,
     db: Session = Depends(get_db),
 ):
-    """Lista anomalie con filtri. Default: solo open."""
+    """Lista anomalie con filtri. Default: solo open.
+
+    v3.5.0-alpha.141 — Filtro `department_id`: applicato solo a anomalie
+    con source_kind='jcl' tramite join JCL→price_item.department_id.
+    Anomalie su altre source (quote/job/invoice) NON sono filtrate dal dept
+    (perché non hanno reparto diretto). Per ora il filtro le esclude.
+    """
     q = (
         db.query(AnomalyEntry)
         .options(
@@ -113,6 +124,16 @@ async def list_anomalies(
         q = q.filter(AnomalyEntry.project_id == project_id)
     if client_id:
         q = q.filter(AnomalyEntry.client_id == client_id)
+    if department_id:
+        # Subquery JCL del dipartimento richiesto via price_item.department_id
+        from sqlalchemy import select
+        dept_jcl_ids = select(JobCostLine.id).join(
+            PriceItem, PriceItem.id == JobCostLine.price_item_id
+        ).where(PriceItem.department_id == department_id)
+        q = q.filter(
+            AnomalyEntry.source_kind == AnomalySourceKind.jcl,
+            AnomalyEntry.source_id.in_(dept_jcl_ids),
+        )
     if from_date:
         q = q.filter(AnomalyEntry.detected_at >= datetime.combine(from_date, datetime.min.time()))
     if to_date:
@@ -162,6 +183,8 @@ def _handle_single(
     action: AnomalyAction,
     user_id: Optional[int],
     notes: Optional[str],
+    target_user_id: Optional[int] = None,
+    next_action_label: Optional[str] = None,
 ) -> dict:
     """Applica azione su 1 anomalia. Crea LossEntry o OverheadCost se servono."""
     if entry.status != AnomalyStatus.open:
@@ -215,7 +238,42 @@ def _handle_single(
         target_kind = "OverheadCost"
         target_id = oc.id
 
-    # rimanda_commerciale / rivaluta_producer: solo cambio stato workflow
+    # v3.5.0-alpha.141 — rimanda_commerciale / rivaluta_producer: cambio stato
+    # workflow + Notification al destinatario specifico se target_user_id fornito.
+    # Title = "[Anomalia] {tipo}". Body = description + msg operatore + next_action.
+    if action in (AnomalyAction.rimanda_commerciale, AnomalyAction.rivaluta_producer):
+        if target_user_id:
+            type_lbl = entry.anomaly_type.value if entry.anomaly_type else "?"
+            action_lbl = ("Rimanda al commerciale" if action == AnomalyAction.rimanda_commerciale
+                          else "Rivaluta producer")
+            body_parts = [f"Anomalia #{entry.id} ({type_lbl}): {entry.description or '(no desc)'}"]
+            if entry.project_id:
+                body_parts.append(f"Progetto #{entry.project_id}" + (f" — {entry.project.title}" if entry.project else ""))
+            if entry.amount:
+                body_parts.append(f"Importo: €{entry.amount:.2f}")
+            if notes:
+                body_parts.append(f"\nMessaggio: {notes}")
+            if next_action_label:
+                body_parts.append(f"\nAzione richiesta: {next_action_label}")
+            link = (f"/projects/{entry.project_id}" if entry.project_id
+                    else f"/finance#section-anomalies")
+            notify(
+                db,
+                user_ids=[target_user_id],
+                kind="custom",
+                title=f"[{action_lbl}] Anomalia #{entry.id}",
+                body="\n".join(body_parts),
+                severity="action_required",
+                link=link,
+                actor_user_id=user_id,
+                tenant_id=current_tenant_id(),
+                commit=False,  # commit gestito dal caller (handle_anomaly)
+            )
+            target_kind = "Notification"
+            target_id = target_user_id  # snapshot dell'utente notificato
+        else:
+            # Workflow audit-only, no Notification
+            pass
 
     entry.status = AnomalyStatus.handled
     entry.handled_action = action
@@ -240,9 +298,14 @@ async def handle_anomaly(
     anomaly_id: int,
     action: str = Form(...),
     notes: Optional[str] = Form(None),
+    # v3.5.0-alpha.141 — Per rimanda/rivaluta: destinatario + azione successiva.
+    target_user_id: Optional[int] = Form(None),
+    next_action_label: Optional[str] = Form(None),
     db: Session = Depends(get_db),
 ):
-    """Applica azione su singola anomalia."""
+    """Applica azione su singola anomalia. Per rimanda/rivaluta, opzionale
+    target_user_id (destinatario Notification) + next_action_label (es. "modifica
+    quote", "ricontatta cliente", "riallinea pianificazione")."""
     try:
         act = AnomalyAction(action)
     except ValueError:
@@ -255,7 +318,10 @@ async def handle_anomaly(
     if not entry:
         raise HTTPException(404, "Anomalia non trovata")
     user = current_user_optional(request)
-    result = _handle_single(db, entry, act, user.id if user else None, notes)
+    result = _handle_single(
+        db, entry, act, user.id if user else None, notes,
+        target_user_id=target_user_id, next_action_label=next_action_label,
+    )
     db.commit()
     return {"ok": True, **result}
 

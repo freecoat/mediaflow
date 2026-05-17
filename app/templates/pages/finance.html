@@ -171,6 +171,38 @@
      Multiselect + bulk-handle. -->
 <div id="section-anomalies" class="hidden">
 
+  <!-- v3.5.0-alpha.141 — Legenda tipi anomalie + side-effects azioni (collassabile) -->
+  <details style="margin-bottom:14px; background:var(--bg2); border:1px solid var(--border); border-radius:8px; padding:8px 12px;">
+    <summary style="cursor:pointer; font-weight:600; font-size:13px; color:var(--text);">📖 Legenda tipi anomalie e azioni</summary>
+    <div style="margin-top:12px; display:grid; grid-template-columns:1fr 1fr; gap:18px;">
+      <div>
+        <div style="font-weight:600; margin-bottom:6px; color:var(--text2);">Tipi anomalie</div>
+        <table style="width:100%; font-size:12px; border-collapse:collapse;">
+          <tbody>
+            <tr><td style="padding:3px 6px; vertical-align:top;"><b style="color:#ef4444;">📅 Extra post-fattura</b></td><td style="padding:3px 6px;">Booking done/extra emersi DOPO che il periodo è già stato fatturato (JCLBilledSlice). Va riallineato con cliente.</td></tr>
+            <tr><td style="padding:3px 6px; vertical-align:top;"><b style="color:#f59e0b;">📈 Sforamento monte ore</b></td><td style="padding:3px 6px;">JCL.quantity_actual &gt; quantity_quoted. Lavoro effettivo eccede preventivo.</td></tr>
+            <tr><td style="padding:3px 6px; vertical-align:top;"><b style="color:#a78bfa;">📉 Quote vs consuntivo</b></td><td style="padding:3px 6px;">Drift fra quote_total e maturato reale a chiusura progetto. Sotto-quotato o over-prezzato.</td></tr>
+            <tr><td style="padding:3px 6px; vertical-align:top;"><b style="color:#ef4444;">💸 Mancato recupero</b></td><td style="padding:3px 6px;">Maturato non trasmesso in batch, fuori finestra fatturabile. Rischio perdita irrecuperabile.</td></tr>
+            <tr><td style="padding:3px 6px; vertical-align:top;"><b style="color:#6272f5;">➕ Extra puri</b></td><td style="padding:3px 6px;">JCL is_extra=True senza quote_line collegata. Lavorazione aggiunta post-approvazione.</td></tr>
+            <tr><td style="padding:3px 6px; vertical-align:top;"><b style="color:#f59e0b;">⚖ Drift costo</b></td><td style="padding:3px 6px;">Σ Resource cost stimato ≠ Σ SupplierInvoice reale per il job. Errata stima cost-rate.</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div>
+        <div style="font-weight:600; margin-bottom:6px; color:var(--text2);">Azioni e conseguenze</div>
+        <table style="width:100%; font-size:12px; border-collapse:collapse;">
+          <tbody>
+            <tr><td style="padding:3px 6px; vertical-align:top;"><b>↩ Rimanda al commerciale</b></td><td style="padding:3px 6px;">Cambio stato → handled. Notifica al commerciale selezionato (messaggio + azione richiesta). <i>Nessun side-effect DB.</i></td></tr>
+            <tr><td style="padding:3px 6px; vertical-align:top;"><b>🔄 Rivaluta producer</b></td><td style="padding:3px 6px;">Cambio stato → handled. Notifica al producer selezionato (messaggio + azione richiesta). <i>Nessun side-effect DB.</i></td></tr>
+            <tr><td style="padding:3px 6px; vertical-align:top;"><b>📉 Write-off (LossEntry)</b></td><td style="padding:3px 6px;">Crea LossEntry sul progetto. Importo registrato come <b>perdita irrecuperabile</b> in P&amp;L finale.</td></tr>
+            <tr><td style="padding:3px 6px; vertical-align:top;"><b>📦 Dirotta su spese aziendali</b></td><td style="padding:3px 6px;">Crea OverheadCost (categoria=other) di pari importo. Sposta il costo dal progetto a <b>spese aziendali generali</b>.</td></tr>
+            <tr><td style="padding:3px 6px; vertical-align:top;"><b>⊘ Dismiss</b></td><td style="padding:3px 6px;">Falso positivo o già gestito altrove. Status → dismissed senza azione.</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </details>
+
   <!-- KPI summary per tipo (open only) -->
   <div id="an-summary" class="stat-grid" style="margin-bottom:16px;"></div>
 
@@ -190,7 +222,15 @@
     <button type="button" class="an-chip" data-an-type="mancato_recupero" onclick="setAnomType('mancato_recupero')">💸 Mancato recupero</button>
     <button type="button" class="an-chip" data-an-type="over_budget" onclick="setAnomType('over_budget')">➕ Extra puri</button>
     <button type="button" class="an-chip" data-an-type="cost_estimate_vs_real_drift" onclick="setAnomType('cost_estimate_vs_real_drift')">⚖ Drift costo</button>
+    <span style="border-left:1px solid var(--border); height:18px; margin:0 8px;"></span>
+    <span class="text-sm text-muted" style="margin-right:6px;">Dipartimento:</span>
+    <select id="an-dept-filter" class="form-select" style="font-size:12px; padding:3px 8px; height:30px;" onchange="onAnomDeptChange()">
+      <option value="">— tutti —</option>
+    </select>
     <span style="flex:1;"></span>
+    <label class="text-xs text-muted" style="display:flex; align-items:center; gap:4px;" title="Auto-rilevamento ogni 10 minuti mentre la pagina è aperta. Attiva detector.detect_all idempotente in background.">
+      <input type="checkbox" id="an-auto-detect" onchange="toggleAnomAutoDetect()"> auto-rileva
+    </label>
     <button class="btn btn-secondary btn-sm" onclick="runAnomalyDetect()" title="Re-scan idempotente dei dati per popolare le anomalie">🔄 Rileva</button>
   </div>
   <style>
@@ -214,11 +254,12 @@
     <strong id="an-sel-count">0 selezionate</strong>
     <span style="border-left:1px solid var(--border); height:20px;"></span>
     <label class="text-sm">Azione:
-      <select id="an-bulk-action" class="form-select" style="font-size:13px; padding:2px 8px;">
-        <option value="rimanda_commerciale">↩ Rimanda al commerciale</option>
-        <option value="rivaluta_producer">🔄 Rivaluta producer</option>
-        <option value="write_off_loss">📉 Write-off (LossEntry)</option>
-        <option value="overhead_cost">📦 Pozzo costi (OverheadCost)</option>
+      <select id="an-bulk-action" class="form-select" style="font-size:13px; padding:2px 8px;"
+              title="Azione applicata a tutte le anomalie selezionate. Vedi legenda sopra per side-effects.">
+        <option value="rimanda_commerciale" title="Cambio stato + Notifica al commerciale. No DB write.">↩ Rimanda al commerciale</option>
+        <option value="rivaluta_producer" title="Cambio stato + Notifica al producer. No DB write.">🔄 Rivaluta producer</option>
+        <option value="write_off_loss" title="Crea LossEntry sul progetto (perdita irrecuperabile).">📉 Write-off (LossEntry)</option>
+        <option value="overhead_cost" title="Crea OverheadCost — sposta il costo da progetto a spese aziendali generali.">📦 Dirotta su spese aziendali</option>
       </select>
     </label>
     <input type="text" id="an-bulk-notes" class="form-input" placeholder="Nota (opzionale)" style="flex:1; max-width:340px; font-size:13px;">
@@ -408,6 +449,53 @@
 </div>
 
 <!-- v3.5.0-alpha.49: Modal emetti fattura -->
+<!-- v3.5.0-alpha.141 — Modal gestione anomalia singola (azione + opzionale destinatario+msg+next) -->
+<div class="modal-overlay" id="modal-anom-handle">
+  <div class="modal" style="max-width:540px;">
+    <div class="modal-header">
+      <span class="modal-title">🛠 Gestisci anomalia</span>
+      <button class="btn btn-ghost btn-icon" onclick="closeModal('modal-anom-handle')">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-group">
+        <label class="form-label">Azione *</label>
+        <select class="form-input" id="an-handle-action" onchange="onAnomHandleActionChange()">
+          <option value="rimanda_commerciale">↩ Rimanda al commerciale</option>
+          <option value="rivaluta_producer">🔄 Rivaluta producer</option>
+          <option value="write_off_loss">📉 Write-off (LossEntry)</option>
+          <option value="overhead_cost">📦 Dirotta su spese aziendali</option>
+        </select>
+        <div class="text-xs text-muted" id="an-handle-effect" style="margin-top:6px; padding:6px 10px; background:rgba(98,114,245,0.08); border-radius:4px;"></div>
+      </div>
+      <div class="form-group" id="an-handle-target-wrap">
+        <label class="form-label">Destinatario notifica</label>
+        <select class="form-input" id="an-handle-target"></select>
+        <div class="text-xs text-muted" id="an-handle-target-hint"></div>
+      </div>
+      <div class="form-group" id="an-handle-next-wrap">
+        <label class="form-label">Azione richiesta successiva</label>
+        <select class="form-input" id="an-handle-next">
+          <option value="">— libera (testo sotto) —</option>
+          <option value="Modifica quotazione">Modifica quotazione</option>
+          <option value="Ricontatta cliente">Ricontatta cliente</option>
+          <option value="Riallinea pianificazione">Riallinea pianificazione</option>
+          <option value="Verifica cost-rate risorse">Verifica cost-rate risorse</option>
+          <option value="Aggiungi extra alla prossima fattura">Aggiungi extra alla prossima fattura</option>
+          <option value="Storno NC + riemit">Storno NC + riemit</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Note / messaggio (opzionale)</label>
+        <textarea class="form-input" id="an-handle-notes" rows="3" placeholder="Contesto, dettaglio, riferimento PO…"></textarea>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeModal('modal-anom-handle')">Annulla</button>
+      <button class="btn btn-primary" onclick="submitAnomHandle()">Applica azione</button>
+    </div>
+  </div>
+</div>
+
 <div class="modal-overlay" id="modal-emit-invoice">
   <div class="modal" style="max-width:560px;">
     <div class="modal-header">
@@ -2020,7 +2108,31 @@ const ACTION_LBL = {
   rimanda_commerciale: '↩ Rimanda commerciale',
   rivaluta_producer: '🔄 Rivaluta producer',
   write_off_loss: '📉 Write-off',
-  overhead_cost: '📦 Pozzo costi',
+  overhead_cost: '📦 Dirotta su spese aziendali',  // v3.5.0-alpha.141 rinominato
+};
+
+// v3.5.0-alpha.141 — Side-effect dichiarati per ogni azione (per legenda + tooltip).
+const ACTION_EFFECTS = {
+  rimanda_commerciale: {
+    title: 'Rimanda al commerciale',
+    effect: 'Cambio stato workflow → handled. Notifica al commerciale selezionato con messaggio + azione successiva. Nessun side-effect DB.',
+    target_role: 'commerciale/sales',
+  },
+  rivaluta_producer: {
+    title: 'Rivaluta producer',
+    effect: 'Cambio stato workflow → handled. Notifica al producer selezionato con messaggio + azione successiva. Nessun side-effect DB.',
+    target_role: 'producer/manager',
+  },
+  write_off_loss: {
+    title: 'Write-off (perdita)',
+    effect: 'Crea LossEntry sul progetto, importo registrato come perso in rendicontazione finale. Entra in P&L come perdita irrecuperabile.',
+    target_role: null,
+  },
+  overhead_cost: {
+    title: 'Dirotta su spese aziendali',
+    effect: 'Crea OverheadCost (categoria=other) di pari importo. Sposta il costo dalla rendicontazione progetto a quella aziendale generale (overhead).',
+    target_role: null,
+  },
 };
 
 function setAnomStatus(s) {
@@ -2054,6 +2166,7 @@ async function loadAnomalies() {
   const qs = [];
   if (_anStatus) qs.push('status=' + _anStatus);
   if (_anType) qs.push('anomaly_type=' + _anType);
+  if (_anDept) qs.push('department_id=' + _anDept);
   const url = '/finance/api/anomalies/v2' + (qs.length ? '?' + qs.join('&') : '');
   let rows;
   try { rows = await api('GET', url); }
@@ -2115,7 +2228,11 @@ function _renderAnomRows(rows) {
       const lnk = document.createElement('a');
       lnk.href = '/projects/' + a.project_id;
       lnk.className = 'mf-link';
-      lnk.textContent = a.project_code || a.project_title || ('#' + a.project_id);
+      // v3.5.0-alpha.141 — Mostra code + title insieme per chiarezza
+      const codePart = a.project_code || ('#' + a.project_id);
+      const titlePart = a.project_title || '';
+      lnk.textContent = titlePart ? (codePart + ' — ' + titlePart) : codePart;
+      lnk.title = titlePart || codePart;
       tdProj.appendChild(lnk);
     } else { tdProj.textContent = '—'; }
     tr.appendChild(tdProj);
@@ -2263,27 +2380,122 @@ async function bulkDismissAnomalies() {
   await loadAnomalies();
 }
 
-async function openAnomActionPopover(anomalyId) {
-  const action = prompt(
-    'Azione (digitare il numero):\n' +
-    '1 = ↩ Rimanda al commerciale\n' +
-    '2 = 🔄 Rivaluta producer\n' +
-    '3 = 📉 Write-off (LossEntry)\n' +
-    '4 = 📦 Pozzo costi (OverheadCost)'
-  );
-  if (!action) return;
-  const map = { '1': 'rimanda_commerciale', '2': 'rivaluta_producer', '3': 'write_off_loss', '4': 'overhead_cost' };
-  const actVal = map[action.trim()];
-  if (!actVal) { toast('Azione non valida', 'warning'); return; }
-  const notes = prompt('Note (opzionali):') || '';
-  const fd = new FormData();
-  fd.append('action', actVal);
-  if (notes) fd.append('notes', notes);
+// v3.5.0-alpha.141 — Modal handle anomaly (no più prompt() numerico).
+// Dropdown azione + tooltip side-effect + condizionali target_user + msg + next_action.
+let _anHandleId = null;
+let _anUsersCache = null;
+
+async function _loadUsersForAnomActions() {
+  if (_anUsersCache) return _anUsersCache;
   try {
-    const res = await api('POST', `/finance/api/anomalies/${anomalyId}/handle`, fd);
-    toast(`✓ Azione applicata${res.target_kind ? ` (creato ${res.target_kind}#${res.target_id})` : ''}`, 'success');
+    const users = await api('GET', '/auth/api/users');
+    _anUsersCache = (users || []).filter(u => u.is_active !== false);
+  } catch (e) { _anUsersCache = []; }
+  return _anUsersCache;
+}
+
+async function openAnomActionPopover(anomalyId) {
+  _anHandleId = anomalyId;
+  await _loadUsersForAnomActions();
+  // Reset modal fields
+  const sel = document.getElementById('an-handle-action');
+  sel.value = 'rimanda_commerciale';
+  document.getElementById('an-handle-notes').value = '';
+  document.getElementById('an-handle-next').value = '';
+  document.getElementById('an-handle-target').value = '';
+  _populateAnomTargetUserSelect();
+  onAnomHandleActionChange();
+  openModal('modal-anom-handle');
+}
+
+function _populateAnomTargetUserSelect() {
+  const sel = document.getElementById('an-handle-target');
+  sel.textContent = '';
+  const empty = document.createElement('option');
+  empty.value = ''; empty.textContent = '— nessuna notifica —';
+  sel.appendChild(empty);
+  (_anUsersCache || []).forEach(u => {
+    const o = document.createElement('option');
+    o.value = u.id;
+    o.textContent = (u.full_name || u.email || ('#' + u.id)) + (u.role ? ' (' + u.role + ')' : '');
+    sel.appendChild(o);
+  });
+}
+
+function onAnomHandleActionChange() {
+  const act = document.getElementById('an-handle-action').value;
+  const eff = ACTION_EFFECTS[act];
+  document.getElementById('an-handle-effect').textContent = eff ? eff.effect : '';
+  const targetWrap = document.getElementById('an-handle-target-wrap');
+  const nextWrap = document.getElementById('an-handle-next-wrap');
+  const needsTarget = (act === 'rimanda_commerciale' || act === 'rivaluta_producer');
+  targetWrap.style.display = needsTarget ? '' : 'none';
+  nextWrap.style.display = needsTarget ? '' : 'none';
+  if (needsTarget) {
+    document.getElementById('an-handle-target-hint').textContent =
+      'Notifica destinata a ' + (eff && eff.target_role ? eff.target_role : '(role specifico)');
+  }
+}
+
+async function submitAnomHandle() {
+  if (!_anHandleId) return;
+  const action = document.getElementById('an-handle-action').value;
+  const notes = document.getElementById('an-handle-notes').value.trim();
+  const targetUserId = document.getElementById('an-handle-target').value;
+  const nextActionLabel = document.getElementById('an-handle-next').value.trim();
+  const fd = new FormData();
+  fd.append('action', action);
+  if (notes) fd.append('notes', notes);
+  if (targetUserId) fd.append('target_user_id', targetUserId);
+  if (nextActionLabel) fd.append('next_action_label', nextActionLabel);
+  try {
+    const res = await api('POST', '/finance/api/anomalies/' + _anHandleId + '/handle', fd);
+    let msg = '✓ Azione applicata';
+    if (res.target_kind === 'Notification') msg += ' + Notifica inviata';
+    else if (res.target_kind) msg += ' (creato ' + res.target_kind + '#' + res.target_id + ')';
+    toast(msg, 'success');
+    closeModal('modal-anom-handle');
     await loadAnomalies();
-  } catch(e) { toast(e.message || 'Errore azione', 'error'); }
+  } catch (e) { toast(e.message || 'Errore azione', 'error'); }
+}
+
+// v3.5.0-alpha.141 — Filtro dipartimento + auto-detect periodico.
+let _anDept = '';
+let _anAutoDetectTimer = null;
+
+async function _loadDeptsForAnomalies() {
+  try {
+    const depts = await api('GET', '/departments/api');
+    const sel = document.getElementById('an-dept-filter');
+    if (!sel) return;
+    (depts || []).forEach(d => {
+      const o = document.createElement('option');
+      o.value = d.id;
+      o.textContent = (d.code ? d.code + ' — ' : '') + d.name;
+      sel.appendChild(o);
+    });
+  } catch (e) { /* silent */ }
+}
+
+function onAnomDeptChange() {
+  _anDept = document.getElementById('an-dept-filter').value || '';
+  loadAnomalies();
+}
+
+function toggleAnomAutoDetect() {
+  const on = document.getElementById('an-auto-detect').checked;
+  if (_anAutoDetectTimer) { clearInterval(_anAutoDetectTimer); _anAutoDetectTimer = null; }
+  if (on) {
+    _anAutoDetectTimer = setInterval(async () => {
+      try {
+        await api('POST', '/finance/api/anomalies/detect');
+        await loadAnomalies();
+      } catch (e) { /* silent */ }
+    }, 10 * 60 * 1000);  // 10 minuti
+    toast('Auto-detect ogni 10 minuti attivo', 'info');
+  } else {
+    toast('Auto-detect spento', 'info');
+  }
 }
 
 async function reopenAnomaly(id) {
@@ -2334,6 +2546,8 @@ async function init() {
   // v3.5.0-alpha.49: pre-fetch batch per popolare badge tab + supportare
   // deep-link /finance#batch-12 anche se utente atterra su tab Fatture.
   loadBatches();
+  // v3.5.0-alpha.141 — Carica dipartimenti per filtro anomalie
+  _loadDeptsForAnomalies();
 }
 
 init();

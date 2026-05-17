@@ -8,6 +8,28 @@
 
 ## Versione corrente
 
+**v3.5.0-alpha.141** — 17 maggio 2026 mattina — Anomalie: 7 fix UX/workflow
+
+Backend:
+- `list_anomalies` filtro `department_id` (subquery JCL→price_item)
+- `_handle_single` + `handle_anomaly` accettano `target_user_id` + `next_action_label`
+- Per rimanda/rivaluta → Notification a destinatario (kind=custom, severity=action_required, body completo)
+
+UI /finance #section-anomalies:
+- Legenda collassabile (6 tipi + 5 azioni con side-effects)
+- Filtro chip dipartimento (dropdown da /departments/api)
+- Checkbox auto-rileva (setInterval 10min)
+- Cell progetto = `{code} — {title}`
+- Modal `#modal-anom-handle` sostituisce prompt() numerico: dropdown azione + tooltip side-effect + target user + next_action select condizionali
+- ACTION_LBL `overhead_cost` → "Dirotta su spese aziendali"
+
+**Backlog α.142+**:
+- α.142 Cashflow 3 fix (auto-load anno, filtri cli/proj, NC senza data)
+- α.143 Crea fattura ampliato + acconti visibili
+- α.144+ workflow acconti (auto-create AP pending al converti quote→job)
+
+## (versione precedente)
+
 **v3.5.0-alpha.140.1** — 17 maggio 2026 mattina — HOTFIX loadQuote → reloadQuote
 
 **Bug**: aggiunta/cancellazione/modifica rata acconto + cambio valuta non aggiornavano UI.

@@ -1,5 +1,52 @@
 # MediaFlow — Changelog
 
+## v3.5.0-alpha.141 — Anomalie: 7 fix UX/workflow (17 mag 2026 mattina)
+
+Feedback Matteo: lista anomalie + azioni vanno migliorate. 7 punti chiusi.
+
+**#1 Lista mostra Progetto code + title insieme**:
+- Cell progetto: `{code} — {title}` invece di solo code. Tooltip su title completo.
+
+**#2 Azioni dropdown invece di input numerico + rinomina "Pozzo costi" → "Dirotta su spese aziendali"**:
+- `openAnomActionPopover` refactor: rimosso `prompt()` numerico, sostituito con modal `#modal-anom-handle`.
+- Select dropdown 4 azioni con label aggiornati. ACTION_LBL `overhead_cost` → "📦 Dirotta su spese aziendali".
+- Bulk dropdown stesso aggiornamento.
+
+**#3 Tooltip side-effects azione**:
+- Nuovo dict `ACTION_EFFECTS` con `title`, `effect`, `target_role` per ogni azione.
+- Box info nel modal con `#an-handle-effect` aggiornato live su change azione.
+- Title HTML sui `<option>` dropdown bulk con descrizione side-effect.
+
+**#4 rimanda_commerciale + rivaluta_producer chiedono target user + msg + next_action**:
+- Backend `_handle_single` esteso con `target_user_id` + `next_action_label`.
+- Se azione = rimanda/rivaluta + target_user_id fornito → crea `Notification` (kind=custom, severity=action_required, link a progetto/anomalies, title "[{azione}] Anomalia #N", body composto con tipo + progetto + importo + msg + next_action).
+- UI modal mostra dropdown user (`/auth/api/users`) + select next_action_label (6 preset + libero) condizionali per le 2 azioni.
+
+**#5 Auto-rilevamento extra post-fattura**:
+- Checkbox "auto-rileva" in toolbar anomalies: `toggleAnomAutoDetect()` triggera `setInterval(detect, 10min)` mentre la pagina è aperta. Idempotente (detector è idempotente, no dup).
+
+**#6 Legenda funzioni tipo voci**:
+- `<details>` collassabile in header tab anomalies con 2 tabelle:
+  - Tipi anomalie (6 voci): descrizione + esempio + colore badge
+  - Azioni (5 voci, include Dismiss): conseguenze concrete + DB write side-effects
+
+**#7 Filtri dipartimento**:
+- Backend `list_anomalies` esteso `department_id` filter via subquery JCL→price_item.department_id. Applica SOLO a anomalie source_kind='jcl' (altre source non hanno reparto diretto → escluse).
+- UI dropdown `#an-dept-filter` in toolbar caricato al init da `/departments/api`.
+
+**Files toccati**:
+- `app/routers/anomalies.py` — list filter + handle params target_user_id/next_action_label + Notification emit
+- `app/templates/pages/finance.html` — legenda, filtri dept, auto-detect, modal handle, refactor lista
+
+**Smoke**: render finance.html 144708 chars con modal-anom-handle/an-dept-filter/Legenda/Dirotta presenti. Endpoint `/auth/api/users` + `/departments/api` esistenti.
+
+**Backlog α.142+**:
+- α.142 Cashflow (3 fix: auto-load anno, filtri cli/proj, NC senza data)
+- α.143 Crea fattura ampliato + acconti visibili
+- Workflow acconti (α.144+) con auto-create AP pending al converti quote→job
+
+---
+
 ## v3.5.0-alpha.140.1 — HOTFIX: loadQuote → reloadQuote (17 mag 2026 mattina)
 
 **Bug**: aggiunta/cancellazione/modifica rata acconto + cambio valuta non aggiornavano visualizzazione.
