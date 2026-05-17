@@ -8,6 +8,32 @@
 
 ## Versione corrente
 
+**v3.5.0-alpha.145** — 17 maggio 2026 pomeriggio tarda — Workflow acconti Step 3/4: UI /finance Bozze + emit
+
+3 endpoint nuovi:
+- `GET /advances/pending-draft` — lista tenant-wide pending/draft/confirmed
+- `POST /advances/{id}/confirm` — update + transition pending→draft|confirmed
+- `POST /advances/{id}/emit-invoice` — crea Invoice(kind=advance) + lega + status=invoiced
+
+UI /finance:
+- Tab "💰 Bozze acconti" con badge count
+- Sezione lista compatta con status badge + actions
+- Modal Gestisci (allocations pct + 3 azioni: bozza/conferma/emetti)
+- Modal Emit Invoice
+
+Deprecazione /cost-report:
+- Bottone "+ Crea acconto" rimosso (link "→ Gestisci in /finance")
+- Card sola lettura per visualizzazione
+
+Smoke E2E: materialize→pending→confirm→emit→invoiced ✓ Invoice creata ✓.
+
+**Backlog α.146**:
+- CR fill mode (Coperto/Maturato/Drift per JCL via AdvancePaymentAllocation)
+- Warning sforamento Σ AP+maturato > quote
+- F29 i18n, OAuth, cross-currency aggregati
+
+## (versione precedente)
+
 **v3.5.0-alpha.144** — 17 maggio 2026 pomeriggio tarda — Workflow acconti: hook converti quote→job
 
 Step 2/4 revisione architetturale acconti (piano α.139). Hook al converti quote→job materializza schedule → AP(pending) + alloc + Notification admin.

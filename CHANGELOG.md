@@ -1,5 +1,45 @@
 # MediaFlow — Changelog
 
+## v3.5.0-alpha.145 — Workflow acconti Step 3/4: UI /finance Bozze + confirm + emit (17 mag 2026 pomeriggio tarda)
+
+Step 3/4 della revisione architetturale acconti (piano α.139). UI completa per gestione bozze acconti in /finance + workflow conferma → emit fattura. Deprecato modal "Crea acconto" da /cost-report (workflow ora in /finance).
+
+**Endpoint nuovi** (`/finance/api/...`):
+
+- `GET /advances/pending-draft` — lista AP tenant-wide in stato pending/draft/confirmed con joinedload allocations+job_cost_line. Ordinato per scheduled_due_date ASC nulls last.
+- `POST /advances/{id}/confirm` — update label/notes/amount/allocations_update (CSV "id:pct") + transition pending→draft|confirmed. 409 se status >= invoiced.
+- `POST /advances/{id}/emit-invoice` — crea Invoice(kind=advance, doc_type=TD01) con snapshot fiscali completi + InvoiceLine descrittiva + lega AP.invoice_id + status=invoiced. Numero auto (`_next_invoice_number_for_advance`) se non fornito.
+
+**UI /finance**:
+- Nuova tab "💰 Bozze acconti" con badge count (giallo).
+- Sezione `#section-advances-drafts` con lista compatta:
+  - status badge colorato (pending=rosso, draft=giallo, confirmed=verde)
+  - project code+title, label, scheduled_due_date, count JCL allocate
+  - importo + bottoni "🛠 Gestisci" / "💶 Emetti"
+- Modal `#modal-advance-confirm`: label, amount, notes, dropdown allocation pct per ogni JCL, 3 azioni (Salva bozza / Conferma / Emetti subito).
+- Modal `#modal-advance-emit`: numero auto, data emissione, scadenza, IVA, descrizione riga. Submit → POST emit-invoice.
+
+**Deprecazione /cost-report**:
+- Bottone "+ Crea acconto" rimosso dalla card "Acconti del progetto".
+- Sostituito con link `→ Gestisci in /finance` che porta a `/finance#section-advances-drafts`.
+- Card resta sola lettura per visualizzazione totali progetto.
+
+**Smoke E2E**:
+- Quote 47 + schedule 20% pct → materialize → AP pending ✓
+- list_pending_draft conta 1 ✓
+- confirm: pending → confirmed (label+notes update) ✓
+- emit-invoice: crea Invoice 2026-00112 €43k + 1 line + lega AP, status→invoiced ✓
+- Verify: AP final status=invoiced invoice_id=118 ✓
+- Cleanup ✓
+
+**Backlog α.146**:
+- CR fill mode (Coperto/Maturato/Drift per JCL coperta via AdvancePaymentAllocation)
+- Warning sforamento (Σ AP + maturato > quote)
+- F29 i18n sweep TUTTA UI
+- OAuth, cross-currency aggregati
+
+---
+
 ## v3.5.0-alpha.144 — Workflow acconti: hook converti quote→job auto-create AP(pending) (17 mag 2026 pomeriggio tarda)
 
 Step 2/4 della revisione architetturale acconti (piano α.139). Hook al converti quote→job materializza QuoteAdvanceSchedule → AdvancePayment(pending) + AdvancePaymentAllocation (mappa QuoteLine→JCL) + Notification admin/manager.

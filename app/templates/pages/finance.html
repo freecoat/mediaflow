@@ -30,6 +30,7 @@
   <div class="tab active" onclick="showSection('invoices',this)">Fatture</div>
   <div class="tab" onclick="showSection('batches',this)">📦 Batch fatturazione <span id="batches-badge" class="badge" style="display:none;background:#fbbf24;color:#000;margin-left:6px;"></span></div>
   <div class="tab" onclick="showSection('anomalies',this)">⚠ Anomalie <span id="anomalies-badge" class="badge" style="display:none;background:#dc2626;color:#fff;margin-left:6px;"></span></div>
+  <div class="tab" onclick="showSection('advances-drafts',this)">💰 Bozze acconti <span id="advances-drafts-badge" class="badge" style="display:none;background:#fbbf24;color:#000;margin-left:6px;"></span></div>
 </div>
 
 <!-- ── Sezione fatture ─────────────────────────────────────── -->
@@ -301,6 +302,110 @@
     </div>
   </div>
 
+</div>
+
+<!-- v3.5.0-alpha.145 — Bozze acconti: AP pending/draft/confirmed da emettere -->
+<div id="section-advances-drafts" class="hidden">
+  <div class="card">
+    <div class="card-header" style="display:flex; align-items:center; justify-content:space-between;">
+      <span class="card-title">💰 Acconti in bozza — da emettere o confermare</span>
+      <span class="text-xs text-muted" id="advances-drafts-summary"></span>
+    </div>
+    <div style="padding:10px 14px;">
+      <div class="text-xs text-muted" style="margin-bottom:8px;">
+        Acconti generati automaticamente al converti quote→job (status <b>pending</b>), oppure in carico amministrazione (<b>draft/confirmed</b>).
+        Workflow: <b>pending</b> → presa in carico (<i>conferma</i>) → <b>confirmed</b> → emit fattura → <b>invoiced</b>.
+      </div>
+      <div id="advances-drafts-host"></div>
+    </div>
+  </div>
+</div>
+
+<!-- v3.5.0-alpha.145 — Modal Conferma/Emit Acconto -->
+<div class="modal-overlay" id="modal-advance-confirm">
+  <div class="modal" style="max-width:640px;">
+    <div class="modal-header">
+      <span class="modal-title" id="adv-conf-title">🛠 Gestisci acconto</span>
+      <button class="btn btn-ghost btn-icon" onclick="closeModal('modal-advance-confirm')">✕</button>
+    </div>
+    <div class="modal-body">
+      <input type="hidden" id="adv-conf-id">
+      <div class="text-xs text-muted" id="adv-conf-meta" style="margin-bottom:10px; padding:6px 10px; background:var(--bg2); border-radius:4px;"></div>
+      <div class="form-row">
+        <div class="form-group">
+          <label class="form-label">Label</label>
+          <input class="form-input" id="adv-conf-label" maxlength="120">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Importo imponibile (€)</label>
+          <input class="form-input mono" id="adv-conf-amount" type="number" step="0.01" min="0">
+        </div>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Note</label>
+        <textarea class="form-input" id="adv-conf-notes" rows="2"></textarea>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Allocazioni a voci di costo (JCL)</label>
+        <div id="adv-conf-allocs-host" style="background:var(--bg2); border:1px solid var(--border); border-radius:6px; padding:8px; max-height:200px; overflow:auto;"></div>
+        <div class="text-xs text-muted" style="margin-top:4px;">Adjust % di copertura per ogni JCL coperto da questo acconto.</div>
+      </div>
+      <hr style="border-color:var(--border); margin:14px 0;">
+      <div class="form-group">
+        <label class="form-label" style="font-weight:600;">Azione</label>
+        <div style="display:flex; gap:8px; flex-wrap:wrap;">
+          <button type="button" class="btn btn-secondary btn-sm" onclick="submitAdvConfirm('draft')">📝 Salva come bozza</button>
+          <button type="button" class="btn btn-secondary btn-sm" onclick="submitAdvConfirm('confirmed')">✓ Conferma (pronto emit)</button>
+          <button type="button" class="btn btn-primary btn-sm" onclick="openAdvEmitFromConfirm()">💶 Emetti fattura subito</button>
+        </div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeModal('modal-advance-confirm')">Chiudi</button>
+    </div>
+  </div>
+</div>
+
+<!-- v3.5.0-alpha.145 — Modal Emit Invoice da AP -->
+<div class="modal-overlay" id="modal-advance-emit">
+  <div class="modal" style="max-width:540px;">
+    <div class="modal-header">
+      <span class="modal-title">💶 Emetti fattura acconto</span>
+      <button class="btn btn-ghost btn-icon" onclick="closeModal('modal-advance-emit')">✕</button>
+    </div>
+    <div class="modal-body">
+      <input type="hidden" id="adv-emit-id">
+      <div class="text-xs text-muted" id="adv-emit-meta" style="margin-bottom:10px; padding:6px 10px; background:var(--bg2); border-radius:4px;"></div>
+      <div class="form-group">
+        <label class="form-label">Numero fattura (vuoto = auto)</label>
+        <input class="form-input mono" id="adv-emit-number" placeholder="es. 2026-00050">
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label class="form-label">Data emissione *</label>
+          <input class="form-input" id="adv-emit-issue" type="date" required>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Scadenza</label>
+          <input class="form-input" id="adv-emit-due" type="date">
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label class="form-label">IVA %</label>
+          <input class="form-input mono" id="adv-emit-vat" type="number" step="0.01" value="22">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Descrizione riga</label>
+          <input class="form-input" id="adv-emit-desc" placeholder="Acconto progetto X">
+        </div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeModal('modal-advance-emit')">Annulla</button>
+      <button class="btn btn-primary" onclick="submitAdvEmit()">💶 Emetti fattura</button>
+    </div>
+  </div>
 </div>
 
 <!-- ── Modali ──────────────────────────────────────────────── -->
@@ -751,14 +856,189 @@ async function _initFinFilters() {
 }
 
 function showSection(name, el) {
-  ['invoices','batches','anomalies'].forEach(s => {
-    document.getElementById('section-'+s).classList.add('hidden');
+  ['invoices','batches','anomalies','advances-drafts'].forEach(s => {
+    const sec = document.getElementById('section-'+s);
+    if (sec) sec.classList.add('hidden');
   });
   document.getElementById('section-'+name).classList.remove('hidden');
   document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
   el.classList.add('active');
   if (name === 'anomalies') loadAnomalies();
   if (name === 'batches') loadBatches();
+  if (name === 'advances-drafts') loadAdvancesDrafts();
+}
+
+// v3.5.0-alpha.145 — Bozze acconti (AP pending/draft/confirmed).
+let _advDraftsCache = [];
+
+async function loadAdvancesDrafts() {
+  const host = document.getElementById('advances-drafts-host');
+  const summary = document.getElementById('advances-drafts-summary');
+  const badge = document.getElementById('advances-drafts-badge');
+  if (!host) return;
+  host.textContent = '';
+  try {
+    const data = await api('GET', '/finance/api/advances/pending-draft');
+    _advDraftsCache = data.rows || [];
+  } catch (e) {
+    host.textContent = 'Errore caricamento: ' + (e.message || '');
+    return;
+  }
+  if (badge) {
+    if (_advDraftsCache.length > 0) {
+      badge.textContent = _advDraftsCache.length; badge.style.display = 'inline-block';
+    } else { badge.style.display = 'none'; }
+  }
+  const totalAmt = _advDraftsCache.reduce((s, r) => s + (r.amount || 0), 0);
+  summary.textContent = _advDraftsCache.length + ' acconto/i in bozza · totale €' + totalAmt.toFixed(2);
+  if (!_advDraftsCache.length) {
+    const d = document.createElement('div');
+    d.className = 'text-muted text-sm';
+    d.style.padding = '14px 0';
+    d.textContent = 'Nessun acconto in bozza. Le bozze appaiono automaticamente quando una quote con termini di acconto viene approvata (converti quote→job).';
+    host.appendChild(d);
+    return;
+  }
+  const STATUS_LBL = { pending: 'Pending (no carico)', draft: 'Bozza', confirmed: 'Confermato' };
+  const STATUS_COLOR = { pending: '#ef4444', draft: '#fbbf24', confirmed: '#22c55e' };
+  _advDraftsCache.forEach(r => {
+    const row = document.createElement('div');
+    row.style.cssText = 'display:flex; align-items:center; gap:10px; padding:10px; background:var(--bg2); border:1px solid var(--border); border-radius:6px; margin-bottom:6px;';
+    const stat = document.createElement('span');
+    const c = STATUS_COLOR[r.status] || '#9aa0b8';
+    stat.style.cssText = 'padding:2px 10px; border-radius:10px; font-size:11px; font-weight:600; min-width:130px; text-align:center; color:' + c + '; background:' + c + '26;';
+    stat.textContent = STATUS_LBL[r.status] || r.status;
+    const proj = document.createElement('div');
+    proj.style.cssText = 'flex:1; font-size:13px;';
+    const projTitle = document.createElement('div');
+    projTitle.style.fontWeight = '600';
+    projTitle.textContent = (r.project_code || '?') + ' — ' + (r.project_title || '');
+    const lbl = document.createElement('div');
+    lbl.className = 'text-xs text-muted';
+    lbl.textContent = (r.label || '(senza label)') + (r.scheduled_due_date ? ' · scad. ' + r.scheduled_due_date : '') +
+      (r.allocations && r.allocations.length ? ' · ' + r.allocations.length + ' JCL allocate' : '');
+    proj.appendChild(projTitle); proj.appendChild(lbl);
+    const amt = document.createElement('div');
+    amt.className = 'mono';
+    amt.style.cssText = 'min-width:120px; text-align:right; font-weight:600;';
+    amt.textContent = fmtCurrency(r.amount);
+    const actGroup = document.createElement('div');
+    actGroup.style.cssText = 'display:flex; gap:4px;';
+    const confBtn = document.createElement('button');
+    confBtn.className = 'btn btn-ghost btn-sm';
+    confBtn.textContent = '🛠 Gestisci';
+    confBtn.title = 'Conferma allocazioni / modifica importo';
+    confBtn.onclick = () => openAdvConfirmModal(r);
+    const emitBtn = document.createElement('button');
+    emitBtn.className = 'btn btn-primary btn-sm';
+    emitBtn.textContent = '💶 Emetti';
+    emitBtn.title = 'Emetti fattura acconto';
+    emitBtn.onclick = () => openAdvEmitModal(r);
+    actGroup.appendChild(confBtn); actGroup.appendChild(emitBtn);
+    row.appendChild(stat); row.appendChild(proj); row.appendChild(amt); row.appendChild(actGroup);
+    host.appendChild(row);
+  });
+}
+
+function openAdvConfirmModal(ap) {
+  document.getElementById('adv-conf-id').value = ap.id;
+  document.getElementById('adv-conf-label').value = ap.label || '';
+  document.getElementById('adv-conf-amount').value = (ap.amount || 0).toFixed(2);
+  document.getElementById('adv-conf-notes').value = ap.notes || '';
+  const meta = document.getElementById('adv-conf-meta');
+  meta.textContent = 'AP #' + ap.id + ' · ' + (ap.project_code || '?') + ' · status ' + ap.status +
+    (ap.scheduled_due_date ? ' · scad. ' + ap.scheduled_due_date : '');
+  const host = document.getElementById('adv-conf-allocs-host');
+  host.textContent = '';
+  (ap.allocations || []).forEach(a => {
+    const row = document.createElement('div');
+    row.style.cssText = 'display:flex; align-items:center; gap:8px; padding:4px 0; border-bottom:1px solid var(--border);';
+    const lbl = document.createElement('div');
+    lbl.style.cssText = 'flex:1; font-size:12px;';
+    lbl.textContent = (a.jcl_description || ('JCL #' + a.job_cost_line_id)).substring(0, 70);
+    const pctInp = document.createElement('input');
+    pctInp.type = 'number'; pctInp.step = '0.1'; pctInp.min = '0'; pctInp.max = '100';
+    pctInp.value = ((a.pct || 1) * 100).toFixed(1);
+    pctInp.dataset.allocId = a.id;
+    pctInp.style.cssText = 'width:70px; padding:2px 4px; background:var(--bg3); border:1px solid var(--border); color:var(--text); border-radius:3px; font-family:DM Mono,monospace; font-size:11px;';
+    row.appendChild(lbl); row.appendChild(pctInp);
+    const u = document.createElement('span'); u.className = 'text-xs text-muted'; u.textContent = '%'; row.appendChild(u);
+    host.appendChild(row);
+  });
+  openModal('modal-advance-confirm');
+}
+
+function _collectAllocUpdates() {
+  const host = document.getElementById('adv-conf-allocs-host');
+  const out = [];
+  host.querySelectorAll('input[type=number]').forEach(inp => {
+    const aid = inp.dataset.allocId;
+    const pct = parseFloat(inp.value || 100) / 100;
+    if (!isNaN(pct) && pct >= 0 && pct <= 1.0) out.push(aid + ':' + pct);
+  });
+  return out.join(',');
+}
+
+async function submitAdvConfirm(nextStatus) {
+  const id = document.getElementById('adv-conf-id').value;
+  if (!id) return;
+  const fd = new FormData();
+  fd.append('label', document.getElementById('adv-conf-label').value.trim());
+  fd.append('notes', document.getElementById('adv-conf-notes').value.trim());
+  fd.append('amount', document.getElementById('adv-conf-amount').value);
+  const aupd = _collectAllocUpdates();
+  if (aupd) fd.append('allocations_update', aupd);
+  fd.append('next_status', nextStatus || 'draft');
+  try {
+    const res = await api('POST', '/finance/api/advances/' + id + '/confirm', fd);
+    toast('✓ Acconto ' + res.status, 'success');
+    closeModal('modal-advance-confirm');
+    await loadAdvancesDrafts();
+  } catch (e) { toast(e.message || 'Errore', 'error'); }
+}
+
+function openAdvEmitFromConfirm() {
+  const id = document.getElementById('adv-conf-id').value;
+  const ap = _advDraftsCache.find(r => String(r.id) === String(id));
+  if (!ap) { toast('Acconto non trovato in cache', 'error'); return; }
+  closeModal('modal-advance-confirm');
+  openAdvEmitModal(ap);
+}
+
+function openAdvEmitModal(ap) {
+  document.getElementById('adv-emit-id').value = ap.id;
+  document.getElementById('adv-emit-number').value = '';
+  document.getElementById('adv-emit-issue').value = new Date().toISOString().slice(0, 10);
+  document.getElementById('adv-emit-due').value = '';
+  document.getElementById('adv-emit-vat').value = 22;
+  document.getElementById('adv-emit-desc').value = ap.label || '';
+  document.getElementById('adv-emit-meta').textContent =
+    'AP #' + ap.id + ' · ' + (ap.project_code || '?') + ' — ' + (ap.project_title || '') +
+    ' · importo €' + (ap.amount || 0).toFixed(2);
+  openModal('modal-advance-emit');
+}
+
+async function submitAdvEmit() {
+  const id = document.getElementById('adv-emit-id').value;
+  if (!id) return;
+  const issue = document.getElementById('adv-emit-issue').value;
+  if (!issue) { toast('Data emissione obbligatoria', 'warning'); return; }
+  const fd = new FormData();
+  fd.append('issue_date', issue);
+  const num = document.getElementById('adv-emit-number').value.trim();
+  if (num) fd.append('invoice_number', num);
+  const due = document.getElementById('adv-emit-due').value;
+  if (due) fd.append('due_date', due);
+  fd.append('vat_rate', document.getElementById('adv-emit-vat').value || 22);
+  const desc = document.getElementById('adv-emit-desc').value.trim();
+  if (desc) fd.append('description', desc);
+  try {
+    const res = await api('POST', '/finance/api/advances/' + id + '/emit-invoice', fd);
+    toast('✓ Fattura ' + res.invoice_number + ' emessa (€' + res.total.toFixed(2) + ' totale)', 'success', 6000);
+    closeModal('modal-advance-emit');
+    await loadAdvancesDrafts();
+    if (typeof loadInvoices === 'function') await loadInvoices();
+  } catch (e) { toast(e.message || 'Errore', 'error'); }
 }
 
 // ── v3.5.0-alpha.49: Batch fatturazione (Step 4 Cost Report → Billing) ──
