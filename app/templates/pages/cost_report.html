@@ -1418,16 +1418,22 @@ function renderCostLines() {
       ? `<span class="text-xs" style="display:inline-block;margin-left:6px;padding:1px 6px;background:rgba(239,68,68,0.18);color:#ef4444;border-radius:8px;font-weight:600;font-size:10px;" title="Stato fatturazione ${l.billing_status} ma maturato=0 — fattura senza ore lavorate">⚠ no-work</span>`
       : '';
     // v3.5.0-alpha.146 (Step 4/4 fill mode): badge "Coperto da acconto" + drift.
+    // v3.5.0-alpha.160: distinguere coverage allocato (tutti AP non-cancelled)
+    // da paid coverage (quota effettivamente incassata via Invoice.amount_paid).
     const advCov = l.advance_coverage || 0;
+    const advPaidCov = l.advance_paid_coverage || 0;
     const advDrift = l.advance_drift || 0;
     const advOverflow = !!l.advance_overflow;
     let advBadge = '';
     if (advCov > 0.005) {
       const driftLbl = advDrift < -0.005 ? ' · scoperto ' + fmtCurrency(-advDrift) :
                        (advDrift > 0.005 ? ' · lavoro extra ' + fmtCurrency(advDrift) : ' · in linea');
-      const bg = advOverflow ? 'rgba(239,68,68,0.18)' : 'rgba(98,114,245,0.18)';
-      const fg = advOverflow ? '#ef4444' : '#6272f5';
-      advBadge = `<span class="text-xs" style="display:inline-block;margin-left:6px;padding:1px 6px;background:${bg};color:${fg};border-radius:8px;font-weight:600;font-size:10px;" title="Coperto da acconto: ${fmtCurrency(advCov)}${driftLbl}${advOverflow ? ' ⚠ overflow > quote*1.05' : ''}">💰 ${fmtCurrency(advCov)}</span>`;
+      const bg = advOverflow ? 'rgba(239,68,68,0.18)' : 'rgba(34,197,94,0.18)';
+      const fg = advOverflow ? '#ef4444' : '#22c55e';
+      const paidPart = advPaidCov > 0.005
+        ? ' (pagato ' + fmtCurrency(advPaidCov) + ')'
+        : ' (acconto non ancora pagato)';
+      advBadge = `<span class="text-xs" style="display:inline-block;margin-left:6px;padding:1px 6px;background:${bg};color:${fg};border-radius:8px;font-weight:600;font-size:10px;" title="Coperto da acconto: ${fmtCurrency(advCov)} allocato${paidPart}${driftLbl}${advOverflow ? ' ⚠ overflow > quote*1.05' : ''}">💰 ${fmtCurrency(advCov)}${advPaidCov > 0.005 ? ' · ✓ ' + fmtCurrency(advPaidCov) : ''}</span>`;
     }
     return `<tr onclick='openLineDetailHere(${l.id})' style="cursor:pointer;">
       <td style="min-width:240px;">

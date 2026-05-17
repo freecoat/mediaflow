@@ -1,5 +1,36 @@
 # MediaFlow — Changelog
 
+## v3.5.0-alpha.160 — JCL advance_paid_coverage: acconto pagato visibile in lavorazioni (17 mag 2026 notte)
+
+Risposta domanda Matteo: "non vedo il pagato nelle voci lavorazione come fatturato".
+
+Pre-α.160: badge `💰 Coperto da acconto` su JCL mostrava solo `advance_coverage` (Σ allocation.amount), indipendentemente da pagamento. Se acconto NON ancora pagato, mostrava comunque coverage piena → fuorviante.
+
+Fix:
+
+**Backend** `job_cost_report`:
+- Pre-fetch `advance_paid_coverage_by_jcl`: per ogni JCL, Σ `allocation.amount × (invoice.amount_paid / AP.amount)`.
+- Ratio limitato a [0, 1] (cap a 100%).
+- JCL response include `advance_paid_coverage` campo nuovo.
+- Formula: quota effettiva incassata dal cliente sulla porzione di acconto allocata a questa JCL.
+
+**UI cost report**:
+- Badge per JCL ora mostra: `💰 €X · ✓ €Y` dove X = allocato totale, Y = effettivamente pagato.
+- Tooltip: "Coperto da acconto: €X allocato (pagato €Y) · drift/in linea".
+- Se acconto NON pagato: badge mostra solo allocato + tooltip "(acconto non ancora pagato)".
+- Colore badge: verde (paid coverage > 0) o indigo (solo allocato).
+
+**Semantica chiarita**:
+- `advance_coverage` (α.146) = Σ allocation per JCL (ledger, indipendente da pagamento)
+- `advance_paid_coverage` (α.160) = quota effettivamente incassata
+- Se acconto €10k allocato 100% a JCL X + invoice acconto pagata 60% (€6k) → JCL X ha paid_coverage = €6k.
+
+**Backlog α.161**:
+- Eventualmente: sommare advance_paid_coverage in "Fatturato totale" del job summary (oggi solo billed_locked)
+- Warning UI se acconto pagato ma JCL non lavorata (work=0 ma paid>0 = anticipato senza work)
+
+---
+
 ## v3.5.0-alpha.159 — Acconti UX: totale% summary + Invoice project + CR Scomputato vs Pagato (17 mag 2026 notte)
 
 3 fix post-test Matteo.

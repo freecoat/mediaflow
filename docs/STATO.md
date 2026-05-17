@@ -8,6 +8,24 @@
 
 ## Versione corrente
 
+**v3.5.0-alpha.160** — 17 maggio 2026 notte — JCL advance_paid_coverage
+
+Fix: pre-α.160 badge "Coperto da acconto" su JCL mostrava allocazione indipendente da pagamento. Acconto NON pagato → mostrava coverage piena fuorviante.
+
+Backend job_cost_report:
+- advance_paid_coverage_by_jcl = Σ alloc × (invoice.amount_paid / AP.amount)
+- Response JCL include `advance_paid_coverage` campo nuovo
+
+UI:
+- Badge `💰 €X · ✓ €Y` (X allocato totale, Y pagato effettivo)
+- Tooltip esplicativo + colore verde se paid > 0
+
+Semantica:
+- advance_coverage = allocato (ledger)
+- advance_paid_coverage = incassato effettivo
+
+## (versione precedente)
+
 **v3.5.0-alpha.159** — 17 maggio 2026 notte — Acconti UX: summary % + Invoice project + CR Pagato/Scomputato
 
 3 fix:

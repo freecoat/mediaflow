@@ -476,7 +476,13 @@ async def job_cost_report(job_id: int, db: Session = Depends(get_db)):
     advance_balance = 0.0
     advance_consumed = 0.0
     # v3.5.0-alpha.146 — Σ AP allocation per JCL (esclude cancelled AP).
+    # v3.5.0-alpha.160 — advance_paid_coverage_by_jcl = quota pagata effettiva.
+    # Formula: Σ allocation.amount × (invoice.amount_paid / AP.amount) per AP
+    # con Invoice non-cancelled non-draft. Esclude porzione non incassata.
+    # NOTA: balance_remaining gestisce già scomputo in fatture batch successive.
+    # Qui consideriamo SOLO la cassa effettivamente incassata sull'invoice acconto.
     advance_coverage_by_jcl: dict[int, float] = {}
+    advance_paid_coverage_by_jcl: dict[int, float] = {}
     if job.cost_lines:
         cov_rows = (
             db.query(_APA.job_cost_line_id, func.coalesce(func.sum(_APA.amount), 0.0))
@@ -490,6 +496,29 @@ async def job_cost_report(job_id: int, db: Session = Depends(get_db)):
             .all()
         )
         advance_coverage_by_jcl = {r[0]: float(r[1] or 0) for r in cov_rows}
+        # Paid coverage: join Invoice per ratio amount_paid/amount.
+        # Per JCL: Σ alloc.amount × ratio.
+        paid_rows = (
+            db.query(
+                _APA.job_cost_line_id,
+                _APA.amount,
+                _AP.amount.label("ap_amount"),
+                Invoice.amount_paid,
+            )
+            .join(_AP, _AP.id == _APA.advance_payment_id)
+            .outerjoin(Invoice, Invoice.id == _AP.invoice_id)
+            .filter(
+                _APA.job_cost_line_id.in_([l.id for l in job.cost_lines]),
+                _AP.status != _APStat.cancelled,
+                _AP.tenant_id == current_tenant_id(),
+            )
+            .all()
+        )
+        for jcl_id, alloc_amt, ap_amt, paid in paid_rows:
+            if not ap_amt or ap_amt <= 0:
+                continue
+            ratio = min(1.0, (paid or 0) / ap_amt)
+            advance_paid_coverage_by_jcl[jcl_id] = advance_paid_coverage_by_jcl.get(jcl_id, 0.0) + (alloc_amt or 0) * ratio
     if job.project_id:
         ap_row = db.query(
             func.coalesce(func.sum(_AP.amount), 0.0),
@@ -830,9 +859,11 @@ async def job_cost_report(job_id: int, db: Session = Depends(get_db)):
                 ),
                 # v3.5.0-alpha.146 (Acconti Step 4 fill mode): coperto da acconto.
                 # advance_coverage = Σ AP_alloc.amount per questa JCL (AP non-cancelled).
-                # advance_drift = total_accrued - advance_coverage (negativo = scoperto).
-                # advance_overflow = advance_coverage > total_quoted * 1.05 → warning.
+                # v3.5.0-alpha.160: advance_paid_coverage = quota EFFETTIVAMENTE pagata
+                # = Σ alloc × (invoice.amount_paid / AP.amount). Conta come "fatturato"
+                # nella vista lavorazione (cassa già coperta da cliente).
                 "advance_coverage": round(advance_coverage_by_jcl.get(l.id, 0.0), 2),
+                "advance_paid_coverage": round(advance_paid_coverage_by_jcl.get(l.id, 0.0), 2),
                 "advance_drift": round((l.total_accrued or 0) - advance_coverage_by_jcl.get(l.id, 0.0), 2),
                 "advance_overflow": bool(
                     (l.total_quoted or 0) > 0
