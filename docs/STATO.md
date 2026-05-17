@@ -8,6 +8,21 @@
 
 ## Versione corrente
 
+**v3.5.0-alpha.146** — 17 maggio 2026 pomeriggio tarda — Workflow acconti Step 4/4: CR fill mode + badge JCL
+
+Chiusura ciclo acconti Pattern B end-to-end (4 step completati: α.139 termini quote → α.144 hook auto-create → α.145 UI bozze + emit → α.146 fill mode CR).
+
+CR job endpoint: pre-fetch advance_coverage_by_jcl + per-JCL advance_coverage/drift/overflow.
+UI: badge inline `💰 €X · drift Y` con bordo rosso se overflow.
+
+Backlog α.147+:
+- F29 round 1: dashboard + sidebar + topbar
+- F29 round 2: clients + projects + quotes
+- F29 round 3: planning + finance + cost-report
+- OAuth, cross-currency aggregati
+
+## (versione precedente)
+
 **v3.5.0-alpha.145** — 17 maggio 2026 pomeriggio tarda — Workflow acconti Step 3/4: UI /finance Bozze + emit
 
 3 endpoint nuovi:

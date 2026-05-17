@@ -1403,9 +1403,21 @@ function renderCostLines() {
     const fakeBadge = l.fake_billing
       ? `<span class="text-xs" style="display:inline-block;margin-left:6px;padding:1px 6px;background:rgba(239,68,68,0.18);color:#ef4444;border-radius:8px;font-weight:600;font-size:10px;" title="Stato fatturazione ${l.billing_status} ma maturato=0 — fattura senza ore lavorate">⚠ no-work</span>`
       : '';
+    // v3.5.0-alpha.146 (Step 4/4 fill mode): badge "Coperto da acconto" + drift.
+    const advCov = l.advance_coverage || 0;
+    const advDrift = l.advance_drift || 0;
+    const advOverflow = !!l.advance_overflow;
+    let advBadge = '';
+    if (advCov > 0.005) {
+      const driftLbl = advDrift < -0.005 ? ' · scoperto ' + fmtCurrency(-advDrift) :
+                       (advDrift > 0.005 ? ' · lavoro extra ' + fmtCurrency(advDrift) : ' · in linea');
+      const bg = advOverflow ? 'rgba(239,68,68,0.18)' : 'rgba(98,114,245,0.18)';
+      const fg = advOverflow ? '#ef4444' : '#6272f5';
+      advBadge = `<span class="text-xs" style="display:inline-block;margin-left:6px;padding:1px 6px;background:${bg};color:${fg};border-radius:8px;font-weight:600;font-size:10px;" title="Coperto da acconto: ${fmtCurrency(advCov)}${driftLbl}${advOverflow ? ' ⚠ overflow > quote*1.05' : ''}">💰 ${fmtCurrency(advCov)}</span>`;
+    }
     return `<tr onclick='openLineDetailHere(${l.id})' style="cursor:pointer;">
       <td style="min-width:240px;">
-        <div style="font-weight:500;font-size:13px;">${l.description}${l.is_extra ? ' <span class="text-xs" style="color:#fb923c;">[extra]</span>' : ''}${refsBadge}${pendBadge}${txBadge}${fakeBadge}</div>
+        <div style="font-weight:500;font-size:13px;">${l.description}${l.is_extra ? ' <span class="text-xs" style="color:#fb923c;">[extra]</span>' : ''}${refsBadge}${pendBadge}${txBadge}${fakeBadge}${advBadge}</div>
         ${l.category ? `<div class="text-xs text-muted">${l.category}</div>` : ''}
         ${bar}
       </td>

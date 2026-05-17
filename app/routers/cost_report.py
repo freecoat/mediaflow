@@ -445,10 +445,29 @@ async def job_cost_report(job_id: int, db: Session = Depends(get_db)):
     ).scalar() or 0
     invoiced_net = float(invoiced_net)
     # v3.5.0-alpha.138 (Acconti Step 2): aggregati per PROJECT del job.
-    from app.models import AdvancePayment as _AP, AdvancePaymentConsumption as _APC, AdvancePaymentStatus as _APStat
+    # v3.5.0-alpha.146 (Step 4/4 fill mode): aggregati per JCL via AdvancePaymentAllocation.
+    from app.models import (
+        AdvancePayment as _AP, AdvancePaymentConsumption as _APC,
+        AdvancePaymentStatus as _APStat, AdvancePaymentAllocation as _APA,
+    )
     advance_amount = 0.0
     advance_balance = 0.0
     advance_consumed = 0.0
+    # v3.5.0-alpha.146 — Σ AP allocation per JCL (esclude cancelled AP).
+    advance_coverage_by_jcl: dict[int, float] = {}
+    if job.cost_lines:
+        cov_rows = (
+            db.query(_APA.job_cost_line_id, func.coalesce(func.sum(_APA.amount), 0.0))
+            .join(_AP, _AP.id == _APA.advance_payment_id)
+            .filter(
+                _APA.job_cost_line_id.in_([l.id for l in job.cost_lines]),
+                _AP.status != _APStat.cancelled,
+                _AP.tenant_id == current_tenant_id(),
+            )
+            .group_by(_APA.job_cost_line_id)
+            .all()
+        )
+        advance_coverage_by_jcl = {r[0]: float(r[1] or 0) for r in cov_rows}
     if job.project_id:
         ap_row = db.query(
             func.coalesce(func.sum(_AP.amount), 0.0),
@@ -783,6 +802,16 @@ async def job_cost_report(job_id: int, db: Session = Depends(get_db)):
                 "fake_billing": bool(
                     l.billing_status and l.billing_status.value in ("billed", "paid")
                     and (l.total_accrued or 0) <= 0.001
+                ),
+                # v3.5.0-alpha.146 (Acconti Step 4 fill mode): coperto da acconto.
+                # advance_coverage = Σ AP_alloc.amount per questa JCL (AP non-cancelled).
+                # advance_drift = total_accrued - advance_coverage (negativo = scoperto).
+                # advance_overflow = advance_coverage > total_quoted * 1.05 → warning.
+                "advance_coverage": round(advance_coverage_by_jcl.get(l.id, 0.0), 2),
+                "advance_drift": round((l.total_accrued or 0) - advance_coverage_by_jcl.get(l.id, 0.0), 2),
+                "advance_overflow": bool(
+                    (l.total_quoted or 0) > 0
+                    and advance_coverage_by_jcl.get(l.id, 0.0) > (l.total_quoted or 0) * 1.05
                 ),
                 # v3.5.0-alpha.60: 3 colonne per riga (slice-based).
                 **three_column_view(l, billed_map.get(l.id, 0.0)),

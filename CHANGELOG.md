@@ -1,5 +1,30 @@
 # MediaFlow — Changelog
 
+## v3.5.0-alpha.146 — Workflow acconti Step 4/4: CR fill mode + badge JCL (17 mag 2026 pomeriggio tarda)
+
+Chiusura ciclo acconti. Cost report mostra ora copertura acconti per JCL.
+
+**Backend cost_report job endpoint**:
+- Pre-fetch `advance_coverage_by_jcl`: `SELECT SUM(AdvancePaymentAllocation.amount) GROUP BY job_cost_line_id` filtrato AP non-cancelled.
+- Per ogni JCL nel response cost_lines:
+  - `advance_coverage` = Σ AP_alloc.amount per JCL
+  - `advance_drift` = total_accrued − advance_coverage (negativo = scoperto, positivo = lavoro extra)
+  - `advance_overflow` = bool(advance_coverage > total_quoted * 1.05)
+
+**UI cost report**:
+- Badge inline per JCL coperta: `💰 €X · scoperto Y` / `· lavoro extra Y` / `· in linea`.
+- Bordo rosso se overflow (> 105% quote).
+- Tooltip dettagliato.
+
+**Smoke**: job 2024-0001 JCL 1 coverage €28k drift -€28k overflow True ✓.
+
+**Backlog α.147+**:
+- F29 i18n sweep TUTTA UI (round 1: dashboard + sidebar + topbar)
+- OAuth integrazioni
+- Cross-currency cost-report aggregati
+
+---
+
 ## v3.5.0-alpha.145 — Workflow acconti Step 3/4: UI /finance Bozze + confirm + emit (17 mag 2026 pomeriggio tarda)
 
 Step 3/4 della revisione architetturale acconti (piano α.139). UI completa per gestione bozze acconti in /finance + workflow conferma → emit fattura. Deprecato modal "Crea acconto" da /cost-report (workflow ora in /finance).
