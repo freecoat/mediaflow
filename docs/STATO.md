@@ -8,6 +8,27 @@
 
 ## Versione corrente
 
+**v3.5.0-alpha.143** — 17 maggio 2026 pomeriggio — Fatturazione: crea fattura ampliato + acconti visibili
+
+**Crea fattura**: modal con cascade cliente→progetto→quote→job→JCL. Force checkbox se senza link strutturato (400 sconsigliato).
+- Backend `POST /finance/api/invoices` accetta project_id/quote_id/job_id/jcl_id + force.
+- Frontend `openNewInvoiceModal()` con cache + cascade auto-populate bidirezionale.
+
+**Acconti visibili in Fatturazione**: card "💰 Acconti aperti" in tab Fatture.
+- Backend nuovo `GET /finance/api/advances/open` (tenant-wide, status=open, balance>0).
+- Frontend `loadOpenAdvances()` mostra lista compatta: numero · progetto · status · importi · bottone Apri.
+
+**Smoke**: 459 routes · render OK · endpoint `/finance/api/advances/open` registrato.
+
+**Backlog α.144+** (workflow acconti):
+- Hook converti quote→job auto-create AP(pending) da schedule + Notification admin
+- UI bozze acconti + workflow conferma/emit
+- CR fill mode (Coperto/Maturato/Drift per JCL)
+- F29 i18n sweep TUTTA UI
+- OAuth, cross-currency aggregati
+
+## (versione precedente)
+
 **v3.5.0-alpha.142** — 17 maggio 2026 pomeriggio — Cashflow 3 fix
 
 - **#1** Year dropdown vuoto in apertura: `initYearSelect()` mai chiamato. Fix.

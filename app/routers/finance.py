@@ -212,17 +212,38 @@ async def list_invoices(
 async def create_invoice(
     number: str = Form(...),
     client_id: int = Form(...),
-    job_id: Optional[int] = Form(None),
     issue_date: date = Form(...),
     due_date: Optional[date] = Form(None),
     vat_rate: float = Form(22.0),
     notes: Optional[str] = Form(None),
+    # v3.5.0-alpha.143 — Link strutturati a project/quote/job/JCL
+    project_id: Optional[int] = Form(None),
+    quote_id: Optional[int] = Form(None),
+    job_id: Optional[int] = Form(None),
+    jcl_id: Optional[int] = Form(None),
+    force: Optional[str] = Form(None),  # "true" se senza project+quote
     db: Session = Depends(get_db),
 ):
+    """v3.5.0-alpha.143 — Crea fattura con link strutturati.
+    Validazione: senza project E quote → 400 (force=true per consentire).
+    JCL link salvato in notes finché non c'è colonna dedicata.
+    """
+    force_b = (force or "").strip().lower() == "true"
+    if not project_id and not quote_id and not force_b:
+        raise HTTPException(
+            400,
+            "Fattura senza progetto/quotazione: aggiungi link strutturato "
+            "oppure passa force=true per confermare."
+        )
+    inv_notes = notes or ""
+    if jcl_id:
+        inv_notes = (inv_notes + (" · " if inv_notes else "")
+                     + f"Lavorazione JCL #{jcl_id}").strip()
     inv = Invoice(
-        number=number, client_id=client_id, job_id=job_id,
+        number=number, client_id=client_id,
+        project_id=project_id, quote_id=quote_id, job_id=job_id,
         issue_date=issue_date, due_date=due_date,
-        vat_rate=vat_rate, notes=notes,
+        vat_rate=vat_rate, notes=(inv_notes or None),
     )
     db.add(inv)
     db.commit()
@@ -545,6 +566,49 @@ async def list_project_advances(project_id: int, db: Session = Depends(get_db)):
             "balance_remaining": round(total_balance, 2),
         },
     }
+
+
+@router.get("/api/advances/open")
+async def list_open_advances(db: Session = Depends(get_db)):
+    """v3.5.0-alpha.143 — Lista acconti aperti (status=open, balance > 0) di
+    tutto il tenant. Usato dal widget /finance#invoices per dare visibilità
+    immediata degli acconti in attesa di emissione/scomputo."""
+    rows = (
+        db.query(AdvancePayment)
+        .options(
+            joinedload(AdvancePayment.invoice),
+            joinedload(AdvancePayment.project),
+            joinedload(AdvancePayment.consumptions),
+        )
+        .filter(
+            AdvancePayment.tenant_id == current_tenant_id(),
+            AdvancePayment.status == AdvancePaymentStatus.open,
+            AdvancePayment.balance_remaining > 0.005,
+        )
+        .order_by(AdvancePayment.created_at.desc())
+        .all()
+    )
+    out = []
+    for ap in rows:
+        inv = ap.invoice
+        proj = ap.project
+        consumed = sum((c.amount_consumed or 0) for c in ap.consumptions)
+        out.append({
+            "id": ap.id,
+            "amount": round(ap.amount or 0, 2),
+            "consumed": round(consumed, 2),
+            "balance_remaining": round(ap.balance_remaining or 0, 2),
+            "project_id": ap.project_id,
+            "project_code": proj.code if proj else None,
+            "project_title": proj.title if proj else None,
+            "invoice_id": inv.id if inv else None,
+            "invoice_number": inv.number if inv else None,
+            "invoice_status": (inv.status.value if inv and hasattr(inv.status, "value") else (inv.status if inv else None)),
+            "invoice_total": round(inv.total or 0, 2) if inv else 0,
+            "invoice_amount_paid": round(inv.amount_paid or 0, 2) if inv else 0,
+            "created_at": ap.created_at.isoformat() if ap.created_at else None,
+        })
+    return {"count": len(out), "rows": out}
 
 
 @router.post("/api/advances/{advance_id}/cancel", dependencies=[RequireEditInvoices])

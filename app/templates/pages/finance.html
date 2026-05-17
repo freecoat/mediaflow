@@ -5,7 +5,7 @@
 {% block topbar_title %}Fatturazione & Report{% endblock %}
 
 {% block topbar_actions %}
-  <button class="btn btn-primary btn-sm" onclick="openModal('modal-new-invoice')">+ Nuova fattura</button>
+  <button class="btn btn-primary btn-sm" onclick="openNewInvoiceModal()">+ Nuova fattura</button>
   <!-- v3.5.0-alpha.90: accrual billing — aggrega N batch approved del progetto → 1 fattura -->
   <button class="btn btn-secondary btn-sm" onclick="openComposeInvoiceModal()" title="Aggrega N batch approvati dello stesso progetto in 1 fattura unica (mensile/trimestrale/custom)">
     📦 Componi fattura periodo
@@ -38,6 +38,15 @@
   <div id="inv-focus-bar" style="display:none; margin-bottom:10px; padding:8px 12px; background:rgba(98,114,245,.10); border:1px solid rgba(98,114,245,.30); border-radius:6px; font-size:13px;">
     🔗 Filtro su singola fattura: <b><span class="focus-num">—</span></b>
     <button class="btn btn-ghost btn-sm" onclick="clearInvoiceFocus()" style="margin-left:10px;">✕ Mostra tutte</button>
+  </div>
+
+  <!-- v3.5.0-alpha.143 — Widget Acconti aperti (visibilità immediata in Fatturazione) -->
+  <div class="card mb-3" id="open-advances-card" style="display:none;">
+    <div class="card-header" style="display:flex; align-items:center; justify-content:space-between;">
+      <span class="card-title">💰 Acconti aperti (da scomputare o ancora attivi)</span>
+      <span class="text-xs text-muted" id="open-advances-summary"></span>
+    </div>
+    <div id="open-advances-body" style="padding:10px 14px;"></div>
   </div>
 
   <!-- v3.5.0-alpha.134 (F25) — Riepilogo Quotato vs Fatturato vs Pagato per progetto -->
@@ -296,9 +305,9 @@
 
 <!-- ── Modali ──────────────────────────────────────────────── -->
 
-<!-- Nuova fattura -->
+<!-- Nuova fattura — v3.5.0-alpha.143 ampliato: cliente/progetto/quote/job/lavorazione -->
 <div class="modal-overlay" id="modal-new-invoice">
-  <div class="modal">
+  <div class="modal" style="max-width:640px;">
     <div class="modal-header">
       <span class="modal-title">Nuova fattura</span>
       <button class="btn btn-ghost btn-icon" onclick="closeModal('modal-new-invoice')">✕</button>
@@ -311,7 +320,37 @@
         </div>
         <div class="form-group">
           <label class="form-label">Cliente *</label>
-          <select class="form-select" id="inv-client"></select>
+          <select class="form-select" id="inv-client" onchange="onInvClientChange()"></select>
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label class="form-label">Progetto</label>
+          <select class="form-select" id="inv-project" onchange="onInvProjectChange()">
+            <option value="">— nessuno (richiede forzatura) —</option>
+          </select>
+          <div class="text-xs text-muted">Filtra job + lavorazioni sotto.</div>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Quotazione</label>
+          <select class="form-select" id="inv-quote" onchange="onInvQuoteChange()">
+            <option value="">— nessuna (richiede forzatura) —</option>
+          </select>
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label class="form-label">Job (lavorazione)</label>
+          <select class="form-select" id="inv-job" onchange="onInvJobChange()">
+            <option value="">— nessuno —</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label class="form-label">JCL (voce di costo)</label>
+          <select class="form-select" id="inv-jcl">
+            <option value="">— nessuna —</option>
+          </select>
+          <div class="text-xs text-muted">Lavorazione specifica coperta dalla fattura.</div>
         </div>
       </div>
       <div class="form-row">
@@ -324,9 +363,26 @@
           <input class="form-input" id="inv-due" type="date">
         </div>
       </div>
-      <div class="form-group">
-        <label class="form-label">IVA %</label>
-        <input class="form-input" id="inv-vat" type="number" value="22" step="0.1">
+      <div class="form-row">
+        <div class="form-group">
+          <label class="form-label">IVA %</label>
+          <input class="form-input" id="inv-vat" type="number" value="22" step="0.1">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Note</label>
+          <input class="form-input" id="inv-notes" placeholder="es. Acconto, SAL, Saldo">
+        </div>
+      </div>
+      <!-- v3.5.0-alpha.143 — Force se senza link a progetto OR quotazione -->
+      <div class="form-group" id="inv-force-wrap" style="display:none; padding:8px 12px; background:rgba(245,158,11,0.12); border:1px solid rgba(245,158,11,0.45); border-radius:6px;">
+        <label class="form-label" style="display:flex; align-items:center; gap:8px;">
+          <input type="checkbox" id="inv-force">
+          <span style="color:#f59e0b; font-weight:600;">⚠ Forza fattura senza progetto/quotazione</span>
+        </label>
+        <div class="text-xs text-muted" style="margin-top:4px;">
+          Le fatture senza link a progetto E quotazione sono <b>fortemente sconsigliate</b>
+          (no traccia a maturato, no anagrafica fiscale snapshot). Spunta per confermare.
+        </div>
       </div>
     </div>
     <div class="modal-footer">
@@ -1733,16 +1789,168 @@ async function openInvoiceDetail(id) {
   modal.appendChild(mc); document.body.appendChild(modal);
 }
 
+// v3.5.0-alpha.143 — Modal Nuova fattura: cascade cliente→progetto→quote→job→JCL.
+// Cache filtri per evitare fetch ripetuti.
+let _invAllProjects = [];
+let _invAllQuotes = [];
+let _invAllJobs = [];
+let _invAllJcls = {};  // job_id → [JCL]
+
+async function _ensureInvCascadeData() {
+  if (_invAllProjects.length) return;
+  try {
+    [_invAllProjects, _invAllQuotes, _invAllJobs] = await Promise.all([
+      api('GET', '/projects/api').catch(() => []),
+      api('GET', '/quotes/api').catch(() => []),
+      api('GET', '/jobs/api').catch(() => []),
+    ]);
+  } catch (e) { /* silent */ }
+}
+
+async function openNewInvoiceModal() {
+  await _ensureInvCascadeData();
+  // Reset
+  document.getElementById('inv-number').value = '';
+  document.getElementById('inv-issue').value = new Date().toISOString().slice(0,10);
+  document.getElementById('inv-due').value = '';
+  document.getElementById('inv-vat').value = 22;
+  document.getElementById('inv-notes').value = '';
+  document.getElementById('inv-force').checked = false;
+  document.getElementById('inv-client').value = '';
+  _populateInvProjectSelect(); _populateInvQuoteSelect(); _populateInvJobSelect(); _populateInvJclSelect([]);
+  _updateInvForceVisibility();
+  openModal('modal-new-invoice');
+}
+
+function _populateInvProjectSelect(filter) {
+  const sel = document.getElementById('inv-project');
+  sel.textContent = '';
+  const empty = document.createElement('option'); empty.value = ''; empty.textContent = '— nessuno —';
+  sel.appendChild(empty);
+  const cid = parseInt(document.getElementById('inv-client').value || 0);
+  (_invAllProjects || []).forEach(p => {
+    if (cid && p.client_id !== cid) return;
+    const o = document.createElement('option'); o.value = p.id;
+    o.textContent = (p.code || '?') + ' — ' + (p.title || '');
+    sel.appendChild(o);
+  });
+}
+function _populateInvQuoteSelect() {
+  const sel = document.getElementById('inv-quote');
+  sel.textContent = '';
+  const empty = document.createElement('option'); empty.value = ''; empty.textContent = '— nessuna —';
+  sel.appendChild(empty);
+  const pid = parseInt(document.getElementById('inv-project').value || 0);
+  (_invAllQuotes || []).forEach(q => {
+    if (pid && q.project_id !== pid) return;
+    const o = document.createElement('option'); o.value = q.id;
+    o.textContent = (q.number || '?') + ' v' + (q.version || 1) + ' — ' + (q.title || '');
+    sel.appendChild(o);
+  });
+}
+function _populateInvJobSelect() {
+  const sel = document.getElementById('inv-job');
+  sel.textContent = '';
+  const empty = document.createElement('option'); empty.value = ''; empty.textContent = '— nessuno —';
+  sel.appendChild(empty);
+  const pid = parseInt(document.getElementById('inv-project').value || 0);
+  (_invAllJobs || []).forEach(j => {
+    if (pid && j.project_id !== pid) return;
+    const o = document.createElement('option'); o.value = j.id;
+    o.textContent = (j.code || '?') + ' — ' + (j.title || '');
+    sel.appendChild(o);
+  });
+}
+function _populateInvJclSelect(jcls) {
+  const sel = document.getElementById('inv-jcl');
+  sel.textContent = '';
+  const empty = document.createElement('option'); empty.value = ''; empty.textContent = '— nessuna —';
+  sel.appendChild(empty);
+  (jcls || []).forEach(l => {
+    const o = document.createElement('option'); o.value = l.id;
+    o.textContent = (l.description || '?').substring(0, 70) + ' · ' + fmtCurrency(l.total_quoted || 0);
+    sel.appendChild(o);
+  });
+}
+
+async function onInvClientChange() {
+  _populateInvProjectSelect();
+  _populateInvQuoteSelect();
+  _populateInvJobSelect();
+  _populateInvJclSelect([]);
+  _updateInvForceVisibility();
+}
+
+async function onInvProjectChange() {
+  _populateInvQuoteSelect();
+  _populateInvJobSelect();
+  _populateInvJclSelect([]);
+  // Auto-set cliente da progetto
+  const pid = parseInt(document.getElementById('inv-project').value || 0);
+  if (pid) {
+    const p = _invAllProjects.find(x => x.id === pid);
+    if (p && p.client_id) document.getElementById('inv-client').value = p.client_id;
+  }
+  _updateInvForceVisibility();
+}
+
+async function onInvQuoteChange() {
+  // Auto-set progetto da quote
+  const qid = parseInt(document.getElementById('inv-quote').value || 0);
+  if (qid) {
+    const q = _invAllQuotes.find(x => x.id === qid);
+    if (q && q.project_id) {
+      document.getElementById('inv-project').value = q.project_id;
+      _populateInvJobSelect();
+    }
+  }
+  _updateInvForceVisibility();
+}
+
+async function onInvJobChange() {
+  const jid = parseInt(document.getElementById('inv-job').value || 0);
+  if (!jid) { _populateInvJclSelect([]); return; }
+  if (_invAllJcls[jid]) { _populateInvJclSelect(_invAllJcls[jid]); return; }
+  try {
+    const r = await api('GET', '/cost-report/api/job/' + jid);
+    _invAllJcls[jid] = r.cost_lines || [];
+    _populateInvJclSelect(_invAllJcls[jid]);
+  } catch (e) { _populateInvJclSelect([]); }
+}
+
+function _updateInvForceVisibility() {
+  const pid = document.getElementById('inv-project').value;
+  const qid = document.getElementById('inv-quote').value;
+  const wrap = document.getElementById('inv-force-wrap');
+  wrap.style.display = (!pid && !qid) ? '' : 'none';
+}
+
 async function createInvoice() {
   const number = document.getElementById('inv-number').value.trim();
   const client_id = document.getElementById('inv-client').value;
   const issue = document.getElementById('inv-issue').value;
+  const projId = document.getElementById('inv-project').value;
+  const quoteId = document.getElementById('inv-quote').value;
+  const jobId = document.getElementById('inv-job').value;
+  const jclId = document.getElementById('inv-jcl').value;
+  const force = document.getElementById('inv-force').checked;
   if (!number || !client_id || !issue) { toast('Compila i campi obbligatori', 'error'); return; }
+  // v3.5.0-alpha.143 — Force se senza link a progetto E quotazione
+  if (!projId && !quoteId && !force) {
+    toast('Fattura senza progetto/quotazione: spunta "Forza" per confermare', 'warning'); return;
+  }
   try {
     const fd = new FormData();
     fd.append('number', number); fd.append('client_id', client_id);
     fd.append('issue_date', issue); fd.append('due_date', document.getElementById('inv-due').value || '');
     fd.append('vat_rate', document.getElementById('inv-vat').value || '22');
+    if (projId) fd.append('project_id', projId);
+    if (quoteId) fd.append('quote_id', quoteId);
+    if (jobId) fd.append('job_id', jobId);
+    if (jclId) fd.append('jcl_id', jclId);
+    const notes = document.getElementById('inv-notes').value.trim();
+    if (notes) fd.append('notes', notes);
+    if (force) fd.append('force', 'true');
     await api('POST', '/finance/api/invoices', fd);
     closeModal('modal-new-invoice');
     toast('Fattura creata', 'success');
@@ -2548,6 +2756,57 @@ async function init() {
   loadBatches();
   // v3.5.0-alpha.141 — Carica dipartimenti per filtro anomalie
   _loadDeptsForAnomalies();
+  // v3.5.0-alpha.143 — Widget acconti aperti
+  loadOpenAdvances();
+}
+
+// v3.5.0-alpha.143 — Widget acconti aperti tenant-wide in tab Fatture.
+async function loadOpenAdvances() {
+  const card = document.getElementById('open-advances-card');
+  if (!card) return;
+  try {
+    const data = await api('GET', '/finance/api/advances/open');
+    const rows = data.rows || [];
+    if (!rows.length) { card.style.display = 'none'; return; }
+    card.style.display = '';
+    const totalBal = rows.reduce((s, r) => s + (r.balance_remaining || 0), 0);
+    document.getElementById('open-advances-summary').textContent =
+      rows.length + ' acconto/i aperto/i · residuo totale ' + fmtCurrency(totalBal);
+    const host = document.getElementById('open-advances-body');
+    host.textContent = '';
+    rows.forEach(r => {
+      const row = document.createElement('div');
+      row.style.cssText = 'display:flex; align-items:center; gap:10px; padding:8px 10px; background:var(--bg2); border:1px solid var(--border); border-radius:6px; margin-bottom:6px;';
+      const num = document.createElement('div');
+      num.style.cssText = "font-family:'DM Mono',monospace; font-size:12px; font-weight:600; color:var(--indigo2); min-width:120px;";
+      num.textContent = r.invoice_number || ('#' + r.id);
+      const proj = document.createElement('div');
+      proj.style.cssText = 'flex:1; font-size:13px;';
+      proj.textContent = (r.project_code || '?') + ' — ' + (r.project_title || '');
+      const stat = document.createElement('span');
+      stat.style.cssText = 'padding:2px 8px; border-radius:10px; font-size:11px; font-weight:600;';
+      const isPaid = r.invoice_status === 'paid';
+      stat.style.background = isPaid ? 'rgba(34,197,94,0.18)' : 'rgba(251,191,36,0.18)';
+      stat.style.color = isPaid ? '#22c55e' : '#fbbf24';
+      stat.textContent = (r.invoice_status || '?') + (isPaid ? '' : ' · da scomputare');
+      const amts = document.createElement('div');
+      amts.className = 'mono text-xs';
+      amts.style.minWidth = '220px';
+      amts.style.textAlign = 'right';
+      amts.title = 'Importo / scomputato / residuo';
+      amts.textContent = fmtCurrency(r.amount) + ' · −' + fmtCurrency(r.consumed) + ' · ' + fmtCurrency(r.balance_remaining);
+      const btn = document.createElement('button');
+      btn.className = 'btn btn-ghost btn-sm';
+      btn.textContent = '→ Apri';
+      btn.title = 'Apri progetto / cost report';
+      btn.onclick = () => { window.location.href = '/projects/' + r.project_id; };
+      row.appendChild(num); row.appendChild(proj); row.appendChild(stat);
+      row.appendChild(amts); row.appendChild(btn);
+      host.appendChild(row);
+    });
+  } catch (e) {
+    card.style.display = 'none';
+  }
 }
 
 init();

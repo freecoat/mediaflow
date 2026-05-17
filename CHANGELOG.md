@@ -1,5 +1,45 @@
 # MediaFlow — Changelog
 
+## v3.5.0-alpha.143 — Fatturazione: crea fattura ampliato + acconti visibili (17 mag 2026 pomeriggio)
+
+**Crea fattura modal**: ampliato con dropdown cliente/progetto/quotazione/job/JCL (cascade).
+
+Frontend:
+- Modal `#modal-new-invoice` esteso con 4 select aggiuntivi: progetto, quote, job, JCL.
+- Cache `_invAllProjects/_invAllQuotes/_invAllJobs` + per-job `_invAllJcls`.
+- Cascade auto-populate: cliente → filtra progetti; progetto → filtra quote+job; quote → auto-set progetto; job → fetch JCL via `/cost-report/api/job/{id}`.
+- Bidirezionale: scegliendo quote auto-popola progetto e cliente.
+- Force checkbox: visibile solo se né progetto né quote selezionati. Conferma "fattura senza link strutturato sconsigliata".
+- `openNewInvoiceModal()` wrapper sostituisce `openModal()` diretto per pre-caricamento cache.
+
+Backend `POST /finance/api/invoices` esteso:
+- Form params: `project_id`, `quote_id`, `job_id`, `jcl_id`, `force`.
+- Validazione: senza project E quote → 400 a meno che `force=true`.
+- `jcl_id` appendito in notes (no colonna FK dedicata per ora).
+
+**Acconti visibili**: nuova card "💰 Acconti aperti" in tab Fatture.
+
+Backend:
+- Nuovo `GET /finance/api/advances/open` ritorna AP status=open balance>0 tenant-wide con joinedload invoice/project/consumptions.
+- Response: rows con invoice_number/status/total/amount_paid + project_code/title + amount/consumed/balance.
+
+Frontend:
+- Card collassabile sopra widget F25 (Quotato vs Fatturato).
+- Lista compatta: numero fattura · progetto · status badge (paid/da-scomputare) · importi (totale · scomputato · residuo) · bottone "Apri" → `/projects/X`.
+- Summary: "N acconti aperti · residuo totale €X".
+- Caricato in `init()` via `loadOpenAdvances()`.
+
+**Smoke render**: finance.html 156384 chars con inv-project/quote/jcl, open-advances-card, loadOpenAdvances presenti ✓. Endpoint `/finance/api/advances/open` registrato (459 routes totale).
+
+**Backlog α.144+** (workflow acconti):
+- Hook converti quote→job: auto-create AdvancePayment(pending) da QuoteAdvanceSchedule + Notification admin
+- UI /finance "Bozze acconti" + workflow conferma/emit
+- CR fill mode (Coperto/Maturato/Drift per JCL coperta)
+- F29 i18n sweep TUTTA UI
+- Conversione cross-currency in cost-report aggregati
+
+---
+
 ## v3.5.0-alpha.142 — Cashflow: 3 fix (17 mag 2026 pomeriggio)
 
 **#1 Year dropdown vuoto in apertura**:
