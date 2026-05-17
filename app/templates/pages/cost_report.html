@@ -525,10 +525,23 @@ function renderCrList() {
     const oVal = (r[_viewKey] ?? r.over_under) || 0;
     const oCls = oVal > 0 ? 'color-rose' : (oVal < 0 ? 'color-success' : 'text-muted');
     const oSign = oVal > 0 ? '+' : '';
+    // v3.5.0-alpha.135 (F26+F27): badge segnale incongruenza fatturazione.
+    // adminFlag = |invoiced_net - Σ slice| > 5% quotato → fatturato disaccoppiato
+    //   da JCL (acconti/SAL/saldo manuali, OR batch+fattura mismatch).
+    // fakeBilling = N JCL billed/paid ma total_accrued=0 → "fattura senza ore".
+    let flagBadges = '';
+    if (r.admin_flag) {
+      const d = r.billed_admin_net || 0;
+      const dSign = d > 0 ? '+' : '';
+      flagBadges += `<span title="Fatturato amministrativo ${dSign}${fmtCurrency(d)} non agganciato a slice JCL (acconti/SAL/saldo o batch disaccoppiati)" style="display:inline-block;margin-left:6px;padding:1px 6px;background:rgba(251,191,36,0.18);color:#fbbf24;border-radius:8px;font-weight:600;font-size:10px;">⚠ admin ${dSign}${fmtCurrency(d)}</span>`;
+    }
+    if (r.fake_billing_count > 0) {
+      flagBadges += `<span title="${r.fake_billing_count} voce(i) di costo con stato fatturato ma 0 ore maturate — verificare semantica" style="display:inline-block;margin-left:6px;padding:1px 6px;background:rgba(239,68,68,0.18);color:#ef4444;border-radius:8px;font-weight:600;font-size:10px;">⚠ fake-bill ${r.fake_billing_count}</span>`;
+    }
     return `<tr style="cursor:pointer;" onclick="loadReport(${r.id})">
       <td class="mono" style="font-size:12px;">${escapeHtml(r.code)}</td>
       <td>
-        <div style="font-weight:500;">${escapeHtml(r.title || '—')}</div>
+        <div style="font-weight:500;">${escapeHtml(r.title || '—')}${flagBadges}</div>
         ${r.quote_number ? `<div style="font-size:11px;color:var(--text3);margin-top:2px;">quote ${escapeHtml(r.quote_number)}${r.quote_title && r.quote_title !== r.title ? ' · ' + escapeHtml(r.quote_title) : ''}</div>` : ''}
       </td>
       <td class="text-muted text-sm">${escapeHtml(r.client || '—')}</td>
@@ -1045,6 +1058,14 @@ function renderKPIs() {
     <div class="stat-card" title="Σ delle JCLBilledSlice — immutabile, già nelle fatture emesse"><div class="stat-label">Fatturato chiuso</div>
       <div class="stat-value color-green mono" style="font-size:20px;">${fmtCurrency(billedLocked)}</div>
       <div class="stat-sub">Σ slice fatturate</div></div>
+    <!-- v3.5.0-alpha.135 (F26): Fatturato totale Invoice + Admin breakdown -->
+    <div class="stat-card" title="Σ Invoice.subtotal (imponibile, no draft/cancelled). Include sia fatturato linked-to-JCL (slice) sia amministrativo manuale (acconti/SAL/saldo).${(s.admin_flag) ? ' ⚠ Mismatch slice vs invoice > 5% quotato.' : ''}"><div class="stat-label">Fatturato totale${s.admin_flag ? ' ⚠' : ''}</div>
+      <div class="stat-value mono" style="font-size:20px;color:${s.admin_flag ? 'var(--amber)' : 'var(--text)'};">${fmtCurrency(s.invoiced_net || 0)}</div>
+      <div class="stat-sub">${(s.billed_admin_net !== undefined) ? ('di cui amministrativo: ' + (s.billed_admin_net >= 0 ? '+' : '') + fmtCurrency(s.billed_admin_net)) : 'imponibile fatture'}</div></div>
+    <!-- v3.5.0-alpha.135 (F27): warning "fake billing" se voci billed senza ore -->
+    ${(s.fake_billing_count || 0) > 0 ? `<div class="stat-card" style="border-left:3px solid #ef4444;" title="${s.fake_billing_count} voce(i) di costo con stato billed/paid ma total_accrued=0 — fattura emessa senza ore lavorate. Probabile artifact seed o JCL mai eseguita."><div class="stat-label">⚠ Fake billing</div>
+      <div class="stat-value color-rose mono" style="font-size:20px;">${s.fake_billing_count}</div>
+      <div class="stat-sub">voci billed senza ore</div></div>` : ''}
     <div class="stat-card" title="Maturato eccedente il già fatturato — prossimo candidato di trasmissione"><div class="stat-label">Maturato post-periodo</div>
       <div class="stat-value color-amber mono" style="font-size:20px;">${fmtCurrency(accruedPost)}</div>
       <div class="stat-sub">done non ancora slice-ato</div></div>
@@ -1162,9 +1183,13 @@ function renderCostLines() {
         txBadge = `<span class="text-xs" style="display:inline-block; margin-left:6px; padding:1px 6px; background:rgba(251,191,36,0.18); color:#fbbf24; border-radius:8px; font-weight:600; font-size:10px;" title="Maturato ${(ratio*100).toFixed(0)}% del quotato — richiede conferma esplicita in trasmissione (sotto-quotato)">⚠ Sotto-quotato (${(ratio*100).toFixed(0)}%)</span>`;
       }
     }
+    // v3.5.0-alpha.135 (F27): badge fake_billing per riga
+    const fakeBadge = l.fake_billing
+      ? `<span class="text-xs" style="display:inline-block;margin-left:6px;padding:1px 6px;background:rgba(239,68,68,0.18);color:#ef4444;border-radius:8px;font-weight:600;font-size:10px;" title="Stato fatturazione ${l.billing_status} ma maturato=0 — fattura senza ore lavorate">⚠ no-work</span>`
+      : '';
     return `<tr onclick='openLineDetailHere(${l.id})' style="cursor:pointer;">
       <td style="min-width:240px;">
-        <div style="font-weight:500;font-size:13px;">${l.description}${l.is_extra ? ' <span class="text-xs" style="color:#fb923c;">[extra]</span>' : ''}${refsBadge}${pendBadge}${txBadge}</div>
+        <div style="font-weight:500;font-size:13px;">${l.description}${l.is_extra ? ' <span class="text-xs" style="color:#fb923c;">[extra]</span>' : ''}${refsBadge}${pendBadge}${txBadge}${fakeBadge}</div>
         ${l.category ? `<div class="text-xs text-muted">${l.category}</div>` : ''}
         ${bar}
       </td>

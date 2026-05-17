@@ -1,5 +1,56 @@
 # MediaFlow — Changelog
 
+## v3.5.0-alpha.135 — F26/F27/F30 coerenza CR↔Fatturazione (pattern B) + F28 root cause (17 mag 2026 mattina)
+
+Chiusura bundle anomalie architetturali emerse α.134 su Shadow Stagione 3. Pattern B: trasparenza UI senza riarchitettura. Visibilità immediata in /cost-report lista + dettaglio.
+
+**F28 — Root cause mismatch slice vs invoice line (DEBUG, no code change)**
+
+Investigazione DB Shadow: inv 22 subtotal €7'358 con 1 line "Acconto 20%" + Σ slice €6'110 (7 slice da batch BB-2026-0002 €6'110). Disaccoppiamento totale.
+
+Causa: `seed_stress.py` STAGE 9 genera Invoice "manuali" (1 line "Acconto/SAL/Saldo" con pct random del quote) PRIMA dello STAGE 14 che crea BillingBatch + JCLBilledSlice independentemente, pickando random un'invoice esistente per `slice.invoice_id`. By-seed-design — NON bug production.
+
+In produzione reale, l'unico flow che lo riproduce è: `POST /finance/api/invoices` (creazione manuale acconto) + `POST /billing/batch/{id}/emit-invoice` (emit batch su altra fattura periodo successivo). I 2 stream sono entrambi validi ma disaccoppiati dal punto di vista contabile.
+
+Conclusione: Pattern B (visibilità split) è la risposta giusta. No riarchitettura. Salvato in memoria `project_alpha134_findings.md`.
+
+**F26 — Split fatturato linked-to-JCL vs amministrativo**
+
+Backend `/cost-report/api/list` + `/cost-report/api/job/{id}`:
+- `invoiced_net` = Σ Invoice.subtotal (imponibile, no draft/cancelled, TD04 sottratto con sign -1)
+- `billed_admin_net` = invoiced_net − billed_locked (Σ slice) = fatturato senza link a JCL
+- `admin_flag` = bool(|billed_admin_net| > 5% del quotato)
+
+UI lista CR: badge inline `⚠ admin ±€X` nella riga del job (tooltip dettagliato).
+UI dettaglio CR: nuova KPI card "Fatturato totale" con sub "di cui amministrativo: ±€X". Bordo amber quando admin_flag.
+
+**F27 — Warning JCL billed/paid && total_accrued=0 (fake billing)**
+
+Backend:
+- Job level: `fake_billing_count` = N JCL con billing_status billed/paid e total_accrued=0
+- Line level: `fake_billing` boolean per ogni JCL del job
+
+UI lista: badge `⚠ fake-bill N` nella riga del job (rosso).
+UI dettaglio: card KPI dedicata `⚠ Fake billing` con bordo rosso (solo se count > 0). Badge `⚠ no-work` nella riga di ogni voce di costo fake.
+
+**F30 — Voci fatturazione CR non corrette**
+
+Generalizzazione F26+F27 — già risolta dalle stesse modifiche. Il dettaglio CR ora mostra contemporaneamente:
+- Fatturato chiuso (Σ slice, linked-to-JCL) — pre-esistente
+- Fatturato totale (Σ Invoice, include amministrativo) — F26 nuovo
+- Delta admin esplicito + warning visivo
+
+Smoke E2E su Shadow Stagione 3 (job 9):
+- budget_quoted €36'794,81 ✓
+- billed_locked €11'975,29 (Σ slice) ✓
+- invoiced_net €36'794,81 (Σ Invoice) ✓
+- billed_admin_net €24'819,52 (fantasma 67%) ✓ admin_flag=True
+- fake_billing_count 7/7 JCL paid senza ore ✓
+
+**Backlog α.136+**: F29 i18n sweep completo (~500-1000 chiavi), test parse 14 capitolati restanti, OAuth integrazioni, automazione portali consegne.
+
+---
+
 ## v3.5.0-alpha.134 — F25 widget Quotato vs Fatturato per progetto + analisi anomalie Shadow (16 mag 2026 notte tarda)
 
 Finding emerso da Matteo uso reale 16 mag tarda: incongruenza Cost Report vs Fatturazione su progetto Shadow Stagione 3. Investigato + soluzione immediata F25 + documentazione anomalie architetturali per α.135+.

@@ -8,6 +8,40 @@
 
 ## Versione corrente
 
+**v3.5.0-alpha.135** — 17 maggio 2026 mattina — F26/F27/F30 coerenza CR↔Fatturazione (pattern B) + F28 root cause
+
+**Bundle architetturale "Coerenza CR↔Fatturazione"** chiuso con pattern B (trasparenza UI, no riarchitettura).
+
+**F28 debug** — root cause documentato. Mismatch Invoice.subtotal vs Σ slice in Shadow è artifact `seed_stress.py` (STAGE 9 invoice manuali + STAGE 14 batch+slice disaccoppiati). In production reale, riproducibile solo combinando `POST /finance/api/invoices` manuale + `emit-invoice` batch su stessa entità. NON bug.
+
+**F26 backend** — `cost_report` list + job endpoint estesi con:
+- `invoiced_net` (Σ Invoice.subtotal imponibile, TD04 sottratto sign -1)
+- `billed_admin_net` = invoiced_net − billed_locked (= fatturato non agganciato a slice)
+- `admin_flag` se |delta| > 5% quotato
+
+**F27 backend** — `fake_billing_count` (job) + `fake_billing` boolean (line) = JCL billed/paid con accrued=0.
+
+**UI**:
+- Lista CR: badge `⚠ admin ±€X` + `⚠ fake-bill N` nella riga del job
+- Dettaglio CR: KPI card "Fatturato totale" (di cui admin) + card `⚠ Fake billing` se count > 0
+- Riga voce di costo: badge `⚠ no-work` se fake_billing
+
+**Smoke Shadow Stagione 3** (job 9):
+- invoiced_net €36'794,81 ✓
+- billed_locked €11'975,29 ✓
+- billed_admin_net €24'819,52 (67% fantasma) ✓ admin_flag=True
+- fake_billing_count 7/7 paid senza ore ✓
+
+**F30** risolto dalle stesse modifiche (visibilità split slice vs invoice totale = "voce fatturazione" ora corretta).
+
+**Backlog α.136+**:
+- F29 i18n sweep completo (~500-1000 chiavi, lavoro pesante spalmato su round)
+- Test parse 14 capitolati restanti (UI 1-by-1)
+- OAuth integrazioni Gmail/Outlook/Drive/OneDrive
+- Automazione portali consegne
+
+## (versione precedente)
+
 **v3.5.0-alpha.134** — 16 maggio 2026 notte tarda — F25 widget Quotato vs Fatturato + analisi Shadow
 
 **Finding architetturale Shadow Stagione 3**:

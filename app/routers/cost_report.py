@@ -80,6 +80,29 @@ async def list_cost_reports(
         for l in j.cost_lines:
             all_jcl_ids.append(l.id)
     billed_map = billed_locked_bulk(db, all_jcl_ids)
+    # v3.5.0-alpha.135 (F26) — pre-fetch Σ Invoice.subtotal per job (TD04 sottratto).
+    # Serve a derivare billed_admin_net = invoiced_net − Σ slice = fatturato
+    # NON agganciato a slice JCL (acconti/SAL/saldo manuali, no link batch).
+    from sqlalchemy import case as _case
+    job_ids = [j.id for j in jobs]
+    invoiced_net_map: dict[int, float] = {}
+    if job_ids:
+        inv_rows = (
+            db.query(
+                Invoice.job_id,
+                func.coalesce(func.sum(
+                    _case((Invoice.doc_type == "TD04", -1), else_=1) * Invoice.subtotal
+                ), 0.0).label("net"),
+            )
+            .filter(
+                Invoice.job_id.in_(job_ids),
+                Invoice.status != InvoiceStatus.draft,
+                Invoice.status != InvoiceStatus.cancelled,
+            )
+            .group_by(Invoice.job_id)
+            .all()
+        )
+        invoiced_net_map = {r.job_id: float(r.net or 0) for r in inv_rows}
     out = []
     for j in jobs:
         total_quoted = sum(l.total_quoted for l in j.cost_lines)
@@ -101,6 +124,21 @@ async def list_cost_reports(
         billed_locked = round(sum(billed_map.get(l.id, 0.0) for l in j.cost_lines), 2)
         accrued_post_period = round(max(0.0, total_accrued - billed_locked), 2)
         forecast_future = round(max(0.0, total_expected - total_accrued), 2)
+        # v3.5.0-alpha.135 (F26): split fatturato linked-to-slice vs amministrativo.
+        # invoiced_net = Σ Invoice.subtotal (no draft/cancelled, TD04 sottratto).
+        # billed_admin_net = invoiced_net − billed_locked (= fatture senza JCL link:
+        # acconti/SAL/saldo manuali, oppure batch+fattura disaccoppiati). Flag
+        # admin_flag se ammontare > 5% del quotato (segnale incongruenza).
+        # v3.5.0-alpha.135 (F27): fake_billing_count = JCL billed/paid con
+        # total_accrued=0 = "fatturato senza lavoro maturato". Warning visivo.
+        invoiced_net = round(invoiced_net_map.get(j.id, 0.0), 2)
+        billed_admin_net = round(invoiced_net - billed_locked, 2)
+        admin_flag = bool(total_quoted > 0 and abs(billed_admin_net) > total_quoted * 0.05)
+        fake_billing_count = sum(
+            1 for l in j.cost_lines
+            if (l.billing_status and l.billing_status.value in ("billed", "paid"))
+            and (l.total_accrued or 0) <= 0.001
+        )
         out.append({
             "id": j.id,
             "code": j.code,
@@ -133,6 +171,11 @@ async def list_cost_reports(
             "billed_locked": billed_locked,
             "accrued_post_period": accrued_post_period,
             "forecast_future": forecast_future,
+            # v3.5.0-alpha.135 (F26+F27)
+            "invoiced_net": invoiced_net,
+            "billed_admin_net": billed_admin_net,
+            "admin_flag": admin_flag,
+            "fake_billing_count": fake_billing_count,
             "lines_count": len(j.cost_lines),
         })
     return out
@@ -343,6 +386,19 @@ async def job_cost_report(job_id: int, db: Session = Depends(get_db)):
     paid = db.query(func.sum(Invoice.total)).filter(
         Invoice.job_id == job_id, Invoice.status == InvoiceStatus.paid
     ).scalar() or 0
+    # v3.5.0-alpha.135 (F26) — Σ Invoice.subtotal imponibile (no draft/cancelled,
+    # TD04 sottratto). Necessario per derivare billed_admin_net = invoiced_net −
+    # billed_locked (Σ slice). admin_net rivela il "fatturato fantasma": fatture
+    # senza link a JCL via slice (acconti/SAL/saldo manuali). Pattern B F26.
+    from sqlalchemy import case as _case
+    invoiced_net = db.query(func.coalesce(func.sum(
+        _case((Invoice.doc_type == "TD04", -1), else_=1) * Invoice.subtotal
+    ), 0.0)).filter(
+        Invoice.job_id == job_id,
+        Invoice.status != InvoiceStatus.draft,
+        Invoice.status != InvoiceStatus.cancelled,
+    ).scalar() or 0
+    invoiced_net = float(invoiced_net)
 
     # Totali cost lines
     total_quoted = sum(l.total_quoted for l in job.cost_lines)
@@ -578,6 +634,20 @@ async def job_cost_report(job_id: int, db: Session = Depends(get_db)):
             "margin": round(margin, 2),
             "invoiced": round(invoiced, 2),
             "paid": round(paid, 2),
+            # v3.5.0-alpha.135 (F26): split fatturato linked-to-JCL vs amministrativo.
+            # invoiced_net = Σ Invoice.subtotal (imponibile, no draft/cancelled).
+            # billed_admin_net = invoiced_net − Σ slice = fatture senza JCL link.
+            # admin_flag se delta > 5% del quotato (segnale incongruenza).
+            "invoiced_net": round(invoiced_net, 2),
+            "billed_admin_net": round(invoiced_net - sum_billed_locked, 2),
+            "admin_flag": bool(total_quoted > 0 and abs(invoiced_net - sum_billed_locked) > total_quoted * 0.05),
+            # v3.5.0-alpha.135 (F27): JCL "fake billing" = billed/paid && accrued=0.
+            # Significa "fattura emessa senza ore lavorate" → warning UI.
+            "fake_billing_count": sum(
+                1 for l in job.cost_lines
+                if (l.billing_status and l.billing_status.value in ("billed", "paid"))
+                and (l.total_accrued or 0) <= 0.001
+            ),
             # v3.5.0-alpha.66.11 — Hardcost ore deliverable (solo INTERNO).
             # Cliente non vede. Da mostrare in /cost-report e /jobs/{id} solo
             # con permesso view_finance.
@@ -631,6 +701,12 @@ async def job_cost_report(job_id: int, db: Session = Depends(get_db)):
                 "billing_status": l.billing_status.value if l.billing_status else "not_billed",
                 "billing_batch_id": l.billing_batch_id,
                 "billed_amount": l.billed_amount,
+                # v3.5.0-alpha.135 (F27): JCL billed/paid ma accrued=0 = fake
+                # billing (fattura emessa senza ore lavorate). Warning UI.
+                "fake_billing": bool(
+                    l.billing_status and l.billing_status.value in ("billed", "paid")
+                    and (l.total_accrued or 0) <= 0.001
+                ),
                 # v3.5.0-alpha.60: 3 colonne per riga (slice-based).
                 **three_column_view(l, billed_map.get(l.id, 0.0)),
                 # v3.5.0-alpha.64: lista quote-line che referenziano questa JCL
