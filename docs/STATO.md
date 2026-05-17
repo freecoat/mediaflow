@@ -8,6 +8,26 @@
 
 ## Versione corrente
 
+**v3.5.0-alpha.163** — 17 maggio 2026 notte — Voci listino trasversali (cross_dept)
+
+Caso Production Management: voce non assegnabile a risorsa via booking (filtro reparto rigido). Soluzione strutturale: price_item.cross_dept=True bypassa filtro.
+
+Modello esteso: cross_dept Boolean + additional_department_ids JSON.
+Auto-migrate ALTER + backfill (dept_id NULL → cross_dept=1).
+Booking _dept_match: bypass se cross_dept. Planning response: cost_line_cross_dept.
+API listino POST/PUT accettano cross_dept.
+
+Versioni intermedie α.161-162:
+- α.161 (1e9822e): Colonna Fatturato include acconto pagato (billed_total)
+- α.162 (5d8e027): Timeline planning zoomKey:ctrlKey (fix conflitto zoom+scroll wheel)
+
+Backlog α.164:
+- UI pricelist modal checkbox "Voce trasversale"
+- CR dept breakdown ripartizione voci trasversali
+- Multi-dept allocation (additional_department_ids)
+
+## (versione precedente)
+
 **v3.5.0-alpha.160** — 17 maggio 2026 notte — JCL advance_paid_coverage
 
 Fix: pre-α.160 badge "Coperto da acconto" su JCL mostrava allocazione indipendente da pagamento. Acconto NON pagato → mostrava coverage piena fuorviante.

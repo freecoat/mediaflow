@@ -1000,13 +1000,21 @@ async def list_bookings(
                 # True se sia il reparto del task (price_item) sia il reparto
                 # della risorsa sono noti e diversi. Il client lo usa per il
                 # badge ⚠ sull'item, indipendente dal momento del drop.
+                # v3.5.0-alpha.163: voci cross_dept (trasversali) → NO warning
+                #   (Production Management, Coordination, ecc.: accettano qualsiasi reparto).
                 "cross_department": (
                     bool(
                         b.cost_line and b.cost_line.price_item
+                        and not getattr(b.cost_line.price_item, "cross_dept", False)
                         and b.cost_line.price_item.department_id is not None
                         and a.resource and a.resource.department_id is not None
                         and b.cost_line.price_item.department_id != a.resource.department_id
                     )
+                ),
+                # v3.5.0-alpha.163 — Voce trasversale: cross_dept flag esposto al client
+                "cost_line_cross_dept": bool(
+                    b.cost_line and b.cost_line.price_item
+                    and getattr(b.cost_line.price_item, "cross_dept", False)
                 ),
                 # v3.5.0-alpha.59 — slice lock: presente se l'assignment ricade
                 # in un periodo già fatturato. UI mostra lucchetto + tooltip,

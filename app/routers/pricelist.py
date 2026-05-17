@@ -159,6 +159,8 @@ async def list_items(
             "price_list": i.price_list, "price_average": i.price_average,
             "price_low": i.price_low, "hardcosts": i.hardcosts,
             "keywords": i.keywords or [],
+            # v3.5.0-alpha.163 — Voce trasversale (cross_dept) per UI badge + filter
+            "cross_dept": bool(getattr(i, "cross_dept", False)),
         }
         for i in items
     ]
@@ -195,6 +197,8 @@ async def create_item(
     price_low: Optional[float] = Form(None),
     hardcosts: Optional[float] = Form(None),
     keywords: Optional[str] = Form(None),
+    # v3.5.0-alpha.163 — Voce trasversale (Production Management, Overhead...)
+    cross_dept: Optional[bool] = Form(False),
     db: Session = Depends(get_db),
 ):
     item = PriceItem(
@@ -209,6 +213,7 @@ async def create_item(
         price_low=price_low,
         hardcosts=hardcosts,
         keywords=_parse_keywords(keywords),
+        cross_dept=bool(cross_dept),
     )
     db.add(item); db.commit(); db.refresh(item)
     return {"id": item.id, "name": item.name}
@@ -229,6 +234,7 @@ async def update_item(
     hardcosts: Optional[float] = Form(None),
     keywords: Optional[str] = Form(None),
     is_active: Optional[bool] = Form(None),
+    cross_dept: Optional[bool] = Form(None),
     db: Session = Depends(get_db),
 ):
     i = db.query(PriceItem).filter(
@@ -248,6 +254,7 @@ async def update_item(
     if hardcosts is not None: i.hardcosts = hardcosts
     if keywords is not None: i.keywords = _parse_keywords(keywords)
     if is_active is not None: i.is_active = is_active
+    if cross_dept is not None: i.cross_dept = bool(cross_dept)
     db.commit()
     return {"id": i.id, "name": i.name}
 

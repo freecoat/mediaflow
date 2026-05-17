@@ -584,6 +584,27 @@ def _auto_migrate_columns():
                 if col not in dcols:
                     print(f"[auto-migrate] departments.{col} mancante -> ALTER TABLE")
                     conn.execute(text(f"ALTER TABLE departments ADD COLUMN {col} {ddl}"))
+    # v3.5.0-alpha.163 — PriceItem cross_dept + additional_department_ids
+    if "price_items" in insp.get_table_names():
+        picols = {c["name"] for c in insp.get_columns("price_items")}
+        pi_alter = [
+            ("cross_dept", "BOOLEAN NOT NULL DEFAULT 0"),
+            ("additional_department_ids", "TEXT NULL"),
+        ]
+        with engine.begin() as conn:
+            for col, ddl in pi_alter:
+                if col not in picols:
+                    print(f"[auto-migrate] price_items.{col} mancante -> ALTER TABLE")
+                    conn.execute(text(f"ALTER TABLE price_items ADD COLUMN {col} {ddl}"))
+            # v3.5.0-alpha.163 — Backfill: voci listino senza department_id =
+            # candidate trasversali → set cross_dept=1 idempotente.
+            try:
+                conn.execute(text(
+                    "UPDATE price_items SET cross_dept=1 "
+                    "WHERE cross_dept=0 AND department_id IS NULL"
+                ))
+            except Exception as e:
+                print(f"[auto-migrate] price_items cross_dept backfill FAILED: {e}")
     if "ingest_batches" in insp.get_table_names():
         ibcols = {c["name"] for c in insp.get_columns("ingest_batches")}
         ib_alter = [
@@ -1188,7 +1209,7 @@ async def lifespan(app: FastAPI):
     yield
 
 
-app = FastAPI(title="MediaFlow", version="3.5.0-alpha.162", lifespan=lifespan)
+app = FastAPI(title="MediaFlow", version="3.5.0-alpha.163", lifespan=lifespan)
 
 BASE_DIR = Path(__file__).parent
 app.mount("/static", StaticFiles(directory=BASE_DIR / "static"), name="static")

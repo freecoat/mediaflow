@@ -600,6 +600,15 @@ class PriceItem(Base):
     # matching testo libero → voce listino e per l'import capitolati.
     keywords: Mapped[Optional[list]] = mapped_column(JSON, nullable=True)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
+    # v3.5.0-alpha.163 — Voce trasversale: non appartiene a un reparto specifico
+    # (es. Production Management, Coordinamento, Overhead progetto). Permette
+    # booking assignment cross-department senza filtri rigidi.
+    # Se True: dept_id può essere NULL OR un dept "principale" cui imputare CR,
+    # MA booking modal NON filtra le risorse per reparto della JCL.
+    # additional_department_ids: JSON list per allocazione costi/profitti su N dept
+    # in CR (futuro α.164: ripartizione manuale).
+    cross_dept: Mapped[bool] = mapped_column(Boolean, default=False, server_default="0")
+    additional_department_ids: Mapped[Optional[list]] = mapped_column(JSON, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
     category: Mapped["PriceCategory"] = relationship(back_populates="items")

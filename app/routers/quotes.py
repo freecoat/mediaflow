@@ -309,6 +309,10 @@ async def get_quote_booking_lines(
             return True
         if price_item is None:
             return True  # riga senza price_item → sempre visibile
+        # v3.5.0-alpha.163 — Voce trasversale (Production Management, Overhead...):
+        # accetta qualsiasi reparto risorsa, no filtro.
+        if getattr(price_item, "cross_dept", False):
+            return True
         pid = getattr(price_item, "department_id", None)
         return pid is None or pid in dept_set
 

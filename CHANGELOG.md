@@ -1,5 +1,44 @@
 # MediaFlow — Changelog
 
+## v3.5.0-alpha.163 — Voci listino trasversali (cross_dept) — Production Management ecc. (17 mag 2026 notte)
+
+Caso Matteo: voce "Production Management" quotata su progetto Time non assegnabile a nessuna risorsa via booking (filtro reparto rigido).
+
+Soluzione **strutturale** (concordata): voci listino possono essere marcate `cross_dept=True` (trasversali). In booking modal accettano qualsiasi reparto risorsa.
+
+**Modello PriceItem esteso**:
+- `cross_dept` (Boolean, default False) — voce trasversale
+- `additional_department_ids` (JSON list, opzionale) — multi-dept allocation futura (α.164)
+
+**Auto-migrate**:
+- ALTER price_items ADD `cross_dept` + `additional_department_ids`
+- Backfill: `UPDATE price_items SET cross_dept=1 WHERE department_id IS NULL` (idempotente).
+
+**Filtro booking** (`quotes._dept_match`):
+- Pre-α.163: dept_set→match SOLO se price_item.department_id ∈ dept_set OR NULL
+- Post-α.163: + bypass se `price_item.cross_dept=True` (sempre visibile a tutte le risorse)
+
+**Planning booking response esteso**:
+- `cross_department` flag warning: ora skip se cross_dept=True (no warning falso per Production Management)
+- `cost_line_cross_dept` campo nuovo per UI badge
+
+**API listino**:
+- `POST /pricelist/api/items` + `PUT .../{id}` accettano `cross_dept` Form param
+- `GET /pricelist/api/items` espone `cross_dept` in response
+
+**Smoke**: 1 voce ("Spedizione standard") backfilled cross_dept=1 (NULL dept). "Production Management" su DB demo ha dept_id assegnato → Matteo deve toggle manuale via UI listino o API.
+
+**Workflow CR cross-department (Fase B α.164+)**:
+- Quando voce trasversale è assegnata a risorsa di reparto X, costo/profitto vanno scaricati su reparto X (risorsa) o reparto principale price_item (se settato) o ripartizione N reparti (additional_department_ids).
+- Cashflow dept breakdown adattato per voci trasversali.
+
+**Backlog α.164**:
+- UI pricelist modal: checkbox "Voce trasversale" + multi-select reparti
+- CR dept breakdown: handling voci trasversali (sezione dedicata o ripartizione)
+- AI capability `propose_mark_cross_dept` per AI suggest based su nome
+
+---
+
 ## v3.5.0-alpha.162 — Timeline planning: fix conflitto zoom+scroll su wheel (17 mag 2026 notte)
 
 Bug: in /planning timeline risorse, rotella mouse triggerava ZOOM (asse tempo) E SCROLL (orizzontale) contemporaneamente — comportamento illeggibile.
