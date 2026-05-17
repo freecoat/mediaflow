@@ -8,6 +8,27 @@
 
 ## Versione corrente
 
+**v3.5.0-alpha.165** — 17 maggio 2026 notte — i18n sweep header tabelle lista
+
+Audit traduzioni: voci in liste non tradotte (pricelist/resources/departments con 0-1 data-i18n; quotes/finance/cost_report parziali). Bulk fix:
+
+- i18n.js: 110+ chiavi `col.*` aggiunte (IT/EN/FR/DE) + `quotes.col.project_title`
+- 22 template: data-i18n applicato su tutti `<th>` lista principale
+  - pricelist, resources, departments, suppliers, projects, clients, quotes, finance, cost_report, planning, hr, overhead, cashflow, admin_users, admin_audit_log, delivery_templates, capitolati_import, assets_inout, physical_assets, finance_reports, finance_forecast, fs_scan
+- Cache-buster i18n.js?v= bumpato 156→165
+
+Backlog α.166+:
+- F29 round 6: data-i18n granulare modal/form per campo
+- Render JS dinamici via mfT() (toast/badge runtime)
+- Pluralizzazione + locale-aware date/numeri Intl API
+- Multi-select additional_department_ids in modal listino
+- CR dept breakdown ripartizione trasversali
+- Acconti UI residui (preview emit, warning over-billing, fatture project-level in CR)
+- OAuth integrazione completa (UI Integrazioni + servizi)
+- Portali consegne plugin reali
+
+## (versione precedente)
+
 **v3.5.0-alpha.164** — 17 maggio 2026 notte — UI listino: dropdown Reparto + checkbox Voce trasversale
 
 UI granulare backend α.163. Modal voce listino con:
@@ -16,13 +37,6 @@ UI granulare backend α.163. Modal voce listino con:
 
 JS: _loadDepts cache + _populateDeptSelect + openNewItem/editItem/saveItem aggiornati.
 Backend: GET item espone cross_dept + additional_department_ids. PUT accetta dept=0 → NULL.
-
-Per sbloccare Production Management: /pricelist → modifica voce → spunta "Voce trasversale" → save.
-
-Backlog α.165:
-- Multi-select additional_department_ids in modal
-- CR dept breakdown ripartizione trasversali
-- AI propose_mark_cross_dept
 
 ## (versione precedente)
 

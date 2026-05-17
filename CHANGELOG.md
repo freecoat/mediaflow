@@ -1,5 +1,39 @@
 # MediaFlow — Changelog
 
+## v3.5.0-alpha.165 — i18n sweep header tabelle lista (17 mag 2026 notte)
+
+Audit traduzioni: voci in liste mancanti su 20+ template. Bulk fix.
+
+**i18n.js**:
+- 110+ chiavi `col.*` aggiunte (IT/EN/FR/DE): name, code, type, unit, price, dept, role, rate_day, rate_hour, contacts, created, items, duration, delivery, quote_job, location, contact, number, deadline, total, supplier, issue, taxable, vat, paid, outstanding, invoices, vat_cf, head, budget, budget_annual, resources, price_items, user, email, linked_resource, last_access, timestamp, action, asset, ip, ua, extra, period, progress, label, serial, capacity, flags, issuer, version, blocks, file, size, ext, template, direction, carrier, tracking, cost, payer, pickup, packages, workitem, from_to, nature, ddt, month, revenue, outflow_suppliers, margin, margin_pct, invoiced, cashed, supplier_invoices, outflow, net_cash, cash_in_pct, when, method, ref, resource, regular, overtime, pending, night, holiday, equiv, cost_estimated, hours, hours_linear, hours_weighted, kind_distribution, start_time, end_time, breakdown, job_note, motivation, delta_quote, slice_linked, admin, proposed, approved, lost, invoice, accrued, estimated, over_under, real_margin, section, qty, discount_pct, match_pricelist, qty_hint, confidence, unit_price, year_a/b, delta_cashed/pct, forecast_a/b, net_cash_a/b, metric, ytd, linear_full_year, realistic_full_year, sent, rejected, forecast, cash_projected, path_rel, mime, over, real_cost, forecast_future, invoiced_short, prefix, counter, pad, preview_next, detected, ai.
+- `quotes.col.project_title` aggiunto.
+
+**Template patched** (data-i18n bulk su `<th>`):
+- `pricelist.html` (0 → tutti: voci + snapshot)
+- `resources.html` (1 → 8)
+- `departments.html` (1 → 7)
+- `suppliers.html` (2 → 16: invoices + suppliers + payments modal)
+- `projects.html` (7 → completa)
+- `clients.html` (10 → completa)
+- `quotes.html` (4 → header lista completa)
+- `finance.html` (8 → ~40: Per-progetto-summary + invoices + batches + anomalies + batch-detail lines)
+- `cost_report.html` (8 → list + voci-di-costo + overtime + not-done-pool)
+- `planning.html` (1 → list view 9)
+- `hr.html` (0 → per-risorsa + punches)
+- `overhead.html` (0 → 9 colonne)
+- `cashflow.html` (0 → 3 tabelle: dept-split + mensile + forecast)
+- `admin_users.html` (0 → 6)
+- `admin_audit_log.html` (0 → 8)
+- `delivery_templates.html` (0 → templates + samples-corpus)
+- `capitolati_import.html` (0 → 7 colonne preview)
+- `assets_inout.html` (0 → 10 list + 12 shipments)
+- `physical_assets.html` (0 → 7 main + 5 numbering)
+- `finance_reports.html` (0 → YoY 9 + YTD 4)
+- `finance_forecast.html` (0 → breakdown 8)
+- `fs_scan.html` (0 → 5)
+
+Cache-buster `i18n.js?v=` bumpato 156 → 165 in base.html + login.html.
+
 ## v3.5.0-alpha.164 — UI listino: dropdown Reparto + checkbox Voce trasversale (17 mag 2026 notte)
 
 UI granulare per backend α.163.

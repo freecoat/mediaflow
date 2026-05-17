@@ -64,14 +64,14 @@
         <table>
           <thead>
             <tr>
-              <th>Progetto</th>
-              <th class="text-right">Quotato (IVA)</th>
-              <th class="text-right">Fatturato (IVA)</th>
-              <th class="text-right">Pagato</th>
-              <th class="text-right">Aperto</th>
-              <th class="text-right" title="Σ JCLBilledSlice imponibile">Slice-linked</th>
-              <th class="text-right" title="Imponibile - Slice = fatturato amministrativo">Admin</th>
-              <th class="text-right" title="Fatturato - Quotato">Δ vs Quote</th>
+              <th data-i18n="col.project">Progetto</th>
+              <th class="text-right" data-i18n="cr.col.quoted">Quotato (IVA)</th>
+              <th class="text-right" data-i18n="col.invoiced">Fatturato (IVA)</th>
+              <th class="text-right" data-i18n="col.paid">Pagato</th>
+              <th class="text-right" data-i18n="col.outstanding">Aperto</th>
+              <th class="text-right" title="Σ JCLBilledSlice imponibile" data-i18n="col.slice_linked">Slice-linked</th>
+              <th class="text-right" title="Imponibile - Slice = fatturato amministrativo" data-i18n="col.admin">Admin</th>
+              <th class="text-right" title="Fatturato - Quotato" data-i18n="col.delta_quote">Δ vs Quote</th>
             </tr>
           </thead>
           <tbody id="pbs-tbody">
@@ -107,13 +107,13 @@
       <table class="mf-sortable">
         <thead>
           <tr>
-            <th>Numero</th>
-            <th>Cliente</th>
-            <th>Progetto</th>
-            <th>Data</th>
-            <th>Scadenza</th>
-            <th>Totale</th>
-            <th>Stato</th>
+            <th data-i18n="col.number">Numero</th>
+            <th data-i18n="col.client">Cliente</th>
+            <th data-i18n="col.project">Progetto</th>
+            <th data-i18n="col.date">Data</th>
+            <th data-i18n="col.deadline">Scadenza</th>
+            <th data-i18n="col.total">Totale</th>
+            <th data-i18n="col.status">Stato</th>
             <th data-no-sort="true"></th>
           </tr>
         </thead>
@@ -152,15 +152,15 @@
       <table class="mf-sortable">
         <thead>
           <tr>
-            <th>Codice</th>
-            <th>Cliente</th>
-            <th>Progetto</th>
-            <th>Stato</th>
-            <th>Periodo</th>
-            <th class="text-right">Proposto</th>
-            <th class="text-right">Approvato</th>
-            <th class="text-right">Perso</th>
-            <th>Fattura</th>
+            <th data-i18n="col.code">Codice</th>
+            <th data-i18n="col.client">Cliente</th>
+            <th data-i18n="col.project">Progetto</th>
+            <th data-i18n="col.status">Stato</th>
+            <th data-i18n="col.period">Periodo</th>
+            <th class="text-right" data-i18n="col.proposed">Proposto</th>
+            <th class="text-right" data-i18n="col.approved">Approvato</th>
+            <th class="text-right" data-i18n="col.lost">Perso</th>
+            <th data-i18n="col.invoice">Fattura</th>
             <th data-no-sort="true"></th>
           </tr>
         </thead>
@@ -284,15 +284,15 @@
         <thead>
           <tr>
             <th data-no-sort="true" style="width:36px;"><input type="checkbox" id="an-select-all" onchange="toggleSelectAll(this)"></th>
-            <th style="width:140px;">Tipo</th>
-            <th>Descrizione</th>
-            <th>Cliente</th>
-            <th>Progetto</th>
-            <th>Job</th>
-            <th class="text-right">Importo</th>
-            <th>Rilevata</th>
-            <th>Stato</th>
-            <th data-no-sort="true" style="width:120px;">Azioni</th>
+            <th style="width:140px;" data-i18n="col.type">Tipo</th>
+            <th data-i18n="col.description">Descrizione</th>
+            <th data-i18n="col.client">Cliente</th>
+            <th data-i18n="col.project">Progetto</th>
+            <th data-i18n="col.job">Job</th>
+            <th class="text-right" data-i18n="col.amount">Importo</th>
+            <th data-i18n="col.detected">Rilevata</th>
+            <th data-i18n="col.status">Stato</th>
+            <th data-no-sort="true" style="width:120px;" data-i18n="col.actions">Azioni</th>
           </tr>
         </thead>
         <tbody id="an-v2-body">
@@ -591,14 +591,14 @@
         <table>
           <thead>
             <tr>
-              <th style="width:30%;">Descrizione</th>
-              <th class="text-right">Q.tà</th>
-              <th class="text-right">Tariffa</th>
-              <th class="text-right" title="Importo quotato originale per la riga">Quotato</th>
-              <th class="text-right" title="Sforamento (max(0, proposto − quotato), solo per righe non-extra)">Over</th>
-              <th class="text-right">Proposto</th>
-              <th class="text-right">Approvato</th>
-              <th class="text-right">Perso</th>
+              <th style="width:30%;" data-i18n="col.description">Descrizione</th>
+              <th class="text-right" data-i18n="col.qty">Q.tà</th>
+              <th class="text-right" data-i18n="col.rate_day">Tariffa</th>
+              <th class="text-right" title="Importo quotato originale per la riga" data-i18n="cr.col.quoted">Quotato</th>
+              <th class="text-right" title="Sforamento (max(0, proposto − quotato), solo per righe non-extra)" data-i18n="col.over">Over</th>
+              <th class="text-right" data-i18n="col.proposed">Proposto</th>
+              <th class="text-right" data-i18n="col.approved">Approvato</th>
+              <th class="text-right" data-i18n="col.lost">Perso</th>
               <th></th>
             </tr>
           </thead>

@@ -112,11 +112,11 @@
     <table>
       <thead>
         <tr>
-          <th>Reparto</th>
-          <th class="text-right">Revenue</th>
-          <th class="text-right">Outflow fornitori</th>
-          <th class="text-right">Margine</th>
-          <th class="text-right">% margine</th>
+          <th data-i18n="col.dept">Reparto</th>
+          <th class="text-right" data-i18n="col.revenue">Revenue</th>
+          <th class="text-right" data-i18n="col.outflow_suppliers">Outflow fornitori</th>
+          <th class="text-right" data-i18n="col.margin">Margine</th>
+          <th class="text-right" data-i18n="col.margin_pct">% margine</th>
         </tr>
       </thead>
       <tbody id="cf-dept-tbody"><tr><td colspan="5" class="text-muted" style="text-align:center;padding:14px;">Caricamento…</td></tr></tbody>
@@ -132,14 +132,14 @@
     <table>
       <thead>
         <tr>
-          <th>Mese</th>
-          <th class="text-right">Fatturato</th>
-          <th class="text-right">Incassato</th>
-          <th class="text-right">Aperto</th>
-          <th class="text-right" title="Σ fatture passive ricevute nel mese">Fatt. passive</th>
-          <th class="text-right" title="Pagamenti a fornitori nel mese (payment_date)">Outflow</th>
-          <th class="text-right" title="Incassato − Outflow del mese">Cassa netta</th>
-          <th class="text-right">% Incasso</th>
+          <th data-i18n="col.month">Mese</th>
+          <th class="text-right" data-i18n="col.invoiced">Fatturato</th>
+          <th class="text-right" data-i18n="col.cashed">Incassato</th>
+          <th class="text-right" data-i18n="col.outstanding">Aperto</th>
+          <th class="text-right" title="Σ fatture passive ricevute nel mese" data-i18n="col.supplier_invoices">Fatt. passive</th>
+          <th class="text-right" title="Pagamenti a fornitori nel mese (payment_date)" data-i18n="col.outflow">Outflow</th>
+          <th class="text-right" title="Incassato − Outflow del mese" data-i18n="col.net_cash">Cassa netta</th>
+          <th class="text-right" data-i18n="col.cash_in_pct">% Incasso</th>
         </tr>
       </thead>
       <tbody id="cf-tbody"></tbody>
@@ -209,14 +209,14 @@
     <table>
       <thead>
         <tr>
-          <th id="bk-period-th">Mese</th>
-          <th class="text-right" title="Σ quote sent nel mese (non pesate)">📤 Sent</th>
-          <th class="text-right" title="Σ quote approved nel mese (raw)">✅ Approved</th>
-          <th class="text-right" title="Σ quote rejected nel mese">❌ Rejected</th>
-          <th class="text-right" title="Forecast pesato (probability/100)">🎯 Forecast</th>
-          <th class="text-right" title="Pagamenti incassati nel mese">💰 Incassato</th>
-          <th class="text-right" title="Outflow fornitori">📤 Outflow</th>
-          <th class="text-right" title="Incassato + forecast_weighted - outflow">💵 Cassa proiettata</th>
+          <th id="bk-period-th" data-i18n="col.month">Mese</th>
+          <th class="text-right" title="Σ quote sent nel mese (non pesate)" data-i18n="col.sent">📤 Sent</th>
+          <th class="text-right" title="Σ quote approved nel mese (raw)" data-i18n="col.approved">✅ Approved</th>
+          <th class="text-right" title="Σ quote rejected nel mese" data-i18n="col.rejected">❌ Rejected</th>
+          <th class="text-right" title="Forecast pesato (probability/100)" data-i18n="col.forecast">🎯 Forecast</th>
+          <th class="text-right" title="Pagamenti incassati nel mese" data-i18n="col.cashed">💰 Incassato</th>
+          <th class="text-right" title="Outflow fornitori" data-i18n="col.outflow">📤 Outflow</th>
+          <th class="text-right" title="Incassato + forecast_weighted - outflow" data-i18n="col.cash_projected">💵 Cassa proiettata</th>
         </tr>
       </thead>
       <tbody id="forecast-tbody"></tbody>

@@ -292,14 +292,14 @@
           <table>
             <thead>
               <tr>
-                <th>Codice</th>
-                <th>Titolo</th>
-                <th>Cliente</th>
-                <th>Progetto</th>
-                <th>Periodo</th>
-                {% if can_view_finance(request.state.current_user) %}<th>Budget</th>{% endif %}
-                <th>Stato</th>
-                <th style="width:140px;">Avanzamento</th>
+                <th data-i18n="col.code">Codice</th>
+                <th data-i18n="col.title">Titolo</th>
+                <th data-i18n="col.client">Cliente</th>
+                <th data-i18n="col.project">Progetto</th>
+                <th data-i18n="col.period">Periodo</th>
+                {% if can_view_finance(request.state.current_user) %}<th data-i18n="col.budget">Budget</th>{% endif %}
+                <th data-i18n="col.status">Stato</th>
+                <th style="width:140px;" data-i18n="col.progress">Avanzamento</th>
                 <th></th>
               </tr>
             </thead>

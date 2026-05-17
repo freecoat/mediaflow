@@ -55,8 +55,8 @@
           <th style="min-width:160px;" data-i18n="col.client">Cliente</th>
           <th style="width:90px;" data-i18n="col.status">Stato</th>
           <th class="text-right" style="width:120px;" data-i18n="cr.col.quoted">Quotato</th>
-          <th class="text-right" style="width:120px;" title="Maturato totale del job">Maturato</th>
-          <th class="text-right" style="width:120px;">Stimato</th>
+          <th class="text-right" style="width:120px;" title="Maturato totale del job" data-i18n="col.accrued">Maturato</th>
+          <th class="text-right" style="width:120px;" data-i18n="col.estimated">Stimato</th>
           <th class="text-right" style="width:120px;" data-i18n="cr.col.over_under">Over/Under</th>
           <th class="text-right" style="width:120px;" data-i18n="cr.col.real_margin">Marg. reale</th>
         </tr>
@@ -156,18 +156,18 @@
       <table class="mf-sortable">
         <thead>
           <tr>
-            <th>Voce</th><th>Unità</th>
-            <th class="text-right">Quotato</th>
+            <th data-i18n="col.items">Voce</th><th data-i18n="col.unit">Unità</th>
+            <th class="text-right" data-i18n="cr.col.quoted">Quotato</th>
             <!-- v3.5.0-alpha.112: nomi più espliciti per distinguere
                  "Maturato totale" (lista CR) vs "Maturato post-periodo" (qui).
                  Sono valori diversi: post-periodo = totale − già-fatturato. -->
-            <th class="text-right" title="Già fatturato — Σ delle slice JCLBilledSlice (immutabile). NOTA: può differire dal Maturato JCL effettivo (over-billing).">Fatturato</th>
-            <th class="text-right" title="Maturato non ancora fatturato — done senza slice. Nella lista CR la colonna 'Maturato' è invece il TOTALE (fatturato + post). =0 se JCL.total_accrued < billed (over-billing storico).">Maturato post</th>
-            <th class="text-right" title="Stima ulteriori ore ancora da lavorare (planned − done)">Stim. futuro</th>
-            <th class="text-right" title="Maturato JCL − Quotato. NB: 'Maturato JCL' è ore done × prezzo (cifra effettiva work), NON billed_locked. Vedi tooltip Margine reale.">Over/Under</th>
-            <th class="text-right" title="Σ ore done × Resource.internal_cost_hourly — costo reale risorse interne stimato (α.67)">Costo reale</th>
-            <th class="text-right" title="Formula: Maturato JCL − Costo reale = (qty_actual × unit_price) − (ore done × cost_hourly). NON usa billed_locked. Se billed_locked > Maturato JCL = over-billing storico, il margine resta calcolato sul work effettivo.">Margine reale</th>
-            <th>Fatt.</th>
+            <th class="text-right" title="Già fatturato — Σ delle slice JCLBilledSlice (immutabile). NOTA: può differire dal Maturato JCL effettivo (over-billing)." data-i18n="col.invoiced">Fatturato</th>
+            <th class="text-right" title="Maturato non ancora fatturato — done senza slice. Nella lista CR la colonna 'Maturato' è invece il TOTALE (fatturato + post). =0 se JCL.total_accrued < billed (over-billing storico)." data-i18n="cr.col.accrued_post">Maturato post</th>
+            <th class="text-right" title="Stima ulteriori ore ancora da lavorare (planned − done)" data-i18n="col.forecast_future">Stim. futuro</th>
+            <th class="text-right" title="Maturato JCL − Quotato. NB: 'Maturato JCL' è ore done × prezzo (cifra effettiva work), NON billed_locked. Vedi tooltip Margine reale." data-i18n="col.over_under">Over/Under</th>
+            <th class="text-right" title="Σ ore done × Resource.internal_cost_hourly — costo reale risorse interne stimato (α.67)" data-i18n="col.real_cost">Costo reale</th>
+            <th class="text-right" title="Formula: Maturato JCL − Costo reale = (qty_actual × unit_price) − (ore done × cost_hourly). NON usa billed_locked. Se billed_locked > Maturato JCL = over-billing storico, il margine resta calcolato sul work effettivo." data-i18n="col.real_margin">Margine reale</th>
+            <th data-i18n="col.invoiced_short">Fatt.</th>
             <th data-no-sort="true"></th>
           </tr>
         </thead>
