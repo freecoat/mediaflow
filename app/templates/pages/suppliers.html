@@ -3,9 +3,9 @@
 {% block title %}Fornitori — MediaFlow{% endblock %}
 {% block topbar_title %}Fornitori & Fatture passive{% endblock %}
 {% block topbar_actions %}
-  <button class="btn btn-secondary btn-sm" onclick="openSupplierModal()">+ Fornitore</button>
+  <button class="btn btn-secondary btn-sm" onclick="openSupplierModal()" data-i18n="sup.new">+ Fornitore</button>
   <button class="btn btn-secondary btn-sm" onclick="openParseFromPDF()">✨ Estrai da PDF</button>
-  <button class="btn btn-primary btn-sm" onclick="openInvoiceModal()">+ Fattura passiva</button>
+  <button class="btn btn-primary btn-sm" onclick="openInvoiceModal()" data-i18n="sup.new_invoice">+ Fattura passiva</button>
 {% endblock %}
 
 {% block content %}

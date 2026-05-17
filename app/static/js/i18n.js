@@ -257,6 +257,53 @@ window.MF_I18N = {
   'cr.col.over_under':       {it: 'Over/Under',        en: 'Over/Under',        fr: 'Sur/Sous',         de: 'Über/Unter'},
   'cr.col.real_cost':        {it: 'Costo reale',       en: 'Real cost',         fr: 'Coût réel',        de: 'Echte Kosten'},
   'cr.col.real_margin':      {it: 'Margine reale',     en: 'Real margin',       fr: 'Marge réelle',     de: 'Echte Marge'},
+
+  // ── Suppliers (v3.5.0-alpha.150 F29 round 4) ──────
+  'sup.title':               {it: 'Fornitori',         en: 'Suppliers',         fr: 'Fournisseurs',     de: 'Lieferanten'},
+  'sup.new':                 {it: '+ Nuovo fornitore', en: '+ New supplier',    fr: '+ Nouveau fournisseur', de: '+ Neuer Lieferant'},
+  'sup.search':              {it: 'Cerca fornitore…',  en: 'Search supplier…',  fr: 'Rechercher fournisseur…', de: 'Lieferant suchen…'},
+  'sup.col.vat':             {it: 'P.IVA',             en: 'VAT',               fr: 'TVA',              de: 'USt-IdNr'},
+  'sup.col.contact':         {it: 'Contatto',          en: 'Contact',           fr: 'Contact',          de: 'Kontakt'},
+  'sup.col.invoices':        {it: 'Fatture',           en: 'Invoices',          fr: 'Factures',         de: 'Rechnungen'},
+  'sup.col.outstanding':     {it: 'Aperto',            en: 'Outstanding',       fr: 'Ouvert',           de: 'Offen'},
+  'sup.invoices.title':      {it: 'Fatture passive',   en: 'Supplier invoices', fr: 'Factures fournisseurs', de: 'Lieferantenrechnungen'},
+  'sup.new_invoice':         {it: '+ Nuova fattura passiva', en: '+ New supplier invoice', fr: '+ Nouvelle facture fourn.', de: '+ Neue Lieferantenrechnung'},
+
+  // ── Resources / Team ──────────────────────────────
+  'res.title':               {it: 'Risorse',           en: 'Resources',         fr: 'Ressources',       de: 'Ressourcen'},
+  'res.new':                 {it: '+ Nuova risorsa',   en: '+ New resource',    fr: '+ Nouvelle ressource', de: '+ Neue Ressource'},
+  'res.search':              {it: 'Cerca risorsa…',    en: 'Search resource…',  fr: 'Rechercher ressource…', de: 'Ressource suchen…'},
+  'res.tab.all':             {it: 'Tutte',             en: 'All',               fr: 'Toutes',           de: 'Alle'},
+  'res.tab.people':          {it: 'Persone',           en: 'People',            fr: 'Personnes',        de: 'Personen'},
+  'res.tab.studios':         {it: 'Sale',              en: 'Studios',           fr: 'Studios',          de: 'Studios'},
+  'res.tab.equipment':       {it: 'Attrezzature',      en: 'Equipment',         fr: 'Équipement',       de: 'Ausrüstung'},
+  'res.col.type':            {it: 'Tipo',              en: 'Type',              fr: 'Type',             de: 'Typ'},
+  'res.col.role':            {it: 'Ruolo',             en: 'Role',              fr: 'Rôle',             de: 'Rolle'},
+  'res.col.dept':            {it: 'Reparto',           en: 'Department',        fr: 'Département',      de: 'Abteilung'},
+  'res.col.rate':            {it: 'Tariffa',           en: 'Rate',              fr: 'Tarif',            de: 'Tarif'},
+  'res.show_inactive':       {it: 'Mostra inattive',   en: 'Show inactive',     fr: 'Afficher inactives', de: 'Inaktive anzeigen'},
+
+  // ── Departments ───────────────────────────────────
+  'dept.title':              {it: 'Reparti',           en: 'Departments',       fr: 'Départements',     de: 'Abteilungen'},
+  'dept.new':                {it: '+ Nuovo reparto',   en: '+ New department',  fr: '+ Nouveau département', de: '+ Neue Abteilung'},
+  'dept.col.name':           {it: 'Nome',              en: 'Name',              fr: 'Nom',              de: 'Name'},
+  'dept.col.head':           {it: 'Responsabile',      en: 'Head',              fr: 'Responsable',      de: 'Leitung'},
+  'dept.col.budget':         {it: 'Budget annuale',    en: 'Annual budget',     fr: 'Budget annuel',    de: 'Jahresbudget'},
+  'dept.col.resources':      {it: 'Risorse',           en: 'Resources',         fr: 'Ressources',       de: 'Ressourcen'},
+
+  // ── Settings ──────────────────────────────────────
+  'set.title':               {it: 'Impostazioni',      en: 'Settings',          fr: 'Paramètres',       de: 'Einstellungen'},
+  'set.tab.company':         {it: 'Azienda',           en: 'Company',           fr: 'Entreprise',       de: 'Unternehmen'},
+  'set.tab.ai':              {it: '🤖 AI',             en: '🤖 AI',             fr: '🤖 IA',            de: '🤖 KI'},
+  'set.tab.numbering':       {it: 'Numerazione',       en: 'Numbering',         fr: 'Numérotation',     de: 'Nummerierung'},
+  'set.tab.security':        {it: 'Sicurezza',         en: 'Security',          fr: 'Sécurité',         de: 'Sicherheit'},
+  'set.tab.data':            {it: 'Dati',              en: 'Data',              fr: 'Données',          de: 'Daten'},
+  'set.tab.brand':           {it: 'Branding',          en: 'Branding',          fr: 'Image de marque',  de: 'Markenbild'},
+  'set.tab.policies':        {it: 'Politiche',         en: 'Policies',          fr: 'Politiques',       de: 'Richtlinien'},
+  'set.fiscal_info':         {it: 'Anagrafica fiscale', en: 'Fiscal info',      fr: 'Données fiscales', de: 'Steuerdaten'},
+  'set.base_currency':       {it: 'Valuta base (ISO 4217)', en: 'Base currency (ISO 4217)', fr: 'Devise de base (ISO 4217)', de: 'Basiswährung (ISO 4217)'},
+  'set.vat_default':         {it: 'Aliquota IVA default (%)', en: 'Default VAT rate (%)', fr: 'Taux TVA défaut (%)', de: 'Standard-USt-Satz (%)'},
+  'set.save':                {it: 'Salva impostazioni', en: 'Save settings',    fr: 'Enregistrer',      de: 'Speichern'},
 };
 
 /**

@@ -1,5 +1,33 @@
 # MediaFlow — Changelog
 
+## v3.5.0-alpha.150 — F29 i18n round 4 (chiude foundation): suppliers + resources + departments + settings (17 mag 2026 sera)
+
+Sweep i18n round 4 (foundation completa). ~40 chiavi nuove.
+
+Dictionary MF_I18N:
+- Suppliers 9: title, new, search, col (vat/contact/invoices/outstanding), invoices.title, new_invoice
+- Resources 12: title, new, search, 4 tab (all/people/studios/equipment), 4 col (type/role/dept/rate), show_inactive
+- Departments 6: title, new, col (name/head/budget/resources)
+- Settings 13: title, 7 tab (company/ai/numbering/security/data/brand/policies), fiscal_info, base_currency, vat_default, save
+
+Template data-i18n:
+- suppliers.html: bottoni topbar (+ Fornitore, + Fattura passiva)
+- resources.html: bottone "+ Nuova risorsa"
+- departments.html: bottone "+ Nuovo reparto"
+- settings.html: label "Valuta base (ISO 4217)"
+
+Cache buster i18n.js?v=3.5.0-alpha.150.
+
+**Tot dictionary cumulata: ~250 chiavi** (4 lingue × 250 = 1000 traduzioni).
+
+**Foundation F29 completa** sui template principali (10 pagine: dashboard, clients, projects, quotes, planning, finance, cost-report, suppliers, resources, departments, settings).
+
+**Backlog F29 successivi**:
+- JS dinamico mfT() per toast/render dinamici (round finale, refactor on-demand)
+- Estendere data-i18n alle modal e ai form (granularità più fine)
+
+---
+
 ## v3.5.0-alpha.149 — F29 i18n round 3: planning + finance + cost-report (17 mag 2026 sera)
 
 Sweep i18n round 3: ~50 chiavi nuove.
