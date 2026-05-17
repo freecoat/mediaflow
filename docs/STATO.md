@@ -8,6 +8,21 @@
 
 ## Versione corrente
 
+**v3.5.0-alpha.153** — 17 maggio 2026 sera — Cross-currency cost-report aggregati
+
+Cost report list endpoint esteso con `quote_currency`, `quote_fx_rate_to_base`, `base_currency`, `total_quoted_base`, `total_accrued_base`. Pre-fetch tenant.default_currency.
+
+Permette aggregati Σ cross-quote in valuta base (essenziale per dashboard).
+
+Backlog α.154+:
+- UI usare *_base per Σ
+- Cashflow cross-currency
+- Test parse 14 capitolati restanti
+- Automazione portali consegne
+- UI tab Integrazioni /settings OAuth
+
+## (versione precedente)
+
 **v3.5.0-alpha.152** — 17 maggio 2026 sera — OAuth scaffold: Google + Microsoft
 
 Foundation OAuth 2 Authorization Code flow.

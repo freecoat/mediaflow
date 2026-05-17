@@ -141,6 +141,11 @@ async def list_cost_reports(
         )
         for r in apc_rows:
             advance_consumed_map[r.project_id] = float(r.cons or 0)
+    # v3.5.0-alpha.153 — Cross-currency aggregati: pre-fetch tenant base currency.
+    from app.models import Tenant
+    _tenant_obj = db.query(Tenant).filter(Tenant.id == current_tenant_id()).first()
+    _base_ccy = (_tenant_obj.default_currency if _tenant_obj else "EUR").upper()
+
     out = []
     for j in jobs:
         total_quoted = sum(l.total_quoted for l in j.cost_lines)
@@ -214,6 +219,17 @@ async def list_cost_reports(
             "billed_admin_net": billed_admin_net,
             "admin_flag": admin_flag,
             "fake_billing_count": fake_billing_count,
+            # v3.5.0-alpha.153 — Cross-currency: se quote ha currency ≠ base,
+            # esponi fx_rate_to_base + totali convertiti per aggregati.
+            "quote_currency": (getattr(j.quote, "currency", None) or _base_ccy) if j.quote else _base_ccy,
+            "quote_fx_rate_to_base": (getattr(j.quote, "fx_rate_to_base", 1.0) or 1.0) if j.quote else 1.0,
+            "base_currency": _base_ccy,
+            "total_quoted_base": round(
+                total_quoted * ((getattr(j.quote, "fx_rate_to_base", 1.0) or 1.0) if j.quote else 1.0), 2
+            ),
+            "total_accrued_base": round(
+                total_accrued * ((getattr(j.quote, "fx_rate_to_base", 1.0) or 1.0) if j.quote else 1.0), 2
+            ),
             # v3.5.0-alpha.138 (Acconti Step 2): aggregati a livello PROJECT.
             # advance_amount = Σ AdvancePayment.amount (acconti emessi, no cancelled)
             # advance_consumed = Σ AdvancePaymentConsumption.amount_consumed (scomputato)

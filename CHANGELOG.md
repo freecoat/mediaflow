@@ -1,5 +1,31 @@
 # MediaFlow — Changelog
 
+## v3.5.0-alpha.153 — Cross-currency cost-report aggregati (17 mag 2026 sera)
+
+Foundation per aggregati cross-currency in cost-report. Pre-α.153, totali progetto con quote in USD non erano sommabili a base EUR (mostrava valori "raw" senza conversione).
+
+**Cost report list endpoint esteso**:
+- Pre-fetch `Tenant.default_currency` (base).
+- Per ogni job:
+  - `quote_currency` (default 'EUR' se no quote)
+  - `quote_fx_rate_to_base` (snapshot da Quote, 1.0 se mancante)
+  - `base_currency` (= tenant base)
+  - `total_quoted_base` = total_quoted × fx_rate
+  - `total_accrued_base` = total_accrued × fx_rate
+
+UI può aggregare `*_base` sicuro per dashboard/totali cross-quote.
+
+**Smoke**: 44 jobs listati. Demo DB tutti EUR (fx=1.0, no conversion).
+
+**Backlog α.154+**:
+- UI dashboard/cost-report aggregati: usare `*_base` per Σ totali corretti
+- Cashflow aggregati cross-currency (invoice ha currency? Necessita propagazione da Quote)
+- Test parse 14 capitolati restanti
+- Automazione portali consegne
+- UI tab "Integrazioni" /settings OAuth
+
+---
+
 ## v3.5.0-alpha.152 — OAuth scaffold: Google (Gmail+Drive) + Microsoft (Outlook+OneDrive) (17 mag 2026 sera)
 
 Foundation OAuth 2 Authorization Code flow per integrazione email + cloud storage. UI Settings + send/upload features in versioni successive.
