@@ -1,5 +1,41 @@
 # MediaFlow — Changelog
 
+## v3.5.0-alpha.151 — F29 i18n round 5: modal/form/JS dinamico — chiusura sweep (17 mag 2026 sera)
+
+Sweep i18n round 5 finale: chiavi modal/form/toast/badge per coverage UI completa.
+
+Dictionary MF_I18N estesa con ~50 chiavi nuove (cumulata ~300):
+
+**Modal commons** (4): new, edit, confirm_delete, required_fields.
+
+**Form labels riusabili** (22): name, email, phone, address, city, country, zip, province, vat_number, tax_code, notes, description, title, start_date, end_date, date, amount, quantity, unit, unit_price, discount, vat_rate, required_mark.
+
+**Toast messages** (11): saved, deleted, created, updated, error, error_loading, error_save, required_fields, access_denied, not_found, unsaved_changes.
+
+**Status badge dinamici** (5): not_billed, in_batch, billed, paid, lost.
+
+**Generic UI** (12): yes, no, all, none, optional, required, total, subtotal, from, to, show, hide.
+
+Template data-i18n esempio applicato clients modal (modal-header + 4 form-label) come pattern dimostrativo. Estensione granulare a tutti i modal/form prosegue on-demand.
+
+`mfT(key)` helper esposto su `window.mfT`. Usabile da render JS per toast/badge dinamici:
+```js
+toast(mfT('toast.saved'), 'success');
+badge.textContent = mfT('badge.paid');
+```
+
+Cache buster i18n.js?v=3.5.0-alpha.151.
+
+**F29 sweep foundation CHIUSO**: 5 round (α.133 + α.147→α.151) — ~300 chiavi × 4 lingue = **~1200 traduzioni** totali. Coverage: sidebar + topbar + login + dashboard + 10 template principali (titoli, tab, bottoni, table headers, modal headers, form labels comuni, status badge, toast messages).
+
+**Round successivi (on-demand)**:
+- Granularità fine: ogni modal/form di ogni template (specifico per campo)
+- Refactor JS render dinamici via mfT()
+- Pluralizzazione (es. "1 cliente" / "5 clienti")
+- Date/numeri locale-aware (Intl API)
+
+---
+
 ## v3.5.0-alpha.150 — F29 i18n round 4 (chiude foundation): suppliers + resources + departments + settings (17 mag 2026 sera)
 
 Sweep i18n round 4 (foundation completa). ~40 chiavi nuove.

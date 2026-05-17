@@ -304,6 +304,71 @@ window.MF_I18N = {
   'set.base_currency':       {it: 'Valuta base (ISO 4217)', en: 'Base currency (ISO 4217)', fr: 'Devise de base (ISO 4217)', de: 'Basiswährung (ISO 4217)'},
   'set.vat_default':         {it: 'Aliquota IVA default (%)', en: 'Default VAT rate (%)', fr: 'Taux TVA défaut (%)', de: 'Standard-USt-Satz (%)'},
   'set.save':                {it: 'Salva impostazioni', en: 'Save settings',    fr: 'Enregistrer',      de: 'Speichern'},
+
+  // ── α.151 round 5 — Modal commons + Form labels ────
+  'modal.new':               {it: 'Nuovo',             en: 'New',               fr: 'Nouveau',          de: 'Neu'},
+  'modal.edit':              {it: 'Modifica',          en: 'Edit',              fr: 'Modifier',         de: 'Bearbeiten'},
+  'modal.confirm_delete':    {it: 'Confermi eliminazione?', en: 'Confirm delete?', fr: 'Confirmer suppression?', de: 'Löschen bestätigen?'},
+  'modal.required_fields':   {it: 'Campi obbligatori', en: 'Required fields',   fr: 'Champs requis',    de: 'Pflichtfelder'},
+
+  // Form labels comuni (riusabili)
+  'form.name':               {it: 'Nome',              en: 'Name',              fr: 'Nom',              de: 'Name'},
+  'form.email':              {it: 'Email',             en: 'Email',             fr: 'E-mail',           de: 'E-Mail'},
+  'form.phone':              {it: 'Telefono',          en: 'Phone',             fr: 'Téléphone',        de: 'Telefon'},
+  'form.address':            {it: 'Indirizzo',         en: 'Address',           fr: 'Adresse',          de: 'Adresse'},
+  'form.city':               {it: 'Città',             en: 'City',              fr: 'Ville',            de: 'Stadt'},
+  'form.country':            {it: 'Paese',             en: 'Country',           fr: 'Pays',             de: 'Land'},
+  'form.zip':                {it: 'CAP',               en: 'ZIP',               fr: 'Code postal',      de: 'PLZ'},
+  'form.province':           {it: 'Provincia',         en: 'Province',          fr: 'Province',         de: 'Provinz'},
+  'form.vat_number':         {it: 'P.IVA',             en: 'VAT number',        fr: 'N° TVA',           de: 'USt-IdNr'},
+  'form.tax_code':           {it: 'Codice fiscale',    en: 'Tax code',          fr: 'Code fiscal',      de: 'Steuernummer'},
+  'form.notes':              {it: 'Note',              en: 'Notes',             fr: 'Notes',            de: 'Notizen'},
+  'form.description':        {it: 'Descrizione',       en: 'Description',       fr: 'Description',      de: 'Beschreibung'},
+  'form.title':              {it: 'Titolo',            en: 'Title',             fr: 'Titre',            de: 'Titel'},
+  'form.start_date':         {it: 'Data inizio',       en: 'Start date',        fr: 'Date début',       de: 'Startdatum'},
+  'form.end_date':           {it: 'Data fine',         en: 'End date',          fr: 'Date fin',         de: 'Enddatum'},
+  'form.date':               {it: 'Data',              en: 'Date',              fr: 'Date',             de: 'Datum'},
+  'form.amount':             {it: 'Importo',           en: 'Amount',            fr: 'Montant',          de: 'Betrag'},
+  'form.quantity':           {it: 'Quantità',          en: 'Quantity',          fr: 'Quantité',         de: 'Menge'},
+  'form.unit':               {it: 'Unità',             en: 'Unit',              fr: 'Unité',            de: 'Einheit'},
+  'form.unit_price':         {it: 'Prezzo unitario',   en: 'Unit price',        fr: 'Prix unitaire',    de: 'Stückpreis'},
+  'form.discount':           {it: 'Sconto',            en: 'Discount',          fr: 'Remise',           de: 'Rabatt'},
+  'form.vat_rate':           {it: 'IVA %',             en: 'VAT %',             fr: 'TVA %',            de: 'USt %'},
+  'form.required_mark':      {it: '*',                 en: '*',                 fr: '*',                de: '*'},
+
+  // Toast messages comuni (per JS via mfT())
+  'toast.saved':             {it: 'Salvato',           en: 'Saved',             fr: 'Enregistré',       de: 'Gespeichert'},
+  'toast.deleted':           {it: 'Eliminato',         en: 'Deleted',           fr: 'Supprimé',         de: 'Gelöscht'},
+  'toast.created':           {it: 'Creato',            en: 'Created',           fr: 'Créé',             de: 'Erstellt'},
+  'toast.updated':           {it: 'Aggiornato',        en: 'Updated',           fr: 'Mis à jour',       de: 'Aktualisiert'},
+  'toast.error':             {it: 'Errore',            en: 'Error',             fr: 'Erreur',           de: 'Fehler'},
+  'toast.error_loading':     {it: 'Errore caricamento', en: 'Error loading',    fr: 'Erreur de chargement', de: 'Ladefehler'},
+  'toast.error_save':        {it: 'Errore salvataggio', en: 'Save error',       fr: 'Erreur d\'enregistrement', de: 'Speicherfehler'},
+  'toast.required_fields':   {it: 'Compila i campi obbligatori', en: 'Fill required fields', fr: 'Remplir champs requis', de: 'Pflichtfelder ausfüllen'},
+  'toast.access_denied':     {it: 'Accesso negato',    en: 'Access denied',     fr: 'Accès refusé',     de: 'Zugriff verweigert'},
+  'toast.not_found':         {it: 'Non trovato',       en: 'Not found',         fr: 'Non trouvé',       de: 'Nicht gefunden'},
+  'toast.unsaved_changes':   {it: 'Modifiche non salvate', en: 'Unsaved changes', fr: 'Modifications non enregistrées', de: 'Ungespeicherte Änderungen'},
+
+  // Status / billing badge dinamici (per JS render)
+  'badge.not_billed':        {it: 'Da fatturare',      en: 'To bill',           fr: 'À facturer',       de: 'Zu fakturieren'},
+  'badge.in_batch':          {it: 'In approv.',        en: 'In review',         fr: 'En revue',         de: 'In Prüfung'},
+  'badge.billed':            {it: 'Fatturato',         en: 'Billed',            fr: 'Facturé',          de: 'Fakturiert'},
+  'badge.paid':              {it: 'Pagato',            en: 'Paid',              fr: 'Payé',             de: 'Bezahlt'},
+  'badge.lost':              {it: 'Perso',             en: 'Lost',              fr: 'Perdu',            de: 'Verloren'},
+
+  // Generic UI text
+  'ui.yes':                  {it: 'Sì',                en: 'Yes',               fr: 'Oui',              de: 'Ja'},
+  'ui.no':                   {it: 'No',                en: 'No',                fr: 'Non',              de: 'Nein'},
+  'ui.all':                  {it: 'Tutti',             en: 'All',               fr: 'Tous',             de: 'Alle'},
+  'ui.none':                 {it: 'Nessuno',           en: 'None',              fr: 'Aucun',            de: 'Keiner'},
+  'ui.optional':             {it: 'opzionale',         en: 'optional',          fr: 'optionnel',        de: 'optional'},
+  'ui.required':             {it: 'obbligatorio',      en: 'required',          fr: 'requis',           de: 'erforderlich'},
+  'ui.total':                {it: 'Totale',            en: 'Total',             fr: 'Total',            de: 'Gesamt'},
+  'ui.subtotal':             {it: 'Subtotale',         en: 'Subtotal',          fr: 'Sous-total',       de: 'Zwischensumme'},
+  'ui.from':                 {it: 'Dal',               en: 'From',              fr: 'Du',               de: 'Vom'},
+  'ui.to':                   {it: 'Al',                en: 'To',                fr: 'Au',               de: 'Bis'},
+  'ui.show':                 {it: 'Mostra',            en: 'Show',              fr: 'Afficher',         de: 'Anzeigen'},
+  'ui.hide':                 {it: 'Nascondi',          en: 'Hide',              fr: 'Masquer',          de: 'Ausblenden'},
 };
 
 /**

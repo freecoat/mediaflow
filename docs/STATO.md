@@ -8,6 +8,27 @@
 
 ## Versione corrente
 
+**v3.5.0-alpha.151** — 17 maggio 2026 sera — F29 i18n round 5 (finale): modal/form/JS dinamico
+
+~50 chiavi nuove (modal commons 4 + form labels 22 + toast 11 + badge dinamici 5 + generic 12). Tot dict cumulata **~300 chiavi × 4 lingue = ~1200 traduzioni**.
+
+mfT(key) helper esposto window.mfT per JS render dinamico (toast/badge).
+
+**F29 sweep foundation CHIUSO** (5 round α.133+α.147→α.151). Coverage: sidebar/topbar/login/dashboard + 10 template principali.
+
+Round successivi (on-demand):
+- Granularità fine modal/form per campo
+- Refactor JS render dinamici via mfT()
+- Pluralizzazione, date/numeri locale-aware
+
+**Prossimi fronti**:
+- α.152 OAuth Gmail/Outlook/Drive/OneDrive
+- α.153 Cross-currency cost-report aggregati
+- α.154 Test parse 14 capitolati restanti
+- α.155 Automazione portali consegne
+
+## (versione precedente)
+
 **v3.5.0-alpha.150** — 17 maggio 2026 sera — F29 i18n round 4: suppliers + resources + departments + settings
 
 ~40 chiavi nuove. Tot dict cumulata **~250 chiavi × 4 lingue = ~1000 traduzioni**.

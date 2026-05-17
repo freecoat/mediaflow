@@ -44,19 +44,19 @@
 <!-- Modal nuovo cliente -->
 <div class="modal-overlay" id="modal-new-client">
   <div class="modal">
-    <div class="modal-header"><span class="modal-title">Nuovo cliente</span>
+    <div class="modal-header"><span class="modal-title"><span data-i18n="modal.new">Nuovo</span> <span data-i18n="col.client">cliente</span></span>
       <button class="btn btn-ghost btn-icon" onclick="closeModal('modal-new-client')">✕</button></div>
     <div class="modal-body">
       <div class="form-row">
-        <div class="form-group"><label class="form-label">Nome azienda *</label>
+        <div class="form-group"><label class="form-label" data-i18n="form.name">Nome azienda *</label>
           <input class="form-input" id="nc-name" placeholder="es. Cattleya srl"></div>
         <div class="form-group"><label class="form-label">Forma giuridica</label>
           <input class="form-input" id="nc-legal" placeholder="SRL / SPA / GmbH…"></div>
       </div>
       <div class="form-row">
-        <div class="form-group"><label class="form-label">P.IVA</label>
+        <div class="form-group"><label class="form-label" data-i18n="form.vat_number">P.IVA</label>
           <input class="form-input" id="nc-vat" placeholder="IT12345678901"></div>
-        <div class="form-group"><label class="form-label">Città</label>
+        <div class="form-group"><label class="form-label" data-i18n="form.city">Città</label>
           <input class="form-input" id="nc-city"></div>
       </div>
       <div class="form-group"><label class="form-label">Sito web</label>
