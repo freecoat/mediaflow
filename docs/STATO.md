@@ -8,6 +8,28 @@
 
 ## Versione corrente
 
+**v3.5.0-alpha.155** — 17 maggio 2026 sera tarda — Automazione portali consegne foundation
+
+2 modelli nuovi:
+- `DeliveryPortal` (config broadcaster, plugin_key, auth_config_enc Fernet)
+- `DeliveryUpload` (tracking upload, status workflow pending→uploading→done|failed)
+
+Plugin architecture `app/services/delivery_portals.py`:
+- 2 plugin built-in: manual (tracking solo) + generic_http (POST + bearer)
+- Plugin futuri: netflix_aspera, amazon_s3, sky_signiant, a24_box
+- `execute_upload()` stateful idempotente
+
+Smoke: 2 tabelle create + 2 plugin registrati.
+
+Backlog α.156+:
+- Router CRUD portali
+- UI tab "Portali consegne" /settings
+- UI upload trigger da page deliverables
+- Plugin broadcaster-specific reali
+- Background queue async
+
+## (versione precedente)
+
 **v3.5.0-alpha.154** — 17 maggio 2026 sera — Parse batch capitolati pendenti
 
 Endpoint `POST /delivery-templates/api/parse-batch-pending?auto_save=true|false`.

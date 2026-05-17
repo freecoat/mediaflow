@@ -17,6 +17,8 @@ from app.models.models import (
     AdvanceDueAnchor, QuoteAdvanceSchedule, QuoteAdvanceAllocation,
     FXRate,
     UserOAuthToken,
+    DeliveryPortal, DeliveryPortalApiType,
+    DeliveryUpload, DeliveryUploadStatus,
     Supplier, SupplierInvoice, SupplierInvoiceStatus, SupplierInvoicePayment,
     JCLBillingStatus, BillingBatch, BillingBatchLine, BillingBatchStatus,
     LossEntry, LossReason,

@@ -1910,6 +1910,80 @@ class AdvancePaymentAllocation(Base):
 # access_token: storage in chiaro (ha TTL breve ~1h, mitigato).
 # refresh_token: cifrato via Fernet AI_KEY_ENCRYPTION_KEY (riuso α.137).
 # Idempotenza: 1 token per (user_id, provider) — UniqueConstraint.
+# v3.5.0-alpha.155 — Portali consegne broadcaster (Netflix/Amazon/A24/Sky/...).
+# Configurazione + tracking upload automatici.
+#
+# api_type:
+# - api: portale supporta upload via API REST (token-based)
+# - web: solo UI web (richiede RPA/Playwright in futuro)
+# - manual: upload manuale, MediaFlow traccia solo lo stato (no automation)
+#
+# auth_config: JSON cifrato (Fernet AI_KEY_ENCRYPTION_KEY) con token/credenziali.
+# Schema flessibile per accomodare auth diverse (token bearer, basic, oauth, ftp).
+class DeliveryPortalApiType(str, enum.Enum):
+    api = "api"
+    web = "web"
+    manual = "manual"
+
+
+class DeliveryUploadStatus(str, enum.Enum):
+    pending = "pending"
+    uploading = "uploading"
+    done = "done"
+    failed = "failed"
+    cancelled = "cancelled"
+
+
+class DeliveryPortal(Base):
+    __tablename__ = "delivery_portals"
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    tenant_id: Mapped[int] = mapped_column(ForeignKey("tenants.id"), default=1, index=True)
+    code: Mapped[str] = mapped_column(String(40), index=True)
+    name: Mapped[str] = mapped_column(String(255))
+    broadcaster: Mapped[Optional[str]] = mapped_column(String(120), nullable=True)
+    api_type: Mapped[DeliveryPortalApiType] = mapped_column(
+        SAEnum(DeliveryPortalApiType), default=DeliveryPortalApiType.manual
+    )
+    base_url: Mapped[Optional[str]] = mapped_column(String(500), nullable=True)
+    # JSON con credenziali — Fernet cifrato a livello applicativo (encrypt prima di save)
+    auth_config_enc: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    # Provider plugin key (es. 'generic_http', 'netflix_aspera', 'amazon_s3').
+    # Risolto da app/services/delivery_portals.py PROVIDERS dict.
+    plugin_key: Mapped[str] = mapped_column(String(60), default="generic_http")
+    notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    is_active: Mapped[bool] = mapped_column(Boolean, default=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    __table_args__ = (
+        UniqueConstraint("tenant_id", "code", name="uq_delivery_portal_code"),
+    )
+
+
+class DeliveryUpload(Base):
+    __tablename__ = "delivery_uploads"
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    tenant_id: Mapped[int] = mapped_column(ForeignKey("tenants.id"), default=1, index=True)
+    portal_id: Mapped[int] = mapped_column(ForeignKey("delivery_portals.id"), index=True)
+    project_id: Mapped[Optional[int]] = mapped_column(ForeignKey("projects.id"), nullable=True, index=True)
+    job_deliverable_id: Mapped[Optional[int]] = mapped_column(
+        ForeignKey("job_deliverables.id"), nullable=True, index=True
+    )
+    asset_id: Mapped[Optional[int]] = mapped_column(ForeignKey("assets.id"), nullable=True)
+    physical_asset_id: Mapped[Optional[int]] = mapped_column(
+        ForeignKey("physical_assets.id"), nullable=True
+    )
+    file_path: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    upload_url: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    status: Mapped[DeliveryUploadStatus] = mapped_column(
+        SAEnum(DeliveryUploadStatus), default=DeliveryUploadStatus.pending, index=True
+    )
+    progress_pct: Mapped[float] = mapped_column(Float, default=0.0)
+    error_message: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    submitted_by_user_id: Mapped[Optional[int]] = mapped_column(ForeignKey("users.id"), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    completed_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+    portal: Mapped["DeliveryPortal"] = relationship(foreign_keys=[portal_id])
+
+
 class UserOAuthToken(Base):
     __tablename__ = "user_oauth_tokens"
     id: Mapped[int] = mapped_column(Integer, primary_key=True)

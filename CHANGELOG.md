@@ -1,5 +1,45 @@
 # MediaFlow — Changelog
 
+## v3.5.0-alpha.155 — Automazione portali consegne: foundation + plugin architecture (17 mag 2026 sera tarda)
+
+Foundation per automazione upload ai portali broadcaster (Netflix/Amazon/A24/Sky/...). UI + endpoint + plugin specifici in versioni successive.
+
+**Modelli nuovi**:
+
+`DeliveryPortal` — configurazione portale per tenant:
+- `code` (unique per tenant), `name`, `broadcaster`, `api_type` (api/web/manual), `base_url`, `auth_config_enc` (Fernet cifrato), `plugin_key`, `is_active`.
+
+`DeliveryUpload` — tracking upload singolo:
+- `portal_id`, `project_id`, `job_deliverable_id`, `asset_id`, `physical_asset_id`, `file_path`, `upload_url`, `status` (pending/uploading/done/failed/cancelled), `progress_pct`, `error_message`, `submitted_by_user_id`, `completed_at`.
+
+`DeliveryPortalApiType` + `DeliveryUploadStatus` enums.
+
+**Servizio `app/services/delivery_portals.py`** plugin architecture:
+
+- `DeliveryPortalPlugin` base class con metodi `validate_auth()`, `upload_file(portal, file_path, metadata)`.
+- `ManualPortalPlugin` — no-op, MediaFlow traccia solo lo stato (broadcaster con UI manuale).
+- `GenericHttpPortalPlugin` — POST multipart + bearer token (auth_config: `{endpoint, token}`).
+- `_PROVIDERS` dict registrabile + `get_plugin(key)` + `list_plugin_keys()`.
+- `encrypt_auth_config` / `decrypt_auth_config` via Fernet AI_KEY_ENCRYPTION_KEY (riuso α.137).
+- `execute_upload(db, upload)` — flow stateful: pending → uploading → done|failed con commit progressivo. Idempotente.
+
+**Plugin futuri TODO**:
+- `netflix_aspera` (Aspera fasp)
+- `amazon_s3` (S3 + signed URLs)
+- `sky_signiant` (Media Shuttle)
+- `a24_box` (Box.com API)
+
+**Smoke**: 2 tabelle create + 2 plugin built-in registrati ✓.
+
+**Backlog α.156+**:
+- Router CRUD portali + upload trigger
+- UI tab "Portali consegne" in /settings (config + auth)
+- UI upload da page deliverables (selezione portale + file)
+- Plugin broadcaster-specific (Netflix/Amazon prima priorità)
+- Background queue (Celery/RQ) per upload async di grandi file
+
+---
+
 ## v3.5.0-alpha.154 — Parse batch capitolati pendenti (17 mag 2026 sera)
 
 Endpoint nuovo per parse batch del corpus capitolati esempio (17 file in `docs/capitolati_esempio/`).
