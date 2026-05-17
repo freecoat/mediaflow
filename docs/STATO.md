@@ -8,6 +8,16 @@
 
 ## Versione corrente
 
+**v3.5.0-alpha.149** — 17 maggio 2026 sera — F29 i18n round 3: planning + finance + cost-report
+
+~50 chiavi nuove (planning 17 + finance 16 + cr 17). Tot dict ~210.
+data-i18n: finance tab + bottone + 3 card titoli, cr table headers, planning bottone Booking.
+Cache buster bumpato.
+
+Backlog F29 round 4 (α.150): suppliers + resources + departments + settings + JS dinamico mfT().
+
+## (versione precedente)
+
 **v3.5.0-alpha.148** — 17 maggio 2026 sera — F29 i18n round 2: clients + projects + quotes
 
 ~40 chiavi nuove (clients 11 + projects 11 + quotes 19). Tot dict ~160 chiavi.

@@ -5,7 +5,7 @@
 {% block topbar_title %}Fatturazione & Report{% endblock %}
 
 {% block topbar_actions %}
-  <button class="btn btn-primary btn-sm" onclick="openNewInvoiceModal()">+ Nuova fattura</button>
+  <button class="btn btn-primary btn-sm" onclick="openNewInvoiceModal()" data-i18n="fin.new_invoice">+ Nuova fattura</button>
   <!-- v3.5.0-alpha.90: accrual billing — aggrega N batch approved del progetto → 1 fattura -->
   <button class="btn btn-secondary btn-sm" onclick="openComposeInvoiceModal()" title="Aggrega N batch approvati dello stesso progetto in 1 fattura unica (mensile/trimestrale/custom)">
     📦 Componi fattura periodo
@@ -27,10 +27,10 @@
 <!-- ── Tabs ──────────────────────────────────────────────────── -->
 <!-- v3.5.0-alpha.111: rimossi tab Timesheet + Report P&L (obsoleti). -->
 <div class="tabs">
-  <div class="tab active" onclick="showSection('invoices',this)">Fatture</div>
-  <div class="tab" onclick="showSection('batches',this)">📦 Batch fatturazione <span id="batches-badge" class="badge" style="display:none;background:#fbbf24;color:#000;margin-left:6px;"></span></div>
-  <div class="tab" onclick="showSection('anomalies',this)">⚠ Anomalie <span id="anomalies-badge" class="badge" style="display:none;background:#dc2626;color:#fff;margin-left:6px;"></span></div>
-  <div class="tab" onclick="showSection('advances-drafts',this)">💰 Bozze acconti <span id="advances-drafts-badge" class="badge" style="display:none;background:#fbbf24;color:#000;margin-left:6px;"></span></div>
+  <div class="tab active" onclick="showSection('invoices',this)" data-i18n="fin.tab.invoices">Fatture</div>
+  <div class="tab" onclick="showSection('batches',this)"><span data-i18n="fin.tab.batches">📦 Batch fatturazione</span> <span id="batches-badge" class="badge" style="display:none;background:#fbbf24;color:#000;margin-left:6px;"></span></div>
+  <div class="tab" onclick="showSection('anomalies',this)"><span data-i18n="fin.tab.anomalies">⚠ Anomalie</span> <span id="anomalies-badge" class="badge" style="display:none;background:#dc2626;color:#fff;margin-left:6px;"></span></div>
+  <div class="tab" onclick="showSection('advances-drafts',this)"><span data-i18n="fin.tab.advances_drafts">💰 Bozze acconti</span> <span id="advances-drafts-badge" class="badge" style="display:none;background:#fbbf24;color:#000;margin-left:6px;"></span></div>
 </div>
 
 <!-- ── Sezione fatture ─────────────────────────────────────── -->
@@ -44,7 +44,7 @@
   <!-- v3.5.0-alpha.143 — Widget Acconti aperti (visibilità immediata in Fatturazione) -->
   <div class="card mb-3" id="open-advances-card" style="display:none;">
     <div class="card-header" style="display:flex; align-items:center; justify-content:space-between;">
-      <span class="card-title">💰 Acconti aperti (da scomputare o ancora attivi)</span>
+      <span class="card-title" data-i18n="fin.adv.open">💰 Acconti aperti (da scomputare o ancora attivi)</span>
       <span class="text-xs text-muted" id="open-advances-summary"></span>
     </div>
     <div id="open-advances-body" style="padding:10px 14px;"></div>
@@ -183,7 +183,7 @@
 
   <!-- v3.5.0-alpha.141 — Legenda tipi anomalie + side-effects azioni (collassabile) -->
   <details style="margin-bottom:14px; background:var(--bg2); border:1px solid var(--border); border-radius:8px; padding:8px 12px;">
-    <summary style="cursor:pointer; font-weight:600; font-size:13px; color:var(--text);">📖 Legenda tipi anomalie e azioni</summary>
+    <summary style="cursor:pointer; font-weight:600; font-size:13px; color:var(--text);" data-i18n="fin.anom.legend">📖 Legenda tipi anomalie e azioni</summary>
     <div style="margin-top:12px; display:grid; grid-template-columns:1fr 1fr; gap:18px;">
       <div>
         <div style="font-weight:600; margin-bottom:6px; color:var(--text2);">Tipi anomalie</div>
@@ -308,7 +308,7 @@
 <div id="section-advances-drafts" class="hidden">
   <div class="card">
     <div class="card-header" style="display:flex; align-items:center; justify-content:space-between;">
-      <span class="card-title">💰 Acconti in bozza — da emettere o confermare</span>
+      <span class="card-title" data-i18n="fin.adv.drafts">💰 Acconti in bozza — da emettere o confermare</span>
       <span class="text-xs text-muted" id="advances-drafts-summary"></span>
     </div>
     <div style="padding:10px 14px;">

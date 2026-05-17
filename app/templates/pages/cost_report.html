@@ -50,19 +50,19 @@
     <table class="mf-sortable">
       <thead>
         <tr>
-          <th style="width:120px;">Codice</th>
-          <th style="min-width:280px;">Titolo / Quote</th>
-          <th style="min-width:160px;">Cliente</th>
-          <th style="width:90px;">Stato</th>
-          <th class="text-right" style="width:120px;">Quotato</th>
-          <th class="text-right" style="width:120px;" title="Maturato totale del job = Σ lavorazioni maturate (include il già fatturato in slice + il post-periodo). Nel dettaglio CR la colonna 'Maturato post' mostra solo la parte non ancora fatturata.">Maturato</th>
+          <th style="width:120px;" data-i18n="col.code">Codice</th>
+          <th style="min-width:280px;" data-i18n="col.title">Titolo / Quote</th>
+          <th style="min-width:160px;" data-i18n="col.client">Cliente</th>
+          <th style="width:90px;" data-i18n="col.status">Stato</th>
+          <th class="text-right" style="width:120px;" data-i18n="cr.col.quoted">Quotato</th>
+          <th class="text-right" style="width:120px;" title="Maturato totale del job">Maturato</th>
           <th class="text-right" style="width:120px;">Stimato</th>
-          <th class="text-right" style="width:120px;">Over/Under</th>
-          <th class="text-right" style="width:120px;" title="Maturato − Costo reale risorse (α.67)">Marg. reale</th>
+          <th class="text-right" style="width:120px;" data-i18n="cr.col.over_under">Over/Under</th>
+          <th class="text-right" style="width:120px;" data-i18n="cr.col.real_margin">Marg. reale</th>
         </tr>
       </thead>
       <tbody id="cr-list-tbody">
-        <tr><td colspan="9" class="text-muted" style="text-align:center;padding:24px;">Caricamento…</td></tr>
+        <tr><td colspan="9" class="text-muted" style="text-align:center;padding:24px;" data-i18n="misc.loading">Caricamento…</td></tr>
       </tbody>
     </table>
   </div>

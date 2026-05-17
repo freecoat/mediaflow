@@ -1,5 +1,27 @@
 # MediaFlow — Changelog
 
+## v3.5.0-alpha.149 — F29 i18n round 3: planning + finance + cost-report (17 mag 2026 sera)
+
+Sweep i18n round 3: ~50 chiavi nuove.
+
+Dictionary MF_I18N estesa:
+- Planning 17: title, 6 tab (calendar/timeline/gantt/kanban/list/todo), new_booking, 5 filtri (resource/job/status/from/to), 4 booking status (tentative/confirmed/done/not_done)
+- Finance 16: title, 4 tab (invoices/batches/anomalies/advances_drafts), new_invoice, compose_invoice, 6 col (invoice_number/issue_date/due_date/total/paid/outstanding), legend anomalies, adv.open/drafts titoli card
+- Cost Report 17: title, search, view_mode + 2 viste (now/forecast), 8 summary KPI (budget/billed_locked/accrued_post/forecast/margin/invoiced_total/advances), 8 col tabella (unit/quoted/billed/accrued_post/forecast/over_under/real_cost/real_margin)
+
+Template data-i18n:
+- finance.html: 4 tab + bottone "+ Nuova fattura" + card titoli (Acconti aperti, Acconti bozze, Legenda anomalie)
+- cost_report.html: table headers lista + loading
+- planning.html: bottone "+ Booking"
+
+Cache buster i18n.js?v=3.5.0-alpha.149.
+
+Tot dictionary cumulata: ~210 chiavi.
+
+Backlog F29 round 4 (α.150): suppliers + resources + departments + settings + JS dinamico mfT() per toast/render.
+
+---
+
 ## v3.5.0-alpha.148 — F29 i18n round 2: clients + projects + quotes (17 mag 2026 sera)
 
 Sweep i18n round 2: ~40 chiavi nuove per pagine clients/projects/quotes.
