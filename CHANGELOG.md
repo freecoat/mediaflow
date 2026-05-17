@@ -1,5 +1,19 @@
 # MediaFlow — Changelog
 
+## v3.5.0-alpha.160.1 — HOTFIX: variable shadowing `paid` in cost_report.py (17 mag 2026 notte)
+
+Bug introdotto α.160: nel for loop `paid_rows` ho usato `paid` come loop var, shadowing variabile esterna omonima (`paid = Σ Invoice.total status=paid`).
+
+Dopo il for, se l'ultima riga aveva `amount_paid=None`, `paid` restava None → `round(paid, 2)` line 776 → `TypeError: type NoneType doesn't define __round__ method`.
+
+Fix: rinomino loop var con suffix `_` (`jcl_id_`, `alloc_amt_`, `ap_amt_`, `paid_amt_`).
+
+Smoke job 45 P-2024-0035-J-2026-002 (precedentemente broken): `paid=0` ✓.
+
+**Lezione**: var shadowing in scope esterno è bug subdolo. Python non avvisa. Loop var con underscore suffix per evitare.
+
+---
+
 ## v3.5.0-alpha.160 — JCL advance_paid_coverage: acconto pagato visibile in lavorazioni (17 mag 2026 notte)
 
 Risposta domanda Matteo: "non vedo il pagato nelle voci lavorazione come fatturato".

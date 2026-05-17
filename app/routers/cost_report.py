@@ -514,11 +514,15 @@ async def job_cost_report(job_id: int, db: Session = Depends(get_db)):
             )
             .all()
         )
-        for jcl_id, alloc_amt, ap_amt, paid in paid_rows:
-            if not ap_amt or ap_amt <= 0:
+        # v3.5.0-alpha.160.1 HOTFIX: rinomino loop var per evitare shadowing
+        # variabile esterna `paid` (job invoiced/paid sum). Pre-fix: dopo il
+        # for, paid restava None (ultima riga query con amount_paid=NULL) →
+        # TypeError round(None) line 776.
+        for jcl_id_, alloc_amt_, ap_amt_, paid_amt_ in paid_rows:
+            if not ap_amt_ or ap_amt_ <= 0:
                 continue
-            ratio = min(1.0, (paid or 0) / ap_amt)
-            advance_paid_coverage_by_jcl[jcl_id] = advance_paid_coverage_by_jcl.get(jcl_id, 0.0) + (alloc_amt or 0) * ratio
+            ratio = min(1.0, (paid_amt_ or 0) / ap_amt_)
+            advance_paid_coverage_by_jcl[jcl_id_] = advance_paid_coverage_by_jcl.get(jcl_id_, 0.0) + (alloc_amt_ or 0) * ratio
     if job.project_id:
         ap_row = db.query(
             func.coalesce(func.sum(_AP.amount), 0.0),
