@@ -8,6 +8,31 @@
 
 ## Versione corrente
 
+**v3.5.0-alpha.138** — 17 maggio 2026 mattina — Acconti Step 2: scomputo automatico + auto-scompute closing
+
+Chiude il ciclo acconti aperto in α.136. Pattern B completo end-to-end.
+
+**Backend**:
+- Helper `_apply_advance_consumptions` (billing.py) crea InvoiceLine negativa + AdvancePaymentConsumption + riduce balance + auto-status consumed.
+- `emit_invoice`, `compose_invoice_from_batches`: accettano `advance_consumptions` CSV `"id:amt,id:amt"`.
+- `emit_closing_invoice`: **auto-scompute FIFO** di tutti gli AP open del progetto fino esaurire subtotal. `advance_overflow_open` warning se residuo non scomputabile.
+- Invoice.project_id linkato direttamente per batch/closing.
+- Cost Report list + job detail estesi con `advance_amount` / `advance_consumed` / `advance_balance` + `advance_overflow_flag`.
+
+**UI**:
+- Modal `/finance` emit batch: sezione "💰 Scomputo acconti aperti" con checkbox + input importo + auto-suggest + recalc live totali.
+- CR card "Acconti progetto" (preesistente α.136) si aggiorna con i consumi nuovi.
+
+**Smoke E2E**: 2 AP €3000+€2000 su Shadow → scomputo €1500+€500 (sub 5000→3000) ✓ full consume → status=consumed ✓ over-consume 409 reject ✓.
+
+**Backlog α.139+**:
+- F29 i18n sweep TUTTA UI (~500-1000 chiavi IT/EN/FR/DE)
+- Conversione cross-currency in cost-report aggregati
+- OAuth Gmail/Outlook/Drive/OneDrive
+- Test parse 14 capitolati restanti
+
+## (versione precedente)
+
 **v3.5.0-alpha.137** — 17 maggio 2026 mattina — Multi-currency Quote + Settings valuta base + FX live (Frankfurter BCE)
 
 Richiesta diretta Matteo: valuta base nelle impostazioni + quotazioni in dollari con conversione live.

@@ -103,6 +103,44 @@ async def list_cost_reports(
             .all()
         )
         invoiced_net_map = {r.job_id: float(r.net or 0) for r in inv_rows}
+    # v3.5.0-alpha.138 — pre-fetch Σ AdvancePayment.amount e .balance_remaining per project.
+    # Σ AdvancePaymentConsumption.amount_consumed = "coperto da acconto" = quota
+    # del lavoro maturato già pre-pagata via scomputo in batch successivi.
+    from app.models import AdvancePayment as _AP, AdvancePaymentConsumption as _APC, AdvancePaymentStatus as _APStat
+    project_ids = list({j.project_id for j in jobs if j.project_id})
+    advance_amount_map: dict[int, float] = {}
+    advance_balance_map: dict[int, float] = {}
+    advance_consumed_map: dict[int, float] = {}
+    if project_ids:
+        ap_rows = (
+            db.query(
+                _AP.project_id,
+                func.coalesce(func.sum(_AP.amount), 0.0).label("amt"),
+                func.coalesce(func.sum(_AP.balance_remaining), 0.0).label("bal"),
+            )
+            .filter(_AP.tenant_id == current_tenant_id(),
+                    _AP.project_id.in_(project_ids),
+                    _AP.status != _APStat.cancelled)
+            .group_by(_AP.project_id)
+            .all()
+        )
+        for r in ap_rows:
+            advance_amount_map[r.project_id] = float(r.amt or 0)
+            advance_balance_map[r.project_id] = float(r.bal or 0)
+        apc_rows = (
+            db.query(
+                _AP.project_id,
+                func.coalesce(func.sum(_APC.amount_consumed), 0.0).label("cons"),
+            )
+            .select_from(_APC)
+            .join(_AP, _AP.id == _APC.advance_payment_id)
+            .filter(_AP.tenant_id == current_tenant_id(),
+                    _AP.project_id.in_(project_ids))
+            .group_by(_AP.project_id)
+            .all()
+        )
+        for r in apc_rows:
+            advance_consumed_map[r.project_id] = float(r.cons or 0)
     out = []
     for j in jobs:
         total_quoted = sum(l.total_quoted for l in j.cost_lines)
@@ -176,6 +214,13 @@ async def list_cost_reports(
             "billed_admin_net": billed_admin_net,
             "admin_flag": admin_flag,
             "fake_billing_count": fake_billing_count,
+            # v3.5.0-alpha.138 (Acconti Step 2): aggregati a livello PROJECT.
+            # advance_amount = Σ AdvancePayment.amount (acconti emessi, no cancelled)
+            # advance_consumed = Σ AdvancePaymentConsumption.amount_consumed (scomputato)
+            # advance_balance = Σ AdvancePayment.balance_remaining (residuo aperto)
+            "advance_amount": round(advance_amount_map.get(j.project_id, 0.0), 2) if j.project_id else 0.0,
+            "advance_consumed": round(advance_consumed_map.get(j.project_id, 0.0), 2) if j.project_id else 0.0,
+            "advance_balance": round(advance_balance_map.get(j.project_id, 0.0), 2) if j.project_id else 0.0,
             "lines_count": len(j.cost_lines),
         })
     return out
@@ -399,6 +444,30 @@ async def job_cost_report(job_id: int, db: Session = Depends(get_db)):
         Invoice.status != InvoiceStatus.cancelled,
     ).scalar() or 0
     invoiced_net = float(invoiced_net)
+    # v3.5.0-alpha.138 (Acconti Step 2): aggregati per PROJECT del job.
+    from app.models import AdvancePayment as _AP, AdvancePaymentConsumption as _APC, AdvancePaymentStatus as _APStat
+    advance_amount = 0.0
+    advance_balance = 0.0
+    advance_consumed = 0.0
+    if job.project_id:
+        ap_row = db.query(
+            func.coalesce(func.sum(_AP.amount), 0.0),
+            func.coalesce(func.sum(_AP.balance_remaining), 0.0),
+        ).filter(
+            _AP.tenant_id == current_tenant_id(),
+            _AP.project_id == job.project_id,
+            _AP.status != _APStat.cancelled,
+        ).first()
+        if ap_row:
+            advance_amount = float(ap_row[0] or 0)
+            advance_balance = float(ap_row[1] or 0)
+        cons_row = db.query(
+            func.coalesce(func.sum(_APC.amount_consumed), 0.0),
+        ).select_from(_APC).join(_AP, _AP.id == _APC.advance_payment_id).filter(
+            _AP.tenant_id == current_tenant_id(),
+            _AP.project_id == job.project_id,
+        ).scalar()
+        advance_consumed = float(cons_row or 0)
 
     # Totali cost lines
     total_quoted = sum(l.total_quoted for l in job.cost_lines)
@@ -647,6 +716,14 @@ async def job_cost_report(job_id: int, db: Session = Depends(get_db)):
                 1 for l in job.cost_lines
                 if (l.billing_status and l.billing_status.value in ("billed", "paid"))
                 and (l.total_accrued or 0) <= 0.001
+            ),
+            # v3.5.0-alpha.138 (Acconti Step 2): aggregati a livello PROJECT.
+            "advance_amount": round(advance_amount, 2),
+            "advance_consumed": round(advance_consumed, 2),
+            "advance_balance": round(advance_balance, 2),
+            # Warning: Σ batch + Σ acconti > quote_total
+            "advance_overflow_flag": bool(
+                total_quoted > 0 and (sum_billed_locked + advance_amount) > total_quoted * 1.05
             ),
             # v3.5.0-alpha.66.11 — Hardcost ore deliverable (solo INTERNO).
             # Cliente non vede. Da mostrare in /cost-report e /jobs/{id} solo

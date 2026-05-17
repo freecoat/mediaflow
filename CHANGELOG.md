@@ -1,5 +1,57 @@
 # MediaFlow — Changelog
 
+## v3.5.0-alpha.138 — Acconti Step 2: scomputo automatico in batch + auto-scompute closing + CR aggregati (17 mag 2026 mattina)
+
+Chiude il ciclo acconti aperto in α.136. Pattern B completo end-to-end:
+acconto emesso → scomputato nelle fatture batch successive → residuo auto-scomputato nella closing.
+
+**Helper backend** (`billing.py`):
+- `_parse_advance_consumptions_csv("id:amt,id:amt")` → lista (id, amt). Solleva 400 su parse/negativo.
+- `_apply_advance_consumptions(db, invoice, project_id, consumptions, billing_batch_id, vat_rate)`:
+  - Valida: AP esiste, project match, status=open, amount ≤ balance_remaining.
+  - Crea InvoiceLine negativa "Scomputo acconto {invoice_num}" (total=-amt).
+  - Crea AdvancePaymentConsumption (ledger).
+  - Riduce balance_remaining; se ≤ 0.005 → status=consumed.
+  - Aggiusta invoice.subtotal -= total_consumed e invoice.total proporzionalmente.
+  - Solleva 409 su tutte le violazioni.
+
+**Endpoint estesi**:
+- `POST /billing/{batch_id}/invoice` accetta `advance_consumptions` Form CSV. Scomputa dopo aver creato InvoiceLine normali. Risponde con `advance_consumptions: {applied, total_consumed}`. Link `invoice.project_id` automatico.
+- `POST /billing/compose-invoice` (aggregato batch): stesso pattern.
+- `POST /billing/closing-invoice/{project_id}`: **auto-scompute FIFO** di tutti gli AP open del progetto fino a esaurire il subtotal della closing. Ritorna `advance_consumptions` + `advance_overflow_open` (residuo non scomputabile = warning per manager, risolve via NC TD04 manuale).
+
+**Cost Report endpoints estesi** (Σ aggregati per project):
+- `list_cost_reports`: pre-fetch `advance_amount` (Σ AP.amount), `advance_consumed` (Σ APC.amount_consumed), `advance_balance` (Σ AP.balance_remaining). Esposti per ogni job.
+- `job_cost_report`: stessi campi nel summary + `advance_overflow_flag` (true se billed_locked + advance_amount > quote * 1.05).
+
+**UI modal "Emetti fattura da batch"** (`/finance` template):
+- Nuova sezione "💰 Scomputo acconti aperti del progetto" caricata via `_loadAdvancesForEmit(projectId)`.
+- Lista checkbox + input importo per ogni AP open. Auto-suggest = min(balance, batch_subtotal_residuo).
+- Recalc live dei totali: Imponibile lordo / Scomputo (verde) / Imponibile netto / IVA / Totale.
+- Submit invia `advance_consumptions` CSV. Toast estesa con "Scomputo acconti −€X".
+- DOM via createElement/textContent (no XSS surface).
+
+**UI Cost Report card "Acconti del progetto"** (preesistente α.136):
+- I 3 stat-card (Totale acconti / Già scomputato / Residuo aperto) si aggiornano automaticamente con i nuovi consumi.
+
+**Smoke E2E** (job 9 Shadow Stagione 3, project 12):
+- 2 AP creati (€3000 + €2000) ✓
+- Scomputo €1500 da AP1 + €500 da AP2 su invoice test (subtotal 5000 → 3000) ✓
+- AP1 balance 3000 → 1500 (open) ✓
+- AP2 balance 2000 → 1500 (open) ✓
+- Full consume AP2 1500 → 0 → status=consumed ✓
+- Over-consume €99999 → 409 reject ✓
+- Cleanup ✓
+
+**Backlog α.139+**:
+- F29 i18n sweep TUTTA UI (~500-1000 chiavi IT/EN/FR/DE)
+- Conversione cross-currency in cost-report aggregati (project con quote USD vs base EUR)
+- OAuth Gmail/Outlook/Drive/OneDrive
+- Test parse 14 capitolati restanti
+- Automazione portali consegne
+
+---
+
 ## v3.5.0-alpha.137 — Multi-currency Quote + Settings valuta base + FX rate live (17 mag 2026 mattina)
 
 Richiesta diretta Matteo post α.136: "Prevedi anche nelle impostazioni la valuta base. Inoltre prevedi di emettere quotazioni in dollari (strumento di conversione automatica sulla base del prezzo attuale del dollaro da implementare in quotazione in tempo reale)".

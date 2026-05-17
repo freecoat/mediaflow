@@ -437,7 +437,13 @@
         <label class="form-label">IVA (%)</label>
         <input class="form-input" id="ei-vat" type="number" step="0.01" value="22" min="0" max="100" style="width:120px;">
       </div>
-      <div id="ei-totals" style="background:var(--bg3); border-radius:8px; padding:10px 12px;"></div>
+      <!-- v3.5.0-alpha.138 — Acconti Step 2: sezione scomputo acconti aperti -->
+      <div id="ei-advances-section" style="margin-top:10px; display:none;">
+        <div class="card-title" style="font-size:13px; margin-bottom:6px;">💰 Scomputo acconti aperti del progetto</div>
+        <div id="ei-advances-list"></div>
+        <div class="text-xs text-muted" style="margin-top:4px;">Spunta gli acconti da scomputare. Verrà aggiunta una InvoiceLine negativa per ognuno + ledger AdvancePaymentConsumption.</div>
+      </div>
+      <div id="ei-totals" style="background:var(--bg3); border-radius:8px; padding:10px 12px; margin-top:10px;"></div>
     </div>
     <div class="modal-footer">
       <button class="btn btn-secondary" onclick="closeModal('modal-emit-invoice')">Annulla</button>
@@ -1080,7 +1086,77 @@ function openEmitInvoice() {
     </div>`;
   // v3.5.0-alpha.112 — check altri batch aperti per stesso progetto
   _checkOtherBatchesForProject(_currentBatch.project_id, _currentBatch.id);
+  // v3.5.0-alpha.138 — carica acconti aperti del progetto per scomputo opzionale
+  _loadAdvancesForEmit(_currentBatch.project_id);
   openModal('modal-emit-invoice');
+}
+
+// v3.5.0-alpha.138 — Acconti Step 2: carica + render sezione scomputo nel modal emit.
+async function _loadAdvancesForEmit(projectId) {
+  const section = document.getElementById('ei-advances-section');
+  const list = document.getElementById('ei-advances-list');
+  if (!section || !list) return;
+  section.style.display = 'none';
+  list.textContent = '';
+  if (!projectId) return;
+  try {
+    const data = await api('GET', '/finance/api/projects/' + projectId + '/advances');
+    const open = (data.rows || []).filter(r => r.status === 'open' && r.balance_remaining > 0.01);
+    if (!open.length) return;
+    section.style.display = 'block';
+    const batchSubtotal = _currentBatch && _currentBatch.total_approved ? _currentBatch.total_approved : 0;
+    let remainingSuggest = batchSubtotal;
+    open.forEach(ap => {
+      const row = document.createElement('div');
+      row.style.cssText = 'display:flex; align-items:center; gap:8px; padding:6px 0; border-bottom:1px solid var(--border);';
+      const cb = document.createElement('input');
+      cb.type = 'checkbox';
+      cb.dataset.advanceId = ap.id;
+      cb.dataset.balance = ap.balance_remaining;
+      // Auto-suggest: min(balance, remainingSuggest)
+      const suggested = Math.min(ap.balance_remaining, Math.max(0, remainingSuggest));
+      const num = (ap.invoice && ap.invoice.number) ? ap.invoice.number : ('#' + ap.id);
+      const lbl = document.createElement('label');
+      lbl.style.cssText = 'flex:1; cursor:pointer; font-size:13px;';
+      lbl.appendChild(cb);
+      const sp = document.createElement('span');
+      sp.style.marginLeft = '6px';
+      sp.textContent = num + ' — residuo ' + fmtCurrency(ap.balance_remaining);
+      lbl.appendChild(sp);
+      const inp = document.createElement('input');
+      inp.type = 'number';
+      inp.step = '0.01';
+      inp.min = '0';
+      inp.max = String(ap.balance_remaining);
+      inp.value = suggested.toFixed(2);
+      inp.dataset.amount = '1';
+      inp.style.cssText = 'width:120px; padding:3px 6px; background:var(--bg2); border:1px solid var(--border); color:var(--text); border-radius:4px; font-family:DM Mono,monospace; font-size:12px;';
+      inp.disabled = true;
+      cb.onchange = () => { inp.disabled = !cb.checked; recalcEmitTotals(); };
+      inp.oninput = () => recalcEmitTotals();
+      row.appendChild(lbl);
+      row.appendChild(inp);
+      list.appendChild(row);
+      remainingSuggest = Math.max(0, remainingSuggest - suggested);
+    });
+  } catch (e) {
+    // silenzioso, scomputo è opzionale
+  }
+}
+
+// v3.5.0-alpha.138 — raccoglie consumptions selezionati nel CSV "id:amt,..."
+function _collectAdvanceConsumptions() {
+  const list = document.getElementById('ei-advances-list');
+  if (!list) return '';
+  const out = [];
+  list.querySelectorAll('input[type=checkbox]').forEach(cb => {
+    if (!cb.checked) return;
+    const id = cb.dataset.advanceId;
+    const inp = cb.parentElement.parentElement.querySelector('input[type=number]');
+    const amt = parseFloat(inp.value || 0);
+    if (amt > 0) out.push(id + ':' + amt);
+  });
+  return out.join(',');
 }
 
 // v3.5.0-alpha.112 — banner se ci sono altri batch approved aperti
@@ -1131,19 +1207,52 @@ function recalcEmitTotals() {
   if (!_currentBatch) return;
   const subtotal = _currentBatch.total_approved || 0;
   const vatPct = parseFloat(document.getElementById('ei-vat').value) || 0;
-  const vat = subtotal * vatPct / 100;
-  const total = subtotal + vat;
-  document.getElementById('ei-totals').innerHTML = `
-    <div style="display:flex; justify-content:space-between; padding:3px 0;">
-      <span class="text-sm">Imponibile</span><span class="mono">${fmtCurrency(subtotal)}</span>
-    </div>
-    <div style="display:flex; justify-content:space-between; padding:3px 0;">
-      <span class="text-sm">IVA (${vatPct}%)</span><span class="mono">${fmtCurrency(vat)}</span>
-    </div>
-    <div style="display:flex; justify-content:space-between; padding:6px 0; border-top:1px solid var(--border); margin-top:4px;">
-      <span class="text-sm" style="font-weight:600;">Totale</span>
-      <span class="mono" style="font-weight:600; color:var(--indigo2);">${fmtCurrency(total)}</span>
-    </div>`;
+  // v3.5.0-alpha.138 — Sottrai eventuali scomputi acconti per anteprima
+  let totalConsumed = 0;
+  const list = document.getElementById('ei-advances-list');
+  if (list) {
+    list.querySelectorAll('input[type=checkbox]').forEach(cb => {
+      if (!cb.checked) return;
+      const inp = cb.parentElement.parentElement.querySelector('input[type=number]');
+      const amt = parseFloat(inp.value || 0);
+      if (amt > 0) totalConsumed += amt;
+    });
+  }
+  const netSubtotal = Math.max(0, subtotal - totalConsumed);
+  const vat = netSubtotal * vatPct / 100;
+  const total = netSubtotal + vat;
+  const out = document.getElementById('ei-totals');
+  out.textContent = '';
+  const mkRow = (lbl, val, bold) => {
+    const r = document.createElement('div');
+    r.style.cssText = 'display:flex; justify-content:space-between; padding:3px 0;' + (bold ? 'border-top:1px solid var(--border); margin-top:4px; padding-top:6px;' : '');
+    const l = document.createElement('span');
+    l.className = 'text-sm';
+    if (bold) l.style.fontWeight = '600';
+    l.textContent = lbl;
+    const v = document.createElement('span');
+    v.className = 'mono';
+    if (bold) { v.style.fontWeight = '600'; v.style.color = 'var(--indigo2)'; }
+    v.textContent = fmtCurrency(val);
+    r.appendChild(l); r.appendChild(v);
+    return r;
+  };
+  out.appendChild(mkRow('Imponibile lordo', subtotal, false));
+  if (totalConsumed > 0.005) {
+    const r = document.createElement('div');
+    r.style.cssText = 'display:flex; justify-content:space-between; padding:3px 0; color:#22c55e;';
+    const l = document.createElement('span');
+    l.className = 'text-sm';
+    l.textContent = 'Scomputo acconti';
+    const v = document.createElement('span');
+    v.className = 'mono';
+    v.textContent = '−' + fmtCurrency(totalConsumed);
+    r.appendChild(l); r.appendChild(v);
+    out.appendChild(r);
+    out.appendChild(mkRow('Imponibile netto', netSubtotal, false));
+  }
+  out.appendChild(mkRow('IVA (' + vatPct + '%)', vat, false));
+  out.appendChild(mkRow('Totale', total, true));
 }
 
 async function submitEmitInvoice() {
@@ -1161,9 +1270,16 @@ async function submitEmitInvoice() {
   fd.append('issue_date', issueDate);
   if (dueDate) fd.append('due_date', dueDate);
   fd.append('vat_rate', vat);
+  // v3.5.0-alpha.138 — Acconti Step 2: invia scomputi selezionati
+  const advCsv = _collectAdvanceConsumptions();
+  if (advCsv) fd.append('advance_consumptions', advCsv);
   try {
     const res = await api('POST', `/finance/api/billing/${_currentBatch.id}/invoice`, fd);
-    toast(`✓ Fattura ${res.invoice_number} emessa: ${fmtCurrency(res.total)} totale (${fmtCurrency(res.subtotal)} + IVA ${fmtCurrency(res.vat_amount)})`, 'success', 6000);
+    let toastMsg = '✓ Fattura ' + res.invoice_number + ' emessa: ' + fmtCurrency(res.total) + ' totale (' + fmtCurrency(res.subtotal) + ' + IVA ' + fmtCurrency(res.vat_amount) + ')';
+    if (res.advance_consumptions && res.advance_consumptions.total_consumed > 0.005) {
+      toastMsg += ' · Scomputo acconti −' + fmtCurrency(res.advance_consumptions.total_consumed);
+    }
+    toast(toastMsg, 'success', 6000);
     closeModal('modal-emit-invoice');
     closeModal('modal-batch-detail');
     // v3.5.0-alpha.112 — apri PDF subito (in nuova tab) dopo emissione

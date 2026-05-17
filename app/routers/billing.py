@@ -40,6 +40,7 @@ from app.models import (
     Project, Job, JobStatus, Invoice, InvoiceLine, InvoiceStatus, Client,
     Tenant,
     Booking, BookingStatus, BookingExecutionStatus,
+    AdvancePayment, AdvancePaymentConsumption, AdvancePaymentStatus,
 )
 from app.services.rbac import (
     current_user_optional, is_admin, is_manager, can_view_finance,
@@ -68,6 +69,106 @@ def _require_manager(request: Request):
 
 
 # ── Helpers ────────────────────────────────────────────────────────────
+
+
+# v3.5.0-alpha.138 — Acconti Step 2: scomputo automatico nelle fatture batch.
+# Parsing input formato CSV: "<advance_id>:<amount>,<advance_id>:<amount>"
+# Esempio: "5:1000.0,7:500.5"
+# Validazione: ogni amount ≤ balance_remaining, project_id match con invoice/batch project.
+# Genera InvoiceLine negative (descrittive) + AdvancePaymentConsumption records.
+# Riduce balance_remaining; status=consumed se balance=0.
+def _parse_advance_consumptions_csv(csv: Optional[str]) -> list[tuple[int, float]]:
+    """Parse "id:amt,id:amt" → [(id, amt), ...]. Vuoto → []. Solleva 400 su parse error."""
+    if not csv or not csv.strip():
+        return []
+    out = []
+    for token in csv.split(","):
+        token = token.strip()
+        if not token:
+            continue
+        if ":" not in token:
+            raise HTTPException(400, f"advance_consumptions formato invalido: '{token}' (atteso id:amt)")
+        a_id_s, amt_s = token.split(":", 1)
+        try:
+            a_id = int(a_id_s.strip())
+            amt = float(amt_s.strip())
+        except ValueError:
+            raise HTTPException(400, f"advance_consumptions parse error su '{token}'")
+        if amt <= 0:
+            raise HTTPException(400, f"advance_consumptions amount deve essere > 0 (advance #{a_id})")
+        out.append((a_id, amt))
+    return out
+
+
+def _apply_advance_consumptions(
+    db: Session, invoice: Invoice, project_id: int,
+    consumptions: list[tuple[int, float]],
+    billing_batch_id: Optional[int] = None,
+    vat_rate: float = 22.0,
+) -> dict:
+    """Per ogni (advance_id, amount) valida + crea InvoiceLine negativa + AdvancePaymentConsumption
+    + riduce balance. Ritorna {applied: [...], total_consumed: float}.
+
+    Solleva 409 se: advance non open / amount > balance / project mismatch.
+    Idempotente NON garantita: chiamare 1 volta per invoice."""
+    if not consumptions:
+        return {"applied": [], "total_consumed": 0.0}
+    applied = []
+    total_consumed = 0.0
+    for a_id, amt in consumptions:
+        ap = db.query(AdvancePayment).filter(
+            AdvancePayment.id == a_id,
+            AdvancePayment.tenant_id == current_tenant_id(),
+        ).first()
+        if not ap:
+            raise HTTPException(404, f"Acconto #{a_id} non trovato")
+        if ap.project_id != project_id:
+            raise HTTPException(
+                409,
+                f"Acconto #{a_id} appartiene al progetto {ap.project_id}, non a {project_id}"
+            )
+        if ap.status != AdvancePaymentStatus.open:
+            raise HTTPException(409, f"Acconto #{a_id} non è in stato 'open' (attuale: {ap.status.value})")
+        if amt > (ap.balance_remaining or 0) + 0.001:
+            raise HTTPException(
+                409,
+                f"Acconto #{a_id} residuo €{ap.balance_remaining:.2f} insufficiente per scomputo €{amt:.2f}"
+            )
+        # InvoiceLine negativa (total = -amt)
+        adv_inv_num = ap.invoice.number if ap.invoice else f"#{a_id}"
+        il = InvoiceLine(
+            invoice_id=invoice.id,
+            description=f"Scomputo acconto {adv_inv_num}",
+            quantity=1.0,
+            unit_price=-amt,
+            total=-amt,
+            vat_rate=vat_rate,
+            discount_pct=0.0,
+        )
+        db.add(il)
+        # Consumption ledger
+        cons = AdvancePaymentConsumption(
+            tenant_id=current_tenant_id(),
+            advance_payment_id=ap.id,
+            invoice_id=invoice.id,
+            billing_batch_id=billing_batch_id,
+            amount_consumed=amt,
+        )
+        db.add(cons)
+        # Update balance + status
+        ap.balance_remaining = round((ap.balance_remaining or 0) - amt, 2)
+        if ap.balance_remaining <= 0.005:
+            ap.balance_remaining = 0.0
+            ap.status = AdvancePaymentStatus.consumed
+        applied.append({"advance_payment_id": ap.id, "amount_consumed": amt,
+                        "balance_remaining": ap.balance_remaining,
+                        "status": ap.status.value})
+        total_consumed += amt
+    # Aggiusta totali Invoice (subtotal/total include scomputi negativi)
+    invoice.subtotal = round((invoice.subtotal or 0) - total_consumed, 2)
+    invoice.total = round((invoice.total or 0) - total_consumed * (1 + (invoice.vat_rate or vat_rate) / 100), 2)
+    return {"applied": applied, "total_consumed": total_consumed}
+
 
 def _next_batch_code(db: Session, project=None) -> str:
     """v3.5.0-alpha.66.14.8 — Wrapper sul numbering service unificato.
@@ -868,6 +969,8 @@ async def emit_invoice(
     issue_date: date = Form(...),
     due_date: Optional[date] = Form(None),
     vat_rate: float = Form(22.0),
+    # v3.5.0-alpha.138 — Scomputo acconti (Step 2). Formato "id:amt,id:amt".
+    advance_consumptions: Optional[str] = Form(None),
     db: Session = Depends(get_db),
 ):
     """Emette una Invoice da un batch approved. Crea Invoice + InvoiceLine
@@ -1001,15 +1104,26 @@ async def emit_invoice(
 
     batch.status = BillingBatchStatus.invoiced
     batch.invoice_id = invoice.id
+    # v3.5.0-alpha.138 — Acconti Step 2: scomputo opzionale.
+    # Applica DOPO aver creato tutte le invoice line normali (per consistenza
+    # del subtotal/total prima di sottrarre gli scomputi).
+    consumptions_in = _parse_advance_consumptions_csv(advance_consumptions)
+    consumed_result = _apply_advance_consumptions(
+        db, invoice, batch.project_id, consumptions_in,
+        billing_batch_id=batch.id, vat_rate=vat_rate,
+    )
+    # v3.5.0-alpha.138 — link diretto Invoice→Project (foundation cost report)
+    invoice.project_id = batch.project_id
     db.commit()
     db.refresh(batch)
     return {
         "batch": _batch_to_dict(batch, with_lines=True),
         "invoice_id": invoice.id,
         "invoice_number": invoice.number,
-        "subtotal": subtotal,
-        "vat_amount": vat_amount,
-        "total": total,
+        "subtotal": invoice.subtotal,  # post-scomputo
+        "vat_amount": invoice.total - invoice.subtotal,
+        "total": invoice.total,
+        "advance_consumptions": consumed_result,
     }
 
 
@@ -1025,6 +1139,8 @@ async def compose_invoice_from_batches(
     vat_rate: float = Form(22.0),
     batch_ids: Optional[str] = Form(None),  # CSV opzionale: se vuoto, prende tutti gli approved
     notes: Optional[str] = Form(None),
+    # v3.5.0-alpha.138 — Scomputo acconti (Step 2). Formato "id:amt,id:amt".
+    advance_consumptions: Optional[str] = Form(None),
     db: Session = Depends(get_db),
 ):
     """v3.5.0-alpha.90 — Accrual billing: aggrega N BillingBatch approved
@@ -1189,6 +1305,14 @@ async def compose_invoice_from_batches(
         # Linka batch → invoice
         batch.status = BillingBatchStatus.invoiced
         batch.invoice_id = invoice.id
+    # v3.5.0-alpha.138 — Scomputo acconti progetto (Step 2)
+    consumptions_in = _parse_advance_consumptions_csv(advance_consumptions)
+    consumed_result = _apply_advance_consumptions(
+        db, invoice, project_id, consumptions_in,
+        billing_batch_id=None, vat_rate=vat_rate,
+    )
+    # v3.5.0-alpha.138 — link diretto Invoice→Project
+    invoice.project_id = project_id
     # v3.5.0-alpha.91 audit fix P1: gestisce race condition su Invoice.number
     # unique. Pre-fix: 500 IntegrityError grezzo. Ora: 409 dedicato.
     try:
@@ -1202,12 +1326,13 @@ async def compose_invoice_from_batches(
     return {
         "invoice_id": invoice.id,
         "invoice_number": invoice.number,
-        "subtotal": round(subtotal, 2),
-        "vat_amount": round(vat_amount, 2),
-        "total": round(total, 2),
+        "subtotal": round(invoice.subtotal, 2),  # post-scomputo
+        "vat_amount": round(invoice.total - invoice.subtotal, 2),
+        "total": round(invoice.total, 2),
         "batches_aggregated": len(batches),
         "batch_codes": [b.code for b in batches],
         "invoice_lines_count": invoice_lines_count,
+        "advance_consumptions": consumed_result,
     }
 
 
@@ -1458,6 +1583,49 @@ async def emit_closing_invoice(
         batch.status = BillingBatchStatus.invoiced
         batch.invoice_id = invoice.id
 
+    # v3.5.0-alpha.138 — Acconti Step 2: auto-scompute TUTTI gli acconti open
+    # del progetto. Genera InvoiceLine negative + AdvancePaymentConsumption.
+    # Se la closing invoice ha subtotal < Σ residuo, scompute proporzionalmente:
+    # in ordine cronologico (FIFO), fermandosi quando si annulla la fattura.
+    # Edge case: subtotal positivo dopo scomputi = saldo dovuto. subtotal=0 =
+    # closing a costo zero (interamente coperta da acconti). subtotal negativo
+    # = acconti in eccesso → bloccato 409 (manager deve emettere NC TD04 manuale).
+    open_advances = db.query(AdvancePayment).filter(
+        AdvancePayment.tenant_id == current_tenant_id(),
+        AdvancePayment.project_id == project_id,
+        AdvancePayment.status == AdvancePaymentStatus.open,
+    ).order_by(AdvancePayment.created_at.asc()).all()
+    auto_consumptions: list[tuple[int, float]] = []
+    remaining_invoice_subtotal = invoice.subtotal or 0.0
+    for ap in open_advances:
+        if remaining_invoice_subtotal <= 0.005:
+            break
+        bal = ap.balance_remaining or 0.0
+        if bal <= 0.005:
+            continue
+        take = min(bal, remaining_invoice_subtotal)
+        auto_consumptions.append((ap.id, round(take, 2)))
+        remaining_invoice_subtotal -= take
+    if auto_consumptions:
+        consumed_result = _apply_advance_consumptions(
+            db, invoice, project_id, auto_consumptions,
+            billing_batch_id=None, vat_rate=vat_rate,
+        )
+    else:
+        consumed_result = {"applied": [], "total_consumed": 0.0}
+    # Hard-block se totale residuo acconti > closing subtotal (= overflow)
+    # Questo NON è coperto sopra (FIFO ferma a 0): segnale che manager ha
+    # accreditato troppo. Manager risolve con NC TD04 sull'acconto eccedente.
+    leftover_open = sum(
+        (ap.balance_remaining or 0)
+        for ap in open_advances
+        if ap.status == AdvancePaymentStatus.open
+    )
+    overflow_warning = leftover_open if leftover_open > 0.005 else 0.0
+
+    # v3.5.0-alpha.138 — link diretto Invoice→Project
+    invoice.project_id = project_id
+
     # Marca progetto chiuso
     proj.finance_status = "closed"
     proj.finance_closed_at = datetime.utcnow()
@@ -1476,12 +1644,14 @@ async def emit_closing_invoice(
         "invoice_id": invoice.id,
         "invoice_number": invoice.number,
         "project_id": project_id,
-        "subtotal": round(subtotal, 2),
-        "vat_amount": round(vat_amount, 2),
-        "total": round(total, 2),
+        "subtotal": round(invoice.subtotal, 2),  # post-scomputo
+        "vat_amount": round(invoice.total - invoice.subtotal, 2),
+        "total": round(invoice.total, 2),
         "invoice_lines_count": invoice_lines_count,
         "batches_aggregated": len(open_batches),
         "project_finance_status": "closed",
+        "advance_consumptions": consumed_result,
+        "advance_overflow_open": round(overflow_warning, 2),
     }
 
 
