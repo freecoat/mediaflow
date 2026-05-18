@@ -73,6 +73,8 @@
   <button class="btn btn-secondary btn-sm" onclick="closeReport()">← Lista</button>
   <span id="cr-detail-title" style="font-size:14px; font-weight:500;"></span>
   <div style="margin-left:auto; display:flex; gap:6px; align-items:center;">
+    <!-- v3.5.0-alpha.169 — Refresh dettaglio CR (Matteo: "altrimenti devo uscire e rientrare") -->
+    <button class="btn btn-ghost btn-sm" onclick="reloadCurrentReport()" id="btn-cr-refresh" title="Ricarica i dati di questo report (reconcile + refetch)">🔄 Aggiorna</button>
     <button class="btn btn-secondary btn-sm" onclick="openModal('modal-assign-resource')" id="btn-assign" disabled>
       + Assegna risorsa
     </button>
@@ -685,6 +687,25 @@ function closeReport() {
   document.getElementById('report-area').classList.add('hidden');
   // no-report rimane nascosto: la lista è la vista default in alpha.16
   loadCrList();  // refresh KPI nella lista
+}
+
+// v3.5.0-alpha.169 — Refresh in-place del dettaglio (Matteo: "altrimenti devo
+// uscire e rientrare"). Riusa loadReport(currentJobId) — pre-load reconcile +
+// refetch + re-render. Mantiene lo scroll position con setTimeout best-effort.
+async function reloadCurrentReport() {
+  if (!currentJobId) return;
+  const scrollY = window.scrollY;
+  const btn = document.getElementById('btn-cr-refresh');
+  if (btn) { btn.disabled = true; btn.textContent = '⏳'; }
+  try {
+    await loadReport(currentJobId);
+    if (typeof toast === 'function') toast('Report aggiornato', 'success', 1500);
+  } catch(e) {
+    if (typeof toast === 'function') toast('Errore aggiornamento: ' + (e.message || ''), 'error');
+  } finally {
+    if (btn) { btn.disabled = false; btn.textContent = '🔄 Aggiorna'; }
+    setTimeout(() => window.scrollTo(0, scrollY), 50);
+  }
 }
 
 function updateExportLinks() {

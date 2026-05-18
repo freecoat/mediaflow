@@ -138,32 +138,78 @@ def detect_extra_after_billed(db: Session) -> int:
 
 
 def detect_sforamento(db: Session) -> int:
-    """JobCostLine non-extra con quantity_actual > quantity_quoted."""
+    """JobCostLine non-extra con SFORAMENTO sul quotato.
+
+    v3.5.0-alpha.169 — Esteso oltre quantità (pre-α.169): ora rileva anche
+    sforamento monetario (total_accrued > total_quoted) e sforamento fattura
+    (Σ slice.billed_amount > total_quoted, "forzato sforamento" via manager
+    che alza total_approved nel batch oltre il quotato).
+
+    Caso A — quantità: quantity_actual > quantity_quoted
+    Caso B — maturato: total_accrued > total_quoted
+    Caso C — fattura forzata: Σ billed_amount > total_quoted
+    Amount = max(0, max(accrued, billed_sum) - quoted).
+    """
+    from sqlalchemy import func, or_
     n = 0
+    # Subquery: slice billed sum per JCL
+    billed_by_jcl_subq = (
+        db.query(
+            JCLBilledSlice.job_cost_line_id.label("jcl_id"),
+            func.sum(JCLBilledSlice.billed_amount).label("billed_sum"),
+        )
+        .filter(
+            JCLBilledSlice.tenant_id == CURRENT_TENANT,
+            JCLBilledSlice.voided_at.is_(None),
+        )
+        .group_by(JCLBilledSlice.job_cost_line_id)
+        .subquery()
+    )
     rows = (
-        db.query(JobCostLine)
+        db.query(JobCostLine, billed_by_jcl_subq.c.billed_sum)
         .options(joinedload(JobCostLine.job).joinedload(Job.project))
+        .outerjoin(billed_by_jcl_subq, JobCostLine.id == billed_by_jcl_subq.c.jcl_id)
         .filter(JobCostLine.tenant_id == CURRENT_TENANT)
         .filter(JobCostLine.job_id.isnot(None))
         .filter(JobCostLine.is_extra == False)  # noqa: E712
-        .filter(JobCostLine.quantity_actual > JobCostLine.quantity_quoted)
+        .filter(or_(
+            JobCostLine.quantity_actual > JobCostLine.quantity_quoted,
+            JobCostLine.total_accrued > JobCostLine.total_quoted,
+            billed_by_jcl_subq.c.billed_sum > JobCostLine.total_quoted,
+        ))
         .all()
     )
-    for jcl in rows:
-        delta_qty = (jcl.quantity_actual or 0) - (jcl.quantity_quoted or 0)
-        delta_val = round(delta_qty * (jcl.unit_price or 0), 2)
-        if delta_val <= 0:
+    for jcl, billed_sum in rows:
+        quoted = jcl.total_quoted or 0.0
+        accrued = jcl.total_accrued or 0.0
+        billed = float(billed_sum or 0.0)
+        # Valore over: massimo tra accrued e billed eccedente il quotato.
+        over_amt = round(max(accrued, billed) - quoted, 2)
+        if over_amt <= 0.005:
+            # Edge case: solo quantity over ma €→0 (es. unit_price=0). Skip.
             continue
+        # Componi descrizione contestuale al "tipo" di sforamento dominante.
+        parts = []
+        if (jcl.quantity_actual or 0) > (jcl.quantity_quoted or 0):
+            parts.append(
+                f"+{(jcl.quantity_actual or 0) - (jcl.quantity_quoted or 0):.2f} "
+                f"{jcl.unit or ''} ({jcl.quantity_actual:.2f} vs "
+                f"{jcl.quantity_quoted:.2f} preventivati)"
+            )
+        if accrued > quoted:
+            parts.append(f"maturato €{accrued:.2f} > quotato €{quoted:.2f}")
+        if billed > quoted:
+            parts.append(f"fatturato €{billed:.2f} > quotato €{quoted:.2f}")
+        descr = f"Sforamento JCL #{jcl.id}: " + " · ".join(parts) if parts else (
+            f"Sforamento JCL #{jcl.id}: +€{over_amt:.2f}"
+        )
         _upsert(
             db,
             anomaly_type=AnomalyType.sforamento_monte_ore,
             source_kind=AnomalySourceKind.jcl,
             source_id=jcl.id,
-            description=(
-                f"Sforamento JCL #{jcl.id}: +{delta_qty:.2f} {jcl.unit or ''} "
-                f"({jcl.quantity_actual:.2f} vs {jcl.quantity_quoted:.2f} preventivati)"
-            ),
-            amount=delta_val,
+            description=descr,
+            amount=over_amt,
             project_id=jcl.job.project_id if jcl.job else None,
             job_id=jcl.job_id,
             client_id=jcl.job.client_id if jcl.job else None,
@@ -173,32 +219,61 @@ def detect_sforamento(db: Session) -> int:
 
 
 def detect_over_budget(db: Session) -> int:
-    """JobCostLine extra puro (is_extra=True, no quote_line_id)."""
+    """JobCostLine extra puro (is_extra=True, no quote_line_id).
+
+    v3.5.0-alpha.169 — Aggiunto fallback su billed_amount/Σ slice quando
+    quantity=0 ma la voce è stata FATTURATA (caso Matteo: extra puro creato
+    direttamente nel batch, quantity_actual mai aggiornata ma billed > 0).
+    Amount = max(qty × prezzo, slice billed, billed_amount).
+    """
+    from sqlalchemy import func
     n = 0
+    billed_by_jcl_subq = (
+        db.query(
+            JCLBilledSlice.job_cost_line_id.label("jcl_id"),
+            func.sum(JCLBilledSlice.billed_amount).label("billed_sum"),
+        )
+        .filter(
+            JCLBilledSlice.tenant_id == CURRENT_TENANT,
+            JCLBilledSlice.voided_at.is_(None),
+        )
+        .group_by(JCLBilledSlice.job_cost_line_id)
+        .subquery()
+    )
     rows = (
-        db.query(JobCostLine)
+        db.query(JobCostLine, billed_by_jcl_subq.c.billed_sum)
         .options(joinedload(JobCostLine.job).joinedload(Job.project))
+        .outerjoin(billed_by_jcl_subq, JobCostLine.id == billed_by_jcl_subq.c.jcl_id)
         .filter(JobCostLine.tenant_id == CURRENT_TENANT)
         .filter(JobCostLine.job_id.isnot(None))
         .filter(JobCostLine.is_extra == True)  # noqa: E712
         .all()
     )
-    for jcl in rows:
-        total = round(
-            (jcl.quantity_actual or jcl.quantity_quoted or 0) * (jcl.unit_price or 0), 2
-        )
-        if total <= 0:
+    for jcl, billed_sum in rows:
+        qty = jcl.quantity_actual or jcl.quantity_quoted or 0
+        total_qty = round(qty * (jcl.unit_price or 0), 2)
+        billed_slice = float(billed_sum or 0.0)
+        total = max(total_qty, billed_slice, float(jcl.billed_amount or 0.0))
+        if total <= 0.005:
             continue
+        # Descrizione: prefer billed se quantity=0 e billed>0
+        if total_qty <= 0 and total > 0:
+            descr = (
+                f"Extra JCL #{jcl.id} «{jcl.description[:60] if jcl.description else ''}» "
+                f"fatturato €{total:.2f} senza quantità maturata (forzato in batch)"
+            )
+        else:
+            descr = (
+                f"Extra JCL #{jcl.id} «{jcl.description[:60] if jcl.description else ''}» "
+                f"({qty} {jcl.unit or ''} → €{total:.2f})"
+            )
         _upsert(
             db,
             anomaly_type=AnomalyType.over_budget,
             source_kind=AnomalySourceKind.jcl,
             source_id=jcl.id,
-            description=(
-                f"Extra JCL #{jcl.id} «{jcl.description[:60] if jcl.description else ''}» "
-                f"({jcl.quantity_actual or jcl.quantity_quoted} {jcl.unit or ''})"
-            ),
-            amount=total,
+            description=descr,
+            amount=round(total, 2),
             project_id=jcl.job.project_id if jcl.job else None,
             job_id=jcl.job_id,
             client_id=jcl.job.client_id if jcl.job else None,

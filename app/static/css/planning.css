@@ -113,10 +113,18 @@
   }
   /* v3.4.45: Time axis più tipografato. Major (giorni/mesi) ora pill-style,
      minor (ore/giorni) compatto. Gradient di fondo accentuato. */
+  /* v3.5.0-alpha.169 — Axis sticky stile "header foglio Excel" durante scroll
+     verticale interno: vis-timeline 7.x mette già .vis-panel.vis-top in cima
+     ma in alcuni casi viene sovrastato dagli items. z-index alto + sfondo
+     opaco evita trasparenze sopra le righe. */
+  .vis-panel.vis-top {
+    z-index: 5 !important;
+  }
   .vis-time-axis {
     background: linear-gradient(180deg, rgba(98,114,245,0.06) 0%, rgba(255,255,255,0.015) 60%, transparent 100%);
     border-bottom: 1px solid rgba(255,255,255,0.07);
   }
+  .vis-foreground { z-index: 1; }
   .vis-time-axis .vis-text {
     color: var(--text2,#aaa);
     font-size: 10.5px;

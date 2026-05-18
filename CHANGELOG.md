@@ -1,5 +1,41 @@
 # MediaFlow — Changelog
 
+## v3.5.0-alpha.169 — Timeline sticky axis + refresh CR + anomalie filtri+€-over + invoice qty fix (18 mag 2026)
+
+4 nuovi bug da Matteo post α.168.
+
+**Timeline — sticky axis stile Excel header**: ripristinato `height+maxHeight=viewport` (rimosso in α.168). Scroll INTERNO al widget preserva axis data/ora fissato sopra. Toolbar pagina sempre visibile. CSS `.vis-panel.vis-top { z-index:5 }` reinforced. Counter `N/M risorse` mantenuto.
+
+**Cost Report — refresh in-place**: bottone `🔄 Aggiorna` in `cr-detail-toolbar` chiama `reloadCurrentReport()` (riusa `loadReport(currentJobId)`). Preserva scroll position via best-effort setTimeout. Pre-α.169 serviva `closeReport() + loadReport()` manuali.
+
+**Anomalie — filtri cliente+progetto**: gap UI (backend `/finance/api/anomalies/v2` già supportava `client_id` + `project_id` da α.89, ma frontend non li esponeva). Aggiunti 2 dropdown in toolbar anomalie (popolati da `/clients/api` + `/projects/api`). Variabili JS `_anClient`, `_anProject` + handler `onAnomClientChange/onAnomProjectChange`. QS append condizionale.
+
+**Anomalie — sforamento monetario + extra fatturato senza qty**: `anomaly_detector.detect_sforamento` pre-α.169 controllava solo `quantity_actual > quantity_quoted`. Matteo "forza sforamento" alzando `total_approved` nel batch oltre il quotato → NESSUNA anomalia rilevata pre/post trasmissione. Esteso:
+
+```
+Caso A — quantità: quantity_actual > quantity_quoted   (esistente)
+Caso B — maturato: total_accrued > total_quoted        (NUOVO)
+Caso C — fatturato: Σ slice.billed_amount > total_quoted (NUOVO, forzatura batch)
+amount = max(0, max(accrued, billed_sum) - quoted)
+```
+
+`detect_over_budget` (JCL extra puro is_extra=True): pre-α.169 skip quando `quantity=0` anche se `billed_amount > 0`. Ora prende `total = max(qty × prezzo, Σ slice billed, billed_amount)`. JCL #66 [EXTRA] Production management €425.96 ora correttamente rilevata.
+
+`emit_invoice`: auto-trigger `detect_all()` dopo commit (non blocking via try/except + rollback). Matteo non deve più premere "Rileva" manualmente per vedere lo sforamento.
+
+**Fattura — quantity in line = ore lavorate, non quotate**: pre-α.169 `InvoiceLine.quantity = bl.quantity` (= `jcl.quantity_actual`, ore totali maturate). Disallineato con `total = total_approved` quando admin riduce batch o quote non saturato.
+
+Fix in `emit_invoice`, `compose_invoice_from_batches`, `emit_closing_invoice`:
+```python
+inv_qty = total_approved / unit_price  if unit_price > 0 else bl.quantity
+```
+Garantisce `qty × prezzo = total` (coerenza). Mostra solo la quota fatturata in questa specifica fattura. JCLBilledSlice.billed_quantity sincronizzato a `inv_qty`.
+
+Smoke:
+- `detect_sforamento` → 12 nuove (JCL #18 Production Management +€2087 ora visibile) ✓
+- `detect_over_budget` → 31 nuove (JCL #66 extra €425.96 ora visibile) ✓
+- `inv_qty = total_approved / unit_price` verificato manuale: bl(price=100, approved=1200) → qty=12 ✓
+
 ## v3.5.0-alpha.168 — Vasi comunicanti billing + auto-numero fattura + timeline natural-scroll (18 mag 2026)
 
 4 bug aperti da Matteo dopo testing α.167.

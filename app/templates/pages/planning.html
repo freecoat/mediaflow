@@ -2066,15 +2066,16 @@ function _tlBindResize() {
       const host = document.getElementById('tl-host');
       if (!inst || !host) return;
       // v3.5.0-alpha.44.1 — anti-loop: skip se delta height insignificante.
-      // setOptions può triggerare un nuovo resize event in alcuni browser
-      // quando la timeline interna ricalcola layout → loop infinito.
-      // v3.5.0-alpha.168 — setOptions ora aggiorna minHeight (era height),
-      // coerente con init che usa minHeight per non clippare il group set.
+      // setOptions({height}) può triggerare un nuovo resize event in alcuni
+      // browser quando la timeline interna ricalcola layout → loop infinito.
+      // v3.5.0-alpha.169 — Ripristinato height+maxHeight per scroll interno
+      // (vis-timeline 7.x: axis data/ora sticky in alto, group labels scroll
+      // verticale insieme agli items).
       const newH = tlComputeHeight(host);
       const lastH = window._tlLastHeight || 0;
       if (Math.abs(newH - lastH) < 8) return;  // < 8px = jitter, ignora
       window._tlLastHeight = newH;
-      try { inst.setOptions({ minHeight: newH }); } catch (_) {}
+      try { inst.setOptions({ height: newH, maxHeight: newH }); } catch (_) {}
     }, 250);  // era 150ms, alzato per maggiore stabilità
   });
 }
@@ -4926,12 +4927,13 @@ async function _doRenderTimeline(preserveWindow=false) {
     stackSubgroups: !_lightMode,
     groupHeightMode: 'fixed',
     // v3.5.0-alpha.44: altezza dinamica viewport (era hardcoded 600). Si
-    // v3.5.0-alpha.168 — height auto + minHeight = viewport. Pre-α.168
-    // height+maxHeight=tlComputeHeight clippavano la timeline alla viewport
-    // tagliando risorse (Matteo: "vedo solo 33/40 con 40 attive"). Ora la
-    // timeline cresce in altezza coi group labels, l'utente scrolla la pagina.
-    // minHeight garantisce occupazione viewport quando ci sono poche risorse.
-    minHeight: (window._tlLastHeight = tlComputeHeight(host)),
+    // v3.5.0-alpha.169 — Ripristinato pattern α.84 (height+maxHeight=viewport):
+    // toolbar pagina sempre visibile + perf (axis ridotto a viewport). Lo
+    // scroll INTERNO della timeline preserva l'axis data/ora sticky in alto
+    // (comportamento nativo vis-timeline 7.x: .vis-time-axis fissato).
+    // Vedi anche CSS .vis-time-axis sticky reinforced sotto.
+    height: (window._tlLastHeight = tlComputeHeight(host)),
+    maxHeight: window._tlLastHeight,
     verticalScroll: true,
     start: win.start,
     end: win.end,

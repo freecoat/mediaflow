@@ -237,6 +237,15 @@
     <select id="an-dept-filter" class="form-select" style="font-size:12px; padding:3px 8px; height:30px;" onchange="onAnomDeptChange()">
       <option value="">— tutti —</option>
     </select>
+    <!-- v3.5.0-alpha.169 — Filtri cliente + progetto (Matteo: "non funzionavano" = non esistevano lato UI, backend già li supporta) -->
+    <span class="text-sm text-muted" style="margin-left:8px; margin-right:6px;">Cliente:</span>
+    <select id="an-client-filter" class="form-select" style="font-size:12px; padding:3px 8px; height:30px; max-width:160px;" onchange="onAnomClientChange()">
+      <option value="">— tutti —</option>
+    </select>
+    <span class="text-sm text-muted" style="margin-left:8px; margin-right:6px;">Progetto:</span>
+    <select id="an-project-filter" class="form-select" style="font-size:12px; padding:3px 8px; height:30px; max-width:200px;" onchange="onAnomProjectChange()">
+      <option value="">— tutti —</option>
+    </select>
     <span style="flex:1;"></span>
     <label class="text-xs text-muted" style="display:flex; align-items:center; gap:4px;" title="Auto-rilevamento ogni 10 minuti mentre la pagina è aperta. Attiva detector.detect_all idempotente in background.">
       <input type="checkbox" id="an-auto-detect" onchange="toggleAnomAutoDetect()"> auto-rileva
@@ -2817,6 +2826,9 @@ async function loadAnomalies() {
   if (_anStatus) qs.push('status=' + _anStatus);
   if (_anType) qs.push('anomaly_type=' + _anType);
   if (_anDept) qs.push('department_id=' + _anDept);
+  // v3.5.0-alpha.169 — cliente + progetto (backend già supportava: era solo gap UI)
+  if (_anClient) qs.push('client_id=' + _anClient);
+  if (_anProject) qs.push('project_id=' + _anProject);
   const url = '/finance/api/anomalies/v2' + (qs.length ? '?' + qs.join('&') : '');
   let rows;
   try { rows = await api('GET', url); }
@@ -3110,7 +3122,10 @@ async function submitAnomHandle() {
 }
 
 // v3.5.0-alpha.141 — Filtro dipartimento + auto-detect periodico.
+// v3.5.0-alpha.169 — Aggiunti filtri cliente + progetto (gap UI, backend OK).
 let _anDept = '';
+let _anClient = '';
+let _anProject = '';
 let _anAutoDetectTimer = null;
 
 async function _loadDeptsForAnomalies() {
@@ -3127,8 +3142,46 @@ async function _loadDeptsForAnomalies() {
   } catch (e) { /* silent */ }
 }
 
+// v3.5.0-alpha.169 — popola cliente + progetto. Riusa /clients/api e /projects/api.
+async function _loadClientsForAnomalies() {
+  try {
+    const clients = await api('GET', '/clients/api');
+    const sel = document.getElementById('an-client-filter');
+    if (!sel) return;
+    (clients || []).forEach(c => {
+      const o = document.createElement('option');
+      o.value = c.id; o.textContent = c.name;
+      sel.appendChild(o);
+    });
+  } catch (e) { /* silent */ }
+}
+
+async function _loadProjectsForAnomalies() {
+  try {
+    const projects = await api('GET', '/projects/api');
+    const sel = document.getElementById('an-project-filter');
+    if (!sel) return;
+    (projects || []).forEach(p => {
+      const o = document.createElement('option');
+      o.value = p.id;
+      o.textContent = (p.code ? p.code + ' — ' : '') + (p.title || '');
+      sel.appendChild(o);
+    });
+  } catch (e) { /* silent */ }
+}
+
 function onAnomDeptChange() {
   _anDept = document.getElementById('an-dept-filter').value || '';
+  loadAnomalies();
+}
+
+function onAnomClientChange() {
+  _anClient = document.getElementById('an-client-filter').value || '';
+  loadAnomalies();
+}
+
+function onAnomProjectChange() {
+  _anProject = document.getElementById('an-project-filter').value || '';
   loadAnomalies();
 }
 
@@ -3198,6 +3251,9 @@ async function init() {
   loadBatches();
   // v3.5.0-alpha.141 — Carica dipartimenti per filtro anomalie
   _loadDeptsForAnomalies();
+  // v3.5.0-alpha.169 — Carica clienti + progetti per filtri anomalie
+  _loadClientsForAnomalies();
+  _loadProjectsForAnomalies();
   // v3.5.0-alpha.143 — Widget acconti aperti
   loadOpenAdvances();
 }

@@ -1198,10 +1198,19 @@ async def emit_invoice(
     for bl in batch.lines:
         if bl.total_approved <= 0:
             continue  # skip lines azzerate (loss totale)
+        # v3.5.0-alpha.169 — Quantity in fattura = total_approved / unit_price
+        # (era bl.quantity = quantity_actual totale, gonfio per JCL parzialmente
+        # fatturate o con total_approved < quoted). Garantisce qty × prezzo =
+        # total (coerenza interna) e mostra solo la quota effettivamente
+        # fatturata in questa specifica fattura (Matteo Bug 4).
+        if bl.unit_price and bl.unit_price > 0:
+            inv_qty = round(bl.total_approved / bl.unit_price, 4)
+        else:
+            inv_qty = bl.quantity  # fallback se unit_price=0 (improbabile)
         il = InvoiceLine(
             invoice_id=invoice.id,
             description=bl.description + period_lbl + (" [extra]" if bl.is_extra else ""),
-            quantity=bl.quantity,
+            quantity=inv_qty,
             unit_price=bl.unit_price,
             total=bl.total_approved,
             vat_rate=vat_rate,  # uniforme da emit; UI futura potrà differenziare
@@ -1250,6 +1259,15 @@ async def emit_invoice(
     invoice.project_id = batch.project_id
     db.commit()
     db.refresh(batch)
+    # v3.5.0-alpha.169 — Auto-detect anomalie dopo emit (Bug 3b): se manager ha
+    # forzato total_approved > total_quoted, scatta sforamento_monte_ore;
+    # se JCL extra fatturata senza quantity, scatta over_budget.
+    try:
+        from app.services.anomaly_detector import detect_all
+        detect_all(db)
+        db.commit()
+    except Exception:
+        db.rollback()  # non blocking
     return {
         "batch": _batch_to_dict(batch, with_lines=True),
         "invoice_id": invoice.id,
@@ -1410,10 +1428,15 @@ async def compose_invoice_from_batches(
             period_lbl = ""
             if batch.period_start and batch.period_end:
                 period_lbl = f" [{batch.period_start.isoformat()} → {batch.period_end.isoformat()}]"
+            # v3.5.0-alpha.169 — quantity recomputed da total_approved (Bug 4)
+            if bl.unit_price and bl.unit_price > 0:
+                inv_qty = round(bl.total_approved / bl.unit_price, 4)
+            else:
+                inv_qty = bl.quantity
             il = InvoiceLine(
                 invoice_id=invoice.id,
                 description=f"[{batch.code}]{period_lbl} " + bl.description + (" [extra]" if bl.is_extra else ""),
-                quantity=bl.quantity,
+                quantity=inv_qty,
                 unit_price=bl.unit_price,
                 total=bl.total_approved,
                 vat_rate=vat_rate,
@@ -1437,7 +1460,7 @@ async def compose_invoice_from_batches(
                 invoice_id=invoice.id,
                 period_start=batch.period_start,
                 period_end=batch.period_end,
-                billed_quantity=bl.quantity or 0.0,
+                billed_quantity=inv_qty or 0.0,
                 billed_amount=bl.total_approved,
                 unit_price_snap=bl.unit_price or 0.0,
             )
@@ -1699,10 +1722,15 @@ async def emit_closing_invoice(
             period_lbl = ""
             if batch.period_start and batch.period_end:
                 period_lbl = f" [{batch.period_start.isoformat()} → {batch.period_end.isoformat()}]"
+            # v3.5.0-alpha.169 — quantity recomputed da total_approved (Bug 4)
+            if bl.unit_price and bl.unit_price > 0:
+                inv_qty = round(bl.total_approved / bl.unit_price, 4)
+            else:
+                inv_qty = bl.quantity
             il = InvoiceLine(
                 invoice_id=invoice.id,
                 description=f"[{batch.code}]{period_lbl} " + bl.description + (" [extra]" if bl.is_extra else ""),
-                quantity=bl.quantity,
+                quantity=inv_qty,
                 unit_price=bl.unit_price,
                 total=bl.total_approved,
                 vat_rate=vat_rate,
@@ -1721,7 +1749,7 @@ async def emit_closing_invoice(
                 invoice_id=invoice.id,
                 period_start=batch.period_start,
                 period_end=batch.period_end,
-                billed_quantity=bl.quantity or 0.0,
+                billed_quantity=inv_qty or 0.0,
                 billed_amount=bl.total_approved,
                 unit_price_snap=bl.unit_price or 0.0,
             )

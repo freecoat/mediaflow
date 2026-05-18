@@ -8,6 +8,35 @@
 
 ## Versione corrente
 
+**v3.5.0-alpha.169** — 18 maggio 2026 — Timeline sticky axis + refresh CR + anomalie filtri+€-over + invoice qty fix
+
+4 bug aperti da Matteo post α.168.
+
+**Timeline sticky axis**: ripristinato `height+maxHeight=viewport` (α.168 rimosso → axis usciva dal viewport con page-scroll). Scroll INTERNO al widget. CSS `.vis-panel.vis-top z-index:5` reinforced. Toolbar pagina sempre sopra. Counter `N/M risorse` mantenuto.
+
+**Cost Report refresh**: bottone `🔄 Aggiorna` in toolbar dettaglio. Riusa `loadReport(currentJobId)`. Preserva scrollY.
+
+**Anomalie filtri cliente+progetto**: gap UI (backend OK da α.89). Aggiunti 2 dropdown popolati da `/clients/api` + `/projects/api`. Variabili `_anClient`/`_anProject` + handler `onAnomClientChange/onAnomProjectChange`.
+
+**Anomalie sforamento monetario + extra forzato**: `detect_sforamento` esteso (qty | total_accrued > total_quoted | Σ billed > total_quoted). `detect_over_budget` accetta JCL extra con quantity=0 ma billed>0. `emit_invoice` auto-trigger `detect_all` (non blocking).
+
+**Fattura quantity**: `InvoiceLine.quantity = total_approved / unit_price` (era `jcl.quantity_actual`, inflato). Applicato a emit_invoice, compose_invoice, closing_invoice + slice billed_quantity sync.
+
+Smoke:
+- detect_sforamento +12 nuove (JCL #18 Production Management €2087 ora visibile) ✓
+- detect_over_budget +31 nuove (JCL #66 [EXTRA] Production €426 ora visibile) ✓
+- inv_qty recompute coerente con total ✓
+
+Backlog α.170+:
+- F29 round 6 i18n granulare modal/form
+- Multi-select additional_department_ids in modal listino
+- CR dept breakdown ripartizione voci trasversali
+- AI capability `propose_advance_allocation` (preset selector)
+- OAuth integrazione completa
+- Portali consegne plugin reali
+
+## (versione precedente)
+
 **v3.5.0-alpha.168** — 18 maggio 2026 — Vasi comunicanti billing + auto-numero fattura + timeline natural-scroll
 
 4 bug aperti da Matteo dopo testing α.167.
@@ -32,14 +61,6 @@ Smoke:
 - `preview_transmission(p=23)` → 12 candidate, `total_proposed=24845` (era 92770 con quoted-default) ✓
 - `_transmit_core` batch 53 con proposed=billable_now ✓ cleaned
 - `job_cost_report` JCL marcata `saturated=True` quando accrued=0 + already_filled>0 ✓
-
-Backlog α.169+:
-- F29 round 6 i18n granulare modal/form
-- Multi-select additional_department_ids in modal listino
-- CR dept breakdown ripartizione voci trasversali
-- AI capability `propose_advance_allocation` (preset selector)
-- OAuth integrazione completa
-- Portali consegne plugin reali
 
 ## (versione precedente)
 
