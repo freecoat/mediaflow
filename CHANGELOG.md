@@ -1,5 +1,47 @@
 # MediaFlow — Changelog
 
+## v3.5.0-alpha.168 — Vasi comunicanti billing + auto-numero fattura + timeline natural-scroll (18 mag 2026)
+
+4 bug aperti da Matteo dopo testing α.167.
+
+**Bug 1 — Timeline: vedo solo 33/40 risorse**: con 40 attive in DB, il cap α.167 (`resources.length > 100 + Light ON`) NON triggera. Root cause: `maxHeight: tlComputeHeight(host)` clippava la timeline alla viewport → user doveva scrollare *dentro* il widget (non scopriva le rimanenti). Risorse Commercial in fondo nascoste.
+
+- `app/templates/pages/planning.html`: rimosso `maxHeight`, sostituito `height` con `minHeight` = viewport. Timeline ora cresce con i group labels, l'utente scrolla la pagina naturalmente.
+- `_tlBindResize` aggiornato: `setOptions({minHeight})` invece di `height`.
+- Badge diagnostico `#tl-res-counter` in toolbar: "N risorse" o "N/M risorse (filtrate)" — popolato da `tlBuildResourceGroups()` con tint indigo se sono attivi filtri.
+
+**Bug 2 — CR post-acconto trasmissibile a fatturazione + Bug 4 — Batch parziale = totale quotato**: riarchitettura semantica "vasi comunicanti" (Matteo: Quote=capienza, CR fill da ore, Billing svuota fino a saturazione).
+
+Formula canonica per JCL:
+```
+already_filled = Σ JCLBilledSlice.billed_amount + Σ APA.amount × paid_ratio
+billable_now   = max(0, total_accrued − already_filled)
+saturata       = (billable_now ≤ 0) AND (already_filled > 0)
+```
+
+`app/routers/billing.py`:
+- `_transmit_core`: candidates filtrate su `billable_now > 0` (escluse saturate). Stati ammessi allargati a `[not_billed, billed, paid]` perché PORZIONE over di JCL chiuse è trasmissibile.
+- `total_proposed` + `total_approved` default = `billable_now` (era `quoted` per UNDER, inflato; o `accrued` totale, ignorava slice precedenti → doppia fatturazione).
+- JCL `billed/paid` mantengono lo status durante trasmissione over (il batch raccoglie supplemento, non chiude la JCL).
+- `preview_transmission`: stesso filtro saturati, expone `billable_now`, `already_filled`, `saturated_excluded`.
+
+`app/routers/cost_report.py`: JCL payload espone `billable_now`, `transmittable`, `saturated` (campi nuovi, back-compat).
+
+`app/templates/pages/cost_report.html`: modal Trasmetti mostra `billable_now` come "Maturato" (residuo) + badge `💧 Già coperto €X` quando `already_filled > 0`. Banner esclusioni include count saturate.
+
+**Bug 3 — Numero fattura sempre manuale**: pre-α.168 tutti i 4 endpoint di emit/create invoice erano `invoice_number: str = Form(...)` (obbligatorio). `_next_invoice_number_for_advance` esisteva solo per acconti.
+
+- `app/routers/finance.py`: rinominata `_next_invoice_number_for_advance` → `_next_invoice_number` (generica, riusabile). Alias retro-compat mantenuto.
+- `create_invoice` (POST `/finance/api/invoices`), `emit_invoice` (POST `/finance/api/billing/{batch}/invoice`), `compose_invoice_from_batches`, `emit_closing_invoice`: `invoice_number: Optional[str] = Form(None)` con fallback `_next_invoice_number(db, issue_date.year)` se vuoto.
+- Naming convention: `{anno}-{NNNNN}` (5 cifre zero-padded). Override manuale conservato.
+- UI: 4 modal (`#inv-number`, `#ei-number`, `#ci-number`, `#cl-number`) → placeholder "auto (es. 2026-00042) — lascia vuoto per progressivo", label senza asterisco obbligatorio.
+
+Verifica smoke:
+- `_next_invoice_number(db, 2026)` → `2026-00114` (ultimo era 00113).
+- `preview_transmission(project_id=23)` → `candidate_count=12, total_proposed=24845, saturated_excluded=0`.
+- `_transmit_core(project_id=23)` → batch con 12 lines, ognuna `total_proposed=billable_now` (era `quoted` totale = 92770 pre-fix).
+- `job_cost_report(job_id=1)` → JCL #1 (accrued=0, already_filled>0) marcata `saturated=True, transmittable=False`. JCL #2 (accrued=13650, already_filled=4517) → `billable_now=9132`.
+
 ## v3.5.0-alpha.167 — Timeline limite risorse → Light mode + snapshot cost_rate per stabilità storica (18 mag 2026)
 
 Due bug aperti da Matteo:

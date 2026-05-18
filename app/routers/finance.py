@@ -227,7 +227,7 @@ async def list_invoices(
 
 @router.post("/api/invoices", dependencies=[RequireEditInvoices])
 async def create_invoice(
-    number: str = Form(...),
+    number: Optional[str] = Form(None),
     client_id: int = Form(...),
     issue_date: date = Form(...),
     due_date: Optional[date] = Form(None),
@@ -244,6 +244,9 @@ async def create_invoice(
     """v3.5.0-alpha.143 — Crea fattura con link strutturati.
     Validazione: senza project E quote → 400 (force=true per consentire).
     JCL link salvato in notes finché non c'è colonna dedicata.
+
+    v3.5.0-alpha.168 — `number` ora opzionale: se omesso/vuoto, auto-generato
+    via _next_invoice_number (naming convention {anno}-{NNNNN}).
     """
     force_b = (force or "").strip().lower() == "true"
     if not project_id and not quote_id and not force_b:
@@ -252,12 +255,22 @@ async def create_invoice(
             "Fattura senza progetto/quotazione: aggiungi link strutturato "
             "oppure passa force=true per confermare."
         )
+    num = (number or "").strip()
+    if num:
+        existing = db.query(Invoice).join(Client, Invoice.client_id == Client.id).filter(
+            Invoice.number == num,
+            Client.tenant_id == current_tenant_id(),
+        ).first()
+        if existing:
+            raise HTTPException(409, f"Numero fattura {num} già esistente")
+    else:
+        num = _next_invoice_number(db, issue_date.year)
     inv_notes = notes or ""
     if jcl_id:
         inv_notes = (inv_notes + (" · " if inv_notes else "")
                      + f"Lavorazione JCL #{jcl_id}").strip()
     inv = Invoice(
-        number=number, client_id=client_id,
+        number=num, client_id=client_id,
         project_id=project_id, quote_id=quote_id, job_id=job_id,
         issue_date=issue_date, due_date=due_date,
         vat_rate=vat_rate, notes=(inv_notes or None),
@@ -363,12 +376,19 @@ async def update_invoice_status(
 # Vedi app/models/models.py AdvancePayment per semantica completa.
 
 
-def _next_invoice_number_for_advance(db: Session, year: int) -> str:
-    """Genera prossimo numero progressivo formato `{year}-{NNN}` per acconto.
-    Stessa convenzione di emit_invoice (manuale via UI). Tenant-scoped.
-    Idempotente: re-genera incrementando finché non collide con numero esistente."""
+def _next_invoice_number(db: Session, year: int) -> str:
+    """Genera prossimo numero progressivo formato `{year}-{NNNNN}` per fattura.
+
+    Convenzione unica (acconto / batch / closing / compose / manuale):
+    `{anno}-{seq 5 cifre}`. Tenant-scoped via Client.tenant_id (Invoice non ha
+    direttamente tenant_id, scoping per cliente).
+    Idempotente: re-genera incrementando finché non collide con numero esistente.
+
+    v3.5.0-alpha.168 — rinominata da `_next_invoice_number_for_advance`,
+    riusata da TUTTI gli endpoint che emettono fatture (Matteo: "default da
+    naming convention con possibile override"). Alias _for_advance mantenuto.
+    """
     from sqlalchemy import desc
-    # Pesca ultimo numero del tenant per l'anno
     last = (
         db.query(Invoice.number)
         .join(Client, Invoice.client_id == Client.id)
@@ -385,7 +405,6 @@ def _next_invoice_number_for_advance(db: Session, year: int) -> str:
         seq = int(last[0].split("-")[1]) + 1
     except (ValueError, IndexError):
         seq = 1
-    # Loop di sicurezza fino a slot libero
     for _ in range(1000):
         candidate = f"{year}-{seq:05d}"
         exists = (
@@ -401,6 +420,11 @@ def _next_invoice_number_for_advance(db: Session, year: int) -> str:
             return candidate
         seq += 1
     raise HTTPException(500, "Impossibile generare numero progressivo univoco")
+
+
+# Alias retro-compat (v3.5.0-alpha.168). Codice esistente che importa il vecchio
+# nome continua a funzionare. Nuovo codice usa _next_invoice_number direttamente.
+_next_invoice_number_for_advance = _next_invoice_number
 
 
 @router.post("/api/projects/{project_id}/advances", dependencies=[RequireEditInvoices])

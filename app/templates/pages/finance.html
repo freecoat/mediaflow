@@ -434,8 +434,8 @@
     <div class="modal-body">
       <div class="form-row">
         <div class="form-group">
-          <label class="form-label">Numero *</label>
-          <input class="form-input" id="inv-number" placeholder="es. 2024-001">
+          <label class="form-label">Numero</label>
+          <input class="form-input" id="inv-number" placeholder="auto (es. 2026-00042) — lascia vuoto per progressivo">
         </div>
         <div class="form-group">
           <label class="form-label">Cliente *</label>
@@ -554,8 +554,8 @@
       </div>
       <div class="form-row">
         <div class="form-group">
-          <label class="form-label">Numero fattura *</label>
-          <input class="form-input" id="ci-number" placeholder="es. 2026-042">
+          <label class="form-label">Numero fattura</label>
+          <input class="form-input" id="ci-number" placeholder="auto (es. 2026-00042) — lascia vuoto per progressivo">
         </div>
         <div class="form-group">
           <label class="form-label">Data emissione *</label>
@@ -682,9 +682,9 @@
       <!-- v3.5.0-alpha.112: banner suggerimento "altri batch aperti" -->
       <div id="ei-multi-batch-banner" style="display:none; margin-bottom:14px;"></div>
       <div class="form-group">
-        <label class="form-label">Numero fattura *</label>
-        <input class="form-input" id="ei-number" placeholder="es. 2026/042" required>
-        <div class="text-xs text-muted">Numerazione manuale per coerenza col tuo gestionale fiscale esterno. Deve essere univoco.</div>
+        <label class="form-label">Numero fattura</label>
+        <input class="form-input" id="ei-number" placeholder="auto (es. 2026-00042) — lascia vuoto per progressivo">
+        <div class="text-xs text-muted">Vuoto = auto (naming convention {anno}-{NNNNN}). Compila per override manuale (es. coerenza con gestionale esterno).</div>
       </div>
       <div class="form-row">
         <div class="form-group">
@@ -731,8 +731,8 @@
       <div id="cl-precheck" style="margin-bottom:14px;"></div>
       <div class="form-row">
         <div class="form-group">
-          <label class="form-label">Numero fattura *</label>
-          <input class="form-input" id="cl-number" placeholder="es. CL-2026-PRJX">
+          <label class="form-label">Numero fattura</label>
+          <input class="form-input" id="cl-number" placeholder="auto (es. 2026-00099) — lascia vuoto per progressivo">
         </div>
         <div class="form-group">
           <label class="form-label">Data emissione *</label>
@@ -1842,12 +1842,13 @@ async function submitEmitInvoice() {
   const issueDate = document.getElementById('ei-issue-date').value;
   const dueDate = document.getElementById('ei-due-date').value;
   const vat = document.getElementById('ei-vat').value;
-  if (!number || !issueDate) {
-    toast('Numero fattura e data emissione sono obbligatori', 'warning');
+  if (!issueDate) {
+    toast('Data emissione obbligatoria', 'warning');
     return;
   }
   const fd = new FormData();
-  fd.append('invoice_number', number);
+  // v3.5.0-alpha.168 — number opzionale, server auto-genera se vuoto
+  if (number) fd.append('invoice_number', number);
   fd.append('issue_date', issueDate);
   if (dueDate) fd.append('due_date', dueDate);
   fd.append('vat_rate', vat);
@@ -2371,14 +2372,16 @@ async function createInvoice() {
   const jobId = document.getElementById('inv-job').value;
   const jclId = document.getElementById('inv-jcl').value;
   const force = document.getElementById('inv-force').checked;
-  if (!number || !client_id || !issue) { toast('Compila i campi obbligatori', 'error'); return; }
+  if (!client_id || !issue) { toast('Cliente e data emissione obbligatori', 'error'); return; }
   // v3.5.0-alpha.143 — Force se senza link a progetto E quotazione
   if (!projId && !quoteId && !force) {
     toast('Fattura senza progetto/quotazione: spunta "Forza" per confermare', 'warning'); return;
   }
   try {
     const fd = new FormData();
-    fd.append('number', number); fd.append('client_id', client_id);
+    // v3.5.0-alpha.168 — number opzionale (auto se vuoto)
+    if (number) fd.append('number', number);
+    fd.append('client_id', client_id);
     fd.append('issue_date', issue); fd.append('due_date', document.getElementById('inv-due').value || '');
     fd.append('vat_rate', document.getElementById('inv-vat').value || '22');
     if (projId) fd.append('project_id', projId);
@@ -2567,9 +2570,10 @@ async function submitClosingInvoice() {
   const dueDate = document.getElementById('cl-due-date').value;
   const vat = document.getElementById('cl-vat').value;
   const notes = document.getElementById('cl-notes').value.trim();
-  if (!number || !issueDate) { toast('Numero + data emissione obbligatori', 'warning'); return; }
+  if (!issueDate) { toast('Data emissione obbligatoria', 'warning'); return; }
   const fd = new FormData();
-  fd.append('invoice_number', number);
+  // v3.5.0-alpha.168 — number opzionale (auto se vuoto)
+  if (number) fd.append('invoice_number', number);
   fd.append('issue_date', issueDate);
   if (dueDate) fd.append('due_date', dueDate);
   fd.append('vat_rate', vat);
@@ -2698,8 +2702,8 @@ async function submitComposeInvoice() {
   const due = document.getElementById('ci-due-date').value;
   const vat = document.getElementById('ci-vat').value;
   const notes = document.getElementById('ci-notes').value.trim();
-  if (!pid || !num || !issue) {
-    toast('Compila progetto, numero, data emissione', 'warning');
+  if (!pid || !issue) {
+    toast('Compila progetto e data emissione', 'warning');
     return;
   }
   if (mode === 'period' && (!ps || !pe)) {
@@ -2710,7 +2714,8 @@ async function submitComposeInvoice() {
   fd.append('project_id', pid);
   if (ps) fd.append('period_start', ps);
   if (pe) fd.append('period_end', pe);
-  fd.append('invoice_number', num);
+  // v3.5.0-alpha.168 — number opzionale (auto se vuoto)
+  if (num) fd.append('invoice_number', num);
   fd.append('issue_date', issue);
   if (due) fd.append('due_date', due);
   fd.append('vat_rate', vat || '22');

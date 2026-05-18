@@ -924,6 +924,31 @@ async def job_cost_report(job_id: int, db: Session = Depends(get_db)):
                 ),
                 "billed_from_slice": round(billed_map.get(l.id, 0.0), 2),
                 "billed_from_advance": round(advance_paid_coverage_by_jcl.get(l.id, 0.0), 2),
+                # v3.5.0-alpha.168 — Vasi comunicanti (Matteo Bug 2): gate
+                # trasmissione = billable_now > 0. Saturata = già coperta da
+                # slice+acconto pagato (fatturazione bloccata fino a superamento
+                # del quotato; oltre, solo la PORZIONE over è trasmissibile).
+                "billable_now": round(
+                    max(0.0, (l.total_accrued or 0.0)
+                        - billed_map.get(l.id, 0.0)
+                        - advance_paid_coverage_by_jcl.get(l.id, 0.0)),
+                    2,
+                ),
+                "transmittable": bool(
+                    (l.is_billable)
+                    and ((l.total_accrued or 0.0)
+                         - billed_map.get(l.id, 0.0)
+                         - advance_paid_coverage_by_jcl.get(l.id, 0.0)) > 0.005
+                ),
+                "saturated": bool(
+                    (l.total_accrued or 0.0)
+                    - billed_map.get(l.id, 0.0)
+                    - advance_paid_coverage_by_jcl.get(l.id, 0.0) <= 0.005
+                    and (
+                        billed_map.get(l.id, 0.0)
+                        + advance_paid_coverage_by_jcl.get(l.id, 0.0)
+                    ) > 0.005
+                ),
                 # v3.5.0-alpha.64: lista quote-line che referenziano questa JCL
                 # (refer-to-sales). UI mostra badge "↪ Riferita su Q-NNN-NN v2".
                 "referrals": refs_map.get(l.id, []),

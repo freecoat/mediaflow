@@ -403,6 +403,8 @@
           <button class="btn btn-ghost btn-sm" id="tl-roi-toggle" onclick="tlRoiTogglePersist()" title="Modalità area (S): trascina sulla griglia per selezionare. Selezioni multiple si sommano. ESC per uscire." style="margin-left:6px;">📦 Area</button>
           <!-- v3.5.0-alpha.111.13 — Heatmap button rimosso (feature stripped). -->
           <button class="btn btn-ghost btn-sm" id="tl-light-toggle" onclick="tlToggleLight()" title="Modalità leggera: disabilita stack overlap (O(N²)), background items (ferie/festività/timbrature) e animazioni. Risolve freeze Chrome con 30+ booking + zoom mese. Trade-off: items sovrapposti visivamente." style="margin-left:6px;">🪶 Light</button>
+          <!-- v3.5.0-alpha.168 — Badge diagnostico "Risorse visibili" -->
+          <span id="tl-res-counter" class="text-xs" style="margin-left:8px; padding:3px 8px; border-radius:6px; background:var(--bg3); color:var(--text2); font-variant-numeric:tabular-nums;" title="Risorse renderizzate / totali attive in DB (post-filtri UI)"></span>
           {% if not full_screen %}
           <button class="btn btn-ghost btn-sm" onclick="tlOpenStandalone()" title="Apri timeline in finestra dedicata full-screen (senza menu/topbar)" style="margin-left:6px;">⛶ Finestra</button>
           {% endif %}
@@ -2064,13 +2066,15 @@ function _tlBindResize() {
       const host = document.getElementById('tl-host');
       if (!inst || !host) return;
       // v3.5.0-alpha.44.1 — anti-loop: skip se delta height insignificante.
-      // setOptions({height}) può triggerare un nuovo resize event in alcuni
-      // browser quando la timeline interna ricalcola layout → loop infinito.
+      // setOptions può triggerare un nuovo resize event in alcuni browser
+      // quando la timeline interna ricalcola layout → loop infinito.
+      // v3.5.0-alpha.168 — setOptions ora aggiorna minHeight (era height),
+      // coerente con init che usa minHeight per non clippare il group set.
       const newH = tlComputeHeight(host);
       const lastH = window._tlLastHeight || 0;
       if (Math.abs(newH - lastH) < 8) return;  // < 8px = jitter, ignora
       window._tlLastHeight = newH;
-      try { inst.setOptions({ height: newH }); } catch (_) {}
+      try { inst.setOptions({ minHeight: newH }); } catch (_) {}
     }, 250);  // era 150ms, alzato per maggiore stabilità
   });
 }
@@ -3456,6 +3460,21 @@ function tlBuildResourceGroups(bookings, rangeStart, rangeEnd) {
     // `<style id="tl-res-tints">` da _tlInjectResourceTints().
     groups.push({id: r.id, content: cell, treeLevel: 2, className: 'tl-res-' + r.id});
   }
+  // v3.5.0-alpha.168 — Badge diagnostico in toolbar (Bug 1: "33/40")
+  try {
+    const counter = document.getElementById('tl-res-counter');
+    if (counter) {
+      const total = (RESOURCES_SEED || []).length;
+      const shown = resources.length;
+      if (shown === total) {
+        counter.textContent = `${total} risorse`;
+        counter.style.background = 'var(--bg3)';
+      } else {
+        counter.textContent = `${shown}/${total} risorse (filtrate)`;
+        counter.style.background = 'rgba(98, 114, 245, 0.15)';
+      }
+    }
+  } catch(_) {}
   return groups;
 }
 
@@ -4907,13 +4926,12 @@ async function _doRenderTimeline(preserveWindow=false) {
     stackSubgroups: !_lightMode,
     groupHeightMode: 'fixed',
     // v3.5.0-alpha.44: altezza dinamica viewport (era hardcoded 600). Si
-    // adatta al ridimensionamento finestra via tlComputeHeight + listener
-    // window.resize bindato in _tlBindResize() qui sotto.
-    // α.44.1: tracking last height per evitare resize loop.
-    // v3.5.0-alpha.84: maxHeight = height per garantire scroll verticale sui
-    // group labels quando le risorse superano la viewport (era unbounded).
-    height: (window._tlLastHeight = tlComputeHeight(host)),
-    maxHeight: window._tlLastHeight,
+    // v3.5.0-alpha.168 — height auto + minHeight = viewport. Pre-α.168
+    // height+maxHeight=tlComputeHeight clippavano la timeline alla viewport
+    // tagliando risorse (Matteo: "vedo solo 33/40 con 40 attive"). Ora la
+    // timeline cresce in altezza coi group labels, l'utente scrolla la pagina.
+    // minHeight garantisce occupazione viewport quando ci sono poche risorse.
+    minHeight: (window._tlLastHeight = tlComputeHeight(host)),
     verticalScroll: true,
     start: win.start,
     end: win.end,

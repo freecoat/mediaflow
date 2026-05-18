@@ -356,16 +356,61 @@ async def preview_transmission(
     if not proj:
         raise HTTPException(404, f"Progetto #{project_id} non trovato")
 
+    # v3.5.0-alpha.168 — Allargato a billed/paid: la PORZIONE over (accrued >
+    # already_filled) di JCL "chiuse" è trasmissibile come supplemento.
     q = db.query(JobCostLine).join(Job).options(joinedload(JobCostLine.job)).filter(
         Job.project_id == project_id,
         Job.status != JobStatus.cancelled,
-        JobCostLine.billing_status == JCLBillingStatus.not_billed,
+        JobCostLine.billing_status.in_([
+            JCLBillingStatus.not_billed,
+            JCLBillingStatus.billed,
+            JCLBillingStatus.paid,
+        ]),
         JobCostLine.total_accrued > 0,
         JobCostLine.is_billable == True,
     )
     if not include_extras:
         q = q.filter(JobCostLine.is_extra == False)
-    candidates = q.all()
+    raw_candidates = q.all()
+
+    # v3.5.0-alpha.168 — Calcolo already_filled per filtro saturati.
+    from app.services.billing_slice_guard import billed_locked_bulk
+    raw_ids = [c.id for c in raw_candidates]
+    billed_locked_map = billed_locked_bulk(db, raw_ids) if raw_ids else {}
+    advance_paid_map: dict[int, float] = {}
+    if raw_ids:
+        from app.models import AdvancePaymentAllocation as _APA
+        ap_rows = (
+            db.query(
+                _APA.job_cost_line_id, _APA.amount,
+                Invoice.amount_paid, Invoice.total.label("inv_total"),
+            )
+            .join(AdvancePayment, AdvancePayment.id == _APA.advance_payment_id)
+            .outerjoin(Invoice, Invoice.id == AdvancePayment.invoice_id)
+            .filter(
+                _APA.job_cost_line_id.in_(raw_ids),
+                AdvancePayment.status != AdvancePaymentStatus.cancelled,
+                AdvancePayment.tenant_id == current_tenant_id(),
+            )
+            .all()
+        )
+        for jcl_id_, alloc_amt_, paid_amt_, inv_total_ in ap_rows:
+            if not inv_total_ or inv_total_ <= 0:
+                continue
+            ratio = min(1.0, (paid_amt_ or 0) / inv_total_)
+            advance_paid_map[jcl_id_] = advance_paid_map.get(jcl_id_, 0.0) + (alloc_amt_ or 0) * ratio
+
+    candidates = []
+    saturated_count = 0
+    billable_now_by_jcl: dict[int, float] = {}
+    for c in raw_candidates:
+        already = (billed_locked_map.get(c.id, 0.0) or 0.0) + (advance_paid_map.get(c.id, 0.0) or 0.0)
+        billable_now = round((c.total_accrued or 0.0) - already, 2)
+        if billable_now <= 0.005:
+            saturated_count += 1
+            continue
+        candidates.append(c)
+        billable_now_by_jcl[c.id] = billable_now
 
     # v3.5.0-alpha.112 — conteggio esclusioni per UX (chiarezza stato)
     excl_in_batch = db.query(JobCostLine).join(Job).filter(
@@ -386,15 +431,17 @@ async def preview_transmission(
     # v3.5.0-alpha.56: breakdown esplicito quote vs extra + sforamento.
     # Sforamento = max(0, total_accrued - total_quoted) sulle righe NON extra
     # (le extra sono già "fuori budget" per definizione).
+    # v3.5.0-alpha.168: totali usano billable_now (residuo da fatturare) invece
+    # di accrued totale → coerenti con il batch creato post-trasmissione.
     quote_lines = [c for c in candidates if not c.is_extra]
     extra_lines = [c for c in candidates if c.is_extra]
-    quote_total = round(sum(c.total_accrued for c in quote_lines), 2)
-    extra_total = round(sum(c.total_accrued for c in extra_lines), 2)
+    quote_total = round(sum(billable_now_by_jcl.get(c.id, 0.0) for c in quote_lines), 2)
+    extra_total = round(sum(billable_now_by_jcl.get(c.id, 0.0) for c in extra_lines), 2)
     overrun_total = round(sum(
         max(0.0, (c.total_accrued or 0) - (c.total_quoted or 0))
         for c in quote_lines
     ), 2)
-    total_proposed = round(sum(c.total_accrued for c in candidates), 2)
+    total_proposed = round(sum(billable_now_by_jcl.get(c.id, 0.0) for c in candidates), 2)
     return {
         "project_id": project_id,
         "period_start": period_start.isoformat(),
@@ -421,6 +468,14 @@ async def preview_transmission(
                 "unit_price": c.unit_price,
                 "total_quoted": c.total_quoted,
                 "total_accrued": c.total_accrued,
+                # v3.5.0-alpha.168 — billable_now = residuo disponibile per
+                # questo batch (accrued − slice precedenti − acconto pagato).
+                # UI usa questo come "Maturato" mostrato e subtotale.
+                "billable_now": round(billable_now_by_jcl.get(c.id, c.total_accrued or 0.0), 2),
+                "already_filled": round(
+                    (billed_locked_map.get(c.id, 0.0) or 0.0)
+                    + (advance_paid_map.get(c.id, 0.0) or 0.0), 2
+                ),
                 "is_extra": c.is_extra,
                 "work_date": c.work_date.isoformat() if c.work_date else None,
                 # v3.5.0-alpha.64: contesto job per UI tabella checkbox.
@@ -433,6 +488,9 @@ async def preview_transmission(
             }
             for c in candidates
         ],
+        # v3.5.0-alpha.168 — n. JCL escluse per saturazione (riempite da slice
+        # + acconto pagato, residuo = 0). UI può mostrare info chip.
+        "saturated_excluded": saturated_count,
     }
 
 
@@ -469,27 +527,93 @@ def _transmit_core(
     if not proj:
         raise ValueError(f"Progetto #{project_id} non trovato")
 
-    # Trova JCL candidate
+    # v3.5.0-alpha.168 — Gate "vasi comunicanti" Bug 2+4 (semantica Matteo).
+    # Fatturazione blocca CR salvo superamento quotato. JCL candidate solo se
+    # billable_now = accrued − already_filled > 0, dove already_filled include
+    # slice immutabili + acconto pagato (advance_paid_coverage).
+    # Estende anche stati `billed`/`paid` per consentire trasmissione della
+    # PORZIONE OVER quando la JCL è "chiusa" ma matura ancora oltre quoted.
     q = db.query(JobCostLine).join(Job).filter(
         Job.project_id == project_id,
         Job.status != JobStatus.cancelled,
-        JobCostLine.billing_status == JCLBillingStatus.not_billed,
+        JobCostLine.billing_status.in_([
+            JCLBillingStatus.not_billed,
+            JCLBillingStatus.billed,
+            JCLBillingStatus.paid,
+        ]),
         JobCostLine.total_accrued > 0,
         JobCostLine.is_billable == True,
     )
     if not include_extras:
         q = q.filter(JobCostLine.is_extra == False)
-    candidates = q.all()
+    raw_candidates = q.all()
 
     # v3.5.0-alpha.64: filtro per selezione esplicita
     if jcl_ids is not None:
         ids_set = set(jcl_ids)
-        candidates = [c for c in candidates if c.id in ids_set]
-        if not candidates:
+        raw_candidates = [c for c in raw_candidates if c.id in ids_set]
+        if not raw_candidates:
             raise ValueError(
                 "Nessuna delle JCL selezionate è candidata valida "
-                "(non in stato not_billed con maturato > 0)."
+                "(non in stato fatturabile con maturato > 0)."
             )
+
+    # v3.5.0-alpha.168 — Calcolo already_filled per ogni candidate:
+    #   already_filled = Σ JCLBilledSlice.billed_amount + Σ advance_paid_coverage
+    # Slice via billed_locked_bulk. Advance coverage via APA × ratio paid/total.
+    from app.services.billing_slice_guard import billed_locked_bulk
+    cand_ids = [c.id for c in raw_candidates]
+    billed_locked_map = billed_locked_bulk(db, cand_ids) if cand_ids else {}
+    advance_paid_map: dict[int, float] = {}
+    if cand_ids:
+        from app.models import AdvancePaymentAllocation
+        ap_rows = (
+            db.query(
+                AdvancePaymentAllocation.job_cost_line_id,
+                AdvancePaymentAllocation.amount,
+                Invoice.amount_paid,
+                Invoice.total.label("inv_total"),
+            )
+            .join(AdvancePayment, AdvancePayment.id == AdvancePaymentAllocation.advance_payment_id)
+            .outerjoin(Invoice, Invoice.id == AdvancePayment.invoice_id)
+            .filter(
+                AdvancePaymentAllocation.job_cost_line_id.in_(cand_ids),
+                AdvancePayment.status != AdvancePaymentStatus.cancelled,
+                AdvancePayment.tenant_id == current_tenant_id(),
+            )
+            .all()
+        )
+        for jcl_id_, alloc_amt_, paid_amt_, inv_total_ in ap_rows:
+            if not inv_total_ or inv_total_ <= 0:
+                continue
+            ratio = min(1.0, (paid_amt_ or 0) / inv_total_)
+            advance_paid_map[jcl_id_] = advance_paid_map.get(jcl_id_, 0.0) + (alloc_amt_ or 0) * ratio
+
+    # Filtra a JCL con billable_now > 0 (residuo da fatturare).
+    # Calcola billable_now per ciascuna e tieni la mappa per la creazione lines.
+    candidates = []
+    billable_now_map: dict[int, float] = {}
+    saturated_count = 0
+    for c in raw_candidates:
+        already = (billed_locked_map.get(c.id, 0.0) or 0.0) + (advance_paid_map.get(c.id, 0.0) or 0.0)
+        billable_now = round((c.total_accrued or 0.0) - already, 2)
+        if billable_now <= 0.005:
+            saturated_count += 1
+            continue
+        candidates.append(c)
+        billable_now_map[c.id] = billable_now
+
+    if not candidates:
+        if jcl_ids is not None:
+            raise ValueError(
+                f"JCL selezionate già saturate (fatturate o coperte da acconto pagato). "
+                f"{saturated_count} riga/e senza residuo da fatturare."
+            )
+        raise ValueError(
+            f"Nessuna JCL trasmissibile: tutte saturate da fatturazione precedente "
+            f"o coperte da acconto pagato ({saturated_count} riga/e). Solo over-quote "
+            f"trasmissibile (extras o supero quotato non ancora trasmesso)."
+        )
 
     # Auto-derive period se non specificato (v3.5.0-alpha.57: da Booking done)
     if period_start is None or period_end is None:
@@ -530,17 +654,16 @@ def _transmit_core(
     db.flush()
 
     for jcl in candidates:
-        # v3.5.0-alpha.111.25 — Default total_approved:
-        # - UNDER (accrued < quoted): default = quoted (admin decide perso)
-        # - OVER (accrued > quoted): default = accrued (la realtà, admin
-        #   può eventualmente ridurre a quoted come sconto cliente)
-        # - extras (quoted=0): default = accrued
+        # v3.5.0-alpha.168 — Default total_approved = billable_now (vasi
+        # comunicanti). billable_now = accrued − already_filled (slice precedenti
+        # + acconto pagato). Pre-α.168 propose era `quoted` per UNDER (inflato
+        # rispetto al maturato reale) o `accrued` totale (ignorava slice già
+        # fatturate → doppia fatturazione). Ora il default è ESATTAMENTE quello
+        # che serve trasmettere ora, l'admin può ridurre come sconto/loss.
         _accrued = jcl.total_accrued or 0.0
-        _quoted = jcl.total_quoted or 0.0
-        if _quoted > 0 and _accrued < _quoted:
-            _approved_default = _quoted
-        else:
-            _approved_default = _accrued
+        _billable_now = billable_now_map.get(jcl.id, _accrued)
+        # total_proposed riflette il "maturato disponibile per questo batch"
+        # (≠ maturato totale: già toglie slice precedenti + acconto pagato).
         line = BillingBatchLine(
             batch_id=batch.id,
             job_cost_line_id=jcl.id,
@@ -548,13 +671,16 @@ def _transmit_core(
             quantity=jcl.quantity_actual,
             unit=jcl.unit,
             unit_price=jcl.unit_price,
-            total_proposed=_accrued,
-            total_approved=_approved_default,
+            total_proposed=_billable_now,
+            total_approved=_billable_now,
             is_extra=jcl.is_extra,
         )
         db.add(line)
-        jcl.billing_status = JCLBillingStatus.in_batch
-        jcl.billing_batch_id = batch.id
+        # v3.5.0-alpha.168 — Solo not_billed → in_batch. Stati billed/paid
+        # restano: il batch raccoglie la PORZIONE over, non chiude la JCL.
+        if jcl.billing_status == JCLBillingStatus.not_billed:
+            jcl.billing_status = JCLBillingStatus.in_batch
+            jcl.billing_batch_id = batch.id
     db.flush()
     _recompute_batch_totals(batch)
     db.commit()
@@ -965,7 +1091,7 @@ async def approve_batch(batch_id: int, request: Request, db: Session = Depends(g
 async def emit_invoice(
     batch_id: int,
     request: Request,
-    invoice_number: str = Form(...),
+    invoice_number: Optional[str] = Form(None),
     issue_date: date = Form(...),
     due_date: Optional[date] = Form(None),
     vat_rate: float = Form(22.0),
@@ -977,8 +1103,11 @@ async def emit_invoice(
     (1 per BillingBatchLine), collega `invoice_id` al batch, marca le JCL
     coinvolte → billed con `billed_amount` = total_approved della line.
 
-    Manager+ richiesto. Numero fattura specificato manualmente
-    (non auto-numerato per non interferire col tuo gestionale fiscale)."""
+    Manager+ richiesto.
+
+    v3.5.0-alpha.168 — `invoice_number` ora opzionale: se omesso/vuoto,
+    auto-generato via _next_invoice_number (naming {anno}-{NNNNN}). Override
+    manuale conservato per coerenza con gestionale fiscale esterno."""
     _require_manager(request)
     batch = db.query(BillingBatch).options(joinedload(BillingBatch.lines)).filter(
         BillingBatch.id == batch_id, BillingBatch.tenant_id == current_tenant_id(),
@@ -992,14 +1121,19 @@ async def emit_invoice(
         )
     if not batch.lines:
         raise HTTPException(400, "Batch vuoto, niente da fatturare")
-    # Verifica unicità numero fattura (v3.5.0-alpha.51.1 fix A3: scoped per
-    # tenant via JOIN client; multi-tenant futuro non subirà collisioni)
-    existing = db.query(Invoice).join(Client, Invoice.client_id == Client.id).filter(
-        Invoice.number == invoice_number,
-        Client.tenant_id == current_tenant_id(),
-    ).first()
-    if existing:
-        raise HTTPException(409, f"Numero fattura {invoice_number} già esistente")
+    # v3.5.0-alpha.168 — Auto numero se non fornito (Bug 3).
+    from app.routers.finance import _next_invoice_number
+    num = (invoice_number or "").strip()
+    if num:
+        existing = db.query(Invoice).join(Client, Invoice.client_id == Client.id).filter(
+            Invoice.number == num,
+            Client.tenant_id == current_tenant_id(),
+        ).first()
+        if existing:
+            raise HTTPException(409, f"Numero fattura {num} già esistente")
+    else:
+        num = _next_invoice_number(db, issue_date.year)
+    invoice_number = num
     # Ricava client_id dal progetto → cliente
     project = db.query(Project).filter(Project.id == batch.project_id).first()
     if not project or not project.client_id:
@@ -1131,7 +1265,7 @@ async def emit_invoice(
 async def compose_invoice_from_batches(
     request: Request,
     project_id: int = Form(...),
-    invoice_number: str = Form(...),
+    invoice_number: Optional[str] = Form(None),
     issue_date: date = Form(...),
     period_start: Optional[date] = Form(None),
     period_end: Optional[date] = Form(None),
@@ -1159,13 +1293,19 @@ async def compose_invoice_from_batches(
     5. Marca JCL come billed/lost come emit_invoice singolo
     """
     _require_manager(request)
-    # Verifica unicità numero fattura
-    existing = db.query(Invoice).join(Client, Invoice.client_id == Client.id).filter(
-        Invoice.number == invoice_number,
-        Client.tenant_id == current_tenant_id(),
-    ).first()
-    if existing:
-        raise HTTPException(409, f"Numero fattura {invoice_number} già esistente")
+    # v3.5.0-alpha.168 — Auto numero se non fornito (Bug 3).
+    from app.routers.finance import _next_invoice_number
+    num = (invoice_number or "").strip()
+    if num:
+        existing = db.query(Invoice).join(Client, Invoice.client_id == Client.id).filter(
+            Invoice.number == num,
+            Client.tenant_id == current_tenant_id(),
+        ).first()
+        if existing:
+            raise HTTPException(409, f"Numero fattura {num} già esistente")
+    else:
+        num = _next_invoice_number(db, issue_date.year)
+    invoice_number = num
     project = db.query(Project).filter(
         Project.id == project_id, Project.tenant_id == current_tenant_id(),
     ).first()
@@ -1434,7 +1574,7 @@ async def closing_invoice_precheck(
 async def emit_closing_invoice(
     project_id: int,
     request: Request,
-    invoice_number: str = Form(...),
+    invoice_number: Optional[str] = Form(None),
     issue_date: date = Form(...),
     due_date: Optional[date] = Form(None),
     vat_rate: float = Form(22.0),
@@ -1475,13 +1615,19 @@ async def emit_closing_invoice(
     if pending > 0:
         raise HTTPException(409, f"{pending} JCL ancora da fatturare/in approvazione — non si può chiudere")
 
-    # Unicità numero
-    existing = db.query(Invoice).join(Client, Invoice.client_id == Client.id).filter(
-        Invoice.number == invoice_number,
-        Client.tenant_id == current_tenant_id(),
-    ).first()
-    if existing:
-        raise HTTPException(409, f"Numero fattura {invoice_number} già esistente")
+    # v3.5.0-alpha.168 — Auto numero se non fornito (Bug 3).
+    from app.routers.finance import _next_invoice_number
+    num = (invoice_number or "").strip()
+    if num:
+        existing = db.query(Invoice).join(Client, Invoice.client_id == Client.id).filter(
+            Invoice.number == num,
+            Client.tenant_id == current_tenant_id(),
+        ).first()
+        if existing:
+            raise HTTPException(409, f"Numero fattura {num} già esistente")
+    else:
+        num = _next_invoice_number(db, issue_date.year)
+    invoice_number = num
 
     # Batch aperti residui → confluiscono nella closing
     open_batches = db.query(BillingBatch).options(joinedload(BillingBatch.lines)).filter(

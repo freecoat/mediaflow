@@ -8,6 +8,41 @@
 
 ## Versione corrente
 
+**v3.5.0-alpha.168** — 18 maggio 2026 — Vasi comunicanti billing + auto-numero fattura + timeline natural-scroll
+
+4 bug aperti da Matteo dopo testing α.167.
+
+**Bug 1 (timeline 33/40)**: con 40 risorse il cap α.167 (`>100 + Light ON`) NON triggera. Root cause: `maxHeight=tlComputeHeight` clippava la timeline alla viewport → user scroll interno (non scopriva risorse Commercial in fondo). Fix: rimosso `maxHeight`, sostituito `height` con `minHeight` = viewport → timeline cresce naturale, pagina scrolla. Badge diagnostico `N/M risorse` in toolbar.
+
+**Bug 2 (CR post-acconto trasmissibile) + Bug 4 (batch parziale = quotato)**: riarchitettura semantica "vasi comunicanti" (Quote=capienza, CR fill da ore, Billing svuota fino a saturazione).
+
+Formula: `already_filled = slice + APA × paid_ratio` · `billable_now = max(0, accrued − already_filled)` · saturata se `billable_now ≤ 0 AND already_filled > 0`.
+
+- `_transmit_core`: candidates filtrate su `billable_now > 0`. Stati ammessi: `[not_billed, billed, paid]` (porzione over di JCL chiuse trasmissibile).
+- `total_proposed=total_approved=billable_now` (era `quoted` per UNDER, inflato; o `accrued` totale, doppia fatturazione).
+- JCL `billed/paid` non cambiano status su batch over (supplemento, non chiude).
+- `preview_transmission` espone `billable_now`, `already_filled`, `saturated_excluded`.
+- `cost_report.py`: payload JCL aggiunge `billable_now`, `transmittable`, `saturated`.
+- UI cost_report modal Trasmetti: colonna "Maturato" = billable_now + badge `💧 Già coperto €X`. Banner esclusioni include saturate.
+
+**Bug 3 (numero fattura sempre manuale)**: `_next_invoice_number_for_advance` esisteva solo per acconti. Rinominata `_next_invoice_number` (generica). I 4 endpoint emit/create invoice (create_invoice, emit_invoice, compose_invoice_from_batches, emit_closing_invoice) ora `invoice_number: Optional` + fallback auto `{anno}-{NNNNN}`. Override manuale conservato. UI: 4 modal con placeholder "auto" + label senza obbligo.
+
+Smoke:
+- `_next_invoice_number(db, 2026)` → `2026-00114` ✓
+- `preview_transmission(p=23)` → 12 candidate, `total_proposed=24845` (era 92770 con quoted-default) ✓
+- `_transmit_core` batch 53 con proposed=billable_now ✓ cleaned
+- `job_cost_report` JCL marcata `saturated=True` quando accrued=0 + already_filled>0 ✓
+
+Backlog α.169+:
+- F29 round 6 i18n granulare modal/form
+- Multi-select additional_department_ids in modal listino
+- CR dept breakdown ripartizione voci trasversali
+- AI capability `propose_advance_allocation` (preset selector)
+- OAuth integrazione completa
+- Portali consegne plugin reali
+
+## (versione precedente)
+
 **v3.5.0-alpha.167** — 18 maggio 2026 — Timeline limite risorse → Light mode + snapshot cost_rate per stabilità storica
 
 2 bug aperti da Matteo dopo testing α.166:
@@ -21,14 +56,6 @@
 - UI Resource modal: avviso giallo "modifiche impattano solo nuovi booking"
 
 Smoke verificato: insert assignment freelance 52€/h → cost_rate_snap=52.0. Swap resource → 123.80€.
-
-Backlog α.168+:
-- F29 round 6 i18n granulare modal/form
-- Multi-select additional_department_ids in modal listino
-- CR dept breakdown ripartizione voci trasversali
-- AI capability `propose_advance_allocation` (preset selector)
-- OAuth integrazione completa
-- Portali consegne plugin reali
 
 ## (versione precedente)
 
