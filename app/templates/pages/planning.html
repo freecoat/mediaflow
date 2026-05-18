@@ -1910,6 +1910,9 @@ function tlToggleLight() {
     localStorage.setItem(TL_LIGHT_USER_SET_KEY, '1');
   } catch (_) {}
   _tlSyncLightBtn(next);
+  // v3.5.0-alpha.167 — Reset toast auto-filter flag così re-toggle ON
+  // ri-mostra messaggio se utente cambia idea.
+  window._tlAutoFilterToastShown = false;
   // Ri-render timeline con nuove options (stack/bg/punch sono baked in vis options)
   if (typeof renderTimeline === 'function') renderTimeline(true);
   toast(next
@@ -3370,11 +3373,12 @@ function tlBuildResourceGroups(bookings, rangeStart, rangeEnd) {
   if (resFilter) resources = resources.filter(r => r.id === resFilter);
   // v3.5.0-alpha.84 — Performance: con >100 risorse senza filtro dept/risorsa,
   // auto-filtra solo le risorse con almeno 1 booking nel range visibile (era
-  // sempre tutte = 500 row labels = scroll rotto). Toggle "Mostra tutte" via
-  // localStorage 'tl_show_all_resources'=1 per disabilitare.
-  let _showAll = false;
-  try { _showAll = localStorage.getItem('tl_show_all_resources') === '1'; } catch(_) {}
-  if (!deptFilter && !resFilter && !_showAll && resources.length > 100 && bookings && bookings.length) {
+  // sempre tutte = 500 row labels = scroll rotto).
+  // v3.5.0-alpha.167: limite legato al Light Mode (🪶 toggle in toolbar).
+  // Light ON = limite attivo (perf safety). Light OFF = mostra tutte le risorse.
+  // Coerente con auto-enable Light al superare TL_LIGHT_AUTO_GROUPS (15).
+  const _lightOn = (typeof tlIsLightMode === 'function') ? tlIsLightMode() : false;
+  if (!deptFilter && !resFilter && _lightOn && resources.length > 100 && bookings && bookings.length) {
     const bookedIds = new Set();
     for (const b of bookings) {
       const rid = b.extendedProps && b.extendedProps.resource_id;
@@ -3385,8 +3389,8 @@ function tlBuildResourceGroups(bookings, rangeStart, rangeEnd) {
     if (resources.length < before && typeof toast === 'function' && !window._tlAutoFilterToastShown) {
       window._tlAutoFilterToastShown = true;
       toast(
-        `🪶 Mostro solo ${resources.length}/${before} risorse con booking nel periodo. ` +
-        `Filtra per reparto o disattiva via console: localStorage.setItem('tl_show_all_resources','1')`,
+        `🪶 Modalità leggera: mostro solo ${resources.length}/${before} risorse con booking nel periodo. ` +
+        `Disattiva Light mode (🪶 in toolbar) per vederle tutte.`,
         'info', 6000
       );
     }

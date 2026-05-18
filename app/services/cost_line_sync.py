@@ -229,17 +229,23 @@ def recompute_cost_line_actual(db: Session, jcl) -> dict:
     #   studio    → studio_hourly_cost
     #   external/None → None (skip, non concorre al costo)
     # Risultato: somma realistica del costo aziendale interno per la riga.
+    # v3.5.0-alpha.167 — Prefer cost_rate_snap (snapshot al create/update assignment).
+    # Garantisce stabilità storica: cambio rate Resource futuro NON impatta JCL già
+    # consuntivate. Fallback Resource.internal_cost_hourly per assignment pre-α.167
+    # (cost_rate_snap=NULL) — back-compat con DB esistenti.
     new_cost_accrued = 0.0
     for b in done_bookings:
         for a in (b.assignments or []):
             if not a.start_datetime or not a.end_datetime:
                 continue
-            res = getattr(a, "resource", None)
-            if res is None:
-                continue
-            rate = res.internal_cost_hourly
+            rate = getattr(a, "cost_rate_snap", None)
             if rate is None or rate <= 0:
-                continue
+                res = getattr(a, "resource", None)
+                if res is None:
+                    continue
+                rate = res.internal_cost_hourly
+                if rate is None or rate <= 0:
+                    continue
             hours_a = max(0.0, (a.end_datetime - a.start_datetime).total_seconds() / 3600.0)
             new_cost_accrued += hours_a * rate
     new_cost_accrued = round(new_cost_accrued, 2)

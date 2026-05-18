@@ -409,6 +409,13 @@ def _auto_migrate_columns():
             print("[auto-migrate] advance_payment_allocations.sort_order mancante -> ALTER TABLE")
             with engine.begin() as conn:
                 conn.execute(text("ALTER TABLE advance_payment_allocations ADD COLUMN sort_order INTEGER NULL"))
+    # v3.5.0-alpha.167 — BookingAssignment.cost_rate_snap (snapshot tariffa oraria)
+    if "booking_assignments" in insp.get_table_names():
+        bacols = {c["name"] for c in insp.get_columns("booking_assignments")}
+        if "cost_rate_snap" not in bacols:
+            print("[auto-migrate] booking_assignments.cost_rate_snap mancante -> ALTER TABLE")
+            with engine.begin() as conn:
+                conn.execute(text("ALTER TABLE booking_assignments ADD COLUMN cost_rate_snap FLOAT NULL"))
     # v3.5.0-alpha.113 — SupplierInvoice.resource_id + Resource.supplier_id +
     # Client.admin_email (intestazione fattura)
     if "supplier_invoices" in insp.get_table_names():
@@ -914,6 +921,13 @@ async def lifespan(app: FastAPI):
         advance_alloc_listener.install()
     except Exception as e:
         print(f"[lifespan] advance_alloc_listener init failed: {e}")
+    # v3.5.0-alpha.167 — Snapshot cost_rate su BookingAssignment al
+    # create/update. Cambio tariffa Resource futura non impatta storia.
+    try:
+        from app.services import booking_assignment_listener  # noqa: F401
+        booking_assignment_listener.install()
+    except Exception as e:
+        print(f"[lifespan] booking_assignment_listener init failed: {e}")
     settings.upload_dir.mkdir(parents=True, exist_ok=True)
     (settings.upload_dir / "assets").mkdir(exist_ok=True)
     (settings.upload_dir / "thumbnails").mkdir(exist_ok=True)
@@ -1223,7 +1237,7 @@ async def lifespan(app: FastAPI):
     yield
 
 
-app = FastAPI(title="MediaFlow", version="3.5.0-alpha.166", lifespan=lifespan)
+app = FastAPI(title="MediaFlow", version="3.5.0-alpha.167", lifespan=lifespan)
 
 BASE_DIR = Path(__file__).parent
 app.mount("/static", StaticFiles(directory=BASE_DIR / "static"), name="static")

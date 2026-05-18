@@ -1519,6 +1519,11 @@ class BookingAssignment(Base):
     resource_id: Mapped[int] = mapped_column(ForeignKey("resources.id"), index=True)
     start_datetime: Mapped[datetime] = mapped_column(DateTime)
     end_datetime: Mapped[datetime] = mapped_column(DateTime)
+    # v3.5.0-alpha.167 — Snapshot tariffa oraria interna al momento create/update
+    # dell'assignment. cost_line_sync legge prima questo, fallback Resource.internal_cost_hourly
+    # se NULL. Garantisce stabilità storica: cambio rate Resource non rotrocede su
+    # assignment già esistenti (= match fatture passive + cashflow storici preservati).
+    cost_rate_snap: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
     booking: Mapped["Booking"] = relationship(back_populates="assignments")
     resource: Mapped["Resource"] = relationship(back_populates="booking_assignments")
 

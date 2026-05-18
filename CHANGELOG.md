@@ -1,5 +1,42 @@
 # MediaFlow — Changelog
 
+## v3.5.0-alpha.167 — Timeline limite risorse → Light mode + snapshot cost_rate per stabilità storica (18 mag 2026)
+
+Due bug aperti da Matteo:
+
+**Bug 1 — Timeline planning interrotta**: risorse Commercial invisibili senza filtro. Root cause `planning.html:3377` (α.84): con >100 risorse + nessun filtro, auto-limita a quelle con booking nel range. Toggle nascosto in localStorage `tl_show_all_resources`.
+
+Fix:
+- Filtro accorpato al **Light Mode** (🪶 toggle in toolbar, già esistente).
+- Light ON = limite attivo (perf safety, soglia 100 + filtro su booking).
+- Light OFF = nessun limite, tutte le risorse visibili sempre.
+- Toast aggiornato: cita esplicitamente "Disattiva 🪶 per vederle tutte".
+- localStorage `tl_show_all_resources` deprecato (rimosso il check).
+- Reset toast flag al toggle Light.
+
+**Bug 2 — Cambio tariffa Resource non aggiorna costo CR (per design)**: matteo confermava preferenza per stabilità storica (no retroattività su booking esistenti). Implementazione via snapshot pattern.
+
+- `BookingAssignment.cost_rate_snap: Optional[float]` — snapshot tariffa al create/update.
+- Listener `app/services/booking_assignment_listener.py`:
+  - `before_insert`: popola `cost_rate_snap` da `Resource.internal_cost_hourly` se NULL.
+  - `before_update`: refresh snapshot SOLO se `resource_id` cambia (cambio datetime non rivaluta — sarebbe retroattivo).
+  - Caller può override snapshot esplicito (skip listener).
+- `cost_line_sync.py:240`: legge prima `a.cost_rate_snap`, fallback `res.internal_cost_hourly` (back-compat assignment pre-α.167 senza snapshot).
+- Auto-migrate `_auto_migrate_columns()`: ALTER TABLE `booking_assignments.cost_rate_snap`.
+- Lifespan: `booking_assignment_listener.install()` registrato dopo advance_alloc_listener.
+
+UI:
+- Modal Resource (`resources.html`): avviso giallo "Modifiche retroattive: cambi di tariffa impattano solo nuovi booking creati dopo il salvataggio. I booking esistenti mantengono la tariffa snapshot originale per preservare la consistenza di cost report storici, cashflow passati e match con fatture fornitori già emesse."
+
+Compatibilità:
+- Match con SupplierInvoice intatto: `total_cost_external` viene da fatture passive (autoritativo), `total_cost_accrued` ora più stabile = cost_drift più significativo.
+- Assignment esistenti senza snapshot: fallback automatico a live Resource rate (back-compat).
+- Backfill opzionale post-cambio rate: non offerto per default (perderebbe storia).
+
+Verifica smoke:
+- Insert assignment con Resource freelance (rate 52€/h) → `cost_rate_snap=52.0` ✓.
+- Swap resource → snapshot refresh a 123.80€/h ✓.
+
 ## v3.5.0-alpha.166 — Riarchitettura acconti: semantica chiara, 4 preset, fattura itemizzata (18 mag 2026)
 
 **Root cause risolto**: `AdvancePaymentAllocation.pct` aveva semantica ambigua (modello dichiarava "% di JCL coperta", codice scriveva `amount = AP.amount × pct`). Con default `pct=1.0` per ogni allocation, per N JCL si allocava N×AP.amount → numeri incoerenti in cost report. Caso Time/Color grading: 16.247,80 mostrato (= 60% di AP) invece di 11.377,48 atteso (60% di JCL).

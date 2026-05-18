@@ -8,6 +8,30 @@
 
 ## Versione corrente
 
+**v3.5.0-alpha.167** — 18 maggio 2026 — Timeline limite risorse → Light mode + snapshot cost_rate per stabilità storica
+
+2 bug aperti da Matteo dopo testing α.166:
+
+**Bug 1** Timeline planning: risorse Commercial invisibili senza filtro (α.84 auto-limit a 100). Filtro accorpato a Light mode (🪶 toggle in toolbar). Light ON = limite. Light OFF = tutte le risorse sempre visibili. localStorage `tl_show_all_resources` deprecato.
+
+**Bug 2** Cambio tariffa Resource non aggiornava costo CR. Confermato: per design no retroattivo (cashflow + match SupplierInvoice preservato). Implementato via snapshot pattern:
+- `BookingAssignment.cost_rate_snap: Optional[float]` (auto-migrate)
+- Listener `booking_assignment_listener.py`: before_insert popola da Resource.internal_cost_hourly. before_update refresh solo se resource_id cambia.
+- `cost_line_sync` prefer snapshot, fallback live (back-compat assignment pre-α.167)
+- UI Resource modal: avviso giallo "modifiche impattano solo nuovi booking"
+
+Smoke verificato: insert assignment freelance 52€/h → cost_rate_snap=52.0. Swap resource → 123.80€.
+
+Backlog α.168+:
+- F29 round 6 i18n granulare modal/form
+- Multi-select additional_department_ids in modal listino
+- CR dept breakdown ripartizione voci trasversali
+- AI capability `propose_advance_allocation` (preset selector)
+- OAuth integrazione completa
+- Portali consegne plugin reali
+
+## (versione precedente)
+
 **v3.5.0-alpha.166** — 18 maggio 2026 — Riarchitettura acconti: semantica chiara, 4 preset, fattura itemizzata
 
 Root cause aperto da Matteo (cost report Time mostrava Color grading 16.247,80 invece di 11.377,48 atteso): `AdvancePaymentAllocation.pct` aveva semantica ambigua. Modello dichiarava "% di JCL coperta", codice scriveva `amount = AP × pct`. Default pct=1.0 per ogni allocation → N×AP allocato per N JCL, valori incoerenti.
