@@ -8,24 +8,41 @@
 
 ## Versione corrente
 
-**v3.5.0-alpha.165** — 17 maggio 2026 notte — i18n sweep header tabelle lista
+**v3.5.0-alpha.166** — 18 maggio 2026 — Riarchitettura acconti: semantica chiara, 4 preset, fattura itemizzata
 
-Audit traduzioni: voci in liste non tradotte (pricelist/resources/departments con 0-1 data-i18n; quotes/finance/cost_report parziali). Bulk fix:
+Root cause aperto da Matteo (cost report Time mostrava Color grading 16.247,80 invece di 11.377,48 atteso): `AdvancePaymentAllocation.pct` aveva semantica ambigua. Modello dichiarava "% di JCL coperta", codice scriveva `amount = AP × pct`. Default pct=1.0 per ogni allocation → N×AP allocato per N JCL, valori incoerenti.
 
-- i18n.js: 110+ chiavi `col.*` aggiunte (IT/EN/FR/DE) + `quotes.col.project_title`
-- 22 template: data-i18n applicato su tutti `<th>` lista principale
-  - pricelist, resources, departments, suppliers, projects, clients, quotes, finance, cost_report, planning, hr, overhead, cashflow, admin_users, admin_audit_log, delivery_templates, capitolati_import, assets_inout, physical_assets, finance_reports, finance_forecast, fs_scan
-- Cache-buster i18n.js?v= bumpato 156→165
+Bundle:
+- Modelli: `amount` autoritativo, `pct` derivato (listener auto-sync), `sort_order` nuovo per preset fill_sequential
+- Materialize: preset `fill_sequential` default (riempi 100% sequenziale, ultima parziale)
+- UI modal: 4 preset (Fill 100% sequenziale / Proporzionale / Pro-rata su residuo / Manuale) + drag handle riordino + input EUR + summary live
+- Endpoint nuovo `/finance/api/advances/{id}/preview-preset` per calcolo allocazioni preview
+- `allocations_set` accetta sia EUR sia "%" (pct di JCL.quoted) — validazione amount ≤ quoted, Σ ≤ AP
+- Cost report OU usa `billed_total` (slice + advance_paid_coverage) → "fill" quando acconto pagato copre voce
+- Paid ratio = paid/total (entrambi lordi) invece di paid/AP (mix lordo/netto)
+- Fattura acconto itemizzata: N InvoiceLine, una per JCL coperta; residuo → riga "Acconto generale"
+- Schedule: pct ⊕ amount_fixed mutual exclusion (400 se entrambi >0)
+- 2 migration script: `migrate_advance_alloc_semantics.py` (ricalcolo alloc + fix schedule) e `migrate_advance_invoice_itemize.py` (drop+ricrea InvoiceLine fatture pre-α.166)
 
-Backlog α.166+:
+Verifica DB sviluppo (Time):
+- AP #3 Color: 16.247,80 → 10.431,42 ✓; Production+Title coperti 100% → OU=0 fill ✓
+- Invoice #119 itemizzata: 3 lines (10.810 + 5.838,25 + 10.431,42), subtotal invariato
+
+Backlog α.167+:
 - F29 round 6: data-i18n granulare modal/form per campo
 - Render JS dinamici via mfT() (toast/badge runtime)
 - Pluralizzazione + locale-aware date/numeri Intl API
 - Multi-select additional_department_ids in modal listino
 - CR dept breakdown ripartizione trasversali
-- Acconti UI residui (preview emit, warning over-billing, fatture project-level in CR)
+- AI capability `propose_advance_allocation` (preset selector)
 - OAuth integrazione completa (UI Integrazioni + servizi)
 - Portali consegne plugin reali
+
+## (versione precedente)
+
+**v3.5.0-alpha.165** — 17 maggio 2026 notte — i18n sweep header tabelle lista
+
+Audit traduzioni: 110+ chiavi col.* IT/EN/FR/DE, 22 template `<th>` con data-i18n.
 
 ## (versione precedente)
 

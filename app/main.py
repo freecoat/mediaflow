@@ -402,6 +402,13 @@ def _auto_migrate_columns():
                 if col not in pcols:
                     print(f"[auto-migrate] projects.{col} mancante -> ALTER TABLE")
                     conn.execute(text(f"ALTER TABLE projects ADD COLUMN {col} {ddl}"))
+    # v3.5.0-alpha.166 — AdvancePaymentAllocation.sort_order (preset fill_sequential)
+    if "advance_payment_allocations" in insp.get_table_names():
+        apacols = {c["name"] for c in insp.get_columns("advance_payment_allocations")}
+        if "sort_order" not in apacols:
+            print("[auto-migrate] advance_payment_allocations.sort_order mancante -> ALTER TABLE")
+            with engine.begin() as conn:
+                conn.execute(text("ALTER TABLE advance_payment_allocations ADD COLUMN sort_order INTEGER NULL"))
     # v3.5.0-alpha.113 — SupplierInvoice.resource_id + Resource.supplier_id +
     # Client.admin_email (intestazione fattura)
     if "supplier_invoices" in insp.get_table_names():
@@ -900,6 +907,13 @@ async def lifespan(app: FastAPI):
         _install_soft_delete_filter()
     except Exception as e:
         print(f"[lifespan] soft-delete listener init failed: {e}")
+    # v3.5.0-alpha.166 — Auto-sync pct derivato su AdvancePaymentAllocation.
+    # Listener garantisce pct = amount/AP.amount dopo insert/update.
+    try:
+        from app.services import advance_alloc_listener  # noqa: F401
+        advance_alloc_listener.install()
+    except Exception as e:
+        print(f"[lifespan] advance_alloc_listener init failed: {e}")
     settings.upload_dir.mkdir(parents=True, exist_ok=True)
     (settings.upload_dir / "assets").mkdir(exist_ok=True)
     (settings.upload_dir / "thumbnails").mkdir(exist_ok=True)
@@ -1209,7 +1223,7 @@ async def lifespan(app: FastAPI):
     yield
 
 
-app = FastAPI(title="MediaFlow", version="3.5.0-alpha.165", lifespan=lifespan)
+app = FastAPI(title="MediaFlow", version="3.5.0-alpha.166", lifespan=lifespan)
 
 BASE_DIR = Path(__file__).parent
 app.mount("/static", StaticFiles(directory=BASE_DIR / "static"), name="static")

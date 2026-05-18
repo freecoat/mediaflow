@@ -148,22 +148,41 @@ def materialize_schedules(
         db.flush()
         new_ap_ids.append(ap.id)
 
-        # Allocazioni da QuoteAdvanceAllocation → JCL via quote_line_id
+        # v3.5.0-alpha.166 — Materialize con preset "fill_sequential":
+        # alloc.amount = min(JCL.total_quoted, remaining), itera in ordine di
+        # qa.id (= ordine inserimento UI / quote_line_id ASC), ultima parziale.
+        # `pct` su QuoteAdvanceAllocation viene IGNORATO (semantica chiarita
+        # post-α.166: vince l'amount calcolato dal preset). Per acconti con
+        # copertura specifica per riga, utente edita post-materialize via UI.
         q_allocs = db.query(QuoteAdvanceAllocation).filter(
             QuoteAdvanceAllocation.schedule_id == sched.id,
-        ).all()
-        for qa in q_allocs:
+        ).order_by(QuoteAdvanceAllocation.id.asc()).all()
+        remaining = amount
+        for idx, qa in enumerate(q_allocs):
             jcl = _resolve_jcl_for_quote_line(db, job.id, qa.quote_line_id)
             if not jcl:
                 log.warning(f"[materialize_schedules] no JCL for QuoteLine #{qa.quote_line_id} in job #{job.id}")
                 continue
+            jcl_q = jcl.total_quoted or 0.0
+            take = round(min(jcl_q, remaining), 2)
+            if take < 0:
+                take = 0.0
             ap_alloc = AdvancePaymentAllocation(
                 advance_payment_id=ap.id,
                 job_cost_line_id=jcl.id,
-                pct=qa.pct or 1.0,
-                amount=round(amount * (qa.pct or 1.0), 2),
+                amount=take,
+                sort_order=idx,
+                # pct ricalcolato auto da listener pre-insert
             )
             db.add(ap_alloc)
+            remaining = round(remaining - take, 2)
+            if remaining <= 0:
+                remaining = 0.0
+        if remaining > 0.01:
+            log.warning(
+                f"[materialize_schedules] AP #{ap.id} residuo non allocato: "
+                f"{remaining} (AP.amount={amount} > Σ JCL quoted coperte)"
+            )
 
         created.append({
             "advance_payment_id": ap.id,

@@ -774,60 +774,108 @@ async def confirm_advance_payment(
             raise HTTPException(409, f"amount {amount} < già consumato {consumed}")
         ap.amount = round(amount, 2)
         ap.balance_remaining = round(amount - consumed, 2)
+    # v3.5.0-alpha.166 — allocations_update accetta sia amount EUR sia "pct%":
+    # "alloc_id:1500.00" → set amount=1500
+    # "alloc_id:60%" → set amount = JCL.total_quoted × 0.6
+    # Validazione: amount ≤ JCL.total_quoted, Σ ≤ AP.amount.
     if allocations_update:
         for token in allocations_update.split(","):
             token = token.strip()
             if not token or ":" not in token:
                 continue
             try:
-                a_id_s, pct_s = token.split(":", 1)
+                a_id_s, val_s = token.split(":", 1)
                 a_id = int(a_id_s.strip())
-                pct_v = float(pct_s.strip())
+                val_s = val_s.strip()
             except ValueError:
                 raise HTTPException(400, f"allocations_update parse error: {token}")
-            if pct_v < 0 or pct_v > 1.0:
-                raise HTTPException(400, f"pct fuori range 0..1: {pct_v}")
             alloc = db.query(_APA).filter(
                 _APA.id == a_id, _APA.advance_payment_id == ap.id,
             ).first()
             if not alloc:
                 raise HTTPException(404, f"Allocation #{a_id} non trovata per AP {ap.id}")
-            alloc.pct = pct_v
-            alloc.amount = round((ap.amount or 0) * pct_v, 2)
-    # v3.5.0-alpha.158 — allocations_set: sostituzione totale add/remove/modify.
-    # Drop tutte le esistenti + crea nuove dal CSV "jcl_id:pct,jcl_id:pct".
+            jcl = db.query(JobCostLine).filter(JobCostLine.id == alloc.job_cost_line_id).first()
+            try:
+                if val_s.endswith("%"):
+                    pct_v = float(val_s[:-1].strip()) / 100.0
+                    if pct_v < 0 or pct_v > 1.0:
+                        raise HTTPException(400, f"pct fuori range 0..1: {pct_v}")
+                    amt_v = round((jcl.total_quoted or 0.0) * pct_v, 2) if jcl else 0.0
+                else:
+                    amt_v = round(float(val_s), 2)
+            except ValueError:
+                raise HTTPException(400, f"allocations_update parse value: {token}")
+            if amt_v < 0:
+                raise HTTPException(400, f"allocations_update amount negativo: {amt_v}")
+            if jcl and amt_v > (jcl.total_quoted or 0.0) + 0.01:
+                raise HTTPException(
+                    400,
+                    f"alloc.amount {amt_v} eccede JCL.total_quoted {jcl.total_quoted}",
+                )
+            alloc.amount = amt_v
+            # pct ricalcolato auto da listener pre-update
+    # v3.5.0-alpha.158/166 — allocations_set: sostituzione totale add/remove/modify.
+    # Drop tutte le esistenti + crea nuove dal CSV.
+    # Formato α.166 (raccomandato): "jcl_id:amount,jcl_id:amount" — amount in EUR.
+    # Formato legacy α.158 con suffisso "%": "jcl_id:60%,jcl_id:40%" → amount calcolato
+    #   come JCL.total_quoted × pct (semantica utente "% di JCL coperta"). NB:
+    #   pre-α.166 il "60%" era "% di AP", post-α.166 è "% di JCL coperta" —
+    #   chiamanti legacy ottengono ora il comportamento naturalmente atteso.
     if allocations_set is not None:
-        # Valida JCL appartengono al progetto dell'AP
         from app.models import AdvancePaymentAllocation as _APA2
-        new_pairs: list[tuple[int, float]] = []
-        for token in allocations_set.split(","):
+        new_pairs: list[tuple[int, float, int]] = []  # (jcl_id, amount, sort_order)
+        for idx, token in enumerate(allocations_set.split(",")):
             token = token.strip()
             if not token:
                 continue
             if ":" not in token:
-                raise HTTPException(400, f"allocations_set parse error: '{token}' (atteso jcl_id:pct)")
-            jid_s, pct_s = token.split(":", 1)
+                raise HTTPException(400, f"allocations_set parse error: '{token}' (atteso jcl_id:amount o jcl_id:pct%)")
+            jid_s, val_s = token.split(":", 1)
+            val_s = val_s.strip()
             try:
                 jid = int(jid_s.strip())
-                pct_v = float(pct_s.strip())
             except ValueError:
                 raise HTTPException(400, f"allocations_set parse: '{token}'")
-            if pct_v <= 0 or pct_v > 1.0:
-                raise HTTPException(400, f"allocations_set pct fuori range (0,1]: {pct_v} per JCL {jid}")
             # Verifica JCL esiste + appartiene al progetto AP
             jcl = db.query(JobCostLine).join(Job, JobCostLine.job_id == Job.id).filter(
                 JobCostLine.id == jid, Job.project_id == ap.project_id,
             ).first()
             if not jcl:
                 raise HTTPException(404, f"JCL {jid} non trovata o non nel progetto {ap.project_id}")
-            new_pairs.append((jid, pct_v))
-        # Drop existing
+            # Determina amount: suffisso "%" → pct di JCL.quoted; altrimenti EUR.
+            try:
+                if val_s.endswith("%"):
+                    pct_v = float(val_s[:-1].strip()) / 100.0
+                    if pct_v <= 0 or pct_v > 1.0:
+                        raise HTTPException(400, f"allocations_set pct fuori range (0,1]: {pct_v} per JCL {jid}")
+                    amt_v = round((jcl.total_quoted or 0.0) * pct_v, 2)
+                else:
+                    amt_v = round(float(val_s), 2)
+            except ValueError:
+                raise HTTPException(400, f"allocations_set parse value: '{token}'")
+            if amt_v < 0:
+                raise HTTPException(400, f"allocations_set amount negativo: {amt_v} per JCL {jid}")
+            # Vincolo: alloc.amount ≤ JCL.total_quoted (no over-coverage)
+            if amt_v > (jcl.total_quoted or 0.0) + 0.01:
+                raise HTTPException(
+                    400,
+                    f"alloc.amount {amt_v} eccede JCL.total_quoted {jcl.total_quoted} (JCL #{jid})",
+                )
+            new_pairs.append((jid, amt_v, idx))
+        # Vincolo Σ ≤ AP.amount (no over-alloc)
+        total_alloc = round(sum(p[1] for p in new_pairs), 2)
+        if total_alloc > (ap.amount or 0.0) + 0.01:
+            raise HTTPException(
+                409,
+                f"Σ allocations {total_alloc} eccede AP.amount {ap.amount}",
+            )
+        # Drop existing + crea nuove
         db.query(_APA2).filter(_APA2.advance_payment_id == ap.id).delete()
-        # Crea nuove
-        for jid, pct_v in new_pairs:
+        for jid, amt_v, order in new_pairs:
             db.add(_APA2(
                 advance_payment_id=ap.id, job_cost_line_id=jid,
-                pct=pct_v, amount=round((ap.amount or 0) * pct_v, 2),
+                amount=amt_v, sort_order=order,
+                # pct calcolato auto da listener pre-insert
             ))
     if next_status:
         if next_status not in ("draft", "confirmed"):
@@ -839,6 +887,115 @@ async def confirm_advance_payment(
         "id": ap.id, "status": ap.status.value,
         "amount": ap.amount, "balance_remaining": ap.balance_remaining,
         "label": ap.label,
+    }
+
+
+@router.post("/api/advances/{advance_id}/preview-preset")
+async def preview_advance_preset(
+    advance_id: int,
+    preset: str = Form(...),  # fill_sequential | pro_rata | pro_rata_remaining | manual
+    jcl_ids: str = Form(...),  # CSV "jid,jid,jid" in ordine UI (per fill_sequential)
+    db: Session = Depends(get_db),
+):
+    """v3.5.0-alpha.166 — Calcola allocazioni proposte per preset selezionato
+    senza salvare. UI usa per popolare cifre prima della conferma utente.
+
+    Preset:
+      - fill_sequential: riempi voci in ordine fino a coprire AP.amount, ultima parziale.
+      - pro_rata: AP × (JCL.quoted / Σ JCL.quoted) — distribuzione proporzionale.
+      - pro_rata_remaining: AP × ((JCL.quoted - JCL.billed_total) / Σ residuo).
+      - manual: nessun calcolo, ritorna 0 per ogni JCL (UI compila a mano).
+
+    Ritorna [{jcl_id, amount, pct, jcl_quoted, jcl_description}].
+    """
+    ap = db.query(AdvancePayment).filter(
+        AdvancePayment.id == advance_id,
+        AdvancePayment.tenant_id == current_tenant_id(),
+    ).first()
+    if not ap:
+        raise HTTPException(404, "Acconto non trovato")
+    if preset not in ("fill_sequential", "pro_rata", "pro_rata_remaining", "manual"):
+        raise HTTPException(400, f"preset '{preset}' non valido")
+    try:
+        jcl_id_list = [int(x.strip()) for x in jcl_ids.split(",") if x.strip()]
+    except ValueError:
+        raise HTTPException(400, "jcl_ids deve essere CSV di interi")
+    if not jcl_id_list:
+        return {"advance_id": advance_id, "preset": preset, "allocations": []}
+    jcls = db.query(JobCostLine).join(Job, JobCostLine.job_id == Job.id).filter(
+        JobCostLine.id.in_(jcl_id_list),
+        Job.project_id == ap.project_id,
+    ).all()
+    jcl_map = {j.id: j for j in jcls}
+    # Mantieni ordine richiesto dalla UI (fondamentale per fill_sequential)
+    ordered = [jcl_map[i] for i in jcl_id_list if i in jcl_map]
+    ap_amount = ap.amount or 0.0
+
+    out = []
+    if preset == "manual":
+        for j in ordered:
+            out.append({
+                "jcl_id": j.id, "amount": 0.0, "pct": 0.0,
+                "jcl_quoted": round(j.total_quoted or 0.0, 2),
+                "jcl_description": j.description,
+            })
+    elif preset == "fill_sequential":
+        remaining = ap_amount
+        for j in ordered:
+            cap = j.total_quoted or 0.0
+            take = round(min(cap, remaining), 2)
+            if take < 0:
+                take = 0.0
+            out.append({
+                "jcl_id": j.id, "amount": take,
+                "pct": round(take / ap_amount, 6) if ap_amount > 0 else 0.0,
+                "jcl_quoted": round(cap, 2),
+                "jcl_description": j.description,
+            })
+            remaining = round(remaining - take, 2)
+            if remaining <= 0:
+                remaining = 0.0
+    elif preset == "pro_rata":
+        sum_q = sum((j.total_quoted or 0.0) for j in ordered)
+        for j in ordered:
+            q = j.total_quoted or 0.0
+            amt = round(ap_amount * (q / sum_q), 2) if sum_q > 0 else 0.0
+            # Cap a JCL.quoted (no over-coverage)
+            amt = min(amt, q)
+            out.append({
+                "jcl_id": j.id, "amount": amt,
+                "pct": round(amt / ap_amount, 6) if ap_amount > 0 else 0.0,
+                "jcl_quoted": round(q, 2),
+                "jcl_description": j.description,
+            })
+    elif preset == "pro_rata_remaining":
+        # Residuo non coperto = JCL.quoted - (slice billed + advance_paid_coverage altri AP)
+        # Approssima: usa solo billed_amount (slice) per evitare complessità.
+        weights = []
+        for j in ordered:
+            q = j.total_quoted or 0.0
+            billed = j.billed_amount or 0.0
+            r = max(0.0, q - billed)
+            weights.append((j, r))
+        sum_r = sum(w[1] for w in weights)
+        for j, r in weights:
+            amt = round(ap_amount * (r / sum_r), 2) if sum_r > 0 else 0.0
+            amt = min(amt, j.total_quoted or 0.0)
+            out.append({
+                "jcl_id": j.id, "amount": amt,
+                "pct": round(amt / ap_amount, 6) if ap_amount > 0 else 0.0,
+                "jcl_quoted": round(j.total_quoted or 0.0, 2),
+                "jcl_description": j.description,
+            })
+
+    sum_amt = round(sum(o["amount"] for o in out), 2)
+    return {
+        "advance_id": advance_id,
+        "preset": preset,
+        "ap_amount": round(ap_amount, 2),
+        "sum_allocated": sum_amt,
+        "residual": round(ap_amount - sum_amt, 2),
+        "allocations": out,
     }
 
 
@@ -933,12 +1090,54 @@ async def emit_invoice_from_advance(
     )
     db.add(inv)
     db.flush()
-    line = InvoiceLine(
-        invoice_id=inv.id, description=desc,
-        quantity=1.0, unit_price=amount, total=amount,
-        vat_rate=vat_rate, discount_pct=0.0,
+    # v3.5.0-alpha.166 — Fattura acconto itemizzata: N InvoiceLine, una per
+    # AdvancePaymentAllocation. UI fattura mostra quali JCL sono coperte.
+    # Fallback: se nessuna allocation (acconto senza voci), 1 riga aggregata.
+    from app.models import AdvancePaymentAllocation as _APA
+    allocs = (
+        db.query(_APA)
+        .filter(_APA.advance_payment_id == ap.id)
+        .order_by(_APA.sort_order.asc().nulls_last(), _APA.id.asc())
+        .all()
     )
-    db.add(line)
+    sum_alloc = round(sum(a.amount or 0.0 for a in allocs), 2)
+    lines_created = 0
+    if allocs and sum_alloc > 0:
+        for a in allocs:
+            jcl = db.query(JobCostLine).filter(JobCostLine.id == a.job_cost_line_id).first()
+            line_desc = (jcl.description if jcl else f"JCL #{a.job_cost_line_id}")
+            db.add(InvoiceLine(
+                invoice_id=inv.id,
+                description=f"Acconto su: {line_desc}",
+                quantity=1.0,
+                unit_price=round(a.amount or 0.0, 2),
+                total=round(a.amount or 0.0, 2),
+                vat_rate=vat_rate,
+                discount_pct=0.0,
+            ))
+            lines_created += 1
+        # Riga residuo: se Σ alloc < AP.amount (acconto non interamente
+        # allocato), aggiungi riga generica per la differenza.
+        residual = round(amount - sum_alloc, 2)
+        if residual > 0.01:
+            db.add(InvoiceLine(
+                invoice_id=inv.id,
+                description=f"Acconto generale — {proj.code}",
+                quantity=1.0,
+                unit_price=residual,
+                total=residual,
+                vat_rate=vat_rate,
+                discount_pct=0.0,
+            ))
+            lines_created += 1
+    else:
+        # Fallback: 1 riga aggregata (comportamento pre-α.166).
+        db.add(InvoiceLine(
+            invoice_id=inv.id, description=desc,
+            quantity=1.0, unit_price=amount, total=amount,
+            vat_rate=vat_rate, discount_pct=0.0,
+        ))
+        lines_created = 1
     ap.invoice_id = inv.id
     ap.status = AdvancePaymentStatus.invoiced
     db.commit()
@@ -949,6 +1148,7 @@ async def emit_invoice_from_advance(
         "status": ap.status.value,
         "invoice_id": inv.id, "invoice_number": inv.number,
         "amount": amount, "vat_amount": vat_amount, "total": total,
+        "lines_created": lines_created,
     }
 
 

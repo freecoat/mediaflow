@@ -1,5 +1,51 @@
 # MediaFlow — Changelog
 
+## v3.5.0-alpha.166 — Riarchitettura acconti: semantica chiara, 4 preset, fattura itemizzata (18 mag 2026)
+
+**Root cause risolto**: `AdvancePaymentAllocation.pct` aveva semantica ambigua (modello dichiarava "% di JCL coperta", codice scriveva `amount = AP.amount × pct`). Con default `pct=1.0` per ogni allocation, per N JCL si allocava N×AP.amount → numeri incoerenti in cost report. Caso Time/Color grading: 16.247,80 mostrato (= 60% di AP) invece di 11.377,48 atteso (60% di JCL).
+
+**Modelli (`models.py`)**:
+- `AdvancePaymentAllocation.amount` è ora autoritativo (cifra coperta dall'AP su JCL in EUR).
+- `pct` nullable, derivato come `amount/AP.amount` (display only).
+- `sort_order` nuovo campo per preset fill_sequential (ordine UI persistito).
+
+**Listener (`app/services/advance_alloc_listener.py`)**:
+- SQLAlchemy event `before_insert`/`before_update` su `AdvancePaymentAllocation` ricalcola pct = amount/AP.amount automaticamente. Evita drift se codice legacy modifica amount senza aggiornare pct.
+
+**Materialize (`advance_schedule_to_payment.py`)**:
+- Default preset `fill_sequential`: riempi voci in ordine `qa.id` fino a coprire AP.amount, ultima parziale. Warning log se residuo non allocato.
+
+**Endpoint finance**:
+- `POST /finance/api/advances/{id}/preview-preset` (nuovo): calcola allocazioni proposte per preset senza salvare. Preset: `fill_sequential` / `pro_rata` / `pro_rata_remaining` / `manual`.
+- `POST /finance/api/advances/{id}/confirm` (riveduto): `allocations_set` accetta sia EUR (`jcl_id:1500.00`) sia % (`jcl_id:60%` → `JCL.quoted × pct`). Validazione server: `amount ≤ JCL.quoted`, `Σ ≤ AP.amount`.
+- `POST /finance/api/advances/{id}/emit-invoice`: fattura ora itemizzata, N InvoiceLine una per allocation (description = JCL.description). Fallback 1 riga aggregata se nessuna allocation. Residuo non allocato → riga "Acconto generale".
+
+**Cost report (`cost_report.py`)**:
+- `over_under_now`/`forecast` usano `billed_total` (slice + advance_paid_coverage) invece di solo slice billing. Voce completamente coperta da acconto pagato → OU ≈ 0 ("fill").
+- Aggregato `list_cost_reports` espone nuovi campi `advance_paid_coverage` + `billed_total` per job.
+- Paid ratio: `min(1.0, invoice.amount_paid / invoice.total)` (entrambi lordi) invece di `paid/AP.amount` (mix lordo/netto). Pre-α.166 funzionava su pagamenti full, rotto su pagamenti parziali.
+
+**Quote schedule (`quotes.py`)**:
+- POST/PUT schedule: rifiuta 400 se `pct` e `amount_fixed` entrambi valorizzati (mutual exclusion). Update setter azzera l'altro.
+
+**UI modal "Gestisci acconto" (`finance.html`)**:
+- Selettore preset (4 opzioni) + bottone "Applica" che chiama preview-preset e popola input.
+- Input cifra in EUR (autoritativo) invece di %, etichetta "€".
+- Drag handle (⋮⋮) per riordinare voci selezionate — impatta preset fill_sequential.
+- Summary live: Σ allocato / AP.amount / residuo, warning rosso se Σ > AP o amount > JCL.quoted, warning giallo se residuo > 0.
+
+**Migration**:
+- `scripts/migrate_advance_alloc_semantics.py`: ricalcola amount allocations esistenti con preset fill_sequential; azzera schedule.pct dove amount_fixed valorizzato.
+- `scripts/migrate_advance_invoice_itemize.py`: drop+ricrea InvoiceLine per Invoice(kind=advance) pre-α.166 (1 riga aggregata → N righe per allocation). Idempotente (skip se già N>1 lines).
+- Auto-migrate `_auto_migrate_columns()`: ALTER TABLE `advance_payment_allocations.sort_order`.
+
+**Lifespan**: `advance_alloc_listener.install()` registrato dopo soft-delete.
+
+**Verifica DB sviluppo (Time/Shadow)**:
+- AP #3 Color grading: 16.247,80 → 10.431,42 ✓ (preset 2 fill: Production 100% + Title 100% = 16.648, residuo 10.431 per Color).
+- Invoice #119 re-itemizzata: 3 InvoiceLine (Production 10.810, Title 5.838,25, Color 10.431,42), subtotal 27.079,67 invariato.
+- OU su Production+Title = 0 ("fill" corretto da acconto pagato), Color = -8.531 (residuo non coperto).
+
 ## v3.5.0-alpha.165 — i18n sweep header tabelle lista (17 mag 2026 notte)
 
 Audit traduzioni: voci in liste mancanti su 20+ template. Bulk fix.

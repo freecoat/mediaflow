@@ -347,10 +347,22 @@
       </div>
       <div class="form-group">
         <label class="form-label">Allocazioni a voci di costo (JCL)</label>
-        <div id="adv-conf-allocs-host" style="background:var(--bg2); border:1px solid var(--border); border-radius:6px; padding:8px; max-height:240px; overflow:auto;"></div>
-        <!-- v3.5.0-alpha.159 — Summary live: totale selezionato + % su quote progetto -->
+        <!-- v3.5.0-alpha.166 — Preset selector + apply -->
+        <div style="display:flex; gap:6px; flex-wrap:wrap; align-items:center; margin-bottom:8px; padding:6px 8px; background:var(--bg2); border:1px solid var(--border); border-radius:4px;">
+          <label style="font-size:11px; font-weight:600;">Preset:</label>
+          <select id="adv-conf-preset" class="form-select" style="font-size:11px; padding:2px 6px; max-width:280px;">
+            <option value="fill_sequential" selected>Riempimento 100% sequenziale</option>
+            <option value="pro_rata">Proporzionale al quotato</option>
+            <option value="pro_rata_remaining">Proporzionale sul residuo non coperto</option>
+            <option value="manual">Manuale</option>
+          </select>
+          <button type="button" class="btn btn-sm btn-secondary" onclick="applyAdvPreset()" style="font-size:11px;">Applica</button>
+          <span class="text-xs text-muted" style="margin-left:6px;">Ordina con drag · voci selezionate spuntate</span>
+        </div>
+        <div id="adv-conf-allocs-host" style="background:var(--bg2); border:1px solid var(--border); border-radius:6px; padding:8px; max-height:280px; overflow:auto;"></div>
+        <!-- v3.5.0-alpha.166 — Summary live: Σ alloc / AP.amount / residuo -->
         <div id="adv-conf-allocs-summary" style="margin-top:6px; padding:6px 10px; background:rgba(98,114,245,0.10); border-radius:4px; font-size:12px;"></div>
-        <div class="text-xs text-muted" style="margin-top:4px;">Spunta JCL + % copertura. Riepilogo live: totale allocato + percentuale su quotato.</div>
+        <div class="text-xs text-muted" style="margin-top:4px;">Spunta JCL, modifica € a piacere. Σ ≤ AP.amount, ogni alloc ≤ quotato JCL.</div>
       </div>
       <hr style="border-color:var(--border); margin:14px 0;">
       <div class="form-group">
@@ -968,110 +980,159 @@ async function openAdvConfirmModal(ap) {
     host.appendChild(d);
     openModal('modal-advance-confirm'); return;
   }
-  // Aggrega per Job
-  const byJob = {};
-  jcls.forEach(j => { (byJob[j.job_code || ('#' + j.job_id)] ||= []).push(j); });
-  Object.entries(byJob).forEach(([jobCode, items]) => {
-    const grpHdr = document.createElement('div');
-    grpHdr.style.cssText = 'font-weight:600; font-size:11px; color:var(--indigo2); margin-top:8px; padding-bottom:3px; border-bottom:1px solid var(--border); text-transform:uppercase; letter-spacing:0.04em;';
-    grpHdr.textContent = jobCode + ' — ' + items.length + ' voce/i';
-    host.appendChild(grpHdr);
-    items.forEach(j => {
-      const row = document.createElement('div');
-      row.style.cssText = 'display:flex; align-items:center; gap:8px; padding:5px 0; border-bottom:1px dashed var(--border); font-size:12px;';
-      const cb = document.createElement('input');
-      cb.type = 'checkbox';
-      cb.dataset.jclId = j.jcl_id;
-      cb.checked = !!j.allocated;
-      const lbl = document.createElement('label');
-      lbl.style.cssText = 'flex:1; cursor:pointer;';
-      lbl.appendChild(cb);
-      const sp = document.createElement('span');
-      sp.style.marginLeft = '6px';
-      sp.textContent = (j.description || '').substring(0, 60) + ' · ' + fmtCurrency(j.total_quoted);
-      lbl.appendChild(sp);
-      row.appendChild(lbl);
-      const pctInp = document.createElement('input');
-      pctInp.type = 'number'; pctInp.step = '0.1'; pctInp.min = '0'; pctInp.max = '100';
-      pctInp.value = j.allocated ? ((j.alloc_pct || 1) * 100).toFixed(1) : '100';
-      pctInp.dataset.jclPct = j.jcl_id;
-      pctInp.style.cssText = 'width:70px; padding:2px 4px; background:var(--bg3); border:1px solid var(--border); color:var(--text); border-radius:3px; font-family:DM Mono,monospace; font-size:11px;';
-      pctInp.disabled = !cb.checked;
-      cb.onchange = () => { pctInp.disabled = !cb.checked; _refreshAdvConfSummary(); };
-      pctInp.oninput = () => _refreshAdvConfSummary();
-      row.appendChild(pctInp);
-      const u = document.createElement('span'); u.className = 'text-xs text-muted'; u.textContent = '%';
-      row.appendChild(u);
-      host.appendChild(row);
+  // v3.5.0-alpha.166 — Lista piatta sortable. Drag handle per riordinare
+  // (impatta preset fill_sequential). Input amount in EUR (autoritativo).
+  jcls.forEach(j => {
+    const row = document.createElement('div');
+    row.draggable = true;
+    row.dataset.jclId = j.jcl_id;
+    row.style.cssText = 'display:flex; align-items:center; gap:8px; padding:5px 4px; border-bottom:1px dashed var(--border); font-size:12px;';
+    const handle = document.createElement('span');
+    handle.textContent = '⋮⋮';
+    handle.style.cssText = 'cursor:grab; color:var(--text-muted); font-weight:700; user-select:none;';
+    row.appendChild(handle);
+    const cb = document.createElement('input');
+    cb.type = 'checkbox';
+    cb.dataset.jclId = j.jcl_id;
+    cb.checked = !!j.allocated;
+    const lbl = document.createElement('label');
+    lbl.style.cssText = 'flex:1; cursor:pointer;';
+    lbl.appendChild(cb);
+    const sp = document.createElement('span');
+    sp.style.marginLeft = '6px';
+    sp.textContent = (j.job_code || '?') + ' · ' + (j.description || '').substring(0, 50) +
+      ' · quotato ' + fmtCurrency(j.total_quoted);
+    lbl.appendChild(sp);
+    row.appendChild(lbl);
+    const amtInp = document.createElement('input');
+    amtInp.type = 'number'; amtInp.step = '0.01'; amtInp.min = '0';
+    amtInp.value = j.allocated ? (j.alloc_amount || 0).toFixed(2) : '0.00';
+    amtInp.dataset.jclAmount = j.jcl_id;
+    amtInp.dataset.jclMax = j.total_quoted || 0;
+    amtInp.style.cssText = 'width:100px; padding:2px 4px; background:var(--bg3); border:1px solid var(--border); color:var(--text); border-radius:3px; font-family:DM Mono,monospace; font-size:11px; text-align:right;';
+    amtInp.disabled = !cb.checked;
+    cb.onchange = () => {
+      amtInp.disabled = !cb.checked;
+      if (!cb.checked) amtInp.value = '0.00';
+      _refreshAdvConfSummary();
+    };
+    amtInp.oninput = () => _refreshAdvConfSummary();
+    row.appendChild(amtInp);
+    const u = document.createElement('span'); u.className = 'text-xs text-muted'; u.textContent = '€';
+    row.appendChild(u);
+    // Drag-and-drop handlers
+    row.addEventListener('dragstart', (e) => {
+      e.dataTransfer.setData('text/plain', String(j.jcl_id));
+      row.style.opacity = '0.5';
     });
+    row.addEventListener('dragend', () => { row.style.opacity = '1'; });
+    row.addEventListener('dragover', (e) => { e.preventDefault(); row.style.borderTop = '2px solid var(--indigo2)'; });
+    row.addEventListener('dragleave', () => { row.style.borderTop = ''; });
+    row.addEventListener('drop', (e) => {
+      e.preventDefault();
+      row.style.borderTop = '';
+      const srcId = e.dataTransfer.getData('text/plain');
+      const src = host.querySelector('[data-jcl-id="' + srcId + '"]');
+      if (src && src !== row) host.insertBefore(src, row);
+    });
+    host.appendChild(row);
   });
   // v3.5.0-alpha.159 — Cache JCL data per summary live
   window._advConfJcls = jcls;
+  // v3.5.0-alpha.166 — Sync summary anche su edit AP.amount
+  const amtInp = document.getElementById('adv-conf-amount');
+  if (amtInp) amtInp.oninput = () => _refreshAdvConfSummary();
   _refreshAdvConfSummary();
   openModal('modal-advance-confirm');
 }
 
-// v3.5.0-alpha.159 — Riepilogo live: somma allocato + % su quotato progetto.
+// v3.5.0-alpha.166 — Riepilogo live: Σ alloc / AP.amount / residuo + warning over-cap.
 function _refreshAdvConfSummary() {
   const summary = document.getElementById('adv-conf-allocs-summary');
   if (!summary) return;
   const host = document.getElementById('adv-conf-allocs-host');
-  const jcls = window._advConfJcls || [];
   const apAmount = parseFloat(document.getElementById('adv-conf-amount').value) || 0;
-  let totalQuotedSel = 0;
-  let totalAllocAmount = 0;
+  let sumAlloc = 0;
   let countSel = 0;
-  host.querySelectorAll('input[type=checkbox]').forEach(cb => {
-    if (!cb.checked) return;
-    const jclId = parseInt(cb.dataset.jclId, 10);
-    const j = jcls.find(x => x.jcl_id === jclId);
-    if (!j) return;
-    const inp = host.querySelector('input[type=number][data-jcl-pct="' + jclId + '"]');
-    const pct = parseFloat(inp ? inp.value : 100) / 100;
-    if (pct <= 0) return;
-    totalQuotedSel += (j.total_quoted || 0) * pct;
-    totalAllocAmount += apAmount * pct;
-    countSel += 1;
-  });
-  const quotedAllProj = jcls.reduce((s, j) => s + (j.total_quoted || 0), 0);
-  const pctOfQuote = quotedAllProj > 0 ? (totalQuotedSel / quotedAllProj * 100) : 0;
-  if (countSel === 0) {
-    summary.textContent = 'Nessuna allocazione · totale quotato progetto: ' + fmtCurrency(quotedAllProj);
-    summary.style.color = 'var(--text-muted)';
-    return;
-  }
-  let txt = countSel + ' voce/i · quotato selezionato ' + fmtCurrency(totalQuotedSel) +
-    ' = ' + pctOfQuote.toFixed(2) + '% del totale progetto ' + fmtCurrency(quotedAllProj);
-  // Warning se Σ pct allocazioni > 100% (= ap.amount totale)
-  const pctSum = jcls.reduce((s, j) => {
-    const cb = host.querySelector('input[type=checkbox][data-jcl-id="' + j.jcl_id + '"]');
-    if (!cb || !cb.checked) return s;
-    const inp = host.querySelector('input[type=number][data-jcl-pct="' + j.jcl_id + '"]');
-    return s + (parseFloat(inp ? inp.value : 0) || 0);
-  }, 0);
-  if (pctSum > 100.5) {
-    txt += ' · ⚠ Σ pct ' + pctSum.toFixed(1) + '% > 100%';
-    summary.style.color = '#f59e0b';
-  } else {
-    summary.style.color = 'var(--text)';
-  }
-  summary.textContent = txt;
-}
-
-// v3.5.0-alpha.158 — Raccoglie allocations_set CSV "jcl_id:pct,..." per
-// sostituzione totale via backend confirm.allocations_set (add/remove/modify).
-function _collectAllocSet() {
-  const host = document.getElementById('adv-conf-allocs-host');
-  const out = [];
+  let overCap = false;
   host.querySelectorAll('input[type=checkbox]').forEach(cb => {
     if (!cb.checked) return;
     const jclId = cb.dataset.jclId;
-    const inp = host.querySelector('input[type=number][data-jcl-pct="' + jclId + '"]');
+    const inp = host.querySelector('input[type=number][data-jcl-amount="' + jclId + '"]');
     if (!inp) return;
-    const pct = parseFloat(inp.value || 100) / 100;
-    if (!isNaN(pct) && pct > 0 && pct <= 1.0) out.push(jclId + ':' + pct);
+    const amt = parseFloat(inp.value || 0) || 0;
+    if (amt <= 0) return;
+    const max = parseFloat(inp.dataset.jclMax || 0) || 0;
+    if (max > 0 && amt > max + 0.01) overCap = true;
+    sumAlloc += amt;
+    countSel += 1;
+  });
+  const residual = apAmount - sumAlloc;
+  let txt = countSel + ' voce/i · Σ allocato ' + fmtCurrency(sumAlloc) +
+    ' / AP ' + fmtCurrency(apAmount) +
+    ' · residuo ' + fmtCurrency(residual);
+  let color = 'var(--text)';
+  if (overCap) {
+    txt += ' · ⚠ amount > quotato JCL';
+    color = '#ef4444';
+  } else if (sumAlloc > apAmount + 0.01) {
+    txt += ' · ⚠ Σ > AP.amount';
+    color = '#ef4444';
+  } else if (residual > 0.01) {
+    txt += ' · ⚠ residuo non allocato';
+    color = '#f59e0b';
+  }
+  summary.style.color = color;
+  summary.textContent = txt;
+}
+
+// v3.5.0-alpha.166 — Raccoglie allocations_set CSV "jcl_id:amount,..."
+// in ordine DOM (drag order, impatta preset future + sort_order persistito).
+function _collectAllocSet() {
+  const host = document.getElementById('adv-conf-allocs-host');
+  const out = [];
+  host.querySelectorAll('[data-jcl-id]').forEach(row => {
+    const cb = row.querySelector('input[type=checkbox]');
+    if (!cb || !cb.checked) return;
+    const jclId = cb.dataset.jclId;
+    const inp = row.querySelector('input[type=number][data-jcl-amount="' + jclId + '"]');
+    if (!inp) return;
+    const amt = parseFloat(inp.value || 0) || 0;
+    if (amt > 0) out.push(jclId + ':' + amt.toFixed(2));
   });
   return out.join(',');
+}
+
+// v3.5.0-alpha.166 — Applica preset via /api/advances/{id}/preview-preset.
+// Selected JCL in ordine DOM → CSV, backend ricalcola amount per ognuna.
+async function applyAdvPreset() {
+  const id = document.getElementById('adv-conf-id').value;
+  if (!id) return;
+  const preset = document.getElementById('adv-conf-preset').value;
+  const host = document.getElementById('adv-conf-allocs-host');
+  // JCL selezionati in ordine DOM
+  const orderedIds = [];
+  host.querySelectorAll('[data-jcl-id]').forEach(row => {
+    const cb = row.querySelector('input[type=checkbox]');
+    if (cb && cb.checked) orderedIds.push(cb.dataset.jclId);
+  });
+  if (orderedIds.length === 0) {
+    toast('Seleziona almeno una voce prima di applicare il preset', 'error');
+    return;
+  }
+  const fd = new FormData();
+  fd.append('preset', preset);
+  fd.append('jcl_ids', orderedIds.join(','));
+  try {
+    const res = await api('POST', '/finance/api/advances/' + id + '/preview-preset', fd);
+    // Popola input amount con valori calcolati
+    (res.allocations || []).forEach(a => {
+      const inp = host.querySelector('input[type=number][data-jcl-amount="' + a.jcl_id + '"]');
+      if (inp) inp.value = (a.amount || 0).toFixed(2);
+    });
+    _refreshAdvConfSummary();
+    toast('Preset ' + preset + ' applicato · residuo ' + fmtCurrency(res.residual || 0), 'success');
+  } catch (e) { toast(e.message || 'Errore preset', 'error'); }
 }
 
 async function submitAdvConfirm(nextStatus) {

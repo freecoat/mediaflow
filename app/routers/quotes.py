@@ -963,6 +963,14 @@ async def create_advance_schedule(
         raise HTTPException(404, "Quote non trovata")
     if pct is None and amount_fixed is None:
         raise HTTPException(400, "Specificare pct o amount_fixed")
+    # v3.5.0-alpha.166 — Mutual exclusion. Pre-α.166: entrambi valorizzati →
+    # amount_fixed prevaleva silenziosamente in _compute_amount, semantica
+    # confusa. Ora rifiuta esplicito.
+    if pct is not None and pct > 0 and amount_fixed is not None and amount_fixed > 0:
+        raise HTTPException(
+            400,
+            "pct e amount_fixed mutualmente esclusivi: specifica uno o l'altro, non entrambi",
+        )
     if pct is not None and (pct < 0 or pct > 1.0):
         raise HTTPException(400, "pct deve essere tra 0 e 1.0 (es. 0.30 = 30%)")
     if amount_fixed is not None and amount_fixed < 0:
@@ -1029,14 +1037,19 @@ async def update_advance_schedule(
     if not s:
         raise HTTPException(404, "Schedule non trovato")
     if label is not None: s.label = label.strip()
+    # v3.5.0-alpha.166 — Mutual exclusion: settare pct azzera amount_fixed e viceversa.
     if pct is not None:
         if pct < 0 or pct > 1.0:
             raise HTTPException(400, "pct deve essere tra 0 e 1.0")
         s.pct = pct
+        if pct > 0:
+            s.amount_fixed = None
     if amount_fixed is not None:
         if amount_fixed < 0:
             raise HTTPException(400, "amount_fixed deve essere >= 0")
         s.amount_fixed = amount_fixed
+        if amount_fixed > 0:
+            s.pct = None
     if due_anchor is not None:
         try:
             s.due_anchor = AdvanceDueAnchor(due_anchor)

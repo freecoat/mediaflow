@@ -141,6 +141,35 @@ async def list_cost_reports(
         )
         for r in apc_rows:
             advance_consumed_map[r.project_id] = float(r.cons or 0)
+    # v3.5.0-alpha.166 — Pre-fetch advance_paid_coverage per JCL su tutti i job
+    # in lista. Stessa formula del detail: Σ AP_alloc.amount × (Invoice.paid /
+    # Invoice.total). Permette OU aggregato di considerare la cassa già
+    # incassata via acconti pagati (oltre a slice billing).
+    from app.models import AdvancePaymentAllocation as _APA_list
+    advance_paid_by_job: dict[int, float] = {}
+    if job_ids:
+        ap_paid_rows = (
+            db.query(
+                JobCostLine.job_id,
+                _APA_list.amount,
+                Invoice.amount_paid,
+                Invoice.total.label("inv_total"),
+            )
+            .join(_APA_list, _APA_list.job_cost_line_id == JobCostLine.id)
+            .join(_AP, _AP.id == _APA_list.advance_payment_id)
+            .outerjoin(Invoice, Invoice.id == _AP.invoice_id)
+            .filter(
+                JobCostLine.job_id.in_(job_ids),
+                _AP.tenant_id == current_tenant_id(),
+                _AP.status != _APStat.cancelled,
+            )
+            .all()
+        )
+        for job_id_, alloc_amt_, paid_amt_, inv_total_ in ap_paid_rows:
+            if not inv_total_ or inv_total_ <= 0:
+                continue
+            ratio = min(1.0, (paid_amt_ or 0) / inv_total_)
+            advance_paid_by_job[job_id_] = advance_paid_by_job.get(job_id_, 0.0) + (alloc_amt_ or 0) * ratio
     # v3.5.0-alpha.153 — Cross-currency aggregati: pre-fetch tenant base currency.
     from app.models import Tenant
     _tenant_obj = db.query(Tenant).filter(Tenant.id == current_tenant_id()).first()
@@ -165,14 +194,19 @@ async def list_cost_reports(
         accrued_post_period = round(max(0.0, total_accrued - billed_locked), 2)
         forecast_future = round(max(0.0, total_expected - total_accrued), 2)
         # v3.5.0-alpha.157 — OU finanziario: effective_accrued = max(total_accrued, billed_locked).
-        # Pre-α.157: OU usava solo total_accrued (work effettivo da booking done),
-        # ignorando billed_locked > accrued (over-billing storico). Caso Vento Aperto Ep. 3:
-        # fatturato €19'246 ma work effettivo €4'200 → OU operativo -52'920 fuorviante.
-        # Ora OU finanziario considera il fatturato come "maturato" (cassa già passata).
-        effective_accrued = max(total_accrued, billed_locked)
-        effective_expected = max(total_expected, billed_locked)
+        # v3.5.0-alpha.166 — billed_total include advance_paid_coverage (cassa
+        # già incassata via acconti pagati, non solo slice batch). OU
+        # finanziario ora "riempie" (OU≈0) anche per voci completamente
+        # coperte da acconto pagato pre-billing.
+        advance_paid_job = round(advance_paid_by_job.get(j.id, 0.0), 2)
+        billed_total_job = round(billed_locked + advance_paid_job, 2)
+        effective_accrued = max(total_accrued, billed_total_job)
+        effective_expected = max(total_expected, billed_total_job)
         over_under_now = round(effective_accrued - total_quoted, 2)
         over_under_forecast = round(effective_expected - total_quoted, 2)
+        # Espone i due valori derivati anche nell'aggregato (UI cost report
+        # list può mostrare colonna "Fatturato totale" coerente con detail).
+
         # v3.5.0-alpha.135 (F26): split fatturato linked-to-slice vs amministrativo.
         # invoiced_net = Σ Invoice.subtotal (no draft/cancelled, TD04 sottratto).
         # billed_admin_net = invoiced_net − billed_locked (= fatture senza JCL link:
@@ -220,6 +254,9 @@ async def list_cost_reports(
             "billed_locked": billed_locked,
             "accrued_post_period": accrued_post_period,
             "forecast_future": forecast_future,
+            # v3.5.0-alpha.166 — Fatturato totale = slice + acconto pagato.
+            "advance_paid_coverage": advance_paid_job,
+            "billed_total": billed_total_job,
             # v3.5.0-alpha.135 (F26+F27)
             "invoiced_net": invoiced_net,
             "billed_admin_net": billed_admin_net,
@@ -496,14 +533,17 @@ async def job_cost_report(job_id: int, db: Session = Depends(get_db)):
             .all()
         )
         advance_coverage_by_jcl = {r[0]: float(r[1] or 0) for r in cov_rows}
-        # Paid coverage: join Invoice per ratio amount_paid/amount.
-        # Per JCL: Σ alloc.amount × ratio.
+        # v3.5.0-alpha.166 — Paid ratio = paid/total (entrambi lordi).
+        # Pre-α.166: ratio = paid/AP.amount mischiava lordo/netto (paid lordo
+        # IVA, AP netto): paid=33037.20 e AP=27079.67 → ratio=1.22 capped a 1.0.
+        # Funzionava se invoice fully paid, ma rotto su pagamenti parziali
+        # (50% IVA paid → ratio=0.61 mentre 50% imponibile coperto).
         paid_rows = (
             db.query(
                 _APA.job_cost_line_id,
                 _APA.amount,
-                _AP.amount.label("ap_amount"),
                 Invoice.amount_paid,
+                Invoice.total.label("inv_total"),
             )
             .join(_AP, _AP.id == _APA.advance_payment_id)
             .outerjoin(Invoice, Invoice.id == _AP.invoice_id)
@@ -514,14 +554,12 @@ async def job_cost_report(job_id: int, db: Session = Depends(get_db)):
             )
             .all()
         )
-        # v3.5.0-alpha.160.1 HOTFIX: rinomino loop var per evitare shadowing
-        # variabile esterna `paid` (job invoiced/paid sum). Pre-fix: dopo il
-        # for, paid restava None (ultima riga query con amount_paid=NULL) →
-        # TypeError round(None) line 776.
-        for jcl_id_, alloc_amt_, ap_amt_, paid_amt_ in paid_rows:
-            if not ap_amt_ or ap_amt_ <= 0:
+        # Loop var rinominate per evitare shadowing var esterna `paid`
+        # (job invoiced/paid sum) — vedi hotfix α.160.1.
+        for jcl_id_, alloc_amt_, paid_amt_, inv_total_ in paid_rows:
+            if not inv_total_ or inv_total_ <= 0:
                 continue
-            ratio = min(1.0, (paid_amt_ or 0) / ap_amt_)
+            ratio = min(1.0, (paid_amt_ or 0) / inv_total_)
             advance_paid_coverage_by_jcl[jcl_id_] = advance_paid_coverage_by_jcl.get(jcl_id_, 0.0) + (alloc_amt_ or 0) * ratio
     if job.project_id:
         ap_row = db.query(
@@ -629,6 +667,10 @@ async def job_cost_report(job_id: int, db: Session = Depends(get_db)):
         })
     sum_billed_locked = round(sum(billed_map.get(lid, 0.0) for lid in line_ids), 2)
     sum_accrued_post_period = round(max(0.0, total_accrued - sum_billed_locked), 2)
+    # v3.5.0-alpha.166 — sum_billed_total = slice + advance_paid_coverage,
+    # usato per OU "fill" (acconto pagato copre voce → OU≈0).
+    sum_advance_paid = round(sum(advance_paid_coverage_by_jcl.get(lid, 0.0) for lid in line_ids), 2)
+    sum_billed_total = round(sum_billed_locked + sum_advance_paid, 2)
     sum_forecast_future = round(max(0.0, total_expected - total_accrued), 2)
 
     # v3.5.0-alpha.65 — Pending OT per riga JCL: ore overtime in attesa di
@@ -751,13 +793,10 @@ async def job_cost_report(job_id: int, db: Session = Depends(get_db)):
             ),
             # v3.5.0-alpha.55: due viste di Over/Under.
             # v3.5.0-alpha.157: OU finanziario = max(accrued, billed) - quoted.
-            # Pre-α.157 ignorava billed_locked > accrued (over-billing storico).
-            # NOW = max(maturato, fatturato) − quotato (extracosto/cassa certo).
-            # FORECAST = max(stima, fatturato) − quotato (sforamento previsto).
-            # Convenzione segno: positivo = OVER (sforamento, problema),
-            # negativo = UNDER (sotto budget, ok).
-            "over_under_now": round(max(total_accrued, sum_billed_locked) - total_quoted, 2),
-            "over_under_forecast": round(max(total_expected, sum_billed_locked) - total_quoted, 2),
+            # v3.5.0-alpha.166: billed include advance_paid_coverage (acconto
+            # pagato copre voce pre-billing → OU ≈ 0 invece di -quoted).
+            "over_under_now": round(max(total_accrued, sum_billed_total) - total_quoted, 2),
+            "over_under_forecast": round(max(total_expected, sum_billed_total) - total_quoted, 2),
             # Back-compat: vecchio campo `over_under` lasciato come alias di
             # forecast (con segno invertito ex-API). Da non usare in nuovi
             # consumer: leggere over_under_now / over_under_forecast.
@@ -841,8 +880,10 @@ async def job_cost_report(job_id: int, db: Session = Depends(get_db)):
                 # v3.5.0-alpha.157: OU finanziario per riga = max(accrued, billed_locked) - quoted.
                 # Riallinea con vista Matteo: se fatturato > work, OU usa fatturato.
                 # Positivo = OVER (sforamento), negativo = UNDER (sotto budget).
-                "over_under_now": round(max((l.total_accrued or 0), billed_map.get(l.id, 0.0)) - (l.total_quoted or 0), 2),
-                "over_under_forecast": round(max((l.total_expected or 0), billed_map.get(l.id, 0.0)) - (l.total_quoted or 0), 2),
+                # v3.5.0-alpha.166: OU usa billed_total (slice + advance_paid_coverage),
+                # non solo billed_locked. Voce coperta da acconto pagato → OU ≈ 0.
+                "over_under_now": round(max((l.total_accrued or 0), billed_map.get(l.id, 0.0) + advance_paid_coverage_by_jcl.get(l.id, 0.0)) - (l.total_quoted or 0), 2),
+                "over_under_forecast": round(max((l.total_expected or 0), billed_map.get(l.id, 0.0) + advance_paid_coverage_by_jcl.get(l.id, 0.0)) - (l.total_quoted or 0), 2),
                 # Alias back-compat (= forecast). Da non usare in nuovi consumer.
                 "over_under": round(l.total_expected - l.total_quoted, 2),
                 "is_billable": l.is_billable,

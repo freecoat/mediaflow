@@ -1887,6 +1887,17 @@ class AdvancePayment(Base):
 # la JobCostLine corrispondente (mapping JCL.quote_line_id == QuoteLine.id).
 # Permette al cost report "fill mode" di mostrare "Coperto da acconto: €X"
 # per ogni JCL (Σ AP_allocation.amount per JCL).
+# v3.5.0-alpha.166 — Semantica chiarita:
+# - `amount` è AUTORITATIVO (cifra coperta dall'AP su questa JCL, EUR).
+# - `pct` è DERIVATO = amount / AP.amount (display, 0..1). Listener auto-sync
+#   in app/services/advance_alloc_listener.py mantiene pct allineato a amount.
+# - Vincoli applicativi: 0 ≤ amount ≤ JCL.total_quoted (no over-coverage),
+#   Σ amount per AP ≤ AP.amount (no over-alloc dell'acconto).
+# - Pre-α.166 (bug): amount era calcolato come AP.amount × pct con pct
+#   default 1.0 per ogni allocation → N×AP.amount allocato, semantica
+#   incoerente con la definizione del campo.
+# - `sort_order` introdotto α.166 per preset "fill_sequential" (riempi voci
+#   nell'ordine UI fino a coprire AP.amount, ultima parziale).
 class AdvancePaymentAllocation(Base):
     __tablename__ = "advance_payment_allocations"
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
@@ -1896,10 +1907,13 @@ class AdvancePaymentAllocation(Base):
     job_cost_line_id: Mapped[int] = mapped_column(
         ForeignKey("job_cost_lines.id", ondelete="CASCADE"), index=True
     )
-    # Quota % della JCL coperta da questo AP (0..1). Default 1.0 = copre tutta.
-    pct: Mapped[float] = mapped_column(Float, default=1.0)
-    # Importo derivato (snapshot al materialize). Ricalcolabile come AP.amount × pct.
+    # Importo coperto dall'AP su questa JCL (EUR, autoritativo).
     amount: Mapped[float] = mapped_column(Float, default=0.0)
+    # Quota derivata = amount / AP.amount (display only, nullable per back-compat).
+    # Listener sincronizza dopo insert/update di amount.
+    pct: Mapped[Optional[float]] = mapped_column(Float, default=0.0, nullable=True)
+    # Ordine per preset "fill_sequential" (NULL = ordina per id ASC).
+    sort_order: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
     advance_payment: Mapped["AdvancePayment"] = relationship(back_populates="allocations")
     job_cost_line: Mapped["JobCostLine"] = relationship(foreign_keys=[job_cost_line_id])
     __table_args__ = (
