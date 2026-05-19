@@ -8,6 +8,34 @@
 
 ## Versione corrente
 
+**v3.5.0-alpha.170** — 19 maggio 2026 — Timeline polish (multi-dept + altezza + scroll + click dettagli) + cashflow filtri + anomalie fallback
+
+9 bug aperti da Matteo post α.169 (4 timeline + 2 anomalie + 3 cashflow).
+
+**Timeline**:
+- `groupHeightMode: 'fixed'` → `'auto'` (riga 74px non tornava a 39px dopo zoom-out)
+- `min/max` range espliciti ±5 anni (scroll orizzontale "si interrompe e non scorre oltre")
+- Click singolo su label risorsa → popover esteso (tipo/cost type/email/phone/interno; pre-α.170 solo ruolo/reparto)
+- Filtro reparto `<select multiple size=4>` (CSV → backend `_parse_id_list`)
+
+**Anomalie**:
+- Filtri cliente/progetto con fallback `OR (col = X, job_id IN subquery)` per record storici con campo NULL
+- `/v2/summary` accetta gli stessi filtri della lista (chip si aggiornano)
+- Auto-detect alla prima apertura tab nella sessione (`ensureAnomDetectOnFirstOpen`)
+
+**Cashflow**:
+- `/by-department` accetta `client_id`/`project_id` (split per reparto era invariato anche con filtri attivi)
+- CSS form-input: `height:32px` clippava bottom (descender g/q tagliati) → `min-height:34px + line-height:20px + padding:6px 10px + box-sizing:border-box`
+- Bottone "🔄 Aggiorna" + focus/blur listener su `cf-year` (select nativo non emette `change` su same-value)
+
+Smoke:
+- planning.html con `RESOURCES_SEED` esteso (6 nuovi campi serializzati) ✓
+- `<select multiple>` reparto + CSV roundtrip ✓
+- `/finance/api/anomalies/v2?client_id=X` con OR fallback ✓
+- `/finance/api/cashflow/{year}/by-department?client_id=X` filtra ✓
+
+## (versione precedente)
+
 **v3.5.0-alpha.169** — 18 maggio 2026 — Timeline sticky axis + refresh CR + anomalie filtri+€-over + invoice qty fix
 
 4 bug aperti da Matteo post α.168.

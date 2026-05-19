@@ -120,10 +120,24 @@ async def list_anomalies(
             q = q.filter(AnomalyEntry.anomaly_type == AnomalyType(anomaly_type))
         except ValueError:
             raise HTTPException(400, f"anomaly_type invalido: {anomaly_type}")
+    # v3.5.0-alpha.170 — Fallback robusto: anomalie create prima dei detector
+    # post-α.89 (o casi degenerati) possono avere client_id/project_id=NULL
+    # nonostante il job_id sia popolato. Senza fallback il filtro non
+    # ritornava nulla. Ora usiamo OR con subquery: match diretto OR derivato
+    # via Job.
+    from sqlalchemy import or_
     if project_id:
-        q = q.filter(AnomalyEntry.project_id == project_id)
+        job_ids_in_proj = db.query(Job.id).filter(Job.project_id == project_id).subquery()
+        q = q.filter(or_(
+            AnomalyEntry.project_id == project_id,
+            AnomalyEntry.job_id.in_(job_ids_in_proj),
+        ))
     if client_id:
-        q = q.filter(AnomalyEntry.client_id == client_id)
+        job_ids_for_client = db.query(Job.id).filter(Job.client_id == client_id).subquery()
+        q = q.filter(or_(
+            AnomalyEntry.client_id == client_id,
+            AnomalyEntry.job_id.in_(job_ids_for_client),
+        ))
     if department_id:
         # Subquery JCL del dipartimento richiesto via price_item.department_id
         from sqlalchemy import select
@@ -143,22 +157,49 @@ async def list_anomalies(
 
 
 @router.get("/api/anomalies/v2/summary", dependencies=[RequireViewAnomalies])
-async def summary_anomalies(db: Session = Depends(get_db)):
-    """KPI per dashboard: conteggi e totale € per tipo, solo open."""
-    from sqlalchemy import func
-    rows = (
-        db.query(
+async def summary_anomalies(
+    project_id: Optional[int] = None,
+    client_id: Optional[int] = None,
+    department_id: Optional[int] = None,
+    db: Session = Depends(get_db),
+):
+    """KPI per dashboard: conteggi e totale € per tipo, solo open.
+
+    v3.5.0-alpha.170 — Accetta gli stessi filtri di /v2 (project_id, client_id,
+    department_id). I chip in UI ora riflettono il contesto del filtro,
+    pre-α.170 mostravano sempre il totale aggregato (bug segnalato Matteo).
+    """
+    from sqlalchemy import func, or_
+    q = db.query(
             AnomalyEntry.anomaly_type,
             func.count(AnomalyEntry.id).label("n"),
             func.sum(AnomalyEntry.amount).label("total"),
-        )
-        .filter(
+        ).filter(
             AnomalyEntry.tenant_id == current_tenant_id(),
             AnomalyEntry.status == AnomalyStatus.open,
         )
-        .group_by(AnomalyEntry.anomaly_type)
-        .all()
-    )
+    if project_id:
+        job_ids_in_proj = db.query(Job.id).filter(Job.project_id == project_id).subquery()
+        q = q.filter(or_(
+            AnomalyEntry.project_id == project_id,
+            AnomalyEntry.job_id.in_(job_ids_in_proj),
+        ))
+    if client_id:
+        job_ids_for_client = db.query(Job.id).filter(Job.client_id == client_id).subquery()
+        q = q.filter(or_(
+            AnomalyEntry.client_id == client_id,
+            AnomalyEntry.job_id.in_(job_ids_for_client),
+        ))
+    if department_id:
+        from sqlalchemy import select
+        dept_jcl_ids = select(JobCostLine.id).join(
+            PriceItem, PriceItem.id == JobCostLine.price_item_id
+        ).where(PriceItem.department_id == department_id)
+        q = q.filter(
+            AnomalyEntry.source_kind == AnomalySourceKind.jcl,
+            AnomalyEntry.source_id.in_(dept_jcl_ids),
+        )
+    rows = q.group_by(AnomalyEntry.anomaly_type).all()
     out = {t.value: {"n": 0, "total": 0.0} for t in AnomalyType}
     for t, n, tot in rows:
         out[t.value if hasattr(t, "value") else t] = {

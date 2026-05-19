@@ -1670,19 +1670,38 @@ async def cashflow_year(
 
 
 @router.get("/api/cashflow/{year}/by-department")
-async def cashflow_by_department(year: int, db: Session = Depends(get_db)):
+async def cashflow_by_department(
+    year: int,
+    project_id: Optional[str] = None,
+    client_id: Optional[str] = None,
+    db: Session = Depends(get_db),
+):
     """v3.5.0-alpha.123 (F19) — Breakdown annuale per Department.
     Revenue side: Invoice → JCLBilledSlice → JobCostLine → PriceItem.department_id.
     Cost side (supplier): SupplierInvoice → Resource → Resource.department_id.
     Annuale (no mensile per ora) per evitare query O(N×12) sul DB.
     Ritorna sia campi total (IVA inclusa) sia _net (imponibile). UI sceglie
     via toggle Mostra IVA.
+
+    v3.5.0-alpha.170 — Accetta i filtri client_id/project_id (CSV) per
+    coerenza con /api/cashflow/{year}. Pre-α.170 lo split per reparto
+    mostrava sempre TUTTI i progetti/clienti del tenant → user percepiva
+    "filtri non funzionano" (i totali in alto cambiavano, il breakdown no).
     """
     from app.models import (
         JCLBilledSlice, JobCostLine as _JCL, Department, Resource, PriceItem,
     )
     from sqlalchemy import extract, func as _func, case as _case
     tid = current_tenant_id()
+    def _parse_csv_ids(v: Optional[str]) -> Optional[list[int]]:
+        if not v:
+            return None
+        try:
+            return [int(x.strip()) for x in v.split(",") if x.strip()]
+        except ValueError:
+            return None
+    pids = _parse_csv_ids(project_id)
+    cids = _parse_csv_ids(client_id)
     # v3.5.0-alpha.125 (P2.B precision) — revenue_net calcolato preciso per
     # slice via ratio (subtotal/total) di ogni invoice, invece di /1.22 medio.
     # Espressione: Σ (slice.billed_amount × invoice.subtotal / invoice.total)
@@ -1691,7 +1710,7 @@ async def cashflow_by_department(year: int, db: Session = Depends(get_db)):
         (Invoice.total > 0, JCLBilledSlice.billed_amount * Invoice.subtotal / Invoice.total),
         else_=JCLBilledSlice.billed_amount / 1.22,
     )
-    revenue_rows = (
+    rev_q = (
         db.query(
             Department.id, Department.name,
             _func.coalesce(_func.sum(JCLBilledSlice.billed_amount), 0.0),
@@ -1708,9 +1727,13 @@ async def cashflow_by_department(year: int, db: Session = Depends(get_db)):
             Invoice.status != InvoiceStatus.draft,
             JCLBilledSlice.voided_at.is_(None),
         )
-        .group_by(Department.id, Department.name)
-        .all()
     )
+    # v3.5.0-alpha.170 — Filtri cliente/progetto via Invoice.client_id / Invoice.job → Job.project_id
+    if cids:
+        rev_q = rev_q.filter(Invoice.client_id.in_(cids))
+    if pids:
+        rev_q = rev_q.join(Job, Invoice.job_id == Job.id).filter(Job.project_id.in_(pids))
+    revenue_rows = rev_q.group_by(Department.id, Department.name).all()
     by_dept = {}
     for did, dname, total, net in revenue_rows:
         key = did if did else 0
@@ -1724,7 +1747,7 @@ async def cashflow_by_department(year: int, db: Session = Depends(get_db)):
         }
 
     # Cost side per dept: SupplierInvoice.resource → Resource.department_id
-    cost_rows = (
+    cost_q = (
         db.query(
             Resource.department_id,
             _func.coalesce(_func.sum(SupplierInvoice.amount_total), 0.0),
@@ -1737,9 +1760,20 @@ async def cashflow_by_department(year: int, db: Session = Depends(get_db)):
             SupplierInvoice.deleted_at.is_(None),
             SupplierInvoice.payment_status != SupplierInvoiceStatus.cancelled,
         )
-        .group_by(Resource.department_id)
-        .all()
     )
+    # v3.5.0-alpha.170 — Filtri cliente/progetto. SupplierInvoice ha project_id
+    # diretto (denormalizzato) + job_id opzionale; cliente derivabile solo via job.
+    from sqlalchemy import or_ as _or
+    if cids or pids:
+        cost_q = cost_q.outerjoin(Job, SupplierInvoice.job_id == Job.id)
+        if cids:
+            cost_q = cost_q.filter(Job.client_id.in_(cids))
+        if pids:
+            cost_q = cost_q.filter(_or(
+                SupplierInvoice.project_id.in_(pids),
+                Job.project_id.in_(pids),
+            ))
+    cost_rows = cost_q.group_by(Resource.department_id).all()
     dept_names = {d.id: d.name for d in db.query(Department).filter(Department.tenant_id == tid).all()}
     for did, total, net in cost_rows:
         key = did if did else 0

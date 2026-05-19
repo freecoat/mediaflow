@@ -1,5 +1,40 @@
 # MediaFlow — Changelog
 
+## v3.5.0-alpha.170 — Timeline polish (multi-dept + altezza + scroll + click dettagli) + cashflow filtri + anomalie fallback (19 mag 2026)
+
+9 bug aperti da Matteo post α.169.
+
+**Timeline — `groupHeightMode: 'auto'`** (pre-α.170 `'fixed'`): bug shrink-back. Su 1 risorsa con overlap (2 booking sovrapposti) tutte le righe gruppo si alzavano a 74px (pattern `fixed` = altezza uniforme massima); zoom-out non riportava più le altre risorse a 39px. Con `'auto'` ogni gruppo prende l'altezza minima necessaria ai propri item.
+
+**Timeline — `min/max` range espliciti** (5 anni passato/+5 futuro): bug "scroll si interrompe e non scorre oltre". Vis-timeline 7.x senza `min/max` espliciti deriva il range dai dati → out of items = stop di fatto. Setting `min: gen 5 anni fa / max: dic 5 anni futuro` libera lo scroll orizzontale al di là dei booking esistenti.
+
+**Timeline — click singolo su label risorsa → popover dettaglio** + dettagli estesi: pre-α.170 serviva doppio click; il popover mostrava solo `ID/Ruolo/Reparto/Booking attivi`. Ora click singolo (più scopribile, doppio click resta funzionante) e popover include:
+- Tipo (`👤 Interno`/`🎒 Freelance`/`🏛 Studio`/`🎬 Attrezzatura`/`💻 Software`/`🚗 Veicolo`)
+- Cost type (Dipendente/Freelance/Sala-struttura)
+- Email, Telefono, Interno
+
+`RESOURCES_SEED` esteso lato template (Jinja) con `type`, `email`, `phone`, `internal_phone`, `supplier_id`, `cost_type`.
+
+**Timeline — filtro reparto multi-select**: pre-α.170 era `<select>` singolo (1 reparto o tutti). Ora `<select multiple size="4">` con CSV passato al backend (già supportato via `_parse_id_list`). Hint UI: "Ctrl/Cmd+click per multi-selezione". `getFilterParams`, `writeFiltersToURL`, `readFiltersFromURL`, `resetFilters` gestiscono `el.multiple` → `selectedOptions`.
+
+**Anomalie — filtri cliente/progetto fallback robusto**: pre-α.170 `WHERE client_id = X` falliva per anomalie storiche con `client_id IS NULL` ma `job_id` popolato. Ora `OR (client_id = X, job_id IN subquery)` deriva il cliente/progetto via Job.
+
+**Anomalie — `/v2/summary` accetta filtri**: pre-α.170 i chip in alto mostravano sempre il totale globale → user percepiva "filtri rotti" se i chip restavano invariati. Ora summary accetta `client_id`, `project_id`, `department_id` (stessi della lista).
+
+**Anomalie — auto-detect alla prima apertura della tab**: il bug "non vedo i 1480,62€ di Over" probabilmente derivava dal mancato re-scan dopo emit_invoice. Ora `ensureAnomDetectOnFirstOpen()` fa un `POST /detect` silente alla prima apertura della tab anomalie nella sessione. Detect-button manuale resta.
+
+**Cashflow — filtro cliente/progetto applicato a `/by-department`**: pre-α.170 lo split per reparto mostrava sempre tutto il tenant anche con cliente/progetto selezionato → user percepiva "filtri non funzionano". Ora endpoint accetta `client_id`/`project_id` (CSV) e applica join su Invoice/SupplierInvoice. Per supplier: usa `SupplierInvoice.project_id` diretto OR `Job.project_id` via outerjoin.
+
+**Cashflow — CSS cut-off granularità/anno**: `height: 32px` clippava il descender (g/q invisibili). Cambiato a `min-height: 34px` + `line-height: 20px` + `padding: 6px 10px` + `box-sizing: border-box`. Applicato anche a cliente/progetto.
+
+**Cashflow — refresh on same-year**: `<select>` nativo non emette `change` se cliccato sullo stesso valore. Aggiunto bottone "🔄 Aggiorna" esplicito + listener focus/blur su `cf-year` che fa reload se il valore non è cambiato fra focus e blur (l'utente ha aperto la dropdown senza cambiare → presunto rispetto del refresh).
+
+Smoke:
+- planning.html boot OK con `RESOURCES_SEED` esteso ✓
+- `<select multiple>` reparto popola array → CSV → backend `_parse_id_list` ✓
+- `/finance/api/anomalies/v2?client_id=X` con OR fallback ritorna anche entry con `client_id IS NULL` ma `job_id IN client jobs` ✓
+- `/finance/api/cashflow/{year}/by-department?client_id=X` filtra ✓
+
 ## v3.5.0-alpha.169 — Timeline sticky axis + refresh CR + anomalie filtri+€-over + invoice qty fix (18 mag 2026)
 
 4 nuovi bug da Matteo post α.168.

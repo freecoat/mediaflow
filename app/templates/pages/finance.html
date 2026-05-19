@@ -873,7 +873,9 @@ async function _initFinFilters() {
       ) : null;
       if (name === 'invoices') loadInvoices();
       else if (name === 'batches') loadBatches();
-      else if (name === 'anomalies') loadAnomalies();
+      else if (name === 'anomalies') {
+        ensureAnomDetectOnFirstOpen().then(() => loadAnomalies());
+      }
     },
   });
 }
@@ -886,7 +888,8 @@ function showSection(name, el) {
   document.getElementById('section-'+name).classList.remove('hidden');
   document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
   el.classList.add('active');
-  if (name === 'anomalies') loadAnomalies();
+  // v3.5.0-alpha.170 — Anomalie: auto-detect alla prima apertura della sessione.
+  if (name === 'anomalies') ensureAnomDetectOnFirstOpen().then(() => loadAnomalies());
   if (name === 'batches') loadBatches();
   if (name === 'advances-drafts') loadAdvancesDrafts();
 }
@@ -2817,9 +2820,31 @@ async function runAnomalyDetect() {
   } catch(e) { toast(e.message || 'Errore detect', 'error'); }
 }
 
-async function loadAnomalies() {
+// v3.5.0-alpha.170 — Auto-detect alla PRIMA apertura della tab anomalie nella
+// sessione. Bug Matteo "non vedo i 1480,62€ di Over": l'anomalia probabilmente
+// emergerebbe da un re-scan idempotente (detect_all). Pre-α.170 serviva click
+// manuale su "🔄 Rileva"; ora il primo accesso lo fa silente (silenzioso, no
+// toast). Auto-detect è già disponibile via checkbox "auto-rileva" (10 min).
+let _anAutoDetectedOnce = false;
+async function ensureAnomDetectOnFirstOpen() {
+  if (_anAutoDetectedOnce) return;
+  _anAutoDetectedOnce = true;
   try {
-    const summary = await api('GET', '/finance/api/anomalies/v2/summary');
+    await api('POST', '/finance/api/anomalies/detect');
+  } catch (_) { /* silent: detect fallisce → l'utente vedrà comunque le anomalie pregresse */ }
+}
+
+async function loadAnomalies() {
+  // v3.5.0-alpha.170 — Summary ora accetta gli stessi filtri della lista,
+  // così i chip riflettono il contesto del filtro applicato (pre-α.170
+  // mostravano i totali globali).
+  const sumQs = [];
+  if (_anDept) sumQs.push('department_id=' + _anDept);
+  if (_anClient) sumQs.push('client_id=' + _anClient);
+  if (_anProject) sumQs.push('project_id=' + _anProject);
+  const sumUrl = '/finance/api/anomalies/v2/summary' + (sumQs.length ? '?' + sumQs.join('&') : '');
+  try {
+    const summary = await api('GET', sumUrl);
     renderAnomSummary(summary);
   } catch(e) { /* skip summary errors */ }
   const qs = [];

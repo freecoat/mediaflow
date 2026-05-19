@@ -156,13 +156,13 @@
     </div>
 
     <div class="form-group">
-      <label>Reparto</label>
-      <select id="f-dept" class="form-select" onchange="onFilterChange()">
-        <option value="">— tutti —</option>
+      <label>Reparto <span class="text-xs text-muted">(multi — Ctrl/Cmd+click)</span></label>
+      <select id="f-dept" class="form-select" multiple size="4" onchange="onFilterChange()" style="min-height:96px;">
         {% for d in departments %}
         <option value="{{ d.id }}">{{ d.name }}</option>
         {% endfor %}
       </select>
+      <div class="text-xs text-muted" style="margin-top:4px;">Vuoto = tutti i reparti</div>
     </div>
 
     <div class="form-group" style="position:relative;">
@@ -1021,7 +1021,7 @@ const CAN_CREATE_BOOKING   = {{ 'true' if can_create_booking(request.state.curre
 const CAN_ASSIGN_RESOURCES = {{ 'true' if can_assign_resources(request.state.current_user) else 'false' }};
 const CAN_REQUEST_BOOKING  = {{ 'true' if request.state.current_user else 'false' }};
 const RESOURCES_SEED = [
-{% for r in resources %}  {id:{{ r.id }}, name:{{ r.name|tojson }}, dept:{{ (r.department_id or 0) }}, color:{{ (r.color or '#6272f5')|tojson }}, role:{{ (r.role or '')|tojson }}}{{ "," if not loop.last else "" }}
+{% for r in resources %}  {id:{{ r.id }}, name:{{ r.name|tojson }}, dept:{{ (r.department_id or 0) }}, color:{{ (r.color or '#6272f5')|tojson }}, role:{{ (r.role or '')|tojson }}, type:{{ (r.type.value if r.type else '')|tojson }}, email:{{ (r.email or '')|tojson }}, phone:{{ (r.phone or '')|tojson }}, internal_phone:{{ (r.internal_phone or '')|tojson }}, supplier_id:{{ (r.supplier_id or 0) }}, cost_type:{{ (r.cost_type.value if r.cost_type else '')|tojson }}}{{ "," if not loop.last else "" }}
 {% endfor %}];
 const DEPARTMENTS_SEED = [
 {% for d in departments %}  {id:{{ d.id }}, name:{{ d.name|tojson }}, color:{{ (d.color or '#6272f5')|tojson }}}{{ "," if not loop.last else "" }}
@@ -1181,6 +1181,12 @@ function readFiltersFromURL() {
     if (!el) return;
     // v3.5.0-alpha.56: gestione checkbox separata (hide-not-done).
     if (el.type === 'checkbox') { el.checked = (p.get(k) === '1'); return; }
+    // v3.5.0-alpha.170 — multi-select reparto: restore selectedOptions da CSV
+    if (el.multiple && p.get(k)) {
+      const vals = new Set(p.get(k).split(',').filter(Boolean));
+      Array.from(el.options).forEach(o => { o.selected = vals.has(o.value); });
+      return;
+    }
     if (p.get(k)) el.value = p.get(k);
   });
   // v3.4.47: render chips multi per ogni filtro autocomplete
@@ -1195,6 +1201,12 @@ function writeFiltersToURL(view) {
     const el = document.getElementById('f-' + k);
     if (!el) return;
     if (el.type === 'checkbox') { if (el.checked) p.set(k, '1'); return; }
+    // v3.5.0-alpha.170 — multi-select reparto: CSV se più valori selezionati.
+    if (el.multiple) {
+      const vals = Array.from(el.selectedOptions).map(o => o.value).filter(Boolean);
+      if (vals.length) p.set(k, vals.join(','));
+      return;
+    }
     if (el.value) p.set(k, el.value);
   });
   history.replaceState(null, '', '/planning/?' + p.toString());
@@ -1206,7 +1218,14 @@ function getFilterParams() {
   const map = {q:'q', dept:'department_id', client:'client_id', project:'project_id', job:'job_id', resource:'resource_id', status:'status', kind:'kind', from:'from_date', to:'to_date'};
   for (const [k, key] of Object.entries(map)) {
     const el = document.getElementById('f-'+k);
-    if (el && el.value) p[key] = el.value;
+    if (!el) continue;
+    // v3.5.0-alpha.170 — multi-select reparto: backend accetta CSV su department_id.
+    if (el.multiple) {
+      const vals = Array.from(el.selectedOptions).map(o => o.value).filter(Boolean);
+      if (vals.length) p[key] = vals.join(',');
+      continue;
+    }
+    if (el.value) p[key] = el.value;
   }
   return p;
 }
@@ -1350,6 +1369,8 @@ function resetFilters() {
     const el = document.getElementById('f-'+k);
     if (!el) return;
     if (el.type === 'checkbox') { el.checked = false; return; }
+    // v3.5.0-alpha.170 — multi-select: deseleziona tutto
+    if (el.multiple) { Array.from(el.options).forEach(o => { o.selected = false; }); return; }
     el.value = '';
   });
   // v3.4.47: pulisce input ricerca + chips multi
@@ -3282,8 +3303,26 @@ function tlShowResourceDetail(resourceId) {
     row.appendChild(l); row.appendChild(v); pop.appendChild(row);
   };
   addRow('ID', r.id);
+  // v3.5.0-alpha.170 — Dettagli estesi: tipo (interno/freelance/studio/...),
+  // ruolo, reparto, cost type, contatti. Risolve gap segnalato da Matteo
+  // (click su risorsa → "non vedo freelancer/interna, contatti, ecc.").
+  const TYPE_LABEL = {
+    person_internal: '👤 Interno',
+    person_freelance: '🎒 Freelance',
+    person: '👤 Persona',
+    studio: '🏛 Studio/Sala',
+    equipment: '🎬 Attrezzatura',
+    software: '💻 Software',
+    vehicle: '🚗 Veicolo',
+  };
+  if (r.type) addRow('Tipo', TYPE_LABEL[r.type] || r.type);
   if (r.role) addRow('Ruolo', r.role);
   if (dept) addRow('Reparto', dept.name);
+  const COST_LABEL = { employee: 'Dipendente', freelance: 'Freelance', studio: 'Sala/struttura' };
+  if (r.cost_type) addRow('Cost type', COST_LABEL[r.cost_type] || r.cost_type);
+  if (r.email) addRow('Email', r.email);
+  if (r.phone) addRow('Telefono', r.phone);
+  if (r.internal_phone) addRow('Interno', r.internal_phone);
   addRow('Booking attivi', String(activeCount));
   // Actions
   const acts = document.createElement('div');
@@ -4925,7 +4964,17 @@ async function _doRenderTimeline(preserveWindow=false) {
     // sparse e il salto in testa.
     margin: {item: {horizontal: 0, vertical: 3}, axis: 6},
     stackSubgroups: !_lightMode,
-    groupHeightMode: 'fixed',
+    // v3.5.0-alpha.170 — 'fixed' equalizzava tutti i gruppi al massimo
+    // (con 1 overlap su 1 risorsa, TUTTE le righe diventavano 74px e non
+    // tornavano più a 39px dopo zoom-out). 'auto' = ogni gruppo prende
+    // l'altezza minima necessaria ai propri item visibili.
+    groupHeightMode: 'auto',
+    // v3.5.0-alpha.170 — min/max scroll espliciti (5 anni passato / 5 futuro).
+    // Bug Matteo: scroll orizzontale si interrompeva e non scorreva oltre;
+    // senza min/max vis-timeline 7.x può imporre un range implicito dai dati
+    // → out of items = stop. Esplicitare risolve la dipendenza dal dataset.
+    min: new Date(new Date().getFullYear() - 5, 0, 1),
+    max: new Date(new Date().getFullYear() + 5, 11, 31),
     // v3.5.0-alpha.44: altezza dinamica viewport (era hardcoded 600). Si
     // v3.5.0-alpha.169 — Ripristinato pattern α.84 (height+maxHeight=viewport):
     // toolbar pagina sempre visibile + perf (axis ridotto a viewport). Lo
@@ -5193,6 +5242,16 @@ async function _doRenderTimeline(preserveWindow=false) {
     });
     _tlHostEl.addEventListener('mouseleave', () => tlTooltipHide());
   }
+
+  // v3.5.0-alpha.170 — Single click su label risorsa apre popover dettaglio.
+  // Pre-α.170 era richiesto doppio click + il popover mancava di tipo (interno/
+  // freelance/studio/...) e contatti (email/phone). Click singolo è più
+  // scopribile; il doppio click resta funzionante (handler dedicato sotto).
+  tlInstance.on('click', (props) => {
+    if (props.what === 'group-label' && typeof props.group === 'number') {
+      tlShowResourceDetail(props.group);
+    }
+  });
 
   let __tlLastDblClick = 0;
   tlInstance.on('doubleClick', async (props) => {

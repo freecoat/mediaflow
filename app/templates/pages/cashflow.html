@@ -14,7 +14,10 @@
   <div style="display:flex; gap:10px; align-items:flex-end; flex-wrap:wrap;">
     <div>
       <label class="form-label" style="font-size:11px; margin-bottom:4px; display:block;">Granularità</label>
-      <select id="cf-granularity" class="form-input" data-no-search="true" style="height:32px;font-size:13px;width:130px;" onchange="onFiltersChanged()">
+      <!-- v3.5.0-alpha.170 — height fissa 32px ritagliava il bottom del testo
+           (descender g/q invisibili). Cambiato a min-height + line-height
+           espliciti + padding verticale → testo allineato e leggibile. -->
+      <select id="cf-granularity" class="form-input" data-no-search="true" style="min-height:34px;line-height:20px;padding:6px 10px;font-size:13px;width:130px;box-sizing:border-box;" onchange="onFiltersChanged()">
         <option value="month">Mensile</option>
         <option value="quarter">Trimestrale</option>
         <option value="year">Annuale</option>
@@ -25,28 +28,37 @@
          sempre triggera reload. Soluzione: select singolo + onchange diretto. -->
     <div>
       <label class="form-label" style="font-size:11px; margin-bottom:4px; display:block;">Cliente</label>
-      <select id="cf-client" class="form-input" style="height:32px;font-size:13px;width:220px;" onchange="onCfClientChange()">
+      <select id="cf-client" class="form-input" style="min-height:34px;line-height:20px;padding:6px 10px;font-size:13px;width:220px;box-sizing:border-box;" onchange="onCfClientChange()">
         <option value="">— Tutti i clienti —</option>
       </select>
     </div>
     <div>
       <label class="form-label" style="font-size:11px; margin-bottom:4px; display:block;">Progetto</label>
-      <select id="cf-project" class="form-input" style="height:32px;font-size:13px;width:240px;" onchange="onFiltersChanged()">
+      <select id="cf-project" class="form-input" style="min-height:34px;line-height:20px;padding:6px 10px;font-size:13px;width:240px;box-sizing:border-box;" onchange="onFiltersChanged()">
         <option value="">— Tutti i progetti —</option>
       </select>
     </div>
     <div>
       <label class="form-label" style="font-size:11px; margin-bottom:4px; display:block;">Anno</label>
-      <select id="cf-year" class="form-input" data-no-search="true" style="height:32px;font-size:13px;width:100px;" onchange="onFiltersChanged()"></select>
+      <!-- v3.5.0-alpha.170 — vedi nota su cf-granularity -->
+      <select id="cf-year" class="form-input" data-no-search="true" style="min-height:34px;line-height:20px;padding:6px 10px;font-size:13px;width:100px;box-sizing:border-box;" onchange="onFiltersChanged()"></select>
     </div>
     <!-- v3.5.0-alpha.123 (F16) — toggle IVA. Default OFF (mostra imponibile).
          Persistente in localStorage mf_cf_show_vat. -->
     <div>
       <label class="form-label" style="font-size:11px; margin-bottom:4px; display:block;">IVA</label>
-      <label style="display:inline-flex; align-items:center; gap:6px; height:32px; font-size:13px; padding:0 12px; border:1px solid var(--border); border-radius:6px; cursor:pointer;">
+      <label style="display:inline-flex; align-items:center; gap:6px; height:34px; font-size:13px; padding:0 12px; border:1px solid var(--border); border-radius:6px; cursor:pointer;">
         <input type="checkbox" id="cf-show-vat" onchange="onToggleVat()" style="margin:0;">
         Mostra IVA
       </label>
+    </div>
+    <!-- v3.5.0-alpha.170 — Bottone Aggiorna esplicito. I <select> nativi non
+         emettono "change" se l'utente clicca sullo stesso valore già selezionato
+         (es. ri-seleziona l'anno corrente) → la pagina non si ricaricava.
+         Questo bottone forza un refresh indipendentemente dallo stato dei filtri. -->
+    <div>
+      <label class="form-label" style="font-size:11px; margin-bottom:4px; display:block;">&nbsp;</label>
+      <button type="button" class="btn btn-secondary btn-sm" onclick="onFiltersChanged()" style="min-height:34px;padding:6px 12px;" title="Ricarica dati cashflow (utile dopo nuove fatture)">🔄 Aggiorna</button>
     </div>
   </div>
 </div>
@@ -456,16 +468,22 @@ async function loadCashflow() {
   renderCashflowChart(rows, year, gran);
   renderCashflowTable(rows, gran);
   // v3.5.0-alpha.123 (F19) — split per reparto: caricamento parallelo
-  loadDeptBreakdown(year, showVat);
+  // v3.5.0-alpha.170 — passa filtri cliente/progetto per coerenza con totali in alto
+  loadDeptBreakdown(year, showVat, cid, pid);
 }
 
 // v3.5.0-alpha.123 (F19) — Carica e renderizza split per reparto.
-async function loadDeptBreakdown(year, showVat) {
+// v3.5.0-alpha.170 — accetta filtri cliente/progetto (pre-α.170 lo split
+// mostrava tutto il tenant anche con filtri attivi, percepito come "filtri rotti").
+async function loadDeptBreakdown(year, showVat, cid, pid) {
   const tbody = document.getElementById('cf-dept-tbody');
   if (!tbody) return;
+  const qs = [];
+  if (cid) qs.push('client_id=' + cid);
+  if (pid) qs.push('project_id=' + pid);
   let data;
   try {
-    data = await api('GET', `/finance/api/cashflow/${year}/by-department`);
+    data = await api('GET', `/finance/api/cashflow/${year}/by-department` + (qs.length ? '?' + qs.join('&') : ''));
   } catch (e) {
     while (tbody.firstChild) tbody.removeChild(tbody.firstChild);
     const tr = document.createElement('tr');
@@ -799,6 +817,17 @@ initYearSelect();
     yearSel.addEventListener('change', () => {
       console.log('[cashflow] year changed →', yearSel.value);
       onFiltersChanged();
+    });
+    // v3.5.0-alpha.170 — Bug Matteo: cliccare sullo STESSO anno non triggera
+    // "change" → niente reload. Workaround: blur dopo selezione forza reload
+    // tramite confronto. Pattern usato: salva valore al focus, confronta al blur.
+    let _yearAtFocus = yearSel.value;
+    yearSel.addEventListener('focus', () => { _yearAtFocus = yearSel.value; });
+    yearSel.addEventListener('blur', () => {
+      if (yearSel.value === _yearAtFocus) {
+        // L'utente ha aperto e richiuso senza cambiare. Forziamo reload comunque.
+        onFiltersChanged();
+      }
     });
   }
 })();
