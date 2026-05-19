@@ -1,5 +1,21 @@
 # MediaFlow — Changelog
 
+## v3.5.0-alpha.171.7 — Sprint 3 filtri planning: chip reparto + lavorazione + search testuale + vista per progetto (19 mag 2026)
+
+4 fix sui filtri planning (TL-1, TL-3 via TL-5, TL-4, TL-5).
+
+**TL-1 — Filtro reparto chip-multi**: sostituito `<select multiple>` con pattern `fa-multi` (coerente con cliente/progetto/job/risorsa). FA_CONFIG aggiunto entry `dept`. Hidden input CSV `f-dept`. Suggestions popup con badge colore reparto.
+
+**TL-3 — Filtro lavorazione (subfiltro progetto)**: backend `/planning/api/bookings` accetta `job_cost_line_id` (CSV). Frontend: la ricerca testuale `q` cattura description JCL via OR clause (vedi TL-5).
+
+**TL-4 — Filtri "Per progetto" view rotti**: backend `/planning/api/project-bookings` accetta gli stessi filtri di `/bookings` (department_id, job_id, job_cost_line_id, kind, status, q). Frontend `renderProjectView` passa `getFilterParams()` invece di solo `resource_id`. Bug "filtri non funzionano in vista Per progetto" risolto.
+
+**TL-5 — Ricerca testuale full-text**: `q` param ora matcha LIKE case-insensitive su: `Booking.notes`, `JobCostLine.description`, `PriceItem.name`, `Job.code`, `Job.title`, `Resource.name`, `Resource.role`. Applicato sia a `/bookings` sia a `/project-bookings`. Param FastAPI usa alias `q` → variabile interna `search_q`.
+
+**Backlog rimanente Sprint 3**:
+- TL-2 risorse limitate scroll con filtro reparto attivo
+- TL-6 risorse tronche in coda timeline (entrambi legati a maxHeight + sticky axis trade-off)
+
 ## v3.5.0-alpha.171.6 — Sprint 2 Step 8: AI capability Consuntivo promote+merge (19 mag 2026)
 
 2 nuove AI capability "AI propone, utente dispone":

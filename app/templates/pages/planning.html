@@ -155,14 +155,16 @@
       <input type="text" id="f-q" class="form-input" placeholder="codice, titolo…" oninput="onFilterChange()">
     </div>
 
-    <div class="form-group">
-      <label>Reparto <span class="text-xs text-muted">(multi — Ctrl/Cmd+click)</span></label>
-      <select id="f-dept" class="form-select" multiple size="4" onchange="onFilterChange()" style="min-height:96px;">
-        {% for d in departments %}
-        <option value="{{ d.id }}">{{ d.name }}</option>
-        {% endfor %}
-      </select>
-      <div class="text-xs text-muted" style="margin-top:4px;">Vuoto = tutti i reparti</div>
+    <!-- v3.5.0-alpha.171.7 (TL-1) — Filtro reparto come fa-multi chip-based
+         (coerente con client/project/job/resource sotto). Hidden input
+         CSV `f-dept`. -->
+    <div class="form-group" style="position:relative;">
+      <label>Reparto <span class="text-xs text-muted">(multi)</span></label>
+      <div class="fa-multi" data-fa-wrap="dept">
+        <input type="text" class="fa-input" data-fa="dept" placeholder="Cerca reparto…" autocomplete="off">
+      </div>
+      <input type="hidden" id="f-dept">
+      <div class="fa-suggestions" data-fa-suggestions="dept"></div>
     </div>
 
     <div class="form-group" style="position:relative;">
@@ -1068,6 +1070,13 @@ let tlZoom = 'week';
 // ── Filter autocomplete (v3.4.20.1) ────────────────────────
 // Configurazione per ogni filtro autocomplete: data seed + campi search + display
 const FA_CONFIG = {
+  // v3.5.0-alpha.171.7 (TL-1) — Reparto come fa-multi chip-based
+  dept: {
+    data: () => DEPARTMENTS_SEED,
+    search: (it, q) => (it.name||'').toLowerCase().includes(q),
+    display: it => it.name,
+    render: it => `<div style="display:flex; align-items:center; gap:6px;"><span style="display:inline-block; width:10px; height:10px; border-radius:3px; background:${it.color||'#6272f5'};"></span>${escapeHtml(it.name)}</div>`,
+  },
   client: {
     data: () => CLIENTS_SEED,
     search: (it, q) => (it.name||'').toLowerCase().includes(q),
@@ -1174,7 +1183,7 @@ function _faSearch(faKey) {
 }
 
 // Setup listeners (eseguito una volta al load)
-['client','project','job','resource'].forEach(faKey => {
+['dept','client','project','job','resource'].forEach(faKey => {
   const inp = document.querySelector(`[data-fa="${faKey}"]`);
   const box = document.querySelector(`[data-fa-suggestions="${faKey}"]`);
   if (!inp || !box) return;
@@ -1212,7 +1221,7 @@ function readFiltersFromURL() {
     if (p.get(k)) el.value = p.get(k);
   });
   // v3.4.47: render chips multi per ogni filtro autocomplete
-  ['client','project','job','resource'].forEach(faKey => {
+  ['dept','client','project','job','resource'].forEach(faKey => {
     _faRenderChips(faKey);
   });
 }
@@ -1396,7 +1405,7 @@ function resetFilters() {
     el.value = '';
   });
   // v3.4.47: pulisce input ricerca + chips multi
-  ['client','project','job','resource'].forEach(faKey => {
+  ['dept','client','project','job','resource'].forEach(faKey => {
     const inp = document.querySelector(`[data-fa="${faKey}"]`);
     if (inp) inp.value = '';
     _faRenderChips(faKey);
@@ -1466,11 +1475,18 @@ async function renderProjectView() {
   }
   host.innerHTML = '<div class="pl-empty">Caricamento…</div>';
   try {
-    // v3.5.0-alpha.13: passa il filtro f-resource al backend per chiudere il
-    // bug "filtro Davide Moretti mostrava anche Luca Bianchi" nella vista per progetto.
-    const resFilter = (document.getElementById('f-resource')?.value || '').trim();
-    let url = `/planning/api/project-bookings?project_id=${projectId}`;
-    if (resFilter) url += `&resource_id=${encodeURIComponent(resFilter)}`;
+    // v3.5.0-alpha.171.7 (TL-4) — passa TUTTI i filtri sidebar al backend
+    // (era solo resource_id pre-α.171.7 -> bug "filtri non funzionano" in
+    // vista Per progetto). Riusa getFilterParams().
+    const fp = getFilterParams();
+    delete fp.project_id;
+    const params = new URLSearchParams();
+    params.set('project_id', projectId);
+    for (const k of Object.keys(fp)) {
+      const v = fp[k];
+      if (v != null && v !== '') params.set(k, v);
+    }
+    const url = '/planning/api/project-bookings?' + params.toString();
     const items = await api('GET', url);
     counter.textContent = `${items.length} booking`;
     if (!items.length) {

@@ -1,5 +1,5 @@
 """Router pianificazione — hub viste + job, clienti, booking."""
-from fastapi import APIRouter, Cookie, Depends, HTTPException, Request, Form
+from fastapi import APIRouter, Cookie, Depends, HTTPException, Request, Form, Query
 from fastapi.responses import HTMLResponse, RedirectResponse
 from typing import Optional
 from datetime import date, datetime, timedelta
@@ -833,6 +833,9 @@ async def list_bookings(
     project_id: Optional[str] = None,
     department_id: Optional[str] = None,
     status: Optional[BookingStatus] = None,
+    job_cost_line_id: Optional[str] = None,  # v3.5.0-alpha.171.7 (TL-3)
+    # v3.5.0-alpha.171.7 (TL-5) — ricerca testuale; UI invia "q=..."
+    search_q: Optional[str] = Query(None, alias="q"),
     db: Session = Depends(get_db),
 ):
     """Lista assignments come items per la timeline.
@@ -840,9 +843,18 @@ async def list_bookings(
     legati allo stesso booking_id via extendedProps.
 
     v3.4.47 — Tutti i filtri id (job/resource/client/project/department)
-    accettano comma-separated (`?resource_id=1,3,5`). Compatibile single."""
+    accettano comma-separated (`?resource_id=1,3,5`). Compatibile single.
+
+    v3.5.0-alpha.171.7 (Sprint 3 TL-3+TL-5):
+    - `job_cost_line_id` (CSV): filtra per lavorazione (JCL). Subfiltro
+      naturale di progetto/job. Permette "mostrami solo i booking di
+      Production management del progetto X".
+    - `q` (testo libero): ricerca full-text su `Booking.notes`,
+      `JobCostLine.description`, `PriceItem.name`, `Job.code`/`Job.title`,
+      `Resource.name`/`Resource.role`. Case-insensitive LIKE.
+    """
     from app.models import PriceItem  # locale per evitare import cycle
-    q = db.query(BookingAssignment).options(
+    qry = db.query(BookingAssignment).options(
         joinedload(BookingAssignment.resource),
         joinedload(BookingAssignment.booking).joinedload(Booking.job).joinedload(Job.project),
         joinedload(BookingAssignment.booking).joinedload(Booking.cost_line).joinedload(JobCostLine.price_item),
@@ -854,30 +866,56 @@ async def list_bookings(
     client_ids = _parse_id_list(client_id)
     project_ids = _parse_id_list(project_id)
     department_ids = _parse_id_list(department_id)
+    jcl_ids = _parse_id_list(job_cost_line_id)  # v3.5.0-alpha.171.7 (TL-3)
     if job_ids:
-        q = q.filter(Booking.job_id.in_(job_ids))
+        qry = qry.filter(Booking.job_id.in_(job_ids))
     if resource_ids:
-        q = q.filter(BookingAssignment.resource_id.in_(resource_ids))
+        qry = qry.filter(BookingAssignment.resource_id.in_(resource_ids))
     if kind:
-        q = q.filter(Booking.kind == kind)
+        qry = qry.filter(Booking.kind == kind)
     if status:
-        q = q.filter(Booking.status == status)
+        qry = qry.filter(Booking.status == status)
     else:
-        q = q.filter(Booking.status != BookingStatus.cancelled)
+        qry = qry.filter(Booking.status != BookingStatus.cancelled)
     if from_date:
-        q = q.filter(BookingAssignment.end_datetime >= from_date)
+        qry = qry.filter(BookingAssignment.end_datetime >= from_date)
     if to_date:
-        q = q.filter(BookingAssignment.start_datetime <= to_date)
+        qry = qry.filter(BookingAssignment.start_datetime <= to_date)
     if client_ids or project_ids:
-        q = q.join(Job, Booking.job_id == Job.id, isouter=True)
+        qry = qry.join(Job, Booking.job_id == Job.id, isouter=True)
         if client_ids:
-            q = q.filter(Job.client_id.in_(client_ids))
+            qry = qry.filter(Job.client_id.in_(client_ids))
         if project_ids:
-            q = q.filter(Job.project_id.in_(project_ids))
+            qry = qry.filter(Job.project_id.in_(project_ids))
     if department_ids:
-        q = q.join(Resource, BookingAssignment.resource_id == Resource.id).filter(
+        qry = qry.join(Resource, BookingAssignment.resource_id == Resource.id).filter(
             Resource.department_id.in_(department_ids)
         )
+    # v3.5.0-alpha.171.7 (TL-3) — filtro lavorazione
+    if jcl_ids:
+        qry = qry.filter(Booking.job_cost_line_id.in_(jcl_ids))
+    # v3.5.0-alpha.171.7 (TL-5) — ricerca testuale full-text
+    if search_q and search_q.strip():
+        from sqlalchemy import or_ as _or, func as _func
+        search = f"%{search_q.strip().lower()}%"
+        qry = (
+            qry.outerjoin(Job, Booking.job_id == Job.id)
+            .outerjoin(JobCostLine, Booking.job_cost_line_id == JobCostLine.id)
+            .outerjoin(PriceItem, JobCostLine.price_item_id == PriceItem.id)
+            .outerjoin(Resource, BookingAssignment.resource_id == Resource.id)
+            .filter(_or(
+                _func.lower(Booking.notes).like(search),
+                _func.lower(JobCostLine.description).like(search),
+                _func.lower(PriceItem.name).like(search),
+                _func.lower(Job.code).like(search),
+                _func.lower(Job.title).like(search),
+                _func.lower(Resource.name).like(search),
+                _func.lower(Resource.role).like(search),
+            ))
+        )
+    # Riassegno alias storico `q` (queryset) per il resto della funzione
+    # che usa `q.all()` / `q.filter(...)` post-filtri principali.
+    q = qry
     assignments = q.all()
     # Cardinalità gruppo per ciascun booking_id (per badge "1/N")
     booking_ids = list({a.booking_id for a in assignments})
@@ -3498,18 +3536,23 @@ async def project_bookings(
     project_id: int,
     from_date: Optional[datetime] = None,
     to_date: Optional[datetime] = None,
-    resource_id: Optional[str] = None,  # v3.5.0-alpha.13: filtro risorsa multi (csv)
+    resource_id: Optional[str] = None,
+    department_id: Optional[str] = None,    # v3.5.0-alpha.171.7 (TL-4)
+    job_id: Optional[str] = None,           # v3.5.0-alpha.171.7 (TL-4)
+    job_cost_line_id: Optional[str] = None, # v3.5.0-alpha.171.7 (TL-4)
+    kind: Optional[BookingKind] = None,     # v3.5.0-alpha.171.7 (TL-4)
+    status: Optional[BookingStatus] = None, # v3.5.0-alpha.171.7 (TL-4)
+    search_q: Optional[str] = Query(None, alias="q"),  # v3.5.0-alpha.171.7 (TL-4+TL-5)
     db: Session = Depends(get_db),
 ):
     """v3.4.44 — Booking di un progetto, formato come "Le mie" ma con info
-    risorsa visibile. Per manager+admin+producer (vista trasversale di tutte
-    le risorse del progetto). RBAC: nessun permesso esplicito definito ancora,
-    ma scopo manager+: blocco se l'utente non ha 'view_all_planning' (alias
-    edit_planning) o uno dei ruoli admin/manager/producer.
+    risorsa visibile.
 
-    v3.5.0-alpha.13: aggiunto filtro `resource_id` (singolo o csv) — risolve
-    il bug per cui il filtro Davide Moretti mostrava anche Luca Bianchi nella
-    vista "Per progetto".
+    v3.5.0-alpha.13: filtro `resource_id` (csv).
+    v3.5.0-alpha.171.7 (TL-4): aggiunti `department_id`, `job_id`,
+    `job_cost_line_id`, `kind`, `status`, `q` (search testuale) per coerenza
+    con `/api/bookings`. Pre-fix la vista "Per progetto" ignorava tutti i
+    filtri sidebar tranne resource_id.
     """
     user = current_user_optional(request)
     if not user:
@@ -3536,6 +3579,37 @@ async def project_bookings(
     rid_list = _parse_id_list(resource_id)
     if rid_list:
         q = q.filter(BookingAssignment.resource_id.in_(rid_list))
+    # v3.5.0-alpha.171.7 (TL-4) — filtri sidebar planning estesi
+    job_ids = _parse_id_list(job_id)
+    dept_ids = _parse_id_list(department_id)
+    jcl_ids = _parse_id_list(job_cost_line_id)
+    if job_ids:
+        q = q.filter(Booking.job_id.in_(job_ids))
+    if dept_ids:
+        q = q.join(Resource, BookingAssignment.resource_id == Resource.id).filter(
+            Resource.department_id.in_(dept_ids)
+        )
+    if jcl_ids:
+        q = q.filter(Booking.job_cost_line_id.in_(jcl_ids))
+    if kind:
+        q = q.filter(Booking.kind == kind)
+    if status:
+        q = q.filter(Booking.status == status)
+    if search_q and search_q.strip():
+        from sqlalchemy import or_ as _or, func as _func
+        from app.models import PriceItem as _PI
+        search = f"%{search_q.strip().lower()}%"
+        q = (
+            q.outerjoin(JobCostLine, Booking.job_cost_line_id == JobCostLine.id)
+            .outerjoin(_PI, JobCostLine.price_item_id == _PI.id)
+            .filter(_or(
+                _func.lower(Booking.notes).like(search),
+                _func.lower(JobCostLine.description).like(search),
+                _func.lower(_PI.name).like(search),
+                _func.lower(Job.code).like(search),
+                _func.lower(Job.title).like(search),
+            ))
+        )
     rows = q.order_by(BookingAssignment.start_datetime.asc()).all()
 
     out = []
