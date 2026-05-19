@@ -1,5 +1,25 @@
 # MediaFlow — Changelog
 
+## v3.5.0-alpha.171 — Sprint 1 CR data integrity: ore double-count + voci stima fantasma (19 mag 2026)
+
+2 bug P0 fatturazione segnalati da Matteo durante test α.170.
+
+**CR-2 — Ore double-count sala+risorsa**: pre-α.171 `quantity_actual` sommava le ore di TUTTI gli assignment di un booking. Con sala A 8h + Carlo 8h → 16h fatturate al cliente (raddoppio). Regola corretta (Matteo):
+- Almeno 1 risorsa umana presente → max(hours) tra umane (override umana)
+- Else → max(hours) tra non-umane
+
+Implementazione: nuovo helper `_booking_billable_hours(b)` (sostituisce `_booking_hours_linear` per il calcolo qty_actual / qty_planned solo su unità time-based). Categorizzazione `HUMAN_RESOURCE_TYPES = {person_internal, person_freelance, person}`. Cost-side (`total_cost_accrued`) continua a sommare per-assignment (sala costa, persona costa: entrambi consumano budget interno) — non era buggato lì.
+
+**CR-1 — Voci stima=quotato senza booking**: pre-α.171 `expected_qty = quoted` di default se 0 booking → voci "fantasma" con stima identica al quotato senza alcun consumo (Voice of Silence Vol.2: Transfer Elettronico, Re-recording Dolby Atmos, ecc.). Regola corretta (Matteo): distinzione fra unità TIME-based e NON-time-based.
+- Time-based (hr/day): expected_qty=0 se 0 booking; altrimenti da planned_hours
+- Non time-based (pc/lump/fix/lot/shot/version/allow/TB/GB → modello BINARIO acceso/spento): actual=expected=quoted SEMPRE. Costi interni dagli assignment normalmente.
+
+Smoke test logico:
+- Carlo 8h + Sala 8h → billable 8h, linear 16h ✓
+- Carlo 4h + Mario 6h + Sala 8h → billable 6h ✓
+- Sala 8h + Sala 4h (no umana) → billable 8h ✓
+- Solo Carlo 8h → billable 8h ✓
+
 ## v3.5.0-alpha.170.1 — Hotfix multiselect reparto + pill UI + msg quote (19 mag 2026)
 
 3 regressioni/polish emerse durante test T1 di α.170:

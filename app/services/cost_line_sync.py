@@ -34,6 +34,12 @@ from sqlalchemy import and_
 HOURS_PER_DAY = 8.0
 TIME_UNITS_HOUR = {"hr", "ore", "hour", "h"}
 TIME_UNITS_DAY = {"day", "giorno", "giornate", "giornata", "d"}
+# v3.5.0-alpha.171 (CR-2) — Distinzione umana / non-umana per regola
+# "billable hours". Quando 1 booking ha sia sala che persona, le ore
+# fatturate al cliente sono quelle della persona (override umana); se
+# nessuna persona ma più sale/attrezzature, prendi quella con più ore
+# (max). Pre-α.171 sommava tutto → ore raddoppiate.
+HUMAN_RESOURCE_TYPES = {"person_internal", "person_freelance", "person"}
 # v3.5.0-alpha.66.11 — Categorizzazione delle unità per cost report split
 # cliente vs interno. Le voci TIME-based mostrano monte ore al cliente
 # (sessioni di lavoro). Le voci NON-time-based (deliverable, materiale,
@@ -84,7 +90,13 @@ def is_time_based_unit(unit: Optional[str]) -> bool:
 
 def _booking_hours_linear(b) -> float:
     """Ore-uomo lineari del booking = somma delle durate degli assignment.
-    Path storico (pre-α.65), invariato per back-compat."""
+    Path storico (pre-α.65), invariato per back-compat.
+
+    Nota: questa è la SOMMA delle ore di tutti gli assignment. Usato per
+    il cost-side interno (`total_cost_accrued`: sala costa, persona costa,
+    entrambi vanno contati). NON usare per `quantity_actual` fatturata al
+    cliente — quella ha logica `_booking_billable_hours` con override umana.
+    """
     if not getattr(b, "assignments", None):
         if not b.start_datetime or not b.end_datetime:
             return 0.0
@@ -94,6 +106,58 @@ def _booking_hours_linear(b) -> float:
         if a.start_datetime and a.end_datetime:
             total += max(0.0, (a.end_datetime - a.start_datetime).total_seconds() / 3600.0)
     return total
+
+
+def _assignment_hours(a) -> float:
+    """Durata in ore di un singolo assignment. 0 se start/end mancanti."""
+    if not a.start_datetime or not a.end_datetime:
+        return 0.0
+    return max(0.0, (a.end_datetime - a.start_datetime).total_seconds() / 3600.0)
+
+
+def _booking_billable_hours(b) -> float:
+    """v3.5.0-alpha.171 (CR-2) — Ore "fatturabili al cliente" del booking.
+
+    Regola Matteo (19 mag 2026):
+    - Se almeno 1 assignment è risorsa umana (person_internal/freelance/person)
+      → max(hours) tra le umane (override umana, ignora sala/equipment)
+    - Else → max(hours) tra tutti gli assignment (sala/equipment/software/vehicle)
+
+    Rationale: il cliente paga le ORE LAVORO della persona; la sala è un costo
+    interno (mostrato in cost-side) ma non si fattura come ore separate.
+    Pre-α.171 sommava sala+persona → fatturazione doppia delle ore.
+
+    Esempi:
+    - Booking: Carlo 8h + Sala A 8h → billable = 8h (max umana)
+    - Booking: Carlo 4h + Mario 6h + Sala A 8h → billable = 6h (max umana)
+    - Booking: Sala A 8h + Sala B 4h (nessuna umana) → billable = 8h
+    - Booking: solo Carlo 8h → billable = 8h
+    - Booking senza assignments → shell-duration (back-compat)
+    """
+    if not getattr(b, "assignments", None):
+        if not b.start_datetime or not b.end_datetime:
+            return 0.0
+        return max(0.0, (b.end_datetime - b.start_datetime).total_seconds() / 3600.0)
+    human_hours = []
+    nonhuman_hours = []
+    for a in b.assignments:
+        h = _assignment_hours(a)
+        if h <= 0:
+            continue
+        res = getattr(a, "resource", None)
+        # Resolve type: prefer relationship enum, fallback to nothing → non-human bucket
+        rtype = None
+        if res is not None:
+            rtype = res.type.value if hasattr(res.type, "value") else str(res.type)
+        if rtype in HUMAN_RESOURCE_TYPES:
+            human_hours.append(h)
+        else:
+            nonhuman_hours.append(h)
+    if human_hours:
+        return max(human_hours)
+    if nonhuman_hours:
+        return max(nonhuman_hours)
+    return 0.0
 
 
 def _booking_hours_weighted(db: Session, b) -> float:
@@ -216,8 +280,20 @@ def recompute_cost_line_actual(db: Session, jcl) -> dict:
     done_bookings = [b for b in all_bookings if b.execution_status == BookingExecutionStatus.done]
 
     unit = (jcl.unit or "").strip().lower()
-    done_hours = sum(_booking_hours(b, db=db, weighted=weighted) for b in done_bookings)
-    planned_hours = sum(_booking_hours(b, db=db, weighted=weighted) for b in all_bookings)
+    is_time = is_time_based_unit(unit)
+    # v3.5.0-alpha.171 (CR-2) — Ore "fatturabili" usano _booking_billable_hours
+    # (override umana, no double-count sala+persona). Cost-side (sotto) somma
+    # SEMPRE tutti gli assignment via _booking_hours (è un consumo reale).
+    # Per unità non time-based il calcolo ore non influenza qty (sotto regola
+    # binaria), ma lo manteniamo per il debug payload.
+    if is_time:
+        done_hours = sum(_booking_billable_hours(b) for b in done_bookings)
+        planned_hours = sum(_booking_billable_hours(b) for b in all_bookings)
+    else:
+        # Per debug/log mostriamo somma lineare (utile per anomalie), ma le
+        # quantità sotto seguono la regola binaria.
+        done_hours = sum(_booking_hours(b, db=db, weighted=weighted) for b in done_bookings)
+        planned_hours = sum(_booking_hours(b, db=db, weighted=weighted) for b in all_bookings)
     new_qty_actual = _qty_from_hours(unit, done_hours, len(done_bookings))
     new_qty_planned = _qty_from_hours(unit, planned_hours, len(all_bookings))
 
@@ -250,13 +326,29 @@ def recompute_cost_line_actual(db: Session, jcl) -> dict:
             new_cost_accrued += hours_a * rate
     new_cost_accrued = round(new_cost_accrued, 2)
 
+    # v3.5.0-alpha.171 (CR-1) — Regola semantica decisa con Matteo 19 mag 2026.
+    # Distinzione fra unità TIME-BASED (hr/day → consumo misurato dai booking)
+    # e unità NON time-based (pc/lump/fix/lot/shot/version/allow/TB/GB → modello
+    # BINARIO acceso/spento: voce è "fatta" per definizione se a preventivo,
+    # i costi interni vengono comunque conteggiati dagli assignment).
+    #
+    # Time-based:
+    #   - actual_qty = ore done convertite (regola billable α.171: max umana)
+    #   - expected_qty = ore planned convertite (NESSUN booking → 0, non quoted)
+    #     Pre-α.171 fallback a quoted creava voci "fantasma" con stima=quotato
+    #     senza booking (bug CR-1 segnalato Matteo).
+    # Non time-based (binario):
+    #   - actual_qty = expected_qty = quantity_quoted SEMPRE
+    #   - Over/Under = 0 (voce sempre allineata al quotato)
+    if is_time:
+        new_qty_actual_final = new_qty_actual
+        expected_qty = new_qty_planned if all_bookings else 0.0
+    else:
+        quoted_q = jcl.quantity_quoted or 0.0
+        new_qty_actual_final = quoted_q
+        expected_qty = quoted_q
+    new_qty_actual = new_qty_actual_final
     new_accrued = round(new_qty_actual * (jcl.unit_price or 0.0), 2)
-    # Stima = quantità pianificata × prezzo. Se non ci sono booking
-    # ancora pianificati, default al quotato (non a 0): la lavorazione
-    # esiste a preventivo ma non è stata ancora schedulata. Quando arriva
-    # il primo booking, la stima passa a qty_planned (può andare sotto
-    # o sopra il quotato → genera under o over).
-    expected_qty = new_qty_planned if all_bookings else (jcl.quantity_quoted or 0.0)
     new_expected = round(expected_qty * (jcl.unit_price or 0.0), 2)
 
     new_work_date = max(

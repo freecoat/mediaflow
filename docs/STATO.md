@@ -8,6 +8,24 @@
 
 ## Versione corrente
 
+**v3.5.0-alpha.171** — 19 maggio 2026 — Sprint 1 CR data integrity: ore double-count + voci stima fantasma
+
+Sprint 1 backlog α.171+ (P0 CR data integrity). Backlog completo in memory [[project_backlog_alpha171]].
+
+**CR-2 ore double-count**: nuovo helper `_booking_billable_hours` (max umana || max non-umana). Cost-side somma per-assignment invariato. `HUMAN_RESOURCE_TYPES = {person_internal, person_freelance, person}`.
+
+**CR-1 stima fantasma**: distinzione time-based vs binario.
+- Time-based (hr/day): 0 booking → expected=0 (era=quoted)
+- Non-time (lump/pc/shot/...): actual=expected=quoted SEMPRE (binario, costi interni dagli assignment)
+
+Smoke logic: T1 Carlo+Sala 8+8 → billable 8 ✓ T2 2 persone+sala 4+6+8 → 6 ✓ T3 2 sale 8+4 → 8 ✓ T4 solo Carlo 8 → 8 ✓.
+
+Prossimo: Sprint 2 — Phantom quote redesign completo ([[project_phantom_quote_redesign]] 8 sub-feature).
+
+Sprint 1 done. Sprint 2-3-4 in coda.
+
+## (versione precedente)
+
 **v3.5.0-alpha.170** — 19 maggio 2026 — Timeline polish (multi-dept + altezza + scroll + click dettagli) + cashflow filtri + anomalie fallback
 
 9 bug aperti da Matteo post α.169 (4 timeline + 2 anomalie + 3 cashflow).
