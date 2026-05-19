@@ -74,11 +74,18 @@ def add_line_from_price_item(
     *,
     quantity: float,
     description_override: Optional[str] = None,
+    allow_zero: bool = False,
 ) -> QuoteLine:
     """Aggiunge una QuoteLine alla quote a partire da una voce di listino.
-    Eredita unit, unit_price, hardcosts. Calcola total = qty × unit_price."""
-    if quantity <= 0:
-        raise HTTPException(400, "quantity deve essere > 0")
+    Eredita unit, unit_price, hardcosts. Calcola total = qty × unit_price.
+
+    v3.5.0-alpha.171.4 — `allow_zero=True` permette quantity=0 (usato per
+    voci di Quotazione a Consuntivo: la voce esiste a preventivo ma con
+    quantità preventivata=0, le ore reali vengono dai booking via JCL
+    `quantity_actual`).
+    """
+    if quantity < 0 or (quantity == 0 and not allow_zero):
+        raise HTTPException(400, "quantity deve essere > 0 (o = 0 con allow_zero)")
     desc = (description_override or price_item.name or "").strip()[:255]
     unit = (price_item.unit or "day")
     unit_price = float(price_item.price_list or 0.0)
@@ -238,6 +245,73 @@ def attach_to_pending_quote(
     }
 
 
+def add_line_to_existing_phantom(
+    db: Session,
+    phantom_quote: Quote,
+    price_item: PriceItem,
+    quantity_hint: float,
+    actor: Optional[User] = None,
+) -> dict:
+    """v3.5.0-alpha.171.4 — Aggiunge una voce a una Quotazione a Consuntivo
+    già esistente (standby). Voce parte SEMPRE da quantity_quoted=0
+    (regola Matteo): la lavorazione esiste a preventivo ma il monte ore
+    quotato è 0, le ore reali confluiscono via booking → JCL.quantity_actual.
+
+    `quantity_hint` non viene applicato alla QuoteLine; serve solo per
+    contesto/log. La JCL collegata verrà sincronizzata da `cost_line_sync`
+    quando i booking done emergono.
+    """
+    line = add_line_from_price_item(
+        db, phantom_quote, price_item, quantity=0.0, allow_zero=True
+    )
+    _recalc_quote_totals(phantom_quote)
+
+    job = _ensure_job_for_quote(db, phantom_quote)
+    db.flush()
+
+    jcl = db.query(JobCostLine).filter(JobCostLine.quote_line_id == line.id).first()
+    db.commit()
+    db.refresh(phantom_quote); db.refresh(line)
+    if jcl: db.refresh(jcl)
+    if job: db.refresh(job)
+
+    try:
+        from app.services.notifications import notify_permission
+        notify_permission(
+            db,
+            permission="edit_quotes",
+            exclude_user_ids=[actor.id] if actor else None,
+            kind=NotificationKind.quote_reverse_approval.value,
+            severity=NotificationSeverity.info.value,
+            title=f"Voce aggiunta a Quotazione a Consuntivo {phantom_quote.number}",
+            body=(
+                f"Voce '{line.description}' aggiunta alla Consuntivo standby (qty quotata=0, "
+                f"ore reali da booking). Decidere se promuovere o accorpare la Consuntivo."
+            ),
+            link=f"/quotes#{phantom_quote.id}",
+            payload={
+                "quote_id": phantom_quote.id, "quote_number": phantom_quote.number,
+                "line_id": line.id, "is_phantom": True, "added_to_existing": True,
+            },
+            actor_user_id=actor.id if actor else None,
+        )
+    except Exception as e:
+        print(f"[reverse_quote] notify failed (existing phantom): {e}")
+
+    return {
+        "quote_id": phantom_quote.id, "quote_number": phantom_quote.number,
+        "quote_status": phantom_quote.status.value,
+        "previous_status": None,
+        "is_phantom": True,
+        "added_to_existing_phantom": True,
+        "job_id": job.id if job else None,
+        "job_code": job.code if job else None,
+        "cost_line_id": jcl.id if jcl else None,
+        "cost_line_description": jcl.description if jcl else line.description,
+        "was_implicit_approval": False,
+    }
+
+
 def create_phantom_quote_with_line(
     db: Session,
     project: Project,
@@ -279,8 +353,9 @@ def create_phantom_quote_with_line(
             f"Aggancia il booking alla quote esistente."
         )
 
-    # Pre-check 2: 1 Consuntivo standby per progetto (DB enforce via UNIQUE
-    # partial index, ma controllo applicativo per messaggio chiaro).
+    # v3.5.0-alpha.171.4 (Step 4) — Se Consuntivo standby esiste, NON
+    # bloccare con 409: AGGIUNGI la voce alla Consuntivo esistente (regola
+    # Matteo: "Eventuali nuove lavorazioni si legano alla phantom esistente").
     existing_standby = next(
         (q for q in (project.quotes or [])
          if getattr(q, "is_phantom", False)
@@ -288,11 +363,7 @@ def create_phantom_quote_with_line(
         None,
     )
     if existing_standby:
-        raise HTTPException(
-            409,
-            f"Quotazione a Consuntivo {existing_standby.number} già attiva per questo "
-            f"progetto. Aggiungi la voce a quella esistente invece di crearne un'altra."
-        )
+        return add_line_to_existing_phantom(db, existing_standby, pi, quantity, actor)
 
     from app.routers.quotes import _next_quote_number_progressive
     today = _date.today()
@@ -311,13 +382,19 @@ def create_phantom_quote_with_line(
     db.add(quote)
     db.flush()
 
-    line = add_line_from_price_item(db, quote, pi, quantity=quantity)
+    # v3.5.0-alpha.171.4 — Voci Consuntivo partono da quantity=0: la voce
+    # esiste a preventivo (per binding listino + price) ma la quantità
+    # preventivata è 0. Le ore reali confluiscono in JCL.quantity_actual
+    # tramite cost_line_sync su booking done. Regola Matteo redesign.
+    line = add_line_from_price_item(db, quote, pi, quantity=0.0, allow_zero=True)
     _recalc_quote_totals(quote)
 
     job = _ensure_job_for_quote(db, quote)
     db.flush()
 
     jcl = db.query(JobCostLine).filter(JobCostLine.quote_line_id == line.id).first()
+    # Anche JCL.quantity_quoted parte da 0 (la JCL viene creata da
+    # _ensure_job_for_quote che eredita dalla QuoteLine).
     db.commit()
     db.refresh(quote); db.refresh(job); db.refresh(line)
     if jcl: db.refresh(jcl)

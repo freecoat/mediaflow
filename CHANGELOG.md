@@ -1,5 +1,16 @@
 # MediaFlow — Changelog
 
+## v3.5.0-alpha.171.4 — Sprint 2 Step 4: auto-attach + voci Consuntivo da 0 (19 mag 2026)
+
+Regola Matteo "voci Consuntivo partono da 0, riportano ore booking":
+
+- `add_line_from_price_item` accetta `allow_zero=True` per consentire `quantity=0`
+- `create_phantom_quote_with_line` ora crea la prima voce con `quantity=0` (era `quantity=durata booking`)
+- Pre-check 2 (Consuntivo già standby) NON blocca più con 409: chiama nuova helper `add_line_to_existing_phantom` per AGGIUNGERE voce alla Consuntivo esistente
+- `add_line_to_existing_phantom`: voce nuova con `quantity=0`, notifica `info` (non `action_required`, è solo append)
+
+Effetto: workflow Matteo "Eventuali nuove lavorazioni si legano alla Consuntivo esistente" rispettato. JCL.quantity_quoted=0, JCL.quantity_actual sincronizzato live dai booking via cost_line_sync.
+
 ## v3.5.0-alpha.171.3 — Sprint 2 Step 3: endpoint promote + merge Consuntivo (19 mag 2026)
 
 2 endpoint workflow Quotazione a Consuntivo.
