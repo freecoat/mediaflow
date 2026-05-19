@@ -1,5 +1,19 @@
 # MediaFlow — Changelog
 
+## v3.5.0-alpha.171.5 — Sprint 2 Step 7: CR badge Consuntivo + visibilità (19 mag 2026)
+
+Payload `/cost-report/api/job/{id}` aggiunge metadati phantom della quote:
+- `quote_id`, `quote_number`, `quote_status`
+- `is_phantom`, `phantom_status` (standby/promoted/merged_into)
+- `merged_into_quote_id`
+
+UI cost_report.html: badge nel titolo dettaglio CR per Job con quote phantom:
+- `📌 CONSUNTIVO · standby` (indigo, in attesa)
+- `✅ CONSUNTIVO · promosso` (verde)
+- `🔗 CONSUNTIVO · accorpato` (grigio storico)
+
+Costruito via DOM API (no innerHTML su content dinamico). Fix CR-15 "voce phantom non visibile in CR" (era invisibile per assenza badge — la voce c'era, mancava solo l'evidenziazione).
+
 ## v3.5.0-alpha.171.4 — Sprint 2 Step 4: auto-attach + voci Consuntivo da 0 (19 mag 2026)
 
 Regola Matteo "voci Consuntivo partono da 0, riportano ore booking":

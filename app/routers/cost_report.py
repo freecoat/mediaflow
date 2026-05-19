@@ -738,6 +738,14 @@ async def job_cost_report(job_id: int, db: Session = Depends(get_db)):
     estimated_cost = bk_data["total_cost"] + (total_expenses or 0)
     margin = total_quoted - estimated_cost
 
+    # v3.5.0-alpha.171.5 (Step 7) — Esponi metadati phantom della quote del
+    # Job per UI badge "📌 Consuntivo" + abilitazione azioni promote/merge.
+    _q = job.quote
+    _is_phantom = bool(getattr(_q, "is_phantom", False)) if _q else False
+    _phantom_status = (
+        _q.phantom_status.value if (_q and getattr(_q, "phantom_status", None)) else None
+    )
+    _merged_into = getattr(_q, "merged_into_quote_id", None) if _q else None
     return {
         "job": {
             "id": job.id, "code": job.code, "title": job.title,
@@ -753,6 +761,13 @@ async def job_cost_report(job_id: int, db: Session = Depends(get_db)):
             "end_date": str(job.end_date) if job.end_date else None,
             # v3.5.0-alpha.65 — Pass-through OT al cliente (opt-in).
             "weighted_revenue": bool(getattr(job, "weighted_revenue", False)),
+            # v3.5.0-alpha.171.5 — Phantom metadata per UI badge + azioni
+            "quote_id": _q.id if _q else None,
+            "quote_number": _q.number if _q else None,
+            "quote_status": (_q.status.value if _q and hasattr(_q.status, "value") else None),
+            "is_phantom": _is_phantom,
+            "phantom_status": _phantom_status,
+            "merged_into_quote_id": _merged_into,
         },
         "summary": {
             "budget_quoted": round(job.budget_quoted, 2),
