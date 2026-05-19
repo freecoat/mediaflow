@@ -1,5 +1,26 @@
 # MediaFlow — Changelog
 
+## v3.5.0-alpha.171.9 — Sprint 2 Step 5 (UI) + Sprint 3 TL-2/TL-6 timeline scroll (19 mag 2026)
+
+**Step 5 (Sprint 2) — UI doppia conferma modifica quote approvata**:
+Helper `_ensureEditableQuoteOrVersion()`. Su `saveQuoteMeta` con quote `approved`:
+1. Confirm "Le modifiche su una quote approvata richiedono nuova versione. Continuare?"
+2. Confirm "Confermi creazione nuova versione vN+1?"
+3. POST `/new-version` → switch context su nuova quote
+4. PUT applicato su `targetId` (id nuova versione)
+
+Coverage MVP: solo `saveQuoteMeta` per ora. Save line/add/delete → backlog UI.
+
+**TL-2 + TL-6 (Sprint 3) — Timeline scroll risorse**: strategia "natural growth + sticky axis CSS".
+
+Pre-α.171.9: `height + maxHeight = viewport` → scroll INTERNO al widget. Con N>visibili risorse l'utente vedeva solo le prime (TL-2 risorse limitate, TL-6 risorse tronche in coda).
+
+Ora:
+- `maxHeight` rimosso (timeline cresce naturale per contenere tutti i gruppi)
+- `minHeight = viewport` (no collasso con poche risorse)
+- `verticalScroll: false` (page-scroll prende il posto del widget-scroll)
+- CSS `.vis-time-axis, .vis-panel.vis-top { position: sticky; top: 0; z-index: 10; }` mantiene axis visibile durante page-scroll (sticky α.169 preservato via CSS invece di scroll interno)
+
 ## v3.5.0-alpha.171.8 — Sprint 2 Step 6: delete voce quote approved → propagazione CR (19 mag 2026)
 
 `DELETE /quotes/api/{id}/lines/{line_id}` su quote APPROVATA con booking attivi: invece di hard-block 409, **propaga automaticamente su Consuntivo**.

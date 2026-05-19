@@ -8,6 +8,40 @@
 
 ## Versione corrente
 
+**v3.5.0-alpha.171.9** — 19 maggio 2026 — Sprint 1+2+3 chiusi: CR data integrity + Phantom redesign + filtri planning + timeline scroll
+
+Maratona 19 mag pomeriggio/sera, 9 commit pushati (α.171 → α.171.9). Chiusi tutti i 3 sprint backlog α.171:
+
+**Sprint 1 CR (α.171)**: CR-2 ore billable (`_booking_billable_hours` max umana || max non-umana), CR-1 binario non-time (`actual=expected=quoted` per lump/pc/shot/...), CR-1 time-based 0 booking → 0. Script `recompute_all_jcl.py` per backfill.
+
+**Sprint 2 Phantom redesign (α.171.1-.6, .8, .9)**: 8 step di redesign quotazione consuntivo.
+- Step 1: enum `PhantomStatus` + colonne `phantom_status`/`merged_into_quote_id` + migration + unique partial index 1-per-progetto
+- Step 2: rename UI "Phantom" → "Quotazione a Consuntivo", pre-check no quote attiva
+- Step 3: endpoint `promote-phantom` + `merge-into/{target}`
+- Step 4: voci Consuntivo `quantity=0`, auto-attach a Consuntivo esistente
+- Step 5 (UI): doppia conferma modifica quote approved + auto-versioning (saveQuoteMeta MVP)
+- Step 6: delete voce quote approved → propagazione CR su Consuntivo (vs hard-block)
+- Step 7: badge CR `📌 CONSUNTIVO` per phantom_status
+- Step 8: AI capability `propose_promote_phantom` + `propose_merge_phantom` + system prompt
+
+**Sprint 3 filtri planning (α.171.7, .9)**:
+- TL-1: filtro reparto chip-multi `fa-multi` (era `<select multiple>`)
+- TL-3: `/api/bookings` accetta `job_cost_line_id` CSV
+- TL-4: vista "Per progetto" rispetta tutti i filtri sidebar
+- TL-5: ricerca testuale `q` LIKE su notes/JCL.description/PriceItem.name/Job.code|title/Resource.name|role
+- TL-2+TL-6: timeline natural growth + sticky axis CSS (page-scroll invece di widget-scroll)
+
+**Setup post-pull Mac**:
+```
+git pull
+python scripts/migrate_phantom_redesign.py
+python scripts/recompute_all_jcl.py
+```
+
+**Test backlog**: vedi memory [[test_checklist_alpha171]] — 24 step T1-T24 + 7 regressioni R1-R7.
+
+## (versione precedente)
+
 **v3.5.0-alpha.171** — 19 maggio 2026 — Sprint 1 CR data integrity: ore double-count + voci stima fantasma
 
 Sprint 1 backlog α.171+ (P0 CR data integrity). Backlog completo in memory [[project_backlog_alpha171]].

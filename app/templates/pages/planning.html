@@ -24,6 +24,19 @@
     box-shadow: 0 0 8px var(--indigo);
     z-index: 5 !important;
   }
+  /* v3.5.0-alpha.171.10 (TL-2 + TL-6) — Sticky axis su scroll PAGINA.
+     Strategia: timeline cresce naturale (no maxHeight), axis resta visibile
+     in alto mentre l'utente scrolla la pagina per vedere tutte le risorse.
+     Risolve "risorse limitate / tronche in coda" segnalato Matteo. */
+  #tl-host .vis-time-axis.vis-foreground,
+  #tl-host .vis-panel.vis-top {
+    position: sticky !important;
+    top: 0 !important;
+    z-index: 10 !important;
+    background: var(--bg2, #131726) !important;
+  }
+  /* Labelset (colonna sinistra risorse) NON sticky: scorre con la pagina
+     così l'utente vede ogni risorsa accanto ai suoi item. */
   /* Item: soft shadow + smooth transitions + better hover */
   #tl-host .vis-item {
     border-radius: 5px !important;
@@ -2127,14 +2140,16 @@ function _tlBindResize() {
       // v3.5.0-alpha.44.1 — anti-loop: skip se delta height insignificante.
       // setOptions({height}) può triggerare un nuovo resize event in alcuni
       // browser quando la timeline interna ricalcola layout → loop infinito.
-      // v3.5.0-alpha.169 — Ripristinato height+maxHeight per scroll interno
-      // (vis-timeline 7.x: axis data/ora sticky in alto, group labels scroll
-      // verticale insieme agli items).
+      // v3.5.0-alpha.171.10 — Strategia natural-growth + sticky axis CSS.
+      // Aggiorno solo minHeight (= viewport) per garantire la timeline non
+      // collassi sotto il viewport quando ci sono poche risorse. Niente
+      // maxHeight: la timeline cresce per contenere tutti i gruppi e la
+      // pagina scrolla (axis sticky via CSS).
       const newH = tlComputeHeight(host);
       const lastH = window._tlLastHeight || 0;
       if (Math.abs(newH - lastH) < 8) return;  // < 8px = jitter, ignora
       window._tlLastHeight = newH;
-      try { inst.setOptions({ height: newH, maxHeight: newH }); } catch (_) {}
+      try { inst.setOptions({ minHeight: newH }); } catch (_) {}
     }, 250);  // era 150ms, alzato per maggiore stabilità
   });
 }
@@ -5017,15 +5032,16 @@ async function _doRenderTimeline(preserveWindow=false) {
     // → out of items = stop. Esplicitare risolve la dipendenza dal dataset.
     min: new Date(new Date().getFullYear() - 5, 0, 1),
     max: new Date(new Date().getFullYear() + 5, 11, 31),
-    // v3.5.0-alpha.44: altezza dinamica viewport (era hardcoded 600). Si
-    // v3.5.0-alpha.169 — Ripristinato pattern α.84 (height+maxHeight=viewport):
-    // toolbar pagina sempre visibile + perf (axis ridotto a viewport). Lo
-    // scroll INTERNO della timeline preserva l'axis data/ora sticky in alto
-    // (comportamento nativo vis-timeline 7.x: .vis-time-axis fissato).
-    // Vedi anche CSS .vis-time-axis sticky reinforced sotto.
-    height: (window._tlLastHeight = tlComputeHeight(host)),
-    maxHeight: window._tlLastHeight,
-    verticalScroll: true,
+    // v3.5.0-alpha.171.10 (TL-2 + TL-6) — Strategia "natural growth + sticky
+    // axis via CSS". Pre-α.171.10 maxHeight=viewport limitava scroll interno
+    // → con N>visibili risorse, l'utente vedeva solo le prime e non scopriva
+    // come scrollare dentro il widget. Ora:
+    //   - height NON cap, minHeight = viewport (timeline cresce naturale)
+    //   - pagina scrolla per coprire tutta la timeline
+    //   - CSS `position: sticky` su `.vis-time-axis` mantiene axis visibile
+    //     mentre l'user scrolla la pagina (fix α.169 sticky preservato).
+    minHeight: (window._tlLastHeight = tlComputeHeight(host)),
+    verticalScroll: false,  // page-scroll prende il posto del widget-scroll
     start: win.start,
     end: win.end,
     groupOrder: 'id',

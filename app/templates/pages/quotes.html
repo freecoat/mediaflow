@@ -2447,7 +2447,40 @@ function _loadShippingMarkupInto() {
   }
 }
 
+// v3.5.0-alpha.171.9 (Sprint 2 Step 5) — Helper doppia conferma per modifica
+// di quote APPROVATA: prima conferma intent, seconda conferma versioning.
+// Se accettata, crea automaticamente una nuova versione (POST /new-version)
+// e prosegue le modifiche su quella. Ritorna l'id della quote su cui
+// applicare la modifica (può differire da currentQuoteId dopo versioning).
+async function _ensureEditableQuoteOrVersion(actionLabel) {
+  if (!currentQuote || currentQuote.status !== 'approved') return currentQuoteId;
+  const ok1 = confirm(
+    `⚠ Quote APPROVATA — ${actionLabel || 'modifica in corso'}.\n\n` +
+    `Le modifiche su una quote approvata richiedono una NUOVA VERSIONE ` +
+    `(la versione attuale resta come storico). Continuare?`
+  );
+  if (!ok1) return null;
+  const ok2 = confirm(
+    `Confermi creazione nuova versione della quote ${currentQuote.number}?\n\n` +
+    `La versione attuale verrà marcata "Sostituita" (superseded).`
+  );
+  if (!ok2) return null;
+  try {
+    const nv = await api('POST', `/quotes/api/${currentQuoteId}/new-version`, new FormData());
+    toast(`Nuova versione ${nv.number} (v${nv.version}) creata`, 'success');
+    currentQuoteId = nv.id;
+    if (typeof loadQuote === 'function') await loadQuote(nv.id);
+    return nv.id;
+  } catch (e) {
+    toast('Errore creazione nuova versione: ' + (e.message || ''), 'error');
+    return null;
+  }
+}
+
 async function saveQuoteMeta() {
+  // v3.5.0-alpha.171.9 — Su quote approved, prima crea nuova versione
+  const targetId = await _ensureEditableQuoteOrVersion('Modifica metadata quote');
+  if (!targetId) return;
   const fd = new FormData();
   fd.append('vat_rate', document.getElementById('q-vat').value || '22');
   fd.append('notes', document.getElementById('q-notes').value);
@@ -2461,7 +2494,7 @@ async function saveQuoteMeta() {
   if (bfEl) fd.append('billing_frequency', bfEl.value || '');
   if (btEl) fd.append('billing_terms_days', btEl.value || '');
   try {
-    const res = await api('PUT', `/quotes/api/${currentQuoteId}`, fd);
+    const res = await api('PUT', `/quotes/api/${targetId}`, fd);
     Object.assign(currentQuote, {
       subtotal_gross: res.subtotal_gross, subtotal: res.subtotal,
       total_after_discount: res.total_after_discount, total_with_vat: res.total_with_vat,
