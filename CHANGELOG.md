@@ -1,5 +1,24 @@
 # MediaFlow — Changelog
 
+## v3.5.0-alpha.171.3 — Sprint 2 Step 3: endpoint promote + merge Consuntivo (19 mag 2026)
+
+2 endpoint workflow Quotazione a Consuntivo.
+
+**`POST /quotes/api/{id}/promote-phantom`**:
+- Pre-check: deve essere `is_phantom=True` E `phantom_status=standby`
+- Effetto: `is_phantom=False`, `phantom_status=promoted` (audit-trail). Status quote (approved) invariato. Job/JCL non toccati.
+
+**`POST /quotes/api/{id}/merge-into/{target_id}`**:
+- Pre-check: source = Consuntivo standby; target non-phantom, stesso project_id, ≠ source
+- Crea NUOVA VERSIONE di target (parent_quote_id=target.id, version+1)
+- Clona righe target con `parent_line_id` (rebind storico)
+- Copia righe Consuntivo come nuove (NO parent_line_id, note `[da Consuntivo NNN]`)
+- Ricalcola totali nuova versione
+- target → `status=superseded`, `superseded_by_id=new_version.id`
+- Consuntivo → `phantom_status=merged_into`, `merged_into_quote_id=new_version.id`
+
+Nota: per MVP il Job phantom NON viene migrato al Job target. Le voci sono ora SU nuova versione target, ma le JCL phantom restano sul Job phantom (storico). Fix audit in Step successivo se serve.
+
 ## v3.5.0-alpha.171.2 — Sprint 2 Step 2: rename UI + pre-check creazione Consuntivo (19 mag 2026)
 
 Rinomina semantica "Phantom Quote" → "Quotazione a Consuntivo" + 2 pre-check.

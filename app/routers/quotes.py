@@ -2147,6 +2147,207 @@ async def list_quote_versions(quote_id: int, db: Session = Depends(get_db)):
     }
 
 
+# ───── v3.5.0-alpha.171.3 — Sprint 2 Step 3 ─────
+# Endpoint workflow Quotazione a Consuntivo (ex Phantom Quote).
+#
+# 1) promote-phantom: Consuntivo → quote effettiva (is_phantom=False,
+#    phantom_status=promoted). Mantiene status approved.
+# 2) merge-into/{target}: accorpa Consuntivo in quote target (anche
+#    approvata). Crea NUOVA VERSIONE di target con voci Consuntivo
+#    aggiunte. Consuntivo marcata merged_into. Target marcata superseded.
+
+@router.post("/api/{quote_id}/promote-phantom")
+async def promote_phantom_quote(
+    quote_id: int,
+    request: Request,
+    db: Session = Depends(get_db),
+):
+    """v3.5.0-alpha.171.3 — Promuove una Quotazione a Consuntivo standby a
+    quote effettiva. is_phantom passa a False, phantom_status passa a
+    `promoted` (per audit). Lo status quote (approved) resta.
+
+    L'effetto pratico: la quote diventa "normale" e perde il badge Consuntivo.
+    Il Job/JCL legato non viene toccato (resta lo stesso, ora associato a una
+    quote non-phantom).
+    """
+    from app.services.rbac import current_user_optional, has_permission
+    from app.models import PhantomStatus
+    user = current_user_optional(request)
+    if not has_permission(user, "edit_quotes"):
+        raise HTTPException(403, "Non hai il permesso di promuovere quote")
+
+    q = (
+        db.query(Quote)
+        .filter(Quote.id == quote_id, Quote.tenant_id == current_tenant_id())
+        .first()
+    )
+    if not q:
+        raise HTTPException(404, "Quotazione non trovata")
+    if not q.is_phantom:
+        raise HTTPException(400, "Solo Quotazioni a Consuntivo possono essere promosse")
+    if q.phantom_status != PhantomStatus.standby:
+        raise HTTPException(
+            400,
+            f"Quotazione a Consuntivo già in stato {q.phantom_status.value if q.phantom_status else 'unknown'}. "
+            f"Solo standby può essere promossa."
+        )
+
+    q.is_phantom = False
+    q.phantom_status = PhantomStatus.promoted
+    db.commit()
+    db.refresh(q)
+    return {
+        "id": q.id,
+        "number": q.number,
+        "status": q.status.value,
+        "is_phantom": q.is_phantom,
+        "phantom_status": q.phantom_status.value if q.phantom_status else None,
+        "promoted": True,
+    }
+
+
+@router.post("/api/{quote_id}/merge-into/{target_id}")
+async def merge_phantom_into(
+    quote_id: int,
+    target_id: int,
+    request: Request,
+    db: Session = Depends(get_db),
+):
+    """v3.5.0-alpha.171.3 — Accorpa Quotazione a Consuntivo in altra quote.
+
+    Effetti:
+    1. Crea NUOVA VERSIONE della quote target (parent_quote_id=target_id).
+       La versione clona TUTTE le righe della target.
+    2. Copia le righe della Consuntivo come nuove QuoteLine sulla nuova
+       versione (no parent_line_id: provengono dalla Consuntivo, non dalla
+       target).
+    3. Ricalcola totali della nuova versione.
+    4. Marca target: status=superseded, superseded_by_id=new_version.id
+       (se non già superseded).
+    5. Marca Consuntivo: phantom_status=merged_into, merged_into_quote_id=new_version.id.
+
+    Vincoli:
+    - source.is_phantom=True E phantom_status=standby
+    - target esiste, NON è phantom, stesso project_id
+    - target.status può essere qualsiasi (anche approved — il versioning permette
+      modifica con audit-trail).
+    """
+    from app.services.rbac import current_user_optional, has_permission
+    from app.models import PhantomStatus
+    user = current_user_optional(request)
+    if not has_permission(user, "edit_quotes"):
+        raise HTTPException(403, "Non hai il permesso di accorpare quote")
+
+    src = (
+        db.query(Quote)
+        .options(joinedload(Quote.lines))
+        .filter(Quote.id == quote_id, Quote.tenant_id == current_tenant_id())
+        .first()
+    )
+    if not src:
+        raise HTTPException(404, "Quotazione Consuntivo non trovata")
+    if not src.is_phantom or src.phantom_status != PhantomStatus.standby:
+        raise HTTPException(400, "Source deve essere Quotazione a Consuntivo standby")
+
+    target = (
+        db.query(Quote)
+        .options(joinedload(Quote.lines))
+        .filter(Quote.id == target_id, Quote.tenant_id == current_tenant_id())
+        .first()
+    )
+    if not target:
+        raise HTTPException(404, "Quotazione target non trovata")
+    if target.is_phantom:
+        raise HTTPException(400, "Target non può essere una Quotazione a Consuntivo")
+    if target.project_id != src.project_id:
+        raise HTTPException(400, "Source e target devono appartenere allo stesso progetto")
+    if src.id == target.id:
+        raise HTTPException(400, "Source e target non possono coincidere")
+
+    # Costruisci nuova versione di target (clone + lines + lines Consuntivo)
+    root = _quote_root(db, target)
+    chain = _quote_chain(db, root)
+    next_version = max(q.version for q in chain) + 1
+    import re
+    base_number = re.sub(r"-v\d+$", "", root.number)
+    new_number = f"{base_number}-v{next_version}"
+
+    if (
+        db.query(Quote)
+        .execution_options(include_deleted=True)
+        .filter(Quote.number == new_number)
+        .first()
+    ):
+        raise HTTPException(409, f"Numero '{new_number}' già esistente (anche cestino)")
+
+    new_q = Quote(
+        number=new_number,
+        version=next_version,
+        parent_quote_id=target.id,
+        project_id=target.project_id,
+        client_id=target.client_id,
+        title=target.title,
+        status=QuoteStatus.draft,
+        issue_date=date.today(),
+        valid_until=target.valid_until,
+        production_material=target.production_material,
+        length_minutes=target.length_minutes,
+        fps=target.fps,
+        delivery_format=target.delivery_format,
+        shooting_days=target.shooting_days,
+        shooting_format=target.shooting_format,
+        package_discount=target.package_discount,
+        category_discounts=dict(target.category_discounts) if target.category_discounts else None,
+        category_order=list(target.category_order) if target.category_order else None,
+        vat_rate=target.vat_rate,
+        notes=(target.notes or "") + f"\n[α.171.3 merge] Voci accorpate da Quotazione a Consuntivo {src.number}",
+        payment_terms=target.payment_terms,
+        tenant_id=current_tenant_id(),
+    )
+    db.add(new_q); db.flush()
+
+    # Copia voci dal target (track parent per rebind futuro)
+    new_lines_target = _copy_quote_lines(target.lines, new_q.id, track_parent=True)
+    db.add_all(new_lines_target)
+    db.flush()
+
+    # Copia voci dalla Consuntivo (NO parent_line_id: provengono da phantom)
+    new_lines_phantom = _copy_quote_lines(src.lines, new_q.id, track_parent=False)
+    # Marca le righe da phantom con note "[da Consuntivo]" se non già
+    for nl in new_lines_phantom:
+        if not nl.detail or "[da Consuntivo]" not in nl.detail:
+            nl.detail = (nl.detail or "") + f"\n[da Consuntivo {src.number}]"
+    db.add_all(new_lines_phantom)
+    db.flush()
+
+    _recalc_quote(new_q)
+
+    # Marca target come superseded
+    target.superseded_by_id = new_q.id
+    if target.status != QuoteStatus.superseded:
+        target.status = QuoteStatus.superseded
+
+    # Marca Consuntivo come merged_into
+    src.phantom_status = PhantomStatus.merged_into
+    src.merged_into_quote_id = new_q.id
+
+    db.commit()
+    db.refresh(new_q); db.refresh(src); db.refresh(target)
+    return {
+        "new_version_id": new_q.id,
+        "new_version_number": new_q.number,
+        "new_version_status": new_q.status.value,
+        "target_id": target.id,
+        "target_number": target.number,
+        "target_status": target.status.value,
+        "source_id": src.id,
+        "source_number": src.number,
+        "source_phantom_status": src.phantom_status.value,
+        "lines_from_target": len(new_lines_target),
+        "lines_from_phantom": len(new_lines_phantom),
+    }
+
+
 def _build_migration_preview(db: Session, new_q: Quote) -> dict:
     """Analisi pre-migrazione tra V_old (= new_q.parent_quote) e V_new (= new_q).
     Identifica righe nuove, modificate, orfane. Evidenzia righe orfane con
