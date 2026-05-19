@@ -1,5 +1,23 @@
 # MediaFlow — Changelog
 
+## v3.5.0-alpha.171.8 — Sprint 2 Step 6: delete voce quote approved → propagazione CR (19 mag 2026)
+
+`DELETE /quotes/api/{id}/lines/{line_id}` su quote APPROVATA con booking attivi: invece di hard-block 409, **propaga automaticamente su Consuntivo**.
+
+Regola Matteo: "voci eliminate da quote approvata → job non più esistenti diventano automaticamente parte di Quotazione a Consuntivo. Se job non ha ore maturate, viene eliminato definitivamente."
+
+Implementazione:
+1. Trova/crea Consuntivo standby del progetto
+2. Clona QuoteLine sulla Consuntivo (`quantity=0`, detail con riferimento `[ex-quote NNN L#X]`)
+3. Sposta tutte le JCL collegate sulla nuova QuoteLine clonata
+4. Cancella la QuoteLine originale
+5. Ricalcola totali quote madre + Consuntivo
+6. Return: `propagated_to_phantom=True, phantom_quote_id, cost_lines_moved, blocking_bookings`
+
+Hard-block 409 resta per quote NON approvate (mantiene safety storica).
+
+Step 5 (UI doppia conferma modifica quote approvata): rimane in backlog UI dedicato (backend già permette modifica).
+
 ## v3.5.0-alpha.171.7 — Sprint 3 filtri planning: chip reparto + lavorazione + search testuale + vista per progetto (19 mag 2026)
 
 4 fix sui filtri planning (TL-1, TL-3 via TL-5, TL-4, TL-5).

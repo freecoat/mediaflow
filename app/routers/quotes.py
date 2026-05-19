@@ -1473,6 +1473,85 @@ async def delete_quote_line(quote_id: int, line_id: int, db: Session = Depends(g
                 "start": b.start_datetime.isoformat() if b.start_datetime else None,
                 "execution_status": b.execution_status.value if hasattr(b.execution_status, "value") else str(b.execution_status),
             })
+    # v3.5.0-alpha.171.8 (Sprint 2 Step 6) — Propagazione su CR per quote
+    # APPROVATA: invece di hard-block, sposta JCL+booking a "Quotazione a
+    # Consuntivo" del progetto (auto-creandola se manca).
+    #
+    # Regola Matteo: "In caso venga eliminata una voce, bisogna propagare
+    # l'adattamento su CR per job non più esistenti: job diventa
+    # automaticamente parte di quotazione phantom o a consuntivo. Se job
+    # non ha ore maturate, viene eliminato definitivamente."
+    parent_quote = db.query(Quote).filter(Quote.id == quote_id).first()
+    is_approved_propagation = (
+        parent_quote
+        and parent_quote.status == QuoteStatus.approved
+        and not parent_quote.is_phantom
+        and blocking_bookings
+    )
+    if is_approved_propagation:
+        # Ha ore maturate (booking attivi): muovi a Consuntivo. Crea se manca.
+        from app.models import PhantomStatus
+        phantom = db.query(Quote).filter(
+            Quote.project_id == parent_quote.project_id,
+            Quote.is_phantom == True,  # noqa: E712
+            Quote.phantom_status == PhantomStatus.standby,
+        ).first()
+        if not phantom:
+            from datetime import date as _date
+            phantom = Quote(
+                number=_next_quote_number_progressive(db),
+                version=1,
+                project_id=parent_quote.project_id,
+                client_id=parent_quote.client_id,
+                title=f"Consuntivo — {parent_quote.title or 'progetto'}",
+                status=QuoteStatus.approved,
+                is_phantom=True,
+                phantom_status=PhantomStatus.standby,
+                issue_date=_date.today(),
+                notes=f"Generata da propagazione delete voce in quote {parent_quote.number}.",
+                tenant_id=current_tenant_id(),
+            )
+            db.add(phantom)
+            db.flush()
+        # Clona QuoteLine nella phantom (qty_quoted=0, ore reali da JCL.actual)
+        from app.services.reverse_quote import _next_position, _next_sort_order
+        cloned = QuoteLine(
+            quote_id=phantom.id,
+            price_item_id=line.price_item_id,
+            section="A",
+            position=_next_position(phantom),
+            description=line.description,
+            detail=(line.detail or "") + f"\n[ex-quote {parent_quote.number} L#{line.id}, voce eliminata dopo approval]",
+            quantity=0.0,
+            unit=line.unit,
+            unit_price=line.unit_price,
+            total=0.0,
+            hardcosts=line.hardcosts,
+            sort_order=_next_sort_order(phantom),
+        )
+        db.add(cloned)
+        db.flush()
+        # Sposta tutte le JCL collegate alla nuova QuoteLine sulla phantom
+        for jcl in cost_lines:
+            jcl.quote_line_id = cloned.id
+        # Cancella la QuoteLine originale (ora orfana, ma JCL stanno nella phantom)
+        db.delete(line)
+        q_main = db.query(Quote).options(
+            joinedload(Quote.lines).joinedload(QuoteLine.price_item).joinedload(PriceItem.category)
+        ).filter(Quote.id == quote_id).first()
+        q_main.lines = [l for l in q_main.lines if l.id != line_id]
+        _recalc_quote(q_main)
+        from app.services.reverse_quote import _recalc_quote_totals as _rqt
+        _rqt(phantom)
+        db.commit()
+        return {
+            "ok": True,
+            "propagated_to_phantom": True,
+            "phantom_quote_id": phantom.id,
+            "phantom_number": phantom.number,
+            "cost_lines_moved": len(cost_lines),
+            "blocking_bookings": len(blocking_bookings),
+        }
     if blocking_bookings:
         raise HTTPException(
             409,
