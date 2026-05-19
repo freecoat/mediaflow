@@ -1,5 +1,15 @@
 # MediaFlow — Changelog
 
+## v3.5.0-alpha.170.1 — Hotfix multiselect reparto + pill UI + msg quote (19 mag 2026)
+
+3 regressioni/polish emerse durante test T1 di α.170:
+
+**Multiselect reparto regressione**: `tlBuildResourceGroups` filtrava client-side via `Number(fp.department_id)` → `NaN` per CSV "1,2,3" → filtro saltato → mostrava tutto. Fix: split CSV in `deptIds[]` + `Array.includes`.
+
+**Checkbox "Nascondi non fatte" UI**: ridisegnata come pill toggle (border + bg accent quando ON), allineata visivamente ai pill del resto della toolbar. Label dinamica OFF/ON a destra.
+
+**Messaggio "quote già APPROVATE" confondente**: testo riscritto in modal reverse-quote. Spiega CHE FARE invece di "non usare questo flusso". TODO α.171 phantom redesign.
+
 ## v3.5.0-alpha.170 — Timeline polish (multi-dept + altezza + scroll + click dettagli) + cashflow filtri + anomalie fallback (19 mag 2026)
 
 9 bug aperti da Matteo post α.169.

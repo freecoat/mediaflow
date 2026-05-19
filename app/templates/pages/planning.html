@@ -255,13 +255,35 @@
          v3.5.0-alpha.88: sezione "Opzioni" separata con divider + label
          allineata ai filtri sopra (era fuori griglia). -->
     <hr style="border:none; border-top:1px solid var(--border); margin:10px 0 6px;">
+    <!-- v3.5.0-alpha.170 — Restyle "Nascondi non fatte" come pill toggle
+         allineata al resto dei filtri (era checkbox squallido, segnalato Matteo). -->
     <div class="form-group" style="margin-bottom:8px;">
       <label style="display:block; font-size:11px; color:var(--text3); text-transform:uppercase; letter-spacing:.05em; margin-bottom:6px;">Opzioni</label>
-      <label class="flex items-center gap-2" style="cursor:pointer; font-size:13px; color:var(--text2); padding:4px 0;">
-        <input type="checkbox" id="f-hide-not-done" onchange="onFilterChange()">
-        <span>Nascondi non fatte</span>
+      <label class="mf-toggle-pill" for="f-hide-not-done" style="display:inline-flex; align-items:center; gap:8px; cursor:pointer; font-size:13px; padding:6px 12px; border:1px solid var(--border); border-radius:6px; background:var(--bg2); transition: all var(--t); width:100%; box-sizing:border-box;">
+        <input type="checkbox" id="f-hide-not-done" onchange="onFilterChange(); this.parentElement.classList.toggle('is-on', this.checked);" style="margin:0; accent-color: var(--indigo);">
+        <span style="flex:1;">Nascondi non fatte</span>
+        <span style="font-size:11px; color:var(--text3);" id="f-hnd-state">OFF</span>
       </label>
     </div>
+    <style>
+      .mf-toggle-pill.is-on { border-color: var(--indigo); background: rgba(98,114,245,0.10); color: var(--indigo2); }
+      .mf-toggle-pill.is-on #f-hnd-state { color: var(--indigo2); font-weight: 600; }
+      .mf-toggle-pill:hover { border-color: var(--border2); }
+    </style>
+    <script>
+      // Sync OFF/ON label all'init + on change.
+      (function _initHndPill() {
+        const cb = document.getElementById('f-hide-not-done');
+        const lab = document.getElementById('f-hnd-state');
+        if (!cb || !lab) return;
+        const sync = () => {
+          lab.textContent = cb.checked ? 'ON' : 'OFF';
+          cb.parentElement.classList.toggle('is-on', cb.checked);
+        };
+        cb.addEventListener('change', sync);
+        sync();
+      })();
+    </script>
 
     <button class="btn btn-ghost btn-sm" onclick="resetFilters()" style="width:100%;">Reset filtri</button>
   </aside>
@@ -3410,10 +3432,14 @@ function tlBuildGroups(bookings, rangeStart, rangeEnd) {
 function tlBuildResourceGroups(bookings, rangeStart, rangeEnd) {
   // Filtri: dept e resource limitano cosa mostriamo
   const fp = getFilterParams();
-  const deptFilter = fp.department_id ? Number(fp.department_id) : null;
+  // v3.5.0-alpha.170 fix — department_id ora può essere CSV (multi-select).
+  // Pre-fix Number("1,2,3") = NaN → filtro saltava e mostrava tutto.
+  const deptIds = fp.department_id
+    ? String(fp.department_id).split(',').map(s => Number(s.trim())).filter(Boolean)
+    : [];
   const resFilter = fp.resource_id ? Number(fp.resource_id) : null;
   let resources = RESOURCES_SEED.slice();
-  if (deptFilter) resources = resources.filter(r => r.dept === deptFilter);
+  if (deptIds.length) resources = resources.filter(r => deptIds.includes(r.dept));
   if (resFilter) resources = resources.filter(r => r.id === resFilter);
   // v3.5.0-alpha.84 — Performance: con >100 risorse senza filtro dept/risorsa,
   // auto-filtra solo le risorse con almeno 1 booking nel range visibile (era
@@ -3422,7 +3448,7 @@ function tlBuildResourceGroups(bookings, rangeStart, rangeEnd) {
   // Light ON = limite attivo (perf safety). Light OFF = mostra tutte le risorse.
   // Coerente con auto-enable Light al superare TL_LIGHT_AUTO_GROUPS (15).
   const _lightOn = (typeof tlIsLightMode === 'function') ? tlIsLightMode() : false;
-  if (!deptFilter && !resFilter && _lightOn && resources.length > 100 && bookings && bookings.length) {
+  if (!deptIds.length && !resFilter && _lightOn && resources.length > 100 && bookings && bookings.length) {
     const bookedIds = new Set();
     for (const b of bookings) {
       const rid = b.extendedProps && b.extendedProps.resource_id;
@@ -7365,7 +7391,14 @@ async function rvqOnProjectChange() {
     window._rvqContext = ctx;
     let bits = [];
     if (ctx.is_internal) bits.push('<span style="color:#22c55e;">✓ Progetto interno</span>');
-    if (ctx.approved_quotes.length) bits.push(`<span style="color:#ef4444;">⚠ ${ctx.approved_quotes.length} quote già APPROVATE — usa l'autocomplete job principale, non questo flusso</span>`);
+    // v3.5.0-alpha.170 — Messaggio più chiaro. Pre-fix: "usa l'autocomplete
+    // job principale, non questo flusso" — incomprensibile per Matteo.
+    // Il significato è: questo flusso (reverse-quote) crea phantom/attach a
+    // quote pending; se le quote sono già APPROVED, il booking va creato dal
+    // modal Nuovo Booking standard che le agganciate direttamente.
+    // TODO α.171 — redesign phantom (memory phantom-quote-redesign) prevede
+    // di permettere creazione phantom companion anche su quote approvate.
+    if (ctx.approved_quotes.length) bits.push(`<span style="color:#ef4444;">⚠ ${ctx.approved_quotes.length} quote APPROVATE sul progetto — per nuovi booking su voci già quotate, crea il booking dal pulsante "+ Booking" in alto (selezionando la quote esistente). Questo flusso serve solo per lavorazioni FUORI quote.</span>`);
     if (ctx.pending_quotes.length) bits.push(`<span style="color:#f59e0b;">${ctx.pending_quotes.length} quote pending (draft/sent) — attaccabili</span>`);
     if (ctx.phantom_quotes.length) bits.push(`<span style="color:#6272f5;">${ctx.phantom_quotes.length} phantom quote esistenti</span>`);
     if (!bits.length) bits.push('<span>Nessuna quote — verrà creata phantom</span>');
