@@ -843,7 +843,7 @@
     </div>
     <div class="modal-body">
       <div style="background:rgba(245,158,11,0.08); border:1px solid rgba(245,158,11,0.3); border-radius:6px; padding:10px 12px; font-size:12px; color:var(--text2); margin-bottom:12px;">
-        Il booking che stai creando aggiunge una <b>riga di quote</b> + auto-crea il <b>Job</b>. Scegli a quale quote attaccarla (con approvazione implicita) o crea una phantom quote. Quantità derivata dalla durata del booking. Account manager notificati.
+        Il booking che stai creando aggiunge una <b>riga di quote</b> + auto-crea il <b>Job</b>. Scegli a quale quote attaccarla (con approvazione implicita) o crea una <b>Quotazione a Consuntivo</b>. Quantità derivata dalla durata del booking. Account manager notificati.
       </div>
 
       <div class="form-group">
@@ -863,7 +863,7 @@
           </label>
           <label id="rvq-mode-phantom-label" style="display:flex; align-items:flex-start; gap:6px; cursor:pointer; font-size:13px; padding:6px; border:1px solid var(--border,#2a2e3d); border-radius:4px;">
             <input type="radio" name="rvq-mode" value="create_phantom" onchange="rvqOnModeChange()" style="margin-top:3px;">
-            <span><b>Crea phantom quote</b> — nuova quote approvata + job, mai inviata al cliente. Visibile in /finance, promuovibile a quote di riferimento.</span>
+            <span><b>Crea Quotazione a Consuntivo</b> — nuova quote approvata + job, mai inviata al cliente. Resta in <i>standby</i> finché promossa a quote effettiva o accorpata a quote esistente.</span>
           </label>
         </div>
       </div>
@@ -876,9 +876,9 @@
       </div>
 
       <div class="form-group" id="rvq-phantom-group" style="display:none;">
-        <label class="form-label">Titolo phantom (opzionale)</label>
+        <label class="form-label">Titolo Quotazione a Consuntivo (opzionale)</label>
         <input type="text" id="rvq-phantom-title" class="form-input" placeholder="es. Manutenzione ordinaria sale — Maggio 2026">
-        <div style="font-size:11px; color:var(--text3); margin-top:4px;">Default: "Phantom — {progetto}"</div>
+        <div style="font-size:11px; color:var(--text3); margin-top:4px;">Default: "Consuntivo — {progetto}"</div>
       </div>
 
       <hr style="border:none; border-top:1px solid var(--border,#2a2e3d); margin:14px 0;">
@@ -7277,7 +7277,7 @@ function tlbJobSearch() {
   if (!projectId) {
     box.innerHTML = '<div style="padding:10px; color:#f59e0b; font-size:12px;">⚠ Scegli prima un progetto</div>' +
       `<div onmousedown="rvqOpen()" style="padding:9px 10px; cursor:pointer; font-size:12px; background:rgba(245,158,11,0.06); border-top:1px solid var(--border,#2a2e3d); color:#f59e0b; font-weight:500;">
-        + Genera <b>phantom quote</b> da questo booking…
+        + Genera <b>Quotazione a Consuntivo</b> da questo booking…
       </div>`;
     box.style.display = '';
     return;
@@ -7291,7 +7291,7 @@ function tlbJobSearch() {
   }
   candidates = candidates.slice(0, 12);
   const extraCTA = `<div onmousedown="rvqOpen()" style="padding:9px 10px; cursor:pointer; font-size:12px; background:rgba(245,158,11,0.06); border-top:1px solid var(--border,#2a2e3d); color:#f59e0b; font-weight:500;">
-    + Genera <b>phantom quote</b> da questo booking (progetto senza quote)…
+    + Genera <b>Quotazione a Consuntivo</b> da questo booking (progetto senza quote)…
   </div>`;
   if (!candidates.length) {
     box.innerHTML = '<div style="padding:10px; color:var(--text3); font-size:12px;">Nessuna quotazione trovata</div>' + extraCTA;
@@ -7303,7 +7303,7 @@ function tlbJobSearch() {
     const statusColor = qt.status === 'approved' ? '#22c55e'
       : qt.status === 'sent' ? '#f59e0b'
       : qt.status === 'draft' ? '#6272f5' : 'var(--text3)';
-    const phantomBadge = qt.is_phantom ? ' <span style="background:rgba(98,114,245,0.15); color:#6272f5; padding:1px 5px; border-radius:3px; font-size:10px;">PHANTOM</span>' : '';
+    const phantomBadge = qt.is_phantom ? ' <span style="background:rgba(98,114,245,0.15); color:#6272f5; padding:1px 5px; border-radius:3px; font-size:10px;" title="Quotazione a Consuntivo — in standby">📌 CONSUNTIVO</span>' : '';
     return `<div class="tlb-job-item" onmousedown="tlbSelectJob(${qt.id})" style="padding:8px 10px; cursor:pointer; border-bottom:1px solid var(--border,#2a2e3d); font-size:12px;">
       <div style="font-weight:500; color:var(--text,#eee);">
         <span class="mono" style="color:#6272f5;">${escapeHtml(qt.number)}</span> — ${escapeHtml(qt.title)}
@@ -7400,8 +7400,8 @@ async function rvqOnProjectChange() {
     // di permettere creazione phantom companion anche su quote approvate.
     if (ctx.approved_quotes.length) bits.push(`<span style="color:#ef4444;">⚠ ${ctx.approved_quotes.length} quote APPROVATE sul progetto — per nuovi booking su voci già quotate, crea il booking dal pulsante "+ Booking" in alto (selezionando la quote esistente). Questo flusso serve solo per lavorazioni FUORI quote.</span>`);
     if (ctx.pending_quotes.length) bits.push(`<span style="color:#f59e0b;">${ctx.pending_quotes.length} quote pending (draft/sent) — attaccabili</span>`);
-    if (ctx.phantom_quotes.length) bits.push(`<span style="color:#6272f5;">${ctx.phantom_quotes.length} phantom quote esistenti</span>`);
-    if (!bits.length) bits.push('<span>Nessuna quote — verrà creata phantom</span>');
+    if (ctx.phantom_quotes.length) bits.push(`<span style="color:#6272f5;">📌 ${ctx.phantom_quotes.length} Quotazione a Consuntivo esistente${ctx.phantom_quotes.length > 1 ? 'i' : ''}</span>`);
+    if (!bits.length) bits.push('<span>Nessuna quote — verrà creata Quotazione a Consuntivo</span>');
     meta.innerHTML = bits.join(' · ');
     document.getElementById('rvq-mode-group').style.display = '';
     // Disabilita "attach" se non ci sono pending
@@ -7515,7 +7515,7 @@ async function rvqSave() {
     const r = await api('POST', '/quotes/api/reverse-attach', fd);
     const msg = r.was_implicit_approval
       ? `Quote ${r.quote_number} approvata implicitamente`
-      : `Phantom quote ${r.quote_number} creata`;
+      : `Quotazione a Consuntivo ${r.quote_number} creata`;
     toast(msg, 'success', 4000);
     // v3.4.53: push nuova quote in QUOTES_SEED (autocomplete) — il job è interno
     if (!QUOTES_SEED.find(q => q.id === r.quote_id)) {
@@ -7593,7 +7593,7 @@ async function tlbSubmit() {
   // Validazione: per kind=project la lavorazione è obbligatoria (v3.4.53)
   if (kind === 'project') {
     if (!quoteId) {
-      toast('Scegli una quotazione (o usa "+ Genera phantom quote" per progetti senza quote)', 'warning');
+      toast('Scegli una quotazione (o usa "+ Genera Quotazione a Consuntivo" per progetti senza quote)', 'warning');
       return;
     }
     if (!lineId) {

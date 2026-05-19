@@ -246,11 +246,53 @@ def create_phantom_quote_with_line(
     title: Optional[str] = None,
     actor: Optional[User] = None,
 ) -> dict:
-    """Crea una phantom quote (status=approved, is_phantom=True) con una line
-    derivata dal listino + Job auto-creato. Notifica account managers."""
+    """v3.5.0-alpha.171.2 (Sprint 2 Step 2) — Crea "Quotazione a Consuntivo"
+    (ex "Phantom Quote") con una line dal listino + Job auto-creato.
+
+    Pre-condizioni (regola Matteo redesign):
+    - Progetto NON deve avere quote attiva con status sent/approved
+      (forward-flow normale → usa quote esistente, non Consuntivo)
+    - Progetto NON deve avere già una Consuntivo standby (UNIQUE 1-per-progetto)
+
+    Effetti:
+    - Crea Quote(is_phantom=True, phantom_status=standby, status=approved)
+    - Crea Job + JCL legate
+    - Notifica account managers per decisione promozione/accorpamento
+    """
+    from app.models import PhantomStatus
     pi = db.query(PriceItem).filter(PriceItem.id == price_item_id).first()
     if not pi:
         raise HTTPException(404, "Voce listino non trovata")
+
+    # Pre-check 1: no Consuntivo se quote attiva (sent/approved non-phantom).
+    active_quote = next(
+        (q for q in (project.quotes or [])
+         if q.status in (QuoteStatus.sent, QuoteStatus.approved)
+         and not getattr(q, "is_phantom", False)),
+        None,
+    )
+    if active_quote:
+        raise HTTPException(
+            409,
+            f"Impossibile creare Quotazione a Consuntivo: il progetto ha già la quote "
+            f"{active_quote.number} ({active_quote.status.value}). "
+            f"Aggancia il booking alla quote esistente."
+        )
+
+    # Pre-check 2: 1 Consuntivo standby per progetto (DB enforce via UNIQUE
+    # partial index, ma controllo applicativo per messaggio chiaro).
+    existing_standby = next(
+        (q for q in (project.quotes or [])
+         if getattr(q, "is_phantom", False)
+         and getattr(q, "phantom_status", None) == PhantomStatus.standby),
+        None,
+    )
+    if existing_standby:
+        raise HTTPException(
+            409,
+            f"Quotazione a Consuntivo {existing_standby.number} già attiva per questo "
+            f"progetto. Aggiungi la voce a quella esistente invece di crearne un'altra."
+        )
 
     from app.routers.quotes import _next_quote_number_progressive
     today = _date.today()
@@ -259,11 +301,12 @@ def create_phantom_quote_with_line(
         version=1,
         project_id=project.id,
         client_id=project.client_id,
-        title=(title or f"Phantom — {project.title}").strip()[:255],
+        title=(title or f"Consuntivo — {project.title}").strip()[:255],
         status=QuoteStatus.approved,
         is_phantom=True,
+        phantom_status=PhantomStatus.standby,
         issue_date=today,
-        notes="Quote phantom: generata da booking reverse-flow. Mai inviata al cliente.",
+        notes="Quotazione a Consuntivo: generata da booking reverse-flow. Mai inviata al cliente. In standby: in attesa di promozione o accorpamento.",
     )
     db.add(quote)
     db.flush()
@@ -287,11 +330,11 @@ def create_phantom_quote_with_line(
             exclude_user_ids=[actor.id] if actor else None,
             kind=NotificationKind.quote_reverse_approval.value,
             severity=NotificationSeverity.action_required.value,
-            title=f"Phantom quote {quote.number} creata (reverse-flow)",
+            title=f"Quotazione a Consuntivo {quote.number} creata (reverse-flow)",
             body=(
                 f"Booking su progetto '{project.title}' senza quote attiva → "
-                f"creata phantom approvata: {line.quantity}× {line.description} = € {line.total:.2f}. "
-                f"Promuovibile a quote di riferimento da /finance."
+                f"creata Quotazione a Consuntivo (standby): {line.quantity}× {line.description} = € {line.total:.2f}. "
+                f"Promuovibile a quote di riferimento o accorpabile a quote esistente."
             ),
             link=f"/quotes#{quote.id}",
             payload={

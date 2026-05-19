@@ -1,5 +1,22 @@
 # MediaFlow — Changelog
 
+## v3.5.0-alpha.171.2 — Sprint 2 Step 2: rename UI + pre-check creazione Consuntivo (19 mag 2026)
+
+Rinomina semantica "Phantom Quote" → "Quotazione a Consuntivo" + 2 pre-check.
+
+**UI rename** in planning.html:
+- Modal reverse-quote: testo descrittivo, radio button, badge `📌 CONSUNTIVO` (era `PHANTOM`)
+- Tooltip + placeholder + toast text
+- Default title quote: "Consuntivo — {progetto}" (era "Phantom — {progetto}")
+
+**Notification update**: titolo + body "Quotazione a Consuntivo {numero} creata".
+
+**Pre-check creazione** in `create_phantom_quote_with_line`:
+1. 409 se progetto ha quote attiva (`sent`/`approved` non-phantom) → forward-flow normale, non Consuntivo
+2. 409 se progetto ha già Consuntivo standby (1-per-progetto, anche DB enforce via UNIQUE)
+
+`phantom_status=PhantomStatus.standby` impostato alla creazione.
+
 ## v3.5.0-alpha.171.1 — Sprint 2 Step 1: Modello + migration Phantom redesign (19 mag 2026)
 
 Foundation per phantom quote redesign (vedi memory `project_phantom_quote_redesign`). NO behavior change ancora — solo schema.
