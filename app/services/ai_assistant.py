@@ -2461,6 +2461,123 @@ def _h_propose_transmit_to_billing(db: Session, data: dict) -> dict:
     )
 
 
+# ── Phantom / Quotazione a Consuntivo (v3.5.0-alpha.171.6 Step 8) ──
+
+@ai_capability("propose_promote_phantom")
+def _h_propose_promote_phantom(db: Session, data: dict) -> dict:
+    """MUTATION. Promuove una Quotazione a Consuntivo standby a quote
+    effettiva (is_phantom=False, phantom_status=promoted). Lo status quote
+    (di solito approved) resta invariato.
+
+    Payload: {"quote_id": int} (PK numerico Consuntivo).
+    """
+    from app.models import PhantomStatus
+    qid = data.get("quote_id")
+    if not qid:
+        raise ValueError("quote_id richiesto")
+    q = db.query(Quote).filter(
+        Quote.id == int(qid),
+        Quote.tenant_id == CURRENT_TENANT,
+    ).first()
+    if not q:
+        raise ValueError(f"Quote {qid} non trovata")
+    if not q.is_phantom:
+        raise ValueError(f"Quote {q.number} non è Quotazione a Consuntivo (is_phantom=False)")
+    if q.phantom_status != PhantomStatus.standby:
+        raise ValueError(
+            f"Quote {q.number} è in stato '{q.phantom_status.value if q.phantom_status else 'unknown'}', "
+            f"solo standby può essere promossa."
+        )
+    q.is_phantom = False
+    q.phantom_status = PhantomStatus.promoted
+    db.commit()
+    return {
+        "quote_id": q.id, "quote_number": q.number,
+        "status": q.status.value,
+        "phantom_status": q.phantom_status.value,
+        "promoted": True,
+    }
+
+
+@ai_capability("propose_merge_phantom")
+def _h_propose_merge_phantom(db: Session, data: dict) -> dict:
+    """MUTATION. Accorpa una Quotazione a Consuntivo standby in una quote
+    target (anche approvata). Crea una NUOVA VERSIONE della target con le
+    voci della Consuntivo aggiunte.
+
+    Payload: {"source_quote_id": int, "target_quote_id": int}.
+    Vincoli: source = Consuntivo standby; target non-phantom, stesso project.
+    """
+    from app.models import PhantomStatus, QuoteLine
+    from app.routers.quotes import _quote_root, _quote_chain, _copy_quote_lines, _recalc_quote
+    import re
+
+    src_id = data.get("source_quote_id")
+    tgt_id = data.get("target_quote_id")
+    if not src_id or not tgt_id:
+        raise ValueError("source_quote_id e target_quote_id richiesti")
+    src = db.query(Quote).filter(
+        Quote.id == int(src_id),
+        Quote.tenant_id == CURRENT_TENANT,
+    ).first()
+    if not src or not src.is_phantom or src.phantom_status != PhantomStatus.standby:
+        raise ValueError("Source non è Quotazione a Consuntivo standby")
+    tgt = db.query(Quote).filter(
+        Quote.id == int(tgt_id),
+        Quote.tenant_id == CURRENT_TENANT,
+    ).first()
+    if not tgt or tgt.is_phantom:
+        raise ValueError("Target non valida (non esiste o è phantom)")
+    if tgt.project_id != src.project_id:
+        raise ValueError("Source e target devono appartenere allo stesso progetto")
+
+    root = _quote_root(db, tgt)
+    chain = _quote_chain(db, root)
+    next_version = max(q.version for q in chain) + 1
+    base_number = re.sub(r"-v\d+$", "", root.number)
+    new_number = f"{base_number}-v{next_version}"
+
+    new_q = Quote(
+        number=new_number,
+        version=next_version,
+        parent_quote_id=tgt.id,
+        project_id=tgt.project_id,
+        client_id=tgt.client_id,
+        title=tgt.title,
+        status=QuoteStatus.draft,
+        issue_date=date.today(),
+        valid_until=tgt.valid_until,
+        vat_rate=tgt.vat_rate,
+        notes=(tgt.notes or "") + f"\n[AI merge] da Consuntivo {src.number}",
+        tenant_id=CURRENT_TENANT,
+    )
+    db.add(new_q); db.flush()
+
+    new_lines_target = _copy_quote_lines(tgt.lines, new_q.id, track_parent=True)
+    db.add_all(new_lines_target)
+    new_lines_phantom = _copy_quote_lines(src.lines, new_q.id, track_parent=False)
+    for nl in new_lines_phantom:
+        nl.detail = (nl.detail or "") + f"\n[da Consuntivo {src.number}]"
+    db.add_all(new_lines_phantom)
+    db.flush()
+
+    _recalc_quote(new_q)
+
+    tgt.superseded_by_id = new_q.id
+    if tgt.status != QuoteStatus.superseded:
+        tgt.status = QuoteStatus.superseded
+    src.phantom_status = PhantomStatus.merged_into
+    src.merged_into_quote_id = new_q.id
+    db.commit()
+    return {
+        "new_version_id": new_q.id, "new_version_number": new_q.number,
+        "target_id": tgt.id, "target_number": tgt.number,
+        "source_id": src.id, "source_number": src.number,
+        "lines_from_target": len(new_lines_target),
+        "lines_from_phantom": len(new_lines_phantom),
+    }
+
+
 # v3.5.0-alpha.66.17.2 (R6.2) — `_ACTION_HANDLERS` derivato dal registry
 # popolato dai decorator `@ai_capability("name")` sopra ogni `_h_*`.
 # Manteniamo l'attributo come dict (non funzione) per compat back-compat

@@ -863,6 +863,45 @@ TOOLS: list[dict] = [
         },
         "handler": "propose_asset_movement",
     },
+    # v3.5.0-alpha.171.6 (Sprint 2 Step 8) — Phantom / Consuntivo workflow
+    {
+        "name": "propose_promote_phantom",
+        "category": "mutation",
+        "description": (
+            "Promuove una Quotazione a Consuntivo (phantom) STANDBY a quote effettiva: "
+            "is_phantom passa a False, phantom_status a 'promoted'. Lo status quote (di "
+            "solito approved) resta invariato. Pattern: usa quando il commerciale/account "
+            "manager decide che la Consuntivo è valida come quote di riferimento."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "quote_id": {"type": "integer", "description": "PK numerico della Consuntivo da promuovere"},
+            },
+            "required": ["quote_id"],
+        },
+        "handler": "propose_promote_phantom",
+    },
+    {
+        "name": "propose_merge_phantom",
+        "category": "mutation",
+        "description": (
+            "Accorpa una Quotazione a Consuntivo (source) in una quote target (anche approvata). "
+            "Crea una nuova VERSIONE della target con le righe Consuntivo aggiunte. La target "
+            "passa a superseded, la Consuntivo a phantom_status=merged_into. Pattern: usa quando "
+            "il commerciale decide che le voci Consuntivo vanno integrate nella quote ufficiale. "
+            "Source e target devono appartenere allo stesso progetto."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "source_quote_id": {"type": "integer", "description": "PK Consuntivo standby da accorpare"},
+                "target_quote_id": {"type": "integer", "description": "PK quote target (non-phantom, stesso progetto)"},
+            },
+            "required": ["source_quote_id", "target_quote_id"],
+        },
+        "handler": "propose_merge_phantom",
+    },
 ]
 
 
@@ -984,6 +1023,11 @@ Regole critiche:
 - (b) **Quote** → SE non esiste nel context "QUOTE ESISTENTI" per il progetto richiesto, propone `propose_quote` con `lines` inline. Per ogni riga, usa `price_item_id` se la voce è in listino (da context o appena creata in (a)) — qty basta, gli altri campi vengono ereditati. Per voci libere (raro), passa `description` + `unit_price` espliciti. Aspetti l'Apply (riceverai il `quote_id`).
 - (c) **Aggiunte successive** → solo dopo che la quote esiste, usa `propose_quote_line` (con `price_item_id` quando applicabile).
 NON proporre `propose_new_item_and_line` se la quote non esiste ancora — fallirà perché serve un `quote_id` valido. Per nuove voci listino + nuova quote in unica creazione, segui (a) → (b).
+
+**Quotazione a Consuntivo (ex Phantom Quote, v3.5.0-alpha.171)**: quote speciale per voci aggiunte via booking su progetto senza quote attiva. 1 sola Consuntivo standby per progetto. Voci `quantity_quoted=0`, ore reali dai booking via JCL. Lifecycle: standby → promoted (diventa quote effettiva) | merged_into (accorpata in altra quote, crea versione).
+- NON proporre creazione di una nuova Consuntivo se il progetto ha già `phantom_status=standby` o quote attiva (sent/approved). Il sistema rifiuterà con 409.
+- Quando l'utente chiede di **"promuovere"** o **"rendere ufficiale"** la Consuntivo → `propose_promote_phantom(quote_id)`.
+- Quando l'utente chiede di **"accorpare"** o **"unire"** la Consuntivo in una quote esistente → `propose_merge_phantom(source_quote_id, target_quote_id)`. Crea nuova versione della target. Usabile anche su target approvata.
 
 **Settings — modificare configurazioni del sistema** (NUOVO in v3.5.0-alpha.19):
 Quando l'utente chiede di **modificare una configurazione** (es. "porta lo straordinario al 35%", "cambia la mia P.IVA", "imposta orario 9-13/14-19"), NON cercare di indovinare se esiste un endpoint dedicato. Usa il flusso generico:

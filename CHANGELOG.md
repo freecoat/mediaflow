@@ -1,5 +1,19 @@
 # MediaFlow — Changelog
 
+## v3.5.0-alpha.171.6 — Sprint 2 Step 8: AI capability Consuntivo promote+merge (19 mag 2026)
+
+2 nuove AI capability "AI propone, utente dispone":
+
+**`propose_promote_phantom(quote_id)`**: promuove Consuntivo standby → quote effettiva (`is_phantom=False, phantom_status=promoted`).
+
+**`propose_merge_phantom(source_quote_id, target_quote_id)`**: accorpa Consuntivo in target. Crea nuova VERSIONE target con righe Consuntivo aggiunte. Target → `superseded`. Source → `merged_into`. Usabile anche su target approvata.
+
+System prompt esteso: regola "Quotazione a Consuntivo" che spiega lifecycle + quando usare promote/merge. Bocca proposta di nuova Consuntivo se progetto ha già standby o quote attiva.
+
+Totale 35 AI capabilities registrate (era 33). Tool schemas Anthropic in `ai_tools.py`.
+
+Sprint 2 Step 8 done. Step 5+6 (modifica quote approved + propagazione delete voce) restano in backlog dedicato.
+
 ## v3.5.0-alpha.171.5 — Sprint 2 Step 7: CR badge Consuntivo + visibilità (19 mag 2026)
 
 Payload `/cost-report/api/job/{id}` aggiunge metadati phantom della quote:
