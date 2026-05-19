@@ -267,7 +267,8 @@ async def _planning_render(
 
 @router.get("/api/clients")
 async def list_clients(db: Session = Depends(get_db)):
-    return db.query(Client).all()
+    # v3.5.0-alpha.171.11 — tenant scope (era leak cross-tenant)
+    return db.query(Client).filter(Client.tenant_id == current_tenant_id()).all()
 
 
 @router.post("/api/clients", dependencies=[RequireEditClients], deprecated=True)

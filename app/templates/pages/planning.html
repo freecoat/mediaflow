@@ -7498,14 +7498,11 @@ async function rvqOnProjectChange() {
     window._rvqContext = ctx;
     let bits = [];
     if (ctx.is_internal) bits.push('<span style="color:#22c55e;">✓ Progetto interno</span>');
-    // v3.5.0-alpha.170 — Messaggio più chiaro. Pre-fix: "usa l'autocomplete
-    // job principale, non questo flusso" — incomprensibile per Matteo.
-    // Il significato è: questo flusso (reverse-quote) crea phantom/attach a
-    // quote pending; se le quote sono già APPROVED, il booking va creato dal
-    // modal Nuovo Booking standard che le agganciate direttamente.
-    // TODO α.171 — redesign phantom (memory phantom-quote-redesign) prevede
-    // di permettere creazione phantom companion anche su quote approvate.
-    if (ctx.approved_quotes.length) bits.push(`<span style="color:#ef4444;">⚠ ${ctx.approved_quotes.length} quote APPROVATE sul progetto — per nuovi booking su voci già quotate, crea il booking dal pulsante "+ Booking" in alto (selezionando la quote esistente). Questo flusso serve solo per lavorazioni FUORI quote.</span>`);
+    // v3.5.0-alpha.171.11 — Phantom redesign α.170+: Quotazione a Consuntivo
+    // permessa SEMPRE, anche con quote approvate (memory project_phantom_quote_redesign).
+    // Pre-fix: messaggio rosso ⚠ disorientava utente → pensava il flusso fosse bloccato.
+    // Ora: info neutre per ogni stato; phantom è sempre disponibile (1-per-progetto in standby).
+    if (ctx.approved_quotes.length) bits.push(`<span style="color:#22c55e;">✅ ${ctx.approved_quotes.length} quote approvate sul progetto. Quotazione a Consuntivo (standby) raccoglie lavorazioni emerse FUORI quote — sarà promote/merge nelle approvate.</span>`);
     if (ctx.pending_quotes.length) bits.push(`<span style="color:#f59e0b;">${ctx.pending_quotes.length} quote pending (draft/sent) — attaccabili</span>`);
     if (ctx.phantom_quotes.length) bits.push(`<span style="color:#6272f5;">📌 ${ctx.phantom_quotes.length} Quotazione a Consuntivo esistente${ctx.phantom_quotes.length > 1 ? 'i' : ''}</span>`);
     if (!bits.length) bits.push('<span>Nessuna quote — verrà creata Quotazione a Consuntivo</span>');

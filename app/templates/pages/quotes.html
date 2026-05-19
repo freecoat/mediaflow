@@ -460,17 +460,35 @@
               <label class="form-label">Etichetta *</label>
               <input class="form-input" id="as-label" placeholder="es. Acconto 30% all'avvio, SAL 30%, Saldo 40%" maxlength="120">
             </div>
+            <!-- v3.5.0-alpha.171.11 — Mutual exclusion fix: radio modalità.
+                 Pre-fix: bidirezionale pct↔amount popolava entrambi i campi →
+                 server (α.166) rifiutava con 400 "mutualmente esclusivi". Bug bloccante.
+                 Ora: radio sceglie campo primario, l'altro è readonly display equivalente.
+                 Submit invia SOLO il primary. -->
+            <div class="form-group">
+              <label class="form-label">Modalità importo *</label>
+              <div style="display:flex; gap:14px; align-items:center;">
+                <label style="display:inline-flex; align-items:center; gap:6px; cursor:pointer;">
+                  <input type="radio" name="as-mode" value="pct" checked onchange="onAdvanceModeChange()">
+                  <span>Percentuale del quote</span>
+                </label>
+                <label style="display:inline-flex; align-items:center; gap:6px; cursor:pointer;">
+                  <input type="radio" name="as-mode" value="amount" onchange="onAdvanceModeChange()">
+                  <span>Importo fisso €</span>
+                </label>
+              </div>
+            </div>
             <div class="form-row">
-              <div class="form-group">
+              <div class="form-group" id="as-pct-group">
                 <label class="form-label">Percentuale quote (%)</label>
                 <input class="form-input mono" id="as-pct" type="number" step="0.5" min="0" max="100" placeholder="30" oninput="onAdvancePctInput()">
                 <div class="text-xs text-muted">Es. 30 = 30% del totale quote.</div>
                 <div class="text-xs mono" id="as-pct-equiv" style="margin-top:3px; color:var(--indigo2);"></div>
               </div>
-              <div class="form-group">
-                <label class="form-label">OPPURE importo fisso</label>
+              <div class="form-group" id="as-amount-group">
+                <label class="form-label">Importo fisso (€)</label>
                 <input class="form-input mono" id="as-amount" type="number" step="0.01" min="0" placeholder="5000.00" oninput="onAdvanceAmountInput()">
-                <div class="text-xs text-muted">Bidirezionale: si aggiornano a vicenda.</div>
+                <div class="text-xs text-muted">Importo assoluto (override pct).</div>
                 <div class="text-xs mono" id="as-amount-equiv" style="margin-top:3px; color:var(--indigo2);"></div>
               </div>
             </div>
@@ -2042,8 +2060,13 @@ function openAdvanceScheduleModal(existing) {
   document.getElementById('as-title').textContent = existing ? '💰 Modifica rata acconto' : '💰 Aggiungi rata acconto';
   document.getElementById('as-id').value = existing ? existing.id : '';
   document.getElementById('as-label').value = existing ? existing.label : '';
+  // v3.5.0-alpha.171.11 — Pre-seleziona radio mode da record esistente.
+  const hasAmount = existing && existing.amount_fixed != null && existing.amount_fixed > 0;
+  const initialMode = hasAmount ? 'amount' : 'pct';
+  document.querySelector(`input[name="as-mode"][value="${initialMode}"]`).checked = true;
   document.getElementById('as-pct').value = (existing && existing.pct != null) ? (existing.pct * 100).toFixed(1) : '';
   document.getElementById('as-amount').value = (existing && existing.amount_fixed != null) ? existing.amount_fixed : '';
+  onAdvanceModeChange();  // applica readOnly + ricalcolo equivalenza
   document.getElementById('as-anchor').value = (existing && existing.due_anchor) || 'quote_approved';
   document.getElementById('as-offset').value = (existing && existing.due_offset_days != null) ? existing.due_offset_days : 0;
   document.getElementById('as-date').value = (existing && existing.due_date) || '';
@@ -2102,8 +2125,10 @@ function openAdvanceScheduleModal(existing) {
   openModal('modal-advance-schedule');
 }
 
-// v3.5.0-alpha.140 — Bidirezionale pct ↔ amount in modal rata.
-// Cambio pct → ricalcola amount = pct * quote_total. Cambio amount → ricalcola pct.
+// v3.5.0-alpha.171.11 — Modalità "primary field" via radio (era sync bidirezionale
+// che popolava entrambi i campi → server α.166 rifiutava con 400 mutualmente esclusivi).
+// Ora: radio sceglie primary (pct|amount). Companion mostrato readonly equivalente.
+// Submit invia SOLO il primary; companion va a null esplicito.
 function _quoteSubtotalForAdvance() {
   return (currentQuote && currentQuote.total_after_discount) || 0;
 }
@@ -2112,7 +2137,32 @@ function _quoteCurrencyForAdvance() {
   return (currentQuote && currentQuote.currency) || 'EUR';
 }
 
+function _asPrimaryMode() {
+  const r = document.querySelector('input[name="as-mode"]:checked');
+  return (r && r.value) || 'pct';
+}
+
+function onAdvanceModeChange() {
+  const mode = _asPrimaryMode();
+  const pctEl = document.getElementById('as-pct');
+  const amtEl = document.getElementById('as-amount');
+  if (mode === 'pct') {
+    pctEl.readOnly = false;
+    amtEl.readOnly = true;
+    amtEl.value = '';  // pulisci secondario, ricalcolato da onAdvancePctInput
+    pctEl.focus();
+  } else {
+    amtEl.readOnly = false;
+    pctEl.readOnly = true;
+    pctEl.value = '';  // pulisci secondario, ricalcolato da onAdvanceAmountInput
+    amtEl.focus();
+  }
+  // Ricomputa equivalente con valore corrente
+  if (mode === 'pct') onAdvancePctInput(); else onAdvanceAmountInput();
+}
+
 function onAdvancePctInput() {
+  if (_asPrimaryMode() !== 'pct') return;  // ignora se non primary
   const pctEl = document.getElementById('as-pct');
   const amtEl = document.getElementById('as-amount');
   const eqEl = document.getElementById('as-pct-equiv');
@@ -2121,16 +2171,18 @@ function onAdvancePctInput() {
   const ccy = _quoteCurrencyForAdvance();
   if (!isNaN(pct) && pct > 0 && sub > 0) {
     const calc = (pct / 100) * sub;
-    amtEl.value = calc.toFixed(2);
+    amtEl.value = calc.toFixed(2);  // display readonly
     eqEl.textContent = '= ' + fmtCurrency(calc) + ' ' + ccy;
-    document.getElementById('as-amount-equiv').textContent = '(' + pct.toFixed(1) + '% del quote)';
+    document.getElementById('as-amount-equiv').textContent = '(equivalente)';
   } else {
     eqEl.textContent = '';
-    if (!pctEl.value) document.getElementById('as-amount-equiv').textContent = '';
+    amtEl.value = '';
+    document.getElementById('as-amount-equiv').textContent = '';
   }
 }
 
 function onAdvanceAmountInput() {
+  if (_asPrimaryMode() !== 'amount') return;  // ignora se non primary
   const pctEl = document.getElementById('as-pct');
   const amtEl = document.getElementById('as-amount');
   const eqEl = document.getElementById('as-amount-equiv');
@@ -2139,12 +2191,13 @@ function onAdvanceAmountInput() {
   const ccy = _quoteCurrencyForAdvance();
   if (!isNaN(amt) && amt > 0 && sub > 0) {
     const pct = (amt / sub) * 100;
-    pctEl.value = pct.toFixed(2);
+    pctEl.value = pct.toFixed(2);  // display readonly
     eqEl.textContent = '(' + pct.toFixed(2) + '% del quote ' + fmtCurrency(sub) + ' ' + ccy + ')';
-    document.getElementById('as-pct-equiv').textContent = '= ' + fmtCurrency(amt) + ' ' + ccy;
+    document.getElementById('as-pct-equiv').textContent = '(equivalente)';
   } else {
     eqEl.textContent = '';
-    if (!amtEl.value) document.getElementById('as-pct-equiv').textContent = '';
+    pctEl.value = '';
+    document.getElementById('as-pct-equiv').textContent = '';
   }
 }
 
@@ -2207,18 +2260,31 @@ async function submitAdvanceSchedule() {
   const id = document.getElementById('as-id').value;
   const label = document.getElementById('as-label').value.trim();
   if (!label) { toast('Etichetta obbligatoria', 'warning'); return; }
+  // v3.5.0-alpha.171.11 — Invia SOLO il primary field; companion forzato a 0 esplicito
+  // così update endpoint azzera la colonna companion (server α.166 fa mutual exclusion).
+  const mode = _asPrimaryMode();
   const pctRaw = document.getElementById('as-pct').value;
   const amountRaw = document.getElementById('as-amount').value;
-  const pct = pctRaw ? parseFloat(pctRaw) / 100 : null;
-  const amount = amountRaw ? parseFloat(amountRaw) : null;
+  let pct = null, amount = null;
+  if (mode === 'pct') {
+    pct = pctRaw ? parseFloat(pctRaw) / 100 : null;
+  } else {
+    amount = amountRaw ? parseFloat(amountRaw) : null;
+  }
   if (pct == null && amount == null) {
-    toast('Specificare pct o importo fisso', 'warning'); return;
+    toast('Specificare percentuale o importo fisso', 'warning'); return;
   }
   const anchor = document.getElementById('as-anchor').value;
   const fd = new FormData();
   fd.append('label', label);
-  if (pct != null) fd.append('pct', pct);
-  if (amount != null) fd.append('amount_fixed', amount);
+  // Solo il primary; companion va a 0 esplicito (update path lo azzera via "if pct>0").
+  if (mode === 'pct') {
+    fd.append('pct', pct);
+    fd.append('amount_fixed', 0);
+  } else {
+    fd.append('amount_fixed', amount);
+    fd.append('pct', 0);
+  }
   fd.append('due_anchor', anchor);
   if (anchor !== 'specific_date') {
     fd.append('due_offset_days', document.getElementById('as-offset').value || 0);

@@ -280,6 +280,18 @@
       </div>
       <div class="form-group"><label class="form-label">Totale stimato a finire (€)</label>
         <input class="form-input" id="ul-expected" type="number" step="0.01"></div>
+      <!-- v3.5.0-alpha.171.11 — Toggle lavorazione esterna delegata.
+           Quando attivo: maturato BINARY da SupplierInvoice (no booking interno). -->
+      <div class="form-group" style="border:1px solid var(--border); padding:10px; border-radius:6px; background:rgba(168,85,247,0.04);">
+        <label style="display:flex; align-items:center; gap:8px; cursor:pointer;">
+          <input type="checkbox" id="ul-external-outsourced">
+          <span><strong>Lavorazione delegata a fornitore esterno</strong></span>
+        </label>
+        <small class="text-muted" style="display:block; margin-top:4px;">
+          Modalità BINARY: maturato = quotato SE almeno una fattura passiva è linkata a questa riga.
+          Nessun booking interno previsto. Costo reale = somma fatture passive.
+        </small>
+      </div>
       <div class="form-group"><label class="form-label">Note</label>
         <textarea class="form-textarea" id="ul-notes" rows="2"></textarea></div>
     </div>
@@ -1489,7 +1501,7 @@ function renderCostLines() {
     }
     return `<tr onclick='openLineDetailHere(${l.id})' style="cursor:pointer;">
       <td style="min-width:240px;">
-        <div style="font-weight:500;font-size:13px;">${l.description}${l.is_extra ? ' <span class="text-xs" style="color:#fb923c;">[extra]</span>' : ''}${refsBadge}${pendBadge}${txBadge}${fakeBadge}${advBadge}</div>
+        <div style="font-weight:500;font-size:13px;">${l.description}${l.is_extra ? ' <span class="text-xs" style="color:#fb923c;">[extra]</span>' : ''}${l.external_outsourced ? ' <span class="text-xs" style="background:rgba(168,85,247,0.2);color:#c084fc;padding:1px 6px;border-radius:8px;font-weight:600;" title="Lavorazione delegata a fornitore esterno (binary on/off via fattura passiva)">🏭 OUTSOURCED</span>' : ''}${refsBadge}${pendBadge}${txBadge}${fakeBadge}${advBadge}</div>
         ${l.category ? `<div class="text-xs text-muted">${l.category}</div>` : ''}
         ${bar}
       </td>
@@ -1917,6 +1929,8 @@ function openUpdateLine(line) {
     `${(line.quantity_actual || 0).toFixed(2)} ${line.unit || ''}`;
   document.getElementById('ul-expected').value = line.total_expected || '';
   document.getElementById('ul-notes').value = line.notes || '';
+  // v3.5.0-alpha.171.11 — toggle external_outsourced
+  document.getElementById('ul-external-outsourced').checked = !!line.external_outsourced;
   openModal('modal-update-line');
 }
 
@@ -2026,10 +2040,12 @@ async function openLineDetailHere(lineId) {
 async function updateLine() {
   const id = document.getElementById('ul-id').value;
   // v3.5.0-alpha.10: niente più quantity_actual/total_accrued — solo expected + notes
+  // v3.5.0-alpha.171.11 — aggiunto external_outsourced toggle
   try {
     const fd = new FormData();
     fd.append('total_expected', document.getElementById('ul-expected').value || '');
     fd.append('notes', document.getElementById('ul-notes').value);
+    fd.append('external_outsourced', document.getElementById('ul-external-outsourced').checked ? 'true' : 'false');
     await api('PUT', `/cost-report/api/job/${currentJobId}/cost-lines/${id}`, fd);
     closeModal('modal-update-line');
     toast('Dati aggiornati', 'success');

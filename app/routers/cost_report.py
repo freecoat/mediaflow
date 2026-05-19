@@ -903,6 +903,8 @@ async def job_cost_report(job_id: int, db: Session = Depends(get_db)):
                 "over_under": round(l.total_expected - l.total_quoted, 2),
                 "is_billable": l.is_billable,
                 "is_extra": l.is_extra,
+                # v3.5.0-alpha.171.11 — Lavorazione delegata a fornitore esterno (binary on/off)
+                "external_outsourced": bool(getattr(l, "external_outsourced", False)),
                 "category": l.price_item.category.name if l.price_item and l.price_item.category else None,
                 # v3.5.0-alpha.48 — Step 3 Cost Report → Billing flow:
                 # esponiamo lo stato fatturazione + l'importo realmente
@@ -1115,12 +1117,17 @@ async def update_cost_line(
     total_accrued: Optional[float] = Form(None),
     total_expected: Optional[float] = Form(None),
     notes: Optional[str] = Form(None),
+    external_outsourced: Optional[bool] = Form(None),
     db: Session = Depends(get_db),
 ):
     """v3.5.0-alpha.10: rimosso override manuale di `quantity_actual` /
     `total_accrued` (decisione architetturale Matteo). I valori sono sempre
     derivati dai booking marcati `done` (cost_line_sync). Se passati, 422.
     Restano editabili `total_expected` (forecast finance) e `notes`.
+
+    v3.5.0-alpha.171.11 — Aggiunto toggle `external_outsourced`: marca la
+    riga come lavorazione interamente delegata (binary on/off via SupplierInvoice
+    linkata). Settarlo triggera reconcile (stale flag).
     """
     if quantity_actual is not None or total_accrued is not None:
         raise HTTPException(
@@ -1134,8 +1141,22 @@ async def update_cost_line(
     if not line: raise HTTPException(404)
     if total_expected is not None: line.total_expected = total_expected
     if notes is not None: line.notes = notes
+    if external_outsourced is not None and bool(external_outsourced) != bool(line.external_outsourced):
+        # Cambio modalità → reconcile immediato per riallineare maturato/cost
+        line.external_outsourced = bool(external_outsourced)
+        line.accrued_stale = True
+        try:
+            from app.services.cost_line_sync import recompute_cost_line_actual
+            recompute_cost_line_actual(db, line)
+        except Exception as _e:
+            print(f"[update_cost_line] reconcile failed jcl#{line.id}: {_e}")
     db.commit()
-    return {"id": line.id, "total_accrued": line.total_accrued, "total_expected": line.total_expected}
+    return {
+        "id": line.id,
+        "total_accrued": line.total_accrued,
+        "total_expected": line.total_expected,
+        "external_outsourced": line.external_outsourced,
+    }
 
 
 @router.post("/api/job/{job_id}/assign-resource")

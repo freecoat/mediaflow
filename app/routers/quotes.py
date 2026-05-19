@@ -961,6 +961,12 @@ async def create_advance_schedule(
     ).first()
     if not q:
         raise HTTPException(404, "Quote non trovata")
+    # v3.5.0-alpha.171.11 — Companion=0 dal client significa "non usato": normalizza a None.
+    # UI radio invia sempre entrambi (uno con valore, l'altro a 0) per coerenza form.
+    if pct is not None and pct <= 0:
+        pct = None
+    if amount_fixed is not None and amount_fixed <= 0:
+        amount_fixed = None
     if pct is None and amount_fixed is None:
         raise HTTPException(400, "Specificare pct o amount_fixed")
     # v3.5.0-alpha.166 — Mutual exclusion. Pre-α.166: entrambi valorizzati →

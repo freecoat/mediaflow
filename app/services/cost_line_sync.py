@@ -266,6 +266,49 @@ def recompute_cost_line_actual(db: Session, jcl) -> dict:
     if jcl is None:
         return {"updated": False, "reason": "no_jcl"}
 
+    # v3.5.0-alpha.171.11 — Branch external_outsourced: maturato BINARY da
+    # SupplierInvoice linkata, no booking-driven, no cost interno.
+    if getattr(jcl, "external_outsourced", False):
+        from app.models import SupplierInvoice as _SI
+        quoted_q = jcl.quantity_quoted or 0.0
+        quoted_total = round(quoted_q * (jcl.unit_price or 0.0), 2)
+        linked_invoices = db.query(_SI).filter(
+            _SI.job_cost_line_id == jcl.id,
+            _SI.deleted_at.is_(None),
+        ).all()
+        has_invoice = len(linked_invoices) > 0
+        new_cost_external = round(
+            sum((si.amount_total or si.amount_net or 0) for si in linked_invoices), 2
+        )
+        # Binary toggle: maturato = quotato SE ricevuta ≥1 fattura, altrimenti 0.
+        new_qty_actual = quoted_q if has_invoice else 0.0
+        new_accrued = quoted_total if has_invoice else 0.0
+        new_expected = quoted_total  # forecast resta sempre = quotato
+        changed = (
+            abs((jcl.quantity_actual or 0) - new_qty_actual) > 1e-6
+            or abs((jcl.total_accrued or 0) - new_accrued) > 1e-2
+            or abs((jcl.total_expected or 0) - new_expected) > 1e-2
+            or abs((jcl.total_cost_accrued or 0) - 0.0) > 1e-2
+            or abs((jcl.total_cost_external or 0) - new_cost_external) > 1e-2
+        )
+        jcl.quantity_actual = new_qty_actual
+        jcl.total_accrued = new_accrued
+        jcl.total_expected = new_expected
+        jcl.total_cost_accrued = 0.0  # nessun consumo interno
+        jcl.total_cost_external = new_cost_external
+        jcl.accrued_stale = False
+        return {
+            "updated": changed,
+            "jcl_id": jcl.id,
+            "mode": "external_outsourced",
+            "linked_invoices_count": len(linked_invoices),
+            "has_invoice": has_invoice,
+            "quantity_actual": new_qty_actual,
+            "total_accrued": new_accrued,
+            "total_expected": new_expected,
+            "total_cost_external": new_cost_external,
+        }
+
     # v3.5.0-alpha.65 — risolvi weighted_revenue del job parent (1 query)
     weighted = False
     if jcl.job_id:

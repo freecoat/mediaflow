@@ -1458,6 +1458,17 @@ class JobCostLine(Base):
     # v3.5.0-alpha.115 — Dirty flag per reconcile lazy (perf).
     # Booking-mutate paths settano True; reconcile-all WHERE stale=True ricomputa.
     accrued_stale: Mapped[bool] = mapped_column(Boolean, default=False, server_default="0")
+    # v3.5.0-alpha.171.11 — Lavorazione interamente delegata a fornitore esterno.
+    # Quando True:
+    #   - NO booking interno previsto (no ore, no cost-internal)
+    #   - Maturato BINARY: total_accrued = total_quoted SE ≥1 SupplierInvoice attiva
+    #     linkata via job_cost_line_id; altrimenti 0
+    #   - total_cost_external = Σ SupplierInvoice.amount_total linkate (path lvl1)
+    #   - total_cost_accrued = 0 (no ore interne)
+    # Default False = comportamento storico (booking-driven).
+    external_outsourced: Mapped[bool] = mapped_column(
+        Boolean, default=False, server_default="0", index=True
+    )
     # Lavorazione "extra": aggiunta dopo l'approvazione della quote (es. cliente
     # chiede un upres in più). quote_line_id è NULL per gli extra puri.
     # Una riga ereditata dalla quote può comunque generare extra senza is_extra=True

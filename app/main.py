@@ -385,6 +385,8 @@ def _auto_migrate_columns():
             ("total_cost_accrued", "REAL NOT NULL DEFAULT 0"),
             ("total_cost_external", "REAL NOT NULL DEFAULT 0"),
             ("accrued_stale", "BOOLEAN NOT NULL DEFAULT 0"),
+            # v3.5.0-alpha.171.11 — Lavorazione interamente delegata a fornitore esterno.
+            ("external_outsourced", "BOOLEAN NOT NULL DEFAULT 0"),
         ]
         with engine.begin() as conn:
             for col, ddl in jcl_alter_115:
@@ -1266,7 +1268,7 @@ async def lifespan(app: FastAPI):
     yield
 
 
-app = FastAPI(title="MediaFlow", version="3.5.0-alpha.171.10", lifespan=lifespan)
+app = FastAPI(title="MediaFlow", version="3.5.0-alpha.171.11", lifespan=lifespan)
 
 BASE_DIR = Path(__file__).parent
 app.mount("/static", StaticFiles(directory=BASE_DIR / "static"), name="static")

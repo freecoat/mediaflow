@@ -1,5 +1,36 @@
 # MediaFlow — Changelog
 
+## v3.5.0-alpha.171.11 — Outsourced JCL + Phantom unblock + Rata radio + Cashflow tenant (19 mag 2026)
+
+**Issue 1 — Lavorazione delegata a fornitore esterno (binary on/off)**:
+- Nuovo flag `JobCostLine.external_outsourced: bool` (default False). Marca riga come delegata interamente a fornitore esterno (no booking interno previsto).
+- Quando attivo, `recompute_cost_line_actual` salta branch booking-driven e applica logica binary:
+  - `total_accrued = quantity_quoted × unit_price` SE ≥1 `SupplierInvoice` attiva linkata via `job_cost_line_id`, altrimenti 0
+  - `total_cost_external = Σ amount_total` delle fatture passive linkate (path lvl1)
+  - `total_cost_accrued = 0` (no consumo interno)
+  - `total_expected = quantity_quoted × unit_price` (forecast sempre = quotato)
+- Toggle UI nel modal Aggiorna riga del Cost Report. Cambio modalità triggera reconcile immediato.
+- Badge "🏭 OUTSOURCED" sulla riga.
+- Endpoint `PUT /cost-report/api/job/{job_id}/cost-lines/{line_id}` accetta `external_outsourced: bool`.
+- API cost report risponde con `external_outsourced` nel payload `cost_lines`.
+- Auto-migrate column in `_auto_migrate_columns()`.
+
+**Issue 2 — Quotazione a Consuntivo unblock (phantom redesign α.170+ alignment)**:
+- Rimosso warning rosso ⚠ "questo flusso serve solo per lavorazioni FUORI quote" in `planning.html` rvqOnProjectChange. Disorientava utente facendogli credere il flusso fosse bloccato.
+- Sostituito con messaggio neutro verde che spiega chiaramente: Quotazione a Consuntivo (standby, 1-per-progetto) raccoglie lavorazioni emerse FUORI quote, e sarà mergeable nelle quote approvate via promote/merge.
+- "Attacca a quote pending" resta disabled solo se 0 pending (corretto, non c'è target).
+
+**Issue 3 — Rata acconto pct/amount mutual exclusion (era bloccante salvataggio)**:
+- Modal `quotes.html` modal-advance-schedule: nuovo radio "Modalità importo: % | €" che traccia il primary field. Companion mostrato readonly come display equivalente.
+- `onAdvancePctInput()` / `onAdvanceAmountInput()` ignorano l'input se non sono il primary mode → niente più popolamento simultaneo.
+- `submitAdvanceSchedule()` invia SOLO il primary field; companion forzato a 0 esplicito (update endpoint α.166 lo azzera via "if pct>0 set amount=None").
+- POST `create_advance_schedule` server-side: normalizza companion=0 → None per compat con UI radio.
+- `openAdvanceScheduleModal()` pre-seleziona radio mode dal record esistente.
+
+**Issue 4 — Cashflow filtri Clienti/Progetti**:
+- `/planning/api/clients` aggiunto `tenant_id` filter (era leak cross-tenant — finding R-MT precedente non coperto).
+- Cache-buster bumped 3.5.0-alpha.133 → 3.5.0-alpha.171.11 su `base.html` per CSS+JS (modifiche multiple negli ultimi 38 alpha senza rinfresco).
+
 ## v3.5.0-alpha.171.10 — Step 5 extended + Step 6 batch + TL-3 dropdown JCL (19 mag 2026)
 
 **Step 5 extended (Sprint 2)**: `_ensureEditableQuoteOrVersion()` applicato a tutti i mutator linee: `saveLineField`, `saveLineDiscount`, `addLine`, `toggleLineOptional`, `saveLineSection`. Helper ora ritorna `null` dopo new-version: l'utente deve ripetere l'edit sulla nuova versione (DOM ricreato con nuovi lineId). Toast guida `"Ripeti la modifica sulla nuova versione (caricata ora)"`.
