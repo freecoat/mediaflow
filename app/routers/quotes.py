@@ -1587,6 +1587,167 @@ async def delete_quote_line(quote_id: int, line_id: int, db: Session = Depends(g
     return {"ok": True, "cost_lines_deleted": len(cost_lines)}
 
 
+# ── v3.5.0-alpha.171.10 (Sprint 2 Step 6 batch) ──
+# Batch delete N line in singola chiamata. Per ogni line applica la stessa
+# logica di `delete_quote_line` (incluso propagation su Consuntivo per quote
+# approved con booking attivi). Raccoglie risultati e ritorna summary.
+
+@router.post("/api/{quote_id}/lines-batch-delete", dependencies=[RequireEditQuotes])
+async def batch_delete_quote_lines(
+    quote_id: int,
+    line_ids: str = Form(..., description="CSV di line IDs da eliminare"),
+    db: Session = Depends(get_db),
+):
+    """Batch delete di più QuoteLine in singola transazione.
+
+    Per ogni line:
+    - Se quote NOT approved: hard-block 409 se ha booking attivi → l'INTERA
+      batch fallisce (rollback). Altrimenti delete cascadea JCL "pulite".
+    - Se quote approved: propaga JCL+booking alla Consuntivo del progetto
+      (auto-crea se manca). Stessa Consuntivo riusata per tutte le line del
+      batch (ottimizzazione).
+
+    Body: `line_ids=1,5,12,18` (CSV).
+    Response: `{ok: true, deleted: N, propagated_to_phantom: bool,
+                phantom_quote_id, cost_lines_moved, details: [...]}`
+    """
+    from app.models import PhantomStatus
+    from datetime import date as _date
+    try:
+        ids = [int(x.strip()) for x in line_ids.split(",") if x.strip()]
+    except ValueError:
+        raise HTTPException(400, "line_ids deve essere CSV di interi")
+    if not ids:
+        raise HTTPException(400, "line_ids vuoto")
+
+    parent_quote = db.query(Quote).filter(Quote.id == quote_id).first()
+    if not parent_quote:
+        raise HTTPException(404, "Quote non trovata")
+    is_approved = (
+        parent_quote.status == QuoteStatus.approved
+        and not parent_quote.is_phantom
+    )
+
+    # Phantom target (singolo per la batch, lazy-init alla prima propagation)
+    phantom = None
+    def _get_or_create_phantom():
+        nonlocal phantom
+        if phantom is not None:
+            return phantom
+        existing = db.query(Quote).filter(
+            Quote.project_id == parent_quote.project_id,
+            Quote.is_phantom == True,  # noqa: E712
+            Quote.phantom_status == PhantomStatus.standby,
+        ).first()
+        if existing:
+            phantom = existing
+            return phantom
+        phantom = Quote(
+            number=_next_quote_number_progressive(db),
+            version=1,
+            project_id=parent_quote.project_id,
+            client_id=parent_quote.client_id,
+            title=f"Consuntivo — {parent_quote.title or 'progetto'}",
+            status=QuoteStatus.approved,
+            is_phantom=True,
+            phantom_status=PhantomStatus.standby,
+            issue_date=_date.today(),
+            notes=f"Generata da batch-delete in quote {parent_quote.number}.",
+            tenant_id=current_tenant_id(),
+        )
+        db.add(phantom)
+        db.flush()
+        return phantom
+
+    from app.services.reverse_quote import _next_position, _next_sort_order, _recalc_quote_totals as _rqt
+    total_moved = 0
+    details = []
+    for lid in ids:
+        line = db.query(QuoteLine).filter(
+            QuoteLine.id == lid, QuoteLine.quote_id == quote_id,
+        ).first()
+        if not line:
+            details.append({"line_id": lid, "skipped": "not_found"})
+            continue
+        cost_lines = db.query(JobCostLine).filter(
+            JobCostLine.quote_line_id == lid
+        ).all()
+        # Check booking attivi
+        blocking_count = 0
+        for jcl in cost_lines:
+            blocking_count += db.query(Booking).filter(
+                Booking.job_cost_line_id == jcl.id,
+                Booking.status != BookingStatus.cancelled,
+            ).count()
+        if blocking_count > 0 and not is_approved:
+            db.rollback()
+            raise HTTPException(
+                409,
+                f"Line #{lid} ha {blocking_count} booking attivi: impossibile "
+                f"eliminare in batch su quote non-approved. Annulla i booking "
+                f"prima, oppure approva la quote (la propagazione su Consuntivo "
+                f"avverrà automatica)."
+            )
+        if blocking_count > 0 and is_approved:
+            phantom = _get_or_create_phantom()
+            cloned = QuoteLine(
+                quote_id=phantom.id,
+                price_item_id=line.price_item_id,
+                section="A",
+                position=_next_position(phantom),
+                description=line.description,
+                detail=(line.detail or "") + f"\n[ex-quote {parent_quote.number} L#{line.id}, batch-delete]",
+                quantity=0.0,
+                unit=line.unit,
+                unit_price=line.unit_price,
+                total=0.0,
+                hardcosts=line.hardcosts,
+                sort_order=_next_sort_order(phantom),
+            )
+            db.add(cloned)
+            db.flush()
+            for jcl in cost_lines:
+                jcl.quote_line_id = cloned.id
+            total_moved += len(cost_lines)
+            db.delete(line)
+            details.append({
+                "line_id": lid, "propagated": True,
+                "cost_lines_moved": len(cost_lines),
+            })
+            continue
+        # No blocking bookings: pulizia diretta
+        for jcl in cost_lines:
+            if jcl.job and jcl.job.status in (JobStatus.completed, JobStatus.invoiced):
+                db.rollback()
+                raise HTTPException(
+                    409, f"JCL del job {jcl.job.code} è in stato {jcl.job.status.value}, non cancellabile."
+                )
+            db.query(TimePunch).filter(
+                TimePunch.job_cost_line_id == jcl.id
+            ).update({"job_cost_line_id": None}, synchronize_session=False)
+            db.delete(jcl)
+        db.delete(line)
+        details.append({"line_id": lid, "deleted_clean": True, "cost_lines_deleted": len(cost_lines)})
+
+    # Recalc parent + phantom
+    parent_fresh = db.query(Quote).options(
+        joinedload(Quote.lines).joinedload(QuoteLine.price_item).joinedload(PriceItem.category)
+    ).filter(Quote.id == quote_id).first()
+    _recalc_quote(parent_fresh)
+    if phantom:
+        _rqt(phantom)
+    db.commit()
+    return {
+        "ok": True,
+        "deleted": len([d for d in details if d.get("deleted_clean") or d.get("propagated")]),
+        "propagated_to_phantom": phantom is not None,
+        "phantom_quote_id": phantom.id if phantom else None,
+        "phantom_number": phantom.number if phantom else None,
+        "cost_lines_moved": total_moved,
+        "details": details,
+    }
+
+
 # ── Soft-delete dell'intera Quote (v3.5.0-alpha.7) ───────────
 
 @router.delete("/api/{quote_id}")

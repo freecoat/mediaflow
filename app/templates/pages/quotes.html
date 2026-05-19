@@ -2329,6 +2329,10 @@ function renderTotals() {
 
 // ── Save handlers ─────────────────────────────────────────────
 async function saveLineField(el) {
+  // v3.5.0-alpha.171.10 (Step 5 extended) — Su quote approved: doppia
+  // conferma + auto-versioning prima di salvare modifica linea.
+  const targetId = await _ensureEditableQuoteOrVersion('Modifica voce quote');
+  if (!targetId) return;
   const tr = el.closest('tr');
   const lineId = tr.dataset.lineId;
   const field = el.dataset.field;
@@ -2359,7 +2363,9 @@ async function saveLineField(el) {
     const fd = new FormData();
     fd.append(field, value);
     for (const [k, v] of Object.entries(extraUpdates)) fd.append(k, v);
-    const res = await api('PUT', `/quotes/api/${currentQuoteId}/lines/${lineId}`, fd);
+    // v3.5.0-alpha.171.10 — usa targetId (può differire da currentQuoteId
+    // se _ensureEditableQuoteOrVersion ha creato nuova versione)
+    const res = await api('PUT', `/quotes/api/${targetId}/lines/${lineId}`, fd);
     document.querySelector(`[data-line-total="${lineId}"]`).textContent = fmtCurrency(res.total);
     Object.assign(currentQuote, {
       subtotal_gross: res.subtotal_gross, subtotal: res.subtotal,
@@ -2386,13 +2392,16 @@ async function saveLineField(el) {
 }
 
 async function saveLineDiscount(el) {
+  // v3.5.0-alpha.171.10 (Step 5 extended)
+  const targetId = await _ensureEditableQuoteOrVersion('Modifica sconto voce');
+  if (!targetId) return;
   const tr = el.closest('tr');
   const lineId = tr.dataset.lineId;
   const pct = parseFloat(el.value || 0) / 100;
   try {
     const fd = new FormData();
     fd.append('line_discount_pct', pct);
-    const res = await api('PUT', `/quotes/api/${currentQuoteId}/lines/${lineId}`, fd);
+    const res = await api('PUT', `/quotes/api/${targetId}/lines/${lineId}`, fd);
     document.querySelector(`[data-line-total="${lineId}"]`).textContent = fmtCurrency(res.total);
     Object.assign(currentQuote, {
       subtotal_gross: res.subtotal_gross, subtotal: res.subtotal,
@@ -2467,10 +2476,17 @@ async function _ensureEditableQuoteOrVersion(actionLabel) {
   if (!ok2) return null;
   try {
     const nv = await api('POST', `/quotes/api/${currentQuoteId}/new-version`, new FormData());
-    toast(`Nuova versione ${nv.number} (v${nv.version}) creata`, 'success');
+    toast(
+      `Nuova versione ${nv.number} (v${nv.version}) creata. ` +
+      `Ripeti la modifica sulla nuova versione (caricata ora).`,
+      'success', 5500
+    );
     currentQuoteId = nv.id;
     if (typeof loadQuote === 'function') await loadQuote(nv.id);
-    return nv.id;
+    // Ritorna null per evitare di applicare la modifica sulla VECCHIA quote:
+    // dopo loadQuote i DOM elements sono ricreati con nuovi lineId. La
+    // modifica originale (es. edit su un campo) va ripetuta esplicitamente.
+    return null;
   } catch (e) {
     toast('Errore creazione nuova versione: ' + (e.message || ''), 'error');
     return null;
@@ -2841,6 +2857,9 @@ function convertPriceOnUnitChange() {
 async function addLine() {
   const desc = document.getElementById('al-desc').value.trim();
   if (!desc) { toast('Inserisci la descrizione', 'error'); return; }
+  // v3.5.0-alpha.171.10 (Step 5 extended)
+  const targetId = await _ensureEditableQuoteOrVersion('Aggiunta voce');
+  if (!targetId) return;
   try {
     const fd = new FormData();
     fd.append('description', desc);
@@ -2850,7 +2869,7 @@ async function addLine() {
     fd.append('unit_price', document.getElementById('al-price').value || '0');
     const piId = document.getElementById('al-price-item-id').value;
     if (piId) fd.append('price_item_id', piId);
-    const res = await api('POST', `/quotes/api/${currentQuoteId}/lines`, fd);
+    const res = await api('POST', `/quotes/api/${targetId}/lines`, fd);
     // v3.4.35: undo stack
     quotePushUndo({kind: 'line_add', line_id: res.id, label: `Voce «${desc}»`},
                   `Voce «${desc}» aggiunta`);
@@ -2861,7 +2880,23 @@ async function addLine() {
 }
 
 async function deleteLine(lineId) {
-  if (!confirm('Rimuovere questa voce?')) return;
+  // v3.5.0-alpha.171.10 (Step 5/6 extended) — Warning specifico per quote
+  // approved: il backend propaga AUTOMATICAMENTE le JCL alla Consuntivo
+  // del progetto (vs hard-block per quote non-approved). L'utente deve
+  // sapere prima cosa succede.
+  if (currentQuote && currentQuote.status === 'approved') {
+    const ok = confirm(
+      '⚠ Voce su quote APPROVATA.\n\n' +
+      'Se la voce ha booking attivi (ore maturate), le JCL collegate ' +
+      'verranno SPOSTATE alla Quotazione a Consuntivo del progetto ' +
+      '(creata automaticamente se manca). I booking restano funzionanti.\n\n' +
+      'Se la voce non ha ore maturate, viene eliminata definitivamente.\n\n' +
+      'Continuare?'
+    );
+    if (!ok) return;
+  } else {
+    if (!confirm('Rimuovere questa voce?')) return;
+  }
   // v3.4.35: snapshot dati riga PRIMA del delete per supportare undo
   const line = (currentQuote.lines || []).find(l => l.id == lineId);
   const snapshot = line ? {
@@ -2873,8 +2908,15 @@ async function deleteLine(lineId) {
     price_item_id: line.price_item_id,
   } : null;
   try {
-    await api('DELETE', `/quotes/api/${currentQuoteId}/lines/${lineId}`);
-    if (snapshot) {
+    const res = await api('DELETE', `/quotes/api/${currentQuoteId}/lines/${lineId}`);
+    // v3.5.0-alpha.171.10 — Toast informativo se propagation è avvenuta
+    if (res && res.propagated_to_phantom) {
+      toast(
+        `Voce spostata a Quotazione a Consuntivo ${res.phantom_number} ` +
+        `(${res.cost_lines_moved} JCL trasferite).`,
+        'info', 6000
+      );
+    } else if (snapshot) {
       quotePushUndo({kind: 'line_delete', line_data: snapshot, label: `Voce «${snapshot.description}»`},
                     `Voce «${snapshot.description}» rimossa`);
     }
@@ -2886,11 +2928,14 @@ async function deleteLine(lineId) {
 async function toggleLineOptional(lineId) {
   const line = (currentQuote.lines || []).find(l => l.id === lineId);
   if (!line) return;
+  // v3.5.0-alpha.171.10 (Step 5 extended)
+  const targetId = await _ensureEditableQuoteOrVersion('Toggle voce opzionale');
+  if (!targetId) return;
   const newVal = !line.is_optional;
   try {
     const fd = new FormData();
     fd.append('is_optional', newVal ? 'true' : 'false');
-    await api('PUT', `/quotes/api/${currentQuoteId}/lines/${lineId}`, fd);
+    await api('PUT', `/quotes/api/${targetId}/lines/${lineId}`, fd);
     toast(newVal ? 'Voce resa opzionale' : 'Voce resa obbligatoria', 'success');
     await reloadQuote();
   } catch(e) { toast(e.message, 'error'); }
@@ -2950,10 +2995,13 @@ async function saveLineSection() {
   const lineId = parseInt(document.getElementById('ls-line-id').value, 10);
   const value = document.getElementById('ls-name').value.trim();
   if (!lineId) return;
+  // v3.5.0-alpha.171.10 (Step 5 extended)
+  const targetId = await _ensureEditableQuoteOrVersion('Modifica sezione voce');
+  if (!targetId) return;
   try {
     const fd = new FormData();
     fd.append('section_label', value === '' ? '__CLEAR__' : value);
-    await api('PUT', `/quotes/api/${currentQuoteId}/lines/${lineId}`, fd);
+    await api('PUT', `/quotes/api/${targetId}/lines/${lineId}`, fd);
     toast(value ? `Sezione: ${value}` : 'Sezione rimossa', 'success');
     closeModal('modal-line-section');
     await reloadQuote();

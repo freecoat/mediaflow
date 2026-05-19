@@ -207,6 +207,17 @@
       <div class="fa-suggestions" data-fa-suggestions="job"></div>
     </div>
 
+    <!-- v3.5.0-alpha.171.10 (TL-3) — Filtro lavorazione (JCL): subfiltro
+         di progetto/job. Backend /planning/api/jcl-search query async. -->
+    <div class="form-group" style="position:relative;">
+      <label>Lavorazione <span class="text-xs text-muted">(multi · subfiltro progetto)</span></label>
+      <div class="fa-multi" data-fa-wrap="jcl">
+        <input type="text" class="fa-input" data-fa="jcl" placeholder="Cerca voce listino, JCL…" autocomplete="off">
+      </div>
+      <input type="hidden" id="f-jcl">
+      <div class="fa-suggestions" data-fa-suggestions="jcl"></div>
+    </div>
+
     <div class="form-group" style="position:relative;">
       <label>Risorsa <span class="text-xs text-muted">(multi)</span></label>
       <div class="fa-multi" data-fa-wrap="resource">
@@ -1117,6 +1128,38 @@ const FA_CONFIG = {
       return `<div style="display:flex; align-items:center; gap:6px;"><span style="display:inline-block; width:8px; height:8px; border-radius:50%; background:${it.color};"></span>${escapeHtml(it.name)}</div>${dept ? '<div class="fa-meta">'+escapeHtml(dept.name)+'</div>' : ''}`;
     },
   },
+  // v3.5.0-alpha.171.10 (TL-3) — JCL dropdown async fetch da
+  // /planning/api/jcl-search. Filtrato per progetti selezionati se ce ne sono.
+  jcl: {
+    // No data sync: dataset troppo grande (potenzialmente migliaia JCL).
+    // fetchAsync chiamata da _faSearch su ogni input (debounced via 200ms
+    // del listener input).
+    fetchAsync: async (q) => {
+      const params = new URLSearchParams();
+      if (q) params.set('q', q);
+      // Subfiltro progetto se selezionato in sidebar
+      const projIds = _faGetIds('project');
+      if (projIds.length) params.set('project_id', projIds.join(','));
+      const jobIds = _faGetIds('job');
+      if (jobIds.length) params.set('job_id', jobIds.join(','));
+      params.set('limit', '20');
+      try {
+        return await api('GET', '/planning/api/jcl-search?' + params.toString());
+      } catch (e) {
+        return [];
+      }
+    },
+    display: it => it._placeholder
+      ? ('JCL #' + it.id)
+      : (it.description || ('JCL #' + it.id)),
+    render: it => {
+      const desc = escapeHtml(it.description || '?');
+      const jobC = escapeHtml(it.job_code || '');
+      const projC = escapeHtml(it.project_code || '');
+      const quoted = (it.quoted_total != null) ? ('€' + Number(it.quoted_total).toFixed(0)) : '';
+      return `<div>${desc}</div><div class="fa-meta">${jobC} · ${projC} · ${quoted}</div>`;
+    },
+  },
 };
 
 // v3.4.47: helpers multi-select. Hidden value = comma-separated ids.
@@ -1139,8 +1182,18 @@ function _faRenderChips(faKey) {
   wrap.querySelectorAll('.fa-chip').forEach(c => c.remove());
   const inp = wrap.querySelector('.fa-input');
   for (const id of ids) {
-    const item = cfg.data().find(x => x.id === id);
-    if (!item) continue;
+    // v3.5.0-alpha.171.10 (TL-3) — fallback su async cache per FA entries
+    // che non hanno data sync (es. jcl). Se cache miss, mostra chip placeholder
+    // con solo l'id (label "JCL #N") come fallback graceful.
+    let item = null;
+    if (cfg.data) item = cfg.data().find(x => x.id === id);
+    if (!item && window._faAsyncCache && window._faAsyncCache[faKey]) {
+      item = window._faAsyncCache[faKey][id];
+    }
+    if (!item) {
+      // Fallback minimal chip: id-only display
+      item = { id, _placeholder: true };
+    }
     const chip = document.createElement('span');
     chip.className = 'fa-chip';
     chip.dataset.id = id;
@@ -1168,15 +1221,37 @@ function _faRemoveId(faKey, id) {
   onFilterChange();
 }
 
-function _faSearch(faKey) {
+// v3.5.0-alpha.171.10 (TL-3) — Cache per FA entries async (es. jcl).
+// `_faAsyncCache[faKey][id] = item` riempito on-fetch / on-add; usato da
+// _faRenderChips per cercare item di id già selezionati senza re-fetch.
+window._faAsyncCache = window._faAsyncCache || {};
+
+async function _faSearch(faKey) {
   const cfg = FA_CONFIG[faKey];
   if (!cfg) return;
   const inp = document.querySelector(`[data-fa="${faKey}"]`);
   const box = document.querySelector(`[data-fa-suggestions="${faKey}"]`);
   const q = (inp.value || '').toLowerCase().trim();
   const selected = new Set(_faGetIds(faKey));
-  let items = cfg.data().filter(it => !selected.has(it.id));
-  if (q) items = items.filter(it => cfg.search(it, q));
+  let items;
+  if (cfg.fetchAsync) {
+    // v3.5.0-alpha.171.10 — async pattern per JCL (e altri big-data)
+    try {
+      const fetched = await cfg.fetchAsync(q);
+      // Popola cache per uso da _faRenderChips
+      const cacheKey = faKey;
+      window._faAsyncCache[cacheKey] = window._faAsyncCache[cacheKey] || {};
+      for (const it of fetched) window._faAsyncCache[cacheKey][it.id] = it;
+      items = fetched.filter(it => !selected.has(it.id));
+    } catch (e) {
+      box.textContent = 'Errore ricerca: ' + (e.message || '');
+      box.style.display = 'block';
+      return;
+    }
+  } else {
+    items = cfg.data().filter(it => !selected.has(it.id));
+    if (q) items = items.filter(it => cfg.search(it, q));
+  }
   items = items.slice(0, 12);
   if (!items.length) {
     box.innerHTML = '<div class="fa-item" style="color:var(--text3); cursor:default;">Nessun risultato</div>';
@@ -1196,7 +1271,7 @@ function _faSearch(faKey) {
 }
 
 // Setup listeners (eseguito una volta al load)
-['dept','client','project','job','resource'].forEach(faKey => {
+['dept','client','project','job','jcl','resource'].forEach(faKey => {
   const inp = document.querySelector(`[data-fa="${faKey}"]`);
   const box = document.querySelector(`[data-fa-suggestions="${faKey}"]`);
   if (!inp || !box) return;
@@ -1217,7 +1292,7 @@ function _faSearch(faKey) {
 
 // ── URL state ───────────────────────────────────────────────
 // alpha.38: aggiunti `time-from` / `time-to` (filtro client-side fascia oraria).
-const FILTER_KEYS = ['q','dept','client','project','job','resource','status','kind','from','to','time-from','time-to','hide-not-done'];
+const FILTER_KEYS = ['q','dept','client','project','job','jcl','resource','status','kind','from','to','time-from','time-to','hide-not-done'];
 function readFiltersFromURL() {
   const p = new URLSearchParams(location.search);
   FILTER_KEYS.forEach(k => {
@@ -1234,7 +1309,7 @@ function readFiltersFromURL() {
     if (p.get(k)) el.value = p.get(k);
   });
   // v3.4.47: render chips multi per ogni filtro autocomplete
-  ['dept','client','project','job','resource'].forEach(faKey => {
+  ['dept','client','project','job','jcl','resource'].forEach(faKey => {
     _faRenderChips(faKey);
   });
 }
@@ -1259,7 +1334,7 @@ function getFilterParams() {
   const p = {};
   // time-from/time-to NON vanno nel QS backend (filtro è client-side); gli
   // altri sì.
-  const map = {q:'q', dept:'department_id', client:'client_id', project:'project_id', job:'job_id', resource:'resource_id', status:'status', kind:'kind', from:'from_date', to:'to_date'};
+  const map = {q:'q', dept:'department_id', client:'client_id', project:'project_id', job:'job_id', jcl:'job_cost_line_id', resource:'resource_id', status:'status', kind:'kind', from:'from_date', to:'to_date'};
   for (const [k, key] of Object.entries(map)) {
     const el = document.getElementById('f-'+k);
     if (!el) continue;
@@ -1371,7 +1446,7 @@ if (pvSel) pvSel.addEventListener('change', () => {
 function renderActiveFiltersBar() {
   const labels = {
     q: 'Cerca', dept: 'Reparto', client: 'Cliente', project: 'Progetto',
-    job: 'Job', resource: 'Risorsa', status: 'Stato', kind: 'Tipo',
+    job: 'Job', jcl: 'Lavorazione', resource: 'Risorsa', status: 'Stato', kind: 'Tipo',
     from: 'Dal', to: 'Al',
   };
   const chips = [];
@@ -1418,7 +1493,7 @@ function resetFilters() {
     el.value = '';
   });
   // v3.4.47: pulisce input ricerca + chips multi
-  ['dept','client','project','job','resource'].forEach(faKey => {
+  ['dept','client','project','job','jcl','resource'].forEach(faKey => {
     const inp = document.querySelector(`[data-fa="${faKey}"]`);
     if (inp) inp.value = '';
     _faRenderChips(faKey);
@@ -7941,7 +8016,7 @@ document.getElementById('pl-toggle-filters').addEventListener('click', () => {
   try { localStorage.setItem('pl-filters-collapsed-user-set', '1'); } catch (_) {}
 });
 function updateActiveFiltersBadge() {
-  const n = ['q','dept','client','project','job','resource','status','kind','from','to']
+  const n = ['q','dept','client','project','job','jcl','resource','status','kind','from','to']
     .filter(k => document.getElementById('f-'+k).value).length;
   const badge = document.getElementById('pl-toggle-badge');
   if (n > 0) { badge.textContent = n; badge.style.display = ''; }

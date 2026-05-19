@@ -822,6 +822,63 @@ def _validate_kind_job(kind: BookingKind, job_id: Optional[int],
     return None, None
 
 
+# v3.5.0-alpha.171.10 (TL-3 dropdown) — Search JCL del progetto filtrato.
+# Restituisce lista JCL match-able da PriceItem.name / JobCostLine.description.
+# Usato dalla sidebar planning per popolare l'autocomplete "Lavorazione".
+@router.get("/api/jcl-search")
+async def jcl_search(
+    project_id: Optional[str] = None,
+    job_id: Optional[str] = None,
+    search_q: Optional[str] = Query(None, alias="q"),
+    limit: int = 50,
+    db: Session = Depends(get_db),
+):
+    """Cerca JCL del tenant, filtrabili per progetto/job + match testuale.
+
+    Response: [{id, description, job_id, job_code, project_id, project_code,
+                 price_item_id, unit, quoted_total}]
+    """
+    from app.models import PriceItem as _PI
+    qry = (
+        db.query(JobCostLine)
+        .options(
+            joinedload(JobCostLine.job).joinedload(Job.project),
+            joinedload(JobCostLine.price_item),
+        )
+        .filter(JobCostLine.tenant_id == current_tenant_id())
+    )
+    project_ids = _parse_id_list(project_id)
+    job_ids = _parse_id_list(job_id)
+    if project_ids:
+        qry = qry.join(Job, JobCostLine.job_id == Job.id).filter(Job.project_id.in_(project_ids))
+    if job_ids:
+        qry = qry.filter(JobCostLine.job_id.in_(job_ids))
+    if search_q and search_q.strip():
+        from sqlalchemy import or_ as _or, func as _func
+        s = f"%{search_q.strip().lower()}%"
+        qry = qry.outerjoin(_PI, JobCostLine.price_item_id == _PI.id).filter(_or(
+            _func.lower(JobCostLine.description).like(s),
+            _func.lower(_PI.name).like(s),
+        ))
+    rows = qry.order_by(JobCostLine.id.desc()).limit(limit).all()
+    out = []
+    for jcl in rows:
+        out.append({
+            "id": jcl.id,
+            "description": jcl.description or (jcl.price_item.name if jcl.price_item else "?"),
+            "job_id": jcl.job_id,
+            "job_code": jcl.job.code if jcl.job else None,
+            "job_title": jcl.job.title if jcl.job else None,
+            "project_id": jcl.job.project_id if jcl.job else None,
+            "project_code": (jcl.job.project.code if jcl.job and jcl.job.project else None),
+            "price_item_id": jcl.price_item_id,
+            "price_item_name": jcl.price_item.name if jcl.price_item else None,
+            "unit": jcl.unit,
+            "quoted_total": round(jcl.total_quoted or 0, 2),
+        })
+    return out
+
+
 @router.get("/api/bookings")
 async def list_bookings(
     job_id: Optional[str] = None,

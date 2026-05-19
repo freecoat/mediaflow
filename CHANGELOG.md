@@ -1,5 +1,24 @@
 # MediaFlow — Changelog
 
+## v3.5.0-alpha.171.10 — Step 5 extended + Step 6 batch + TL-3 dropdown JCL (19 mag 2026)
+
+**Step 5 extended (Sprint 2)**: `_ensureEditableQuoteOrVersion()` applicato a tutti i mutator linee: `saveLineField`, `saveLineDiscount`, `addLine`, `toggleLineOptional`, `saveLineSection`. Helper ora ritorna `null` dopo new-version: l'utente deve ripetere l'edit sulla nuova versione (DOM ricreato con nuovi lineId). Toast guida `"Ripeti la modifica sulla nuova versione (caricata ora)"`.
+
+`deleteLine` aggiunge warning specifico per quote approved: spiega che le JCL verranno spostate alla Consuntivo automaticamente. Toast info post-delete se propagation è avvenuta.
+
+**Step 6 batch delete (Sprint 2)**: `POST /quotes/api/{id}/lines-batch-delete` (Form `line_ids` CSV). Per ogni line applica stessa logica di `delete_quote_line`:
+- Quote non-approved + booking attivi → 409 rollback intero batch
+- Quote approved + booking attivi → propaga TUTTE le JCL del batch alla STESSA Consuntivo (lazy-init, no nuova phantom per ogni line)
+- Pulizia diretta per line senza booking
+
+**TL-3 dropdown lavorazione (Sprint 3)**:
+- Backend `GET /planning/api/jcl-search?q&project_id&job_id&limit` — ricerca JCL filtrabile per progetto/job + match testuale su `JobCostLine.description` / `PriceItem.name`
+- Frontend `f-jcl` come `fa-multi` chip-based (autocomplete async)
+- `FA_CONFIG.jcl` con `fetchAsync` (subfiltro automatico dei project_id selezionati)
+- `_faSearch` async-aware (legge `cfg.fetchAsync` se presente)
+- `_faAsyncCache[faKey][id]` per render chip dei JCL selezionati senza re-fetch
+- FILTER_KEYS + map + labels + listeners aggiornati per includere `jcl`
+
 ## v3.5.0-alpha.171.9 — Sprint 2 Step 5 (UI) + Sprint 3 TL-2/TL-6 timeline scroll (19 mag 2026)
 
 **Step 5 (Sprint 2) — UI doppia conferma modifica quote approvata**:
