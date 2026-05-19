@@ -1,5 +1,17 @@
 # MediaFlow — Changelog
 
+## v3.5.0-alpha.171.1 — Sprint 2 Step 1: Modello + migration Phantom redesign (19 mag 2026)
+
+Foundation per phantom quote redesign (vedi memory `project_phantom_quote_redesign`). NO behavior change ancora — solo schema.
+
+- `PhantomStatus` enum: `standby | promoted | merged_into`
+- `Quote.phantom_status: Optional[PhantomStatus]` (NULL per quote normali, default `standby` per phantom esistenti)
+- `Quote.merged_into_quote_id: Optional[FK quotes.id]` (target di accorpamento)
+- Partial unique index `uq_phantom_standby_per_project` → 1 phantom standby per progetto
+- Migration `scripts/migrate_phantom_redesign.py` + auto-migrate hook in main.py lifespan (idempotente)
+
+Backfill: phantom esistenti → `phantom_status='standby'`.
+
 ## v3.5.0-alpha.171 — Sprint 1 CR data integrity: ore double-count + voci stima fantasma (19 mag 2026)
 
 2 bug P0 fatturazione segnalati da Matteo durante test α.170.

@@ -148,6 +148,25 @@ class QuoteStatus(str, enum.Enum):
     # (distinta da rejected: non rifiutata dal cliente, è stata superata)
     superseded = "superseded"
 
+
+class PhantomStatus(str, enum.Enum):
+    """v3.5.0-alpha.171 (Sprint 2) — Stato workflow Phantom Quote
+    (rinominata UI "Quotazione a Consuntivo").
+
+    Applicabile solo se Quote.is_phantom=True. Valori:
+    - standby: phantom attiva, in attesa di decisione commerciale/account
+      manager. Le nuove lavorazioni da booking si auto-legano qui.
+    - promoted: phantom è stata promossa a quote effettiva
+      (is_phantom passa a False). Storico per audit.
+    - merged_into: phantom è stata accorpata in un'altra quote: viene
+      creata una NUOVA VERSIONE della quote target con le voci phantom
+      mergiate. La phantom resta nel DB come storico ma è "esaurita"
+      (merged_into_quote_id FK al target).
+    """
+    standby = "standby"
+    promoted = "promoted"
+    merged_into = "merged_into"
+
 class ProjectStatus(str, enum.Enum):
     prospect = "prospect"; quoting = "quoting"; active = "active"
     completed = "completed"; archived = "archived"
@@ -1193,6 +1212,18 @@ class Quote(Base):
     # promossa a quote di riferimento (toggle is_phantom=False).
     is_phantom: Mapped[bool] = mapped_column(Boolean, default=False)
 
+    # v3.5.0-alpha.171 (Sprint 2 phantom redesign) — Workflow phantom stateful.
+    # phantom_status SOLO applicabile se is_phantom=True. NULL per quote normali.
+    # Vedi PhantomStatus enum per semantica.
+    phantom_status: Mapped[Optional[PhantomStatus]] = mapped_column(
+        SAEnum(PhantomStatus), nullable=True, index=True
+    )
+    # FK alla quote target di un accorpamento (quando phantom_status=merged_into).
+    # NULL per phantom standby/promoted o quote non phantom.
+    merged_into_quote_id: Mapped[Optional[int]] = mapped_column(
+        ForeignKey("quotes.id"), nullable=True
+    )
+
     # v3.5.0-alpha.7 — Soft-delete (cestino).
     # Una Quote con `deleted_at` non NULL è "in cestino": invisibile alla UI
     # principale (filter automatico via SQLAlchemy event listener), ripristinabile
@@ -1211,6 +1242,8 @@ class Quote(Base):
         foreign_keys=[parent_quote_id], remote_side=[id], post_update=True)
     superseded_by: Mapped[Optional["Quote"]] = relationship(
         foreign_keys=[superseded_by_id], remote_side=[id], post_update=True)
+    merged_into_quote: Mapped[Optional["Quote"]] = relationship(
+        foreign_keys=[merged_into_quote_id], remote_side=[id], post_update=True)
 
 
 class QuoteLine(Base):

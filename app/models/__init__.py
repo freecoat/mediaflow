@@ -31,7 +31,7 @@ from app.models.models import (
     ResourceCostType,
     PriceCategory, PriceItem, PriceLevel,
     PricelistSnapshot, PricelistSnapshotKind,
-    Quote, QuoteLine, QuoteStatus,
+    Quote, QuoteLine, QuoteStatus, PhantomStatus,
     AIConversation, AIMessage,
     UserAISettings, AIAction, AIUsageLog,
     ClientPortalAccess,

@@ -169,12 +169,41 @@ def _auto_migrate_columns():
             ("tenant_id", "INTEGER NOT NULL DEFAULT 1"),
             # v3.5.0-alpha.106 — Clausola ricarico spedizioni in quote
             ("shipping_markup_pct", "REAL NOT NULL DEFAULT 15.0"),
+            # v3.5.0-alpha.171 (Sprint 2 phantom redesign): stato workflow phantom
+            # + accorpamento. NULL per quote normali.
+            ("phantom_status", "VARCHAR(20) NULL"),
+            ("merged_into_quote_id", "INTEGER NULL REFERENCES quotes(id)"),
         ]
         with engine.begin() as conn:
             for col, ddl in quote_alter:
                 if col not in qcols:
                     print(f"[auto-migrate] quotes.{col} mancante -> ALTER TABLE")
                     conn.execute(text(f"ALTER TABLE quotes ADD COLUMN {col} {ddl}"))
+            # v3.5.0-alpha.171 — backfill standby + partial unique index
+            # (idempotente: WHERE phantom_status IS NULL filtra solo prime esecuzioni)
+            conn.execute(text(
+                "UPDATE quotes SET phantom_status='standby' "
+                "WHERE is_phantom = 1 AND phantom_status IS NULL"
+            ))
+            idx_rows = conn.execute(text(
+                "SELECT name FROM sqlite_master WHERE type='index' "
+                "AND name='uq_phantom_standby_per_project'"
+            )).fetchall()
+            if not idx_rows:
+                conn.execute(text(
+                    "CREATE UNIQUE INDEX uq_phantom_standby_per_project "
+                    "ON quotes(tenant_id, project_id) "
+                    "WHERE is_phantom = 1 AND phantom_status = 'standby' "
+                    "AND deleted_at IS NULL"
+                ))
+                print("[auto-migrate] CREATE UNIQUE INDEX uq_phantom_standby_per_project")
+            idx_rows = conn.execute(text(
+                "SELECT name FROM sqlite_master WHERE type='index' "
+                "AND name='ix_quotes_phantom_status'"
+            )).fetchall()
+            if not idx_rows:
+                conn.execute(text("CREATE INDEX ix_quotes_phantom_status ON quotes(phantom_status)"))
+                print("[auto-migrate] CREATE INDEX ix_quotes_phantom_status")
     # v3.4.50.1 — QuoteLine: parent_line_id per eredità righe in versioning
     # v3.5.0-alpha.27 — QuoteLine: is_optional + section_label
     # v3.5.0-alpha.64 — QuoteLine: referred_from_jcl_id (link a JCL d'origine
@@ -1237,7 +1266,7 @@ async def lifespan(app: FastAPI):
     yield
 
 
-app = FastAPI(title="MediaFlow", version="3.5.0-alpha.171", lifespan=lifespan)
+app = FastAPI(title="MediaFlow", version="3.5.0-alpha.171.1", lifespan=lifespan)
 
 BASE_DIR = Path(__file__).parent
 app.mount("/static", StaticFiles(directory=BASE_DIR / "static"), name="static")
