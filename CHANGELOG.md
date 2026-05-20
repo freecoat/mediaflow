@@ -1,5 +1,77 @@
 # MediaFlow — Changelog
 
+## v3.5.0-alpha.172.3 — Restructure Sprint 3: endpoint + Bug 1 fix (20 mag 2026)
+
+**Sprint 3 di 5**: endpoint REST per workflow Deliverable + hard-delete admin + ingest MHL/CSV + fix Bug 1 allocation acconto.
+
+**RBAC permission keys nuovi** (`app/services/rbac.py`):
+- `hard_delete_project` (admin-only) — cascade FULL irreversibile
+- `view_deliverables` (tutti i ruoli read)
+- `edit_deliverables` (manager/producer/operator)
+- `confirm_deliverables` (manager/producer — workflow conferma manuale)
+
+**Endpoint nuovi**:
+
+`DELETE /admin/projects/{id}/hard-delete` (admin only):
+- Anti-misclick: body `confirm_token` deve essere `"DELETE-{project.code}"`
+- Wrap `project_purge.hard_delete_project` (cascade 17-step)
+- Solo per workflow test/cleanup, NON produzione standard
+
+`POST /jobs/api/deliverables/{id}/confirm-delivery`:
+- Conferma manuale quantity_delivered (Restructure workflow)
+- Form: `quantity, asset_id?, physical_asset_id?, source, notes?`
+- source ∈ {manual, mhl_yoyotta, csv_lto, fs_scan, ai_proposal}
+- Effetti: incrementa qty_delivered, status → delivered se completo, popola confirmed_at/by
+- Opzionale: crea row `deliverable_assets` per verifica + sync FK legacy primary
+- Warning notifica se zero ore tracked sui booking linked (decisione 8.2)
+- Permesso: `confirm_deliverables`
+
+`GET/POST/DELETE /planning/api/bookings/{id}/deliverables`:
+- CRUD M:N pivot `booking_deliverables`
+- POST: link booking ↔ deliverable (idempotente, cross-job link bloccato)
+- DELETE: rimuove link
+- Auto-triggera `deliverable_cost_sync.recompute_for_booking` (cost split equo)
+- Permesso: `edit_planning_all`
+
+`POST /ingest/yoyotta-mhl` + `POST /ingest/csv-lto`:
+- Upload file MHL Yoyotta (v1/v2 XML) o CSV LTO
+- Parser tollerante in `app/services/mhl_parser.py` (no deps esterne)
+- Spawn 1 `PhysicalAsset` (kind=LTO) con label + capacity_gb + total used
+- Auto-link a deliverable (DeliverableAsset row source='mhl_yoyotta'|'csv_lto')
+- Auto-confirm 1 unità del deliverable (quantity_delivered++)
+- Status → delivered se completo, file_attached altrimenti
+- Permesso: `edit_deliverables`
+
+**Fix Bug 1 allocation acconto** (memory `project_bug_acconti_2026_05_20`):
+
+`PUT /quotes/api/advance-schedules/{id}`:
+- ORA accetta `allocations` form param (era assente pre-α.172.3)
+- Format CSV "line_id:pct,line_id:pct"
+- Replace TUTTE le allocations esistenti (delete + insert atomico)
+- Stringa vuota = clear allocations
+- Re-materialize AP allocations per AP in stato editabile (pending/draft/confirmed)
+- AP invoiced/paid/consumed NON ricreate (immutability: servirebbe NC)
+
+`advance_schedule_to_payment.py`:
+- `materialize_schedules`: branching JCL/Deliverable per QuoteAdvanceAllocation
+  - QuoteLine time-based → `AdvancePaymentAllocation` (legacy)
+  - QuoteLine non-time → N `AdvancePaymentDeliverableAllocation` (1 per Deliverable spawnato)
+  - Pattern fill_sequential con take = min(target.total_quoted, remaining)
+- Helper nuovo `rebuild_ap_allocations_from_schedule` riusabile per re-materialize PUT
+- `_resolve_deliverables_for_quote_line` helper (1 QuoteLine → N Deliverable, 1 per qty)
+
+**main.py**:
+- Mount router `ingest_deliverables`
+- Bump versione α.172.3
+
+**Smoke test boot**:
+- 480 routes totali, +5 nuove (1 ingest MHL + 1 CSV + 1 hard-delete + 1 confirm + 3 pivot booking-deliverable)
+- App importata clean, nessun import error
+
+**Pendenti Sprint 4-5**:
+- UI: editor quote split JCL/Deliverable, CR sezioni separate, kanban consegne, modal confirm-delivery
+- Migration UX: tool one-shot voci storiche
+
 ## v3.5.0-alpha.172.2 — Restructure Sprint 2: service layer (20 mag 2026)
 
 **Sprint 2 di 5**: refactor service core per supportare la separazione JCL/Deliverable.

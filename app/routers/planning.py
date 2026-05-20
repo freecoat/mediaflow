@@ -3887,3 +3887,128 @@ async def my_bookings(
             "notes": b.notes,
         })
     return out
+
+
+# ─────────────────────────────────────────────────────────────
+# v3.5.0-alpha.172.3 Restructure Sprint 3 — Booking link Deliverable (M:N)
+# Pivot booking_deliverables. Permette ad un booking di servire N
+# deliverable (cost split equo via deliverable_cost_sync).
+# ─────────────────────────────────────────────────────────────
+
+@router.get("/api/bookings/{booking_id}/deliverables")
+async def list_booking_deliverables(
+    booking_id: int,
+    db: Session = Depends(get_db),
+):
+    """Lista deliverable linkati al booking via pivot booking_deliverables."""
+    from app.models import Booking, BookingDeliverable, JobDeliverable
+
+    b = db.query(Booking).filter(
+        Booking.id == booking_id, Booking.tenant_id == current_tenant_id(),
+    ).first()
+    if not b:
+        raise HTTPException(404, "Booking non trovato")
+
+    rows = (
+        db.query(BookingDeliverable, JobDeliverable)
+        .join(JobDeliverable, JobDeliverable.id == BookingDeliverable.job_deliverable_id)
+        .filter(BookingDeliverable.booking_id == booking_id)
+        .order_by(BookingDeliverable.sort_order.asc(), BookingDeliverable.id.asc())
+        .all()
+    )
+    return [
+        {
+            "pivot_id": link.id,
+            "deliverable_id": d.id,
+            "name": d.name,
+            "unit": d.unit,
+            "unit_nature": d.unit_nature.value if hasattr(d.unit_nature, "value") else d.unit_nature,
+            "quantity_planned": d.quantity_planned,
+            "quantity_delivered": d.quantity_delivered,
+            "status": d.status.value if hasattr(d.status, "value") else d.status,
+            "sort_order": link.sort_order,
+        }
+        for link, d in rows
+    ]
+
+
+@router.post("/api/bookings/{booking_id}/deliverables", dependencies=[RequireEditPlanningAll])
+async def link_booking_deliverable(
+    booking_id: int,
+    job_deliverable_id: int = Form(...),
+    sort_order: int = Form(0),
+    db: Session = Depends(get_db),
+):
+    """Crea row in booking_deliverables. Idempotente: skip se gia presente.
+    Triggera recompute deliverable_cost_sync per ricalcolare cost split.
+    """
+    from app.models import Booking, BookingDeliverable, JobDeliverable
+    from app.services.deliverable_cost_sync import recompute_for_booking
+
+    b = db.query(Booking).filter(
+        Booking.id == booking_id, Booking.tenant_id == current_tenant_id(),
+    ).first()
+    if not b:
+        raise HTTPException(404, "Booking non trovato")
+
+    d = db.query(JobDeliverable).filter(
+        JobDeliverable.id == job_deliverable_id,
+        JobDeliverable.tenant_id == current_tenant_id(),
+    ).first()
+    if not d:
+        raise HTTPException(404, "Deliverable non trovato")
+    if d.job_id != b.job_id:
+        raise HTTPException(
+            400,
+            f"Deliverable appartiene a job #{d.job_id}, booking a job #{b.job_id}. "
+            "Cross-job link non permesso."
+        )
+
+    existing = db.query(BookingDeliverable).filter(
+        BookingDeliverable.booking_id == booking_id,
+        BookingDeliverable.job_deliverable_id == job_deliverable_id,
+    ).first()
+    if existing:
+        return {"ok": True, "pivot_id": existing.id, "already_linked": True}
+
+    link = BookingDeliverable(
+        booking_id=booking_id,
+        job_deliverable_id=job_deliverable_id,
+        sort_order=sort_order,
+    )
+    db.add(link); db.flush()
+
+    # Ricalcola tutti i deliverable linkati a questo booking (cost split equo)
+    recompute_for_booking(db, b)
+    db.commit()
+    return {"ok": True, "pivot_id": link.id, "already_linked": False}
+
+
+@router.delete("/api/bookings/{booking_id}/deliverables/{deliverable_id}",
+               dependencies=[RequireEditPlanningAll])
+async def unlink_booking_deliverable(
+    booking_id: int,
+    deliverable_id: int,
+    db: Session = Depends(get_db),
+):
+    """Rimuove row da booking_deliverables. Triggera recompute cost_split."""
+    from app.models import Booking, BookingDeliverable
+    from app.services.deliverable_cost_sync import recompute_for_booking
+
+    b = db.query(Booking).filter(
+        Booking.id == booking_id, Booking.tenant_id == current_tenant_id(),
+    ).first()
+    if not b:
+        raise HTTPException(404, "Booking non trovato")
+
+    link = db.query(BookingDeliverable).filter(
+        BookingDeliverable.booking_id == booking_id,
+        BookingDeliverable.job_deliverable_id == deliverable_id,
+    ).first()
+    if not link:
+        return {"ok": True, "deleted": False}
+
+    db.delete(link); db.flush()
+    recompute_for_booking(db, b)
+    db.commit()
+    return {"ok": True, "deleted": True}

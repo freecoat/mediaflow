@@ -565,3 +565,51 @@ def _role_code_to_enum(code: str) -> UserRole:
         "viewer": UserRole.viewer,
     }
     return mapping.get(code, UserRole.staff)
+
+
+# ─────────────────────────────────────────────────────────────────
+# v3.5.0-alpha.172.3 Restructure Sprint 3 — Hard-delete project cascade
+# Workflow ADMIN-ONLY, irreversibile. Spec docs/RESTRUCTURE_2026_05_20.md
+# sezione 6.
+# ─────────────────────────────────────────────────────────────────
+
+@router.delete("/projects/{project_id}/hard-delete")
+async def hard_delete_project_endpoint(
+    project_id: int,
+    confirm_token: str = Body(..., embed=True),
+    db: Session = Depends(get_db),
+    user: User = Depends(requires_permission("hard_delete_project")),
+):
+    """Hard-delete cascade FULL di un progetto + tutto l'albero correlato
+    (Quote, Job, JCL, Booking, Invoice, Asset, Deliverable, ...).
+
+    Pensato SOLO per workflow test/cleanup admin. Per produzione standard
+    usa soft-delete (cestino).
+
+    Anti-misclick: il body deve contenere `confirm_token` = `"DELETE-{code}"`.
+    Esempio: project.code='TEST-001' -> confirm_token='DELETE-TEST-001'.
+
+    Returns: counters per tabella + project_code.
+    """
+    from app.models import Project
+    from app.services.project_purge import hard_delete_project
+
+    proj = db.query(Project).filter(Project.id == project_id).first()
+    if not proj:
+        raise HTTPException(404, "Project non trovato")
+
+    expected = f"DELETE-{proj.code}"
+    if confirm_token != expected:
+        raise HTTPException(
+            400,
+            f"confirm_token non valido. Atteso esattamente '{expected}'."
+        )
+
+    try:
+        report = hard_delete_project(db, project_id, actor_user_id=user.id)
+        db.commit()
+        return report
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(500, f"Hard-delete fallito: {e}")
+

@@ -1335,7 +1335,7 @@ async def lifespan(app: FastAPI):
     yield
 
 
-app = FastAPI(title="MediaFlow", version="3.5.0-alpha.172.2", lifespan=lifespan)
+app = FastAPI(title="MediaFlow", version="3.5.0-alpha.172.3", lifespan=lifespan)
 
 BASE_DIR = Path(__file__).parent
 app.mount("/static", StaticFiles(directory=BASE_DIR / "static"), name="static")
@@ -1628,6 +1628,9 @@ app.include_router(oauth_router.router)
 app.include_router(portal.router)  # v3.5.0-alpha.97 — Portale cliente (#10 fase A)
 app.include_router(platform.router)  # v3.5.0-alpha.104 — Super-admin platform
 app.include_router(billing.router)
+# v3.5.0-alpha.172.3 Restructure Sprint 3 — Ingest deliverable (MHL Yoyotta + CSV LTO)
+from app.routers import ingest_deliverables as ingest_deliverables_router
+app.include_router(ingest_deliverables_router.router)
 
 
 @app.get("/", response_class=HTMLResponse)

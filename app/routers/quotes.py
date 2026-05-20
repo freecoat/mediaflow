@@ -1071,9 +1071,20 @@ async def update_advance_schedule(
     milestone_label: Optional[str] = Form(None),
     sort_order: Optional[int] = Form(None),
     notes: Optional[str] = Form(None),
+    # v3.5.0-alpha.172.3 Bug 1 fix — allocations form param accettato anche
+    # in update path. Pre-fix (pre α.172.3) il PUT NON accettava allocations
+    # quindi la modifica delle voci coperte dall'acconto post-creazione era
+    # impossibile via UI. Vedi memory project_bug_acconti_2026_05_20.
+    # Formato CSV "line_id:pct,line_id:pct" — replace TUTTE le allocations
+    # esistenti (delete + insert). Stringa vuota = clear allocations.
+    allocations: Optional[str] = Form(None),
     db: Session = Depends(get_db),
 ):
-    from app.models import QuoteAdvanceSchedule, AdvanceDueAnchor
+    from app.models import (
+        QuoteAdvanceSchedule, QuoteAdvanceAllocation, AdvanceDueAnchor,
+        AdvancePayment, AdvancePaymentAllocation,
+        AdvancePaymentDeliverableAllocation,
+    )
     s = db.query(QuoteAdvanceSchedule).filter(
         QuoteAdvanceSchedule.id == schedule_id,
         QuoteAdvanceSchedule.tenant_id == current_tenant_id(),
@@ -1104,9 +1115,66 @@ async def update_advance_schedule(
     if milestone_label is not None: s.milestone_label = milestone_label
     if sort_order is not None: s.sort_order = sort_order
     if notes is not None: s.notes = notes
+
+    # v3.5.0-alpha.172.3 — Bug 1 fix: replace allocations + re-materialize AP.
+    if allocations is not None:
+        # Delete existing allocations
+        db.query(QuoteAdvanceAllocation).filter(
+            QuoteAdvanceAllocation.schedule_id == s.id
+        ).delete(synchronize_session=False)
+        # Parse + insert new ones (formato "line_id:pct,line_id:pct")
+        if allocations.strip():
+            for token in allocations.split(","):
+                token = token.strip()
+                if not token:
+                    continue
+                if ":" not in token:
+                    raise HTTPException(400, f"allocations formato invalido: '{token}' (atteso line_id:pct)")
+                l_id_s, pct_s = token.split(":", 1)
+                try:
+                    l_id = int(l_id_s.strip())
+                    a_pct = float(pct_s.strip())
+                except ValueError:
+                    raise HTTPException(400, f"allocations parse error: '{token}'")
+                if a_pct <= 0 or a_pct > 1.0:
+                    raise HTTPException(400, f"allocation pct deve essere tra 0 e 1.0 (line #{l_id})")
+                db.add(QuoteAdvanceAllocation(
+                    schedule_id=s.id, quote_line_id=l_id, pct=a_pct,
+                ))
+
+        # Re-materialize: se AP già esistente (status pending/draft/confirmed)
+        # cancella sue allocations vecchie e re-crea da nuova schedule
+        # allocations. AP già invoiced/paid/consumed NON ricreate (semantica
+        # immutability: la riallocazione richiede manualmente nota credito).
+        from app.models import AdvancePaymentStatus
+        editable_statuses = {AdvancePaymentStatus.pending, AdvancePaymentStatus.draft,
+                              AdvancePaymentStatus.confirmed}
+        existing_aps = db.query(AdvancePayment).filter(
+            AdvancePayment.quote_advance_schedule_id == s.id,
+            AdvancePayment.status.in_(editable_statuses),
+        ).all()
+        re_materialized = 0
+        for ap in existing_aps:
+            # Cancella vecchie AP allocations (JCL + Deliverable)
+            db.query(AdvancePaymentAllocation).filter(
+                AdvancePaymentAllocation.advance_payment_id == ap.id
+            ).delete(synchronize_session=False)
+            db.query(AdvancePaymentDeliverableAllocation).filter(
+                AdvancePaymentDeliverableAllocation.advance_payment_id == ap.id
+            ).delete(synchronize_session=False)
+            # Re-materialize via helper riusabile
+            from app.services.advance_schedule_to_payment import (
+                rebuild_ap_allocations_from_schedule,
+            )
+            rebuild_ap_allocations_from_schedule(db, ap, s)
+            re_materialized += 1
+        s._re_materialized_count = re_materialized  # debug payload only
+
     db.commit()
     db.refresh(s)
-    return _serialize_schedule(s)
+    result = _serialize_schedule(s)
+    result["re_materialized_count"] = getattr(s, "_re_materialized_count", 0)
+    return result
 
 
 @router.delete("/api/advance-schedules/{schedule_id}", dependencies=[RequireEditQuotes])

@@ -8,6 +8,36 @@
 
 ## Versione corrente
 
+**v3.5.0-alpha.172.3** — 20 maggio 2026 — Sprint 3 Restructure: endpoint + fix Bug 1
+
+Sprint 3 di 5. 5 endpoint nuovi + fix Bug 1 allocation acconto.
+
+**Endpoint**:
+- `DELETE /admin/projects/{id}/hard-delete` admin-only + confirm_token
+- `POST /jobs/api/deliverables/{id}/confirm-delivery` workflow conferma manuale
+- `GET/POST/DELETE /planning/api/bookings/{id}/deliverables` M:N pivot
+- `POST /ingest/yoyotta-mhl` + `/ingest/csv-lto` parser auto-fill quantity_delivered
+
+**Fix Bug 1**:
+- PUT `/quotes/api/advance-schedules/{id}` accetta allocations (era assente!)
+- Re-materialize AP per AP editabili dopo update allocations
+- `materialize_schedules` branching JCL/Deliverable (covers entrambe le casistiche)
+- Helper riusabile `rebuild_ap_allocations_from_schedule`
+
+**RBAC nuovi keys**: hard_delete_project, view/edit/confirm_deliverables (preset roles aggiornati).
+
+**Smoke test**: 480 routes registrate, app boot clean.
+
+## Prossimo step — Sprint 4 UI
+
+1. Editor quote split JCL/Deliverable in editor tab
+2. CR detail con sezioni separate Lavorazioni vs Consegne
+3. Kanban consegne per progetto
+4. Modal confirm-delivery + link asset
+5. Modal multi-select deliverable in booking edit
+
+## (versione precedente)
+
 **v3.5.0-alpha.172.2** — 20 maggio 2026 — Sprint 2 Restructure: service layer
 
 Sprint 2 di 5. Service core rifatto per supportare separazione JCL/Deliverable.

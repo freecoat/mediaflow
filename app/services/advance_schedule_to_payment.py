@@ -74,6 +74,108 @@ def _resolve_jcl_for_quote_line(db: Session, job_id: int, quote_line_id: int) ->
     ).first()
 
 
+def _resolve_deliverables_for_quote_line(db: Session, job_id: int, quote_line_id: int) -> list:
+    """v3.5.0-alpha.172.3 Restructure — Restituisce TUTTI i JobDeliverable
+    spawnati da una QuoteLine (1 row per qty unitaria, decisione restructure)."""
+    from app.models import JobDeliverable
+    return db.query(JobDeliverable).filter(
+        JobDeliverable.job_id == job_id,
+        JobDeliverable.quote_line_id == quote_line_id,
+        JobDeliverable.deleted_at.is_(None),
+    ).order_by(JobDeliverable.id.asc()).all()
+
+
+def rebuild_ap_allocations_from_schedule(db: Session, ap, schedule) -> dict:
+    """v3.5.0-alpha.172.3 — Re-materialize delle AP_allocation per un AP
+    a partire dalle QuoteAdvanceAllocation correnti della schedule.
+
+    Cancella allocations vecchie del AP (precondizione: il caller le ha gia
+    droppate) e ricostruisce fill_sequential su JCL + Deliverable parallel.
+
+    Per ogni QuoteAdvanceAllocation:
+    - se la QuoteLine matcha una JCL (unit time-based) -> AdvancePaymentAllocation
+    - se matcha N Deliverable (unit non-time, 1 row per qty) -> N
+      AdvancePaymentDeliverableAllocation con amount pro-quota su total_quoted
+
+    Caller è responsabile del commit e di chiamare con AP in stato editabile
+    (pending/draft/confirmed). AP invoiced/paid/consumed non rallocabili
+    (servirebbe nota credito).
+    """
+    from app.models import (
+        AdvancePaymentAllocation, AdvancePaymentDeliverableAllocation,
+        QuoteAdvanceAllocation,
+    )
+
+    job = db.query(Job).filter(Job.id == ap.project_id).first()  # placeholder
+    # Job vero deriva da: AP.project_id -> Project.jobs[0] (può essere multi).
+    # Recupera tramite quote_advance_schedule_id -> quote_id -> Quote.job.
+    from app.models import Quote as _Q
+    q = db.query(_Q).filter(_Q.id == schedule.quote_id).first()
+    if q and q.job:
+        job = q.job
+    if not job:
+        log.warning(f"[rebuild_ap_allocations] AP #{ap.id} no job linked, skip")
+        return {"jcl_allocs": 0, "deliverable_allocs": 0}
+
+    q_allocs = db.query(QuoteAdvanceAllocation).filter(
+        QuoteAdvanceAllocation.schedule_id == schedule.id,
+    ).order_by(QuoteAdvanceAllocation.id.asc()).all()
+    if not q_allocs:
+        return {"jcl_allocs": 0, "deliverable_allocs": 0}
+
+    remaining = float(ap.amount or 0.0)
+    jcl_allocs = 0
+    deliv_allocs = 0
+    sort_idx = 0
+
+    for qa in q_allocs:
+        if remaining <= 0:
+            break
+        # Time-based ramo: JCL singolo
+        jcl = _resolve_jcl_for_quote_line(db, job.id, qa.quote_line_id)
+        if jcl is not None:
+            jcl_q = float(jcl.total_quoted or 0.0)
+            take = round(min(jcl_q, remaining), 2)
+            if take <= 0:
+                continue
+            db.add(AdvancePaymentAllocation(
+                advance_payment_id=ap.id,
+                job_cost_line_id=jcl.id,
+                amount=take,
+                sort_order=sort_idx,
+            ))
+            jcl_allocs += 1
+            sort_idx += 1
+            remaining = round(remaining - take, 2)
+            continue
+        # Non-time ramo: N Deliverable per QuoteLine
+        delivs = _resolve_deliverables_for_quote_line(db, job.id, qa.quote_line_id)
+        for d in delivs:
+            if remaining <= 0:
+                break
+            d_q = float(d.total_quoted or 0.0)
+            take = round(min(d_q, remaining), 2)
+            if take <= 0:
+                continue
+            db.add(AdvancePaymentDeliverableAllocation(
+                advance_payment_id=ap.id,
+                job_deliverable_id=d.id,
+                amount=take,
+                sort_order=sort_idx,
+            ))
+            deliv_allocs += 1
+            sort_idx += 1
+            remaining = round(remaining - take, 2)
+
+    if remaining > 0.01:
+        log.warning(
+            f"[rebuild_ap_allocations] AP #{ap.id} residuo non allocato: {remaining} "
+            f"(AP.amount={ap.amount}, Sigma coperture < amount)"
+        )
+
+    return {"jcl_allocs": jcl_allocs, "deliverable_allocs": deliv_allocs}
+
+
 def _admin_user_ids(db: Session, tenant_id: int) -> list[int]:
     """Utenti tenant con ruolo admin/manager/accounting (destinatari notifica
     advance_pending). Filtra is_active."""
@@ -154,34 +256,59 @@ def materialize_schedules(
         # `pct` su QuoteAdvanceAllocation viene IGNORATO (semantica chiarita
         # post-α.166: vince l'amount calcolato dal preset). Per acconti con
         # copertura specifica per riga, utente edita post-materialize via UI.
+        # v3.5.0-alpha.172.3 Restructure — Branching JCL/Deliverable.
+        from app.models import AdvancePaymentDeliverableAllocation
         q_allocs = db.query(QuoteAdvanceAllocation).filter(
             QuoteAdvanceAllocation.schedule_id == sched.id,
         ).order_by(QuoteAdvanceAllocation.id.asc()).all()
         remaining = amount
-        for idx, qa in enumerate(q_allocs):
-            jcl = _resolve_jcl_for_quote_line(db, job.id, qa.quote_line_id)
-            if not jcl:
-                log.warning(f"[materialize_schedules] no JCL for QuoteLine #{qa.quote_line_id} in job #{job.id}")
-                continue
-            jcl_q = jcl.total_quoted or 0.0
-            take = round(min(jcl_q, remaining), 2)
-            if take < 0:
-                take = 0.0
-            ap_alloc = AdvancePaymentAllocation(
-                advance_payment_id=ap.id,
-                job_cost_line_id=jcl.id,
-                amount=take,
-                sort_order=idx,
-                # pct ricalcolato auto da listener pre-insert
-            )
-            db.add(ap_alloc)
-            remaining = round(remaining - take, 2)
+        sort_idx = 0
+        for qa in q_allocs:
             if remaining <= 0:
-                remaining = 0.0
+                break
+            # Time-based ramo: JCL singolo
+            jcl = _resolve_jcl_for_quote_line(db, job.id, qa.quote_line_id)
+            if jcl is not None:
+                jcl_q = jcl.total_quoted or 0.0
+                take = round(min(jcl_q, remaining), 2)
+                if take <= 0:
+                    continue
+                db.add(AdvancePaymentAllocation(
+                    advance_payment_id=ap.id,
+                    job_cost_line_id=jcl.id,
+                    amount=take,
+                    sort_order=sort_idx,
+                ))
+                sort_idx += 1
+                remaining = round(remaining - take, 2)
+                continue
+            # Non-time ramo: N Deliverable per QuoteLine (1 row per qty)
+            delivs = _resolve_deliverables_for_quote_line(db, job.id, qa.quote_line_id)
+            if not delivs:
+                log.warning(
+                    f"[materialize_schedules] no JCL/Deliverable for QuoteLine "
+                    f"#{qa.quote_line_id} in job #{job.id}"
+                )
+                continue
+            for d in delivs:
+                if remaining <= 0:
+                    break
+                d_q = float(d.total_quoted or 0.0)
+                take = round(min(d_q, remaining), 2)
+                if take <= 0:
+                    continue
+                db.add(AdvancePaymentDeliverableAllocation(
+                    advance_payment_id=ap.id,
+                    job_deliverable_id=d.id,
+                    amount=take,
+                    sort_order=sort_idx,
+                ))
+                sort_idx += 1
+                remaining = round(remaining - take, 2)
         if remaining > 0.01:
             log.warning(
                 f"[materialize_schedules] AP #{ap.id} residuo non allocato: "
-                f"{remaining} (AP.amount={amount} > Σ JCL quoted coperte)"
+                f"{remaining} (AP.amount={amount} > Sigma coperture)"
             )
 
         created.append({

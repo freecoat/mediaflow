@@ -839,6 +839,154 @@ async def restore_deliverable(
     return _serialize_deliverable(d)
 
 
+# ─────────────────────────────────────────────────────────────
+# v3.5.0-alpha.172.3 Restructure Sprint 3 — Confirm delivery workflow
+# Producer/manager conferma `quantity_delivered` per deliverable, opzionale
+# link a un asset (digital o physical) come verifica.
+# ─────────────────────────────────────────────────────────────
+
+@router.post("/api/deliverables/{deliverable_id}/confirm-delivery")
+async def confirm_deliverable_delivery(
+    deliverable_id: int,
+    request: Request,
+    quantity: float = Form(1.0),
+    asset_id: Optional[int] = Form(None),
+    physical_asset_id: Optional[int] = Form(None),
+    source: str = Form("manual"),
+    notes: Optional[str] = Form(None),
+    db: Session = Depends(get_db),
+):
+    """Conferma consegna di N unita' del deliverable (default 1).
+
+    Effetti:
+    - quantity_delivered += quantity (max = quantity_planned)
+    - status -> delivered se quantity_delivered >= quantity_planned
+    - confirmed_at + confirmed_by_user_id popolati al primo delivery
+    - opzionale: crea row in deliverable_assets per verifica (XOR asset_id |
+      physical_asset_id)
+    - source: manual | mhl_yoyotta | csv_lto | fs_scan | ai_proposal
+    - emette warning se booking ore=0 sui pivot (decision 8 punto B
+      RESTRUCTURE_2026_05_20.md: maturato senza ore = WARN, non blocco)
+    """
+    from app.services.rbac import current_user_optional, has_permission
+    from app.models import DeliverableAsset, BookingDeliverable, Booking
+    from sqlalchemy import func
+
+    user = current_user_optional(request)
+    if not has_permission(user, "confirm_deliverables"):
+        raise HTTPException(403, "Permesso insufficiente per confermare consegne")
+
+    d = db.query(JobDeliverable).filter(
+        JobDeliverable.id == deliverable_id,
+        JobDeliverable.tenant_id == current_tenant_id(),
+    ).first()
+    if not d:
+        raise HTTPException(404, "Deliverable non trovato")
+    if d.deleted_at is not None:
+        raise HTTPException(400, "Deliverable in cestino, ripristina prima di confermare")
+
+    if quantity <= 0:
+        raise HTTPException(400, "quantity deve essere > 0")
+
+    if asset_id is not None and physical_asset_id is not None:
+        raise HTTPException(400, "asset_id e physical_asset_id mutualmente esclusivi")
+
+    valid_sources = {"manual", "mhl_yoyotta", "csv_lto", "fs_scan", "ai_proposal"}
+    if source not in valid_sources:
+        raise HTTPException(400, f"source invalido. Valid: {sorted(valid_sources)}")
+
+    new_qty = (d.quantity_delivered or 0.0) + quantity
+    planned = d.quantity_planned or 0.0
+    if planned and new_qty > planned + 1e-6:
+        raise HTTPException(
+            400,
+            f"quantity_delivered ({new_qty}) supera quantity_planned ({planned}). "
+            "Riduci o aggiorna quantity_planned."
+        )
+
+    # First-time confirmation: popola audit
+    if (d.quantity_delivered or 0) <= 0 and d.confirmed_at is None:
+        d.confirmed_at = datetime.utcnow()
+        d.confirmed_by_user_id = user.id if user else None
+
+    d.quantity_delivered = new_qty
+    # Update status
+    if new_qty >= planned > 0:
+        d.status = DeliverableStatus.delivered
+        d.delivered_date = datetime.utcnow().date()
+    elif new_qty > 0:
+        d.status = DeliverableStatus.in_production
+
+    # Recompute revenue + cost (cost da deliverable_cost_sync se booking linked)
+    from app.services.deliverable_cost_sync import recompute_deliverable_cost
+    recompute_deliverable_cost(db, d)
+
+    # Warning: maturato confermato ma zero ore tracked sui booking linked
+    n_link_bookings_with_hours = db.query(func.count(BookingDeliverable.id)).filter(
+        BookingDeliverable.job_deliverable_id == d.id
+    ).scalar() or 0
+    if n_link_bookings_with_hours == 0:
+        try:
+            from app.services.notifications import notify_permission, NotificationKind, NotificationSeverity
+            notify_permission(
+                db,
+                permission="view_finance",
+                kind="deliverable_confirmed_no_hours",
+                severity="info",
+                title=f"Consegna confermata senza ore tracciate — {d.name[:60]}",
+                body=(
+                    f"Deliverable '{d.name}' confermato come consegnato "
+                    f"({d.quantity_delivered}/{d.quantity_planned} {d.unit}) "
+                    f"ma nessun booking linkato: maturato confermato senza ore di lavorazione. "
+                    "Verifica se le ore vanno tracciate."
+                ),
+                link=f"/jobs/{d.job_id}",
+                payload={
+                    "deliverable_id": d.id,
+                    "job_id": d.job_id,
+                    "quantity_delivered": d.quantity_delivered,
+                },
+                actor_user_id=user.id if user else None,
+            )
+        except Exception as _e:
+            pass  # notifica non bloccante
+
+    # Optional asset link
+    asset_link_created = None
+    if asset_id is not None or physical_asset_id is not None:
+        link = DeliverableAsset(
+            job_deliverable_id=d.id,
+            asset_id=asset_id,
+            physical_asset_id=physical_asset_id,
+            source=source,
+            confirmed_by_user_id=user.id if user else None,
+            notes=notes,
+        )
+        db.add(link); db.flush()
+        asset_link_created = link.id
+        # Sync FK legacy primary se vuoto
+        if asset_id and not d.digital_asset_id:
+            d.digital_asset_id = asset_id
+        if physical_asset_id and not d.physical_asset_id:
+            d.physical_asset_id = physical_asset_id
+
+    db.commit()
+    db.refresh(d)
+
+    return {
+        "ok": True,
+        "deliverable_id": d.id,
+        "quantity_delivered": d.quantity_delivered,
+        "quantity_planned": d.quantity_planned,
+        "status": d.status.value,
+        "total_accrued": d.total_accrued,
+        "total_cost_accrued": d.total_cost_accrued,
+        "confirmed_at": d.confirmed_at.isoformat() if d.confirmed_at else None,
+        "asset_link_id": asset_link_created,
+        "warn_no_hours": n_link_bookings_with_hours == 0,
+    }
+
+
 # ── NAMING HELPER (v3.5.0-alpha.66.9) ────────────────────────
 
 @router.get("/api/naming/presets")

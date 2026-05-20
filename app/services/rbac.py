@@ -82,6 +82,15 @@ PERMISSIONS: Dict[str, Dict[str, List[str]]] = {
         # un'intera linea (es. quote di test con tutto il suo strascico).
         # Irreversibile, niente passaggio dal cestino.
         "purge_total":     ["Pulizia totale (hard-delete cascade quote+job+booking)"],
+        # v3.5.0-alpha.172.3 — Hard-delete project cascade FULL (Restructure).
+        # Irreversibile. ADMIN-ONLY, solo per workflow test/cleanup.
+        "hard_delete_project": ["Hard-delete progetto cascade FULL (admin only)"],
+    },
+    "Consegne / Deliverable": {
+        # v3.5.0-alpha.172.3 — Workflow JobDeliverable.
+        "view_deliverables":   ["Visualizza consegne"],
+        "edit_deliverables":   ["Modifica consegne (specifiche, link asset)"],
+        "confirm_deliverables": ["Conferma consegna (quantity_delivered)"],
     },
     "Risorse": {
         "view_resources":   ["Visualizza anagrafica risorse"],
@@ -129,6 +138,8 @@ PRESET_PERMISSIONS: Dict[str, List[str]] = {
         # "Orari lavorativi definibili solo da autorizzazione manager in su")
         "view_settings_global", "manage_settings_global",
         "view_trash", "restore_trash",
+        # v3.5.0-alpha.172.3 — Deliverable workflow (Restructure)
+        "view_deliverables", "edit_deliverables", "confirm_deliverables",
     ],
     "producer": [
         "view_clients",
@@ -144,6 +155,8 @@ PRESET_PERMISSIONS: Dict[str, List[str]] = {
         "view_resources",
         # v3.5.0-alpha.21: producer ha read-only sugli orari (vede regole CCNL)
         "view_settings_global",
+        # v3.5.0-alpha.172.3 — Deliverable workflow (producer = conferma consegne)
+        "view_deliverables", "edit_deliverables", "confirm_deliverables",
     ],
     "accounting": [
         "view_clients",
@@ -156,6 +169,8 @@ PRESET_PERMISSIONS: Dict[str, List[str]] = {
         # v3.5.0-alpha.87 — accounting cura pozzo costi
         "view_overhead", "edit_overhead",
         "view_settings_global",
+        # v3.5.0-alpha.172.3 — read-only Deliverable per accounting
+        "view_deliverables",
     ],
     "operator": [
         "view_projects",
@@ -164,12 +179,16 @@ PRESET_PERMISSIONS: Dict[str, List[str]] = {
         # v3.5.0-alpha.21: operator/staff vede gli orari lavorativi (read-only)
         # — il regolamento d'azienda gli serve per orientarsi sulle proprie ore
         "view_settings_global",
+        # v3.5.0-alpha.172.3 — operator/staff vede + linka deliverable (lavorazione)
+        "view_deliverables", "edit_deliverables",
     ],
     "viewer": [
         "view_clients", "view_projects",
         "view_planning",
         "view_punches_own",
         "view_settings_global",
+        # v3.5.0-alpha.172.3 — read-only
+        "view_deliverables",
     ],
 }
 
