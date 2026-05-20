@@ -180,30 +180,71 @@ def attach_to_pending_quote(
     # Ensure Job (forward-flow standard)
     job = _ensure_job_for_quote(db, quote)
 
-    # JobCostLine corrispondente alla nuova QuoteLine
-    jcl = db.query(JobCostLine).filter(
-        JobCostLine.quote_line_id == line.id
-    ).first()
-    if not jcl:
-        # _create_job_from_quote popola da q.lines AL MOMENTO della creazione del job:
-        # se il job esisteva già prima della reverse-attach, le righe nuove non
-        # ci sono. Le aggiungiamo ora.
-        jcl = JobCostLine(
-            job_id=job.id,
-            quote_line_id=line.id,
-            price_item_id=line.price_item_id,
-            description=line.description,
-            quantity_quoted=line.quantity,
-            unit=line.unit,
-            unit_price=line.unit_price,
-            total_quoted=line.total,
-            total_expected=line.total,
-        )
-        db.add(jcl)
-        db.flush()
+    # v3.5.0-alpha.172.2 Restructure — branching JCL/Deliverable per unit.
+    # _create_job_from_quote popola da q.lines AL MOMENTO creazione job:
+    # se job esisteva già prima della reverse-attach, righe nuove non ci sono.
+    # Le aggiungiamo ora secondo unit_nature.
+    from app.models import JobDeliverable, DeliverableUnitNature, DeliverableBillingStatus
+    TIME_UNITS = ("hr", "day")
+    unit_l = (line.unit or "").strip().lower()
+    jcl = None
+    spawned_deliverables = []
+    if unit_l in TIME_UNITS:
+        jcl = db.query(JobCostLine).filter(
+            JobCostLine.quote_line_id == line.id
+        ).first()
+        if not jcl:
+            jcl = JobCostLine(
+                job_id=job.id,
+                quote_line_id=line.id,
+                price_item_id=line.price_item_id,
+                description=line.description,
+                quantity_quoted=line.quantity,
+                unit=line.unit,
+                unit_price=line.unit_price,
+                total_quoted=line.total,
+                total_expected=line.total,
+            )
+            db.add(jcl)
+            db.flush()
+    else:
+        existing = db.query(JobDeliverable).filter(
+            JobDeliverable.quote_line_id == line.id,
+            JobDeliverable.job_id == job.id,
+        ).count()
+        if existing == 0:
+            n_rows = max(1, int(round(float(line.quantity or 0))))
+            for idx in range(n_rows):
+                nature_map = {
+                    "pc": "deliverable_qty", "lot": "deliverable_qty",
+                    "shot": "deliverable_qty", "version": "deliverable_qty",
+                    "TB": "deliverable_volume", "GB": "deliverable_volume",
+                    "allow": "manual_allow", "lump": "manual_allow", "fix": "manual_allow",
+                }
+                nature = DeliverableUnitNature(nature_map.get(unit_l, "deliverable_qty"))
+                d = JobDeliverable(
+                    tenant_id=quote.tenant_id,
+                    job_id=job.id,
+                    quote_line_id=line.id,
+                    price_item_id=line.price_item_id,
+                    name=line.description,
+                    unit=line.unit,
+                    unit_price=line.unit_price,
+                    unit_nature=nature,
+                    quantity_planned=1.0,
+                    quantity_delivered=0.0,
+                    total_quoted=round(line.unit_price or 0.0, 2),
+                    total_accrued=0.0,
+                    total_cost_accrued=0.0,
+                    billing_status=DeliverableBillingStatus.not_billed,
+                )
+                db.add(d); db.flush()
+                spawned_deliverables.append(d.id)
 
     db.commit()
-    db.refresh(quote); db.refresh(job); db.refresh(line); db.refresh(jcl)
+    db.refresh(quote); db.refresh(job); db.refresh(line)
+    if jcl:
+        db.refresh(jcl)
 
     # Notifica account managers (permesso edit_quotes)
     try:
@@ -239,8 +280,9 @@ def attach_to_pending_quote(
         "previous_status": prev_status.value,
         "is_phantom": False,
         "job_id": job.id, "job_code": job.code,
-        "cost_line_id": jcl.id,
-        "cost_line_description": jcl.description,
+        "cost_line_id": jcl.id if jcl else None,
+        "cost_line_description": jcl.description if jcl else line.description,
+        "deliverable_ids": spawned_deliverables,
         "was_implicit_approval": True,
     }
 

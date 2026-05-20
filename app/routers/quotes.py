@@ -107,19 +107,57 @@ def _create_job_from_quote(db: Session, q: Quote, user_id: Optional[int] = None)
     )
     db.add(job)
     db.flush()
+    # v3.5.0-alpha.172.2 Restructure — branching unit time-based vs non-time:
+    # - Time-based (hr, day) → JobCostLine (lavorazione)
+    # - Non-time (pc/lot/shot/version/TB/GB/allow/lump/fix) → JobDeliverable
+    #   (1 row per qty unitaria, decisione 1.1 RESTRUCTURE_2026_05_20.md)
+    from app.models import JobDeliverable, DeliverableUnitNature, DeliverableBillingStatus
+    TIME_UNITS = ("hr", "day")
+    UNIT_TO_NATURE = {
+        "hr": "time_based", "day": "time_based",
+        "pc": "deliverable_qty", "lot": "deliverable_qty",
+        "shot": "deliverable_qty", "version": "deliverable_qty",
+        "TB": "deliverable_volume", "GB": "deliverable_volume",
+        "allow": "manual_allow", "lump": "manual_allow", "fix": "manual_allow",
+    }
     for line in q.lines:
-        db.add(JobCostLine(
-            job_id=job.id,
-            quote_line_id=line.id,
-            price_item_id=line.price_item_id,
-            description=line.description,
-            quantity_quoted=line.quantity,
-            unit=line.unit,
-            unit_price=line.unit_price,
-            total_quoted=line.total,
-            total_expected=line.total,
-        ))
-    db.flush()  # Necessario: JCL.id servono al materialize_schedules
+        unit_l = (line.unit or "").strip().lower()
+        if unit_l in TIME_UNITS:
+            db.add(JobCostLine(
+                job_id=job.id,
+                quote_line_id=line.id,
+                price_item_id=line.price_item_id,
+                description=line.description,
+                quantity_quoted=line.quantity,
+                unit=line.unit,
+                unit_price=line.unit_price,
+                total_quoted=line.total,
+                total_expected=line.total,
+            ))
+        else:
+            # Non-time: spawn 1 JobDeliverable per qty unitaria (round-int, min 1).
+            nature_code = UNIT_TO_NATURE.get(unit_l, "deliverable_qty")
+            nature = DeliverableUnitNature(nature_code)
+            n_rows = max(1, int(round(float(line.quantity or 0))))
+            for idx in range(n_rows):
+                db.add(JobDeliverable(
+                    tenant_id=q.tenant_id,
+                    job_id=job.id,
+                    job_cost_line_id=None,
+                    quote_line_id=line.id,
+                    price_item_id=line.price_item_id,
+                    name=line.description,
+                    unit=line.unit,
+                    unit_price=line.unit_price,
+                    unit_nature=nature,
+                    quantity_planned=1.0,
+                    quantity_delivered=0.0,
+                    total_quoted=round(line.unit_price or 0.0, 2),
+                    total_accrued=0.0,
+                    total_cost_accrued=0.0,
+                    billing_status=DeliverableBillingStatus.not_billed,
+                ))
+    db.flush()  # Necessario: JCL.id + Deliverable.id servono al materialize_schedules
 
     # v3.5.0-alpha.144 — Materializza AdvancePayment(pending) da schedule quote.
     # Fail-soft: errori loggati, non bloccano la conversione quote→job.

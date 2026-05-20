@@ -1,5 +1,54 @@
 # MediaFlow — Changelog
 
+## v3.5.0-alpha.172.2 — Restructure Sprint 2: service layer (20 mag 2026)
+
+**Sprint 2 di 5**: refactor service core per supportare la separazione JCL/Deliverable.
+
+**`app/services/cost_line_sync.py`** — REFACTOR:
+- Branch binary "JCL non-time = qty_actual=quoted SEMPRE" RIMOSSO (era root cause Bug 2 maturato fantasma)
+- Branch `external_outsourced=True` legacy: ora azzera + warning (migrate_restructure_phase1 ha già convertito a JobDeliverable `lump`)
+- Per JCL legacy non-time-based incontrate: azzeramento accrued + warning log → fix strutturale Bug 2 a livello servizio
+- JCL ora SOLO time-based (`hr`, `day`). Maturato deterministico da booking done × unit_price
+
+**`app/services/deliverable_cost_sync.py`** — NUOVO:
+- `recompute_deliverable_cost(db, deliverable)`: cost split EQUO booking → N deliverable linkati via `booking_deliverables` M:N. Formula: `D.total_cost_accrued += booking_cost / n_links` per ogni booking done/in_progress
+- `recompute_for_booking(db, booking)`: hook post-mutazione booking, ricalcola tutti i deliverable linkati
+- `recompute_for_job(db, job_id)`: bulk reconcile per job
+- `mark_deliverable_stale` + `mark_booking_deliverables_stale`: dirty flag pattern (coerente con `cost_line_sync.mark_jcl_stale`)
+- Maturato (revenue) NON gestito qui: confermato MANUALMENTE dal producer via `quantity_delivered`
+- Booking cost calc via `cost_rate_snap` (snapshot α.167) con fallback `Resource.internal_cost_hourly`
+
+**`app/routers/quotes.py`** — `_create_job_from_quote` rifatto:
+- Branching `unit` time-based vs non-time
+- Time-based (`hr`, `day`) → `JobCostLine` (lavorazione)
+- Non-time → `JobDeliverable` (1 row per qty unitaria, `nature` derivata da unit code)
+- Auto-link `quote_line_id` per supporto AdvancePaymentDeliverableAllocation futuro
+
+**`app/services/reverse_quote.py`** — esteso a deliverable phantom:
+- `attach_to_pending_quote` branching JCL/Deliverable per unit
+- Spawn `JobDeliverable` per voci non-time aggiunte in reverse-flow
+- Output ritorna `deliverable_ids` lista
+- Phantom Z ora copre anche deliverable extra (decisione restructure punto 5)
+
+**`app/services/project_purge.py`** — NUOVO:
+- `hard_delete_project(db, project_id, actor_user_id)` cascade FULL FK-safe in singola transazione
+- 17 step ordinati top-down: AI subtree → notifications → anomaly → project_* → booking subtree → timesheets → billing slices/AP → quotes schedules → invoices → vfx/deliverable subtree → JCL → jobs → quotes → assets → projects
+- Helper introspettivo `_has_column` per skip silent su colonne mancanti (back-compat DB legacy)
+- Solo per workflow ADMIN-ONLY test/cleanup (NON soft-delete standard)
+- Output dict counters per tabella
+
+**Smoke test seed_5projects + migration phase1**:
+- Recompute JCL: 12 JCL legacy non-time azzerate con warning (atteso post-migration), 20 JCL time-based recomputed correttamente
+- Recompute Deliverable: cost split equo verificato (P1+P2 = quota da booking done; P3+P4 = 0 perché booking confirmed non in_progress)
+- Hard-delete P5 (quote-only): 8 quote_lines + 1 quote + 1 project
+- Hard-delete P4 (con acconti + bookings + Deliverable): 25 bookings + 50 assignments + 3 booking_deliverables + 16 AP_allocations + 2 AP + 2 invoices + 8 JCL + 3 Deliverable + 1 quote + 1 job + 1 project — tutto cancellato senza FK violation
+- Re-seed + re-migrate idempotenti
+
+**Sprint pendenti** (3-5):
+- Endpoint nuovi (hard-delete admin, confirm-delivery, link-deliverable, yoyotta-mhl, csv-lto)
+- UI (editor quote split JCL/Deliverable, CR sezioni, kanban consegne)
+- Migration UX (tool one-shot voci storiche)
+
 ## v3.5.0-alpha.172.1 — Restructure Sprint 1: schema + migration + backfill (20 mag 2026)
 
 **Sprint 1 di 5 della ristrutturazione architetturale** definita in `docs/RESTRUCTURE_2026_05_20.md`. Schema + migration + auto-migrate boot.

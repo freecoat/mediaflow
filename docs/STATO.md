@@ -8,6 +8,33 @@
 
 ## Versione corrente
 
+**v3.5.0-alpha.172.2** — 20 maggio 2026 — Sprint 2 Restructure: service layer
+
+Sprint 2 di 5. Service core rifatto per supportare separazione JCL/Deliverable.
+
+**Servizi modificati**:
+- `cost_line_sync.py`: branch binary RIMOSSO (root cause Bug 2). JCL solo time-based. JCL non-time legacy azzerate con warning.
+- `deliverable_cost_sync.py` NUOVO: cost split equo booking → N deliverable. Revenue manuale via quantity_delivered.
+- `reverse_quote.py`: branching unit, spawn JobDeliverable per voci non-time. Phantom Z esteso.
+- `project_purge.py` NUOVO: hard-delete cascade 17-step FK-safe admin-only.
+- `routers/quotes.py:_create_job_from_quote`: branching JCL/Deliverable per unit al convert quote→job.
+
+**Smoke test**:
+- JCL legacy non-time azzerate ✓ (12 JCL P1-P4)
+- Recompute Deliverable cost split: P1/P2 cost da booking done, P3/P4 = 0 (booking confirmed non in_progress) ✓
+- Hard-delete cascade su P4 (con acconti + bookings + Deliverable + invoices): 25+50+3+16+2+2+8+3+1+1+1 record cancellati senza FK violation ✓
+- Idempotenza re-seed + re-migrate confermata
+
+## Prossimo step — Sprint 3 Endpoint
+
+1. `DELETE /admin/projects/{id}/hard-delete` con `RequireAdmin` + confirm_token
+2. `POST /jobs/{id}/deliverables/{did}/confirm-delivery` (+ optional asset_id)
+3. `POST /bookings/{id}/link-deliverable` (M:N add)
+4. `POST /ingest/yoyotta-mhl` (upload MHL → parse → spawn PhysicalAsset + auto-link Deliverable)
+5. `POST /ingest/csv-lto` (CSV alternativo)
+
+## (versione precedente)
+
 **v3.5.0-alpha.172.1** — 20 maggio 2026 — Sprint 1 Restructure: schema + migration + backfill
 
 Sprint 1 di 5 della ristrutturazione architetturale (vedi `docs/RESTRUCTURE_2026_05_20.md`).

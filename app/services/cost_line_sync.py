@@ -266,47 +266,24 @@ def recompute_cost_line_actual(db: Session, jcl) -> dict:
     if jcl is None:
         return {"updated": False, "reason": "no_jcl"}
 
-    # v3.5.0-alpha.171.11 — Branch external_outsourced: maturato BINARY da
-    # SupplierInvoice linkata, no booking-driven, no cost interno.
+    # v3.5.0-alpha.172 Restructure — Branch external_outsourced rimosso.
+    # Le voci precedentemente marcate `external_outsourced=True` sono ora
+    # JobDeliverable con `unit_nature=manual_allow` (vedi migrate_restructure_phase1).
+    # La JCL legacy con flag=True viene tollerata back-compat (no-op breve
+    # branch): comportamento atteso è che `migrate_restructure_phase1` abbia
+    # già spawnato un Deliverable lump, ma se per qualche motivo è rimasta,
+    # azzeriamo accrued e usciamo, per non causare maturato fantasma.
     if getattr(jcl, "external_outsourced", False):
-        from app.models import SupplierInvoice as _SI
-        quoted_q = jcl.quantity_quoted or 0.0
-        quoted_total = round(quoted_q * (jcl.unit_price or 0.0), 2)
-        linked_invoices = db.query(_SI).filter(
-            _SI.job_cost_line_id == jcl.id,
-            _SI.deleted_at.is_(None),
-        ).all()
-        has_invoice = len(linked_invoices) > 0
-        new_cost_external = round(
-            sum((si.amount_total or si.amount_net or 0) for si in linked_invoices), 2
-        )
-        # Binary toggle: maturato = quotato SE ricevuta ≥1 fattura, altrimenti 0.
-        new_qty_actual = quoted_q if has_invoice else 0.0
-        new_accrued = quoted_total if has_invoice else 0.0
-        new_expected = quoted_total  # forecast resta sempre = quotato
-        changed = (
-            abs((jcl.quantity_actual or 0) - new_qty_actual) > 1e-6
-            or abs((jcl.total_accrued or 0) - new_accrued) > 1e-2
-            or abs((jcl.total_expected or 0) - new_expected) > 1e-2
-            or abs((jcl.total_cost_accrued or 0) - 0.0) > 1e-2
-            or abs((jcl.total_cost_external or 0) - new_cost_external) > 1e-2
-        )
-        jcl.quantity_actual = new_qty_actual
-        jcl.total_accrued = new_accrued
-        jcl.total_expected = new_expected
-        jcl.total_cost_accrued = 0.0  # nessun consumo interno
-        jcl.total_cost_external = new_cost_external
+        jcl.quantity_actual = 0.0
+        jcl.total_accrued = 0.0
+        jcl.total_expected = 0.0
+        jcl.total_cost_accrued = 0.0
+        jcl.total_cost_external = 0.0
         jcl.accrued_stale = False
         return {
-            "updated": changed,
-            "jcl_id": jcl.id,
-            "mode": "external_outsourced",
-            "linked_invoices_count": len(linked_invoices),
-            "has_invoice": has_invoice,
-            "quantity_actual": new_qty_actual,
-            "total_accrued": new_accrued,
-            "total_expected": new_expected,
-            "total_cost_external": new_cost_external,
+            "updated": True, "jcl_id": jcl.id,
+            "mode": "external_outsourced_legacy_zeroed",
+            "note": "Run migrate_restructure_phase1 to convert to JobDeliverable lump",
         }
 
     # v3.5.0-alpha.65 — risolvi weighted_revenue del job parent (1 query)
@@ -324,19 +301,33 @@ def recompute_cost_line_actual(db: Session, jcl) -> dict:
 
     unit = (jcl.unit or "").strip().lower()
     is_time = is_time_based_unit(unit)
-    # v3.5.0-alpha.171 (CR-2) — Ore "fatturabili" usano _booking_billable_hours
-    # (override umana, no double-count sala+persona). Cost-side (sotto) somma
-    # SEMPRE tutti gli assignment via _booking_hours (è un consumo reale).
-    # Per unità non time-based il calcolo ore non influenza qty (sotto regola
-    # binaria), ma lo manteniamo per il debug payload.
-    if is_time:
-        done_hours = sum(_booking_billable_hours(b) for b in done_bookings)
-        planned_hours = sum(_booking_billable_hours(b) for b in all_bookings)
-    else:
-        # Per debug/log mostriamo somma lineare (utile per anomalie), ma le
-        # quantità sotto seguono la regola binaria.
-        done_hours = sum(_booking_hours(b, db=db, weighted=weighted) for b in done_bookings)
-        planned_hours = sum(_booking_hours(b, db=db, weighted=weighted) for b in all_bookings)
+    # v3.5.0-alpha.172 Restructure — JCL DEVE essere time-based.
+    # Voci non-time sono state migrate a JobDeliverable da migrate_restructure_phase1.
+    # Se incontriamo una JCL non-time qui (legacy), azzeriamo maturato e usciamo
+    # con warning per evitare il maturato fantasma del Bug 2 pre-restructure.
+    if not is_time:
+        import logging as _log
+        _log.getLogger(__name__).warning(
+            f"[cost_line_sync] JCL #{jcl.id} ha unit non-time '{unit}': "
+            f"esegui migrate_restructure_phase1 per convertirla a JobDeliverable. "
+            f"Azzeramento maturato per evitare Bug 2."
+        )
+        jcl.quantity_actual = 0.0
+        jcl.total_accrued = 0.0
+        jcl.total_expected = 0.0
+        jcl.total_cost_accrued = 0.0
+        jcl.accrued_stale = False
+        return {
+            "updated": True, "jcl_id": jcl.id,
+            "mode": "non_time_legacy_zeroed",
+            "unit": unit,
+            "note": "JCL non-time legacy. Run migrate_restructure_phase1.",
+        }
+    # Ore "fatturabili" usano _booking_billable_hours (override umana,
+    # no double-count sala+persona). Cost-side (sotto) somma SEMPRE tutti gli
+    # assignment via _booking_hours (è un consumo reale).
+    done_hours = sum(_booking_billable_hours(b) for b in done_bookings)
+    planned_hours = sum(_booking_billable_hours(b) for b in all_bookings)
     new_qty_actual = _qty_from_hours(unit, done_hours, len(done_bookings))
     new_qty_planned = _qty_from_hours(unit, planned_hours, len(all_bookings))
 
@@ -369,27 +360,11 @@ def recompute_cost_line_actual(db: Session, jcl) -> dict:
             new_cost_accrued += hours_a * rate
     new_cost_accrued = round(new_cost_accrued, 2)
 
-    # v3.5.0-alpha.171 (CR-1) — Regola semantica decisa con Matteo 19 mag 2026.
-    # Distinzione fra unità TIME-BASED (hr/day → consumo misurato dai booking)
-    # e unità NON time-based (pc/lump/fix/lot/shot/version/allow/TB/GB → modello
-    # BINARIO acceso/spento: voce è "fatta" per definizione se a preventivo,
-    # i costi interni vengono comunque conteggiati dagli assignment).
-    #
-    # Time-based:
-    #   - actual_qty = ore done convertite (regola billable α.171: max umana)
-    #   - expected_qty = ore planned convertite (NESSUN booking → 0, non quoted)
-    #     Pre-α.171 fallback a quoted creava voci "fantasma" con stima=quotato
-    #     senza booking (bug CR-1 segnalato Matteo).
-    # Non time-based (binario):
-    #   - actual_qty = expected_qty = quantity_quoted SEMPRE
-    #   - Over/Under = 0 (voce sempre allineata al quotato)
-    if is_time:
-        new_qty_actual_final = new_qty_actual
-        expected_qty = new_qty_planned if all_bookings else 0.0
-    else:
-        quoted_q = jcl.quantity_quoted or 0.0
-        new_qty_actual_final = quoted_q
-        expected_qty = quoted_q
+    # v3.5.0-alpha.172 Restructure — JCL solo time-based (vedi guard sopra).
+    # actual_qty = ore done convertite (regola billable α.171: max umana)
+    # expected_qty = ore planned convertite (NESSUN booking → 0, non quoted)
+    new_qty_actual_final = new_qty_actual
+    expected_qty = new_qty_planned if all_bookings else 0.0
     new_qty_actual = new_qty_actual_final
     new_accrued = round(new_qty_actual * (jcl.unit_price or 0.0), 2)
     new_expected = round(expected_qty * (jcl.unit_price or 0.0), 2)
