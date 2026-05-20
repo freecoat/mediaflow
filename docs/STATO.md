@@ -8,6 +8,32 @@
 
 ## Versione corrente
 
+**v3.5.0-alpha.172** — 20 maggio 2026 — Design doc restructure JCL→CR→Fatt→Cashflow + tool seed 5 progetti test
+
+Sessione 20 mag — **no code changes**, solo doc strategici + tooling per test.
+
+**Doc strategico `docs/RESTRUCTURE_2026_05_20.md`** committato. Ristrutturazione architetturale concordata punto-per-punto con Matteo:
+- Separazione netta lavorazioni (JCL, solo time-based hr/day) vs consegne (JobDeliverable, qty/volume/manual).
+- Booking↔Deliverable M:N. PhysicalAsset 1:1 progetto. Phantom Z esteso.
+- Hard-delete progetto admin-only cascade FULL (test-only).
+- Sprint plan 5 fasi (schema → service → endpoint → UI → migration UX).
+- Decisioni finali: AdvancePaymentDeliverableAllocation separata, sconti spalmati DENTRO sezione, cashflow horizon configurabile default 90gg con sub-categorie separabili, migration autospawn.
+
+**Tool `scripts/seed_5projects.py`** per test DB pulito: 5 progetti DI+AUDIO compressi 1 mese, mix stati maturato (100%/50%/quote-only), 2 con acconti 30% completi.
+
+**Bug aperti registrati** (memory `project_bug_acconti_2026_05_20`):
+- Bug 1 allocation acconto su JCL sbagliate (PUT manca `allocations` + fill_sequential ignora pct + idempotency block re-materialize)
+- Bug 2 maturato fantasma su unit non-time-based (regola binary in `cost_line_sync.py:386-393`)
+- Entrambi risolti strutturalmente nel restructure.
+
+## Prossimo step
+
+1. Quando Matteo è su Mac fisico: inspect DB remoto per Bug 1 (verifica residue AP_alloc + versioning quote)
+2. Decisione: hotfix Bug 1+2 in versione corrente PRIMA di Sprint 1 restructure, o saltare hotfix e partire diretti restructure
+3. Eventuale audit sconti quote→CR→Fatt completare prima di Sprint 1 (memory `project_backlog_sconti_quote_cr_fatturazione`)
+
+## (versione precedente)
+
 **v3.5.0-alpha.171.9** — 19 maggio 2026 — Sprint 1+2+3 chiusi: CR data integrity + Phantom redesign + filtri planning + timeline scroll
 
 Maratona 19 mag pomeriggio/sera, 9 commit pushati (α.171 → α.171.9). Chiusi tutti i 3 sprint backlog α.171:

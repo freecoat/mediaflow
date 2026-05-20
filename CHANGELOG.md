@@ -1,5 +1,45 @@
 # MediaFlow — Changelog
 
+## v3.5.0-alpha.172 — Design doc restructure JCL→CR→Fatt→Cashflow + seed 5 progetti test (20 mag 2026)
+
+**No code changes** — solo doc strategici + tooling test.
+
+**Doc nuovo `docs/RESTRUCTURE_2026_05_20.md`** — spec architetturale completa per ristrutturazione workflow JCL→CR→Fatturazione→Cashflow concordata con Matteo:
+- **JCL = solo unità temporali** (`hr`, `day`). Maturato deterministico da booking done. Fix Bug 2 maturato fantasma per unit non-time.
+- **JobDeliverable = consegne** (`pc`, `TB`, `allow`, `shot`, `lot`, `lump`, `version`, `fix`, `GB`). 1 row per qty unitaria. Maturato manuale + link asset come verifica.
+- **Booking ↔ Deliverable M:N** via pivot `booking_deliverables` (drop `Booking.job_deliverable_id` singolo).
+- **Asset digital cost=0** sempre, verifica only. **PhysicalAsset 1:1 progetto** (drop AssetMembership N:M).
+- **Phantom Z esteso** a deliverable extra non solo JCL.
+- **Hard-delete progetto** admin-only cascade FULL (anche fatture, no archivio orfane). Solo test-mode.
+- **DeliverableBilledSlice** separato da JCLBilledSlice (no polimorfismo).
+- **AdvancePaymentDeliverableAllocation** tabella separata parallela (no polimorfismo).
+- **Sconti** category/package proporzionali DENTRO ogni sezione (subtotal_gross_jcl + subtotal_gross_deliverable separati).
+- **Cashflow horizon** configurabile per-utente default 90gg, sub-categorie separabili.
+- **Migration backfill** autospawn JobDeliverable per JCL non-time esistenti.
+- **VFX shots** anchor point ora, sistema completo dopo.
+- **Yoyotta MHL** + CSV LTO per auto-fill quantity_delivered su deliverable_volume.
+- Sprint plan 5 fasi (schema → service → endpoint → UI → migration UX).
+- Apre Bug 1 (allocation acconto wrong JCL) + Bug 2 (maturato fantasma) come fix strutturali nello stesso restructure.
+
+**Tool nuovo `scripts/seed_5projects.py`** — script idempotente per popolare DB di test:
+- 5 progetti DI-VIDEO + AUDIO compressi in 1 mese di lavorazioni:
+  - P1: maturato 100%, no fatture
+  - P2: maturato 100% + 2 acconti 30%
+  - P3: maturato 50% + fill 100% confirmed
+  - P4: maturato 50% + fill 100% + 2 acconti 30%
+  - P5: solo quote, no job
+- Booking standard 1 persona + 1 sala (M:N assignments)
+- Acconti completi: Invoice paid + InvoicePayment + AdvancePayment status=paid + AdvancePaymentAllocation pro-quota su tutte JCL
+- Reuse `reset_business_data.py` + purge esteso per tabelle satellite (memory `feedback_reset_business_data_gaps`)
+- Risorse: Luca Bianchi (online), Sara Conti (colorist), Suite DI 1 (sala), Davide Moretti (mixer freelance), Studio A (sala mix)
+- Helper `_bk_state_sync` per allineamento legacy status/execution_status al `BookingState` canonico
+
+**Memory aggiornate**:
+- `project_bug_acconti_2026_05_20` — Bug 1 (PUT advance-schedules missing allocations + fill_sequential ignora pct + idempotency block re-materialize) + Bug 2 (binary unit branch in cost_line_sync)
+- `project_restructure_2026_05_20` — decisioni architetturali finali + sprint plan
+- `project_backlog_sconti_quote_cr_fatturazione` — audit pendente sconti propagation
+- `feedback_reset_business_data_gaps` — script non purga 17+ tabelle satellite
+
 ## v3.5.0-alpha.171.11 — Outsourced JCL + Phantom unblock + Rata radio + Cashflow tenant (19 mag 2026)
 
 **Issue 1 — Lavorazione delegata a fornitore esterno (binary on/off)**:
