@@ -8,6 +8,33 @@
 
 ## Versione corrente
 
+**v3.5.0-alpha.172.1** — 20 maggio 2026 — Sprint 1 Restructure: schema + migration + backfill
+
+Sprint 1 di 5 della ristrutturazione architetturale (vedi `docs/RESTRUCTURE_2026_05_20.md`).
+
+**Schema nuovo**:
+- 7 modelli nuovi: BookingDeliverable, DeliverableAsset, DeliverableSpec, DeliverableBilledSlice, AdvancePaymentDeliverableAllocation, VFXShot, PricelistUnit
+- 2 enum nuovi: DeliverableUnitNature, DeliverableBillingStatus
+- JobDeliverable esteso (+16 colonne) — quantity/billing/conferma
+- Quote: subtotal_gross_jcl + subtotal_gross_deliverable
+- PriceItem: unit_nature
+
+**Migration `scripts/migrate_restructure_phase1.py`** idempotente:
+- Test su DB seed_5projects: 32 JCL → 12 JobDeliverable autospawnati (1 row per qty), 12 booking pivot, 44 PriceItem backfilled, 11 PricelistUnit seedate
+- Quote split: 29450 JCL + 1850 Deliverable = 31300 ✓
+- Rerun idempotency confermata
+
+**Auto-migrate boot** in lifespan (anti-crash su pull senza migration).
+
+## Prossimo step — Sprint 2 Service layer
+
+1. `cost_line_sync.py`: rimuovere branch binary (linee 386-393). JCL solo time-based → fix strutturale Bug 2 maturato fantasma.
+2. Nuovo `deliverable_cost_sync.py`: cost split equo booking → N deliverable linkati. Maturato manuale.
+3. Estendere `reverse_quote.py` per phantom deliverable (non solo JCL).
+4. Hook hard-delete in nuovo `project_purge.py`.
+
+## (versione precedente)
+
 **v3.5.0-alpha.172** — 20 maggio 2026 — Design doc restructure JCL→CR→Fatt→Cashflow + tool seed 5 progetti test
 
 Sessione 20 mag — **no code changes**, solo doc strategici + tooling per test.

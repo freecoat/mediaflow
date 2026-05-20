@@ -923,6 +923,68 @@ def _backfill_resource_assignments():
         print(f"[backfill] resource_assignments failed: {e}")
 
 
+def _auto_migrate_restructure_phase1():
+    """v3.5.0-alpha.172 — Auto-fix colonne Sprint 1 Restructure (memory
+    `feedback_auto_migrate_columns`). Idempotente: ALTER TABLE ADD COLUMN
+    solo se mancanti. Per nuove tabelle (booking_deliverables,
+    deliverable_*, vfx_shots, pricelist_units, advance_payment_deliverable_
+    allocations) si appoggia a `Base.metadata.create_all()` chiamato da
+    `create_tables()` poco prima.
+
+    Per backfill dati (pricelist_units seed, unit_nature, autospawn JCL→
+    Deliverable) preferisci sempre `scripts/migrate_restructure_phase1.py`
+    esplicito. Qui solo schema-level guardrail anti-crash.
+    """
+    from sqlalchemy import text
+    from app.database import engine
+    try:
+        with engine.begin() as conn:
+            def cols(table):
+                return {r[1] for r in conn.execute(text(f"PRAGMA table_info({table})"))}
+            jd_cols = cols("job_deliverables")
+            jd_alters = [
+                ("quote_line_id",        "INTEGER REFERENCES quote_lines(id)"),
+                ("unit",                 "VARCHAR(20)"),
+                ("unit_price",           "FLOAT NOT NULL DEFAULT 0"),
+                ("unit_nature",          "VARCHAR(32) NOT NULL DEFAULT 'deliverable_qty'"),
+                ("quantity_planned",     "FLOAT NOT NULL DEFAULT 1"),
+                ("quantity_delivered",   "FLOAT NOT NULL DEFAULT 0"),
+                ("total_quoted",         "FLOAT NOT NULL DEFAULT 0"),
+                ("total_accrued",        "FLOAT NOT NULL DEFAULT 0"),
+                ("total_cost_accrued",   "FLOAT NOT NULL DEFAULT 0"),
+                ("accrued_stale",        "BOOLEAN NOT NULL DEFAULT 0"),
+                ("confirmed_at",         "DATETIME"),
+                ("confirmed_by_user_id", "INTEGER REFERENCES users(id)"),
+                ("billing_status",       "VARCHAR(32) NOT NULL DEFAULT 'not_billed'"),
+                ("billing_batch_id",     "INTEGER REFERENCES billing_batches(id)"),
+                ("billed_amount",        "FLOAT"),
+                ("deleted_by_user_id",   "INTEGER REFERENCES users(id)"),
+            ]
+            for col, ddl in jd_alters:
+                if col not in jd_cols:
+                    print(f"[auto-migrate-α172] job_deliverables.{col} -> ALTER")
+                    conn.execute(text(f"ALTER TABLE job_deliverables ADD COLUMN {col} {ddl}"))
+
+            q_cols = cols("quotes")
+            for col, ddl in [
+                ("subtotal_gross_jcl",         "FLOAT NOT NULL DEFAULT 0"),
+                ("subtotal_gross_deliverable", "FLOAT NOT NULL DEFAULT 0"),
+            ]:
+                if col not in q_cols:
+                    print(f"[auto-migrate-α172] quotes.{col} -> ALTER")
+                    conn.execute(text(f"ALTER TABLE quotes ADD COLUMN {col} {ddl}"))
+
+            pi_cols = cols("price_items")
+            if "unit_nature" not in pi_cols:
+                print("[auto-migrate-α172] price_items.unit_nature -> ALTER")
+                conn.execute(text(
+                    "ALTER TABLE price_items ADD COLUMN unit_nature VARCHAR(32) "
+                    "NOT NULL DEFAULT 'deliverable_qty'"
+                ))
+    except Exception as e:
+        print(f"[auto-migrate-α172] failed: {e}")
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     create_tables()
@@ -932,6 +994,11 @@ async def lifespan(app: FastAPI):
         _auto_migrate_columns()
     except Exception as e:
         print(f"[lifespan] _auto_migrate_columns failed: {e}")
+    # v3.5.0-alpha.172 — Auto-fix colonne Sprint 1 Restructure
+    try:
+        _auto_migrate_restructure_phase1()
+    except Exception as e:
+        print(f"[lifespan] _auto_migrate_restructure_phase1 failed: {e}")
     # v3.5.0-alpha.111 — Backfill JobResourceAssignment da booking storici
     try:
         _backfill_resource_assignments()
@@ -1268,7 +1335,7 @@ async def lifespan(app: FastAPI):
     yield
 
 
-app = FastAPI(title="MediaFlow", version="3.5.0-alpha.172", lifespan=lifespan)
+app = FastAPI(title="MediaFlow", version="3.5.0-alpha.172.1", lifespan=lifespan)
 
 BASE_DIR = Path(__file__).parent
 app.mount("/static", StaticFiles(directory=BASE_DIR / "static"), name="static")

@@ -28,6 +28,11 @@ from app.models.models import (
     PhysicalAsset, PhysicalAssetKind, AssetOwnerType,
     AssetMovement, AssetMovementType, IngestBatch, AssetMembership,
     JobDeliverable, DeliverableNature, DeliverableStatus,
+    # v3.5.0-alpha.172 Restructure
+    DeliverableUnitNature, DeliverableBillingStatus,
+    BookingDeliverable, DeliverableAsset, DeliverableSpec,
+    DeliverableBilledSlice, AdvancePaymentDeliverableAllocation,
+    VFXShot, PricelistUnit,
     ResourceCostType,
     PriceCategory, PriceItem, PriceLevel,
     PricelistSnapshot, PricelistSnapshotKind,

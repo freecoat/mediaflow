@@ -1,5 +1,62 @@
 # MediaFlow — Changelog
 
+## v3.5.0-alpha.172.1 — Restructure Sprint 1: schema + migration + backfill (20 mag 2026)
+
+**Sprint 1 di 5 della ristrutturazione architetturale** definita in `docs/RESTRUCTURE_2026_05_20.md`. Schema + migration + auto-migrate boot.
+
+**Modelli nuovi (`app/models/models.py`)**:
+- `BookingDeliverable` — pivot M:N booking ↔ job_deliverables (sostituisce singolo `Booking.job_deliverable_id`)
+- `DeliverableAsset` — pivot M:N deliverable ↔ asset (digital OR physical, XOR). Estende i FK singoli legacy. Tracking source (manual / mhl_yoyotta / csv_lto / fs_scan / ai_proposal).
+- `DeliverableSpec` — specifiche tecniche estese (codec/resolution/framerate/naming/target_size_tb) richiamabili in booking. Si affianca a `JobDeliverable.spec_json`.
+- `DeliverableBilledSlice` — snapshot immutabile qty_delivered fatturata per batch. Parallelo a `JCLBilledSlice` (no polimorfismo).
+- `AdvancePaymentDeliverableAllocation` — allocation acconto AP → JobDeliverable. Parallela ad `AdvancePaymentAllocation` (per JCL). Tabella separata per evitare polimorfismo SQLAlchemy fragile.
+- `VFXShot` — anchor point per VFX shot tracking. Schema minimo (code, status, asset_id, notes). Logica completa in sprint dedicato.
+- `PricelistUnit` — tassonomia unit listino configurabile. 11 preset seedate per tenant=1 al boot (hr, day, pc, lot, shot, version, TB, GB, allow, lump, fix) con nature classificata.
+
+**Enum nuovi**:
+- `DeliverableUnitNature` — `time_based | deliverable_qty | deliverable_volume | manual_allow`
+- `DeliverableBillingStatus` — `not_billed | in_batch | billed | paid | lost` (mirror JCLBillingStatus)
+
+**Estensioni `JobDeliverable`** (16 colonne):
+- `quote_line_id` (FK), `unit`, `unit_price`, `unit_nature`
+- `quantity_planned`, `quantity_delivered`, `total_quoted`, `total_accrued`, `total_cost_accrued`
+- `accrued_stale` (dirty flag pattern come JCL)
+- `confirmed_at`, `confirmed_by_user_id`
+- `billing_status`, `billing_batch_id`, `billed_amount`
+- `deleted_by_user_id` (audit hard-delete)
+
+**Estensione `Quote`**:
+- `subtotal_gross_jcl` + `subtotal_gross_deliverable` (split per sconti DENTRO sezione, vedi decisione 8.2 in RESTRUCTURE_2026_05_20.md)
+
+**Estensione `PriceItem`**:
+- `unit_nature` (derivata da unit code, cacheable per evitare JOIN in query CR)
+
+**Migration script `scripts/migrate_restructure_phase1.py`**:
+- Idempotente, rerunnable, supporta `--dry-run` + `--yes`
+- 8 step: create tables → alter columns → seed pricelist_units → backfill unit_nature → backfill deliverable.quote_line_id → backfill quote subtotal split → **autospawn JobDeliverable per JCL non-time** (1 row per qty unitaria, cascade booking pivot) → backfill booking_deliverables da legacy
+- Output JSON con counters dettagliati
+
+**Auto-migrate boot `app/main.py`**:
+- Nuovo `_auto_migrate_restructure_phase1()` chiamato in lifespan
+- Guardrail anti-crash su DB pull-ato senza migration esplicita (pattern `feedback_auto_migrate_columns`)
+- Solo schema (ALTER TABLE ADD COLUMN). Backfill dati richiede script esplicito.
+
+**Smoke test su DB seed_5projects (32 JCL totali)**:
+- 20 JCL time-based skippate (lavorazioni ore)
+- 12 JCL non-time (`pc`) → 12 JobDeliverable spawnati
+- 12 booking re-linkati via pivot
+- 5 Quote split: 29450€ JCL + 1850€ Deliverable per ognuna (somma = 31300€ ✓)
+- 44 PriceItem backfilled con unit_nature
+- 11 PricelistUnit seedate
+- Rerun idempotency: tutte le operazioni skip su seconda esecuzione
+
+**Pendenti Sprint 2-5** (servizi, endpoint, UI, migration UX):
+- Rimozione branch binary in `cost_line_sync.py:386-393` (Bug 2 fix strutturale)
+- `deliverable_cost_sync.py` nuovo (split cost equo booking → N deliverable linkati)
+- `reverse_quote.py` esteso per deliverable phantom
+- Endpoint hard-delete admin + confirm-delivery + yoyotta-mhl + csv-lto
+- UI: editor quote split JCL/Deliverable, CR sezioni, kanban consegne
+
 ## v3.5.0-alpha.172 — Design doc restructure JCL→CR→Fatt→Cashflow + seed 5 progetti test (20 mag 2026)
 
 **No code changes** — solo doc strategici + tooling test.

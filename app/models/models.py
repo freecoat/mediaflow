@@ -211,6 +211,30 @@ class DeliverableNature(str, enum.Enum):
     physical = "physical" # supporto fisico consegnato (LTO, HDD, CRU, Blu-Ray)
 
 
+# v3.5.0-alpha.172 — Restructure: classificazione semantica dell'unità di
+# misura listino per workflow CR/billing.
+# - time_based         (hr, day)       → JobCostLine, maturato da booking done
+# - deliverable_qty    (pc, lot, shot, version) → JobDeliverable manuale + asset
+# - deliverable_volume (TB, GB)        → JobDeliverable, auto-fill via Yoyotta MHL
+# - manual_allow       (allow, lump, fix) → JobDeliverable, solo conferma manuale
+class DeliverableUnitNature(str, enum.Enum):
+    time_based = "time_based"
+    deliverable_qty = "deliverable_qty"
+    deliverable_volume = "deliverable_volume"
+    manual_allow = "manual_allow"
+
+
+# v3.5.0-alpha.172 — Restructure: stato fatturazione JobDeliverable.
+# Parallelo a JCLBillingStatus. Flow: not_billed → in_batch → billed → paid.
+# Ramo alternativo: in_batch → lost.
+class DeliverableBillingStatus(str, enum.Enum):
+    not_billed = "not_billed"
+    in_batch = "in_batch"
+    billed = "billed"
+    paid = "paid"
+    lost = "lost"
+
+
 # v3.5.0-alpha.66.9 — Tipo di costo della risorsa, per calcolo hardcost interno
 # nel cost report. Separato dalle tariffe di vendita esistenti (hourly_rate /
 # daily_rate) che restano per la quote al cliente.
@@ -610,6 +634,14 @@ class PriceItem(Base):
     description: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     unit_pre: Mapped[str] = mapped_column(String(20), default="per")
     unit: Mapped[str] = mapped_column(String(20))
+    # v3.5.0-alpha.172 Restructure — classificazione semantica unit listino.
+    # Derivata da PricelistUnit.nature al matching unit↔unit_code; cacheata
+    # qui per evitare JOIN nelle query CR/billing. Default deliverable_qty
+    # per back-compat (voci pre-restructure considerate non-time).
+    unit_nature: Mapped[DeliverableUnitNature] = mapped_column(
+        SAEnum(DeliverableUnitNature), default=DeliverableUnitNature.deliverable_qty,
+        server_default="deliverable_qty", index=True,
+    )
     price_list: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
     price_average: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
     price_low: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
@@ -1184,6 +1216,16 @@ class Quote(Base):
     # total_after_discount = post-sconto pacchetto, base imponibile per IVA.
     total_after_discount: Mapped[float] = mapped_column(Float, default=0.0)
     total_with_vat: Mapped[float] = mapped_column(Float, default=0.0)
+    # v3.5.0-alpha.172 Restructure — split JCL vs Deliverable per sconti
+    # applicati DENTRO ogni sezione (proporzionali). PDF mostra 2 blocchi:
+    # "Lavorazioni" + "Consegne" con propri subtotale + sconti.
+    # Calcolati da `_recalc_quote` insieme a subtotal_gross.
+    subtotal_gross_jcl: Mapped[float] = mapped_column(
+        Float, nullable=False, default=0.0, server_default="0"
+    )
+    subtotal_gross_deliverable: Mapped[float] = mapped_column(
+        Float, nullable=False, default=0.0, server_default="0"
+    )
     
     # v3.5.0-alpha.77 — Sales pipeline forecast.
     # win_probability_pct: 0..100, override manuale del default-da-status.
@@ -2698,6 +2740,251 @@ class JobDeliverable(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
     deleted_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True, index=True)
+
+    # ── v3.5.0-alpha.172 Restructure: maturato + billing per deliverable ──
+    # quote_line_id: FK alla QuoteLine sorgente al convert quote→job.
+    # Permette mapping deliverable ↔ QuoteAdvanceAllocation (acconti).
+    quote_line_id: Mapped[Optional[int]] = mapped_column(
+        ForeignKey("quote_lines.id"), nullable=True, index=True
+    )
+    # Unità del prezzo (mirror di QuoteLine.unit / PriceItem.unit).
+    # Es. "pc", "TB", "allow", "shot", "lot", "lump", "version", "fix", "GB".
+    # NON time-based (hr/day restano nelle JCL).
+    unit: Mapped[Optional[str]] = mapped_column(String(20), nullable=True)
+    unit_price: Mapped[float] = mapped_column(
+        Float, nullable=False, default=0.0, server_default="0"
+    )
+    # Classificazione semantica (derivata da PriceItem.unit_nature al create).
+    unit_nature: Mapped[DeliverableUnitNature] = mapped_column(
+        SAEnum(DeliverableUnitNature), default=DeliverableUnitNature.deliverable_qty,
+        server_default="deliverable_qty", index=True,
+    )
+    # quantity_planned: qty quotata (in unità sopra). Per scelta architetturale
+    # restructure 2026-05-20, è SEMPRE 1.0 perché creiamo 1 row per ogni qty
+    # unitaria della QuoteLine. Lasciato float per flessibilità futura.
+    quantity_planned: Mapped[float] = mapped_column(
+        Float, nullable=False, default=1.0, server_default="1"
+    )
+    # quantity_delivered: incrementato manualmente dal producer alla conferma
+    # consegna (deliverable_qty/manual_allow) o via auto-fill (MHL/scan per
+    # deliverable_volume). Max = quantity_planned (vincolo applicativo).
+    quantity_delivered: Mapped[float] = mapped_column(
+        Float, nullable=False, default=0.0, server_default="0"
+    )
+    total_quoted: Mapped[float] = mapped_column(
+        Float, nullable=False, default=0.0, server_default="0"
+    )
+    total_accrued: Mapped[float] = mapped_column(
+        Float, nullable=False, default=0.0, server_default="0"
+    )
+    total_cost_accrued: Mapped[float] = mapped_column(
+        Float, nullable=False, default=0.0, server_default="0"
+    )
+    accrued_stale: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False, server_default="0"
+    )
+    # Conferma manuale producer (timestamp + user). Popolato al primo
+    # quantity_delivered > 0.
+    confirmed_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+    confirmed_by_user_id: Mapped[Optional[int]] = mapped_column(
+        ForeignKey("users.id"), nullable=True
+    )
+    # Billing parallel a JCL.
+    billing_status: Mapped[DeliverableBillingStatus] = mapped_column(
+        SAEnum(DeliverableBillingStatus), default=DeliverableBillingStatus.not_billed,
+        server_default="not_billed", index=True,
+    )
+    billing_batch_id: Mapped[Optional[int]] = mapped_column(
+        ForeignKey("billing_batches.id"), nullable=True, index=True
+    )
+    billed_amount: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
+    # Soft-delete user attribution (per audit hard-delete admin).
+    deleted_by_user_id: Mapped[Optional[int]] = mapped_column(
+        ForeignKey("users.id"), nullable=True
+    )
+
+
+# ─────────────────────────────────────────────────────────────────────
+# v3.5.0-alpha.172 — Restructure (RESTRUCTURE_2026_05_20.md)
+# Pivot M:N booking↔deliverable + deliverable↔asset, slice billing
+# parallela, allocation acconto separata, anchor VFXShot, tassonomia
+# unit configurabile.
+# ─────────────────────────────────────────────────────────────────────
+
+class BookingDeliverable(Base):
+    """v3.5.0-alpha.172 — Pivot M:N booking ↔ job_deliverables.
+    Sostituisce il vecchio singolo `Booking.job_deliverable_id`.
+    Permette ad un booking di servire più deliverables (es. 1 sessione
+    color 8h finisce 3 versioni DCP). Cost-side: il costo del booking
+    è ripartito EQUAMENTE sui deliverable linkati (vedi
+    `deliverable_cost_sync.py`).
+    """
+    __tablename__ = "booking_deliverables"
+    __table_args__ = (
+        UniqueConstraint("booking_id", "job_deliverable_id", name="uq_booking_deliverable"),
+    )
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    booking_id: Mapped[int] = mapped_column(
+        ForeignKey("bookings.id", ondelete="CASCADE"), index=True
+    )
+    job_deliverable_id: Mapped[int] = mapped_column(
+        ForeignKey("job_deliverables.id", ondelete="CASCADE"), index=True
+    )
+    sort_order: Mapped[int] = mapped_column(Integer, default=0)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+
+
+class DeliverableAsset(Base):
+    """v3.5.0-alpha.172 — Pivot M:N deliverable ↔ asset (digital OR physical).
+    Estende il singolo `JobDeliverable.digital_asset_id` / `physical_asset_id`
+    (mantenuti come primary FK back-compat). Permette link multipli per
+    verifica: es. 1 DCP delivery linkato a 2 LTO (master + clone) + 1 MD5.
+
+    Vincolo XOR: per ogni riga, esattamente uno fra `asset_id` (digital) e
+    `physical_asset_id` deve essere valorizzato.
+    Source: traccia come è nato il link (manuale, MHL Yoyotta, CSV LTO,
+    filesystem scan, AI proposal).
+    """
+    __tablename__ = "deliverable_assets"
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    job_deliverable_id: Mapped[int] = mapped_column(
+        ForeignKey("job_deliverables.id", ondelete="CASCADE"), index=True
+    )
+    asset_id: Mapped[Optional[int]] = mapped_column(
+        ForeignKey("assets.id", ondelete="SET NULL"), nullable=True, index=True
+    )
+    physical_asset_id: Mapped[Optional[int]] = mapped_column(
+        ForeignKey("physical_assets.id", ondelete="SET NULL"), nullable=True, index=True
+    )
+    source: Mapped[str] = mapped_column(String(20), default="manual")
+    # manual | mhl_yoyotta | csv_lto | fs_scan | ai_proposal
+    confirmed_by_user_id: Mapped[Optional[int]] = mapped_column(
+        ForeignKey("users.id"), nullable=True
+    )
+    confirmed_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+
+
+class DeliverableSpec(Base):
+    """v3.5.0-alpha.172 — Specifiche tecniche estese del deliverable,
+    richiamabili in booking (es. modal "Quale spec applichi?").
+    Si affianca a `JobDeliverable.spec_json` (libero) per offrire campi
+    strutturati con preset reusabili da `delivery_templates`.
+    1:1 col deliverable (1 spec primary per deliverable). Multipli=fork
+    versioni futuro.
+    """
+    __tablename__ = "deliverable_specs"
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    job_deliverable_id: Mapped[int] = mapped_column(
+        ForeignKey("job_deliverables.id", ondelete="CASCADE"), index=True
+    )
+    codec: Mapped[Optional[str]] = mapped_column(String(80), nullable=True)
+    resolution: Mapped[Optional[str]] = mapped_column(String(40), nullable=True)
+    framerate: Mapped[Optional[str]] = mapped_column(String(20), nullable=True)
+    color_space: Mapped[Optional[str]] = mapped_column(String(40), nullable=True)
+    audio_config: Mapped[Optional[str]] = mapped_column(String(80), nullable=True)
+    naming_convention: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    target_size_tb: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
+    target_broadcaster: Mapped[Optional[str]] = mapped_column(String(80), nullable=True)
+    template_id: Mapped[Optional[int]] = mapped_column(
+        ForeignKey("delivery_templates.id"), nullable=True
+    )
+    notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+
+
+class DeliverableBilledSlice(Base):
+    """v3.5.0-alpha.172 — Snapshot immutabile della qty_delivered fatturata
+    per un deliverable in un batch. Lock anti-modifica analoga a
+    `JCLBilledSlice`. Discriminata per entità diversa (deliverable vs JCL).
+    """
+    __tablename__ = "deliverable_billed_slices"
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    tenant_id: Mapped[int] = mapped_column(ForeignKey("tenants.id"), default=1, index=True)
+    job_deliverable_id: Mapped[int] = mapped_column(
+        ForeignKey("job_deliverables.id"), index=True
+    )
+    billing_batch_id: Mapped[int] = mapped_column(
+        ForeignKey("billing_batches.id"), index=True
+    )
+    quantity_billed: Mapped[float] = mapped_column(Float, nullable=False, default=0.0)
+    billed_amount: Mapped[float] = mapped_column(Float, nullable=False, default=0.0)
+    period_start: Mapped[date] = mapped_column(Date)
+    period_end: Mapped[date] = mapped_column(Date)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+
+
+class AdvancePaymentDeliverableAllocation(Base):
+    """v3.5.0-alpha.172 — Allocazione acconto AP → JobDeliverable.
+    Parallela a `AdvancePaymentAllocation` (che è per JCL). Tabella separata
+    per evitare polimorfismo SQLAlchemy fragile. CR/finance leggono le 2
+    tabelle separatamente.
+
+    Semantica `amount` autoritativa (coperto in EUR sulla riga deliverable);
+    `pct` derivato auto da listener (mantiene allineato a AP.amount).
+    Vincoli applicativi: 0 ≤ amount ≤ deliverable.total_quoted (no over-cov),
+    Σ amount per AP ≤ AP.amount (no over-alloc).
+    """
+    __tablename__ = "advance_payment_deliverable_allocations"
+    __table_args__ = (
+        UniqueConstraint("advance_payment_id", "job_deliverable_id", name="uq_ap_alloc_deliv"),
+    )
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    advance_payment_id: Mapped[int] = mapped_column(
+        ForeignKey("advance_payments.id", ondelete="CASCADE"), index=True
+    )
+    job_deliverable_id: Mapped[int] = mapped_column(
+        ForeignKey("job_deliverables.id", ondelete="CASCADE"), index=True
+    )
+    amount: Mapped[float] = mapped_column(Float, default=0.0)
+    pct: Mapped[Optional[float]] = mapped_column(Float, default=0.0, nullable=True)
+    sort_order: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+
+
+class VFXShot(Base):
+    """v3.5.0-alpha.172 — Anchor point per VFX shot tracking.
+    Schema minimo, logica completa rinviata a sprint dedicato.
+    Asset_id link è opzionale (futuro: asset = render finale dello shot).
+    """
+    __tablename__ = "vfx_shots"
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    job_deliverable_id: Mapped[int] = mapped_column(
+        ForeignKey("job_deliverables.id", ondelete="CASCADE"), index=True
+    )
+    code: Mapped[str] = mapped_column(String(50))
+    status: Mapped[str] = mapped_column(String(20), default="pending")
+    # pending | in_progress | rendered | approved | rejected
+    asset_id: Mapped[Optional[int]] = mapped_column(
+        ForeignKey("assets.id", ondelete="SET NULL"), nullable=True
+    )
+    notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime, default=datetime.utcnow, onupdate=datetime.utcnow
+    )
+
+
+class PricelistUnit(Base):
+    """v3.5.0-alpha.172 — Tassonomia unit listino configurabile.
+    Una row per ogni unit valida (hr, day, pc, TB, ecc.). La colonna
+    `nature` determina il workflow CR/billing (JCL vs Deliverable).
+    Tenant-scoped (default tenant=1 con preset condiviso al seed).
+    """
+    __tablename__ = "pricelist_units"
+    __table_args__ = (
+        UniqueConstraint("tenant_id", "code", name="uq_pricelist_unit"),
+    )
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    tenant_id: Mapped[int] = mapped_column(ForeignKey("tenants.id"), default=1, index=True)
+    code: Mapped[str] = mapped_column(String(20))         # hr | day | pc | TB | ...
+    label: Mapped[str] = mapped_column(String(60))        # "Ora" | "Pezzo" | "Terabyte"
+    nature: Mapped[DeliverableUnitNature] = mapped_column(
+        SAEnum(DeliverableUnitNature), index=True
+    )
+    sort_order: Mapped[int] = mapped_column(Integer, default=100)
+    is_active: Mapped[bool] = mapped_column(Boolean, default=True)
+    notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
 
 
 # ── AI ASSISTANT (storico conversazioni) ─────────────────────
