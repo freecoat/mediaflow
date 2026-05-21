@@ -1,5 +1,20 @@
 # MediaFlow — Changelog
 
+## v3.5.0-alpha.172.23 — DB import: in-place rewrite per Windows + OneDrive (21 mag 2026)
+
+α.172.22 `engine.dispose()` non bastava: OneDrive sync (cartella `OneDrive\Documents\Claude\...`) tiene handle sul file durante restore, blocca `shutil.move`/`copy2` che richiedono write-exclusive lock al destinatario.
+
+Nuova strategia in `data_import.restore_from_zip`:
+1. `engine.dispose()` pre-swap (rilascia connection pool)
+2. Cleanup WAL/SHM sidecar (mediaflow.db-wal/-shm/-journal)
+3. Backup via `copy2` (non `move` → no rename file system)
+4. Lettura nuovo DB in memoria
+5. **In-place rewrite**: apertura file destinazione in `r+b` (riusa inode esistente, no exclusive write lock), `truncate(0)` + write + `fsync`
+6. Retry 5× con backoff 0/0.3/0.8/1.5/3.0s se PermissionError transient (OneDrive)
+7. `engine.dispose()` finale per scartare statement cache
+
+Vantaggi: preserva inode (no OneDrive race su rename), tollera lock condivisi su read, fsync forza flush atomico. Errore include hint per pausare OneDrive sync se permission persiste.
+
 ## v3.5.0-alpha.172.22 — Fix DB import ZIP su Windows (file lock) (21 mag 2026)
 
 Bug Matteo: import ZIP da /settings → `WinError 32: file utilizzato da un altro processo: mediaflow.db`.

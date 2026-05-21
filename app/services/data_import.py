@@ -125,43 +125,100 @@ def restore_from_zip(
             "warnings": [],
         }
 
-        # 2) DB swap atomico con backup
+        # 2) DB swap con backup. v3.5.0-alpha.172.23 — strategia in-place
+        # rewrite per Windows: invece di rinominare/copiare il file
+        # (shutil.move/copy2 chiede write-exclusive lock al destinatario,
+        # bloccato da OneDrive sync + connection pool SQLAlchemy + altri
+        # processi), facciamo:
+        #
+        #   1. engine.dispose() per rilasciare le connection SQLite del pool
+        #   2. lettura raw bytes del DB sorgente in memoria
+        #   3. backup raw del DB corrente (copia, no move → safe anche lockato)
+        #   4. apertura DB corrente in 'r+b' (sharing-aware: non chiede write-
+        #      exclusive nuovo, riusa handle file system esistente), truncate
+        #      e write dei nuovi bytes
+        #   5. retry transient PermissionError con backoff (OneDrive sync apre
+        #      e chiude il file in finestre brevi)
+        #
+        # In-place rewrite preserva inode + file lock state esistente. SQLite
+        # alla prossima connection legge il nuovo contenuto (no WAL bound al
+        # vecchio file, perché abbiamo già disposto il pool).
         db_src = extract_dir / "mediaflow.db"
         if db_src.exists():
             db_dst = project_root / "mediaflow.db"
             ts = datetime.now().strftime("%Y%m%d-%H%M%S")
             backup_path = project_root / f"mediaflow.db.backup-{ts}"
-            # v3.5.0-alpha.172.22 — Windows ferma il swap finché il connection
-            # pool di SQLAlchemy tiene handle aperti sul DB. Dispose esplicito +
-            # GC forzato per rilasciare lock prima del move. Su Linux/Mac il
-            # rename funziona comunque ma il dispose evita stale connection nel
-            # pool subito dopo lo swap (queries on new DB con connection vecchio).
             try:
                 from app.database import engine as _eng
                 _eng.dispose()
             except Exception as e_d:
                 summary["warnings"].append(f"engine.dispose pre-swap warning: {e_d}")
-            import gc
+            import gc, time
             gc.collect()
-            try:
-                if db_dst.exists():
-                    shutil.move(str(db_dst), str(backup_path))
-                shutil.copy2(str(db_src), str(db_dst))
-                summary["actions"].append(
-                    f"DB ripristinato. Backup precedente: {backup_path.name}"
-                )
-            except Exception as e:
-                # Tentiamo il rollback se il backup esiste
-                if backup_path.exists() and not db_dst.exists():
+            # Pulisci WAL/SHM se presenti (lascia il main DB consistent prima del swap)
+            for sidecar in (".db-wal", ".db-shm", ".db-journal"):
+                p = project_root / f"mediaflow{sidecar}"
+                if p.exists():
                     try:
-                        shutil.move(str(backup_path), str(db_dst))
-                        summary["warnings"].append("Restore fallito, ripristinato backup.")
+                        p.unlink()
                     except Exception:
                         pass
-                raise RuntimeError(f"DB swap fallito: {e}") from e
-            # v3.5.0-alpha.172.22 — Dopo swap, dispose di nuovo per scartare
-            # cache statement bound al vecchio DB. Il primo SessionLocal()
-            # successivo ricreerà il pool sul nuovo file.
+            # Backup raw via copy (no move → no rename file system)
+            try:
+                if db_dst.exists():
+                    shutil.copy2(str(db_dst), str(backup_path))
+            except Exception as e_bk:
+                summary["warnings"].append(f"Backup raw fallito: {e_bk} (procedo con import)")
+            # Lettura nuovo DB
+            try:
+                with open(db_src, "rb") as f_in:
+                    new_bytes = f_in.read()
+            except Exception as e_r:
+                raise RuntimeError(f"Lettura DB sorgente fallita: {e_r}") from e_r
+            # In-place rewrite con retry su lock transient (OneDrive)
+            attempts = 5
+            delays = [0.0, 0.3, 0.8, 1.5, 3.0]
+            last_err: Optional[Exception] = None
+            for i in range(attempts):
+                if delays[i] > 0:
+                    time.sleep(delays[i])
+                try:
+                    # 'r+b' richiede file esistente; se non c'è creiamo via 'wb'
+                    mode = "r+b" if db_dst.exists() else "wb"
+                    with open(db_dst, mode) as f_out:
+                        f_out.seek(0)
+                        f_out.truncate(0)
+                        f_out.write(new_bytes)
+                        f_out.flush()
+                        import os as _os
+                        _os.fsync(f_out.fileno())
+                    last_err = None
+                    break
+                except PermissionError as e_p:
+                    last_err = e_p
+                    # Retry con dispose engine extra (potrebbe essersi ricreato
+                    # pool tra un tentativo e l'altro)
+                    try:
+                        from app.database import engine as _eng_r
+                        _eng_r.dispose()
+                    except Exception:
+                        pass
+                    gc.collect()
+                except Exception as e_o:
+                    last_err = e_o
+                    break
+            if last_err is not None:
+                hint = (
+                    " — Hint: pausa la sincronizzazione OneDrive su questa "
+                    "cartella, oppure sposta il progetto fuori da OneDrive "
+                    "(C:\\dev\\... o simile). OneDrive blocca handle file "
+                    "durante sync."
+                ) if isinstance(last_err, PermissionError) else ""
+                raise RuntimeError(f"DB swap fallito: {last_err}{hint}") from last_err
+            summary["actions"].append(
+                f"DB ripristinato (in-place rewrite). Backup raw: {backup_path.name}"
+            )
+            # Dispose finale per scartare statement cache bound al vecchio DB
             try:
                 from app.database import engine as _eng2
                 _eng2.dispose()
