@@ -8,31 +8,36 @@
 
 ## Versione corrente
 
-**v3.5.0-alpha.172.9** — 21 maggio 2026 — **RESTRUCTURE 2026-05-20 COMPLETO** (Sprint 5/5)
+**v3.5.0-alpha.172.27** — 21 maggio 2026 — AI Copilot polish + bulk delete + timeline incrementale
 
-Tutti gli sprint del restructure JCL→Deliverable chiusi: schema → service → endpoint → UI → migration UX.
+11 commit α.172.17→α.172.27 pushati. Sessione lunga via tunnel cloudflared (test live in browser).
 
-**Sprint 5 T1+T2 — Migration UX**:
-- `app/services/jcl_to_deliverable_migrator.py` (nuovo): `scan_legacy_jcl` + `migrate_jcl_to_deliverable` + `migrate_all_legacy` + `notify_admins_if_legacy`
-- 5 endpoint admin `/admin/api/restructure/*` (RequireAdmin via `hard_delete_project` perm)
-- Pagina UI `/admin/restructure-migration` con scan + batch migrate + notifica
-- `NotificationKind.legacy_jcl_non_time` enum + hook lifespan auto-check al boot
+**Highlight versioni**:
+- **α.172.17** Booking AI multi-risorsa (`resource_ids[]`) + HARD-BLOCK `job_cost_line_id` server-side + search Consegne modal
+- **α.172.18** Quote approvata immutabile (`_assert_quote_mutable`) + cascade JobDeliverable in delete/migrate/batch_delete
+- **α.172.19** Backfill `unit_nature` legacy + auto-fix silent al boot + consolidate volume/forfait + delete orphan
+- **α.172.20** Bulk delete assignment: endpoint `POST /api/booking-assignments/bulk-delete` + bottone toolbar planning
+- **α.172.21** Timeline planning refresh incrementale (`tlIncrementalRefresh/Remove/RemoveAssignments` su `itemsDS`) — 7 callsite refactored
+- **α.172.22-.23** Fix DB import Win/OneDrive: `engine.dispose()` + in-place rewrite + retry backoff
+- **α.172.24** AI linguaggio umano (vietato `JCL`/`propose_*` nelle risposte) + sezione LAVORAZIONI DEI JOB nel context
+- **α.172.25** Fix AI: deriva `job_id` da `job_cost_line_id`
+- **α.172.26** AI skip festività italiane (`holidays.IT`) + fix flex display lista Consegne
+- **α.172.27** Tool readonly `check_recurring_booking_collisions` anticipa festività/ferie/conflict
 
-**Smoke test**: 485 routes, boot clean.
+**DB stato**: 23 Deliverable totali (era 123), backfill + cleanup orfani applicato. Export ZIP `mediaflow-export-3.5.0-alpha.172.27-20260521-190332.zip` (281 KB).
 
-## Prossimo step — Test E2E utente + backlog parallelo
+## Prossimo step — Sessione 22+ maggio (definita da Matteo)
 
-Restructure CODE COMPLETE. Aspetta test Matteo sui 5 sprint per individuare:
-- Regressioni CR/Billing/Cashflow sul flow JCL+Deliverable separati
-- UX issue nel kanban/multi-select
-- Quote storiche con voci ambigue da migrare manualmente
+1. **Sconti in CR**: audit di come line/category/package discount propagano da Quote a CR. Verifica `total_quoted` lavorazioni vs `subtotal_after_cat`. Memory `project_backlog_sconti_quote_cr_fatturazione`.
+2. **Deep test CR Deliverables + Assets**: dopo restructure α.172, verificare CR su voci non-time. Branch `deliverable_qty` (N row 1 cad) vs volume/forfait (1 row aggregato) — verifica accrued/billed corretti.
+3. **MAM (Media & Asset Management) — implementazione iniziale**: link DAM/PhysicalAsset → Deliverable conferma. Memory `project_dam_physical_assets`.
+4. **Funzioni in/out + spedizioni**: PhysicalAsset logistics 360° (esisteva in α.66.10+), approfondimento workflow DDT + QR + scan + numerazione.
 
-Backlog parallelo (non-blocking restructure):
-- Audit sconti category/package split JCL/Deliverable proporzionali (decisione 8.2)
-- AI capabilities `propose_confirm_deliverable`, `propose_link_asset_to_deliverable`
-- Drag&drop kanban Consegne (manual status transition)
-- Cashflow horizon configurabile + sub-categorie separabili (decisione 8.3)
-- Migration tool inverso "Sposta deliverable → JCL" per casi rari
+**Setup tunnel per dev remoto** (opzionale): `tools/cloudflared.exe tunnel --url http://localhost:8000 --no-autoupdate` → URL temporaneo HTTPS per browse via tunnel senza push/pull. Persiste finché processo vivo.
+
+## (versione precedente)
+
+**v3.5.0-alpha.172.9** — 21 maggio 2026 — Restructure 2026-05-20 Sprint 5/5 COMPLETE (migration UX). 485 routes.
 
 ## (versione precedente)
 
