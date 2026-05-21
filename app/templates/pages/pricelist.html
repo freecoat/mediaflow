@@ -247,15 +247,31 @@
       <div class="form-row">
         <div class="form-group"><label class="form-label">Categoria *</label>
           <select class="form-select" id="it-cat"></select></div>
-        <div class="form-group" style="max-width:130px;">
-          <label class="form-label">Unità *</label>
-          <select class="form-select" id="it-unit">
-            <option value="day">day</option><option value="hr">hr</option>
-            <option value="min">min</option><option value="pc">pc</option>
-            <option value="TB">TB</option><option value="GB">GB</option>
-            <option value="shot">shot</option><option value="version">version</option>
-            <option value="allow">allowance</option>
+        <div class="form-group" style="max-width:200px;">
+          <label class="form-label">Unità *
+            <span id="it-nature-badge" style="display:none;margin-left:6px;font-size:9px;font-weight:700;padding:1px 5px;border-radius:7px;vertical-align:middle;"></span>
+          </label>
+          <!-- v3.5.0-alpha.172.8 (Sprint 4 T5) — optgroup Lavorazione/Consegna,
+               badge nature derivata da unit_nature_for(). -->
+          <select class="form-select" id="it-unit" onchange="updateItemNatureBadge()">
+            <optgroup label="Lavorazione (JCL)">
+              <option value="day">day</option>
+              <option value="hr">hr</option>
+            </optgroup>
+            <optgroup label="Consegna (Deliverable)">
+              <option value="pc">pc</option>
+              <option value="lot">lot</option>
+              <option value="shot">shot</option>
+              <option value="version">version</option>
+              <option value="TB">TB</option>
+              <option value="GB">GB</option>
+              <option value="lump">lump</option>
+              <option value="allow">allowance</option>
+              <option value="fix">fix</option>
+              <option value="min">min</option>
+            </optgroup>
           </select>
+          <div class="text-xs" id="it-nature-hint" style="color:var(--text3);margin-top:3px;font-size:11px;"></div>
         </div>
       </div>
       <div class="form-group"><label class="form-label">Nome voce *</label>
@@ -440,7 +456,7 @@ function renderItems() {
           ${i.keywords.length > 5 ? `<span class="text-xs text-muted">+${i.keywords.length - 5}</span>` : ''}
         </div>` : ''}
       </td>
-      <td class="text-sm text-muted">${dp.unitLabel}</td>
+      <td class="text-sm text-muted">${dp.unitLabel}${_natureBadgeHtml(i.unit_nature)}</td>
       <td class="mono text-right">${dp.price != null ? fmtCurrency(dp.price) : '—'}</td>
       <td class="mono text-right text-muted">${i.hardcosts ? fmtCurrency(i.hardcosts) : '—'}</td>
       <td class="text-right" style="white-space:nowrap;" onclick="event.stopPropagation()">
@@ -490,6 +506,45 @@ function _populateDeptSelect(currentId) {
   });
 }
 
+// v3.5.0-alpha.172.8 (Sprint 4 T5) — Mirror server-side unit_nature_for()
+// (app/services/cost_line_sync.py). Mostra badge nature derivata dall'unit.
+const UNIT_NATURE_MAP = {
+  hr: 'time_based', ore: 'time_based', hour: 'time_based', h: 'time_based',
+  day: 'time_based', giorno: 'time_based', giornate: 'time_based',
+  giornata: 'time_based', d: 'time_based',
+  pc: 'deliverable_qty', lot: 'deliverable_qty',
+  shot: 'deliverable_qty', version: 'deliverable_qty',
+  tb: 'deliverable_volume', gb: 'deliverable_volume',
+  allow: 'manual_allow', lump: 'manual_allow', fix: 'manual_allow',
+  min: 'manual_allow',
+};
+const NATURE_LABELS = {
+  time_based:         { lbl: 'JCL · Lavorazione',           bg: 'rgba(34,197,94,0.15)',  fg: '#22c55e', hint: 'Maturato = ore booking done × unit_price. Genera JobCostLine.' },
+  deliverable_qty:    { lbl: 'DEL · Quantità',              bg: 'rgba(245,158,11,0.15)', fg: '#f59e0b', hint: 'Maturato = quantity_delivered × unit_price. Conferma manuale.' },
+  deliverable_volume: { lbl: 'DEL · Volume',                bg: 'rgba(168,85,247,0.15)', fg: '#c084fc', hint: 'Maturato = volume_delivered × unit_price. Auto-fill MHL Yoyotta.' },
+  manual_allow:       { lbl: 'DEL · Forfait',               bg: 'rgba(98,114,245,0.15)', fg: '#a7b3f9', hint: 'Forfait — solo conferma manuale producer.' },
+};
+function _natureBadgeHtml(nature) {
+  // v3.5.0-alpha.172.8 (Sprint 4 T5) — Badge inline per riga listino.
+  if (!nature) nature = 'deliverable_qty';
+  const info = NATURE_LABELS[nature] || NATURE_LABELS.deliverable_qty;
+  return ` <span style="display:inline-block;font-size:9px;font-weight:700;padding:1px 5px;border-radius:7px;margin-left:4px;background:${info.bg};color:${info.fg};">${nature === 'time_based' ? 'JCL' : 'DEL'}</span>`;
+}
+function updateItemNatureBadge() {
+  const u = (document.getElementById('it-unit').value || '').toLowerCase();
+  const nature = UNIT_NATURE_MAP[u] || 'deliverable_qty';
+  const info = NATURE_LABELS[nature] || NATURE_LABELS.deliverable_qty;
+  const badge = document.getElementById('it-nature-badge');
+  const hint = document.getElementById('it-nature-hint');
+  if (badge) {
+    badge.style.display = '';
+    badge.style.background = info.bg;
+    badge.style.color = info.fg;
+    badge.textContent = info.lbl;
+  }
+  if (hint) hint.textContent = info.hint;
+}
+
 async function openNewItem() {
   await _loadDepts();
   document.getElementById('modal-title').textContent = 'Nuova voce';
@@ -503,6 +558,7 @@ async function openNewItem() {
   document.getElementById('it-keywords').value = '';
   _populateDeptSelect(null);
   document.getElementById('it-cross-dept').checked = false;
+  updateItemNatureBadge();
   openModal('modal-item');
 }
 
@@ -521,6 +577,7 @@ async function editItem(id) {
     document.getElementById('it-keywords').value = (i.keywords || []).join(', ');
     _populateDeptSelect(i.department_id);
     document.getElementById('it-cross-dept').checked = !!i.cross_dept;
+    updateItemNatureBadge();
     openModal('modal-item');
   } catch(e) { alert(e.message); }
 }

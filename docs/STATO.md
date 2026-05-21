@@ -8,33 +8,33 @@
 
 ## Versione corrente
 
-**v3.5.0-alpha.172.4** — 21 maggio 2026 — Sprint 4 T1 Restructure: editor quote split JCL/Deliverable
+**v3.5.0-alpha.172.8** — 21 maggio 2026 — Sprint 4 Restructure COMPLETE (T1→T5)
 
-Sprint 4 di 5 — Task 1/5. Prima visualizzazione utente della separazione strutturale lavorazioni vs consegne.
+Sprint 4 di 5 chiuso. Tutta la UI utente espone la separazione strutturale Lavorazioni (JCL) vs Consegne (Deliverable).
 
-**Backend**:
-- Helper `unit_nature_for(unit)` centralizzato in `app/services/cost_line_sync.py` (single source of truth, sostituisce mappe duplicate)
-- `_recalc_quote` popola `subtotal_gross_jcl` + `subtotal_gross_deliverable` ad ogni save
-- `GET /api/{quote_id}` espone i 2 subtotali split + `unit_nature` per ogni riga
-- 5 endpoint subtotali updated per propagare split
-
-**Frontend** (`quotes.html`):
-- Tab bar `Tutto | 🔧 Lavorazioni | 📦 Consegne` con count + subtotale lordo per tab
-- Stato persistito `localStorage.mf_quote_tab`
-- `renderLines` filtra per `unit_nature`. Empty state contestuale
-- Badge inline `JCL` (verde) / `DEL` (arancione) accanto al select unit
-- Select unit con `optgroup` Lavorazione/Consegna + nuove option lot/lump/fix
-- `renderTotals` mostra 2 sub-righe lordi split sotto "Totale lordo"
-- CSS dedicato `.qt-tab` + `.ql-nature-badge`
+**T1 — Editor quote** (`quotes.html`): tab Tutto/Lavorazioni/Consegne + split lordo + badge nature + select unit con optgroup.
+**T2 — CR detail** (`cost_report.py` + `cost_report.html`): API ritorna `deliverables[]` array. Card "📦 Consegne" sotto "🔧 Lavorazioni" con qty bar + maturato + status + confirm button.
+**T3 — Booking modal** (`planning.html`): multi-select deliverable in `modal-tl-booking`. Sync POST/DELETE pivot al save. Wiring create+edit.
+**T4 — Job kanban** (`job_detail.html`): toggle Lista/Kanban (4 colonne). Modal `modal-confirm-delivery` con qty + source + asset link.
+**T5 — Listino** (`pricelist.py` + `pricelist.html`): unit_nature derivata server-side via `unit_nature_for`. Optgroup nel modal + badge inline tabella.
 
 **Smoke test**: 480 routes, boot clean.
 
-## Prossimo step — Sprint 4 T2 CR detail sezioni Lavorazioni vs Consegne
+## Prossimo step — Sprint 5 Migration UX
 
-Cost report dettaglio progetto: 2 sezioni separate JCL vs JobDeliverable con regole maturato distinte (ore done vs quantity_delivered manuale). Sub-task pendenti:
-- T3 modal booking multi-select deliverable
-- T4 pagina Consegne progetto (kanban + confirm-delivery)
-- T5 editor listino unit/nature derivata
+1. Tool one-shot "Sposta voce X in deliverable" per quote storiche (move JCL non-time → JobDeliverable)
+2. Notifica admin "Hai JCL non-time-based residuali: migrare a Deliverable?" (warning post-migration)
+3. Eventuali fix/polish dopo test E2E utente su sprint 1→4
+
+Backlog parallelo:
+- Audit sconti category/package proporzionali split JCL/Deliverable (decisione 8.2 RESTRUCTURE)
+- AI capabilities `propose_confirm_deliverable`, `propose_link_asset_to_deliverable`
+- Drag&drop kanban Consegne (manual status transition)
+- Cashflow horizon configurabile + sub-categorie separabili (decisione 8.3)
+
+## (versione precedente)
+
+**v3.5.0-alpha.172.4** — 21 maggio 2026 — Sprint 4 T1 editor quote split (separazione tab Lavorazioni/Consegne)
 
 ## (versione precedente)
 

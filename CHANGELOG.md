@@ -1,5 +1,42 @@
 # MediaFlow — Changelog
 
+## v3.5.0-alpha.172.8 — Restructure Sprint 4 COMPLETE: UI restructure JCL/Deliverable (21 mag 2026)
+
+**Sprint 4 di 5 CHIUSO** (T1→T5). Tutta la UI utente espone la separazione strutturale lavorazioni vs consegne introdotta dal restructure.
+
+### T2 — CR detail sezioni Lavorazioni vs Consegne (`cost_report.py` + `cost_report.html`)
+- API `GET /cost-report/api/job/{job_id}`: aggiunto array `deliverables` con qty_planned/delivered/pct + total_quoted/accrued/cost_accrued + status + confirmed_at + billing_status
+- `summary.deliverables_quoted/accrued/cost_accrued/confirmed`: aggregati per KPI
+- UI: card separata "📦 Consegne" sotto "🔧 Lavorazioni" con tabella 11 colonne (Plan/Cons/Quotato/Maturato/Costo/Margine/Stato/Fatt./Conferma)
+- Bottone "✓" per riga (apre modal/prompt conferma)
+- Sezione visibile solo se job ha deliverables
+
+### T3 — Booking modal multi-select deliverable (`planning.html`)
+- Nuovo blocco "📦 Consegne linkate" nel modal `modal-tl-booking`
+- Checkbox list dei JobDeliverable del job corrente
+- `tlbLoadDeliverables(jobId, bookingId?)`: fetch lista + linked baseline
+- `tlbSyncDeliverables(bookingId)`: calcola delta POST/DELETE su `/planning/api/bookings/{id}/deliverables` (Sprint 3)
+- Wiring in `tlbLoadBookingLines` (create) + `tlbOpenEdit` (edit)
+- Sync chiamato dopo POST/PUT booking — fail-soft
+
+### T4 — Pagina Consegne progetto kanban (`job_detail.html`)
+- Toggle vista `📋 Lista | 🗂 Kanban` (persistito in `localStorage.mf_dlv_view`)
+- Render kanban 4 colonne: Pianificato · In lavorazione · Consegnato · Chiuso (accepted/rejected)
+- Mini-card con qty bar + target date + bottoni Conferma/Elimina
+- Nuovo modal `modal-confirm-delivery` ricco: quantity + source (manual/MHL/CSV/scan/AI) + asset digitale + asset fisico + note
+- `openConfirmDelivery(id)`: carica asset linkabili da `/dam/api/assets?job_id=X` e `/physical-assets/api?job_id=X`
+- `submitConfirmDelivery()`: POST `/jobs/api/deliverables/{id}/confirm-delivery` (Sprint 3 endpoint)
+
+### T5 — Editor listino unit_nature derivata (`pricelist.py` + `pricelist.html`)
+- Backend: `create_item`/`update_item` derivano `unit_nature` da `unit` via `unit_nature_for()` (single source of truth)
+- API GET `/api/items` e `/api/items/{id}`: espongono `unit_nature`
+- UI modal voce: select `<optgroup>` Lavorazione (JCL) / Consegna (Deliverable) + nuove opzioni `lot`, `lump`, `fix`
+- Badge nature derivata accanto label "Unità" + hint formula maturato per tipo
+- Tabella listino: badge `JCL`/`DEL` accanto unit per ogni riga
+- `_natureBadgeHtml()` helper riusabile
+
+**Smoke test**: 480 routes, boot clean, no regressioni grep.
+
 ## v3.5.0-alpha.172.4 — Restructure Sprint 4 T1: editor quote split JCL/Deliverable (21 mag 2026)
 
 **Sprint 4 di 5 — Task 1**: editor quote con tab "Lavorazioni" (JCL) + "Consegne" (Deliverable). Prima visualizzazione utente della separazione strutturale.

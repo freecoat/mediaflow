@@ -148,11 +148,18 @@
 
 <!-- ── Tab Consegne / Deliverable (v3.5.0-alpha.66.9) ─────── -->
 <div class="card mt-4">
-  <div class="flex items-center justify-between mb-3">
+  <div class="flex items-center justify-between mb-3" style="gap:10px;flex-wrap:wrap;">
     <div class="card-title" style="margin:0;"><i data-lucide="package" style="width:16px;height:16px;vertical-align:-3px;"></i> Consegne</div>
-    {% if can_assign_resources(request.state.current_user) or can_create_booking(request.state.current_user) %}
-    <button class="btn btn-secondary btn-sm" onclick="openNewDeliverable()"><i data-lucide="plus" style="width:14px;height:14px;vertical-align:-2px;"></i> Nuovo deliverable</button>
-    {% endif %}
+    <div style="display:flex;align-items:center;gap:8px;">
+      <!-- v3.5.0-alpha.172.7 (Sprint 4 T4) — Toggle vista Lista | Kanban -->
+      <div id="dlv-view-toggle" style="display:inline-flex;gap:0;border:1px solid var(--border);border-radius:6px;overflow:hidden;">
+        <button type="button" class="dlv-view-btn active" data-view="list" onclick="setDeliverableView('list')" style="background:var(--bg2);color:var(--indigo2);border:0;padding:4px 10px;cursor:pointer;font-size:12px;">📋 Lista</button>
+        <button type="button" class="dlv-view-btn" data-view="kanban" onclick="setDeliverableView('kanban')" style="background:transparent;color:var(--text2);border:0;border-left:1px solid var(--border);padding:4px 10px;cursor:pointer;font-size:12px;">🗂 Kanban</button>
+      </div>
+      {% if can_assign_resources(request.state.current_user) or can_create_booking(request.state.current_user) %}
+      <button class="btn btn-secondary btn-sm" onclick="openNewDeliverable()"><i data-lucide="plus" style="width:14px;height:14px;vertical-align:-2px;"></i> Nuovo deliverable</button>
+      {% endif %}
+    </div>
   </div>
   <p class="text-sm text-muted mb-3" style="margin-top:0;">
     File e supporti fisici da consegnare al cliente (DCP, ProRes, IMF, LTO, drive, Blu-Ray).
@@ -161,6 +168,59 @@
   </p>
   <div id="deliverables-list">
     <div class="text-muted text-sm" style="padding:14px;text-align:center;">Caricamento…</div>
+  </div>
+</div>
+
+<!-- v3.5.0-alpha.172.7 (Sprint 4 T4) — Modal Conferma consegna -->
+<div class="modal-overlay" id="modal-confirm-delivery">
+  <div class="modal" style="max-width:520px;">
+    <div class="modal-header">
+      <span class="modal-title">✓ Conferma consegna</span>
+      <button class="btn btn-ghost btn-icon" onclick="closeModal('modal-confirm-delivery')">✕</button>
+    </div>
+    <div class="modal-body">
+      <div id="cd-deliverable-info" style="background:rgba(98,114,245,0.05);border-left:3px solid #6272f5;padding:8px 12px;border-radius:0 4px 4px 0;margin-bottom:12px;font-size:13px;"></div>
+      <input type="hidden" id="cd-deliverable-id">
+      <div class="form-row">
+        <div class="form-group" style="flex:1;">
+          <label class="form-label">Quantità da confermare *</label>
+          <input class="form-input" id="cd-quantity" type="number" step="0.01" min="0.01">
+          <div class="text-xs text-muted" id="cd-qty-hint" style="margin-top:3px;"></div>
+        </div>
+        <div class="form-group" style="max-width:180px;">
+          <label class="form-label">Origine</label>
+          <select class="form-select" id="cd-source" data-no-search="true">
+            <option value="manual">Manuale (producer)</option>
+            <option value="mhl_yoyotta">MHL Yoyotta</option>
+            <option value="csv_lto">CSV LTO</option>
+            <option value="fs_scan">Scan filesystem</option>
+            <option value="ai_proposal">Proposta AI</option>
+          </select>
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label class="form-label">Asset digitale linkato <span class="text-muted">(opzionale)</span></label>
+          <select class="form-select" id="cd-asset-id">
+            <option value="">— nessuno —</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Asset fisico <span class="text-muted">(opzionale)</span></label>
+          <select class="form-select" id="cd-physical-id">
+            <option value="">— nessuno —</option>
+          </select>
+        </div>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Note</label>
+        <textarea class="form-input" id="cd-notes" rows="2" placeholder="Numero registro, recipient, riferimenti…"></textarea>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeModal('modal-confirm-delivery')">Annulla</button>
+      <button class="btn btn-primary" onclick="submitConfirmDelivery()">✓ Conferma</button>
+    </div>
   </div>
 </div>
 
@@ -359,6 +419,8 @@
 {% block scripts %}
 <script>
 const JOB_ID = {{ job.id }};
+// v3.5.0-alpha.172.7 (Sprint 4 T4) — project_id per filtro asset/physical_asset
+const JOB_PROJECT_ID = {{ job.project_id or 'null' }};
 // v3.4.54 / v3.5.0-alpha.10 — flag RBAC dal server. CAN_EDIT_COST_ACTUALS
 // rimosso: il quantity_actual non è più editabile manualmente (decisione 4 mag).
 const CAN_VIEW_FINANCE = {{ 'true' if can_view_finance(request.state.current_user) else 'false' }};
@@ -689,18 +751,195 @@ const DLV_STATUS_COLOR = {
 };
 let _dlvNamingPresets = [];
 
+// v3.5.0-alpha.172.7 (Sprint 4 T4) — View mode Lista | Kanban
+let _dlvViewMode = (function () {
+  try { return localStorage.getItem('mf_dlv_view') || 'list'; } catch(_) { return 'list'; }
+})();
+let _dlvCache = [];
+function setDeliverableView(mode) {
+  if (mode !== 'list' && mode !== 'kanban') mode = 'list';
+  _dlvViewMode = mode;
+  try { localStorage.setItem('mf_dlv_view', mode); } catch(_) {}
+  document.querySelectorAll('#dlv-view-toggle .dlv-view-btn').forEach(b => {
+    const active = b.dataset.view === mode;
+    b.classList.toggle('active', active);
+    b.style.background = active ? 'var(--bg2)' : 'transparent';
+    b.style.color = active ? 'var(--indigo2)' : 'var(--text2)';
+  });
+  _renderDeliverables();
+}
+
 async function loadDeliverables() {
   const target = document.getElementById('deliverables-list');
   try {
-    const list = await api('GET', `/jobs/api/${JOB_ID}/deliverables`);
-    if (!list.length) {
-      target.innerHTML = `<div class="text-muted text-sm" style="padding:20px;text-align:center;">Nessun deliverable. Aggiungi il primo con "+ Nuovo deliverable".</div>`;
-      return;
-    }
-    target.innerHTML = list.map(d => renderDeliverableCard(d)).join('');
-    if (typeof lucide !== 'undefined' && lucide.createIcons) lucide.createIcons();
+    _dlvCache = await api('GET', `/jobs/api/${JOB_ID}/deliverables`);
+    setDeliverableView(_dlvViewMode);
   } catch(e) {
-    target.innerHTML = `<div class="text-sm" style="color:var(--rose);padding:14px;">${e.message}</div>`;
+    target.replaceChildren();
+    const errDiv = document.createElement('div');
+    errDiv.className = 'text-sm';
+    errDiv.style.cssText = 'color:var(--rose);padding:14px;';
+    errDiv.textContent = e.message || 'Errore caricamento';
+    target.appendChild(errDiv);
+  }
+}
+
+function _renderDeliverables() {
+  const target = document.getElementById('deliverables-list');
+  target.replaceChildren();
+  if (!_dlvCache.length) {
+    target.insertAdjacentHTML('beforeend',
+      `<div class="text-muted text-sm" style="padding:20px;text-align:center;">Nessun deliverable. Aggiungi il primo con "+ Nuovo deliverable".</div>`
+    );
+    return;
+  }
+  const html = _dlvViewMode === 'kanban'
+    ? renderDeliverableKanban(_dlvCache)
+    : _dlvCache.map(d => renderDeliverableCard(d)).join('');
+  target.insertAdjacentHTML('beforeend', html);
+  if (typeof lucide !== 'undefined' && lucide.createIcons) lucide.createIcons();
+}
+
+// Kanban 4 colonne: Pianificato · In lavorazione · Consegnato · Accettato/Rifiutato
+function renderDeliverableKanban(list) {
+  const COLS = [
+    { key: 'planned',     lbl: '🗓 Pianificato',    statuses: ['planned'] },
+    { key: 'in_progress', lbl: '🛠 In lavorazione', statuses: ['in_production','file_attached','qc_running','qc_passed','qc_failed'] },
+    { key: 'delivered',   lbl: '✓ Consegnato',     statuses: ['delivered'] },
+    { key: 'closed',      lbl: '✅ Chiuso',         statuses: ['accepted','rejected'] },
+  ];
+  const buckets = Object.fromEntries(COLS.map(c => [c.key, []]));
+  for (const d of list) {
+    const col = COLS.find(c => c.statuses.includes(d.status));
+    buckets[col ? col.key : 'planned'].push(d);
+  }
+  return `<div class="dlv-kanban" style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px;">
+    ${COLS.map(c => {
+      const cards = buckets[c.key].map(d => renderDeliverableKanbanCard(d)).join('');
+      const count = buckets[c.key].length;
+      const empty = !count ? `<div class="text-muted text-xs" style="padding:18px;text-align:center;border:1px dashed var(--border);border-radius:6px;">— vuoto —</div>` : '';
+      return `<div class="dlv-kanban-col" style="background:rgba(255,255,255,0.02);border-radius:8px;padding:10px;min-height:180px;">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;padding-bottom:6px;border-bottom:1px solid var(--border);">
+          <span style="font-weight:600;font-size:12px;color:var(--text2);">${c.lbl}</span>
+          <span class="mono text-xs" style="background:rgba(98,114,245,0.15);color:var(--indigo2);padding:1px 6px;border-radius:8px;">${count}</span>
+        </div>
+        ${cards}${empty}
+      </div>`;
+    }).join('')}
+  </div>`;
+}
+
+function renderDeliverableKanbanCard(d) {
+  const qtyP = d.quantity_planned || 0;
+  const qtyD = d.quantity_delivered || 0;
+  const pct = qtyP > 0 ? Math.min(100, Math.round((qtyD / qtyP) * 100)) : 0;
+  const target = d.target_delivery_date ? `<div class="text-xs text-muted">📅 ${escapeHtml(d.target_delivery_date)}</div>` : '';
+  const unit = escapeHtml(d.unit || '—');
+  const remaining = qtyP - qtyD;
+  const confirmBtn = (remaining > 0.005)
+    ? `<button class="btn btn-primary btn-sm" style="font-size:11px;padding:3px 8px;" onclick="openConfirmDelivery(${d.id})" title="Conferma consegna">✓ Conferma</button>`
+    : `<span class="text-xs" style="color:#22c55e;">✓ Completo</span>`;
+  const linked = (d.digital_asset_id || d.physical_asset_id)
+    ? `<span class="text-xs" style="color:#a78bfa;" title="Asset linkato">📎</span>`
+    : '';
+  return `<div class="dlv-card-mini" style="background:var(--bg2);border:1px solid var(--border);border-left:3px solid ${DLV_STATUS_COLOR[d.status] || '#6272f5'};border-radius:6px;padding:8px 10px;margin-bottom:6px;">
+    <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:6px;">
+      <div style="font-weight:500;font-size:12px;flex:1;line-height:1.3;">${escapeHtml(d.name)}${linked}</div>
+    </div>
+    <div class="text-xs text-muted" style="margin-top:4px;">${(qtyD).toFixed(2)} / ${(qtyP).toFixed(2)} ${unit}</div>
+    <div style="position:relative;height:4px;background:rgba(255,255,255,0.05);border-radius:2px;margin:5px 0;">
+      <div style="position:absolute;left:0;top:0;height:100%;width:${pct}%;background:${pct >= 100 ? '#22c55e' : '#6272f5'};border-radius:2px;"></div>
+    </div>
+    ${target}
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-top:6px;">
+      ${confirmBtn}
+      <button class="btn btn-ghost btn-sm" style="color:var(--rose);font-size:11px;" onclick="deleteDeliverable(${d.id})" title="Elimina">✕</button>
+    </div>
+  </div>`;
+}
+
+async function openConfirmDelivery(deliverableId) {
+  const d = (_dlvCache || []).find(x => x.id === deliverableId);
+  if (!d) { toast('Deliverable non trovato', 'error'); return; }
+  const remaining = (d.quantity_planned || 0) - (d.quantity_delivered || 0);
+  document.getElementById('cd-deliverable-id').value = String(deliverableId);
+  const info = document.getElementById('cd-deliverable-info');
+  info.replaceChildren();
+  const dname = document.createElement('div');
+  dname.style.fontWeight = '600';
+  dname.textContent = d.name;
+  const dmeta = document.createElement('div');
+  dmeta.className = 'text-xs text-muted';
+  dmeta.style.marginTop = '4px';
+  dmeta.textContent = `Pianificate: ${d.quantity_planned} ${d.unit || ''} · Consegnate: ${d.quantity_delivered} · Rimanenti: ${remaining.toFixed(2)}`;
+  info.appendChild(dname);
+  info.appendChild(dmeta);
+  document.getElementById('cd-quantity').value = String(Math.max(0, remaining));
+  document.getElementById('cd-quantity').max = String(remaining);
+  document.getElementById('cd-qty-hint').textContent = `Max ${remaining.toFixed(2)} ${d.unit || ''}`;
+  document.getElementById('cd-source').value = 'manual';
+  document.getElementById('cd-notes').value = '';
+  // Reset asset selects via DOM API
+  const aSel = document.getElementById('cd-asset-id');
+  const pSel = document.getElementById('cd-physical-id');
+  const _resetSel = (sel) => {
+    sel.replaceChildren();
+    const opt = document.createElement('option');
+    opt.value = ''; opt.textContent = '— nessuno —';
+    sel.appendChild(opt);
+  };
+  _resetSel(aSel); _resetSel(pSel);
+  try {
+    const assetsResp = await api('GET', `/dam/api/assets?job_id=${JOB_ID}&limit=200`);
+    const assets = (assetsResp && Array.isArray(assetsResp.items)) ? assetsResp.items : (Array.isArray(assetsResp) ? assetsResp : []);
+    assets.forEach(a => {
+      const o = document.createElement('option');
+      o.value = String(a.id); o.textContent = (a.original_name || a.name || ('#'+a.id));
+      aSel.appendChild(o);
+    });
+  } catch(_) {}
+  try {
+    const physResp = await api('GET', `/physical-assets/api?job_id=${JOB_ID}&limit=200`);
+    const phys = (physResp && Array.isArray(physResp.items)) ? physResp.items : (Array.isArray(physResp) ? physResp : []);
+    if (Array.isArray(phys)) {
+      phys.forEach(a => {
+        const o = document.createElement('option');
+        o.value = String(a.id); o.textContent = (a.label || a.barcode || ('#'+a.id));
+        pSel.appendChild(o);
+      });
+    }
+  } catch(_) {}
+  if (d.digital_asset_id) aSel.value = String(d.digital_asset_id);
+  if (d.physical_asset_id) pSel.value = String(d.physical_asset_id);
+  openModal('modal-confirm-delivery');
+}
+
+async function submitConfirmDelivery() {
+  const id = document.getElementById('cd-deliverable-id').value;
+  const qty = parseFloat(document.getElementById('cd-quantity').value || '0');
+  if (!id || isNaN(qty) || qty <= 0) { toast('Quantità non valida', 'warning'); return; }
+  const fd = new FormData();
+  fd.append('quantity', String(qty));
+  fd.append('source', document.getElementById('cd-source').value || 'manual');
+  const a = document.getElementById('cd-asset-id').value;
+  if (a) fd.append('asset_id', a);
+  const p = document.getElementById('cd-physical-id').value;
+  if (p) fd.append('physical_asset_id', p);
+  const n = document.getElementById('cd-notes').value.trim();
+  if (n) fd.append('notes', n);
+  try {
+    const r = await fetch(`/jobs/api/deliverables/${id}/confirm-delivery`, {
+      method: 'POST', body: fd, credentials: 'same-origin',
+    });
+    if (!r.ok) {
+      const err = await r.json().catch(() => ({}));
+      throw new Error(err.detail || 'Errore conferma');
+    }
+    closeModal('modal-confirm-delivery');
+    toast('✓ Consegna confermata', 'success');
+    await loadDeliverables();
+  } catch(e) {
+    toast(e.message || 'Errore', 'error');
   }
 }
 

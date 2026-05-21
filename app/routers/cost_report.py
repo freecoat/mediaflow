@@ -860,6 +860,12 @@ async def job_cost_report(job_id: int, db: Session = Depends(get_db)):
             "deliverable_hardcost_internal": round(total_deliverable_hardcost, 2),
             "deliverable_hours_internal": round(total_deliverable_hours, 2),
             "deliverable_count": len(deliverables),
+            # v3.5.0-alpha.172.5 (Sprint 4 T2) — Aggregati Deliverable per
+            # sezione "Consegne" separata da JCL nel CR detail.
+            "deliverables_quoted": round(sum(d.total_quoted or 0.0 for d in deliverables), 2),
+            "deliverables_accrued": round(sum(d.total_accrued or 0.0 for d in deliverables), 2),
+            "deliverables_cost_accrued": round(sum(d.total_cost_accrued or 0.0 for d in deliverables), 2),
+            "deliverables_confirmed": sum(1 for d in deliverables if d.confirmed_at is not None),
         },
         # v3.4.33 — Breakdown per fascia + per-risorsa dai booking
         "bookings_breakdown": bk_data["breakdown_total"],
@@ -984,6 +990,41 @@ async def job_cost_report(job_id: int, db: Session = Depends(get_db)):
                 ),
             }
             for l in job.cost_lines
+        ],
+        # v3.5.0-alpha.172.5 (Sprint 4 T2) — Lista Deliverable per sezione
+        # "Consegne" separata. Regole maturato distinte: total_accrued =
+        # quantity_delivered × unit_price (manuale o auto-fill MHL).
+        # Producer conferma via /jobs/api/deliverables/{id}/confirm-delivery.
+        "deliverables": [
+            {
+                "id": d.id,
+                "name": d.name,
+                "unit": d.unit,
+                "unit_nature": (d.unit_nature.value if d.unit_nature else "deliverable_qty"),
+                "unit_price": d.unit_price or 0.0,
+                "quantity_planned": d.quantity_planned or 0.0,
+                "quantity_delivered": d.quantity_delivered or 0.0,
+                "quantity_pct": round(
+                    ((d.quantity_delivered or 0) / (d.quantity_planned or 1) * 100)
+                    if (d.quantity_planned or 0) > 0 else 0.0, 1
+                ),
+                "total_quoted": round(d.total_quoted or 0.0, 2),
+                "total_accrued": round(d.total_accrued or 0.0, 2),
+                "total_cost_accrued": round(d.total_cost_accrued or 0.0, 2),
+                "real_margin": round((d.total_accrued or 0.0) - (d.total_cost_accrued or 0.0), 2),
+                "status": (d.status.value if d.status else "planned"),
+                "confirmed_at": d.confirmed_at.isoformat() if d.confirmed_at else None,
+                "target_delivery_date": str(d.target_delivery_date) if d.target_delivery_date else None,
+                "delivered_date": str(d.delivered_date) if d.delivered_date else None,
+                "billing_status": (d.billing_status.value if d.billing_status else "not_billed"),
+                "billing_batch_id": d.billing_batch_id,
+                "billed_amount": d.billed_amount,
+                "job_cost_line_id": d.job_cost_line_id,
+                "digital_asset_id": d.digital_asset_id,
+                "physical_asset_id": d.physical_asset_id,
+                "primary_resource_id": d.primary_resource_id,
+            }
+            for d in deliverables
         ],
         # v3.5.0-alpha.48: elenco BillingBatch del progetto per dare contesto
         # nel widget Fatturazione del cost report (totali per stato + link).

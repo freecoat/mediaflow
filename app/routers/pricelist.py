@@ -156,6 +156,8 @@ async def list_items(
             "department_color": i.department.color if i.department else None,
             "name": i.name, "description": i.description,
             "unit_pre": i.unit_pre, "unit": i.unit,
+            # v3.5.0-alpha.172.8 (Sprint 4 T5) — Nature derivata per UI badge.
+            "unit_nature": (i.unit_nature.value if hasattr(i.unit_nature, "value") else (i.unit_nature or "deliverable_qty")),
             "price_list": i.price_list, "price_average": i.price_average,
             "price_low": i.price_low, "hardcosts": i.hardcosts,
             "keywords": i.keywords or [],
@@ -177,6 +179,7 @@ async def get_item(item_id: int, db: Session = Depends(get_db)):
         "id": i.id, "category_id": i.category_id, "department_id": i.department_id,
         "name": i.name, "description": i.description,
         "unit_pre": i.unit_pre, "unit": i.unit,
+        "unit_nature": (i.unit_nature.value if hasattr(i.unit_nature, "value") else (i.unit_nature or "deliverable_qty")),
         "price_list": i.price_list, "price_average": i.price_average,
         "price_low": i.price_low, "hardcosts": i.hardcosts,
         "keywords": i.keywords or [],
@@ -204,6 +207,11 @@ async def create_item(
     cross_dept: Optional[bool] = Form(False),
     db: Session = Depends(get_db),
 ):
+    # v3.5.0-alpha.172.8 (Sprint 4 T5) — Deriva unit_nature da unit via helper
+    # centralizzato. Single source of truth (cost_line_sync.unit_nature_for).
+    from app.services.cost_line_sync import unit_nature_for
+    from app.models import DeliverableUnitNature
+    nature = DeliverableUnitNature(unit_nature_for(unit))
     item = PriceItem(
         tenant_id=current_tenant_id(),
         category_id=category_id,
@@ -211,6 +219,7 @@ async def create_item(
         name=name.strip(),
         description=description,
         unit=unit, unit_pre=unit_pre,
+        unit_nature=nature,
         price_list=price_list,
         price_average=price_average,
         price_low=price_low,
@@ -250,7 +259,14 @@ async def update_item(
     if department_id is not None: i.department_id = department_id if department_id else None
     if name is not None: i.name = name.strip()
     if description is not None: i.description = description
-    if unit is not None: i.unit = unit
+    if unit is not None:
+        # v3.5.0-alpha.172.8 (Sprint 4 T5) — Ricalcola unit_nature al cambio unit.
+        # Cost report / billing / quote split dipendono dal nature corretto.
+        # TODO Sprint 5: bloccare cambio se esistono QuoteLine usate.
+        from app.services.cost_line_sync import unit_nature_for
+        from app.models import DeliverableUnitNature
+        i.unit = unit
+        i.unit_nature = DeliverableUnitNature(unit_nature_for(unit))
     if unit_pre is not None: i.unit_pre = unit_pre
     if price_list is not None: i.price_list = price_list
     if price_average is not None: i.price_average = price_average

@@ -776,6 +776,19 @@
           <div id="tlb-line-meta" style="font-size:11px; color:var(--text3); margin-top:4px;"></div>
         </div>
 
+        <!-- v3.5.0-alpha.172.6 (Sprint 4 T3) — Multi-select consegne (Deliverable) linkate al booking.
+             Pivot M:N booking_deliverables. Cost split equo via deliverable_cost_sync.
+             Visibile solo se il job ha JobDeliverable. -->
+        <div class="form-group" id="tlb-deliverables-group" style="display:none;">
+          <label class="form-label">📦 Consegne linkate <span style="color:var(--text3); font-weight:normal;">(opzionale — booking contribuisce al cost split delle consegne selezionate)</span></label>
+          <div id="tlb-deliverables-list" style="max-height:180px; overflow-y:auto; background:rgba(98,114,245,0.04); border:1px solid var(--border); border-radius:6px; padding:6px 10px;">
+            <div class="text-muted text-sm" style="padding:4px 0;">— caricamento…</div>
+          </div>
+          <div class="text-xs" style="color:var(--text3); margin-top:4px;">
+            Le consegne contrassegnate riceveranno una quota del costo del booking (ore × cost_rate / N consegne linkate).
+          </div>
+        </div>
+
         <div class="form-group">
           <label class="form-label">Note</label>
           <textarea id="tlb-notes" class="form-input" rows="3" style="resize:vertical; font-family:inherit;" placeholder="Annotazioni libere, riferimenti, contatti…"></textarea>
@@ -6797,6 +6810,12 @@ async function tlbLoadBookingLines(quoteId) {
   try {
     const data = await api('GET', `/quotes/api/${quoteId}/booking-lines${qs}`);
     window._tlbCurrentBookingLines = data;
+    // v3.5.0-alpha.172.6 (Sprint 4 T3) — Carica Deliverable del job per multi-select.
+    // Se quote ha già job approved (data.job_id), mostra blocco anche in create mode.
+    if (data.job_id) {
+      const editingId = document.getElementById('tlb-editing-booking-id')?.value;
+      tlbLoadDeliverables(data.job_id, editingId || null).catch(() => {});
+    }
     if (!data.lines.length) {
       const msg = dept_ids.length
         ? `⚠ Nessuna lavorazione di questa quote per ${dept_ids.length === 1 ? 'il reparto' : 'i reparti'} delle risorse selezionate. Cambia risorsa o aggiungi una voce listino del reparto giusto in /quotes.`
@@ -7174,6 +7193,82 @@ function tlbOpen(resourceId, timeClicked) {
   openModal('modal-tl-booking');
 }
 
+// v3.5.0-alpha.172.6 (Sprint 4 T3) — Helper Deliverable multi-select.
+// Carica TUTTI i deliverable del job, marca check su quelli già linkati.
+// Stato corrente memorizzato in window._tlbLinkedDeliverableIds (Set di id)
+// = baseline al load; al submit calcoliamo add/remove dal contenuto checkbox.
+window._tlbLinkedDeliverableIds = new Set();
+async function tlbLoadDeliverables(jobId, bookingId) {
+  const group = document.getElementById('tlb-deliverables-group');
+  const list = document.getElementById('tlb-deliverables-list');
+  if (!group || !list) return;
+  window._tlbLinkedDeliverableIds = new Set();
+  if (!jobId) { group.style.display = 'none'; return; }
+  try {
+    const dlvs = await api('GET', `/jobs/api/${jobId}/deliverables`);
+    if (!Array.isArray(dlvs) || dlvs.length === 0) {
+      group.style.display = 'none';
+      return;
+    }
+    // Linked correnti (solo edit)
+    let linked = [];
+    if (bookingId) {
+      try {
+        linked = await api('GET', `/planning/api/bookings/${bookingId}/deliverables`);
+      } catch(_) { linked = []; }
+    }
+    const linkedIds = new Set((linked || []).map(l => l.deliverable_id));
+    window._tlbLinkedDeliverableIds = new Set(linkedIds);
+    // Render checkbox list
+    const rows = dlvs.map(d => {
+      const checked = linkedIds.has(d.id) ? 'checked' : '';
+      const pct = (d.quantity_planned || 0) > 0
+        ? Math.round(((d.quantity_delivered || 0) / d.quantity_planned) * 100)
+        : 0;
+      const statLbl = d.status || 'planned';
+      const nameSafe = escapeHtml(d.name || '');
+      const unitSafe = escapeHtml(d.unit || '—');
+      return `<label style="display:flex; align-items:center; gap:8px; padding:4px 0; cursor:pointer; border-bottom:1px dashed rgba(255,255,255,0.05);">
+        <input type="checkbox" class="tlb-dlv-chk" data-deliverable-id="${d.id}" ${checked}>
+        <span style="flex:1; font-size:13px;">${nameSafe} <span class="text-muted text-xs">${unitSafe} · ${pct}% · ${statLbl}</span></span>
+      </label>`;
+    }).join('');
+    list.replaceChildren();
+    list.insertAdjacentHTML('beforeend', rows);
+    group.style.display = '';
+  } catch(e) {
+    group.style.display = 'none';
+    console.warn('tlbLoadDeliverables failed:', e);
+  }
+}
+
+async function tlbSyncDeliverables(bookingId) {
+  // Calcola delta tra checkbox state e baseline → POST add, DELETE remove.
+  // Fail-soft: errori loggati ma non bloccano il flow save booking.
+  if (!bookingId) return;
+  const baseline = window._tlbLinkedDeliverableIds || new Set();
+  const checkedIds = new Set(
+    Array.from(document.querySelectorAll('#tlb-deliverables-list .tlb-dlv-chk'))
+      .filter(cb => cb.checked)
+      .map(cb => parseInt(cb.dataset.deliverableId, 10))
+  );
+  const toAdd = [...checkedIds].filter(id => !baseline.has(id));
+  const toRemove = [...baseline].filter(id => !checkedIds.has(id));
+  for (const id of toAdd) {
+    try {
+      const fd = new FormData();
+      fd.append('job_deliverable_id', String(id));
+      await api('POST', `/planning/api/bookings/${bookingId}/deliverables`, fd);
+    } catch(e) { console.warn('link deliverable failed:', id, e); }
+  }
+  for (const id of toRemove) {
+    try {
+      await api('DELETE', `/planning/api/bookings/${bookingId}/deliverables/${id}`);
+    } catch(e) { console.warn('unlink deliverable failed:', id, e); }
+  }
+  return { added: toAdd.length, removed: toRemove.length };
+}
+
 async function tlbOpenEdit(bookingId) {
   // Precarica TUTTI gli assignments del booking selezionato
   _tlbReset();
@@ -7220,6 +7315,8 @@ async function tlbOpenEdit(bookingId) {
     tlbOnStateChange();  // mostra/nascondi reason row
   }
   if (p.job_id) {
+    // v3.5.0-alpha.172.6 (Sprint 4 T3) — Multi-select Deliverable linkati al booking
+    tlbLoadDeliverables(p.job_id, bookingId).catch(() => {});
     // v3.4.53: dal Job risaliamo alla Quote (job_id resta come puntatore interno)
     try {
       const jdata = await api('GET', `/jobs/api/${p.job_id}`);
@@ -7832,6 +7929,8 @@ async function tlbSubmit() {
           toast('Stato esecuzione non aggiornato: ' + (stErr.message||''), 'warning', 4500);
         }
       }
+      // v3.5.0-alpha.172.6 (Sprint 4 T3) — Sync Deliverable linkati (fail-soft)
+      try { await tlbSyncDeliverables(editingId); } catch(_) {}
       toast('Booking aggiornato', 'success');
       // v3.5.0-alpha.63: se era richiesta estensione serie, fai la chiamata ora
       if (extendAsSeriesArgs) {
@@ -7884,6 +7983,10 @@ async function tlbSubmit() {
         try {
           await api('PATCH', `/planning/api/bookings/${created.id}/state`, stateFd);
         } catch(stErr) { /* non blocca: booking creato col status legacy */ }
+      }
+      // v3.5.0-alpha.172.6 (Sprint 4 T3) — Sync Deliverable linkati al nuovo booking
+      if (created && created.id) {
+        try { await tlbSyncDeliverables(created.id); } catch(_) {}
       }
       toast('Booking creato', 'success');
       closeModal('modal-tl-booking');

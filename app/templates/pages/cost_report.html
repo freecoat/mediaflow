@@ -150,9 +150,14 @@
   </div>
 
   <!-- v3.5.0-alpha.88 — Voci di costo FULL WIDTH (era 50% in grid-2).
-       11 colonne richiedevano scroll orizzontale → overlap con sezione sotto. -->
+       11 colonne richiedevano scroll orizzontale → overlap con sezione sotto.
+       v3.5.0-alpha.172.5 (Sprint 4 T2) — header "🔧 Lavorazioni (JCL)" per
+       distinguere da sezione "📦 Consegne" (Deliverable) sotto. -->
   <div class="card mb-4">
-    <div class="card-title mb-3">Voci di costo: Quotazione vs Reale</div>
+    <div class="card-title mb-3" style="display:flex;align-items:center;gap:8px;">
+      <span>🔧 Lavorazioni — Quotazione vs Reale</span>
+      <span class="text-xs" style="color:var(--text3);font-weight:normal;">(JCL · maturato = ore booking done × unit_price)</span>
+    </div>
     <div class="table-wrap">
       <!-- v3.5.0-alpha.111: mf-sortable per ordinamento click-su-header -->
       <table class="mf-sortable">
@@ -177,6 +182,40 @@
       </table>
     </div>
   </div>
+
+  <!-- v3.5.0-alpha.172.5 (Sprint 4 T2) — Sezione "📦 Consegne" parallela.
+       Maturato distinto: quantity_delivered × unit_price (manuale o
+       MHL auto-fill). Producer conferma via modal confirm-delivery (T4). -->
+  <div class="card mb-4" id="deliverables-card" style="display:none;">
+    <div class="card-title mb-3" style="display:flex;align-items:center;justify-content:space-between;gap:10px;">
+      <div style="display:flex;align-items:center;gap:8px;">
+        <span>📦 Consegne — Quotazione vs Consegnato</span>
+        <span class="text-xs" style="color:var(--text3);font-weight:normal;">(Deliverable · maturato = qty_delivered × unit_price)</span>
+      </div>
+      <div class="text-xs" id="deliverables-summary" style="color:var(--text3);font-weight:normal;"></div>
+    </div>
+    <div class="table-wrap">
+      <table class="mf-sortable">
+        <thead>
+          <tr>
+            <th>Deliverable</th>
+            <th>Unità</th>
+            <th class="text-right" title="Quantità pianificata">Plan</th>
+            <th class="text-right" title="Quantità consegnata (manuale o auto-fill MHL)">Cons.</th>
+            <th class="text-right" title="Σ qty_planned × unit_price">Quotato</th>
+            <th class="text-right" title="qty_delivered × unit_price">Maturato</th>
+            <th class="text-right" title="Costo stimato risorse interne (ore booking × cost_rate)">Costo</th>
+            <th class="text-right" title="Maturato − Costo">Margine</th>
+            <th>Stato</th>
+            <th>Fatt.</th>
+            <th data-no-sort="true"></th>
+          </tr>
+        </thead>
+        <tbody id="deliverables-table"></tbody>
+      </table>
+    </div>
+  </div>
+
   <!-- v3.5.0-alpha.88: card "Ore lavorate (consuntivo)" rimossa — era sempre
        vuota (deprecata da R3.5 v3.4.38, le ore canoniche sono in "Ore booking
        per fascia" sotto). -->
@@ -641,6 +680,7 @@ function onViewModeChange() {
   if (currentReport) {
     if (typeof renderKPIs === 'function') renderKPIs();
     if (typeof renderCostLines === 'function') renderCostLines();
+    if (typeof renderDeliverables === 'function') renderDeliverables();
   }
   if (typeof updateExportLinks === 'function') updateExportLinks();
 }
@@ -809,7 +849,7 @@ async function loadReport(jobId) {
     wrWrap.style.background = job.weighted_revenue ? 'rgba(168,85,247,0.12)' : 'transparent';
   }
   updateExportLinks();
-  renderKPIs(); renderCostLines(); renderResources();
+  renderKPIs(); renderCostLines(); renderDeliverables(); renderResources();
   // v3.5.0-alpha.88: renderTimesheets() rimosso (pannello deprecato α.66.66).
   renderBillingWidget();  // v3.5.0-alpha.48: widget Fatturazione (Step 3)
   renderAdvancesCard();   // v3.5.0-alpha.136: card Acconti progetto (Pattern B)
@@ -1520,6 +1560,109 @@ function renderCostLines() {
       </td>
     </tr>`;
   }).join('');
+}
+
+// v3.5.0-alpha.172.5 (Sprint 4 T2) — Renderer sezione "Consegne" (Deliverable).
+// Maturato regola diversa: qty_delivered × unit_price, NON ore booking.
+// Producer conferma manuale o auto-fill (MHL Yoyotta / CSV LTO / scan).
+function renderDeliverables() {
+  const card = document.getElementById('deliverables-card');
+  const tbody = document.getElementById('deliverables-table');
+  const summary = document.getElementById('deliverables-summary');
+  if (!card || !tbody) return;
+  const dlvs = (currentReport && currentReport.deliverables) || [];
+  if (!dlvs.length) {
+    card.style.display = 'none';
+    return;
+  }
+  card.style.display = '';
+  const s = currentReport.summary || {};
+  const dQ = s.deliverables_quoted || 0;
+  const dA = s.deliverables_accrued || 0;
+  const dC = s.deliverables_confirmed || 0;
+  if (summary) {
+    summary.textContent =
+      `${dlvs.length} consegne · ${dC} confermate · `
+      + `Quotato ${fmtCurrency(dQ)} · Maturato ${fmtCurrency(dA)}`;
+  }
+  const STATUS_BADGES = {
+    planned:       { bg: 'rgba(148,163,184,0.18)', fg: '#94a3b8', lbl: 'Pianificato' },
+    in_progress:   { bg: 'rgba(98,114,245,0.18)',  fg: '#a7b3f9', lbl: 'In lavorazione' },
+    delivered:     { bg: 'rgba(34,197,94,0.18)',   fg: '#22c55e', lbl: 'Consegnato' },
+    file_attached: { bg: 'rgba(168,85,247,0.18)',  fg: '#c084fc', lbl: 'File allegato' },
+    accepted:      { bg: 'rgba(34,197,94,0.22)',   fg: '#22c55e', lbl: 'Accettato' },
+    rejected:      { bg: 'rgba(239,68,68,0.18)',   fg: '#ef4444', lbl: 'Rifiutato' },
+  };
+  const html = dlvs.map(d => {
+    const pct = d.quantity_pct || 0;
+    const barW = Math.min(100, Math.max(0, pct));
+    const pctColor = pct >= 100 ? '#22c55e' : (pct > 0 ? '#6272f5' : 'rgba(255,255,255,0.05)');
+    const stat = STATUS_BADGES[d.status] || STATUS_BADGES.planned;
+    const statBadge = `<span class="text-xs" style="display:inline-block;padding:1px 6px;background:${stat.bg};color:${stat.fg};border-radius:8px;font-weight:600;font-size:10px;">${stat.lbl}</span>`;
+    const margin = d.real_margin || 0;
+    const marginColor = (d.total_cost_accrued || 0) > 0
+      ? (margin >= 0 ? 'var(--green)' : 'var(--rose)')
+      : 'var(--text3)';
+    const confirmBtn = (d.quantity_delivered < d.quantity_planned)
+      ? `<button class="btn btn-ghost btn-sm" title="Conferma consegna manuale" onclick="event.stopPropagation();openConfirmDeliverable(${d.id})">✓</button>`
+      : '';
+    const assetBadge = (d.digital_asset_id || d.physical_asset_id)
+      ? `<span class="text-xs" style="margin-left:6px;color:#a78bfa;" title="Asset linkato">[asset]</span>`
+      : '';
+    return `<tr style="cursor:default;">
+      <td style="min-width:240px;">
+        <div style="font-weight:500;font-size:13px;">${escapeHtml(d.name || '')}${assetBadge}</div>
+        <div style="position:relative;height:5px;background:rgba(255,255,255,0.05);border-radius:3px;margin-top:6px;">
+          <div style="position:absolute;left:0;top:0;height:100%;width:${barW}%;background:${pctColor};border-radius:3px;"></div>
+        </div>
+      </td>
+      <td class="text-sm text-muted">${escapeHtml(d.unit || '—')}</td>
+      <td class="mono text-right">${(d.quantity_planned || 0).toFixed(2)}</td>
+      <td class="mono text-right" style="color:${pct >= 100 ? 'var(--green)' : 'var(--text)'};">${(d.quantity_delivered || 0).toFixed(2)}<span class="text-xs text-muted"> (${pct.toFixed(0)}%)</span></td>
+      <td class="mono text-right">${fmtCurrency(d.total_quoted)}</td>
+      <td class="mono text-right color-green">${fmtCurrency(d.total_accrued)}</td>
+      <td class="mono text-right" style="color:${(d.total_cost_accrued||0)>0?'var(--text)':'var(--text3)'};">${(d.total_cost_accrued||0)>0?fmtCurrency(d.total_cost_accrued):'—'}</td>
+      <td class="mono text-right" style="color:${marginColor};">${(d.total_cost_accrued||0)>0?fmtCurrency(margin):'—'}</td>
+      <td>${statBadge}</td>
+      <td>${renderBillingBadge(d.billing_status, d.billing_batch_id)}</td>
+      <td>${confirmBtn}</td>
+    </tr>`;
+  }).join('');
+  tbody.replaceChildren();
+  tbody.insertAdjacentHTML('beforeend', html);
+}
+
+// Modal "Conferma consegna" stub MVP. Sprint 4 T4 (kanban) sostituirà con
+// modal completo che include linking asset + override notes.
+function openConfirmDeliverable(deliverableId) {
+  const dlv = (currentReport && currentReport.deliverables || []).find(d => d.id === deliverableId);
+  if (!dlv) return;
+  const remaining = (dlv.quantity_planned || 0) - (dlv.quantity_delivered || 0);
+  const ans = prompt(
+    `Conferma consegna "${dlv.name}"\n\n`
+    + `Pianificate: ${dlv.quantity_planned}\n`
+    + `Consegnate: ${dlv.quantity_delivered}\n`
+    + `Rimanenti: ${remaining}\n\n`
+    + `Quantità da confermare (max ${remaining}):`,
+    String(remaining)
+  );
+  if (!ans) return;
+  const qty = parseFloat(ans);
+  if (isNaN(qty) || qty <= 0) { toast('Quantità non valida', 'warning'); return; }
+  const fd = new FormData();
+  fd.append('quantity', qty);
+  fd.append('source', 'manual');
+  fetch(`/jobs/api/deliverables/${deliverableId}/confirm-delivery`, {
+    method: 'POST', body: fd, credentials: 'same-origin',
+  }).then(async r => {
+    if (!r.ok) {
+      const err = await r.json().catch(() => ({}));
+      throw new Error(err.detail || 'Errore conferma');
+    }
+    toast('✓ Consegna confermata', 'success');
+    if (typeof loadReport === 'function') loadReport(currentReport.job.id);
+    else location.reload();
+  }).catch(e => toast(e.message, 'error'));
 }
 
 // v3.5.0-alpha.62 — Rimanda al commerciale
