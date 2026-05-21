@@ -1535,6 +1535,22 @@ def _h_propose_recurring_bookings(db: Session, data: dict) -> dict:
         days = {DAYS[d.strip()[:3].upper()] for d in rule.split(",") if d.strip()}
     if not days:
         raise ValueError(f"Regola ricorrenza non valida: {rule}")
+    # v3.5.0-alpha.172.26 — Skip festività nazionali (default ON).
+    # AI Copilot non aveva visibilità su 2 giugno / 25 aprile / ecc → creava
+    # booking nel giorno festivo. Set `skip_holidays=False` per disattivare.
+    skip_holidays = data.get("skip_holidays")
+    if skip_holidays is None:
+        skip_holidays = True
+    holidays_set = set()
+    if skip_holidays:
+        try:
+            import holidays as _hol
+            country_class = getattr(_hol, "IT", None)
+            if country_class:
+                yrs = list(range(start_d.year, until_d.year + 1))
+                holidays_set = set(country_class(years=yrs).keys())
+        except Exception:
+            holidays_set = set()
     job = db.query(Job).filter(Job.id == int(job_id)).first()
     if not job:
         raise ValueError(f"Job #{job_id} non trovato")
@@ -1564,9 +1580,15 @@ def _h_propose_recurring_bookings(db: Session, data: dict) -> dict:
     title = (data.get("title") or "").strip() or f"Ricorrente {rule.lower()}"
     created = []
     skipped_conflict = []
+    skipped_holiday = []
     cur_d = start_d
     while cur_d <= until_d:
         if cur_d.weekday() in days:
+            # v3.5.0-alpha.172.26 — skip festività nazionali (Italian holidays)
+            if cur_d in holidays_set:
+                skipped_holiday.append(cur_d.isoformat())
+                cur_d += _td(days=1)
+                continue
             ns = _dt.combine(cur_d, start_t)
             ne = _dt.combine(cur_d, end_t)
             # conflict check su QUALUNQUE risorsa: se anche solo una è
@@ -1615,8 +1637,10 @@ def _h_propose_recurring_bookings(db: Session, data: dict) -> dict:
         "rule": rule, "start_date": start_d.isoformat(), "until_date": until_d.isoformat(),
         "created_count": len(created),
         "skipped_conflicts_count": len(skipped_conflict),
+        "skipped_holidays_count": len(skipped_holiday),
         "created": created[:20],
         "skipped_conflicts": skipped_conflict[:20],
+        "skipped_holidays": skipped_holiday[:20],
     }
 
 

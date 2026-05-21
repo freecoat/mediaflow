@@ -1,5 +1,23 @@
 # MediaFlow — Changelog
 
+## v3.5.0-alpha.172.26 — AI skip festività + fix ordine lista Consegne post-search (21 mag 2026)
+
+Feedback Matteo dopo test α.172.25:
+1. AI Copilot ignorava 2 giugno (Festa della Repubblica) nel booking ricorrente WEEKDAYS
+2. Lista Consegne nel modal booking: dopo ricerca, le righe si dispongono orizzontalmente invece di una sotto l'altra
+
+**Fix #1 — Skip festività italiane** (`ai_assistant.py:_h_propose_recurring_bookings`):
+- Nuovo param `skip_holidays` (default true) sul tool `propose_recurring_bookings`
+- Server interroga `holidays.IT(years=[...])` (pacchetto `holidays` già installato) per gli anni del range
+- Date festive vengono escluse + listate nel response come `skipped_holidays[]` (audit)
+- Counter `skipped_holidays_count` per UI
+
+**Fix #2 — Ordine lista Consegne** (`planning.html:tlbFilterDeliverables`):
+- `style.display = ''` faceva tornare il label a `inline` default → row in fila orizzontale
+- Sostituito con `'flex'` (e `'block'` per empty message). Layout vertical preservato post-filter.
+
+Smart split per booking ricorrenti (es. 9-18 → 9-13 + 14-18 lunch break) **non implementato** in questo commit: Matteo l'ha categorizzato come "dettaglio". In backlog.
+
 ## v3.5.0-alpha.172.25 — Fix AI: deriva job da job_cost_line_id (21 mag 2026)
 
 Bug Matteo: AI propone booking ricorrente con `job_cost_line_id=14` (Online conform DNHP) + `resource_ids=[1,5]` ma SENZA `job_id`. Apply fallisce: "job_id non risolto". JCL è univoca → conosce il suo job, ma resolver `_h_propose_recurring_bookings` non sfruttava questo path.

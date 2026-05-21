@@ -7446,11 +7446,13 @@ function tlbFilterDeliverables(query) {
     const isChecked = !!row.querySelector('input.tlb-dlv-chk:checked');
     const hay = row.getAttribute('data-search') || '';
     const match = !q || hay.indexOf(q) !== -1 || isChecked;
-    row.style.display = match ? '' : 'none';
+    // v3.5.0-alpha.172.26 — restore 'flex' invece di '' altrimenti il label
+    // torna a inline default e le row si dispongono in fila orizzontale.
+    row.style.display = match ? 'flex' : 'none';
     if (match) visible++;
   });
   const empty = document.getElementById('tlb-deliverables-empty');
-  if (empty) empty.style.display = (visible === 0 && rows.length > 0) ? '' : 'none';
+  if (empty) empty.style.display = (visible === 0 && rows.length > 0) ? 'block' : 'none';
 }
 
 async function tlbSyncDeliverables(bookingId) {

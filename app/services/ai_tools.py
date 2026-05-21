@@ -555,6 +555,7 @@ TOOLS: list[dict] = [
                 "start_time":       {"type": "string", "description": "Orario start HH:MM."},
                 "end_time":         {"type": "string", "description": "Orario end HH:MM (no overnight)."},
                 "title":            {"type": "string", "description": "Titolo opzionale, default 'Ricorrente {rule}'."},
+                "skip_holidays":    {"type": "boolean", "description": "Salta festività nazionali italiane (default true). Le date festive vengono escluse + listate nella risposta."},
             },
             "required": ["job_cost_line_id", "start_date", "until_date", "start_time", "end_time"],
         },
