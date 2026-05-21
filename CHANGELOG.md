@@ -1,5 +1,16 @@
 # MediaFlow — Changelog
 
+## v3.5.0-alpha.172.25 — Fix AI: deriva job da job_cost_line_id (21 mag 2026)
+
+Bug Matteo: AI propone booking ricorrente con `job_cost_line_id=14` (Online conform DNHP) + `resource_ids=[1,5]` ma SENZA `job_id`. Apply fallisce: "job_id non risolto". JCL è univoca → conosce il suo job, ma resolver `_h_propose_recurring_bookings` non sfruttava questo path.
+
+Fix `ai_assistant.py:_h_propose_recurring_bookings`:
+- Fallback 0 (priorità massima): `job_cost_line_id` → `JCL.job_id`
+- Ordine resolver: jcl → quote_id → quote_number → project_id
+- Errore riformulato in italiano leggibile
+
+Risultato: AI può proporre booking ricorrenti passando solo la lavorazione (campo che già ha dal context LAVORAZIONI DEI JOB), il sistema risolve job automaticamente.
+
 ## v3.5.0-alpha.172.24 — AI Copilot: linguaggio umano + opzioni lavorazione (21 mag 2026)
 
 Feedback Matteo: AI Copilot chiedeva "qual è il job_cost_line_id?" all'utente — troppo tecnico per produttore non-dev. Inoltre AI non aveva visibilità sulle lavorazioni (JCL) dei job nel context overview.

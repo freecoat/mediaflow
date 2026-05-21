@@ -1469,12 +1469,21 @@ def _h_propose_recurring_bookings(db: Session, data: dict) -> dict:
     # v3.5.0-alpha.172.15 — Resolver job_id robusto:
     # Accetta job_id diretto OPPURE quote_id/quote_number/project_id (fallback)
     # per evitare allucinazione "Job #4" su number che è Quote/Project id.
+    # v3.5.0-alpha.172.25 — Resolver esteso: se l'AI passa solo
+    # job_cost_line_id (caso comune dopo che ha visto LAVORAZIONI DEI JOB nel
+    # context), deriviamo job_id dalla JCL stessa. La JCL è univoca → 1 solo job.
     job_id = data.get("job_id")
     if not job_id:
         from app.models import Quote as _Q, Project as _P
+        # Fallback 0: job_cost_line_id → JCL.job_id
+        jcl_hint = data.get("job_cost_line_id")
+        if jcl_hint:
+            jcl_row = db.query(JobCostLine).filter(JobCostLine.id == int(jcl_hint)).first()
+            if jcl_row and jcl_row.job_id:
+                job_id = jcl_row.job_id
         # Fallback 1: quote_id
         qid = data.get("quote_id")
-        if qid:
+        if not job_id and qid:
             q = db.query(_Q).filter(_Q.id == int(qid)).first()
             if q and q.job:
                 job_id = q.job.id
@@ -1493,7 +1502,8 @@ def _h_propose_recurring_bookings(db: Session, data: dict) -> dict:
                 job_id = j.id
         if not job_id:
             raise ValueError(
-                "job_id non risolto. Passa job_id valido oppure quote_id/project_id."
+                "job non risolto. Passa job_cost_line_id (lavorazione), "
+                "quote_id o project_id."
             )
     # v3.5.0-alpha.172.17 — Multi-resource: 1 booking con N assignments
     # invece di N booking separati (evita doppia rendicontazione CR).
