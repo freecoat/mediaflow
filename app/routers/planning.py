@@ -809,16 +809,29 @@ async def delete_resource_preset(
 
 def _validate_kind_job(kind: BookingKind, job_id: Optional[int],
                        job_cost_line_id: Optional[int], db: Session):
-    """Valida coerenza kind / job_id / cost_line_id. Ritorna (job_id_clean, line_id_clean)."""
+    """Valida coerenza kind / job_id / cost_line_id. Ritorna (job_id_clean, line_id_clean).
+
+    v3.5.0-alpha.172.17 — HARD-BLOCK su `kind=project` senza `job_cost_line_id`:
+    senza una lavorazione (JCL) associata il booking non viene mai attribuito nel
+    cost report (lavoro fantasma). Applicato lato server in modo da coprire
+    POST /api/bookings, PUT /api/bookings/{id}, AI tool `propose_recurring_bookings`
+    e qualsiasi altro path che riusi questo validator.
+    """
     if kind == BookingKind.project:
         if not job_id:
             raise HTTPException(400, "Per kind=project serve job_id")
-        if job_cost_line_id:
-            line = db.query(JobCostLine).filter(JobCostLine.id == job_cost_line_id).first()
-            if not line:
-                raise HTTPException(404, "Lavorazione non trovata")
-            if line.job_id != job_id:
-                raise HTTPException(400, f"La lavorazione #{job_cost_line_id} non appartiene al job #{job_id}")
+        if not job_cost_line_id:
+            raise HTTPException(
+                400,
+                "Lavorazione (JCL) obbligatoria per booking kind=project. "
+                "Seleziona una lavorazione del job — senza JCL il booking non "
+                "viene attribuito nel cost report."
+            )
+        line = db.query(JobCostLine).filter(JobCostLine.id == job_cost_line_id).first()
+        if not line:
+            raise HTTPException(404, "Lavorazione non trovata")
+        if line.job_id != job_id:
+            raise HTTPException(400, f"La lavorazione #{job_cost_line_id} non appartiene al job #{job_id}")
         return job_id, job_cost_line_id
     return None, None
 

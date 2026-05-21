@@ -1495,9 +1495,19 @@ def _h_propose_recurring_bookings(db: Session, data: dict) -> dict:
             raise ValueError(
                 "job_id non risolto. Passa job_id valido oppure quote_id/project_id."
             )
-    rid = int(data.get("resource_id") or 0)
-    if not rid:
-        raise ValueError("resource_id obbligatorio")
+    # v3.5.0-alpha.172.17 — Multi-resource: 1 booking con N assignments
+    # invece di N booking separati (evita doppia rendicontazione CR).
+    # Back-compat: accetta `resource_id` singolo OR `resource_ids` array.
+    rids_in = data.get("resource_ids")
+    if rids_in is None:
+        rid_single = int(data.get("resource_id") or 0)
+        rids = [rid_single] if rid_single else []
+    else:
+        if not isinstance(rids_in, list):
+            raise ValueError("resource_ids deve essere un array")
+        rids = [int(r) for r in rids_in if r]
+    if not rids:
+        raise ValueError("resource_id o resource_ids obbligatorio")
     start_d = _d.fromisoformat(data["start_date"])
     until_d = _d.fromisoformat(data["until_date"])
     start_t = _t.fromisoformat(data["start_time"])
@@ -1518,11 +1528,30 @@ def _h_propose_recurring_bookings(db: Session, data: dict) -> dict:
     job = db.query(Job).filter(Job.id == int(job_id)).first()
     if not job:
         raise ValueError(f"Job #{job_id} non trovato")
-    if not db.query(Resource).filter(Resource.id == rid).first():
-        raise ValueError(f"Risorsa #{rid} non trovata")
+    for _rid in rids:
+        if not db.query(Resource).filter(Resource.id == _rid).first():
+            raise ValueError(f"Risorsa #{_rid} non trovata")
+
+    # v3.5.0-alpha.172.17 — HARD-BLOCK booking project senza JCL.
+    # I booking kind=project DEVONO essere associati a una lavorazione (JCL)
+    # del job, altrimenti il cost report non li attribuisce e si crea "lavoro
+    # fantasma". UI normale lo richiede già, AI bypassava il check.
+    jcl_id = data.get("job_cost_line_id")
+    if not jcl_id:
+        raise ValueError(
+            f"job_cost_line_id obbligatorio per booking kind=project. "
+            f"Scegli una lavorazione del Job #{job.id} ({job.code}) dal context "
+            f"(sezione JOB ATTIVI mostra le voci) o passa quote_line_id."
+        )
+    # Verifica JCL coerente col job
+    _jcl = db.query(JobCostLine).filter(JobCostLine.id == int(jcl_id)).first()
+    if not _jcl or _jcl.job_id != job.id:
+        raise ValueError(
+            f"JobCostLine #{jcl_id} non appartiene al Job #{job.id}. "
+            f"Scegli una JCL del job corretto."
+        )
 
     title = (data.get("title") or "").strip() or f"Ricorrente {rule.lower()}"
-    jcl_id = data.get("job_cost_line_id")
     created = []
     skipped_conflict = []
     cur_d = start_d
@@ -1530,38 +1559,43 @@ def _h_propose_recurring_bookings(db: Session, data: dict) -> dict:
         if cur_d.weekday() in days:
             ns = _dt.combine(cur_d, start_t)
             ne = _dt.combine(cur_d, end_t)
-            # conflict check
-            c = db.query(BookingAssignment).join(Booking).filter(
+            # conflict check su QUALUNQUE risorsa: se anche solo una è
+            # già impegnata, saltiamo il giorno. Doppia booking sulla stessa
+            # risorsa NON è ammessa (la PIANIFICAZIONE VIVA segnala duplicate).
+            conflict = db.query(BookingAssignment).join(Booking).filter(
                 Booking.status != BookingStatus.cancelled,
-                BookingAssignment.resource_id == rid,
+                BookingAssignment.resource_id.in_(rids),
                 BookingAssignment.start_datetime < ne,
                 BookingAssignment.end_datetime > ns,
             ).first()
-            if c:
+            if conflict:
                 skipped_conflict.append(cur_d.isoformat())
                 cur_d += _td(days=1)
                 continue
             from app.models import BookingState as _BSt
-            # v3.5.0-alpha.172.16 — Booking non ha campo `title` (solo `notes`).
-            # title (se fornito dall'AI) finisce in notes per tracciamento.
+            # 1 SOLO booking per occorrenza, con N assignments (1 per risorsa).
+            # Cost report aggrega correttamente: persona + studio = un solo
+            # "set" di ore lavorate, no double-count.
             b = Booking(
                 tenant_id=CURRENT_TENANT, job_id=job.id,
                 start_datetime=ns, end_datetime=ne,
                 status=BookingStatus.confirmed, kind=BookingKind.project,
-                job_cost_line_id=int(jcl_id) if jcl_id else None,
-                state=_BSt.confirmed,  # v3.5.0-alpha.66.5.1: sync state
+                job_cost_line_id=int(jcl_id),
+                state=_BSt.confirmed,
                 notes=title if title else None,
             )
             db.add(b); db.flush()
-            db.add(BookingAssignment(
-                booking_id=b.id, resource_id=rid,
-                start_datetime=ns, end_datetime=ne,
-            ))
+            for _rid in rids:
+                db.add(BookingAssignment(
+                    booking_id=b.id, resource_id=_rid,
+                    start_datetime=ns, end_datetime=ne,
+                ))
             try:
                 db.add(BookingChange(
                     booking_id=b.id, kind="ai_create_recurring",
-                    summary=f"AI recurring create ({rule}, {cur_d})",
-                    payload={"rule": rule, "date": cur_d.isoformat()},
+                    summary=f"AI recurring create ({rule}, {cur_d}, {len(rids)} risorse)",
+                    payload={"rule": rule, "date": cur_d.isoformat(),
+                             "resource_ids": rids},
                 ))
             except Exception:
                 pass

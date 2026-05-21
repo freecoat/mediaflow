@@ -1,5 +1,30 @@
 # MediaFlow — Changelog
 
+## v3.5.0-alpha.172.17 — Booking multi-risorsa AI + HARD-BLOCK JCL + filtro Consegne modal (21 mag 2026)
+
+Tre fix richiesti da Matteo dopo test α.172.16:
+1. AI Copilot creava N booking separati invece di 1 booking con N assignments quando richieste "2 risorse insieme" (es. colorist + sala color) → doppia rendicontazione nel cost report.
+2. Booking creabili senza lavorazione (JCL) → finivano fuori dal cost report (lavoro fantasma). Validazione c'era solo lato UI; AI bypassava + path PUT/extend-as-series anche.
+3. Lista Consegne nel modal booking ingestibile quando job ha molti deliverable (es. 50+ episodi).
+
+**AI tool `propose_recurring_bookings`** (`ai_assistant.py`, `ai_tools.py`):
+- Accetta `resource_ids` array (preferito) oltre a `resource_id` singolo back-compat
+- 1 booking per occorrenza con N `BookingAssignment` (no double-count CR)
+- `job_cost_line_id` ora in `required` schema + error message esplicito se mancante
+- Conflict check su `resource_id.in_(rids)` per QUALUNQUE risorsa coinvolta
+- `BookingChange` payload include `resource_ids` per audit
+
+**HARD-BLOCK server `_validate_kind_job`** (`planning.py`):
+- `kind=project` senza `job_cost_line_id` → HTTP 400 con messaggio chiaro
+- Copre POST `/api/bookings`, PUT `/api/bookings/{id}`, AI tool — single source of truth
+- DB inspect pre-rollout: 100 booking project attivi, 0 senza JCL → enforcement sicuro
+
+**Filtro Consegne modal `tlbLoadDeliverables`** (`planning.html`):
+- Search box sopra la lista checkbox Consegne (case-insensitive su nome + unit + status)
+- Righe già checked restano sempre visibili filtrando (no perdita selezione)
+- Reset campo + hide "empty" message a ogni load
+- Empty state esplicito se 0 match
+
 ## v3.5.0-alpha.172.16 — Fix propose_recurring_bookings: `title` kwarg invalido (21 mag 2026)
 
 Bug: handler `_h_propose_recurring_bookings` passava `title=title` a `Booking(...)` ma il modello non ha campo `title`. Apply falliva con `'title' is an invalid keyword argument for Booking`.

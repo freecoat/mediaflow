@@ -778,12 +778,16 @@
 
         <!-- v3.5.0-alpha.172.6 (Sprint 4 T3) — Multi-select consegne (Deliverable) linkate al booking.
              Pivot M:N booking_deliverables. Cost split equo via deliverable_cost_sync.
-             Visibile solo se il job ha JobDeliverable. -->
+             Visibile solo se il job ha JobDeliverable.
+             v3.5.0-alpha.172.17 — search box per filtrare la lista quando il job
+             ha molte consegne (es. 50+ episodi). -->
         <div class="form-group" id="tlb-deliverables-group" style="display:none;">
           <label class="form-label">📦 Consegne linkate <span style="color:var(--text3); font-weight:normal;">(opzionale — booking contribuisce al cost split delle consegne selezionate)</span></label>
+          <input type="text" id="tlb-deliverables-search" class="form-input" placeholder="🔎 Cerca consegna per nome o unità…" style="margin-bottom:6px;" oninput="tlbFilterDeliverables(this.value)">
           <div id="tlb-deliverables-list" style="max-height:180px; overflow-y:auto; background:rgba(98,114,245,0.04); border:1px solid var(--border); border-radius:6px; padding:6px 10px;">
             <div class="text-muted text-sm" style="padding:4px 0;">— caricamento…</div>
           </div>
+          <div id="tlb-deliverables-empty" class="text-muted text-xs" style="display:none; padding:4px 2px;">Nessuna consegna corrisponde alla ricerca.</div>
           <div class="text-xs" style="color:var(--text3); margin-top:4px;">
             Le consegne contrassegnate riceveranno una quota del costo del booking (ore × cost_rate / N consegne linkate).
           </div>
@@ -7220,6 +7224,8 @@ async function tlbLoadDeliverables(jobId, bookingId) {
     const linkedIds = new Set((linked || []).map(l => l.deliverable_id));
     window._tlbLinkedDeliverableIds = new Set(linkedIds);
     // Render checkbox list
+    // v3.5.0-alpha.172.17 — data-search per filtro client-side case-insensitive
+    // su nome + unità + status. Reset campo search a ogni load.
     const rows = dlvs.map(d => {
       const checked = linkedIds.has(d.id) ? 'checked' : '';
       const pct = (d.quantity_planned || 0) > 0
@@ -7228,18 +7234,42 @@ async function tlbLoadDeliverables(jobId, bookingId) {
       const statLbl = d.status || 'planned';
       const nameSafe = escapeHtml(d.name || '');
       const unitSafe = escapeHtml(d.unit || '—');
-      return `<label style="display:flex; align-items:center; gap:8px; padding:4px 0; cursor:pointer; border-bottom:1px dashed rgba(255,255,255,0.05);">
+      const searchKey = `${(d.name || '').toLowerCase()} ${(d.unit || '').toLowerCase()} ${statLbl.toLowerCase()}`;
+      return `<label class="tlb-dlv-row" data-search="${escapeHtml(searchKey)}" style="display:flex; align-items:center; gap:8px; padding:4px 0; cursor:pointer; border-bottom:1px dashed rgba(255,255,255,0.05);">
         <input type="checkbox" class="tlb-dlv-chk" data-deliverable-id="${d.id}" ${checked}>
         <span style="flex:1; font-size:13px;">${nameSafe} <span class="text-muted text-xs">${unitSafe} · ${pct}% · ${statLbl}</span></span>
       </label>`;
     }).join('');
     list.replaceChildren();
     list.insertAdjacentHTML('beforeend', rows);
+    const search = document.getElementById('tlb-deliverables-search');
+    if (search) { search.value = ''; }
+    const empty = document.getElementById('tlb-deliverables-empty');
+    if (empty) { empty.style.display = 'none'; }
     group.style.display = '';
   } catch(e) {
     group.style.display = 'none';
     console.warn('tlbLoadDeliverables failed:', e);
   }
+}
+
+// v3.5.0-alpha.172.17 — Search filter client-side per consegne nel modal booking.
+// Match case-insensitive su nome + unit + status (data-search precomputato).
+// Le righe già checked restano sempre visibili anche se non matchano (così
+// l'utente non perde la selezione corrente filtrando).
+function tlbFilterDeliverables(query) {
+  const q = (query || '').trim().toLowerCase();
+  const rows = document.querySelectorAll('#tlb-deliverables-list .tlb-dlv-row');
+  let visible = 0;
+  rows.forEach(row => {
+    const isChecked = !!row.querySelector('input.tlb-dlv-chk:checked');
+    const hay = row.getAttribute('data-search') || '';
+    const match = !q || hay.indexOf(q) !== -1 || isChecked;
+    row.style.display = match ? '' : 'none';
+    if (match) visible++;
+  });
+  const empty = document.getElementById('tlb-deliverables-empty');
+  if (empty) empty.style.display = (visible === 0 && rows.length > 0) ? '' : 'none';
 }
 
 async function tlbSyncDeliverables(bookingId) {
