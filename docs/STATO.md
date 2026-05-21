@@ -8,29 +8,37 @@
 
 ## Versione corrente
 
-**v3.5.0-alpha.172.8** — 21 maggio 2026 — Sprint 4 Restructure COMPLETE (T1→T5)
+**v3.5.0-alpha.172.9** — 21 maggio 2026 — **RESTRUCTURE 2026-05-20 COMPLETO** (Sprint 5/5)
 
-Sprint 4 di 5 chiuso. Tutta la UI utente espone la separazione strutturale Lavorazioni (JCL) vs Consegne (Deliverable).
+Tutti gli sprint del restructure JCL→Deliverable chiusi: schema → service → endpoint → UI → migration UX.
 
-**T1 — Editor quote** (`quotes.html`): tab Tutto/Lavorazioni/Consegne + split lordo + badge nature + select unit con optgroup.
-**T2 — CR detail** (`cost_report.py` + `cost_report.html`): API ritorna `deliverables[]` array. Card "📦 Consegne" sotto "🔧 Lavorazioni" con qty bar + maturato + status + confirm button.
-**T3 — Booking modal** (`planning.html`): multi-select deliverable in `modal-tl-booking`. Sync POST/DELETE pivot al save. Wiring create+edit.
-**T4 — Job kanban** (`job_detail.html`): toggle Lista/Kanban (4 colonne). Modal `modal-confirm-delivery` con qty + source + asset link.
-**T5 — Listino** (`pricelist.py` + `pricelist.html`): unit_nature derivata server-side via `unit_nature_for`. Optgroup nel modal + badge inline tabella.
+**Sprint 5 T1+T2 — Migration UX**:
+- `app/services/jcl_to_deliverable_migrator.py` (nuovo): `scan_legacy_jcl` + `migrate_jcl_to_deliverable` + `migrate_all_legacy` + `notify_admins_if_legacy`
+- 5 endpoint admin `/admin/api/restructure/*` (RequireAdmin via `hard_delete_project` perm)
+- Pagina UI `/admin/restructure-migration` con scan + batch migrate + notifica
+- `NotificationKind.legacy_jcl_non_time` enum + hook lifespan auto-check al boot
 
-**Smoke test**: 480 routes, boot clean.
+**Smoke test**: 485 routes, boot clean.
 
-## Prossimo step — Sprint 5 Migration UX
+## Prossimo step — Test E2E utente + backlog parallelo
 
-1. Tool one-shot "Sposta voce X in deliverable" per quote storiche (move JCL non-time → JobDeliverable)
-2. Notifica admin "Hai JCL non-time-based residuali: migrare a Deliverable?" (warning post-migration)
-3. Eventuali fix/polish dopo test E2E utente su sprint 1→4
+Restructure CODE COMPLETE. Aspetta test Matteo sui 5 sprint per individuare:
+- Regressioni CR/Billing/Cashflow sul flow JCL+Deliverable separati
+- UX issue nel kanban/multi-select
+- Quote storiche con voci ambigue da migrare manualmente
 
-Backlog parallelo:
-- Audit sconti category/package proporzionali split JCL/Deliverable (decisione 8.2 RESTRUCTURE)
+Backlog parallelo (non-blocking restructure):
+- Audit sconti category/package split JCL/Deliverable proporzionali (decisione 8.2)
 - AI capabilities `propose_confirm_deliverable`, `propose_link_asset_to_deliverable`
 - Drag&drop kanban Consegne (manual status transition)
 - Cashflow horizon configurabile + sub-categorie separabili (decisione 8.3)
+- Migration tool inverso "Sposta deliverable → JCL" per casi rari
+
+## (versione precedente)
+
+**v3.5.0-alpha.172.8** — 21 maggio 2026 — Sprint 4 Restructure COMPLETE (T1→T5)
+
+UI editor quote + CR detail + booking modal + job kanban + listino editor. 480 routes.
 
 ## (versione precedente)
 

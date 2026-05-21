@@ -1,0 +1,160 @@
+{% extends "base.html" %}
+{% block title %}Migrazione Restructure — MediaFlow{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+  <div class="page-header" style="margin-bottom:18px;">
+    <h1 class="page-title">🔧 Migrazione Restructure JCL → Deliverable</h1>
+    <p class="page-subtitle">Tool admin per migrare JobCostLine legacy con unit non-time-based (pc, TB, lump, allow…) a JobDeliverable. One-shot, idempotente.</p>
+  </div>
+
+  <div class="card mb-4">
+    <div class="card-title mb-3" style="display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;">
+      <span>Scan candidate</span>
+      <div style="display:flex;gap:6px;">
+        <button class="btn btn-secondary btn-sm" onclick="scanLegacy()">🔍 Scan ora</button>
+        <button class="btn btn-warning btn-sm" onclick="migrateAll()" id="btn-migrate-all" disabled>⚡ Migra tutte</button>
+        <button class="btn btn-ghost btn-sm" onclick="notifyAdmins()" title="Manda notifica agli admin (idempotente)">📣 Notifica admin</button>
+      </div>
+    </div>
+    <div id="scan-summary" style="background:rgba(98,114,245,0.05);border-left:3px solid #6272f5;padding:8px 12px;border-radius:0 4px 4px 0;margin-bottom:12px;font-size:13px;">
+      Premi "Scan ora" per cercare JCL residuali.
+    </div>
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>JCL #</th>
+            <th>Descrizione</th>
+            <th>Job</th>
+            <th class="text-right">Q.tà</th>
+            <th>Unità</th>
+            <th class="text-right">Prezzo</th>
+            <th class="text-right">Quotato</th>
+            <th>Tipo</th>
+            <th>Azione</th>
+          </tr>
+        </thead>
+        <tbody id="candidates-table">
+          <tr><td colspan="9" class="text-muted" style="text-align:center;padding:24px;">— scan non ancora eseguito —</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <div class="card mb-4">
+    <div class="card-title mb-3">ℹ Come funziona</div>
+    <ul style="font-size:13px;line-height:1.6;">
+      <li>Una JCL con unit non time-based (es. <code>pc</code>, <code>TB</code>, <code>lump</code>, <code>allow</code>) viene migrata creando <b>N JobDeliverable</b> (1 per ogni unità di <code>quantity_quoted</code>, round-int min 1).</li>
+      <li>Le <code>external_outsourced=true</code> diventano <b>1 JobDeliverable</b> unit <code>lump</code> con <code>quantity_planned</code> = <code>quantity_quoted</code>.</li>
+      <li>I booking linked alla JCL via <code>job_cost_line_id</code> vengono linkati al primo JobDeliverable spawned via pivot <code>booking_deliverables</code>.</li>
+      <li>Il <code>quantity_actual</code> della JCL viene ripartito: prime N row consegnate (qty_done=1), altre planned (qty_done=0). Stato JobDeliverable: <code>delivered</code> se qty_done&gt;0, altrimenti <code>planned</code>.</li>
+      <li>La JCL legacy NON viene cancellata: <code>total_accrued/quantity_actual/total_expected/total_cost_accrued</code> azzerate per evitare double-count.</li>
+      <li>Idempotente: se esiste già JobDeliverable linkato a una JCL, skip.</li>
+    </ul>
+  </div>
+</div>
+
+<script>
+let _lastCandidates = [];
+
+async function scanLegacy() {
+  try {
+    const r = await api('GET', '/admin/api/restructure/legacy-jcl-scan');
+    _lastCandidates = r.candidates || [];
+    const summary = document.getElementById('scan-summary');
+    summary.replaceChildren();
+    const lead = document.createElement('div');
+    lead.style.fontWeight = '600';
+    lead.textContent = r.count > 0
+      ? `Trovate ${r.count} JCL candidate per migrazione.`
+      : '✓ Nessuna JCL legacy residuale. Stato pulito.';
+    summary.appendChild(lead);
+    document.getElementById('btn-migrate-all').disabled = (r.count === 0);
+    renderCandidates();
+  } catch(e) {
+    toast(e.message || 'Errore scan', 'error');
+  }
+}
+
+function renderCandidates() {
+  const tbody = document.getElementById('candidates-table');
+  tbody.replaceChildren();
+  if (!_lastCandidates.length) {
+    tbody.insertAdjacentHTML('beforeend',
+      '<tr><td colspan="9" class="text-muted" style="text-align:center;padding:24px;">Nessuna JCL legacy trovata.</td></tr>'
+    );
+    return;
+  }
+  const rows = _lastCandidates.map(c => {
+    const ext = c.external_outsourced
+      ? '<span class="text-xs" style="background:rgba(168,85,247,0.18);color:#c084fc;padding:1px 6px;border-radius:8px;font-weight:600;">OUTSOURCED</span>'
+      : '<span class="text-xs" style="background:rgba(245,158,11,0.15);color:#f59e0b;padding:1px 6px;border-radius:8px;font-weight:600;">DELIVERABLE</span>';
+    return `<tr data-jcl-id="${c.jcl_id}">
+      <td class="mono">#${c.jcl_id}</td>
+      <td>${escapeHtml(c.description || '—')}</td>
+      <td class="mono text-sm">#${c.job_id}</td>
+      <td class="mono text-right">${(c.quantity_quoted || 0).toFixed(2)}</td>
+      <td class="text-sm text-muted">${escapeHtml(c.unit || '—')}</td>
+      <td class="mono text-right">${fmtCurrency(c.unit_price || 0)}</td>
+      <td class="mono text-right">${fmtCurrency(c.total_quoted || 0)}</td>
+      <td>${ext}</td>
+      <td><button class="btn btn-primary btn-sm" onclick="migrateOne(${c.jcl_id})">⚡ Migra</button></td>
+    </tr>`;
+  }).join('');
+  tbody.insertAdjacentHTML('beforeend', rows);
+}
+
+async function migrateOne(jclId) {
+  if (!confirm(`Migrare JCL #${jclId} a JobDeliverable?\n\nL'operazione è idempotente e azzera il maturato JCL.`)) return;
+  try {
+    const r = await api('POST', `/admin/api/restructure/migrate-jcl/${jclId}`);
+    if (r.migrated) {
+      const nDlv = (r.deliverable_ids || []).length;
+      toast(`✓ JCL #${jclId} migrata: ${nDlv} JobDeliverable, ${r.bookings_linked} booking linked`, 'success');
+      scanLegacy();
+    } else {
+      toast(`Skip: ${r.reason || 'sconosciuto'}`, 'info');
+    }
+  } catch(e) {
+    toast(e.message || 'Errore migrazione', 'error');
+  }
+}
+
+async function migrateAll() {
+  if (!_lastCandidates.length) { toast('Esegui scan prima', 'warning'); return; }
+  if (!confirm(`Migrare TUTTE le ${_lastCandidates.length} JCL legacy in batch?\n\nOperazione lunga, idempotente. Conferma per procedere.`)) return;
+  const btn = document.getElementById('btn-migrate-all');
+  btn.disabled = true; btn.textContent = '⏳ Migrazione in corso…';
+  try {
+    const s = await api('POST', '/admin/api/restructure/migrate-all');
+    const errN = (s.errors || []).length;
+    const msg = `✓ ${s.migrated} migrate · ${s.skipped} skip · `
+      + `${s.deliverables_spawned} JobDeliverable spawn · `
+      + `${s.bookings_linked} booking linked`
+      + (errN ? ` · ⚠ ${errN} errori` : '');
+    toast(msg, errN ? 'warning' : 'success', 6000);
+    scanLegacy();
+  } catch(e) {
+    toast(e.message || 'Errore batch', 'error');
+  } finally {
+    btn.disabled = false; btn.textContent = '⚡ Migra tutte';
+  }
+}
+
+async function notifyAdmins() {
+  try {
+    const r = await api('POST', '/admin/api/restructure/notify-admins');
+    if (r.notified) {
+      toast(`✓ Notifica inviata: ${r.count} JCL su ${r.jobs} job`, 'success');
+    } else {
+      toast(`Skip notifica: ${r.reason}${r.count ? ' (' + r.count + ' candidate)' : ''}`, 'info', 4000);
+    }
+  } catch(e) {
+    toast(e.message || 'Errore notifica', 'error');
+  }
+}
+
+scanLegacy();  // auto-scan al load
+</script>
+{% endblock %}

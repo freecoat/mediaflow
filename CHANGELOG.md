@@ -1,5 +1,46 @@
 # MediaFlow — Changelog
 
+## v3.5.0-alpha.172.9 — Restructure Sprint 5 COMPLETE: Migration UX (21 mag 2026)
+
+**Sprint 5 di 5 CHIUSO**. Tool runtime per migrazione JCL legacy → JobDeliverable, esposto come endpoint admin + UI + notifica automatica.
+
+**Restructure 2026-05-20 COMPLETO** (5/5 sprint chiusi): schema → service → endpoint → UI → migration UX.
+
+### T1 — Tool runtime migrate JCL non-time → Deliverable
+
+`app/services/jcl_to_deliverable_migrator.py` (nuovo):
+- `scan_legacy_jcl(db)` — query JCL con unit non-time-based, esclude già migrati
+- `migrate_jcl_to_deliverable(db, jcl_id)` — migra UNA JCL: spawn N JobDeliverable + cascade booking pivot + azzera JCL maturato. Idempotente.
+- `migrate_all_legacy(db)` — wrap batch su scan. Summary aggregato.
+
+External_outsourced=True → 1 row JobDeliverable unit `lump`. Altri → N row (qty_quoted round-int min 1). `quantity_actual` JCL ripartito sulle prime N row come `quantity_delivered`. Stato `delivered` se qty_done>0, altrimenti `planned`.
+
+### Endpoint admin (`/admin/api/restructure/*`)
+
+5 nuovi endpoint, tutti protetti `RequireAdmin` (proxy `hard_delete_project`):
+- `GET /admin/restructure-migration` — pagina HTML UI
+- `GET /admin/api/restructure/legacy-jcl-scan` — scan candidate
+- `POST /admin/api/restructure/migrate-jcl/{id}` — migra singola
+- `POST /admin/api/restructure/migrate-all` — batch
+- `POST /admin/api/restructure/notify-admins` — trigger manuale notifica
+
+### UI `/admin/restructure-migration`
+
+Pagina dedicata con:
+- Tabella scan (JCL #, descrizione, job, qty, unit, prezzo, tipo, azione)
+- Bottoni: Scan ora · Migra tutte · Notifica admin · Migra (per riga)
+- Auto-scan al load
+- Conferma utente per batch
+- Block "Come funziona" inline
+
+### T2 — Notifica admin JCL non-time residuali
+
+- `NotificationKind.legacy_jcl_non_time` aggiunto a enum (`models.py`)
+- `notify_admins_if_legacy(db)` in migrator: scan + emit `notify_permission(permission="hard_delete_project", kind=legacy_jcl_non_time, severity=action_required)`. Idempotente (skip se notifica unread pending)
+- Hook lifespan: auto-check al boot dopo `booking_assignment_listener`. Fail-soft con log.
+
+**Smoke test**: 485 routes, boot clean.
+
 ## v3.5.0-alpha.172.8 — Restructure Sprint 4 COMPLETE: UI restructure JCL/Deliverable (21 mag 2026)
 
 **Sprint 4 di 5 CHIUSO** (T1→T5). Tutta la UI utente espone la separazione strutturale lavorazioni vs consegne introdotta dal restructure.

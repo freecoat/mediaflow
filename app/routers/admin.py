@@ -613,3 +613,87 @@ async def hard_delete_project_endpoint(
         db.rollback()
         raise HTTPException(500, f"Hard-delete fallito: {e}")
 
+
+# ─────────────────────────────────────────────────────────────────
+# v3.5.0-alpha.172.9 (Sprint 5 T1+T2) — Restructure migration tools
+# Migra JCL legacy non-time-based → JobDeliverable runtime (vs script CLI).
+# ADMIN-only (proxy: permesso `hard_delete_project`).
+# ─────────────────────────────────────────────────────────────────
+
+@router.get("/restructure-migration", response_class=HTMLResponse)
+async def restructure_migration_page(
+    request: Request,
+    db: Session = Depends(get_db),
+    user: User = Depends(requires_permission("hard_delete_project")),
+):
+    """UI admin per migrare JCL residuali → JobDeliverable singolarmente o batch."""
+    return _tpl().TemplateResponse(
+        "pages/admin_restructure_migration.html",
+        {"request": request},
+    )
+
+
+@router.get("/api/restructure/legacy-jcl-scan")
+async def restructure_legacy_jcl_scan(
+    db: Session = Depends(get_db),
+    user: User = Depends(requires_permission("hard_delete_project")),
+):
+    """Ritorna lista JCL non-time candidate per migrazione."""
+    from app.services.jcl_to_deliverable_migrator import scan_legacy_jcl
+    candidates = scan_legacy_jcl(db)
+    return {
+        "count": len(candidates),
+        "candidates": candidates,
+    }
+
+
+@router.post("/api/restructure/migrate-jcl/{jcl_id}")
+async def restructure_migrate_jcl(
+    jcl_id: int,
+    db: Session = Depends(get_db),
+    user: User = Depends(requires_permission("hard_delete_project")),
+):
+    """Migra UNA JCL legacy → JobDeliverable. Idempotente."""
+    from app.services.jcl_to_deliverable_migrator import migrate_jcl_to_deliverable
+    try:
+        result = migrate_jcl_to_deliverable(db, jcl_id)
+        if result.get("migrated"):
+            db.commit()
+        return result
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(500, f"Migrazione fallita: {e}")
+
+
+@router.post("/api/restructure/migrate-all")
+async def restructure_migrate_all(
+    db: Session = Depends(get_db),
+    user: User = Depends(requires_permission("hard_delete_project")),
+):
+    """Batch: migra TUTTE le JCL legacy non-time del tenant."""
+    from app.services.jcl_to_deliverable_migrator import migrate_all_legacy
+    try:
+        summary = migrate_all_legacy(db)
+        db.commit()
+        return summary
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(500, f"Migrazione batch fallita: {e}")
+
+
+@router.post("/api/restructure/notify-admins")
+async def restructure_notify_admins(
+    db: Session = Depends(get_db),
+    user: User = Depends(requires_permission("hard_delete_project")),
+):
+    """Trigger manuale notifica admin se trova JCL legacy residuali.
+    Idempotente: skip se notifica unread già pending."""
+    from app.services.jcl_to_deliverable_migrator import notify_admins_if_legacy
+    try:
+        result = notify_admins_if_legacy(db)
+        db.commit()
+        return result
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(500, f"Notifica fallita: {e}")
+

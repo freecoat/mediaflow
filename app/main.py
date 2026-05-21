@@ -1026,6 +1026,21 @@ async def lifespan(app: FastAPI):
         booking_assignment_listener.install()
     except Exception as e:
         print(f"[lifespan] booking_assignment_listener init failed: {e}")
+    # v3.5.0-alpha.172.9 (Sprint 5 T2) — Check JCL legacy non-time-based al
+    # boot e notifica admin se trovate. Idempotente: skip se già pending.
+    try:
+        from app.database import SessionLocal
+        from app.services.jcl_to_deliverable_migrator import notify_admins_if_legacy
+        _db = SessionLocal()
+        try:
+            res = notify_admins_if_legacy(_db)
+            _db.commit()
+            if res.get("notified"):
+                print(f"[lifespan] legacy_jcl_non_time notify: {res['count']} JCL su {res['jobs']} job")
+        finally:
+            _db.close()
+    except Exception as e:
+        print(f"[lifespan] notify_admins_if_legacy failed: {e}")
     settings.upload_dir.mkdir(parents=True, exist_ok=True)
     (settings.upload_dir / "assets").mkdir(exist_ok=True)
     (settings.upload_dir / "thumbnails").mkdir(exist_ok=True)
@@ -1335,7 +1350,7 @@ async def lifespan(app: FastAPI):
     yield
 
 
-app = FastAPI(title="MediaFlow", version="3.5.0-alpha.172.8", lifespan=lifespan)
+app = FastAPI(title="MediaFlow", version="3.5.0-alpha.172.9", lifespan=lifespan)
 
 BASE_DIR = Path(__file__).parent
 app.mount("/static", StaticFiles(directory=BASE_DIR / "static"), name="static")

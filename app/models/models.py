@@ -359,6 +359,8 @@ class NotificationKind(str, enum.Enum):
     extra_after_billed = "extra_after_billed"  # → accounting + producer/manager
     # v3.5.0-alpha.111.26 — fine mese: verifica CR completati da trasmettere
     cr_eom_review = "cr_eom_review"  # → producer (ultimo giorno mese)
+    # v3.5.0-alpha.172.9 (Sprint 5) — restructure migration alert
+    legacy_jcl_non_time = "legacy_jcl_non_time"  # → admin (JCL residuali da migrare a Deliverable)
     custom = "custom"
 
 
