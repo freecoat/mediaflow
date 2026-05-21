@@ -3330,6 +3330,21 @@ async function approveAndCreateJob() {
   } catch(e) { toast(e.message, 'error'); }
 }
 
+// v3.5.0-alpha.172.10 — Fetch preview NumberingConfig con project_code/client_code
+// reali. Popola nq-number se vuoto (o se contiene preview-only senza progetto reale).
+async function _fetchNumberingPreview(projectCode, clientCode) {
+  const fd = new FormData();
+  if (projectCode) fd.append('project_code', projectCode);
+  if (clientCode) fd.append('client_code', clientCode);
+  try {
+    const r = await fetch('/settings/api/numbering/quote/preview', {
+      method: 'POST', credentials: 'same-origin', body: fd,
+    });
+    if (!r.ok) return null;
+    return await r.json();
+  } catch (_) { return null; }
+}
+
 function onProjectSelect() {
   const sel = document.getElementById('nq-project');
   const opt = sel.options[sel.selectedIndex];
@@ -3338,33 +3353,47 @@ function onProjectSelect() {
   if (!titleInput.value.trim()) {
     titleInput.value = opt.dataset.title || '';
   }
+  // v3.5.0-alpha.172.10 — Auto-numero da NumberingConfig.
+  // Estrae project_code dal label "[CODE] Title" e ri-fetcha preview reale.
+  // Pre-fix: pattern hardcoded `Q-{code}-v1` ignorava NumberingConfig.
   const numInput = document.getElementById('nq-number');
-  if (!numInput.value.trim()) {
-    const projectCode = opt.textContent.match(/\[([^\]]+)\]/);
-    if (projectCode) {
-      numInput.value = `Q-${projectCode[1]}-v1`;
-    }
+  const codeMatch = opt.textContent.match(/\[([^\]]+)\]/);
+  const projectCode = codeMatch ? codeMatch[1] : null;
+  const clientCode = opt.dataset.clientCode || null;
+  if (projectCode) {
+    _fetchNumberingPreview(projectCode, clientCode).then(prev => {
+      if (!prev || !prev.preview) return;
+      // Popola se vuoto OR se contiene placeholder «PROJ»/«CLI» da fetch iniziale
+      const cur = (numInput.value || '').trim();
+      const isPlaceholder = !cur || cur.includes('«PROJ»') || cur.includes('«CLI»');
+      if (isPlaceholder) numInput.value = prev.preview;
+      const hint = document.getElementById('nq-number-hint');
+      if (hint) {
+        hint.textContent = `Pattern attivo: ${prev.format}${prev.preview ? ` (esempio: ${prev.preview})` : ''}.`;
+      }
+    });
   }
 }
 
-// v3.5.0-alpha.121 (F7c) — Wrapper apertura modal Nuova quotazione che
-// fetcha il pattern numbering attivo da /settings/api/numbering/quote/preview
-// e lo mostra come hint sotto il campo Numero. Pre-fix: placeholder hardcoded
-// "Q-2025-0001-v1" senza riferimento al pattern realmente configurato.
+// v3.5.0-alpha.121 (F7c) — Apertura modal Nuova quotazione.
+// v3.5.0-alpha.172.10 — Pre-popola nq-number con preview NumberingConfig
+// (placeholder «PROJ»/«CLI» se progetto non ancora scelto). onProjectSelect
+// ricaricherà preview con codici reali alla selezione.
 async function openNewQuoteModal() {
   const hint = document.getElementById('nq-number-hint');
   if (hint) hint.textContent = '';
+  const numInput = document.getElementById('nq-number');
+  if (numInput) numInput.value = '';  // reset prima di refetch
   openModal('modal-new-quote');
-  try {
-    const fd = new FormData();
-    const prev = await fetch('/settings/api/numbering/quote/preview', {
-      method: 'POST', credentials: 'same-origin', body: fd,
-    }).then(r => r.json());
-    if (hint && prev && prev.format) {
-      const exMsg = prev.preview ? ` (esempio: ${prev.preview})` : '';
-      hint.textContent = `Pattern attivo: ${prev.format}${exMsg}.`;
-    }
-  } catch (e) { /* silente: hint resta vuoto, no break */ }
+  const prev = await _fetchNumberingPreview(null, null);
+  if (!prev) return;
+  if (hint && prev.format) {
+    const exMsg = prev.preview ? ` (esempio: ${prev.preview})` : '';
+    hint.textContent = `Pattern attivo: ${prev.format}${exMsg}.`;
+  }
+  if (numInput && prev.preview && !numInput.value.trim()) {
+    numInput.value = prev.preview;
+  }
 }
 
 async function createQuote() {

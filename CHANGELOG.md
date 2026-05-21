@@ -1,5 +1,19 @@
 # MediaFlow — Changelog
 
+## v3.5.0-alpha.172.10 — Fix quote auto-numero da NumberingConfig (21 mag 2026)
+
+**Bug**: modal "Nuova quotazione" non popolava il campo `Numero` con il pattern configurato in `/settings#numbering`. Pre-fix:
+- `openNewQuoteModal()` fetchava `/settings/api/numbering/quote/preview` solo per mostrare hint testuale ("Pattern attivo: Q-{YYYY}-{NNN}") sotto il campo, ma il campo restava vuoto.
+- `onProjectSelect()` valorizzava `nq-number` con pattern hardcoded `Q-{projectCode}-v1` ignorando NumberingConfig.
+
+**Fix** (`quotes.html`):
+- Nuovo helper `_fetchNumberingPreview(projectCode, clientCode)` riusabile
+- `openNewQuoteModal()`: dopo fetch preview, popola `nq-number.value = prev.preview` (con placeholder `«PROJ»`/`«CLI»` se progetto non ancora scelto)
+- `onProjectSelect()`: ri-fetch preview con `project_code` reale estratto dal label `[CODE] Title`, sostituisce placeholder se presente
+- Hint sotto il campo aggiornato dinamicamente con esempio
+
+**Effetto**: utente apre modal → vede numero auto-generato secondo pattern attivo, modificabile prima del submit.
+
 ## v3.5.0-alpha.172.9 — Restructure Sprint 5 COMPLETE: Migration UX (21 mag 2026)
 
 **Sprint 5 di 5 CHIUSO**. Tool runtime per migrazione JCL legacy → JobDeliverable, esposto come endpoint admin + UI + notifica automatica.
