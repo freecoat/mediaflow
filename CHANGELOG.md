@@ -1,5 +1,20 @@
 # MediaFlow — Changelog
 
+## v3.5.0-alpha.172.24 — AI Copilot: linguaggio umano + opzioni lavorazione (21 mag 2026)
+
+Feedback Matteo: AI Copilot chiedeva "qual è il job_cost_line_id?" all'utente — troppo tecnico per produttore non-dev. Inoltre AI non aveva visibilità sulle lavorazioni (JCL) dei job nel context overview.
+
+**Context AI esteso** (`ai_context.py`):
+- Sezione `LAVORAZIONI DEI JOB` aggiunta all'overview: per ogni job attivo, top 8 JCL con `job_cost_line_id | descrizione | unit | qty quotata`. Cap 60 entries totali.
+- Vista in-canvas job: lista completa JCL (top 30) con stessi campi.
+
+**System prompt** (`ai_tools.py`):
+- Nuova regola #7 **Linguaggio umano**: vietato menzionare `job_cost_line_id`, `quote_id`, `JCL`, `propose_*`, "fallback", "tool_result" all'utente. Usa "lavorazione di color grading", "quotazione Q-DNHP-v3", "fattura passiva".
+- Nuova regola #8 **Lavorazione obbligatoria con opzioni**: se manca `job_cost_line_id` E ci sono 2+ candidati, presentare LISTA NUMERATA leggibile in markdown (es. "1. Color grading SDR — 10 giornate quotate"), attendere scelta utente. Se 1 solo match per il task → usalo senza chiedere. Se 0 → proporre creazione voce listino.
+- Regole #9-11 riformulate per parlare di "lavorazione" non "JCL".
+
+Risultato atteso: AI propone direttamente il booking giusto su Color grading / Online conform / etc, senza chiedere ID tecnici. Se ambiguo, chiede in italiano.
+
 ## v3.5.0-alpha.172.23 — DB import: in-place rewrite per Windows + OneDrive (21 mag 2026)
 
 α.172.22 `engine.dispose()` non bastava: OneDrive sync (cartella `OneDrive\Documents\Claude\...`) tiene handle sul file durante restore, blocca `shutil.move`/`copy2` che richiedono write-exclusive lock al destinatario.

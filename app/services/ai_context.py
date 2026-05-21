@@ -200,6 +200,15 @@ def build_context(db: Session,
 - Titolo: {j.title} | Stato: {j.status}
 - Budget quotato: {_short_money(j.budget_quoted)} | A finire: {_short_money(total_expected)}
 - Voci di costo: {len(cost_lines)}""")
+            # v3.5.0-alpha.172.24 — lista JCL del job (lavorazioni) per
+            # consentire all'AI di scegliere autonomamente quale lavorazione
+            # collegare a un nuovo booking senza chiedere ID all'utente.
+            if cost_lines:
+                jcl_lines = ["Lavorazioni del job (job_cost_line_id | descrizione | unità | qty quotata):"]
+                for cl in cost_lines[:30]:
+                    desc = cl.description or (cl.price_item.name if cl.price_item else "?")
+                    jcl_lines.append(f"  {cl.id} | {desc} | {cl.unit or '?'} | {cl.quantity_quoted or 0}")
+                parts.append("\n".join(jcl_lines))
 
     # Vista d'insieme (sempre, breve, per dare consapevolezza globale)
     from datetime import date as date_type
@@ -285,6 +294,27 @@ def build_context(db: Session,
         overview.append("JOB ATTIVI (job_id | code | project_id | quote_id | status):")
         for j in job_rows:
             overview.append(f"  {j.id} | {j.code} | proj#{j.project_id} | quote#{j.quote_id or '?'} | {j.status.value if hasattr(j.status,'value') else j.status}")
+        # v3.5.0-alpha.172.24 — Lavorazioni (JCL) per ogni job attivo: AI le usa
+        # per scegliere autonomamente il job_cost_line_id su nuovi booking
+        # senza chiedere "qual è l'ID?" all'utente. Cap 60 JCL totali.
+        budget = 60
+        jcl_overview = []
+        for j in job_rows:
+            if budget <= 0:
+                break
+            jcls = list(j.cost_lines)[:8]  # top 8 per job
+            if not jcls:
+                continue
+            jcl_overview.append(f"  Job #{j.id} ({j.code}) — lavorazioni:")
+            for cl in jcls:
+                if budget <= 0:
+                    break
+                desc = cl.description or (cl.price_item.name if cl.price_item else "?")
+                jcl_overview.append(f"    jcl#{cl.id} | {desc} | {cl.unit or '?'} | qty={cl.quantity_quoted or 0}")
+                budget -= 1
+        if jcl_overview:
+            overview.append("LAVORAZIONI DEI JOB (job_cost_line_id | descrizione | unit | qty quotata):")
+            overview.extend(jcl_overview)
 
     # Lista clienti esistenti (per evitare allucinazioni di nomi)
     clients_rows = db.query(Client).filter(
