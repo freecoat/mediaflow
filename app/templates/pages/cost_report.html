@@ -154,10 +154,15 @@
        v3.5.0-alpha.172.5 (Sprint 4 T2) — header "🔧 Lavorazioni (JCL)" per
        distinguere da sezione "📦 Consegne" (Deliverable) sotto. -->
   <div class="card mb-4">
-    <div class="card-title mb-3" style="display:flex;align-items:center;gap:8px;">
-      <span>🔧 Lavorazioni — Quotazione vs Reale</span>
-      <span class="text-xs" style="color:var(--text3);font-weight:normal;">(a tempo · maturato = ore booking done × prezzo)</span>
+    <div class="card-title mb-3" style="display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;">
+      <div style="display:flex;align-items:center;gap:8px;">
+        <span>🔧 Lavorazioni — Quotazione vs Reale</span>
+        <span class="text-xs" style="color:var(--text3);font-weight:normal;">(a tempo · maturato = ore booking done × prezzo)</span>
+      </div>
+      <button type="button" class="btn btn-ghost btn-sm" id="cl-filters-toggle" onclick="toggleCostLinesFilters()">▼ Filtri</button>
     </div>
+    <!-- v3.5.0-alpha.172.13 — Filter bar Lavorazioni -->
+    <div id="cl-filters-host" style="display:none;"></div>
     <div class="table-wrap">
       <!-- v3.5.0-alpha.111: mf-sortable per ordinamento click-su-header -->
       <table class="mf-sortable">
@@ -187,13 +192,18 @@
        Maturato distinto: quantity_delivered × unit_price (manuale o
        MHL auto-fill). Producer conferma via modal confirm-delivery (T4). -->
   <div class="card mb-4" id="deliverables-card" style="display:none;">
-    <div class="card-title mb-3" style="display:flex;align-items:center;justify-content:space-between;gap:10px;">
+    <div class="card-title mb-3" style="display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;">
       <div style="display:flex;align-items:center;gap:8px;">
         <span>📦 Consegne — Quotazione vs Consegnato</span>
         <span class="text-xs" style="color:var(--text3);font-weight:normal;">(maturato = quantità consegnata × prezzo)</span>
       </div>
-      <div class="text-xs" id="deliverables-summary" style="color:var(--text3);font-weight:normal;"></div>
+      <div style="display:flex;align-items:center;gap:10px;">
+        <div class="text-xs" id="deliverables-summary" style="color:var(--text3);font-weight:normal;"></div>
+        <button type="button" class="btn btn-ghost btn-sm" id="dlv-filters-toggle" onclick="toggleDeliverablesFilters()">▼ Filtri</button>
+      </div>
     </div>
+    <!-- v3.5.0-alpha.172.13 — Filter bar Consegne -->
+    <div id="dlv-filters-host" style="display:none;"></div>
     <div class="table-wrap">
       <table class="mf-sortable">
         <thead>
@@ -1448,10 +1458,166 @@ function renderBillingBadge(status, batchId) {
   return `<span title="${tip}" style="display:inline-block; padding:2px 8px; border-radius:10px; font-size:11px; font-weight:600; color:${meta.color}; background:${meta.bg}; white-space:nowrap;">${meta.lbl}</span>`;
 }
 
+// v3.5.0-alpha.172.13 — Filtri client-side Lavorazioni + Consegne
+let _clFilters = { q: null, department_id: [], unit_nature: null, billing_status: [] };
+let _clFilterBar = null;
+let _dlvFilters = { q: null, department_id: [], status: [], billing_status: [], unit_nature: null };
+let _dlvFilterBar = null;
+
+const NATURE_OPTIONS = [
+  { value: '', label: 'Tutte le tipologie' },
+  { value: 'time_based',         label: 'A tempo' },
+  { value: 'deliverable_qty',    label: 'Consegna · Quantità' },
+  { value: 'deliverable_volume', label: 'Consegna · Volume' },
+  { value: 'manual_allow',       label: 'Consegna · Forfait' },
+];
+const BILLING_STATUS_OPTIONS_JCL = [
+  { id: 'not_billed',  name: 'Non fatturato' },
+  { id: 'in_batch',    name: 'In batch' },
+  { id: 'billed',      name: 'Fatturato' },
+  { id: 'paid',        name: 'Pagato' },
+  { id: 'extra',       name: 'Extra' },
+];
+const BILLING_STATUS_OPTIONS_DLV = [
+  { id: 'not_billed', name: 'Non fatturato' },
+  { id: 'billed',     name: 'Fatturato' },
+  { id: 'paid',       name: 'Pagato' },
+];
+const DLV_STATUS_OPTIONS = [
+  { id: 'planned',       name: 'Pianificato' },
+  { id: 'in_production', name: 'In produzione' },
+  { id: 'file_attached', name: 'File allegato' },
+  { id: 'qc_running',    name: 'QC in corso' },
+  { id: 'qc_passed',     name: 'QC passato' },
+  { id: 'qc_failed',     name: 'QC fallito' },
+  { id: 'delivered',     name: 'Consegnato' },
+  { id: 'accepted',      name: 'Accettato' },
+  { id: 'rejected',      name: 'Rifiutato' },
+];
+
+function _uniqDepartments(rows) {
+  const seen = new Map();
+  for (const r of (rows || [])) {
+    if (r.department_id && !seen.has(r.department_id)) {
+      seen.set(r.department_id, { id: r.department_id, name: r.department_name || ('Reparto #' + r.department_id) });
+    }
+  }
+  return [...seen.values()];
+}
+
+function toggleCostLinesFilters() {
+  const host = document.getElementById('cl-filters-host');
+  const btn = document.getElementById('cl-filters-toggle');
+  const open = host.style.display === 'none' || !host.style.display;
+  host.style.display = open ? '' : 'none';
+  if (btn) btn.textContent = open ? '▲ Filtri' : '▼ Filtri';
+  if (open && !_clFilterBar) {
+    const depts = _uniqDepartments(currentReport && currentReport.cost_lines || []);
+    _clFilterBar = MFFilterBar({
+      host,
+      filters: [
+        { kind: 'text', id: 'q', label: 'Cerca', placeholder: 'Descrizione, categoria…' },
+        { kind: 'autocomplete', id: 'department_id', label: 'Reparto', multi: true,
+          data: () => depts, search: (it, q) => (it.name||'').toLowerCase().includes(q),
+          display: it => it.name, placeholder: 'Tutti i reparti' },
+        { kind: 'select', id: 'unit_nature', label: 'Tipologia', searchable: false,
+          options: NATURE_OPTIONS },
+        { kind: 'autocomplete', id: 'billing_status', label: 'Fatturazione', multi: true,
+          data: () => BILLING_STATUS_OPTIONS_JCL, search: (it, q) => (it.name||'').toLowerCase().includes(q),
+          display: it => it.name, placeholder: 'Tutti gli stati' },
+      ],
+      onChange: (v) => {
+        _clFilters = {
+          q: (v.q || '').toLowerCase(),
+          department_id: Array.isArray(v.department_id) ? v.department_id : [],
+          unit_nature: v.unit_nature || null,
+          billing_status: (Array.isArray(v.billing_status) ? v.billing_status.map(String) : []),
+        };
+        renderCostLines();
+      },
+    });
+  }
+}
+
+function toggleDeliverablesFilters() {
+  const host = document.getElementById('dlv-filters-host');
+  const btn = document.getElementById('dlv-filters-toggle');
+  const open = host.style.display === 'none' || !host.style.display;
+  host.style.display = open ? '' : 'none';
+  if (btn) btn.textContent = open ? '▲ Filtri' : '▼ Filtri';
+  if (open && !_dlvFilterBar) {
+    const depts = _uniqDepartments(currentReport && currentReport.deliverables || []);
+    _dlvFilterBar = MFFilterBar({
+      host,
+      filters: [
+        { kind: 'text', id: 'q', label: 'Cerca', placeholder: 'Nome, categoria…' },
+        { kind: 'autocomplete', id: 'department_id', label: 'Reparto', multi: true,
+          data: () => depts, search: (it, q) => (it.name||'').toLowerCase().includes(q),
+          display: it => it.name, placeholder: 'Tutti i reparti' },
+        { kind: 'select', id: 'unit_nature', label: 'Tipologia', searchable: false,
+          options: NATURE_OPTIONS.filter(o => o.value !== 'time_based') },
+        { kind: 'autocomplete', id: 'status', label: 'Stato consegna', multi: true,
+          data: () => DLV_STATUS_OPTIONS, search: (it, q) => (it.name||'').toLowerCase().includes(q),
+          display: it => it.name, placeholder: 'Tutti gli stati' },
+        { kind: 'autocomplete', id: 'billing_status', label: 'Fatturazione', multi: true,
+          data: () => BILLING_STATUS_OPTIONS_DLV, search: (it, q) => (it.name||'').toLowerCase().includes(q),
+          display: it => it.name, placeholder: 'Tutti gli stati' },
+      ],
+      onChange: (v) => {
+        _dlvFilters = {
+          q: (v.q || '').toLowerCase(),
+          department_id: Array.isArray(v.department_id) ? v.department_id : [],
+          unit_nature: v.unit_nature || null,
+          status: (Array.isArray(v.status) ? v.status.map(String) : []),
+          billing_status: (Array.isArray(v.billing_status) ? v.billing_status.map(String) : []),
+        };
+        renderDeliverables();
+      },
+    });
+  }
+}
+
+function _applyClFilters(rows) {
+  return (rows || []).filter(l => {
+    if (_clFilters.q) {
+      const hay = ((l.description || '') + ' ' + (l.category || '')).toLowerCase();
+      if (!hay.includes(_clFilters.q)) return false;
+    }
+    if (_clFilters.department_id && _clFilters.department_id.length
+        && !_clFilters.department_id.includes(l.department_id)) return false;
+    if (_clFilters.unit_nature && l.unit_nature !== _clFilters.unit_nature) return false;
+    if (_clFilters.billing_status && _clFilters.billing_status.length
+        && !_clFilters.billing_status.includes(String(l.billing_status || 'not_billed'))) return false;
+    return true;
+  });
+}
+
+function _applyDlvFilters(rows) {
+  return (rows || []).filter(d => {
+    if (_dlvFilters.q) {
+      const hay = ((d.name || '') + ' ' + (d.category || '')).toLowerCase();
+      if (!hay.includes(_dlvFilters.q)) return false;
+    }
+    if (_dlvFilters.department_id && _dlvFilters.department_id.length
+        && !_dlvFilters.department_id.includes(d.department_id)) return false;
+    if (_dlvFilters.unit_nature && d.unit_nature !== _dlvFilters.unit_nature) return false;
+    if (_dlvFilters.status && _dlvFilters.status.length
+        && !_dlvFilters.status.includes(String(d.status || 'planned'))) return false;
+    if (_dlvFilters.billing_status && _dlvFilters.billing_status.length
+        && !_dlvFilters.billing_status.includes(String(d.billing_status || 'not_billed'))) return false;
+    return true;
+  });
+}
+
 function renderCostLines() {
   const tbody = document.getElementById('cost-lines-table');
-  if (!currentReport.cost_lines.length) {
-    tbody.innerHTML = '<tr><td colspan="11" class="text-muted" style="text-align:center;padding:20px;">Nessuna voce di costo</td></tr>'; return;
+  const lines = _applyClFilters(currentReport.cost_lines || []);
+  if (!lines.length) {
+    const total = (currentReport.cost_lines || []).length;
+    const msg = total > 0
+      ? `<tr><td colspan="11" class="text-muted" style="text-align:center;padding:20px;">Nessuna voce corrisponde ai filtri (${total} totali)</td></tr>`
+      : `<tr><td colspan="11" class="text-muted" style="text-align:center;padding:20px;">Nessuna voce di costo</td></tr>`;
+    tbody.innerHTML = msg; return;
   }
   // v3.5.0-alpha.55: vista Maturato/Stima. Maturato → over_under_now.
   // Stima → over_under_forecast. Convenzione: positivo=OVER (rosso),
@@ -1459,7 +1625,7 @@ function renderCostLines() {
   // v3.5.0-alpha.60: 3 colonne slice-based (billed_locked / accrued_post /
   // forecast_future) sostituiscono le precedenti Maturato + Stimato.
   const _viewKey2 = _crViewMode() === 'forecast' ? 'over_under_forecast' : 'over_under_now';
-  tbody.innerHTML = currentReport.cost_lines.map(l => {
+  tbody.innerHTML = lines.map(l => {
     const ov = (l[_viewKey2] ?? l.over_under) || 0;
     const ovSign = ov > 0 ? '+' : '';
     // v3.5.0-alpha.161 — billed_total unifica slice + advance_paid_coverage.
@@ -1570,20 +1736,32 @@ function renderDeliverables() {
   const tbody = document.getElementById('deliverables-table');
   const summary = document.getElementById('deliverables-summary');
   if (!card || !tbody) return;
-  const dlvs = (currentReport && currentReport.deliverables) || [];
-  if (!dlvs.length) {
+  const allDlvs = (currentReport && currentReport.deliverables) || [];
+  if (!allDlvs.length) {
     card.style.display = 'none';
     return;
   }
   card.style.display = '';
+  // v3.5.0-alpha.172.13 — Applica filtri client-side
+  const dlvs = _applyDlvFilters(allDlvs);
   const s = currentReport.summary || {};
   const dQ = s.deliverables_quoted || 0;
   const dA = s.deliverables_accrued || 0;
   const dC = s.deliverables_confirmed || 0;
   if (summary) {
+    const tot = allDlvs.length;
+    const filt = dlvs.length;
+    const lblCount = (filt !== tot) ? `${filt}/${tot} consegne` : `${tot} consegne`;
     summary.textContent =
-      `${dlvs.length} consegne · ${dC} confermate · `
+      `${lblCount} · ${dC} confermate · `
       + `Quotato ${fmtCurrency(dQ)} · Maturato ${fmtCurrency(dA)}`;
+  }
+  if (!dlvs.length) {
+    tbody.replaceChildren();
+    tbody.insertAdjacentHTML('beforeend',
+      `<tr><td colspan="11" class="text-muted" style="text-align:center;padding:18px;">Nessuna consegna corrisponde ai filtri (${allDlvs.length} totali)</td></tr>`
+    );
+    return;
   }
   const STATUS_BADGES = {
     planned:       { bg: 'rgba(148,163,184,0.18)', fg: '#94a3b8', lbl: 'Pianificato' },

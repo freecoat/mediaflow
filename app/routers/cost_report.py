@@ -13,7 +13,7 @@ from app.models import (
     Booking, BookingAssignment, BookingExecutionStatus, BookingOvertimeStatus, BookingStatus,
     Resource, WorkingHoursPolicy,
     BillingBatch, BillingBatchStatus, JCLBillingStatus,
-    JobDeliverable,
+    JobDeliverable, PriceItem,
     SupplierInvoice, SupplierInvoiceStatus,
 )
 from app.services.booking_cost import compute_assignment_breakdown, BookingBreakdown
@@ -464,7 +464,8 @@ async def job_cost_report(job_id: int, db: Session = Depends(get_db)):
     job = db.query(Job).options(
         joinedload(Job.client),
         joinedload(Job.quote),
-        joinedload(Job.cost_lines).joinedload(JobCostLine.price_item),
+        joinedload(Job.cost_lines).joinedload(JobCostLine.price_item).joinedload(PriceItem.department),
+        joinedload(Job.cost_lines).joinedload(JobCostLine.price_item).joinedload(PriceItem.category),
         joinedload(Job.resource_assignments).joinedload(JobResourceAssignment.resource),
     ).filter(Job.id == job_id).first()
     if not job: raise HTTPException(404, "Job non trovato")
@@ -592,6 +593,10 @@ async def job_cost_report(job_id: int, db: Session = Depends(get_db)):
     # Il cost report CLIENTE non vede questo dato (solo qty + descrizione).
     deliverables = (
         db.query(JobDeliverable)
+        .options(
+            joinedload(JobDeliverable.price_item).joinedload(PriceItem.category),
+            joinedload(JobDeliverable.price_item).joinedload(PriceItem.department),
+        )
         .filter(
             JobDeliverable.job_id == job_id,
             JobDeliverable.deleted_at.is_(None),
@@ -912,6 +917,10 @@ async def job_cost_report(job_id: int, db: Session = Depends(get_db)):
                 # v3.5.0-alpha.171.11 — Lavorazione delegata a fornitore esterno (binary on/off)
                 "external_outsourced": bool(getattr(l, "external_outsourced", False)),
                 "category": l.price_item.category.name if l.price_item and l.price_item.category else None,
+                # v3.5.0-alpha.172.13 — Per filtro UI cost report
+                "department_id": (l.price_item.department_id if l.price_item else None),
+                "department_name": (l.price_item.department.name if l.price_item and l.price_item.department else None),
+                "unit_nature": (l.price_item.unit_nature.value if l.price_item and getattr(l.price_item.unit_nature, "value", None) else (l.price_item.unit_nature if l.price_item else None)) or ("time_based" if is_time_based_unit(l.unit) else "deliverable_qty"),
                 # v3.5.0-alpha.48 — Step 3 Cost Report → Billing flow:
                 # esponiamo lo stato fatturazione + l'importo realmente
                 # fatturato (può divergere da total_accrued se manager ha
@@ -1023,6 +1032,10 @@ async def job_cost_report(job_id: int, db: Session = Depends(get_db)):
                 "digital_asset_id": d.digital_asset_id,
                 "physical_asset_id": d.physical_asset_id,
                 "primary_resource_id": d.primary_resource_id,
+                # v3.5.0-alpha.172.13 — Per filtro UI cost report
+                "department_id": (d.price_item.department_id if d.price_item else None),
+                "department_name": (d.price_item.department.name if d.price_item and d.price_item.department else None),
+                "category": (d.price_item.category.name if d.price_item and d.price_item.category else None),
             }
             for d in deliverables
         ],

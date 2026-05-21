@@ -2805,6 +2805,9 @@ class JobDeliverable(Base):
         ForeignKey("users.id"), nullable=True
     )
 
+    # v3.5.0-alpha.172.13 — relationship esplicita per filtri CR (department/category)
+    price_item: Mapped[Optional["PriceItem"]] = relationship(foreign_keys=[price_item_id])
+
 
 # ─────────────────────────────────────────────────────────────────────
 # v3.5.0-alpha.172 — Restructure (RESTRUCTURE_2026_05_20.md)

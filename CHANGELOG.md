@@ -1,5 +1,23 @@
 # MediaFlow — Changelog
 
+## v3.5.0-alpha.172.13 — Cost report: filtri Lavorazioni + Consegne (21 mag 2026)
+
+Feedback Matteo: rendere filtrabili le card Lavorazioni e Consegne nel cost report dettaglio. Filtri generici + per tipologia/reparto.
+
+**Backend** (`cost_report.py`):
+- Eager-load `PriceItem.department` + `PriceItem.category` su `cost_lines` e `deliverables`
+- `cost_lines[]` esposti con `department_id`, `department_name`, `unit_nature` (derivata da PriceItem.unit_nature o fallback da is_time_based_unit)
+- `deliverables[]` esposti con `department_id`, `department_name`, `category`
+- `JobDeliverable.price_item` relationship esplicita aggiunta al modello
+
+**Frontend** (`cost_report.html`):
+- 2 filter bar (MFFilterBar) collassabili sopra Lavorazioni + Consegne
+- Filtri Lavorazioni: testo · reparto (multi) · tipologia (single) · fatturazione (multi)
+- Filtri Consegne: testo · reparto (multi) · tipologia (single) · stato (multi) · fatturazione (multi)
+- `_applyClFilters`/`_applyDlvFilters` client-side, re-render tbody senza re-fetch
+- Empty state contestuale ("Nessuna voce corrisponde ai filtri")
+- Summary aggiornato con count filtrato/totale
+
 ## v3.5.0-alpha.172.12 — Lista quote collassa catena versioni → 1 riga + badge (21 mag 2026)
 
 Feedback Matteo: lista /quotes mostrava tutte le versioni di una catena (es. v1, v2, v3) separate quando solo v1 era marked superseded. Soluzione: collassare per catena, mostrare solo leaf.
