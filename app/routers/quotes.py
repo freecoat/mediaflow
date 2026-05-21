@@ -292,35 +292,77 @@ async def list_quotes(
     include_superseded: bool = False,
     db: Session = Depends(get_db),
 ):
-    """v3.5.0-alpha.156 — Default: nasconde versioni superseded (Quote.superseded_by_id
-    is None = ultima versione della catena). Param `include_superseded=true` per
-    forzare visualizzazione storica completa (drill versioning).
+    """v3.5.0-alpha.156 — Default: nasconde versioni superseded.
+    v3.5.0-alpha.172.12 — Default: collassa la catena versioni per `parent_quote_id`,
+    mostra solo la LEAF (ultima versione, no child) + `versions_count` nella
+    risposta. Param `include_superseded=true` espande la storia completa.
+
+    Una quote è "leaf" se:
+      - nessun'altra quote ha `parent_quote_id == self.id`
+      - AND `superseded_by_id IS NULL`
     """
     # v3.5.0-alpha.66.15.2 — tenant scope (R1)
     q = db.query(Quote).filter(
         Quote.tenant_id == current_tenant_id(),
     ).options(joinedload(Quote.client), joinedload(Quote.project))
-    if not include_superseded:
-        q = q.filter(Quote.superseded_by_id.is_(None))
     if project_id:
         q = q.filter(Quote.project_id == project_id)
-    qs = q.order_by(Quote.created_at.desc()).all()
+    all_qs = q.order_by(Quote.created_at.desc()).all()
+
+    # Pre-calcolo: per ogni quote, c'è una figlia che la referenzia come parent?
+    has_child: dict[int, bool] = {qq.id: False for qq in all_qs}
+    parent_map: dict[int, Optional[int]] = {qq.id: qq.parent_quote_id for qq in all_qs}
+    for qq in all_qs:
+        if qq.parent_quote_id and qq.parent_quote_id in has_child:
+            has_child[qq.parent_quote_id] = True
+
+    def _is_leaf(qq) -> bool:
+        return (not has_child.get(qq.id)) and (qq.superseded_by_id is None)
+
+    # Catena: count delle versioni risalendo parent_quote_id fino a root + figli.
+    # Pre-calcolo root_id per evitare hop ripetuti.
+    root_of: dict[int, int] = {}
+    def _root(qid: int) -> int:
+        if qid in root_of:
+            return root_of[qid]
+        cur = qid
+        seen = set()
+        while cur not in seen:
+            seen.add(cur)
+            p = parent_map.get(cur)
+            if not p or p == cur:
+                root_of[qid] = cur
+                return cur
+            cur = p
+        root_of[qid] = cur
+        return cur
+
+    chain_size: dict[int, int] = {}
+    for qq in all_qs:
+        r = _root(qq.id)
+        chain_size[r] = chain_size.get(r, 0) + 1
+
+    visible = all_qs if include_superseded else [qq for qq in all_qs if _is_leaf(qq)]
     return [
         {
-            "id": q.id, "number": q.number, "version": q.version,
-            "title": q.title, "status": q.status,
-            "project_id": q.project_id,
-            "project_title": q.project.title if q.project else None,
-            "client": q.client.name if q.client else None,
-            "issue_date": str(q.issue_date),
-            "valid_until": str(q.valid_until) if q.valid_until else None,
-            "subtotal": q.subtotal,
-            "total_after_discount": q.total_after_discount,
-            "total_with_vat": q.total_with_vat,
-            "has_job": q.job is not None,
-            "from_deliverables": q.generated_from_deliverables,
+            "id": qq.id, "number": qq.number, "version": qq.version,
+            "title": qq.title, "status": qq.status,
+            "project_id": qq.project_id,
+            "project_title": qq.project.title if qq.project else None,
+            "client": qq.client.name if qq.client else None,
+            "issue_date": str(qq.issue_date),
+            "valid_until": str(qq.valid_until) if qq.valid_until else None,
+            "subtotal": qq.subtotal,
+            "total_after_discount": qq.total_after_discount,
+            "total_with_vat": qq.total_with_vat,
+            "has_job": qq.job is not None,
+            "from_deliverables": qq.generated_from_deliverables,
+            # v3.5.0-alpha.172.12 — Catena versioni collassata
+            "versions_count": chain_size.get(_root(qq.id), 1),
+            "root_quote_id": _root(qq.id),
+            "is_leaf": _is_leaf(qq),
         }
-        for q in qs
+        for qq in visible
     ]
 
 

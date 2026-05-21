@@ -707,6 +707,23 @@
   </div><!-- /#quote-editor-body -->
 </div>
 
+<!-- v3.5.0-alpha.172.12: Modal storia versioni catena quote -->
+<div class="modal-overlay" id="modal-versions">
+  <div class="modal" style="max-width:560px;">
+    <div class="modal-header">
+      <span class="modal-title">📐 Catena versioni</span>
+      <button class="btn btn-ghost btn-icon" onclick="closeModal('modal-versions')">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="text-xs text-muted" style="margin-bottom:10px;">Tutte le versioni della catena (ordinate dalla più recente). La leaf è evidenziata.</div>
+      <div id="versions-modal-body" style="border:1px solid var(--border);border-radius:6px;background:var(--bg2);"></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeModal('modal-versions')">Chiudi</button>
+    </div>
+  </div>
+</div>
+
 <!-- v3.4.43: Modal duplica con scelta progetto -->
 <div class="modal-overlay" id="modal-duplicate-quote">
   <div class="modal" style="max-width:520px;">
@@ -1261,7 +1278,14 @@ function renderQuotesList() {
   if (!rows.length) {
     tbody.innerHTML = '<tr><td colspan="8" class="text-muted" style="text-align:center;padding:24px;">Nessuna quotazione corrisponde ai filtri</td></tr>'; return;
   }
-  tbody.innerHTML = rows.map(q => `
+  tbody.innerHTML = rows.map(q => {
+    // v3.5.0-alpha.172.12 — Badge "N versioni" se catena versioning > 1.
+    // Click → modal con storia versioni (riusa /api/{id}/versions).
+    const nVer = q.versions_count || 1;
+    const verBadge = (nVer > 1)
+      ? `<button class="btn btn-ghost btn-sm" onclick="event.stopPropagation();openVersionsModal(${q.id});" title="Catena ${nVer} versioni — clic per storia" style="padding:1px 7px;background:rgba(167,139,250,0.15);color:#a78bfa;border:1px solid rgba(167,139,250,0.3);border-radius:8px;font-weight:600;font-size:10px;margin-right:4px;">📐 v${q.version} · ${nVer}</button>`
+      : '';
+    return `
     <tr style="cursor:pointer;">
       <td class="mono" style="font-size:12px;" onclick="openEditor(${q.id})">${q.number}</td>
       <td style="font-weight:500;" onclick="openEditor(${q.id})">
@@ -1274,12 +1298,40 @@ function renderQuotesList() {
       <td class="mono text-right" onclick="openEditor(${q.id})">${fmtCurrency(q.total_with_vat)}</td>
       <td onclick="openEditor(${q.id})">${statusBadge(q.status)}</td>
       <td class="text-xs text-muted" style="text-align:right;white-space:nowrap;">
+        ${verBadge}
         ${q.has_job ? '<span class="badge badge-active" style="font-size:10px;">Job ✓</span>' : ''}
         <button class="btn btn-ghost btn-sm" onclick="event.stopPropagation();duplicateQuoteFromList(${q.id});" title="Duplica (scenario / template)">📋</button>
         <button class="btn btn-ghost btn-sm" onclick="event.stopPropagation();newVersionQuoteFromList(${q.id});" title="Nuova versione (legata)">📐</button>
         <button class="btn btn-ghost btn-sm color-rose" onclick="event.stopPropagation();deleteQuoteFromList(${q.id});" title="Sposta nel cestino">🗑</button>
       </td>
-    </tr>`).join('');
+    </tr>`;
+  }).join('');
+}
+
+// v3.5.0-alpha.172.12 — Modal storia versioni di una catena quote.
+// Riusa endpoint /api/{id}/versions. Click su versione → apre editor.
+async function openVersionsModal(quoteId) {
+  try {
+    const data = await api('GET', `/quotes/api/${quoteId}/versions`);
+    const body = document.getElementById('versions-modal-body');
+    body.replaceChildren();
+    const list = (data.versions || []).slice().sort((a, b) => b.version - a.version);
+    const html = list.map(v => {
+      const isCurrent = v.id === data.current_id;
+      const jobBadge = v.has_job ? `<span class="badge badge-active" style="font-size:9px;margin-left:6px;">Job ${escapeHtml(v.job_code || '')}</span>` : '';
+      return `<div style="display:flex;align-items:center;justify-content:space-between;padding:8px 10px;border-bottom:1px solid var(--border);${isCurrent ? 'background:rgba(167,139,250,0.10);' : ''}">
+        <div style="flex:1;">
+          <div style="font-weight:600;">v${v.version} · <span class="mono">${escapeHtml(v.number)}</span>${jobBadge}</div>
+          <div class="text-xs text-muted">Stato: ${escapeHtml(v.status || '')}${isCurrent ? ' · attuale leaf' : ''}</div>
+        </div>
+        <button class="btn btn-primary btn-sm" onclick="closeModal('modal-versions');openEditor(${v.id});">Apri</button>
+      </div>`;
+    }).join('');
+    body.insertAdjacentHTML('beforeend', html);
+    openModal('modal-versions');
+  } catch (e) {
+    toast(e.message || 'Errore caricamento versioni', 'error');
+  }
 }
 
 function resetQlFilters() {

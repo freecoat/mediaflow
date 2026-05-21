@@ -1,5 +1,20 @@
 # MediaFlow — Changelog
 
+## v3.5.0-alpha.172.12 — Lista quote collassa catena versioni → 1 riga + badge (21 mag 2026)
+
+Feedback Matteo: lista /quotes mostrava tutte le versioni di una catena (es. v1, v2, v3) separate quando solo v1 era marked superseded. Soluzione: collassare per catena, mostrare solo leaf.
+
+**Backend** (`/quotes/api`):
+- Filtro precedente `superseded_by_id IS NULL` non bastava: catena di draft/sent non aveva nessuna superseded
+- Nuovo algoritmo: una quote è "leaf" se nessun'altra quote ha `parent_quote_id == self.id` AND `superseded_by_id IS NULL`
+- Risposta arricchita con `versions_count`, `root_quote_id`, `is_leaf`
+- Param `include_superseded=true` ripristina visualizzazione storica completa
+
+**Frontend** (`quotes.html`):
+- Badge `📐 v{N} · {count}` nella colonna azioni se catena > 1
+- Click sul badge → nuovo modal `modal-versions` con storia completa (riusa endpoint `/api/{id}/versions`)
+- Modal mostra ogni versione + stato + job link + bottone "Apri editor" per ogni versione
+
 ## v3.5.0-alpha.172.11 — UI label leggibili: sigle JCL/DEL → Lav/Cons (21 mag 2026)
 
 Feedback Matteo: sigle JCL/DEL gergali nei badge unit (editor quote, listino, cost report) non significative per utente finale.
