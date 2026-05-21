@@ -1,5 +1,26 @@
 # MediaFlow — Changelog
 
+## v3.5.0-alpha.172.11 — UI label leggibili: sigle JCL/DEL → Lav/Cons (21 mag 2026)
+
+Feedback Matteo: sigle JCL/DEL gergali nei badge unit (editor quote, listino, cost report) non significative per utente finale.
+
+**Cambi UI** (no breaking, no DB):
+- Badge inline `quotes.html`: `JCL` → `Lav`, `DEL` → `Cons`
+- Badge inline `pricelist.html` (tabella): stesso rename
+- `NATURE_LABELS` pricelist modal:
+  - `JCL · Lavorazione` → `Lavorazione (a tempo)`
+  - `DEL · Quantità` → `Consegna · Quantità`
+  - `DEL · Volume` → `Consegna · Volume`
+  - `DEL · Forfait` → `Consegna · Forfait`
+- Optgroup unit select (quote + pricelist modal):
+  - `Lavorazione (JCL)` → `Lavorazione (a tempo)`
+  - `Consegna (Deliverable)` → `Consegna`
+- Cost report card-header:
+  - `(JCL · maturato = ore booking done × unit_price)` → `(a tempo · maturato = ore booking done × prezzo)`
+  - `(Deliverable · maturato = qty_delivered × unit_price)` → `(maturato = quantità consegnata × prezzo)`
+
+Terminologia tecnica (JCL, JobDeliverable, JCLBilledSlice) resta in codice/log/tooltip developer, fuori dalla UI utente.
+
 ## v3.5.0-alpha.172.10 — Fix quote auto-numero da NumberingConfig (21 mag 2026)
 
 **Bug**: modal "Nuova quotazione" non popolava il campo `Numero` con il pattern configurato in `/settings#numbering`. Pre-fix:

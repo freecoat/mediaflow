@@ -254,11 +254,11 @@
           <!-- v3.5.0-alpha.172.8 (Sprint 4 T5) — optgroup Lavorazione/Consegna,
                badge nature derivata da unit_nature_for(). -->
           <select class="form-select" id="it-unit" onchange="updateItemNatureBadge()">
-            <optgroup label="Lavorazione (JCL)">
+            <optgroup label="Lavorazione (a tempo)">
               <option value="day">day</option>
               <option value="hr">hr</option>
             </optgroup>
-            <optgroup label="Consegna (Deliverable)">
+            <optgroup label="Consegna">
               <option value="pc">pc</option>
               <option value="lot">lot</option>
               <option value="shot">shot</option>
@@ -519,16 +519,16 @@ const UNIT_NATURE_MAP = {
   min: 'manual_allow',
 };
 const NATURE_LABELS = {
-  time_based:         { lbl: 'JCL · Lavorazione',           bg: 'rgba(34,197,94,0.15)',  fg: '#22c55e', hint: 'Maturato = ore booking done × unit_price. Genera JobCostLine.' },
-  deliverable_qty:    { lbl: 'DEL · Quantità',              bg: 'rgba(245,158,11,0.15)', fg: '#f59e0b', hint: 'Maturato = quantity_delivered × unit_price. Conferma manuale.' },
-  deliverable_volume: { lbl: 'DEL · Volume',                bg: 'rgba(168,85,247,0.15)', fg: '#c084fc', hint: 'Maturato = volume_delivered × unit_price. Auto-fill MHL Yoyotta.' },
-  manual_allow:       { lbl: 'DEL · Forfait',               bg: 'rgba(98,114,245,0.15)', fg: '#a7b3f9', hint: 'Forfait — solo conferma manuale producer.' },
+  time_based:         { lbl: 'Lavorazione (a tempo)',       bg: 'rgba(34,197,94,0.15)',  fg: '#22c55e', hint: 'Maturato = ore booking done × prezzo unitario.' },
+  deliverable_qty:    { lbl: 'Consegna · Quantità',         bg: 'rgba(245,158,11,0.15)', fg: '#f59e0b', hint: 'Maturato = quantità consegnata × prezzo unitario. Conferma manuale.' },
+  deliverable_volume: { lbl: 'Consegna · Volume',           bg: 'rgba(168,85,247,0.15)', fg: '#c084fc', hint: 'Maturato = volume consegnato × prezzo unitario. Auto-fill MHL Yoyotta.' },
+  manual_allow:       { lbl: 'Consegna · Forfait',          bg: 'rgba(98,114,245,0.15)', fg: '#a7b3f9', hint: 'Forfait — solo conferma manuale producer.' },
 };
 function _natureBadgeHtml(nature) {
   // v3.5.0-alpha.172.8 (Sprint 4 T5) — Badge inline per riga listino.
   if (!nature) nature = 'deliverable_qty';
   const info = NATURE_LABELS[nature] || NATURE_LABELS.deliverable_qty;
-  return ` <span style="display:inline-block;font-size:9px;font-weight:700;padding:1px 5px;border-radius:7px;margin-left:4px;background:${info.bg};color:${info.fg};">${nature === 'time_based' ? 'JCL' : 'DEL'}</span>`;
+  return ` <span style="display:inline-block;font-size:9px;font-weight:700;padding:1px 5px;border-radius:7px;margin-left:4px;background:${info.bg};color:${info.fg};">${nature === 'time_based' ? 'Lav' : 'Cons'}</span>`;
 }
 function updateItemNatureBadge() {
   const u = (document.getElementById('it-unit').value || '').toLowerCase();

@@ -1867,8 +1867,8 @@ function renderLineRow(l) {
   const nat = _lineNature(l);
   const isJcl = nat === 'time_based';
   const natBadge = isJcl
-    ? `<span class="ql-nature-badge nature-jcl" title="Lavorazione: maturato da ore booking">JCL</span>`
-    : `<span class="ql-nature-badge nature-del" title="Consegna: maturato manuale o auto-fill">DEL</span>`;
+    ? `<span class="ql-nature-badge nature-jcl" title="Lavorazione: maturato da ore booking">Lav</span>`
+    : `<span class="ql-nature-badge nature-del" title="Consegna: maturato manuale o auto-fill">Cons</span>`;
   const optBadge = isOpt
     ? `<span class="ql-opt-badge" title="Voce opzionale: totale escluso dal subtotale">Opzionale</span>`
     : '';
@@ -1903,11 +1903,11 @@ function renderLineRow(l) {
       <td>
         <div style="display:flex;align-items:center;gap:4px;">
           <select class="inline-edit mono" data-field="unit" onchange="saveLineField(this)" style="font-size:12px;padding:2px 4px;">
-            <optgroup label="Lavorazione (JCL)">
+            <optgroup label="Lavorazione (a tempo)">
               <option value="day"${l.unit==='day'?' selected':''}>day</option>
               <option value="hr"${l.unit==='hr'?' selected':''}>hr</option>
             </optgroup>
-            <optgroup label="Consegna (Deliverable)">
+            <optgroup label="Consegna">
               <option value="pc"${l.unit==='pc'?' selected':''}>pc</option>
               <option value="lot"${l.unit==='lot'?' selected':''}>lot</option>
               <option value="shot"${l.unit==='shot'?' selected':''}>shot</option>
