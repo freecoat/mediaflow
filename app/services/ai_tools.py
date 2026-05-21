@@ -542,9 +542,12 @@ TOOLS: list[dict] = [
         "input_schema": {
             "type": "object",
             "properties": {
-                "job_id":           {"type": "integer", "description": "Job di destinazione."},
+                "job_id":           {"type": "integer", "description": "Job di destinazione (preferito). Se assente, sarà risolto da quote_id/quote_number/project_id."},
+                "quote_id":         {"type": "integer", "description": "Fallback: quote.id linkata al job (resolver server-side quote.job.id)."},
+                "quote_number":     {"type": "string", "description": "Fallback: numero quote (es. 'Q-2026-001')."},
+                "project_id":       {"type": "integer", "description": "Fallback: project.id (prende job approved più recente del project)."},
                 "job_cost_line_id": {"type": "integer", "description": "Riga di costo opzionale (cost report sync)."},
-                "resource_id":      {"type": "integer", "description": "Risorsa unica per tutte le occorrenze."},
+                "resource_id":      {"type": "integer", "description": "Risorsa unica per tutte le occorrenze. Vedi RISORSE ATTIVE nel context per role+department."},
                 "rule":             {"type": "string", "description": "DAILY | WEEKDAYS (default) | WEEKENDS | CSV es. 'MON,WED,FRI'"},
                 "start_date":       {"type": "string", "description": "Prima data YYYY-MM-DD."},
                 "until_date":       {"type": "string", "description": "Ultima data YYYY-MM-DD (inclusa)."},
@@ -552,7 +555,7 @@ TOOLS: list[dict] = [
                 "end_time":         {"type": "string", "description": "Orario end HH:MM (no overnight)."},
                 "title":            {"type": "string", "description": "Titolo opzionale, default 'Ricorrente {rule}'."},
             },
-            "required": ["job_id", "resource_id", "start_date", "until_date", "start_time", "end_time"],
+            "required": ["resource_id", "start_date", "until_date", "start_time", "end_time"],
         },
         "handler": "propose_recurring_bookings",
     },
@@ -1063,4 +1066,6 @@ Per **CREARE** nuovi booking singoli usa `propose_booking` (esistente).
 6. **Booking ricorrenti**: per richieste tipo "online editor lun-ven 9-18 per 4 settimane", USA `propose_recurring_bookings` (un singolo Apply) invece di proporre 20 booking singoli.
 7. **Uso del job_cost_line_id**: quando crei booking su un job, prova a collegarlo a una `job_cost_line_id` esistente (visibile nel context del job). Permette al cost report di tracciare le ore correttamente.
 8. **JCL fatturate sono LOCKED**: se un booking ha JCL `in_batch`/`billed`/`paid`, le capability move/resize/delete/bulk_move falliscono con errore esplicativo. NON insistere — chiedi al manager di ritirare il batch prima.
+9. **MATCH RUOLO RISORSA con tipo lavorazione**: la sezione `RISORSE ATTIVE` mostra `role` di ogni risorsa (colorist, online editor, sound designer, ...) e `type` (person_internal/studio/equipment/...). USA il `role` per decidere chi fa cosa. Es. "color grading" → cerca risorsa con role `colorist`. Es. "online conform" → role `online editor`. Per studio/sale: usa il `type=studio` filtrato per `department` coerente (Color/Grading per colorist, Online/Conform per editor). NON inventare ruoli/risorse non presenti.
+10. **Job_id da QUOTE**: la sezione `JOB ATTIVI` mappa `job_id ↔ quote_id ↔ project_id`. Quando proponi `propose_recurring_bookings`/`propose_booking`, usa il `job_id` corretto (non confonderlo con quote_id o project_id). In alternativa puoi passare `quote_id`/`project_id` come fallback — il server risolve automaticamente.
 """

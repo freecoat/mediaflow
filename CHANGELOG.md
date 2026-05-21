@@ -1,5 +1,26 @@
 # MediaFlow — Changelog
 
+## v3.5.0-alpha.172.15 — AI Copilot: context risorse+job + job_id resolver (21 mag 2026)
+
+Feedback Matteo: AI inventava ruoli risorse (colorist su online editor) e proponeva booking ricorrenti su "Job #4" che non esisteva (confondeva quote_id con job_id). Apply falliva con "Job #4 non trovato".
+
+**Context AI esteso** (`ai_context.py`):
+- Nuova sezione `RISORSE ATTIVE (id | name | role | type | department)` — top 60 risorse attive
+- Nuova sezione `JOB ATTIVI (job_id | code | project_id | quote_id | status)` — top 30 job approved/active
+- Permette all'AI di mappare role↔task (colorist↔color, online editor↔conform) e quote_id↔job_id senza guess
+
+**Handler `propose_recurring_bookings`** (`ai_assistant.py`):
+- Resolver job_id robusto: accetta `quote_id` / `quote_number` / `project_id` come fallback
+- Server risolve automaticamente quote.job.id o job approved più recente del project
+- Error message esplicito se nessun fallback risolve
+- `job_id` non più nei `required` (basta resource_id + date + ore)
+
+**Tool spec** (`ai_tools.py`):
+- Schema aggiornato con quote_id/quote_number/project_id come parametri fallback
+- 2 nuove regole prompt:
+  - **#9 MATCH RUOLO**: AI usa `role` da RISORSE ATTIVE per decidere chi fa cosa (colorist→color, online editor→conform)
+  - **#10 Job_id da QUOTE**: AI ricava job_id da JOB ATTIVI mapping invece di guess
+
 ## v3.5.0-alpha.172.14 — Spawn deliverable per nature: volume/forfait aggregati (21 mag 2026)
 
 Feedback Matteo: data transfer (TB/GB) e forfait (allow/lump/fix) trattati come N row separate è errato semanticamente. Volume cumulativo (es. 10 TB backup) deve essere 1 entità con qty_delivered che cresce via MHL Yoyotta / scan / manuale. Idem per forfait/lump.

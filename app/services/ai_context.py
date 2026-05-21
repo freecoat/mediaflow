@@ -258,6 +258,34 @@ def build_context(db: Session,
         if n_items > PRICELIST_LIMIT:
             overview.append(f"  …(altre {n_items - PRICELIST_LIMIT} voci omesse — chiedi all'utente se serve cercare oltre)")
 
+    # v3.5.0-alpha.172.15 — Risorse attive con role + dept (per assegnazioni
+    # corrette in propose_recurring_bookings / propose_booking).
+    # Pre-fix l'AI vedeva solo `name` + count → allucinava ruoli (colorist su
+    # online editor, scambio reparti).
+    res_rows = (db.query(Resource).filter(
+        Resource.tenant_id == CURRENT_TENANT,
+        Resource.is_active == True,
+    ).order_by(Resource.id).limit(60).all())
+    if res_rows:
+        overview.append("RISORSE ATTIVE (id | name | role | type | department):")
+        for r in res_rows:
+            role = (r.role or "—")
+            rtype = (r.type.value if hasattr(r.type, "value") else str(r.type or "—"))
+            dept = (r.department.name if r.department else "—")
+            overview.append(f"  {r.id} | {r.name} | {role} | {rtype} | {dept}")
+
+    # v3.5.0-alpha.172.15 — Job attivi con quote+project (per evitare confusione
+    # quote_id↔job_id nei propose_recurring_bookings). AI ricava Job.id da
+    # Quote.id senza guess.
+    job_rows = (db.query(Job)
+        .filter(Job.tenant_id == CURRENT_TENANT,
+                Job.status.in_([JobStatus.approved, JobStatus.active]))
+        .order_by(Job.id.desc()).limit(30).all())
+    if job_rows:
+        overview.append("JOB ATTIVI (job_id | code | project_id | quote_id | status):")
+        for j in job_rows:
+            overview.append(f"  {j.id} | {j.code} | proj#{j.project_id} | quote#{j.quote_id or '?'} | {j.status.value if hasattr(j.status,'value') else j.status}")
+
     # Lista clienti esistenti (per evitare allucinazioni di nomi)
     clients_rows = db.query(Client).filter(
         Client.tenant_id == CURRENT_TENANT,

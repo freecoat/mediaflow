@@ -1466,9 +1466,35 @@ def _h_propose_recurring_bookings(db: Session, data: dict) -> dict:
     CURRENT_TENANT = 1
     DAYS = {"MON": 0, "TUE": 1, "WED": 2, "THU": 3, "FRI": 4, "SAT": 5, "SUN": 6}
 
+    # v3.5.0-alpha.172.15 — Resolver job_id robusto:
+    # Accetta job_id diretto OPPURE quote_id/quote_number/project_id (fallback)
+    # per evitare allucinazione "Job #4" su number che è Quote/Project id.
     job_id = data.get("job_id")
     if not job_id:
-        raise ValueError("job_id obbligatorio")
+        from app.models import Quote as _Q, Project as _P
+        # Fallback 1: quote_id
+        qid = data.get("quote_id")
+        if qid:
+            q = db.query(_Q).filter(_Q.id == int(qid)).first()
+            if q and q.job:
+                job_id = q.job.id
+        # Fallback 2: quote_number
+        if not job_id and data.get("quote_number"):
+            q = db.query(_Q).filter(_Q.number == str(data["quote_number"])).first()
+            if q and q.job:
+                job_id = q.job.id
+        # Fallback 3: project_id (prendi job approved più recente)
+        if not job_id and data.get("project_id"):
+            j = (db.query(Job)
+                 .filter(Job.project_id == int(data["project_id"]),
+                         Job.status.in_([JobStatus.approved, JobStatus.active]))
+                 .order_by(Job.id.desc()).first())
+            if j:
+                job_id = j.id
+        if not job_id:
+            raise ValueError(
+                "job_id non risolto. Passa job_id valido oppure quote_id/project_id."
+            )
     rid = int(data.get("resource_id") or 0)
     if not rid:
         raise ValueError("resource_id obbligatorio")
