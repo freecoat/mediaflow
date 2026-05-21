@@ -206,6 +206,13 @@ def _line_category(line: QuoteLine) -> str:
     return CATEGORY_FALLBACK
 
 
+# v3.5.0-alpha.172.4 (Sprint 4 T1) — Alias del helper centralizzato per
+# evitare import cross-module ripetuti nei serializer JSON.
+def _unit_nature(unit: Optional[str]) -> str:
+    from app.services.cost_line_sync import unit_nature_for
+    return unit_nature_for(unit)
+
+
 def _recalc_quote(quote: Quote) -> None:
     """
     Cascata sconti:
@@ -222,8 +229,13 @@ def _recalc_quote(quote: Quote) -> None:
     subtotal / total_after_discount / total_with_vat. Sono mostrate in un
     blocco "Optional aggiuntivi" separato (UI + PDF).
     """
+    from app.services.cost_line_sync import unit_nature_for
     cat_disc = quote.category_discounts or {}
     subtotal_gross = 0.0
+    # v3.5.0-alpha.172.4 (Sprint 4 T1) — split lordo JCL vs Deliverable.
+    # JCL = unit time_based (hr/day/...). Deliverable = il resto (pc/TB/lump/...).
+    subtotal_gross_jcl = 0.0
+    subtotal_gross_deliverable = 0.0
     cat_buckets: dict[str, float] = {}
 
     for l in quote.lines:
@@ -233,6 +245,10 @@ def _recalc_quote(quote: Quote) -> None:
         if l.is_optional:
             continue  # totale calcolato ma fuori dai subtotali
         subtotal_gross += gross
+        if unit_nature_for(l.unit) == "time_based":
+            subtotal_gross_jcl += gross
+        else:
+            subtotal_gross_deliverable += gross
         cat_key = _line_category(l)
         cat_buckets[cat_key] = cat_buckets.get(cat_key, 0.0) + net_after_line
 
@@ -245,6 +261,8 @@ def _recalc_quote(quote: Quote) -> None:
     total_with_vat = total_after * (1 + (quote.vat_rate or 0.0) / 100)
 
     quote.subtotal_gross = round(subtotal_gross, 2)
+    quote.subtotal_gross_jcl = round(subtotal_gross_jcl, 2)
+    quote.subtotal_gross_deliverable = round(subtotal_gross_deliverable, 2)
     quote.subtotal = round(subtotal_after_cat, 2)
     quote.total_after_discount = round(total_after, 2)
     quote.total_with_vat = round(total_with_vat, 2)
@@ -659,6 +677,9 @@ async def get_quote(quote_id: int, db: Session = Depends(get_db)):
         "category_discounts": q.category_discounts or {},
         "category_order": q.category_order or [],
         "subtotal_gross": q.subtotal_gross,
+        # v3.5.0-alpha.172.4 (Sprint 4 T1) — split JCL/Deliverable per editor tabs
+        "subtotal_gross_jcl": getattr(q, "subtotal_gross_jcl", 0.0) or 0.0,
+        "subtotal_gross_deliverable": getattr(q, "subtotal_gross_deliverable", 0.0) or 0.0,
         "subtotal": q.subtotal,
         "total_after_discount": q.total_after_discount,
         "total_with_vat": q.total_with_vat,
@@ -696,6 +717,9 @@ async def get_quote(quote_id: int, db: Session = Depends(get_db)):
                 # v3.5.0-alpha.64: link a JCL d'origine se la riga è nata da
                 # refer-to-sales (badge "↪ Da JCL #X" cliccabile).
                 "referred_from_jcl_id": l.referred_from_jcl_id,
+                # v3.5.0-alpha.172.4 (Sprint 4 T1) — nature derivata dall'unit
+                # per filtro tab Lavorazioni (time_based) / Consegne (resto).
+                "unit_nature": _unit_nature(l.unit),
             }
             for l in sorted(q.lines, key=lambda x: x.sort_order)
         ],
@@ -1216,6 +1240,8 @@ async def update_category_discount(
         "category_discounts": q.category_discounts or {},
         "category_order": q.category_order or [],
         "subtotal_gross": q.subtotal_gross,
+        "subtotal_gross_jcl": getattr(q, "subtotal_gross_jcl", 0.0) or 0.0,
+        "subtotal_gross_deliverable": getattr(q, "subtotal_gross_deliverable", 0.0) or 0.0,
         "subtotal": q.subtotal,
         "total_after_discount": q.total_after_discount,
         "total_with_vat": q.total_with_vat,
@@ -1345,7 +1371,10 @@ async def add_quote_line(
     db.commit()
     return {
         "id": line.id, "total": line.total, "quote_total": q.total_with_vat,
-        "subtotal_gross": q.subtotal_gross, "subtotal": q.subtotal,
+        "subtotal_gross": q.subtotal_gross,
+        "subtotal_gross_jcl": getattr(q, "subtotal_gross_jcl", 0.0) or 0.0,
+        "subtotal_gross_deliverable": getattr(q, "subtotal_gross_deliverable", 0.0) or 0.0,
+        "subtotal": q.subtotal,
         "total_after_discount": q.total_after_discount,
         "total_with_vat": q.total_with_vat,
         "subtotal_optional": round(
@@ -1539,7 +1568,10 @@ async def update_quote_line(
     db.commit()
     return {
         "id": line.id, "total": line.total,
-        "subtotal_gross": q.subtotal_gross, "subtotal": q.subtotal,
+        "subtotal_gross": q.subtotal_gross,
+        "subtotal_gross_jcl": getattr(q, "subtotal_gross_jcl", 0.0) or 0.0,
+        "subtotal_gross_deliverable": getattr(q, "subtotal_gross_deliverable", 0.0) or 0.0,
+        "subtotal": q.subtotal,
         "total_after_discount": q.total_after_discount,
         "total_with_vat": q.total_with_vat,
         "subtotal_optional": round(

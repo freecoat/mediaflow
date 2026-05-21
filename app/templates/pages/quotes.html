@@ -84,6 +84,37 @@
     background: transparent; border: 1px solid var(--border); border-radius: 3px;
     font-family: 'DM Mono', monospace; font-size: 12px; color: var(--text);
   }
+  /* v3.5.0-alpha.172.4 (Sprint 4 T1) — Tab Lavorazioni/Consegne */
+  .quote-tabs .qt-tab {
+    background: transparent; border: 1px solid transparent; border-bottom: 0;
+    color: var(--text2); font-size: 13px; font-weight: 500;
+    padding: 6px 14px; cursor: pointer; border-radius: 5px 5px 0 0;
+    display: inline-flex; align-items: center; gap: 6px;
+    transition: background 0.12s, color 0.12s;
+  }
+  .quote-tabs .qt-tab:hover { background: rgba(98,114,245,0.08); color: var(--text); }
+  .quote-tabs .qt-tab.active {
+    background: var(--bg2); color: var(--indigo2); font-weight: 600;
+    border-color: var(--border); border-bottom-color: var(--bg2);
+    margin-bottom: -1px;
+  }
+  .quote-tabs .qt-tab-count {
+    display: inline-block; min-width: 18px; text-align: center;
+    background: rgba(255,255,255,0.08); color: var(--text2);
+    padding: 1px 6px; border-radius: 8px; font-size: 11px; font-weight: 600;
+    font-family: 'DM Mono', monospace;
+  }
+  .quote-tabs .qt-tab.active .qt-tab-count { background: rgba(98,114,245,0.20); color: var(--indigo2); }
+  .quote-tabs .qt-tab-subtotal { font-size: 11px; color: var(--text2); font-weight: 500; }
+  .quote-tabs .qt-tab.active .qt-tab-subtotal { color: var(--indigo2); }
+  /* Badge nature mini accanto a Q.tà */
+  .ql-nature-badge {
+    display: inline-block; font-size: 9px; font-weight: 700; letter-spacing: 0.4px;
+    padding: 1px 5px; border-radius: 7px; margin-left: 4px; vertical-align: middle;
+    text-transform: uppercase;
+  }
+  .ql-nature-badge.nature-jcl { background: rgba(34,197,94,0.15); color: #22c55e; }
+  .ql-nature-badge.nature-del { background: rgba(245,158,11,0.15); color: #f59e0b; }
 </style>
 {% endblock %}
 
@@ -545,6 +576,21 @@
         <div class="card-header" style="display:flex;justify-content:space-between;align-items:center;">
           <span class="card-title">Voci preventivo</span>
           <button class="btn btn-ghost btn-sm" onclick="openLoadFromTemplate()" title="Bulk-add voci da DeliveryTemplate (suggested_items)">📋 Carica da template</button>
+        </div>
+        <!-- v3.5.0-alpha.172.4 (Sprint 4 T1) — Tab split JCL vs Deliverable.
+             Filtra le righe per `unit_nature`. Subtotale lordo della sezione mostrato accanto. -->
+        <div class="quote-tabs" id="quote-tabs" role="tablist" style="display:flex;gap:2px;padding:6px 12px 0;border-bottom:1px solid var(--border);">
+          <button type="button" class="qt-tab active" data-qt-tab="all" onclick="setQuoteTab('all')" role="tab" aria-selected="true">
+            Tutto <span class="qt-tab-count" id="qt-count-all">0</span>
+          </button>
+          <button type="button" class="qt-tab" data-qt-tab="jcl" onclick="setQuoteTab('jcl')" role="tab" aria-selected="false" title="Voci time-based (hr, day): generano JobCostLine">
+            🔧 Lavorazioni <span class="qt-tab-count" id="qt-count-jcl">0</span>
+            <span class="qt-tab-subtotal mono" id="qt-sub-jcl"></span>
+          </button>
+          <button type="button" class="qt-tab" data-qt-tab="deliverable" onclick="setQuoteTab('deliverable')" role="tab" aria-selected="false" title="Voci non-time (pc, TB, lump, allow…): generano JobDeliverable">
+            📦 Consegne <span class="qt-tab-count" id="qt-count-deliverable">0</span>
+            <span class="qt-tab-subtotal mono" id="qt-sub-deliverable"></span>
+          </button>
         </div>
         <div class="table-wrap">
           <table id="lines-table">
@@ -1112,6 +1158,64 @@
 let currentQuoteId = null;
 let currentQuote = null;
 let priceItems = [];
+// v3.5.0-alpha.172.4 (Sprint 4 T1) — Tab filtro Lavorazioni/Consegne nell'editor.
+// Valori: 'all' | 'jcl' | 'deliverable'. Persistito per-utente in localStorage.
+let currentQuoteTab = (function () {
+  const v = localStorage.getItem('mf_quote_tab') || 'all';
+  return (v === 'jcl' || v === 'deliverable') ? v : 'all';
+})();
+function _applyQuoteTabClasses() {
+  document.querySelectorAll('#quote-tabs .qt-tab').forEach(el => {
+    const active = el.dataset.qtTab === currentQuoteTab;
+    el.classList.toggle('active', active);
+    el.setAttribute('aria-selected', active ? 'true' : 'false');
+  });
+}
+function setQuoteTab(tab) {
+  if (!['all','jcl','deliverable'].includes(tab)) tab = 'all';
+  currentQuoteTab = tab;
+  try { localStorage.setItem('mf_quote_tab', tab); } catch(_) {}
+  _applyQuoteTabClasses();
+  if (currentQuote) renderLines();
+}
+function _lineNature(l) {
+  // Mirror server-side helper (app/services/cost_line_sync.py:unit_nature_for).
+  // Fallback solo se backend non ha popolato il campo (es. quote pre-restructure).
+  if (l && l.unit_nature) return l.unit_nature;
+  const u = (l && l.unit || '').trim().toLowerCase();
+  if (['hr','ore','hour','h','day','giorno','giornate','giornata','d'].includes(u)) return 'time_based';
+  if (['pc','lot','shot','version'].includes(u)) return 'deliverable_qty';
+  if (['tb','gb'].includes(u)) return 'deliverable_volume';
+  if (['allow','lump','fix','min'].includes(u)) return 'manual_allow';
+  return 'deliverable_qty';
+}
+function _lineMatchesTab(l, tab) {
+  if (tab === 'all') return true;
+  const isJcl = _lineNature(l) === 'time_based';
+  return tab === 'jcl' ? isJcl : !isJcl;
+}
+function _refreshQuoteTabSummary(lines) {
+  // Conta righe non-opzionali per tab + somma lorda (qty * unit_price *
+  // (1+allowance)) per tab. Combacia con _recalc_quote lato server.
+  let nAll = 0, nJcl = 0, nDel = 0, sJcl = 0, sDel = 0;
+  for (const l of (lines || [])) {
+    if (l.is_optional) continue;
+    nAll++;
+    const gross = (l.quantity || 0) * (l.unit_price || 0) * (1 + (l.allowance || 0));
+    if (_lineNature(l) === 'time_based') { nJcl++; sJcl += gross; }
+    else { nDel++; sDel += gross; }
+  }
+  const elAll = document.getElementById('qt-count-all');
+  const elJcl = document.getElementById('qt-count-jcl');
+  const elDel = document.getElementById('qt-count-deliverable');
+  const subJcl = document.getElementById('qt-sub-jcl');
+  const subDel = document.getElementById('qt-sub-deliverable');
+  if (elAll) elAll.textContent = String(nAll);
+  if (elJcl) elJcl.textContent = String(nJcl);
+  if (elDel) elDel.textContent = String(nDel);
+  if (subJcl) subJcl.textContent = sJcl > 0 ? (' · ' + fmtCurrency(sJcl)) : '';
+  if (subDel) subDel.textContent = sDel > 0 ? (' · ' + fmtCurrency(sDel)) : '';
+}
 const SL = { draft:'Bozza', sent:'Inviata', approved:'Approvata', rejected:'Rifiutata', expired:'Scaduta', superseded:'Sostituita' };
 const HOURS_PER_DAY = 8;
 
@@ -1239,6 +1343,7 @@ async function reloadQuote() {
   document.getElementById('qa-delivery').value = currentQuote.delivery_format || '';
   document.getElementById('qa-length').value = currentQuote.length_minutes || '';
   document.getElementById('qa-fps').value = currentQuote.fps || '';
+  _applyQuoteTabClasses();  // v3.5.0-alpha.172.4 (Sprint 4 T1) — sync tab DOM
   renderLines();
   renderTotals();
   renderAdvanceSchedules();  // v3.5.0-alpha.139 — Termini acconto strutturati
@@ -1564,12 +1669,26 @@ function renderLines() {
   // v3.4.34: multi-tbody per categoria → drag&drop sui blocchi categoria.
   const table = document.getElementById('lines-table');
   const emptyTbody = document.getElementById('lines-tbody-empty');
-  const lines = currentQuote.lines || [];
+  const allLines = currentQuote.lines || [];
+  // v3.5.0-alpha.172.4 (Sprint 4 T1) — Aggiorna count/subtotal nelle tab
+  // dal totale lordo per nature (non-opzionali). Tab visibili sempre.
+  _refreshQuoteTabSummary(allLines);
+  // Filtra per tab attivo
+  const lines = allLines.filter(l => _lineMatchesTab(l, currentQuoteTab));
   // Rimuovi tbody categoria precedenti (lascia solo lines-tbody-empty)
   table.querySelectorAll('tbody.ql-cat-tbody').forEach(t => t.remove());
 
   if (!lines.length) {
     emptyTbody.style.display = '';
+    const td = emptyTbody.querySelector('td');
+    if (td) {
+      const msg = currentQuoteTab === 'jcl'
+        ? 'Nessuna voce Lavorazione (unit hr/day). Trascina una voce time-based dal listino.'
+        : currentQuoteTab === 'deliverable'
+        ? 'Nessuna voce Consegna (pc/TB/lump/allow…). Trascina una voce non-time dal listino.'
+        : 'Nessuna voce — apri il pannello Listino e trascina una voce qui';
+      td.textContent = msg;
+    }
     return;
   }
   emptyTbody.style.display = 'none';
@@ -1744,6 +1863,12 @@ function renderLineRow(l) {
   const desc = (l.description || '').replace(/"/g, '&quot;');
   const detail = (l.detail || '').replace(/"/g, '&quot;');
   const isOpt = !!l.is_optional;
+  // v3.5.0-alpha.172.4 (Sprint 4 T1) — badge nature: JCL vs Consegna
+  const nat = _lineNature(l);
+  const isJcl = nat === 'time_based';
+  const natBadge = isJcl
+    ? `<span class="ql-nature-badge nature-jcl" title="Lavorazione: maturato da ore booking">JCL</span>`
+    : `<span class="ql-nature-badge nature-del" title="Consegna: maturato manuale o auto-fill">DEL</span>`;
   const optBadge = isOpt
     ? `<span class="ql-opt-badge" title="Voce opzionale: totale escluso dal subtotale">Opzionale</span>`
     : '';
@@ -1776,17 +1901,27 @@ function renderLineRow(l) {
       <td><input class="inline-edit mono text-right" data-field="quantity" type="number" step="0.5"
                  value="${l.quantity}" onblur="saveLineField(this)"></td>
       <td>
-        <select class="inline-edit mono" data-field="unit" onchange="saveLineField(this)" style="font-size:12px;padding:2px 4px;">
-          <option value="day"${l.unit==='day'?' selected':''}>day</option>
-          <option value="hr"${l.unit==='hr'?' selected':''}>hr</option>
-          <option value="pc"${l.unit==='pc'?' selected':''}>pc</option>
-          <option value="min"${l.unit==='min'?' selected':''}>min</option>
-          <option value="TB"${l.unit==='TB'?' selected':''}>TB</option>
-          <option value="GB"${l.unit==='GB'?' selected':''}>GB</option>
-          <option value="shot"${l.unit==='shot'?' selected':''}>shot</option>
-          <option value="version"${l.unit==='version'?' selected':''}>ver</option>
-          <option value="allow"${l.unit==='allow'?' selected':''}>allow</option>
-        </select>
+        <div style="display:flex;align-items:center;gap:4px;">
+          <select class="inline-edit mono" data-field="unit" onchange="saveLineField(this)" style="font-size:12px;padding:2px 4px;">
+            <optgroup label="Lavorazione (JCL)">
+              <option value="day"${l.unit==='day'?' selected':''}>day</option>
+              <option value="hr"${l.unit==='hr'?' selected':''}>hr</option>
+            </optgroup>
+            <optgroup label="Consegna (Deliverable)">
+              <option value="pc"${l.unit==='pc'?' selected':''}>pc</option>
+              <option value="lot"${l.unit==='lot'?' selected':''}>lot</option>
+              <option value="shot"${l.unit==='shot'?' selected':''}>shot</option>
+              <option value="version"${l.unit==='version'?' selected':''}>ver</option>
+              <option value="TB"${l.unit==='TB'?' selected':''}>TB</option>
+              <option value="GB"${l.unit==='GB'?' selected':''}>GB</option>
+              <option value="lump"${l.unit==='lump'?' selected':''}>lump</option>
+              <option value="allow"${l.unit==='allow'?' selected':''}>allow</option>
+              <option value="fix"${l.unit==='fix'?' selected':''}>fix</option>
+              <option value="min"${l.unit==='min'?' selected':''}>min</option>
+            </optgroup>
+          </select>
+          ${natBadge}
+        </div>
       </td>
       <td><input class="inline-edit mono text-right" data-field="unit_price" type="number" step="0.01"
                  value="${l.unit_price}" onblur="saveLineField(this)"></td>
@@ -2347,11 +2482,34 @@ function renderTotals() {
     ? q.subtotal_optional
     : (q.lines || []).reduce((s, l) => s + (l.is_optional ? (l.total || 0) : 0), 0);
 
+  // v3.5.0-alpha.172.4 (Sprint 4 T1) — Split lordo JCL vs Deliverable.
+  // Mostrato come righe figlie se entrambi >0. Server fornisce subtotal_gross_jcl
+  // e subtotal_gross_deliverable; fallback client-side per quote pre-restructure.
+  let sJcl = q.subtotal_gross_jcl;
+  let sDel = q.subtotal_gross_deliverable;
+  if (sJcl == null || sDel == null) {
+    sJcl = 0; sDel = 0;
+    for (const l of (q.lines || [])) {
+      if (l.is_optional) continue;
+      const gross = (l.quantity || 0) * (l.unit_price || 0) * (1 + (l.allowance || 0));
+      if (_lineNature(l) === 'time_based') sJcl += gross; else sDel += gross;
+    }
+  }
+  const splitRows = (sJcl > 0.005 && sDel > 0.005) ? `
+    <div class="totals-line" style="font-size:12px;color:var(--text2);padding:2px 12px;">
+      <span>↳ Lavorazioni (JCL)</span>
+      <span class="mono">${fmtCurrency(sJcl)}</span>
+    </div>
+    <div class="totals-line" style="font-size:12px;color:var(--text2);padding:2px 12px;">
+      <span>↳ Consegne (Deliverable)</span>
+      <span class="mono">${fmtCurrency(sDel)}</span>
+    </div>` : '';
   document.getElementById('totals-panel').innerHTML = `
     <div class="totals-line gross">
       <span>Totale lordo (no sconti)</span>
       <span class="mono">${fmtCurrency(q.subtotal_gross)}</span>
     </div>
+    ${splitRows}
     ${grossDiscountTotal > 0.005 ? `
     <div class="totals-line disc">
       <span>Sconti voci + categoria</span>
@@ -2434,7 +2592,10 @@ async function saveLineField(el) {
     const res = await api('PUT', `/quotes/api/${targetId}/lines/${lineId}`, fd);
     document.querySelector(`[data-line-total="${lineId}"]`).textContent = fmtCurrency(res.total);
     Object.assign(currentQuote, {
-      subtotal_gross: res.subtotal_gross, subtotal: res.subtotal,
+      subtotal_gross: res.subtotal_gross,
+      subtotal_gross_jcl: res.subtotal_gross_jcl,
+      subtotal_gross_deliverable: res.subtotal_gross_deliverable,
+      subtotal: res.subtotal,
       total_after_discount: res.total_after_discount, total_with_vat: res.total_with_vat,
     });
     const line = currentQuote.lines.find(l => l.id == lineId);
@@ -2451,6 +2612,12 @@ async function saveLineField(el) {
         if (qtyInput) qtyInput.value = extraUpdates.quantity;
       }
       line.total = res.total;
+      // v3.5.0-alpha.172.4 (Sprint 4 T1) — Ricalcola nature al cambio unit, e
+      // re-renderizza per riassegnare badge + filtro tab.
+      if (field === 'unit') {
+        delete line.unit_nature;
+        renderLines();
+      }
     }
     renderTotals();
     refreshCategoryDiscountAmounts();
@@ -2470,7 +2637,10 @@ async function saveLineDiscount(el) {
     const res = await api('PUT', `/quotes/api/${targetId}/lines/${lineId}`, fd);
     document.querySelector(`[data-line-total="${lineId}"]`).textContent = fmtCurrency(res.total);
     Object.assign(currentQuote, {
-      subtotal_gross: res.subtotal_gross, subtotal: res.subtotal,
+      subtotal_gross: res.subtotal_gross,
+      subtotal_gross_jcl: res.subtotal_gross_jcl,
+      subtotal_gross_deliverable: res.subtotal_gross_deliverable,
+      subtotal: res.subtotal,
       total_after_discount: res.total_after_discount, total_with_vat: res.total_with_vat,
     });
     const line = currentQuote.lines.find(l => l.id == lineId);
@@ -2490,7 +2660,10 @@ async function saveCategoryDiscount(el) {
     const res = await api('PUT', `/quotes/api/${currentQuoteId}/category-discount`, fd);
     Object.assign(currentQuote, {
       category_discounts: res.category_discounts,
-      subtotal_gross: res.subtotal_gross, subtotal: res.subtotal,
+      subtotal_gross: res.subtotal_gross,
+      subtotal_gross_jcl: res.subtotal_gross_jcl,
+      subtotal_gross_deliverable: res.subtotal_gross_deliverable,
+      subtotal: res.subtotal,
       total_after_discount: res.total_after_discount, total_with_vat: res.total_with_vat,
     });
     renderTotals();
@@ -2508,7 +2681,10 @@ async function savePackageDiscount(el) {
     const res = await api('PUT', `/quotes/api/${currentQuoteId}`, fd);
     Object.assign(currentQuote, {
       package_discount: packageNeg,
-      subtotal_gross: res.subtotal_gross, subtotal: res.subtotal,
+      subtotal_gross: res.subtotal_gross,
+      subtotal_gross_jcl: res.subtotal_gross_jcl,
+      subtotal_gross_deliverable: res.subtotal_gross_deliverable,
+      subtotal: res.subtotal,
       total_after_discount: res.total_after_discount, total_with_vat: res.total_with_vat,
     });
     renderTotals();
@@ -2578,7 +2754,10 @@ async function saveQuoteMeta() {
   try {
     const res = await api('PUT', `/quotes/api/${targetId}`, fd);
     Object.assign(currentQuote, {
-      subtotal_gross: res.subtotal_gross, subtotal: res.subtotal,
+      subtotal_gross: res.subtotal_gross,
+      subtotal_gross_jcl: res.subtotal_gross_jcl,
+      subtotal_gross_deliverable: res.subtotal_gross_deliverable,
+      subtotal: res.subtotal,
       total_after_discount: res.total_after_discount, total_with_vat: res.total_with_vat,
       vat_rate: parseFloat(document.getElementById('q-vat').value || 22),
       notes: document.getElementById('q-notes').value,

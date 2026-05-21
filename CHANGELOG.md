@@ -1,5 +1,33 @@
 # MediaFlow — Changelog
 
+## v3.5.0-alpha.172.4 — Restructure Sprint 4 T1: editor quote split JCL/Deliverable (21 mag 2026)
+
+**Sprint 4 di 5 — Task 1**: editor quote con tab "Lavorazioni" (JCL) + "Consegne" (Deliverable). Prima visualizzazione utente della separazione strutturale.
+
+**Backend** (`app/routers/quotes.py` + `app/services/cost_line_sync.py`):
+- Nuovo helper centralizzato `unit_nature_for(unit)` in `cost_line_sync.py` — single source of truth (sostituisce mappe hardcoded duplicate in `_create_job_from_quote` e `reverse_quote.py`)
+- `_recalc_quote` popola `subtotal_gross_jcl` + `subtotal_gross_deliverable` (split lordo per nature) ad ogni save
+- `GET /api/{quote_id}` espone `subtotal_gross_jcl`, `subtotal_gross_deliverable` + `unit_nature` per ogni riga
+- 5 endpoint che ritornano subtotali (`add_line`, `update_line`, `forecast`, `update_category_discount`, ...) ora ritornano anche i 2 split
+
+**Frontend** (`app/templates/pages/quotes.html`):
+- Tab bar in `#lines-card`: `Tutto | 🔧 Lavorazioni | 📦 Consegne` con count + subtotale lordo per tab
+- Stato `currentQuoteTab` persistito in `localStorage.mf_quote_tab`
+- `renderLines` filtra `currentQuote.lines` per `unit_nature` in base al tab attivo
+- Empty state contestuale al filtro (es. "Nessuna voce Lavorazione")
+- Badge nature inline per riga (`JCL` verde / `DEL` arancione) accanto al select unit
+- Select unit con `optgroup` "Lavorazione (JCL)" / "Consegna (Deliverable)" — esplicita ripartizione
+- Aggiunti `lot`, `lump`, `fix` come option (estensione Sprint 1 pricelist_units)
+- `renderTotals` mostra 2 righe figlie "↳ Lavorazioni" + "↳ Consegne" sotto "Totale lordo" (solo se entrambi presenti)
+- Al cambio unit di una riga: nature ricalcolata + re-render tab counts/filtro
+
+**Helper JS**:
+- `_lineNature(line)` mirror server-side (fallback per quote pre-restructure)
+- `_lineMatchesTab(line, tab)` per filtro
+- `_refreshQuoteTabSummary(lines)` aggiorna count + subtotale lordo per tab
+
+**Smoke test**: 480 routes registrate, boot clean.
+
 ## v3.5.0-alpha.172.3 — Restructure Sprint 3: endpoint + Bug 1 fix (20 mag 2026)
 
 **Sprint 3 di 5**: endpoint REST per workflow Deliverable + hard-delete admin + ingest MHL/CSV + fix Bug 1 allocation acconto.

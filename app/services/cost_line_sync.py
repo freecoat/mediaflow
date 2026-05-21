@@ -88,6 +88,37 @@ def is_time_based_unit(unit: Optional[str]) -> bool:
     return unit.strip().lower() in TIME_UNITS
 
 
+# v3.5.0-alpha.172.4 (Sprint 4 T1) — Helper centralizzato unit→nature.
+# Sostituisce mappa hardcoded duplicata in routers/quotes.py:_create_job_from_quote
+# e services/reverse_quote.py. Single source of truth.
+_UNIT_TO_NATURE = {
+    # time_based → JCL
+    "hr": "time_based", "ore": "time_based", "hour": "time_based",
+    "h": "time_based", "day": "time_based", "giorno": "time_based",
+    "giornate": "time_based", "giornata": "time_based", "d": "time_based",
+    # deliverable_qty
+    "pc": "deliverable_qty", "lot": "deliverable_qty",
+    "shot": "deliverable_qty", "version": "deliverable_qty",
+    # deliverable_volume
+    "tb": "deliverable_volume", "gb": "deliverable_volume",
+    # manual_allow
+    "allow": "manual_allow", "lump": "manual_allow", "fix": "manual_allow",
+    # min legacy → manual_allow (frazione tempo, fatturata a forfait)
+    "min": "manual_allow",
+}
+
+
+def unit_nature_for(unit: Optional[str]) -> str:
+    """Ritorna la `DeliverableUnitNature` (stringa) per un'`unit` di QuoteLine.
+
+    Default `deliverable_qty` per unit sconosciute (back-compat: voci pre-restructure
+    o unit_label custom).
+    """
+    if not unit:
+        return "deliverable_qty"
+    return _UNIT_TO_NATURE.get(unit.strip().lower(), "deliverable_qty")
+
+
 def _booking_hours_linear(b) -> float:
     """Ore-uomo lineari del booking = somma delle durate degli assignment.
     Path storico (pre-α.65), invariato per back-compat.

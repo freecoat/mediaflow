@@ -8,33 +8,39 @@
 
 ## Versione corrente
 
-**v3.5.0-alpha.172.3** — 20 maggio 2026 — Sprint 3 Restructure: endpoint + fix Bug 1
+**v3.5.0-alpha.172.4** — 21 maggio 2026 — Sprint 4 T1 Restructure: editor quote split JCL/Deliverable
 
-Sprint 3 di 5. 5 endpoint nuovi + fix Bug 1 allocation acconto.
+Sprint 4 di 5 — Task 1/5. Prima visualizzazione utente della separazione strutturale lavorazioni vs consegne.
 
-**Endpoint**:
-- `DELETE /admin/projects/{id}/hard-delete` admin-only + confirm_token
-- `POST /jobs/api/deliverables/{id}/confirm-delivery` workflow conferma manuale
-- `GET/POST/DELETE /planning/api/bookings/{id}/deliverables` M:N pivot
-- `POST /ingest/yoyotta-mhl` + `/ingest/csv-lto` parser auto-fill quantity_delivered
+**Backend**:
+- Helper `unit_nature_for(unit)` centralizzato in `app/services/cost_line_sync.py` (single source of truth, sostituisce mappe duplicate)
+- `_recalc_quote` popola `subtotal_gross_jcl` + `subtotal_gross_deliverable` ad ogni save
+- `GET /api/{quote_id}` espone i 2 subtotali split + `unit_nature` per ogni riga
+- 5 endpoint subtotali updated per propagare split
 
-**Fix Bug 1**:
-- PUT `/quotes/api/advance-schedules/{id}` accetta allocations (era assente!)
-- Re-materialize AP per AP editabili dopo update allocations
-- `materialize_schedules` branching JCL/Deliverable (covers entrambe le casistiche)
-- Helper riusabile `rebuild_ap_allocations_from_schedule`
+**Frontend** (`quotes.html`):
+- Tab bar `Tutto | 🔧 Lavorazioni | 📦 Consegne` con count + subtotale lordo per tab
+- Stato persistito `localStorage.mf_quote_tab`
+- `renderLines` filtra per `unit_nature`. Empty state contestuale
+- Badge inline `JCL` (verde) / `DEL` (arancione) accanto al select unit
+- Select unit con `optgroup` Lavorazione/Consegna + nuove option lot/lump/fix
+- `renderTotals` mostra 2 sub-righe lordi split sotto "Totale lordo"
+- CSS dedicato `.qt-tab` + `.ql-nature-badge`
 
-**RBAC nuovi keys**: hard_delete_project, view/edit/confirm_deliverables (preset roles aggiornati).
+**Smoke test**: 480 routes, boot clean.
 
-**Smoke test**: 480 routes registrate, app boot clean.
+## Prossimo step — Sprint 4 T2 CR detail sezioni Lavorazioni vs Consegne
 
-## Prossimo step — Sprint 4 UI
+Cost report dettaglio progetto: 2 sezioni separate JCL vs JobDeliverable con regole maturato distinte (ore done vs quantity_delivered manuale). Sub-task pendenti:
+- T3 modal booking multi-select deliverable
+- T4 pagina Consegne progetto (kanban + confirm-delivery)
+- T5 editor listino unit/nature derivata
 
-1. Editor quote split JCL/Deliverable in editor tab
-2. CR detail con sezioni separate Lavorazioni vs Consegne
-3. Kanban consegne per progetto
-4. Modal confirm-delivery + link asset
-5. Modal multi-select deliverable in booking edit
+## (versione precedente)
+
+**v3.5.0-alpha.172.3** — 20 maggio 2026 — Sprint 3 Restructure: endpoint + Bug 1 fix
+
+5 endpoint nuovi (hard-delete admin, confirm-delivery, booking↔deliverable M:N, ingest MHL/CSV LTO) + fix Bug 1 allocation acconto (PUT advance-schedules accetta allocations, materialize considera Deliverable). RBAC nuovi keys: hard_delete_project, view/edit/confirm_deliverables.
 
 ## (versione precedente)
 
