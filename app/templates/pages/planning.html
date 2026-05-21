@@ -3877,6 +3877,87 @@ function tlBookingToItem(b) {
   };
 }
 
+// v3.5.0-alpha.172.21 — Helper refresh incrementale timeline.
+// Pre-α.172.21 ogni mutator chiamava `renderTimeline(true)` → destroy/recreate
+// vis-timeline + reload completo bookings + background items + heatmap. Costo
+// 200-800ms con 100+ booking. Sostituito con patch granulari su `itemsDS`.
+//
+// Refresh totale resta usato per: cambio filtri sidebar, zoom, modalità.
+//
+// Limite: gli helper toccano SOLO itemsDS (vis DataSet). Background items
+// (ferie/festivi/timbrature) NON sono aggiornati — restano validi finché
+// filtri/zoom non cambiano (re-render manuale lo aggiorna).
+
+// Refresh 1 o N booking: re-fetch dal server e patch in itemsDS.
+async function tlIncrementalRefresh(bookingIds) {
+  if (!itemsDS || !window._tlInstance) return false;
+  const ids = (Array.isArray(bookingIds) ? bookingIds : [bookingIds])
+              .filter(x => x != null).map(x => parseInt(x, 10));
+  if (!ids.length) return true;
+  let flats = [];
+  try {
+    flats = await api('GET', `/planning/api/bookings?booking_id=${ids.join(',')}`);
+  } catch(e) {
+    console.warn('tlIncrementalRefresh fetch failed:', e);
+    return false;
+  }
+  if (!Array.isArray(flats)) return false;
+  const newItems = flats.map(b => tlBookingToItem(b)).filter(Boolean);
+  // Re-map per modalità progetto se attiva
+  const groupBy = (typeof tlGroupBy === 'string') ? tlGroupBy : (window._tlGroupBy || 'resource');
+  let toInsert = newItems;
+  if (groupBy === 'project' && typeof tlRemapItemsForProjectMode === 'function') {
+    toInsert = tlRemapItemsForProjectMode(newItems, flats);
+  }
+  const idsSet = new Set(ids);
+  const existing = itemsDS.get({filter: it => it.booking_id && idsSet.has(it.booking_id)});
+  const newIdSet = new Set(toInsert.map(it => it.id));
+  const toRemove = existing.filter(it => !newIdSet.has(it.id)).map(it => it.id);
+  if (toRemove.length) itemsDS.remove(toRemove);
+  if (toInsert.length) itemsDS.update(toInsert);  // DataSet.update inserts if missing
+  // Aggiorna cache window._tlBookings (usata da tlbOpenEdit)
+  if (Array.isArray(window._tlBookings)) {
+    const wb = window._tlBookings;
+    const flatIds = new Set(flats.map(f => f.id));
+    const filtered = wb.filter(b => !idsSet.has(b.booking_id) || flatIds.has(b.id));
+    for (const f of flats) {
+      const idx = filtered.findIndex(b => b.id === f.id);
+      if (idx >= 0) filtered[idx] = f;
+      else filtered.push(f);
+    }
+    window._tlBookings = filtered;
+  }
+  return true;
+}
+
+// Remove tutti gli items per N booking_id (cascade visivo).
+function tlIncrementalRemove(bookingIds) {
+  if (!itemsDS) return false;
+  const ids = Array.isArray(bookingIds) ? bookingIds : [bookingIds];
+  const idsSet = new Set(ids.filter(x => x != null).map(x => parseInt(x, 10)));
+  if (!idsSet.size) return true;
+  const toRemove = itemsDS.get({filter: it => it.booking_id && idsSet.has(it.booking_id)});
+  if (toRemove.length) itemsDS.remove(toRemove.map(it => it.id));
+  if (Array.isArray(window._tlBookings)) {
+    window._tlBookings = window._tlBookings.filter(b => !idsSet.has(b.booking_id));
+  }
+  return true;
+}
+
+// Remove specifici assignment (granulare).
+function tlIncrementalRemoveAssignments(assignmentIds) {
+  if (!itemsDS) return false;
+  const ids = Array.isArray(assignmentIds) ? assignmentIds : [assignmentIds];
+  const idsSet = new Set(ids.filter(x => x != null).map(x => parseInt(x, 10)));
+  if (!idsSet.size) return true;
+  const toRemove = itemsDS.get({filter: it => it.assignment_id && idsSet.has(it.assignment_id)});
+  if (toRemove.length) itemsDS.remove(toRemove.map(it => it.id));
+  if (Array.isArray(window._tlBookings)) {
+    window._tlBookings = window._tlBookings.filter(b => !idsSet.has(b.assignment_id));
+  }
+  return true;
+}
+
 // Finestra parte SEMPRE dall'anchor (oggi di default) e si estende in avanti.
 function tlWindowFor(zoom, anchor) {
   const a = anchor ? new Date(anchor) : new Date();
@@ -5511,7 +5592,9 @@ async function _doRenderTimeline(preserveWindow=false) {
             in_progress:'avviato', done:'marcato fatto', not_done:'marcato non fatto',
           };
           toast(`Booking ${STATE_LBL[newState] || newState}`, 'success');
-          renderTimeline(true);
+          // v3.5.0-alpha.172.21 — Refresh incrementale solo booking touched
+          const refreshed = await tlIncrementalRefresh(bid);
+          if (!refreshed) renderTimeline(true);
         } else if (choice === 'duplicate') {
           const itemCopy = {
             id: props.item,
@@ -5519,8 +5602,10 @@ async function _doRenderTimeline(preserveWindow=false) {
             start: new Date(new Date(it.end).getTime() + 60*60*1000),
             end: new Date(new Date(it.end).getTime() + 2*60*60*1000),
           };
-          await _tlDoDuplicate(itemCopy, origBooking);
-          renderTimeline(true);
+          const dup = await _tlDoDuplicate(itemCopy, origBooking);
+          // v3.5.0-alpha.172.21 — refresh solo nuovo booking
+          const refreshed = dup && dup.id && await tlIncrementalRefresh(dup.id);
+          if (!refreshed) renderTimeline(true);
         } else if (choice === 'duplicate_day' || choice === 'duplicate_week') {
           // v3.5.0-alpha.66: replica rapida senza paste-mode, riusa
           // tlInstantPaste con dayOffset=1 o 7 e clipboard locale (1 booking).
@@ -5532,12 +5617,21 @@ async function _doRenderTimeline(preserveWindow=false) {
           if (newRes && newRes !== it.group) {
             const fakeItem = {id: props.item, group: newRes, start: it.start, end: it.end};
             await _tlDoMove(fakeItem, it, assignmentId);
-            renderTimeline(true);
+            // v3.5.0-alpha.172.21 — refresh solo booking touched
+            const bid = origBooking ? origBooking.booking_id : null;
+            const refreshed = bid && await tlIncrementalRefresh(bid);
+            if (!refreshed) renderTimeline(true);
           }
         } else if (choice === 'delete') {
-          await api('DELETE', `/planning/api/booking-assignments/${assignmentId}`);
+          const _delRes = await api('DELETE', `/planning/api/booking-assignments/${assignmentId}`);
           tlPushUndo({type:'remove_assignment', assignment_id: assignmentId}, 'Assegnazione eliminata');
-          renderTimeline(true);
+          // v3.5.0-alpha.172.21 — Refresh incrementale invece di full rebuild.
+          tlIncrementalRemoveAssignments([assignmentId]);
+          // Se booking ha altri assignments → refresh per env aggiornato
+          const bookingId = _delRes && _delRes.booking_id;
+          if (bookingId && _delRes.booking_cancelled === false) {
+            await tlIncrementalRefresh(bookingId);
+          }
         }
       } catch(e) { toast(e.message || 'Errore', 'error'); }
     } else if (typeof props.group === 'number' && props.time) {
@@ -5646,6 +5740,10 @@ async function _doRenderTimeline(preserveWindow=false) {
     if (!confirm(msg)) return;
     // v3.5.0-alpha.172.20 — sostituito loop sequenziale con 1 call atomica
     // server-side. Cascade booking, slice-lock guard + audit lato server.
+    // v3.5.0-alpha.172.21 — Refresh incrementale: remove direct invece di
+    // rebuild timeline. Per i booking cancellati (cascade) chiama
+    // tlIncrementalRemove sui booking_ids; per assignment singoli sopravvissuti
+    // chiama tlIncrementalRemoveAssignments.
     try {
       const fd = new FormData();
       fd.append('assignment_ids', aIdList.join(','));
@@ -5654,11 +5752,23 @@ async function _doRenderTimeline(preserveWindow=false) {
       if (res.cancelled_bookings) label += ` · ${res.cancelled_bookings} booking cancellati`;
       if (res.skipped_billed) label += ` · ${res.skipped_billed} skip (slice fatturate)`;
       toast(label, res.skipped_billed ? 'warning' : 'success');
+      // Patch granulare: rimuovi assignment locali; cascade dei booking
+      // cancellati avviene automaticamente perché remove(items) toglie tutte
+      // le righe linked al booking (assignment_id sono univoci globali).
+      tlIncrementalRemoveAssignments(aIdList);
+      // Refresh dei booking sopravvissuti (cambio man-hours envelope)
+      const survivedBookings = [...bookingIds].filter(bid => {
+        const stillThere = itemsDS && itemsDS.get({filter: it => it.booking_id === bid}).length > 0;
+        return stillThere;
+      });
+      if (survivedBookings.length) {
+        await tlIncrementalRefresh(survivedBookings);
+      }
     } catch(err) {
       toast('Bulk delete fallito: ' + (err && err.message ? err.message : 'errore'), 'error');
       console.error(err);
+      renderTimeline(true);
     }
-    renderTimeline(true);
   };
   document.addEventListener('keydown', window._tlDeleteHandler, true);
 
@@ -6282,10 +6392,16 @@ async function tlBulkDeleteSelection() {
     if (res.cancelled_bookings) label += ` · ${res.cancelled_bookings} booking cancellati`;
     if (res.skipped_billed) label += ` · ${res.skipped_billed} skip (slice fatturate)`;
     toast(label, res.skipped_billed ? 'warning' : 'success');
-    renderTimeline(true);
+    // v3.5.0-alpha.172.21 — Patch granulare via DataSet (no full rebuild)
+    tlIncrementalRemoveAssignments([...cascadeA]);
+    const survivedBookings = [...bookingIds].filter(bid => {
+      return itemsDS && itemsDS.get({filter: it => it.booking_id === bid}).length > 0;
+    });
+    if (survivedBookings.length) await tlIncrementalRefresh(survivedBookings);
   } catch (e) {
     toast('Bulk delete fallito: ' + (e && e.message ? e.message : 'errore'), 'error');
     console.error(e);
+    renderTimeline(true);
   }
 }
 
@@ -8052,7 +8168,12 @@ async function tlbSubmit() {
         }
       }
       closeModal('modal-tl-booking');
-      renderTimeline(true);
+      // v3.5.0-alpha.172.21 — Refresh incrementale invece di full rebuild.
+      // extend-as-series può creare booking nuovi → fallback hard render se
+      // exRes.ok > 0 (id nuovi sconosciuti al client).
+      const exCreatedNew = extendAsSeriesArgs && extendAsSeriesArgs._ok > 0;
+      const refreshed = !exCreatedNew && await tlIncrementalRefresh(editingId);
+      if (!refreshed) renderTimeline(true);
     } else if (!CAN_CREATE_BOOKING) {
       // v3.5.0-alpha.10 — editor: invia richiesta al producer invece di creare booking
       const first = assignments[0];
@@ -8085,7 +8206,15 @@ async function tlbSubmit() {
       }
       toast('Booking creato', 'success');
       closeModal('modal-tl-booking');
-      renderTimeline(true);
+      // v3.5.0-alpha.172.21 — Refresh incrementale. recurrence_rule sul POST
+      // crea N booking (1 per occorrenza); created.id = primario, gli altri
+      // sono sconosciuti → fallback hard render. Senza recurrence → patch.
+      const recurUsed = !!fd.get('recurrence_rule');
+      let refreshed = false;
+      if (created && created.id && !recurUsed) {
+        refreshed = await tlIncrementalRefresh(created.id);
+      }
+      if (!refreshed) renderTimeline(true);
     }
   } catch(e) {
     toast(e.message || 'Errore', 'error');

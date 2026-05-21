@@ -1,5 +1,32 @@
 # MediaFlow — Changelog
 
+## v3.5.0-alpha.172.21 — Timeline planning refresh incrementale (21 mag 2026)
+
+Domanda Matteo: serve full refresh ad ogni mutate? No. Pre-α.172.21 ogni create/edit/delete/duplicate/state-change chiamava `renderTimeline(true)` → destroy/recreate vis-timeline + reload completo bookings + background items. Costo 200-800ms con 100+ booking + flicker visivo.
+
+**Server `GET /planning/api/bookings`**:
+- Nuovo param `booking_id` (CSV) per refresh selettivo
+- Permette `?booking_id=12,34` per re-fetch solo i booking touched
+
+**Server `DELETE /booking-assignments/{id}`**:
+- Response include `booking_id` (necessario UI per decidere se refresh booking parent o solo rimuovere assignment)
+
+**Client `planning.html` — Helper incrementali**:
+- `tlIncrementalRefresh(bookingIds)`: re-fetch + patch `itemsDS.update()` (insert se mancante)
+- `tlIncrementalRemove(bookingIds)`: remove tutti gli items di N booking
+- `tlIncrementalRemoveAssignments(assignmentIds)`: remove specifici assignment (granulare)
+- Aggiornano anche `window._tlBookings` cache (per `tlbOpenEdit`)
+- Modalità progetto: `tlRemapItemsForProjectMode` applicato pre-insert
+
+**Refactored 7 callsite** (mutator) per usare incremental:
+- Modal save: create + edit (fallback `renderTimeline` se recurrence_rule o extend-as-series creano N booking)
+- Context menu: state-change, duplicate, reassign, delete
+- Bulk delete: `_tlDeleteHandler` (Delete key) + `tlBulkDeleteSelection` (bottone)
+
+Refresh totale ancora usato per: cambio filtri sidebar, zoom, modalità color-by/density. Background items (ferie/festivi/timbrature) restano coerenti finché window non cambia.
+
+Risparmio: ~300-500ms per operazione + no flicker. Operazioni rimanenti (paste/multi-move/bulk-edit/extend-as-series) restano hard render per ora (backlog).
+
 ## v3.5.0-alpha.172.20 — Bulk delete assignment planning: endpoint + bottone (21 mag 2026)
 
 Funzione richiesta Matteo: "elimina tutte le assegnazioni" come bulk. Pre-α.172.20 il tasto Delete su selezione multipla faceva loop sequenziale `DELETE` (N call HTTP, lento + non atomico). Aggiunto endpoint server-side bulk + bottone UI.

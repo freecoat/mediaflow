@@ -905,6 +905,10 @@ async def list_bookings(
     department_id: Optional[str] = None,
     status: Optional[BookingStatus] = None,
     job_cost_line_id: Optional[str] = None,  # v3.5.0-alpha.171.7 (TL-3)
+    # v3.5.0-alpha.172.21 — Filtro booking_id CSV per refresh incrementale UI.
+    # Permette al client di re-fetch solo i booking touched dopo mutate senza
+    # ricaricare l'intera timeline.
+    booking_id: Optional[str] = None,
     # v3.5.0-alpha.171.7 (TL-5) — ricerca testuale; UI invia "q=..."
     search_q: Optional[str] = Query(None, alias="q"),
     db: Session = Depends(get_db),
@@ -965,6 +969,10 @@ async def list_bookings(
     # v3.5.0-alpha.171.7 (TL-3) — filtro lavorazione
     if jcl_ids:
         qry = qry.filter(Booking.job_cost_line_id.in_(jcl_ids))
+    # v3.5.0-alpha.172.21 — filtro booking_id (refresh incrementale)
+    booking_ids_in = _parse_id_list(booking_id)
+    if booking_ids_in:
+        qry = qry.filter(Booking.id.in_(booking_ids_in))
     # v3.5.0-alpha.171.7 (TL-5) — ricerca testuale full-text
     if search_q and search_q.strip():
         from sqlalchemy import or_ as _or, func as _func
@@ -3050,7 +3058,12 @@ async def delete_assignment(
     except Exception as e:
         print(f"[delete_assignment] cost line sync failed: {e}")
     db.commit()
-    return {"ok": True, "booking_cancelled": not bool(booking.assignments)}
+    # v3.5.0-alpha.172.21 — booking_id nel response per UI refresh incrementale.
+    return {
+        "ok": True,
+        "booking_id": booking.id,
+        "booking_cancelled": not bool(booking.assignments),
+    }
 
 
 @router.delete("/api/bookings/{booking_id}")
