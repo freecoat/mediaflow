@@ -1,5 +1,28 @@
 # MediaFlow — Changelog
 
+## v3.5.0-alpha.172.18 — Quote approvata immutabile + cascade Deliverable in delete/migrate (21 mag 2026)
+
+Feedback Matteo dopo test α.172.17:
+
+**Bug A — Quote approvata non immutabile**: era possibile modificare/aggiungere/riordinare voci direttamente. Unica via dovrebbe essere creare una nuova versione (`/api/{id}/new-version`) + `migrate-job`.
+
+**Bug B — Deliverable orfani**: dopo delete/edit voce in quote approvata, CR aggiornato sulle Lavorazioni (JCL) ma JobDeliverable rimanevano linkati alla QuoteLine eliminata → "consegne fantasma" in /jobs/{id}.
+
+**Fix Bug A — Helper `_assert_quote_mutable`** (`quotes.py`):
+- Raise 409 se `quote.status==approved and not is_phantom` (Consuntivi restano editabili)
+- Errore guida esplicito a `/api/{id}/new-version`
+- Applicato a: `add_quote_line`, `update_quote_line`, `reorder_quote_lines`
+- `delete_quote_line` + `batch_delete_quote_lines`: NO 409, propaga SEMPRE a Consuntivo phantom (anche senza booking attivi). Estende logica Sprint 2 Step 6.
+
+**Fix Bug B — Cascade JobDeliverable** (`quotes.py`):
+- `update_quote_line`: sync `name/unit/unit_price/total_quoted` su Deliverable linkati al phantom. `quantity_planned` aggiornata solo se `qty_delivered==0` e nature non `deliverable_qty` (spawn-per-unit non rimodulato).
+- `delete_quote_line` (cascade clean): cascade delete Deliverable. Block 409 se `confirmed_at` o `billing_status in (in_batch, billed, paid)`.
+- `delete_quote_line` (propagazione phantom): move `quote_line_id → cloned.id` per i Deliverable linkati (no orfani in jobs).
+- `batch_delete_quote_lines`: stesso pattern (propaga su approved, cascade su non-approved con guard fatturazione).
+- `migrate_job`: estende re-bind a JobDeliverable via `parent_line_id`. Sync campi + crea Deliverable per righe nuove V_new (applicando spawn-rule per nature, vedi α.172.14). Orfani: `quote_line_id=None` se `orphan_strategy=keep_as_extra`. Response include `deliverables_rebound/orphaned/created`.
+
+Smoke: 485 routes, validator HARD-BLOCK testato (HTTPException 409).
+
 ## v3.5.0-alpha.172.17 — Booking multi-risorsa AI + HARD-BLOCK JCL + filtro Consegne modal (21 mag 2026)
 
 Tre fix richiesti da Matteo dopo test α.172.16:

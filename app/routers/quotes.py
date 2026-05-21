@@ -9,7 +9,7 @@ from app.models import (
     Quote, QuoteLine, Job, JobStatus, QuoteStatus,
     PriceItem, PriceCategory, PriceLevel, Project, Client,
     Booking, BookingStatus, JobCostLine, TimePunch,
-    DeliveryTemplate,
+    DeliveryTemplate, JobDeliverable,
 )
 from app.services.rbac import requires_permission
 from app.context import current_tenant_id
@@ -223,6 +223,32 @@ def _line_category(line: QuoteLine) -> str:
 def _unit_nature(unit: Optional[str]) -> str:
     from app.services.cost_line_sync import unit_nature_for
     return unit_nature_for(unit)
+
+
+# v3.5.0-alpha.172.18 — Quote approvata immutabile: HARD-BLOCK su tutte le
+# mutazioni dirette (add/update/reorder line, batch ops). Unica via per
+# modificare una quote approvata è creare una nuova versione via
+# POST /api/{quote_id}/new-version → modificare la draft → migrate-job.
+#
+# Eccezione: i Consuntivi (quote `is_phantom=True`, anche se status=approved)
+# rappresentano il cost report vivo del progetto e DEVONO restare editabili
+# per propagazione automatica dalle voci approvate eliminate.
+#
+# `delete_quote_line` ha logica propria di propagazione a Consuntivo: il
+# blocco lì è gestito separatamente (non viene mai 409, ridiretto a phantom).
+def _assert_quote_mutable(quote: Quote, action: str = "modifica") -> None:
+    """Raise 409 se la quote è approvata e non è un Consuntivo.
+
+    Action è una parola breve che entra nel messaggio d'errore (es. "aggiunta
+    voce", "modifica voce", "riordino"). Default "modifica".
+    """
+    if quote.status == QuoteStatus.approved and not quote.is_phantom:
+        raise HTTPException(
+            409,
+            f"{action.capitalize()} bloccata: la quotazione {quote.number} è "
+            f"approvata. Crea una nuova versione (POST /api/{quote.id}/new-version), "
+            f"applica le modifiche alla draft e usa migrate-job per propagare al Job."
+        )
 
 
 def _recalc_quote(quote: Quote) -> None:
@@ -1315,6 +1341,7 @@ async def reorder_quote_lines(
         raise HTTPException(400, "Campo 'order' deve essere una lista di line_id")
     q = db.query(Quote).options(joinedload(Quote.lines)).filter(Quote.id == quote_id).first()
     if not q: raise HTTPException(404)
+    _assert_quote_mutable(q, action="riordino voci")
     line_map = {l.id: l for l in q.lines}
     for idx, line_id in enumerate(order):
         line = line_map.get(int(line_id))
@@ -1370,6 +1397,7 @@ async def add_quote_line(
         joinedload(Quote.lines).joinedload(QuoteLine.price_item).joinedload(PriceItem.category)
     ).filter(Quote.id == quote_id).first()
     if not q: raise HTTPException(404)
+    _assert_quote_mutable(q, action="aggiunta voce")
     if price_item_id and unit_price == 0:
         item = db.query(PriceItem).filter(PriceItem.id == price_item_id).first()
         if item:
@@ -1570,6 +1598,11 @@ async def update_quote_line(
 ):
     line = db.query(QuoteLine).filter(QuoteLine.id == line_id, QuoteLine.quote_id == quote_id).first()
     if not line: raise HTTPException(404)
+    # v3.5.0-alpha.172.18 — HARD-BLOCK su quote approvate non-phantom (Consuntivi
+    # sono modificabili perché sono il cost report vivo del progetto).
+    q_pre = db.query(Quote).filter(Quote.id == quote_id).first()
+    if q_pre:
+        _assert_quote_mutable(q_pre, action="modifica voce")
     if description is not None: line.description = description
     if detail is not None: line.detail = detail
     if quantity is not None: line.quantity = quantity
@@ -1619,6 +1652,27 @@ async def update_quote_line(
         # Per sicurezza: lo lasciamo come riferimento iniziale (no sovrascrittura).
         job_cost_line_synced = True
 
+    # v3.5.0-alpha.172.18 — sync anche JobDeliverable collegati (Consuntivo edit).
+    # Cambia nome, unit, unit_price, total_quoted. Per quantity_planned aggiorna
+    # SOLO se nessun delivered ancora registrato (qty_delivered == 0): se ci sono
+    # consegne parziali confermate, l'aggregato non si può rimodulare a caldo.
+    # nature non si tocca (cambio unit → nature è un'altra storia, va via versioning).
+    job_deliverables_synced = 0
+    deliverables = db.query(JobDeliverable).filter(JobDeliverable.quote_line_id == line.id).all()
+    for d in deliverables:
+        d.name = line.description
+        d.unit = line.unit
+        d.unit_price = line.unit_price or 0.0
+        if (d.quantity_delivered or 0.0) == 0.0:
+            # Per `deliverable_qty` spawn-per-unit (qty_planned=1.0 per row): NON
+            # cambiare qty_planned (le altre row dello stesso QL hanno qty=1
+            # ciascuna). Per volume/forfait (1 row aggregato): aggiorna a qty quote.
+            from app.services.cost_line_sync import unit_nature_for as _unfor
+            if _unfor(line.unit) != "deliverable_qty":
+                d.quantity_planned = float(line.quantity or 0.0)
+        d.total_quoted = round((d.quantity_planned or 0.0) * (d.unit_price or 0.0), 2)
+        job_deliverables_synced += 1
+
     db.commit()
     return {
         "id": line.id, "total": line.total,
@@ -1634,6 +1688,7 @@ async def update_quote_line(
         "is_optional": bool(line.is_optional),
         "section_label": line.section_label or None,
         "job_cost_line_synced": job_cost_line_synced,
+        "job_deliverables_synced": job_deliverables_synced,
     }
 
 
@@ -1675,16 +1730,16 @@ async def delete_quote_line(quote_id: int, line_id: int, db: Session = Depends(g
     # APPROVATA: invece di hard-block, sposta JCL+booking a "Quotazione a
     # Consuntivo" del progetto (auto-creandola se manca).
     #
-    # Regola Matteo: "In caso venga eliminata una voce, bisogna propagare
-    # l'adattamento su CR per job non più esistenti: job diventa
-    # automaticamente parte di quotazione phantom o a consuntivo. Se job
-    # non ha ore maturate, viene eliminato definitivamente."
+    # v3.5.0-alpha.172.18 — Estensione: propagazione attiva su QUALUNQUE delete
+    # su quote approvata non-phantom (anche senza booking attivi) per coerenza
+    # con regola "quote approvata immutabile". Inclusione cascade JobDeliverable
+    # nella propagazione (prima venivano lasciati orfani sul Job → consegne
+    # fantasma in /jobs/{id}).
     parent_quote = db.query(Quote).filter(Quote.id == quote_id).first()
     is_approved_propagation = (
         parent_quote
         and parent_quote.status == QuoteStatus.approved
         and not parent_quote.is_phantom
-        and blocking_bookings
     )
     if is_approved_propagation:
         # Ha ore maturate (booking attivi): muovi a Consuntivo. Crea se manca.
@@ -1732,7 +1787,15 @@ async def delete_quote_line(quote_id: int, line_id: int, db: Session = Depends(g
         # Sposta tutte le JCL collegate alla nuova QuoteLine sulla phantom
         for jcl in cost_lines:
             jcl.quote_line_id = cloned.id
-        # Cancella la QuoteLine originale (ora orfana, ma JCL stanno nella phantom)
+        # v3.5.0-alpha.172.18 — Sposta anche i JobDeliverable spawnati dalla
+        # QuoteLine originale alla cloned. Senza questo passaggio le consegne
+        # restavano linkate alla QL eliminata → fantasma in /jobs/{id} deliveries.
+        deliverables_moved = db.query(JobDeliverable).filter(
+            JobDeliverable.quote_line_id == line_id
+        ).all()
+        for d in deliverables_moved:
+            d.quote_line_id = cloned.id
+        # Cancella la QuoteLine originale (ora orfana, ma JCL+Deliverable stanno nella phantom)
         db.delete(line)
         q_main = db.query(Quote).options(
             joinedload(Quote.lines).joinedload(QuoteLine.price_item).joinedload(PriceItem.category)
@@ -1748,6 +1811,7 @@ async def delete_quote_line(quote_id: int, line_id: int, db: Session = Depends(g
             "phantom_quote_id": phantom.id,
             "phantom_number": phantom.number,
             "cost_lines_moved": len(cost_lines),
+            "deliverables_moved": len(deliverables_moved),
             "blocking_bookings": len(blocking_bookings),
         }
     if blocking_bookings:
@@ -1775,6 +1839,31 @@ async def delete_quote_line(quote_id: int, line_id: int, db: Session = Depends(g
         ).update({"job_cost_line_id": None}, synchronize_session=False)
         db.delete(jcl)
 
+    # v3.5.0-alpha.172.18 — Cascade su JobDeliverable: rimosse insieme se pulite.
+    # Block se confermate (confirmed_at) o se già in batch/billed/paid (billing_status).
+    deliverables = db.query(JobDeliverable).filter(JobDeliverable.quote_line_id == line_id).all()
+    for d in deliverables:
+        from app.models import DeliverableBillingStatus
+        if d.confirmed_at:
+            raise HTTPException(
+                409,
+                f"Impossibile cancellare: consegna '{d.name}' è già confermata "
+                f"({d.confirmed_at.isoformat()}). Annulla la conferma o usa una "
+                f"nuova versione di quote."
+            )
+        if d.billing_status in (
+            DeliverableBillingStatus.in_batch,
+            DeliverableBillingStatus.billed,
+            DeliverableBillingStatus.paid,
+        ):
+            raise HTTPException(
+                409,
+                f"Impossibile cancellare: consegna '{d.name}' è già "
+                f"{d.billing_status.value} (fatturata o in fattura). Crea nuova "
+                f"versione di quote per modifiche."
+            )
+        db.delete(d)
+
     db.delete(line)
     q = db.query(Quote).options(
         joinedload(Quote.lines).joinedload(QuoteLine.price_item).joinedload(PriceItem.category)
@@ -1782,7 +1871,11 @@ async def delete_quote_line(quote_id: int, line_id: int, db: Session = Depends(g
     q.lines = [l for l in q.lines if l.id != line_id]
     _recalc_quote(q)
     db.commit()
-    return {"ok": True, "cost_lines_deleted": len(cost_lines)}
+    return {
+        "ok": True,
+        "cost_lines_deleted": len(cost_lines),
+        "deliverables_deleted": len(deliverables),
+    }
 
 
 # ── v3.5.0-alpha.171.10 (Sprint 2 Step 6 batch) ──
@@ -1886,7 +1979,10 @@ async def batch_delete_quote_lines(
                 f"prima, oppure approva la quote (la propagazione su Consuntivo "
                 f"avverrà automatica)."
             )
-        if blocking_count > 0 and is_approved:
+        # v3.5.0-alpha.172.18 — Su quote approved propaga SEMPRE (anche senza
+        # booking attivi) per coerenza con regola "quote approvata immutabile".
+        # Include cascade JobDeliverable per evitare consegne fantasma.
+        if is_approved:
             phantom = _get_or_create_phantom()
             cloned = QuoteLine(
                 quote_id=phantom.id,
@@ -1906,14 +2002,20 @@ async def batch_delete_quote_lines(
             db.flush()
             for jcl in cost_lines:
                 jcl.quote_line_id = cloned.id
+            deliverables_to_move = db.query(JobDeliverable).filter(
+                JobDeliverable.quote_line_id == lid
+            ).all()
+            for d in deliverables_to_move:
+                d.quote_line_id = cloned.id
             total_moved += len(cost_lines)
             db.delete(line)
             details.append({
                 "line_id": lid, "propagated": True,
                 "cost_lines_moved": len(cost_lines),
+                "deliverables_moved": len(deliverables_to_move),
             })
             continue
-        # No blocking bookings: pulizia diretta
+        # No blocking bookings + quote not approved: pulizia diretta
         for jcl in cost_lines:
             if jcl.job and jcl.job.status in (JobStatus.completed, JobStatus.invoiced):
                 db.rollback()
@@ -1924,8 +2026,37 @@ async def batch_delete_quote_lines(
                 TimePunch.job_cost_line_id == jcl.id
             ).update({"job_cost_line_id": None}, synchronize_session=False)
             db.delete(jcl)
+        # v3.5.0-alpha.172.18 — Cascade Deliverable (block se confermati/billed)
+        from app.models import DeliverableBillingStatus
+        deliverables_clean = db.query(JobDeliverable).filter(
+            JobDeliverable.quote_line_id == lid
+        ).all()
+        for d in deliverables_clean:
+            if d.confirmed_at:
+                db.rollback()
+                raise HTTPException(
+                    409,
+                    f"Consegna '{d.name}' (line #{lid}) è già confermata: "
+                    f"impossibile eliminare. Annulla conferma o crea nuova versione."
+                )
+            if d.billing_status in (
+                DeliverableBillingStatus.in_batch,
+                DeliverableBillingStatus.billed,
+                DeliverableBillingStatus.paid,
+            ):
+                db.rollback()
+                raise HTTPException(
+                    409,
+                    f"Consegna '{d.name}' (line #{lid}) è {d.billing_status.value}: "
+                    f"impossibile eliminare. Crea nuova versione di quote."
+                )
+            db.delete(d)
         db.delete(line)
-        details.append({"line_id": lid, "deleted_clean": True, "cost_lines_deleted": len(cost_lines)})
+        details.append({
+            "line_id": lid, "deleted_clean": True,
+            "cost_lines_deleted": len(cost_lines),
+            "deliverables_deleted": len(deliverables_clean),
+        })
 
     # Recalc parent + phantom
     parent_fresh = db.query(Quote).options(
@@ -2943,9 +3074,24 @@ async def migrate_job(
     cost_lines_rebound = 0
     cost_lines_orphaned = 0
     cost_lines_created = 0
+    deliverables_rebound = 0
+    deliverables_orphaned = 0
+    deliverables_created = 0
 
     if job:
-        # Re-bind dei JobCostLine via parent_line_id
+        # v3.5.0-alpha.172.18 — branching JCL vs Deliverable per nature.
+        # Le voci time-based (hr/day) sincronizzano JobCostLine; le voci
+        # non-time (pc/TB/lump/...) sincronizzano JobDeliverable. La logica
+        # parent_line_id resta la chiave di re-bind in entrambi i casi.
+        from app.services.cost_line_sync import unit_nature_for as _unfor
+        from app.models import (
+            JobDeliverable as _JD, DeliverableUnitNature as _DUN,
+            DeliverableBillingStatus as _DBS,
+        )
+        TIME_UNITS = ("hr", "day")
+        SPAWN_PER_UNIT_NATURES = ("deliverable_qty",)
+
+        # Re-bind dei JobCostLine via parent_line_id (time-based)
         for jcl in list(job.cost_lines):
             if jcl.is_extra:
                 continue  # extra puri non toccati
@@ -2969,23 +3115,81 @@ async def migrate_job(
                     jcl.is_extra = True
                 cost_lines_orphaned += 1
 
-        # Crea JobCostLine per righe nuove (presenti in V_new ma non in V_old)
-        existing_new_line_ids = {jcl.quote_line_id for jcl in job.cost_lines if jcl.quote_line_id}
+        # v3.5.0-alpha.172.18 — Re-bind dei JobDeliverable via parent_line_id.
+        # Stessa logica di JCL: re-bind + sync campi pianificati. Per spawn-per-unit
+        # (deliverable_qty), NON ri-sincronizziamo qty_planned (resta 1.0 per row).
+        existing_deliverables = db.query(_JD).filter(_JD.job_id == job.id).all()
+        for d in existing_deliverables:
+            if d.quote_line_id and d.quote_line_id in new_line_by_parent:
+                new_line = new_line_by_parent[d.quote_line_id]
+                d.quote_line_id = new_line.id
+                d.name = new_line.description
+                d.price_item_id = new_line.price_item_id
+                d.unit = new_line.unit
+                d.unit_price = new_line.unit_price or 0.0
+                # quantity_delivered NON tocco. qty_planned sync solo se nessun delivered
+                # e nature non spawn-per-unit (per qty discreti ogni row resta a 1.0).
+                if (d.quantity_delivered or 0.0) == 0.0 and \
+                   _unfor(new_line.unit) not in SPAWN_PER_UNIT_NATURES:
+                    d.quantity_planned = float(new_line.quantity or 0.0)
+                d.total_quoted = round((d.quantity_planned or 0.0) * (d.unit_price or 0.0), 2)
+                deliverables_rebound += 1
+            elif d.quote_line_id:
+                # Orfano: riga V_old non più in V_new. NON cancello (potrebbero esserci
+                # asset linkati o conferme parziali). Soft-detach: quote_line_id = NULL.
+                if orphan_strategy == "keep_as_extra":
+                    d.quote_line_id = None
+                deliverables_orphaned += 1
+
+        # Crea JobCostLine + JobDeliverable per righe NUOVE (V_new ma non V_old).
+        existing_new_line_ids_jcl = {jcl.quote_line_id for jcl in job.cost_lines if jcl.quote_line_id}
+        existing_new_line_ids_dlv = {d.quote_line_id for d in existing_deliverables if d.quote_line_id}
         for nl in new_q.lines:
-            if nl.id not in existing_new_line_ids:
-                # È una riga "fresh" (nuova in V_new): crea JobCostLine
-                db.add(JobCostLine(
-                    job_id=job.id,
-                    quote_line_id=nl.id,
-                    price_item_id=nl.price_item_id,
-                    description=nl.description,
-                    quantity_quoted=nl.quantity,
-                    unit=nl.unit,
-                    unit_price=nl.unit_price,
-                    total_quoted=nl.total,
-                    total_expected=nl.total,
-                ))
-                cost_lines_created += 1
+            unit_l = (nl.unit or "").strip().lower()
+            if unit_l in TIME_UNITS:
+                if nl.id not in existing_new_line_ids_jcl:
+                    db.add(JobCostLine(
+                        job_id=job.id,
+                        quote_line_id=nl.id,
+                        price_item_id=nl.price_item_id,
+                        description=nl.description,
+                        quantity_quoted=nl.quantity,
+                        unit=nl.unit,
+                        unit_price=nl.unit_price,
+                        total_quoted=nl.total,
+                        total_expected=nl.total,
+                    ))
+                    cost_lines_created += 1
+            else:
+                if nl.id not in existing_new_line_ids_dlv:
+                    nature_code = _unfor(nl.unit)
+                    nature = _DUN(nature_code)
+                    qty_total = float(nl.quantity or 0.0)
+                    up = float(nl.unit_price or 0.0)
+                    if nature_code in SPAWN_PER_UNIT_NATURES:
+                        n_rows = max(1, int(round(qty_total)))
+                        per_row_qty = 1.0
+                    else:
+                        n_rows = 1
+                        per_row_qty = qty_total if qty_total > 0 else 1.0
+                    for _idx in range(n_rows):
+                        db.add(_JD(
+                            tenant_id=new_q.tenant_id,
+                            job_id=job.id,
+                            quote_line_id=nl.id,
+                            price_item_id=nl.price_item_id,
+                            name=nl.description,
+                            unit=nl.unit,
+                            unit_price=up,
+                            unit_nature=nature,
+                            quantity_planned=per_row_qty,
+                            quantity_delivered=0.0,
+                            total_quoted=round(per_row_qty * up, 2),
+                            total_accrued=0.0,
+                            total_cost_accrued=0.0,
+                            billing_status=_DBS.not_billed,
+                        ))
+                        deliverables_created += 1
 
         if orphan_strategy == "floating_job":
             job.quote_id = None
@@ -3016,5 +3220,8 @@ async def migrate_job(
         "cost_lines_rebound": cost_lines_rebound,
         "cost_lines_orphaned": cost_lines_orphaned,
         "cost_lines_created": cost_lines_created,
+        "deliverables_rebound": deliverables_rebound,
+        "deliverables_orphaned": deliverables_orphaned,
+        "deliverables_created": deliverables_created,
         "orphan_strategy": orphan_strategy,
     }
