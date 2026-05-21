@@ -2868,6 +2868,151 @@ async def multi_move_assignments(
     }
 
 
+@router.post("/api/booking-assignments/bulk-delete")
+async def bulk_delete_assignments(
+    request: Request,
+    assignment_ids: Optional[str] = Form(None, description="CSV di assignment_id da cancellare"),
+    booking_ids: Optional[str] = Form(None, description="CSV di booking_id (cancella TUTTE le assignment dei booking)"),
+    force_slice_unlock: bool = Form(False, description="Admin gate: ignora JCLBilledSlice locks"),
+    db: Session = Depends(get_db),
+):
+    """v3.5.0-alpha.172.20 — Bulk delete assignment in singola transazione.
+
+    Sostituisce loop client-side N delete con 1 call atomica. Cascade: se un
+    booking perde l'ultimo assignment → booking.status=cancelled (allineato a
+    `delete_assignment` single).
+
+    Body Form:
+    - `assignment_ids` (CSV): solo gli assignment specificati
+    - `booking_ids` (CSV): tutti gli assignment dei booking listati (espansione
+      server-side per evitare di mandare 100 id se il batch è grande)
+    - `force_slice_unlock` (admin): bypass JCLBilledSlice HARD-BLOCK
+
+    Validazione:
+    - RBAC scope su union resource_ids
+    - `_assert_no_blocking_slice` per ogni booking coinvolto (con force gate)
+    - Tenant filter
+
+    Response:
+    {
+      "ok": true,
+      "deleted_assignments": N,
+      "cancelled_bookings": M,
+      "skipped_billed": K,        # booking saltati per slice lock
+      "errors": []
+    }
+    """
+    if not assignment_ids and not booking_ids:
+        raise HTTPException(400, "Passa assignment_ids o booking_ids (almeno uno)")
+
+    # Parse input
+    def _csv_ints(s: Optional[str]) -> set[int]:
+        if not s: return set()
+        try:
+            return {int(x.strip()) for x in s.split(",") if x.strip()}
+        except ValueError:
+            raise HTTPException(400, "ID non interi nel CSV")
+
+    a_ids = _csv_ints(assignment_ids)
+    b_ids = _csv_ints(booking_ids)
+
+    # Espandi booking_ids → assignment_ids
+    if b_ids:
+        extra = db.query(BookingAssignment.id).join(Booking).filter(
+            BookingAssignment.booking_id.in_(b_ids),
+            Booking.tenant_id == current_tenant_id(),
+        ).all()
+        a_ids.update(e[0] for e in extra)
+
+    if not a_ids:
+        return {"ok": True, "deleted_assignments": 0, "cancelled_bookings": 0,
+                "skipped_billed": 0, "errors": []}
+
+    # Resolve assignments (tenant filtered via Booking join)
+    assignments = db.query(BookingAssignment).join(Booking).filter(
+        BookingAssignment.id.in_(a_ids),
+        Booking.tenant_id == current_tenant_id(),
+    ).all()
+    if not assignments:
+        return {"ok": True, "deleted_assignments": 0, "cancelled_bookings": 0,
+                "skipped_billed": 0, "errors": []}
+
+    # RBAC scope su tutte le risorse coinvolte
+    _enforce_planning_scope(request, db, {a.resource_id for a in assignments})
+
+    # Raggruppa per booking
+    by_booking: dict[int, list[BookingAssignment]] = {}
+    for a in assignments:
+        by_booking.setdefault(a.booking_id, []).append(a)
+
+    # Check JCLBilledSlice lock per booking
+    skipped_bookings: set[int] = set()
+    if not force_slice_unlock:
+        for bid, ass_list in by_booking.items():
+            booking = ass_list[0].booking
+            try:
+                _assert_no_blocking_slice(db, booking, force=False)
+            except HTTPException as e:
+                if e.status_code == 409:
+                    skipped_bookings.add(bid)
+                else:
+                    raise
+
+    deleted_assignments = 0
+    cancelled_bookings = 0
+    touched_bookings: list[Booking] = []
+
+    for bid, ass_list in by_booking.items():
+        if bid in skipped_bookings:
+            continue
+        booking = ass_list[0].booking
+        for a in ass_list:
+            db.delete(a)
+            deleted_assignments += 1
+        touched_bookings.append(booking)
+
+    db.flush()
+
+    # Per ogni booking touched: refresh + cascade cancelled se ultimo assignment
+    for booking in touched_bookings:
+        db.refresh(booking)
+        if not booking.assignments:
+            booking.status = BookingStatus.cancelled
+            booking.state = BookingState.cancelled
+            cancelled_bookings += 1
+        else:
+            _recalc_booking_envelope(booking)
+
+    # Recompute cost lines per booking touched (man-hours cambiate)
+    try:
+        from app.services.cost_line_sync import recompute_for_booking
+        for booking in touched_bookings:
+            recompute_for_booking(db, booking)
+    except Exception as e:
+        print(f"[bulk_delete_assignments] cost line sync failed: {e}")
+
+    # Audit log per booking
+    for booking in touched_bookings:
+        try:
+            _log_change(
+                db, booking.id,
+                kind="bulk_delete_assignments",
+                summary=f"Bulk delete: {len(by_booking.get(booking.id, []))} assignment rimosse",
+                payload={"bulk": True},
+            )
+        except Exception:
+            pass
+
+    db.commit()
+    return {
+        "ok": True,
+        "deleted_assignments": deleted_assignments,
+        "cancelled_bookings": cancelled_bookings,
+        "skipped_billed": len(skipped_bookings),
+        "errors": [],
+    }
+
+
 @router.delete("/api/booking-assignments/{assignment_id}")
 async def delete_assignment(
     assignment_id: int,

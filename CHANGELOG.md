@@ -1,5 +1,22 @@
 # MediaFlow — Changelog
 
+## v3.5.0-alpha.172.20 — Bulk delete assignment planning: endpoint + bottone (21 mag 2026)
+
+Funzione richiesta Matteo: "elimina tutte le assegnazioni" come bulk. Pre-α.172.20 il tasto Delete su selezione multipla faceva loop sequenziale `DELETE` (N call HTTP, lento + non atomico). Aggiunto endpoint server-side bulk + bottone UI.
+
+**Endpoint `POST /planning/api/booking-assignments/bulk-delete`**:
+- Body Form: `assignment_ids` (CSV) OR `booking_ids` (CSV expanded to all assignments). `force_slice_unlock` admin gate.
+- Validation: RBAC scope su union resource_ids, `_assert_no_blocking_slice` per ogni booking (skip se billed, no abort batch), tenant filter.
+- Cascade: booking che perde ultimo assignment → `status=cancelled, state=cancelled`.
+- Recompute cost_line_sync per booking touched (man-hours cambiate post-delete).
+- Audit log `bulk_delete_assignments` per booking.
+- Response: `{deleted_assignments, cancelled_bookings, skipped_billed, errors}`.
+
+**UI toolbar planning**:
+- Bottone `🗑 Elimina` accanto a `✏ Bulk`, enable/disable via `tlOnSelectionChange` con counter `(N)`.
+- `tlBulkDeleteSelection()`: espande selezione client-side (cascade preview), conferma, 1 call atomica.
+- `_tlDeleteHandler` (Delete key) refactor: sostituito loop sequenziale con bulk endpoint.
+
 ## v3.5.0-alpha.172.19 — Backfill unit_nature legacy PriceItem + Deliverable (21 mag 2026)
 
 Bug C confermato in DB Matteo (export α.172.16):

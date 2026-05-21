@@ -443,6 +443,9 @@
                quando senza selezione → Matteo "sparito"). Ora sempre presente,
                disabled se nessun item selezionato. UX più stabile. -->
           <button class="btn btn-ghost btn-sm" id="tl-bulk-btn-toolbar" onclick="tlOpenBulkModal()" disabled style="opacity:0.4; margin-left:6px;" title="Modifica in blocco i booking selezionati (richiede selezione attiva)">✏ Bulk</button>
+          <!-- v3.5.0-alpha.172.20 — Bulk delete: cancella tutte le assegnazioni
+               selezionate in singola call atomica (cascade booking se ultimo). -->
+          <button class="btn btn-ghost btn-sm" id="tl-bulk-delete-btn-toolbar" onclick="tlBulkDeleteSelection()" disabled style="opacity:0.4; margin-left:6px;" title="Elimina in blocco gli assignment selezionati (richiede selezione attiva)">🗑 Elimina</button>
           <!-- v3.5.0-alpha.38: rimossi bottone "☑ Seleziona…" e dropdown ▾ (Matteo:
                "i filtri generali bastano"). Il pannello tl-select-panel resta nel DOM
                come no-op (può essere riusato in futuro), le funzioni JS rimangono. -->
@@ -5641,17 +5644,20 @@ async function _doRenderTimeline(preserveWindow=false) {
       ? `Eliminare ${aIdList.length} assegnazioni (cascade su ${bookingIds.size} booking — incluse le risorse linkate non selezionate)?`
       : `Eliminare ${aIdList.length} assegnazioni selezionate?`;
     if (!confirm(msg)) return;
-    let ok = 0, fail = 0;
-    for (const aid of aIdList) {
-      try {
-        await api('DELETE', `/planning/api/booking-assignments/${aid}`);
-        ok++;
-      } catch(err) {
-        fail++;
-        console.warn('delete failed for assignment', aid, err);
-      }
+    // v3.5.0-alpha.172.20 — sostituito loop sequenziale con 1 call atomica
+    // server-side. Cascade booking, slice-lock guard + audit lato server.
+    try {
+      const fd = new FormData();
+      fd.append('assignment_ids', aIdList.join(','));
+      const res = await api('POST', '/planning/api/booking-assignments/bulk-delete', fd);
+      let label = `${res.deleted_assignments} eliminate`;
+      if (res.cancelled_bookings) label += ` · ${res.cancelled_bookings} booking cancellati`;
+      if (res.skipped_billed) label += ` · ${res.skipped_billed} skip (slice fatturate)`;
+      toast(label, res.skipped_billed ? 'warning' : 'success');
+    } catch(err) {
+      toast('Bulk delete fallito: ' + (err && err.message ? err.message : 'errore'), 'error');
+      console.error(err);
     }
-    toast(`${ok} eliminate${fail ? ` · ${fail} errori` : ''}`, fail ? 'warning' : 'success');
     renderTimeline(true);
   };
   document.addEventListener('keydown', window._tlDeleteHandler, true);
@@ -6220,8 +6226,67 @@ function tlOnSelectionChange() {
       : 'Modifica in blocco i booking selezionati (richiede selezione attiva)';
     btn.textContent = has ? `✏ Bulk (${selA.length})` : '✏ Bulk';
   }
+  // v3.5.0-alpha.172.20 — bottone bulk delete
+  const delBtn = document.getElementById('tl-bulk-delete-btn-toolbar');
+  if (delBtn) {
+    const has = selA.length >= 1;
+    delBtn.disabled = !has;
+    delBtn.style.opacity = has ? '1' : '0.4';
+    delBtn.style.background = has ? 'rgba(244,63,94,0.18)' : '';
+    delBtn.style.color = has ? '#fb7185' : '';
+    delBtn.title = has
+      ? `Elimina in blocco ${selA.length} assignment selezionat${selA.length === 1 ? 'a' : 'e'} (cascade booking se ultima)`
+      : 'Elimina in blocco le assignment selezionate (richiede selezione attiva)';
+    delBtn.textContent = has ? `🗑 Elimina (${selA.length})` : '🗑 Elimina';
+  }
   // v3.5.0-alpha.24: aggiorna anche il counter del pannello selezione
   if (typeof tlSelectPanelUpdateCounter === 'function') tlSelectPanelUpdateCounter();
+}
+
+// v3.5.0-alpha.172.20 — Bulk delete: 1 call atomica server-side invece di
+// loop sequenziale (path Delete key pre-α.172.20 era N call HTTP serial).
+// Cascade server: espande assignment_ids → tutti gli assignment dei booking
+// selezionati. Se booking perde l'ultima → status=cancelled.
+async function tlBulkDeleteSelection() {
+  if (!window._tlInstance) return;
+  const sel = window._tlInstance.getSelection() || [];
+  const aIds = sel.filter(id => typeof id === 'string' && id.startsWith('a'))
+                  .map(id => parseInt(id.substring(1), 10));
+  if (aIds.length === 0) {
+    toast('Nessun assignment selezionato', 'warning');
+    return;
+  }
+  // Espandi selezione client-side per messaggio chiaro (cascade preview)
+  const allItems = (typeof itemsDS !== 'undefined' && itemsDS) ? itemsDS.get() : [];
+  const bookingIds = new Set();
+  for (const aid of aIds) {
+    const item = allItems.find(x => x.id === 'a' + aid || x.assignment_id === aid);
+    if (item && item.booking_id) bookingIds.add(item.booking_id);
+  }
+  const cascadeA = new Set(aIds);
+  for (const it of allItems) {
+    if (it.booking_id && bookingIds.has(it.booking_id) && it.assignment_id) {
+      cascadeA.add(it.assignment_id);
+    }
+  }
+  const cascade = cascadeA.size > aIds.length;
+  const msg = cascade
+    ? `Eliminare ${cascadeA.size} assegnazioni? (cascade su ${bookingIds.size} booking — incluse risorse linkate non selezionate)`
+    : `Eliminare ${cascadeA.size} assegnazioni selezionate?`;
+  if (!confirm(msg)) return;
+  try {
+    const fd = new FormData();
+    fd.append('assignment_ids', [...cascadeA].join(','));
+    const res = await api('POST', '/planning/api/booking-assignments/bulk-delete', fd);
+    let label = `${res.deleted_assignments} eliminate`;
+    if (res.cancelled_bookings) label += ` · ${res.cancelled_bookings} booking cancellati`;
+    if (res.skipped_billed) label += ` · ${res.skipped_billed} skip (slice fatturate)`;
+    toast(label, res.skipped_billed ? 'warning' : 'success');
+    renderTimeline(true);
+  } catch (e) {
+    toast('Bulk delete fallito: ' + (e && e.message ? e.message : 'errore'), 'error');
+    console.error(e);
+  }
 }
 
 // ── v3.5.0-alpha.21: selezione multipla via menu (alternativa affidabile a ROI shift+drag) ──
