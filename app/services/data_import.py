@@ -131,6 +131,18 @@ def restore_from_zip(
             db_dst = project_root / "mediaflow.db"
             ts = datetime.now().strftime("%Y%m%d-%H%M%S")
             backup_path = project_root / f"mediaflow.db.backup-{ts}"
+            # v3.5.0-alpha.172.22 — Windows ferma il swap finché il connection
+            # pool di SQLAlchemy tiene handle aperti sul DB. Dispose esplicito +
+            # GC forzato per rilasciare lock prima del move. Su Linux/Mac il
+            # rename funziona comunque ma il dispose evita stale connection nel
+            # pool subito dopo lo swap (queries on new DB con connection vecchio).
+            try:
+                from app.database import engine as _eng
+                _eng.dispose()
+            except Exception as e_d:
+                summary["warnings"].append(f"engine.dispose pre-swap warning: {e_d}")
+            import gc
+            gc.collect()
             try:
                 if db_dst.exists():
                     shutil.move(str(db_dst), str(backup_path))
@@ -147,6 +159,14 @@ def restore_from_zip(
                     except Exception:
                         pass
                 raise RuntimeError(f"DB swap fallito: {e}") from e
+            # v3.5.0-alpha.172.22 — Dopo swap, dispose di nuovo per scartare
+            # cache statement bound al vecchio DB. Il primo SessionLocal()
+            # successivo ricreerà il pool sul nuovo file.
+            try:
+                from app.database import engine as _eng2
+                _eng2.dispose()
+            except Exception:
+                pass
         else:
             summary["warnings"].append(
                 "Archivio senza mediaflow.db. DB locale invariato."

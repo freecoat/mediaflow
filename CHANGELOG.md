@@ -1,5 +1,17 @@
 # MediaFlow — Changelog
 
+## v3.5.0-alpha.172.22 — Fix DB import ZIP su Windows (file lock) (21 mag 2026)
+
+Bug Matteo: import ZIP da /settings → `WinError 32: file utilizzato da un altro processo: mediaflow.db`.
+
+Su Windows il pool SQLAlchemy mantiene handle aperti sul DB anche tra request. `shutil.move` su file lockato fallisce. Linux/Mac il rename passa comunque.
+
+Fix in `data_import.py:restore_from_zip`:
+- `engine.dispose()` PRIMA del swap → chiude connection pool + rilascia file handle
+- `gc.collect()` forza release di Cursor/Connection ancora referenziati
+- `engine.dispose()` di nuovo DOPO swap → scarta statement cache bound al vecchio DB
+- Il prossimo `SessionLocal()` ricrea il pool sul nuovo file
+
 ## v3.5.0-alpha.172.21 — Timeline planning refresh incrementale (21 mag 2026)
 
 Domanda Matteo: serve full refresh ad ogni mutate? No. Pre-α.172.21 ogni create/edit/delete/duplicate/state-change chiamava `renderTimeline(true)` → destroy/recreate vis-timeline + reload completo bookings + background items. Costo 200-800ms con 100+ booking + flicker visivo.
