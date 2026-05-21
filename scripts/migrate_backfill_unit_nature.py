@@ -237,10 +237,10 @@ def main():
         else:
             db.commit()
             print()
-            print("✓ Commit OK")
+            print("OK - commit eseguito")
     except Exception as e:
         db.rollback()
-        print(f"✗ Errore: {e}")
+        print(f"ERRORE: {e}")
         raise
     finally:
         db.close()
