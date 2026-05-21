@@ -1,5 +1,31 @@
 # MediaFlow — Changelog
 
+## v3.5.0-alpha.172.19 — Backfill unit_nature legacy PriceItem + Deliverable (21 mag 2026)
+
+Bug C confermato in DB Matteo (export α.172.16):
+- 20/56 PriceItem hanno `unit_nature='deliverable_qty'` ma unit è hr/day/TB/allow/min → dovrebbe essere time_based / deliverable_volume / manual_allow
+- 100/123 Deliverable stesso problema (default backfill α.172.1 mai corretto)
+- QL #29 "Data Transfer" 100 TB → spawnato 100 row separate (legacy pre-α.172.14) invece di 1 aggregato → QL poi eliminata, lasciando 100 deliverable orfani
+
+**Script `scripts/migrate_backfill_unit_nature.py`** con 4 funzioni idempotenti:
+1. `backfill_price_items()`: ricalcola `PriceItem.unit_nature` dal mapping `unit_nature_for(unit)`
+2. `backfill_deliverables()`: stesso su `JobDeliverable.unit_nature`
+3. `consolidate_volume_forfait_deliverables()`: collassa multi-row volume/forfait stesso QL in 1 row aggregato (sum qty_planned + delivered + total_quoted/accrued, primo confirmed_at/asset). BLOCK se billing_status != not_billed.
+4. `delete_orphan_deliverables()`: hard-delete Deliverable con `quote_line_id` non esistente E senza asset/conferma.
+
+**Auto-backfill silent al boot** (`main.py` lifespan): step 1+2 eseguiti al boot, log se trovati mismatch. Safe + idempotente. Step 3+4 restano manuali (potenzialmente distruttivi).
+
+**Dry-run su DB Matteo**:
+- Step 1+2: 20 PriceItem + 100 Deliverable backfill
+- Step 3: QL#29 collassato 100→1 (99 row rimosse)
+- Step 4: 1 orfano cleanup post-collapse
+
+**Uso CLI per cleanup completo**:
+```bash
+python -m scripts.migrate_backfill_unit_nature --all
+# oppure separati: --consolidate, --orphans, --dry-run
+```
+
 ## v3.5.0-alpha.172.18 — Quote approvata immutabile + cascade Deliverable in delete/migrate (21 mag 2026)
 
 Feedback Matteo dopo test α.172.17:
