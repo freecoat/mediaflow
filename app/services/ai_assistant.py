@@ -1542,12 +1542,15 @@ def _h_propose_recurring_bookings(db: Session, data: dict) -> dict:
                 cur_d += _td(days=1)
                 continue
             from app.models import BookingState as _BSt
+            # v3.5.0-alpha.172.16 — Booking non ha campo `title` (solo `notes`).
+            # title (se fornito dall'AI) finisce in notes per tracciamento.
             b = Booking(
                 tenant_id=CURRENT_TENANT, job_id=job.id,
-                title=title, start_datetime=ns, end_datetime=ne,
+                start_datetime=ns, end_datetime=ne,
                 status=BookingStatus.confirmed, kind=BookingKind.project,
                 job_cost_line_id=int(jcl_id) if jcl_id else None,
                 state=_BSt.confirmed,  # v3.5.0-alpha.66.5.1: sync state
+                notes=title if title else None,
             )
             db.add(b); db.flush()
             db.add(BookingAssignment(

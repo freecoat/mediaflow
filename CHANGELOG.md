@@ -1,5 +1,11 @@
 # MediaFlow — Changelog
 
+## v3.5.0-alpha.172.16 — Fix propose_recurring_bookings: `title` kwarg invalido (21 mag 2026)
+
+Bug: handler `_h_propose_recurring_bookings` passava `title=title` a `Booking(...)` ma il modello non ha campo `title`. Apply falliva con `'title' is an invalid keyword argument for Booking`.
+
+Fix (`ai_assistant.py`): rimosso `title=` kwarg, `title` AI-fornito ora finisce in `Booking.notes` per tracciamento.
+
 ## v3.5.0-alpha.172.15 — AI Copilot: context risorse+job + job_id resolver (21 mag 2026)
 
 Feedback Matteo: AI inventava ruoli risorse (colorist su online editor) e proponeva booking ricorrenti su "Job #4" che non esisteva (confondeva quote_id con job_id). Apply falliva con "Job #4 non trovato".
