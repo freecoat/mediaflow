@@ -107,19 +107,23 @@ def _create_job_from_quote(db: Session, q: Quote, user_id: Optional[int] = None)
     )
     db.add(job)
     db.flush()
-    # v3.5.0-alpha.172.2 Restructure — branching unit time-based vs non-time:
-    # - Time-based (hr, day) → JobCostLine (lavorazione)
-    # - Non-time (pc/lot/shot/version/TB/GB/allow/lump/fix) → JobDeliverable
-    #   (1 row per qty unitaria, decisione 1.1 RESTRUCTURE_2026_05_20.md)
+    # v3.5.0-alpha.172.2 Restructure — branching unit time-based vs non-time.
+    # v3.5.0-alpha.172.14 — Revisione spawn rule per nature:
+    #   - time_based (hr/day) → JobCostLine
+    #   - deliverable_qty (pc/lot/shot/version) → N row, 1 per ogni unità.
+    #     Es. quote "3 DCP" → 3 JobDeliverable distinti (qty_planned=1.0 each)
+    #     per permettere conferma individuale + link asset 1:1.
+    #   - deliverable_volume (TB/GB) → 1 row, qty_planned = qty quote.
+    #     Es. quote "10 TB backup" → 1 deliverable qty_planned=10.0, qty_delivered
+    #     incrementato via MHL Yoyotta o manuale.
+    #   - manual_allow (allow/lump/fix) → 1 row, qty_planned = qty quote.
+    #     Es. quote "1 allow rinegoziazione" → 1 deliverable qty_planned=1.0.
+    #     Forfait/lump → 1 conferma manuale.
+    from app.services.cost_line_sync import unit_nature_for
     from app.models import JobDeliverable, DeliverableUnitNature, DeliverableBillingStatus
     TIME_UNITS = ("hr", "day")
-    UNIT_TO_NATURE = {
-        "hr": "time_based", "day": "time_based",
-        "pc": "deliverable_qty", "lot": "deliverable_qty",
-        "shot": "deliverable_qty", "version": "deliverable_qty",
-        "TB": "deliverable_volume", "GB": "deliverable_volume",
-        "allow": "manual_allow", "lump": "manual_allow", "fix": "manual_allow",
-    }
+    # Nature per cui spawn 1 row per qty unitaria (consegne discrete).
+    SPAWN_PER_UNIT_NATURES = ("deliverable_qty",)
     for line in q.lines:
         unit_l = (line.unit or "").strip().lower()
         if unit_l in TIME_UNITS:
@@ -135,10 +139,18 @@ def _create_job_from_quote(db: Session, q: Quote, user_id: Optional[int] = None)
                 total_expected=line.total,
             ))
         else:
-            # Non-time: spawn 1 JobDeliverable per qty unitaria (round-int, min 1).
-            nature_code = UNIT_TO_NATURE.get(unit_l, "deliverable_qty")
+            nature_code = unit_nature_for(line.unit)
             nature = DeliverableUnitNature(nature_code)
-            n_rows = max(1, int(round(float(line.quantity or 0))))
+            qty_total = float(line.quantity or 0.0)
+            up = float(line.unit_price or 0.0)
+            if nature_code in SPAWN_PER_UNIT_NATURES:
+                # Discreto: 1 row per unità (es. 3 DCP separati).
+                n_rows = max(1, int(round(qty_total)))
+                per_row_qty = 1.0
+            else:
+                # Volume/forfait: 1 row aggregato (TB cumulativo o lump sum).
+                n_rows = 1
+                per_row_qty = qty_total if qty_total > 0 else 1.0
             for idx in range(n_rows):
                 db.add(JobDeliverable(
                     tenant_id=q.tenant_id,
@@ -148,11 +160,11 @@ def _create_job_from_quote(db: Session, q: Quote, user_id: Optional[int] = None)
                     price_item_id=line.price_item_id,
                     name=line.description,
                     unit=line.unit,
-                    unit_price=line.unit_price,
+                    unit_price=up,
                     unit_nature=nature,
-                    quantity_planned=1.0,
+                    quantity_planned=per_row_qty,
                     quantity_delivered=0.0,
-                    total_quoted=round(line.unit_price or 0.0, 2),
+                    total_quoted=round(per_row_qty * up, 2),
                     total_accrued=0.0,
                     total_cost_accrued=0.0,
                     billing_status=DeliverableBillingStatus.not_billed,

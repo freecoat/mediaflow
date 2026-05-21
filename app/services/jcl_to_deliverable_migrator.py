@@ -89,22 +89,30 @@ def migrate_jcl_to_deliverable(db: Session, jcl_id: int) -> dict:
     external = bool(getattr(jcl, "external_outsourced", False))
     nature_str = "manual_allow" if external else unit_nature_for(unit)
     unit_eff = "lump" if external else unit
-    if external:
+    qty_raw = float(jcl.quantity_quoted or 0.0)
+    # v3.5.0-alpha.172.14 — Spawn rule:
+    # external/manual_allow/deliverable_volume → 1 row aggregato.
+    # deliverable_qty (pc/lot/shot/version) → N row, 1 per unità.
+    if external or nature_str in ("manual_allow", "deliverable_volume"):
         n_rows = 1
-        per_row_qty = float(jcl.quantity_quoted or 1.0)
+        per_row_qty = qty_raw if qty_raw > 0 else 1.0
     else:
-        qty_raw = float(jcl.quantity_quoted or 0)
+        # deliverable_qty
         n_rows = max(1, int(round(qty_raw)))
         per_row_qty = 1.0
 
     new_ids: list[int] = []
     up = float(jcl.unit_price or 0.0)
-    qa_total = round(float(jcl.quantity_actual or 0.0))
+    qa_total = float(jcl.quantity_actual or 0.0)
+    qa_int = round(qa_total)
+    aggregated = (n_rows == 1)  # external O volume O manual_allow
     for idx in range(n_rows):
-        if external:
-            qty_done = float(jcl.quantity_actual or 0.0)
+        if aggregated:
+            # 1 row → tutto il qty_actual va qui (cap a per_row_qty)
+            qty_done = min(qa_total, per_row_qty) if per_row_qty > 0 else qa_total
         else:
-            qty_done = 1.0 if idx < qa_total else 0.0
+            # N row deliverable_qty → 1 per unità completata
+            qty_done = 1.0 if idx < qa_int else 0.0
         d = JobDeliverable(
             tenant_id=jcl.tenant_id,
             job_id=jcl.job_id,

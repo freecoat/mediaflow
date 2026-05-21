@@ -301,29 +301,28 @@ def autospawn_deliverables_from_jcl(conn, dry_run: bool = False) -> dict:
         else:
             unit_eff = unit
 
-        # Determina quante row creare:
-        # - external_outsourced: 1 sola row con quantity_planned = quantity_quoted
-        # - altri: 1 row per qty unitaria (round to int, min 1)
-        if external:
+        # v3.5.0-alpha.172.14 — Spawn rule per nature:
+        # external/manual_allow/deliverable_volume → 1 row aggregato.
+        # deliverable_qty (pc/lot/shot/version) → N row, 1 per unità.
+        qty_raw = float(jcl[6] or 0)
+        if external or nature in ("manual_allow", "deliverable_volume"):
             n_rows = 1
-            per_row_qty = float(jcl[6] or 1.0)
+            per_row_qty = qty_raw if qty_raw > 0 else 1.0
         else:
-            qty_raw = float(jcl[6] or 0)
             n_rows = max(1, int(round(qty_raw)))
             per_row_qty = 1.0
 
+        aggregated = (n_rows == 1)
         new_deliv_ids = []
         for idx in range(n_rows):
             up = float(jcl[9] or 0.0)
             tq = round(per_row_qty * up, 2)
-            # quantity_delivered iniziale derivato da JCL.quantity_actual
-            # ripartito su row:
-            if external:
-                qty_done = float(jcl[7] or 0.0)
+            # quantity_delivered iniziale derivato da JCL.quantity_actual.
+            qa_total = float(jcl[7] or 0.0)
+            if aggregated:
+                qty_done = min(qa_total, per_row_qty) if per_row_qty > 0 else qa_total
             else:
-                # Distribuisci quantity_actual round per row: round(qty_actual)
-                # divisione: per le prime rows fino a qty_actual, set 1; le altre 0.
-                qa = round(float(jcl[7] or 0.0))
+                qa = round(qa_total)
                 qty_done = 1.0 if idx < qa else 0.0
             ta = round(qty_done * up, 2)
 

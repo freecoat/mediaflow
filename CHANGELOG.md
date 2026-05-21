@@ -1,5 +1,29 @@
 # MediaFlow — Changelog
 
+## v3.5.0-alpha.172.14 — Spawn deliverable per nature: volume/forfait aggregati (21 mag 2026)
+
+Feedback Matteo: data transfer (TB/GB) e forfait (allow/lump/fix) trattati come N row separate è errato semanticamente. Volume cumulativo (es. 10 TB backup) deve essere 1 entità con qty_delivered che cresce via MHL Yoyotta / scan / manuale. Idem per forfait/lump.
+
+**Regola spawn revisionata** (`docs/RESTRUCTURE_2026_05_20.md` sezione 2.1):
+
+| Nature | Spawn | Esempio |
+|---|---|---|
+| `deliverable_qty` (pc/lot/shot/version) | N row, 1 per unità | qty=3 pc → 3 deliverable separati (qty_planned=1 each) |
+| `deliverable_volume` (TB/GB) | **1 row aggregato** | qty=10 TB → 1 deliverable qty_planned=10, qty_delivered incrementato via MHL/CSV/manuale |
+| `manual_allow` (allow/lump/fix) | **1 row aggregato** | qty=1 lump → 1 deliverable qty_planned=1, 1 conferma manuale |
+| `external_outsourced=True` (JCL legacy) | 1 row unit forzato `lump` | preservato |
+
+**File aggiornati**:
+- `app/routers/quotes.py:_create_job_from_quote` — branching `SPAWN_PER_UNIT_NATURES = ("deliverable_qty",)`
+- `app/services/reverse_quote.py` — stesso pattern in phantom Z spawn
+- `app/services/jcl_to_deliverable_migrator.py` — migration runtime + aggregated qty_done
+- `scripts/migrate_restructure_phase1.py` — pattern allineato per re-run script CLI
+- `docs/RESTRUCTURE_2026_05_20.md` — documentata revisione spawn rule
+
+Helper centralizzato `unit_nature_for()` (cost_line_sync) usato ovunque, no mappe duplicate.
+
+**Migrazione dati esistenti**: nuove quote post-α.172.14 seguono nuova rule. Quote storiche con spawn N row per TB/GB rimangono come sono (no breaking change). Admin può rieseguire `/admin/restructure-migration` se vuole consolidare, ma sostituirebbe i deliverable esistenti.
+
 ## v3.5.0-alpha.172.13 — Cost report: filtri Lavorazioni + Consegne (21 mag 2026)
 
 Feedback Matteo: rendere filtrabili le card Lavorazioni e Consegne nel cost report dettaglio. Filtri generici + per tipologia/reparto.

@@ -213,15 +213,20 @@ def attach_to_pending_quote(
             JobDeliverable.job_id == job.id,
         ).count()
         if existing == 0:
-            n_rows = max(1, int(round(float(line.quantity or 0))))
+            # v3.5.0-alpha.172.14 — Spawn rule per nature (vedi quotes.py):
+            # deliverable_qty → N row 1 per unità; volume/manual_allow → 1 row aggregato.
+            from app.services.cost_line_sync import unit_nature_for
+            nature_code = unit_nature_for(line.unit)
+            nature = DeliverableUnitNature(nature_code)
+            qty_total = float(line.quantity or 0.0)
+            up = float(line.unit_price or 0.0)
+            if nature_code == "deliverable_qty":
+                n_rows = max(1, int(round(qty_total)))
+                per_row_qty = 1.0
+            else:
+                n_rows = 1
+                per_row_qty = qty_total if qty_total > 0 else 1.0
             for idx in range(n_rows):
-                nature_map = {
-                    "pc": "deliverable_qty", "lot": "deliverable_qty",
-                    "shot": "deliverable_qty", "version": "deliverable_qty",
-                    "TB": "deliverable_volume", "GB": "deliverable_volume",
-                    "allow": "manual_allow", "lump": "manual_allow", "fix": "manual_allow",
-                }
-                nature = DeliverableUnitNature(nature_map.get(unit_l, "deliverable_qty"))
                 d = JobDeliverable(
                     tenant_id=quote.tenant_id,
                     job_id=job.id,
@@ -229,11 +234,11 @@ def attach_to_pending_quote(
                     price_item_id=line.price_item_id,
                     name=line.description,
                     unit=line.unit,
-                    unit_price=line.unit_price,
+                    unit_price=up,
                     unit_nature=nature,
-                    quantity_planned=1.0,
+                    quantity_planned=per_row_qty,
                     quantity_delivered=0.0,
-                    total_quoted=round(line.unit_price or 0.0, 2),
+                    total_quoted=round(per_row_qty * up, 2),
                     total_accrued=0.0,
                     total_cost_accrued=0.0,
                     billing_status=DeliverableBillingStatus.not_billed,

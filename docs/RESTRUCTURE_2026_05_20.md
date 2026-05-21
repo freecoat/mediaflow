@@ -54,9 +54,17 @@ Asset fisici (LTO/HDD/Drive) restano canale a parte: acquisto vendor + ricarico 
 - `billed_amount: float` — uguale JCL
 - `linked_asset_ids: array` o tabella pivot `deliverable_assets` — multi-link verifica
 
-**REGOLA**: 1 JobDeliverable per ogni `qty` unitaria della QuoteLine.
-- QuoteLine "DCP Master" qty=3 pc → 3 JobDeliverable row al convert
-- Permette link 1:1 deliverable→asset, conferma indipendente
+**REGOLA spawn deliverable (revisione α.172.14)** — dipende da `unit_nature`:
+- `deliverable_qty` (pc/lot/shot/version) → **N row, 1 per unità**.
+  Es. QuoteLine "DCP Master" qty=3 pc → 3 JobDeliverable separati (qty_planned=1 each).
+  Permette link 1:1 deliverable→asset + conferma indipendente.
+- `deliverable_volume` (TB/GB) → **1 row aggregato**, qty_planned = qty quote.
+  Es. QuoteLine "Backup LTO" qty=10 TB → 1 JobDeliverable qty_planned=10.0.
+  qty_delivered incrementato cumulativamente via MHL Yoyotta / CSV LTO / fill manuale.
+- `manual_allow` (allow/lump/fix) → **1 row aggregato**, qty_planned = qty quote.
+  Forfait per definizione, 1 sola conferma manuale producer.
+- `external_outsourced=True` (legacy flag su JCL) → **1 row** unit forzato a `lump`,
+  qty_planned = qty quote (outsourcing è 1 entità fatturabile).
 
 **Booking** — link M:N deliverable
 - RIMUOVERE: `booking.job_deliverable_id` (FK singolo)
