@@ -1444,6 +1444,144 @@ def _h_find_free_slots(db: Session, data: dict) -> dict:
     }
 
 
+@ai_capability("check_recurring_booking_collisions")
+def _h_check_recurring_booking_collisions(db: Session, data: dict) -> dict:
+    """READONLY. Anticipa festività italiane + ferie/malattie risorse +
+    booking esistenti che cadono nel range di una proposta ricorrente.
+
+    Usato dall'AI PRIMA di proporre `propose_recurring_bookings`: se ritorna
+    eventi (festività/ferie/conflitti), l'AI presenta la lista all'utente
+    e chiede conferma esplicita ("saltiamo questi giorni?" / "cambiamo
+    date?") invece di creare silenziosamente.
+
+    Payload: stessa struttura di `propose_recurring_bookings` (resource_ids,
+    rule, start_date, until_date, start_time, end_time). NON crea booking.
+
+    Response:
+    {
+      "working_days_count": int,
+      "holidays": [{"date": "YYYY-MM-DD", "name": "Festa della Repubblica"}],
+      "unavailabilities": [{"resource_id", "resource_name", "kind",
+                            "start_date", "end_date", "reason"}],
+      "existing_conflicts": [{"date", "resource_id", "resource_name",
+                              "booking_id"}],
+      "weekend_count": int,
+      "scope": {...}
+    }
+    """
+    from datetime import datetime as _dt, timedelta as _td, date as _d, time as _t
+    from app.models import (
+        BookingStatus as _BS, BookingAssignment as _BA, Booking as _B,
+        Resource as _R, ResourceUnavailability as _RU,
+        UnavailabilityStatus as _US,
+    )
+    DAYS = {"MON": 0, "TUE": 1, "WED": 2, "THU": 3, "FRI": 4, "SAT": 5, "SUN": 6}
+    # Parse resource_ids
+    rids_in = data.get("resource_ids")
+    if rids_in is None:
+        rid_single = int(data.get("resource_id") or 0)
+        rids = [rid_single] if rid_single else []
+    else:
+        if not isinstance(rids_in, list):
+            raise ValueError("resource_ids deve essere un array")
+        rids = [int(r) for r in rids_in if r]
+    if not rids:
+        raise ValueError("resource_id o resource_ids obbligatorio")
+    start_d = _d.fromisoformat(data["start_date"])
+    until_d = _d.fromisoformat(data["until_date"])
+    start_t = _t.fromisoformat(data.get("start_time") or "09:00")
+    end_t = _t.fromisoformat(data.get("end_time") or "18:00")
+    rule = (data.get("rule") or "WEEKDAYS").upper().strip()
+    if rule == "DAILY":
+        days = set(range(7))
+    elif rule == "WEEKDAYS":
+        days = {0, 1, 2, 3, 4}
+    elif rule == "WEEKENDS":
+        days = {5, 6}
+    else:
+        days = {DAYS[d.strip()[:3].upper()] for d in rule.split(",") if d.strip()}
+    if not days:
+        raise ValueError(f"Regola ricorrenza non valida: {rule}")
+    # Italian holidays nel range
+    holidays_list: list[dict] = []
+    try:
+        import holidays as _hol
+        country_class = getattr(_hol, "IT", None)
+        if country_class:
+            yrs = list(range(start_d.year, until_d.year + 1))
+            it_hol = country_class(years=yrs)
+            for d_h, name in it_hol.items():
+                if start_d <= d_h <= until_d and d_h.weekday() in days:
+                    holidays_list.append({"date": d_h.isoformat(), "name": name})
+    except Exception:
+        pass
+    # Resource names lookup
+    res_rows = db.query(_R).filter(_R.id.in_(rids)).all()
+    res_name = {r.id: r.name for r in res_rows}
+    # Indisponibilità approvate che intersecano [start_d, until_d]
+    unav_rows = db.query(_RU).filter(
+        _RU.resource_id.in_(rids),
+        _RU.status == _US.approved,
+        _RU.start_date <= until_d,
+        _RU.end_date >= start_d,
+    ).all()
+    unavailabilities: list[dict] = []
+    for u in unav_rows:
+        unavailabilities.append({
+            "resource_id": u.resource_id,
+            "resource_name": res_name.get(u.resource_id, f"#{u.resource_id}"),
+            "kind": u.kind.value if hasattr(u.kind, "value") else str(u.kind),
+            "start_date": u.start_date.isoformat(),
+            "end_date": u.end_date.isoformat(),
+            "reason": u.reason or "",
+        })
+    # Booking esistenti su queste risorse nel range
+    range_start = _dt.combine(start_d, _t(0, 0))
+    range_end = _dt.combine(until_d, _t(23, 59))
+    existing = db.query(_BA).join(_B).filter(
+        _B.status != _BS.cancelled,
+        _BA.resource_id.in_(rids),
+        _BA.start_datetime < range_end,
+        _BA.end_datetime > range_start,
+    ).all()
+    existing_conflicts: list[dict] = []
+    for a in existing:
+        cur = a.start_datetime.date()
+        # Solo se cade in giorno della regola
+        if cur.weekday() in days and start_d <= cur <= until_d:
+            existing_conflicts.append({
+                "date": cur.isoformat(),
+                "resource_id": a.resource_id,
+                "resource_name": res_name.get(a.resource_id, f"#{a.resource_id}"),
+                "booking_id": a.booking_id,
+            })
+    # Working days totali (matching rule, esclusi holiday)
+    cur = start_d
+    working_days = 0
+    weekend_count = 0
+    holidays_set = {_d.fromisoformat(h["date"]) for h in holidays_list}
+    while cur <= until_d:
+        if cur.weekday() in days:
+            if cur not in holidays_set:
+                working_days += 1
+        elif cur.weekday() in (5, 6):
+            weekend_count += 1
+        cur += _td(days=1)
+    return {
+        "working_days_count": working_days,
+        "weekend_count": weekend_count,
+        "holidays": holidays_list,
+        "unavailabilities": unavailabilities,
+        "existing_conflicts": existing_conflicts,
+        "scope": {
+            "resource_ids": rids,
+            "start_date": start_d.isoformat(),
+            "until_date": until_d.isoformat(),
+            "rule": rule,
+        },
+    }
+
+
 @ai_capability("propose_recurring_bookings")
 def _h_propose_recurring_bookings(db: Session, data: dict) -> dict:
     """MUTATION. Crea una serie ricorrente di booking dal lunedì al venerdì

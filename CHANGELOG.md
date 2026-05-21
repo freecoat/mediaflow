@@ -1,5 +1,21 @@
 # MediaFlow — Changelog
 
+## v3.5.0-alpha.172.27 — AI check_recurring_booking_collisions: anticipa festività/ferie (21 mag 2026)
+
+Feedback Matteo: α.172.26 skipava festività silenziosamente. Vuole che l'AI chieda conferma PRIMA se trovate festività/ferie/conflitti.
+
+**Tool readonly `check_recurring_booking_collisions`** (`ai_assistant.py` + `ai_tools.py`):
+- Stessi parametri di `propose_recurring_bookings` (resource_ids, rule, start_date, until_date, start_time, end_time)
+- Anticipa: festività italiane nel range (via `holidays.IT`), ferie/malattie approved (`ResourceUnavailability`), booking esistenti che si sovrappongono
+- Response: `working_days_count`, `weekend_count`, `holidays[]`, `unavailabilities[]`, `existing_conflicts[]`
+
+**System prompt**:
+- Regola #6 estesa: PRIMA di `propose_recurring_bookings` (range > 5 gg o mesi con festività), chiama SEMPRE `check_recurring_booking_collisions`
+- Se ritorna eventi: AI cita in italiano leggibile ("il 2 giugno è Festa della Repubblica", "Luca è in ferie il 5") e chiede conferma esplicita
+- Solo dopo OK utente, propone la creazione
+
+Smoke su 2026-06-01..12: rilevati 9 working days, 1 festività (2 giugno), 0 ferie, 20 conflitti booking precedenti.
+
 ## v3.5.0-alpha.172.26 — AI skip festività + fix ordine lista Consegne post-search (21 mag 2026)
 
 Feedback Matteo dopo test α.172.25:

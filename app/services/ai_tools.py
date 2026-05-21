@@ -530,6 +530,32 @@ TOOLS: list[dict] = [
         "handler": "find_free_slots",
     },
     {
+        "name": "check_recurring_booking_collisions",
+        "category": "readonly",
+        "description": (
+            "READONLY. Anticipa festività italiane + ferie/malattie + booking esistenti "
+            "che cadono nel range di una serie ricorrente che stai per proporre. USA "
+            "SEMPRE PRIMA di `propose_recurring_bookings` quando il range copre più di "
+            "5 giorni. Se ritorna festività o ferie, mostra all'utente la lista in "
+            "italiano e chiedi conferma (saltiamo / cambiamo date) prima di proporre la "
+            "creazione effettiva. Stessi parametri di propose_recurring_bookings."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "resource_id":  {"type": "integer", "description": "Risorsa singola."},
+                "resource_ids": {"type": "array", "items": {"type": "integer"}, "description": "Lista risorse coinvolte."},
+                "rule":         {"type": "string", "description": "DAILY|WEEKDAYS|WEEKENDS|CSV (default WEEKDAYS)."},
+                "start_date":   {"type": "string", "description": "Prima data YYYY-MM-DD."},
+                "until_date":   {"type": "string", "description": "Ultima data YYYY-MM-DD inclusa."},
+                "start_time":   {"type": "string", "description": "Orario start HH:MM (default 09:00)."},
+                "end_time":     {"type": "string", "description": "Orario end HH:MM (default 18:00)."},
+            },
+            "required": ["start_date", "until_date"],
+        },
+        "handler": "check_recurring_booking_collisions",
+    },
+    {
         "name": "propose_recurring_bookings",
         "category": "mutation",
         "description": (
@@ -1066,6 +1092,12 @@ Per **CREARE** nuovi booking singoli usa `propose_booking` (esistente).
 4. **Conflict awareness**: prima di proporre booking nuovi su una finestra contesa, considera `analyze_conflicts` per dare un quadro chiaro all'utente. Non sovrascrivere conflitti esistenti.
 5. **Spiega il perché**: dopo aver proposto un'azione di pianificazione, aggiungi 1-2 frasi che giustificano la scelta (es. "Ho scelto martedì perché Luca è libero e non ci sono festività nel periodo").
 6. **Booking ricorrenti**: per richieste tipo "online editor lun-ven 9-18 per 4 settimane", USA `propose_recurring_bookings` (un singolo Apply) invece di proporre 20 booking singoli.
+
+   **PRIMA di proporre la creazione** (quando il range copre >5 giorni o tocca aprile/maggio/giugno/agosto/dicembre — periodi con festività), chiama SEMPRE `check_recurring_booking_collisions` con stessi parametri. Se la response contiene:
+   - `holidays[]` non vuoto → cita le festività in italiano ("il 2 giugno cade Festa della Repubblica") e chiedi: *vuoi saltare quei giorni o cambiare le date?*
+   - `unavailabilities[]` non vuoto → cita ferie/malattia per risorsa ("Luca è in ferie il 5 giugno") e chiedi: *salto, sposto su altra risorsa, o cambio range?*
+   - `existing_conflicts[]` non vuoto → cita conflitti ("Conforming 1 ha già booking #42 il 3 giugno") e chiedi alternativa
+   Solo dopo conferma esplicita utente, chiama `propose_recurring_bookings` (skip_holidays resta true).
 7. **Linguaggio umano, mai ID tecnici nelle risposte** (v3.5.0-alpha.172.24): NON menzionare mai all'utente termini tipo `job_cost_line_id`, `quote_id`, `project_id`, `JCL`, `propose_*`, `tool_result`, `payload`, "fallback". L'utente è un produttore, non uno sviluppatore. USA invece parole umane: "lavorazione di color grading", "quotazione Q-DNHP-v3", "fattura passiva n. 42", "progetto Mare Nostrum". Anche nelle conferme/errori riformula in italiano leggibile.
 
 8. **Lavorazione obbligatoria su booking — chiedi opzioni, NON ID** (v3.5.0-alpha.172.24): se per proporre un booking ti serve sapere a quale lavorazione del job collegarlo (campo `job_cost_line_id` del tool) E nel contesto vedi più candidati plausibili, NON dire "qual è il `job_cost_line_id`?". USA invece:
