@@ -878,6 +878,31 @@ def _auto_migrate_columns():
                     "ON anomaly_entries (tenant_id, dedup_key)"
                 ))
 
+    # v3.5.0-alpha.172.28 — Scheda tecnica: link pubblico EDITABILE
+    if "project_tech_sheets" in insp.get_table_names():
+        tcols = {c["name"] for c in insp.get_columns("project_tech_sheets")}
+        ts_alter = [
+            ("edit_token", "VARCHAR(64) NULL"),
+            ("is_public_edit_enabled", "BOOLEAN NOT NULL DEFAULT 0"),
+            ("edit_expires_at", "DATETIME NULL"),
+            ("edit_published_at", "DATETIME NULL"),
+        ]
+        with engine.begin() as conn:
+            for col, ddl in ts_alter:
+                if col not in tcols:
+                    print(f"[auto-migrate] project_tech_sheets.{col} mancante -> ALTER TABLE (alpha.172.28)")
+                    conn.execute(text(f"ALTER TABLE project_tech_sheets ADD COLUMN {col} {ddl}"))
+        idx_names = {ix["name"] for ix in insp.get_indexes("project_tech_sheets")}
+        if "ix_project_tech_sheets_edit_token" not in idx_names:
+            with engine.begin() as conn:
+                try:
+                    conn.execute(text(
+                        "CREATE UNIQUE INDEX IF NOT EXISTS ix_project_tech_sheets_edit_token "
+                        "ON project_tech_sheets(edit_token) WHERE edit_token IS NOT NULL"
+                    ))
+                except Exception as e:
+                    print(f"[auto-migrate] ix edit_token FAILED (non-bloccante): {e}")
+
 
 def _backfill_resource_assignments():
     """v3.5.0-alpha.111 — Backfill JobResourceAssignment per booking
@@ -1371,7 +1396,7 @@ async def lifespan(app: FastAPI):
     yield
 
 
-app = FastAPI(title="MediaFlow", version="3.5.0-alpha.172.27", lifespan=lifespan)
+app = FastAPI(title="MediaFlow", version="3.5.0-alpha.172.28", lifespan=lifespan)
 
 BASE_DIR = Path(__file__).parent
 app.mount("/static", StaticFiles(directory=BASE_DIR / "static"), name="static")

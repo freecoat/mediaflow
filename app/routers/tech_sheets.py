@@ -1,17 +1,24 @@
-"""Router scheda tecnica progetto (v3.4.31).
+"""Router scheda tecnica progetto (v3.4.31, edit link α.172.28).
 
 Workflow sheet di un progetto: catena di lavorazione (camere, audio, look,
 storage, dailies, crew, process). Schema flessibile JSON.
 
 - `GET    /projects/api/{pid}/tech-sheet` — JSON (auto-crea draft se manca)
 - `PUT    /projects/api/{pid}/tech-sheet` — sostituisce data + campi metadata
-- `POST   /projects/api/{pid}/tech-sheet/publish` — genera/rigenera token + scadenza
-- `DELETE /projects/api/{pid}/tech-sheet/public` — disattiva link pubblico
+- `POST   /projects/api/{pid}/tech-sheet/publish` — genera/rigenera token readonly
+- `DELETE /projects/api/{pid}/tech-sheet/public` — disattiva link readonly
+- `POST   /projects/api/{pid}/tech-sheet/publish-edit` — genera/rigenera token EDIT
+- `DELETE /projects/api/{pid}/tech-sheet/public-edit` — disattiva link EDIT
+- `GET    /projects/api/{pid}/tech-sheet/edit-logs` — audit modifiche pubbliche
 - `GET    /public/tech-sheet/{token}` — vista pubblica readonly (no auth)
+- `GET    /public/tech-sheet/{edit_token}/edit` — editor pubblico (no auth)
+- `PUT    /public/tech-sheet/{edit_token}` — save granulare con identità editor
+- `GET    /public/tech-sheet/{edit_token}/state` — polling updated_at + recent logs
 """
 from __future__ import annotations
 from datetime import datetime, timedelta
 import secrets
+import re
 from typing import Optional
 
 from fastapi import APIRouter, Depends, Form, HTTPException, Request, Body
@@ -19,9 +26,14 @@ from fastapi.responses import HTMLResponse
 from sqlalchemy.orm import Session, joinedload
 
 from app.database import get_db
-from app.models import Project, ProjectTechSheet, DeliveryTemplate, Resource, User
+from app.models import (
+    Project, ProjectTechSheet, DeliveryTemplate, Resource, User,
+    TechSheetEditLog,
+)
 from app.services.rbac import current_user_optional, can_view_finance, has_permission
 from app.context import current_tenant_id
+
+_EMAIL_RE = re.compile(r"^[A-Za-z0-9._%+\-]+@[A-Za-z0-9.\-]+\.[A-Za-z]{2,}$")
 
 router = APIRouter(tags=["tech_sheets"])
 
@@ -95,6 +107,10 @@ def _serialize(ts: ProjectTechSheet, project: Optional[Project] = None) -> dict:
         "public_token": ts.public_token if ts.is_public_enabled else None,
         "expires_at": ts.expires_at.isoformat() if ts.expires_at else None,
         "published_at": ts.published_at.isoformat() if ts.published_at else None,
+        "is_public_edit_enabled": ts.is_public_edit_enabled,
+        "edit_token": ts.edit_token if ts.is_public_edit_enabled else None,
+        "edit_expires_at": ts.edit_expires_at.isoformat() if ts.edit_expires_at else None,
+        "edit_published_at": ts.edit_published_at.isoformat() if ts.edit_published_at else None,
         "delivery_template_id": ts.delivery_template_id,
         "created_at": ts.created_at.isoformat() if ts.created_at else None,
         "updated_at": ts.updated_at.isoformat() if ts.updated_at else None,
@@ -125,6 +141,23 @@ def _is_token_alive(ts: ProjectTechSheet) -> bool:
     if ts.expires_at and ts.expires_at < datetime.utcnow():
         return False
     return True
+
+
+def _is_edit_token_alive(ts: ProjectTechSheet) -> bool:
+    if not ts.is_public_edit_enabled or not ts.edit_token:
+        return False
+    if ts.edit_expires_at and ts.edit_expires_at < datetime.utcnow():
+        return False
+    return True
+
+
+def _client_ip(request: Request) -> Optional[str]:
+    fwd = request.headers.get("x-forwarded-for") or request.headers.get("cf-connecting-ip")
+    if fwd:
+        return fwd.split(",")[0].strip()[:64]
+    if request.client:
+        return request.client.host[:64]
+    return None
 
 
 # ── API authenticated ──────────────────────────────────────────
@@ -258,6 +291,102 @@ async def unpublish_tech_sheet(
     return {"ok": True}
 
 
+@router.post("/projects/api/{project_id}/tech-sheet/publish-edit")
+async def publish_tech_sheet_edit(
+    project_id: int,
+    request: Request,
+    expires_days: Optional[int] = Form(30),
+    rotate_token: bool = Form(False),
+    db: Session = Depends(get_db),
+):
+    """Abilita link pubblico EDITABILE (α.172.28).
+
+    - `expires_days=0` o vuoto → senza scadenza.
+    - `rotate_token=true` → rigenera (link vecchio invalidato).
+    - Default scadenza 30gg (vs 90gg readonly): più stretta per sicurezza.
+    """
+    user = current_user_optional(request)
+    if not has_permission(user, "edit_projects"):
+        raise HTTPException(403, "Serve permesso edit_projects")
+    p = db.query(Project).filter(
+        Project.id == project_id, Project.tenant_id == current_tenant_id(),
+    ).first()
+    if not p:
+        raise HTTPException(404, "Progetto non trovato")
+    ts = _get_or_create(db, p)
+
+    if rotate_token or not ts.edit_token:
+        ts.edit_token = secrets.token_urlsafe(32)
+    ts.is_public_edit_enabled = True
+    ts.edit_published_at = datetime.utcnow()
+    if expires_days and int(expires_days) > 0:
+        ts.edit_expires_at = datetime.utcnow() + timedelta(days=int(expires_days))
+    else:
+        ts.edit_expires_at = None
+    db.commit(); db.refresh(ts)
+    return {
+        "edit_token": ts.edit_token,
+        "is_public_edit_enabled": ts.is_public_edit_enabled,
+        "edit_expires_at": ts.edit_expires_at.isoformat() if ts.edit_expires_at else None,
+        "edit_published_at": ts.edit_published_at.isoformat() if ts.edit_published_at else None,
+    }
+
+
+@router.delete("/projects/api/{project_id}/tech-sheet/public-edit")
+async def unpublish_tech_sheet_edit(
+    project_id: int,
+    request: Request,
+    db: Session = Depends(get_db),
+):
+    user = current_user_optional(request)
+    if not has_permission(user, "edit_projects"):
+        raise HTTPException(403, "Serve permesso edit_projects")
+    p = db.query(Project).filter(Project.id == project_id).first()
+    if not p:
+        raise HTTPException(404, "Progetto non trovato")
+    ts = db.query(ProjectTechSheet).filter(ProjectTechSheet.project_id == project_id).first()
+    if not ts:
+        return {"ok": True}
+    ts.is_public_edit_enabled = False
+    ts.edit_expires_at = None
+    db.commit()
+    return {"ok": True}
+
+
+@router.get("/projects/api/{project_id}/tech-sheet/edit-logs")
+async def tech_sheet_edit_logs(
+    project_id: int,
+    request: Request,
+    limit: int = 100,
+    db: Session = Depends(get_db),
+):
+    user = current_user_optional(request)
+    if not has_permission(user, "view_projects") and not has_permission(user, "edit_projects"):
+        raise HTTPException(403, "Permesso negato")
+    p = db.query(Project).filter(
+        Project.id == project_id, Project.tenant_id == current_tenant_id(),
+    ).first()
+    if not p:
+        raise HTTPException(404, "Progetto non trovato")
+    ts = db.query(ProjectTechSheet).filter(ProjectTechSheet.project_id == project_id).first()
+    if not ts:
+        return {"logs": []}
+    logs = db.query(TechSheetEditLog).filter(
+        TechSheetEditLog.tech_sheet_id == ts.id,
+    ).order_by(TechSheetEditLog.edited_at.desc()).limit(min(max(limit, 1), 500)).all()
+    return {
+        "logs": [{
+            "id": l.id,
+            "editor_name": l.editor_name,
+            "editor_email": l.editor_email,
+            "ip_address": l.ip_address,
+            "section_keys": l.section_keys,
+            "summary": l.summary,
+            "edited_at": l.edited_at.isoformat() if l.edited_at else None,
+        } for l in logs]
+    }
+
+
 # ── Vista pubblica (no auth) ──────────────────────────────────
 @router.get("/public/tech-sheet/{token}", response_class=HTMLResponse)
 async def public_tech_sheet(
@@ -285,3 +414,133 @@ async def public_tech_sheet(
             "delivery_template": ts.delivery_template,
         },
     )
+
+
+# ── Editor pubblico (no auth) — α.172.28 ──────────────────────
+@router.get("/public/tech-sheet/{edit_token}/edit", response_class=HTMLResponse)
+async def public_tech_sheet_edit(
+    edit_token: str,
+    request: Request,
+    db: Session = Depends(get_db),
+):
+    ts = db.query(ProjectTechSheet).options(
+        joinedload(ProjectTechSheet.project).joinedload(Project.client),
+        joinedload(ProjectTechSheet.delivery_template),
+    ).filter(ProjectTechSheet.edit_token == edit_token).first()
+    if not ts or not _is_edit_token_alive(ts):
+        reason = "expired" if (ts and ts.edit_expires_at and ts.edit_expires_at < datetime.utcnow()) else "not_found"
+        return _tpl().TemplateResponse(
+            "pages/tech_sheet_public_error.html",
+            {"request": request, "reason": reason},
+            status_code=410 if ts else 404,
+        )
+    project = ts.project
+    return _tpl().TemplateResponse(
+        "pages/tech_sheet_public_edit.html",
+        {
+            "request": request,
+            "ts": _serialize(ts, project),
+            "project": project,
+            "delivery_template": ts.delivery_template,
+            "edit_token": edit_token,
+        },
+    )
+
+
+@router.put("/public/tech-sheet/{edit_token}")
+async def public_tech_sheet_save(
+    edit_token: str,
+    request: Request,
+    payload: dict = Body(...),
+    db: Session = Depends(get_db),
+):
+    """Save granulare da editor pubblico.
+
+    Payload: `{editor_name, editor_email, sections: {key: value, ...}}`.
+    Merge top-level: solo sezioni in `sections` sovrascrivono. Le altre
+    restano come sono (concorrenza last-write-wins per-sezione, vedi memo
+    `project_session_22mag2026` per design).
+    """
+    ts = db.query(ProjectTechSheet).filter(
+        ProjectTechSheet.edit_token == edit_token,
+    ).first()
+    if not ts or not _is_edit_token_alive(ts):
+        raise HTTPException(410 if ts else 404, "Link non valido o scaduto")
+
+    editor_name = (payload.get("editor_name") or "").strip()[:200]
+    editor_email = (payload.get("editor_email") or "").strip().lower()[:200]
+    sections = payload.get("sections") or {}
+    if not editor_name or len(editor_name) < 2:
+        raise HTTPException(422, "Nome obbligatorio")
+    if not editor_email or not _EMAIL_RE.match(editor_email):
+        raise HTTPException(422, "Email non valida")
+    if not isinstance(sections, dict) or not sections:
+        raise HTTPException(422, "Nessuna sezione da salvare")
+
+    # Merge top-level: solo chiavi note in DEFAULT_DATA
+    new_data = dict(ts.data or {})
+    accepted: list[str] = []
+    for key, val in sections.items():
+        if key in DEFAULT_DATA:
+            new_data[key] = val
+            accepted.append(key)
+    if not accepted:
+        raise HTTPException(422, "Nessuna sezione valida")
+    ts.data = new_data
+
+    log = TechSheetEditLog(
+        tech_sheet_id=ts.id,
+        editor_name=editor_name,
+        editor_email=editor_email,
+        ip_address=_client_ip(request),
+        section_keys=",".join(accepted)[:500],
+        summary=(payload.get("summary") or None),
+    )
+    db.add(log)
+    db.commit(); db.refresh(ts); db.refresh(log)
+    return {
+        "ok": True,
+        "saved_sections": accepted,
+        "updated_at": ts.updated_at.isoformat() if ts.updated_at else None,
+        "log_id": log.id,
+    }
+
+
+@router.get("/public/tech-sheet/{edit_token}/state")
+async def public_tech_sheet_state(
+    edit_token: str,
+    request: Request,
+    since: Optional[str] = None,
+    db: Session = Depends(get_db),
+):
+    """Polling concorrenza: ritorna updated_at + log nuovi dopo `since` (ISO).
+
+    Frontend chiama ogni 30s. Se `updated_at_server > last_known` E
+    log nuovi presenti → mostra banner con autore + sezioni cambiate.
+    """
+    ts = db.query(ProjectTechSheet).filter(
+        ProjectTechSheet.edit_token == edit_token,
+    ).first()
+    if not ts or not _is_edit_token_alive(ts):
+        raise HTTPException(410 if ts else 404, "Link non valido o scaduto")
+
+    since_dt: Optional[datetime] = None
+    if since:
+        try:
+            since_dt = datetime.fromisoformat(since.replace("Z", ""))
+        except Exception:
+            since_dt = None
+
+    q = db.query(TechSheetEditLog).filter(TechSheetEditLog.tech_sheet_id == ts.id)
+    if since_dt:
+        q = q.filter(TechSheetEditLog.edited_at > since_dt)
+    logs = q.order_by(TechSheetEditLog.edited_at.desc()).limit(20).all()
+    return {
+        "updated_at": ts.updated_at.isoformat() if ts.updated_at else None,
+        "logs": [{
+            "editor_name": l.editor_name,
+            "editor_email": l.editor_email,
+            "section_keys": l.section_keys,
+            "edited_at": l.edited_at.isoformat() if l.edited_at else None,
+        } for l in logs],
+    }

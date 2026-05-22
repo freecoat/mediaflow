@@ -1,5 +1,46 @@
 # MediaFlow — Changelog
 
+## v3.5.0-alpha.172.28 — Scheda tecnica: link pubblico EDITABILE (22 mag 2026)
+
+Richiesta Matteo: oltre al link readonly esistente (α.x), generare un link **modificabile** per condividere la scheda tecnica con clienti/crew esterni e farsi compilare i campi senza login.
+
+**Modello** (`app/models/models.py`):
+- `ProjectTechSheet`: nuove colonne `edit_token` (str unique nullable), `is_public_edit_enabled` (bool), `edit_expires_at`, `edit_published_at`
+- Nuova tabella `TechSheetEditLog`: audit per ogni save dal link pubblico (`editor_name`, `editor_email`, `ip_address`, `section_keys` CSV, `summary`, `edited_at`). Relazione 1:N → cascade delete.
+
+**Auto-migrate** (`app/main.py`): 4 ALTER TABLE + index unique parziale su `edit_token`. Idempotente.
+
+**Endpoint** (`app/routers/tech_sheets.py`):
+- `POST /projects/api/{pid}/tech-sheet/publish-edit` (form: `expires_days`, `rotate_token`) — default 30gg (vs 90gg readonly per sicurezza)
+- `DELETE /projects/api/{pid}/tech-sheet/public-edit`
+- `GET /projects/api/{pid}/tech-sheet/edit-logs?limit=...` — audit per UI interna
+- `GET /public/tech-sheet/{edit_token}/edit` (HTML editor, no auth)
+- `PUT /public/tech-sheet/{edit_token}` (JSON body: `editor_name`, `editor_email`, `sections{}`) — salvataggio granulare per sezione + log
+- `GET /public/tech-sheet/{edit_token}/state?since=<iso>` — polling concorrenza (ritorna `updated_at` + log nuovi)
+
+**Template editor** (`tech_sheet_public_edit.html`):
+- Header progetto readonly (titolo/code/regia/dop/produzione/consegna)
+- Modal identità obbligatoria (nome+email, validati regex, ricordati in `localStorage` per token)
+- Editor sezioni reso via JS introspezione su `data` JSON: bool → checkbox, number → input number, string → input/textarea, array/object → textarea JSON con validazione client.
+- Salvataggio per sezione con bottone dedicato — invia SOLO la sezione modificata (merge top-level server-side).
+- Banner top fixed per concorrenza: polling 30s su `/state?since=...`. Se altri editor (email diversa) hanno salvato dopo l'ultimo nostro save → "X ha modificato: <sezioni> (alle HH:MM). Ricarica per vedere le modifiche."
+- Costruzione DOM via `createElement` + `.value` setter (NO `innerHTML` su user-input): difesa XSS.
+
+**UI interna** (`project_detail.html`):
+- Pulsante "🔓 Link modificabile" accanto a "🔗 Link pubblico" nell'editor scheda tecnica
+- Modal `modal-ts-publish-edit`: warning, scadenza (default 30gg, max 90), rotate, copia URL, disattiva
+- Sezione "Modifiche dal link pubblico": lista log (autore, email, sezioni, IP, timestamp) — caricata via `/tech-sheet/edit-logs`
+
+**Concorrenza** — design: last-write-wins per-sezione + polling. Save granulare (frontend invia solo sezione modificata) riduce collisioni. Editor pubblico vede banner se un altro salva nel frattempo. Senza WebSocket per non aggiungere infrastruttura.
+
+**Audit/sicurezza**:
+- Nome+email obbligatori prima del primo save (validati client+server)
+- IP catturato (x-forwarded-for / cf-connecting-ip se presente) e loggato
+- Token edit URL-safe (32 byte → 43 chars base64)
+- Default scadenza 30gg (vs 90 readonly)
+
+**Smoke** (locale α.172.28): /health 200 + version corretta; route `/public/tech-sheet/<fake>/edit` 404; modello import OK; 4 ALTER applicate al boot via auto-migrate.
+
 ## v3.5.0-alpha.172.27 — AI check_recurring_booking_collisions: anticipa festività/ferie (21 mag 2026)
 
 Feedback Matteo: α.172.26 skipava festività silenziosamente. Vuole che l'AI chieda conferma PRIMA se trovate festività/ferie/conflitti.

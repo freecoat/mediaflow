@@ -3179,6 +3179,12 @@ class ProjectTechSheet(Base):
     expires_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
     published_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
 
+    # Pubblicazione EDITABLE via link (α.172.28)
+    edit_token: Mapped[Optional[str]] = mapped_column(String(64), unique=True, nullable=True, index=True)
+    is_public_edit_enabled: Mapped[bool] = mapped_column(Boolean, default=False)
+    edit_expires_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+    edit_published_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+
     # Dati strutturati (vedi tech_sheet_schema docstring per layout)
     # general / cameras / audio / looks / storage / dailies / folder_struct / contacts / process / notes
     data: Mapped[dict] = mapped_column(JSON, default=dict)
@@ -3188,6 +3194,27 @@ class ProjectTechSheet(Base):
 
     project: Mapped["Project"] = relationship()
     delivery_template: Mapped[Optional["DeliveryTemplate"]] = relationship()
+    edit_logs: Mapped[list["TechSheetEditLog"]] = relationship(
+        back_populates="tech_sheet", cascade="all, delete-orphan",
+        order_by="desc(TechSheetEditLog.edited_at)",
+    )
+
+
+class TechSheetEditLog(Base):
+    """Audit log modifiche scheda tecnica via link pubblico editabile (α.172.28)."""
+    __tablename__ = "tech_sheet_edit_logs"
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    tech_sheet_id: Mapped[int] = mapped_column(
+        ForeignKey("project_tech_sheets.id"), index=True)
+    editor_name: Mapped[str] = mapped_column(String(200))
+    editor_email: Mapped[str] = mapped_column(String(200), index=True)
+    ip_address: Mapped[Optional[str]] = mapped_column(String(64), nullable=True)
+    section_keys: Mapped[str] = mapped_column(String(500))  # CSV: "cameras,notes"
+    summary: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    edited_at: Mapped[datetime] = mapped_column(
+        DateTime, default=datetime.utcnow, index=True)
+
+    tech_sheet: Mapped["ProjectTechSheet"] = relationship(back_populates="edit_logs")
 
 
 # ── SPESE AZIENDALI / POZZO COSTI GENERICI (v3.5.0-alpha.87) ──────────

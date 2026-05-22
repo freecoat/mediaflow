@@ -1,0 +1,542 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+  <title>Scheda tecnica (editabile) — {{ project.title }}</title>
+  <link rel="stylesheet" href="/static/css/main.css?v=3.5.0-alpha.172.28">
+  <style>
+    body { background: var(--bg, #0d1117); }
+    .ts-page { max-width: 1080px; margin: 0 auto; padding: 28px 24px 80px; }
+    .ts-header {
+      background: linear-gradient(135deg, rgba(98,114,245,0.12), rgba(98,114,245,0.04));
+      border: 1px solid var(--indigo-border);
+      border-radius: 10px; padding: 22px 26px; margin-bottom: 20px;
+    }
+    .ts-h-eye { font-size: 11px; text-transform: uppercase; letter-spacing: 1.2px; color: var(--indigo2); font-weight: 600; }
+    .ts-h-title { font-size: 24px; font-weight: 700; margin: 6px 0 4px; color: var(--text); }
+    .ts-h-sub { color: var(--text2); font-size: 13.5px; }
+    .ts-h-meta {
+      display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+      gap: 14px; margin-top: 18px; padding-top: 16px; border-top: 1px solid var(--border);
+    }
+    .ts-h-meta .lbl { font-size: 10px; text-transform: uppercase; color: var(--text3); letter-spacing: 0.6px; }
+    .ts-h-meta .val { font-size: 13px; color: var(--text); margin-top: 2px; }
+    .ts-section {
+      background: var(--bg2, #1a1d2e); border: 1px solid var(--border);
+      border-radius: 8px; padding: 18px 20px; margin-bottom: 16px;
+    }
+    .ts-section-head {
+      display: flex; align-items: center; justify-content: space-between; gap: 12px;
+      margin: 0 0 14px; padding-bottom: 8px; border-bottom: 1px solid var(--border);
+    }
+    .ts-section-head h2 {
+      font-size: 14px; text-transform: uppercase; letter-spacing: 1px;
+      color: var(--indigo2); margin: 0; font-weight: 700;
+    }
+    .ts-section-save {
+      background: var(--indigo, #6272f5); color: #fff; border: none;
+      padding: 5px 12px; border-radius: 5px; font-size: 12px; font-weight: 600;
+      cursor: pointer;
+    }
+    .ts-section-save:hover { filter: brightness(1.1); }
+    .ts-section-save:disabled { opacity: 0.5; cursor: not-allowed; }
+    .ts-section-saved {
+      font-size: 11px; color: #22c55e; font-weight: 600;
+    }
+    .ts-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 12px 18px; }
+    .ts-field { display: flex; flex-direction: column; gap: 4px; }
+    .ts-field label { font-size: 10.5px; text-transform: uppercase; letter-spacing: 0.5px; color: var(--text3); }
+    .ts-field input[type=text], .ts-field input[type=number], .ts-field textarea {
+      background: var(--bg, #0d1117); border: 1px solid var(--border);
+      color: var(--text); border-radius: 5px; padding: 6px 9px; font-size: 13px;
+      font-family: inherit;
+    }
+    .ts-field input:focus, .ts-field textarea:focus {
+      outline: none; border-color: var(--indigo, #6272f5);
+    }
+    .ts-field textarea { resize: vertical; min-height: 80px; line-height: 1.5; }
+    .ts-field textarea.ts-json {
+      font-family: 'DM Mono', 'Cascadia Code', monospace; font-size: 12px;
+      min-height: 140px;
+    }
+    .ts-field .hint { font-size: 10.5px; color: var(--text3); font-style: italic; }
+    .ts-field .err { font-size: 11px; color: #ef4444; }
+    .ts-field input[type=checkbox] { width: 16px; height: 16px; cursor: pointer; }
+    .ts-field-bool { flex-direction: row; align-items: center; gap: 8px; }
+    .ts-field-bool label { margin: 0; text-transform: none; font-size: 13px; color: var(--text); }
+
+    /* Banner concorrenza */
+    .ts-banner {
+      position: fixed; top: 0; left: 0; right: 0; z-index: 1000;
+      background: #f59e0b; color: #111;
+      padding: 12px 20px; font-size: 13.5px; font-weight: 500;
+      display: none; box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+    }
+    .ts-banner.show { display: block; }
+    .ts-banner .closeb {
+      float: right; background: rgba(0,0,0,0.15); border: none; color: #111;
+      padding: 3px 10px; border-radius: 4px; font-size: 12px; cursor: pointer;
+      font-weight: 600;
+    }
+    .ts-banner .reload {
+      background: #111; color: #f59e0b; border: none;
+      padding: 4px 12px; border-radius: 4px; font-size: 12px; cursor: pointer;
+      font-weight: 600; margin-right: 8px;
+    }
+
+    /* Identity modal */
+    .ts-modal-bg {
+      position: fixed; inset: 0; background: rgba(0,0,0,0.75); z-index: 2000;
+      display: flex; align-items: center; justify-content: center;
+    }
+    .ts-modal {
+      background: var(--bg2, #1a1d2e); border: 1px solid var(--border);
+      border-radius: 10px; padding: 28px 32px; max-width: 420px; width: 90%;
+    }
+    .ts-modal h3 { margin: 0 0 6px; color: var(--text); font-size: 17px; }
+    .ts-modal p { color: var(--text2); font-size: 13.5px; margin: 0 0 18px; line-height: 1.5; }
+    .ts-modal label { display: block; font-size: 11px; text-transform: uppercase;
+      letter-spacing: 0.5px; color: var(--text3); margin: 12px 0 4px; }
+    .ts-modal input {
+      width: 100%; background: var(--bg, #0d1117); border: 1px solid var(--border);
+      color: var(--text); border-radius: 5px; padding: 8px 10px; font-size: 14px;
+      box-sizing: border-box;
+    }
+    .ts-modal .err { color: #ef4444; font-size: 12px; margin-top: 6px; }
+    .ts-modal .btn-row { margin-top: 22px; text-align: right; }
+    .ts-modal button {
+      background: var(--indigo, #6272f5); color: #fff; border: none;
+      padding: 8px 18px; border-radius: 5px; font-size: 14px; font-weight: 600;
+      cursor: pointer;
+    }
+
+    .ts-foot {
+      text-align: center; margin-top: 32px; padding-top: 16px;
+      border-top: 1px solid var(--border); color: var(--text3); font-size: 11px;
+    }
+    .ts-eye-badge {
+      display: inline-block; background: rgba(98,114,245,0.18);
+      color: var(--indigo2); padding: 3px 10px; border-radius: 12px;
+      font-size: 10.5px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.6px;
+      margin-left: 8px;
+    }
+    .ts-identity-bar {
+      display: flex; align-items: center; justify-content: space-between;
+      background: var(--bg2, #1a1d2e); border: 1px solid var(--border);
+      border-radius: 6px; padding: 8px 14px; margin-bottom: 14px;
+      font-size: 12.5px; color: var(--text2);
+    }
+    .ts-identity-bar a { color: var(--indigo2); cursor: pointer; }
+  </style>
+</head>
+<body class="theme-indigo">
+
+<!-- Banner concorrenza (mostrato da JS quando altro editor salva) -->
+<div class="ts-banner" id="ts-banner">
+  <button class="reload" onclick="location.reload()">Ricarica</button>
+  <span id="ts-banner-msg"></span>
+  <button class="closeb" onclick="document.getElementById('ts-banner').classList.remove('show')">Chiudi</button>
+</div>
+
+<div class="ts-page">
+  <!-- Header progetto (readonly) -->
+  <div class="ts-header">
+    <div class="ts-h-eye">
+      Workflow Sheet · v{{ ts.version }}
+      <span class="ts-eye-badge">Editabile</span>
+    </div>
+    <h1 class="ts-h-title">{{ project.title }}</h1>
+    <div class="ts-h-sub">
+      <span style="font-family:'DM Mono',monospace;">[{{ project.code }}]</span>
+      {% if project.client %} · {{ project.client.name }}{% endif %}
+      {% if project.project_type %} · {{ project.project_type }}{% endif %}
+    </div>
+    <div class="ts-h-meta">
+      <div><div class="lbl">Regia</div><div class="val">{{ project.director or '—' }}</div></div>
+      <div><div class="lbl">DoP</div><div class="val">{{ project.dop or '—' }}</div></div>
+      <div><div class="lbl">Produzione</div><div class="val">{{ project.producer or '—' }}</div></div>
+      <div><div class="lbl">Consegna</div><div class="val">{{ project.delivery_deadline or '—' }}</div></div>
+      <div><div class="lbl">Durata (min)</div><div class="val">{{ project.length_minutes or '—' }}</div></div>
+      <div><div class="lbl">FPS</div><div class="val">{{ project.fps or '—' }}</div></div>
+    </div>
+  </div>
+
+  <!-- Identity bar (mostrata dopo modal) -->
+  <div class="ts-identity-bar" id="ts-id-bar" style="display:none;">
+    <span>Editor: <strong id="ts-id-name"></strong> · <span id="ts-id-email"></span></span>
+    <a onclick="window.tsChangeIdentity()">Cambia</a>
+  </div>
+
+  <!-- Editor sezioni (popolato da JS) -->
+  <div id="ts-editor"></div>
+
+  <div class="ts-foot">
+    MediaFlow · Salvataggio per sezione · Ultima modifica server: <span id="ts-foot-updated">{{ ts.updated_at[:19].replace('T', ' ') if ts.updated_at else '—' }}</span>
+    {% if ts.edit_expires_at %} · Link valido fino al {{ ts.edit_expires_at[:10] }}{% endif %}
+  </div>
+</div>
+
+<!-- Identity modal -->
+<div class="ts-modal-bg" id="ts-id-modal" style="display:none;">
+  <div class="ts-modal">
+    <h3>Identificati prima di modificare</h3>
+    <p>Il tuo nome ed email vengono registrati ad ogni salvataggio per tracciabilità. Non sono pubblici.</p>
+    <form onsubmit="event.preventDefault(); window.tsSaveIdentity();">
+      <label>Nome e cognome</label>
+      <input type="text" id="ts-id-name-input" required minlength="2" maxlength="200" autocomplete="name">
+      <label>Email</label>
+      <input type="email" id="ts-id-email-input" required maxlength="200" autocomplete="email">
+      <div class="err" id="ts-id-err" style="display:none;"></div>
+      <div class="btn-row">
+        <button type="submit">Conferma</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<script>
+const TS_DATA = {{ ts.data | tojson }};
+const TS_EDIT_TOKEN = {{ edit_token | tojson }};
+const TS_INITIAL_UPDATED_AT = {{ ts.updated_at | tojson }};
+const STORAGE_KEY = "ts_edit_identity_" + TS_EDIT_TOKEN;
+const POLL_MS = 30000;
+
+let identity = null;
+let lastKnownUpdatedAt = TS_INITIAL_UPDATED_AT;
+
+const SECTION_LABELS = {
+  general: "Generale",
+  cameras: "Camere",
+  audio: "Audio",
+  looks: "Look / Color",
+  storage: "Storage / Archiving",
+  dailies: "Dailies / Editorial",
+  folder_struct: "Folder structure",
+  contacts: "Crew tecnica / Contatti",
+  process: "Process / QC / Reporting",
+  notes: "Note libere",
+};
+
+const FIELD_LABELS = {
+  production_company: "Produzione (società)",
+  shoot_days: "Giorni di lavorazione",
+  num_cameras: "Numero camere",
+  recorder: "Recorder",
+  file_format: "Formato file",
+  sample_rate: "Sample rate",
+  bit_depth: "Bit depth",
+  tc_fps: "TC frame rate",
+  sync_method: "Sync method",
+  track_layout: "Track layout",
+  master: "Master",
+  backup: "Backup",
+  shuttle: "Shuttle",
+  checksum_onset: "Checksum on-set",
+  checksum_lab: "Checksum lab",
+  lto_count: "LTO copies",
+  lto_type: "LTO type",
+  shuttle_freq: "Frequenza shuttle",
+  mags_reusable: "Mags riusabili",
+  total_tb_estimated: "TB stimati totali",
+  editorial_format: "Editorial format",
+  editorial_container: "Editorial container",
+  online_format: "Online format",
+  online_bitrate: "Online bitrate",
+  naming_convention: "Naming convention",
+  burnins: "Burn-ins",
+  nle: "NLE",
+  review_platform: "Review platform",
+  exchange_format: "Exchange format",
+  volume_naming: "Naming volume",
+  daily_template: "Daily template",
+  qc_onset: "QC on-set",
+  qc_lab: "QC lab",
+  clearance_sla: "Clearance SLA",
+  report_recipients: "Destinatari report giornalieri",
+  notify_emails: "Email notifications",
+};
+
+function label(key) {
+  return FIELD_LABELS[key] || key.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+}
+function sectionLabel(key) { return SECTION_LABELS[key] || label(key); }
+
+function fieldId(sectionKey, fieldKey) {
+  // sectionKey/fieldKey sono chiavi del DEFAULT_DATA o snake_case sicuro
+  return `f_${sectionKey}_${fieldKey}`.replace(/[^a-zA-Z0-9_]/g, '_');
+}
+
+// Identity ---------------------------------------------------------
+function loadIdentity() {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (raw) identity = JSON.parse(raw);
+  } catch (e) {}
+  if (identity && identity.name && identity.email) {
+    showIdentityBar();
+  } else {
+    document.getElementById('ts-id-modal').style.display = 'flex';
+  }
+}
+function showIdentityBar() {
+  // textContent → safe contro XSS
+  document.getElementById('ts-id-name').textContent = identity.name;
+  document.getElementById('ts-id-email').textContent = identity.email;
+  document.getElementById('ts-id-bar').style.display = 'flex';
+}
+window.tsSaveIdentity = function() {
+  const name = document.getElementById('ts-id-name-input').value.trim();
+  const email = document.getElementById('ts-id-email-input').value.trim().toLowerCase();
+  const err = document.getElementById('ts-id-err');
+  err.style.display = 'none';
+  if (name.length < 2) { err.textContent = 'Nome troppo corto'; err.style.display = 'block'; return; }
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+    err.textContent = 'Email non valida'; err.style.display = 'block'; return;
+  }
+  identity = { name, email };
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(identity));
+  document.getElementById('ts-id-modal').style.display = 'none';
+  showIdentityBar();
+};
+window.tsChangeIdentity = function() {
+  document.getElementById('ts-id-name-input').value = identity?.name || '';
+  document.getElementById('ts-id-email-input').value = identity?.email || '';
+  document.getElementById('ts-id-modal').style.display = 'flex';
+};
+
+// Render editor: costruisco DOM via createElement + popolo .value
+// (NO innerHTML su contenuto user-provided — evita XSS)
+function makeEl(tag, attrs, children) {
+  const el = document.createElement(tag);
+  if (attrs) {
+    for (const [k, v] of Object.entries(attrs)) {
+      if (v == null || v === false) continue;
+      if (k === 'class') el.className = v;
+      else if (k === 'text') el.textContent = v;
+      else if (k.startsWith('on') && typeof v === 'function') el.addEventListener(k.slice(2), v);
+      else if (k === 'dataset') {
+        for (const [dk, dv] of Object.entries(v)) el.dataset[dk] = dv;
+      } else el.setAttribute(k, v === true ? '' : v);
+    }
+  }
+  if (children) {
+    for (const c of children) {
+      if (c == null) continue;
+      el.appendChild(typeof c === 'string' ? document.createTextNode(c) : c);
+    }
+  }
+  return el;
+}
+
+function detectType(fieldKey, value) {
+  if (typeof value === 'boolean') return 'bool';
+  if (typeof value === 'number') return 'num';
+  if (Array.isArray(value) || (value && typeof value === 'object')) return 'json';
+  if (value === null && /(_days|_count|_minutes|num_|_pct|_mbs|_fps|_estimated)/.test(fieldKey)) return 'num';
+  return 'str';
+}
+
+function buildField(sectionKey, fieldKey, value) {
+  const id = fieldId(sectionKey, fieldKey);
+  const lbl = label(fieldKey);
+  const t = detectType(fieldKey, value);
+
+  if (t === 'bool') {
+    const inp = makeEl('input', { type: 'checkbox', id, dataset: { section: sectionKey, key: fieldKey, type: 'bool' } });
+    inp.checked = !!value;
+    return makeEl('div', { class: 'ts-field ts-field-bool' }, [
+      inp,
+      makeEl('label', { for: id, text: lbl }),
+    ]);
+  }
+  if (t === 'num') {
+    const inp = makeEl('input', { type: 'number', id, step: 'any', dataset: { section: sectionKey, key: fieldKey, type: 'num' } });
+    if (value !== null && value !== undefined) inp.value = value;
+    return makeEl('div', { class: 'ts-field' }, [
+      makeEl('label', { for: id, text: lbl }),
+      inp,
+    ]);
+  }
+  if (t === 'json') {
+    const ta = makeEl('textarea', { id, class: 'ts-json', dataset: { section: sectionKey, key: fieldKey, type: 'json' } });
+    ta.value = JSON.stringify(value, null, 2);
+    return makeEl('div', { class: 'ts-field', style: 'grid-column: 1 / -1;' }, [
+      makeEl('label', { for: id }, [
+        document.createTextNode(lbl + ' '),
+        makeEl('span', { class: 'hint', text: '(formato JSON)' }),
+      ]),
+      ta,
+      makeEl('div', { class: 'err', id: id + '_err', style: 'display:none;' }),
+    ]);
+  }
+  // str
+  const longField = /(notes|description|address|naming|template)/.test(fieldKey);
+  const isLong = longField || (typeof value === 'string' && value.length > 80);
+  if (isLong) {
+    const ta = makeEl('textarea', { id, dataset: { section: sectionKey, key: fieldKey, type: 'str' } });
+    ta.value = value || '';
+    return makeEl('div', { class: 'ts-field', style: 'grid-column: 1 / -1;' }, [
+      makeEl('label', { for: id, text: lbl }),
+      ta,
+    ]);
+  }
+  const inp = makeEl('input', { type: 'text', id, dataset: { section: sectionKey, key: fieldKey, type: 'str' } });
+  inp.value = value || '';
+  return makeEl('div', { class: 'ts-field' }, [
+    makeEl('label', { for: id, text: lbl }),
+    inp,
+  ]);
+}
+
+function buildSection(sectionKey, value) {
+  const savedTag = makeEl('span', {
+    class: 'ts-section-saved', id: 'saved_' + sectionKey,
+    style: 'display:none;', text: '✓ Salvato',
+  });
+  const saveBtn = makeEl('button', {
+    class: 'ts-section-save', text: 'Salva sezione',
+    onclick: () => window.tsSaveSection(sectionKey),
+  });
+  const head = makeEl('div', { class: 'ts-section-head' }, [
+    makeEl('h2', { text: sectionLabel(sectionKey) }),
+    makeEl('div', null, [savedTag, document.createTextNode(' '), saveBtn]),
+  ]);
+
+  let body;
+  const rootId = `f_${sectionKey}__root`;
+  if (typeof value === 'string') {
+    const ta = makeEl('textarea', {
+      id: rootId, style: 'min-height:160px;',
+      dataset: { section: sectionKey, key: '__root', type: 'str' },
+    });
+    ta.value = value;
+    body = makeEl('div', { class: 'ts-field' }, [ta]);
+  } else if (Array.isArray(value)) {
+    const ta = makeEl('textarea', {
+      id: rootId, class: 'ts-json', style: 'min-height:240px;',
+      dataset: { section: sectionKey, key: '__root', type: 'json' },
+    });
+    ta.value = JSON.stringify(value, null, 2);
+    body = makeEl('div', { class: 'ts-field' }, [
+      makeEl('label', { for: rootId }, [
+        makeEl('span', { class: 'hint', text: 'Lista (formato JSON). Modifica le voci mantenendo la struttura.' }),
+      ]),
+      ta,
+      makeEl('div', { class: 'err', id: rootId + '_err', style: 'display:none;' }),
+    ]);
+  } else if (value && typeof value === 'object') {
+    const fields = Object.entries(value).map(([k, v]) => buildField(sectionKey, k, v));
+    body = makeEl('div', { class: 'ts-grid' }, fields);
+  } else {
+    body = makeEl('div', { class: 'ts-field' }, [
+      makeEl('span', { class: 'hint', text: 'Tipo non supportato.' }),
+    ]);
+  }
+
+  return makeEl('div', { class: 'ts-section', dataset: { section: sectionKey } }, [head, body]);
+}
+
+function renderEditor() {
+  const order = ['general', 'cameras', 'audio', 'looks', 'storage', 'dailies', 'folder_struct', 'contacts', 'process', 'notes'];
+  const keys = order.filter(k => k in TS_DATA).concat(Object.keys(TS_DATA).filter(k => !order.includes(k)));
+  const container = document.getElementById('ts-editor');
+  container.replaceChildren(...keys.map(k => buildSection(k, TS_DATA[k])));
+}
+
+// Save per sezione -------------------------------------------------
+function collectSectionValue(sectionKey) {
+  const root = document.querySelector(`[data-section="${sectionKey}"][data-key="__root"]`);
+  if (root) {
+    const type = root.getAttribute('data-type');
+    if (type === 'json') {
+      try { return { value: JSON.parse(root.value), err: null }; }
+      catch (e) { return { value: null, err: 'JSON non valido: ' + e.message }; }
+    }
+    return { value: root.value, err: null };
+  }
+  const obj = {};
+  const inputs = document.querySelectorAll(`[data-section="${sectionKey}"][data-key]`);
+  for (const el of inputs) {
+    const k = el.getAttribute('data-key');
+    if (k === '__root') continue;
+    const type = el.getAttribute('data-type');
+    let v;
+    if (type === 'bool') v = el.checked;
+    else if (type === 'num') {
+      const raw = el.value.trim();
+      v = raw === '' ? null : Number(raw);
+      if (raw !== '' && isNaN(v)) return { value: null, err: `Campo "${k}" non numerico` };
+    } else if (type === 'json') {
+      const errBox = document.getElementById(el.id + '_err');
+      if (errBox) errBox.style.display = 'none';
+      try { v = el.value.trim() === '' ? null : JSON.parse(el.value); }
+      catch (e) {
+        if (errBox) { errBox.textContent = 'JSON non valido: ' + e.message; errBox.style.display = 'block'; }
+        return { value: null, err: `Campo "${k}" JSON non valido` };
+      }
+    } else { v = el.value; }
+    obj[k] = v;
+  }
+  return { value: obj, err: null };
+}
+
+window.tsSaveSection = async function(sectionKey) {
+  if (!identity) { document.getElementById('ts-id-modal').style.display = 'flex'; return; }
+  const { value, err } = collectSectionValue(sectionKey);
+  if (err) { alert(err); return; }
+  const btn = document.querySelector(`.ts-section[data-section="${sectionKey}"] .ts-section-save`);
+  const savedTag = document.getElementById('saved_' + sectionKey);
+  if (btn) { btn.disabled = true; btn.textContent = 'Salvataggio…'; }
+  try {
+    const r = await fetch(`/public/tech-sheet/${encodeURIComponent(TS_EDIT_TOKEN)}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        editor_name: identity.name,
+        editor_email: identity.email,
+        sections: { [sectionKey]: value },
+      }),
+    });
+    if (!r.ok) { const txt = await r.text(); throw new Error(`${r.status}: ${txt}`); }
+    const out = await r.json();
+    TS_DATA[sectionKey] = value;
+    lastKnownUpdatedAt = out.updated_at;
+    document.getElementById('ts-foot-updated').textContent = (out.updated_at || '').slice(0, 19).replace('T', ' ');
+    if (savedTag) { savedTag.style.display = 'inline'; setTimeout(() => { savedTag.style.display = 'none'; }, 3000); }
+  } catch (e) {
+    alert('Salvataggio fallito: ' + e.message);
+  } finally {
+    if (btn) { btn.disabled = false; btn.textContent = 'Salva sezione'; }
+  }
+};
+
+// Polling concorrenza ----------------------------------------------
+async function pollState() {
+  try {
+    const url = `/public/tech-sheet/${encodeURIComponent(TS_EDIT_TOKEN)}/state?since=${encodeURIComponent(lastKnownUpdatedAt || '')}`;
+    const r = await fetch(url);
+    if (!r.ok) return;
+    const out = await r.json();
+    if (!out.logs || out.logs.length === 0) return;
+    const others = out.logs.filter(l => !identity || l.editor_email !== identity.email);
+    if (others.length === 0) { lastKnownUpdatedAt = out.updated_at; return; }
+    const last = others[0];
+    const sections = last.section_keys.split(',').map(s => sectionLabel(s.trim())).join(', ');
+    const when = last.edited_at ? last.edited_at.slice(11, 16) : '';
+    // textContent → safe XSS
+    document.getElementById('ts-banner-msg').textContent =
+      `${last.editor_name} ha modificato: ${sections} (alle ${when}). Ricarica per vedere le modifiche.`;
+    document.getElementById('ts-banner').classList.add('show');
+  } catch (e) {}
+}
+
+document.addEventListener('DOMContentLoaded', () => {
+  loadIdentity();
+  renderEditor();
+  setInterval(pollState, POLL_MS);
+});
+</script>
+</body>
+</html>

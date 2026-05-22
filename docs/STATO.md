@@ -8,6 +8,12 @@
 
 ## Versione corrente
 
+**v3.5.0-alpha.172.28** — 22 maggio 2026 — Scheda tecnica progetto: link pubblico EDITABILE
+
+Aggiunto link `/public/tech-sheet/{edit_token}/edit` complementare al readonly esistente. Editor compilabile senza login con identità tracciata (nome+email obbligatori), salvataggio granulare per sezione, polling concorrenza 30s con banner. UI gestione in `/projects/{id}` (modal "🔓 Link modificabile" + lista log modifiche pubbliche). Default scadenza 30gg. Bug fix: print `α` in auto-migrate crashava su console Windows cp1252 → sostituito con `alpha`.
+
+## Versione precedente
+
 **v3.5.0-alpha.172.27** — 21 maggio 2026 — AI Copilot polish + bulk delete + timeline incrementale
 
 11 commit α.172.17→α.172.27 pushati. Sessione lunga via tunnel cloudflared (test live in browser).

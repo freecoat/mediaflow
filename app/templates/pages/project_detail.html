@@ -257,6 +257,7 @@
       </div>
       <div style="margin-left:auto;display:flex;gap:8px;flex-wrap:wrap;align-items:flex-end;">
         <button class="btn btn-secondary btn-sm" onclick="tsOpenPublish()">🔗 Link pubblico</button>
+        <button class="btn btn-secondary btn-sm" onclick="tsOpenPublishEdit()">🔓 Link modificabile</button>
       </div>
     </div>
 
@@ -482,6 +483,55 @@
       <button class="btn btn-ghost" id="ts-pub-disable-btn" onclick="tsDisablePublic()" style="margin-right:auto;display:none;">Disattiva link</button>
       <button class="btn btn-secondary" onclick="closeModal('modal-ts-publish')">Annulla</button>
       <button class="btn btn-primary" onclick="tsDoPublish()">Pubblica / Aggiorna</button>
+    </div>
+  </div>
+</div>
+
+<!-- Modal pubblicazione link EDITABILE (α.172.28) -->
+<div class="modal-overlay" id="modal-ts-publish-edit">
+  <div class="modal" style="max-width:640px;">
+    <div class="modal-header">
+      <span class="modal-title">🔓 Link modificabile scheda tecnica</span>
+      <button class="btn btn-ghost btn-icon" onclick="closeModal('modal-ts-publish-edit')">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="text-xs" style="background:rgba(245,158,11,0.12);border:1px solid rgba(245,158,11,0.4);color:#f59e0b;padding:8px 12px;border-radius:6px;margin-bottom:14px;">
+        ⚠ Chi apre questo link può <strong>modificare</strong> la scheda tecnica senza login. Tracciabilità via nome+email obbligatori. Default scadenza 30 giorni.
+      </div>
+      <div id="ts-pubedit-current" style="margin-bottom:14px;display:none;">
+        <div class="text-sm text-muted mb-2">Link attivo:</div>
+        <div style="display:flex;gap:6px;align-items:center;background:var(--bg);border:1px solid var(--border);border-radius:6px;padding:8px;">
+          <input class="form-input" id="ts-pubedit-url" readonly style="flex:1;font-family:'DM Mono',monospace;font-size:12px;background:transparent;border:0;">
+          <button class="btn btn-secondary btn-sm" onclick="tsCopyEditUrl()">📋 Copia</button>
+        </div>
+        <div class="text-xs text-muted mt-2" id="ts-pubedit-expires"></div>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Scadenza link</label>
+        <select class="form-select" id="ts-pubedit-expires-sel">
+          <option value="7">7 giorni</option>
+          <option value="14">14 giorni</option>
+          <option value="30" selected>30 giorni</option>
+          <option value="60">60 giorni</option>
+          <option value="90">90 giorni</option>
+          <option value="0">Senza scadenza (fortemente sconsigliato)</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label style="display:flex;align-items:center;gap:8px;font-size:13px;">
+          <input type="checkbox" id="ts-pubedit-rotate"> Rigenera token (invalida il link precedente)
+        </label>
+      </div>
+
+      <div id="ts-edit-logs-wrap" style="margin-top:18px;display:none;">
+        <div class="text-sm" style="margin-bottom:6px;color:var(--text2);font-weight:600;">Modifiche dal link pubblico</div>
+        <div id="ts-edit-logs" style="max-height:220px;overflow:auto;background:var(--bg);border:1px solid var(--border);border-radius:6px;padding:8px;font-size:12px;"></div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" id="ts-pubedit-disable-btn" onclick="tsDisablePublicEdit()" style="margin-right:auto;display:none;">Disattiva link</button>
+      <button class="btn btn-secondary" onclick="closeModal('modal-ts-publish-edit')">Annulla</button>
+      <button class="btn btn-primary" onclick="tsDoPublishEdit()">Pubblica / Aggiorna</button>
     </div>
   </div>
 </div>
@@ -1540,6 +1590,110 @@ function tsCopyUrl() {
     toast('URL copiato', 'success', 1500);
   } catch(e) {
     navigator.clipboard.writeText(inp.value).then(() => toast('URL copiato', 'success', 1500));
+  }
+}
+
+// ── Pubblicazione EDITABILE (α.172.28) ────────────────────────
+function tsOpenPublishEdit() {
+  if (!tsState) return;
+  const cur = document.getElementById('ts-pubedit-current');
+  if (tsState.is_public_edit_enabled && tsState.edit_token) {
+    cur.style.display = '';
+    document.getElementById('ts-pubedit-url').value =
+      window.location.origin + '/public/tech-sheet/' + tsState.edit_token + '/edit';
+    document.getElementById('ts-pubedit-expires').textContent = tsState.edit_expires_at
+      ? `Scadenza: ${new Date(tsState.edit_expires_at).toLocaleString('it-IT')}`
+      : 'Senza scadenza.';
+    document.getElementById('ts-pubedit-disable-btn').style.display = '';
+  } else {
+    cur.style.display = 'none';
+    document.getElementById('ts-pubedit-disable-btn').style.display = 'none';
+  }
+  document.getElementById('ts-pubedit-rotate').checked = false;
+  tsLoadEditLogs();
+  openModal('modal-ts-publish-edit');
+}
+
+async function tsDoPublishEdit() {
+  const fd = new FormData();
+  fd.append('expires_days', document.getElementById('ts-pubedit-expires-sel').value || '30');
+  fd.append('rotate_token', document.getElementById('ts-pubedit-rotate').checked ? 'true' : 'false');
+  try {
+    const res = await api('POST', `/projects/api/${PROJECT_ID}/tech-sheet/publish-edit`, fd);
+    tsState.is_public_edit_enabled = res.is_public_edit_enabled;
+    tsState.edit_token = res.edit_token;
+    tsState.edit_expires_at = res.edit_expires_at;
+    tsState.edit_published_at = res.edit_published_at;
+    toast('Link modificabile aggiornato', 'success');
+    closeModal('modal-ts-publish-edit');
+    setTimeout(tsOpenPublishEdit, 100);
+  } catch(e) { toast(e.message, 'error'); }
+}
+
+async function tsDisablePublicEdit() {
+  if (!confirm('Disattivare il link modificabile? Nessuno potrà più modificare via URL pubblico.')) return;
+  try {
+    await api('DELETE', `/projects/api/${PROJECT_ID}/tech-sheet/public-edit`);
+    tsState.is_public_edit_enabled = false;
+    tsState.edit_token = null;
+    tsState.edit_expires_at = null;
+    toast('Link modificabile disattivato', 'info');
+    closeModal('modal-ts-publish-edit');
+  } catch(e) { toast(e.message, 'error'); }
+}
+
+function tsCopyEditUrl() {
+  const inp = document.getElementById('ts-pubedit-url');
+  inp.select();
+  try {
+    document.execCommand('copy');
+    toast('URL copiato', 'success', 1500);
+  } catch(e) {
+    navigator.clipboard.writeText(inp.value).then(() => toast('URL copiato', 'success', 1500));
+  }
+}
+
+async function tsLoadEditLogs() {
+  const wrap = document.getElementById('ts-edit-logs-wrap');
+  const box = document.getElementById('ts-edit-logs');
+  box.replaceChildren(document.createTextNode('Caricamento…'));
+  try {
+    const res = await api('GET', `/projects/api/${PROJECT_ID}/tech-sheet/edit-logs?limit=50`);
+    const logs = res.logs || [];
+    if (logs.length === 0) {
+      wrap.style.display = '';
+      box.replaceChildren(Object.assign(document.createElement('div'), {
+        className: 'text-muted', textContent: 'Nessuna modifica registrata.',
+      }));
+      return;
+    }
+    wrap.style.display = '';
+    box.replaceChildren();
+    for (const l of logs) {
+      const when = l.edited_at ? new Date(l.edited_at).toLocaleString('it-IT') : '—';
+      // textContent → safe XSS (nome/email/sezioni sono input utente esterno)
+      const row = document.createElement('div');
+      row.style.cssText = 'padding:5px 0;border-bottom:1px solid var(--border);';
+      const head = document.createElement('div');
+      head.style.cssText = 'display:flex;justify-content:space-between;gap:8px;';
+      const name = document.createElement('strong');
+      name.textContent = l.editor_name + ' <' + l.editor_email + '>';
+      const ts = document.createElement('span');
+      ts.className = 'text-muted';
+      ts.style.fontSize = '11px';
+      ts.textContent = when;
+      head.append(name, ts);
+      const detail = document.createElement('div');
+      detail.className = 'text-muted';
+      detail.style.fontSize = '11.5px';
+      detail.textContent = 'Sezioni: ' + (l.section_keys || '—') + (l.ip_address ? ' · IP ' + l.ip_address : '');
+      row.append(head, detail);
+      box.appendChild(row);
+    }
+  } catch(e) {
+    box.replaceChildren(Object.assign(document.createElement('div'), {
+      className: 'text-muted', textContent: 'Errore caricamento log: ' + e.message,
+    }));
   }
 }
 
