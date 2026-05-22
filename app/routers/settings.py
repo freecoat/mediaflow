@@ -8,7 +8,7 @@ from fastapi.responses import HTMLResponse
 from typing import Optional
 from sqlalchemy.orm import Session
 from app.database import get_db
-from app.models import User, WorkingHoursPolicy, Resource
+from app.models import User, WorkingHoursPolicy, Resource, Holiday
 from app.models.models import UserAISettings
 from datetime import time
 from app.services.auth import get_current_user_from_token, hash_password, verify_password
@@ -542,8 +542,16 @@ async def delete_working_hours_policy(
             f"Impossibile eliminare: {used_by} risorse stanno usando questa policy. "
             "Riassegnale a un'altra policy prima di eliminare.",
         )
+    # α.172.33.2 — Cascade festività linkate: soft-delete (is_active=False)
+    # delle Holiday con scope_policy_id=policy_id. Evita orphan dopo delete.
+    affected_holidays = db.query(Holiday).filter(
+        Holiday.scope_policy_id == policy_id,
+        Holiday.tenant_id == CURRENT_TENANT_FALLBACK,
+    ).all()
+    for h in affected_holidays:
+        h.is_active = False
     db.delete(p); db.commit()
-    return {"ok": True}
+    return {"ok": True, "deactivated_holidays": len(affected_holidays)}
 
 
 @router.post("/api/working-hours/{policy_id}/set-default")
@@ -619,8 +627,31 @@ async def duplicate_working_hours_policy(
         monthly_rol_hours_accrual=getattr(src, "monthly_rol_hours_accrual", 8.0),
         monthly_permit_hours_accrual=getattr(src, "monthly_permit_hours_accrual", 8.0),
     )
-    db.add(clone); db.commit(); db.refresh(clone)
-    return _serialize_policy(clone)
+    db.add(clone); db.flush()
+
+    # α.172.33.2 — Cascade duplicate festività scope=src → clone.
+    # Tenant-wide (scope_policy_id=NULL) NON copiate (sono condivise).
+    src_holidays = db.query(Holiday).filter(
+        Holiday.scope_policy_id == src.id,
+        Holiday.tenant_id == src.tenant_id,
+        Holiday.is_active == True,  # noqa: E712
+    ).all()
+    cloned_holidays = 0
+    for sh in src_holidays:
+        h = Holiday(
+            tenant_id=sh.tenant_id,
+            date=sh.date, name=sh.name, kind=sh.kind,
+            scope_policy_id=clone.id,
+            is_active=True,
+            created_by_user_id=user.id if user else None,
+        )
+        db.add(h)
+        cloned_holidays += 1
+
+    db.commit(); db.refresh(clone)
+    out = _serialize_policy(clone)
+    out["cloned_holidays"] = cloned_holidays
+    return out
 
 
 # ── v3.5.0-alpha.52: DATI AZIENDALI per fattura formale ───────

@@ -1220,7 +1220,10 @@ async function whDuplicatePolicy() {
   try {
     const fd = new FormData(); fd.append('new_name', newName);
     const created = await api('POST', `/settings/api/working-hours/${id}/duplicate`, fd);
-    toast(`Duplicato come '${created.name}'`, 'success');
+    // α.172.33.2 — Festività linkate clonate automaticamente
+    const ch = created.cloned_holidays || 0;
+    const extra = ch > 0 ? ` (+${ch} festività clonate)` : '';
+    toast(`Duplicato come '${created.name}'${extra}`, 'success');
     await whReload(created.id);
   } catch (e) { toast(e.message || 'Errore', 'error'); }
 }
@@ -1241,10 +1244,26 @@ async function whDeletePolicy() {
   if (!id) return;
   const p = _whPolicies.find(x => String(x.id) === String(id));
   if (!p) return;
-  if (!confirm(`Eliminare preset '${p.name}'?\nSe ci sono risorse che lo usano, l'eliminazione verrà bloccata.`)) return;
+  // α.172.33.2 — Conta festività scope = questa policy (saranno disattivate)
+  let holidaysWarn = '';
   try {
-    await api('DELETE', `/settings/api/working-hours/${id}`);
-    toast(`Preset '${p.name}' eliminato`, 'success');
+    const eff = await api('GET', `/hr/api/holidays?include_inactive=false`);
+    const scoped = (eff.holidays || []).filter(h => h.scope_policy_id === parseInt(id, 10));
+    if (scoped.length > 0) {
+      holidaysWarn = `\n\n⚠ ${scoped.length} festività linkate a questo preset verranno disattivate (soft-delete).`;
+    }
+  } catch(e) { /* ignore: best-effort warn */ }
+  if (!confirm(
+    `Eliminare preset '${p.name}'?\n` +
+    `Se ci sono risorse che lo usano, l'eliminazione verrà bloccata.` +
+    holidaysWarn
+  )) return;
+  try {
+    const res = await api('DELETE', `/settings/api/working-hours/${id}`);
+    const extra = res && res.deactivated_holidays
+      ? ` (+${res.deactivated_holidays} festività disattivate)`
+      : '';
+    toast(`Preset '${p.name}' eliminato${extra}`, 'success');
     await whReload();
   } catch (e) { toast(e.message || 'Errore', 'error'); }
 }
