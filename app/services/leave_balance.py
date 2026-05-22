@@ -54,6 +54,18 @@ def _unavailability_hours(u: ResourceUnavailability, daily_hours: float) -> floa
     return days * daily_hours
 
 
+def _is_employee_eligible(resource: Resource) -> bool:
+    """α.172.32.1 — Accrual ferie/ROL/permessi si applica SOLO ai dipendenti
+    (`person_internal`). Freelance e non-umane sono escluse:
+    - Freelance: pagati per giornata/ora, no maturazione
+    - Studio/equipment/software/vehicle: cose, non persone
+    `person` (legacy pre-α.111) trattato come dipendente per back-compat.
+    """
+    from app.models import ResourceType
+    t = resource.type
+    return t in (ResourceType.person_internal, getattr(ResourceType, "person", None))
+
+
 def compute_leave_balance(
     db: Session,
     resource_id: int,
@@ -91,6 +103,15 @@ def compute_leave_balance(
     resource = db.query(Resource).filter(Resource.id == resource_id).first()
     if not resource:
         return {"error": "resource_not_found"}
+
+    # α.172.32.1 — Solo dipendenti (person_internal) maturano ferie/ROL/permessi
+    if not _is_employee_eligible(resource):
+        return {
+            "not_applicable": True,
+            "reason": "Saldi non applicabili: solo dipendenti maturano ferie/ROL/permessi (freelance e risorse non umane esclusi).",
+            "resource_id": resource_id,
+            "resource_type": resource.type.value if resource.type else None,
+        }
 
     policy = _resolve_policy(db, resource)
     daily_hours = policy.daily_hours_threshold if policy else 8.0

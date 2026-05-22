@@ -117,7 +117,7 @@
       <div class="form-row">
         <div class="form-group">
           <label class="form-label">Tipo *</label>
-          <select class="form-select" id="rs-type">
+          <select class="form-select" id="rs-type" onchange="rsOnTypeChange()">
             <option value="person_internal">👤 Personale interno</option>
             <option value="person_freelance">👤 Freelance</option>
             <option value="studio">🏠 Studio / Sala</option>
@@ -279,10 +279,10 @@
         <p class="text-sm text-muted" style="margin-top:4px;">Preset di orari/multiplicatori OT/accrual ferie. Imposta in /settings → Orari lavorativi.</p>
       </div>
 
-      <!-- ─── Override accrual per-resource (α.172.32 B) ─────────── -->
-      <details style="margin-bottom:14px;">
+      <!-- ─── Override accrual per-resource (α.172.32 B, visibile solo dipendenti) -->
+      <details id="rs-accrual-section" style="margin-bottom:14px;">
         <summary style="cursor:pointer; padding:6px 10px; background:var(--bg2); border:1px solid var(--border); border-radius:4px; font-size:12px;">
-          ⚙️ Override accrual ferie/ROL/permessi (avanzato)
+          ⚙️ Override accrual ferie/ROL/permessi (solo dipendenti)
         </summary>
         <div style="padding:10px; margin-top:6px; border:1px solid var(--border); border-radius:4px;">
           <p class="text-sm text-muted" style="margin:0 0 10px;">
@@ -431,6 +431,7 @@ function openNewResource() {
   const cb = document.getElementById('rs-create-user');
   if (cb) { cb.checked = false; document.getElementById('rs-user-fields').style.display = 'none'; }
   rsToggleCreateUserSection();
+  rsToggleAccrualSection();
   openModal('modal-resource');
 }
 
@@ -450,9 +451,23 @@ function rsToggleCreateUserSection() {
   }
 }
 
+// α.172.32.1 — Sezione Override accrual visibile solo per person_internal
+// (dipendenti). Freelance + risorse non-umane non maturano ferie/ROL/permessi.
+function rsToggleAccrualSection() {
+  const t = (document.getElementById('rs-type') || {}).value;
+  const sec = document.getElementById('rs-accrual-section');
+  if (sec) sec.style.display = (t === 'person_internal' || t === 'person') ? '' : 'none';
+}
+
+function rsOnTypeChange() {
+  rsToggleCreateUserSection();
+  rsToggleAccrualSection();
+  rsToggleAccrualSection();
+}
+
 document.addEventListener('DOMContentLoaded', () => {
   const t = document.getElementById('rs-type');
-  if (t) t.addEventListener('change', rsToggleCreateUserSection);
+  if (t) t.addEventListener('change', rsOnTypeChange);
   const cu = document.getElementById('rs-create-user');
   if (cu) cu.addEventListener('change', () => {
     document.getElementById('rs-user-fields').style.display = cu.checked ? '' : 'none';

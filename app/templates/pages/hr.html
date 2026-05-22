@@ -880,6 +880,8 @@ async function reloadLeaveBalance() {
   try {
     const b = await api('GET', `/hr/api/leave-balance?resource_id=${rid}&year=${year}`);
     if (b.error) { card.style.display = 'none'; return; }
+    // α.172.32.1 — Saldo non applicabile a freelance / non-umane
+    if (b.not_applicable) { card.style.display = 'none'; return; }
     document.getElementById('lb-year').textContent = `· anno ${b.year} · al ${b.as_of}`;
     const selOpt = document.querySelector(`#f-resource option[value="${rid}"]`);
     document.getElementById('lb-resource-name').textContent = selOpt ? selOpt.textContent : '';
