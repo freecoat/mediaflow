@@ -1347,10 +1347,9 @@ function renderMyUnavList(rows) {
     }).join('') + '</div>';
 }
 
-// α.172.30 — Edit unavailability spostato in fondo al file fuori da
-// `{% if scoped_resource_id %}` per essere visibile anche per admin/manager
-// senza Resource collegata (memory feedback: lo stesso pattern già usato per
-// _expDefaultMonth in alpha.111.23.1).
+// α.172.30 — Edit unavailability spostato fuori dal blocco condizionale
+// scoped_resource_id per essere visibile anche per admin/manager senza
+// Resource collegata (stesso pattern di _expDefaultMonth in alpha.111.23.1).
 
 async function myUnavSubmit() {
   const start = document.getElementById('myunav-start').value;
@@ -1384,9 +1383,9 @@ async function myUnavDelete(id) {
 reloadMyHours();
 {% endif %}
 
-// α.172.30.2 — myUnavEdit + openEditUnavRow FUORI dal blocco
-// `{% if scoped_resource_id %}` (bug: admin senza Resource collegata vedeva
-// `openEditUnavRow is not defined` cliccando riga permesso in tabella).
+// α.172.30.2 — myUnavEdit + openEditUnavRow FUORI dal blocco condizionale
+// scoped_resource_id (bug: admin senza Resource collegata vedeva
+// "openEditUnavRow is not defined" cliccando riga permesso in tabella).
 async function myUnavEdit(uId) {
   let u;
   try {
