@@ -537,12 +537,14 @@ const STATUS_CLASS = {
   completed: 'badge-done', invoiced: 'badge-invoiced', cancelled: 'badge-cancelled',
   tentative: 'badge-draft', confirmed: 'badge-active', paid: 'badge-paid',
   sent: 'badge-done', overdue: 'badge-cancelled',
+  approved: 'badge-active',  // α.172.31 — NC stato iniziale pre-invio
 };
 const STATUS_LABEL = {
   draft: 'Bozza', active: 'Attivo', on_hold: 'In pausa',
   completed: 'Completato', invoiced: 'Fatturato', cancelled: 'Annullato',
   tentative: 'Provvisorio', confirmed: 'Confermato', paid: 'Pagato',
-  sent: 'Inviato', overdue: 'Scaduto',
+  sent: 'Inviata', overdue: 'Scaduta',
+  approved: 'Approvata',  // α.172.31 — NC nasce qui, transizione → sent via UI
 };
 function statusBadge(status) {
   const cls = STATUS_CLASS[status] || 'badge-draft';

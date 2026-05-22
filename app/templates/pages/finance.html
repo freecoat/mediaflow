@@ -1955,24 +1955,23 @@ async function loadInvoices() {
     const sendBtn = (i.status !== 'cancelled' && i.status !== 'draft')
       ? `<button class="btn btn-ghost btn-sm" onclick="event.stopPropagation(); sendInvoiceEmail(${i.id});" title="Invia fattura via email all'amministrazione cliente (richiede SMTP in .env)">✉</button>`
       : '';
-    // v3.5.0-alpha.121 (F18) — Hide select cambio stato se status terminal
-    // (paid/cancelled). Allowed transitions:
-    //   draft → sent, cancelled
-    //   sent → paid, overdue, cancelled
-    //   overdue → paid, cancelled
-    //   paid / cancelled → terminal (no UI)
+    // v3.5.0-alpha.121 (F18) — Hide select cambio stato se status terminal.
+    // α.172.31 — esteso con `approved` (NC nasce qui, transizione → sent o cancel).
     const _ALLOWED_TR = {
-      draft: ['sent','cancelled'],
+      draft: ['approved','sent','cancelled'],
+      approved: ['sent','cancelled'],
       sent: ['paid','overdue','cancelled'],
       overdue: ['paid','cancelled'],
       paid: [], cancelled: [],
     };
     const allowed = _ALLOWED_TR[i.status] || [];
+    // α.172.31 — Label IT per option dropdown (era valore raw enum)
+    const _LBL = {draft:'Bozza', approved:'Approvata', sent:'Inviata', paid:'Pagata', overdue:'Scaduta', cancelled:'Annullata'};
     const statusSelect = allowed.length === 0
       ? `<span class="text-xs text-muted" title="Stato terminale: nessuna transizione consentita">—</span>`
       : `<select class="form-select" style="width:auto;font-size:12px;padding:4px 8px;" onclick="event.stopPropagation();" onchange="changeInvStatus(${i.id}, this.value)">
           <option value="">Cambia…</option>
-          ${allowed.map(s=>`<option value="${s}">${s}</option>`).join('')}
+          ${allowed.map(s=>`<option value="${s}">${_LBL[s]||s}</option>`).join('')}
         </select>`;
     return `<tr style="cursor:pointer;" onclick="openInvoiceDetail(${i.id})">
       <td class="mono" style="font-size:12px;">${numHtml}</td>
