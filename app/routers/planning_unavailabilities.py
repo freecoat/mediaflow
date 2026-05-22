@@ -17,7 +17,7 @@ Endpoint:
 """
 from fastapi import APIRouter, Depends, HTTPException, Request, Form
 from typing import Optional
-from datetime import date as _date, datetime, timedelta as _td
+from datetime import date as _date, datetime, time as _time, timedelta as _td
 from sqlalchemy.orm import Session
 from app.database import get_db
 from app.models import (
@@ -41,6 +41,10 @@ def _u_dict(u: "ResourceUnavailability") -> dict:
         "resource_name": u.resource.name if u.resource else None,
         "start_date": u.start_date.isoformat(),
         "end_date": u.end_date.isoformat(),
+        "start_time": u.start_time.strftime("%H:%M") if u.start_time else None,
+        "end_time": u.end_time.strftime("%H:%M") if u.end_time else None,
+        "hours_duration": u.hours_duration,
+        "is_partial": u.is_partial,
         "kind": u.kind.value if hasattr(u.kind, "value") else u.kind,
         "reason": u.reason,
         "status": u.status.value if hasattr(u.status, "value") else u.status,
@@ -50,6 +54,28 @@ def _u_dict(u: "ResourceUnavailability") -> dict:
         "rejection_reason": u.rejection_reason,
         "created_at": u.created_at.isoformat() if u.created_at else None,
     }
+
+
+def _parse_time_quarter(s: Optional[str]) -> Optional[_time]:
+    """Parse HH:MM stringa accettando solo step di 15min. None se vuoto.
+
+    Raise ValueError se formato invalido o non-step-15.
+    """
+    if not s:
+        return None
+    s = s.strip()
+    if not s:
+        return None
+    try:
+        parts = s.split(":")
+        h = int(parts[0]); m = int(parts[1])
+    except Exception:
+        raise ValueError(f"Orario non valido: {s} (atteso HH:MM)")
+    if not (0 <= h < 24 and 0 <= m < 60):
+        raise ValueError(f"Orario fuori range: {s}")
+    if m % 15 != 0:
+        raise ValueError(f"Granularità deve essere 15 minuti: {s}")
+    return _time(h, m)
 
 
 @router.get("/unavailabilities")
@@ -192,17 +218,40 @@ async def create_unavailability(
     end_date: _date = Form(...),
     kind: UnavailabilityKind = Form(UnavailabilityKind.vacation),
     reason: Optional[str] = Form(None),
+    # α.172.29 — Assenza intra-giorno (granularità 15min). Se entrambi
+    # popolati, start_date == end_date obbligatorio. Se vuoti → giorno intero.
+    start_time: Optional[str] = Form(None),
+    end_time: Optional[str] = Form(None),
     db: Session = Depends(get_db),
 ):
-    """Crea una richiesta di ferie/malattia/permesso.
+    """Crea una richiesta di ferie/malattia/permesso/ROL/recupero.
 
     - Staff/viewer: scope forzato sulla propria risorsa, status=pending
     - Admin/manager/producer: può creare per qualsiasi risorsa, status=approved
       di default (saltano il workflow visto che sono già autorizzati).
+    - α.172.29: se `start_time` e `end_time` popolati → assenza intra-giorno
+      (richiede start_date == end_date, granularità 15min).
     """
     user = current_user_optional(request)
     if end_date < start_date:
         raise HTTPException(400, "end_date deve essere >= start_date")
+
+    # α.172.29 — Validazione assenza intra-giorno
+    try:
+        st = _parse_time_quarter(start_time)
+        et = _parse_time_quarter(end_time)
+    except ValueError as e:
+        raise HTTPException(422, str(e))
+    is_partial = bool(st and et)
+    hours_duration: Optional[float] = None
+    if is_partial:
+        if start_date != end_date:
+            raise HTTPException(400, "Assenza a ore: start_date deve coincidere con end_date")
+        if et <= st:
+            raise HTTPException(400, "end_time deve essere posteriore a start_time")
+        hours_duration = ((et.hour * 60 + et.minute) - (st.hour * 60 + st.minute)) / 60.0
+    elif st or et:
+        raise HTTPException(400, "Specifica entrambi start_time e end_time, o nessuno dei due")
 
     if not is_elevated(user):
         own = scope_resource_id(db, user)
@@ -232,6 +281,7 @@ async def create_unavailability(
 
     u = ResourceUnavailability(
         resource_id=resource_id, start_date=start_date, end_date=end_date,
+        start_time=st, end_time=et, hours_duration=hours_duration,
         kind=kind, reason=reason,
         status=status,
         requested_by_user_id=user.id if user else None,

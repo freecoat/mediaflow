@@ -58,20 +58,38 @@ def _day_intervals(policy: WorkingHoursPolicy, d: date) -> List[TimeSlot]:
 
 
 def get_holidays(policy: WorkingHoursPolicy, year_from: int, year_to: int) -> Set[date]:
-    """Festività nazionali per gli anni richiesti, o set vuoto se policy disabilita."""
+    """Festività nazionali per gli anni richiesti, o set vuoto se policy disabilita.
+
+    α.172.29 nota: questa è la versione "policy-driven" legacy (basata su
+    `policy.holidays_country`). Per festività efficaci con custom Holiday
+    + per-resource scope usa `app.services.holidays_service.get_effective_holidays`.
+    """
     if not policy.holidays_country:
         return set()
     try:
         import holidays as _hol
         years = list(range(year_from, year_to + 1))
         country = policy.holidays_country.upper()
-        # Es. holidays.IT(years=[2026])
         country_class = getattr(_hol, country, None)
         if not country_class:
             return set()
         return set(country_class(years=years).keys())
     except Exception:
         return set()
+
+
+def get_effective_holidays_for_resource(
+    db, tenant_id: int, resource_id: int, year_from: int, year_to: int,
+) -> Set[date]:
+    """Wrapper convenience: festività effettive per resource su anni range.
+
+    Usa il nuovo service holidays_service (α.172.29) che combina nazionali +
+    custom Holiday tenant-scoped + filtra scope_resource_id/scope_location.
+    """
+    from app.services.holidays_service import get_effective_holidays_range
+    return set(get_effective_holidays_range(
+        db, tenant_id, year_from, year_to, resource_id=resource_id,
+    ).keys())
 
 
 def _unavailability_dates(unavailabilities: Iterable[ResourceUnavailability]) -> Set[date]:

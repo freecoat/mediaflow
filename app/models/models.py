@@ -521,6 +521,11 @@ class Tenant(Base):
     # boot. Es. ["/Volumes/StorageA", "/mnt/nas/deliverables"]. Vuoto =
     # nessun path autorizzato → endpoint /admin/fs-scan rifiuta tutto.
     fs_scan_allowed_paths: Mapped[Optional[list]] = mapped_column(JSON, nullable=True)
+    # v3.5.0-alpha.172.29 — Calendario festività
+    # Flag globale: include holidays.IT (festività nazionali italiane)?
+    # False = solo `Holiday` custom. True (default) = nazionali + custom.
+    use_national_holidays: Mapped[bool] = mapped_column(Boolean, default=True)
+    holidays_country_code: Mapped[str] = mapped_column(String(8), default="IT")
     # Stato
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
     onboarding_completed: Mapped[bool] = mapped_column(Boolean, default=False)
@@ -1002,6 +1007,13 @@ class Resource(Base):
     user_id: Mapped[Optional[int]] = mapped_column(ForeignKey("users.id"), nullable=True)
     # Override policy orario lavorativo (NULL = usa il default tenant)
     working_hours_policy_id: Mapped[Optional[int]] = mapped_column(ForeignKey("working_hours_policies.id"), nullable=True)
+    # Tag location per festività regionali/locali (α.172.29) — es. "Milano",
+    # "Catania". Matchato da Holiday.scope_location.
+    location_tag: Mapped[Optional[str]] = mapped_column(String(100), nullable=True, index=True)
+    # Override per-resource accrual ferie/ROL (NULL = usa default da WHP)
+    annual_leave_days_override: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
+    monthly_rol_hours_override: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
+    monthly_permit_hours_override: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
     user: Mapped[Optional["User"]] = relationship(back_populates="resources")
     department: Mapped[Optional["Department"]] = relationship(back_populates="resources")
@@ -1055,9 +1067,11 @@ class ResourcePreset(Base):
 
 
 class UnavailabilityKind(str, enum.Enum):
-    vacation = "vacation"     # ferie
-    sick = "sick"             # malattia
-    holiday = "holiday"        # festività (auto-generata da policy)
+    vacation = "vacation"        # ferie
+    sick = "sick"                # malattia
+    holiday = "holiday"          # festività (auto-generata da policy)
+    permit_rol = "permit_rol"    # permesso ROL (α.172.29)
+    recovery = "recovery"        # ore a recupero (α.172.29)
     other = "other"
 
 
@@ -1073,6 +1087,12 @@ class ResourceUnavailability(Base):
     resource_id: Mapped[int] = mapped_column(ForeignKey("resources.id"))
     start_date: Mapped[date] = mapped_column(Date)
     end_date: Mapped[date] = mapped_column(Date)
+    # Intra-day partial (α.172.29): se entrambi NULL → giorno intero.
+    # Altrimenti assenza parziale tra start_time e end_time (granularità 15min).
+    # `hours_duration` ridondante per query veloce (= computed da start/end).
+    start_time: Mapped[Optional[time]] = mapped_column(Time, nullable=True)
+    end_time: Mapped[Optional[time]] = mapped_column(Time, nullable=True)
+    hours_duration: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
     kind: Mapped[UnavailabilityKind] = mapped_column(SAEnum(UnavailabilityKind), default=UnavailabilityKind.vacation)
     reason: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
     # Workflow approvazione (v3.4.22 cantiere D)
@@ -1085,6 +1105,51 @@ class ResourceUnavailability(Base):
     rejection_reason: Mapped[Optional[str]] = mapped_column(String(500), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
     resource: Mapped["Resource"] = relationship(back_populates="unavailabilities")
+
+    @property
+    def is_partial(self) -> bool:
+        """True se assenza intra-giorno (start_time + end_time popolati)."""
+        return self.start_time is not None and self.end_time is not None
+
+
+# ── Festività personalizzate (α.172.29) ─────────────────────────────
+# Tabella tenant-scoped per festività custom (locali, ponti aziendali,
+# scope per-resource o per-location). Si combina con holidays.IT
+# nazionale via flag `Tenant.use_national_holidays`. Logica di
+# combinazione in `app.services.holidays_service.get_effective_holidays`.
+
+class HolidayKind(str, enum.Enum):
+    local = "local"                      # festività locale (es. patrono cittadino)
+    company = "company"                  # ponte aziendale / chiusura aziendale
+    national_override = "national_override"  # ridefinisce nome festività nazionale
+    exclude = "exclude"                  # esclude festività nazionale dal calendario
+
+
+class Holiday(Base):
+    """Festività personalizzata tenant-scoped (α.172.29).
+
+    Scope risolution priority:
+    - scope_resource_id IS NOT NULL → solo per quella resource
+    - scope_location IS NOT NULL → solo per Resource con location_tag matching
+    - entrambi NULL → tutto il tenant
+    """
+    __tablename__ = "holidays"
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    tenant_id: Mapped[int] = mapped_column(Integer, default=1, index=True)
+    date: Mapped[date] = mapped_column(Date, index=True)
+    name: Mapped[str] = mapped_column(String(200))
+    kind: Mapped[HolidayKind] = mapped_column(
+        SAEnum(HolidayKind), default=HolidayKind.local, index=True,
+    )
+    scope_resource_id: Mapped[Optional[int]] = mapped_column(
+        ForeignKey("resources.id"), nullable=True, index=True,
+    )
+    scope_location: Mapped[Optional[str]] = mapped_column(String(100), nullable=True, index=True)
+    is_active: Mapped[bool] = mapped_column(Boolean, default=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    created_by_user_id: Mapped[Optional[int]] = mapped_column(
+        ForeignKey("users.id"), nullable=True,
+    )
 
 
 # ── ORARIO LAVORATIVO (E3 v3.4.17) ────────────────────────────
@@ -1140,6 +1205,16 @@ class WorkingHoursPolicy(Base):
     overtime_brackets: Mapped[Optional[list]] = mapped_column(JSON, nullable=True, default=None)
     # Etichetta opzionale del CCNL/preset (es. "Italia base", "CCNL Cinema · Doppiaggio")
     ccnl_label: Mapped[Optional[str]] = mapped_column(String(120), nullable=True)
+    # v3.5.0-alpha.172.29 — Accrual annuale ferie / mensile ROL / mensile permessi.
+    # Usati da `compute_leave_balance` per maturate dinamiche. Override per-resource
+    # via Resource.annual_leave_days_override / monthly_rol_hours_override /
+    # monthly_permit_hours_override. Default IT base: 26gg ferie/anno, 8h ROL/mese,
+    # 8h permessi retribuiti/mese. CCNL-dipendente; Matteo definirà i numeri reali.
+    annual_leave_days_default: Mapped[float] = mapped_column(Float, default=26.0)
+    monthly_rol_hours_accrual: Mapped[float] = mapped_column(Float, default=8.0)
+    monthly_permit_hours_accrual: Mapped[float] = mapped_column(Float, default=8.0)
+    # Soglia ore lavoro/giorno per conversione gg → h (es. ferie godute = 1gg = 8h).
+    # Reuso `daily_hours_threshold` per coerenza (già presente sopra).
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
 
 

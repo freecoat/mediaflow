@@ -8,11 +8,23 @@
 
 ## Versione corrente
 
-**v3.5.0-alpha.172.28** — 22 maggio 2026 — Scheda tecnica progetto: link pubblico EDITABILE
+**v3.5.0-alpha.172.29** — 22 maggio 2026 — Assenze a ore + festività custom + AI CCNL params
 
-Aggiunto link `/public/tech-sheet/{edit_token}/edit` complementare al readonly esistente. Editor compilabile senza login con identità tracciata (nome+email obbligatori), salvataggio granulare per sezione, polling concorrenza 30s con banner. UI gestione in `/projects/{id}` (modal "🔓 Link modificabile" + lista log modifiche pubbliche). Default scadenza 30gg. Bug fix: print `α` in auto-migrate crashava su console Windows cp1252 → sostituito con `alpha`.
+Bundle 2 feature richieste:
+1. **Permesso ROL / Malattia / Ferie / Recupero ore — anche a ore** (15min granularità). Integrate nel modal `/hr` timbratura via dropdown optgroup. Dispatch backend a `/planning/api/unavailabilities` con start_time/end_time. Service `compute_leave_balance` calcola saldo dinamico (maturate pro-rata − consumate approved). UI: card 📊 Saldo ferie/ROL/permessi/malattia con filtro risorsa.
+2. **Calendario festività custom** tenant-scoped con scope per-resource/location. Pagina `/hr/holidays` CRUD + import CSV. Nazionali italiane (holidays.IT) attive di default + custom locali / aziendali / override / exclude. Refactor 2 callsite AI per usare festività effective.
+
+Bonus:
+- 2 nuove AI capability: `propose_ccnl_params` (aggiorna WorkingHoursPolicy con dati CCNL via AI) + `propose_holiday_set` (bulk insert festività).
+- WorkingHoursPolicy accrual fields: ferie/anno, ROL/mese, permessi/mese (override per-resource opzionale).
 
 ## Versione precedente
+
+**v3.5.0-alpha.172.28** — 22 maggio 2026 — Scheda tecnica progetto: link pubblico EDITABILE
+
+Aggiunto link `/public/tech-sheet/{edit_token}/edit` complementare al readonly esistente. Editor compilabile senza login con identità tracciata (nome+email obbligatori), salvataggio granulare per sezione, polling concorrenza 30s con banner. UI gestione in `/projects/{id}` (modal "🔓 Link modificabile" + lista log modifiche pubbliche). Default scadenza 30gg.
+
+## (versione precedente)
 
 **v3.5.0-alpha.172.27** — 21 maggio 2026 — AI Copilot polish + bulk delete + timeline incrementale
 

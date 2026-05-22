@@ -21,6 +21,7 @@ from app.routers import (
     anomalies,  # v3.5.0-alpha.89 — Workflow anomalie fatturazione (sprint S4)
     portal,    # v3.5.0-alpha.97 — Portale cliente (#10 fase A)
     platform,  # v3.5.0-alpha.104 — Super-admin platform tenant management
+    holidays as holidays_router,  # v3.5.0-alpha.172.29 — Festività custom + leave balance
 )
 
 
@@ -878,6 +879,56 @@ def _auto_migrate_columns():
                     "ON anomaly_entries (tenant_id, dedup_key)"
                 ))
 
+    # v3.5.0-alpha.172.29 — Assenze a ore + festività custom + CCNL accrual
+    if "resource_unavailabilities" in insp.get_table_names():
+        rucols = {c["name"] for c in insp.get_columns("resource_unavailabilities")}
+        ru_alter = [
+            ("start_time", "TIME NULL"),
+            ("end_time", "TIME NULL"),
+            ("hours_duration", "FLOAT NULL"),
+        ]
+        with engine.begin() as conn:
+            for col, ddl in ru_alter:
+                if col not in rucols:
+                    print(f"[auto-migrate] resource_unavailabilities.{col} mancante -> ALTER TABLE (alpha.172.29)")
+                    conn.execute(text(f"ALTER TABLE resource_unavailabilities ADD COLUMN {col} {ddl}"))
+    if "resources" in insp.get_table_names():
+        rcols = {c["name"] for c in insp.get_columns("resources")}
+        r_alter = [
+            ("location_tag", "VARCHAR(100) NULL"),
+            ("annual_leave_days_override", "FLOAT NULL"),
+            ("monthly_rol_hours_override", "FLOAT NULL"),
+            ("monthly_permit_hours_override", "FLOAT NULL"),
+        ]
+        with engine.begin() as conn:
+            for col, ddl in r_alter:
+                if col not in rcols:
+                    print(f"[auto-migrate] resources.{col} mancante -> ALTER TABLE (alpha.172.29)")
+                    conn.execute(text(f"ALTER TABLE resources ADD COLUMN {col} {ddl}"))
+    if "tenants" in insp.get_table_names():
+        tcols = {c["name"] for c in insp.get_columns("tenants")}
+        t_alter = [
+            ("use_national_holidays", "BOOLEAN NOT NULL DEFAULT 1"),
+            ("holidays_country_code", "VARCHAR(8) NOT NULL DEFAULT 'IT'"),
+        ]
+        with engine.begin() as conn:
+            for col, ddl in t_alter:
+                if col not in tcols:
+                    print(f"[auto-migrate] tenants.{col} mancante -> ALTER TABLE (alpha.172.29)")
+                    conn.execute(text(f"ALTER TABLE tenants ADD COLUMN {col} {ddl}"))
+    if "working_hours_policies" in insp.get_table_names():
+        wcols = {c["name"] for c in insp.get_columns("working_hours_policies")}
+        w_alter = [
+            ("annual_leave_days_default", "FLOAT NOT NULL DEFAULT 26.0"),
+            ("monthly_rol_hours_accrual", "FLOAT NOT NULL DEFAULT 8.0"),
+            ("monthly_permit_hours_accrual", "FLOAT NOT NULL DEFAULT 8.0"),
+        ]
+        with engine.begin() as conn:
+            for col, ddl in w_alter:
+                if col not in wcols:
+                    print(f"[auto-migrate] working_hours_policies.{col} mancante -> ALTER TABLE (alpha.172.29)")
+                    conn.execute(text(f"ALTER TABLE working_hours_policies ADD COLUMN {col} {ddl}"))
+
     # v3.5.0-alpha.172.28 — Scheda tecnica: link pubblico EDITABILE
     if "project_tech_sheets" in insp.get_table_names():
         tcols = {c["name"] for c in insp.get_columns("project_tech_sheets")}
@@ -1396,7 +1447,7 @@ async def lifespan(app: FastAPI):
     yield
 
 
-app = FastAPI(title="MediaFlow", version="3.5.0-alpha.172.28", lifespan=lifespan)
+app = FastAPI(title="MediaFlow", version="3.5.0-alpha.172.29", lifespan=lifespan)
 
 BASE_DIR = Path(__file__).parent
 app.mount("/static", StaticFiles(directory=BASE_DIR / "static"), name="static")
@@ -1672,6 +1723,7 @@ app.include_router(ai.router)
 app.include_router(departments.router)
 app.include_router(settings_router.router)
 app.include_router(hr.router)
+app.include_router(holidays_router.router)  # v3.5.0-alpha.172.29 — Festività custom + leave balance
 app.include_router(jobs.router)
 app.include_router(admin.router)
 app.include_router(notifications_router.router)

@@ -1502,17 +1502,20 @@ def _h_check_recurring_booking_collisions(db: Session, data: dict) -> dict:
         days = {DAYS[d.strip()[:3].upper()] for d in rule.split(",") if d.strip()}
     if not days:
         raise ValueError(f"Regola ricorrenza non valida: {rule}")
-    # Italian holidays nel range
+    # Festività efficaci nel range (α.172.29 — include custom + per-resource scope)
     holidays_list: list[dict] = []
     try:
-        import holidays as _hol
-        country_class = getattr(_hol, "IT", None)
-        if country_class:
-            yrs = list(range(start_d.year, until_d.year + 1))
-            it_hol = country_class(years=yrs)
-            for d_h, name in it_hol.items():
-                if start_d <= d_h <= until_d and d_h.weekday() in days:
-                    holidays_list.append({"date": d_h.isoformat(), "name": name})
+        from app.services.holidays_service import get_effective_holidays_range
+        from app.context import current_tenant_id
+        # Per multi-resource booking ricorrente, scope = tenant-wide
+        # (festività comuni a tutte le risorse). Per-resource override gestito
+        # in caller separato se serve.
+        hol_map = get_effective_holidays_range(
+            db, current_tenant_id(), start_d.year, until_d.year, resource_id=None,
+        )
+        for d_h, name in hol_map.items():
+            if start_d <= d_h <= until_d and d_h.weekday() in days:
+                holidays_list.append({"date": d_h.isoformat(), "name": name})
     except Exception:
         pass
     # Resource names lookup
@@ -1682,11 +1685,13 @@ def _h_propose_recurring_bookings(db: Session, data: dict) -> dict:
     holidays_set = set()
     if skip_holidays:
         try:
-            import holidays as _hol
-            country_class = getattr(_hol, "IT", None)
-            if country_class:
-                yrs = list(range(start_d.year, until_d.year + 1))
-                holidays_set = set(country_class(years=yrs).keys())
+            # α.172.29 — usa effective holidays (include custom tenant + nazionali)
+            from app.services.holidays_service import get_effective_holidays_range
+            from app.context import current_tenant_id
+            hol_map = get_effective_holidays_range(
+                db, current_tenant_id(), start_d.year, until_d.year, resource_id=None,
+            )
+            holidays_set = set(hol_map.keys())
         except Exception:
             holidays_set = set()
     job = db.query(Job).filter(Job.id == int(job_id)).first()
@@ -2810,6 +2815,145 @@ def _h_propose_merge_phantom(db: Session, data: dict) -> dict:
         "source_id": src.id, "source_number": src.number,
         "lines_from_target": len(new_lines_target),
         "lines_from_phantom": len(new_lines_phantom),
+    }
+
+
+# ── α.172.29 — Capability HR: CCNL params + Holiday set ───────
+
+@ai_capability("propose_ccnl_params")
+def _h_propose_ccnl_params(db: Session, data: dict) -> dict:
+    """MUTATION. Aggiorna parametri CCNL su WorkingHoursPolicy.
+
+    Args (tutti opzionali eccetto `working_hours_policy_id`):
+    - `working_hours_policy_id` (int): ID WHP da aggiornare. Se omesso → policy default tenant.
+    - `ccnl_label` (str): etichetta CCNL applicato
+    - `annual_leave_days_default` (float): giorni ferie annui maturati
+    - `monthly_rol_hours_accrual` (float): ore ROL maturate al mese
+    - `monthly_permit_hours_accrual` (float): ore permessi retribuiti / mese
+    - `daily_hours_threshold` (float): soglia overtime giornaliera
+    - `weekly_hours_threshold` (float): soglia overtime settimanale
+    - `overtime_brackets` (list): scaglioni JSON [{from_hour, multiplier}, ...]
+    - `permit_multiplier` (float): coefficiente report HR per ore permesso
+    """
+    from app.models import WorkingHoursPolicy
+    whp_id = data.get("working_hours_policy_id")
+    if whp_id:
+        whp = db.query(WorkingHoursPolicy).filter(
+            WorkingHoursPolicy.id == int(whp_id),
+            WorkingHoursPolicy.tenant_id == CURRENT_TENANT,
+        ).first()
+    else:
+        whp = db.query(WorkingHoursPolicy).filter(
+            WorkingHoursPolicy.tenant_id == CURRENT_TENANT,
+            WorkingHoursPolicy.is_default == True,  # noqa: E712
+        ).first()
+    if not whp:
+        raise ValueError("WorkingHoursPolicy non trovata. Specifica `working_hours_policy_id` o crea una policy default.")
+
+    changed: list[str] = []
+    for fld in ("ccnl_label",):
+        if fld in data and data[fld] is not None:
+            v = (str(data[fld])).strip()[:120]
+            if v != getattr(whp, fld):
+                setattr(whp, fld, v); changed.append(fld)
+    for fld in (
+        "annual_leave_days_default", "monthly_rol_hours_accrual",
+        "monthly_permit_hours_accrual", "daily_hours_threshold",
+        "weekly_hours_threshold", "permit_multiplier",
+    ):
+        if fld in data and data[fld] is not None:
+            try:
+                v = float(data[fld])
+            except Exception:
+                raise ValueError(f"Campo {fld}: atteso numero")
+            if v != getattr(whp, fld):
+                setattr(whp, fld, v); changed.append(fld)
+    if "overtime_brackets" in data and data["overtime_brackets"] is not None:
+        brk = data["overtime_brackets"]
+        if not isinstance(brk, list):
+            raise ValueError("overtime_brackets deve essere lista di {from_hour, multiplier}")
+        whp.overtime_brackets = brk
+        changed.append("overtime_brackets")
+
+    db.flush()
+    return {
+        "updated": True,
+        "working_hours_policy_id": whp.id,
+        "name": whp.name,
+        "ccnl_label": whp.ccnl_label,
+        "fields_changed": changed,
+        "message": f"WorkingHoursPolicy '{whp.name}' aggiornata ({len(changed)} campi).",
+    }
+
+
+@ai_capability("propose_holiday_set")
+def _h_propose_holiday_set(db: Session, data: dict) -> dict:
+    """MUTATION. Inserisce festività custom in blocco.
+
+    Args:
+    - `holidays` (list, obbligatorio): [{date: 'YYYY-MM-DD', name: str, kind?: str,
+       scope_location?: str, scope_resource_id?: int}, ...]
+    - `replace_existing` (bool, default false): se true cancella (is_active=False)
+       le custom esistenti dello stesso anno prima di inserire le nuove
+    """
+    from app.models import Holiday, HolidayKind
+    from datetime import date as _d
+    items = data.get("holidays") or []
+    if not isinstance(items, list) or not items:
+        raise ValueError("'holidays' obbligatorio (lista non vuota)")
+    replace_existing = bool(data.get("replace_existing", False))
+
+    years = set()
+    parsed: list[dict] = []
+    for i, it in enumerate(items):
+        if not isinstance(it, dict):
+            raise ValueError(f"Item {i}: atteso oggetto")
+        try:
+            d = _d.fromisoformat(str(it.get("date") or "").strip())
+        except Exception:
+            raise ValueError(f"Item {i}: data non valida (atteso YYYY-MM-DD)")
+        name = (it.get("name") or "").strip()
+        if not name:
+            raise ValueError(f"Item {i}: nome obbligatorio")
+        kind_str = (it.get("kind") or "local").strip()
+        try:
+            kind = HolidayKind(kind_str)
+        except ValueError:
+            kind = HolidayKind.local
+        years.add(d.year)
+        parsed.append({
+            "date": d, "name": name[:200], "kind": kind,
+            "scope_location": (it.get("scope_location") or None),
+            "scope_resource_id": it.get("scope_resource_id"),
+        })
+
+    if replace_existing:
+        from sqlalchemy import extract
+        for yr in years:
+            existing = db.query(Holiday).filter(
+                Holiday.tenant_id == CURRENT_TENANT,
+                extract("year", Holiday.date) == yr,
+                Holiday.is_active == True,  # noqa: E712
+            ).all()
+            for h in existing:
+                h.is_active = False
+
+    created_ids: list[int] = []
+    for p in parsed:
+        h = Holiday(
+            tenant_id=CURRENT_TENANT,
+            date=p["date"], name=p["name"], kind=p["kind"],
+            scope_location=(p["scope_location"][:100] if p["scope_location"] else None),
+            scope_resource_id=p["scope_resource_id"],
+        )
+        db.add(h); db.flush()
+        created_ids.append(h.id)
+
+    return {
+        "created_count": len(created_ids),
+        "years": sorted(list(years)),
+        "replaced_existing": replace_existing,
+        "message": f"{len(created_ids)} festività custom inserite per anni {sorted(list(years))}.",
     }
 
 

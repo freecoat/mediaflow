@@ -5,6 +5,7 @@
 {% block topbar_title %}Ore di lavoro · HR{% endblock %}
 
 {% block topbar_actions %}
+  <a href="/hr/holidays" class="btn btn-secondary btn-sm">📅 Calendario festività</a>
   <button class="btn btn-primary btn-sm" onclick="openNewPunch()">+ Nuova timbratura</button>
 {% endblock %}
 
@@ -171,6 +172,18 @@
   <div class="hr-tot-card">
     <div class="lbl">Caricamento…</div>
     <div class="val">—</div>
+  </div>
+</div>
+
+<!-- ── Saldo ferie/ROL/permessi (α.172.29) ─────────────────── -->
+<div id="leave-balance-card" class="card" style="margin-bottom:16px;display:none;">
+  <div class="flex items-center justify-between" style="margin-bottom:10px;">
+    <h3 style="font-size:14px; margin:0;">📊 Saldo ferie / ROL / permessi <span id="lb-year" class="text-muted text-sm" style="font-weight:normal;"></span></h3>
+    <div class="text-xs text-muted" id="lb-resource-name"></div>
+  </div>
+  <div id="lb-grid" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:12px;"></div>
+  <div class="text-xs text-muted" style="margin-top:8px;">
+    Maturate calcolate pro-rata sul tempo trascorso. Override per-risorsa in <a href="/resources">/resources</a> &gt; "Contratto".
   </div>
 </div>
 
@@ -385,13 +398,23 @@
         <div class="form-group">
           <label class="form-label">Tipo *</label>
           <select class="form-select" id="p-kind" required onchange="updatePunchDuration()">
-            {% for k in kinds %}
-              {% if k.value in ('shift', 'break') %}
-              <option value="{{ k.value }}">{{ k.label }}</option>
-              {% endif %}
-            {% endfor %}
+            <optgroup label="Lavoro">
+              {% for k in kinds %}
+                {% if k.value in ('shift', 'break') %}
+                <option value="{{ k.value }}">{{ k.label }}</option>
+                {% endif %}
+              {% endfor %}
+            </optgroup>
+            <!-- α.172.29 — assenze a ore o a giornata, dispatch a /planning/api/unavailabilities -->
+            <optgroup label="Assenze (anche a ore)">
+              <option value="leave_vacation">🏖️ Ferie</option>
+              <option value="leave_sick">🤒 Malattia</option>
+              <option value="leave_permit_rol">⏱️ Permesso ROL</option>
+              <option value="leave_recovery">↩️ Recupero ore</option>
+              <option value="leave_other">📝 Altro permesso</option>
+            </optgroup>
           </select>
-          <small class="form-help text-muted">Lo straordinario viene calcolato automaticamente in base alla policy oraria. Per ferie/malattia → sezione "Le mie ferie e malattie" qui sotto.</small>
+          <small class="form-help text-muted">Lo straordinario è calcolato automaticamente in base alla policy oraria. Per assenze parziali a ore (es. permesso ROL 14:00-16:00) usa "Assenze a ore" e imposta gli orari (step 15 min).</small>
         </div>
       </div>
       <div class="form-row">
@@ -481,8 +504,15 @@ function _populateBreakOptions() {
 function _updateBreakVisibility() {
   const kind = (document.getElementById('p-kind') || {}).value;
   const grp = document.getElementById('p-break-group');
-  if (!grp) return;
-  grp.style.display = (kind === 'shift') ? '' : 'none';
+  if (grp) grp.style.display = (kind === 'shift') ? '' : 'none';
+  // α.172.29 — Nascondi Job per assenze leave_* (non ha senso assegnare un job
+  // a una ferie). Mostra hint sui 15min.
+  const isLeave = kind && kind.indexOf('leave_') === 0;
+  const jobSel = document.getElementById('p-job');
+  if (jobSel) {
+    const jobGrp = jobSel.closest('.form-group');
+    if (jobGrp) jobGrp.style.display = isLeave ? 'none' : '';
+  }
 }
 
 function fmtDate(iso) {
@@ -519,6 +549,7 @@ function buildQuery() {
 // singola timbratura (distribuito sui punch del giorno con regola last-in-
 // first-out) e i totali del periodo per le 8 categorie del breakdown.
 async function reloadHR() {
+  reloadLeaveBalance();  // α.172.29 — saldo ferie/ROL/permessi
   const qs = buildQuery();
   let data;
   try {
@@ -738,9 +769,52 @@ async function openEditPunch(punchId) {
 
 async function savePunch() {
   const id = document.getElementById('p-id').value;
-  const fd = new FormData();
-  fd.append('resource_id', document.getElementById('p-resource').value);
   const kind = document.getElementById('p-kind').value;
+  const resource_id = document.getElementById('p-resource').value;
+  const start = document.getElementById('p-start').value;
+  const end = document.getElementById('p-end').value;
+  if (!resource_id) { toast('Risorsa obbligatoria', 'error'); return; }
+  if (!start) { toast('Inizio obbligatorio', 'error'); return; }
+
+  // α.172.29 — Dispatch: leave_* → /planning/api/unavailabilities
+  if (kind && kind.indexOf('leave_') === 0) {
+    if (id) { toast('Edit di assenze esistenti: usa la sezione "Le mie ferie e malattie"', 'info'); return; }
+    if (!end) { toast('Fine obbligatoria per assenze', 'error'); return; }
+    const dtS = new Date(start), dtE = new Date(end);
+    if (isNaN(dtS) || isNaN(dtE)) { toast('Date non valide', 'error'); return; }
+    if (dtE <= dtS) { toast('Fine ≤ Inizio', 'error'); return; }
+    // Validazione step 15min su minuti
+    if (dtS.getMinutes() % 15 !== 0 || dtE.getMinutes() % 15 !== 0) {
+      toast('Orari devono essere a step di 15 minuti (es. 14:00, 14:15, 14:30, 14:45)', 'error');
+      return;
+    }
+    const pad = (n) => String(n).padStart(2, '0');
+    const dateS = `${dtS.getFullYear()}-${pad(dtS.getMonth()+1)}-${pad(dtS.getDate())}`;
+    const dateE = `${dtE.getFullYear()}-${pad(dtE.getMonth()+1)}-${pad(dtE.getDate())}`;
+    const fd = new FormData();
+    fd.append('resource_id', resource_id);
+    fd.append('start_date', dateS);
+    fd.append('end_date', dateE);
+    fd.append('kind', kind.replace('leave_', ''));
+    fd.append('reason', document.getElementById('p-notes').value || '');
+    // Se stessa data → assenza intra-giorno con orari
+    if (dateS === dateE) {
+      fd.append('start_time', `${pad(dtS.getHours())}:${pad(dtS.getMinutes())}`);
+      fd.append('end_time', `${pad(dtE.getHours())}:${pad(dtE.getMinutes())}`);
+    }
+    try {
+      await api('POST', '/planning/api/unavailabilities', fd);
+      const kindLbl = ({vacation:'Ferie',sick:'Malattia',permit_rol:'Permesso ROL',recovery:'Recupero ore',other:'Permesso'})[kind.replace('leave_','')] || 'Assenza';
+      toast(kindLbl + (dateS === dateE ? ' a ore' : '') + ' registrata', 'success');
+      closeModal('modal-punch');
+      reloadHR();
+    } catch(e) { toast(e.message || 'Errore', 'error'); }
+    return;
+  }
+
+  // Punch normale (shift / break / idle / overtime)
+  const fd = new FormData();
+  fd.append('resource_id', resource_id);
   fd.append('kind', kind);
   // v3.5.0-alpha.22: pausa pranzo (solo per shift)
   if (kind === 'shift') {
@@ -749,16 +823,8 @@ async function savePunch() {
   } else {
     fd.append('break_minutes', '0');
   }
-  const start = document.getElementById('p-start').value;
-  const end = document.getElementById('p-end').value;
-  if (!start || !document.getElementById('p-resource').value) {
-    toast('Risorsa e inizio obbligatori', 'error'); return;
-  }
   // v3.5.0-alpha.14: NO toISOString — invia raw local datetime-local value
-  // ("YYYY-MM-DDTHH:MM"). FastAPI lo parsa come naive datetime e lo storia
-  // nel DB così com'è. La display poi ri-legge naive e non applica offset.
-  // Bug pre-alpha.14: utente Italia (UTC+2 DST) inseriva 9:00 → toISOString
-  // mandava 07:00 UTC → server salvava 07:00 naive → display 07:00 (-2h).
+  // ("YYYY-MM-DDTHH:MM"). FastAPI lo parsa come naive datetime.
   fd.append('start_datetime', start);
   if (end) {
     fd.append('end_datetime', end);
@@ -784,6 +850,71 @@ async function savePunch() {
     closeModal('modal-punch');
     reloadHR();
   } catch(e) { toast(e.message || 'Errore', 'error'); }
+}
+
+// α.172.29 — Saldo dinamico ferie / ROL / permessi / malattia
+async function reloadLeaveBalance() {
+  const rid = document.getElementById('f-resource').value;
+  const card = document.getElementById('leave-balance-card');
+  if (!rid) { card.style.display = 'none'; return; }
+  const fromDate = document.getElementById('f-from').value;
+  let year = (new Date()).getFullYear();
+  if (fromDate) {
+    const y = parseInt(fromDate.slice(0, 4), 10);
+    if (!isNaN(y)) year = y;
+  }
+  try {
+    const b = await api('GET', `/hr/api/leave-balance?resource_id=${rid}&year=${year}`);
+    if (b.error) { card.style.display = 'none'; return; }
+    document.getElementById('lb-year').textContent = `· anno ${b.year} · al ${b.as_of}`;
+    const selOpt = document.querySelector(`#f-resource option[value="${rid}"]`);
+    document.getElementById('lb-resource-name').textContent = selOpt ? selOpt.textContent : '';
+    const grid = document.getElementById('lb-grid');
+    grid.replaceChildren();
+
+    const _card = (title, items, color) => {
+      const box = document.createElement('div');
+      box.style.cssText = `background:var(--bg);border:1px solid var(--border);border-left:3px solid ${color};border-radius:6px;padding:10px 12px;`;
+      const h = document.createElement('div');
+      h.style.cssText = 'font-size:11px;text-transform:uppercase;letter-spacing:0.4px;color:var(--text3);font-weight:600;margin-bottom:6px;';
+      h.textContent = title;
+      box.appendChild(h);
+      for (const [lbl, val] of items) {
+        const row = document.createElement('div');
+        row.style.cssText = 'display:flex;justify-content:space-between;font-size:12.5px;padding:2px 0;';
+        const lblSpan = document.createElement('span'); lblSpan.className = 'text-muted'; lblSpan.textContent = lbl;
+        const valSpan = document.createElement('strong'); valSpan.textContent = val;
+        row.append(lblSpan, valSpan);
+        box.appendChild(row);
+      }
+      return box;
+    };
+
+    grid.appendChild(_card('🏖️ Ferie', [
+      ['Maturate', `${b.ferie.matured_days} gg (${b.ferie.matured_hours} h)`],
+      ['Godute', `${b.ferie.consumed_days_eq} gg (${b.ferie.consumed_hours} h)`],
+      ['Residue', `${b.ferie.residual_days} gg (${b.ferie.residual_hours} h)`],
+    ], '#6272f5'));
+    grid.appendChild(_card('⏱️ ROL', [
+      ['Maturate', `${b.rol.matured_hours} h`],
+      ['Godute', `${b.rol.consumed_hours} h`],
+      ['Residue', `${b.rol.residual_hours} h`],
+    ], '#fb923c'));
+    grid.appendChild(_card('📝 Permessi', [
+      ['Maturate', `${b.permit.matured_hours} h`],
+      ['Godute', `${b.permit.consumed_hours} h`],
+      ['Residue', `${b.permit.residual_hours} h`],
+    ], '#22c55e'));
+    grid.appendChild(_card('🤒 Malattia', [
+      ['Giorni eq.', `${b.sick_days_eq} gg`],
+      ['Ore', `${b.sick_hours} h`],
+      ['Annuali', `${b.year}`],
+    ], '#f87171'));
+
+    card.style.display = '';
+  } catch (e) {
+    card.style.display = 'none';
+  }
 }
 
 async function deletePunch() {

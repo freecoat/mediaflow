@@ -1,5 +1,63 @@
 # MediaFlow — Changelog
 
+## v3.5.0-alpha.172.29 — Assenze a ore + festività custom + AI CCNL (22 mag 2026)
+
+Bundle 2 feature richieste da Matteo:
+1. Permesso ROL, malattia, ferie, recupero ore — anche **a ore** (granularità 15 min) integrate nel modal timbratura.
+2. **Calendario festività personalizzato** per-tenant, per-location, per-resource. Sostituisce o aggiunge alle nazionali italiane.
+
+**Modelli** (`app/models/models.py`):
+- `UnavailabilityKind` esteso: aggiunti `permit_rol`, `recovery` (oltre vacation/sick/holiday/other).
+- `ResourceUnavailability` esteso: `start_time`, `end_time`, `hours_duration` (intra-giorno parziale). Property `is_partial`.
+- Nuovo `Holiday(id, tenant_id, date, name, kind, scope_resource_id FK?, scope_location TEXT?, is_active, created_by_user_id)`. `HolidayKind`: `local | company | national_override | exclude`.
+- `Resource` esteso: `location_tag` (matchato da `Holiday.scope_location`) + `annual_leave_days_override`, `monthly_rol_hours_override`, `monthly_permit_hours_override` (override per-risorsa).
+- `Tenant` esteso: `use_national_holidays` (flag), `holidays_country_code` (default "IT").
+- `WorkingHoursPolicy` esteso: `annual_leave_days_default` (26gg), `monthly_rol_hours_accrual` (8h), `monthly_permit_hours_accrual` (8h). CCNL-dipendente; Matteo definirà i numeri reali per CCNL post-prod.
+
+**Auto-migrate** (`app/main.py`): 12 ALTER TABLE idempotenti per le 4 tabelle. Nuova tabella `holidays` creata da `create_tables()`.
+
+**Servizi nuovi**:
+- `app/services/holidays_service.py` — `get_effective_holidays(db, tenant_id, year, resource_id=None)` risolve nazionali (se flag) ∪ custom matching scope − exclude. Riusato in 2 callsite AI (`_h_propose_recurring_bookings`, `_h_check_recurring_booking_collisions`) sostituendo `holidays.IT(...)` diretto.
+- `app/services/leave_balance.py` — `compute_leave_balance(db, resource_id, year)` calcolo dinamico ferie maturate (pro-rata mesi trascorsi) − consumate (ResourceUnavailability approved, conta `hours_duration` per parziali o days×daily_hours per intere). Saldi separati per ferie / ROL / permessi / malattia.
+
+**Router nuovo** (`app/routers/holidays.py`, prefix `/hr`):
+- `GET /api/holidays?year=&include_inactive=` — lista custom
+- `GET /api/holidays/effective?year=&resource_id=` — risolte (custom + nazionali + scope match)
+- `POST /api/holidays` (form)
+- `PUT /api/holidays/{id}` (json)
+- `DELETE /api/holidays/{id}` (soft: is_active=False)
+- `POST /api/holidays/bulk-import` (json: csv_text, skip_existing) — import paste CSV
+- `GET /api/leave-balance?resource_id=&year=` — saldo dinamico
+- `GET /holidays` — pagina HTML CRUD
+
+**Router unavailabilities** (`planning_unavailabilities.py`):
+- POST `/planning/api/unavailabilities` esteso con `start_time` / `end_time` opzionali (HH:MM step 15min validati server-side).
+- Se popolati → assenza intra-giorno (start_date == end_date obbligatorio). Altrimenti giorno intero come prima.
+- `_u_dict` ritorna anche start_time/end_time/hours_duration/is_partial.
+
+**Modal timbratura** (`pages/hr.html`):
+- Dropdown Tipo aggiunto optgroup "Assenze (anche a ore)" con 5 voci: Ferie, Malattia, Permesso ROL, Recupero ore, Altro permesso.
+- `savePunch()` dispatch: kind `leave_*` → POST /planning/api/unavailabilities con start_date/end_date estratti + start_time/end_time se stessa data. Validazione step 15min lato client.
+- `_updateBreakVisibility()` nasconde campi non pertinenti (pausa, job) per kind leave_*.
+
+**UI saldo** (`pages/hr.html`):
+- Card "📊 Saldo ferie / ROL / permessi" mostrata quando filtro risorsa selezionato. 4 box: Ferie (maturate/godute/residue gg+h), ROL (h), Permessi (h), Malattia (gg eq).
+- Auto-reload con `reloadHR()` quando cambia risorsa o anno.
+
+**UI festività** (`pages/holidays.html` + topbar HR):
+- Pagina dedicata `/hr/holidays`: tabella unificata custom + nazionali (filtro per anno/risorsa/showNational), pill colorate per kind, edit/disattiva inline.
+- Modal CRUD: data, nome, kind, scope_resource_id, scope_location.
+- Modal Import CSV: paste testo `date,name,kind,scope_location` con skip-existing flag e report errori.
+- Costruzione DOM via `createElement` + `.textContent` (NO innerHTML user-input — XSS-safe).
+- Link "📅 Calendario festività" in topbar `/hr`.
+
+**AI capabilities nuove** (`app/services/ai_assistant.py`):
+- `propose_ccnl_params(working_hours_policy_id?, ccnl_label, annual_leave_days_default, monthly_rol_hours_accrual, monthly_permit_hours_accrual, daily_hours_threshold, weekly_hours_threshold, overtime_brackets, permit_multiplier)` — aggiorna WHP. Se `working_hours_policy_id` omesso → policy default tenant.
+- `propose_holiday_set(holidays=[{date,name,kind,scope_location,scope_resource_id}], replace_existing=false)` — bulk insert festività con parsing + dedup + opzione replace.
+- Totale capability: 36 → 38.
+
+**Smoke** (locale α.172.29): /health 200 + version corretta; 12 ALTER applicate al boot; `/hr/holidays` redirect 303 a login; `/hr/api/holidays/effective` 401 senza auth (gate corretto); 2 capability HR registrate (`propose_ccnl_params`, `propose_holiday_set`).
+
 ## v3.5.0-alpha.172.28 — Scheda tecnica: link pubblico EDITABILE (22 mag 2026)
 
 Richiesta Matteo: oltre al link readonly esistente (α.x), generare un link **modificabile** per condividere la scheda tecnica con clienti/crew esterni e farsi compilare i campi senza login.

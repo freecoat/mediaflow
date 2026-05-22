@@ -4,6 +4,7 @@ from app.models.models import (
     Department,
     DeliveryTemplate,
     Resource, ResourceType, ResourceUnavailability, UnavailabilityKind, UnavailabilityStatus, WorkingHoursPolicy,
+    Holiday, HolidayKind,
     ResourcePreset,
     Client, ClientWork, Project, ProjectStatus, ProjectMilestone,
     Job, JobStatus, Booking, BookingAssignment, BookingChange, BookingStatus, BookingKind,

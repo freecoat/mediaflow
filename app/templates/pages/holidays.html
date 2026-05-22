@@ -1,0 +1,399 @@
+{% extends "base.html" %}
+{% set active_page = "hr" %}
+
+{% block title %}Festività — MediaFlow{% endblock %}
+{% block topbar_title %}Calendario festività{% endblock %}
+
+{% block topbar_actions %}
+  {% if is_elevated %}
+  <button class="btn btn-secondary btn-sm" onclick="openHolImport()">📥 Import CSV</button>
+  <button class="btn btn-primary btn-sm" onclick="openNewHoliday()">+ Nuova festività</button>
+  {% endif %}
+{% endblock %}
+
+{% block head %}
+<style>
+  .h-filters { display:flex; gap:12px; align-items:flex-end; margin-bottom:16px; flex-wrap:wrap; }
+  .h-table { width:100%; border-collapse:collapse; margin-top:12px; }
+  .h-table th, .h-table td { padding:9px 12px; text-align:left; border-bottom:1px solid var(--border); font-size:13px; }
+  .h-table th { background:var(--bg2); font-weight:600; color:var(--text2); font-size:12px; text-transform:uppercase; letter-spacing:0.4px; }
+  .h-table tr:hover { background:rgba(98,114,245,0.05); }
+  .h-pill { display:inline-block; padding:2px 9px; border-radius:10px; font-size:11px; font-weight:600; }
+  .h-pill-national { background:rgba(34,197,94,0.18); color:#22c55e; }
+  .h-pill-local    { background:rgba(98,114,245,0.18); color:var(--indigo2); }
+  .h-pill-company  { background:rgba(251,191,36,0.18); color:#fbbf24; }
+  .h-pill-override { background:rgba(244,114,182,0.18); color:#f472b6; }
+  .h-pill-exclude  { background:rgba(248,113,113,0.18); color:#f87171; }
+  .h-empty { padding:24px; text-align:center; color:var(--text3); font-style:italic; }
+  .h-source { font-size:10.5px; color:var(--text3); text-transform:uppercase; letter-spacing:0.4px; }
+  .help-card { background:var(--bg2); border:1px solid var(--border); border-radius:8px; padding:12px 16px; font-size:12.5px; color:var(--text2); margin-bottom:18px; }
+  .help-card strong { color:var(--text); }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="help-card">
+  <strong>Come funziona:</strong> Le festività nazionali (italiane) sono incluse automaticamente.
+  Qui aggiungi festività <em>locali</em> (es. patrono cittadino), <em>aziendali</em> (ponti / chiusure),
+  oppure <em>sostituisci</em> il nome di una nazionale o <em>escludi</em> una nazionale dal calendario aziendale.
+  Lo scope può essere globale, per <em>location</em> (es. risorse con tag "Milano") o per <em>risorsa singola</em>.
+</div>
+
+<div class="h-filters">
+  <div class="form-group">
+    <label class="form-label">Anno</label>
+    <select class="form-select" id="f-year" onchange="reloadHolidays()">
+      {% for y in range(current_year - 2, current_year + 4) %}
+      <option value="{{ y }}" {% if y == current_year %}selected{% endif %}>{{ y }}</option>
+      {% endfor %}
+    </select>
+  </div>
+  <div class="form-group">
+    <label class="form-label">Risorsa</label>
+    <select class="form-select" id="f-resource" onchange="reloadHolidays()">
+      <option value="">— scope globale (tutte le risorse) —</option>
+      {% for r in resources %}
+      <option value="{{ r.id }}">{{ r.name }}{% if r.location_tag %} · {{ r.location_tag }}{% endif %}</option>
+      {% endfor %}
+    </select>
+  </div>
+  <div class="form-group">
+    <label style="display:flex;align-items:center;gap:6px;font-size:12.5px;color:var(--text2);">
+      <input type="checkbox" id="f-show-national" checked onchange="reloadHolidays()">
+      Mostra anche festività nazionali
+    </label>
+  </div>
+</div>
+
+<div id="holidays-list"></div>
+
+<!-- Modal nuova/edit festività -->
+<div class="modal-overlay" id="modal-holiday">
+  <div class="modal" style="max-width:560px;">
+    <div class="modal-header">
+      <span class="modal-title" id="mh-title">Nuova festività</span>
+      <button class="btn btn-ghost btn-icon" onclick="closeModal('modal-holiday')">✕</button>
+    </div>
+    <div class="modal-body">
+      <input type="hidden" id="mh-id" value="">
+      <div class="form-row">
+        <div class="form-group">
+          <label class="form-label">Data *</label>
+          <input class="form-input" id="mh-date" type="date" required>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Tipo *</label>
+          <select class="form-select" id="mh-kind" required>
+            {% for k in kinds %}
+            <option value="{{ k.value }}">{{ k.label }}</option>
+            {% endfor %}
+          </select>
+        </div>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Nome *</label>
+        <input class="form-input" id="mh-name" type="text" maxlength="200" placeholder="es. Sant'Ambrogio, Ponte 2 giugno, ecc." required>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label class="form-label">Scope: risorsa specifica</label>
+          <select class="form-select" id="mh-resource">
+            <option value="">— tutte —</option>
+            {% for r in resources %}
+            <option value="{{ r.id }}">{{ r.name }}{% if r.location_tag %} · {{ r.location_tag }}{% endif %}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Scope: location tag</label>
+          <input class="form-input" id="mh-location" type="text" maxlength="100" placeholder="es. Milano, Roma">
+          <small class="form-help text-muted">Si applica a tutte le risorse con `location_tag` coincidente.</small>
+        </div>
+      </div>
+      <small class="form-help text-muted">Se entrambi vuoti → festività tenant-wide (vale per tutti). Se compili "Risorsa specifica", "Location" viene ignorato.</small>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeModal('modal-holiday')">Annulla</button>
+      <button class="btn btn-danger" id="mh-delete-btn" onclick="deleteHoliday()" style="display:none;margin-right:auto;">Disattiva</button>
+      <button class="btn btn-primary" onclick="saveHoliday()">Salva</button>
+    </div>
+  </div>
+</div>
+
+<!-- Modal import CSV -->
+<div class="modal-overlay" id="modal-hol-import">
+  <div class="modal" style="max-width:680px;">
+    <div class="modal-header">
+      <span class="modal-title">📥 Import festività da CSV</span>
+      <button class="btn btn-ghost btn-icon" onclick="closeModal('modal-hol-import')">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="text-sm text-muted mb-2">
+        Header atteso: <code>date,name,kind,scope_location</code>. <code>kind</code> e <code>scope_location</code> opzionali.
+        Date in formato ISO (YYYY-MM-DD). <code>kind</code> ammessi: local, company, national_override, exclude.
+      </div>
+      <textarea class="form-textarea" id="hi-csv" rows="14" style="font-family:'DM Mono',monospace;font-size:12px;" placeholder="date,name,kind,scope_location
+2026-12-07,Sant'Ambrogio,local,Milano
+2026-12-24,Mezza giornata vigilia,company,
+2026-02-05,Sant'Agata,local,Catania"></textarea>
+      <label style="display:flex;align-items:center;gap:6px;margin-top:8px;font-size:12.5px;">
+        <input type="checkbox" id="hi-skip" checked>
+        Salta righe con data+nome già esistenti
+      </label>
+      <div id="hi-result" class="text-sm" style="margin-top:10px;"></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeModal('modal-hol-import')">Annulla</button>
+      <button class="btn btn-primary" onclick="importHolidays()">Importa</button>
+    </div>
+  </div>
+</div>
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+// RESOURCES_MAP popolato lato server in modo SAFE (Jinja `tojson` esegue
+// HTML escape su </script>, quote, ecc.)
+const RESOURCES_ARR = {{ resources_data | tojson }};
+const RESOURCES_MAP = {};
+for (const r of RESOURCES_ARR) RESOURCES_MAP[r.id] = {name: r.name, loc: r.loc};
+const IS_ELEVATED = {{ 'true' if is_elevated else 'false' }};
+
+function _kindLabel(kind, isNational) {
+  if (isNational) return 'Nazionale';
+  return ({local:'Locale',company:'Aziendale',national_override:'Override',exclude:'Esclude'})[kind] || kind;
+}
+function _scopeText(h) {
+  if (h.scope_resource_id && RESOURCES_MAP[h.scope_resource_id]) return '👤 ' + RESOURCES_MAP[h.scope_resource_id].name;
+  if (h.scope_location) return '📍 ' + h.scope_location;
+  return 'Tutte le risorse';
+}
+function _pillClass(kind, isNational) {
+  if (isNational) return 'h-pill h-pill-national';
+  return 'h-pill h-pill-' + (kind === 'national_override' ? 'override' : kind);
+}
+
+function _td(text, opts) {
+  const td = document.createElement('td');
+  td.textContent = text == null ? '' : String(text);
+  if (opts && opts.style) td.setAttribute('style', opts.style);
+  return td;
+}
+
+function _buildHolidayTable(rows) {
+  const table = document.createElement('table');
+  table.className = 'h-table';
+  const thead = document.createElement('thead');
+  const trh = document.createElement('tr');
+  for (const lbl of ['Data', 'Giorno', 'Nome', 'Tipo', 'Scope', 'Origine', '']) {
+    const th = document.createElement('th');
+    th.textContent = lbl;
+    trh.appendChild(th);
+  }
+  thead.appendChild(trh);
+  table.appendChild(thead);
+  const tbody = document.createElement('tbody');
+  for (const h of rows) {
+    const d = new Date(h.date + 'T00:00:00');
+    const giorno = d.toLocaleDateString('it-IT', {weekday: 'short'});
+    const isNat = !h.is_custom;
+    const tr = document.createElement('tr');
+    // Data
+    const tdDate = document.createElement('td');
+    const strong = document.createElement('strong'); strong.textContent = h.date;
+    tdDate.appendChild(strong);
+    tr.appendChild(tdDate);
+    // Giorno
+    tr.appendChild(_td(giorno));
+    // Nome
+    tr.appendChild(_td(h.name));
+    // Tipo (pill)
+    const tdKind = document.createElement('td');
+    const pill = document.createElement('span');
+    pill.className = _pillClass(h.kind, isNat);
+    pill.textContent = _kindLabel(h.kind, isNat);
+    tdKind.appendChild(pill);
+    tr.appendChild(tdKind);
+    // Scope
+    tr.appendChild(_td(isNat ? 'Globale (nazionale)' : _scopeText(h)));
+    // Origine
+    const tdOrigin = document.createElement('td');
+    const span = document.createElement('span');
+    span.className = 'h-source';
+    span.textContent = isNat ? 'holidays.IT' : 'CUSTOM';
+    tdOrigin.appendChild(span);
+    tr.appendChild(tdOrigin);
+    // Edit
+    const tdAct = document.createElement('td');
+    tdAct.style.textAlign = 'right';
+    if (h.is_custom && IS_ELEVATED) {
+      const btn = document.createElement('button');
+      btn.className = 'btn btn-ghost btn-sm';
+      btn.textContent = '✏️';
+      btn.addEventListener('click', () => openEditHoliday(h.id));
+      tdAct.appendChild(btn);
+    }
+    tr.appendChild(tdAct);
+    tbody.appendChild(tr);
+  }
+  table.appendChild(tbody);
+  return table;
+}
+
+async function reloadHolidays() {
+  const year = parseInt(document.getElementById('f-year').value, 10);
+  const resource_id = document.getElementById('f-resource').value || '';
+  const showNational = document.getElementById('f-show-national').checked;
+  const box = document.getElementById('holidays-list');
+  box.replaceChildren(Object.assign(document.createElement('div'), {className:'h-empty', textContent:'Caricamento…'}));
+
+  const customP = api('GET', `/hr/api/holidays?year=${year}&include_inactive=false`);
+  let effP = null;
+  if (showNational) {
+    let effQ = `/hr/api/holidays/effective?year=${year}` + (resource_id ? `&resource_id=${resource_id}` : '');
+    effP = api('GET', effQ);
+  }
+  try {
+    const custom = await customP;
+    const customList = custom.holidays || [];
+    let allRows = customList.map(h => ({...h, is_custom: true}));
+    if (effP) {
+      const eff = await effP;
+      const customDates = new Set(customList.map(h => h.date));
+      for (const it of (eff.effective || [])) {
+        if (!customDates.has(it.date)) {
+          allRows.push({date: it.date, name: it.name, kind: 'national', is_custom: false});
+        }
+      }
+    }
+    if (resource_id) {
+      const rid = parseInt(resource_id, 10);
+      const loc = RESOURCES_MAP[rid]?.loc || '';
+      allRows = allRows.filter(h => {
+        if (!h.is_custom) return true;
+        if (h.scope_resource_id) return h.scope_resource_id === rid;
+        if (h.scope_location) return h.scope_location === loc;
+        return true;
+      });
+    }
+    allRows.sort((a, b) => a.date.localeCompare(b.date));
+    if (allRows.length === 0) {
+      box.replaceChildren(Object.assign(document.createElement('div'), {className:'h-empty', textContent:'Nessuna festività per i criteri scelti.'}));
+      return;
+    }
+    box.replaceChildren(_buildHolidayTable(allRows));
+  } catch(e) {
+    box.replaceChildren(Object.assign(document.createElement('div'), {className:'h-empty', textContent:'Errore: ' + (e.message || 'sconosciuto')}));
+  }
+}
+
+function openNewHoliday() {
+  document.getElementById('mh-title').textContent = 'Nuova festività';
+  document.getElementById('mh-id').value = '';
+  document.getElementById('mh-date').value = '';
+  document.getElementById('mh-name').value = '';
+  document.getElementById('mh-kind').value = 'local';
+  document.getElementById('mh-resource').value = '';
+  document.getElementById('mh-location').value = '';
+  document.getElementById('mh-delete-btn').style.display = 'none';
+  openModal('modal-holiday');
+}
+
+async function openEditHoliday(id) {
+  const year = parseInt(document.getElementById('f-year').value, 10);
+  const res = await api('GET', `/hr/api/holidays?year=${year}`);
+  const h = (res.holidays || []).find(x => x.id === id);
+  if (!h) { toast('Festività non trovata', 'error'); return; }
+  document.getElementById('mh-title').textContent = 'Festività #' + id;
+  document.getElementById('mh-id').value = id;
+  document.getElementById('mh-date').value = h.date;
+  document.getElementById('mh-name').value = h.name;
+  document.getElementById('mh-kind').value = h.kind;
+  document.getElementById('mh-resource').value = h.scope_resource_id || '';
+  document.getElementById('mh-location').value = h.scope_location || '';
+  document.getElementById('mh-delete-btn').style.display = '';
+  openModal('modal-holiday');
+}
+
+async function saveHoliday() {
+  const id = document.getElementById('mh-id').value;
+  const date = document.getElementById('mh-date').value;
+  const name = document.getElementById('mh-name').value.trim();
+  const kind = document.getElementById('mh-kind').value;
+  const resource_id = document.getElementById('mh-resource').value;
+  const location = document.getElementById('mh-location').value.trim();
+  if (!date || !name) { toast('Data e nome obbligatori', 'error'); return; }
+  try {
+    if (id) {
+      await api('PUT', `/hr/api/holidays/${id}`, {
+        date, name, kind,
+        scope_resource_id: resource_id ? parseInt(resource_id, 10) : null,
+        scope_location: location || null,
+      }, { json: true });
+      toast('Festività aggiornata', 'success');
+    } else {
+      const fd = new FormData();
+      fd.append('date', date); fd.append('name', name); fd.append('kind', kind);
+      if (resource_id) fd.append('scope_resource_id', resource_id);
+      if (location) fd.append('scope_location', location);
+      await api('POST', '/hr/api/holidays', fd);
+      toast('Festività creata', 'success');
+    }
+    closeModal('modal-holiday');
+    reloadHolidays();
+  } catch(e) { toast(e.message || 'Errore', 'error'); }
+}
+
+async function deleteHoliday() {
+  const id = document.getElementById('mh-id').value;
+  if (!id) return;
+  if (!confirm('Disattivare questa festività? Sparirà dal calendario ma resta nello storico.')) return;
+  try {
+    await api('DELETE', `/hr/api/holidays/${id}`);
+    toast('Festività disattivata', 'info');
+    closeModal('modal-holiday');
+    reloadHolidays();
+  } catch(e) { toast(e.message || 'Errore', 'error'); }
+}
+
+function openHolImport() {
+  document.getElementById('hi-csv').value = '';
+  document.getElementById('hi-result').replaceChildren();
+  openModal('modal-hol-import');
+}
+
+async function importHolidays() {
+  const csv_text = document.getElementById('hi-csv').value;
+  const skip_existing = document.getElementById('hi-skip').checked;
+  if (!csv_text.trim()) { toast('Incolla il CSV prima', 'error'); return; }
+  try {
+    const res = await api('POST', '/hr/api/holidays/bulk-import', { csv_text, skip_existing }, { json: true });
+    const out = document.getElementById('hi-result');
+    out.replaceChildren();
+    const ok = document.createElement('span'); ok.style.color = '#22c55e';
+    ok.textContent = 'Create: ' + res.created;
+    out.append(ok, document.createTextNode(' · '));
+    const sk = document.createElement('span'); sk.className = 'text-muted';
+    sk.textContent = 'Saltate: ' + res.skipped;
+    out.appendChild(sk);
+    if (res.errors && res.errors.length) {
+      const errBox = document.createElement('div');
+      errBox.style.marginTop = '6px';
+      const errLbl = document.createElement('span'); errLbl.style.color = '#ef4444'; errLbl.textContent = 'Errori:';
+      errBox.appendChild(errLbl);
+      const ul = document.createElement('ul');
+      for (const e of res.errors) {
+        const li = document.createElement('li'); li.textContent = e; ul.appendChild(li);
+      }
+      errBox.appendChild(ul);
+      out.appendChild(errBox);
+    }
+    toast('Importate ' + res.created + ' festività', 'success');
+    reloadHolidays();
+  } catch(e) { toast(e.message || 'Errore', 'error'); }
+}
+
+document.addEventListener('DOMContentLoaded', reloadHolidays);
+</script>
+{% endblock %}
