@@ -30,3 +30,7 @@ q_test.*
 q3.csv
 q3.pdf
 q3.xlsx
+
+# graphify knowledge graph (α.172.29) — rigenerabile localmente con `graphify .`
+graphify-out/
+.graphify-cache/

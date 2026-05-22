@@ -211,3 +211,13 @@ Da verificare/sistemare:
 ---
 
 *Ultimo aggiornamento: 27 aprile 2026 sera tardi — v3.4.4: AI search-first nel listino + scenario C (`propose_new_item_and_line`), `propose_quote_line` accetta `price_item_id`, voci listino nel context AI, system prompt con regola SEARCH-FIRST. v3.4.3: card copilot human-readable + toggle JSON. v3.4.2: quick wins copilot + categoria libera per riga in quote.*
+
+## graphify
+
+This project has a knowledge graph at graphify-out/ with god nodes, community structure, and cross-file relationships.
+
+Rules:
+- For codebase questions, first run `graphify query "<question>"` when graphify-out/graph.json exists. Use `graphify path "<A>" "<B>"` for relationships and `graphify explain "<concept>"` for focused concepts. These return a scoped subgraph, usually much smaller than GRAPH_REPORT.md or raw grep output.
+- If graphify-out/wiki/index.md exists, use it for broad navigation instead of raw source browsing.
+- Read graphify-out/GRAPH_REPORT.md only for broad architecture review or when query/path/explain do not surface enough context.
+- After modifying code, run `graphify update .` to keep the graph current (AST-only, no API cost).
