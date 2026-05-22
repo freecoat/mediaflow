@@ -8,6 +8,14 @@
 
 ## Versione corrente
 
+**v3.5.0-alpha.172.34** — 22 maggio 2026 — Dropdown campi scheda tecnica + seed Netflix
+
+A della lista complessi: pannello admin /settings → "Scheda tecnica" per gestire opzioni dei campi tecnici (codec, sample_rate, formato editorial, ecc). Editor pubblico scheda tecnica usa `<select>` strict quando campo ha opzioni. Bottone "🎬 Seed Netflix" popola con ~250 valori da Netflix Delivery Specifications (40 field paths). Endpoint pubblico no-auth gated da edit_token.
+
+LISTA COMPLESSI COMPLETATA. Restano test intensivi su tutto α.172.x.
+
+## Versione precedente
+
 **v3.5.0-alpha.172.33** — 22 maggio 2026 — Refactor holidays scope → policy CCNL
 
 C della lista complessi: festività legate alle policy CCNL invece di per-resource/location. Pulizia architettura. Resolver via `effective_policy_id` (override OR default). Backward-compat legacy fields preservati ma ignorati. Link "Calendario festività" sotto /settings → Orari lavorativi.

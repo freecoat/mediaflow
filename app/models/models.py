@@ -3286,6 +3286,34 @@ class ProjectTechSheet(Base):
     )
 
 
+class TechSheetFieldOption(Base):
+    """Opzione dropdown configurabile per campi scheda tecnica (α.172.34).
+
+    Pannello admin in /settings → "Scheda tecnica" permette di gestire le
+    liste di valori ammessi per ciascun field_path (es. `cameras.codec`,
+    `dailies.editorial_format`). Quando esistono options per un field_path,
+    l'editor scheda tecnica rende un `<select>` strict (no free text).
+    Quando nessuna option → input text free come default.
+
+    Seed iniziale: scope Netflix delivery (codec, proxies, dailies).
+    """
+    __tablename__ = "tech_sheet_field_options"
+    __table_args__ = (
+        UniqueConstraint("tenant_id", "field_path", "value", name="uq_tsfo_tenant_path_value"),
+    )
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    tenant_id: Mapped[int] = mapped_column(Integer, default=1, index=True)
+    field_path: Mapped[str] = mapped_column(String(120), index=True)  # es. "cameras.codec"
+    value: Mapped[str] = mapped_column(String(200))  # valore salvato
+    label: Mapped[Optional[str]] = mapped_column(String(200), nullable=True)  # display (default = value)
+    sort_order: Mapped[int] = mapped_column(Integer, default=0, index=True)
+    is_active: Mapped[bool] = mapped_column(Boolean, default=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    created_by_user_id: Mapped[Optional[int]] = mapped_column(
+        ForeignKey("users.id"), nullable=True,
+    )
+
+
 class TechSheetEditLog(Base):
     """Audit log modifiche scheda tecnica via link pubblico editabile (α.172.28)."""
     __tablename__ = "tech_sheet_edit_logs"

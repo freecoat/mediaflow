@@ -1,5 +1,51 @@
 # MediaFlow — Changelog
 
+## v3.5.0-alpha.172.34 — Dropdown campi scheda tecnica + seed Netflix (22 mag 2026)
+
+A della lista complessi Matteo. Pannello admin in /settings → "Scheda tecnica" per configurare i valori ammessi dei campi tecnici. Editor scheda tecnica usa `<select>` strict quando il campo ha almeno 1 opzione attiva, altrimenti input free testo come default.
+
+**Modello** (`models.py`):
+- `TechSheetFieldOption(tenant_id, field_path, value, label, sort_order, is_active)`
+- Unique constraint `(tenant_id, field_path, value)` evita duplicati
+- field_path es. `cameras.codec`, `dailies.editorial_format`, `audio.sample_rate`
+
+**Router** (`tech_sheet_options.py`, prefix `/settings`):
+- GET /api/tech-sheet-options (filtro field_path opzionale)
+- GET /api/tech-sheet-options/paths (known paths + count attive)
+- GET /api/tech-sheet-options/by-path (mappa indicizzata per editor)
+- POST /api/tech-sheet-options (admin only)
+- PUT /api/tech-sheet-options/{id}
+- DELETE /api/tech-sheet-options/{id} (soft is_active=False)
+- POST /api/tech-sheet-options/seed-netflix (admin only, idempotente)
+
+**Endpoint pubblico** (`tech_sheets.py`):
+- GET /public/tech-sheet/{edit_token}/field-options — mappa options gated da token (no-auth)
+
+**UI Settings** (`settings.html`):
+- Nuovo tab "Scheda tecnica" sotto Orari lavorativi
+- Selector "Filtra campo" carica known paths con count opzioni attive
+- Lista grouped per field_path con badge `value · label · sort`
+- Bottone "🎬 Seed Netflix" (admin) popola con valori Netflix Delivery Specifications
+- Modal CRUD: field_path, value, label, sort_order. Path immutabile post-create.
+
+**Seed Netflix scope iniziale** (~40 field paths, ~250 valori):
+- cameras: codec (ARRIRAW, ProRes 4444 XQ, REDCODE, Venice X-OCN…), sensor_res, fps, color_space_in (LogC4, S-Log3, ACEScct…), ODT, squeeze
+- audio: recorder (Sound Devices 833, Zaxcom Nova…), file_format (BWF), sample_rate, bit_depth (24/32-float), TC, sync, track layout
+- storage: master (LTO-9/8), checksum (MD5/xxHash64/MHL), shuttle, LTO
+- dailies: editorial format (ProRes 422 LT/Proxy, DNxHR LB/SQ), container (MOV/MXF), online format, NLE (Avid/Premiere/Resolve), review (Frame.io)
+- process: QC tools (Silverstack/Baton)
+
+**Editor pubblico** (`tech_sheet_public_edit.html`):
+- `loadFieldOptions()` fetch `/public/tech-sheet/{token}/field-options` prima del render
+- `buildField` controlla `FIELD_OPTIONS[fieldPath]`: se popolato → `<select>` con opzioni; valore custom esistente preservato come `(custom)` extra option (no data loss)
+- Style `.ts-select` aggiunto
+
+**Test**:
+1. /settings → tab Scheda tecnica → 🎬 Seed Netflix → ~250 valori
+2. /projects/{id} → genera link editabile → apri public editor
+3. Campi `codec`, `sample_rate`, ecc. ora hanno dropdown invece di input
+4. Vai su /settings, aggiungi una opzione custom per `cameras.codec` → appare nel dropdown
+
 ## v3.5.0-alpha.172.33 — Refactor holidays scope → policy CCNL (22 mag 2026)
 
 C della lista complessi Matteo. Sposta scope festività da `resource_id`/`location_tag` (α.172.29) a `WorkingHoursPolicy`. Festività legate al contratto CCNL.

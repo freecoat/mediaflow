@@ -42,7 +42,7 @@ from app.models.models import (
     UserAISettings, AIAction, AIUsageLog,
     ClientPortalAccess,
     Notification, NotificationKind, NotificationSeverity,
-    ProjectTechSheet, TechSheetEditLog,
+    ProjectTechSheet, TechSheetEditLog, TechSheetFieldOption,
     # v3.5.0-alpha.87 — Pozzo costi / Spese aziendali
     OverheadCost, OverheadCostCategory, RecurrenceInterval,
     # v3.5.0-alpha.89 — Anomaly workflow (sprint S4)

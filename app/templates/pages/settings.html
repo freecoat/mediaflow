@@ -83,6 +83,7 @@
     <div class="settings-tab" data-pane="sidebar" onclick="showPane('sidebar')"><i data-lucide="panel-left" style="width:14px;height:14px;vertical-align:-2px;"></i> Sidebar</div>
     <div class="settings-tab" data-pane="ai" onclick="showPane('ai')"><i data-lucide="bot" style="width:14px;height:14px;vertical-align:-2px;"></i> AI</div>
     <div class="settings-tab" data-pane="hours" onclick="showPane('hours')"><i data-lucide="clock" style="width:14px;height:14px;vertical-align:-2px;"></i> Orari lavorativi</div>
+    <div class="settings-tab" data-pane="techsheet" onclick="showPane('techsheet')"><i data-lucide="list" style="width:14px;height:14px;vertical-align:-2px;"></i> Scheda tecnica</div>
     <div class="settings-tab" data-pane="account" onclick="showPane('account')"><i data-lucide="user" style="width:14px;height:14px;vertical-align:-2px;"></i> Account</div>
     <div class="settings-tab" data-pane="mfa" onclick="showPane('mfa')"><i data-lucide="shield-check" style="width:14px;height:14px;vertical-align:-2px;"></i> 🔒 MFA TOTP</div>
     <div class="settings-tab" data-pane="company" onclick="showPane('company')"><i data-lucide="building-2" style="width:14px;height:14px;vertical-align:-2px;"></i> Azienda</div>
@@ -372,6 +373,79 @@
             {% endif %}
           </div>
         </form>
+      </div>
+    </div>
+
+    <!-- ── Pannello Scheda tecnica (α.172.34) ───────────────── -->
+    <div class="settings-pane" id="pane-techsheet">
+      <div class="card mb-4">
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:14px;">
+          <div>
+            <div class="card-title" style="margin:0;">Opzioni dropdown campi scheda tecnica</div>
+            <p class="text-sm text-muted" style="margin:4px 0 0;">
+              Definisci i valori ammessi per ogni campo della scheda tecnica progetto.
+              Quando un campo ha almeno 1 opzione attiva, l'editor mostrerà un <code>&lt;select&gt;</code> strict.
+              Senza opzioni → input testo libero come default.
+            </p>
+          </div>
+          {% if user and user.role and user.role.value == 'admin' %}
+          <button class="btn btn-secondary btn-sm" onclick="seedNetflix()" title="Popola con valori Netflix Delivery Specifications">
+            🎬 Seed Netflix
+          </button>
+          {% endif %}
+        </div>
+        <div class="form-group">
+          <label class="form-label">Filtra campo</label>
+          <select id="tso-filter-path" class="form-select" onchange="loadTsoOptions()" style="max-width:380px;">
+            <option value="">— tutti i campi —</option>
+          </select>
+        </div>
+        {% if user and user.role and user.role.value == 'admin' %}
+        <div style="margin-bottom:12px;">
+          <button class="btn btn-primary btn-sm" onclick="openTsoNew()">+ Nuova opzione</button>
+        </div>
+        {% endif %}
+        <div id="tso-list">
+          <div class="text-sm text-muted" style="text-align:center; padding:24px;">Caricamento…</div>
+        </div>
+      </div>
+
+      <!-- Modal CRUD option -->
+      <div class="modal-overlay" id="modal-tso">
+        <div class="modal" style="max-width:520px;">
+          <div class="modal-header">
+            <span class="modal-title" id="tso-title">Nuova opzione</span>
+            <button class="btn btn-ghost btn-icon" onclick="closeModal('modal-tso')">✕</button>
+          </div>
+          <div class="modal-body">
+            <input type="hidden" id="tso-id">
+            <div class="form-group">
+              <label class="form-label">Campo *</label>
+              <select id="tso-field-path" class="form-select" required>
+                <option value="">— seleziona campo —</option>
+              </select>
+            </div>
+            <div class="form-row">
+              <div class="form-group">
+                <label class="form-label">Valore (salvato) *</label>
+                <input class="form-input" id="tso-value" maxlength="200" required>
+              </div>
+              <div class="form-group">
+                <label class="form-label">Etichetta (display, opz)</label>
+                <input class="form-input" id="tso-label" maxlength="200" placeholder="Default = valore">
+              </div>
+            </div>
+            <div class="form-group">
+              <label class="form-label">Ordine</label>
+              <input class="form-input" id="tso-sort" type="number" value="0">
+            </div>
+          </div>
+          <div class="modal-footer">
+            <button class="btn btn-danger" id="tso-delete-btn" onclick="deleteTso()" style="margin-right:auto; display:none;">Disattiva</button>
+            <button class="btn btn-secondary" onclick="closeModal('modal-tso')">Annulla</button>
+            <button class="btn btn-primary" onclick="saveTso()">Salva</button>
+          </div>
+        </div>
       </div>
     </div>
 
@@ -2030,6 +2104,177 @@ const _origShowPane = window.showPane;
 window.showPane = function(name) {
   if (typeof _origShowPane === 'function') _origShowPane(name);
   if (name === 'mfa') mfaLoadStatus();
+  if (name === 'techsheet') tsoInit();
 };
+
+// ── α.172.34 — Opzioni dropdown scheda tecnica ──────────────
+let _tsoPaths = null;
+let _tsoOptionsCache = [];
+
+async function tsoInit() {
+  if (_tsoPaths) return;  // load once
+  try {
+    const res = await api('GET', '/settings/api/tech-sheet-options/paths');
+    _tsoPaths = res.known_paths || [];
+    const counts = res.active_counts || {};
+    const sel = document.getElementById('tso-filter-path');
+    if (sel && sel.options.length <= 1) {
+      for (const p of _tsoPaths) {
+        const c = counts[p] || 0;
+        const opt = document.createElement('option');
+        opt.value = p;
+        opt.textContent = p + (c > 0 ? ` (${c} opz)` : '');
+        sel.appendChild(opt);
+      }
+    }
+    const modalSel = document.getElementById('tso-field-path');
+    if (modalSel && modalSel.options.length <= 1) {
+      for (const p of _tsoPaths) {
+        const opt = document.createElement('option');
+        opt.value = p;
+        opt.textContent = p;
+        modalSel.appendChild(opt);
+      }
+    }
+    await loadTsoOptions();
+  } catch(e) { toast(e.message || 'Errore caricamento campi', 'error'); }
+}
+
+async function loadTsoOptions() {
+  const fp = document.getElementById('tso-filter-path').value;
+  const url = '/settings/api/tech-sheet-options' + (fp ? `?field_path=${encodeURIComponent(fp)}&include_inactive=true` : '?include_inactive=true');
+  try {
+    const res = await api('GET', url);
+    _tsoOptionsCache = res.options || [];
+    renderTsoList();
+  } catch (e) { toast(e.message, 'error'); }
+}
+
+function renderTsoList() {
+  const host = document.getElementById('tso-list');
+  if (!_tsoOptionsCache.length) {
+    host.replaceChildren(Object.assign(document.createElement('div'), {
+      className: 'text-sm text-muted', textContent: 'Nessuna opzione configurata. Usa "+ Nuova opzione" o "🎬 Seed Netflix".',
+      style: 'text-align:center; padding:24px;',
+    }));
+    return;
+  }
+  // Group by field_path
+  const byPath = {};
+  for (const o of _tsoOptionsCache) (byPath[o.field_path] = byPath[o.field_path] || []).push(o);
+  host.replaceChildren();
+  for (const [path, opts] of Object.entries(byPath)) {
+    const card = document.createElement('div');
+    card.style.cssText = 'background:var(--bg2); border:1px solid var(--border); border-radius:6px; padding:10px 14px; margin-bottom:8px;';
+    const head = document.createElement('div');
+    head.style.cssText = 'font-weight:600; font-size:13px; color:var(--indigo2); margin-bottom:6px;';
+    head.textContent = path + ` · ${opts.length} opz`;
+    card.appendChild(head);
+    for (const o of opts) {
+      const row = document.createElement('div');
+      row.style.cssText = 'display:flex; justify-content:space-between; align-items:center; padding:4px 0; border-top:1px solid var(--border); font-size:12.5px;';
+      row.style.opacity = o.is_active ? '1' : '0.4';
+      const left = document.createElement('div');
+      const valSpan = document.createElement('strong'); valSpan.textContent = o.value;
+      left.appendChild(valSpan);
+      if (o.label && o.label !== o.value) {
+        const lbl = document.createElement('span');
+        lbl.className = 'text-muted'; lbl.style.marginLeft = '6px';
+        lbl.textContent = '· ' + o.label;
+        left.appendChild(lbl);
+      }
+      if (!o.is_active) {
+        const inact = document.createElement('span');
+        inact.className = 'text-muted'; inact.style.marginLeft = '6px';
+        inact.textContent = '[disattivata]';
+        left.appendChild(inact);
+      }
+      const editBtn = document.createElement('button');
+      editBtn.className = 'btn btn-ghost btn-sm';
+      editBtn.textContent = '✏️';
+      editBtn.addEventListener('click', () => openTsoEdit(o.id));
+      row.append(left, editBtn);
+      card.appendChild(row);
+    }
+    host.appendChild(card);
+  }
+}
+
+function openTsoNew() {
+  document.getElementById('tso-title').textContent = 'Nuova opzione';
+  document.getElementById('tso-id').value = '';
+  document.getElementById('tso-field-path').value = document.getElementById('tso-filter-path').value || '';
+  document.getElementById('tso-value').value = '';
+  document.getElementById('tso-label').value = '';
+  document.getElementById('tso-sort').value = '0';
+  document.getElementById('tso-delete-btn').style.display = 'none';
+  openModal('modal-tso');
+}
+
+function openTsoEdit(id) {
+  const o = _tsoOptionsCache.find(x => x.id === id);
+  if (!o) return;
+  document.getElementById('tso-title').textContent = 'Opzione #' + id;
+  document.getElementById('tso-id').value = id;
+  document.getElementById('tso-field-path').value = o.field_path;
+  document.getElementById('tso-field-path').disabled = true;  // path immutabile post-create
+  document.getElementById('tso-value').value = o.value;
+  document.getElementById('tso-label').value = (o.label && o.label !== o.value) ? o.label : '';
+  document.getElementById('tso-sort').value = o.sort_order || 0;
+  document.getElementById('tso-delete-btn').style.display = o.is_active ? '' : 'none';
+  openModal('modal-tso');
+}
+
+async function saveTso() {
+  const id = document.getElementById('tso-id').value;
+  const field_path = document.getElementById('tso-field-path').value;
+  const value = document.getElementById('tso-value').value.trim();
+  const label = document.getElementById('tso-label').value.trim();
+  const sort = parseInt(document.getElementById('tso-sort').value || '0', 10);
+  if (!field_path || !value) { toast('Campo e valore obbligatori', 'error'); return; }
+  try {
+    if (id) {
+      await api('PUT', `/settings/api/tech-sheet-options/${id}`, {
+        value, label: label || null, sort_order: sort,
+      }, { json: true });
+      toast('Opzione aggiornata', 'success');
+    } else {
+      const fd = new FormData();
+      fd.append('field_path', field_path); fd.append('value', value);
+      if (label) fd.append('label', label);
+      fd.append('sort_order', String(sort));
+      await api('POST', '/settings/api/tech-sheet-options', fd);
+      toast('Opzione creata', 'success');
+    }
+    document.getElementById('tso-field-path').disabled = false;
+    closeModal('modal-tso');
+    _tsoPaths = null;  // refresh path counts
+    await tsoInit();
+  } catch (e) { toast(e.message || 'Errore', 'error'); }
+}
+
+async function deleteTso() {
+  const id = document.getElementById('tso-id').value;
+  if (!id) return;
+  if (!confirm('Disattivare questa opzione? Resta nello storico ma non sarà più mostrata.')) return;
+  try {
+    await api('DELETE', `/settings/api/tech-sheet-options/${id}`);
+    toast('Opzione disattivata', 'info');
+    document.getElementById('tso-field-path').disabled = false;
+    closeModal('modal-tso');
+    await loadTsoOptions();
+  } catch (e) { toast(e.message || 'Errore', 'error'); }
+}
+
+async function seedNetflix() {
+  if (!confirm('Popolare con valori Netflix Delivery Specifications?\nIdempotente: salta valori esistenti.')) return;
+  try {
+    const fd = new FormData();
+    const res = await api('POST', '/settings/api/tech-sheet-options/seed-netflix', fd);
+    toast(`Seed Netflix: +${res.created} create, ${res.reactivated} riattivate, ${res.skipped} esistenti`, 'success');
+    _tsoPaths = null;
+    await tsoInit();
+  } catch (e) { toast(e.message || 'Errore', 'error'); }
+}
 </script>
 {% endblock %}

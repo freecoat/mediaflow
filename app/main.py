@@ -22,6 +22,7 @@ from app.routers import (
     portal,    # v3.5.0-alpha.97 — Portale cliente (#10 fase A)
     platform,  # v3.5.0-alpha.104 — Super-admin platform tenant management
     holidays as holidays_router,  # v3.5.0-alpha.172.29 — Festività custom + leave balance
+    tech_sheet_options,  # v3.5.0-alpha.172.34 — Dropdown options scheda tecnica + seed Netflix
 )
 
 
@@ -1458,7 +1459,7 @@ async def lifespan(app: FastAPI):
     yield
 
 
-app = FastAPI(title="MediaFlow", version="3.5.0-alpha.172.33.2", lifespan=lifespan)
+app = FastAPI(title="MediaFlow", version="3.5.0-alpha.172.34", lifespan=lifespan)
 
 BASE_DIR = Path(__file__).parent
 app.mount("/static", StaticFiles(directory=BASE_DIR / "static"), name="static")
@@ -1735,6 +1736,7 @@ app.include_router(departments.router)
 app.include_router(settings_router.router)
 app.include_router(hr.router)
 app.include_router(holidays_router.router)  # v3.5.0-alpha.172.29 — Festività custom + leave balance
+app.include_router(tech_sheet_options.router)  # v3.5.0-alpha.172.34 — Dropdown options scheda tecnica
 app.include_router(jobs.router)
 app.include_router(admin.router)
 app.include_router(notifications_router.router)

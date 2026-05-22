@@ -506,6 +506,30 @@ async def public_tech_sheet_save(
     }
 
 
+@router.get("/public/tech-sheet/{edit_token}/field-options")
+async def public_tech_sheet_field_options(
+    edit_token: str, db: Session = Depends(get_db),
+):
+    """α.172.34 — Opzioni dropdown per editor pubblico (no-auth, gated da token).
+    Ritorna mappa field_path → [{value, label}, ...]."""
+    ts = db.query(ProjectTechSheet).filter(
+        ProjectTechSheet.edit_token == edit_token,
+    ).first()
+    if not ts or not _is_edit_token_alive(ts):
+        raise HTTPException(410 if ts else 404, "Link non valido o scaduto")
+    from app.models import TechSheetFieldOption
+    rows = db.query(TechSheetFieldOption).filter(
+        TechSheetFieldOption.tenant_id == ts.tenant_id,
+        TechSheetFieldOption.is_active == True,  # noqa: E712
+    ).order_by(
+        TechSheetFieldOption.field_path, TechSheetFieldOption.sort_order, TechSheetFieldOption.value,
+    ).all()
+    out: dict[str, list] = {}
+    for o in rows:
+        out.setdefault(o.field_path, []).append({"value": o.value, "label": o.label or o.value})
+    return out
+
+
 @router.get("/public/tech-sheet/{edit_token}/state")
 async def public_tech_sheet_state(
     edit_token: str,

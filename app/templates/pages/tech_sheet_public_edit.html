@@ -48,6 +48,12 @@
     .ts-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 12px 18px; }
     .ts-field { display: flex; flex-direction: column; gap: 4px; }
     .ts-field label { font-size: 10.5px; text-transform: uppercase; letter-spacing: 0.5px; color: var(--text3); }
+    .ts-field select.ts-select {
+      background: var(--bg, #0d1117); border: 1px solid var(--border);
+      color: var(--text); border-radius: 5px; padding: 6px 9px; font-size: 13px;
+      font-family: inherit; cursor: pointer;
+    }
+    .ts-field select.ts-select:focus { outline: none; border-color: var(--indigo, #6272f5); }
     .ts-field input[type=text], .ts-field input[type=number], .ts-field textarea {
       background: var(--bg, #0d1117); border: 1px solid var(--border);
       color: var(--text); border-radius: 5px; padding: 6px 9px; font-size: 13px;
@@ -205,6 +211,9 @@ const POLL_MS = 30000;
 
 let identity = null;
 let lastKnownUpdatedAt = TS_INITIAL_UPDATED_AT;
+// α.172.34 — Mappa field_path → [{value, label}, ...] caricata server-side.
+// Quando un field ha options attive, render `<select>` strict invece di input free.
+let FIELD_OPTIONS = {};
 
 const SECTION_LABELS = {
   general: "Generale",
@@ -342,6 +351,33 @@ function buildField(sectionKey, fieldKey, value) {
   const id = fieldId(sectionKey, fieldKey);
   const lbl = label(fieldKey);
   const t = detectType(fieldKey, value);
+
+  // α.172.34 — Se field_path ha opzioni attive → render <select> strict
+  const fieldPath = sectionKey + '.' + fieldKey;
+  const opts = FIELD_OPTIONS[fieldPath];
+  if (opts && opts.length > 0 && t !== 'json' && t !== 'bool') {
+    const sel = makeEl('select', {
+      id, class: 'ts-select',
+      dataset: { section: sectionKey, key: fieldKey, type: 'str' },
+    });
+    const emptyOpt = makeEl('option', { value: '', text: '— seleziona —' });
+    sel.appendChild(emptyOpt);
+    for (const o of opts) {
+      const opt = makeEl('option', { value: o.value, text: o.label || o.value });
+      sel.appendChild(opt);
+    }
+    sel.value = value != null ? String(value) : '';
+    // Se valore presente ma NON in lista → mantieni come opzione "(custom)"
+    if (value && !opts.some(o => o.value === value)) {
+      const customOpt = makeEl('option', { value: value, text: value + ' (custom)' });
+      sel.insertBefore(customOpt, sel.firstChild.nextSibling);
+      sel.value = value;
+    }
+    return makeEl('div', { class: 'ts-field' }, [
+      makeEl('label', { for: id, text: lbl }),
+      sel,
+    ]);
+  }
 
   if (t === 'bool') {
     const inp = makeEl('input', { type: 'checkbox', id, dataset: { section: sectionKey, key: fieldKey, type: 'bool' } });
@@ -532,8 +568,17 @@ async function pollState() {
   } catch (e) {}
 }
 
-document.addEventListener('DOMContentLoaded', () => {
+async function loadFieldOptions() {
+  try {
+    const r = await fetch(`/public/tech-sheet/${encodeURIComponent(TS_EDIT_TOKEN)}/field-options`);
+    if (r.ok) FIELD_OPTIONS = await r.json();
+  } catch (e) { /* fail-safe: editor parte come prima senza dropdown */ }
+}
+
+document.addEventListener('DOMContentLoaded', async () => {
   loadIdentity();
+  // α.172.34 — Carica options DROPDOWN configurate prima del render
+  await loadFieldOptions();
   renderEditor();
   setInterval(pollState, POLL_MS);
 });
