@@ -267,8 +267,11 @@
         </div>
       </details>
 
-      <!-- ─── Orario lavorativo override (v3.4.20.4) ──────────── -->
-      <div class="form-group">
+      <!-- ─── Orario lavorativo override (v3.4.20.4) ────────────
+           α.172.32.2: visibile solo per persone (interno/freelance).
+           Risorse non umane (studio/equipment/software/vehicle) usano
+           solo disponibilità giornaliera dal calendario, non CCNL. -->
+      <div class="form-group" id="rs-wh-policy-section">
         <label class="form-label">Orario lavorativo (preset CCNL)</label>
         <select class="form-select" id="rs-wh-policy">
           <option value="">— usa default tenant —</option>
@@ -432,6 +435,7 @@ function openNewResource() {
   if (cb) { cb.checked = false; document.getElementById('rs-user-fields').style.display = 'none'; }
   rsToggleCreateUserSection();
   rsToggleAccrualSection();
+  rsToggleWhPolicySection();
   openModal('modal-resource');
 }
 
@@ -459,10 +463,20 @@ function rsToggleAccrualSection() {
   if (sec) sec.style.display = (t === 'person_internal' || t === 'person') ? '' : 'none';
 }
 
+// α.172.32.2 — Dropdown preset CCNL visibile solo per persone
+// (person_internal/person_freelance/person legacy). Risorse oggetto
+// (studio/equipment/software/vehicle) non hanno contratto, solo disponibilità.
+function rsToggleWhPolicySection() {
+  const t = (document.getElementById('rs-type') || {}).value;
+  const sec = document.getElementById('rs-wh-policy-section');
+  const isPerson = ['person_internal', 'person_freelance', 'person'].includes(t);
+  if (sec) sec.style.display = isPerson ? '' : 'none';
+}
+
 function rsOnTypeChange() {
   rsToggleCreateUserSection();
   rsToggleAccrualSection();
-  rsToggleAccrualSection();
+  rsToggleWhPolicySection();
 }
 
 document.addEventListener('DOMContentLoaded', () => {
