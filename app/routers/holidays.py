@@ -69,7 +69,9 @@ async def holidays_page(request: Request, db: Session = Depends(get_db)):
             "policies": policies,
             "policies_data": policies_data,
             "kinds": [{"value": k.value, "label": _kind_label(k)} for k in HolidayKind],
-            "is_elevated": is_elevated(user),
+            # α.172.33.1 — Rinominato da is_elevated (collideva con funzione
+            # globale Jinja `is_elevated(_user)` chiamata in base.html).
+            "user_is_elevated": is_elevated(user),
             "current_year": datetime.utcnow().year,
         },
     )

@@ -5,7 +5,7 @@
 {% block topbar_title %}Calendario festività{% endblock %}
 
 {% block topbar_actions %}
-  {% if is_elevated %}
+  {% if user_is_elevated %}
   <button class="btn btn-secondary btn-sm" onclick="openHolImport()">📥 Import CSV</button>
   <button class="btn btn-primary btn-sm" onclick="openNewHoliday()">+ Nuova festività</button>
   {% endif %}
@@ -157,7 +157,7 @@ for (const r of RESOURCES_ARR) RESOURCES_MAP[r.id] = {name: r.name, loc: r.loc};
 const POLICIES_ARR = {{ policies_data | tojson }};
 const POLICIES_MAP = {};
 for (const p of POLICIES_ARR) POLICIES_MAP[p.id] = p;
-const IS_ELEVATED = {{ 'true' if is_elevated else 'false' }};
+const IS_ELEVATED = {{ 'true' if user_is_elevated else 'false' }};
 
 function _kindLabel(kind, isNational) {
   if (isNational) return 'Nazionale';
