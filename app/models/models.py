@@ -1130,12 +1130,14 @@ class HolidayKind(str, enum.Enum):
 
 
 class Holiday(Base):
-    """Festività personalizzata tenant-scoped (α.172.29).
+    """Festività personalizzata tenant-scoped (α.172.29, refactor scope α.172.33).
 
-    Scope risolution priority:
-    - scope_resource_id IS NOT NULL → solo per quella resource
-    - scope_location IS NOT NULL → solo per Resource con location_tag matching
-    - entrambi NULL → tutto il tenant
+    Scope risolution (α.172.33):
+    - scope_policy_id IS NOT NULL → si applica solo a Resource con quella WorkingHoursPolicy
+    - scope_policy_id IS NULL → festività tenant-wide (tutte le risorse)
+
+    Legacy fields scope_resource_id/scope_location restano nel modello per
+    back-compat ma NON sono più usati nella risoluzione (drop in α.172.34+).
     """
     __tablename__ = "holidays"
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
@@ -1145,6 +1147,11 @@ class Holiday(Base):
     kind: Mapped[HolidayKind] = mapped_column(
         SAEnum(HolidayKind), default=HolidayKind.local, index=True,
     )
+    # α.172.33 — scope pulito basato su policy CCNL
+    scope_policy_id: Mapped[Optional[int]] = mapped_column(
+        ForeignKey("working_hours_policies.id"), nullable=True, index=True,
+    )
+    # Legacy (deprecati, NON usati per risoluzione, restano per back-compat)
     scope_resource_id: Mapped[Optional[int]] = mapped_column(
         ForeignKey("resources.id"), nullable=True, index=True,
     )

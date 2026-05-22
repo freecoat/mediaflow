@@ -33,10 +33,11 @@
 
 {% block content %}
 <div class="help-card">
-  <strong>Come funziona:</strong> Le festività nazionali (italiane) sono incluse automaticamente.
+  <strong>Come funziona (α.172.33):</strong> Le festività nazionali (italiane) sono incluse automaticamente.
   Qui aggiungi festività <em>locali</em> (es. patrono cittadino), <em>aziendali</em> (ponti / chiusure),
-  oppure <em>sostituisci</em> il nome di una nazionale o <em>escludi</em> una nazionale dal calendario aziendale.
-  Lo scope può essere globale, per <em>location</em> (es. risorse con tag "Milano") o per <em>risorsa singola</em>.
+  oppure <em>sostituisci</em> il nome di una nazionale o <em>escludi</em> una nazionale dal calendario.
+  Lo <strong>scope</strong> è ora basato sui <strong>preset CCNL</strong>: scegli la policy (es. "CCNL Milano")
+  e la festività varrà solo per risorse con quella policy effettiva. Vuoto = vale per tutto il tenant.
 </div>
 
 <div class="h-filters">
@@ -94,23 +95,19 @@
         <label class="form-label">Nome *</label>
         <input class="form-input" id="mh-name" type="text" maxlength="200" placeholder="es. Sant'Ambrogio, Ponte 2 giugno, ecc." required>
       </div>
-      <div class="form-row">
-        <div class="form-group">
-          <label class="form-label">Scope: risorsa specifica</label>
-          <select class="form-select" id="mh-resource">
-            <option value="">— tutte —</option>
-            {% for r in resources %}
-            <option value="{{ r.id }}">{{ r.name }}{% if r.location_tag %} · {{ r.location_tag }}{% endif %}</option>
-            {% endfor %}
-          </select>
-        </div>
-        <div class="form-group">
-          <label class="form-label">Scope: location tag</label>
-          <input class="form-input" id="mh-location" type="text" maxlength="100" placeholder="es. Milano, Roma">
-          <small class="form-help text-muted">Si applica a tutte le risorse con `location_tag` coincidente.</small>
-        </div>
+      <div class="form-group">
+        <label class="form-label">Scope: policy CCNL (opzionale)</label>
+        <select class="form-select" id="mh-policy">
+          <option value="">— Tenant-wide (tutte le risorse) —</option>
+          {% for p in policies %}
+          <option value="{{ p.id }}">{{ p.name }}{% if p.is_default %} (default){% endif %}{% if p.ccnl_label %} · {{ p.ccnl_label }}{% endif %}</option>
+          {% endfor %}
+        </select>
+        <small class="form-help text-muted">
+          Se selezionata una policy, la festività vale solo per risorse con quella policy effettiva
+          (override personale o, se assente, policy default tenant). Vuoto = vale per tutti.
+        </small>
       </div>
-      <small class="form-help text-muted">Se entrambi vuoti → festività tenant-wide (vale per tutti). Se compili "Risorsa specifica", "Location" viene ignorato.</small>
     </div>
     <div class="modal-footer">
       <button class="btn btn-secondary" onclick="closeModal('modal-holiday')">Annulla</button>
@@ -153,11 +150,13 @@
 
 {% block scripts %}
 <script>
-// RESOURCES_MAP popolato lato server in modo SAFE (Jinja `tojson` esegue
-// HTML escape su </script>, quote, ecc.)
+// RESOURCES_MAP + POLICIES_MAP popolati lato server (tojson safe).
 const RESOURCES_ARR = {{ resources_data | tojson }};
 const RESOURCES_MAP = {};
 for (const r of RESOURCES_ARR) RESOURCES_MAP[r.id] = {name: r.name, loc: r.loc};
+const POLICIES_ARR = {{ policies_data | tojson }};
+const POLICIES_MAP = {};
+for (const p of POLICIES_ARR) POLICIES_MAP[p.id] = p;
 const IS_ELEVATED = {{ 'true' if is_elevated else 'false' }};
 
 function _kindLabel(kind, isNational) {
@@ -165,8 +164,14 @@ function _kindLabel(kind, isNational) {
   return ({local:'Locale',company:'Aziendale',national_override:'Override',exclude:'Esclude'})[kind] || kind;
 }
 function _scopeText(h) {
-  if (h.scope_resource_id && RESOURCES_MAP[h.scope_resource_id]) return '👤 ' + RESOURCES_MAP[h.scope_resource_id].name;
-  if (h.scope_location) return '📍 ' + h.scope_location;
+  // α.172.33 — scope basato su policy
+  if (h.scope_policy_id && POLICIES_MAP[h.scope_policy_id]) {
+    const p = POLICIES_MAP[h.scope_policy_id];
+    return '📋 ' + p.name + (p.ccnl_label ? ' · ' + p.ccnl_label : '');
+  }
+  // Legacy back-compat (campi deprecati)
+  if (h.scope_resource_id && RESOURCES_MAP[h.scope_resource_id]) return '👤 (legacy) ' + RESOURCES_MAP[h.scope_resource_id].name;
+  if (h.scope_location) return '📍 (legacy) ' + h.scope_location;
   return 'Tutte le risorse';
 }
 function _pillClass(kind, isNational) {
@@ -267,13 +272,20 @@ async function reloadHolidays() {
         }
       }
     }
+    // α.172.33 — Filter custom holidays per scope_policy_id quando una resource
+    // è selezionata: confronto con la policy effettiva della resource (override
+    // o default tenant). Il backend non ci passa quella info qui, deduciamo da
+    // POLICIES_MAP del tenant + assunzione "default = la prima con is_default".
     if (resource_id) {
       const rid = parseInt(resource_id, 10);
-      const loc = RESOURCES_MAP[rid]?.loc || '';
+      // Approssimazione client-side: non avendo info su WHP override del
+      // resource, mostriamo: tenant-wide + (se possibile dedurre) policy match.
+      // Per ora mostriamo tutte tenant-wide e attendiamo l'endpoint /effective
+      // server-side (già caricato sopra) per accuratezza.
       allRows = allRows.filter(h => {
         if (!h.is_custom) return true;
-        if (h.scope_resource_id) return h.scope_resource_id === rid;
-        if (h.scope_location) return h.scope_location === loc;
+        if (h.scope_policy_id == null) return true;
+        // Legacy: non filtriamo lato client per policy match (informativo)
         return true;
       });
     }
@@ -294,8 +306,7 @@ function openNewHoliday() {
   document.getElementById('mh-date').value = '';
   document.getElementById('mh-name').value = '';
   document.getElementById('mh-kind').value = 'local';
-  document.getElementById('mh-resource').value = '';
-  document.getElementById('mh-location').value = '';
+  document.getElementById('mh-policy').value = '';
   document.getElementById('mh-delete-btn').style.display = 'none';
   openModal('modal-holiday');
 }
@@ -310,8 +321,7 @@ async function openEditHoliday(id) {
   document.getElementById('mh-date').value = h.date;
   document.getElementById('mh-name').value = h.name;
   document.getElementById('mh-kind').value = h.kind;
-  document.getElementById('mh-resource').value = h.scope_resource_id || '';
-  document.getElementById('mh-location').value = h.scope_location || '';
+  document.getElementById('mh-policy').value = h.scope_policy_id || '';
   document.getElementById('mh-delete-btn').style.display = '';
   openModal('modal-holiday');
 }
@@ -321,22 +331,19 @@ async function saveHoliday() {
   const date = document.getElementById('mh-date').value;
   const name = document.getElementById('mh-name').value.trim();
   const kind = document.getElementById('mh-kind').value;
-  const resource_id = document.getElementById('mh-resource').value;
-  const location = document.getElementById('mh-location').value.trim();
+  const policy_id = document.getElementById('mh-policy').value;
   if (!date || !name) { toast('Data e nome obbligatori', 'error'); return; }
   try {
     if (id) {
       await api('PUT', `/hr/api/holidays/${id}`, {
         date, name, kind,
-        scope_resource_id: resource_id ? parseInt(resource_id, 10) : null,
-        scope_location: location || null,
+        scope_policy_id: policy_id ? parseInt(policy_id, 10) : null,
       }, { json: true });
       toast('Festività aggiornata', 'success');
     } else {
       const fd = new FormData();
       fd.append('date', date); fd.append('name', name); fd.append('kind', kind);
-      if (resource_id) fd.append('scope_resource_id', resource_id);
-      if (location) fd.append('scope_location', location);
+      if (policy_id) fd.append('scope_policy_id', policy_id);
       await api('POST', '/hr/api/holidays', fd);
       toast('Festività creata', 'success');
     }

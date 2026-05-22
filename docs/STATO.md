@@ -8,6 +8,14 @@
 
 ## Versione corrente
 
+**v3.5.0-alpha.172.33** — 22 maggio 2026 — Refactor holidays scope → policy CCNL
+
+C della lista complessi: festività legate alle policy CCNL invece di per-resource/location. Pulizia architettura. Resolver via `effective_policy_id` (override OR default). Backward-compat legacy fields preservati ma ignorati. Link "Calendario festività" sotto /settings → Orari lavorativi.
+
+Resta complesso: A (dropdown scheda tecnica + seed Netflix, α.172.34).
+
+## Versione precedente
+
 **v3.5.0-alpha.172.32** — 22 maggio 2026 — Multi-preset WorkingHoursPolicy UI + accrual override
 
 B della lista complessi: orari lavorativi salvabili come preset multipli (CCNL diversi per post-prod), richiamabili per resource. UI in `/settings → Orari lavorativi` con selector + bottoni Nuovo/Duplica/Set Default/Elimina. Card resource estesa con override accrual ferie/ROL/permessi + location tag (per festività locali). Endpoint CRUD completi + HARD-BLOCK delete se policy in uso.

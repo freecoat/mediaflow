@@ -208,6 +208,11 @@
           Ogni risorsa può usare un preset specifico via dropdown nella sua scheda.
           Smart split nei booking rispetta questi orari + accrual ferie/ROL/permessi.
         </p>
+        <!-- α.172.33 — Festività legate alle policy -->
+        <div style="background:rgba(98,114,245,0.08); border:1px solid var(--indigo-border, rgba(98,114,245,0.3)); border-radius:6px; padding:10px 14px; margin-bottom:14px; font-size:12.5px;">
+          📅 <strong>Festività</strong> (locali, aziendali, override nazionali) sono legate alle policy CCNL.
+          <a href="/hr/holidays" class="btn btn-secondary btn-sm" style="margin-left:8px;">Gestisci calendario festività →</a>
+        </div>
         {% if not can_edit_settings(user) %}
         <div style="background:rgba(251,146,60,0.10); border:1px solid #fb923c; border-radius:6px; padding:10px 14px; font-size:12px; margin-bottom:14px;">
           🔒 Sola lettura — per modificare gli orari lavorativi servono permessi di manager o superiore.

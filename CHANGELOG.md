@@ -1,5 +1,53 @@
 # MediaFlow — Changelog
 
+## v3.5.0-alpha.172.33 — Refactor holidays scope → policy CCNL (22 mag 2026)
+
+C della lista complessi Matteo. Sposta scope festività da `resource_id`/`location_tag` (α.172.29) a `WorkingHoursPolicy`. Festività legate al contratto CCNL.
+
+**Audit pre-refactor**: 0 Holiday in DB, 0 resource con location_tag → migrate safe.
+
+**Modello** (`models.py`):
+- Holiday: nuovo `scope_policy_id` FK WorkingHoursPolicy (nullable)
+- Legacy `scope_resource_id`/`scope_location` lasciati per back-compat ma NON usati dal resolver
+
+**Auto-migrate** (`main.py`): ALTER TABLE holidays ADD scope_policy_id.
+
+**Service** (`holidays_service.py`):
+- `get_effective_holidays` riscritto:
+  1. Carica nazionali se `tenant.use_national_holidays`
+  2. Risolve `effective_policy_id` del resource (override personale OR policy default tenant)
+  3. Holiday `scope_policy_id=NULL` → tenant-wide (sempre)
+  4. Holiday `scope_policy_id=P` → applica solo se `effective_policy_id == P`
+  5. `kind=exclude` rimuove date
+
+**Router** (`routers/holidays.py`):
+- `_h_dict` ora espone `scope_policy_id`
+- POST/PUT accettano `scope_policy_id` (validato contro WorkingHoursPolicy.tenant)
+- Legacy fields ancora ricevibili per compat MA ignorati dal resolver
+- Context template esteso con `policies_data` (lista CCNL preset)
+
+**UI** (`templates/pages/holidays.html`):
+- Modal CRUD: dropdown "Scope: policy CCNL" sostituisce campi "Risorsa specifica" + "Location"
+- Tabella scope text: 📋 Policy XYZ invece di 👤 nome / 📍 location
+- Legacy data (se esiste) mostrata con badge "(legacy)" per visibilità
+
+**Link** (`settings.html`):
+- Pane Orari lavorativi: card link "📅 Calendario festività" → `/hr/holidays`
+
+**Test rapido**:
+1. /settings → Orari lavorativi → "Gestisci calendario festività"
+2. + Nuova festività → seleziona "Scope: policy CCNL Doppiaggio"
+3. Risorsa con policy Doppiaggio vede la festività; risorse con altra policy no
+4. Tenant-wide (scope vuoto) → tutte la vedono
+
+## v3.5.0-alpha.172.32.2 — Nascondi dropdown CCNL per risorse non-umane (22 mag 2026)
+
+Feedback Matteo: vedeva ancora "Orario lavorativo (preset CCNL)" in modal risorsa anche per studio/equipment/software/vehicle (oggetti, no contratto). Fix: `rsToggleWhPolicySection()` nasconde dropdown per non-persone.
+
+## v3.5.0-alpha.172.32.1 — Accrual restricted to person_internal (dipendenti) (22 mag 2026)
+
+Feedback Matteo: orario lavorativo policy si applica a tutte le risorse ma accrual ferie/ROL/permessi vale SOLO per dipendenti interni. Restrizione `_is_employee_eligible()` + UI nasconde sezioni accrual per freelance/non-umane.
+
 ## v3.5.0-alpha.172.32 — Multi-preset WorkingHoursPolicy UI + accrual override (22 mag 2026)
 
 B della lista complessi Matteo. Multi-preset orari lavorativi salvabili e richiamabili per resource basato su contratto CCNL.

@@ -879,6 +879,17 @@ def _auto_migrate_columns():
                     "ON anomaly_entries (tenant_id, dedup_key)"
                 ))
 
+    # v3.5.0-alpha.172.33 — Holiday scope_policy_id (refactor scope C)
+    if "holidays" in insp.get_table_names():
+        hcols = {c["name"] for c in insp.get_columns("holidays")}
+        if "scope_policy_id" not in hcols:
+            print("[auto-migrate] holidays.scope_policy_id mancante -> ALTER TABLE (alpha.172.33)")
+            with engine.begin() as conn:
+                conn.execute(text(
+                    "ALTER TABLE holidays ADD COLUMN scope_policy_id INTEGER NULL "
+                    "REFERENCES working_hours_policies(id)"
+                ))
+
     # v3.5.0-alpha.172.29 — Assenze a ore + festività custom + CCNL accrual
     if "resource_unavailabilities" in insp.get_table_names():
         rucols = {c["name"] for c in insp.get_columns("resource_unavailabilities")}
@@ -1447,7 +1458,7 @@ async def lifespan(app: FastAPI):
     yield
 
 
-app = FastAPI(title="MediaFlow", version="3.5.0-alpha.172.32.2", lifespan=lifespan)
+app = FastAPI(title="MediaFlow", version="3.5.0-alpha.172.33", lifespan=lifespan)
 
 BASE_DIR = Path(__file__).parent
 app.mount("/static", StaticFiles(directory=BASE_DIR / "static"), name="static")

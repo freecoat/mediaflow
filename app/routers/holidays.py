@@ -50,12 +50,24 @@ async def holidays_page(request: Request, db: Session = Depends(get_db)):
     resources_data = [
         {"id": r.id, "name": r.name, "loc": r.location_tag or ""} for r in resources
     ]
+    # α.172.33 — policy CCNL tenant per scope dropdown
+    from app.models import WorkingHoursPolicy
+    policies = db.query(WorkingHoursPolicy).filter(
+        WorkingHoursPolicy.tenant_id == current_tenant_id(),
+    ).order_by(WorkingHoursPolicy.is_default.desc(), WorkingHoursPolicy.name).all()
+    policies_data = [
+        {"id": p.id, "name": p.name, "is_default": p.is_default,
+         "ccnl_label": p.ccnl_label or ""}
+        for p in policies
+    ]
     return _tpl().TemplateResponse(
         "pages/holidays.html",
         {
             "request": request,
             "resources": resources,
             "resources_data": resources_data,
+            "policies": policies,
+            "policies_data": policies_data,
             "kinds": [{"value": k.value, "label": _kind_label(k)} for k in HolidayKind],
             "is_elevated": is_elevated(user),
             "current_year": datetime.utcnow().year,
@@ -79,8 +91,9 @@ def _h_dict(h: Holiday) -> dict:
         "date": h.date.isoformat() if h.date else None,
         "name": h.name,
         "kind": h.kind.value if hasattr(h.kind, "value") else str(h.kind),
-        "scope_resource_id": h.scope_resource_id,
-        "scope_location": h.scope_location,
+        "scope_policy_id": h.scope_policy_id,  # α.172.33
+        "scope_resource_id": h.scope_resource_id,  # legacy, kept for back-compat
+        "scope_location": h.scope_location,        # legacy
         "is_active": h.is_active,
         "created_at": h.created_at.isoformat() if h.created_at else None,
     }
@@ -134,28 +147,30 @@ async def create_holiday(
     date: _date = Form(...),
     name: str = Form(...),
     kind: HolidayKind = Form(HolidayKind.local),
-    scope_resource_id: Optional[int] = Form(None),
-    scope_location: Optional[str] = Form(None),
+    scope_policy_id: Optional[int] = Form(None),
     db: Session = Depends(get_db),
 ):
+    """Crea festività custom. α.172.33 — scope via WorkingHoursPolicy.
+    NULL = tenant-wide (tutte le risorse). Altrimenti applica solo a risorse
+    con quella policy effettiva (override o default tenant)."""
     user = current_user_optional(request)
     if not is_elevated(user):
         raise HTTPException(403, "Solo admin/manager/producer possono gestire festività")
     name = (name or "").strip()
     if not name:
         raise HTTPException(422, "Nome obbligatorio")
-    if scope_resource_id:
-        r = db.query(Resource).filter(
-            Resource.id == scope_resource_id,
-            Resource.tenant_id == current_tenant_id(),
+    if scope_policy_id:
+        from app.models import WorkingHoursPolicy
+        p = db.query(WorkingHoursPolicy).filter(
+            WorkingHoursPolicy.id == scope_policy_id,
+            WorkingHoursPolicy.tenant_id == current_tenant_id(),
         ).first()
-        if not r:
-            raise HTTPException(404, "Risorsa scope non trovata")
+        if not p:
+            raise HTTPException(404, "Policy scope non trovata")
     h = Holiday(
         tenant_id=current_tenant_id(),
         date=date, name=name[:200], kind=kind,
-        scope_resource_id=scope_resource_id,
-        scope_location=(scope_location.strip()[:100] if scope_location else None),
+        scope_policy_id=scope_policy_id,
         created_by_user_id=user.id if user else None,
     )
     db.add(h); db.commit(); db.refresh(h)
@@ -189,6 +204,21 @@ async def update_holiday(
             h.kind = HolidayKind(payload["kind"])
         except ValueError:
             raise HTTPException(422, "Kind non valido")
+    # α.172.33 — scope via policy
+    if "scope_policy_id" in payload:
+        spid = payload["scope_policy_id"]
+        if spid:
+            from app.models import WorkingHoursPolicy
+            p = db.query(WorkingHoursPolicy).filter(
+                WorkingHoursPolicy.id == int(spid),
+                WorkingHoursPolicy.tenant_id == current_tenant_id(),
+            ).first()
+            if not p:
+                raise HTTPException(404, "Policy scope non trovata")
+            h.scope_policy_id = int(spid)
+        else:
+            h.scope_policy_id = None
+    # Legacy fields (back-compat, ignorati dal resolver)
     if "scope_resource_id" in payload:
         h.scope_resource_id = payload["scope_resource_id"] or None
     if "scope_location" in payload:

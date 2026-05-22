@@ -43,13 +43,17 @@ def get_effective_holidays(
 ) -> Dict[date, str]:
     """Risolve festività efficaci per la combinazione (tenant, resource, anno).
 
-    Priorità:
+    α.172.33 — scope refactored su WorkingHoursPolicy:
     1. Se `tenant.use_national_holidays` → carica nazionali.
-    2. Aggiunge Holiday(kind in {local, company, national_override}) matching
-       scope (tenant-wide / location / resource_id).
-    3. Rimuove date dove esiste Holiday(kind=exclude) matching scope.
+    2. Holiday con `scope_policy_id=NULL` (tenant-wide) → sempre applicato.
+    3. Holiday con `scope_policy_id=P` → applicato solo se resource ha
+       working_hours_policy_id=P (o policy default tenant=P se resource non
+       ha override).
+    4. `kind=exclude` rimuove date corrispondenti.
+    5. `kind=national_override` sostituisce nome festività nazionale.
 
-    `national_override` sostituisce il nome (mantiene la data).
+    `resource_id=None` → ritorna solo festività tenant-wide + nazionali
+    (no policy-scope match).
     """
     tenant = db.query(Tenant).filter(Tenant.id == tenant_id).first()
     if not tenant:
@@ -59,10 +63,22 @@ def get_effective_holidays(
     if tenant.use_national_holidays:
         out.update(_national_holidays(tenant.holidays_country_code or "IT", year))
 
-    resource = None
+    # Determina la policy effettiva della resource (override per-resource OR
+    # policy default tenant). None se nessuna resource passata.
+    effective_policy_id: Optional[int] = None
     if resource_id is not None:
         resource = db.query(Resource).filter(Resource.id == resource_id).first()
-    res_location = (resource.location_tag if resource else None)
+        if resource:
+            if resource.working_hours_policy_id:
+                effective_policy_id = resource.working_hours_policy_id
+            else:
+                from app.models import WorkingHoursPolicy
+                default = db.query(WorkingHoursPolicy).filter(
+                    WorkingHoursPolicy.tenant_id == tenant_id,
+                    WorkingHoursPolicy.is_default == True,  # noqa: E712
+                ).first()
+                if default:
+                    effective_policy_id = default.id
 
     q = db.query(Holiday).filter(
         Holiday.tenant_id == tenant_id,
@@ -71,19 +87,18 @@ def get_effective_holidays(
     )
 
     for h in q.all():
-        # Scope filtering
-        if h.scope_resource_id is not None:
-            if resource_id is None or h.scope_resource_id != resource_id:
-                continue
-        elif h.scope_location:
-            if res_location != h.scope_location:
+        # Scope filtering (α.172.33 — policy-based)
+        if h.scope_policy_id is not None:
+            # Festività legata a policy specifica → applica solo se resource
+            # ha quella policy effettiva
+            if effective_policy_id != h.scope_policy_id:
                 continue
         # else: tenant-wide → applica sempre
 
         if h.kind in (HolidayKind.local, HolidayKind.company):
             out[h.date] = h.name
         elif h.kind == HolidayKind.national_override:
-            out[h.date] = h.name  # sostituisce il nome IT
+            out[h.date] = h.name
         elif h.kind == HolidayKind.exclude:
             out.pop(h.date, None)
 
