@@ -269,15 +269,46 @@
 
       <!-- ─── Orario lavorativo override (v3.4.20.4) ──────────── -->
       <div class="form-group">
-        <label class="form-label">Orario lavorativo</label>
+        <label class="form-label">Orario lavorativo (preset CCNL)</label>
         <select class="form-select" id="rs-wh-policy">
           <option value="">— usa default tenant —</option>
           {% for p in wh_policies %}
-          <option value="{{ p.id }}">{{ p.name }}{% if p.is_default %} (default){% endif %}</option>
+          <option value="{{ p.id }}">{{ p.name }}{% if p.is_default %} (default){% endif %}{% if p.ccnl_label %} · {{ p.ccnl_label }}{% endif %}</option>
           {% endfor %}
         </select>
-        <p class="text-sm text-muted" style="margin-top:4px;">Override opzionale per orari diversi dalla policy globale.</p>
+        <p class="text-sm text-muted" style="margin-top:4px;">Preset di orari/multiplicatori OT/accrual ferie. Imposta in /settings → Orari lavorativi.</p>
       </div>
+
+      <!-- ─── Override accrual per-resource (α.172.32 B) ─────────── -->
+      <details style="margin-bottom:14px;">
+        <summary style="cursor:pointer; padding:6px 10px; background:var(--bg2); border:1px solid var(--border); border-radius:4px; font-size:12px;">
+          ⚙️ Override accrual ferie/ROL/permessi (avanzato)
+        </summary>
+        <div style="padding:10px; margin-top:6px; border:1px solid var(--border); border-radius:4px;">
+          <p class="text-sm text-muted" style="margin:0 0 10px;">
+            Valori personalizzati per questa risorsa (es. neoassunto, contratto custom).
+            Lascia vuoto per usare i default del preset CCNL selezionato sopra.
+          </p>
+          <div class="grid-2" style="gap:10px;">
+            <div class="form-group" style="margin:0;">
+              <label class="form-label">Ferie / anno (giorni)</label>
+              <input type="number" step="0.5" min="0" max="60" id="rs-leave-override" class="form-input" placeholder="Eredita dal preset">
+            </div>
+            <div class="form-group" style="margin:0;">
+              <label class="form-label">ROL / mese (ore)</label>
+              <input type="number" step="0.5" min="0" max="40" id="rs-rol-override" class="form-input" placeholder="Eredita dal preset">
+            </div>
+            <div class="form-group" style="margin:0;">
+              <label class="form-label">Permessi / mese (ore)</label>
+              <input type="number" step="0.5" min="0" max="40" id="rs-permit-override" class="form-input" placeholder="Eredita dal preset">
+            </div>
+            <div class="form-group" style="margin:0;">
+              <label class="form-label">Tag location (festività locali)</label>
+              <input type="text" id="rs-location-tag" class="form-input" maxlength="100" placeholder="es. Milano, Catania">
+            </div>
+          </div>
+        </div>
+      </details>
 
       <!-- ─── Ferie e malattie (v3.4.20.4) ──────────────────── -->
       <div class="form-group" id="rs-unav-section" style="display:none;">
@@ -391,6 +422,10 @@ function openNewResource() {
   document.getElementById('rs-desc').value = '';
   document.getElementById('rs-color').value = '#6272f5';
   document.getElementById('rs-wh-policy').value = '';
+  const _lo = document.getElementById('rs-leave-override'); if (_lo) _lo.value = '';
+  const _ro = document.getElementById('rs-rol-override'); if (_ro) _ro.value = '';
+  const _po = document.getElementById('rs-permit-override'); if (_po) _po.value = '';
+  const _lt = document.getElementById('rs-location-tag'); if (_lt) _lt.value = '';
   document.getElementById('rs-unav-section').style.display = 'none'; // solo in edit
   // Reset toggle utente
   const cb = document.getElementById('rs-create-user');
@@ -463,6 +498,15 @@ async function editResource(id) {
     document.getElementById('rs-desc').value = r.description || '';
     document.getElementById('rs-color').value = r.color || '#6272f5';
     document.getElementById('rs-wh-policy').value = r.working_hours_policy_id || '';
+    // α.172.32 B — override accrual per-resource
+    const _lo = document.getElementById('rs-leave-override');
+    if (_lo) _lo.value = r.annual_leave_days_override != null ? r.annual_leave_days_override : '';
+    const _ro = document.getElementById('rs-rol-override');
+    if (_ro) _ro.value = r.monthly_rol_hours_override != null ? r.monthly_rol_hours_override : '';
+    const _po = document.getElementById('rs-permit-override');
+    if (_po) _po.value = r.monthly_permit_hours_override != null ? r.monthly_permit_hours_override : '';
+    const _lt = document.getElementById('rs-location-tag');
+    if (_lt) _lt.value = r.location_tag || '';
     // Cost-rate (v3.5.0-alpha.66.10)
     document.getElementById('rs-cost-type').value = r.cost_type || '';
     document.getElementById('rs-cost-mensile').value = r.monthly_gross_salary || '';
@@ -561,6 +605,15 @@ async function saveResource() {
   fd.append('color', document.getElementById('rs-color').value);
   // Override policy orari (vuoto = usa default tenant)
   fd.append('working_hours_policy_id', document.getElementById('rs-wh-policy').value || '0');
+  // α.172.32 B — override accrual per-resource (empty = inherit from policy)
+  const _lo = document.getElementById('rs-leave-override');
+  if (_lo && _lo.value !== '') fd.append('annual_leave_days_override', _lo.value);
+  const _ro = document.getElementById('rs-rol-override');
+  if (_ro && _ro.value !== '') fd.append('monthly_rol_hours_override', _ro.value);
+  const _po = document.getElementById('rs-permit-override');
+  if (_po && _po.value !== '') fd.append('monthly_permit_hours_override', _po.value);
+  const _lt = document.getElementById('rs-location-tag');
+  if (_lt) fd.append('location_tag', _lt.value || '');
 
   // Cost-rate fields (v3.5.0-alpha.66.10)
   const costType = document.getElementById('rs-cost-type').value;

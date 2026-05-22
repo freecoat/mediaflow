@@ -8,6 +8,14 @@
 
 ## Versione corrente
 
+**v3.5.0-alpha.172.32** — 22 maggio 2026 — Multi-preset WorkingHoursPolicy UI + accrual override
+
+B della lista complessi: orari lavorativi salvabili come preset multipli (CCNL diversi per post-prod), richiamabili per resource. UI in `/settings → Orari lavorativi` con selector + bottoni Nuovo/Duplica/Set Default/Elimina. Card resource estesa con override accrual ferie/ROL/permessi + location tag (per festività locali). Endpoint CRUD completi + HARD-BLOCK delete se policy in uso.
+
+Restano complessi: C holidays in policy (α.172.33), A dropdown scheda tecnica (α.172.34).
+
+## Versione precedente
+
 **v3.5.0-alpha.172.31** — 22 maggio 2026 — Acconto HARD-BLOCK JCL + NC approved init + cascade
 
 3 fix workflow finanziario:

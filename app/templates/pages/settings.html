@@ -185,11 +185,28 @@
     <!-- ── Pannello Orari lavorativi ──────────────────────────── -->
     <div class="settings-pane" id="pane-hours">
       <div class="card mb-4">
-        <div class="card-title mb-2">Policy "Italia standard"</div>
+        <!-- α.172.32 B — Multi-preset WorkingHoursPolicy selector + CRUD -->
+        <div style="display:flex; align-items:center; justify-content:space-between; gap:12px; margin-bottom:14px; flex-wrap:wrap;">
+          <div style="display:flex; align-items:center; gap:8px; flex:1; min-width:280px;">
+            <label class="form-label" style="margin:0; white-space:nowrap;">Preset attivo:</label>
+            <select id="wh-policy-selector" class="form-select" style="flex:1; max-width:380px;" onchange="onWhPolicyChange()">
+              <option value="">— Caricamento… —</option>
+            </select>
+            <span id="wh-default-badge" class="badge badge-active" style="display:none;">★ Default tenant</span>
+          </div>
+          {% if can_edit_settings(user) %}
+          <div style="display:flex; gap:6px; flex-wrap:wrap;">
+            <button class="btn btn-secondary btn-sm" onclick="whNewPolicy()" title="Crea nuovo preset">+ Nuovo</button>
+            <button class="btn btn-ghost btn-sm" onclick="whDuplicatePolicy()" title="Duplica preset corrente">📑 Duplica</button>
+            <button class="btn btn-ghost btn-sm" id="wh-set-default-btn" onclick="whSetDefault()" title="Imposta come default tenant">★ Default</button>
+            <button class="btn btn-ghost btn-sm" id="wh-delete-btn" onclick="whDeletePolicy()" title="Elimina preset" style="color:#ef4444;">🗑 Elimina</button>
+          </div>
+          {% endif %}
+        </div>
         <p class="text-sm text-muted mb-3">
-          Definisce quando le risorse sono disponibili a essere prenotate.
-          Si applica come default a tutte le risorse del tenant.
-          Smart split nei booking rispetta questi orari.
+          Crea preset multipli per CCNL diversi (es. Cinema, Audiovisivo, Doppiaggio).
+          Ogni risorsa può usare un preset specifico via dropdown nella sua scheda.
+          Smart split nei booking rispetta questi orari + accrual ferie/ROL/permessi.
         </p>
         {% if not can_edit_settings(user) %}
         <div style="background:rgba(251,146,60,0.10); border:1px solid #fb923c; border-radius:6px; padding:10px 14px; font-size:12px; margin-bottom:14px;">
@@ -312,6 +329,33 @@
             <div id="wh-brackets-host"></div>
             <button type="button" class="btn btn-secondary btn-sm" onclick="whAddBracket()" style="margin-top:8px;">+ Aggiungi scaglione</button>
             <button type="button" class="btn btn-ghost btn-sm" onclick="whClearBrackets()" style="margin-top:8px; margin-left:6px;">Rimuovi tutti</button>
+          </div>
+
+          <!-- α.172.32 B — Accrual ferie/ROL/permessi (α.172.29 fields) -->
+          <div class="form-group" style="margin-top:18px; padding-top:14px; border-top:1px solid var(--border);">
+            <div class="card-title" style="margin-bottom:8px;">Accrual annuale / mensile</div>
+            <p class="text-sm text-muted mb-3">
+              Maturazione ferie/ROL/permessi usata dal saldo dinamico in `/hr`.
+              Override per-risorsa disponibili dalla scheda risorsa (es. dipendente neoassunto
+              con accrual diverso da CCNL standard).
+            </p>
+            <div class="grid-2" style="gap:12px;">
+              <div class="form-group">
+                <label class="form-label">Ferie maturate / anno (giorni)</label>
+                <input type="number" step="0.5" min="0" max="60" id="wh-annual-leave-days" class="form-input">
+                <p class="text-sm text-muted" style="margin-top:4px;">Default 26gg CCNL Italia standard. Range 0-60.</p>
+              </div>
+              <div class="form-group">
+                <label class="form-label">ROL maturate / mese (ore)</label>
+                <input type="number" step="0.5" min="0" max="40" id="wh-monthly-rol" class="form-input">
+                <p class="text-sm text-muted" style="margin-top:4px;">Default 8h/mese. Riduzione orario di lavoro.</p>
+              </div>
+              <div class="form-group">
+                <label class="form-label">Permessi retribuiti / mese (ore)</label>
+                <input type="number" step="0.5" min="0" max="40" id="wh-monthly-permit" class="form-input">
+                <p class="text-sm text-muted" style="margin-top:4px;">Default 8h/mese. Permessi extra (visite mediche, eventi famigliari, ecc).</p>
+              </div>
+            </div>
           </div>
 
           <div class="flex gap-2 mt-3">
@@ -1072,37 +1116,132 @@ function whApplyReadonly() {
   });
 }
 
-// ── Working hours (v3.4.20.3) ────────────────────────────────
-async function whReload() {
+// ── Working hours (v3.4.20.3, α.172.32 B multi-preset) ─────────
+let _whPolicies = [];
+
+async function whReload(preferId) {
   try {
-    const list = await api('GET', '/settings/api/working-hours');
-    const p = (list || []).find(x => x.is_default) || (list || [])[0];
+    _whPolicies = await api('GET', '/settings/api/working-hours') || [];
+    // Aggiorna selector
+    const sel = document.getElementById('wh-policy-selector');
+    if (sel) {
+      const currentVal = preferId || sel.value || (
+        (_whPolicies.find(x => x.is_default) || _whPolicies[0] || {}).id
+      );
+      sel.replaceChildren();
+      for (const p of _whPolicies) {
+        const opt = document.createElement('option');
+        opt.value = String(p.id);
+        opt.textContent = (p.is_default ? '★ ' : '') + p.name + (p.ccnl_label ? ' · ' + p.ccnl_label : '');
+        if (String(p.id) === String(currentVal)) opt.selected = true;
+        sel.appendChild(opt);
+      }
+    }
+    const selected = sel ? sel.value : '';
+    const p = _whPolicies.find(x => String(x.id) === String(selected))
+      || _whPolicies.find(x => x.is_default)
+      || _whPolicies[0];
     if (!p) return;
-    document.getElementById('wh-id').value = p.id;
-    document.getElementById('wh-name').value = p.name || '';
-    document.getElementById('wh-morning-start').value = p.morning_start || '';
-    document.getElementById('wh-morning-end').value = p.morning_end || '';
-    document.getElementById('wh-afternoon-start').value = p.afternoon_start || '';
-    document.getElementById('wh-afternoon-end').value = p.afternoon_end || '';
-    document.getElementById('wh-country').value = p.holidays_country || '';
-    const days = p.working_days || 0;
-    document.querySelectorAll('[data-wh-day]').forEach(cb => {
-      cb.checked = !!(days & (1 << Number(cb.dataset.whDay)));
-    });
-    document.getElementById('wh-daily-thr').value = p.daily_hours_threshold ?? 8;
-    document.getElementById('wh-weekly-thr').value = p.weekly_hours_threshold ?? 40;
-    document.getElementById('wh-ot-mult').value = p.overtime_multiplier ?? 1.25;
-    document.getElementById('wh-night-mult').value = p.night_multiplier ?? 1.5;
-    document.getElementById('wh-sun-mult').value = p.sunday_multiplier ?? 1.5;
-    document.getElementById('wh-hol-mult').value = p.holiday_multiplier ?? 2.0;
-    document.getElementById('wh-permit-mult').value = p.permit_multiplier ?? 1.0;
-    document.getElementById('wh-night-start').value = p.night_start || '22:00';
-    document.getElementById('wh-night-end').value = p.night_end || '06:00';
-    // v3.4.32.2 — scaglioni overtime + ccnl label
-    document.getElementById('wh-ccnl-label').value = p.ccnl_label || '';
-    whRenderBrackets(p.overtime_brackets || []);
+    _whApplyToForm(p);
+    _whUpdateButtons(p);
     whApplyReadonly();
   } catch(e) { toast(e.message || 'Errore caricamento policy', 'error'); }
+}
+
+function _whApplyToForm(p) {
+  document.getElementById('wh-id').value = p.id;
+  document.getElementById('wh-name').value = p.name || '';
+  document.getElementById('wh-morning-start').value = p.morning_start || '';
+  document.getElementById('wh-morning-end').value = p.morning_end || '';
+  document.getElementById('wh-afternoon-start').value = p.afternoon_start || '';
+  document.getElementById('wh-afternoon-end').value = p.afternoon_end || '';
+  document.getElementById('wh-country').value = p.holidays_country || '';
+  const days = p.working_days || 0;
+  document.querySelectorAll('[data-wh-day]').forEach(cb => {
+    cb.checked = !!(days & (1 << Number(cb.dataset.whDay)));
+  });
+  document.getElementById('wh-daily-thr').value = p.daily_hours_threshold ?? 8;
+  document.getElementById('wh-weekly-thr').value = p.weekly_hours_threshold ?? 40;
+  document.getElementById('wh-ot-mult').value = p.overtime_multiplier ?? 1.25;
+  document.getElementById('wh-night-mult').value = p.night_multiplier ?? 1.5;
+  document.getElementById('wh-sun-mult').value = p.sunday_multiplier ?? 1.5;
+  document.getElementById('wh-hol-mult').value = p.holiday_multiplier ?? 2.0;
+  document.getElementById('wh-permit-mult').value = p.permit_multiplier ?? 1.0;
+  document.getElementById('wh-night-start').value = p.night_start || '22:00';
+  document.getElementById('wh-night-end').value = p.night_end || '06:00';
+  document.getElementById('wh-ccnl-label').value = p.ccnl_label || '';
+  whRenderBrackets(p.overtime_brackets || []);
+  // α.172.29 accrual
+  const al = document.getElementById('wh-annual-leave-days');
+  if (al) al.value = p.annual_leave_days_default ?? 26;
+  const rol = document.getElementById('wh-monthly-rol');
+  if (rol) rol.value = p.monthly_rol_hours_accrual ?? 8;
+  const pmt = document.getElementById('wh-monthly-permit');
+  if (pmt) pmt.value = p.monthly_permit_hours_accrual ?? 8;
+}
+
+function _whUpdateButtons(p) {
+  const badge = document.getElementById('wh-default-badge');
+  if (badge) badge.style.display = p.is_default ? '' : 'none';
+  const setDefBtn = document.getElementById('wh-set-default-btn');
+  if (setDefBtn) setDefBtn.style.display = p.is_default ? 'none' : '';
+  const delBtn = document.getElementById('wh-delete-btn');
+  if (delBtn) delBtn.style.display = p.is_default ? 'none' : '';
+}
+
+function onWhPolicyChange() {
+  const id = document.getElementById('wh-policy-selector').value;
+  const p = _whPolicies.find(x => String(x.id) === String(id));
+  if (p) { _whApplyToForm(p); _whUpdateButtons(p); }
+}
+
+async function whNewPolicy() {
+  const name = prompt('Nome nuovo preset (es. "CCNL Cinema · Doppiaggio")');
+  if (!name) return;
+  try {
+    const fd = new FormData(); fd.append('name', name);
+    const created = await api('POST', '/settings/api/working-hours', fd);
+    toast(`Preset '${created.name}' creato`, 'success');
+    await whReload(created.id);
+  } catch (e) { toast(e.message || 'Errore', 'error'); }
+}
+
+async function whDuplicatePolicy() {
+  const id = document.getElementById('wh-policy-selector').value;
+  if (!id) { toast('Seleziona un preset da duplicare', 'error'); return; }
+  const src = _whPolicies.find(x => String(x.id) === String(id));
+  const newName = prompt('Nome del nuovo preset:', (src ? src.name : '') + ' (copia)');
+  if (!newName) return;
+  try {
+    const fd = new FormData(); fd.append('new_name', newName);
+    const created = await api('POST', `/settings/api/working-hours/${id}/duplicate`, fd);
+    toast(`Duplicato come '${created.name}'`, 'success');
+    await whReload(created.id);
+  } catch (e) { toast(e.message || 'Errore', 'error'); }
+}
+
+async function whSetDefault() {
+  const id = document.getElementById('wh-policy-selector').value;
+  if (!id) return;
+  if (!confirm("Impostare questo preset come default tenant?\nLe risorse senza override useranno questo.")) return;
+  try {
+    await api('POST', `/settings/api/working-hours/${id}/set-default`);
+    toast('Preset impostato come default', 'success');
+    await whReload(id);
+  } catch (e) { toast(e.message || 'Errore', 'error'); }
+}
+
+async function whDeletePolicy() {
+  const id = document.getElementById('wh-policy-selector').value;
+  if (!id) return;
+  const p = _whPolicies.find(x => String(x.id) === String(id));
+  if (!p) return;
+  if (!confirm(`Eliminare preset '${p.name}'?\nSe ci sono risorse che lo usano, l'eliminazione verrà bloccata.`)) return;
+  try {
+    await api('DELETE', `/settings/api/working-hours/${id}`);
+    toast(`Preset '${p.name}' eliminato`, 'success');
+    await whReload();
+  } catch (e) { toast(e.message || 'Errore', 'error'); }
 }
 
 // v3.4.32.2 — Scaglioni overtime: render + add/remove
@@ -1183,9 +1322,17 @@ async function whSave() {
   // v3.4.32.2: scaglioni + ccnl_label
   fd.append('ccnl_label', document.getElementById('wh-ccnl-label').value);
   fd.append('overtime_brackets', JSON.stringify(whReadBrackets()));
+  // α.172.29 accrual fields (α.172.32 B UI)
+  const al = document.getElementById('wh-annual-leave-days');
+  if (al && al.value !== '') fd.append('annual_leave_days_default', al.value);
+  const rol = document.getElementById('wh-monthly-rol');
+  if (rol && rol.value !== '') fd.append('monthly_rol_hours_accrual', rol.value);
+  const pmt = document.getElementById('wh-monthly-permit');
+  if (pmt && pmt.value !== '') fd.append('monthly_permit_hours_accrual', pmt.value);
   try {
     await api('PUT', `/settings/api/working-hours/${id}`, fd);
     toast('Policy salvata', 'success');
+    await whReload(id);
   } catch(e) { toast(e.message || 'Errore salvataggio', 'error'); }
 }
 

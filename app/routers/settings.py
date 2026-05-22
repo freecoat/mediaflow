@@ -8,7 +8,7 @@ from fastapi.responses import HTMLResponse
 from typing import Optional
 from sqlalchemy.orm import Session
 from app.database import get_db
-from app.models import User, WorkingHoursPolicy
+from app.models import User, WorkingHoursPolicy, Resource
 from app.models.models import UserAISettings
 from datetime import time
 from app.services.auth import get_current_user_from_token, hash_password, verify_password
@@ -303,6 +303,10 @@ def _serialize_policy(p: WorkingHoursPolicy) -> dict:
         "night_end": p.night_end.strftime("%H:%M") if p.night_end else None,
         "overtime_brackets": p.overtime_brackets or [],
         "ccnl_label": p.ccnl_label,
+        # α.172.29 — Accrual ferie/ROL/permessi
+        "annual_leave_days_default": getattr(p, "annual_leave_days_default", 26.0),
+        "monthly_rol_hours_accrual": getattr(p, "monthly_rol_hours_accrual", 8.0),
+        "monthly_permit_hours_accrual": getattr(p, "monthly_permit_hours_accrual", 8.0),
     }
 
 
@@ -382,6 +386,9 @@ async def update_working_hours(
     night_end: Optional[str] = Form(None),
     overtime_brackets: Optional[str] = Form(None),  # JSON string
     ccnl_label: Optional[str] = Form(None),
+    annual_leave_days_default: Optional[float] = Form(None),
+    monthly_rol_hours_accrual: Optional[float] = Form(None),
+    monthly_permit_hours_accrual: Optional[float] = Form(None),
     db: Session = Depends(get_db),
 ):
     # v3.5.0-alpha.21: RBAC — solo manager+ può modificare working hours.
@@ -440,6 +447,18 @@ async def update_working_hours(
                 raise HTTPException(400, f"overtime_brackets JSON non valido: {e}")
     if ccnl_label is not None:
         p.ccnl_label = (ccnl_label.strip() or None)
+    if annual_leave_days_default is not None:
+        if annual_leave_days_default < 0 or annual_leave_days_default > 365:
+            raise HTTPException(400, "annual_leave_days_default fuori range [0..365]")
+        p.annual_leave_days_default = annual_leave_days_default
+    if monthly_rol_hours_accrual is not None:
+        if monthly_rol_hours_accrual < 0 or monthly_rol_hours_accrual > 200:
+            raise HTTPException(400, "monthly_rol_hours_accrual fuori range [0..200]")
+        p.monthly_rol_hours_accrual = monthly_rol_hours_accrual
+    if monthly_permit_hours_accrual is not None:
+        if monthly_permit_hours_accrual < 0 or monthly_permit_hours_accrual > 200:
+            raise HTTPException(400, "monthly_permit_hours_accrual fuori range [0..200]")
+        p.monthly_permit_hours_accrual = monthly_permit_hours_accrual
     if p.morning_end <= p.morning_start:
         raise HTTPException(400, "morning_end deve essere > morning_start")
     if p.daily_hours_threshold <= 0 or p.weekly_hours_threshold <= 0:
@@ -450,6 +469,158 @@ async def update_working_hours(
     db.commit()
     db.refresh(p)
     return _serialize_policy(p)
+
+
+# ── Multi-preset WorkingHoursPolicy (α.172.32 B) ──────────────
+
+@router.post("/api/working-hours")
+async def create_working_hours_policy(
+    request: Request,
+    name: str = Form(...),
+    db: Session = Depends(get_db),
+):
+    """Crea nuovo preset WorkingHoursPolicy con valori default sensati.
+    Editing via PUT successivo."""
+    from app.services.rbac import current_user_optional, can_edit_settings
+    user = current_user_optional(request)
+    if not can_edit_settings(user):
+        raise HTTPException(403, "Solo manager+ possono creare orari lavorativi")
+    name = name.strip()[:80]
+    if not name:
+        raise HTTPException(422, "Nome obbligatorio")
+    existing = db.query(WorkingHoursPolicy).filter(
+        WorkingHoursPolicy.tenant_id == CURRENT_TENANT_FALLBACK,
+        WorkingHoursPolicy.name == name,
+    ).first()
+    if existing:
+        raise HTTPException(409, f"Esiste già una policy con nome '{name}'")
+    p = WorkingHoursPolicy(
+        tenant_id=CURRENT_TENANT_FALLBACK,
+        name=name,
+        is_default=False,
+        morning_start=time(9, 0), morning_end=time(13, 0),
+        afternoon_start=time(14, 0), afternoon_end=time(18, 0),
+        working_days=31,
+        holidays_country="IT",
+        daily_hours_threshold=8.0, weekly_hours_threshold=40.0,
+        overtime_multiplier=1.30, night_multiplier=1.25,
+        sunday_multiplier=1.50, holiday_multiplier=2.00,
+        permit_multiplier=1.0,
+        night_start=time(22, 0), night_end=time(6, 0),
+        annual_leave_days_default=26.0,
+        monthly_rol_hours_accrual=8.0,
+        monthly_permit_hours_accrual=8.0,
+    )
+    db.add(p); db.commit(); db.refresh(p)
+    return _serialize_policy(p)
+
+
+@router.delete("/api/working-hours/{policy_id}")
+async def delete_working_hours_policy(
+    policy_id: int, request: Request, db: Session = Depends(get_db),
+):
+    from app.services.rbac import current_user_optional, can_edit_settings
+    user = current_user_optional(request)
+    if not can_edit_settings(user):
+        raise HTTPException(403, "Solo manager+ possono eliminare orari lavorativi")
+    p = db.query(WorkingHoursPolicy).filter(
+        WorkingHoursPolicy.id == policy_id,
+        WorkingHoursPolicy.tenant_id == CURRENT_TENANT_FALLBACK,
+    ).first()
+    if not p:
+        raise HTTPException(404, "Policy non trovata")
+    if p.is_default:
+        raise HTTPException(409, "Non puoi eliminare la policy default. Imposta prima un'altra policy come default.")
+    # HARD-BLOCK: blocca delete se assegnata a resource
+    used_by = db.query(Resource).filter(
+        Resource.working_hours_policy_id == policy_id,
+        Resource.tenant_id == CURRENT_TENANT_FALLBACK,
+    ).count()
+    if used_by:
+        raise HTTPException(
+            409,
+            f"Impossibile eliminare: {used_by} risorse stanno usando questa policy. "
+            "Riassegnale a un'altra policy prima di eliminare.",
+        )
+    db.delete(p); db.commit()
+    return {"ok": True}
+
+
+@router.post("/api/working-hours/{policy_id}/set-default")
+async def set_default_working_hours_policy(
+    policy_id: int, request: Request, db: Session = Depends(get_db),
+):
+    """Imposta questa policy come default tenant (e demota la precedente)."""
+    from app.services.rbac import current_user_optional, can_edit_settings
+    user = current_user_optional(request)
+    if not can_edit_settings(user):
+        raise HTTPException(403, "Solo manager+ possono impostare la policy default")
+    p = db.query(WorkingHoursPolicy).filter(
+        WorkingHoursPolicy.id == policy_id,
+        WorkingHoursPolicy.tenant_id == CURRENT_TENANT_FALLBACK,
+    ).first()
+    if not p:
+        raise HTTPException(404, "Policy non trovata")
+    # Demota tutte le altre
+    db.query(WorkingHoursPolicy).filter(
+        WorkingHoursPolicy.tenant_id == CURRENT_TENANT_FALLBACK,
+        WorkingHoursPolicy.id != policy_id,
+    ).update({WorkingHoursPolicy.is_default: False})
+    p.is_default = True
+    db.commit(); db.refresh(p)
+    return _serialize_policy(p)
+
+
+@router.post("/api/working-hours/{policy_id}/duplicate")
+async def duplicate_working_hours_policy(
+    policy_id: int,
+    request: Request,
+    new_name: str = Form(...),
+    db: Session = Depends(get_db),
+):
+    """Clona una policy esistente con un nuovo nome. Util per creare varianti
+    di CCNL (es. 'Cinema base' → 'Cinema con scaglioni doppiaggio')."""
+    from app.services.rbac import current_user_optional, can_edit_settings
+    user = current_user_optional(request)
+    if not can_edit_settings(user):
+        raise HTTPException(403, "Solo manager+ possono duplicare orari lavorativi")
+    src = db.query(WorkingHoursPolicy).filter(
+        WorkingHoursPolicy.id == policy_id,
+        WorkingHoursPolicy.tenant_id == CURRENT_TENANT_FALLBACK,
+    ).first()
+    if not src:
+        raise HTTPException(404, "Policy sorgente non trovata")
+    new_name = new_name.strip()[:80]
+    if not new_name:
+        raise HTTPException(422, "Nuovo nome obbligatorio")
+    if db.query(WorkingHoursPolicy).filter(
+        WorkingHoursPolicy.tenant_id == CURRENT_TENANT_FALLBACK,
+        WorkingHoursPolicy.name == new_name,
+    ).first():
+        raise HTTPException(409, f"Esiste già una policy con nome '{new_name}'")
+    clone = WorkingHoursPolicy(
+        tenant_id=src.tenant_id,
+        name=new_name, is_default=False,
+        morning_start=src.morning_start, morning_end=src.morning_end,
+        afternoon_start=src.afternoon_start, afternoon_end=src.afternoon_end,
+        working_days=src.working_days,
+        holidays_country=src.holidays_country,
+        daily_hours_threshold=src.daily_hours_threshold,
+        weekly_hours_threshold=src.weekly_hours_threshold,
+        overtime_multiplier=src.overtime_multiplier,
+        night_multiplier=src.night_multiplier,
+        sunday_multiplier=src.sunday_multiplier,
+        holiday_multiplier=src.holiday_multiplier,
+        permit_multiplier=src.permit_multiplier,
+        night_start=src.night_start, night_end=src.night_end,
+        overtime_brackets=list(src.overtime_brackets) if src.overtime_brackets else None,
+        ccnl_label=src.ccnl_label,
+        annual_leave_days_default=getattr(src, "annual_leave_days_default", 26.0),
+        monthly_rol_hours_accrual=getattr(src, "monthly_rol_hours_accrual", 8.0),
+        monthly_permit_hours_accrual=getattr(src, "monthly_permit_hours_accrual", 8.0),
+    )
+    db.add(clone); db.commit(); db.refresh(clone)
+    return _serialize_policy(clone)
 
 
 # ── v3.5.0-alpha.52: DATI AZIENDALI per fattura formale ───────

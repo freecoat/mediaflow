@@ -1,5 +1,38 @@
 # MediaFlow — Changelog
 
+## v3.5.0-alpha.172.32 — Multi-preset WorkingHoursPolicy UI + accrual override (22 mag 2026)
+
+B della lista complessi Matteo. Multi-preset orari lavorativi salvabili e richiamabili per resource basato su contratto CCNL.
+
+**Backend** (`settings.py`):
+- `_serialize_policy` esteso con `annual_leave_days_default`, `monthly_rol_hours_accrual`, `monthly_permit_hours_accrual` (α.172.29 fields ora esposti via API).
+- `PUT /settings/api/working-hours/{id}` accetta i 3 accrual fields con validazione range.
+- Nuovi endpoint:
+  - `POST /settings/api/working-hours` — crea nuovo preset (defaults sensati IT)
+  - `DELETE /settings/api/working-hours/{id}` — HARD-BLOCK se in uso da Resource o se default
+  - `POST /settings/api/working-hours/{id}/set-default` — toggle default tenant (demota precedente)
+  - `POST /settings/api/working-hours/{id}/duplicate` — clona con nuovo nome
+
+**UI /settings → Orari lavorativi** (`settings.html`):
+- Selector "Preset attivo" con tutti i preset tenant + badge "★ Default tenant"
+- Bottoni: + Nuovo, 📑 Duplica, ★ Default, 🗑 Elimina (admin/manager only)
+- Sezione "Accrual annuale / mensile" con 3 input: ferie/anno (gg), ROL/mese (h), permessi/mese (h)
+- `whReload(preferId)` ricarica lista + applica preset selezionato
+- `_whUpdateButtons(p)` nasconde Default/Elimina se policy è già default
+
+**UI Resource** (`resources.html`):
+- Dropdown "Orario lavorativo (preset CCNL)" mostra ora anche `ccnl_label` accanto al nome
+- Nuovo `<details>` "Override accrual ferie/ROL/permessi" con 4 input:
+  - `annual_leave_days_override`, `monthly_rol_hours_override`, `monthly_permit_hours_override` (eredita dal preset se vuoto)
+  - `location_tag` per festività locali (es. "Milano" → patrono cittadino)
+- Router resources.py PUT esteso con 4 nuovi field (form raw parse per "" = clear esplicito)
+- Resource serialize esteso con i 4 nuovi field
+
+**Test rapido** (Matteo):
+1. `/settings` → tab Orari lavorativi → "+ Nuovo" → "CCNL Doppiaggio" → modifica scaglioni + accrual ferie → Salva
+2. `/resources` → modifica risorsa → Orario lavorativo → seleziona "CCNL Doppiaggio"
+3. `/hr` filtra risorsa → Card 📊 Saldo usa accrual del preset (o override se settato)
+
 ## v3.5.0-alpha.172.31 — Acconto HARD-BLOCK JCL + NC approved init + cascade (22 mag 2026)
 
 Bundle 3 dei 4 fix lista facili Matteo (post-α.172.30/.30.x). #1 quote-side

@@ -235,6 +235,11 @@ async def get_resource(resource_id: int, db: Session = Depends(get_db)):
         "freelance_hourly_cost": r.freelance_hourly_cost,
         "studio_hourly_cost": r.studio_hourly_cost,
         "internal_cost_hourly": r.internal_cost_hourly,
+        # α.172.32 B
+        "location_tag": getattr(r, "location_tag", None),
+        "annual_leave_days_override": getattr(r, "annual_leave_days_override", None),
+        "monthly_rol_hours_override": getattr(r, "monthly_rol_hours_override", None),
+        "monthly_permit_hours_override": getattr(r, "monthly_permit_hours_override", None),
     }
 
 
@@ -268,6 +273,11 @@ async def update_resource(
     annual_working_hours: Optional[float] = Form(None),
     freelance_hourly_cost: Optional[float] = Form(None),
     studio_hourly_cost: Optional[float] = Form(None),
+    # α.172.32 B — Override accrual per-resource + location tag
+    annual_leave_days_override: Optional[float] = Form(None),
+    monthly_rol_hours_override: Optional[float] = Form(None),
+    monthly_permit_hours_override: Optional[float] = Form(None),
+    location_tag: Optional[str] = Form(None),
     db: Session = Depends(get_db),
 ):
     r = db.query(Resource).filter(
@@ -310,6 +320,21 @@ async def update_resource(
     if is_active is not None: r.is_active = is_active
     if working_hours_policy_id is not None:
         r.working_hours_policy_id = working_hours_policy_id or None
+    # α.172.32 B — Override accrual per-resource (NULL = inherit from policy)
+    form_raw_x = await request.form()
+    for fld in ("annual_leave_days_override", "monthly_rol_hours_override", "monthly_permit_hours_override"):
+        if fld in form_raw_x:
+            raw = (form_raw_x.get(fld) or "").strip()
+            if raw == "":
+                setattr(r, fld, None)
+            else:
+                try:
+                    setattr(r, fld, float(raw))
+                except ValueError:
+                    raise HTTPException(400, f"{fld} non numerico: '{raw}'")
+    if "location_tag" in form_raw_x:
+        loc = (form_raw_x.get("location_tag") or "").strip()
+        r.location_tag = loc[:100] if loc else None
     # v3.5.0-alpha.66.10 — cost-rate interno
     from app.models import ResourceCostType
     if cost_type is not None:
