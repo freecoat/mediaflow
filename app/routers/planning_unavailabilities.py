@@ -426,6 +426,77 @@ async def reject_unavailability(
     return _u_dict(u)
 
 
+@router.put("/unavailabilities/{u_id}")
+async def update_unavailability(
+    u_id: int,
+    request: Request,
+    start_date: Optional[_date] = Form(None),
+    end_date: Optional[_date] = Form(None),
+    kind: Optional[UnavailabilityKind] = Form(None),
+    reason: Optional[str] = Form(None),
+    start_time: Optional[str] = Form(None),
+    end_time: Optional[str] = Form(None),
+    clear_time: bool = Form(False),
+    db: Session = Depends(get_db),
+):
+    """α.172.30 — Modifica unavailability esistente.
+
+    Per staff: solo propria + status pending.
+    Per admin/manager: qualsiasi (anche approved).
+    Tutti i campi opzionali (PATCH-style). `clear_time=true` per rimuovere
+    start_time/end_time (assenza intra-giorno → giorno intero).
+    """
+    user = current_user_optional(request)
+    u = db.query(ResourceUnavailability).join(Resource).filter(
+        ResourceUnavailability.id == u_id,
+        Resource.tenant_id == current_tenant_id(),
+    ).first()
+    if not u:
+        raise HTTPException(404, "Unavailability non trovata")
+    if not is_elevated(user):
+        own = scope_resource_id(db, user)
+        if u.resource_id != own:
+            raise HTTPException(403, "Permesso negato")
+        if u.status != UnavailabilityStatus.pending:
+            raise HTTPException(403, "Solo richieste pending possono essere modificate dall'utente")
+
+    if start_date is not None:
+        u.start_date = start_date
+    if end_date is not None:
+        u.end_date = end_date
+    if u.end_date < u.start_date:
+        raise HTTPException(400, "end_date deve essere >= start_date")
+    if kind is not None:
+        u.kind = kind
+    if reason is not None:
+        u.reason = reason.strip() or None
+
+    if clear_time:
+        u.start_time = None
+        u.end_time = None
+        u.hours_duration = None
+    else:
+        if start_time is not None or end_time is not None:
+            try:
+                new_st = _parse_time_quarter(start_time) if start_time is not None else u.start_time
+                new_et = _parse_time_quarter(end_time) if end_time is not None else u.end_time
+            except ValueError as e:
+                raise HTTPException(422, str(e))
+            if (new_st and not new_et) or (new_et and not new_st):
+                raise HTTPException(400, "Specifica entrambi start_time/end_time o usa clear_time=true")
+            if new_st and new_et:
+                if u.start_date != u.end_date:
+                    raise HTTPException(400, "Assenza a ore: start_date deve coincidere con end_date")
+                if new_et <= new_st:
+                    raise HTTPException(400, "end_time deve essere posteriore a start_time")
+                u.start_time = new_st
+                u.end_time = new_et
+                u.hours_duration = ((new_et.hour * 60 + new_et.minute) - (new_st.hour * 60 + new_st.minute)) / 60.0
+
+    db.commit(); db.refresh(u)
+    return _u_dict(u)
+
+
 @router.delete("/unavailabilities/{u_id}")
 async def delete_unavailability(u_id: int, request: Request, db: Session = Depends(get_db)):
     user = current_user_optional(request)

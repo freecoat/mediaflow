@@ -777,8 +777,8 @@ async function savePunch() {
   if (!start) { toast('Inizio obbligatorio', 'error'); return; }
 
   // α.172.29 — Dispatch: leave_* → /planning/api/unavailabilities
+  // α.172.30 — Edit unavailability se id="unav:N" (da myUnavEdit)
   if (kind && kind.indexOf('leave_') === 0) {
-    if (id) { toast('Edit di assenze esistenti: usa la sezione "Le mie ferie e malattie"', 'info'); return; }
     if (!end) { toast('Fine obbligatoria per assenze', 'error'); return; }
     const dtS = new Date(start), dtE = new Date(end);
     if (isNaN(dtS) || isNaN(dtE)) { toast('Date non valide', 'error'); return; }
@@ -803,9 +803,21 @@ async function savePunch() {
       fd.append('end_time', `${pad(dtE.getHours())}:${pad(dtE.getMinutes())}`);
     }
     try {
-      await api('POST', '/planning/api/unavailabilities', fd);
       const kindLbl = ({vacation:'Ferie',sick:'Malattia',permit_rol:'Permesso ROL',recovery:'Recupero ore',other:'Permesso'})[kind.replace('leave_','')] || 'Assenza';
-      toast(kindLbl + (dateS === dateE ? ' a ore' : '') + ' registrata', 'success');
+      if (id && id.startsWith('unav:')) {
+        // α.172.30 — PUT edit assenza esistente
+        const uid = id.split(':')[1];
+        if (dateS !== dateE) {
+          // multi-giorno → clear time
+          fd.delete('start_time'); fd.delete('end_time');
+          fd.append('clear_time', 'true');
+        }
+        await api('PUT', `/planning/api/unavailabilities/${uid}`, fd);
+        toast(kindLbl + ' aggiornata', 'success');
+      } else {
+        await api('POST', '/planning/api/unavailabilities', fd);
+        toast(kindLbl + (dateS === dateE ? ' a ore' : '') + ' registrata', 'success');
+      }
       closeModal('modal-punch');
       reloadHR();
     } catch(e) { toast(e.message || 'Errore', 'error'); }
@@ -1231,6 +1243,8 @@ reloadPendingUnav();
 {% if scoped_resource_id %}
 // ── v3.4.26: Le mie ore (riepilogo + richieste ferie/malattia) ──────────
 const MY_RESOURCE_ID = {{ scoped_resource_id }};
+// α.172.30 — flag elevated per UI condizionali (es. edit unavailability approved)
+window.HR_USER_IS_ELEVATED = {{ 'true' if user_is_elevated else 'false' }};
 
 async function reloadMyHours() {
   // Periodo: usa filtri f-from/f-to se presenti, altrimenti mese corrente
@@ -1296,11 +1310,14 @@ function renderMyUnavList(rows) {
   if (!rows || !rows.length) {
     return '<div style="padding:8px; color:var(--text3); font-size:12px; text-align:center;">Nessuna richiesta</div>';
   }
-  const KIND_LBL = {vacation:'Ferie', sick:'Malattia', other:'Permesso'};
-  const KIND_COL = {vacation:'#6272f5', sick:'#ef4444', other:'#9ca3af'};
+  const KIND_LBL = {vacation:'Ferie', sick:'Malattia', permit_rol:'Permesso ROL', recovery:'Recupero ore', other:'Permesso'};
+  const KIND_COL = {vacation:'#6272f5', sick:'#ef4444', permit_rol:'#fb923c', recovery:'#a78bfa', other:'#9ca3af'};
   const STATUS_LBL = {pending:'⏳ In attesa', approved:'✅ Approvata', rejected:'❌ Rifiutata'};
   const STATUS_COL = {pending:'#fbbf24', approved:'#22c55e', rejected:'#ef4444'};
   const fmt = d => new Date(d+'T00:00').toLocaleDateString('it-IT', {day:'numeric', month:'short', year:'numeric'});
+  // α.172.30 — admin/manager possono editare anche approved (memory: Matteo
+  // riportava "non posso modificare permessi e malattia"). Staff: solo pending.
+  const isElevated = !!window.HR_USER_IS_ELEVATED;
   return '<div style="border:1px solid var(--border,#2a2e3d); border-radius:6px; max-height:200px; overflow-y:auto;">' +
     rows.map(u => {
       const lbl = KIND_LBL[u.kind] || u.kind;
@@ -1309,17 +1326,52 @@ function renderMyUnavList(rows) {
       const stCol = STATUS_COL[u.status] || '#9ca3af';
       const reason = u.reason ? ` <span style="color:var(--text3);">· ${escapeHtml(u.reason)}</span>` : '';
       const reject = u.rejection_reason ? `<div style="font-size:11px; color:#ef4444; margin-top:2px;">Motivo rifiuto: ${escapeHtml(u.rejection_reason)}</div>` : '';
-      const canDelete = u.status === 'pending';
+      const isPending = u.status === 'pending';
+      const canEdit = isPending || isElevated;
+      const canDelete = isPending || isElevated;
+      const timeRange = (u.start_time && u.end_time)
+        ? ` <span style="color:var(--indigo2); font-size:11px;">[${u.start_time}–${u.end_time}${u.hours_duration ? ' · '+u.hours_duration.toFixed(2)+'h' : ''}]</span>`
+        : '';
       return `<div style="padding:6px 10px; border-bottom:1px solid var(--border); font-size:12px; display:flex; justify-content:space-between; align-items:center; gap:8px;">
         <div style="flex:1;">
           <span style="display:inline-block; width:8px; height:8px; border-radius:50%; background:${col}; margin-right:6px;"></span>
-          <b>${lbl}</b> · ${fmt(u.start_date)} → ${fmt(u.end_date)}${reason}
+          <b>${lbl}</b> · ${fmt(u.start_date)} → ${fmt(u.end_date)}${timeRange}${reason}
           ${reject}
         </div>
         <span style="color:${stCol}; font-weight:500; font-size:11px; white-space:nowrap;">${stLbl}</span>
-        ${canDelete ? `<button class="btn btn-ghost btn-sm" title="Annulla richiesta" onclick="myUnavDelete(${u.id})">✕</button>` : ''}
+        ${canEdit ? `<button class="btn btn-ghost btn-sm" title="Modifica" onclick="myUnavEdit(${u.id})">✏️</button>` : ''}
+        ${canDelete ? `<button class="btn btn-ghost btn-sm" title="${isPending ? 'Annulla richiesta' : 'Elimina'}" onclick="myUnavDelete(${u.id})">✕</button>` : ''}
       </div>`;
     }).join('') + '</div>';
+}
+
+// α.172.30 — Edit unavailability: usa modal-punch (riusato) con kind leave_*,
+// pre-popola, save via PUT /planning/api/unavailabilities/{id}.
+async function myUnavEdit(uId) {
+  let allUnav;
+  try {
+    const fromIso = document.getElementById('f-from').value || (new Date(new Date().getFullYear(), 0, 1)).toISOString().slice(0,10);
+    const toIso = document.getElementById('f-to').value || (new Date(new Date().getFullYear() + 1, 0, 1)).toISOString().slice(0,10);
+    allUnav = await api('GET', `/planning/api/my-unavailabilities?from_date=${fromIso}&to_date=${toIso}`);
+  } catch (e) { toast('Caricamento fallito: ' + e.message, 'error'); return; }
+  const u = (allUnav || []).find(x => x.id === uId);
+  if (!u) { toast('Assenza non trovata', 'error'); return; }
+  // Riapro un mini-prompt: stesso modal-punch ma adattato
+  _populateBreakOptions();
+  document.getElementById('modal-punch-title').textContent = `Modifica assenza #${u.id}`;
+  document.getElementById('p-id').value = 'unav:' + u.id;  // marker per dispatch
+  document.getElementById('p-resource').value = u.resource_id || '';
+  document.getElementById('p-kind').value = 'leave_' + u.kind;
+  // Date+time → datetime-local
+  const pad = (n) => String(n).padStart(2, '0');
+  const sTime = u.start_time || '09:00';
+  const eTime = u.end_time || '18:00';
+  document.getElementById('p-start').value = u.start_date + 'T' + sTime;
+  document.getElementById('p-end').value = u.end_date + 'T' + eTime;
+  document.getElementById('p-notes').value = u.reason || '';
+  document.getElementById('p-delete-btn').style.display = '';
+  _updateBreakVisibility();
+  openModal('modal-punch');
 }
 
 async function myUnavSubmit() {

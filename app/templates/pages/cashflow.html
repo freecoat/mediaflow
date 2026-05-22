@@ -309,10 +309,19 @@ let _cfProjectAc = null;
 async function loadFilters() {
   try {
     [_cfClients, _cfProjects] = await Promise.all([
-      api('GET', '/planning/api/clients').catch(() => []),
-      api('GET', '/projects/api').catch(() => []),
+      api('GET', '/planning/api/clients').catch((e) => { console.error('[cashflow] clients fetch fail:', e); return []; }),
+      api('GET', '/projects/api').catch((e) => { console.error('[cashflow] projects fetch fail:', e); return []; }),
     ]);
-  } catch(e) { _cfClients = []; _cfProjects = []; }
+  } catch(e) {
+    console.error('[cashflow] loadFilters error:', e);
+    _cfClients = []; _cfProjects = [];
+  }
+  // α.172.30 — Difesa: alcuni endpoint legacy ritornavano object invece di
+  // array → .slice() throw silenzioso e dropdown rimanevano vuoti. Forziamo
+  // a array vuoto se non Array.
+  if (!Array.isArray(_cfClients)) _cfClients = [];
+  if (!Array.isArray(_cfProjects)) _cfProjects = [];
+  console.debug('[cashflow] loaded', _cfClients.length, 'clients +', _cfProjects.length, 'projects');
   // v3.5.0-alpha.143.1 — Popola select nativo cli/proj.
   const cliSel = document.getElementById('cf-client');
   const projSel = document.getElementById('cf-project');

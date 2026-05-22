@@ -8,6 +8,14 @@
 
 ## Versione corrente
 
+**v3.5.0-alpha.172.30** — 22 maggio 2026 — Bug fix: edit assenze approvate + cashflow dropdown
+
+2 fix puntuali (subset della lista facili di Matteo): PUT endpoint unavailability con permission gate (staff=pending+own / admin=qualsiasi) + UI bottone ✏️ + reuse modal-punch via marker `unav:N`. Cashflow loadFilters difensivo (Array.isArray cast + console log) per dropdown vuoti.
+
+**Rinviato α.172.31+**: #1-#4 (Acconto config quote + HARD-BLOCK JCL + NC approved-init + NC→Acconto cascade) + B (UI multi-preset WHP) + C (refactor holidays scope policy) + A (dropdown campi scheda tecnica con pannello admin + seed Netflix).
+
+## Versione precedente
+
 **v3.5.0-alpha.172.29** — 22 maggio 2026 — Assenze a ore + festività custom + AI CCNL params
 
 Bundle 2 feature richieste:

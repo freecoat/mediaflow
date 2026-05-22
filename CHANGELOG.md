@@ -1,5 +1,33 @@
 # MediaFlow — Changelog
 
+## v3.5.0-alpha.172.30 — Bug fix: edit assenze approvate + cashflow dropdown (22 mag 2026)
+
+Bundle 2 fix richieste Matteo (subset di lista più ampia, altri 4 facili + 3 complessi rinviati a α.172.31+ per scope sicuro).
+
+**Fix #5 — Edit permessi/malattia approvate** (`planning_unavailabilities.py` + `hr.html`):
+- Nuovo endpoint `PUT /planning/api/unavailabilities/{id}` — PATCH-style, accetta start_date/end_date/kind/reason/start_time/end_time/clear_time tutti opzionali.
+- Permission: staff può solo le sue + status=pending. Admin/manager/producer (is_elevated) può qualsiasi anche `approved`.
+- UI: `renderMyUnavList` aggiunge bottone ✏️ per kind/status editabili. Per elevated visibile su tutti status. Mostra range orario `[HH:MM–HH:MM · Nh]` per assenze intra-giorno.
+- `myUnavEdit(id)` riusa modal-punch con marker `id="unav:N"`, `savePunch` dispatch a PUT invece di POST.
+- Esteso `HR_USER_IS_ELEVATED` window flag iniettato da Jinja per UI condizionali.
+- Esteso KIND_LBL/COL con `permit_rol` e `recovery` (introdotti α.172.29) — prima non resi.
+
+**Fix #6 — Cashflow dropdown clienti/progetti vuoti** (`cashflow.html`):
+- Difesa: forzato `Array.isArray()` check + cast a `[]` se non-array (era `_cfClients.slice()` su oggetto API error → throw silenzioso → dropdown vuoti permanenti).
+- Log `console.error` in catch per debug futuro.
+- Log `console.debug` count clienti+progetti caricati.
+
+**Rinviato a α.172.31+**:
+- #1 Acconto config in quote (replica fatturazione, non-vincolante)
+- #2 HARD-BLOCK emit acconto senza JCL selezionate
+- #3 NC stato iniziale "approved" + invio separato (richiede aggiungere `approved` a `InvoiceStatus` enum + auto-migrate SAEnum + aggiornare cashflow_year_sync)
+- #4 NC su Acconto → Acconto torna draft (cascade)
+- B Multi-preset WorkingHoursPolicy UI in `/settings`
+- C Refactor holidays scope → policy_id (sposta pagina sotto `/settings`)
+- A Dropdown campi scheda tecnica + seed Netflix admin pannello
+
+**Smoke**: app.version 3.5.0-alpha.172.30, PUT route registrata su router unavailability.
+
 ## v3.5.0-alpha.172.29 — Assenze a ore + festività custom + AI CCNL (22 mag 2026)
 
 Bundle 2 feature richieste da Matteo:
