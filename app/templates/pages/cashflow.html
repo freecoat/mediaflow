@@ -278,7 +278,12 @@
   .cc-month-label { font-size: 11px; color: var(--text3); text-transform: uppercase; padding-top: 4px; border-top: 1px solid var(--border); width: 100%; text-align: center; }
   .cc-month-label.is-current { color: var(--indigo2); border-top-color: var(--indigo); }
 </style>
+{% endblock %}
 
+{# α.172.30 — JS spostato in block scripts: base.html carica global.js
+   (api, toast, escapeHtml) PRIMA di {% block scripts %}, mentre block content
+   precede global.js. Bug era: `api is not defined` in loadFilters. #}
+{% block scripts %}
 <script>
 const MESI_IT = ['Gen','Feb','Mar','Apr','Mag','Giu','Lug','Ago','Set','Ott','Nov','Dic'];
 const _curYear = new Date().getFullYear();

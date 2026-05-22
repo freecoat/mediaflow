@@ -607,6 +607,8 @@ async def hr_timeline(
                     "unav_kind_label": {
                         "vacation": "Ferie",
                         "sick": "Malattia",
+                        "permit_rol": "Permesso ROL",
+                        "recovery": "Recupero ore",
                         "other": "Permesso",
                     }.get(kv, kv),
                     "reason": u.reason,

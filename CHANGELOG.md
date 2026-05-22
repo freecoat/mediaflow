@@ -1,5 +1,19 @@
 # MediaFlow — Changelog
 
+## v3.5.0-alpha.172.30.1 — Hotfix: click row permesso + cashflow script order (22 mag 2026)
+
+2 bug reportati da Matteo post α.172.30:
+
+1. **Click su riga permesso/malattia/ROL non apriva modal** (era no-op). Causa: `renderTable` in `hr.html` aveva `onclick='openEditPunch(...)'` SOLO su `<tr>` punch, niente su unavailability row.
+   - Fix: aggiunto `onclick='openEditUnavRow(${e.unav_id})'` su row unavailability + cursor:pointer
+   - Nuovo endpoint `GET /planning/api/unavailabilities/{id}` per fetch singolo (permission gate: staff=propria, elevated=qualsiasi)
+   - `myUnavEdit` ora usa GET singolo invece di scorrere `my-unavailabilities` (funziona anche per admin che vede tutte)
+   - `openEditUnavRow` = alias di `myUnavEdit` per onclick attribute
+   - Esteso `unav_kind_label` mapping con `permit_rol="Permesso ROL"` e `recovery="Recupero ore"` (introdotti α.172.29 ma label ancora mancante in timeline render)
+
+2. **Cashflow `api is not defined` / `toast is not defined`**: tutto il JS di cashflow.html era dentro `{% block content %}` invece di `{% block scripts %}`. base.html include global.js (api, toast) DOPO block content e PRIMA di block scripts → race condition: script di cashflow eseguito prima di global.js load.
+   - Fix: spostato `<script>...</script>` di cashflow in `{% block scripts %}` (chiuso content prima del `<script>`).
+
 ## v3.5.0-alpha.172.30 — Bug fix: edit assenze approvate + cashflow dropdown (22 mag 2026)
 
 Bundle 2 fix richieste Matteo (subset di lista più ampia, altri 4 facili + 3 complessi rinviati a α.172.31+ per scope sicuro).

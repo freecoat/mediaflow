@@ -620,7 +620,9 @@ function renderTable(entries) {
   tbody.innerHTML = entries.map(e => {
     if (e.source === 'unavailability') {
       const col = CAT_COLOR[e.unav_kind] || '#9ca3af';
-      return `<tr class="punch-row" style="background:rgba(98,114,245,0.04);">
+      // α.172.30.1 — riga assenza cliccabile per editing (era bug: click no-op).
+      // Endpoint server-side fa permission gate (staff=propria, elevated=qualsiasi).
+      return `<tr class="punch-row" onclick='openEditUnavRow(${e.unav_id})' style="background:rgba(98,114,245,0.04);cursor:pointer;">
         <td>${fmtDate(e.start_datetime)}</td>
         <td>
           <span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:${e.resource_color || '#888'};margin-right:6px;"></span>
@@ -1347,23 +1349,18 @@ function renderMyUnavList(rows) {
 
 // α.172.30 — Edit unavailability: usa modal-punch (riusato) con kind leave_*,
 // pre-popola, save via PUT /planning/api/unavailabilities/{id}.
+// α.172.30.1 — fetch via GET singolo (funziona sia per staff che elevated).
 async function myUnavEdit(uId) {
-  let allUnav;
+  let u;
   try {
-    const fromIso = document.getElementById('f-from').value || (new Date(new Date().getFullYear(), 0, 1)).toISOString().slice(0,10);
-    const toIso = document.getElementById('f-to').value || (new Date(new Date().getFullYear() + 1, 0, 1)).toISOString().slice(0,10);
-    allUnav = await api('GET', `/planning/api/my-unavailabilities?from_date=${fromIso}&to_date=${toIso}`);
-  } catch (e) { toast('Caricamento fallito: ' + e.message, 'error'); return; }
-  const u = (allUnav || []).find(x => x.id === uId);
+    u = await api('GET', `/planning/api/unavailabilities/${uId}`);
+  } catch (e) { toast('Caricamento assenza fallito: ' + e.message, 'error'); return; }
   if (!u) { toast('Assenza non trovata', 'error'); return; }
-  // Riapro un mini-prompt: stesso modal-punch ma adattato
   _populateBreakOptions();
   document.getElementById('modal-punch-title').textContent = `Modifica assenza #${u.id}`;
   document.getElementById('p-id').value = 'unav:' + u.id;  // marker per dispatch
   document.getElementById('p-resource').value = u.resource_id || '';
   document.getElementById('p-kind').value = 'leave_' + u.kind;
-  // Date+time → datetime-local
-  const pad = (n) => String(n).padStart(2, '0');
   const sTime = u.start_time || '09:00';
   const eTime = u.end_time || '18:00';
   document.getElementById('p-start').value = u.start_date + 'T' + sTime;
@@ -1373,6 +1370,9 @@ async function myUnavEdit(uId) {
   _updateBreakVisibility();
   openModal('modal-punch');
 }
+
+// α.172.30.1 — Alias: click su riga unavailability nella timeline tabellare HR.
+function openEditUnavRow(uId) { return myUnavEdit(uId); }
 
 async function myUnavSubmit() {
   const start = document.getElementById('myunav-start').value;

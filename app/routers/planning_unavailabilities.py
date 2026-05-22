@@ -426,6 +426,23 @@ async def reject_unavailability(
     return _u_dict(u)
 
 
+@router.get("/unavailabilities/{u_id}")
+async def get_unavailability(u_id: int, request: Request, db: Session = Depends(get_db)):
+    """α.172.30.1 — Fetch singola unavailability per UI edit."""
+    user = current_user_optional(request)
+    u = db.query(ResourceUnavailability).join(Resource).filter(
+        ResourceUnavailability.id == u_id,
+        Resource.tenant_id == current_tenant_id(),
+    ).first()
+    if not u:
+        raise HTTPException(404, "Unavailability non trovata")
+    if not is_elevated(user):
+        own = scope_resource_id(db, user)
+        if u.resource_id != own:
+            raise HTTPException(403, "Permesso negato")
+    return _u_dict(u)
+
+
 @router.put("/unavailabilities/{u_id}")
 async def update_unavailability(
     u_id: int,
