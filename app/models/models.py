@@ -245,8 +245,12 @@ class ResourceCostType(str, enum.Enum):
     external = "external"     # risorsa esterna a uso (sala/equipment a noleggio)
 
 class InvoiceStatus(str, enum.Enum):
-    draft = "draft"; sent = "sent"; paid = "paid"
-    overdue = "overdue"; cancelled = "cancelled"
+    draft = "draft"
+    approved = "approved"  # α.172.31 — NC: stato iniziale (emessa lato sistema ma non ancora inviata al cliente)
+    sent = "sent"
+    paid = "paid"
+    overdue = "overdue"
+    cancelled = "cancelled"
 
 
 # v3.5.0-alpha.136 — Tipologia funzionale Invoice.

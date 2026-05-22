@@ -340,7 +340,10 @@ async def update_invoice_status(
     #   sent/paid/overdue → cancelled (solo via storno NC TD04 — vedi billing)
     # Bloccare regressioni (paid → draft, cancelled → sent, etc.)
     _ALLOWED = {
-        InvoiceStatus.draft: {InvoiceStatus.sent, InvoiceStatus.cancelled},
+        InvoiceStatus.draft: {InvoiceStatus.sent, InvoiceStatus.approved, InvoiceStatus.cancelled},
+        # α.172.31 (#3) — `approved` = stato iniziale NC (e potenziale future
+        # fatture ordinarie). Da approved si invia o si annulla.
+        InvoiceStatus.approved: {InvoiceStatus.sent, InvoiceStatus.cancelled},
         InvoiceStatus.sent: {InvoiceStatus.paid, InvoiceStatus.overdue, InvoiceStatus.cancelled},
         InvoiceStatus.overdue: {InvoiceStatus.paid, InvoiceStatus.cancelled},
         InvoiceStatus.paid: set(),  # paid è terminal: solo storno NC
@@ -1052,6 +1055,17 @@ async def emit_invoice_from_advance(
         raise HTTPException(409, f"Acconto già emesso/processato (status={ap.status.value})")
     if ap.invoice_id:
         raise HTTPException(409, f"AP #{advance_id} già linkato a Invoice #{ap.invoice_id}")
+    # α.172.31 — HARD-BLOCK #2: emit acconto richiede allocazioni JCL.
+    # Senza allocazioni, AP non si scomputa correttamente nelle fatture
+    # successive e il cost report mostra incoerenze. Matteo: vincolante solo
+    # in fatturazione (in quote schedule resta opzionale).
+    if not ap.allocations or len(ap.allocations) == 0:
+        raise HTTPException(
+            422,
+            "Impossibile emettere: nessuna allocazione a voci di lavorazione (JCL). "
+            "Apri il modal 'Gestisci acconto', seleziona le voci e applica un preset "
+            "di riempimento prima di emettere la fattura.",
+        )
     proj = db.query(Project).filter(
         Project.id == ap.project_id, Project.tenant_id == current_tenant_id(),
     ).first()
@@ -1415,7 +1429,8 @@ async def get_invoice_detail(invoice_id: int, db: Session = Depends(get_db)):
         raise HTTPException(404, "Fattura non trovata")
     # transitions allowed da _ALLOWED in update_invoice_status (F18)
     _allowed_map = {
-        InvoiceStatus.draft: ["sent", "cancelled"],
+        InvoiceStatus.draft: ["sent", "approved", "cancelled"],
+        InvoiceStatus.approved: ["sent", "cancelled"],
         InvoiceStatus.sent: ["paid", "overdue", "cancelled"],
         InvoiceStatus.overdue: ["paid", "cancelled"],
         InvoiceStatus.paid: [],

@@ -37,7 +37,7 @@ from app.models import (
     JobCostLine, JCLBillingStatus,
     LossEntry, LossReason,
     JCLBilledSlice,
-    Project, Job, JobStatus, Invoice, InvoiceLine, InvoiceStatus, Client,
+    Project, Job, JobStatus, Invoice, InvoiceLine, InvoiceStatus, InvoiceKind, Client,
     Tenant,
     Booking, BookingStatus, BookingExecutionStatus,
     AdvancePayment, AdvancePaymentConsumption, AdvancePaymentStatus,
@@ -2367,15 +2367,15 @@ async def storno_invoice(
 
     # NC: importi positivi con TD04 — convenzione FatturaPA. Il segno contabile
     # è espresso dal tipo documento, non dal segno numerico.
-    # v3.5.0-alpha.120 (F12) — NC nasce sent (non draft): rappresenta uno storno
-    # ufficiale di una fattura già emessa, quindi è un documento già "vivo" dal
-    # punto di vista contabile. Prima la NC restava draft e cashflow_year_sync
-    # filtrava draft → la NC non veniva mai conteggiata come storno, lasciando
-    # la fattura sorgente cancelled visibile come fatturato senza compensazione.
+    # α.172.31 (#3) — NC nasce `approved` (era `sent` in α.120): rappresenta uno
+    # storno ufficiale già contabilizzato, ma l'invio effettivo al cliente è
+    # un'azione separata (transizione approved → sent via mark-sent endpoint).
+    # cashflow_year_sync conta sia approved che sent come storni efficaci
+    # (vs draft che resta escluso). Memory feedback Matteo.
     nc = Invoice(
         number=credit_number,
         client_id=src.client_id,
-        status=InvoiceStatus.sent,
+        status=InvoiceStatus.approved,
         issue_date=issue_date,
         subtotal=src.subtotal or 0.0,
         vat_rate=src.vat_rate or 22.0,
@@ -2456,6 +2456,21 @@ async def storno_invoice(
     for b in batches:
         b.invoice_id = None
         b.status = BillingBatchStatus.approved
+
+    # α.172.31 (#4) — Se la fattura stornata era un ACCONTO (kind=advance),
+    # riapri l'AdvancePayment ledger collegato: invoice_id=None, status=draft.
+    # Permette di rieditare allocazioni / importo e riemettere fattura
+    # successiva senza dover ricreare l'AP da zero.
+    reopened_advance_id = None
+    if src.kind == InvoiceKind.advance:
+        ap_src = db.query(AdvancePayment).filter(
+            AdvancePayment.invoice_id == src.id,
+            AdvancePayment.tenant_id == current_tenant_id(),
+        ).first()
+        if ap_src:
+            ap_src.invoice_id = None
+            ap_src.status = AdvancePaymentStatus.draft
+            reopened_advance_id = ap_src.id
 
     # v3.5.0-alpha.112 — se la fattura stornata era CLOSING di un progetto:
     # riapri il progetto finanziariamente (finance_status='active').

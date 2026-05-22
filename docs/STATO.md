@@ -8,6 +8,17 @@
 
 ## Versione corrente
 
+**v3.5.0-alpha.172.31** — 22 maggio 2026 — Acconto HARD-BLOCK JCL + NC approved init + cascade
+
+3 fix workflow finanziario:
+- HARD-BLOCK emit acconto senza JCL allocations (422 con messaggio guida)
+- NC nasce in stato `approved` (nuovo enum value), invio separato via mark-sent
+- Cascade NC su Acconto → AdvancePayment torna `draft` (riusabile per riedit + riemit)
+
+Rinviato α.172.31.1: #1 preset selector in quote modal acconto (solo UI helper, scope minore).
+
+## Versione precedente
+
 **v3.5.0-alpha.172.30** — 22 maggio 2026 — Bug fix: edit assenze approvate + cashflow dropdown
 
 2 fix puntuali (subset della lista facili di Matteo): PUT endpoint unavailability con permission gate (staff=pending+own / admin=qualsiasi) + UI bottone ✏️ + reuse modal-punch via marker `unav:N`. Cashflow loadFilters difensivo (Array.isArray cast + console log) per dropdown vuoti.

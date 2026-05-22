@@ -1,5 +1,38 @@
 # MediaFlow — Changelog
 
+## v3.5.0-alpha.172.31 — Acconto HARD-BLOCK JCL + NC approved init + cascade (22 mag 2026)
+
+Bundle 3 dei 4 fix lista facili Matteo (post-α.172.30/.30.x). #1 quote-side
+preset acconto rinviato a α.172.31.1 (manca solo UI helper).
+
+**Fix #2 — HARD-BLOCK emit acconto senza JCL** (`finance.py`):
+- `emit_invoice_from_advance`: 422 se `ap.allocations` vuoto.
+- Messaggio guida utente: "Apri Gestisci acconto, seleziona voci, applica preset".
+- Vincolo solo lato fatturazione (in quote schedule resta opzionale).
+
+**Fix #3 — NC stato iniziale `approved`** (`models.py` + `billing.py` + `finance.py`):
+- `InvoiceStatus` enum esteso: aggiunto `approved` (stato post-emissione sistema, pre-invio cliente).
+- `emit_credit_note` (billing.py): crea NC con `status=approved` (era `sent` in α.120). Cashflow conta sia approved che sent come storni efficaci (filtro `!= draft`).
+- Transitions allowed: `draft → approved/sent/cancelled`, `approved → sent/cancelled`.
+- `_MUTABLE_INVOICE_STATES` resta `(draft,)` — approved immutabile (solo invio o cancel).
+
+**Fix #4 — Cascade NC su Acconto → AP draft** (`billing.py`):
+- Quando NC emessa su Invoice(kind=advance): riapre AdvancePayment con `invoice_id=None` e `status=draft`. Permette ri-editare allocazioni e ri-emettere senza ricreare l'AP.
+- `reopened_advance_id` aggiunto al response per audit.
+
+**Rinviato α.172.31.1**:
+- #1 Quote-side acconto preset selector. Modal `modal-advance-schedule` ha già label/pct-amount/note/allocazioni voci. Manca solo dropdown preset (`fill_sequential`/`pro_rata`/`pro_rata_remaining`/`manual`) come in finance, con applicazione client-side su QuoteLine (no endpoint server, non vincolante).
+
+**Note SQLite SAEnum**: `approved` aggiunto a `InvoiceStatus` senza ALTER TABLE (SQLite non enforza native_enum CHECK).
+
+## v3.5.0-alpha.172.30.3 — Hotfix: Jinja letterale in commenti JS rompe parse hr.html (22 mag 2026)
+
+500 su `/hr/`: commenti JS contenevano `{% if scoped_resource_id %}` letterale (per documentare refactor). Jinja li ha interpretati come tag veri, sbilanciando if/endif → `TemplateSyntaxError: Encountered unknown tag 'endblock'`. Fix: parafrasato testo senza sintassi Jinja letterale. Memory feedback creata.
+
+## v3.5.0-alpha.172.30.2 — Hotfix: openEditUnavRow ReferenceError per admin (22 mag 2026)
+
+`myUnavEdit` + `openEditUnavRow` erano dentro `{% if scoped_resource_id %}`, admin/manager senza Resource associata vedevano "openEditUnavRow is not defined" su click riga. Spostate fuori + esposte come `window.*`.
+
 ## v3.5.0-alpha.172.30.1 — Hotfix: click row permesso + cashflow script order (22 mag 2026)
 
 2 bug reportati da Matteo post α.172.30:
