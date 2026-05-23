@@ -1330,6 +1330,63 @@ async def emit_invoice_from_advance(
     }
 
 
+# v3.5.0-alpha.172.50 — Reset status acconto: torna a pending da draft/confirmed.
+# Richiesta Matteo: bozza confermata erroneamente deve poter tornare a pending
+# per rilasciare le allocazioni (cross-AP overflow block usa exclude_cancelled
+# ma NON exclude_pending — quindi reset a pending libera la JCL per altro AP).
+@router.post("/api/advances/{advance_id}/reset-to-pending", dependencies=[RequireEditInvoices])
+async def reset_advance_to_pending(advance_id: int, db: Session = Depends(get_db)):
+    """Riporta un AdvancePayment da draft/confirmed → pending.
+
+    Vincoli:
+    - AP deve essere in stato draft o confirmed
+    - AP non deve avere invoice_id (cioè non ancora emesso)
+    - Allocazioni esistenti vengono PRESERVATE (l'utente può riconfermare)
+
+    Cancelled NON viene riaperto via reset: usare endpoint dedicato (TODO).
+    Per ora annullamento → ricreazione AP nuovo via materialize_schedules o
+    create_advance_payment manuale.
+    """
+    ap = db.query(AdvancePayment).filter(
+        AdvancePayment.id == advance_id,
+        AdvancePayment.tenant_id == current_tenant_id(),
+    ).first()
+    if not ap:
+        raise HTTPException(404, "Acconto non trovato")
+    if ap.invoice_id:
+        raise HTTPException(
+            409,
+            detail={
+                "message": (
+                    f"Impossibile resettare: acconto già emesso come fattura.\n\n"
+                    f"• AP #{ap.id} → Invoice #{ap.invoice_id}\n\n"
+                    f"Per ripristinare lo stato: storna la fattura via Nota di "
+                    f"Credito (TD04), così l'AP tornerà automaticamente a draft."
+                ),
+            },
+        )
+    if ap.status not in (AdvancePaymentStatus.draft, AdvancePaymentStatus.confirmed):
+        raise HTTPException(
+            409,
+            detail={
+                "message": (
+                    f"Reset disponibile solo per acconti in stato draft o confirmed.\n\n"
+                    f"• Stato corrente: {ap.status.value}\n\n"
+                    f"Pending non ha bisogno di reset (è già lo stato iniziale). "
+                    f"Cancelled e invoiced richiedono altri flussi."
+                ),
+            },
+        )
+    prev_status = ap.status.value
+    ap.status = AdvancePaymentStatus.pending
+    db.commit()
+    return {
+        "ok": True, "id": ap.id, "status": ap.status.value,
+        "previous_status": prev_status,
+        "allocations_preserved": True,
+    }
+
+
 @router.post("/api/advances/{advance_id}/cancel", dependencies=[RequireEditInvoices])
 async def cancel_advance_payment(advance_id: int, db: Session = Depends(get_db)):
     """Annulla acconto. Consentito solo se balance_remaining == amount (nessun consumo).

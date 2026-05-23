@@ -1,5 +1,41 @@
 # MediaFlow — Changelog
 
+## v3.5.0-alpha.172.50 — Reset acconto draft → pending + UI allocazione più chiara (24 mag 2026)
+
+Matteo:
+1. "Vorrei resettare lo status di un acconto se in bozza, non posso"
+2. "Mecanica UI allocazione più chiara"
+3. "JCL nella bozza acconto sono troppo poche rispetto alle voci quotate"
+
+**Spiegazione #3**: il conteggio è corretto. Quando Quote → Job, solo righe **time-based** (`hr/day`) generano JCL. Righe forfait/qty/lump (`deliverable_qty/volume/lump`) generano JobDeliverable (modello separato). 9 QuoteLine → 3 JCL (time) + 6 Deliverable. Modal attuale mostra solo JCL. UI estesa per allocare anche su JobDeliverable richiede modal nuovo (Pattern B α.135 con `AdvancePaymentDeliverableAllocation`). Per ora documenta il comportamento + banner spiegativo nel modal.
+
+**Fix #1 — Reset endpoint**:
+- Nuovo `POST /finance/api/advances/{id}/reset-to-pending` (`RequireEditInvoices`)
+- Solo se `status in (draft, confirmed)` AND `invoice_id is None`
+- Status → pending, allocations preservate (utente può riconfermare)
+- Errori human-readable per casi bloccanti (già emesso = serve NC TD04 per ripristino)
+- Return `{ok, id, status, previous_status, allocations_preserved}`
+
+**Fix #2 — UI Reset button + banner spiegativo allocazione**:
+- Modal "Gestisci acconto" ora ha:
+  - **Banner blu in cima**: spiegazione 4 righe della meccanica allocazione (cosa è, vincoli Σ, JobDeliverable forfait non visibili)
+  - **Bottone "⟲ Resetta a pending"** (giallo, footer azione) visibile solo se `status in (draft, confirmed)`. Conferma dialog before. Allocazioni preservate.
+  - **Hint testuale** sotto bottoni azione: "Bozza = modificabile, allocazioni preservate · Confermato = pronto per emissione · Reset → pending libera le voci per altri acconti"
+- Funzione JS `resetAdvToPending()` con confirm dialog + toast feedback + reload lista AP
+
+**Combo workflow ora chiaro**:
+- Pending: inizial, modificabile, no vincoli cross-AP
+- Draft: allocazioni confermate, AP prenota le JCL (cross-AP block attivo)
+- Confirmed: pronto per emit invoice
+- Reset disponibile su draft/confirmed → torna a pending → libera allocazioni
+- Cancelled: terminal, libera definitivamente (per ricreazione)
+
+**File toccati**: `app/routers/finance.py` (+1 endpoint), `app/templates/pages/finance.html` (+banner +bottone +funzione), `app/main.py`, `CHANGELOG.md`.
+
+514 routes (+1 reset endpoint).
+
+---
+
 ## v3.5.0-alpha.172.49 — Cross-AP allocation overflow JCL block (23 mag 2026)
 
 Matteo: "ho appena allocato 2 acconti sulla stessa JCL eccedendo il complessivo quotato. Il fill dovrebbe essere permanente quando viene confermato nella bozza acconti".

@@ -354,6 +354,13 @@
         <label class="form-label">Note</label>
         <textarea class="form-input" id="adv-conf-notes" rows="2"></textarea>
       </div>
+      <!-- v3.5.0-alpha.172.50 — Banner spiegativo allocazione -->
+      <div style="margin-bottom:12px; padding:10px 12px; background:rgba(98,114,245,0.10); border:1px solid rgba(98,114,245,0.30); border-radius:6px; font-size:12px; line-height:1.5;">
+        <div style="font-weight:600; margin-bottom:4px;">💡 Come funziona l'allocazione</div>
+        L'acconto può essere distribuito sulle <b>voci di lavorazione (JCL)</b> del progetto. Le voci a forfait/consegna restano nel modello deliverable (non visibili qui). Ogni allocazione "prenota" quella quota della JCL: quando emetterai la fattura ordinaria di quella voce, l'importo allocato sarà già coperto dall'acconto.
+        <br>
+        <b>Vincoli</b>: Σ allocazioni ≤ Importo acconto · ogni alloc ≤ Quotato JCL · cross-AP somma alloc su stessa JCL ≤ Quotato.
+      </div>
       <div class="form-group">
         <label class="form-label">Allocazioni a voci di costo (JCL)</label>
         <!-- v3.5.0-alpha.166 — Preset selector + apply -->
@@ -371,7 +378,7 @@
         <div id="adv-conf-allocs-host" style="background:var(--bg2); border:1px solid var(--border); border-radius:6px; padding:8px; max-height:280px; overflow:auto;"></div>
         <!-- v3.5.0-alpha.166 — Summary live: Σ alloc / AP.amount / residuo -->
         <div id="adv-conf-allocs-summary" style="margin-top:6px; padding:6px 10px; background:rgba(98,114,245,0.10); border-radius:4px; font-size:12px;"></div>
-        <div class="text-xs text-muted" style="margin-top:4px;">Spunta JCL, modifica € a piacere. Σ ≤ AP.amount, ogni alloc ≤ quotato JCL.</div>
+        <div class="text-xs text-muted" style="margin-top:4px;">Spunta JCL, modifica € a piacere. Preset "Riempimento" è il più rapido: distribuisce sequenzialmente le voci selezionate fino a coprire l'acconto.</div>
       </div>
       <hr style="border-color:var(--border); margin:14px 0;">
       <div class="form-group">
@@ -380,7 +387,10 @@
           <button type="button" class="btn btn-secondary btn-sm" onclick="submitAdvConfirm('draft')">📝 Salva come bozza</button>
           <button type="button" class="btn btn-secondary btn-sm" onclick="submitAdvConfirm('confirmed')">✓ Conferma (pronto emit)</button>
           <button type="button" class="btn btn-primary btn-sm" onclick="openAdvEmitFromConfirm()">💶 Emetti fattura subito</button>
+          <!-- v3.5.0-alpha.172.50 — Reset status draft/confirmed → pending -->
+          <button type="button" id="adv-conf-reset-btn" class="btn btn-ghost btn-sm" onclick="resetAdvToPending()" style="color:#fbbf24; display:none;" title="Riporta a pending per liberare allocazioni">⟲ Resetta a pending</button>
         </div>
+        <div class="text-xs text-muted" style="margin-top:4px;">Bozza = modificabile, allocazioni preservate · Confermato = pronto per emissione · Reset → pending libera le voci per altri acconti.</div>
       </div>
     </div>
     <div class="modal-footer">
@@ -974,6 +984,11 @@ async function openAdvConfirmModal(ap) {
   const meta = document.getElementById('adv-conf-meta');
   meta.textContent = 'AP #' + ap.id + ' · ' + (ap.project_code || '?') + ' · status ' + ap.status +
     (ap.scheduled_due_date ? ' · scad. ' + ap.scheduled_due_date : '');
+  // v3.5.0-alpha.172.50 — Bottone reset visibile solo se draft/confirmed
+  const resetBtn = document.getElementById('adv-conf-reset-btn');
+  if (resetBtn) {
+    resetBtn.style.display = (ap.status === 'draft' || ap.status === 'confirmed') ? '' : 'none';
+  }
   // v3.5.0-alpha.158 — Fetch TUTTE JCL del progetto via /jcls-available
   // → picker completo, l'utente può add/remove/modify allocazioni.
   const host = document.getElementById('adv-conf-allocs-host');
@@ -1164,6 +1179,22 @@ async function submitAdvConfirm(nextStatus) {
     closeModal('modal-advance-confirm');
     await loadAdvancesDrafts();
   } catch (e) { toast(e.message || 'Errore', 'error'); }
+}
+
+// v3.5.0-alpha.172.50 — Reset acconto draft/confirmed → pending.
+// Le allocazioni esistenti vengono preservate, l'utente può riconfermare.
+async function resetAdvToPending() {
+  const id = document.getElementById('adv-conf-id').value;
+  if (!id) return;
+  if (!confirm("Riportare l'acconto a 'pending'?\n\nLe allocazioni esistenti verranno preservate.\nLo status pending libera l'acconto per modifiche.")) return;
+  try {
+    const res = await api('POST', '/finance/api/advances/' + id + '/reset-to-pending', new FormData());
+    toast(`↻ Acconto resettato a ${res.status} (era ${res.previous_status})`, 'success');
+    closeModal('modal-advance-confirm');
+    await loadAdvancesDrafts();
+  } catch (e) {
+    if (!e._toastShown) toast(e.message || 'Errore reset', 'error');
+  }
 }
 
 function openAdvEmitFromConfirm() {
