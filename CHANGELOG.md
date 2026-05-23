@@ -1,5 +1,27 @@
 # MediaFlow — Changelog
 
+## v3.5.0-alpha.172.41.1 — Hotfix audit α.172.40 auto-migrate misplaced (23 mag 2026)
+
+Bug introdotto α.172.40 (Sprint 5): blocchi auto-migrate per
+`Tag.tenant_id`, `FXRate.tenant_id`, 14 FK indexes, `Invoice.tenant_id`
+erano stati incollati per errore in `_backfill_resource_assignments()`
+invece di `_auto_migrate_columns()`. Risultato: `insp` non in scope, codice
+silently saltato → DB esistenti non migrati → 500 su `/finance/` e
+`/planning/api/bookings`.
+
+Fix: spostati i 3 blocchi all'interno di `_auto_migrate_columns()`
+prima del `def _backfill_resource_assignments()`. Auto-migrate ora gira
+correttamente al boot lifespan.
+
+Verifica:
+- ALTER TABLE tags ADD tenant_id ✅
+- ALTER TABLE fx_rates ADD tenant_id ✅
+- ALTER TABLE invoices ADD tenant_id ✅ (+ backfill 6 rows da Client)
+- 14 CREATE INDEX FK ✅
+- Smoke TestClient `/finance/` → 200, `/planning/api/bookings` → 401 (cookie required, normale)
+
+---
+
 ## v3.5.0-alpha.172.41 — Sprint 6 Audit FINALE: SDI compliance + FatturaPA XML (BLOCCO 6 parte 2) (23 mag 2026)
 
 **Chiusura ufficiale dell'audit multi-agent**. Sprint 6 finalizza BLOCCO 6 con wire-up validatori italiani nei router + FatturaPA XML builder self-contained + cleanup UI residuo.

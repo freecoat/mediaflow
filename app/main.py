@@ -966,50 +966,6 @@ def _auto_migrate_columns():
                 except Exception as e:
                     print(f"[auto-migrate] ix edit_token FAILED (non-bloccante): {e}")
 
-
-def _backfill_resource_assignments():
-    """v3.5.0-alpha.111 — Backfill JobResourceAssignment per booking
-    storici. Risolve il caso reportato da Matteo: cost report mostra molte
-    risorse nei booking per fascia ma poche nell'assignment del progetto.
-
-    Causa: booking creati prima di α.55 (quando l'auto-assignment è stato
-    introdotto). SQL idempotente: insert solo per (job_id, resource_id) non
-    già presenti in JobResourceAssignment.
-    """
-    from sqlalchemy import text
-    from app.database import engine
-    try:
-        with engine.begin() as conn:
-            # Verifica colonne (per evitare errore su DB pre-α.55)
-            jra_cols = {r[1] for r in conn.execute(text("PRAGMA table_info(job_resource_assignments)"))}
-            res_cols = {r[1] for r in conn.execute(text("PRAGMA table_info(resources)"))}
-            if "role_in_project" not in jra_cols:
-                return
-            select_role = "r.role" if "role" in res_cols else "NULL"
-            select_daily = "r.daily_rate" if "daily_rate" in res_cols else "NULL"
-            select_hourly = "r.hourly_rate" if "hourly_rate" in res_cols else "NULL"
-            sql = text(f"""
-                INSERT INTO job_resource_assignments
-                  (job_id, resource_id, role_in_project, agreed_daily_rate, agreed_hourly_rate)
-                SELECT DISTINCT b.job_id, ba.resource_id,
-                       {select_role}, {select_daily}, {select_hourly}
-                FROM booking_assignments ba
-                JOIN bookings b ON b.id = ba.booking_id
-                LEFT JOIN resources r ON r.id = ba.resource_id
-                WHERE b.job_id IS NOT NULL
-                  AND NOT EXISTS (
-                    SELECT 1 FROM job_resource_assignments jra
-                    WHERE jra.job_id = b.job_id
-                      AND jra.resource_id = ba.resource_id
-                  )
-            """)
-            result = conn.execute(sql)
-            inserted = result.rowcount
-            if inserted and inserted > 0:
-                print(f"[backfill] {inserted} JobResourceAssignment ricostruiti da booking storici")
-    except Exception as e:
-        print(f"[backfill] resource_assignments failed: {e}")
-
     # v3.5.0-alpha.172.40 (Sprint 5.D BLOCCO 6) — INDEX su FK hot-path
     # (audit: 22 FK senza index, qui i top 8 più trafficati). Idempotente.
     fk_indexes = [
@@ -1070,11 +1026,7 @@ def _backfill_resource_assignments():
                 print(f"[auto-migrate] {ucname} FAILED: {e}")
 
     # v3.5.0-alpha.172.37 (Sprint 3.E BLOCCO 4) — Invoice.tenant_id +
-    # composite UNIQUE(tenant_id, number). Pre-α.172.37 il numero fattura
-    # era UNIQUE globale → due tenant collidevano. Soluzione finale (rebuild
-    # table per dropare il legacy unique) rimandata a Sprint 5; qui:
-    # (1) ADD COLUMN tenant_id; (2) backfill da JOIN clients;
-    # (3) CREATE UNIQUE INDEX composito convivente col legacy.
+    # composite UNIQUE(tenant_id, number).
     if "invoices" in insp.get_table_names():
         inv_cols = {c["name"] for c in insp.get_columns("invoices")}
         if "tenant_id" not in inv_cols:
@@ -1105,6 +1057,50 @@ def _backfill_resource_assignments():
                 ))
             except Exception as e:
                 print(f"[auto-migrate] uq_invoice_tenant_number FAILED: {e}")
+
+
+def _backfill_resource_assignments():
+    """v3.5.0-alpha.111 — Backfill JobResourceAssignment per booking
+    storici. Risolve il caso reportato da Matteo: cost report mostra molte
+    risorse nei booking per fascia ma poche nell'assignment del progetto.
+
+    Causa: booking creati prima di α.55 (quando l'auto-assignment è stato
+    introdotto). SQL idempotente: insert solo per (job_id, resource_id) non
+    già presenti in JobResourceAssignment.
+    """
+    from sqlalchemy import text
+    from app.database import engine
+    try:
+        with engine.begin() as conn:
+            # Verifica colonne (per evitare errore su DB pre-α.55)
+            jra_cols = {r[1] for r in conn.execute(text("PRAGMA table_info(job_resource_assignments)"))}
+            res_cols = {r[1] for r in conn.execute(text("PRAGMA table_info(resources)"))}
+            if "role_in_project" not in jra_cols:
+                return
+            select_role = "r.role" if "role" in res_cols else "NULL"
+            select_daily = "r.daily_rate" if "daily_rate" in res_cols else "NULL"
+            select_hourly = "r.hourly_rate" if "hourly_rate" in res_cols else "NULL"
+            sql = text(f"""
+                INSERT INTO job_resource_assignments
+                  (job_id, resource_id, role_in_project, agreed_daily_rate, agreed_hourly_rate)
+                SELECT DISTINCT b.job_id, ba.resource_id,
+                       {select_role}, {select_daily}, {select_hourly}
+                FROM booking_assignments ba
+                JOIN bookings b ON b.id = ba.booking_id
+                LEFT JOIN resources r ON r.id = ba.resource_id
+                WHERE b.job_id IS NOT NULL
+                  AND NOT EXISTS (
+                    SELECT 1 FROM job_resource_assignments jra
+                    WHERE jra.job_id = b.job_id
+                      AND jra.resource_id = ba.resource_id
+                  )
+            """)
+            result = conn.execute(sql)
+            inserted = result.rowcount
+            if inserted and inserted > 0:
+                print(f"[backfill] {inserted} JobResourceAssignment ricostruiti da booking storici")
+    except Exception as e:
+        print(f"[backfill] resource_assignments failed: {e}")
 
 
 def _auto_migrate_restructure_phase1():
@@ -1555,7 +1551,7 @@ async def lifespan(app: FastAPI):
     yield
 
 
-app = FastAPI(title="MediaFlow", version="3.5.0-alpha.172.41", lifespan=lifespan)
+app = FastAPI(title="MediaFlow", version="3.5.0-alpha.172.41.1", lifespan=lifespan)
 
 BASE_DIR = Path(__file__).parent
 app.mount("/static", StaticFiles(directory=BASE_DIR / "static"), name="static")
