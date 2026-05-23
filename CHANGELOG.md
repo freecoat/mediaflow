@@ -1,5 +1,56 @@
 # MediaFlow — Changelog
 
+## v3.5.0-alpha.172.40 — Sprint 5 Audit: DB integrity + IT tax foundation (BLOCCO 6 parte 1) (23 mag 2026)
+
+Chiude **BLOCCO 6 parte sicura** dell'audit multi-agent. 6 sub-fix integrity DB + foundation compliance italiana. FK ondelete table-rebuild + FatturaPA XML builder + backlog UI Sprint 4.E → Sprint 6 dedicato.
+
+**5.A — JCLBilledSlice immutability event listener** (`app/services/billing_slice_immutability.py` nuovo):
+SQLAlchemy `before_update` listener blocca UPDATE su tutti i campi snapshot della slice, eccetto `voided_at` + `voided_by_invoice_id` (storno via NC TD04). Defense-in-depth complementare a `assert_slice_lock_safe` (booking-driven) + `assert_jcl_lock_safe` (quote-side Sprint 2): qualsiasi punto di ingresso (script, batch, AI tool-use futuro) che modifica slice via ORM solleva `ValueError`. Registrazione idempotente al boot via `register_immutability_listener()` in main.py.
+
+**5.B — 4 modelli `tenant_id` → `ForeignKey`**: Holiday, Notification, ProjectTechSheet, TechSheetFieldOption. Pre-α.172.40 `tenant_id: Mapped[int] = mapped_column(Integer, default=1, ...)` senza FK constraint. Ora `ForeignKey("tenants.id")`. Caveat SQLite: ALTER COLUMN ADD CONSTRAINT non supportato nativamente, integrity ora enforced a livello ORM. Postgres porting futuro applicherà constraint reale.
+
+**5.C — Tag + FXRate `tenant_id` denormalizzato**:
+- `Tag`: era globale (un tenant vedeva tag di altri). Aggiunta `tenant_id` + `UniqueConstraint(tenant_id, name)`.
+- `FXRate`: era globale. Aggiunta `tenant_id` + `UniqueConstraint(tenant_id, from_currency, to_currency)`.
+- Auto-migrate: ALTER TABLE ADD COLUMN + UNIQUE INDEX composto idempotente.
+
+**5.D — INDEX su FK hot-path (14 spot)**:
+`projects.client_id`, `quotes.project_id/client_id`, `quote_lines.quote_id/price_item_id`, `jobs.project_id/client_id`, `job_cost_lines.job_id/quote_line_id/price_item_id`, `invoices.client_id/job_id/quote_id`, `invoice_lines.invoice_id` → `index=True` su model + `CREATE INDEX IF NOT EXISTS` auto-migrate. Performance pagine traffico alto (planning, cost-report, finance, billing) sensibili al miglioramento.
+
+**5.E — `app/services/italian_tax.py` validators** (foundation FatturaPA, wire-up router → Sprint 6):
+- `validate_partita_iva(s)` — 11 cifre + Luhn mod-10 (tollera `IT` prefix)
+- `validate_codice_fiscale(s)` — 16 alfanum persona fisica o 11 cifre PG
+- `validate_sdi_code(s)` — 7 alfanum, `0000000`, `999999` (PA)
+- `validate_iban_it(s)` — IT mod-97 (ISO 13616)
+- `validate_regime_fiscale(s)` — RF01-RF19
+- `validate_tipo_documento(s)` — TD01-TD28
+- `validate_natura_iva(s)` — N1-N7.x
+- `map_invoice_kind_to_tipo_documento(kind, is_credit_note)` — advance → TD02, credit → TD04
+- `invoice_sdi_compliance_check(...)` — pre-emit check ritorna lista errori bloccanti
+- Constants: `REGIME_FISCALE_CODES/LABELS`, `TIPO_DOCUMENTO_CODES/LABELS`, `NATURA_IVA_CODES`
+
+Smoke test passati: P.IVA RAI (06382641006), IBAN reale, CF persona fisica, enum validators, compliance check con 5 errori detected.
+
+**5.F — JSON validators critical (3 spot)**:
+- `Role.permissions` — list of str (rifiuta nested object/non-str entries)
+- `WorkingHoursPolicy.overtime_brackets` — list of dict con `from_hour`+`multiplier` numerici
+- `Tenant.asset_numbering_config` — dict (non list/scalar)
+
+SQLAlchemy `@validates` decorator: validazione a save-time, ValueError invece di silent corruzione JSON.
+
+**Caveat e backlog Sprint 6**:
+- FK `ondelete` esplicito su FK a Project/Job/Tenant/Client: richiede SQLite table-rebuild (FK refs incrociate, rischio alto). Rimandato a Sprint 6 dedicato.
+- FatturaPA XML builder (`app/services/sdi_xml.py` + endpoint `/finance/api/invoices/{id}/sdi-xml`): big new module, Sprint 6.
+- Backlog UI 4.E (pricelist/cost_report/dam/planning title attrs lower-risk hotspots): cleanup incrementale Sprint 6.
+- italian_tax wire-up sui router (clients.py POST/PUT, billing.emit_invoice, finance create_invoice): Sprint 6 (richiede UI feedback errori validation).
+- Old `UNIQUE(name)` su Tag legacy DB sopravvive (idem `Invoice.number` Sprint 3.E): rebuild table Sprint 6.
+
+**File toccati**: `app/services/billing_slice_immutability.py` (nuovo), `app/services/italian_tax.py` (nuovo), `app/models/models.py`, `app/main.py`, `CHANGELOG.md`, `docs/STATO.md`.
+
+512 routes (invariato). Auto-migrate Tag+FXRate.tenant_id + 14 FK indexes idempotenti al primo boot post-pull.
+
+---
+
 ## v3.5.0-alpha.172.39 — Sprint 4 Audit: UI antipattern cleanup (BLOCCO 5) (23 mag 2026)
 
 Chiude **BLOCCO 5 dell'audit multi-agent**: 6 categorie di antipattern UI/JS che generavano bug silenti ricorrenti.

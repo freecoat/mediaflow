@@ -12,7 +12,7 @@ from sqlalchemy import (
     String, Integer, Float, Boolean, Text, Date, DateTime, Time, JSON,
     ForeignKey, Enum as SAEnum, UniqueConstraint
 )
-from sqlalchemy.orm import Mapped, mapped_column, relationship
+from sqlalchemy.orm import Mapped, mapped_column, relationship, validates
 from app.database import Base
 
 
@@ -397,6 +397,18 @@ class Role(Base):
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, index=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
 
+    # v3.5.0-alpha.172.40 (Sprint 5.F BLOCCO 6) — JSON shape validation.
+    @validates("permissions")
+    def _v_permissions(self, key, value):
+        if value is None:
+            return []
+        if not isinstance(value, list):
+            raise ValueError(f"Role.permissions: list of str required, got {type(value).__name__}")
+        for i, p in enumerate(value):
+            if not isinstance(p, str):
+                raise ValueError(f"Role.permissions[{i}]: str required, got {type(p).__name__}")
+        return value
+
 
 class User(Base):
     __tablename__ = "users"
@@ -537,6 +549,17 @@ class Tenant(Base):
 
     departments: Mapped[List["Department"]] = relationship(back_populates="tenant", cascade="all, delete-orphan")
     delivery_templates: Mapped[List["DeliveryTemplate"]] = relationship(back_populates="tenant", cascade="all, delete-orphan")
+
+    # v3.5.0-alpha.172.40 (Sprint 5.F BLOCCO 6) — JSON shape validation.
+    @validates("asset_numbering_config")
+    def _v_asset_numbering_config(self, key, value):
+        if value is None:
+            return None
+        if not isinstance(value, dict):
+            raise ValueError(
+                f"Tenant.asset_numbering_config: dict required, got {type(value).__name__}"
+            )
+        return value
 
 
 # ── DEPARTMENT ───────────────────────────────────────────────
@@ -833,8 +856,8 @@ class Project(Base):
     tenant_id: Mapped[int] = mapped_column(ForeignKey("tenants.id"), default=1, index=True)
     code: Mapped[str] = mapped_column(String(50), unique=True, index=True)
     title: Mapped[str] = mapped_column(String(255))
-    client_id: Mapped[int] = mapped_column(ForeignKey("clients.id"))
-    
+    client_id: Mapped[int] = mapped_column(ForeignKey("clients.id"), index=True)  # Sprint 5.D
+
     # Tipologia progetto
     project_type: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
     # feature_film, short_film, series, documentary, spot, music_video, corporate
@@ -1141,7 +1164,7 @@ class Holiday(Base):
     """
     __tablename__ = "holidays"
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
-    tenant_id: Mapped[int] = mapped_column(Integer, default=1, index=True)
+    tenant_id: Mapped[int] = mapped_column(ForeignKey("tenants.id"), default=1, index=True)
     date: Mapped[date] = mapped_column(Date, index=True)
     name: Mapped[str] = mapped_column(String(200))
     kind: Mapped[HolidayKind] = mapped_column(
@@ -1228,6 +1251,33 @@ class WorkingHoursPolicy(Base):
     # Reuso `daily_hours_threshold` per coerenza (già presente sopra).
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
 
+    # v3.5.0-alpha.172.40 (Sprint 5.F BLOCCO 6) — JSON shape validation.
+    @validates("overtime_brackets")
+    def _v_overtime_brackets(self, key, value):
+        if value is None:
+            return None
+        if not isinstance(value, list):
+            raise ValueError(
+                f"WorkingHoursPolicy.overtime_brackets: list required, got {type(value).__name__}"
+            )
+        for i, b in enumerate(value):
+            if not isinstance(b, dict):
+                raise ValueError(
+                    f"overtime_brackets[{i}]: dict required with from_hour+multiplier"
+                )
+            if "from_hour" not in b or "multiplier" not in b:
+                raise ValueError(
+                    f"overtime_brackets[{i}]: must contain `from_hour` and `multiplier` keys"
+                )
+            try:
+                float(b["from_hour"])
+                float(b["multiplier"])
+            except (TypeError, ValueError):
+                raise ValueError(
+                    f"overtime_brackets[{i}]: from_hour and multiplier must be numeric"
+                )
+        return value
+
 
 # ── QUOTAZIONE (collegata a Progetto, non più direttamente a Cliente) ──
 
@@ -1244,8 +1294,8 @@ class Quote(Base):
     version: Mapped[int] = mapped_column(Integer, default=1)
 
     # Collegamento: Progetto è primario, Cliente viene dal progetto
-    project_id: Mapped[int] = mapped_column(ForeignKey("projects.id"))
-    client_id: Mapped[int] = mapped_column(ForeignKey("clients.id"))   # denormalized per query veloci
+    project_id: Mapped[int] = mapped_column(ForeignKey("projects.id"), index=True)  # Sprint 5.D
+    client_id: Mapped[int] = mapped_column(ForeignKey("clients.id"), index=True)   # denormalized per query veloci  # Sprint 5.D
     
     title: Mapped[str] = mapped_column(String(255))
     status: Mapped[QuoteStatus] = mapped_column(SAEnum(QuoteStatus), default=QuoteStatus.draft)
@@ -1379,8 +1429,8 @@ class Quote(Base):
 class QuoteLine(Base):
     __tablename__ = "quote_lines"
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
-    quote_id: Mapped[int] = mapped_column(ForeignKey("quotes.id"))
-    price_item_id: Mapped[Optional[int]] = mapped_column(ForeignKey("price_items.id"), nullable=True)
+    quote_id: Mapped[int] = mapped_column(ForeignKey("quotes.id"), index=True)  # Sprint 5.D
+    price_item_id: Mapped[Optional[int]] = mapped_column(ForeignKey("price_items.id"), nullable=True, index=True)  # Sprint 5.D
     section: Mapped[str] = mapped_column(String(10), default="A")
     position: Mapped[str] = mapped_column(String(20), default="A.1")
     description: Mapped[str] = mapped_column(String(255))
@@ -1507,8 +1557,8 @@ class Job(Base):
     title: Mapped[str] = mapped_column(String(255))
     description: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     
-    project_id: Mapped[int] = mapped_column(ForeignKey("projects.id"))
-    client_id: Mapped[int] = mapped_column(ForeignKey("clients.id"))
+    project_id: Mapped[int] = mapped_column(ForeignKey("projects.id"), index=True)  # Sprint 5.D
+    client_id: Mapped[int] = mapped_column(ForeignKey("clients.id"), index=True)  # Sprint 5.D
     quote_id: Mapped[Optional[int]] = mapped_column(ForeignKey("quotes.id"), nullable=True, unique=True)
     
     status: Mapped[JobStatus] = mapped_column(SAEnum(JobStatus), default=JobStatus.draft)
@@ -1560,9 +1610,9 @@ class JobCostLine(Base):
     # v3.5.0-alpha.66.15.0 — tenant_id aggiunto in sprint R1 (audit HIGH #1).
     # Denormalized da job.tenant_id per scope efficiente nel cost-report.
     tenant_id: Mapped[int] = mapped_column(ForeignKey("tenants.id"), default=1, index=True)
-    job_id: Mapped[int] = mapped_column(ForeignKey("jobs.id"))
-    quote_line_id: Mapped[Optional[int]] = mapped_column(ForeignKey("quote_lines.id"), nullable=True)
-    price_item_id: Mapped[Optional[int]] = mapped_column(ForeignKey("price_items.id"), nullable=True)
+    job_id: Mapped[int] = mapped_column(ForeignKey("jobs.id"), index=True)  # Sprint 5.D
+    quote_line_id: Mapped[Optional[int]] = mapped_column(ForeignKey("quote_lines.id"), nullable=True, index=True)  # Sprint 5.D
+    price_item_id: Mapped[Optional[int]] = mapped_column(ForeignKey("price_items.id"), nullable=True, index=True)  # Sprint 5.D
     description: Mapped[str] = mapped_column(String(255))
     quantity_quoted: Mapped[float] = mapped_column(Float, default=0.0)
     quantity_actual: Mapped[float] = mapped_column(Float, default=0.0)
@@ -1910,9 +1960,9 @@ class Invoice(Base):
         ForeignKey("tenants.id"), default=1, index=True
     )
     number: Mapped[str] = mapped_column(String(50))
-    client_id: Mapped[int] = mapped_column(ForeignKey("clients.id"))
-    job_id: Mapped[Optional[int]] = mapped_column(ForeignKey("jobs.id"), nullable=True)
-    quote_id: Mapped[Optional[int]] = mapped_column(ForeignKey("quotes.id"), nullable=True)
+    client_id: Mapped[int] = mapped_column(ForeignKey("clients.id"), index=True)  # Sprint 5.D
+    job_id: Mapped[Optional[int]] = mapped_column(ForeignKey("jobs.id"), nullable=True, index=True)  # Sprint 5.D
+    quote_id: Mapped[Optional[int]] = mapped_column(ForeignKey("quotes.id"), nullable=True, index=True)  # Sprint 5.D
     status: Mapped[InvoiceStatus] = mapped_column(SAEnum(InvoiceStatus), default=InvoiceStatus.draft)
     issue_date: Mapped[date] = mapped_column(Date)
     due_date: Mapped[Optional[date]] = mapped_column(Date, nullable=True)
@@ -1979,7 +2029,7 @@ class Invoice(Base):
 class InvoiceLine(Base):
     __tablename__ = "invoice_lines"
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
-    invoice_id: Mapped[int] = mapped_column(ForeignKey("invoices.id"))
+    invoice_id: Mapped[int] = mapped_column(ForeignKey("invoices.id"), index=True)  # Sprint 5.D
     description: Mapped[str] = mapped_column(String(255))
     quantity: Mapped[float] = mapped_column(Float, default=1.0)
     unit_price: Mapped[float] = mapped_column(Float)
@@ -2219,16 +2269,19 @@ class UserOAuthToken(Base):
 
 class FXRate(Base):
     __tablename__ = "fx_rates"
+    # v3.5.0-alpha.172.40 (Sprint 5.C BLOCCO 6) — tenant_id per evitare
+    # leak FX di tenant tra organizzazioni (audit BLOCCO 6).
+    # UNIQUE composito su (tenant_id, from, to) invece di globale.
+    __table_args__ = (
+        UniqueConstraint("tenant_id", "from_currency", "to_currency", name="uq_fx_tenant_pair"),
+    )
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    tenant_id: Mapped[int] = mapped_column(ForeignKey("tenants.id"), default=1, index=True)
     from_currency: Mapped[str] = mapped_column(String(3), index=True)
     to_currency: Mapped[str] = mapped_column(String(3), index=True)
     rate: Mapped[float] = mapped_column(Float)
     fetched_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, index=True)
     provider: Mapped[str] = mapped_column(String(40), default="frankfurter")
-    # Indice composto per unicità coppia (gestito a livello applicativo: 1 row per coppia)
-    __table_args__ = (
-        UniqueConstraint("from_currency", "to_currency", name="uq_fx_pair"),
-    )
 
 
 class AdvancePaymentConsumption(Base):
@@ -2412,8 +2465,15 @@ class JCLBilledSlice(Base):
 
 class Tag(Base):
     __tablename__ = "tags"
+    # v3.5.0-alpha.172.40 (Sprint 5.C BLOCCO 6) — tenant_id per scope tag
+    # (audit: era leak — un tenant vedeva tag creati da altri).
+    # UNIQUE composito su (tenant_id, name).
+    __table_args__ = (
+        UniqueConstraint("tenant_id", "name", name="uq_tag_tenant_name"),
+    )
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
-    name: Mapped[str] = mapped_column(String(100), unique=True)
+    tenant_id: Mapped[int] = mapped_column(ForeignKey("tenants.id"), default=1, index=True)
+    name: Mapped[str] = mapped_column(String(100))
 
 
 class AssetTag(Base):
@@ -3230,7 +3290,7 @@ class AIUsageLog(Base):
 class Notification(Base):
     __tablename__ = "notifications"
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
-    tenant_id: Mapped[int] = mapped_column(Integer, default=1, index=True)
+    tenant_id: Mapped[int] = mapped_column(ForeignKey("tenants.id"), default=1, index=True)
     user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), index=True)
     actor_user_id: Mapped[Optional[int]] = mapped_column(
         ForeignKey("users.id"), nullable=True)
@@ -3260,7 +3320,7 @@ class Notification(Base):
 class ProjectTechSheet(Base):
     __tablename__ = "project_tech_sheets"
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
-    tenant_id: Mapped[int] = mapped_column(Integer, default=1, index=True)
+    tenant_id: Mapped[int] = mapped_column(ForeignKey("tenants.id"), default=1, index=True)
     project_id: Mapped[int] = mapped_column(
         ForeignKey("projects.id"), unique=True, index=True)
     delivery_template_id: Mapped[Optional[int]] = mapped_column(
@@ -3316,7 +3376,7 @@ class TechSheetFieldOption(Base):
         UniqueConstraint("tenant_id", "field_path", "value", name="uq_tsfo_tenant_path_value"),
     )
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
-    tenant_id: Mapped[int] = mapped_column(Integer, default=1, index=True)
+    tenant_id: Mapped[int] = mapped_column(ForeignKey("tenants.id"), default=1, index=True)
     field_path: Mapped[str] = mapped_column(String(120), index=True)  # es. "cameras.codec"
     value: Mapped[str] = mapped_column(String(200))  # valore salvato
     label: Mapped[Optional[str]] = mapped_column(String(200), nullable=True)  # display (default = value)

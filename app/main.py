@@ -1010,6 +1010,65 @@ def _backfill_resource_assignments():
     except Exception as e:
         print(f"[backfill] resource_assignments failed: {e}")
 
+    # v3.5.0-alpha.172.40 (Sprint 5.D BLOCCO 6) — INDEX su FK hot-path
+    # (audit: 22 FK senza index, qui i top 8 più trafficati). Idempotente.
+    fk_indexes = [
+        ("projects", "client_id"),
+        ("quotes", "project_id"),
+        ("quotes", "client_id"),
+        ("quote_lines", "quote_id"),
+        ("quote_lines", "price_item_id"),
+        ("jobs", "project_id"),
+        ("jobs", "client_id"),
+        ("job_cost_lines", "job_id"),
+        ("job_cost_lines", "quote_line_id"),
+        ("job_cost_lines", "price_item_id"),
+        ("invoices", "client_id"),
+        ("invoices", "job_id"),
+        ("invoices", "quote_id"),
+        ("invoice_lines", "invoice_id"),
+    ]
+    with engine.begin() as conn:
+        for tname, colname in fk_indexes:
+            if tname not in insp.get_table_names():
+                continue
+            ixname = f"ix_{tname}_{colname}"
+            try:
+                conn.execute(text(
+                    f"CREATE INDEX IF NOT EXISTS {ixname} ON {tname}({colname})"
+                ))
+            except Exception as e:
+                print(f"[auto-migrate] {ixname} FAILED: {e}")
+
+    # v3.5.0-alpha.172.40 (Sprint 5.C BLOCCO 6) — Tag.tenant_id + FXRate.tenant_id.
+    # Entrambi avevano scope globale → leak cross-tenant. Aggiunti col +
+    # UNIQUE composito (tenant_id, name/pair).
+    for tname, ucname, ucols in [
+        ("tags", "uq_tag_tenant_name", ["tenant_id", "name"]),
+        ("fx_rates", "uq_fx_tenant_pair", ["tenant_id", "from_currency", "to_currency"]),
+    ]:
+        if tname not in insp.get_table_names():
+            continue
+        cols = {c["name"] for c in insp.get_columns(tname)}
+        if "tenant_id" not in cols:
+            print(f"[auto-migrate] {tname}.tenant_id mancante -> ALTER TABLE")
+            with engine.begin() as conn:
+                conn.execute(text(
+                    f"ALTER TABLE {tname} ADD COLUMN tenant_id INTEGER NOT NULL "
+                    f"DEFAULT 1 REFERENCES tenants(id)"
+                ))
+        with engine.begin() as conn:
+            try:
+                cols_csv = ", ".join(ucols)
+                conn.execute(text(
+                    f"CREATE UNIQUE INDEX IF NOT EXISTS {ucname} ON {tname}({cols_csv})"
+                ))
+                conn.execute(text(
+                    f"CREATE INDEX IF NOT EXISTS ix_{tname}_tenant_id ON {tname}(tenant_id)"
+                ))
+            except Exception as e:
+                print(f"[auto-migrate] {ucname} FAILED: {e}")
+
     # v3.5.0-alpha.172.37 (Sprint 3.E BLOCCO 4) — Invoice.tenant_id +
     # composite UNIQUE(tenant_id, number). Pre-α.172.37 il numero fattura
     # era UNIQUE globale → due tenant collidevano. Soluzione finale (rebuild
@@ -1496,7 +1555,7 @@ async def lifespan(app: FastAPI):
     yield
 
 
-app = FastAPI(title="MediaFlow", version="3.5.0-alpha.172.39", lifespan=lifespan)
+app = FastAPI(title="MediaFlow", version="3.5.0-alpha.172.40", lifespan=lifespan)
 
 BASE_DIR = Path(__file__).parent
 app.mount("/static", StaticFiles(directory=BASE_DIR / "static"), name="static")
@@ -1534,6 +1593,14 @@ templates.env.globals["has_permission"] = _rbac.has_permission
 # static `?v={{ app_version }}` invece di stringhe hardcoded per file.
 # Bump app version una volta = invalida TUTTI gli static in un colpo.
 templates.env.globals["app_version"] = app.version
+
+# v3.5.0-alpha.172.40 (Sprint 5.A BLOCCO 6) — JCLBilledSlice immutability
+# event listener model-level. Defense-in-depth: nessuna modifica ORM ai
+# campi finanziari snapshot, indipendente dal punto di ingresso (router /
+# script / batch / AI tool-use). Storno via NC TD04 resta consentito su
+# voided_at/voided_by_invoice_id.
+from app.services.billing_slice_immutability import register_immutability_listener
+register_immutability_listener()
 
 
 # Middleware: forza no-cache sulle risposte HTML.

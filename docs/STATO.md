@@ -8,6 +8,47 @@
 
 ## Versione corrente
 
+**v3.5.0-alpha.172.40** — 23 maggio 2026 — Sprint 5 Audit: DB integrity + IT tax foundation (BLOCCO 6 parte 1)
+
+Chiude BLOCCO 6 parte sicura — 6 sub-fix integrity DB + foundation compliance italiana:
+
+- **5.A immutability event listener** JCLBilledSlice (defense-in-depth, qualsiasi ORM write su slice billed = ValueError eccetto storno via NC TD04)
+- **5.B 4 modelli `tenant_id` → ForeignKey** (Holiday/Notification/ProjectTechSheet/TechSheetFieldOption)
+- **5.C Tag + FXRate tenant_id** + UNIQUE composito + auto-migrate
+- **5.D INDEX su 14 FK hot-path** (projects/quotes/jobs/JCL/invoices/quote_lines/invoice_lines)
+- **5.E `italian_tax.py`** foundation: validate P.IVA Luhn mod-10, CF, SDI 7-char, IBAN IT mod-97, enum RF01-RF19/TD01-TD28/N1-N7.x, mapping kind→TD, `invoice_sdi_compliance_check` pre-emit
+- **5.F JSON validators** `@validates` su Role.permissions, WHP.overtime_brackets, Tenant.asset_numbering_config
+
+Smoke test italian_tax: P.IVA RAI, IBAN reale, CF, enum tutti OK.
+
+512 routes invariato.
+
+## Lavoro in corso
+
+Sprint 5 chiuso. **Sprint 6 (FINALE)** = BLOCCO 6 parte rischiosa + FatturaPA XML + wire-up validators + UI backlog. Bump previsti α.172.41+.
+
+## Prossimo step
+
+1. **italian_tax wire-up router**: clients.py POST/PUT vat_number → `validate_partita_iva` → 422 se invalido. Same per Supplier, Tenant, Invoice snapshots.
+2. **FatturaPA XML builder**: `app/services/sdi_xml.py` nuovo + endpoint `GET /finance/api/invoices/{id}/sdi-xml`. Skill `sdi-xml-builder` come riferimento implementation.
+3. **`invoice_sdi_compliance_check` HARD-BLOCK** in `billing.emit_invoice` (pre-DB-commit): se errors → 422 con lista.
+4. **FK `ondelete`**: rebuild table SQLite per Project/Job/Tenant/Client FK. RISCHIO ALTO — fare con backup + script di migration dedicato.
+5. **Backlog UI 4.E**: pricelist `${i.name}/${i.description}`, cost_report opzioni, dam upload `${f.name}`, planning title attrs, finance options.
+6. **Old UNIQUE legacy rebuild**: Tag.name + Invoice.number + Asset filename, table-rebuild per dropare UNIQUE globale e attivare composito.
+
+## Bug aperti
+
+Stato audit:
+- ✅ BLOCCO 1 (tenant scope) — α.172.35
+- ✅ BLOCCO 2 (slice-lock quote-side) — α.172.36
+- ✅ BLOCCO 3 (UI 404 endpoint) — α.172.36
+- ✅ BLOCCO 4 (finance + Decimal hotspot) — α.172.37+38
+- ✅ BLOCCO 5 (UI antipattern) — α.172.39
+- ✅ BLOCCO 6 parte 1 (DB integrity + IT tax foundation) — α.172.40
+- 🔜 BLOCCO 6 parte 2 (FatturaPA XML + wire-up + FK ondelete) — Sprint 6
+
+## Versione precedente
+
 **v3.5.0-alpha.172.39** — 23 maggio 2026 — Sprint 4 Audit: UI antipattern cleanup (BLOCCO 5)
 
 Chiude BLOCCO 5 — 6 categorie antipattern UI/JS:
