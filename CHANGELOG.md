@@ -1,5 +1,44 @@
 # MediaFlow — Changelog
 
+## v3.5.0-alpha.172.37 — Sprint 3 Audit: finance domain invariants (BLOCCO 4) (23 mag 2026)
+
+Chiude **BLOCCO 4 dell'audit multi-agent**: 5 bug finance — `weighted_revenue` dead code, anomaly reopen P&L double-count, overtime brackets divergenti HR vs cost-report, IVA aggregata vs per-riga, `Invoice.number` UNIQUE globale anti-multi-tenant.
+
+**3.A — `weighted_revenue` ora funziona** (`cost_line_sync.recompute_cost_line_actual`):
+Pre-α.172.37 il flag `Job.weighted_revenue` esisteva sul modello e veniva persistito via API ma il calcolo NON lo applicava — feature dichiarata muta da settimane. Branch aggiunto: se `weighted=True`, `done_hours = sum(_booking_hours_weighted(b))` (CCNL brackets + holiday/sunday/overtime/night multiplier) invece di `_booking_billable_hours`. Solo lato maturato (`total_accrued`): `total_expected` (forecast) resta lineare per non sovrastimare i ricavi.
+
+**3.B — Anomaly reopen cascade** (`anomalies.reopen_anomaly`):
+Pre-α.172.37 reopen lasciava `LossEntry`/`OverheadCost` collegato in vita → re-handle creava SECONDO record → P&L double-count. Ora:
+- `LossEntry` → hard delete (record auto-generato, ricreato a re-handle)
+- `OverheadCost` → soft-delete via `deleted_at` (audit preservato)
+- Audit trail in `entry.notes` documenta sempre il cleanup
+- `Notification`/altri kind: lasciati (puntatore audit, no impatto P&L)
+
+**3.C — Overtime brackets single source of truth** (`overtime.py:222`):
+Pre-α.172.37 `compute_overtime` applicava flat `policy.overtime_multiplier` ignorando `overtime_brackets`. `booking_cost.compute_assignment_breakdown` invece applicava brackets via `_weighted_overtime_with_brackets`. Risultato: buste paga (HR) vs cost report (finance) divergenti su CCNL con scaglioni (Cinema Doppiaggio prime 2h +30% poi +60%). Unificato: `overtime.py` importa lo stesso helper.
+
+**3.D — IVA per-riga** (nuovo `app/services/invoice_totals.py`):
+Pre-α.172.37 `billing.emit_invoice` + `compose_invoice_from_batches` calcolavano `subtotal * vat_rate / 100` aggregato. Per fatture multi-aliquota (FatturaPA `<DatiRiepilogo>`) il totale arrotondato differisce da `Σ(line.total × line.vat_rate)`. Nuovo helper aggrega `subtotal/vat_amount/total` da `InvoiceLine` + ritorna `by_rate: [{rate, subtotal, vat_amount, lines}]` (utilizzabile da emissione FatturaPA Sprint 5). 3 callsite aggiornati:
+- `billing.emit_invoice` post-line creation
+- `billing.compose_invoice_from_batches` post-line creation
+- `finance.add_invoice_line` (anche fix P1 audit: `inv.subtotal += total` rompeva su `subtotal=None`)
+
+**3.E — `Invoice.number` UNIQUE per-tenant**:
+Pre-α.172.37 `Invoice.number` aveva `unique=True` globale → due tenant con stesso numero "2026-00001" collidevano. Aggiunto:
+- Colonna `Invoice.tenant_id: ForeignKey("tenants.id")` denormalizzata
+- `__table_args__ = (UniqueConstraint("tenant_id", "number"),)`
+- `_auto_migrate_columns()` (lifespan): ALTER TABLE ADD COLUMN tenant_id + backfill da `Client.tenant_id` + CREATE UNIQUE INDEX uq_invoice_tenant_number + INDEX ix_invoices_tenant_id
+- 7 callsite `Invoice(...)` (billing.py + finance.py) settano `tenant_id=current_tenant_id()`
+- `tenant_guard.py`: rimosso Invoice da `_INDIRECT_VIA_CLIENT` (ora scope diretto via colonna, no più JOIN Client)
+
+NB: il vecchio `UNIQUE(number)` legacy sui DB pre-α.172.37 sopravvive fino a rebuild table (roadmap Sprint 5). Convive col composito senza falsi positivi single-tenant.
+
+**File toccati**: `app/services/cost_line_sync.py`, `app/services/overtime.py`, `app/services/invoice_totals.py` (nuovo), `app/services/tenant_guard.py`, `app/routers/anomalies.py`, `app/routers/billing.py`, `app/routers/finance.py`, `app/models/models.py`, `app/main.py`, `CHANGELOG.md`, `docs/STATO.md`.
+
+Smoke: app boota 512 routes. Auto-migrate `invoices.tenant_id` testabile a primo boot post-pull (idempotente).
+
+---
+
 ## v3.5.0-alpha.172.36 — Sprint 2 Audit: slice-lock simmetrico + UI 404 (23 mag 2026)
 
 Chiude **BLOCCO 2** (JCLBilledSlice immutability lato quote-side) e **BLOCCO 3** (endpoint UI 404) dell'audit multi-agent.

@@ -37,7 +37,11 @@ T = TypeVar("T")
 
 # Modelli senza colonna `tenant_id` diretta — scope via JOIN su Client.
 # Estendere quando se ne aggiungono altri (es. InvoiceLine se usata by-ID).
-_INDIRECT_VIA_CLIENT = {Invoice}
+#
+# v3.5.0-alpha.172.37 (Sprint 3.E) — Invoice ora ha `tenant_id` diretto
+# (denormalizzato da Client.tenant_id, popolato da _auto_migrate_columns).
+# Set vuoto a regime; lasciato come hook architetturale per modelli futuri.
+_INDIRECT_VIA_CLIENT: set = set()
 
 
 def scoped(query, model: Type[T]):

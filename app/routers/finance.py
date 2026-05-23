@@ -281,6 +281,7 @@ async def create_invoice(
         inv_notes = (inv_notes + (" · " if inv_notes else "")
                      + f"Lavorazione JCL #{jcl_id}").strip()
     inv = Invoice(
+        tenant_id=current_tenant_id(),  # v3.5.0-alpha.172.37 Sprint 3.E
         number=num, client_id=client_id,
         project_id=project_id, quote_id=quote_id, job_id=job_id,
         issue_date=issue_date, due_date=due_date,
@@ -325,11 +326,18 @@ async def add_invoice_line(
     line = InvoiceLine(
         invoice_id=invoice_id, description=description,
         quantity=quantity, unit_price=unit_price, total=total,
+        vat_rate=inv.vat_rate,  # default header → uniforme col flusso emit
     )
     db.add(line)
-    # Ricalcola totali fattura
-    inv.subtotal += total
-    inv.total = inv.subtotal * (1 + inv.vat_rate / 100)
+    # v3.5.0-alpha.172.37 (Sprint 3.D BLOCCO 4) — ricomputa totals via helper
+    # (era `inv.subtotal += total` + `inv.total = subtotal * (1 + vat)`, che
+    # P1: rompeva su `subtotal=None` con TypeError, e P0: rotto in scenari
+    # multi-rate. Helper aggrega per-riga + per-aliquota).
+    from app.services.invoice_totals import (
+        compute_invoice_totals_from_lines, apply_totals_to_invoice,
+    )
+    db.flush()
+    apply_totals_to_invoice(inv, compute_invoice_totals_from_lines(inv.lines))
     db.commit()
     return line
 
@@ -494,6 +502,7 @@ async def create_advance_payment(
     total = round(subtotal + vat_amount, 2)
 
     inv = Invoice(
+        tenant_id=current_tenant_id(),  # v3.5.0-alpha.172.37 Sprint 3.E
         number=num,
         client_id=proj.client_id,
         project_id=project_id,
@@ -1100,6 +1109,7 @@ async def emit_invoice_from_advance(
     desc = (description or ap.label or f"Acconto progetto {proj.code}").strip()
 
     inv = Invoice(
+        tenant_id=current_tenant_id(),  # v3.5.0-alpha.172.37 Sprint 3.E
         number=num,
         client_id=proj.client_id,
         project_id=ap.project_id,

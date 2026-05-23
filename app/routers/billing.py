@@ -1149,6 +1149,8 @@ async def emit_invoice(
     tenant_obj = db.query(Tenant).filter(Tenant.id == current_tenant_id()).first()
 
     invoice = Invoice(
+        # v3.5.0-alpha.172.37 (Sprint 3.E) — denormalizzato tenant_id
+        tenant_id=current_tenant_id(),
         number=invoice_number,
         client_id=project.client_id,
         status=InvoiceStatus.draft,
@@ -1257,6 +1259,16 @@ async def emit_invoice(
     )
     # v3.5.0-alpha.138 — link diretto Invoice→Project (foundation cost report)
     invoice.project_id = batch.project_id
+    # v3.5.0-alpha.172.37 (Sprint 3.D BLOCCO 4) — IVA per-riga: ricomputa
+    # subtotal/total da Σ InvoiceLine invece di subtotal*vat_rate aggregato.
+    # In flusso single-rate i due valori coincidono; in multi-rate (futuro UI
+    # con vat_rate per riga, requisito FatturaPA <DatiRiepilogo>) corregge il
+    # rounding. Audit BLOCCO 4.
+    from app.services.invoice_totals import (
+        compute_invoice_totals_from_lines, apply_totals_to_invoice,
+    )
+    db.flush()  # rende visibile invoice.lines aggiornato
+    apply_totals_to_invoice(invoice, compute_invoice_totals_from_lines(invoice.lines))
     db.commit()
     db.refresh(batch)
     # v3.5.0-alpha.169 — Auto-detect anomalie dopo emit (Bug 3b): se manager ha
@@ -1373,6 +1385,8 @@ async def compose_invoice_from_batches(
 
     batch_codes = ", ".join(b.code for b in batches)
     invoice = Invoice(
+        # v3.5.0-alpha.172.37 (Sprint 3.E)
+        tenant_id=current_tenant_id(),
         number=invoice_number,
         client_id=project.client_id,
         status=InvoiceStatus.draft,
@@ -1476,6 +1490,13 @@ async def compose_invoice_from_batches(
     )
     # v3.5.0-alpha.138 — link diretto Invoice→Project
     invoice.project_id = project_id
+    # v3.5.0-alpha.172.37 (Sprint 3.D BLOCCO 4) — IVA per-riga: ricomputa
+    # totals da Σ InvoiceLine (stesso pattern di emit_invoice).
+    from app.services.invoice_totals import (
+        compute_invoice_totals_from_lines, apply_totals_to_invoice,
+    )
+    db.flush()
+    apply_totals_to_invoice(invoice, compute_invoice_totals_from_lines(invoice.lines))
     # v3.5.0-alpha.91 audit fix P1: gestisce race condition su Invoice.number
     # unique. Pre-fix: 500 IntegrityError grezzo. Ora: 409 dedicato.
     try:
@@ -1669,6 +1690,7 @@ async def emit_closing_invoice(
 
     closing_note = (notes or "") + f"\nFATTURA DI CHIUSURA PROGETTO {proj.code}"
     invoice = Invoice(
+        tenant_id=current_tenant_id(),  # v3.5.0-alpha.172.37 Sprint 3.E
         number=invoice_number,
         client_id=proj.client_id,
         status=InvoiceStatus.draft,
@@ -2373,6 +2395,7 @@ async def storno_invoice(
     # cashflow_year_sync conta sia approved che sent come storni efficaci
     # (vs draft che resta escluso). Memory feedback Matteo.
     nc = Invoice(
+        tenant_id=current_tenant_id(),  # v3.5.0-alpha.172.37 Sprint 3.E
         number=credit_number,
         client_id=src.client_id,
         status=InvoiceStatus.approved,

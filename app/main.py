@@ -1010,6 +1010,43 @@ def _backfill_resource_assignments():
     except Exception as e:
         print(f"[backfill] resource_assignments failed: {e}")
 
+    # v3.5.0-alpha.172.37 (Sprint 3.E BLOCCO 4) — Invoice.tenant_id +
+    # composite UNIQUE(tenant_id, number). Pre-α.172.37 il numero fattura
+    # era UNIQUE globale → due tenant collidevano. Soluzione finale (rebuild
+    # table per dropare il legacy unique) rimandata a Sprint 5; qui:
+    # (1) ADD COLUMN tenant_id; (2) backfill da JOIN clients;
+    # (3) CREATE UNIQUE INDEX composito convivente col legacy.
+    if "invoices" in insp.get_table_names():
+        inv_cols = {c["name"] for c in insp.get_columns("invoices")}
+        if "tenant_id" not in inv_cols:
+            print("[auto-migrate] invoices.tenant_id mancante -> ALTER TABLE")
+            with engine.begin() as conn:
+                conn.execute(text(
+                    "ALTER TABLE invoices ADD COLUMN tenant_id INTEGER NOT NULL "
+                    "DEFAULT 1 REFERENCES tenants(id)"
+                ))
+                # Backfill da Client.tenant_id
+                res = conn.execute(text(
+                    "UPDATE invoices SET tenant_id = "
+                    "(SELECT tenant_id FROM clients WHERE clients.id = invoices.client_id) "
+                    "WHERE EXISTS (SELECT 1 FROM clients WHERE clients.id = invoices.client_id)"
+                ))
+                if res.rowcount:
+                    print(f"[auto-migrate] backfilled {res.rowcount} invoice.tenant_id")
+        # CREATE UNIQUE INDEX composto (idempotente)
+        with engine.begin() as conn:
+            try:
+                conn.execute(text(
+                    "CREATE UNIQUE INDEX IF NOT EXISTS uq_invoice_tenant_number "
+                    "ON invoices(tenant_id, number)"
+                ))
+                conn.execute(text(
+                    "CREATE INDEX IF NOT EXISTS ix_invoices_tenant_id "
+                    "ON invoices(tenant_id)"
+                ))
+            except Exception as e:
+                print(f"[auto-migrate] uq_invoice_tenant_number FAILED: {e}")
+
 
 def _auto_migrate_restructure_phase1():
     """v3.5.0-alpha.172 — Auto-fix colonne Sprint 1 Restructure (memory
@@ -1459,7 +1496,7 @@ async def lifespan(app: FastAPI):
     yield
 
 
-app = FastAPI(title="MediaFlow", version="3.5.0-alpha.172.36", lifespan=lifespan)
+app = FastAPI(title="MediaFlow", version="3.5.0-alpha.172.37", lifespan=lifespan)
 
 BASE_DIR = Path(__file__).parent
 app.mount("/static", StaticFiles(directory=BASE_DIR / "static"), name="static")

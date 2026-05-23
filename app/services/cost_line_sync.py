@@ -357,7 +357,18 @@ def recompute_cost_line_actual(db: Session, jcl) -> dict:
     # Ore "fatturabili" usano _booking_billable_hours (override umana,
     # no double-count sala+persona). Cost-side (sotto) somma SEMPRE tutti gli
     # assignment via _booking_hours (è un consumo reale).
-    done_hours = sum(_booking_billable_hours(b) for b in done_bookings)
+    #
+    # v3.5.0-alpha.172.37 (Sprint 3.A BLOCCO 4) — pass-through OT al cliente:
+    # se `Job.weighted_revenue=True`, le ore done vengono pesate via
+    # `_booking_hours_weighted` (CCNL brackets + holiday/sunday/overtime
+    # multiplier). Solo `done_hours` (maturato): `planned_hours` (forecast)
+    # resta lineare per non sovra-stimare i ricavi attesi.
+    # Pre-α.172.37 il flag esisteva su Job ma NON era applicato — feature
+    # dichiarata ma muta. Bug audit BLOCCO 4.
+    if weighted:
+        done_hours = sum(_booking_hours_weighted(db, b) for b in done_bookings)
+    else:
+        done_hours = sum(_booking_billable_hours(b) for b in done_bookings)
     planned_hours = sum(_booking_billable_hours(b) for b in all_bookings)
     new_qty_actual = _qty_from_hours(unit, done_hours, len(done_bookings))
     new_qty_planned = _qty_from_hours(unit, planned_hours, len(all_bookings))

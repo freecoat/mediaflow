@@ -1894,8 +1894,22 @@ class SupplierInvoicePayment(Base):
 
 class Invoice(Base):
     __tablename__ = "invoices"
+    # v3.5.0-alpha.172.37 (Sprint 3.E BLOCCO 4) — multi-tenant: UNIQUE su
+    # (tenant_id, number) invece di solo number. Pre-α.172.37 due tenant
+    # con stesso numero fattura "2026-00001" collidevano a livello DB.
+    # `tenant_id` denormalizzato da Client.tenant_id, popolato da
+    # _auto_migrate_columns + sempre settato a creazione.
+    # NB: il vecchio UNIQUE su `number` sopravvive su DB pre-α.172.37 fino a
+    # rebuild table (Sprint 5 roadmap). Idempotenza: composite UNIQUE
+    # convive col legacy.
+    __table_args__ = (
+        UniqueConstraint("tenant_id", "number", name="uq_invoice_tenant_number"),
+    )
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
-    number: Mapped[str] = mapped_column(String(50), unique=True)
+    tenant_id: Mapped[int] = mapped_column(
+        ForeignKey("tenants.id"), default=1, index=True
+    )
+    number: Mapped[str] = mapped_column(String(50))
     client_id: Mapped[int] = mapped_column(ForeignKey("clients.id"))
     job_id: Mapped[Optional[int]] = mapped_column(ForeignKey("jobs.id"), nullable=True)
     quote_id: Mapped[Optional[int]] = mapped_column(ForeignKey("quotes.id"), nullable=True)

@@ -25,6 +25,11 @@ from typing import Iterable, List, Optional, Set, Dict
 
 from app.models import TimePunch, PunchKind, WorkingHoursPolicy
 from app.services.working_hours import get_holidays
+# v3.5.0-alpha.172.37 (Sprint 3.C BLOCCO 4) — single source of truth per
+# scaglioni CCNL overtime. Pre-α.172.37 booking_cost applicava brackets
+# (CR-side) ma overtime (HR-side) usava flat multiplier → buste paga vs
+# cost report divergenti. Audit BLOCCO 4.
+from app.services.booking_cost import _weighted_overtime_with_brackets
 
 
 COUNTABLE_KINDS = (PunchKind.shift, PunchKind.overtime)
@@ -232,7 +237,15 @@ def compute_overtime(
     # overtime totale (daily+weekly), escludendo già festivo+domenica
     overtime_total = out.overtime_daily_hours + out.overtime_weekly_hours
     overtime_remaining = max(0.0, overtime_total - out.holiday_hours - sunday_non_holiday)
-    weighted += overtime_remaining * o_mult
+    # v3.5.0-alpha.172.37 (Sprint 3.C) — scaglioni CCNL se valorizzati
+    # (es. Cinema Doppiaggio: prime 2h +30%, poi +60%). Identica logica a
+    # booking_cost.py:229 — unica fonte di verità via shared helper.
+    if policy.overtime_brackets:
+        weighted += _weighted_overtime_with_brackets(
+            overtime_remaining, policy.overtime_brackets, o_mult,
+        )
+    else:
+        weighted += overtime_remaining * o_mult
     # ore notturne residue (non già festivo/domenica/overtime)
     night_residual = max(
         0.0,

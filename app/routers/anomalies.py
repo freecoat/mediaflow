@@ -464,9 +464,44 @@ async def reopen_anomaly(
         f"\n[reopen {datetime.utcnow().isoformat()}] precedente: status={entry.status.value} "
         f"action={prev_action} target_id={entry.handled_target_id}"
     )
+    # v3.5.0-alpha.172.37 (Sprint 3.B BLOCCO 4) — cascade cleanup del target.
+    # Pre-α.172.37 il record (LossEntry/OverheadCost) generato dal handle restava
+    # in vita anche dopo reopen → re-handle creava un SECONDO record →
+    # P&L double-count. Audit BLOCCO 4.
+    # - LossEntry: hard delete (record auto-generato, ri-creato a re-handle)
+    # - OverheadCost: soft-delete (ha deleted_at, audit preservato)
+    # - Notification / altro: lasciato (puntatore di audit, no impatto P&L)
+    target_kind = (entry.handled_target_kind or "").strip()
+    target_id = entry.handled_target_id
+    cleanup_log = None
+    if target_kind == "LossEntry" and target_id:
+        from app.models import LossEntry as _LE
+        le = db.query(_LE).filter(
+            _LE.id == target_id, _LE.tenant_id == current_tenant_id()
+        ).first()
+        if le:
+            db.delete(le)
+            cleanup_log = f"LossEntry#{target_id} hard-deleted"
+    elif target_kind == "OverheadCost" and target_id:
+        from app.models import OverheadCost as _OC
+        oc = db.query(_OC).filter(
+            _OC.id == target_id,
+            _OC.tenant_id == current_tenant_id(),
+            _OC.deleted_at.is_(None),
+        ).first()
+        if oc:
+            user = getattr(request.state, "current_user", None)
+            oc.deleted_at = datetime.utcnow()
+            oc.deleted_by_user_id = user.id if user else None
+            cleanup_log = f"OverheadCost#{target_id} soft-deleted"
+    if cleanup_log:
+        entry.notes = (entry.notes or "") + f"\n[reopen cleanup] {cleanup_log}"
     entry.status = AnomalyStatus.open
     entry.handled_action = None
     entry.handled_at = None
-    # NB: handled_target_id resta per audit (puntatore al record creato in passato).
+    # handled_target_id resta per audit (puntatore al record cancellato/soft-deleted).
     db.commit()
-    return {"ok": True, "id": entry.id, "status": "open"}
+    return {
+        "ok": True, "id": entry.id, "status": "open",
+        "target_cleanup": cleanup_log,
+    }

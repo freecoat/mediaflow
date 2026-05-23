@@ -8,6 +8,43 @@
 
 ## Versione corrente
 
+**v3.5.0-alpha.172.37** — 23 maggio 2026 — Sprint 3 Audit: finance domain invariants (BLOCCO 4)
+
+Chiude BLOCCO 4 — 5 bug finance critici:
+
+- **3.A weighted_revenue ora funziona**: `cost_line_sync.recompute_cost_line_actual` applica `_booking_hours_weighted` (CCNL brackets + multiplier holiday/sunday/overtime/night) quando `Job.weighted_revenue=True`. Pre-α.172.37 il flag era dead code — pass-through OT al cliente non-funzionante.
+- **3.B anomaly reopen cascade**: cancella `LossEntry` (hard) / soft-delete `OverheadCost` collegati al reopen → previene P&L double-count su re-handle.
+- **3.C overtime brackets single source of truth**: `overtime.py` importa helper di `booking_cost.py` per CCNL scaglioni. Pre-α.172.37 HR (buste paga) vs CR (cost report) divergenti.
+- **3.D IVA per-riga**: nuovo `app/services/invoice_totals.py` (`compute_invoice_totals_from_lines` + `apply_totals_to_invoice` + `by_rate` per FatturaPA `<DatiRiepilogo>`). 3 callsite aggiornati (emit_invoice + compose_invoice_from_batches + add_invoice_line, anche fix `subtotal=None` TypeError).
+- **3.E Invoice.tenant_id denormalizzato**: nuova colonna + `UniqueConstraint(tenant_id, number)`. Auto-migrate ALTER TABLE + backfill da `Client.tenant_id` + UNIQUE INDEX composto + INDEX su tenant_id. 7 callsite `Invoice(...)` impostano `tenant_id=current_tenant_id()`. `tenant_guard._INDIRECT_VIA_CLIENT` ora vuoto (Invoice scope diretto). Legacy `UNIQUE(number)` sopravvive fino a rebuild table (Sprint 5 roadmap).
+
+512 routes (invariato). Auto-migrate idempotente al primo boot post-pull.
+
+## Lavoro in corso
+
+Sprint 3 chiuso. **Sprint 4 next**: BLOCCO 5 UI antipattern (JSON.stringify in onclick, escapeHtml innerHTML, setSelection wrapper bypass, CSRF). Bump previsti α.172.38 → α.172.42.
+
+## Prossimo step
+
+1. Helper redefiniti rimuovi (pricelist fmtCurrency, hr fmtDate, fs_scan fmtSize)
+2. 4 onclick JSON.stringify → data-* attributes (dam, notifications, cost_report, finance)
+3. 9 `setSelection()` → `_tlSetSel()` wrapper in planning.html
+4. `mf_tl_light` flag su stack:true (planning.html:1770)
+5. escapeHtml sistematico in 25+ template innerHTML
+6. Cache-buster `?v=` automatico via hash file (helper Jinja)
+
+## Bug aperti
+
+Stato audit:
+- ✅ BLOCCO 1 (tenant scope) — α.172.35
+- ✅ BLOCCO 2 (slice-lock quote-side) — α.172.36
+- ✅ BLOCCO 3 (UI 404 endpoint) — α.172.36
+- ✅ BLOCCO 4 (finance: weighted_revenue + anomaly + overtime brackets + IVA + Invoice.number) — α.172.37
+- 🔜 BLOCCO 5 (UI antipattern) — Sprint 4
+- 🔜 BLOCCO 6 (DB integrity + IT compliance + Float→Numeric Sprint 3.5) — Sprint 5
+
+## Versione precedente
+
 **v3.5.0-alpha.172.36** — 23 maggio 2026 — Sprint 2 Audit: slice-lock simmetrico + UI 404
 
 Chiude **BLOCCO 2** (immutability JCL violata quote-side) + **BLOCCO 3** (3 endpoint UI 404 silenti).
