@@ -967,19 +967,73 @@ async def confirm_advance_payment(
                 raise HTTPException(400, f"allocations_set parse value: '{token}'")
             if amt_v < 0:
                 raise HTTPException(400, f"allocations_set amount negativo: {amt_v} per JCL {jid}")
-            # Vincolo: alloc.amount ≤ JCL.total_quoted (no over-coverage)
+            # Vincolo: alloc.amount ≤ JCL.total_quoted (no over-coverage SU questa singola AP)
             if amt_v > (jcl.total_quoted or 0.0) + 0.01:
                 raise HTTPException(
                     400,
-                    f"alloc.amount {amt_v} eccede JCL.total_quoted {jcl.total_quoted} (JCL #{jid})",
+                    detail={
+                        "message": (
+                            f"L'allocazione richiesta supera il quotato della voce.\n\n"
+                            f"• Voce JCL #{jid}: {jcl.description or '(senza descrizione)'}\n"
+                            f"• Quotato: € {(jcl.total_quoted or 0):,.2f}\n"
+                            f"• Allocazione richiesta: € {amt_v:,.2f}\n\n"
+                            f"Riduci l'importo allocato a questa voce."
+                        ),
+                    },
+                )
+            # v3.5.0-alpha.172.49 — Cross-AP check: Σ allocazioni esistenti su
+            # questa JCL da OTHER AP non-cancelled + nuova allocation
+            # dev'essere ≤ JCL.total_quoted. Pre-α.172.49 ogni AP poteva
+            # allocare full JCL.total_quoted senza vedere altri AP → overflow
+            # complessivo (es. 2 AP da 50% ciascuno = 100% × 2 = 200%).
+            other_aps_alloc = (
+                db.query(func.coalesce(func.sum(_APA2.amount), 0.0))
+                .join(AdvancePayment, AdvancePayment.id == _APA2.advance_payment_id)
+                .filter(
+                    _APA2.job_cost_line_id == jid,
+                    AdvancePayment.id != ap.id,  # escludi self (stiamo riscrivendo le sue alloc)
+                    AdvancePayment.status != AdvancePaymentStatus.cancelled,
+                    AdvancePayment.tenant_id == current_tenant_id(),
+                )
+                .scalar() or 0.0
+            )
+            jcl_quoted = jcl.total_quoted or 0.0
+            if (amt_v + other_aps_alloc) > jcl_quoted + 0.01:
+                free_remaining = max(0.0, jcl_quoted - other_aps_alloc)
+                raise HTTPException(
+                    409,
+                    detail={
+                        "message": (
+                            f"La voce è già parzialmente allocata ad altri acconti.\n\n"
+                            f"• Voce JCL #{jid}: {jcl.description or '(senza descrizione)'}\n"
+                            f"• Quotato totale: € {jcl_quoted:,.2f}\n"
+                            f"• Già allocato ad altri acconti: € {other_aps_alloc:,.2f}\n"
+                            f"• Disponibile residuo: € {free_remaining:,.2f}\n"
+                            f"• Allocazione richiesta da questo acconto: € {amt_v:,.2f}\n\n"
+                            f"Riduci l'allocazione a € {free_remaining:,.2f} o meno, "
+                            f"oppure annulla l'acconto precedente che la copre."
+                        ),
+                        "jcl_id": jid,
+                        "jcl_quoted": round(jcl_quoted, 2),
+                        "other_aps_alloc": round(other_aps_alloc, 2),
+                        "free_remaining": round(free_remaining, 2),
+                        "attempted_amount": round(amt_v, 2),
+                    },
                 )
             new_pairs.append((jid, amt_v, idx))
-        # Vincolo Σ ≤ AP.amount (no over-alloc)
+        # Vincolo Σ ≤ AP.amount (no over-alloc su questa AP)
         total_alloc = round(sum(p[1] for p in new_pairs), 2)
         if total_alloc > (ap.amount or 0.0) + 0.01:
             raise HTTPException(
                 409,
-                f"Σ allocations {total_alloc} eccede AP.amount {ap.amount}",
+                detail={
+                    "message": (
+                        f"La somma delle allocazioni supera il totale dell'acconto.\n\n"
+                        f"• Importo acconto: € {(ap.amount or 0):,.2f}\n"
+                        f"• Somma allocazioni richieste: € {total_alloc:,.2f}\n\n"
+                        f"Riduci una o più allocazioni alle voci."
+                    ),
+                },
             )
         # Drop existing + crea nuove
         db.query(_APA2).filter(_APA2.advance_payment_id == ap.id).delete()

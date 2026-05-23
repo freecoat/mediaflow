@@ -1,5 +1,34 @@
 # MediaFlow — Changelog
 
+## v3.5.0-alpha.172.49 — Cross-AP allocation overflow JCL block (23 mag 2026)
+
+Matteo: "ho appena allocato 2 acconti sulla stessa JCL eccedendo il complessivo quotato. Il fill dovrebbe essere permanente quando viene confermato nella bozza acconti".
+
+Pre-α.172.49 `confirm_advance_payment` controllava `alloc.amount ≤ JCL.total_quoted` SOLO sull'AP corrente. Niente check cross-AP → 2 AP potevano ciascuno allocare 100% della stessa JCL → overflow effettivo 200%.
+
+Fix in `finance.py` (allocations_set loop):
+- Σ allocazioni esistenti su JCL da OTHER AP non-cancelled (escludendo self) calcolato via query
+- Se `amt_v + other_aps_alloc > JCL.total_quoted + 0.01` → HTTP 409 con messaggio dettagliato:
+  - JCL #id + descrizione
+  - Quotato totale, già allocato altri AP, disponibile residuo
+  - Allocazione richiesta attuale
+  - Suggerimento azione: ridurre o annullare AP precedente
+
+Errore richiesto da specifica Matteo: allocation confermata in `draft/confirmed` deve essere "permanente" → cross-AP overflow bloccato.
+
+Migliorati anche altri 2 errori esistenti in stesso endpoint (single-AP overflow + Σ alloc > AP.amount): convertiti a `detail.message` multi-line human-readable per consistency con α.172.48 toastBlock.
+
+Combo block completo sui 3 livelli ora:
+- α.172.46: Σ AP > project budget (creazione AP)
+- α.172.47: Σ schedule pct > 100% (definizione Quote schedule)
+- α.172.49: Σ alloc su JCL > JCL.quoted (cross-AP)
+
+Nessun path può sfornare allocazioni cumulative > 100% del quotato.
+
+**File toccati**: `app/routers/finance.py`, `app/main.py`, `CHANGELOG.md`.
+
+---
+
 ## v3.5.0-alpha.172.48 — Warning HARD-BLOCK visibili + human-readable (toastBlock) (23 mag 2026)
 
 Matteo: "per tutti i warning block, possiamo creare warning più visibili e sempre human readable?"
