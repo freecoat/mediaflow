@@ -1082,6 +1082,61 @@ async def list_advance_schedules(quote_id: int, db: Session = Depends(get_db)):
     return {"quote_id": quote_id, "schedules": [_serialize_schedule(s) for s in schedules]}
 
 
+# v3.5.0-alpha.172.47 — HARD-BLOCK helper: Σ pct schedules <= 100%.
+# Pre-α.172.47 utente poteva creare schedule 30% + 80% = 110% senza warn.
+# Materialize → 2 AP per 110% del budget → bloccato solo a emit.
+# Check anticipato al save dello schedule.
+def _check_advance_schedule_total(
+    db: Session, quote_id: int, *,
+    new_pct: Optional[float] = None,
+    new_amount_fixed: Optional[float] = None,
+    exclude_id: Optional[int] = None,
+) -> None:
+    """Solleva HTTPException(409) se Σ schedule pct (+ amount_fixed
+    convertito a pct via quote_total) eccede 1.0. `exclude_id` = id del
+    record corrente (PUT) da escludere dal calcolo."""
+    from app.models import QuoteAdvanceSchedule
+    q = db.query(Quote).filter(Quote.id == quote_id).first()
+    if not q:
+        return  # quote non esiste, lascia gestire al chiamante
+    quote_total = q.total_after_discount or 0.0
+    existing = db.query(QuoteAdvanceSchedule).filter(
+        QuoteAdvanceSchedule.quote_id == quote_id,
+        QuoteAdvanceSchedule.tenant_id == current_tenant_id(),
+    )
+    if exclude_id is not None:
+        existing = existing.filter(QuoteAdvanceSchedule.id != exclude_id)
+    cumulative_pct = 0.0
+    for s in existing.all():
+        if s.pct:
+            cumulative_pct += s.pct
+        elif s.amount_fixed and quote_total > 0:
+            cumulative_pct += s.amount_fixed / quote_total
+    new_contrib = 0.0
+    if new_pct:
+        new_contrib = new_pct
+    elif new_amount_fixed and quote_total > 0:
+        new_contrib = new_amount_fixed / quote_total
+    if cumulative_pct + new_contrib > 1.0 + 0.001:
+        existing_pct_label = round(cumulative_pct * 100, 1)
+        new_pct_label = round(new_contrib * 100, 1)
+        total_pct_label = round((cumulative_pct + new_contrib) * 100, 1)
+        raise HTTPException(
+            409,
+            detail={
+                "message": (
+                    f"Σ acconti programmati supererebbe il 100% del valore quote: "
+                    f"{total_pct_label}%. Esistenti: {existing_pct_label}%, "
+                    f"nuovo: {new_pct_label}%. Riduci percentuale o elimina "
+                    f"uno schedule esistente."
+                ),
+                "existing_pct": existing_pct_label,
+                "attempted_pct": new_pct_label,
+                "total_pct": total_pct_label,
+            },
+        )
+
+
 @router.post("/api/{quote_id}/advance-schedules", dependencies=[RequireEditQuotes])
 async def create_advance_schedule(
     quote_id: int,
@@ -1128,6 +1183,8 @@ async def create_advance_schedule(
         anchor_enum = AdvanceDueAnchor(due_anchor)
     except ValueError:
         raise HTTPException(400, f"due_anchor non valido: {due_anchor}")
+    # v3.5.0-alpha.172.47 — HARD-BLOCK overflow Σ pct
+    _check_advance_schedule_total(db, quote_id, new_pct=pct, new_amount_fixed=amount_fixed)
     sched = QuoteAdvanceSchedule(
         tenant_id=current_tenant_id(),
         quote_id=quote_id,
@@ -1197,6 +1254,11 @@ async def update_advance_schedule(
     if not s:
         raise HTTPException(404, "Schedule non trovato")
     if label is not None: s.label = label.strip()
+    # v3.5.0-alpha.172.47 — HARD-BLOCK overflow Σ pct (escludi self da calc)
+    _check_advance_schedule_total(
+        db, s.quote_id, new_pct=pct, new_amount_fixed=amount_fixed,
+        exclude_id=schedule_id,
+    )
     # v3.5.0-alpha.166 — Mutual exclusion: settare pct azzera amount_fixed e viceversa.
     if pct is not None:
         if pct < 0 or pct > 1.0:

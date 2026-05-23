@@ -1,5 +1,30 @@
 # MediaFlow — Changelog
 
+## v3.5.0-alpha.172.47 — HARD-BLOCK Σ schedule acconti > 100% in quote (23 mag 2026)
+
+Estensione α.172.46 al livello QuoteAdvanceSchedule (sorgente upstream).
+
+α.172.46 bloccava `create_advance_payment` (AP diretto su progetto). Ma il flow REALE è: utente definisce schedule acconti su Quote → approva Quote → `materialize_schedules` crea AP automaticamente. Schedule mal-configurati (es. 30% + 80% = 110%) generavano 2 AP per 110% del valore quote senza warn fino all'emit.
+
+Fix in `quotes.py`:
+- Nuovo helper `_check_advance_schedule_total(db, quote_id, *, new_pct, new_amount_fixed, exclude_id)`:
+  - Σ pct schedule esistenti (escludi exclude_id) + nuovo contributo
+  - `amount_fixed` convertito a pct via `quote_total`
+  - Se > 1.0 + 0.001 → HTTP 409 con `{message, existing_pct, attempted_pct, total_pct}`
+- Hook su `POST /api/{quote_id}/advance-schedules` (create) e `PUT /api/advance-schedules/{id}` (update con exclude_id=self).
+
+Messaggio: "Σ acconti programmati supererebbe il 100% del valore quote: X%. Esistenti: Y%, nuovo: Z%. Riduci percentuale o elimina uno schedule esistente."
+
+Doppio livello block:
+- α.172.46 — su create_advance_payment manuale (POST projects/{id}/advances)
+- α.172.47 — su create/update schedule in Quote (upstream)
+
+Insieme prevengono qualsiasi path da generare AP cumulativo > budget.
+
+**File toccati**: `app/routers/quotes.py`, `app/main.py`, `CHANGELOG.md`.
+
+---
+
 ## v3.5.0-alpha.172.46 — HARD-BLOCK Σ acconti > budget progetto (23 mag 2026)
 
 Matteo: "ho appena generato 2 acconti per lo stesso progetto: uno del 30% e uno dell'80%" → 110% del budget, nessun warn.
