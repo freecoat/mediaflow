@@ -39,12 +39,38 @@ Schema di output JSON (tutti i campi opzionali, None se non trovato):
   "company_size": "Piccola (<10) | Media (10-50) | Grande (50-250) | Enterprise (250+)",
   "founded_year": 2003,
   "recent_productions": [
-    {"title": "Nome opera", "year": 2023, "role": "Produttore/Distributore/..."},
+    {
+      "title": "Nome opera",
+      "year": 2023,
+      "role": "Produttore | Coproduttore | Distributore | Esecutivo | ...",
+      "format": "Lungometraggio | Cortometraggio | Serie TV | Documentario | Spot | Branded",
+      "genre": "Drammatico | Commedia | Thriller | Animazione | ...",
+      "length_minutes": 110,
+      "director": "Nome cognome",
+      "cast": ["Attore 1", "Attore 2", "Attore 3"],
+      "dop": "Direttore della fotografia (se noto)",
+      "release_date": "YYYY-MM-DD o null",
+      "festival_premiere": "es. 'Venezia 2023', 'Cannes 2024' o null",
+      "distributor": "Distributore IT/internazionale (se diverso da role)",
+      "broadcaster": "Broadcaster/Streamer (Netflix, Sky, RAI, ...) o null",
+      "funding": ["MIC", "Eurimages", "Regione Lazio Film Commission", "tax credit", ...],
+      "co_producers": ["Coproduttori esteri/nazionali"],
+      "box_office_eur": 1234567,
+      "awards": ["Coppa Volpi 2023", "David di Donatello"],
+      "imdb_id": "tt1234567 o null"
+    },
     ...
   ],
   "notes": "Sintesi 2-3 frasi: cosa fa l'azienda, specializzazione, reputazione.",
   "sources": ["url1", "url2", ...]
-}"""
+}
+
+IMPORTANTE filmografia: per case di produzione audiovisiva i campi rilevanti
+per un software gestionale post-prod sono cast/regista/dop (per matching
+risorse), finanziamenti (per valutare budget tipici), date uscita (per
+pianificare consegne future), festival/awards (per posizionamento). NON
+limitarti a title+year+role: cerca dettagli completi per almeno le ultime
+5-10 produzioni rilevanti."""
 
 
 ENRICHMENT_SYSTEM_PROMPT_NOWEB = """Sei un assistente che struttura informazioni aziendali in un formato JSON specifico.
@@ -68,11 +94,35 @@ Schema di output JSON (tutti i campi opzionali, null se non sai):
   "company_size": "Piccola | Media | Grande | Enterprise — solo se noto",
   "founded_year": null,
   "recent_productions": [
-    {"title": "Nome opera ricordata", "year": 2023, "role": "Produttore/..."}
+    {
+      "title": "Nome opera ricordata",
+      "year": 2023,
+      "role": "Produttore/Coproduttore/Distributore/...",
+      "format": "Lungometraggio | Serie TV | Documentario | ...",
+      "genre": "Drammatico | Commedia | ...",
+      "length_minutes": null,
+      "director": "Nome cognome se ricordato",
+      "cast": ["Attori principali se ricordati"],
+      "dop": null,
+      "release_date": "YYYY-MM-DD o null",
+      "festival_premiere": "es. 'Venezia 2023' o null",
+      "distributor": null,
+      "broadcaster": null,
+      "funding": ["MIC", "tax credit", ...] o [],
+      "co_producers": [],
+      "box_office_eur": null,
+      "awards": ["David", "Coppa Volpi", ...] o [],
+      "imdb_id": null
+    }
   ],
   "notes": "2-3 frasi su cosa fa l'azienda. Indica esplicitamente se sono informazioni dal tuo training, potenzialmente non aggiornate.",
   "sources": []
-}"""
+}
+
+IMPORTANTE filmografia: anche senza accesso web, per case famose ricorda
+quanto puoi su cast/regista/festival/awards delle produzioni note. Lascia
+null SOLO i campi di cui non sei certo (date precise, IBAN, P.IVA, box
+office). Cast/regista sono spesso noti per produzioni di rilievo."""
 
 
 def _normalize_result(result: dict, web_used: bool) -> dict:
@@ -94,11 +144,21 @@ def _try_native_web_search(provider, name: str, known_info: Optional[dict]) -> O
         return None
     user_prompt = (
         f'Cerca informazioni dettagliate sull\'azienda audiovisiva "{name}". '
-        f'Fai più ricerche se serve: sito ufficiale, sede legale, P.IVA, '
-        f'anno fondazione, filmografia/produzioni recenti, settore.\n\n'
+        f'Fai più ricerche separate per ciascuna area: '
+        f'(1) sito ufficiale + sede legale + P.IVA + anno fondazione; '
+        f'(2) filmografia recente (ultimi 5 anni) con per ogni produzione '
+        f'cast principale, regista, DOP, date uscita theatrical/streaming, '
+        f'premiere festival, distributore, broadcaster; '
+        f'(3) finanziamenti pubblici noti (MIC, Eurimages, Film Commission '
+        f'regionali, tax credit), coproduttori esteri/nazionali; '
+        f'(4) box office italiano/internazionale se reperibile, premi/awards. '
+        f'Usa anche IMDb/CineDataBase/Mymovies/Variety come fonti.\n\n'
         + (f"Info già note (puoi usarle per affinare le query): "
            f"{json.dumps(known_info, ensure_ascii=False)}\n\n" if known_info else "")
-        + 'Restituisci poi UN SOLO oggetto JSON secondo lo schema, senza testo extra.'
+        + 'Restituisci poi UN SOLO oggetto JSON secondo lo schema, senza testo extra. '
+        + 'Per ogni produzione popola TUTTI i campi che riesci a trovare con '
+        + 'ragionevole certezza (cast, regista, finanziamenti, date). Lascia '
+        + 'null solo i campi davvero non documentati.'
     )
     logger.info(f"Native web_search per: {name}")
     result = provider.extract_json_with_web_search(

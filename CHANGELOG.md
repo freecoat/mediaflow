@@ -1,5 +1,32 @@
 # MediaFlow — Changelog
 
+## v3.5.0-alpha.172.44 — Schema filmografia AI esteso: cast/funding/release/festival (23 mag 2026)
+
+Matteo: "ricerca AI filmografia deludente, mancano dati su finanziamenti, cast, date uscita".
+
+Pre-α.172.44 schema `recent_productions` AI enrichment: solo `{title, year, role}`. Per case di produzione audiovisiva era info insufficiente — utente vuole dettaglio rilevante per gestionale post-prod.
+
+Schema esteso (`app/services/client_enrichment.py`):
+- `format`: Lungometraggio/Serie TV/Documentario/Cortometraggio/Spot/Branded
+- `genre`: Drammatico/Commedia/Thriller/...
+- `length_minutes`
+- `director`, `cast` (array), `dop`
+- `release_date` (YYYY-MM-DD), `festival_premiere` (es. "Venezia 2023")
+- `distributor`, `broadcaster` (Netflix/Sky/RAI/...)
+- `funding` (array: MIC, Eurimages, Film Commission regionali, tax credit)
+- `co_producers` (array)
+- `box_office_eur`, `awards` (array), `imdb_id`
+
+Aggiornati 2 system prompt (WEB + NOWEB) + user prompt search:
+- Web path: chiede 4 ricerche separate (anagrafica + filmografia + finanziamenti + box office/awards), suggerisce IMDb/CineDataBase/Mymovies/Variety come fonti
+- No-web path: chiede di compilare quanto noto da training per produzioni famose, lasciare null solo dati incerti
+
+**File toccati**: `app/services/client_enrichment.py`, `app/main.py`, `CHANGELOG.md`.
+
+UI cliente mostrerà ora dettaglio filmografia espanso post-enrichment. Eventuale UI estesa per renderizzare nuovi campi → backlog.
+
+---
+
 ## v3.5.0-alpha.172.43 — UX fix Emit acconto: warning inline + disable se 0 allocazioni (23 mag 2026)
 
 Modal "Emetti fattura acconto" pre-α.172.43 mostrava bottone Emit attivo
