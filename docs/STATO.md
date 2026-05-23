@@ -8,35 +8,50 @@
 
 ## Versione corrente
 
-**v3.5.0-alpha.172.41** — 23 maggio 2026 — Sprint 6 Audit FINALE: SDI compliance + FatturaPA XML (BLOCCO 6 parte 2)
+**v3.5.0-alpha.172.50** — 23-24 maggio 2026 — Reset acconto draft→pending + UI allocazione chiara
 
-**AUDIT MULTI-AGENT CHIUSO**. Sprint 6 finalizza BLOCCO 6 parte 2:
+13 commit oggi α.172.34 → α.172.50. Sprint 1-6 audit chiuso 100% + 7 fix post-audit + DB ripulito + UX modal acconto migliorata.
 
-- **6.A italian_tax wire-up**: clients.py POST/PUT `_validate_fiscal_fields()` solleva 422 su P.IVA/CF/SDI/IBAN invalidi. billing.emit_invoice pre-emit HARD-BLOCK via `invoice_sdi_compliance_check`.
-- **6.B FatturaPA XML builder** nuovo `app/services/sdi_xml.py`: `build_fattura_xml(invoice, tenant) → (xml, filename)`. Self-contained via xml.etree, conforme FPR12 B2B v1.6.1. Endpoint `GET /finance/api/invoices/{id}/sdi-xml` download (`RequireEditInvoices`). Smoke test passato: RAI P.IVA, IBAN reale, 2 lines → 2869 bytes XML OK, filename `IT12345678901_RSENA.xml`.
-- **6.C UI backlog escapeHtml**: pricelist row, cost_report description, dam upload filename.
+Sintesi post-audit fix:
+- α.172.42 cashflow Fandango outstanding includeva cancelled (-€57.528 fantasma)
+- α.172.42 cascade NC→AdvancePayment draft anche da update_invoice_status cancelled
+- α.172.42 modal "Nuovo cliente" 7 campi fiscali SDI mancanti aggiunti
+- α.172.43 UX modal Emit acconto: banner verde/rosso + Emit disabilitato se 0 alloc
+- α.172.44-45 filmografia AI schema esteso (cast/funding/release/festival) + wire-up backend + UI import
+- α.172.46-47-49 3 livelli HARD-BLOCK Σ acconti: budget progetto + schedule quote + cross-AP JCL
+- α.172.48 toastBlock 12s rosso visibile per warning 409 + auto-trigger su detail.message
+- α.172.50 endpoint reset draft→pending + UI bottone + banner spiegativo modal allocazione
 
-513 routes (+1 SDI endpoint). No DB migration.
+DB: clienti+progetti+quote freschi (purge totale business 23 mag sera). Anagrafiche tecniche preservate. Matteo ha creato 1 quote + 2 acconti pre-chiusura sera.
+
+514 routes (+1 reset endpoint).
 
 ## Lavoro in corso
 
-**Audit chiuso al 100%**. 6 sprint + 1 mini (Sprint 3.5) eseguiti tra α.172.35 e α.172.41 in singola sessione 23 mag 2026.
+PAUSA — Matteo dorme (chiusura sera 23 mag). **Riapertura 24 mag mattina**.
 
 ## Prossimo step
 
-Test intensivo utente Matteo su sprint 1-6. In particolare:
-1. Verifica live tenant scope (login con tenant!=1 fittizio se possibile)
-2. Modifica voce quote con JCL fatturata → 409 atteso (Sprint 2)
-3. `weighted_revenue=True` su Job con OT → `total_accrued` ora include multiplier (Sprint 3.A)
-4. Tentativo emit_invoice senza P.IVA cliente → 422 atteso (Sprint 6.A)
-5. Download `/finance/api/invoices/{id}/sdi-xml` su fattura test → XML valid (Sprint 6.B)
-6. Reopen anomaly con LossEntry collegata → record sparisce (Sprint 3.B)
+**Test plan dettagliato in memoria** `project_test_plan_24mag2026.md` — 12 fasi step-by-step da fare insieme:
 
-Backlog Sprint 7 (opzionale, post-test):
-- FK ondelete + UNIQUE legacy table-rebuild SQLite (richiede backup esplicito)
-- UI bottone "Genera XML SDI" in /finance tab Fatture
-- Trasmissione automatica SDI via Aruba/Sole24 (richiede firma digitale)
-- Wire-up `_validate_fiscal_fields` su Supplier/Tenant edit endpoints
+- FASE 0: Restart server uvicorn + Ctrl+Shift+R browser + verifica versione α.172.50
+- FASE 1: Reset acconto draft→pending (banner + bottone giallo)
+- FASE 2: Cross-AP overflow JCL block (toastBlock rosso)
+- FASE 3-4: Emit fattura acconto + cascade NC→draft
+- FASE 5-6: Compliance SDI + XML download FatturaPA
+- FASE 7: Pass-through OT toggle weighted_revenue
+- FASE 8: Cashflow Fandango (skip se DB purgato)
+- FASE 9: Filmografia AI dettagliata (cast/finanziamenti/festival)
+- FASE 10: Anomaly reopen cascade
+- FASE 11: 3 block visivi toastBlock (schedule/AP/cross-JCL)
+- FASE 12: Issue aperti (Deliverable in acconto, rendering filmografia)
+
+Backlog Sprint 7 (post-test):
+- FK ondelete table-rebuild SQLite (rischio)
+- Trasmissione SDI auto (firma digitale richiesta)
+- UI bottone "Genera XML SDI" in /finance tab
+- Allocazione acconto su JobDeliverable (modal duale JCL+Deliverable)
+- Rendering UI schede filmografia esteso (synopsis/cast_crew/funding visibili)
 
 ## Bug aperti
 
