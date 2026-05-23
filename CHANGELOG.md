@@ -1,5 +1,34 @@
 # MediaFlow — Changelog
 
+## v3.5.0-alpha.172.48 — Warning HARD-BLOCK visibili + human-readable (toastBlock) (23 mag 2026)
+
+Matteo: "per tutti i warning block, possiamo creare warning più visibili e sempre human readable?"
+
+Pre-α.172.48 i 409 HARD-BLOCK uscivano via `toast()` standard:
+- durata 3.5s → utente non leggeva
+- 1 riga → messaggio troncato
+- messaggi backend con simboli tecnici (Σ) e percentuali bare
+
+Fix in `app/static/js/global.js`:
+- Nuova funzione `toastBlock(msg, opts)`:
+  - durata 12s (vs 3.5s)
+  - multi-line + word-wrap (white-space:pre-wrap)
+  - dismissable via ✕
+  - bordo rosso evidente + sfondo rossastro
+  - z-index 9999 per non essere coperto da modal
+  - icona ⛔ + titolo "Operazione bloccata" + body messaggio
+- `_parseError()` auto-mostra `toastBlock` su HTTP 409 con `detail.message`. Skip per `SLICE_LOCK_CONFIRM_REQUIRED` (ha handler dedicato). Flag `e._toastShown=true` previene doppio toast lato chiamante.
+
+Refactor messaggi backend in formato multi-line human-readable:
+- `finance.py:create_advance_payment` 409: ora "La somma degli acconti supererebbe il budget del progetto.\n• Budget: € X\n• Esistenti: € Y (Z%)\n• Nuovo: € W\n• Totale: € T (P%)\n\nPer procedere: riduci..."
+- `quotes.py:_check_advance_schedule_total` 409: stesso pattern human-readable con bullet points.
+
+Convenzione futura per nuovi 409 block: usa `detail={"message": "<multi-line IT con emoji/bullet + suggested action>", ...}`. UI mostrerà automaticamente via toastBlock.
+
+**File toccati**: `app/static/js/global.js`, `app/routers/finance.py`, `app/routers/quotes.py`, `app/main.py`, `CHANGELOG.md`.
+
+---
+
 ## v3.5.0-alpha.172.47 — HARD-BLOCK Σ schedule acconti > 100% in quote (23 mag 2026)
 
 Estensione α.172.46 al livello QuoteAdvanceSchedule (sorgente upstream).

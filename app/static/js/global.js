@@ -292,6 +292,56 @@ function toast(msg, type = 'info', duration = 3500) {
   }, duration);
 }
 
+// v3.5.0-alpha.172.48 — Toast "block" per warning HARD-BLOCK 409.
+// Caratteristiche vs toast standard:
+//  - durata 12s (vs 3.5s) — utente ha tempo di leggere
+//  - multi-line + word-wrap (toast standard è 1 riga troncata)
+//  - dismissable via click (✕) — l'utente conferma di averlo letto
+//  - icona ⛔ e bordo rosso evidente
+//  - z-index alto per non essere coperto da modal
+// Usato auto da api() su 409, OR manualmente: `toastBlock("messaggio human")`.
+function toastBlock(msg, opts = {}) {
+  const duration = opts.duration || 12000;
+  const container = document.getElementById('toast-container');
+  if (!container) {
+    alert(msg);  // fallback estremo se toast-container manca
+    return;
+  }
+  const el = document.createElement('div');
+  el.className = 'toast error toast-block';
+  el.style.cssText = (
+    'max-width:min(560px, 90vw); white-space:pre-wrap; padding:14px 40px 14px 16px; '
+    + 'font-size:14px; line-height:1.45; border:2px solid rgba(239,68,68,0.55); '
+    + 'background:rgba(239,68,68,0.18); color:#fef2f2; '
+    + 'box-shadow:0 4px 18px rgba(0,0,0,0.4); border-radius:10px; '
+    + 'position:relative; z-index:9999;'
+  );
+  const icon = document.createElement('div');
+  icon.textContent = '⛔ ' + (opts.title || 'Operazione bloccata');
+  icon.style.cssText = 'font-weight:600; margin-bottom:6px; font-size:13px;';
+  const body = document.createElement('div');
+  body.textContent = msg;
+  const close = document.createElement('button');
+  close.textContent = '✕';
+  close.setAttribute('aria-label', 'Chiudi avviso');
+  close.style.cssText = (
+    'position:absolute; top:8px; right:10px; background:transparent; '
+    + 'border:0; color:#fef2f2; font-size:18px; cursor:pointer; line-height:1; padding:2px 6px;'
+  );
+  close.onclick = () => { el.remove(); };
+  el.appendChild(icon);
+  el.appendChild(body);
+  el.appendChild(close);
+  container.appendChild(el);
+  try { playSound('notify'); } catch (e) {}
+  setTimeout(() => {
+    if (!el.parentNode) return;
+    el.style.opacity = '0';
+    el.style.transition = 'opacity 400ms';
+    setTimeout(() => el.remove(), 400);
+  }, duration);
+}
+
 // ── Modal ─────────────────────────────────────────────────────
 // v3.5.0-alpha.9: openModal ora rinfresca searchable selects + timepickers
 // dentro il modal dopo averlo aperto.
@@ -438,6 +488,17 @@ async function api(method, url, body, options) {
     const e = new Error(humanMsg);
     e.detail = err.detail;
     e.status = resp.status;
+    // v3.5.0-alpha.172.48 — Auto-mostra toastBlock per 409 con messaggio
+    // human-readable. Differenzia HARD-BLOCK dai semplici 400 (validation):
+    // 409 = conflict / business rule violation = warning critico, l'utente
+    // deve leggere + decidere. Skip se chiamante ha già gestito.
+    if (resp.status === 409 && humanMsg && typeof toastBlock === 'function') {
+      const isSliceLock = err.detail && err.detail.code === 'SLICE_LOCK_CONFIRM_REQUIRED';
+      if (!isSliceLock) {  // slice-lock ha handler dedicato sotto
+        try { toastBlock(humanMsg); } catch (_) {}
+        e._toastShown = true;  // signal a chiamanti per evitare doppio toast
+      }
+    }
     return e;
   };
 

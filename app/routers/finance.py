@@ -530,10 +530,13 @@ async def create_advance_payment(
                 409,
                 detail={
                     "message": (
-                        f"Σ acconti supererebbe il budget progetto: "
-                        f"€{total_after_new:.2f} ({pct_attempt}%) > €{project_budget:.2f}. "
-                        f"Acconti esistenti: €{existing_advances_total:.2f} ({pct_existing}%). "
-                        f"Riduci l'importo o annulla un acconto esistente."
+                        f"La somma degli acconti supererebbe il budget del progetto.\n\n"
+                        f"• Budget progetto: € {project_budget:,.2f}\n"
+                        f"• Acconti già esistenti: € {existing_advances_total:,.2f} ({pct_existing}%)\n"
+                        f"• Nuovo acconto richiesto: € {amount:,.2f}\n"
+                        f"• Totale risultante: € {total_after_new:,.2f} ({pct_attempt}%)\n\n"
+                        f"Per procedere: riduci l'importo del nuovo acconto, "
+                        f"oppure annulla uno degli acconti esistenti."
                     ),
                     "project_budget": round(project_budget, 2),
                     "existing_advances_total": round(existing_advances_total, 2),

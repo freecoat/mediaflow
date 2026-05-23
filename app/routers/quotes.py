@@ -1125,10 +1125,12 @@ def _check_advance_schedule_total(
             409,
             detail={
                 "message": (
-                    f"Σ acconti programmati supererebbe il 100% del valore quote: "
-                    f"{total_pct_label}%. Esistenti: {existing_pct_label}%, "
-                    f"nuovo: {new_pct_label}%. Riduci percentuale o elimina "
-                    f"uno schedule esistente."
+                    f"Gli acconti programmati supererebbero il 100% del valore della quotazione.\n\n"
+                    f"• Acconti già programmati: {existing_pct_label}%\n"
+                    f"• Nuovo acconto richiesto: {new_pct_label}%\n"
+                    f"• Totale risultante: {total_pct_label}%\n\n"
+                    f"Per procedere: riduci la percentuale del nuovo acconto, "
+                    f"oppure elimina uno degli acconti programmati esistenti."
                 ),
                 "existing_pct": existing_pct_label,
                 "attempted_pct": new_pct_label,

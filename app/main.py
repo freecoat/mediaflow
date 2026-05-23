@@ -1551,7 +1551,7 @@ async def lifespan(app: FastAPI):
     yield
 
 
-app = FastAPI(title="MediaFlow", version="3.5.0-alpha.172.47", lifespan=lifespan)
+app = FastAPI(title="MediaFlow", version="3.5.0-alpha.172.48", lifespan=lifespan)
 
 BASE_DIR = Path(__file__).parent
 app.mount("/static", StaticFiles(directory=BASE_DIR / "static"), name="static")
