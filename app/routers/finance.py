@@ -385,8 +385,26 @@ async def update_invoice_status(
         total = inv.total or 0.0
         if (inv.amount_paid or 0.0) < total:
             inv.amount_paid = total
+    # v3.5.0-alpha.172.42 — Cascade su acconto cancelled (anche da draft/approved):
+    # se la fattura acconto viene cancellata SENZA passare da NC TD04, l'AP
+    # ledger collegato torna a `draft` (analogo al flow create_credit_note in
+    # billing.py:2510). Permette di rieditare e riemettere senza ricreare AP.
+    # Idempotente: se inv non è kind=advance, no-op.
+    advance_reopened_id = None
+    if status == InvoiceStatus.cancelled and inv.kind == InvoiceKind.advance:
+        ap_src = db.query(AdvancePayment).filter(
+            AdvancePayment.invoice_id == inv.id,
+            AdvancePayment.tenant_id == current_tenant_id(),
+        ).first()
+        if ap_src:
+            ap_src.invoice_id = None
+            ap_src.status = AdvancePaymentStatus.draft
+            advance_reopened_id = ap_src.id
     db.commit()
-    return {"id": inv.id, "status": inv.status}
+    result = {"id": inv.id, "status": inv.status}
+    if advance_reopened_id:
+        result["advance_reopened_id"] = advance_reopened_id
+    return result
 
 
 # ── Acconti progetto (v3.5.0-alpha.136) ────────────────────────────
@@ -1957,9 +1975,15 @@ def cashflow_year_sync(
             series[m - 1]["invoiced"] += sign * (inv.total or 0.0)
             series[m - 1]["invoiced_net"] += sign * (inv.subtotal or 0.0)
         # outstanding: NC TD04 non genera outstanding (è un credito, non un debito da incassare)
+        # v3.5.0-alpha.172.42 — BUG FIX: outstanding ESCLUDE cancelled (era
+        # solo paid). Fatture annullate via NC TD04 non sono debiti da
+        # incassare. Matteo: filtro Fandango mostrava 57.528€ = 3×19176 net
+        # delle 3 invoice cancelled, ma nessun progetto Fandango aveva
+        # davvero importi in attesa. Coerente con sign=-1 dell'NC sopra che
+        # storna l'invoiced; l'outstanding deve allinearsi.
         if getattr(inv, "doc_type", None) != "TD04":
             remaining = max(0.0, (inv.total or 0.0) - (inv.amount_paid or 0.0))
-            if remaining > 0 and inv.status != InvoiceStatus.paid:
+            if remaining > 0 and inv.status not in (InvoiceStatus.paid, InvoiceStatus.cancelled):
                 series[m - 1]["outstanding"] += remaining
                 # v3.5.0-alpha.123 (F16) — outstanding_net pro-quota
                 total_v = inv.total or 0.0

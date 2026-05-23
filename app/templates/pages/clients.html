@@ -56,8 +56,29 @@
       <div class="form-row">
         <div class="form-group"><label class="form-label" data-i18n="form.vat_number">P.IVA</label>
           <input class="form-input" id="nc-vat" placeholder="IT12345678901"></div>
+        <div class="form-group"><label class="form-label">Codice fiscale</label>
+          <input class="form-input" id="nc-tax" placeholder="16 alfanum o 11 cifre"></div>
+      </div>
+      <!-- v3.5.0-alpha.172.42 — campi fiscali obbligatori SDI -->
+      <div class="form-row">
+        <div class="form-group"><label class="form-label">Codice SDI</label>
+          <input class="form-input" id="nc-sdi" placeholder="7 alfanum o 0000000" maxlength="7"></div>
+        <div class="form-group"><label class="form-label">PEC</label>
+          <input class="form-input" id="nc-pec" type="email" placeholder="pec@..."></div>
+      </div>
+      <div class="form-row">
+        <div class="form-group"><label class="form-label">Indirizzo</label>
+          <input class="form-input" id="nc-address"></div>
+        <div class="form-group"><label class="form-label">CAP</label>
+          <input class="form-input" id="nc-zip" maxlength="5" style="max-width:120px;"></div>
+      </div>
+      <div class="form-row">
         <div class="form-group"><label class="form-label" data-i18n="form.city">Città</label>
           <input class="form-input" id="nc-city"></div>
+        <div class="form-group"><label class="form-label">Prov.</label>
+          <input class="form-input" id="nc-province" maxlength="2" style="max-width:80px;"></div>
+        <div class="form-group"><label class="form-label">Paese</label>
+          <input class="form-input" id="nc-country" value="IT" maxlength="2" style="max-width:80px;"></div>
       </div>
       <div class="form-group"><label class="form-label">Sito web</label>
         <input class="form-input" id="nc-website" placeholder="https://..."></div>
@@ -212,9 +233,18 @@ function _newClientFormData() {
   if (!name) { toast('Inserisci il nome', 'error'); return null; }
   const fd = new FormData();
   fd.append('name', name);
-  ['legal', 'vat', 'city', 'website', 'contact', 'email', 'notes'].forEach(f => {
-    const v = document.getElementById('nc-' + f).value;
-    if (v) fd.append(f === 'legal' ? 'legal_form' : f === 'vat' ? 'vat_number' : f === 'contact' ? 'contact_name' : f === 'email' ? 'contact_email' : f, v);
+  // v3.5.0-alpha.172.42 — esteso con tax_code/sdi/pec/address/zip/province/country
+  const fieldMap = {
+    legal: 'legal_form', vat: 'vat_number', tax: 'tax_code', sdi: 'sdi_code',
+    pec: 'pec', address: 'address', zip: 'zip_code', city: 'city',
+    province: 'province', country: 'country', website: 'website',
+    contact: 'contact_name', email: 'contact_email', notes: 'notes',
+  };
+  Object.entries(fieldMap).forEach(([short, full]) => {
+    const el = document.getElementById('nc-' + short);
+    if (!el) return;
+    const v = (el.value || '').trim();
+    if (v) fd.append(full, v);
   });
   return fd;
 }

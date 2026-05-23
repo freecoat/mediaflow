@@ -1,5 +1,36 @@
 # MediaFlow — Changelog
 
+## v3.5.0-alpha.172.42 — Bugfix post-audit: cashflow outstanding + advance cancel cascade + client modal fiscale (23 mag 2026)
+
+3 fix dopo test utente Matteo post-audit.
+
+**1. Cashflow outstanding includeva cancelled** (`finance.py:1960`):
+Bug: la query outstanding escludeva solo `paid` ma NON `cancelled`. Una fattura annullata (cancelled) restava nel calcolo "in attesa di incasso" → cifra inflate. Esempio: cliente Fandango aveva 3 fatture cancelled × €19176 net = **€57.528** mostrati come outstanding net pur senza nessun debito reale (fatture stornate via NC).
+
+Fix: aggiunto `cancelled` al filtro `inv.status not in (paid, cancelled)`. Coerente con sign=-1 dell'NC sopra che storna l'invoiced.
+
+**2. Acconto cancelled da draft/approved senza NC** (`finance.py:update_invoice_status`):
+Pre-α.172.42 solo lo storno via NC TD04 (`billing.create_credit_note`) riapriva l'AdvancePayment ledger collegato. Cancellando una fattura acconto da `draft` o `approved` (cambio stato → cancelled), l'AP restava sospeso → impossibile rieditare/riemettere senza ricreare da zero.
+
+Fix: in `update_invoice_status`, quando `status=cancelled` AND `inv.kind=advance`, cascade su `AdvancePayment`: `invoice_id=None`, `status=draft`. Ritorna `advance_reopened_id` nel payload per feedback UI. Idempotente per non-advance.
+
+**3. Modal "Nuovo cliente" mancava campi fiscali SDI** (`clients.html` + `clients.py POST /api`):
+Pre-α.172.42 modal new client aveva solo: nome, legal_form, vat_number, city, website, contact_name, contact_email. Mancavano `tax_code`, `sdi_code`, `pec`, `admin_email`, `address`, `zip_code`, `province`, `country` — tutti necessari per emettere fattura via SDI (skill `italian-tax-compliance`). Matteo bloccato dal flusso emit_invoice (Sprint 6.A) perché client appena creato non aveva P.IVA/SDI/PEC.
+
+Fix:
+- Backend `POST /clients/api` accetta i 7 campi mancanti (tax_code, sdi_code, pec, admin_email, address, zip_code, province, country)
+- `_validate_fiscal_fields` esteso a tax_code+sdi_code
+- Modal HTML: aggiunti input nc-tax / nc-sdi / nc-pec / nc-address / nc-zip / nc-province / nc-country (con default "IT")
+- `_newClientFormData()` JS: serializzazione via fieldMap (dict-driven invece di chain ternary illeggibile)
+
+Client creati ora hanno tutti i campi richiesti per SDI compliance al primo save.
+
+**File toccati**: `app/routers/finance.py`, `app/routers/clients.py`, `app/templates/pages/clients.html`, `app/main.py`, `CHANGELOG.md`.
+
+513 routes invariato. Test sniff: cliente Fandango con 3 fatture cancellate → outstanding net ora correttamente 0 (era 57.528).
+
+---
+
 ## v3.5.0-alpha.172.41.1 — Hotfix audit α.172.40 auto-migrate misplaced (23 mag 2026)
 
 Bug introdotto α.172.40 (Sprint 5): blocchi auto-migrate per

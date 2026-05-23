@@ -244,8 +244,15 @@ async def create_client(
     contact_email: Optional[str] = Form(None),
     contact_phone: Optional[str] = Form(None),
     vat_number: Optional[str] = Form(None),
+    # v3.5.0-alpha.172.42 — campi fiscali su create (prima solo su edit)
+    tax_code: Optional[str] = Form(None),
+    sdi_code: Optional[str] = Form(None),
+    pec: Optional[str] = Form(None),
+    admin_email: Optional[str] = Form(None),
     address: Optional[str] = Form(None),
+    zip_code: Optional[str] = Form(None),
     city: Optional[str] = Form(None),
+    province: Optional[str] = Form(None),
     country: Optional[str] = Form(None),
     website: Optional[str] = Form(None),
     notes: Optional[str] = Form(None),
@@ -253,7 +260,7 @@ async def create_client(
     db: Session = Depends(get_db),
 ):
     # v3.5.0-alpha.172.41 (Sprint 6.A) — validazione fiscali italiani
-    _validate_fiscal_fields(vat_number=vat_number)
+    _validate_fiscal_fields(vat_number=vat_number, tax_code=tax_code, sdi_code=sdi_code)
     # Anti-duplicato: blocca se c'è almeno un match HIGH e force=False
     if not force:
         candidates = find_duplicate_candidates(db, name)
@@ -268,7 +275,10 @@ async def create_client(
         tenant_id=current_tenant_id(),
         name=name, legal_form=legal_form, contact_name=contact_name,
         contact_email=contact_email, contact_phone=contact_phone,
-        vat_number=vat_number, address=address, city=city, country=country,
+        vat_number=vat_number, tax_code=tax_code, sdi_code=sdi_code,
+        pec=pec, admin_email=admin_email,
+        address=address, zip_code=zip_code, city=city,
+        province=province, country=country,
         website=website, notes=notes,
     )
     db.add(c); db.commit(); db.refresh(c)
