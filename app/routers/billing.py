@@ -1148,6 +1148,28 @@ async def emit_invoice(
     client_obj = db.query(Client).filter(Client.id == project.client_id).first()
     tenant_obj = db.query(Tenant).filter(Tenant.id == current_tenant_id()).first()
 
+    # v3.5.0-alpha.172.41 (Sprint 6.A BLOCCO 6 parte 2) — pre-emit SDI
+    # compliance HARD-BLOCK. Verifica P.IVA/CF/SDI/regime/natura prima di
+    # creare Invoice (no rollback per integrity error tardivo).
+    from app.services.italian_tax import invoice_sdi_compliance_check
+    sdi_errs = invoice_sdi_compliance_check(
+        client_vat=(client_obj.vat_number if client_obj else None),
+        client_tax_code=(client_obj.tax_code if client_obj else None),
+        client_sdi=(client_obj.sdi_code if client_obj else None),
+        client_pec=(client_obj.pec if client_obj else None),
+        client_country=(client_obj.country if client_obj else None),
+        tenant_vat=(tenant_obj.vat_number if tenant_obj else None),
+        tenant_fiscal_regime=(tenant_obj.fiscal_regime if tenant_obj else None),
+        vat_rate=vat_rate,
+        natura=None,
+    )
+    if sdi_errs:
+        raise HTTPException(422, detail={
+            "message": "Fattura non emissibile: campi fiscali mancanti o invalidi",
+            "errors": sdi_errs,
+            "hint": "Completa P.IVA cliente, codice SDI o PEC, regime fiscale tenant",
+        })
+
     invoice = Invoice(
         # v3.5.0-alpha.172.37 (Sprint 3.E) — denormalizzato tenant_id
         tenant_id=current_tenant_id(),

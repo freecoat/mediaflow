@@ -1582,6 +1582,38 @@ async def delete_invoice_payment(payment_id: int, db: Session = Depends(get_db))
     return {"deleted": True, "invoice_id": p.invoice_id, "amount_paid": (inv.amount_paid if inv else None)}
 
 
+# ── SDI / FatturaPA XML export (v3.5.0-alpha.172.41 Sprint 6.B) ──────
+
+@router.get("/api/invoices/{invoice_id}/sdi-xml", dependencies=[RequireEditInvoices])
+async def download_sdi_xml(invoice_id: int, db: Session = Depends(get_db)):
+    """Genera XML FatturaPA v1.6.1 download per emissione manuale SDI.
+
+    Requisiti:
+    - Invoice in stato `draft`/`approved`/`sent` (no draft incompleti? non bloccato)
+    - Snapshot client/tenant valorizzati (cristallizzati a emit_invoice)
+    - P.IVA cliente o CF + codice SDI o PEC + regime fiscale tenant valorizzati
+
+    Trasmissione automatica via Aruba/Sole24 non implementata (richiede firma
+    digitale + accreditamento). Roadmap S8.x.
+    """
+    from fastapi.responses import Response
+    from app.services.sdi_xml import build_fattura_xml
+    inv = fetch_invoice_or_404(db, invoice_id)
+    # Tenant carico per fallback su snapshot mancanti
+    tenant = db.query(Tenant).filter(Tenant.id == current_tenant_id()).first()
+    if not tenant:
+        raise HTTPException(500, "Tenant non trovato in contesto")
+    try:
+        xml_str, filename = build_fattura_xml(inv, tenant)
+    except Exception as e:
+        raise HTTPException(500, f"Errore generazione XML SDI: {e}")
+    return Response(
+        content=xml_str,
+        media_type="application/xml",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
+
+
 # ── Cashflow timeline (v3.5.0-alpha.66.20) ────────────────────────────
 
 

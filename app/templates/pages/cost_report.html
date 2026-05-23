@@ -1705,10 +1705,11 @@ function renderCostLines() {
         : ' (acconto non ancora pagato)';
       advBadge = `<span class="text-xs" style="display:inline-block;margin-left:6px;padding:1px 6px;background:${bg};color:${fg};border-radius:8px;font-weight:600;font-size:10px;" title="Coperto da acconto: ${fmtCurrency(advCov)} allocato${paidPart}${driftLbl}${advOverflow ? ' ⚠ overflow > quote*1.05' : ''}">💰 ${fmtCurrency(advCov)}${advPaidCov > 0.005 ? ' · ✓ ' + fmtCurrency(advPaidCov) : ''}</span>`;
     }
+    // v3.5.0-alpha.172.41 Sprint 6.C — escapeHtml su description/category
     return `<tr onclick='openLineDetailHere(${l.id})' style="cursor:pointer;">
       <td style="min-width:240px;">
-        <div style="font-weight:500;font-size:13px;">${l.description}${l.is_extra ? ' <span class="text-xs" style="color:#fb923c;">[extra]</span>' : ''}${l.external_outsourced ? ' <span class="text-xs" style="background:rgba(168,85,247,0.2);color:#c084fc;padding:1px 6px;border-radius:8px;font-weight:600;" title="Lavorazione delegata a fornitore esterno (binary on/off via fattura passiva)">🏭 OUTSOURCED</span>' : ''}${refsBadge}${pendBadge}${txBadge}${fakeBadge}${advBadge}</div>
-        ${l.category ? `<div class="text-xs text-muted">${l.category}</div>` : ''}
+        <div style="font-weight:500;font-size:13px;">${escapeHtml(l.description || '')}${l.is_extra ? ' <span class="text-xs" style="color:#fb923c;">[extra]</span>' : ''}${l.external_outsourced ? ' <span class="text-xs" style="background:rgba(168,85,247,0.2);color:#c084fc;padding:1px 6px;border-radius:8px;font-weight:600;" title="Lavorazione delegata a fornitore esterno (binary on/off via fattura passiva)">🏭 OUTSOURCED</span>' : ''}${refsBadge}${pendBadge}${txBadge}${fakeBadge}${advBadge}</div>
+        ${l.category ? `<div class="text-xs text-muted">${escapeHtml(l.category)}</div>` : ''}
         ${bar}
       </td>
       <td class="text-sm text-muted">${l.unit}</td>

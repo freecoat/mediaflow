@@ -11,6 +11,32 @@ from app.models import Client, ClientWork, Project, User
 from app.services.client_enrichment import enrich_client
 from app.services.ai_provider import get_provider_for_user
 from app.services.auth import get_current_user_from_token
+from app.services.italian_tax import (
+    validate_partita_iva, validate_codice_fiscale, validate_sdi_code,
+    validate_iban_it,
+)
+
+
+def _validate_fiscal_fields(
+    *, vat_number: Optional[str] = None, tax_code: Optional[str] = None,
+    sdi_code: Optional[str] = None, iban: Optional[str] = None,
+) -> None:
+    """v3.5.0-alpha.172.41 (Sprint 6.A BLOCCO 6 parte 2) — wire-up
+    italian_tax validators. Solleva HTTPException(422) con dettaglio dei
+    campi invalidi. Campi None/vuoto passano (validazione optional).
+    """
+    errors: list[str] = []
+    if vat_number and not validate_partita_iva(vat_number):
+        errors.append(f"P.IVA non valida (manca o checksum errato): {vat_number}")
+    if tax_code and not validate_codice_fiscale(tax_code):
+        errors.append(f"Codice fiscale non valido (atteso 16 alfanum o 11 cifre): {tax_code}")
+    if sdi_code and not validate_sdi_code(sdi_code):
+        errors.append(f"Codice SDI non valido (atteso 7 alfanum, 0000000 o 999999): {sdi_code}")
+    if iban and not validate_iban_it(iban):
+        errors.append(f"IBAN IT non valido (checksum mod-97 errato): {iban}")
+    if errors:
+        from fastapi import HTTPException as _HE
+        raise _HE(422, detail={"errors": errors})
 from datetime import datetime
 import json
 import re
@@ -226,6 +252,8 @@ async def create_client(
     force: bool = Form(False),  # se True, salta il check duplicati
     db: Session = Depends(get_db),
 ):
+    # v3.5.0-alpha.172.41 (Sprint 6.A) — validazione fiscali italiani
+    _validate_fiscal_fields(vat_number=vat_number)
     # Anti-duplicato: blocca se c'è almeno un match HIGH e force=False
     if not force:
         candidates = find_duplicate_candidates(db, name)
@@ -276,6 +304,10 @@ async def update_client(
     ).first()
     if not c:
         raise HTTPException(404, "Cliente non trovato")
+    # v3.5.0-alpha.172.41 (Sprint 6.A) — validazione fiscali italiani
+    _validate_fiscal_fields(
+        vat_number=vat_number, tax_code=tax_code, sdi_code=sdi_code,
+    )
 
     for field in ("name", "legal_form", "contact_name", "contact_role",
                   "contact_email", "contact_phone", "admin_email",

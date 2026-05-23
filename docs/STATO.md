@@ -8,6 +8,51 @@
 
 ## Versione corrente
 
+**v3.5.0-alpha.172.41** — 23 maggio 2026 — Sprint 6 Audit FINALE: SDI compliance + FatturaPA XML (BLOCCO 6 parte 2)
+
+**AUDIT MULTI-AGENT CHIUSO**. Sprint 6 finalizza BLOCCO 6 parte 2:
+
+- **6.A italian_tax wire-up**: clients.py POST/PUT `_validate_fiscal_fields()` solleva 422 su P.IVA/CF/SDI/IBAN invalidi. billing.emit_invoice pre-emit HARD-BLOCK via `invoice_sdi_compliance_check`.
+- **6.B FatturaPA XML builder** nuovo `app/services/sdi_xml.py`: `build_fattura_xml(invoice, tenant) → (xml, filename)`. Self-contained via xml.etree, conforme FPR12 B2B v1.6.1. Endpoint `GET /finance/api/invoices/{id}/sdi-xml` download (`RequireEditInvoices`). Smoke test passato: RAI P.IVA, IBAN reale, 2 lines → 2869 bytes XML OK, filename `IT12345678901_RSENA.xml`.
+- **6.C UI backlog escapeHtml**: pricelist row, cost_report description, dam upload filename.
+
+513 routes (+1 SDI endpoint). No DB migration.
+
+## Lavoro in corso
+
+**Audit chiuso al 100%**. 6 sprint + 1 mini (Sprint 3.5) eseguiti tra α.172.35 e α.172.41 in singola sessione 23 mag 2026.
+
+## Prossimo step
+
+Test intensivo utente Matteo su sprint 1-6. In particolare:
+1. Verifica live tenant scope (login con tenant!=1 fittizio se possibile)
+2. Modifica voce quote con JCL fatturata → 409 atteso (Sprint 2)
+3. `weighted_revenue=True` su Job con OT → `total_accrued` ora include multiplier (Sprint 3.A)
+4. Tentativo emit_invoice senza P.IVA cliente → 422 atteso (Sprint 6.A)
+5. Download `/finance/api/invoices/{id}/sdi-xml` su fattura test → XML valid (Sprint 6.B)
+6. Reopen anomaly con LossEntry collegata → record sparisce (Sprint 3.B)
+
+Backlog Sprint 7 (opzionale, post-test):
+- FK ondelete + UNIQUE legacy table-rebuild SQLite (richiede backup esplicito)
+- UI bottone "Genera XML SDI" in /finance tab Fatture
+- Trasmissione automatica SDI via Aruba/Sole24 (richiede firma digitale)
+- Wire-up `_validate_fiscal_fields` su Supplier/Tenant edit endpoints
+
+## Bug aperti
+
+Stato audit complessivo (TUTTI CHIUSI):
+- ✅ BLOCCO 1 (tenant scope) — α.172.35
+- ✅ BLOCCO 2 (slice-lock quote-side) — α.172.36
+- ✅ BLOCCO 3 (UI 404 endpoint) — α.172.36
+- ✅ BLOCCO 4 (finance + Decimal hotspot) — α.172.37+38
+- ✅ BLOCCO 5 (UI antipattern) — α.172.39
+- ✅ BLOCCO 6 parte 1 (DB integrity + IT tax foundation) — α.172.40
+- ✅ BLOCCO 6 parte 2 (SDI compliance + FatturaPA XML) — α.172.41
+
+Da 131 finding totali audit → tutti i P0+P1 critici chiusi o documentati. Restano backlog cleanup (table rebuild rischiosi, UI lower-risk residui, integrazione SDI live).
+
+## Versione precedente
+
 **v3.5.0-alpha.172.40** — 23 maggio 2026 — Sprint 5 Audit: DB integrity + IT tax foundation (BLOCCO 6 parte 1)
 
 Chiude BLOCCO 6 parte sicura — 6 sub-fix integrity DB + foundation compliance italiana:

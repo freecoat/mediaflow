@@ -412,10 +412,11 @@ function handleDrop(e) {
 function handleFiles(files) {
   pendingFiles = [...files];
   const list = document.getElementById('file-list');
+  // v3.5.0-alpha.172.41 Sprint 6.C — escapeHtml su filename (può contenere &lt;/&gt; etc)
   list.innerHTML = pendingFiles.map((f, i) => `
     <div class="flex items-center gap-2 mb-1 text-sm">
       <span>${assetIcon(f.type.split('/')[0])}</span>
-      <span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${f.name}</span>
+      <span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${escapeHtml(f.name)}</span>
       <span class="text-muted">${fmtSize(f.size)}</span>
     </div>`).join('');
 }

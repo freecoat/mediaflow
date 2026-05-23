@@ -447,10 +447,11 @@ function renderItems() {
     const dp = displayPrice(i);
     return `
     <tr style="cursor:pointer;" onclick="editItem(${i.id})">
-      <td><span class="badge badge-draft" style="font-size:10px;">${i.category || '—'}</span></td>
+      <!-- v3.5.0-alpha.172.41 Sprint 6.C — escapeHtml user-supplied -->
+      <td><span class="badge badge-draft" style="font-size:10px;">${escapeHtml(i.category || '—')}</span></td>
       <td>
-        <div style="font-weight:500;font-size:13px;">${i.name}</div>
-        ${i.description ? `<div class="text-xs text-muted mt-1" style="font-size:11px;">${i.description}</div>` : ''}
+        <div style="font-weight:500;font-size:13px;">${escapeHtml(i.name || '')}</div>
+        ${i.description ? `<div class="text-xs text-muted mt-1" style="font-size:11px;">${escapeHtml(i.description)}</div>` : ''}
         ${(i.keywords && i.keywords.length) ? `<div style="margin-top:4px;display:flex;gap:3px;flex-wrap:wrap;">
           ${i.keywords.slice(0,5).map(k => `<span style="background:rgba(98,114,245,0.12);color:var(--indigo2);padding:1px 6px;border-radius:4px;font-size:10px;font-family:'DM Mono',monospace;">${k}</span>`).join('')}
           ${i.keywords.length > 5 ? `<span class="text-xs text-muted">+${i.keywords.length - 5}</span>` : ''}

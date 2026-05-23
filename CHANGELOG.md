@@ -1,5 +1,48 @@
 # MediaFlow — Changelog
 
+## v3.5.0-alpha.172.41 — Sprint 6 Audit FINALE: SDI compliance + FatturaPA XML (BLOCCO 6 parte 2) (23 mag 2026)
+
+**Chiusura ufficiale dell'audit multi-agent**. Sprint 6 finalizza BLOCCO 6 con wire-up validatori italiani nei router + FatturaPA XML builder self-contained + cleanup UI residuo.
+
+**6.A — `italian_tax` wire-up nei router**:
+- `clients.py POST/PUT`: nuovo helper `_validate_fiscal_fields()` che solleva `HTTPException(422)` con dettaglio errori per `vat_number`/`tax_code`/`sdi_code`/`iban` invalidi. Validatori non più dead code.
+- `billing.emit_invoice`: HARD-BLOCK pre-emit via `invoice_sdi_compliance_check()`. Solleva 422 con `{message, errors, hint}` se P.IVA/CF/SDI/regime/natura mancanti o invalidi. Blocca emissione di fatture non emissibili via SDI.
+
+**6.B — FatturaPA v1.6.1 XML builder** (nuovo `app/services/sdi_xml.py`):
+Self-contained Python via `xml.etree.ElementTree`. Architettura:
+- `build_fattura_xml(invoice, tenant) → (xml_str, filename)` — XML conforme FPR12 B2B
+- Header completo: `DatiTrasmissione`, `CedentePrestatore`, `CessionarioCommittente` (snapshot da Invoice immutabile)
+- Body: `DatiGenerali` + `DettaglioLinee` per InvoiceLine + `DatiRiepilogo` aggregato per aliquota + `DatiPagamento` con IBAN
+- `get_sdi_filename(piva, progressivo)` → `IT{piva}_{progressivo}.xml` (Base32 Crockford)
+- `_map_payment_method()`: free-text "Bonifico"/"Carta"/etc → MP01-MP23
+- Default constants: `FPR12`, `RF01`, `TD01`, `MP05`, `TP02`, causale "Servizi di post-produzione audiovisiva"
+- Money via `Decimal` (helper `money_round` HALF_UP) per precisione SDI
+
+**Endpoint nuovo `GET /finance/api/invoices/{invoice_id}/sdi-xml`** (`RequireEditInvoices`):
+Download XML pronto per upload manuale al portale SDI. Trasmissione automatica via Aruba/Sole24 (richiede firma digitale + accreditamento) → roadmap S8.x.
+
+Smoke test: invoice fittizia (RAI P.IVA, IBAN reale, 2 InvoiceLine €1000+€220 IVA) → XML 2869 bytes generato OK, filename `IT12345678901_RSENA.xml`.
+
+**6.C — UI backlog escapeHtml lower-risk** (5 spot):
+- `pricelist.html:452-453` — `${i.category}`/`${i.name}`/`${i.description}` (row template)
+- `cost_report.html:1710-1711` — `${l.description}`/`${l.category}`
+- `dam.html:418` — `${f.name}` upload progress
+
+Planning title attrs (`${d.title}` 2719+7619) skippati perché `d` è array static `_PRIO_DOTS` (no user-supplied input).
+
+**Backlog rimandato** (richiede backup utente + script manuale dedicato):
+- 6.D FK `ondelete` table-rebuild SQLite (Project/Job/Tenant/Client FK refs)
+- 6.E UNIQUE legacy rebuild (Tag.name, Invoice.number, Asset filename)
+- Roadmap S7+: trasmissione automatica SDI + firma digitale + ricezione PEC + conservazione sostitutiva
+- Wire-up `_validate_fiscal_fields` su Supplier/Tenant edit endpoints
+- UI bottone "Genera XML SDI" in `/finance` (oggi raggiungibile solo via URL diretto)
+
+**File toccati**: `app/services/sdi_xml.py` (nuovo), `app/routers/clients.py`, `app/routers/billing.py`, `app/routers/finance.py`, `app/templates/pages/pricelist.html`, `app/templates/pages/cost_report.html`, `app/templates/pages/dam.html`, `app/main.py`, `CHANGELOG.md`, `docs/STATO.md`.
+
+513 routes (+1 endpoint SDI). Auto-migrate invariato (no DB change).
+
+---
+
 ## v3.5.0-alpha.172.40 — Sprint 5 Audit: DB integrity + IT tax foundation (BLOCCO 6 parte 1) (23 mag 2026)
 
 Chiude **BLOCCO 6 parte sicura** dell'audit multi-agent. 6 sub-fix integrity DB + foundation compliance italiana. FK ondelete table-rebuild + FatturaPA XML builder + backlog UI Sprint 4.E → Sprint 6 dedicato.
