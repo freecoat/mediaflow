@@ -495,6 +495,52 @@ async def create_advance_payment(
         raise HTTPException(404, "Progetto non trovato")
     if not proj.client_id:
         raise HTTPException(400, "Progetto senza cliente: assegna cliente prima di creare acconto")
+
+    # v3.5.0-alpha.172.46 — HARD-BLOCK Σ acconti > budget progetto.
+    # Pre-α.172.46 nessun limite: utente poteva creare AP per 30% + 80% =
+    # 110% del progetto. Controllo: Σ AP non-cancelled + nuovo amount <=
+    # Σ Quote.total_after_discount (escluse IVA) delle quote approved.
+    # Fallback su `proj.budget_quoted` se nessuna quote approved.
+    from app.models import Quote as _Q, QuoteStatus as _QS
+    approved_quotes_total = (
+        db.query(func.coalesce(func.sum(_Q.total_after_discount), 0.0))
+        .filter(
+            _Q.project_id == project_id,
+            _Q.status == _QS.approved,
+            _Q.deleted_at.is_(None),
+        )
+        .scalar() or 0.0
+    )
+    project_budget = approved_quotes_total or (getattr(proj, "budget_quoted", None) or 0.0)
+    existing_advances_total = (
+        db.query(func.coalesce(func.sum(AdvancePayment.amount), 0.0))
+        .filter(
+            AdvancePayment.project_id == project_id,
+            AdvancePayment.tenant_id == current_tenant_id(),
+            AdvancePayment.status != AdvancePaymentStatus.cancelled,
+        )
+        .scalar() or 0.0
+    )
+    if project_budget > 0:
+        total_after_new = existing_advances_total + amount
+        if total_after_new > project_budget + 0.01:
+            pct_attempt = round(total_after_new / project_budget * 100, 1)
+            pct_existing = round(existing_advances_total / project_budget * 100, 1)
+            raise HTTPException(
+                409,
+                detail={
+                    "message": (
+                        f"Σ acconti supererebbe il budget progetto: "
+                        f"€{total_after_new:.2f} ({pct_attempt}%) > €{project_budget:.2f}. "
+                        f"Acconti esistenti: €{existing_advances_total:.2f} ({pct_existing}%). "
+                        f"Riduci l'importo o annulla un acconto esistente."
+                    ),
+                    "project_budget": round(project_budget, 2),
+                    "existing_advances_total": round(existing_advances_total, 2),
+                    "attempted_amount": round(amount, 2),
+                    "attempted_total_pct": pct_attempt,
+                },
+            )
     client_obj = db.query(Client).filter(Client.id == proj.client_id).first()
     tenant_obj = db.query(Tenant).filter(Tenant.id == current_tenant_id()).first()
 

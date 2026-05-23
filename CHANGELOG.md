@@ -1,5 +1,25 @@
 # MediaFlow — Changelog
 
+## v3.5.0-alpha.172.46 — HARD-BLOCK Σ acconti > budget progetto (23 mag 2026)
+
+Matteo: "ho appena generato 2 acconti per lo stesso progetto: uno del 30% e uno dell'80%" → 110% del budget, nessun warn.
+
+Pre-α.172.46 `create_advance_payment` nessun controllo cumulativo. User poteva creare N acconti slegati senza limit, sommando > 100% del progetto.
+
+Fix in `finance.py:create_advance_payment`:
+- Calcola `project_budget = Σ Quote.total_after_discount` (status=approved, non cestino). Fallback `proj.budget_quoted` se nessuna quote approved.
+- Calcola `existing_advances_total = Σ AP.amount` per stesso project (status != cancelled).
+- Se `existing_advances_total + nuovo_amount > project_budget` → HTTP 409 con `{message, project_budget, existing_advances_total, attempted_amount, attempted_total_pct}`.
+- Tolerance ±0.01 per arrotondamenti centesimi.
+
+Messaggio errore esplicito: "Σ acconti supererebbe il budget progetto: €X (Y%) > €Z. Acconti esistenti: €A (B%). Riduci l'importo o annulla un acconto esistente."
+
+Cancellazione di un AP esistente (status=cancelled) lo esclude dal Σ → utente può ricreare con altro importo.
+
+**File toccati**: `app/routers/finance.py`, `app/main.py`, `CHANGELOG.md`.
+
+---
+
 ## v3.5.0-alpha.172.45 — Filmografia import: passthrough campi estesi backend+UI (23 mag 2026)
 
 Matteo: "schede filmografiche dei film importati continuano a non avere informazioni" (cast, finanziamenti, date uscita, festival).
