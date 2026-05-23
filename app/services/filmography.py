@@ -126,6 +126,12 @@ ESTRAI tutte le opere (film, serie, documentari, spot, cortometraggi) in cui il 
 5. **Anno** (`year`): solo se chiaramente indicato. Se non sicuro, null.
 6. **Confidence**: "alta" (≥2 fonti citano l'opera), "media" (1 fonte primaria), "bassa" (menzione marginale).
 
+v3.5.0-alpha.172.45 — schema esteso: popola ANCHE synopsis, release_date,
+funding_public, cast_crew, external_links, awards (campi del modello
+ClientWork). L'utente del software è una casa di post-prod e ha bisogno
+del dettaglio rilevante (cast/dop per matching risorse, finanziamenti per
+budget, premiere/festival per pianning consegne).
+
 Rispondi SOLO con questo JSON, senza testo prima o dopo, senza markdown:
 
 {{
@@ -137,12 +143,37 @@ Rispondi SOLO con questo JSON, senza testo prima o dopo, senza markdown:
       "our_role": "produzione|post-produzione|distribuzione|co-produzione|... (o null)",
       "director": "Nome Cognome (o null)",
       "country": "IT (o null)",
+      "synopsis": "Sintesi 2-3 frasi della trama (se reperibile nelle fonti, altrimenti null)",
+      "release_date": "YYYY-MM-DD (data uscita theatrical/streaming, null se non chiara)",
+      "funding_public": {{
+        "mibac": true,
+        "regional": "Nome Film Commission o null",
+        "eu": false,
+        "notes": "tax credit, Eurimages, MIC, ecc."
+      }},
+      "cast_crew": {{
+        "director": "Nome Cognome",
+        "dop": "Direttore Fotografia",
+        "executive_producer": "Produttore Esecutivo",
+        "editor": "Montatore",
+        "sound_design": "Sound designer",
+        "music": "Compositore",
+        "screenplay": "Sceneggiatori",
+        "lead_cast": ["Attore 1", "Attore 2", "Attore 3"]
+      }},
+      "external_links": [
+        {{"label": "Trailer", "url": "https://..."}},
+        {{"label": "IMDb", "url": "https://imdb.com/..."}},
+        {{"label": "Sito ufficiale", "url": "https://..."}}
+      ],
+      "awards": ["Coppa Volpi 2024", "David di Donatello miglior film"],
       "source_urls": ["https://...", "https://..."],
       "confidence": "alta|media|bassa"
     }}
   ]
 }}
 
+Compila ogni campo solo se DOCUMENTATO nelle fonti. null/[] OK se incerto.
 Se nessuna opera è chiaramente identificabile, ritorna `{{"works": []}}`.
 """
     extracted = provider.extract_json(system, user, max_tokens=6000)
@@ -173,6 +204,24 @@ Se nessuna opera è chiaramente identificabile, ritorna `{{"works": []}}`.
         if not isinstance(urls, list):
             urls = []
         urls = [str(u) for u in urls if u]
+        # v3.5.0-alpha.172.45 — campi estesi (passthrough JSON-friendly).
+        # Pass-through come dict/list; il router li serializza a Text quando salva.
+        funding_pub = w.get("funding_public")
+        if funding_pub is not None and not isinstance(funding_pub, dict):
+            funding_pub = None
+        cast_crew = w.get("cast_crew")
+        if cast_crew is not None and not isinstance(cast_crew, dict):
+            cast_crew = None
+        ext_links = w.get("external_links")
+        if ext_links is not None and not isinstance(ext_links, list):
+            ext_links = None
+        awards = w.get("awards")
+        if awards is not None and not isinstance(awards, list):
+            awards = None
+        rel = w.get("release_date") or None
+        # Sanity: release_date deve essere stringa YYYY-MM-DD (validato in save)
+        if rel is not None and not isinstance(rel, str):
+            rel = None
         clean.append({
             "title": title[:255],
             "year": year,
@@ -180,6 +229,12 @@ Se nessuna opera è chiaramente identificabile, ritorna `{{"works": []}}`.
             "our_role": (w.get("our_role") or None),
             "director": (w.get("director") or None),
             "country": (w.get("country") or None),
+            "synopsis": (w.get("synopsis") or None),
+            "release_date": rel,
+            "funding_public": funding_pub,
+            "cast_crew": cast_crew,
+            "external_links": ext_links,
+            "awards": awards,
             "source_urls": urls,
             "confidence": w.get("confidence") or "media",
         })

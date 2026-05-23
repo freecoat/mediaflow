@@ -1,5 +1,32 @@
 # MediaFlow — Changelog
 
+## v3.5.0-alpha.172.45 — Filmografia import: passthrough campi estesi backend+UI (23 mag 2026)
+
+Matteo: "schede filmografiche dei film importati continuano a non avere informazioni" (cast, finanziamenti, date uscita, festival).
+
+α.172.44 estendeva schema AI in `client_enrichment.py` ma il flusso REALE di import filmografia passa da `app/services/filmography.py` (search via Tavily su fonti pubbliche), NON da client_enrichment. Inoltre il modello `ClientWork` ha già i campi (`synopsis`, `release_date`, `funding_public`, `cast_crew`, `external_links`, `awards`) MA:
+
+1. `filmography.py` schema AI prompt: solo `{title, year, kind, our_role, director, country}` → nessun campo extra estratto
+2. `clients.py POST /api/{cid}/works`: accettava 8 Form fields → scartava synopsis/release/funding/cast/links/awards anche se UI li avesse mandati
+3. UI `cwCandidatesImport()`: serializzava solo campi base nel FormData
+
+Fix 3 livelli:
+- **`filmography.py`**: schema JSON esteso con `synopsis/release_date/funding_public/cast_crew/external_links/awards`. Prompt chiede esplicitamente di compilare quando documentato. Clean function passthrough JSON-friendly + sanity check (dict per funding/cast, list per links/awards, str YYYY-MM-DD per date).
+- **`clients.py POST /api/{cid}/works`**: accetta 6 nuovi Form fields (synopsis, release_date, funding_public, cast_crew, external_links, awards). `_passthrough_json()` helper normalizza JSON strings. release_date parsato via strptime.
+- **`client_works.html cwCandidatesImport()`**: serializza i nuovi campi in FormData se l'AI li ha popolati (JSON.stringify per dict/list).
+
+Ora il flow completo end-to-end:
+1. User clicca "Ricerca AI" → Tavily 2 query mirate su filmitalia/cinema.cultura/imdb/mymovies
+2. AI estrae opere CON cast/regista/dop/finanziamenti/festival/awards dalle fonti
+3. UI mostra candidati → user seleziona → POST con tutti i campi estesi
+4. Backend salva su ClientWork con synopsis/release_date/funding_public/cast_crew/external_links/awards popolati
+
+UI rendering scheda filmografica esistente già supporta i campi (template client_works.html). Verifica visiva: cliccare card opera importata → vedi synopsis + cast + crew + finanziamenti.
+
+**File toccati**: `app/services/filmography.py`, `app/routers/clients.py`, `app/templates/pages/client_works.html`, `app/main.py`, `CHANGELOG.md`.
+
+---
+
 ## v3.5.0-alpha.172.44 — Schema filmografia AI esteso: cast/funding/release/festival (23 mag 2026)
 
 Matteo: "ricerca AI filmografia deludente, mancano dati su finanziamenti, cast, date uscita".

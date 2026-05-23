@@ -650,6 +650,16 @@ async def create_client_work(
     sources: Optional[str] = Form(None),  # JSON string [{name,url}, ...]
     notes: Optional[str] = Form(None),
     ai_imported: bool = Form(False),
+    # v3.5.0-alpha.172.45 — campi estesi (allineati a update_client_work).
+    # Pre-α.172.45 import filmografia AI scartava synopsis/release_date/
+    # funding/cast/crew/links/awards perché POST non li accettava → schede
+    # filmografiche importate restavano vuote.
+    synopsis: Optional[str] = Form(None),
+    release_date: Optional[str] = Form(None),  # YYYY-MM-DD
+    funding_public: Optional[str] = Form(None),  # JSON string
+    cast_crew: Optional[str] = Form(None),  # JSON string
+    external_links: Optional[str] = Form(None),  # JSON string
+    awards: Optional[str] = Form(None),  # JSON string or CSV
     db: Session = Depends(get_db),
 ):
     """Crea una nuova opera nella filmografia del cliente. Idempotente su
@@ -689,6 +699,25 @@ async def create_client_work(
         except Exception:
             sources_clean = None
 
+    # v3.5.0-alpha.172.45 — parse release_date + JSON fields (idempotente null safe)
+    rd = None
+    if release_date:
+        try:
+            from datetime import datetime as _dt
+            rd = _dt.strptime(release_date.strip(), "%Y-%m-%d").date()
+        except (ValueError, TypeError):
+            rd = None
+
+    def _passthrough_json(s: Optional[str]) -> Optional[str]:
+        """Se è stringa JSON valida, normalizza. Altrimenti None."""
+        if not s:
+            return None
+        try:
+            parsed = json.loads(s) if isinstance(s, str) else s
+            return json.dumps(parsed, ensure_ascii=False)
+        except Exception:
+            return None
+
     w = ClientWork(
         tenant_id=current_tenant_id(),
         client_id=client_id,
@@ -701,6 +730,13 @@ async def create_client_work(
         sources_json=sources_clean,
         notes=(notes or None),
         ai_imported=bool(ai_imported),
+        # v3.5.0-alpha.172.45 — campi estesi accettati
+        synopsis=(synopsis or None),
+        release_date=rd,
+        funding_public=_passthrough_json(funding_public),
+        cast_crew=_passthrough_json(cast_crew),
+        external_links=_passthrough_json(external_links),
+        awards=_passthrough_json(awards),
     )
     db.add(w); db.commit(); db.refresh(w)
     return {"ok": True, "duplicate": False, **_work_dict(w)}

@@ -645,6 +645,13 @@ async function cwCandidatesImport() {
       });
       fd.append('sources', JSON.stringify(srcs));
     }
+    // v3.5.0-alpha.172.45 — passa campi estesi se l'AI li ha popolati
+    if (w.synopsis) fd.append('synopsis', w.synopsis);
+    if (w.release_date) fd.append('release_date', w.release_date);
+    if (w.funding_public) fd.append('funding_public', JSON.stringify(w.funding_public));
+    if (w.cast_crew) fd.append('cast_crew', JSON.stringify(w.cast_crew));
+    if (w.external_links) fd.append('external_links', JSON.stringify(w.external_links));
+    if (w.awards) fd.append('awards', JSON.stringify(w.awards));
     try {
       const res = await api('POST', `/clients/api/${CLIENT_ID}/works`, fd);
       if (res.duplicate) dupN++; else okN++;
