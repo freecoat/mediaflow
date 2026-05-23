@@ -1,5 +1,36 @@
 # MediaFlow — Changelog
 
+## v3.5.0-alpha.172.38 — Sprint 3.5: Decimal in invoice_totals hotspot (23 mag 2026)
+
+Mini-sprint chiusura BLOCCO 4 audit (Float vs Numeric). Decisione **opzione C**: SQLite memorizza già float64 (~15 cifre significative), errori di rappresentazione su monetary fields trascurabili a scale MediaFlow. Migrazione di tutti i ~70 campi Float → Numeric(15,2) rimandata a porting Postgres futuro (high-risk migration, basso ROI ora).
+
+Sprint 3.5 minimale: usato `Decimal` al boundary di aggregazione critica.
+
+**Nuovo `app/services/money.py`**:
+- `to_decimal(value)` — float/str/None → Decimal stabile (via str() per evitare repr binaria)
+- `money_round(d)` — quantize 2 decimali HALF_UP (convenzione SDI/fiscale, NON banker's HALF_EVEN)
+- `money_to_float(d)` — Decimal → float per persistenza Float legacy
+
+**`invoice_totals.compute_invoice_totals_from_lines` refactored** con Decimal interno:
+- Subtotal/vat_amount/total/by_rate calcolati come Decimal
+- HALF_UP per rounding (vs Python default HALF_EVEN che può deviare da SDI)
+- Boundary di output: `float(money_round(d))` per back-compat colonne Float
+- Garantisce Σ(round(x, 2)) ≡ round(Σ(x), 2) anche su 200+ righe
+
+**Test smoke**:
+- 10 righe × 100€ × 22% → subtotal=1000, vat=220, total=1220 ✓
+- 3 righe multi-aliquota (22%/10%/4%) → vat=34, by_rate ordinato ✓
+- 200 righe × 0.33€ × 22% → subtotal=66, vat=14 (consistente) ✓
+- Empty → struttura zero ✓
+
+**Non toccato**: colonne SQLAlchemy restano `Float`. Postgres porting futuro convertirà a `Numeric(15,2)` con type adapter SQLAlchemy che restituisce Decimal direttamente, eliminando questa indirezione.
+
+**File toccati**: `app/services/money.py` (nuovo), `app/services/invoice_totals.py`, `app/main.py`, `CHANGELOG.md`, `docs/STATO.md`.
+
+512 routes (invariato).
+
+---
+
 ## v3.5.0-alpha.172.37 — Sprint 3 Audit: finance domain invariants (BLOCCO 4) (23 mag 2026)
 
 Chiude **BLOCCO 4 dell'audit multi-agent**: 5 bug finance — `weighted_revenue` dead code, anomaly reopen P&L double-count, overtime brackets divergenti HR vs cost-report, IVA aggregata vs per-riga, `Invoice.number` UNIQUE globale anti-multi-tenant.

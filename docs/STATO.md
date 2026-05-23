@@ -8,6 +8,27 @@
 
 ## Versione corrente
 
+**v3.5.0-alpha.172.38** — 23 maggio 2026 — Sprint 3.5: Decimal in invoice_totals hotspot
+
+Mini-sprint chiusura BLOCCO 4. Decisione **opzione C**: SQLite stores REAL nativo, scale MediaFlow non soffre Float precision. Migrazione full ~70 campi rinviata a porting Postgres.
+
+Sprint 3.5 minimale = `Decimal` solo nell'hotspot di aggregazione critica:
+- Nuovo `app/services/money.py` con `to_decimal/money_round/money_to_float` (HALF_UP fiscale, NON banker's HALF_EVEN)
+- `invoice_totals.compute_invoice_totals_from_lines` refactored Decimal interno, float boundary
+- Garantisce Σ(round(x, 2)) ≡ round(Σ(x), 2) anche su 200+ righe
+
+512 routes invariato. 4 test smoke passati (single rate / multi-aliquota / 200 righe penny / empty).
+
+## Lavoro in corso
+
+Sprint 3.5 chiuso. **Sprint 4 next**: BLOCCO 5 UI antipattern.
+
+## Prossimo step
+
+(same as Sprint 4 plan)
+
+## Versione precedente
+
 **v3.5.0-alpha.172.37** — 23 maggio 2026 — Sprint 3 Audit: finance domain invariants (BLOCCO 4)
 
 Chiude BLOCCO 4 — 5 bug finance critici:
