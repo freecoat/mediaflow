@@ -1181,10 +1181,57 @@ function openAdvEmitModal(ap) {
   document.getElementById('adv-emit-due').value = '';
   document.getElementById('adv-emit-vat').value = 22;
   document.getElementById('adv-emit-desc').value = ap.label || '';
-  document.getElementById('adv-emit-meta').textContent =
+  const meta = document.getElementById('adv-emit-meta');
+  meta.textContent =
     'AP #' + ap.id + ' · ' + (ap.project_code || '?') + ' — ' + (ap.project_title || '') +
     ' · importo €' + (ap.amount || 0).toFixed(2);
+  // v3.5.0-alpha.172.43 UX fix — banner warning + disable Emit se 0 alloc.
+  // Pre-fix l'utente cliccava Emit + riceveva 422 senza capire la causa.
+  // Ora messaggio inline + shortcut a Conferma allocazioni.
+  const allocCount = Array.isArray(ap.allocations) ? ap.allocations.length : 0;
+  const submitBtn = document.querySelector('#modal-advance-emit .modal-footer .btn-primary');
+  let banner = document.getElementById('adv-emit-warn');
+  if (!banner) {
+    banner = document.createElement('div');
+    banner.id = 'adv-emit-warn';
+    banner.style.cssText = 'margin:10px 0; padding:10px 12px; border-radius:6px; font-size:13px;';
+    meta.parentNode.insertBefore(banner, meta.nextSibling);
+  }
+  if (allocCount === 0) {
+    banner.style.cssText += 'background:rgba(239,68,68,0.12); color:#fca5a5; border:1px solid rgba(239,68,68,0.35);';
+    banner.textContent = '';
+    const warnTxt = document.createElement('span');
+    warnTxt.textContent = '⚠ Nessuna allocazione a JCL. Conferma allocazioni prima di emettere. ';
+    const goBtn = document.createElement('button');
+    goBtn.type = 'button';
+    goBtn.className = 'btn btn-secondary btn-sm';
+    goBtn.style.marginLeft = '8px';
+    goBtn.textContent = '↪ Vai a Conferma';
+    goBtn.onclick = () => { closeModal('modal-advance-emit'); openAdvConfirmFromCache(ap.id); };
+    banner.appendChild(warnTxt);
+    banner.appendChild(goBtn);
+    submitBtn.disabled = true;
+    submitBtn.title = 'Conferma allocazioni JCL prima di emettere';
+  } else {
+    banner.style.cssText += 'background:rgba(34,197,94,0.10); color:#86efac; border:1px solid rgba(34,197,94,0.30);';
+    const sumAlloc = ap.allocations.reduce((s, a) => s + (a.amount || 0), 0);
+    banner.textContent = `✓ ${allocCount} JCL allocate · Σ €${sumAlloc.toFixed(2)} (vs AP €${(ap.amount||0).toFixed(2)})`;
+    submitBtn.disabled = false;
+    submitBtn.title = '';
+  }
   openModal('modal-advance-emit');
+}
+
+// v3.5.0-alpha.172.43 — Helper shortcut: apri modal Conferma da Emit
+// quando user clicca "Vai a Conferma".
+function openAdvConfirmFromCache(apId) {
+  const ap = _advDraftsCache.find(r => String(r.id) === String(apId));
+  if (!ap) { toast('AP non trovato in cache, ricarica la pagina', 'error'); return; }
+  if (typeof openAdvConfirmModal === 'function') {
+    openAdvConfirmModal(ap);
+  } else {
+    toast('Modal Conferma non disponibile su questa pagina', 'error');
+  }
 }
 
 async function submitAdvEmit() {

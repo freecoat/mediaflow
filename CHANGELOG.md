@@ -1,5 +1,29 @@
 # MediaFlow — Changelog
 
+## v3.5.0-alpha.172.43 — UX fix Emit acconto: warning inline + disable se 0 allocazioni (23 mag 2026)
+
+Modal "Emetti fattura acconto" pre-α.172.43 mostrava bottone Emit attivo
+anche con 0 allocazioni JCL. User cliccava → 422 generico "nessuna
+allocazione" senza capire la causa o cosa fare.
+
+Fix UX in `openAdvEmitModal`:
+- Banner inline nel modal con stato allocazioni:
+  - ✓ verde "N JCL allocate · Σ €X (vs AP €Y)" se allocazioni presenti
+  - ⚠ rosso "Nessuna allocazione a JCL" se 0, + bottone "↪ Vai a Conferma"
+- Submit `disabled=true` se 0 alloc + tooltip esplicativo
+- Shortcut button apre direttamente `modal-advance-confirm` per quel AP
+  (via cache `_advDraftsCache`)
+
+Helper nuovo: `openAdvConfirmFromCache(apId)` — riusabile per altri
+shortcut UX simili.
+
+**File toccati**: `app/templates/pages/finance.html`, `app/main.py`,
+`CHANGELOG.md`.
+
+513 routes invariato.
+
+---
+
 ## v3.5.0-alpha.172.42 — Bugfix post-audit: cashflow outstanding + advance cancel cascade + client modal fiscale (23 mag 2026)
 
 3 fix dopo test utente Matteo post-audit.
