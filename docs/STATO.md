@@ -8,6 +8,49 @@
 
 ## Versione corrente
 
+**v3.5.0-alpha.172.36** — 23 maggio 2026 — Sprint 2 Audit: slice-lock simmetrico + UI 404
+
+Chiude **BLOCCO 2** (immutability JCL violata quote-side) + **BLOCCO 3** (3 endpoint UI 404 silenti).
+
+**Slice-lock simmetrico**: esteso `app/services/billing_slice_guard.py` con API JCL-driven (`find_any_active_slice_for_jcl`, `jcl_lock_message`, `assert_jcl_lock_safe`). 4 callsite quote-side patchati:
+- `update_quote_line` sync JCL (era leak: rinomina/riprezza silenzioso post-billing)
+- `delete_quote_line` cascade (era leak: slice orfane)
+- `batch_delete_quote_lines` (era leak: idem batch)
+- `migrate_job` versioning re-bind (era leak: ribind silenzioso)
+
+Tutti tornano 409 con payload `{message, lock: {slice_id, period_start, period_end, invoice_number, billed_amount}}` consumabile dalla modale di rettifica UI.
+
+**UI 404 fix** (cross-ref audit):
+- `project_detail.html:1283-1285` deliverable templates → `/delivery-templates/api/list`
+- `job_detail.html:1011` resources dropdown → `/resources/api`
+
+512 routes (invariato). Smoke OK.
+
+## Lavoro in corso
+
+Sprint 2 chiuso. **Sprint 3 next** dell'audit: BLOCCO 4 finance — `weighted_revenue` dead code in `cost_line_sync.py` + Float→Numeric migration + IVA per-riga + `Invoice.number` UNIQUE per-tenant.
+
+## Prossimo step
+
+1. **Weighted_revenue**: branch `_booking_hours_weighted` in `cost_line_sync.recompute_cost_line_actual:320-401` (helper già scritto a riga 194)
+2. **Invoice.number multi-tenant**: migration `UniqueConstraint("tenant_id", "number")` + script
+3. **Anomaly reopen**: soft-delete `LossEntry`/`OverheadCost` collegato al reopen
+4. **Overtime brackets**: unificare in `overtime.py:222` chiamando helper di `booking_cost.py`
+5. **IVA per-riga**: refactor `billing.py:1142,1362` calcola vat_amount per `InvoiceLine`
+6. **Float→Numeric** migration: Quote/Invoice prima, JCL dopo, Resource rate ultimo
+
+## Bug aperti
+
+Stato audit:
+- ✅ BLOCCO 1 (tenant scope leak) — α.172.35
+- ✅ BLOCCO 2 (slice-lock quote-side) — α.172.36
+- ✅ BLOCCO 3 (UI 404 endpoint) — α.172.36
+- 🔜 BLOCCO 4 (weighted_revenue + Float→Numeric + IVA per-riga + Invoice.number) — Sprint 3
+- 🔜 BLOCCO 5 (UI JSON.stringify + setSelection wrapper + escapeHtml + CSRF) — Sprint 4
+- 🔜 BLOCCO 6 (FK ondelete + JCLBilledSlice immutability model-level + validators IT + FatturaPA XML) — Sprint 5
+
+## Versione precedente
+
 **v3.5.0-alpha.172.35** — 23 maggio 2026 — Sprint 1 Audit: tenant scope guard
 
 Chiude **BLOCCO 1** dell'audit multi-agent (5 agent paralleli, 131 finding, 37 P0): cross-tenant data leak su pattern by-ID lookup e page-render. 23 query patchate via helper riusabile.

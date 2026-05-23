@@ -1008,7 +1008,9 @@ async function openNewDeliverable() {
       items.map(it => `<option value="${it.id}">${escapeHtml(it.name)}</option>`).join('');
   } catch(e) { /* silent */ }
   try {
-    const resources = await api('GET', '/resources/api/list');
+    // v3.5.0-alpha.172.36 (Sprint 2 BLOCCO 3) — endpoint corretto `/resources/api`
+    // (cross-ref audit). Era `/resources/api/list` → 404 silente → select vuota.
+    const resources = await api('GET', '/resources/api');
     const sel = document.getElementById('dlv-resource');
     sel.innerHTML = '<option value="">— nessuno —</option>' +
       (resources || []).map(r => `<option value="${r.id}">${escapeHtml(r.name)} (${escapeHtml(r.role||'')})</option>`).join('');

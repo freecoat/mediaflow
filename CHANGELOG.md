@@ -1,5 +1,36 @@
 # MediaFlow — Changelog
 
+## v3.5.0-alpha.172.36 — Sprint 2 Audit: slice-lock simmetrico + UI 404 (23 mag 2026)
+
+Chiude **BLOCCO 2** (JCLBilledSlice immutability lato quote-side) e **BLOCCO 3** (endpoint UI 404) dell'audit multi-agent.
+
+**Slice-lock simmetrico** (BLOCCO 2): le 4 mutazioni JCL dal lato `quotes.py` bypassavano il guard. Asimmetria critica: planning/AI lato chiamavano `assert_slice_lock_safe()` su Booking, quote-side modificava direttamente la JCL. Una JCL già fatturata poteva essere rinominata/riprezzata/cancellata silenziosamente → divergenza fra JCL e snapshot fattura emessa.
+
+**Esteso `app/services/billing_slice_guard.py`** con API JCL-driven:
+- `find_any_active_slice_for_jcl(db, jcl_id)` — slice non-voided più antica, no filtro periodo
+- `jcl_lock_message(slice_, action)` — messaggio uniforme IT
+- `assert_jcl_lock_safe(db, jcl_id, action)` — solleva `HTTPException(409)` con `{message, lock}` payload riusabile dalla modale di rettifica UI
+
+Differenza con `find_blocking_slice` esistente: quel guard è booking-driven (richiede `Booking` con `start_datetime/end_datetime`); l'esistenza di una slice attiva sulla JCL blocca *strutturalmente* qualsiasi mutazione (rinomina, cambio prezzo, cancellazione), indipendentemente da periodi.
+
+**quotes.py — 4 fix slice-lock**:
+- `update_quote_line` (1645+): sync JCL gated da guard. Azione: "modificare la voce di costo collegata a"
+- `delete_quote_line` (1840): cascade su JCL gated. Azione: "eliminare la voce di costo collegata a"
+- `batch_delete_quote_lines` (2028): batch-delete con rollback su lock. Idem messaggio
+- `migrate_job` versioning (3105): re-bind JCL gated. Azione: "ribindare la voce di costo in nuova versione di quote per"
+
+Tutti i 4 ritornano 409 con payload `{message: <messaggio IT>, lock: {slice_id, period_start, period_end, invoice_id, invoice_number, billed_amount}}` — la modale UI esistente per rettifica può consumarlo.
+
+**UI 404 fix** (BLOCCO 3): 3 endpoint chiamati da template ma non definiti in nessun router → select vuota silenziosa con `catch(e) {}`:
+- `project_detail.html:1283-1285` — `/dam/api/delivery-templates` + fallback `/api/delivery-templates` → corretto `/delivery-templates/api/list`. Era un doppio try/catch a vuoto.
+- `job_detail.html:1011` — `/resources/api/list` → corretto `/resources/api`. Risorse non comparivano nel dropdown del modal "Nuova consegna" in scheda job.
+
+**Smoke**: import OK, app boota 512 routes (invariato).
+
+**File toccati**: `app/services/billing_slice_guard.py`, `app/routers/quotes.py`, `app/templates/pages/project_detail.html`, `app/templates/pages/job_detail.html`, `app/main.py`, `CHANGELOG.md`, `docs/STATO.md`.
+
+---
+
 ## v3.5.0-alpha.172.35 — Sprint 1 Audit: tenant scope guard (23 mag 2026)
 
 Chiude il **BLOCCO 1 dell'audit multi-agent** (5 agent paralleli read-only, 131 finding totali, 37 P0): cross-tenant data leak su pattern by-ID lookup e page-render. 23 query patchate via helper riusabile.

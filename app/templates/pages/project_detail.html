@@ -1279,11 +1279,12 @@ async function tsLoad() {
   try {
     tsState = await api('GET', `/projects/api/${PROJECT_ID}/tech-sheet`);
     // Carica delivery templates per il select
+    // v3.5.0-alpha.172.36 (Sprint 2 BLOCCO 3) — endpoint corretto è
+    // `/delivery-templates/api/list` (cross-ref audit). I 2 URL precedenti
+    // (`/dam/api/delivery-templates` + `/api/delivery-templates`) non
+    // esistono in nessun router → 404 + select vuota silenziosa.
     let dts = [];
-    try { dts = await api('GET', '/dam/api/delivery-templates').catch(() => []); } catch(e) {}
-    if (!Array.isArray(dts) || !dts.length) {
-      try { dts = await api('GET', '/api/delivery-templates'); } catch(e) { dts = []; }
-    }
+    try { dts = await api('GET', '/delivery-templates/api/list'); } catch(e) { dts = []; }
     const dtSel = document.getElementById('ts-delivery-template');
     dtSel.innerHTML = '<option value="">— nessuno —</option>' +
       (dts || []).map(t => `<option value="${t.id}">${escapeHtml(t.name || ('#'+t.id))}</option>`).join('');

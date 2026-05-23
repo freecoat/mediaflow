@@ -94,6 +94,74 @@ def slice_lock_message(slice_: JCLBilledSlice) -> str:
     )
 
 
+# v3.5.0-alpha.172.36 (Sprint 2) — JCL-driven slice lock guard ──────────
+# Sprint 2 audit BLOCCO 2: mutazioni JCL lato quote-side (quotes.py)
+# bypassano lo slice-lock. Estendiamo l'API del guard con check non
+# vincolato al period — per modifiche JCL (rinomina/prezzo/quantità) o
+# delete: basta che esista UNA slice attiva per dichiarare blocco.
+
+def find_any_active_slice_for_jcl(
+    db: Session, jcl_id: Optional[int],
+) -> Optional[JCLBilledSlice]:
+    """Ritorna la prima `JCLBilledSlice` non-voided della JCL, indipendente
+    dal periodo. Differente da `find_blocking_slice_for_dates` perché non
+    serve un intervallo: la sola esistenza di una slice attiva blocca la
+    mutazione strutturale della JCL (campi monetari, descrizione, delete).
+    """
+    if not jcl_id:
+        return None
+    return (
+        db.query(JCLBilledSlice)
+        .filter(
+            JCLBilledSlice.job_cost_line_id == jcl_id,
+            JCLBilledSlice.voided_at.is_(None),
+        )
+        .order_by(JCLBilledSlice.period_start.asc())
+        .first()
+    )
+
+
+def jcl_lock_message(slice_: JCLBilledSlice, action: str = "modificare") -> str:
+    """Messaggio standard per blocco JCL-driven (mutazione/delete quote-side)."""
+    invoice_label = ""
+    if slice_.invoice and slice_.invoice.number:
+        invoice_label = f" (fattura {slice_.invoice.number})"
+    return (
+        f"Impossibile {action} questa voce: già fatturata"
+        f"{invoice_label} con slice "
+        f"[{slice_.period_start.isoformat()} → {slice_.period_end.isoformat()}]. "
+        f"Per modifiche emetti Nota di Credito (TD04) o crea nuova versione "
+        f"della quotazione."
+    )
+
+
+def assert_jcl_lock_safe(
+    db: Session, jcl_id: Optional[int], *, action: str = "modificare",
+) -> None:
+    """Solleva HTTPException(409) se la JCL ha almeno una slice attiva
+    (non-voided). Idempotente: nessuno-op se jcl_id è None o nessuna slice.
+
+    Da chiamare prima di qualsiasi UPDATE su campi strutturali della JCL
+    (description, unit, unit_price, quantity_quoted, total_quoted) o prima
+    di `db.delete(jcl)`. NON serve per update di campi soft come `notes`,
+    `total_expected`, `external_outsourced` (vedi cost_report.update_cost_line).
+
+    `action` viene usato per il messaggio: "modificare", "eliminare",
+    "ribindare" (per migrate_job versioning), ecc.
+    """
+    from fastapi import HTTPException
+    s = find_any_active_slice_for_jcl(db, jcl_id)
+    if s is None:
+        return
+    raise HTTPException(
+        409,
+        detail={
+            "message": jcl_lock_message(s, action=action),
+            "lock": slice_lock_payload(s),
+        },
+    )
+
+
 def slice_lock_payload(slice_: JCLBilledSlice) -> dict:
     """Payload JSON per response 409 — UI lo usa per popolare la modale di
     rettifica."""

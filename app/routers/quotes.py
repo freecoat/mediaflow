@@ -12,6 +12,7 @@ from app.models import (
     DeliveryTemplate, JobDeliverable,
 )
 from app.services.rbac import requires_permission
+from app.services.billing_slice_guard import assert_jcl_lock_safe
 from app.context import current_tenant_id
 
 router = APIRouter(prefix="/quotes", tags=["quotes"])
@@ -1642,6 +1643,12 @@ async def update_quote_line(
                 f"Modifica bloccata: il job {jcl.job.code} è in stato "
                 f"{jcl.job.status.value}. Riapri/duplica il job per modificare."
             )
+        # v3.5.0-alpha.172.36 (Sprint 2 BLOCCO 2) — slice-lock guard JCL-driven.
+        # Se la JCL ha già una slice attiva (fatturata), bloccare la mutazione:
+        # corromperebbe link JCL↔fattura emessa (snapshot resta corretto ma JCL
+        # diverge per future ri-trasmissioni). Soluzione formale: TD04 + nuova
+        # versione di quote.
+        assert_jcl_lock_safe(db, jcl.id, action="modificare la voce di costo collegata a")
         jcl.description = line.description
         jcl.quantity_quoted = line.quantity
         jcl.unit = line.unit
@@ -1833,6 +1840,10 @@ async def delete_quote_line(quote_id: int, line_id: int, db: Session = Depends(g
                 f"Impossibile cancellare: il job {jcl.job.code} è in stato "
                 f"{jcl.job.status.value} e ha già consuntivato questa lavorazione."
             )
+        # v3.5.0-alpha.172.36 (Sprint 2 BLOCCO 2) — slice-lock guard:
+        # cancellare una JCL con slice attive lascerebbe slice orfane
+        # (FK senza ondelete CASCADE → integrity error o NULL silente).
+        assert_jcl_lock_safe(db, jcl.id, action="eliminare la voce di costo collegata a")
         # Per TimePunch (HR, separato dal cost report): soft-detach OK
         db.query(TimePunch).filter(
             TimePunch.job_cost_line_id == jcl.id
@@ -2022,6 +2033,12 @@ async def batch_delete_quote_lines(
                 raise HTTPException(
                     409, f"JCL del job {jcl.job.code} è in stato {jcl.job.status.value}, non cancellabile."
                 )
+            # v3.5.0-alpha.172.36 (Sprint 2 BLOCCO 2) — slice-lock guard
+            try:
+                assert_jcl_lock_safe(db, jcl.id, action="eliminare la voce di costo collegata a")
+            except HTTPException as _e:
+                db.rollback()
+                raise
             db.query(TimePunch).filter(
                 TimePunch.job_cost_line_id == jcl.id
             ).update({"job_cost_line_id": None}, synchronize_session=False)
@@ -3096,6 +3113,16 @@ async def migrate_job(
             if jcl.is_extra:
                 continue  # extra puri non toccati
             if jcl.quote_line_id and jcl.quote_line_id in new_line_by_parent:
+                # v3.5.0-alpha.172.36 (Sprint 2 BLOCCO 2) — slice-lock guard:
+                # versioning quote che ribinda una JCL già fatturata farebbe
+                # divergere prezzo/descrizione vs snapshot fattura. Va emessa
+                # NC TD04 prima, oppure il versioning lascia "as-is" le JCL
+                # bloccate (qui scegliamo HARD-BLOCK 409 dell'intera operazione
+                # di migrate, l'utente vede l'elenco e agisce).
+                assert_jcl_lock_safe(
+                    db, jcl.id,
+                    action="ribindare la voce di costo in nuova versione di quote per",
+                )
                 # Re-bind: punta alla riga V_new corrispondente
                 new_line = new_line_by_parent[jcl.quote_line_id]
                 jcl.quote_line_id = new_line.id
