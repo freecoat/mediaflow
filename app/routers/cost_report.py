@@ -21,6 +21,11 @@ from app.services.working_hours import get_holidays
 from app.services.pdf_export import generate_client_cost_report_pdf
 from app.services.cost_line_sync import is_time_based_unit
 from app.context import current_tenant_id
+from app.services.tenant_guard import scoped
+from app.services.rbac import requires_permission
+
+# v3.5.0-alpha.172.35 (Sprint 1) — permission gate per modifiche JCL
+RequireEditCostLines = Depends(requires_permission("edit_cost_lines"))
 
 router = APIRouter(prefix="/cost-report", tags=["cost_report"])
 
@@ -1164,7 +1169,10 @@ async def reconcile_status(db: Session = Depends(get_db)):
     return {"stale_count": int(stale)}
 
 
-@router.put("/api/job/{job_id}/cost-lines/{line_id}")
+@router.put(
+    "/api/job/{job_id}/cost-lines/{line_id}",
+    dependencies=[RequireEditCostLines],
+)
 async def update_cost_line(
     job_id: int, line_id: int,
     quantity_actual: Optional[float] = Form(None),
@@ -1190,7 +1198,8 @@ async def update_cost_line(
             "Derivano sempre dai booking marcati 'done'. La fatturazione di "
             "extra/scontistica/banca-ore passerà dal flusso fatturazione (in roadmap)."
         )
-    line = db.query(JobCostLine).filter(
+    # v3.5.0-alpha.172.35 (Sprint 1) — tenant guard
+    line = scoped(db.query(JobCostLine), JobCostLine).filter(
         JobCostLine.id == line_id, JobCostLine.job_id == job_id).first()
     if not line: raise HTTPException(404)
     if total_expected is not None: line.total_expected = total_expected

@@ -57,6 +57,11 @@ PERMISSIONS: Dict[str, Dict[str, List[str]]] = {
         "view_pricelist":   ["Visualizza listino prezzi"],
         "edit_pricelist":   ["Modifica listino prezzi"],
         "view_cost_report": ["Visualizza cost report"],
+        # v3.5.0-alpha.172.35 — Sprint 1: edit_cost_lines = mod. campi editabili
+        # delle JCL (total_expected/notes/external_outsourced). I valori derivati
+        # (quantity_actual/total_accrued) restano lock dai booking — vedi
+        # commento `edit_cost_actuals` rimosso più sotto.
+        "edit_cost_lines":  ["Modifica righe di costo job (forecast, note, outsourced)"],
         "view_invoices":    ["Visualizza fatture"],
         "edit_invoices":    ["Crea/modifica fatture"],
         # v3.5.0-alpha.87 — Pozzo costi generici / Spese aziendali (OverheadCost).
@@ -129,7 +134,8 @@ PRESET_PERMISSIONS: Dict[str, List[str]] = {
         "approve_unavailability",
         "view_finance", "view_quotes", "edit_quotes", "delete_quotes",
         "view_pricelist", "edit_pricelist",
-        "view_cost_report", "view_invoices", "edit_invoices",
+        "view_cost_report", "edit_cost_lines",
+        "view_invoices", "edit_invoices",
         # v3.5.0-alpha.87 — pozzo costi / spese aziendali
         "view_overhead", "edit_overhead",
         "view_resources", "edit_resources",
@@ -150,7 +156,7 @@ PRESET_PERMISSIONS: Dict[str, List[str]] = {
         "approve_unavailability",
         "view_finance", "view_quotes", "edit_quotes", "delete_quotes",
         "view_pricelist",
-        "view_cost_report",
+        "view_cost_report", "edit_cost_lines",
         "view_overhead",  # v3.5.0-alpha.87 — producer read-only
         "view_resources",
         # v3.5.0-alpha.21: producer ha read-only sugli orari (vede regole CCNL)
@@ -165,7 +171,8 @@ PRESET_PERMISSIONS: Dict[str, List[str]] = {
         "view_punches_all",
         "view_finance", "view_quotes", "edit_quotes", "delete_quotes",
         "view_pricelist",
-        "view_cost_report", "view_invoices", "edit_invoices",
+        "view_cost_report", "edit_cost_lines",
+        "view_invoices", "edit_invoices",
         # v3.5.0-alpha.87 — accounting cura pozzo costi
         "view_overhead", "edit_overhead",
         "view_settings_global",

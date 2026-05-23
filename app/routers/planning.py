@@ -29,6 +29,7 @@ def _parse_priority(value):
 from datetime import date as _date, timedelta as _td
 from app.services.auth import get_current_user_from_token
 from app.services.rbac import is_elevated, scope_resource_id, current_user_optional, requires_permission
+from app.services.tenant_guard import scoped, fetch_or_404
 
 # v3.5.0-alpha.66.16.0 — Sprint R3: gate per i 4 mutator planning senza
 # protezione (audit HIGH #4). Endpoint duplicati di clients/jobs (CRUD)
@@ -219,15 +220,22 @@ async def _planning_render(
             Resource.tenant_id == current_tenant_id(), Resource.is_active == True
         ).order_by(Resource.name).all()
     )
+    # v3.5.0-alpha.172.35 (Sprint 1) — tenant scope su page-render (era leak)
     jobs = (
-        db.query(Job).options(joinedload(Job.client), joinedload(Job.project))
+        scoped(
+            db.query(Job).options(joinedload(Job.client), joinedload(Job.project)),
+            Job,
+        )
         .filter(Job.status != JobStatus.cancelled)
         .order_by(Job.created_at.desc()).all()
     )
     from app.models import Quote, QuoteStatus
     quotes = (
-        db.query(Quote).options(
-            joinedload(Quote.client), joinedload(Quote.project)
+        scoped(
+            db.query(Quote).options(
+                joinedload(Quote.client), joinedload(Quote.project)
+            ),
+            Quote,
         ).filter(
             Quote.status.in_((QuoteStatus.draft, QuoteStatus.sent, QuoteStatus.approved))
         ).order_by(Quote.created_at.desc()).all()
@@ -271,28 +279,10 @@ async def list_clients(db: Session = Depends(get_db)):
     return db.query(Client).filter(Client.tenant_id == current_tenant_id()).all()
 
 
-@router.post("/api/clients", dependencies=[RequireEditClients], deprecated=True)
-async def create_client(
-    name: str = Form(...),
-    contact_email: Optional[str] = Form(None),
-    contact_phone: Optional[str] = Form(None),
-    vat_number: Optional[str] = Form(None),
-    address: Optional[str] = Form(None),
-    db: Session = Depends(get_db),
-):
-    """v3.5.0-alpha.66.17.3 (R7) — DEPRECATED: usa POST /clients/api che ha
-    schema completo (legal_form, contact_name, sdi_code, pec, città, ecc).
-    Endpoint duplicato di clients.py:212 con subset minimo dei campi.
-    Mantenuto per compat client legacy; rimuovere quando nessun template
-    chiama più /planning/api/clients POST."""
-    c = Client(
-        name=name, contact_email=contact_email,
-        contact_phone=contact_phone, vat_number=vat_number, address=address,
-    )
-    db.add(c)
-    db.commit()
-    db.refresh(c)
-    return c
+# v3.5.0-alpha.172.35 (Sprint 1) — RIMOSSO endpoint `POST /planning/api/clients`
+# (era deprecated da v3.4.x). Aveva bug: creava Client senza `tenant_id` →
+# leak cross-tenant. UI corretta usa `POST /clients/api`. Cross-ref audit
+# (Sprint 1) ha confermato nessun caller residuo.
 
 
 # ── Job API ───────────────────────────────────────────────────────────
@@ -338,9 +328,8 @@ def _compute_job_progress(db: Session, job_id: int) -> dict:
 @router.get("/api/jobs/{job_id}/progress")
 async def job_progress(job_id: int, db: Session = Depends(get_db)):
     """v3.4.37 — Avanzamento del job calcolato sui Booking."""
-    j = db.query(Job).filter(Job.id == job_id).first()
-    if not j:
-        raise HTTPException(404, "Job non trovato")
+    # v3.5.0-alpha.172.35 (Sprint 1) — tenant guard via fetch_or_404
+    fetch_or_404(db, Job, job_id, error="Job non trovato")
     return _compute_job_progress(db, job_id)
 
 
@@ -363,9 +352,8 @@ async def job_resource_coverage(
         raise HTTPException(400, "resource_ids deve essere CSV di interi")
     if not rids:
         return {"covered": [], "missing": []}
-    j = db.query(Job).filter(Job.id == job_id).first()
-    if not j:
-        raise HTTPException(404, "Job non trovato")
+    # v3.5.0-alpha.172.35 (Sprint 1) — tenant guard
+    j = fetch_or_404(db, Job, job_id, error="Job non trovato")
     assigned = {
         a.resource_id for a in db.query(JobResourceAssignment).filter(
             JobResourceAssignment.job_id == job_id
@@ -400,8 +388,15 @@ async def list_jobs(
 
     v3.4.47 — `client_id`/`project_id`/`department_id` accettano comma-separated
     (es. `?client_id=1,5,7`). Compatibile con single-id pre-multi.
+
+    v3.5.0-alpha.172.35 (Sprint 1) — tenant filter ora unconditional (era
+    "implicito via client/project" ma solo se uno di quei filtri opzionali
+    veniva passato; senza filtri restituiva tutti i job di tutti i tenant).
     """
-    qs = db.query(Job).options(joinedload(Job.client), joinedload(Job.project))
+    qs = scoped(
+        db.query(Job).options(joinedload(Job.client), joinedload(Job.project)),
+        Job,
+    )
     if status:
         qs = qs.filter(Job.status == status)
     client_ids = _parse_id_list(client_id)
@@ -447,36 +442,19 @@ async def list_jobs(
     return out
 
 
-@router.post("/api/jobs", deprecated=True, dependencies=[RequireEditPlanningAll])
-async def create_job(
-    code: str = Form(...),
-    title: str = Form(...),
-    client_id: int = Form(...),
-    status: JobStatus = Form(JobStatus.draft),
-    start_date: Optional[date] = Form(None),
-    end_date: Optional[date] = Form(None),
-    budget: Optional[float] = Form(None),
-    description: Optional[str] = Form(None),
-    db: Session = Depends(get_db),
-):
-    """DEPRECATED dal v3.4.8. I job nascono solo da quote approvate.
-    Mantenuto per scenari di import/migrazione legacy."""
-    existing = db.query(Job).filter(Job.code == code).first()
-    if existing:
-        raise HTTPException(400, f"Codice job '{code}' già esistente")
-    j = Job(
-        code=code, title=title, client_id=client_id, status=status,
-        start_date=start_date, end_date=end_date, budget=budget, description=description,
-    )
-    db.add(j)
-    db.commit()
-    db.refresh(j)
-    return j
+# v3.5.0-alpha.172.35 (Sprint 1) — RIMOSSO endpoint `POST /planning/api/jobs`
+# (era deprecated da v3.4.8). I job nascono solo da quote approvate. Aveva
+# 2 bug: (1) creava Job senza `tenant_id`, (2) check unicità `code` cross-tenant
+# (collisione falsa positiva). Nessun caller residuo nel codebase.
 
 
 @router.get("/api/jobs/{job_id}")
 async def get_job(job_id: int, db: Session = Depends(get_db)):
-    j = db.query(Job).options(joinedload(Job.client)).filter(Job.id == job_id).first()
+    # v3.5.0-alpha.172.35 (Sprint 1) — tenant guard
+    j = (
+        scoped(db.query(Job).options(joinedload(Job.client)), Job)
+        .filter(Job.id == job_id).first()
+    )
     if not j:
         raise HTTPException(404, "Job non trovato")
     return j

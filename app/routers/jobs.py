@@ -30,6 +30,7 @@ from app.models import (
     PhysicalAsset, PhysicalAssetKind, Asset, DeliveryTemplate, Resource,
 )
 from app.context import current_tenant_id
+from app.services.tenant_guard import scoped, fetch_or_404
 
 router = APIRouter(prefix="/jobs", tags=["jobs"])
 
@@ -247,7 +248,8 @@ async def get_cost_line_detail(job_id: int, line_id: int, db: Session = Depends(
         BookingAssignment, BookingExecutionStatus, BookingStatus,
         QuoteLine, Resource,
     )
-    line = db.query(JobCostLine).filter(
+    # v3.5.0-alpha.172.35 (Sprint 1) — tenant guard
+    line = scoped(db.query(JobCostLine), JobCostLine).filter(
         JobCostLine.id == line_id, JobCostLine.job_id == job_id
     ).first()
     if not line:
@@ -422,7 +424,8 @@ async def update_cost_line(
             "passerà dal flusso fatturazione dedicato (in roadmap)."
         )
 
-    line = db.query(JobCostLine).filter(
+    # v3.5.0-alpha.172.35 (Sprint 1) — tenant guard
+    line = scoped(db.query(JobCostLine), JobCostLine).filter(
         JobCostLine.id == line_id, JobCostLine.job_id == job_id
     ).first()
     if not line:
@@ -456,7 +459,8 @@ async def delete_cost_line(job_id: int, line_id: int, request: Request, db: Sess
     from app.services.rbac import can_view_finance, current_user_optional
     if not can_view_finance(current_user_optional(request)):
         raise HTTPException(403, "Permesso negato (richiede view_finance)")
-    line = db.query(JobCostLine).filter(
+    # v3.5.0-alpha.172.35 (Sprint 1) — tenant guard
+    line = scoped(db.query(JobCostLine), JobCostLine).filter(
         JobCostLine.id == line_id, JobCostLine.job_id == job_id
     ).first()
     if not line:
@@ -1026,7 +1030,8 @@ async def preview_naming(
             JobDeliverable.tenant_id == current_tenant_id(),
         ).first()
         if deliverable:
-            job = db.query(Job).filter(Job.id == deliverable.job_id).first()
+            # v3.5.0-alpha.172.35 (Sprint 1) — tenant guard
+            job = scoped(db.query(Job), Job).filter(Job.id == deliverable.job_id).first()
 
     tokens = build_token_dict(
         db, deliverable=deliverable, job=job, overrides=overrides,

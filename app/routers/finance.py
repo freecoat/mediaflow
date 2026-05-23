@@ -14,6 +14,7 @@ from app.models import (
 )
 from app.services.finance import job_financial_summary, company_pl_summary, departments_pl_summary
 from app.services.rbac import requires_permission
+from app.services.tenant_guard import scoped, fetch_or_404, fetch_invoice_or_404
 from app.context import current_tenant_id
 
 router = APIRouter(prefix="/finance", tags=["finance"])
@@ -42,7 +43,12 @@ async def cashflow_page(request: Request, db: Session = Depends(get_db)):
 
 @router.get("/", response_class=HTMLResponse)
 async def finance_page(request: Request, db: Session = Depends(get_db)):
-    invoices = db.query(Invoice).options(joinedload(Invoice.client)).order_by(Invoice.issue_date.desc()).all()
+    # v3.5.0-alpha.172.35 (Sprint 1) — tenant scope (era leak: Invoice non ha
+    # tenant_id diretto, scope via Client). `scoped()` aggiunge JOIN Client.
+    invoices = (
+        scoped(db.query(Invoice).options(joinedload(Invoice.client)), Invoice)
+        .order_by(Invoice.issue_date.desc()).all()
+    )
     return _tpl().TemplateResponse(
         "pages/finance.html", {"request": request, "invoices": invoices}
     )
@@ -61,19 +67,24 @@ async def list_timesheets(
     db: Session = Depends(get_db),
 ):
     """v3.5.0-alpha.86 — Filtri estesi (S3.1): client/project/period.
-    Filtri cliente/progetto richiedono join con Job."""
-    q = db.query(Timesheet)
+    Filtri cliente/progetto richiedono join con Job.
+
+    v3.5.0-alpha.172.35 (Sprint 1) — tenant scope baseline (era leak: Timesheet
+    non ha tenant_id diretto, scoping via Job.tenant_id obbligatorio sempre,
+    non solo quando vengono passati i filtri cliente/progetto).
+    """
+    from app.models import Job as _Job
+    q = db.query(Timesheet).join(_Job, Timesheet.job_id == _Job.id).filter(
+        _Job.tenant_id == current_tenant_id()
+    )
     if job_id:
         q = q.filter(Timesheet.job_id == job_id)
     if user_id:
         q = q.filter(Timesheet.user_id == user_id)
-    if client_id or project_id:
-        from app.models import Job as _Job
-        q = q.join(_Job, Timesheet.job_id == _Job.id)
-        if client_id:
-            q = q.filter(_Job.client_id == client_id)
-        if project_id:
-            q = q.filter(_Job.project_id == project_id)
+    if client_id:
+        q = q.filter(_Job.client_id == client_id)
+    if project_id:
+        q = q.filter(_Job.project_id == project_id)
     if from_date:
         q = q.filter(Timesheet.work_date >= from_date)
     if to_date:
@@ -307,9 +318,8 @@ async def add_invoice_line(
     unit_price: float = Form(...),
     db: Session = Depends(get_db),
 ):
-    inv = db.query(Invoice).filter(Invoice.id == invoice_id).first()
-    if not inv:
-        raise HTTPException(404, "Fattura non trovata")
+    # v3.5.0-alpha.172.35 (Sprint 1) — tenant guard
+    inv = fetch_invoice_or_404(db, invoice_id)
     _enforce_invoice_mutable(inv)  # v3.5.0-alpha.114
     total = quantity * unit_price
     line = InvoiceLine(
@@ -330,9 +340,8 @@ async def update_invoice_status(
     status: InvoiceStatus = Form(...),
     db: Session = Depends(get_db),
 ):
-    inv = db.query(Invoice).filter(Invoice.id == invoice_id).first()
-    if not inv:
-        raise HTTPException(404, "Fattura non trovata")
+    # v3.5.0-alpha.172.35 (Sprint 1) — tenant guard
+    inv = fetch_invoice_or_404(db, invoice_id)
     # v3.5.0-alpha.114 — transizioni stato consentite:
     #   draft → sent (emissione)
     #   sent → paid (pagamento)
@@ -1475,9 +1484,8 @@ async def get_invoice_detail(invoice_id: int, db: Session = Depends(get_db)):
 @router.get("/api/invoices/{invoice_id}/payments")
 async def list_invoice_payments(invoice_id: int, db: Session = Depends(get_db)):
     """Lista pagamenti registrati per una fattura."""
-    inv = db.query(Invoice).filter(Invoice.id == invoice_id).first()
-    if not inv:
-        raise HTTPException(404, "Fattura non trovata")
+    # v3.5.0-alpha.172.35 (Sprint 1) — tenant guard
+    inv = fetch_invoice_or_404(db, invoice_id)
     rows = sorted(inv.payments, key=lambda p: p.payment_date or date.min, reverse=True)
     return {
         "invoice_id": invoice_id,
@@ -1519,15 +1527,14 @@ async def create_invoice_payment(
     """
     if amount <= 0:
         raise HTTPException(400, "Importo deve essere > 0")
-    inv = db.query(Invoice).filter(Invoice.id == invoice_id).first()
-    if not inv:
-        raise HTTPException(404, "Fattura non trovata")
+    # v3.5.0-alpha.172.35 (Sprint 1) — tenant guard + rimosso fallback hardcoded
+    inv = fetch_invoice_or_404(db, invoice_id)
     if inv.status == InvoiceStatus.cancelled:
         raise HTTPException(409, "Fattura cancellata: pagamenti non ammessi")
 
     user = getattr(request.state, "current_user", None)
     payment = InvoicePayment(
-        tenant_id=getattr(inv, "tenant_id", 1) or 1,
+        tenant_id=current_tenant_id(),
         invoice_id=invoice_id,
         amount=round(amount, 2),
         payment_date=payment_date,
@@ -1552,10 +1559,10 @@ async def create_invoice_payment(
 @router.delete("/api/payments/{payment_id}", dependencies=[RequireEditInvoices])
 async def delete_invoice_payment(payment_id: int, db: Session = Depends(get_db)):
     """Elimina un pagamento (annulla incasso). Ricomputa amount_paid + status."""
-    p = db.query(InvoicePayment).filter(InvoicePayment.id == payment_id).first()
-    if not p:
-        raise HTTPException(404, "Pagamento non trovato")
-    inv = db.query(Invoice).filter(Invoice.id == p.invoice_id).first()
+    # v3.5.0-alpha.172.35 (Sprint 1) — tenant guard. InvoicePayment ha tenant_id
+    # diretto, Invoice scope via Client.
+    p = fetch_or_404(db, InvoicePayment, payment_id, error="Pagamento non trovato")
+    inv = fetch_invoice_or_404(db, p.invoice_id)
     db.delete(p)
     db.flush()
     if inv is not None:
@@ -2103,10 +2110,16 @@ async def list_floating_jobs(db: Session = Depends(get_db)):
     `orphan_strategy=floating_job`, o da cancellazione manuale della quote.
 
     Ritorna la lista per la sezione Anomalie di /finance, e per generare
-    notifiche `job_floating_alert` periodiche."""
+    notifiche `job_floating_alert` periodiche.
+
+    v3.5.0-alpha.172.35 (Sprint 1) — tenant scope (era leak)."""
     jobs = (
-        db.query(Job)
-        .options(joinedload(Job.project), joinedload(Job.client), joinedload(Job.cost_lines))
+        scoped(
+            db.query(Job).options(
+                joinedload(Job.project), joinedload(Job.client), joinedload(Job.cost_lines)
+            ),
+            Job,
+        )
         .filter(Job.quote_id.is_(None))
         .filter(Job.status != JobStatus.cancelled)
         .order_by(Job.created_at.desc()).all()
@@ -2148,9 +2161,14 @@ async def list_discrepancies(db: Session = Depends(get_db)):
     extras = []
     inconsistent = []
 
+    # v3.5.0-alpha.172.35 (Sprint 1) — tenant scope (era leak)
     cost_lines = (
-        db.query(JobCostLine)
-        .options(joinedload(JobCostLine.job).joinedload(Job.project))
+        scoped(
+            db.query(JobCostLine).options(
+                joinedload(JobCostLine.job).joinedload(Job.project)
+            ),
+            JobCostLine,
+        )
         .filter(JobCostLine.job_id.isnot(None))
         .all()
     )

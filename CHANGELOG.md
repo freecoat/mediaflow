@@ -1,5 +1,49 @@
 # MediaFlow — Changelog
 
+## v3.5.0-alpha.172.35 — Sprint 1 Audit: tenant scope guard (23 mag 2026)
+
+Chiude il **BLOCCO 1 dell'audit multi-agent** (5 agent paralleli read-only, 131 finding totali, 37 P0): cross-tenant data leak su pattern by-ID lookup e page-render. 23 query patchate via helper riusabile.
+
+**Nuovo helper** (`app/services/tenant_guard.py`):
+- `scoped(query, Model)` — applica filtro `tenant_id == current_tenant_id()` su query esistente. Riconosce indirezione via Client per `Invoice` (no colonna `tenant_id` diretta).
+- `fetch_or_404(db, Model, id)` — generic by-ID fetch + tenant guard + 404 uniforme (no enumeration leak).
+- `fetch_invoice_or_404(db, invoice_id)` — specializzato Invoice, scope via Client.
+- Fallisce LOUD (RuntimeError) se Model nuovo non ha strategia di scope definita.
+
+**Nuovo permesso RBAC**: `edit_cost_lines` (categoria Finanza). Modifica campi editabili JCL (total_expected, notes, external_outsourced). I valori derivati (quantity_actual, total_accrued) restano lock dai booking. Assegnato a `admin`, `manager`, `producer`, `accounting`. Non a `operator`/`viewer`.
+
+**planning.py** — 4 fix + 2 endpoint deprecati rimossi:
+- ❌ Rimosso `POST /planning/api/clients` (deprecated, creava Client senza `tenant_id`)
+- ❌ Rimosso `POST /planning/api/jobs` (deprecated, creava Job senza `tenant_id` + check unicità code cross-tenant)
+- `_planning_render` Job/Quote query → `scoped()`
+- `job_progress`, `job_resource_coverage`, `get_job` → `fetch_or_404`
+- `list_jobs` baseline filter `scoped()` (era condizionale via client/project)
+
+**finance.py** — 9 fix:
+- `finance_page` Invoice list → `scoped()` (Client JOIN)
+- `list_timesheets` baseline `Job.tenant_id` filter sempre (era solo con filtri client/project)
+- 5× Invoice by-ID (`add_invoice_line`, `update_invoice_status`, `list_invoice_payments`, `create_invoice_payment`, `delete_invoice_payment`) → `fetch_invoice_or_404`
+- `create_invoice_payment` rimosso hardcoded fallback `tenant_id=1` → `current_tenant_id()`
+- `list_floating_jobs` + `list_discrepancies` (sezione Anomalie) → `scoped()`
+
+**jobs.py** — 4 fix:
+- `get_cost_line_detail`, `update_cost_line` (`/api/{job_id}/cost-lines/...`), `delete_cost_line` JCL by-ID → `scoped(JobCostLine)`
+- `get_naming_tokens` Job by-ID → `scoped(Job)`
+
+**cost_report.py** — 2 fix:
+- `update_cost_line` PUT — aggiunto gate `RequireEditCostLines`
+- JCL by-ID → `scoped(JobCostLine)`
+
+**Sicurezza**:
+- 23 endpoint patchati: leak cross-tenant chiuso. Tenant=2 fittizio non riesce più a enumerare/leggere/modificare record di tenant=1 via id guess.
+- `Invoice.number` UNIQUE GLOBALE noto come time-bomb multi-tenant HARD → tracciato per Sprint 5 (richiede migration DB).
+
+**File toccati**: `app/services/tenant_guard.py` (nuovo), `app/services/rbac.py`, `app/routers/planning.py`, `app/routers/finance.py`, `app/routers/jobs.py`, `app/routers/cost_report.py`, `app/main.py`, `CHANGELOG.md`, `docs/STATO.md`.
+
+Smoke test: tutti gli import OK, app boota 512 routes (era 514 prima — 2 deprecated rimossi).
+
+---
+
 ## v3.5.0-alpha.172.34 — Dropdown campi scheda tecnica + seed Netflix (22 mag 2026)
 
 A della lista complessi Matteo. Pannello admin in /settings → "Scheda tecnica" per configurare i valori ammessi dei campi tecnici. Editor scheda tecnica usa `<select>` strict quando il campo ha almeno 1 opzione attiva, altrimenti input free testo come default.

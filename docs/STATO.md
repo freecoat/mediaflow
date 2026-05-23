@@ -8,6 +8,48 @@
 
 ## Versione corrente
 
+**v3.5.0-alpha.172.35** — 23 maggio 2026 — Sprint 1 Audit: tenant scope guard
+
+Chiude **BLOCCO 1** dell'audit multi-agent (5 agent paralleli, 131 finding, 37 P0): cross-tenant data leak su pattern by-ID lookup e page-render. 23 query patchate via helper riusabile.
+
+**Nuovo `app/services/tenant_guard.py`**: `scoped(query, Model)` + `fetch_or_404(db, Model, id)` + `fetch_invoice_or_404(db, id)`. Gestisce indirezione Invoice via Client. Fallisce LOUD se Model nuovo senza strategia di scope (no leak silente futuro).
+
+**Nuovo permesso RBAC `edit_cost_lines`** in categoria Finanza. Assegnato a admin/manager/producer/accounting.
+
+**Endpoint deprecati rimossi** (avevano bug + duplicati):
+- `POST /planning/api/clients` (era v3.4.x deprecated)
+- `POST /planning/api/jobs` (era v3.4.8 deprecated)
+
+**Router toccati** (23 fix):
+- planning.py: 4 query (page-render Job/Quote, job_progress, coverage, get_job, list_jobs baseline)
+- finance.py: 9 query (page-render Invoice, list_timesheets baseline, 5 Invoice by-ID + payment, list_floating_jobs, list_discrepancies, rimosso hardcoded tenant=1 fallback)
+- jobs.py: 4 query (3 JCL by-ID + Job in naming-tokens)
+- cost_report.py: 2 (gate + JCL by-ID update)
+
+App boota 512 routes (-2 da deprecati). Smoke import OK.
+
+## Lavoro in corso
+
+Sprint 1 chiuso. **Sprint 2 next** dell'audit: slice-lock simmetrico quote-side (BLOCCO 2 audit) + 3 endpoint UI 404 (BLOCCO 3). Bump previsti α.172.36 → α.172.40.
+
+## Prossimo step
+
+1. **Slice-lock symmetric**: estrarre `assert_slice_lock_safe()` da planning.py → service condiviso. Applicare a `quotes.py:1645,3105,1840,2028` con HARD-BLOCK 409.
+2. **FK ondelete safety** su `jcl_billed_slices.job_cost_line_id` (model-level event listener `before_update`).
+3. **Fix 3 endpoint 404 UI**: project_detail.html:1283-1285 → `/delivery-templates/api/list`, job_detail.html:1011 → `/resources/api`.
+
+## Bug aperti
+
+Audit multi-agent (`23 mag 2026`): 131 finding, 37 P0. Stato:
+- ✅ BLOCCO 1 (tenant scope leak) — chiuso α.172.35
+- 🔜 BLOCCO 2 (slice-lock quote-side) — Sprint 2
+- 🔜 BLOCCO 3 (UI 404 endpoint mancanti) — Sprint 2
+- 🔜 BLOCCO 4 (weighted_revenue dead, Float→Numeric, IVA per-riga, Invoice.number multi-tenant) — Sprint 3
+- 🔜 BLOCCO 5 (UI JSON.stringify onclick, setSelection bypass, escapeHtml innerHTML, CSRF) — Sprint 4
+- 🔜 BLOCCO 6 (FK ondelete, JCLBilledSlice model-level immutability, P.IVA/CF/SDI validators, FatturaPA XML) — Sprint 5
+
+## Versione precedente
+
 **v3.5.0-alpha.172.34** — 22 maggio 2026 — Dropdown campi scheda tecnica + seed Netflix
 
 A della lista complessi: pannello admin /settings → "Scheda tecnica" per gestire opzioni dei campi tecnici (codec, sample_rate, formato editorial, ecc). Editor pubblico scheda tecnica usa `<select>` strict quando campo ha opzioni. Bottone "🎬 Seed Netflix" popola con ~250 valori da Netflix Delivery Specifications (40 field paths). Endpoint pubblico no-auth gated da edit_token.
