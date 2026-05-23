@@ -184,6 +184,7 @@ let _advTypes = new Set();
 let ALL_TAGS = [];
 // v3.5.0-alpha.86 (S3.4)
 let _activeTechs = new Set();
+let _assetsById = new Map();  // v3.5.0-alpha.172.39 (Sprint 4.B) cache by id per onclick handlers
 window._damFilters = { client_id: null, project_id: null, from_date: '', to_date: '' };
 let _damClients = [];
 let _damProjects = [];
@@ -445,7 +446,12 @@ async function uploadFiles() {
 }
 
 // ── Dettaglio asset ──────────────────────────────────────────
-function showAssetDetail(a) {
+function showAssetDetail(idOrAsset) {
+  // v3.5.0-alpha.172.39 (Sprint 4.B) — accetta id (nuovo) o object (legacy).
+  const a = (typeof idOrAsset === 'number')
+    ? _assetsById.get(idOrAsset)
+    : idOrAsset;
+  if (!a) return;
   document.getElementById('ad-title').textContent = a.original_name;
   document.getElementById('ad-download').href = a.download_url;
   document.getElementById('ad-delete').onclick = () => deleteAsset(a.id);

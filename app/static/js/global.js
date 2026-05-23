@@ -526,9 +526,14 @@ function fmtDate(iso) {
   return new Date(iso).toLocaleDateString('it-IT');
 }
 function fmtSize(bytes) {
+  // v3.5.0-alpha.172.39 (Sprint 4.A) — extended GB+ per fs_scan use case.
+  // Soglie decimali (1e3/1e6/1e9) usate in fs_scan: ridotto a unica regola
+  // per coerenza. Tutte le pagine usano questa funzione (no shadow locali).
+  if (!bytes || bytes < 0) return '0 B';
   if (bytes < 1024) return bytes + ' B';
   if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
-  return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
+  if (bytes < 1024 * 1024 * 1024) return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
+  return (bytes / (1024 * 1024 * 1024)).toFixed(2) + ' GB';
 }
 
 // ── Status badge ──────────────────────────────────────────────

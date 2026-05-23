@@ -1406,8 +1406,10 @@ function renderBatchLines(b) {
     // v3.5.0-alpha.64: bottone ↪ AM (refer-to-sales) per righe in over o extra
     // del batch in draft. Usa la modal modale per scegliere extend/new.
     const showReferBtn = isDraft && (l.is_extra || (l.over || 0) > 0.01);
+    // v3.5.0-alpha.172.39 (Sprint 4.B) — rimosso JSON.stringify in onclick.
+    // description letta da _currentBatch.lines dentro l'handler.
     const referBtn = showReferBtn
-      ? `<button class="btn btn-ghost btn-sm" onclick="openReferBatchLineToSales(${l.id}, ${JSON.stringify(l.description || '').replace(/"/g, '&quot;')})" title="Rimanda al commerciale: rimuove la riga dal batch + crea/estende quote con [EXTRA]" style="color:#c084fc;">↪ AM</button>`
+      ? `<button class="btn btn-ghost btn-sm" onclick="openReferBatchLineToSales(${l.id})" title="Rimanda al commerciale: rimuove la riga dal batch + crea/estende quote con [EXTRA]" style="color:#c084fc;">↪ AM</button>`
       : '';
     return `<tr>
       <td>
@@ -1431,6 +1433,12 @@ function renderBatchLines(b) {
 // refer (vedi billing.py refer_batch_line_to_sales).
 function openReferBatchLineToSales(lineId, descSnippet) {
   if (!_currentBatch) return;
+  // v3.5.0-alpha.172.39 (Sprint 4.B) — descSnippet ora opzionale (legacy);
+  // se omessa, look-up da _currentBatch.lines.
+  if (descSnippet === undefined) {
+    const found = (_currentBatch.lines || []).find(x => x.id === lineId);
+    descSnippet = found ? (found.description || '') : '';
+  }
   const overlay = document.createElement('div');
   overlay.className = 'modal-overlay';
   overlay.style.display = 'flex';

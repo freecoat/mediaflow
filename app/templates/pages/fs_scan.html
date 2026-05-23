@@ -131,13 +131,9 @@
 let _fsData = null;
 const _fsSelected = new Set();  // rel_path
 
-function fmtSize(n) {
-  if (!n) return '0 B';
-  if (n > 1e9) return (n/1e9).toFixed(2) + ' GB';
-  if (n > 1e6) return (n/1e6).toFixed(2) + ' MB';
-  if (n > 1e3) return (n/1e3).toFixed(1) + ' KB';
-  return n + ' B';
-}
+// v3.5.0-alpha.172.39 (Sprint 4.A) — rimosso fmtSize locale (shadow del
+// global.js:528). Global.js esteso a supporto GB+. Soglie ora binarie
+// (1024^N) invece di decimali (1e3) — differenza marginale a display.
 
 async function runFsScan() {
   const path = document.getElementById('fs-path').value.trim();

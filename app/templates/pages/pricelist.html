@@ -326,9 +326,9 @@ let allItems = [], allCats = [], activeCat = null;
 let viewMode = 'day'; // 'day' | 'hour'  — 1 turno = 8 ore
 const HOURS_PER_DAY = 8;
 
-function fmtCurrency(n) {
-  return '€ ' + Number(n).toLocaleString('it-IT', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-}
+// v3.5.0-alpha.172.39 (Sprint 4.A) — rimosso fmtCurrency locale (shadow del
+// global.js:521). Format cambia da "€ 1.234,56" a "1.234,56 €" (Intl
+// standard IT). Memo feedback_global_helpers_centralizzati.md.
 
 function displayPrice(item) {
   // Restituisce {price, unitLabel} per la visualizzazione corrente.

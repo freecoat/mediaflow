@@ -14,7 +14,7 @@
 <!-- v3.5.0-alpha.66.14.9: CSS estratto in /static/css/planning.css per
      ridurre planning.html da 7377 -> 6710 righe e abilitare cache HTTP
      indipendente del CSS. Il blocco <style> originale era 668 righe. -->
-<link rel="stylesheet" href="/static/css/planning.css?v=3.5.0-alpha.111.17">
+<link rel="stylesheet" href="/static/css/planning.css?v={{ app_version }}">
 <style>
   /* v3.5.0-alpha.79 — Polish timeline */
   /* Today line emphasizzata */
@@ -1766,9 +1766,15 @@ function tlSetDensity(d) {
   const inst = window._tlInstance || window.tl;
   if (inst && typeof inst.setOptions === 'function') {
     try {
+      // v3.5.0-alpha.172.39 (Sprint 4.D) — rispetta flag light-mode su
+      // dataset grossi (memo feedback_vis_timeline_quirks: stack:true è
+      // O(N²) e freeza Chrome/Mac >1500 item). Light mode disabilita
+      // stack per scalabilità. Toggle via localStorage `mf_tl_light`.
+      let lightMode = false;
+      try { lightMode = localStorage.getItem('mf_tl_light') === '1'; } catch(_) {}
       inst.setOptions({
-        stack: true,
-        stackSubgroups: true,
+        stack: !lightMode,
+        stackSubgroups: !lightMode,
         margin: { item: { horizontal: 0, vertical: 3 }, axis: 6 },
       });
     } catch(e) {}
@@ -6444,7 +6450,9 @@ function tlSelectAllVisible() {
     const ite = new Date(it.end).getTime();
     return its < we && ite > ws;
   }).map(it => it.id);
-  window._tlInstance.setSelection(ids);
+  // v3.5.0-alpha.172.39 (Sprint 4.C) — _tlSetSel wrapper invece di
+  // setSelection diretto: garantisce fire select event per Bulk button + counter
+  _tlSetSel(ids);
   toast(`${ids.length} booking selezionati`, 'success');
   document.getElementById('tl-select-menu').style.display = 'none';
   tlOnSelectionChange();
@@ -6474,7 +6482,7 @@ function tlSelectByJob() {
     .filter(b => b.extendedProps && b.extendedProps.job_id === jid)
     .map(b => b.id);
   if (!ids.length) { toast('Nessun booking per quel job', 'info'); return; }
-  window._tlInstance.setSelection(ids);
+  _tlSetSel(ids);  // v3.5.0-alpha.172.39 Sprint 4.C
   toast(`${ids.length} booking del job ${jid} selezionati`, 'success');
   tlOnSelectionChange();
 }
@@ -6502,7 +6510,7 @@ function tlSelectByResource() {
     .filter(b => b.extendedProps && b.extendedProps.resource_id === rid)
     .map(b => b.id);
   if (!ids.length) { toast('Nessun booking per quella risorsa', 'info'); return; }
-  window._tlInstance.setSelection(ids);
+  _tlSetSel(ids);  // v3.5.0-alpha.172.39 Sprint 4.C
   toast(`${ids.length} booking della risorsa ${rid} selezionati`, 'success');
   tlOnSelectionChange();
 }
@@ -6523,14 +6531,14 @@ function tlSelectByDate() {
     return its < fe && ite > fs;
   }).map(it => it.id);
   if (!ids.length) { toast('Nessun booking nel range', 'info'); return; }
-  window._tlInstance.setSelection(ids);
+  _tlSetSel(ids);  // v3.5.0-alpha.172.39 Sprint 4.C
   toast(`${ids.length} booking selezionati`, 'success');
   tlOnSelectionChange();
 }
 
 function tlClearSelection() {
   document.getElementById('tl-select-menu').style.display = 'none';
-  if (window._tlInstance) window._tlInstance.setSelection([]);
+  _tlSetSel([]);  // v3.5.0-alpha.172.39 Sprint 4.C
   tlOnSelectionChange();
   // v3.5.0-alpha.24: aggiorna counter pannello
   if (typeof tlSelectPanelUpdateCounter === 'function') tlSelectPanelUpdateCounter();
@@ -6618,7 +6626,7 @@ function tlSelectPanelApply() {
     if (fPrio && String(p.priority || 'normal') !== fPrio) continue;
     ids.push(it.id);
   }
-  window._tlInstance.setSelection(ids);
+  _tlSetSel(ids);  // v3.5.0-alpha.172.39 Sprint 4.C
   tlOnSelectionChange();
   tlSelectPanelUpdateCounter();
   if (!ids.length) toast('Nessun booking soddisfa i filtri', 'info', 1800);
@@ -6632,7 +6640,7 @@ function tlSelectPanelInvert() {
   const cur = new Set(window._tlInstance.getSelection() || []);
   const all = ds.get().filter(it => typeof it.id === 'string' && it.id.startsWith('a')).map(it => it.id);
   const inv = all.filter(id => !cur.has(id));
-  window._tlInstance.setSelection(inv);
+  _tlSetSel(inv);  // v3.5.0-alpha.172.39 Sprint 4.C
   tlOnSelectionChange();
   tlSelectPanelUpdateCounter();
   toast(`Inversione: ${inv.length} ora selezionati`, 'info', 1500);

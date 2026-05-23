@@ -515,11 +515,8 @@ function _updateBreakVisibility() {
   }
 }
 
-function fmtDate(iso) {
-  if (!iso) return '';
-  const d = new Date(iso);
-  return d.toLocaleDateString('it-IT', { day: '2-digit', month: '2-digit', year: 'numeric' });
-}
+// v3.5.0-alpha.172.39 (Sprint 4.A) — rimosso fmtDate locale (shadow del
+// global.js:524). Behavior identico (toLocaleDateString it-IT).
 function fmtTime(iso) {
   if (!iso) return '';
   const d = new Date(iso);

@@ -1722,7 +1722,7 @@ function renderCostLines() {
       <td>${renderBillingBadge(l.billing_status, l.billing_batch_id)}</td>
       <td onclick="event.stopPropagation()" style="white-space:nowrap;">
         ${(accruedPost > 0 || (l.is_extra && (l.total_accrued || 0) > 0)) ? `<button class="btn btn-ghost btn-sm" title="Rimanda al commerciale" onclick="openReferToSales(${l.id})">↪</button>` : ''}
-        <button class="btn btn-ghost btn-sm" onclick="openUpdateLine(${JSON.stringify(l).replace(/"/g,'&quot;')})">✎</button>
+        <button class="btn btn-ghost btn-sm" onclick="openUpdateLine(${l.id})">✎</button>
       </td>
     </tr>`;
   }).join('');
@@ -2244,7 +2244,16 @@ function renderResources() {
 // v3.5.0-alpha.88 — renderTimesheets rimosso: pannello deprecato α.66.66
 // (le ore canoniche sono in "Ore booking per fascia").
 
-function openUpdateLine(line) {
+function openUpdateLine(idOrLine) {
+  // v3.5.0-alpha.172.39 (Sprint 4.B) — accetta id (nuovo, look-up in
+  // currentReport.cost_lines) o object (legacy back-compat).
+  let line;
+  if (typeof idOrLine === 'number') {
+    line = (currentReport?.cost_lines || []).find(l => l.id === idOrLine);
+    if (!line) return;
+  } else {
+    line = idOrLine;
+  }
   document.getElementById('ul-id').value = line.id;
   document.getElementById('ul-actual-display').value =
     `${(line.quantity_actual || 0).toFixed(2)} ${line.unit || ''}`;

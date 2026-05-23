@@ -1,5 +1,47 @@
 # MediaFlow — Changelog
 
+## v3.5.0-alpha.172.39 — Sprint 4 Audit: UI antipattern cleanup (BLOCCO 5) (23 mag 2026)
+
+Chiude **BLOCCO 5 dell'audit multi-agent**: 6 categorie di antipattern UI/JS che generavano bug silenti ricorrenti.
+
+**4.A — Helper redefiniti rimossi** (memo `feedback_global_helpers_centralizzati`):
+- `pricelist.html:329` `fmtCurrency` (shadow di `global.js:521`) → rimosso. Format cambia da "€ 1.234,56" a "1.234,56 €" (Intl standard IT).
+- `hr.html:518` `fmtDate` (shadow di `global.js:524`) → rimosso. Behavior identico.
+- `fs_scan.html:134` `fmtSize` (shadow di `global.js:528`) → rimosso. `global.js` esteso per supporto GB+ (soglie binarie 1024^N).
+
+**4.B — JSON.stringify in onclick (4 spot)** — antipattern silently-broken con quote/apice in nomi (memo `feedback_no_jsonstringify_in_onclick`):
+- `dam.html:274` `showAssetDetail(${JSON.stringify(a)...})` → cache `_assetsById` Map + `showAssetDetail(${a.id})`. Handler accetta id O object (back-compat).
+- `components/notifications.html:149` `notifClick(id, JSON.stringify(link))` → `data-link` attr DOM + handler legge da attribute.
+- `cost_report.html:1725` `openUpdateLine(${JSON.stringify(l)...})` → `openUpdateLine(${l.id})` + look-up in `currentReport.cost_lines`.
+- `finance.html:1410` `openReferBatchLineToSales(id, JSON.stringify(desc))` → solo id + look-up in `_currentBatch.lines`.
+
+**4.C — `setSelection` wrapper bypass (8 spot planning.html)** — `_tlSetSel` wrapper fa fire dell'evento `select` (necessario per Bulk button + counter UI). Pre-α.172.39 i call diretti `window._tlInstance.setSelection(...)` skippavano (memo `feedback_vis_timeline_quirks`). Sostituiti in: `tlSelectInView`, `tlSelectByJob`, `tlSelectByResource`, `tlSelectByDate`, `tlClearSelection`, `tlSelectPanelApply`, `tlSelectPanelInvert`. Spot 5410 lasciato diretto (recursion guard interno `_tlSuppressSelect`).
+
+**4.D — `stack:true` light-mode toggle** (`planning.html:1770`):
+Pre-α.172.39 `setOptions({ stack: true, stackSubgroups: true })` forzato senza check. Su dataset >1500 item su Mac Chrome freezava (memo `feedback_vis_timeline_quirks`: O(N²)). Ora legge `localStorage.mf_tl_light='1'` → `stack: false` per scalabilità.
+
+**4.E — `escapeHtml` su `${var}` in innerHTML — top hotspots** (XSS audit BLOCCO 5):
+Pre-α.172.39 4 template iniettavano nomi/titoli user-supplied direttamente in backtick `innerHTML`. Una virgola/quote/HTML char breaka layout o XSS. Patched:
+- `dashboard.html:271-277` job rows: code/title/client
+- `projects.html:231-235` project rows: code/title/client_name
+- `project_detail.html:802-805` job rows: code/title
+- `clients.html:188-201` client rows: name/legal_form/website/industry/city/email
+
+Backlog Sprint 5 (lower-risk option lists + planning title attrs): `pricelist.html:452`, `cost_report.html:498,1710`, `dam.html:485`, `finance.html:3254`, `planning.html:2719,7611`.
+
+**4.F — Cache-buster automatico via `app_version` Jinja global**:
+Pre-α.172.39 `?v=3.5.0-alpha.X.Y.Z` hardcoded per ciascun file static → bump del file senza update del `?v=` = il fix non arriva al browser (memo `feedback_cache_buster_static`, lezione v3.4.24.1). Memo già violato a α.172.34 (`base.html` `main.css?v=α.172.16` vs file modificato a α.133). Ora:
+- `templates.env.globals["app_version"] = app.version`
+- Tutti gli static refs (`/static/css/*`, `/static/js/*`) ora `?v={{ app_version }}`
+- Bump `app.version` (main.py) invalida TUTTI gli static in un colpo
+- 11 ref aggiornati: base.html (5), copilot.html (1), login.html (2), planning.html (1), tech_sheet_public_edit.html (1), portal_base.html (1)
+
+**File toccati**: `app/main.py`, `app/static/js/global.js`, `app/services/...` (no — solo UI), `app/templates/components/copilot.html`, `app/templates/components/notifications.html`, `app/templates/pages/clients.html`, `app/templates/pages/cost_report.html`, `app/templates/pages/dam.html`, `app/templates/pages/dashboard.html`, `app/templates/pages/finance.html`, `app/templates/pages/fs_scan.html`, `app/templates/pages/hr.html`, `app/templates/pages/login.html`, `app/templates/pages/planning.html`, `app/templates/pages/pricelist.html`, `app/templates/pages/project_detail.html`, `app/templates/pages/projects.html`, `app/templates/pages/tech_sheet_public_edit.html`, `app/templates/base.html`, `app/templates/portal_base.html`, `CHANGELOG.md`, `docs/STATO.md`.
+
+512 routes (invariato). Tutti i bump versione futuri = cache-buster automatico.
+
+---
+
 ## v3.5.0-alpha.172.38 — Sprint 3.5: Decimal in invoice_totals hotspot (23 mag 2026)
 
 Mini-sprint chiusura BLOCCO 4 audit (Float vs Numeric). Decisione **opzione C**: SQLite memorizza già float64 (~15 cifre significative), errori di rappresentazione su monetary fields trascurabili a scale MediaFlow. Migrazione di tutti i ~70 campi Float → Numeric(15,2) rimandata a porting Postgres futuro (high-risk migration, basso ROI ora).

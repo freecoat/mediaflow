@@ -801,8 +801,8 @@ function renderJobs(jobs) {
   const canFinance = {{ 'true' if _can_finance else 'false' }};
   tbody.innerHTML = jobs.map(j => `
     <tr>
-      <td class="mono" style="font-size:12px;">${j.code}</td>
-      <td style="font-weight:500;">${j.title}</td>
+      <td class="mono" style="font-size:12px;">${escapeHtml(j.code || '')}</td>
+      <td style="font-weight:500;">${escapeHtml(j.title || '')}</td>
       ${canFinance ? `<td class="mono text-right">${fmtCurrency(j.budget_quoted)}</td>` : ''}
       <td>${statusBadge(j.status)}</td>
       <td>

@@ -8,6 +8,48 @@
 
 ## Versione corrente
 
+**v3.5.0-alpha.172.39** — 23 maggio 2026 — Sprint 4 Audit: UI antipattern cleanup (BLOCCO 5)
+
+Chiude BLOCCO 5 — 6 categorie antipattern UI/JS:
+
+- **4.A helper shadow rimossi**: pricelist fmtCurrency, hr fmtDate, fs_scan fmtSize → uso global.js. fmtSize esteso GB+.
+- **4.B JSON.stringify in onclick**: 4 spot (dam/notifications/cost_report/finance) → data-attr + cache map.
+- **4.C setSelection wrapper bypass**: 8 spot planning.html → `_tlSetSel()` per fire event.
+- **4.D stack:true light-mode**: planning.html legge localStorage.mf_tl_light per disabilitare stack su dataset grossi.
+- **4.E escapeHtml innerHTML top 4 hotspots**: dashboard/projects/project_detail/clients. Backlog (lower-risk) → Sprint 5.
+- **4.F cache-buster automatico**: `app_version` Jinja global + 11 static refs `?v={{ app_version }}`. Bump versione = invalida tutti gli static.
+
+512 routes invariato.
+
+## Lavoro in corso
+
+Sprint 4 chiuso. **Sprint 5 next**: BLOCCO 6 — DB integrity (FK ondelete, immutability event listener, soft-delete + UNIQUE bypass) + IT compliance (P.IVA/CF/SDI/natura validators + FatturaPA XML builder). Bump previsti α.172.40 → α.172.50.
+
+## Prossimo step
+
+1. FK `ondelete` esplicito su tutti FK Project/Job/Tenant/Client
+2. SQLAlchemy event listener `before_update` su `JCLBilledSlice` (immutability model-level)
+3. `tenant_id` → ForeignKey su 4 modelli bare Integer (Holiday/Notification/ProjectTechSheet/TechSheetFieldOption)
+4. `tenant_id` su Tag + FXRate (leak reali)
+5. `index=True` su 22 FK hot-path
+6. JSON validators su `role.permissions`, `tenant.asset_numbering_config`, `working_hours_policy.overtime_brackets`
+7. **`app/services/italian_tax.py`**: validator P.IVA (11+Luhn-mod-11), CF (16/11), SDI (7 char), enum N1-N7, enum RF01-RF19, mappa TD02 per advance
+8. **`app/services/sdi_xml.py`**: nuovo, FatturaPA XML builder via `sdi-xml-builder` skill
+9. Endpoint `/finance/api/invoices/{id}/sdi-xml`
+10. Backlog UI 4.E lower-risk: pricelist/cost_report/dam/planning title
+
+## Bug aperti
+
+Stato audit:
+- ✅ BLOCCO 1 (tenant scope) — α.172.35
+- ✅ BLOCCO 2 (slice-lock quote-side) — α.172.36
+- ✅ BLOCCO 3 (UI 404 endpoint) — α.172.36
+- ✅ BLOCCO 4 (finance + Decimal hotspot) — α.172.37+α.172.38
+- ✅ BLOCCO 5 (UI antipattern) — α.172.39
+- 🔜 BLOCCO 6 (DB integrity + IT compliance) — Sprint 5
+
+## Versione precedente
+
 **v3.5.0-alpha.172.38** — 23 maggio 2026 — Sprint 3.5: Decimal in invoice_totals hotspot
 
 Mini-sprint chiusura BLOCCO 4. Decisione **opzione C**: SQLite stores REAL nativo, scale MediaFlow non soffre Float precision. Migrazione full ~70 campi rinviata a porting Postgres.

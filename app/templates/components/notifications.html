@@ -146,7 +146,11 @@ async function notifLoadList() {
       else if (diffMin < 60) when = `${diffMin} min fa`;
       else if (diffMin < 1440) when = `${Math.floor(diffMin/60)}h fa`;
       else when = t.toLocaleDateString('it-IT', {day:'numeric', month:'short', hour:'2-digit', minute:'2-digit'});
-      return `<div class="${cls}" data-id="${n.id}" onclick="notifClick(${n.id}, ${JSON.stringify(n.link || '').replace(/"/g, '&quot;')})">
+      // v3.5.0-alpha.172.39 (Sprint 4.B) — link in data-attr (no
+      // JSON.stringify in onclick antipattern). escapeHtml su link
+      // sufficiente perché DOM attribute, non interpretato come JS.
+      const linkAttr = n.link ? `data-link="${escapeHtml(n.link)}"` : '';
+      return `<div class="${cls}" data-id="${n.id}" ${linkAttr} onclick="notifClick(${n.id})">
         <div class="notif-card-title">${icon} ${escapeHtml(n.title || '')}</div>
         ${n.body ? `<div class="notif-card-body">${escapeHtml(n.body)}</div>` : ''}
         <div class="notif-card-time">${when}</div>
@@ -164,7 +168,15 @@ function notifToggleDrawer() {
   if (NOTIF_DRAWER_OPEN) notifLoadList();
 }
 
-async function notifClick(id, link) {
+async function notifClick(id, linkParam) {
+  // v3.5.0-alpha.172.39 (Sprint 4.B) — link letto da data-link attr invece
+  // di parametro JSON.stringify-ato. `linkParam` mantiene back-compat se
+  // qualcuno chiama esplicitamente notifClick(id, link).
+  let link = linkParam;
+  if (link === undefined) {
+    const el = document.querySelector(`.notif-card[data-id="${id}"]`);
+    link = el ? (el.getAttribute('data-link') || '') : '';
+  }
   try { await api('POST', `/notifications/api/${id}/read`); } catch(e){}
   await notifFetchUnread();
   if (link) {

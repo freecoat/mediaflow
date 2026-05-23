@@ -1496,7 +1496,7 @@ async def lifespan(app: FastAPI):
     yield
 
 
-app = FastAPI(title="MediaFlow", version="3.5.0-alpha.172.38", lifespan=lifespan)
+app = FastAPI(title="MediaFlow", version="3.5.0-alpha.172.39", lifespan=lifespan)
 
 BASE_DIR = Path(__file__).parent
 app.mount("/static", StaticFiles(directory=BASE_DIR / "static"), name="static")
@@ -1527,6 +1527,13 @@ templates.env.globals["can_approve_unavailability"] = _rbac.can_approve_unavaila
 templates.env.globals["can_manage_users"] = _rbac.can_manage_users
 templates.env.globals["can_manage_roles"] = _rbac.can_manage_roles
 templates.env.globals["has_permission"] = _rbac.has_permission
+
+# v3.5.0-alpha.172.39 (Sprint 4.F BLOCCO 5) — cache-buster automatico via
+# app_version. Memo `feedback_cache_buster_static.md`: modificare static
+# senza bumpare ?v= = fix non arriva al browser. Soluzione: tutti gli
+# static `?v={{ app_version }}` invece di stringhe hardcoded per file.
+# Bump app version una volta = invalida TUTTI gli static in un colpo.
+templates.env.globals["app_version"] = app.version
 
 
 # Middleware: forza no-cache sulle risposte HTML.
