@@ -387,10 +387,10 @@
           <button type="button" class="btn btn-secondary btn-sm" onclick="submitAdvConfirm('draft')">📝 Salva come bozza</button>
           <button type="button" class="btn btn-secondary btn-sm" onclick="submitAdvConfirm('confirmed')">✓ Conferma (pronto emit)</button>
           <button type="button" class="btn btn-primary btn-sm" onclick="openAdvEmitFromConfirm()">💶 Emetti fattura subito</button>
-          <!-- v3.5.0-alpha.172.50 — Reset status draft/confirmed → pending -->
-          <button type="button" id="adv-conf-reset-btn" class="btn btn-ghost btn-sm" onclick="resetAdvToPending()" style="color:#fbbf24; display:none;" title="Riporta a pending per liberare allocazioni">⟲ Resetta a pending</button>
+          <!-- v3.5.0-alpha.172.51 — Reset HARD: status draft/confirmed → pending + delete allocations -->
+          <button type="button" id="adv-conf-reset-btn" class="btn btn-ghost btn-sm" onclick="resetAdvToPending()" style="color:#fbbf24; display:none;" title="Reset hard: torna a pending ed elimina TUTTE le allocazioni JCL e deliverable">⟲ Resetta a pending</button>
         </div>
-        <div class="text-xs text-muted" style="margin-top:4px;">Bozza = modificabile, allocazioni preservate · Confermato = pronto per emissione · Reset → pending libera le voci per altri acconti.</div>
+        <div class="text-xs text-muted" style="margin-top:4px;">Bozza = modificabile · Confermato = pronto emit · <strong style="color:#fbbf24;">Reset = elimina TUTTE le allocazioni</strong> → ricominci da zero, JCL libere per altri acconti.</div>
       </div>
     </div>
     <div class="modal-footer">
@@ -1027,15 +1027,32 @@ async function openAdvConfirmModal(ap) {
     lbl.appendChild(cb);
     const sp = document.createElement('span');
     sp.style.marginLeft = '6px';
-    sp.textContent = (j.job_code || '?') + ' · ' + (j.description || '').substring(0, 50) +
+    // v3.5.0-alpha.172.52 — Mostra quotato + altri AP + disponibile per chiarezza cross-AP.
+    const avail = (j.available_for_this_ap != null ? j.available_for_this_ap : j.total_quoted) || 0;
+    const otherAp = j.other_aps_alloc || 0;
+    let infoTxt = (j.job_code || '?') + ' · ' + (j.description || '').substring(0, 50) +
       ' · quotato ' + fmtCurrency(j.total_quoted);
+    if (otherAp > 0.01) {
+      infoTxt += ' · altri AP ' + fmtCurrency(otherAp) + ' · ';
+    } else {
+      infoTxt += ' · ';
+    }
+    sp.appendChild(document.createTextNode(infoTxt));
+    const availSpan = document.createElement('span');
+    availSpan.textContent = 'disponibile ' + fmtCurrency(avail);
+    availSpan.style.cssText = 'color:' + (avail > 0.01 ? '#34d399' : '#f87171') + '; font-weight:600;';
+    sp.appendChild(availSpan);
     lbl.appendChild(sp);
     row.appendChild(lbl);
     const amtInp = document.createElement('input');
     amtInp.type = 'number'; amtInp.step = '0.01'; amtInp.min = '0';
     amtInp.value = j.allocated ? (j.alloc_amount || 0).toFixed(2) : '0.00';
     amtInp.dataset.jclAmount = j.jcl_id;
-    amtInp.dataset.jclMax = j.total_quoted || 0;
+    // dataset.jclMax = disponibile (quoted - billed - altri AP), non quoted assoluto
+    amtInp.dataset.jclMax = avail;
+    amtInp.dataset.jclQuoted = j.total_quoted || 0;
+    amtInp.title = 'Max disponibile per questo acconto: ' + fmtCurrency(avail) +
+      (otherAp > 0.01 ? ' (€ ' + fmtCurrency(otherAp) + ' già su altri AP)' : '');
     amtInp.style.cssText = 'width:100px; padding:2px 4px; background:var(--bg3); border:1px solid var(--border); color:var(--text); border-radius:3px; font-family:DM Mono,monospace; font-size:11px; text-align:right;';
     amtInp.disabled = !cb.checked;
     cb.onchange = () => {
@@ -1073,7 +1090,8 @@ async function openAdvConfirmModal(ap) {
   openModal('modal-advance-confirm');
 }
 
-// v3.5.0-alpha.166 — Riepilogo live: Σ alloc / AP.amount / residuo + warning over-cap.
+// v3.5.0-alpha.172.52 — Riepilogo live: Σ alloc / AP.amount / residuo + warnings dettagliati.
+// jclMax ora = disponibile per questo AP (quoted - billed - altri AP), non quoted assoluto.
 function _refreshAdvConfSummary() {
   const summary = document.getElementById('adv-conf-allocs-summary');
   if (!summary) return;
@@ -1081,7 +1099,7 @@ function _refreshAdvConfSummary() {
   const apAmount = parseFloat(document.getElementById('adv-conf-amount').value) || 0;
   let sumAlloc = 0;
   let countSel = 0;
-  let overCap = false;
+  let overAvail = false;
   host.querySelectorAll('input[type=checkbox]').forEach(cb => {
     if (!cb.checked) return;
     const jclId = cb.dataset.jclId;
@@ -1089,25 +1107,27 @@ function _refreshAdvConfSummary() {
     if (!inp) return;
     const amt = parseFloat(inp.value || 0) || 0;
     if (amt <= 0) return;
-    const max = parseFloat(inp.dataset.jclMax || 0) || 0;
-    if (max > 0 && amt > max + 0.01) overCap = true;
+    const maxAvail = parseFloat(inp.dataset.jclMax || 0) || 0;
+    if (amt > maxAvail + 0.01) overAvail = true;
     sumAlloc += amt;
     countSel += 1;
   });
   const residual = apAmount - sumAlloc;
   let txt = countSel + ' voce/i · Σ allocato ' + fmtCurrency(sumAlloc) +
-    ' / AP ' + fmtCurrency(apAmount) +
-    ' · residuo ' + fmtCurrency(residual);
+    ' / AP ' + fmtCurrency(apAmount);
   let color = 'var(--text)';
-  if (overCap) {
-    txt += ' · ⚠ amount > quotato JCL';
+  if (overAvail) {
+    txt += ' · ⚠ amount > disponibile JCL (altri AP la coprono già)';
     color = '#ef4444';
   } else if (sumAlloc > apAmount + 0.01) {
-    txt += ' · ⚠ Σ > AP.amount';
+    txt += ' · ⚠ Σ supera AP.amount di ' + fmtCurrency(sumAlloc - apAmount);
     color = '#ef4444';
   } else if (residual > 0.01) {
-    txt += ' · ⚠ residuo non allocato';
+    txt += ' · ⚠ mancano ' + fmtCurrency(residual) + ' per coprire l\'acconto (Conferma bloccata)';
     color = '#f59e0b';
+  } else {
+    txt += ' · ✓ copertura completa';
+    color = '#34d399';
   }
   summary.style.color = color;
   summary.textContent = txt;
@@ -1182,14 +1202,20 @@ async function submitAdvConfirm(nextStatus) {
 }
 
 // v3.5.0-alpha.172.50 — Reset acconto draft/confirmed → pending.
-// Le allocazioni esistenti vengono preservate, l'utente può riconfermare.
+// v3.5.0-alpha.172.51 — HARD reset: cancella TUTTE le allocazioni JCL + Deliverable.
 async function resetAdvToPending() {
   const id = document.getElementById('adv-conf-id').value;
   if (!id) return;
-  if (!confirm("Riportare l'acconto a 'pending'?\n\nLe allocazioni esistenti verranno preservate.\nLo status pending libera l'acconto per modifiche.")) return;
+  if (!confirm("Resettare l'acconto a 'pending'?\n\n⚠️ Verranno ELIMINATE tutte le allocazioni JCL e deliverable collegate.\nLe voci di costo torneranno libere per altri acconti.\nDovrai riallocarle da zero.")) return;
   try {
     const res = await api('POST', '/finance/api/advances/' + id + '/reset-to-pending', new FormData());
-    toast(`↻ Acconto resettato a ${res.status} (era ${res.previous_status})`, 'success');
+    const j = res.allocations_deleted_jcl || 0;
+    const d = res.allocations_deleted_deliverable || 0;
+    const tot = j + d;
+    const msg = tot > 0
+      ? `↻ Acconto resettato a ${res.status} (era ${res.previous_status}) · ${tot} allocazioni eliminate (${j} JCL + ${d} deliverable)`
+      : `↻ Acconto resettato a ${res.status} (era ${res.previous_status})`;
+    toast(msg, 'success');
     closeModal('modal-advance-confirm');
     await loadAdvancesDrafts();
   } catch (e) {

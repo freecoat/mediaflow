@@ -1,5 +1,40 @@
 # MediaFlow — Changelog
 
+## v3.5.0-alpha.172.53 — Hard reset acconto + cap cross-AP nei preset + HARD-BLOCK sotto-copertura (24 mag 2026)
+
+Test FASE 1 plan 24 mag. Matteo:
+1. "Reset troppo soft: vanno eliminate anche le allocazioni"
+2. "Strategie auto non sottraggono allocazioni di altri AP → fail al save"
+3. "Manuale: nessun check copertura totale AP.amount"
+4. Bug 172.52: confirma mostrava `Σ=0` anche con allocazioni — `db.flush()` mancante prima del check
+
+**Fix #1 (α.172.51) — Reset HARD acconto**:
+- `POST /finance/api/advances/{id}/reset-to-pending` ora ELIMINA tutte le `AdvancePaymentAllocation` + `AdvancePaymentDeliverableAllocation` collegate (era preserva)
+- Return `{allocations_deleted_jcl, allocations_deleted_deliverable}`
+- UI confirm dialog: "⚠️ Verranno ELIMINATE tutte le allocazioni JCL e deliverable…"
+- Toast con count: "↻ Acconto resettato … · N allocazioni eliminate (X JCL + Y deliverable)"
+- Hint footer modal: "**Reset = elimina TUTTE le allocazioni** → ricominci da zero, JCL libere per altri acconti"
+
+**Fix #2 (α.172.52) — Cap cross-AP nei preset + listing**:
+- `GET /api/advances/{id}/jcls-available` ritorna ora `billed_amount`, `other_aps_alloc`, `available_for_this_ap` (= max(0, quoted - billed - Σ_altri_AP_non_cancelled))
+- `POST /api/advances/{id}/preview-preset`: tutti i preset usano `available_for_this_ap` come cap (era `total_quoted`). `fill_sequential` non tenta più allocazioni che falliranno al save per overflow cross-AP. `pro_rata` e `pro_rata_remaining` ora pesano su `available` (eliminato approssimazione billed_amount only)
+- UI riga JCL: `quotato X · altri AP Y · disponibile Z` (verde se >0, rosso se 0)
+- Input cap = disponibile (non quoted assoluto). Tooltip: "Max disponibile per questo acconto: X (€ Y già su altri AP)"
+
+**Fix #3 (α.172.52) — HARD-BLOCK sotto-copertura su Conferma**:
+- `POST /api/advances/{id}/confirm` con `next_status='confirmed'`: 409 toastBlock se Σ allocazioni < AP.amount
+- Detail: `{message, ap_amount, sum_allocated, gap}` con bullet points
+- Bozza (`draft`) accetta copertura parziale — solo confirmed richiede match
+
+**Fix #4 (α.172.53) — `db.flush()` prima del check Σ**:
+- Bug α.172.52: nuove righe `_APA2(...)` aggiunte via `db.add()` non visibili a `func.sum` finché non flushed. Risultato Σ=0 fantasma anche se utente aveva allocato 14.775. Fix: `db.flush()` esplicito prima del check.
+
+**UI summary live aggiornato**:
+- ✓ copertura completa (verde)
+- ⚠ mancano X (Conferma bloccata) (arancio)
+- ⚠ amount > disponibile JCL (altri AP la coprono già) (rosso)
+- ⚠ Σ supera AP.amount di X (rosso)
+
 ## v3.5.0-alpha.172.50 — Reset acconto draft → pending + UI allocazione più chiara (24 mag 2026)
 
 Matteo:

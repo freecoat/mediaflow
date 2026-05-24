@@ -8,9 +8,14 @@
 
 ## Versione corrente
 
-**v3.5.0-alpha.172.50** — 23-24 maggio 2026 — Reset acconto draft→pending + UI allocazione chiara
+**v3.5.0-alpha.172.53** — 24 maggio 2026 — Hard reset acconto + cap cross-AP preset + HARD-BLOCK sotto-copertura
 
-13 commit oggi α.172.34 → α.172.50. Sprint 1-6 audit chiuso 100% + 7 fix post-audit + DB ripulito + UX modal acconto migliorata.
+Test FASE 1 plan 24 mag chiuso. 3 fix mirati su modal "Gestisci acconto":
+- Reset HARD (cancella allocations JCL+Deliverable)
+- Preset auto sottraggono altri AP attivi dal cap JCL
+- Confirma 409 se Σ alloc < AP.amount + bug flush risolto α.172.53
+
+13 commit 23 mag α.172.34 → α.172.50. Sprint 1-6 audit chiuso 100% + 7 fix post-audit + DB ripulito + UX modal acconto migliorata.
 
 Sintesi post-audit fix:
 - α.172.42 cashflow Fandango outstanding includeva cancelled (-€57.528 fantasma)
@@ -28,7 +33,7 @@ DB: clienti+progetti+quote freschi (purge totale business 23 mag sera). Anagrafi
 
 ## Lavoro in corso
 
-PAUSA — Matteo dorme (chiusura sera 23 mag). **Riapertura 24 mag mattina**.
+Test plan 24 mag in corso. **FASE 1 chiusa** (reset draft→pending + cap cross-AP + HARD-BLOCK confirma). Prossima: **FASE 2 cross-AP overflow JCL** (con toastBlock già esistente α.172.49).
 
 ## Prossimo step
 

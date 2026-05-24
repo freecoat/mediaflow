@@ -823,17 +823,41 @@ async def list_jcls_for_advance(advance_id: int, db: Session = Depends(get_db)):
     # Map alloc esistenti su questo AP
     allocs = db.query(_APA).filter(_APA.advance_payment_id == advance_id).all()
     alloc_map = {a.job_cost_line_id: a for a in allocs}
+    # v3.5.0-alpha.172.52 — Σ alloc per JCL su altri AP non-cancelled (esclude self).
+    # Serve a UI per mostrare "Disponibile = quoted - billed - altri_AP".
+    other_aps_by_jcl: dict[int, float] = {}
+    if jcls:
+        rows = (
+            db.query(_APA.job_cost_line_id, func.coalesce(func.sum(_APA.amount), 0.0))
+            .join(AdvancePayment, AdvancePayment.id == _APA.advance_payment_id)
+            .filter(
+                _APA.job_cost_line_id.in_([j.id for j in jcls]),
+                AdvancePayment.id != ap.id,
+                AdvancePayment.status != AdvancePaymentStatus.cancelled,
+                AdvancePayment.tenant_id == current_tenant_id(),
+            )
+            .group_by(_APA.job_cost_line_id)
+            .all()
+        )
+        other_aps_by_jcl = {r[0]: float(r[1] or 0.0) for r in rows}
     out = []
     for jcl in jcls:
         a = alloc_map.get(jcl.id)
+        q = jcl.total_quoted or 0.0
+        billed = jcl.billed_amount or 0.0
+        other = other_aps_by_jcl.get(jcl.id, 0.0)
+        available = max(0.0, q - billed - other)
         out.append({
             "jcl_id": jcl.id,
             "job_id": jcl.job_id,
             "job_code": jcl.job.code if jcl.job else None,
             "description": jcl.description,
             "unit": jcl.unit,
-            "total_quoted": round(jcl.total_quoted or 0, 2),
+            "total_quoted": round(q, 2),
             "total_accrued": round(jcl.total_accrued or 0, 2),
+            "billed_amount": round(billed, 2),
+            "other_aps_alloc": round(other, 2),
+            "available_for_this_ap": round(available, 2),
             "billing_status": jcl.billing_status.value if jcl.billing_status else None,
             "allocated": bool(a),
             "alloc_id": a.id if a else None,
@@ -1046,6 +1070,39 @@ async def confirm_advance_payment(
     if next_status:
         if next_status not in ("draft", "confirmed"):
             raise HTTPException(400, f"next_status '{next_status}' non valido (atteso draft|confirmed)")
+        # v3.5.0-alpha.172.52 — HARD-BLOCK sotto-copertura: confermare un acconto
+        # richiede che Σ allocazioni JCL == AP.amount (tolleranza 0.01 EUR).
+        # Bozza (draft) accetta copertura parziale; confirmed no — altrimenti
+        # emit fattura andrebbe in fail su _emit_invoice_from_advance.
+        if next_status == "confirmed":
+            from app.models import AdvancePaymentAllocation as _APA_check
+            # Flush pending writes (new allocations da allocations_set) prima del check.
+            db.flush()
+            total_now = (
+                db.query(func.coalesce(func.sum(_APA_check.amount), 0.0))
+                .filter(_APA_check.advance_payment_id == ap.id)
+                .scalar() or 0.0
+            )
+            total_now = float(total_now)
+            ap_amt = ap.amount or 0.0
+            if total_now < ap_amt - 0.01:
+                gap = round(ap_amt - total_now, 2)
+                raise HTTPException(
+                    409,
+                    detail={
+                        "message": (
+                            f"Allocazioni JCL non coprono il totale dell'acconto.\n\n"
+                            f"• Importo acconto: € {ap_amt:,.2f}\n"
+                            f"• Allocato finora: € {total_now:,.2f}\n"
+                            f"• Mancano: € {gap:,.2f}\n\n"
+                            f"Per confermare l'acconto Σ allocazioni deve uguagliare "
+                            f"l'importo acconto. Aggiungi voci o salva come bozza."
+                        ),
+                        "ap_amount": round(ap_amt, 2),
+                        "sum_allocated": round(total_now, 2),
+                        "gap": gap,
+                    },
+                )
         ap.status = AdvancePaymentStatus(next_status)
     db.commit()
     db.refresh(ap)
@@ -1063,17 +1120,20 @@ async def preview_advance_preset(
     jcl_ids: str = Form(...),  # CSV "jid,jid,jid" in ordine UI (per fill_sequential)
     db: Session = Depends(get_db),
 ):
-    """v3.5.0-alpha.166 — Calcola allocazioni proposte per preset selezionato
-    senza salvare. UI usa per popolare cifre prima della conferma utente.
+    """v3.5.0-alpha.172.52 — Calcola allocazioni proposte per preset selezionato
+    senza salvare. Cap per JCL = quoted - billed - Σ_alloc_altri_AP_attivi
+    (esclusi cancelled e self). Previene fail al save per overflow cross-AP.
 
     Preset:
       - fill_sequential: riempi voci in ordine fino a coprire AP.amount, ultima parziale.
-      - pro_rata: AP × (JCL.quoted / Σ JCL.quoted) — distribuzione proporzionale.
-      - pro_rata_remaining: AP × ((JCL.quoted - JCL.billed_total) / Σ residuo).
+      - pro_rata: AP × (JCL.available / Σ JCL.available) — distribuzione proporzionale.
+      - pro_rata_remaining: alias di pro_rata (entrambi usano available).
       - manual: nessun calcolo, ritorna 0 per ogni JCL (UI compila a mano).
 
-    Ritorna [{jcl_id, amount, pct, jcl_quoted, jcl_description}].
+    Ritorna [{jcl_id, amount, pct, jcl_quoted, jcl_billed, jcl_other_aps,
+              jcl_available, jcl_description}].
     """
+    from app.models import AdvancePaymentAllocation as _APA
     ap = db.query(AdvancePayment).filter(
         AdvancePayment.id == advance_id,
         AdvancePayment.tenant_id == current_tenant_id(),
@@ -1097,62 +1157,70 @@ async def preview_advance_preset(
     ordered = [jcl_map[i] for i in jcl_id_list if i in jcl_map]
     ap_amount = ap.amount or 0.0
 
+    # Cross-AP allocation per JCL: somma su altri AP non-cancelled (self escluso).
+    other_aps_by_jcl: dict[int, float] = {}
+    if ordered:
+        rows = (
+            db.query(_APA.job_cost_line_id, func.coalesce(func.sum(_APA.amount), 0.0))
+            .join(AdvancePayment, AdvancePayment.id == _APA.advance_payment_id)
+            .filter(
+                _APA.job_cost_line_id.in_([j.id for j in ordered]),
+                AdvancePayment.id != ap.id,
+                AdvancePayment.status != AdvancePaymentStatus.cancelled,
+                AdvancePayment.tenant_id == current_tenant_id(),
+            )
+            .group_by(_APA.job_cost_line_id)
+            .all()
+        )
+        other_aps_by_jcl = {r[0]: float(r[1] or 0.0) for r in rows}
+
+    def _available(j: JobCostLine) -> float:
+        q = j.total_quoted or 0.0
+        billed = j.billed_amount or 0.0
+        other = other_aps_by_jcl.get(j.id, 0.0)
+        return max(0.0, q - billed - other)
+
+    def _row(j: JobCostLine, amt: float) -> dict:
+        q = j.total_quoted or 0.0
+        billed = j.billed_amount or 0.0
+        other = other_aps_by_jcl.get(j.id, 0.0)
+        avail = _available(j)
+        return {
+            "jcl_id": j.id, "amount": amt,
+            "pct": round(amt / ap_amount, 6) if ap_amount > 0 else 0.0,
+            "jcl_quoted": round(q, 2),
+            "jcl_billed": round(billed, 2),
+            "jcl_other_aps": round(other, 2),
+            "jcl_available": round(avail, 2),
+            "jcl_description": j.description,
+        }
+
     out = []
     if preset == "manual":
         for j in ordered:
-            out.append({
-                "jcl_id": j.id, "amount": 0.0, "pct": 0.0,
-                "jcl_quoted": round(j.total_quoted or 0.0, 2),
-                "jcl_description": j.description,
-            })
+            out.append(_row(j, 0.0))
     elif preset == "fill_sequential":
         remaining = ap_amount
         for j in ordered:
-            cap = j.total_quoted or 0.0
+            cap = _available(j)
             take = round(min(cap, remaining), 2)
             if take < 0:
                 take = 0.0
-            out.append({
-                "jcl_id": j.id, "amount": take,
-                "pct": round(take / ap_amount, 6) if ap_amount > 0 else 0.0,
-                "jcl_quoted": round(cap, 2),
-                "jcl_description": j.description,
-            })
+            out.append(_row(j, take))
             remaining = round(remaining - take, 2)
             if remaining <= 0:
                 remaining = 0.0
-    elif preset == "pro_rata":
-        sum_q = sum((j.total_quoted or 0.0) for j in ordered)
-        for j in ordered:
-            q = j.total_quoted or 0.0
-            amt = round(ap_amount * (q / sum_q), 2) if sum_q > 0 else 0.0
-            # Cap a JCL.quoted (no over-coverage)
-            amt = min(amt, q)
-            out.append({
-                "jcl_id": j.id, "amount": amt,
-                "pct": round(amt / ap_amount, 6) if ap_amount > 0 else 0.0,
-                "jcl_quoted": round(q, 2),
-                "jcl_description": j.description,
-            })
-    elif preset == "pro_rata_remaining":
-        # Residuo non coperto = JCL.quoted - (slice billed + advance_paid_coverage altri AP)
-        # Approssima: usa solo billed_amount (slice) per evitare complessità.
-        weights = []
-        for j in ordered:
-            q = j.total_quoted or 0.0
-            billed = j.billed_amount or 0.0
-            r = max(0.0, q - billed)
-            weights.append((j, r))
-        sum_r = sum(w[1] for w in weights)
-        for j, r in weights:
-            amt = round(ap_amount * (r / sum_r), 2) if sum_r > 0 else 0.0
-            amt = min(amt, j.total_quoted or 0.0)
-            out.append({
-                "jcl_id": j.id, "amount": amt,
-                "pct": round(amt / ap_amount, 6) if ap_amount > 0 else 0.0,
-                "jcl_quoted": round(j.total_quoted or 0.0, 2),
-                "jcl_description": j.description,
-            })
+    elif preset in ("pro_rata", "pro_rata_remaining"):
+        # Entrambi i preset proporzionali usano available (quoted - billed - altri AP).
+        weights = [(j, _available(j)) for j in ordered]
+        sum_w = sum(w[1] for w in weights)
+        for j, w in weights:
+            if sum_w > 0:
+                amt = round(ap_amount * (w / sum_w), 2)
+                amt = min(amt, w)  # mai sopra il disponibile
+            else:
+                amt = 0.0
+            out.append(_row(j, amt))
 
     sum_amt = round(sum(o["amount"] for o in out), 2)
     return {
@@ -1330,22 +1398,20 @@ async def emit_invoice_from_advance(
     }
 
 
-# v3.5.0-alpha.172.50 — Reset status acconto: torna a pending da draft/confirmed.
-# Richiesta Matteo: bozza confermata erroneamente deve poter tornare a pending
-# per rilasciare le allocazioni (cross-AP overflow block usa exclude_cancelled
-# ma NON exclude_pending — quindi reset a pending libera la JCL per altro AP).
+# v3.5.0-alpha.172.51 — Reset status acconto: HARD reset, elimina anche allocazioni.
+# Richiesta Matteo: reset soft (status only) lascia le allocazioni JCL/deliverable
+# attaccate all'AP. Il cross-AP overflow block conta TUTTE le allocazioni
+# non-cancelled → l'altro AP non può modificare le stesse JCL. Quindi reset
+# significa: libera la JCL davvero, ripartendo da zero.
 @router.post("/api/advances/{advance_id}/reset-to-pending", dependencies=[RequireEditInvoices])
 async def reset_advance_to_pending(advance_id: int, db: Session = Depends(get_db)):
-    """Riporta un AdvancePayment da draft/confirmed → pending.
+    """Riporta un AdvancePayment da draft/confirmed → pending ed elimina TUTTE
+    le allocazioni JCL + deliverable collegate (hard reset).
 
     Vincoli:
     - AP deve essere in stato draft o confirmed
     - AP non deve avere invoice_id (cioè non ancora emesso)
-    - Allocazioni esistenti vengono PRESERVATE (l'utente può riconfermare)
-
-    Cancelled NON viene riaperto via reset: usare endpoint dedicato (TODO).
-    Per ora annullamento → ricreazione AP nuovo via materialize_schedules o
-    create_advance_payment manuale.
+    - Allocazioni: ELIMINATE (JCL + Deliverable), non preservate
     """
     ap = db.query(AdvancePayment).filter(
         AdvancePayment.id == advance_id,
@@ -1377,13 +1443,26 @@ async def reset_advance_to_pending(advance_id: int, db: Session = Depends(get_db
                 ),
             },
         )
+    from app.models import (
+        AdvancePaymentAllocation as _APA,
+        AdvancePaymentDeliverableAllocation as _APDA,
+    )
     prev_status = ap.status.value
+    # Hard reset: elimina allocations JCL
+    jcl_count = db.query(_APA).filter(
+        _APA.advance_payment_id == ap.id
+    ).delete(synchronize_session=False)
+    # Hard reset: elimina allocations Deliverable
+    deliv_count = db.query(_APDA).filter(
+        _APDA.advance_payment_id == ap.id
+    ).delete(synchronize_session=False)
     ap.status = AdvancePaymentStatus.pending
     db.commit()
     return {
         "ok": True, "id": ap.id, "status": ap.status.value,
         "previous_status": prev_status,
-        "allocations_preserved": True,
+        "allocations_deleted_jcl": int(jcl_count or 0),
+        "allocations_deleted_deliverable": int(deliv_count or 0),
     }
 
 
