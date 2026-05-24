@@ -1,4 +1,4 @@
-"""MediaFlow v3 — entrypoint FastAPI con AI e gerarchia Client→Project→Quote."""
+"""Claqo v3 — entrypoint FastAPI con AI e gerarchia Client→Project→Quote."""
 from fastapi import FastAPI, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
@@ -317,6 +317,16 @@ def _auto_migrate_columns():
             ("capex_threshold_eur",     "FLOAT NOT NULL DEFAULT 500.0"),
             # v3.5.0-alpha.96 — Filesystem scan whitelist path autorizzati
             ("fs_scan_allowed_paths",   "TEXT NULL"),
+            # v3.5.0-alpha.172.60 — Sede strutturata + IscrizioneREA per FatturaPA
+            ("street_address",          "VARCHAR(255) NULL"),
+            ("zip_code",                "VARCHAR(20) NULL"),
+            ("city",                    "VARCHAR(100) NULL"),
+            ("province",                "VARCHAR(4) NULL"),
+            ("country",                 "VARCHAR(2) NOT NULL DEFAULT 'IT'"),
+            ("rea_office",              "VARCHAR(4) NULL"),
+            ("rea_capital_eur",         "FLOAT NULL"),
+            ("socio_unico",             "VARCHAR(2) NULL"),
+            ("stato_liquidazione",      "VARCHAR(2) NOT NULL DEFAULT 'LN'"),
         ]
         with engine.begin() as conn:
             for col, ddl in t_alter:
@@ -1551,7 +1561,7 @@ async def lifespan(app: FastAPI):
     yield
 
 
-app = FastAPI(title="MediaFlow", version="3.5.0-alpha.172.53", lifespan=lifespan)
+app = FastAPI(title="Claqo", version="3.5.0-alpha.172.72", lifespan=lifespan)
 
 BASE_DIR = Path(__file__).parent
 app.mount("/static", StaticFiles(directory=BASE_DIR / "static"), name="static")

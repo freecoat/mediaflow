@@ -1162,6 +1162,16 @@ async def emit_invoice(
         tenant_fiscal_regime=(tenant_obj.fiscal_regime if tenant_obj else None),
         vat_rate=vat_rate,
         natura=None,
+        # v3.5.0-alpha.172.60 — anagrafica sede + ragione sociale
+        client_address=(client_obj.address if client_obj else None),
+        client_zip=(client_obj.zip_code if client_obj else None),
+        client_city=(client_obj.city if client_obj else None),
+        client_province=(client_obj.province if client_obj else None),
+        tenant_street=(getattr(tenant_obj, "street_address", None) if tenant_obj else None),
+        tenant_zip=(getattr(tenant_obj, "zip_code", None) if tenant_obj else None),
+        tenant_city=(getattr(tenant_obj, "city", None) if tenant_obj else None),
+        tenant_province=(getattr(tenant_obj, "province", None) if tenant_obj else None),
+        tenant_legal_name=(tenant_obj.legal_name or tenant_obj.name if tenant_obj else None),
     )
     if sdi_errs:
         raise HTTPException(422, detail={
@@ -2369,13 +2379,16 @@ async def get_invoice_pdf(
 async def storno_invoice(
     invoice_id: int,
     request: Request,
-    credit_number: str = Form(...),
+    credit_number: Optional[str] = Form(None),
     issue_date: date = Form(...),
     reason: Optional[str] = Form(None),
     db: Session = Depends(get_db),
 ):
     """v3.5.0-alpha.111 — Emette nota di credito TD04 che storna integralmente
     la fattura sorgente.
+
+    v3.5.0-alpha.172.58 — credit_number opzionale: se omesso, auto-genera serie
+    separata `NC-{year}-NNNNN` via `_next_credit_note_number`.
 
     Effetti:
     1. Crea Invoice TD04 con stessi line snapshot + cliente snapshot, status=draft.
@@ -2401,6 +2414,12 @@ async def storno_invoice(
         raise HTTPException(400, "Non puoi stornare una nota di credito (TD04)")
     if src.status == InvoiceStatus.cancelled:
         raise HTTPException(400, "Fattura già annullata")
+    # v3.5.0-alpha.172.58 — Auto-gen numero NC se non fornito (`NC-{year}-NNNNN`).
+    if credit_number is None or not credit_number.strip():
+        from app.routers.finance import _next_credit_note_number
+        credit_number = _next_credit_note_number(db, issue_date.year)
+    else:
+        credit_number = credit_number.strip()
     # Univocità numero NC
     existing = db.query(Invoice).join(Client, Invoice.client_id == Client.id).filter(
         Invoice.number == credit_number,

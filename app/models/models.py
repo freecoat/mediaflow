@@ -510,12 +510,26 @@ class Tenant(Base):
     tax_code: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)         # CF se ≠ P.IVA
     iban: Mapped[Optional[str]] = mapped_column(String(40), nullable=True)             # IBAN bancario
     sdi_code: Mapped[Optional[str]] = mapped_column(String(20), nullable=True)         # codice destinatario SDI proprio
-    rea_number: Mapped[Optional[str]] = mapped_column(String(40), nullable=True)       # es. "MI-1234567"
-    fiscal_capital: Mapped[Optional[str]] = mapped_column(String(80), nullable=True)   # Capitale sociale es. "10.000,00 i.v."
+    rea_number: Mapped[Optional[str]] = mapped_column(String(40), nullable=True)       # es. "1234567" (solo numero REA)
+    fiscal_capital: Mapped[Optional[str]] = mapped_column(String(80), nullable=True)   # Capitale sociale legacy free-text es. "10.000,00 i.v."
     fiscal_regime: Mapped[str] = mapped_column(String(8), default="RF01")              # RF01=ordinario, RF19=forfettario
     payment_terms_default: Mapped[int] = mapped_column(Integer, default=30)            # giorni
     payment_method_default: Mapped[str] = mapped_column(String(80), default="Bonifico bancario")
     invoice_footer: Mapped[Optional[str]] = mapped_column(Text, nullable=True)         # testo libero in calce
+    # v3.5.0-alpha.172.60 — Sede strutturata FatturaPA (CedentePrestatore/Sede).
+    # `address` resta come legacy free-text (compat PDF); per SDI XML servono
+    # campi separati: Indirizzo, CAP, Comune, Provincia (sigla), Nazione.
+    street_address: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)  # Via + civico
+    zip_code: Mapped[Optional[str]] = mapped_column(String(20), nullable=True)         # CAP 5 cifre IT
+    city: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)            # Comune
+    province: Mapped[Optional[str]] = mapped_column(String(4), nullable=True)          # Sigla "MI", "RM"
+    country: Mapped[str] = mapped_column(String(2), default="IT")                      # ISO 3166-1 alpha-2
+    # v3.5.0-alpha.172.60 — IscrizioneREA (obbligatoria per società di capitali IT).
+    # Es. REA Milano "MI-1234567" → rea_office="MI", rea_number="1234567"
+    rea_office: Mapped[Optional[str]] = mapped_column(String(4), nullable=True)        # Sigla provincia REA
+    rea_capital_eur: Mapped[Optional[float]] = mapped_column(Float, nullable=True)     # Capitale sociale numerico EUR (per XML)
+    socio_unico: Mapped[Optional[str]] = mapped_column(String(2), nullable=True)       # "SU"=socio unico, "SM"=multi-socio, NULL=ditta individuale
+    stato_liquidazione: Mapped[str] = mapped_column(String(2), default="LN")           # "LN"=non in liquidazione, "LS"=in liquidazione
     # v3.5.0-alpha.66.13 — Branding aziendale per PDF (quote/cost report/invoice)
     tagline: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)        # claim/sottotitolo opzionale
     brand_color: Mapped[Optional[str]] = mapped_column(String(7), nullable=True)      # hex es. #6272f5 — usato come accent nei PDF

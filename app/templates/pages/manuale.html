@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% block title %}Manuale d'uso — MediaFlow{% endblock %}
+{% block title %}Manuale d'uso — Claqo{% endblock %}
 {% block topbar_title %}Manuale d'uso{% endblock %}
 
 {% block head %}
@@ -189,13 +189,13 @@
   <article class="manuale-content">
 
     <section id="intro">
-      <h1>Manuale d'uso MediaFlow</h1>
-      <p>MediaFlow è una piattaforma di gestione per case di post-produzione audiovisiva, con un assistente AI integrato come <strong>co-pilota</strong>. Coordina il lavoro dalla quotazione iniziale fino al cost report finale.</p>
+      <h1>Manuale d'uso Claqo</h1>
+      <p>Claqo è una piattaforma di gestione per case di post-produzione audiovisiva, con un assistente AI integrato come <strong>co-pilota</strong>. Coordina il lavoro dalla quotazione iniziale fino al cost report finale.</p>
 
       <h2>Filosofia</h2>
       <ul>
         <li><strong>AI propone, utente dispone.</strong> Ogni mutazione automatizzata richiede una conferma esplicita. Niente azioni "magiche" non tracciate.</li>
-        <li><strong>Funziona anche senza AI.</strong> Il copilota è un acceleratore, non un requisito: se non configuri provider AI, MediaFlow resta pienamente operativo.</li>
+        <li><strong>Funziona anche senza AI.</strong> Il copilota è un acceleratore, non un requisito: se non configuri provider AI, Claqo resta pienamente operativo.</li>
         <li><strong>Listino modulare.</strong> Il listino non è uno standard rigido: ogni casa di post ha il suo, e il sistema si adatta.</li>
       </ul>
 
@@ -209,7 +209,7 @@
 
     <section id="concetti">
       <h2>Concetti chiave</h2>
-      <p>La gerarchia delle entità è il cuore di MediaFlow. Capire come si compongono evita confusione su cosa appare dove.</p>
+      <p>La gerarchia delle entità è il cuore di Claqo. Capire come si compongono evita confusione su cosa appare dove.</p>
 
       <h3 id="concetti-cliente">Cliente · Progetto · Job</h3>
       <ul>
@@ -473,12 +473,12 @@ form: client_id=42, email="referente@cliente.it", full_name="Mario Rossi"
       <h2>Multi-tenant <span class="manuale-chip new">α.101–α.104</span></h2>
 
       <h3 id="mt-overview">Concetti chiave</h3>
-      <p>MediaFlow supporta più aziende clienti (tenant) sulla stessa
+      <p>Claqo supporta più aziende clienti (tenant) sulla stessa
       installazione. Ogni tenant ha dati isolati: clienti, progetti, listino,
       utenti, asset, fatture.</p>
       <ul>
         <li><strong>Tenant resolution</strong>: dal subdomain
-        (<code>acme.mediaflow.it</code>), header <code>X-Tenant-Slug</code>,
+        (<code>acme.Claqo.it</code>), header <code>X-Tenant-Slug</code>,
         query <code>?tenant=acme</code>, o JWT del cookie. Fallback tenant
         Default (id=1).</li>
         <li><strong>Email scoped per tenant</strong>: lo stesso indirizzo
@@ -519,7 +519,7 @@ form: client_id=42, email="referente@cliente.it", full_name="Mario Rossi"
       <p>Tre modalità (in dev):</p>
       <ol>
         <li><strong>Subdomain</strong> (prod, quando DNS pronto):
-        <code>http://acme.mediaflow.it/auth/login</code></li>
+        <code>http://acme.Claqo.it/auth/login</code></li>
         <li><strong>lvh.me</strong> (dev, no DNS setup richiesto):
         <code>http://acme.lvh.me:8000/auth/login</code> (risolve a 127.0.0.1)</li>
         <li><strong>Query param</strong> (fallback):
@@ -554,7 +554,7 @@ form: client_id=42, email="referente@cliente.it", full_name="Mario Rossi"
         <li>Opt-in: <code>.env</code>, uploads, trash</li>
         <li>Cifratura AES-256 con password (apribile anche da 7zip/WinZip)</li>
       </ul>
-      <p>Restore da ZIP: check di major version, swap atomico DB con backup automatico (<code>mediaflow.db.backup-{timestamp}</code>), rollback su errore. Utile per sincronizzare PC ↔ Mac o per backup/restore.</p>
+      <p>Restore da ZIP: check di major version, swap atomico DB con backup automatico (<code>Claqo.db.backup-{timestamp}</code>), rollback su errore. Utile per sincronizzare PC ↔ Mac o per backup/restore.</p>
     </section>
 
     <section id="shortcuts">
@@ -607,7 +607,7 @@ form: client_id=42, email="referente@cliente.it", full_name="Mario Rossi"
 
       <h3>La timeline si blocca/freeze in Chrome con molti booking</h3>
       <p>Diagnosi performance trace 7/5/2026: il colpevole è quasi sempre un'<strong>estensione browser</strong> (Bitwarden, 1Password, LastPass, MetaMask, ecc.) che osserva le mutazioni del DOM. Vis-timeline crea/distrugge migliaia di nodi durante zoom/pan, e l'estensione esegue una scan a ogni mutazione → main thread saturo → freeze.</p>
-      <p><strong>Test diagnostico</strong>: apri Chrome in modalità incognito (<kbd>Cmd</kbd>/<kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>N</kbd>) e usa MediaFlow lì. Se in incognito funziona fluido → confermato problema estensione.</p>
+      <p><strong>Test diagnostico</strong>: apri Chrome in modalità incognito (<kbd>Cmd</kbd>/<kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>N</kbd>) e usa Claqo lì. Se in incognito funziona fluido → confermato problema estensione.</p>
       <p><strong>Workaround</strong>:</p>
       <ul>
         <li>Disattiva l'estensione su <code>localhost</code> (Bitwarden: Settings → Excluded Domains → aggiungi <code>localhost</code>)</li>
@@ -615,7 +615,7 @@ form: client_id=42, email="referente@cliente.it", full_name="Mario Rossi"
         <li>Usa <a href="/planning/full">Pagina timeline standalone</a> in finestra dedicata (riduce DOM extra di sidebar/topbar)</li>
         <li>Disattiva la heatmap (📊 toolbar) se attivata</li>
       </ul>
-      <p>MediaFlow include attributi <code>data-bwignore</code> / <code>data-lpignore</code> / <code>autocomplete="off"</code> su contenitori timeline per chiedere alle estensioni di non scansionarli, ma non tutte le rispettano.</p>
+      <p>Claqo include attributi <code>data-bwignore</code> / <code>data-lpignore</code> / <code>autocomplete="off"</code> su contenitori timeline per chiedere alle estensioni di non scansionarli, ma non tutte le rispettano.</p>
     </section>
 
   </article>

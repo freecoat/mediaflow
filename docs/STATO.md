@@ -8,6 +8,10 @@
 
 ## Versione corrente
 
+**v3.5.0-alpha.172.72** — 24-25 maggio 2026 — Test maratona FASE 1-4 + 20+ patch + Brand Claqo pack
+
+22 commit (24 mag): test FASE 0-4 chiusi + bug fixes acconto/SDI/UI + rebrand Claqo (mascot copilot da brand-pack ufficiale, app icon variant-B/C, tema Claqo Dark+Light), feat aggiunte: milestone timeline gruppo dedicato + modal CRUD, camera specs matrix 26 modelli filter live, scheda tecnica dropdown human-readable, filtri fatture annullate/NC, projects row-clickable + scadenza/quote-ref, post-emit no-cancel → NC TD04 auto-num, sede tenant strutturata + IscrizioneREA in XML SDI, AI parse capitolati 503.
+
 **v3.5.0-alpha.172.53** — 24 maggio 2026 — Hard reset acconto + cap cross-AP preset + HARD-BLOCK sotto-copertura
 
 Test FASE 1 plan 24 mag chiuso. 3 fix mirati su modal "Gestisci acconto":
@@ -33,7 +37,7 @@ DB: clienti+progetti+quote freschi (purge totale business 23 mag sera). Anagrafi
 
 ## Lavoro in corso
 
-Test plan 24 mag in corso. **FASE 1 chiusa** (reset draft→pending + cap cross-AP + HARD-BLOCK confirma). Prossima: **FASE 2 cross-AP overflow JCL** (con toastBlock già esistente α.172.49).
+PAUSA — chiusura sera 24 mag. Riapertura 25 mag: **FASE 5 SDI compliance** + verifica implementazioni 24 mag (vedi [[project-test-plan-24mag2026]]). Domani aggiungere fase test ore lavorate.
 
 ## Prossimo step
 

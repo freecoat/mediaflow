@@ -1,11 +1,11 @@
-"""MediaFlow v3 — configurazione con AI e Web Search."""
+"""Claqo v3 — configurazione con AI e Web Search."""
 from pydantic_settings import BaseSettings
 from pathlib import Path
 from typing import Optional
 
 
 class Settings(BaseSettings):
-    app_name: str = "MediaFlow"
+    app_name: str = "Claqo"
     app_env: str = "development"
     secret_key: str = "dev-secret-key-change-in-production"
     access_token_expire_minutes: int = 480

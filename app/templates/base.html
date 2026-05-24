@@ -8,7 +8,11 @@
   <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
   <meta http-equiv="Pragma" content="no-cache">
   <meta http-equiv="Expires" content="0">
-  <title>{% block title %}MediaFlow{% endblock %}</title>
+  <title>{% block title %}Claqo{% endblock %}</title>
+  <!-- v3.5.0-alpha.172.72 — Favicon Claqo app icon (variant-B outline dark) -->
+  <link rel="icon" type="image/svg+xml" href="/static/img/claqo-app-icon.svg">
+  <link rel="apple-touch-icon" href="/static/img/claqo-app-icon.svg">
+  <meta name="theme-color" content="#D85A30">
   <!-- v3.5.0-alpha.172.39 Sprint 4.F — cache-buster ?v={{ app_version }} per static.
        Bump app version invalida tutti gli static in un colpo (memo feedback_cache_buster_static). -->
   <link rel="stylesheet" href="/static/css/main.css?v={{ app_version }}">
@@ -52,8 +56,8 @@
   <!-- ── Sidebar ──────────────────────────────────────────── -->
   <aside class="sidebar" id="sidebar">
     <div class="sidebar-logo" onclick="showAboutModal()" style="cursor:pointer;" title="Info versione">
-      <div class="logo-mark">MF</div>
-      <span class="logo-text">MediaFlow</span>
+      <img src="/static/img/claqo-app-icon.svg?v={{ app_version }}" alt="" class="logo-mark" style="width:32px;height:32px;border-radius:8px;">
+      <span class="logo-text" style="font-weight:500;letter-spacing:-0.3px;">claqo</span>
     </div>
 
     <nav class="sidebar-nav">
@@ -267,16 +271,16 @@
 <!-- Toast container -->
 <div id="toast-container"></div>
 
-<!-- v3.5.0-alpha.108 — About modal (click logo MediaFlow) -->
+<!-- v3.5.0-alpha.108 — About modal (click logo Claqo) -->
 <div class="modal-overlay" id="modal-about">
   <div class="modal" style="max-width:440px;">
     <div class="modal-header">
-      <span class="modal-title">ℹ️ About MediaFlow</span>
+      <span class="modal-title">ℹ️ About Claqo</span>
       <button class="btn btn-ghost btn-icon" onclick="closeModal('modal-about')">&times;</button>
     </div>
     <div class="modal-body" style="text-align:center;">
       <div style="font-size:48px;margin-bottom:8px;">🎬</div>
-      <div style="font-size:20px;font-weight:700;color:var(--text);">MediaFlow</div>
+      <div style="font-size:20px;font-weight:700;color:var(--text);">Claqo</div>
       <div style="font-size:11px;color:var(--text2);margin-top:4px;text-transform:uppercase;letter-spacing:.08em;">Post-production management</div>
       <div style="margin:20px 0;padding:12px;background:var(--bg3);border-radius:6px;">
         <div style="font-size:11px;color:var(--text3);text-transform:uppercase;letter-spacing:.05em;">Versione corrente</div>
@@ -289,7 +293,7 @@
         <div style="margin-top:10px;">
           <a href="/manuale" style="color:var(--indigo2);text-decoration:none;">📖 Manuale</a>
           ·
-          <a href="https://github.com/freecoat/mediaflow" target="_blank" style="color:var(--indigo2);text-decoration:none;">📦 GitHub</a>
+          <a href="https://github.com/freecoat/Claqo" target="_blank" style="color:var(--indigo2);text-decoration:none;">📦 GitHub</a>
         </div>
       </div>
     </div>

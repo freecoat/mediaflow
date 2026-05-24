@@ -1,4 +1,4 @@
-// MediaFlow — Copilot AI drawer
+// Claqo — Copilot AI drawer
 // Pattern "AI propone, utente dispone": ogni azione richiede conferma esplicita.
 
 (function () {

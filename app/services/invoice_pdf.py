@@ -152,7 +152,7 @@ def generate_invoice_pdf(
 
     # ── 1) Header: Cedente + Tipo doc/N°/Data ─────────────────
     cedente_name = _resolve_field(invoice, "tenant_legal_name_snap", tenant, "legal_name") \
-        or (tenant.name if tenant else "MediaFlow")
+        or (tenant.name if tenant else "Claqo")
     cedente_vat = _resolve_field(invoice, "tenant_vat_snap", tenant, "vat_number")
     cedente_cf = _resolve_field(invoice, "tenant_tax_code_snap", tenant, "tax_code")
     cedente_addr = _resolve_field(invoice, "tenant_address_snap", tenant, "address")

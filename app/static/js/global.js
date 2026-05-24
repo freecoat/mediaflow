@@ -1,9 +1,9 @@
-/* MediaFlow — global.js
+/* Claqo — global.js
    Toast, modal helpers, API fetch wrapper, tema, riordino sidebar
 */
 
 // ── Tema (preset CSS variables) ────────────────────────────────
-const MF_THEMES = ['indigo', 'slate', 'forest', 'sand', 'paper', 'linen', 'sage', 'midnight', 'copper', 'plum', 'teal', 'mono', 'broadcast'];
+const MF_THEMES = ['indigo', 'claqo', 'claqo-light', 'slate', 'forest', 'sand', 'paper', 'linen', 'sage', 'midnight', 'copper', 'plum', 'teal', 'mono', 'broadcast'];
 const MF_FONTS = ['dmsans', 'inter', 'roboto', 'ibmplex', 'source', 'system'];
 
 function applyTheme() {
@@ -22,6 +22,8 @@ function setTheme(theme) {
 // v3.5.0-alpha.66.19: topbar theme switcher — cycle + popover
 const MF_THEME_META = {
   indigo:    { name:'Indigo',    sw:['#0f1117','#1f2436','#6272f5','#e8ecf5'] },
+  claqo:     { name:'Claqo Dark', sw:['#14110f','#2a2320','#D85A30','#FAECE7'] },
+  'claqo-light': { name:'Claqo Light', sw:['#FAECE7','#ead0c3','#D85A30','#1A1A1A'] },
   slate:     { name:'Slate',     sw:['#11141a','#232730','#5b8def','#e6e9ef'] },
   forest:    { name:'Forest',    sw:['#0c1410','#1a261f','#4ade80','#e7f0e9'] },
   sand:      { name:'Sand',      sw:['#f5f1e8','#e1dac5','#a0522d','#2b2620'] },

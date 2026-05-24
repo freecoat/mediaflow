@@ -112,6 +112,37 @@ async def create_project(
     return {"id": p.id, "code": p.code}
 
 
+# v3.5.0-alpha.172.67 — Tutte le milestones del tenant per overlay timeline planning.
+# IMPORTANTE: questa rotta DEVE stare PRIMA di /api/{project_id} altrimenti
+# FastAPI matcha "milestones-all" come project_id → 422 parse int.
+@router.get("/api/milestones-all")
+async def list_milestones_all(
+    from_date: Optional[date] = None,
+    to_date: Optional[date] = None,
+    db: Session = Depends(get_db),
+):
+    """Tutte le milestone del tenant. Filtri opzionali su target_date.
+    Aggiunge project_code per render label nella timeline.
+    """
+    q = (
+        db.query(ProjectMilestone, Project)
+        .join(Project, ProjectMilestone.project_id == Project.id)
+        .filter(Project.tenant_id == current_tenant_id())
+    )
+    if from_date:
+        q = q.filter(ProjectMilestone.target_date >= from_date)
+    if to_date:
+        q = q.filter(ProjectMilestone.target_date <= to_date)
+    rows = q.order_by(ProjectMilestone.target_date).all()
+    out = []
+    for m, p in rows:
+        d = _milestone_dict(m)
+        d["project_code"] = p.code
+        d["project_title"] = p.title
+        out.append(d)
+    return out
+
+
 @router.get("/api/{project_id}")
 async def get_project(project_id: int, db: Session = Depends(get_db)):
     # v3.5.0-alpha.103 R-MT4: tenant scope filter (era leak cross-tenant).
@@ -146,15 +177,20 @@ async def get_project(project_id: int, db: Session = Depends(get_db)):
         "storage_root": p.storage_root,
         "s3_bucket": p.s3_bucket,
         "fs_scan_paths": p.fs_scan_paths or [],
+        # v3.5.0-alpha.172.71 — Aggiunto valid_until in quote + count JCL + quote_ref in job
         "quotes": [
             {"id": q.id, "number": q.number, "version": q.version,
              "status": q.status, "total_with_vat": q.total_with_vat,
-             "issue_date": str(q.issue_date)}
+             "issue_date": str(q.issue_date),
+             "valid_until": str(q.valid_until) if q.valid_until else None}
             for q in p.quotes
         ],
         "jobs": [
             {"id": j.id, "code": j.code, "title": j.title,
-             "status": j.status, "budget_quoted": j.budget_quoted}
+             "status": j.status, "budget_quoted": j.budget_quoted,
+             "jcl_count": len(j.cost_lines or []) if hasattr(j, "cost_lines") else 0,
+             "quote_number": (j.quote.number if getattr(j, "quote", None) else None),
+             "quote_id": j.quote_id}
             for j in p.jobs
         ],
     }
@@ -543,6 +579,11 @@ async def list_milestones(project_id: int, db: Session = Depends(get_db)):
         .all()
     )
     return [_milestone_dict(m) for m in rows]
+
+
+# Endpoint /api/milestones-all SPOSTATO sopra a /api/{project_id} per evitare
+# collisione FastAPI (project_id matchava "milestones-all" → 422 parse int).
+# Vedi blocco α.172.67 sopra (riga ~107).
 
 
 @router.post("/api/{project_id}/milestones")

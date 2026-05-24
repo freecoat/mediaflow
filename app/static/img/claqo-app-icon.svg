@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200" width="200" height="200">
+  <title>Claqo variant B — outline dark</title>
+  <rect width="200" height="200" rx="44" fill="#1A1A1A"/>
+  <rect x="39" y="83" width="122" height="61" rx="6" fill="none" stroke="#D85A30" stroke-width="7"/>
+  <path d="M 39 83 L 78 44 L 128 44 L 89 83 Z" fill="none" stroke="#D85A30" stroke-width="7" stroke-linejoin="round"/>
+  <rect x="61" y="100" width="11" height="11" fill="#D85A30"/>
+  <rect x="94" y="100" width="11" height="11" fill="#D85A30"/>
+  <rect x="128" y="100" width="11" height="11" fill="#D85A30"/>
+</svg>

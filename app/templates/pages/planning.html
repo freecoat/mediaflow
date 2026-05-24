@@ -1,7 +1,7 @@
 {% extends "base.html" %}
 {% set active_page = "planning" %}
 
-{% block title %}Pianificazione — MediaFlow{% endblock %}
+{% block title %}Pianificazione — Claqo{% endblock %}
 {% block topbar_title %}Pianificazione{% endblock %}
 
 {% block topbar_actions %}
@@ -62,6 +62,26 @@
   #tl-host .vis-foreground .vis-group .vis-item {
     margin-top: 2px;
   }
+  /* v3.5.0-alpha.172.67 — Milestone progetto come point items. */
+  #tl-host .vis-item.tl-milestone {
+    background: transparent !important;
+    border: none !important;
+    color: var(--text) !important;
+    font-weight: 600;
+    font-size: 12px;
+    cursor: pointer;
+  }
+  #tl-host .vis-item.tl-milestone .vis-item-content {
+    padding: 2px 6px;
+    border-radius: 4px;
+    background: rgba(216,90,48,.16);
+    border: 1px solid #D85A30;
+  }
+  #tl-host .vis-item.tl-ms-done .vis-item-content { background: rgba(34,197,94,.16); border-color: #22c55e; }
+  #tl-host .vis-item.tl-ms-missed .vis-item-content { background: rgba(239,68,68,.16); border-color: #ef4444; }
+  #tl-host .vis-item.tl-ms-imminent .vis-item-content { background: rgba(239,159,39,.16); border-color: #EF9F27; }
+  #tl-host .vis-item.tl-ms-pending .vis-item-content { background: rgba(216,90,48,.16); border-color: #D85A30; }
+  #tl-host .vis-item.tl-milestone.vis-point .vis-item-content::before { content: ''; }
   /* v3.5.0-alpha.82 — Heatmap container neutro (era rgba bianco, invisibile su tema chiaro).
      Usa color-mix var(--text) per adattarsi sia su dark che chiaro. */
   #tl-host .vis-labelset .vis-label .tl-heat {
@@ -454,6 +474,10 @@
           <button class="btn btn-ghost btn-sm" id="tl-roi-toggle" onclick="tlRoiTogglePersist()" title="Modalità area (S): trascina sulla griglia per selezionare. Selezioni multiple si sommano. ESC per uscire." style="margin-left:6px;">📦 Area</button>
           <!-- v3.5.0-alpha.111.13 — Heatmap button rimosso (feature stripped). -->
           <button class="btn btn-ghost btn-sm" id="tl-light-toggle" onclick="tlToggleLight()" title="Modalità leggera: disabilita stack overlap (O(N²)), background items (ferie/festività/timbrature) e animazioni. Risolve freeze Chrome con 30+ booking + zoom mese. Trade-off: items sovrapposti visivamente." style="margin-left:6px;">🪶 Light</button>
+          <!-- v3.5.0-alpha.172.69 — Toggle gruppo milestones -->
+          <label class="text-xs" style="display:inline-flex;align-items:center;gap:5px;margin-left:8px;cursor:pointer;color:var(--text2);" title="Mostra/nascondi la riga ⭐ Milestones in cima alla timeline">
+            <input type="checkbox" id="tl-show-milestones" checked onchange="renderTimeline(true)"> ⭐ Milestones
+          </label>
           <!-- v3.5.0-alpha.168 — Badge diagnostico "Risorse visibili" -->
           <span id="tl-res-counter" class="text-xs" style="margin-left:8px; padding:3px 8px; border-radius:6px; background:var(--bg3); color:var(--text2); font-variant-numeric:tabular-nums;" title="Risorse renderizzate / totali attive in DB (post-filtri UI)"></span>
           {% if not full_screen %}
@@ -972,6 +996,62 @@
       <button class="btn btn-ghost btn-icon" onclick="closeModal('modal-job-detail')">✕</button>
     </div>
     <div class="modal-body" id="detail-body"></div>
+  </div>
+</div>
+
+<!-- v3.5.0-alpha.172.69 — Modal milestone CRUD (creazione + edit) -->
+<div class="modal-overlay" id="modal-milestone">
+  <div class="modal" style="max-width:560px;">
+    <div class="modal-header">
+      <span class="modal-title" id="ms-modal-title">⭐ Nuova milestone</span>
+      <button class="btn btn-ghost btn-icon" onclick="closeModal('modal-milestone')">✕</button>
+    </div>
+    <div class="modal-body">
+      <input type="hidden" id="ms-id">
+      <div class="form-group">
+        <label class="form-label">Progetto *</label>
+        <select id="ms-project" class="form-select" required>
+          <option value="">— seleziona progetto —</option>
+        </select>
+      </div>
+      <div class="form-row">
+        <div class="form-group" style="flex:2;">
+          <label class="form-label">Titolo *</label>
+          <input id="ms-title" class="form-input" maxlength="255" placeholder="es. Picture lock, Audio mix, Master delivery" required>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Data *</label>
+          <input id="ms-date" type="date" class="form-input" required>
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label class="form-label">Colore</label>
+          <div style="display:flex;align-items:center;gap:8px;">
+            <input id="ms-color" type="color" class="form-input" style="width:50px;height:36px;padding:2px;cursor:pointer;" value="#D85A30">
+            <span class="text-xs text-muted">Visibile in timeline</span>
+          </div>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Stato</label>
+          <label style="display:flex;align-items:center;gap:6px;cursor:pointer;padding:8px 0;">
+            <input id="ms-completed" type="checkbox">
+            <span class="text-sm">Completata</span>
+          </label>
+        </div>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Descrizione (opzionale)</label>
+        <textarea id="ms-description" class="form-textarea" rows="2" placeholder="Note interne, dipendenze, riferimenti capitolato…"></textarea>
+      </div>
+    </div>
+    <div class="modal-footer" style="display:flex;justify-content:space-between;">
+      <button id="ms-delete-btn" class="btn btn-ghost btn-sm" onclick="msModalDelete()" style="color:#ef4444;display:none;">🗑 Elimina</button>
+      <div style="display:flex;gap:8px;margin-left:auto;">
+        <button class="btn btn-secondary" onclick="closeModal('modal-milestone')">Annulla</button>
+        <button class="btn btn-primary" onclick="msModalSave()">💾 Salva</button>
+      </div>
+    </div>
   </div>
 </div>
 
@@ -5002,6 +5082,118 @@ function tlHasConflict(item, allItems) {
 // il chiamante successivo aspetta. Più chiamate stacked si risolvono in
 // FIFO ordinato.
 let _tlRenderQueue = Promise.resolve();
+// v3.5.0-alpha.172.69 — Modal milestone CRUD. Helpers `tlMilestoneNew/Edit/NewFromPicker`
+// pre-popolano i campi e aprono modal-milestone. Save → POST/PUT, Delete → DELETE.
+async function _msLoadProjectsSelect(selectedId) {
+  const sel = document.getElementById('ms-project');
+  if (!sel) return;
+  if (sel.dataset.loaded !== '1') {
+    try {
+      const projects = await api('GET', '/projects/api');
+      sel.replaceChildren(Object.assign(document.createElement('option'), { value: '', textContent: '— seleziona progetto —' }));
+      (projects || []).forEach(p => {
+        const o = document.createElement('option');
+        o.value = String(p.id);
+        o.textContent = `${p.code} · ${p.title || ''}`;
+        sel.appendChild(o);
+      });
+      sel.dataset.loaded = '1';
+    } catch (e) { toast(e.message || 'Errore lista progetti', 'error'); }
+  }
+  if (selectedId) sel.value = String(selectedId);
+}
+
+async function tlMilestoneNewFromPicker(atTime) {
+  await _msLoadProjectsSelect();
+  document.getElementById('ms-id').value = '';
+  document.getElementById('ms-modal-title').textContent = '⭐ Nuova milestone';
+  const sel = document.getElementById('ms-project');
+  sel.disabled = false;
+  document.getElementById('ms-title').value = '';
+  const isoDate = (atTime instanceof Date ? atTime : new Date(atTime)).toISOString().substring(0, 10);
+  document.getElementById('ms-date').value = isoDate;
+  document.getElementById('ms-color').value = '#D85A30';
+  document.getElementById('ms-completed').checked = false;
+  document.getElementById('ms-description').value = '';
+  document.getElementById('ms-delete-btn').style.display = 'none';
+  openModal('modal-milestone');
+}
+
+async function tlMilestoneNew(projectId, projectCode, atTime) {
+  await _msLoadProjectsSelect(projectId);
+  document.getElementById('ms-id').value = '';
+  document.getElementById('ms-modal-title').textContent = `⭐ Nuova milestone · ${projectCode}`;
+  document.getElementById('ms-project').disabled = true;
+  document.getElementById('ms-title').value = '';
+  const isoDate = (atTime instanceof Date ? atTime : new Date(atTime)).toISOString().substring(0, 10);
+  document.getElementById('ms-date').value = isoDate;
+  document.getElementById('ms-color').value = '#D85A30';
+  document.getElementById('ms-completed').checked = false;
+  document.getElementById('ms-description').value = '';
+  document.getElementById('ms-delete-btn').style.display = 'none';
+  openModal('modal-milestone');
+}
+
+async function tlMilestoneEdit(m) {
+  if (!m || !m.id) return;
+  await _msLoadProjectsSelect(m.project_id);
+  document.getElementById('ms-id').value = String(m.id);
+  document.getElementById('ms-modal-title').textContent = `✏ Modifica milestone · ${m.project_code || '#' + m.project_id}`;
+  document.getElementById('ms-project').disabled = true; // progetto immutabile post-create
+  document.getElementById('ms-title').value = m.title || '';
+  document.getElementById('ms-date').value = m.target_date || '';
+  const c = (m.color || '').toString().trim();
+  document.getElementById('ms-color').value = c.startsWith('#') ? c : (c ? '#' + c : '#D85A30');
+  document.getElementById('ms-completed').checked = !!m.is_completed;
+  document.getElementById('ms-description').value = m.description || '';
+  document.getElementById('ms-delete-btn').style.display = '';
+  openModal('modal-milestone');
+}
+
+async function msModalSave() {
+  const id = document.getElementById('ms-id').value.trim();
+  const projectId = parseInt(document.getElementById('ms-project').value, 10);
+  const title = document.getElementById('ms-title').value.trim();
+  const date = document.getElementById('ms-date').value;
+  const color = document.getElementById('ms-color').value.replace(/^#/, '').toUpperCase();
+  const completed = document.getElementById('ms-completed').checked;
+  const description = document.getElementById('ms-description').value.trim();
+  if (!projectId) { toast('Seleziona un progetto', 'warning'); return; }
+  if (!title) { toast('Titolo obbligatorio', 'warning'); return; }
+  if (!date) { toast('Data obbligatoria', 'warning'); return; }
+  const fd = new FormData();
+  fd.append('title', title);
+  fd.append('target_date', date);
+  if (color) fd.append('color', '#' + color);
+  if (description) fd.append('description', description);
+  fd.append('is_completed', completed ? 'true' : 'false');
+  try {
+    if (id) {
+      await api('PUT', `/projects/api/${projectId}/milestones/${id}`, fd);
+      toast('Milestone aggiornata', 'success');
+    } else {
+      await api('POST', `/projects/api/${projectId}/milestones`, fd);
+      toast('⭐ Milestone creata', 'success');
+    }
+    closeModal('modal-milestone');
+    if (typeof renderTimeline === 'function') renderTimeline(true);
+  } catch (e) { toast(e.message || 'Errore salvataggio milestone', 'error'); }
+}
+
+async function msModalDelete() {
+  const id = document.getElementById('ms-id').value.trim();
+  const projectId = parseInt(document.getElementById('ms-project').value, 10);
+  const title = document.getElementById('ms-title').value;
+  if (!id || !projectId) return;
+  if (!confirm(`Eliminare milestone "${title}"?`)) return;
+  try {
+    await api('DELETE', `/projects/api/${projectId}/milestones/${id}`);
+    toast('Milestone eliminata', 'success');
+    closeModal('modal-milestone');
+    if (typeof renderTimeline === 'function') renderTimeline(true);
+  } catch (e) { toast(e.message || 'Errore eliminazione', 'error'); }
+}
+
 async function renderTimeline(preserveWindow=false) {
   const next = _tlRenderQueue.then(() => _doRenderTimeline(preserveWindow));
   // Aggancia il prossimo turno: anche se _doRenderTimeline rigetta, la
@@ -5176,7 +5368,49 @@ async function _doRenderTimeline(preserveWindow=false) {
   // questi sono moltiplicati × risorse × giorni → con 20+ risorse + zoom
   // mese diventano 600+ items extra che vis-timeline deve layoutare.
   const _hideBg = (window._tlGroupBy === 'project') || tlIsLightMode();
-  const itemsDS = new vis.DataSet(_hideBg ? items : [...items, ...bgItems, ...punchItems]);
+  // v3.5.0-alpha.172.69 — Milestone progetto: range che occupa il giorno intero
+  // (start 00:00 → end 23:59:59 stesso giorno). Color custom dal modal milestone.
+  // Toggle visibilità via checkbox toolbar (tl-show-milestones).
+  let milestoneItems = [];
+  let milestoneGroup = null;
+  const _msShowToggle = document.getElementById('tl-show-milestones');
+  const _msVisible = !_msShowToggle || _msShowToggle.checked;
+  if (_msVisible) try {
+    const fromD = (savedWin ? new Date(savedWin.start) : winFrom).toISOString().substring(0, 10);
+    const toD = (savedWin ? new Date(savedWin.end) : winTo).toISOString().substring(0, 10);
+    const ms = await api('GET', `/projects/api/milestones-all?from_date=${fromD}&to_date=${toD}`);
+    if (ms && ms.length > 0) {
+      (ms || []).forEach(m => {
+        const lbl = `${m.project_code || '#' + m.project_id} · ${m.title}`;
+        // Color: usa custom se settato (es. "ff8800" o "#ff8800"), altrimenti default per status
+        const cleanColor = (m.color || '').toString().trim().replace(/^#/, '');
+        const customColor = /^[0-9a-fA-F]{6}$/.test(cleanColor) ? '#' + cleanColor : null;
+        const styleAttr = customColor
+          ? `background:${customColor}26;border-left:4px solid ${customColor};color:var(--text);`
+          : '';
+        milestoneItems.push({
+          id: 'ms-' + m.id,
+          group: '__milestones__',
+          start: m.target_date + 'T00:00:00',
+          end: m.target_date + 'T23:59:59',
+          type: 'range',
+          className: 'tl-milestone tl-ms-' + m.status,
+          content: `<span title="${escapeHtml(lbl)} · ${m.target_date} · ${m.status}">⭐ ${escapeHtml(lbl)}</span>`,
+          style: styleAttr,
+          _milestone_id: m.id,
+          _ms_data: m,
+        });
+      });
+      milestoneGroup = { id: '__milestones__', content: '⭐ Milestones', order: -9999 };
+    }
+  } catch (e) {
+    console.warn('milestones fetch fail', e);
+  }
+  const itemsDS = new vis.DataSet(_hideBg ? [...items, ...milestoneItems] : [...items, ...bgItems, ...punchItems, ...milestoneItems]);
+  if (milestoneGroup) {
+    // Insert milestone group at top of groups array (vis-timeline rispetta order:)
+    groups.unshift(milestoneGroup);
+  }
 
   const groupsDS = new vis.DataSet(groups);
   // v3.5.0-alpha.46.2: light mode disable stack (O(N²) → freeze Chrome 30+ items zoom mese)
@@ -5436,10 +5670,14 @@ async function _doRenderTimeline(preserveWindow=false) {
         try { itemsDS.update({ id: it.id, className: cleaned }); } catch(_) {}
       }
     });
-    if (!props.items.length) return;
+    // v3.5.0-alpha.172.68 — Anche su deselect totale aggiorna bottoni bulk/delete
+    if (!props.items.length) {
+      tlOnSelectionChange();
+      return;
+    }
     const selId = props.items[0];
     const sel = items.find(x => x.id === selId) || allItems.find(x => x.id === selId);
-    if (!sel) return;
+    if (!sel) { tlOnSelectionChange(); return; }
     const bid = sel.booking_id;
     if (bid) {
       // Match su booking_id (riga 2145: tlBookingToItem espone b.booking_id)
@@ -5506,12 +5744,31 @@ async function _doRenderTimeline(preserveWindow=false) {
       if (!it) return;
       // Background items (ferie/festa/timbrature/heatmap) non hanno booking_id
       if (typeof props.item === 'string' && (props.item.startsWith('u-') || props.item.startsWith('tp-') || props.item.startsWith('hm-'))) return;
+      // v3.5.0-alpha.172.67 — Doppio click su milestone → modal edit milestone
+      if (typeof props.item === 'string' && props.item.startsWith('ms-')) {
+        try { tlMilestoneEdit(it._ms_data); }
+        catch(e) { toast(e.message || 'Errore apertura milestone', 'error'); }
+        return;
+      }
       const bid = it.booking_id || (bookings.find(b => b.id === props.item) || {}).booking_id;
       if (bid) {
         try { await tlbOpenEdit(bid); }
         catch(e) { toast(e.message || 'Errore apertura dettaglio booking', 'error'); }
       }
       return;
+    }
+    // v3.5.0-alpha.172.68 — Doppio click su gruppo "__milestones__" o gruppo progetto → crea milestone
+    if (props.group === '__milestones__' && props.time) {
+      tlMilestoneNewFromPicker(props.time);
+      return;
+    }
+    if (window._tlGroupBy === 'project' && props.group && typeof props.group === 'string' && props.group.startsWith('j') && props.time) {
+      const jobId = parseInt(props.group.substring(1), 10);
+      const b = (window._tlBookings || []).find(x => x.job_id === jobId);
+      if (b && b.project_id) {
+        tlMilestoneNew(b.project_id, b.project_code || '#'+b.project_id, props.time);
+        return;
+      }
     }
     if (!props.group || typeof props.group !== 'number') return;
     // v3.5.0-alpha.82 — Doppio click su area label risorsa → mostra dettaglio

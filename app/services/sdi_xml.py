@@ -105,7 +105,7 @@ def _build_header(root: ET.Element, invoice, tenant, progressivo: str) -> None:
     cp = _e(header, "CedentePrestatore")
     cp_da = _e(cp, "DatiAnagrafici")
     cp_id = _e(cp_da, "IdFiscaleIVA")
-    _e(cp_id, "IdPaese", "IT")
+    _e(cp_id, "IdPaese", getattr(tenant, "country", None) or "IT")
     _e(cp_id, "IdCodice", _strip_it(invoice.tenant_vat_snap or tenant.vat_number or ""))
     if invoice.tenant_tax_code_snap or tenant.tax_code:
         _e(cp_da, "CodiceFiscale", invoice.tenant_tax_code_snap or tenant.tax_code)
@@ -113,14 +113,40 @@ def _build_header(root: ET.Element, invoice, tenant, progressivo: str) -> None:
     denom, _n, _c = _split_name(invoice.tenant_legal_name_snap or tenant.legal_name or tenant.name)
     _e(cp_anag, "Denominazione", denom or "")
     _e(cp_da, "RegimeFiscale", invoice.tenant_fiscal_regime_snap or tenant.fiscal_regime or _DEFAULT_REGIME)
-    # Sede legale tenant
+    # Sede legale tenant — v3.5.0-alpha.172.60 usa campi strutturati con
+    # fallback ad `address` legacy free-text.
     cp_sede = _e(cp, "Sede")
-    _e(cp_sede, "Indirizzo", _safe(invoice.tenant_address_snap or tenant.address))
+    _e(cp_sede, "Indirizzo", _safe(
+        getattr(tenant, "street_address", None) or invoice.tenant_address_snap or tenant.address
+    ))
     _e(cp_sede, "CAP", _safe(getattr(tenant, "zip_code", None) or "00000"))
     _e(cp_sede, "Comune", _safe(getattr(tenant, "city", None) or "—"))
     if getattr(tenant, "province", None):
         _e(cp_sede, "Provincia", tenant.province)
-    _e(cp_sede, "Nazione", "IT")
+    _e(cp_sede, "Nazione", getattr(tenant, "country", None) or "IT")
+    # ─── IscrizioneREA (società di capitali IT) ───
+    # v3.5.0-alpha.172.60 — Sezione opzionale ma obbligatoria per SRL/SPA.
+    # Emessa SOLO se tenant ha tutti i campi minimi (rea_office + rea_number).
+    rea_office = getattr(tenant, "rea_office", None)
+    rea_num = tenant.rea_number
+    if rea_office and rea_num:
+        cp_rea = _e(cp, "IscrizioneREA")
+        _e(cp_rea, "Ufficio", rea_office.upper().strip())
+        _e(cp_rea, "NumeroREA", str(rea_num).strip())
+        cap_eur = getattr(tenant, "rea_capital_eur", None)
+        if cap_eur is not None and cap_eur > 0:
+            _e(cp_rea, "CapitaleSociale", _fmt_money(cap_eur))
+        socio = getattr(tenant, "socio_unico", None)
+        if socio in ("SU", "SM"):
+            _e(cp_rea, "SocioUnico", socio)
+        _e(cp_rea, "StatoLiquidazione", getattr(tenant, "stato_liquidazione", None) or "LN")
+    # ─── Contatti tenant (opzionale) ───
+    if tenant.email or tenant.phone:
+        cp_cont = _e(cp, "Contatti")
+        if tenant.phone:
+            _e(cp_cont, "Telefono", tenant.phone.strip()[:12])
+        if tenant.email:
+            _e(cp_cont, "Email", tenant.email.strip())
 
     # ─── CessionarioCommittente (cliente) ───
     cc = _e(header, "CessionarioCommittente")

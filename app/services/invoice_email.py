@@ -89,7 +89,7 @@ def send_invoice_via_smtp(
         raise InvoiceEmailError(503, "SMTP_FROM non configurato in .env.")
 
     doc_label = "Nota di credito" if inv.doc_type == "TD04" else "Fattura"
-    subject = f"{doc_label} {inv.number} — {tenant_obj.name if tenant_obj else 'MediaFlow'}"
+    subject = f"{doc_label} {inv.number} — {tenant_obj.name if tenant_obj else 'Claqo'}"
     proj_line = ""
     if project_obj:
         proj_line = f"\nProgetto: {project_obj.code} · {project_obj.title}"

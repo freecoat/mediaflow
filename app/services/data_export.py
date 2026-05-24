@@ -286,7 +286,7 @@ def build_export_zip(
 
         # 2) metadata.json
         meta = {
-            "app": "MediaFlow",
+            "app": "Claqo",
             "app_version": app_version,
             "exported_at": datetime.utcnow().isoformat() + "Z",
             "options": {

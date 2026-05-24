@@ -28,30 +28,57 @@ router = APIRouter(prefix="/settings", tags=["tech-sheet-options"])
 
 # Field paths supportati dal modello tech_sheet (vedi DEFAULT_DATA in tech_sheets.py)
 # Path = "<section>.<field>" per oggetti annidati, oppure "<section>" per stringa.
-KNOWN_FIELD_PATHS = [
-    # general
-    "general.production_company",
-    # cameras (lista di camera object)
-    "cameras.codec", "cameras.sensor_res", "cameras.format_aspect",
-    "cameras.framing_aspect", "cameras.fps", "cameras.hi_speed_max_fps",
-    "cameras.shutter", "cameras.color_space_in", "cameras.working_color_space",
-    "cameras.odt", "cameras.squeeze", "cameras.mag_type",
-    # audio
-    "audio.recorder", "audio.file_format", "audio.sample_rate", "audio.bit_depth",
-    "audio.tc_fps", "audio.sync_method", "audio.track_layout",
-    # looks (lista)
-    "looks.type", "looks.range_transform",
-    # storage
-    "storage.master", "storage.backup", "storage.shuttle",
-    "storage.checksum_onset", "storage.checksum_lab", "storage.lto_type",
-    "storage.shuttle_freq",
-    # dailies
-    "dailies.editorial_format", "dailies.editorial_container",
-    "dailies.online_format", "dailies.online_bitrate", "dailies.nle",
-    "dailies.review_platform", "dailies.exchange_format",
-    # process
-    "process.qc_onset", "process.qc_lab",
-]
+# v3.5.0-alpha.172.62 — Etichette human-readable + raggruppamento per sezione.
+FIELD_LABELS = {
+    # General
+    "general.production_company": ("Produzione", "Casa di produzione"),
+    # Cameras
+    "cameras.model": ("Camera · Modello", "Modello camera principale (ARRI Alexa 35, RED V-Raptor, Sony Venice 2…)"),
+    "cameras.codec": ("Camera · Codec", "Codec di registrazione (ARRIRAW, RED R3D, ProRes…)"),
+    "cameras.sensor_res": ("Camera · Risoluzione sensore", "Risoluzione nativa sensore (es. 4608x2592)"),
+    "cameras.format_aspect": ("Camera · Aspect formato", "Aspect ratio del formato girato (3:2, 16:9, 6:5…)"),
+    "cameras.framing_aspect": ("Camera · Aspect framing", "Aspect ratio per il framing in post (2.39:1, 1.85:1…)"),
+    "cameras.fps": ("Camera · Frame rate", "FPS nominale (24, 25, 29.97…)"),
+    "cameras.hi_speed_max_fps": ("Camera · Hi-speed max", "FPS massimo per riprese in slow-motion"),
+    "cameras.shutter": ("Camera · Shutter", "Angolo otturatore (180°, 172.8°…)"),
+    "cameras.color_space_in": ("Camera · Color space input", "Spazio colore camera (LogC4, RedWideGamutRGB…)"),
+    "cameras.working_color_space": ("Camera · Working color space", "Spazio colore di lavoro in post (ACEScct AP1, Rec.2020…)"),
+    "cameras.odt": ("Camera · ODT", "Output Display Transform (Rec.709 γ2.4 D65, P3-D65…)"),
+    "cameras.squeeze": ("Camera · Squeeze anamorfico", "Fattore di squeeze (1x sferico, 2x anamorfico)"),
+    "cameras.mag_type": ("Camera · Tipo magazzino", "Supporto registrazione (Codex Compact, CFexpress…)"),
+    # Audio
+    "audio.recorder": ("Audio · Recorder", "Recorder on-set (Sound Devices, Cantar…)"),
+    "audio.file_format": ("Audio · Formato file", "Formato file (BWF, WAV poly…)"),
+    "audio.sample_rate": ("Audio · Sample rate", "Frequenza di campionamento (48 kHz, 96 kHz…)"),
+    "audio.bit_depth": ("Audio · Bit depth", "Profondità bit (24-bit, 32-bit float…)"),
+    "audio.tc_fps": ("Audio · TC FPS", "Frame rate timecode audio (24, 25, 29.97 NDF…)"),
+    "audio.sync_method": ("Audio · Metodo sync", "Sincronizzazione (Timecode jam-sync, LTC live…)"),
+    "audio.track_layout": ("Audio · Track layout", "Layout tracce (1=Boom mono, 2=Lav L+R…)"),
+    # Looks
+    "looks.type": ("Look · Tipo", "Tipo look (ASC-CDL, Powergrade, LUT 3D…)"),
+    "looks.range_transform": ("Look · Range transform", "Trasformazione range segnale (Legal→Full, ScRGB…)"),
+    # Storage
+    "storage.master": ("Storage · Master", "Storage master (NAS QNAP, Pegasus3 RAID…)"),
+    "storage.backup": ("Storage · Backup", "Storage backup (LTO-9, Glacier, secondary NAS…)"),
+    "storage.shuttle": ("Storage · Shuttle", "Storage shuttle on-set (G-Drive, Atomos SSD…)"),
+    "storage.checksum_onset": ("Storage · Checksum on-set", "Algoritmo checksum durante shooting (MD5, xxHash64…)"),
+    "storage.checksum_lab": ("Storage · Checksum lab", "Algoritmo checksum verifica lab (MD5, xxHash64…)"),
+    "storage.lto_type": ("Storage · Tipo LTO", "Generazione LTO (LTO-8, LTO-9, LTO-10…)"),
+    "storage.shuttle_freq": ("Storage · Frequenza shuttle", "Frequenza spedizione shuttle (daily, weekly…)"),
+    # Dailies
+    "dailies.editorial_format": ("Dailies · Formato editorial", "Codec dailies editorial (ProRes Proxy, DNxHR…)"),
+    "dailies.editorial_container": ("Dailies · Container editorial", "Container editorial (MXF OP1a, MOV…)"),
+    "dailies.online_format": ("Dailies · Formato online", "Codec dailies online (ProRes 4444, DNxHR HQX…)"),
+    "dailies.online_bitrate": ("Dailies · Bitrate online", "Bitrate dailies online (Mbps target)"),
+    "dailies.nle": ("Dailies · NLE", "Software editing (Avid Media Composer, Premiere Pro, DaVinci Resolve…)"),
+    "dailies.review_platform": ("Dailies · Platform review", "Piattaforma review (Frame.io, Wipster, internal…)"),
+    "dailies.exchange_format": ("Dailies · Formato scambio", "Formato scambio (AAF, XML EDL…)"),
+    # Process / QC
+    "process.qc_onset": ("Process · QC on-set", "Strumento QC on-set (DIT cart, monitor calibrato…)"),
+    "process.qc_lab": ("Process · QC lab", "Strumento QC laboratorio (Baselight, DaVinci, Marquise…)"),
+}
+
+KNOWN_FIELD_PATHS = list(FIELD_LABELS.keys())
 
 
 def _o_dict(o: TechSheetFieldOption) -> dict:
@@ -101,10 +128,43 @@ async def list_paths(request: Request, db: Session = Depends(get_db)):
     counts: dict[str, int] = {}
     for o in rows:
         counts[o.field_path] = counts.get(o.field_path, 0) + 1
+    # v3.5.0-alpha.172.62 — label human-readable + descrizione per UI settings.
+    paths_with_labels = [
+        {
+            "path": p,
+            "label": FIELD_LABELS.get(p, (p, ""))[0],
+            "description": FIELD_LABELS.get(p, (p, ""))[1],
+            "active_count": counts.get(p, 0),
+        }
+        for p in KNOWN_FIELD_PATHS
+    ]
     return {
-        "known_paths": KNOWN_FIELD_PATHS,
+        "known_paths": KNOWN_FIELD_PATHS,  # retro-compat
         "active_counts": counts,
+        "paths_with_labels": paths_with_labels,
     }
+
+
+# v3.5.0-alpha.172.65 — Camera specs matrix: ogni modello → spec compatibili
+# (resolutions, codecs, fps, color_space_in, format_aspect). Usato dall'editor
+# scheda tecnica per filtrare i dropdown in base alla camera selezionata.
+@router.get("/api/camera-specs")
+async def camera_specs(request: Request):
+    """Restituisce il JSON con le specifiche delle camere supportate.
+
+    Source: app/data/camera_specs.json. ~26 modelli ARRI/RED/Sony/Blackmagic/
+    Canon/Panasonic/Phantom. Da arricchire via WebSearch o contributo manuale.
+    """
+    import json
+    from pathlib import Path
+    p = Path(__file__).parent.parent / "data" / "camera_specs.json"
+    if not p.exists():
+        return {"camera_specs": {}, "_meta": {"error": "specs file not found"}}
+    try:
+        with p.open("r", encoding="utf-8") as f:
+            return json.load(f)
+    except Exception as e:
+        return {"camera_specs": {}, "_meta": {"error": str(e)}}
 
 
 @router.get("/api/tech-sheet-options/by-path")
@@ -206,6 +266,19 @@ async def delete_option(opt_id: int, request: Request, db: Session = Depends(get
 # Valori da Netflix Delivery Specifications (camera approved list +
 # proxies + dailies). Subset pragmatico, espandibile via UI.
 NETFLIX_SEED = {
+    "cameras.model": [
+        "ARRI Alexa 35", "ARRI Alexa Mini LF", "ARRI Alexa Mini", "ARRI Alexa 65", "ARRI Amira",
+        "RED V-Raptor 8K VV", "RED V-Raptor XL 8K VV", "RED Komodo 6K", "RED Komodo-X 6K",
+        "RED Helium 8K S35", "RED Monstro 8K VV",
+        "Sony Venice 2 8K", "Sony Venice 2 6K", "Sony Venice", "Sony FX9", "Sony FX6", "Sony FX3",
+        "Blackmagic URSA Mini Pro 12K", "Blackmagic URSA Mini Pro 4.6K G2",
+        "Blackmagic Pocket 6K Pro", "Blackmagic Cinema Camera 6K",
+        "Canon EOS C500 Mark II", "Canon EOS C400", "Canon EOS C300 Mark III",
+        "Canon EOS R5 C", "Canon EOS C70",
+        "Panasonic Varicam 35", "Panasonic Varicam LT", "Panasonic EVA1",
+        "Phantom Flex4K", "Phantom Veo 4K", "Phantom Ultrahigh-Speed v2640",
+        "Z CAM E2-F8", "Z CAM E2-F6", "Sigma FP",
+    ],
     "cameras.codec": [
         "ARRIRAW", "Apple ProRes 4444 XQ", "Apple ProRes 4444",
         "REDCODE RAW (R3D)", "Sony Venice X-OCN ST", "Sony Venice X-OCN LT",

@@ -85,7 +85,7 @@ def _get_tenant_info(quote):
             }
     except Exception:
         pass
-    return {"name": "MediaFlow", "vat": None, "address": None,
+    return {"name": "Claqo", "vat": None, "address": None,
             "email": None, "phone": None, "website": None,
             "tagline": "", "brand_color": "#6272f5",
             "show_powered_by": True, "logo_path": None, "document_header": ""}
@@ -95,7 +95,7 @@ def generate_quote_pdf(quote) -> bytes:
     buf = BytesIO()
     doc = SimpleDocTemplate(buf, pagesize=A4,
         leftMargin=14*mm, rightMargin=14*mm, topMargin=14*mm, bottomMargin=14*mm,
-        title=f"Quotazione {quote.number}", author="MediaFlow")
+        title=f"Quotazione {quote.number}", author="Claqo")
     story = []
 
     tenant = _get_tenant_info(quote)
@@ -117,7 +117,7 @@ def generate_quote_pdf(quote) -> bytes:
     if tenant["website"]: contact_bits.append(tenant["website"])
     if contact_bits: tenant_lines.append(" · ".join(contact_bits))
     if tenant["vat"]:     tenant_lines.append(f"P.IVA {tenant['vat']}")
-    tenant_block = Paragraph("<br/>".join(tenant_lines) or "MediaFlow",
+    tenant_block = Paragraph("<br/>".join(tenant_lines) or "Claqo",
         ParagraphStyle("tt", fontSize=8, textColor=GRAY, leading=11))
 
     # Logo opzionale: messo in colonna dedicata se presente

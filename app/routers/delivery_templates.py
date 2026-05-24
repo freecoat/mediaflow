@@ -284,10 +284,19 @@ async def parse_batch_pending(request: Request, db: Session = Depends(get_db),
 
 
 @router.post("/api/parse-sample", dependencies=[RequireEditSettings])
-async def parse_sample_capitolato(filename: str = Form(...)):
+async def parse_sample_capitolato(
+    request: Request,
+    filename: str = Form(...),
+    db: Session = Depends(get_db),
+):
     """v3.5.0-alpha.128 (Fase 5) — Parse capitolato dalla directory di
     esempio docs/capitolati_esempio/ senza upload. Sicurezza: filename
-    valida via whitelist directory + no path traversal."""
+    valida via whitelist directory + no path traversal.
+
+    v3.5.0-alpha.172.71 — Usa AI provider PER-UTENTE (era fallback global che
+    falliva se .env AI_PROVIDER=disabled). Errori AI restituiti come 503
+    user-friendly invece di 500 generico.
+    """
     from pathlib import Path as _Path
     proj_root = _Path(__file__).resolve().parents[2]
     samples_dir = (proj_root / "docs" / "capitolati_esempio").resolve()
@@ -304,6 +313,25 @@ async def parse_sample_capitolato(filename: str = Form(...)):
         raise HTTPException(404, f"Esempio non trovato: {filename}")
     if fpath.stat().st_size == 0:
         raise HTTPException(400, "File esempio vuoto")
+    # Verifica provider AI configurato per utente (o fallback global)
+    from app.services.ai_provider import get_provider_for_user, get_provider
+    from app.services.rbac import current_user_optional
+    user = current_user_optional(request)
+    provider = get_provider_for_user(user.id if user else None, db) if user else None
+    if not provider:
+        provider = get_provider()
+    if not provider:
+        raise HTTPException(
+            503,
+            detail={
+                "message": (
+                    "AI provider non configurato.\n\n"
+                    "Per usare il parsing automatico dei capitolati, configura una "
+                    "API key in /settings → AI (Claude/OpenAI/Gemini/Ollama)."
+                ),
+                "remediation": "configure_ai_provider",
+            },
+        )
     # Riusa parser via bytes diretti
     content = fpath.read_bytes()
     from app.services.deliverables_parser import (
@@ -315,9 +343,9 @@ async def parse_sample_capitolato(filename: str = Form(...)):
     try:
         result = parse_delivery_template(text)
     except Exception as e:
-        raise HTTPException(500, f"Parser error: {e}")
+        raise HTTPException(503, f"Errore AI provider: {e}")
     if not result:
-        raise HTTPException(500, "Parser AI ha restituito risposta vuota")
+        raise HTTPException(503, "Il parser AI non ha restituito risposta (provider rate-limit o testo non interpretabile)")
     result["source_document_name"] = filename
     result["text_preview"] = text[:200]
     return result

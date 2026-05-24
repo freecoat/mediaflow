@@ -179,7 +179,7 @@
   <div id="ts-editor"></div>
 
   <div class="ts-foot">
-    MediaFlow · Salvataggio per sezione · Ultima modifica server: <span id="ts-foot-updated">{{ ts.updated_at[:19].replace('T', ' ') if ts.updated_at else '—' }}</span>
+    Claqo · Salvataggio per sezione · Ultima modifica server: <span id="ts-foot-updated">{{ ts.updated_at[:19].replace('T', ' ') if ts.updated_at else '—' }}</span>
     {% if ts.edit_expires_at %} · Link valido fino al {{ ts.edit_expires_at[:10] }}{% endif %}
   </div>
 </div>

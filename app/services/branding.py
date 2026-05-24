@@ -18,7 +18,7 @@ from pathlib import Path
 from typing import Optional
 from sqlalchemy.orm import Session
 
-DEFAULT_BRAND_COLOR = "#6272f5"  # Indigo MediaFlow
+DEFAULT_BRAND_COLOR = "#D85A30"  # Claqo-red (brand brief v0.1)
 
 
 def get_branding(db: Session, tenant_id: int = 1) -> dict:
@@ -51,8 +51,8 @@ def get_branding(db: Session, tenant_id: int = 1) -> dict:
         info_lines.append(" · ".join(contact_bits))
 
     return {
-        "name": t.legal_name or t.name or "MediaFlow",
-        "short_name": t.name or "MediaFlow",
+        "name": t.legal_name or t.name or "Claqo",
+        "short_name": t.name or "Claqo",
         "tagline": getattr(t, "tagline", None) or "",
         "address": t.address or "",
         "vat_number": t.vat_number or "",
@@ -71,8 +71,8 @@ def get_branding(db: Session, tenant_id: int = 1) -> dict:
 
 def _default_branding() -> dict:
     return {
-        "name": "MediaFlow",
-        "short_name": "MediaFlow",
+        "name": "Claqo",
+        "short_name": "Claqo",
         "tagline": "",
         "address": "", "vat_number": "", "tax_code": "",
         "email": "", "phone": "", "website": "",

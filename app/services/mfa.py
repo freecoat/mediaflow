@@ -23,7 +23,7 @@ import qrcode
 from app.services.crypto import encrypt_secret, decrypt_secret
 
 
-ISSUER = "MediaFlow"
+ISSUER = "Claqo"
 
 
 def generate_secret() -> str:

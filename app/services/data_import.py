@@ -107,8 +107,9 @@ def restore_from_zip(
             meta = json.loads(meta_path.read_text(encoding="utf-8"))
         except Exception as e:
             raise ValueError(f"metadata.json non parsabile: {e}") from e
-        if meta.get("app") != "MediaFlow":
-            raise ValueError("metadata.json: campo 'app' non è 'MediaFlow'.")
+        # v3.5.0-alpha.172.59 — accetta sia "Claqo" (post-rebrand) sia "MediaFlow" (legacy ZIP).
+        if meta.get("app") not in ("Claqo", "MediaFlow"):
+            raise ValueError("metadata.json: campo 'app' non è 'Claqo' né 'MediaFlow'.")
 
         export_version = meta.get("app_version", "?")
         if _major_version(current_app_version) and _major_version(export_version):

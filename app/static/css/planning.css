@@ -1,4 +1,4 @@
-/* MediaFlow — planning.css
+/* Claqo — planning.css
  * Estratto da app/templates/pages/planning.html (in-template <style>) in
  * v3.5.0-alpha.66.14.9. Quick win post-audit #11 — riduce planning.html da
  * 7377 righe a ~6710, abilita cache HTTP indipendente del CSS, IDE/diff
@@ -492,7 +492,7 @@
   #tl-host.tl-paste-mode .vis-item { cursor: not-allowed; }
   /* Background items: ferie/malattia/festività/weekend (E3 v3.4.17) */
   /* v3.5.0-alpha.24: ferie/malattia/festività uniformati (stesso alpha 0.12 +
-     stripes 0.20) e ferie passa al colore palette MediaFlow indigo (#6272f5)
+     stripes 0.20) e ferie passa al colore palette Claqo indigo (#6272f5)
      invece di indigo cool (#6366f1). */
   .vis-item.tl-bg-vacation { background: rgba(98,114,245,0.12) !important; border: none !important; box-shadow: none; }
   .vis-item.tl-bg-vacation::before { content: ''; position: absolute; inset: 0; background: repeating-linear-gradient(45deg, transparent 0 4px, rgba(98,114,245,0.20) 4px 8px); }

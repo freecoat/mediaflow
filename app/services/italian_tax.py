@@ -227,22 +227,47 @@ def invoice_sdi_compliance_check(
     tenant_fiscal_regime: Optional[str],
     vat_rate: Optional[float],
     natura: Optional[str] = None,
+    # v3.5.0-alpha.172.60 — Anagrafica sede + cliente strutturata
+    client_address: Optional[str] = None,
+    client_zip: Optional[str] = None,
+    client_city: Optional[str] = None,
+    client_province: Optional[str] = None,
+    tenant_street: Optional[str] = None,
+    tenant_zip: Optional[str] = None,
+    tenant_city: Optional[str] = None,
+    tenant_province: Optional[str] = None,
+    tenant_legal_name: Optional[str] = None,
 ) -> list[str]:
     """Pre-emit check: ritorna lista errori bloccanti per invio SDI.
     Lista vuota = fattura emissibile. Lista non-vuota = HARD-BLOCK.
+
+    v3.5.0-alpha.172.60 — Verifica anche anagrafica sede (cedente + cessionario):
+    Indirizzo, CAP, Comune, Provincia. FatturaPA v1.6.1 li richiede sempre.
     """
     errors: list[str] = []
-    # Cessionario (cliente): almeno uno tra vat o tax_code
+    # ── Cessionario (cliente) ──────────────────────────────────────
     if not (client_vat or client_tax_code):
         errors.append("Manca P.IVA o codice fiscale del cliente (cessionario)")
     elif client_vat and not validate_partita_iva(client_vat):
         errors.append(f"P.IVA cliente non valida: {client_vat}")
-    # Recapito: SDI 7-char OPPURE PEC
-    if not (client_sdi or client_pec):
-        errors.append("Manca codice destinatario SDI o PEC del cliente")
-    elif client_sdi and not validate_sdi_code(client_sdi):
-        errors.append(f"Codice SDI cliente non valido: {client_sdi}")
-    # Cedente (tenant): P.IVA + regime
+    # Recapito SDI: 7-char OPPURE PEC (estero: codice destinatario "XXXXXXX")
+    is_foreign = (client_country or "IT").upper() != "IT"
+    if not is_foreign:
+        if not (client_sdi or client_pec):
+            errors.append("Manca codice destinatario SDI o PEC del cliente")
+        elif client_sdi and not validate_sdi_code(client_sdi):
+            errors.append(f"Codice SDI cliente non valido: {client_sdi}")
+    # Sede cliente (FatturaPA: Indirizzo + CAP + Comune obbligatori)
+    if not (client_address or "").strip():
+        errors.append("Manca indirizzo (via/civico) del cliente")
+    if not is_foreign:
+        if not (client_zip or "").strip():
+            errors.append("Manca CAP del cliente")
+        if not (client_city or "").strip():
+            errors.append("Manca città del cliente")
+        if not (client_province or "").strip():
+            errors.append("Manca sigla provincia del cliente (es. MI, RM)")
+    # ── Cedente (tenant) ───────────────────────────────────────────
     if not tenant_vat:
         errors.append("Manca P.IVA del tenant (cedente)")
     elif not validate_partita_iva(tenant_vat):
@@ -251,7 +276,17 @@ def invoice_sdi_compliance_check(
         errors.append("Manca regime fiscale tenant (RF01-RF19)")
     elif not validate_regime_fiscale(tenant_fiscal_regime):
         errors.append(f"Regime fiscale tenant non valido: {tenant_fiscal_regime}")
-    # Natura IVA obbligatoria se vat_rate=0
+    if not (tenant_legal_name or "").strip():
+        errors.append("Manca ragione sociale del tenant")
+    if not (tenant_street or "").strip():
+        errors.append("Manca indirizzo sede del tenant (via/civico)")
+    if not (tenant_zip or "").strip():
+        errors.append("Manca CAP sede del tenant")
+    if not (tenant_city or "").strip():
+        errors.append("Manca comune sede del tenant")
+    if not (tenant_province or "").strip():
+        errors.append("Manca sigla provincia sede del tenant")
+    # ── Natura IVA ──────────────────────────────────────────────────
     if vat_rate is not None and float(vat_rate) == 0.0:
         if not natura:
             errors.append("Natura IVA obbligatoria quando vat_rate=0 (N1-N7)")

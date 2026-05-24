@@ -1,7 +1,7 @@
 {% extends "base.html" %}
 {% set active_page = "finance" %}
 
-{% block title %}Finanza — MediaFlow{% endblock %}
+{% block title %}Finanza — Claqo{% endblock %}
 {% block topbar_title %}Fatturazione & Report{% endblock %}
 
 {% block topbar_actions %}
@@ -97,6 +97,17 @@
            title="Filtra le fatture con scadenza nel passato non ancora pagate (anche se non flaggate overdue).">
       <input type="checkbox" id="inv-only-overdue" onchange="loadInvoices()">
       Solo scadute (due_date passata)
+    </label>
+    <!-- v3.5.0-alpha.172.68 — Toggle visibilità fatture annullate + Note di Credito -->
+    <label class="text-sm" style="display:flex; align-items:center; gap:6px; cursor:pointer;"
+           title="Mostra fatture in stato 'annullato' (stornate via NC TD04).">
+      <input type="checkbox" id="inv-show-cancelled" onchange="loadInvoices()">
+      Mostra annullate
+    </label>
+    <label class="text-sm" style="display:flex; align-items:center; gap:6px; cursor:pointer;"
+           title="Mostra Note di Credito (doc_type=TD04).">
+      <input type="checkbox" id="inv-show-nc" checked onchange="loadInvoices()">
+      Mostra NC
     </label>
     <!-- v3.5.0-alpha.112 — ricerca per numero fattura -->
     <input type="text" class="form-input" id="inv-search-number" placeholder="🔍 N. fattura…"
@@ -2009,6 +2020,8 @@ function _debInvSearch() {
 async function loadInvoices() {
   const status = document.getElementById('inv-filter').value;
   const onlyOverdue = document.getElementById('inv-only-overdue')?.checked;
+  const showCancelled = document.getElementById('inv-show-cancelled')?.checked;
+  const showNC = document.getElementById('inv-show-nc')?.checked !== false; // default true
   const numberQ = document.getElementById('inv-search-number')?.value.trim();
   const finQs = buildFinQS();
   const parts = [];
@@ -2018,6 +2031,9 @@ async function loadInvoices() {
   if (finQs) parts.push(finQs);
   const url = '/finance/api/invoices' + (parts.length ? '?' + parts.join('&') : '');
   let invs = await api('GET', url);
+  // v3.5.0-alpha.172.68 — Filtri client-side: nascondi annullate/NC se non spuntato
+  if (!showCancelled) invs = invs.filter(i => i.status !== 'cancelled');
+  if (!showNC) invs = invs.filter(i => (i.doc_type || 'TD01') !== 'TD04');
   // v3.5.0-alpha.111: focus mode → riduci a una sola fattura
   const focusBox = document.getElementById('inv-focus-bar');
   if (window._focusedInvoiceId) {
@@ -2061,6 +2077,10 @@ async function loadInvoices() {
     const pdfBtn = (i.status === 'cancelled')
       ? `<button class="btn btn-ghost btn-sm" disabled style="opacity:0.4;cursor:not-allowed;" title="Fattura annullata: non stampabile">📥</button>`
       : `<a class="btn btn-ghost btn-sm" href="/finance/api/billing/invoice/${i.id}/pdf" target="_blank" onclick="event.stopPropagation();" title="Stampa PDF">📥</a>`;
+    // v3.5.0-alpha.172.60 — Scarica XML SDI FatturaPA v1.6.1. Cancelled bypass.
+    const xmlBtn = (i.status === 'cancelled')
+      ? `<button class="btn btn-ghost btn-sm" disabled style="opacity:0.4;cursor:not-allowed;" title="Fattura annullata: XML SDI non disponibile">📄</button>`
+      : `<a class="btn btn-ghost btn-sm" href="/finance/api/invoices/${i.id}/sdi-xml" target="_blank" onclick="event.stopPropagation();" title="Scarica XML FatturaPA SDI">📄</a>`;
     // v3.5.0-alpha.127 (F6) — invia email cliente. Disponibile su fatture
     // non-draft non-cancelled. Endpoint backend rispira 503 se SMTP non
     // configurato, 400 se cliente senza admin_email.
@@ -2069,11 +2089,12 @@ async function loadInvoices() {
       : '';
     // v3.5.0-alpha.121 (F18) — Hide select cambio stato se status terminal.
     // α.172.31 — esteso con `approved` (NC nasce qui, transizione → sent o cancel).
+    // α.172.57 — Post-emit (sent/overdue) NO cancelled diretto: solo via NC TD04.
     const _ALLOWED_TR = {
       draft: ['approved','sent','cancelled'],
       approved: ['sent','cancelled'],
-      sent: ['paid','overdue','cancelled'],
-      overdue: ['paid','cancelled'],
+      sent: ['paid','overdue'],
+      overdue: ['paid'],
       paid: [], cancelled: [],
     };
     const allowed = _ALLOWED_TR[i.status] || [];
@@ -2095,6 +2116,7 @@ async function loadInvoices() {
       <td>${statusBadge(i.status)}</td>
       <td onclick="event.stopPropagation();">
         ${pdfBtn}
+        ${xmlBtn}
         ${sendBtn}
         ${stornoBtn}
         ${statusSelect}

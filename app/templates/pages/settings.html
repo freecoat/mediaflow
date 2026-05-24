@@ -1,6 +1,6 @@
 {% extends "base.html" %}
 {% set active_page = "settings" %}
-{% block title %}Impostazioni — MediaFlow{% endblock %}
+{% block title %}Impostazioni — Claqo{% endblock %}
 {% block topbar_title %}Impostazioni{% endblock %}
 
 {% block head %}
@@ -389,10 +389,21 @@
             </p>
           </div>
           {% if user and user.role and user.role.value == 'admin' %}
-          <button class="btn btn-secondary btn-sm" onclick="seedNetflix()" title="Popola con valori Netflix Delivery Specifications">
-            🎬 Seed Netflix
+          <button class="btn btn-secondary btn-sm" onclick="tsoAIDeepSearch()" title="L'AI copilot effettuerà ricerca web deep per popolare i valori standard di mercato (deliverables, camere, codec, audio…)">
+            🤖 Popola con AI (deep search)
           </button>
           {% endif %}
+        </div>
+        <!-- v3.5.0-alpha.172.62 — Mini-guida flow -->
+        <div style="background:rgba(216,90,48,.08); border:1px solid rgba(216,90,48,.3); border-radius:6px; padding:10px 12px; margin-bottom:14px; font-size:12px; line-height:1.55;">
+          <strong>💡 Come funziona:</strong>
+          <ol style="margin:6px 0 0; padding-left:20px;">
+            <li>Scegli un <b>campo</b> (es. <code>cameras.codec</code>) e crea una o più opzioni (es. ProRes 4444, ARRIRAW, RED R3D).</li>
+            <li>Apri un progetto → tab <b>Scheda tecnica</b> → quel campo apparirà come <b>dropdown</b> con SOLO le opzioni configurate.</li>
+            <li>Se l'utente aveva già inserito un valore custom non in elenco, viene preservato e marcato <i>(custom)</i>.</li>
+            <li>Senza opzioni configurate → input testo libero (default originale).</li>
+            <li>Shortcut: <b>🎬 Seed Netflix</b> popola tutti i campi con i valori delle Netflix Delivery Specifications.</li>
+          </ol>
         </div>
         <div class="form-group">
           <label class="form-label">Filtra campo</label>
@@ -638,7 +649,7 @@
             <div class="form-group" style="grid-column:1/-1;">
               <label style="display:flex; align-items:center; gap:8px;">
                 <input type="checkbox" id="cmp-show_powered_by" checked>
-                <span class="text-sm">Mostra "Generato con MediaFlow" nel footer dei documenti</span>
+                <span class="text-sm">Mostra "Generato con Claqo" nel footer dei documenti</span>
               </label>
               <div class="text-xs text-muted" style="margin-top:3px;">Disattivalo per fattura/quote completamente white-label.</div>
             </div>
@@ -707,7 +718,7 @@
 AWS_SECRET_ACCESS_KEY=...
 AWS_S3_ENDPOINT=https://s3.eu-west-1.amazonaws.com  # opt
 AWS_S3_REGION=eu-west-1
-AWS_S3_DEFAULT_BUCKET=mediaflow-prod</pre>
+AWS_S3_DEFAULT_BUCKET=Claqo-prod</pre>
           </li>
           <li>Per ogni Project che vuoi su S3:
             <code>storage_backend=s3</code>, <code>s3_bucket=&lt;tuo-bucket&gt;</code>,
@@ -855,7 +866,7 @@ AWS_S3_DEFAULT_BUCKET=mediaflow-prod</pre>
         <div class="card-title mb-2"><i data-lucide="upload" style="width:16px;height:16px;vertical-align:-3px;"></i> Import / Restore</div>
         <p class="text-sm text-muted mb-3" style="background:rgba(220,38,38,0.10); border:1px solid #dc2626; border-radius:6px; padding:10px 14px;">
           ⚠ <b>ATTENZIONE</b>: il restore SOSTITUISCE il database corrente.
-          Verrà fatto un backup automatico (<code>mediaflow.db.backup-&lt;timestamp&gt;</code>)
+          Verrà fatto un backup automatico (<code>Claqo.db.backup-&lt;timestamp&gt;</code>)
           prima dell'overwrite. Ferma il server prima di importare grandi archivi.
         </p>
         <div class="form-group">
@@ -894,6 +905,10 @@ AWS_S3_DEFAULT_BUCKET=mediaflow-prod</pre>
 const THEMES = [
   { id:'indigo', name:'Indigo Dark', desc:'Dark indaco — default',
     swatches:['#0f1117','#1f2436','#6272f5','#7e8ef7','#e8ecf5'] },
+  { id:'claqo', name:'Claqo Dark', desc:'Brand Claqo — dark warm + claqo-red',
+    swatches:['#14110f','#2a2320','#D85A30','#e7724a','#FAECE7'] },
+  { id:'claqo-light', name:'Claqo Light', desc:'Brand Claqo — take-cream + claqo-red',
+    swatches:['#FAECE7','#ead0c3','#D85A30','#b94e29','#1A1A1A'] },
   { id:'slate',  name:'Slate Dark', desc:'Grigio freddo — sobrio',
     swatches:['#11141a','#232730','#5b8def','#7aa3f5','#e6e9ef'] },
   { id:'forest', name:'Forest', desc:'Verde scuro — naturale',
@@ -1696,7 +1711,7 @@ async function adminImportZip() {
   const file = fileInput.files[0];
   const ok = confirm(
     'ATTENZIONE: il restore SOSTITUISCE il database corrente.\n\n' +
-    'Verrà fatto un backup automatico (mediaflow.db.backup-<timestamp>) prima dell\'overwrite.\n\n' +
+    'Verrà fatto un backup automatico (Claqo.db.backup-<timestamp>) prima dell\'overwrite.\n\n' +
     'Procedere?'
   );
   if (!ok) return;
@@ -2108,7 +2123,9 @@ window.showPane = function(name) {
 };
 
 // ── α.172.34 — Opzioni dropdown scheda tecnica ──────────────
+// α.172.62 — human-readable labels mostrate in primo piano, path tecnico secondario.
 let _tsoPaths = null;
+let _tsoPathLabels = {};  // path → {label, description}
 let _tsoOptionsCache = [];
 
 async function tsoInit() {
@@ -2117,22 +2134,27 @@ async function tsoInit() {
     const res = await api('GET', '/settings/api/tech-sheet-options/paths');
     _tsoPaths = res.known_paths || [];
     const counts = res.active_counts || {};
+    const labeled = res.paths_with_labels || [];
+    _tsoPathLabels = {};
+    for (const p of labeled) {
+      _tsoPathLabels[p.path] = { label: p.label, description: p.description };
+    }
     const sel = document.getElementById('tso-filter-path');
     if (sel && sel.options.length <= 1) {
-      for (const p of _tsoPaths) {
-        const c = counts[p] || 0;
+      for (const p of labeled) {
         const opt = document.createElement('option');
-        opt.value = p;
-        opt.textContent = p + (c > 0 ? ` (${c} opz)` : '');
+        opt.value = p.path;
+        opt.textContent = p.label + (p.active_count > 0 ? ` (${p.active_count})` : '');
         sel.appendChild(opt);
       }
     }
     const modalSel = document.getElementById('tso-field-path');
     if (modalSel && modalSel.options.length <= 1) {
-      for (const p of _tsoPaths) {
+      for (const p of labeled) {
         const opt = document.createElement('option');
-        opt.value = p;
-        opt.textContent = p;
+        opt.value = p.path;
+        opt.textContent = p.label;
+        opt.title = p.path + (p.description ? ' — ' + p.description : '');
         modalSel.appendChild(opt);
       }
     }
@@ -2166,9 +2188,28 @@ function renderTsoList() {
   for (const [path, opts] of Object.entries(byPath)) {
     const card = document.createElement('div');
     card.style.cssText = 'background:var(--bg2); border:1px solid var(--border); border-radius:6px; padding:10px 14px; margin-bottom:8px;';
+    // v3.5.0-alpha.172.62 — Header: label human-readable in primo piano, path mono secondario
+    const meta = _tsoPathLabels[path] || { label: path, description: '' };
     const head = document.createElement('div');
-    head.style.cssText = 'font-weight:600; font-size:13px; color:var(--indigo2); margin-bottom:6px;';
-    head.textContent = path + ` · ${opts.length} opz`;
+    head.style.cssText = 'margin-bottom:6px;';
+    const labelEl = document.createElement('div');
+    labelEl.style.cssText = 'font-weight:600; font-size:14px; color:var(--text); display:flex; align-items:center; gap:8px;';
+    labelEl.textContent = meta.label;
+    const countBadge = document.createElement('span');
+    countBadge.style.cssText = 'background:var(--indigo-bg); color:var(--indigo2); padding:1px 7px; border-radius:10px; font-size:11px; font-weight:500;';
+    countBadge.textContent = `${opts.length} opz`;
+    labelEl.appendChild(countBadge);
+    head.appendChild(labelEl);
+    const pathEl = document.createElement('div');
+    pathEl.style.cssText = 'font-family:DM Mono,monospace; font-size:11px; color:var(--text3); margin-top:2px;';
+    pathEl.textContent = path;
+    head.appendChild(pathEl);
+    if (meta.description) {
+      const descEl = document.createElement('div');
+      descEl.style.cssText = 'font-size:11.5px; color:var(--text2); margin-top:3px; font-style:italic;';
+      descEl.textContent = meta.description;
+      head.appendChild(descEl);
+    }
     card.appendChild(head);
     for (const o of opts) {
       const row = document.createElement('div');
@@ -2267,6 +2308,8 @@ async function deleteTso() {
 }
 
 async function seedNetflix() {
+  // v3.5.0-alpha.172.68 — Mantenuta per retro-compat (chiamata da onclick legacy).
+  // Bottone visibile sostituito da tsoAIDeepSearch (vedi sotto).
   if (!confirm('Popolare con valori Netflix Delivery Specifications?\nIdempotente: salta valori esistenti.')) return;
   try {
     const fd = new FormData();
@@ -2275,6 +2318,30 @@ async function seedNetflix() {
     _tsoPaths = null;
     await tsoInit();
   } catch (e) { toast(e.message || 'Errore', 'error'); }
+}
+
+// v3.5.0-alpha.172.68 — AI deep-search per popolare opzioni scheda tecnica.
+// Apre il copilot AI con prompt pre-compilato; l'AI userà WebSearch (Tavily)
+// per cercare valori standard di mercato e proporre opzioni via Apply.
+async function tsoAIDeepSearch() {
+  const path = document.getElementById('tso-filter-path').value;
+  const meta = _tsoPathLabels[path];
+  const prompt = path
+    ? `Effettua una ricerca deep sul web per i valori standard del campo "${meta ? meta.label : path}" (path tecnico: ${path}) in ambito post-produzione audiovisiva 2026. Proponi le opzioni più diffuse come propose_tech_sheet_option con field_path="${path}".`
+    : `Effettua una ricerca deep sul web per i valori standard di TUTTI i campi della scheda tecnica progetto (post-produzione audiovisiva 2026): codec camera, risoluzioni, fps, color space, audio recorder, storage, NLE, dailies. Proponi le opzioni come propose_tech_sheet_option.`;
+  if (typeof copilotOpen === 'function') {
+    copilotOpen();
+    setTimeout(() => {
+      const ta = document.querySelector('#copilot-drawer textarea');
+      if (ta) {
+        ta.value = prompt;
+        ta.focus();
+        toast('Prompt copilot pronto — premi Invio per avviare ricerca AI', 'info', 5000);
+      }
+    }, 300);
+  } else {
+    toast('Copilot AI non disponibile su questa pagina', 'warning');
+  }
 }
 </script>
 {% endblock %}

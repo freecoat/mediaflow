@@ -1,7 +1,7 @@
 {% extends "base.html" %}
 {% set active_page = "projects" %}
 
-{% block title %}Progetto — MediaFlow{% endblock %}
+{% block title %}Progetto — Claqo{% endblock %}
 {% block topbar_title %}<a href="/projects" class="text-muted" style="text-decoration:none;">Progetti</a> <span class="text-muted">/</span> <span id="breadcrumb-title">—</span>{% endblock %}
 
 {% block topbar_actions %}
@@ -56,7 +56,8 @@
         <thead>
           <tr>
             <th>Numero</th><th>Versione</th><th>Data</th>
-            <th class="text-right">Totale</th><th>Stato</th><th></th>
+            <th>Scadenza</th>
+            <th class="text-right">Totale</th><th>Stato</th>
           </tr>
         </thead>
         <tbody id="quotes-table"></tbody>
@@ -78,7 +79,7 @@
       <table>
         <thead>
           <tr>
-            <th>Codice</th><th>Titolo</th>{% if _can_finance %}<th class="text-right">Budget</th>{% endif %}<th>Stato</th><th></th>
+            <th>Codice</th><th>Titolo</th><th>Quotazione</th><th class="text-center">Voci</th>{% if _can_finance %}<th class="text-right">Budget</th>{% endif %}<th>Stato</th>
           </tr>
         </thead>
         <tbody id="jobs-table"></tbody>
@@ -774,17 +775,22 @@ function renderQuotes(quotes) {
   }
   tbody.closest('.table-wrap').style.display = '';
   noQ.classList.add('hidden');
-  tbody.innerHTML = quotes.map(q => `
-    <tr>
-      <td class="mono" style="font-size:12px;">${q.number}</td>
+  // v3.5.0-alpha.172.71 — Riga cliccabile (apre quotazione), aggiunta colonna scadenza
+  tbody.innerHTML = quotes.map(q => {
+    const expired = q.valid_until && new Date(q.valid_until) < new Date();
+    const expiryHtml = q.valid_until
+      ? `<span class="text-sm" style="color:${expired ? '#ef4444' : 'var(--text2)'};">${fmtDate(q.valid_until)}${expired ? ' ⚠' : ''}</span>`
+      : '<span class="text-xs text-muted">—</span>';
+    return `
+    <tr style="cursor:pointer;" onclick="window.location.href='/quotes#${q.id}'" title="Apri quotazione">
+      <td class="mono" style="font-size:12px;">${escapeHtml(q.number)}</td>
       <td><span class="text-xs text-muted">v</span><span class="mono">${q.version}</span></td>
       <td class="text-sm">${fmtDate(q.issue_date)}</td>
+      <td>${expiryHtml}</td>
       <td class="mono text-right">${fmtCurrency(q.total_with_vat)}</td>
       <td>${statusBadge(q.status)}</td>
-      <td>
-        <a class="btn btn-ghost btn-sm" href="/quotes#${q.id}">Apri →</a>
-      </td>
-    </tr>`).join('');
+    </tr>`;
+  }).join('');
 }
 
 function renderJobs(jobs) {
@@ -799,16 +805,23 @@ function renderJobs(jobs) {
   tbody.closest('.table-wrap').style.display = '';
   noJ.classList.add('hidden');
   const canFinance = {{ 'true' if _can_finance else 'false' }};
-  tbody.innerHTML = jobs.map(j => `
-    <tr>
+  // v3.5.0-alpha.172.71 — Riga cliccabile (apre cost report o job detail),
+  // colonne aggiunte: Quotazione riferimento + Voci (count JCL).
+  tbody.innerHTML = jobs.map(j => {
+    const target = canFinance ? `/cost-report?job=${j.id}` : `/jobs/${j.id}`;
+    const quoteCell = j.quote_id
+      ? `<a class="mono text-xs" href="/quotes#${j.quote_id}" onclick="event.stopPropagation();" style="color:var(--indigo2);">${escapeHtml(j.quote_number || '#' + j.quote_id)}</a>`
+      : '<span class="text-xs text-muted">—</span>';
+    return `
+    <tr style="cursor:pointer;" onclick="window.location.href='${target}'" title="Apri ${canFinance ? 'cost report' : 'dettaglio job'}">
       <td class="mono" style="font-size:12px;">${escapeHtml(j.code || '')}</td>
       <td style="font-weight:500;">${escapeHtml(j.title || '')}</td>
+      <td>${quoteCell}</td>
+      <td class="text-center mono text-sm">${j.jcl_count || 0}</td>
       ${canFinance ? `<td class="mono text-right">${fmtCurrency(j.budget_quoted)}</td>` : ''}
       <td>${statusBadge(j.status)}</td>
-      <td>
-        ${canFinance ? `<a class="btn btn-ghost btn-sm" href="/cost-report?job=${j.id}">Cost report →</a>` : `<a class="btn btn-ghost btn-sm" href="/jobs/${j.id}">Apri →</a>`}
-      </td>
-    </tr>`).join('');
+    </tr>`;
+  }).join('');
 }
 
 function renderDetails(p) {
@@ -1273,10 +1286,115 @@ function _getByPath(obj, path) {
   return path.split('.').reduce((c, k) => (c == null ? c : c[k]), obj);
 }
 
+// v3.5.0-alpha.172.62 — Mappa field_path → [{value,label}] caricata server-side.
+// Quando un field ha options attive, render `<select>` strict invece di input free.
+let TS_FIELD_OPTIONS = {};
+// v3.5.0-alpha.172.65 — Camera specs matrix: model → spec (resolutions/codecs/fps/…)
+let TS_CAMERA_SPECS = {};
+async function tsLoadFieldOptions() {
+  try {
+    const r = await api('GET', '/settings/api/tech-sheet-options/by-path');
+    TS_FIELD_OPTIONS = r || {};
+  } catch (e) { TS_FIELD_OPTIONS = {}; }
+  // v3.5.0-alpha.172.65 — Carica anche camera specs per filtraggio per-modello
+  try {
+    const sp = await api('GET', '/settings/api/camera-specs');
+    TS_CAMERA_SPECS = (sp && sp.camera_specs) || {};
+  } catch (e) { TS_CAMERA_SPECS = {}; }
+  // v3.5.0-alpha.172.66 — Auto-popola cameras.model con le chiavi del JSON specs
+  // (così il dropdown funziona anche se admin non ha mai cliccato 🎬 Seed Netflix).
+  // Merge con opzioni DB esistenti se presenti.
+  const modelsFromJson = Object.keys(TS_CAMERA_SPECS || {});
+  if (modelsFromJson.length > 0) {
+    const existing = TS_FIELD_OPTIONS['cameras.model'] || [];
+    const existingVals = new Set(existing.map(o => o.value));
+    const merged = [...existing];
+    for (const m of modelsFromJson) {
+      if (!existingVals.has(m)) merged.push({ value: m, label: m });
+    }
+    TS_FIELD_OPTIONS['cameras.model'] = merged;
+  }
+}
+
+// Helper per render dinamico (cameras/looks): ritorna HTML <select> se path
+// ha options attive, altrimenti <input> standard. Usato dentro tsRenderCameras
+// e tsRenderLooks dove i campi sono creati via template-string (no [data-ts-path]).
+// v3.5.0-alpha.172.65 — filterValues opzionale: array di string ammessi (es. spec
+// camera per il modello selezionato). Se passato, options sono ridotte a questo set.
+function tsHtmlInputOrSelect(fieldPath, currentVal, onchangeAttr, placeholder, filterValues) {
+  let opts = TS_FIELD_OPTIONS[fieldPath];
+  const safeCur = escapeHtml(currentVal || '');
+  // Override completo se filterValues passato (anche se options globali assenti).
+  if (Array.isArray(filterValues) && filterValues.length > 0) {
+    opts = filterValues.map(v => ({ value: String(v), label: String(v) }));
+  }
+  if (!opts || opts.length === 0) {
+    return `<input class="form-input" value="${safeCur}" onchange="${onchangeAttr}" placeholder="${escapeHtml(placeholder || '')}">`;
+  }
+  let html = `<select class="form-select" onchange="${onchangeAttr}"><option value="">— scegli —</option>`;
+  let matched = false;
+  opts.forEach(o => {
+    const sel = (currentVal === o.value) ? ' selected' : '';
+    if (sel) matched = true;
+    html += `<option value="${escapeHtml(o.value)}"${sel}>${escapeHtml(o.label || o.value)}</option>`;
+  });
+  if (currentVal && !matched) {
+    html += `<option value="${safeCur}" selected>${safeCur} (custom)</option>`;
+  }
+  html += '</select>';
+  return html;
+}
+
+// v3.5.0-alpha.172.65 — Lookup spec camera per il modello dato.
+// Ritorna {resolutions, codecs, fps_max, color_space_in, format_aspect} o null.
+function tsCameraSpec(model) {
+  if (!model) return null;
+  return TS_CAMERA_SPECS[model] || null;
+}
+
+// Sostituisce input/textarea con select strict se field_path ha options attive.
+// Preserva il valore corrente (se nelle options) e ridefinisce dataset.tsPath.
+function tsApplyFieldOptions() {
+  document.querySelectorAll('[data-ts-path]').forEach(el => {
+    if (el.tagName === 'SELECT' && el.dataset.tsSelectApplied === '1') return;
+    const path = el.dataset.tsPath;
+    const opts = TS_FIELD_OPTIONS[path];
+    if (!opts || opts.length === 0) return;
+    if (el.tagName === 'INPUT' && el.type === 'checkbox') return; // boolean: skip
+    if (el.tagName === 'SELECT') return; // già select statica (es. status)
+    // Crea select con stessa classe + free-text fallback (valore corrente
+    // se non in options viene preservato come <option> custom).
+    const sel = document.createElement('select');
+    sel.className = el.className || 'form-input';
+    sel.dataset.tsPath = path;
+    sel.dataset.tsSelectApplied = '1';
+    const cur = el.value || '';
+    const empty = document.createElement('option');
+    empty.value = ''; empty.textContent = '— scegli —';
+    sel.appendChild(empty);
+    let matched = false;
+    opts.forEach(o => {
+      const op = document.createElement('option');
+      op.value = o.value; op.textContent = o.label || o.value;
+      if (cur === o.value) { op.selected = true; matched = true; }
+      sel.appendChild(op);
+    });
+    if (cur && !matched) {
+      const op = document.createElement('option');
+      op.value = cur; op.textContent = cur + ' (custom)';
+      op.selected = true;
+      sel.appendChild(op);
+    }
+    el.parentNode.replaceChild(sel, el);
+  });
+}
+
 async function tsLoad() {
   document.getElementById('ts-loading').style.display = '';
   document.getElementById('ts-editor').style.display = 'none';
   try {
+    // v3.5.0-alpha.172.62 — Carica options dropdown PRIMA del render
+    await tsLoadFieldOptions();
     tsState = await api('GET', `/projects/api/${PROJECT_ID}/tech-sheet`);
     // Carica delivery templates per il select
     // v3.5.0-alpha.172.36 (Sprint 2 BLOCCO 3) — endpoint corretto è
@@ -1308,6 +1426,8 @@ function tsRender() {
     if (el.type === 'checkbox') el.checked = !!val;
     else el.value = (val == null) ? '' : val;
   });
+  // v3.5.0-alpha.172.62 — Sostituisci input → select se options configurate
+  tsApplyFieldOptions();
   document.querySelectorAll('[data-ts-path-list]').forEach(el => {
     const path = el.dataset.tsPathList;
     const arr = _getByPath(tsState.data, path) || [];
@@ -1408,37 +1528,47 @@ function tsRenderCameras() {
     host.innerHTML = '<div class="text-muted text-sm" style="padding:12px;text-align:center;">Nessuna camera. Clicca "+ Aggiungi camera".</div>';
     return;
   }
-  host.innerHTML = arr.map((c, i) => `
+  host.innerHTML = arr.map((c, i) => {
+    // v3.5.0-alpha.172.65 — Spec camera per modello selezionato → filtra dropdown.
+    const sp = tsCameraSpec(c.model);
+    const fFps = sp && sp.fps_max ? sp.fps_max.map(x => String(x)) : null;
+    const fRes = sp && sp.resolutions ? sp.resolutions : null;
+    const fCodec = sp && sp.codecs ? sp.codecs : null;
+    const fCS = sp && sp.color_space_in ? sp.color_space_in : null;
+    const fAspect = sp && sp.format_aspect ? sp.format_aspect : null;
+    const specBadge = sp ? `<span style="background:var(--indigo-bg);color:var(--indigo2);padding:1px 7px;border-radius:10px;font-size:10px;font-weight:500;margin-left:8px;" title="${escapeHtml(sp.manufacturer||'')} · ${escapeHtml(sp.sensor_format||'')} · ${sp.dynamic_range_stops||'?'} stops · mount ${escapeHtml(sp.mount||'?')}">✓ spec applicate</span>` : '';
+    return `
     <div class="card mb-3" style="background:var(--bg);">
       <div class="flex items-center justify-between mb-2">
-        <div style="display:flex;align-items:center;gap:10px;">
-          <input class="form-input" style="width:50px;text-align:center;font-weight:600;" value="${escapeHtml(c.id_letter || '')}" onchange="tsCameraChange(${i},'id_letter',this.value)" placeholder="A">
-          <input class="form-input" style="min-width:200px;" value="${escapeHtml(c.model || '')}" onchange="tsCameraChange(${i},'model',this.value)" placeholder="Modello camera (es. ARRI Alexa 35)">
+        <div style="display:flex;align-items:center;gap:10px;min-width:0;flex:1;">
+          <input class="form-input" style="width:50px;text-align:center;font-weight:600;flex:0 0 50px;" value="${escapeHtml(c.id_letter || '')}" onchange="tsCameraChange(${i},'id_letter',this.value)" placeholder="A">
+          <div style="flex:1;min-width:200px;">${tsHtmlInputOrSelect('cameras.model', c.model, `tsCameraModelChange(${i},this.value)`, 'Modello camera (es. ARRI Alexa 35)')}</div>
+          ${specBadge}
         </div>
         <button class="btn btn-ghost btn-sm color-rose" onclick="tsRemoveCamera(${i})" title="Rimuovi">✕</button>
       </div>
       <div class="form-row">
-        <div class="form-group"><label class="form-label">Codec</label><input class="form-input" value="${escapeHtml(c.codec||'')}" onchange="tsCameraChange(${i},'codec',this.value)" placeholder="ARRIRAW"></div>
-        <div class="form-group"><label class="form-label">Risoluzione sensore</label><input class="form-input" value="${escapeHtml(c.sensor_res||'')}" onchange="tsCameraChange(${i},'sensor_res',this.value)" placeholder="4608x2592"></div>
-        <div class="form-group"><label class="form-label">FPS</label><input class="form-input" value="${escapeHtml(c.fps||'')}" onchange="tsCameraChange(${i},'fps',this.value)" placeholder="25"></div>
+        <div class="form-group"><label class="form-label">Codec</label>${tsHtmlInputOrSelect('cameras.codec', c.codec, `tsCameraChange(${i},'codec',this.value)`, 'ARRIRAW', fCodec)}</div>
+        <div class="form-group"><label class="form-label">Risoluzione sensore</label>${tsHtmlInputOrSelect('cameras.sensor_res', c.sensor_res, `tsCameraChange(${i},'sensor_res',this.value)`, '4608x2592', fRes)}</div>
+        <div class="form-group"><label class="form-label">FPS</label>${tsHtmlInputOrSelect('cameras.fps', c.fps, `tsCameraChange(${i},'fps',this.value)`, '25', fFps)}</div>
       </div>
       <div class="form-row">
-        <div class="form-group"><label class="form-label">Format aspect</label><input class="form-input" value="${escapeHtml(c.format_aspect||'')}" onchange="tsCameraChange(${i},'format_aspect',this.value)" placeholder="3:2 Open Gate"></div>
-        <div class="form-group"><label class="form-label">Framing aspect</label><input class="form-input" value="${escapeHtml(c.framing_aspect||'')}" onchange="tsCameraChange(${i},'framing_aspect',this.value)" placeholder="2.39:1"></div>
-        <div class="form-group"><label class="form-label">Squeeze</label><input class="form-input" value="${escapeHtml(c.squeeze||'')}" onchange="tsCameraChange(${i},'squeeze',this.value)" placeholder="1x / 2x"></div>
+        <div class="form-group"><label class="form-label">Format aspect</label>${tsHtmlInputOrSelect('cameras.format_aspect', c.format_aspect, `tsCameraChange(${i},'format_aspect',this.value)`, '3:2 Open Gate', fAspect)}</div>
+        <div class="form-group"><label class="form-label">Framing aspect</label>${tsHtmlInputOrSelect('cameras.framing_aspect', c.framing_aspect, `tsCameraChange(${i},'framing_aspect',this.value)`, '2.39:1')}</div>
+        <div class="form-group"><label class="form-label">Squeeze</label>${tsHtmlInputOrSelect('cameras.squeeze', c.squeeze, `tsCameraChange(${i},'squeeze',this.value)`, '1x / 2x')}</div>
       </div>
       <div class="form-row">
-        <div class="form-group"><label class="form-label">Color space input</label><input class="form-input" value="${escapeHtml(c.color_space_in||'')}" onchange="tsCameraChange(${i},'color_space_in',this.value)" placeholder="ARRI Wide Gamut 4 / LogC4"></div>
-        <div class="form-group"><label class="form-label">Working color</label><input class="form-input" value="${escapeHtml(c.working_color_space||'')}" onchange="tsCameraChange(${i},'working_color_space',this.value)" placeholder="ACEScct AP1"></div>
-        <div class="form-group"><label class="form-label">ODT</label><input class="form-input" value="${escapeHtml(c.odt||'')}" onchange="tsCameraChange(${i},'odt',this.value)" placeholder="Rec.709 γ2.4 D65"></div>
+        <div class="form-group"><label class="form-label">Color space input</label>${tsHtmlInputOrSelect('cameras.color_space_in', c.color_space_in, `tsCameraChange(${i},'color_space_in',this.value)`, 'ARRI Wide Gamut 4 / LogC4', fCS)}</div>
+        <div class="form-group"><label class="form-label">Working color</label>${tsHtmlInputOrSelect('cameras.working_color_space', c.working_color_space, `tsCameraChange(${i},'working_color_space',this.value)`, 'ACEScct AP1')}</div>
+        <div class="form-group"><label class="form-label">ODT</label>${tsHtmlInputOrSelect('cameras.odt', c.odt, `tsCameraChange(${i},'odt',this.value)`, 'Rec.709 γ2.4 D65')}</div>
       </div>
       <div class="form-row">
-        <div class="form-group"><label class="form-label">Hi-speed max</label><input class="form-input" value="${escapeHtml(c.hi_speed_max_fps||'')}" onchange="tsCameraChange(${i},'hi_speed_max_fps',this.value)" placeholder="660 fps"></div>
-        <div class="form-group"><label class="form-label">Shutter</label><input class="form-input" value="${escapeHtml(c.shutter||'')}" onchange="tsCameraChange(${i},'shutter',this.value)" placeholder="180°"></div>
+        <div class="form-group"><label class="form-label">Hi-speed max</label>${tsHtmlInputOrSelect('cameras.hi_speed_max_fps', c.hi_speed_max_fps, `tsCameraChange(${i},'hi_speed_max_fps',this.value)`, '660 fps')}</div>
+        <div class="form-group"><label class="form-label">Shutter</label>${tsHtmlInputOrSelect('cameras.shutter', c.shutter, `tsCameraChange(${i},'shutter',this.value)`, '180°')}</div>
         <div class="form-group"><label class="form-label">Safety / extraction</label><input class="form-input" value="${escapeHtml(c.safety_pct||'')}" onchange="tsCameraChange(${i},'safety_pct',this.value)" placeholder="5% scaling"></div>
       </div>
       <div class="form-row">
-        <div class="form-group"><label class="form-label">Tipo magazzino</label><input class="form-input" value="${escapeHtml(c.mag_type||'')}" onchange="tsCameraChange(${i},'mag_type',this.value)" placeholder="Codex Compact 2TB"></div>
+        <div class="form-group"><label class="form-label">Tipo magazzino</label>${tsHtmlInputOrSelect('cameras.mag_type', c.mag_type, `tsCameraChange(${i},'mag_type',this.value)`, 'Codex Compact 2TB')}</div>
         <div class="form-group"><label class="form-label">Min per mag</label><input class="form-input" value="${escapeHtml(c.min_per_mag||'')}" onchange="tsCameraChange(${i},'min_per_mag',this.value)" placeholder="65 min @ 4.6K"></div>
         <div class="form-group"><label class="form-label">Datarate (MB/s)</label><input class="form-input" value="${escapeHtml(c.datarate_mbs||'')}" onchange="tsCameraChange(${i},'datarate_mbs',this.value)" placeholder="456.75"></div>
       </div>
@@ -1447,7 +1577,14 @@ function tsRenderCameras() {
         <textarea class="form-textarea" rows="3" oninput="tsCameraLensesChange(${i},this.value)" placeholder="Cooke Anamorphic/i\nCanon 15.5-45">${escapeHtml((c.lenses||[]).join('\n'))}</textarea>
       </div>
     </div>
-  `).join('');
+  `;
+  }).join('');
+}
+
+// v3.5.0-alpha.172.65 — Cambia modello camera + re-render della card (filtra options).
+function tsCameraModelChange(idx, newModel) {
+  tsCameraChange(idx, 'model', newModel);
+  tsRenderCameras();
 }
 
 // ── Looks ─────────────────────────────────────────────────────
@@ -1484,12 +1621,12 @@ function tsRenderLooks() {
       </div>
       <div class="form-row">
         <div class="form-group"><label class="form-label">Scope</label><input class="form-input" value="${escapeHtml(l.scope||'')}" onchange="tsLookChange(${i},'scope',this.value)" placeholder="all / scene 1-5 / flashback"></div>
-        <div class="form-group"><label class="form-label">Tipo</label><input class="form-input" value="${escapeHtml(l.type||'')}" onchange="tsLookChange(${i},'type',this.value)" placeholder="ASC-CDL / Powergrade"></div>
+        <div class="form-group"><label class="form-label">Tipo</label>${tsHtmlInputOrSelect('looks.type', l.type, `tsLookChange(${i},'type',this.value)`, 'ASC-CDL / Powergrade')}</div>
         <div class="form-group"><label class="form-label">3DLUT size</label><input class="form-input" value="${escapeHtml(l.size_3d||'')}" onchange="tsLookChange(${i},'size_3d',this.value)" placeholder="33x33"></div>
       </div>
       <div class="form-row">
         <div class="form-group" style="flex:2;"><label class="form-label">LUT/LMT file</label><input class="form-input" value="${escapeHtml(l.lut_file||'')}" onchange="tsLookChange(${i},'lut_file',this.value)" placeholder="FM_LMT_ACEScct_v01.cube"></div>
-        <div class="form-group" style="flex:2;"><label class="form-label">Range transform</label><input class="form-input" value="${escapeHtml(l.range_transform||'')}" onchange="tsLookChange(${i},'range_transform',this.value)" placeholder="Camera OUT LEGAL → Monitor LEGAL"></div>
+        <div class="form-group" style="flex:2;"><label class="form-label">Range transform</label>${tsHtmlInputOrSelect('looks.range_transform', l.range_transform, `tsLookChange(${i},'range_transform',this.value)`, 'Camera OUT LEGAL → Monitor LEGAL')}</div>
       </div>
     </div>
   `).join('');

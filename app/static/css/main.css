@@ -1,5 +1,5 @@
 /* ═══════════════════════════════════════════════════════════════
-   MediaFlow — Design System
+   Claqo — Design System
    Font: DM Sans (corpo) + DM Mono (codici/numeri)
    Palette: Slate scuro + accento Indaco
 ═══════════════════════════════════════════════════════════════ */
@@ -36,10 +36,20 @@
   --text2:     #9aa3bf;
   --text3:     #5c6480;
 
+  /* v3.5.0-alpha.172.71 — Indigo Dark default ripristinato.
+     Brand Claqo (claqo-red #D85A30, take-cream, stage-black, cue-amber)
+     spostato in tema dedicato `.theme-claqo` (vedi sotto). I token Claqo
+     restano definiti qui come variabili globali per uso in componenti
+     specifici (mascot copilot, branding default service). */
   --indigo:    #6272f5;
   --indigo2:   #7e8ef7;
   --indigo-bg: rgba(98,114,245,.12);
   --indigo-border: rgba(98,114,245,.35);
+  --claqo-red: #D85A30;
+  --take-cream: #FAECE7;
+  --stage-black: #1A1A1A;
+  --cue-amber: #EF9F27;
+  --studio-grey: #5F5E5A;
 
   --teal:      #2ec4b6;
   --amber:     #f59e0b;
@@ -197,6 +207,62 @@
   --indigo2:   #166534;
   --indigo-bg: rgba(21,128,61,.10);
   --indigo-border: rgba(21,128,61,.30);
+}
+
+/* ── Tema: Claqo Dark (brand brief v0.1, dark warm + claqo-red) — α.172.71 ─ */
+.theme-claqo {
+  --bg:        #14110f;     /* stage-black warm */
+  --bg2:       #1f1a17;
+  --bg3:       #2a2320;
+  --surface:   #322b27;
+  --surface2:  #3d3530;
+  --border:    #3d3530;
+  --border2:   #4e433d;
+
+  --text:      #FAECE7;     /* take-cream */
+  --text2:     #c5b8b1;
+  --text3:     #8a7c75;
+
+  --indigo:    #D85A30;     /* claqo-red */
+  --indigo2:   #e7724a;
+  --indigo-bg: rgba(216,90,48,.14);
+  --indigo-border: rgba(216,90,48,.38);
+
+  --amber:     #EF9F27;     /* cue-amber */
+  --status-hold:      #EF9F27;
+  --status-done:      #D85A30;
+}
+
+/* ── Tema: Claqo Light (cream bg + stage-black text + claqo-red) — α.172.72 ─ */
+.theme-claqo-light {
+  --bg:        #FAECE7;     /* take-cream */
+  --bg2:       #f3e0d8;
+  --bg3:       #ead0c3;
+  --surface:   #fff7f3;
+  --surface2:  #f6e4dc;
+  --border:    #e0c8bc;
+  --border2:   #c9a896;
+
+  --text:      #1A1A1A;     /* stage-black */
+  --text2:     #5F5E5A;     /* studio-grey */
+  --text3:     #8a8784;
+
+  --indigo:    #D85A30;     /* claqo-red */
+  --indigo2:   #b94e29;
+  --indigo-bg: rgba(216,90,48,.12);
+  --indigo-border: rgba(216,90,48,.35);
+
+  --amber:     #EF9F27;     /* cue-amber */
+  --status-hold:      #EF9F27;
+  --status-done:      #D85A30;
+}
+
+/* Tint overrides per Claqo Light (light theme → tint nere semitrasparenti) */
+.theme-claqo-light {
+  --tint-faint:   rgba(0,0,0,.018);
+  --tint-soft:    rgba(0,0,0,.06);
+  --tint-medium:  rgba(0,0,0,.10);
+  --tint-strong:  rgba(0,0,0,.18);
 }
 
 /* ── Tema: Midnight (blu profondo) — v3.4.32.1 ─────────────────── */

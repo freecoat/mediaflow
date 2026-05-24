@@ -71,7 +71,7 @@ def generate_invoice_pdf(invoice: dict, lines: list[dict], company: dict = None)
                                  fontName="Helvetica-Bold", alignment=TA_RIGHT)
 
     # ── Header ────────────────────────────────────────────────
-    company_name = (company or {}).get("name", "MediaFlow")
+    company_name = (company or {}).get("name", "Claqo")
     company_info = (company or {}).get("info", "Via Esempio 1 — 00100 Roma\nP.IVA IT01234567890")
 
     header_data = [
@@ -311,7 +311,7 @@ def generate_client_cost_report_pdf(report: dict, company: dict = None,
     tagline_style = ParagraphStyle("tagline", fontSize=9, textColor=BRAND,
                                    fontName="Helvetica-Oblique", leading=12)
 
-    company_name = branding.get("name") or (company or {}).get("name") or "MediaFlow"
+    company_name = branding.get("name") or (company or {}).get("name") or "Claqo"
     company_info = branding.get("info") or (company or {}).get("info") or ""
     tagline = branding.get("tagline") or ""
     document_header = branding.get("document_header") or ""

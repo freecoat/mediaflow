@@ -354,20 +354,46 @@ async def update_invoice_status(
     #   draft → sent (emissione)
     #   sent → paid (pagamento)
     #   sent → overdue (auto/manuale)
-    #   sent/paid/overdue → cancelled (solo via storno NC TD04 — vedi billing)
-    # Bloccare regressioni (paid → draft, cancelled → sent, etc.)
+    # v3.5.0-alpha.172.57 — Post-emissione (sent/paid/overdue) NO cancelled diretto.
+    # Una volta inviata al cliente/SDI, la fattura è immutabile per legge: storno
+    # esclusivamente via Nota di Credito TD04 (endpoint billing.create_credit_note
+    # che genera l'NC + marca la sorgente cancelled in transazione).
+    # Draft/approved restano cancellabili dirette (non ancora emesse).
     _ALLOWED = {
         InvoiceStatus.draft: {InvoiceStatus.sent, InvoiceStatus.approved, InvoiceStatus.cancelled},
         # α.172.31 (#3) — `approved` = stato iniziale NC (e potenziale future
-        # fatture ordinarie). Da approved si invia o si annulla.
+        # fatture ordinarie non ancora trasmesse). Da approved si invia o si annulla.
         InvoiceStatus.approved: {InvoiceStatus.sent, InvoiceStatus.cancelled},
-        InvoiceStatus.sent: {InvoiceStatus.paid, InvoiceStatus.overdue, InvoiceStatus.cancelled},
-        InvoiceStatus.overdue: {InvoiceStatus.paid, InvoiceStatus.cancelled},
+        # α.172.57 — sent: SOLO paid/overdue. No cancelled diretto.
+        InvoiceStatus.sent: {InvoiceStatus.paid, InvoiceStatus.overdue},
+        # α.172.57 — overdue: SOLO paid. No cancelled diretto.
+        InvoiceStatus.overdue: {InvoiceStatus.paid},
         InvoiceStatus.paid: set(),  # paid è terminal: solo storno NC
         InvoiceStatus.cancelled: set(),  # cancelled terminal
     }
     cur = inv.status
     if status != cur and status not in _ALLOWED.get(cur, set()):
+        # Caso speciale: tentativo cancel su fattura emessa → guida verso NC TD04.
+        if status == InvoiceStatus.cancelled and cur in (
+            InvoiceStatus.sent, InvoiceStatus.overdue, InvoiceStatus.paid,
+        ):
+            raise HTTPException(
+                409,
+                detail={
+                    "message": (
+                        f"Impossibile annullare direttamente: fattura già emessa "
+                        f"(stato '{cur.value}').\n\n"
+                        f"Una volta inviata al cliente/SDI, la fattura è immutabile "
+                        f"per legge. Per stornarla:\n"
+                        f"1. Apri la fattura → 'Emetti Nota di Credito (TD04)'\n"
+                        f"2. La NC storna integralmente l'importo e marca questa "
+                        f"fattura come 'annullata' in transazione."
+                    ),
+                    "invoice_id": inv.id,
+                    "current_status": cur.value,
+                    "remediation": "credit_note_td04",
+                },
+            )
         raise HTTPException(
             409,
             f"Transizione stato {cur} → {status} non consentita. "
@@ -463,6 +489,48 @@ def _next_invoice_number(db: Session, year: int) -> str:
 # Alias retro-compat (v3.5.0-alpha.168). Codice esistente che importa il vecchio
 # nome continua a funzionare. Nuovo codice usa _next_invoice_number direttamente.
 _next_invoice_number_for_advance = _next_invoice_number
+
+
+def _next_credit_note_number(db: Session, year: int) -> str:
+    """v3.5.0-alpha.172.58 — Numero progressivo per Nota di Credito TD04.
+
+    Serie separata dalle fatture ordinarie: `NC-{year}-{NNNNN}`. Più leggibile
+    di una numerazione unica (legge fiscale italiana ammette entrambe le scelte;
+    serie separata preferita per chiarezza nel registro vendite).
+    """
+    from sqlalchemy import desc
+    prefix = f"NC-{year}-"
+    last = (
+        db.query(Invoice.number)
+        .join(Client, Invoice.client_id == Client.id)
+        .filter(
+            Client.tenant_id == current_tenant_id(),
+            Invoice.number.like(f"{prefix}%"),
+        )
+        .order_by(desc(Invoice.number))
+        .first()
+    )
+    if not last:
+        return f"{prefix}00001"
+    try:
+        seq = int(last[0].rsplit("-", 1)[1]) + 1
+    except (ValueError, IndexError):
+        seq = 1
+    for _ in range(1000):
+        candidate = f"{prefix}{seq:05d}"
+        exists = (
+            db.query(Invoice.id)
+            .join(Client, Invoice.client_id == Client.id)
+            .filter(
+                Client.tenant_id == current_tenant_id(),
+                Invoice.number == candidate,
+            )
+            .first()
+        )
+        if not exists:
+            return candidate
+        seq += 1
+    raise HTTPException(500, "Impossibile generare numero progressivo NC univoco")
 
 
 @router.post("/api/projects/{project_id}/advances", dependencies=[RequireEditInvoices])
@@ -2669,9 +2737,47 @@ async def download_invoice_pdf(invoice_id: int, db: Session = Depends(get_db)):
         or (inv.client.admin_email if inv.client and getattr(inv.client, "admin_email", None) else None)
         or (inv.client.contact_email if inv.client and inv.client.contact_email else None)
     )
+    # v3.5.0-alpha.172.60 — Intestazione fattura completa FatturaPA-compliant:
+    # indirizzo destinatario + CAP/comune/provincia + P.IVA/CF + PEC/SDI.
+    # Preferisce snapshot (immutabili) con fallback live al cliente attuale.
+    def _snap_or_live(snap_field: str, live_field: str):
+        s = getattr(inv, snap_field, None)
+        if s:
+            return s
+        return getattr(inv.client, live_field, None) if inv.client else None
+    cli_addr = _snap_or_live("client_address_snap", "address")
+    cli_zip = _snap_or_live("client_zip_snap", "zip_code")
+    cli_city = _snap_or_live("client_city_snap", "city")
+    cli_prov = _snap_or_live("client_province_snap", "province")
+    cli_country = _snap_or_live("client_country_snap", "country") or "IT"
+    cli_vat = _snap_or_live("client_vat_snap", "vat_number")
+    cli_cf = _snap_or_live("client_tax_code_snap", "tax_code")
+    cli_pec = _snap_or_live("client_pec_snap", "pec")
+    cli_sdi = _snap_or_live("client_sdi_snap", "sdi_code")
+    # Linea indirizzo: "Via, 123 — 20121 Milano (MI), IT"
+    addr_bits = []
+    if cli_addr:
+        addr_bits.append(cli_addr.strip())
+    loc_bits = []
+    if cli_zip: loc_bits.append(cli_zip.strip())
+    if cli_city: loc_bits.append(cli_city.strip())
+    if cli_prov: loc_bits.append(f"({cli_prov.strip()})")
+    if loc_bits:
+        addr_bits.append(" ".join(loc_bits))
+    if cli_country and cli_country.upper() != "IT":
+        addr_bits.append(cli_country.upper())
     client_info_parts = []
-    if inv.client and inv.client.vat_number:
-        client_info_parts.append(f"P.IVA {inv.client.vat_number}")
+    if addr_bits:
+        client_info_parts.append(" — ".join(addr_bits))
+    fiscal_bits = []
+    if cli_vat: fiscal_bits.append(f"P.IVA {cli_vat}")
+    if cli_cf and cli_cf != cli_vat: fiscal_bits.append(f"C.F. {cli_cf}")
+    if fiscal_bits:
+        client_info_parts.append(" · ".join(fiscal_bits))
+    if cli_sdi:
+        client_info_parts.append(f"SDI: {cli_sdi}")
+    elif cli_pec:
+        client_info_parts.append(f"PEC: {cli_pec} · SDI: 0000000")
     if admin_email:
         client_info_parts.append(f"Att.ne Amministrazione · {admin_email}")
     invoice_data = {
