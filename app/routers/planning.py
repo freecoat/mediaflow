@@ -1204,6 +1204,43 @@ def _expand_assignments_smart(db: Session, parsed_ass: list[dict]) -> list[dict]
     return out
 
 
+def _classify_assignments_pairing(db: Session, parsed_ass: list[dict]) -> Optional[dict]:
+    """v3.5.0-alpha.172.88 (Bundle H1) — Detect anomaly: booking con SOLO
+    risorse umane O SOLO risorse non-umane (sala/equipment/software/vehicle).
+    Pattern tipico produzione post: umana + sala/equipment vanno appaiate.
+    Ritorna dict con `kind` ('human_only' | 'studio_only') + lista risorse,
+    o None se mix OK. Caller usa risultato per warning + force-override.
+    """
+    from app.services.cost_line_sync import HUMAN_RESOURCE_TYPES
+    human_res = []
+    nonhuman_res = []
+    rids = sorted({pa["resource_id"] for pa in parsed_ass})
+    for rid in rids:
+        r = db.query(Resource).filter(Resource.id == rid).first()
+        if not r:
+            continue
+        rtype = r.type.value if hasattr(r.type, "value") else str(r.type)
+        if rtype in HUMAN_RESOURCE_TYPES:
+            human_res.append({"id": rid, "name": r.name, "type": rtype})
+        else:
+            nonhuman_res.append({"id": rid, "name": r.name, "type": rtype})
+    if human_res and not nonhuman_res:
+        return {
+            "kind": "human_only",
+            "message": f"Booking con SOLO risorse umane ({len(human_res)}): {', '.join(h['name'] for h in human_res)}. Manca una risorsa tecnica (sala/equipment). Conferma se intenzionale.",
+            "human_resources": human_res,
+            "nonhuman_resources": [],
+        }
+    if nonhuman_res and not human_res:
+        return {
+            "kind": "studio_only",
+            "message": f"Booking con SOLO risorse non-umane ({len(nonhuman_res)}): {', '.join(s['name'] for s in nonhuman_res)}. Manca un operatore umano. Conferma se intenzionale.",
+            "human_resources": [],
+            "nonhuman_resources": nonhuman_res,
+        }
+    return None
+
+
 def _enforce_planning_scope(request: Request, db: Session, resource_ids):
     """Per staff/viewer ammette solo booking sulla propria risorsa."""
     user = current_user_optional(request)
@@ -1239,6 +1276,7 @@ async def create_booking(
     smart_split: bool = Form(False),  # E3 v3.4.17
     recurrence_rule: Optional[str] = Form(None),  # E5 v3.4.19: WEEKDAYS, MON, TUE,THU, DAILY...
     recurrence_until: Optional[_date] = Form(None),
+    force_single_type: bool = Form(False),  # Bundle H1 v3.5.0-alpha.172.88 — bypass anomaly check
     db: Session = Depends(get_db),
 ):
     """Crea un booking con N assignments (multi-risorsa).
@@ -1319,6 +1357,23 @@ async def create_booking(
         parsed_ass = _expand_assignments_smart(db, parsed_ass)
         if not parsed_ass:
             raise HTTPException(400, "Smart split: il range richiesto non contiene orario lavorativo (tutto fuori orario, weekend, ferie o festivi)")
+
+    # v3.5.0-alpha.172.88 (Bundle H1) — anomaly: booking solo umani o solo
+    # non-umani. Override esplicito via force_single_type=true.
+    if not force_single_type:
+        warn = _classify_assignments_pairing(db, parsed_ass)
+        if warn is not None:
+            raise HTTPException(
+                422,
+                detail={
+                    "code": "SINGLE_TYPE_WARNING",
+                    "kind": warn["kind"],
+                    "message": warn["message"],
+                    "human_resources": warn["human_resources"],
+                    "nonhuman_resources": warn["nonhuman_resources"],
+                    "remediation": "force_single_type",
+                },
+            )
 
     # Conflict check su tutti gli assignments (vs altri booking attivi)
     for i, pa in enumerate(parsed_ass):
@@ -1566,6 +1621,7 @@ async def update_booking(
     priority: Optional[str] = Form(None),  # v3.5.0-alpha.22
     assignments: Optional[str] = Form(None),  # se passato, replace-all
     smart_split: bool = Form(False),  # v3.5.0-alpha.172.75 — split a posteriori
+    force_single_type: bool = Form(False),  # Bundle H1 v3.5.0-alpha.172.88
     force_slice_unlock: bool = Depends(_force_unlock_dep),  # α.66.3 + α.111.23 admin-gate
     db: Session = Depends(get_db),
 ):
@@ -1629,6 +1685,21 @@ async def update_booking(
                     400,
                     "Smart split: il range richiesto non contiene orario lavorativo "
                     "(tutto fuori orario, weekend, ferie o festivi)."
+                )
+        # v3.5.0-alpha.172.88 (Bundle H1) — anomaly check single-type pairing
+        if not force_single_type:
+            warn = _classify_assignments_pairing(db, parsed_ass)
+            if warn is not None:
+                raise HTTPException(
+                    422,
+                    detail={
+                        "code": "SINGLE_TYPE_WARNING",
+                        "kind": warn["kind"],
+                        "message": warn["message"],
+                        "human_resources": warn["human_resources"],
+                        "nonhuman_resources": warn["nonhuman_resources"],
+                        "remediation": "force_single_type",
+                    },
                 )
         # Conflict check (escludendo gli assignment attuali del booking, che sostituiremo)
         existing_ids = [a.id for a in b.assignments]

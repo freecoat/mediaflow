@@ -528,6 +528,41 @@ async function api(method, url, body, options) {
     // all'utente, poi re-invia con force_slice_unlock=true. Pattern globale:
     // tutti i call site beneficiano senza modifiche puntuali.
     const det = e.detail;
+    // v3.5.0-alpha.172.88 (Bundle H1) — anomaly booking single-type pairing.
+    // 422 SINGLE_TYPE_WARNING: prompt conferma + retry con force_single_type.
+    const isSingleType = e.status === 422 && det && typeof det === 'object'
+      && det.code === 'SINGLE_TYPE_WARNING';
+    if (isSingleType) {
+      const msg = det.message || 'Anomalia booking: risorse non bilanciate.';
+      const ok = confirm('⚠ Anomalia rilevata\n\n' + msg + '\n\nProcedere comunque?');
+      if (!ok) throw e;
+      let retryBody = body, retryUrl = url;
+      if (body instanceof FormData) {
+        const cloned = new FormData();
+        for (const [k, v] of body.entries()) cloned.append(k, v);
+        cloned.set('force_single_type', 'true');
+        retryBody = cloned;
+      } else if (body && typeof body === 'object') {
+        retryBody = { ...body, force_single_type: 'true' };
+      } else {
+        retryUrl = url + (url.includes('?') ? '&' : '?') + 'force_single_type=true';
+      }
+      const retryResp = await (async () => {
+        const opts = { method };
+        if (retryBody instanceof FormData) {
+          opts.body = retryBody;
+        } else if (options && options.json && retryBody && typeof retryBody === 'object') {
+          opts.headers = { 'Content-Type': 'application/json' };
+          opts.body = JSON.stringify(retryBody);
+        } else if (retryBody) {
+          opts.headers = { 'Content-Type': 'application/x-www-form-urlencoded' };
+          opts.body = new URLSearchParams(retryBody).toString();
+        }
+        return fetch(retryUrl, opts);
+      })();
+      if (!retryResp.ok) throw await _parseError(retryResp);
+      return retryResp.json();
+    }
     const isSliceLock = e.status === 409 && det && typeof det === 'object'
       && det.code === 'SLICE_LOCK_CONFIRM_REQUIRED';
     if (isSliceLock) {

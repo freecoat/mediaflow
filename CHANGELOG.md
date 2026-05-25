@@ -1,5 +1,25 @@
 # MediaFlow — Changelog
 
+## v3.5.0-alpha.172.88 — Bundle H1: anomaly warning booking single-type pairing (umani-only o studio-only) (25 mag 2026)
+
+Richiesta Matteo: "Booking solo risorsa umana senza non-umane (e viceversa) devono generare warning. Sono generalmente anomalie. Dovrebbero sempre essere associate, salvo forced utente."
+
+**Backend** (`app/routers/planning.py`):
+- Nuovo helper `_classify_assignments_pairing(db, parsed_ass)`: detect SOLO umani O SOLO non-umani (sala/equipment/software/vehicle). Ritorna `{kind, message, human_resources, nonhuman_resources}` o None.
+- `POST /api/bookings` + `PUT /api/bookings/{id}` accettano nuovo `force_single_type: bool = Form(False)`.
+- Pre-conflict-check: se classify ritorna anomaly + `!force_single_type` → 422 `detail.code=SINGLE_TYPE_WARNING` con messaggio human-readable.
+
+**Frontend** (`app/static/js/global.js`):
+- `api()` helper intercetta automaticamente 422 SINGLE_TYPE_WARNING → `confirm()` dialog ("Anomalia rilevata: ... Procedere comunque?") → retry con `force_single_type=true` aggiunto al body. Same pattern di SLICE_LOCK_CONFIRM_REQUIRED. Trasparente per tutti i call site UI esistenti.
+
+**Backlog H1.bis**: stessa logica replicata nei capability AI `_h_propose_booking` e `_h_propose_recurring_bookings` (rinviato — richiede system prompt rule + flag su mutation handler).
+
+**File toccati**: `app/routers/planning.py` (helper + 2 hook), `app/static/js/global.js` (handler 422 in `api()`), `app/main.py`, `CHANGELOG.md`.
+
+521 routes invariato. Schema DB invariato.
+
+**H2 (fix UI conferma delivery /jobs rotta)** + **H3 (conferma delivery in planning + asset library)** rinviati: serve specifico errore/screenshot da Matteo per debug H2 (modal apre? bottone "✓ Conferma" presente? 403? altro?).
+
 ## v3.5.0-alpha.172.87 — Bundle G1+G2: DeepSeek AI provider + fix unit select width quotes (25 mag 2026)
 
 **G1 — DeepSeek AI provider** (`app/services/ai_provider.py`):
