@@ -81,6 +81,7 @@
   <div class="settings-tabs">
     <div class="settings-tab active" data-pane="aspect" onclick="showPane('aspect')"><i data-lucide="palette" style="width:14px;height:14px;vertical-align:-2px;"></i> Aspetto</div>
     <div class="settings-tab" data-pane="sidebar" onclick="showPane('sidebar')"><i data-lucide="panel-left" style="width:14px;height:14px;vertical-align:-2px;"></i> Sidebar</div>
+    <div class="settings-tab" data-pane="diag" onclick="showPane('diag')"><i data-lucide="activity" style="width:14px;height:14px;vertical-align:-2px;"></i> Diagnostica</div>
     <div class="settings-tab" data-pane="ai" onclick="showPane('ai')"><i data-lucide="bot" style="width:14px;height:14px;vertical-align:-2px;"></i> AI</div>
     <div class="settings-tab" data-pane="hours" onclick="showPane('hours')"><i data-lucide="clock" style="width:14px;height:14px;vertical-align:-2px;"></i> Orari lavorativi</div>
     <div class="settings-tab" data-pane="techsheet" onclick="showPane('techsheet')"><i data-lucide="list" style="width:14px;height:14px;vertical-align:-2px;"></i> Scheda tecnica</div>
@@ -160,6 +161,34 @@
         <div class="flex gap-2 mt-3">
           <button class="btn btn-secondary btn-sm" onclick="resetSidebarOrder()">Ripristina ordine default</button>
         </div>
+      </div>
+    </div>
+
+    <!-- ── Pannello Diagnostica (Bundle E v3.5.0-alpha.172.76) ── -->
+    <div class="settings-pane" id="pane-diag">
+      <div class="card mb-4">
+        <div class="card-title mb-3">📋 Log azioni</div>
+        <p class="text-sm text-muted mb-3">
+          Storico permanente di toast, conferme, errori API ed eventi.
+          Ring buffer 500 eventi salvato nel browser corrente.
+          Apri il pannello con <b>Ctrl+Shift+L</b> da qualsiasi pagina.
+        </p>
+        <div class="flex gap-2 mb-3">
+          <button class="btn btn-secondary btn-sm" onclick="window.mfLogTogglePanel(true)"><i data-lucide="panel-bottom-open" style="width:14px;height:14px;vertical-align:-2px;"></i> Apri pannello log</button>
+          <button class="btn btn-secondary btn-sm" onclick="window.mfLogExport()"><i data-lucide="download" style="width:14px;height:14px;vertical-align:-2px;"></i> Esporta JSON</button>
+          <button class="btn btn-secondary btn-sm" onclick="if(confirm('Svuotare il log azioni?')) window.mfLogClear()"><i data-lucide="trash-2" style="width:14px;height:14px;vertical-align:-2px;"></i> Svuota</button>
+        </div>
+      </div>
+      <div class="card mb-4">
+        <div class="card-title mb-3">Verbose mode</div>
+        <p class="text-sm text-muted mb-3">
+          Quando attivo, ogni chiamata API (anche le riuscite) viene loggata.
+          Default: solo errori e toast user-facing. La preferenza è salvata nel browser corrente.
+        </p>
+        <label style="display:flex;align-items:center;gap:10px;cursor:pointer;font-size:13px;">
+          <input type="checkbox" id="diag-verbose-toggle" onchange="window.mfLogSetVerbose(this.checked)" style="width:18px;height:18px;">
+          <span>Attiva verbose mode</span>
+        </label>
       </div>
     </div>
 
@@ -956,6 +985,10 @@ function showPane(id) {
   if (id === 'hours') whReload();
   if (id === 'storage') { fspReload(); s3StatusReload(); }
   if (id === 'numbering') nmbReload();
+  if (id === 'diag') {
+    const cb = document.getElementById('diag-verbose-toggle');
+    if (cb && typeof window.mfLogVerboseIsOn === 'function') cb.checked = window.mfLogVerboseIsOn();
+  }
 }
 
 // v3.5.0-alpha.113 — Naming conventions builder drag&drop

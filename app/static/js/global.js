@@ -276,6 +276,10 @@ function playSound(name) {
 
 // ── Toast ─────────────────────────────────────────────────────
 function toast(msg, type = 'info', duration = 3500) {
+  // v3.5.0-alpha.172.76 (Bundle E) — push permanent log entry
+  if (typeof window.mfLog === 'function') {
+    try { window.mfLog('toast', type, msg); } catch (e) { /* fail-safe */ }
+  }
   const container = document.getElementById('toast-container');
   if (!container) return;
   const el = document.createElement('div');
@@ -303,6 +307,10 @@ function toast(msg, type = 'info', duration = 3500) {
 //  - z-index alto per non essere coperto da modal
 // Usato auto da api() su 409, OR manualmente: `toastBlock("messaggio human")`.
 function toastBlock(msg, opts = {}) {
+  // v3.5.0-alpha.172.76 (Bundle E) — push permanent log entry
+  if (typeof window.mfLog === 'function') {
+    try { window.mfLog('toastBlock', 'error', msg, opts.detail || null); } catch (e) {}
+  }
   const duration = opts.duration || 12000;
   const container = document.getElementById('toast-container');
   if (!container) {
@@ -505,8 +513,16 @@ async function api(method, url, body, options) {
   };
 
   let resp = await _doRequest(body);
+  // v3.5.0-alpha.172.76 (Bundle E) — verbose mode: log every API call
+  if (typeof window.mfLog === 'function' && typeof window.mfLogVerboseIsOn === 'function' && window.mfLogVerboseIsOn()) {
+    try { window.mfLog('api', resp.ok ? 'debug' : 'warning', method + ' ' + url + ' → ' + resp.status); } catch (_) {}
+  }
   if (!resp.ok) {
     const e = await _parseError(resp);
+    // v3.5.0-alpha.172.76 (Bundle E) — always log API errors (not just verbose)
+    if (typeof window.mfLog === 'function') {
+      try { window.mfLog('api', 'error', method + ' ' + url + ' → ' + resp.status + ': ' + e.message, e.detail); } catch (_) {}
+    }
     // v3.5.0-alpha.66.3: intercetta SLICE_LOCK_CONFIRM_REQUIRED automaticamente.
     // Booking confirmed in periodo fatturato → chiede conferma esplicita
     // all'utente, poi re-invia con force_slice_unlock=true. Pattern globale:

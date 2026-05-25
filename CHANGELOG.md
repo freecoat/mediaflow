@@ -1,5 +1,32 @@
 # MediaFlow — Changelog
 
+## v3.5.0-alpha.172.76 — Bundle E: Log azioni permanente + verbose mode + shortcut Ctrl+Shift+L (25 mag 2026)
+
+Richiesta Matteo: durante test AI/UI servono spesso copie esatte di toast/errori per descrivere bug — copy a mano è lento e perde dettaglio. Soluzione: pannello log permanente con ring buffer locale + shortcut + esporta JSON.
+
+**Nuovo modulo `app/static/js/action_log.js`** (XSS-safe, DOM-only):
+- Ring buffer 500 eventi in `localStorage.mf_action_log`. Entry: `{ts, type, cat, msg, detail, url}`.
+- API globali: `mfLog(type, cat, msg, detail)`, `mfLogTogglePanel(open?)`, `mfLogExport()`, `mfLogClear()`, `mfLogSetVerbose(bool)`, `mfLogVerboseIsOn()`.
+- Pannello flottante bottom-right (640×420 max) con header (Copia tutto / Esporta JSON / Svuota / ✕ + checkbox verbose) + body scrollabile + footer hint.
+- Ogni riga: timestamp + categoria colorata + tipo + messaggio + bottone 📋 copy entry. Click su riga = espandi detail (raw JSON o stack).
+- Shortcut globale **Ctrl+Shift+L** apre/chiude il pannello da qualsiasi pagina.
+- Export JSON (`claqo-action-log-<ISO>.json`) per allegare a bug report.
+
+**Hook centralizzati in `global.js`**:
+- `toast(msg, type)` → `mfLog('toast', type, msg)` (sempre attivo)
+- `toastBlock(msg, opts)` → `mfLog('toastBlock', 'error', msg, opts.detail)` (sempre attivo)
+- `api(method, url, body)` → su errore: `mfLog('api', 'error', ...)` (sempre). In verbose mode (`localStorage.mf_verbose=1`): logga anche le chiamate ok.
+
+**UI Settings tab "Diagnostica"** (`/settings` → 📊 Diagnostica):
+- Bottone "Apri pannello log" + "Esporta JSON" + "Svuota".
+- Toggle "Verbose mode" persistente nel browser.
+
+**Include in `base.html`**: `action_log.js` caricato PRIMA di `global.js` (così `window.mfLog` è disponibile quando `toast`/`api` vengono definiti).
+
+**File toccati**: `app/static/js/action_log.js` (NEW), `app/static/js/global.js` (3 hook points), `app/templates/base.html` (1 script include), `app/templates/pages/settings.html` (tab + pane Diagnostica + init checkbox), `app/main.py` (version), `CHANGELOG.md`.
+
+516 routes invariato. Schema DB invariato. Cache-buster automatico via `app_version`.
+
 ## v3.5.0-alpha.172.75 — Smart split a posteriori su update + AI capability propose_split_booking (25 mag 2026)
 
 Richiesta Matteo: "posso modificare bookings con split a posteriori?". Smart split esisteva solo su `POST /api/bookings` (E3 v3.4.17 + α.172.74 per ricorrenti AI). Su edit di un booking esistente bisognava ricalcolare gli slot lato client e mandare lista già splittata via `assignments` replace-all.
