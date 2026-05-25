@@ -8,15 +8,88 @@
 
 ## Versione corrente
 
-**v3.5.0-alpha.172.75** — 25 maggio 2026 — Smart split a posteriori su update + AI capability propose_split_booking
+**v3.5.0-alpha.172.88** — 25 maggio 2026 sera — Bundle H1 anomaly warning booking single-type pairing
 
-Richiesta Matteo: "posso modificare bookings con split a posteriori?". Smart split esisteva solo in CREATE.
+Maratona sessione 25 maggio: chiuse versioni α.172.76 → α.172.88 (13 commit). Bundle organizzati E → B → A → C → D → F (P0 fix) → G (Deepseek + UX) → H1 (anomaly warning booking).
 
-- `PUT /api/bookings/{id}` accetta nuovo `smart_split: bool` (Form, default false). Quando `assignments` è in replace-all + flag on: il range "naive" viene espanso via `_expand_assignments_smart` su WHP + ferie + festivi della risorsa, conflict check su lista espansa.
-- Nuova capability AI `propose_split_booking(booking_id, new_start_datetime?, new_end_datetime?)`: ri-splitta in atomico gli assignment correnti (a) senza parametri = ricalcola sui dati attuali (utile dopo cambio WHP o festività); (b) con override envelope = estende/comprime e splitta. Multi-risorsa: ogni risorsa con la propria policy. Replace-all atomico + recompute cost line + audit `ai_split`.
-- Memo: ogni mutator gestionale dovrebbe avere capability AI corrispondente (vedi `feedback_copilot_more_capabilities.md`).
+521 routes. Schema DB invariato (nessuna migrazione aperta).
 
-516 routes invariato. Schema DB invariato.
+## Maratona 25 maggio 2026 — riepilogo bundle chiusi
+
+- **α.172.76 — Bundle E**: log azioni permanente (`action_log.js`, Ctrl+Shift+L), verbose toggle, ring buffer 500 eventi localStorage, export JSON. Hook automatici in `toast()`/`toastBlock()`/`api()`. Settings tab Diagnostica.
+- **α.172.77 — Bundle B**: smart_split AI con fallback policy default tenant (`_resolve_policy_for_resource` invece di check su `resource.working_hours_policy_id`). Fix booking AI single-slot 9-18 invece di 9-13+14-18.
+- **α.172.78 — Bundle A**: `propose_bulk_split_booking` + `propose_bulk_delete_booking` (helper `_resolve_bookings_for_bulk` shared); fix `/pricelist/api` 404 → `/pricelist/api/items`; fix `itemsDS is not defined` esponendo `window._tlItemsDS` in renderTimeline.
+- **α.172.79 — Bundle C**: auto-refresh timeline post-Apply AI (listener `mf:ai-action-applied` in planning.html mappa action_type → tlIncrementalRefresh/Remove), milestone align primo tentativo, sidebar nav ellipsis.
+- **α.172.80 — Bundle D**: AI chat naming. PATCH `/api/conversations/{id}/title`, DELETE `/api/conversations/{id}`. Auto-title `<Project> · <msg40>`. UI rename + delete con icon button.
+- **α.172.81 — Bundle F (P0)**: capitolato parse 500 → fix (provider per-utente iniettato nei 3 parser); smart_split manuale su edit booking (rimosso `!editingId`); milestone className `tl-milestone-group`; Ctrl+Z timeline capture phase; stato quote badge colorato in detail editor.
+- **α.172.82 — F7+F8+F9**: AI quote naming convention (`gen_doc_code` invece di hardcode), milestone def-fix flex center, modalità progetti parent rows compact. **Regression timeline risorse**.
+- **α.172.83 — Hotfix**: revert F8 milestone CSS + scope F9 `[data-group-by="project"]`.
+- **α.172.84 — FLAT project mode**: rimosso `nestedGroups` da `tlBuildGroupsByProject`. Project header inline prefix nel label job.
+- **α.172.85**: fix `AttributeError Client.code` (Client.name sanitizzato) + `run_in_threadpool` per AI parse (no event loop block).
+- **α.172.86**: split parse + match capitolato in due endpoint per evitare cloudflare 524. Nuovo `POST /ai/api/deliverables/match` chiamato in background da UI Step 2.
+- **α.172.87 — Bundle G1+G2**: DeepSeek AI provider (deepseek-chat V3 + deepseek-reasoner R1). Unit select width fix (min-width 70px, width:auto).
+- **α.172.88 — Bundle H1**: anomaly warning booking single-type pairing. Helper `_classify_assignments_pairing` in planning.py + 422 SINGLE_TYPE_WARNING + auto-intercept in api() global.js con confirm + retry force_single_type=true.
+
+## Prossima sessione (locale da casa)
+
+**Server**: lancia normale `python run.py` (NO tunnel cloudflared se è in locale).
+
+**Roadmap concordata — ordine**:
+
+1. **K — CR cleanup + ore toggle**
+   - K1 rimuovi modalità "Stima vs Quotato" obsoleta (=Maturato vs Quotato)
+   - K2 toggle "Cassa €" ↔ "Ore" su colonne JCL (qty_quoted/qty_actual/qty_planned già in DB)
+
+2. **I — Stati nested Deliverable + cascade QC reject**
+   - Status main: `planned` → `in_progress` → `qc` → `delivered` → `closed`
+   - `qc_substatus` enum nullable (valido solo se main=qc): `in_progress|pass|rejected`
+   - Booking con delivery linkato + state=in_progress → auto-set deliverable.status=in_progress
+   - QC rejected → main torna a planned + notifica in-app + asset rejected → spawn nuovo asset placeholder linked stesso deliverable
+   - delivered → closed: manuale (NO auto). qc_pass resta lì (delivered manuale).
+   - QC report uploads multipli (M:N pivot deliverable_qc_reports → Asset) + capability AI `propose_qc_report_summary` (legge PDF, estrae pass/fail)
+   - Email notification on rejected: backlog (SMTP non configurato)
+
+3. **J — Planning HUB deliverable** (centrale)
+   - Nuovo panel/tab in `/planning`: Kanban DRAGGABLE (drag tra colonne change status) + Lista
+   - Click card kanban / riga lista → modal con DETTAGLI TECNICI 8 blocchi (riusa DeliveryTemplate schema: video/audio/text/head/textless/naming/archive/metadata)
+   - Modal permette inserimento manuale O dropdown template
+   - Quote line generica (3× DCP) → spawn 3 JobDeliverable rinominabili indipendenti
+   - Capability AI `propose_deliverable_specs` legge capitolati e popola tech_specs
+
+4. **H2 — Jobs page click→modal READ-ONLY**
+   - Kanban/lista in `/jobs/{id}` solo overview essenziale
+   - Click apre stesso modal di Planning ma READ-ONLY (no edit, no drag)
+   - Bug attuale "non posso modificare consegne" risolto da H3 (l'edit avviene in Planning)
+
+5. **H3 — Asset Library status delivery + metadata**
+   - Asset detail mostra delivery linked status (read-only)
+   - Metadata tecnici letti da file (ffprobe/mediainfo/exif)
+   - NO modal edit. Asset rejected via cascade I3
+   - Asset rejected → nuovo asset placeholder linked stesso deliverable (forza re-pass manuale possibile)
+
+## Bug ancora aperti
+
+- **Booking #54/#105/#106 ridondanti** sul JCL Dailies workflow (Filmetto): 3 booking/data invece di 2. Frutto di test iterativi. Da pulire via `propose_bulk_delete_booking` + ricreare con `propose_recurring_bookings(smart_split=true)`.
+- **CR Filmetto 24300 vs quote 16200**: matematicamente corretto (54 day computed da 108 booking × 4h max human). Si normalizza dopo cleanup booking.
+- **H1.bis backlog**: AI capability `_h_propose_booking` e `_h_propose_recurring_bookings` non check single-type anomaly. Da aggiungere.
+
+## Test stato
+
+Test sessione 25 mag pomeriggio:
+- ✅ E log azioni Ctrl+Shift+L
+- ✅ B smart_split AI con pausa pranzo
+- ✅ A bulk_split/delete (testato live), 404 pricelist fix, itemsDS fix
+- ✅ C auto-refresh timeline AI, milestone (post hotfix α.172.83), sidebar ellipsis
+- ✅ D AI chat rename/delete + auto-title
+- ✅ F1 capitolato (post-fix run_in_threadpool + split parse/match α.172.86)
+- ✅ F2 smart_split manuale edit (post rimozione !editingId)
+- ✅ F3 milestone className post-hotfix
+- ✅ F4 stato quote badge
+- ✅ F5 Ctrl+Z timeline capture
+- ✅ F7 naming convention AI capitolato (post fix Client.code)
+- ✅ G1 DeepSeek provider
+- ✅ G2 unit width
+- ✅ H1 anomaly warning
 
 ## Prossima sessione (chiusura 25 mag mattina, riapertura remoto via tunnel)
 
