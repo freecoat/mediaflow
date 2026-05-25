@@ -320,12 +320,15 @@ def _next_quote_number(db: Session, project=None) -> str:
     from app.services.numbering import gen_doc_code
     from app.context import current_tenant_id
     project_code = project.code if project else None
+    # v3.5.0-alpha.172.85 fix: Client non ha attributo `code`. Usa name
+    # sanitizzato (no spazi, primi 12 char uppercase) come placeholder.
     client_code = None
     if project and getattr(project, "client_id", None):
         from app.models import Client as _Client
         cli = db.query(_Client).filter(_Client.id == project.client_id).first()
-        if cli:
-            client_code = cli.code
+        if cli and cli.name:
+            import re as _re
+            client_code = _re.sub(r"\s+", "", cli.name)[:12].upper() or None
     code, _seq = gen_doc_code(
         db, "quote", tenant_id=current_tenant_id(),
         project_code=project_code, client_code=client_code,

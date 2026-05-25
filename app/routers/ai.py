@@ -530,7 +530,11 @@ async def parse_deliverables_api(
     if not extracted_text.strip():
         raise HTTPException(400, "Impossibile estrarre testo dal file")
 
-    parsed = parse_deliverables(extracted_text, hint=hint, provider=provider)
+    # v3.5.0-alpha.172.85: AI provider sync (requests.post) blocca event loop
+    # in async def. run_in_threadpool sposta in thread → server resta
+    # responsivo per altre request durante l'analisi capitolato.
+    from fastapi.concurrency import run_in_threadpool
+    parsed = await run_in_threadpool(parse_deliverables, extracted_text, hint=hint, provider=provider)
     if not parsed:
         raise HTTPException(500, "Parser AI ha fallito. Verifica il contenuto del capitolato (es. PDF immagine non OCR-izzato).")
 
@@ -542,7 +546,7 @@ async def parse_deliverables_api(
     ]
 
     deliverables = parsed.get("deliverables", [])
-    matches = match_deliverables_to_pricelist(deliverables, pricelist, provider=provider) if deliverables else None
+    matches = await run_in_threadpool(match_deliverables_to_pricelist, deliverables, pricelist, provider=provider) if deliverables else None
     match_map = {}
     if matches and matches.get("matches"):
         for m in matches["matches"]:
@@ -594,13 +598,17 @@ async def create_quote_from_deliverables(
     if not number:
         from app.services.numbering import gen_doc_code
         from app.context import current_tenant_id
-        # Resolve client_code per pattern come "{CLIENT_CODE}-{NNN}"
+        # v3.5.0-alpha.172.85 fix: Client non ha attributo `code`, solo `name`.
+        # Per i pattern che usano {CLIENT_CODE} si usa il nome sanitizzato
+        # (primi 12 char uppercase senza spazi). Se serve un vero codice
+        # cliente, aggiungere Client.code separato in futuro.
         client_code = None
         if project.client_id:
             from app.models import Client as _Client
             cli = db.query(_Client).filter(_Client.id == project.client_id).first()
-            if cli:
-                client_code = cli.code
+            if cli and cli.name:
+                import re as _re
+                client_code = _re.sub(r"\s+", "", cli.name)[:12].upper() or None
         number, _seq = gen_doc_code(
             db, "quote", tenant_id=current_tenant_id(),
             project_code=project.code, client_code=client_code,

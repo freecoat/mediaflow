@@ -1,5 +1,24 @@
 # MediaFlow — Changelog
 
+## v3.5.0-alpha.172.85 — Fix create-quote AttributeError Client.code + AI parse in threadpool (no event loop block) (25 mag 2026)
+
+Bug Matteo dopo α.172.84:
+1. `/ai/api/deliverables/create-quote 500`: `AttributeError: 'Client' object has no attribute 'code'` — F7 assumeva Client.code esistente (vero per Project, NON per Client).
+2. "Durante analisi non posso aggiornare altre pagine" — AI parse blocca event loop perché provider.extract_json è sync (requests.post). Single uvicorn worker → tutta l'app fredda finché AI risponde.
+
+**Fix 1** (`app/routers/ai.py:create_quote_from_deliverables` + `app/services/ai_assistant.py:_next_quote_number`):
+- Client non ha `code`. Usa `cli.name` sanitizzato (no spazi, primi 12 char uppercase) come placeholder per `{CLIENT_CODE}` nei pattern numbering.
+- Futura aggiunta `Client.code` separato → backward compatible (basta cambiare 2 spot).
+
+**Fix 2** (`app/routers/ai.py:parse_deliverables_api`):
+- `parse_deliverables` e `match_deliverables_to_pricelist` wrapped in `fastapi.concurrency.run_in_threadpool`.
+- Network call AI esegue in thread separato → event loop libero per servire altre request (planning, dashboard, /health, etc.) mentre AI lavora.
+- Niente più cloudflare 502 per browser bloccato + niente più "tutto freezato" UX.
+
+**File toccati**: `app/routers/ai.py` (2 spot create-quote + parse), `app/services/ai_assistant.py` (_next_quote_number client_code fix), `app/main.py` (version), `CHANGELOG.md`.
+
+520 routes invariato. Schema DB invariato.
+
 ## v3.5.0-alpha.172.84 — Modalità "Per progetto" FLAT (no nested empty parent rows) (25 mag 2026)
 
 Bug Matteo dopo α.172.83: snippet `<div class="vis-group tl-project-1" style="height: 23px;"></div>` — parent row del progetto è VUOTO (foreground empty), spreco di spazio sopra ogni job.
