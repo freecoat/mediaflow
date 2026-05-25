@@ -1859,6 +1859,75 @@ def _h_propose_recurring_bookings(db: Session, data: dict) -> dict:
         )
 
     title = (data.get("title") or "").strip() or f"Ricorrente {rule.lower()}"
+
+    # v3.5.0-alpha.172.74 — smart_split + overtime warning.
+    # smart_split=True: ogni risorsa-giorno produce N slot (mattina+pomeriggio)
+    # invece di 1 monolitico, sfruttando WorkingHoursPolicy.morning/afternoon.
+    # Riusa split_booking_smart già testato dall'endpoint UI POST /api/bookings.
+    smart_split = bool(data.get("smart_split") or False)
+
+    # Pre-carica policy per ogni risorsa (per smart_split + warning OT).
+    # Fallback: la prima risorsa con policy valorizza i parametri "rappresentativi"
+    # per warning e split. Risorse senza policy → slot monolitico (no split).
+    policies_by_rid: dict = {}
+    if smart_split:
+        from app.services.working_hours import split_booking_smart as _split_smart
+        for _rid in rids:
+            r = db.query(Resource).filter(Resource.id == _rid).first()
+            if r and getattr(r, "working_hours_policy_id", None):
+                from app.models import WorkingHoursPolicy as _WHP
+                pol = db.query(_WHP).filter(_WHP.id == r.working_hours_policy_id).first()
+                if pol:
+                    policies_by_rid[_rid] = pol
+
+    # Calcolo ore effettive standard per giorno (per overtime warning).
+    # Senza smart_split: end - start (orario "presenza" continuativo).
+    # Con smart_split: durata slot policy (al netto pausa pranzo).
+    daily_hours_raw = (
+        _dt.combine(_d.today(), end_t) - _dt.combine(_d.today(), start_t)
+    ).total_seconds() / 3600.0
+    daily_hours_effective = daily_hours_raw
+    lunch_break_minutes: int = 0
+    if smart_split and policies_by_rid:
+        # Usa prima policy come riferimento per pausa "tipica"
+        _ref_pol = next(iter(policies_by_rid.values()))
+        if _ref_pol.morning_start and _ref_pol.morning_end:
+            mor = (_dt.combine(_d.today(), _ref_pol.morning_end)
+                   - _dt.combine(_d.today(), _ref_pol.morning_start)).total_seconds() / 3600.0
+        else:
+            mor = 0.0
+        if _ref_pol.afternoon_start and _ref_pol.afternoon_end:
+            aft = (_dt.combine(_d.today(), _ref_pol.afternoon_end)
+                   - _dt.combine(_d.today(), _ref_pol.afternoon_start)).total_seconds() / 3600.0
+            lunch_break_minutes = int(round((
+                _dt.combine(_d.today(), _ref_pol.afternoon_start)
+                - _dt.combine(_d.today(), _ref_pol.morning_end)
+            ).total_seconds() / 60.0))
+        else:
+            aft = 0.0
+        daily_hours_effective = mor + aft
+
+    # Overtime warning: soglia 8h (CCNL standard). Calcolo informativo, NON blocca.
+    overtime_threshold_hours = 8.0
+    overtime_warning = None
+    if daily_hours_effective > overtime_threshold_hours + 0.001:
+        overtime_warning = {
+            "daily_hours_effective": round(daily_hours_effective, 2),
+            "daily_hours_presence": round(daily_hours_raw, 2),
+            "lunch_break_minutes": lunch_break_minutes,
+            "threshold_hours": overtime_threshold_hours,
+            "excess_hours_per_day": round(daily_hours_effective - overtime_threshold_hours, 2),
+            "smart_split_applied": smart_split,
+            "message": (
+                f"⚠️ Ore lavorate effettive {round(daily_hours_effective, 2)}h/giorno "
+                f"> soglia standard {int(overtime_threshold_hours)}h → ogni giornata "
+                f"genera {round(daily_hours_effective - overtime_threshold_hours, 2)}h "
+                f"di straordinario. "
+                + ("(pausa pranzo già sottratta)" if smart_split else
+                   "Considera pausa pranzo (smart_split) oppure restringi l'orario.")
+            ),
+        }
+
     created = []
     skipped_conflict = []
     skipped_holiday = []
@@ -1872,9 +1941,33 @@ def _h_propose_recurring_bookings(db: Session, data: dict) -> dict:
                 continue
             ns = _dt.combine(cur_d, start_t)
             ne = _dt.combine(cur_d, end_t)
-            # conflict check su QUALUNQUE risorsa: se anche solo una è
-            # già impegnata, saltiamo il giorno. Doppia booking sulla stessa
-            # risorsa NON è ammessa (la PIANIFICAZIONE VIVA segnala duplicate).
+
+            # v3.5.0-alpha.172.74 — costruisci assignments giornalieri.
+            # Senza smart_split: 1 assignment/risorsa con range completo.
+            # Con smart_split: N assignment/risorsa, uno per slot policy
+            # (es. 9-13 + 14-18 con pausa 13-14).
+            assignments_for_day: list[dict] = []  # [{rid, start, end}, ...]
+            if smart_split:
+                from app.services.working_hours import split_booking_smart as _split_smart
+                for _rid in rids:
+                    pol = policies_by_rid.get(_rid)
+                    if not pol:
+                        # Risorsa senza policy → slot intero (no split possibile)
+                        assignments_for_day.append({"rid": _rid, "start": ns, "end": ne})
+                        continue
+                    slots = _split_smart(ns, ne, pol, unavailabilities=None)
+                    if not slots:
+                        # Range fuori orario policy → fallback slot intero
+                        # (l'utente ha esplicitato 9-18, rispettiamo intento)
+                        assignments_for_day.append({"rid": _rid, "start": ns, "end": ne})
+                    else:
+                        for sl in slots:
+                            assignments_for_day.append({"rid": _rid, "start": sl.start, "end": sl.end})
+            else:
+                for _rid in rids:
+                    assignments_for_day.append({"rid": _rid, "start": ns, "end": ne})
+
+            # conflict check su tutti gli assignments del giorno (qualunque risorsa)
             conflict = db.query(BookingAssignment).join(Booking).filter(
                 Booking.status != BookingStatus.cancelled,
                 BookingAssignment.resource_id.in_(rids),
@@ -1886,35 +1979,40 @@ def _h_propose_recurring_bookings(db: Session, data: dict) -> dict:
                 cur_d += _td(days=1)
                 continue
             from app.models import BookingState as _BSt
-            # 1 SOLO booking per occorrenza, con N assignments (1 per risorsa).
-            # Cost report aggrega correttamente: persona + studio = un solo
-            # "set" di ore lavorate, no double-count.
+            # 1 SOLO booking per occorrenza, con N assignments (1 o più per risorsa
+            # se smart_split). Envelope = min(start)..max(end) di tutti gli assignments.
+            env_start = min(a["start"] for a in assignments_for_day)
+            env_end = max(a["end"] for a in assignments_for_day)
             b = Booking(
                 tenant_id=CURRENT_TENANT, job_id=job.id,
-                start_datetime=ns, end_datetime=ne,
+                start_datetime=env_start, end_datetime=env_end,
                 status=BookingStatus.confirmed, kind=BookingKind.project,
                 job_cost_line_id=int(jcl_id),
                 state=_BSt.confirmed,
                 notes=title if title else None,
             )
             db.add(b); db.flush()
-            for _rid in rids:
+            for a in assignments_for_day:
                 db.add(BookingAssignment(
-                    booking_id=b.id, resource_id=_rid,
-                    start_datetime=ns, end_datetime=ne,
+                    booking_id=b.id, resource_id=a["rid"],
+                    start_datetime=a["start"], end_datetime=a["end"],
                 ))
             try:
                 db.add(BookingChange(
                     booking_id=b.id, kind="ai_create_recurring",
-                    summary=f"AI recurring create ({rule}, {cur_d}, {len(rids)} risorse)",
+                    summary=f"AI recurring create ({rule}, {cur_d}, {len(rids)} risorse"
+                            + (f", smart_split×{len(assignments_for_day)}" if smart_split else "")
+                            + ")",
                     payload={"rule": rule, "date": cur_d.isoformat(),
-                             "resource_ids": rids},
+                             "resource_ids": rids, "smart_split": smart_split,
+                             "assignments_count": len(assignments_for_day)},
                 ))
             except Exception:
                 pass
-            created.append({"booking_id": b.id, "date": cur_d.isoformat()})
+            created.append({"booking_id": b.id, "date": cur_d.isoformat(),
+                            "assignments_count": len(assignments_for_day)})
         cur_d += _td(days=1)
-    return {
+    out = {
         "rule": rule, "start_date": start_d.isoformat(), "until_date": until_d.isoformat(),
         "created_count": len(created),
         "skipped_conflicts_count": len(skipped_conflict),
@@ -1922,7 +2020,13 @@ def _h_propose_recurring_bookings(db: Session, data: dict) -> dict:
         "created": created[:20],
         "skipped_conflicts": skipped_conflict[:20],
         "skipped_holidays": skipped_holiday[:20],
+        "smart_split_applied": smart_split,
+        "daily_hours_effective": round(daily_hours_effective, 2),
+        "lunch_break_minutes": lunch_break_minutes,
     }
+    if overtime_warning:
+        out["overtime_warning"] = overtime_warning
+    return out
 
 
 @ai_capability("propose_bulk_move")

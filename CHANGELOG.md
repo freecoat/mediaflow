@@ -1,5 +1,32 @@
 # MediaFlow — Changelog
 
+## v3.5.0-alpha.172.74 — propose_recurring_bookings: smart_split + overtime warning (25 mag 2026)
+
+Estensione α.172.73 dopo richiesta Matteo: nel dialogo originale il prompt era "9-18 con pausa pranzo" ma l'AI creava booking monolitici 9-18 (CR 9h, non 8h reali). Esisteva già smart split server-side (working_hours.split_booking_smart, endpoint `POST /api/bookings` con flag `smart_split=true`) ma la capability AI non lo usava.
+
+**Fix smart_split**:
+- `propose_recurring_bookings` accetta parametro `smart_split: bool` (default false, back-compat)
+- Per ogni giorno + risorsa con WorkingHoursPolicy: chiama `split_booking_smart(ns, ne, policy)` → ritorna lista TimeSlot (mattina + pomeriggio se policy ha entrambe le finestre)
+- 1 booking/giorno con N assignments (N = somma slot di tutte le risorse, tipicamente 2/risorsa con pausa pranzo)
+- Envelope booking = `min(start)` → `max(end)` di tutti gli assignments
+- Fallback se risorsa senza policy o range fuori orario: slot intero monolitico (preserva intento utente)
+- BookingChange payload include `smart_split: True, assignments_count: N` per audit
+- Response include `smart_split_applied`, `daily_hours_effective`, `lunch_break_minutes` calcolati dalla prima policy come riferimento
+
+**Overtime warning informativo**:
+- Handler calcola `daily_hours_effective` (smart_split=on: morning + afternoon, smart_split=off: end-start)
+- Se `> 8h` (soglia CCNL standard) → response include `overtime_warning {daily_hours_effective, daily_hours_presence, lunch_break_minutes, threshold_hours, excess_hours_per_day, smart_split_applied, message}`
+- NON blocca creazione — è warning informativo. AI deve citarlo all'utente per conferma esplicita
+
+**System prompt rule 6 estesa**:
+- "Pausa pranzo — CHIEDI SEMPRE (anche se utente non l'ha citata): orari ampi > 6h o che attraversano 12:30-14:30 → chiedi continuato o con pausa. Tipico Italia 9-18 = pausa 13-14. Se sì → smart_split=true."
+- "Warning straordinari — se response ha overtime_warning, CITA all'utente in italiano e attendi conferma prima di step successivi (es. bulk status change)."
+- Tool reference: descrizione `propose_recurring_bookings` aggiornata con `smart_split?` e `overtime_warning` in response.
+
+**File toccati**: `app/services/ai_assistant.py` (handler propose_recurring_bookings esteso ~80 righe per smart_split + warning OT), `app/services/ai_tools.py` (schema param + system prompt rule 6 estesa), `app/main.py`, `CHANGELOG.md`, `docs/STATO.md`.
+
+516 routes invariato. Schema DB invariato. Pattern riusa `working_hours.split_booking_smart` testato dall'UI dal v3.4.17.
+
 ## v3.5.0-alpha.172.73 — AI Copilot: compute_recurring_date_range + propose_bulk_booking_status_change (25 mag 2026)
 
 Bug report Matteo su Copilot recurring dailies "36 giorni a ritroso da 30 maggio":

@@ -8,6 +8,17 @@
 
 ## Versione corrente
 
+**v3.5.0-alpha.172.74** — 25 maggio 2026 — propose_recurring_bookings: smart_split + overtime warning
+
+Estensione α.172.73 dopo richiesta Matteo (dialogo "9-18 con pausa pranzo" → AI creava 9h monolitici invece di 8h reali con pausa).
+
+- Capability `propose_recurring_bookings` accetta `smart_split: bool`. Riusa `working_hours.split_booking_smart` esistente. 1 booking/giorno + N assignments (mattina+pomeriggio con pausa). CR calcola ore reali al netto pausa.
+- Fallback: risorsa senza policy → slot monolitico (preserva intento utente)
+- Response include `daily_hours_effective`, `lunch_break_minutes`, `smart_split_applied` + opzionale `overtime_warning` se ore effettive > 8h
+- System prompt rule 6: AI CHIEDE SEMPRE pausa pranzo anche se non citata (orari ampi > 6h o attraversano 12:30-14:30). Cita overtime_warning all'utente per conferma esplicita prima di proseguire.
+
+516 routes invariato. Schema DB invariato.
+
 **v3.5.0-alpha.172.73** — 25 maggio 2026 — AI Copilot 2 nuove capability (recurring date range + bulk status change)
 
 Bug reali emersi su test mattutino "36 giorni dailies a ritroso da 30 mag, Luca Bianchi + Conforming 1, prima metà già done":
@@ -65,8 +76,12 @@ DB: clienti+progetti+quote freschi (purge totale business 23 mag sera). Anagrafi
 - FASE 11: 3 block visivi toastBlock (schedule/AP/cross-JCL)
 - FASE 12: Issue aperti (Deliverable in acconto, rendering filmografia)
 
-**Smoke test α.172.73 da fare prima del FASE 5**:
-- Copilot: "Per Filmetto Test aggiungi 36 giorni di dailies a ritroso dal 30 maggio, Luca Bianchi + Conforming 1, 9-18". Verificare che AI chiami `compute_recurring_date_range` (forward/backward + 36 + skip_holidays) e ottenga start_date corretto al primo colpo.
+**Smoke test α.172.74 da fare prima del FASE 5**:
+- Copilot: "Per Filmetto Test aggiungi 36 giorni di dailies a ritroso dal 30 maggio, Luca Bianchi + Conforming 1, 9-18". Verificare che AI:
+  1. Chiami `compute_recurring_date_range(anchor=2026-05-30, n=36, backward, skip_holidays=true)` → ottiene start 9 apr (skipped 1 mag)
+  2. CHIEDA esplicitamente "orario continuato o con pausa pranzo?" (anche se Matteo nel test cita "con pausa pranzo", verificare che AI rispetti la rule anche se utente non cita)
+  3. Su conferma pausa: chiami `propose_recurring_bookings(smart_split=true, ...)` → 36 booking creati, ogni booking con 2 assignments × 2 risorse = 4 totali (9-13 + 14-18 per Luca + Conforming1)
+  4. Su orario continuato senza pausa: response avrà `overtime_warning` (9h > 8h) → AI lo cita all'utente
 - Copilot: "Marca done i primi 18 booking della serie dailies di Filmetto Test". Verificare che AI chiami `propose_bulk_booking_status_change` con filter `{job_id, date_to, current_state: confirmed}` e new_state=done.
 
 Backlog Sprint 7 (post-test):
