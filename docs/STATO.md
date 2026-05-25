@@ -18,6 +18,23 @@ Richiesta Matteo: "posso modificare bookings con split a posteriori?". Smart spl
 
 516 routes invariato. Schema DB invariato.
 
+## Prossima sessione (chiusura 25 mag mattina, riapertura remoto via tunnel)
+
+**Test trafila AI copilot** (post-restart server):
+- Booking esistente multi-risorsa → "ri-splitta saltando pausa pranzo" → verifica replace-all + envelope + recompute CR.
+- Booking con WHP cambiata → `propose_split_booking(id)` senza override → nuovi segmenti.
+- Booking con `new_start/new_end` → estensione + split.
+- Conflict edge: range che invade booking di altra risorsa.
+- Slice-lock: split su booking in JCLBilledSlice → ValueError leggibile.
+- Single-resource senza policy → fallback monolitico.
+
+**Fase 5 a seguire** (capitolato → quote auto):
+- `deliverables_parser.match_deliverables_to_pricelist` già esiste, da cablare in UI.
+- 17 capitolati reali in `docs/capitolati_esempio/` come corpus test.
+- Flusso target: upload capitolato → parser → preview deliverable + match listino → conferma utente → genera quote A/B/C.
+
+**Direttiva durevole** (memo `feedback_copilot_more_capabilities.md`): ogni mutator endpoint deve avere capability `propose_*` corrispondente nel registry AI. Da applicare a ogni nuova feature.
+
 **v3.5.0-alpha.172.74** — 25 maggio 2026 — propose_recurring_bookings: smart_split + overtime warning
 
 Estensione α.172.73 dopo richiesta Matteo (dialogo "9-18 con pausa pranzo" → AI creava 9h monolitici invece di 8h reali con pausa).
