@@ -738,6 +738,121 @@ Regole:
 """
 
 
+# v3.5.0-alpha.172.90 (Bundle J) — Capability AI propose_deliverable_specs.
+# Adatta gli 8 blocchi tech_specs di un DeliveryTemplate al deliverable specifico.
+# Handler readonly DB: ritorna spec_json proposto, NON persiste (utente salva via UI).
+DELIVERABLE_SPECS_SYSTEM_PROMPT = """Sei un tecnico di post-produzione esperto in specifiche di consegna
+(deliverable specs) per cinema, TV broadcast, streaming.
+
+Riceverai:
+- Nome e dettagli di un JobDeliverable specifico (es. "DCP INTEROP 2K IT")
+- Un DeliveryTemplate di riferimento (capitolato generico, 8 blocchi JSON)
+
+Produci un JSON con la SOLA chiave "spec_json" il cui valore e' un dict
+con gli 8 blocchi adattati al deliverable specifico:
+
+{
+  "spec_json": {
+    "video_specs":       {...} | null,
+    "audio_specs":       {...} | null,
+    "text_specs":        {...} | null,
+    "head_format":       {...} | null,
+    "textless_format":   {...} | null,
+    "naming_convention": {...} | null,
+    "archive_specs":     {...} | null,
+    "metadata_requirements": {...} | null
+  }
+}
+
+Regole:
+- Adatta CONTESTUALMENTE le specifiche al deliverable specifico (es. DCP =
+  JPEG2000 + 24fps + DCI 2K; IMF = JPEG2000 + IMP package; ProRes master =
+  ProRes 422 HQ 1920x1080).
+- Mantieni la struttura interna di ogni blocco coerente con il template di
+  riferimento (chiavi simili, valori adattati).
+- Se un blocco non e' applicabile, valore = null.
+- Output: SOLO il JSON, no markdown wrapper, no commenti. Parsable da json.loads().
+"""
+
+
+@ai_capability("propose_deliverable_specs", category="readonly")
+def _h_propose_deliverable_specs(db: Session, data: dict) -> dict:
+    """Propone spec_json (8 blocchi) per un JobDeliverable a partire da un
+    DeliveryTemplate di riferimento.
+
+    Schema `data`:
+      - deliverable_id (int) — obbligatorio
+      - template_id (int) — obbligatorio (DeliveryTemplate da usare come base)
+
+    Return: {"spec_json": {video_specs, ...}, "message": "..."}
+    NON persiste — l'utente salva via PUT /jobs/api/deliverables/{id} con
+    spec_json nel form (UI dsmSave).
+    """
+    from app.models import JobDeliverable, DeliveryTemplate
+    import json as _json
+
+    deliv_id = data.get("deliverable_id")
+    tpl_id = data.get("template_id")
+    if not deliv_id or not tpl_id:
+        raise ValueError("deliverable_id e template_id obbligatori")
+
+    d = db.query(JobDeliverable).filter(JobDeliverable.id == int(deliv_id)).first()
+    if not d:
+        raise ValueError(f"Deliverable {deliv_id} non trovato")
+    tpl = db.query(DeliveryTemplate).filter(DeliveryTemplate.id == int(tpl_id)).first()
+    if not tpl:
+        raise ValueError(f"DeliveryTemplate {tpl_id} non trovato")
+
+    user_id = data.get("_user_id")
+    provider = get_provider_for_user(user_id, db) if user_id else get_provider()
+    if not provider:
+        raise ValueError("Nessun AI provider configurato")
+
+    tpl_blocks = {
+        "video_specs": tpl.video_specs or {},
+        "audio_specs": tpl.audio_specs or {},
+        "text_specs": tpl.text_specs or {},
+        "head_format": tpl.head_format or {},
+        "textless_format": tpl.textless_format or {},
+        "naming_convention": tpl.naming_convention or {},
+        "archive_specs": tpl.archive_specs or {},
+        "metadata_requirements": tpl.metadata_requirements or {},
+    }
+    user_prompt = (
+        f"Deliverable target:\n"
+        f"  - Nome: {d.name}\n"
+        f"  - Unit: {d.unit or '—'}\n"
+        f"  - Nature: {d.nature.value if d.nature else 'digital'}\n"
+        f"  - Note: {d.notes or '—'}\n\n"
+        f"DeliveryTemplate di riferimento ({tpl.code} — {tpl.name or ''}):\n"
+        f"{_json.dumps(tpl_blocks, indent=2, ensure_ascii=False)[:8000]}\n\n"
+        "Adatta gli 8 blocchi al deliverable specifico e produci il JSON."
+    )
+
+    try:
+        raw = provider.complete(
+            DELIVERABLE_SPECS_SYSTEM_PROMPT, user_prompt,
+            max_tokens=2000, temperature=0.3,
+        )
+    except Exception as e:
+        raise ValueError(f"Provider AI ha fallito: {e}")
+
+    parsed = safe_json_parse(raw) if raw else None
+    if not isinstance(parsed, dict) or "spec_json" not in parsed:
+        raise ValueError(
+            f"Output AI non parsabile o senza 'spec_json'. Raw (primi 200): {(raw or '')[:200]}"
+        )
+
+    spec = parsed["spec_json"]
+    n_filled = sum(1 for v in spec.values() if v) if isinstance(spec, dict) else 0
+    return {
+        "deliverable_id": d.id,
+        "template_id": tpl.id,
+        "spec_json": spec,
+        "message": f"AI ha proposto {n_filled}/8 blocchi tech_specs basati su template {tpl.code}.",
+    }
+
+
 @ai_capability("propose_qc_report_summary")
 def _h_propose_qc_report_summary(db: Session, data: dict) -> dict:
     """Estrae summary AI da un QC report PDF linkato a un deliverable.

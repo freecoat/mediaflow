@@ -8,13 +8,13 @@
 
 ## Versione corrente
 
-**v3.5.0-alpha.172.89** — 25 maggio 2026 (ripresa sessione locale) — Bundle I: stati nested Deliverable + cascade QC reject
+**v3.5.0-alpha.172.90** — 25 maggio 2026 (sera) — Bundle J: Planning HUB Deliverable + AI propose_specs
 
-Riavvio sessione locale post-tunnel cloudflared. Saltata K (rimandata a backlog), partita direttamente con I.
+Tab `📦 Deliverable` in /planning come HUB centrale tenant-wide. Kanban 5 colonne draggable + Lista alternativa. Click card apre modal tech specs 8 blocchi con pre-fill da DeliveryTemplate + bottone AI che adatta le specifiche al deliverable specifico (es. template UHD generico → DCP IT JPEG2000).
 
-Restructure stato deliverable: enum 9-piatto → 5 main + qc_substatus nullable. Cascade automatica su QC reject (asset rejected + spawn placeholder + notifica view_finance). Hook auto-bump deliverable quando booking linkato passa a in_progress. Upload QC report PDF + AI capability `propose_qc_report_summary` che estrae pass/fail dal PDF via provider corrente.
+524 routes (+2: `/jobs/api/deliverables/list` tenant-wide + `/ai/api/deliverables/{id}/propose-specs`). Schema DB invariato.
 
-522 routes (+1 endpoint AI qc-report-summary). Schema DB: +2 colonne (deliverable.qc_substatus + assets.status) + 2 indici. Auto-migrate idempotente al boot mappa legacy enum conservativamente (nessun cascade su dati storici).
+**Bundle I (α.172.89)** chiuso poco prima: stati nested Deliverable (5 main + qc_substatus) + cascade QC reject + auto-bump booking→deliverable + upload QC report PDF + AI propose_qc_report_summary. 2 colonne nuove (qc_substatus + assets.status) + 2 indici.
 
 ## Maratona 25 maggio 2026 — riepilogo bundle chiusi
 
@@ -65,12 +65,7 @@ Restructure stato deliverable: enum 9-piatto → 5 main + qc_substatus nullable.
 
 1. **I — Stati nested Deliverable + cascade QC reject** ✅ FATTA in α.172.89
 
-2. **J — Planning HUB deliverable** (centrale)
-   - Nuovo panel/tab in `/planning`: Kanban DRAGGABLE (drag tra colonne change status) + Lista
-   - Click card kanban / riga lista → modal con DETTAGLI TECNICI 8 blocchi (riusa DeliveryTemplate schema: video/audio/text/head/textless/naming/archive/metadata)
-   - Modal permette inserimento manuale O dropdown template
-   - Quote line generica (3× DCP) → spawn 3 JobDeliverable rinominabili indipendenti
-   - Capability AI `propose_deliverable_specs` legge capitolati e popola tech_specs
+2. **J — Planning HUB deliverable** ✅ FATTA in α.172.90
 
 4. **H2 — Jobs page click→modal READ-ONLY**
    - Kanban/lista in `/jobs/{id}` solo overview essenziale

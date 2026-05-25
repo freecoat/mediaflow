@@ -1,5 +1,43 @@
 # MediaFlow — Changelog
 
+## v3.5.0-alpha.172.90 — Bundle J: Planning HUB Deliverable centrale + AI propose_deliverable_specs (25 mag 2026)
+
+Nuovo tab `📦 Deliverable` in `/planning` come HUB tenant-wide per gestione ciclo vita. Modal tech specs 8 blocchi riusabile da DeliveryTemplate + AI capability che adatta le specifiche del template al deliverable specifico.
+
+**Endpoint nuovo** (`app/routers/jobs.py`):
+- `GET /jobs/api/deliverables/list?status=&qc_substatus=&job_id=&project_id=&include_deleted=&limit=` — lista tenant-wide con join Job+Project. Restituisce `{count, items: [...]}` con `job_code/name + project_code/title`. Default limit 500.
+
+**UI Planning HUB** (`app/templates/pages/planning.html`):
+- Tab nuovo `📦 Deliverable` (dopo Timeline risorse). Vista `view-deliverables` con toggle Kanban/Lista.
+- Kanban 5 colonne per status main: Pianificato / In lavorazione / QC / Consegnato / Chiuso. Conteggio per colonna.
+- Card draggable: drag&drop tra colonne triggera `PUT /jobs/api/deliverables/{id}` con nuovo status. Drop su QC setta default `qc_substatus=in_progress`. Drop su Chiuso richiede conferma e usa `POST /close`.
+- Lista alternativa: tabella con Nome/Progetto/Job/Stato/QC sub/Unit/Qty/Target. Click riga apre stesso modal.
+- Card mostra: name, project label, unit, qc_substatus se attivo (color-coded per main status), target_delivery_date.
+
+**Modal Tech Specs 8 blocchi** (`#modal-deliverable-specs`):
+- Apertura via click card kanban o riga lista.
+- 8 textarea JSON (video_specs / audio_specs / text_specs / head_format / textless_format / naming_convention / archive_specs / metadata_requirements) — riuso esatto schema `DeliveryTemplate`.
+- Dropdown `DeliveryTemplate` per pre-fill: bottone `📋 Applica` precompila SOLO i blocchi vuoti (preserva edit utente).
+- Bottone `🤖 AI` invoca capability `propose_deliverable_specs` (template selezionato come riferimento) → riempie tutti i blocchi con proposta AI, utente revisiona e salva.
+- Validazione JSON inline per blocco prima del save (alert se non parsable). Salva via `PUT /jobs/api/deliverables/{id}` con `spec_json`.
+
+**AI capability** (`app/services/ai_assistant.py`):
+- Nuovo `propose_deliverable_specs` (category=readonly): input `deliverable_id + template_id`. Provider AI riceve nome+nature+notes deliverable + 8 blocchi template e produce JSON `{spec_json: {...}}` adattato (es. template generico 4K UHD → deliverable "DCP INTEROP 2K IT" → spec JPEG2000+DCI 2K+24fps).
+- Tronca template a 8000 char, max_tokens=2000, temperature=0.3 per coerenza.
+- Handler readonly DB (non persiste). Endpoint `POST /ai/api/deliverables/{id}/propose-specs` form `template_id`.
+
+**Spawn N deliverable** (già presente da α.172.14 in `app/services/jcl_to_deliverable_migrator.py`): QuoteLine `unit_nature='deliverable_qty'` con `quantity=3` spawn 3 JobDeliverable identici (stesso name, rinominabili indipendenti via UI). Nessuna modifica necessaria, già allineato a requirement Bundle J.
+
+524 routes (+2: list tenant-wide + AI propose-specs). Schema DB invariato.
+
+**File toccati**: `app/routers/jobs.py`, `app/routers/ai.py`, `app/services/ai_assistant.py`, `app/templates/pages/planning.html`, `app/main.py`, `CHANGELOG.md`, `docs/STATO.md`.
+
+**Out of scope (backlog post-J)**:
+- H2 — Jobs page modal READ-ONLY (riusa stesso modal Specs ma view-only)
+- H3 — Asset Library status delivery + metadata ffprobe
+- K — CR cleanup + ore toggle (parcheggiato sessione 25 mag)
+- Editor strutturato per i 8 blocchi (form invece di textarea JSON) — UX iterativa post-test
+
 ## v3.5.0-alpha.172.89 — Bundle I: stati nested Deliverable + cascade QC reject (25 mag 2026)
 
 Restructure dello stato del ciclo di vita di `JobDeliverable`. Workflow QC reale (run → pass/reject → rerun) non era riflesso pulitamente dall'enum 9-valori piatto. Bundle I collassa in 5 stati main + 1 substatus QC nullable, aggiunge cascade su QC reject e auto-bump deliverable quando booking linkato passa a in_progress.

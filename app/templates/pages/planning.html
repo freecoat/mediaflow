@@ -384,6 +384,7 @@
       {% if user_is_elevated %}<div class="pl-tab" data-view="project">📂 Per progetto</div>{% endif %}
       <div class="pl-tab" data-view="storyboard">🎬 Storyboard</div>
       <div class="pl-tab" data-view="timeline">🧭 Timeline risorse</div>
+      <div class="pl-tab" data-view="deliverables">📦 Deliverable</div>
     </div>
 
     <div id="active-filters" class="pl-active-filters-bar"></div>
@@ -748,6 +749,52 @@
       </div>
     </div>
 
+    <!-- v3.5.0-alpha.172.90 (Bundle J) — Deliverable HUB centrale -->
+    <div class="pl-view" id="view-deliverables">
+      <div class="card">
+        <div style="display:flex; align-items:center; justify-content:space-between; gap:14px; padding:10px 14px; border-bottom:1px solid var(--border);">
+          <div style="display:flex; align-items:center; gap:12px; flex-wrap:wrap;">
+            <strong style="font-size:14px;">📦 Deliverable HUB</strong>
+            <span id="dh-counter" class="text-xs text-muted">caricamento…</span>
+          </div>
+          <div style="display:flex; align-items:center; gap:8px;">
+            <select id="dh-mode" class="form-select" style="height:30px; padding:2px 8px; font-size:12px;">
+              <option value="kanban">Kanban</option>
+              <option value="list">Lista</option>
+            </select>
+            <button class="btn btn-ghost btn-sm" onclick="renderDeliverableHub()" title="Refresh">🔄</button>
+          </div>
+        </div>
+        <div id="dh-host" style="padding:12px 14px;"><div class="pl-empty">Caricamento…</div></div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<!-- v3.5.0-alpha.172.90 (Bundle J) — Modal Tech Specs deliverable (8 blocchi) -->
+<div class="modal-overlay" id="modal-deliverable-specs">
+  <div class="modal" style="max-width:880px;">
+    <div class="modal-header">
+      <span class="modal-title" id="dsm-title">Specifiche tecniche deliverable</span>
+      <button class="btn btn-ghost btn-icon" onclick="closeModal('modal-deliverable-specs')">✕</button>
+    </div>
+    <div class="modal-body" style="max-height:72vh; overflow-y:auto;">
+      <input type="hidden" id="dsm-deliverable-id">
+      <div style="display:flex; gap:8px; align-items:center; margin-bottom:14px; padding:8px 10px; background:rgba(98,114,245,0.06); border-radius:6px;">
+        <label class="text-xs text-muted" style="margin:0;">Pre-fill da template:</label>
+        <select id="dsm-template-select" class="form-select" style="flex:1; height:30px; font-size:12px;">
+          <option value="">— scegli un DeliveryTemplate —</option>
+        </select>
+        <button class="btn btn-ghost btn-sm" onclick="dsmApplyTemplate()" title="Sovrascrive i blocchi vuoti">📋 Applica</button>
+        <button class="btn btn-ghost btn-sm" onclick="dsmAiPropose()" title="AI legge il template e propone tech specs" style="color:var(--indigo2);">🤖 AI</button>
+      </div>
+      <div id="dsm-blocks-host" style="display:flex; flex-direction:column; gap:10px;"></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="closeModal('modal-deliverable-specs')">Annulla</button>
+      <button class="btn btn-primary" onclick="dsmSave()">💾 Salva specifiche</button>
+    </div>
   </div>
 </div>
 
@@ -1195,7 +1242,7 @@
 <script>
 const ACTIVE_VIEW = {{ ('"' + active_view + '"')|safe }};
 const CURRENT_RESOURCE_ID = {{ current_resource_id if current_resource_id else 'null' }};
-const VALID_VIEWS = ['jobs','calendar','agenda','todo','project','storyboard','timeline'];
+const VALID_VIEWS = ['jobs','calendar','agenda','todo','project','storyboard','timeline','deliverables'];
 // v3.5.0-alpha.10 — flag RBAC per nascondere prezzi/budget agli editor (operator)
 // e bloccare la creazione booking diretta. CAN_REQUEST_BOOKING è sempre true per
 // chi vede il planning (il flusso "richiesta booking" notifica producer/manager).
@@ -1645,7 +1692,341 @@ async function renderView(view) {
   if (view === 'project') return renderProjectView();
   if (view === 'storyboard') return renderStoryboard();
   if (view === 'timeline') return renderTimeline();
+  if (view === 'deliverables') return renderDeliverableHub();
 }
+
+// ── v3.5.0-alpha.172.90 (Bundle J) — Deliverable HUB ──────────
+const DH_STATUS_COLS = [
+  { key: 'planned',     lbl: '⏸ Pianificato',  fg: '#94a3b8' },
+  { key: 'in_progress', lbl: '▶ In lavorazione', fg: '#a7b3f9' },
+  { key: 'qc',          lbl: '🔍 QC',          fg: '#fbbf24' },
+  { key: 'delivered',   lbl: '📤 Consegnato',  fg: '#22c55e' },
+  { key: 'closed',      lbl: '🔒 Chiuso',      fg: '#c084fc' },
+];
+const DH_BLOCK_DEFS = [
+  ['video_specs', 'Video specs'],
+  ['audio_specs', 'Audio specs'],
+  ['text_specs', 'Text / subs specs'],
+  ['head_format', 'Head format'],
+  ['textless_format', 'Textless format'],
+  ['naming_convention', 'Naming convention'],
+  ['archive_specs', 'Archive specs'],
+  ['metadata_requirements', 'Metadata requirements'],
+];
+let _dhItems = [];
+let _dhTemplates = [];
+
+function _dhClear(el) { while (el.firstChild) el.removeChild(el.firstChild); }
+function _dhMakeEmpty(host, msg, color) {
+  _dhClear(host);
+  const e = document.createElement('div');
+  e.className = 'pl-empty';
+  if (color) e.style.color = color;
+  e.textContent = msg;
+  host.appendChild(e);
+}
+
+async function renderDeliverableHub() {
+  const host = document.getElementById('dh-host');
+  const counter = document.getElementById('dh-counter');
+  _dhMakeEmpty(host, 'Caricamento…');
+  try {
+    const data = await api('GET', '/jobs/api/deliverables/list');
+    _dhItems = data.items || [];
+    counter.textContent = `${_dhItems.length} deliverable`;
+  } catch (e) {
+    _dhMakeEmpty(host, 'Errore: ' + (e.message || ''), 'var(--rose)');
+    return;
+  }
+  if (!_dhTemplates.length) {
+    try {
+      const res = await api('GET', '/delivery-templates/api/list');
+      _dhTemplates = Array.isArray(res) ? res : (res.items || []);
+    } catch(_) { _dhTemplates = []; }
+  }
+  const mode = document.getElementById('dh-mode').value;
+  if (mode === 'list') dhRenderList(host, _dhItems);
+  else dhRenderKanban(host, _dhItems);
+}
+
+document.addEventListener('change', e => {
+  if (e.target && e.target.id === 'dh-mode') renderDeliverableHub();
+});
+
+function dhRenderKanban(host, items) {
+  const byStatus = {};
+  DH_STATUS_COLS.forEach(c => byStatus[c.key] = []);
+  items.forEach(d => { if (byStatus[d.status]) byStatus[d.status].push(d); });
+  _dhClear(host);
+  const board = document.createElement('div');
+  board.style.cssText = 'display:grid; grid-template-columns:repeat(5,minmax(220px,1fr)); gap:10px;';
+  DH_STATUS_COLS.forEach(col => {
+    const colDiv = document.createElement('div');
+    colDiv.className = 'dh-col';
+    colDiv.dataset.status = col.key;
+    colDiv.style.cssText = 'background:var(--bg3); border:1px solid var(--border); border-radius:6px; padding:8px; min-height:340px; display:flex; flex-direction:column; gap:6px;';
+    const head = document.createElement('div');
+    head.style.cssText = `font-size:11px; text-transform:uppercase; letter-spacing:0.06em; color:${col.fg}; font-weight:600; padding:2px 4px 6px; border-bottom:1px solid var(--border); margin-bottom:4px;`;
+    head.textContent = `${col.lbl} (${byStatus[col.key].length})`;
+    colDiv.appendChild(head);
+    byStatus[col.key].forEach(d => colDiv.appendChild(dhBuildCard(d, col.fg)));
+    colDiv.addEventListener('dragover', dhDragOver);
+    colDiv.addEventListener('drop', dhDrop);
+    board.appendChild(colDiv);
+  });
+  host.appendChild(board);
+}
+
+function dhBuildCard(d, colorFg) {
+  const card = document.createElement('div');
+  card.className = 'dh-card';
+  card.draggable = true;
+  card.dataset.deliverableId = d.id;
+  card.dataset.status = d.status;
+  card.style.cssText = 'background:var(--bg2); border:1px solid var(--border); border-radius:5px; padding:8px 10px; cursor:grab; font-size:12px;';
+  const name = document.createElement('div');
+  name.style.cssText = 'font-weight:600; margin-bottom:3px;';
+  name.textContent = d.name || '';
+  card.appendChild(name);
+  const sub = document.createElement('div');
+  sub.className = 'text-xs text-muted';
+  sub.textContent = (d.project_code || d.project_title || (d.job_code || `Job #${d.job_id}`)) + ' · ' + (d.unit || '—');
+  card.appendChild(sub);
+  if (d.qc_substatus) {
+    const qc = document.createElement('div');
+    qc.className = 'text-xs';
+    qc.style.cssText = `margin-top:4px; color:${colorFg};`;
+    qc.textContent = 'QC: ' + d.qc_substatus;
+    card.appendChild(qc);
+  }
+  if (d.target_delivery_date) {
+    const dt = document.createElement('div');
+    dt.className = 'text-xs text-muted';
+    dt.style.marginTop = '2px';
+    dt.textContent = '📅 ' + d.target_delivery_date;
+    card.appendChild(dt);
+  }
+  card.addEventListener('click', () => dsmOpen(d.id));
+  card.addEventListener('dragstart', dhDragStart);
+  card.addEventListener('dragend', dhDragEnd);
+  return card;
+}
+
+function dhRenderList(host, items) {
+  _dhClear(host);
+  if (!items.length) { _dhMakeEmpty(host, 'Nessun deliverable'); return; }
+  const table = document.createElement('table');
+  table.style.width = '100%';
+  const thead = document.createElement('thead');
+  const trh = document.createElement('tr');
+  ['Nome','Progetto','Job','Stato','QC sub','Unit','Qty','Target'].forEach(h => {
+    const th = document.createElement('th'); th.textContent = h; trh.appendChild(th);
+  });
+  thead.appendChild(trh); table.appendChild(thead);
+  const tbody = document.createElement('tbody');
+  items.forEach(d => {
+    const tr = document.createElement('tr');
+    tr.style.cursor = 'pointer';
+    tr.onclick = () => dsmOpen(d.id);
+    const tdN = document.createElement('td');
+    const b = document.createElement('b'); b.textContent = d.name || ''; tdN.appendChild(b);
+    tr.appendChild(tdN);
+    const cols = [
+      d.project_code || d.project_title || '—',
+      d.job_code || '—',
+      d.status,
+      d.qc_substatus || '—',
+      d.unit || '—',
+      `${(d.quantity_delivered||0).toFixed(2)} / ${(d.quantity_planned||0).toFixed(2)}`,
+      d.target_delivery_date || '—',
+    ];
+    cols.forEach((v, idx) => {
+      const td = document.createElement('td');
+      if (idx === 5) td.className = 'mono text-right';
+      else td.className = 'text-sm';
+      td.textContent = v;
+      tr.appendChild(td);
+    });
+    tbody.appendChild(tr);
+  });
+  table.appendChild(tbody);
+  host.appendChild(table);
+}
+
+let _dhDragId = null;
+function dhDragStart(e) {
+  _dhDragId = parseInt(e.currentTarget.dataset.deliverableId, 10);
+  e.currentTarget.style.opacity = '0.4';
+  e.dataTransfer.effectAllowed = 'move';
+}
+function dhDragEnd(e) {
+  e.currentTarget.style.opacity = '1';
+  _dhDragId = null;
+  document.querySelectorAll('.dh-col').forEach(c => c.style.background = 'var(--bg3)');
+}
+function dhDragOver(e) {
+  e.preventDefault();
+  e.currentTarget.style.background = 'rgba(98,114,245,0.10)';
+}
+function dhDrop(e) {
+  e.preventDefault();
+  e.currentTarget.style.background = 'var(--bg3)';
+  if (!_dhDragId) return;
+  const newStatus = e.currentTarget.dataset.status;
+  const card = document.querySelector(`.dh-card[data-deliverable-id="${_dhDragId}"]`);
+  if (!card) return;
+  if (card.dataset.status === newStatus) return;
+  let qc_sub = '';
+  if (newStatus === 'qc') qc_sub = 'in_progress';
+  dhUpdateStatus(_dhDragId, newStatus, qc_sub);
+}
+
+async function dhUpdateStatus(deliverableId, newStatus, qcSubstatus) {
+  if (newStatus === 'closed') {
+    if (!confirm('Chiusura formale (irreversibile). Procedere?')) { renderDeliverableHub(); return; }
+    try {
+      const r = await fetch(`/jobs/api/deliverables/${deliverableId}/close`, {
+        method: 'POST', credentials: 'same-origin',
+      });
+      if (!r.ok) { const err = await r.json().catch(()=>({})); throw new Error(err.detail || 'Errore'); }
+      toast('🔒 Chiuso', 'success');
+    } catch(e) { toast(e.message || 'Errore', 'error'); }
+    renderDeliverableHub();
+    return;
+  }
+  try {
+    const fd = new FormData();
+    fd.append('status', newStatus);
+    if (qcSubstatus) fd.append('qc_substatus', qcSubstatus);
+    const r = await fetch(`/jobs/api/deliverables/${deliverableId}`, {
+      method: 'PUT', body: fd, credentials: 'same-origin',
+    });
+    if (!r.ok) { const err = await r.json().catch(()=>({})); throw new Error(err.detail || 'Errore'); }
+    toast(`Stato → ${newStatus}${qcSubstatus ? '·' + qcSubstatus : ''}`, 'success', 1500);
+  } catch(e) { toast(e.message || 'Errore', 'error'); }
+  renderDeliverableHub();
+}
+
+async function dsmOpen(deliverableId) {
+  const d = _dhItems.find(x => x.id === deliverableId);
+  if (!d) return;
+  openModal('modal-deliverable-specs');
+  document.getElementById('dsm-deliverable-id').value = String(d.id);
+  document.getElementById('dsm-title').textContent = `Specifiche tecniche — ${d.name}`;
+  const sel = document.getElementById('dsm-template-select');
+  _dhClear(sel);
+  const optEmpty = document.createElement('option');
+  optEmpty.value = ''; optEmpty.textContent = '— scegli un DeliveryTemplate —';
+  sel.appendChild(optEmpty);
+  _dhTemplates.forEach(t => {
+    const opt = document.createElement('option');
+    opt.value = String(t.id);
+    opt.textContent = `${t.code} — ${t.name || ''}${t.broadcaster ? ' · ' + t.broadcaster : ''}`;
+    sel.appendChild(opt);
+  });
+  const host = document.getElementById('dsm-blocks-host');
+  _dhClear(host);
+  const loading = document.createElement('div'); loading.className = 'text-muted text-sm';
+  loading.textContent = 'Caricamento blocchi…'; host.appendChild(loading);
+  try {
+    const fresh = await api('GET', `/jobs/api/deliverables/${d.id}`);
+    const spec = fresh.spec_json || {};
+    _dhClear(host);
+    DH_BLOCK_DEFS.forEach(([key, lbl]) => {
+      const block = spec[key] || null;
+      const card = document.createElement('div');
+      card.style.cssText = 'background:var(--bg3); border:1px solid var(--border); border-radius:6px; padding:8px 10px;';
+      const lblEl = document.createElement('label');
+      lblEl.style.cssText = 'font-size:11px; text-transform:uppercase; letter-spacing:0.06em; color:var(--text3); font-weight:600; display:block; margin-bottom:4px;';
+      lblEl.textContent = lbl;
+      const ta = document.createElement('textarea');
+      ta.dataset.block = key;
+      ta.style.cssText = 'width:100%; min-height:70px; background:var(--bg2); color:var(--text); border:1px solid var(--border); border-radius:4px; padding:6px 8px; font-family:var(--font-mono); font-size:12px; resize:vertical;';
+      ta.placeholder = `{ } — JSON libero per ${lbl.toLowerCase()}`;
+      if (block != null) ta.value = JSON.stringify(block, null, 2);
+      card.appendChild(lblEl); card.appendChild(ta);
+      host.appendChild(card);
+    });
+  } catch(e) {
+    _dhClear(host);
+    const err = document.createElement('div'); err.style.color = 'var(--rose)';
+    err.textContent = 'Errore: ' + (e.message || '');
+    host.appendChild(err);
+  }
+}
+
+function dsmApplyTemplate() {
+  const tid = parseInt(document.getElementById('dsm-template-select').value, 10);
+  if (!tid) { toast('Seleziona un template', 'warning'); return; }
+  const tpl = _dhTemplates.find(t => t.id === tid);
+  if (!tpl) return;
+  let filled = 0;
+  document.querySelectorAll('#dsm-blocks-host textarea').forEach(ta => {
+    const key = ta.dataset.block;
+    if (ta.value.trim()) return;
+    const block = tpl[key];
+    if (block && Object.keys(block).length > 0) {
+      ta.value = JSON.stringify(block, null, 2);
+      filled++;
+    }
+  });
+  toast(`📋 ${filled} blocchi precompilati da ${tpl.code}`, 'success', 2000);
+}
+
+async function dsmAiPropose() {
+  const id = parseInt(document.getElementById('dsm-deliverable-id').value, 10);
+  const tid = parseInt(document.getElementById('dsm-template-select').value, 10);
+  if (!id) return;
+  if (!tid) { toast('Seleziona un template come riferimento per l\'AI', 'warning'); return; }
+  toast('🤖 AI sta proponendo le specifiche…', 'info', 2500);
+  try {
+    const fd = new FormData();
+    fd.append('template_id', String(tid));
+    const r = await fetch(`/ai/api/deliverables/${id}/propose-specs`, {
+      method: 'POST', body: fd, credentials: 'same-origin',
+    });
+    if (!r.ok) { const err = await r.json().catch(()=>({})); throw new Error(err.detail || 'Errore AI'); }
+    const data = await r.json();
+    const spec = data.spec_json || {};
+    let filled = 0;
+    document.querySelectorAll('#dsm-blocks-host textarea').forEach(ta => {
+      const key = ta.dataset.block;
+      if (spec[key]) { ta.value = JSON.stringify(spec[key], null, 2); filled++; }
+    });
+    toast(`🤖 AI ha proposto ${filled} blocchi · revisiona e Salva`, 'success', 3500);
+  } catch(e) {
+    toast(e.message || 'Errore', 'error');
+  }
+}
+
+async function dsmSave() {
+  const id = parseInt(document.getElementById('dsm-deliverable-id').value, 10);
+  if (!id) return;
+  const spec = {};
+  let parseErr = null;
+  document.querySelectorAll('#dsm-blocks-host textarea').forEach(ta => {
+    const key = ta.dataset.block;
+    const raw = ta.value.trim();
+    if (!raw) return;
+    try { spec[key] = JSON.parse(raw); }
+    catch(e) { parseErr = `Blocco "${key}" non e' JSON valido: ${e.message}`; }
+  });
+  if (parseErr) { toast(parseErr, 'error', 5000); return; }
+  try {
+    const fd = new FormData();
+    fd.append('spec_json', JSON.stringify(spec));
+    const r = await fetch(`/jobs/api/deliverables/${id}`, {
+      method: 'PUT', body: fd, credentials: 'same-origin',
+    });
+    if (!r.ok) { const err = await r.json().catch(()=>({})); throw new Error(err.detail || 'Errore'); }
+    toast('💾 Specifiche salvate', 'success');
+    closeModal('modal-deliverable-specs');
+    renderDeliverableHub();
+  } catch(e) {
+    toast(e.message || 'Errore', 'error');
+  }
+}
+
 
 // v3.5.0-alpha.13: bottone "+ Booking" globale in topbar (visibile da
 // qualsiasi view). Apre il modal di creazione con risorsa di default

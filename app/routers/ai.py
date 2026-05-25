@@ -496,6 +496,36 @@ async def ai_review_quote(
     return {"review": review}
 
 
+# ── Deliverable tech_specs propose AI (v3.5.0-alpha.172.90 Bundle J) ──
+
+@router.post("/api/deliverables/{deliverable_id}/propose-specs")
+async def ai_propose_deliverable_specs(
+    deliverable_id: int,
+    template_id: int = Form(...),
+    access_token: Optional[str] = Cookie(None),
+    db: Session = Depends(get_db),
+):
+    """Invoca capability AI propose_deliverable_specs: adatta 8 blocchi
+    DeliveryTemplate al JobDeliverable specifico. Readonly DB (la UI salva
+    via PUT /jobs/api/deliverables/{id} dopo revisione utente).
+    """
+    u = _resolve_current_user(db, access_token)
+    user_id = u.id if u else None
+    if get_provider_for_user(user_id, db) is None:
+        raise HTTPException(503, "AI non configurata per l'utente")
+    from app.services.ai_assistant import _h_propose_deliverable_specs
+    try:
+        return _h_propose_deliverable_specs(db, {
+            "deliverable_id": deliverable_id,
+            "template_id": template_id,
+            "_user_id": user_id,
+        })
+    except ValueError as e:
+        raise HTTPException(400, str(e))
+    except Exception as e:
+        raise HTTPException(500, f"AI propose specs fallita: {e}")
+
+
 # ── QC report summary AI (v3.5.0-alpha.172.89 Bundle I) ──────
 
 @router.post("/api/deliverables/{deliverable_id}/qc-report-summary")

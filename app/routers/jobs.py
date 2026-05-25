@@ -584,6 +584,64 @@ def _compute_internal_hardcost(db: Session, deliverable_id: int) -> dict:
     }
 
 
+@router.get("/api/deliverables/list")
+async def list_deliverables_tenant_wide(
+    status: Optional[str] = None,
+    qc_substatus: Optional[str] = None,
+    job_id: Optional[int] = None,
+    project_id: Optional[int] = None,
+    include_deleted: bool = False,
+    limit: int = 500,
+    db: Session = Depends(get_db),
+):
+    """v3.5.0-alpha.172.90 (Bundle J) — Lista deliverable tenant-wide per
+    Planning HUB. Filtri opzionali: status, qc_substatus, job_id, project_id.
+    Restituisce join Job + Project per label visualizzazione (job_code,
+    job_name, project_code, project_title).
+
+    Default: exclude deleted, limit 500 (paginazione client-side per kanban).
+    """
+    q = (
+        db.query(JobDeliverable, Job, Project)
+        .join(Job, Job.id == JobDeliverable.job_id)
+        .outerjoin(Project, Project.id == Job.project_id)
+        .filter(JobDeliverable.tenant_id == current_tenant_id())
+    )
+    if not include_deleted:
+        q = q.filter(JobDeliverable.deleted_at.is_(None))
+    if status:
+        try:
+            q = q.filter(JobDeliverable.status == DeliverableStatus(status))
+        except ValueError:
+            raise HTTPException(400, f"status invalido: {status}")
+    if qc_substatus:
+        try:
+            q = q.filter(JobDeliverable.qc_substatus == QCSubstatus(qc_substatus))
+        except ValueError:
+            raise HTTPException(400, f"qc_substatus invalido: {qc_substatus}")
+    if job_id:
+        q = q.filter(JobDeliverable.job_id == job_id)
+    if project_id:
+        q = q.filter(Job.project_id == project_id)
+
+    rows = q.order_by(
+        JobDeliverable.target_delivery_date.asc().nullslast(),
+        JobDeliverable.id.asc(),
+    ).limit(limit).all()
+
+    out = []
+    for d, j, p in rows:
+        rec = _serialize_deliverable(d)
+        rec["job_id"] = j.id
+        rec["job_code"] = j.code
+        rec["job_name"] = j.name
+        rec["project_id"] = p.id if p else None
+        rec["project_code"] = p.code if p else None
+        rec["project_title"] = p.title if p else None
+        out.append(rec)
+    return {"count": len(out), "items": out}
+
+
 @router.get("/api/{job_id}/deliverables")
 async def list_deliverables(
     job_id: int,
