@@ -341,7 +341,8 @@ async def parse_sample_capitolato(
     if not text or len(text.strip()) < 20:
         raise HTTPException(400, "Estrazione testo fallita o testo troppo breve (<20 caratteri)")
     try:
-        result = parse_delivery_template(text)
+        # v3.5.0-alpha.172.81 (Bundle F): inject per-user provider
+        result = parse_delivery_template(text, provider=provider)
     except Exception as e:
         raise HTTPException(503, f"Errore AI provider: {e}")
     if not result:
@@ -431,16 +432,24 @@ async def duplicate_template(template_id: int, db: Session = Depends(get_db)):
 
 
 @router.post("/api/parse", dependencies=[RequireEditSettings])
-async def parse_capitolato(file: UploadFile = File(...)):
+async def parse_capitolato(
+    request: Request,
+    file: UploadFile = File(...),
+    db: Session = Depends(get_db),
+):
     """Estrae da un capitolato (PDF/docx/xlsx/txt) gli 8 blocchi DeliveryTemplate
     via AI. Read-only: ritorna la preview JSON, NON salva.
 
     Frontend usa il payload per popolare il modal di preview e permettere
     correzioni manuali prima del POST /api/save.
+    v3.5.0-alpha.172.81 (Bundle F): iniezione provider per-utente per non
+    dipendere da fallback global (che falliva se .env AI_PROVIDER=disabled).
     """
     from app.services.deliverables_parser import (
         extract_text_from_file, parse_delivery_template,
     )
+    from app.services.ai_provider import get_provider_for_user, get_provider
+    from app.services.rbac import current_user_optional
 
     if not file.filename:
         raise HTTPException(400, "Nome file mancante")
@@ -450,7 +459,13 @@ async def parse_capitolato(file: UploadFile = File(...)):
     text = extract_text_from_file(file_bytes, file.filename)
     if not text or len(text.strip()) < 20:
         raise HTTPException(400, "Estrazione testo fallita o testo troppo breve (<20 caratteri)")
-    parsed = parse_delivery_template(text)
+    user = current_user_optional(request)
+    provider = get_provider_for_user(user.id if user else None, db) if user else None
+    if not provider:
+        provider = get_provider()
+    if not provider:
+        raise HTTPException(503, "AI non configurata. Vai in Impostazioni → tab AI per configurare un provider.")
+    parsed = parse_delivery_template(text, provider=provider)
     if parsed is None:
         raise HTTPException(503, "Provider AI non disponibile o estrazione fallita. Configura un provider in /settings → AI.")
     parsed.setdefault("source_document_name", file.filename)
@@ -665,6 +680,7 @@ async def hydrated_suggested_items(template_id: int, db: Session = Depends(get_d
 
 @router.post("/api/parse-and-match", dependencies=[RequireEditSettings])
 async def parse_and_match(
+    request: Request,
     file: UploadFile = File(...),
     hint: Optional[str] = Form(None),
     include_template: int = Form(1),   # 1 = parsa anche i 8 blocchi DeliveryTemplate
@@ -673,11 +689,15 @@ async def parse_and_match(
     """v3.5.0-alpha.95 — Estrae testo + parser AI deliverables + match listino
     in una sola call. Ritorna preview JSON, NON salva nulla. La UI usa il
     payload per la tabella "voci capitolato ↔ voce listino" con override.
+    v3.5.0-alpha.172.81 (Bundle F): provider per-utente iniettato.
     """
     from app.services.deliverables_parser import (
         extract_text_from_file, parse_deliverables,
         parse_delivery_template, match_deliverables_to_pricelist,
     )
+    from app.services.ai_provider import get_provider_for_user, get_provider
+    from app.services.rbac import current_user_optional
+
     if not file.filename:
         raise HTTPException(400, "Nome file mancante")
     file_bytes = await file.read()
@@ -686,9 +706,15 @@ async def parse_and_match(
     text = extract_text_from_file(file_bytes, file.filename)
     if not text or len(text.strip()) < 20:
         raise HTTPException(400, "Estrazione testo fallita (<20 caratteri).")
+    user = current_user_optional(request)
+    provider = get_provider_for_user(user.id if user else None, db) if user else None
+    if not provider:
+        provider = get_provider()
+    if not provider:
+        raise HTTPException(503, "AI non configurata. Vai in Impostazioni → tab AI per configurare un provider.")
 
     # Step 1: deliverables (lista voci operative)
-    parsed = parse_deliverables(text, hint=hint)
+    parsed = parse_deliverables(text, hint=hint, provider=provider)
     if parsed is None:
         raise HTTPException(503, "AI provider non disponibile. Configura in /settings.")
     deliverables = parsed.get("deliverables") or []
@@ -704,7 +730,7 @@ async def parse_and_match(
         "id": p.id, "name": p.name, "category": (p.category.name if p.category else None),
         "unit": p.unit, "price_list": p.price_list,
     } for p in pricelist]
-    match_result = (match_deliverables_to_pricelist(deliverables, pi_payload)
+    match_result = (match_deliverables_to_pricelist(deliverables, pi_payload, provider=provider)
                     if deliverables else None) or {"matches": []}
     matches_by_idx = {m["deliverable_index"]: m for m in match_result.get("matches", [])
                       if isinstance(m, dict) and "deliverable_index" in m}
@@ -732,7 +758,7 @@ async def parse_and_match(
     template_blocks = None
     if include_template:
         try:
-            template_blocks = parse_delivery_template(text)
+            template_blocks = parse_delivery_template(text, provider=provider)
         except Exception as e:
             import logging; logging.getLogger(__name__).warning(f"parse_delivery_template error: {e}")
             template_blocks = None

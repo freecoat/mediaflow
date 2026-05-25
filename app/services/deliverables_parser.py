@@ -123,12 +123,16 @@ Schema output:
 }"""
 
 
-def parse_deliverables(text: str, hint: Optional[str] = None) -> Optional[dict]:
+def parse_deliverables(text: str, hint: Optional[str] = None, provider=None) -> Optional[dict]:
     """
     Analizza un capitolato e restituisce la struttura voci + info progetto.
     hint: testo addizionale dell'utente (es. "è un documentario da 52 minuti").
+    provider: instance opzionale (per-utente). Se None usa get_provider() global.
+    v3.5.0-alpha.172.81 (Bundle F): accetta provider iniettato dal router
+    per usare la AI key per-utente invece del fallback global.
     """
-    provider = get_provider()
+    if provider is None:
+        provider = get_provider()
     if not provider:
         logger.warning("AI provider non disponibile — parser disabilitato")
         return None
@@ -199,15 +203,17 @@ Schema output:
 Se un blocco non è menzionato nel capitolato, ometti la chiave. Non inventare specifiche assenti."""
 
 
-def parse_delivery_template(text: str) -> Optional[dict]:
+def parse_delivery_template(text: str, provider=None) -> Optional[dict]:
     """Analizza un capitolato e ritorna un dict con i 8 blocchi DeliveryTemplate
     + metadati (code/name/broadcaster/description/ai_confidence).
 
     Usato dall'endpoint POST /delivery-templates/api/parse per popolare la
     preview prima del salvataggio. L'utente può poi correggere/integrare
     prima di salvare. v3.5.0-alpha.66.20 Fase 2 step C.
+    v3.5.0-alpha.172.81 (Bundle F): accetta provider iniettato dal router.
     """
-    provider = get_provider()
+    if provider is None:
+        provider = get_provider()
     if not provider:
         logger.warning("AI provider non disponibile — parse_delivery_template disabilitato")
         return None
@@ -257,13 +263,16 @@ Se una voce non ha corrispondenza chiara nel listino, imposta price_item_id: nul
 
 
 def match_deliverables_to_pricelist(deliverables: list[dict],
-                                     pricelist: list[dict]) -> Optional[dict]:
+                                     pricelist: list[dict],
+                                     provider=None) -> Optional[dict]:
     """
     Matcha le voci di capitolato con le voci del listino.
     deliverables: output di parse_deliverables['deliverables']
     pricelist: lista voci dal DB con campi id, name, category, unit, price_list
+    v3.5.0-alpha.172.81 (Bundle F): accetta provider iniettato dal router.
     """
-    provider = get_provider()
+    if provider is None:
+        provider = get_provider()
     if not provider:
         return None
 

@@ -203,7 +203,10 @@
                 onblur="qeSaveTitle(this)"
                 onkeydown="qeHeaderKey(event,this)"></span>
         </h2>
-        <span class="text-xs" id="editor-status"></span>
+        <!-- v3.5.0-alpha.172.81 (Bundle F4) — Stato quote più visibile: badge
+             colorato + size up + uppercase, sotto il titolo. Pre-fix era
+             text-xs sbiadito, l'utente non vedeva subito draft/sent/approved. -->
+        <span class="qe-status-badge" id="editor-status"></span>
       </div>
       <div class="flex gap-2">
         <button class="btn btn-secondary btn-sm" onclick="closeEditor()">← Lista</button>
@@ -266,6 +269,25 @@
       background:var(--bg3); border-bottom-color:var(--border) !important; cursor:text;
     }
     .qe-edit-number:focus, .qe-edit-title:focus { background:var(--bg3); }
+    /* v3.5.0-alpha.172.81 (Bundle F4) — Badge stato quote evident sotto titolo */
+    .qe-status-badge {
+      display: inline-block;
+      margin-top: 6px;
+      padding: 3px 10px;
+      font-size: 11px;
+      font-weight: 600;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      border-radius: 4px;
+      border: 1px solid transparent;
+      vertical-align: middle;
+    }
+    .qe-status-draft    { background: rgba(148,163,184,0.16); color:#94a3b8; border-color: rgba(148,163,184,0.4); }
+    .qe-status-sent     { background: rgba(96,165,250,0.16); color:#60a5fa; border-color: rgba(96,165,250,0.4); }
+    .qe-status-approved { background: rgba(34,197,94,0.18); color:#22c55e; border-color: rgba(34,197,94,0.45); }
+    .qe-status-rejected { background: rgba(239,68,68,0.16); color:#f87171; border-color: rgba(239,68,68,0.4); }
+    .qe-status-cancelled{ background: rgba(120,113,108,0.16); color:#a8a29e; border-color: rgba(120,113,108,0.4); }
+    .qe-status-invoiced { background: rgba(168,85,247,0.16); color:#c084fc; border-color: rgba(168,85,247,0.4); }
     /* Critical Assumptions compatto: bar con input piccoli affiancati */
     .quote-editor-assumptions {
       display:flex; align-items:center; gap:8px; flex-wrap:wrap;
@@ -1378,7 +1400,10 @@ async function reloadQuote() {
     numEl.style.opacity = '0.7';
     numEl.title = `Number bloccato in stato '${currentQuote.status}'`;
   }
-  document.getElementById('editor-status').textContent = SL[currentQuote.status] || currentQuote.status;
+  // v3.5.0-alpha.172.81 (Bundle F4) — badge stato con classe colorata
+  const _stEl = document.getElementById('editor-status');
+  _stEl.textContent = SL[currentQuote.status] || currentQuote.status;
+  _stEl.className = 'qe-status-badge qe-status-' + (currentQuote.status || 'draft');
   document.getElementById('btn-pdf').href = `/quotes/api/${currentQuoteId}/pdf`;
   document.getElementById('btn-csv').href = `/quotes/api/${currentQuoteId}/export.csv`;
   document.getElementById('btn-xlsx').href = `/quotes/api/${currentQuoteId}/export.xlsx`;

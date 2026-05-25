@@ -1,5 +1,37 @@
 # MediaFlow — Changelog
 
+## v3.5.0-alpha.172.81 — Bundle F: P0 fix capitolato 500 + smart_split edit + milestone className + Ctrl+Z capture + stato quote badge (25 mag 2026)
+
+5 bug riportati Matteo dopo test α.172.80:
+
+**F1 — Capitolato parse 500** (`app/services/deliverables_parser.py` + 2 router):
+- Root cause: `parse_deliverables/parse_delivery_template/match_deliverables_to_pricelist` chiamavano `get_provider()` GLOBAL. Se `.env AI_PROVIDER=disabled` (norma per multi-utente), ritornava None → 500 anche se l'utente aveva configurato la propria API key in /settings → AI.
+- Fix: tutte e 3 le funzioni accettano nuovo parametro `provider=None` (back-compat: fallback a get_provider() se non passato).
+- Router `app/routers/ai.py:parse_deliverables_api` + `app/routers/delivery_templates.py:parse_capitolato + parse_and_match`: ottengono `get_provider_for_user(user.id, db)` → fallback `get_provider()` → 503 chiaro se assente, e iniettano l'instance.
+- `parse_sample_file` aveva già il provider per-utente ma non lo passava → ora `parse_delivery_template(text, provider=provider)`.
+
+**F2 — Smart split manuale su edit booking** (`app/templates/pages/planning.html:8469`):
+- Bug: `if (smartSplit.checked && !editingId)` — il `!editingId` impediva l'invio del flag su PUT /api/bookings/{id} (back-compat α.3.4.17 quando solo CREATE supportava). Da α.172.75 anche PUT lo accetta ma UI non lo mandava → checkbox "spezza" su edit pareva no-op.
+- Fix: rimosso `!editingId`. Flag inviato sempre se checkbox spuntato.
+
+**F3 — Milestone group height + click collassa altro gruppo** (`app/templates/pages/planning.html` CSS + group definition):
+- Bug: vis-timeline 7.x NON applica `data-group-id` agli elementi DOM (snippet reale Matteo: `<div class="vis-group" style="height: 30px;">` senza data-group-id). Il mio CSS `[data-group-id="__milestones__"]` (α.172.79 Bundle C2) non matchava nulla → fix invisibile. Label 30px vs hover 48px causava click su milestone che collassava il gruppo successivo (DI/Video) per misalignment.
+- Fix: `milestoneGroup = { ..., className: 'tl-milestone-group' }` — vis-timeline applica className SIA al label sinistro SIA al group foreground. CSS reso più stretto: `height:36px !important` su entrambe le parti → allineamento garantito.
+
+**F4 — Stato quote più visibile in detail editor** (`app/templates/pages/quotes.html`):
+- Pre-fix: `<span class="text-xs" id="editor-status">` minuscolo, sbiadito sotto il titolo → utente non vedeva subito draft/sent/approved.
+- Fix: badge `.qe-status-badge` con padding 3×10, font-weight 600, uppercase, border + background semi-trasparenti per stato (`.qe-status-draft|sent|approved|rejected|cancelled|invoiced`). CSS aggiunto al `<style>` inline della pagina.
+
+**F5 — Ctrl+Z timeline** (`app/templates/pages/planning.html:4299`):
+- Sospetto: vis-timeline 7.x cattura keyboard event sul canvas e stoppa propagation (bubble). Il listener era registrato in fase bubble standard → mai chiamato.
+- Fix: `window.addEventListener('keydown', handler, true)` — capture phase intercetta PRIMA del canvas. Applica a tutti gli shortcut (Ctrl+Z/Ctrl+Y/Ctrl+C/Ctrl+V/Delete/Esc).
+
+**F6 — Altezza modalità progetti** — rimandato (aspetto screenshot Matteo).
+
+**File toccati**: `app/services/deliverables_parser.py` (3 funzioni), `app/routers/ai.py` (1 endpoint), `app/routers/delivery_templates.py` (3 endpoint), `app/templates/pages/planning.html` (4 spot: handler smart_split + milestoneGroup className + CSS milestone + capture phase keydown), `app/templates/pages/quotes.html` (2 spot: badge markup + CSS), `app/main.py` (version), `CHANGELOG.md`.
+
+520 routes invariato. Schema DB invariato.
+
 ## v3.5.0-alpha.172.80 — Bundle D: AI chat naming (rinomina + elimina + auto-title contestuale) (25 mag 2026)
 
 Richiesta Matteo: "vorrei dare un nome ad ogni chat copilot e poterla rinominare, magari relazionata al progetto o al tema, per tenere traccia di tutto". Pre-fix: titolo era i primi 60 char del primo messaggio, non rinominabile, no eliminazione.

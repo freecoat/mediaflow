@@ -82,23 +82,26 @@
   #tl-host .vis-item.tl-ms-imminent .vis-item-content { background: rgba(239,159,39,.16); border-color: #EF9F27; }
   #tl-host .vis-item.tl-ms-pending .vis-item-content { background: rgba(216,90,48,.16); border-color: #D85A30; }
   #tl-host .vis-item.tl-milestone.vis-point .vis-item-content::before { content: ''; }
-  /* v3.5.0-alpha.172.79 (Bundle C2) — Fix milestone group misalignment.
-     Pre-fix: label sinistra "⭐ Milestones" più alta della riga timeline.
-     Causa: vis-timeline 7.x calcola groupHeightMode:'auto' su altezza item +
-     padding asymmetric tra label (text-only) e riga foreground (range item
-     con border+padding). Allineiamo facendo collassare margin/padding del
-     gruppo speciale __milestones__ e fissando altezza riga conservativa. */
-  #tl-host .vis-foreground .vis-group[data-group-id="__milestones__"],
-  #tl-host .vis-labelset .vis-label[data-group-id="__milestones__"] {
-    min-height: 32px !important;
-    line-height: 1 !important;
+  /* v3.5.0-alpha.172.79 → α.172.81 (Bundle C2/F) — Fix milestone group misalign.
+     vis-timeline 7.x NON applica data-group-id agli elementi DOM (snippet
+     reale Matteo: `<div class="vis-group" style="height: 30px;">`). Soluzione
+     corretta: la group definition usa `className: 'tl-milestone-group'` che
+     vis-timeline applica SIA al label sinistro SIA al group foreground.
+     Forziamo altezza uguale per allinearli (pre-fix label 30px vs hover 48px
+     causava click su milestone che collassava il gruppo DI/Video sotto). */
+  #tl-host .vis-label.tl-milestone-group,
+  #tl-host .vis-group.tl-milestone-group {
+    min-height: 36px !important;
+    height: 36px !important;
+    box-sizing: border-box !important;
   }
-  #tl-host .vis-labelset .vis-label[data-group-id="__milestones__"] .vis-inner {
-    padding: 6px 8px !important;
+  #tl-host .vis-label.tl-milestone-group .vis-inner {
+    padding: 8px 10px !important;
+    line-height: 1 !important;
     display: flex;
     align-items: center;
   }
-  #tl-host .vis-foreground .vis-group[data-group-id="__milestones__"] .vis-item {
+  #tl-host .vis-group.tl-milestone-group .vis-item {
     margin-top: 4px !important;
   }
   /* v3.5.0-alpha.82 — Heatmap container neutro (era rgba bianco, invisibile su tema chiaro).
@@ -4201,6 +4204,8 @@ window.addEventListener('blur', () => { window._tlAltDown = false; });
 window._tlClipboard = []; // array di booking duplicabili (snapshot di items + bookings refs)
 
 // E4 v3.4.18: keyboard shortcuts su timeline (attivi solo se vista timeline è la attiva)
+// v3.5.0-alpha.172.81 (Bundle F5): capture phase per intercettare PRIMA di
+// vis-timeline 7.x (alcuni canvas stoppavano propagation di Ctrl+Z/V).
 window.addEventListener('keydown', async (e) => {
   const view = document.querySelector('.pl-tab.active');
   if (!view || view.dataset.view !== 'timeline') return;
@@ -4291,7 +4296,7 @@ window.addEventListener('keydown', async (e) => {
       e.preventDefault();
     }
   }
-});
+}, true);  // capture phase per intercettare prima di vis-timeline canvas
 
 // v3.4.32.2: Ctrl+Shift+V → entra in "paste mode": prossimo click su area
 // vuota della timeline incolla il clipboard a quella posizione (primo
@@ -5491,7 +5496,13 @@ async function _doRenderTimeline(preserveWindow=false) {
           _ms_data: m,
         });
       });
-      milestoneGroup = { id: '__milestones__', content: '⭐ Milestones', order: -9999 };
+      // v3.5.0-alpha.172.81 (Bundle F) — className: applicato da vis-timeline
+      // 7.x SIA al label sinistro SIA al group foreground, così il CSS può
+      // forzare height consistente tra le due parti (pre-fix la label era
+      // 30px, il foreground variabile → misalignment + click su milestone
+      // collassava gruppo successivo).
+      milestoneGroup = { id: '__milestones__', content: '⭐ Milestones', order: -9999,
+                         className: 'tl-milestone-group' };
     }
   } catch (e) {
     console.warn('milestones fetch fail', e);
@@ -8464,9 +8475,12 @@ async function tlbSubmit() {
     cancelled: 'cancelled',
   };
   fd.append('status', _stateToStatus[stateValue] || 'tentative');
-  // E3 v3.4.17: smart split server-side (solo per nuovo, non in edit)
+  // E3 v3.4.17 + v3.5.0-alpha.172.81 (Bundle F): smart_split server-side.
+  // Pre α.172.75: solo su CREATE (`!editingId`). Da α.172.75 anche PUT /api/
+  // bookings/{id} accetta smart_split, ma il flag UI non veniva mandato →
+  // checkbox "spezza" su edit appariva senza effetto. Ora si manda sempre.
   const smartSplit = document.getElementById('tlb-smart-split');
-  if (smartSplit && smartSplit.checked && !editingId) fd.append('smart_split', 'true');
+  if (smartSplit && smartSplit.checked) fd.append('smart_split', 'true');
   // E5 v3.4.19: ricorrenza (solo per CREATE — espande il booking originale).
   // v3.5.0-alpha.63: in edit mode (editingId) la ricorrenza diventa "estendi
   // come serie" → chiamata SEPARATA a /extend-as-series dopo il PUT, perché

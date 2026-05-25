@@ -507,8 +507,13 @@ async def parse_deliverables_api(
     db: Session = Depends(get_db),
 ):
     u = _resolve_current_user(db, access_token)
-    if get_provider_for_user(u.id if u else None, db) is None:
-        raise HTTPException(503, "AI non configurata")
+    # v3.5.0-alpha.172.81 (Bundle F): istanzia provider per-utente UNA VOLTA e
+    # lo iniettiamo nel parser/matcher. Pre-fix: parse_deliverables chiamava
+    # get_provider() (global) che era None se la AI key non era sul tenant
+    # globale → 500 anche se l'utente aveva configurato la propria chiave AI.
+    provider = get_provider_for_user(u.id if u else None, db)
+    if provider is None:
+        raise HTTPException(503, "AI non configurata. Vai in Impostazioni → tab AI per configurare un provider.")
 
     if file:
         file_bytes = await file.read()
@@ -525,9 +530,9 @@ async def parse_deliverables_api(
     if not extracted_text.strip():
         raise HTTPException(400, "Impossibile estrarre testo dal file")
 
-    parsed = parse_deliverables(extracted_text, hint=hint)
+    parsed = parse_deliverables(extracted_text, hint=hint, provider=provider)
     if not parsed:
-        raise HTTPException(500, "Parser AI ha fallito. Verifica il contenuto del capitolato.")
+        raise HTTPException(500, "Parser AI ha fallito. Verifica il contenuto del capitolato (es. PDF immagine non OCR-izzato).")
 
     pricelist = [
         {"id": i.id, "name": i.name,
@@ -537,7 +542,7 @@ async def parse_deliverables_api(
     ]
 
     deliverables = parsed.get("deliverables", [])
-    matches = match_deliverables_to_pricelist(deliverables, pricelist) if deliverables else None
+    matches = match_deliverables_to_pricelist(deliverables, pricelist, provider=provider) if deliverables else None
     match_map = {}
     if matches and matches.get("matches"):
         for m in matches["matches"]:
