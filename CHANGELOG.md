@@ -1,5 +1,25 @@
 # MediaFlow — Changelog
 
+## v3.5.0-alpha.172.86 — Split parse_deliverables: parse + match come call separate (fix cloudflare 524) (25 mag 2026)
+
+Bug Matteo: `POST /ai/api/deliverables/parse 524 (Cloudflare timeout)` su PDF capitolato + listino grande. 524 = trycloudflare tunnel hard limit 100s.
+
+Root cause: parse_deliverables + match_deliverables_to_pricelist eseguiti seriali nello stesso endpoint. ~30s parse + ~60s match = >100s su listino esteso → tunnel scaduto → browser riceve HTML error page Cloudflare → JSON.parse fallisce → toast confuso "Unexpected token '<'".
+
+**Fix backend** (`app/routers/ai.py`):
+- `parse_deliverables_api`: rimosso match interno. Ritorna `{deliverables: [...], needs_match: true}` rapido (~30s).
+- Nuovo endpoint `POST /ai/api/deliverables/match`: prende `{deliverables: [...]}`, ritorna `{matches: {idx: {price_item_id, price_item_name, confidence, ...}}}`. Tempo ~60s ma su request separata.
+
+**Fix UI** (`app/templates/pages/quotes.html:wizardStep1Submit`):
+- Dopo parse, mostra subito Step 2 con voci estratte (no badge match).
+- Fire-and-forget POST `/ai/api/deliverables/match` in background.
+- On success: aggiorna `_wcParsed.deliverables[].matched_*` + re-render Step 2 + toast "Match listino completato (N/M)".
+- On fail: silenzioso, l'utente può associare a mano via UI step 2.
+
+521 routes (520 + 1 nuovo). Schema DB invariato. UX migliorata: utente vede voci immediatamente invece di aspettare 90s.
+
+**File toccati**: `app/routers/ai.py` (parse-only + nuovo /match), `app/templates/pages/quotes.html` (wizard background match), `app/main.py`, `CHANGELOG.md`.
+
 ## v3.5.0-alpha.172.85 — Fix create-quote AttributeError Client.code + AI parse in threadpool (no event loop block) (25 mag 2026)
 
 Bug Matteo dopo α.172.84:

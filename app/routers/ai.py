@@ -533,10 +533,55 @@ async def parse_deliverables_api(
     # v3.5.0-alpha.172.85: AI provider sync (requests.post) blocca event loop
     # in async def. run_in_threadpool sposta in thread → server resta
     # responsivo per altre request durante l'analisi capitolato.
+    # v3.5.0-alpha.172.86: skip match per ridurre durata totale request.
+    # Cloudflare tunnel free ha hard limit 100s → 2 AI call seriali (~30s
+    # parse + ~60s match su listino grande) sforavano = 524. Ora ritorna
+    # solo deliverables (rapido); il match è opzionale via separato
+    # endpoint /api/deliverables/match (UI Step 2 lo chiama in background).
     from fastapi.concurrency import run_in_threadpool
     parsed = await run_in_threadpool(parse_deliverables, extracted_text, hint=hint, provider=provider)
     if not parsed:
         raise HTTPException(500, "Parser AI ha fallito. Verifica il contenuto del capitolato (es. PDF immagine non OCR-izzato).")
+
+    deliverables = parsed.get("deliverables", [])
+    # Default fields per consistenza (match avviene in chiamata separata)
+    for d in deliverables:
+        d["matched_price_item_id"] = None
+        d["match_confidence"] = "none"
+
+    return {
+        "project_info": parsed.get("project_info", {}),
+        "deliverables": deliverables,
+        "global_notes": parsed.get("global_notes"),
+        "source_document_name": source_name,
+        "needs_match": True,  # signal UI di chiamare /api/deliverables/match
+    }
+
+
+@router.post("/api/deliverables/match", dependencies=[RequireEditQuotesAI])
+async def match_deliverables_api(
+    request: Request,
+    access_token: Optional[str] = Cookie(None),
+    db: Session = Depends(get_db),
+):
+    """v3.5.0-alpha.172.86: estratto da parse_deliverables_api per evitare
+    cloudflare 524 (>100s totale tra parse + match). UI chiama questo
+    endpoint dopo aver ricevuto parsed.deliverables, in background mentre
+    l'utente già vede la lista.
+
+    Payload JSON: { deliverables: [...] }
+    Risposta: { matches: { idx: {price_item_id, confidence, ...} } }
+    """
+    from fastapi.concurrency import run_in_threadpool
+    u = _resolve_current_user(db, access_token)
+    provider = get_provider_for_user(u.id if u else None, db)
+    if provider is None:
+        raise HTTPException(503, "AI non configurata")
+
+    data = await request.json()
+    deliverables = data.get("deliverables") or []
+    if not isinstance(deliverables, list) or not deliverables:
+        return {"matches": {}}
 
     pricelist = [
         {"id": i.id, "name": i.name,
@@ -544,34 +589,28 @@ async def parse_deliverables_api(
          "unit": i.unit, "price_list": i.price_list}
         for i in db.query(PriceItem).filter(PriceItem.is_active == True).all()
     ]
+    if not pricelist:
+        return {"matches": {}}
 
-    deliverables = parsed.get("deliverables", [])
-    matches = await run_in_threadpool(match_deliverables_to_pricelist, deliverables, pricelist, provider=provider) if deliverables else None
-    match_map = {}
-    if matches and matches.get("matches"):
-        for m in matches["matches"]:
-            match_map[m["deliverable_index"]] = m
-
-    for i, d in enumerate(deliverables):
-        match = match_map.get(i)
-        if match and match.get("price_item_id"):
-            item = next((x for x in pricelist if x["id"] == match["price_item_id"]), None)
-            if item:
-                d["matched_price_item_id"] = item["id"]
-                d["matched_price_item_name"] = item["name"]
-                d["matched_unit_price"] = item["price_list"]
-                d["match_confidence"] = match.get("confidence", "medium")
-                d["match_reasoning"] = match.get("reasoning", "")
-        else:
-            d["matched_price_item_id"] = None
-            d["match_confidence"] = "none"
-
-    return {
-        "project_info": parsed.get("project_info", {}),
-        "deliverables": deliverables,
-        "global_notes": parsed.get("global_notes"),
-        "source_document_name": source_name,
-    }
+    result = await run_in_threadpool(match_deliverables_to_pricelist, deliverables, pricelist, provider=provider)
+    matches = {}
+    if result and result.get("matches"):
+        pi_by_id = {p["id"]: p for p in pricelist}
+        for m in result["matches"]:
+            idx = m.get("deliverable_index")
+            pid = m.get("price_item_id")
+            if idx is None:
+                continue
+            pi = pi_by_id.get(pid) if pid else None
+            matches[str(idx)] = {
+                "price_item_id": pid,
+                "price_item_name": pi["name"] if pi else None,
+                "unit_price": pi["price_list"] if pi else None,
+                "unit": pi["unit"] if pi else None,
+                "confidence": m.get("confidence", "medium"),
+                "reasoning": m.get("reasoning", ""),
+            }
+    return {"matches": matches}
 
 
 # ── Crea quotazione da capitolato confermato ─────────────────

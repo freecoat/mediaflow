@@ -3898,6 +3898,35 @@ async function wizardStep1Submit() {
     document.getElementById('wc-back-btn').style.display = '';
     document.getElementById('wc-next-btn').textContent = 'Crea quotazione';
     document.getElementById('wc-next-btn').disabled = false;
+    // v3.5.0-alpha.172.86 — fire match in background (separato da parse per
+    // evitare cloudflare 524 su request > 100s). UI mostra subito le voci
+    // estratte, poi aggiorna le badge match quando arriva il result.
+    if (_wcParsed.needs_match && Array.isArray(_wcParsed.deliverables) && _wcParsed.deliverables.length) {
+      try {
+        const mr = await fetch('/ai/api/deliverables/match', {
+          method: 'POST',
+          headers: {'Content-Type': 'application/json'},
+          credentials: 'same-origin',
+          body: JSON.stringify({deliverables: _wcParsed.deliverables}),
+        });
+        if (mr.ok) {
+          const mres = await mr.json();
+          const matches = mres.matches || {};
+          for (const [idx, m] of Object.entries(matches)) {
+            const d = _wcParsed.deliverables[parseInt(idx)];
+            if (d && m.price_item_id) {
+              d.matched_price_item_id = m.price_item_id;
+              d.matched_price_item_name = m.price_item_name;
+              d.matched_unit_price = m.unit_price;
+              d.match_confidence = m.confidence;
+              d.match_reasoning = m.reasoning;
+            }
+          }
+          renderWizardStep2();
+          toast(`Match listino completato (${Object.keys(matches).length}/${_wcParsed.deliverables.length} voci)`, 'success');
+        }
+      } catch(_) { /* match opzionale — l'utente può associare a mano */ }
+    }
   } catch(e) {
     toast(e.message || 'Errore parsing', 'error');
   } finally {
