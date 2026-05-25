@@ -8,6 +8,14 @@
 
 ## Versione corrente
 
+**v3.5.0-alpha.172.92** — 25 maggio 2026 (notte) — Bundle H3: Asset Library metadata ffprobe + delivery linked
+
+Pannello "Dettaglio asset" in `/dam` ora mostra (read-only): badge `AssetStatus` (planned/uploaded/rejected/accepted), deliverable linkati con status + qc_substatus + link a `/planning`, specifiche tecniche file estratte via ffprobe (Container/Video/Audio dettagliato). Fallback Pillow per immagini se ffprobe assente. Modal `showAssetDetail` refactor a DOM API (no più innerHTML).
+
+526 routes (+2: `/dam/api/assets/{id}/metadata` + `/dam/api/assets/{id}/delivery-info`). Schema DB invariato. ffprobe esterno, assente OK fallback gentile.
+
+**Sessione 25 maggio CONCLUSA — 4 bundle (I+J+H2+H3)**. Test live + report a domani 26 maggio.
+
 **v3.5.0-alpha.172.91** — 25 maggio 2026 (sera-notte) — Bundle H2: Jobs page deliverable section READ-ONLY
 
 `/jobs/{id}` allineato a nuovo enum Bundle I (5 status + qc_substatus). Kanban 5 colonne (era 4 legacy). Click card apre modal tech specs VIEW-only (`#modal-jd-specs`). Editing dei status/specs si fa solo da Planning HUB (Bundle J): link permanente in footer kanban + bottone "✏ Modifica in /planning" nel modal.
@@ -75,7 +83,7 @@ Tab `📦 Deliverable` in /planning come HUB centrale tenant-wide. Kanban 5 colo
 
 4. **H2 — Jobs page click→modal READ-ONLY** ✅ FATTA in α.172.91
 
-5. **H3 — Asset Library status delivery + metadata**
+5. **H3 — Asset Library status delivery + metadata** ✅ FATTA in α.172.92
    - Asset detail mostra delivery linked status (read-only)
    - Metadata tecnici letti da file (ffprobe/mediainfo/exif)
    - NO modal edit. Asset rejected via cascade I3

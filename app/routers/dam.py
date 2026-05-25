@@ -200,6 +200,119 @@ async def list_assets(
     ]
 
 
+# v3.5.0-alpha.172.92 (Bundle H3) — Metadata tecnici estratti dal file +
+# delivery linked status (deliverable + qc_substatus). Read-only.
+
+@router.get("/api/assets/{asset_id}/metadata")
+async def get_asset_metadata(
+    asset_id: int,
+    db: Session = Depends(get_db),
+):
+    """Estrae metadata tecnici dal file Asset via ffprobe / Pillow.
+    Idempotente: re-invocazione = ri-estrazione (no cache per ora).
+    Output shape vedi `app.services.asset_metadata.extract_asset_metadata`.
+    """
+    from app.services.asset_metadata import extract_asset_metadata
+    a = db.query(Asset).filter(
+        Asset.id == asset_id,
+        Asset.tenant_id == current_tenant_id(),
+    ).first()
+    if not a:
+        raise HTTPException(404, "Asset non trovato")
+    if not a.file_path:
+        return {"asset_id": asset_id, "tool": "none",
+                "errors": ["asset senza file_path"],
+                "video": None, "audio": [], "container": None}
+    # S3 paths: non possiamo leggere local file → skip
+    if a.file_path.startswith("s3://"):
+        return {"asset_id": asset_id, "tool": "none",
+                "errors": ["file su S3, metadata extraction non supportata"],
+                "video": None, "audio": [], "container": None}
+    meta = extract_asset_metadata(a.file_path, a.mime_type)
+    meta["asset_id"] = asset_id
+    meta["filename"] = a.original_name
+    meta["mime_type"] = a.mime_type
+    meta["file_size"] = a.file_size
+    return meta
+
+
+@router.get("/api/assets/{asset_id}/delivery-info")
+async def get_asset_delivery_info(
+    asset_id: int,
+    db: Session = Depends(get_db),
+):
+    """Restituisce delivery context dell'asset: deliverable linkati,
+    status main + qc_substatus, project/job. Read-only — editing su
+    /planning HUB (Bundle J)."""
+    from app.models import (
+        JobDeliverable, DeliverableAsset, Job, Project,
+        DeliverableStatus, AssetStatus,
+    )
+    a = db.query(Asset).filter(
+        Asset.id == asset_id,
+        Asset.tenant_id == current_tenant_id(),
+    ).first()
+    if not a:
+        raise HTTPException(404, "Asset non trovato")
+
+    deliverables = []
+    # Primary FK (legacy): job_deliverable_id
+    if a.job_deliverable_id:
+        d = db.query(JobDeliverable).filter(
+            JobDeliverable.id == a.job_deliverable_id,
+            JobDeliverable.tenant_id == current_tenant_id(),
+        ).first()
+        if d:
+            deliverables.append(_serialize_deliv_for_asset(db, d, source="primary_fk"))
+    # M:N pivot DeliverableAsset
+    links = db.query(DeliverableAsset).filter(
+        DeliverableAsset.asset_id == asset_id,
+    ).all()
+    seen = {d["id"] for d in deliverables}
+    for link in links:
+        d = db.query(JobDeliverable).filter(
+            JobDeliverable.id == link.job_deliverable_id,
+            JobDeliverable.tenant_id == current_tenant_id(),
+        ).first()
+        if d and d.id not in seen:
+            deliverables.append(_serialize_deliv_for_asset(db, d, source=link.source or "manual"))
+            seen.add(d.id)
+
+    return {
+        "asset_id": asset_id,
+        "asset_status": a.status.value if a.status else "planned",
+        "is_internal_archive": a.is_internal_archive,
+        "is_delivered_external": a.is_delivered_external,
+        "delivered_at": a.delivered_at.isoformat() + "Z" if a.delivered_at else None,
+        "delivered_to": a.delivered_to,
+        "deliverables": deliverables,
+        "parent_asset_id": a.parent_asset_id,
+        "version": a.version,
+    }
+
+
+def _serialize_deliv_for_asset(db, d, source="manual"):
+    """Helper: serializza deliverable minimo per asset delivery-info."""
+    from app.models import Job, Project
+    job = db.query(Job).filter(Job.id == d.job_id).first()
+    project = db.query(Project).filter(Project.id == job.project_id).first() if job and job.project_id else None
+    return {
+        "id": d.id,
+        "name": d.name,
+        "status": d.status.value if d.status else "planned",
+        "qc_substatus": d.qc_substatus.value if d.qc_substatus else None,
+        "target_delivery_date": d.target_delivery_date.isoformat() if d.target_delivery_date else None,
+        "delivered_date": d.delivered_date.isoformat() if d.delivered_date else None,
+        "link_source": source,
+        "job_id": d.job_id,
+        "job_code": job.code if job else None,
+        "job_name": job.name if job else None,
+        "project_id": project.id if project else None,
+        "project_code": project.code if project else None,
+        "project_title": project.title if project else None,
+    }
+
+
 @router.post("/api/assets/{asset_id}/assign-project", dependencies=[RequireEditDam])
 async def assign_asset_to_project(
     asset_id: int,

@@ -1,5 +1,37 @@
 # MediaFlow — Changelog
 
+## v3.5.0-alpha.172.92 — Bundle H3: Asset Library metadata ffprobe + delivery linked status (25 mag 2026 notte)
+
+Pannello "Dettaglio asset" in `/dam` ora mostra (read-only) le specifiche tecniche estratte dal file via `ffprobe` + il contesto delivery (deliverable linkati con status main + qc_substatus). Asset.status badge visibile (planned/uploaded/rejected/accepted). Link a `/planning → 📦 Deliverable` per editing (Bundle J HUB).
+
+**Service nuovo** (`app/services/asset_metadata.py`):
+- `extract_asset_metadata(file_path, mime_type) -> dict` con shape `{tool, video, audio[], container, errors[]}`.
+- Strategy: ffprobe per qualsiasi media (video/audio/anche immagini); Pillow fallback per `image/*` se ffprobe assente o output vuoto.
+- ffprobe via subprocess (no dipendenza Python aggiunta), timeout 8s, gestione corrupted/missing file senza eccezioni.
+- Parsing `r_frame_rate` (`24000/1001` → `23.976`), bitrate normalizzato in kbps, lingua audio da stream tags.
+- Idempotente: non solleva, sempre dict consistente con `errors[]` valorizzato se fallisce.
+
+**Endpoint nuovi** (`app/routers/dam.py`):
+- `GET /dam/api/assets/{id}/metadata` — invoca service. Skip se file su `s3://`.
+- `GET /dam/api/assets/{id}/delivery-info` — `{asset_status, is_internal_archive, is_delivered_external, deliverables: [{id, name, status, qc_substatus, target_delivery_date, link_source, job/project labels}]}`. Aggrega FK legacy `Asset.job_deliverable_id` + pivot `DeliverableAsset` (dedup).
+- Helper `_serialize_deliv_for_asset` riusabile.
+
+**UI dam.html `#modal-asset-detail`**:
+- Rifattorizzato `showAssetDetail` da `innerHTML` a `createElement` (security-safe pattern, no eval).
+- Nuova sezione `📦 Delivery linked`: badge `AssetStatus` color-coded (planned/uploaded/rejected/accepted), flag is_internal_archive / is_delivered_external, per ogni deliverable: badge main + sub-badge QC + nome + project/job + target_date + link "✏ Modifica in /planning →".
+- Nuova sezione `🎬 Specifiche tecniche file` (ffprobe async): tool usato + blocchi Container/Video/Audio con campi tipizzati (risoluzione, codec, framerate, sample rate, lingua audio). Errori `⚠` testo neutro.
+- Fetch async non-bloccanti (modal apre subito, sezioni si popolano).
+
+**Cascade QC reject** (Bundle I) ora visibile: `Asset.status='rejected'` come badge rosso "Rifiutato (QC)". Spawn placeholder visibile in /dam con stessa filename "(re-run QC)" e link al deliverable originale.
+
+**Tech-debt risolto**: `showAssetDetail` migrato a DOM API (no più innerHTML con template literal — pattern security hook).
+
+526 routes (+2). Schema DB invariato. Nessuna nuova dipendenza Python — ffprobe esterno (assente OK, fallback gentile).
+
+**File toccati**: `app/services/asset_metadata.py` (nuovo), `app/routers/dam.py`, `app/templates/pages/dam.html`, `app/main.py`, `CHANGELOG.md`, `docs/STATO.md`.
+
+**Sessione 25 maggio CONCLUSA — 4 bundle locali**: α.172.89 (I) + α.172.90 (J) + α.172.91 (H2) + α.172.92 (H3). Commit NON pushati (memo policy locale = solo major bump). Test live + report rimandati a domani 26 mag.
+
 ## v3.5.0-alpha.172.91 — Bundle H2: Jobs page deliverable section READ-ONLY + modal specs view (25 mag 2026)
 
 Allineamento `/jobs/{id}` con nuovo enum Bundle I (5 status main + qc_substatus) e separazione editing → Planning HUB (Bundle J). Pagina Job ora overview-only: vede stato deliverable, conferma consegne, ma NON modifica status né tech_specs (link a `/planning?view=deliverables`).

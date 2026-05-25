@@ -447,6 +447,27 @@ async function uploadFiles() {
 }
 
 // ── Dettaglio asset ──────────────────────────────────────────
+// v3.5.0-alpha.172.92 (Bundle H3) — Aggiunte sezioni:
+//  1. Delivery linked (deliverable status + qc_substatus, link a /planning)
+//  2. Specifiche tecniche file (ffprobe/Pillow async)
+// READ-ONLY: editing in /planning -> Deliverable HUB (Bundle J).
+const _ASSET_STATUS_LBL = {
+  planned: 'Pianificato', uploaded: 'Caricato',
+  rejected: 'Rifiutato (QC)', accepted: 'Accettato',
+};
+const _ASSET_STATUS_COLOR = {
+  planned: '#94a3b8', uploaded: '#a7b3f9',
+  rejected: '#ef4444', accepted: '#22c55e',
+};
+const _DLV_STATUS_LBL = {
+  planned: 'Pianificato', in_progress: 'In lavorazione',
+  qc: 'QC', delivered: 'Consegnato', closed: 'Chiuso',
+};
+const _DLV_STATUS_COLOR = {
+  planned: '#94a3b8', in_progress: '#a7b3f9',
+  qc: '#fbbf24', delivered: '#22c55e', closed: '#c084fc',
+};
+
 function showAssetDetail(idOrAsset) {
   // v3.5.0-alpha.172.39 (Sprint 4.B) — accetta id (nuovo) o object (legacy).
   const a = (typeof idOrAsset === 'number')
@@ -456,18 +477,224 @@ function showAssetDetail(idOrAsset) {
   document.getElementById('ad-title').textContent = a.original_name;
   document.getElementById('ad-download').href = a.download_url;
   document.getElementById('ad-delete').onclick = () => deleteAsset(a.id);
-  document.getElementById('ad-body').innerHTML = `
-    ${a.thumbnail_url
-      ? `<img src="${a.thumbnail_url}" style="width:100%;border-radius:var(--radius);margin-bottom:16px;object-fit:cover;max-height:220px;">`
-      : `<div style="text-align:center;font-size:48px;margin-bottom:16px;">${assetIcon(a.asset_type)}</div>`}
-    <table style="width:100%;font-size:13px;">
-      <tr><td class="text-muted" style="padding:5px 0;width:35%;">Tipo</td><td>${a.asset_type} (${a.mime_type})</td></tr>
-      <tr><td class="text-muted" style="padding:5px 0;">Dimensione</td><td>${fmtSize(a.file_size)}</td></tr>
-      <tr><td class="text-muted" style="padding:5px 0;">Caricato</td><td>${fmtDate(a.created_at)}</td></tr>
-      <tr><td class="text-muted" style="padding:5px 0;">Versione</td><td>v${a.version}</td></tr>
-      ${a.tags.length ? `<tr><td class="text-muted" style="padding:5px 0;">Tag</td><td>${a.tags.map(t=>'#'+t).join(', ')}</td></tr>` : ''}
-    </table>`;
+
+  const body = document.getElementById('ad-body');
+  body.replaceChildren();
+
+  // Thumbnail / icona
+  const head = document.createElement('div');
+  if (a.thumbnail_url) {
+    const img = document.createElement('img');
+    img.src = a.thumbnail_url;
+    img.style.cssText = 'width:100%;border-radius:var(--radius);margin-bottom:12px;object-fit:cover;max-height:220px;';
+    head.appendChild(img);
+  } else {
+    head.style.cssText = 'text-align:center;font-size:48px;margin-bottom:12px;';
+    head.textContent = assetIcon(a.asset_type);
+  }
+  body.appendChild(head);
+
+  // Tabella base
+  const table = document.createElement('table');
+  table.style.cssText = 'width:100%;font-size:13px;margin-bottom:14px;';
+  const rows = [
+    ['Tipo', `${a.asset_type} (${a.mime_type})`],
+    ['Dimensione', fmtSize(a.file_size)],
+    ['Caricato', fmtDate(a.created_at)],
+    ['Versione', 'v' + a.version],
+  ];
+  if (a.tags && a.tags.length) rows.push(['Tag', a.tags.map(t=>'#'+t).join(', ')]);
+  rows.forEach(([k, v]) => {
+    const tr = document.createElement('tr');
+    const tdk = document.createElement('td'); tdk.className = 'text-muted'; tdk.style.cssText = 'padding:5px 0;width:35%;'; tdk.textContent = k;
+    const tdv = document.createElement('td'); tdv.style.padding = '5px 0';
+    tdv.textContent = v == null ? '—' : v;
+    tr.appendChild(tdk); tr.appendChild(tdv);
+    table.appendChild(tr);
+  });
+  body.appendChild(table);
+
+  // Sezione Delivery linked (placeholder fino a fetch)
+  const dlSection = document.createElement('div');
+  dlSection.style.cssText = 'background:rgba(192,132,252,0.06); border:1px solid rgba(192,132,252,0.25); border-radius:6px; padding:8px 12px; margin-bottom:10px;';
+  const dlHdr = document.createElement('div');
+  dlHdr.style.cssText = 'font-size:11px; text-transform:uppercase; letter-spacing:0.06em; color:var(--text3); font-weight:600; margin-bottom:6px;';
+  dlHdr.textContent = '📦 Delivery linked';
+  dlSection.appendChild(dlHdr);
+  const dlBody = document.createElement('div');
+  dlBody.className = 'text-xs text-muted';
+  dlBody.textContent = 'Caricamento…';
+  dlSection.appendChild(dlBody);
+  body.appendChild(dlSection);
+
+  // Sezione Specifiche tecniche file (placeholder fino a fetch)
+  const mtSection = document.createElement('div');
+  mtSection.style.cssText = 'background:var(--bg3); border:1px solid var(--border); border-radius:6px; padding:8px 12px;';
+  const mtHdr = document.createElement('div');
+  mtHdr.style.cssText = 'font-size:11px; text-transform:uppercase; letter-spacing:0.06em; color:var(--text3); font-weight:600; margin-bottom:6px;';
+  mtHdr.textContent = '🎬 Specifiche tecniche file';
+  mtSection.appendChild(mtHdr);
+  const mtBody = document.createElement('div');
+  mtBody.className = 'text-xs text-muted';
+  mtBody.textContent = 'Analisi file…';
+  mtSection.appendChild(mtBody);
+  body.appendChild(mtSection);
+
   openModal('modal-asset-detail');
+
+  // Fetch async — Delivery + Metadata (non bloccanti)
+  _adFetchDeliveryInfo(a.id, dlBody);
+  _adFetchMetadata(a.id, mtBody);
+}
+
+async function _adFetchDeliveryInfo(assetId, host) {
+  try {
+    const info = await api('GET', `/dam/api/assets/${assetId}/delivery-info`);
+    host.replaceChildren();
+    // Asset status badge
+    const statusRow = document.createElement('div');
+    statusRow.style.cssText = 'margin-bottom:6px; display:flex; gap:8px; align-items:center; flex-wrap:wrap;';
+    const statBadge = document.createElement('span');
+    const aSt = info.asset_status || 'planned';
+    statBadge.style.cssText = `padding:2px 8px;border-radius:8px;background:${_ASSET_STATUS_COLOR[aSt]}33;color:${_ASSET_STATUS_COLOR[aSt]};font-weight:600;font-size:11px;`;
+    statBadge.textContent = _ASSET_STATUS_LBL[aSt] || aSt;
+    statusRow.appendChild(statBadge);
+    if (info.is_internal_archive) {
+      const b = document.createElement('span');
+      b.style.cssText = 'padding:1px 6px;border-radius:6px;background:rgba(98,114,245,0.15);color:#a7b3f9;font-size:10px;';
+      b.textContent = '📂 Archivio interno';
+      statusRow.appendChild(b);
+    }
+    if (info.is_delivered_external) {
+      const b = document.createElement('span');
+      b.style.cssText = 'padding:1px 6px;border-radius:6px;background:rgba(34,197,94,0.15);color:#22c55e;font-size:10px;';
+      b.textContent = '📤 Consegnato esterno';
+      statusRow.appendChild(b);
+    }
+    host.appendChild(statusRow);
+
+    if (!info.deliverables || !info.deliverables.length) {
+      const none = document.createElement('div');
+      none.className = 'text-xs text-muted'; none.style.fontStyle = 'italic';
+      none.textContent = 'Nessun deliverable linkato.';
+      host.appendChild(none);
+    } else {
+      info.deliverables.forEach(d => {
+        const row = document.createElement('div');
+        row.style.cssText = 'padding:6px 0; border-top:1px solid var(--border); font-size:12px;';
+        const top = document.createElement('div');
+        top.style.cssText = 'display:flex; gap:8px; align-items:center; flex-wrap:wrap;';
+        const dlBadge = document.createElement('span');
+        const dSt = d.status || 'planned';
+        dlBadge.style.cssText = `padding:1px 6px;border-radius:6px;background:${_DLV_STATUS_COLOR[dSt]}33;color:${_DLV_STATUS_COLOR[dSt]};font-weight:600;font-size:10px;`;
+        dlBadge.textContent = _DLV_STATUS_LBL[dSt] || dSt;
+        top.appendChild(dlBadge);
+        if (d.qc_substatus) {
+          const qcB = document.createElement('span');
+          qcB.style.cssText = `padding:1px 5px;border-radius:5px;background:${_DLV_STATUS_COLOR.qc}55;color:${_DLV_STATUS_COLOR.qc};font-size:9px;font-weight:600;`;
+          qcB.textContent = 'QC: ' + d.qc_substatus;
+          top.appendChild(qcB);
+        }
+        const linkSrc = document.createElement('span');
+        linkSrc.className = 'text-xs text-muted'; linkSrc.style.fontStyle = 'italic';
+        linkSrc.textContent = '(' + d.link_source + ')';
+        top.appendChild(linkSrc);
+        row.appendChild(top);
+
+        const name = document.createElement('div');
+        name.style.cssText = 'font-weight:500; margin-top:3px;';
+        name.textContent = d.name;
+        row.appendChild(name);
+
+        const meta = document.createElement('div');
+        meta.className = 'text-xs text-muted'; meta.style.marginTop = '2px';
+        const proj = d.project_code || d.project_title || '—';
+        const job = d.job_code || '—';
+        meta.textContent = `${proj} · Job ${job}`;
+        if (d.target_delivery_date) meta.textContent += ` · 📅 ${d.target_delivery_date}`;
+        row.appendChild(meta);
+
+        const editLink = document.createElement('a');
+        editLink.href = '/planning?view=deliverables';
+        editLink.target = '_blank';
+        editLink.style.cssText = 'font-size:11px; color:var(--indigo2); margin-top:3px; display:inline-block;';
+        editLink.textContent = '✏ Modifica in /planning →';
+        row.appendChild(editLink);
+
+        host.appendChild(row);
+      });
+    }
+  } catch(e) {
+    host.replaceChildren();
+    const err = document.createElement('div'); err.className = 'text-xs'; err.style.color = 'var(--rose)';
+    err.textContent = 'Errore: ' + (e.message || '');
+    host.appendChild(err);
+  }
+}
+
+async function _adFetchMetadata(assetId, host) {
+  try {
+    const meta = await api('GET', `/dam/api/assets/${assetId}/metadata`);
+    host.replaceChildren();
+    if (meta.tool === 'none' || (!meta.video && !meta.audio.length && !meta.container)) {
+      const none = document.createElement('div');
+      none.className = 'text-xs text-muted'; none.style.fontStyle = 'italic';
+      none.textContent = (meta.errors && meta.errors.length)
+        ? meta.errors[0]
+        : 'Nessuna spec tecnica estraibile da questo file.';
+      host.appendChild(none);
+      return;
+    }
+    const toolBadge = document.createElement('div');
+    toolBadge.className = 'text-xs text-muted'; toolBadge.style.cssText = 'margin-bottom:5px;';
+    toolBadge.textContent = `Tool: ${meta.tool}`;
+    host.appendChild(toolBadge);
+
+    const addRow = (k, v) => {
+      if (v == null || v === '') return;
+      const tr = document.createElement('div');
+      tr.style.cssText = 'display:flex; gap:8px; font-size:12px; padding:2px 0;';
+      const tdk = document.createElement('span'); tdk.className = 'text-muted'; tdk.style.minWidth = '110px'; tdk.textContent = k;
+      const tdv = document.createElement('span'); tdv.style.cssText = 'font-family:var(--font-mono);';
+      tdv.textContent = String(v);
+      tr.appendChild(tdk); tr.appendChild(tdv);
+      host.appendChild(tr);
+    };
+    if (meta.container) {
+      addRow('Container', meta.container.format);
+      if (meta.container.duration_sec != null) addRow('Durata', meta.container.duration_sec.toFixed(2) + ' s');
+      if (meta.container.bitrate_kbps != null) addRow('Bitrate', meta.container.bitrate_kbps + ' kbps');
+    }
+    if (meta.video) {
+      addRow('— Video —', '');
+      addRow('Risoluzione', meta.video.width && meta.video.height ? `${meta.video.width} × ${meta.video.height}` : null);
+      addRow('Codec', meta.video.codec);
+      addRow('Framerate', meta.video.framerate);
+      addRow('Pixel format', meta.video.pixel_format);
+      addRow('Color space', meta.video.color_space);
+    }
+    if (meta.audio && meta.audio.length) {
+      meta.audio.forEach((au, i) => {
+        addRow(`— Audio ${i + 1} —`, '');
+        addRow('Codec', au.codec);
+        addRow('Canali', au.channels);
+        addRow('Sample rate', au.sample_rate ? au.sample_rate + ' Hz' : null);
+        addRow('Bitrate', au.bitrate_kbps ? au.bitrate_kbps + ' kbps' : null);
+        addRow('Lingua', au.language);
+      });
+    }
+    if (meta.errors && meta.errors.length) {
+      const err = document.createElement('div');
+      err.className = 'text-xs'; err.style.cssText = 'color:var(--text3); font-style:italic; margin-top:6px;';
+      err.textContent = '⚠ ' + meta.errors[0];
+      host.appendChild(err);
+    }
+  } catch(e) {
+    host.replaceChildren();
+    const err = document.createElement('div'); err.className = 'text-xs'; err.style.color = 'var(--rose)';
+    err.textContent = 'Errore: ' + (e.message || '');
+    host.appendChild(err);
+  }
 }
 
 async function deleteAsset(id) {
