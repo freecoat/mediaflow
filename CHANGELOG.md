@@ -1,5 +1,23 @@
 # MediaFlow — Changelog
 
+## v3.5.0-alpha.172.77 — Bundle B: smart_split AI usa policy default tenant come fallback (25 mag 2026)
+
+Bug riportato Matteo dopo test α.172.74: `propose_recurring_bookings` con `smart_split=true` non spezzava davvero le giornate (booking #90 = 1 slot 9-18 invece di 2 slot 9-13 + 14-18), e generava `overtime_warning` spurio (9h presenza invece di 8h reali al netto pausa).
+
+**Root cause**: il loop di pre-carica policy in `_h_propose_recurring_bookings` (`ai_assistant.py:1995`) controllava SOLO `resource.working_hours_policy_id`. Risorse senza override esplicito (Luca, Conforming, Sara, SalaColor in seed_demo) → `policies_by_rid={}` → smart_split silently no-op + calcolo ore basato su envelope (end-start).
+
+**Diff path manual UI vs AI** (booking #177 manuale vs #90 AI): `POST /api/bookings` → `_expand_assignments_smart()` → `_resolve_policy_for_resource()` che HA il fallback a `WorkingHoursPolicy.is_default==True` del tenant. Stesso helper era già usato in `_h_propose_split_booking` (α.172.75) ma non in recurring.
+
+**Fix**: refactor del loop in `_h_propose_recurring_bookings` per usare `_resolve_policy_for_resource(db, _rid)` invece del check diretto su `r.working_hours_policy_id`. Ora se risorsa non ha policy override → applica default tenant (`CCNL Cineaudiovisivo 2019 - Ferie IT`, morning 9-13 + afternoon 14-18, lunch 13-14).
+
+Comportamento atteso post-fix sullo scenario reale di test:
+- `propose_recurring_bookings(smart_split=true, start=09:00, end=18:00, resource_ids=[Luca, Conforming1])` → per ogni giorno: 2 assignments per risorsa (9-13 + 14-18) = 4 totali. `daily_hours_effective=8.0`, `lunch_break_minutes=60`, NO overtime warning.
+- Risorse miste (alcune con WHP override, altre no): ognuna usa la propria policy effettiva.
+
+**File toccati**: `app/services/ai_assistant.py` (1 funzione, sostituzione loop pre-carica policy), `app/main.py` (version), `CHANGELOG.md`.
+
+516 routes invariato. Schema DB invariato. Allineato con path manual UI (POST /api/bookings + smart_split=true) e con `_h_propose_split_booking`.
+
 ## v3.5.0-alpha.172.76 — Bundle E: Log azioni permanente + verbose mode + shortcut Ctrl+Shift+L (25 mag 2026)
 
 Richiesta Matteo: durante test AI/UI servono spesso copie esatte di toast/errori per descrivere bug — copy a mano è lento e perde dettaglio. Soluzione: pannello log permanente con ring buffer locale + shortcut + esporta JSON.

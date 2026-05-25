@@ -1989,18 +1989,21 @@ def _h_propose_recurring_bookings(db: Session, data: dict) -> dict:
     smart_split = bool(data.get("smart_split") or False)
 
     # Pre-carica policy per ogni risorsa (per smart_split + warning OT).
-    # Fallback: la prima risorsa con policy valorizza i parametri "rappresentativi"
-    # per warning e split. Risorse senza policy → slot monolitico (no split).
+    # v3.5.0-alpha.172.77 (Bundle B0) — usa _resolve_policy_for_resource (helper
+    # condiviso col path manual UI POST /api/bookings): se la risorsa NON ha
+    # working_hours_policy_id, fallback alla policy DEFAULT del tenant.
+    # Prima del fix: il check `if r.working_hours_policy_id` saltava il fallback,
+    # producendo policies_by_rid={}, smart_split silently no-op (1 slot monolitico
+    # 9-18), daily_hours_effective=presence (9h) anziché slot policy (8h netti
+    # con pausa), overtime_warning errato. Allineato a _h_propose_split_booking
+    # che già usava lo stesso helper.
     policies_by_rid: dict = {}
     if smart_split:
-        from app.services.working_hours import split_booking_smart as _split_smart
+        from app.routers.planning import _resolve_policy_for_resource
         for _rid in rids:
-            r = db.query(Resource).filter(Resource.id == _rid).first()
-            if r and getattr(r, "working_hours_policy_id", None):
-                from app.models import WorkingHoursPolicy as _WHP
-                pol = db.query(_WHP).filter(_WHP.id == r.working_hours_policy_id).first()
-                if pol:
-                    policies_by_rid[_rid] = pol
+            pol = _resolve_policy_for_resource(db, _rid)
+            if pol:
+                policies_by_rid[_rid] = pol
 
     # Calcolo ore effettive standard per giorno (per overtime warning).
     # Senza smart_split: end - start (orario "presenza" continuativo).
