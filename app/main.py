@@ -1175,6 +1175,73 @@ def _auto_migrate_restructure_phase1():
         print(f"[auto-migrate-α172] failed: {e}")
 
 
+def _auto_migrate_bundle_i():
+    """v3.5.0-alpha.172.89 (Bundle I) — Stati nested deliverable + cascade QC.
+    Idempotente: ALTER + UPDATE solo se mancano colonne / status legacy.
+    Per backfill dati pulito preferisci `scripts/migrate_phase_i_deliverable_status.py`.
+    """
+    from sqlalchemy import text
+    from app.database import engine
+    try:
+        with engine.begin() as conn:
+            def cols(table):
+                return {r[1] for r in conn.execute(text(f"PRAGMA table_info({table})"))}
+            jd_cols = cols("job_deliverables")
+            if "qc_substatus" not in jd_cols:
+                print("[auto-migrate-bundle-i] job_deliverables.qc_substatus -> ALTER")
+                conn.execute(text(
+                    "ALTER TABLE job_deliverables ADD COLUMN qc_substatus VARCHAR(20) NULL"
+                ))
+            a_cols = cols("assets")
+            if "status" not in a_cols:
+                print("[auto-migrate-bundle-i] assets.status -> ALTER")
+                conn.execute(text(
+                    "ALTER TABLE assets ADD COLUMN status VARCHAR(20) NOT NULL DEFAULT 'planned'"
+                ))
+            # Mapping legacy status (idempotente: WHERE status IN (...))
+            status_map = [
+                ("in_production", "in_progress", None),
+                ("file_attached", "in_progress", None),
+                ("qc_running",    "qc",          "in_progress"),
+                ("qc_passed",     "qc",          "passed"),
+                ("qc_failed",     "qc",          "rejected"),
+                ("accepted",      "closed",      None),
+                ("rejected",      "delivered",   None),
+            ]
+            for old, new_main, new_sub in status_map:
+                if new_sub:
+                    res = conn.execute(text(
+                        "UPDATE job_deliverables SET status=:new_main, qc_substatus=:new_sub "
+                        "WHERE status=:old"
+                    ), {"new_main": new_main, "new_sub": new_sub, "old": old})
+                else:
+                    res = conn.execute(text(
+                        "UPDATE job_deliverables SET status=:new_main, qc_substatus=NULL "
+                        "WHERE status=:old"
+                    ), {"new_main": new_main, "old": old})
+                if res.rowcount:
+                    print(f"[auto-migrate-bundle-i] {res.rowcount}x deliverable.status {old} -> {new_main}"
+                          + (f"+{new_sub}" if new_sub else ""))
+            # Asset.status backfill: file_path valorizzato -> uploaded
+            res = conn.execute(text(
+                "UPDATE assets SET status='uploaded' "
+                "WHERE status='planned' AND file_path IS NOT NULL AND file_path != ''"
+            ))
+            if res.rowcount:
+                print(f"[auto-migrate-bundle-i] {res.rowcount}x asset.status planned -> uploaded")
+            # Indici (idempotenti via IF NOT EXISTS)
+            conn.execute(text(
+                "CREATE INDEX IF NOT EXISTS ix_deliverables_status_substatus "
+                "ON job_deliverables(status, qc_substatus)"
+            ))
+            conn.execute(text(
+                "CREATE INDEX IF NOT EXISTS ix_assets_tenant_status "
+                "ON assets(tenant_id, status)"
+            ))
+    except Exception as e:
+        print(f"[auto-migrate-bundle-i] failed: {e}")
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     create_tables()
@@ -1189,6 +1256,11 @@ async def lifespan(app: FastAPI):
         _auto_migrate_restructure_phase1()
     except Exception as e:
         print(f"[lifespan] _auto_migrate_restructure_phase1 failed: {e}")
+    # v3.5.0-alpha.172.89 — Auto-fix Bundle I (stati nested deliverable)
+    try:
+        _auto_migrate_bundle_i()
+    except Exception as e:
+        print(f"[lifespan] _auto_migrate_bundle_i failed: {e}")
     # v3.5.0-alpha.111 — Backfill JobResourceAssignment da booking storici
     try:
         _backfill_resource_assignments()
@@ -1561,7 +1633,7 @@ async def lifespan(app: FastAPI):
     yield
 
 
-app = FastAPI(title="Claqo", version="3.5.0-alpha.172.88", lifespan=lifespan)
+app = FastAPI(title="Claqo", version="3.5.0-alpha.172.89", lifespan=lifespan)
 
 BASE_DIR = Path(__file__).parent
 app.mount("/static", StaticFiles(directory=BASE_DIR / "static"), name="static")

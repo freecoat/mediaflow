@@ -1,5 +1,59 @@
 # MediaFlow — Changelog
 
+## v3.5.0-alpha.172.89 — Bundle I: stati nested Deliverable + cascade QC reject (25 mag 2026)
+
+Restructure dello stato del ciclo di vita di `JobDeliverable`. Workflow QC reale (run → pass/reject → rerun) non era riflesso pulitamente dall'enum 9-valori piatto. Bundle I collassa in 5 stati main + 1 substatus QC nullable, aggiunge cascade su QC reject e auto-bump deliverable quando booking linkato passa a in_progress.
+
+**Modelli** (`app/models/models.py`):
+- `DeliverableStatus` enum riscritto: `planned → in_progress → qc → delivered → closed` (5 valori vs 9 precedenti).
+- Nuovo `QCSubstatus` enum (in_progress | passed | rejected) nullable, valido solo se `status == qc`.
+- Nuovo `AssetStatus` enum (planned | uploaded | rejected | accepted) → `Asset.status` (prima implicito tramite flag is_internal_archive/is_delivered_external).
+- `JobDeliverable.qc_substatus` + indice composto `(status, qc_substatus)`.
+- `NotificationKind.deliverable_qc_rejected` per cascade.
+
+**Migrazione legacy CONSERVATIVA** (`app/main.py::_auto_migrate_bundle_i` + `scripts/migrate_phase_i_deliverable_status.py`):
+- `in_production` / `file_attached` → `in_progress`
+- `qc_running` → `qc` + `qc_substatus=in_progress`
+- `qc_passed` → `qc` + `qc_substatus=passed`
+- `qc_failed` → `qc` + `qc_substatus=rejected` (NO auto-cascade su dati legacy)
+- `accepted` → `closed`
+- `rejected` (cliente) → `delivered`
+- Asset con `file_path` valorizzato → `status=uploaded`, altrimenti `planned`
+- Indici `ix_deliverables_status_substatus`, `ix_assets_tenant_status`
+
+**Cascade QC reject** (`app/services/qc_cascade.py`):
+- `cascade_qc_reject(db, deliverable)` invocato automaticamente quando `update_deliverable` riceve `status=qc + qc_substatus=rejected`.
+- Effetti: main status → planned, qc_substatus → None, Asset principali (source!='qc_report') marcati rejected, spawn placeholder Asset(status=planned, parent=originale, file_path vuoto) linkato via DeliverableAsset(source='manual'), notifica in-app a permesso `view_finance`.
+- Idempotente: skip placeholder se ne esiste già uno post-reject con parent_asset_id su asset rejected linkato a questo deliv.
+
+**Router** (`app/routers/jobs.py`):
+- `PUT /api/deliverables/{id}` esteso con `qc_substatus` + `qc_reject_reason` opzionali. Valida: qc_substatus ammesso solo se status==qc. Triggera cascade.
+- Nuovo `POST /api/deliverables/{id}/close` — solo `delivered → closed`, permesso `view_finance`, irreversibile (409 su update successivo se da closed).
+- Nuovo `POST /api/deliverables/{id}/qc-report` — upload PDF QC: crea Asset standalone (status=uploaded) + DeliverableAsset(source='qc_report'). Max 50 MB.
+
+**Hook booking→deliverable** (`app/routers/planning.py::update_booking_execution`):
+- Quando booking passa a `execution_status=in_progress`, deliverable linkati via `BookingDeliverable` pivot con `status=planned` ricevono auto-bump a `in_progress`. Idempotente, audit-loggato come `deliverable_auto_bump`.
+
+**AI capability** (`app/services/ai_assistant.py`):
+- Nuovo `propose_qc_report_summary` (Anthropic-style tool): legge file PDF da Asset.file_path linkato come QC report, estrae testo via pypdf, manda al provider AI corrente con `QC_SUMMARY_SYSTEM_PROMPT` (output JSON `{passed, issues, notes}`), salva summary in `DeliverableAsset.notes` e ritorna suggested `qc_substatus`. Tronca PDF a 12k char.
+- Endpoint dedicato `POST /ai/api/deliverables/{id}/qc-report-summary` invoca inline senza creare AIAction (è readonly da deliverable point-of-view, sola notes su pivot).
+
+**UI** (`app/templates/pages/cost_report.html`):
+- Sezione Consegne: badge stato (5 main) + sub-badge piccolo per qc_substatus (in_corso / pass / reject).
+- Bottoni azione per-stato:
+  - `planned` → ▶ Avvia
+  - `in_progress` → 🔍 Manda a QC
+  - `qc` (in corso) → 📎 Upload report · ✓ Pass · ✗ Reject (cascade con conferma)
+  - `qc + passed` → 📤 Conferma delivery / Trasla a delivered
+  - `delivered` → 🔒 Chiudi (irreversibile)
+- Upload QC report PDF (modal file picker) + trigger AI summary in background con toast "🤖 QC AI: PASS/REJECT — suggerito qc_substatus='...'".
+
+**Smoke test boot**: 522 routes (+1 endpoint `/ai/api/deliverables/{id}/qc-report-summary`). Schema DB: +2 colonne (qc_substatus, assets.status) + 2 indici. Auto-migrate idempotente al boot per DB esistenti.
+
+**File toccati**: `app/models/models.py`, `app/models/__init__.py`, `app/routers/jobs.py`, `app/routers/planning.py`, `app/routers/cost_report.py`, `app/routers/ai.py`, `app/routers/ingest_deliverables.py`, `app/services/qc_cascade.py` (nuovo), `app/services/ai_assistant.py`, `app/templates/pages/cost_report.html`, `app/main.py`, `scripts/migrate_phase_i_deliverable_status.py` (nuovo), `CHANGELOG.md`, `docs/STATO.md`.
+
+**Out of scope (backlog)**: email notification on QC reject (SMTP non configurato), Planning HUB Deliverable centrale (Bundle J), Jobs page modal read-only (Bundle H2), Asset Library metadata ffprobe (Bundle H3), capability AI auto-closure su delivered + N giorni.
+
 ## v3.5.0-alpha.172.88 — Bundle H1: anomaly warning booking single-type pairing (umani-only o studio-only) (25 mag 2026)
 
 Richiesta Matteo: "Booking solo risorsa umana senza non-umane (e viceversa) devono generare warning. Sono generalmente anomalie. Dovrebbero sempre essere associate, salvo forced utente."

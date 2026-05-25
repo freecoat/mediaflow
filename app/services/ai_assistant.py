@@ -35,7 +35,7 @@ from app.models import (
     JobCostLine, BookingChange,
 )
 from app.models.models import AIAction, JCLBillingStatus
-from app.services.ai_provider import get_provider_for_user, safe_json_parse
+from app.services.ai_provider import get_provider_for_user, get_provider, safe_json_parse
 
 logger = logging.getLogger(__name__)
 
@@ -714,6 +714,145 @@ def _h_web_search(db: Session, data: dict) -> dict:
         raise ValueError("Manca 'query'")
     results = tavily_search(query, max_results=5)
     return {"query": query, "results": results}
+
+
+# v3.5.0-alpha.172.89 (Bundle I) — Capability AI QC report summary.
+# Legge PDF QC linkato a un DeliverableAsset(source='qc_report'), estrae testo
+# via pypdf, lo passa al provider AI corrente con prompt strutturato, parsa
+# JSON {pass: bool, issues: [...], notes: str}. Salva summary in
+# DeliverableAsset.notes e suggerisce qc_substatus next-action.
+QC_SUMMARY_SYSTEM_PROMPT = """Sei un revisore tecnico di QC report video/audio per case di post-produzione.
+Leggi il PDF allegato e produci un JSON STRINGENTE con questa shape:
+
+{
+  "passed": true|false,
+  "issues": ["lista breve di problemi rilevati (max 5 voci), vuota se passed"],
+  "notes": "riassunto in 2-3 frasi italiane di cosa contiene il report"
+}
+
+Regole:
+- passed=true SOLO se il report indica chiaramente esito positivo senza issue bloccanti
+- passed=false se ci sono difetti tecnici (audio click, dropped frame, sub mismatch, colore fuori standard, ecc.)
+- issues = stringhe corte e specifiche (es. "audio peak -1dBFS oltre soglia broadcast")
+- Output: SOLO il JSON, nessun markdown wrapper, nessun commento. Parsable da json.loads().
+"""
+
+
+@ai_capability("propose_qc_report_summary")
+def _h_propose_qc_report_summary(db: Session, data: dict) -> dict:
+    """Estrae summary AI da un QC report PDF linkato a un deliverable.
+
+    Schema atteso `data`:
+      - deliverable_id (int) — obbligatorio
+      - asset_id (int) — obbligatorio (Asset linkato come QC report via
+        DeliverableAsset.source='qc_report')
+
+    Effetti:
+      - Legge file_path dell'Asset, estrae testo PDF
+      - Chiama provider AI corrente per riassunto strutturato
+      - Salva summary JSON in DeliverableAsset.notes (override se esiste)
+      - Ritorna summary + qc_substatus suggerito (passed/rejected)
+
+    NB: handler "readonly" lato DB (scrive solo DeliverableAsset.notes,
+    non muta status deliverable). L'utente sceglie se applicare il suggerimento
+    via setDeliverableStatus() o qcRejectDeliverable() dal drawer copilot.
+    """
+    from app.models import DeliverableAsset, JobDeliverable
+    from app.services.deliverables_parser import extract_text_from_pdf
+    import json as _json
+    import os
+
+    deliv_id = data.get("deliverable_id")
+    asset_id = data.get("asset_id")
+    if not deliv_id or not asset_id:
+        raise ValueError("deliverable_id e asset_id obbligatori")
+
+    d = db.query(JobDeliverable).filter(JobDeliverable.id == int(deliv_id)).first()
+    if not d:
+        raise ValueError(f"Deliverable {deliv_id} non trovato")
+
+    link = db.query(DeliverableAsset).filter(
+        DeliverableAsset.job_deliverable_id == int(deliv_id),
+        DeliverableAsset.asset_id == int(asset_id),
+        DeliverableAsset.source == "qc_report",
+    ).first()
+    if not link:
+        raise ValueError(
+            f"Nessun DeliverableAsset(source=qc_report) per deliverable={deliv_id} "
+            f"asset={asset_id}"
+        )
+
+    asset = db.query(Asset).filter(Asset.id == int(asset_id)).first()
+    if not asset or not asset.file_path:
+        raise ValueError(f"Asset {asset_id} senza file_path")
+    if not os.path.exists(asset.file_path):
+        raise ValueError(f"File QC report non trovato su disco: {asset.file_path}")
+
+    # Estrai testo dal PDF
+    with open(asset.file_path, "rb") as f:
+        file_bytes = f.read()
+    pdf_text = extract_text_from_pdf(file_bytes)
+    if not pdf_text.strip():
+        raise ValueError("Estrazione testo PDF vuota — file corrotto o solo immagini?")
+
+    # Tronca a 12k char per non sforare context window provider
+    pdf_text_trunc = pdf_text[:12000]
+
+    # Provider AI corrente (per-utente tramite registry; fallback global)
+    user_id = data.get("_user_id")
+    provider = get_provider_for_user(user_id, db) if user_id else get_provider()
+    if not provider:
+        raise ValueError("Nessun AI provider configurato per l'utente")
+
+    user_prompt = (
+        f"Deliverable: {d.name}\n"
+        f"Unit: {d.unit or '—'} | Qty pianificata: {d.quantity_planned}\n\n"
+        f"--- QC REPORT (estratto PDF) ---\n{pdf_text_trunc}\n--- FINE REPORT ---"
+    )
+
+    try:
+        raw = provider.complete(
+            QC_SUMMARY_SYSTEM_PROMPT, user_prompt,
+            max_tokens=600, temperature=0.2,
+        )
+    except Exception as e:
+        raise ValueError(f"Provider AI ha fallito: {e}")
+
+    summary = safe_json_parse(raw) if raw else None
+    if not isinstance(summary, dict):
+        raise ValueError(
+            f"Output AI non parsabile come JSON. Raw (primi 200ch): {(raw or '')[:200]}"
+        )
+
+    passed = bool(summary.get("passed"))
+    issues = summary.get("issues") or []
+    notes_txt = (summary.get("notes") or "").strip()
+
+    # Salva summary su DeliverableAsset.notes (testo human-readable)
+    badge = "✓ PASS" if passed else "✗ REJECT"
+    saved_notes = (
+        f"[QC AI summary] {badge}\n"
+        f"{notes_txt}\n"
+    )
+    if issues:
+        saved_notes += "Issues:\n  - " + "\n  - ".join(str(i) for i in issues[:5])
+    link.notes = saved_notes[:2000]
+    db.commit()
+
+    suggested_substatus = "passed" if passed else "rejected"
+    return {
+        "deliverable_id": d.id,
+        "asset_id": asset.id,
+        "passed": passed,
+        "issues": issues,
+        "notes": notes_txt,
+        "suggested_qc_substatus": suggested_substatus,
+        "message": (
+            f"QC report analizzato: {badge}. "
+            + (f"{len(issues)} issue rilevate. " if issues else "")
+            + f"Suggerimento: setta qc_substatus='{suggested_substatus}'."
+        ),
+    }
 
 
 # ── Settings registry handlers (v3.5.0-alpha.19) ─────────────

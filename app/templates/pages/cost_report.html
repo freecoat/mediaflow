@@ -1764,27 +1764,52 @@ function renderDeliverables() {
     );
     return;
   }
+  // v3.5.0-alpha.172.89 (Bundle I) — Status main 5 valori + qc_substatus nested.
   const STATUS_BADGES = {
-    planned:       { bg: 'rgba(148,163,184,0.18)', fg: '#94a3b8', lbl: 'Pianificato' },
-    in_progress:   { bg: 'rgba(98,114,245,0.18)',  fg: '#a7b3f9', lbl: 'In lavorazione' },
-    delivered:     { bg: 'rgba(34,197,94,0.18)',   fg: '#22c55e', lbl: 'Consegnato' },
-    file_attached: { bg: 'rgba(168,85,247,0.18)',  fg: '#c084fc', lbl: 'File allegato' },
-    accepted:      { bg: 'rgba(34,197,94,0.22)',   fg: '#22c55e', lbl: 'Accettato' },
-    rejected:      { bg: 'rgba(239,68,68,0.18)',   fg: '#ef4444', lbl: 'Rifiutato' },
+    planned:     { bg: 'rgba(148,163,184,0.18)', fg: '#94a3b8', lbl: 'Pianificato' },
+    in_progress: { bg: 'rgba(98,114,245,0.18)',  fg: '#a7b3f9', lbl: 'In lavorazione' },
+    qc:          { bg: 'rgba(251,191,36,0.18)',  fg: '#fbbf24', lbl: 'QC' },
+    delivered:   { bg: 'rgba(34,197,94,0.18)',   fg: '#22c55e', lbl: 'Consegnato' },
+    closed:      { bg: 'rgba(168,85,247,0.18)',  fg: '#c084fc', lbl: 'Chiuso' },
+  };
+  const QC_SUB_BADGES = {
+    in_progress: { bg: 'rgba(251,191,36,0.32)', fg: '#fbbf24', lbl: 'in corso' },
+    passed:      { bg: 'rgba(34,197,94,0.32)',  fg: '#22c55e', lbl: 'pass' },
+    rejected:    { bg: 'rgba(239,68,68,0.32)',  fg: '#ef4444', lbl: 'reject' },
   };
   const html = dlvs.map(d => {
     const pct = d.quantity_pct || 0;
     const barW = Math.min(100, Math.max(0, pct));
     const pctColor = pct >= 100 ? '#22c55e' : (pct > 0 ? '#6272f5' : 'rgba(255,255,255,0.05)');
     const stat = STATUS_BADGES[d.status] || STATUS_BADGES.planned;
-    const statBadge = `<span class="text-xs" style="display:inline-block;padding:1px 6px;background:${stat.bg};color:${stat.fg};border-radius:8px;font-weight:600;font-size:10px;">${stat.lbl}</span>`;
+    let statBadge = `<span class="text-xs" style="display:inline-block;padding:1px 6px;background:${stat.bg};color:${stat.fg};border-radius:8px;font-weight:600;font-size:10px;">${stat.lbl}</span>`;
+    // Sub-badge QC (solo se status=qc + substatus valorizzato)
+    if (d.status === 'qc' && d.qc_substatus && QC_SUB_BADGES[d.qc_substatus]) {
+      const sub = QC_SUB_BADGES[d.qc_substatus];
+      statBadge += ` <span class="text-xs" style="display:inline-block;padding:1px 5px;background:${sub.bg};color:${sub.fg};border-radius:6px;font-weight:600;font-size:9px;margin-left:2px;">${sub.lbl}</span>`;
+    }
     const margin = d.real_margin || 0;
     const marginColor = (d.total_cost_accrued || 0) > 0
       ? (margin >= 0 ? 'var(--green)' : 'var(--rose)')
       : 'var(--text3)';
-    const confirmBtn = (d.quantity_delivered < d.quantity_planned)
-      ? `<button class="btn btn-ghost btn-sm" title="Conferma consegna manuale" onclick="event.stopPropagation();openConfirmDeliverable(${d.id})">✓</button>`
-      : '';
+    // v3.5.0-alpha.172.89 (Bundle I) — Bottoni azione per-stato (workflow lineare)
+    let actionBtns = '';
+    if (d.status === 'planned') {
+      actionBtns = `<button class="btn btn-ghost btn-sm" title="Avvia (in lavorazione)" onclick="event.stopPropagation();setDeliverableStatus(${d.id},'in_progress')">▶</button>`;
+    } else if (d.status === 'in_progress') {
+      actionBtns = `<button class="btn btn-ghost btn-sm" title="Manda a QC" onclick="event.stopPropagation();setDeliverableStatus(${d.id},'qc','in_progress')">🔍</button>`;
+    } else if (d.status === 'qc' && (d.qc_substatus === 'in_progress' || !d.qc_substatus)) {
+      actionBtns = `<button class="btn btn-ghost btn-sm" title="Upload QC report PDF" onclick="event.stopPropagation();uploadQCReport(${d.id})">📎</button>`
+        + `<button class="btn btn-ghost btn-sm" title="QC Pass" onclick="event.stopPropagation();setDeliverableStatus(${d.id},'qc','passed')">✓</button>`
+        + `<button class="btn btn-ghost btn-sm" title="QC Reject (cascade)" style="color:#ef4444;" onclick="event.stopPropagation();qcRejectDeliverable(${d.id})">✗</button>`;
+    } else if (d.status === 'qc' && d.qc_substatus === 'passed') {
+      actionBtns = (d.quantity_delivered < d.quantity_planned)
+        ? `<button class="btn btn-ghost btn-sm" title="Conferma consegna" onclick="event.stopPropagation();openConfirmDeliverable(${d.id})">📤</button>`
+        : `<button class="btn btn-ghost btn-sm" title="Trasla a Delivered" onclick="event.stopPropagation();setDeliverableStatus(${d.id},'delivered')">📤</button>`;
+    } else if (d.status === 'delivered') {
+      actionBtns = `<button class="btn btn-ghost btn-sm" title="Chiudi (irreversibile)" style="color:#c084fc;" onclick="event.stopPropagation();closeDeliverable(${d.id})">🔒</button>`;
+    }
+    const confirmBtn = actionBtns;
     const assetBadge = (d.digital_asset_id || d.physical_asset_id)
       ? `<span class="text-xs" style="margin-left:6px;color:#a78bfa;" title="Asset linkato">[asset]</span>`
       : '';
@@ -1842,6 +1867,137 @@ function openConfirmDeliverable(deliverableId) {
     if (typeof loadReport === 'function') loadReport(currentReport.job.id);
     else location.reload();
   }).catch(e => toast(e.message, 'error'));
+}
+
+// v3.5.0-alpha.172.89 (Bundle I) — Transizioni stato deliverable.
+// setDeliverableStatus(id, status, qc_substatus?) → PUT update_deliverable.
+async function setDeliverableStatus(deliverableId, status, qcSubstatus) {
+  try {
+    const fd = new FormData();
+    fd.append('status', status);
+    if (qcSubstatus) fd.append('qc_substatus', qcSubstatus);
+    const r = await fetch(`/jobs/api/deliverables/${deliverableId}`, {
+      method: 'PUT', body: fd, credentials: 'same-origin',
+    });
+    if (!r.ok) {
+      const err = await r.json().catch(() => ({}));
+      throw new Error(err.detail || 'Errore aggiornamento stato');
+    }
+    toast(`✓ Stato → ${status}${qcSubstatus ? '·' + qcSubstatus : ''}`, 'success', 1500);
+    if (typeof reloadCurrentReport === 'function') reloadCurrentReport();
+  } catch (e) {
+    toast(e.message || 'Errore', 'error');
+  }
+}
+
+// QC reject con conferma + cascade (asset rejected + placeholder + notifica).
+async function qcRejectDeliverable(deliverableId) {
+  const reason = prompt(
+    'Motivo del reject QC (opzionale, finisce nella notifica e nelle note placeholder):',
+    ''
+  );
+  if (reason === null) return;  // utente ha annullato il prompt
+  const ok = confirm(
+    'Confermi il QC REJECT?\n\n'
+    + 'Effetti automatici:\n'
+    + '• Deliverable torna a stato "planned"\n'
+    + '• Asset principali linkati marcati "rejected"\n'
+    + '• Spawn nuovo placeholder per re-upload\n'
+    + '• Notifica in-app a chi ha permesso view_finance\n\n'
+    + 'Procedere?'
+  );
+  if (!ok) return;
+  try {
+    const fd = new FormData();
+    fd.append('status', 'qc');
+    fd.append('qc_substatus', 'rejected');
+    if (reason) fd.append('qc_reject_reason', reason);
+    const r = await fetch(`/jobs/api/deliverables/${deliverableId}`, {
+      method: 'PUT', body: fd, credentials: 'same-origin',
+    });
+    if (!r.ok) {
+      const err = await r.json().catch(() => ({}));
+      throw new Error(err.detail || 'Errore QC reject');
+    }
+    const data = await r.json();
+    const c = data.qc_cascade || {};
+    toast(
+      `✗ QC reject applicato — ${c.assets_rejected || 0} asset rejected · `
+      + `${c.placeholders_spawned || 0} placeholder · ${c.notified || 0} notifiche`,
+      'success', 3500
+    );
+    if (typeof reloadCurrentReport === 'function') reloadCurrentReport();
+  } catch (e) {
+    toast(e.message || 'Errore', 'error');
+  }
+}
+
+// Upload QC report PDF (file picker → POST /qc-report).
+async function uploadQCReport(deliverableId) {
+  const input = document.createElement('input');
+  input.type = 'file';
+  input.accept = 'application/pdf,image/*';
+  input.onchange = async () => {
+    const file = input.files && input.files[0];
+    if (!file) return;
+    if (file.size > 50 * 1024 * 1024) {
+      toast('File troppo grande (max 50 MB)', 'error'); return;
+    }
+    try {
+      const fd = new FormData();
+      fd.append('file', file);
+      const r = await fetch(`/jobs/api/deliverables/${deliverableId}/qc-report`, {
+        method: 'POST', body: fd, credentials: 'same-origin',
+      });
+      if (!r.ok) {
+        const err = await r.json().catch(() => ({}));
+        throw new Error(err.detail || 'Errore upload');
+      }
+      const data = await r.json();
+      toast(`📎 QC report caricato (asset #${data.qc_asset_id})`, 'success', 2500);
+      // Trigger AI summary inline (capability propose_qc_report_summary).
+      // Non blocca l'utente: parte in background, mostra suggerimento qc_substatus se pronto.
+      try {
+        const fd2 = new FormData();
+        fd2.append('asset_id', data.qc_asset_id);
+        fetch(`/ai/api/deliverables/${deliverableId}/qc-report-summary`, {
+          method: 'POST', body: fd2, credentials: 'same-origin',
+        }).then(async r => {
+          if (!r.ok) return;
+          const summary = await r.json();
+          const lbl = summary.passed ? '✓ PASS' : '✗ REJECT';
+          toast(`🤖 QC AI: ${lbl} — suggerito qc_substatus='${summary.suggested_qc_substatus}'`, 'info', 4500);
+        }).catch(() => {});
+      } catch (_) { /* AI summary opzionale, non bloccante */ }
+      if (typeof reloadCurrentReport === 'function') reloadCurrentReport();
+    } catch (e) {
+      toast(e.message || 'Errore upload', 'error');
+    }
+  };
+  input.click();
+}
+
+// Chiusura formale deliverable (delivered → closed, irreversibile).
+async function closeDeliverable(deliverableId) {
+  const ok = confirm(
+    'Chiudere formalmente il deliverable?\n\n'
+    + 'Stato → "closed" IRREVERSIBILE.\n'
+    + 'Lo stato non potra\' piu\' essere modificato (storno richiede atto formale).'
+  );
+  if (!ok) return;
+  try {
+    const r = await fetch(`/jobs/api/deliverables/${deliverableId}/close`, {
+      method: 'POST', credentials: 'same-origin',
+    });
+    if (!r.ok) {
+      const err = await r.json().catch(() => ({}));
+      throw new Error(err.detail || 'Errore chiusura');
+    }
+    toast('🔒 Deliverable chiuso', 'success', 2000);
+    if (typeof reloadCurrentReport === 'function') reloadCurrentReport();
+  } catch (e) {
+    toast(e.message || 'Errore', 'error');
+  }
 }
 
 // v3.5.0-alpha.62 — Rimanda al commerciale

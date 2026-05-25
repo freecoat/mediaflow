@@ -1027,6 +1027,8 @@ async def job_cost_report(job_id: int, db: Session = Depends(get_db)):
                 "total_cost_accrued": round(d.total_cost_accrued or 0.0, 2),
                 "real_margin": round((d.total_accrued or 0.0) - (d.total_cost_accrued or 0.0), 2),
                 "status": (d.status.value if d.status else "planned"),
+                # v3.5.0-alpha.172.89 (Bundle I) — substatus QC nullable
+                "qc_substatus": (d.qc_substatus.value if d.qc_substatus else None),
                 "confirmed_at": d.confirmed_at.isoformat() if d.confirmed_at else None,
                 "target_delivery_date": str(d.target_delivery_date) if d.target_delivery_date else None,
                 "delivered_date": str(d.delivered_date) if d.delivered_date else None,

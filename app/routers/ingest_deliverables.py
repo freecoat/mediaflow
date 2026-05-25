@@ -147,7 +147,7 @@ def _process_ingest(
                 deliverable.status = DeliverableStatus.delivered
                 deliverable.delivered_date = datetime.utcnow().date()
             else:
-                deliverable.status = DeliverableStatus.file_attached
+                deliverable.status = DeliverableStatus.in_progress
             if not deliverable.physical_asset_id:
                 deliverable.physical_asset_id = pa.id
             confirmed_qty = 1

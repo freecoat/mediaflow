@@ -17,7 +17,7 @@ upres) e il sistema le marca con `is_extra=True` per la rendicontazione.
 from datetime import datetime, date
 from typing import Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Request, Form
+from fastapi import APIRouter, Depends, HTTPException, Request, Form, UploadFile, File
 from fastapi.responses import HTMLResponse
 from sqlalchemy.orm import Session, joinedload
 from sqlalchemy import func
@@ -26,7 +26,7 @@ from app.database import get_db
 from app.models import (
     Job, JobStatus, JobCostLine, Booking, BookingAssignment, BookingStatus,
     TimePunch, Project, Client, PriceItem, PriceCategory,
-    JobDeliverable, DeliverableNature, DeliverableStatus,
+    JobDeliverable, DeliverableNature, DeliverableStatus, QCSubstatus,
     PhysicalAsset, PhysicalAssetKind, Asset, DeliveryTemplate, Resource,
 )
 from app.context import current_tenant_id
@@ -507,6 +507,8 @@ def _serialize_deliverable(d: JobDeliverable) -> dict:
         "file_naming": d.file_naming,
         "nature": d.nature.value if d.nature else "digital",
         "status": d.status.value if d.status else "planned",
+        # v3.5.0-alpha.172.89 (Bundle I) — substatus QC nullable
+        "qc_substatus": d.qc_substatus.value if d.qc_substatus else None,
         "delivery_template_id": d.delivery_template_id,
         "spec_json": d.spec_json or {},
         "primary_resource_id": d.primary_resource_id,
@@ -716,6 +718,8 @@ async def update_deliverable(
     name: Optional[str] = Form(None),
     nature: Optional[str] = Form(None),
     status: Optional[str] = Form(None),
+    qc_substatus: Optional[str] = Form(None),
+    qc_reject_reason: Optional[str] = Form(None),
     job_cost_line_id: Optional[int] = Form(None),
     price_item_id: Optional[int] = Form(None),
     delivery_template_id: Optional[int] = Form(None),
@@ -743,22 +747,54 @@ async def update_deliverable(
     if not d:
         raise HTTPException(404, "Deliverable non trovato")
 
+    # v3.5.0-alpha.172.89 (Bundle I) — closed e' irreversibile.
+    # Permettiamo solo no-op (status uguale) o nessun cambio status.
+    if d.status == DeliverableStatus.closed and status is not None and status != "closed":
+        raise HTTPException(
+            409,
+            f"Deliverable in stato 'closed' immutabile. "
+            f"Status non puo' essere riaperto via update (transizione richiede storno formale)."
+        )
+
     if name is not None:
         d.name = name.strip()[:255] or d.name
     if nature is not None:
         try: d.nature = DeliverableNature(nature)
         except ValueError: raise HTTPException(400, f"nature invalida: {nature}")
+
+    # v3.5.0-alpha.172.89 (Bundle I) — Stati nested. Validazione + cascade.
+    triggered_qc_cascade = None
     if status is not None:
         try:
             new_status = DeliverableStatus(status)
-            d.status = new_status
-            # Cristallizza date di stato se rilevanti
-            if new_status == DeliverableStatus.delivered and not d.delivered_date:
-                d.delivered_date = date.today()
-            if new_status == DeliverableStatus.accepted and not d.accepted_date:
-                d.accepted_date = date.today()
         except ValueError:
             raise HTTPException(400, f"status invalido: {status}")
+        # qc_substatus valido solo se main==qc
+        new_sub: Optional[QCSubstatus] = None
+        if qc_substatus is not None and qc_substatus != "":
+            if new_status != DeliverableStatus.qc:
+                raise HTTPException(400, "qc_substatus ammesso solo con status='qc'")
+            try:
+                new_sub = QCSubstatus(qc_substatus)
+            except ValueError:
+                raise HTTPException(400, f"qc_substatus invalido: {qc_substatus}")
+        d.status = new_status
+        # Reset substatus se main != qc
+        if new_status != DeliverableStatus.qc:
+            d.qc_substatus = None
+        else:
+            d.qc_substatus = new_sub  # potrebbe restare None se non specificato (qc in attesa)
+        # Cristallizza date di stato
+        if new_status == DeliverableStatus.delivered and not d.delivered_date:
+            d.delivered_date = date.today()
+        # Cascade QC reject
+        if new_status == DeliverableStatus.qc and new_sub == QCSubstatus.rejected:
+            from app.services.qc_cascade import cascade_qc_reject
+            triggered_qc_cascade = cascade_qc_reject(
+                db, d,
+                actor_user_id=user.id if user else None,
+                reason=qc_reject_reason,
+            )
     if job_cost_line_id is not None: d.job_cost_line_id = job_cost_line_id or None
     if price_item_id is not None: d.price_item_id = price_item_id or None
     if delivery_template_id is not None: d.delivery_template_id = delivery_template_id or None
@@ -782,19 +818,51 @@ async def update_deliverable(
             raise HTTPException(400, f"spec_json non valido: {e}")
 
     # Bridge asset (mutually exclusive con nature)
+    # v3.5.0-alpha.172.89 (Bundle I): rimosso auto-bump in_production→file_attached
+    # (enum collassato). Link asset NON cambia status main; cambio esplicito via UI.
     if digital_asset_id is not None:
         d.digital_asset_id = digital_asset_id or None
         if digital_asset_id:
             d.asset_locked_at = datetime.utcnow()
-            if d.status == DeliverableStatus.in_production:
-                d.status = DeliverableStatus.file_attached
     if physical_asset_id is not None:
         d.physical_asset_id = physical_asset_id or None
         if physical_asset_id:
             d.asset_locked_at = datetime.utcnow()
-            if d.status == DeliverableStatus.in_production:
-                d.status = DeliverableStatus.file_attached
 
+    db.commit()
+    payload = _serialize_deliverable(d)
+    if triggered_qc_cascade:
+        payload["qc_cascade"] = triggered_qc_cascade
+    return payload
+
+
+@router.post("/api/deliverables/{deliverable_id}/close")
+async def close_deliverable(
+    deliverable_id: int,
+    request: Request,
+    db: Session = Depends(get_db),
+):
+    """v3.5.0-alpha.172.89 (Bundle I) — Chiusura formale deliverable.
+    Solo transizione consentita: delivered -> closed. Irreversibile.
+    Permesso: view_finance (atto formale finance-level).
+    """
+    from app.services.rbac import current_user_optional, has_permission
+    user = current_user_optional(request)
+    if not has_permission(user, "view_finance"):
+        raise HTTPException(403, "Permesso insufficiente (richiesto view_finance)")
+    d = db.query(JobDeliverable).filter(
+        JobDeliverable.id == deliverable_id,
+        JobDeliverable.tenant_id == current_tenant_id(),
+    ).first()
+    if not d:
+        raise HTTPException(404, "Deliverable non trovato")
+    if d.status != DeliverableStatus.delivered:
+        raise HTTPException(
+            409,
+            f"Solo deliverable in stato 'delivered' chiudibili (attuale: {d.status.value})."
+        )
+    d.status = DeliverableStatus.closed
+    d.qc_substatus = None
     db.commit()
     return _serialize_deliverable(d)
 
@@ -919,7 +987,7 @@ async def confirm_deliverable_delivery(
         d.status = DeliverableStatus.delivered
         d.delivered_date = datetime.utcnow().date()
     elif new_qty > 0:
-        d.status = DeliverableStatus.in_production
+        d.status = DeliverableStatus.in_progress
 
     # Recompute revenue + cost (cost da deliverable_cost_sync se booking linked)
     from app.services.deliverable_cost_sync import recompute_deliverable_cost
@@ -988,6 +1056,77 @@ async def confirm_deliverable_delivery(
         "confirmed_at": d.confirmed_at.isoformat() if d.confirmed_at else None,
         "asset_link_id": asset_link_created,
         "warn_no_hours": n_link_bookings_with_hours == 0,
+    }
+
+
+# ─────────────────────────────────────────────────────────────
+# v3.5.0-alpha.172.89 (Bundle I) — Upload QC report multipli (PDF).
+# Crea Asset standalone + DeliverableAsset(source='qc_report') linkato.
+# Trigger opzionale capability AI propose_qc_report_summary post-upload.
+# ─────────────────────────────────────────────────────────────
+
+@router.post("/api/deliverables/{deliverable_id}/qc-report")
+async def upload_qc_report(
+    deliverable_id: int,
+    request: Request,
+    file: UploadFile = File(...),
+    notes: Optional[str] = Form(None),
+    db: Session = Depends(get_db),
+):
+    from app.services.rbac import current_user_optional, has_permission
+    from app.services.dam import save_upload, resolve_asset_type
+    from app.models import DeliverableAsset, AssetStatus
+
+    user = current_user_optional(request)
+    if not has_permission(user, "edit_planning_all") and not has_permission(user, "assign_resources"):
+        raise HTTPException(403, "Permesso insufficiente")
+
+    d = db.query(JobDeliverable).filter(
+        JobDeliverable.id == deliverable_id,
+        JobDeliverable.tenant_id == current_tenant_id(),
+    ).first()
+    if not d:
+        raise HTTPException(404, "Deliverable non trovato")
+
+    if file.size and file.size > 50 * 1024 * 1024:
+        raise HTTPException(413, "QC report troppo grande (max 50 MB)")
+
+    file_bytes = await file.read()
+    filename, file_path, mime_type = save_upload(file_bytes, file.filename)
+    asset_type = resolve_asset_type(mime_type)
+
+    qc_asset = Asset(
+        tenant_id=d.tenant_id,
+        filename=filename,
+        original_name=file.filename,
+        file_path=file_path,
+        asset_type=asset_type,
+        mime_type=mime_type,
+        file_size=len(file_bytes),
+        job_id=d.job_id,
+        uploaded_by=user.id if user else 1,
+        description=f"QC report deliverable #{d.id} — {d.name[:80]}",
+        status=AssetStatus.uploaded,
+    )
+    db.add(qc_asset); db.flush()
+
+    link = DeliverableAsset(
+        job_deliverable_id=d.id,
+        asset_id=qc_asset.id,
+        source="qc_report",
+        confirmed_by_user_id=user.id if user else None,
+        notes=(notes or "").strip() or None,
+    )
+    db.add(link); db.flush()
+
+    db.commit()
+    return {
+        "ok": True,
+        "deliverable_id": d.id,
+        "qc_asset_id": qc_asset.id,
+        "deliverable_asset_id": link.id,
+        "filename": filename,
+        "mime_type": mime_type,
     }
 
 

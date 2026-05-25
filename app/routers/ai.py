@@ -496,6 +496,38 @@ async def ai_review_quote(
     return {"review": review}
 
 
+# ── QC report summary AI (v3.5.0-alpha.172.89 Bundle I) ──────
+
+@router.post("/api/deliverables/{deliverable_id}/qc-report-summary")
+async def ai_qc_report_summary(
+    deliverable_id: int,
+    asset_id: int = Form(...),
+    access_token: Optional[str] = Cookie(None),
+    db: Session = Depends(get_db),
+):
+    """Invoca capability AI propose_qc_report_summary per analizzare un PDF
+    QC report linkato come DeliverableAsset(source='qc_report'). Esegue
+    inline (no AIAction proposta perche' e' solo lettura+summary, l'utente
+    decide poi se applicare il suggerimento via setDeliverableStatus).
+    """
+    u = _resolve_current_user(db, access_token)
+    user_id = u.id if u else None
+    if get_provider_for_user(user_id, db) is None:
+        raise HTTPException(503, "AI non configurata per l'utente")
+    from app.services.ai_assistant import _h_propose_qc_report_summary
+    try:
+        result = _h_propose_qc_report_summary(db, {
+            "deliverable_id": deliverable_id,
+            "asset_id": asset_id,
+            "_user_id": user_id,
+        })
+        return result
+    except ValueError as e:
+        raise HTTPException(400, str(e))
+    except Exception as e:
+        raise HTTPException(500, f"AI summary fallita: {e}")
+
+
 # ── Deliverables parser (upload capitolato) ──────────────────
 
 @router.post("/api/deliverables/parse", dependencies=[RequireEditQuotesAI])

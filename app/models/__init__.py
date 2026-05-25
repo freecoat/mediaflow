@@ -24,11 +24,11 @@ from app.models.models import (
     JCLBillingStatus, BillingBatch, BillingBatchLine, BillingBatchStatus,
     LossEntry, LossReason,
     JCLBilledSlice,
-    Asset, AssetType, Tag, AssetTag,
+    Asset, AssetType, AssetStatus, Tag, AssetTag,
     ProjectAccessGrant, AssetAccessAction, AssetAccessLog,
     PhysicalAsset, PhysicalAssetKind, AssetOwnerType,
     AssetMovement, AssetMovementType, IngestBatch, AssetMembership,
-    JobDeliverable, DeliverableNature, DeliverableStatus,
+    JobDeliverable, DeliverableNature, DeliverableStatus, QCSubstatus,
     # v3.5.0-alpha.172 Restructure
     DeliverableUnitNature, DeliverableBillingStatus,
     BookingDeliverable, DeliverableAsset, DeliverableSpec,

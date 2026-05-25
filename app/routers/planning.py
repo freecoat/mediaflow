@@ -3507,6 +3507,28 @@ async def update_booking_execution(
         recompute_for_booking(db, b)
     except Exception as e:
         print(f"[update_booking_execution] cost line sync failed: {e}")
+
+    # v3.5.0-alpha.172.89 (Bundle I) — hook auto-bump deliverable a in_progress
+    # quando booking linkato passa a in_progress E deliverable e' ancora planned.
+    # Idempotente: skip se deliverable gia' in stato != planned (no clobber).
+    if execution_status == BookingExecutionStatus.in_progress:
+        try:
+            from app.models import BookingDeliverable, JobDeliverable, DeliverableStatus
+            pivots = db.query(BookingDeliverable, JobDeliverable).join(
+                JobDeliverable, JobDeliverable.id == BookingDeliverable.job_deliverable_id
+            ).filter(
+                BookingDeliverable.booking_id == b.id,
+                JobDeliverable.status == DeliverableStatus.planned,
+                JobDeliverable.deleted_at.is_(None),
+            ).all()
+            for _piv, deliv in pivots:
+                deliv.status = DeliverableStatus.in_progress
+                _log_change(db, b.id, "deliverable_auto_bump",
+                            f"Deliverable #{deliv.id} → in_progress (trigger booking)",
+                            {"deliverable_id": deliv.id, "old": "planned", "new": "in_progress"})
+        except Exception as e:
+            print(f"[update_booking_execution] deliverable auto-bump failed: {e}")
+
     db.commit()
     db.refresh(b)
 

@@ -8,11 +8,13 @@
 
 ## Versione corrente
 
-**v3.5.0-alpha.172.88** — 25 maggio 2026 sera — Bundle H1 anomaly warning booking single-type pairing
+**v3.5.0-alpha.172.89** — 25 maggio 2026 (ripresa sessione locale) — Bundle I: stati nested Deliverable + cascade QC reject
 
-Maratona sessione 25 maggio: chiuse versioni α.172.76 → α.172.88 (13 commit). Bundle organizzati E → B → A → C → D → F (P0 fix) → G (Deepseek + UX) → H1 (anomaly warning booking).
+Riavvio sessione locale post-tunnel cloudflared. Saltata K (rimandata a backlog), partita direttamente con I.
 
-521 routes. Schema DB invariato (nessuna migrazione aperta).
+Restructure stato deliverable: enum 9-piatto → 5 main + qc_substatus nullable. Cascade automatica su QC reject (asset rejected + spawn placeholder + notifica view_finance). Hook auto-bump deliverable quando booking linkato passa a in_progress. Upload QC report PDF + AI capability `propose_qc_report_summary` che estrae pass/fail dal PDF via provider corrente.
+
+522 routes (+1 endpoint AI qc-report-summary). Schema DB: +2 colonne (deliverable.qc_substatus + assets.status) + 2 indici. Auto-migrate idempotente al boot mappa legacy enum conservativamente (nessun cascade su dati storici).
 
 ## Maratona 25 maggio 2026 — riepilogo bundle chiusi
 
@@ -30,26 +32,40 @@ Maratona sessione 25 maggio: chiuse versioni α.172.76 → α.172.88 (13 commit)
 - **α.172.87 — Bundle G1+G2**: DeepSeek AI provider (deepseek-chat V3 + deepseek-reasoner R1). Unit select width fix (min-width 70px, width:auto).
 - **α.172.88 — Bundle H1**: anomaly warning booking single-type pairing. Helper `_classify_assignments_pairing` in planning.py + 422 SINGLE_TYPE_WARNING + auto-intercept in api() global.js con confirm + retry force_single_type=true.
 
-## Prossima sessione (locale da casa)
+## Prossima sessione
 
-**Server**: lancia normale `python run.py` (NO tunnel cloudflared se è in locale).
+**Server**: lancia normale `python run.py`.
 
-**Roadmap concordata — ordine**:
+**Status Bundle I (α.172.89)**:
+- ✅ Modelli (DeliverableStatus 5 valori, QCSubstatus, AssetStatus, NotificationKind.deliverable_qc_rejected)
+- ✅ Migrazione legacy conservativa + auto-migrate al boot
+- ✅ Service qc_cascade.py
+- ✅ Endpoint update_deliverable esteso + nuovo close + nuovo qc-report upload
+- ✅ Hook booking→deliverable auto-bump in_progress
+- ✅ UI badge nested + 5 azioni stato + sub-badge QC
+- ✅ AI capability propose_qc_report_summary + endpoint dedicato
+- ⏳ Test live Matteo: serve smoke su DB esistente con deliverable legacy
 
-1. **K — CR cleanup + ore toggle**
+**Test plan I post-restart server**:
+1. Boot e verifica console log `[auto-migrate-bundle-i]` — mappa enum legacy (se DB ha già status legacy)
+2. Apri /cost-report di un progetto con deliverable
+3. Verifica badge stato attuale + sub-badge QC se applicabile
+4. Click ▶ su deliverable planned → verifica passa a in_progress
+5. Click 🔍 → manda a QC
+6. Upload PDF QC test (qualsiasi PDF leggibile) — verifica toast "🤖 QC AI: PASS/REJECT"
+7. Click ✗ Reject → verifica cascade: asset principale status='rejected' (via /dam), spawn placeholder visibile, notifica in /notifications
+8. Click 🔒 su deliverable delivered → verifica chiusura + 409 se ritento update
+9. Booking linkato a deliverable in_progress → cambia execution_status a in_progress → verifica deliverable auto-bump
+
+**Bundle backlog (ordine concordato post-I)**:
+
+0. **K — CR cleanup + ore toggle** (RIMANDATA, sostituita da I in α.172.89)
    - K1 rimuovi modalità "Stima vs Quotato" obsoleta (=Maturato vs Quotato)
    - K2 toggle "Cassa €" ↔ "Ore" su colonne JCL (qty_quoted/qty_actual/qty_planned già in DB)
 
-2. **I — Stati nested Deliverable + cascade QC reject**
-   - Status main: `planned` → `in_progress` → `qc` → `delivered` → `closed`
-   - `qc_substatus` enum nullable (valido solo se main=qc): `in_progress|pass|rejected`
-   - Booking con delivery linkato + state=in_progress → auto-set deliverable.status=in_progress
-   - QC rejected → main torna a planned + notifica in-app + asset rejected → spawn nuovo asset placeholder linked stesso deliverable
-   - delivered → closed: manuale (NO auto). qc_pass resta lì (delivered manuale).
-   - QC report uploads multipli (M:N pivot deliverable_qc_reports → Asset) + capability AI `propose_qc_report_summary` (legge PDF, estrae pass/fail)
-   - Email notification on rejected: backlog (SMTP non configurato)
+1. **I — Stati nested Deliverable + cascade QC reject** ✅ FATTA in α.172.89
 
-3. **J — Planning HUB deliverable** (centrale)
+2. **J — Planning HUB deliverable** (centrale)
    - Nuovo panel/tab in `/planning`: Kanban DRAGGABLE (drag tra colonne change status) + Lista
    - Click card kanban / riga lista → modal con DETTAGLI TECNICI 8 blocchi (riusa DeliveryTemplate schema: video/audio/text/head/textless/naming/archive/metadata)
    - Modal permette inserimento manuale O dropdown template

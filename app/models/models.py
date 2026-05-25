@@ -192,17 +192,41 @@ class PhysicalAssetKind(str, enum.Enum):
     other = "other"       # tutto il resto fisico
 
 
-# v3.5.0-alpha.66.9 — Stato del ciclo di vita di un JobDeliverable
+# v3.5.0-alpha.172.89 (Bundle I) — Stati nested.
+# Main collassa il vecchio enum 9-piatto in 5 stati lineari + qc_substatus.
+# Mapping legacy (migrate_phase_i_deliverable_status.py):
+#   in_production / file_attached → in_progress
+#   qc_running   → qc + qc_substatus=in_progress
+#   qc_passed    → qc + qc_substatus=pass
+#   qc_failed    → qc + qc_substatus=rejected
+#   accepted     → closed
+#   rejected (cliente) → delivered (gestito come riapertura, NO closed)
+# Transizione delivered → closed = manuale (atto formale, irreversibile).
 class DeliverableStatus(str, enum.Enum):
     planned = "planned"             # specifica nota, produzione non iniziata
-    in_production = "in_production" # ≥1 booking attivo o file in lavorazione
-    file_attached = "file_attached" # asset (digital o physical) linkato
-    qc_running = "qc_running"       # AI QC in corso
-    qc_passed = "qc_passed"         # QC ok, pronto consegna
-    qc_failed = "qc_failed"         # QC fallito, da rifare
+    in_progress = "in_progress"     # produzione in corso (booking attivo o file in lavorazione)
+    qc = "qc"                       # in quality control (vedi qc_substatus per dettaglio)
     delivered = "delivered"         # consegnato al cliente / portale
-    accepted = "accepted"           # cliente ha approvato
-    rejected = "rejected"           # cliente ha rifiutato
+    closed = "closed"               # chiuso formalmente, immutabile
+
+
+# v3.5.0-alpha.172.89 (Bundle I) — Substatus QC nullable, valido solo se main==qc.
+# Workflow ciclico: in_progress → passed (manuale o AI QC ok) | rejected (cascade reset).
+# NB: usato `passed` come attr (no clash con keyword Python `pass`).
+class QCSubstatus(str, enum.Enum):
+    in_progress = "in_progress"     # AI QC in corso o run manuale in corso
+    passed = "passed"               # QC ok, pronto consegna
+    rejected = "rejected"           # QC fallito → cascade reset deliverable a planned
+
+
+# v3.5.0-alpha.172.89 (Bundle I) — Stato Asset digitale per cascade QC.
+# Prima era implicito (flag is_internal_archive/is_delivered_external).
+# Ora enum esplicito per supportare cascade "QC rejected → asset rejected + spawn placeholder".
+class AssetStatus(str, enum.Enum):
+    planned = "planned"             # placeholder vuoto (no file caricato)
+    uploaded = "uploaded"           # file presente, non ancora QC
+    rejected = "rejected"           # rifiutato (QC o cliente) → da rifare
+    accepted = "accepted"           # validato (post-delivery o post-QC pass)
 
 
 # v3.5.0-alpha.66.9 — Natura del deliverable: digital o physical (mutually exclusive)
@@ -365,6 +389,8 @@ class NotificationKind(str, enum.Enum):
     cr_eom_review = "cr_eom_review"  # → producer (ultimo giorno mese)
     # v3.5.0-alpha.172.9 (Sprint 5) — restructure migration alert
     legacy_jcl_non_time = "legacy_jcl_non_time"  # → admin (JCL residuali da migrare a Deliverable)
+    # v3.5.0-alpha.172.89 (Bundle I) — cascade QC reject su deliverable
+    deliverable_qc_rejected = "deliverable_qc_rejected"  # → view_finance (asset rejected + placeholder spawn)
     custom = "custom"
 
 
@@ -2595,6 +2621,12 @@ class Asset(Base):
     version: Mapped[int] = mapped_column(Integer, default=1)
     parent_asset_id: Mapped[Optional[int]] = mapped_column(ForeignKey("assets.id"), nullable=True)
     is_public: Mapped[bool] = mapped_column(Boolean, default=False)
+    # v3.5.0-alpha.172.89 (Bundle I) — Stato QC dell'asset.
+    # Default planned; uploaded al primo file_path valorizzato; rejected via
+    # cascade qc_cascade (Bundle I); accepted manuale post-delivery.
+    status: Mapped[AssetStatus] = mapped_column(
+        SAEnum(AssetStatus), default=AssetStatus.planned, server_default="planned", index=True
+    )
     # v3.5.0-alpha.66.9 — Bridge DAM ↔ JobDeliverable + flag archive/delivery.
     # Lega l'asset al deliverable di produzione di cui rappresenta "il file".
     # Promosso dall'utente con click "Questo è il file finale per [deliverable]".
@@ -2857,8 +2889,8 @@ class PhysicalAsset(Base):
 # (riga prezzo cliente) e Asset/PhysicalAsset (file/supporto consegnato).
 # - spec_json cristallizza le specifiche tecniche dal DeliveryTemplate
 #   al momento della pianificazione.
-# - status traccia il workflow planned → in_production → file_attached →
-#   qc_passed → delivered → accepted.
+# - status traccia il workflow main: planned → in_progress → qc → delivered → closed.
+#   In stato `qc`, qc_substatus differenzia in_progress/passed/rejected (Bundle I α.172.89).
 # - Booking.job_deliverable_id collega le ore di produzione a questo deliverable
 #   per calcolare l'hardcost interno (ore × Resource.internal_cost_hourly).
 # - Asset.job_deliverable_id (digital) o PhysicalAsset.job_deliverable_id
@@ -2908,6 +2940,13 @@ class JobDeliverable(Base):
     # Stato e date
     status: Mapped[DeliverableStatus] = mapped_column(
         SAEnum(DeliverableStatus), default=DeliverableStatus.planned, index=True
+    )
+    # v3.5.0-alpha.172.89 (Bundle I) — Substatus QC nullable.
+    # Valido solo quando status == DeliverableStatus.qc. Su qualsiasi altro main
+    # status il valore va resettato a None (vincolo applicativo, validato in
+    # update_deliverable router).
+    qc_substatus: Mapped[Optional[QCSubstatus]] = mapped_column(
+        SAEnum(QCSubstatus), nullable=True, index=True
     )
     target_delivery_date: Mapped[Optional[date]] = mapped_column(Date, nullable=True)
     delivered_date: Mapped[Optional[date]] = mapped_column(Date, nullable=True)
