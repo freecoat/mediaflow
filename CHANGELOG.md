@@ -1,5 +1,40 @@
 # MediaFlow — Changelog
 
+## v3.5.0-alpha.172.82 — Bundle F7+F8+F9: AI quote naming convention + milestone misalign def-fix + project mode altezza parent (25 mag 2026)
+
+**F7** — Quote AI da capitolato + propose_quote rispettano NumberingConfig:
+
+Bug Matteo: "Quotazione generata da AI capitolato non usa naming convention".
+
+Root cause: due path AI generavano number hardcoded `Q-{year}-NNN` invece di leggere `NumberingConfig` per tenant (configurato in /settings → Naming conventions).
+
+**Path 1 — `_h_propose_quote`** (`app/services/ai_assistant.py:_next_quote_number`):
+- Pre: regex matching su quote esistenti + `f"Q-{year}-{n:03d}"`
+- Post: usa `gen_doc_code(db, 'quote', tenant_id, project_code, client_code)` — stesso helper della UI manual create quote.
+
+**Path 2 — `create_quote_from_deliverables`** (`app/routers/ai.py`):
+- Pre: `number=data["number"]` (UI forzava utente a digitare)
+- Post: se `data.number` vuoto → `gen_doc_code(db, 'quote', ...)`. UI wizard step 1 ora ha `number` opzionale (placeholder "(vuoto = auto dalla naming convention)").
+
+Allinea il path AI a tutti gli altri (UI manual, ricorrenza, duplica, versione).
+
+**F7 File toccati**: `app/services/ai_assistant.py` (_next_quote_number + propose_quote call), `app/routers/ai.py` (create_quote_from_deliverables), `app/templates/pages/quotes.html` (wizard step 1 number opzionale + placeholder).
+
+**F8 (followup F3)** — milestone misalign def-fix:
+- Tentativo F (height:36px forzato su label+foreground) rompeva hit-test: vis-timeline calcolava foreground 30px (auto su items vuoti) ma label diventava 36px → click su label cadeva fuori e collassava il gruppo DI/Video sottostante (segnalato Matteo + screenshot 14.17.05).
+- Fix: NO height forcing. Solo `display:flex; align-items:center` sul label per centrare il testo entro qualunque altezza naturale.
+
+**F9** — altezza eccessiva modalità "Per progetto":
+- Bug screenshot 13.10.52: parent row "Filmetto Test [Filmetto Test 01]" appare alto e vuoto sopra il sotto-row job "Filmetto Test 01 - J004".
+- Causa: vis-timeline applica `.vis-nesting-group` ai parent con `nestedGroups[]` (project mode). Altezza auto ~36-48px senza items propri.
+- Fix: CSS `min/max/height: 22px` su `.vis-label.vis-nesting-group` + `.vis-foreground .vis-group.vis-nesting-group` + padding ridotto. Le righe job sottostanti restano normali.
+
+**F8+F9 File toccati**: `app/templates/pages/planning.html` (CSS milestone + nesting-group).
+
+**Tutti i file F7+F8+F9**: ai_assistant.py, ai.py, quotes.html, planning.html, main.py, CHANGELOG.md.
+
+520 routes invariato. Schema DB invariato.
+
 ## v3.5.0-alpha.172.81 — Bundle F: P0 fix capitolato 500 + smart_split edit + milestone className + Ctrl+Z capture + stato quote badge (25 mag 2026)
 
 5 bug riportati Matteo dopo test α.172.80:

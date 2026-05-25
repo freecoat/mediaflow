@@ -309,27 +309,28 @@ def _h_propose_project(db: Session, data: dict) -> dict:
             "message": f"Progetto '{p.code}' ({p.title}) creato con id={p.id} per cliente {client.name}."}
 
 
-def _next_quote_number(db: Session) -> str:
-    """Genera Q-{anno}-{progressivo zero-padded a 3 cifre} basato sulle quote esistenti.
+def _next_quote_number(db: Session, project=None) -> str:
+    """Genera il prossimo numero quote rispettando la NumberingConfig del tenant.
 
-    BYPASS soft-delete filter (`include_deleted=True`): le quote in cestino
-    occupano comunque il `number` (vincolo UNIQUE su DB), quindi devono essere
-    considerate qui per evitare collisioni di numero al successivo INSERT.
+    v3.5.0-alpha.172.82: passato da pattern hardcoded `Q-{year}-NNN` a
+    `gen_doc_code(db, 'quote', ...)` che legge la naming convention configurata
+    in /settings → Naming conventions (pattern, reset_yearly, project_code,
+    client_code). Allinea il path AI con quello manual UI.
     """
-    from datetime import date as date_type
-    year = date_type.today().year
-    prefix = f"Q-{year}-"
-    last = (db.query(Quote)
-              .execution_options(include_deleted=True)
-              .filter(Quote.number.like(f"{prefix}%"))
-              .order_by(Quote.id.desc()).first())
-    n = 1
-    if last:
-        try:
-            n = int(last.number.rsplit("-", 1)[1]) + 1
-        except (ValueError, IndexError):
-            n = 1
-    return f"{prefix}{n:03d}"
+    from app.services.numbering import gen_doc_code
+    from app.context import current_tenant_id
+    project_code = project.code if project else None
+    client_code = None
+    if project and getattr(project, "client_id", None):
+        from app.models import Client as _Client
+        cli = db.query(_Client).filter(_Client.id == project.client_id).first()
+        if cli:
+            client_code = cli.code
+    code, _seq = gen_doc_code(
+        db, "quote", tenant_id=current_tenant_id(),
+        project_code=project_code, client_code=client_code,
+    )
+    return code
 
 
 @ai_capability("propose_quote")
@@ -366,7 +367,7 @@ def _h_propose_quote(db: Session, data: dict) -> dict:
     # number: auto se mancante (bypass soft-delete: quote in cestino occupano il number)
     number = (data.get("number") or "").strip()
     if not number:
-        number = _next_quote_number(db)
+        number = _next_quote_number(db, project=project)
     elif (db.query(Quote)
             .execution_options(include_deleted=True)
             .filter(Quote.number == number).first()):

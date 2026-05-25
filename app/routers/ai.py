@@ -587,8 +587,27 @@ async def create_quote_from_deliverables(
     from datetime import date as date_type
     proj_info = data.get("project_info", {}) or {}
 
+    # v3.5.0-alpha.172.82 (Bundle F7) — number opzionale: se vuoto usa
+    # naming convention NumberingConfig tenant-scope (allinea AI capitolato
+    # al pattern di tutte le altre quote, niente hardcode Q-2026-NNN).
+    number = (data.get("number") or "").strip()
+    if not number:
+        from app.services.numbering import gen_doc_code
+        from app.context import current_tenant_id
+        # Resolve client_code per pattern come "{CLIENT_CODE}-{NNN}"
+        client_code = None
+        if project.client_id:
+            from app.models import Client as _Client
+            cli = db.query(_Client).filter(_Client.id == project.client_id).first()
+            if cli:
+                client_code = cli.code
+        number, _seq = gen_doc_code(
+            db, "quote", tenant_id=current_tenant_id(),
+            project_code=project.code, client_code=client_code,
+        )
+
     quote = Quote(
-        number=data["number"],
+        number=number,
         project_id=project_id,
         client_id=project.client_id,
         title=data.get("title") or project.title,

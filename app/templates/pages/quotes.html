@@ -893,7 +893,7 @@
         <div class="form-row">
           <div class="form-group">
             <label class="form-label">Numero quote *</label>
-            <input class="form-input" id="wc-number" placeholder="es. Q-2026-NNN">
+            <input class="form-input" id="wc-number" placeholder="(vuoto = auto dalla naming convention)">
           </div>
           <div class="form-group">
             <label class="form-label">Data emissione</label>
@@ -3873,7 +3873,8 @@ async function wizardStep1Submit() {
   const text = document.getElementById('wc-text').value.trim();
   const hint = document.getElementById('wc-hint').value.trim();
   if (!projectId) { toast('Seleziona progetto', 'warning'); return; }
-  if (!number) { toast('Numero quote richiesto', 'warning'); return; }
+  // v3.5.0-alpha.172.82 — number opzionale: se vuoto, server applica
+  // naming convention (NumberingConfig per tenant/doc_type=quote).
   if (!file && !text) { toast('Carica file o incolla testo', 'warning'); return; }
   const fd = new FormData();
   if (file) fd.append('file', file);

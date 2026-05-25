@@ -82,27 +82,42 @@
   #tl-host .vis-item.tl-ms-imminent .vis-item-content { background: rgba(239,159,39,.16); border-color: #EF9F27; }
   #tl-host .vis-item.tl-ms-pending .vis-item-content { background: rgba(216,90,48,.16); border-color: #D85A30; }
   #tl-host .vis-item.tl-milestone.vis-point .vis-item-content::before { content: ''; }
-  /* v3.5.0-alpha.172.79 → α.172.81 (Bundle C2/F) — Fix milestone group misalign.
-     vis-timeline 7.x NON applica data-group-id agli elementi DOM (snippet
-     reale Matteo: `<div class="vis-group" style="height: 30px;">`). Soluzione
-     corretta: la group definition usa `className: 'tl-milestone-group'` che
-     vis-timeline applica SIA al label sinistro SIA al group foreground.
-     Forziamo altezza uguale per allinearli (pre-fix label 30px vs hover 48px
-     causava click su milestone che collassava il gruppo DI/Video sotto). */
-  #tl-host .vis-label.tl-milestone-group,
-  #tl-host .vis-group.tl-milestone-group {
-    min-height: 36px !important;
-    height: 36px !important;
-    box-sizing: border-box !important;
+  /* v3.5.0-alpha.172.79 → α.172.82 (Bundle C2/F/F8) — Fix milestone misalign.
+     vis-timeline 7.x applica `className: 'tl-milestone-group'` SIA al
+     label sinistro SIA al group foreground. Tentativo F (altezza forzata
+     a 36px su entrambi) ha rotto il hit-test perché il foreground a volte
+     restava 30px (calcolo auto su items vuoti) e la label diventava più
+     alta → click su label cadeva fuori e collassava il gruppo successivo.
+     Soluzione F8: NON forzare height — lascia vis-timeline calcolare il
+     foreground; per il label uso flex center per allineare il testo
+     verticalmente entro l'altezza naturale (qualunque sia). */
+  #tl-host .vis-label.tl-milestone-group {
+    display: flex !important;
+    align-items: center !important;
+    padding: 0 10px !important;
   }
   #tl-host .vis-label.tl-milestone-group .vis-inner {
-    padding: 8px 10px !important;
-    line-height: 1 !important;
-    display: flex;
-    align-items: center;
+    padding: 0 !important;
+    line-height: 1.2 !important;
   }
   #tl-host .vis-group.tl-milestone-group .vis-item {
-    margin-top: 4px !important;
+    margin-top: 2px !important;
+  }
+  /* v3.5.0-alpha.172.82 (Bundle F8) — Compatta righe parent in modalità
+     "Per progetto". Pre-fix: il parent row vuoto (sopra al sotto-row job)
+     aveva altezza auto ~36-48px → blocchi vuoti sopra ogni progetto.
+     vis-timeline applica `.vis-nesting-group` ai parent che hanno nested.
+     Riduciamo a 22px (giusto per vedere etichetta), le righe job
+     sottostanti restano normali. */
+  #tl-host .vis-label.vis-nesting-group,
+  #tl-host .vis-foreground .vis-group.vis-nesting-group {
+    min-height: 22px !important;
+    max-height: 28px !important;
+    height: 22px !important;
+  }
+  #tl-host .vis-label.vis-nesting-group .vis-inner {
+    padding: 2px 6px !important;
+    line-height: 1.1 !important;
   }
   /* v3.5.0-alpha.82 — Heatmap container neutro (era rgba bianco, invisibile su tema chiaro).
      Usa color-mix var(--text) per adattarsi sia su dark che chiaro. */
