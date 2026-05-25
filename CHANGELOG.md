@@ -1,5 +1,23 @@
 # MediaFlow — Changelog
 
+## v3.5.0-alpha.172.83 — Hotfix: revert F8 milestone CSS + scope F9 nesting-group SOLO a project mode (25 mag 2026)
+
+Regression riportata Matteo immediatamente dopo α.172.82:
+- "Timeline risorse era OK. Adesso è misaligned" → causa F9 CSS `.vis-nesting-group` colpiva anche i reparti DI/Video in modalità risorse.
+- "Problema allineamento milestone era stato corretto" → F8 (rimuovere height forcing) era inutile, lo stato α.172.81 era OK.
+
+**Revert F8**: ripristinato CSS milestone con height:36px forzato su label+foreground (stato α.172.81 funzionante).
+
+**Scope F9 a project mode**:
+- CSS `.vis-nesting-group` ora qualificato con `#tl-host[data-group-by="project"]`.
+- JS `_tlApplyGroupByAttr(v)` setta l'attributo sul `#tl-host` ogni volta che il toggle Risorsa|Progetto cambia + on init.
+- Modalità risorse: nested groups (reparti) NON toccati, altezza naturale preservata.
+- Modalità progetto: parent rows compatti come F9 voleva.
+
+**File toccati**: `app/templates/pages/planning.html` (CSS milestone revert + nesting-group scoped + JS attr setter), `app/main.py` (version), `CHANGELOG.md`.
+
+520 routes invariato. Schema DB invariato.
+
 ## v3.5.0-alpha.172.82 — Bundle F7+F8+F9: AI quote naming convention + milestone misalign def-fix + project mode altezza parent (25 mag 2026)
 
 **F7** — Quote AI da capitolato + propose_quote rispettano NumberingConfig:
