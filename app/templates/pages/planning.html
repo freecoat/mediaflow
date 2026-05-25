@@ -3975,7 +3975,11 @@ function tlBookingToItem(b) {
 // filtri/zoom non cambiano (re-render manuale lo aggiorna).
 
 // Refresh 1 o N booking: re-fetch dal server e patch in itemsDS.
+// v3.5.0-alpha.172.78 (Bundle A4) — usa window._tlItemsDS invece di itemsDS
+// (closure local di renderTimeline). Pre-fix: ReferenceError quando chiamato
+// fuori scope (modal edit, drawer AI applied hook).
 async function tlIncrementalRefresh(bookingIds) {
+  const itemsDS = window._tlItemsDS;
   if (!itemsDS || !window._tlInstance) return false;
   const ids = (Array.isArray(bookingIds) ? bookingIds : [bookingIds])
               .filter(x => x != null).map(x => parseInt(x, 10));
@@ -4018,6 +4022,7 @@ async function tlIncrementalRefresh(bookingIds) {
 
 // Remove tutti gli items per N booking_id (cascade visivo).
 function tlIncrementalRemove(bookingIds) {
+  const itemsDS = window._tlItemsDS;
   if (!itemsDS) return false;
   const ids = Array.isArray(bookingIds) ? bookingIds : [bookingIds];
   const idsSet = new Set(ids.filter(x => x != null).map(x => parseInt(x, 10)));
@@ -4032,6 +4037,7 @@ function tlIncrementalRemove(bookingIds) {
 
 // Remove specifici assignment (granulare).
 function tlIncrementalRemoveAssignments(assignmentIds) {
+  const itemsDS = window._tlItemsDS;
   if (!itemsDS) return false;
   const ids = Array.isArray(assignmentIds) ? assignmentIds : [assignmentIds];
   const idsSet = new Set(ids.filter(x => x != null).map(x => parseInt(x, 10)));
@@ -5407,6 +5413,12 @@ async function _doRenderTimeline(preserveWindow=false) {
     console.warn('milestones fetch fail', e);
   }
   const itemsDS = new vis.DataSet(_hideBg ? [...items, ...milestoneItems] : [...items, ...bgItems, ...punchItems, ...milestoneItems]);
+  // v3.5.0-alpha.172.78 (Bundle A4) — Esponi itemsDS globalmente. Pre-fix:
+  // i tre helper tlIncrementalRefresh/Remove/RemoveAssignments accedevano
+  // direttamente a `itemsDS` (closure local di questa funzione) → ReferenceError
+  // "itemsDS is not defined" quando chiamati da modal smart_split a posteriori
+  // o da hook drawer AI. Ora `window._tlItemsDS` è il riferimento canonico.
+  window._tlItemsDS = itemsDS;
   if (milestoneGroup) {
     // Insert milestone group at top of groups array (vis-timeline rispetta order:)
     groups.unshift(milestoneGroup);

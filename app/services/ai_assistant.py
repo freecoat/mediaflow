@@ -2456,6 +2456,329 @@ def _h_propose_bulk_booking_status_change(db: Session, data: dict) -> dict:
     }
 
 
+# ── v3.5.0-alpha.172.78 (Bundle A1+A2) — Bulk split + bulk delete ──
+# Shared selection helper riusato da bulk_split + bulk_delete.
+# Stessa semantica filter di propose_bulk_booking_status_change.
+def _resolve_bookings_for_bulk(db: Session, data: dict) -> list:
+    """Risolvi una lista di Booking da `booking_ids` OPPURE `filter`.
+
+    Stesso contratto di propose_bulk_booking_status_change (per coerenza
+    cross-capability). Limite hard 200 booking. Raise ValueError con
+    messaggio human-readable per AI.
+    """
+    from datetime import date as _d, datetime as _dt, time as _t
+    from app.models import BookingState
+    CURRENT_TENANT = 1
+    bids_raw = data.get("booking_ids")
+    filter_in = data.get("filter")
+    if bids_raw and filter_in:
+        raise ValueError("Passa `booking_ids` OPPURE `filter`, non entrambi.")
+    if not bids_raw and not filter_in:
+        raise ValueError("Passa `booking_ids` (lista) o `filter` (criteri).")
+
+    q = db.query(Booking).filter(
+        Booking.tenant_id == CURRENT_TENANT,
+        Booking.status != BookingStatus.cancelled,
+    )
+    if bids_raw:
+        if not isinstance(bids_raw, list) or not bids_raw:
+            raise ValueError("booking_ids deve essere una lista non vuota")
+        try:
+            bids = [int(x) for x in bids_raw]
+        except (TypeError, ValueError):
+            raise ValueError("booking_ids: tutti gli elementi devono essere interi")
+        if len(bids) > 200:
+            raise ValueError(f"Limite 200 booking per chiamata superato ({len(bids)})")
+        q = q.filter(Booking.id.in_(bids))
+    else:
+        if not isinstance(filter_in, dict):
+            raise ValueError("`filter` deve essere un oggetto")
+        f_job = filter_in.get("job_id")
+        f_project = filter_in.get("project_id")
+        f_resource = filter_in.get("resource_id")
+        f_from = filter_in.get("date_from")
+        f_to = filter_in.get("date_to")
+        f_state = filter_in.get("current_state")
+        if not any([f_job, f_project, f_resource]):
+            raise ValueError(
+                "filter: almeno uno tra job_id, project_id, resource_id è "
+                "obbligatorio (evita match accidentale tenant-wide)."
+            )
+        if f_job:
+            q = q.filter(Booking.job_id == int(f_job))
+        if f_project:
+            jids = [j.id for j in db.query(Job).filter(Job.project_id == int(f_project)).all()]
+            if not jids:
+                raise ValueError(f"Progetto #{f_project}: nessun job trovato")
+            q = q.filter(Booking.job_id.in_(jids))
+        if f_resource:
+            try:
+                rid = int(f_resource)
+            except (TypeError, ValueError):
+                raise ValueError(f"filter.resource_id non numerico: {f_resource!r}")
+            booking_ids_for_res = [
+                a.booking_id for a in
+                db.query(BookingAssignment).filter(BookingAssignment.resource_id == rid).all()
+            ]
+            if not booking_ids_for_res:
+                raise ValueError(f"Risorsa #{rid}: nessun booking trovato")
+            q = q.filter(Booking.id.in_(booking_ids_for_res))
+        if f_from:
+            try:
+                d_from = _d.fromisoformat(str(f_from))
+            except Exception:
+                raise ValueError(f"filter.date_from non valido: {f_from!r}")
+            q = q.filter(Booking.start_datetime >= _dt.combine(d_from, _t(0, 0)))
+        if f_to:
+            try:
+                d_to = _d.fromisoformat(str(f_to))
+            except Exception:
+                raise ValueError(f"filter.date_to non valido: {f_to!r}")
+            q = q.filter(Booking.start_datetime <= _dt.combine(d_to, _t(23, 59, 59)))
+        if f_state:
+            try:
+                cur_state_enum = BookingState(str(f_state).strip().lower())
+            except ValueError:
+                raise ValueError(
+                    f"filter.current_state non valido: {f_state!r}. Ammessi: "
+                    f"tentative, confirmed, in_progress, done, not_done."
+                )
+            q = q.filter(Booking.state == cur_state_enum)
+
+    bookings = q.order_by(Booking.start_datetime.asc()).all()
+    if not bookings:
+        raise ValueError("Nessun booking matcha la selezione")
+    if len(bookings) > 200:
+        raise ValueError(
+            f"Selezione produce {len(bookings)} booking — limite 200 per chiamata. "
+            f"Restringi `filter` (es. aggiungi date_from/date_to)."
+        )
+    return bookings
+
+
+@ai_capability("propose_bulk_split_booking")
+def _h_propose_bulk_split_booking(db: Session, data: dict) -> dict:
+    """MUTATION. Re-splitta N booking esistenti in singolo Apply.
+
+    Utile dopo cambio WHP, festività aggiunte, o quando AI ha creato
+    serie monolitica e l'utente vuole spezzare con pausa pranzo.
+
+    Selezione: `booking_ids` OPPURE `filter` (stessa semantica di
+    propose_bulk_booking_status_change). Per ogni booking applica la
+    stessa logica di `propose_split_booking` (atomico per booking).
+
+    Skip granulare: slice locked, JCL in_batch, assignment vuoti.
+    Conflict per-booking → loggato come failed (i restanti procedono).
+
+    Payload: {
+      "booking_ids"?: [int],
+      "filter"?: {...},
+    }
+    """
+    from datetime import datetime as _dt
+    from app.models import BookingAssignment, ResourceUnavailability, UnavailabilityStatus
+    from app.services.working_hours import split_booking_smart
+    from app.services.booking_mutate import audit_booking_mutation
+    from app.routers.planning import _resolve_policy_for_resource
+    from app.services.billing_slice_guard import find_blocking_slice, slice_lock_message
+
+    bookings = _resolve_bookings_for_bulk(db, data)
+    split_ok: list = []
+    skipped_locked: list = []
+    skipped_in_batch: list = []
+    skipped_no_assign: list = []
+    failed: list = []
+
+    for b in bookings:
+        # Skip slice locked
+        try:
+            sl = find_blocking_slice(db, b)
+            if sl is not None:
+                skipped_locked.append({"booking_id": b.id, "reason": slice_lock_message(sl)})
+                continue
+        except Exception:
+            pass
+        # Skip JCL in_batch
+        if b.job_cost_line_id:
+            jcl = db.query(JobCostLine).filter(JobCostLine.id == b.job_cost_line_id).first()
+            if jcl and jcl.billing_status == JCLBillingStatus.in_batch:
+                skipped_in_batch.append({
+                    "booking_id": b.id,
+                    "reason": f"JCL #{jcl.id} in BillingBatch di approvazione",
+                })
+                continue
+        if not b.assignments:
+            skipped_no_assign.append({"booking_id": b.id, "reason": "nessun assignment da splittare"})
+            continue
+
+        resource_ids = sorted({a.resource_id for a in b.assignments})
+        new_segments: list = []
+        try:
+            for rid in resource_ids:
+                res_ass = [a for a in b.assignments if a.resource_id == rid]
+                target_s = min(a.start_datetime for a in res_ass)
+                target_e = max(a.end_datetime for a in res_ass)
+                policy = _resolve_policy_for_resource(db, rid)
+                if not policy:
+                    new_segments.append({"resource_id": rid, "start_datetime": target_s, "end_datetime": target_e})
+                    continue
+                unavs = db.query(ResourceUnavailability).filter(
+                    ResourceUnavailability.resource_id == rid,
+                    ResourceUnavailability.status == UnavailabilityStatus.approved,
+                ).all()
+                slots = split_booking_smart(target_s, target_e, policy, unavs)
+                if not slots:
+                    raise ValueError(f"Risorsa #{rid}: range fuori orario lavorativo")
+                for sl_ in slots:
+                    new_segments.append({"resource_id": rid, "start_datetime": sl_.start, "end_datetime": sl_.end})
+
+            # Conflict check escludendo current assignments
+            existing_ids = [a.id for a in b.assignments]
+            for seg in new_segments:
+                q = db.query(BookingAssignment).join(Booking).filter(
+                    Booking.tenant_id == 1,
+                    Booking.status != BookingStatus.cancelled,
+                    BookingAssignment.resource_id == seg["resource_id"],
+                    BookingAssignment.start_datetime < seg["end_datetime"],
+                    BookingAssignment.end_datetime > seg["start_datetime"],
+                )
+                if existing_ids:
+                    q = q.filter(~BookingAssignment.id.in_(existing_ids))
+                c = q.first()
+                if c:
+                    raise ValueError(
+                        f"Conflitto risorsa #{seg['resource_id']} "
+                        f"{seg['start_datetime']:%Y-%m-%d %H:%M}–{seg['end_datetime']:%H:%M} "
+                        f"(vs assignment #{c.id})"
+                    )
+
+            # Apply: replace-all
+            for old in list(b.assignments):
+                db.delete(old)
+            db.flush()
+            for seg in new_segments:
+                db.add(BookingAssignment(
+                    booking_id=b.id, resource_id=seg["resource_id"],
+                    start_datetime=seg["start_datetime"], end_datetime=seg["end_datetime"],
+                ))
+            b.start_datetime = min(seg["start_datetime"] for seg in new_segments)
+            b.end_datetime = max(seg["end_datetime"] for seg in new_segments)
+
+            try:
+                from app.services.cost_line_sync import recompute_for_booking
+                recompute_for_booking(db, b)
+            except Exception as _e:
+                logger.warning(f"recompute_for_booking failed in bulk_split #{b.id}: {_e}")
+            try:
+                audit_booking_mutation(
+                    db, b, kind="ai_bulk_split",
+                    summary=f"AI bulk split → {len(new_segments)} segmenti",
+                    payload={"segments": len(new_segments), "resources": resource_ids},
+                )
+            except Exception:
+                pass
+
+            split_ok.append({
+                "booking_id": b.id,
+                "segments_count": len(new_segments),
+                "resources_count": len(resource_ids),
+            })
+        except ValueError as ve:
+            failed.append({"booking_id": b.id, "reason": str(ve)})
+        except Exception as exc:
+            failed.append({"booking_id": b.id, "reason": f"errore inatteso: {exc}"})
+
+    return {
+        "selected_count": len(bookings),
+        "split_count": len(split_ok),
+        "skipped_locked_count": len(skipped_locked),
+        "skipped_in_batch_count": len(skipped_in_batch),
+        "skipped_no_assign_count": len(skipped_no_assign),
+        "failed_count": len(failed),
+        "split": split_ok[:50],
+        "skipped_locked": skipped_locked[:20],
+        "skipped_in_batch": skipped_in_batch[:20],
+        "skipped_no_assign": skipped_no_assign[:20],
+        "failed": failed[:20],
+    }
+
+
+@ai_capability("propose_bulk_delete_booking")
+def _h_propose_bulk_delete_booking(db: Session, data: dict) -> dict:
+    """MUTATION. Soft-delete N booking in singolo Apply (status=cancelled).
+
+    Selezione: `booking_ids` OPPURE `filter` (stessa semantica di
+    propose_bulk_booking_status_change). Soft-delete recuperabile da
+    cestino. Recompute cost line per ognuno (i done escono dal maturato).
+
+    Skip granulare: slice locked, JCL in_batch, già cancellati.
+
+    Payload: {
+      "booking_ids"?: [int],
+      "filter"?: {...},
+      "reason"?: str (motivo applicato a tutti)
+    }
+    """
+    from app.models import BookingState
+    from app.services.billing_slice_guard import find_blocking_slice, slice_lock_message
+
+    bookings = _resolve_bookings_for_bulk(db, data)
+    reason = (data.get("reason") or "").strip() or None
+    cancelled: list = []
+    skipped_locked: list = []
+    skipped_in_batch: list = []
+
+    for b in bookings:
+        # Skip slice locked
+        try:
+            sl = find_blocking_slice(db, b)
+            if sl is not None:
+                skipped_locked.append({"booking_id": b.id, "reason": slice_lock_message(sl)})
+                continue
+        except Exception:
+            pass
+        # Skip JCL in_batch
+        if b.job_cost_line_id:
+            jcl = db.query(JobCostLine).filter(JobCostLine.id == b.job_cost_line_id).first()
+            if jcl and jcl.billing_status == JCLBillingStatus.in_batch:
+                skipped_in_batch.append({
+                    "booking_id": b.id,
+                    "reason": f"JCL #{jcl.id} in BillingBatch di approvazione",
+                })
+                continue
+
+        b.status = BookingStatus.cancelled
+        b.state = BookingState.cancelled
+        if reason:
+            existing = b.notes or ""
+            b.notes = (existing + ("\n" if existing else "") + f"[AI bulk cancel] {reason}").strip()
+        try:
+            from app.services.cost_line_sync import recompute_for_booking
+            recompute_for_booking(db, b)
+        except Exception as _e:
+            logger.warning(f"recompute_for_booking failed in bulk_delete #{b.id}: {_e}")
+        try:
+            db.add(BookingChange(
+                booking_id=b.id, kind="ai_bulk_delete",
+                summary=f"AI bulk cancel" + (f": {reason}" if reason else ""),
+                payload={"reason": reason},
+            ))
+        except Exception:
+            pass
+        cancelled.append({"booking_id": b.id})
+
+    return {
+        "selected_count": len(bookings),
+        "cancelled_count": len(cancelled),
+        "skipped_locked_count": len(skipped_locked),
+        "skipped_in_batch_count": len(skipped_in_batch),
+        "cancelled": cancelled[:100],
+        "skipped_locked": skipped_locked[:20],
+        "skipped_in_batch": skipped_in_batch[:20],
+        "reason": reason,
+    }
+
+
 @ai_capability("query_project_finance")
 def _h_query_project_finance(db: Session, data: dict) -> dict:
     """READONLY. Stato finanziario aggregato di un progetto: quotato,

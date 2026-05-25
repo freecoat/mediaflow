@@ -3791,7 +3791,7 @@ async function openWizardCapitolato() {
   try {
     const [projects, pi] = await Promise.all([
       api('GET', '/projects/api'),
-      api('GET', '/pricelist/api'),
+      api('GET', '/pricelist/api/items'),
     ]);
     _wcPriceItems = pi;
     const sel = document.getElementById('wc-project');

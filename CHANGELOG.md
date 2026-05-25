@@ -1,5 +1,36 @@
 # MediaFlow — Changelog
 
+## v3.5.0-alpha.172.78 — Bundle A: capability bulk AI (split+delete) + fix /pricelist/api 404 + itemsDS scope (25 mag 2026)
+
+Bug riportati Matteo dopo test α.172.77:
+1. AI emette N applicativi separati per `propose_split_booking` e `propose_delete_booking` su gruppi di booking (es. 24 apply per cancellare serie ricorrente) → workflow inutilizzabile.
+2. Wizard "Crea da capitolato" su `/quotes` apre con `GET /pricelist/api` → 404 (endpoint corretto è `/pricelist/api/items`).
+3. Smart_split a posteriori da modal edit booking → JS error `itemsDS is not defined`. Helper `tlIncrementalRefresh/Remove/RemoveAssignments` accedono direttamente al `const itemsDS` locale di `renderTimeline()` → ReferenceError fuori scope.
+
+**A1 — `propose_bulk_split_booking`** (nuova capability mutation):
+- Re-splitta N booking esistenti in SINGOLO Apply. Per ognuno: `_resolve_policy_for_resource` + `split_booking_smart` + replace-all atomico + recompute cost line + audit `ai_bulk_split`.
+- Selezione: `booking_ids[]` OPPURE `filter{job_id|project_id|resource_id|date_from|date_to|current_state}` (mutuamente esclusivi).
+- Skip granulare per-booking: slice locked, JCL in_batch, nessun assignment. I restanti procedono.
+- Limite 200 booking/chiamata. Stesso pattern di `propose_bulk_booking_status_change`.
+
+**A2 — `propose_bulk_delete_booking`** (nuova capability mutation):
+- Soft-delete N booking (status=cancelled) in singolo Apply. Per ognuno: recompute cost line + audit `ai_bulk_delete` + opzionale `reason` in notes.
+- Stesso filter/selection pattern di A1. Stesso skip granulare.
+
+**System prompt aggiornato**: regola critica esplicita per AI — usa SEMPRE bulk_split / bulk_delete invece di N propose_split / N propose_delete singole. Eccezione: utente chiede "uno alla volta".
+
+**Helper condiviso `_resolve_bookings_for_bulk(db, data)`**: factorizzato per riuso bulk_split + bulk_delete (DRY su filter resolution).
+
+**A3 — Fix `/pricelist/api` 404**: `app/templates/pages/quotes.html:3794` `api('GET', '/pricelist/api')` → `/pricelist/api/items` (allineato con linea 1352 stesso file).
+
+**A4 — Fix `itemsDS is not defined`** (`app/templates/pages/planning.html`):
+- Esposto `window._tlItemsDS = itemsDS` subito dopo `const itemsDS = new vis.DataSet(...)` in `renderTimeline()`.
+- Refactor `tlIncrementalRefresh`, `tlIncrementalRemove`, `tlIncrementalRemoveAssignments` per dereferenziare `window._tlItemsDS` invece del `itemsDS` closure-local. Ora chiamabili da qualsiasi handler globale (modal edit, drawer AI applied hook).
+
+**File toccati**: `app/services/ai_assistant.py` (helper + 2 handler), `app/services/ai_tools.py` (2 schema + prompt rule), `app/templates/pages/quotes.html` (1 endpoint), `app/templates/pages/planning.html` (4 spot), `app/main.py` (version), `CHANGELOG.md`.
+
+518 routes (518 = 516 + 2 nuove capability). Schema DB invariato.
+
 ## v3.5.0-alpha.172.77 — Bundle B: smart_split AI usa policy default tenant come fallback (25 mag 2026)
 
 Bug riportato Matteo dopo test α.172.74: `propose_recurring_bookings` con `smart_split=true` non spezzava davvero le giornate (booking #90 = 1 slot 9-18 invece di 2 slot 9-13 + 14-18), e generava `overtime_warning` spurio (9h presenza invece di 8h reali al netto pausa).

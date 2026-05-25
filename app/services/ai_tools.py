@@ -701,6 +701,72 @@ TOOLS: list[dict] = [
         "handler": "propose_bulk_booking_status_change",
     },
     {
+        "name": "propose_bulk_split_booking",
+        "category": "mutation",
+        "description": (
+            "Re-splitta N booking esistenti in UN SOLO Apply (vs N apply separati). "
+            "USA SEMPRE invece di propose_split_booking quando l'utente chiede "
+            "'ri-splitta tutti i booking di X', 'spezza pausa pranzo su tutta la "
+            "serie dailies'. Per ogni booking applica split_booking_smart con WHP "
+            "+ ferie + festivi correnti. Atomico per-booking: skip granulare per "
+            "slice locked / JCL in_batch / nessun assignment. Limite 200/chiamata. "
+            "Stesso pattern filter di propose_bulk_booking_status_change."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "booking_ids": {"type": "array", "items": {"type": "integer"}, "description": "Lista esplicita ID. Mutuamente esclusivo con `filter`."},
+                "filter": {
+                    "type": "object",
+                    "description": "Criteri alternativa a booking_ids. Almeno uno tra job_id/project_id/resource_id obbligatorio.",
+                    "properties": {
+                        "job_id":         {"type": "integer"},
+                        "project_id":     {"type": "integer"},
+                        "resource_id":    {"type": "integer"},
+                        "date_from":      {"type": "string", "description": "YYYY-MM-DD inclusiva."},
+                        "date_to":        {"type": "string", "description": "YYYY-MM-DD inclusiva."},
+                        "current_state":  {"type": "string", "description": "tentative|confirmed|in_progress|done|not_done"},
+                    },
+                },
+            },
+            "required": [],
+        },
+        "handler": "propose_bulk_split_booking",
+    },
+    {
+        "name": "propose_bulk_delete_booking",
+        "category": "mutation",
+        "description": (
+            "Soft-delete N booking in UN SOLO Apply (vs N apply). USA SEMPRE "
+            "invece di propose_delete_booking quando l'utente chiede 'cancella "
+            "tutti i booking di X', 'elimina la serie ricorrente'. Soft-delete "
+            "recuperabile dal Cestino. Per ognuno: recompute cost line + audit "
+            "log. Skip granulare per slice locked / JCL in_batch. Limite 200/"
+            "chiamata. Stesso pattern filter di propose_bulk_booking_status_change."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "booking_ids": {"type": "array", "items": {"type": "integer"}, "description": "Lista esplicita ID. Mutuamente esclusivo con `filter`."},
+                "filter": {
+                    "type": "object",
+                    "description": "Criteri alternativa a booking_ids. Almeno uno tra job_id/project_id/resource_id obbligatorio.",
+                    "properties": {
+                        "job_id":         {"type": "integer"},
+                        "project_id":     {"type": "integer"},
+                        "resource_id":    {"type": "integer"},
+                        "date_from":      {"type": "string", "description": "YYYY-MM-DD inclusiva."},
+                        "date_to":        {"type": "string", "description": "YYYY-MM-DD inclusiva."},
+                        "current_state":  {"type": "string", "description": "tentative|confirmed|in_progress|done|not_done"},
+                    },
+                },
+                "reason": {"type": "string", "description": "Motivo applicato a tutti (audit + notes)."},
+            },
+            "required": [],
+        },
+        "handler": "propose_bulk_delete_booking",
+    },
+    {
         "name": "propose_transmit_to_billing",
         "category": "mutation",
         "description": (
@@ -1201,6 +1267,8 @@ Per **CREARE** nuovi booking singoli usa `propose_booking` (esistente).
    **Warning straordinari** — se la response di `propose_recurring_bookings` contiene `overtime_warning` (giornata effettiva > 8h), CITA il warning all'utente subito in italiano leggibile: "⚠️ Ogni giornata risulta di X ore effettive, ovvero Yh di straordinario rispetto alla soglia 8h. Vuoi che restringa l'orario o procediamo accettando lo straordinario?". Attendi conferma prima di passare a step successivi (es. cambio stato in batch).
 
    **Cambio stato in batch** — quando l'utente chiede di portare a "done"/"in lavorazione"/"non fatto" un gruppo di booking ("marca done la prima metà", "metti in lavorazione tutti i booking di Luca di questa settimana"), USA `propose_bulk_booking_status_change`. NON dire mai "non disponibile via AI, fallo a mano dalla timeline". Passa `filter` (job_id + date_from/date_to + current_state) se hai criteri chiari; passa `booking_ids[]` se hai già la lista esplicita dal context. Per `not_done` chiedi prima il motivo all'utente — è obbligatorio.
+
+   **Bulk split + bulk delete — REGOLA CRITICA** (α.172.78): quando l'utente chiede di ri-splittare O cancellare N booking ("ri-splitta tutti i booking di Filmetto Test", "spezza con pausa pranzo tutta la serie dailies", "cancella tutti i booking del progetto X", "elimina la serie ricorrente di Luca"), USA SEMPRE `propose_bulk_split_booking` O `propose_bulk_delete_booking` (UN SOLO Apply per la lista intera). NON emettere mai N chiamate separate a `propose_split_booking` / `propose_delete_booking` — l'utente dovrebbe cliccare Apply N volte, inutilizzabile. Eccezione: se l'utente ha esplicitamente chiesto "uno per uno" / "uno alla volta", allora chiamale singole. Stesso pattern filter (`filter.{job_id|project_id|resource_id|date_from|date_to|current_state}`) di `propose_bulk_booking_status_change`. Limite hard 200/chiamata.
 7. **Linguaggio umano, mai ID tecnici nelle risposte** (v3.5.0-alpha.172.24): NON menzionare mai all'utente termini tipo `job_cost_line_id`, `quote_id`, `project_id`, `JCL`, `propose_*`, `tool_result`, `payload`, "fallback". L'utente è un produttore, non uno sviluppatore. USA invece parole umane: "lavorazione di color grading", "quotazione Q-DNHP-v3", "fattura passiva n. 42", "progetto Mare Nostrum". Anche nelle conferme/errori riformula in italiano leggibile.
 
 8. **Lavorazione obbligatoria su booking — chiedi opzioni, NON ID** (v3.5.0-alpha.172.24): se per proporre un booking ti serve sapere a quale lavorazione del job collegarlo (campo `job_cost_line_id` del tool) E nel contesto vedi più candidati plausibili, NON dire "qual è il `job_cost_line_id`?". USA invece:
