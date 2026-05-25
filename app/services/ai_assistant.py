@@ -1444,6 +1444,144 @@ def _h_find_free_slots(db: Session, data: dict) -> dict:
     }
 
 
+@ai_capability("compute_recurring_date_range")
+def _h_compute_recurring_date_range(db: Session, data: dict) -> dict:
+    """READONLY. Calcola start_date+until_date esatti per N giorni lavorativi
+    di una serie ricorrente, partendo da anchor_date in forward o backward.
+    Festività italiane (e custom tenant) saltate dal conteggio se
+    skip_holidays=true (default). Risolve il calcolo manuale che l'AI
+    sbagliava su edge case (range che attraversano 2 festività).
+
+    Payload: {
+      "anchor_date": "YYYY-MM-DD",
+      "working_days_count": int,
+      "direction": "forward" | "backward" (default forward),
+      "rule": "DAILY" | "WEEKDAYS" (default) | "WEEKENDS" | "MON,WED,FRI",
+      "skip_holidays": bool (default true)
+    }
+    Response: {
+      "start_date", "until_date",
+      "direction", "rule",
+      "working_days_count_requested",
+      "working_days_count_actual",
+      "calendar_days_count",
+      "skipped_holidays": [{"date","name"}],
+      "skipped_weekends_count"
+    }
+    """
+    from datetime import date as _d, timedelta as _td
+    DAYS = {"MON": 0, "TUE": 1, "WED": 2, "THU": 3, "FRI": 4, "SAT": 5, "SUN": 6}
+
+    anchor_raw = data.get("anchor_date")
+    if not anchor_raw:
+        raise ValueError("anchor_date obbligatorio (YYYY-MM-DD)")
+    try:
+        anchor = _d.fromisoformat(str(anchor_raw))
+    except Exception:
+        raise ValueError(f"anchor_date non valido (atteso YYYY-MM-DD): {anchor_raw!r}")
+
+    try:
+        target_n = int(data.get("working_days_count") or 0)
+    except (TypeError, ValueError):
+        raise ValueError(f"working_days_count non numerico: {data.get('working_days_count')!r}")
+    if target_n <= 0:
+        raise ValueError("working_days_count deve essere > 0")
+    if target_n > 5000:
+        raise ValueError("working_days_count > 5000 non supportato (sanity cap)")
+
+    direction = str(data.get("direction") or "forward").lower().strip()
+    if direction not in ("forward", "backward"):
+        raise ValueError(f"direction non valida: {direction!r} (atteso forward|backward)")
+
+    rule = (data.get("rule") or "WEEKDAYS").upper().strip()
+    if rule == "DAILY":
+        days = set(range(7))
+    elif rule == "WEEKDAYS":
+        days = {0, 1, 2, 3, 4}
+    elif rule == "WEEKENDS":
+        days = {5, 6}
+    else:
+        try:
+            days = {DAYS[d.strip()[:3].upper()] for d in rule.split(",") if d.strip()}
+        except KeyError:
+            raise ValueError(f"Regola ricorrenza non valida: {rule!r}")
+    if not days:
+        raise ValueError(f"Regola ricorrenza non valida: {rule!r}")
+
+    skip_holidays = data.get("skip_holidays")
+    if skip_holidays is None:
+        skip_holidays = True
+
+    # Pre-carica festività su range largo (anchor ± 4 anni) per coprire
+    # working_days_count grandi (es. 1000 giorni ≈ 4 anni di lavorazione).
+    holidays_map: dict = {}
+    if skip_holidays:
+        try:
+            from app.services.holidays_service import get_effective_holidays_range
+            from app.context import current_tenant_id
+            from datetime import date as _d2
+            year_lo = anchor.year - 4 if direction == "backward" else anchor.year
+            year_hi = anchor.year if direction == "backward" else anchor.year + 4
+            holidays_map = get_effective_holidays_range(
+                db, current_tenant_id(), year_lo, year_hi, resource_id=None,
+            )
+        except Exception:
+            holidays_map = {}
+    holidays_set = set(holidays_map.keys())
+
+    # Itera giorno per giorno finché non raggiungo target_n giorni validi.
+    step = _td(days=1 if direction == "forward" else -1)
+    cur = anchor
+    collected: list = []        # date valide (giorni della rule, non-festivi)
+    skipped_holidays: list = [] # [{date,name}]
+    skipped_weekends = 0
+    iter_cap = max(target_n * 30, 366)  # safety: ~30x per coprire festività dense
+
+    iters = 0
+    while len(collected) < target_n and iters < iter_cap:
+        iters += 1
+        weekday = cur.weekday()
+        if weekday in days:
+            if cur in holidays_set:
+                skipped_holidays.append({
+                    "date": cur.isoformat(),
+                    "name": holidays_map.get(cur) or "Festività",
+                })
+            else:
+                collected.append(cur)
+        elif weekday in (5, 6) and weekday not in days:
+            skipped_weekends += 1
+        cur += step
+
+    if len(collected) < target_n:
+        raise ValueError(
+            f"Iter cap raggiunto ({iter_cap}) prima di raccogliere {target_n} "
+            f"giorni lavorativi. Range sospetto: anchor={anchor}, rule={rule}."
+        )
+
+    # collected è in ordine forward o backward — start/until sempre cronologici.
+    sd = min(collected)
+    ud = max(collected)
+    cal_days = (ud - sd).days + 1
+
+    # skipped_holidays in ordine cronologico per UX
+    skipped_holidays.sort(key=lambda x: x["date"])
+
+    return {
+        "start_date": sd.isoformat(),
+        "until_date": ud.isoformat(),
+        "direction": direction,
+        "rule": rule,
+        "working_days_count_requested": target_n,
+        "working_days_count_actual": len(collected),
+        "calendar_days_count": cal_days,
+        "skipped_holidays": skipped_holidays,
+        "skipped_holidays_count": len(skipped_holidays),
+        "skipped_weekends_count": skipped_weekends,
+        "anchor_date": anchor.isoformat(),
+    }
+
+
 @ai_capability("check_recurring_booking_collisions")
 def _h_check_recurring_booking_collisions(db: Session, data: dict) -> dict:
     """READONLY. Anticipa festività italiane + ferie/malattie risorse +
@@ -1867,6 +2005,225 @@ def _h_propose_bulk_move(db: Session, data: dict) -> dict:
         "shifted_minutes": sm,
         "moved_count": len(bookings),
         "moved_booking_ids": [b.id for b in bookings],
+    }
+
+
+@ai_capability("propose_bulk_booking_status_change")
+def _h_propose_bulk_booking_status_change(db: Session, data: dict) -> dict:
+    """MUTATION. Cambia stato di N booking (BookingState canonico).
+    Tipico: portare a 'done' la prima metà di una serie ricorrente.
+
+    Selezione: `booking_ids` (lista esplicita) OPPURE `filter` (criteri
+    job/project/resource + range date + current_state). Mutuamente esclusivi.
+
+    Per-booking: skip se locked da slice billed o JCL in_batch (loggato come
+    failed con motivo human-readable). I restanti procedono. Se new_state=done
+    triggera recompute_for_booking (aggiorna maturato JCL).
+
+    Payload: {
+      "booking_ids"?: [int],
+      "filter"?: {
+         "job_id"?: int, "project_id"?: int, "resource_id"?: int,
+         "date_from"?: "YYYY-MM-DD", "date_to"?: "YYYY-MM-DD",
+         "current_state"?: "tentative|confirmed|in_progress|done|not_done"
+      },
+      "new_state": "tentative|confirmed|in_progress|done|not_done",
+      "note"?: str
+    }
+    """
+    from datetime import date as _d, datetime as _dt, time as _t
+    from app.models import BookingState
+    from app.services.booking_state import apply_state_to_booking, state_label
+    CURRENT_TENANT = 1
+
+    # --- Validate new_state
+    ns_raw = data.get("new_state")
+    if not ns_raw:
+        raise ValueError("new_state obbligatorio (tentative|confirmed|in_progress|done|not_done)")
+    try:
+        target_state = BookingState(str(ns_raw).strip().lower())
+    except ValueError:
+        raise ValueError(
+            f"new_state non valido: {ns_raw!r}. Ammessi: tentative, confirmed, "
+            f"in_progress, done, not_done."
+        )
+    if target_state == BookingState.cancelled:
+        raise ValueError(
+            "Per cancellare booking usa la capability dedicata (soft-delete), "
+            "non propose_bulk_booking_status_change."
+        )
+
+    note = (data.get("note") or "").strip()
+    if target_state == BookingState.not_done and not note:
+        raise ValueError(
+            "Per new_state='not_done' il parametro `note` è OBBLIGATORIO "
+            "(motivo del non-fatto, va in audit + UI)."
+        )
+
+    # --- Resolve booking_ids (o via lista esplicita o via filter)
+    bids_raw = data.get("booking_ids")
+    filter_in = data.get("filter")
+    if bids_raw and filter_in:
+        raise ValueError("Passa `booking_ids` OPPURE `filter`, non entrambi.")
+    if not bids_raw and not filter_in:
+        raise ValueError("Passa `booking_ids` (lista) o `filter` (criteri).")
+
+    q = db.query(Booking).filter(
+        Booking.tenant_id == CURRENT_TENANT,
+        Booking.status != BookingStatus.cancelled,
+    )
+
+    if bids_raw:
+        if not isinstance(bids_raw, list) or not bids_raw:
+            raise ValueError("booking_ids deve essere una lista non vuota")
+        try:
+            bids = [int(x) for x in bids_raw]
+        except (TypeError, ValueError):
+            raise ValueError("booking_ids: tutti gli elementi devono essere interi")
+        if len(bids) > 200:
+            raise ValueError(f"Limite 200 booking per chiamata superato ({len(bids)})")
+        q = q.filter(Booking.id.in_(bids))
+    else:
+        # filter mode
+        if not isinstance(filter_in, dict):
+            raise ValueError("`filter` deve essere un oggetto")
+        f_job = filter_in.get("job_id")
+        f_project = filter_in.get("project_id")
+        f_resource = filter_in.get("resource_id")
+        f_from = filter_in.get("date_from")
+        f_to = filter_in.get("date_to")
+        f_state = filter_in.get("current_state")
+        if not any([f_job, f_project, f_resource]):
+            raise ValueError(
+                "filter: almeno uno tra job_id, project_id, resource_id è "
+                "obbligatorio (per sanity — evita match accidentale tenant-wide)."
+            )
+        if f_job:
+            q = q.filter(Booking.job_id == int(f_job))
+        if f_project:
+            jids = [j.id for j in db.query(Job).filter(Job.project_id == int(f_project)).all()]
+            if not jids:
+                raise ValueError(f"Progetto #{f_project}: nessun job trovato")
+            q = q.filter(Booking.job_id.in_(jids))
+        if f_resource:
+            try:
+                rid = int(f_resource)
+            except (TypeError, ValueError):
+                raise ValueError(f"filter.resource_id non numerico: {f_resource!r}")
+            booking_ids_for_res = [
+                a.booking_id for a in
+                db.query(BookingAssignment).filter(BookingAssignment.resource_id == rid).all()
+            ]
+            if not booking_ids_for_res:
+                raise ValueError(f"Risorsa #{rid}: nessun booking trovato")
+            q = q.filter(Booking.id.in_(booking_ids_for_res))
+        if f_from:
+            try:
+                d_from = _d.fromisoformat(str(f_from))
+            except Exception:
+                raise ValueError(f"filter.date_from non valido: {f_from!r}")
+            q = q.filter(Booking.start_datetime >= _dt.combine(d_from, _t(0, 0)))
+        if f_to:
+            try:
+                d_to = _d.fromisoformat(str(f_to))
+            except Exception:
+                raise ValueError(f"filter.date_to non valido: {f_to!r}")
+            q = q.filter(Booking.start_datetime <= _dt.combine(d_to, _t(23, 59, 59)))
+        if f_state:
+            try:
+                cur_state_enum = BookingState(str(f_state).strip().lower())
+            except ValueError:
+                raise ValueError(
+                    f"filter.current_state non valido: {f_state!r}. Ammessi: "
+                    f"tentative, confirmed, in_progress, done, not_done."
+                )
+            q = q.filter(Booking.state == cur_state_enum)
+
+    bookings = q.order_by(Booking.start_datetime.asc()).all()
+    if not bookings:
+        raise ValueError("Nessun booking matcha la selezione")
+    if len(bookings) > 200:
+        raise ValueError(
+            f"Selezione produce {len(bookings)} booking — limite 200 per chiamata. "
+            f"Restringi `filter` (es. aggiungi date_from/date_to)."
+        )
+
+    # --- Apply per booking: skip se locked, altrimenti cambia stato
+    changed: list = []
+    skipped_locked: list = []
+    skipped_in_batch: list = []
+    skipped_already: list = []
+    target_value = target_state.value
+
+    for b in bookings:
+        if b.state == target_state:
+            skipped_already.append({"booking_id": b.id, "reason": f"già {target_value}"})
+            continue
+        # Slice locked? (JCL billed/paid con periodo che copre questo booking)
+        try:
+            from app.services.billing_slice_guard import find_blocking_slice, slice_lock_message
+            sl = find_blocking_slice(db, b)
+            if sl is not None:
+                skipped_locked.append({
+                    "booking_id": b.id,
+                    "reason": slice_lock_message(sl),
+                })
+                continue
+        except Exception:
+            pass
+        # JCL in batch di approvazione?
+        if b.job_cost_line_id:
+            jcl = db.query(JobCostLine).filter(JobCostLine.id == b.job_cost_line_id).first()
+            if jcl and jcl.billing_status == JCLBillingStatus.in_batch:
+                skipped_in_batch.append({
+                    "booking_id": b.id,
+                    "reason": (
+                        f"JCL #{jcl.id} in BillingBatch di approvazione — "
+                        f"il manager deve approvare/annullare prima."
+                    ),
+                })
+                continue
+
+        old_state_str = b.state.value if hasattr(b.state, "value") else str(b.state)
+        apply_state_to_booking(b, target_state)
+        if target_state == BookingState.not_done:
+            b.not_done_reason = note
+        else:
+            b.not_done_reason = None
+
+        # Recompute maturato se done (vedi planning.bulk_edit pattern α.66.5.1)
+        if target_state == BookingState.done and b.job_cost_line_id:
+            try:
+                from app.services.cost_line_sync import recompute_for_booking
+                recompute_for_booking(db, b)
+            except Exception as _e:
+                logger.warning(f"recompute_for_booking failed in bulk_status #{b.id}: {_e}")
+
+        # Audit log
+        try:
+            db.add(BookingChange(
+                booking_id=b.id,
+                kind="ai_bulk_status_change",
+                summary=f"AI bulk status: {old_state_str} → {target_value}" + (f" ({note})" if note else ""),
+                payload={"old_state": old_state_str, "new_state": target_value, "note": note or None},
+            ))
+        except Exception:
+            pass
+
+        changed.append({"booking_id": b.id, "old_state": old_state_str, "new_state": target_value})
+
+    return {
+        "new_state": target_value,
+        "new_state_label": state_label(target_state),
+        "selected_count": len(bookings),
+        "changed_count": len(changed),
+        "skipped_locked_count": len(skipped_locked),
+        "skipped_in_batch_count": len(skipped_in_batch),
+        "skipped_already_count": len(skipped_already),
+        "changed": changed[:50],
+        "skipped_locked": skipped_locked[:20],
+        "skipped_in_batch": skipped_in_batch[:20],
+        "skipped_already": skipped_already[:20],
     }
 
 

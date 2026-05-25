@@ -8,6 +8,20 @@
 
 ## Versione corrente
 
+**v3.5.0-alpha.172.73** — 25 maggio 2026 — AI Copilot 2 nuove capability (recurring date range + bulk status change)
+
+Bug reali emersi su test mattutino "36 giorni dailies a ritroso da 30 mag, Luca Bianchi + Conforming 1, prima metà già done":
+- AI ha calcolato 6 apr → 30 mag = 38 giorni invece di 36 (sbagliava festività edge case), dovendo cancellare a posteriori
+- AI ha dichiarato "cambio stato done in blocco non disponibile via AI" → l'utente costretto a marcarli a mano dalla timeline
+
+**Fix A** — `compute_recurring_date_range` (readonly): input `anchor_date + working_days_count + direction (forward|backward) + rule + skip_holidays` → ritorna start/until esatti + lista festività attraversate. Sostituisce calcolo mentale dell'AI.
+
+**Fix B** — `propose_bulk_booking_status_change` (mutation): cambia stato (tentative/confirmed/in_progress/done/not_done) di N booking via `booking_ids[]` OR `filter{job_id|project_id|resource_id, date_from, date_to, current_state}`. Skip granulare slice locked / JCL in_batch / already_target. `not_done` richiede `note`. Recompute maturato automatico se done. Audit log BookingChange.
+
+System prompt rule 6 estesa: "USA SEMPRE compute_recurring_date_range quando l'utente dà N giornate / a ritroso / N settimane" + "NON dire mai 'cambio stato non disponibile via AI', USA propose_bulk_booking_status_change".
+
+516 routes (+2 capability). Schema DB invariato. Pronto per smoke test su scenario "36 dailies a ritroso".
+
 **v3.5.0-alpha.172.72** — 24-25 maggio 2026 — Test maratona FASE 1-4 + 20+ patch + Brand Claqo pack
 
 22 commit (24 mag): test FASE 0-4 chiusi + bug fixes acconto/SDI/UI + rebrand Claqo (mascot copilot da brand-pack ufficiale, app icon variant-B/C, tema Claqo Dark+Light), feat aggiunte: milestone timeline gruppo dedicato + modal CRUD, camera specs matrix 26 modelli filter live, scheda tecnica dropdown human-readable, filtri fatture annullate/NC, projects row-clickable + scadenza/quote-ref, post-emit no-cancel → NC TD04 auto-num, sede tenant strutturata + IscrizioneREA in XML SDI, AI parse capitolati 503.
@@ -37,16 +51,12 @@ DB: clienti+progetti+quote freschi (purge totale business 23 mag sera). Anagrafi
 
 ## Lavoro in corso
 
-PAUSA — chiusura sera 24 mag. Riapertura 25 mag: **FASE 5 SDI compliance** + verifica implementazioni 24 mag (vedi [[project-test-plan-24mag2026]]). Domani aggiungere fase test ore lavorate.
+α.172.73 chiuso (mattino 25 mag) — 2 capability AI nuove pronte per test live via copilot. **Riapertura test plan 24 mag da FASE 5 SDI compliance** (FASE 1-4 chiuse da α.172.72).
 
 ## Prossimo step
 
-**Test plan dettagliato in memoria** `project_test_plan_24mag2026.md` — 12 fasi step-by-step da fare insieme:
+**Test plan dettagliato in memoria** `project_test_plan_24mag2026.md` — restano FASE 5-12 da fare insieme:
 
-- FASE 0: Restart server uvicorn + Ctrl+Shift+R browser + verifica versione α.172.50
-- FASE 1: Reset acconto draft→pending (banner + bottone giallo)
-- FASE 2: Cross-AP overflow JCL block (toastBlock rosso)
-- FASE 3-4: Emit fattura acconto + cascade NC→draft
 - FASE 5-6: Compliance SDI + XML download FatturaPA
 - FASE 7: Pass-through OT toggle weighted_revenue
 - FASE 8: Cashflow Fandango (skip se DB purgato)
@@ -54,6 +64,10 @@ PAUSA — chiusura sera 24 mag. Riapertura 25 mag: **FASE 5 SDI compliance** + v
 - FASE 10: Anomaly reopen cascade
 - FASE 11: 3 block visivi toastBlock (schedule/AP/cross-JCL)
 - FASE 12: Issue aperti (Deliverable in acconto, rendering filmografia)
+
+**Smoke test α.172.73 da fare prima del FASE 5**:
+- Copilot: "Per Filmetto Test aggiungi 36 giorni di dailies a ritroso dal 30 maggio, Luca Bianchi + Conforming 1, 9-18". Verificare che AI chiami `compute_recurring_date_range` (forward/backward + 36 + skip_holidays) e ottenga start_date corretto al primo colpo.
+- Copilot: "Marca done i primi 18 booking della serie dailies di Filmetto Test". Verificare che AI chiami `propose_bulk_booking_status_change` con filter `{job_id, date_to, current_state: confirmed}` e new_state=done.
 
 Backlog Sprint 7 (post-test):
 - FK ondelete table-rebuild SQLite (rischio)

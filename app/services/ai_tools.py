@@ -530,6 +530,33 @@ TOOLS: list[dict] = [
         "handler": "find_free_slots",
     },
     {
+        "name": "compute_recurring_date_range",
+        "category": "readonly",
+        "description": (
+            "READONLY. Calcola start_date+until_date ESATTI per una serie ricorrente di "
+            "N giorni lavorativi, partendo in avanti o a ritroso da una data ancora. "
+            "Conta solo i giorni della `rule` ed esclude festività italiane (skip_holidays). "
+            "USA SEMPRE quando l'utente specifica un numero di giorni lavorativi invece di "
+            "una data fine: \"36 giorni di dailies a ritroso dal 30 maggio\", \"4 settimane "
+            "lun-ven da domani\", \"prenota 10 giornate prima del 15 giugno\". "
+            "Restituisce il range pronto per `check_recurring_booking_collisions` e "
+            "`propose_recurring_bookings`, più la lista di festività attraversate (da "
+            "presentare all'utente per conferma)."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "anchor_date":         {"type": "string", "description": "Data ancora YYYY-MM-DD. Se direction=forward è la prima data candidata; se backward è l'ultima."},
+                "working_days_count":  {"type": "integer", "description": "Numero di giorni lavorativi target (>0). Festività italiane vengono saltate (skip_holidays default true) — il conteggio rispetta sempre il netto."},
+                "direction":           {"type": "string", "description": "forward (default) = anchor è start_date; backward = anchor è until_date."},
+                "rule":                {"type": "string", "description": "DAILY | WEEKDAYS (default) | WEEKENDS | CSV es. 'MON,WED,FRI'."},
+                "skip_holidays":       {"type": "boolean", "description": "Salta festività italiane + override tenant nel conteggio (default true)."},
+            },
+            "required": ["anchor_date", "working_days_count"],
+        },
+        "handler": "compute_recurring_date_range",
+    },
+    {
         "name": "check_recurring_booking_collisions",
         "category": "readonly",
         "description": (
@@ -606,6 +633,44 @@ TOOLS: list[dict] = [
             "required": ["booking_ids", "shift_minutes"],
         },
         "handler": "propose_bulk_move",
+    },
+    {
+        "name": "propose_bulk_booking_status_change",
+        "category": "mutation",
+        "description": (
+            "Cambia lo stato (BookingState) di N booking in batch. Tipico: portare a "
+            "'done' la prima metà di una serie ricorrente, marcare 'not_done' una "
+            "settimana saltata, riportare a 'confirmed' una pianificazione errata. "
+            "Atomic per-booking: i booking dentro periodo già fatturato (slice locked) "
+            "o JCL in batch di approvazione vengono SKIPPATI (loggati come failed) — "
+            "i restanti procedono. Per 'done' viene ricomputato automaticamente il "
+            "maturato (recompute_for_booking). Per 'not_done' SERVE `note` (motivo). "
+            "Passa `booking_ids` OPPURE `filter` (mutuamente esclusivi): il filtro è "
+            "comodo quando hai criteri (job, range, stato corrente) ma non vuoi "
+            "enumerare ID. Limite hard: 200 booking per chiamata."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "booking_ids": {"type": "array", "items": {"type": "integer"}, "description": "Lista esplicita ID booking. Mutuamente esclusivo con `filter`."},
+                "filter": {
+                    "type": "object",
+                    "description": "Criteri di selezione (alternativa a booking_ids). Almeno uno tra job_id/project_id/resource_id obbligatorio.",
+                    "properties": {
+                        "job_id":         {"type": "integer", "description": "Limita ai booking di questo job."},
+                        "project_id":     {"type": "integer", "description": "Limita ai booking dei job di questo progetto."},
+                        "resource_id":    {"type": "integer", "description": "Limita ai booking con questa risorsa in assignments."},
+                        "date_from":      {"type": "string", "description": "Solo booking con start_date >= YYYY-MM-DD."},
+                        "date_to":        {"type": "string", "description": "Solo booking con start_date <= YYYY-MM-DD."},
+                        "current_state":  {"type": "string", "description": "Solo booking attualmente in questo stato (tentative|confirmed|in_progress|done|not_done)."},
+                    },
+                },
+                "new_state": {"type": "string", "description": "Stato target: tentative | confirmed | in_progress | done | not_done. 'done' triggera recompute maturato."},
+                "note":      {"type": "string", "description": "OBBLIGATORIO se new_state=not_done (motivo). Altrimenti opzionale (audit summary)."},
+            },
+            "required": ["new_state"],
+        },
+        "handler": "propose_bulk_booking_status_change",
     },
     {
         "name": "propose_transmit_to_billing",
@@ -1076,8 +1141,10 @@ Quando l'utente chiede di operare su booking esistenti (spostare, allungare, eli
 **PIANIFICAZIONE AVANZATA** (v3.5.0-alpha.54):
 - `analyze_conflicts(days?, project_id?, department_id?)` → READONLY: trova overlap orari nei booking di un periodo. Restituisce coppie con suggerimento di risoluzione. USA per "trova i conflitti della prossima settimana", "ci sono sovrapposizioni su Luca?".
 - `find_free_slots(duration_minutes, resource_id | department_id, from_date?, days?, work_hours_*)` → READONLY: cerca slot liberi. USA per "quando ho 4h libere su Marco?", "che slot ha il colorist senior questa settimana?".
+- `compute_recurring_date_range(anchor_date, working_days_count, direction, rule, skip_holidays)` → READONLY: calcola start/until ESATTI per N giorni lavorativi forward/backward dall'ancora, festività italiane saltate dal conteggio. USA SEMPRE prima di `propose_recurring_bookings` quando l'utente dà un numero di giornate ("36 giorni di dailies a ritroso dal 30 maggio", "4 settimane lun-ven da domani") invece di una data fine esplicita.
 - `propose_recurring_bookings(job_id, resource_id, rule, start_date, until_date, start_time, end_time)` → MUTATION: crea N booking ricorrenti (lun-ven o regola custom). Le occorrenze in conflitto vengono saltate (non bloccanti). USA per "prenota Luca lun-ven 9-13 da domani al 30 maggio".
 - `propose_bulk_move(booking_ids[], shift_minutes)` → MUTATION: sposta N booking di delta uniforme. Atomic. USA per "sposta tutti i booking di questa settimana di +1 ora".
+- `propose_bulk_booking_status_change(booking_ids[] | filter{job_id|project_id|resource_id, date_from?, date_to?, current_state?}, new_state, note?)` → MUTATION: cambia stato di N booking (tentative/confirmed/in_progress/done/not_done). USA per "porta a done la prima metà della serie", "marca not_done la settimana saltata". Booking dentro fatture/batch skippati con motivo. Per `not_done` `note` è obbligatorio.
 
 **FATTURAZIONE** (v3.5.0-alpha.54):
 - `query_project_finance(project_id)` → READONLY: stato finanziario completo del progetto (quotato, maturato, atteso, spese, margine, fatturato, incassato, ripartizione billing_status). USA per "qual è il margine del progetto X?", "quanto resta da fatturare?", "come stiamo a maturato?".
@@ -1093,11 +1160,15 @@ Per **CREARE** nuovi booking singoli usa `propose_booking` (esistente).
 5. **Spiega il perché**: dopo aver proposto un'azione di pianificazione, aggiungi 1-2 frasi che giustificano la scelta (es. "Ho scelto martedì perché Luca è libero e non ci sono festività nel periodo").
 6. **Booking ricorrenti**: per richieste tipo "online editor lun-ven 9-18 per 4 settimane", USA `propose_recurring_bookings` (un singolo Apply) invece di proporre 20 booking singoli.
 
+   **Conteggio per giornate (NON per data fine)** — quando l'utente dice "N giornate" / "N giorni di X" / "a ritroso da Y" / "per le prossime 4 settimane" senza una data fine esplicita, NON stimare il range a mente (errore tipico: sbagliare conteggio festività). Chiama SEMPRE `compute_recurring_date_range` con anchor_date + working_days_count + direction (forward|backward). Restituisce start/until esatti pronti per il passo successivo + lista festività attraversate (cita all'utente per trasparenza).
+
    **PRIMA di proporre la creazione** (quando il range copre >5 giorni o tocca aprile/maggio/giugno/agosto/dicembre — periodi con festività), chiama SEMPRE `check_recurring_booking_collisions` con stessi parametri. Se la response contiene:
    - `holidays[]` non vuoto → cita le festività in italiano ("il 2 giugno cade Festa della Repubblica") e chiedi: *vuoi saltare quei giorni o cambiare le date?*
    - `unavailabilities[]` non vuoto → cita ferie/malattia per risorsa ("Luca è in ferie il 5 giugno") e chiedi: *salto, sposto su altra risorsa, o cambio range?*
    - `existing_conflicts[]` non vuoto → cita conflitti ("Conforming 1 ha già booking #42 il 3 giugno") e chiedi alternativa
    Solo dopo conferma esplicita utente, chiama `propose_recurring_bookings` (skip_holidays resta true).
+
+   **Cambio stato in batch** — quando l'utente chiede di portare a "done"/"in lavorazione"/"non fatto" un gruppo di booking ("marca done la prima metà", "metti in lavorazione tutti i booking di Luca di questa settimana"), USA `propose_bulk_booking_status_change`. NON dire mai "non disponibile via AI, fallo a mano dalla timeline". Passa `filter` (job_id + date_from/date_to + current_state) se hai criteri chiari; passa `booking_ids[]` se hai già la lista esplicita dal context. Per `not_done` chiedi prima il motivo all'utente — è obbligatorio.
 7. **Linguaggio umano, mai ID tecnici nelle risposte** (v3.5.0-alpha.172.24): NON menzionare mai all'utente termini tipo `job_cost_line_id`, `quote_id`, `project_id`, `JCL`, `propose_*`, `tool_result`, `payload`, "fallback". L'utente è un produttore, non uno sviluppatore. USA invece parole umane: "lavorazione di color grading", "quotazione Q-DNHP-v3", "fattura passiva n. 42", "progetto Mare Nostrum". Anche nelle conferme/errori riformula in italiano leggibile.
 
 8. **Lavorazione obbligatoria su booking — chiedi opzioni, NON ID** (v3.5.0-alpha.172.24): se per proporre un booking ti serve sapere a quale lavorazione del job collegarlo (campo `job_cost_line_id` del tool) E nel contesto vedi più candidati plausibili, NON dire "qual è il `job_cost_line_id`?". USA invece:

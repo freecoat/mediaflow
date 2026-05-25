@@ -1,5 +1,35 @@
 # MediaFlow — Changelog
 
+## v3.5.0-alpha.172.73 — AI Copilot: compute_recurring_date_range + propose_bulk_booking_status_change (25 mag 2026)
+
+Bug report Matteo su Copilot recurring dailies "36 giorni a ritroso da 30 maggio":
+1. AI sbagliava conteggio festività (creava 38 booking invece di 36 → doveva cancellare 2 a posteriori)
+2. AI dichiarava "cambio stato done in blocco non disponibile via AI" e rimandava l'utente alla timeline manuale
+
+**Fix A — `compute_recurring_date_range` (capability readonly, nuova)**:
+- Input: `anchor_date`, `working_days_count`, `direction` (forward|backward), `rule` (DAILY|WEEKDAYS|WEEKENDS|CSV), `skip_holidays` (default true)
+- Itera giorno-per-giorno applicando rule + saltando festività italiane (effective + custom tenant via `holidays_service.get_effective_holidays_range`)
+- Iter cap = `max(target_n*30, 366)` per coprire range densi di festività
+- Response: `start_date`, `until_date`, `working_days_count_actual`, `calendar_days_count`, `skipped_holidays[{date,name}]`, `skipped_weekends_count`
+- Risolve calcolo manuale che l'AI sbagliava: ora restituisce range pronto per `check_recurring_booking_collisions` e `propose_recurring_bookings`
+- System prompt rule 6 aggiornata: USA SEMPRE quando l'utente dà N giornate / "a ritroso" / "per le prossime 4 settimane" invece di una data fine
+
+**Fix B — `propose_bulk_booking_status_change` (capability mutation, nuova)**:
+- Selezione: `booking_ids[]` esplicita OPPURE `filter` (job_id|project_id|resource_id + date_from/date_to + current_state) — mutuamente esclusivi
+- `new_state` enum BookingState (tentative|confirmed|in_progress|done|not_done). `cancelled` esplicitamente bloccato (richiede capability dedicata)
+- `note` obbligatorio se `not_done`
+- Per-booking skip se locked da slice billed (via `find_blocking_slice` + `slice_lock_message`) o JCL in batch di approvazione → loggato in `skipped_locked[]` / `skipped_in_batch[]`
+- Skip se già nello stato target → `skipped_already[]`
+- Se `new_state=done` + booking ha JCL → `recompute_for_booking` per aggiornare maturato
+- Audit log: `BookingChange(kind="ai_bulk_status_change", summary, payload)`
+- Cap hard 200 booking per chiamata (sanity)
+- Filter mode richiede almeno uno tra job_id/project_id/resource_id (evita match tenant-wide accidentale)
+- System prompt rule 6 estesa: NON dire mai "fallo manualmente", USA questo tool
+
+**File toccati**: `app/services/ai_tools.py` (+2 schema, +update system prompt rule 6 + tool reference), `app/services/ai_assistant.py` (+`_h_compute_recurring_date_range` 140 righe, +`_h_propose_bulk_booking_status_change` 200 righe), `app/main.py` (version), `CHANGELOG.md`, `docs/STATO.md`.
+
+516 routes (+2 capability AI). Schema DB invariato.
+
 ## v3.5.0-alpha.172.53 — Hard reset acconto + cap cross-AP nei preset + HARD-BLOCK sotto-copertura (24 mag 2026)
 
 Test FASE 1 plan 24 mag. Matteo:
