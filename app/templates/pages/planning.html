@@ -82,6 +82,25 @@
   #tl-host .vis-item.tl-ms-imminent .vis-item-content { background: rgba(239,159,39,.16); border-color: #EF9F27; }
   #tl-host .vis-item.tl-ms-pending .vis-item-content { background: rgba(216,90,48,.16); border-color: #D85A30; }
   #tl-host .vis-item.tl-milestone.vis-point .vis-item-content::before { content: ''; }
+  /* v3.5.0-alpha.172.79 (Bundle C2) — Fix milestone group misalignment.
+     Pre-fix: label sinistra "⭐ Milestones" più alta della riga timeline.
+     Causa: vis-timeline 7.x calcola groupHeightMode:'auto' su altezza item +
+     padding asymmetric tra label (text-only) e riga foreground (range item
+     con border+padding). Allineiamo facendo collassare margin/padding del
+     gruppo speciale __milestones__ e fissando altezza riga conservativa. */
+  #tl-host .vis-foreground .vis-group[data-group-id="__milestones__"],
+  #tl-host .vis-labelset .vis-label[data-group-id="__milestones__"] {
+    min-height: 32px !important;
+    line-height: 1 !important;
+  }
+  #tl-host .vis-labelset .vis-label[data-group-id="__milestones__"] .vis-inner {
+    padding: 6px 8px !important;
+    display: flex;
+    align-items: center;
+  }
+  #tl-host .vis-foreground .vis-group[data-group-id="__milestones__"] .vis-item {
+    margin-top: 4px !important;
+  }
   /* v3.5.0-alpha.82 — Heatmap container neutro (era rgba bianco, invisibile su tema chiaro).
      Usa color-mix var(--text) per adattarsi sia su dark che chiaro. */
   #tl-host .vis-labelset .vis-label .tl-heat {
@@ -4049,6 +4068,71 @@ function tlIncrementalRemoveAssignments(assignmentIds) {
   }
   return true;
 }
+
+// v3.5.0-alpha.172.79 (Bundle C1) — Auto-refresh timeline dopo Apply AI.
+// Listener globale per evento `mf:ai-action-applied` (dispatchato da
+// copilot.js dopo Apply). Mappa l'action_type al refresh granulare giusto:
+// patch (refresh booking_id) vs remove (incremental remove) vs full rebuild.
+// Senza questo, l'utente vedeva il toast "Azione applicata" ma la timeline
+// restava ferma allo stato pre-applicazione → confusione + dover ricaricare
+// pagina a mano.
+(function () {
+  function _collectBookingIds(action_type, result) {
+    if (!result) return { refresh: [], remove: [] };
+    const refresh = []; const remove = [];
+    // Singoli
+    if (typeof result.booking_id === 'number') {
+      if (action_type === 'propose_delete_booking') remove.push(result.booking_id);
+      else refresh.push(result.booking_id);
+    }
+    // Ricorrenti: result.created[] = [{booking_id, ...}]
+    if (Array.isArray(result.created)) {
+      result.created.forEach(c => { if (c && typeof c.booking_id === 'number') refresh.push(c.booking_id); });
+    }
+    // Bulk status change: result.changed[] = [{booking_id, ...}]
+    if (Array.isArray(result.changed)) {
+      result.changed.forEach(c => { if (c && typeof c.booking_id === 'number') refresh.push(c.booking_id); });
+    }
+    // Bulk move: result.moved[] = [{booking_id, ...}]
+    if (Array.isArray(result.moved)) {
+      result.moved.forEach(c => { if (c && typeof c.booking_id === 'number') refresh.push(c.booking_id); });
+    }
+    // Bulk split: result.split[] = [{booking_id, ...}]
+    if (Array.isArray(result.split)) {
+      result.split.forEach(c => { if (c && typeof c.booking_id === 'number') refresh.push(c.booking_id); });
+    }
+    // Bulk delete: result.cancelled[] = [{booking_id, ...}]
+    if (Array.isArray(result.cancelled)) {
+      result.cancelled.forEach(c => { if (c && typeof c.booking_id === 'number') remove.push(c.booking_id); });
+    }
+    return { refresh, remove };
+  }
+
+  document.addEventListener('mf:ai-action-applied', async (ev) => {
+    try {
+      // Solo se siamo sulla pagina planning (host esiste + timeline montata).
+      if (!document.getElementById('tl-host') || !window._tlInstance) return;
+      const detail = ev && ev.detail || {};
+      const at = detail.actionType || '';
+      // Skip action_type non legati a planning (evita refresh inutili)
+      const isPlanning = /^propose_(booking|recurring_bookings|move_booking|resize_booking|split_booking|delete_booking|bulk_move|bulk_split_booking|bulk_delete_booking|bulk_booking_status_change)$/.test(at);
+      if (!isPlanning) return;
+      const { refresh, remove } = _collectBookingIds(at, detail.result);
+      if (remove.length && typeof tlIncrementalRemove === 'function') {
+        tlIncrementalRemove(remove);
+      }
+      if (refresh.length && typeof tlIncrementalRefresh === 'function') {
+        await tlIncrementalRefresh(refresh);
+      }
+      // Fallback: nessun id estratto + azione plausibile → rebuild totale
+      if (!refresh.length && !remove.length && typeof renderTimeline === 'function') {
+        try { await renderTimeline(); } catch(_) {}
+      }
+    } catch (e) {
+      console.warn('Auto-refresh AI applied failed:', e);
+    }
+  });
+})();
 
 // Finestra parte SEMPRE dall'anchor (oggi di default) e si estende in avanti.
 function tlWindowFor(zoom, anchor) {

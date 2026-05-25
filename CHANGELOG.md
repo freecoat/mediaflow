@@ -1,5 +1,36 @@
 # MediaFlow — Changelog
 
+## v3.5.0-alpha.172.79 — Bundle C: auto-refresh timeline post-Apply AI + milestone align + sidebar ellipsis (25 mag 2026)
+
+Bug riportati Matteo:
+1. Timeline non si aggiorna dopo Apply via AI Copilot — toast "Azione applicata" arriva, ma la riga visiva resta ferma fino a reload manuale.
+2. Milestone group: quando ON, l'etichetta sinistra "⭐ Milestones" appare più alta della corrispondente riga in timeline.
+3. Label nav sidebar tagliate a destra senza ellipsis (es. "In/Out Asset", "Asset Library", "Asset Fisici").
+
+**C1 — Auto-refresh timeline post-Apply AI** (`app/templates/pages/planning.html`):
+- Listener globale `document.addEventListener('mf:ai-action-applied', ...)` (l'evento è già dispatchato da `copilot.js` post-Apply).
+- Mapping action_type → refresh granulare:
+  - propose_booking / propose_move / resize / split / recurring → `tlIncrementalRefresh(booking_ids)`
+  - propose_delete_booking → `tlIncrementalRemove([id])`
+  - propose_bulk_status_change / bulk_move / bulk_split → refresh dei booking_ids estratti da `result.changed[] | moved[] | split[]`
+  - propose_bulk_delete_booking → `tlIncrementalRemove(result.cancelled[].map(c => c.booking_id))`
+  - Fallback: rebuild totale se nessun id estraibile.
+- Helper `_collectBookingIds(action_type, result)` interno per estrazione.
+- Guard: skip se non sulla pagina planning (no `#tl-host`) o action_type non legato a planning.
+
+**C2 — Milestone group misalignment** (`app/templates/pages/planning.html` CSS):
+- Causa: vis-timeline 7.x con `groupHeightMode:'auto'` calcola altezza item differente da altezza label text-only → riga `__milestones__` con range item beveva 32px ma label "⭐ Milestones" 28px → misalignment.
+- Fix CSS targetato `[data-group-id="__milestones__"]`: `min-height:32px`, `line-height:1`, padding label uniforme, `margin-top:4px` sull'item.
+
+**C3 — Sidebar nav ellipsis** (`app/static/css/main.css`):
+- Causa: `.nav-item` è flex container ma il `<span>` testuale non aveva `min-width:0` (flex default `auto`) → non shrinkava → testo tagliato senza segno visivo.
+- Fix: `.nav-item { overflow:hidden }` + `.nav-item > span:not(.nav-icon) { min-width:0; flex:1; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }` + `flex-shrink:0` sull'icona.
+- Bonus: tutte le voci lunghe future ottengono auto-ellipsis senza ulteriori interventi.
+
+**File toccati**: `app/templates/pages/planning.html` (listener AI + CSS milestone), `app/static/css/main.css` (sidebar nav), `app/main.py` (version), `CHANGELOG.md`.
+
+518 routes invariato. Schema DB invariato. Test atteso: dopo Apply via copilot di `propose_bulk_split_booking` su 36 booking, timeline si aggiorna in <1s (incremental refresh) senza F5.
+
 ## v3.5.0-alpha.172.78 — Bundle A: capability bulk AI (split+delete) + fix /pricelist/api 404 + itemsDS scope (25 mag 2026)
 
 Bug riportati Matteo dopo test α.172.77:

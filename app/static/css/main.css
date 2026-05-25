@@ -629,8 +629,25 @@ a:hover { text-decoration: underline; }
   font-weight: 500;
   border: 1px solid var(--indigo-border);
 }
-.nav-item .nav-icon { width: 16px; text-align: center; opacity: 0.8; }
+.nav-item .nav-icon { width: 16px; text-align: center; opacity: 0.8; flex-shrink: 0; }
 .nav-item.active .nav-icon { opacity: 1; }
+
+/* v3.5.0-alpha.172.79 (Bundle C3) — Label nav non taglia il testo a destra.
+   Pre-fix: con sidebar 220px + alcune voci lunghe ("In/Out Asset", "Asset
+   Library", "Asset Fisici", "Finance Reports") il `<span>` testuale veniva
+   tagliato senza ellipsis perché flex child con min-width default = auto
+   non shrinkava. Ora: il container nav-item permette overflow + min-width
+   0 sul testo + ellipsis. Tooltip native via title attr quando troncato. */
+.nav-item {
+  overflow: hidden;
+}
+.nav-item > span:not(.nav-icon) {
+  min-width: 0;
+  flex: 1;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
 
 .sidebar-footer {
   padding: 12px 10px;
