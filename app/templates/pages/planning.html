@@ -3812,24 +3812,20 @@ function tlBuildProjectGroups(bookings) {
     }
   }
   if (!projects.size) return [];
+  // v3.5.0-alpha.172.84 — FLAT (no nestedGroups): pre-fix il parent project
+  // era una riga visivamente vuota (empty foreground) sopra ad ogni job
+  // children → spreco di spazio + UX confusa. Ora ogni job include il nome
+  // del progetto come prefisso nel label; project tint via className resta.
+  // Beneficio: niente più .vis-nesting-group orfani in project mode.
   const groups = [];
-  // Project parent + Job leaves
-  for (const [pid, info] of projects) {
-    const childIds = [...info.jobs].map(j => 'j' + j);
-    groups.push({
-      id: 'p' + pid,
-      content: `<b>${escapeHtml(info.title)}</b>${info.code ? ` <span style="opacity:.6; font-size:10px;">[${escapeHtml(info.code)}]</span>` : ''}`,
-      nestedGroups: childIds,
-      treeLevel: 1,
-      className: 'tl-project-' + pid,
-    });
-  }
-  // Job leaves — v3.5.0-alpha.82: className tl-project-{id} per applicare tint
   for (const [jid, info] of jobs) {
+    const proj = projects.get(info.project_id);
+    const projHeader = proj
+      ? `<b>${escapeHtml(proj.title)}</b>${proj.code ? ` <span style="opacity:.55; font-size:10px;">[${escapeHtml(proj.code)}]</span>` : ''} <span style="opacity:.5;">·</span> `
+      : '';
     groups.push({
       id: 'j' + jid,
-      content: `${info.code ? `<span class="mono text-xs text-muted">${escapeHtml(info.code)}</span> ` : ''}${escapeHtml(info.title)}`,
-      treeLevel: 2,
+      content: `${projHeader}${info.code ? `<span class="mono text-xs text-muted">${escapeHtml(info.code)}</span> ` : ''}${escapeHtml(info.title)}`,
       className: 'tl-project-' + info.project_id,
     });
   }

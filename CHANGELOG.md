@@ -1,5 +1,22 @@
 # MediaFlow — Changelog
 
+## v3.5.0-alpha.172.84 — Modalità "Per progetto" FLAT (no nested empty parent rows) (25 mag 2026)
+
+Bug Matteo dopo α.172.83: snippet `<div class="vis-group tl-project-1" style="height: 23px;"></div>` — parent row del progetto è VUOTO (foreground empty), spreco di spazio sopra ogni job.
+
+Root cause: `tlBuildGroupsByProject` usava `nestedGroups` per fare project parent + job children. vis-timeline 7.x crea il parent ROW comunque, anche se foreground vuoto. CSS F9 (compatta a 22px) mascherava il sintomo ma non risolveva.
+
+**Fix**: rimosso nestedGroups. Project mode ora FLAT: 1 riga per job, label include header `<b>Project Title</b> [Code] · <code> · <job title>` come prefix. Tint progetto via className `tl-project-{id}` invariato.
+
+Beneficio:
+- Niente più .vis-nesting-group orfani in project mode → no empty rows.
+- 1:1 ratio righe/job → UX più chiara.
+- CSS scoped α.172.83 resta come safety (no-op senza nesting).
+
+**File toccati**: `app/templates/pages/planning.html` (tlBuildGroupsByProject refactor), `app/main.py` (version), `CHANGELOG.md`.
+
+520 routes invariato. Schema DB invariato.
+
 ## v3.5.0-alpha.172.83 — Hotfix: revert F8 milestone CSS + scope F9 nesting-group SOLO a project mode (25 mag 2026)
 
 Regression riportata Matteo immediatamente dopo α.172.82:
