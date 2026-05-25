@@ -211,9 +211,16 @@
   </div>
   <div class="cp-conv-bar">
     <span>Storia:</span>
-    <select id="cp-conv-select" onchange="copilotLoadConv(this.value)">
+    <select id="cp-conv-select" onchange="copilotLoadConv(this.value)" style="flex:1;min-width:0;">
       <option value="">(nuova)</option>
     </select>
+    <!-- v3.5.0-alpha.172.80 (Bundle D1) — Rinomina + elimina conversazione -->
+    <button type="button" id="cp-conv-rename" onclick="copilotRenameConv()" title="Rinomina conversazione" style="background:transparent;border:0;color:inherit;cursor:pointer;padding:2px 4px;display:none;">
+      <i data-lucide="pencil" style="width:14px;height:14px;"></i>
+    </button>
+    <button type="button" id="cp-conv-delete" onclick="copilotDeleteConv()" title="Elimina conversazione" style="background:transparent;border:0;color:inherit;cursor:pointer;padding:2px 4px;display:none;">
+      <i data-lucide="trash-2" style="width:14px;height:14px;"></i>
+    </button>
   </div>
   <div class="cp-messages" id="cp-messages">
     <!-- Quick prompts dinamici — popolati da copilot.js _renderWelcome() in base

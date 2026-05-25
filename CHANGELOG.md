@@ -1,5 +1,33 @@
 # MediaFlow — Changelog
 
+## v3.5.0-alpha.172.80 — Bundle D: AI chat naming (rinomina + elimina + auto-title contestuale) (25 mag 2026)
+
+Richiesta Matteo: "vorrei dare un nome ad ogni chat copilot e poterla rinominare, magari relazionata al progetto o al tema, per tenere traccia di tutto". Pre-fix: titolo era i primi 60 char del primo messaggio, non rinominabile, no eliminazione.
+
+**Auto-title contestuale** (`app/routers/ai.py` chat endpoint):
+- Se `project_id` nel context: `<Project.title> · <primi 40 char msg>` (es. "Filmetto Test · ri-splitta tutti i booking di dailies con...")
+- Se `quote_id` nel context: `<Quote.number> · <primi 40 char msg>` (es. "Q-2026-001 · aggiungi color grading...")
+- Altrimenti: primi 60 char del messaggio (back-compat).
+- Hard cap 255 char (matching schema).
+
+**Endpoint rinomina** `PATCH /ai/api/conversations/{id}/title` (Form `title`):
+- Ownership check: solo `user_id == current_user.id` può rinominare (403 altrimenti).
+- Title vuoto → NULL (rimuove titolo, torna a placeholder UI).
+
+**Endpoint elimina** `DELETE /ai/api/conversations/{id}`:
+- Stesso ownership check. Cascade `delete-orphan` su AIMessage (messaggi cancellati). AIAction storiche sopravvivono con `conversation_id` orfano (per audit).
+
+**UI** (`app/templates/components/copilot.html` + `app/static/js/copilot.js`):
+- 2 icon button accanto al `<select>` storia: ✏️ rinomina + 🗑️ elimina.
+- Visibili solo se `state.conversationId` non null (cioè conversazione attiva, non nuova).
+- `copilotRenameConv()`: prompt nativo con titolo corrente pre-compilato → PATCH → reload list.
+- `copilotDeleteConv()`: confirm + DELETE → reset a nuova → reload list.
+- Helper `_updateConvActionBtns()` chiamato dopo: nuova conv, load conv esistente, prima risposta AI (quando server assegna conversationId).
+
+**File toccati**: `app/routers/ai.py` (auto-title + 2 endpoint), `app/templates/components/copilot.html` (2 button), `app/static/js/copilot.js` (3 handler + 3 hook chiamate), `app/main.py` (version), `CHANGELOG.md`.
+
+520 routes (518 + 2 endpoint conversations). Schema DB invariato (AIConversation.title già esisteva, ora valorizzato meglio).
+
 ## v3.5.0-alpha.172.79 — Bundle C: auto-refresh timeline post-Apply AI + milestone align + sidebar ellipsis (25 mag 2026)
 
 Bug riportati Matteo:

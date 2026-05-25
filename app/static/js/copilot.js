@@ -121,6 +121,7 @@
     state.conversationId = null;
     state.messages = [];
     document.getElementById("cp-conv-select").value = "";
+    if (typeof _updateConvActionBtns === 'function') _updateConvActionBtns();
     render();
   };
 
@@ -142,8 +143,60 @@
       const data = await api("GET", `/ai/api/conversations/${id}`);
       state.conversationId = data.id;
       state.messages = data.messages.map(m => ({ role: m.role, content: m.content, actions: [] }));
+      _updateConvActionBtns();
       render();
     } catch (e) { toast("Errore caricamento conversazione: " + e.message, "error"); }
+  };
+
+  // v3.5.0-alpha.172.80 (Bundle D1) — Mostra/nascondi bottoni rinomina+elimina
+  // in base alla presenza di una conversazione attiva (id non null).
+  function _updateConvActionBtns() {
+    const has = !!state.conversationId;
+    const btnR = document.getElementById("cp-conv-rename");
+    const btnD = document.getElementById("cp-conv-delete");
+    if (btnR) btnR.style.display = has ? "inline-flex" : "none";
+    if (btnD) btnD.style.display = has ? "inline-flex" : "none";
+  }
+
+  window.copilotRenameConv = async function () {
+    const id = state.conversationId;
+    if (!id) return;
+    const sel = document.getElementById("cp-conv-select");
+    const opt = sel && sel.options[sel.selectedIndex];
+    // Estrai title corrente dall'option (rimuovi suffisso " · N msg")
+    let current = "";
+    if (opt && opt.text) {
+      const t = opt.text;
+      const idx = t.lastIndexOf(" · ");
+      current = idx > 0 ? t.substring(0, idx) : t;
+      if (current === "—") current = "";
+    }
+    const newTitle = prompt("Rinomina conversazione:", current);
+    if (newTitle === null) return;  // cancel
+    const clean = newTitle.trim().slice(0, 255);
+    try {
+      const fd = new FormData();
+      fd.append("title", clean);
+      await api("PATCH", `/ai/api/conversations/${id}/title`, fd);
+      toast("Titolo aggiornato", "success");
+      await loadConversations();
+    } catch (e) {
+      toast("Errore rinomina: " + e.message, "error");
+    }
+  };
+
+  window.copilotDeleteConv = async function () {
+    const id = state.conversationId;
+    if (!id) return;
+    if (!confirm("Eliminare questa conversazione? L'azione non è reversibile.")) return;
+    try {
+      await api("DELETE", `/ai/api/conversations/${id}`);
+      toast("Conversazione eliminata", "success");
+      copilotNewConv();
+      await loadConversations();
+    } catch (e) {
+      toast("Errore eliminazione: " + e.message, "error");
+    }
   };
 
   // ── Send message ─────────────────────────────────────────
@@ -212,6 +265,9 @@
       const data = await r.json();
       if (!r.ok) throw new Error(data.detail || ("HTTP " + r.status));
       state.conversationId = data.conversation_id || state.conversationId;
+      // v3.5.0-alpha.172.80 (Bundle D1) — Mostra rinomina/elimina dopo prima
+      // risposta che ha creato la conversazione lato server.
+      if (typeof _updateConvActionBtns === 'function') _updateConvActionBtns();
       state.messages.push({
         role: "assistant",
         content: data.reply || "",

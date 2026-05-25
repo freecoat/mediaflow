@@ -158,11 +158,36 @@ async def chat(
     if conv_id:
         conv = db.query(AIConversation).filter(AIConversation.id == conv_id).first()
     if conv is None and user_id:
+        # v3.5.0-alpha.172.80 (Bundle D1) — Titolo auto-generato più leggibile.
+        # Prefisso col code/titolo del progetto se nel context, poi primi
+        # ~40 char del messaggio utente. Esempio:
+        # "Filmetto Test · ri-splitta tutti i booking di dailies con pausa..."
+        # Utente può rinominare via PATCH /api/conversations/{id}/title.
         title_src = _flatten_content(messages[0].get("content", "")) if messages else ""
+        title_src = (title_src or "").strip()
+        prefix = ""
+        if project_id:
+            proj = db.query(Project).filter(Project.id == project_id).first()
+            if proj:
+                prefix = (proj.title or proj.code or "")[:30].strip()
+        elif quote_id:
+            qz = db.query(Quote).filter(Quote.id == quote_id).first()
+            if qz:
+                prefix = (qz.number or qz.title or "")[:30].strip()
+        if prefix and title_src:
+            auto_title = f"{prefix} · {title_src[:40]}"
+        elif title_src:
+            auto_title = title_src[:60]
+        elif prefix:
+            auto_title = prefix
+        else:
+            auto_title = None
+        if auto_title:
+            auto_title = auto_title[:255]
         conv = AIConversation(
             user_id=user_id,
             project_id=project_id, quote_id=quote_id, job_id=job_id,
-            title=(title_src[:60] if title_src else None),
+            title=auto_title,
         )
         db.add(conv); db.flush()
 
@@ -283,6 +308,54 @@ async def get_conversation(conv_id: int, db: Session = Depends(get_db)):
             for m in sorted(conv.messages, key=lambda x: x.id)
         ],
     }
+
+
+# v3.5.0-alpha.172.80 (Bundle D1) — Rinomina + elimina conversazione AI.
+# Permette all'utente di organizzare la storia chat con titoli human-readable
+# (es. "Filmetto · split dailies pausa pranzo") e cancellare quelle obsolete.
+# Ownership check: solo l'utente che ha creato la conversation può modificarla.
+
+@router.patch("/api/conversations/{conv_id}/title")
+async def patch_conversation_title(
+    conv_id: int,
+    title: str = Form(...),
+    access_token: Optional[str] = Cookie(None),
+    db: Session = Depends(get_db),
+):
+    u = _resolve_current_user(db, access_token)
+    if not u:
+        raise HTTPException(401, "Login richiesto")
+    conv = db.query(AIConversation).filter(AIConversation.id == conv_id).first()
+    if not conv:
+        raise HTTPException(404, "Conversazione non trovata")
+    if conv.user_id != u.id:
+        raise HTTPException(403, "Solo il proprietario può rinominare")
+    new_title = (title or "").strip()[:255] or None
+    conv.title = new_title
+    db.commit()
+    return {"ok": True, "id": conv.id, "title": conv.title}
+
+
+@router.delete("/api/conversations/{conv_id}")
+async def delete_conversation(
+    conv_id: int,
+    access_token: Optional[str] = Cookie(None),
+    db: Session = Depends(get_db),
+):
+    u = _resolve_current_user(db, access_token)
+    if not u:
+        raise HTTPException(401, "Login richiesto")
+    conv = db.query(AIConversation).filter(AIConversation.id == conv_id).first()
+    if not conv:
+        raise HTTPException(404, "Conversazione non trovata")
+    if conv.user_id != u.id:
+        raise HTTPException(403, "Solo il proprietario può eliminare")
+    # cascade="all, delete-orphan" su AIConversation.messages → cancella anche
+    # i messaggi. AIAction.conversation_id è nullable=True quindi le azioni
+    # storiche sopravvivono per audit (con conversation_id orfano).
+    db.delete(conv)
+    db.commit()
+    return {"ok": True, "id": conv_id}
 
 
 # ── Azioni proposte (apply / reject) ─────────────────────────
