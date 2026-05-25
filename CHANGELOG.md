@@ -1,5 +1,24 @@
 # MediaFlow — Changelog
 
+## v3.5.0-alpha.172.87 — Bundle G1+G2: DeepSeek AI provider + fix unit select width quotes (25 mag 2026)
+
+**G1 — DeepSeek AI provider** (`app/services/ai_provider.py`):
+- Nuovo `DeepseekProvider` (OpenAI-compatible REST, endpoint `https://api.deepseek.com/chat/completions`).
+- 2 modelli: `deepseek-chat` (V3, default), `deepseek-reasoner` (R1).
+- Aggiunto a `PROVIDER_MODELS`, `PROVIDER_LABELS`, `PROVIDER_CLASSES`, `MODEL_PRICING_USD_PER_M_TOKENS`.
+- UI Settings → AI ora mostra automaticamente la card DeepSeek (loop su PROVIDER_LABELS).
+- 6 provider totali: Claude, OpenAI, Gemini, Perplexity, DeepSeek, Ollama.
+
+**G2 — Quote unit select width** (`app/templates/pages/quotes.html`):
+- `<select data-field="unit">` aveva `width: 100%` ereditato da `.inline-edit` + senza `min-width` → testo unit troncato (es. "version" diventava "v...", "allow" troncato).
+- Fix: `min-width:70px; width:auto;` inline → la select prende lo spazio necessario al label più lungo, niente troncamento.
+
+**G3+G4+G5** (rimandati): CR/Pianificazione mismatch + delivery non shown done in CR + CR toggle € vs ore — richiedono investigazione code path. Prossima iterazione.
+
+521 routes invariato. Schema DB invariato.
+
+**File toccati**: `app/services/ai_provider.py` (DeepseekProvider class + dict additions), `app/templates/pages/quotes.html` (select unit style), `app/main.py` (version), `CHANGELOG.md`.
+
 ## v3.5.0-alpha.172.86 — Split parse_deliverables: parse + match come call separate (fix cloudflare 524) (25 mag 2026)
 
 Bug Matteo: `POST /ai/api/deliverables/parse 524 (Cloudflare timeout)` su PDF capitolato + listino grande. 524 = trycloudflare tunnel hard limit 100s.

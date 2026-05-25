@@ -1979,7 +1979,7 @@ function renderLineRow(l) {
                  value="${l.quantity}" onblur="saveLineField(this)"></td>
       <td>
         <div style="display:flex;align-items:center;gap:4px;">
-          <select class="inline-edit mono" data-field="unit" onchange="saveLineField(this)" style="font-size:12px;padding:2px 4px;">
+          <select class="inline-edit mono" data-field="unit" onchange="saveLineField(this)" style="font-size:12px;padding:2px 4px;min-width:70px;width:auto;">
             <optgroup label="Lavorazione (a tempo)">
               <option value="day"${l.unit==='day'?' selected':''}>day</option>
               <option value="hr"${l.unit==='hr'?' selected':''}>hr</option>

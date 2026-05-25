@@ -86,6 +86,10 @@ PROVIDER_MODELS: dict[str, list[dict]] = {
         {"id": "sonar",         "label": "Sonar (rapido)"},
         {"id": "sonar-reasoning", "label": "Sonar Reasoning"},
     ],
+    "deepseek": [
+        {"id": "deepseek-chat",      "label": "DeepSeek V3 (default)"},
+        {"id": "deepseek-reasoner",  "label": "DeepSeek R1 (ragionamento)"},
+    ],
     "ollama": [
         {"id": "llama3.1:70b",  "label": "Llama 3.1 70B"},
         {"id": "llama3.1:8b",   "label": "Llama 3.1 8B (leggero)"},
@@ -98,6 +102,7 @@ PROVIDER_LABELS: dict[str, str] = {
     "openai":     "OpenAI",
     "gemini":     "Google Gemini",
     "perplexity": "Perplexity",
+    "deepseek":   "DeepSeek",
     "ollama":     "Ollama (locale)",
 }
 
@@ -125,6 +130,9 @@ MODEL_PRICING_USD_PER_M_TOKENS: dict[str, dict[str, float]] = {
     "sonar-pro":            {"input": 3.0,   "output": 15.0,  "cache_read": 0.0, "cache_create": 0.0},
     "sonar":                {"input": 1.0,   "output": 1.0,   "cache_read": 0.0, "cache_create": 0.0},
     "sonar-reasoning":      {"input": 1.0,   "output": 5.0,   "cache_read": 0.0, "cache_create": 0.0},
+    # DeepSeek (pricing maggio 2026 — cache_hit/miss separati)
+    "deepseek-chat":        {"input": 0.27,  "output": 1.10,  "cache_read": 0.07,  "cache_create": 0.0},
+    "deepseek-reasoner":    {"input": 0.55,  "output": 2.19,  "cache_read": 0.14,  "cache_create": 0.0},
     # Ollama (locale → costo zero compute on-prem)
     "llama3.1:70b":         {"input": 0.0, "output": 0.0, "cache_read": 0.0, "cache_create": 0.0},
     "llama3.1:8b":          {"input": 0.0, "output": 0.0, "cache_read": 0.0, "cache_create": 0.0},
@@ -652,6 +660,53 @@ class PerplexityProvider(AIProvider):
                            "temperature": temperature, "messages": msgs})
 
 
+class DeepseekProvider(AIProvider):
+    """
+    DeepSeek API (OpenAI-compatible chat completions).
+    Endpoint: https://api.deepseek.com/chat/completions
+    Models: deepseek-chat (V3), deepseek-reasoner (R1).
+    v3.5.0-alpha.172.87 (Bundle G1).
+    """
+    BASE_URL = "https://api.deepseek.com"
+
+    def __init__(self, cfg: ProviderConfig):
+        if not cfg.api_key:
+            raise RuntimeError("DEEPSEEK_API_KEY mancante")
+        self.api_key = cfg.api_key
+        self.model = cfg.model or "deepseek-chat"
+        self.base_url = (cfg.base_url or self.BASE_URL).rstrip("/")
+
+    @property
+    def name(self) -> str: return f"DeepSeek ({self.model})"
+
+    def _post(self, payload: dict) -> str:
+        headers = {"Authorization": f"Bearer {self.api_key}",
+                   "Content-Type": "application/json"}
+        with httpx.Client(timeout=180) as client:
+            r = client.post(f"{self.base_url}/chat/completions",
+                            headers=headers, json=payload)
+            r.raise_for_status()
+            data = r.json()
+        return data.get("choices", [{}])[0].get("message", {}).get("content", "") or ""
+
+    def complete(self, system, user, max_tokens=2000, temperature=0.3):
+        return self._post({
+            "model": self.model, "max_tokens": max_tokens, "temperature": temperature,
+            "messages": [{"role": "system", "content": system},
+                         {"role": "user", "content": user}]})
+
+    def chat(self, messages, system=None, max_tokens=2000, temperature=0.5):
+        msgs = [{"role": "system", "content": system}] if system else []
+        # DeepSeek API è OpenAI-compatible: traduce vision blocks come OpenAI
+        for m in messages:
+            msgs.append({
+                "role": m.get("role", "user"),
+                "content": _translate_blocks_to_openai(m.get("content", "")),
+            })
+        return self._post({"model": self.model, "max_tokens": max_tokens,
+                           "temperature": temperature, "messages": msgs})
+
+
 class OllamaProvider(AIProvider):
     def __init__(self, cfg: ProviderConfig):
         self.base_url = (cfg.base_url or settings.ollama_base_url).rstrip("/")
@@ -691,6 +746,7 @@ PROVIDER_CLASSES = {
     "openai":     OpenAIProvider,
     "gemini":     GeminiProvider,
     "perplexity": PerplexityProvider,
+    "deepseek":   DeepseekProvider,
     "ollama":     OllamaProvider,
 }
 
