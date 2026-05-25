@@ -8,6 +8,12 @@
 
 ## Versione corrente
 
+**v3.5.0-alpha.172.91** — 25 maggio 2026 (sera-notte) — Bundle H2: Jobs page deliverable section READ-ONLY
+
+`/jobs/{id}` allineato a nuovo enum Bundle I (5 status + qc_substatus). Kanban 5 colonne (era 4 legacy). Click card apre modal tech specs VIEW-only (`#modal-jd-specs`). Editing dei status/specs si fa solo da Planning HUB (Bundle J): link permanente in footer kanban + bottone "✏ Modifica in /planning" nel modal.
+
+524 routes invariato. Schema DB invariato. Solo aggiornamento template + JS.
+
 **v3.5.0-alpha.172.90** — 25 maggio 2026 (sera) — Bundle J: Planning HUB Deliverable + AI propose_specs
 
 Tab `📦 Deliverable` in /planning come HUB centrale tenant-wide. Kanban 5 colonne draggable + Lista alternativa. Click card apre modal tech specs 8 blocchi con pre-fill da DeliveryTemplate + bottone AI che adatta le specifiche al deliverable specifico (es. template UHD generico → DCP IT JPEG2000).
@@ -67,10 +73,7 @@ Tab `📦 Deliverable` in /planning come HUB centrale tenant-wide. Kanban 5 colo
 
 2. **J — Planning HUB deliverable** ✅ FATTA in α.172.90
 
-4. **H2 — Jobs page click→modal READ-ONLY**
-   - Kanban/lista in `/jobs/{id}` solo overview essenziale
-   - Click apre stesso modal di Planning ma READ-ONLY (no edit, no drag)
-   - Bug attuale "non posso modificare consegne" risolto da H3 (l'edit avviene in Planning)
+4. **H2 — Jobs page click→modal READ-ONLY** ✅ FATTA in α.172.91
 
 5. **H3 — Asset Library status delivery + metadata**
    - Asset detail mostra delivery linked status (read-only)

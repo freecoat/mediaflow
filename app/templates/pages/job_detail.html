@@ -346,6 +346,31 @@
   </div>
 </div>
 
+<!-- v3.5.0-alpha.172.91 (Bundle H2) — Modal Tech Specs deliverable READ-ONLY -->
+<div class="modal-overlay" id="modal-jd-specs">
+  <div class="modal" style="max-width:880px;">
+    <div class="modal-header">
+      <span class="modal-title" id="jdsm-title">Specifiche tecniche deliverable (read-only)</span>
+      <button class="btn btn-ghost btn-icon" onclick="closeModal('modal-jd-specs')">✕</button>
+    </div>
+    <div class="modal-body" style="max-height:72vh; overflow-y:auto;">
+      <div style="display:flex; gap:10px; align-items:center; margin-bottom:14px; padding:8px 12px; background:rgba(192,132,252,0.08); border:1px solid rgba(192,132,252,0.25); border-radius:6px; font-size:12px;">
+        <span>🔒</span>
+        <div>
+          <b>Read-only.</b> Per modificare stato o specifiche apri
+          <a href="/planning?view=deliverables" style="color:var(--indigo2);">/planning → 📦 Deliverable</a>.
+        </div>
+      </div>
+      <div id="jdsm-meta" class="text-sm text-muted" style="margin-bottom:10px;"></div>
+      <div id="jdsm-blocks-host" style="display:flex; flex-direction:column; gap:10px;"></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeModal('modal-jd-specs')">Chiudi</button>
+      <a id="jdsm-edit-link" class="btn btn-primary" href="/planning?view=deliverables" target="_blank">✏ Modifica in /planning</a>
+    </div>
+  </div>
+</div>
+
 <!-- ── Modal dettaglio lavorazione (read-only, v3.4.55) ────── -->
 <div class="modal-overlay" id="modal-line-detail">
   <div class="modal" style="max-width:760px;">
@@ -737,17 +762,23 @@ async function deleteLine() {
 loadJob();
 
 // ── Deliverable management (v3.5.0-alpha.66.9) ───────────────
+// v3.5.0-alpha.172.91 (Bundle H2) — Allineato a Bundle I enum 5 main + sub QC.
 const DLV_STATUS_LABEL = {
-  planned: 'Pianificato', in_production: 'In produzione',
-  file_attached: 'File linkato', qc_running: 'QC in corso',
-  qc_passed: 'QC passato', qc_failed: 'QC fallito',
-  delivered: 'Consegnato', accepted: 'Accettato', rejected: 'Rifiutato',
+  planned: 'Pianificato',
+  in_progress: 'In lavorazione',
+  qc: 'QC',
+  delivered: 'Consegnato',
+  closed: 'Chiuso',
 };
 const DLV_STATUS_COLOR = {
-  planned: 'var(--muted)', in_production: 'var(--primary)',
-  file_attached: '#3b82f6', qc_running: '#f59e0b',
-  qc_passed: '#22c55e', qc_failed: '#ef4444',
-  delivered: '#0ea5e9', accepted: '#10b981', rejected: '#dc2626',
+  planned: '#94a3b8',
+  in_progress: '#a7b3f9',
+  qc: '#fbbf24',
+  delivered: '#22c55e',
+  closed: '#c084fc',
+};
+const DLV_QC_SUB_LABEL = {
+  in_progress: 'QC in corso', passed: 'QC pass', rejected: 'QC reject',
 };
 let _dlvNamingPresets = [];
 
@@ -800,32 +831,37 @@ function _renderDeliverables() {
   if (typeof lucide !== 'undefined' && lucide.createIcons) lucide.createIcons();
 }
 
-// Kanban 4 colonne: Pianificato · In lavorazione · Consegnato · Accettato/Rifiutato
+// v3.5.0-alpha.172.91 (Bundle H2) — Kanban 5 colonne allineato a Bundle I.
+// READ-ONLY: niente drag. Edit avviene in /planning (Bundle J HUB).
 function renderDeliverableKanban(list) {
   const COLS = [
-    { key: 'planned',     lbl: '🗓 Pianificato',    statuses: ['planned'] },
-    { key: 'in_progress', lbl: '🛠 In lavorazione', statuses: ['in_production','file_attached','qc_running','qc_passed','qc_failed'] },
-    { key: 'delivered',   lbl: '✓ Consegnato',     statuses: ['delivered'] },
-    { key: 'closed',      lbl: '✅ Chiuso',         statuses: ['accepted','rejected'] },
+    { key: 'planned',     lbl: '🗓 Pianificato'   },
+    { key: 'in_progress', lbl: '▶ In lavorazione' },
+    { key: 'qc',          lbl: '🔍 QC'            },
+    { key: 'delivered',   lbl: '📤 Consegnato'    },
+    { key: 'closed',      lbl: '🔒 Chiuso'        },
   ];
   const buckets = Object.fromEntries(COLS.map(c => [c.key, []]));
   for (const d of list) {
-    const col = COLS.find(c => c.statuses.includes(d.status));
-    buckets[col ? col.key : 'planned'].push(d);
+    const target = COLS.find(c => c.key === d.status);
+    buckets[target ? target.key : 'planned'].push(d);
   }
-  return `<div class="dlv-kanban" style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px;">
+  return `<div class="dlv-kanban" style="display:grid;grid-template-columns:repeat(5,1fr);gap:10px;">
     ${COLS.map(c => {
       const cards = buckets[c.key].map(d => renderDeliverableKanbanCard(d)).join('');
       const count = buckets[c.key].length;
       const empty = !count ? `<div class="text-muted text-xs" style="padding:18px;text-align:center;border:1px dashed var(--border);border-radius:6px;">— vuoto —</div>` : '';
       return `<div class="dlv-kanban-col" style="background:rgba(255,255,255,0.02);border-radius:8px;padding:10px;min-height:180px;">
         <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;padding-bottom:6px;border-bottom:1px solid var(--border);">
-          <span style="font-weight:600;font-size:12px;color:var(--text2);">${c.lbl}</span>
+          <span style="font-weight:600;font-size:12px;color:${DLV_STATUS_COLOR[c.key]};">${c.lbl}</span>
           <span class="mono text-xs" style="background:rgba(98,114,245,0.15);color:var(--indigo2);padding:1px 6px;border-radius:8px;">${count}</span>
         </div>
         ${cards}${empty}
       </div>`;
     }).join('')}
+  </div>
+  <div class="text-xs text-muted" style="margin-top:8px;text-align:center;">
+    🔒 Read-only — modifica stato/specifiche da <a href="/planning" style="color:var(--indigo2);">/planning → 📦 Deliverable</a>.
   </div>`;
 }
 
@@ -836,15 +872,22 @@ function renderDeliverableKanbanCard(d) {
   const target = d.target_delivery_date ? `<div class="text-xs text-muted">📅 ${escapeHtml(d.target_delivery_date)}</div>` : '';
   const unit = escapeHtml(d.unit || '—');
   const remaining = qtyP - qtyD;
-  const confirmBtn = (remaining > 0.005)
-    ? `<button class="btn btn-primary btn-sm" style="font-size:11px;padding:3px 8px;" onclick="openConfirmDelivery(${d.id})" title="Conferma consegna">✓ Conferma</button>`
-    : `<span class="text-xs" style="color:#22c55e;">✓ Completo</span>`;
+  // v3.5.0-alpha.172.91 (Bundle H2) — card click apre modal read-only.
+  // Conferma consegna resta come azione consentita (è atto operativo, non modifica stato workflow).
+  const isClosed = d.status === 'closed';
+  const confirmBtn = (!isClosed && remaining > 0.005)
+    ? `<button class="btn btn-primary btn-sm" style="font-size:11px;padding:3px 8px;" onclick="event.stopPropagation();openConfirmDelivery(${d.id})" title="Conferma consegna">✓ Conferma</button>`
+    : (qtyP > 0 ? `<span class="text-xs" style="color:#22c55e;">✓ Completo</span>` : `<span class="text-xs text-muted">—</span>`);
   const linked = (d.digital_asset_id || d.physical_asset_id)
     ? `<span class="text-xs" style="color:#a78bfa;" title="Asset linkato">📎</span>`
     : '';
-  return `<div class="dlv-card-mini" style="background:var(--bg2);border:1px solid var(--border);border-left:3px solid ${DLV_STATUS_COLOR[d.status] || '#6272f5'};border-radius:6px;padding:8px 10px;margin-bottom:6px;">
+  // Sub-badge QC se in stato qc
+  const qcSub = (d.status === 'qc' && d.qc_substatus && DLV_QC_SUB_LABEL[d.qc_substatus])
+    ? `<span class="text-xs" style="display:inline-block;padding:1px 5px;background:${DLV_STATUS_COLOR.qc}33;color:${DLV_STATUS_COLOR.qc};border-radius:6px;font-weight:600;font-size:9px;margin-left:4px;">${DLV_QC_SUB_LABEL[d.qc_substatus]}</span>`
+    : '';
+  return `<div class="dlv-card-mini" style="background:var(--bg2);border:1px solid var(--border);border-left:3px solid ${DLV_STATUS_COLOR[d.status] || '#6272f5'};border-radius:6px;padding:8px 10px;margin-bottom:6px;cursor:pointer;" onclick="jdOpenSpecsReadonly(${d.id})" title="Click per vedere specifiche tecniche (read-only)">
     <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:6px;">
-      <div style="font-weight:500;font-size:12px;flex:1;line-height:1.3;">${escapeHtml(d.name)}${linked}</div>
+      <div style="font-weight:500;font-size:12px;flex:1;line-height:1.3;">${escapeHtml(d.name)}${linked}${qcSub}</div>
     </div>
     <div class="text-xs text-muted" style="margin-top:4px;">${(qtyD).toFixed(2)} / ${(qtyP).toFixed(2)} ${unit}</div>
     <div style="position:relative;height:4px;background:rgba(255,255,255,0.05);border-radius:2px;margin:5px 0;">
@@ -853,7 +896,8 @@ function renderDeliverableKanbanCard(d) {
     ${target}
     <div style="display:flex;justify-content:space-between;align-items:center;margin-top:6px;">
       ${confirmBtn}
-      <button class="btn btn-ghost btn-sm" style="color:var(--rose);font-size:11px;" onclick="deleteDeliverable(${d.id})" title="Elimina">✕</button>
+      ${isClosed ? '<span class="text-xs" style="color:#c084fc;">🔒</span>'
+                 : `<button class="btn btn-ghost btn-sm" style="color:var(--rose);font-size:11px;" onclick="event.stopPropagation();deleteDeliverable(${d.id})" title="Elimina">✕</button>`}
     </div>
   </div>`;
 }
@@ -944,13 +988,18 @@ async function submitConfirmDelivery() {
 }
 
 function renderDeliverableCard(d) {
-  const statusBadge = `<span style="display:inline-block;padding:2px 8px;border-radius:3px;background:${DLV_STATUS_COLOR[d.status]};color:#fff;font-size:11px;">${DLV_STATUS_LABEL[d.status] || d.status}</span>`;
+  const statusBadge = `<span style="display:inline-block;padding:2px 8px;border-radius:3px;background:${DLV_STATUS_COLOR[d.status]}33;color:${DLV_STATUS_COLOR[d.status]};font-weight:600;font-size:11px;">${DLV_STATUS_LABEL[d.status] || d.status}</span>`;
+  // v3.5.0-alpha.172.91 (Bundle H2) — sub-badge QC nested
+  const qcSub = (d.status === 'qc' && d.qc_substatus && DLV_QC_SUB_LABEL[d.qc_substatus])
+    ? `<span style="display:inline-block;padding:1px 6px;border-radius:6px;background:${DLV_STATUS_COLOR.qc}55;color:${DLV_STATUS_COLOR.qc};font-weight:600;font-size:10px;margin-left:-4px;">${DLV_QC_SUB_LABEL[d.qc_substatus]}</span>`
+    : '';
   const natureBadge = `<span style="display:inline-block;padding:2px 6px;border-radius:3px;background:${d.nature === 'physical' ? '#a855f7' : '#6272f5'};color:#fff;font-size:10px;text-transform:uppercase;">${d.nature}</span>`;
   const target = d.target_delivery_date ? `<span class="text-xs text-muted">📅 ${d.target_delivery_date}</span>` : '';
   const hours = d.actual_hours ? `<span class="text-xs text-muted" title="Ore booking attribuiti">⏱ ${d.actual_hours}h</span>` : '';
   const fileNaming = d.file_naming ? `<div class="text-xs" style="font-family:monospace;color:var(--text2);margin-top:2px;">📝 ${escapeHtml(d.file_naming)}</div>` : '';
+  const isClosed = d.status === 'closed';
   return `
-    <div class="card" style="margin-bottom:8px;padding:12px 14px;">
+    <div class="card" style="margin-bottom:8px;padding:12px 14px;cursor:pointer;" onclick="jdOpenSpecsReadonly(${d.id})" title="Click per vedere specifiche tecniche (read-only)">
       <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
         <div style="flex:1;min-width:240px;">
           <div style="font-weight:500;">${escapeHtml(d.name)}</div>
@@ -958,10 +1007,11 @@ function renderDeliverableCard(d) {
         </div>
         <div style="display:flex;gap:8px;align-items:center;">
           ${natureBadge}
-          ${statusBadge}
+          ${statusBadge}${qcSub}
           ${target}
           ${hours}
-          <button class="btn btn-ghost btn-sm" onclick="deleteDeliverable(${d.id})" title="Elimina deliverable" style="color:var(--rose);"><i data-lucide="trash-2" style="width:13px;height:13px;"></i></button>
+          ${isClosed ? '<span style="color:#c084fc;" title="Chiuso (irreversibile)">🔒</span>'
+                     : `<button class="btn btn-ghost btn-sm" onclick="event.stopPropagation();deleteDeliverable(${d.id})" title="Elimina deliverable" style="color:var(--rose);"><i data-lucide="trash-2" style="width:13px;height:13px;"></i></button>`}
         </div>
       </div>
     </div>`;
@@ -1100,6 +1150,98 @@ async function deleteDeliverable(id) {
     toast('Deliverable eliminato', 'success');
     loadDeliverables();
   } catch(e) { toast(e.message || 'Errore', 'error'); }
+}
+
+// v3.5.0-alpha.172.91 (Bundle H2) — Modal tech specs read-only.
+// Mostra spec_json 8 blocchi (DeliveryTemplate schema) senza permettere edit.
+// Per editing: link a /planning?view=deliverables (Bundle J HUB).
+const JDSM_BLOCK_DEFS = [
+  ['video_specs', 'Video specs'],
+  ['audio_specs', 'Audio specs'],
+  ['text_specs', 'Text / subs specs'],
+  ['head_format', 'Head format'],
+  ['textless_format', 'Textless format'],
+  ['naming_convention', 'Naming convention'],
+  ['archive_specs', 'Archive specs'],
+  ['metadata_requirements', 'Metadata requirements'],
+];
+
+async function jdOpenSpecsReadonly(deliverableId) {
+  const d = (_dlvCache || []).find(x => x.id === deliverableId);
+  if (!d) { toast('Deliverable non trovato', 'warning'); return; }
+  openModal('modal-jd-specs');
+  document.getElementById('jdsm-title').textContent = `Specifiche tecniche — ${d.name} (read-only)`;
+  const meta = document.getElementById('jdsm-meta');
+  meta.replaceChildren();
+  const status = document.createElement('span');
+  status.style.cssText = `padding:2px 8px;border-radius:8px;background:${DLV_STATUS_COLOR[d.status]}33;color:${DLV_STATUS_COLOR[d.status]};font-weight:600;font-size:11px;`;
+  status.textContent = DLV_STATUS_LABEL[d.status] || d.status;
+  meta.appendChild(status);
+  if (d.qc_substatus && DLV_QC_SUB_LABEL[d.qc_substatus]) {
+    const sub = document.createElement('span');
+    sub.style.cssText = `padding:1px 6px;border-radius:6px;background:${DLV_STATUS_COLOR.qc}55;color:${DLV_STATUS_COLOR.qc};font-weight:600;font-size:10px;margin-left:6px;`;
+    sub.textContent = DLV_QC_SUB_LABEL[d.qc_substatus];
+    meta.appendChild(sub);
+  }
+  const sep = document.createElement('span');
+  sep.style.margin = '0 8px'; sep.style.color = 'var(--text3)'; sep.textContent = '·';
+  meta.appendChild(sep);
+  const unit = document.createElement('span');
+  unit.textContent = `${(d.quantity_delivered||0).toFixed(2)} / ${(d.quantity_planned||0).toFixed(2)} ${d.unit || ''}`;
+  meta.appendChild(unit);
+  if (d.target_delivery_date) {
+    const tgt = document.createElement('span');
+    tgt.style.marginLeft = '12px'; tgt.textContent = '📅 ' + d.target_delivery_date;
+    meta.appendChild(tgt);
+  }
+
+  const editLink = document.getElementById('jdsm-edit-link');
+  if (editLink) editLink.href = `/planning?view=deliverables`;
+
+  const host = document.getElementById('jdsm-blocks-host');
+  host.replaceChildren();
+  const loading = document.createElement('div');
+  loading.className = 'text-muted text-sm'; loading.textContent = 'Caricamento spec…';
+  host.appendChild(loading);
+  try {
+    const fresh = await api('GET', `/jobs/api/deliverables/${d.id}`);
+    const spec = fresh.spec_json || {};
+    host.replaceChildren();
+    let nFilled = 0;
+    JDSM_BLOCK_DEFS.forEach(([key, lbl]) => {
+      const block = spec[key];
+      const card = document.createElement('div');
+      card.style.cssText = 'background:var(--bg3); border:1px solid var(--border); border-radius:6px; padding:8px 10px;';
+      const lblEl = document.createElement('label');
+      lblEl.style.cssText = 'font-size:11px; text-transform:uppercase; letter-spacing:0.06em; color:var(--text3); font-weight:600; display:block; margin-bottom:4px;';
+      lblEl.textContent = lbl;
+      card.appendChild(lblEl);
+      if (block && Object.keys(block).length > 0) {
+        nFilled++;
+        const pre = document.createElement('pre');
+        pre.style.cssText = 'margin:0; font-family:var(--font-mono); font-size:12px; color:var(--text2); white-space:pre-wrap; max-height:240px; overflow:auto;';
+        pre.textContent = JSON.stringify(block, null, 2);
+        card.appendChild(pre);
+      } else {
+        const empty = document.createElement('div');
+        empty.className = 'text-xs text-muted'; empty.style.fontStyle = 'italic';
+        empty.textContent = '— vuoto —';
+        card.appendChild(empty);
+      }
+      host.appendChild(card);
+    });
+    if (nFilled === 0) {
+      const note = document.createElement('div');
+      note.className = 'text-xs text-muted'; note.style.cssText = 'margin-top:8px;text-align:center;';
+      note.textContent = 'Nessun blocco tech_specs definito. Compila da /planning → modal.';
+      host.appendChild(note);
+    }
+  } catch(e) {
+    host.replaceChildren();
+    const err = document.createElement('div'); err.style.color = 'var(--rose)';
+    err.textContent = 'Errore: ' + (e.message || '');
+    host.appendChild(err);
+  }
 }
 
 loadDeliverables();

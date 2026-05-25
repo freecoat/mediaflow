@@ -1,5 +1,44 @@
 # MediaFlow — Changelog
 
+## v3.5.0-alpha.172.91 — Bundle H2: Jobs page deliverable section READ-ONLY + modal specs view (25 mag 2026)
+
+Allineamento `/jobs/{id}` con nuovo enum Bundle I (5 status main + qc_substatus) e separazione editing → Planning HUB (Bundle J). Pagina Job ora overview-only: vede stato deliverable, conferma consegne, ma NON modifica status né tech_specs (link a `/planning?view=deliverables`).
+
+**Aggiornamento enum status** (`app/templates/pages/job_detail.html`):
+- `DLV_STATUS_LABEL` riscritto: 5 valori (planned / in_progress / qc / delivered / closed) invece di 9 legacy.
+- `DLV_STATUS_COLOR` allineato palette Bundle I (grigio / indigo / amber / verde / viola).
+- Nuovo `DLV_QC_SUB_LABEL` per sub-badge QC (in_progress / passed / rejected).
+
+**Kanban deliverable** (5 colonne invece di 4):
+- `renderDeliverableKanban` riscritto: 5 colonne corrispondenti a status main (no bucketing arbitrario su 9 legacy).
+- Footer bar con link a `/planning → 📦 Deliverable` per editing.
+
+**Card deliverable** (lista + kanban):
+- Click card apre `jdOpenSpecsReadonly(id)` → modal `#modal-jd-specs` con 8 blocchi tech_specs in modalità VIEW-only (JSON pretty-printed in `<pre>`, no textarea editabile).
+- Sub-badge QC visualizzato accanto al main badge.
+- Status `closed` mostra lucchetto 🔒 invece di bottone elimina (irreversibile).
+- Bottone "Conferma consegna" disabilitato se status=closed.
+- `event.stopPropagation()` sui bottoni interni per evitare apertura modal su click bottone elimina/conferma.
+
+**Modal nuovo** `#modal-jd-specs`:
+- Banner top "🔒 Read-only" con link a `/planning?view=deliverables` per editing.
+- Meta-row: status badge + sub-badge + qty + target date.
+- 8 cards una per blocco tech_specs (`<pre>` con JSON.stringify se valorizzato, label "— vuoto —" altrimenti).
+- Footer: solo Chiudi + link "✏ Modifica in /planning" (target=_blank).
+- Fetch fresh tramite `GET /jobs/api/deliverables/{id}` per spec_json aggiornato (no stale da `_dlvCache`).
+
+**Out of scope risolto**: bug "non posso modificare consegne" da spec H2 — la conferma consegna esistente (`openConfirmDelivery`) resta funzionante, l'edit di status/specs si fa da Planning HUB come pianificato in Bundle J.
+
+524 routes invariato. Schema DB invariato. Nessuna migrazione.
+
+**File toccati**: `app/templates/pages/job_detail.html`, `app/main.py`, `CHANGELOG.md`, `docs/STATO.md`.
+
+**Out of scope (backlog post-H2)**:
+- H3 — Asset Library status delivery linked + metadata ffprobe (next)
+- K — CR cleanup + ore toggle (parcheggiato)
+- Editor strutturato 8 blocchi (form invece di JSON textarea) in /planning
+- Email notification QC reject (SMTP non configurato)
+
 ## v3.5.0-alpha.172.90 — Bundle J: Planning HUB Deliverable centrale + AI propose_deliverable_specs (25 mag 2026)
 
 Nuovo tab `📦 Deliverable` in `/planning` come HUB tenant-wide per gestione ciclo vita. Modal tech specs 8 blocchi riusabile da DeliveryTemplate + AI capability che adatta le specifiche del template al deliverable specifico.
