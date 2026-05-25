@@ -468,6 +468,33 @@ TOOLS: list[dict] = [
         "handler": "propose_resize_booking",
     },
     {
+        "name": "propose_split_booking",
+        "category": "mutation",
+        "description": (
+            "Splitta a posteriori un booking esistente rispettando la policy oraria "
+            "della risorsa (Working Hours Policy + ferie + festivi). Modalità: "
+            "(a) senza parametri → ri-splitta gli assignment correnti rispettando "
+            "pausa pranzo e festività eventualmente cambiate. "
+            "(b) con `new_start_datetime`/`new_end_datetime` → estende/comprime "
+            "l'envelope al nuovo range e splitta intelligentemente. "
+            "Per booking multi-risorsa applica lo stesso range a tutte le risorse, "
+            "ognuna con la propria policy. Replace-all atomico. "
+            "USA per richieste tipo 'splitta saltando la pausa pranzo', 'ricalcola "
+            "questo booking sull'orario di lavoro', 'estendi a venerdì rispettando "
+            "i festivi'."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "booking_id":         {"type": "integer", "description": "ID booking esistente."},
+                "new_start_datetime": {"type": "string",  "description": "ISO datetime opzionale. Se assente usa lo start corrente."},
+                "new_end_datetime":   {"type": "string",  "description": "ISO datetime opzionale. Se assente usa l'end corrente."},
+            },
+            "required": ["booking_id"],
+        },
+        "handler": "propose_split_booking",
+    },
+    {
         "name": "propose_delete_booking",
         "category": "mutation",
         "description": (

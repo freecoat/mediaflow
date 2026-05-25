@@ -1,5 +1,28 @@
 # MediaFlow — Changelog
 
+## v3.5.0-alpha.172.75 — Smart split a posteriori su update + AI capability propose_split_booking (25 mag 2026)
+
+Richiesta Matteo: "posso modificare bookings con split a posteriori?". Smart split esisteva solo su `POST /api/bookings` (E3 v3.4.17 + α.172.74 per ricorrenti AI). Su edit di un booking esistente bisognava ricalcolare gli slot lato client e mandare lista già splittata via `assignments` replace-all.
+
+Memo durevole: ogni capability gestionale dovrebbe essere esposta al copilot (`feedback_copilot_more_capabilities.md`).
+
+**Endpoint update**:
+- `PUT /api/bookings/{id}` accetta nuovo `smart_split: bool = Form(False)` (back-compat).
+- Quando `assignments` è passato in replace-all e `smart_split=true`: dopo intra-payload guard, chiama `_expand_assignments_smart(db, parsed_ass)` (helper già esistente, riusa policy + ferie + festivi). Conflict check successivo lavora sulla lista espansa.
+- 400 esplicito se il range richiesto è tutto fuori orario (weekend/ferie/festivi).
+
+**AI capability `propose_split_booking`** (nuova):
+- Splitta a posteriori un booking esistente rispettando WHP + ferie + festivi correnti.
+- Due modalità: (a) senza parametri → ri-splitta gli assignment correnti (utile dopo cambio WHP o aggiunta festività); (b) con `new_start_datetime`/`new_end_datetime` → estende/comprime l'envelope al nuovo range e splitta.
+- Multi-risorsa: applica lo stesso range a tutte le risorse del booking, ognuna con la propria policy.
+- Replace-all atomico: cancella assignment correnti, crea nuovi segmenti, aggiorna envelope booking, recompute cost line, audit log `ai_split`.
+- Slice-lock check via `_assert_no_blocking_slice` + `_assert_jcl_not_locked` (resolve helper).
+- Conflict check escludendo gli assignment correnti del booking.
+
+**File toccati**: `app/routers/planning.py` (+11 righe in `update_booking`), `app/services/ai_tools.py` (+28 righe schema + descrizione), `app/services/ai_assistant.py` (+115 righe handler `_h_propose_split_booking`), `app/main.py` (version bump), `CHANGELOG.md`.
+
+516 routes invariato. Schema DB invariato. Riusa `working_hours.split_booking_smart` testato dall'UI dal v3.4.17.
+
 ## v3.5.0-alpha.172.74 — propose_recurring_bookings: smart_split + overtime warning (25 mag 2026)
 
 Estensione α.172.73 dopo richiesta Matteo: nel dialogo originale il prompt era "9-18 con pausa pranzo" ma l'AI creava booking monolitici 9-18 (CR 9h, non 8h reali). Esisteva già smart split server-side (working_hours.split_booking_smart, endpoint `POST /api/bookings` con flag `smart_split=true`) ma la capability AI non lo usava.

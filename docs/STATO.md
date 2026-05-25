@@ -8,6 +8,16 @@
 
 ## Versione corrente
 
+**v3.5.0-alpha.172.75** — 25 maggio 2026 — Smart split a posteriori su update + AI capability propose_split_booking
+
+Richiesta Matteo: "posso modificare bookings con split a posteriori?". Smart split esisteva solo in CREATE.
+
+- `PUT /api/bookings/{id}` accetta nuovo `smart_split: bool` (Form, default false). Quando `assignments` è in replace-all + flag on: il range "naive" viene espanso via `_expand_assignments_smart` su WHP + ferie + festivi della risorsa, conflict check su lista espansa.
+- Nuova capability AI `propose_split_booking(booking_id, new_start_datetime?, new_end_datetime?)`: ri-splitta in atomico gli assignment correnti (a) senza parametri = ricalcola sui dati attuali (utile dopo cambio WHP o festività); (b) con override envelope = estende/comprime e splitta. Multi-risorsa: ogni risorsa con la propria policy. Replace-all atomico + recompute cost line + audit `ai_split`.
+- Memo: ogni mutator gestionale dovrebbe avere capability AI corrispondente (vedi `feedback_copilot_more_capabilities.md`).
+
+516 routes invariato. Schema DB invariato.
+
 **v3.5.0-alpha.172.74** — 25 maggio 2026 — propose_recurring_bookings: smart_split + overtime warning
 
 Estensione α.172.73 dopo richiesta Matteo (dialogo "9-18 con pausa pranzo" → AI creava 9h monolitici invece di 8h reali con pausa).

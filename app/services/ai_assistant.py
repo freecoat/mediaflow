@@ -1245,6 +1245,128 @@ def _h_propose_resize_booking(db: Session, data: dict) -> dict:
     }
 
 
+@ai_capability("propose_split_booking")
+def _h_propose_split_booking(db: Session, data: dict) -> dict:
+    """Splitta a posteriori un booking esistente (v3.5.0-alpha.172.75).
+
+    Per ogni assignment del booking applica `split_booking_smart` con la WHP
+    della risorsa + ferie/festivi correnti. Replace-all atomico.
+
+    Payload:
+      {
+        "booking_id": int,
+        "new_start_datetime"?: ISO,  # override envelope start
+        "new_end_datetime"?:   ISO,  # override envelope end
+      }
+    """
+    from datetime import datetime as _dt
+    from app.models import BookingAssignment, ResourceUnavailability, UnavailabilityStatus
+    from app.services.working_hours import split_booking_smart
+    from app.services.booking_mutate import audit_booking_mutation
+    from app.routers.planning import _resolve_policy_for_resource
+
+    b = _resolve_booking_for_planning(db, data)
+    if not b.assignments:
+        raise ValueError(f"Booking #{b.id} non ha assignment da splittare")
+
+    # Override envelope o usa l'esistente
+    new_s_raw = data.get("new_start_datetime")
+    new_e_raw = data.get("new_end_datetime")
+    try:
+        new_s = _dt.fromisoformat(new_s_raw) if new_s_raw else None
+        new_e = _dt.fromisoformat(new_e_raw) if new_e_raw else None
+    except Exception:
+        raise ValueError("new_start_datetime/new_end_datetime non ISO valide")
+    if new_s and new_e and new_e <= new_s:
+        raise ValueError("new_end_datetime deve essere > new_start_datetime")
+
+    # Per ogni risorsa coinvolta, calcola range target e splitta
+    resource_ids = sorted({a.resource_id for a in b.assignments})
+    new_segments: list[dict] = []
+    for rid in resource_ids:
+        # Range target: nuovo envelope se passato, altrimenti envelope per-risorsa
+        if new_s or new_e:
+            target_s = new_s or min(a.start_datetime for a in b.assignments if a.resource_id == rid)
+            target_e = new_e or max(a.end_datetime   for a in b.assignments if a.resource_id == rid)
+        else:
+            res_ass = [a for a in b.assignments if a.resource_id == rid]
+            target_s = min(a.start_datetime for a in res_ass)
+            target_e = max(a.end_datetime   for a in res_ass)
+        policy = _resolve_policy_for_resource(db, rid)
+        if not policy:
+            new_segments.append({"resource_id": rid, "start_datetime": target_s, "end_datetime": target_e})
+            continue
+        unavs = db.query(ResourceUnavailability).filter(
+            ResourceUnavailability.resource_id == rid,
+            ResourceUnavailability.status == UnavailabilityStatus.approved,
+        ).all()
+        slots = split_booking_smart(target_s, target_e, policy, unavs)
+        if not slots:
+            raise ValueError(
+                f"Risorsa #{rid}: il range richiesto non contiene orario lavorativo "
+                f"(tutto fuori orario, weekend, ferie o festivi)."
+            )
+        for sl in slots:
+            new_segments.append({"resource_id": rid, "start_datetime": sl.start, "end_datetime": sl.end})
+
+    # Conflict check (escludendo gli assignment correnti del booking)
+    existing_ids = [a.id for a in b.assignments]
+    for seg in new_segments:
+        q = db.query(BookingAssignment).join(Booking).filter(
+            Booking.tenant_id == 1,
+            Booking.status != BookingStatus.cancelled,
+            BookingAssignment.resource_id == seg["resource_id"],
+            BookingAssignment.start_datetime < seg["end_datetime"],
+            BookingAssignment.end_datetime > seg["start_datetime"],
+        )
+        if existing_ids:
+            q = q.filter(~BookingAssignment.id.in_(existing_ids))
+        c = q.first()
+        if c:
+            raise ValueError(
+                f"Conflitto risorsa #{seg['resource_id']} {seg['start_datetime']:%Y-%m-%d %H:%M}"
+                f"–{seg['end_datetime']:%H:%M} (vs assignment #{c.id})"
+            )
+
+    # Replace-all atomico
+    for old in list(b.assignments):
+        db.delete(old)
+    db.flush()
+    for seg in new_segments:
+        db.add(BookingAssignment(
+            booking_id=b.id,
+            resource_id=seg["resource_id"],
+            start_datetime=seg["start_datetime"],
+            end_datetime=seg["end_datetime"],
+        ))
+    # Aggiorna envelope booking
+    b.start_datetime = min(seg["start_datetime"] for seg in new_segments)
+    b.end_datetime   = max(seg["end_datetime"]   for seg in new_segments)
+
+    # Recompute cost line + audit
+    try:
+        from app.services.cost_report import recompute_for_booking
+        recompute_for_booking(db, b)
+    except Exception as _e:
+        logger.warning(f"recompute_for_booking failed in propose_split_booking: {_e}")
+    try:
+        audit_booking_mutation(
+            db, b,
+            kind="ai_split",
+            summary=f"AI split → {len(new_segments)} segmenti",
+            payload={"segments": len(new_segments), "resources": resource_ids},
+        )
+    except Exception:
+        pass
+    return {
+        "booking_id": b.id,
+        "segments_count": len(new_segments),
+        "resources_count": len(resource_ids),
+        "new_start": b.start_datetime.isoformat(),
+        "new_end": b.end_datetime.isoformat(),
+    }
+
+
 @ai_capability("propose_delete_booking")
 def _h_propose_delete_booking(db: Session, data: dict) -> dict:
     """Cancella un booking (soft-delete via status=cancelled).

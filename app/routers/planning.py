@@ -1565,10 +1565,16 @@ async def update_booking(
     notes: Optional[str] = Form(None),
     priority: Optional[str] = Form(None),  # v3.5.0-alpha.22
     assignments: Optional[str] = Form(None),  # se passato, replace-all
+    smart_split: bool = Form(False),  # v3.5.0-alpha.172.75 — split a posteriori
     force_slice_unlock: bool = Depends(_force_unlock_dep),  # α.66.3 + α.111.23 admin-gate
     db: Session = Depends(get_db),
 ):
     """Aggiorna metadata booking (kind/job/status/notes) e/o sostituisce assignments.
+
+    Se `smart_split=true` e `assignments` è passato, la lista replace-all viene
+    espansa via `split_booking_smart` per ogni risorsa (rispetta WHP + ferie +
+    festivi). Utile per ribaltare un range "naive" su orari lavorativi reali
+    senza ricalcolarli lato client.
 
     Per drag/resize di un singolo item della timeline → usare PUT /api/booking-assignments/{aid}.
     """
@@ -1614,6 +1620,16 @@ async def update_booking(
                 f"La stessa risorsa è inserita due volte con orari sovrapposti "
                 f"(righe #{i+1} e #{j+1}). Rimuovi il duplicato o sistema gli orari."
             )
+        # v3.5.0-alpha.172.75 — smart split a posteriori: espande il range
+        # naive su orari lavorativi reali (WHP + ferie + festivi).
+        if smart_split:
+            parsed_ass = _expand_assignments_smart(db, parsed_ass)
+            if not parsed_ass:
+                raise HTTPException(
+                    400,
+                    "Smart split: il range richiesto non contiene orario lavorativo "
+                    "(tutto fuori orario, weekend, ferie o festivi)."
+                )
         # Conflict check (escludendo gli assignment attuali del booking, che sostituiremo)
         existing_ids = [a.id for a in b.assignments]
         for i, pa in enumerate(parsed_ass):
