@@ -1242,6 +1242,49 @@ def _auto_migrate_bundle_i():
         print(f"[auto-migrate-bundle-i] failed: {e}")
 
 
+def _auto_reclassify_physical_deliverables():
+    """v3.5.0-alpha.172.93 (Bundle K2) — Reclassify deliverable digital→physical
+    per LTO/HDD/CRU/Blu-Ray/DVD/tape/nastro/USB-drive. Match keyword su
+    PriceItem.name + PriceItem.keywords (JSON). Idempotente: skip se già
+    physical. Esegue UPDATE in singola transazione.
+    """
+    from sqlalchemy import text
+    from app.database import engine
+    PATTERNS = (
+        "lto", "hdd", "cru", "tape", "nastro", "nastri",
+        "blu-ray", "bluray", "blu ray", "dvd",
+        "shuttle", "usb drive", "harddisk", "hard disk", "hard-disk",
+        "drive consegna", "disco rigido", "supporto fisico",
+    )
+    try:
+        with engine.begin() as conn:
+            # Trova price_items che matchano (case-insensitive substring)
+            ors = " OR ".join(
+                ["LOWER(name) LIKE :p" + str(i)
+                 + " OR LOWER(COALESCE(description,'')) LIKE :p" + str(i)
+                 + " OR LOWER(COALESCE(keywords,'')) LIKE :p" + str(i)
+                 for i, _ in enumerate(PATTERNS)]
+            )
+            params = {f"p{i}": f"%{p}%" for i, p in enumerate(PATTERNS)}
+            rows = conn.execute(text(
+                f"SELECT id FROM price_items WHERE {ors}"
+            ), params).fetchall()
+            pi_ids = [r[0] for r in rows]
+            if not pi_ids:
+                return
+            # Update deliverable digital→physical per quei price_item.
+            placeholders = ",".join([f":id{i}" for i, _ in enumerate(pi_ids)])
+            res = conn.execute(text(
+                f"UPDATE job_deliverables SET nature='physical' "
+                f"WHERE nature='digital' AND price_item_id IN ({placeholders})"
+            ), {f"id{i}": v for i, v in enumerate(pi_ids)})
+            if res.rowcount:
+                print(f"[auto-reclassify-bundle-k2] {res.rowcount}x deliverable digital -> physical "
+                      f"(matched {len(pi_ids)} price_items)")
+    except Exception as e:
+        print(f"[auto-reclassify-bundle-k2] failed: {e}")
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     create_tables()
@@ -1261,6 +1304,11 @@ async def lifespan(app: FastAPI):
         _auto_migrate_bundle_i()
     except Exception as e:
         print(f"[lifespan] _auto_migrate_bundle_i failed: {e}")
+    # v3.5.0-alpha.172.93 — Bundle K2: reclassify LTO/HDD/CRU/Blu-Ray digital→physical
+    try:
+        _auto_reclassify_physical_deliverables()
+    except Exception as e:
+        print(f"[lifespan] _auto_reclassify_physical_deliverables failed: {e}")
     # v3.5.0-alpha.111 — Backfill JobResourceAssignment da booking storici
     try:
         _backfill_resource_assignments()
@@ -1633,7 +1681,7 @@ async def lifespan(app: FastAPI):
     yield
 
 
-app = FastAPI(title="Claqo", version="3.5.0-alpha.172.92", lifespan=lifespan)
+app = FastAPI(title="Claqo", version="3.5.0-alpha.172.93", lifespan=lifespan)
 
 BASE_DIR = Path(__file__).parent
 app.mount("/static", StaticFiles(directory=BASE_DIR / "static"), name="static")

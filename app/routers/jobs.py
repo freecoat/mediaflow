@@ -597,7 +597,7 @@ async def list_deliverables_tenant_wide(
     """v3.5.0-alpha.172.90 (Bundle J) — Lista deliverable tenant-wide per
     Planning HUB. Filtri opzionali: status, qc_substatus, job_id, project_id.
     Restituisce join Job + Project per label visualizzazione (job_code,
-    job_name, project_code, project_title).
+    job_title, project_code, project_title).
 
     Default: exclude deleted, limit 500 (paginazione client-side per kanban).
     """
@@ -634,7 +634,7 @@ async def list_deliverables_tenant_wide(
         rec = _serialize_deliverable(d)
         rec["job_id"] = j.id
         rec["job_code"] = j.code
-        rec["job_name"] = j.name
+        rec["job_title"] = j.title
         rec["project_id"] = p.id if p else None
         rec["project_code"] = p.code if p else None
         rec["project_title"] = p.title if p else None

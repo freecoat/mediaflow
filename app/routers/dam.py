@@ -306,7 +306,7 @@ def _serialize_deliv_for_asset(db, d, source="manual"):
         "link_source": source,
         "job_id": d.job_id,
         "job_code": job.code if job else None,
-        "job_name": job.name if job else None,
+        "job_title": job.title if job else None,
         "project_id": project.id if project else None,
         "project_code": project.code if project else None,
         "project_title": project.title if project else None,

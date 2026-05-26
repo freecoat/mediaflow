@@ -159,7 +159,14 @@
         <span>🔧 Lavorazioni — Quotazione vs Reale</span>
         <span class="text-xs" style="color:var(--text3);font-weight:normal;">(a tempo · maturato = ore booking done × prezzo)</span>
       </div>
-      <button type="button" class="btn btn-ghost btn-sm" id="cl-filters-toggle" onclick="toggleCostLinesFilters()">▼ Filtri</button>
+      <div style="display:flex; align-items:center; gap:8px;">
+        <!-- v3.5.0-alpha.172.93 (Bundle K3) — Switch valuta/ore tabella Lavorazioni -->
+        <div class="mf-toggle-group" role="tablist" aria-label="Vista" style="display:inline-flex; border:1px solid var(--border); border-radius:6px; overflow:hidden; font-size:12px;">
+          <button type="button" id="cl-mode-eur" class="btn btn-ghost btn-sm" style="border-radius:0; border:none;" onclick="setCostLinesMode('eur')" title="Valori in € (default)">€</button>
+          <button type="button" id="cl-mode-hours" class="btn btn-ghost btn-sm" style="border-radius:0; border:none; border-left:1px solid var(--border);" onclick="setCostLinesMode('hours')" title="Valori in ore (solo time-based)">h</button>
+        </div>
+        <button type="button" class="btn btn-ghost btn-sm" id="cl-filters-toggle" onclick="toggleCostLinesFilters()">▼ Filtri</button>
+      </div>
     </div>
     <!-- v3.5.0-alpha.172.13 — Filter bar Lavorazioni -->
     <div id="cl-filters-host" style="display:none;"></div>
@@ -1251,7 +1258,7 @@ async function openResourceJobs(resourceId, resourceName) {
   const pid = currentReport && currentReport.job && currentReport.job.project_id;
   const projectTitle = currentReport && currentReport.job && currentReport.job.project_title;
   const scopeLabel = pid ? ` — solo progetto ${projectTitle || '#'+pid}` : '';
-  document.getElementById('rj-title').textContent = `${resourceName || 'Risorsa'} — job lavorati${scopeLabel}`;
+  document.getElementById('rj-title').textContent = `${resourceName || 'Risorsa'} — lavorazioni svolte${scopeLabel}`;
   while (body.firstChild) body.removeChild(body.firstChild);
   const loading = document.createElement('div');
   loading.className = 'text-muted';
@@ -1260,26 +1267,32 @@ async function openResourceJobs(resourceId, resourceName) {
   openModal('modal-resource-jobs');
   try {
     const qs = pid ? `?project_id=${pid}` : '';
-    const d = await api('GET', `/cost-report/api/resource/${resourceId}/jobs${qs}`);
+    // v3.5.0-alpha.172.93 (Bundle K3) — drill ora a livello LAVORAZIONE (JCL).
+    const d = await api('GET', `/cost-report/api/resource/${resourceId}/cost-lines${qs}`);
+    // Adatta payload: server ritorna `lines` invece di `jobs`. Aliasing per
+    // mantenere il render originale invariato.
+    d.jobs = d.lines || [];
+    d.jobs_count = d.lines_count || 0;
     while (body.firstChild) body.removeChild(body.firstChild);
     // Header summary
     const hdr = document.createElement('div');
     hdr.style.cssText = 'background:var(--bg2);padding:10px 14px;border-radius:6px;margin-bottom:12px;font-size:13px;';
-    const summary = `${d.jobs_count} job · rate sell €${(d.rate_hourly_sell||0).toFixed(2)}/h` +
+    const summary = `${d.jobs_count} lavorazion${d.jobs_count === 1 ? 'e' : 'i'} · rate sell €${(d.rate_hourly_sell||0).toFixed(2)}/h` +
       (d.rate_hourly_internal_cost ? ` · cost interno €${d.rate_hourly_internal_cost.toFixed(2)}/h` : '');
     hdr.textContent = summary;
     body.appendChild(hdr);
     if (!d.jobs.length) {
       const e = document.createElement('div');
       e.className = 'text-muted';
-      e.textContent = 'Nessun job trovato per questa risorsa.';
+      e.textContent = 'Nessuna lavorazione trovata per questa risorsa.';
       body.appendChild(e);
       return;
     }
     const tbl = document.createElement('table');
     tbl.style.cssText = 'width:100%;font-size:12px;';
     const thead = document.createElement('thead');
-    thead.innerHTML = '<tr style="color:var(--text3);"><th style="text-align:left;padding:4px;">Job</th><th style="text-align:left;padding:4px;">Cliente</th><th style="padding:4px;">Stato</th><th style="padding:4px;">Periodo</th><th style="text-align:right;padding:4px;">Reg.</th><th style="text-align:right;padding:4px;">OT</th><th style="text-align:right;padding:4px;">Not./Fest.</th><th style="text-align:right;padding:4px;">Tot ore</th><th style="text-align:right;padding:4px;">Pesate</th><th style="text-align:right;padding:4px;">Costo sell</th><th style="text-align:right;padding:4px;">Costo interno</th></tr>';
+    // v3.5.0-alpha.172.93 (Bundle K3) — header costante, no user data: safe innerHTML.
+    thead.innerHTML = '<tr style="color:var(--text3);"><th style="text-align:left;padding:4px;">Lavorazione</th><th style="text-align:left;padding:4px;">Job</th><th style="padding:4px;">Stato</th><th style="padding:4px;">Periodo</th><th style="text-align:right;padding:4px;">Reg.</th><th style="text-align:right;padding:4px;">OT</th><th style="text-align:right;padding:4px;">Not./Fest.</th><th style="text-align:right;padding:4px;">Tot ore</th><th style="text-align:right;padding:4px;">Pesate</th><th style="text-align:right;padding:4px;">Costo sell</th><th style="text-align:right;padding:4px;">Costo interno</th></tr>';
     tbl.appendChild(thead);
     const tbody = document.createElement('tbody');
     let totH = 0, totW = 0, totSell = 0, totReal = 0;
@@ -1291,10 +1304,20 @@ async function openResourceJobs(resourceId, resourceName) {
       if (j.cost_estimated_internal != null) totReal += j.cost_estimated_internal;
       const tr = document.createElement('tr');
       tr.style.cssText = 'border-bottom:1px solid var(--border);cursor:pointer;';
-      tr.title = 'Apri job nel cost report';
+      // v3.5.0-alpha.172.93 (Bundle K3) — click su lavorazione: se stesso job
+      // corrente apre dettaglio lavorazione (modal openLineDetailHere); altrimenti
+      // ricarica cost-report del job destinazione.
+      tr.title = j.cost_line_id
+        ? 'Apri dettaglio lavorazione'
+        : 'Apri job (ore non legate a lavorazione)';
       tr.onclick = () => {
         closeModal('modal-resource-jobs');
-        if (typeof loadReport === 'function') loadReport(j.job_id);
+        const sameJob = currentReport && currentReport.job && currentReport.job.id === j.job_id;
+        if (j.cost_line_id && sameJob && typeof openLineDetailHere === 'function') {
+          openLineDetailHere(j.cost_line_id);
+        } else if (typeof loadReport === 'function') {
+          loadReport(j.job_id);
+        }
       };
       const fmtH2 = (h) => (h||0).toFixed(2) + 'h';
       const fmtPeriod = () => {
@@ -1302,9 +1325,14 @@ async function openResourceJobs(resourceId, resourceName) {
         if (j.first_date === j.last_date) return fmtDate(j.first_date);
         return fmtDate(j.first_date) + ' → ' + fmtDate(j.last_date);
       };
+      // v3.5.0-alpha.172.93 (Bundle K3) — col 0 = LAVORAZIONE (JCL), col 1 = JOB.
+      const jclCell = j.cost_line_id
+        ? '<b>'+escapeHtml(j.cost_line_desc||'—')+'</b><div class="text-xs text-muted">'+escapeHtml(j.cost_line_unit||'')+'</div>'
+        : '<i class="text-muted">(senza lavorazione)</i>';
+      const jobCell = '<span class="mono text-xs">'+escapeHtml(j.job_code||'')+'</span><div class="text-xs text-muted">'+escapeHtml(j.client_name||'—')+'</div>';
       const cells = [
-        ['<b class="mono">'+escapeHtml(j.job_code||'')+'</b><div class="text-xs text-muted">'+escapeHtml(j.job_title||'')+'</div>', null],
-        [escapeHtml(j.client_name||'—'), null],
+        [jclCell, null],
+        [jobCell, null],
         ['<span class="badge">'+escapeHtml(j.job_status||'')+'</span>', null],
         [fmtPeriod(), null],
         [fmtH2(b.regular_hours), 'mono text-right'],
@@ -1609,9 +1637,71 @@ function _applyDlvFilters(rows) {
   });
 }
 
+// v3.5.0-alpha.172.93 (Bundle K3) — Mode switch €/ore tabella Lavorazioni.
+// Persistito in localStorage, applicato a renderCostLines + thead labels.
+let _clMode = (function() {
+  try { return localStorage.getItem('cr_cl_mode') || 'eur'; } catch(_) { return 'eur'; }
+})();
+function setCostLinesMode(mode) {
+  _clMode = (mode === 'hours') ? 'hours' : 'eur';
+  try { localStorage.setItem('cr_cl_mode', _clMode); } catch(_) {}
+  _clSyncModeButtons();
+  _clSyncThead();
+  if (typeof renderCostLines === 'function') renderCostLines();
+}
+
+// Sostituisce thead della tabella Lavorazioni in base a `_clMode`. Cache
+// dell'HTML originale (€) per ripristino. NB: il primo run salva il default,
+// chiamato anche su mount.
+let _clTheadEurCache = null;
+const _CL_THEAD_HOURS = '<tr><th>Voce</th><th>Unità</th>'
+  + '<th class="text-right" title="Ore quotate (qty_quoted × factor unit)">Quotate (h)</th>'
+  + '<th class="text-right" title="Ore lavorate done (qty_actual × factor unit)">Maturate (h)</th>'
+  + '<th class="text-right" title="Maturate − Quotate. Positivo = sforo, negativo = under.">Over/Under (h)</th>'
+  + '<th colspan="6" class="text-muted text-sm" data-no-sort="true">(colonne € disattivate in vista ore)</th></tr>';
+function _clSyncThead() {
+  const table = document.querySelector('#cost-lines-table');
+  if (!table) return;
+  const tableEl = table.closest('table');
+  if (!tableEl) return;
+  const thead = tableEl.querySelector('thead');
+  if (!thead) return;
+  if (!_clTheadEurCache) _clTheadEurCache = thead.innerHTML;
+  // Header costanti (no user data): innerHTML sicuro.
+  thead.innerHTML = (_clMode === 'hours') ? _CL_THEAD_HOURS : _clTheadEurCache;
+}
+document.addEventListener('DOMContentLoaded', _clSyncThead);
+function _clSyncModeButtons() {
+  const e = document.getElementById('cl-mode-eur');
+  const h = document.getElementById('cl-mode-hours');
+  if (!e || !h) return;
+  const ACTIVE = 'background:var(--indigo-bg); color:var(--indigo2); font-weight:600;';
+  e.style.cssText = (_clMode === 'eur')
+    ? 'border-radius:0; border:none; ' + ACTIVE
+    : 'border-radius:0; border:none;';
+  h.style.cssText = (_clMode === 'hours')
+    ? 'border-radius:0; border:none; border-left:1px solid var(--border); ' + ACTIVE
+    : 'border-radius:0; border:none; border-left:1px solid var(--border);';
+}
+document.addEventListener('DOMContentLoaded', _clSyncModeButtons);
+
+// Helper: per riga JCL time-based estrae ore quotate/done. Per altre unità
+// ritorna null (riga sarà "—" in mode hours).
+function _clHoursFor(l) {
+  const unit = (l && l.unit || '').toString().toLowerCase();
+  if (unit !== 'hr' && unit !== 'day') return null;
+  const factor = (unit === 'day') ? 8 : 1;  // approx 1 giornata = 8 ore
+  return {
+    quoted: (l.quantity_quoted || 0) * factor,
+    actual: (l.quantity_actual || 0) * factor,
+    over_under: ((l.quantity_actual || 0) - (l.quantity_quoted || 0)) * factor,
+  };
+}
+
 function renderCostLines() {
   const tbody = document.getElementById('cost-lines-table');
   const lines = _applyClFilters(currentReport.cost_lines || []);
+  if (_clMode === 'hours') return _renderCostLinesHours(tbody, lines);
   if (!lines.length) {
     const total = (currentReport.cost_lines || []).length;
     const msg = total > 0
@@ -1727,6 +1817,81 @@ function renderCostLines() {
       </td>
     </tr>`;
   }).join('');
+}
+
+// v3.5.0-alpha.172.93 (Bundle K3) — Render alternativo Lavorazioni in ORE.
+// Tabella con colonne: Voce | Unità | Quotate(h) | Maturate(h) | Over/Under(h).
+// Righe non time-based mostrano "—" in tutte le colonne ore (NON nascoste
+// per coerenza filtri/conteggio). Click riga mantiene openLineDetailHere.
+function _renderCostLinesHours(tbody, lines) {
+  if (!tbody) return;
+  while (tbody.firstChild) tbody.removeChild(tbody.firstChild);
+  if (!lines.length) {
+    const tr = document.createElement('tr');
+    const td = document.createElement('td');
+    td.colSpan = 7;
+    td.className = 'text-muted';
+    td.style.cssText = 'text-align:center;padding:20px;';
+    td.textContent = 'Nessuna voce di costo';
+    tr.appendChild(td);
+    tbody.appendChild(tr);
+    return;
+  }
+  const fmtH = (v) => (Number(v || 0)).toFixed(2) + 'h';
+  for (const l of lines) {
+    const h = _clHoursFor(l);
+    const tr = document.createElement('tr');
+    tr.style.cursor = 'pointer';
+    tr.addEventListener('click', () => openLineDetailHere(l.id));
+    // Voce
+    const tdN = document.createElement('td');
+    tdN.style.minWidth = '240px';
+    const nameDiv = document.createElement('div');
+    nameDiv.style.cssText = 'font-weight:500;font-size:13px;';
+    nameDiv.textContent = l.description || '';
+    tdN.appendChild(nameDiv);
+    if (l.category) {
+      const cat = document.createElement('div');
+      cat.className = 'text-xs text-muted';
+      cat.textContent = l.category;
+      tdN.appendChild(cat);
+    }
+    tr.appendChild(tdN);
+    // Unità
+    const tdU = document.createElement('td');
+    tdU.className = 'text-sm text-muted';
+    tdU.textContent = l.unit || '';
+    tr.appendChild(tdU);
+    // Quotate / Maturate / Over-Under
+    const isTimeBased = (h !== null);
+    const ovStr = isTimeBased ? (h.over_under > 0 ? '+' : '') + fmtH(h.over_under) : '—';
+    const cols = [
+      [isTimeBased ? fmtH(h.quoted) : '—', 'mono text-right'],
+      [isTimeBased ? fmtH(h.actual) : '—', 'mono text-right'],
+      [ovStr, 'mono text-right'],
+    ];
+    cols.forEach(([txt, cls], idx) => {
+      const td = document.createElement('td');
+      td.className = cls;
+      if (idx === 2 && isTimeBased) {
+        td.style.color = h.over_under > 0 ? 'var(--rose)' : (h.over_under < 0 ? 'var(--green)' : 'var(--text3)');
+      }
+      td.textContent = txt;
+      tr.appendChild(td);
+    });
+    // Stato fatt (mantieni colonna per allineamento header originale; mode
+    // hours usa colspan ridotto, quindi salto). Lascio 2 colonne placeholder
+    // per allineamento se la tabella ha thead 11 colonne. In mode hours il
+    // thead originale resta — manderemmo errore stack? Soluzione: rimpiazzo
+    // anche thead via toggle. Per ora aggiungo 6 td vuoti per non rompere.
+    for (let i = 0; i < 6; i++) {
+      const td = document.createElement('td');
+      td.style.opacity = '0.4';
+      td.textContent = '—';
+      tr.appendChild(td);
+    }
+    tbody.appendChild(tr);
+  }
 }
 
 // v3.5.0-alpha.172.5 (Sprint 4 T2) — Renderer sezione "Consegne" (Deliverable).

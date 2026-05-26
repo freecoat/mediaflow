@@ -8,6 +8,18 @@
 
 ## Versione corrente
 
+**v3.5.0-alpha.172.93** — 26 maggio 2026 — Bundle K1+K2+K3 (test plan giro 1) + hotfix critico Bundle J 500
+
+Sessione test 26 mag. Aperta con bug 500 su `/jobs/api/deliverables/list` (typo `j.name` su `Job.title`) → hotfix immediato. Poi 3 richieste UX di Matteo durante test:
+
+**K1**: filtri Planning sidebar ora switchano tra "planning" e "deliverables" view. Stato "job" rinominato → "stato booking" (BookingState canonico), applicato client-side (era passato come QS al backend incompatibile). Aggiunti 2 filtri Hub: Stato deliverable (5) + QC sub-status (4). Label "Da/A" → "Target da/a" in deliverables view. `renderDeliverableHub` ora passa querystring server-side al backend + filtra client-side multi-id/date/search.
+
+**K2**: LTO/HDD/CRU/Blu-Ray/DVD/tape/shuttle/USB-drive → auto-`DeliverableNature.physical` (era sempre `digital` default). Helper `_infer_deliverable_nature` in `quotes.py` applicato in spawn quote→job + rebind quote. Backfill al boot (`_auto_reclassify_physical_deliverables`): 2 deliverable esistenti riclassificati al primo restart (matched 3 price_items lean preset).
+
+**K3**: Cost Report card "Lavorazioni" ora ha switch `[€ | h]` (persistente localStorage). Mode hours mostra Quotate/Maturate/Over-Under in ore (factor day×8 per time-based). Drill risorsa click in "Ore booking per fascia" ora apre **lavorazioni** (JCL aggregate) invece di solo job. Endpoint nuovo `/cost-report/api/resource/{id}/cost-lines`.
+
+527 routes (+1: cost_lines drill). Schema DB invariato. Cantiere L (tech specs unified) backloggato — snodo critico tra planning e asset mgmt, da affrontare con macrostruttura prima del dettaglio (capitolato Netflix come riferimento + ingest `FbF_QC-Report_Template.xlsx`).
+
 **v3.5.0-alpha.172.92** — 25 maggio 2026 (notte) — Bundle H3: Asset Library metadata ffprobe + delivery linked
 
 Pannello "Dettaglio asset" in `/dam` ora mostra (read-only): badge `AssetStatus` (planned/uploaded/rejected/accepted), deliverable linkati con status + qc_substatus + link a `/planning`, specifiche tecniche file estratte via ffprobe (Container/Video/Audio dettagliato). Fallback Pillow per immagini se ffprobe assente. Modal `showAssetDetail` refactor a DOM API (no più innerHTML).

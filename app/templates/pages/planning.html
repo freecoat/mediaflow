@@ -264,7 +264,7 @@
 
     <!-- v3.5.0-alpha.171.10 (TL-3) — Filtro lavorazione (JCL): subfiltro
          di progetto/job. Backend /planning/api/jcl-search query async. -->
-    <div class="form-group" style="position:relative;">
+    <div class="form-group" data-pl-views="planning" style="position:relative;">
       <label>Lavorazione <span class="text-xs text-muted">(multi · subfiltro progetto)</span></label>
       <div class="fa-multi" data-fa-wrap="jcl">
         <input type="text" class="fa-input" data-fa="jcl" placeholder="Cerca voce listino, JCL…" autocomplete="off">
@@ -282,21 +282,42 @@
       <div class="fa-suggestions" data-fa-suggestions="resource"></div>
     </div>
 
-    <div class="form-group">
-      <label>Stato job</label>
+    <div class="form-group" data-pl-views="planning">
+      <label>Stato booking</label>
       <select id="f-status" class="form-select" onchange="onFilterChange()">
         <option value="">— tutti —</option>
-        <option value="draft">Bozza</option>
-        <option value="quoting">In quotazione</option>
-        <option value="approved">Approvato</option>
-        <option value="active">Attivo</option>
-        <option value="on_hold">In pausa</option>
-        <option value="completed">Completato</option>
-        <option value="invoiced">Fatturato</option>
+        <option value="tentative">Tentativo</option>
+        <option value="confirmed">Confermato</option>
+        <option value="in_progress">In corso</option>
+        <option value="done">Fatto</option>
+        <option value="not_done">Non fatto</option>
       </select>
     </div>
 
-    <div class="form-group">
+    <!-- v3.5.0-alpha.172.93 (Bundle K1) — Filtri specifici Deliverable view -->
+    <div class="form-group" data-pl-views="deliverables">
+      <label>Stato deliverable</label>
+      <select id="f-dlv-status" class="form-select" onchange="onFilterChange()">
+        <option value="">— tutti —</option>
+        <option value="planned">⏸ Pianificato</option>
+        <option value="in_progress">▶ In lavorazione</option>
+        <option value="qc">🔍 QC</option>
+        <option value="delivered">📤 Consegnato</option>
+        <option value="closed">🔒 Chiuso</option>
+      </select>
+    </div>
+    <div class="form-group" data-pl-views="deliverables">
+      <label>QC sub-status</label>
+      <select id="f-dlv-qcsub" class="form-select" onchange="onFilterChange()">
+        <option value="">— tutti —</option>
+        <option value="in_progress">In corso</option>
+        <option value="passed">Pass</option>
+        <option value="rejected">Reject</option>
+        <option value="conditional">Condizionato</option>
+      </select>
+    </div>
+
+    <div class="form-group" data-pl-views="planning">
       <label>Tipo booking</label>
       <select id="f-kind" class="form-select" onchange="onFilterChange()">
         <option value="">— tutti —</option>
@@ -308,19 +329,19 @@
     </div>
 
     <div class="form-group">
-      <label>Da</label>
+      <label data-pl-label data-pl-label-default="Da" data-pl-label-deliverables="Target da">Da</label>
       <input type="date" id="f-from" class="form-input" onchange="onFilterChange()">
     </div>
 
     <div class="form-group">
-      <label>A</label>
+      <label data-pl-label data-pl-label-default="A" data-pl-label-deliverables="Target a">A</label>
       <input type="date" id="f-to" class="form-input" onchange="onFilterChange()">
     </div>
 
     <!-- v3.5.0-alpha.38: filtro fascia oraria (client-side, applicato a
          renderTimeline). I booking con almeno un assignment che intersechi
          la fascia [from, to] passano. -->
-    <div class="form-group" style="display:flex; gap:6px; align-items:end;">
+    <div class="form-group" data-pl-views="planning" style="display:flex; gap:6px; align-items:end;">
       <div style="flex:1;">
         <label>Orario da</label>
         <input type="time" id="f-time-from" class="form-input" onchange="onFilterChange()" step="900">
@@ -335,10 +356,10 @@
          rimuove i booking con execution_status=not_done da tutte le viste.
          v3.5.0-alpha.88: sezione "Opzioni" separata con divider + label
          allineata ai filtri sopra (era fuori griglia). -->
-    <hr style="border:none; border-top:1px solid var(--border); margin:10px 0 6px;">
+    <hr data-pl-views="planning" style="border:none; border-top:1px solid var(--border); margin:10px 0 6px;">
     <!-- v3.5.0-alpha.170 — Restyle "Nascondi non fatte" come pill toggle
          allineata al resto dei filtri (era checkbox squallido, segnalato Matteo). -->
-    <div class="form-group" style="margin-bottom:8px;">
+    <div class="form-group" data-pl-views="planning" style="margin-bottom:8px;">
       <label style="display:block; font-size:11px; color:var(--text3); text-transform:uppercase; letter-spacing:.05em; margin-bottom:6px;">Opzioni</label>
       <label class="mf-toggle-pill" for="f-hide-not-done" style="display:inline-flex; align-items:center; gap:8px; cursor:pointer; font-size:13px; padding:6px 12px; border:1px solid var(--border); border-radius:6px; background:var(--bg2); transition: all var(--t); width:100%; box-sizing:border-box;">
         <input type="checkbox" id="f-hide-not-done" onchange="onFilterChange(); this.parentElement.classList.toggle('is-on', this.checked);" style="margin:0; accent-color: var(--indigo);">
@@ -1474,7 +1495,7 @@ async function _faSearch(faKey) {
 
 // ── URL state ───────────────────────────────────────────────
 // alpha.38: aggiunti `time-from` / `time-to` (filtro client-side fascia oraria).
-const FILTER_KEYS = ['q','dept','client','project','job','jcl','resource','status','kind','from','to','time-from','time-to','hide-not-done'];
+const FILTER_KEYS = ['q','dept','client','project','job','jcl','resource','status','kind','from','to','time-from','time-to','hide-not-done','dlv-status','dlv-qcsub'];
 function readFiltersFromURL() {
   const p = new URLSearchParams(location.search);
   FILTER_KEYS.forEach(k => {
@@ -1516,7 +1537,11 @@ function getFilterParams() {
   const p = {};
   // time-from/time-to NON vanno nel QS backend (filtro è client-side); gli
   // altri sì.
-  const map = {q:'q', dept:'department_id', client:'client_id', project:'project_id', job:'job_id', jcl:'job_cost_line_id', resource:'resource_id', status:'status', kind:'kind', from:'from_date', to:'to_date'};
+  // v3.5.0-alpha.172.93 (Bundle K1) — `status` ora è BookingState (era JobStatus),
+  // applicato client-side sui booking. NON viene passato come QS al backend
+  // (i.e. `/planning/api/jobs` accetta JobStatus, incompatibile). Stesso per
+  // `dlv-status` / `dlv-qcsub` che sono filtri Deliverable HUB.
+  const map = {q:'q', dept:'department_id', client:'client_id', project:'project_id', job:'job_id', jcl:'job_cost_line_id', resource:'resource_id', kind:'kind', from:'from_date', to:'to_date'};
   for (const [k, key] of Object.entries(map)) {
     const el = document.getElementById('f-'+k);
     if (!el) continue;
@@ -1562,6 +1587,22 @@ function filterBookingsHideNotDone(bookings) {
   });
 }
 
+// v3.5.0-alpha.172.93 (Bundle K1) — filtro client-side "Stato booking"
+// (BookingState canonico α.66.5). Applica `f-status` ai booking. Skip su
+// vista deliverables (filtro non applicabile, già nascosto da visibility).
+function filterBookingsByState(bookings) {
+  const sel = document.getElementById('f-status');
+  const v = sel && sel.value ? sel.value : '';
+  if (!v || !bookings || !bookings.length) return bookings;
+  return bookings.filter(b => {
+    const st = (b && b.extendedProps && b.extendedProps.state)
+            || (b && b.state)
+            || (b && b.extendedProps && b.extendedProps.status)
+            || (b && b.status) || '';
+    return st === v;
+  });
+}
+
 // Filtra una lista di booking lasciando solo quelli con almeno un assignment
 // che interseca la fascia oraria [fromMin, toMin] (in minuti dal midnight).
 function filterBookingsByTimeRange(bookings, range) {
@@ -1600,6 +1641,8 @@ function setView(view) {
   document.querySelectorAll('.pl-view').forEach(v => {
     v.classList.toggle('active', v.id === 'view-' + view);
   });
+  // v3.5.0-alpha.172.93 (Bundle K1) — filtri visibility per view
+  applyFilterVisibilityForView(view);
   writeFiltersToURL(view);
   // v3.5.0-alpha.84 — Auto-collapse sidebar filtri sulle viste visuali
   // (calendar/timeline) per dare spazio massimo al rendering. Resta aperto
@@ -1625,11 +1668,37 @@ if (pvSel) pvSel.addEventListener('change', () => {
   if (document.querySelector('.pl-tab.active')?.dataset.view === 'project') renderProjectView();
 });
 
+// v3.5.0-alpha.172.93 (Bundle K1) — Mostra/nasconde filtri sidebar in base
+// alla view attiva. Elementi con `data-pl-views="planning"` sono visibili in
+// tutte le viste TRANNE 'deliverables'. Elementi con `data-pl-views="deliverables"`
+// solo in deliverables. Le label con `data-pl-label` cambiano testo in base
+// alla view (es. "Da/A" → "Target da/a" su deliverables).
+function applyFilterVisibilityForView(view) {
+  const isDelv = (view === 'deliverables');
+  document.querySelectorAll('[data-pl-views="planning"]').forEach(el => {
+    el.style.display = isDelv ? 'none' : '';
+  });
+  document.querySelectorAll('[data-pl-views="deliverables"]').forEach(el => {
+    el.style.display = isDelv ? '' : 'none';
+  });
+  document.querySelectorAll('[data-pl-label]').forEach(el => {
+    el.textContent = isDelv
+      ? (el.dataset.plLabelDeliverables || el.dataset.plLabelDefault || el.textContent)
+      : (el.dataset.plLabelDefault || el.textContent);
+  });
+}
+
 function renderActiveFiltersBar() {
+  const isDelv = document.querySelector('.pl-tab.active')?.dataset.view === 'deliverables';
   const labels = {
     q: 'Cerca', dept: 'Reparto', client: 'Cliente', project: 'Progetto',
-    job: 'Job', jcl: 'Lavorazione', resource: 'Risorsa', status: 'Stato', kind: 'Tipo',
-    from: 'Dal', to: 'Al',
+    job: 'Job', jcl: 'Lavorazione', resource: 'Risorsa',
+    status: isDelv ? null : 'Stato booking',
+    kind: isDelv ? null : 'Tipo',
+    'dlv-status': isDelv ? 'Stato delv' : null,
+    'dlv-qcsub': isDelv ? 'QC sub' : null,
+    from: isDelv ? 'Target da' : 'Dal',
+    to: isDelv ? 'Target a' : 'Al',
   };
   const chips = [];
   // v3.5.0-alpha.56: chip "Nascondi non fatte" se attivo
@@ -1638,6 +1707,7 @@ function renderActiveFiltersBar() {
     chips.push('<span class="chip">Nascondi non fatte</span>');
   }
   for (const k of Object.keys(labels)) {
+    if (!labels[k]) continue;
     const el = document.getElementById('f-'+k);
     if (!el || !el.value) continue;
     if (FA_CONFIG[k]) {
@@ -1730,9 +1800,46 @@ async function renderDeliverableHub() {
   const host = document.getElementById('dh-host');
   const counter = document.getElementById('dh-counter');
   _dhMakeEmpty(host, 'Caricamento…');
+  // v3.5.0-alpha.172.93 (Bundle K1) — filtri server-side via querystring
+  const params = new URLSearchParams();
+  const fStatus = document.getElementById('f-dlv-status')?.value || '';
+  const fQc = document.getElementById('f-dlv-qcsub')?.value || '';
+  const fProject = document.getElementById('f-project')?.value || '';
+  const fJob = document.getElementById('f-job')?.value || '';
+  if (fStatus) params.set('status', fStatus);
+  if (fQc) params.set('qc_substatus', fQc);
+  // multi-id CSV → invio solo PRIMO id (endpoint accetta singolo). Per multi
+  // facciamo fallback a filtro client-side sotto.
+  const firstId = (csv) => {
+    const ids = (csv || '').split(',').map(s => s.trim()).filter(Boolean);
+    return ids.length === 1 ? ids[0] : '';
+  };
+  if (firstId(fProject)) params.set('project_id', firstId(fProject));
+  if (firstId(fJob)) params.set('job_id', firstId(fJob));
+  const qs = params.toString();
   try {
-    const data = await api('GET', '/jobs/api/deliverables/list');
-    _dhItems = data.items || [];
+    const data = await api('GET', '/jobs/api/deliverables/list' + (qs ? '?' + qs : ''));
+    let items = data.items || [];
+    // Filtri client-side per multi-id (progetto/job/risorsa), date range,
+    // ricerca testo. Resource filtra su primary_resource_id.
+    const projIds = (fProject || '').split(',').map(s => Number(s.trim())).filter(Boolean);
+    const jobIds = (fJob || '').split(',').map(s => Number(s.trim())).filter(Boolean);
+    const resIds = ((document.getElementById('f-resource')?.value) || '').split(',').map(s => Number(s.trim())).filter(Boolean);
+    const fromD = document.getElementById('f-from')?.value || '';
+    const toD = document.getElementById('f-to')?.value || '';
+    const qText = ((document.getElementById('f-q')?.value) || '').trim().toLowerCase();
+    if (projIds.length > 1) items = items.filter(d => projIds.includes(d.project_id));
+    if (jobIds.length > 1) items = items.filter(d => jobIds.includes(d.job_id));
+    if (resIds.length) items = items.filter(d => d.primary_resource_id && resIds.includes(d.primary_resource_id));
+    if (fromD) items = items.filter(d => !d.target_delivery_date || d.target_delivery_date >= fromD);
+    if (toD) items = items.filter(d => !d.target_delivery_date || d.target_delivery_date <= toD);
+    if (qText) items = items.filter(d => (
+      (d.name || '').toLowerCase().includes(qText)
+      || (d.job_code || '').toLowerCase().includes(qText)
+      || (d.project_code || '').toLowerCase().includes(qText)
+      || (d.project_title || '').toLowerCase().includes(qText)
+    ));
+    _dhItems = items;
     counter.textContent = `${_dhItems.length} deliverable`;
   } catch (e) {
     _dhMakeEmpty(host, 'Errore: ' + (e.message || ''), 'var(--rose)');
@@ -2821,6 +2928,7 @@ async function renderStoryboard() {
   }
   // v3.5.0-alpha.56: filtro client-side "nascondi non fatte"
   bookings = filterBookingsHideNotDone(bookings);
+  bookings = filterBookingsByState(bookings);
 
   // Group per giorno (chiave YYYY-MM-DD locale)
   const days = [];
@@ -3020,6 +3128,7 @@ async function renderAgenda() {
   ]);
   // v3.5.0-alpha.56: filtro client-side "nascondi non fatte"
   bookings = filterBookingsHideNotDone(bookings);
+  bookings = filterBookingsByState(bookings);
   const all = [...bookings, ...punches].filter(e => e.start);
   all.sort((a,b) => new Date(a.start) - new Date(b.start));
   const host = document.getElementById('ag-host');
@@ -5738,6 +5847,7 @@ async function _doRenderTimeline(preserveWindow=false) {
   bookings = filterBookingsByTimeRange(bookings, getTimeRangeFilter());
   // v3.5.0-alpha.56: filtro client-side "nascondi non fatte"
   bookings = filterBookingsHideNotDone(bookings);
+  bookings = filterBookingsByState(bookings);
   window._tlBookings = bookings; // espongo per tlbOpenEdit (multi-row precarica)
   let items = bookings.map(tlBookingToItem).filter(i => i.group);
   // v3.5.0-alpha.21: vista "Per progetto" → re-mappa group da resource_id a 'j'+job_id

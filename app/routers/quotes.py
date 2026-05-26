@@ -9,7 +9,7 @@ from app.models import (
     Quote, QuoteLine, Job, JobStatus, QuoteStatus,
     PriceItem, PriceCategory, PriceLevel, Project, Client,
     Booking, BookingStatus, JobCostLine, TimePunch,
-    DeliveryTemplate, JobDeliverable,
+    DeliveryTemplate, JobDeliverable, DeliverableNature,
 )
 from app.services.rbac import requires_permission
 from app.services.billing_slice_guard import assert_jcl_lock_safe
@@ -28,6 +28,35 @@ RequireEditQuotes = Depends(requires_permission("edit_quotes"))
 # → 1. In Fase 7 sostituire con `Depends(get_tenant_id)` su ogni endpoint.
 
 CATEGORY_FALLBACK = "Altro"
+
+# v3.5.0-alpha.172.93 (Bundle K2) — Auto-classify DeliverableNature da PriceItem.
+# Match su name/keywords case-insensitive. Se hit → nature=physical.
+# Cover LTO, HDD, CRU, Blu-Ray/Bluray, DVD, tape/nastro, USB drive, shuttle.
+_PHYSICAL_KEYWORDS = (
+    "lto", "hdd", "cru", "tape", "nastro", "nastri",
+    "blu-ray", "bluray", "blu ray", "dvd",
+    "shuttle", "usb drive", "harddisk", "hard disk", "hard-disk",
+    "drive consegna", "disco rigido", "supporto fisico",
+)
+
+
+def _infer_deliverable_nature(price_item: Optional[PriceItem]) -> DeliverableNature:
+    """Inferisce digital vs physical da nome + keywords del PriceItem.
+    Default = digital. Match case-insensitive su substring.
+    """
+    if not price_item:
+        return DeliverableNature.digital
+    haystack_parts = [(price_item.name or ""), (price_item.description or "")]
+    kw = price_item.keywords
+    if isinstance(kw, list):
+        haystack_parts.extend(str(x) for x in kw)
+    elif isinstance(kw, str):
+        haystack_parts.append(kw)
+    hay = " ".join(haystack_parts).lower()
+    for needle in _PHYSICAL_KEYWORDS:
+        if needle in hay:
+            return DeliverableNature.physical
+    return DeliverableNature.digital
 
 
 def _next_job_code(db: Session, project: Project) -> str:
@@ -152,6 +181,9 @@ def _create_job_from_quote(db: Session, q: Quote, user_id: Optional[int] = None)
                 # Volume/forfait: 1 row aggregato (TB cumulativo o lump sum).
                 n_rows = 1
                 per_row_qty = qty_total if qty_total > 0 else 1.0
+            # v3.5.0-alpha.172.93 (Bundle K2) — auto-classify digital/physical
+            pi = db.query(PriceItem).filter(PriceItem.id == line.price_item_id).first() if line.price_item_id else None
+            phys_nature = _infer_deliverable_nature(pi)
             for idx in range(n_rows):
                 db.add(JobDeliverable(
                     tenant_id=q.tenant_id,
@@ -160,6 +192,7 @@ def _create_job_from_quote(db: Session, q: Quote, user_id: Optional[int] = None)
                     quote_line_id=line.id,
                     price_item_id=line.price_item_id,
                     name=line.description,
+                    nature=phys_nature,
                     unit=line.unit,
                     unit_price=up,
                     unit_nature=nature,
@@ -3263,6 +3296,9 @@ async def migrate_job(
                     else:
                         n_rows = 1
                         per_row_qty = qty_total if qty_total > 0 else 1.0
+                    # v3.5.0-alpha.172.93 (Bundle K2) — auto-classify digital/physical
+                    pi_rebind = db.query(PriceItem).filter(PriceItem.id == nl.price_item_id).first() if nl.price_item_id else None
+                    phys_nature = _infer_deliverable_nature(pi_rebind)
                     for _idx in range(n_rows):
                         db.add(_JD(
                             tenant_id=new_q.tenant_id,
@@ -3270,6 +3306,7 @@ async def migrate_job(
                             quote_line_id=nl.id,
                             price_item_id=nl.price_item_id,
                             name=nl.description,
+                            nature=phys_nature,
                             unit=nl.unit,
                             unit_price=up,
                             unit_nature=nature,

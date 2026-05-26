@@ -1,5 +1,40 @@
 # MediaFlow — Changelog
 
+## v3.5.0-alpha.172.93 — Bundle K1+K2+K3: filtri planning unificati + LTO physical auto + CR ore/€ + drill lavorazione (26 mag 2026)
+
+Sessione test 26 mag. Hotfix endpoint `/jobs/api/deliverables/list` 500 (typo `j.name` su Job che ha `title`) + 3 bundle K richiesti da Matteo durante test plan.
+
+**Hotfix critico**:
+- `app/routers/jobs.py:600,637` — `j.name` → `j.title`, payload `job_name` → `job_title`. Endpoint Planning HUB Deliverable era 500 dal commit Bundle J α.172.90.
+- `app/routers/dam.py:309` — stesso bug duplicato `job.name` → `job.title`. Frontend già si aspettava `job_title` (3 punti in planning.html).
+
+**Bundle K1 — Filtri Planning unificati per Deliverable view**:
+- Sidebar filtri planning ora switcha dinamicamente in base alla tab attiva (planning vs deliverables) invece di confonderle.
+- Attributo `data-pl-views="planning"` su filtri booking-only (Tipo booking, Orario, Lavorazione JCL, "Nascondi non fatte", divider): visibili in jobs/calendar/agenda/timeline/storyboard/project, nascosti in deliverables.
+- Attributo `data-pl-views="deliverables"` su 2 nuovi filtri (Stato deliverable 5 valori, QC sub-status 4): visibili solo in deliverables view.
+- Label "Da/A" cambia dinamicamente in "Target da/a" in deliverables view (`data-pl-label-deliverables`).
+- "Stato job" rinominato → "Stato booking" con opzioni BookingState canonico (tentative/confirmed/in_progress/done/not_done). Applicato client-side via nuovo helper `filterBookingsByState()` in timeline/calendar/agenda. NON passato come QS al backend `/planning/api/jobs` (incompatibile con JobStatus).
+- `renderDeliverableHub()` ora legge filtri attivi (status, qc_substatus, project_id, job_id via QS server-side; resource/date/search client-side) e passa al backend `/jobs/api/deliverables/list?status=...&qc_substatus=...&project_id=...&job_id=...`.
+- `renderActiveFiltersBar()` adatta etichette chip in base alla view (Stato delv / QC sub solo in deliverables).
+- Funzione nuova `applyFilterVisibilityForView(view)` hooked in `setView()`.
+
+**Bundle K2 — Auto-classify DeliverableNature.physical per LTO/HDD/CRU**:
+- `app/routers/quotes.py`: helper `_infer_deliverable_nature(price_item)` con pattern keywords (lto/hdd/cru/tape/nastro/blu-ray/dvd/shuttle/usb-drive/harddisk/drive-consegna/disco-rigido/supporto-fisico). Match case-insensitive su PriceItem.name + description + keywords.
+- Spawn quote→job (`_convert_quote_to_job`): `JobDeliverable` ora viene creato con `nature=_infer_deliverable_nature(price_item)` invece di default digital.
+- Spawn rebind quote (linea 3299): stesso fix applicato.
+- Auto-backfill al boot (`app/main.py:_auto_reclassify_physical_deliverables`): UPDATE deliverable digital→physical per price_items che matchano. Idempotente (skip già physical), log `[auto-reclassify-bundle-k2] Nx deliverable digital -> physical`. Test: 2 row riclassificate al primo boot, 3 price_items matchati nel seed demo.
+- Endpoint POST create_deliverable resta utente-driven (utente sceglie nature in UI Form).
+
+**Bundle K3 — Cost Report switch tabella €/ore + drill risorsa→lavorazione**:
+- UI: switch `[€ | h]` a fianco bottone "▼ Filtri" nella card "🔧 Lavorazioni". Persistenza in localStorage `cr_cl_mode`. Sync state al boot.
+- Mode `eur` (default): tabella originale (Quotato/Fatturato/Maturato post/Stim. futuro/Over-Under/Costo/Margine/Fatt.).
+- Mode `hours`: thead sostituito (`_clSyncThead()`), renderer `_renderCostLinesHours()` mostra colonne Voce | Unità | Quotate (h) | Maturate (h) | Over/Under (h). Righe time-based (unit hr/day, day×8) popolate; altre unità "—". 6 td placeholder per allineamento colonne € originali (transparent).
+- Helper `_clHoursFor(line)` estrae `{quoted, actual, over_under}` da `quantity_quoted/actual × factor unit`.
+- Drill risorsa: click su risorsa in "⏱ Ore booking per fascia" ora apre dettaglio **lavorazioni** (JCL) invece di job. Endpoint nuovo backend `GET /cost-report/api/resource/{id}/cost-lines?project_id=` con aggregation per `(job_id, cost_line_id)` invece di solo job_id. Restituisce breakdown ore (regular/OT/notturno/festivo), weighted, sell/internal cost per lavorazione.
+- Frontend `openResourceJobs()`: header tabella "Lavorazione | Job | Stato | Periodo | …", click su riga chiama `openLineDetailHere(cost_line_id)` se stesso job corrente, altrimenti fallback `loadReport(job_id)`. Etichetta modal "lavorazioni svolte" invece di "job lavorati". Booking senza cost_line raggruppati come "(senza lavorazione)".
+
+**Cantiere aperto (Bundle L, da brainstorm)**: tech specs Asset↔Deliverable↔QC unified (capitolato Netflix come riferimento, lingua/versione/sottotitoli/textless, ingest excel `FbF_QC-Report_Template.xlsx` come schema canonico). Snodo critico tra pianificazione e asset management.
+
 ## v3.5.0-alpha.172.92 — Bundle H3: Asset Library metadata ffprobe + delivery linked status (25 mag 2026 notte)
 
 Pannello "Dettaglio asset" in `/dam` ora mostra (read-only) le specifiche tecniche estratte dal file via `ffprobe` + il contesto delivery (deliverable linkati con status main + qc_substatus). Asset.status badge visibile (planned/uploaded/rejected/accepted). Link a `/planning → 📦 Deliverable` per editing (Bundle J HUB).
