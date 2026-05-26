@@ -34,3 +34,6 @@ q3.xlsx
 # graphify knowledge graph (α.172.29) — rigenerabile localmente con `graphify .`
 graphify-out/
 .graphify-cache/
+
+# superpowers brainstorm visual companion (mockup HTML + state)
+.superpowers/
