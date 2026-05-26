@@ -3018,6 +3018,19 @@ class JobDeliverable(Base):
         ForeignKey("users.id"), nullable=True
     )
 
+    # ── v3.5.0-alpha.172.94 Bundle L Stack 1 — Link a DeliveryVariant ──
+    # variant_id FK opzionale: quando set, spec_json del deliverable rappresenta
+    # SOLO i campi override (parziale). Resolver applica merge:
+    #   merged = {**variant.spec_json, **deliverable.spec_json}
+    # Snapshot fields copiati da DeliveryVariant al spawn per query veloce
+    # (evita JOIN su cost-report / planning filter).
+    variant_id: Mapped[Optional[int]] = mapped_column(
+        ForeignKey("delivery_variants.id"), nullable=True, index=True
+    )
+    variant_language: Mapped[Optional[str]] = mapped_column(String(10), nullable=True)
+    variant_territory: Mapped[Optional[str]] = mapped_column(String(10), nullable=True)
+    variant_format: Mapped[Optional[str]] = mapped_column(String(20), nullable=True)
+
     # v3.5.0-alpha.172.13 — relationship esplicita per filtri CR (department/category)
     price_item: Mapped[Optional["PriceItem"]] = relationship(foreign_keys=[price_item_id])
 

@@ -62,3 +62,33 @@ def test_delivery_variant_unique_code_per_tenant(db, tenant_id):
     db.add(DeliveryVariant(tenant_id=tenant_id, code="dup", name="B", schema_version_id=sv.id, spec_json={}))
     with pytest.raises(IntegrityError):
         db.commit()
+
+
+def test_jobdeliverable_variant_link(db, tenant_id):
+    from app.models import (
+        Tenant, Client, Project, Job, JobDeliverable,
+        DeliveryVariant, VariantSchemaVersion, DeliveryVariantCategory,
+    )
+    db.add(Tenant(id=tenant_id, name="t", slug="t"))
+    db.add(Client(id=1, tenant_id=tenant_id, name="C"))
+    db.add(Project(id=1, tenant_id=tenant_id, code="P1", title="P", client_id=1))
+    db.add(Job(id=1, tenant_id=tenant_id, code="J1", title="J", project_id=1, client_id=1))
+    sv = VariantSchemaVersion(version="v1", schema_json={})
+    db.add(sv); db.commit(); db.refresh(sv)
+    v = DeliveryVariant(
+        tenant_id=tenant_id, code="x", name="X",
+        category=DeliveryVariantCategory.t1_technical,
+        schema_version_id=sv.id, spec_json={},
+        language="it", territory="WW", delivery_format="IMF",
+    )
+    db.add(v); db.commit(); db.refresh(v)
+
+    d = JobDeliverable(
+        tenant_id=tenant_id, job_id=1, name="DLV-1",
+        variant_id=v.id,
+        variant_language="it", variant_territory="WW", variant_format="IMF",
+    )
+    db.add(d); db.commit(); db.refresh(d)
+    assert d.variant_id == v.id
+    assert d.variant_language == "it"
+    assert d.variant_format == "IMF"
