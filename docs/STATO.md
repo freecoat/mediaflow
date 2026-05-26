@@ -8,6 +8,34 @@
 
 ## Versione corrente
 
+**v3.5.0-alpha.172.93** + Bundle L Stack 1 IN-PROGRESS (Task 0-3 done) — 26 maggio 2026 sera
+
+### Bundle L Stack 1 — punto di ripresa
+
+Sessione 26 mag chiusa al volo. Esecuzione Stack 1 (Subagent-Driven, 17 task) avviata. **3/17 task completati locali, 5 commit non pushati**:
+
+- ✅ Task 0 — pytest scaffold + jsonschema dep (commit `8d3a81f`)
+- ✅ Task 1 — VariantSchemaVersion model (commit `b2ec37c` + fix `afc8c1a`)
+- ✅ Task 2 — DeliveryVariant model + DeliveryVariantCategory enum (commit `45f3160` + fix `391650a`)
+- ✅ Task 3 — JobDeliverable.variant_id + 3 snapshot fields (commit `a1525f5`)
+- ⏳ Task 4 — Asset.tech_specs columns (NEXT, plan §Task 4 — insertion point già localizzato: Asset class ends at models.py line ~2658, prossima `class AssetMovementType` a 2659)
+- ⏳ Task 5-17 — pending
+
+**Riprendere**: leggere `docs/superpowers/plans/2026-05-26-bundle-l-stack1-foundation.md` Task 4 → 17. Pattern dispatch identico ai task fatti (implementer + spec review + code quality review). Esecuzione su `main` (consenso Matteo già dato).
+
+**Branch corrente**: `main`. **Commits da pushare**: 5 (Bundle L) + 1 (Bundle K1+K2+K3 α.172.93, già pushato? verificare con `git log origin/main..main`).
+
+**App in esecuzione**: localhost:8000, versione corrente `3.5.0-alpha.172.93` (Bundle K). Tunnel app: `https://festivals-bringing-truck-pendant.trycloudflare.com` (potenzialmente scaduto se cloudflared killato).
+
+**Brainstorm + design Bundle L completato in questa sessione**:
+- Design spec: `docs/superpowers/specs/2026-05-26-bundle-l-tech-specs-unified-design.md` (commit `e895eb2`)
+- Implementation plan: `docs/superpowers/plans/2026-05-26-bundle-l-stack1-foundation.md` (commit `cd5b1c7`)
+- Decisioni Q1-Q9 brainstorm: capitolato-first / 17 corpus batch AI / catalog DeliveryVariant / JSON Schema versionato / QC event-sourced / extractor service / capability primo stack B+E+F / classificazione T1/T2/T3 / roadmap 5 stack
+
+**Sessione attuale chiusa**. Riapertura: continuare Task 4 con Subagent-Driven Development skill.
+
+---
+
 **v3.5.0-alpha.172.93** — 26 maggio 2026 — Bundle K1+K2+K3 (test plan giro 1) + hotfix critico Bundle J 500
 
 Sessione test 26 mag. Aperta con bug 500 su `/jobs/api/deliverables/list` (typo `j.name` su `Job.title`) → hotfix immediato. Poi 3 richieste UX di Matteo durante test:
