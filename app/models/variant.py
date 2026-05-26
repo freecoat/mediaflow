@@ -57,7 +57,7 @@ class DeliveryVariant(Base):
     source_capitolato: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
     source_section: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
     suggested_price_item_id: Mapped[Optional[int]] = mapped_column(
-        ForeignKey("price_items.id"), nullable=True
+        ForeignKey("price_items.id"), nullable=True, index=True
     )
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, server_default="1")
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
