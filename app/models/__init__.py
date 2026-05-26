@@ -1,4 +1,5 @@
 from app.models.variant import VariantSchemaVersion
+from app.models.variant import DeliveryVariant, DeliveryVariantCategory
 from app.models.models import (
     User, UserRole, Role,
     Tenant,
