@@ -1363,6 +1363,65 @@ def _seed_variant_schema_v1():
         db.close()
 
 
+def _auto_backfill_jd_variant_match():
+    """v3.5.0-alpha.172.96 (Bundle L Stack 1) — Best-effort backfill:
+    per ogni JobDeliverable con variant_id NULL, prova matching via keyword
+    su `name` vs DeliveryVariant.name del catalog tenant. Idempotente.
+
+    Strategy LITE (no AI): tokenize entrambi, score Jaccard. Soglia 0.6
+    minima per assegnare. Variant migliore vince. Stack 4 introdurrà
+    suggest_variants_for_job capability AI per i casi rimasti NULL.
+    """
+    from app.database import SessionLocal
+    from app.models.models import JobDeliverable
+    from app.models.variant import DeliveryVariant
+
+    def _tokens(s: str) -> set[str]:
+        import re as _re
+        return {t for t in _re.split(r"[^a-z0-9]+", (s or "").lower()) if t and len(t) >= 3}
+
+    db = SessionLocal()
+    try:
+        candidates = db.query(JobDeliverable).filter(JobDeliverable.variant_id.is_(None)).all()
+        if not candidates:
+            return
+        variants = db.query(DeliveryVariant).filter(DeliveryVariant.is_active == True).all()  # noqa: E712
+        if not variants:
+            return
+        var_tokens = [(v, _tokens(v.name)) for v in variants]
+        matched = 0
+        for d in candidates:
+            d_t = _tokens(d.name)
+            if not d_t:
+                continue
+            best_score = 0.0
+            best_v = None
+            for v, vt in var_tokens:
+                if v.tenant_id != d.tenant_id:
+                    continue
+                union = d_t | vt
+                inter = d_t & vt
+                if not union:
+                    continue
+                score = len(inter) / len(union)
+                if score > best_score:
+                    best_score = score
+                    best_v = v
+            if best_v and best_score >= 0.6:
+                d.variant_id = best_v.id
+                d.variant_language = best_v.language
+                d.variant_territory = best_v.territory
+                d.variant_format = best_v.delivery_format
+                matched += 1
+        if matched:
+            db.commit()
+            print(f"[auto-backfill-bundle-l] {matched} JobDeliverable → variant_id assegnato (Jaccard ≥0.6)")
+    except Exception as e:
+        print(f"[auto-backfill-bundle-l] failed: {e}")
+    finally:
+        db.close()
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     create_tables()
@@ -1396,6 +1455,10 @@ async def lifespan(app: FastAPI):
         _seed_variant_schema_v1()
     except Exception as e:
         print(f"[lifespan] _seed_variant_schema_v1 failed: {e}")
+    try:
+        _auto_backfill_jd_variant_match()
+    except Exception as e:
+        print(f"[lifespan] _auto_backfill_jd_variant_match failed: {e}")
     # v3.5.0-alpha.111 — Backfill JobResourceAssignment da booking storici
     try:
         _backfill_resource_assignments()
