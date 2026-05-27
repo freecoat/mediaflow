@@ -1,5 +1,71 @@
 # MediaFlow — Changelog
 
+## v3.5.0-alpha.172.96 — Bundle L Stack 1 CLOSE: foundation (Task 13-17) (27 mag 2026)
+
+Milestone 3/3 dello Stack 1 → Stack 1 chiuso. Script DB import + router/UI listing `/delivery-variants` + backfill Jaccard JobDeliverable.variant_id + sidebar link. 24 test pytest verdi, 532 routes. Foundation Bundle L completa: i 4 stack successivi (QC event-sourced, ingest/export QC, planning variant-aware UI, AI capability runtime) costruiscono sopra senza schema breaking changes.
+
+**`scripts/import_parsed_variants.py`** — DB import idempotente:
+- Input: directory con `<vendor>.variants.json` (output Task 12).
+- Validation: jsonschema contro VariantSchemaVersion attivo. Variant invalide → skip + log `INVALID code: <error>`.
+- Idempotenza: skip se `(tenant_id, code)` già presente. `--dry-run` per simulazione.
+- `--only t1_technical` per filtrare tier (T2/T3 importati in step successivi).
+- Mappa fields: `category`, `language`, `territory`, `delivery_format` (da `container.format`), `has_textless`, `has_subtitles`, `source_capitolato`, `source_section`, `suggested_price_item_id`.
+
+**Router `app/routers/delivery_variants.py`** — CRUD listing minimal:
+- `GET /delivery-variants/` (HTMLResponse) — pagina listing tenant-wide.
+- `GET /delivery-variants/api/list?category&language&delivery_format` — JSON array filtri server-side.
+- `GET /delivery-variants/api/{id}` — JSON dettaglio singola variant.
+- `POST /delivery-variants/api/create` (form-based) — crea + valida code unique-per-tenant.
+- `POST /delivery-variants/api/{id}/delete` — soft-delete `is_active=False`.
+- RBAC: `requires_permission("edit_quotes")` riusato (no nuovo permission per Stack 1; nuovo `edit_delivery_variants` defer Stack 4).
+- Tenant filter su ogni query via `current_tenant_id()`.
+
+**UI `app/templates/pages/delivery_variants.html`** — listing minimal:
+- Tabella sortable: code / nome / category / format / lingua / territorio / textless / sub / origine + soft-delete azione.
+- Filtro categoria dropdown + search code/name live.
+- Counter "N variant" dinamico.
+- "+ Nuova variant" prompt minimale (form rich + JSON Schema auto-gen defer Stack 4).
+- Empty state con hint script parse_capitolati.py + import_parsed_variants.py.
+
+**Backfill `_auto_backfill_jd_variant_match`** (`app/main.py`):
+- Best-effort match keyword Jaccard score tra `JobDeliverable.name` e `DeliveryVariant.name` tenant-scoped.
+- Soglia 0.6 minima (tokenize lowercase ≥3 char). Variant migliore vince.
+- Snapshot `variant_language/territory/format` al match (preserva intent storico anche se variant cambia).
+- Idempotente: skip deliverable con `variant_id != NULL`.
+- Wirato nel `lifespan` dopo `_seed_variant_schema_v1` (try/except non bloccante).
+- Stack 4 introdurrà `propose_variant_for_deliverable` AI capability per i casi rimasti NULL.
+
+**Sidebar link** (`app/templates/base.html`):
+- "📦 Variants" → `/delivery-variants/` aggiunto come sibling di "Capitolati" nella sezione asset (dopo `delivery-templates/import` sub-item).
+- Icona lucide `package`. `data-i18n="nav.delivery_variants"` per traduzioni future.
+
+**Coverage Stack 1 100%**: 17 task piano completati. Coverage check (spec ↔ task):
+| Spec | Task |
+|------|------|
+| §4.1 VariantSchemaVersion | Task 1 ✓ |
+| §4.2 DeliveryVariant + Category | Task 2 ✓ |
+| §4.3 JobDeliverable extensions | Task 3 ✓ |
+| §4.4 Asset extensions | Task 4 ✓ |
+| §5 JSON Schema v1 + validation | Task 5, 6 ✓ |
+| §6 Tech specs extractor service | Task 7, 8, 9, 10 ✓ |
+| §9 parse_capitolati.py | Task 12 ✓ |
+| §11 Migrations Stack 1 | Task 11 ✓ |
+| §13 Backfill keyword (Open question 4) | Task 16 (Jaccard heuristic, no AI Stack 1) ✓ |
+
+**Non incluso Stack 1 (defer)**:
+- QC event-sourced + QCReport (Stack 2)
+- ingest_qc_excel + export_qc_report (Stack 3)
+- UI planning variant-aware + asset modal sezioni tipizzate (Stack 4)
+- AI capability runtime extract_capitolato_to_variants (Stack 5)
+
+**Tests pytest**: 24 verdi (`tests/test_variant_model.py` 6 + `tests/test_variant_schema.py` 7 + `tests/test_tech_specs_extractor.py` 8 + `tests/test_parse_capitolati.py` 3). Fixture `_clean_registry` autouse + pattern `importlib.reload` per registry isolation.
+
+**Plan**: `docs/superpowers/plans/2026-05-26-bundle-l-stack1-foundation.md` (17 task, 3 milestone, COMPLETO).
+
+**Routes totali**: 532 (+5 da α.172.95).
+
+---
+
 ## v3.5.0-alpha.172.95 — Bundle L Stack 1 (Task 8-12): extractor impl + auto-migrate + capitolati parser (27 mag 2026)
 
 Milestone 2/3 dello Stack 1. Extractor reali (FFProbe + Pillow) registrati nel registry, asset_metadata.py diventa wrapper sottile, auto-migrate al boot popola le colonne Bundle L su DB esistenti, script batch parser per i 17 capitolati corpus con `--dry-run` end-to-end. 21 test pytest verdi.

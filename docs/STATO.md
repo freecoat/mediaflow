@@ -8,31 +8,61 @@
 
 ## Versione corrente
 
-**v3.5.0-alpha.172.93** + Bundle L Stack 1 IN-PROGRESS (Task 0-3 done) — 26 maggio 2026 sera
+**v3.5.0-alpha.172.96** — 27 maggio 2026 — Bundle L Stack 1 CLOSE: foundation completa
 
-### Bundle L Stack 1 — punto di ripresa
+Foundation cantiere strutturale Bundle L (tech specs unified Asset↔Deliverable↔QC). Modelli `VariantSchemaVersion` + `DeliveryVariant` con JSON Schema v1 validato, estensioni `JobDeliverable.variant_id` + `Asset.tech_specs_json`, refactor `asset_metadata.py` in `tech_specs_extractor` service estensibile (plugin registry, ffprobe + pillow), script batch `parse_capitolati.py` (--dry-run su 17 corpus → 200 stub variants), script `import_parsed_variants.py` con JSON Schema validation, router/UI `/delivery-variants` listing minimal, backfill Jaccard JobDeliverable.variant_id, sidebar link "📦 Variants".
 
-Sessione 26 mag chiusa al volo. Esecuzione Stack 1 (Subagent-Driven, 17 task) avviata. **3/17 task completati locali, 5 commit non pushati**:
+**Coverage Stack 1**: 17/17 task (3 milestone α.172.94 + α.172.95 + α.172.96). 24 test pytest verdi. 532 routes (+5 da α.172.93). Auto-migrate idempotente al boot per DB esistenti.
 
-- ✅ Task 0 — pytest scaffold + jsonschema dep (commit `8d3a81f`)
-- ✅ Task 1 — VariantSchemaVersion model (commit `b2ec37c` + fix `afc8c1a`)
-- ✅ Task 2 — DeliveryVariant model + DeliveryVariantCategory enum (commit `45f3160` + fix `391650a`)
-- ✅ Task 3 — JobDeliverable.variant_id + 3 snapshot fields (commit `a1525f5`)
-- ⏳ Task 4 — Asset.tech_specs columns (NEXT, plan §Task 4 — insertion point già localizzato: Asset class ends at models.py line ~2658, prossima `class AssetMovementType` a 2659)
-- ⏳ Task 5-17 — pending
+### Sessione 27 maggio 2026 — riepilogo
 
-**Riprendere**: leggere `docs/superpowers/plans/2026-05-26-bundle-l-stack1-foundation.md` Task 4 → 17. Pattern dispatch identico ai task fatti (implementer + spec review + code quality review). Esecuzione su `main` (consenso Matteo già dato).
+**18 commit** (di cui 17 Bundle L Stack 1 + 1 cleanup ZIP), tutti su `main`, **non pushati**.
 
-**Branch corrente**: `main`. **Commits da pushare**: 5 (Bundle L) + 1 (Bundle K1+K2+K3 α.172.93, già pushato? verificare con `git log origin/main..main`).
+| Step | Commit | Cosa |
+|------|--------|------|
+| pre | 6ae830b | chore cleanup 69 ZIP export legacy |
+| Task 4 | 561d60e | Asset.tech_specs columns |
+| Task 5 | 1a8ef6d | JSON Schema v1 + validation tests |
+| Task 5 fix | 61eea44 | canonical draft-07 metaschema URL |
+| Task 6 | 249b5eb | variant_schema service loader + validator |
+| Task 7 | cf2f4e0 | tech_specs_extractor ABC + registry |
+| Task 7 fix | 933f63b | registry pollution + logger + tool setdefault |
+| α.172.94 | 6b255f5 | Milestone 1/3 bump |
+| Task 8 | 337cef5 | FFProbeExtractor port + auto-load |
+| Task 9 | fb9ab32 | PillowExtractor immagini |
+| Task 10 | 984652b | asset_metadata.py = wrapper legacy |
+| Task 11 | 1a68f69 | auto-migrate + seed schema v1 al boot |
+| Task 12 | f6572f0 | parse_capitolati.py batch + dry-run smoke |
+| α.172.95 | 912e004 | Milestone 2/3 bump |
+| Task 13 | ce0d09a | import_parsed_variants.py con validation |
+| Task 14 | f96e653 | router /delivery-variants CRUD |
+| Task 15 | 809907c | UI delivery_variants.html listing |
+| Task 16 | 184a4b4 | backfill JobDeliverable.variant_id Jaccard |
+| α.172.96 | (TBD) | Milestone 3/3 bump + sidebar + STATO + CHANGELOG |
 
-**App in esecuzione**: localhost:8000, versione corrente `3.5.0-alpha.172.93` (Bundle K). Tunnel app: `https://festivals-bringing-truck-pendant.trycloudflare.com` (potenzialmente scaduto se cloudflared killato).
+### Stato dati DB sviluppo
 
-**Brainstorm + design Bundle L completato in questa sessione**:
-- Design spec: `docs/superpowers/specs/2026-05-26-bundle-l-tech-specs-unified-design.md` (commit `e895eb2`)
-- Implementation plan: `docs/superpowers/plans/2026-05-26-bundle-l-stack1-foundation.md` (commit `cd5b1c7`)
-- Decisioni Q1-Q9 brainstorm: capitolato-first / 17 corpus batch AI / catalog DeliveryVariant / JSON Schema versionato / QC event-sourced / extractor service / capability primo stack B+E+F / classificazione T1/T2/T3 / roadmap 5 stack
+- **DB attuale**: 8 ALTER applicate al boot α.172.95 (`job_deliverables` +4 col, `assets` +4 col, +1 INDEX).
+- **VariantSchemaVersion v1**: seeded da `schemas/variant_v1.json`.
+- **DeliveryVariant**: 1 sola test variant (`test-imf-it` creata in smoke Task 14). 200 stub generate da parse_capitolati.py NON ancora importate (sono in `docs/superpowers/specs/capitolati-parsed/` come JSON, schema reale rifiuterà la maggior parte — gli stub Task 12 hanno solo `code/name/category`, mancano `container.format` ecc).
+- **Backfill match**: 0 JobDeliverable assegnati (test variant non ha keyword overlap con deliverable storici).
 
-**Sessione attuale chiusa**. Riapertura: continuare Task 4 con Subagent-Driven Development skill.
+### Prossima sessione — Stack 2
+
+**Roadmap Bundle L** (vedi design spec):
+- ✅ Stack 1 — Foundation (modelli + extractor + parser)
+- ⏳ **Stack 2 — QC event-sourced** (QCEvent + QCReport tables, append-only history, replay state, integration con esistente qc_cascade Bundle I)
+- Stack 3 — ingest_qc_excel + export_qc_report (parser xlsx FbF + PDF/HTML export)
+- Stack 4 — UI planning variant-aware + asset modal sezioni tipizzate (rich form auto-gen da JSON Schema)
+- Stack 5 — Capability AI runtime `extract_capitolato_to_variants` (production path non-dry-run di parse_capitolati.py)
+
+**Pre-requisiti riapertura Stack 2**:
+- Push origin/main dei 18 commit (confermare con Matteo).
+- Test E2E manuale `/delivery-variants/` su browser (Matteo).
+- Popolare 2 file capitolato 0-byte (Amazon MGM + Netflix `.txt`) se possibile.
+- Considerare OCR fallback per PDF scannerizzati (Beta Film) — defer Stack 5 piu' ragionevole.
+
+**Bug aperti Bundle L Stack 1**: nessuno noto. CR/Planning/DAM/Jobs invariati (back-compat preservata via wrapper asset_metadata.py + opt-in variant_id NULL).
 
 ---
 
