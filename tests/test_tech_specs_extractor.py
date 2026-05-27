@@ -4,11 +4,15 @@ import pytest
 
 @pytest.fixture(autouse=True)
 def _clean_registry():
-    """Snapshot/restore _REGISTRY per evitare pollution cross-test.
+    """Svuota _REGISTRY prima di ogni test e ripristina lo snapshot dopo.
 
-    Necessario perche' Task 8/9 registreranno FFProbe/Pillow al boot
-    su video/* + audio/* + image/*: senza cleanup, i Dummy registrati
-    qui non vincerebbero piu' first-match-wins.
+    Necessario perche' Task 8/9 registrano FFProbe/Pillow al boot
+    su video/*, audio/*, image/*: senza cleanup, i Dummy registrati
+    nei test non vincerebbero piu' first-match-wins.
+
+    Pattern: i test che vogliono extractor "di produzione" devono
+    ricaricare esplicitamente il modulo via `importlib.reload`, che
+    ri-esegue il decorator @register_extractor.
     """
     from app.services.tech_specs_extractor import _REGISTRY
     snapshot = list(_REGISTRY)
@@ -62,3 +66,27 @@ def test_no_extractor_returns_none_struct():
     out = extract_tech_specs("/tmp/unknown.bin", "application/octet-stream")
     assert out["tool"] == "none"
     assert "errors" in out
+
+
+def test_ffprobe_registered_for_video_audio():
+    # Il fixture _clean_registry ha svuotato _REGISTRY: ricarico il modulo
+    # ffprobe_extractor per riattivare il decorator @register_extractor.
+    import importlib
+    from app.services.tech_specs_extractor import ffprobe_extractor
+    importlib.reload(ffprobe_extractor)
+    from app.services.tech_specs_extractor import get_extractor
+
+    assert get_extractor("video/mp4") is not None
+    assert get_extractor("audio/wav") is not None
+    assert get_extractor("video/quicktime") is not None
+
+
+def test_ffprobe_missing_file_returns_error_struct():
+    # Idem: ricarico per registrare ffprobe.
+    import importlib
+    from app.services.tech_specs_extractor import ffprobe_extractor
+    importlib.reload(ffprobe_extractor)
+    from app.services.tech_specs_extractor import extract_tech_specs
+    out = extract_tech_specs("/non/existent/file.mp4", "video/mp4")
+    assert out["tool"] in ("ffprobe", "none")  # ffprobe assente o file mancante
+    assert isinstance(out.get("errors"), list)
