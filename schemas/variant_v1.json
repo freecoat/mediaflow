@@ -1,0 +1,67 @@
+{
+  "$schema": "https://json-schema.org/draft-07/schema",
+  "$id": "claqo/variant/v1",
+  "title": "Claqo DeliveryVariant Schema v1",
+  "type": "object",
+  "required": ["code", "name", "category"],
+  "properties": {
+    "code": {"type": "string", "pattern": "^[a-z0-9-]+$"},
+    "name": {"type": "string", "minLength": 3},
+    "category": {"enum": ["t1_technical", "t2_documentation", "t3_compilation"]},
+    "container": {
+      "type": "object",
+      "properties": {
+        "format": {"enum": ["IMF", "DCP", "ProRes", "MXF", "MOV", "MP4", "TIFF", "DPX", "WAV", "SCC", "TTML", "VTT"]}
+      }
+    },
+    "video": {
+      "type": "object",
+      "properties": {
+        "resolution": {"type": "string"},
+        "codec": {"type": "string"},
+        "framerate": {"type": "number"},
+        "color_space": {"enum": ["BT.709", "BT.2020", "P3-D65", "P3-DCI", "DCI-XYZ"]},
+        "hdr": {"type": "boolean"},
+        "hdr_format": {"enum": [null, "PQ", "HLG", "Dolby Vision", "HDR10+"]},
+        "chroma": {"enum": ["4:2:0", "4:2:2", "4:4:4"]},
+        "bit_depth": {"enum": [8, 10, 12, 16]},
+        "field_order": {"enum": ["progressive", "interlaced_uff", "interlaced_lff"]}
+      }
+    },
+    "audio": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "track": {"type": "string"},
+          "codec": {"enum": ["PCM", "Atmos", "AAC", "AC3", "EAC3", "DTS"]},
+          "channels": {"type": "integer"},
+          "sample_rate": {"enum": [48000, 96000]},
+          "bit_depth": {"enum": [16, 24]},
+          "language": {"type": "string"}
+        }
+      }
+    },
+    "subtitles": {
+      "type": "object",
+      "properties": {
+        "present": {"type": "boolean"},
+        "type": {"enum": [null, "burnt", "sidecar_scc", "sidecar_vtt", "sidecar_ttml", "sdh"]}
+      }
+    },
+    "textless": {
+      "type": "object",
+      "properties": {
+        "tail_present": {"type": "boolean"},
+        "separate_file": {"type": "boolean"}
+      }
+    },
+    "language": {"type": "string"},
+    "territory": {"type": "string"},
+    "naming": {"type": "string"},
+    "head_format": {"type": "object"},
+    "archive": {"type": "object"},
+    "metadata": {"type": "object"}
+  },
+  "additionalProperties": true
+}
