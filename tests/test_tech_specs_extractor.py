@@ -90,3 +90,14 @@ def test_ffprobe_missing_file_returns_error_struct():
     out = extract_tech_specs("/non/existent/file.mp4", "video/mp4")
     assert out["tool"] in ("ffprobe", "none")  # ffprobe assente o file mancante
     assert isinstance(out.get("errors"), list)
+
+
+def test_pillow_registered_for_images():
+    # _clean_registry ha svuotato _REGISTRY: ricarico pillow_extractor
+    # per riattivare il decorator @register_extractor.
+    import importlib
+    from app.services.tech_specs_extractor import pillow_extractor
+    importlib.reload(pillow_extractor)
+    from app.services.tech_specs_extractor import get_extractor
+    assert get_extractor("image/jpeg") is not None
+    assert get_extractor("image/png") is not None

@@ -84,4 +84,5 @@ def extract_tech_specs(path: str, mime: Optional[str] = None) -> dict:
 
 # Auto-load extractors (registry side-effect via @register_extractor decorator)
 from app.services.tech_specs_extractor import ffprobe_extractor as _ffp  # noqa: F401, E402
+from app.services.tech_specs_extractor import pillow_extractor as _pil  # noqa: F401, E402
 
