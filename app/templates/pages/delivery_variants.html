@@ -1,0 +1,124 @@
+{% extends "base.html" %}
+{% block title %}Delivery variants — Claqo{% endblock %}
+{% block content %}
+<div class="container" style="max-width:1200px;margin:0 auto;padding:20px;">
+  <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:20px;">
+    <div>
+      <h1 style="margin:0;">📦 Delivery variants</h1>
+      <p class="text-sm text-muted" style="margin:4px 0 0;">Catalog tenant — riusabili tra progetti. Auto-popolato da parser capitolati (T1 technical priority).</p>
+    </div>
+    <div>
+      <button class="btn btn-primary btn-sm" onclick="openCreateVariant()">+ Nuova variant</button>
+    </div>
+  </div>
+
+  <div style="display:flex;gap:10px;margin-bottom:14px;align-items:center;">
+    <label class="text-sm text-muted">Filtro categoria:</label>
+    <select id="f-cat" class="form-select" style="width:auto;" onchange="renderList()">
+      <option value="">— tutte —</option>
+      <option value="t1_technical">T1 Technical</option>
+      <option value="t2_documentation">T2 Documentation</option>
+      <option value="t3_compilation">T3 Compilation</option>
+    </select>
+    <input type="text" id="f-q" class="form-input" placeholder="Cerca code/name…" style="width:240px;" oninput="renderList()">
+    <span id="counter" class="text-sm text-muted"></span>
+  </div>
+
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th>Code</th><th>Nome</th><th>Category</th><th>Format</th>
+          <th>Lingua</th><th>Territorio</th>
+          <th>Textless</th><th>Sub</th>
+          <th>Origine</th><th data-no-sort="true"></th>
+        </tr>
+      </thead>
+      <tbody id="variants-tbody"></tbody>
+    </table>
+  </div>
+</div>
+
+<script>
+let _all = {{ variants|tojson|safe if variants is defined else '[]' }};
+
+async function loadList() {
+  try {
+    _all = await api('GET', '/delivery-variants/api/list');
+  } catch (e) {
+    toast('Errore caricamento variant: ' + e.message, 'error');
+    _all = [];
+  }
+  renderList();
+}
+
+function renderList() {
+  const cat = document.getElementById('f-cat').value;
+  const q = (document.getElementById('f-q').value || '').trim().toLowerCase();
+  let items = _all || [];
+  if (cat) items = items.filter(v => v.category === cat);
+  if (q) items = items.filter(v => (v.code||'').toLowerCase().includes(q) || (v.name||'').toLowerCase().includes(q));
+  document.getElementById('counter').textContent = `${items.length} variant`;
+  const tbody = document.getElementById('variants-tbody');
+  while (tbody.firstChild) tbody.removeChild(tbody.firstChild);
+  if (!items.length) {
+    const tr = document.createElement('tr');
+    const td = document.createElement('td');
+    td.colSpan = 10;
+    td.className = 'text-muted';
+    td.style.cssText = 'text-align:center;padding:30px;';
+    td.textContent = 'Nessuna variant. Esegui script parse_capitolati.py + import_parsed_variants.py.';
+    tr.appendChild(td); tbody.appendChild(tr);
+    return;
+  }
+  items.forEach(v => {
+    const tr = document.createElement('tr');
+    const cells = [
+      v.code, v.name, v.category, v.delivery_format || '—',
+      v.language || '—', v.territory || '—',
+      v.has_textless ? '✓' : '—', v.has_subtitles ? '✓' : '—',
+      v.source_capitolato || '—',
+    ];
+    cells.forEach((txt, idx) => {
+      const td = document.createElement('td');
+      if (idx === 0) td.className = 'mono text-sm';
+      else td.className = 'text-sm';
+      td.textContent = txt;
+      tr.appendChild(td);
+    });
+    const tdAct = document.createElement('td');
+    const btn = document.createElement('button');
+    btn.className = 'btn btn-ghost btn-sm';
+    btn.textContent = '✕';
+    btn.title = 'Soft-delete';
+    btn.onclick = () => deleteVariant(v.id, v.code);
+    tdAct.appendChild(btn);
+    tr.appendChild(tdAct);
+    tbody.appendChild(tr);
+  });
+}
+
+async function deleteVariant(id, code) {
+  if (!confirm(`Disattiva variant '${code}'?`)) return;
+  try {
+    await api('POST', `/delivery-variants/api/${id}/delete`);
+    toast('Variant disattivata');
+    loadList();
+  } catch(e) { toast(e.message, 'error'); }
+}
+
+function openCreateVariant() {
+  const code = prompt('Code (es. imf-master-hd-it):');
+  if (!code) return;
+  const name = prompt('Nome leggibile:');
+  if (!name) return;
+  const fd = new FormData();
+  fd.set('code', code); fd.set('name', name); fd.set('category', 't1_technical');
+  api('POST', '/delivery-variants/api/create', fd)
+    .then(() => { toast('Variant creata'); loadList(); })
+    .catch(e => toast(e.message, 'error'));
+}
+
+document.addEventListener('DOMContentLoaded', loadList);
+</script>
+{% endblock %}
