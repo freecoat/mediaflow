@@ -1285,6 +1285,84 @@ def _auto_reclassify_physical_deliverables():
         print(f"[auto-reclassify-bundle-k2] failed: {e}")
 
 
+def _auto_migrate_bundle_l_stack1():
+    """v3.5.0-alpha.172.95 (Bundle L Stack 1) — Schema migrations per:
+    - job_deliverables.variant_id + variant_language/territory/format
+    - assets.tech_specs_json + tech_specs_extractor + tech_specs_extracted_at + tech_specs_schema_version
+    - tabelle variant_schema_versions + delivery_variants (via create_tables se non esistono).
+
+    Idempotente: ALTER + CREATE solo se mancanti.
+    """
+    from sqlalchemy import text
+    from app.database import engine
+    try:
+        with engine.begin() as conn:
+            def cols(table):
+                return {r[1] for r in conn.execute(text(f"PRAGMA table_info({table})"))}
+
+            jd_cols = cols("job_deliverables")
+            for col, decl in [
+                ("variant_id", "INTEGER NULL REFERENCES delivery_variants(id)"),
+                ("variant_language", "VARCHAR(10) NULL"),
+                ("variant_territory", "VARCHAR(10) NULL"),
+                ("variant_format", "VARCHAR(20) NULL"),
+            ]:
+                if col not in jd_cols:
+                    print(f"[auto-migrate-bundle-l] job_deliverables.{col} -> ALTER")
+                    conn.execute(text(f"ALTER TABLE job_deliverables ADD COLUMN {col} {decl}"))
+
+            a_cols = cols("assets")
+            for col, decl in [
+                ("tech_specs_json", "TEXT NULL"),  # SQLite JSON stored as TEXT
+                ("tech_specs_extractor", "VARCHAR(40) NULL"),
+                ("tech_specs_extracted_at", "DATETIME NULL"),
+                ("tech_specs_schema_version", "VARCHAR(20) NULL"),
+            ]:
+                if col not in a_cols:
+                    print(f"[auto-migrate-bundle-l] assets.{col} -> ALTER")
+                    conn.execute(text(f"ALTER TABLE assets ADD COLUMN {col} {decl}"))
+
+            conn.execute(text(
+                "CREATE INDEX IF NOT EXISTS ix_jd_variant_id ON job_deliverables(variant_id)"
+            ))
+    except Exception as e:
+        print(f"[auto-migrate-bundle-l] failed: {e}")
+
+
+def _seed_variant_schema_v1():
+    """v3.5.0-alpha.172.95 (Bundle L Stack 1) — Carica schemas/variant_v1.json
+    in VariantSchemaVersion(version='v1', is_active=True) se non esiste.
+    Idempotente.
+    """
+    import json as _json
+    from pathlib import Path
+    from app.database import SessionLocal
+    from app.models.variant import VariantSchemaVersion
+    schema_path = Path(__file__).resolve().parent.parent / "schemas" / "variant_v1.json"
+    if not schema_path.exists():
+        print(f"[seed-variant-schema] schema file mancante: {schema_path}")
+        return
+    db = SessionLocal()
+    try:
+        existing = db.query(VariantSchemaVersion).filter(VariantSchemaVersion.version == "v1").first()
+        if existing:
+            return
+        with schema_path.open("r", encoding="utf-8") as f:
+            schema = _json.load(f)
+        db.add(VariantSchemaVersion(
+            version="v1",
+            schema_json=schema,
+            description="Canonical schema v1 (Bundle L Stack 1)",
+            is_active=True,
+        ))
+        db.commit()
+        print("[seed-variant-schema] v1 caricato da schemas/variant_v1.json")
+    except Exception as e:
+        print(f"[seed-variant-schema] failed: {e}")
+    finally:
+        db.close()
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     create_tables()
@@ -1309,6 +1387,15 @@ async def lifespan(app: FastAPI):
         _auto_reclassify_physical_deliverables()
     except Exception as e:
         print(f"[lifespan] _auto_reclassify_physical_deliverables failed: {e}")
+    # v3.5.0-alpha.172.95 — Bundle L Stack 1: schema migrations + seed
+    try:
+        _auto_migrate_bundle_l_stack1()
+    except Exception as e:
+        print(f"[lifespan] _auto_migrate_bundle_l_stack1 failed: {e}")
+    try:
+        _seed_variant_schema_v1()
+    except Exception as e:
+        print(f"[lifespan] _seed_variant_schema_v1 failed: {e}")
     # v3.5.0-alpha.111 — Backfill JobResourceAssignment da booking storici
     try:
         _backfill_resource_assignments()
