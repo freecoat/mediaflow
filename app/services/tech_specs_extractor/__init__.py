@@ -6,10 +6,13 @@ Plugin registry pattern: nuovi extractor si registrano via decorator
 from __future__ import annotations
 
 import fnmatch
+import logging
 from datetime import datetime
 from typing import Optional, Type
 
 from app.services.tech_specs_extractor.base import TechSpecsExtractor
+
+logger = logging.getLogger(__name__)
 
 
 # Registry: lista di tuple (mime_pattern, priority_index, extractor_class)
@@ -62,6 +65,7 @@ def extract_tech_specs(path: str, mime: Optional[str] = None) -> dict:
     try:
         inst = cls()
         out = inst.extract(path, mime)
+        out.setdefault("tool", cls.name)
         out.setdefault("extracted_at", datetime.utcnow().isoformat() + "Z")
         out.setdefault("errors", [])
         out.setdefault("audio", [])
@@ -69,6 +73,7 @@ def extract_tech_specs(path: str, mime: Optional[str] = None) -> dict:
         out.setdefault("container", None)
         return out
     except Exception as e:
+        logger.exception("extractor %s failed on %s", cls.name, path)
         return {
             "tool": cls.name,
             "extracted_at": datetime.utcnow().isoformat() + "Z",

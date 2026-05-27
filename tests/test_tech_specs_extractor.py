@@ -2,6 +2,21 @@
 import pytest
 
 
+@pytest.fixture(autouse=True)
+def _clean_registry():
+    """Snapshot/restore _REGISTRY per evitare pollution cross-test.
+
+    Necessario perche' Task 8/9 registreranno FFProbe/Pillow al boot
+    su video/* + audio/* + image/*: senza cleanup, i Dummy registrati
+    qui non vincerebbero piu' first-match-wins.
+    """
+    from app.services.tech_specs_extractor import _REGISTRY
+    snapshot = list(_REGISTRY)
+    _REGISTRY.clear()
+    yield
+    _REGISTRY[:] = snapshot
+
+
 def test_extractor_abc_required_method():
     from app.services.tech_specs_extractor.base import TechSpecsExtractor
 
