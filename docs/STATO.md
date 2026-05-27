@@ -8,6 +8,75 @@
 
 ## Versione corrente
 
+**v3.5.0-alpha.172.97** — 27 maggio 2026 sera — Folder-view quote + 5 fix sessione 27 mag
+
+Cantiere folder-view chiuso. Lista `/quotes/` ora raggruppa per `base_code` con stacked status cards, accordion expand/collapse, filtri stato preservati. Tutte le quote nuove nascono con suffix `-v1`. 4 fix tecnici verificati end-to-end inclusi nel bundle.
+
+### Sessione 27 maggio sera — riepilogo
+
+**Cantiere folder-view `/quotes/`**:
+- backend: helpers `with_v1_suffix` + `split_version_suffix` in `app/services/numbering.py`. Auto-backfill `-v1` al boot via `_auto_backfill_quote_v1_suffix` (lifespan, idempotente, silent no-op se DB già pulito). List endpoint ritorna `base_code` + `version_number` aggiuntivi.
+- frontend: `renderQuotesList` riscritto. Folder header indaco con chevron + stacked status cards. Single-version → render piatto come prima. Multi-version → accordion (stato persistente in `localStorage`). Filtri stato a livello version, folder visibile se ≥1 matcha. Auto-expand quando filter nasconde righe + nota "X versioni nascoste".
+- preview numbering: `/settings/api/numbering/quote/preview` ora ritorna `Q-2026-NNN-v1` per allineamento UI ↔ server.
+
+**Fix tecnici già verificati API (sessione pomeriggio + sera):**
+1. `_booking_billable_hours` smart_split → sum-per-resource (CR Dailies 144h→288h)
+2. `next_progressive_code` max scan (collision Q-vN)
+3. Bin-prefix Quote.number cestino + restore collision
+4. Lista versioni inline in card "Stato & azioni"
+
+**Guard versioning** (fix bug emerso durante test sessione 27 mag):
+- Backend `PUT /quotes/api/{id}/status`: 409 HARD-BLOCK se quote ha parent approved+Job → forza l'uso di migrate-job.
+- UI editor: bottone "Approvata" disabilitato + "Approva + crea Job" nascosto quando parent ha Job. Hint giallo "Usa Migra Job" sotto.
+- Bug reale incontrato: approva diretta v2 → Job 3 duplicato (111 deliverable spawn-per-unit). DB attuale ha 2 Job su Q-2026-005 — pulizia rimandata a decisione Matteo.
+
+**Fix UI minori sessione sera tardi (richiesta Matteo):**
+- z-index `.topbar` 50→100 → popover theme/lang sopra `.al-side` listino flottante.
+- Nuovo font scale switcher in topbar (🔍): 6 step 100→150%, `body { zoom }`, persistenza localStorage.mf_font_scale.
+
+**Stato DB anomalia da risolvere** (Job duplicato Filmone):
+- Q-2026-005-v1 (id=2) approved → Job 2 (Filmone-J005), ATTIVO (1 booking + 12 deliverable).
+- Q-2026-005-v2 (id=9) approved → Job 3 (Filmone-J006), INATTIVO (0 booking, 111 deliverable spawn-per-unit, 0 timbrature).
+- Opzione futura: eliminare Job 3 + JCL/JD cascade + downgrade v2 a draft → poi migrate-job pulito. Defer a richiesta esplicita.
+
+### Smoke test post-commit eseguiti
+
+- `/health` → 200 v3.5.0-alpha.172.97
+- `/quotes/api?include_superseded=true` → 5 record, tutti con `base_code` + `version_number` popolati
+- `/settings/api/numbering/quote/preview` → `Q-2026-008-v1` ✓
+- `/quotes/api/1/duplicate` → 200 `{number: "Q-2026-007-v1"}` ✓
+- `/quotes/api/1/new-version` → 200 `{number: "Q-2026-004-v3", version: 3}` ✓
+- Auto-backfill `-v1` standalone run: 0 rinominate (DB già pulito da sessione precedente). Idempotente confermato.
+
+### Test pendenti browser Matteo
+
+1. Apri `/quotes/` (refresh forzato Ctrl+Shift+R per cache-buster) → verifica:
+   - folder `Q-2026-004` (3 vers) collapsed con stacked cards `[Approvata][Bozza]`
+   - folder `Q-2026-005` single row `[Approvata]`
+   - folder `Q-2026-007` single row `[Bozza]` (creata da smoke duplicate)
+2. Click chevron / badge `📐 N vers.` → expand/collapse + persistenza dopo refresh.
+3. Filtro stato "Approvata" → folder `Q-2026-004` auto-expand con solo v1 visibile + nota "2 versioni nascoste". Folder `Q-2026-007` nascosto.
+4. Crea nuova quote dal modal → verifica numero `Q-2026-009-v1` (preview ora include suffix).
+5. New-version da v3 → produce `Q-2026-004-v4`.
+6. Cleanup: cestina le quote di test (id=7, id=8) generate dallo smoke API se non servono.
+
+Tunnel cloudflared: da rilanciare se Matteo accede da remoto. Server in locale: `python run.py` (auto-restart al primo edit).
+
+### Prossima sessione — Stack 2 Bundle L (QC event-sourced)
+
+Roadmap Bundle L (vedi α.172.96 STATO):
+- ✅ Stack 1 Foundation chiusa (24 task, 532 routes)
+- ⏳ **Stack 2** — QCEvent + QCReport tables append-only, replay state, integration con `qc_cascade` esistente Bundle I.
+
+Decisioni Stack 2 (memory `project_stack2_qc_event_sourced_decisions.md`):
+- A=per-asset granularity, B=event types enumerati, C=snapshot denorm sync con eventi, D=alimenta Bundle I (event→qc_substatus derivato).
+
+Pre-requisiti: brainstorm/design dialogue prima di scrivere codice (cantiere strutturale → vale pattern Maestro).
+
+Login dev: `admin@mediaflow.it / admin123`.
+
+---
+
 **v3.5.0-alpha.172.96** — 27 maggio 2026 — Bundle L Stack 1 CLOSE: foundation completa
 
 Foundation cantiere strutturale Bundle L (tech specs unified Asset↔Deliverable↔QC). Modelli `VariantSchemaVersion` + `DeliveryVariant` con JSON Schema v1 validato, estensioni `JobDeliverable.variant_id` + `Asset.tech_specs_json`, refactor `asset_metadata.py` in `tech_specs_extractor` service estensibile (plugin registry, ffprobe + pillow), script batch `parse_capitolati.py` (--dry-run su 17 corpus → 200 stub variants), script `import_parsed_variants.py` con JSON Schema validation, router/UI `/delivery-variants` listing minimal, backfill Jaccard JobDeliverable.variant_id, sidebar link "📦 Variants".

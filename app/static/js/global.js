@@ -111,6 +111,86 @@ document.addEventListener('DOMContentLoaded', () => {
   // Click outside chiude (gestito da CSS via :focus-within, ma fallback JS)
 });
 
+// ── v3.5.0-alpha.172.97 — Font scale (visual zoom) ───────────
+// Scala globale UI via body { zoom: var(--font-scale) }. 6 step da 100% a 150%.
+// Persistenza in localStorage `mf_font_scale`. Inizializzato al boot.
+const MF_FONT_SCALES = [
+  { v: 1.0, lbl: '100% (default)' },
+  { v: 1.1, lbl: '110%' },
+  { v: 1.2, lbl: '120%' },
+  { v: 1.3, lbl: '130%' },
+  { v: 1.4, lbl: '140%' },
+  { v: 1.5, lbl: '150%' },
+];
+
+function applyFontScale() {
+  const raw = parseFloat(localStorage.getItem('mf_font_scale') || '1');
+  const scale = (Number.isFinite(raw) && raw >= 1.0 && raw <= 1.5) ? raw : 1.0;
+  document.documentElement.style.setProperty('--font-scale', String(scale));
+}
+function setFontScale(v) {
+  const n = parseFloat(v);
+  if (!Number.isFinite(n) || n < 1.0 || n > 1.5) return;
+  localStorage.setItem('mf_font_scale', String(n));
+  applyFontScale();
+  _topbarZoomRender();
+  if (typeof toast === 'function') toast('Visualizzazione: ' + Math.round(n * 100) + '%', 'success');
+}
+// Applica subito (prima del DOMContentLoaded) per evitare FOUC.
+applyFontScale();
+
+function topbarZoomToggleOpen(ev) {
+  if (ev) ev.stopPropagation();
+  const wrap = document.getElementById('topbar-zoom-wrap');
+  if (!wrap) return;
+  const wasOpen = wrap.classList.contains('is-open');
+  document.querySelectorAll('.topbar-zoom-wrap.is-open').forEach(w => w.classList.remove('is-open'));
+  if (!wasOpen) {
+    wrap.classList.add('is-open');
+    _topbarZoomRender();
+    setTimeout(() => {
+      const off = (e) => {
+        if (!wrap.contains(e.target)) {
+          wrap.classList.remove('is-open');
+          document.removeEventListener('click', off);
+        }
+      };
+      document.addEventListener('click', off);
+    }, 0);
+  }
+}
+window.topbarZoomToggleOpen = topbarZoomToggleOpen;
+
+function _topbarZoomRender() {
+  const pop = document.getElementById('topbar-zoom-pop');
+  if (!pop) return;
+  const cur = parseFloat(localStorage.getItem('mf_font_scale') || '1');
+  while (pop.firstChild) pop.removeChild(pop.firstChild);
+  for (const o of MF_FONT_SCALES) {
+    const cell = document.createElement('button');
+    cell.type = 'button';
+    cell.className = 'tz-cell' + (Math.abs(cur - o.v) < 0.001 ? ' active' : '');
+    cell.title = o.lbl;
+    cell.setAttribute('data-zoom', String(o.v));
+    cell.addEventListener('click', () => {
+      setFontScale(o.v);
+      const wrap = document.getElementById('topbar-zoom-wrap');
+      if (wrap) wrap.classList.remove('is-open');
+    });
+    const icon = document.createElement('span');
+    icon.className = 'tz-icon';
+    icon.textContent = o.v === 1.0 ? '🔍' : (o.v <= 1.2 ? 'A' : 'A+');
+    const lbl = document.createElement('span');
+    lbl.className = 'tz-lbl';
+    lbl.textContent = o.lbl;
+    cell.appendChild(icon);
+    cell.appendChild(lbl);
+    pop.appendChild(cell);
+  }
+}
+window._topbarZoomRender = _topbarZoomRender;
+document.addEventListener('DOMContentLoaded', () => { _topbarZoomRender(); });
+
 // v3.4.32.1: variante font opzionale (default = dmsans)
 function applyFont() {
   const f = localStorage.getItem('mf_font') || 'dmsans';

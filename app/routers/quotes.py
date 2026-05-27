@@ -415,6 +415,9 @@ async def list_quotes(
         chain_size[r] = chain_size.get(r, 0) + 1
 
     visible = all_qs if include_superseded else [qq for qq in all_qs if _is_leaf(qq)]
+    # v3.5.0-alpha.172.97 — base_code + version_number derivati da Quote.number
+    # per folder-view UI (raggruppa per base_code, ordina per version desc).
+    from app.services.numbering import split_version_suffix
     return [
         {
             "id": qq.id, "number": qq.number, "version": qq.version,
@@ -433,6 +436,11 @@ async def list_quotes(
             "versions_count": chain_size.get(_root(qq.id), 1),
             "root_quote_id": _root(qq.id),
             "is_leaf": _is_leaf(qq),
+            # v3.5.0-alpha.172.97 — parent + created_at + base_code + version_number per folder-view
+            "parent_quote_id": qq.parent_quote_id,
+            "created_at": qq.created_at.isoformat() if qq.created_at else None,
+            "base_code": split_version_suffix(qq.number)[0],
+            "version_number": split_version_suffix(qq.number)[1],
         }
         for qq in visible
     ]
@@ -866,6 +874,27 @@ async def update_quote_status(
     cancelled_job_id = None
 
     if new == QuoteStatus.approved and prev != QuoteStatus.approved:
+        # v3.5.0-alpha.172.97.1 — HARD-BLOCK: se la quote ha un parent gia'
+        # approved con Job collegato, approvare direttamente creerebbe un Job
+        # duplicato (bypass del workflow migrate-job che e' l'unico path corretto
+        # per propagare una nuova versione al Job esistente).
+        # Caso reale incontrato: v2 approvata via PUT/status invece di migrate-job
+        # → Job duplicato con 111 deliverable spawn-per-unit + v1+v2 entrambe
+        # approved, stato incongruente non recuperabile via UI.
+        if q.parent_quote_id:
+            parent = (
+                db.query(Quote)
+                .options(joinedload(Quote.job))
+                .filter(Quote.id == q.parent_quote_id).first()
+            )
+            if parent and parent.status == QuoteStatus.approved and parent.job:
+                raise HTTPException(
+                    409,
+                    f"Versione collegata: usa migrate-job invece di approvare direttamente. "
+                    f"La versione precedente {parent.number} è già approved con Job "
+                    f"{parent.job.code}. Approvare questa versione creerebbe un Job duplicato. "
+                    f"POST /quotes/api/{q.id}/migrate-job per propagare al Job esistente."
+                )
         # v3.5.0-alpha.111 — Propaga scadenze fatturazione Quote → Project
         # SE Project non ha override esplicito (campi NULL).
         if q.project:
@@ -2529,8 +2558,14 @@ def _next_quote_number_progressive(db: Session, project: Optional[Project] = Non
     pannello /settings#numbering. Variabili supportate per "quote":
     YYYY/YY/MM/DD/YYYYMMDD/NNN/NN/NNNN/PROJECT_CODE/CLIENT_CODE.
     Fallback al pattern default Q-{YYYY}-{NNN} se config assente.
+
+    v3.5.0-alpha.172.97 — Folder-view: tutte le quote nuove nascono con
+    suffix `-v1`. Idempotente: se il NumberingConfig pattern include già
+    `-vN`, non viene duplicato.
     """
-    from app.services.numbering import gen_doc_code, next_year_progressive
+    from app.services.numbering import (
+        gen_doc_code, next_year_progressive, with_v1_suffix,
+    )
     from app.context import current_tenant_id
     try:
         code, _ = gen_doc_code(
@@ -2539,23 +2574,24 @@ def _next_quote_number_progressive(db: Session, project: Optional[Project] = Non
             project_code=(project.code if project else None),
             client_code=(client.name[:8].upper() if client and getattr(client, "name", None) else None),
         )
+        full = with_v1_suffix(code)
         # Verifica uniqueness vs DB esistente (con soft-delete)
         from app.models import Quote as _Q
         exists = (
             db.query(_Q).execution_options(include_deleted=True)
-            .filter(_Q.number == code).first()
+            .filter(_Q.number == full).first()
         )
         if exists:
             # Fallback: incrementa con il vecchio metodo (sicuro su collision)
-            return next_year_progressive(
+            return with_v1_suffix(next_year_progressive(
                 db, Quote, base="Q", code_field="number", include_deleted=True,
-            )
-        return code
+            ))
+        return full
     except Exception as _e:
         print(f"[quote_numbering] gen_doc_code failed, fallback: {_e}")
-        return next_year_progressive(
+        return with_v1_suffix(next_year_progressive(
             db, Quote, base="Q", code_field="number", include_deleted=True,
-        )
+        ))
 
 
 def _copy_quote_lines(src_lines: list, dest_quote_id: int, track_parent: bool) -> list[QuoteLine]:

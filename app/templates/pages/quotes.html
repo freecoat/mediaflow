@@ -10,6 +10,22 @@
 {% block head %}
 <script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.2/Sortable.min.js"></script>
 <style>
+  /* v3.5.0-alpha.172.97 — Folder-view + stacked status cards */
+  .qrow-folder:hover { background: rgba(98,114,245,0.10) !important; }
+  .qrow-version:hover { background: rgba(255,255,255,0.04) !important; }
+  .qstatus-chip {
+    display: inline-block; padding: 2px 8px; font-size: 11px; font-weight: 600;
+    border-radius: 10px; white-space: nowrap; line-height: 1.4;
+  }
+  .qstatus-chip.stacked {
+    position: relative; box-shadow: 1px 1px 3px rgba(0,0,0,0.15);
+  }
+  .qstatus-stack:hover .qstatus-chip.stacked {
+    transform: none !important; margin-left: 4px !important;
+    transition: transform 0.18s ease, margin 0.18s ease;
+  }
+  .qstatus-chip { transition: transform 0.18s ease, margin 0.18s ease; }
+
   .ql-row.dragging { opacity: 0.4; }
   .ql-row .ghost { background: var(--indigo-bg); }
   .ql-cat-header {
@@ -404,24 +420,23 @@
         </div>
         <div class="card" data-collapsible="quote-actions">
           <div class="card-title mb-2">Stato &amp; azioni</div>
+          <!-- v3.5.0-alpha.172.97 — Lista versioni inline (era card separata) -->
+          <div id="versions-inline-wrap" style="display:none;margin-bottom:10px;">
+            <div class="text-xs text-muted mb-1" style="font-weight:600;text-transform:uppercase;letter-spacing:.04em;">Versioni quotazione</div>
+            <div id="versions-list" style="display:flex;flex-direction:column;gap:4px;font-size:12px;"></div>
+          </div>
           <div class="flex gap-2" style="flex-wrap:wrap;">
             <button class="btn btn-secondary btn-sm" onclick="setQuoteStatus('sent')">📤 Inviata</button>
-            <button class="btn btn-secondary btn-sm" onclick="setQuoteStatus('approved')">✅ Approvata</button>
+            <button id="btn-status-approved" class="btn btn-secondary btn-sm" onclick="setQuoteStatus('approved')">✅ Approvata</button>
             <button class="btn btn-secondary btn-sm" onclick="setQuoteStatus('rejected')">❌ Rifiutata</button>
             <button class="btn btn-secondary btn-sm" onclick="setQuoteStatus('expired')">⏰ Scaduta</button>
           </div>
-          <button class="btn btn-primary btn-sm mt-3" style="width:100%;" onclick="approveAndCreateJob()">✓ Approva quote → Job</button>
+          <button id="btn-approve-create-job" class="btn btn-primary btn-sm mt-3" style="width:100%;" onclick="approveAndCreateJob()">✓ Approva quote → Job</button>
+          <button id="btn-migrate-job" class="btn btn-primary btn-sm mt-2" style="display:none;width:100%;" onclick="openMigratePreview()">↪ Migra Job a questa versione</button>
+          <div id="migrate-only-hint" style="display:none;margin-top:8px;padding:8px 10px;background:rgba(245,158,11,0.10);border:1px solid rgba(245,158,11,0.35);border-radius:4px;font-size:11px;color:#f59e0b;line-height:1.4;">
+            ⚠️ Versione legata a un Job esistente sul parent. Usa <b>Migra Job</b> per propagare le modifiche al Job; <i>Approvata</i> diretto è bloccato (creerebbe un Job duplicato).
+          </div>
         </div>
-      </div>
-
-      <!-- v3.5.0-alpha.111.17: Versioni estratte FUORI dal quote-top-row.
-           Con 2+ versioni la card destra diventava più alta della sinistra
-           (Riepilogo economico = totals compatti). Stessa logica α.111.2
-           per Condizioni economiche. -->
-      <div id="versions-area" class="card" data-collapsible="quote-versions" style="margin-top:18px;display:none;">
-        <div class="card-title mb-3">Versioni quotazione</div>
-        <div id="versions-list" style="display:flex;flex-direction:column;gap:4px;font-size:12px;"></div>
-        <button id="btn-migrate-job" class="btn btn-primary btn-sm mt-2" style="display:none;" onclick="openMigratePreview()">↪ Migra Job a questa versione</button>
       </div>
 
       <!-- v3.5.0-alpha.111.2: Condizioni economiche & scadenze spostate FUORI
@@ -1262,8 +1277,64 @@ const HOURS_PER_DAY = 8;
 let _quotesIndex = {};  // {id: quote} per recuperare label e altro nei handler
 let _quotesAll = [];     // dataset completo da filtrare client-side
 
+// v3.5.0-alpha.172.97 — Folder-view (sostituisce tree indentato).
+// Mappa stati quote → label IT + colore + priorita' (1 = piu' alta).
+// Priority order: approved > sent > draft > expired > rejected.
+// `superseded` escluso dal folder header (visibile solo nelle version row).
+const QSTATUS_META = {
+  approved:   { label: 'Approvata', color: '#10b981', bg: 'rgba(16,185,129,0.18)',  border: 'rgba(16,185,129,0.40)',  priority: 1 },
+  sent:       { label: 'Inviata',   color: '#6272f5', bg: 'rgba(98,114,245,0.18)',  border: 'rgba(98,114,245,0.40)',  priority: 2 },
+  draft:      { label: 'Bozza',     color: '#94a3b8', bg: 'rgba(148,163,184,0.18)', border: 'rgba(148,163,184,0.40)', priority: 3 },
+  expired:    { label: 'Scaduta',   color: '#f59e0b', bg: 'rgba(245,158,11,0.18)',  border: 'rgba(245,158,11,0.40)',  priority: 4 },
+  rejected:   { label: 'Rifiutata', color: '#ef4444', bg: 'rgba(239,68,68,0.18)',   border: 'rgba(239,68,68,0.40)',   priority: 5 },
+  superseded: { label: 'Superata',  color: '#a78bfa', bg: 'rgba(167,139,250,0.15)', border: 'rgba(167,139,250,0.35)', priority: 99 },
+};
+
+function quoteStatusChip(status, extra = '') {
+  const m = QSTATUS_META[status] || QSTATUS_META.draft;
+  return `<span class="qstatus-chip" style="background:${m.bg};color:${m.color};border:1px solid ${m.border};${extra}">${m.label}</span>`;
+}
+
+function stackedStatusCards(statuses) {
+  // statuses: array di stati unici presenti nel folder (puo' includere superseded).
+  // Render: cards stacked offset, ordinate per priority. Esclude superseded.
+  const visible = statuses
+    .filter(s => s !== 'superseded')
+    .map(s => ({ s, p: (QSTATUS_META[s] || { priority: 99 }).priority }))
+    .sort((a, b) => a.p - b.p);
+  if (!visible.length) return '<span class="text-xs text-muted">—</span>';
+  if (visible.length === 1) return quoteStatusChip(visible[0].s);
+  // Multi-stato: stacked offset (top = priority piu' alta)
+  const html = visible.map((v, i) => {
+    const m = QSTATUS_META[v.s];
+    const offsetX = i * 8;
+    const offsetY = i * 4;
+    const z = visible.length - i;
+    return `<span class="qstatus-chip stacked" style="background:${m.bg};color:${m.color};border:1px solid ${m.border};margin-left:${i===0?0:-12}px;transform:translate(${offsetX}px,${offsetY}px);z-index:${z};">${m.label}</span>`;
+  }).join('');
+  return `<span class="qstatus-stack" style="display:inline-block;position:relative;">${html}</span>`;
+}
+
+// Stato folder espansi (chiave: base_code). Persistente in localStorage per evitare
+// reset visivo a ogni reload (es. dopo save/delete refresh lista).
+const _QFOLDER_OPEN_KEY = 'mf.quotes.folderOpen';
+function _qfolderOpenSet() {
+  try { return new Set(JSON.parse(localStorage.getItem(_QFOLDER_OPEN_KEY) || '[]')); }
+  catch { return new Set(); }
+}
+function _qfolderOpenSave(set) {
+  try { localStorage.setItem(_QFOLDER_OPEN_KEY, JSON.stringify([...set])); } catch {}
+}
+function toggleQuoteFolder(baseCode) {
+  const open = _qfolderOpenSet();
+  if (open.has(baseCode)) open.delete(baseCode); else open.add(baseCode);
+  _qfolderOpenSave(open);
+  renderQuotesList();
+}
+
 async function loadQuotes() {
-  _quotesAll = await api('GET', '/quotes/api');
+  // v3.5.0-alpha.172.97 — Carica TUTTE le quote (root + versioni) per folder-view.
+  _quotesAll = await api('GET', '/quotes/api?include_superseded=true');
   _quotesIndex = {};
   _quotesAll.forEach(q => { _quotesIndex[q.id] = q; });
   // Popola filtro cliente con valori unici
@@ -1281,53 +1352,155 @@ function renderQuotesList() {
   const fClient = document.getElementById('ql-f-client')?.value || '';
   const fStatus = document.getElementById('ql-f-status')?.value || '';
   const fJob = document.getElementById('ql-f-job')?.value || '';
-  let rows = _quotesAll.slice();
-  if (fClient) rows = rows.filter(r => r.client === fClient);
-  if (fStatus) rows = rows.filter(r => r.status === fStatus);
-  if (fJob === 'yes') rows = rows.filter(r => r.has_job);
-  if (fJob === 'no') rows = rows.filter(r => !r.has_job);
-  if (q) {
-    rows = rows.filter(r =>
-      (r.number || '').toLowerCase().includes(q) ||
-      (r.title || '').toLowerCase().includes(q) ||
-      (r.project_title || '').toLowerCase().includes(q) ||
-      (r.client || '').toLowerCase().includes(q)
-    );
-  }
   const tbody = document.getElementById('quotes-table');
   const counter = document.getElementById('ql-count');
-  if (counter) counter.textContent = `${rows.length} su ${_quotesAll.length} quotazioni`;
-  if (!rows.length) {
-    tbody.innerHTML = '<tr><td colspan="8" class="text-muted" style="text-align:center;padding:24px;">Nessuna quotazione corrisponde ai filtri</td></tr>'; return;
+
+  // ── Match per versione (filtri agiscono a livello version) ──────────
+  function _matchesFilters(r) {
+    if (fClient && r.client !== fClient) return false;
+    if (fStatus && r.status !== fStatus) return false;
+    if (fJob === 'yes' && !r.has_job) return false;
+    if (fJob === 'no' && r.has_job) return false;
+    if (q) {
+      const hay = `${r.number||''} ${r.title||''} ${r.project_title||''} ${r.client||''}`.toLowerCase();
+      if (!hay.includes(q)) return false;
+    }
+    return true;
   }
-  tbody.innerHTML = rows.map(q => {
-    // v3.5.0-alpha.172.12 — Badge "N versioni" se catena versioning > 1.
-    // Click → modal con storia versioni (riusa /api/{id}/versions).
-    const nVer = q.versions_count || 1;
-    const verBadge = (nVer > 1)
-      ? `<button class="btn btn-ghost btn-sm" onclick="event.stopPropagation();openVersionsModal(${q.id});" title="Catena ${nVer} versioni — clic per storia" style="padding:1px 7px;background:rgba(167,139,250,0.15);color:#a78bfa;border:1px solid rgba(167,139,250,0.3);border-radius:8px;font-weight:600;font-size:10px;margin-right:4px;">📐 v${q.version} · ${nVer}</button>`
-      : '';
-    return `
-    <tr style="cursor:pointer;">
-      <td class="mono" style="font-size:12px;" onclick="openEditor(${q.id})">${q.number}</td>
-      <td style="font-weight:500;" onclick="openEditor(${q.id})">
-        <div>${q.project_title || q.title || '—'}</div>
-        ${q.project_title && q.title && q.title !== q.project_title ? `<div style="font-size:11px;font-weight:400;color:var(--text3);margin-top:2px;">${escapeHtml(q.title)}</div>` : ''}
+
+  // ── Raggruppa per base_code (folder) ────────────────────────────────
+  const folders = new Map();  // base_code → { all_versions:[], visible_versions:[] }
+  for (const r of _quotesAll) {
+    const base = r.base_code || r.number || `__id${r.id}`;
+    if (!folders.has(base)) folders.set(base, { base, all: [], visible: [] });
+    const f = folders.get(base);
+    f.all.push(r);
+    if (_matchesFilters(r)) f.visible.push(r);
+  }
+
+  // Folder visibile se ha almeno 1 version che matcha
+  const visibleFolders = [...folders.values()].filter(f => f.visible.length > 0);
+
+  // Ordina folder per data creazione della latest version (desc)
+  visibleFolders.sort((a, b) => {
+    const la = a.all.slice().sort((x, y) => (y.version || 1) - (x.version || 1))[0];
+    const lb = b.all.slice().sort((x, y) => (y.version || 1) - (x.version || 1))[0];
+    return (lb?.created_at || lb?.issue_date || '').localeCompare(la?.created_at || la?.issue_date || '');
+  });
+
+  const totalVisibleVersions = visibleFolders.reduce((acc, f) => acc + f.visible.length, 0);
+  if (counter) counter.textContent = `${visibleFolders.length} quotazioni · ${totalVisibleVersions} versioni su ${_quotesAll.length}`;
+
+  if (!visibleFolders.length) {
+    tbody.innerHTML = '<tr><td colspan="8" class="text-muted" style="text-align:center;padding:24px;">Nessuna quotazione corrisponde ai filtri</td></tr>';
+    return;
+  }
+
+  const openSet = _qfolderOpenSet();
+  const html = [];
+
+  for (const folder of visibleFolders) {
+    const versions = folder.all.slice().sort((a, b) => (b.version || 1) - (a.version || 1));
+    const latest = versions[0];
+    const isSingle = versions.length === 1;
+    const baseCodeEsc = escapeHtml(folder.base);
+
+    // CASO 1: una sola versione → render diretto come riga normale (no folder wrapper)
+    if (isSingle) {
+      const v = versions[0];
+      html.push(`
+    <tr class="qrow-single" style="cursor:pointer;">
+      <td class="mono" style="font-size:12px;" onclick="openEditor(${v.id})">${baseCodeEsc}<span style="color:var(--text3);font-size:11px;margin-left:4px;">v${v.version_number || 1}</span></td>
+      <td style="font-weight:500;" onclick="openEditor(${v.id})">
+        <div>${escapeHtml(v.project_title || v.title || '—')}</div>
+        ${v.project_title && v.title && v.title !== v.project_title ? `<div style="font-size:11px;font-weight:400;color:var(--text3);margin-top:2px;">${escapeHtml(v.title)}</div>` : ''}
       </td>
-      <td class="text-muted text-sm" onclick="openEditor(${q.id})">${q.client || '—'}</td>
-      <td class="text-sm" onclick="openEditor(${q.id})">${fmtDate(q.issue_date)}</td>
-      <td class="text-sm ${q.valid_until && new Date(q.valid_until) < new Date() ? 'color-rose' : ''}" onclick="openEditor(${q.id})">${fmtDate(q.valid_until)}</td>
-      <td class="mono text-right" onclick="openEditor(${q.id})">${fmtCurrency(q.total_with_vat)}</td>
-      <td onclick="openEditor(${q.id})">${statusBadge(q.status)}</td>
+      <td class="text-muted text-sm" onclick="openEditor(${v.id})">${escapeHtml(v.client || '—')}</td>
+      <td class="text-sm" onclick="openEditor(${v.id})">${fmtDate(v.issue_date)}</td>
+      <td class="text-sm ${v.valid_until && new Date(v.valid_until) < new Date() ? 'color-rose' : ''}" onclick="openEditor(${v.id})">${fmtDate(v.valid_until)}</td>
+      <td class="mono text-right" onclick="openEditor(${v.id})">${fmtCurrency(v.total_with_vat)}</td>
+      <td onclick="openEditor(${v.id})">${quoteStatusChip(v.status)}</td>
       <td class="text-xs text-muted" style="text-align:right;white-space:nowrap;">
-        ${verBadge}
-        ${q.has_job ? '<span class="badge badge-active" style="font-size:10px;">Job ✓</span>' : ''}
-        <button class="btn btn-ghost btn-sm" onclick="event.stopPropagation();duplicateQuoteFromList(${q.id});" title="Duplica (scenario / template)">📋</button>
-        <button class="btn btn-ghost btn-sm" onclick="event.stopPropagation();newVersionQuoteFromList(${q.id});" title="Nuova versione (legata)">📐</button>
-        <button class="btn btn-ghost btn-sm color-rose" onclick="event.stopPropagation();deleteQuoteFromList(${q.id});" title="Sposta nel cestino">🗑</button>
+        <span style="padding:1px 7px;background:rgba(148,163,184,0.12);color:var(--text2);border:1px solid var(--border);border-radius:8px;font-weight:600;font-size:10px;margin-right:4px;">1 vers.</span>
+        ${v.has_job ? '<span class="badge badge-active" style="font-size:10px;">Job ✓</span>' : ''}
+        <button class="btn btn-ghost btn-sm" onclick="event.stopPropagation();duplicateQuoteFromList(${v.id});" title="Duplica (scenario / template)">📋</button>
+        <button class="btn btn-ghost btn-sm" onclick="event.stopPropagation();newVersionQuoteFromList(${v.id});" title="Nuova versione (legata)">📐</button>
+        <button class="btn btn-ghost btn-sm color-rose" onclick="event.stopPropagation();deleteQuoteFromList(${v.id});" title="Sposta nel cestino">🗑</button>
       </td>
-    </tr>`;
-  }).join('');
+    </tr>`);
+      continue;
+    }
+
+    // CASO 2: multi-versione → folder header + version rows expandable
+    // Auto-expand se utente ha filtrato (visible < all): mostra subito le matching
+    const isFiltered = folder.visible.length < folder.all.length;
+    const isOpen = openSet.has(folder.base) || isFiltered;
+    const chevron = isOpen ? '▼' : '▶';
+    const uniqueStatuses = [...new Set(versions.map(v => v.status))];
+    const stackedHtml = stackedStatusCards(uniqueStatuses);
+    const versionsCountBadge = `<button class="btn btn-ghost btn-sm" onclick="event.stopPropagation();toggleQuoteFolder('${baseCodeEsc.replace(/'/g, "&#39;")}');" title="${versions.length} versioni — clic per espandere/comprimere" style="padding:1px 7px;background:rgba(167,139,250,0.15);color:#a78bfa;border:1px solid rgba(167,139,250,0.3);border-radius:8px;font-weight:600;font-size:10px;margin-right:4px;">📐 ${versions.length} vers.</button>`;
+    const hasAnyJob = versions.some(v => v.has_job);
+
+    html.push(`
+    <tr class="qrow-folder" data-base="${baseCodeEsc}" style="cursor:pointer;background:rgba(98,114,245,0.05);border-top:1px solid rgba(98,114,245,0.18);" onclick="toggleQuoteFolder('${baseCodeEsc.replace(/'/g, "&#39;")}')">
+      <td class="mono" style="font-size:12px;font-weight:600;">
+        <span style="display:inline-block;width:14px;color:var(--indigo2);">${chevron}</span>${baseCodeEsc}
+      </td>
+      <td style="font-weight:600;">
+        <div>${escapeHtml(latest.project_title || latest.title || '—')}</div>
+        ${latest.project_title && latest.title && latest.title !== latest.project_title ? `<div style="font-size:11px;font-weight:400;color:var(--text3);margin-top:2px;">${escapeHtml(latest.title)}</div>` : ''}
+      </td>
+      <td class="text-muted text-sm">${escapeHtml(latest.client || '—')}</td>
+      <td class="text-sm">${fmtDate(latest.issue_date)}</td>
+      <td class="text-sm ${latest.valid_until && new Date(latest.valid_until) < new Date() ? 'color-rose' : ''}">${fmtDate(latest.valid_until)}</td>
+      <td class="mono text-right" style="font-weight:600;">${fmtCurrency(latest.total_with_vat)}</td>
+      <td>${stackedHtml}</td>
+      <td class="text-xs text-muted" style="text-align:right;white-space:nowrap;">
+        ${versionsCountBadge}
+        ${hasAnyJob ? '<span class="badge badge-active" style="font-size:10px;" title="Almeno una versione ha Job collegato">Job ✓</span>' : ''}
+        <button class="btn btn-ghost btn-sm" onclick="event.stopPropagation();newVersionQuoteFromList(${latest.id});" title="Nuova versione (legata) dalla latest">📐</button>
+      </td>
+    </tr>`);
+
+    if (!isOpen) continue;
+
+    // Version rows (sotto folder). Mostra SOLO le matching dai filtri (visible).
+    const visibleVersions = folder.visible.slice().sort((a, b) => (b.version || 1) - (a.version || 1));
+    const hiddenCount = folder.all.length - folder.visible.length;
+
+    for (const v of visibleVersions) {
+      html.push(`
+    <tr class="qrow-version" data-base="${baseCodeEsc}" style="cursor:pointer;background:rgba(255,255,255,0.015);">
+      <td class="mono" style="font-size:12px;color:var(--text2);" onclick="openEditor(${v.id})">
+        <span style="display:inline-block;width:14px;"></span>
+        <span style="color:var(--text3);">↳</span>
+        <span style="margin-left:4px;padding:1px 6px;background:rgba(167,139,250,0.10);color:#a78bfa;border-radius:4px;font-weight:600;">v${v.version_number || v.version || 1}</span>
+      </td>
+      <td class="text-muted text-sm" onclick="openEditor(${v.id})">${escapeHtml(v.title || latest.title || '—')}</td>
+      <td class="text-muted text-sm" onclick="openEditor(${v.id})">${escapeHtml(v.client || '—')}</td>
+      <td class="text-sm" onclick="openEditor(${v.id})">${fmtDate(v.issue_date)}</td>
+      <td class="text-sm ${v.valid_until && new Date(v.valid_until) < new Date() ? 'color-rose' : ''}" onclick="openEditor(${v.id})">${fmtDate(v.valid_until)}</td>
+      <td class="mono text-right" onclick="openEditor(${v.id})">${fmtCurrency(v.total_with_vat)}</td>
+      <td onclick="openEditor(${v.id})">${quoteStatusChip(v.status)}</td>
+      <td class="text-xs text-muted" style="text-align:right;white-space:nowrap;">
+        ${v.has_job ? '<span class="badge badge-active" style="font-size:10px;">Job ✓</span>' : ''}
+        <button class="btn btn-ghost btn-sm" onclick="event.stopPropagation();duplicateQuoteFromList(${v.id});" title="Duplica (scenario / template)">📋</button>
+        <button class="btn btn-ghost btn-sm" onclick="event.stopPropagation();newVersionQuoteFromList(${v.id});" title="Nuova versione legata da questa">📐</button>
+        <button class="btn btn-ghost btn-sm color-rose" onclick="event.stopPropagation();deleteQuoteFromList(${v.id});" title="Sposta nel cestino">🗑</button>
+      </td>
+    </tr>`);
+    }
+
+    if (hiddenCount > 0) {
+      html.push(`
+    <tr class="qrow-hidden-note" style="background:rgba(255,255,255,0.01);">
+      <td colspan="8" style="padding:4px 12px;color:var(--text3);font-size:11px;font-style:italic;">
+        <span style="display:inline-block;width:14px;"></span>↳ ${hiddenCount} versione${hiddenCount>1?'i':''} nascosta${hiddenCount>1?'e':''} dai filtri attivi
+      </td>
+    </tr>`);
+    }
+  }
+  tbody.innerHTML = html.join('');
 }
 
 // v3.5.0-alpha.172.12 — Modal storia versioni di una catena quote.
@@ -1436,25 +1609,30 @@ async function reloadQuote() {
 async function loadVersionsArea() {
   try {
     const data = await api('GET', `/quotes/api/${currentQuoteId}/versions`);
-    const area = document.getElementById('versions-area');
+    // v3.5.0-alpha.172.97 — Lista versioni inline dentro card Stato & azioni
+    // (era card separata sotto). Mostra sempre se almeno 1 versione, anche
+    // single-version per dare visibilita' dello stato della catena.
+    const wrap = document.getElementById('versions-inline-wrap');
     const list = document.getElementById('versions-list');
     const btnMigrate = document.getElementById('btn-migrate-job');
-    if (!data.versions || data.versions.length <= 1) {
-      // Nessun parent e nessun figlio → niente catena, area nascosta
-      area.style.display = 'none';
+    if (!data.versions || data.versions.length === 0) {
+      wrap.style.display = 'none';
       btnMigrate.style.display = 'none';
       return;
     }
-    area.style.display = '';
+    wrap.style.display = '';
     list.innerHTML = data.versions.map(v => {
       const isCurrent = v.id === data.current_id;
       const job = v.has_job ? ` <span class="badge badge-active" style="font-size:9px;">Job ${escapeHtml(v.job_code || '')}</span>` : '';
       const link = isCurrent
         ? `<b>v${v.version} · ${escapeHtml(v.number)}</b>`
         : `<a href="#" onclick="event.preventDefault();openEditor(${v.id});" style="color:var(--indigo2);">v${v.version} · ${escapeHtml(v.number)}</a>`;
-      return `<div style="display:flex;justify-content:space-between;gap:6px;align-items:center;${isCurrent ? 'background:var(--indigo-bg);padding:3px 6px;border-radius:4px;' : ''}">
-        <span>${link}${job}</span>
-        <span class="text-xs text-muted">${SL[v.status] || v.status}</span>
+      const date = v.issue_date ? ` <span class="text-xs text-muted">(${escapeHtml(v.issue_date)})</span>` : '';
+      const total = (v.total_after_discount != null) ? ` <span class="text-xs text-muted">· €${Number(v.total_after_discount).toLocaleString('it-IT',{minimumFractionDigits:2,maximumFractionDigits:2})}</span>` : '';
+      const statusClass = 'qe-status-badge qe-status-' + (v.status || 'draft');
+      return `<div style="display:flex;justify-content:space-between;gap:6px;align-items:center;${isCurrent ? 'background:var(--indigo-bg);padding:3px 6px;border-radius:4px;' : 'padding:3px 6px;'}">
+        <span>${link}${date}${total}${job}</span>
+        <span class="${statusClass}" style="font-size:10px;">${escapeHtml(SL[v.status] || v.status)}</span>
       </div>`;
     }).join('');
     // Mostra "Migra Job" solo se: io ho parent_quote_id, parent ha job, io sono draft/sent
@@ -1464,6 +1642,22 @@ async function loadVersionsArea() {
     const canMigrate = parent && parent.has_job
       && (currentQuote.status === 'draft' || currentQuote.status === 'sent');
     btnMigrate.style.display = canMigrate ? '' : 'none';
+    // v3.5.0-alpha.172.97.1 — guard UI: se la quote è una versione collegata a un
+    // Job esistente, nascondi/disabilita Approva diretta. L'unico path corretto
+    // è migrate-job; il backend rigetta comunque con 409 ma evitiamo confusione.
+    const btnApprovedStatus = document.getElementById('btn-status-approved');
+    const btnApproveCreateJob = document.getElementById('btn-approve-create-job');
+    const migrateOnlyHint = document.getElementById('migrate-only-hint');
+    const parentHasJob = !!(parent && parent.has_job);
+    if (parentHasJob) {
+      if (btnApprovedStatus) { btnApprovedStatus.disabled = true; btnApprovedStatus.title = 'Bloccato: usa Migra Job (la versione precedente è già approved con Job)'; btnApprovedStatus.style.opacity = '.5'; btnApprovedStatus.style.cursor = 'not-allowed'; }
+      if (btnApproveCreateJob) btnApproveCreateJob.style.display = 'none';
+      if (migrateOnlyHint) migrateOnlyHint.style.display = '';
+    } else {
+      if (btnApprovedStatus) { btnApprovedStatus.disabled = false; btnApprovedStatus.title = ''; btnApprovedStatus.style.opacity = ''; btnApprovedStatus.style.cursor = ''; }
+      if (btnApproveCreateJob) btnApproveCreateJob.style.display = '';
+      if (migrateOnlyHint) migrateOnlyHint.style.display = 'none';
+    }
   } catch(e) { /* silent: area resta nascosta */ }
 }
 

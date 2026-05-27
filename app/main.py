@@ -1422,6 +1422,101 @@ def _auto_backfill_jd_variant_match():
         db.close()
 
 
+def _auto_backfill_quote_v1_suffix():
+    """v3.5.0-alpha.172.97 — Backfill suffix `-v1` su Quote.number legacy.
+
+    Folder-view UI raggruppa le quote per base_code = number senza suffix
+    `-vN`. Per uniformita', ogni quote esistente senza suffix viene rinominata
+    aggiungendo `-v1`. Idempotente: salta quelle gia' con suffix.
+
+    Gestisce:
+      - Quote attive (`Q-2026-001` → `Q-2026-001-v1`)
+      - Quote cestinate con bin-prefix (`~B5~Q-2026-001` → `~B5~Q-2026-001-v1`)
+      - Collision: se il target esiste, append `_R<id>` come salvagente
+        (caso patologico, non dovrebbe mai capitare).
+
+    Bypassa il soft-delete filter via `include_deleted=True`.
+    """
+    import re
+    from app.database import SessionLocal
+    from app.models.models import Quote
+    from app.services.soft_delete import _BIN_PREFIX_RE
+    SUFFIX_RE = re.compile(r"-v\d+$")
+    db = SessionLocal()
+    try:
+        rows = (
+            db.query(Quote)
+            .execution_options(include_deleted=True)
+            .all()
+        )
+        # Pre-calcola index di tutti i number esistenti per collision check O(1)
+        existing_numbers = {r.number for r in rows if r.number}
+        renamed = 0
+        for q in rows:
+            if not q.number:
+                continue
+            # Strip bin-prefix (se cestinata) per ispezionare il core
+            bin_match = _BIN_PREFIX_RE.match(q.number)
+            core = q.number[bin_match.end():] if bin_match else q.number
+            prefix = q.number[:bin_match.end()] if bin_match else ""
+            # Skip se gia' ha suffix -vN
+            if SUFFIX_RE.search(core):
+                continue
+            new_core = f"{core}-v1"
+            new_number = prefix + new_core
+            # Collision guard
+            if new_number in existing_numbers:
+                new_number = f"{new_number}_R{q.id}"
+            existing_numbers.discard(q.number)
+            existing_numbers.add(new_number)
+            q.number = new_number
+            renamed += 1
+        if renamed:
+            db.commit()
+            print(f"[auto-migrate-α.172.97] backfilled -v1 suffix on {renamed} legacy quotes")
+    except Exception as e:
+        print(f"[auto-backfill-v1] failed: {e}")
+        db.rollback()
+    finally:
+        db.close()
+
+
+def _auto_bin_prefix_deleted_quotes():
+    """v3.5.0-alpha.172.97 — Backfill: rinomina `number` delle Quote gia' in
+    cestino con prefisso bin (`~B<id>~<original>`) per liberare il number
+    originale a nuove quote/versioni. Idempotente: salta quelle gia' bin-prefixed.
+
+    Bypassa il soft-delete filter via `include_deleted=True`.
+    """
+    from app.database import SessionLocal
+    from app.models.models import Quote
+    from app.services.soft_delete import _bin_number, _BIN_PREFIX_RE
+    db = SessionLocal()
+    try:
+        deleted = (
+            db.query(Quote)
+            .execution_options(include_deleted=True)
+            .filter(Quote.deleted_at.isnot(None))
+            .all()
+        )
+        renamed = 0
+        for q in deleted:
+            if not q.number:
+                continue
+            if _BIN_PREFIX_RE.match(q.number):
+                continue
+            q.number = _bin_number(q.id, q.number)
+            renamed += 1
+        if renamed:
+            db.commit()
+            print(f"[auto-bin-prefix] {renamed} Quote cestinate rinominate con prefisso bin")
+    except Exception as e:
+        print(f"[auto-bin-prefix] failed: {e}")
+        db.rollback()
+    finally:
+        db.close()
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     create_tables()
@@ -1459,6 +1554,18 @@ async def lifespan(app: FastAPI):
         _auto_backfill_jd_variant_match()
     except Exception as e:
         print(f"[lifespan] _auto_backfill_jd_variant_match failed: {e}")
+    # v3.5.0-alpha.172.97 — Bin-prefix retroattivo su Quote.number cestinate
+    # per liberare UNIQUE constraint (vedi soft_delete._bin_number).
+    try:
+        _auto_bin_prefix_deleted_quotes()
+    except Exception as e:
+        print(f"[lifespan] _auto_bin_prefix_deleted_quotes failed: {e}")
+    # v3.5.0-alpha.172.97 — Backfill suffix -v1 su Quote.number legacy per
+    # uniformare il numbering al folder-view (raggruppa per base_code).
+    try:
+        _auto_backfill_quote_v1_suffix()
+    except Exception as e:
+        print(f"[lifespan] _auto_backfill_quote_v1_suffix failed: {e}")
     # v3.5.0-alpha.111 — Backfill JobResourceAssignment da booking storici
     try:
         _backfill_resource_assignments()
@@ -1831,7 +1938,7 @@ async def lifespan(app: FastAPI):
     yield
 
 
-app = FastAPI(title="Claqo", version="3.5.0-alpha.172.96", lifespan=lifespan)
+app = FastAPI(title="Claqo", version="3.5.0-alpha.172.97", lifespan=lifespan)
 
 BASE_DIR = Path(__file__).parent
 app.mount("/static", StaticFiles(directory=BASE_DIR / "static"), name="static")

@@ -148,11 +148,16 @@ def _assignment_hours(a) -> float:
 
 def _booking_billable_hours(b) -> float:
     """v3.5.0-alpha.171 (CR-2) — Ore "fatturabili al cliente" del booking.
+    v3.5.0-alpha.172.97 — fix smart_split: somma per risorsa, poi max tra risorse.
 
     Regola Matteo (19 mag 2026):
     - Se almeno 1 assignment è risorsa umana (person_internal/freelance/person)
-      → max(hours) tra le umane (override umana, ignora sala/equipment)
-    - Else → max(hours) tra tutti gli assignment (sala/equipment/software/vehicle)
+      → max(hours_per_resource) tra le umane (override umana, ignora sala/equipment)
+    - Else → max(hours_per_resource) tra non-umane (sala/equipment/software/vehicle)
+
+    Aggregazione per resource_id PRIMA del max: con smart_split (α.172.75) la
+    stessa persona ha 2 assignment giornalieri (AM 4h + PM 4h) → sum=8h.
+    Senza aggregazione, max() prendeva un solo slot da 4h sotto-stimando del 50%.
 
     Rationale: il cliente paga le ORE LAVORO della persona; la sala è un costo
     interno (mostrato in cost-side) ma non si fattura come ore separate.
@@ -160,6 +165,7 @@ def _booking_billable_hours(b) -> float:
 
     Esempi:
     - Booking: Carlo 8h + Sala A 8h → billable = 8h (max umana)
+    - Booking: Carlo AM 4h + Carlo PM 4h (smart_split) → billable = 8h (sum stessa risorsa)
     - Booking: Carlo 4h + Mario 6h + Sala A 8h → billable = 6h (max umana)
     - Booking: Sala A 8h + Sala B 4h (nessuna umana) → billable = 8h
     - Booking: solo Carlo 8h → billable = 8h
@@ -169,25 +175,27 @@ def _booking_billable_hours(b) -> float:
         if not b.start_datetime or not b.end_datetime:
             return 0.0
         return max(0.0, (b.end_datetime - b.start_datetime).total_seconds() / 3600.0)
-    human_hours = []
-    nonhuman_hours = []
+    from collections import defaultdict
+    human_by_res: dict = defaultdict(float)
+    nonhuman_by_res: dict = defaultdict(float)
     for a in b.assignments:
         h = _assignment_hours(a)
         if h <= 0:
             continue
+        rid = a.resource_id or 0
         res = getattr(a, "resource", None)
         # Resolve type: prefer relationship enum, fallback to nothing → non-human bucket
         rtype = None
         if res is not None:
             rtype = res.type.value if hasattr(res.type, "value") else str(res.type)
         if rtype in HUMAN_RESOURCE_TYPES:
-            human_hours.append(h)
+            human_by_res[rid] += h
         else:
-            nonhuman_hours.append(h)
-    if human_hours:
-        return max(human_hours)
-    if nonhuman_hours:
-        return max(nonhuman_hours)
+            nonhuman_by_res[rid] += h
+    if human_by_res:
+        return max(human_by_res.values())
+    if nonhuman_by_res:
+        return max(nonhuman_by_res.values())
     return 0.0
 
 

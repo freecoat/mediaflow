@@ -316,8 +316,10 @@ def _next_quote_number(db: Session, project=None) -> str:
     `gen_doc_code(db, 'quote', ...)` che legge la naming convention configurata
     in /settings → Naming conventions (pattern, reset_yearly, project_code,
     client_code). Allinea il path AI con quello manual UI.
+
+    v3.5.0-alpha.172.97: folder-view → suffix `-v1` su ogni quote nuova.
     """
-    from app.services.numbering import gen_doc_code
+    from app.services.numbering import gen_doc_code, with_v1_suffix
     from app.context import current_tenant_id
     project_code = project.code if project else None
     # v3.5.0-alpha.172.85 fix: Client non ha attributo `code`. Usa name
@@ -333,7 +335,7 @@ def _next_quote_number(db: Session, project=None) -> str:
         db, "quote", tenant_id=current_tenant_id(),
         project_code=project_code, client_code=client_code,
     )
-    return code
+    return with_v1_suffix(code)
 
 
 @ai_capability("propose_quote")

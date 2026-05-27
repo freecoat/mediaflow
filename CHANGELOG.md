@@ -1,5 +1,56 @@
 # MediaFlow — Changelog
 
+## v3.5.0-alpha.172.97 — Folder-view quote + 4 fix sessione 27 mag pomeriggio (27 mag 2026)
+
+Chiusura sessione test 27 maggio: 5 fix verificati + nuovo cantiere folder-view per la lista quotazioni.
+
+**Folder-view `/quotes/`** (nuovo) — la lista non è più piatta. Tutte le quote sono raggruppate per `base_code` (numero senza suffix `-vN`). Folder visualizzato come riga indaco con:
+- chevron espandi/comprimi (stato persistente in `localStorage`)
+- titolo della latest version + cliente + totale latest
+- **stacked status cards**: card sovrapposte ordinate per priorità (Approvata > Inviata > Bozza > Scaduta > Rifiutata, esclusa Superseded). Hover spreads, click decorativo
+- badge "📐 N vers." cliccabile per toggle
+- bottone "📐 Nuova versione" sulla latest
+Versioni sotto: righe indentate, numero `↳ v1/v2/v3...`, badge stato individuale, azioni per-versione (duplicate, new-version, delete).
+Folder con singola versione → render diretto come riga normale (no wrapper).
+
+**Numbering uniforme** — Tutte le quote nuove nascono con suffix `-v1`:
+- `app/services/numbering.py`: nuovi helper `with_v1_suffix(code)` + `split_version_suffix(code) -> (base, n)`, entrambi idempotenti.
+- `_next_quote_number_progressive`, AI `_next_quote_number`, preview `/settings/api/numbering/quote/preview`: tutti applicano `with_v1_suffix` al risultato.
+- `new-version` esistente già produce `-vN` correttamente (regex strip + append).
+
+**Backfill al boot** — `_auto_backfill_quote_v1_suffix` (`app/main.py`) rinomina le quote legacy senza suffix → aggiunge `-v1`. Idempotente (skip se già ha suffix `-vN`). Gestisce bin-prefix `~B<id>~` per quote cestinate. Collision detect con `_R<id>` fallback (caso patologico).
+
+**List endpoint esteso** — `/quotes/api` ora include `base_code` + `version_number` per ogni record (derivati via `split_version_suffix`). Frontend raggruppa per `base_code`.
+
+**Filtri stato preservati** — i 4 filtri (search, cliente, stato, job) continuano a funzionare lato versione. Folder visibile se almeno 1 version matcha. Auto-expand folder quando filtri attivi nascondono versioni. Nota "X versioni nascoste dai filtri attivi" sotto il folder.
+
+**Sessione 27 mag pomeriggio — 4 fix tecnici verificati end-to-end (raggruppati in α.172.97):**
+
+1. **`_booking_billable_hours` smart_split** — `app/services/cost_line_sync.py:149`. Pre-fix `max()` flat collassava AM+PM stessa persona a 4h invece di 8h. Post-fix aggregazione per `resource_id` → max tra risorse distinte. Backfill `scripts/backfill_jcl_billable_hours_alpha172_97.py` lanciato (Dailies Filmetto: qty 18→36, accrued 8.100€→16.200€).
+
+2. **`next_progressive_code` collision con versioning** — `app/services/numbering.py:74`. ORDER BY id.desc() prendeva ultima inserita (es. `-v2`) → tail-strip restituiva N=5 ma 5 già occupato → IntegrityError 500 su duplicate. Post-fix: scan TUTTI i match, calcola `max(N)` ignorando `-vN`.
+
+3. **Bin-prefix Quote.number in cestino** — `app/services/soft_delete.py:203`. `soft_delete` ora rinomina `quote.number` a `~B<id>~<original>` per liberare UNIQUE constraint. `restore_quote` strippa prefix + gestisce collision con `_R<id>`. Auto-backfill al boot via `_auto_bin_prefix_deleted_quotes` (lifespan).
+
+4. **Lista versioni inline in card "Stato & azioni"** — `app/templates/pages/quotes.html`. Versioni rese dentro `quote-top-row` (sopra bottoni di stato), con date+totale+badge status colorato. Card standalone `versions-area` rimossa.
+
+CSS: `.qstatus-chip` / `.qstatus-stack` / `.qrow-folder` / `.qrow-version`. Stato folder espansi persistente in `localStorage` (`mf.quotes.folderOpen`).
+
+Nessuno schema DB change. Backfill `-v1` idempotente al boot (silent no-op se tutte le quote già con suffix).
+
+**Guard versioning: blocco approvazione diretta di versione legata** (`PUT /quotes/api/{id}/status`):
+Bug emerso durante test sessione 27 mag: approvare direttamente una v2 di una catena dove la v1 è già approved+ha Job creava un Job duplicato (Job 3 con 111 deliverable spawn-per-unit nel caso reale Filmone). Fix: backend ora ritorna **409** con messaggio chiaro se la quote ha `parent_quote_id` e `parent.status==approved` e `parent.job` esiste. L'unico path corretto in questo caso è `migrate-job`. UI quote editor ora disabilita il bottone "Approvata" + nasconde "Approva + crea Job" quando il parent ha già un Job; sotto i bottoni compare hint giallo che istruisce a usare "Migra Job".
+
+Test verificato API: `PUT /quotes/api/10/status status=approved` (v4 di Q-2026-004 con Job J004 sul parent v1) → `409 "Versione collegata: usa migrate-job..."`.
+
+**Fix z-index topbar popover** (`app/static/css/main.css`):
+Bug visibile in `/quotes/` con pannello listino flottante aperto: popover palette tema + popover lingua apparivano sotto il side panel `.al-side` (entrambi z-index 50, ordine DOM dava al-side la precedenza). Fix: `.topbar` z-index 50 → 100. Tutti i popover dentro topbar ora coprono i side panel di pagina.
+
+**Font scale (visual zoom) topbar** (`app/static/css/main.css`, `app/static/js/global.js`, `app/templates/base.html`):
+Nuovo switcher accanto al theme/lang picker (icona 🔍). 6 step: 100% / 110% / 120% / 130% / 140% / 150%. Implementato via `body { zoom: var(--font-scale) }` (Chrome/Edge/Safari/Firefox ≥126). Persistenza `localStorage.mf_font_scale`. Applicato pre-DOMContentLoaded per evitare FOUC.
+
+---
+
 ## v3.5.0-alpha.172.96 — Bundle L Stack 1 CLOSE: foundation (Task 13-17) (27 mag 2026)
 
 Milestone 3/3 dello Stack 1 → Stack 1 chiuso. Script DB import + router/UI listing `/delivery-variants` + backfill Jaccard JobDeliverable.variant_id + sidebar link. 24 test pytest verdi, 532 routes. Foundation Bundle L completa: i 4 stack successivi (QC event-sourced, ingest/export QC, planning variant-aware UI, AI capability runtime) costruiscono sopra senza schema breaking changes.

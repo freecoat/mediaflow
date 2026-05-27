@@ -31,6 +31,7 @@ automaticamente.
 """
 from __future__ import annotations
 import logging
+import re
 from contextlib import contextmanager
 from datetime import datetime
 from typing import Any, Optional
@@ -200,6 +201,32 @@ def _collect_blocking_bookings(db: Session, quote: Quote) -> list[dict]:
     } for b in rows]
 
 
+# v3.5.0-alpha.172.97 — Prefisso "bin" sul `number` di Quote in cestino.
+# La UNIQUE constraint a livello DB su `quotes.number` non distingue tra
+# attive e soft-deleted. Senza prefisso, dopo cestino di Q-2026-004-v2,
+# una nuova versione con lo stesso nome falliva con IntegrityError.
+# Soluzione: rinominare a `~B<id>~<original>` al delete, strip al restore.
+_BIN_PREFIX_RE = re.compile(r"^~B(\d+)~")
+
+
+def _bin_number(quote_id: int, original: str) -> str:
+    """Genera number cestinato. Massimo 50 char (vedi Quote.number)."""
+    prefix = f"~B{quote_id}~"
+    # Tronca l'originale se complessivamente eccede 50 char
+    max_orig = 50 - len(prefix)
+    return prefix + (original[:max_orig] if original else "")
+
+
+def _strip_bin_prefix(number: str) -> Optional[str]:
+    """Se il numero ha il prefisso bin, ritorna l'originale. Altrimenti None."""
+    if not number:
+        return None
+    m = _BIN_PREFIX_RE.match(number)
+    if not m:
+        return None
+    return number[m.end():]
+
+
 def soft_delete_quote(db: Session, quote: Quote, *, user: User,
                       force: bool = False) -> dict:
     """Soft-delete di una Quote con tutte le regole di integrità v3.4.55+.
@@ -235,6 +262,11 @@ def soft_delete_quote(db: Session, quote: Quote, *, user: User,
                 bookings=blocking,
             )
         # Soft-delete pulito
+        # v3.5.0-alpha.172.97 — rinomina number con prefisso bin per liberare
+        # il number originale per nuove quote/versioni (UNIQUE constraint DB
+        # non distingue tra attive e soft-deleted).
+        if quote.number and not _BIN_PREFIX_RE.match(quote.number):
+            quote.number = _bin_number(quote.id, quote.number)
         quote.deleted_at         = datetime.utcnow()
         quote.deleted_by_user_id = user.id if user else None
         return {
@@ -304,12 +336,37 @@ def soft_delete_quote(db: Session, quote: Quote, *, user: User,
 
 
 def restore_quote(db: Session, quote: Quote) -> dict:
-    """Ripristina una Quote dal cestino. Idempotente."""
+    """Ripristina una Quote dal cestino. Idempotente.
+
+    v3.5.0-alpha.172.97 — strip prefisso bin sul number. Se il number originale
+    e' nel frattempo occupato da un'altra quote attiva, ritorna `renamed=True`
+    con un nuovo number progressivo (`<orig>_R<id>`) e segnala il caller.
+    """
     if quote.deleted_at is None:
         return {"ok": True, "already_active": True, "quote_id": quote.id}
+    original = _strip_bin_prefix(quote.number) if quote.number else None
+    renamed_to: Optional[str] = None
+    if original:
+        # Collision check: number originale occupato da altra quote attiva
+        collision = (
+            db.query(Quote)
+            .filter(Quote.number == original, Quote.id != quote.id)
+            .first()
+        )
+        if collision is None:
+            quote.number = original
+        else:
+            # Mantiene number con suffisso di emergenza per non rompere UNIQUE
+            quote.number = f"{original}_R{quote.id}"
+            renamed_to = quote.number
     quote.deleted_at         = None
     quote.deleted_by_user_id = None
-    return {"ok": True, "quote_id": quote.id}
+    return {
+        "ok": True,
+        "quote_id": quote.id,
+        "renamed_to": renamed_to,
+        "restored_number": quote.number,
+    }
 
 
 # ── Service: regole di delete/restore Project (v3.5.0-alpha.8) ─

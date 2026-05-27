@@ -496,7 +496,12 @@
 .font-source { --font-body: 'Source Sans 3', sans-serif; --font-mono: 'JetBrains Mono', monospace; }
 .font-system { --font-body: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; --font-mono: 'Consolas', 'Menlo', monospace; }
 
+/* v3.5.0-alpha.172.97 — Font scale visual zoom. Default 1.0 (= 100%).
+   Override via localStorage `mf_font_scale` → JS imposta CSS var su :root.
+   Applicato a body con `zoom` (Chrome/Edge/Safari/Firefox >=126). */
+:root { --font-scale: 1; }
 html { font-size: 15px; }
+body { zoom: var(--font-scale); }
 body {
   font-family: var(--font-body);
   background: var(--bg);
@@ -750,7 +755,9 @@ body.no-chrome { overflow: hidden; }
   justify-content: space-between;
   padding: 0 24px;
   position: sticky; top: 0;
-  z-index: 50;
+  /* v3.5.0-alpha.172.97 — alza topbar sopra .al-side (z:50) per garantire
+     che i popover (theme/lang/zoom) coprano il pannello listino flottante. */
+  z-index: 100;
 }
 .topbar-title {
   font-size: 15px;
@@ -894,6 +901,34 @@ body.no-chrome { overflow: hidden; }
   min-width: 180px;
 }
 .topbar-lang-wrap.is-open .topbar-lang-pop { display: grid; }
+
+/* v3.5.0-alpha.172.97 — Font scale (visual zoom) switcher. Pattern sticky
+   toggle clone di theme/lang. Scala via body { zoom: var(--font-scale) }. */
+.topbar-zoom-wrap { position: relative; }
+.topbar-zoom-pop {
+  position: absolute; top: calc(100% + 6px); right: 0;
+  background: var(--bg2); border: 1px solid var(--border);
+  border-radius: var(--radius); box-shadow: var(--shadow-lg);
+  padding: 6px; z-index: 200;
+  display: none;
+  grid-template-columns: 1fr;
+  gap: 3px;
+  min-width: 160px;
+}
+.topbar-zoom-wrap.is-open .topbar-zoom-pop { display: grid; }
+.topbar-zoom-pop .tz-cell {
+  display: flex; align-items: center; gap: 8px;
+  background: transparent; border: 1px solid transparent;
+  border-radius: 4px; padding: 6px 10px;
+  cursor: pointer; color: var(--text);
+  transition: background var(--t), border-color var(--t);
+  text-align: left; font-family: inherit; font-size: 13px;
+}
+.topbar-zoom-pop .tz-cell:hover { background: var(--bg3); border-color: var(--border); }
+.topbar-zoom-pop .tz-cell.active { background: var(--indigo-bg); border-color: var(--indigo); color: var(--indigo2); }
+.topbar-zoom-pop .tz-icon { font-size: 14px; line-height: 1; width: 18px; text-align: center; }
+.topbar-zoom-pop .tz-lbl { flex: 1; }
+
 .topbar-lang-pop .tl-cell {
   display: flex; align-items: center; gap: 8px;
   background: transparent; border: 1px solid transparent;

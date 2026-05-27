@@ -1040,6 +1040,11 @@ async def preview_numbering(
            .replace("{PROJECT_CODE}", (project_code or "«PROJ»"))
            .replace("{CLIENT_CODE}",  (client_code or "«CLI»"))
     )
+    # v3.5.0-alpha.172.97 — folder-view: append `-v1` al preview quote.
+    # Allinea il default UI al numbering server-side (_next_quote_number_progressive).
+    if doc_type == "quote":
+        from app.services.numbering import with_v1_suffix
+        out = with_v1_suffix(out)
     return {
         "preview": out,
         "format": fmt,

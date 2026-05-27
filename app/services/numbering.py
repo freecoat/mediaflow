@@ -78,20 +78,27 @@ def next_progressive_code(
         q = q.execution_options(include_deleted=True)
     if extra_filter is not None:
         q = q.filter(extra_filter)
-    last = q.order_by(model.id.desc()).first()
-    n = 1
-    if last is not None:
+    # v3.5.0-alpha.172.97 — scan ALL matching codes and compute max(N).
+    # ORDER BY id.desc() era fragile: con versioning (Q-2026-004-v2) il
+    # "piu' recente" puntava a un base N piu' basso, restituendo un N gia'
+    # occupato da un altro doc → UNIQUE collision. Fix: max progressive
+    # tra tutti i match, ignorando suffix -vNN.
+    max_n = 0
+    for row in q.all():
+        code = getattr(row, code_field)
+        if not code:
+            continue
         try:
-            tail = getattr(last, code_field).rsplit("-", 1)[1]
-            # Skip tail "vNN" (es. quote versioning Q-2026-001-v2):
-            # in tal caso ricaviamo il base "Q-2026-001" e prendiamo il suo N.
+            tail = code.rsplit("-", 1)[1]
             if tail.startswith("v") and tail[1:].isdigit():
-                base = getattr(last, code_field).rsplit("-", 1)[0]
+                base = code.rsplit("-", 1)[0]
                 tail = base.rsplit("-", 1)[1]
-            n = int(tail) + 1
+            cur_n = int(tail)
         except (ValueError, IndexError, AttributeError):
-            n = 1
-    return f"{prefix}{n:03d}"
+            continue
+        if cur_n > max_n:
+            max_n = cur_n
+    return f"{prefix}{max_n + 1:03d}"
 
 
 def next_year_progressive(
@@ -255,6 +262,41 @@ def gen_doc_code(
         rec.current_year = today.year
         rec.current_seq = seq
     return code, seq
+
+
+# v3.5.0-alpha.172.97 — Helper versioning per Quote.number
+# Tutte le Quote nascono con suffix -v1. new-version aggiunge -v(N+1).
+# Folder-view UI raggruppa per base_code = strip -vN suffix.
+import re as _re
+
+_VERSION_SUFFIX_RE = _re.compile(r"-v(\d+)$")
+
+
+def split_version_suffix(code: str) -> tuple[str, int]:
+    """Spezza un Quote.number in (base, version_number).
+
+    Esempi:
+        "Q-2026-001-v2" -> ("Q-2026-001", 2)
+        "Q-2026-001"    -> ("Q-2026-001", 1)   # legacy fallback
+        ""              -> ("", 1)
+    """
+    if not code:
+        return "", 1
+    m = _VERSION_SUFFIX_RE.search(code)
+    if m:
+        return code[:m.start()], int(m.group(1))
+    return code, 1
+
+
+def with_v1_suffix(code: str) -> str:
+    """Aggiunge `-v1` a un base code se non ha già un suffix -vN.
+
+    Idempotente. Usato dai generatori quote-number per produrre sempre
+    codici versionati uniformi (Q-2026-001-v1).
+    """
+    if not code:
+        return code
+    return code if _VERSION_SUFFIX_RE.search(code) else f"{code}-v1"
 
 
 def with_retry_on_unique(
