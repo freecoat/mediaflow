@@ -101,3 +101,22 @@ def test_pillow_registered_for_images():
     from app.services.tech_specs_extractor import get_extractor
     assert get_extractor("image/jpeg") is not None
     assert get_extractor("image/png") is not None
+
+
+def test_asset_metadata_back_compat():
+    """Endpoint /dam/api/assets/{id}/metadata usa extract_asset_metadata.
+    Verifica che continui a funzionare delegando al nuovo service.
+
+    Pre: ricarico ffprobe_extractor cosi' il delega trova un extractor
+    registrato su video/* (il fixture _clean_registry ha svuotato _REGISTRY)."""
+    import importlib
+    from app.services.tech_specs_extractor import ffprobe_extractor
+    importlib.reload(ffprobe_extractor)
+    from app.services.asset_metadata import extract_asset_metadata
+    out = extract_asset_metadata("/non/existent.mp4", "video/mp4")
+    # Shape compatibile con consumer esistente
+    assert "tool" in out
+    assert "errors" in out
+    assert "video" in out
+    assert "audio" in out
+    assert "container" in out
