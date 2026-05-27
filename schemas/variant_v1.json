@@ -1,5 +1,5 @@
 {
-  "$schema": "https://json-schema.org/draft-07/schema",
+  "$schema": "http://json-schema.org/draft-07/schema#",
   "$id": "claqo/variant/v1",
   "title": "Claqo DeliveryVariant Schema v1",
   "type": "object",
