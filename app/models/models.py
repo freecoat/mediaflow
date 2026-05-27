@@ -2642,6 +2642,14 @@ class Asset(Base):
     delivery_method: Mapped[Optional[str]] = mapped_column(String(80), nullable=True)
     delivery_tracking: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    # ── v3.5.0-alpha.172.94 Bundle L Stack 1 — Tech specs cached ──
+    # Estratto da tech_specs_extractor service (ffprobe default, MediaInfo/AI
+    # vision futuri). Refresh manuale "↻ Riestrai" + auto al QC start se
+    # extracted_at > 30gg.
+    tech_specs_json: Mapped[Optional[dict]] = mapped_column(JSON, nullable=True)
+    tech_specs_extractor: Mapped[Optional[str]] = mapped_column(String(40), nullable=True)
+    tech_specs_extracted_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+    tech_specs_schema_version: Mapped[Optional[str]] = mapped_column(String(20), nullable=True)
     job: Mapped[Optional["Job"]] = relationship(back_populates="assets")
     uploaded_by_user: Mapped["User"] = relationship(back_populates="assets")
     tags: Mapped[List["Tag"]] = relationship(secondary="asset_tags")

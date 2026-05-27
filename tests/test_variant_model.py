@@ -92,3 +92,27 @@ def test_jobdeliverable_variant_link(db, tenant_id):
     assert d.variant_id == v.id
     assert d.variant_language == "it"
     assert d.variant_format == "IMF"
+
+
+def test_asset_tech_specs_columns(db, tenant_id):
+    from datetime import datetime
+    from app.models import Tenant, Client, Project, Job, Asset, User
+    from app.models.models import AssetType
+    db.add(Tenant(id=tenant_id, name="t", slug="t"))
+    db.add(User(id=1, tenant_id=tenant_id, email="u@t", full_name="U", hashed_password="x"))
+    db.add(Client(id=1, tenant_id=tenant_id, name="C"))
+    db.add(Project(id=1, tenant_id=tenant_id, code="P1", title="P", client_id=1))
+    db.add(Job(id=1, tenant_id=tenant_id, code="J1", title="J", project_id=1, client_id=1))
+    a = Asset(
+        tenant_id=tenant_id, job_id=1,
+        filename="x.mxf", original_name="x.mxf", file_path="/tmp/x.mxf", mime_type="video/x-mxf",
+        asset_type=AssetType.video, file_size=0, uploaded_by=1,
+        tech_specs_json={"video": {"codec": "ProRes", "resolution": "1920x1080"}},
+        tech_specs_extractor="ffprobe",
+        tech_specs_extracted_at=datetime.utcnow(),
+        tech_specs_schema_version="v1",
+    )
+    db.add(a); db.commit(); db.refresh(a)
+    assert a.tech_specs_json["video"]["codec"] == "ProRes"
+    assert a.tech_specs_extractor == "ffprobe"
+    assert a.tech_specs_schema_version == "v1"
