@@ -2081,6 +2081,9 @@ app.include_router(billing.router)
 # v3.5.0-alpha.172.3 Restructure Sprint 3 — Ingest deliverable (MHL Yoyotta + CSV LTO)
 from app.routers import ingest_deliverables as ingest_deliverables_router
 app.include_router(ingest_deliverables_router.router)
+# Bundle L Stack 1 Task 14 — Delivery variants CRUD minimal
+from app.routers.delivery_variants import router as delivery_variants_router
+app.include_router(delivery_variants_router)
 
 
 @app.get("/", response_class=HTMLResponse)
