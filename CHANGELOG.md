@@ -1,5 +1,62 @@
 # MediaFlow — Changelog
 
+## v3.5.0-alpha.172.98 — Bundle L Stack 2: QC event-sourced foundation (28 mag 2026)
+
+Milestone 1/3 dello Stack 2 di Bundle L. Foundation event-sourcing per il workflow QC: ogni mutazione produce un `QCEvent` append-only; una projection materializzata `QCReport` viene aggiornata in tempo reale; coerenza con Bundle I preservata via sync diretto su `JobDeliverable.qc_substatus`.
+
+**Models (`app/models/models.py`)**:
+- `QCEventType` enum a 13 valori: 9 originali (`qc_started, snapshot_taken, video/audio/text_error_logged, recommendation_added, qc_passed/failed/conditional`) + 4 estensioni (`note_added, correction_requested, signoff_added, qc_reopened`).
+- `QCEvent` (nuova tabella, append-only): `id, tenant_id, deliverable_id, asset_id?, qc_number, sequence, event_type, payload_json, operator_id, occurred_at, source, source_excel_path`. 2 indici composti (`deliverable_id+qc_number+sequence`, `tenant_id+occurred_at`).
+- `QCReport` (projection materializzata, unique per deliverable): counters per event_type (video/audio/text errors, recommendations, notes, corrections, signoffs) + `max_grade` + `overall_status` + `last_event_at/id` + `summary_json` cache UI.
+- `Tenant.tech_specs_refresh_days` (nuovo, default 30). Auto-ALTER al boot.
+
+**Listener immutability (`app/services/qc_event_listener.py`)**:
+- `before_update` / `before_delete` su `QCEvent` → `raise QCEventImmutabilityError` se non in admin override.
+- Session option escape: `session.info['__qc_admin_override__'] = True` per repair scripts super-admin.
+
+**Projection sync esplicita**:
+- `apply_projection_for_event(sess, ev)` chiamata sincrona dal service dopo ogni `_emit` (NOT un after_insert listener: SQLAlchemy ha quirk con mutazioni durante flush; chiamata esplicita garantisce persistenza).
+- Counter aggiornati per channel-typed events. `max_grade` propagato dai video/audio/text errors.
+- `_sync_deliverable_bundle_i` aggiorna `JobDeliverable.status/qc_substatus/qc_run_at/qc_run_by_user_id` per back-compat UI Bundle I esistente.
+
+**Service `app/services/qc_events.py`** — 11 funzioni pubbliche:
+- `start_qc(d, asset_id?, refresh_snapshot=True)` → emette `qc_started` (+ `snapshot_taken` se asset ha tech_specs)
+- `log_error(d, channel: video|audio|text, timecode?, grade=1, description, extra?)`
+- `add_recommendation`, `add_note`, `request_correction`, `signoff`
+- `pass_qc`, `fail_qc`, `conditional_qc`, `reopen_qc`
+- `rebuild_qc_report(d)` per re-derivazione esplicita da event stream
+
+Payload `payload_json` come dict libero (no jsonschema validation runtime). Schema suggerito documentato nel modulo docstring.
+
+**Router `app/routers/qc.py`** — 13 endpoint REST:
+- 11 write (`POST /qc/api/deliverables/{id}/start, log-event, recommendation, note, correction, signoff, pass, fail, conditional, reopen, rebuild-report`)
+- 2 read (`GET .../events, .../report`)
+- RBAC: write → `edit_planning_all | assign_resources`. Read → `view_finance | assign_resources | edit_planning_all`.
+- Output standard: `{event, report, deliverable_status, deliverable_qc_substatus}` per refresh UI live.
+
+**Sostituzione path Bundle I → event-sourced** (`app/routers/jobs.py` `update_deliverable`):
+Quando `status=qc` viene PUT-ato:
+- Path A (main status ≠ qc): mutazione diretta legacy invariata.
+- Path B (main status = qc): delega a `qc_events.start_qc/pass_qc/fail_qc` invece di mutare direttamente; listener sincronizza `qc_substatus` per UI back-compat.
+- Cascade reject (`cascade_qc_reject` da Bundle I) chiamato indipendentemente sul fail per preservare asset/spawn placeholder workflow.
+
+**Backfill al boot (`app/main.py`)**:
+- `_auto_migrate_bundle_l_stack2`: ALTER TABLE tenants per `tech_specs_refresh_days` se mancante.
+- `_auto_backfill_qc_events_stack2`: spawn QCEvent stream synthetic per ogni `JobDeliverable.qc_substatus != NULL` legacy. Mapping conservativo: passed → `qc_passed`, rejected → `qc_failed`, in_progress → solo `qc_started`. Idempotente (skip se QCReport o eventi già esistono). source="legacy_backfill".
+
+**Smoke E2E API verificato (DB pulito → QC v2 reopen)**:
+- start → event 1 qc_number=1 / deliverable.status=qc qc_sub=in_progress / report.last_qc_number=1 ✓
+- log video grade 3 → video_errors_count=1, max_grade=3 ✓
+- pass → overall=passed / deliverable.qc_sub=passed ✓
+- reopen → overall=reopened ✓
+- start nuovo round → qc_number=2 / report.last_qc_number=2 ✓
+
+Nuove tabelle create automaticamente da `Base.metadata.create_all` (lifespan). Listener immutability registrato dal lifespan. Backfill silent no-op su DB pulito (135 deliverable, 0 con qc_substatus legacy).
+
+Stack 3+4+5 backlog: UI rich modal QC, ingest Excel FbF template, capability AI `propose_qc_from_asset_diff`, export PDF/HTML QC report.
+
+---
+
 ## v3.5.0-alpha.172.97 — Folder-view quote + 4 fix sessione 27 mag pomeriggio (27 mag 2026)
 
 Chiusura sessione test 27 maggio: 5 fix verificati + nuovo cantiere folder-view per la lista quotazioni.

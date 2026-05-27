@@ -8,6 +8,34 @@
 
 ## Versione corrente
 
+**v3.5.0-alpha.172.98** — 28 maggio 2026 — Bundle L Stack 2 milestone 1/3: QC event-sourced foundation
+
+Chiuso il foundation di Stack 2 (Bundle L QC event-sourced). Models `QCEvent` append-only + `QCReport` projection + 13 event types + service 11 funzioni + router 13 endpoint REST + sostituzione path Bundle I `update_deliverable` → delega allo stream eventi. Coerenza UI Bundle I preservata via projection sync diretta a `JobDeliverable.qc_substatus`.
+
+Smoke E2E API verificato end-to-end (start → log err → pass → reopen → start v2).
+
+### Prossima sessione
+
+**Stack 2 milestone 2/3 (α.172.99)** — UI rich modal QC:
+- Modal QC submit con timeline events loggabili (timecode + grade + canale + descrizione)
+- Tab "Storia QC" per QCEvent stream completo
+- Bottoni 6 esiti: Pass / Fail / Conditional / Reopen / Sign-off / Note
+- Integrazione con `/planning` HUB (Bundle J)
+- vis-timeline alternativo per visualizzazione QC rounds
+
+**Stack 2 milestone 3/3 (α.172.100)** — Tests + edge cases:
+- `tests/test_qc_events.py`: immutability listener, projection sync correctness, backfill idempotency, reopen flow, sign-off flow, qc_number progression, payload schema esempi.
+- Integration test Bundle I cascade (`qc_failed` → `cascade_qc_reject`).
+- Edge: multi-asset stream, qc_number monotonicity invariante.
+
+**Push pendente**: α.172.97 + α.172.98 entrambi locali, push origin/main dopo test browser Matteo domani.
+
+### Sessione 28 maggio — riepilogo
+
+[Stack 2 milestone 1/3 sopra. Tasks 12-16 chiusi: models, listener immutability, service, router, backfill+auto-migrate. Tutti smoke API verdi. Server live su :8000.]
+
+---
+
 **v3.5.0-alpha.172.97** — 27 maggio 2026 sera — Folder-view quote + 5 fix sessione 27 mag
 
 Cantiere folder-view chiuso. Lista `/quotes/` ora raggruppa per `base_code` con stacked status cards, accordion expand/collapse, filtri stato preservati. Tutte le quote nuove nascono con suffix `-v1`. 4 fix tecnici verificati end-to-end inclusi nel bundle.

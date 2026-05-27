@@ -821,6 +821,11 @@ async def update_deliverable(
         except ValueError: raise HTTPException(400, f"nature invalida: {nature}")
 
     # v3.5.0-alpha.172.89 (Bundle I) — Stati nested. Validazione + cascade.
+    # v3.5.0-alpha.172.98 (Bundle L Stack 2) — QC transitions ora delegano a
+    # `app.services.qc_events` (event-sourced). Il listener after_insert su
+    # QCEvent sincronizza d.qc_substatus + d.qc_run_at + d.qc_run_by_user_id
+    # per back-compat con UI Bundle I. La cascade reject e' chiamata qui per
+    # preservare il workflow esistente (asset rejected + spawn placeholder).
     triggered_qc_cascade = None
     if status is not None:
         try:
@@ -836,16 +841,50 @@ async def update_deliverable(
                 new_sub = QCSubstatus(qc_substatus)
             except ValueError:
                 raise HTTPException(400, f"qc_substatus invalido: {qc_substatus}")
-        d.status = new_status
-        # Reset substatus se main != qc
+
+        # Path A: main status NON qc -> mutazione diretta legacy (nessun QC event)
         if new_status != DeliverableStatus.qc:
+            d.status = new_status
             d.qc_substatus = None
+            if new_status == DeliverableStatus.delivered and not d.delivered_date:
+                d.delivered_date = date.today()
         else:
-            d.qc_substatus = new_sub  # potrebbe restare None se non specificato (qc in attesa)
-        # Cristallizza date di stato
-        if new_status == DeliverableStatus.delivered and not d.delivered_date:
-            d.delivered_date = date.today()
-        # Cascade QC reject
+            # Path B: main status = qc -> delega allo stream QCEvent.
+            from app.services import qc_events as _qc
+            from app.services.qc_event_listener import rebuild_qc_report
+            actor_id = user.id if user else None
+
+            # Apri un QC round se ancora non esiste oppure se l'ultimo era
+            # gia' terminato (passed/failed/conditional) e ora si vuole
+            # ricominciare → in entrambi i casi: chiama start_qc().
+            from app.models import QCReport as _QCReport
+            cur_rep = db.query(_QCReport).filter(
+                _QCReport.deliverable_id == d.id
+            ).first()
+            need_start = (cur_rep is None) or (
+                cur_rep.overall_status not in ("in_progress", "reopened")
+            )
+            if need_start:
+                _qc.start_qc(db, d.id, operator_id=actor_id, source="bundle_i_update")
+
+            # Mappa substatus -> event emit
+            if new_sub == QCSubstatus.passed:
+                _qc.pass_qc(db, d.id, operator_id=actor_id, source="bundle_i_update")
+            elif new_sub == QCSubstatus.rejected:
+                _qc.fail_qc(
+                    db, d.id,
+                    primary_cause=qc_reject_reason or "QC rejected via Bundle I update",
+                    operator_id=actor_id,
+                    source="bundle_i_update",
+                )
+            # qc_substatus=in_progress o None: stato di attesa, nessun event
+            # terminal richiesto (qc_started gia' emesso sopra se needed).
+
+            # Listener after_insert ha sincronizzato d.status + d.qc_substatus.
+            # Per sicurezza forza re-read da DB.
+            db.flush()
+
+        # Cascade QC reject (richiesta Bundle I, indipendente dal path event-sourced)
         if new_status == DeliverableStatus.qc and new_sub == QCSubstatus.rejected:
             from app.services.qc_cascade import cascade_qc_reject
             triggered_qc_cascade = cascade_qc_reject(

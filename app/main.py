@@ -23,6 +23,7 @@ from app.routers import (
     platform,  # v3.5.0-alpha.104 — Super-admin platform tenant management
     holidays as holidays_router,  # v3.5.0-alpha.172.29 — Festività custom + leave balance
     tech_sheet_options,  # v3.5.0-alpha.172.34 — Dropdown options scheda tecnica + seed Netflix
+    qc,  # v3.5.0-alpha.172.98 (Bundle L Stack 2) — QC event-sourced workflow
 )
 
 
@@ -1422,6 +1423,112 @@ def _auto_backfill_jd_variant_match():
         db.close()
 
 
+def _auto_migrate_bundle_l_stack2():
+    """v3.5.0-alpha.172.98 (Bundle L Stack 2) — ALTER tenants per aggiungere
+    `tech_specs_refresh_days` se mancante. Le nuove tabelle qc_events +
+    qc_reports sono create da `create_tables()` (Base.metadata.create_all).
+
+    Idempotente: skip se la colonna esiste gia'.
+    """
+    from sqlalchemy import inspect, text
+    from app.database import engine
+    try:
+        insp = inspect(engine)
+        cols = {c["name"] for c in insp.get_columns("tenants")}
+        if "tech_specs_refresh_days" not in cols:
+            with engine.begin() as conn:
+                conn.execute(text(
+                    "ALTER TABLE tenants ADD COLUMN tech_specs_refresh_days "
+                    "INTEGER NOT NULL DEFAULT 30"
+                ))
+            print("[auto-migrate-stack2] tenants.tech_specs_refresh_days added")
+    except Exception as e:
+        print(f"[auto-migrate-stack2] failed: {e}")
+
+
+def _auto_backfill_qc_events_stack2():
+    """v3.5.0-alpha.172.98 (Bundle L Stack 2) — Backfill synthetic QCEvent
+    stream per JobDeliverable legacy con qc_substatus != NULL (Bundle I).
+
+    Strategia unificata (scenari A/B/C):
+    - Skip se QCReport gia' esiste per il deliverable (idempotente).
+    - Per deliverable con qc_substatus in (in_progress, passed, rejected):
+      spawn qc_started + (qc_passed | qc_failed) con payload_json = legacy
+      qc_report_json (se presente, altrimenti dict vuoto + nota).
+    - source="legacy_backfill" per audit trail.
+    """
+    from app.database import SessionLocal
+    from app.models.models import JobDeliverable, QCEvent, QCReport, QCEventType, QCSubstatus
+    db = SessionLocal()
+    try:
+        candidates = (
+            db.query(JobDeliverable)
+            .filter(JobDeliverable.qc_substatus.isnot(None))
+            .all()
+        )
+        if not candidates:
+            return
+        spawned = 0
+        for d in candidates:
+            # Idempotenza: se gia' c'e' un QCReport (o eventi), skip.
+            has_report = db.query(QCReport).filter(
+                QCReport.deliverable_id == d.id
+            ).first() is not None
+            has_events = db.query(QCEvent).filter(
+                QCEvent.deliverable_id == d.id
+            ).first() is not None
+            if has_report or has_events:
+                continue
+
+            occurred = d.qc_run_at or d.updated_at or datetime.utcnow()
+            base_payload = dict(d.qc_report_json or {})
+            base_payload.setdefault("note", "Legacy backfill da JobDeliverable.qc_substatus")
+
+            # qc_started
+            db.add(QCEvent(
+                tenant_id=d.tenant_id,
+                deliverable_id=d.id,
+                qc_number=1,
+                sequence=1,
+                event_type=QCEventType.qc_started,
+                payload_json={"qc_number": 1, "source": "legacy_backfill"},
+                operator_id=d.qc_run_by_user_id,
+                occurred_at=occurred,
+                source="legacy_backfill",
+            ))
+
+            # Terminal event coerente con qc_substatus
+            if d.qc_substatus == QCSubstatus.passed:
+                term_event = QCEventType.qc_passed
+            elif d.qc_substatus == QCSubstatus.rejected:
+                term_event = QCEventType.qc_failed
+                base_payload.setdefault("primary_cause", "Legacy: imported as rejected")
+            else:  # in_progress: niente terminal event
+                term_event = None
+
+            if term_event is not None:
+                db.add(QCEvent(
+                    tenant_id=d.tenant_id,
+                    deliverable_id=d.id,
+                    qc_number=1,
+                    sequence=2,
+                    event_type=term_event,
+                    payload_json=base_payload,
+                    operator_id=d.qc_run_by_user_id,
+                    occurred_at=occurred,
+                    source="legacy_backfill",
+                ))
+            spawned += 1
+        if spawned:
+            db.commit()
+            print(f"[auto-backfill-stack2] {spawned} deliverable -> QCEvent stream synthetic")
+    except Exception as e:
+        print(f"[auto-backfill-stack2] failed: {e}")
+        db.rollback()
+    finally:
+        db.close()
+
+
 def _auto_backfill_quote_v1_suffix():
     """v3.5.0-alpha.172.97 — Backfill suffix `-v1` su Quote.number legacy.
 
@@ -1566,6 +1673,21 @@ async def lifespan(app: FastAPI):
         _auto_backfill_quote_v1_suffix()
     except Exception as e:
         print(f"[lifespan] _auto_backfill_quote_v1_suffix failed: {e}")
+    # v3.5.0-alpha.172.98 (Bundle L Stack 2) — ALTER tenants + register listener
+    # + backfill QCEvent stream da JobDeliverable.qc_substatus legacy.
+    try:
+        _auto_migrate_bundle_l_stack2()
+    except Exception as e:
+        print(f"[lifespan] _auto_migrate_bundle_l_stack2 failed: {e}")
+    try:
+        from app.services.qc_event_listener import init_qc_event_listeners
+        init_qc_event_listeners()
+    except Exception as e:
+        print(f"[lifespan] init_qc_event_listeners failed: {e}")
+    try:
+        _auto_backfill_qc_events_stack2()
+    except Exception as e:
+        print(f"[lifespan] _auto_backfill_qc_events_stack2 failed: {e}")
     # v3.5.0-alpha.111 — Backfill JobResourceAssignment da booking storici
     try:
         _backfill_resource_assignments()
@@ -1938,7 +2060,7 @@ async def lifespan(app: FastAPI):
     yield
 
 
-app = FastAPI(title="Claqo", version="3.5.0-alpha.172.97", lifespan=lifespan)
+app = FastAPI(title="Claqo", version="3.5.0-alpha.172.98", lifespan=lifespan)
 
 BASE_DIR = Path(__file__).parent
 app.mount("/static", StaticFiles(directory=BASE_DIR / "static"), name="static")
@@ -2232,6 +2354,8 @@ app.include_router(hr.router)
 app.include_router(holidays_router.router)  # v3.5.0-alpha.172.29 — Festività custom + leave balance
 app.include_router(tech_sheet_options.router)  # v3.5.0-alpha.172.34 — Dropdown options scheda tecnica
 app.include_router(jobs.router)
+# v3.5.0-alpha.172.98 (Bundle L Stack 2) — QC event-sourced workflow router
+app.include_router(qc.router)
 app.include_router(admin.router)
 app.include_router(notifications_router.router)
 app.include_router(tech_sheets.router)

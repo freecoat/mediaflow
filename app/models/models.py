@@ -10,7 +10,7 @@ from datetime import datetime, date, time
 from typing import Optional, List, Any
 from sqlalchemy import (
     String, Integer, Float, Boolean, Text, Date, DateTime, Time, JSON,
-    ForeignKey, Enum as SAEnum, UniqueConstraint
+    ForeignKey, Enum as SAEnum, UniqueConstraint, Index
 )
 from sqlalchemy.orm import Mapped, mapped_column, relationship, validates
 from app.database import Base
@@ -227,6 +227,26 @@ class AssetStatus(str, enum.Enum):
     uploaded = "uploaded"           # file presente, non ancora QC
     rejected = "rejected"           # rifiutato (QC o cliente) → da rifare
     accepted = "accepted"           # validato (post-delivery o post-QC pass)
+
+
+# v3.5.0-alpha.172.98 (Bundle L Stack 2) — QCEvent event types.
+# 9 originali + 4 estensioni: qc_reopened, note_added, correction_requested,
+# signoff_added. Payload_json dict libero per ogni event (struttura suggerita
+# nei commenti del service `qc_events.py` ma non validata runtime).
+class QCEventType(str, enum.Enum):
+    qc_started = "qc_started"
+    snapshot_taken = "snapshot_taken"
+    video_error_logged = "video_error_logged"
+    audio_error_logged = "audio_error_logged"
+    text_error_logged = "text_error_logged"
+    recommendation_added = "recommendation_added"
+    note_added = "note_added"
+    correction_requested = "correction_requested"
+    signoff_added = "signoff_added"
+    qc_passed = "qc_passed"
+    qc_failed = "qc_failed"
+    qc_conditional = "qc_conditional"
+    qc_reopened = "qc_reopened"
 
 
 # v3.5.0-alpha.66.9 — Natura del deliverable: digital o physical (mutually exclusive)
@@ -541,6 +561,12 @@ class Tenant(Base):
     fiscal_regime: Mapped[str] = mapped_column(String(8), default="RF01")              # RF01=ordinario, RF19=forfettario
     payment_terms_default: Mapped[int] = mapped_column(Integer, default=30)            # giorni
     payment_method_default: Mapped[str] = mapped_column(String(80), default="Bonifico bancario")
+    # v3.5.0-alpha.172.98 (Bundle L Stack 2) — Tech specs refresh policy.
+    # Numero di giorni dopo i quali un Asset.tech_specs_json viene considerato
+    # stale e ri-estratto al prossimo qc_started. Configurabile per tenant.
+    tech_specs_refresh_days: Mapped[int] = mapped_column(
+        Integer, default=30, server_default="30"
+    )
     invoice_footer: Mapped[Optional[str]] = mapped_column(Text, nullable=True)         # testo libero in calce
     # v3.5.0-alpha.172.60 — Sede strutturata FatturaPA (CedentePrestatore/Sede).
     # `address` resta come legacy free-text (compat PDF); per SDI XML servono
@@ -3729,3 +3755,94 @@ class NumberingConfig(Base):
     notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+
+# v3.5.0-alpha.172.98 (Bundle L Stack 2) — QC event-sourced model.
+#
+# Tabella append-only: ogni mutazione del workflow QC su un deliverable produce
+# un record. La projection materializzata QCReport (sotto) e' aggiornata via
+# event listener `after_insert` (vedi app/services/qc_event_listener.py).
+# UPDATE/DELETE rifiutati da listener `before_update`/`before_delete`
+# (immutability), salvo session option `__qc_admin_override__` per super-admin.
+#
+# Coerenza con Bundle I: listener aggiorna anche JobDeliverable.qc_substatus +
+# qc_run_at + qc_run_by_user_id per back-compat con cascade qc esistente.
+#
+# qc_number: progressivo intra-deliverable (1, 2, 3 …). Incrementato a ogni
+# qc_started. qc_reopened spawna un nuovo qc_started con qc_number successivo.
+#
+# sequence: ordinamento intra-QC (1 = qc_started, 2 = snapshot_taken, 3 = primo
+# errore loggato, ecc.).
+#
+# payload_json: dict libero. Struttura suggerita per event_type documentata nel
+# service `qc_events.py` ma non validata runtime (no jsonschema check per
+# performance + flessibilita' UI rich).
+class QCEvent(Base):
+    __tablename__ = "qc_events"
+    __table_args__ = (
+        Index("ix_qc_events_deliverable_qc", "deliverable_id", "qc_number", "sequence"),
+        Index("ix_qc_events_tenant_occurred", "tenant_id", "occurred_at"),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    tenant_id: Mapped[int] = mapped_column(ForeignKey("tenants.id"), index=True)
+    deliverable_id: Mapped[int] = mapped_column(
+        ForeignKey("job_deliverables.id"), index=True
+    )
+    asset_id: Mapped[Optional[int]] = mapped_column(
+        ForeignKey("assets.id"), nullable=True, index=True
+    )
+    qc_number: Mapped[int] = mapped_column(Integer, index=True)
+    sequence: Mapped[int] = mapped_column(Integer)
+    event_type: Mapped[QCEventType] = mapped_column(
+        SAEnum(QCEventType), index=True
+    )
+    payload_json: Mapped[dict] = mapped_column(JSON, nullable=False, default=dict)
+    operator_id: Mapped[Optional[int]] = mapped_column(
+        ForeignKey("users.id"), nullable=True
+    )
+    occurred_at: Mapped[datetime] = mapped_column(
+        DateTime, default=datetime.utcnow, index=True
+    )
+    # Provenienza: "manual" | "excel_ingest" | "ai_diff" | "legacy_backfill" | "qc_cascade"
+    source: Mapped[Optional[str]] = mapped_column(String(40), nullable=True)
+    source_excel_path: Mapped[Optional[str]] = mapped_column(String(512), nullable=True)
+
+
+# v3.5.0-alpha.172.98 (Bundle L Stack 2) — Projection materializzata QCEvent.
+# Unica row per deliverable_id. Aggiornata da listener `after_insert` su QCEvent.
+# Refresh esplicito tramite `qc_events.rebuild_qc_report(deliverable_id)`.
+#
+# summary_json: cache UI tabellare es. {"errors_by_grade": {1:2, 2:0, 3:1, 4:0},
+# "last_5_events": [...], "open_corrections": [...]}.
+class QCReport(Base):
+    __tablename__ = "qc_reports"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    tenant_id: Mapped[int] = mapped_column(ForeignKey("tenants.id"), index=True)
+    deliverable_id: Mapped[int] = mapped_column(
+        ForeignKey("job_deliverables.id"), unique=True, index=True
+    )
+    last_qc_number: Mapped[int] = mapped_column(Integer, default=0)
+    # "in_progress" | "passed" | "failed" | "conditional" | "reopened"
+    overall_status: Mapped[str] = mapped_column(String(20), default="in_progress")
+    video_errors_count: Mapped[int] = mapped_column(Integer, default=0)
+    audio_errors_count: Mapped[int] = mapped_column(Integer, default=0)
+    text_errors_count: Mapped[int] = mapped_column(Integer, default=0)
+    recommendations_count: Mapped[int] = mapped_column(Integer, default=0)
+    notes_count: Mapped[int] = mapped_column(Integer, default=0)
+    open_corrections_count: Mapped[int] = mapped_column(Integer, default=0)
+    signoffs_count: Mapped[int] = mapped_column(Integer, default=0)
+    max_grade: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    last_operator_id: Mapped[Optional[int]] = mapped_column(
+        ForeignKey("users.id"), nullable=True
+    )
+    last_event_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+    last_event_id: Mapped[Optional[int]] = mapped_column(
+        ForeignKey("qc_events.id"), nullable=True
+    )
+    summary_json: Mapped[Optional[dict]] = mapped_column(JSON, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime, default=datetime.utcnow, onupdate=datetime.utcnow
+    )

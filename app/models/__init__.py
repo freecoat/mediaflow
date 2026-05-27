@@ -51,4 +51,6 @@ from app.models.models import (
     AnomalyEntry, AnomalyType, AnomalyStatus, AnomalyAction, AnomalySourceKind,
     # v3.5.0-alpha.112 — Numbering rules
     NumberingConfig,
+    # v3.5.0-alpha.172.98 (Bundle L Stack 2) — QC event-sourced
+    QCEvent, QCReport, QCEventType,
 )
