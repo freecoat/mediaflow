@@ -1,5 +1,47 @@
 # MediaFlow — Changelog
 
+## v3.5.0-alpha.172.94 — Bundle L Stack 1 (Task 1-7): models + JSON Schema + extractor base (27 mag 2026)
+
+Foundation Bundle L "tech specs unified" (riconciliazione Asset/Deliverable/QC, catalogo DeliveryVariant capitolato-first). Stack 1 di 5, milestone 1 di 3. Nessun comportamento utente cambia in α.172.94: solo modelli, schema, service plumbing. TDD strict (tests/ + pytest).
+
+**Nuovi modelli** (`app/models/variant.py`):
+- `VariantSchemaVersion` — versione schema canonico (v1, v2…). Unique su `version`. Una sola `is_active=True` (vincolo applicativo).
+- `DeliveryVariant` — variante canonica di consegna (es. "IMF Master HD IT", "ProRes 4444 XQ"). `tenant_id` + `code` unique-per-tenant + `category` (T1 technical / T2 documentation / T3 compilation) + `spec_json` validato contro VariantSchemaVersion + override editoriali (language/territory/delivery_format/has_textless/has_subtitles).
+- Enum `DeliveryVariantCategory` (t1_technical / t2_documentation / t3_compilation).
+
+**Estensioni modelli esistenti** (`app/models/models.py`):
+- `JobDeliverable`: nuova FK `variant_id` (nullable) + 3 colonne snapshot (`variant_language`, `variant_territory`, `variant_format`) — frozen al momento dello spawn per evitare drift retroattivi quando la variant cambia.
+- `Asset`: 4 nuove colonne tech specs cached (`tech_specs_json` JSON + `tech_specs_extractor` String(40) + `tech_specs_extracted_at` DateTime + `tech_specs_schema_version` String(20)). Refresh manuale "↻ Riestrai" o auto al QC start se stale (>30gg).
+
+**JSON Schema canonico** (`schemas/variant_v1.json`):
+- Draft-07, `$id` `claqo/variant/v1`, `additionalProperties: true` (back-compat per stack successivi).
+- Required: `code`, `name`, `category`. Pattern code `^[a-z0-9-]+$`.
+- Blocchi: container/video/audio[]/subtitles/textless/language/territory/naming/head_format/archive/metadata. Enum chiusi su color_space, chroma, bit_depth, framerate, codec audio, hdr_format, subtitles type, container format, field_order.
+
+**Service `app/services/variant_schema.py`**:
+- `load_active_schema(db)` / `load_schema_by_version(db, version)` / `validate_variant_spec(db, spec, schema_version=None)` — JSON Schema validator helpers.
+
+**Service `app/services/tech_specs_extractor/`**:
+- `base.py` ABC `TechSpecsExtractor.extract(path, mime)` con shape canonica dict (tool / container / video / audio[] / errors[]).
+- `__init__.py` registry pluggable + public API `extract_tech_specs(path, mime)`: decorator `@register_extractor(name, mime_priority)`, lookup via fnmatch glob, first-match-wins, gentle fallback (`tool: "none"` se no match, catch-all eccezioni con `logger.exception` + `errors[]`).
+- Stack 1 NON registra extractor: FFProbe/Pillow arrivano nei Task 8-9 (α.172.95).
+
+**Tests scaffold** (`tests/`):
+- `conftest.py` con fixture `db` (SQLite in-memory, schema auto-create) + `tenant_id` (=1).
+- `test_variant_model.py` — 6 test (VariantSchemaVersion CRUD/unique, DeliveryVariant CRUD/unique, JobDeliverable.variant_id link, Asset.tech_specs columns).
+- `test_variant_schema.py` — 7 test (schema loads + valid/invalid pattern/enum + additionalProperties + service loader/validator).
+- `test_tech_specs_extractor.py` — 4 test (ABC required method, register/lookup, public API, no-extractor fallback). Fixture `autouse=True` snapshot/restore `_REGISTRY` per evitare pollution cross-test (preventiva per Task 8/9).
+- 17 test totali, suite verde.
+
+**Dipendenze**:
+- `jsonschema>=4.0` già in `requirements.txt` (v4.26 installata).
+
+**Cleanup**: 69 export ZIP legacy (alpha.111–alpha.172.x) rimossi da `docs/` pre-Bundle L.
+
+**Plan**: `docs/superpowers/plans/2026-05-26-bundle-l-stack1-foundation.md` (17 task, 3 milestone). **Design**: `docs/superpowers/specs/2026-05-26-bundle-l-tech-specs-unified-design.md`.
+
+---
+
 ## v3.5.0-alpha.172.93 — Bundle K1+K2+K3: filtri planning unificati + LTO physical auto + CR ore/€ + drill lavorazione (26 mag 2026)
 
 Sessione test 26 mag. Hotfix endpoint `/jobs/api/deliverables/list` 500 (typo `j.name` su Job che ha `title`) + 3 bundle K richiesti da Matteo durante test plan.
