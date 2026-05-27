@@ -56,3 +56,38 @@ def test_additional_properties_allowed(schema_v1):
         "future_field_2027": {"any": "value"},
     }
     validate(instance=instance, schema=schema_v1)  # no exception
+
+
+def test_load_active_schema(db):
+    from app.models.variant import VariantSchemaVersion
+    from app.services.variant_schema import load_active_schema
+
+    sv = VariantSchemaVersion(version="v1", schema_json={"type": "object"}, is_active=True)
+    db.add(sv); db.commit()
+    schema = load_active_schema(db)
+    assert schema["type"] == "object"
+
+
+def test_validate_variant_against_active_schema(db):
+    from app.models.variant import VariantSchemaVersion
+    from app.services.variant_schema import validate_variant_spec
+    import pytest
+
+    sv = VariantSchemaVersion(
+        version="v1",
+        schema_json={
+            "type": "object",
+            "required": ["code", "name", "category"],
+            "properties": {"category": {"enum": ["t1_technical"]}},
+        },
+        is_active=True,
+    )
+    db.add(sv); db.commit()
+
+    # Valid
+    validate_variant_spec(db, {"code": "x", "name": "X", "category": "t1_technical"})
+
+    # Invalid: missing required
+    from jsonschema.exceptions import ValidationError
+    with pytest.raises(ValidationError):
+        validate_variant_spec(db, {"code": "x"})
