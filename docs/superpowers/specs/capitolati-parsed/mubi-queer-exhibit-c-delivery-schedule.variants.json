@@ -1,0 +1,20 @@
+[
+  {
+    "code": "mubi-queer-exhibit-c-delivery-schedule-stub-1",
+    "name": "[DRY-RUN] mubi-queer-exhibit-c-delivery-schedule chunk 1",
+    "category": "t1_technical",
+    "spec_json": {},
+    "source_capitolato": "MUBI_QUEER - EXHIBIT C Delivery Schedule.pdf",
+    "source_section": "chunk 1/2",
+    "_snippet": "PICTURE Deal Memo DATE Page 7 of 17  EXHIBIT C  Delivery Schedule  to the Acquisition and Distribution Agreement dated a"
+  },
+  {
+    "code": "mubi-queer-exhibit-c-delivery-schedule-stub-2",
+    "name": "[DRY-RUN] mubi-queer-exhibit-c-delivery-schedule chunk 2",
+    "category": "t1_technical",
+    "spec_json": {},
+    "source_capitolato": "MUBI_QUEER - EXHIBIT C Delivery Schedule.pdf",
+    "source_section": "chunk 2/2",
+    "_snippet": "00,000 per claim/US $ 5,000,000 in the aggregate and the policy must remain in effect for at least three years from the "
+  }
+]

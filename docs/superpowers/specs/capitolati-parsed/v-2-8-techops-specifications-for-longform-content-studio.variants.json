@@ -1,0 +1,29 @@
+[
+  {
+    "code": "v-2-8-techops-specifications-for-longform-content-studio-stub-1",
+    "name": "[DRY-RUN] v-2-8-techops-specifications-for-longform-content-studio chunk 1",
+    "category": "t1_technical",
+    "spec_json": {},
+    "source_capitolato": "V 2.8 - TechOps Specifications for Longform Content (Studio).pdf",
+    "source_section": "chunk 1/3",
+    "_snippet": "rt      \\                             TechOps Inbound Specifications For Longform Content VERSION 2.8 March 2024  SUMMAR"
+  },
+  {
+    "code": "v-2-8-techops-specifications-for-longform-content-studio-stub-2",
+    "name": "[DRY-RUN] v-2-8-techops-specifications-for-longform-content-studio chunk 2",
+    "category": "t1_technical",
+    "spec_json": {},
+    "source_capitolato": "V 2.8 - TechOps Specifications for Longform Content (Studio).pdf",
+    "source_section": "chunk 2/3",
+    "_snippet": "adata>   • The styling and layout information should appear as below: • Example for PQ (UHD/HDR)   • Font color is 127 g"
+  },
+  {
+    "code": "v-2-8-techops-specifications-for-longform-content-studio-stub-3",
+    "name": "[DRY-RUN] v-2-8-techops-specifications-for-longform-content-studio chunk 3",
+    "category": "t1_technical",
+    "spec_json": {},
+    "source_capitolato": "V 2.8 - TechOps Specifications for Longform Content (Studio).pdf",
+    "source_section": "chunk 3/3",
+    "_snippet": "0123456_A1234_CC_EN-US.scc   Patch Fixes [GTM Unified ID]_[GTM Production Number]_[Aspect Ratio + Transformation]_[Stand"
+  }
+]

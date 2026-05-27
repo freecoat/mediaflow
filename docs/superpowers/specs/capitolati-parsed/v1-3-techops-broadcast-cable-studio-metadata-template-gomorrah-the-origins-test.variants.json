@@ -1,0 +1,524 @@
+[
+  {
+    "code": "v1-3-techops-broadcast-cable-studio-metadata-template-gomorrah-the-origins-test-stub-1",
+    "name": "[DRY-RUN] v1-3-techops-broadcast-cable-studio-metadata-template-gomorrah-the-origins-test chunk 1",
+    "category": "t1_technical",
+    "spec_json": {},
+    "source_capitolato": "V1.3_TechOps_Broadcast_Cable_Studio_Metadata_Template_Gomorrah_The_Origins_test.xlsx",
+    "source_section": "chunk 1/58",
+    "_snippet": "=== Longform_Metadata === FILM / SERIES LEVEL METADATA COLUMNS  (SHOULD BE CONSISTENT FOR ALL EPISODES OF A SERIES) |  |"
+  },
+  {
+    "code": "v1-3-techops-broadcast-cable-studio-metadata-template-gomorrah-the-origins-test-stub-2",
+    "name": "[DRY-RUN] v1-3-techops-broadcast-cable-studio-metadata-template-gomorrah-the-origins-test chunk 2",
+    "category": "t1_technical",
+    "spec_json": {},
+    "source_capitolato": "V1.3_TechOps_Broadcast_Cable_Studio_Metadata_Template_Gomorrah_The_Origins_test.xlsx",
+    "source_section": "chunk 2/58",
+    "_snippet": "  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |"
+  },
+  {
+    "code": "v1-3-techops-broadcast-cable-studio-metadata-template-gomorrah-the-origins-test-stub-3",
+    "name": "[DRY-RUN] v1-3-techops-broadcast-cable-studio-metadata-template-gomorrah-the-origins-test chunk 3",
+    "category": "t1_technical",
+    "spec_json": {},
+    "source_capitolato": "V1.3_TechOps_Broadcast_Cable_Studio_Metadata_Template_Gomorrah_The_Origins_test.xlsx",
+    "source_section": "chunk 3/58",
+    "_snippet": " |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  | "
+  },
+  {
+    "code": "v1-3-techops-broadcast-cable-studio-metadata-template-gomorrah-the-origins-test-stub-4",
+    "name": "[DRY-RUN] v1-3-techops-broadcast-cable-studio-metadata-template-gomorrah-the-origins-test chunk 4",
+    "category": "t1_technical",
+    "spec_json": {},
+    "source_capitolato": "V1.3_TechOps_Broadcast_Cable_Studio_Metadata_Template_Gomorrah_The_Origins_test.xlsx",
+    "source_section": "chunk 4/58",
+    "_snippet": "|  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  "
+  },
+  {
+    "code": "v1-3-techops-broadcast-cable-studio-metadata-template-gomorrah-the-origins-test-stub-5",
+    "name": "[DRY-RUN] v1-3-techops-broadcast-cable-studio-metadata-template-gomorrah-the-origins-test chunk 5",
+    "category": "t1_technical",
+    "spec_json": {},
+    "source_capitolato": "V1.3_TechOps_Broadcast_Cable_Studio_Metadata_Template_Gomorrah_The_Origins_test.xlsx",
+    "source_section": "chunk 5/58",
+    "_snippet": "  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |"
+  },
+  {
+    "code": "v1-3-techops-broadcast-cable-studio-metadata-template-gomorrah-the-origins-test-stub-6",
+    "name": "[DRY-RUN] v1-3-techops-broadcast-cable-studio-metadata-template-gomorrah-the-origins-test chunk 6",
+    "category": "t1_technical",
+    "spec_json": {},
+    "source_capitolato": "V1.3_TechOps_Broadcast_Cable_Studio_Metadata_Template_Gomorrah_The_Origins_test.xlsx",
+    "source_section": "chunk 6/58",
+    "_snippet": "|  |  |  |  |  |  |  |  |  |  |   |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  | "
+  },
+  {
+    "code": "v1-3-techops-broadcast-cable-studio-metadata-template-gomorrah-the-origins-test-stub-7",
+    "name": "[DRY-RUN] v1-3-techops-broadcast-cable-studio-metadata-template-gomorrah-the-origins-test chunk 7",
+    "category": "t1_technical",
+    "spec_json": {},
+    "source_capitolato": "V1.3_TechOps_Broadcast_Cable_Studio_Metadata_Template_Gomorrah_The_Origins_test.xlsx",
+    "source_section": "chunk 7/58",
+    "_snippet": "  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |   |  |  "
+  },
+  {
+    "code": "v1-3-techops-broadcast-cable-studio-metadata-template-gomorrah-the-origins-test-stub-8",
+    "name": "[DRY-RUN] v1-3-techops-broadcast-cable-studio-metadata-template-gomorrah-the-origins-test chunk 8",
+    "category": "t1_technical",
+    "spec_json": {},
+    "source_capitolato": "V1.3_TechOps_Broadcast_Cable_Studio_Metadata_Template_Gomorrah_The_Origins_test.xlsx",
+    "source_section": "chunk 8/58",
+    "_snippet": " |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  | "
+  },
+  {
+    "code": "v1-3-techops-broadcast-cable-studio-metadata-template-gomorrah-the-origins-test-stub-9",
+    "name": "[DRY-RUN] v1-3-techops-broadcast-cable-studio-metadata-template-gomorrah-the-origins-test chunk 9",
+    "category": "t1_technical",
+    "spec_json": {},
+    "source_capitolato": "V1.3_TechOps_Broadcast_Cable_Studio_Metadata_Template_Gomorrah_The_Origins_test.xlsx",
+    "source_section": "chunk 9/58",
+    "_snippet": "|  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  "
+  },
+  {
+    "code": "v1-3-techops-broadcast-cable-studio-metadata-template-gomorrah-the-origins-test-stub-10",
+    "name": "[DRY-RUN] v1-3-techops-broadcast-cable-studio-metadata-template-gomorrah-the-origins-test chunk 10",
+    "category": "t1_technical",
+    "spec_json": {},
+    "source_capitolato": "V1.3_TechOps_Broadcast_Cable_Studio_Metadata_Template_Gomorrah_The_Origins_test.xlsx",
+    "source_section": "chunk 10/58",
+    "_snippet": "  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |"
+  },
+  {
+    "code": "v1-3-techops-broadcast-cable-studio-metadata-template-gomorrah-the-origins-test-stub-11",
+    "name": "[DRY-RUN] v1-3-techops-broadcast-cable-studio-metadata-template-gomorrah-the-origins-test chunk 11",
+    "category": "t1_technical",
+    "spec_json": {},
+    "source_capitolato": "V1.3_TechOps_Broadcast_Cable_Studio_Metadata_Template_Gomorrah_The_Origins_test.xlsx",
+    "source_section": "chunk 11/58",
+    "_snippet": " |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  | "
+  },
+  {
+    "code": "v1-3-techops-broadcast-cable-studio-metadata-template-gomorrah-the-origins-test-stub-12",
+    "name": "[DRY-RUN] v1-3-techops-broadcast-cable-studio-metadata-template-gomorrah-the-origins-test chunk 12",
+    "category": "t1_technical",
+    "spec_json": {},
+    "source_capitolato": "V1.3_TechOps_Broadcast_Cable_Studio_Metadata_Template_Gomorrah_The_Origins_test.xlsx",
+    "source_section": "chunk 12/58",
+    "_snippet": "|  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  "
+  },
+  {
+    "code": "v1-3-techops-broadcast-cable-studio-metadata-template-gomorrah-the-origins-test-stub-13",
+    "name": "[DRY-RUN] v1-3-techops-broadcast-cable-studio-metadata-template-gomorrah-the-origins-test chunk 13",
+    "category": "t1_technical",
+    "spec_json": {},
+    "source_capitolato": "V1.3_TechOps_Broadcast_Cable_Studio_Metadata_Template_Gomorrah_The_Origins_test.xlsx",
+    "source_section": "chunk 13/58",
+    "_snippet": " |  |  |  |  |   |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |"
+  },
+  {
+    "code": "v1-3-techops-broadcast-cable-studio-metadata-template-gomorrah-the-origins-test-stub-14",
+    "name": "[DRY-RUN] v1-3-techops-broadcast-cable-studio-metadata-template-gomorrah-the-origins-test chunk 14",
+    "category": "t1_technical",
+    "spec_json": {},
+    "source_capitolato": "V1.3_TechOps_Broadcast_Cable_Studio_Metadata_Template_Gomorrah_The_Origins_test.xlsx",
+    "source_section": "chunk 14/58",
+    "_snippet": "|  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |   |  |  |  |  |  |  |  | "
+  },
+  {
+    "code": "v1-3-techops-broadcast-cable-studio-metadata-template-gomorrah-the-origins-test-stub-15",
+    "name": "[DRY-RUN] v1-3-techops-broadcast-cable-studio-metadata-template-gomorrah-the-origins-test chunk 15",
+    "category": "t1_technical",
+    "spec_json": {},
+    "source_capitolato": "V1.3_TechOps_Broadcast_Cable_Studio_Metadata_Template_Gomorrah_The_Origins_test.xlsx",
+    "source_section": "chunk 15/58",
+    "_snippet": "  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |"
+  },
+  {
+    "code": "v1-3-techops-broadcast-cable-studio-metadata-template-gomorrah-the-origins-test-stub-16",
+    "name": "[DRY-RUN] v1-3-techops-broadcast-cable-studio-metadata-template-gomorrah-the-origins-test chunk 16",
+    "category": "t1_technical",
+    "spec_json": {},
+    "source_capitolato": "V1.3_TechOps_Broadcast_Cable_Studio_Metadata_Template_Gomorrah_The_Origins_test.xlsx",
+    "source_section": "chunk 16/58",
+    "_snippet": " |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  | "
+  },
+  {
+    "code": "v1-3-techops-broadcast-cable-studio-metadata-template-gomorrah-the-origins-test-stub-17",
+    "name": "[DRY-RUN] v1-3-techops-broadcast-cable-studio-metadata-template-gomorrah-the-origins-test chunk 17",
+    "category": "t1_technical",
+    "spec_json": {},
+    "source_capitolato": "V1.3_TechOps_Broadcast_Cable_Studio_Metadata_Template_Gomorrah_The_Origins_test.xlsx",
+    "source_section": "chunk 17/58",
+    "_snippet": "|  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  "
+  },
+  {
+    "code": "v1-3-techops-broadcast-cable-studio-metadata-template-gomorrah-the-origins-test-stub-18",
+    "name": "[DRY-RUN] v1-3-techops-broadcast-cable-studio-metadata-template-gomorrah-the-origins-test chunk 18",
+    "category": "t1_technical",
+    "spec_json": {},
+    "source_capitolato": "V1.3_TechOps_Broadcast_Cable_Studio_Metadata_Template_Gomorrah_The_Origins_test.xlsx",
+    "source_section": "chunk 18/58",
+    "_snippet": "  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |"
+  },
+  {
+    "code": "v1-3-techops-broadcast-cable-studio-metadata-template-gomorrah-the-origins-test-stub-19",
+    "name": "[DRY-RUN] v1-3-techops-broadcast-cable-studio-metadata-template-gomorrah-the-origins-test chunk 19",
+    "category": "t1_technical",
+    "spec_json": {},
+    "source_capitolato": "V1.3_TechOps_Broadcast_Cable_Studio_Metadata_Template_Gomorrah_The_Origins_test.xlsx",
+    "source_section": "chunk 19/58",
+    "_snippet": " |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  | "
+  },
+  {
+    "code": "v1-3-techops-broadcast-cable-studio-metadata-template-gomorrah-the-origins-test-stub-20",
+    "name": "[DRY-RUN] v1-3-techops-broadcast-cable-studio-metadata-template-gomorrah-the-origins-test chunk 20",
+    "category": "t1_technical",
+    "spec_json": {},
+    "source_capitolato": "V1.3_TechOps_Broadcast_Cable_Studio_Metadata_Template_Gomorrah_The_Origins_test.xlsx",
+    "source_section": "chunk 20/58",
+    "_snippet": "ad Behavior | Historical African Milieu | Cleanliness | Art Technique | Ali Baba | Battle Of Gettysburg | Antarctica | D"
+  },
+  {
+    "code": "v1-3-techops-broadcast-cable-studio-metadata-template-gomorrah-the-origins-test-stub-21",
+    "name": "[DRY-RUN] v1-3-techops-broadcast-cable-studio-metadata-template-gomorrah-the-origins-test chunk 21",
+    "category": "t1_technical",
+    "spec_json": {},
+    "source_capitolato": "V1.3_TechOps_Broadcast_Cable_Studio_Metadata_Template_Gomorrah_The_Origins_test.xlsx",
+    "source_section": "chunk 21/58",
+    "_snippet": "e Country | Lavish  | Christian R&B | Anorexic People |  | Nobility | Family Saga | Championship Events | Bomb Shelters "
+  },
+  {
+    "code": "v1-3-techops-broadcast-cable-studio-metadata-template-gomorrah-the-origins-test-stub-22",
+    "name": "[DRY-RUN] v1-3-techops-broadcast-cable-studio-metadata-template-gomorrah-the-origins-test chunk 22",
+    "category": "t1_technical",
+    "spec_json": {},
+    "source_capitolato": "V1.3_TechOps_Broadcast_Cable_Studio_Metadata_Template_Gomorrah_The_Origins_test.xlsx",
+    "source_section": "chunk 22/58",
+    "_snippet": "960s | Landscaping | Drive-By Shootings |  | Morquio's Syndrome | Crimefighting | Billy the Kid | Louisiana Purchase | B"
+  },
+  {
+    "code": "v1-3-techops-broadcast-cable-studio-metadata-template-gomorrah-the-origins-test-stub-23",
+    "name": "[DRY-RUN] v1-3-techops-broadcast-cable-studio-metadata-template-gomorrah-the-origins-test chunk 23",
+    "category": "t1_technical",
+    "spec_json": {},
+    "source_capitolato": "V1.3_TechOps_Broadcast_Cable_Studio_Metadata_Template_Gomorrah_The_Origins_test.xlsx",
+    "source_section": "chunk 23/58",
+    "_snippet": " Troubles | Cedar Rapids  | Garage Rock | Barbers |  |  | Parallel Worlds | Family Tragedies | Cubicles | Late 20th Cent"
+  },
+  {
+    "code": "v1-3-techops-broadcast-cable-studio-metadata-template-gomorrah-the-origins-test-stub-24",
+    "name": "[DRY-RUN] v1-3-techops-broadcast-cable-studio-metadata-template-gomorrah-the-origins-test chunk 24",
+    "category": "t1_technical",
+    "spec_json": {},
+    "source_capitolato": "V1.3_TechOps_Broadcast_Cable_Studio_Metadata_Template_Gomorrah_The_Origins_test.xlsx",
+    "source_section": "chunk 24/58",
+    "_snippet": "st Food Restaurants |  | World Travel | Island Life |  |  | Government Budgeting | Committees Of Correspondence |  | Dal"
+  },
+  {
+    "code": "v1-3-techops-broadcast-cable-studio-metadata-template-gomorrah-the-origins-test-stub-25",
+    "name": "[DRY-RUN] v1-3-techops-broadcast-cable-studio-metadata-template-gomorrah-the-origins-test chunk 25",
+    "category": "t1_technical",
+    "spec_json": {},
+    "source_capitolato": "V1.3_TechOps_Broadcast_Cable_Studio_Metadata_Template_Gomorrah_The_Origins_test.xlsx",
+    "source_section": "chunk 25/58",
+    "_snippet": "y |  | Fort Myer  | New Acoustic | Camp Counselors |  |  |  | New Music Releases | Headmasters' Offices |  |  | Organiza"
+  },
+  {
+    "code": "v1-3-techops-broadcast-cable-studio-metadata-template-gomorrah-the-origins-test-stub-26",
+    "name": "[DRY-RUN] v1-3-techops-broadcast-cable-studio-metadata-template-gomorrah-the-origins-test chunk 26",
+    "category": "t1_technical",
+    "spec_json": {},
+    "source_capitolato": "V1.3_TechOps_Broadcast_Cable_Studio_Metadata_Template_Gomorrah_The_Origins_test.xlsx",
+    "source_section": "chunk 26/58",
+    "_snippet": "e | Christmas Elves |  |  |  | Riots | Liquor Stores |  |  | Sexual Frustration |  |  | Oyster Farming | Gabriel Jesus S"
+  },
+  {
+    "code": "v1-3-techops-broadcast-cable-studio-metadata-template-gomorrah-the-origins-test-stub-27",
+    "name": "[DRY-RUN] v1-3-techops-broadcast-cable-studio-metadata-template-gomorrah-the-origins-test chunk 27",
+    "category": "t1_technical",
+    "spec_json": {},
+    "source_capitolato": "V1.3_TechOps_Broadcast_Cable_Studio_Metadata_Template_Gomorrah_The_Origins_test.xlsx",
+    "source_section": "chunk 27/58",
+    "_snippet": "Rights |  |  | Rumba | Hellboy |  | Korumburra  | Two-Tone Ska Revival | Conquistadors |  |  |  | Train Crashes | Neighb"
+  },
+  {
+    "code": "v1-3-techops-broadcast-cable-studio-metadata-template-gomorrah-the-origins-test-stub-28",
+    "name": "[DRY-RUN] v1-3-techops-broadcast-cable-studio-metadata-template-gomorrah-the-origins-test chunk 28",
+    "category": "t1_technical",
+    "spec_json": {},
+    "source_capitolato": "V1.3_TechOps_Broadcast_Cable_Studio_Metadata_Template_Gomorrah_The_Origins_test.xlsx",
+    "source_section": "chunk 28/58",
+    "_snippet": "le |  |  |  |  | Residence Exteriors |  |  |  |  |  | Worker's Rights | Jia Hongsheng |  | Milagro  |  | Decepticons |  "
+  },
+  {
+    "code": "v1-3-techops-broadcast-cable-studio-metadata-template-gomorrah-the-origins-test-stub-29",
+    "name": "[DRY-RUN] v1-3-techops-broadcast-cable-studio-metadata-template-gomorrah-the-origins-test chunk 29",
+    "category": "t1_technical",
+    "spec_json": {},
+    "source_capitolato": "V1.3_TechOps_Broadcast_Cable_Studio_Metadata_Template_Gomorrah_The_Origins_test.xlsx",
+    "source_section": "chunk 29/58",
+    "_snippet": " |  | Evil Assistants |  |  |  |  | The Mind |  |  |  |  |  |  | Laurence Olivier |  | Pearl Harbor  |  | Evil Butlers |"
+  },
+  {
+    "code": "v1-3-techops-broadcast-cable-studio-metadata-template-gomorrah-the-origins-test-stub-30",
+    "name": "[DRY-RUN] v1-3-techops-broadcast-cable-studio-metadata-template-gomorrah-the-origins-test chunk 30",
+    "category": "t1_technical",
+    "spec_json": {},
+    "source_capitolato": "V1.3_TechOps_Broadcast_Cable_Studio_Metadata_Template_Gomorrah_The_Origins_test.xlsx",
+    "source_section": "chunk 30/58",
+    "_snippet": "a |  | Singapore  |  | Free Spirits |  |  |  |  |  |  |  |  |  |  |  | Motown Records |  | Sioux City  |  | Free Thinker"
+  },
+  {
+    "code": "v1-3-techops-broadcast-cable-studio-metadata-template-gomorrah-the-origins-test-stub-31",
+    "name": "[DRY-RUN] v1-3-techops-broadcast-cable-studio-metadata-template-gomorrah-the-origins-test chunk 31",
+    "category": "t1_technical",
+    "spec_json": {},
+    "source_capitolato": "V1.3_TechOps_Broadcast_Cable_Studio_Metadata_Template_Gomorrah_The_Origins_test.xlsx",
+    "source_section": "chunk 31/58",
+    "_snippet": " |  |  |  |  |  |  |  |  |  |  |  | Robert Mitchum |  | United Arab Emirates  |  | Heirs To The Throne |  |  |  |  |  | "
+  },
+  {
+    "code": "v1-3-techops-broadcast-cable-studio-metadata-template-gomorrah-the-origins-test-stub-32",
+    "name": "[DRY-RUN] v1-3-techops-broadcast-cable-studio-metadata-template-gomorrah-the-origins-test chunk 32",
+    "category": "t1_technical",
+    "spec_json": {},
+    "source_capitolato": "V1.3_TechOps_Broadcast_Cable_Studio_Metadata_Template_Gomorrah_The_Origins_test.xlsx",
+    "source_section": "chunk 32/58",
+    "_snippet": "  |  |  |  |  |  |  |  |  |  | Specific Crimefighters  |  | Jaguars |  |  |  |  |  |  |  |  |  |  |  | Specific Criminal"
+  },
+  {
+    "code": "v1-3-techops-broadcast-cable-studio-metadata-template-gomorrah-the-origins-test-stub-33",
+    "name": "[DRY-RUN] v1-3-techops-broadcast-cable-studio-metadata-template-gomorrah-the-origins-test chunk 33",
+    "category": "t1_technical",
+    "spec_json": {},
+    "source_capitolato": "V1.3_TechOps_Broadcast_Cable_Studio_Metadata_Template_Gomorrah_The_Origins_test.xlsx",
+    "source_section": "chunk 33/58",
+    "_snippet": " Teenage Girls  |  | Marriage Counselors |  |  |  |  |  |  |  |  |  |  |  | Specific Teenagers  |  | Married Couples |  "
+  },
+  {
+    "code": "v1-3-techops-broadcast-cable-studio-metadata-template-gomorrah-the-origins-test-stub-34",
+    "name": "[DRY-RUN] v1-3-techops-broadcast-cable-studio-metadata-template-gomorrah-the-origins-test chunk 34",
+    "category": "t1_technical",
+    "spec_json": {},
+    "source_capitolato": "V1.3_TechOps_Broadcast_Cable_Studio_Metadata_Template_Gomorrah_The_Origins_test.xlsx",
+    "source_section": "chunk 34/58",
+    "_snippet": "Woody Woodpecker  |  | Newcomers |  |  |  |  |  |  |  |  |  |  |  | World Bank  |  | Newlyweds |  |  |  |  |  |  |  |  |"
+  },
+  {
+    "code": "v1-3-techops-broadcast-cable-studio-metadata-template-gomorrah-the-origins-test-stub-35",
+    "name": "[DRY-RUN] v1-3-techops-broadcast-cable-studio-metadata-template-gomorrah-the-origins-test chunk 35",
+    "category": "t1_technical",
+    "spec_json": {},
+    "source_capitolato": "V1.3_TechOps_Broadcast_Cable_Studio_Metadata_Template_Gomorrah_The_Origins_test.xlsx",
+    "source_section": "chunk 35/58",
+    "_snippet": "orts Fans  |  | Sports Figures  |  | Sports Leagues  |  | Sports Organizations  |  | Sports Participants  |  | Sports Pe"
+  },
+  {
+    "code": "v1-3-techops-broadcast-cable-studio-metadata-template-gomorrah-the-origins-test-stub-36",
+    "name": "[DRY-RUN] v1-3-techops-broadcast-cable-studio-metadata-template-gomorrah-the-origins-test chunk 36",
+    "category": "t1_technical",
+    "spec_json": {},
+    "source_capitolato": "V1.3_TechOps_Broadcast_Cable_Studio_Metadata_Template_Gomorrah_The_Origins_test.xlsx",
+    "source_section": "chunk 36/58",
+    "_snippet": "-OUT | HH:MM:SS:FF; IN-OUT multiple entries seperated by comma | HH:MM:SS:FF; IN-OUT | HH:MM:SS:FF; IN-OUT | credits ove"
+  },
+  {
+    "code": "v1-3-techops-broadcast-cable-studio-metadata-template-gomorrah-the-origins-test-stub-37",
+    "name": "[DRY-RUN] v1-3-techops-broadcast-cable-studio-metadata-template-gomorrah-the-origins-test chunk 37",
+    "category": "t1_technical",
+    "spec_json": {},
+    "source_capitolato": "V1.3_TechOps_Broadcast_Cable_Studio_Metadata_Template_Gomorrah_The_Origins_test.xlsx",
+    "source_section": "chunk 37/58",
+    "_snippet": " |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  | "
+  },
+  {
+    "code": "v1-3-techops-broadcast-cable-studio-metadata-template-gomorrah-the-origins-test-stub-38",
+    "name": "[DRY-RUN] v1-3-techops-broadcast-cable-studio-metadata-template-gomorrah-the-origins-test chunk 38",
+    "category": "t1_technical",
+    "spec_json": {},
+    "source_capitolato": "V1.3_TechOps_Broadcast_Cable_Studio_Metadata_Template_Gomorrah_The_Origins_test.xlsx",
+    "source_section": "chunk 38/58",
+    "_snippet": "|  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  "
+  },
+  {
+    "code": "v1-3-techops-broadcast-cable-studio-metadata-template-gomorrah-the-origins-test-stub-39",
+    "name": "[DRY-RUN] v1-3-techops-broadcast-cable-studio-metadata-template-gomorrah-the-origins-test chunk 39",
+    "category": "t1_technical",
+    "spec_json": {},
+    "source_capitolato": "V1.3_TechOps_Broadcast_Cable_Studio_Metadata_Template_Gomorrah_The_Origins_test.xlsx",
+    "source_section": "chunk 39/58",
+    "_snippet": " |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |   |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |"
+  },
+  {
+    "code": "v1-3-techops-broadcast-cable-studio-metadata-template-gomorrah-the-origins-test-stub-40",
+    "name": "[DRY-RUN] v1-3-techops-broadcast-cable-studio-metadata-template-gomorrah-the-origins-test chunk 40",
+    "category": "t1_technical",
+    "spec_json": {},
+    "source_capitolato": "V1.3_TechOps_Broadcast_Cable_Studio_Metadata_Template_Gomorrah_The_Origins_test.xlsx",
+    "source_section": "chunk 40/58",
+    "_snippet": "|  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  "
+  },
+  {
+    "code": "v1-3-techops-broadcast-cable-studio-metadata-template-gomorrah-the-origins-test-stub-41",
+    "name": "[DRY-RUN] v1-3-techops-broadcast-cable-studio-metadata-template-gomorrah-the-origins-test chunk 41",
+    "category": "t1_technical",
+    "spec_json": {},
+    "source_capitolato": "V1.3_TechOps_Broadcast_Cable_Studio_Metadata_Template_Gomorrah_The_Origins_test.xlsx",
+    "source_section": "chunk 41/58",
+    "_snippet": "  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |"
+  },
+  {
+    "code": "v1-3-techops-broadcast-cable-studio-metadata-template-gomorrah-the-origins-test-stub-42",
+    "name": "[DRY-RUN] v1-3-techops-broadcast-cable-studio-metadata-template-gomorrah-the-origins-test chunk 42",
+    "category": "t1_technical",
+    "spec_json": {},
+    "source_capitolato": "V1.3_TechOps_Broadcast_Cable_Studio_Metadata_Template_Gomorrah_The_Origins_test.xlsx",
+    "source_section": "chunk 42/58",
+    "_snippet": " |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  | "
+  },
+  {
+    "code": "v1-3-techops-broadcast-cable-studio-metadata-template-gomorrah-the-origins-test-stub-43",
+    "name": "[DRY-RUN] v1-3-techops-broadcast-cable-studio-metadata-template-gomorrah-the-origins-test chunk 43",
+    "category": "t1_technical",
+    "spec_json": {},
+    "source_capitolato": "V1.3_TechOps_Broadcast_Cable_Studio_Metadata_Template_Gomorrah_The_Origins_test.xlsx",
+    "source_section": "chunk 43/58",
+    "_snippet": "|  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  "
+  },
+  {
+    "code": "v1-3-techops-broadcast-cable-studio-metadata-template-gomorrah-the-origins-test-stub-44",
+    "name": "[DRY-RUN] v1-3-techops-broadcast-cable-studio-metadata-template-gomorrah-the-origins-test chunk 44",
+    "category": "t1_technical",
+    "spec_json": {},
+    "source_capitolato": "V1.3_TechOps_Broadcast_Cable_Studio_Metadata_Template_Gomorrah_The_Origins_test.xlsx",
+    "source_section": "chunk 44/58",
+    "_snippet": "  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |"
+  },
+  {
+    "code": "v1-3-techops-broadcast-cable-studio-metadata-template-gomorrah-the-origins-test-stub-45",
+    "name": "[DRY-RUN] v1-3-techops-broadcast-cable-studio-metadata-template-gomorrah-the-origins-test chunk 45",
+    "category": "t1_technical",
+    "spec_json": {},
+    "source_capitolato": "V1.3_TechOps_Broadcast_Cable_Studio_Metadata_Template_Gomorrah_The_Origins_test.xlsx",
+    "source_section": "chunk 45/58",
+    "_snippet": " |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  | "
+  },
+  {
+    "code": "v1-3-techops-broadcast-cable-studio-metadata-template-gomorrah-the-origins-test-stub-46",
+    "name": "[DRY-RUN] v1-3-techops-broadcast-cable-studio-metadata-template-gomorrah-the-origins-test chunk 46",
+    "category": "t1_technical",
+    "spec_json": {},
+    "source_capitolato": "V1.3_TechOps_Broadcast_Cable_Studio_Metadata_Template_Gomorrah_The_Origins_test.xlsx",
+    "source_section": "chunk 46/58",
+    "_snippet": "  |  |  |  |  |  |  |  |  |  |  |   |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  "
+  },
+  {
+    "code": "v1-3-techops-broadcast-cable-studio-metadata-template-gomorrah-the-origins-test-stub-47",
+    "name": "[DRY-RUN] v1-3-techops-broadcast-cable-studio-metadata-template-gomorrah-the-origins-test chunk 47",
+    "category": "t1_technical",
+    "spec_json": {},
+    "source_capitolato": "V1.3_TechOps_Broadcast_Cable_Studio_Metadata_Template_Gomorrah_The_Origins_test.xlsx",
+    "source_section": "chunk 47/58",
+    "_snippet": " |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |   |  |"
+  },
+  {
+    "code": "v1-3-techops-broadcast-cable-studio-metadata-template-gomorrah-the-origins-test-stub-48",
+    "name": "[DRY-RUN] v1-3-techops-broadcast-cable-studio-metadata-template-gomorrah-the-origins-test chunk 48",
+    "category": "t1_technical",
+    "spec_json": {},
+    "source_capitolato": "V1.3_TechOps_Broadcast_Cable_Studio_Metadata_Template_Gomorrah_The_Origins_test.xlsx",
+    "source_section": "chunk 48/58",
+    "_snippet": "|  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  "
+  },
+  {
+    "code": "v1-3-techops-broadcast-cable-studio-metadata-template-gomorrah-the-origins-test-stub-49",
+    "name": "[DRY-RUN] v1-3-techops-broadcast-cable-studio-metadata-template-gomorrah-the-origins-test chunk 49",
+    "category": "t1_technical",
+    "spec_json": {},
+    "source_capitolato": "V1.3_TechOps_Broadcast_Cable_Studio_Metadata_Template_Gomorrah_The_Origins_test.xlsx",
+    "source_section": "chunk 49/58",
+    "_snippet": "  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |"
+  },
+  {
+    "code": "v1-3-techops-broadcast-cable-studio-metadata-template-gomorrah-the-origins-test-stub-50",
+    "name": "[DRY-RUN] v1-3-techops-broadcast-cable-studio-metadata-template-gomorrah-the-origins-test chunk 50",
+    "category": "t1_technical",
+    "spec_json": {},
+    "source_capitolato": "V1.3_TechOps_Broadcast_Cable_Studio_Metadata_Template_Gomorrah_The_Origins_test.xlsx",
+    "source_section": "chunk 50/58",
+    "_snippet": " |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  | "
+  },
+  {
+    "code": "v1-3-techops-broadcast-cable-studio-metadata-template-gomorrah-the-origins-test-stub-51",
+    "name": "[DRY-RUN] v1-3-techops-broadcast-cable-studio-metadata-template-gomorrah-the-origins-test chunk 51",
+    "category": "t1_technical",
+    "spec_json": {},
+    "source_capitolato": "V1.3_TechOps_Broadcast_Cable_Studio_Metadata_Template_Gomorrah_The_Origins_test.xlsx",
+    "source_section": "chunk 51/58",
+    "_snippet": "|  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  "
+  },
+  {
+    "code": "v1-3-techops-broadcast-cable-studio-metadata-template-gomorrah-the-origins-test-stub-52",
+    "name": "[DRY-RUN] v1-3-techops-broadcast-cable-studio-metadata-template-gomorrah-the-origins-test chunk 52",
+    "category": "t1_technical",
+    "spec_json": {},
+    "source_capitolato": "V1.3_TechOps_Broadcast_Cable_Studio_Metadata_Template_Gomorrah_The_Origins_test.xlsx",
+    "source_section": "chunk 52/58",
+    "_snippet": "  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |"
+  },
+  {
+    "code": "v1-3-techops-broadcast-cable-studio-metadata-template-gomorrah-the-origins-test-stub-53",
+    "name": "[DRY-RUN] v1-3-techops-broadcast-cable-studio-metadata-template-gomorrah-the-origins-test chunk 53",
+    "category": "t1_technical",
+    "spec_json": {},
+    "source_capitolato": "V1.3_TechOps_Broadcast_Cable_Studio_Metadata_Template_Gomorrah_The_Origins_test.xlsx",
+    "source_section": "chunk 53/58",
+    "_snippet": "|  |  |  |  |  |   |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  | "
+  },
+  {
+    "code": "v1-3-techops-broadcast-cable-studio-metadata-template-gomorrah-the-origins-test-stub-54",
+    "name": "[DRY-RUN] v1-3-techops-broadcast-cable-studio-metadata-template-gomorrah-the-origins-test chunk 54",
+    "category": "t1_technical",
+    "spec_json": {},
+    "source_capitolato": "V1.3_TechOps_Broadcast_Cable_Studio_Metadata_Template_Gomorrah_The_Origins_test.xlsx",
+    "source_section": "chunk 54/58",
+    "_snippet": "   |  |  |  |  |  |  | News | News | News |  |  |  | 2.21 |  |  |  |  | 5.1 Surround;2ch Stereo;2ch Stereo M&E;2ch Stere"
+  },
+  {
+    "code": "v1-3-techops-broadcast-cable-studio-metadata-template-gomorrah-the-origins-test-stub-55",
+    "name": "[DRY-RUN] v1-3-techops-broadcast-cable-studio-metadata-template-gomorrah-the-origins-test chunk 55",
+    "category": "t1_technical",
+    "spec_json": {},
+    "source_capitolato": "V1.3_TechOps_Broadcast_Cable_Studio_Metadata_Template_Gomorrah_The_Origins_test.xlsx",
+    "source_section": "chunk 55/58",
+    "_snippet": "  |  |  |  |  |  |   |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |   |  |  | "
+  },
+  {
+    "code": "v1-3-techops-broadcast-cable-studio-metadata-template-gomorrah-the-origins-test-stub-56",
+    "name": "[DRY-RUN] v1-3-techops-broadcast-cable-studio-metadata-template-gomorrah-the-origins-test chunk 56",
+    "category": "t1_technical",
+    "spec_json": {},
+    "source_capitolato": "V1.3_TechOps_Broadcast_Cable_Studio_Metadata_Template_Gomorrah_The_Origins_test.xlsx",
+    "source_section": "chunk 56/58",
+    "_snippet": " |  |  |  |  |  |  |  |  |  |  |  |  |  |   |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |"
+  },
+  {
+    "code": "v1-3-techops-broadcast-cable-studio-metadata-template-gomorrah-the-origins-test-stub-57",
+    "name": "[DRY-RUN] v1-3-techops-broadcast-cable-studio-metadata-template-gomorrah-the-origins-test chunk 57",
+    "category": "t1_technical",
+    "spec_json": {},
+    "source_capitolato": "V1.3_TechOps_Broadcast_Cable_Studio_Metadata_Template_Gomorrah_The_Origins_test.xlsx",
+    "source_section": "chunk 57/58",
+    "_snippet": "|  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |   |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  | "
+  },
+  {
+    "code": "v1-3-techops-broadcast-cable-studio-metadata-template-gomorrah-the-origins-test-stub-58",
+    "name": "[DRY-RUN] v1-3-techops-broadcast-cable-studio-metadata-template-gomorrah-the-origins-test chunk 58",
+    "category": "t1_technical",
+    "spec_json": {},
+    "source_capitolato": "V1.3_TechOps_Broadcast_Cable_Studio_Metadata_Template_Gomorrah_The_Origins_test.xlsx",
+    "source_section": "chunk 58/58",
+    "_snippet": "  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |   |  |  |  |  |  |  |  |  |  |  "
+  }
+]

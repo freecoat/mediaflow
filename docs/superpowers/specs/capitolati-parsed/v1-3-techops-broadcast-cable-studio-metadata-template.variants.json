@@ -1,0 +1,596 @@
+[
+  {
+    "code": "v1-3-techops-broadcast-cable-studio-metadata-template-stub-1",
+    "name": "[DRY-RUN] v1-3-techops-broadcast-cable-studio-metadata-template chunk 1",
+    "category": "t1_technical",
+    "spec_json": {},
+    "source_capitolato": "V1.3_TechOps_Broadcast_Cable_Studio_Metadata_Template.xlsx",
+    "source_section": "chunk 1/66",
+    "_snippet": "=== Longform_Metadata === FILM / SERIES LEVEL METADATA COLUMNS  (SHOULD BE CONSISTENT FOR ALL EPISODES OF A SERIES) |  |"
+  },
+  {
+    "code": "v1-3-techops-broadcast-cable-studio-metadata-template-stub-2",
+    "name": "[DRY-RUN] v1-3-techops-broadcast-cable-studio-metadata-template chunk 2",
+    "category": "t1_technical",
+    "spec_json": {},
+    "source_capitolato": "V1.3_TechOps_Broadcast_Cable_Studio_Metadata_Template.xlsx",
+    "source_section": "chunk 2/66",
+    "_snippet": "  |  |  |  |  |  |  |  |  |  |  |  |   |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  "
+  },
+  {
+    "code": "v1-3-techops-broadcast-cable-studio-metadata-template-stub-3",
+    "name": "[DRY-RUN] v1-3-techops-broadcast-cable-studio-metadata-template chunk 3",
+    "category": "t1_technical",
+    "spec_json": {},
+    "source_capitolato": "V1.3_TechOps_Broadcast_Cable_Studio_Metadata_Template.xlsx",
+    "source_section": "chunk 3/66",
+    "_snippet": " |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |   |"
+  },
+  {
+    "code": "v1-3-techops-broadcast-cable-studio-metadata-template-stub-4",
+    "name": "[DRY-RUN] v1-3-techops-broadcast-cable-studio-metadata-template chunk 4",
+    "category": "t1_technical",
+    "spec_json": {},
+    "source_capitolato": "V1.3_TechOps_Broadcast_Cable_Studio_Metadata_Template.xlsx",
+    "source_section": "chunk 4/66",
+    "_snippet": "|  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  "
+  },
+  {
+    "code": "v1-3-techops-broadcast-cable-studio-metadata-template-stub-5",
+    "name": "[DRY-RUN] v1-3-techops-broadcast-cable-studio-metadata-template chunk 5",
+    "category": "t1_technical",
+    "spec_json": {},
+    "source_capitolato": "V1.3_TechOps_Broadcast_Cable_Studio_Metadata_Template.xlsx",
+    "source_section": "chunk 5/66",
+    "_snippet": "  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |"
+  },
+  {
+    "code": "v1-3-techops-broadcast-cable-studio-metadata-template-stub-6",
+    "name": "[DRY-RUN] v1-3-techops-broadcast-cable-studio-metadata-template chunk 6",
+    "category": "t1_technical",
+    "spec_json": {},
+    "source_capitolato": "V1.3_TechOps_Broadcast_Cable_Studio_Metadata_Template.xlsx",
+    "source_section": "chunk 6/66",
+    "_snippet": " |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  | "
+  },
+  {
+    "code": "v1-3-techops-broadcast-cable-studio-metadata-template-stub-7",
+    "name": "[DRY-RUN] v1-3-techops-broadcast-cable-studio-metadata-template chunk 7",
+    "category": "t1_technical",
+    "spec_json": {},
+    "source_capitolato": "V1.3_TechOps_Broadcast_Cable_Studio_Metadata_Template.xlsx",
+    "source_section": "chunk 7/66",
+    "_snippet": "|  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  "
+  },
+  {
+    "code": "v1-3-techops-broadcast-cable-studio-metadata-template-stub-8",
+    "name": "[DRY-RUN] v1-3-techops-broadcast-cable-studio-metadata-template chunk 8",
+    "category": "t1_technical",
+    "spec_json": {},
+    "source_capitolato": "V1.3_TechOps_Broadcast_Cable_Studio_Metadata_Template.xlsx",
+    "source_section": "chunk 8/66",
+    "_snippet": "  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |"
+  },
+  {
+    "code": "v1-3-techops-broadcast-cable-studio-metadata-template-stub-9",
+    "name": "[DRY-RUN] v1-3-techops-broadcast-cable-studio-metadata-template chunk 9",
+    "category": "t1_technical",
+    "spec_json": {},
+    "source_capitolato": "V1.3_TechOps_Broadcast_Cable_Studio_Metadata_Template.xlsx",
+    "source_section": "chunk 9/66",
+    "_snippet": "|  |  |  |  |  |  |   |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  | "
+  },
+  {
+    "code": "v1-3-techops-broadcast-cable-studio-metadata-template-stub-10",
+    "name": "[DRY-RUN] v1-3-techops-broadcast-cable-studio-metadata-template chunk 10",
+    "category": "t1_technical",
+    "spec_json": {},
+    "source_capitolato": "V1.3_TechOps_Broadcast_Cable_Studio_Metadata_Template.xlsx",
+    "source_section": "chunk 10/66",
+    "_snippet": "  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |   |  |  |  |  |  |  "
+  },
+  {
+    "code": "v1-3-techops-broadcast-cable-studio-metadata-template-stub-11",
+    "name": "[DRY-RUN] v1-3-techops-broadcast-cable-studio-metadata-template chunk 11",
+    "category": "t1_technical",
+    "spec_json": {},
+    "source_capitolato": "V1.3_TechOps_Broadcast_Cable_Studio_Metadata_Template.xlsx",
+    "source_section": "chunk 11/66",
+    "_snippet": " |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  | "
+  },
+  {
+    "code": "v1-3-techops-broadcast-cable-studio-metadata-template-stub-12",
+    "name": "[DRY-RUN] v1-3-techops-broadcast-cable-studio-metadata-template chunk 12",
+    "category": "t1_technical",
+    "spec_json": {},
+    "source_capitolato": "V1.3_TechOps_Broadcast_Cable_Studio_Metadata_Template.xlsx",
+    "source_section": "chunk 12/66",
+    "_snippet": "|  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  "
+  },
+  {
+    "code": "v1-3-techops-broadcast-cable-studio-metadata-template-stub-13",
+    "name": "[DRY-RUN] v1-3-techops-broadcast-cable-studio-metadata-template chunk 13",
+    "category": "t1_technical",
+    "spec_json": {},
+    "source_capitolato": "V1.3_TechOps_Broadcast_Cable_Studio_Metadata_Template.xlsx",
+    "source_section": "chunk 13/66",
+    "_snippet": "  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |"
+  },
+  {
+    "code": "v1-3-techops-broadcast-cable-studio-metadata-template-stub-14",
+    "name": "[DRY-RUN] v1-3-techops-broadcast-cable-studio-metadata-template chunk 14",
+    "category": "t1_technical",
+    "spec_json": {},
+    "source_capitolato": "V1.3_TechOps_Broadcast_Cable_Studio_Metadata_Template.xlsx",
+    "source_section": "chunk 14/66",
+    "_snippet": " |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  | "
+  },
+  {
+    "code": "v1-3-techops-broadcast-cable-studio-metadata-template-stub-15",
+    "name": "[DRY-RUN] v1-3-techops-broadcast-cable-studio-metadata-template chunk 15",
+    "category": "t1_technical",
+    "spec_json": {},
+    "source_capitolato": "V1.3_TechOps_Broadcast_Cable_Studio_Metadata_Template.xlsx",
+    "source_section": "chunk 15/66",
+    "_snippet": "|  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  "
+  },
+  {
+    "code": "v1-3-techops-broadcast-cable-studio-metadata-template-stub-16",
+    "name": "[DRY-RUN] v1-3-techops-broadcast-cable-studio-metadata-template chunk 16",
+    "category": "t1_technical",
+    "spec_json": {},
+    "source_capitolato": "V1.3_TechOps_Broadcast_Cable_Studio_Metadata_Template.xlsx",
+    "source_section": "chunk 16/66",
+    "_snippet": " |   |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |"
+  },
+  {
+    "code": "v1-3-techops-broadcast-cable-studio-metadata-template-stub-17",
+    "name": "[DRY-RUN] v1-3-techops-broadcast-cable-studio-metadata-template chunk 17",
+    "category": "t1_technical",
+    "spec_json": {},
+    "source_capitolato": "V1.3_TechOps_Broadcast_Cable_Studio_Metadata_Template.xlsx",
+    "source_section": "chunk 17/66",
+    "_snippet": "|  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |   |  |  |  |  |  |  |  |  |  |  |  | "
+  },
+  {
+    "code": "v1-3-techops-broadcast-cable-studio-metadata-template-stub-18",
+    "name": "[DRY-RUN] v1-3-techops-broadcast-cable-studio-metadata-template chunk 18",
+    "category": "t1_technical",
+    "spec_json": {},
+    "source_capitolato": "V1.3_TechOps_Broadcast_Cable_Studio_Metadata_Template.xlsx",
+    "source_section": "chunk 18/66",
+    "_snippet": "  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |"
+  },
+  {
+    "code": "v1-3-techops-broadcast-cable-studio-metadata-template-stub-19",
+    "name": "[DRY-RUN] v1-3-techops-broadcast-cable-studio-metadata-template chunk 19",
+    "category": "t1_technical",
+    "spec_json": {},
+    "source_capitolato": "V1.3_TechOps_Broadcast_Cable_Studio_Metadata_Template.xlsx",
+    "source_section": "chunk 19/66",
+    "_snippet": " |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  | "
+  },
+  {
+    "code": "v1-3-techops-broadcast-cable-studio-metadata-template-stub-20",
+    "name": "[DRY-RUN] v1-3-techops-broadcast-cable-studio-metadata-template chunk 20",
+    "category": "t1_technical",
+    "spec_json": {},
+    "source_capitolato": "V1.3_TechOps_Broadcast_Cable_Studio_Metadata_Template.xlsx",
+    "source_section": "chunk 20/66",
+    "_snippet": "|  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  "
+  },
+  {
+    "code": "v1-3-techops-broadcast-cable-studio-metadata-template-stub-21",
+    "name": "[DRY-RUN] v1-3-techops-broadcast-cable-studio-metadata-template chunk 21",
+    "category": "t1_technical",
+    "spec_json": {},
+    "source_capitolato": "V1.3_TechOps_Broadcast_Cable_Studio_Metadata_Template.xlsx",
+    "source_section": "chunk 21/66",
+    "_snippet": "  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |"
+  },
+  {
+    "code": "v1-3-techops-broadcast-cable-studio-metadata-template-stub-22",
+    "name": "[DRY-RUN] v1-3-techops-broadcast-cable-studio-metadata-template chunk 22",
+    "category": "t1_technical",
+    "spec_json": {},
+    "source_capitolato": "V1.3_TechOps_Broadcast_Cable_Studio_Metadata_Template.xlsx",
+    "source_section": "chunk 22/66",
+    "_snippet": " |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  | "
+  },
+  {
+    "code": "v1-3-techops-broadcast-cable-studio-metadata-template-stub-23",
+    "name": "[DRY-RUN] v1-3-techops-broadcast-cable-studio-metadata-template chunk 23",
+    "category": "t1_technical",
+    "spec_json": {},
+    "source_capitolato": "V1.3_TechOps_Broadcast_Cable_Studio_Metadata_Template.xlsx",
+    "source_section": "chunk 23/66",
+    "_snippet": "|  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  "
+  },
+  {
+    "code": "v1-3-techops-broadcast-cable-studio-metadata-template-stub-24",
+    "name": "[DRY-RUN] v1-3-techops-broadcast-cable-studio-metadata-template chunk 24",
+    "category": "t1_technical",
+    "spec_json": {},
+    "source_capitolato": "V1.3_TechOps_Broadcast_Cable_Studio_Metadata_Template.xlsx",
+    "source_section": "chunk 24/66",
+    "_snippet": " Bachata | Advice Columnists | Hollywood Films | Duty | Bumbling Buffoons | Auto Races | Apartments | 1952 | Bull Riding"
+  },
+  {
+    "code": "v1-3-techops-broadcast-cable-studio-metadata-template-stub-25",
+    "name": "[DRY-RUN] v1-3-techops-broadcast-cable-studio-metadata-template chunk 25",
+    "category": "t1_technical",
+    "spec_json": {},
+    "source_capitolato": "V1.3_TechOps_Broadcast_Cable_Studio_Metadata_Template.xlsx",
+    "source_section": "chunk 25/66",
+    "_snippet": "l Services Units | Young-Adult Books | Misfortune | Exposed! | Catastrophes | Boardrooms | 2038 | Falconry | Childhood |"
+  },
+  {
+    "code": "v1-3-techops-broadcast-cable-studio-metadata-template-stub-26",
+    "name": "[DRY-RUN] v1-3-techops-broadcast-cable-studio-metadata-template chunk 26",
+    "category": "t1_technical",
+    "spec_json": {},
+    "source_capitolato": "V1.3_TechOps_Broadcast_Cable_Studio_Metadata_Template.xlsx",
+    "source_section": "chunk 26/66",
+    "_snippet": "rict Attorneys |  |  | Kidnapped | Cultural Seasons | Changing Rooms | 1890s | Kart Racing | Domestic Life |  | Mental I"
+  },
+  {
+    "code": "v1-3-techops-broadcast-cable-studio-metadata-template-stub-27",
+    "name": "[DRY-RUN] v1-3-techops-broadcast-cable-studio-metadata-template chunk 27",
+    "category": "t1_technical",
+    "spec_json": {},
+    "source_capitolato": "V1.3_TechOps_Broadcast_Cable_Studio_Metadata_Template.xlsx",
+    "source_section": "chunk 27/66",
+    "_snippet": "tract | Fairs | Creative Departments | Late 1900s | Reminiscing | Gender Roles |  | Sadness | Encryption | Calamity Jane"
+  },
+  {
+    "code": "v1-3-techops-broadcast-cable-studio-metadata-template-stub-28",
+    "name": "[DRY-RUN] v1-3-techops-broadcast-cable-studio-metadata-template chunk 28",
+    "category": "t1_technical",
+    "spec_json": {},
+    "source_capitolato": "V1.3_TechOps_Broadcast_Cable_Studio_Metadata_Template.xlsx",
+    "source_section": "chunk 28/66",
+    "_snippet": "Events | Fallout Shelters |  | Weaves | Interpersonal Rivalries |  |  | Geology | Claudius |  | Crimea |   | Indian Devo"
+  },
+  {
+    "code": "v1-3-techops-broadcast-cable-studio-metadata-template-stub-29",
+    "name": "[DRY-RUN] v1-3-techops-broadcast-cable-studio-metadata-template chunk 29",
+    "category": "t1_technical",
+    "spec_json": {},
+    "source_capitolato": "V1.3_TechOps_Broadcast_Cable_Studio_Metadata_Template.xlsx",
+    "source_section": "chunk 29/66",
+    "_snippet": " Society & Culture |  |  | Land Warfare | Drew Barrymore |  | Florence |   | Mongolian | Cabinet Members |  |  |  | Musi"
+  },
+  {
+    "code": "v1-3-techops-broadcast-cable-studio-metadata-template-stub-30",
+    "name": "[DRY-RUN] v1-3-techops-broadcast-cable-studio-metadata-template chunk 30",
+    "category": "t1_technical",
+    "spec_json": {},
+    "source_capitolato": "V1.3_TechOps_Broadcast_Cable_Studio_Metadata_Template.xlsx",
+    "source_section": "chunk 30/66",
+    "_snippet": " | Seduction |  |  | Nuclear Energy | Franz Anton Mesmer |  | Hampstead Heath Park |   | Psychedelic Soul | Children-In-"
+  },
+  {
+    "code": "v1-3-techops-broadcast-cable-studio-metadata-template-stub-31",
+    "name": "[DRY-RUN] v1-3-techops-broadcast-cable-studio-metadata-template chunk 31",
+    "category": "t1_technical",
+    "spec_json": {},
+    "source_capitolato": "V1.3_TechOps_Broadcast_Cable_Studio_Metadata_Template.xlsx",
+    "source_section": "chunk 31/66",
+    "_snippet": " Ceremonies | Music Video Sets |  |  | Usurpation |  |  | Religious Practice | Harlem Success Academy |  | Kentucky |   "
+  },
+  {
+    "code": "v1-3-techops-broadcast-cable-studio-metadata-template-stub-32",
+    "name": "[DRY-RUN] v1-3-techops-broadcast-cable-studio-metadata-template chunk 32",
+    "category": "t1_technical",
+    "spec_json": {},
+    "source_capitolato": "V1.3_TechOps_Broadcast_Cable_Studio_Metadata_Template.xlsx",
+    "source_section": "chunk 32/66",
+    "_snippet": "rencing | Jean Aurenche |  | Mayflower |   |  | Daleks |  |  |  |  | Real Estate Firms |  |  |  |  |  | Vietnamese Cuisi"
+  },
+  {
+    "code": "v1-3-techops-broadcast-cable-studio-metadata-template-stub-33",
+    "name": "[DRY-RUN] v1-3-techops-broadcast-cable-studio-metadata-template chunk 33",
+    "category": "t1_technical",
+    "spec_json": {},
+    "source_capitolato": "V1.3_TechOps_Broadcast_Cable_Studio_Metadata_Template.xlsx",
+    "source_section": "chunk 33/66",
+    "_snippet": "|  | King Philip V of Spain |  | Oran |   |  | Engaged Couples |  |  |  |  | Suburbs |  |  |  |  |  |  | King Richard | "
+  },
+  {
+    "code": "v1-3-techops-broadcast-cable-studio-metadata-template-stub-34",
+    "name": "[DRY-RUN] v1-3-techops-broadcast-cable-studio-metadata-template chunk 34",
+    "category": "t1_technical",
+    "spec_json": {},
+    "source_capitolato": "V1.3_TechOps_Broadcast_Cable_Studio_Metadata_Template.xlsx",
+    "source_section": "chunk 34/66",
+    "_snippet": " |  |  |  |  |  |  |  |  |  |  | Merlin |  | Santa Monica |   |  | Flies |  |  |  |  |  |  |  |  |  |  |  | Merrill's Ma"
+  },
+  {
+    "code": "v1-3-techops-broadcast-cable-studio-metadata-template-stub-35",
+    "name": "[DRY-RUN] v1-3-techops-broadcast-cable-studio-metadata-template chunk 35",
+    "category": "t1_technical",
+    "spec_json": {},
+    "source_capitolato": "V1.3_TechOps_Broadcast_Cable_Studio_Metadata_Template.xlsx",
+    "source_section": "chunk 35/66",
+    "_snippet": " |  | The Matterhorn |   |  | Groundskeepers |  |  |  |  |  |  |  |  |  |  |  | Queen Elizabeth II |  | The Moon |   |  "
+  },
+  {
+    "code": "v1-3-techops-broadcast-cable-studio-metadata-template-stub-36",
+    "name": "[DRY-RUN] v1-3-techops-broadcast-cable-studio-metadata-template chunk 36",
+    "category": "t1_technical",
+    "spec_json": {},
+    "source_capitolato": "V1.3_TechOps_Broadcast_Cable_Studio_Metadata_Template.xlsx",
+    "source_section": "chunk 36/66",
+    "_snippet": "|  |  |  |  | Specific Angels |  |  |   |  | Informants |  |  |  |  |  |  |  |  |  |  |  | Specific Animal Trainers |  |"
+  },
+  {
+    "code": "v1-3-techops-broadcast-cable-studio-metadata-template-stub-37",
+    "name": "[DRY-RUN] v1-3-techops-broadcast-cable-studio-metadata-template chunk 37",
+    "category": "t1_technical",
+    "spec_json": {},
+    "source_capitolato": "V1.3_TechOps_Broadcast_Cable_Studio_Metadata_Template.xlsx",
+    "source_section": "chunk 37/66",
+    "_snippet": "ts |  |  |   |  | Living Nutcrackers |  |  |  |  |  |  |  |  |  |  |  | Specific Office Workers |  |  |   |  | Living Ob"
+  },
+  {
+    "code": "v1-3-techops-broadcast-cable-studio-metadata-template-stub-38",
+    "name": "[DRY-RUN] v1-3-techops-broadcast-cable-studio-metadata-template chunk 38",
+    "category": "t1_technical",
+    "spec_json": {},
+    "source_capitolato": "V1.3_TechOps_Broadcast_Cable_Studio_Metadata_Template.xlsx",
+    "source_section": "chunk 38/66",
+    "_snippet": "ovans |  |  |  |  |  |  |  |  |  |  |  | Thi Thanh Nga |  |  |   |  | Mole Agents |  |  |  |  |  |  |  |  |  |  |  | Thi"
+  },
+  {
+    "code": "v1-3-techops-broadcast-cable-studio-metadata-template-stub-39",
+    "name": "[DRY-RUN] v1-3-techops-broadcast-cable-studio-metadata-template chunk 39",
+    "category": "t1_technical",
+    "spec_json": {},
+    "source_capitolato": "V1.3_TechOps_Broadcast_Cable_Studio_Metadata_Template.xlsx",
+    "source_section": "chunk 39/66",
+    "_snippet": "  |  |  |  |  |   |  | Pakistanis |  |  |  |  |  |  |  |  |  |  |  |  |  |  |   |  | Paleontologists |  |  |  |  |  |  |"
+  },
+  {
+    "code": "v1-3-techops-broadcast-cable-studio-metadata-template-stub-40",
+    "name": "[DRY-RUN] v1-3-techops-broadcast-cable-studio-metadata-template chunk 40",
+    "category": "t1_technical",
+    "spec_json": {},
+    "source_capitolato": "V1.3_TechOps_Broadcast_Cable_Studio_Metadata_Template.xlsx",
+    "source_section": "chunk 40/66",
+    "_snippet": "  |  |  |  |  |  |  |  |  |  |  |  |  |  |   |  | Queens |  |  |  |  |  |  |  |  |  |  |  |  |  |  |   |  | Queer People"
+  },
+  {
+    "code": "v1-3-techops-broadcast-cable-studio-metadata-template-stub-41",
+    "name": "[DRY-RUN] v1-3-techops-broadcast-cable-studio-metadata-template chunk 41",
+    "category": "t1_technical",
+    "spec_json": {},
+    "source_capitolato": "V1.3_TechOps_Broadcast_Cable_Studio_Metadata_Template.xlsx",
+    "source_section": "chunk 41/66",
+    "_snippet": "|  |  |  |  |  |  |  |  |  |  |  |  |   |  | Ship Mates |  |  |  |  |  |  |  |  |  |  |  |  |  |  |   |  | Ship Owners |"
+  },
+  {
+    "code": "v1-3-techops-broadcast-cable-studio-metadata-template-stub-42",
+    "name": "[DRY-RUN] v1-3-techops-broadcast-cable-studio-metadata-template chunk 42",
+    "category": "t1_technical",
+    "spec_json": {},
+    "source_capitolato": "V1.3_TechOps_Broadcast_Cable_Studio_Metadata_Template.xlsx",
+    "source_section": "chunk 42/66",
+    "_snippet": "vivalists |  |  |  |  |  |  |  |  |  |  |  |  |  |  |   |  | Surviving Spouses |  |  |  |  |  |  |  |  |  |  |  |  |  | "
+  },
+  {
+    "code": "v1-3-techops-broadcast-cable-studio-metadata-template-stub-43",
+    "name": "[DRY-RUN] v1-3-techops-broadcast-cable-studio-metadata-template chunk 43",
+    "category": "t1_technical",
+    "spec_json": {},
+    "source_capitolato": "V1.3_TechOps_Broadcast_Cable_Studio_Metadata_Template.xlsx",
+    "source_section": "chunk 43/66",
+    "_snippet": " | Voice Actresses |  |  |  |  |  |  |  |  |  |  |  |  |  |  |   |  | Volleyball Players |  |  |  |  |  |  |  |  |  |  |"
+  },
+  {
+    "code": "v1-3-techops-broadcast-cable-studio-metadata-template-stub-44",
+    "name": "[DRY-RUN] v1-3-techops-broadcast-cable-studio-metadata-template chunk 44",
+    "category": "t1_technical",
+    "spec_json": {},
+    "source_capitolato": "V1.3_TechOps_Broadcast_Cable_Studio_Metadata_Template.xlsx",
+    "source_section": "chunk 44/66",
+    "_snippet": " Effects scroll down to select \"N/A\" | Type of Component File. Select from Dropdown. | Auto-Generated Field | Language o"
+  },
+  {
+    "code": "v1-3-techops-broadcast-cable-studio-metadata-template-stub-45",
+    "name": "[DRY-RUN] v1-3-techops-broadcast-cable-studio-metadata-template chunk 45",
+    "category": "t1_technical",
+    "spec_json": {},
+    "source_capitolato": "V1.3_TechOps_Broadcast_Cable_Studio_Metadata_Template.xlsx",
+    "source_section": "chunk 45/66",
+    "_snippet": " |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  | "
+  },
+  {
+    "code": "v1-3-techops-broadcast-cable-studio-metadata-template-stub-46",
+    "name": "[DRY-RUN] v1-3-techops-broadcast-cable-studio-metadata-template chunk 46",
+    "category": "t1_technical",
+    "spec_json": {},
+    "source_capitolato": "V1.3_TechOps_Broadcast_Cable_Studio_Metadata_Template.xlsx",
+    "source_section": "chunk 46/66",
+    "_snippet": "|  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  "
+  },
+  {
+    "code": "v1-3-techops-broadcast-cable-studio-metadata-template-stub-47",
+    "name": "[DRY-RUN] v1-3-techops-broadcast-cable-studio-metadata-template chunk 47",
+    "category": "t1_technical",
+    "spec_json": {},
+    "source_capitolato": "V1.3_TechOps_Broadcast_Cable_Studio_Metadata_Template.xlsx",
+    "source_section": "chunk 47/66",
+    "_snippet": "  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |"
+  },
+  {
+    "code": "v1-3-techops-broadcast-cable-studio-metadata-template-stub-48",
+    "name": "[DRY-RUN] v1-3-techops-broadcast-cable-studio-metadata-template chunk 48",
+    "category": "t1_technical",
+    "spec_json": {},
+    "source_capitolato": "V1.3_TechOps_Broadcast_Cable_Studio_Metadata_Template.xlsx",
+    "source_section": "chunk 48/66",
+    "_snippet": " |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  | "
+  },
+  {
+    "code": "v1-3-techops-broadcast-cable-studio-metadata-template-stub-49",
+    "name": "[DRY-RUN] v1-3-techops-broadcast-cable-studio-metadata-template chunk 49",
+    "category": "t1_technical",
+    "spec_json": {},
+    "source_capitolato": "V1.3_TechOps_Broadcast_Cable_Studio_Metadata_Template.xlsx",
+    "source_section": "chunk 49/66",
+    "_snippet": "  |  |  |  |  |  |  |  |  |  |  |   |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  "
+  },
+  {
+    "code": "v1-3-techops-broadcast-cable-studio-metadata-template-stub-50",
+    "name": "[DRY-RUN] v1-3-techops-broadcast-cable-studio-metadata-template chunk 50",
+    "category": "t1_technical",
+    "spec_json": {},
+    "source_capitolato": "V1.3_TechOps_Broadcast_Cable_Studio_Metadata_Template.xlsx",
+    "source_section": "chunk 50/66",
+    "_snippet": " |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |   |  |"
+  },
+  {
+    "code": "v1-3-techops-broadcast-cable-studio-metadata-template-stub-51",
+    "name": "[DRY-RUN] v1-3-techops-broadcast-cable-studio-metadata-template chunk 51",
+    "category": "t1_technical",
+    "spec_json": {},
+    "source_capitolato": "V1.3_TechOps_Broadcast_Cable_Studio_Metadata_Template.xlsx",
+    "source_section": "chunk 51/66",
+    "_snippet": "|  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  "
+  },
+  {
+    "code": "v1-3-techops-broadcast-cable-studio-metadata-template-stub-52",
+    "name": "[DRY-RUN] v1-3-techops-broadcast-cable-studio-metadata-template chunk 52",
+    "category": "t1_technical",
+    "spec_json": {},
+    "source_capitolato": "V1.3_TechOps_Broadcast_Cable_Studio_Metadata_Template.xlsx",
+    "source_section": "chunk 52/66",
+    "_snippet": "  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |"
+  },
+  {
+    "code": "v1-3-techops-broadcast-cable-studio-metadata-template-stub-53",
+    "name": "[DRY-RUN] v1-3-techops-broadcast-cable-studio-metadata-template chunk 53",
+    "category": "t1_technical",
+    "spec_json": {},
+    "source_capitolato": "V1.3_TechOps_Broadcast_Cable_Studio_Metadata_Template.xlsx",
+    "source_section": "chunk 53/66",
+    "_snippet": " |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  | "
+  },
+  {
+    "code": "v1-3-techops-broadcast-cable-studio-metadata-template-stub-54",
+    "name": "[DRY-RUN] v1-3-techops-broadcast-cable-studio-metadata-template chunk 54",
+    "category": "t1_technical",
+    "spec_json": {},
+    "source_capitolato": "V1.3_TechOps_Broadcast_Cable_Studio_Metadata_Template.xlsx",
+    "source_section": "chunk 54/66",
+    "_snippet": "|  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  "
+  },
+  {
+    "code": "v1-3-techops-broadcast-cable-studio-metadata-template-stub-55",
+    "name": "[DRY-RUN] v1-3-techops-broadcast-cable-studio-metadata-template chunk 55",
+    "category": "t1_technical",
+    "spec_json": {},
+    "source_capitolato": "V1.3_TechOps_Broadcast_Cable_Studio_Metadata_Template.xlsx",
+    "source_section": "chunk 55/66",
+    "_snippet": "  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |"
+  },
+  {
+    "code": "v1-3-techops-broadcast-cable-studio-metadata-template-stub-56",
+    "name": "[DRY-RUN] v1-3-techops-broadcast-cable-studio-metadata-template chunk 56",
+    "category": "t1_technical",
+    "spec_json": {},
+    "source_capitolato": "V1.3_TechOps_Broadcast_Cable_Studio_Metadata_Template.xlsx",
+    "source_section": "chunk 56/66",
+    "_snippet": "|  |  |  |  |  |   |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  | "
+  },
+  {
+    "code": "v1-3-techops-broadcast-cable-studio-metadata-template-stub-57",
+    "name": "[DRY-RUN] v1-3-techops-broadcast-cable-studio-metadata-template chunk 57",
+    "category": "t1_technical",
+    "spec_json": {},
+    "source_capitolato": "V1.3_TechOps_Broadcast_Cable_Studio_Metadata_Template.xlsx",
+    "source_section": "chunk 57/66",
+    "_snippet": "  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |   |  |  |  |  |  |  |  "
+  },
+  {
+    "code": "v1-3-techops-broadcast-cable-studio-metadata-template-stub-58",
+    "name": "[DRY-RUN] v1-3-techops-broadcast-cable-studio-metadata-template chunk 58",
+    "category": "t1_technical",
+    "spec_json": {},
+    "source_capitolato": "V1.3_TechOps_Broadcast_Cable_Studio_Metadata_Template.xlsx",
+    "source_section": "chunk 58/66",
+    "_snippet": " |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  | "
+  },
+  {
+    "code": "v1-3-techops-broadcast-cable-studio-metadata-template-stub-59",
+    "name": "[DRY-RUN] v1-3-techops-broadcast-cable-studio-metadata-template chunk 59",
+    "category": "t1_technical",
+    "spec_json": {},
+    "source_capitolato": "V1.3_TechOps_Broadcast_Cable_Studio_Metadata_Template.xlsx",
+    "source_section": "chunk 59/66",
+    "_snippet": "|  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  "
+  },
+  {
+    "code": "v1-3-techops-broadcast-cable-studio-metadata-template-stub-60",
+    "name": "[DRY-RUN] v1-3-techops-broadcast-cable-studio-metadata-template chunk 60",
+    "category": "t1_technical",
+    "spec_json": {},
+    "source_capitolato": "V1.3_TechOps_Broadcast_Cable_Studio_Metadata_Template.xlsx",
+    "source_section": "chunk 60/66",
+    "_snippet": "  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |"
+  },
+  {
+    "code": "v1-3-techops-broadcast-cable-studio-metadata-template-stub-61",
+    "name": "[DRY-RUN] v1-3-techops-broadcast-cable-studio-metadata-template chunk 61",
+    "category": "t1_technical",
+    "spec_json": {},
+    "source_capitolato": "V1.3_TechOps_Broadcast_Cable_Studio_Metadata_Template.xlsx",
+    "source_section": "chunk 61/66",
+    "_snippet": " |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  | "
+  },
+  {
+    "code": "v1-3-techops-broadcast-cable-studio-metadata-template-stub-62",
+    "name": "[DRY-RUN] v1-3-techops-broadcast-cable-studio-metadata-template chunk 62",
+    "category": "t1_technical",
+    "spec_json": {},
+    "source_capitolato": "V1.3_TechOps_Broadcast_Cable_Studio_Metadata_Template.xlsx",
+    "source_section": "chunk 62/66",
+    "_snippet": "|  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  "
+  },
+  {
+    "code": "v1-3-techops-broadcast-cable-studio-metadata-template-stub-63",
+    "name": "[DRY-RUN] v1-3-techops-broadcast-cable-studio-metadata-template chunk 63",
+    "category": "t1_technical",
+    "spec_json": {},
+    "source_capitolato": "V1.3_TechOps_Broadcast_Cable_Studio_Metadata_Template.xlsx",
+    "source_section": "chunk 63/66",
+    "_snippet": "  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |"
+  },
+  {
+    "code": "v1-3-techops-broadcast-cable-studio-metadata-template-stub-64",
+    "name": "[DRY-RUN] v1-3-techops-broadcast-cable-studio-metadata-template chunk 64",
+    "category": "t1_technical",
+    "spec_json": {},
+    "source_capitolato": "V1.3_TechOps_Broadcast_Cable_Studio_Metadata_Template.xlsx",
+    "source_section": "chunk 64/66",
+    "_snippet": "|  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |   |  |  |  |  |  |  |  |  |  |  |  |  | "
+  },
+  {
+    "code": "v1-3-techops-broadcast-cable-studio-metadata-template-stub-65",
+    "name": "[DRY-RUN] v1-3-techops-broadcast-cable-studio-metadata-template chunk 65",
+    "category": "t1_technical",
+    "spec_json": {},
+    "source_capitolato": "V1.3_TechOps_Broadcast_Cable_Studio_Metadata_Template.xlsx",
+    "source_section": "chunk 65/66",
+    "_snippet": "  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |"
+  },
+  {
+    "code": "v1-3-techops-broadcast-cable-studio-metadata-template-stub-66",
+    "name": "[DRY-RUN] v1-3-techops-broadcast-cable-studio-metadata-template chunk 66",
+    "category": "t1_technical",
+    "spec_json": {},
+    "source_capitolato": "V1.3_TechOps_Broadcast_Cable_Studio_Metadata_Template.xlsx",
+    "source_section": "chunk 66/66",
+    "_snippet": "  |  |  |  |   |  |  |  |  |  |  |  |  |  |  |  |  | 2.66 |  |  |  |  |  | German | DE-DE | German (DE-DE) | Dolby Visio"
+  }
+]

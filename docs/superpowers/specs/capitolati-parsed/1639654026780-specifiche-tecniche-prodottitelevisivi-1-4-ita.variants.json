@@ -1,0 +1,47 @@
+[
+  {
+    "code": "1639654026780-specifiche-tecniche-prodottitelevisivi-1-4-ita-stub-1",
+    "name": "[DRY-RUN] 1639654026780-specifiche-tecniche-prodottitelevisivi-1-4-ita chunk 1",
+    "category": "t1_technical",
+    "spec_json": {},
+    "source_capitolato": "1639654026780_Specifiche_Tecniche_ProdottiTelevisivi_1.4_ITA.pdf",
+    "source_section": "chunk 1/5",
+    "_snippet": "             S pecifiche Tecniche per la  consegna di prodotti televisivi nei  formati SD/HD/3D/UHD                    V"
+  },
+  {
+    "code": "1639654026780-specifiche-tecniche-prodottitelevisivi-1-4-ita-stub-2",
+    "name": "[DRY-RUN] 1639654026780-specifiche-tecniche-prodottitelevisivi-1-4-ita chunk 2",
+    "category": "t1_technical",
+    "spec_json": {},
+    "source_capitolato": "1639654026780_Specifiche_Tecniche_ProdottiTelevisivi_1.4_ITA.pdf",
+    "source_section": "chunk 2/5",
+    "_snippet": " al di fuori dei limiti specificati.   3.3 Titoli in movimento e grafica  I titoli in movimento e la grafica devono esse"
+  },
+  {
+    "code": "1639654026780-specifiche-tecniche-prodottitelevisivi-1-4-ita-stub-3",
+    "name": "[DRY-RUN] 1639654026780-specifiche-tecniche-prodottitelevisivi-1-4-ita chunk 3",
+    "category": "t1_technical",
+    "spec_json": {},
+    "source_capitolato": "1639654026780_Specifiche_Tecniche_ProdottiTelevisivi_1.4_ITA.pdf",
+    "source_section": "chunk 3/5",
+    "_snippet": "l segnale di timecode deve essere conforme allo standard SMPTE 12M-1.   Il timecode corrispondente al primo frame del pr"
+  },
+  {
+    "code": "1639654026780-specifiche-tecniche-prodottitelevisivi-1-4-ita-stub-4",
+    "name": "[DRY-RUN] 1639654026780-specifiche-tecniche-prodottitelevisivi-1-4-ita chunk 4",
+    "category": "t1_technical",
+    "spec_json": {},
+    "source_capitolato": "1639654026780_Specifiche_Tecniche_ProdottiTelevisivi_1.4_ITA.pdf",
+    "source_section": "chunk 4/5",
+    "_snippet": "stiche principali del profilo HDTV MOV/ProRes  1080p25 basato sul formato di compressione Apple ProRes21.  Caratteristic"
+  },
+  {
+    "code": "1639654026780-specifiche-tecniche-prodottitelevisivi-1-4-ita-stub-5",
+    "name": "[DRY-RUN] 1639654026780-specifiche-tecniche-prodottitelevisivi-1-4-ita chunk 5",
+    "category": "t1_technical",
+    "spec_json": {},
+    "source_capitolato": "1639654026780_Specifiche_Tecniche_ProdottiTelevisivi_1.4_ITA.pdf",
+    "source_section": "chunk 5/5",
+    "_snippet": "/ITA Dolby E  8T10 Stereo/ITA + MCA/ITA Dolby E  8T11 Stereo/ITA + AD/ITA  8T12 Stereo/ITA+ MCA/ITA  8T13 Stereo/OTH+MCA"
+  }
+]
