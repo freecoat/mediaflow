@@ -1,5 +1,50 @@
 # MediaFlow — Changelog
 
+## v3.5.0-alpha.172.95 — Bundle L Stack 1 (Task 8-12): extractor impl + auto-migrate + capitolati parser (27 mag 2026)
+
+Milestone 2/3 dello Stack 1. Extractor reali (FFProbe + Pillow) registrati nel registry, asset_metadata.py diventa wrapper sottile, auto-migrate al boot popola le colonne Bundle L su DB esistenti, script batch parser per i 17 capitolati corpus con `--dry-run` end-to-end. 21 test pytest verdi.
+
+**FFProbeExtractor** (`app/services/tech_specs_extractor/ffprobe_extractor.py`):
+- Port da `asset_metadata.py` (originale Bundle H3). Logica subprocess ffprobe `-show_format -show_streams -of json`, timeout 8s, gentle fallback se binary assente.
+- Registrato su `mime_priority=["video/*", "audio/*"]` via `@register_extractor("ffprobe", ...)`.
+- Output shape: `{tool, container{format,size_bytes,duration_sec,bitrate_kbps}, video{width,height,framerate,codec,duration_sec,bitrate_kbps,pixel_format}, audio[{codec,channels,sample_rate,bitrate_kbps,language}], errors[]}`.
+- Helper `_parse_framerate("25000/1000")` → `"25"` o stringa formattata.
+
+**PillowExtractor** (`app/services/tech_specs_extractor/pillow_extractor.py`):
+- Fallback per `image/*` (JPEG, PNG, TIFF, ecc.). Usa PIL (già nelle deps via thumbnails Bundle H3).
+- Output: `{tool: "pillow", container{format}, video{width,height,codec,pixel_format}, audio: [], errors[]}`.
+- Gentle ImportError se PIL non disponibile.
+
+**Auto-load registry** (`app/services/tech_specs_extractor/__init__.py`):
+- Bottom-of-file imports per side-effect: `ffprobe_extractor as _ffp` + `pillow_extractor as _pil`. Decorator si attiva all'import del package.
+
+**asset_metadata.py legacy wrapper** (`app/services/asset_metadata.py`):
+- Refactor: da 190 righe inline ffprobe/pillow → 15 righe wrapper che delega a `extract_tech_specs(file_path, mime_type)`.
+- Firma `extract_asset_metadata(file_path, mime_type=None)` invariata. `dam.py` endpoint `/dam/api/assets/{id}/metadata` continua a funzionare senza modifiche (back-compat verificata via test).
+- Net deletion: −180/+25 righe. Logica concentrata nel registry plugin.
+
+**Auto-migrate al boot Bundle L** (`app/main.py`):
+- `_auto_migrate_bundle_l_stack1()` idempotente: PRAGMA `table_info` check + ALTER condizionali su `job_deliverables` (variant_id FK + variant_language/territory/format) e `assets` (tech_specs_json + tech_specs_extractor + tech_specs_extracted_at + tech_specs_schema_version) + `CREATE INDEX IF NOT EXISTS ix_jd_variant_id`. Log `[auto-migrate-bundle-l]` per ogni ALTER eseguita.
+- `_seed_variant_schema_v1()` idempotente: carica `schemas/variant_v1.json` in `VariantSchemaVersion(version='v1', is_active=True)` se non esiste. Log `[seed-variant-schema] v1 caricato`.
+- Wire nel `lifespan` (try/except per non bloccare boot se failure). Eseguite DOPO `_auto_reclassify_physical_deliverables` (Bundle K2).
+- Smoke su DB esistente α.172.94: 8 ALTER eseguite + 1 INDEX + seed v1. Seconda invocazione 0 ALTER (idempotenza confermata).
+
+**`scripts/parse_capitolati.py`** — batch parser corpus (Stack 1 path `--dry-run`, AI runtime path Stack 5):
+- Input: directory con TXT/PDF/DOCX/XLSX (corpus `docs/capitolati_esempio/`).
+- Pipeline: extract_text_from_file (pypdf/python-docx/openpyxl) → chunk_text (sliding window 24k char, overlap 1k) → classify_item_tier (regex keyword T1 technical / T2 documentation / T3 compilation) → per-chunk stub variant in `--dry-run` o call `ai_provider.extract_variants_from_chunk` (Stack 5 placeholder).
+- Output: `<vendor>.variants.json` per ogni capitolato + `REPORT.md` aggregato.
+- Smoke su 17 capitolati: 200 stub variants generate. Edge cases segnalati:
+  - 2 file `.txt` 0-byte (Amazon MGM + Netflix — da popolare con contenuto reale)
+  - 1 file `.doc` legacy (Veterans Sales Agent — python-docx supporta solo `.docx`, OK gentle skip)
+  - 1 PDF scannerizzato (Beta Film Delivery Master — solo 13 char estratti, richiederà OCR fallback in Stack 5)
+  - Top contributor chunk: XLSX NBCU TechOps metadata template (66 chunk, 1.5M char)
+
+**Tests** (`tests/test_tech_specs_extractor.py` + `tests/test_parse_capitolati.py`):
+- 21 test pytest verdi totali (4 base + 2 ffprobe + 1 pillow + 1 back-compat + 13 model/schema + 3 parser).
+- Pattern `importlib.reload(<extractor>)` dentro test body per riattivare decorator `@register_extractor` dopo `_clean_registry.clear()` autouse.
+
+---
+
 ## v3.5.0-alpha.172.94 — Bundle L Stack 1 (Task 1-7): models + JSON Schema + extractor base (27 mag 2026)
 
 Foundation Bundle L "tech specs unified" (riconciliazione Asset/Deliverable/QC, catalogo DeliveryVariant capitolato-first). Stack 1 di 5, milestone 1 di 3. Nessun comportamento utente cambia in α.172.94: solo modelli, schema, service plumbing. TDD strict (tests/ + pytest).
