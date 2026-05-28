@@ -1,5 +1,21 @@
 # MediaFlow — Changelog
 
+## v3.5.0-alpha.172.126 — Container taxonomy non-AV: fix 21 falsi positivi MISSING_CONTAINER (28 mag 2026 sera)
+
+La regola di validazione R9 (`MISSING_CONTAINER`) assumeva che ogni DeliveryItem fosse un wrapper audio/video, segnalando come **error** i 21 deliverable senza container — ma sottotitoli, KDM, immagini disco e documenti sono containerless per natura. Scelta architetturale (con Matteo): **estendere la taxonomy Container** invece di allentare R9, così ogni item ha un container reale e il dato resta onesto.
+
+**8 nuovi Container preset globali** (`scripts/migrate_delivery_taxonomy.py`):
+- Subtitle Sidecar: EBU-STL, SRT, TTML/IMSC, SCC, WebVTT (`media_kind='subtitle'`)
+- KDM / DKDM (`media_kind='key'`)
+- Optical Disc Image ISO (`media_kind='disc'`)
+- Document PDF/XLS/DOC (`media_kind='document'`)
+
+**Backfill signal-driven** `_backfill_containerless_items()`: riassegna gli item senza container usando `subtitle_format` + euristiche sul nome (KDM/ISO/QC report/cue sheet). Idempotente (solo `container_id` NULL). 20 item riassegnati, 0 non classificati.
+
+**Risultato validazione corpus** (211 item): da **22 item con issue** (21 MISSING_CONTAINER) a **2** — entrambi finding legittimi non-falsi-positivi (1 `J2K_REQUIRES_MXF` su J2C image-seq id=69, 1 `IMGSEQ_NO_AUDIO` su DCDM id=173). R9 invariato, nessun nuovo falso positivo dai media_kind aggiunti.
+
+File: `scripts/migrate_delivery_taxonomy.py`. Nessuna modifica al validator o ai modelli.
+
 ## v3.5.0-alpha.172.125 — Fix lifespan backfill (Path scoping) + avvia_muto anti-zombie (28 mag 2026 sera)
 
 **Bug fix lifespan** — `from pathlib import Path` locale dentro la funzione `lifespan` rendeva `Path` una variabile locale per **tutto** lo scope → i 3 backfill precedenti (`JCL.work_date`, `JCL.total_expected`, `JCLBilledSlice`) crashavano al primo uso di `Path` con `cannot access local variable 'Path' where it is not associated with a value`. Errore catturato dal try/except → silenzioso, ma i backfill non giravano mai. Rimosso l'import locale, ora usa il `Path` globale (riga 7). I 3 backfill ora completano al boot.

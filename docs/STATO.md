@@ -8,7 +8,12 @@
 
 ## Versione corrente
 
-**v3.5.0-alpha.172.125** — 28 maggio 2026 sera — fix lifespan backfill (Path scoping) + avvia_muto anti-zombie
+**v3.5.0-alpha.172.126** — 28 maggio 2026 sera — Container taxonomy non-AV: fix 21 falsi positivi MISSING_CONTAINER
+
+### α.172.126 ✅ (punto #2 "Prossima sessione" chiuso)
+8 nuovi Container preset (Subtitle EBU-STL/SRT/TTML-IMSC/SCC/WebVTT + KDM + ISO + Document) con `media_kind` dedicati. Backfill signal-driven riassegna i 20 item containerless (subtitle/KDM/ISO/doc). Validazione corpus 211 item: **22→2 issue** (i 2 residui sono finding veri: J2K_REQUIRES_MXF id=69, IMGSEQ_NO_AUDIO id=173). R9 invariato, scelta "taxonomy estesa" vs allentare la regola. File: `scripts/migrate_delivery_taxonomy.py`.
+
+**Restano punti #1 (test browser E2E — lato Matteo) e #3 (AI match listino batch 211 item → suggested_price_item_id).**
 
 ### α.172.125 ✅
 **Fix 500 su /delivery-templates** diagnosticato a fondo: NON era un bug di codice ma 10 server zombie su :8000 (OneDrive rompe il reload-watcher di uvicorn → restart manuali accumulano processi; SO_REUSEADDR Windows → un vecchio .116 rispondeva, template .124 → Jinja UndefinedError su `stats`/`show_inactive`). Fix: kill di tutti i python + relaunch pulito.

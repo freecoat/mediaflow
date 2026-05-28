@@ -22,7 +22,7 @@ sys.path.insert(0, str(ROOT))
 from app.database import SessionLocal, engine
 from app.models.models import (
     Base, Package, Container, VideoCodec, AudioCodec, AudioChannelConfig,
-    AudioMixType, MixStandard, Resolution, FrameRate,
+    AudioMixType, MixStandard, Resolution, FrameRate, DeliveryItem,
 )
 
 
@@ -68,6 +68,18 @@ CONTAINERS = [
     {"name": "Image Sequence EXR", "extension": ".exr", "op_pattern": None,  "media_kind": "image_seq", "sort_order": 110, "description": "OpenEXR float HDR multilayer. VFX/grading scene-linear.", "is_image_sequence": True},
     {"name": "Image Sequence TIFF","extension": ".tif", "op_pattern": None,  "media_kind": "image_seq", "sort_order": 120, "description": "TIFF 8/16-bit. Archival/post.", "is_image_sequence": True},
     {"name": "Image Sequence J2C", "extension": ".j2c", "op_pattern": None,  "media_kind": "image_seq", "sort_order": 130, "description": "JPEG 2000 codestream sequence (DCP source).", "is_image_sequence": True},
+    # v3.5.0-alpha.172.126 — Container NON-AV. Non ogni deliverable è un wrapper
+    # audio/video: sottotitoli, chiavi DCP, immagini disco e documenti hanno il
+    # proprio "container". Risolve i falsi positivi MISSING_CONTAINER su subtitle/
+    # KDM/ISO/document senza allentare R9 (ogni item ha comunque un container).
+    {"name": "Subtitle Sidecar (EBU-STL)",  "extension": ".stl", "op_pattern": None, "media_kind": "subtitle", "sort_order": 200, "description": "EBU STL (Tech 3264) subtitle file. Broadcast europeo."},
+    {"name": "Subtitle Sidecar (SRT)",      "extension": ".srt", "op_pattern": None, "media_kind": "subtitle", "sort_order": 210, "description": "SubRip plain-text timed text. Diffuso, semplice."},
+    {"name": "Subtitle Sidecar (TTML/IMSC)","extension": ".xml", "op_pattern": None, "media_kind": "subtitle", "sort_order": 220, "description": "W3C TTML / IMSC 1.1 timed text XML. Netflix/IMF/SMPTE."},
+    {"name": "Subtitle Sidecar (SCC)",      "extension": ".scc", "op_pattern": None, "media_kind": "subtitle", "sort_order": 230, "description": "Scenarist Closed Caption (CEA-608) US broadcast."},
+    {"name": "Subtitle Sidecar (WebVTT)",   "extension": ".vtt", "op_pattern": None, "media_kind": "subtitle", "sort_order": 240, "description": "W3C WebVTT timed text. Web/HTML5/OTT."},
+    {"name": "KDM / DKDM",                   "extension": ".xml", "op_pattern": None, "media_kind": "key",      "sort_order": 250, "description": "(D)KDM Key Delivery Message XML (SMPTE ST 430-1/-3). Sblocca DCP cifrato."},
+    {"name": "Optical Disc Image (ISO)",     "extension": ".iso", "op_pattern": None, "media_kind": "disc",     "sort_order": 260, "description": "Immagine disco ISO 9660/UDF. DVD-Video / Blu-ray BDMV."},
+    {"name": "Document (PDF/XLS/DOC)",       "extension": None,   "op_pattern": None, "media_kind": "document", "sort_order": 270, "description": "Documento allegato non-AV: QC report, cue sheet, metadata sheet, as-run log."},
 ]
 
 
@@ -228,6 +240,67 @@ FRAME_RATES = [
 ]
 
 
+def _backfill_containerless_items(db):
+    """v3.5.0-alpha.172.126 — Assegna un container ai DeliveryItem non-AV che
+    erano rimasti senza (subtitle/KDM/ISO/document), eliminando i falsi positivi
+    MISSING_CONTAINER. Signal-driven: usa subtitle_format + euristiche sul nome.
+    Idempotente: opera solo su item con container_id NULL.
+    """
+    def cid(name):
+        c = db.query(Container).filter(Container.name == name).first()
+        return c.id if c else None
+
+    C_STL  = cid("Subtitle Sidecar (EBU-STL)")
+    C_SRT  = cid("Subtitle Sidecar (SRT)")
+    C_TTML = cid("Subtitle Sidecar (TTML/IMSC)")
+    C_SCC  = cid("Subtitle Sidecar (SCC)")
+    C_VTT  = cid("Subtitle Sidecar (WebVTT)")
+    C_KDM  = cid("KDM / DKDM")
+    C_ISO  = cid("Optical Disc Image (ISO)")
+    C_DOC  = cid("Document (PDF/XLS/DOC)")
+
+    items = db.query(DeliveryItem).filter(DeliveryItem.container_id.is_(None)).all()
+    assigned = 0
+    skipped = []
+    for it in items:
+        sf = (it.subtitle_format or "").upper()
+        nm = (it.name or "").upper()
+        nt = (it.notes or "").upper()
+        target = None
+        is_subtitle = bool(sf) or any(k in nm for k in ("SOTTOTITOL", "SUBTITLE", "CLOSED CAPTION", "CAPTION"))
+        if is_subtitle:
+            if "TTML" in sf or "IMSC" in sf or "XML" in sf:
+                target = C_TTML
+            elif "SRT" in sf:
+                target = C_SRT
+            elif "VTT" in sf or "WEBVTT" in (sf + nm):
+                target = C_VTT
+            elif "SCC" in sf:
+                target = C_SCC
+            elif "STL" in sf or "EBU" in sf:
+                target = C_STL
+            else:
+                target = C_TTML  # default moderno se formato non riconosciuto
+        elif "KDM" in nm or "KDM" in nt:
+            target = C_KDM
+        elif "ISO" in nm or "DISC" in nm:
+            target = C_ISO
+        elif any(k in nm for k in ("QC REPORT", "CUE SHEET", "REPORT", "METADATA",
+                                    "AS-RUN", "AS RUN", "CHAPTER", "DOCUMENT", "SHEET")):
+            target = C_DOC
+        if target:
+            it.container_id = target
+            assigned += 1
+        else:
+            skipped.append((it.id, it.name))
+    db.commit()
+    if skipped:
+        print(f"  ! {len(skipped)} item senza container e non classificabili:")
+        for iid, inm in skipped[:20]:
+            print(f"      id={iid} {inm!r}")
+    return assigned
+
+
 def main():
     sys.stdout.reconfigure(encoding="utf-8", errors="replace")
     print("-> Creazione tabelle nuove (idempotente)...")
@@ -251,6 +324,10 @@ def main():
             print(f"  + {k:22} {v} record")
         total = sum(counts.values())
         print(f"\n[OK] Totale {total} record nuovi.")
+
+        print("\n-> Backfill container su DeliveryItem non-AV (subtitle/KDM/ISO/doc)...")
+        n_bf = _backfill_containerless_items(db)
+        print(f"[OK] {n_bf} item riassegnati a un container appropriato.")
     finally:
         db.close()
     return 0
