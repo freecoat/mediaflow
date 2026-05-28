@@ -208,7 +208,10 @@ Testo capitolato (per riferimento):
 
 Mappa ciascun item agli id taxonomy."""
     try:
-        pass2_result = provider.extract_json(PASS2_SYSTEM_PROMPT, pass2_user, max_tokens=16000)
+        # v3.5.0-alpha.172.118 — bump 16K → 32K: PIPERFILM-DELIVERY troncava
+        # output (DCP + 16 audio channels + multi-edizioni = items con extra_specs
+        # molto verbosi). Sonnet 4.6 supporta fino a 64K output.
+        pass2_result = provider.extract_json(PASS2_SYSTEM_PROMPT, pass2_user, max_tokens=32000)
     except Exception as e:
         logger.error(f"pass2 failed: {e}")
         return None

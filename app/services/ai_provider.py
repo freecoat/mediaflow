@@ -374,9 +374,20 @@ class ClaudeProvider(AIProvider):
     def name(self) -> str: return f"Claude ({self.model})"
 
     def complete(self, system, user, max_tokens=2000, temperature=0.3):
-        resp = self.client.messages.create(
+        # v3.5.0-alpha.172.118 — auto-streaming quando max_tokens > 16K perché
+        # SDK Anthropic richiede streaming per request che possono superare
+        # 10 minuti (vedi delivery_items_parser pass2 con PIPERFILM-DELIVERY).
+        kwargs = dict(
             model=self.model, max_tokens=max_tokens, temperature=temperature,
-            system=system, messages=[{"role": "user", "content": user}])
+            system=system, messages=[{"role": "user", "content": user}],
+        )
+        if max_tokens > 16000:
+            chunks: list[str] = []
+            with self.client.messages.stream(**kwargs) as stream:
+                for text in stream.text_stream:
+                    chunks.append(text)
+            return "".join(chunks)
+        resp = self.client.messages.create(**kwargs)
         return resp.content[0].text
 
     def chat(self, messages, system=None, max_tokens=2000, temperature=0.5):

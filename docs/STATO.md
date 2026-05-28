@@ -8,14 +8,19 @@
 
 ## Versione corrente
 
-**v3.5.0-alpha.172.117** — 28 maggio 2026 sera — Rename rapido delivery template (backlog #3 chiuso) + batch 2.4 12/13
+**v3.5.0-alpha.172.118** — 28 maggio 2026 sera — PIPERFILM fix streaming + batch 2.4 chiuso 13/13 = 211 items
 
-### Rename rapido delivery template ✅
+### PIPERFILM parser fix ✅
+- Root cause: output troncato a 16K + SDK Anthropic rifiuta non-streaming oltre 10 min.
+- Fix: `ClaudeProvider.complete()` auto-stream se `max_tokens>16000` + bump pass2 32K.
+- Risultato: **31 items PIPERFILM in 217s**. Batch 13/13 = **211 items totali**.
+
+### Rename rapido delivery template ✅ (α.172.117)
 Bottone `✏️` riga tabella `/delivery-templates` → 2 prompt (nome + code) → PUT con name/code → reload. Pattern data-attribute (no JSON.stringify in onclick). Backend `update_template()` già accettava i campi.
 
-### Stato batch Tier 2.4 ✅ chiuso
+### Stato batch Tier 2.4 ✅ chiuso 13/13
 
-Batch `scripts/batch_extract_items.py` parser v2: **12/13 OK = 180 DeliveryItem** + AudioTrackSpec ricchi.
+Batch `scripts/batch_extract_items.py` parser v2: **13/13 OK = 211 DeliveryItem** + AudioTrackSpec ricchi. PIPERFILM recuperato α.172.118 (vedi sopra).
 
 | # | Template | Items | Tempo |
 |---|---|---:|---:|
@@ -31,9 +36,9 @@ Batch `scripts/batch_extract_items.py` parser v2: **12/13 OK = 180 DeliveryItem*
 | 10 | NBCU-LONGFORM-UHD-V1.3_TECHO | 2 | 35s |
 | 11 | VISION-DIST-IT | 29 | 177s |
 | 12 | A24-QUEER-DELIVERY | 20 | 166s |
-| 13 | **PIPERFILM-DELIVERY** | **0 ERR** | 218s |
+| 13 | **PIPERFILM-DELIVERY** | **31** | 217s (α.172.118) |
 
-**PIPERFILM ERR**: parser AI risposta non JSON valido (markdown/spiegazione/troncata anche con max_tokens=8000). Retry manuale possibile o tagliare capitolato. Backlog.
+**PIPERFILM recuperato** α.172.118 con fix streaming + max_tokens 32K.
 
 **NBCU-UHD-HDR10-LONGFORM 1 item**: sospetto sottoestrazione, verificare nel template sorgente se davvero ha solo 1 deliverable rispetto agli altri NBCU.
 
@@ -45,7 +50,7 @@ Batch `scripts/batch_extract_items.py` parser v2: **12/13 OK = 180 DeliveryItem*
 | 2.1 router DeliveryItem | ✅ | c9f691e |
 | 2.2 UI tabs Items in /delivery-templates | ✅ | c9f691e |
 | 2.3 admin /settings/delivery-taxonomy + CRUD | ✅ | 9b2b1bf |
-| 2.4 batch re-parse 13 templates | ✅ 12/13 = 180 items | — |
+| 2.4 batch re-parse 13 templates | ✅ 13/13 = 211 items | α.172.118 |
 | 2.5 JobDeliverable.delivery_item_id FK + UI cascading | ✅ | 9b2b1bf |
 
 Tutti commit pushati su origin/main.
@@ -53,7 +58,7 @@ Tutti commit pushati su origin/main.
 ### Backlog originale Matteo /delivery-templates
 
 1. ✅ Tech specs delivery dropdown → CHIUSO (taxonomy 135 record + UI tab Items + modal editor con dropdown α.172.114)
-2. ✅ Parser batch 17 capitolati → CHIUSO α.172.111 (legacy JSON 8-block) + Tier 2.4 chiuso 12/13 = 180 items α.172.116
+2. ✅ Parser batch 17 capitolati → CHIUSO α.172.111 (legacy JSON 8-block) + Tier 2.4 chiuso 13/13 = 211 items α.172.118
 3. ✅ Rename template → CHIUSO α.172.117 (bottone ✏️ inline)
 4. ✅ Modal dettaglio human-readable + edit no-JSON → CHIUSO α.172.112
 5. ✅ Modal Aggiungi delivery cascading template→item → CHIUSO α.172.115/116
@@ -62,14 +67,12 @@ Tutti commit pushati su origin/main.
 
 ### Prossima sessione
 
-1. Test browser end-to-end:
-   - http://localhost:8000/delivery-templates → tab Items su 12 templates popolati (verifica cards summary)
+1. Test browser end-to-end (porta 8000 zombie Win — restart manuale `avvia_muto.bat`):
+   - http://localhost:8000/delivery-templates → tab Items su 13 templates popolati (verifica cards summary + rename ✏️)
    - http://localhost:8000/settings/delivery-taxonomy → CRUD entity taxonomy
    - http://localhost:8000/jobs/{id} → modal Nuovo deliverable cascading template→item
-2. Retry PIPERFILM (1/13 fallito): valutare aumento max_tokens parser oltre 8000 oppure split capitolato in chunk.
-3. Verifica NBCU-UHD-HDR10 (solo 1 item estratto: realmente povero o sottoestrazione AI?).
-4. Mini-task #3 rename template di consegna.
-5. Eventuale Tier 3 (raffinamenti UI, validazione cross-tier).
+2. Verifica NBCU-UHD-HDR10 (solo 1 item estratto): realmente povero o sottoestrazione AI? Confrontare con NBCU-LONGFORM-UHD (7) e NBCU-TECHOPS (10).
+3. Eventuale Tier 3 (raffinamenti UI, validazione cross-tier).
 
 ---
 

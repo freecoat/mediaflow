@@ -1,5 +1,47 @@
 # MediaFlow — Changelog
 
+## v3.5.0-alpha.172.118 — PIPERFILM parser fix: auto-streaming + max_tokens 32K (28 mag 2026 sera)
+
+**Tier 2.4 batch chiuso 13/13 = 211 DeliveryItem totali.**
+
+Root cause PIPERFILM-DELIVERY fail (α.172.116/117):
+
+1. Output troncato a 16K tokens (DCP + 16 canali audio + multi-edizioni = items con `extra_specs` molto verbosi).
+2. Aumentando `max_tokens` a 32K, Anthropic SDK rifiuta richiesta non-streaming con: `ValueError: Streaming is required for operations that may take longer than 10 minutes`.
+
+Fix in `app/services/ai_provider.py` (ClaudeProvider.complete):
+
+- Auto-switch a streaming (`client.messages.stream`) quando `max_tokens > 16000`.
+- Sotto la soglia mantiene il path classico `messages.create` (no overhead).
+- API esterna invariata: ritorna sempre stringa concatenata.
+
+Fix in `app/services/delivery_items_parser.py`:
+
+- Pass2 `max_tokens` bumpato da 16K a 32K (Sonnet 4.6 supporta fino a 64K output).
+
+Risultato PIPERFILM: **31 items estratti in 217s** (DCP Feature 4K SMPTE, Mix Audiodescrizione 5.1, ISO DVD, ecc).
+
+Tabella finale batch Tier 2.4:
+
+| Template | Items |
+|---|---:|
+| RAI-SDHDUHD-1.4 | 24 |
+| GTM-DELIVERY | 3 |
+| FREMANTLE-DCP-ITA-THEATRICAL | 35 |
+| MUBI-FEATURE-DELIVERY | 25 |
+| NBCUNI-AUDIO-51 | 17 |
+| SKY-ITA-AV-DELIVERY | 7 |
+| NBCU-TECHOPS-LONGFORM-2.8 | 10 |
+| NBCU-LONGFORM-UHD | 7 |
+| NBCU-UHD-HDR10-LONGFORM | 1 |
+| NBCU-LONGFORM-UHD-V1.3_TECHO | 2 |
+| VISION-DIST-IT | 29 |
+| A24-QUEER-DELIVERY | 20 |
+| **PIPERFILM-DELIVERY** | **31** |
+| **TOTALE** | **211** |
+
+Resta solo verifica `NBCU-UHD-HDR10-LONGFORM` (1 item: sospetto sottoestrazione vs realmente capitolato povero).
+
 ## v3.5.0-alpha.172.117 — Rename rapido delivery template (backlog #3) (28 mag 2026 sera)
 
 **Mini-task chiuso dal backlog originale Matteo `/delivery-templates`.**
