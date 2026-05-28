@@ -5,6 +5,9 @@
 {% block topbar_title %}Capitolati di consegna{% endblock %}
 
 {% block topbar_actions %}
+  <!-- v3.5.0-alpha.172.123 (Tier 3 Bundle D) -->
+  <button class="btn btn-ghost btn-sm" onclick="openSearchItemsModal()" title="Cerca DeliveryItem cross-template">🔍 Cerca items</button>
+  <button class="btn btn-ghost btn-sm" onclick="openDiffTemplatesModal()" title="Confronta 2 template affiancati">⚖ Diff template</button>
   <button class="btn btn-primary btn-sm" onclick="openImportModal()">
     <i data-lucide="upload"></i> Importa capitolato
   </button>
@@ -1044,6 +1047,16 @@ async function openItemEditor(item, tid) {
   `;
   box.appendChild(form);
 
+  // v3.5.0-alpha.172.121 (Tier 3 Bundle B) — Validation panel cross-tier
+  const valSec = document.createElement('div');
+  valSec.id = 'dli-validation';
+  valSec.style.cssText = 'margin-top:12px;padding:10px;background:var(--bg3);border:1px solid var(--border);border-radius:6px;font-size:12px;display:none;';
+  box.appendChild(valSec);
+  if (!isNew) {
+    // auto-validate appena apre modal
+    setTimeout(() => dlvLoadValidation(item.id), 80);
+  }
+
   // Audio tracks sub-section
   const audioSec = document.createElement('div');
   audioSec.style.cssText = 'margin-top:14px;padding-top:14px;border-top:1px solid var(--border);';
@@ -1144,6 +1157,28 @@ async function openItemEditor(item, tid) {
   }
   const rightBtns = document.createElement('div');
   rightBtns.style.cssText = 'display:flex;gap:8px;';
+  // v3.5.0-alpha.172.121 (Tier 3 Bundle B)
+  if (!isNew) {
+    const validateBtn = document.createElement('button');
+    validateBtn.className = 'btn btn-ghost btn-sm';
+    validateBtn.textContent = '🔎 Valida';
+    validateBtn.title = 'Verifica compatibilità FK cross-tier';
+    validateBtn.onclick = () => dlvLoadValidation(item.id);
+    rightBtns.appendChild(validateBtn);
+    const revalBtn = document.createElement('button');
+    revalBtn.className = 'btn btn-ghost btn-sm';
+    revalBtn.textContent = '🤖 Rivalida AI';
+    revalBtn.title = 'Re-esegue mapping FK via AI con taxonomy aggiornata';
+    revalBtn.onclick = () => dlvRevalidateAI(item.id, tid, ov);
+    rightBtns.appendChild(revalBtn);
+    // v3.5.0-alpha.172.122 (Tier 3 Bundle C) — AI match listino
+    const matchBtn = document.createElement('button');
+    matchBtn.className = 'btn btn-ghost btn-sm';
+    matchBtn.textContent = '🔍 Match listino';
+    matchBtn.title = 'AI ranka top 3 PriceItem candidati per linking';
+    matchBtn.onclick = () => dlvAiMatchPricelist(item.id, tid, ov);
+    rightBtns.appendChild(matchBtn);
+  }
   const cancelBtn = document.createElement('button');
   cancelBtn.className = 'btn btn-secondary btn-sm';
   cancelBtn.textContent = 'Annulla';
@@ -1550,6 +1585,184 @@ async function confirmDelete(tid, code) {
   }
 }
 
+// v3.5.0-alpha.172.121 (Tier 3 Bundle B) — Validazione cross-tier item.
+async function dlvLoadValidation(itemId) {
+  const box = document.getElementById('dli-validation');
+  if (!box) return;
+  box.style.display = 'block';
+  box.innerHTML = '<span style="color:var(--text3);">Validazione in corso…</span>';
+  try {
+    const r = await fetch(`/delivery-items/api/${itemId}/validate`, { credentials: 'same-origin' });
+    if (!r.ok) {
+      const e = await r.json().catch(() => ({}));
+      throw new Error(e.detail || ('HTTP ' + r.status));
+    }
+    const data = await r.json();
+    const counts = data.counts || {};
+    const issues = data.issues || [];
+    if (issues.length === 0) {
+      box.style.background = 'rgba(34,197,94,0.10)';
+      box.style.borderColor = 'rgba(34,197,94,0.4)';
+      box.innerHTML = `<strong style="color:#86efac;">✓ Item compliant</strong> <span style="color:var(--text3);">nessun warning sulle combinazioni FK.</span>`;
+      return;
+    }
+    const colorBySev = { error: '#fca5a5', warning: '#fcd34d', info: '#93c5fd' };
+    const bgBySev = { error: 'rgba(239,68,68,0.10)', warning: 'rgba(245,158,11,0.10)', info: 'rgba(59,130,246,0.10)' };
+    const iconBySev = { error: '✕', warning: '⚠', info: 'ℹ' };
+    const worst = counts.error ? 'error' : (counts.warning ? 'warning' : 'info');
+    box.style.background = bgBySev[worst];
+    box.style.borderColor = colorBySev[worst];
+    const header = `<div style="margin-bottom:6px;"><strong>Validazione:</strong> ${counts.error||0} errori · ${counts.warning||0} warning · ${counts.info||0} info</div>`;
+    const list = issues.map(it => {
+      const c = colorBySev[it.severity] || '#fff';
+      return `<div style="padding:4px 6px;border-left:3px solid ${c};margin-bottom:4px;">
+        <span style="color:${c};font-weight:600;">${iconBySev[it.severity] || '·'} ${escapeHtml(it.code)}</span>
+        <span style="color:var(--text2);"> — ${escapeHtml(it.message)}</span>
+      </div>`;
+    }).join('');
+    box.innerHTML = header + list;
+  } catch (e) {
+    box.style.background = 'rgba(239,68,68,0.10)';
+    box.innerHTML = `<span style="color:#fca5a5;">Errore validation: ${escapeHtml(e.message || String(e))}</span>`;
+  }
+}
+
+// v3.5.0-alpha.172.122 (Tier 3 Bundle C) — AI match listino su DeliveryItem.
+async function dlvAiMatchPricelist(itemId, tid, parentModal) {
+  // overlay loading
+  const loadOv = document.createElement('div');
+  loadOv.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.7);z-index:2300;display:flex;align-items:center;justify-content:center;';
+  const loadBox = document.createElement('div');
+  loadBox.style.cssText = 'background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:20px;min-width:320px;text-align:center;';
+  loadBox.textContent = '🤖 AI sta cercando le voci listino più pertinenti…';
+  loadOv.appendChild(loadBox);
+  document.body.appendChild(loadOv);
+  let data;
+  try {
+    const r = await fetch(`/delivery-items/api/${itemId}/match-pricelist`, { method: 'POST', credentials: 'same-origin' });
+    if (!r.ok) {
+      const e = await r.json().catch(() => ({}));
+      throw new Error(e.detail || ('HTTP ' + r.status));
+    }
+    data = await r.json();
+  } catch (e) {
+    loadOv.remove();
+    toast(`Errore match listino: ${e.message || ''}`, 'error', 4500);
+    return;
+  }
+  loadOv.remove();
+
+  const matches = data.matches || [];
+  // modal ranking
+  const ov = document.createElement('div');
+  ov.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.75);z-index:2350;display:flex;align-items:center;justify-content:center;';
+  const box = document.createElement('div');
+  box.style.cssText = 'background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:18px;width:560px;max-width:95vw;display:flex;flex-direction:column;';
+  const titleEl = document.createElement('div');
+  titleEl.style.cssText = 'font-weight:600;font-size:14px;margin-bottom:8px;';
+  titleEl.textContent = '🔍 Match listino — Top candidati AI';
+  box.appendChild(titleEl);
+  const diagEl = document.createElement('div');
+  diagEl.style.cssText = 'font-size:11px;color:var(--text3);margin-bottom:12px;';
+  diagEl.textContent = data.diag || '';
+  box.appendChild(diagEl);
+
+  if (matches.length === 0) {
+    const empty = document.createElement('div');
+    empty.style.cssText = 'padding:20px;text-align:center;color:var(--text3);';
+    empty.textContent = 'Nessun match trovato. Aggiungi keyword o crea una voce listino dedicata.';
+    box.appendChild(empty);
+  } else {
+    matches.forEach((m, idx) => {
+      const card = document.createElement('div');
+      card.style.cssText = 'padding:10px 12px;margin-bottom:8px;background:var(--bg3);border:1px solid var(--border);border-radius:6px;cursor:pointer;transition:border-color 0.15s;';
+      card.onmouseover = () => { card.style.borderColor = 'var(--accent)'; };
+      card.onmouseout = () => { card.style.borderColor = 'var(--border)'; };
+      const confPct = Math.round((m.confidence || 0) * 100);
+      const confColor = confPct >= 70 ? '#86efac' : (confPct >= 40 ? '#fcd34d' : '#fca5a5');
+      const header = document.createElement('div');
+      header.style.cssText = 'display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;';
+      const left = document.createElement('div');
+      left.style.cssText = 'font-weight:600;font-size:13px;';
+      left.textContent = `#${idx + 1} ${m.name}`;
+      header.appendChild(left);
+      const conf = document.createElement('span');
+      conf.style.cssText = `font-size:12px;color:${confColor};font-weight:600;`;
+      conf.textContent = `${confPct}%`;
+      header.appendChild(conf);
+      card.appendChild(header);
+      const meta = document.createElement('div');
+      meta.style.cssText = 'font-size:11px;color:var(--text2);margin-bottom:4px;';
+      meta.textContent = `${m.category} · ${m.unit}`;
+      card.appendChild(meta);
+      const reason = document.createElement('div');
+      reason.style.cssText = 'font-size:11px;color:var(--text3);font-style:italic;';
+      reason.textContent = m.reason || '';
+      card.appendChild(reason);
+      card.onclick = async () => {
+        if (!confirm(`Collegare l'item al PriceItem "${m.name}" (confidence ${confPct}%)?`)) return;
+        try {
+          const fd = new FormData();
+          fd.append('suggested_price_item_id', String(m.price_item_id));
+          const r = await fetch(`/delivery-items/api/${itemId}`, { method: 'PUT', body: fd, credentials: 'same-origin' });
+          if (!r.ok) {
+            const err = await r.json().catch(() => ({}));
+            throw new Error(err.detail || 'HTTP ' + r.status);
+          }
+          toast(`✓ Linkato a "${m.name}"`, 'success', 2500);
+          ov.remove();
+          if (parentModal) parentModal.remove();
+          await _loadItemsForTemplate(tid);
+          const fresh = _currentItems.find(x => x.id === itemId);
+          if (fresh) openItemEditor(fresh, tid);
+        } catch (e) {
+          toast(`Errore: ${e.message || ''}`, 'error', 4000);
+        }
+      };
+      box.appendChild(card);
+    });
+  }
+
+  const footer = document.createElement('div');
+  footer.style.cssText = 'display:flex;justify-content:flex-end;margin-top:12px;';
+  const closeBtn = document.createElement('button');
+  closeBtn.className = 'btn btn-secondary btn-sm';
+  closeBtn.textContent = 'Chiudi';
+  closeBtn.onclick = () => ov.remove();
+  footer.appendChild(closeBtn);
+  box.appendChild(footer);
+
+  ov.appendChild(box);
+  document.body.appendChild(ov);
+}
+
+async function dlvRevalidateAI(itemId, tid, modal) {
+  if (!confirm('Rivalida via AI: re-esegue il mapping FK (package/container/codec/resolution/framerate) usando la taxonomy correntemente attiva.\n\nCampi text liberi (note, extra_specs, nome) NON vengono toccati.\n\nProcedere?')) return;
+  const box = document.getElementById('dli-validation');
+  if (box) {
+    box.style.display = 'block';
+    box.innerHTML = '<span style="color:var(--text3);">🤖 AI in elaborazione (~20-40s)…</span>';
+  }
+  try {
+    const r = await fetch(`/delivery-items/api/${itemId}/revalidate-ai`, { method: 'POST', credentials: 'same-origin' });
+    if (!r.ok) {
+      const e = await r.json().catch(() => ({}));
+      throw new Error(e.detail || ('HTTP ' + r.status));
+    }
+    const data = await r.json();
+    const upd = data.updates_applied || {};
+    const n = Object.keys(upd).length;
+    toast(`✓ Rivalida AI: ${n} campo/i aggiornato/i`, 'success', 3500);
+    // ricarica modal con dati freschi
+    if (modal) modal.remove();
+    await _loadItemsForTemplate(tid);
+    const fresh = _currentItems.find(x => x.id === itemId);
+    if (fresh) openItemEditor(fresh, tid);
+  } catch (e) {
+    toast(`Errore rivalida AI: ${e.message || ''}`, 'error', 5000);
+  }
+}
+
 // v3.5.0-alpha.172.120 (Tier 3 Bundle A) — Toggle "mostra inattivi" (server-side via query param).
 function toggleInactiveTemplates(checked) {
   const url = new URL(window.location.href);
@@ -1582,6 +1795,193 @@ document.addEventListener('DOMContentLoaded', () => {
   if (q) q.addEventListener('input', applyDtFilters);
   if (br) br.addEventListener('change', applyDtFilters);
 });
+
+// v3.5.0-alpha.172.123 (Tier 3 Bundle D) — Search globale DeliveryItem cross-template.
+function openSearchItemsModal() {
+  const ov = document.createElement('div');
+  ov.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.75);z-index:2400;display:flex;align-items:flex-start;justify-content:center;padding-top:40px;';
+  const box = document.createElement('div');
+  box.style.cssText = 'background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:18px;width:920px;max-width:95vw;max-height:85vh;display:flex;flex-direction:column;';
+  box.innerHTML = `
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
+      <div style="font-weight:600;font-size:14px;">🔍 Cerca DeliveryItem (cross-template)</div>
+      <button class="btn btn-ghost btn-icon" id="srch-close" style="font-size:18px;">✕</button>
+    </div>
+    <div style="display:grid;grid-template-columns:2fr 1fr 1fr 1fr auto;gap:8px;margin-bottom:10px;">
+      <input class="form-input" id="srch-q" placeholder="Testo libero (name/notes/color_space)…" autofocus>
+      <input class="form-input" id="srch-pkg" placeholder="Package (es. DCP)">
+      <input class="form-input" id="srch-res" placeholder="Resolution (es. UHD)">
+      <input class="form-input" id="srch-hdr" placeholder="HDR (es. HDR10)">
+      <button class="btn btn-primary btn-sm" id="srch-go">Cerca</button>
+    </div>
+    <div id="srch-results" style="overflow:auto;flex:1;min-height:200px;">
+      <div style="color:var(--text3);text-align:center;padding:30px;">Inserisci almeno un filtro e clicca Cerca.</div>
+    </div>
+  `;
+  ov.appendChild(box);
+  document.body.appendChild(ov);
+  document.getElementById('srch-close').onclick = () => ov.remove();
+  const runSearch = async () => {
+    const params = new URLSearchParams();
+    const q = document.getElementById('srch-q').value.trim();
+    const pkg = document.getElementById('srch-pkg').value.trim();
+    const res = document.getElementById('srch-res').value.trim();
+    const hdr = document.getElementById('srch-hdr').value.trim();
+    if (q) params.set('q', q);
+    if (pkg) params.set('package', pkg);
+    if (res) params.set('resolution', res);
+    if (hdr) params.set('hdr', hdr);
+    if (!params.toString()) { toast('Inserisci almeno un filtro', 'warning'); return; }
+    const out = document.getElementById('srch-results');
+    out.innerHTML = '<div style="color:var(--text3);text-align:center;padding:30px;">Ricerca in corso…</div>';
+    try {
+      const r = await fetch('/delivery-items/api/search?' + params.toString(), { credentials: 'same-origin' });
+      if (!r.ok) {
+        const e = await r.json().catch(() => ({}));
+        throw new Error(e.detail || ('HTTP ' + r.status));
+      }
+      const data = await r.json();
+      const results = data.results || [];
+      if (results.length === 0) {
+        out.innerHTML = '<div style="color:var(--text3);text-align:center;padding:30px;">Nessun match.</div>';
+        return;
+      }
+      const rows = results.map(r2 => {
+        const specs = [r2.package, r2.video_codec, r2.resolution, r2.hdr_format, r2.color_space].filter(Boolean).join(' · ');
+        return `<tr style="cursor:pointer;" onclick="window.location.href='/delivery-templates#tpl-${r2.template_id}'">
+          <td class="mono text-sm">${escapeHtml(r2.template_code)}</td>
+          <td>${escapeHtml(r2.name)}</td>
+          <td class="text-sm" style="color:var(--text2);">${escapeHtml(specs)}</td>
+          <td class="text-sm" style="color:var(--text3);">${escapeHtml((r2.suggested_qty || '') + ' ' + (r2.suggested_unit || ''))}</td>
+        </tr>`;
+      }).join('');
+      out.innerHTML = `<div style="margin-bottom:8px;color:var(--text3);font-size:12px;">${data.count} risultati (limit 50)</div>
+        <table class="mf-sortable"><thead><tr><th>Template</th><th>Item</th><th>Specs</th><th>Qty</th></tr></thead><tbody>${rows}</tbody></table>`;
+    } catch (e) {
+      out.innerHTML = `<div style="color:#fca5a5;padding:20px;">Errore: ${escapeHtml(e.message || String(e))}</div>`;
+    }
+  };
+  document.getElementById('srch-go').onclick = runSearch;
+  ['srch-q', 'srch-pkg', 'srch-res', 'srch-hdr'].forEach(id => {
+    document.getElementById(id).addEventListener('keydown', (ev) => {
+      if (ev.key === 'Enter') runSearch();
+    });
+  });
+}
+
+// v3.5.0-alpha.172.123 (Tier 3 Bundle D) — Diff visivo 2 template affiancati.
+async function openDiffTemplatesModal() {
+  // Carica lista template per dropdown
+  let tpls;
+  try {
+    const r = await fetch('/delivery-templates/api/list', { credentials: 'same-origin' });
+    tpls = await r.json();
+  } catch (e) {
+    toast('Errore caricamento lista template', 'error');
+    return;
+  }
+  if (!Array.isArray(tpls) || tpls.length < 2) {
+    toast('Servono almeno 2 template per il diff', 'warning');
+    return;
+  }
+  const optsHtml = tpls.map(t => `<option value="${t.id}">${escapeHtml(t.code)} — ${escapeHtml(t.name)}</option>`).join('');
+
+  const ov = document.createElement('div');
+  ov.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.75);z-index:2400;display:flex;align-items:flex-start;justify-content:center;padding-top:30px;';
+  const box = document.createElement('div');
+  box.style.cssText = 'background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:18px;width:1080px;max-width:96vw;max-height:88vh;display:flex;flex-direction:column;';
+  box.innerHTML = `
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
+      <div style="font-weight:600;font-size:14px;">⚖ Diff template di consegna</div>
+      <button class="btn btn-ghost btn-icon" id="diff-close" style="font-size:18px;">✕</button>
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr auto;gap:8px;margin-bottom:12px;align-items:end;">
+      <div>
+        <label style="font-size:11px;color:var(--text3);text-transform:uppercase;">Template A</label>
+        <select class="form-select" id="diff-a"><option value="">— scegli —</option>${optsHtml}</select>
+      </div>
+      <div>
+        <label style="font-size:11px;color:var(--text3);text-transform:uppercase;">Template B</label>
+        <select class="form-select" id="diff-b"><option value="">— scegli —</option>${optsHtml}</select>
+      </div>
+      <button class="btn btn-primary btn-sm" id="diff-go">Confronta</button>
+    </div>
+    <div id="diff-results" style="overflow:auto;flex:1;min-height:200px;color:var(--text3);text-align:center;padding:20px;">
+      Scegli 2 template e clicca Confronta.
+    </div>
+  `;
+  ov.appendChild(box);
+  document.body.appendChild(ov);
+  document.getElementById('diff-close').onclick = () => ov.remove();
+  document.getElementById('diff-go').onclick = async () => {
+    const a = document.getElementById('diff-a').value;
+    const b = document.getElementById('diff-b').value;
+    if (!a || !b) { toast('Seleziona entrambi i template', 'warning'); return; }
+    if (a === b) { toast('Scegli 2 template diversi', 'warning'); return; }
+    const out = document.getElementById('diff-results');
+    out.innerHTML = '<div style="color:var(--text3);padding:30px;text-align:center;">Calcolo diff…</div>';
+    try {
+      const r = await fetch(`/delivery-templates/api/diff?a=${a}&b=${b}`, { credentials: 'same-origin' });
+      if (!r.ok) {
+        const e = await r.json().catch(() => ({}));
+        throw new Error(e.detail || ('HTTP ' + r.status));
+      }
+      const data = await r.json();
+      renderDiffResults(out, data);
+    } catch (e) {
+      out.innerHTML = `<div style="color:#fca5a5;padding:20px;">Errore: ${escapeHtml(e.message || String(e))}</div>`;
+    }
+  };
+}
+
+function renderDiffResults(container, data) {
+  container.style.textAlign = 'left';
+  container.style.color = 'var(--text)';
+  const a = data.a, b = data.b;
+  const blocks = data.blocks || {};
+  const items = data.items || {};
+  let html = '';
+
+  // Header counts
+  html += `<div style="display:flex;gap:24px;margin-bottom:14px;padding:10px;background:var(--bg3);border:1px solid var(--border);border-radius:6px;">
+    <div><strong>A:</strong> ${escapeHtml(a.code)} <span style="color:var(--text3);">— ${escapeHtml(a.name)} (${a.items_count} items)</span></div>
+    <div><strong>B:</strong> ${escapeHtml(b.code)} <span style="color:var(--text3);">— ${escapeHtml(b.name)} (${b.items_count} items)</span></div>
+  </div>`;
+
+  // Blocks diff
+  html += '<div style="font-weight:600;margin-bottom:6px;">📦 Blocchi specs</div>';
+  html += '<table class="mf-sortable" style="margin-bottom:14px;"><thead><tr><th>Blocco</th><th>A presente</th><th>B presente</th><th>Solo A</th><th>Solo B</th><th>Comuni</th></tr></thead><tbody>';
+  Object.entries(blocks).forEach(([bn, bd]) => {
+    const aOk = bd.a_has_data ? '✓' : '—';
+    const bOk = bd.b_has_data ? '✓' : '—';
+    html += `<tr>
+      <td class="mono text-sm">${escapeHtml(bn)}</td>
+      <td style="color:${bd.a_has_data ? '#86efac' : 'var(--text3)'};">${aOk}</td>
+      <td style="color:${bd.b_has_data ? '#86efac' : 'var(--text3)'};">${bOk}</td>
+      <td class="text-sm" style="color:#fca5a5;">${bd.only_a.length ? escapeHtml(bd.only_a.join(', ')) : '—'}</td>
+      <td class="text-sm" style="color:#fcd34d;">${bd.only_b.length ? escapeHtml(bd.only_b.join(', ')) : '—'}</td>
+      <td class="text-sm" style="color:var(--text2);">${bd.common.length}</td>
+    </tr>`;
+  });
+  html += '</tbody></table>';
+
+  // Items diff
+  html += '<div style="font-weight:600;margin-bottom:6px;">📋 Diff items</div>';
+  html += '<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;">';
+  const col = (title, arr, color) => {
+    let h = `<div style="background:var(--bg3);border:1px solid var(--border);border-radius:6px;padding:10px;">
+      <div style="font-weight:600;color:${color};margin-bottom:6px;">${escapeHtml(title)} (${arr.length})</div>`;
+    if (!arr.length) h += '<div style="color:var(--text3);font-size:12px;">—</div>';
+    else h += '<ul style="margin:0;padding-left:18px;font-size:12px;">' + arr.map(n => `<li>${escapeHtml(n)}</li>`).join('') + '</ul>';
+    return h + '</div>';
+  };
+  html += col('Solo A', items.only_in_a || [], '#fca5a5');
+  html += col('Solo B', items.only_in_b || [], '#fcd34d');
+  html += col('Comuni', items.common_names || [], '#86efac');
+  html += '</div>';
+
+  container.innerHTML = html;
+}
 
 // v3.5.0-alpha.172.117 — rename rapido (code + name) senza aprire modal dettaglio.
 // Backlog #3 chiuso. PUT /delivery-templates/api/{tid} accetta code/name parziali.

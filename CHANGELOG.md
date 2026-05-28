@@ -1,5 +1,86 @@
 # MediaFlow — Changelog
 
+## v3.5.0-alpha.172.123 — Tier 3 Bundle B+C+D: validation + AI match listino + search/diff (28 mag 2026 sera)
+
+Bundle congiunto per non frammentare commit. Tutti i pezzi ruotano sulle entità Tier 1/2 (DeliveryItem + DeliveryTemplate + taxonomy + PriceItem).
+
+### Bundle B — Validation cross-tier + Rivalida AI (T3.4 + T3.8)
+
+Nuovo `app/services/delivery_item_validation.py` con 9 regole dichiarative:
+
+1. `DCP_REQUIRES_MXF` — Package DCP richiede container MXF.
+2. `DCP_REQUIRES_J2K` — Package DCP richiede VideoCodec JPEG2000.
+3. `IMF_REQUIRES_MXF` + `IMF_PREFERS_OP1A`.
+4. `PRORES_PREFERS_QUICKTIME` — ProRes tipicamente in .mov.
+5. `J2K_REQUIRES_MXF`.
+6. `IMGSEQ_NO_AUDIO` — Image sequence non ammette audio tracks.
+7. `HDR_REQUIRES_10BIT` + `HDR_PREFERS_BT2020_OR_P3`.
+8. `UHD_HIGH_FRAMERATE` — info su combinazione rara UHD@≥100fps.
+9. `AUDIO_CONTAINER_NO_VCODEC` + `MISSING_CONTAINER`.
+
+Severity: `error` | `warning` | `info`. Output `{ok, counts, issues}`.
+
+Risultato sul corpus reale: **22 items / 211 con issue** (21 MISSING_CONTAINER su subtitle/KDM/ISO + 1 IMGSEQ_NO_AUDIO).
+
+Endpoint:
+- `GET /delivery-items/api/{iid}/validate` — verifica senza mutare.
+- `POST /delivery-items/api/{iid}/revalidate-ai` — re-esegue pass2 LLM mapping FK con taxonomy correntemente attiva. Preserva `name` + `extra_specs` + `notes`. Ritorna `updates_applied` + nuova validation.
+
+UI modal item editor:
+- Sezione `dli-validation` (auto-caricata all'apertura item esistente).
+- Bottoni footer `🔎 Valida` + `🤖 Rivalida AI`.
+- Color-code severity (red/yellow/blue) + counter.
+
+### Bundle C — AI match listino (T3.6)
+
+Nuovo `app/services/delivery_item_pricelist_match.py`:
+
+- Carica DeliveryItem + serializza specs salienti per LLM.
+- Carica PriceItem attivi (limit 120, con name/desc/keywords/category/unit).
+- Prompt LLM (Claude Sonnet 4.6 default) → ranking top 3 con `confidence` 0..1 + `reason`.
+- Fallback heuristic se provider AI assente: overlap parole nome+keyword.
+
+Endpoint:
+- `POST /delivery-items/api/{iid}/match-pricelist` — ritorna `{matches: [...], diag}`. NON applica, UI lo fa via PUT esistente.
+
+UI modal item:
+- Bottone `🔍 Match listino` (vicino a Valida/Rivalida).
+- Popup con top 3 card cliccabili (confidence color-coded + nome + categoria + unit + reason).
+- Click su card → conferma → PUT `suggested_price_item_id` → toast → ricarica modal.
+
+Smoke heuristic su PIPERFILM #181 "DCP Feature 4K SMPTE IT":
+- 50% "Mastering DCP Dolby Vision/Atmos (SMPTE Bv2.1)"
+- 33% "Mastering DCP standard"
+- 17% "DCDM 16-bit XYZ TIFF"
+
+### Bundle D — Search globale + Diff template (T3.3 + T3.5)
+
+Endpoint:
+- `GET /delivery-items/api/search?q=&package=&resolution=&hdr=&limit=` — ricerca cross-template con join Package/Container/Resolution/VideoCodec. Output `{count, results: [...]}` con `template_code` per ogni hit.
+- `GET /delivery-templates/api/diff?a=&b=` — confronto strutturato:
+  - Per ogni blocco specs (8 blocchi): `a_has_data`, `b_has_data`, `only_a` (chiavi), `only_b`, `common`.
+  - Items: `only_in_a`, `only_in_b`, `common_names` (match per nome lower-case).
+
+UI topbar `/delivery-templates`:
+- Bottone `🔍 Cerca items` → modal con 4 input filtro (testo + package + resolution + HDR) + tabella risultati cliccabili (jump al template).
+- Bottone `⚖ Diff template` → modal con 2 dropdown template + tabella blocchi color-coded + 3 colonne items (Solo A / Solo B / Comuni).
+
+Smoke `q=DCP`: 10 risultati cross-template (A24 + FREMANTLE). Smoke diff t4 (FREMANTLE 35 items) vs t14 (PIPERFILM 31): 0 nomi comuni (capitolati totalmente diversi).
+
+### Sicurezza UI
+
+Tutti i valori dinamici nei modal passano da `escapeHtml()`. HTML statico safe (nessun innerHTML con dati utente non sanitizzati).
+
+### File modificati
+
+- `app/services/delivery_item_validation.py` (nuovo)
+- `app/services/delivery_item_pricelist_match.py` (nuovo)
+- `app/routers/delivery_items.py` (+4 endpoint: validate / revalidate-ai / match-pricelist / search + diff_templates)
+- `app/templates/pages/delivery_templates.html` (+5 funzioni JS, +3 modal, +3 bottoni topbar/footer)
+- `app/main.py` (bump version)
+
+Nessuna migrazione DB.
+
 ## v3.5.0-alpha.172.120 — Tier 3 Bundle A: /delivery-templates UI polish (28 mag 2026 sera)
 
 Bundle 3-in-1 sulla pagina lista capitolati:

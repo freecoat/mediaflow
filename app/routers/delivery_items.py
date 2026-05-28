@@ -294,6 +294,312 @@ async def delete_item(iid: int, db: Session = Depends(get_db)):
     return {"ok": True, "id": iid}
 
 
+# ── Validazione cross-tier α.172.121 (Tier 3 Bundle B) ────────
+
+@router.get("/delivery-items/api/{iid}/validate")
+async def validate_item_endpoint(iid: int, db: Session = Depends(get_db)):
+    """Verifica compatibilità FK dell'item. Non muta nulla."""
+    from app.services.delivery_item_validation import validate_summary
+    it = db.query(DeliveryItem).filter(
+        DeliveryItem.id == iid,
+        DeliveryItem.tenant_id == current_tenant_id(),
+    ).first()
+    if not it:
+        raise HTTPException(404, "DeliveryItem non trovato")
+    return validate_summary(db, it)
+
+
+@router.post("/delivery-items/api/{iid}/revalidate-ai", dependencies=[RequireEdit])
+async def revalidate_item_ai(iid: int, request: Request, db: Session = Depends(get_db)):
+    """Re-esegue pass2 mapping FK via AI sul singolo item, usando la
+    taxonomy correntemente attiva. Utile dopo aggiunta nuovi preset.
+
+    L'item conserva il `name` e tutti i campi text liberi
+    (extra_specs/notes); vengono ricalcolati solo i FK
+    (package/container/codec/resolution/framerate/audio).
+    """
+    from app.services.ai_provider import get_provider_for_user, get_provider
+    from app.services.delivery_items_parser import (
+        _taxonomy_dict_for_pass2, PASS2_SYSTEM_PROMPT, materialize_items,
+    )
+    import json
+
+    it = db.query(DeliveryItem).filter(
+        DeliveryItem.id == iid,
+        DeliveryItem.tenant_id == current_tenant_id(),
+    ).first()
+    if not it:
+        raise HTTPException(404, "DeliveryItem non trovato")
+
+    user = current_user_optional(request, db)
+    user_id = user.id if user else 1
+    provider = get_provider_for_user(user_id, db) or get_provider()
+    if not provider:
+        raise HTTPException(503, "Nessun provider AI configurato.")
+
+    taxonomy = _taxonomy_dict_for_pass2(db, current_tenant_id())
+    item_payload = {
+        "name": it.name,
+        "package": _name_or_none(db, "Package", it.package_id),
+        "container": _name_or_none(db, "Container", it.container_id),
+        "video_codec": _name_or_none(db, "VideoCodec", it.video_codec_id),
+        "video_bit_depth": it.video_bit_depth,
+        "chroma_subsampling": it.chroma_subsampling,
+        "resolution": _name_or_none(db, "Resolution", it.resolution_id),
+        "aspect_ratio": it.aspect_ratio,
+        "frame_rate": _name_or_none(db, "FrameRate", it.frame_rate_id),
+        "scan_type": it.scan_type,
+        "color_space": it.color_space,
+        "hdr_format": it.hdr_format,
+        "extra_specs": it.extra_specs,
+        "notes": it.notes,
+    }
+
+    pass2_user = f"""Item da rimappare con taxonomy aggiornata:
+{json.dumps([item_payload], ensure_ascii=False)}
+
+Vocabolario taxonomy disponibile:
+{json.dumps(taxonomy, ensure_ascii=False)}
+
+Mappa l'item agli id taxonomy. Restituisci JSON {{"items":[...]}}.
+"""
+    parsed = provider.extract_json(PASS2_SYSTEM_PROMPT, pass2_user, max_tokens=8000)
+    if not parsed or "items" not in parsed:
+        diag = getattr(provider, "last_extract_diag", {}) or {}
+        raise HTTPException(502, f"AI rimapping fallito: {diag.get('error','no msg')[:200]}")
+
+    new_items = parsed.get("items") or []
+    if not new_items:
+        raise HTTPException(502, "AI non ha restituito mapping.")
+
+    mapped = new_items[0]
+    # Applica solo i FK ricalcolati; preserva name + extra_specs + notes originali.
+    fk_fields = ("package_id", "container_id", "video_codec_id",
+                 "resolution_id", "frame_rate_id")
+    updates_applied = {}
+    for f in fk_fields:
+        new_val = mapped.get(f)
+        if new_val is not None and new_val != getattr(it, f):
+            old_val = getattr(it, f)
+            setattr(it, f, new_val)
+            updates_applied[f] = {"from": old_val, "to": new_val}
+    # Campi free-text potenzialmente migliorati
+    for f in ("chroma_subsampling", "aspect_ratio", "scan_type", "color_space", "hdr_format"):
+        new_val = mapped.get(f)
+        if new_val is not None and new_val != getattr(it, f):
+            old_val = getattr(it, f)
+            setattr(it, f, new_val)
+            updates_applied[f] = {"from": old_val, "to": new_val}
+    it.ai_extracted = True
+    db.commit()
+    db.refresh(it)
+    from app.services.delivery_item_validation import validate_summary
+    val = validate_summary(db, it)
+    return {
+        "ok": True,
+        "item": _serialize_item(it),
+        "updates_applied": updates_applied,
+        "validation": val,
+    }
+
+
+# ── Search globale items α.172.123 (Tier 3 Bundle D) ─────────
+
+@router.get("/delivery-items/api/search")
+async def search_items(
+    q: str = "",
+    package: str = "",
+    resolution: str = "",
+    hdr: str = "",
+    limit: int = 50,
+    db: Session = Depends(get_db),
+):
+    """Ricerca cross-template DeliveryItem. Filtri opzionali:
+    - q: testo libero (case-insensitive) match su name + notes + color_space
+    - package: nome package (es. "DCP", "IMF")
+    - resolution: nome o family resolution (es. "UHD", "HD")
+    - hdr: HDR format (es. "HDR10", "Dolby Vision")
+
+    Output: lista items + template_code + template_name.
+    """
+    from app.models.models import (
+        Package, Container, Resolution, DeliveryTemplate, VideoCodec,
+    )
+    tid = current_tenant_id()
+    Q = (
+        db.query(DeliveryItem, DeliveryTemplate.code, DeliveryTemplate.name,
+                 Package.name.label("pkg_name"),
+                 Resolution.name.label("res_name"),
+                 Container.name.label("cont_name"),
+                 VideoCodec.name.label("vc_name"))
+        .join(DeliveryTemplate, DeliveryItem.delivery_template_id == DeliveryTemplate.id)
+        .outerjoin(Package, DeliveryItem.package_id == Package.id)
+        .outerjoin(Container, DeliveryItem.container_id == Container.id)
+        .outerjoin(Resolution, DeliveryItem.resolution_id == Resolution.id)
+        .outerjoin(VideoCodec, DeliveryItem.video_codec_id == VideoCodec.id)
+        .filter(DeliveryItem.tenant_id == tid)
+        .filter(DeliveryItem.is_active == True)  # noqa: E712
+    )
+    if q.strip():
+        like = f"%{q.strip().lower()}%"
+        from sqlalchemy import func, or_
+        Q = Q.filter(or_(
+            func.lower(DeliveryItem.name).like(like),
+            func.lower(DeliveryItem.notes).like(like),
+            func.lower(DeliveryItem.color_space).like(like),
+        ))
+    if package.strip():
+        Q = Q.filter(Package.name.ilike(f"%{package.strip()}%"))
+    if resolution.strip():
+        from sqlalchemy import or_
+        rs = resolution.strip()
+        Q = Q.filter(or_(
+            Resolution.name.ilike(f"%{rs}%"),
+            Resolution.family.ilike(f"%{rs}%"),
+        ))
+    if hdr.strip():
+        Q = Q.filter(DeliveryItem.hdr_format.ilike(f"%{hdr.strip()}%"))
+
+    rows = Q.order_by(DeliveryTemplate.code.asc(), DeliveryItem.sort_order.asc()).limit(max(1, min(limit, 200))).all()
+    return {
+        "count": len(rows),
+        "results": [
+            {
+                "id": it.id,
+                "name": it.name,
+                "template_id": it.delivery_template_id,
+                "template_code": tcode,
+                "template_name": tname,
+                "package": pkg,
+                "container": cont,
+                "video_codec": vc,
+                "resolution": res,
+                "hdr_format": it.hdr_format,
+                "color_space": it.color_space,
+                "suggested_unit": it.suggested_unit,
+                "suggested_qty": it.suggested_qty,
+            }
+            for it, tcode, tname, pkg, res, cont, vc in rows
+        ],
+    }
+
+
+# ── Diff template α.172.123 (Tier 3 Bundle D) ────────────────
+
+@router.get("/delivery-templates/api/diff")
+async def diff_templates(a: int, b: int, db: Session = Depends(get_db)):
+    """Confronta 2 template: diff sui 8 blocchi specs + diff lista items.
+
+    Output:
+    {
+      "a": {id, code, name},
+      "b": {id, code, name},
+      "blocks": {block_name: {a_keys, b_keys, only_a, only_b, common}},
+      "items": {only_in_a: [...], only_in_b: [...], common_names: [...]}
+    }
+    """
+    tid = current_tenant_id()
+    ta = db.query(DeliveryTemplate).filter(
+        DeliveryTemplate.id == a, DeliveryTemplate.tenant_id == tid,
+    ).first()
+    tb = db.query(DeliveryTemplate).filter(
+        DeliveryTemplate.id == b, DeliveryTemplate.tenant_id == tid,
+    ).first()
+    if not ta or not tb:
+        raise HTTPException(404, "Template non trovato")
+
+    block_names = (
+        "video_specs", "audio_specs", "text_specs", "head_format",
+        "textless_format", "naming_convention", "archive_specs",
+        "metadata_requirements",
+    )
+    blocks = {}
+    for bn in block_names:
+        av = getattr(ta, bn) or {}
+        bv = getattr(tb, bn) or {}
+        a_keys = set(av.keys()) if isinstance(av, dict) else set()
+        b_keys = set(bv.keys()) if isinstance(bv, dict) else set()
+        blocks[bn] = {
+            "a_has_data": bool(av),
+            "b_has_data": bool(bv),
+            "only_a": sorted(a_keys - b_keys),
+            "only_b": sorted(b_keys - a_keys),
+            "common": sorted(a_keys & b_keys),
+        }
+
+    items_a = db.query(DeliveryItem).filter(
+        DeliveryItem.delivery_template_id == a,
+        DeliveryItem.tenant_id == tid,
+        DeliveryItem.is_active == True,  # noqa: E712
+    ).all()
+    items_b = db.query(DeliveryItem).filter(
+        DeliveryItem.delivery_template_id == b,
+        DeliveryItem.tenant_id == tid,
+        DeliveryItem.is_active == True,  # noqa: E712
+    ).all()
+    names_a = {(it.name or "").lower(): it.name for it in items_a}
+    names_b = {(it.name or "").lower(): it.name for it in items_b}
+    set_a = set(names_a.keys())
+    set_b = set(names_b.keys())
+    return {
+        "a": {"id": ta.id, "code": ta.code, "name": ta.name, "items_count": len(items_a)},
+        "b": {"id": tb.id, "code": tb.code, "name": tb.name, "items_count": len(items_b)},
+        "blocks": blocks,
+        "items": {
+            "only_in_a": sorted([names_a[k] for k in (set_a - set_b)]),
+            "only_in_b": sorted([names_b[k] for k in (set_b - set_a)]),
+            "common_names": sorted([names_a[k] for k in (set_a & set_b)]),
+        },
+    }
+
+
+# ── AI match listino α.172.122 (Tier 3 Bundle C) ─────────────
+
+@router.post("/delivery-items/api/{iid}/match-pricelist", dependencies=[RequireEdit])
+async def match_pricelist_endpoint(iid: int, request: Request, db: Session = Depends(get_db)):
+    """AI ranking top 3 PriceItem candidati per linking suggested_price_item_id.
+
+    Output: {"matches": [{"price_item_id": int, "confidence": 0..1, "reason": str,
+    "name": str, "category": str, "unit": str}], "diag": str}
+
+    L'endpoint NON applica il match: la UI mostra ranking e l'utente clicca
+    per applicare via PUT /delivery-items/api/{iid} con suggested_price_item_id.
+    """
+    from app.services.ai_provider import get_provider_for_user, get_provider
+    from app.services.delivery_item_pricelist_match import match_pricelist_for_item
+
+    it = db.query(DeliveryItem).filter(
+        DeliveryItem.id == iid,
+        DeliveryItem.tenant_id == current_tenant_id(),
+    ).first()
+    if not it:
+        raise HTTPException(404, "DeliveryItem non trovato")
+
+    user = current_user_optional(request, db)
+    user_id = user.id if user else 1
+    provider = get_provider_for_user(user_id, db) or get_provider()
+    # provider può essere None: il service fa fallback heuristic
+    return match_pricelist_for_item(db, it, current_tenant_id(), provider)
+
+
+def _name_or_none(db: Session, model_name: str, fk: Optional[int]) -> Optional[str]:
+    """Helper per revalidate-ai: ritorna `name` dato FK + nome modello."""
+    if not fk:
+        return None
+    from app.models.models import (
+        Package, Container, VideoCodec, Resolution, FrameRate,
+    )
+    model_map = {
+        "Package": Package, "Container": Container, "VideoCodec": VideoCodec,
+        "Resolution": Resolution, "FrameRate": FrameRate,
+    }
+    M = model_map.get(model_name)
+    if not M:
+        return None
+    rec = db.get(M, fk)
+    return rec.name if rec else None
+
+
 # ── AudioTrackSpec CRUD ─────────────────────────────────────
 
 @router.post("/delivery-items/api/{iid}/audio-tracks", dependencies=[RequireEdit])

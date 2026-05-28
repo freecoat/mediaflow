@@ -8,14 +8,19 @@
 
 ## Versione corrente
 
-**v3.5.0-alpha.172.120** — 28 maggio 2026 sera — Tier 3 Bundle A: UI polish /delivery-templates
+**v3.5.0-alpha.172.123** — 28 maggio 2026 sera — Tier 3 Bundle B+C+D: validation + AI match listino + search/diff
 
-### Tier 3 Bundle A ✅ (T3.1 + T3.2 + T3.7)
-- **Stats panel** sopra tabella: counter template (attivi/inattivi) + items totali + Top 5 package + Top 5 resolution.
-- **Toolbar filtri**: search testo (code/nome) + dropdown broadcaster + toggle "Mostra inattivi" (server-side via `?show_inactive=1`).
-- **Colonna Items**: count DeliveryItem per riga (single COUNT query no N+1).
-- Filtri client-side via data-attrs, counter live "N visibili".
-- Nessuna migrazione DB.
+### Tier 3 Bundle B+C+D ✅
+**B (T3.4+T3.8)**: validation cross-tier su 9 regole + endpoint `validate` + endpoint `revalidate-ai` (re-mapping LLM FK preservando text). UI bottoni 🔎 Valida + 🤖 Rivalida AI nel modal item. Corpus reale 22/211 items con issue (21 MISSING_CONTAINER su subtitle/KDM/ISO).
+
+**C (T3.6)**: AI ranking top 3 PriceItem candidati per linking `suggested_price_item_id`. Service con LLM + fallback heuristic overlap. UI bottone 🔍 Match listino + popup confidence color-coded cliccabile.
+
+**D (T3.3+T3.5)**: endpoint `/delivery-items/api/search` con 4 filtri (q/package/resolution/hdr) + endpoint `/delivery-templates/api/diff` strutturato blocchi + items. UI 2 bottoni topbar (Cerca items + Diff template) con modal dedicati.
+
+Tutti file modificati: `delivery_item_validation.py` + `delivery_item_pricelist_match.py` (nuovi services) + `delivery_items.py` (+4 endpoint) + `delivery_templates.html` (+5 funzioni JS, +3 modal). Nessuna migrazione DB.
+
+### Tier 3 Bundle A ✅ (α.172.120, T3.1+T3.2+T3.7)
+Stats panel + toolbar filtri + toggle inattivi + colonna Items.
 
 ### Soft-delete Gomorrah ✅
 2 template istanze compilate (NBCU-UHD-HDR10-LONGFORM id=10 1 item, NBCU-LONGFORM-UHD-V1.3_TECHO id=11 2 items) marcati `is_active=False`. Description con nota "istanza compilata, vedi NBCU-LONGFORM-UHD generico". Items preservati per traceability.
@@ -80,11 +85,12 @@ Tutti commit pushati su origin/main.
 ### Prossima sessione
 
 1. Test browser end-to-end (porta 8000 zombie Win — restart manuale `avvia_muto.bat`):
-   - http://localhost:8000/delivery-templates → tab Items su 11 templates referenza attivi (verifica cards summary + rename ✏️)
-   - http://localhost:8000/settings/delivery-taxonomy → CRUD entity taxonomy
-   - http://localhost:8000/jobs/{id} → modal Nuovo deliverable cascading template→item
-2. Tier 3 raffinamenti UI / validazione cross-tier.
-3. Eventuale rifinitura: bottone "Mostra inattivi" in /delivery-templates per ripristinare visibilità Gomorrah quando serve.
+   - `/delivery-templates` → topbar (🔍 Cerca items, ⚖ Diff template), stats panel + filtri + toggle inattivi, rename ✏️
+   - modal item editor → 🔎 Valida, 🤖 Rivalida AI, 🔍 Match listino
+   - `/settings/delivery-taxonomy` → CRUD entity taxonomy
+   - `/jobs/{id}` → modal Nuovo deliverable cascading
+2. Affinamento MISSING_CONTAINER: troppo stringente per subtitle/KDM/ISO (21 falsi positivi). Opzioni: aggiungere container "subtitle text" / "encryption key" / "optical disc" alla taxonomy seed, OPPURE down severity a "warning" se subtitle_format/notes contengono pattern.
+3. AI matching listino in batch su tutti i 211 items per pre-popolare `suggested_price_item_id` (ora vuoto su tutti). ~30-60 min Claude.
 
 ---
 
