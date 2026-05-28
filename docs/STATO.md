@@ -8,12 +8,17 @@
 
 ## Versione corrente
 
-**v3.5.0-alpha.172.118** — 28 maggio 2026 sera — PIPERFILM fix streaming + batch 2.4 chiuso 13/13 = 211 items
+**v3.5.0-alpha.172.119** — 28 maggio 2026 sera — Soft-delete 2 template Gomorrah + PIPERFILM fix + batch 13/13
 
-### PIPERFILM parser fix ✅
+### Soft-delete Gomorrah ✅
+2 template istanze compilate (NBCU-UHD-HDR10-LONGFORM id=10 1 item, NBCU-LONGFORM-UHD-V1.3_TECHO id=11 2 items) marcati `is_active=False`. Description con nota "istanza compilata, vedi NBCU-LONGFORM-UHD generico". Items preservati per traceability.
+
+**Corpus finale: 11 capitolati referenza attivi = 208 DeliveryItem attivi (+ EXAMPLE-THEATRICAL seed vuoto).**
+
+### PIPERFILM parser fix ✅ (α.172.118)
 - Root cause: output troncato a 16K + SDK Anthropic rifiuta non-streaming oltre 10 min.
 - Fix: `ClaudeProvider.complete()` auto-stream se `max_tokens>16000` + bump pass2 32K.
-- Risultato: **31 items PIPERFILM in 217s**. Batch 13/13 = **211 items totali**.
+- Risultato: **31 items PIPERFILM in 217s**. Batch 13/13 = **211 items totali** (208 attivi + 3 soft-deleted).
 
 ### Rename rapido delivery template ✅ (α.172.117)
 Bottone `✏️` riga tabella `/delivery-templates` → 2 prompt (nome + code) → PUT con name/code → reload. Pattern data-attribute (no JSON.stringify in onclick). Backend `update_template()` già accettava i campi.
@@ -68,11 +73,11 @@ Tutti commit pushati su origin/main.
 ### Prossima sessione
 
 1. Test browser end-to-end (porta 8000 zombie Win — restart manuale `avvia_muto.bat`):
-   - http://localhost:8000/delivery-templates → tab Items su 13 templates popolati (verifica cards summary + rename ✏️)
+   - http://localhost:8000/delivery-templates → tab Items su 11 templates referenza attivi (verifica cards summary + rename ✏️)
    - http://localhost:8000/settings/delivery-taxonomy → CRUD entity taxonomy
    - http://localhost:8000/jobs/{id} → modal Nuovo deliverable cascading template→item
-2. Verifica NBCU-UHD-HDR10 (solo 1 item estratto): realmente povero o sottoestrazione AI? Confrontare con NBCU-LONGFORM-UHD (7) e NBCU-TECHOPS (10).
-3. Eventuale Tier 3 (raffinamenti UI, validazione cross-tier).
+2. Tier 3 raffinamenti UI / validazione cross-tier.
+3. Eventuale rifinitura: bottone "Mostra inattivi" in /delivery-templates per ripristinare visibilità Gomorrah quando serve.
 
 ---
 

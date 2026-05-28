@@ -1,5 +1,21 @@
 # MediaFlow — Changelog
 
+## v3.5.0-alpha.172.119 — Soft-delete 2 template Gomorrah (istanze compilate, non capitolati) (28 mag 2026 sera)
+
+Pulizia post-Tier 2.4:
+
+- `NBCU-UHD-HDR10-LONGFORM` (id=10, 1 item) e `NBCU-LONGFORM-UHD-V1.3_TECHO` (id=11, 2 items) sono **istanze compilate** del template generico per la serie Gomorrah_The_Origins (workflow test data NBCU), non capitolati di riferimento.
+- `is_active=False` su entrambi. `description` aggiornata con nota: "Istanza compilata per Gomorrah_The_Origins. Template generico di riferimento: NBCU-LONGFORM-UHD".
+- Items NON cancellati: 3 DeliveryItem preservati per traceability sotto template soft-deleted.
+
+Risultato finale corpus capitolati:
+
+- **12 template attivi** (incluso EXAMPLE-THEATRICAL seed senza items)
+- **11 capitolati referenza popolati = 208 DeliveryItem attivi**
+- 2 template Gomorrah soft-deleted
+
+Nessuna modifica codice — solo data migration via script ad-hoc.
+
 ## v3.5.0-alpha.172.118 — PIPERFILM parser fix: auto-streaming + max_tokens 32K (28 mag 2026 sera)
 
 **Tier 2.4 batch chiuso 13/13 = 211 DeliveryItem totali.**
