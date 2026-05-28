@@ -24,6 +24,7 @@ from app.routers import (
     holidays as holidays_router,  # v3.5.0-alpha.172.29 — Festività custom + leave balance
     tech_sheet_options,  # v3.5.0-alpha.172.34 — Dropdown options scheda tecnica + seed Netflix
     qc,  # v3.5.0-alpha.172.98 (Bundle L Stack 2) — QC event-sourced workflow
+    delivery_items,  # v3.5.0-alpha.172.114 (Tier 2.1) — DeliveryItem + taxonomy router
 )
 
 
@@ -2060,7 +2061,7 @@ async def lifespan(app: FastAPI):
     yield
 
 
-app = FastAPI(title="Claqo", version="3.5.0-alpha.172.113", lifespan=lifespan)
+app = FastAPI(title="Claqo", version="3.5.0-alpha.172.114", lifespan=lifespan)
 
 BASE_DIR = Path(__file__).parent
 app.mount("/static", StaticFiles(directory=BASE_DIR / "static"), name="static")
@@ -2356,6 +2357,7 @@ app.include_router(tech_sheet_options.router)  # v3.5.0-alpha.172.34 — Dropdow
 app.include_router(jobs.router)
 # v3.5.0-alpha.172.98 (Bundle L Stack 2) — QC event-sourced workflow router
 app.include_router(qc.router)
+app.include_router(delivery_items.router)
 app.include_router(admin.router)
 app.include_router(notifications_router.router)
 app.include_router(tech_sheets.router)

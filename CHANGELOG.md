@@ -1,5 +1,54 @@
 # MediaFlow — Changelog
 
+## v3.5.0-alpha.172.114 — Tier 2.1+2.2: router DeliveryItem + UI tabs Items in /delivery-templates (28 mag 2026)
+
+**Tier 2.1 — Router API (app/routers/delivery_items.py)**
+
+Endpoint nuovi (montato `app.include_router(delivery_items.router)` in main.py):
+
+- `GET /delivery-templates/api/{tid}/items` — lista DeliveryItem del template (con audio_tracks selectinload).
+- `GET /delivery-items/api/{iid}` — dettaglio item.
+- `POST /delivery-templates/api/{tid}/items` — create manuale (Form per campo).
+- `PUT /delivery-items/api/{iid}` — update item (tutti i campi opzionali, JSON validation per subtitle_languages + extra_specs).
+- `DELETE /delivery-items/api/{iid}` — soft-delete (`is_active=False`).
+- `POST /delivery-items/api/{iid}/audio-tracks` — aggiungi traccia audio.
+- `PUT /delivery-audio-tracks/api/{aid}` — update traccia.
+- `DELETE /delivery-audio-tracks/api/{aid}` — delete traccia (hard, M2M).
+- `GET /delivery-taxonomy/api` — vocabolario completo per dropdown UI (preset globali + tenant-owned, attributi ricchi).
+- `POST /delivery-templates/api/{tid}/items/ai-extract` — esegue `parse_delivery_items_v2()` + `materialize_items()` sul source_document_name del template. Idempotente per (name, template). Ritorna `{saved, skipped, items_extracted, pass1_categories}`.
+
+Tenant scope ovunque (`current_tenant_id()` + tenant_id NULL per preset globali via OR). Permission gate `manage_settings_global` per mutator. Provider AI per-utente per ai-extract.
+
+**Tier 2.2 — UI tabs Comune/Items/Voci listino in modal-detail (delivery_templates.html)**
+
+Modal dettaglio template ora a 3 tab:
+
+1. **📋 Specs blocchi (legacy)** — editor 8 blocchi capitolato esistente (α.172.112).
+2. **📦 Items (N)** — nuovo, mostra DeliveryItem con FK taxonomy.
+3. **💰 Voci listino** — editor suggested_items esistente.
+
+Default tab: "Items" se il template ne ha già (non vuoto), altrimenti "Specs blocchi". Tabs alternano via `_tabSwitch()` con bottoni footer condizionati (Save Template visibile solo su tab blocks, Save Voci solo su tab listino).
+
+**Pane Items** (`renderItemsPane`):
+- Lista cards per ogni DeliveryItem con summary visuale: `📦 Package · 🎞 Container · 🎬 VideoCodec · 📐 Resolution · ⏱ Frame rate · 🌈 HDR · 🔊 N tracks`.
+- Badge `🤖 conf X%` se ai_extracted, badge `⚠ review` arancione se pending_review.
+- Click card → apre `openItemEditor(item, tid)` con form completo.
+- Bottone "🤖 Estrai items via AI" (visibile se source_document_name presente): chiama `POST /ai-extract` con conferma (avviso 30-90s Claude), aggiorna lista live + tab count.
+- Bottone "+ Aggiungi item" → `openItemEditor(null, tid)` per creazione manuale.
+- Empty state: icona 📦 grande + invito.
+
+**Modal editor item** (`openItemEditor`):
+- Form 2-colonne con campi taxonomy come dropdown popolati da `_taxonomyCache` (caricato 1 volta + cached): Package, Container, VideoCodec, Resolution, FrameRate, AudioCodec, ChannelConfig, MixType, MixStandard.
+- Campi enum hardcoded: bit_depth (8/10/12/16), chroma (4:4:4/4:2:2/4:2:0/4:1:1/4:4:4:4), scan_type, hdr_format, subtitle_format.
+- Campi string libera: aspect_ratio, color_space, subtitle_languages (comma-sep), notes.
+- Sezione "🔊 Audio tracks" inline: lista tracce con summary + bottoni ✎/✕. Su create: avviso "Salva prima l'item per aggiungere tracce".
+- Bottoni footer: Elimina (solo edit), Annulla, Crea/Salva.
+
+**Modal editor audio track** (`openAudioTrackEditor`):
+- Form 2-colonne con dropdown taxonomy.
+- Sample rate enum (44.1/48/88.2/96/192 kHz), bit depth (16/24/32), checkbox is_optional.
+- Sovrapposto al modal item con z-index più alto (2200), su save chiude entrambi e ricarica.
+
 ## v3.5.0-alpha.172.113 — Tier 1 delivery taxonomy: schema + seed 135 + parser AI 2-pass (28 mag 2026)
 
 Fondazione per granularità delivery specs: tassonomia tecnica strutturata,

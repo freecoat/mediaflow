@@ -172,6 +172,7 @@
       <div class="text-muted text-sm">Caricamento…</div>
     </div>
     <div class="modal-footer">
+      <button class="btn btn-primary" id="btn-save-template" onclick="saveEditedTemplate()" style="display:none;">💾 Salva modifiche</button>
       <button class="btn btn-primary" id="btn-save-suggested" onclick="saveSuggestedItems()" style="display:none;">Salva voci listino</button>
       <button class="btn btn-secondary" onclick="closeModal('modal-detail')">Chiudi</button>
     </div>
@@ -416,9 +417,258 @@ async function _loadPriceItemsOnce() {
   try { _allPriceItems = await api('GET', '/pricelist/api/items'); } catch(e) { _allPriceItems = []; }
 }
 
+// v3.5.0-alpha.172.112 — Render editor human-readable per un value (string,
+// number, bool, array di stringhe, oggetto annidato). Ricorsivo con depth
+// limit 4 per evitare loop. Genera DOM con data-edit-key/data-edit-type per
+// permettere il rebuild via collectEdited().
+function renderEditableValue(parent, key, value, depth) {
+  depth = depth || 0;
+  const row = document.createElement('div');
+  row.className = 'h-row';
+  row.dataset.editKey = key;
+  row.style.cssText = 'display:grid;grid-template-columns:180px 1fr 26px;gap:8px;align-items:start;padding:5px 0;border-bottom:1px dashed rgba(255,255,255,0.04);';
+  const lbl = document.createElement('div');
+  lbl.style.cssText = 'font-size:12px;color:var(--text2);padding-top:6px;text-transform:none;letter-spacing:0;font-weight:500;';
+  lbl.textContent = key.replace(/_/g, ' ');
+  row.appendChild(lbl);
+  const valHost = document.createElement('div');
+  valHost.className = 'h-val';
+  row.appendChild(valHost);
+  const rmBtn = document.createElement('button');
+  rmBtn.className = 'btn btn-ghost btn-sm';
+  rmBtn.style.cssText = 'color:#ef4444;padding:2px 6px;font-size:11px;align-self:start;';
+  rmBtn.textContent = '✕';
+  rmBtn.title = 'Rimuovi campo';
+  rmBtn.onclick = () => row.remove();
+  row.appendChild(rmBtn);
+
+  const renderInto = (host, val) => {
+    while (host.firstChild) host.removeChild(host.firstChild);
+    if (val === null || val === undefined) {
+      const inp = document.createElement('input');
+      inp.className = 'form-input';
+      inp.dataset.editType = 'string';
+      inp.placeholder = '(vuoto)';
+      host.appendChild(inp);
+      return;
+    }
+    if (typeof val === 'boolean') {
+      const w = document.createElement('label');
+      w.style.cssText = 'display:flex;align-items:center;gap:6px;font-size:12px;';
+      const cb = document.createElement('input');
+      cb.type = 'checkbox'; cb.checked = val;
+      cb.dataset.editType = 'bool';
+      const t = document.createElement('span'); t.textContent = val ? 'sì' : 'no';
+      cb.onchange = () => { t.textContent = cb.checked ? 'sì' : 'no'; };
+      w.appendChild(cb); w.appendChild(t); host.appendChild(w);
+      return;
+    }
+    if (typeof val === 'number') {
+      const inp = document.createElement('input');
+      inp.type = 'number'; inp.step = 'any';
+      inp.value = String(val);
+      inp.className = 'form-input';
+      inp.dataset.editType = 'number';
+      host.appendChild(inp);
+      return;
+    }
+    if (Array.isArray(val)) {
+      // Array di scalari (stringhe/numeri) → textarea 1 per riga
+      const allScalar = val.every(v => v === null || ['string','number','boolean'].includes(typeof v));
+      if (allScalar) {
+        const ta = document.createElement('textarea');
+        ta.value = val.map(v => v === null ? '' : String(v)).join('\n');
+        ta.dataset.editType = 'array_scalar';
+        ta.style.cssText = 'width:100%;min-height:48px;font-family:var(--font-mono);font-size:12px;background:var(--bg2);color:var(--text);border:1px solid var(--border);border-radius:4px;padding:4px 6px;';
+        ta.placeholder = '1 valore per riga';
+        host.appendChild(ta);
+        return;
+      }
+      // Array di oggetti → JSON readonly + warning (raro nei capitolati)
+      const note = document.createElement('div');
+      note.style.cssText = 'font-size:11px;color:var(--text3);';
+      note.textContent = `(lista di ${val.length} oggetti — edit avanzato non supportato in modal pretty)`;
+      host.appendChild(note);
+      const pre = document.createElement('pre');
+      pre.dataset.editType = 'json_readonly';
+      pre.textContent = JSON.stringify(val, null, 2);
+      pre.style.cssText = 'margin:4px 0 0;font-family:var(--font-mono);font-size:11px;color:var(--text2);white-space:pre-wrap;background:var(--bg2);padding:6px;border-radius:4px;max-height:200px;overflow:auto;';
+      host.appendChild(pre);
+      return;
+    }
+    if (typeof val === 'object') {
+      // Oggetto annidato → sub-card ricorsivo
+      const sub = document.createElement('div');
+      sub.dataset.editType = 'object';
+      sub.style.cssText = 'background:var(--bg2);border:1px solid var(--border);border-radius:4px;padding:6px 8px;';
+      const subRows = document.createElement('div');
+      sub.appendChild(subRows);
+      const addBtn = document.createElement('button');
+      addBtn.className = 'btn btn-ghost btn-sm';
+      addBtn.style.cssText = 'margin-top:6px;font-size:11px;padding:2px 8px;';
+      addBtn.textContent = '+ Aggiungi campo';
+      addBtn.onclick = () => addEmptyField(subRows, depth + 1);
+      sub.appendChild(addBtn);
+      Object.entries(val).forEach(([k, v]) => {
+        renderEditableValue(subRows, k, v, depth + 1);
+      });
+      host.appendChild(sub);
+      return;
+    }
+    // string default
+    const useTextarea = (typeof val === 'string' && val.length > 60);
+    if (useTextarea) {
+      const ta = document.createElement('textarea');
+      ta.value = val;
+      ta.dataset.editType = 'string';
+      ta.style.cssText = 'width:100%;min-height:48px;font-size:12px;background:var(--bg2);color:var(--text);border:1px solid var(--border);border-radius:4px;padding:4px 6px;';
+      host.appendChild(ta);
+    } else {
+      const inp = document.createElement('input');
+      inp.className = 'form-input';
+      inp.value = String(val);
+      inp.dataset.editType = 'string';
+      host.appendChild(inp);
+    }
+  };
+  renderInto(valHost, value);
+  parent.appendChild(row);
+}
+
+// Prompt key + render row vuota stringa default. Usato da "+ Aggiungi campo".
+function addEmptyField(host, depth) {
+  const key = prompt('Nome del nuovo campo (es. "codec", "max_tracks", "languages"):');
+  if (!key) return;
+  const k = key.trim();
+  if (!k) return;
+  renderEditableValue(host, k, '', depth);
+}
+
+// Ricostruisce un oggetto dal DOM editor.
+function collectEditedObject(rootHost) {
+  const out = {};
+  // Iterate solo i diretti figli .h-row (non i nested)
+  rootHost.querySelectorAll(':scope > .h-row').forEach(row => {
+    const key = row.dataset.editKey;
+    if (!key) return;
+    const valHost = row.querySelector(':scope > .h-val');
+    if (!valHost) return;
+    const child = valHost.firstChild;
+    if (!child) { out[key] = null; return; }
+    // child è il wrapper specifico (input/textarea/label/div con dataset.editType)
+    const type = child.dataset ? child.dataset.editType : null;
+    if (!type) {
+      // wrapper label per bool
+      const cb = child.querySelector('input[type=checkbox]');
+      if (cb) { out[key] = cb.checked; return; }
+      out[key] = null;
+      return;
+    }
+    if (type === 'string') {
+      out[key] = child.value;
+    } else if (type === 'number') {
+      const n = parseFloat(child.value);
+      out[key] = isNaN(n) ? null : n;
+    } else if (type === 'bool') {
+      out[key] = child.checked;
+    } else if (type === 'array_scalar') {
+      const lines = (child.value || '').split('\n').map(s => s.trim()).filter(Boolean);
+      out[key] = lines;
+    } else if (type === 'json_readonly') {
+      try { out[key] = JSON.parse(child.textContent); } catch(e) { out[key] = null; }
+    } else if (type === 'object') {
+      const subRows = child.firstChild;  // div con .h-row figli
+      out[key] = collectEditedObject(subRows);
+    }
+  });
+  return out;
+}
+
+// Render card di un blocco capitolato (video_specs/audio_specs/…) editabile.
+function renderEditableBlock(blockKey, label, data) {
+  const card = document.createElement('div');
+  card.className = 'blk-card has-data';
+  card.style.cssText = 'margin-bottom:10px;padding:10px 14px;background:var(--bg3);border:1px solid var(--border);border-radius:6px;';
+  card.dataset.blockKey = blockKey;
+  const header = document.createElement('div');
+  header.style.cssText = 'display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;';
+  const lbl = document.createElement('div');
+  lbl.style.cssText = 'font-weight:600;font-size:13px;color:var(--text);';
+  lbl.textContent = label;
+  header.appendChild(lbl);
+  const addBtn = document.createElement('button');
+  addBtn.className = 'btn btn-ghost btn-sm';
+  addBtn.style.cssText = 'font-size:11px;padding:2px 8px;';
+  addBtn.textContent = '+ Aggiungi campo';
+  header.appendChild(addBtn);
+  card.appendChild(header);
+  const rowsHost = document.createElement('div');
+  rowsHost.className = 'blk-rows';
+  addBtn.onclick = () => addEmptyField(rowsHost, 0);
+  card.appendChild(rowsHost);
+  if (data && typeof data === 'object' && !Array.isArray(data)) {
+    Object.entries(data).forEach(([k, v]) => renderEditableValue(rowsHost, k, v, 0));
+  }
+  return card;
+}
+
+// v3.5.0-alpha.172.114 — taxonomy cache + helpers per tab Items
+let _taxonomyCache = null;
+async function _loadTaxonomyOnce() {
+  if (_taxonomyCache) return _taxonomyCache;
+  try { _taxonomyCache = await api('GET', '/delivery-taxonomy/api'); }
+  catch(e) { _taxonomyCache = {packages:[],containers:[],video_codecs:[],audio_codecs:[],channel_configs:[],mix_types:[],mix_standards:[],resolutions:[],frame_rates:[]}; }
+  return _taxonomyCache;
+}
+function _taxLookup(list, id) {
+  if (!id || !list) return null;
+  return list.find(x => x.id === id) || null;
+}
+function _itemSummary(it, tax) {
+  const parts = [];
+  const pkg = _taxLookup(tax.packages, it.package_id);
+  if (pkg) parts.push(`📦 ${pkg.name}`);
+  const cnt = _taxLookup(tax.containers, it.container_id);
+  if (cnt) parts.push(`🎞 ${cnt.name}`);
+  const vc = _taxLookup(tax.video_codecs, it.video_codec_id);
+  if (vc) parts.push(`🎬 ${vc.name}`);
+  const res = _taxLookup(tax.resolutions, it.resolution_id);
+  if (res) parts.push(`📐 ${res.name}`);
+  const fr = _taxLookup(tax.frame_rates, it.frame_rate_id);
+  if (fr) parts.push(`⏱ ${fr.fps}fps`);
+  if (it.hdr_format && it.hdr_format !== 'SDR') parts.push(`🌈 ${it.hdr_format}`);
+  if (it.audio_tracks && it.audio_tracks.length) {
+    parts.push(`🔊 ${it.audio_tracks.length} track${it.audio_tracks.length === 1 ? '' : 's'}`);
+  }
+  return parts.join(' · ');
+}
+
+let _currentItems = [];
+async function _loadItemsForTemplate(tid) {
+  try {
+    const r = await api('GET', `/delivery-templates/api/${tid}/items`);
+    _currentItems = r.items || [];
+  } catch(e) { _currentItems = []; }
+}
+
+function _tabSwitch(name) {
+  ['blocks','items','listino'].forEach(t => {
+    const tab = document.getElementById('dt-tab-' + t);
+    const pane = document.getElementById('dt-pane-' + t);
+    if (tab) tab.classList.toggle('is-active', t === name);
+    if (pane) pane.style.display = (t === name) ? '' : 'none';
+  });
+  // bottoni footer condizionati
+  const isBlk = (name === 'blocks');
+  const isLst = (name === 'listino');
+  document.getElementById('btn-save-template').style.display = isBlk ? '' : 'none';
+  document.getElementById('btn-save-suggested').style.display = isLst ? '' : 'none';
+}
+
 async function openDetail(tid) {
   openModal('modal-detail');
   document.getElementById('btn-save-suggested').style.display = 'none';
+  document.getElementById('btn-save-template').style.display = 'none';
   const body = document.getElementById('detail-body');
   while (body.firstChild) body.removeChild(body.firstChild);
   const loading = document.createElement('div');
@@ -426,11 +676,13 @@ async function openDetail(tid) {
   loading.textContent = 'Caricamento...';
   body.appendChild(loading);
   try {
-    const [t, hyd, _pi] = await Promise.all([
+    const [t, hyd, _pi, _tx] = await Promise.all([
       api('GET', '/delivery-templates/api/' + tid),
       api('GET', `/delivery-templates/api/${tid}/suggested-hydrated`),
       _loadPriceItemsOnce(),
+      _loadTaxonomyOnce(),
     ]);
+    await _loadItemsForTemplate(tid);
     _currentTemplate = t;
     _currentSuggested = (hyd.items || []).map(it => ({
       price_item_id: it.price_item_id,
@@ -439,27 +691,64 @@ async function openDetail(tid) {
       notes: it.notes || '',
     }));
     body.removeChild(loading);
-    const header = document.createElement('div');
-    header.style.cssText = 'background:var(--bg3); padding:10px 14px; border-radius:6px; margin-bottom:12px; font-size:13px;';
-    const hb = document.createElement('b'); hb.textContent = t.code; header.appendChild(hb);
-    header.appendChild(document.createTextNode(' — ' + (t.name || '')));
-    body.appendChild(header);
+
+    // Header editabile: code + name + broadcaster + version + description
+    const headBox = document.createElement('div');
+    headBox.style.cssText = 'background:var(--bg3);padding:10px 14px;border-radius:6px;margin-bottom:12px;border:1px solid var(--border);';
+    headBox.innerHTML = `
+      <div style="display:grid;grid-template-columns:1fr 2fr 1fr 1fr;gap:8px;margin-bottom:8px;">
+        <div><label style="font-size:11px;color:var(--text3);text-transform:uppercase;letter-spacing:.05em;">Code *</label>
+          <input class="form-input" id="edt-code" value="${escapeHtml(t.code||'')}" style="text-transform:uppercase;font-family:var(--font-mono);"></div>
+        <div><label style="font-size:11px;color:var(--text3);text-transform:uppercase;letter-spacing:.05em;">Name *</label>
+          <input class="form-input" id="edt-name" value="${escapeHtml(t.name||'')}"></div>
+        <div><label style="font-size:11px;color:var(--text3);text-transform:uppercase;letter-spacing:.05em;">Broadcaster</label>
+          <input class="form-input" id="edt-broadcaster" value="${escapeHtml(t.broadcaster||'')}"></div>
+        <div><label style="font-size:11px;color:var(--text3);text-transform:uppercase;letter-spacing:.05em;">Version</label>
+          <input class="form-input" id="edt-version" value="${escapeHtml(t.version||'1.0')}"></div>
+      </div>
+      <div><label style="font-size:11px;color:var(--text3);text-transform:uppercase;letter-spacing:.05em;">Description</label>
+        <textarea class="form-input" id="edt-description" rows="2" style="width:100%;font-size:12px;">${escapeHtml(t.description||'')}</textarea></div>
+    `;
+    body.appendChild(headBox);
+
+    // Tabs bar
+    const tabsBar = document.createElement('div');
+    tabsBar.className = 'tabs';
+    tabsBar.style.cssText = 'margin:0 0 12px;border-bottom:1px solid var(--border);display:flex;gap:0;';
+    tabsBar.innerHTML = `
+      <div class="tab is-active" id="dt-tab-blocks" onclick="_tabSwitch('blocks')">📋 Specs blocchi (legacy)</div>
+      <div class="tab" id="dt-tab-items" onclick="_tabSwitch('items')">📦 Items (${_currentItems.length})</div>
+      <div class="tab" id="dt-tab-listino" onclick="_tabSwitch('listino')">💰 Voci listino</div>
+    `;
+    body.appendChild(tabsBar);
+
+    // Pane: blocks (legacy 8 blocks editor)
+    const paneBlocks = document.createElement('div');
+    paneBlocks.id = 'dt-pane-blocks';
+    body.appendChild(paneBlocks);
+    const blocksHost = document.createElement('div');
+    blocksHost.id = 'edt-blocks-host';
+    paneBlocks.appendChild(blocksHost);
     for (const [key, label] of BLOCK_DEFS) {
-      const data = t[key];
-      if (!data || Object.keys(data).length === 0) continue;
-      const card = document.createElement('div');
-      card.className = 'blk-card has-data';
-      card.style.marginBottom = '8px';
-      const lbl = document.createElement('label'); lbl.textContent = label;
-      const pre = document.createElement('pre');
-      pre.style.cssText = 'margin:6px 0 0; font-family:var(--font-mono); font-size:12px; color:var(--text2); white-space:pre-wrap;';
-      pre.textContent = JSON.stringify(data, null, 2);
-      card.appendChild(lbl); card.appendChild(pre);
-      body.appendChild(card);
+      const data = t[key] || {};
+      const card = renderEditableBlock(key, label, data);
+      blocksHost.appendChild(card);
     }
-    // Editor suggested_items (v3.5.0-alpha.68.6)
+
+    // Pane: items (Tier 2.2)
+    const paneItems = document.createElement('div');
+    paneItems.id = 'dt-pane-items';
+    paneItems.style.display = 'none';
+    body.appendChild(paneItems);
+    renderItemsPane(paneItems, tid);
+
+    // Pane: listino (suggested items, existing editor)
+    const paneList = document.createElement('div');
+    paneList.id = 'dt-pane-listino';
+    paneList.style.display = 'none';
+    body.appendChild(paneList);
     const itemsCard = document.createElement('div');
-    itemsCard.style.cssText = 'margin-top:18px; padding:12px 14px; background:rgba(98,114,245,.06); border:1px solid rgba(98,114,245,.18); border-radius:8px;';
+    itemsCard.style.cssText = 'padding:12px 14px; background:rgba(98,114,245,.06); border:1px solid rgba(98,114,245,.18); border-radius:8px;';
     const h = document.createElement('div');
     h.style.cssText = 'display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;';
     const ht = document.createElement('div');
@@ -470,11 +759,11 @@ async function openDetail(tid) {
     hs.textContent = '— usate da "Carica da template" in /quotes';
     ht.appendChild(hs);
     h.appendChild(ht);
-    const addBtn = document.createElement('button');
-    addBtn.className = 'btn btn-ghost btn-sm';
-    addBtn.textContent = '+ Aggiungi voce';
-    addBtn.onclick = addSuggestedRow;
-    h.appendChild(addBtn);
+    const addBtnL = document.createElement('button');
+    addBtnL.className = 'btn btn-ghost btn-sm';
+    addBtnL.textContent = '+ Aggiungi voce';
+    addBtnL.onclick = addSuggestedRow;
+    h.appendChild(addBtnL);
     itemsCard.appendChild(h);
     const rowsHost = document.createElement('div');
     rowsHost.id = 'sug-rows';
@@ -484,15 +773,483 @@ async function openDetail(tid) {
     hint.style.cssText = 'margin-top:8px;';
     hint.textContent = 'Section: A=Mastering/Delivery, B=Picture/Grading, C=Sound, D=VFX, E=Archive/Transfer.';
     itemsCard.appendChild(hint);
-    body.appendChild(itemsCard);
+    paneList.appendChild(itemsCard);
     renderSuggestedRows();
-    document.getElementById('btn-save-suggested').style.display = '';
+
+    // Default: items tab if già popolati, altrimenti blocks
+    if (_currentItems.length > 0) _tabSwitch('items');
+    else _tabSwitch('blocks');
   } catch(e) {
     if (body.contains(loading)) body.removeChild(loading);
     const err = document.createElement('div'); err.style.color = 'var(--rose)';
     err.textContent = e.message || 'Errore';
     body.appendChild(err);
   }
+}
+
+// ── Pane Items: lista + AI extract + manual create ─────────
+function renderItemsPane(pane, tid) {
+  while (pane.firstChild) pane.removeChild(pane.firstChild);
+  // Header con bottoni
+  const head = document.createElement('div');
+  head.style.cssText = 'display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;';
+  const lbl = document.createElement('div');
+  lbl.style.cssText = 'font-weight:600;font-size:13px;';
+  lbl.textContent = `Delivery items (${_currentItems.length})`;
+  head.appendChild(lbl);
+  const btns = document.createElement('div');
+  btns.style.cssText = 'display:flex;gap:8px;';
+  if (_currentTemplate.source_document_name) {
+    const aiBtn = document.createElement('button');
+    aiBtn.className = 'btn btn-secondary btn-sm';
+    aiBtn.innerHTML = '🤖 Estrai items via AI';
+    aiBtn.title = `Re-parsing del capitolato sorgente: ${_currentTemplate.source_document_name}`;
+    aiBtn.onclick = async () => {
+      if (!confirm(`Estrai items dal capitolato AI?\n\nUsa il file "${_currentTemplate.source_document_name}" come sorgente.\nGli items con stesso nome esistente saranno saltati.\nL'operazione richiede ~30-90s di chiamate Claude.`)) return;
+      aiBtn.disabled = true; aiBtn.innerHTML = '⏳ AI parsing in corso…';
+      try {
+        const r = await api('POST', `/delivery-templates/api/${tid}/items/ai-extract`, {});
+        toast(`🤖 ${r.saved} items aggiunti (skip ${r.skipped}, extracted ${r.items_extracted})`, 'success', 4000);
+        await _loadItemsForTemplate(tid);
+        renderItemsPane(pane, tid);
+        const tab = document.getElementById('dt-tab-items');
+        if (tab) tab.textContent = `📦 Items (${_currentItems.length})`;
+      } catch(e) {
+        toast(`Errore AI: ${e.message||''}`, 'error', 6000);
+      } finally {
+        aiBtn.disabled = false; aiBtn.innerHTML = '🤖 Estrai items via AI';
+      }
+    };
+    btns.appendChild(aiBtn);
+  }
+  const addBtn = document.createElement('button');
+  addBtn.className = 'btn btn-primary btn-sm';
+  addBtn.innerHTML = '+ Aggiungi item';
+  addBtn.onclick = () => openItemEditor(null, tid);
+  btns.appendChild(addBtn);
+  head.appendChild(btns);
+  pane.appendChild(head);
+
+  if (!_currentItems.length) {
+    const empty = document.createElement('div');
+    empty.style.cssText = 'padding:30px;text-align:center;color:var(--text3);font-size:13px;background:var(--bg3);border-radius:6px;';
+    empty.innerHTML = `
+      <div style="font-size:32px;margin-bottom:10px;">📦</div>
+      <div style="font-weight:600;margin-bottom:6px;">Nessun delivery item</div>
+      <div style="font-size:12px;">
+        Clicca "🤖 Estrai items via AI" per generare items dal capitolato,
+        oppure "+ Aggiungi item" per crearne uno manualmente.
+      </div>`;
+    pane.appendChild(empty);
+    return;
+  }
+  const tax = _taxonomyCache;
+  const list = document.createElement('div');
+  list.style.cssText = 'display:flex;flex-direction:column;gap:8px;';
+  _currentItems.forEach((it) => {
+    const card = document.createElement('div');
+    card.className = 'item-card';
+    card.style.cssText = 'padding:10px 14px;background:var(--bg3);border:1px solid var(--border);border-radius:6px;cursor:pointer;';
+    if (it.pending_review) {
+      card.style.borderLeft = '3px solid #f59e0b';
+    }
+    const row1 = document.createElement('div');
+    row1.style.cssText = 'display:flex;justify-content:space-between;align-items:flex-start;gap:8px;';
+    const nm = document.createElement('div');
+    nm.style.cssText = 'flex:1;';
+    const nmTitle = document.createElement('div');
+    nmTitle.style.cssText = 'font-weight:600;font-size:13px;';
+    nmTitle.textContent = it.name;
+    nm.appendChild(nmTitle);
+    const summary = document.createElement('div');
+    summary.style.cssText = 'font-size:11px;color:var(--text3);margin-top:4px;';
+    summary.textContent = _itemSummary(it, tax) || '(nessuna spec mappata)';
+    nm.appendChild(summary);
+    row1.appendChild(nm);
+    const meta = document.createElement('div');
+    meta.style.cssText = 'display:flex;flex-direction:column;align-items:flex-end;gap:4px;font-size:11px;color:var(--text3);';
+    if (it.ai_extracted) {
+      const b = document.createElement('span');
+      b.style.cssText = 'padding:1px 6px;background:rgba(98,114,245,.15);color:#6272f5;border-radius:8px;font-size:10px;';
+      b.textContent = `🤖 conf ${it.ai_confidence ? (it.ai_confidence*100).toFixed(0)+'%' : '?'}`;
+      meta.appendChild(b);
+    }
+    if (it.pending_review) {
+      const b = document.createElement('span');
+      b.style.cssText = 'padding:1px 6px;background:rgba(245,158,11,.15);color:#f59e0b;border-radius:8px;font-size:10px;';
+      b.textContent = '⚠ review';
+      meta.appendChild(b);
+    }
+    if (it.suggested_qty && it.suggested_unit) {
+      const u = document.createElement('span');
+      u.textContent = `${it.suggested_qty} ${it.suggested_unit}`;
+      meta.appendChild(u);
+    }
+    row1.appendChild(meta);
+    card.appendChild(row1);
+    card.onclick = () => openItemEditor(it, tid);
+    list.appendChild(card);
+  });
+  pane.appendChild(list);
+}
+
+// Modal editor item (create/edit) — usa modal interno overlay
+async function openItemEditor(item, tid) {
+  const tax = await _loadTaxonomyOnce();
+  const isNew = !item;
+  const ov = document.createElement('div');
+  ov.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.7);z-index:2100;display:flex;align-items:center;justify-content:center;';
+  const box = document.createElement('div');
+  box.style.cssText = 'background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:18px;width:780px;max-width:95vw;max-height:90vh;overflow:auto;display:flex;flex-direction:column;';
+  const title = document.createElement('div');
+  title.style.cssText = 'font-weight:600;font-size:14px;margin-bottom:14px;display:flex;justify-content:space-between;align-items:center;';
+  title.innerHTML = `<span>${isNew ? '+ Nuovo delivery item' : '✎ Modifica item'}</span>
+    <button class="btn btn-ghost btn-icon" onclick="this.closest('.dlv-item-modal').remove()" style="font-size:18px;">✕</button>`;
+  ov.className = 'dlv-item-modal';
+  box.appendChild(title);
+
+  const opt = (list, sel, placeholder) => {
+    let h = `<option value="">${placeholder || '— nessuno —'}</option>`;
+    (list || []).forEach(r => {
+      const s = (sel !== null && sel !== undefined && Number(sel) === r.id) ? ' selected' : '';
+      h += `<option value="${r.id}"${s}>${escapeHtml(r.name)}</option>`;
+    });
+    return h;
+  };
+  const v = item || {};
+  const form = document.createElement('div');
+  form.style.cssText = 'display:grid;grid-template-columns:1fr 1fr;gap:10px;';
+  form.innerHTML = `
+    <div style="grid-column:1/-1;">
+      <label style="font-size:11px;color:var(--text3);text-transform:uppercase;">Nome *</label>
+      <input class="form-input" id="dli-name" value="${escapeHtml(v.name||'')}"></div>
+
+    <div><label style="font-size:11px;color:var(--text3);text-transform:uppercase;">Package</label>
+      <select class="form-select" id="dli-package">${opt(tax.packages, v.package_id, '— nessuno (single-file) —')}</select></div>
+    <div><label style="font-size:11px;color:var(--text3);text-transform:uppercase;">Container *</label>
+      <select class="form-select" id="dli-container">${opt(tax.containers, v.container_id)}</select></div>
+
+    <div><label style="font-size:11px;color:var(--text3);text-transform:uppercase;">Video codec</label>
+      <select class="form-select" id="dli-vcodec">${opt(tax.video_codecs, v.video_codec_id, '— audio-only —')}</select></div>
+    <div><label style="font-size:11px;color:var(--text3);text-transform:uppercase;">Resolution</label>
+      <select class="form-select" id="dli-res">${opt(tax.resolutions, v.resolution_id)}</select></div>
+
+    <div><label style="font-size:11px;color:var(--text3);text-transform:uppercase;">Bit depth</label>
+      <select class="form-select" id="dli-bitdepth">
+        <option value="">—</option>
+        ${[8,10,12,16].map(b => `<option value="${b}"${v.video_bit_depth===b?' selected':''}>${b}-bit</option>`).join('')}
+      </select></div>
+    <div><label style="font-size:11px;color:var(--text3);text-transform:uppercase;">Chroma</label>
+      <select class="form-select" id="dli-chroma">
+        <option value="">—</option>
+        ${['4:4:4','4:2:2','4:2:0','4:1:1','4:4:4:4'].map(c => `<option value="${c}"${v.chroma_subsampling===c?' selected':''}>${c}</option>`).join('')}
+      </select></div>
+
+    <div><label style="font-size:11px;color:var(--text3);text-transform:uppercase;">Frame rate</label>
+      <select class="form-select" id="dli-fr">${opt(tax.frame_rates, v.frame_rate_id)}</select></div>
+    <div><label style="font-size:11px;color:var(--text3);text-transform:uppercase;">Aspect ratio</label>
+      <input class="form-input" id="dli-aspect" value="${escapeHtml(v.aspect_ratio||'')}" placeholder="es. 1.85 / 2.39 / 16:9"></div>
+
+    <div><label style="font-size:11px;color:var(--text3);text-transform:uppercase;">Scan type</label>
+      <select class="form-select" id="dli-scan">
+        <option value="">—</option>
+        ${['progressive','interlaced','psf'].map(c => `<option value="${c}"${v.scan_type===c?' selected':''}>${c}</option>`).join('')}
+      </select></div>
+    <div><label style="font-size:11px;color:var(--text3);text-transform:uppercase;">HDR format</label>
+      <select class="form-select" id="dli-hdr">
+        <option value="">—</option>
+        ${['SDR','HDR10','HDR10+','Dolby Vision','HLG'].map(c => `<option value="${c}"${v.hdr_format===c?' selected':''}>${c}</option>`).join('')}
+      </select></div>
+
+    <div style="grid-column:1/-1;"><label style="font-size:11px;color:var(--text3);text-transform:uppercase;">Color space</label>
+      <input class="form-input" id="dli-color" value="${escapeHtml(v.color_space||'')}" placeholder="es. Rec.709 / DCI XYZ / Rec.2020 PQ"></div>
+
+    <div><label style="font-size:11px;color:var(--text3);text-transform:uppercase;">Subtitle format</label>
+      <select class="form-select" id="dli-subfmt">
+        <option value="">—</option>
+        ${['TTML IMSC 1.1','PNG+XML','Burn-in','PGS','EBU-STL','SRT'].map(c => `<option value="${c}"${v.subtitle_format===c?' selected':''}>${c}</option>`).join('')}
+      </select></div>
+    <div><label style="font-size:11px;color:var(--text3);text-transform:uppercase;">Subtitle languages (ISO comma-sep)</label>
+      <input class="form-input" id="dli-sublang" value="${escapeHtml((v.subtitle_languages||[]).join(','))}" placeholder="es. it,en,fr"></div>
+
+    <div><label style="font-size:11px;color:var(--text3);text-transform:uppercase;">Unità suggerita</label>
+      <select class="form-select" id="dli-unit">
+        <option value="">—</option>
+        ${['pc','TB','GB','min','allow','version','shot','day','hr'].map(c => `<option value="${c}"${v.suggested_unit===c?' selected':''}>${c}</option>`).join('')}
+      </select></div>
+    <div><label style="font-size:11px;color:var(--text3);text-transform:uppercase;">Qty suggerita</label>
+      <input class="form-input" id="dli-qty" type="number" step="0.1" value="${v.suggested_qty || ''}"></div>
+
+    <div style="grid-column:1/-1;"><label style="font-size:11px;color:var(--text3);text-transform:uppercase;">Note</label>
+      <textarea class="form-input" id="dli-notes" rows="2">${escapeHtml(v.notes||'')}</textarea></div>
+  `;
+  box.appendChild(form);
+
+  // Audio tracks sub-section
+  const audioSec = document.createElement('div');
+  audioSec.style.cssText = 'margin-top:14px;padding-top:14px;border-top:1px solid var(--border);';
+  const audioHead = document.createElement('div');
+  audioHead.style.cssText = 'display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;';
+  const audioLbl = document.createElement('div');
+  audioLbl.style.cssText = 'font-weight:600;font-size:13px;';
+  audioLbl.textContent = `🔊 Audio tracks (${(v.audio_tracks||[]).length})`;
+  audioHead.appendChild(audioLbl);
+  if (!isNew) {
+    const addAudioBtn = document.createElement('button');
+    addAudioBtn.className = 'btn btn-ghost btn-sm';
+    addAudioBtn.style.cssText = 'font-size:11px;padding:2px 8px;';
+    addAudioBtn.textContent = '+ Aggiungi traccia';
+    addAudioBtn.onclick = () => openAudioTrackEditor(null, item.id, ov);
+    audioHead.appendChild(addAudioBtn);
+  }
+  audioSec.appendChild(audioHead);
+  const audioList = document.createElement('div');
+  audioList.style.cssText = 'display:flex;flex-direction:column;gap:6px;';
+  if (isNew) {
+    const note = document.createElement('div');
+    note.style.cssText = 'font-size:11px;color:var(--text3);font-style:italic;padding:6px;';
+    note.textContent = 'Salva prima il delivery item per aggiungere tracce audio.';
+    audioList.appendChild(note);
+  } else {
+    (v.audio_tracks || []).forEach(t => {
+      const row = document.createElement('div');
+      row.style.cssText = 'display:flex;justify-content:space-between;align-items:center;padding:6px 10px;background:var(--bg3);border:1px solid var(--border);border-radius:4px;font-size:12px;';
+      const left = document.createElement('div');
+      const cc = _taxLookup(tax.channel_configs, t.channel_config_id);
+      const mt = _taxLookup(tax.mix_types, t.mix_type_id);
+      const ms = _taxLookup(tax.mix_standards, t.mix_standard_id);
+      const ac = _taxLookup(tax.audio_codecs, t.audio_codec_id);
+      const bits = [t.track_label,
+        cc ? `🔊 ${cc.name}` : null,
+        mt ? `🎚 ${mt.name}` : null,
+        ms ? `📏 ${ms.name}` : null,
+        ac ? `🎵 ${ac.name}` : null,
+        t.sample_rate_hz ? `${(t.sample_rate_hz/1000).toFixed(1)}kHz` : null,
+        t.bit_depth ? `${t.bit_depth}-bit` : null,
+        t.is_optional ? '(opzionale)' : null,
+      ].filter(Boolean);
+      left.innerHTML = bits.map(b => `<span style="margin-right:8px;">${escapeHtml(b)}</span>`).join('');
+      row.appendChild(left);
+      const actions = document.createElement('div');
+      actions.style.cssText = 'display:flex;gap:4px;';
+      const edBtn = document.createElement('button');
+      edBtn.className = 'btn btn-ghost btn-sm'; edBtn.style.cssText = 'font-size:11px;padding:1px 6px;'; edBtn.textContent = '✎';
+      edBtn.onclick = () => openAudioTrackEditor(t, item.id, ov);
+      actions.appendChild(edBtn);
+      const rmBtn = document.createElement('button');
+      rmBtn.className = 'btn btn-ghost btn-sm'; rmBtn.style.cssText = 'font-size:11px;padding:1px 6px;color:#ef4444;'; rmBtn.textContent = '✕';
+      rmBtn.onclick = async () => {
+        if (!confirm(`Eliminare traccia "${t.track_label}"?`)) return;
+        try {
+          await api('DELETE', `/delivery-audio-tracks/api/${t.id}`);
+          toast('Traccia eliminata', 'success', 1500);
+          ov.remove();
+          // ricarica detail
+          await _loadItemsForTemplate(tid);
+          const pane = document.getElementById('dt-pane-items');
+          if (pane) renderItemsPane(pane, tid);
+        } catch(e) { toast(`Errore: ${e.message||''}`, 'error', 3000); }
+      };
+      actions.appendChild(rmBtn);
+      row.appendChild(actions);
+      audioList.appendChild(row);
+    });
+  }
+  audioSec.appendChild(audioList);
+  box.appendChild(audioSec);
+
+  // Footer
+  const footer = document.createElement('div');
+  footer.style.cssText = 'margin-top:14px;padding-top:14px;border-top:1px solid var(--border);display:flex;justify-content:space-between;align-items:center;gap:8px;';
+  const delBtn = document.createElement('button');
+  if (!isNew) {
+    delBtn.className = 'btn btn-ghost btn-sm';
+    delBtn.style.cssText = 'color:#ef4444;';
+    delBtn.textContent = 'Elimina item';
+    delBtn.onclick = async () => {
+      if (!confirm(`Eliminare l'item "${v.name}" e tutte le sue tracce audio?`)) return;
+      try {
+        await api('DELETE', `/delivery-items/api/${item.id}`);
+        toast('Item eliminato', 'success', 1500);
+        ov.remove();
+        await _loadItemsForTemplate(tid);
+        const pane = document.getElementById('dt-pane-items');
+        if (pane) renderItemsPane(pane, tid);
+        const tab = document.getElementById('dt-tab-items');
+        if (tab) tab.textContent = `📦 Items (${_currentItems.length})`;
+      } catch(e) { toast(`Errore: ${e.message||''}`, 'error', 3000); }
+    };
+    footer.appendChild(delBtn);
+  } else {
+    footer.appendChild(document.createElement('span'));
+  }
+  const rightBtns = document.createElement('div');
+  rightBtns.style.cssText = 'display:flex;gap:8px;';
+  const cancelBtn = document.createElement('button');
+  cancelBtn.className = 'btn btn-secondary btn-sm';
+  cancelBtn.textContent = 'Annulla';
+  cancelBtn.onclick = () => ov.remove();
+  rightBtns.appendChild(cancelBtn);
+  const saveBtn = document.createElement('button');
+  saveBtn.className = 'btn btn-primary btn-sm';
+  saveBtn.textContent = isNew ? 'Crea item' : 'Salva modifiche';
+  saveBtn.onclick = async () => {
+    const fd = new FormData();
+    const name = document.getElementById('dli-name').value.trim();
+    if (!name) { toast('Nome obbligatorio', 'error'); return; }
+    fd.append('name', name);
+    const _set = (key, id) => {
+      const el = document.getElementById(id);
+      if (!el) return;
+      if (el.value !== '') fd.append(key, el.value);
+      else fd.append(key, '');
+    };
+    _set('package_id', 'dli-package');
+    _set('container_id', 'dli-container');
+    _set('video_codec_id', 'dli-vcodec');
+    _set('video_bit_depth', 'dli-bitdepth');
+    _set('chroma_subsampling', 'dli-chroma');
+    _set('resolution_id', 'dli-res');
+    _set('aspect_ratio', 'dli-aspect');
+    _set('frame_rate_id', 'dli-fr');
+    _set('scan_type', 'dli-scan');
+    _set('color_space', 'dli-color');
+    _set('hdr_format', 'dli-hdr');
+    _set('subtitle_format', 'dli-subfmt');
+    const slang = document.getElementById('dli-sublang').value.trim();
+    if (slang) {
+      const arr = slang.split(',').map(s => s.trim()).filter(Boolean);
+      fd.append('subtitle_languages', JSON.stringify(arr));
+    } else if (!isNew) {
+      fd.append('subtitle_languages', '');
+    }
+    _set('suggested_unit', 'dli-unit');
+    const qty = document.getElementById('dli-qty').value;
+    if (qty) fd.append('suggested_qty', qty);
+    fd.append('notes', document.getElementById('dli-notes').value.trim());
+    try {
+      const url = isNew
+        ? `/delivery-templates/api/${tid}/items`
+        : `/delivery-items/api/${item.id}`;
+      const method = isNew ? 'POST' : 'PUT';
+      const r = await fetch(url, { method, body: fd, credentials: 'same-origin' });
+      if (!r.ok) {
+        const err = await r.json().catch(() => ({}));
+        throw new Error(err.detail || 'Errore');
+      }
+      toast(`Item ${isNew ? 'creato' : 'salvato'}`, 'success', 1500);
+      ov.remove();
+      await _loadItemsForTemplate(tid);
+      const pane = document.getElementById('dt-pane-items');
+      if (pane) renderItemsPane(pane, tid);
+      const tab = document.getElementById('dt-tab-items');
+      if (tab) tab.textContent = `📦 Items (${_currentItems.length})`;
+    } catch(e) {
+      toast(`Errore: ${e.message||''}`, 'error', 4000);
+    }
+  };
+  rightBtns.appendChild(saveBtn);
+  footer.appendChild(rightBtns);
+  box.appendChild(footer);
+
+  ov.appendChild(box);
+  document.body.appendChild(ov);
+  setTimeout(() => document.getElementById('dli-name').focus(), 50);
+}
+
+// Modal editor traccia audio
+async function openAudioTrackEditor(track, itemId, parentOverlay) {
+  const tax = await _loadTaxonomyOnce();
+  const isNew = !track;
+  const v = track || {};
+  const ov = document.createElement('div');
+  ov.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.7);z-index:2200;display:flex;align-items:center;justify-content:center;';
+  ov.className = 'dlv-audio-modal';
+  const box = document.createElement('div');
+  box.style.cssText = 'background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:18px;width:560px;max-width:95vw;display:flex;flex-direction:column;';
+  const opt = (list, sel, placeholder) => {
+    let h = `<option value="">${placeholder || '— nessuno —'}</option>`;
+    (list || []).forEach(r => {
+      const s = (sel !== null && sel !== undefined && Number(sel) === r.id) ? ' selected' : '';
+      h += `<option value="${r.id}"${s}>${escapeHtml(r.name)}</option>`;
+    });
+    return h;
+  };
+  box.innerHTML = `
+    <div style="font-weight:600;font-size:14px;margin-bottom:14px;">${isNew ? '+ Nuova traccia audio' : '✎ Modifica traccia audio'}</div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
+      <div style="grid-column:1/-1;"><label style="font-size:11px;color:var(--text3);text-transform:uppercase;">Track label *</label>
+        <input class="form-input" id="dlat-label" value="${escapeHtml(v.track_label||'')}" placeholder="es. Mix Theatrical 5.1"></div>
+      <div><label style="font-size:11px;color:var(--text3);text-transform:uppercase;">Channel config</label>
+        <select class="form-select" id="dlat-cc">${opt(tax.channel_configs, v.channel_config_id)}</select></div>
+      <div><label style="font-size:11px;color:var(--text3);text-transform:uppercase;">Mix type</label>
+        <select class="form-select" id="dlat-mt">${opt(tax.mix_types, v.mix_type_id)}</select></div>
+      <div><label style="font-size:11px;color:var(--text3);text-transform:uppercase;">Mix standard</label>
+        <select class="form-select" id="dlat-ms">${opt(tax.mix_standards, v.mix_standard_id)}</select></div>
+      <div><label style="font-size:11px;color:var(--text3);text-transform:uppercase;">Audio codec</label>
+        <select class="form-select" id="dlat-ac">${opt(tax.audio_codecs, v.audio_codec_id)}</select></div>
+      <div><label style="font-size:11px;color:var(--text3);text-transform:uppercase;">Sample rate (Hz)</label>
+        <select class="form-select" id="dlat-sr">
+          <option value="">—</option>
+          ${[44100,48000,88200,96000,192000].map(s => `<option value="${s}"${v.sample_rate_hz===s?' selected':''}>${(s/1000).toFixed(1)} kHz</option>`).join('')}
+        </select></div>
+      <div><label style="font-size:11px;color:var(--text3);text-transform:uppercase;">Bit depth</label>
+        <select class="form-select" id="dlat-bd">
+          <option value="">—</option>
+          ${[16,24,32].map(b => `<option value="${b}"${v.bit_depth===b?' selected':''}>${b}-bit</option>`).join('')}
+        </select></div>
+      <div style="grid-column:1/-1;"><label style="display:flex;align-items:center;gap:6px;font-size:12px;">
+        <input type="checkbox" id="dlat-opt" ${v.is_optional?'checked':''}> Traccia opzionale</label></div>
+      <div style="grid-column:1/-1;"><label style="font-size:11px;color:var(--text3);text-transform:uppercase;">Note</label>
+        <textarea class="form-input" id="dlat-notes" rows="2">${escapeHtml(v.notes||'')}</textarea></div>
+    </div>
+    <div style="margin-top:14px;display:flex;justify-content:flex-end;gap:8px;">
+      <button class="btn btn-secondary btn-sm" id="dlat-cancel">Annulla</button>
+      <button class="btn btn-primary btn-sm" id="dlat-save">${isNew?'Aggiungi':'Salva'}</button>
+    </div>
+  `;
+  ov.appendChild(box);
+  document.body.appendChild(ov);
+  box.querySelector('#dlat-cancel').onclick = () => ov.remove();
+  box.querySelector('#dlat-save').onclick = async () => {
+    const label = box.querySelector('#dlat-label').value.trim();
+    if (!label) { toast('Track label obbligatorio', 'error'); return; }
+    const fd = new FormData();
+    fd.append('track_label', label);
+    const sel = (k, id) => {
+      const el = box.querySelector('#'+id);
+      if (el && el.value !== '') fd.append(k, el.value);
+      else if (!isNew) fd.append(k, '');
+    };
+    sel('channel_config_id', 'dlat-cc');
+    sel('mix_type_id', 'dlat-mt');
+    sel('mix_standard_id', 'dlat-ms');
+    sel('audio_codec_id', 'dlat-ac');
+    sel('sample_rate_hz', 'dlat-sr');
+    sel('bit_depth', 'dlat-bd');
+    fd.append('is_optional', box.querySelector('#dlat-opt').checked ? 'true' : 'false');
+    fd.append('notes', box.querySelector('#dlat-notes').value.trim());
+    try {
+      const url = isNew
+        ? `/delivery-items/api/${itemId}/audio-tracks`
+        : `/delivery-audio-tracks/api/${track.id}`;
+      const method = isNew ? 'POST' : 'PUT';
+      const r = await fetch(url, { method, body: fd, credentials: 'same-origin' });
+      if (!r.ok) { const err = await r.json().catch(()=>({})); throw new Error(err.detail || 'Errore'); }
+      toast(`Traccia ${isNew?'aggiunta':'salvata'}`, 'success', 1500);
+      ov.remove();
+      if (parentOverlay) {
+        parentOverlay.remove();
+        // Riapri editor item con dati aggiornati
+        await _loadItemsForTemplate(_currentTemplate.id);
+        const fresh = _currentItems.find(x => x.id === itemId);
+        if (fresh) openItemEditor(fresh, _currentTemplate.id);
+        const pane = document.getElementById('dt-pane-items');
+        if (pane) renderItemsPane(pane, _currentTemplate.id);
+      }
+    } catch(e) { toast(`Errore: ${e.message||''}`, 'error', 4000); }
+  };
+  setTimeout(() => box.querySelector('#dlat-label').focus(), 50);
 }
 
 function renderSuggestedRows() {
@@ -664,6 +1421,48 @@ function pickPriceItem() {
     render();
     setTimeout(() => search.focus(), 50);
   });
+}
+
+// v3.5.0-alpha.172.112 — Salva header + 8 blocchi human-readable editati.
+async function saveEditedTemplate() {
+  if (!_currentTemplate) return;
+  const code = (document.getElementById('edt-code').value || '').trim().toUpperCase();
+  const name = (document.getElementById('edt-name').value || '').trim();
+  if (!code || !name) {
+    toast('Code e Name sono obbligatori', 'error');
+    return;
+  }
+  const fd = new FormData();
+  fd.append('code', code);
+  fd.append('name', name);
+  fd.append('broadcaster', document.getElementById('edt-broadcaster').value || '');
+  fd.append('version', document.getElementById('edt-version').value || '1.0');
+  fd.append('description', document.getElementById('edt-description').value || '');
+  // 8 blocchi: ricostruisci ogni blocco dal DOM e invia JSON-stringified.
+  const blocksHost = document.getElementById('edt-blocks-host');
+  for (const [key, _lbl] of BLOCK_DEFS) {
+    const card = blocksHost.querySelector(`[data-block-key="${key}"]`);
+    if (!card) continue;
+    const rowsHost = card.querySelector('.blk-rows');
+    if (!rowsHost) continue;
+    const obj = collectEditedObject(rowsHost);
+    fd.append(key, JSON.stringify(obj));
+  }
+  try {
+    const r = await fetch(`/delivery-templates/api/${_currentTemplate.id}`, {
+      method: 'PUT', body: fd, credentials: 'same-origin',
+    });
+    if (!r.ok) {
+      const err = await r.json().catch(() => ({}));
+      throw new Error(err.detail || 'Errore salvataggio');
+    }
+    toast('💾 Template salvato', 'success');
+    // Ricarica detail con stato fresh
+    await openDetail(_currentTemplate.id);
+    if (typeof renderList === 'function') renderList();
+  } catch(e) {
+    toast(e.message || 'Errore', 'error');
+  }
 }
 
 async function saveSuggestedItems() {

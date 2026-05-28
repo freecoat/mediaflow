@@ -8,19 +8,21 @@
 
 ## Versione corrente
 
-**v3.5.0-alpha.172.113** — 28 maggio 2026 — Tier 1 delivery taxonomy: schema + seed 135 + parser AI 2-pass
+**v3.5.0-alpha.172.114** — 28 maggio 2026 — Tier 2.1+2.2: router DeliveryItem + UI tabs Items
 
-Tier 1 della big rearchitecture delivery specs chiuso. Schema 11 modelli (Package, Container, VideoCodec, AudioCodec, AudioChannelConfig, AudioMixType, MixStandard, Resolution, FrameRate, DeliveryItem, AudioTrackSpec) + migrazione idempotente + seed 135 record sistema cross-ref Wikipedia/SMPTE/DaVinci + parser AI 2-pass con mapping FK numerico.
+Router REST per DeliveryItem + AudioTrackSpec con tenant_scope + permission gate. Endpoint `/delivery-taxonomy/api` per dropdown UI. Endpoint `/delivery-templates/api/{tid}/items/ai-extract` per re-parsing capitolato sorgente con materialize_items().
 
-Smoke test MUBI Queer Exhibit C (31k char PDF, 25 items): mapping accurato package/container/codec/audio/resolution/fps con confidence media 0.88. Solo 2/25 in pending_review.
+Modal dettaglio `/delivery-templates` riscritto a 3 tab: Specs blocchi (legacy) / Items (nuovo) / Voci listino. Pane Items con card summary visuale (📦 Package · 🎞 Container · 🎬 VideoCodec · 📐 Resolution · ⏱ FPS · 🔊 N tracks), bottone "🤖 Estrai items via AI" (≈30-90s Claude), bottone "+ Aggiungi item" manuale. Modal editor item con dropdown taxonomy. Modal editor audio track inline sovrapposto.
 
-### Prossima sessione — Tier 2 (~10h)
+DB: 14 templates, 0 DeliveryItem (Tier 2.4 popolerà via re-parse batch).
 
-1. UI Admin taxonomy CRUD + import/export JSON cross-tenant
-2. UI dettaglio template tabs Comune+Items con visualizzazione DeliveryItem ricchi
-3. UI Nuovo Deliverable in /jobs cascading template→item
-4. Re-parse 13 capitolati esistenti con parser v2 (~25-30 min Claude)
-5. Back-fill JobDeliverable.delivery_item_id
+### Prossima sessione — Tier 2 step rimanenti
+
+3. Tier 2.3 — Admin UI taxonomy CRUD + import/export JSON cross-tenant
+4. Tier 2.4 — Re-parse 13 templates esistenti con parser v2 (~25-30 min Claude)
+5. Tier 2.5 — JobDeliverable.delivery_item_id FK + UI Nuovo Deliverable cascading
+
+Per testare già Tier 2.2: apri https://parker-mining-ahead-infringement.trycloudflare.com/delivery-templates, clicca un template (es. MUBI id=5), tab "📦 Items (0)", bottone "🤖 Estrai items via AI" → attesa ~90s → 25 items appaiono.
 
 ### Backlog originale Matteo /delivery-templates
 

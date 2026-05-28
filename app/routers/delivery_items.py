@@ -1,0 +1,492 @@
+"""v3.5.0-alpha.172.114 — Router DeliveryItem + AudioTrackSpec + taxonomy lookup.
+
+Endpoint:
+- GET    /delivery-templates/{tid}/items          — lista DeliveryItem del template
+- POST   /delivery-templates/{tid}/items          — crea item manuale
+- POST   /delivery-templates/{tid}/items/ai-extract — parse capitolato (re-parsing) → materialize items
+- GET    /delivery-items/{iid}                    — dettaglio item + tracce audio
+- PUT    /delivery-items/{iid}                    — update item (Form per campo)
+- DELETE /delivery-items/{iid}                    — soft-delete
+- POST   /delivery-items/{iid}/audio-tracks       — aggiungi traccia audio
+- PUT    /delivery-audio-tracks/{aid}             — update audio track
+- DELETE /delivery-audio-tracks/{aid}             — delete audio track
+- GET    /delivery-taxonomy                       — vocabolario completo per dropdown UI
+"""
+from __future__ import annotations
+import json
+import logging
+from typing import Optional
+from pathlib import Path
+from fastapi import APIRouter, Depends, HTTPException, Form, Request
+from sqlalchemy import or_
+from sqlalchemy.orm import Session, selectinload
+
+from app.database import get_db
+from app.models.models import (
+    DeliveryTemplate, DeliveryItem, AudioTrackSpec,
+    Package, Container, VideoCodec, AudioCodec, AudioChannelConfig,
+    AudioMixType, MixStandard, Resolution, FrameRate,
+)
+from app.services.rbac import requires_permission, current_user_optional
+from app.context import current_tenant_id
+
+logger = logging.getLogger(__name__)
+router = APIRouter(tags=["delivery_items"])
+
+RequireEdit = Depends(requires_permission("manage_settings_global"))
+
+
+# ── Serializers ─────────────────────────────────────────────
+
+def _serialize_track(t: AudioTrackSpec) -> dict:
+    return {
+        "id": t.id,
+        "delivery_item_id": t.delivery_item_id,
+        "sort_order": t.sort_order,
+        "track_label": t.track_label,
+        "channel_config_id": t.channel_config_id,
+        "mix_type_id": t.mix_type_id,
+        "mix_standard_id": t.mix_standard_id,
+        "audio_codec_id": t.audio_codec_id,
+        "sample_rate_hz": t.sample_rate_hz,
+        "bit_depth": t.bit_depth,
+        "is_optional": t.is_optional,
+        "notes": t.notes,
+    }
+
+
+def _serialize_item(it: DeliveryItem, with_tracks: bool = True) -> dict:
+    out = {
+        "id": it.id,
+        "tenant_id": it.tenant_id,
+        "delivery_template_id": it.delivery_template_id,
+        "name": it.name,
+        "sort_order": it.sort_order,
+        "package_id": it.package_id,
+        "package_variant_notes": it.package_variant_notes,
+        "container_id": it.container_id,
+        "video_codec_id": it.video_codec_id,
+        "video_bit_depth": it.video_bit_depth,
+        "chroma_subsampling": it.chroma_subsampling,
+        "resolution_id": it.resolution_id,
+        "aspect_ratio": it.aspect_ratio,
+        "frame_rate_id": it.frame_rate_id,
+        "scan_type": it.scan_type,
+        "color_space": it.color_space,
+        "hdr_format": it.hdr_format,
+        "subtitle_format": it.subtitle_format,
+        "subtitle_languages": it.subtitle_languages,
+        "suggested_unit": it.suggested_unit,
+        "suggested_qty": it.suggested_qty,
+        "suggested_price_item_id": it.suggested_price_item_id,
+        "extra_specs": it.extra_specs,
+        "notes": it.notes,
+        "ai_extracted": it.ai_extracted,
+        "ai_confidence": it.ai_confidence,
+        "pending_review": it.pending_review,
+        "is_active": it.is_active,
+    }
+    if with_tracks:
+        out["audio_tracks"] = [_serialize_track(t) for t in sorted(it.audio_tracks, key=lambda x: x.sort_order)]
+    return out
+
+
+def _scoped_taxonomy(db: Session, tenant_id: int):
+    """Helper: return per-tenant + global preset records, active only, ordered."""
+    def _q(Model):
+        return db.query(Model).filter(
+            or_(Model.tenant_id == tenant_id, Model.tenant_id.is_(None)),
+            Model.is_active == True,  # noqa: E712
+        ).order_by(Model.sort_order, Model.id).all()
+    return _q
+
+
+# ── Items: list / detail / CRUD ─────────────────────────────
+
+@router.get("/delivery-templates/api/{tid}/items")
+async def list_items(tid: int, db: Session = Depends(get_db)):
+    """Lista DeliveryItem di un template (solo attivi)."""
+    items = (
+        db.query(DeliveryItem)
+        .options(selectinload(DeliveryItem.audio_tracks))
+        .filter(
+            DeliveryItem.delivery_template_id == tid,
+            DeliveryItem.tenant_id == current_tenant_id(),
+            DeliveryItem.is_active == True,  # noqa: E712
+        )
+        .order_by(DeliveryItem.sort_order, DeliveryItem.id)
+        .all()
+    )
+    return {"items": [_serialize_item(it) for it in items]}
+
+
+@router.get("/delivery-items/api/{iid}")
+async def get_item(iid: int, db: Session = Depends(get_db)):
+    it = (
+        db.query(DeliveryItem)
+        .options(selectinload(DeliveryItem.audio_tracks))
+        .filter(
+            DeliveryItem.id == iid,
+            DeliveryItem.tenant_id == current_tenant_id(),
+        )
+        .first()
+    )
+    if not it:
+        raise HTTPException(404, "DeliveryItem non trovato")
+    return _serialize_item(it)
+
+
+@router.post("/delivery-templates/api/{tid}/items", dependencies=[RequireEdit])
+async def create_item_manual(
+    tid: int,
+    name: str = Form(...),
+    package_id: Optional[int] = Form(None),
+    container_id: Optional[int] = Form(None),
+    video_codec_id: Optional[int] = Form(None),
+    video_bit_depth: Optional[int] = Form(None),
+    chroma_subsampling: Optional[str] = Form(None),
+    resolution_id: Optional[int] = Form(None),
+    aspect_ratio: Optional[str] = Form(None),
+    frame_rate_id: Optional[int] = Form(None),
+    scan_type: Optional[str] = Form(None),
+    color_space: Optional[str] = Form(None),
+    hdr_format: Optional[str] = Form(None),
+    subtitle_format: Optional[str] = Form(None),
+    suggested_unit: Optional[str] = Form(None),
+    suggested_qty: Optional[float] = Form(None),
+    suggested_price_item_id: Optional[int] = Form(None),
+    notes: Optional[str] = Form(None),
+    db: Session = Depends(get_db),
+):
+    tpl = db.query(DeliveryTemplate).filter(
+        DeliveryTemplate.id == tid,
+        DeliveryTemplate.tenant_id == current_tenant_id(),
+    ).first()
+    if not tpl:
+        raise HTTPException(404, "DeliveryTemplate non trovato")
+    last_sort = db.query(DeliveryItem).filter(
+        DeliveryItem.delivery_template_id == tid,
+    ).count() * 10
+    it = DeliveryItem(
+        tenant_id=current_tenant_id(),
+        delivery_template_id=tid,
+        name=name.strip(),
+        sort_order=last_sort,
+        package_id=package_id,
+        container_id=container_id,
+        video_codec_id=video_codec_id,
+        video_bit_depth=video_bit_depth,
+        chroma_subsampling=chroma_subsampling or None,
+        resolution_id=resolution_id,
+        aspect_ratio=aspect_ratio or None,
+        frame_rate_id=frame_rate_id,
+        scan_type=scan_type or None,
+        color_space=color_space or None,
+        hdr_format=hdr_format or None,
+        subtitle_format=subtitle_format or None,
+        suggested_unit=suggested_unit or None,
+        suggested_qty=suggested_qty,
+        suggested_price_item_id=suggested_price_item_id,
+        notes=notes or None,
+        ai_extracted=False,
+    )
+    db.add(it)
+    db.commit()
+    db.refresh(it)
+    return _serialize_item(it)
+
+
+@router.put("/delivery-items/api/{iid}", dependencies=[RequireEdit])
+async def update_item(
+    iid: int,
+    name: Optional[str] = Form(None),
+    package_id: Optional[int] = Form(None),
+    package_variant_notes: Optional[str] = Form(None),
+    container_id: Optional[int] = Form(None),
+    video_codec_id: Optional[int] = Form(None),
+    video_bit_depth: Optional[int] = Form(None),
+    chroma_subsampling: Optional[str] = Form(None),
+    resolution_id: Optional[int] = Form(None),
+    aspect_ratio: Optional[str] = Form(None),
+    frame_rate_id: Optional[int] = Form(None),
+    scan_type: Optional[str] = Form(None),
+    color_space: Optional[str] = Form(None),
+    hdr_format: Optional[str] = Form(None),
+    subtitle_format: Optional[str] = Form(None),
+    subtitle_languages: Optional[str] = Form(None),  # JSON list
+    suggested_unit: Optional[str] = Form(None),
+    suggested_qty: Optional[float] = Form(None),
+    suggested_price_item_id: Optional[int] = Form(None),
+    extra_specs: Optional[str] = Form(None),  # JSON
+    notes: Optional[str] = Form(None),
+    pending_review: Optional[bool] = Form(None),
+    sort_order: Optional[int] = Form(None),
+    db: Session = Depends(get_db),
+):
+    it = db.query(DeliveryItem).filter(
+        DeliveryItem.id == iid,
+        DeliveryItem.tenant_id == current_tenant_id(),
+    ).first()
+    if not it:
+        raise HTTPException(404, "DeliveryItem non trovato")
+
+    if name is not None:                     it.name = name.strip()
+    if package_id is not None:               it.package_id = package_id or None
+    if package_variant_notes is not None:    it.package_variant_notes = package_variant_notes.strip() or None
+    if container_id is not None:             it.container_id = container_id or None
+    if video_codec_id is not None:           it.video_codec_id = video_codec_id or None
+    if video_bit_depth is not None:          it.video_bit_depth = video_bit_depth or None
+    if chroma_subsampling is not None:       it.chroma_subsampling = chroma_subsampling.strip() or None
+    if resolution_id is not None:            it.resolution_id = resolution_id or None
+    if aspect_ratio is not None:             it.aspect_ratio = aspect_ratio.strip() or None
+    if frame_rate_id is not None:            it.frame_rate_id = frame_rate_id or None
+    if scan_type is not None:                it.scan_type = scan_type.strip() or None
+    if color_space is not None:              it.color_space = color_space.strip() or None
+    if hdr_format is not None:               it.hdr_format = hdr_format.strip() or None
+    if subtitle_format is not None:          it.subtitle_format = subtitle_format.strip() or None
+    if subtitle_languages is not None:
+        try:
+            v = json.loads(subtitle_languages) if subtitle_languages.strip() else None
+            if v is not None and not isinstance(v, list):
+                raise ValueError("must be list")
+            it.subtitle_languages = v
+        except (json.JSONDecodeError, ValueError) as e:
+            raise HTTPException(400, f"subtitle_languages JSON invalido: {e}")
+    if suggested_unit is not None:           it.suggested_unit = suggested_unit.strip() or None
+    if suggested_qty is not None:            it.suggested_qty = suggested_qty
+    if suggested_price_item_id is not None:  it.suggested_price_item_id = suggested_price_item_id or None
+    if extra_specs is not None:
+        try:
+            it.extra_specs = json.loads(extra_specs) if extra_specs.strip() else None
+        except json.JSONDecodeError as e:
+            raise HTTPException(400, f"extra_specs JSON invalido: {e}")
+    if notes is not None:                    it.notes = notes.strip() or None
+    if pending_review is not None:           it.pending_review = pending_review
+    if sort_order is not None:               it.sort_order = sort_order
+
+    db.commit()
+    db.refresh(it)
+    return _serialize_item(it)
+
+
+@router.delete("/delivery-items/api/{iid}", dependencies=[RequireEdit])
+async def delete_item(iid: int, db: Session = Depends(get_db)):
+    """Soft-delete (is_active=False)."""
+    it = db.query(DeliveryItem).filter(
+        DeliveryItem.id == iid,
+        DeliveryItem.tenant_id == current_tenant_id(),
+    ).first()
+    if not it:
+        raise HTTPException(404, "DeliveryItem non trovato")
+    it.is_active = False
+    db.commit()
+    return {"ok": True, "id": iid}
+
+
+# ── AudioTrackSpec CRUD ─────────────────────────────────────
+
+@router.post("/delivery-items/api/{iid}/audio-tracks", dependencies=[RequireEdit])
+async def add_audio_track(
+    iid: int,
+    track_label: str = Form(...),
+    channel_config_id: Optional[int] = Form(None),
+    mix_type_id: Optional[int] = Form(None),
+    mix_standard_id: Optional[int] = Form(None),
+    audio_codec_id: Optional[int] = Form(None),
+    sample_rate_hz: Optional[int] = Form(None),
+    bit_depth: Optional[int] = Form(None),
+    is_optional: bool = Form(False),
+    notes: Optional[str] = Form(None),
+    db: Session = Depends(get_db),
+):
+    it = db.query(DeliveryItem).filter(
+        DeliveryItem.id == iid,
+        DeliveryItem.tenant_id == current_tenant_id(),
+    ).first()
+    if not it:
+        raise HTTPException(404, "DeliveryItem non trovato")
+    last = db.query(AudioTrackSpec).filter(AudioTrackSpec.delivery_item_id == iid).count() * 10
+    tr = AudioTrackSpec(
+        delivery_item_id=iid,
+        sort_order=last,
+        track_label=track_label.strip(),
+        channel_config_id=channel_config_id or None,
+        mix_type_id=mix_type_id or None,
+        mix_standard_id=mix_standard_id or None,
+        audio_codec_id=audio_codec_id or None,
+        sample_rate_hz=sample_rate_hz or None,
+        bit_depth=bit_depth or None,
+        is_optional=is_optional,
+        notes=notes.strip() if notes else None,
+    )
+    db.add(tr)
+    db.commit()
+    db.refresh(tr)
+    return _serialize_track(tr)
+
+
+@router.put("/delivery-audio-tracks/api/{aid}", dependencies=[RequireEdit])
+async def update_audio_track(
+    aid: int,
+    track_label: Optional[str] = Form(None),
+    channel_config_id: Optional[int] = Form(None),
+    mix_type_id: Optional[int] = Form(None),
+    mix_standard_id: Optional[int] = Form(None),
+    audio_codec_id: Optional[int] = Form(None),
+    sample_rate_hz: Optional[int] = Form(None),
+    bit_depth: Optional[int] = Form(None),
+    is_optional: Optional[bool] = Form(None),
+    notes: Optional[str] = Form(None),
+    sort_order: Optional[int] = Form(None),
+    db: Session = Depends(get_db),
+):
+    tr = db.query(AudioTrackSpec).join(DeliveryItem).filter(
+        AudioTrackSpec.id == aid,
+        DeliveryItem.tenant_id == current_tenant_id(),
+    ).first()
+    if not tr:
+        raise HTTPException(404, "AudioTrack non trovato")
+    if track_label is not None:       tr.track_label = track_label.strip() or tr.track_label
+    if channel_config_id is not None: tr.channel_config_id = channel_config_id or None
+    if mix_type_id is not None:       tr.mix_type_id = mix_type_id or None
+    if mix_standard_id is not None:   tr.mix_standard_id = mix_standard_id or None
+    if audio_codec_id is not None:    tr.audio_codec_id = audio_codec_id or None
+    if sample_rate_hz is not None:    tr.sample_rate_hz = sample_rate_hz or None
+    if bit_depth is not None:         tr.bit_depth = bit_depth or None
+    if is_optional is not None:       tr.is_optional = is_optional
+    if notes is not None:             tr.notes = notes.strip() or None
+    if sort_order is not None:        tr.sort_order = sort_order
+    db.commit()
+    db.refresh(tr)
+    return _serialize_track(tr)
+
+
+@router.delete("/delivery-audio-tracks/api/{aid}", dependencies=[RequireEdit])
+async def delete_audio_track(aid: int, db: Session = Depends(get_db)):
+    tr = db.query(AudioTrackSpec).join(DeliveryItem).filter(
+        AudioTrackSpec.id == aid,
+        DeliveryItem.tenant_id == current_tenant_id(),
+    ).first()
+    if not tr:
+        raise HTTPException(404, "AudioTrack non trovato")
+    db.delete(tr)
+    db.commit()
+    return {"ok": True, "id": aid}
+
+
+# ── Taxonomy lookup (dropdowns UI) ──────────────────────────
+
+@router.get("/delivery-taxonomy/api")
+async def get_taxonomy(db: Session = Depends(get_db)):
+    """Vocabolario completo (preset globali + tenant-owned) per dropdown UI.
+    Output ricco: include attributi semantici utili per cliente (typical_use,
+    family, channel_count, ecc)."""
+    tenant_id = current_tenant_id()
+    _q = _scoped_taxonomy(db, tenant_id)
+    return {
+        "packages": [
+            {"id": r.id, "name": r.name, "typical_use": r.typical_use,
+             "structure_desc": r.structure_desc, "is_preset_global": r.is_preset_global}
+            for r in _q(Package)
+        ],
+        "containers": [
+            {"id": r.id, "name": r.name, "extension": r.extension, "op_pattern": r.op_pattern,
+             "is_image_sequence": r.is_image_sequence, "media_kind": r.media_kind,
+             "is_preset_global": r.is_preset_global}
+            for r in _q(Container)
+        ],
+        "video_codecs": [
+            {"id": r.id, "name": r.name, "family": r.family, "profile_flavor": r.profile_flavor,
+             "typical_use": r.typical_use, "is_intermediate": r.is_intermediate,
+             "is_preset_global": r.is_preset_global}
+            for r in _q(VideoCodec)
+        ],
+        "audio_codecs": [
+            {"id": r.id, "name": r.name, "family": r.family, "is_lossless": r.is_lossless,
+             "is_preset_global": r.is_preset_global}
+            for r in _q(AudioCodec)
+        ],
+        "channel_configs": [
+            {"id": r.id, "name": r.name, "channel_count": r.channel_count,
+             "spec_string": r.spec_string, "is_immersive": r.is_immersive,
+             "is_preset_global": r.is_preset_global}
+            for r in _q(AudioChannelConfig)
+        ],
+        "mix_types": [
+            {"id": r.id, "name": r.name, "short_label": r.short_label,
+             "is_preset_global": r.is_preset_global}
+            for r in _q(AudioMixType)
+        ],
+        "mix_standards": [
+            {"id": r.id, "name": r.name, "family": r.family,
+             "loudness_target_lufs": r.loudness_target_lufs,
+             "true_peak_max_dbtp": r.true_peak_max_dbtp,
+             "standard_ref": r.standard_ref, "is_preset_global": r.is_preset_global}
+            for r in _q(MixStandard)
+        ],
+        "resolutions": [
+            {"id": r.id, "name": r.name, "width": r.width, "height": r.height,
+             "framing_aspect": r.framing_aspect, "family": r.family,
+             "is_preset_global": r.is_preset_global}
+            for r in _q(Resolution)
+        ],
+        "frame_rates": [
+            {"id": r.id, "name": r.name, "fps": r.fps, "is_drop_frame": r.is_drop_frame,
+             "is_ntsc_family": r.is_ntsc_family, "is_preset_global": r.is_preset_global}
+            for r in _q(FrameRate)
+        ],
+    }
+
+
+# ── AI extract (re-parse capitolato → materialize items) ────
+
+@router.post("/delivery-templates/api/{tid}/items/ai-extract", dependencies=[RequireEdit])
+async def ai_extract_items(tid: int, request: Request, db: Session = Depends(get_db)):
+    """Esegue parse_delivery_items_v2 sul source_document del template + materialize.
+    Idempotente per (name, template). Ritorna count saved/skipped."""
+    tpl = db.query(DeliveryTemplate).filter(
+        DeliveryTemplate.id == tid,
+        DeliveryTemplate.tenant_id == current_tenant_id(),
+    ).first()
+    if not tpl:
+        raise HTTPException(404, "DeliveryTemplate non trovato")
+    if not tpl.source_document_name:
+        raise HTTPException(400, "Template senza source_document_name (creato manualmente?). "
+                                  "Aggiungi un capitolato in docs/capitolati_esempio/ e rilancia.")
+    proj_root = Path(__file__).resolve().parents[2]
+    fpath = (proj_root / "docs" / "capitolati_esempio" / tpl.source_document_name).resolve()
+    samples_dir = (proj_root / "docs" / "capitolati_esempio").resolve()
+    try:
+        fpath.relative_to(samples_dir)
+    except ValueError:
+        raise HTTPException(400, "filename fuori scope")
+    if not fpath.is_file():
+        raise HTTPException(404, f"Capitolato sorgente non trovato: {tpl.source_document_name}")
+    # Provider AI per-utente
+    from app.services.ai_provider import get_provider_for_user, get_provider
+    from app.services.deliverables_parser import extract_text_from_file
+    from app.services.delivery_items_parser import parse_delivery_items_v2, materialize_items
+    user = current_user_optional(request)
+    provider = get_provider_for_user(user.id, db) if user else None
+    if not provider:
+        provider = get_provider()
+    if not provider:
+        raise HTTPException(503, "AI provider non configurato.")
+    content = fpath.read_bytes()
+    if not content:
+        raise HTTPException(400, "Capitolato vuoto.")
+    text = extract_text_from_file(content, tpl.source_document_name)
+    if not text or len(text.strip()) < 20:
+        raise HTTPException(400, "Estrazione testo fallita (PDF image-only?).")
+    parsed = parse_delivery_items_v2(text, db, tenant_id=current_tenant_id(), provider=provider)
+    if not parsed:
+        diag = getattr(provider, "last_extract_diag", None) or {}
+        raise HTTPException(503, f"Parser AI failed. Diag: {diag.get('error') or 'no detail'}")
+    saved, skipped = materialize_items(db, tid, parsed, tenant_id=current_tenant_id())
+    return {
+        "ok": True,
+        "items_extracted": len(parsed.get("items") or []),
+        "saved": saved,
+        "skipped": skipped,
+        "pass1_categories": parsed.get("pass1_categories") or [],
+    }
