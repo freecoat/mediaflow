@@ -1,5 +1,19 @@
 # MediaFlow — Changelog
 
+## v3.5.0-alpha.172.102 — Folder badge: stacked statiche ~85% overlap (no ventaglio) (28 mag 2026)
+
+Refactor del layout stacked status cards in folder `/quotes/`. Pre-α.172.102 (α.172.99): ventaglio rotato con animation hover (Matteo: "non mi piace"). Post: cards sovrapposte ~85% statiche, label visibile SOLO sulla top card (priority più alta visibile), sotto-cards mostrano solo sliver di colore (10-15px) come segnaposto stato.
+
+**CSS (`quotes.html`)**:
+- `.qstatus-chip.stacked` → `min-width: 70px; text-align: center; box-shadow: -2px 0 4px rgba(0,0,0,0.35)` (shadow solo lato sinistro per dare profondità "carte impilate").
+- `.qstatus-chip.stacked.under` → `color: transparent !important; margin-left: -60px` (~85% di min-width 70px → ~10px sliver visibile per ogni card sotto).
+- No più animation/transition/hover spread. Tooltip nativo HTML mostra label di ogni card al hover.
+
+**JS `stackedStatusCards`**:
+- Ordine HTML: reverse (priority alta → bassa). Card top (priority bassa nel sort priority asc, es. "Approvata" priority=1) viene scritta per ULTIMA → z-index naturale la mette sopra senza override.
+- Sotto-cards riceveranno classe `under` (label nascosta + margin sovrapposto).
+- Identificazione discrete dello stato via colore: verde (Approvata), indaco (Inviata), grigio (Bozza), ambra (Scaduta), rosso (Rifiutata).
+
 ## v3.5.0-alpha.172.101 — Bundle L Stack 2 milestone 3/3 CLOSE: pytest QC (28 mag 2026)
 
 Stack 2 di Bundle L chiuso completo. 28 test pytest su QC event-sourced foundation, tutti green.
