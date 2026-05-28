@@ -2260,7 +2260,18 @@ def cashflow_year_sync(
     if client_ids:
         inv_q = inv_q.filter(Invoice.client_id.in_(client_ids))
     if project_ids:
-        inv_q = inv_q.join(Job, Invoice.job_id == Job.id).filter(Job.project_id.in_(project_ids))
+        # v3.5.0-alpha.172.103 — Fix Matteo: filtro progetto usava SOLO join via
+        # Job, ma molte Invoice (es. acconti, kind=advance) hanno project_id
+        # denormalizzato diretto con job_id=NULL. Il vecchio filtro escludeva
+        # tutto -> "filtri progetto = tutto a 0". Ora outer-join + OR su
+        # Invoice.project_id direct OR Job.project_id.
+        from sqlalchemy import or_ as _or
+        inv_q = inv_q.outerjoin(Job, Invoice.job_id == Job.id).filter(
+            _or(
+                Invoice.project_id.in_(project_ids),
+                Job.project_id.in_(project_ids),
+            )
+        )
     invoices = inv_q.all()
     invoice_ids = [i.id for i in invoices]
 
@@ -2272,6 +2283,8 @@ def cashflow_year_sync(
     # Matching NC<->TD01: stesso client_id, stesso total (tolleranza 0.01),
     # NC issue_date >= TD01 issue_date. Heuristico ma robusto in mancanza di FK.
     # Una NC consuma una TD01 (1:1), no double-count.
+    def extract_year_safe(d):
+        return d.year if d else None
     all_inv_for_match = db.query(Invoice).filter(
         Invoice.status != InvoiceStatus.draft,
     ).all()
@@ -2287,6 +2300,7 @@ def cashflow_year_sync(
     # precedente o uguale.
     stornata_ids: set = set()
     consumed_nc_ids: set = set()
+    td01_id_to_nc_id: dict = {}  # mapping per re-include NC sotto filtro project
     cancelled_td01 = [
         i for i in all_inv_for_match
         if i.status == InvoiceStatus.cancelled
@@ -2304,7 +2318,24 @@ def cashflow_year_sync(
                 continue
             stornata_ids.add(td01.id)
             consumed_nc_ids.add(nc.id)
+            td01_id_to_nc_id[td01.id] = nc.id
             break
+
+    # v3.5.0-alpha.172.103 fix 2/2 — Re-include NC TD04 quando la TD01 stornata
+    # passa il filtro corrente. Senza questo, filtro project_id=X include la TD01
+    # (project_id valorizzato) ma NON la NC (project_id NULL spesso) → saldo
+    # rimane positivo fantasma (= valore TD01 senza la NC che la storna).
+    nc_by_id = {nc.id: nc for nc in all_inv_for_match if getattr(nc, "doc_type", None) == "TD04"}
+    invoice_ids_set = set(invoice_ids)
+    for td01 in invoices:
+        if td01.id in stornata_ids:
+            nc_id = td01_id_to_nc_id.get(td01.id)
+            if nc_id and nc_id not in invoice_ids_set:
+                nc = nc_by_id.get(nc_id)
+                if nc and extract_year_safe(nc.issue_date) == year:
+                    invoices.append(nc)
+                    invoice_ids.append(nc.id)
+                    invoice_ids_set.add(nc.id)
 
     invoices_missing_date: list[int] = []
     cancelled_orphan_ids: list[int] = []

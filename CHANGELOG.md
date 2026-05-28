@@ -1,6 +1,24 @@
 # MediaFlow — Changelog
 
-## v3.5.0-alpha.172.103 — Cashflow fix: cancelled orfane escluse (Matteo bug Cattleya) (28 mag 2026)
+## v3.5.0-alpha.172.104 — Cashflow follow-up: filtro project_id denorm + NC re-include (28 mag 2026)
+
+Due fix complementari emersi durante verifica del fix α.172.103 (cancelled orfane). Matteo segnalava "Se attivo filtri progetti è tutto a 0".
+
+**Fix 1 — Filtro `project_id` includeva solo Job-linked invoice** (`app/routers/finance.py:cashflow_year_sync`):
+- Root cause: 9/10 invoice Cattleya avevano `Invoice.project_id=1` denormalizzato MA `Invoice.job_id=NULL` (caso acconti/invoice senza job assegnato).
+- Vecchio filtro: `inv_q.join(Job, Invoice.job_id == Job.id).filter(Job.project_id.in_(project_ids))` → escludeva tutte le invoice senza job.
+- Fix: `inv_q.outerjoin(Job, Invoice.job_id == Job.id).filter(or_(Invoice.project_id.in_(project_ids), Job.project_id.in_(project_ids)))`.
+
+**Fix 2 — Re-include NC TD04 sotto filtro project**:
+- Root cause: NC TD04 spesso ha `project_id=NULL` (no propagation automatica da TD01 stornata al momento di emissione).
+- Conseguenza pre-fix: filtro `project_id=X` includeva TD01 cancelled (project valorizzato) + skip della NC TD04 (project NULL) → saldo positivo fantasma (= valore TD01 senza la NC che la storna).
+- Fix: `td01_id_to_nc_id` mapping calcolato nel pre-pass storni. Post-fetch `invoices` filtrate, re-include nel set le NC matchate per TD01 nella lista filtrata (anche se NC.project_id NULL).
+
+**Verifica DB Matteo**: tutti 3 scenari (no-filter, filter project=1, filter client=2) ora convergono a `invoiced=18025.50` (solo TD01#2 paid, sopravvissuta non-stornata). Pre-fix: filter project=1 → 30042.50 (= 18025.50 + 12017 TD01 stornata ma NC esclusa).
+
+**Backlog futuro** (decorrelato da questo fix): aggiungere propagation automatica `project_id` a NC TD04 quando creata da TD01 esistente. Eliminerebbe la necessità del re-include post-hoc.
+
+## v3.5.0-alpha.172.103 — Cashflow fix: cancelled orfane escluse (bug Cattleya 88650) (28 mag 2026)
 
 Bug Matteo: cashflow mostrava fatturato **88.650€ NET maggio 2026** (Cattleya), valore non riconoscibile. Root cause inspection:
 - 8 TD01 cancelled stesso giorno (24/05/2026) per Cattleya: 1×14775 + 7×9850
