@@ -1,5 +1,42 @@
 # MediaFlow — Changelog
 
+## v3.5.0-alpha.172.116 — Tier 2.3 admin taxonomy CRUD + Tier 2.5 JobDeliverable FK (28 mag 2026)
+
+**Tier 2.5 — JobDeliverable.delivery_item_id FK + UI cascading**
+
+- `JobDeliverable.delivery_item_id` FK aggiunta al modello (`models.py`), nullable + index.
+- `_auto_migrate_columns()` in main.py: ALTER TABLE job_deliverables ADD COLUMN.
+- Fix encoding char α nei print di auto-migrate (causava UnicodeEncodeError su Windows cp1252 console, bloccando migration). Replace `α172`→`a172`.
+- `POST /jobs/api/{job_id}/deliverables` accetta `delivery_item_id` Form. Salvato sul DeliveryItem creato.
+- UI `modal-new-deliverable` (job_detail.html): sezione "📦 Capitolato + Item" cascading:
+  - Dropdown "Capitolato" popolato da `/delivery-templates/api/list` all'apertura modal.
+  - On change → `dlvLoadItemsForTemplate(tid)`: fetch `/delivery-templates/api/{tid}/items` → popola dropdown items.
+  - On item change → `dlvApplyItemSpecs()`: auto-fill nome (se vuoto), suggested_qty, resolution/framerate/audio_config dai FK taxonomy, preview visivo specs effettive (Package · Container · VideoCodec · Resolution · FPS · HDR · ColorSpace · audio tracks).
+  - `saveDeliverable()` invia `delivery_template_id` + `delivery_item_id` nel POST.
+
+**Tier 2.3 — Admin UI taxonomy CRUD + import/export JSON**
+
+Endpoint CRUD generici parametrici per tutte le 9 entity (delivery_items.py):
+
+- `GET /delivery-taxonomy/api/{kind}` — lista preset globali + tenant-owned.
+- `POST /delivery-taxonomy/api/{kind}` — create custom tenant-owned (`is_preset_global=False`). Form generico con name + tutti i campi extra applicabili. Validazione unicità per (tenant, name).
+- `PUT /delivery-taxonomy/api/{kind}/{rec_id}` — update. Read-only su preset globali (403).
+- `DELETE /delivery-taxonomy/api/{kind}/{rec_id}` — soft-delete (`is_active=False`). Read-only su preset globali (403).
+- `GET /delivery-taxonomy/api/export.json` — esporta tutta la taxonomy custom del tenant come JSON.
+- `POST /delivery-taxonomy/api/import` — importa JSON (formato export). Crea solo record con name nuovo.
+
+`_coerce_field()`: helper che converte stringa form a tipo column SQLAlchemy atteso (bool/int/float/str) usando `column.type.python_type`. Tollerante (None per parsing failed).
+
+Pagina UI `/settings/delivery-taxonomy` (delivery_taxonomy.html nuovo):
+
+- Tabs 9 entity (📦 Packages, 🎞 Containers, 🎬 Video codecs, 🎵 Audio codecs, 🔊 Channels, 🎚 Mix types, 📏 Mix standards, 📐 Resolutions, ⏱ Frame rates).
+- Tabella con colonne dinamiche (campi specifici per entity da `DTX_FIELDS` JS map allineata a `_EXTRA_FIELDS` server).
+- Badge 🔒 GLOBAL (preset, read-only) vs ✎ CUSTOM (tenant editabile).
+- Bottoni footer cell: ✎ edit, ✕ disattiva (solo su CUSTOM).
+- Modal editor con form a campi tipizzati (bool=checkbox, int/float=number step, text=input, textarea per description).
+- Bottoni topbar: ⬇ Export JSON (download), ⬆ Import JSON (file picker + POST con conferma counts).
+- Counter "N record (X preset · Y custom)".
+
 ## v3.5.0-alpha.172.114 — Tier 2.1+2.2: router DeliveryItem + UI tabs Items in /delivery-templates (28 mag 2026)
 
 **Tier 2.1 — Router API (app/routers/delivery_items.py)**

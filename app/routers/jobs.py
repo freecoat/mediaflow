@@ -676,6 +676,7 @@ async def create_deliverable(
     job_cost_line_id: Optional[int] = Form(None),
     price_item_id: Optional[int] = Form(None),
     delivery_template_id: Optional[int] = Form(None),
+    delivery_item_id: Optional[int] = Form(None),  # v3.5.0-alpha.172.115 Tier 2.5
     primary_resource_id: Optional[int] = Form(None),
     estimated_hours: Optional[float] = Form(None),
     target_delivery_date: Optional[str] = Form(None),
@@ -738,6 +739,7 @@ async def create_deliverable(
             nature=nature_enum,
             status=DeliverableStatus.planned,
             delivery_template_id=delivery_template_id,
+            delivery_item_id=delivery_item_id,
             primary_resource_id=primary_resource_id,
             estimated_hours=estimated_hours,
             target_delivery_date=target_d,

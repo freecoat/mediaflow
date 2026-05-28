@@ -18,6 +18,8 @@ import logging
 from typing import Optional
 from pathlib import Path
 from fastapi import APIRouter, Depends, HTTPException, Form, Request
+from fastapi.responses import HTMLResponse
+from fastapi.templating import Jinja2Templates
 from sqlalchemy import or_
 from sqlalchemy.orm import Session, selectinload
 
@@ -32,8 +34,17 @@ from app.context import current_tenant_id
 
 logger = logging.getLogger(__name__)
 router = APIRouter(tags=["delivery_items"])
+templates_engine = Jinja2Templates(directory="app/templates")
 
 RequireEdit = Depends(requires_permission("manage_settings_global"))
+
+
+@router.get("/settings/delivery-taxonomy", response_class=HTMLResponse)
+async def delivery_taxonomy_page(request: Request):
+    """Pagina UI admin per gestire taxonomy delivery."""
+    return templates_engine.TemplateResponse(
+        "pages/delivery_taxonomy.html", {"request": request},
+    )
 
 
 # ── Serializers ─────────────────────────────────────────────
@@ -436,6 +447,214 @@ async def get_taxonomy(db: Session = Depends(get_db)):
             for r in _q(FrameRate)
         ],
     }
+
+
+# ── Taxonomy admin CRUD (Tier 2.3) ──────────────────────────
+#
+# Endpoint generici per CRUD su ogni entity taxonomy. Permette ad admin di
+# aggiungere/editare/disattivare voci custom tenant-specific. Preset globali
+# (is_preset_global=True) sono read-only.
+
+_ENTITY_MAP = {
+    "packages":         Package,
+    "containers":       Container,
+    "video_codecs":     VideoCodec,
+    "audio_codecs":     AudioCodec,
+    "channel_configs":  AudioChannelConfig,
+    "mix_types":        AudioMixType,
+    "mix_standards":    MixStandard,
+    "resolutions":      Resolution,
+    "frame_rates":      FrameRate,
+}
+
+# Campi base presenti su tutti i modelli
+_BASE_FIELDS = {"name", "description", "sort_order", "is_active", "is_preset_global"}
+
+# Campi specifici per entity (oltre _BASE_FIELDS): per validazione + serializzazione
+_EXTRA_FIELDS = {
+    "packages":        ["typical_use", "structure_desc"],
+    "containers":      ["extension", "op_pattern", "is_image_sequence", "media_kind"],
+    "video_codecs":    ["family", "profile_flavor", "typical_use", "typical_bitrate", "is_intermediate"],
+    "audio_codecs":    ["family", "is_lossless"],
+    "channel_configs": ["channel_count", "spec_string", "is_immersive"],
+    "mix_types":       ["short_label"],
+    "mix_standards":   ["family", "loudness_target_lufs", "true_peak_max_dbtp", "spl_reference_dbc", "standard_ref"],
+    "resolutions":     ["width", "height", "framing_aspect", "family"],
+    "frame_rates":     ["fps", "is_drop_frame", "is_ntsc_family"],
+}
+
+
+def _serialize_taxonomy(rec, kind: str) -> dict:
+    """Serializza un record taxonomy con tutti i campi base + extra."""
+    out = {f: getattr(rec, f, None) for f in _BASE_FIELDS}
+    out["id"] = rec.id
+    out["tenant_id"] = rec.tenant_id
+    for f in _EXTRA_FIELDS.get(kind, []):
+        out[f] = getattr(rec, f, None)
+    return out
+
+
+def _coerce_field(model_cls, field_name: str, raw_value: str):
+    """Convert form string a tipo SQLAlchemy column atteso. None se vuoto."""
+    if raw_value is None:
+        return None
+    s = raw_value.strip() if isinstance(raw_value, str) else raw_value
+    if isinstance(s, str) and s == "":
+        return None
+    col = model_cls.__table__.c.get(field_name)
+    if col is None:
+        return s
+    try:
+        py_type = col.type.python_type
+    except (NotImplementedError, AttributeError):
+        return s
+    if py_type is bool:
+        if isinstance(s, bool):
+            return s
+        return str(s).strip().lower() in ("true", "1", "yes", "on", "y", "si")
+    if py_type is int:
+        try: return int(s)
+        except (ValueError, TypeError): return None
+    if py_type is float:
+        try: return float(s)
+        except (ValueError, TypeError): return None
+    return str(s)
+
+
+@router.get("/delivery-taxonomy/api/{kind}")
+async def list_taxonomy_entity(kind: str, db: Session = Depends(get_db)):
+    """Lista record di una entity taxonomy (preset globali + tenant-owned attivi)."""
+    Model = _ENTITY_MAP.get(kind)
+    if not Model:
+        raise HTTPException(404, f"Entity '{kind}' non valida. Disponibili: {list(_ENTITY_MAP)}")
+    rows = (
+        db.query(Model)
+        .filter(or_(Model.tenant_id == current_tenant_id(), Model.tenant_id.is_(None)))
+        .order_by(Model.is_preset_global.desc(), Model.sort_order, Model.id)
+        .all()
+    )
+    return {"entity": kind, "items": [_serialize_taxonomy(r, kind) for r in rows]}
+
+
+@router.post("/delivery-taxonomy/api/{kind}", dependencies=[RequireEdit])
+async def create_taxonomy_entity(
+    kind: str, request: Request, db: Session = Depends(get_db),
+):
+    """Crea un record custom tenant-owned per la entity. Form: name (obblig) +
+    tutti i campi extra applicabili come stringa."""
+    Model = _ENTITY_MAP.get(kind)
+    if not Model:
+        raise HTTPException(404, f"Entity '{kind}' non valida")
+    form = await request.form()
+    name = (form.get("name") or "").strip()
+    if not name:
+        raise HTTPException(400, "name obbligatorio")
+    # Verifica unicità per tenant
+    exists = db.query(Model).filter(
+        Model.tenant_id == current_tenant_id(),
+        Model.name == name,
+    ).first()
+    if exists:
+        raise HTTPException(400, f"name '{name}' già esistente per questo tenant")
+    kwargs = {"tenant_id": current_tenant_id(), "name": name, "is_preset_global": False}
+    for f in _EXTRA_FIELDS.get(kind, []) + ["description", "sort_order"]:
+        if f in form:
+            kwargs[f] = _coerce_field(Model, f, form.get(f))
+    rec = Model(**kwargs)
+    db.add(rec)
+    db.commit()
+    db.refresh(rec)
+    return _serialize_taxonomy(rec, kind)
+
+
+@router.put("/delivery-taxonomy/api/{kind}/{rec_id}", dependencies=[RequireEdit])
+async def update_taxonomy_entity(
+    kind: str, rec_id: int, request: Request, db: Session = Depends(get_db),
+):
+    """Update record taxonomy. Read-only su preset globali."""
+    Model = _ENTITY_MAP.get(kind)
+    if not Model:
+        raise HTTPException(404, f"Entity '{kind}' non valida")
+    rec = db.query(Model).filter(Model.id == rec_id).first()
+    if not rec:
+        raise HTTPException(404, "Record non trovato")
+    if rec.is_preset_global:
+        raise HTTPException(403, "Preset globale è read-only. Crea un override custom.")
+    if rec.tenant_id != current_tenant_id():
+        raise HTTPException(403, "Record di altro tenant")
+    form = await request.form()
+    for f in ["name", "description", "sort_order", "is_active"] + _EXTRA_FIELDS.get(kind, []):
+        if f in form:
+            setattr(rec, f, _coerce_field(Model, f, form.get(f)))
+    db.commit()
+    db.refresh(rec)
+    return _serialize_taxonomy(rec, kind)
+
+
+@router.delete("/delivery-taxonomy/api/{kind}/{rec_id}", dependencies=[RequireEdit])
+async def delete_taxonomy_entity(
+    kind: str, rec_id: int, db: Session = Depends(get_db),
+):
+    """Soft-delete (is_active=False). Read-only su preset globali."""
+    Model = _ENTITY_MAP.get(kind)
+    if not Model:
+        raise HTTPException(404, f"Entity '{kind}' non valida")
+    rec = db.query(Model).filter(Model.id == rec_id).first()
+    if not rec:
+        raise HTTPException(404, "Record non trovato")
+    if rec.is_preset_global:
+        raise HTTPException(403, "Preset globale non eliminabile")
+    if rec.tenant_id != current_tenant_id():
+        raise HTTPException(403, "Record di altro tenant")
+    rec.is_active = False
+    db.commit()
+    return {"ok": True, "id": rec_id}
+
+
+@router.get("/delivery-taxonomy/api/export.json", dependencies=[RequireEdit])
+async def export_taxonomy(db: Session = Depends(get_db)):
+    """Esporta TUTTA la taxonomy custom del tenant (no preset globali) come JSON."""
+    out = {"tenant_id": current_tenant_id(), "exported_at": None, "entities": {}}
+    from datetime import datetime as _dt
+    out["exported_at"] = _dt.utcnow().isoformat()
+    for kind, Model in _ENTITY_MAP.items():
+        rows = (
+            db.query(Model)
+            .filter(Model.tenant_id == current_tenant_id())
+            .order_by(Model.sort_order, Model.id)
+            .all()
+        )
+        out["entities"][kind] = [_serialize_taxonomy(r, kind) for r in rows]
+    return out
+
+
+@router.post("/delivery-taxonomy/api/import", dependencies=[RequireEdit])
+async def import_taxonomy(request: Request, db: Session = Depends(get_db)):
+    """Importa taxonomy JSON (formato export). Crea solo record nuovi (name unique).
+    Body: `{"entities": {"packages": [...], ...}}`"""
+    body = await request.json()
+    entities = body.get("entities") or {}
+    stats = {"created": 0, "skipped": 0}
+    for kind, items in entities.items():
+        Model = _ENTITY_MAP.get(kind)
+        if not Model:
+            continue
+        existing = {r.name for r in db.query(Model.name).filter(
+            Model.tenant_id == current_tenant_id()
+        ).all()}
+        for it in items or []:
+            name = (it.get("name") or "").strip()
+            if not name or name in existing:
+                stats["skipped"] += 1
+                continue
+            kwargs = {"tenant_id": current_tenant_id(), "name": name, "is_preset_global": False}
+            for f in _EXTRA_FIELDS.get(kind, []) + ["description", "sort_order"]:
+                if f in it and it[f] is not None:
+                    kwargs[f] = it[f]
+            db.add(Model(**kwargs))
+            stats["created"] += 1
+    db.commit()
+    return {"ok": True, **stats}
 
 
 # ── AI extract (re-parse capitolato → materialize items) ────

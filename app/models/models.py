@@ -3236,6 +3236,13 @@ class JobDeliverable(Base):
     delivery_template_id: Mapped[Optional[int]] = mapped_column(
         ForeignKey("delivery_templates.id"), nullable=True
     )
+    # v3.5.0-alpha.172.115 (Tier 2.5) — FK al DeliveryItem strutturato che
+    # specifica le tech specs di questo file consegnato. Convive con
+    # spec_json (legacy 8-block JSON) per back-compat; in futuro UI nuovo
+    # deliverable popola SOLO delivery_item_id e legge specs via join.
+    delivery_item_id: Mapped[Optional[int]] = mapped_column(
+        ForeignKey("delivery_items.id"), nullable=True, index=True,
+    )
     spec_json: Mapped[Optional[dict]] = mapped_column(JSON, nullable=True)
     # Produzione
     primary_resource_id: Mapped[Optional[int]] = mapped_column(

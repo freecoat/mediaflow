@@ -1151,10 +1151,12 @@ def _auto_migrate_restructure_phase1():
                 ("billing_batch_id",     "INTEGER REFERENCES billing_batches(id)"),
                 ("billed_amount",        "FLOAT"),
                 ("deleted_by_user_id",   "INTEGER REFERENCES users(id)"),
+                # v3.5.0-alpha.172.115 (Tier 2.5) — FK al DeliveryItem strutturato
+                ("delivery_item_id",     "INTEGER REFERENCES delivery_items(id)"),
             ]
             for col, ddl in jd_alters:
                 if col not in jd_cols:
-                    print(f"[auto-migrate-α172] job_deliverables.{col} -> ALTER")
+                    print(f"[auto-migrate-a172] job_deliverables.{col} -> ALTER")
                     conn.execute(text(f"ALTER TABLE job_deliverables ADD COLUMN {col} {ddl}"))
 
             q_cols = cols("quotes")
@@ -1163,18 +1165,18 @@ def _auto_migrate_restructure_phase1():
                 ("subtotal_gross_deliverable", "FLOAT NOT NULL DEFAULT 0"),
             ]:
                 if col not in q_cols:
-                    print(f"[auto-migrate-α172] quotes.{col} -> ALTER")
+                    print(f"[auto-migrate-a172] quotes.{col} -> ALTER")
                     conn.execute(text(f"ALTER TABLE quotes ADD COLUMN {col} {ddl}"))
 
             pi_cols = cols("price_items")
             if "unit_nature" not in pi_cols:
-                print("[auto-migrate-α172] price_items.unit_nature -> ALTER")
+                print("[auto-migrate-a172] price_items.unit_nature -> ALTER")
                 conn.execute(text(
                     "ALTER TABLE price_items ADD COLUMN unit_nature VARCHAR(32) "
                     "NOT NULL DEFAULT 'deliverable_qty'"
                 ))
     except Exception as e:
-        print(f"[auto-migrate-α172] failed: {e}")
+        print(f"[auto-migrate-a172] failed: {e}")
 
 
 def _auto_migrate_bundle_i():
@@ -2061,7 +2063,7 @@ async def lifespan(app: FastAPI):
     yield
 
 
-app = FastAPI(title="Claqo", version="3.5.0-alpha.172.114", lifespan=lifespan)
+app = FastAPI(title="Claqo", version="3.5.0-alpha.172.116", lifespan=lifespan)
 
 BASE_DIR = Path(__file__).parent
 app.mount("/static", StaticFiles(directory=BASE_DIR / "static"), name="static")

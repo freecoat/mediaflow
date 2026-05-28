@@ -230,6 +230,23 @@
     <div class="modal-header"><span class="modal-title">Nuovo deliverable</span>
       <button class="btn btn-ghost btn-icon" onclick="closeModal('modal-new-deliverable')">✕</button></div>
     <div class="modal-body">
+      <!-- v3.5.0-alpha.172.115 (Tier 2.5) — Cascading template → item con auto-fill specs -->
+      <div class="form-group" style="background:rgba(98,114,245,.06);border:1px solid rgba(98,114,245,.18);border-radius:6px;padding:10px 12px;margin-bottom:12px;">
+        <label class="form-label" style="margin-bottom:6px;font-weight:600;">📦 Capitolato + Item (precompila specs)</label>
+        <div class="form-row" style="margin-bottom:6px;">
+          <div class="form-group" style="margin:0;">
+            <select class="form-select" id="dlv-template" onchange="dlvLoadItemsForTemplate()">
+              <option value="">— scegli capitolato —</option>
+            </select>
+          </div>
+          <div class="form-group" style="margin:0;">
+            <select class="form-select" id="dlv-item" onchange="dlvApplyItemSpecs()" disabled>
+              <option value="">— scegli item —</option>
+            </select>
+          </div>
+        </div>
+        <div id="dlv-item-preview" style="display:none;font-size:11px;color:var(--text3);padding:6px 8px;background:var(--bg3);border-radius:4px;"></div>
+      </div>
       <div class="form-row">
         <div class="form-group" style="flex:2;"><label class="form-label">Nome *</label>
           <input class="form-input" id="dlv-name" placeholder="Es: DCP INTEROP 2K — Featurette IT" maxlength="255"></div>
@@ -1084,7 +1101,118 @@ async function openNewDeliverable() {
       (resources || []).map(r => `<option value="${r.id}">${escapeHtml(r.name)} (${escapeHtml(r.role||'')})</option>`).join('');
   } catch(e) { /* silent */ }
 
+  // v3.5.0-alpha.172.115 (Tier 2.5) — Carica capitolati delivery per cascading
+  try {
+    const dts = await api('GET', '/delivery-templates/api/list');
+    const sel = document.getElementById('dlv-template');
+    sel.innerHTML = '<option value="">— nessuno —</option>' +
+      (dts || []).map(t => `<option value="${t.id}">${escapeHtml(t.code || '')} · ${escapeHtml(t.name || '')}</option>`).join('');
+    document.getElementById('dlv-item').innerHTML = '<option value="">— scegli capitolato sopra —</option>';
+    document.getElementById('dlv-item').disabled = true;
+    document.getElementById('dlv-item-preview').style.display = 'none';
+  } catch(e) { /* silent */ }
+
   openModal('modal-new-deliverable');
+}
+
+// v3.5.0-alpha.172.115 (Tier 2.5) — Cascading: load items quando template scelto
+let _dlvTaxonomyCache = null;
+async function _dlvLoadTaxonomyOnce() {
+  if (_dlvTaxonomyCache) return _dlvTaxonomyCache;
+  try { _dlvTaxonomyCache = await api('GET', '/delivery-taxonomy/api'); }
+  catch(e) { _dlvTaxonomyCache = {packages:[],containers:[],video_codecs:[],audio_codecs:[],channel_configs:[],mix_types:[],mix_standards:[],resolutions:[],frame_rates:[]}; }
+  return _dlvTaxonomyCache;
+}
+function _dlvTaxLookup(list, id) {
+  if (!id || !list) return null;
+  return list.find(x => x.id === id) || null;
+}
+let _dlvCurrentItems = [];
+async function dlvLoadItemsForTemplate() {
+  const tid = document.getElementById('dlv-template').value;
+  const itemSel = document.getElementById('dlv-item');
+  const preview = document.getElementById('dlv-item-preview');
+  _dlvCurrentItems = [];
+  preview.style.display = 'none';
+  if (!tid) {
+    itemSel.innerHTML = '<option value="">— scegli capitolato sopra —</option>';
+    itemSel.disabled = true;
+    return;
+  }
+  itemSel.disabled = true;
+  itemSel.innerHTML = '<option value="">⏳ Caricamento items…</option>';
+  try {
+    const r = await api('GET', `/delivery-templates/api/${tid}/items`);
+    _dlvCurrentItems = r.items || [];
+    if (!_dlvCurrentItems.length) {
+      itemSel.innerHTML = '<option value="">— nessun item (apri il template e clicca "Estrai items via AI") —</option>';
+      itemSel.disabled = true;
+      return;
+    }
+    itemSel.innerHTML = '<option value="">— scegli item —</option>' +
+      _dlvCurrentItems.map(it => `<option value="${it.id}">${escapeHtml(it.name)}</option>`).join('');
+    itemSel.disabled = false;
+  } catch(e) {
+    itemSel.innerHTML = '<option value="">— errore caricamento —</option>';
+    itemSel.disabled = true;
+  }
+}
+
+async function dlvApplyItemSpecs() {
+  const iid = parseInt(document.getElementById('dlv-item').value, 10);
+  const preview = document.getElementById('dlv-item-preview');
+  if (!iid) { preview.style.display = 'none'; return; }
+  const item = _dlvCurrentItems.find(x => x.id === iid);
+  if (!item) { preview.style.display = 'none'; return; }
+  const tax = await _dlvLoadTaxonomyOnce();
+  // Auto-fill nome se vuoto
+  const nameEl = document.getElementById('dlv-name');
+  if (!nameEl.value.trim()) nameEl.value = item.name;
+  // Suggested unit/qty
+  if (item.suggested_unit) {
+    const qtyEl = document.getElementById('dlv-qty');
+    if (qtyEl && (qtyEl.value === '' || qtyEl.value === '1') && item.suggested_qty) {
+      qtyEl.value = Math.max(1, Math.round(item.suggested_qty));
+    }
+  }
+  // Auto-fill spec fields se vuoti
+  const res = _dlvTaxLookup(tax.resolutions, item.resolution_id);
+  if (res && !document.getElementById('dlv-spec-resolution').value) {
+    document.getElementById('dlv-spec-resolution').value = res.name;
+  }
+  const fr = _dlvTaxLookup(tax.frame_rates, item.frame_rate_id);
+  if (fr && !document.getElementById('dlv-spec-framerate').value) {
+    document.getElementById('dlv-spec-framerate').value = `${fr.fps}`;
+  }
+  if ((item.audio_tracks || []).length && !document.getElementById('dlv-spec-audio').value) {
+    const firstTrack = item.audio_tracks[0];
+    const cc = _dlvTaxLookup(tax.channel_configs, firstTrack.channel_config_id);
+    if (cc) document.getElementById('dlv-spec-audio').value = cc.name;
+  }
+  // Preview summary visivo
+  const parts = [];
+  const pkg = _dlvTaxLookup(tax.packages, item.package_id);
+  if (pkg) parts.push(`📦 ${pkg.name}`);
+  const cnt = _dlvTaxLookup(tax.containers, item.container_id);
+  if (cnt) parts.push(`🎞 ${cnt.name}`);
+  const vc = _dlvTaxLookup(tax.video_codecs, item.video_codec_id);
+  if (vc) parts.push(`🎬 ${vc.name}`);
+  if (res) parts.push(`📐 ${res.name}`);
+  if (fr) parts.push(`⏱ ${fr.fps}fps`);
+  if (item.hdr_format && item.hdr_format !== 'SDR') parts.push(`🌈 ${item.hdr_format}`);
+  if (item.color_space) parts.push(`🎨 ${item.color_space}`);
+  const audioBits = (item.audio_tracks || []).slice(0, 3).map(t => {
+    const cc = _dlvTaxLookup(tax.channel_configs, t.channel_config_id);
+    const mt = _dlvTaxLookup(tax.mix_types, t.mix_type_id);
+    return `${cc ? cc.name : '?'}${mt ? '/' + mt.short_label : ''}`;
+  });
+  if (audioBits.length) parts.push(`🔊 ${audioBits.join(' + ')}`);
+  preview.textContent = '';
+  const b = document.createElement('b');
+  b.textContent = 'Specs auto-fill: ';
+  preview.appendChild(b);
+  preview.appendChild(document.createTextNode(parts.join(' · ')));
+  preview.style.display = '';
 }
 
 // Live preview del naming quando cambiano i campi spec
@@ -1137,6 +1265,11 @@ async function saveDeliverable() {
   if (pi) fd.append('price_item_id', pi);
   const res = document.getElementById('dlv-resource').value;
   if (res) fd.append('primary_resource_id', res);
+  // v3.5.0-alpha.172.115 (Tier 2.5) — FK al template + item strutturato
+  const dtpl = document.getElementById('dlv-template').value;
+  if (dtpl) fd.append('delivery_template_id', dtpl);
+  const ditem = document.getElementById('dlv-item').value;
+  if (ditem) fd.append('delivery_item_id', ditem);
   const hours = document.getElementById('dlv-hours').value;
   if (hours) fd.append('estimated_hours', hours);
   const target = document.getElementById('dlv-target').value;

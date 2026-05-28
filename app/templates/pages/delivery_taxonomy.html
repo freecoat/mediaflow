@@ -1,0 +1,300 @@
+{% extends "base.html" %}
+{% block title %}Taxonomy Delivery — Claqo{% endblock %}
+{% block content %}
+<div class="container-fluid" style="padding:20px;">
+  <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;">
+    <div>
+      <h1 style="margin:0;font-size:20px;">🗂 Taxonomy Delivery</h1>
+      <p class="text-sm text-muted" style="margin:4px 0 0;">
+        Vocabolario tecnico (Package/Container/Codec/Audio/Resolution/Frame rate) usato per
+        strutturare delivery items. Preset globali sono read-only; aggiungi voci custom per il tuo tenant.
+      </p>
+    </div>
+    <div style="display:flex;gap:8px;">
+      <button class="btn btn-secondary btn-sm" onclick="dtxExport()">⬇ Export JSON</button>
+      <button class="btn btn-secondary btn-sm" onclick="document.getElementById('dtx-import-file').click()">⬆ Import JSON</button>
+      <input type="file" id="dtx-import-file" accept="application/json,.json" style="display:none;" onchange="dtxImport(this)">
+    </div>
+  </div>
+
+  <div class="tabs" id="dtx-tabs" style="margin-bottom:14px;border-bottom:1px solid var(--border);display:flex;gap:0;flex-wrap:wrap;">
+    <div class="tab is-active" data-kind="packages"        onclick="dtxSwitch('packages')">📦 Packages</div>
+    <div class="tab" data-kind="containers"      onclick="dtxSwitch('containers')">🎞 Containers</div>
+    <div class="tab" data-kind="video_codecs"    onclick="dtxSwitch('video_codecs')">🎬 Video codecs</div>
+    <div class="tab" data-kind="audio_codecs"    onclick="dtxSwitch('audio_codecs')">🎵 Audio codecs</div>
+    <div class="tab" data-kind="channel_configs" onclick="dtxSwitch('channel_configs')">🔊 Channels</div>
+    <div class="tab" data-kind="mix_types"       onclick="dtxSwitch('mix_types')">🎚 Mix types</div>
+    <div class="tab" data-kind="mix_standards"   onclick="dtxSwitch('mix_standards')">📏 Mix standards</div>
+    <div class="tab" data-kind="resolutions"     onclick="dtxSwitch('resolutions')">📐 Resolutions</div>
+    <div class="tab" data-kind="frame_rates"     onclick="dtxSwitch('frame_rates')">⏱ Frame rates</div>
+  </div>
+
+  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
+    <div id="dtx-counter" class="text-sm text-muted"></div>
+    <button class="btn btn-primary btn-sm" onclick="dtxOpenEditor(null)">+ Nuovo record custom</button>
+  </div>
+
+  <div id="dtx-list-host"></div>
+</div>
+
+<script>
+// Schema campi extra per entity (allineato a _EXTRA_FIELDS lato server)
+const DTX_FIELDS = {
+  packages:        [{k:'typical_use',type:'text'},{k:'structure_desc',type:'textarea'}],
+  containers:      [{k:'extension',type:'text'},{k:'op_pattern',type:'text'},{k:'is_image_sequence',type:'bool'},{k:'media_kind',type:'text'}],
+  video_codecs:    [{k:'family',type:'text'},{k:'profile_flavor',type:'text'},{k:'typical_use',type:'text'},{k:'typical_bitrate',type:'text'},{k:'is_intermediate',type:'bool'}],
+  audio_codecs:    [{k:'family',type:'text'},{k:'is_lossless',type:'bool'}],
+  channel_configs: [{k:'channel_count',type:'int'},{k:'spec_string',type:'text'},{k:'is_immersive',type:'bool'}],
+  mix_types:       [{k:'short_label',type:'text'}],
+  mix_standards:   [{k:'family',type:'text'},{k:'loudness_target_lufs',type:'float'},{k:'true_peak_max_dbtp',type:'float'},{k:'spl_reference_dbc',type:'float'},{k:'standard_ref',type:'text'}],
+  resolutions:     [{k:'width',type:'int'},{k:'height',type:'int'},{k:'framing_aspect',type:'text'},{k:'family',type:'text'}],
+  frame_rates:     [{k:'fps',type:'float'},{k:'is_drop_frame',type:'bool'},{k:'is_ntsc_family',type:'bool'}],
+};
+
+let _dtxCurrentKind = 'packages';
+let _dtxCurrentItems = [];
+
+async function dtxSwitch(kind) {
+  _dtxCurrentKind = kind;
+  document.querySelectorAll('#dtx-tabs .tab').forEach(t => {
+    t.classList.toggle('is-active', t.dataset.kind === kind);
+  });
+  await dtxReload();
+}
+
+async function dtxReload() {
+  const host = document.getElementById('dtx-list-host');
+  host.innerHTML = '<div class="text-muted text-sm" style="padding:20px;">Caricamento…</div>';
+  try {
+    const r = await api('GET', `/delivery-taxonomy/api/${_dtxCurrentKind}`);
+    _dtxCurrentItems = r.items || [];
+    const presetCount = _dtxCurrentItems.filter(it => it.is_preset_global).length;
+    const customCount = _dtxCurrentItems.length - presetCount;
+    document.getElementById('dtx-counter').textContent =
+      `${_dtxCurrentItems.length} record (${presetCount} preset globali · ${customCount} custom tenant)`;
+    dtxRender(host);
+  } catch(e) {
+    host.innerHTML = `<div class="text-sm" style="color:#ef4444;padding:20px;">Errore: ${e.message||''}</div>`;
+  }
+}
+
+function dtxRender(host) {
+  host.innerHTML = '';
+  if (!_dtxCurrentItems.length) {
+    host.innerHTML = '<div class="text-muted text-sm" style="padding:30px;text-align:center;">Nessun record. Clicca "+ Nuovo" per aggiungerne uno.</div>';
+    return;
+  }
+  const fields = DTX_FIELDS[_dtxCurrentKind] || [];
+  const table = document.createElement('table');
+  table.style.cssText = 'width:100%;font-size:12px;border-collapse:collapse;';
+  const thead = document.createElement('thead');
+  thead.innerHTML = `<tr style="background:var(--bg3);color:var(--text2);">
+    <th style="text-align:left;padding:8px;width:24%;">Nome</th>
+    ${fields.map(f => `<th style="text-align:left;padding:8px;">${f.k}</th>`).join('')}
+    <th style="text-align:center;padding:8px;width:80px;">Origin</th>
+    <th style="text-align:center;padding:8px;width:90px;">Stato</th>
+    <th style="padding:8px;width:80px;"></th>
+  </tr>`;
+  table.appendChild(thead);
+  const tbody = document.createElement('tbody');
+  _dtxCurrentItems.forEach(it => {
+    const tr = document.createElement('tr');
+    tr.style.cssText = 'border-bottom:1px solid var(--border);' + (it.is_active ? '' : 'opacity:.4;');
+    const nameCell = document.createElement('td');
+    nameCell.style.padding = '6px 8px';
+    const b = document.createElement('b'); b.textContent = it.name;
+    nameCell.appendChild(b);
+    if (it.description) {
+      const sub = document.createElement('div');
+      sub.style.cssText = 'font-size:11px;color:var(--text3);margin-top:2px;';
+      sub.textContent = it.description.slice(0, 80) + (it.description.length > 80 ? '…' : '');
+      nameCell.appendChild(sub);
+    }
+    tr.appendChild(nameCell);
+    fields.forEach(f => {
+      const td = document.createElement('td');
+      td.style.padding = '6px 8px';
+      const v = it[f.k];
+      if (v === null || v === undefined) td.textContent = '—';
+      else if (f.type === 'bool') td.textContent = v ? '✓' : '✗';
+      else td.textContent = String(v);
+      tr.appendChild(td);
+    });
+    const tdOrigin = document.createElement('td');
+    tdOrigin.style.cssText = 'padding:6px 8px;text-align:center;';
+    if (it.is_preset_global) {
+      tdOrigin.innerHTML = '<span style="padding:1px 6px;background:rgba(98,114,245,.15);color:#6272f5;border-radius:8px;font-size:10px;">🔒 GLOBAL</span>';
+    } else {
+      tdOrigin.innerHTML = '<span style="padding:1px 6px;background:rgba(34,197,94,.15);color:#22c55e;border-radius:8px;font-size:10px;">✎ CUSTOM</span>';
+    }
+    tr.appendChild(tdOrigin);
+    const tdStatus = document.createElement('td');
+    tdStatus.style.cssText = 'padding:6px 8px;text-align:center;font-size:11px;';
+    tdStatus.textContent = it.is_active ? 'Attivo' : 'Disattivo';
+    tr.appendChild(tdStatus);
+    const tdAct = document.createElement('td');
+    tdAct.style.cssText = 'padding:6px 8px;text-align:center;';
+    if (!it.is_preset_global) {
+      const ed = document.createElement('button');
+      ed.className = 'btn btn-ghost btn-sm';
+      ed.style.cssText = 'font-size:11px;padding:1px 6px;';
+      ed.textContent = '✎';
+      ed.onclick = () => dtxOpenEditor(it);
+      tdAct.appendChild(ed);
+      const rm = document.createElement('button');
+      rm.className = 'btn btn-ghost btn-sm';
+      rm.style.cssText = 'font-size:11px;padding:1px 6px;color:#ef4444;';
+      rm.textContent = '✕';
+      rm.onclick = async () => {
+        if (!confirm(`Disattivare "${it.name}"?`)) return;
+        try {
+          await api('DELETE', `/delivery-taxonomy/api/${_dtxCurrentKind}/${it.id}`);
+          toast('Disattivato', 'success', 1500);
+          await dtxReload();
+        } catch(e) { toast(`Errore: ${e.message||''}`, 'error'); }
+      };
+      tdAct.appendChild(rm);
+    }
+    tr.appendChild(tdAct);
+    tbody.appendChild(tr);
+  });
+  table.appendChild(tbody);
+  host.appendChild(table);
+}
+
+function dtxOpenEditor(item) {
+  const isNew = !item;
+  const ov = document.createElement('div');
+  ov.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.7);z-index:2000;display:flex;align-items:center;justify-content:center;';
+  const box = document.createElement('div');
+  box.style.cssText = 'background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:18px;width:520px;max-height:90vh;overflow:auto;display:flex;flex-direction:column;';
+  const title = document.createElement('div');
+  title.style.cssText = 'font-weight:600;font-size:14px;margin-bottom:14px;';
+  title.textContent = isNew ? `+ Nuovo record (${_dtxCurrentKind})` : `✎ Modifica: ${item.name}`;
+  box.appendChild(title);
+  const v = item || {};
+  const fields = DTX_FIELDS[_dtxCurrentKind] || [];
+  const form = document.createElement('div');
+  form.style.cssText = 'display:flex;flex-direction:column;gap:10px;';
+  // Name field
+  form.innerHTML = `
+    <div><label style="font-size:11px;color:var(--text3);text-transform:uppercase;">Name *</label>
+      <input class="form-input" id="dtx-fld-name" value="${escapeHtml(v.name||'')}"></div>
+    <div><label style="font-size:11px;color:var(--text3);text-transform:uppercase;">Description</label>
+      <textarea class="form-input" id="dtx-fld-description" rows="2">${escapeHtml(v.description||'')}</textarea></div>
+    <div><label style="font-size:11px;color:var(--text3);text-transform:uppercase;">Sort order</label>
+      <input class="form-input" id="dtx-fld-sort_order" type="number" value="${v.sort_order||0}"></div>
+  `;
+  fields.forEach(f => {
+    const wrap = document.createElement('div');
+    const lbl = document.createElement('label');
+    lbl.style.cssText = 'font-size:11px;color:var(--text3);text-transform:uppercase;';
+    lbl.textContent = f.k;
+    wrap.appendChild(lbl);
+    let el;
+    if (f.type === 'bool') {
+      el = document.createElement('label');
+      el.style.cssText = 'display:flex;align-items:center;gap:6px;font-size:12px;margin-top:4px;';
+      const cb = document.createElement('input');
+      cb.type = 'checkbox';
+      cb.id = 'dtx-fld-' + f.k;
+      cb.checked = !!v[f.k];
+      el.appendChild(cb);
+      el.appendChild(document.createTextNode('Sì'));
+    } else if (f.type === 'textarea') {
+      el = document.createElement('textarea');
+      el.className = 'form-input'; el.rows = 2;
+      el.id = 'dtx-fld-' + f.k;
+      el.value = v[f.k] != null ? String(v[f.k]) : '';
+    } else {
+      el = document.createElement('input');
+      el.className = 'form-input';
+      el.type = (f.type === 'int' || f.type === 'float') ? 'number' : 'text';
+      if (f.type === 'float') el.step = 'any';
+      el.id = 'dtx-fld-' + f.k;
+      el.value = v[f.k] != null ? String(v[f.k]) : '';
+    }
+    wrap.appendChild(el);
+    form.appendChild(wrap);
+  });
+  box.appendChild(form);
+
+  const footer = document.createElement('div');
+  footer.style.cssText = 'margin-top:14px;display:flex;justify-content:flex-end;gap:8px;';
+  const cancelBtn = document.createElement('button');
+  cancelBtn.className = 'btn btn-secondary btn-sm';
+  cancelBtn.textContent = 'Annulla';
+  cancelBtn.onclick = () => ov.remove();
+  footer.appendChild(cancelBtn);
+  const saveBtn = document.createElement('button');
+  saveBtn.className = 'btn btn-primary btn-sm';
+  saveBtn.textContent = isNew ? 'Crea' : 'Salva';
+  saveBtn.onclick = async () => {
+    const name = document.getElementById('dtx-fld-name').value.trim();
+    if (!name) { toast('Name obbligatorio', 'error'); return; }
+    const fd = new FormData();
+    fd.append('name', name);
+    fd.append('description', document.getElementById('dtx-fld-description').value);
+    fd.append('sort_order', document.getElementById('dtx-fld-sort_order').value || '0');
+    fields.forEach(f => {
+      const el = document.getElementById('dtx-fld-' + f.k);
+      if (!el) return;
+      if (f.type === 'bool') fd.append(f.k, el.checked ? 'true' : 'false');
+      else fd.append(f.k, el.value);
+    });
+    try {
+      const url = isNew
+        ? `/delivery-taxonomy/api/${_dtxCurrentKind}`
+        : `/delivery-taxonomy/api/${_dtxCurrentKind}/${item.id}`;
+      const method = isNew ? 'POST' : 'PUT';
+      const r = await fetch(url, {method, body: fd, credentials: 'same-origin'});
+      if (!r.ok) { const err = await r.json().catch(()=>({})); throw new Error(err.detail || 'Errore'); }
+      toast(isNew ? 'Creato' : 'Salvato', 'success', 1500);
+      ov.remove();
+      await dtxReload();
+    } catch(e) { toast(`Errore: ${e.message||''}`, 'error', 4000); }
+  };
+  footer.appendChild(saveBtn);
+  box.appendChild(footer);
+  ov.appendChild(box);
+  document.body.appendChild(ov);
+  setTimeout(() => document.getElementById('dtx-fld-name').focus(), 50);
+}
+
+async function dtxExport() {
+  try {
+    const r = await fetch('/delivery-taxonomy/api/export.json', {credentials: 'same-origin'});
+    if (!r.ok) throw new Error('Errore export');
+    const blob = await r.blob();
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `delivery-taxonomy-tenant-export-${Date.now()}.json`;
+    document.body.appendChild(a); a.click(); document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    toast('Export OK', 'success', 1500);
+  } catch(e) { toast(`Errore: ${e.message||''}`, 'error', 3000); }
+}
+
+async function dtxImport(input) {
+  const file = input.files[0];
+  if (!file) return;
+  try {
+    const txt = await file.text();
+    const json = JSON.parse(txt);
+    const r = await fetch('/delivery-taxonomy/api/import', {
+      method: 'POST', body: JSON.stringify(json),
+      headers: {'Content-Type':'application/json'}, credentials: 'same-origin',
+    });
+    if (!r.ok) { const err = await r.json().catch(()=>({})); throw new Error(err.detail || 'Errore'); }
+    const result = await r.json();
+    toast(`Import OK: ${result.created} creati, ${result.skipped} skip`, 'success', 3000);
+    await dtxReload();
+  } catch(e) { toast(`Errore import: ${e.message||''}`, 'error', 4000); }
+  input.value = '';
+}
+
+// Init
+window.addEventListener('DOMContentLoaded', () => { dtxReload(); });
+</script>
+{% endblock %}

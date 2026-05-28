@@ -8,6 +8,20 @@
 
 ## Versione corrente
 
+**v3.5.0-alpha.172.116** — 28 maggio 2026 — Tier 2.3 admin taxonomy CRUD + Tier 2.5 JobDeliverable FK
+
+Tier 2.5: JobDeliverable.delivery_item_id FK aggiunto + UI cascading in `modal-new-deliverable` di job_detail.html (dropdown Capitolato → Item con auto-fill nome/qty/specs preview).
+
+Tier 2.3: endpoint CRUD generici per 9 entity taxonomy con preset globali read-only + custom tenant-owned editabili. Pagina `/settings/delivery-taxonomy` con 9 tabs + tabella dinamica + modal editor + export/import JSON.
+
+Tier 2.4 (batch re-parse 13 templates) ANCORA IN CORSO background: 2/13 fatti (RAI 24 items + GTM 3). Stima fine ~25 min.
+
+### Prossima sessione
+
+Verifica batch completion (DeliveryItem totali in DB). Test browser tier 2.2+2.3+2.5 + raffina UI dove serve. Backlog originale Matteo /delivery-templates COMPLETO eccetto rename template (mini-task).
+
+---
+
 **v3.5.0-alpha.172.114** — 28 maggio 2026 — Tier 2.1+2.2: router DeliveryItem + UI tabs Items
 
 Router REST per DeliveryItem + AudioTrackSpec con tenant_scope + permission gate. Endpoint `/delivery-taxonomy/api` per dropdown UI. Endpoint `/delivery-templates/api/{tid}/items/ai-extract` per re-parsing capitolato sorgente con materialize_items().
