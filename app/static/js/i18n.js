@@ -571,8 +571,162 @@ function applyI18n(root) {
       if (!replaced) el.textContent = translated;
     }
   });
+  // v3.5.0-alpha.172.107 — pass 2: auto-swap DOM scan brutale per coprire le
+  // 61 stringhe italiane comuni (Annulla, Salva, Cliente, Stato, ecc.) anche
+  // dove i template NON hanno ancora data-i18n. Chiamato sempre (anche it,
+  // per ripristinare il testo originale dopo round-trip cambio lingua).
+  applyAutoSwap(root, lang);
 }
 window.applyI18n = applyI18n;
+
+// v3.5.0-alpha.172.107 — auto-swap dictionary (61 stringhe comuni)
+// Coprono ~60% delle stringhe italiane piu' usate (audit i18n_audit.py).
+// Le restanti 139 stringhe (TODO_TRANSLATE) richiedono traduzione manuale
+// o batch AI: vedi tools/i18n_patch_suggestions.md.
+window.MF_I18N_AUTO_SWAP = {
+  'common.annulla': { it: 'Annulla', en: 'Cancel', fr: 'Annuler', de: 'Abbrechen', es: 'Cancelar' },
+  'common.caricamento': { it: 'Caricamento…', en: 'Loading…', fr: 'Chargement…', de: 'Laden…', es: 'Cargando…' },
+  'common.stato': { it: 'Stato', en: 'Status', fr: 'Statut', de: 'Status', es: 'Estado' },
+  'common.salva': { it: 'Salva', en: 'Save', fr: 'Enregistrer', de: 'Speichern', es: 'Guardar' },
+  'common.elimina': { it: 'Elimina', en: 'Delete', fr: 'Supprimer', de: 'Löschen', es: 'Eliminar' },
+  'common.progetto': { it: 'Progetto', en: 'Project', fr: 'Projet', de: 'Projekt', es: 'Proyecto' },
+  'common.cliente': { it: 'Cliente', en: 'Client', fr: 'Client', de: 'Kunde', es: 'Cliente' },
+  'common.risorsa': { it: 'Risorsa', en: 'Resource', fr: 'Ressource', de: 'Ressource', es: 'Recurso' },
+  'common.data': { it: 'Data', en: 'Date', fr: 'Date', de: 'Datum', es: 'Fecha' },
+  'common.lavorazione': { it: 'Lavorazione', en: 'Operation', fr: 'Opération', de: 'Arbeitsschritt', es: 'Operación' },
+  'common.voce': { it: 'Voce', en: 'Item', fr: 'Article', de: 'Posten', es: 'Concepto' },
+  'common.attivo': { it: 'Attivo', en: 'Active', fr: 'Actif', de: 'Aktiv', es: 'Activo' },
+  'common.risorse': { it: 'Risorse', en: 'Resources', fr: 'Ressources', de: 'Ressourcen', es: 'Recursos' },
+  'common.ricerca': { it: 'Ricerca', en: 'Search', fr: 'Recherche', de: 'Suche', es: 'Búsqueda' },
+  'common.bozza': { it: 'Bozza', en: 'Draft', fr: 'Brouillon', de: 'Entwurf', es: 'Borrador' },
+  'common.caricamento_2': { it: 'Caricamento...', en: 'Loading...', fr: 'Chargement...', de: 'Laden...', es: 'Cargando...' },
+  'common.quotazione': { it: 'Quotazione', en: 'Quote', fr: 'Devis', de: 'Angebot', es: 'Cotización' },
+  'common.quotazioni': { it: 'Quotazioni', en: 'Quotes', fr: 'Devis', de: 'Angebote', es: 'Cotizaciones' },
+  'common.crea': { it: 'Crea', en: 'Create', fr: 'Créer', de: 'Erstellen', es: 'Crear' },
+  'common.clienti': { it: 'Clienti', en: 'Clients', fr: 'Clients', de: 'Kunden', es: 'Clientes' },
+  'common.ore': { it: 'Ore', en: 'Hours', fr: 'Heures', de: 'Stunden', es: 'Horas' },
+  'common.inviata': { it: 'Inviata', en: 'Sent', fr: 'Envoyée', de: 'Gesendet', es: 'Enviada' },
+  'common.opzionale': { it: '(opzionale)', en: '(optional)', fr: '(facultatif)', de: '(optional)', es: '(opcional)' },
+  'common.progetti': { it: 'Progetti', en: 'Projects', fr: 'Projets', de: 'Projekte', es: 'Proyectos' },
+  'common.totale': { it: 'Totale', en: 'Total', fr: 'Total', de: 'Gesamt', es: 'Total' },
+  'common.approvata': { it: 'Approvata', en: 'Approved', fr: 'Approuvée', de: 'Genehmigt', es: 'Aprobada' },
+  'auto.invia': { it: 'Invia', en: 'Send', fr: 'Envoyer', de: 'Senden', es: 'Enviar' },
+  'auto.caricamento': { it: 'caricamento…', en: 'Loading…', fr: 'Chargement…', de: 'Laden…', es: 'Cargando…' },
+  'auto.settimana': { it: 'Settimana', en: 'Week', fr: 'Semaine', de: 'Woche', es: 'Semana' },
+  'auto.mese': { it: 'Mese', en: 'Month', fr: 'Mois', de: 'Monat', es: 'Mes' },
+  'auto.errore': { it: 'Errore', en: 'Error', fr: 'Erreur', de: 'Fehler', es: 'Error' },
+  'auto.ora': { it: 'Ora', en: 'Hour', fr: 'Heure', de: 'Stunde', es: 'Hora' },
+  'auto.scaduta': { it: 'Scaduta', en: 'Expired', fr: 'Expirée', de: 'Abgelaufen', es: 'Vencida' },
+  'auto.errore_2': { it: 'Errore:', en: 'Error:', fr: 'Erreur :', de: 'Fehler:', es: 'Error:' },
+  'auto.fornitore': { it: 'Fornitore', en: 'Supplier', fr: 'Fournisseur', de: 'Lieferant', es: 'Proveedor' },
+  'auto.carica': { it: 'Carica', en: 'Upload', fr: 'Charger', de: 'Hochladen', es: 'Cargar' },
+  'auto.stato': { it: 'Stato:', en: 'Status:', fr: 'Statut :', de: 'Status:', es: 'Estado:' },
+  'auto.cliente': { it: 'Cliente:', en: 'Client:', fr: 'Client :', de: 'Kunde:', es: 'Cliente:' },
+  'auto.progetto': { it: 'Progetto:', en: 'Project:', fr: 'Projet :', de: 'Projekt:', es: 'Proyecto:' },
+  'auto.fattura': { it: 'Fattura', en: 'Invoice', fr: 'Facture', de: 'Rechnung', es: 'Factura' },
+  'auto.importa': { it: 'Importa', en: 'Import', fr: 'Importer', de: 'Importieren', es: 'Importar' },
+  'auto.mese_2': { it: 'Mese:', en: 'Month:', fr: 'Mois :', de: 'Monat:', es: 'Mes:' },
+  'auto.rifiuta': { it: 'Rifiuta', en: 'Reject', fr: 'Rejeter', de: 'Ablehnen', es: 'Rechazar' },
+  'auto.lavorazioni': { it: 'Lavorazioni', en: 'Operations', fr: 'Opérations', de: 'Arbeitsschritte', es: 'Operaciones' },
+  'auto.consegne': { it: 'Consegne', en: 'Deliveries', fr: 'Livraisons', de: 'Lieferungen', es: 'Entregas' },
+  'auto.aggiungi': { it: 'Aggiungi', en: 'Add', fr: 'Ajouter', de: 'Hinzufügen', es: 'Añadir' },
+  'auto.spedizioni': { it: 'Spedizioni', en: 'Shipments', fr: 'Expéditions', de: 'Versand', es: 'Envíos' },
+  'auto.progetti': { it: 'Progetti:', en: 'Projects:', fr: 'Projets :', de: 'Projekte:', es: 'Proyectos:' },
+  'auto.clienti': { it: 'Clienti:', en: 'Clients:', fr: 'Clients :', de: 'Kunden:', es: 'Clientes:' },
+  'auto.nuovo': { it: 'Nuovo', en: 'New', fr: 'Nouveau', de: 'Neu', es: 'Nuevo' },
+  'auto.filtri': { it: 'Filtri', en: 'Filters', fr: 'Filtres', de: 'Filter', es: 'Filtros' },
+  'auto.giorno': { it: 'Giorno', en: 'Day', fr: 'Jour', de: 'Tag', es: 'Día' },
+  'auto.voci': { it: 'Voci', en: 'Items', fr: 'Articles', de: 'Posten', es: 'Conceptos' },
+  'auto.rifiutata': { it: 'Rifiutata', en: 'Rejected', fr: 'Rejetée', de: 'Abgelehnt', es: 'Rechazada' },
+  'auto.opzionale': { it: 'Opzionale', en: 'Optional', fr: 'Facultatif', de: 'Optional', es: 'Opcional' },
+  'auto.subtotale': { it: 'Subtotale', en: 'Subtotal', fr: 'Sous-total', de: 'Zwischensumme', es: 'Subtotal' },
+  'auto.totale': { it: 'TOTALE', en: 'TOTAL', fr: 'TOTAL', de: 'GESAMT', es: 'TOTAL' },
+  'auto.attiva': { it: 'Attiva', en: 'Active', fr: 'Active', de: 'Aktiv', es: 'Activa' },
+  'auto.scaduto': { it: 'Scaduto', en: 'Expired', fr: 'Expiré', de: 'Abgelaufen', es: 'Vencido' },
+  'auto.consegna': { it: 'Consegna', en: 'Delivery', fr: 'Livraison', de: 'Lieferung', es: 'Entrega' },
+  'auto.conferma': { it: 'Conferma', en: 'Confirm', fr: 'Confirmer', de: 'Bestätigen', es: 'Confirmar' },
+};
+
+let _MF_ITALIAN_LOOKUP = null;
+function _buildItalianLookup() {
+  const m = new Map();
+  for (const [key, entry] of Object.entries(window.MF_I18N_AUTO_SWAP)) {
+    if (entry && entry.it) {
+      m.set(entry.it.trim(), key);
+    }
+  }
+  return m;
+}
+
+/**
+ * v3.5.0-alpha.172.107 — Auto-swap brutale dei testi italiani hardcoded.
+ * Scansiona text nodes + attributi (title/placeholder/alt/aria-label) e
+ * sostituisce stringhe match-esatto trim con la traduzione della lingua corrente.
+ *
+ * Limitazioni note:
+ * - Match SOLO esatto trim (no substring) per evitare di rompere testi
+ *   contenenti nomi propri (es. "Cliente Italia SpA").
+ * - Skip INPUT/TEXTAREA/SCRIPT/STYLE.
+ * - Skip elementi con data-i18n already set (gestiti da pass 1).
+ * - SHOW_TEXT walker → ignora HTML markup nei tag.
+ */
+// Storage per round-trip cambio lingua: ogni text node che abbiamo tradotto
+// salva l'IT originale in `_mfOrigIt` (WeakMap per evitare leak DOM).
+const _MF_ORIG_TEXT = new WeakMap();
+function applyAutoSwap(root, lang) {
+  root = root || document;
+  lang = lang || mfCurrentLang();
+  if (!_MF_ITALIAN_LOOKUP) _MF_ITALIAN_LOOKUP = _buildItalianLookup();
+  // Text nodes
+  const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT, {
+    acceptNode: (n) => {
+      const p = n.parentElement;
+      if (!p) return NodeFilter.FILTER_REJECT;
+      if (['SCRIPT', 'STYLE', 'INPUT', 'TEXTAREA'].includes(p.tagName)) {
+        return NodeFilter.FILTER_REJECT;
+      }
+      if (p.hasAttribute('data-i18n')) return NodeFilter.FILTER_REJECT;
+      return NodeFilter.FILTER_ACCEPT;
+    },
+  });
+  let n;
+  const toUpdate = [];
+  while ((n = walker.nextNode())) {
+    // Source-of-truth IT: prefer cached original, else current value
+    const origIt = (_MF_ORIG_TEXT.get(n) || n.nodeValue).trim();
+    if (!origIt) continue;
+    const key = _MF_ITALIAN_LOOKUP.get(origIt);
+    if (!key) continue;
+    const translated = window.MF_I18N_AUTO_SWAP[key][lang];
+    if (!translated) continue;
+    toUpdate.push({ node: n, translated, origIt });
+  }
+  for (const u of toUpdate) {
+    // Cache original IT prima del primo swap
+    if (!_MF_ORIG_TEXT.has(u.node)) {
+      _MF_ORIG_TEXT.set(u.node, u.node.nodeValue);
+    }
+    // Sostituisci preservando whitespace circostante
+    const orig = _MF_ORIG_TEXT.get(u.node);
+    u.node.nodeValue = orig.replace(u.origIt, u.translated);
+  }
+  // Attributes (title/placeholder/alt/aria-label)
+  const ATTRS = ['title', 'placeholder', 'alt', 'aria-label'];
+  for (const attr of ATTRS) {
+    root.querySelectorAll(`[${attr}]`).forEach(el => {
+      const cacheKey = `_mfOrigAttr_${attr}`;
+      const origIt = (el.dataset[cacheKey] || el.getAttribute(attr) || '').trim();
+      if (!origIt) return;
+      const key = _MF_ITALIAN_LOOKUP.get(origIt);
+      if (!key) return;
+      const translated = window.MF_I18N_AUTO_SWAP[key][lang];
+      if (!translated) return;
+      if (!el.dataset[cacheKey]) el.dataset[cacheKey] = el.getAttribute(attr);
+      el.setAttribute(attr, translated);
+    });
+  }
+}
+window.applyAutoSwap = applyAutoSwap;
 
 /**
  * Cambia lingua: salva in localStorage + ri-applica al DOM corrente.

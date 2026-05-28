@@ -1,5 +1,27 @@
 # MediaFlow — Changelog
 
+## v3.5.0-alpha.172.107 — i18n auto-swap DOM: 61 stringhe comuni IT→EN/FR/DE/ES live (28 mag 2026)
+
+Implementazione **auto-swap brutale DOM** delle 61 stringhe italiane comuni rilevate dall'audit α.172.106. Coperto ~60% dell'usage italiano UI senza dover annotare template con `data-i18n`.
+
+**`MF_I18N_AUTO_SWAP` dict** (`app/static/js/i18n.js`): 61 entries (`common.*` 27 + `auto.*` 34) con valori it/en/fr/de/es completi. Stringhe coperte: Annulla, Caricamento…, Salva, Elimina, Cliente, Progetto, Quotazione, Fattura, Stato, Bozza, Inviata, Approvata, Scaduta, Rifiutata, Ricerca, Filtri, Risorsa, Lavorazione, ecc.
+
+**`applyAutoSwap(root, lang)`** in `applyI18n` come pass 2:
+- `TreeWalker SHOW_TEXT` con `acceptNode` filter (skip SCRIPT/STYLE/INPUT/TEXTAREA + elementi con `data-i18n`).
+- Match esatto trim sul lookup `IT → key`. Skip substring per non rompere nomi propri ("Cliente Italia SpA").
+- WeakMap `_MF_ORIG_TEXT` per cache IT originale del text node → round-trip cambio lingua (EN → IT → EN) funziona correttamente.
+- Stessa logica per attributi `title`, `placeholder`, `alt`, `aria-label` con cache `dataset._mfOrigAttr_<name>`.
+
+**Tools nuovi**:
+- `tools/i18n_generate_entries.py`: legge audit findings + applica dictionary statico IT→target → emette `tools/i18n_generated_entries.js` (200 entries) + `tools/i18n_patch_suggestions.md` (report).
+- Estrazione 61 translated entries via Python regex parser (`tools/_i18n_common_merge.txt` come intermediario).
+
+**Rimane fuori scope (TODO_TRANSLATE)**:
+- 139 stringhe specifiche (entry generate marker `TODO_TRANSLATE` per en/fr/de/es) richiedono traduzione manuale o batch AI. Vedi `tools/i18n_patch_suggestions.md` sezione TODO_TRANSLATE.
+- 277 stringhe non-unique (varianti = 477 totali - 200 unique) verranno coperte automaticamente dal pass DOM una volta tradotte le 200 unique.
+
+**Test browser**: cambia lingua dal popover topbar (icona bandiera) → 🇬🇧/🇫🇷/🇩🇪/🇪🇸 → swap immediato di label comuni in tutto il DOM. Cambio lingua round-trip verso IT ripristina testo originale.
+
 ## v3.5.0-alpha.172.106 — i18n: aggiunto ES + audit report 477 stringhe (28 mag 2026)
 
 Setup i18n esteso + audit baseline per pianificare massive translation campaign.
