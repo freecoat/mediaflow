@@ -132,13 +132,14 @@ async def delivery_templates_page(request: Request, db: Session = Depends(get_db
 
 
 @router.get("/api/list")
-async def list_templates(db: Session = Depends(get_db)):
-    rows = (
-        db.query(DeliveryTemplate)
-        .filter(DeliveryTemplate.tenant_id == current_tenant_id())
-        .order_by(DeliveryTemplate.broadcaster.asc(), DeliveryTemplate.name.asc())
-        .all()
-    )
+async def list_templates(include_inactive: bool = False, db: Session = Depends(get_db)):
+    """v3.5.0-alpha.172.124 — Default filtra is_active=True (modal cascading
+    job/quote non deve mostrare template soft-deleted). `?include_inactive=1`
+    per esporli (uso admin/diagnostica)."""
+    q = db.query(DeliveryTemplate).filter(DeliveryTemplate.tenant_id == current_tenant_id())
+    if not include_inactive:
+        q = q.filter(DeliveryTemplate.is_active == True)  # noqa: E712
+    rows = q.order_by(DeliveryTemplate.broadcaster.asc(), DeliveryTemplate.name.asc()).all()
     return [_dt_dict(t) for t in rows]
 
 

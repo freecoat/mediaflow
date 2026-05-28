@@ -1,5 +1,15 @@
 # MediaFlow — Changelog
 
+## v3.5.0-alpha.172.124 — list_templates filtra soft-deleted di default (28 mag 2026 sera)
+
+`GET /delivery-templates/api/list` ora filtra `is_active=True` di default. Flag `?include_inactive=1` per esporre i soft-deleted (uso admin/diagnostica).
+
+**Motivo**: i 3 template soft-deleted (istanze compilate Gomorrah/NBCU id=10/11, vedi α.172.119) comparivano nelle dropdown dei modal cascading di job/quote/planning/project + dropdown Diff. Ora invisibili lì.
+
+**Sicurezza modifica**: la tabella admin `/delivery-templates` è server-rendered via route `delivery_templates_page` con param `show_inactive` separato — non consuma `/api/list`. I 5 caller JS dell'endpoint (diff dropdown + cascading job/planning/project/quotes) vogliono tutti solo attivi. Nessun fix frontend necessario.
+
+File: `app/routers/delivery_templates.py` (1 funzione).
+
 ## v3.5.0-alpha.172.123 — Tier 3 Bundle B+C+D: validation + AI match listino + search/diff (28 mag 2026 sera)
 
 Bundle congiunto per non frammentare commit. Tutti i pezzi ruotano sulle entità Tier 1/2 (DeliveryItem + DeliveryTemplate + taxonomy + PriceItem).

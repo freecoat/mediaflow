@@ -8,7 +8,12 @@
 
 ## Versione corrente
 
-**v3.5.0-alpha.172.123** — 28 maggio 2026 sera — Tier 3 Bundle B+C+D: validation + AI match listino + search/diff
+**v3.5.0-alpha.172.124** — 28 maggio 2026 sera — list_templates filtra soft-deleted di default (`?include_inactive=1` per admin)
+
+### α.172.124 ✅
+`GET /delivery-templates/api/list` default `is_active=True`. I 3 template soft-deleted (Gomorrah/NBCU id=10/11) non compaiono più nelle dropdown cascading job/quote/planning/project + Diff. Tabella admin invariata (server-rendered con `show_inactive`). Nessun fix frontend, nessuna migrazione DB.
+
+
 
 ### Tier 3 Bundle B+C+D ✅
 **B (T3.4+T3.8)**: validation cross-tier su 9 regole + endpoint `validate` + endpoint `revalidate-ai` (re-mapping LLM FK preservando text). UI bottoni 🔎 Valida + 🤖 Rivalida AI nel modal item. Corpus reale 22/211 items con issue (21 MISSING_CONTAINER su subtitle/KDM/ISO).
