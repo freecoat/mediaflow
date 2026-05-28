@@ -33,9 +33,12 @@ def apply_audio_config_preset(db: Session, item: DeliveryItem,
     esistenti derivate da un preset (ri-applicazione idempotente). Ritorna il
     numero di tracce create. NON committa (lascia al caller)."""
     # Rimuovi tracce esistenti dell'item (sostituzione in blocco, D2 nota).
+    # synchronize_session="fetch": ri-sincronizza l'identity-map della sessione,
+    # evitando oggetti AudioTrackSpec stale se il chiamante (router) ha già
+    # caricato item.audio_tracks prima di applicare il preset.
     db.query(AudioTrackSpec).filter(
         AudioTrackSpec.delivery_item_id == item.id
-    ).delete(synchronize_session=False)
+    ).delete(synchronize_session="fetch")
 
     layout = preset.track_layout or []
     created = 0
