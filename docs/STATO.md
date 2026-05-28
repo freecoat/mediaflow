@@ -8,6 +8,33 @@
 
 ## Versione corrente
 
+**v3.5.0-alpha.172.111** — 28 maggio 2026 — Batch parse 17 capitolati: 13 templates salvati
+
+Prima esecuzione completa del parsing AI sui 17 capitolati esempio. **13 DeliveryTemplate creati** (id 2-14, conf media 0.79). Broadcaster coperti: RAI, GTM, Fremantle, MUBI, Sky/NBCU, Sky Italia, NBCU TechOps (3 variants UHD/HDR10), Vision, A24, PiperFilm.
+
+Root cause precedente A24/IRDA "JSON malformato": `max_tokens=4000` troncava risposta Claude. Fix `deliverables_parser.py`: 4000 → 8000. Capitolati grossi (60+ righe JSON) ora parsano OK.
+
+Tool nuovo `scripts/batch_parse_capitolati.py` standalone (bypass HTTP, --dry, --user-id, progress per-file, collision suffix auto).
+
+4 errori non recuperabili senza intervento aggiuntivo:
+- 2 .txt 0-byte (placeholder vuoti in repo)
+- BETA FILM PDF image-only (serve OCR)
+- Veterans .doc legacy (serve antiword/libreoffice)
+
+### Backlog UX delivery_templates rimanente
+
+1. Tech sheet: aggiungere selezione manuale opzioni via lista (oltre input AI).
+2. ✅ Capitolati: parsing iniziale sui 17 — CHIUSO α.172.111.
+3. Capitolati: aggiungere rename template di consegna.
+4. Modal dettaglio template: rifare human-readable + edit form (no JSON raw).
+5. Modal "Aggiungi specifiche delivery a progetto": scelta file estrapolato + nome custom + modifica manuale + togli edit JSON + note.
+
+### Prossima sessione
+
+(4) modal dettaglio template human-readable + edit form (no JSON raw). Pre-requisito per (3) rename e (5) wizard delivery.
+
+---
+
 **v3.5.0-alpha.172.110** — 28 maggio 2026 — Fix parse-sample 503 cieco + /pricelist/api 404
 
 Hotfix duplice sul flusso `/delivery-templates` parsing capitolato AI segnalato da Matteo.

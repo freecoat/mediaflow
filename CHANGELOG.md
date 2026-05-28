@@ -1,5 +1,40 @@
 # MediaFlow — Changelog
 
+## v3.5.0-alpha.172.111 — Batch parse 17 capitolati: 13 templates salvati (28 mag 2026)
+
+Esecuzione **prima volta** del parsing AI sui 17 capitolati esempio in `docs/capitolati_esempio/`. Risultato: **13 DeliveryTemplate creati** in DB (id 2-14), confidence media 0.79.
+
+**Templates creati** (broadcaster · code · confidence):
+- RAI · RAI-SDHDUHD-1.4 · 0.82
+- GTM · GTM-DELIVERY · 0.62
+- Fremantle · FREMANTLE-DCP-ITA-THEATRICAL · 0.82
+- MUBI · MUBI-FEATURE-DELIVERY · 0.82
+- NBCUniversal/Sky · NBCUNI-AUDIO-51 · 0.91
+- Sky Italia · SKY-ITA-AV-DELIVERY · 0.88
+- NBCUniversal · NBCU-TECHOPS-LONGFORM-2.8 · 0.72
+- NBCUniversal · NBCU-LONGFORM-UHD · 0.62 (Metadata Template base)
+- NBCUniversal · NBCU-UHD-HDR10-LONGFORM · 0.72 (Gomorrah variant 1)
+- NBCUniversal · NBCU-LONGFORM-UHD-V1.3_TECHO · 0.72 (Gomorrah variant 2)
+- Vision Distribution · VISION-DIST-IT · 0.82
+- A24 · A24-QUEER-DELIVERY · 0.88
+- PiperFilm · PIPERFILM-DELIVERY · 0.82
+
+**Fix root cause `max_tokens` troncato**
+Inizialmente A24 e IRDA fallivano con `safe_json_parse returned None`. Root cause: `parse_delivery_template()` passava `max_tokens=4000` a `provider.extract_json()`, ma capitolati grossi (10k+ token JSON) saturavano il budget e Claude restituiva risposta troncata a metà struct. `safe_json_parse` non recuperava JSON parziali → 503 generico.
+
+Fix `deliverables_parser.py:232`: `max_tokens 4000 → 8000`. Dopo bump, A24 (id=13, conf 0.88) e IRDA (id=14, conf 0.82) parsano in 60s ciascuno con dict completo 13 keys.
+
+**4 errori residui non recuperabili** senza intervento aggiuntivo:
+- `Amazon_MGM_Deliverables.txt` 0 byte (placeholder vuoto in repo)
+- `Netflix_Deliverables.txt` 0 byte (placeholder vuoto in repo)
+- `BETA FILM_DELIVERY MASTER.pdf` image-only (pypdf no OCR — serve pytesseract/OCRmyPDF)
+- `Veterans_SALES AGENT DELIVERY SCHEDULE … .doc` legacy .doc (python-docx supporta solo .docx OOXML — serve antiword/libreoffice)
+
+**Tool standalone `scripts/batch_parse_capitolati.py`**
+Bypass HTTP timeout uvicorn. Skip idempotente per `source_document_name` già esistente. Progress per-file con tempo + confidence. Collision detect su `code` con suffix automatico. `--dry` flag per dry-run senza save. `--user-id` selezione provider per-utente (default admin id=1).
+
+**Endpoint `/api/parse-batch-pending` aggiornato**: inietta `provider_for_user` invece di fallback global (parallelo a fix `parse-sample` α.172.110).
+
 ## v3.5.0-alpha.172.110 — Fix parse-sample 503 cieco + /pricelist/api 404 (28 mag 2026)
 
 Hotfix sul flusso "Parsing capitolato" in `/delivery-templates`. Due bug separati segnalati da Matteo.

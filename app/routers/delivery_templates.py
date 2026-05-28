@@ -205,6 +205,14 @@ async def parse_batch_pending(request: Request, db: Session = Depends(get_db),
     skipped = []
     errors = []
     user = current_user_optional(request)
+    # v3.5.0-alpha.172.111 — inject provider per-utente (era fallback global
+    # che falliva se .env AI_PROVIDER=disabled, identico a parse-sample).
+    from app.services.ai_provider import get_provider_for_user, get_provider
+    provider = get_provider_for_user(user.id, db) if user else None
+    if not provider:
+        provider = get_provider()
+    if not provider:
+        raise HTTPException(503, "AI provider non configurato. Vai in /settings → AI.")
     for fpath in sorted(samples_dir.iterdir()):
         if not fpath.is_file():
             continue
@@ -220,9 +228,11 @@ async def parse_batch_pending(request: Request, db: Session = Depends(get_db),
             if not text or len(text.strip()) < 20:
                 errors.append({"file": fpath.name, "error": "testo estratto troppo breve"})
                 continue
-            result = parse_delivery_template(text)
+            result = parse_delivery_template(text, provider=provider)
             if not result:
-                errors.append({"file": fpath.name, "error": "parser AI ritornato vuoto"})
+                diag = getattr(provider, "last_extract_diag", None) or {}
+                detail = diag.get("error") or "parser AI ritornato vuoto"
+                errors.append({"file": fpath.name, "error": detail[:200]})
                 continue
             result["source_document_name"] = fpath.name
             if auto_save:

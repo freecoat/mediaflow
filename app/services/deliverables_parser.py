@@ -229,7 +229,10 @@ def parse_delivery_template(text: str, provider=None) -> Optional[dict]:
 ---
 
 Estrai i blocchi strutturati come da schema."""
-    return provider.extract_json(PARSE_TEMPLATE_SYSTEM_PROMPT, user_prompt, max_tokens=4000)
+    # v3.5.0-alpha.172.111 — max_tokens 4000→8000 per capitolati grossi.
+    # Senza questo bump A24/IRDA tornavano JSON troncato a metà struct,
+    # safe_json_parse falliva → 503 "Risposta non JSON valido".
+    return provider.extract_json(PARSE_TEMPLATE_SYSTEM_PROMPT, user_prompt, max_tokens=8000)
 
 
 # ── Matching voci capitolato ↔ listino prezzi ───────────────
