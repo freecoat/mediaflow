@@ -43,16 +43,19 @@ def apply_audio_config_preset(db: Session, item: DeliveryItem,
     layout = preset.track_layout or []
     created = 0
     for idx, tr in enumerate(layout):
-        cc_id = _resolve_id(db, AudioChannelConfig, tr.get("channel_config"), item.tenant_id)
-        mt_id = _resolve_id(db, AudioMixType, tr.get("mix_type"), item.tenant_id)
-        ms_id = _resolve_id(db, MixStandard, tr.get("mix_standard"), item.tenant_id)
-        ac_id = _resolve_id(db, AudioCodec, tr.get("codec"), item.tenant_id)
-        unresolved = [k for k, v in (
-            ("channel_config", tr.get("channel_config") and cc_id is None),
-            ("mix_type", tr.get("mix_type") and mt_id is None),
-            ("mix_standard", tr.get("mix_standard") and ms_id is None),
-            ("codec", tr.get("codec") and ac_id is None),
-        ) if v]
+        # Accept both name-keys (channel_config, mix_type, …) and id-keys
+        # (channel_config_id, mix_type_id, …) so parser-created presets work too.
+        cc_id = _resolve_id(db, AudioChannelConfig, tr.get("channel_config"), item.tenant_id) or tr.get("channel_config_id")
+        mt_id = _resolve_id(db, AudioMixType, tr.get("mix_type"), item.tenant_id) or tr.get("mix_type_id")
+        ms_id = _resolve_id(db, MixStandard, tr.get("mix_standard"), item.tenant_id) or tr.get("mix_standard_id")
+        ac_id = _resolve_id(db, AudioCodec, tr.get("codec"), item.tenant_id) or tr.get("audio_codec_id")
+        # Flag as unresolved only when a name was given AND neither name nor id-key resolved it.
+        unresolved = [k for k, name_val, resolved_id, id_key in (
+            ("channel_config", tr.get("channel_config"), cc_id, tr.get("channel_config_id")),
+            ("mix_type",       tr.get("mix_type"),       mt_id, tr.get("mix_type_id")),
+            ("mix_standard",   tr.get("mix_standard"),   ms_id, tr.get("mix_standard_id")),
+            ("codec",          tr.get("codec"),          ac_id, tr.get("audio_codec_id")),
+        ) if name_val and resolved_id is None and id_key is None]
         note = None
         if unresolved:
             note = "taxonomy non risolta: " + ", ".join(
@@ -65,7 +68,7 @@ def apply_audio_config_preset(db: Session, item: DeliveryItem,
             mix_type_id=mt_id,
             mix_standard_id=ms_id,
             audio_codec_id=ac_id,
-            sample_rate_hz=tr.get("sample_rate"),
+            sample_rate_hz=tr.get("sample_rate") or tr.get("sample_rate_hz"),
             bit_depth=tr.get("bit_depth"),
             notes=note,
         ))

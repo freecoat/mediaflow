@@ -1089,6 +1089,12 @@ async def create_audio_preset(tid: int, code: str = Form(...), name: str = Form(
                               track_layout_json: Optional[str] = Form(None),
                               db: Session = Depends(get_db)):
     from app.models.models import AudioConfigPreset
+    tpl = db.query(DeliveryTemplate).filter(
+        DeliveryTemplate.id == tid,
+        DeliveryTemplate.tenant_id == current_tenant_id(),
+    ).first()
+    if not tpl:
+        raise HTTPException(404, "DeliveryTemplate non trovato")
     track_layout = []
     if track_layout_json and track_layout_json.strip():
         try:

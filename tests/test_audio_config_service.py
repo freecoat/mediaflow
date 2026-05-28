@@ -49,3 +49,23 @@ def test_apply_preset_replaces_existing_derived_tracks(db, tenant_id):
     tracks = db.query(AudioTrackSpec).filter(
         AudioTrackSpec.delivery_item_id == item.id).all()
     assert len(tracks) == 2  # non duplica
+
+
+def test_apply_preset_accepts_id_keys(db, tenant_id):
+    from app.models.models import DeliveryTemplate, DeliveryItem, AudioConfigPreset, AudioTrackSpec, AudioChannelConfig
+    from app.services.audio_config_service import apply_audio_config_preset
+    t = DeliveryTemplate(tenant_id=tenant_id, code="IDK-X", name="idk")
+    db.add(t); db.flush()
+    cc = AudioChannelConfig(tenant_id=None, name="5.1", channel_count=6)
+    db.add(cc); db.flush()
+    preset = AudioConfigPreset(tenant_id=tenant_id, delivery_template_id=t.id, code="X1", name="x1",
+        track_layout=[{"track_label": "T", "channel_config_id": cc.id, "audio_codec_id": None,
+                       "sample_rate_hz": 48000}])
+    db.add(preset); db.flush()
+    item = DeliveryItem(tenant_id=tenant_id, delivery_template_id=t.id, name="I")
+    db.add(item); db.flush()
+    apply_audio_config_preset(db, item, preset); db.flush()
+    tr = db.query(AudioTrackSpec).filter(AudioTrackSpec.delivery_item_id == item.id).first()
+    assert tr.channel_config_id == cc.id
+    assert tr.sample_rate_hz == 48000
+    assert tr.notes is None  # id-key provided -> not flagged unresolved
