@@ -10,28 +10,35 @@
 {% block head %}
 <script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.2/Sortable.min.js"></script>
 <style>
-  /* v3.5.0-alpha.172.102 — Folder-view + stacked cards (statiche, sovrapposte ~85%) */
+  /* v3.5.0-alpha.172.105 — Folder-view + stacked cards verticale (top card +
+     sotto-strisce colore sotto). Riprogetto post-feedback Matteo: la versione
+     orizzontale rendeva male (pillola vuota a fianco). Adesso TOP card
+     (priority piu' alta nell'order) sopra a piena larghezza/altezza, sotto
+     compaiono N strisce sottili (~4px) colore segnaposto delle altre status. */
   .qrow-folder:hover { background: rgba(98,114,245,0.10) !important; }
   .qrow-version:hover { background: rgba(255,255,255,0.04) !important; }
   .qstatus-chip {
     display: inline-block; padding: 3px 10px; font-size: 11px; font-weight: 600;
     border-radius: 10px; white-space: nowrap; line-height: 1.4;
   }
-  .qstatus-stack { display: inline-block; position: relative; }
-  .qstatus-chip.stacked {
-    position: relative;
-    min-width: 70px;
-    text-align: center;
-    box-shadow: -2px 0 4px rgba(0,0,0,0.35);
+  .qstatus-stack {
+    display: inline-flex; flex-direction: column; align-items: stretch;
+    position: relative; gap: 2px;
   }
-  /* Sotto-card: nascondi label completamente, mostra solo sliver di colore.
-     Sovrapposizione massiva ~85% via margin-left negativo. */
-  .qstatus-chip.stacked.under {
-    color: transparent !important;
-    text-shadow: none;
-    margin-left: -60px; /* ~85% di min-width 70px */
+  .qstatus-chip.stacked-top {
+    box-shadow: 0 2px 4px rgba(0,0,0,0.30);
+    z-index: 2;
   }
-  .qstatus-chip.stacked:first-child { margin-left: 0; }
+  /* Strisce sotto = sliver alta ~4px piena larghezza chip top, color solido */
+  .qstatus-substrip {
+    height: 4px;
+    border-radius: 2px;
+    width: 80%;
+    margin: 0 auto;
+    box-shadow: 0 1px 2px rgba(0,0,0,0.18);
+  }
+  /* Hover stack: scrollare leggermente per evidenziare le strisce */
+  .qstatus-stack:hover .qstatus-substrip { width: 92%; transition: width 0.18s; }
 
   .ql-row.dragging { opacity: 0.4; }
   .ql-row .ghost { background: var(--indigo-bg); }
@@ -1311,19 +1318,18 @@ function stackedStatusCards(statuses) {
     .sort((a, b) => a.p - b.p);
   if (!visible.length) return '<span class="text-xs text-muted">—</span>';
   if (visible.length === 1) return quoteStatusChip(visible[0].s);
-  // Multi-stato: cards sovrapposte ~85% statiche.
-  // Ordine HTML: card piu' "in fondo" (priority alta) PRIMA → card TOP (priority
-  // bassa, label visibile) per ULTIMA → z-index naturale la mette sopra.
-  // Sotto-card hanno classe `under` (label nascosta via CSS color:transparent +
-  // margin-left -60px per sovrapposizione massiva). Tooltip mostra label.
-  const reversed = visible.slice().reverse();
-  const n = reversed.length;
-  const html = reversed.map((v, i) => {
+  // Multi-stato: stack VERTICALE.
+  // Top card = priority piu' alta (es. "Approvata" priority=1) chip pieno con label.
+  // Sotto: N strisce orizzontali sottili (~4px) colore segnaposto delle altre status.
+  // Tooltip su ogni striscia mostra label.
+  const top = visible[0]; // priority piu' alta
+  const rest = visible.slice(1);
+  const topMeta = QSTATUS_META[top.s];
+  let html = `<span class="qstatus-chip stacked-top" style="background:${topMeta.bg};color:${topMeta.color};border:1px solid ${topMeta.border};" title="${topMeta.label}">${topMeta.label}</span>`;
+  for (const v of rest) {
     const m = QSTATUS_META[v.s];
-    const isTop = (i === n - 1);
-    const cls = isTop ? 'qstatus-chip stacked' : 'qstatus-chip stacked under';
-    return `<span class="${cls}" style="background:${m.bg};color:${m.color};border:1px solid ${m.border};" title="${m.label}">${m.label}</span>`;
-  }).join('');
+    html += `<span class="qstatus-substrip" style="background:${m.color};" title="${m.label}"></span>`;
+  }
   return `<span class="qstatus-stack">${html}</span>`;
 }
 

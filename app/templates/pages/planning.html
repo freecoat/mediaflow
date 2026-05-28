@@ -802,13 +802,16 @@
     </div>
     <div class="modal-body" style="max-height:72vh; overflow-y:auto;">
       <input type="hidden" id="dsm-deliverable-id">
-      <div style="display:flex; gap:8px; align-items:center; margin-bottom:14px; padding:8px 10px; background:rgba(98,114,245,0.06); border-radius:6px;">
+      <div style="display:flex; gap:8px; align-items:center; margin-bottom:14px; padding:8px 10px; background:rgba(98,114,245,0.06); border-radius:6px; flex-wrap:wrap;">
         <label class="text-xs text-muted" style="margin:0;">Pre-fill da template:</label>
-        <select id="dsm-template-select" class="form-select" style="flex:1; height:30px; font-size:12px;">
+        <select id="dsm-template-select" class="form-select" style="flex:1; min-width:180px; height:30px; font-size:12px;">
           <option value="">— scegli un DeliveryTemplate —</option>
         </select>
         <button class="btn btn-ghost btn-sm" onclick="dsmApplyTemplate()" title="Sovrascrive i blocchi vuoti">📋 Applica</button>
         <button class="btn btn-ghost btn-sm" onclick="dsmAiPropose()" title="AI legge il template e propone tech specs" style="color:var(--indigo2);">🤖 AI</button>
+        <span style="flex:0 0 auto;border-left:1px solid var(--border);padding-left:8px;margin-left:4px;">
+          <button class="btn btn-ghost btn-sm" id="dsm-toggle-mode" onclick="dsmToggleMode()" title="Passa tra rendering human-readable e JSON raw" style="font-size:11px;">📝 Modifica JSON</button>
+        </span>
       </div>
       <div id="dsm-blocks-host" style="display:flex; flex-direction:column; gap:10px;"></div>
     </div>
@@ -2041,6 +2044,154 @@ async function dhUpdateStatus(deliverableId, newStatus, qcSubstatus) {
   renderDeliverableHub();
 }
 
+// v3.5.0-alpha.172.105 — Mode 'pretty' (human-readable key-value) vs 'raw' (JSON textarea)
+let _dsmMode = 'pretty';
+let _dsmCurrentSpec = {};
+
+function dsmToggleMode() {
+  _dsmMode = (_dsmMode === 'pretty') ? 'raw' : 'pretty';
+  // Sync: se passi da raw→pretty, riparsa textarea per non perdere modifiche
+  if (_dsmMode === 'pretty') {
+    document.querySelectorAll('#dsm-blocks-host textarea').forEach(ta => {
+      const k = ta.dataset.block;
+      const v = ta.value.trim();
+      if (!v) { delete _dsmCurrentSpec[k]; return; }
+      try { _dsmCurrentSpec[k] = JSON.parse(v); }
+      catch(_) { /* invalid: skip, user vede raw warning */ }
+    });
+  }
+  document.getElementById('dsm-toggle-mode').textContent =
+    (_dsmMode === 'pretty') ? '📝 Modifica JSON' : '👁 Vista leggibile';
+  dsmRenderBlocks();
+}
+
+function dsmRenderBlocks() {
+  const host = document.getElementById('dsm-blocks-host');
+  _dhClear(host);
+  DH_BLOCK_DEFS.forEach(([key, lbl]) => {
+    const block = _dsmCurrentSpec[key] || null;
+    const card = document.createElement('div');
+    card.style.cssText = 'background:var(--bg3); border:1px solid var(--border); border-radius:6px; padding:10px 12px;';
+    const lblEl = document.createElement('label');
+    lblEl.style.cssText = 'font-size:11px; text-transform:uppercase; letter-spacing:0.06em; color:var(--text3); font-weight:600; display:block; margin-bottom:6px;';
+    lblEl.textContent = lbl;
+    card.appendChild(lblEl);
+    if (_dsmMode === 'raw') {
+      const ta = document.createElement('textarea');
+      ta.dataset.block = key;
+      ta.style.cssText = 'width:100%; min-height:70px; background:var(--bg2); color:var(--text); border:1px solid var(--border); border-radius:4px; padding:6px 8px; font-family:var(--font-mono); font-size:12px; resize:vertical;';
+      ta.placeholder = `{ } — JSON libero per ${lbl.toLowerCase()}`;
+      if (block != null) ta.value = JSON.stringify(block, null, 2);
+      card.appendChild(ta);
+    } else {
+      // Pretty mode: rendering key-value editable
+      const prettyHost = document.createElement('div');
+      prettyHost.dataset.block = key;
+      prettyHost.className = 'dsm-pretty-block';
+      dsmRenderPretty(prettyHost, block, key);
+      card.appendChild(prettyHost);
+    }
+    host.appendChild(card);
+  });
+}
+
+// Render ricorsivo di un dict in stile chiave-valore editabile
+function dsmRenderPretty(host, obj, blockKey, depth = 0) {
+  _dhClear(host);
+  if (obj == null || (typeof obj === 'object' && Object.keys(obj).length === 0)) {
+    const empty = document.createElement('div');
+    empty.className = 'text-muted text-sm';
+    empty.style.cssText = 'padding:6px 0;font-style:italic;';
+    empty.textContent = '— Nessuna specifica. Usa "Pre-fill da template" o "🤖 AI", oppure "📝 Modifica JSON" per inserire a mano.';
+    host.appendChild(empty);
+    return;
+  }
+  const table = document.createElement('table');
+  table.style.cssText = 'width:100%;border-collapse:collapse;font-size:13px;';
+  if (Array.isArray(obj)) {
+    obj.forEach((item, idx) => {
+      const tr = document.createElement('tr');
+      tr.style.borderBottom = '1px solid var(--border)';
+      const tdK = document.createElement('td');
+      tdK.style.cssText = 'padding:5px 8px;color:var(--text3);font-weight:600;width:80px;font-size:11px;text-transform:uppercase;letter-spacing:0.04em;';
+      tdK.textContent = '#' + (idx + 1);
+      const tdV = document.createElement('td');
+      tdV.style.cssText = 'padding:5px 8px;';
+      if (typeof item === 'object' && item !== null) {
+        const sub = document.createElement('div');
+        sub.style.cssText = 'padding-left:10px;border-left:2px solid var(--border);';
+        dsmRenderPretty(sub, item, blockKey + '[' + idx + ']', depth + 1);
+        tdV.appendChild(sub);
+      } else {
+        tdV.textContent = String(item);
+      }
+      tr.appendChild(tdK); tr.appendChild(tdV);
+      table.appendChild(tr);
+    });
+  } else {
+    Object.entries(obj).forEach(([k, v]) => {
+      const tr = document.createElement('tr');
+      tr.style.borderBottom = '1px solid var(--border)';
+      const tdK = document.createElement('td');
+      tdK.style.cssText = 'padding:5px 8px;color:var(--indigo2);font-weight:600;width:32%;vertical-align:top;';
+      tdK.textContent = dsmHumanizeKey(k);
+      const tdV = document.createElement('td');
+      tdV.style.cssText = 'padding:5px 8px;color:var(--text);word-break:break-word;';
+      if (typeof v === 'object' && v !== null) {
+        const sub = document.createElement('div');
+        sub.style.cssText = 'padding-left:8px;border-left:2px solid var(--border);';
+        dsmRenderPretty(sub, v, blockKey + '.' + k, depth + 1);
+        tdV.appendChild(sub);
+      } else {
+        // Editable inline: input text che aggiorna _dsmCurrentSpec
+        const inp = document.createElement('input');
+        inp.type = 'text';
+        inp.value = String(v == null ? '' : v);
+        inp.style.cssText = 'width:100%;background:transparent;border:none;border-bottom:1px dashed transparent;color:inherit;padding:2px 0;font-size:13px;';
+        inp.addEventListener('focus', () => { inp.style.borderBottom = '1px dashed var(--indigo2)'; });
+        inp.addEventListener('blur', () => { inp.style.borderBottom = '1px dashed transparent'; });
+        inp.addEventListener('change', () => {
+          // Update _dsmCurrentSpec[blockKey...k] preservando il tipo (number→number, bool→bool)
+          dsmUpdatePath(blockKey + '.' + k, inp.value);
+        });
+        tdV.appendChild(inp);
+      }
+      tr.appendChild(tdK); tr.appendChild(tdV);
+      table.appendChild(tr);
+    });
+  }
+  host.appendChild(table);
+}
+
+// Humanize "video_specs" → "Video specs", "framerate" → "Framerate", "fps_drop" → "Fps drop"
+function dsmHumanizeKey(k) {
+  return String(k).replace(/_/g, ' ').replace(/^./, c => c.toUpperCase());
+}
+
+// Aggiorna _dsmCurrentSpec seguendo path "blockKey.subkey.subsubkey"
+function dsmUpdatePath(path, val) {
+  const parts = path.split('.');
+  // primo segmento e' block key (root in _dsmCurrentSpec)
+  const root = parts.shift();
+  if (!_dsmCurrentSpec[root]) _dsmCurrentSpec[root] = {};
+  let cur = _dsmCurrentSpec[root];
+  while (parts.length > 1) {
+    const seg = parts.shift();
+    if (cur[seg] == null || typeof cur[seg] !== 'object') cur[seg] = {};
+    cur = cur[seg];
+  }
+  const leaf = parts[0];
+  // Type coercion: number se parse riuscito, boolean se "true"/"false", else string
+  if (val === '') { cur[leaf] = ''; return; }
+  if (val === 'true' || val === 'false') { cur[leaf] = (val === 'true'); return; }
+  const n = Number(val);
+  if (!Number.isNaN(n) && val.trim() !== '' && /^-?\d+(\.\d+)?$/.test(val.trim())) {
+    cur[leaf] = n;
+    return;
+  }
+  cur[leaf] = val;
+}
+
 async function dsmOpen(deliverableId) {
   const d = _dhItems.find(x => x.id === deliverableId);
   if (!d) return;
@@ -2064,23 +2215,10 @@ async function dsmOpen(deliverableId) {
   loading.textContent = 'Caricamento blocchi…'; host.appendChild(loading);
   try {
     const fresh = await api('GET', `/jobs/api/deliverables/${d.id}`);
-    const spec = fresh.spec_json || {};
-    _dhClear(host);
-    DH_BLOCK_DEFS.forEach(([key, lbl]) => {
-      const block = spec[key] || null;
-      const card = document.createElement('div');
-      card.style.cssText = 'background:var(--bg3); border:1px solid var(--border); border-radius:6px; padding:8px 10px;';
-      const lblEl = document.createElement('label');
-      lblEl.style.cssText = 'font-size:11px; text-transform:uppercase; letter-spacing:0.06em; color:var(--text3); font-weight:600; display:block; margin-bottom:4px;';
-      lblEl.textContent = lbl;
-      const ta = document.createElement('textarea');
-      ta.dataset.block = key;
-      ta.style.cssText = 'width:100%; min-height:70px; background:var(--bg2); color:var(--text); border:1px solid var(--border); border-radius:4px; padding:6px 8px; font-family:var(--font-mono); font-size:12px; resize:vertical;';
-      ta.placeholder = `{ } — JSON libero per ${lbl.toLowerCase()}`;
-      if (block != null) ta.value = JSON.stringify(block, null, 2);
-      card.appendChild(lblEl); card.appendChild(ta);
-      host.appendChild(card);
-    });
+    _dsmCurrentSpec = fresh.spec_json || {};
+    _dsmMode = 'pretty';
+    document.getElementById('dsm-toggle-mode').textContent = '📝 Modifica JSON';
+    dsmRenderBlocks();
   } catch(e) {
     _dhClear(host);
     const err = document.createElement('div'); err.style.color = 'var(--rose)';
@@ -2095,15 +2233,16 @@ function dsmApplyTemplate() {
   const tpl = _dhTemplates.find(t => t.id === tid);
   if (!tpl) return;
   let filled = 0;
-  document.querySelectorAll('#dsm-blocks-host textarea').forEach(ta => {
-    const key = ta.dataset.block;
-    if (ta.value.trim()) return;
+  DH_BLOCK_DEFS.forEach(([key, _lbl]) => {
+    const existing = _dsmCurrentSpec[key];
+    if (existing && Object.keys(existing).length > 0) return;
     const block = tpl[key];
     if (block && Object.keys(block).length > 0) {
-      ta.value = JSON.stringify(block, null, 2);
+      _dsmCurrentSpec[key] = JSON.parse(JSON.stringify(block));
       filled++;
     }
   });
+  dsmRenderBlocks();
   toast(`📋 ${filled} blocchi precompilati da ${tpl.code}`, 'success', 2000);
 }
 
@@ -2123,10 +2262,13 @@ async function dsmAiPropose() {
     const data = await r.json();
     const spec = data.spec_json || {};
     let filled = 0;
-    document.querySelectorAll('#dsm-blocks-host textarea').forEach(ta => {
-      const key = ta.dataset.block;
-      if (spec[key]) { ta.value = JSON.stringify(spec[key], null, 2); filled++; }
+    DH_BLOCK_DEFS.forEach(([key, _lbl]) => {
+      if (spec[key]) {
+        _dsmCurrentSpec[key] = JSON.parse(JSON.stringify(spec[key]));
+        filled++;
+      }
     });
+    dsmRenderBlocks();
     toast(`🤖 AI ha proposto ${filled} blocchi · revisiona e Salva`, 'success', 3500);
   } catch(e) {
     toast(e.message || 'Errore', 'error');
@@ -2136,16 +2278,19 @@ async function dsmAiPropose() {
 async function dsmSave() {
   const id = parseInt(document.getElementById('dsm-deliverable-id').value, 10);
   if (!id) return;
-  const spec = {};
+  // Se mode=raw, parsa le textarea aggiornando _dsmCurrentSpec
   let parseErr = null;
-  document.querySelectorAll('#dsm-blocks-host textarea').forEach(ta => {
-    const key = ta.dataset.block;
-    const raw = ta.value.trim();
-    if (!raw) return;
-    try { spec[key] = JSON.parse(raw); }
-    catch(e) { parseErr = `Blocco "${key}" non e' JSON valido: ${e.message}`; }
-  });
+  if (_dsmMode === 'raw') {
+    document.querySelectorAll('#dsm-blocks-host textarea').forEach(ta => {
+      const key = ta.dataset.block;
+      const raw = ta.value.trim();
+      if (!raw) { delete _dsmCurrentSpec[key]; return; }
+      try { _dsmCurrentSpec[key] = JSON.parse(raw); }
+      catch(e) { parseErr = `Blocco "${key}" non e' JSON valido: ${e.message}`; }
+    });
+  }
   if (parseErr) { toast(parseErr, 'error', 5000); return; }
+  const spec = _dsmCurrentSpec;
   try {
     const fd = new FormData();
     fd.append('spec_json', JSON.stringify(spec));

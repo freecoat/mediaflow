@@ -1,5 +1,27 @@
 # MediaFlow — Changelog
 
+## v3.5.0-alpha.172.105 — Stacked vertical strips + tech specs human-readable (28 mag 2026)
+
+Due fix da feedback Matteo (screenshot 092404+092535):
+
+**1. Folder badge stacked: layout verticale** (`quotes.html`).
+Pre-α.172.105 (α.172.102 orizzontale): chip top + chip sotto sovrapposte orizzontalmente con label nascosta → render in screenshot mostrava "pillola arancio vuota" mal posizionata accanto al chip verde "Approvata". Matteo: "non buona".
+
+Post: **stack verticale**:
+- Top card: chip standard con label visibile (priority piu' alta).
+- Sotto: N strisce sottili orizzontali (~4px alta, 80% width chip top, color solido).
+- Tooltip nativo su ogni striscia mostra label completa.
+- Hover stack: strisce passano a 92% width (lieve evidenza).
+
+**2. Modal Tech Specs deliverable: human-readable** (`planning.html` modal `dsmOpen`).
+Pre-α.172.105: 8 textarea con `JSON.stringify(block, null, 2)` → Matteo: "vedo codice nei campi".
+Post:
+- Render `pretty` di default: tabella key-value per ogni blocco. Chiavi humanized (`video_specs` → `Video specs`, `framerate` → `Framerate`). Valori scalar editable inline (input testuali con underline focus). Oggetti nested rendering ricorsivo con indent + border-left.
+- Toggle "📝 Modifica JSON" ↔ "👁 Vista leggibile" passa a textarea raw per power user. Sync bidirezionale (raw → JSON parse → riempie cache; pretty → leggere cache).
+- `_dsmCurrentSpec` cache globale del modal, source-of-truth durante editing.
+- `dsmApplyTemplate`/`dsmAiPropose`/`dsmSave` migrati al cache (no piu' textarea-only).
+- Type coercion al save: `"42"` → 42 (number), `"true"/"false"` → boolean, altrimenti string.
+
 ## v3.5.0-alpha.172.104 — Cashflow follow-up: filtro project_id denorm + NC re-include (28 mag 2026)
 
 Due fix complementari emersi durante verifica del fix α.172.103 (cancelled orfane). Matteo segnalava "Se attivo filtri progetti è tutto a 0".
