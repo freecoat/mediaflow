@@ -58,6 +58,8 @@
           </td>
           <td>
             <button class="btn btn-ghost btn-sm" onclick="openDetail({{ t.id }})" title="Vedi dettagli">👁</button>
+            <!-- v3.5.0-alpha.172.117 — rename rapido (code+name) senza aprire modal dettaglio -->
+            <button class="btn btn-ghost btn-sm js-rename-tpl" data-tid="{{ t.id }}" data-code="{{ t.code }}" data-name="{{ t.name }}" title="Rinomina (code + nome)">✏️</button>
             <!-- v3.5.0-alpha.132 (Fase 5 QoL) — export JSON + duplica -->
             <a class="btn btn-ghost btn-sm" href="/delivery-templates/api/{{ t.id }}/export-json" target="_blank" title="Esporta come JSON">⬇</a>
             <button class="btn btn-ghost btn-sm" onclick="duplicateTemplate({{ t.id }}, '{{ t.code|e }}')" title="Duplica come bozza modificabile">📋</button>
@@ -1490,6 +1492,49 @@ async function confirmDelete(tid, code) {
     toast(e.message || 'Errore', 'error');
   }
 }
+
+// v3.5.0-alpha.172.117 — rename rapido (code + name) senza aprire modal dettaglio.
+// Backlog #3 chiuso. PUT /delivery-templates/api/{tid} accetta code/name parziali.
+async function renameTemplateAction(tid, currentCode, currentName) {
+  const newName = prompt('Nuovo nome leggibile:', currentName || '');
+  if (newName === null) return;
+  const trimmedName = newName.trim();
+  if (!trimmedName) { toast('Nome vuoto: rename annullato', 'warning'); return; }
+
+  const newCode = prompt('Nuovo code (identifier UPPERCASE, lascia invariato se non vuoi cambiarlo):', currentCode || '');
+  if (newCode === null) return;
+  const trimmedCode = newCode.trim().toUpperCase();
+  if (!trimmedCode) { toast('Code vuoto: rename annullato', 'warning'); return; }
+
+  if (trimmedName === (currentName || '') && trimmedCode === (currentCode || '')) {
+    toast('Nessuna modifica', 'info');
+    return;
+  }
+
+  const fd = new FormData();
+  fd.append('name', trimmedName);
+  fd.append('code', trimmedCode);
+  try {
+    const r = await fetch('/delivery-templates/api/' + tid, { method: 'PUT', body: fd, credentials: 'same-origin' });
+    if (!r.ok) {
+      const err = await r.json().catch(() => ({ detail: 'Errore HTTP ' + r.status }));
+      throw new Error(err.detail || ('HTTP ' + r.status));
+    }
+    toast(`✓ Rinominato in "${trimmedCode}" / "${trimmedName}"`, 'success', 4000);
+    setTimeout(() => window.location.reload(), 500);
+  } catch (e) {
+    toast(e.message || 'Errore rename', 'error');
+  }
+}
+
+document.addEventListener('click', (ev) => {
+  const btn = ev.target.closest('.js-rename-tpl');
+  if (!btn) return;
+  ev.preventDefault();
+  const tid = parseInt(btn.dataset.tid, 10);
+  if (!tid) return;
+  renameTemplateAction(tid, btn.dataset.code || '', btn.dataset.name || '');
+});
 
 // v3.5.0-alpha.132 (Fase 5 QoL) — duplica template come bozza modificabile.
 async function duplicateTemplate(tid, code) {

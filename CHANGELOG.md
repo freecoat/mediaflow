@@ -1,5 +1,17 @@
 # MediaFlow — Changelog
 
+## v3.5.0-alpha.172.117 — Rename rapido delivery template (backlog #3) (28 mag 2026 sera)
+
+**Mini-task chiuso dal backlog originale Matteo `/delivery-templates`.**
+
+- Nuovo bottone `✏️` nella riga della tabella templates (`delivery_templates.html`) tra `👁` ed `⬇`.
+- Click → 2 prompt sequenziali (nome leggibile + code UPPERCASE, default = valori attuali) → PUT FormData `/delivery-templates/api/{tid}` con solo `name` + `code` → toast + reload.
+- Listener delegato `document.addEventListener('click', ...)` su `.js-rename-tpl` con `data-tid`/`data-code`/`data-name` (no `onclick` inline con stringhe template, no `JSON.stringify` → conforme a `feedback_no_jsonstringify_in_onclick`).
+- Backend invariato: `update_template()` già accettava `code`/`name` Optional.
+- Niente migrazione DB.
+
+**Batch Tier 2.4 chiuso 12/13 = 180 DeliveryItem** (sessione locale, post-interruzione SDK). 1/13 PIPERFILM-DELIVERY fallito (parser AI non-JSON anche con max_tokens=8000 → backlog). NBCU-UHD-HDR10-LONGFORM solo 1 item (sospetto sottoestrazione, da verificare nel sorgente).
+
 ## v3.5.0-alpha.172.116 — Tier 2.3 admin taxonomy CRUD + Tier 2.5 JobDeliverable FK (28 mag 2026)
 
 **Tier 2.5 — JobDeliverable.delivery_item_id FK + UI cascading**

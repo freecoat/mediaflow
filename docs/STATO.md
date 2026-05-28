@@ -8,23 +8,34 @@
 
 ## Versione corrente
 
-**v3.5.0-alpha.172.116** — 28 maggio 2026 sera — Tier 2 COMPLETO (eccetto batch 2.4 in run background)
+**v3.5.0-alpha.172.117** — 28 maggio 2026 sera — Rename rapido delivery template (backlog #3 chiuso) + batch 2.4 12/13
 
-**SESSIONE INTERROTTA — riprende da locale stasera.**
+### Rename rapido delivery template ✅
+Bottone `✏️` riga tabella `/delivery-templates` → 2 prompt (nome + code) → PUT con name/code → reload. Pattern data-attribute (no JSON.stringify in onclick). Backend `update_template()` già accettava i campi.
 
-### Stato batch Tier 2.4 al momento interruzione
+### Stato batch Tier 2.4 ✅ chiuso
 
-Batch `scripts/batch_extract_items.py` parser v2 sui 13 templates:
-- **3/13 completati**: RAI-SDHDUHD-1.4 (24 items, 159s), GTM-DELIVERY (3, 39s), FREMANTLE-DCP-ITA-THEATRICAL (35, 192s).
-- **DB: 62 DeliveryItem totali** + AudioTrackSpec ricchi.
-- **10/13 residui**: MUBI/NBCUNI-AUDIO/SKY-ITA/NBCU-TECHOPS/NBCU-LONGFORM (3 variants Gomorra)/VISION/A24/PIPERFILM. Stima ~22 min ancora.
+Batch `scripts/batch_extract_items.py` parser v2: **12/13 OK = 180 DeliveryItem** + AudioTrackSpec ricchi.
 
-**Per riprendere da locale**:
-1. Server gira ancora su :8000 α.172.116 (background task `bo06h0t9z`).
-2. Tunnel cloudflared up su https://parker-mining-ahead-infringement.trycloudflare.com (task `buf6npnvv`).
-3. Batch in run su background task `b45429fn0`. Se still alive: lascia finire. Se killed:
-   `.venv\Scripts\python.exe scripts\batch_extract_items.py`
-   (idempotente: skip template con items già presenti).
+| # | Template | Items | Tempo |
+|---|---|---:|---:|
+| 1 | RAI-SDHDUHD-1.4 | 24 | 159s |
+| 2 | GTM-DELIVERY | 3 | 39s |
+| 3 | FREMANTLE-DCP-ITA-THEATRICAL | 35 | 192s |
+| 4 | MUBI-FEATURE-DELIVERY | 25 | ~90s |
+| 5 | NBCUNI-AUDIO-51 | 17 | ~60s |
+| 6 | SKY-ITA-AV-DELIVERY | 7 | — |
+| 7 | NBCU-TECHOPS-LONGFORM-2.8 | 10 | — |
+| 8 | NBCU-LONGFORM-UHD | 7 | — |
+| 9 | NBCU-UHD-HDR10-LONGFORM | 1 | 32s |
+| 10 | NBCU-LONGFORM-UHD-V1.3_TECHO | 2 | 35s |
+| 11 | VISION-DIST-IT | 29 | 177s |
+| 12 | A24-QUEER-DELIVERY | 20 | 166s |
+| 13 | **PIPERFILM-DELIVERY** | **0 ERR** | 218s |
+
+**PIPERFILM ERR**: parser AI risposta non JSON valido (markdown/spiegazione/troncata anche con max_tokens=8000). Retry manuale possibile o tagliare capitolato. Backlog.
+
+**NBCU-UHD-HDR10-LONGFORM 1 item**: sospetto sottoestrazione, verificare nel template sorgente se davvero ha solo 1 deliverable rispetto agli altri NBCU.
 
 ### Riepilogo Tier 1+2 chiuso
 
@@ -34,7 +45,7 @@ Batch `scripts/batch_extract_items.py` parser v2 sui 13 templates:
 | 2.1 router DeliveryItem | ✅ | c9f691e |
 | 2.2 UI tabs Items in /delivery-templates | ✅ | c9f691e |
 | 2.3 admin /settings/delivery-taxonomy + CRUD | ✅ | 9b2b1bf |
-| 2.4 batch re-parse 13 templates | ⏳ in run | — |
+| 2.4 batch re-parse 13 templates | ✅ 12/13 = 180 items | — |
 | 2.5 JobDeliverable.delivery_item_id FK + UI cascading | ✅ | 9b2b1bf |
 
 Tutti commit pushati su origin/main.
@@ -42,20 +53,23 @@ Tutti commit pushati su origin/main.
 ### Backlog originale Matteo /delivery-templates
 
 1. ✅ Tech specs delivery dropdown → CHIUSO (taxonomy 135 record + UI tab Items + modal editor con dropdown α.172.114)
-2. ✅ Parser batch 17 capitolati → CHIUSO α.172.111 (legacy JSON 8-block) + Tier 2.4 in run (DeliveryItem strutturati)
-3. ⏳ Rename template → mini-task pending
+2. ✅ Parser batch 17 capitolati → CHIUSO α.172.111 (legacy JSON 8-block) + Tier 2.4 chiuso 12/13 = 180 items α.172.116
+3. ✅ Rename template → CHIUSO α.172.117 (bottone ✏️ inline)
 4. ✅ Modal dettaglio human-readable + edit no-JSON → CHIUSO α.172.112
 5. ✅ Modal Aggiungi delivery cascading template→item → CHIUSO α.172.115/116
 
-### Prossima sessione (locale stasera)
+**Backlog originale 100% chiuso.**
 
-1. Verifica batch completion. Conta DeliveryItem totali (target ~300+ su 13 templates).
-2. Test browser:
-   - https://localhost:8000/delivery-templates → tab Items su 13 templates
-   - https://localhost:8000/settings/delivery-taxonomy → CRUD entity
-   - https://localhost:8000/jobs/{id} → modal Nuovo deliverable cascading
-3. Chiusura mini-task rename template (#3 backlog).
-4. Eventuale Tier 3 (raffinamenti UI, validazione cross-tier).
+### Prossima sessione
+
+1. Test browser end-to-end:
+   - http://localhost:8000/delivery-templates → tab Items su 12 templates popolati (verifica cards summary)
+   - http://localhost:8000/settings/delivery-taxonomy → CRUD entity taxonomy
+   - http://localhost:8000/jobs/{id} → modal Nuovo deliverable cascading template→item
+2. Retry PIPERFILM (1/13 fallito): valutare aumento max_tokens parser oltre 8000 oppure split capitolato in chunk.
+3. Verifica NBCU-UHD-HDR10 (solo 1 item estratto: realmente povero o sottoestrazione AI?).
+4. Mini-task #3 rename template di consegna.
+5. Eventuale Tier 3 (raffinamenti UI, validazione cross-tier).
 
 ---
 
