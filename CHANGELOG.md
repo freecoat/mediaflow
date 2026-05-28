@@ -1,5 +1,26 @@
 # MediaFlow — Changelog
 
+## v3.5.0-alpha.172.101 — Bundle L Stack 2 milestone 3/3 CLOSE: pytest QC (28 mag 2026)
+
+Stack 2 di Bundle L chiuso completo. 28 test pytest su QC event-sourced foundation, tutti green.
+
+**File nuovo (`tests/test_qc_events.py`)** — 28 test su:
+
+1. **Immutability QCEvent** (4 test): UPDATE/DELETE bloccati salvo session option `__qc_admin_override__=True`. Validate `QCEventImmutabilityError` raise.
+2. **qc_number progression** (1 test): start_qc dopo reopen_qc incrementa qc_number (1 → 2 → 3 con cicli pass→reopen→start).
+3. **Sequence reset per round** (1 test): sequence riparte da 1 per ogni nuovo qc_number (verifica round 1 seq 1-5 + round 2 seq 1-2).
+4. **Projection counter correctness** (3 test): video/audio/text error counter + recommendation/note/correction/signoff counter + max_grade propagation (max grade tra tutti i channel errors).
+5. **Terminal status mapping** (4 test): pass → `overall_status=passed`, fail → `failed`, conditional → `conditional`, reopen → `reopened`.
+6. **Bundle I sync** (5 test): `JobDeliverable.qc_substatus` aggiornato su start (in_progress), pass (passed), fail (rejected), conditional (passed back-compat), reopen (in_progress). `qc_run_at` + `qc_run_by_user_id` popolati.
+7. **rebuild_qc_report idempotency** (2 test): chiamato 2x produce stesso stato; con 0 eventi rimuove projection; idempotente su projection già None.
+8. **Guard validation** (7 test): log_error/recommendation/correction/signoff/pass richiedono QC attivo (raise `ValueError("Nessun QC attivo")`); reopen richiede pregresso; note ammessa pre-QC come container futuro round 1; channel invalido raise `"channel non valido"`.
+
+Pattern test: SQLite in-memory + `_make_tenant_and_deliverable` helper (Tenant+Client+Project+Job+JobDeliverable minimi). Autouse fixture `_ensure_listeners` per registrare immutability listener una volta per sessione. Tenant.slug aggiunto a fixture (NOT NULL).
+
+**Risultato**: 28/28 passed in 2.7s. Stack 2 completo: foundation (α.172.98) + UI rich modal (α.172.100) + tests (α.172.101).
+
+**Stack 3+ rinviati** (Bundle L roadmap): ingest Excel QC FbF (foglio Field by Field) + capability AI `propose_qc_from_asset_diff` (compare snapshot asset vs riferimento) + export PDF QCReport.
+
 ## v3.5.0-alpha.172.100 — Bundle L Stack 2 milestone 2/3: UI QC rich modal (28 mag 2026)
 
 Milestone 2/3 dello Stack 2 di Bundle L. UI rich modal QC globale che consuma gli endpoint event-sourced di α.172.98, esposto come `window.openQcModal(deliverableId, name)` da qualsiasi template.
