@@ -1,6 +1,6 @@
 // v3.5.0-alpha.172.107 — Auto-generated da tools/i18n_generate_entries.py
 // Mergere in window.MF_I18N (app/static/js/i18n.js).
-// Totale entry: 200 (61 tradotte da dict, 139 TODO_TRANSLATE)
+// Totale entry: 200 (80 tradotte da dict, 120 TODO_TRANSLATE)
 //
 // CONVENZIONE:
 //   common.* = stringa usata su >=3 file (probabile UI globale).
@@ -122,10 +122,10 @@ window.MF_I18N_GENERATED = {
   }, // freq=4 files=2
   'common.quando': {
     it: 'Quando',
-    en: 'TODO_TRANSLATE',
-    fr: 'TODO_TRANSLATE',
-    de: 'TODO_TRANSLATE',
-    es: 'TODO_TRANSLATE',
+    en: 'When',
+    fr: 'Quand',
+    de: 'Wann',
+    es: 'Cuándo',
   }, // freq=4 files=3
   'common.quotazione': {
     it: 'Quotazione',
@@ -143,10 +143,10 @@ window.MF_I18N_GENERATED = {
   }, // freq=4 files=2
   'common.confermato': {
     it: 'Confermato',
-    en: 'TODO_TRANSLATE',
-    fr: 'TODO_TRANSLATE',
-    de: 'TODO_TRANSLATE',
-    es: 'TODO_TRANSLATE',
+    en: 'Confirmed',
+    fr: 'Confirmé',
+    de: 'Bestätigt',
+    es: 'Confirmado',
   }, // freq=4 files=3
   'common.crea': {
     it: 'Crea',
@@ -178,10 +178,10 @@ window.MF_I18N_GENERATED = {
   }, // freq=3 files=3
   'common.dal': {
     it: 'Dal',
-    en: 'TODO_TRANSLATE',
-    fr: 'TODO_TRANSLATE',
-    de: 'TODO_TRANSLATE',
-    es: 'TODO_TRANSLATE',
+    en: 'From',
+    fr: 'Du',
+    de: 'Von',
+    es: 'Desde',
   }, // freq=3 files=2
   'common.opzionale': {
     it: '(opzionale)',
@@ -227,17 +227,17 @@ window.MF_I18N_GENERATED = {
   }, // freq=2 files=2
   'auto.approvato': {
     it: 'Approvato',
-    en: 'TODO_TRANSLATE',
-    fr: 'TODO_TRANSLATE',
-    de: 'TODO_TRANSLATE',
-    es: 'TODO_TRANSLATE',
+    en: 'Approved',
+    fr: 'Approuvé',
+    de: 'Genehmigt',
+    es: 'Aprobado',
   }, // freq=2 files=2
   'auto.annullato': {
     it: 'Annullato',
-    en: 'TODO_TRANSLATE',
-    fr: 'TODO_TRANSLATE',
-    de: 'TODO_TRANSLATE',
-    es: 'TODO_TRANSLATE',
+    en: 'Cancelled',
+    fr: 'Annulé',
+    de: 'Storniert',
+    es: 'Anulado',
   }, // freq=2 files=2
   'auto.aoriginal_name': {
     it: '${a.original_name}',
@@ -290,17 +290,17 @@ window.MF_I18N_GENERATED = {
   }, // freq=2 files=2
   'auto.fatto': {
     it: 'Fatto',
-    en: 'TODO_TRANSLATE',
-    fr: 'TODO_TRANSLATE',
-    de: 'TODO_TRANSLATE',
-    es: 'TODO_TRANSLATE',
+    en: 'Done',
+    fr: 'Fait',
+    de: 'Erledigt',
+    es: 'Hecho',
   }, // freq=2 files=1
   'auto.descrizione_opzionale': {
     it: 'Descrizione (opzionale)',
-    en: 'TODO_TRANSLATE',
-    fr: 'TODO_TRANSLATE',
-    de: 'TODO_TRANSLATE',
-    es: 'TODO_TRANSLATE',
+    en: 'Description (optional)',
+    fr: 'Description (facultative)',
+    de: 'Beschreibung (optional)',
+    es: 'Descripción (opcional)',
   }, // freq=2 files=2
   'auto.ora': {
     it: 'Ora',
@@ -332,10 +332,10 @@ window.MF_I18N_GENERATED = {
   }, // freq=2 files=1
   'auto.importo': {
     it: 'Importo',
-    en: 'TODO_TRANSLATE',
-    fr: 'TODO_TRANSLATE',
-    de: 'TODO_TRANSLATE',
-    es: 'TODO_TRANSLATE',
+    en: 'Amount',
+    fr: 'Montant',
+    de: 'Betrag',
+    es: 'Importe',
   }, // freq=2 files=1
   'auto.errore_escapehtmlemessage': {
     it: 'Errore: \' + escapeHtml(e.message||\'\') + \'',
@@ -346,10 +346,10 @@ window.MF_I18N_GENERATED = {
   }, // freq=2 files=1
   'auto.nuova': {
     it: '(nuova)',
-    en: 'TODO_TRANSLATE',
-    fr: 'TODO_TRANSLATE',
-    de: 'TODO_TRANSLATE',
-    es: 'TODO_TRANSLATE',
+    en: '(new)',
+    fr: '(nouvelle)',
+    de: '(neu)',
+    es: '(nueva)',
   }, // freq=1 files=1
   'auto.errore_emessage_2': {
     it: 'Errore: \'+(e.message||\'\')+\'',
@@ -360,24 +360,24 @@ window.MF_I18N_GENERATED = {
   }, // freq=1 files=1
   'auto.builtin': {
     it: 'Built-in',
-    en: 'TODO_TRANSLATE',
-    fr: 'TODO_TRANSLATE',
-    de: 'TODO_TRANSLATE',
-    es: 'TODO_TRANSLATE',
+    en: 'Built-in',
+    fr: 'Intégré',
+    de: 'Integriert',
+    es: 'Integrado',
   }, // freq=1 files=1
   'auto.modalità_ritiroconsegna': {
     it: 'Modalità ritiro/consegna',
-    en: 'TODO_TRANSLATE',
-    fr: 'TODO_TRANSLATE',
-    de: 'TODO_TRANSLATE',
-    es: 'TODO_TRANSLATE',
+    en: 'Pickup/Delivery mode',
+    fr: 'Mode retrait/livraison',
+    de: 'Abholung/Lieferung',
+    es: 'Modo recogida/entrega',
   }, // freq=1 files=1
   'auto.hint_ai_opzionale': {
     it: 'Hint AI (opzionale)',
-    en: 'TODO_TRANSLATE',
-    fr: 'TODO_TRANSLATE',
-    de: 'TODO_TRANSLATE',
-    es: 'TODO_TRANSLATE',
+    en: 'AI hint (optional)',
+    fr: 'Indice IA (facultatif)',
+    de: 'KI-Hinweis (optional)',
+    es: 'Pista IA (opcional)',
   }, // freq=1 files=1
   'auto.rfake_billing_count_vocei_di_c': {
     it: '${r.fake_billing_count} voce(i) di costo con stato fatturato ma 0 ore maturate — verificare semantica',
@@ -395,24 +395,24 @@ window.MF_I18N_GENERATED = {
   }, // freq=1 files=1
   'auto.costo_reale_fatture': {
     it: 'Costo reale (fatture)',
-    en: 'TODO_TRANSLATE',
-    fr: 'TODO_TRANSLATE',
-    de: 'TODO_TRANSLATE',
-    es: 'TODO_TRANSLATE',
+    en: 'Actual cost (invoices)',
+    fr: 'Coût réel (factures)',
+    de: 'Realer Aufwand (Rechnungen)',
+    es: 'Coste real (facturas)',
   }, // freq=1 files=1
   'auto.note_per_il_commerciale_opzion': {
     it: 'Note per il commerciale (opzionale)',
-    en: 'TODO_TRANSLATE',
-    fr: 'TODO_TRANSLATE',
-    de: 'TODO_TRANSLATE',
-    es: 'TODO_TRANSLATE',
+    en: 'Notes for sales (optional)',
+    fr: 'Notes pour le commercial (facultatif)',
+    de: 'Notizen für Vertrieb (optional)',
+    es: 'Notas para comercial (opcional)',
   }, // freq=1 files=1
   'auto.creaestendi_quote': {
     it: 'Crea/estendi quote',
-    en: 'TODO_TRANSLATE',
-    fr: 'TODO_TRANSLATE',
-    de: 'TODO_TRANSLATE',
-    es: 'TODO_TRANSLATE',
+    en: 'Create/extend quote',
+    fr: 'Créer/étendre devis',
+    de: 'Angebot erstellen/erweitern',
+    es: 'Crear/ampliar cotización',
   }, // freq=1 files=1
   'auto.carica': {
     it: 'Carica',
@@ -451,17 +451,17 @@ window.MF_I18N_GENERATED = {
   }, // freq=1 files=1
   'auto.nota_opzionale': {
     it: 'Nota (opzionale)',
-    en: 'TODO_TRANSLATE',
-    fr: 'TODO_TRANSLATE',
-    de: 'TODO_TRANSLATE',
-    es: 'TODO_TRANSLATE',
+    en: 'Note (optional)',
+    fr: 'Note (facultative)',
+    de: 'Notiz (optional)',
+    es: 'Nota (opcional)',
   }, // freq=1 files=1
   'auto.job_lavorazione': {
     it: 'Job (lavorazione)',
-    en: 'TODO_TRANSLATE',
-    fr: 'TODO_TRANSLATE',
-    de: 'TODO_TRANSLATE',
-    es: 'TODO_TRANSLATE',
+    en: 'Job (operation)',
+    fr: 'Job (opération)',
+    de: 'Job (Arbeitsschritt)',
+    es: 'Trabajo (operación)',
   }, // freq=1 files=1
   'auto.forza_fattura_senza_progettoqu': {
     it: '⚠ Forza fattura senza progetto/quotazione',
@@ -472,17 +472,17 @@ window.MF_I18N_GENERATED = {
   }, // freq=1 files=1
   'auto.note_messaggio_opzionale': {
     it: 'Note / messaggio (opzionale)',
-    en: 'TODO_TRANSLATE',
-    fr: 'TODO_TRANSLATE',
-    de: 'TODO_TRANSLATE',
-    es: 'TODO_TRANSLATE',
+    en: 'Notes / message (optional)',
+    fr: 'Notes / message (facultatif)',
+    de: 'Notizen / Nachricht (optional)',
+    es: 'Notas / mensaje (opcional)',
   }, // freq=1 files=1
   'auto.motivo_opzionale': {
     it: 'Motivo (opzionale)',
-    en: 'TODO_TRANSLATE',
-    fr: 'TODO_TRANSLATE',
-    de: 'TODO_TRANSLATE',
-    es: 'TODO_TRANSLATE',
+    en: 'Reason (optional)',
+    fr: 'Motif (facultatif)',
+    de: 'Grund (optional)',
+    es: 'Motivo (opcional)',
   }, // freq=1 files=1
   'auto.fattura': {
     it: 'Fattura',

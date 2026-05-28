@@ -1,5 +1,21 @@
 # MediaFlow — Changelog
 
+## v3.5.0-alpha.172.108 — i18n round 2: dict +19 stringhe (61→80 tradotte) (28 mag 2026)
+
+Espansione round 2 del dictionary statico `tools/i18n_generate_entries.py:DICT` con 50 nuove parole IT (form fields, status verbs, address fields, generic UI). Re-run del generation script → 80 entries tradotte (era 61), 120 TODO_TRANSLATE (era 139).
+
+**Nuove stringhe coperte**:
+- Date/quando: Quando, Confermato, Confermata, Dal, Al, Approvato, Annullato, Fatto
+- Form: Descrizione, Descrizione (opzionale), Importo, Importi, (nuova), (nuovo), Built-in, Modalità ritiro/consegna
+- AI/Producer: Hint AI (opzionale), Costo reale (fatture), Note per il commerciale (opzionale), Crea/estendi quote
+- Generic: Nota (opzionale), Job (lavorazione), Note / messaggio (opzionale), Motivo (opzionale)
+- Anagrafica: Nome, Cognome, Email, Telefono, Indirizzo, Città, Provincia, Paese, CAP, P.IVA, Codice fiscale, IBAN
+- Actions: Sì, No, OK, Scegli, Seleziona, Applica, Azzera, Indietro, Avanti, Dettagli, Azioni, Note, Tutti, Nessuno
+
+`window.MF_I18N_AUTO_SWAP` aggiornato in `app/static/js/i18n.js` con 80 entries via Python regex replace. Auto-swap DOM ora copre **circa 70-75%** delle stringhe italiane più ricorrenti.
+
+**TODO rimanenti (120)**: stringhe complesse + falsi positivi (CSS hex colors, JS template literals). Pattern resto: refining heuristica audit oppure batch traduzione AI dedicata.
+
 ## v3.5.0-alpha.172.107 — i18n auto-swap DOM: 61 stringhe comuni IT→EN/FR/DE/ES live (28 mag 2026)
 
 Implementazione **auto-swap brutale DOM** delle 61 stringhe italiane comuni rilevate dall'audit α.172.106. Coperto ~60% dell'usage italiano UI senza dover annotare template con `data-i18n`.
