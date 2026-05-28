@@ -1964,7 +1964,10 @@ async def lifespan(app: FastAPI):
     #   - altrimenti se almeno 1 slice esiste → JCL.billing_status = billed
     # Idempotente: marker uploads/.jcl_status_backfilled_v1.
     try:
-        from pathlib import Path
+        # v3.5.0-alpha.172.125 — rimosso `from pathlib import Path` locale:
+        # rendeva Path una variabile locale per TUTTO il lifespan → i backfill
+        # precedenti (work_date/total_expected/JCLBilledSlice) crashavano con
+        # "cannot access local variable 'Path'". Usa il Path globale (riga 7).
         marker = Path("uploads") / ".jcl_status_backfilled_v1"
         if not marker.exists():
             marker.parent.mkdir(parents=True, exist_ok=True)
@@ -2063,7 +2066,7 @@ async def lifespan(app: FastAPI):
     yield
 
 
-app = FastAPI(title="Claqo", version="3.5.0-alpha.172.124", lifespan=lifespan)
+app = FastAPI(title="Claqo", version="3.5.0-alpha.172.125", lifespan=lifespan)
 
 BASE_DIR = Path(__file__).parent
 app.mount("/static", StaticFiles(directory=BASE_DIR / "static"), name="static")

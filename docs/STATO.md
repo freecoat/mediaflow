@@ -8,7 +8,11 @@
 
 ## Versione corrente
 
-**v3.5.0-alpha.172.124** — 28 maggio 2026 sera — list_templates filtra soft-deleted di default (`?include_inactive=1` per admin)
+**v3.5.0-alpha.172.125** — 28 maggio 2026 sera — fix lifespan backfill (Path scoping) + avvia_muto anti-zombie
+
+### α.172.125 ✅
+**Fix 500 su /delivery-templates** diagnosticato a fondo: NON era un bug di codice ma 10 server zombie su :8000 (OneDrive rompe il reload-watcher di uvicorn → restart manuali accumulano processi; SO_REUSEADDR Windows → un vecchio .116 rispondeva, template .124 → Jinja UndefinedError su `stats`/`show_inactive`). Fix: kill di tutti i python + relaunch pulito.
+Inoltre: (1) rimosso `from pathlib import Path` locale nel lifespan che faceva crashare in silenzio 3 backfill JCL (Path diventava variabile locale per tutto lo scope); (2) `avvia_muto.bat` ora killa i listener su :8000 prima di avviare → niente più zombie.
 
 ### α.172.124 ✅
 `GET /delivery-templates/api/list` default `is_active=True`. I 3 template soft-deleted (Gomorrah/NBCU id=10/11) non compaiono più nelle dropdown cascading job/quote/planning/project + Diff. Tabella admin invariata (server-rendered con `show_inactive`). Nessun fix frontend, nessuna migrazione DB.

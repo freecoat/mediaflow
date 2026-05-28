@@ -1,5 +1,13 @@
 # MediaFlow — Changelog
 
+## v3.5.0-alpha.172.125 — Fix lifespan backfill (Path scoping) + avvia_muto anti-zombie (28 mag 2026 sera)
+
+**Bug fix lifespan** — `from pathlib import Path` locale dentro la funzione `lifespan` rendeva `Path` una variabile locale per **tutto** lo scope → i 3 backfill precedenti (`JCL.work_date`, `JCL.total_expected`, `JCLBilledSlice`) crashavano al primo uso di `Path` con `cannot access local variable 'Path' where it is not associated with a value`. Errore catturato dal try/except → silenzioso, ma i backfill non giravano mai. Rimosso l'import locale, ora usa il `Path` globale (riga 7). I 3 backfill ora completano al boot.
+
+**avvia_muto.bat anti-zombie** — OneDrive rompe il file-watcher di uvicorn `--reload`: ogni restart manuale lasciava il processo precedente in LISTEN su :8000 (SO_REUSEADDR Windows), accumulando server zombie che servivano codice vecchio (oggi 10 processi, vecchia versione .116 che rispondeva al posto della corrente → 500 su /delivery-templates per context Jinja mancante). Aggiunto step PowerShell che killa **solo** i processi in LISTEN su :8000 prima di `python run.py`. Non tocca altri python.
+
+File: `app/main.py` (lifespan), `avvia_muto.bat`.
+
 ## v3.5.0-alpha.172.124 — list_templates filtra soft-deleted di default (28 mag 2026 sera)
 
 `GET /delivery-templates/api/list` ora filtra `is_active=True` di default. Flag `?include_inactive=1` per esporre i soft-deleted (uso admin/diagnostica).
