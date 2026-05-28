@@ -715,6 +715,9 @@ class DeliveryTemplate(Base):
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
     tenant: Mapped["Tenant"] = relationship(back_populates="delivery_templates")
+    audio_config_presets: Mapped[List["AudioConfigPreset"]] = relationship(
+        back_populates="delivery_template", cascade="all, delete-orphan"
+    )
 
 
 # ── DELIVERY TAXONOMY (v3.5.0-alpha.172.113 — Tier 1) ─────────
@@ -986,6 +989,9 @@ class DeliveryItem(Base):
     audio_tracks: Mapped[List["AudioTrackSpec"]] = relationship(
         back_populates="delivery_item", cascade="all, delete-orphan"
     )
+    audio_config_preset: Mapped[Optional["AudioConfigPreset"]] = relationship(
+        foreign_keys=[audio_config_preset_id]
+    )
 
 
 class AudioTrackSpec(Base):
@@ -1037,6 +1043,10 @@ class AudioConfigPreset(Base):
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    delivery_template: Mapped["DeliveryTemplate"] = relationship(
+        back_populates="audio_config_presets"
+    )
 
 
 # ── LISTINO ──────────────────────────────────────────────────

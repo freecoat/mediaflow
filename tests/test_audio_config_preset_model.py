@@ -26,3 +26,16 @@ def test_audio_config_preset_model(db, tenant_id):
     assert p.id is not None
     assert p.is_active is True
     assert p.track_layout[0]["track_label"] == "5.1 L"
+
+
+def test_audio_config_preset_unique_code_per_template(db, tenant_id):
+    import pytest
+    from sqlalchemy.exc import IntegrityError
+    from app.models.models import DeliveryTemplate, AudioConfigPreset
+    t = DeliveryTemplate(tenant_id=tenant_id, code="TST-UQ", name="UQ")
+    db.add(t); db.flush()
+    db.add(AudioConfigPreset(tenant_id=tenant_id, delivery_template_id=t.id, code="8T07", name="a"))
+    db.flush()
+    db.add(AudioConfigPreset(tenant_id=tenant_id, delivery_template_id=t.id, code="8T07", name="b"))
+    with pytest.raises(IntegrityError):
+        db.flush()
