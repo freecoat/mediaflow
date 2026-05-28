@@ -10,21 +10,30 @@
 {% block head %}
 <script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.2/Sortable.min.js"></script>
 <style>
-  /* v3.5.0-alpha.172.97 — Folder-view + stacked status cards */
+  /* v3.5.0-alpha.172.99 — Folder-view + stacked playing cards (fan effect) */
   .qrow-folder:hover { background: rgba(98,114,245,0.10) !important; }
   .qrow-version:hover { background: rgba(255,255,255,0.04) !important; }
   .qstatus-chip {
-    display: inline-block; padding: 2px 8px; font-size: 11px; font-weight: 600;
+    display: inline-block; padding: 3px 10px; font-size: 11px; font-weight: 600;
     border-radius: 10px; white-space: nowrap; line-height: 1.4;
   }
+  .qstatus-stack {
+    display: inline-block; position: relative; padding: 6px 4px 6px 0;
+    transition: padding 0.22s ease;
+  }
   .qstatus-chip.stacked {
-    position: relative; box-shadow: 1px 1px 3px rgba(0,0,0,0.15);
+    position: relative;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.28), 0 1px 2px rgba(0,0,0,0.18);
+    transform-origin: bottom left;
+    transition: transform 0.22s ease, margin 0.22s ease, box-shadow 0.22s ease;
   }
+  /* Hover: spread orizzontale come ventaglio di carte aperto (no rotation) */
+  .qstatus-stack:hover { padding-right: 8px; }
   .qstatus-stack:hover .qstatus-chip.stacked {
-    transform: none !important; margin-left: 4px !important;
-    transition: transform 0.18s ease, margin 0.18s ease;
+    margin-left: 6px !important;
+    transform: translate(0, 0) rotate(0deg) !important;
+    box-shadow: 0 4px 8px rgba(0,0,0,0.35), 0 2px 4px rgba(0,0,0,0.20);
   }
-  .qstatus-chip { transition: transform 0.18s ease, margin 0.18s ease; }
 
   .ql-row.dragging { opacity: 0.4; }
   .ql-row .ghost { background: var(--indigo-bg); }
@@ -1304,15 +1313,22 @@ function stackedStatusCards(statuses) {
     .sort((a, b) => a.p - b.p);
   if (!visible.length) return '<span class="text-xs text-muted">—</span>';
   if (visible.length === 1) return quoteStatusChip(visible[0].s);
-  // Multi-stato: stacked offset (top = priority piu' alta)
+  // Multi-stato: ventaglio di carte stile playing-cards.
+  // Card top (priority alta) sta dietro, rotazione 0; cards successive ruotate
+  // progressivamente verso destra-su, offset orizzontale + verticale.
+  // Hover (vedi CSS .qstatus-stack:hover) spreada orizzontalmente.
+  const n = visible.length;
   const html = visible.map((v, i) => {
     const m = QSTATUS_META[v.s];
-    const offsetX = i * 8;
-    const offsetY = i * 4;
-    const z = visible.length - i;
-    return `<span class="qstatus-chip stacked" style="background:${m.bg};color:${m.color};border:1px solid ${m.border};margin-left:${i===0?0:-12}px;transform:translate(${offsetX}px,${offsetY}px);z-index:${z};">${m.label}</span>`;
+    // Ventaglio simmetrico: rotation da -6deg a +6deg
+    const rot = n === 1 ? 0 : (-6 + (12 * i / (n - 1)));
+    const offsetX = i * 10;
+    const offsetY = Math.abs(i - (n - 1) / 2) * 2;
+    const z = n - i;
+    const ml = i === 0 ? 0 : -18;
+    return `<span class="qstatus-chip stacked" style="background:${m.bg};color:${m.color};border:1px solid ${m.border};margin-left:${ml}px;transform:translate(${offsetX}px,${offsetY}px) rotate(${rot}deg);z-index:${z};">${m.label}</span>`;
   }).join('');
-  return `<span class="qstatus-stack" style="display:inline-block;position:relative;">${html}</span>`;
+  return `<span class="qstatus-stack">${html}</span>`;
 }
 
 // Stato folder espansi (chiave: base_code). Persistente in localStorage per evitare

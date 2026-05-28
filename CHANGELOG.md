@@ -1,5 +1,30 @@
 # MediaFlow — Changelog
 
+## v3.5.0-alpha.172.99 — Fix test: CR qty respawn cross-nature + folder ventaglio + TB doc (28 mag 2026)
+
+Tre fix da test browser Matteo:
+
+**1. CR quantity stale dopo edit voce quote (`app/routers/quotes.py`)** — bug: editando una voce quote con cambio `unit` (es. TB→pc) e cambio `quantity` (es. 100→10), il Cost Report mostrava `unit` aggiornato ma `quantity` rimasta a 100. Root cause: `update_quote_line` aggiornava in-place i `JobDeliverable` collegati ma saltava `quantity_planned` quando la nature target era `deliverable_qty` (assumendo spawn-per-unit qty=1 per N row), MA non re-spawnava le N row se il numero cambiava o se la nature era diversa (volume → qty).
+
+  Fix: nuovo helper `_respawn_line_artifacts(db, line, job)`:
+  - Detect cambio nature (volume↔qty↔manual_allow) O cambio N row (spawn-per-unit).
+  - Pre-check safety: 0 `quantity_delivered`, 0 booking link, `billing_status=not_billed`, `confirmed_at=None`. Altrimenti 409 con messaggio "crea nuova versione di quote".
+  - SAFE: delete vecchi `JobDeliverable` + re-spawn con logica identica a `_create_job_from_quote` (1 row per `volume/manual_allow`, N row per `deliverable_qty`).
+  - Out-of-scope MVP: cambio cross-table time↔non-time (JCL↔Deliverable) → 409 "richiede nuova versione".
+  - Wired in `update_quote_line` PRIMA del sync inline tradizionale (linea 1788+). Se respawn=False, fallback al sync inline esistente (name/unit/price/qty_planned per non-qty nature).
+
+**2. Folder quote — badge stacked playing cards (`app/templates/pages/quotes.html`)** — pre-α.172.99: stacked offset minimale (8px X, 4px Y, no rotation) → poco leggibile come "carte sovrapposte". Post-α.172.99: ventaglio reale stile playing cards.
+  - CSS: shadow 2-livelli, `transform-origin: bottom left`, transition più morbida (0.22s).
+  - JS `stackedStatusCards`: ventaglio simmetrico rotation `-6deg → +6deg` distribuito su N cards, offset X 10px/card, offset Y parabolico (Math.abs(i - (n-1)/2) × 2), margin-left -18px per sovrapposizione marcata.
+  - Hover (`.qstatus-stack:hover`): reset rotation a 0deg + spread orizzontale (`margin-left: 6px`) + shadow boost — ventaglio si "apre" come pila spread.
+
+**3. TB ammontare rendicontativo — decisione architetturale documentata**: semantica `deliverable_volume` (TB/GB) confermata = 1 row aggregata, NON deliverable discreto. Le unità TB/GB rappresentano **ammontare dati trasferiti** (LTO, HDD, link Digidelivery), non consegne separate. Roadmap futura post-Bundle L: bridge MediaShuttle/Aspera/Yoyotta per transfer monitoring automatico (auto-update `quantity_delivered`). Salvato in memoria `project_tb_ammontare_rendicontativo`.
+
+Nessuna migrazione DB. Test browser:
+- Edit voce LTO LTFS Archive: TB qty=100 → pc qty=10 → CR mostra pc qty=10 (10 row separati spawn-per-unit).
+- Edit voce TB qty=10 → qty=20 → CR mostra 1 row aggregato volume qty=20.
+- Folder `/quotes/` con 3+ status diversi (es. v1 approved + v2 sent + v3 draft) → ventaglio inclinato visibile, hover spread orizzontale.
+
 ## v3.5.0-alpha.172.98 — Bundle L Stack 2: QC event-sourced foundation (28 mag 2026)
 
 Milestone 1/3 dello Stack 2 di Bundle L. Foundation event-sourcing per il workflow QC: ogni mutazione produce un `QCEvent` append-only; una projection materializzata `QCReport` viene aggiornata in tempo reale; coerenza con Bundle I preservata via sync diretto su `JobDeliverable.qc_substatus`.

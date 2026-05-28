@@ -223,6 +223,151 @@ def _create_job_from_quote(db: Session, q: Quote, user_id: Optional[int] = None)
     return job
 
 
+def _respawn_line_artifacts(db: Session, line: QuoteLine, job: Optional[Job]) -> dict:
+    """v3.5.0-alpha.172.99 — Re-spawn JCL/JobDeliverable per una singola QuoteLine.
+
+    Trigger: cambio `unit_nature` (volume↔qty↔manual_allow) O cambio numero
+    row spawn-per-unit (qty cambia per `deliverable_qty`). In tutti questi
+    casi gli artifacts esistenti NON rappresentano più la quote line.
+
+    Pre-check sicurezza prima di delete:
+      - JCL: 0 booking non-cancelled
+      - JobDeliverable: quantity_delivered=0 + no link booking_deliverables +
+        billing_status=not_billed + confirmed_at=None
+      - Altrimenti 409 con messaggio "crea nuova versione quote"
+
+    Out-of-scope MVP: cambio cross-table time↔non-time (JCL↔Deliverable).
+    Per ora se nature passa da/a time_based ritorna no-op con warning — l'edit
+    delle altre property (description/unit_price) viene già propagato dal
+    chiamante. La transizione completa cross-table va via nuova versione quote.
+    """
+    from app.models import (
+        BookingDeliverable, DeliverableBillingStatus,
+        DeliverableUnitNature,
+    )
+    from app.services.cost_line_sync import unit_nature_for, TIME_UNITS
+
+    if job is None:
+        return {"respawned": False, "reason": "no_job_yet"}
+
+    unit_l = (line.unit or "").strip().lower()
+    target_is_time = unit_l in TIME_UNITS
+    target_nature_code = "time_based" if target_is_time else unit_nature_for(line.unit)
+
+    # Artifacts esistenti
+    existing_jcl = db.query(JobCostLine).filter(
+        JobCostLine.quote_line_id == line.id
+    ).all()
+    existing_deliv = db.query(JobDeliverable).filter(
+        JobDeliverable.quote_line_id == line.id
+    ).all()
+
+    current_is_time = bool(existing_jcl) and not existing_deliv
+    current_is_deliv = bool(existing_deliv) and not existing_jcl
+
+    # Cross-table change: out-of-scope (NEEDS new quote version)
+    if current_is_time != target_is_time and (existing_jcl or existing_deliv):
+        raise HTTPException(
+            409,
+            f"Cambio unit '{line.unit}' richiede passaggio time↔deliverable: "
+            f"non supportato a caldo. Crea una nuova versione di quote (clone "
+            f"+ modifica + migrate-job)."
+        )
+
+    # Same-side change (entrambi deliverable side)
+    if current_is_deliv:
+        # Detect se serve respawn:
+        # - nature cambia, O
+        # - target nature=deliverable_qty E count rows != target qty
+        current_nature_code = (existing_deliv[0].unit_nature.value
+                               if existing_deliv[0].unit_nature else "deliverable_qty")
+        nature_changed = (current_nature_code != target_nature_code)
+        qty_total = float(line.quantity or 0.0)
+        target_n_rows = (max(1, int(round(qty_total)))
+                         if target_nature_code == "deliverable_qty" else 1)
+        rows_changed = (len(existing_deliv) != target_n_rows)
+        if not (nature_changed or rows_changed):
+            return {"respawned": False, "reason": "no_change_needed"}
+
+        # SAFETY: tutti i deliverable devono essere "vergini"
+        for d in existing_deliv:
+            if (d.quantity_delivered or 0.0) > 0.0:
+                raise HTTPException(
+                    409,
+                    f"Consegna '{d.name}' ha quantity_delivered={d.quantity_delivered}: "
+                    f"impossibile re-spawn. Annulla la consegna parziale o crea "
+                    f"nuova versione di quote."
+                )
+            if d.confirmed_at:
+                raise HTTPException(
+                    409,
+                    f"Consegna '{d.name}' confermata: impossibile re-spawn. "
+                    f"Annulla conferma o crea nuova versione di quote."
+                )
+            if d.billing_status in (
+                DeliverableBillingStatus.in_batch,
+                DeliverableBillingStatus.billed,
+                DeliverableBillingStatus.paid,
+            ):
+                raise HTTPException(
+                    409,
+                    f"Consegna '{d.name}' è {d.billing_status.value}: "
+                    f"impossibile re-spawn. Crea nuova versione di quote."
+                )
+            n_links = db.query(BookingDeliverable).filter(
+                BookingDeliverable.job_deliverable_id == d.id
+            ).count()
+            if n_links > 0:
+                raise HTTPException(
+                    409,
+                    f"Consegna '{d.name}' ha {n_links} booking linkati: "
+                    f"impossibile re-spawn. Scollegali o crea nuova versione."
+                )
+
+        # SAFE: delete vecchi + spawn nuovi
+        for d in existing_deliv:
+            db.delete(d)
+        db.flush()
+
+        target_nature = DeliverableUnitNature(target_nature_code)
+        up = float(line.unit_price or 0.0)
+        per_row_qty = (1.0 if target_nature_code == "deliverable_qty"
+                       else (qty_total if qty_total > 0 else 1.0))
+        pi = (db.query(PriceItem).filter(PriceItem.id == line.price_item_id).first()
+              if line.price_item_id else None)
+        phys_nature = _infer_deliverable_nature(pi)
+        for _idx in range(target_n_rows):
+            db.add(JobDeliverable(
+                tenant_id=job.tenant_id,
+                job_id=job.id,
+                job_cost_line_id=None,
+                quote_line_id=line.id,
+                price_item_id=line.price_item_id,
+                name=line.description,
+                nature=phys_nature,
+                unit=line.unit,
+                unit_price=up,
+                unit_nature=target_nature,
+                quantity_planned=per_row_qty,
+                quantity_delivered=0.0,
+                total_quoted=round(per_row_qty * up, 2),
+                total_accrued=0.0,
+                total_cost_accrued=0.0,
+                billing_status=DeliverableBillingStatus.not_billed,
+            ))
+        db.flush()
+        return {
+            "respawned": True,
+            "old_n_rows": len(existing_deliv),
+            "old_nature": current_nature_code,
+            "new_n_rows": target_n_rows,
+            "new_nature": target_nature_code,
+        }
+
+    # current_is_time: solo update qty su JCL (già fatto dal chiamante)
+    return {"respawned": False, "reason": "time_based_inline_update"}
+
+
 def _job_has_activity(db: Session, job: Job) -> bool:
     """True se il job ha booking non-cancelled o TimePunch effettivi."""
     active_bk = db.query(Booking).filter(
@@ -1785,26 +1930,35 @@ async def update_quote_line(
         # Per sicurezza: lo lasciamo come riferimento iniziale (no sovrascrittura).
         job_cost_line_synced = True
 
-    # v3.5.0-alpha.172.18 — sync anche JobDeliverable collegati (Consuntivo edit).
-    # Cambia nome, unit, unit_price, total_quoted. Per quantity_planned aggiorna
-    # SOLO se nessun delivered ancora registrato (qty_delivered == 0): se ci sono
-    # consegne parziali confermate, l'aggregato non si può rimodulare a caldo.
-    # nature non si tocca (cambio unit → nature è un'altra storia, va via versioning).
+    # v3.5.0-alpha.172.99 — sync JobDeliverable + respawn cross-nature.
+    # Step 1: prova respawn (cambio nature OR cambio N row spawn-per-unit).
+    # Pre-check safety: solleva 409 se ci sono consegne/booking link/billed.
+    # Step 2: se no-respawn, sync inline name/unit/price/qty.
     job_deliverables_synced = 0
-    deliverables = db.query(JobDeliverable).filter(JobDeliverable.quote_line_id == line.id).all()
-    for d in deliverables:
-        d.name = line.description
-        d.unit = line.unit
-        d.unit_price = line.unit_price or 0.0
-        if (d.quantity_delivered or 0.0) == 0.0:
-            # Per `deliverable_qty` spawn-per-unit (qty_planned=1.0 per row): NON
-            # cambiare qty_planned (le altre row dello stesso QL hanno qty=1
-            # ciascuna). Per volume/forfait (1 row aggregato): aggiorna a qty quote.
-            from app.services.cost_line_sync import unit_nature_for as _unfor
-            if _unfor(line.unit) != "deliverable_qty":
-                d.quantity_planned = float(line.quantity or 0.0)
-        d.total_quoted = round((d.quantity_planned or 0.0) * (d.unit_price or 0.0), 2)
-        job_deliverables_synced += 1
+    respawn_info = {}
+    parent_job = db.query(Job).filter(Job.quote_id == quote_id).first()
+    if parent_job:
+        respawn_info = _respawn_line_artifacts(db, line, parent_job)
+    if not respawn_info.get("respawned"):
+        # Sync inline (no nature/rows change)
+        from app.services.cost_line_sync import unit_nature_for as _unfor
+        deliverables = db.query(JobDeliverable).filter(
+            JobDeliverable.quote_line_id == line.id
+        ).all()
+        for d in deliverables:
+            d.name = line.description
+            d.unit = line.unit
+            d.unit_price = line.unit_price or 0.0
+            if (d.quantity_delivered or 0.0) == 0.0:
+                # Per `deliverable_qty` spawn-per-unit: qty_planned=1.0 per row,
+                # già coerente (count rows == line.quantity gestito dal respawn).
+                # Per volume/manual_allow (1 row aggregato): aggiorna a qty quote.
+                if _unfor(line.unit) != "deliverable_qty":
+                    d.quantity_planned = float(line.quantity or 0.0)
+            d.total_quoted = round((d.quantity_planned or 0.0) * (d.unit_price or 0.0), 2)
+            job_deliverables_synced += 1
+    else:
+        job_deliverables_synced = respawn_info.get("new_n_rows", 0)
 
     db.commit()
     return {
