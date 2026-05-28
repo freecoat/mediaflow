@@ -1,5 +1,33 @@
 # MediaFlow — Changelog
 
+## v3.5.0-alpha.172.120 — Tier 3 Bundle A: /delivery-templates UI polish (28 mag 2026 sera)
+
+Bundle 3-in-1 sulla pagina lista capitolati:
+
+**T3.1 — Toggle "Mostra inattivi"** (checkbox in toolbar). Query param `?show_inactive=1`. Server filtra `is_active=True` di default. Quando attivo, le righe inattive mostrano badge rosso "inattivo" accanto al code.
+
+**T3.2 — Filtri client-side** (ricerca testo + dropdown broadcaster):
+- Input `search`: filtra per `code + nome` (case-insensitive).
+- Dropdown `broadcaster`: lista distinta dei broadcaster presenti.
+- Counter live "N template visibili" si aggiorna on-the-fly.
+- Filtraggio puramente JS (data-attrs `data-search` / `data-broadcaster`).
+
+**T3.7 — Stats panel corpus** (card sopra tabella):
+- Counter Template (attivi + inattivi se presenti).
+- Counter DeliveryItem totali (sum cross-template).
+- Top 5 package per usage (es. DCP 47, IMF 12, ProRes Master 18...).
+- Top 5 resolution per usage (es. UHD 32, HD 28, 2K DCI 15...).
+
+**Tabella**: aggiunta colonna "Items" (count DeliveryItem per template). Calcolata server-side single query `func.count` group_by.
+
+Backend `delivery_templates_page()`:
+- Param `show_inactive` da query string.
+- Single COUNT query per items per template (no N+1).
+- Distinct broadcasters set.
+- Stats package/resolution via JOIN + group_by ordinato desc.
+
+Nessuna migrazione DB.
+
 ## v3.5.0-alpha.172.119 — Soft-delete 2 template Gomorrah (istanze compilate, non capitolati) (28 mag 2026 sera)
 
 Pulizia post-Tier 2.4:

@@ -8,7 +8,14 @@
 
 ## Versione corrente
 
-**v3.5.0-alpha.172.119** — 28 maggio 2026 sera — Soft-delete 2 template Gomorrah + PIPERFILM fix + batch 13/13
+**v3.5.0-alpha.172.120** — 28 maggio 2026 sera — Tier 3 Bundle A: UI polish /delivery-templates
+
+### Tier 3 Bundle A ✅ (T3.1 + T3.2 + T3.7)
+- **Stats panel** sopra tabella: counter template (attivi/inattivi) + items totali + Top 5 package + Top 5 resolution.
+- **Toolbar filtri**: search testo (code/nome) + dropdown broadcaster + toggle "Mostra inattivi" (server-side via `?show_inactive=1`).
+- **Colonna Items**: count DeliveryItem per riga (single COUNT query no N+1).
+- Filtri client-side via data-attrs, counter live "N visibili".
+- Nessuna migrazione DB.
 
 ### Soft-delete Gomorrah ✅
 2 template istanze compilate (NBCU-UHD-HDR10-LONGFORM id=10 1 item, NBCU-LONGFORM-UHD-V1.3_TECHO id=11 2 items) marcati `is_active=False`. Description con nota "istanza compilata, vedi NBCU-LONGFORM-UHD generico". Items preservati per traceability.

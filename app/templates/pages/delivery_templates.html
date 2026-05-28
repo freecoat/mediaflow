@@ -11,10 +11,65 @@
 {% endblock %}
 
 {% block content %}
+
+<!-- v3.5.0-alpha.172.120 (Tier 3 Bundle A) — Stats panel corpus -->
+<div class="card mb-2" id="stats-panel" style="padding:12px 16px;">
+  <div style="display:flex; gap:24px; flex-wrap:wrap; align-items:center;">
+    <div>
+      <div style="font-size:11px; color:var(--text3); text-transform:uppercase; letter-spacing:0.4px;">Template</div>
+      <div style="font-size:20px; font-weight:600;">
+        <span style="color:var(--text);">{{ stats.total_active }}</span>
+        <span style="color:var(--text3); font-size:13px; font-weight:400;">attivi</span>
+        {% if stats.total_inactive %}
+          <span style="color:var(--text3); font-size:13px;">+ {{ stats.total_inactive }} inattivi</span>
+        {% endif %}
+      </div>
+    </div>
+    <div>
+      <div style="font-size:11px; color:var(--text3); text-transform:uppercase; letter-spacing:0.4px;">DeliveryItem totali</div>
+      <div style="font-size:20px; font-weight:600;">{{ stats.total_items }}</div>
+    </div>
+    {% if stats.by_package %}
+    <div style="flex:1; min-width:240px;">
+      <div style="font-size:11px; color:var(--text3); text-transform:uppercase; letter-spacing:0.4px;">Top package</div>
+      <div style="font-size:13px; color:var(--text2);">
+        {% for name, cnt in stats.by_package[:5] %}
+          <span style="margin-right:10px;"><strong style="color:var(--text);">{{ name }}</strong> {{ cnt }}</span>
+        {% endfor %}
+      </div>
+    </div>
+    {% endif %}
+    {% if stats.by_resolution %}
+    <div style="flex:1; min-width:240px;">
+      <div style="font-size:11px; color:var(--text3); text-transform:uppercase; letter-spacing:0.4px;">Top resolution</div>
+      <div style="font-size:13px; color:var(--text2);">
+        {% for label, cnt in stats.by_resolution[:5] %}
+          <span style="margin-right:10px;"><strong style="color:var(--text);">{{ label }}</strong> {{ cnt }}</span>
+        {% endfor %}
+      </div>
+    </div>
+    {% endif %}
+  </div>
+</div>
+
 <div class="card">
-  <div class="card-header">
+  <div class="card-header" style="flex-wrap:wrap; gap:8px;">
     <span class="card-title">Template di consegna</span>
-    <span style="color:var(--text3); font-size:12px;">{{ templates|length }} template configurati</span>
+    <!-- Toolbar filtri α.172.120 -->
+    <div style="display:flex; gap:8px; flex-wrap:wrap; align-items:center; margin-left:auto;">
+      <input type="search" id="dt-filter-q" placeholder="Cerca code/nome…" style="padding:4px 8px; border-radius:4px; border:1px solid var(--border); background:var(--bg2); color:var(--text); font-size:13px; min-width:180px;">
+      <select id="dt-filter-broadcaster" style="padding:4px 8px; border-radius:4px; border:1px solid var(--border); background:var(--bg2); color:var(--text); font-size:13px;">
+        <option value="">Tutti broadcaster</option>
+        {% for b in broadcasters %}
+          <option value="{{ b }}">{{ b }}</option>
+        {% endfor %}
+      </select>
+      <label style="display:flex; align-items:center; gap:4px; font-size:13px; color:var(--text2); cursor:pointer; user-select:none;">
+        <input type="checkbox" id="dt-toggle-inactive" {% if show_inactive %}checked{% endif %} onchange="toggleInactiveTemplates(this.checked)">
+        Mostra inattivi
+      </label>
+      <span style="color:var(--text3); font-size:12px;" id="dt-visible-count">{{ templates|length }} template</span>
+    </div>
   </div>
   <div class="table-wrap">
     <table class="mf-sortable">
@@ -24,23 +79,25 @@
           <th data-i18n="col.name">Nome</th>
           <th data-i18n="col.issuer">Emittente</th>
           <th data-i18n="col.version">Versione</th>
+          <th class="text-right" title="N. DeliveryItem associati">Items</th>
           <th data-i18n="col.blocks">Blocchi</th>
           <th data-i18n="col.ai">AI</th>
-          <th style="width:120px;" data-i18n="col.actions">Azioni</th>
+          <th style="width:140px;" data-i18n="col.actions">Azioni</th>
         </tr>
       </thead>
       <tbody id="dt-tbody">
         {% if not templates %}
-        <tr><td colspan="7" class="text-muted" style="text-align:center; padding:30px;">
+        <tr><td colspan="8" class="text-muted" style="text-align:center; padding:30px;">
           Nessun template. Importa un capitolato con il bottone in alto, oppure crea uno manuale.
         </td></tr>
         {% endif %}
         {% for t in templates %}
-        <tr data-tid="{{ t.id }}" style="{{ 'opacity:0.5;' if not t.is_active else '' }}">
-          <td class="mono text-sm">{{ t.code }}</td>
+        <tr data-tid="{{ t.id }}" data-search="{{ (t.code ~ ' ' ~ t.name)|lower }}" data-broadcaster="{{ t.broadcaster or '' }}" data-active="{{ '1' if t.is_active else '0' }}" style="{{ 'opacity:0.5;' if not t.is_active else '' }}">
+          <td class="mono text-sm">{{ t.code }}{% if not t.is_active %} <span class="badge" style="background:rgba(239,68,68,0.18); color:#fca5a5; font-size:10px;">inattivo</span>{% endif %}</td>
           <td>{{ t.name }}</td>
           <td style="color:var(--text2);">{{ t.broadcaster or '—' }}</td>
           <td class="mono text-sm">{{ t.version }}</td>
+          <td class="text-right mono text-sm" style="color:var(--text2);">{{ items_count.get(t.id, 0) }}</td>
           <td class="text-sm" style="color:var(--text2);">
             {% set blocks = [] %}
             {% if t.video_specs %}{% set _ = blocks.append('video') %}{% endif %}
@@ -1492,6 +1549,39 @@ async function confirmDelete(tid, code) {
     toast(e.message || 'Errore', 'error');
   }
 }
+
+// v3.5.0-alpha.172.120 (Tier 3 Bundle A) — Toggle "mostra inattivi" (server-side via query param).
+function toggleInactiveTemplates(checked) {
+  const url = new URL(window.location.href);
+  if (checked) url.searchParams.set('show_inactive', '1');
+  else url.searchParams.delete('show_inactive');
+  window.location.href = url.toString();
+}
+
+// v3.5.0-alpha.172.120 — Filtri client-side (ricerca testo + broadcaster).
+function applyDtFilters() {
+  const q = (document.getElementById('dt-filter-q').value || '').trim().toLowerCase();
+  const br = document.getElementById('dt-filter-broadcaster').value || '';
+  const rows = document.querySelectorAll('#dt-tbody tr[data-tid]');
+  let visible = 0;
+  rows.forEach(tr => {
+    const haystack = tr.dataset.search || '';
+    const broadcaster = tr.dataset.broadcaster || '';
+    const okQ = !q || haystack.includes(q);
+    const okBr = !br || broadcaster === br;
+    const show = okQ && okBr;
+    tr.style.display = show ? '' : 'none';
+    if (show) visible++;
+  });
+  const counter = document.getElementById('dt-visible-count');
+  if (counter) counter.textContent = visible + ' template visibili';
+}
+document.addEventListener('DOMContentLoaded', () => {
+  const q = document.getElementById('dt-filter-q');
+  const br = document.getElementById('dt-filter-broadcaster');
+  if (q) q.addEventListener('input', applyDtFilters);
+  if (br) br.addEventListener('change', applyDtFilters);
+});
 
 // v3.5.0-alpha.172.117 — rename rapido (code + name) senza aprire modal dettaglio.
 // Backlog #3 chiuso. PUT /delivery-templates/api/{tid} accetta code/name parziali.

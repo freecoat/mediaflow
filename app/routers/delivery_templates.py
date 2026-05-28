@@ -19,6 +19,7 @@ from fastapi.responses import HTMLResponse
 from sqlalchemy.orm import Session
 from app.database import get_db
 from app.models import DeliveryTemplate, PriceItem, PriceCategory
+from app.models.models import DeliveryItem, Package, Resolution
 from app.services.rbac import requires_permission, current_user_optional
 from app.context import current_tenant_id
 
@@ -64,15 +65,66 @@ def _dt_dict(t: DeliveryTemplate) -> dict:
 
 @router.get("/", response_class=HTMLResponse)
 async def delivery_templates_page(request: Request, db: Session = Depends(get_db)):
-    templates = (
-        db.query(DeliveryTemplate)
-        .filter(DeliveryTemplate.tenant_id == current_tenant_id())
-        .order_by(DeliveryTemplate.broadcaster.asc(), DeliveryTemplate.name.asc())
+    # v3.5.0-alpha.172.120 (Tier 3 Bundle A): toggle inattivi + filtri + stats.
+    show_inactive = request.query_params.get("show_inactive", "0") in ("1", "true", "on")
+    tid = current_tenant_id()
+    q = db.query(DeliveryTemplate).filter(DeliveryTemplate.tenant_id == tid)
+    if not show_inactive:
+        q = q.filter(DeliveryTemplate.is_active == True)  # noqa: E712
+    templates = q.order_by(DeliveryTemplate.broadcaster.asc(), DeliveryTemplate.name.asc()).all()
+
+    # Items count per template (single query)
+    from sqlalchemy import func
+    counts_rows = (
+        db.query(DeliveryItem.delivery_template_id, func.count(DeliveryItem.id))
+        .filter(DeliveryItem.tenant_id == tid)
+        .group_by(DeliveryItem.delivery_template_id)
         .all()
     )
+    items_count = {row[0]: row[1] for row in counts_rows}
+
+    # Stats corpus
+    total_active_templates = sum(1 for t in templates if t.is_active)
+    total_inactive_templates = sum(1 for t in templates if not t.is_active)
+    total_items = sum(items_count.values())
+
+    # Top package + resolution distribution
+    pkg_rows = (
+        db.query(Package.name, func.count(DeliveryItem.id))
+        .join(DeliveryItem, DeliveryItem.package_id == Package.id)
+        .filter(DeliveryItem.tenant_id == tid)
+        .group_by(Package.name)
+        .order_by(func.count(DeliveryItem.id).desc())
+        .all()
+    )
+    res_rows = (
+        db.query(Resolution.name, func.count(DeliveryItem.id))
+        .join(DeliveryItem, DeliveryItem.resolution_id == Resolution.id)
+        .filter(DeliveryItem.tenant_id == tid)
+        .group_by(Resolution.name)
+        .order_by(func.count(DeliveryItem.id).desc())
+        .all()
+    )
+
+    # Broadcasters distinct (per filtro)
+    broadcasters = sorted({(t.broadcaster or "").strip() for t in templates if (t.broadcaster or "").strip()})
+
     return _tpl().TemplateResponse(
         "pages/delivery_templates.html",
-        {"request": request, "templates": templates},
+        {
+            "request": request,
+            "templates": templates,
+            "items_count": items_count,
+            "show_inactive": show_inactive,
+            "stats": {
+                "total_active": total_active_templates,
+                "total_inactive": total_inactive_templates,
+                "total_items": total_items,
+                "by_package": [(name, cnt) for name, cnt in pkg_rows[:8]],
+                "by_resolution": [(label, cnt) for label, cnt in res_rows[:8]],
+            },
+            "broadcasters": broadcasters,
+        },
     )
 
 
