@@ -8,6 +8,36 @@
 
 ## Versione corrente
 
+**v3.5.0-alpha.172.113** — 28 maggio 2026 — Tier 1 delivery taxonomy: schema + seed 135 + parser AI 2-pass
+
+Tier 1 della big rearchitecture delivery specs chiuso. Schema 11 modelli (Package, Container, VideoCodec, AudioCodec, AudioChannelConfig, AudioMixType, MixStandard, Resolution, FrameRate, DeliveryItem, AudioTrackSpec) + migrazione idempotente + seed 135 record sistema cross-ref Wikipedia/SMPTE/DaVinci + parser AI 2-pass con mapping FK numerico.
+
+Smoke test MUBI Queer Exhibit C (31k char PDF, 25 items): mapping accurato package/container/codec/audio/resolution/fps con confidence media 0.88. Solo 2/25 in pending_review.
+
+### Prossima sessione — Tier 2 (~10h)
+
+1. UI Admin taxonomy CRUD + import/export JSON cross-tenant
+2. UI dettaglio template tabs Comune+Items con visualizzazione DeliveryItem ricchi
+3. UI Nuovo Deliverable in /jobs cascading template→item
+4. Re-parse 13 capitolati esistenti con parser v2 (~25-30 min Claude)
+5. Back-fill JobDeliverable.delivery_item_id
+
+### Backlog originale Matteo /delivery-templates
+
+1. ✅ Tech sheet delivery: opzioni dropdown manuali → CHIUSO via taxonomy 135 record (Tier 1 α.172.113)
+2. ✅ Batch parse 17 capitolati → CHIUSO α.172.111 (13 templates JSON 8-block legacy)
+3. Capitolati: rename template → TODO Tier 2
+4. ✅ Modal dettaglio human-readable + edit form (no JSON) → CHIUSO α.172.112
+5. Modal Aggiungi delivery items (cascading template→item) → TODO Tier 2
+
+---
+
+**v3.5.0-alpha.172.112** — 28 maggio 2026 — Modal dettaglio template human-readable + edit form (no JSON)
+
+Rifatto modal /delivery-templates da JSON raw a editor human-readable con 3 livelli: header editabile (code/name/broadcaster/version/description) + 8 blocchi capitolato con form dinamico per-tipo (string/number/bool/array/nested object ricorsivo) + bottoni add/edit/remove field. PUT salva tutto in singolo call.
+
+---
+
 **v3.5.0-alpha.172.111** — 28 maggio 2026 — Batch parse 17 capitolati: 13 templates salvati
 
 Prima esecuzione completa del parsing AI sui 17 capitolati esempio. **13 DeliveryTemplate creati** (id 2-14, conf media 0.79). Broadcaster coperti: RAI, GTM, Fremantle, MUBI, Sky/NBCU, Sky Italia, NBCU TechOps (3 variants UHD/HDR10), Vision, A24, PiperFilm.

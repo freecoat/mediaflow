@@ -1,5 +1,101 @@
 # MediaFlow — Changelog
 
+## v3.5.0-alpha.172.113 — Tier 1 delivery taxonomy: schema + seed 135 + parser AI 2-pass (28 mag 2026)
+
+Fondazione per granularità delivery specs: tassonomia tecnica strutturata,
+modello DeliveryItem dedicato per ogni file consegnato, parser AI con
+mapping FK numerici al vocabolario invece di stringhe libere.
+
+**Tier 1 — Schema (app/models/models.py):**
+
+11 nuovi modelli SQLAlchemy 2.0 (Mapped/mapped_column):
+
+- `Package` (DCP/IMF, NULLABLE su DeliveryItem)
+- `Container` (QuickTime/MXF OP1a/OP-Atom/AS-11/MP4/MKV/WAV/AIFF/image seq)
+- `VideoCodec` (ProRes×7, DNxHR×5, DNxHD×4, H.264×4, HEVC×4, JPEG 2000 DCI/P-HT/standard, JPEG XS, XAVC×3, XDCam, CineForm, Uncompressed, VP9, AV1, MPEG-2, AVC-Intra)
+- `AudioCodec` (PCM 16/24/32, AAC LC/HE, Dolby Digital/E/Atmos Master IAB/TrueHD, MP3, ALAC, FLAC)
+- `AudioChannelConfig` (Mono/Stereo/LCR/Quad/5.0/5.1×3 SMPTE/Film/DTS/6.1/7.1 SMPTE/SDDS/Atmos 5.1.4/7.1.4/7.1.2/9.1.6/22.2 NHK)
+- `AudioMixType` (Full Mix/M&E/DM&E/Dialogue/Music/Effects/Foley/ADR Stems + Optional HI/AD/SDH + Stems bundle)
+- `MixStandard` (Theatrical Farfield 85 dBC, HE Nearfield, EBU R128 -23 LUFS, ATSC A/85 -24 LKFS, AES TD1004 -16 LUFS, Netflix Atmos -27 LKFS, YouTube/Spotify/Apple Music -14/-16 LUFS)
+- `Resolution` (SD NTSC/PAL, HD 720p/1080p, 2K DCI Flat/Scope/Full, UHD 3840, 4K DCI Flat/Scope/Full, 8K UHD-2)
+- `FrameRate` (23.976, 24, 25, 29.97 NDF/DF, 30, 48, 50, 59.94 NDF/DF, 60, 96, 100, 119.88, 120)
+- `DeliveryItem` (singolo file consegnato; FK a Package/Container/VideoCodec/Resolution/FrameRate + bit_depth/chroma/aspect/scan/color/HDR + subtitle/suggested unit/qty/price_item + extra_specs JSON + pending_review)
+- `AudioTrackSpec` (M2M: una DeliveryItem può richiedere N tracce audio simultanee — Mix Theatrical 5.1 + Mix HE 5.1 + M&E + Stereo Dialogue + Stems)
+
+Pattern comune: `tenant_id NULLABLE` (NULL=preset globale), `is_preset_global`,
+`is_active`, `sort_order`, timestamps. UniqueConstraint per (tenant_id, name).
+
+**Tier 1 — Seed (scripts/migrate_delivery_taxonomy.py):**
+
+135 record sistema iniziali, fonti incrociate:
+- Wikipedia (DCP, IMF, MXF, Comparison container formats, Comparison codecs, Surround sound, Dolby Atmos, EBU R128, ATSC A/85, Aspect ratio, Frame rate, Chroma subsampling, HDR, UHDTV)
+- DaVinci Resolve 20 Reference Manual (codec families, presets)
+- SMPTE ST 428/429 (DCP), ST 2067 (IMF), AMWA MXF AS-11 (UK DPP)
+- Cross-ref con 13 capitolati AI-parsati (verifica codec/container/audio menzionati effettivamente nei capitolati reali)
+
+Conteggio: 7 Package + 14 Container + 37 VideoCodec + 12 AudioCodec + 16 AudioChannelConfig + 12 AudioMixType + 10 MixStandard + 12 Resolution + 15 FrameRate.
+
+**Tier 1 — Parser AI 2-pass (app/services/delivery_items_parser.py):**
+
+`parse_delivery_items_v2(text, db, tenant_id, provider)` esegue:
+
+- **Pass 1** (system prompt): estrai dal capitolato lista delivery items distinti (DCP Feature, ProRes Master HD, IMF App 2E, Trailer, ecc) + termini tecnici menzionati raggruppati per categoria.
+- **Pass 2** (system prompt + vocabolario taxonomy compatto come `[[id, "name"], ...]`): per ogni item, mappa container/package/video_codec/audio_codec/channel_config/mix_type/mix_standard/resolution/frame_rate a id FK numerici. Output `audio_tracks[]` M2M con N tracce per item. `extra_specs JSON` per cose non in vocabolario. `pending_review=True` se mapping incerto + `confidence` float.
+
+Per limiti token Claude (max_tokens=16000 per Pass 2): vocabolario compatto in formato `[[id, name], ...]` invece di dict verboso. Risparmia ~5k token.
+
+`materialize_items(db, delivery_template_id, parsed, tenant_id)`: inserisce risultato in DB come DeliveryItem + AudioTrackSpec. Idempotente per `name+template`.
+
+**Smoke test E2E MUBI Queer Exhibit C (31k char PDF):**
+
+25 items estratti con mapping accurato:
+- DCP Feature → pkg=DCP SMPTE, cnt=MXF OP1a, vcodec=JPEG 2000 DCP, res=4K DCI Flat, fr=24 fps, audio 5.1 SMPTE Full Mix Theatrical PCM 24-bit (conf 0.92)
+- ProRes HD Masters → cnt=QuickTime, vcodec=ProRes 4444, res=HD 1080p, fr=23.976/25, multi-track (5.1 OV + 2.0 OV + M&E 2.0) (conf 0.88-0.90)
+- H.264 MP4 Master → cnt=MP4, vcodec=H.264 High, res=HD 1080p (conf 0.87)
+- M&E 5.1/2.0 Cinema/TV/DVD → cnt=WAV, mt=M&E, ms=Theatrical Farfield/EBU R128, cc=5.1 SMPTE/Stereo (conf 0.91-0.92)
+- Stems DME → cnt=WAV, mt=Stems bundle DME (conf 0.89)
+- Trailer HD ProRes 422 HQ + Audio mixes con Stems Trailer (conf 0.90)
+- 4K SDR/HDR ProRes 4444/4444 XQ → res=4K DCI Scope, multi-audio (conf 0.85-0.88)
+- Pending review solo 2/25 (Textless Backgrounds + ProTools Session — natura ambigua)
+
+**Prossimo Tier 2 (~10h):**
+- UI Admin taxonomy CRUD + import/export JSON cross-tenant
+- UI dettaglio template tabs Comune+Items
+- UI Nuovo Deliverable cascading template→item
+- Re-parse 13 capitolati esistenti con parser v2 (~25-30 min Claude)
+- Back-fill JobDeliverable.delivery_item_id
+
+## v3.5.0-alpha.172.112 — Modal dettaglio template human-readable + edit form (no JSON) (28 mag 2026)
+
+Rifatto modal dettaglio `/delivery-templates` da visualizzazione JSON raw a editor human-readable con edit per-campo. Fase A del backlog `/delivery-templates` aperto da Matteo.
+
+**Prima**: il modal mostrava `<pre>JSON.stringify(block, null, 2)</pre>` per ognuno degli 8 blocchi capitolato (video_specs/audio_specs/text_specs/head_format/textless_format/naming_convention/archive_specs/metadata_requirements). Nessun edit possibile dalla UI — per correggere allucinazioni AI o errori di parsing bisognava editare DB direttamente.
+
+**Ora**: editor inline a 3 livelli.
+
+1. **Header editabile** (top card): inputs editabili per `code` (uppercase mono), `name`, `broadcaster`, `version`, textarea per `description`.
+2. **8 blocchi capitolato** (card per ognuno): per ogni key dell'oggetto JSON, render dinamico in base al tipo del value:
+   - `string` corto → `<input>` text
+   - `string` lungo (>60 char) → `<textarea>`
+   - `number` → `<input type="number" step="any">`
+   - `boolean` → checkbox con label "sì/no"
+   - `array di scalari` → `<textarea>` con 1 valore per riga
+   - `array di oggetti` → JSON readonly (rare, edit avanzato non supportato)
+   - `object` annidato → sub-card ricorsivo (depth limit 4)
+3. **Bottoni per-blocco**: "+ Aggiungi campo" (prompt key + inserisce row vuota string default), "✕" per blocco (rimuovi row).
+
+**Helper code:**
+- `renderEditableValue(parent, key, value, depth)`: produce DOM editor specifico per tipo. Marca con `data-edit-type` per rebuild.
+- `renderEditableBlock(blockKey, label, data)`: card di un blocco con rows + add field button.
+- `collectEditedObject(rootHost)`: cammina DOM e ricostruisce dict raccogliendo `data-edit-key` + `data-edit-type` (compreso ricorsivo per nested).
+- `saveEditedTemplate()`: legge tutti gli inputs header + 8 blocchi ricostruiti → POST FormData all'endpoint PUT `/delivery-templates/api/{id}` esistente (già accetta i 9 campi + 8 JSON blocchi).
+
+**Bottone footer modal**: nuovo `💾 Salva modifiche` (id `btn-save-template`) accanto a "Salva voci listino" preesistente. Si mostra solo dopo carico template, si reuse dopo save.
+
+**Edge case**: array di oggetti complessi (es. `formats_accepted: [{label, resolution, codec, ...}]` in RAI template) restano readonly JSON con nota — edit avanzato pianificato per Fase futura via dedicated row-editor table.
+
+**No edit JSON raw**: Matteo aveva chiesto esplicitamente di togliere modifica JSON ovunque per evitare di rompere struttura per utenti standard. In questo modal era già assente (era solo display read-only). Mantiene solo il fallback `json_readonly` per array di oggetti complessi.
+
 ## v3.5.0-alpha.172.111 — Batch parse 17 capitolati: 13 templates salvati (28 mag 2026)
 
 Esecuzione **prima volta** del parsing AI sui 17 capitolati esempio in `docs/capitolati_esempio/`. Risultato: **13 DeliveryTemplate creati** in DB (id 2-14), confidence media 0.79.

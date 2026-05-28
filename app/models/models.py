@@ -711,6 +711,291 @@ class DeliveryTemplate(Base):
     tenant: Mapped["Tenant"] = relationship(back_populates="delivery_templates")
 
 
+# ── DELIVERY TAXONOMY (v3.5.0-alpha.172.113 — Tier 1) ─────────
+# Tassonomia tecnica per delivery specs strutturate. Modelli dedicati
+# (NON 1 tabella generica) per riuso cross-feature: DAM asset identification,
+# QC matching, listino price item linking, parser AI vocabolario per mapping.
+#
+# Pattern comune:
+# - tenant_id NULLABLE → record sistema (preset_global) condivisi cross-tenant
+# - is_preset_global=True → seed Davinci-derived + Wikipedia/SMPTE-derived,
+#   non eliminabili da user (read-only oltre rename/disattiva).
+# - is_active per soft-delete tenant-level.
+# - name UNIQUE per (tenant_id, name) — preset globali hanno tenant_id=NULL.
+# - description, sort_order, created_at, updated_at.
+#
+# Fonti seed: Wikipedia (container_formats, codecs, DCP, IMF, MXF, EBU R128,
+# Atmos), DaVinci Resolve 20 Reference, SMPTE ST 428/429 (DCP), SMPTE ST 2067
+# (IMF), AMWA MXF AS-11 (UK DPP).
+
+
+def _mixin_taxonomy_columns():
+    """Helper documentale: TUTTI i modelli taxonomy hanno questi 7 campi.
+    Non usato come MixinClass per evitare problemi con Mapped — replicato
+    inline in ogni class per chiarezza schema diretta su SQLAlchemy 2.0."""
+    pass
+
+
+class Package(Base):
+    """Pacchetto delivery (DCP/IMF). NULLABLE su DeliveryItem (single-file
+    formats come ProRes QuickTime non hanno package wrapping)."""
+    __tablename__ = "delivery_packages"
+    __table_args__ = (UniqueConstraint("tenant_id", "name", name="uq_delivery_package_tenant_name"),)
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    tenant_id: Mapped[Optional[int]] = mapped_column(ForeignKey("tenants.id"), nullable=True, index=True)
+    name: Mapped[str] = mapped_column(String(80))            # "DCP Interop", "IMF App 2E"
+    typical_use: Mapped[Optional[str]] = mapped_column(String(120), nullable=True)  # "cinema theatrical", "OTT studio masters"
+    structure_desc: Mapped[Optional[str]] = mapped_column(Text, nullable=True)      # "CPL+PKL+AssetMap+MXF tracks"
+    description: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    is_preset_global: Mapped[bool] = mapped_column(Boolean, default=False)
+    is_active: Mapped[bool] = mapped_column(Boolean, default=True)
+    sort_order: Mapped[int] = mapped_column(Integer, default=0)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+
+class Container(Base):
+    """Container/wrapper di basso livello. Sempre presente su DeliveryItem.
+    Es. QuickTime, MXF OP1a, MP4, WAV, image sequence DPX."""
+    __tablename__ = "delivery_containers"
+    __table_args__ = (UniqueConstraint("tenant_id", "name", name="uq_delivery_container_tenant_name"),)
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    tenant_id: Mapped[Optional[int]] = mapped_column(ForeignKey("tenants.id"), nullable=True, index=True)
+    name: Mapped[str] = mapped_column(String(80))            # "QuickTime", "MXF OP1a"
+    extension: Mapped[Optional[str]] = mapped_column(String(20), nullable=True)  # ".mov" ".mxf" ""
+    op_pattern: Mapped[Optional[str]] = mapped_column(String(40), nullable=True) # NULL non-MXF, "OP1a"/"OP-Atom"/"AS-11"
+    is_image_sequence: Mapped[bool] = mapped_column(Boolean, default=False)
+    media_kind: Mapped[Optional[str]] = mapped_column(String(20), nullable=True)  # "video" "audio" "image_seq" "mixed"
+    description: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    is_preset_global: Mapped[bool] = mapped_column(Boolean, default=False)
+    is_active: Mapped[bool] = mapped_column(Boolean, default=True)
+    sort_order: Mapped[int] = mapped_column(Integer, default=0)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+
+class VideoCodec(Base):
+    """Codec video. Famiglie: ProRes, DNxHR/HD, J2K, H.264, HEVC, XAVC, ecc."""
+    __tablename__ = "delivery_video_codecs"
+    __table_args__ = (UniqueConstraint("tenant_id", "name", name="uq_delivery_vcodec_tenant_name"),)
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    tenant_id: Mapped[Optional[int]] = mapped_column(ForeignKey("tenants.id"), nullable=True, index=True)
+    name: Mapped[str] = mapped_column(String(80))            # "Apple ProRes 4444 XQ"
+    family: Mapped[Optional[str]] = mapped_column(String(40), nullable=True)  # "ProRes" "DNxHR" "JPEG2000"
+    profile_flavor: Mapped[Optional[str]] = mapped_column(String(60), nullable=True)  # "4444 XQ" "HQX" "Main 10"
+    typical_use: Mapped[Optional[str]] = mapped_column(String(80), nullable=True)  # "master" "intermediate" "broadcast" "streaming"
+    typical_bitrate: Mapped[Optional[str]] = mapped_column(String(40), nullable=True)
+    is_intermediate: Mapped[bool] = mapped_column(Boolean, default=False)
+    description: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    is_preset_global: Mapped[bool] = mapped_column(Boolean, default=False)
+    is_active: Mapped[bool] = mapped_column(Boolean, default=True)
+    sort_order: Mapped[int] = mapped_column(Integer, default=0)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+
+class AudioCodec(Base):
+    """Codec audio. PCM/Dolby/AAC/MP3/ALAC/FLAC."""
+    __tablename__ = "delivery_audio_codecs"
+    __table_args__ = (UniqueConstraint("tenant_id", "name", name="uq_delivery_acodec_tenant_name"),)
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    tenant_id: Mapped[Optional[int]] = mapped_column(ForeignKey("tenants.id"), nullable=True, index=True)
+    name: Mapped[str] = mapped_column(String(80))            # "PCM 24-bit Linear", "Dolby Atmos Master (IAB)"
+    family: Mapped[Optional[str]] = mapped_column(String(40), nullable=True)  # "PCM" "Dolby" "AAC"
+    is_lossless: Mapped[bool] = mapped_column(Boolean, default=False)
+    description: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    is_preset_global: Mapped[bool] = mapped_column(Boolean, default=False)
+    is_active: Mapped[bool] = mapped_column(Boolean, default=True)
+    sort_order: Mapped[int] = mapped_column(Integer, default=0)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+
+class AudioChannelConfig(Base):
+    """Configurazione canali audio. Mono/Stereo/5.1/7.1/Atmos."""
+    __tablename__ = "delivery_audio_channel_configs"
+    __table_args__ = (UniqueConstraint("tenant_id", "name", name="uq_delivery_audiocfg_tenant_name"),)
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    tenant_id: Mapped[Optional[int]] = mapped_column(ForeignKey("tenants.id"), nullable=True, index=True)
+    name: Mapped[str] = mapped_column(String(80))            # "5.1 SMPTE", "Atmos 7.1.4"
+    channel_count: Mapped[int] = mapped_column(Integer, default=2)
+    spec_string: Mapped[Optional[str]] = mapped_column(String(120), nullable=True)  # "L R C LFE Ls Rs"
+    is_immersive: Mapped[bool] = mapped_column(Boolean, default=False)
+    description: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    is_preset_global: Mapped[bool] = mapped_column(Boolean, default=False)
+    is_active: Mapped[bool] = mapped_column(Boolean, default=True)
+    sort_order: Mapped[int] = mapped_column(Integer, default=0)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+
+class AudioMixType(Base):
+    """Tipo contenuto audio (M&E/Mix/Stems)."""
+    __tablename__ = "delivery_audio_mix_types"
+    __table_args__ = (UniqueConstraint("tenant_id", "name", name="uq_delivery_mixtype_tenant_name"),)
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    tenant_id: Mapped[Optional[int]] = mapped_column(ForeignKey("tenants.id"), nullable=True, index=True)
+    name: Mapped[str] = mapped_column(String(80))            # "M&E", "Dialogue Stem", "Full Mix"
+    short_label: Mapped[Optional[str]] = mapped_column(String(20), nullable=True)  # "M&E" "DM&E" "FM"
+    description: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    is_preset_global: Mapped[bool] = mapped_column(Boolean, default=False)
+    is_active: Mapped[bool] = mapped_column(Boolean, default=True)
+    sort_order: Mapped[int] = mapped_column(Integer, default=0)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+
+class MixStandard(Base):
+    """Standard di mix (Theatrical/HE/Broadcast/Streaming) con loudness target."""
+    __tablename__ = "delivery_mix_standards"
+    __table_args__ = (UniqueConstraint("tenant_id", "name", name="uq_delivery_mixstd_tenant_name"),)
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    tenant_id: Mapped[Optional[int]] = mapped_column(ForeignKey("tenants.id"), nullable=True, index=True)
+    name: Mapped[str] = mapped_column(String(80))            # "Broadcast EBU R128", "Theatrical Farfield"
+    family: Mapped[Optional[str]] = mapped_column(String(40), nullable=True)  # "theatrical" "broadcast" "streaming" "home"
+    loudness_target_lufs: Mapped[Optional[float]] = mapped_column(Float, nullable=True)  # -23, -24, -16, -14
+    true_peak_max_dbtp: Mapped[Optional[float]] = mapped_column(Float, nullable=True)    # -1, -2
+    spl_reference_dbc: Mapped[Optional[float]] = mapped_column(Float, nullable=True)     # 85 per theatrical
+    standard_ref: Mapped[Optional[str]] = mapped_column(String(80), nullable=True)       # "EBU R128", "ATSC A/85", "AES TD1004"
+    description: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    is_preset_global: Mapped[bool] = mapped_column(Boolean, default=False)
+    is_active: Mapped[bool] = mapped_column(Boolean, default=True)
+    sort_order: Mapped[int] = mapped_column(Integer, default=0)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+
+class Resolution(Base):
+    """Risoluzione video. HD/2K/UHD/4K/8K + DCI variants (Flat/Scope/Full)."""
+    __tablename__ = "delivery_resolutions"
+    __table_args__ = (UniqueConstraint("tenant_id", "name", name="uq_delivery_resolution_tenant_name"),)
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    tenant_id: Mapped[Optional[int]] = mapped_column(ForeignKey("tenants.id"), nullable=True, index=True)
+    name: Mapped[str] = mapped_column(String(80))            # "2K DCI Flat", "UHD 3840"
+    width: Mapped[int] = mapped_column(Integer)
+    height: Mapped[int] = mapped_column(Integer)
+    framing_aspect: Mapped[Optional[str]] = mapped_column(String(20), nullable=True)  # "1.85" "2.39" "16:9"
+    family: Mapped[Optional[str]] = mapped_column(String(40), nullable=True)  # "SD" "HD" "2K DCI" "UHD" "4K DCI" "8K"
+    description: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    is_preset_global: Mapped[bool] = mapped_column(Boolean, default=False)
+    is_active: Mapped[bool] = mapped_column(Boolean, default=True)
+    sort_order: Mapped[int] = mapped_column(Integer, default=0)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+
+class FrameRate(Base):
+    """Frame rate (23.976/24/25/29.97/30/48/50/60/120/...). Drop-frame TC flag."""
+    __tablename__ = "delivery_frame_rates"
+    __table_args__ = (UniqueConstraint("tenant_id", "name", name="uq_delivery_framerate_tenant_name"),)
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    tenant_id: Mapped[Optional[int]] = mapped_column(ForeignKey("tenants.id"), nullable=True, index=True)
+    name: Mapped[str] = mapped_column(String(40))            # "23.976 (24/1.001 NTSC film)"
+    fps: Mapped[float] = mapped_column(Float)                # 23.976, 24.0, 25.0, 29.97
+    is_drop_frame: Mapped[bool] = mapped_column(Boolean, default=False)
+    is_ntsc_family: Mapped[bool] = mapped_column(Boolean, default=False)
+    description: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    is_preset_global: Mapped[bool] = mapped_column(Boolean, default=False)
+    is_active: Mapped[bool] = mapped_column(Boolean, default=True)
+    sort_order: Mapped[int] = mapped_column(Integer, default=0)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+
+# ── DeliveryItem + AudioTrackSpec (M2M) ─────────────────────
+#
+# DeliveryItem = singolo "file consegnato" specificato dentro un capitolato.
+# Es. un capitolato A24 può richiedere: 1 DCP 2K IT + 1 DCP 4K UHD WW +
+# 1 ProRes 4444 XQ Master HD + 1 ProRes 422 HQ Trailer + 1 IMF App 2E.
+# Quei 5 sono 5 DeliveryItem distinti dello stesso DeliveryTemplate.
+#
+# AudioTrackSpec = N tracce audio richieste per UN DeliveryItem.
+# Es. un DCP 2K IT può richiedere simultaneamente: Mix 5.1 Theatrical +
+# Mix Stereo HE + M&E 5.1 + Dialogue 1.0. Quattro AudioTrackSpec sullo
+# stesso item.
+
+class DeliveryItem(Base):
+    __tablename__ = "delivery_items"
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    tenant_id: Mapped[int] = mapped_column(ForeignKey("tenants.id"), default=1, index=True)
+    delivery_template_id: Mapped[int] = mapped_column(
+        ForeignKey("delivery_templates.id"), index=True
+    )
+    name: Mapped[str] = mapped_column(String(255))           # "DCP INTEROP 2K IT"
+    sort_order: Mapped[int] = mapped_column(Integer, default=0)
+
+    # Package + Container layer
+    package_id: Mapped[Optional[int]] = mapped_column(ForeignKey("delivery_packages.id"), nullable=True)
+    package_variant_notes: Mapped[Optional[str]] = mapped_column(String(120), nullable=True)
+    container_id: Mapped[Optional[int]] = mapped_column(ForeignKey("delivery_containers.id"), nullable=True)
+
+    # Video layer
+    video_codec_id: Mapped[Optional[int]] = mapped_column(ForeignKey("delivery_video_codecs.id"), nullable=True)
+    video_bit_depth: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)  # 8/10/12/16
+    chroma_subsampling: Mapped[Optional[str]] = mapped_column(String(20), nullable=True)  # "4:4:4" "4:2:2" "4:2:0"
+    resolution_id: Mapped[Optional[int]] = mapped_column(ForeignKey("delivery_resolutions.id"), nullable=True)
+    aspect_ratio: Mapped[Optional[str]] = mapped_column(String(20), nullable=True)  # "1.85" "2.39" "16:9"
+    frame_rate_id: Mapped[Optional[int]] = mapped_column(ForeignKey("delivery_frame_rates.id"), nullable=True)
+    scan_type: Mapped[Optional[str]] = mapped_column(String(20), nullable=True)  # "progressive" "interlaced" "psf"
+    color_space: Mapped[Optional[str]] = mapped_column(String(80), nullable=True)  # "Rec.709" "DCI XYZ" "Rec.2020 PQ"
+    hdr_format: Mapped[Optional[str]] = mapped_column(String(40), nullable=True)   # "SDR" "HDR10" "DV" "HLG"
+
+    # Subtitle layer
+    subtitle_format: Mapped[Optional[str]] = mapped_column(String(40), nullable=True)  # "TTML IMSC 1.1" "PNG+XML" "Burn-in"
+    subtitle_languages: Mapped[Optional[list]] = mapped_column(JSON, nullable=True)    # ["it","en","fr"]
+
+    # Delivery meta
+    suggested_unit: Mapped[Optional[str]] = mapped_column(String(20), nullable=True)  # "pc" "TB" "min"
+    suggested_qty: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
+    suggested_price_item_id: Mapped[Optional[int]] = mapped_column(
+        ForeignKey("price_items.id"), nullable=True
+    )
+
+    # Freeform per cose non in taxonomy (teste/code/timeline/metadata custom)
+    extra_specs: Mapped[Optional[dict]] = mapped_column(JSON, nullable=True)
+    notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+
+    # AI parsing source
+    ai_extracted: Mapped[bool] = mapped_column(Boolean, default=False)
+    ai_confidence: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
+    pending_review: Mapped[bool] = mapped_column(Boolean, default=False)  # true se parser ha aggiunto FK incerte
+
+    is_active: Mapped[bool] = mapped_column(Boolean, default=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    audio_tracks: Mapped[List["AudioTrackSpec"]] = relationship(
+        back_populates="delivery_item", cascade="all, delete-orphan"
+    )
+
+
+class AudioTrackSpec(Base):
+    """Traccia audio singola richiesta per un DeliveryItem. Un DeliveryItem
+    può richiedere N tracce simultaneamente (Mix + M&E + Stems + Dialogue)."""
+    __tablename__ = "delivery_audio_track_specs"
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    delivery_item_id: Mapped[int] = mapped_column(
+        ForeignKey("delivery_items.id"), index=True
+    )
+    sort_order: Mapped[int] = mapped_column(Integer, default=0)
+    track_label: Mapped[str] = mapped_column(String(120))    # "Mix Theatrical 5.1", "M&E 5.1"
+
+    channel_config_id: Mapped[Optional[int]] = mapped_column(ForeignKey("delivery_audio_channel_configs.id"), nullable=True)
+    mix_type_id: Mapped[Optional[int]] = mapped_column(ForeignKey("delivery_audio_mix_types.id"), nullable=True)
+    mix_standard_id: Mapped[Optional[int]] = mapped_column(ForeignKey("delivery_mix_standards.id"), nullable=True)
+    audio_codec_id: Mapped[Optional[int]] = mapped_column(ForeignKey("delivery_audio_codecs.id"), nullable=True)
+
+    sample_rate_hz: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)  # 48000 / 96000 / 192000
+    bit_depth: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)       # 16/24/32
+
+    is_optional: Mapped[bool] = mapped_column(Boolean, default=False)
+    notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    delivery_item: Mapped["DeliveryItem"] = relationship(back_populates="audio_tracks")
+
+
 # ── LISTINO ──────────────────────────────────────────────────
 
 class PriceCategory(Base):
