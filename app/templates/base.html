@@ -350,6 +350,11 @@ async function showAboutModal() {
 {% include "components/notifications.html" %}
 {% endif %}
 
+<!-- QC rich modal globale (v3.5.0-alpha.172.100 Bundle L Stack 2 m2/3) -->
+{% if request.state.current_user %}
+{% include "components/qc_modal.html" %}
+{% endif %}
+
 <script src="/static/js/lucide.min.js?v={{ app_version }}"></script>
 <script>
   // v3.5.0-alpha.111.23 — User context globale per JS (admin gate slice-lock + altri)

@@ -1,5 +1,35 @@
 # MediaFlow — Changelog
 
+## v3.5.0-alpha.172.100 — Bundle L Stack 2 milestone 2/3: UI QC rich modal (28 mag 2026)
+
+Milestone 2/3 dello Stack 2 di Bundle L. UI rich modal QC globale che consuma gli endpoint event-sourced di α.172.98, esposto come `window.openQcModal(deliverableId, name)` da qualsiasi template.
+
+**Component nuovo (`app/templates/components/qc_modal.html`)** — incluso globalmente in `base.html`:
+- **Header**: nome deliverable + chip overall_status (not_started/in_progress/passed/failed/conditional) + chip round number + chip max_grade.
+- **Tab "Storia QC"**: summary 7-cell grid (video/audio/text errors + recommendations + notes + open_corrections + signoffs) + timeline events raggruppata per round (qc_number desc), eventi entro round in sequence asc. Render colorato per event_type (video=rosso, audio=ambra, text=verde, pass=verde, fail=rosso, conditional=ambra, reopened=viola). Grade chip G1/G2/G3 per errori canale.
+- **Tab "Nuovo evento"**: 3 sezioni form:
+  - 📺 Log evento canale (video/audio/text + timecode + grade 1-3 + descrizione)
+  - 💡 Raccomandazione / 📝 Nota interna
+  - ✏ Correzione richiesta (target event IDs CSV + due date + descrizione)
+- **Actions footer**: 6 bottoni esiti round — ▶ Start QC, ✓ Pass, ✗ Fail (con cascade Bundle I), ⚠ Conditional, ↻ Reopen, ⟲ Rebuild Report.
+- Refresh live: ogni mutator `qcmPostForm()` ricarica events + report e chiama opzionale `window.qcmOnUpdate(did)` per il template parent (refresh lista deliverable o board).
+- XSS-safe: tutti i payload eventi passano per `escapeHtml()`, fallback JSON.stringify wrappato in escape.
+
+**Integrazione `job_detail.html`** — bottoni QC sulle card deliverable (kanban + lista):
+- Wrapper `jdOpenQcModal(id)` risolve nome da `_dlvCache` (evita `JSON.stringify` in onclick — cfr feedback `no_jsonstringify_in_onclick`) e installa `window.qcmOnUpdate = loadDeliverables` per refresh badge QC.
+
+**Integrazione `planning.html` (Bundle J HUB)** — bottoni QC sulle card kanban deliverable + colonna nuova "QC" in vista lista:
+- DOM-built (no innerHTML untrusted), event listener `addEventListener('click')`, `qcmOnUpdate = renderDeliverableHub` per refresh kanban dopo mutazione.
+
+**Endpoint consumati** (tutti già presenti in `app/routers/qc.py` α.172.98): GET `/events` + `/report`; POST `/start`, `/log-event`, `/recommendation`, `/note`, `/correction`, `/signoff`, `/pass`, `/fail` (trigger_cascade=True), `/conditional`, `/reopen`, `/rebuild-report`.
+
+**Test browser pendenti**:
+- Aprire `/jobs/{id}` → card deliverable → bottone "🔍 QC" → start round → log 1 video err G3 → fail → vedere cascade Bundle I (qc_substatus=rejected sul card + spawn placeholder asset se attivo).
+- Aprire `/planning?view=deliverables` → kanban con bottone QC su ogni card → stessa interazione, board si refresha live.
+- Riapertura round: dopo pass/fail, "↻ Reopen" → motivo prompt → nuovo round qc_number+1 + qc_substatus torna in_progress.
+
+Nessuna migrazione DB. Smoke template + import app OK.
+
 ## v3.5.0-alpha.172.99 — Fix test: CR qty respawn cross-nature + folder ventaglio + TB doc (28 mag 2026)
 
 Tre fix da test browser Matteo:

@@ -1913,6 +1913,18 @@ function dhBuildCard(d, colorFg) {
     dt.textContent = '📅 ' + d.target_delivery_date;
     card.appendChild(dt);
   }
+  // v3.5.0-alpha.172.100 — QC modal trigger su ogni card
+  const qcBtn = document.createElement('button');
+  qcBtn.className = 'btn btn-ghost btn-sm';
+  qcBtn.style.cssText = 'color:#fbbf24;font-size:11px;padding:2px 6px;margin-top:5px;';
+  qcBtn.textContent = '🔍 QC';
+  qcBtn.title = 'QC: storia eventi + nuovo round';
+  qcBtn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    window.qcmOnUpdate = () => renderDeliverableHub();
+    openQcModal(d.id, d.name || ('#' + d.id));
+  });
+  card.appendChild(qcBtn);
   card.addEventListener('click', () => dsmOpen(d.id));
   card.addEventListener('dragstart', dhDragStart);
   card.addEventListener('dragend', dhDragEnd);
@@ -1926,7 +1938,7 @@ function dhRenderList(host, items) {
   table.style.width = '100%';
   const thead = document.createElement('thead');
   const trh = document.createElement('tr');
-  ['Nome','Progetto','Job','Stato','QC sub','Unit','Qty','Target'].forEach(h => {
+  ['Nome','Progetto','Job','Stato','QC sub','Unit','Qty','Target','QC'].forEach(h => {
     const th = document.createElement('th'); th.textContent = h; trh.appendChild(th);
   });
   thead.appendChild(trh); table.appendChild(thead);
@@ -1954,6 +1966,21 @@ function dhRenderList(host, items) {
       td.textContent = v;
       tr.appendChild(td);
     });
+    // v3.5.0-alpha.172.100 — colonna QC trigger
+    const tdQc = document.createElement('td');
+    tdQc.className = 'text-center';
+    const qcBtn = document.createElement('button');
+    qcBtn.className = 'btn btn-ghost btn-sm';
+    qcBtn.style.cssText = 'color:#fbbf24;font-size:11px;padding:2px 6px;';
+    qcBtn.textContent = '🔍 QC';
+    qcBtn.title = 'QC: storia eventi + nuovo round';
+    qcBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      window.qcmOnUpdate = () => renderDeliverableHub();
+      openQcModal(d.id, d.name || ('#' + d.id));
+    });
+    tdQc.appendChild(qcBtn);
+    tr.appendChild(tdQc);
     tbody.appendChild(tr);
   });
   table.appendChild(tbody);

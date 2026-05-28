@@ -878,6 +878,9 @@ function renderDeliverableKanbanCard(d) {
   const confirmBtn = (!isClosed && remaining > 0.005)
     ? `<button class="btn btn-primary btn-sm" style="font-size:11px;padding:3px 8px;" onclick="event.stopPropagation();openConfirmDelivery(${d.id})" title="Conferma consegna">✓ Conferma</button>`
     : (qtyP > 0 ? `<span class="text-xs" style="color:#22c55e;">✓ Completo</span>` : `<span class="text-xs text-muted">—</span>`);
+  // v3.5.0-alpha.172.100 — QC modal trigger (nome risolto via _dlvCache, no
+  // JSON.stringify in onclick: cfr feedback_no_jsonstringify_in_onclick).
+  const qcBtn = `<button class="btn btn-ghost btn-sm" style="font-size:11px;padding:3px 6px;color:#fbbf24;" onclick="event.stopPropagation();jdOpenQcModal(${d.id})" title="QC: storia eventi + nuovo round">🔍 QC</button>`;
   const linked = (d.digital_asset_id || d.physical_asset_id)
     ? `<span class="text-xs" style="color:#a78bfa;" title="Asset linkato">📎</span>`
     : '';
@@ -894,8 +897,11 @@ function renderDeliverableKanbanCard(d) {
       <div style="position:absolute;left:0;top:0;height:100%;width:${pct}%;background:${pct >= 100 ? '#22c55e' : '#6272f5'};border-radius:2px;"></div>
     </div>
     ${target}
-    <div style="display:flex;justify-content:space-between;align-items:center;margin-top:6px;">
-      ${confirmBtn}
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-top:6px;gap:4px;">
+      <div style="display:flex;gap:4px;align-items:center;">
+        ${confirmBtn}
+        ${qcBtn}
+      </div>
       ${isClosed ? '<span class="text-xs" style="color:#c084fc;">🔒</span>'
                  : `<button class="btn btn-ghost btn-sm" style="color:var(--rose);font-size:11px;" onclick="event.stopPropagation();deleteDeliverable(${d.id})" title="Elimina">✕</button>`}
     </div>
@@ -998,6 +1004,8 @@ function renderDeliverableCard(d) {
   const hours = d.actual_hours ? `<span class="text-xs text-muted" title="Ore booking attribuiti">⏱ ${d.actual_hours}h</span>` : '';
   const fileNaming = d.file_naming ? `<div class="text-xs" style="font-family:monospace;color:var(--text2);margin-top:2px;">📝 ${escapeHtml(d.file_naming)}</div>` : '';
   const isClosed = d.status === 'closed';
+  // v3.5.0-alpha.172.100 — QC button anche su card Lista
+  const qcBtnList = `<button class="btn btn-ghost btn-sm" onclick="event.stopPropagation();jdOpenQcModal(${d.id})" title="QC: storia eventi + nuovo round" style="color:#fbbf24;font-size:11px;padding:3px 6px;">🔍 QC</button>`;
   return `
     <div class="card" style="margin-bottom:8px;padding:12px 14px;cursor:pointer;" onclick="jdOpenSpecsReadonly(${d.id})" title="Click per vedere specifiche tecniche (read-only)">
       <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
@@ -1010,11 +1018,21 @@ function renderDeliverableCard(d) {
           ${statusBadge}${qcSub}
           ${target}
           ${hours}
+          ${qcBtnList}
           ${isClosed ? '<span style="color:#c084fc;" title="Chiuso (irreversibile)">🔒</span>'
                      : `<button class="btn btn-ghost btn-sm" onclick="event.stopPropagation();deleteDeliverable(${d.id})" title="Elimina deliverable" style="color:var(--rose);"><i data-lucide="trash-2" style="width:13px;height:13px;"></i></button>`}
         </div>
       </div>
     </div>`;
+}
+
+// v3.5.0-alpha.172.100 — wrapper: risolve nome da cache + apre modal + hook refresh
+function jdOpenQcModal(deliverableId) {
+  const d = (_dlvCache || []).find(x => x.id === deliverableId);
+  const name = d ? d.name : ('#' + deliverableId);
+  // Hook: dopo ogni QC action, ricarica lista deliverable per aggiornare badge
+  window.qcmOnUpdate = function(_did) { loadDeliverables(); };
+  openQcModal(deliverableId, name);
 }
 
 async function openNewDeliverable() {

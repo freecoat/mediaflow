@@ -1,0 +1,464 @@
+{# v3.5.0-alpha.172.100 — Bundle L Stack 2 milestone 2/3
+   QC Rich Modal globale event-sourced.
+
+   Esposto come `window.openQcModal(deliverableId, deliverableName?)` da qualsiasi
+   template (job_detail, planning HUB Bundle J, futuri).
+
+   Backend: app/routers/qc.py (GET /events, /report; POST /start, /log-event,
+   /recommendation, /note, /correction, /signoff, /pass, /fail, /conditional,
+   /reopen, /rebuild-report).
+#}
+<style>
+  /* QC Modal */
+  .qcm-overlay { display:none; position:fixed; inset:0; background:rgba(0,0,0,0.55); z-index:1100; align-items:center; justify-content:center; padding:24px; }
+  .qcm-overlay.open { display:flex; }
+  .qcm-panel { background:var(--bg1, #1a1d2b); border:1px solid var(--border, #2a2f44); border-radius:10px; width:min(940px, 100%); max-height:90vh; display:flex; flex-direction:column; box-shadow:0 14px 40px rgba(0,0,0,0.5); }
+  .qcm-header { display:flex; align-items:center; justify-content:space-between; padding:14px 20px; border-bottom:1px solid var(--border, #2a2f44); }
+  .qcm-title { font-size:15px; font-weight:600; color:var(--text1, #e2e6ff); display:flex; align-items:center; gap:8px; flex-wrap:wrap; }
+  .qcm-status-chip { display:inline-block; padding:2px 8px; border-radius:10px; font-size:11px; font-weight:600; }
+  .qcm-grade-chip { display:inline-block; padding:2px 8px; border-radius:10px; font-size:11px; font-weight:600; background:rgba(245,158,11,0.18); color:#f59e0b; border:1px solid rgba(245,158,11,0.4); }
+  .qcm-tabs { display:flex; gap:0; border-bottom:1px solid var(--border, #2a2f44); padding:0 16px; background:rgba(255,255,255,0.02); }
+  .qcm-tab { padding:10px 16px; background:transparent; border:none; color:var(--text2, #94a3b8); font-size:13px; font-weight:500; cursor:pointer; border-bottom:2px solid transparent; transition:color 0.15s, border-color 0.15s; }
+  .qcm-tab.active { color:var(--indigo2, #a7b3f9); border-bottom-color:var(--indigo2, #a7b3f9); }
+  .qcm-tab:hover:not(.active) { color:var(--text1, #e2e6ff); }
+  .qcm-body { padding:16px 20px; overflow-y:auto; flex:1; min-height:200px; }
+  .qcm-summary { display:grid; grid-template-columns:repeat(auto-fit, minmax(110px, 1fr)); gap:8px; margin-bottom:16px; }
+  .qcm-summary-cell { background:rgba(98,114,245,0.05); border-left:3px solid var(--indigo2, #6272f5); border-radius:0 4px 4px 0; padding:6px 10px; }
+  .qcm-summary-cell .lbl { font-size:10px; color:var(--text2, #94a3b8); text-transform:uppercase; letter-spacing:0.4px; }
+  .qcm-summary-cell .val { font-size:18px; font-weight:600; color:var(--text1, #e2e6ff); }
+  .qcm-event { background:var(--bg2, #1f2235); border:1px solid var(--border, #2a2f44); border-radius:6px; padding:10px 12px; margin-bottom:8px; border-left:3px solid var(--indigo2, #6272f5); }
+  .qcm-event-head { display:flex; align-items:center; justify-content:space-between; gap:8px; margin-bottom:4px; }
+  .qcm-event-type { font-weight:600; font-size:12px; color:var(--indigo2, #a7b3f9); }
+  .qcm-event-meta { font-size:11px; color:var(--text2, #94a3b8); }
+  .qcm-event-body { font-size:13px; color:var(--text1, #e2e6ff); line-height:1.45; }
+  .qcm-event.video { border-left-color:#ef4444; }
+  .qcm-event.audio { border-left-color:#f59e0b; }
+  .qcm-event.text { border-left-color:#10b981; }
+  .qcm-event.qc_started { border-left-color:#6272f5; background:rgba(98,114,245,0.06); }
+  .qcm-event.qc_passed { border-left-color:#22c55e; background:rgba(34,197,94,0.06); }
+  .qcm-event.qc_failed { border-left-color:#ef4444; background:rgba(239,68,68,0.06); }
+  .qcm-event.qc_conditional { border-left-color:#fbbf24; background:rgba(251,191,36,0.06); }
+  .qcm-event.qc_reopened { border-left-color:#a78bfa; background:rgba(167,139,250,0.06); }
+  .qcm-event-grade { display:inline-block; padding:1px 6px; border-radius:8px; font-size:10px; font-weight:600; margin-right:6px; }
+  .qcm-event-grade.g1 { background:rgba(34,197,94,0.18); color:#22c55e; }
+  .qcm-event-grade.g2 { background:rgba(251,191,36,0.18); color:#fbbf24; }
+  .qcm-event-grade.g3 { background:rgba(239,68,68,0.18); color:#ef4444; }
+  .qcm-form-row { display:flex; gap:8px; margin-bottom:10px; flex-wrap:wrap; }
+  .qcm-form-row > * { flex:1; min-width:120px; }
+  .qcm-form-row .qcm-field-full { flex:1 1 100%; min-width:100%; }
+  .qcm-form input, .qcm-form select, .qcm-form textarea { width:100%; background:var(--bg2, #1f2235); border:1px solid var(--border, #2a2f44); color:var(--text1, #e2e6ff); padding:6px 10px; border-radius:4px; font-size:13px; }
+  .qcm-form textarea { min-height:60px; resize:vertical; font-family:inherit; }
+  .qcm-form label { font-size:11px; color:var(--text2, #94a3b8); text-transform:uppercase; letter-spacing:0.4px; display:block; margin-bottom:3px; }
+  .qcm-form-section { background:rgba(255,255,255,0.02); border:1px solid var(--border, #2a2f44); border-radius:6px; padding:12px; margin-bottom:12px; }
+  .qcm-form-section h4 { margin:0 0 8px 0; font-size:12px; font-weight:600; color:var(--indigo2, #a7b3f9); text-transform:uppercase; letter-spacing:0.5px; }
+  .qcm-actions { display:flex; gap:6px; flex-wrap:wrap; padding:12px 20px; border-top:1px solid var(--border, #2a2f44); background:rgba(255,255,255,0.02); border-radius:0 0 10px 10px; }
+  .qcm-action-btn { padding:6px 12px; border-radius:6px; font-size:12px; font-weight:600; cursor:pointer; border:1px solid; transition:transform 0.1s ease, box-shadow 0.1s ease; }
+  .qcm-action-btn:hover:not(:disabled) { transform:translateY(-1px); box-shadow:0 2px 6px rgba(0,0,0,0.2); }
+  .qcm-action-btn:disabled { opacity:0.45; cursor:not-allowed; }
+  .qcm-action-start { background:rgba(98,114,245,0.18); color:#a7b3f9; border-color:rgba(98,114,245,0.4); }
+  .qcm-action-pass { background:rgba(34,197,94,0.18); color:#22c55e; border-color:rgba(34,197,94,0.4); }
+  .qcm-action-fail { background:rgba(239,68,68,0.18); color:#ef4444; border-color:rgba(239,68,68,0.4); }
+  .qcm-action-conditional { background:rgba(251,191,36,0.18); color:#fbbf24; border-color:rgba(251,191,36,0.4); }
+  .qcm-action-reopen { background:rgba(167,139,250,0.18); color:#a78bfa; border-color:rgba(167,139,250,0.4); }
+  .qcm-action-rebuild { background:rgba(148,163,184,0.18); color:#94a3b8; border-color:rgba(148,163,184,0.4); }
+  .qcm-close { background:transparent; border:none; color:var(--text2, #94a3b8); font-size:20px; cursor:pointer; padding:0 4px; }
+  .qcm-close:hover { color:var(--text1, #e2e6ff); }
+  .qcm-empty { text-align:center; padding:30px 12px; color:var(--text2, #94a3b8); font-size:13px; }
+  .qcm-round-divider { display:flex; align-items:center; gap:8px; margin:14px 0 8px 0; padding-bottom:4px; border-bottom:1px dashed var(--border, #2a2f44); }
+  .qcm-round-divider .lbl { font-size:11px; font-weight:600; color:var(--indigo2, #a7b3f9); text-transform:uppercase; letter-spacing:0.5px; }
+</style>
+
+<div id="qcm-overlay" class="qcm-overlay" onclick="if(event.target===this) closeQcModal()">
+  <div class="qcm-panel">
+    <div class="qcm-header">
+      <div class="qcm-title">
+        <span style="font-size:16px;">🔍</span>
+        <span>QC —</span>
+        <span id="qcm-deliv-name" style="color:var(--indigo2, #a7b3f9);">…</span>
+        <span id="qcm-status-chips"></span>
+      </div>
+      <button class="qcm-close" onclick="closeQcModal()" title="Chiudi">✕</button>
+    </div>
+
+    <div class="qcm-tabs">
+      <button class="qcm-tab active" data-qcm-tab="history" onclick="qcmSwitchTab('history')">Storia QC</button>
+      <button class="qcm-tab" data-qcm-tab="log" onclick="qcmSwitchTab('log')">Nuovo evento</button>
+    </div>
+
+    <div class="qcm-body">
+      <div id="qcm-tab-history">
+        <div id="qcm-summary" class="qcm-summary"></div>
+        <div id="qcm-events"></div>
+      </div>
+      <div id="qcm-tab-log" style="display:none;">
+        <form class="qcm-form" onsubmit="event.preventDefault();">
+
+          <div class="qcm-form-section">
+            <h4>📺 Log evento canale</h4>
+            <div class="qcm-form-row">
+              <div>
+                <label>Canale</label>
+                <select id="qcm-log-channel">
+                  <option value="video">🎬 Video</option>
+                  <option value="audio">🔊 Audio</option>
+                  <option value="text">📝 Text/Sub</option>
+                </select>
+              </div>
+              <div>
+                <label>Timecode</label>
+                <input type="text" id="qcm-log-timecode" placeholder="00:12:34">
+              </div>
+              <div>
+                <label>Grade</label>
+                <select id="qcm-log-grade">
+                  <option value="1">1 — Minore</option>
+                  <option value="2">2 — Importante</option>
+                  <option value="3">3 — Critico</option>
+                </select>
+              </div>
+            </div>
+            <div class="qcm-form-row">
+              <div class="qcm-field-full">
+                <label>Descrizione</label>
+                <textarea id="qcm-log-desc" placeholder="Es. macroblocking visibile in pan rapido"></textarea>
+              </div>
+            </div>
+            <button type="button" class="qcm-action-btn qcm-action-start" onclick="qcmLogEvent()">+ Log evento</button>
+          </div>
+
+          <div class="qcm-form-section">
+            <h4>💡 Raccomandazione / 📝 Nota</h4>
+            <div class="qcm-form-row">
+              <div class="qcm-field-full">
+                <label>Testo</label>
+                <textarea id="qcm-reco-desc" placeholder="Es. valutare regrade scena 12, oppure nota interna…"></textarea>
+              </div>
+            </div>
+            <div class="qcm-form-row" style="margin-bottom:0;">
+              <button type="button" class="qcm-action-btn qcm-action-start" onclick="qcmAddReco()">+ Raccomandazione</button>
+              <button type="button" class="qcm-action-btn qcm-action-rebuild" onclick="qcmAddNote()">+ Nota interna</button>
+            </div>
+          </div>
+
+          <div class="qcm-form-section">
+            <h4>✏ Correzione richiesta</h4>
+            <div class="qcm-form-row">
+              <div>
+                <label>Event IDs target (CSV)</label>
+                <input type="text" id="qcm-corr-targets" placeholder="es. 12,15,18">
+              </div>
+              <div>
+                <label>Due date (opt)</label>
+                <input type="date" id="qcm-corr-due">
+              </div>
+            </div>
+            <div class="qcm-form-row">
+              <div class="qcm-field-full">
+                <label>Descrizione</label>
+                <textarea id="qcm-corr-desc" placeholder="Cosa va corretto"></textarea>
+              </div>
+            </div>
+            <button type="button" class="qcm-action-btn qcm-action-conditional" onclick="qcmAddCorrection()">+ Correzione</button>
+          </div>
+
+        </form>
+      </div>
+    </div>
+
+    <div class="qcm-actions">
+      <button class="qcm-action-btn qcm-action-start" onclick="qcmStart()" title="Avvia nuovo round QC + snapshot tech specs">▶ Start QC</button>
+      <button class="qcm-action-btn qcm-action-pass" onclick="qcmPass()" title="Chiudi round con esito PASS">✓ Pass</button>
+      <button class="qcm-action-btn qcm-action-fail" onclick="qcmFail()" title="Chiudi round con esito FAIL + cascade Bundle I">✗ Fail</button>
+      <button class="qcm-action-btn qcm-action-conditional" onclick="qcmConditional()" title="Chiudi con esito CONDITIONAL (pass se condizioni soddisfatte)">⚠ Conditional</button>
+      <button class="qcm-action-btn qcm-action-reopen" onclick="qcmReopen()" title="Riapri round dopo chiusura (richiede motivo)">↻ Reopen</button>
+      <button class="qcm-action-btn qcm-action-rebuild" onclick="qcmRebuild()" title="Re-deriva QCReport dallo stream eventi (debug)">⟲ Rebuild Report</button>
+    </div>
+  </div>
+</div>
+
+<script>
+// ── QC Rich Modal — controller globale ──────────────────────────────────────
+window._qcm = {
+  deliverableId: null,
+  deliverableName: '',
+  events: [],
+  report: null,
+  status: null,
+  qcSubstatus: null,
+};
+
+const QCM_EVENT_LABEL = {
+  qc_started: 'Round avviato',
+  snapshot_taken: 'Snapshot tech specs',
+  video_error_logged: 'Errore video',
+  audio_error_logged: 'Errore audio',
+  text_error_logged: 'Errore text',
+  recommendation_added: 'Raccomandazione',
+  note_added: 'Nota',
+  correction_requested: 'Correzione richiesta',
+  signoff_added: 'Firma',
+  qc_passed: '✓ Round PASS',
+  qc_failed: '✗ Round FAIL',
+  qc_conditional: '⚠ Round CONDITIONAL',
+  qc_reopened: '↻ Round riaperto',
+};
+
+const QCM_STATUS_META = {
+  not_started:  { lbl:'Non avviato',   bg:'rgba(148,163,184,0.18)', color:'#94a3b8', border:'rgba(148,163,184,0.4)' },
+  in_progress:  { lbl:'In corso',      bg:'rgba(98,114,245,0.18)',  color:'#a7b3f9', border:'rgba(98,114,245,0.4)'  },
+  passed:       { lbl:'Pass',          bg:'rgba(34,197,94,0.18)',   color:'#22c55e', border:'rgba(34,197,94,0.4)'   },
+  failed:       { lbl:'Fail',          bg:'rgba(239,68,68,0.18)',   color:'#ef4444', border:'rgba(239,68,68,0.4)'   },
+  conditional:  { lbl:'Conditional',   bg:'rgba(251,191,36,0.18)',  color:'#fbbf24', border:'rgba(251,191,36,0.4)'  },
+};
+
+window.openQcModal = async function(deliverableId, deliverableName) {
+  window._qcm.deliverableId = deliverableId;
+  window._qcm.deliverableName = deliverableName || ('#' + deliverableId);
+  document.getElementById('qcm-deliv-name').textContent = window._qcm.deliverableName;
+  qcmSwitchTab('history');
+  document.getElementById('qcm-overlay').classList.add('open');
+  await qcmRefresh();
+};
+
+window.closeQcModal = function() {
+  document.getElementById('qcm-overlay').classList.remove('open');
+};
+
+window.qcmSwitchTab = function(name) {
+  document.querySelectorAll('.qcm-tab').forEach(b => {
+    b.classList.toggle('active', b.dataset.qcmTab === name);
+  });
+  document.getElementById('qcm-tab-history').style.display = (name === 'history') ? '' : 'none';
+  document.getElementById('qcm-tab-log').style.display = (name === 'log') ? '' : 'none';
+};
+
+async function qcmRefresh() {
+  const did = window._qcm.deliverableId;
+  if (!did) return;
+  try {
+    const [evResp, repResp] = await Promise.all([
+      fetch(`/qc/api/deliverables/${did}/events`, { credentials: 'same-origin' }).then(r => r.json()),
+      fetch(`/qc/api/deliverables/${did}/report`, { credentials: 'same-origin' }).then(r => r.json()),
+    ]);
+    window._qcm.events = evResp.events || [];
+    window._qcm.report = repResp.report || null;
+    qcmRenderHeader();
+    qcmRenderSummary();
+    qcmRenderEvents();
+  } catch (e) {
+    if (typeof toast === 'function') toast('Errore caricamento QC: ' + (e.message || e), 'error');
+  }
+}
+
+function qcmRenderHeader() {
+  const target = document.getElementById('qcm-status-chips');
+  const r = window._qcm.report;
+  if (!r) {
+    target.innerHTML = '<span class="qcm-status-chip" style="background:rgba(148,163,184,0.18);color:#94a3b8;border:1px solid rgba(148,163,184,0.4);">Mai avviato</span>';
+    return;
+  }
+  const meta = QCM_STATUS_META[r.overall_status] || QCM_STATUS_META.not_started;
+  let html = `<span class="qcm-status-chip" style="background:${meta.bg};color:${meta.color};border:1px solid ${meta.border};">${meta.lbl}</span>`;
+  if (r.last_qc_number) {
+    html += ` <span class="qcm-status-chip" style="background:rgba(98,114,245,0.18);color:#a7b3f9;border:1px solid rgba(98,114,245,0.4);">Round #${r.last_qc_number}</span>`;
+  }
+  if (r.max_grade) {
+    html += ` <span class="qcm-grade-chip">Max grade ${r.max_grade}</span>`;
+  }
+  target.innerHTML = html;
+}
+
+function qcmRenderSummary() {
+  const target = document.getElementById('qcm-summary');
+  const r = window._qcm.report;
+  if (!r) { target.innerHTML = ''; return; }
+  const cells = [
+    { lbl: '🎬 Video err',   val: r.video_errors_count || 0 },
+    { lbl: '🔊 Audio err',   val: r.audio_errors_count || 0 },
+    { lbl: '📝 Text err',    val: r.text_errors_count || 0 },
+    { lbl: '💡 Raccom.',     val: r.recommendations_count || 0 },
+    { lbl: '📝 Note',        val: r.notes_count || 0 },
+    { lbl: '✏ Correz. aperte', val: r.open_corrections_count || 0 },
+    { lbl: '✍ Firme',        val: r.signoffs_count || 0 },
+  ];
+  target.innerHTML = cells.map(c => `
+    <div class="qcm-summary-cell">
+      <div class="lbl">${c.lbl}</div>
+      <div class="val">${c.val}</div>
+    </div>
+  `).join('');
+}
+
+function qcmRenderEvents() {
+  const target = document.getElementById('qcm-events');
+  const events = window._qcm.events;
+  if (!events.length) {
+    target.innerHTML = '<div class="qcm-empty">Nessun evento. Avvia un round QC con "▶ Start QC".</div>';
+    return;
+  }
+  // Raggruppa per qc_number, render con divider
+  const byRound = {};
+  for (const ev of events) {
+    const n = ev.qc_number || 1;
+    if (!byRound[n]) byRound[n] = [];
+    byRound[n].push(ev);
+  }
+  const rounds = Object.keys(byRound).map(Number).sort((a, b) => b - a); // desc
+  let html = '';
+  for (const n of rounds) {
+    html += `<div class="qcm-round-divider"><span class="lbl">Round #${n}</span></div>`;
+    // Eventi del round in ordine cronologico (sequence asc)
+    const evs = byRound[n].slice().sort((a, b) => (a.sequence || 0) - (b.sequence || 0));
+    html += evs.map(ev => qcmRenderEvent(ev)).join('');
+  }
+  target.innerHTML = html;
+}
+
+function qcmRenderEvent(ev) {
+  const typeLbl = QCM_EVENT_LABEL[ev.event_type] || ev.event_type;
+  const when = ev.occurred_at ? new Date(ev.occurred_at).toLocaleString('it-IT') : '—';
+  const op = ev.operator_id ? `op #${ev.operator_id}` : 'system';
+  let cls = ev.event_type;
+  if (ev.event_type === 'video_error_logged') cls = 'video';
+  if (ev.event_type === 'audio_error_logged') cls = 'audio';
+  if (ev.event_type === 'text_error_logged') cls = 'text';
+  const p = ev.payload || {};
+  let body = '';
+  if (cls === 'video' || cls === 'audio' || cls === 'text') {
+    const grade = p.grade || 1;
+    const tc = p.timecode ? `<span class="qcm-event-meta">[${escapeHtml(p.timecode)}]</span> ` : '';
+    body = `<span class="qcm-event-grade g${grade}">G${grade}</span>${tc}${escapeHtml(p.description || '—')}`;
+  } else if (ev.event_type === 'recommendation_added' || ev.event_type === 'note_added') {
+    body = escapeHtml(p.description || p.text || '—');
+  } else if (ev.event_type === 'correction_requested') {
+    const due = p.due_date ? ` <span class="qcm-event-meta">(due ${escapeHtml(p.due_date)})</span>` : '';
+    const targets = Array.isArray(p.target_event_ids) && p.target_event_ids.length
+      ? ` <span class="qcm-event-meta">→ ev ${p.target_event_ids.join(',')}</span>` : '';
+    body = `${escapeHtml(p.description || '—')}${targets}${due}`;
+  } else if (ev.event_type === 'signoff_added') {
+    body = `Firma di <b>signer #${p.signer_id || '?'}</b> (${escapeHtml(p.role || 'qc')})${p.note ? ' — ' + escapeHtml(p.note) : ''}`;
+  } else if (ev.event_type === 'qc_started') {
+    body = p.asset_id ? `Asset linkato: #${p.asset_id}` : 'Round avviato';
+  } else if (ev.event_type === 'snapshot_taken') {
+    body = `Snapshot tech specs preso${p.snapshot_id ? ' (#' + p.snapshot_id + ')' : ''}`;
+  } else if (ev.event_type === 'qc_passed') {
+    body = `Round PASS${p.overall_grade ? ', overall grade ' + p.overall_grade : ''}${p.note ? ' — ' + escapeHtml(p.note) : ''}`;
+  } else if (ev.event_type === 'qc_failed') {
+    body = `Causa: ${escapeHtml(p.primary_cause || '—')}${p.max_grade ? ' (max grade ' + p.max_grade + ')' : ''}`;
+  } else if (ev.event_type === 'qc_conditional') {
+    const conds = Array.isArray(p.conditions) ? p.conditions.join('; ') : '';
+    body = `Pass se: ${escapeHtml(p.pass_when || conds || '—')}`;
+  } else if (ev.event_type === 'qc_reopened') {
+    body = `Motivo: ${escapeHtml(p.reason || '—')}`;
+  } else {
+    // Fallback eventi sconosciuti: escape per evitare XSS da payload custom
+    body = escapeHtml(JSON.stringify(p));
+  }
+  return `<div class="qcm-event ${cls}">
+    <div class="qcm-event-head">
+      <span class="qcm-event-type">${typeLbl}</span>
+      <span class="qcm-event-meta">#${ev.id} · seq ${ev.sequence} · ${when} · ${op}</span>
+    </div>
+    <div class="qcm-event-body">${body}</div>
+  </div>`;
+}
+
+// ── Mutator wrappers ─────────────────────────────────────────────────────────
+async function qcmPostForm(path, fields) {
+  const did = window._qcm.deliverableId;
+  if (!did) return;
+  const fd = new FormData();
+  for (const k in fields) {
+    if (fields[k] !== undefined && fields[k] !== null && fields[k] !== '') fd.append(k, fields[k]);
+  }
+  try {
+    const r = await fetch(`/qc/api/deliverables/${did}${path}`, {
+      method: 'POST', body: fd, credentials: 'same-origin',
+    });
+    if (!r.ok) {
+      const err = await r.json().catch(() => ({}));
+      throw new Error(err.detail || r.statusText);
+    }
+    if (typeof toast === 'function') toast('✓ QC: azione eseguita', 'success');
+    await qcmRefresh();
+    // Notify parent template per refresh lista deliverable
+    if (typeof window.qcmOnUpdate === 'function') window.qcmOnUpdate(did);
+  } catch (e) {
+    if (typeof toast === 'function') toast('Errore: ' + (e.message || e), 'error');
+  }
+}
+
+window.qcmStart = function() {
+  qcmPostForm('/start', { refresh_snapshot: 'true' });
+};
+window.qcmPass = function() {
+  const grade = prompt('Overall grade (1–5, opt):', '');
+  const note = prompt('Nota chiusura (opt):', '') || '';
+  qcmPostForm('/pass', { overall_grade: grade || undefined, note });
+};
+window.qcmFail = function() {
+  const cause = prompt('Causa primaria del FAIL (richiesta):', '');
+  if (!cause) return;
+  const maxG = prompt('Max grade (1–5, opt):', '');
+  qcmPostForm('/fail', { primary_cause: cause, max_grade: maxG || undefined, trigger_cascade: 'true' });
+};
+window.qcmConditional = function() {
+  const cond = prompt('Condizioni (CSV o JSON array):', '');
+  if (cond === null) return;
+  const passWhen = prompt('Pass quando (opt):', '') || '';
+  qcmPostForm('/conditional', { conditions: cond, pass_when: passWhen });
+};
+window.qcmReopen = function() {
+  const reason = prompt('Motivo riapertura (richiesto):', '');
+  if (!reason) return;
+  qcmPostForm('/reopen', { reason });
+};
+window.qcmRebuild = function() {
+  if (!confirm('Re-derivazione QCReport dallo stream eventi. Procedere?')) return;
+  qcmPostForm('/rebuild-report', {});
+};
+
+window.qcmLogEvent = function() {
+  const channel = document.getElementById('qcm-log-channel').value;
+  const tc = document.getElementById('qcm-log-timecode').value.trim();
+  const grade = document.getElementById('qcm-log-grade').value;
+  const desc = document.getElementById('qcm-log-desc').value.trim();
+  if (!desc) { if (typeof toast === 'function') toast('Descrizione richiesta', 'warning'); return; }
+  qcmPostForm('/log-event', { channel, timecode: tc, grade, description: desc });
+  document.getElementById('qcm-log-desc').value = '';
+  document.getElementById('qcm-log-timecode').value = '';
+};
+
+window.qcmAddReco = function() {
+  const desc = document.getElementById('qcm-reco-desc').value.trim();
+  if (!desc) { if (typeof toast === 'function') toast('Testo richiesto', 'warning'); return; }
+  qcmPostForm('/recommendation', { description: desc });
+  document.getElementById('qcm-reco-desc').value = '';
+};
+
+window.qcmAddNote = function() {
+  const desc = document.getElementById('qcm-reco-desc').value.trim();
+  if (!desc) { if (typeof toast === 'function') toast('Testo richiesto', 'warning'); return; }
+  qcmPostForm('/note', { text: desc });
+  document.getElementById('qcm-reco-desc').value = '';
+};
+
+window.qcmAddCorrection = function() {
+  const targets = document.getElementById('qcm-corr-targets').value.trim();
+  const due = document.getElementById('qcm-corr-due').value;
+  const desc = document.getElementById('qcm-corr-desc').value.trim();
+  if (!desc) { if (typeof toast === 'function') toast('Descrizione richiesta', 'warning'); return; }
+  qcmPostForm('/correction', { target_event_ids: targets, due_date: due, description: desc });
+  document.getElementById('qcm-corr-desc').value = '';
+  document.getElementById('qcm-corr-targets').value = '';
+};
+
+// Escape helper fallback (global.js dovrebbe già fornirlo)
+if (typeof window.escapeHtml !== 'function') {
+  window.escapeHtml = function(s) {
+    return String(s == null ? '' : s)
+      .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+  };
+}
+</script>
