@@ -31,6 +31,7 @@ from app.models.models import (
 )
 from app.services.rbac import requires_permission, current_user_optional
 from app.context import current_tenant_id
+from app.services.delivery_timeline_service import effective_timeline
 
 logger = logging.getLogger(__name__)
 router = APIRouter(tags=["delivery_items"])
@@ -96,6 +97,12 @@ def _serialize_item(it: DeliveryItem, with_tracks: bool = True) -> dict:
         "ai_confidence": it.ai_confidence,
         "pending_review": it.pending_review,
         "is_active": it.is_active,
+        # timeline + audio-config (v3.5.0-alpha.172.127)
+        "tc_start": it.tc_start,
+        "program_start": it.program_start,
+        "timeline_segments": it.timeline_segments or [],
+        "audio_config_preset_id": it.audio_config_preset_id,
+        "audio_config_code": it.audio_config_code,
     }
     if with_tracks:
         out["audio_tracks"] = [_serialize_track(t) for t in sorted(it.audio_tracks, key=lambda x: x.sort_order)]
@@ -144,7 +151,9 @@ async def get_item(iid: int, db: Session = Depends(get_db)):
     )
     if not it:
         raise HTTPException(404, "DeliveryItem non trovato")
-    return _serialize_item(it)
+    data = _serialize_item(it)
+    data["effective_timeline"] = effective_timeline(db, it)
+    return data
 
 
 @router.post("/delivery-templates/api/{tid}/items", dependencies=[RequireEdit])
@@ -232,6 +241,11 @@ async def update_item(
     notes: Optional[str] = Form(None),
     pending_review: Optional[bool] = Form(None),
     sort_order: Optional[int] = Form(None),
+    # timeline + audio-config (v3.5.0-alpha.172.127)
+    tc_start: Optional[str] = Form(None),
+    program_start: Optional[str] = Form(None),
+    timeline_segments_json: Optional[str] = Form(None),
+    audio_config_preset_id: Optional[str] = Form(None),
     db: Session = Depends(get_db),
 ):
     it = db.query(DeliveryItem).filter(
@@ -274,6 +288,31 @@ async def update_item(
     if notes is not None:                    it.notes = notes.strip() or None
     if pending_review is not None:           it.pending_review = pending_review
     if sort_order is not None:               it.sort_order = sort_order
+
+    # timeline + audio-config (v3.5.0-alpha.172.127)
+    if tc_start is not None:
+        it.tc_start = tc_start.strip() or None
+    if program_start is not None:
+        it.program_start = program_start.strip() or None
+    if timeline_segments_json is not None:
+        try:
+            v = json.loads(timeline_segments_json) if timeline_segments_json.strip() else []
+            if not isinstance(v, list):
+                raise ValueError("must be list")
+            it.timeline_segments = v
+        except (json.JSONDecodeError, ValueError) as e:
+            raise HTTPException(400, f"timeline_segments_json invalido: {e}")
+    if audio_config_preset_id is not None:
+        pid = int(audio_config_preset_id) if str(audio_config_preset_id).strip() else None
+        if pid:
+            from app.models.models import AudioConfigPreset
+            from app.services.audio_config_service import apply_audio_config_preset
+            preset = db.get(AudioConfigPreset, pid)
+            if preset and preset.delivery_template_id == it.delivery_template_id:
+                apply_audio_config_preset(db, it, preset)
+        else:
+            it.audio_config_preset_id = None
+            it.audio_config_code = None
 
     db.commit()
     db.refresh(it)
@@ -1015,3 +1054,91 @@ async def ai_extract_items(tid: int, request: Request, db: Session = Depends(get
         "skipped": skipped,
         "pass1_categories": parsed.get("pass1_categories") or [],
     }
+
+
+# ── AudioConfigPreset (v3.5.0-alpha.172.127) ──────────────────
+
+def _serialize_preset(p) -> dict:
+    return {
+        "id": p.id, "delivery_template_id": p.delivery_template_id,
+        "code": p.code, "name": p.name, "description": p.description,
+        "track_layout": p.track_layout or [], "sort_order": p.sort_order,
+        "is_active": p.is_active,
+    }
+
+
+@router.get("/delivery-templates/api/{tid}/audio-presets")
+async def list_audio_presets(tid: int, db: Session = Depends(get_db)):
+    from app.models.models import AudioConfigPreset
+    rows = (db.query(AudioConfigPreset)
+            .filter(AudioConfigPreset.delivery_template_id == tid,
+                    AudioConfigPreset.tenant_id == current_tenant_id(),
+                    AudioConfigPreset.is_active == True)  # noqa: E712
+            .order_by(AudioConfigPreset.sort_order, AudioConfigPreset.code).all())
+    return [_serialize_preset(p) for p in rows]
+
+
+@router.post("/delivery-templates/api/{tid}/audio-presets", dependencies=[RequireEdit])
+async def create_audio_preset(tid: int, code: str = Form(...), name: str = Form(...),
+                              description: Optional[str] = Form(None),
+                              track_layout_json: Optional[str] = Form(None),
+                              db: Session = Depends(get_db)):
+    from app.models.models import AudioConfigPreset
+    track_layout = []
+    if track_layout_json and track_layout_json.strip():
+        try:
+            v = json.loads(track_layout_json)
+            if isinstance(v, list):
+                track_layout = v
+        except json.JSONDecodeError:
+            pass
+    p = AudioConfigPreset(
+        tenant_id=current_tenant_id(), delivery_template_id=tid,
+        code=code.strip(), name=name.strip(), description=description,
+        track_layout=track_layout,
+    )
+    db.add(p)
+    db.commit()
+    db.refresh(p)
+    return _serialize_preset(p)
+
+
+@router.put("/delivery-audio-presets/api/{pid}", dependencies=[RequireEdit])
+async def update_audio_preset(pid: int, code: Optional[str] = Form(None),
+                              name: Optional[str] = Form(None),
+                              description: Optional[str] = Form(None),
+                              track_layout_json: Optional[str] = Form(None),
+                              db: Session = Depends(get_db)):
+    from app.models.models import AudioConfigPreset
+    p = db.query(AudioConfigPreset).filter(
+        AudioConfigPreset.id == pid,
+        AudioConfigPreset.tenant_id == current_tenant_id()).first()
+    if not p:
+        raise HTTPException(404, "preset non trovato")
+    if code is not None:
+        p.code = code.strip()
+    if name is not None:
+        p.name = name.strip()
+    if description is not None:
+        p.description = description
+    if track_layout_json is not None:
+        try:
+            v = json.loads(track_layout_json) if track_layout_json.strip() else []
+            p.track_layout = v if isinstance(v, list) else []
+        except json.JSONDecodeError:
+            p.track_layout = []
+    db.commit()
+    return _serialize_preset(p)
+
+
+@router.delete("/delivery-audio-presets/api/{pid}", dependencies=[RequireEdit])
+async def delete_audio_preset(pid: int, db: Session = Depends(get_db)):
+    from app.models.models import AudioConfigPreset
+    p = db.query(AudioConfigPreset).filter(
+        AudioConfigPreset.id == pid,
+        AudioConfigPreset.tenant_id == current_tenant_id()).first()
+    if not p:
+        raise HTTPException(404, "preset non trovato")
+    p.is_active = False  # soft-delete
+    db.commit()
+    return {"ok": True}
