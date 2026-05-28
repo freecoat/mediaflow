@@ -14,12 +14,13 @@
 //   <input data-i18n="auth.email" data-i18n-attr="placeholder" placeholder="Email">
 // Il testo IT inline resta come fallback se applyI18n() non gira o key manca.
 
-window.MF_LANGS = ['it', 'en', 'fr', 'de'];
+window.MF_LANGS = ['it', 'en', 'fr', 'de', 'es'];
 window.MF_LANG_META = {
   it: {flag: '🇮🇹', name: 'Italiano'},
   en: {flag: '🇬🇧', name: 'English'},
   fr: {flag: '🇫🇷', name: 'Français'},
   de: {flag: '🇩🇪', name: 'Deutsch'},
+  es: {flag: '🇪🇸', name: 'Español'},
 };
 
 window.MF_I18N = {

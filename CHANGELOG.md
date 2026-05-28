@@ -1,5 +1,32 @@
 # MediaFlow — Changelog
 
+## v3.5.0-alpha.172.106 — i18n: aggiunto ES + audit report 477 stringhe (28 mag 2026)
+
+Setup i18n esteso + audit baseline per pianificare massive translation campaign.
+
+**Aggiunto Spagnolo** (`app/static/js/i18n.js`): `MF_LANGS` ora include `'es'` (oltre it/en/fr/de). `MF_LANG_META.es = {flag: '🇪🇸', name: 'Español'}`. Le chiavi dict esistenti del file DEVONO essere completate con valori `es:` — task massivo separato (vedi audit).
+
+**Script audit `tools/i18n_audit.py`**: scansiona `app/templates/**/*.html` + `app/static/js/**/*.js`, identifica stringhe italiane hardcoded NON coperte da `data-i18n` / `MF_I18N` / `t(...)`. Heuristica via match parole italiane comuni (articoli, preposizioni, verbi typical UI). Output report markdown.
+
+**Report iniziale `docs/i18n_audit_report.md`**:
+- **Totale**: 477 stringhe italiane non-traducibili
+- **File interessati**: 40
+- **Top 5**:
+  - `templates/pages/planning.html` (53)
+  - `templates/pages/quotes.html` (34)
+  - `static/js/copilot.js` (31)
+  - `templates/pages/cost_report.html` (30)
+  - `templates/pages/finance.html` (30)
+- Per ogni file (top 15 dettaglio): line, kind (text/attr/js_string), text estratto, chiave suggerita.
+
+**Falsi positivi noti** (audit heuristico, refining incrementale):
+- CSS color hex (`#2a2320`) → da blacklist
+- Identificatori snake_case → già esclusi ma non perfetto
+
+**Pattern per attaccare le 477**: a) per ogni stringa, aggiungi entry a `MF_I18N` con valori it/en/fr/de/es; b) annota template con `data-i18n="key"` (lascia testo IT inline come fallback); c) re-run audit per verificare gap.
+
+**Stima sforzo**: ~3-4 ore manuali per le 477 stringhe, oppure script semi-automatico AI-assisted (capability nuova `propose_i18n_translations` da costruire).
+
 ## v3.5.0-alpha.172.105 — Stacked vertical strips + tech specs human-readable (28 mag 2026)
 
 Due fix da feedback Matteo (screenshot 092404+092535):
