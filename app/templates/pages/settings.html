@@ -308,12 +308,12 @@
           </p>
           <div class="grid-2" style="gap:12px;">
             <div class="form-group">
-              <label class="form-label">Soglia ore/giorno</label>
+              <label class="form-label" data-i18n="settings.threshold_hours_day">Soglia ore/giorno</label>
               <input type="number" step="0.5" min="1" id="wh-daily-thr" class="form-input">
               <p class="text-sm text-muted" style="margin-top:4px;">Default 8h. Oltre = overtime.</p>
             </div>
             <div class="form-group">
-              <label class="form-label">Soglia ore/settimana</label>
+              <label class="form-label" data-i18n="settings.threshold_hours_week">Soglia ore/settimana</label>
               <input type="number" step="0.5" min="1" id="wh-weekly-thr" class="form-input">
               <p class="text-sm text-muted" style="margin-top:4px;">Default 40h.</p>
             </div>
@@ -355,7 +355,7 @@
           <!-- v3.4.32.2 — Scaglioni overtime CCNL ─────────────────────── -->
           <div class="form-group" style="margin-top:18px; padding-top:14px; border-top:1px solid var(--border);">
             <label class="form-label" style="display:flex; justify-content:space-between; align-items:center;">
-              <span>Scaglioni overtime <span style="font-weight:normal; color:var(--text3); font-size:11px;">(opzionale, per CCNL con maggiorazioni a fasce)</span></span>
+              <span>Scaglioni overtime <span style="font-weight:normal; color:var(--text3); font-size:11px;" data-i18n="settings.optional_ccnl_brackets">(opzionale, per CCNL con maggiorazioni a fasce)</span></span>
               <input type="text" id="wh-ccnl-label" placeholder="Es: CCNL Cinema · Doppiaggio" class="form-input" style="width:auto; min-width:240px; height:30px; font-size:12px;">
             </label>
             <p class="text-sm text-muted" style="margin:4px 0 8px;">
@@ -376,19 +376,19 @@
             </p>
             <div class="grid-2" style="gap:12px;">
               <div class="form-group">
-                <label class="form-label">Ferie maturate / anno (giorni)</label>
+                <label class="form-label" data-i18n="settings.vacation_accrued_year_days">Ferie maturate / anno (giorni)</label>
                 <input type="number" step="0.5" min="0" max="60" id="wh-annual-leave-days" class="form-input">
                 <p class="text-sm text-muted" style="margin-top:4px;">Default 26gg CCNL Italia standard. Range 0-60.</p>
               </div>
               <div class="form-group">
-                <label class="form-label">ROL maturate / mese (ore)</label>
+                <label class="form-label" data-i18n="settings.rol_accrued_month_hours">ROL maturate / mese (ore)</label>
                 <input type="number" step="0.5" min="0" max="40" id="wh-monthly-rol" class="form-input">
-                <p class="text-sm text-muted" style="margin-top:4px;">Default 8h/mese. Riduzione orario di lavoro.</p>
+                <p class="text-sm text-muted" style="margin-top:4px;" data-i18n="settings.rol_help">Default 8h/mese. Riduzione orario di lavoro.</p>
               </div>
               <div class="form-group">
-                <label class="form-label">Permessi retribuiti / mese (ore)</label>
+                <label class="form-label" data-i18n="settings.permissions_paid_month_hrs">Permessi retribuiti / mese (ore)</label>
                 <input type="number" step="0.5" min="0" max="40" id="wh-monthly-permit" class="form-input">
-                <p class="text-sm text-muted" style="margin-top:4px;">Default 8h/mese. Permessi extra (visite mediche, eventi famigliari, ecc).</p>
+                <p class="text-sm text-muted" style="margin-top:4px;" data-i18n="settings.permissions_help">Default 8h/mese. Permessi extra (visite mediche, eventi famigliari, ecc).</p>
               </div>
             </div>
           </div>
@@ -467,7 +467,7 @@
             </div>
             <div class="form-row">
               <div class="form-group">
-                <label class="form-label">Valore (salvato) *</label>
+                <label class="form-label" data-i18n="settings.value_saved">Valore (salvato) *</label>
                 <input class="form-input" id="tso-value" maxlength="200" required>
               </div>
               <div class="form-group">
@@ -617,7 +617,7 @@
               <option value="RF12">RF12 — Agriturismo</option>
             </select></div>
           <div class="form-group">
-            <label class="form-label">Codice destinatario SDI proprio (opzionale)</label>
+            <label class="form-label" data-i18n="settings.sdi_recipient_code">Codice destinatario SDI proprio (opzionale)</label>
             <input class="form-input" id="cmp-sdi_code" placeholder="7 caratteri"></div>
           <div class="form-group" style="grid-column:1/-1;">
             <label class="form-label">IBAN bancario</label>
@@ -626,7 +626,7 @@
             <label class="form-label">Modalità pagamento default</label>
             <input class="form-input" id="cmp-payment_method_default" placeholder="Bonifico bancario"></div>
           <div class="form-group">
-            <label class="form-label">Termini pagamento default (giorni)</label>
+            <label class="form-label" data-i18n="settings.payment_terms_default_days">Termini pagamento default (giorni)</label>
             <input class="form-input" id="cmp-payment_terms_default" type="number" min="0" max="365"></div>
           <div class="form-group">
             <label class="form-label">Aliquota IVA default (%)</label>
@@ -672,7 +672,7 @@
               <div class="text-xs text-muted" style="margin-top:3px;">Usato come accent color (titoli, separatori, header tabelle) nei PDF.</div>
             </div>
             <div class="form-group" style="grid-column:1/-1;">
-              <label class="form-label">Intestazione documento (opzionale)</label>
+              <label class="form-label" data-i18n="settings.document_header_optional">Intestazione documento (opzionale)</label>
               <textarea class="form-input" id="cmp-document_header" rows="2" placeholder="Testo libero che appare sotto il logo, sopra il contenuto del documento."></textarea>
             </div>
             <div class="form-group" style="grid-column:1/-1;">
@@ -721,7 +721,7 @@
           Cartelle filesystem dove gli admin/editor possono lanciare lo scan
           (<a href="/dam/fs-scan">/dam/fs-scan</a>) per importare Asset DAM
           senza copiare i file. Per sicurezza solo path qui elencati sono
-          accessibili. Per <strong>scope per-progetto</strong> (sovrascrive
+          accessibili. Per <strong data-i18n="settings.scope_per_project">scope per-progetto</strong> (sovrascrive
           questa lista) edita il singolo Project.
         </p>
         <div id="fsp-list" style="margin-bottom:10px;"></div>
@@ -854,7 +854,7 @@ AWS_S3_DEFAULT_BUCKET=Claqo-prod</pre>
             <input type="checkbox" id="exp-trash">
             <div style="flex:1;">
               <div style="font-weight:500;">Includi cestino</div>
-              <div class="text-xs text-muted">Record soft-deleted (clienti, progetti, quote, voci listino).</div>
+              <div class="text-xs text-muted" data-i18n="settings.soft_deleted_records">Record soft-deleted (clienti, progetti, quote, voci listino).</div>
             </div>
           </label>
           <label style="display:flex; align-items:center; gap:10px; padding:10px 12px; background:var(--bg2); border:1px solid var(--border); border-radius:6px;">
@@ -865,7 +865,7 @@ AWS_S3_DEFAULT_BUCKET=Claqo-prod</pre>
             </div>
           </label>
           <label style="display:flex; align-items:center; gap:10px; padding:10px 12px; background:var(--bg2); border:1px solid var(--border); border-radius:6px;">
-            <input type="password" id="exp-password" placeholder="(opzionale) Password per cifratura AES" autocomplete="new-password" style="flex:1; padding:6px 8px; background:var(--bg3); color:var(--text); border:1px solid var(--border); border-radius:4px;">
+            <input type="password" id="exp-password" data-i18n="settings.aes_password_optional" data-i18n-attr="placeholder" placeholder="(opzionale) Password per cifratura AES" autocomplete="new-password" style="flex:1; padding:6px 8px; background:var(--bg3); color:var(--text); border:1px solid var(--border); border-radius:4px;">
           </label>
         </div>
         <div class="flex gap-2 mt-3">

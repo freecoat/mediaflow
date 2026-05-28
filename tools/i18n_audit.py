@@ -97,21 +97,80 @@ JINJA_BLOCK_PATTERN = re.compile(r"\{%.*?%\}|\{\{.*?\}\}", re.DOTALL)
 
 def is_italian(text: str) -> bool:
     """Heuristica: la stringa contiene parole italiane indicative."""
-    if len(text.strip()) < 3:
+    t = text.strip()
+    if len(t) < 3:
         return False
     # Skip stringhe interamente numeriche/punteggiatura
-    if re.match(r"^[\d\s\.,;:!?+\-*/=()\[\]{}<>%€$_#@&|\\'\"`~^]+$", text):
+    if re.match(r"^[\d\s\.,;:!?+\-*/=()\[\]{}<>%€$_#@&|\\'\"`~^]+$", t):
+        return False
+    # Skip CSS color hex (#fff, #aabbcc, #aabbccdd)
+    if re.match(r"^#[0-9a-fA-F]{3,8}$", t):
+        return False
+    # Skip CSS units / numeric literals
+    if re.match(r"^[\d\.\-]+(px|rem|em|%|vh|vw|deg|s|ms)$", t):
+        return False
+    # Skip JS template literal con interpolazione ${...}
+    if "${" in t or "</" in t or "<i>" in t.lower() or "<b>" in t.lower():
+        return False
+    # Skip stringhe che sembrano HTML markup (contengono <tag)
+    if re.search(r"<[a-z][a-z0-9]*\s|</[a-z]", t.lower()):
         return False
     # Skip URL, percorsi, classi CSS, code
-    if re.match(r"^(https?://|/[a-z]|#[a-z]|\.[a-z\-]+|[a-z\-_]+\(\))", text.strip().lower()):
+    if re.match(r"^(https?://|/[a-z]|#[a-z\-]|\.[a-z\-]+|[a-z\-_]+\(\))", t.lower()):
         return False
-    # Skip identificatori snake_case/camelCase (sembrano variabili)
-    if re.match(r"^[a-z_]+$", text.strip()) or re.match(r"^[a-z][a-zA-Z0-9]*$", text.strip()):
+    # Skip espressioni JS/condizioni (contengono &&, ||, ?, :, !==, ==, =>)
+    if re.search(r"&&|\|\||!==|==|=>|\?\s|\s:\s|\.\s*[a-z]+\(", t):
+        return False
+    # Skip identificatori snake_case/camelCase puri
+    if re.match(r"^[a-z_]+$", t) or re.match(r"^[a-z][a-zA-Z0-9_]*$", t):
+        return False
+    if re.match(r"^[a-z\-]+$", t) and "-" in t:
+        return False
+    # Skip CSV header (lista nomi colonna)
+    if "," in t and re.match(r"^[a-z_,\s]+$", t.lower()):
+        return False
+    # Skip stringhe iniziano con $1, $2, ${, simboli markup
+    if t.startswith(("$1", "$2", "$&", "${", "\\$")):
+        return False
+    # Skip data-* / aria-* / role attribute values
+    if re.match(r"^(data-|aria-|role-)[a-z]", t.lower()):
         return False
     # Match parola italiana
-    words = re.findall(r"[a-zA-ZÃ Ã¨Ã©ÃÃ²Ã¹]+", text.lower())
+    words = re.findall(r"[a-zA-ZÃ Ã¨Ã©ÃÃ²Ã¹àèéìòù]+", t.lower())
     italian_hits = sum(1 for w in words if w in ITALIAN_WORDS)
-    return italian_hits >= 1
+    if italian_hits < 1:
+        return False
+    # Skip se è dominata da identifier-like (es. "color: #fff abc")
+    word_count = len(words)
+    if word_count <= 2 and italian_hits == 1:
+        # singola parola italiana isolata: accetta solo se la stringa è essenzialmente quella parola
+        meaningful = re.sub(r"[\d#\s\.,;:!?+\-*/=()\[\]{}<>%€$_@&|\\'\"`~^]+", "", t)
+        if len(meaningful) < 3:
+            return False
+    return True
+
+
+# AUTO_SWAP coverage: caricato a startup
+_AUTO_SWAP_IT = None
+
+
+def _load_auto_swap_it() -> set:
+    """Estrae le stringhe IT già coperte da MF_I18N_AUTO_SWAP runtime."""
+    global _AUTO_SWAP_IT
+    if _AUTO_SWAP_IT is not None:
+        return _AUTO_SWAP_IT
+    _AUTO_SWAP_IT = set()
+    try:
+        p = Path("app/static/js/i18n.js")
+        if p.exists():
+            content = p.read_text(encoding="utf-8")
+            m = re.search(r"window\.MF_I18N_AUTO_SWAP\s*=\s*\{(.+?)\n\};", content, re.DOTALL)
+            if m:
+                for entry in re.finditer(r"it:\s*'([^']+)'", m.group(1)):
+                    _AUTO_SWAP_IT.add(entry.group(1).strip())
+    except Exception:
+        pass
+    return _AUTO_SWAP_IT
 
 
 def has_i18n_marker(line: str, text: str) -> bool:
@@ -121,6 +180,9 @@ def has_i18n_marker(line: str, text: str) -> bool:
     if 't(' in line and '"' in line:
         return True
     if "MF_I18N" in line:
+        return True
+    # Stringa già coperta da AUTO_SWAP runtime
+    if text.strip() in _load_auto_swap_it():
         return True
     return False
 

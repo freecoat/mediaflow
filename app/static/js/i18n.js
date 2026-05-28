@@ -519,6 +519,86 @@ window.MF_I18N = {
   'col.detected':            {it: 'Rilevata',          en: 'Detected',          fr: 'Détectée',         de: 'Erkannt'},
   'col.ai':                  {it: 'AI',                en: 'AI',                fr: 'IA',               de: 'KI'},
   'quotes.col.project_title':{it: 'Progetto / Titolo quote', en: 'Project / Quote title', fr: 'Projet / Titre devis', de: 'Projekt / Angebotstitel'},
+
+  // ── α.172.109 — Pagine specifiche (audit round 3) ─────────
+  // Settings (configurazione)
+  'settings.threshold_hours_day':       {it: 'Soglia ore/giorno',                                en: 'Daily hours threshold',                  fr: 'Seuil heures/jour',                  de: 'Schwelle Stunden/Tag',                       es: 'Umbral horas/día'},
+  'settings.threshold_hours_week':      {it: 'Soglia ore/settimana',                             en: 'Weekly hours threshold',                 fr: 'Seuil heures/semaine',               de: 'Schwelle Stunden/Woche',                     es: 'Umbral horas/semana'},
+  'settings.optional_ccnl_brackets':    {it: '(opzionale, per CCNL con maggiorazioni a fasce)',  en: '(optional, for CBA with bracket surcharges)', fr: '(facultatif, pour CCT à majorations par tranches)', de: '(optional, für Tarifvertrag mit Zuschlagsstufen)', es: '(opcional, para convenio con recargos escalonados)'},
+  'settings.vacation_accrued_year_days':{it: 'Ferie maturate / anno (giorni)',                   en: 'Vacation accrued / year (days)',         fr: 'Congés acquis / an (jours)',         de: 'Urlaub erworben / Jahr (Tage)',              es: 'Vacaciones devengadas / año (días)'},
+  'settings.rol_accrued_month_hours':   {it: 'ROL maturate / mese (ore)',                        en: 'TOIL accrued / month (hours)',           fr: 'RTT acquis / mois (heures)',         de: 'Freizeitausgleich / Monat (Stunden)',        es: 'Horas compensables / mes'},
+  'settings.rol_help':                  {it: 'Default 8h/mese. Riduzione orario di lavoro.',     en: 'Default 8h/month. Working time reduction.', fr: 'Défaut 8h/mois. Réduction temps de travail.', de: 'Standard 8h/Monat. Arbeitszeitverkürzung.', es: 'Por defecto 8h/mes. Reducción horaria.'},
+  'settings.permissions_paid_month_hrs':{it: 'Permessi retribuiti / mese (ore)',                 en: 'Paid leave / month (hours)',             fr: 'Congés payés extra / mois (heures)', de: 'Bezahlte Sonderfreistellung / Monat (Stunden)', es: 'Permisos retribuidos / mes (horas)'},
+  'settings.permissions_help':          {it: 'Default 8h/mese. Permessi extra (visite mediche, eventi famigliari, ecc).', en: 'Default 8h/month. Extra leave (medical, family events, etc).', fr: 'Défaut 8h/mois. Congés extra (médical, événements familiaux, etc).', de: 'Standard 8h/Monat. Sonderurlaub (Arzt, Familienereignisse usw).', es: 'Por defecto 8h/mes. Permisos extra (médico, familia, etc).'},
+  'settings.value_saved':               {it: 'Valore (salvato) *',                               en: 'Value (saved) *',                        fr: 'Valeur (enregistrée) *',             de: 'Wert (gespeichert) *',                       es: 'Valor (guardado) *'},
+  'settings.sdi_recipient_code':        {it: 'Codice destinatario SDI proprio (opzionale)',      en: 'Own SDI recipient code (optional)',      fr: 'Code destinataire SDI (facultatif)', de: 'Eigener SDI-Empfängercode (optional)',       es: 'Código destinatario SDI propio (opcional)'},
+  'settings.payment_terms_default_days':{it: 'Termini pagamento default (giorni)',               en: 'Default payment terms (days)',           fr: 'Délais de paiement par défaut (jours)', de: 'Standard-Zahlungsziel (Tage)',             es: 'Plazos de pago por defecto (días)'},
+  'settings.document_header_optional':  {it: 'Intestazione documento (opzionale)',               en: 'Document header (optional)',             fr: 'En-tête document (facultatif)',      de: 'Dokumentkopf (optional)',                    es: 'Encabezado documento (opcional)'},
+  'settings.scope_per_project':         {it: 'scope per-progetto',                               en: 'per-project scope',                      fr: 'portée par projet',                  de: 'projektbezogener Geltungsbereich',           es: 'alcance por proyecto'},
+  'settings.soft_deleted_records':      {it: 'Record soft-deleted (clienti, progetti, quote, voci listino).', en: 'Soft-deleted records (clients, projects, quotes, price items).', fr: 'Enregistrements supprimés (clients, projets, devis, articles).', de: 'Soft-gelöschte Datensätze (Kunden, Projekte, Angebote, Preisliste).', es: 'Registros eliminados (clientes, proyectos, cotizaciones, precios).'},
+  'settings.aes_password_optional':     {it: '(opzionale) Password per cifratura AES',           en: '(optional) AES encryption password',     fr: '(facultatif) Mot de passe chiffrement AES', de: '(optional) Passwort für AES-Verschlüsselung', es: '(opcional) Contraseña cifrado AES'},
+
+  // Copilot (drawer AI)
+  'copilot.placeholder_booking':        {it: 'Crea un booking per … (descrivi job/risorsa/quando)', en: 'Create a booking for … (describe job/resource/when)', fr: 'Créer un booking pour … (décrire job/ressource/quand)', de: 'Booking erstellen für … (Job/Ressource/Wann)', es: 'Crear un booking para … (describe job/recurso/cuándo)'},
+  'copilot.placeholder_pricelist':      {it: 'Aggiungi voce listino: color grading 4K HDR, €1500/giorno', en: 'Add price item: color grading 4K HDR, €1500/day', fr: 'Ajouter article: étalonnage 4K HDR, 1500 €/jour', de: 'Preisposten hinzufügen: Color Grading 4K HDR, 1500 €/Tag', es: 'Añadir artículo: color grading 4K HDR, 1500 €/día'},
+  'copilot.client_new':                 {it: 'Cliente (nuovo)',           en: 'Client (new)',         fr: 'Client (nouveau)',    de: 'Kunde (neu)',           es: 'Cliente (nuevo)'},
+  'copilot.project_new':                {it: 'Progetto (nuovo)',          en: 'Project (new)',        fr: 'Projet (nouveau)',    de: 'Projekt (neu)',         es: 'Proyecto (nuevo)'},
+  'copilot.quote_new':                  {it: 'Quote (nuova)',             en: 'Quote (new)',          fr: 'Devis (nouveau)',     de: 'Angebot (neu)',         es: 'Cotización (nueva)'},
+  'copilot.quote_edit':                 {it: 'Quote (modifica)',          en: 'Quote (edit)',         fr: 'Devis (modifier)',    de: 'Angebot (bearbeiten)',  es: 'Cotización (editar)'},
+  'copilot.resource_new':               {it: 'Risorsa (nuova)',           en: 'Resource (new)',       fr: 'Ressource (nouvelle)',de: 'Ressource (neu)',       es: 'Recurso (nuevo)'},
+  'copilot.booking_new':                {it: 'Booking (nuovo)',           en: 'Booking (new)',        fr: 'Booking (nouveau)',   de: 'Booking (neu)',         es: 'Booking (nuevo)'},
+
+  // Quotes (preventivi)
+  'quotes.days_after_anchor':           {it: "Giorni dopo l'ancora",      en: 'Days after anchor',    fr: "Jours après l'ancre", de: 'Tage nach Anker',       es: 'Días después del ancla'},
+  'quotes.zero_at_anchor':              {it: '0 = subito all\'ancora.',   en: '0 = immediately at anchor.', fr: "0 = immédiatement à l'ancre.", de: '0 = sofort am Anker.', es: '0 = inmediatamente en el ancla.'},
+  'quotes.allocation_optional':         {it: 'Allocazione a voci di quote (opzionale)', en: 'Allocation to quote lines (optional)', fr: 'Allocation aux lignes du devis (facultatif)', de: 'Zuweisung zu Angebotszeilen (optional)', es: 'Asignación a líneas de cotización (opcional)'},
+  'quotes.hr_short':                    {it: 'hr (ora)',                  en: 'hr (hour)',            fr: 'h (heure)',           de: 'Std (Stunde)',          es: 'h (hora)'},
+  'quotes.tooltip_processing':          {it: 'Lavorazione: maturato da ore booking', en: 'Operation: accrued from booking hours', fr: 'Opération: acquis des heures booking', de: 'Arbeitsschritt: aus Booking-Stunden', es: 'Operación: devengado de horas booking'},
+  'quotes.tooltip_delivery':            {it: 'Consegna: maturato manuale o auto-fill', en: 'Delivery: manual or auto-fill accrual', fr: 'Livraison: acquis manuel ou auto-fill', de: 'Lieferung: manuell oder Auto-Fill', es: 'Entrega: devengado manual o auto-fill'},
+  'quotes.tooltip_currency_change':     {it: 'Cambio valuta: NON converte voci/totali/PDF. I valori restano espressi nella nuova valuta.', en: 'Currency change: does NOT convert lines/totals/PDF. Values remain expressed in the new currency.', fr: 'Changement de devise: ne convertit PAS lignes/totaux/PDF. Les valeurs restent exprimées dans la nouvelle devise.', de: 'Währungswechsel: konvertiert KEINE Zeilen/Summen/PDF. Werte bleiben in der neuen Währung.', es: 'Cambio de divisa: NO convierte líneas/totales/PDF. Los valores siguen expresados en la nueva divisa.'},
+
+  // Finance (fatturazione)
+  'finance.tooltip_show_cancelled':     {it: "Mostra fatture in stato 'annullato' (stornate via NC TD04).", en: "Show invoices with 'cancelled' status (reversed via TD04 credit note).", fr: "Afficher factures 'annulées' (extournées par avoir TD04).", de: "Stornierte Rechnungen anzeigen (per TD04-Gutschrift).", es: "Mostrar facturas 'anuladas' (revertidas vía NC TD04)."},
+  'finance.extra_post_invoice':         {it: '📅 Extra post-fattura',     en: '📅 Post-invoice extra', fr: '📅 Extra post-facture', de: '📅 Extras nach Rechnung', es: '📅 Extra post-factura'},
+  'finance.force_no_project':           {it: '⚠ Forza fattura senza progetto/quotazione', en: '⚠ Force invoice without project/quote', fr: '⚠ Forcer facture sans projet/devis', de: '⚠ Rechnung ohne Projekt/Angebot erzwingen', es: '⚠ Forzar factura sin proyecto/cotización'},
+
+  // Pricelist (listino)
+  'pricelist.per_day':                  {it: '€/Giorno',                  en: '€/Day',                fr: '€/Jour',              de: '€/Tag',                 es: '€/Día'},
+  'pricelist.per_hour':                 {it: '€/Ora',                     en: '€/Hour',               fr: '€/Heure',             de: '€/Stunde',              es: '€/Hora'},
+  'pricelist.preset_builtin':           {it: 'Preset built-in',           en: 'Built-in preset',      fr: 'Préréglage intégré',  de: 'Eingebaute Vorlage',    es: 'Preset integrado'},
+
+  // Resources (risorse — staff)
+  'resources.vacation_per_year':        {it: 'Ferie / anno (giorni)',     en: 'Vacation / year (days)', fr: 'Congés / an (jours)', de: 'Urlaub / Jahr (Tage)', es: 'Vacaciones / año (días)'},
+  'resources.rol_per_month':            {it: 'ROL / mese (ore)',          en: 'TOIL / month (hours)', fr: 'RTT / mois (heures)', de: 'Freizeitausgleich / Monat (Stunden)', es: 'Horas compensables / mes'},
+  'resources.permissions_per_month':    {it: 'Permessi / mese (ore)',     en: 'Leave / month (hours)', fr: 'Congés / mois (heures)', de: 'Sonderurlaub / Monat (Stunden)', es: 'Permisos / mes (horas)'},
+
+  // Planning
+  'planning.title_quote_consuntivo':    {it: 'Titolo Quotazione a Consuntivo (opzionale)', en: 'Final Quote Title (optional)', fr: 'Titre devis final (facultatif)', de: 'Titel Schluss-Angebot (optional)', es: 'Título cotización final (opcional)'},
+  'planning.hint_done_sync':            {it: 'Marcare "Fatto" triggera il sync col cost report (man-hours). "Non fatto" richiede ricalcolo.', en: 'Marking "Done" triggers cost report sync (man-hours). "Not done" requires recompute.', fr: 'Cocher "Fait" déclenche la synchro du rapport coûts (heures-homme). "Non fait" exige un recalcul.', de: '"Erledigt" markieren synchronisiert den Kostenbericht (Mannstunden). "Nicht erledigt" erfordert Neuberechnung.', es: 'Marcar "Hecho" sincroniza el cost report (horas-hombre). "No hecho" requiere recálculo.'},
+
+  // Project detail
+  'project_detail.saved':               {it: 'Salvato.',                  en: 'Saved.',               fr: 'Enregistré.',         de: 'Gespeichert.',          es: 'Guardado.'},
+
+  // Finance reports
+  'finance_reports.yoy_comparison':     {it: 'Comparazione anno-su-anno', en: 'Year-over-year comparison', fr: 'Comparaison année sur année', de: 'Jahresvergleich', es: 'Comparación interanual'},
+
+  // Holidays
+  'holidays.scope_ccnl_policy':         {it: 'Scope: policy CCNL (opzionale)', en: 'Scope: CBA policy (optional)', fr: 'Portée: politique CCT (facultative)', de: 'Bereich: Tarifvertrag (optional)', es: 'Alcance: política convenio (opcional)'},
+
+  // HR
+  'hr.xlsx_help':                       {it: 'XLSX include 2 fogli (Dettaglio + Totali per Risorsa×Mese×Tipo). Range default = anno corrente.', en: 'XLSX includes 2 sheets (Detail + Totals by Resource×Month×Type). Default range = current year.', fr: 'XLSX inclut 2 feuilles (Détail + Totaux par Ressource×Mois×Type). Plage par défaut = année en cours.', de: 'XLSX enthält 2 Blätter (Detail + Summen nach Ressource×Monat×Typ). Standardbereich = laufendes Jahr.', es: 'XLSX incluye 2 hojas (Detalle + Totales por Recurso×Mes×Tipo). Rango por defecto = año actual.'},
+
+  // Overhead (spese aziendali)
+  'overhead.useful_life_months':        {it: 'Vita utile (mesi)',         en: 'Useful life (months)', fr: 'Durée utile (mois)',  de: 'Nutzungsdauer (Monate)', es: 'Vida útil (meses)'},
+
+  // Physical assets
+  'physical_assets.example_serial':     {it: 'es. WD42-A1B2C3',           en: 'e.g. WD42-A1B2C3',     fr: 'ex. WD42-A1B2C3',     de: 'z.B. WD42-A1B2C3',      es: 'ej. WD42-A1B2C3'},
+
+  // Platform tenants
+  'platform_tenants.created':           {it: 'Creato',                    en: 'Created',              fr: 'Créé',                de: 'Erstellt',              es: 'Creado'},
+
+  // Portal project (lato cliente)
+  'portal_project.specifications':      {it: 'Specifiche',                en: 'Specifications',       fr: 'Spécifications',      de: 'Spezifikationen',       es: 'Especificaciones'},
 };
 
 /**

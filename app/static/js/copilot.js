@@ -57,7 +57,7 @@
         { txt: "Quali risorse sono sotto-utilizzate questa settimana?", icon: "📊" },
         { txt: "Riepilogo job critici (deadline ≤ 14 giorni)", icon: "🔴" },
         { sec: "Pianificazione" },
-        { txt: "Crea un booking per … (descrivi job/risorsa/quando)", icon: "+" },
+        { txt: mfT("copilot.placeholder_booking"), icon: "+" },
         { txt: "Sposta il booking #N di +1 giorno", icon: "📅" },
         { txt: "Cambia risorsa del booking #N da Luca a Marco", icon: "🔄" },
         { txt: "Allunga il booking #N di 2 ore", icon: "⏱" },
@@ -88,7 +88,7 @@
       prompts = [
         { sec: "Esempi" },
         { txt: "Crea cliente RAI con sede a Roma", icon: "🏢" },
-        { txt: "Aggiungi voce listino: color grading 4K HDR, €1500/giorno", icon: "+" },
+        { txt: mfT("copilot.placeholder_pricelist"), icon: "+" },
         { txt: "Aggiorna durata di questo progetto a 90 minuti", icon: "✎" },
         { txt: "Cerca specifiche di consegna Netflix 2026", icon: "🔍" },
       ];
@@ -330,16 +330,16 @@
 
   function actionTypeLabel(t) {
     return ({
-      "propose_client": "Cliente (nuovo)",
-      "propose_project": "Progetto (nuovo)",
+      "propose_client": mfT("copilot.client_new"),
+      "propose_project": mfT("copilot.project_new"),
       "propose_project_metadata": "Progetto (metadati)",
-      "propose_quote": "Quote (nuova)",
-      "update_quote": "Quote (modifica)",
+      "propose_quote": mfT("copilot.quote_new"),
+      "update_quote": mfT("copilot.quote_edit"),
       "propose_quote_line": "Riga quote",
       "propose_price_item": "Voce listino",
       "propose_new_item_and_line": "Nuova voce listino + riga quote",
-      "propose_resource": "Risorsa (nuova)",
-      "propose_booking": "Booking (nuovo)",
+      "propose_resource": mfT("copilot.resource_new"),
+      "propose_booking": mfT("copilot.booking_new"),
       // v3.5.0-alpha.50 — Planning operations
       "propose_move_booking": "📅 Sposta booking",
       "propose_resize_booking": "📅 Ridimensiona booking",

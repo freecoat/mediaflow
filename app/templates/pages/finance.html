@@ -100,6 +100,7 @@
     </label>
     <!-- v3.5.0-alpha.172.68 — Toggle visibilità fatture annullate + Note di Credito -->
     <label class="text-sm" style="display:flex; align-items:center; gap:6px; cursor:pointer;"
+           data-i18n="finance.tooltip_show_cancelled" data-i18n-attr="title"
            title="Mostra fatture in stato 'annullato' (stornate via NC TD04).">
       <input type="checkbox" id="inv-show-cancelled" onchange="loadInvoices()">
       Mostra annullate
@@ -200,7 +201,7 @@
         <div style="font-weight:600; margin-bottom:6px; color:var(--text2);">Tipi anomalie</div>
         <table style="width:100%; font-size:12px; border-collapse:collapse;">
           <tbody>
-            <tr><td style="padding:3px 6px; vertical-align:top;"><b style="color:#ef4444;">📅 Extra post-fattura</b></td><td style="padding:3px 6px;">Booking done/extra emersi DOPO che il periodo è già stato fatturato (JCLBilledSlice). Va riallineato con cliente.</td></tr>
+            <tr><td style="padding:3px 6px; vertical-align:top;"><b style="color:#ef4444;" data-i18n="finance.extra_post_invoice">📅 Extra post-fattura</b></td><td style="padding:3px 6px;">Booking done/extra emersi DOPO che il periodo è già stato fatturato (JCLBilledSlice). Va riallineato con cliente.</td></tr>
             <tr><td style="padding:3px 6px; vertical-align:top;"><b style="color:#f59e0b;">📈 Sforamento monte ore</b></td><td style="padding:3px 6px;">JCL.quantity_actual &gt; quantity_quoted. Lavoro effettivo eccede preventivo.</td></tr>
             <tr><td style="padding:3px 6px; vertical-align:top;"><b style="color:#a78bfa;">📉 Quote vs consuntivo</b></td><td style="padding:3px 6px;">Drift fra quote_total e maturato reale a chiusura progetto. Sotto-quotato o over-prezzato.</td></tr>
             <tr><td style="padding:3px 6px; vertical-align:top;"><b style="color:#ef4444;">💸 Mancato recupero</b></td><td style="padding:3px 6px;">Maturato non trasmesso in batch, fuori finestra fatturabile. Rischio perdita irrecuperabile.</td></tr>
@@ -237,7 +238,7 @@
     <span style="border-left:1px solid var(--border); height:18px; margin:0 8px;"></span>
     <span class="text-sm text-muted" style="margin-right:6px;">Tipo:</span>
     <button type="button" class="an-chip is-active" data-an-type="" onclick="setAnomType('')">Tutti</button>
-    <button type="button" class="an-chip" data-an-type="extra_after_billed" onclick="setAnomType('extra_after_billed')">📅 Extra post-fattura</button>
+    <button type="button" class="an-chip" data-an-type="extra_after_billed" onclick="setAnomType('extra_after_billed')" data-i18n="finance.extra_post_invoice">📅 Extra post-fattura</button>
     <button type="button" class="an-chip" data-an-type="sforamento_monte_ore" onclick="setAnomType('sforamento_monte_ore')">📈 Sforamenti</button>
     <button type="button" class="an-chip" data-an-type="quote_discrepancy" onclick="setAnomType('quote_discrepancy')">📉 Quote vs consuntivo</button>
     <button type="button" class="an-chip" data-an-type="mancato_recupero" onclick="setAnomType('mancato_recupero')">💸 Mancato recupero</button>
@@ -526,7 +527,7 @@
       <div class="form-group" id="inv-force-wrap" style="display:none; padding:8px 12px; background:rgba(245,158,11,0.12); border:1px solid rgba(245,158,11,0.45); border-radius:6px;">
         <label class="form-label" style="display:flex; align-items:center; gap:8px;">
           <input type="checkbox" id="inv-force">
-          <span style="color:#f59e0b; font-weight:600;">⚠ Forza fattura senza progetto/quotazione</span>
+          <span style="color:#f59e0b; font-weight:600;" data-i18n="finance.force_no_project">⚠ Forza fattura senza progetto/quotazione</span>
         </label>
         <div class="text-xs text-muted" style="margin-top:4px;">
           Le fatture senza link a progetto E quotazione sono <b>fortemente sconsigliate</b>

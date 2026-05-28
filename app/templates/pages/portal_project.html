@@ -32,7 +32,7 @@
   {% endif %}
   {% if project.fps or project.delivery_format %}
   <div class="portal-card">
-    <div style="font-size:11px;color:var(--text3);text-transform:uppercase;letter-spacing:.05em;">Specifiche</div>
+    <div style="font-size:11px;color:var(--text3);text-transform:uppercase;letter-spacing:.05em;" data-i18n="portal_project.specifications">Specifiche</div>
     <div style="font-size:13px;margin-top:6px;">
       {% if project.fps %}<div>fps: {{ project.fps }}</div>{% endif %}
       {% if project.delivery_format %}<div>delivery: {{ project.delivery_format }}</div>{% endif %}

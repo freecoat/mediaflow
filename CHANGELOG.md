@@ -1,5 +1,28 @@
 # MediaFlow — Changelog
 
+## v3.5.0-alpha.172.109 — i18n round 3: scrutinio approfondito, audit 477→15 (28 mag 2026)
+
+Iterazione i18n profonda che chiude il gap residuo dell'audit. Lavoro su tre fronti.
+
+**1. Tool audit migliorato** (`tools/i18n_audit.py`)
+- Filtri false positive aggiunti: CSS hex (`#RRGGBB`), CSS units (`16px`/`1rem`/`2em`/`50%`), JS template literal (`${...}`), HTML markup annidato (`<tag…>`, `</tag>`), espressioni JS (`&&`/`||`/`===`/`=>`/`?:`), `data-*`/`aria-*` attr values, CSV header (`a,b,c`).
+- **AUTO_SWAP coverage check**: scansiona `window.MF_I18N_AUTO_SWAP` e marca come `has_i18n_marker` le stringhe già coperte runtime. Niente più conteggio doppio.
+- Risultato: audit pass su stesso codebase 477 → 64 (i 413 in più erano già coperti runtime o falsi positivi).
+
+**2. MF_I18N dictionary +43 entries** (`app/static/js/i18n.js`)
+- Nuova sezione "// ── α.172.109 — Pagine specifiche (audit round 3) ──" con 43 chiavi per le frasi contestuali lunghe non aggredibili via AUTO_SWAP.
+- Coverage 5 lingue (it/en/fr/de/es) completa per ogni chiave.
+- Aree coperte: settings (CCNL, ferie/ROL/permessi, SDI, branding, soft-delete), copilot (placeholder drawer + action labels), quotes (anchor offset, allocation, currency tooltip), finance (NC TD04 tooltip, extra post-fattura, force no-project), pricelist (€/Giorno/Ora, preset built-in), resources (override CCNL), planning (titolo consuntivo + hint sync), project_detail (Salvato.), finance_reports (YoY), holidays, hr, overhead, physical_assets, platform_tenants, portal_project.
+
+**3. Annotazione `data-i18n` nei template** (15 file)
+- `settings.html` (14 stringhe), `quotes.html` (6 stringhe + 2 JS title via `mfT()`), `finance.html` (3), `pricelist.html` (3 con `<span>` wrap dove serve), `resources.html` (3), `planning.html` (2), `project_detail.html` (1), `finance_reports.html` (1), `holidays.html` (1), `hr.html` (1), `overhead.html` (1), `physical_assets.html` (1 placeholder), `platform_tenants.html` (1), `portal_project.html` (1).
+- `copilot.js`: 2 prompt suggestion + 6 action label sostituiti con `mfT('copilot.*')`. JS string literals tradotti runtime.
+- Pattern usato: `data-i18n="key"` per textContent, `data-i18n="key" data-i18n-attr="title|placeholder"` per attributi.
+
+**Risultato finale audit**: 477 → **15**. Dei 15 residui: 7 in `manuale.html` (doc utente, scelta: lasciato IT come documentazione interna), 6 falsi positivi tool ancora non catturati (espressioni JS, CSS inline), 2 esempi testuali in placeholder (es. WD42 serial, Cooke Anamorphic lente). **0 stringhe UI veramente da tradurre**.
+
+**Numero finale coverage i18n**: 526 chiavi `MF_I18N` (era 483) + 80 chiavi `MF_I18N_AUTO_SWAP` runtime = **606 stringhe** tradotte 5 lingue.
+
 ## v3.5.0-alpha.172.108 — i18n round 2: dict +19 stringhe (61→80 tradotte) (28 mag 2026)
 
 Espansione round 2 del dictionary statico `tools/i18n_generate_entries.py:DICT` con 50 nuove parole IT (form fields, status verbs, address fields, generic UI). Re-run del generation script → 80 entries tradotte (era 61), 120 TODO_TRANSLATE (era 139).

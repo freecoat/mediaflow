@@ -8,6 +8,22 @@
 
 ## Versione corrente
 
+**v3.5.0-alpha.172.109** — 28 maggio 2026 — i18n round 3: scrutinio approfondito, audit 477→15
+
+Lavoro su tre fronti per chiudere il gap i18n residuo: tool `i18n_audit.py` migliorato (filtri false positive CSS hex/JS template literal/expressions/data-* + AUTO_SWAP coverage check), dictionary `MF_I18N` espanso +43 entries 5 lingue per frasi contestuali lunghe (settings CCNL/SDI/branding, copilot drawer, quotes anchor/currency, finance NC TD04, pricelist €/Giorno/Ora, resources override, planning, project_detail, finance_reports, holidays, hr, overhead, physical_assets, platform_tenants, portal_project), annotazione `data-i18n` in 15 template + `copilot.js` con `mfT()` per JS strings.
+
+Risultato finale audit: 477 → **15**. Dei 15 residui: 7 manuale.html (doc utente, scelta), 6 falsi positivi tool (espressioni JS, CSS inline), 2 esempi placeholder. **0 stringhe UI vere da tradurre**.
+
+Coverage totale i18n: 575 chiavi `MF_I18N` + 80 `MF_I18N_AUTO_SWAP` = **655 stringhe** tradotte 5 lingue.
+
+### Prossima sessione
+
+Test browser Matteo: switch lingua su `/settings`, `/quotes` (modal acconto), `/finance` (toggle annullate), `/pricelist` (tabs giorno/ora), `/resources` (modal override), `/planning` (modal bulk Fatto), `/hr`, `/holidays`, `/overhead`, `/finance-reports`. Verifica AUTO_SWAP runtime + nuovi data-i18n esplicit.
+
+Bundle L Stack 2 prossimo milestone (era pre-α.172.99) si riprende dopo eventuali fix i18n + altri spunti utente.
+
+---
+
 **v3.5.0-alpha.172.98** — 28 maggio 2026 — Bundle L Stack 2 milestone 1/3: QC event-sourced foundation
 
 Chiuso il foundation di Stack 2 (Bundle L QC event-sourced). Models `QCEvent` append-only + `QCReport` projection + 13 event types + service 11 funzioni + router 13 endpoint REST + sostituzione path Bundle I `update_deliverable` → delega allo stream eventi. Coerenza UI Bundle I preservata via projection sync diretta a `JobDeliverable.qc_substatus`.

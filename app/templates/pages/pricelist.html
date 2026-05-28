@@ -39,8 +39,8 @@
         <input type="text" id="search-items" placeholder="Cerca per nome, descrizione o keyword…" oninput="renderItems()">
       </div>
       <div class="tabs" style="margin:0;" title="1 turno = 8 ore. Cambia solo la visualizzazione, il prezzo memorizzato resta invariato.">
-        <div class="tab active" id="view-day" onclick="setViewMode('day')">€/Giorno</div>
-        <div class="tab" id="view-hour" onclick="setViewMode('hour')">€/Ora</div>
+        <div class="tab active" id="view-day" onclick="setViewMode('day')" data-i18n="pricelist.per_day">€/Giorno</div>
+        <div class="tab" id="view-hour" onclick="setViewMode('hour')" data-i18n="pricelist.per_hour">€/Ora</div>
       </div>
       <span class="text-xs text-muted" id="items-count"></span>
     </div>
@@ -127,7 +127,7 @@
         <button class="btn btn-primary btn-sm" onclick="snapSaveCurrent()"><i data-lucide="save" style="width:14px;height:14px;vertical-align:-2px;"></i> Salva listino corrente</button>
         <button class="btn btn-secondary btn-sm" onclick="document.getElementById('snap-upload-input').click()"><i data-lucide="upload" style="width:14px;height:14px;vertical-align:-2px;"></i> Importa file .json</button>
         <input type="file" id="snap-upload-input" accept="application/json,.json" style="display:none;" onchange="snapUpload(this)">
-        <button class="btn btn-secondary btn-sm" onclick="snapShowPresets()"><i data-lucide="gift" style="width:14px;height:14px;vertical-align:-2px;"></i> Preset built-in</button>
+        <button class="btn btn-secondary btn-sm" onclick="snapShowPresets()"><i data-lucide="gift" style="width:14px;height:14px;vertical-align:-2px;"></i> <span data-i18n="pricelist.preset_builtin">Preset built-in</span></button>
         <span style="flex:1;"></span>
         <label style="display:flex;align-items:center;gap:6px;font-size:13px;color:var(--muted);">
           <input type="checkbox" id="snap-show-deleted" onchange="snapReload()"> Mostra cestino

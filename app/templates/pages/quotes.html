@@ -585,9 +585,9 @@
                 </select>
               </div>
               <div class="form-group" id="as-offset-wrap">
-                <label class="form-label">Giorni dopo l'ancora</label>
+                <label class="form-label" data-i18n="quotes.days_after_anchor">Giorni dopo l'ancora</label>
                 <input class="form-input mono" id="as-offset" type="number" step="1" min="0" value="0">
-                <div class="text-xs text-muted">0 = subito all'ancora.</div>
+                <div class="text-xs text-muted" data-i18n="quotes.zero_at_anchor">0 = subito all'ancora.</div>
               </div>
               <div class="form-group" id="as-date-wrap" style="display:none;">
                 <label class="form-label">Data specifica</label>
@@ -603,7 +603,7 @@
               <textarea class="form-input" id="as-notes" rows="2" placeholder="Condizioni, riferimento PO, ecc."></textarea>
             </div>
             <div class="form-group">
-              <label class="form-label">Allocazione a voci di quote (opzionale)</label>
+              <label class="form-label" data-i18n="quotes.allocation_optional">Allocazione a voci di quote (opzionale)</label>
               <div id="as-allocations-host" style="background:var(--bg2); border:1px solid var(--border); border-radius:6px; padding:8px; max-height:240px; overflow:auto;"></div>
               <!-- v3.5.0-alpha.140 — Display riepilogo selezione voci -->
               <div id="as-allocations-summary" style="margin-top:6px; padding:6px 10px; background:rgba(98,114,245,0.10); border-radius:4px; font-size:12px; display:none;"></div>
@@ -728,7 +728,7 @@
                 <label class="form-label">Unità</label>
                 <select class="form-select" id="al-unit" onchange="convertPriceOnUnitChange()">
                   <option value="day">day (turno 8h)</option>
-                  <option value="hr">hr (ora)</option>
+                  <option value="hr" data-i18n="quotes.hr_short">hr (ora)</option>
                   <option value="pc">pc (pezzo)</option>
                   <option value="min">min (minuto prodotto)</option>
                   <option value="TB">TB</option>
@@ -2156,8 +2156,8 @@ function renderLineRow(l) {
   const nat = _lineNature(l);
   const isJcl = nat === 'time_based';
   const natBadge = isJcl
-    ? `<span class="ql-nature-badge nature-jcl" title="Lavorazione: maturato da ore booking">Lav</span>`
-    : `<span class="ql-nature-badge nature-del" title="Consegna: maturato manuale o auto-fill">Cons</span>`;
+    ? `<span class="ql-nature-badge nature-jcl" title="${escapeHtml(mfT('quotes.tooltip_processing'))}">Lav</span>`
+    : `<span class="ql-nature-badge nature-del" title="${escapeHtml(mfT('quotes.tooltip_delivery'))}">Cons</span>`;
   const optBadge = isOpt
     ? `<span class="ql-opt-badge" title="Voce opzionale: totale escluso dal subtotale">Opzionale</span>`
     : '';
@@ -2263,7 +2263,7 @@ function renderCurrencyHeader() {
     // v3.5.0-alpha.140 — Nota: il cambio valuta NON converte voci/totali/PDF.
     // I valori restano espressi nella valuta selezionata. Il tasso è solo snapshot
     // di riferimento per report aggregati in valuta base.
-    wrap.title = "Cambio valuta: NON converte voci/totali/PDF. I valori restano espressi nella nuova valuta. Il tasso è solo snapshot di riferimento.";
+    wrap.title = mfT('quotes.tooltip_currency_change');
     const sel = document.createElement('select');
     sel.id = 'q-currency';
     sel.style.cssText = "background:var(--bg2); border:1px solid var(--border); color:var(--text); border-radius:4px; padding:3px 6px; font-family:'DM Mono',monospace;";
