@@ -8,17 +8,54 @@
 
 ## Versione corrente
 
-**v3.5.0-alpha.172.116** — 28 maggio 2026 — Tier 2.3 admin taxonomy CRUD + Tier 2.5 JobDeliverable FK
+**v3.5.0-alpha.172.116** — 28 maggio 2026 sera — Tier 2 COMPLETO (eccetto batch 2.4 in run background)
 
-Tier 2.5: JobDeliverable.delivery_item_id FK aggiunto + UI cascading in `modal-new-deliverable` di job_detail.html (dropdown Capitolato → Item con auto-fill nome/qty/specs preview).
+**SESSIONE INTERROTTA — riprende da locale stasera.**
 
-Tier 2.3: endpoint CRUD generici per 9 entity taxonomy con preset globali read-only + custom tenant-owned editabili. Pagina `/settings/delivery-taxonomy` con 9 tabs + tabella dinamica + modal editor + export/import JSON.
+### Stato batch Tier 2.4 al momento interruzione
 
-Tier 2.4 (batch re-parse 13 templates) ANCORA IN CORSO background: 2/13 fatti (RAI 24 items + GTM 3). Stima fine ~25 min.
+Batch `scripts/batch_extract_items.py` parser v2 sui 13 templates:
+- **3/13 completati**: RAI-SDHDUHD-1.4 (24 items, 159s), GTM-DELIVERY (3, 39s), FREMANTLE-DCP-ITA-THEATRICAL (35, 192s).
+- **DB: 62 DeliveryItem totali** + AudioTrackSpec ricchi.
+- **10/13 residui**: MUBI/NBCUNI-AUDIO/SKY-ITA/NBCU-TECHOPS/NBCU-LONGFORM (3 variants Gomorra)/VISION/A24/PIPERFILM. Stima ~22 min ancora.
 
-### Prossima sessione
+**Per riprendere da locale**:
+1. Server gira ancora su :8000 α.172.116 (background task `bo06h0t9z`).
+2. Tunnel cloudflared up su https://parker-mining-ahead-infringement.trycloudflare.com (task `buf6npnvv`).
+3. Batch in run su background task `b45429fn0`. Se still alive: lascia finire. Se killed:
+   `.venv\Scripts\python.exe scripts\batch_extract_items.py`
+   (idempotente: skip template con items già presenti).
 
-Verifica batch completion (DeliveryItem totali in DB). Test browser tier 2.2+2.3+2.5 + raffina UI dove serve. Backlog originale Matteo /delivery-templates COMPLETO eccetto rename template (mini-task).
+### Riepilogo Tier 1+2 chiuso
+
+| Tier | Stato | Commit |
+|---|---|---|
+| 1 schema 11 modelli + seed 135 + parser 2-pass | ✅ | a96e9c8 |
+| 2.1 router DeliveryItem | ✅ | c9f691e |
+| 2.2 UI tabs Items in /delivery-templates | ✅ | c9f691e |
+| 2.3 admin /settings/delivery-taxonomy + CRUD | ✅ | 9b2b1bf |
+| 2.4 batch re-parse 13 templates | ⏳ in run | — |
+| 2.5 JobDeliverable.delivery_item_id FK + UI cascading | ✅ | 9b2b1bf |
+
+Tutti commit pushati su origin/main.
+
+### Backlog originale Matteo /delivery-templates
+
+1. ✅ Tech specs delivery dropdown → CHIUSO (taxonomy 135 record + UI tab Items + modal editor con dropdown α.172.114)
+2. ✅ Parser batch 17 capitolati → CHIUSO α.172.111 (legacy JSON 8-block) + Tier 2.4 in run (DeliveryItem strutturati)
+3. ⏳ Rename template → mini-task pending
+4. ✅ Modal dettaglio human-readable + edit no-JSON → CHIUSO α.172.112
+5. ✅ Modal Aggiungi delivery cascading template→item → CHIUSO α.172.115/116
+
+### Prossima sessione (locale stasera)
+
+1. Verifica batch completion. Conta DeliveryItem totali (target ~300+ su 13 templates).
+2. Test browser:
+   - https://localhost:8000/delivery-templates → tab Items su 13 templates
+   - https://localhost:8000/settings/delivery-taxonomy → CRUD entity
+   - https://localhost:8000/jobs/{id} → modal Nuovo deliverable cascading
+3. Chiusura mini-task rename template (#3 backlog).
+4. Eventuale Tier 3 (raffinamenti UI, validazione cross-tier).
 
 ---
 
