@@ -1,5 +1,25 @@
 # MediaFlow — Changelog
 
+## v3.5.0-alpha.172.127 — Timeline / TC start / Audio config sui delivery item (29 mag 2026)
+
+Feature completa (9 task TDD, branch `feat/delivery-timeline-audioconfig`). I capitolati definiscono dettagli tecnici critici prima non strutturati: TC start (es. Vision 00:59:59:00), configurazione timeline/testa (barre+toni, slate, counter RAI, nero, rulli DCP), codici audio d'emittente (RAI 8T07/16T09). Ora catturati in forma strutturata, ereditabili e QC-abili.
+
+**Modello**: `DeliveryItem` +5 campi (`tc_start`, `program_start`, `timeline_segments` JSON, `audio_config_preset_id` FK, `audio_config_code`); `DeliveryTemplate` +3 default emittente (`default_tc_start/program_start/timeline_segments`); nuova tabella `AudioConfigPreset` (legata al template, UNIQUE template+code, `track_layout` JSON) con relazioni ORM.
+
+**Servizi**: `apply_audio_config_preset` materializza le `AudioTrackSpec` concrete dal preset (risolve nomi taxonomy → id, fallback nota; `synchronize_session=fetch`). `effective_timeline` implementa l'eredità item←template con flag `*_inherited`. `qc_expected_for_deliverable` espone i valori attesi al QC.
+
+**Router**: CRUD `AudioConfigPreset` per template (tenant-scoped, RBAC, soft-delete); `update_item` accetta tc/program/timeline_json/preset (lookup tenant-scoped, ownership template); `_serialize_item` + `get_item` (effective_timeline); `qc.py` espone `qc_expected` in `_post_response`+`qc_get_report`; `update_template` accetta i default.
+
+**Parser**: pass2 estrae tc_start/program_start/timeline_segments/audio_config_code; `materialize_items` li persiste e crea/collega `AudioConfigPreset` dal codice (idempotente).
+
+**UI** (`/delivery-templates`): sezione "⏱ Timeline & TC" nel modal item (TC start con hint ereditato, program start, dropdown audio config, editor segmenti add/remove con kind/label/tc/reel/source); default emittente nell'editor template. Pattern data-attribute (no JSON.stringify in onclick), escapeHtml.
+
+**Migrazione** `scripts/migrate_delivery_timeline_audioconfig.py` idempotente + boot auto-migrate. Backfill `default_tc_start/program_start` da `head_format` **solo se timecode ben formato** (regex HH:MM:SS:FF; la prosa viene scartata → null, valore grezzo resta in head_format). 6 template popolati (GTM/NBCU/A24/Vision/EXAMPLE).
+
+**Test**: 65/65 pytest (nuovi: model, audio service, timeline service, parser materialize, qc_expected). Spec di design + piano in `docs/superpowers/`.
+
+Fuori scope (follow-up): re-parse LLM per-item dei capitolati (richiede API key — bottone "🤖 Estrai items" in UI); auto-checklist QC dai segmenti; AI capability `propose_audio_config_preset`/`propose_timeline_segment`.
+
 ## v3.5.0-alpha.172.126 — Container taxonomy non-AV: fix 21 falsi positivi MISSING_CONTAINER (28 mag 2026 sera)
 
 La regola di validazione R9 (`MISSING_CONTAINER`) assumeva che ogni DeliveryItem fosse un wrapper audio/video, segnalando come **error** i 21 deliverable senza container — ma sottotitoli, KDM, immagini disco e documenti sono containerless per natura. Scelta architetturale (con Matteo): **estendere la taxonomy Container** invece di allentare R9, così ogni item ha un container reale e il dato resta onesto.

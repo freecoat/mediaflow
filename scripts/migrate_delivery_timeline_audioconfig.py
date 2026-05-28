@@ -40,19 +40,39 @@ def _add_cols(table, coldefs):
                 conn.execute(text(f"ALTER TABLE {table} ADD COLUMN {col} {ddl}"))
 
 
+import re
+
+# Timecode pieno HH:MM:SS:FF (separatore frame : ; o .). Estrae il TC pulito da
+# un testo che spesso è prosa ("59:59:00 (1 secondo di nero...)"). Promuovere
+# prosa troncata sarebbe peggio di null → estraiamo solo un TC ben formato.
+_TC_RE = re.compile(r"\b(\d{1,2}:\d{2}:\d{2}[:;.]\d{2})\b")
+
+
+def _extract_tc(raw):
+    """Ritorna un timecode HH:MM:SS:FF pulito estratto da `raw`, o None."""
+    if not raw:
+        return None
+    m = _TC_RE.search(str(raw))
+    return m.group(1) if m else None
+
+
 def _backfill_template_defaults(db):
-    """Promuove head_format → default_tc_start/program_start dei template."""
+    """Promuove head_format → default_tc_start/program_start dei template.
+    Solo timecode ben formati (HH:MM:SS:FF); la prosa viene scartata (resta
+    null, il valore grezzo è comunque in head_format)."""
     n = 0
     for t in db.query(DeliveryTemplate).all():
         hf = t.head_format or {}
         if not isinstance(hf, dict):
             continue
         changed = False
-        if not t.default_tc_start and hf.get("timecode_start"):
-            t.default_tc_start = str(hf["timecode_start"])[:20]
+        tc = _extract_tc(hf.get("timecode_start"))
+        if not t.default_tc_start and tc:
+            t.default_tc_start = tc
             changed = True
-        if not t.default_program_start and hf.get("program_start"):
-            t.default_program_start = str(hf["program_start"])[:20]
+        pg = _extract_tc(hf.get("program_start"))
+        if not t.default_program_start and pg:
+            t.default_program_start = pg
             changed = True
         if changed:
             n += 1

@@ -8,7 +8,14 @@
 
 ## Versione corrente
 
-**v3.5.0-alpha.172.126** — 28 maggio 2026 sera — Container taxonomy non-AV: fix 21 falsi positivi MISSING_CONTAINER
+**v3.5.0-alpha.172.127** — 29 maggio 2026 — Timeline / TC start / Audio config sui delivery item
+
+### α.172.127 ✅ (feature subagent-driven, 9 task TDD, branch feat/delivery-timeline-audioconfig)
+Catturati in forma strutturata i dettagli tecnici dei capitolati prima persi: **TC start** (Vision 00:59:59:00), **timeline/testa** (barre+toni, slate, counter RAI, nero, rulli DCP via segmenti con kind/tc/reel/source), **codici audio d'emittente** (RAI 8T07/16T09 → tabella `AudioConfigPreset` legata al template che materializza le `AudioTrackSpec`). Default su template + override su item (`effective_timeline` con eredità). QC riceve `qc_expected`. Parser pass2 esteso. UI sezione "⏱ Timeline & TC" nel modal item. Migrazione idempotente + backfill TC pulito (regex, prosa scartata). 65/65 pytest. Spec+piano in `docs/superpowers/`.
+
+**Follow-up**: re-parse LLM per-item (serve API key, bottone "🤖 Estrai items"); auto-checklist QC; AI capability propose_audio_config_preset. Da fare: merge branch→main + push. Restano punti #1 (test browser E2E) e #3 (AI match listino batch) della sessione precedente.
+
+### α.172.126 ✅ — Container taxonomy non-AV: fix 21 falsi positivi MISSING_CONTAINER
 
 ### α.172.126 ✅ (punto #2 "Prossima sessione" chiuso)
 8 nuovi Container preset (Subtitle EBU-STL/SRT/TTML-IMSC/SCC/WebVTT + KDM + ISO + Document) con `media_kind` dedicati. Backfill signal-driven riassegna i 20 item containerless (subtitle/KDM/ISO/doc). Validazione corpus 211 item: **22→2 issue** (i 2 residui sono finding veri: J2K_REQUIRES_MXF id=69, IMGSEQ_NO_AUDIO id=173). R9 invariato, scelta "taxonomy estesa" vs allentare la regola. File: `scripts/migrate_delivery_taxonomy.py`.
