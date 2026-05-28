@@ -307,7 +307,12 @@ async def update_item(
         if pid:
             from app.models.models import AudioConfigPreset
             from app.services.audio_config_service import apply_audio_config_preset
-            preset = db.get(AudioConfigPreset, pid)
+            # Tenant-scoped lookup (no cross-tenant leak via PK): filtra tenant_id
+            # + verifica ownership template prima di applicare.
+            preset = (db.query(AudioConfigPreset)
+                      .filter(AudioConfigPreset.id == pid,
+                              AudioConfigPreset.tenant_id == current_tenant_id())
+                      .first())
             if preset and preset.delivery_template_id == it.delivery_template_id:
                 apply_audio_config_preset(db, it, preset)
         else:
