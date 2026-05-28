@@ -35,6 +35,7 @@ from app.models import (
     JobDeliverable, QCEvent, QCReport,
 )
 from app.services import qc_events
+from app.services.delivery_timeline_service import qc_expected_for_deliverable
 
 router = APIRouter(prefix="/qc", tags=["qc"])
 
@@ -119,6 +120,7 @@ def _post_response(db: Session, deliverable_id: int, event) -> dict:
         "report": _serialize_report(rep),
         "deliverable_status": d.status.value if d and d.status else None,
         "deliverable_qc_substatus": d.qc_substatus.value if d and d.qc_substatus else None,
+        "qc_expected": qc_expected_for_deliverable(db, d) if d else None,
     }
 
 
@@ -401,6 +403,9 @@ async def qc_get_report(
     db: Session = Depends(get_db),
 ):
     _check_read(request)
-    _fetch_deliverable(db, deliverable_id)
+    d = _fetch_deliverable(db, deliverable_id)
     rep = db.query(QCReport).filter(QCReport.deliverable_id == deliverable_id).first()
-    return {"report": _serialize_report(rep)}
+    return {
+        "report": _serialize_report(rep),
+        "qc_expected": qc_expected_for_deliverable(db, d),
+    }

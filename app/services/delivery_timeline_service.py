@@ -25,3 +25,17 @@ def effective_timeline(db: Session, item: DeliveryItem) -> dict:
         "program_start": pg, "program_start_inherited": pg_inh,
         "timeline_segments": seg or [], "timeline_segments_inherited": seg_inh,
     }
+
+
+def qc_expected_for_deliverable(db: Session, deliverable) -> "dict | None":
+    """Valori attesi (tc/timeline/audio config) per il QC di un JobDeliverable
+    collegato a un DeliveryItem. None se non collegato o item non trovato."""
+    if not getattr(deliverable, "delivery_item_id", None):
+        return None
+    di = db.get(DeliveryItem, deliverable.delivery_item_id)
+    if not di:
+        return None
+    return {
+        **effective_timeline(db, di),
+        "audio_config_code": di.audio_config_code,
+    }
