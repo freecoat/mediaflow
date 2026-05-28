@@ -1,5 +1,24 @@
 # MediaFlow — Changelog
 
+## v3.5.0-alpha.172.103 — Cashflow fix: cancelled orfane escluse (Matteo bug Cattleya) (28 mag 2026)
+
+Bug Matteo: cashflow mostrava fatturato **88.650€ NET maggio 2026** (Cattleya), valore non riconoscibile. Root cause inspection:
+- 8 TD01 cancelled stesso giorno (24/05/2026) per Cattleya: 1×14775 + 7×9850
+- 1 NC TD04 (#10) di 9850
+
+Logica α.114 contava `cancelled` SEMPRE come +sign nel cashflow del mese di emissione, partendo dall'assunzione "ogni TD01 cancelled ha NC TD04 corrispondente nel mese suo che la storna a saldo 0". Vero in regime contabile italiano coerente. **Bug**: 7 TD01 cancelled erano ORFANE (no NC contropartita) → 7×9850 = 68950 + 14775 + (14775-9850 = 4925 paid-NC) = 88650 valore fantasma.
+
+**Fix `app/routers/finance.py:cashflow_year_sync`** (α.172.103):
+- Pre-pass: matching heuristico NC TD04 → TD01 cancelled. Per ogni NC, cerca TD01 cancelled con `client_id` uguale + `total` uguale (tolleranza 0.01) + `issue_date` precedente o uguale. Greedy 1:1 (consumed_nc_ids per evitare double-match).
+- TD01 cancelled con `id ∉ stornata_ids` → SKIP dal calcolo `invoiced` (annullamento extra-contabile, dato sporco). Aggiunte a `cancelled_orphan_invoices` nel return per UI notice.
+- TD01 cancelled matched + NC TD04: comportamento invariato (TD01 + nel mese suo, NC - nel mese suo, saldo annuale = 0).
+
+Verifica DB attuale Matteo: 2026-05 invoiced **88650 → 18025.50** (corretto: solo TD01#2 paid + TD01#3 stornata-NC che si cancellano), 7 orphan listate (#1, #4-9).
+
+**TODO UI** (rinviato, non bloccante): mostrare in `/finance/cashflow` notice "⚠ N fatture cancellate senza NC — escluse dal cashflow" con link a `/finance#invoices`, per permettere a producer/accounting di indagare e creare NC mancanti o eliminare cancellazioni illegittime.
+
+**No FK NC→TD01 nel modello**: matching heuristico è l'unica via oggi. Backlog futuro: aggiungere `Invoice.refunded_invoice_id` FK opzionale + popolare quando si crea una NC TD04 da TD01 esistente.
+
 ## v3.5.0-alpha.172.102 — Folder badge: stacked statiche ~85% overlap (no ventaglio) (28 mag 2026)
 
 Refactor del layout stacked status cards in folder `/quotes/`. Pre-α.172.102 (α.172.99): ventaglio rotato con animation hover (Matteo: "non mi piace"). Post: cards sovrapposte ~85% statiche, label visibile SOLO sulla top card (priority più alta visibile), sotto-cards mostrano solo sliver di colore (10-15px) come segnaposto stato.

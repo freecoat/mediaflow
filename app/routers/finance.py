@@ -2263,7 +2263,51 @@ def cashflow_year_sync(
         inv_q = inv_q.join(Job, Invoice.job_id == Job.id).filter(Job.project_id.in_(project_ids))
     invoices = inv_q.all()
     invoice_ids = [i.id for i in invoices]
+
+    # v3.5.0-alpha.172.103 — Fix Matteo: cancelled "orfane" gonfiavano cashflow.
+    # Regola contabile italiana: TD01 cancelled DEVE restare nel cashflow del suo
+    # mese SOLO se esiste NC TD04 corrispondente (la NC storna nel mese suo, saldo
+    # netto annuale = 0). Senza NC, la cancelled e' annullamento amministrativo
+    # extra-contabile e NON deve contare (= dato sporco).
+    # Matching NC<->TD01: stesso client_id, stesso total (tolleranza 0.01),
+    # NC issue_date >= TD01 issue_date. Heuristico ma robusto in mancanza di FK.
+    # Una NC consuma una TD01 (1:1), no double-count.
+    all_inv_for_match = db.query(Invoice).filter(
+        Invoice.status != InvoiceStatus.draft,
+    ).all()
+    td04_by_client: dict = {}
+    for nc in all_inv_for_match:
+        if getattr(nc, "doc_type", None) != "TD04":
+            continue
+        if not nc.issue_date:
+            continue
+        td04_by_client.setdefault(nc.client_id, []).append(nc)
+    # Set di TD01 cancelled stornate (id) — costruito greedy: per ogni NC, trova
+    # la TD01 cancelled non-ancora-matchata con stesso client+total+issue_date
+    # precedente o uguale.
+    stornata_ids: set = set()
+    consumed_nc_ids: set = set()
+    cancelled_td01 = [
+        i for i in all_inv_for_match
+        if i.status == InvoiceStatus.cancelled
+        and getattr(i, "doc_type", None) != "TD04"
+        and i.issue_date is not None
+    ]
+    for td01 in cancelled_td01:
+        candidates = td04_by_client.get(td01.client_id, [])
+        for nc in candidates:
+            if nc.id in consumed_nc_ids:
+                continue
+            if abs((nc.total or 0.0) - (td01.total or 0.0)) > 0.01:
+                continue
+            if nc.issue_date < td01.issue_date:
+                continue
+            stornata_ids.add(td01.id)
+            consumed_nc_ids.add(nc.id)
+            break
+
     invoices_missing_date: list[int] = []
+    cancelled_orphan_ids: list[int] = []
     for inv in invoices:
         if not inv.issue_date:
             # v3.5.0-alpha.142 (#3 cashflow fix) — Invoice senza issue_date
@@ -2273,12 +2317,20 @@ def cashflow_year_sync(
             invoices_missing_date.append(inv.id)
             continue
         m = inv.issue_date.month
+        doc_t = getattr(inv, "doc_type", None)
+        # v3.5.0-alpha.172.103 — TD01 cancelled SENZA NC corrispondente: skip
+        # dal calcolo invoiced (dato sporco / annullamento extra-contabile).
+        if (inv.status == InvoiceStatus.cancelled
+                and doc_t != "TD04"
+                and inv.id not in stornata_ids):
+            cancelled_orphan_ids.append(inv.id)
+            continue
         # v3.5.0-alpha.114 — include anche cancelled (post-storno): la fattura
         # originale resta nel cashflow storico del suo mese di emissione, e
         # la NC TD04 storna come negativo nel mese del NC. Saldo finale netto.
         if inv.status in (InvoiceStatus.sent, InvoiceStatus.paid,
                           InvoiceStatus.overdue, InvoiceStatus.cancelled):
-            sign = -1 if (getattr(inv, "doc_type", None) == "TD04") else 1
+            sign = -1 if (doc_t == "TD04") else 1
             series[m - 1]["invoiced"] += sign * (inv.total or 0.0)
             series[m - 1]["invoiced_net"] += sign * (inv.subtotal or 0.0)
         # outstanding: NC TD04 non genera outstanding (è un credito, non un debito da incassare)
@@ -2471,6 +2523,10 @@ def cashflow_year_sync(
         # v3.5.0-alpha.142 (#3) — Invoice senza issue_date escluse dal cashflow
         # (no fallback gennaio fuorviante). UI mostra warning con link a /finance#invoices.
         "invoices_missing_date": invoices_missing_date,
+        # v3.5.0-alpha.172.103 — Cancelled TD01 senza NC TD04 corrispondente
+        # (matching heuristico client+total+date). Escluse dal cashflow per non
+        # gonfiare i totali. UI dovrebbe mostrare warning con link a /finance#invoices.
+        "cancelled_orphan_invoices": cancelled_orphan_ids,
     }
 
 
