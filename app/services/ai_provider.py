@@ -283,16 +283,33 @@ class AIProvider(ABC):
     def name(self) -> str: ...
 
     def extract_json(self, system: str, user: str, max_tokens: int = 3000) -> Optional[dict]:
+        """v3.5.0-alpha.172.110 — Diagnostica: salva ultima diagnosi in
+        ``self.last_extract_diag`` (dict con ``stage`` + ``error`` + ``raw_preview``)
+        così l'endpoint chiamante può propagare un messaggio user-friendly invece
+        del generico "no response".
+        """
         system_with_json = (
             system + "\n\nIMPORTANTE: Rispondi SOLO con un oggetto JSON valido, "
             "senza testo prima o dopo, senza markdown, senza backtick."
         )
+        self.last_extract_diag = None
         try:
             response = self.complete(system_with_json, user, max_tokens=max_tokens, temperature=0.1)
-            return safe_json_parse(response)
         except Exception as e:
-            logger.error(f"AI extract_json failed: {e}")
+            err_msg = f"{type(e).__name__}: {e}"
+            logger.error(f"AI extract_json complete() failed: {err_msg}")
+            self.last_extract_diag = {"stage": "complete", "error": err_msg, "raw_preview": ""}
             return None
+        parsed = safe_json_parse(response)
+        if parsed is None:
+            preview = (response or "")[:200].replace("\n", " ")
+            logger.error(f"AI extract_json: safe_json_parse returned None. Raw preview: {preview!r}")
+            self.last_extract_diag = {
+                "stage": "parse",
+                "error": "Risposta AI non in formato JSON valido (markdown/spiegazione/troncata)",
+                "raw_preview": preview,
+            }
+        return parsed
 
     def supports_web_search(self) -> bool:
         """True se il provider espone un tool web_search server-side nativo."""

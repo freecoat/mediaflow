@@ -413,7 +413,7 @@ let _allPriceItems = [];
 
 async function _loadPriceItemsOnce() {
   if (_allPriceItems.length) return;
-  try { _allPriceItems = await api('GET', '/pricelist/api'); } catch(e) { _allPriceItems = []; }
+  try { _allPriceItems = await api('GET', '/pricelist/api/items'); } catch(e) { _allPriceItems = []; }
 }
 
 async function openDetail(tid) {

@@ -1,5 +1,31 @@
 # MediaFlow — Changelog
 
+## v3.5.0-alpha.172.110 — Fix parse-sample 503 cieco + /pricelist/api 404 (28 mag 2026)
+
+Hotfix sul flusso "Parsing capitolato" in `/delivery-templates`. Due bug separati segnalati da Matteo.
+
+**Bug 1 — `/delivery-templates/api/parse-sample` ritorna 503 generico**
+Root cause: `BaseProvider.extract_json()` cattura tutte le eccezioni e ritorna `None`. L'endpoint vede solo `None` e raise `503 "Il parser AI non ha restituito risposta (provider rate-limit o testo non interpretabile)"`. Messaggio inutile in debug: utente non capisce se è rate-limit, JSON malformato, oppure API key scaduta.
+
+Fix:
+- `ai_provider.py:BaseProvider.extract_json`: salva diagnosi reale in `self.last_extract_diag` con `{stage, error, raw_preview}`. `stage=complete` se exception su `provider.complete()`, `stage=parse` se risposta arrivata ma `safe_json_parse` ha fallito. Log error con preview risposta (primi 200 char).
+- `routers/delivery_templates.py:parse_sample_capitolato`: dopo `if not result`, legge `provider.last_extract_diag` e compone HTTPException 503 con messaggio specifico:
+  - `complete` → "Provider AI non raggiungibile o ha sollevato eccezione. Dettaglio: …. Possibili cause: rate-limit, API key scaduta, model id obsoleto, network."
+  - `parse` → "L'AI ha risposto ma il JSON non è parsabile. Anteprima risposta: '…'. Riprova: transitorio (modello ha aggiunto preambolo/markdown). Se persiste, usa un modello più capace (Opus/GPT-4o)."
+
+**Bug 2 — GET `/pricelist/api` 404**
+Root cause: `app/templates/pages/delivery_templates.html:416` chiamava endpoint inesistente `/pricelist/api` (senza `/items`). Route reale è `/pricelist/api/items`. Side-effect: in modal dettaglio template, `_loadPriceItemsOnce()` falliva silente e suggested-match price item non funzionava.
+
+Fix: corretta URL a `/pricelist/api/items`.
+
+**Stato 17 capitolati esempio**
+Audit estrazione testo via `extract_text_from_file()`:
+- 14 file estraibili (PDF/DOCX/XLSX/TXT con contenuto reale, 3-326KB testo)
+- 3 file degenerati: `Netflix_Deliverables.txt` + `Amazon_MGM_Deliverables.txt` 0-byte (placeholder vuoti), `BETA FILM_DELIVERY MASTER.pdf` image-only (pypdf estrae solo whitespace).
+- I 2 .txt vuoti già esclusi dall'endpoint `/api/sample-files` (filter `size==0`). Il PDF image-only viene listato ma blocca a `parse-sample` con 400 "Estrazione testo fallita o testo troppo breve (<20 caratteri)" che è informativo.
+
+**Verifica live**: MUBI_QUEER PDF (31k char testo) → Claude Sonnet 4.6 estrae dict completo 13 keys in ~45s. Sistema operativo su file estraibili.
+
 ## v3.5.0-alpha.172.109 — i18n round 3: scrutinio approfondito, audit 477→15 (28 mag 2026)
 
 Iterazione i18n profonda che chiude il gap residuo dell'audit. Lavoro su tre fronti.

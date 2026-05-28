@@ -346,7 +346,24 @@ async def parse_sample_capitolato(
     except Exception as e:
         raise HTTPException(503, f"Errore AI provider: {e}")
     if not result:
-        raise HTTPException(503, "Il parser AI non ha restituito risposta (provider rate-limit o testo non interpretabile)")
+        # v3.5.0-alpha.172.110 — propaga diagnosi reale invece di msg generico
+        diag = getattr(provider, "last_extract_diag", None) or {}
+        if diag.get("stage") == "complete":
+            msg = (
+                "Provider AI non raggiungibile o ha sollevato eccezione.\n"
+                f"Dettaglio: {diag.get('error')}\n\n"
+                "Possibili cause: rate-limit, API key scaduta, model id obsoleto, network."
+            )
+        elif diag.get("stage") == "parse":
+            msg = (
+                "L'AI ha risposto ma il JSON non è parsabile.\n"
+                f"Anteprima risposta: {diag.get('raw_preview')!r}\n\n"
+                "Riprova: questo è transitorio (modello ha aggiunto preambolo/markdown). "
+                "Se persiste, usa un modello più capace (Opus/GPT-4o)."
+            )
+        else:
+            msg = "Il parser AI non ha restituito risposta. Controlla logs server."
+        raise HTTPException(503, msg)
     result["source_document_name"] = filename
     result["text_preview"] = text[:200]
     return result

@@ -8,6 +8,29 @@
 
 ## Versione corrente
 
+**v3.5.0-alpha.172.110** — 28 maggio 2026 — Fix parse-sample 503 cieco + /pricelist/api 404
+
+Hotfix duplice sul flusso `/delivery-templates` parsing capitolato AI segnalato da Matteo.
+
+- `BaseProvider.extract_json` salva diagnosi reale in `last_extract_diag` (stage `complete` vs `parse`, error msg, raw preview). Stop al silent-swallow exception.
+- Endpoint `parse-sample` legge la diagnosi e propaga messaggio user-friendly specifico per cause (rate-limit/API key/model id/JSON malformato).
+- Fix UI 404: `delivery_templates.html:416` `/pricelist/api` → `/pricelist/api/items`.
+- Audit 17 capitolati esempio: 14 estraibili OK, 3 degenerati (2 .txt 0-byte + 1 PDF image-only); endpoint sample-files già filtra i 2 .txt vuoti.
+
+### Backlog UX delivery_templates (richieste Matteo non ancora aperte)
+
+1. Tech sheet: aggiungere selezione manuale opzioni via lista (oltre input AI).
+2. Capitolati: parsing iniziale sui 17 capitolati esempio (batch).
+3. Capitolati: aggiungere rename template di consegna.
+4. Modal dettaglio template: rifare human-readable + edit form (no JSON raw).
+5. Modal "Aggiungi specifiche delivery a progetto": scelta file estrapolato + nome custom delivery + modifica manuale specifiche + togli edit JSON + note.
+
+### Prossima sessione
+
+Apri (2) parse batch capitolati su corpus. Poi (4) modal template human-readable. Poi (5) wizard delivery enriched.
+
+---
+
 **v3.5.0-alpha.172.109** — 28 maggio 2026 — i18n round 3: scrutinio approfondito, audit 477→15
 
 Lavoro su tre fronti per chiudere il gap i18n residuo: tool `i18n_audit.py` migliorato (filtri false positive CSS hex/JS template literal/expressions/data-* + AUTO_SWAP coverage check), dictionary `MF_I18N` espanso +43 entries 5 lingue per frasi contestuali lunghe (settings CCNL/SDI/branding, copilot drawer, quotes anchor/currency, finance NC TD04, pricelist €/Giorno/Ora, resources override, planning, project_detail, finance_reports, holidays, hr, overhead, physical_assets, platform_tenants, portal_project), annotazione `data-i18n` in 15 template + `copilot.js` con `mfT()` per JS strings.
