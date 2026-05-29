@@ -1,5 +1,18 @@
 # MediaFlow — Changelog
 
+## v3.5.0-alpha.172.131 — Audio config in Audio Tracks + apply reattivo + warning AI (29 mag 2026)
+
+UX delivery item (`app/templates/pages/delivery_templates.html`):
+- **Audio config preset spostato** da sezione "Timeline & TC" → sezione "🔊 Audio Tracks" (dove appartiene semanticamente).
+- **Apply reattivo**: selezionare un preset applica subito le tracce (PUT + materializzazione server-side via `apply_audio_config_preset`) e ricarica la lista tracce inline — niente più salva+riapri. Warning di conferma "sostituisce le tracce esistenti" quando l'item ne ha già.
+- Estratto `renderAudioRows()` riusabile (apertura + post-apply).
+
+Warning conferma su interventi AI token-heavy:
+- **extract-head (vision)**: ora chiede conferma esplicita (legge il PDF come immagini, ~75k token/pagina, solo Claude).
+- **match-listino**: conferma prima della chiamata LLM di ranking.
+
+Dev DX (`app/main.py`): Jinja `auto_reload=True` + cache svuotata quando `app_env=development` → i template inline-JS modificati vengono riletti a ogni request senza restart (OneDrive rompe il watcher uvicorn → i reload .py erano inaffidabili). Fine "devo riavviare per vedere la modifica".
+
 ## v3.5.0-alpha.172.130 — Hotfix 500 "Estrai TC/Timeline/Audio" (29 mag 2026)
 
 Fix `TypeError: current_user_optional() takes 1 positional argument but 2 were given` su 4 endpoint in `app/routers/delivery_items.py` (incluso `extract-head`, bottone "🤖 Estrai TC/Timeline/Audio").

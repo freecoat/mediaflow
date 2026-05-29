@@ -1164,10 +1164,6 @@ async function openItemEditor(item, tid) {
       <label style="font-size:11px;color:var(--text3);text-transform:uppercase;">Program Start</label>
       <input class="form-input" id="item-program-start" value="${escapeHtml(v.program_start||'')}" placeholder="es. 01:00:00:00">
     </div>
-    <div>
-      <label style="font-size:11px;color:var(--text3);text-transform:uppercase;">Audio config preset</label>
-      <select class="form-select" id="item-audio-config"><option value="">—</option></select>
-    </div>
   `;
   tlSec.appendChild(tlGrid);
 
@@ -1190,30 +1186,20 @@ async function openItemEditor(item, tid) {
 
   box.appendChild(tlSec);
 
-  // Populate timeline segments + audio presets async
+  // Populate timeline segments async
   _tlSegments = [];
   renderTimelineSegments(v.timeline_segments || []);
-  if (!isNew) {
-    const templateId = v.delivery_template_id || tid;
-    if (templateId) {
-      api('GET', `/delivery-templates/api/${templateId}/audio-presets`).then(presets => {
-        const sel = document.getElementById('item-audio-config');
-        if (!sel) return;
-        sel.innerHTML = '<option value="">—</option>' + (presets || []).map(p =>
-          `<option value="${p.id}"${p.id === v.audio_config_preset_id ? ' selected' : ''}>${escapeHtml(p.code)} — ${escapeHtml(p.name)}</option>`
-        ).join('');
-      }).catch(() => {});
-    }
-  }
 
-  // Audio tracks sub-section
+  // Audio tracks sub-section (α.172.130: audio config preset spostato qui da
+  // Timeline&TC + applicazione reattiva — le tracce si aggiornano alla selezione
+  // senza salvare/riaprire).
   const audioSec = document.createElement('div');
   audioSec.style.cssText = 'margin-top:14px;padding-top:14px;border-top:1px solid var(--border);';
   const audioHead = document.createElement('div');
   audioHead.style.cssText = 'display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;';
   const audioLbl = document.createElement('div');
   audioLbl.style.cssText = 'font-weight:600;font-size:13px;';
-  audioLbl.textContent = `🔊 Audio tracks (${(v.audio_tracks||[]).length})`;
+  audioLbl.textContent = `🔊 Audio tracks (${(itemFull.audio_tracks||[]).length})`;
   audioHead.appendChild(audioLbl);
   if (!isNew) {
     const addAudioBtn = document.createElement('button');
@@ -1224,15 +1210,34 @@ async function openItemEditor(item, tid) {
     audioHead.appendChild(addAudioBtn);
   }
   audioSec.appendChild(audioHead);
+
+  // Audio config preset (spostato da Timeline&TC).
+  if (!isNew) {
+    const cfgRow = document.createElement('div');
+    cfgRow.style.cssText = 'margin-bottom:10px;';
+    cfgRow.innerHTML = `
+      <label style="font-size:11px;color:var(--text3);text-transform:uppercase;">Audio config preset</label>
+      <select class="form-select" id="item-audio-config"><option value="">—</option></select>
+      <span style="font-size:11px;color:var(--text3);">Applicato subito: sostituisce le tracce dell'item.</span>`;
+    audioSec.appendChild(cfgRow);
+  }
+
   const audioList = document.createElement('div');
   audioList.style.cssText = 'display:flex;flex-direction:column;gap:6px;';
-  if (isNew) {
-    const note = document.createElement('div');
-    note.style.cssText = 'font-size:11px;color:var(--text3);font-style:italic;padding:6px;';
-    note.textContent = 'Salva prima il delivery item per aggiungere tracce audio.';
-    audioList.appendChild(note);
-  } else {
-    (v.audio_tracks || []).forEach(t => {
+  audioSec.appendChild(audioList);
+  box.appendChild(audioSec);
+
+  // Render riusabile delle righe tracce: chiamato all'apertura e dopo apply preset.
+  function renderAudioRows() {
+    audioList.innerHTML = '';
+    if (isNew) {
+      const note = document.createElement('div');
+      note.style.cssText = 'font-size:11px;color:var(--text3);font-style:italic;padding:6px;';
+      note.textContent = 'Salva prima il delivery item per aggiungere tracce audio.';
+      audioList.appendChild(note);
+      return;
+    }
+    (itemFull.audio_tracks || []).forEach(t => {
       const row = document.createElement('div');
       row.style.cssText = 'display:flex;justify-content:space-between;align-items:center;padding:6px 10px;background:var(--bg3);border:1px solid var(--border);border-radius:4px;font-size:12px;';
       const left = document.createElement('div');
@@ -1276,8 +1281,43 @@ async function openItemEditor(item, tid) {
       audioList.appendChild(row);
     });
   }
-  audioSec.appendChild(audioList);
-  box.appendChild(audioSec);
+  renderAudioRows();
+
+  // Popola i preset + handler apply reattivo (dopo che il select è nel DOM).
+  if (!isNew) {
+    const templateId = v.delivery_template_id || tid;
+    if (templateId) {
+      api('GET', `/delivery-templates/api/${templateId}/audio-presets`).then(presets => {
+        const sel = document.getElementById('item-audio-config');
+        if (!sel) return;
+        sel.innerHTML = '<option value="">—</option>' + (presets || []).map(p =>
+          `<option value="${p.id}"${p.id === v.audio_config_preset_id ? ' selected' : ''}>${escapeHtml(p.code)} — ${escapeHtml(p.name)}</option>`
+        ).join('');
+        let _prevPreset = sel.value;
+        sel.onchange = async () => {
+          const pid = sel.value;
+          if ((itemFull.audio_tracks || []).length && pid &&
+              !confirm('Applicare il preset SOSTITUISCE le tracce audio esistenti di questo item. Procedere?')) {
+            sel.value = _prevPreset; return;
+          }
+          try {
+            const fd = new FormData();
+            fd.append('audio_config_preset_id', pid);
+            const r = await fetch(`/delivery-items/api/${itemFull.id}`, { method: 'PUT', body: fd, credentials: 'same-origin' });
+            if (!r.ok) { const e = await r.json().catch(() => ({})); throw new Error(e.detail || 'Errore'); }
+            itemFull = await api('GET', `/delivery-items/api/${itemFull.id}`);
+            renderAudioRows();
+            audioLbl.textContent = `🔊 Audio tracks (${(itemFull.audio_tracks||[]).length})`;
+            _prevPreset = pid;
+            toast(pid ? 'Preset applicato' : 'Preset rimosso', 'success', 1500);
+          } catch(e) {
+            sel.value = _prevPreset;
+            toast(`Errore apply preset: ${e.message||''}`, 'error', 3000);
+          }
+        };
+      }).catch(() => {});
+    }
+  }
 
   // Footer
   const footer = document.createElement('div');
@@ -1790,6 +1830,8 @@ async function dlvLoadValidation(itemId) {
 
 // v3.5.0-alpha.172.122 (Tier 3 Bundle C) — AI match listino su DeliveryItem.
 async function dlvAiMatchPricelist(itemId, tid, parentModal) {
+  // α.172.130 — warning: chiamata LLM (consumo token). Conferma esplicita.
+  if (!confirm('🤖 Match listino via AI: una chiamata LLM ranka le voci di listino candidate (consumo token). Procedere?')) return;
   // overlay loading
   const loadOv = document.createElement('div');
   loadOv.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.7);z-index:2300;display:flex;align-items:center;justify-content:center;';
@@ -2190,6 +2232,9 @@ document.addEventListener('click', (ev) => {
 // ── Head specs extraction: TC start / Timeline segments / Audio configs ────
 async function extractHeadSpecs(tid, pane) {
   if (!tid) { toast('Nessun template attivo', 'warning'); return; }
+  // α.172.130 — warning: estrazione VISION molto costosa in token (legge il PDF
+  // come immagini, ~75k token/pagina su Claude). Conferma esplicita.
+  if (!confirm('⚠️ Estrazione TC/Timeline/Audio via VISION.\n\nLegge il capitolato come immagini: operazione MOLTO costosa in token (solo Claude, ~1-2 min). Procedere?')) return;
   // Reset stato preview precedente (evita Applica su dati stale di altro template).
   window._headPreview = null; window._headTid = null;
   let box = document.getElementById('head-preview');

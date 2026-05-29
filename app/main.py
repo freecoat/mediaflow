@@ -2095,7 +2095,7 @@ async def lifespan(app: FastAPI):
     yield
 
 
-app = FastAPI(title="Claqo", version="3.5.0-alpha.172.130", lifespan=lifespan)
+app = FastAPI(title="Claqo", version="3.5.0-alpha.172.131", lifespan=lifespan)
 
 BASE_DIR = Path(__file__).parent
 app.mount("/static", StaticFiles(directory=BASE_DIR / "static"), name="static")
@@ -2107,6 +2107,12 @@ _uploads_dir.mkdir(exist_ok=True)
 (_uploads_dir / "copilot").mkdir(exist_ok=True)
 app.mount("/uploads", StaticFiles(directory=_uploads_dir), name="uploads")
 templates = Jinja2Templates(directory=BASE_DIR / "templates")
+# α.172.130 — in dev abilita auto_reload: i template inline-JS modificati vengono
+# riletti a ogni request senza restart server (OneDrive rompe il watcher uvicorn,
+# quindi i .py reload sono inaffidabili; questo evita di servire template stale).
+if settings.app_env == "development":
+    templates.env.auto_reload = True
+    templates.env.cache = {}
 
 # Espone helpers RBAC ai template Jinja per condizionali UI
 from app.services import rbac as _rbac
