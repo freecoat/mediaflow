@@ -8,7 +8,17 @@
 
 ## Versione corrente
 
-**v3.5.0-alpha.172.128** — 29 maggio 2026 — Estrazione capitolati via vision: corpus popolato
+**v3.5.0-alpha.172.136** — 29 maggio 2026 — F2 pipeline deliverables: quote picker a spunte da capitolato
+
+### α.172.136 ✅ (F2 pipeline, quote picker + smoke E2E Playwright)
+`delivery_bucket.template_bucket_options()`: voci-bucket distinte dai DeliveryItem del template (decisione 10) con prezzo+conteggio+note→detail. Endpoint `GET /quotes/api/template-buckets/{tid}` + `POST /quotes/api/{qid}/load-from-template-items` (aggiunge righe dal sottoinsieme spuntato, detail precompilato). UI `quotes.html`: bottone "🎯 Picker capitolato" + modal checkbox. Fix bug latente dropdown livello prezzo (`list_price`→`list`, 422 — anche vecchio `lt-level`). Smoke Playwright OK (Fremantle 21 bucket → add → righe corrette). 3 test nuovi, 92/92. **Prossimo: F3** (planning JobDeliverable snapshot in spec_json + Asset atteso + booking modal).
+
+### α.172.135 ✅ (F1 pipeline Capitolato→Listino, TDD)
+Service `app/services/delivery_bucket.py`: `compute_bucket()` riduce un DeliveryItem a voce-bucket GENERICA per media_kind (video=package|container+codec+res+HDR · audio=mix_type+channel da traccia primaria · sidecar=tipo container). `match_or_create_bucket()` trova-o-crea PriceItem in categoria "Deliveries", link via `suggested_price_item_id` riusato (decisione 9, no colonna nuova). Migrazione B `scripts/migrate_deliveries_buckets.py` (--dry): **211 DeliveryItem → 66 bucket** (riuso 3.2x), 13 voci legacy soft-deprecate, idempotente. 11 test nuovi, 89/89 green. Snapshot `db_snapshots/snapshot-3.5.0-alpha.172.135-pre-bucket-migration.db`. Design completo (decisioni 1-11) in `docs/superpowers/specs/2026-05-29-deliverables-pipeline-design.md`.
+
+**Prossimo**: F2 quote picker a spunte (endpoint voci-bucket derivate dai DeliveryItem del template + UI → righe con `detail` per specs capitolato, migliora `load-from-template`). Poi F3 planning affinamento JobDeliverable + Asset atteso + booking modal.
+
+### α.172.128 ✅ (feature subagent-driven) — Estrazione capitolati via vision: corpus popolato
 
 ### α.172.128 ✅ (feature subagent-driven, 8 task TDD + eval gate, branch feat/capitolato-head-extraction)
 Pipeline estrazione TC/timeline/audio-config dai capitolati via **vision** (PyMuPDF PDF→immagini, risolve il limite pypdf sulle tabelle audio). `render_document_for_llm` + `extract_head_specs` (vocab canonico iniettato, legge tabella+legenda) + `reconcile_taxonomy_aliases` (M&E=IT mix=IT, guard anti-hallucination) + `apply_head_specs` (idempotente upsert). `ClaudeProvider.chat` auto-stream >16K (fix troncamento). Endpoint extract-head/apply-head + bottone UI preview/Applica + batch script.

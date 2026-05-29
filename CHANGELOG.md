@@ -1,5 +1,38 @@
 # MediaFlow — Changelog
 
+## v3.5.0-alpha.172.136 — F2 pipeline deliverables: quote picker a spunte da capitolato (29 mag 2026)
+
+Seconda fase pipeline (F1 = α.172.135). La quote ora compone le righe scegliendo **a spunte** le consegne del capitolato, dalle voci-bucket derivate live dai DeliveryItem del template (decisione 10), non più solo da `suggested_items` statico.
+
+**Service** `delivery_bucket.template_bucket_options(db, tenant_id, template_id)`: ritorna le voci-bucket distinte fra i DeliveryItem del template, ciascuna con prezzo listino, quanti/quali item ci mappano e una proposta di `detail` (note di capitolato aggregate). Ordinato per nome, salta item non linkati. 3 test nuovi.
+
+**Endpoint** `quotes.py`:
+- `GET /quotes/api/template-buckets/{template_id}` — sorgente del picker.
+- `POST /quotes/api/{quote_id}/load-from-template-items` — aggiunge le righe dal sottoinsieme spuntato (prezzo dal listino, `detail` precompilato dalle note capitolato se `with_detail`). Idempotente sui price_item, valida che i bucket appartengano al template.
+
+**UI** `quotes.html`: bottone "🎯 Picker capitolato" + modal con select capitolato, livello prezzo, sezione, toggle dettaglio, lista checkbox dei bucket (nome + N item + note + prezzo), tutte/nessuna, contatore. DOM via createElement (no JSON.stringify in onclick).
+
+**Fix bug latente**: i dropdown "livello prezzo" (vecchio `lt-level` + nuovo `bp-level`) mandavano `list_price` ma `PriceLevel` enum vuole `list` → 422 sul submit. Corretti entrambi a `value="list"`.
+
+Smoke E2E Playwright: login → quote → picker → template Fremantle (21 bucket) → seleziona → add → righe create con nomi bucket corretti. 92/92 pytest. Prossimo: F3 planning affinamento JobDeliverable + Asset.
+
+## v3.5.0-alpha.172.135 — F1 pipeline deliverables: consolidamento listino bucket (29 mag 2026)
+
+Prima fase della pipeline Capitolato→Listino→Quote→Planning→Asset (design in `docs/superpowers/specs/2026-05-29-deliverables-pipeline-design.md`, decisioni 1-11).
+
+**Service `app/services/delivery_bucket.py`**: `compute_bucket(db, item)` riduce un `DeliveryItem` (menù completo specs) a una voce-bucket di listino GENERICA, ramificando per media_kind:
+- video → `(package|container) + codec + risoluzione + HDR` (es. "QuickTime / Apple ProRes 422 HQ / HD 1080p", "DCP SMPTE / JPEG 2000 (DCP) / 4K DCI Full"). HDR/colorspace nel nome solo se ≠ SDR (decisione 8).
+- audio → `mix_type/role + channel_config` dalla traccia primaria (es. "Full Mix (Final Mix) / 5.1 SMPTE", "M&E (Music + Effects) / Stereo 2.0"). Risolve il collasso dei 61 deliverable audio in un unico bucket "WAV".
+- sidecar (subtitle/key/disc/document) → per tipo container.
+
+`match_or_create_bucket()` trova-o-crea il `PriceItem` (match per name entro categoria "Deliveries") e linka via `suggested_price_item_id` riusato come link canonico (decisione 9). Nessuna colonna nuova.
+
+**Migrazione B** (`scripts/migrate_deliveries_buckets.py`, `--dry` per preview): consolida le ~13 voci deliverable storiche non uniformi e le soft-deprecata; **211 DeliveryItem → 66 voci-bucket** (riuso 3.2x). Idempotente. Quote-line storiche NON rimappate (rischio accettato).
+
+11 test nuovi (`tests/test_delivery_bucket.py`), 89/89 totali green. Snapshot pre-migrazione in `db_snapshots/snapshot-3.5.0-alpha.172.135-pre-bucket-migration.db`.
+
+Prossimo: F2 quote picker a spunte (voci-bucket derivate dai DeliveryItem del template), F3 planning affinamento + asset.
+
 ## v3.5.0-alpha.172.134 — Warning extract-head allineato alla cascata (29 mag 2026)
 
 Rifrasato il confirm del bottone "Estrai TC/Timeline/Audio": non più "VISION molto costosa" (fuorviante ora che i PDF testo vanno sul path economico), ma "usa il TESTO se disponibile (anche DeepSeek), VISION solo se scansione". File: `delivery_templates.html`.

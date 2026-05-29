@@ -626,7 +626,10 @@
            ondrop="onLinesDrop(event)">
         <div class="card-header" style="display:flex;justify-content:space-between;align-items:center;">
           <span class="card-title">Voci preventivo</span>
-          <button class="btn btn-ghost btn-sm" onclick="openLoadFromTemplate()" title="Bulk-add voci da DeliveryTemplate (suggested_items)">📋 Carica da template</button>
+          <div style="display:flex;gap:6px;">
+            <button class="btn btn-ghost btn-sm" onclick="openBucketPicker()" title="Scegli a spunte le consegne del capitolato (voci-bucket derivate)">🎯 Picker capitolato</button>
+            <button class="btn btn-ghost btn-sm" onclick="openLoadFromTemplate()" title="Bulk-add voci da DeliveryTemplate (suggested_items)">📋 Carica da template</button>
+          </div>
         </div>
         <!-- v3.5.0-alpha.172.4 (Sprint 4 T1) — Tab split JCL vs Deliverable.
              Filtra le righe per `unit_nature`. Subtotale lordo della sezione mostrato accanto. -->
@@ -1020,7 +1023,7 @@
       <div class="form-group">
         <label class="form-label">Livello prezzo</label>
         <select class="form-select" id="lt-level">
-          <option value="list_price" selected>Listino</option>
+          <option value="list" selected>Listino</option>
           <option value="average">Media</option>
           <option value="low">Basso</option>
         </select>
@@ -1035,6 +1038,58 @@
     <div class="modal-footer">
       <button class="btn btn-secondary" onclick="closeModal('modal-load-template')">Annulla</button>
       <button class="btn btn-primary" id="lt-confirm" onclick="confirmLoadFromTemplate()" disabled>Carica righe</button>
+    </div>
+  </div>
+</div>
+
+<!-- v3.5.0-alpha.172.136 (F2) — Picker a spunte voci-bucket derivate dal capitolato -->
+<div class="modal-overlay" id="modal-bucket-picker">
+  <div class="modal" style="max-width:720px;">
+    <div class="modal-header">
+      <span class="modal-title">🎯 Picker consegne da capitolato</span>
+      <button class="btn btn-ghost btn-icon" onclick="closeModal('modal-bucket-picker')">&times;</button>
+    </div>
+    <div class="modal-body">
+      <div style="display:flex;gap:10px;">
+        <div class="form-group" style="flex:2;">
+          <label class="form-label">Capitolato (template) *</label>
+          <select class="form-select" id="bp-template" onchange="onBucketTemplatePicked()">
+            <option value="">— seleziona —</option>
+          </select>
+        </div>
+        <div class="form-group" style="flex:1;">
+          <label class="form-label">Livello prezzo</label>
+          <select class="form-select" id="bp-level">
+            <option value="list" selected>Listino</option>
+            <option value="average">Media</option>
+            <option value="low">Basso</option>
+          </select>
+        </div>
+        <div class="form-group" style="flex:0 0 80px;">
+          <label class="form-label">Sezione</label>
+          <input class="form-input" id="bp-section" value="A" maxlength="1" style="text-transform:uppercase;">
+        </div>
+      </div>
+      <label class="text-xs" style="display:flex;align-items:center;gap:6px;margin:2px 0 8px;">
+        <input type="checkbox" id="bp-detail" checked> Precompila il <b>dettaglio</b> riga con le note di capitolato
+      </label>
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;">
+        <span class="text-xs text-muted" id="bp-count">—</span>
+        <span class="text-xs">
+          <a href="#" onclick="bpToggleAll(true);return false;">tutte</a> ·
+          <a href="#" onclick="bpToggleAll(false);return false;">nessuna</a>
+        </span>
+      </div>
+      <div id="bp-list" style="max-height:320px;overflow:auto;border:1px solid var(--border);border-radius:6px;padding:4px;">
+        <div class="text-muted" style="padding:10px;">Seleziona un capitolato per vedere le consegne.</div>
+      </div>
+      <div class="text-xs text-muted" style="margin-top:8px;">
+        Le voci sono i <b>bucket tecnici generici</b> derivati dai DeliveryItem del capitolato. Voci già presenti in quote (stesso listino) vengono saltate.
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeModal('modal-bucket-picker')">Annulla</button>
+      <button class="btn btn-primary" id="bp-confirm" onclick="confirmBucketPicker()" disabled>Aggiungi selezionate</button>
     </div>
   </div>
 </div>
@@ -4427,6 +4482,142 @@ async function confirmLoadFromTemplate() {
     if (typeof reloadQuote === 'function') await reloadQuote();
   } catch(e) {
     toast(e.message || 'Errore', 'error');
+  }
+}
+
+// v3.5.0-alpha.172.136 (F2) — Picker a spunte voci-bucket derivate dal capitolato
+let _bpBuckets = [];
+async function openBucketPicker() {
+  if (!currentQuoteId) { toast('Apri prima una quote', 'warning'); return; }
+  let templates = [];
+  try {
+    templates = await api('GET', '/delivery-templates/api/list');
+  } catch(e) {
+    toast(e.message || 'Errore caricamento capitolati', 'error');
+    return;
+  }
+  const sel = document.getElementById('bp-template');
+  while (sel.firstChild) sel.removeChild(sel.firstChild);
+  const def = document.createElement('option');
+  def.value = ''; def.textContent = '— seleziona —';
+  sel.appendChild(def);
+  templates.filter(t => t.is_active !== false).forEach(t => {
+    const o = document.createElement('option');
+    o.value = t.id;
+    o.textContent = `${t.code} — ${t.name}` + (t.broadcaster ? ` (${t.broadcaster})` : '');
+    sel.appendChild(o);
+  });
+  _bpBuckets = [];
+  document.getElementById('bp-confirm').disabled = true;
+  document.getElementById('bp-count').textContent = '—';
+  const host = document.getElementById('bp-list');
+  while (host.firstChild) host.removeChild(host.firstChild);
+  const m = document.createElement('div'); m.className = 'text-muted';
+  m.style.padding = '10px'; m.textContent = 'Seleziona un capitolato per vedere le consegne.';
+  host.appendChild(m);
+  openModal('modal-bucket-picker');
+}
+
+async function onBucketTemplatePicked() {
+  const tid = document.getElementById('bp-template').value;
+  const host = document.getElementById('bp-list');
+  const btn = document.getElementById('bp-confirm');
+  while (host.firstChild) host.removeChild(host.firstChild);
+  _bpBuckets = [];
+  btn.disabled = true;
+  document.getElementById('bp-count').textContent = '—';
+  if (!tid) { return; }
+  const ld = document.createElement('div'); ld.className = 'text-muted';
+  ld.style.padding = '10px'; ld.textContent = 'Caricamento...';
+  host.appendChild(ld);
+  try {
+    const res = await api('GET', `/quotes/api/template-buckets/${tid}`);
+    _bpBuckets = res.buckets || [];
+    while (host.firstChild) host.removeChild(host.firstChild);
+    if (!_bpBuckets.length) {
+      const w = document.createElement('div'); w.style.cssText = 'padding:10px;color:var(--rose);';
+      w.textContent = 'Nessuna voce-bucket: i DeliveryItem di questo capitolato non sono linkati al listino. Lancia la migrazione bucket.';
+      host.appendChild(w);
+      return;
+    }
+    _bpBuckets.forEach((b, i) => host.appendChild(bpRow(b, i)));
+    bpUpdateCount();
+  } catch(e) {
+    while (host.firstChild) host.removeChild(host.firstChild);
+    const er = document.createElement('div'); er.style.cssText = 'padding:10px;color:var(--rose);';
+    er.textContent = e.message || 'Errore caricamento bucket';
+    host.appendChild(er);
+  }
+}
+
+function bpRow(b, i) {
+  const row = document.createElement('label');
+  row.style.cssText = 'display:flex;gap:8px;align-items:flex-start;padding:6px 8px;border-bottom:1px solid var(--border);cursor:pointer;';
+  const cb = document.createElement('input');
+  cb.type = 'checkbox'; cb.className = 'bp-cb'; cb.dataset.pid = b.price_item_id;
+  cb.style.marginTop = '3px';
+  cb.addEventListener('change', bpUpdateCount);
+  row.appendChild(cb);
+  const mid = document.createElement('div'); mid.style.flex = '1';
+  const nm = document.createElement('div');
+  const strong = document.createElement('b'); strong.textContent = b.name;
+  nm.appendChild(strong);
+  const cnt = document.createElement('span'); cnt.className = 'text-xs text-muted';
+  cnt.textContent = `  ·  ${b.item_count} item: ${b.item_names.join(', ')}`;
+  nm.appendChild(cnt);
+  mid.appendChild(nm);
+  if (b.detail_suggestion) {
+    const det = document.createElement('div'); det.className = 'text-xs text-muted';
+    det.style.cssText = 'margin-top:2px;font-style:italic;';
+    det.textContent = '↳ ' + b.detail_suggestion;
+    mid.appendChild(det);
+  }
+  row.appendChild(mid);
+  const price = document.createElement('div'); price.className = 'mono text-xs';
+  const p = b.price_list != null ? `€${(b.price_list).toFixed(0)}` : '—';
+  price.textContent = `${p}/${b.unit||''}`;
+  row.appendChild(price);
+  return row;
+}
+
+function bpToggleAll(on) {
+  document.querySelectorAll('#bp-list .bp-cb').forEach(cb => { cb.checked = on; });
+  bpUpdateCount();
+}
+
+function bpUpdateCount() {
+  const n = document.querySelectorAll('#bp-list .bp-cb:checked').length;
+  document.getElementById('bp-count').textContent = `${n} di ${_bpBuckets.length} selezionate`;
+  document.getElementById('bp-confirm').disabled = n === 0;
+}
+
+async function confirmBucketPicker() {
+  if (!currentQuoteId) return;
+  const tid = document.getElementById('bp-template').value;
+  if (!tid) return;
+  const ids = Array.from(document.querySelectorAll('#bp-list .bp-cb:checked')).map(cb => cb.dataset.pid);
+  if (!ids.length) { toast('Seleziona almeno una voce', 'warning'); return; }
+  const fd = new FormData();
+  fd.append('template_id', tid);
+  fd.append('price_level', document.getElementById('bp-level').value);
+  fd.append('section', (document.getElementById('bp-section').value || 'A').toUpperCase());
+  fd.append('with_detail', document.getElementById('bp-detail').checked ? 'true' : 'false');
+  ids.forEach(id => fd.append('price_item_ids', id));
+  document.getElementById('bp-confirm').disabled = true;
+  try {
+    const r = await fetch(`/quotes/api/${currentQuoteId}/load-from-template-items`, {
+      method: 'POST', body: fd, credentials: 'same-origin',
+    });
+    if (!r.ok) throw new Error((await r.json()).detail || 'Errore');
+    const res = await r.json();
+    closeModal('modal-bucket-picker');
+    toast(`✓ ${res.added} righe aggiunte` +
+          (res.skipped_duplicate ? ` · ${res.skipped_duplicate} duplicate` : '') +
+          (res.skipped_invalid ? ` · ${res.skipped_invalid} non valide` : ''), 'success');
+    if (typeof reloadQuote === 'function') await reloadQuote();
+  } catch(e) {
+    toast(e.message || 'Errore', 'error');
+    document.getElementById('bp-confirm').disabled = false;
   }
 }
 </script>

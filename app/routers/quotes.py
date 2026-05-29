@@ -1,7 +1,7 @@
 """Router quotazioni — ora ancorate al Progetto."""
 from fastapi import APIRouter, Depends, HTTPException, Request, Form, Response
 from fastapi.responses import HTMLResponse
-from typing import Optional
+from typing import Optional, List
 from datetime import date
 from sqlalchemy.orm import Session, joinedload
 from app.database import get_db
@@ -13,6 +13,7 @@ from app.models import (
 )
 from app.services.rbac import requires_permission
 from app.services.billing_slice_guard import assert_jcl_lock_safe
+from app.services.delivery_bucket import template_bucket_options
 from app.context import current_tenant_id
 
 router = APIRouter(prefix="/quotes", tags=["quotes"])
@@ -1850,6 +1851,123 @@ async def load_from_template(
         "subtotal": q.subtotal,
         "template_code": t.code,
         "template_name": t.name,
+    }
+
+
+@router.get("/api/template-buckets/{template_id}", dependencies=[RequireEditQuotes])
+async def template_buckets(template_id: int, db: Session = Depends(get_db)):
+    """F2 picker — voci-bucket distinte derivate dai DeliveryItem del template
+    (decisione 10). Sorgente per il picker a spunte nella quote."""
+    t = db.query(DeliveryTemplate).filter(
+        DeliveryTemplate.id == template_id,
+        DeliveryTemplate.tenant_id == current_tenant_id(),
+    ).first()
+    if not t:
+        raise HTTPException(404, "Template non trovato")
+    buckets = template_bucket_options(db, current_tenant_id(), template_id)
+    return {
+        "ok": True,
+        "template_id": t.id,
+        "template_code": t.code,
+        "template_name": t.name,
+        "buckets": buckets,
+    }
+
+
+@router.post("/api/{quote_id}/load-from-template-items", dependencies=[RequireEditQuotes])
+async def load_from_template_items(
+    quote_id: int,
+    template_id: int = Form(...),
+    price_item_ids: List[int] = Form(...),
+    price_level: PriceLevel = Form(PriceLevel.list_price),
+    section: str = Form("A"),
+    with_detail: bool = Form(True),
+    db: Session = Depends(get_db),
+):
+    """F2 — aggiunge righe quote dai bucket selezionati nel picker (decisione 2+10).
+
+    A differenza di ``load-from-template`` (statico da ``suggested_items``), le voci
+    sono il sottoinsieme spuntato dei bucket derivati dai DeliveryItem del template.
+    Se ``with_detail``, precompila ``detail`` con le note di capitolato aggregate
+    per quel bucket (piattaforma upload, naming, ecc.). Idempotente sui price_item.
+    """
+    q = db.query(Quote).options(joinedload(Quote.lines)).filter(
+        Quote.id == quote_id,
+        Quote.tenant_id == current_tenant_id(),
+    ).first()
+    if not q:
+        raise HTTPException(404, "Quote non trovata")
+    if q.status in (QuoteStatus.approved, QuoteStatus.rejected):
+        raise HTTPException(409, f"Quote in stato {q.status.value}, non modificabile")
+
+    # Mappa bucket→detail derivata dal template (validazione: solo bucket di QUESTO template).
+    options = {o["price_item_id"]: o for o in template_bucket_options(db, current_tenant_id(), template_id)}
+    if not options:
+        raise HTTPException(400, "Il template non ha voci-bucket derivabili (DeliveryItem non linkati)")
+
+    existing_pi = {l.price_item_id for l in q.lines if l.price_item_id}
+    sort_order = max((l.sort_order for l in q.lines), default=0)
+    sect = (section or "A").strip().upper()[:1] or "A"
+    sect_count = sum(1 for l in q.lines if l.section == sect)
+    added, skipped_dup, skipped_invalid = 0, 0, 0
+
+    for pid in price_item_ids:
+        opt = options.get(pid)
+        if not opt:
+            skipped_invalid += 1
+            continue
+        if pid in existing_pi:
+            skipped_dup += 1
+            continue
+        item = db.query(PriceItem).filter(
+            PriceItem.id == pid,
+            PriceItem.tenant_id == current_tenant_id(),
+            PriceItem.is_active == True,  # noqa: E712
+        ).first()
+        if not item:
+            skipped_invalid += 1
+            continue
+        price = {
+            PriceLevel.list_price: item.price_list,
+            PriceLevel.average: item.price_average,
+            PriceLevel.low: item.price_low,
+        }.get(price_level, item.price_list) or 0.0
+        sect_count += 1
+        sort_order += 10
+        line = QuoteLine(
+            quote_id=quote_id,
+            description=item.name,
+            section=sect,
+            position=f"{sect}.{sect_count}",
+            detail=(opt.get("detail_suggestion") if with_detail else None),
+            quantity=1.0,
+            unit=item.unit,
+            price_level=price_level,
+            unit_price=price,
+            allowance=0.0,
+            line_discount_pct=0.0,
+            total=0.0,
+            hardcosts=0.0,
+            price_item_id=item.id,
+            sort_order=sort_order,
+            is_optional=False,
+        )
+        db.add(line)
+        existing_pi.add(item.id)
+        added += 1
+
+    if added == 0:
+        return {"ok": True, "added": 0, "skipped_duplicate": skipped_dup,
+                "skipped_invalid": skipped_invalid,
+                "message": "Nessuna riga aggiunta (già presenti o non valide)"}
+    db.flush()
+    db.refresh(q)
+    _recalc_quote(q)
+    db.commit()
+    return {
+        "ok": True, "added": added, "skipped_duplicate": skipped_dup,
+        "skipped_invalid": skipped_invalid,
+        "quote_total": q.total_with_vat, "subtotal": q.subtotal,
     }
 
 
