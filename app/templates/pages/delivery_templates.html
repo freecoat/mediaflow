@@ -2190,6 +2190,8 @@ document.addEventListener('click', (ev) => {
 // ── Head specs extraction: TC start / Timeline segments / Audio configs ────
 async function extractHeadSpecs(tid, pane) {
   if (!tid) { toast('Nessun template attivo', 'warning'); return; }
+  // Reset stato preview precedente (evita Applica su dati stale di altro template).
+  window._headPreview = null; window._headTid = null;
   let box = document.getElementById('head-preview');
   if (!box) {
     box = document.createElement('div');
