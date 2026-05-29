@@ -74,3 +74,4 @@ tavily-python>=0.5.1
 pypdf>=5.1.0
 python-docx>=1.1.2
 PyMuPDF>=1.24
+pymupdf4llm>=0.0.17  # α.172.133 — PDF→markdown (tabelle) per estrazione capitolati testo-prima (cascata, no vision)

@@ -1198,9 +1198,14 @@ async def extract_head(tid: int, request: Request, db: Session = Depends(get_db)
     if not provider:
         raise HTTPException(400, "Nessun provider AI configurato per l'utente.")
     rendered = render_document_for_llm(path.read_bytes(), path.name)
-    parsed = extract_head_specs(
-        provider, rendered, tpl.broadcaster or tpl.code, db, current_tenant_id(),
-    )
+    try:
+        parsed = extract_head_specs(
+            provider, rendered, tpl.broadcaster or tpl.code, db, current_tenant_id(),
+        )
+    except ValueError as e:
+        # α.172.133 — es. PDF scansione (mode=vision) ma provider attivo senza
+        # vision (es. DeepSeek): messaggio chiaro 400 invece di 500 opaco.
+        raise HTTPException(400, str(e))
     return {
         "template_id": tid,
         "mode": rendered.get("mode"),

@@ -1,5 +1,12 @@
-"""v3.5.0-alpha.172.128 — Estrazione head-specs (TC/timeline/audio-config) dai
-capitolati. PDF → vision (PyMuPDF page images); docx/xlsx/txt → testo.
+"""Estrazione head-specs (TC/timeline/audio-config) dai capitolati.
+
+v3.5.0-alpha.172.133 — pipeline a CASCATA testo-prima:
+  PDF con text-layer → PyMuPDF4LLM markdown (tabelle incluse), modalità TESTO,
+    0 token-immagine, qualsiasi provider (anche DeepSeek);
+  PDF scansione (text-layer assente) → fallback VISION (page images, solo Claude);
+  docx/xlsx/txt → testo (deliverables_parser).
+PoC RAI Spec 1.4: PyMuPDF4LLM = 28/28 audio config con tracce, ~100-300x più
+economico della vision. Vision resta l'eccezione (es. BETA FILM scansione).
 """
 from __future__ import annotations
 import base64
@@ -15,13 +22,43 @@ RENDER_DPI = 150
 
 def render_document_for_llm(file_bytes: bytes, filename: str) -> dict:
     """Rende un capitolato per il consumo LLM.
-    PDF → {mode:'vision', images:[png bytes], page_count}. Altro → {mode:'text', text}.
+    PDF testo → {mode:'text', text:markdown, page_count, source:'pymupdf4llm'}.
+    PDF scansione → {mode:'vision', images:[png bytes], page_count}.
+    Altro (docx/xlsx/txt) → {mode:'text', text}.
     """
     ext = (filename.rsplit(".", 1)[-1] if "." in filename else "").lower()
     if ext == "pdf":
         import fitz
         doc = fitz.open(stream=file_bytes, filetype="pdf")
         page_count = doc.page_count
+        # α.172.133 — CASCATA testo-prima. La maggioranza dei capitolati PDF ha un
+        # text-layer completo (RAI, MUBI, Sky, NBCU, IRDA): PyMuPDF4LLM ne estrae
+        # markdown con tabelle (incl. le tabelle audio multi-canale) in modo
+        # deterministico, 0 token-immagine, e usabile con QUALSIASI provider
+        # (anche DeepSeek text-only). La vision (cara, solo Claude) resta il
+        # fallback SOLO per i PDF scansione (text-layer assente, es. BETA FILM).
+        # Detector scansione = raw text fitz (robusto: una scansione dà ~0 char,
+        # mentre il markdown pymupdf4llm aggiunge placeholder immagine fuorvianti).
+        raw_text_len = 0
+        try:
+            raw_text_len = sum(len(p.get_text().strip()) for p in doc)
+        except Exception as e:
+            logger.warning("[head-extractor] raw text probe KO %s: %s", filename, e)
+        if raw_text_len >= max(300, 25 * page_count):
+            try:
+                import pymupdf4llm
+                text_md = pymupdf4llm.to_markdown(doc) or ""
+                doc.close()
+                logger.info("[head-extractor] %s: text-layer ok (%d char) → modalità TESTO (pymupdf4llm)",
+                            filename, raw_text_len)
+                return {"mode": "text", "text": text_md, "page_count": page_count,
+                        "source": "pymupdf4llm"}
+            except Exception as e:
+                logger.warning("[head-extractor] pymupdf4llm KO %s: %s → fallback vision", filename, e)
+        else:
+            logger.info("[head-extractor] %s: text-layer scarso (%d char, %d pagine) → fallback VISION (scansione?)",
+                        filename, raw_text_len, page_count)
+        # Fallback VISION: PDF scansione o estrazione testo fallita.
         if page_count > PAGE_CAP:
             logger.warning(
                 "[head-extractor] %s ha %d pagine (> cap %d): tutte renderizzate, costo vision elevato.",

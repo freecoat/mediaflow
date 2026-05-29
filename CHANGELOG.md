@@ -1,5 +1,18 @@
 # MediaFlow — Changelog
 
+## v3.5.0-alpha.172.133 — Estrazione capitolati a cascata: testo-prima (PyMuPDF4LLM) + vision fallback (29 mag 2026)
+
+`render_document_for_llm` (`capitolato_head_extractor.py`) ora è una **pipeline a cascata**:
+- **PDF con text-layer** → PyMuPDF4LLM converte in markdown (tabelle audio multi-canale incluse) → modalità **testo**, 0 token-immagine, usabile con **qualsiasi provider** (anche DeepSeek text-only).
+- **PDF scansione** (text-layer assente) → fallback **vision** (page images, solo Claude).
+- Detector scansione = lunghezza raw-text fitz (robusto vs i placeholder-immagine del markdown).
+
+**PoC verificato** sui 6 PDF reali: 5 text (RAI/IRDA/MUBI/Sky/NBCU), 1 vision (BETA FILM scansione). E2E RAI Spec 1.4 via **DeepSeek**: **28/28 audio config** (8T01–15 + 16T01–13) con nomi/tracce + TC start, ~**$0.004 vs ~$0.5–1.5** della vision Claude. Vision diventa l'eccezione (scansioni).
+
+Endpoint `extract-head`: `ValueError` provider-non-vision su scansione → **400** chiaro (non 500). Dep: `pymupdf4llm>=0.0.17`.
+
+Nota perf: estrazione testo DeepSeek v4-flash ~191s su input grande (one-time per capitolato); valutare v4-pro / non-thinking per velocità.
+
 ## v3.5.0-alpha.172.132 — Timeline default ereditabile + fix render overlay (29 mag 2026)
 
 Struttura timeline (testa/coda) ora **visibile ed ereditata** (modello: template default → item, niente duplicazione).
