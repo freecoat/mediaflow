@@ -5,6 +5,7 @@ from app.models.models import (
     Tenant,
     Department,
     DeliveryTemplate,
+    DeliveryItem,
     Resource, ResourceType, ResourceUnavailability, UnavailabilityKind, UnavailabilityStatus, WorkingHoursPolicy,
     Holiday, HolidayKind,
     ResourcePreset,

@@ -28,6 +28,7 @@ from app.models import (
     TimePunch, Project, Client, PriceItem, PriceCategory,
     JobDeliverable, DeliverableNature, DeliverableStatus, QCSubstatus,
     PhysicalAsset, PhysicalAssetKind, Asset, DeliveryTemplate, Resource,
+    DeliveryItem,
 )
 from app.context import current_tenant_id
 from app.services.tenant_guard import scoped, fetch_or_404
@@ -718,6 +719,18 @@ async def create_deliverable(
                 raise ValueError("spec_json deve essere un oggetto JSON")
         except Exception as e:
             raise HTTPException(400, f"spec_json non valido: {e}")
+
+    # F3.1 — auto-snapshot: se è collegato un DeliveryItem e non è stato passato
+    # uno spec_json esplicito, congela le specs del capitolato nel deliverable
+    # (decoupling da edit successivi). L'item deve appartenere al tenant.
+    if spec_dict is None and delivery_item_id:
+        from app.services.delivery_snapshot import snapshot_delivery_item
+        di = db.query(DeliveryItem).filter(
+            DeliveryItem.id == delivery_item_id,
+            DeliveryItem.tenant_id == current_tenant_id(),
+        ).first()
+        if di:
+            spec_dict = snapshot_delivery_item(db, di)
 
     # Parsing target_delivery_date
     target_d = None

@@ -8,7 +8,10 @@
 
 ## Versione corrente
 
-**v3.5.0-alpha.172.136** — 29 maggio 2026 — F2 pipeline deliverables: quote picker a spunte da capitolato
+**v3.5.0-alpha.172.137** — 29 maggio 2026 — F3.1 pipeline deliverables: snapshot specs capitolato
+
+### α.172.137 ✅ (F3.1 pipeline, snapshot + smoke E2E)
+`delivery_snapshot.snapshot_delivery_item()`: congela le specs risolte di un DeliveryItem (nomi taxonomy, video/audio_tracks/subtitle/timeline eredit./extra) in dict JSON. Wire in `jobs.py` create deliverable: `delivery_item_id` presente + no spec_json → auto-snapshot (decoupling capitolato, decisione 4). `DeliveryItem` aggiunto a `app/models/__init__`. Smoke E2E OK (spec_json 16 chiavi). 5 test nuovi, 97/97. **Prossimo: F3.2** booking modal mostra tipo file (container/package)+nome item del JobDeliverable collegato; **F3.3** asset bridge (conferma deliverable→nasce/collega Asset con specs "attese" da spec_json, QC confronta via `qc_expected_for_deliverable`).
 
 ### α.172.136 ✅ (F2 pipeline, quote picker + smoke E2E Playwright)
 `delivery_bucket.template_bucket_options()`: voci-bucket distinte dai DeliveryItem del template (decisione 10) con prezzo+conteggio+note→detail. Endpoint `GET /quotes/api/template-buckets/{tid}` + `POST /quotes/api/{qid}/load-from-template-items` (aggiunge righe dal sottoinsieme spuntato, detail precompilato). UI `quotes.html`: bottone "🎯 Picker capitolato" + modal checkbox. Fix bug latente dropdown livello prezzo (`list_price`→`list`, 422 — anche vecchio `lt-level`). Smoke Playwright OK (Fremantle 21 bucket → add → righe corrette). 3 test nuovi, 92/92. **Prossimo: F3** (planning JobDeliverable snapshot in spec_json + Asset atteso + booking modal).

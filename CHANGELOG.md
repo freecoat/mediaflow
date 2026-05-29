@@ -1,5 +1,15 @@
 # MediaFlow — Changelog
 
+## v3.5.0-alpha.172.137 — F3.1 pipeline deliverables: snapshot specs capitolato nel deliverable (29 mag 2026)
+
+Terza fase pipeline, step 1. Quando si crea un JobDeliverable collegato a un DeliveryItem, le specifiche tecniche del capitolato vengono **congelate** in `spec_json` (decoupling: edit successivi al capitolato non toccano il deliverable già pianificato — decisione 4).
+
+**Service** `delivery_snapshot.snapshot_delivery_item(db, item)`: produce un dict JSON-serializzabile con le specs risolte (nomi taxonomy, non FK): container/package/media_kind, blocco video (codec/bit_depth/chroma/risoluzione/aspect/frame_rate/scan/color_space/hdr), audio_tracks (label/channel/mix_type/mix_standard/codec/sample_rate/bit_depth/is_optional), subtitle (format+languages), timeline/TC con eredità dal template (`effective_timeline`), audio_config_code, extra_specs, notes. 5 test nuovi.
+
+**Wire-up** `jobs.py` create deliverable: se `delivery_item_id` presente e nessun `spec_json` esplicito passato → auto-snapshot (tenant-scoped). `DeliveryItem` aggiunto agli export di `app/models/__init__.py`.
+
+Smoke E2E Playwright: POST create deliverable con delivery_item_id → spec_json popolato (16 chiavi, container risolto). 97/97 pytest. Prossimo: F3.2 booking modal mostra tipo file+nome item, F3.3 asset bridge (conferma→Asset atteso).
+
 ## v3.5.0-alpha.172.136 — F2 pipeline deliverables: quote picker a spunte da capitolato (29 mag 2026)
 
 Seconda fase pipeline (F1 = α.172.135). La quote ora compone le righe scegliendo **a spunte** le consegne del capitolato, dalle voci-bucket derivate live dai DeliveryItem del template (decisione 10), non più solo da `suggested_items` statico.
