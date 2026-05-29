@@ -29,10 +29,12 @@ def render_document_for_llm(file_bytes: bytes, filename: str) -> dict:
         zoom = RENDER_DPI / 72.0
         mat = fitz.Matrix(zoom, zoom)
         images = []
-        for page in doc:
-            pix = page.get_pixmap(matrix=mat)
-            images.append(pix.tobytes("png"))
-        doc.close()
+        try:
+            for page in doc:
+                pix = page.get_pixmap(matrix=mat)
+                images.append(pix.tobytes("png"))
+        finally:
+            doc.close()  # no leak del doc handle anche su errore pixmap mid-loop
         return {"mode": "vision", "images": images, "page_count": page_count}
     try:
         from app.services.deliverables_parser import extract_text_from_file
