@@ -118,7 +118,7 @@ def _user_prompt(broadcaster: str, vocab: dict, text: Optional[str] = None) -> s
 
 
 def extract_head_specs(provider, rendered: dict, broadcaster: str,
-                       db: Session, tenant_id: int, max_tokens: int = 12000) -> dict:
+                       db: Session, tenant_id: int, max_tokens: int = 32000) -> dict:
     """Chiama l'LLM (vision o testo) e ritorna il dict del contratto. No write."""
     vocab = _taxonomy_vocab(db, tenant_id)
     if rendered.get("mode") == "vision":

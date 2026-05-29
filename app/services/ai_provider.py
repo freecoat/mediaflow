@@ -394,6 +394,16 @@ class ClaudeProvider(AIProvider):
         kwargs = {"model": self.model, "max_tokens": max_tokens,
                   "temperature": temperature, "messages": messages}
         if system: kwargs["system"] = system
+        # v3.5.0-alpha.172.128 — auto-streaming >16K (come complete()): il SDK
+        # Anthropic richiede streaming per output grandi (es. estrazione
+        # head-specs vision su capitolati a molte pagine). Senza streaming
+        # l'output viene troncato → JSON non parsabile.
+        if max_tokens > 16000:
+            chunks: list[str] = []
+            with self.client.messages.stream(**kwargs) as stream:
+                for text in stream.text_stream:
+                    chunks.append(text)
+            return "".join(chunks)
         return self.client.messages.create(**kwargs).content[0].text
 
     def supports_web_search(self) -> bool:
