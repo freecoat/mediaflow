@@ -83,7 +83,12 @@ trigger (UI/batch) → `render_document_for_llm` (vision|text) → `extract_head
 1. **Inietta vocabolario taxonomy** (nomi attivi di `AudioChannelConfig`/`AudioMixType`/`MixStandard`/`AudioCodec`) → il modello mappa i termini del capitolato ai **nomi canonici**; termini non presenti → li mette comunque (nome grezzo) **e** li elenca in `suggested_taxonomy`.
 2. **TC normalizzato** HH:MM:SS:FF; prosa → estrai TC, resto in `notes`.
 3. **Vision**: istruzione esplicita a leggere le **tabelle audio riga per riga** per la mappatura per-traccia (punto debole di pypdf).
-4. **Fallback D5**: non-strutturabile → `source_notes` / `notes`.
+4. **Tabella + legenda (RAI)**: i codici RAI (8T07, 16T09…) mappano **configurazioni audio standard e diffuse**, espresse nelle tabelle del Cap. 10 tramite **sigle/abbreviazioni** spiegate in una **legenda** separata. Il prompt deve:
+   - leggere **sia la tabella sia la legenda** e fare il **cross-reference** (ogni sigla di cella → significato dalla legenda → nome canonico taxonomy);
+   - per ogni traccia restituire l'abbreviazione originale in `track_label`/`notes` **e** la mappatura espansa nei campi `channel_config`/`mix_type`/`mix_standard`;
+   - riconoscere le config standard note (5.1, stereo Lt/Rt, M&E, dialoghi, audiodescrizione, ecc.) e mapparle ai nomi taxonomy canonici.
+   - **Verifica accurata**: nell'eval manuale RAI si confronta il track_layout estratto contro la tabella+legenda del capitolato cella per cella prima di considerare il preset corretto.
+5. **Fallback D5**: non-strutturabile → `source_notes` / `notes`.
 
 ## Sezione 3 — Edge case & testing
 
@@ -100,7 +105,7 @@ trigger (UI/batch) → `render_document_for_llm` (vision|text) → `extract_head
   - `apply_head_specs`: idempotenza (create→update preset, niente duplicati); setta TC/timeline; **preview vuota non azzera**; track_layout name-keys preservati; `suggested_taxonomy` ritornato.
   - `render_document_for_llm`: mode `vision` per `.pdf`, `text` per `.docx/.txt/.xlsx`; `page_count` corretto.
   - normalizzazione TC (prosa → HH:MM:SS:FF | null).
-- **Estrazione LLM**: non deterministica → test del layer `apply` con dict fisso; **eval manuale** su RAI/Vision/Sky (preview validata da Matteo).
+- **Estrazione LLM**: non deterministica → test del layer `apply` con dict fisso; **eval manuale** su RAI/Vision/Sky. Per RAI in particolare: **confronto cella-per-cella** del track_layout estratto contro **tabella Cap. 10 + legenda** del capitolato (le sigle devono essere espanse correttamente); il preset si considera valido solo dopo questa verifica.
 
 ## Convenzioni rispettate
 - Tenant scope + RBAC (RequireEdit) sugli endpoint mutator.
