@@ -1219,7 +1219,12 @@ async def apply_head(
     """Applica il parsed dict di head specs al DeliveryTemplate (idempotente).
     payload_json: JSON string con le stesse chiavi restituite da extract-head preview."""
     from app.services.capitolato_head_extractor import apply_head_specs
-    parsed = json.loads(payload_json)
+    try:
+        parsed = json.loads(payload_json)
+    except (ValueError, TypeError):
+        raise HTTPException(400, "payload_json non è JSON valido")
+    if not isinstance(parsed, dict):
+        raise HTTPException(400, "payload_json deve essere un oggetto JSON")
     summary = apply_head_specs(db, tid, parsed, current_tenant_id())
     # audit best-effort
     try:
