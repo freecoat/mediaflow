@@ -82,3 +82,34 @@ def test_apply_empty_preview_does_not_wipe(db, tenant_id):
     apply_head_specs(db, t.id, {"default_tc_start": None, "timeline_segments": [], "audio_config_codes": []}, tenant_id)
     db.flush(); db.refresh(t)
     assert t.default_tc_start == "00:59:59:00"
+
+
+# ── Task 4: alias reconciliation ─────────────────────────────────────────────
+
+from app.services.capitolato_head_extractor import _apply_alias_mapping
+
+
+def test_apply_alias_mapping_rewrites_and_prunes():
+    parsed = {
+        "audio_config_codes": [
+            {"code": "X", "tracks": [
+                {"track_label": "T1", "mix_type": "IT mix", "channel_config": "5.1"},
+                {"track_label": "T2", "mix_type": "M&E", "channel_config": "Stereo"},
+            ]},
+        ],
+        "suggested_taxonomy": [
+            {"kind": "mix_type", "name": "IT mix", "seen_as": "IT"},
+            {"kind": "mix_type", "name": "Foley Stem", "seen_as": "foley"},
+        ],
+    }
+    # mapping says "IT mix" (mix_type) is an alias of canonical "M&E"; "Foley Stem" is NEW
+    mapping = {("mix_type", "IT mix"): "M&E"}
+    report = _apply_alias_mapping(parsed, mapping)
+    # track field rewritten to canonical
+    assert parsed["audio_config_codes"][0]["tracks"][0]["mix_type"] == "M&E"
+    # aliased suggested term pruned; genuinely-new kept
+    names = [s["name"] for s in parsed["suggested_taxonomy"]]
+    assert "IT mix" not in names
+    assert "Foley Stem" in names
+    assert report["mapped"] == [{"kind": "mix_type", "name": "IT mix", "canonical": "M&E"}]
+    assert any(s["name"] == "Foley Stem" for s in report["new"])

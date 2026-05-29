@@ -144,7 +144,13 @@ def extract_head_specs(provider, rendered: dict, broadcaster: str,
     else:
         user = _user_prompt(broadcaster, vocab, text=(rendered.get("text") or "")[:120000])
         raw = provider.complete(_SYS_PROMPT, user, max_tokens=max_tokens, temperature=0.1)
-    return _parse_head_json(raw)
+    parsed = _parse_head_json(raw)
+    # v3.5.0-alpha.172.128 — pass di riconciliazione alias (M&E=IT mix=IT, ecc.)
+    try:
+        reconcile_taxonomy_aliases(provider, parsed, db, tenant_id)
+    except Exception:
+        pass
+    return parsed
 
 
 # ── apply_head_specs (Task 3) ─────────────────────────────────────────────────
@@ -217,3 +223,76 @@ def apply_head_specs(db: Session, template_id: int, parsed: dict, tenant_id: int
         "presets_updated": updated,
         "suggested_taxonomy": parsed.get("suggested_taxonomy") or [],
     }
+
+
+# ── Alias reconciliation (LLM cross-reference) ────────────────────────────────
+
+_ALIAS_FIELDS = ("channel_config", "mix_type", "mix_standard", "codec")
+
+
+def _apply_alias_mapping(parsed: dict, mapping: dict) -> dict:
+    """Applica un mapping {(kind, raw_name) -> canonical_name} al parsed:
+    - riscrive i campi traccia (channel_config/mix_type/mix_standard/codec) il cui
+      valore == raw_name al nome canonico;
+    - rimuove da suggested_taxonomy le voci (kind,name) che risultano alias (mappate),
+      tenendo solo le genuinamente nuove.
+    Ritorna {"mapped":[{kind,name,canonical}], "new":[<suggested rimasti>]}.
+    """
+    # rewrite track fields
+    for code in parsed.get("audio_config_codes") or []:
+        for tr in code.get("tracks") or []:
+            for kind in _ALIAS_FIELDS:
+                val = tr.get(kind)
+                if val is not None and (kind, val) in mapping:
+                    tr[kind] = mapping[(kind, val)]
+    # prune suggested_taxonomy
+    mapped, new = [], []
+    for s in parsed.get("suggested_taxonomy") or []:
+        key = (s.get("kind"), s.get("name"))
+        if key in mapping:
+            mapped.append({"kind": s.get("kind"), "name": s.get("name"),
+                           "canonical": mapping[key]})
+        else:
+            new.append(s)
+    parsed["suggested_taxonomy"] = new
+    return {"mapped": mapped, "new": new}
+
+
+def reconcile_taxonomy_aliases(provider, parsed: dict, db, tenant_id: int) -> dict:
+    """Cross-reference LLM: per ogni voce suggested_taxonomy decide se è sinonimo
+    di una canonica esistente (es. 'IT mix' -> 'M&E') o genuinamente nuova. Applica
+    il mapping (rewrite tracce + prune suggested). Best-effort: errori non rompono.
+    Ritorna il report di _apply_alias_mapping (o {"mapped":[],"new":[...]} se no-op)."""
+    suggested = parsed.get("suggested_taxonomy") or []
+    if not suggested:
+        return {"mapped": [], "new": []}
+    vocab = _taxonomy_vocab(db, tenant_id)
+    try:
+        import json as _json
+        sys_p = (
+            "Sei un esperto di terminologia audio di post-produzione. Per ogni TERMINE "
+            "dato, decidi se è solo un NOME DIVERSO di una delle voci CANONICHE della "
+            "stessa categoria (sinonimo/alias, es. 'IT mix'='IT'='M&E'; 'Music & Effects'='M&E'). "
+            "Rispondi SOLO JSON: una lista di {\"kind\":\"\",\"name\":\"\",\"canonical\":\"<nome canonico esatto OPPURE NEW>\"}. "
+            "Usa il nome canonico ESATTO dalla lista fornita se è un alias; 'NEW' se è "
+            "davvero un concetto nuovo non presente."
+        )
+        lines = ["CANONICHE per categoria:"]
+        for k in _ALIAS_FIELDS:
+            lines.append(f"  {k}: {vocab.get(k, [])}")
+        lines.append("TERMINI da classificare:")
+        for s in suggested:
+            lines.append(f"  - kind={s.get('kind')} name={s.get('name')!r} (visto come {s.get('seen_as')!r})")
+        raw = provider.complete(sys_p, "\n".join(lines), max_tokens=2000, temperature=0.0)
+        decisions = _parse_head_json(raw)
+        if isinstance(decisions, dict):
+            decisions = decisions.get("items") or decisions.get("decisions") or []
+        mapping = {}
+        for d in (decisions or []):
+            kind = d.get("kind"); name = d.get("name"); canon = d.get("canonical")
+            if kind and name and canon and canon != "NEW" and canon in vocab.get(kind, []):
+                mapping[(kind, name)] = canon
+        return _apply_alias_mapping(parsed, mapping)
+    except Exception as e:
+        logger.warning("[head-extractor] reconcile_taxonomy_aliases failed: %s", e)
+        return {"mapped": [], "new": suggested}
