@@ -145,3 +145,75 @@ def extract_head_specs(provider, rendered: dict, broadcaster: str,
         user = _user_prompt(broadcaster, vocab, text=(rendered.get("text") or "")[:120000])
         raw = provider.complete(_SYS_PROMPT, user, max_tokens=max_tokens, temperature=0.1)
     return _parse_head_json(raw)
+
+
+# ── apply_head_specs (Task 3) ─────────────────────────────────────────────────
+
+import re as _re
+
+_TC_RE = _re.compile(r"\b(\d{1,2}:\d{2}:\d{2}[:;.]\d{2})\b")
+
+
+def _clean_tc(raw):
+    """Estrae un TC ben formato HH:MM:SS:FF dalla stringa grezza. Prosa/None → None."""
+    if not raw:
+        return None
+    m = _TC_RE.search(str(raw))
+    return m.group(1) if m else None
+
+
+def apply_head_specs(db: Session, template_id: int, parsed: dict, tenant_id: int) -> dict:
+    """Idempotente. Setta i default_* del template SOLO se presenti nella preview
+    (preview vuota non azzera) e fa upsert degli AudioConfigPreset per (template, code).
+    NON crea voci taxonomy. Ritorna riepilogo. NON committa (il caller decide)."""
+    from app.models.models import DeliveryTemplate, AudioConfigPreset
+    tpl = db.query(DeliveryTemplate).filter(
+        DeliveryTemplate.id == template_id,
+        DeliveryTemplate.tenant_id == tenant_id).first()
+    if not tpl:
+        raise ValueError("template non trovato")
+
+    tc = _clean_tc(parsed.get("default_tc_start"))
+    pg = _clean_tc(parsed.get("default_program_start"))
+    segs = parsed.get("timeline_segments") or []
+    tc_set = pg_set = False
+    if tc:
+        tpl.default_tc_start = tc
+        tc_set = True
+    if pg:
+        tpl.default_program_start = pg
+        pg_set = True
+    if segs:
+        tpl.default_timeline_segments = segs
+
+    created = updated = 0
+    for code_def in parsed.get("audio_config_codes") or []:
+        code = (code_def.get("code") or "").strip()
+        if not code:
+            continue
+        preset = db.query(AudioConfigPreset).filter(
+            AudioConfigPreset.delivery_template_id == template_id,
+            AudioConfigPreset.code == code).first()
+        if preset:
+            preset.name = code_def.get("name") or preset.name
+            preset.description = code_def.get("description") or preset.description
+            preset.track_layout = code_def.get("tracks") or preset.track_layout
+            updated += 1
+        else:
+            db.add(AudioConfigPreset(
+                tenant_id=tenant_id,
+                delivery_template_id=template_id,
+                code=code,
+                name=code_def.get("name") or code,
+                description=code_def.get("description"),
+                track_layout=code_def.get("tracks") or [],
+            ))
+            created += 1
+    return {
+        "tc_set": tc_set,
+        "program_set": pg_set,
+        "segments_n": len(segs),
+        "presets_created": created,
+        "presets_updated": updated,
+        "suggested_taxonomy": parsed.get("suggested_taxonomy") or [],
+    }

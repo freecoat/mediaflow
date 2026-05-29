@@ -25,3 +25,60 @@ def test_parse_head_json_tolerant():
 def test_parse_head_json_garbage_returns_empty():
     d = _parse_head_json("non sono json")
     assert d == {}
+
+
+# ── Task 3: apply_head_specs ──────────────────────────────────────────────────
+
+from app.services.capitolato_head_extractor import apply_head_specs
+
+
+def _tpl(db, tenant_id, code="RAI-AP"):
+    from app.models.models import DeliveryTemplate
+    t = DeliveryTemplate(tenant_id=tenant_id, code=code, name=code)
+    db.add(t); db.flush()
+    return t
+
+
+def test_apply_sets_defaults_and_creates_presets(db, tenant_id):
+    from app.models.models import AudioConfigPreset
+    t = _tpl(db, tenant_id)
+    parsed = {
+        "default_tc_start": "00:59:59:00", "default_program_start": "01:00:00:00",
+        "timeline_segments": [{"order": 1, "kind": "bars_tone", "label": "barre"}],
+        "audio_config_codes": [
+            {"code": "8T07", "name": "8 tracce", "tracks": [{"track_label": "T1", "channel_config": "5.1"}]},
+        ],
+        "suggested_taxonomy": [{"kind": "mix_type", "name": "Audiodescrizione", "seen_as": "AD"}],
+    }
+    out = apply_head_specs(db, t.id, parsed, tenant_id)
+    db.flush(); db.refresh(t)
+    assert t.default_tc_start == "00:59:59:00"
+    assert t.default_program_start == "01:00:00:00"
+    assert t.default_timeline_segments[0]["kind"] == "bars_tone"
+    p = db.query(AudioConfigPreset).filter(
+        AudioConfigPreset.delivery_template_id == t.id, AudioConfigPreset.code == "8T07").first()
+    assert p is not None and p.track_layout[0]["channel_config"] == "5.1"
+    assert out["presets_created"] == 1
+    assert out["suggested_taxonomy"] == parsed["suggested_taxonomy"]
+
+
+def test_apply_is_idempotent_upsert(db, tenant_id):
+    from app.models.models import AudioConfigPreset
+    t = _tpl(db, tenant_id, code="RAI-AP2")
+    parsed = {"audio_config_codes": [{"code": "8T07", "name": "v1", "tracks": []}]}
+    apply_head_specs(db, t.id, parsed, tenant_id); db.flush()
+    parsed["audio_config_codes"][0]["name"] = "v2"
+    out = apply_head_specs(db, t.id, parsed, tenant_id); db.flush()
+    presets = db.query(AudioConfigPreset).filter(
+        AudioConfigPreset.delivery_template_id == t.id, AudioConfigPreset.code == "8T07").all()
+    assert len(presets) == 1
+    assert presets[0].name == "v2"
+    assert out["presets_updated"] == 1 and out["presets_created"] == 0
+
+
+def test_apply_empty_preview_does_not_wipe(db, tenant_id):
+    t = _tpl(db, tenant_id, code="RAI-AP3")
+    t.default_tc_start = "00:59:59:00"; db.flush()
+    apply_head_specs(db, t.id, {"default_tc_start": None, "timeline_segments": [], "audio_config_codes": []}, tenant_id)
+    db.flush(); db.refresh(t)
+    assert t.default_tc_start == "00:59:59:00"
