@@ -471,6 +471,7 @@ async function doSaveTemplate() {
 }
 
 let _currentTemplate = null;
+let _edtTl = null;  // α.172.132 — istanza editor timeline default del template
 let _currentSuggested = [];
 let _allPriceItems = [];
 
@@ -776,8 +777,28 @@ async function openDetail(tid) {
         <div><label style="font-size:11px;color:var(--text3);text-transform:uppercase;letter-spacing:.05em;">Program Start default</label>
           <input class="form-input" id="edt-default-program-start" value="${escapeHtml(t.default_program_start||'')}" placeholder="es. 01:00:00:00" style="font-family:var(--font-mono);"></div>
       </div>
+      <div style="margin-top:8px;">
+        <label id="edt-tl-label" style="font-size:11px;color:var(--text3);text-transform:uppercase;letter-spacing:.05em;display:block;">Timeline default (testa/coda) — ereditata dagli item</label>
+        <div id="edt-tl-content">
+          <div id="edt-timeline-segments" style="margin-top:4px;"></div>
+          <button type="button" class="btn btn-ghost btn-sm" id="edt-add-seg" style="margin-top:6px;font-size:11px;padding:2px 8px;">+ Segmento</button>
+        </div>
+      </div>
     `;
     body.appendChild(headBox);
+    // α.172.132 — editor timeline default del template (riusa la factory; popolato
+    // da extract-head o editabile a mano). Salvato in saveTemplate().
+    _edtTl = makeTimelineSegmentEditor(document.getElementById('edt-timeline-segments'), t.default_timeline_segments || []);
+    _edtTl.render();
+    const _edtAddSeg = document.getElementById('edt-add-seg');
+    if (_edtAddSeg) _edtAddSeg.onclick = () => _edtTl.add();
+    // α.172.132 — collapse/expand timeline default (collassata di default per non
+    // ingombrare l'header; click sul titolo per espandere).
+    const _edtTlLabel = document.getElementById('edt-tl-label');
+    const _edtTlContent = document.getElementById('edt-tl-content');
+    if (_edtTlLabel && _edtTlContent) {
+      _edtTlLabel.insertBefore(_attachCollapse(_edtTlLabel, [_edtTlContent], true), _edtTlLabel.firstChild);
+    }
 
     // Tabs bar
     const tabsBar = document.createElement('div');
@@ -975,59 +996,98 @@ function renderItemsPane(pane, tid) {
 }
 
 // ── Timeline segments helpers (v3.5.0-alpha.172.128) ──────────────────────
-let _tlSegments = [];
-function renderTimelineSegments(segs) {
-  _tlSegments = Array.isArray(segs) ? segs.slice() : [];
-  const box = document.getElementById('item-timeline-segments');
-  if (!box) return;
-  const kinds = ['bars_tone','slate','countdown','counter','black','program','textless','logo','main_titles','tail','other'];
-  const rows = _tlSegments.map((s, i) => {
-    const kindOpts = kinds.map(k => `<option${s.kind===k?' selected':''}>${k}</option>`).join('');
-    const d = document.createElement('div');
-    d.className = 'tl-seg';
-    d.dataset.idx = i;
-    d.style.cssText = 'display:flex;gap:4px;margin-bottom:4px;flex-wrap:wrap;align-items:center;';
-    d.innerHTML = `<select class="tl-kind" style="font-size:12px;background:var(--bg2);color:var(--text);border:1px solid var(--border);border-radius:4px;padding:2px 4px;">${kindOpts}</select>`
-      + `<input class="tl-label" value="${escapeHtml(s.label||'')}" placeholder="label" style="width:80px;font-size:12px;">`
-      + `<input class="tl-tcin"  value="${escapeHtml(s.tc_in||'')}" placeholder="tc in" style="width:90px;font-size:12px;">`
-      + `<input class="tl-tcout" value="${escapeHtml(s.tc_out||'')}" placeholder="tc out" style="width:90px;font-size:12px;">`
-      + `<input class="tl-reel"  value="${escapeHtml(s.reel||'')}" placeholder="reel" style="width:56px;font-size:12px;">`
-      + `<input class="tl-source" value="${escapeHtml(s.source||'')}" placeholder="source" style="width:80px;font-size:12px;">`;
-    const rmBtn = document.createElement('button');
-    rmBtn.type = 'button';
-    rmBtn.className = 'btn btn-ghost btn-sm';
-    rmBtn.style.cssText = 'padding:1px 6px;font-size:11px;color:#ef4444;';
-    rmBtn.textContent = '✕';
-    rmBtn.dataset.rmIdx = i;
-    rmBtn.onclick = () => { removeTimelineSegment(parseInt(rmBtn.dataset.rmIdx, 10)); };
-    d.appendChild(rmBtn);
-    return d;
+// α.172.132 — Editor segmenti timeline RIUSABILE (instance-based). Usato sia
+// dall'item editor (#item-timeline-segments) sia dal template editor
+// (#edt-timeline-segments). Sostituisce il vecchio singleton globale _tlSegments
+// (un solo #item-timeline-segments in pagina → i due editor non potevano coesistere).
+// opts.readOnly: rende i campi disabilitati (es. segmenti ereditati dal template).
+const _TL_KINDS = ['bars_tone','slate','countdown','counter','black','program','textless','logo','main_titles','tail','other'];
+// container: ELEMENTO o id. Usiamo SEMPRE il riferimento elemento (mai
+// document.getElementById in render/collect) così l'editor funziona anche quando
+// il contenitore è in un overlay non ancora attaccato al DOM (caso item editor:
+// montato prima di document.body.appendChild(ov)) e non c'è cross-contaminazione
+// tra due editor con la stessa classe .tl-seg aperti insieme (header + item).
+function makeTimelineSegmentEditor(container, initialSegs, opts) {
+  opts = opts || {};
+  const readOnly = !!opts.readOnly;
+  const box = (typeof container === 'string') ? document.getElementById(container) : container;
+  let segs = Array.isArray(initialSegs) ? initialSegs.slice() : [];
+  function collect() {
+    if (readOnly) return segs.slice();
+    if (!box) return segs.slice();
+    const rows = box.querySelectorAll('.tl-seg');
+    segs = Array.from(rows).map((r, i) => ({
+      order: i + 1,
+      kind:   r.querySelector('.tl-kind').value,
+      label:  r.querySelector('.tl-label').value || null,
+      tc_in:  r.querySelector('.tl-tcin').value  || null,
+      tc_out: r.querySelector('.tl-tcout').value || null,
+      reel:   r.querySelector('.tl-reel').value  || null,
+      source: r.querySelector('.tl-source').value|| null,
+    }));
+    return segs;
+  }
+  function render() {
+    if (!box) return;
+    while (box.firstChild) box.removeChild(box.firstChild);
+    if (!segs.length) {
+      const empty = document.createElement('div');
+      empty.style.cssText = 'font-size:11px;color:var(--text3);font-style:italic;';
+      empty.textContent = '— nessun segmento —';
+      box.appendChild(empty);
+      return;
+    }
+    const dis = readOnly ? ' disabled' : '';
+    segs.forEach((s, i) => {
+      const kindOpts = _TL_KINDS.map(k => `<option${s.kind===k?' selected':''}>${k}</option>`).join('');
+      const d = document.createElement('div');
+      d.className = 'tl-seg';
+      d.dataset.idx = i;
+      d.style.cssText = 'display:flex;gap:4px;margin-bottom:4px;flex-wrap:wrap;align-items:center;';
+      d.innerHTML = `<select class="tl-kind" style="font-size:12px;background:var(--bg2);color:var(--text);border:1px solid var(--border);border-radius:4px;padding:2px 4px;"${dis}>${kindOpts}</select>`
+        + `<input class="tl-label" value="${escapeHtml(s.label||'')}" placeholder="label" style="width:80px;font-size:12px;"${dis}>`
+        + `<input class="tl-tcin"  value="${escapeHtml(s.tc_in||'')}" placeholder="tc in" style="width:90px;font-size:12px;"${dis}>`
+        + `<input class="tl-tcout" value="${escapeHtml(s.tc_out||'')}" placeholder="tc out" style="width:90px;font-size:12px;"${dis}>`
+        + `<input class="tl-reel"  value="${escapeHtml(s.reel||'')}" placeholder="reel" style="width:56px;font-size:12px;"${dis}>`
+        + `<input class="tl-source" value="${escapeHtml(s.source||'')}" placeholder="source" style="width:80px;font-size:12px;"${dis}>`;
+      if (!readOnly) {
+        const rmBtn = document.createElement('button');
+        rmBtn.type = 'button';
+        rmBtn.className = 'btn btn-ghost btn-sm';
+        rmBtn.style.cssText = 'padding:1px 6px;font-size:11px;color:#ef4444;';
+        rmBtn.textContent = '✕';
+        rmBtn.onclick = () => { collect(); segs.splice(i, 1); render(); };
+        d.appendChild(rmBtn);
+      }
+      box.appendChild(d);
+    });
+  }
+  function add() {
+    collect();
+    segs.push({order: segs.length + 1, kind:'bars_tone', label:'', tc_in:'', tc_out:'', reel:'', source:''});
+    render();
+  }
+  return { render, collect, add, get: () => segs.slice() };
+}
+
+// α.172.132 — collapse/expand riusabile. Aggiunge un caret cliccabile su headerEl
+// e mostra/nasconde contentEls. Ritorna il caret (il chiamante lo posiziona).
+function _attachCollapse(headerEl, contentEls, startCollapsed) {
+  const caret = document.createElement('span');
+  caret.style.cssText = 'cursor:pointer;user-select:none;margin-right:6px;display:inline-block;width:10px;';
+  let isC = !!startCollapsed;
+  headerEl.style.cursor = 'pointer';
+  function apply() {
+    caret.textContent = isC ? '▸' : '▾';
+    contentEls.forEach(e => { if (e) e.style.display = isC ? 'none' : ''; });
+  }
+  headerEl.addEventListener('click', (ev) => {
+    // non collassare se si clicca un bottone/input dentro l'header
+    if (ev.target.closest('button,input,select')) return;
+    isC = !isC; apply();
   });
-  while (box.firstChild) box.removeChild(box.firstChild);
-  rows.forEach(r => box.appendChild(r));
-}
-function addTimelineSegment() {
-  collectTimelineSegments();
-  _tlSegments.push({order:_tlSegments.length+1, kind:'bars_tone', label:'', tc_in:'', tc_out:'', reel:'', source:''});
-  renderTimelineSegments(_tlSegments);
-}
-function removeTimelineSegment(i) {
-  collectTimelineSegments();
-  _tlSegments.splice(i, 1);
-  renderTimelineSegments(_tlSegments);
-}
-function collectTimelineSegments() {
-  const rows = document.querySelectorAll('#item-timeline-segments .tl-seg');
-  _tlSegments = Array.from(rows).map((r, i) => ({
-    order: i + 1,
-    kind:   r.querySelector('.tl-kind').value,
-    label:  r.querySelector('.tl-label').value || null,
-    tc_in:  r.querySelector('.tl-tcin').value  || null,
-    tc_out: r.querySelector('.tl-tcout').value || null,
-    reel:   r.querySelector('.tl-reel').value  || null,
-    source: r.querySelector('.tl-source').value|| null,
-  }));
-  return _tlSegments;
+  apply();
+  return caret;
 }
 
 // Modal editor item (create/edit) — usa modal interno overlay
@@ -1151,6 +1211,8 @@ async function openItemEditor(item, tid) {
 
   const eff = itemFull.effective_timeline || {};
   const tcInhText = (!v.tc_start && eff.tc_start) ? `ereditato: ${eff.tc_start}` : '';
+  // α.172.132 — istanza editor timeline item + flag stato ereditato (visibili al save).
+  let itemTl = null, itemTlInherited = false;
 
   const tlGrid = document.createElement('div');
   tlGrid.style.cssText = 'display:grid;grid-template-columns:1fr 1fr;gap:10px;';
@@ -1168,27 +1230,62 @@ async function openItemEditor(item, tid) {
   tlSec.appendChild(tlGrid);
 
   const tlSegLabel = document.createElement('div');
-  tlSegLabel.style.cssText = 'font-size:11px;color:var(--text3);text-transform:uppercase;margin-top:10px;margin-bottom:4px;';
-  tlSegLabel.textContent = 'Timeline (testa/coda)';
+  tlSegLabel.style.cssText = 'font-size:11px;color:var(--text3);text-transform:uppercase;margin-top:10px;margin-bottom:4px;display:flex;justify-content:space-between;align-items:center;gap:8px;';
+  const tlSegLabelTxt = document.createElement('span');
+  tlSegLabelTxt.textContent = 'Timeline (testa/coda)';
+  tlSegLabel.appendChild(tlSegLabelTxt);
+  const tlInhBadge = document.createElement('span');
+  tlInhBadge.style.cssText = 'font-size:10px;color:#fbbf24;text-transform:none;font-weight:600;';
+  tlSegLabel.appendChild(tlInhBadge);
   tlSec.appendChild(tlSegLabel);
 
   const tlSegBox = document.createElement('div');
   tlSegBox.id = 'item-timeline-segments';
   tlSec.appendChild(tlSegBox);
 
+  const tlBtnRow = document.createElement('div');
+  tlBtnRow.style.cssText = 'margin-top:6px;display:flex;gap:6px;';
+  tlSec.appendChild(tlBtnRow);
   const addSegBtn = document.createElement('button');
   addSegBtn.type = 'button';
   addSegBtn.className = 'btn btn-ghost btn-sm';
-  addSegBtn.style.cssText = 'margin-top:6px;font-size:11px;padding:2px 8px;';
+  addSegBtn.style.cssText = 'font-size:11px;padding:2px 8px;';
   addSegBtn.textContent = '+ Segmento';
-  addSegBtn.onclick = addTimelineSegment;
-  tlSec.appendChild(addSegBtn);
+  tlBtnRow.appendChild(addSegBtn);
+  const overrideBtn = document.createElement('button');
+  overrideBtn.type = 'button';
+  overrideBtn.className = 'btn btn-ghost btn-sm';
+  overrideBtn.style.cssText = 'font-size:11px;padding:2px 8px;';
+  overrideBtn.textContent = '📋 Copia timeline dal template';
+  overrideBtn.title = 'Copia i segmenti ereditati dal template come override editabile su questo item';
+  tlBtnRow.appendChild(overrideBtn);
 
   box.appendChild(tlSec);
 
-  // Populate timeline segments async
-  _tlSegments = [];
-  renderTimelineSegments(v.timeline_segments || []);
+  // α.172.132 — collapse/expand della sezione timeline (caret nel titolo).
+  tlSegLabel.insertBefore(_attachCollapse(tlSegLabel, [tlSegBox, tlBtnRow], false), tlSegLabel.firstChild);
+
+  // α.172.132 — Eredità timeline: se l'item non ha segmenti propri ma il template
+  // ne ha (effective_timeline.timeline_segments_inherited), mostriamo gli ereditati
+  // READ-ONLY (niente duplicazione su DB) finché l'utente non fa "Override".
+  // In stato ereditato il save invia [] → item.timeline_segments resta NULL → eredita.
+  const _ownSegs = (v.timeline_segments && v.timeline_segments.length) ? v.timeline_segments : null;
+  const _effSegs = (eff.timeline_segments && eff.timeline_segments.length) ? eff.timeline_segments : [];
+  function _mountItemTl(readOnly, initial) {
+    itemTlInherited = readOnly;
+    itemTl = makeTimelineSegmentEditor(tlSegBox, initial, {readOnly});
+    itemTl.render();
+    addSegBtn.style.display = readOnly ? 'none' : '';
+    overrideBtn.style.display = readOnly ? '' : 'none';
+    tlInhBadge.textContent = readOnly ? '↳ ereditato dal template (read-only)' : '';
+  }
+  addSegBtn.onclick = () => itemTl.add();
+  overrideBtn.onclick = () => _mountItemTl(false, _effSegs);  // copia editabile dagli ereditati
+  if (!_ownSegs && eff.timeline_segments_inherited && _effSegs.length) {
+    _mountItemTl(true, _effSegs);     // ereditato read-only
+  } else {
+    _mountItemTl(false, _ownSegs || []);  // propri editabili (o vuoto)
+  }
 
   // Audio tracks sub-section (α.172.130: audio config preset spostato qui da
   // Timeline&TC + applicazione reattiva — le tracce si aggiornano alla selezione
@@ -1411,10 +1508,12 @@ async function openItemEditor(item, tid) {
     if (qty) fd.append('suggested_qty', qty);
     fd.append('notes', document.getElementById('dli-notes').value.trim());
     // v3.5.0-alpha.172.128 — Timeline & TC fields
-    collectTimelineSegments();
     fd.append('tc_start', document.getElementById('item-tc-start').value);
     fd.append('program_start', document.getElementById('item-program-start').value);
-    fd.append('timeline_segments_json', JSON.stringify(_tlSegments));
+    // α.172.132 — se in stato "ereditato" (read-only), invia [] così l'item resta
+    // senza segmenti propri e continua a ereditare dal template. Altrimenti i propri.
+    const _tlOut = itemTlInherited ? [] : (itemTl ? itemTl.collect() : []);
+    fd.append('timeline_segments_json', JSON.stringify(_tlOut));
     const audioConfigSel = document.getElementById('item-audio-config');
     if (audioConfigSel) fd.append('audio_config_preset_id', audioConfigSel.value);
     try {
@@ -1733,6 +1832,8 @@ async function saveEditedTemplate() {
   if (edtDtc) fd.append('default_tc_start', edtDtc.value);
   const edtDps = document.getElementById('edt-default-program-start');
   if (edtDps) fd.append('default_program_start', edtDps.value);
+  // α.172.132 — timeline default del template (gli item la ereditano).
+  if (_edtTl) fd.append('default_timeline_segments', JSON.stringify(_edtTl.collect()));
   // 8 blocchi: ricostruisci ogni blocco dal DOM e invia JSON-stringified.
   const blocksHost = document.getElementById('edt-blocks-host');
   for (const [key, _lbl] of BLOCK_DEFS) {

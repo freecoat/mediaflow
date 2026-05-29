@@ -60,6 +60,8 @@ def _dt_dict(t: DeliveryTemplate) -> dict:
         # v3.5.0-alpha.172.128 — TC defaults
         "default_tc_start": t.default_tc_start,
         "default_program_start": t.default_program_start,
+        # v3.5.0-alpha.172.132 — struttura timeline default (ereditata dagli item)
+        "default_timeline_segments": t.default_timeline_segments or [],
     }
 
 
@@ -661,6 +663,8 @@ async def update_template(
     # v3.5.0-alpha.172.128 — TC defaults
     default_tc_start: Optional[str] = Form(None),
     default_program_start: Optional[str] = Form(None),
+    # v3.5.0-alpha.172.132 — struttura timeline default
+    default_timeline_segments: Optional[str] = Form(None),
     db: Session = Depends(get_db),
 ):
     t = db.query(DeliveryTemplate).filter(
@@ -707,6 +711,10 @@ async def update_template(
     # v3.5.0-alpha.172.128
     if default_tc_start is not None: t.default_tc_start = default_tc_start.strip() or None
     if default_program_start is not None: t.default_program_start = default_program_start.strip() or None
+    # v3.5.0-alpha.172.132 — timeline default (lista segmenti, stessa shape di item.timeline_segments)
+    if default_timeline_segments is not None:
+        v = _parse_list(default_timeline_segments)
+        t.default_timeline_segments = v if v else None
     db.commit()
     db.refresh(t)
     return _dt_dict(t)

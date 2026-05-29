@@ -1,5 +1,20 @@
 # MediaFlow — Changelog
 
+## v3.5.0-alpha.172.132 — Timeline default ereditabile + fix render overlay (29 mag 2026)
+
+Struttura timeline (testa/coda) ora **visibile ed ereditata** (modello: template default → item, niente duplicazione).
+
+**Backend** (`delivery_templates.py`): serializer + PUT gestiscono `default_timeline_segments`.
+
+**Frontend** (`delivery_templates.html`):
+- **Bugfix critico**: `makeTimelineSegmentEditor` ora usa il **riferimento elemento** (non `document.getElementById` su id condiviso). L'item editor montava i segmenti *prima* di `document.body.appendChild(ov)` → `getElementById` su overlay staccato ritornava null → 0 righe (i segmenti ereditati non apparivano, e il save item li perdeva). Risolto + elimina cross-contaminazione tra editor header e item aperti insieme.
+- **Template editor**: editor "Timeline default (testa/coda)" nell'header (vedi/correggi i segmenti estratti da extract-head; salvati sul template). Collassato di default.
+- **Item editor — eredità**: se l'item non ha segmenti propri ma il template sì → mostra gli ereditati **read-only** + badge "↳ ereditato dal template" + bottone **"📋 Copia timeline dal template"** (override editabile). Save in stato ereditato invia `[]` → l'item resta a ereditare (nessuna duplicazione DB).
+- **Refactor**: widget segmenti da singleton globale (`_tlSegments` + `#item-timeline-segments` unico) a **factory instance-based** riusabile (item + template coesistono).
+- **Collapse/expand** della sezione timeline sia nell'header template sia nell'item editor.
+
+Verificato E2E via browser (Playwright): persistenza template, render ereditato read-only, copia→editabile→save persiste, save-ereditato resta ereditato, collapse, 0 console error.
+
 ## v3.5.0-alpha.172.131 — Audio config in Audio Tracks + apply reattivo + warning AI (29 mag 2026)
 
 UX delivery item (`app/templates/pages/delivery_templates.html`):
