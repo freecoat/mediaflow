@@ -283,9 +283,14 @@ def reconcile_taxonomy_aliases(provider, parsed: dict, db, tenant_id: int) -> di
         for s in suggested:
             lines.append(f"  - kind={s.get('kind')} name={s.get('name')!r} (visto come {s.get('seen_as')!r})")
         raw = provider.complete(sys_p, "\n".join(lines), max_tokens=2000, temperature=0.0)
-        decisions = _parse_head_json(raw)
+        # La risposta è una LISTA JSON di decisioni; safe_json_parse la ritorna
+        # come list (NON usare _parse_head_json che forza dict → scarterebbe la lista).
+        from app.services.ai_provider import safe_json_parse
+        decisions = safe_json_parse(raw)
         if isinstance(decisions, dict):
             decisions = decisions.get("items") or decisions.get("decisions") or []
+        if not isinstance(decisions, list):
+            decisions = []
         mapping = {}
         for d in (decisions or []):
             kind = d.get("kind"); name = d.get("name"); canon = d.get("canonical")
