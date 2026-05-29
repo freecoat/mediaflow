@@ -1,5 +1,31 @@
 # MediaFlow — Changelog
 
+## v3.5.0-alpha.172.128 — Estrazione capitolati via vision: corpus popolato (29 mag 2026)
+
+Pipeline di estrazione TC/timeline/audio-config dai capitolati (8 task TDD, branch `feat/capitolato-head-extraction`). Risolve il limite di pypdf sulle tabelle audio leggendo i PDF come immagini (vision).
+
+**Servizio** `app/services/capitolato_head_extractor.py`:
+- `render_document_for_llm` — PDF → immagini pagina (PyMuPDF, 150 DPI, cap 60pp + warning); docx/xlsx/txt → testo. Hybrid.
+- `extract_head_specs` — vision (`provider.chat` con image blocks) o testo; inietta vocabolario taxonomy canonico per il mapping; legge tabella+legenda per espandere le sigle audio.
+- `reconcile_taxonomy_aliases` — pass LLM che riconosce i sinonimi (M&E = "IT mix" = "IT") e li mappa alle canoniche esistenti invece di proporli come nuovi (guard anti-hallucination: accetta solo canoniche presenti in DB).
+- `apply_head_specs` — idempotente: setta `default_tc_start/program_start/default_timeline_segments` (solo TC ben formati, preview vuota non azzera) + upsert `AudioConfigPreset` per (template, code). NON crea voci taxonomy.
+
+**Vision streaming**: `ClaudeProvider.chat` ora auto-streama >16K token (come `complete()`) — senza, l'output ricco RAI (28 codici + tracce) veniva troncato → JSON non parsabile.
+
+**Endpoint**: `POST /delivery-templates/api/{tid}/extract-head` (preview, no write) + `apply-head` (Form payload, AIAction audit). Tenant-scoped + RBAC.
+
+**UI**: bottone "🤖 Estrai TC/Timeline/Audio" nel pane Items → preview card (TC, timeline, preset, taxonomy da aggiungere) → Applica/Annulla.
+
+**Batch** `scripts/extract_head_specs_batch.py` (--dry-run/--only/apply).
+
+**Corpus popolato** (Claude vision): **97 AudioConfigPreset** su 11 broadcaster (RAI 28, MUBI 16, Sky 15, NBCU-TechOps 13, PIPERFILM 8, Fremantle/Vision 5, A24 4…) + TC start + timeline. RAI 8T07/16T09 con mappatura tracce per-canale (5.1 L/R/C/LFE/Ls/Rs, M&E, AD, Dolby E) verificata vs tabella+legenda.
+
+**Test**: 78/78 pytest (render mode, vocab/parse, apply idempotente, alias map + anti-hallucination).
+
+Dipendenza nuova: **PyMuPDF** (AGPL — ok uso interno, rivalutare al lancio pubblico). DeepSeek è text-only: la pipeline vision resta su Claude per i PDF.
+
+Follow-up: aggiungere a mano le `suggested_taxonomy` residue per template; assegnazione code→item via dropdown; update modelli DeepSeek (v4-flash/pro) prossimo round.
+
 ## v3.5.0-alpha.172.127 — Timeline / TC start / Audio config sui delivery item (29 mag 2026)
 
 Feature completa (9 task TDD, branch `feat/delivery-timeline-audioconfig`). I capitolati definiscono dettagli tecnici critici prima non strutturati: TC start (es. Vision 00:59:59:00), configurazione timeline/testa (barre+toni, slate, counter RAI, nero, rulli DCP), codici audio d'emittente (RAI 8T07/16T09). Ora catturati in forma strutturata, ereditabili e QC-abili.

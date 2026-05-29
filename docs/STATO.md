@@ -8,7 +8,15 @@
 
 ## Versione corrente
 
-**v3.5.0-alpha.172.127** — 29 maggio 2026 — Timeline / TC start / Audio config sui delivery item
+**v3.5.0-alpha.172.128** — 29 maggio 2026 — Estrazione capitolati via vision: corpus popolato
+
+### α.172.128 ✅ (feature subagent-driven, 8 task TDD + eval gate, branch feat/capitolato-head-extraction)
+Pipeline estrazione TC/timeline/audio-config dai capitolati via **vision** (PyMuPDF PDF→immagini, risolve il limite pypdf sulle tabelle audio). `render_document_for_llm` + `extract_head_specs` (vocab canonico iniettato, legge tabella+legenda) + `reconcile_taxonomy_aliases` (M&E=IT mix=IT, guard anti-hallucination) + `apply_head_specs` (idempotente upsert). `ClaudeProvider.chat` auto-stream >16K (fix troncamento). Endpoint extract-head/apply-head + bottone UI preview/Applica + batch script.
+**Corpus popolato**: 97 AudioConfigPreset su 11 broadcaster (RAI 28 con 8T07/16T09 verificati vs tabella+legenda, MUBI 16, Sky 15, NBCU 13, PIPERFILM 8…) + TC start + timeline. 78/78 pytest.
+
+**Follow-up**: (1) aggiungere a mano suggested_taxonomy residue per template (`/settings/delivery-taxonomy`); (2) assegnazione audio_config_code→item via dropdown; (3) **update modelli DeepSeek** (v4-flash/v4-pro + pricing + retrocompat, da api-docs.deepseek.com) prossimo round — DeepSeek text-only, vision resta su Claude; (4) merge branch→main.
+
+### α.172.127 ✅ — Timeline / TC start / Audio config sui delivery item
 
 ### α.172.127 ✅ (feature subagent-driven, 9 task TDD, branch feat/delivery-timeline-audioconfig)
 Catturati in forma strutturata i dettagli tecnici dei capitolati prima persi: **TC start** (Vision 00:59:59:00), **timeline/testa** (barre+toni, slate, counter RAI, nero, rulli DCP via segmenti con kind/tc/reel/source), **codici audio d'emittente** (RAI 8T07/16T09 → tabella `AudioConfigPreset` legata al template che materializza le `AudioTrackSpec`). Default su template + override su item (`effective_timeline` con eredità). QC riceve `qc_expected`. Parser pass2 esteso. UI sezione "⏱ Timeline & TC" nel modal item. Migrazione idempotente + backfill TC pulito (regex, prosa scartata). 65/65 pytest. Spec+piano in `docs/superpowers/`.
