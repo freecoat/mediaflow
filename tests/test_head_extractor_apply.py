@@ -113,3 +113,41 @@ def test_apply_alias_mapping_rewrites_and_prunes():
     assert "Foley Stem" in names
     assert report["mapped"] == [{"kind": "mix_type", "name": "IT mix", "canonical": "M&E"}]
     assert any(s["name"] == "Foley Stem" for s in report["new"])
+
+
+class _FakeProvider:
+    """Provider finto: complete() ritorna un JSON di decisioni prefissato."""
+    def __init__(self, raw):
+        self._raw = raw
+
+    def complete(self, system, user, max_tokens=2000, temperature=0.0):
+        return self._raw
+
+
+def test_reconcile_maps_alias_to_existing_canonical(db, tenant_id):
+    from app.models.models import AudioMixType
+    from app.services.capitolato_head_extractor import reconcile_taxonomy_aliases
+    db.add(AudioMixType(tenant_id=None, name="M&E")); db.flush()
+    parsed = {
+        "audio_config_codes": [{"code": "X", "tracks": [{"track_label": "T1", "mix_type": "IT mix"}]}],
+        "suggested_taxonomy": [{"kind": "mix_type", "name": "IT mix", "seen_as": "IT"}],
+    }
+    prov = _FakeProvider('[{"kind":"mix_type","name":"IT mix","canonical":"M&E"}]')
+    rep = reconcile_taxonomy_aliases(prov, parsed, db, tenant_id)
+    assert parsed["audio_config_codes"][0]["tracks"][0]["mix_type"] == "M&E"
+    assert parsed["suggested_taxonomy"] == []          # alias pruned
+    assert rep["mapped"] and rep["mapped"][0]["canonical"] == "M&E"
+
+
+def test_reconcile_rejects_hallucinated_canonical(db, tenant_id):
+    from app.services.capitolato_head_extractor import reconcile_taxonomy_aliases
+    parsed = {
+        "audio_config_codes": [{"code": "X", "tracks": [{"track_label": "T1", "mix_type": "Foley"}]}],
+        "suggested_taxonomy": [{"kind": "mix_type", "name": "Foley", "seen_as": "foley"}],
+    }
+    # LLM "mappa" a una canonica NON presente in vocab -> deve essere ignorata (resta NEW)
+    prov = _FakeProvider('[{"kind":"mix_type","name":"Foley","canonical":"Inventato XYZ"}]')
+    rep = reconcile_taxonomy_aliases(prov, parsed, db, tenant_id)
+    assert parsed["audio_config_codes"][0]["tracks"][0]["mix_type"] == "Foley"  # non riscritto
+    assert any(s["name"] == "Foley" for s in parsed["suggested_taxonomy"])      # resta nuovo
+    assert rep["mapped"] == []

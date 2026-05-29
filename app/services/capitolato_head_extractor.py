@@ -268,7 +268,6 @@ def reconcile_taxonomy_aliases(provider, parsed: dict, db, tenant_id: int) -> di
         return {"mapped": [], "new": []}
     vocab = _taxonomy_vocab(db, tenant_id)
     try:
-        import json as _json
         sys_p = (
             "Sei un esperto di terminologia audio di post-produzione. Per ogni TERMINE "
             "dato, decidi se è solo un NOME DIVERSO di una delle voci CANONICHE della "
