@@ -8459,10 +8459,17 @@ async function tlbLoadDeliverables(jobId, bookingId) {
       const statLbl = d.status || 'planned';
       const nameSafe = escapeHtml(d.name || '');
       const unitSafe = escapeHtml(d.unit || '—');
-      const searchKey = `${(d.name || '').toLowerCase()} ${(d.unit || '').toLowerCase()} ${statLbl.toLowerCase()}`;
+      // F3.2 — tipo file (package|container) + nome item capitolato dallo snapshot
+      // spec_json (decisione 7). Badge mostrato accanto al nome nel booking modal.
+      const sj = d.spec_json || {};
+      const fileType = sj.package || sj.container || '';
+      const ftBadge = fileType
+        ? `<span class="text-xs" style="background:rgba(98,114,245,0.18); color:var(--indigo,#6272f5); border-radius:4px; padding:1px 6px; margin-left:4px; white-space:nowrap;">${escapeHtml(fileType)}</span>`
+        : '';
+      const searchKey = `${(d.name || '').toLowerCase()} ${(d.unit || '').toLowerCase()} ${statLbl.toLowerCase()} ${fileType.toLowerCase()}`;
       return `<label class="tlb-dlv-row" data-search="${escapeHtml(searchKey)}" style="display:flex; align-items:center; gap:8px; padding:4px 0; cursor:pointer; border-bottom:1px dashed rgba(255,255,255,0.05);">
         <input type="checkbox" class="tlb-dlv-chk" data-deliverable-id="${d.id}" ${checked}>
-        <span style="flex:1; font-size:13px;">${nameSafe} <span class="text-muted text-xs">${unitSafe} · ${pct}% · ${statLbl}</span></span>
+        <span style="flex:1; font-size:13px;">${nameSafe}${ftBadge} <span class="text-muted text-xs">${unitSafe} · ${pct}% · ${statLbl}</span></span>
       </label>`;
     }).join('');
     list.replaceChildren();

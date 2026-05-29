@@ -8,7 +8,12 @@
 
 ## Versione corrente
 
-**v3.5.0-alpha.172.137** — 29 maggio 2026 — F3.1 pipeline deliverables: snapshot specs capitolato
+**v3.5.0-alpha.172.138** — 29 maggio 2026 — F3.2+F3.3: pipeline deliverables COMPLETA
+
+### α.172.138 ✅ (F3.2 booking file-type + F3.3 QC compare, pipeline F1+F2+F3 chiusa)
+**F3.2**: booking modal planning mostra badge tipo file (package|container da spec_json) su ogni deliverable. Endpoint bookings/deliverables arricchito `file_type`+`delivery_item_name`. **F3.3 lazy bridge** (no Asset placeholder, scelta esplicita): `qc_specs_compare.build_expected()` (attese live da DeliveryItem: risoluzione/codec family/HDR/audio channel-count) + `compare_to_actual()` (report per-campo match/mismatch/unknown, codec fuzzy, audio multiset) + `run_deliverable_qc_compare()` salva in qc_report_json. Auto-run al link asset (non bloccante) + endpoint `POST /jobs/api/deliverables/{id}/qc-compare`. 6 test, 103/103. Smoke E2E OK (mismatch res+audio, match codec fuzzy).
+
+**PIPELINE DELIVERABLES COMPLETA** (F1 listino bucket + F2 quote picker + F3 planning snapshot/booking/QC). Design in `docs/superpowers/specs/2026-05-29-deliverables-pipeline-design.md`. 4 commit locali NON pushati (53e4b1a, 42a833f + .138). **Prossimo**: push + ZIP export, poi test browser Matteo end-to-end (quote picker → convert job → planning badge → QC compare con file reale).
 
 ### α.172.137 ✅ (F3.1 pipeline, snapshot + smoke E2E)
 `delivery_snapshot.snapshot_delivery_item()`: congela le specs risolte di un DeliveryItem (nomi taxonomy, video/audio_tracks/subtitle/timeline eredit./extra) in dict JSON. Wire in `jobs.py` create deliverable: `delivery_item_id` presente + no spec_json → auto-snapshot (decoupling capitolato, decisione 4). `DeliveryItem` aggiunto a `app/models/__init__`. Smoke E2E OK (spec_json 16 chiavi). 5 test nuovi, 97/97. **Prossimo: F3.2** booking modal mostra tipo file (container/package)+nome item del JobDeliverable collegato; **F3.3** asset bridge (conferma deliverable→nasce/collega Asset con specs "attese" da spec_json, QC confronta via `qc_expected_for_deliverable`).

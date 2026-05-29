@@ -784,6 +784,28 @@ async def get_deliverable(deliverable_id: int, db: Session = Depends(get_db)):
     return rec
 
 
+@router.post("/api/deliverables/{deliverable_id}/qc-compare")
+async def qc_compare_deliverable(deliverable_id: int, db: Session = Depends(get_db)):
+    """F3.3 — confronta on-demand le specs reali dell'asset digitale linkato con
+    quelle attese del capitolato (DeliveryItem). Salva in qc_report_json."""
+    d = db.query(JobDeliverable).filter(
+        JobDeliverable.id == deliverable_id,
+        JobDeliverable.tenant_id == current_tenant_id(),
+    ).first()
+    if not d:
+        raise HTTPException(404, "Deliverable non trovato")
+    if not d.delivery_item_id:
+        raise HTTPException(400, "Deliverable non collegato a un capitolato (delivery_item)")
+    if not d.digital_asset_id:
+        raise HTTPException(400, "Nessun asset digitale linkato al deliverable")
+    from app.services.qc_specs_compare import run_deliverable_qc_compare
+    report = run_deliverable_qc_compare(db, d)
+    if report is None:
+        raise HTTPException(400, "Asset linkato senza tech_specs estratte (esegui prima l'estrazione)")
+    db.commit()
+    return {"ok": True, "qc_report": report}
+
+
 @router.put("/api/deliverables/{deliverable_id}")
 async def update_deliverable(
     deliverable_id: int,
@@ -1154,6 +1176,16 @@ async def confirm_deliverable_delivery(
         if physical_asset_id and not d.physical_asset_id:
             d.physical_asset_id = physical_asset_id
 
+    # F3.3 lazy bridge — al link di un asset digitale con tech_specs, confronta
+    # le specs reali con quelle attese del capitolato (non bloccante).
+    qc_compare = None
+    if d.digital_asset_id and d.delivery_item_id:
+        try:
+            from app.services.qc_specs_compare import run_deliverable_qc_compare
+            qc_compare = run_deliverable_qc_compare(db, d)
+        except Exception:
+            pass  # confronto best-effort, non blocca la conferma
+
     db.commit()
     db.refresh(d)
 
@@ -1168,6 +1200,7 @@ async def confirm_deliverable_delivery(
         "confirmed_at": d.confirmed_at.isoformat() if d.confirmed_at else None,
         "asset_link_id": asset_link_created,
         "warn_no_hours": n_link_bookings_with_hours == 0,
+        "qc_compare": qc_compare,
     }
 
 

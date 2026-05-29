@@ -4174,6 +4174,12 @@ async def list_booking_deliverables(
         .order_by(BookingDeliverable.sort_order.asc(), BookingDeliverable.id.asc())
         .all()
     )
+    def _file_type(d) -> "str | None":
+        """F3.2 — tipo file (package o container) + nome item dal capitolato.
+        Letto dallo snapshot spec_json (decisione 7), niente join."""
+        sj = d.spec_json or {}
+        return sj.get("package") or sj.get("container")
+
     return [
         {
             "pivot_id": link.id,
@@ -4185,6 +4191,9 @@ async def list_booking_deliverables(
             "quantity_delivered": d.quantity_delivered,
             "status": d.status.value if hasattr(d.status, "value") else d.status,
             "sort_order": link.sort_order,
+            # F3.2 — tipo file consegna + nome item capitolato per il booking modal.
+            "file_type": _file_type(d),
+            "delivery_item_name": (d.spec_json or {}).get("name"),
         }
         for link, d in rows
     ]

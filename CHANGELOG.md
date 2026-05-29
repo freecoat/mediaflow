@@ -1,5 +1,18 @@
 # MediaFlow — Changelog
 
+## v3.5.0-alpha.172.138 — F3.2+F3.3 pipeline deliverables: booking file-type + QC compare specs (29 mag 2026)
+
+Chiude F3 (pipeline Capitolato→Listino→Quote→Planning→Asset).
+
+**F3.2 — booking modal mostra tipo file + item (decisione 7)**: nel modal booking di planning, ogni deliverable della lista mostra un badge col **tipo file** (package o container) letto dallo snapshot `spec_json`. Endpoint `/planning/api/bookings/{id}/deliverables` arricchito con `file_type` + `delivery_item_name`. Search client-side estesa al tipo file. Solo display, nessuna migrazione.
+
+**F3.3 — lazy bridge QC compare (decisione 5 rivista)**: niente Asset placeholder "atteso" (Asset è file-centrico, placeholder vuoti sporcherebbero il DAM). Le specs attese restano derivate live dal DeliveryItem; quando un asset digitale con `tech_specs_json` viene linkato a un deliverable, un confronto QC le mette a fronte di quelle reali.
+- `qc_specs_compare.build_expected(db, item)`: attese comparabili (risoluzione width×height, codec family, HDR, channel-count audio) live dalla taxonomy.
+- `compare_to_actual(expected, tech_specs)`: report per-campo (match/mismatch/unknown), match codec **fuzzy** ("MPEG-2"~"mpeg2video"), audio per multiset channel-count. `ok=False` se ≥1 mismatch.
+- `run_deliverable_qc_compare()`: trova l'asset linkato, confronta, salva in `qc_report_json`. Auto-run (non bloccante) al link asset in confirm-delivery + endpoint on-demand `POST /jobs/api/deliverables/{id}/qc-compare`.
+
+6 test nuovi, 103/103. Smoke E2E Playwright: qc-compare su deliverable→asset reale → report con resolution/audio mismatch + codec match fuzzy. **Pipeline F1+F2+F3 completa.**
+
 ## v3.5.0-alpha.172.137 — F3.1 pipeline deliverables: snapshot specs capitolato nel deliverable (29 mag 2026)
 
 Terza fase pipeline, step 1. Quando si crea un JobDeliverable collegato a un DeliveryItem, le specifiche tecniche del capitolato vengono **congelate** in `spec_json` (decoupling: edit successivi al capitolato non toccano il deliverable già pianificato — decisione 4).
