@@ -122,6 +122,13 @@ def extract_head_specs(provider, rendered: dict, broadcaster: str,
     """Chiama l'LLM (vision o testo) e ritorna il dict del contratto. No write."""
     vocab = _taxonomy_vocab(db, tenant_id)
     if rendered.get("mode") == "vision":
+        # Guard: un provider non-vision droppererebbe le immagini in silenzio.
+        supports = getattr(provider, "supports_vision", None)
+        if callable(supports) and not supports():
+            raise ValueError(
+                f"Il provider AI '{getattr(provider, 'name', '?')}' non supporta vision; "
+                "serve un provider con vision (es. Claude) per i PDF."
+            )
         content = [{"type": "text", "text": _user_prompt(broadcaster, vocab)}]
         for png in rendered.get("images", []):
             content.append({
