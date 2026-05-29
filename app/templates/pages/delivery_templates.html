@@ -890,6 +890,13 @@ function renderItemsPane(pane, tid) {
     };
     btns.appendChild(aiBtn);
   }
+  // Bottone Estrai TC/Timeline/Audio (head specs vision)
+  const headBtn = document.createElement('button');
+  headBtn.type = 'button';
+  headBtn.className = 'btn btn-secondary btn-sm';
+  headBtn.innerHTML = '🤖 Estrai TC/Timeline/Audio';
+  headBtn.onclick = () => extractHeadSpecs(tid, pane);
+  btns.appendChild(headBtn);
   const addBtn = document.createElement('button');
   addBtn.className = 'btn btn-primary btn-sm';
   addBtn.innerHTML = '+ Aggiungi item';
@@ -897,6 +904,12 @@ function renderItemsPane(pane, tid) {
   btns.appendChild(addBtn);
   head.appendChild(btns);
   pane.appendChild(head);
+  // Preview box per extract-head (ricostruita ogni volta; visibile se c'è stato in attesa)
+  const previewBox = document.createElement('div');
+  previewBox.id = 'head-preview';
+  previewBox.style.display = 'none';
+  previewBox.style.marginTop = '12px';
+  pane.appendChild(previewBox);
 
   if (!_currentItems.length) {
     const empty = document.createElement('div');
@@ -2173,6 +2186,90 @@ document.addEventListener('click', (ev) => {
   if (!tid) return;
   renameTemplateAction(tid, btn.dataset.code || '', btn.dataset.name || '');
 });
+
+// ── Head specs extraction: TC start / Timeline segments / Audio configs ────
+async function extractHeadSpecs(tid, pane) {
+  if (!tid) { toast('Nessun template attivo', 'warning'); return; }
+  // Reset stato preview precedente (evita Applica su dati stale di altro template).
+  window._headPreview = null; window._headTid = null;
+  let box = document.getElementById('head-preview');
+  if (!box) {
+    box = document.createElement('div');
+    box.id = 'head-preview';
+    box.style.marginTop = '12px';
+    if (pane) pane.appendChild(box);
+  }
+  box.style.display = 'block';
+  box.innerHTML = '<div class="text-muted">⏳ Estrazione in corso (vision, può richiedere 1-2 min)…</div>';
+  let r;
+  try {
+    r = await fetch(`/delivery-templates/api/${tid}/extract-head`, {method: 'POST', credentials: 'same-origin'});
+  } catch (e) {
+    box.innerHTML = '<div style="color:#fca5a5;">Errore rete: ' + escapeHtml(String(e)) + '</div>';
+    return;
+  }
+  if (!r.ok) {
+    let msg = '';
+    try { const d = await r.json(); msg = d.detail || ''; } catch (_) {}
+    box.innerHTML = `<div style="color:#fca5a5;">Errore ${r.status}${msg ? ': ' + escapeHtml(msg) : ''}</div>`;
+    return;
+  }
+  const data = await r.json();
+  window._headPreview = data.preview;
+  window._headTid = tid;
+  renderHeadPreview(data);
+}
+
+function renderHeadPreview(data) {
+  const p = data.preview || {};
+  const segs = (p.timeline_segments || []).map(s =>
+    `<li>${escapeHtml(s.kind || '')} — ${escapeHtml(s.label || '')} ${escapeHtml(s.tc_in || '')}</li>`
+  ).join('');
+  const presets = (p.audio_config_codes || []).map(c =>
+    `<div><strong>${escapeHtml(c.code || '')}</strong> — ${escapeHtml(c.name || '')} (${(c.tracks || []).length} tracce)</div>`
+  ).join('');
+  const sugg = (p.suggested_taxonomy || []).map(s =>
+    `<li>${escapeHtml(s.kind || '')}: ${escapeHtml(s.name || '')} (visto come "${escapeHtml(s.seen_as || '')}")</li>`
+  ).join('');
+  const box = document.getElementById('head-preview');
+  if (!box) return;
+  box.innerHTML = `
+    <div style="border:1px solid var(--border);border-radius:8px;padding:12px;font-size:13px;">
+      <div>TC start: <strong>${escapeHtml(p.default_tc_start || '—')}</strong> · Program: <strong>${escapeHtml(p.default_program_start || '—')}</strong> · ${data.mode === 'vision' ? ('vision ' + (data.page_count || '') + 'pp') : 'testo'}</div>
+      <div style="margin-top:6px;">Timeline:<ul style="margin:4px 0 0 16px;">${segs || '<li>—</li>'}</ul></div>
+      <div style="margin-top:6px;">Audio config:${presets || ' —'}</div>
+      ${sugg ? `<div style="margin-top:6px;color:#fbbf24;">Taxonomy da aggiungere a mano (<a href="/settings/delivery-taxonomy">apri</a>):<ul style="margin:4px 0 0 16px;">${sugg}</ul></div>` : ''}
+      <div style="margin-top:10px;display:flex;gap:8px;">
+        <button type="button" class="btn btn-primary btn-sm" onclick="applyHeadSpecs()">Applica</button>
+        <button type="button" class="btn btn-ghost btn-sm" onclick="document.getElementById('head-preview').style.display='none'">Annulla</button>
+      </div>
+    </div>`;
+}
+
+async function applyHeadSpecs() {
+  const tid = window._headTid;
+  if (!tid) { toast('Nessun template attivo', 'warning'); return; }
+  const fd = new FormData();
+  fd.append('payload_json', JSON.stringify(window._headPreview || {}));
+  let r;
+  try {
+    r = await fetch(`/delivery-templates/api/${tid}/apply-head`, {method: 'POST', body: fd, credentials: 'same-origin'});
+  } catch (e) {
+    toast('Errore rete apply', 'error');
+    return;
+  }
+  if (!r.ok) {
+    let msg = '';
+    try { const d = await r.json(); msg = d.detail || ''; } catch (_) {}
+    toast(`Errore apply${msg ? ': ' + msg : ''}`, 'error');
+    return;
+  }
+  const s = await r.json();
+  toast(`Applicato: ${s.presets_created} preset creati, ${s.presets_updated} aggiornati`, 'success');
+  document.getElementById('head-preview').style.display = 'none';
+  window._headPreview = null;
+  window._headTid = null;
+}
 
 // v3.5.0-alpha.132 (Fase 5 QoL) — duplica template come bozza modificabile.
 async function duplicateTemplate(tid, code) {
