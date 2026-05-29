@@ -2333,9 +2333,9 @@ document.addEventListener('click', (ev) => {
 // ── Head specs extraction: TC start / Timeline segments / Audio configs ────
 async function extractHeadSpecs(tid, pane) {
   if (!tid) { toast('Nessun template attivo', 'warning'); return; }
-  // α.172.130 — warning: estrazione VISION molto costosa in token (legge il PDF
-  // come immagini, ~75k token/pagina su Claude). Conferma esplicita.
-  if (!confirm('⚠️ Estrazione TC/Timeline/Audio via VISION.\n\nLegge il capitolato come immagini: operazione MOLTO costosa in token (solo Claude, ~1-2 min). Procedere?')) return;
+  // α.172.133 — estrazione a cascata: testo (economico, qualsiasi provider) per i
+  // PDF con text-layer; vision (cara, solo Claude) solo se scansione. Conferma esplicita.
+  if (!confirm('🤖 Estrazione TC/Timeline/Audio via AI.\n\nUsa il TESTO del capitolato se disponibile (economico, ~1-2 min, anche DeepSeek). Se il PDF è una scansione passa alla VISION (più costosa, solo Claude). Procedere?')) return;
   // Reset stato preview precedente (evita Applica su dati stale di altro template).
   window._headPreview = null; window._headTid = null;
   let box = document.getElementById('head-preview');

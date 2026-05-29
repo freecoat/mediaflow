@@ -1,5 +1,9 @@
 # MediaFlow — Changelog
 
+## v3.5.0-alpha.172.134 — Warning extract-head allineato alla cascata (29 mag 2026)
+
+Rifrasato il confirm del bottone "Estrai TC/Timeline/Audio": non più "VISION molto costosa" (fuorviante ora che i PDF testo vanno sul path economico), ma "usa il TESTO se disponibile (anche DeepSeek), VISION solo se scansione". File: `delivery_templates.html`.
+
 ## v3.5.0-alpha.172.133 — Estrazione capitolati a cascata: testo-prima (PyMuPDF4LLM) + vision fallback (29 mag 2026)
 
 `render_document_for_llm` (`capitolato_head_extractor.py`) ora è una **pipeline a cascata**:
