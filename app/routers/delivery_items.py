@@ -1212,8 +1212,8 @@ async def extract_head(tid: int, request: Request, db: Session = Depends(get_db)
 @router.post("/delivery-templates/api/{tid}/apply-head", dependencies=[RequireEdit])
 async def apply_head(
     tid: int,
+    request: Request,
     payload_json: str = Form(...),
-    request: Request = None,
     db: Session = Depends(get_db),
 ):
     """Applica il parsed dict di head specs al DeliveryTemplate (idempotente).
