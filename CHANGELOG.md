@@ -1,5 +1,17 @@
 # MediaFlow — Changelog
 
+## v3.5.0-alpha.172.129 — Update modelli DeepSeek V4 (29 mag 2026)
+
+Aggiornati modelli e pricing DeepSeek da [api-docs.deepseek.com](https://api-docs.deepseek.com/):
+- **deepseek-v4-flash** (default, 1M context, 384K output, thinking default-on) — input $0.14/M, output $0.28/M, cache-hit $0.0028/M.
+- **deepseek-v4-pro** (qualità) — input $0.435/M, output $0.87/M.
+- `deepseek-chat` / `deepseek-reasoner` marcati legacy (deprecati 2026-07-24, mappano a v4-flash); pricing tenuto per retrocompat.
+- Default `DeepseekProvider` → `deepseek-v4-flash`. Base url `https://api.deepseek.com` (OpenAI/Anthropic-compatible).
+
+**Nota**: DeepSeek resta **text-only** (`supports_vision=False`) — la pipeline vision (estrazione capitolati PDF) resta su Claude. DeepSeek selezionabile per copilot / features testuali.
+
+File: `app/services/ai_provider.py`.
+
 ## v3.5.0-alpha.172.128 — Estrazione capitolati via vision: corpus popolato (29 mag 2026)
 
 Pipeline di estrazione TC/timeline/audio-config dai capitolati (8 task TDD, branch `feat/capitolato-head-extraction`). Risolve il limite di pypdf sulle tabelle audio leggendo i PDF come immagini (vision).

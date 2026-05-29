@@ -87,8 +87,10 @@ PROVIDER_MODELS: dict[str, list[dict]] = {
         {"id": "sonar-reasoning", "label": "Sonar Reasoning"},
     ],
     "deepseek": [
-        {"id": "deepseek-chat",      "label": "DeepSeek V3 (default)"},
-        {"id": "deepseek-reasoner",  "label": "DeepSeek R1 (ragionamento)"},
+        {"id": "deepseek-v4-flash",  "label": "DeepSeek V4 Flash (default)"},
+        {"id": "deepseek-v4-pro",    "label": "DeepSeek V4 Pro (qualità)"},
+        {"id": "deepseek-chat",      "label": "DeepSeek Chat (legacy → V4 Flash, deprecato 2026-07-24)"},
+        {"id": "deepseek-reasoner",  "label": "DeepSeek Reasoner (legacy → V4 Flash thinking, deprecato 2026-07-24)"},
     ],
     "ollama": [
         {"id": "llama3.1:70b",  "label": "Llama 3.1 70B"},
@@ -130,7 +132,10 @@ MODEL_PRICING_USD_PER_M_TOKENS: dict[str, dict[str, float]] = {
     "sonar-pro":            {"input": 3.0,   "output": 15.0,  "cache_read": 0.0, "cache_create": 0.0},
     "sonar":                {"input": 1.0,   "output": 1.0,   "cache_read": 0.0, "cache_create": 0.0},
     "sonar-reasoning":      {"input": 1.0,   "output": 5.0,   "cache_read": 0.0, "cache_create": 0.0},
-    # DeepSeek (pricing maggio 2026 — cache_hit/miss separati)
+    # DeepSeek (pricing 29 mag 2026 da api-docs.deepseek.com — cache_hit/miss separati)
+    "deepseek-v4-flash":    {"input": 0.14,   "output": 0.28,  "cache_read": 0.0028,  "cache_create": 0.0},
+    "deepseek-v4-pro":      {"input": 0.435,  "output": 0.87,  "cache_read": 0.003625, "cache_create": 0.0},
+    # Legacy (deprecati 2026-07-24, mappano a v4-flash) — tenuti per retrocompat pricing
     "deepseek-chat":        {"input": 0.27,  "output": 1.10,  "cache_read": 0.07,  "cache_create": 0.0},
     "deepseek-reasoner":    {"input": 0.55,  "output": 2.19,  "cache_read": 0.14,  "cache_create": 0.0},
     # Ollama (locale → costo zero compute on-prem)
@@ -700,10 +705,13 @@ class PerplexityProvider(AIProvider):
 
 class DeepseekProvider(AIProvider):
     """
-    DeepSeek API (OpenAI-compatible chat completions).
+    DeepSeek API (OpenAI/Anthropic-compatible chat completions).
     Endpoint: https://api.deepseek.com/chat/completions
-    Models: deepseek-chat (V3), deepseek-reasoner (R1).
-    v3.5.0-alpha.172.87 (Bundle G1).
+    Models (29 mag 2026): deepseek-v4-flash (default, 1M ctx, 384K out, thinking
+    default-on), deepseek-v4-pro (qualità). Legacy deepseek-chat/deepseek-reasoner
+    deprecati 2026-07-24 → mappano a v4-flash (non-thinking / thinking).
+    NB: DeepSeek è TEXT-ONLY (supports_vision=False); per i PDF/vision usare Claude.
+    v3.5.0-alpha.172.87 (Bundle G1); v4 update α.172.128.
     """
     BASE_URL = "https://api.deepseek.com"
 
@@ -711,7 +719,7 @@ class DeepseekProvider(AIProvider):
         if not cfg.api_key:
             raise RuntimeError("DEEPSEEK_API_KEY mancante")
         self.api_key = cfg.api_key
-        self.model = cfg.model or "deepseek-chat"
+        self.model = cfg.model or "deepseek-v4-flash"
         self.base_url = (cfg.base_url or self.BASE_URL).rstrip("/")
 
     @property
