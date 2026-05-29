@@ -375,7 +375,7 @@ async def revalidate_item_ai(iid: int, request: Request, db: Session = Depends(g
     if not it:
         raise HTTPException(404, "DeliveryItem non trovato")
 
-    user = current_user_optional(request, db)
+    user = current_user_optional(request)
     user_id = user.id if user else 1
     provider = get_provider_for_user(user_id, db) or get_provider()
     if not provider:
@@ -619,7 +619,7 @@ async def match_pricelist_endpoint(iid: int, request: Request, db: Session = Dep
     if not it:
         raise HTTPException(404, "DeliveryItem non trovato")
 
-    user = current_user_optional(request, db)
+    user = current_user_optional(request)
     user_id = user.id if user else 1
     provider = get_provider_for_user(user_id, db) or get_provider()
     # provider può essere None: il service fa fallback heuristic
@@ -1192,7 +1192,7 @@ async def extract_head(tid: int, request: Request, db: Session = Depends(get_db)
             400,
             "Capitolato sorgente non trovato (source_document_name/path).",
         )
-    user = current_user_optional(request, db)
+    user = current_user_optional(request)
     user_id = user.id if user else 1
     provider = get_provider_for_user(user_id, db) or get_provider()
     if not provider:
@@ -1229,7 +1229,7 @@ async def apply_head(
     # audit best-effort
     try:
         from app.models.models import AIAction
-        user = current_user_optional(request, db) if request else None
+        user = current_user_optional(request) if request else None
         user_id = user.id if user else 1
         db.add(AIAction(
             user_id=user_id,

@@ -1,5 +1,13 @@
 # MediaFlow — Changelog
 
+## v3.5.0-alpha.172.130 — Hotfix 500 "Estrai TC/Timeline/Audio" (29 mag 2026)
+
+Fix `TypeError: current_user_optional() takes 1 positional argument but 2 were given` su 4 endpoint in `app/routers/delivery_items.py` (incluso `extract-head`, bottone "🤖 Estrai TC/Timeline/Audio").
+
+`rbac.current_user_optional(request)` prende **solo** `request` (legge il cookie JWT), non la sessione DB. Le 4 chiamate passavano `(request, db)` → 500 ad ogni click. Tolto l'argomento `db` superfluo (linee 378, 622, 1195, 1232).
+
+File: `app/routers/delivery_items.py`.
+
 ## v3.5.0-alpha.172.129 — Update modelli DeepSeek V4 (29 mag 2026)
 
 Aggiornati modelli e pricing DeepSeek da [api-docs.deepseek.com](https://api-docs.deepseek.com/):
