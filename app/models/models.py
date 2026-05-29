@@ -692,6 +692,12 @@ class DeliveryTemplate(Base):
     archive_specs: Mapped[Optional[dict]] = mapped_column(JSON, nullable=True)
     metadata_requirements: Mapped[Optional[dict]] = mapped_column(JSON, nullable=True)
 
+    # Default emittente timeline/TC (v3.5.0-alpha.172.127). Gli item ereditano
+    # questi se i propri campi sono vuoti. `head_format` resta come legacy/fonte.
+    default_tc_start: Mapped[Optional[str]] = mapped_column(String(20), nullable=True)
+    default_program_start: Mapped[Optional[str]] = mapped_column(String(20), nullable=True)
+    default_timeline_segments: Mapped[Optional[list]] = mapped_column(JSON, nullable=True)
+
     # Quali voci del listino sono tipicamente richieste da questo template
     # Esempio: [{"price_item_id": 7, "notes": "INTEROP DCP", "qty_hint": 1}, ...]
     suggested_items: Mapped[Optional[list]] = mapped_column(JSON, nullable=True)
@@ -709,6 +715,9 @@ class DeliveryTemplate(Base):
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
     tenant: Mapped["Tenant"] = relationship(back_populates="delivery_templates")
+    audio_config_presets: Mapped[List["AudioConfigPreset"]] = relationship(
+        back_populates="delivery_template", cascade="all, delete-orphan"
+    )
 
 
 # ── DELIVERY TAXONOMY (v3.5.0-alpha.172.113 — Tier 1) ─────────
@@ -944,6 +953,19 @@ class DeliveryItem(Base):
     subtitle_format: Mapped[Optional[str]] = mapped_column(String(40), nullable=True)  # "TTML IMSC 1.1" "PNG+XML" "Burn-in"
     subtitle_languages: Mapped[Optional[list]] = mapped_column(JSON, nullable=True)    # ["it","en","fr"]
 
+    # Timeline / TC layer (v3.5.0-alpha.172.127) — override; default sul template.
+    tc_start: Mapped[Optional[str]] = mapped_column(String(20), nullable=True)        # "00:59:59:00"
+    program_start: Mapped[Optional[str]] = mapped_column(String(20), nullable=True)   # "01:00:00:00"
+    # Lista ordinata segmenti testa/coda. Shape:
+    # [{order,kind,label,tc_in,tc_out,duration,reel,source,notes}]
+    # kind ∈ bars_tone|slate|countdown|counter|black|program|textless|logo|main_titles|tail|other
+    timeline_segments: Mapped[Optional[list]] = mapped_column(JSON, nullable=True)
+    # Audio config code (es. RAI 8T07) + FK al preset del template.
+    audio_config_preset_id: Mapped[Optional[int]] = mapped_column(
+        ForeignKey("audio_config_presets.id"), nullable=True
+    )
+    audio_config_code: Mapped[Optional[str]] = mapped_column(String(40), nullable=True)
+
     # Delivery meta
     suggested_unit: Mapped[Optional[str]] = mapped_column(String(20), nullable=True)  # "pc" "TB" "min"
     suggested_qty: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
@@ -966,6 +988,9 @@ class DeliveryItem(Base):
 
     audio_tracks: Mapped[List["AudioTrackSpec"]] = relationship(
         back_populates="delivery_item", cascade="all, delete-orphan"
+    )
+    audio_config_preset: Mapped[Optional["AudioConfigPreset"]] = relationship(
+        foreign_keys=[audio_config_preset_id]
     )
 
 
@@ -994,6 +1019,34 @@ class AudioTrackSpec(Base):
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
     delivery_item: Mapped["DeliveryItem"] = relationship(back_populates="audio_tracks")
+
+
+class AudioConfigPreset(Base):
+    """Codice di configurazione audio d'emittente (es. RAI 8T07, 16T09).
+    Legato a UN DeliveryTemplate (D4: no riuso cross-template). `track_layout`
+    si materializza in AudioTrackSpec concrete sull'item (D2)."""
+    __tablename__ = "audio_config_presets"
+    __table_args__ = (
+        UniqueConstraint("delivery_template_id", "code", name="uq_audio_preset_template_code"),
+    )
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    tenant_id: Mapped[int] = mapped_column(ForeignKey("tenants.id"), default=1, index=True)
+    delivery_template_id: Mapped[int] = mapped_column(
+        ForeignKey("delivery_templates.id"), index=True
+    )
+    code: Mapped[str] = mapped_column(String(40))            # "8T07"
+    name: Mapped[str] = mapped_column(String(120))           # "8 tracce: 5.1 + Stereo"
+    description: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    # [{track_label, channel_config, mix_type, mix_standard, codec, sample_rate, bit_depth}]
+    track_layout: Mapped[Optional[list]] = mapped_column(JSON, nullable=True)
+    sort_order: Mapped[int] = mapped_column(Integer, default=0)
+    is_active: Mapped[bool] = mapped_column(Boolean, default=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    delivery_template: Mapped["DeliveryTemplate"] = relationship(
+        back_populates="audio_config_presets"
+    )
 
 
 # ── LISTINO ──────────────────────────────────────────────────

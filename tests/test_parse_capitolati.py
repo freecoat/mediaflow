@@ -34,3 +34,27 @@ def test_extract_text_from_unknown_returns_empty():
     from scripts.parse_capitolati import extract_text_from_file
     text = extract_text_from_file("/non/existent/file.xyz")
     assert text == ""
+
+
+def test_materialize_persists_timeline_and_audio_code(db, tenant_id):
+    from app.models.models import DeliveryTemplate, DeliveryItem, AudioConfigPreset
+    from app.services.delivery_items_parser import materialize_items
+    t = DeliveryTemplate(tenant_id=tenant_id, code="RAI-MZ", name="RAI mz")
+    db.add(t); db.flush()
+    parsed = {"items": [{
+        "name": "HDTV 1080i25", "tc_start": "10:00:00:00",
+        "program_start": "10:00:00:00",
+        "timeline_segments": [{"order": 1, "kind": "bars_tone", "label": "barre"}],
+        "audio_config_code": "8T07",
+        "audio_tracks": [{"track_label": "5.1"}],
+    }]}
+    saved, skipped = materialize_items(db, t.id, parsed, tenant_id)
+    assert saved == 1
+    it = db.query(DeliveryItem).filter(DeliveryItem.delivery_template_id == t.id).first()
+    assert it.tc_start == "10:00:00:00"
+    assert it.timeline_segments[0]["kind"] == "bars_tone"
+    assert it.audio_config_code == "8T07"
+    p = db.query(AudioConfigPreset).filter(
+        AudioConfigPreset.delivery_template_id == t.id, AudioConfigPreset.code == "8T07").first()
+    assert p is not None
+    assert it.audio_config_preset_id == p.id

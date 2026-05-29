@@ -770,6 +770,12 @@ async function openDetail(tid) {
       </div>
       <div><label style="font-size:11px;color:var(--text3);text-transform:uppercase;letter-spacing:.05em;">Description</label>
         <textarea class="form-input" id="edt-description" rows="2" style="width:100%;font-size:12px;">${escapeHtml(t.description||'')}</textarea></div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:8px;">
+        <div><label style="font-size:11px;color:var(--text3);text-transform:uppercase;letter-spacing:.05em;">TC Start default</label>
+          <input class="form-input" id="edt-default-tc-start" value="${escapeHtml(t.default_tc_start||'')}" placeholder="es. 00:59:59:00" style="font-family:var(--font-mono);"></div>
+        <div><label style="font-size:11px;color:var(--text3);text-transform:uppercase;letter-spacing:.05em;">Program Start default</label>
+          <input class="form-input" id="edt-default-program-start" value="${escapeHtml(t.default_program_start||'')}" placeholder="es. 01:00:00:00" style="font-family:var(--font-mono);"></div>
+      </div>
     `;
     body.appendChild(headBox);
 
@@ -955,10 +961,75 @@ function renderItemsPane(pane, tid) {
   pane.appendChild(list);
 }
 
+// ── Timeline segments helpers (v3.5.0-alpha.172.128) ──────────────────────
+let _tlSegments = [];
+function renderTimelineSegments(segs) {
+  _tlSegments = Array.isArray(segs) ? segs.slice() : [];
+  const box = document.getElementById('item-timeline-segments');
+  if (!box) return;
+  const kinds = ['bars_tone','slate','countdown','counter','black','program','textless','logo','main_titles','tail','other'];
+  const rows = _tlSegments.map((s, i) => {
+    const kindOpts = kinds.map(k => `<option${s.kind===k?' selected':''}>${k}</option>`).join('');
+    const d = document.createElement('div');
+    d.className = 'tl-seg';
+    d.dataset.idx = i;
+    d.style.cssText = 'display:flex;gap:4px;margin-bottom:4px;flex-wrap:wrap;align-items:center;';
+    d.innerHTML = `<select class="tl-kind" style="font-size:12px;background:var(--bg2);color:var(--text);border:1px solid var(--border);border-radius:4px;padding:2px 4px;">${kindOpts}</select>`
+      + `<input class="tl-label" value="${escapeHtml(s.label||'')}" placeholder="label" style="width:80px;font-size:12px;">`
+      + `<input class="tl-tcin"  value="${escapeHtml(s.tc_in||'')}" placeholder="tc in" style="width:90px;font-size:12px;">`
+      + `<input class="tl-tcout" value="${escapeHtml(s.tc_out||'')}" placeholder="tc out" style="width:90px;font-size:12px;">`
+      + `<input class="tl-reel"  value="${escapeHtml(s.reel||'')}" placeholder="reel" style="width:56px;font-size:12px;">`
+      + `<input class="tl-source" value="${escapeHtml(s.source||'')}" placeholder="source" style="width:80px;font-size:12px;">`;
+    const rmBtn = document.createElement('button');
+    rmBtn.type = 'button';
+    rmBtn.className = 'btn btn-ghost btn-sm';
+    rmBtn.style.cssText = 'padding:1px 6px;font-size:11px;color:#ef4444;';
+    rmBtn.textContent = '✕';
+    rmBtn.dataset.rmIdx = i;
+    rmBtn.onclick = () => { removeTimelineSegment(parseInt(rmBtn.dataset.rmIdx, 10)); };
+    d.appendChild(rmBtn);
+    return d;
+  });
+  while (box.firstChild) box.removeChild(box.firstChild);
+  rows.forEach(r => box.appendChild(r));
+}
+function addTimelineSegment() {
+  collectTimelineSegments();
+  _tlSegments.push({order:_tlSegments.length+1, kind:'bars_tone', label:'', tc_in:'', tc_out:'', reel:'', source:''});
+  renderTimelineSegments(_tlSegments);
+}
+function removeTimelineSegment(i) {
+  collectTimelineSegments();
+  _tlSegments.splice(i, 1);
+  renderTimelineSegments(_tlSegments);
+}
+function collectTimelineSegments() {
+  const rows = document.querySelectorAll('#item-timeline-segments .tl-seg');
+  _tlSegments = Array.from(rows).map((r, i) => ({
+    order: i + 1,
+    kind:   r.querySelector('.tl-kind').value,
+    label:  r.querySelector('.tl-label').value || null,
+    tc_in:  r.querySelector('.tl-tcin').value  || null,
+    tc_out: r.querySelector('.tl-tcout').value || null,
+    reel:   r.querySelector('.tl-reel').value  || null,
+    source: r.querySelector('.tl-source').value|| null,
+  }));
+  return _tlSegments;
+}
+
 // Modal editor item (create/edit) — usa modal interno overlay
 async function openItemEditor(item, tid) {
   const tax = await _loadTaxonomyOnce();
   const isNew = !item;
+  // Per item esistente: fetch detail fresco per avere effective_timeline
+  let itemFull = item || {};
+  if (!isNew && item && item.id) {
+    try {
+      itemFull = await api('GET', `/delivery-items/api/${item.id}`);
+    } catch(e) {
+      itemFull = item; // fallback al dato cached
+    }
+  }
   const ov = document.createElement('div');
   ov.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.7);z-index:2100;display:flex;align-items:center;justify-content:center;';
   const box = document.createElement('div');
@@ -978,7 +1049,7 @@ async function openItemEditor(item, tid) {
     });
     return h;
   };
-  const v = item || {};
+  const v = itemFull;
   const form = document.createElement('div');
   form.style.cssText = 'display:grid;grid-template-columns:1fr 1fr;gap:10px;';
   form.innerHTML = `
@@ -1054,7 +1125,72 @@ async function openItemEditor(item, tid) {
   box.appendChild(valSec);
   if (!isNew) {
     // auto-validate appena apre modal
-    setTimeout(() => dlvLoadValidation(item.id), 80);
+    setTimeout(() => dlvLoadValidation(itemFull.id), 80);
+  }
+
+  // v3.5.0-alpha.172.128 — Timeline & TC section
+  const tlSec = document.createElement('div');
+  tlSec.style.cssText = 'margin-top:14px;padding:12px 14px;background:var(--bg3);border:1px solid var(--border);border-radius:6px;';
+  const tlTitle = document.createElement('div');
+  tlTitle.style.cssText = 'font-weight:600;font-size:13px;margin-bottom:10px;';
+  tlTitle.textContent = '⏱ Timeline & TC';
+  tlSec.appendChild(tlTitle);
+
+  const eff = itemFull.effective_timeline || {};
+  const tcInhText = (!v.tc_start && eff.tc_start) ? `ereditato: ${eff.tc_start}` : '';
+
+  const tlGrid = document.createElement('div');
+  tlGrid.style.cssText = 'display:grid;grid-template-columns:1fr 1fr;gap:10px;';
+  tlGrid.innerHTML = `
+    <div>
+      <label style="font-size:11px;color:var(--text3);text-transform:uppercase;">TC Start</label>
+      <input class="form-input" id="item-tc-start" value="${escapeHtml(v.tc_start||'')}" placeholder="es. 00:59:59:00">
+      <span id="item-tc-start-inh" style="font-size:11px;color:var(--text3);">${escapeHtml(tcInhText)}</span>
+    </div>
+    <div>
+      <label style="font-size:11px;color:var(--text3);text-transform:uppercase;">Program Start</label>
+      <input class="form-input" id="item-program-start" value="${escapeHtml(v.program_start||'')}" placeholder="es. 01:00:00:00">
+    </div>
+    <div>
+      <label style="font-size:11px;color:var(--text3);text-transform:uppercase;">Audio config preset</label>
+      <select class="form-select" id="item-audio-config"><option value="">—</option></select>
+    </div>
+  `;
+  tlSec.appendChild(tlGrid);
+
+  const tlSegLabel = document.createElement('div');
+  tlSegLabel.style.cssText = 'font-size:11px;color:var(--text3);text-transform:uppercase;margin-top:10px;margin-bottom:4px;';
+  tlSegLabel.textContent = 'Timeline (testa/coda)';
+  tlSec.appendChild(tlSegLabel);
+
+  const tlSegBox = document.createElement('div');
+  tlSegBox.id = 'item-timeline-segments';
+  tlSec.appendChild(tlSegBox);
+
+  const addSegBtn = document.createElement('button');
+  addSegBtn.type = 'button';
+  addSegBtn.className = 'btn btn-ghost btn-sm';
+  addSegBtn.style.cssText = 'margin-top:6px;font-size:11px;padding:2px 8px;';
+  addSegBtn.textContent = '+ Segmento';
+  addSegBtn.onclick = addTimelineSegment;
+  tlSec.appendChild(addSegBtn);
+
+  box.appendChild(tlSec);
+
+  // Populate timeline segments + audio presets async
+  _tlSegments = [];
+  renderTimelineSegments(v.timeline_segments || []);
+  if (!isNew) {
+    const templateId = v.delivery_template_id || tid;
+    if (templateId) {
+      api('GET', `/delivery-templates/api/${templateId}/audio-presets`).then(presets => {
+        const sel = document.getElementById('item-audio-config');
+        if (!sel) return;
+        sel.innerHTML = '<option value="">—</option>' + (presets || []).map(p =>
+          `<option value="${p.id}"${p.id === v.audio_config_preset_id ? ' selected' : ''}>${escapeHtml(p.code)} — ${escapeHtml(p.name)}</option>`
+        ).join('');
+      }).catch(() => {});
+    }
   }
 
   // Audio tracks sub-section
@@ -1071,7 +1207,7 @@ async function openItemEditor(item, tid) {
     addAudioBtn.className = 'btn btn-ghost btn-sm';
     addAudioBtn.style.cssText = 'font-size:11px;padding:2px 8px;';
     addAudioBtn.textContent = '+ Aggiungi traccia';
-    addAudioBtn.onclick = () => openAudioTrackEditor(null, item.id, ov);
+    addAudioBtn.onclick = () => openAudioTrackEditor(null, itemFull.id, ov);
     audioHead.appendChild(addAudioBtn);
   }
   audioSec.appendChild(audioHead);
@@ -1106,7 +1242,7 @@ async function openItemEditor(item, tid) {
       actions.style.cssText = 'display:flex;gap:4px;';
       const edBtn = document.createElement('button');
       edBtn.className = 'btn btn-ghost btn-sm'; edBtn.style.cssText = 'font-size:11px;padding:1px 6px;'; edBtn.textContent = '✎';
-      edBtn.onclick = () => openAudioTrackEditor(t, item.id, ov);
+      edBtn.onclick = () => openAudioTrackEditor(t, itemFull.id, ov);
       actions.appendChild(edBtn);
       const rmBtn = document.createElement('button');
       rmBtn.className = 'btn btn-ghost btn-sm'; rmBtn.style.cssText = 'font-size:11px;padding:1px 6px;color:#ef4444;'; rmBtn.textContent = '✕';
@@ -1141,7 +1277,7 @@ async function openItemEditor(item, tid) {
     delBtn.onclick = async () => {
       if (!confirm(`Eliminare l'item "${v.name}" e tutte le sue tracce audio?`)) return;
       try {
-        await api('DELETE', `/delivery-items/api/${item.id}`);
+        await api('DELETE', `/delivery-items/api/${itemFull.id}`);
         toast('Item eliminato', 'success', 1500);
         ov.remove();
         await _loadItemsForTemplate(tid);
@@ -1163,20 +1299,20 @@ async function openItemEditor(item, tid) {
     validateBtn.className = 'btn btn-ghost btn-sm';
     validateBtn.textContent = '🔎 Valida';
     validateBtn.title = 'Verifica compatibilità FK cross-tier';
-    validateBtn.onclick = () => dlvLoadValidation(item.id);
+    validateBtn.onclick = () => dlvLoadValidation(itemFull.id);
     rightBtns.appendChild(validateBtn);
     const revalBtn = document.createElement('button');
     revalBtn.className = 'btn btn-ghost btn-sm';
     revalBtn.textContent = '🤖 Rivalida AI';
     revalBtn.title = 'Re-esegue mapping FK via AI con taxonomy aggiornata';
-    revalBtn.onclick = () => dlvRevalidateAI(item.id, tid, ov);
+    revalBtn.onclick = () => dlvRevalidateAI(itemFull.id, tid, ov);
     rightBtns.appendChild(revalBtn);
     // v3.5.0-alpha.172.122 (Tier 3 Bundle C) — AI match listino
     const matchBtn = document.createElement('button');
     matchBtn.className = 'btn btn-ghost btn-sm';
     matchBtn.textContent = '🔍 Match listino';
     matchBtn.title = 'AI ranka top 3 PriceItem candidati per linking';
-    matchBtn.onclick = () => dlvAiMatchPricelist(item.id, tid, ov);
+    matchBtn.onclick = () => dlvAiMatchPricelist(itemFull.id, tid, ov);
     rightBtns.appendChild(matchBtn);
   }
   const cancelBtn = document.createElement('button');
@@ -1221,10 +1357,17 @@ async function openItemEditor(item, tid) {
     const qty = document.getElementById('dli-qty').value;
     if (qty) fd.append('suggested_qty', qty);
     fd.append('notes', document.getElementById('dli-notes').value.trim());
+    // v3.5.0-alpha.172.128 — Timeline & TC fields
+    collectTimelineSegments();
+    fd.append('tc_start', document.getElementById('item-tc-start').value);
+    fd.append('program_start', document.getElementById('item-program-start').value);
+    fd.append('timeline_segments_json', JSON.stringify(_tlSegments));
+    const audioConfigSel = document.getElementById('item-audio-config');
+    if (audioConfigSel) fd.append('audio_config_preset_id', audioConfigSel.value);
     try {
       const url = isNew
         ? `/delivery-templates/api/${tid}/items`
-        : `/delivery-items/api/${item.id}`;
+        : `/delivery-items/api/${itemFull.id}`;
       const method = isNew ? 'POST' : 'PUT';
       const r = await fetch(url, { method, body: fd, credentials: 'same-origin' });
       if (!r.ok) {
@@ -1532,6 +1675,11 @@ async function saveEditedTemplate() {
   fd.append('broadcaster', document.getElementById('edt-broadcaster').value || '');
   fd.append('version', document.getElementById('edt-version').value || '1.0');
   fd.append('description', document.getElementById('edt-description').value || '');
+  // v3.5.0-alpha.172.128 — TC defaults
+  const edtDtc = document.getElementById('edt-default-tc-start');
+  if (edtDtc) fd.append('default_tc_start', edtDtc.value);
+  const edtDps = document.getElementById('edt-default-program-start');
+  if (edtDps) fd.append('default_program_start', edtDps.value);
   // 8 blocchi: ricostruisci ogni blocco dal DOM e invia JSON-stringified.
   const blocksHost = document.getElementById('edt-blocks-host');
   for (const [key, _lbl] of BLOCK_DEFS) {

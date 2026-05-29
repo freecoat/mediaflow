@@ -1070,6 +1070,35 @@ def _auto_migrate_columns():
             except Exception as e:
                 print(f"[auto-migrate] uq_invoice_tenant_number FAILED: {e}")
 
+    # v3.5.0-alpha.172.127 — timeline/TC + audio_config_presets (boot safety).
+    insp2 = inspect(engine)
+    if "delivery_items" in insp2.get_table_names():
+        di_cols = {c["name"] for c in insp2.get_columns("delivery_items")}
+        di_add = [
+            ("tc_start", "VARCHAR(20) NULL"),
+            ("program_start", "VARCHAR(20) NULL"),
+            ("timeline_segments", "JSON NULL"),
+            ("audio_config_preset_id", "INTEGER NULL"),
+            ("audio_config_code", "VARCHAR(40) NULL"),
+        ]
+        with engine.begin() as conn:
+            for col, ddl in di_add:
+                if col not in di_cols:
+                    print(f"[auto-migrate] delivery_items.{col} -> ALTER")
+                    conn.execute(text(f"ALTER TABLE delivery_items ADD COLUMN {col} {ddl}"))
+    if "delivery_templates" in insp2.get_table_names():
+        dt_cols = {c["name"] for c in insp2.get_columns("delivery_templates")}
+        dt_add = [
+            ("default_tc_start", "VARCHAR(20) NULL"),
+            ("default_program_start", "VARCHAR(20) NULL"),
+            ("default_timeline_segments", "JSON NULL"),
+        ]
+        with engine.begin() as conn:
+            for col, ddl in dt_add:
+                if col not in dt_cols:
+                    print(f"[auto-migrate] delivery_templates.{col} -> ALTER")
+                    conn.execute(text(f"ALTER TABLE delivery_templates ADD COLUMN {col} {ddl}"))
+
 
 def _backfill_resource_assignments():
     """v3.5.0-alpha.111 — Backfill JobResourceAssignment per booking
@@ -2066,7 +2095,7 @@ async def lifespan(app: FastAPI):
     yield
 
 
-app = FastAPI(title="Claqo", version="3.5.0-alpha.172.126", lifespan=lifespan)
+app = FastAPI(title="Claqo", version="3.5.0-alpha.172.127", lifespan=lifespan)
 
 BASE_DIR = Path(__file__).parent
 app.mount("/static", StaticFiles(directory=BASE_DIR / "static"), name="static")

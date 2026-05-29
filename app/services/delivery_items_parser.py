@@ -119,6 +119,15 @@ Per OGNI item, restituisci:
 - suggested_unit (string: "pc" "TB" "min")
 - suggested_qty (number)
 - audio_tracks: lista [{track_label, channel_config_id, mix_type_id, mix_standard_id, audio_codec_id, sample_rate_hz, bit_depth, is_optional, notes}]
+- tc_start: timecode di inizio file se indicato (es. "00:59:59:00"), altrimenti null
+- program_start: timecode di inizio programma se indicato (es. "01:00:00:00"), altrimenti null
+- timeline_segments: lista ordinata della testa/coda se descritta nel capitolato.
+  Ogni elemento: {order, kind, label, tc_in, tc_out, duration, reel, source, notes}.
+  kind ∈ bars_tone|slate|countdown|counter|black|program|textless|logo|main_titles|tail|other.
+  reel = numero rullo DCP (es. Vision "1 logo = 1 rullo"); source = materiale sorgente.
+  Se non descritta, lista vuota.
+- audio_config_code: codice di configurazione audio d'emittente se citato (es. RAI "8T07", "16T09"), altrimenti null
+Quello che non riesci a strutturare, mettilo in `notes` (non perdere informazioni).
 - extra_specs: dict JSON freeform per cose NON in taxonomy (teste/code, naming convention, archive notes, metadata extras)
 - pending_review: true SE non sei sicuro al 80%+ del mapping di package/container/video_codec
 - confidence: float 0.0-1.0
@@ -272,12 +281,32 @@ def materialize_items(db: Session, delivery_template_id: int, parsed: dict,
             suggested_price_item_id=None,  # mapping listino al passo successivo
             extra_specs=it.get("extra_specs"),
             notes=it.get("notes"),
+            tc_start=it.get("tc_start"),
+            program_start=it.get("program_start"),
+            timeline_segments=it.get("timeline_segments") or None,
+            audio_config_code=it.get("audio_config_code"),
             ai_extracted=True,
             ai_confidence=float(it.get("confidence") or 0.0),
             pending_review=bool(it.get("pending_review", False)),
         )
         db.add(item)
         db.flush()  # popola item.id per audio_tracks
+        # v3.5.0-alpha.172.127 — se il parser ha trovato un audio_config_code,
+        # crea/collega un AudioConfigPreset sul template (idempotente per code).
+        acode = (it.get("audio_config_code") or "").strip()
+        if acode:
+            from app.models.models import AudioConfigPreset
+            preset = (db.query(AudioConfigPreset)
+                      .filter(AudioConfigPreset.delivery_template_id == delivery_template_id,
+                              AudioConfigPreset.code == acode).first())
+            if not preset:
+                preset = AudioConfigPreset(
+                    tenant_id=tenant_id, delivery_template_id=delivery_template_id,
+                    code=acode, name=acode,
+                    track_layout=it.get("audio_tracks") or [],
+                )
+                db.add(preset); db.flush()
+            item.audio_config_preset_id = preset.id
         for t_idx, t in enumerate(it.get("audio_tracks") or []):
             tr = AudioTrackSpec(
                 delivery_item_id=item.id,

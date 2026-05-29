@@ -57,6 +57,9 @@ def _dt_dict(t: DeliveryTemplate) -> dict:
         "ai_confidence": t.ai_confidence,
         "is_active": t.is_active,
         "created_at": str(t.created_at)[:19] if t.created_at else None,
+        # v3.5.0-alpha.172.128 — TC defaults
+        "default_tc_start": t.default_tc_start,
+        "default_program_start": t.default_program_start,
     }
 
 
@@ -655,6 +658,9 @@ async def update_template(
     metadata_requirements: Optional[str] = Form(None),
     suggested_items: Optional[str] = Form(None),  # v3.5.0-alpha.68.6
     is_active: Optional[bool] = Form(None),
+    # v3.5.0-alpha.172.128 — TC defaults
+    default_tc_start: Optional[str] = Form(None),
+    default_program_start: Optional[str] = Form(None),
     db: Session = Depends(get_db),
 ):
     t = db.query(DeliveryTemplate).filter(
@@ -698,6 +704,9 @@ async def update_template(
     if metadata_requirements is not None: t.metadata_requirements = _parse_dict(metadata_requirements)
     if suggested_items is not None: t.suggested_items = _parse_list(suggested_items)
     if is_active is not None: t.is_active = is_active
+    # v3.5.0-alpha.172.128
+    if default_tc_start is not None: t.default_tc_start = default_tc_start.strip() or None
+    if default_program_start is not None: t.default_program_start = default_program_start.strip() or None
     db.commit()
     db.refresh(t)
     return _dt_dict(t)
