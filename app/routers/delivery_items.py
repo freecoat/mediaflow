@@ -1153,3 +1153,86 @@ async def delete_audio_preset(pid: int, db: Session = Depends(get_db)):
     p.is_active = False  # soft-delete
     db.commit()
     return {"ok": True}
+
+
+# ── Head extraction (v3.5.0-alpha.172.128) ────────────────────
+
+def _resolve_capitolato_path(tpl):
+    """File sorgente del capitolato: source_document_path se esiste, altrimenti
+    per nome in docs/capitolati_esempio/. Ritorna Path o None."""
+    if tpl.source_document_path:
+        p = Path(tpl.source_document_path)
+        if p.is_file():
+            return p
+    if tpl.source_document_name:
+        cand = Path("docs/capitolati_esempio") / tpl.source_document_name
+        if cand.is_file():
+            return cand
+    return None
+
+
+@router.post("/delivery-templates/api/{tid}/extract-head", dependencies=[RequireEdit])
+async def extract_head(tid: int, request: Request, db: Session = Depends(get_db)):
+    """Preview estrazione head specs (video_specs, audio_specs, head_format, ecc.)
+    dal capitolato sorgente via AI. Non muta nulla: ritorna il parsed dict
+    per conferma utente prima di apply-head."""
+    from app.services.ai_provider import get_provider_for_user, get_provider
+    from app.services.capitolato_head_extractor import (
+        render_document_for_llm, extract_head_specs,
+    )
+    tpl = db.query(DeliveryTemplate).filter(
+        DeliveryTemplate.id == tid,
+        DeliveryTemplate.tenant_id == current_tenant_id(),
+    ).first()
+    if not tpl:
+        raise HTTPException(404, "DeliveryTemplate non trovato")
+    path = _resolve_capitolato_path(tpl)
+    if not path:
+        raise HTTPException(
+            400,
+            "Capitolato sorgente non trovato (source_document_name/path).",
+        )
+    user = current_user_optional(request, db)
+    user_id = user.id if user else 1
+    provider = get_provider_for_user(user_id, db) or get_provider()
+    if not provider:
+        raise HTTPException(400, "Nessun provider AI configurato per l'utente.")
+    rendered = render_document_for_llm(path.read_bytes(), path.name)
+    parsed = extract_head_specs(
+        provider, rendered, tpl.broadcaster or tpl.code, db, current_tenant_id(),
+    )
+    return {
+        "template_id": tid,
+        "mode": rendered.get("mode"),
+        "page_count": rendered.get("page_count"),
+        "preview": parsed,
+    }
+
+
+@router.post("/delivery-templates/api/{tid}/apply-head", dependencies=[RequireEdit])
+async def apply_head(
+    tid: int,
+    payload_json: str = Form(...),
+    request: Request = None,
+    db: Session = Depends(get_db),
+):
+    """Applica il parsed dict di head specs al DeliveryTemplate (idempotente).
+    payload_json: JSON string con le stesse chiavi restituite da extract-head preview."""
+    from app.services.capitolato_head_extractor import apply_head_specs
+    parsed = json.loads(payload_json)
+    summary = apply_head_specs(db, tid, parsed, current_tenant_id())
+    # audit best-effort
+    try:
+        from app.models.models import AIAction
+        user = current_user_optional(request, db) if request else None
+        user_id = user.id if user else 1
+        db.add(AIAction(
+            user_id=user_id,
+            action_type="extract_head_specs",
+            status="applied",
+            payload=json.dumps({"template_id": tid, "summary": summary})[:4000],
+        ))
+    except Exception:
+        pass
+    db.commit()
+    return summary
