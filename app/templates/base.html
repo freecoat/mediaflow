@@ -152,9 +152,9 @@
         <a href="/delivery-templates/import" data-nav-id="capitolati_import" class="nav-item nav-subitem {% if active_page == 'capitolati_import' %}active{% endif %}" style="padding-left:36px;font-size:12px;">
           <span class="nav-icon"><i data-lucide="upload-cloud"></i></span> <span data-i18n="nav.capitolati_import">Import → Quote</span>
         </a>
-        <a href="/delivery-variants/" data-nav-id="delivery_variants" class="nav-item {% if active_page == 'delivery_variants' %}active{% endif %}">
-          <span class="nav-icon"><i data-lucide="package"></i></span> <span data-i18n="nav.delivery_variants">Variants</span>
-        </a>
+        {# v3.5.0-alpha.172.128 — /delivery-variants DEPRECATO (Bundle L Stack 1 mai
+           completato; rimpiazzato da DeliveryItem/DeliveryTemplate). Link rimosso
+           dalla nav; route/modello restano inerti (0 record) finché non si rimuovono. #}
       </div>
 
       {% if request.state.current_user and request.state.current_user.is_platform_admin %}
