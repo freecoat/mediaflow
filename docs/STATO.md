@@ -8,7 +8,10 @@
 
 ## Versione corrente
 
-**v3.5.0-alpha.172.140** — 30 maggio 2026 — auto-refresh AI + validità 2 sett + numero quote auto da projects
+**v3.5.0-alpha.172.141** — 30 maggio 2026 — fix schema AI price_list/unit (confusione copilot)
+
+### α.172.141 ✅ (fix schema tool AI: price_list non-id + unit enum)
+Copilot si auto-confondeva creando voci listino: "price_list richiede il PK della price list?". Falso (price_list = prezzo numerico livello List, no FK). Root: `propose_price_item`/`propose_new_item_and_line` avevano `price_list` senza description + `unit` enum `["day","hour","flat"]` sbagliato (voci reali: `pc` 85×, `day`, `TB`, `hr`, `min`, `shot`, `allow`, `version`). Fix `ai_tools.py`: description esplicita su price_list + enum rimosso (stringa libera con esempi). Verificato load tools. **Restart server** (schema letto al boot provider).
 
 ### α.172.140 ✅ (3 richieste Matteo: UX copilot + quote)
 **1 Auto-refresh post-azione AI (globale)**: `copilotApply` contratto `detail.handled` — pagine con refresh mirato (quotes/planning) settano `handled=true` (no reload, drawer aperto, dialogo continua); pagine senza listener → reload soft 700ms. Guard `moreWork` (no reload a metà batch multi-azione). **2 Validità quote default +14gg** in tutti i path (create_quote server fallback + `_h_propose_quote` AI + prefill UI + schema tool). **3 Numero quote auto da naming convention anche da /projects**: `create_quote.number` opzionale → `_next_quote_number_progressive()` se vuoto; project_detail prefilla via `/settings/api/numbering/quote/preview` (come /quotes). Verificato unit: autogen `Q-2026-009-v1`, +14gg. JS node-check + Jinja parse OK. **Test browser Matteo pendente** (item 1 reload + item 3 prefill).

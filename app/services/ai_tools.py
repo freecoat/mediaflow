@@ -230,8 +230,8 @@ TOOLS: list[dict] = [
             "properties": {
                 "name":             {"type": "string"},
                 "description":      {"type": "string"},
-                "unit":             {"type": "string", "enum": ["day", "hour", "flat"]},
-                "price_list":       {"type": "number"},
+                "unit":             {"type": "string", "description": "Unità di misura (stringa libera). Comuni: 'day', 'hr', 'pc' (a pezzo/nastro), 'TB', 'min', 'shot', 'flat', 'allow', 'version'."},
+                "price_list":       {"type": "number", "description": "Prezzo di listino come NUMERO in valuta base (es. 150 = 150€/unità, livello 'List'). NON è un id né un riferimento a un listino."},
                 "category_name":    {"type": "string"},
                 "department_name":  {"type": "string"},
                 "keywords": {
@@ -260,8 +260,8 @@ TOOLS: list[dict] = [
                 "quote_number":    {"type": "string"},
                 "name":             {"type": "string", "description": "Nome della voce listino da creare."},
                 "category_name":   {"type": "string"},
-                "unit":             {"type": "string", "enum": ["day", "hour", "flat"]},
-                "price_list":      {"type": "number"},
+                "unit":             {"type": "string", "description": "Unità di misura (stringa libera). Comuni: 'day', 'hr', 'pc' (a pezzo/nastro), 'TB', 'min', 'shot', 'flat', 'allow', 'version'."},
+                "price_list":      {"type": "number", "description": "Prezzo di listino come NUMERO in valuta base (es. 150 = 150€/unità, livello 'List'). NON è un id né un riferimento a un listino."},
                 "quantity":         {"type": "number"},
                 "description":     {"type": "string"},
                 "department_name": {"type": "string"},

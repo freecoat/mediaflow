@@ -1,5 +1,13 @@
 # MediaFlow — Changelog
 
+## v3.5.0-alpha.172.141 — fix schema AI: price_list non è un id + unit enum sbagliato (30 mag 2026)
+
+**Sintomo**: durante la creazione voci listino via copilot, il modello si è auto-confuso — "price_list richiede il PK della price list, qual è l'id?". Falso: `price_list` è il prezzo di listino numerico (livello List), non un FK; non esiste entità PriceList separata.
+
+**Root cause**: nei tool `propose_price_item` e `propose_new_item_and_line` il campo `price_list` era `{"type":"number"}` **senza description** → il nome "price_list" suggeriva un riferimento a "una price list". In più `unit` aveva `enum:["day","hour","flat"]` **sbagliato/incompleto**: le voci reali usano `pc` (85 voci!), `day`, `TB`, `hr`, `min`, `shot`, `allow`, `version` — nessuna "hour"/"flat". Il modello creava voci `TB`/`pc` solo violando l'enum (fragile).
+
+**Fix** (`ai_tools.py`): `price_list` ora ha description esplicita ("NUMERO in valuta base, livello 'List', NON un id"). `unit` enum rimosso → stringa libera con esempi delle unità reali. Verificato: entrambi i tool caricano con description, enum sparito. Richiede restart server (schema letto al boot del provider).
+
 ## v3.5.0-alpha.172.140 — auto-refresh post-azione AI + validità quote 2 settimane + numero quote auto da projects (30 mag 2026)
 
 Tre richieste da Matteo (batch UX/quote).
