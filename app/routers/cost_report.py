@@ -1069,7 +1069,7 @@ async def job_cost_report(job_id: int, db: Session = Depends(get_db)):
     }
 
 
-@router.put("/api/job/{job_id}/weighted-revenue")
+@router.put("/api/job/{job_id}/weighted-revenue", dependencies=[RequireEditCostLines])
 async def set_weighted_revenue(
     job_id: int,
     enabled: bool = Form(...),
@@ -1085,7 +1085,8 @@ async def set_weighted_revenue(
     Effetto: il flag è persistito sul Job + automatic reconcile-actuals di
     tutte le cost-line (così il cliente vede subito i nuovi numeri). Idempotente.
     """
-    job = db.query(Job).filter(Job.id == job_id).first()
+    # v3.5.0-alpha.172.142 — tenant scope (era cross-tenant write)
+    job = scoped(db.query(Job), Job).filter(Job.id == job_id).first()
     if not job:
         raise HTTPException(404, "Job non trovato")
     job.weighted_revenue = bool(enabled)
@@ -1100,7 +1101,7 @@ async def set_weighted_revenue(
     }
 
 
-@router.post("/api/job/{job_id}/reconcile-actuals")
+@router.post("/api/job/{job_id}/reconcile-actuals", dependencies=[RequireEditCostLines])
 async def reconcile_actuals(job_id: int, db: Session = Depends(get_db)):
     """v3.4.41 — Ricomputa quantity_actual + total_accrued di tutte le
     JobCostLine del job aggregando i Booking con execution_status=done.
@@ -1111,7 +1112,8 @@ async def reconcile_actuals(job_id: int, db: Session = Depends(get_db)):
         sincronizzare il consuntivo dal flusso operativo.
     Idempotente."""
     from app.services.cost_line_sync import recompute_for_job
-    job = db.query(Job).filter(Job.id == job_id).first()
+    # v3.5.0-alpha.172.142 — tenant scope (era cross-tenant read/recompute)
+    job = scoped(db.query(Job), Job).filter(Job.id == job_id).first()
     if not job:
         raise HTTPException(404, "Job non trovato")
     result = recompute_for_job(db, job_id)
@@ -1124,7 +1126,7 @@ async def reconcile_actuals(job_id: int, db: Session = Depends(get_db)):
 # Pre-115: iterava TUTTI i job del tenant × tutte le JCL = 80k query su stress
 # DB → freeze pagina. Ora: WHERE accrued_stale=True → solo le JCL toccate
 # dall'ultimo recompute. Booking-mutate paths settano stale=True via hook.
-@router.post("/api/reconcile-all")
+@router.post("/api/reconcile-all", dependencies=[RequireEditCostLines])
 async def reconcile_all_jobs(force: int = 0, db: Session = Depends(get_db)):
     """Ricomputa solo le JCL marcate stale (lazy reconcile pattern).
     Idempotente. Invoke su page-load lista CR — ora costante invece di O(N²).

@@ -632,9 +632,14 @@ async def create_advance_payment(
     else:
         num = _next_invoice_number_for_advance(db, issue_date.year)
 
-    subtotal = round(amount, 2)
-    vat_amount = round(subtotal * vat_rate / 100, 2)
-    total = round(subtotal + vat_amount, 2)
+    # v3.5.0-alpha.172.142 — Decimal/HALF_UP coerente con compute_invoice_totals
+    # (era float round() = banker's, path divergente dalle fatture regolari).
+    from app.services.money import to_decimal, money_round, money_to_float
+    _sub_d = money_round(to_decimal(amount))
+    _vat_d = money_round(_sub_d * to_decimal(vat_rate) / to_decimal(100))
+    subtotal = money_to_float(_sub_d)
+    vat_amount = money_to_float(_vat_d)
+    total = money_to_float(money_round(_sub_d + _vat_d))
 
     inv = Invoice(
         tenant_id=current_tenant_id(),  # v3.5.0-alpha.172.37 Sprint 3.E
@@ -1360,9 +1365,13 @@ async def emit_invoice_from_advance(
         if existing:
             raise HTTPException(409, f"Numero fattura {num} già esistente")
 
+    # v3.5.0-alpha.172.142 — Decimal/HALF_UP coerente (era float round()).
+    from app.services.money import to_decimal, money_round, money_to_float
     amount = ap.amount or 0
-    vat_amount = round(amount * vat_rate / 100, 2)
-    total = round(amount + vat_amount, 2)
+    _amt_d = money_round(to_decimal(amount))
+    _vat_d = money_round(_amt_d * to_decimal(vat_rate) / to_decimal(100))
+    vat_amount = money_to_float(_vat_d)
+    total = money_to_float(money_round(_amt_d + _vat_d))
     desc = (description or ap.label or f"Acconto progetto {proj.code}").strip()
 
     inv = Invoice(

@@ -101,7 +101,13 @@ async def create_project(
             400,
             f"Codice progetto '{code}' già esistente (anche se in cestino: ripristinalo o usa un altro codice)"
         )
+    # v3.5.0-alpha.172.142 — valida che client_id appartenga al tenant corrente
+    # (era: FK accettata raw → possibile link cross-tenant per ID enumeration).
+    # fetch_or_404 solleva 404 se id sconosciuto OR fuori scope.
+    from app.services.tenant_guard import fetch_or_404
+    fetch_or_404(db, Client, client_id, error="Cliente non trovato")
     p = Project(
+        tenant_id=current_tenant_id(),
         code=code, title=title, client_id=client_id, project_type=project_type,
         length_minutes=length_minutes, fps=fps, shooting_format=shooting_format,
         delivery_format=delivery_format, director=director, producer=producer,

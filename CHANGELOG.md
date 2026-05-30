@@ -1,5 +1,21 @@
 # MediaFlow — Changelog
 
+## v3.5.0-alpha.172.142 — multiaudit fix batch A→E: sicurezza + cross-tenant + finance robustezza + test (30 mag 2026)
+
+Esito dell'audit multi-agent (8 dimensioni, finder + verifier adversarial). Implementati i batch A→E concordati. **Single-tenant alpha**: i fix cross-tenant sono debito per la beta multi-tenant, non exploit live; applicati ora perché economici e prevengono voragini in beta.
+
+**Batch A — igiene segreti.** Cancellato `.env.backup-20260521-181650` (conteneva ANTHROPIC/TAVILY/SECRET_KEY in chiaro). `.gitignore`: aggiunti pattern `.env.backup*`, `.env.*.backup`, `*.db.backup*`, `*.db.bak*`, `*.bak`. **AZIONE MATTEO RICHIESTA: ruotare ANTHROPIC_API_KEY + TAVILY_API_KEY nelle dashboard** (le chiavi erano su disco).
+
+**Batch B — cross-tenant + RBAC gate.** `cost_report.py`: 3 endpoint (`set_weighted_revenue`, `reconcile_actuals`, `reconcile_all`) ora con `dependencies=[RequireEditCostLines]` + `scoped()` sul lookup Job (erano `db.query(Job).filter(id==...)` senza tenant → write/recompute cross-tenant). `projects.create_project`: valida `client_id` via `fetch_or_404(Client)` (era FK raw → link cross-tenant per ID enumeration) + `tenant_id=current_tenant_id()` esplicito (era default=1). Modelli: `Project.code`/`Job.code`/`Quote.number` → `UniqueConstraint(tenant_id, ...)` composito (era globale → collisione cross-tenant in beta). 6 indici FK aggiunti (Quote self-ref ×3, QuoteLine.parent_line_id, JobResourceAssignment job_id+resource_id). Migrazione `scripts/migrate_tenant_unique.py`: indici FK SAFE (eseguiti subito), rebuild UNIQUE gated `--rebuild-unique` (prerequisito beta, non eseguito ora).
+
+**Batch C — auth hardening.** `config.assert_production_security()`: boot guard fail-closed. Se `app_env=production` con `auth_required=False` OR `secret_key` debole/default (<32 char) OR `ai_key_encryption_key` mancante → `RuntimeError`, avvio rifiutato. No-op in development. Cablato in `main.lifespan` (prima riga).
+
+**Batch D — finance robustezza.** Invoice acconto (`finance.py` ×2 path): float `round()` banker's → `money.to_decimal/money_round` HALF_UP (coerente con `compute_invoice_totals`). `italian_tax.validate_sdi_code` + `sdi_xml`: ora accettano codice SDI 6 char (PA/iPA) oltre ai 7 (prima il 6-char `999999` passava la validazione ma il builder XML lo droppava silenziosamente a `0000000`). `fx.convert`: arrotonda HALF_UP a 2 cifre (era float grezzo persistito). `quotes._resolve_item_unit_price`: helper unico per i 3 punti `price_list None → €0`; ora logga **warning** (prezzo MANCANTE ≠ zero reale) invece di silenziare.
+
+**Batch E — test (aree prima senza copertura).** `tests/test_security_audit_fixes.py`: 21 test su SDI 6/7, Decimal/HALF_UP invoice acconto, fx rounding, price_list None+warning, `tenant_guard.fetch_or_404` cross-tenant 404 + `scoped`, UNIQUE composito Project/Job/Quote. **124/124 pytest verde** (era 103).
+
+**Non eseguito (debito documentato):** rebuild UNIQUE composito su DB esistente (beta), `datetime.utcnow()` ×110 deprecation, gap TPN/DAM P1 (metadata no-access-check, MFA upload/delete, secure-delete default, watermark non-image, uploaded_by spoof) → backlog post-60%. Vedi report audit + STATO.md.
+
 ## v3.5.0-alpha.172.141 — fix schema AI: price_list non è un id + unit enum sbagliato (30 mag 2026)
 
 **Sintomo**: durante la creazione voci listino via copilot, il modello si è auto-confuso — "price_list richiede il PK della price list, qual è l'id?". Falso: `price_list` è il prezzo di listino numerico (livello List), non un FK; non esiste entità PriceList separata.

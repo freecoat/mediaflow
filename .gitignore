@@ -1,6 +1,13 @@
 .env
+# Backup .env = SECRET LEAK risk (contengono API key in chiaro). Mai committare.
+.env.backup*
+.env.*.backup
 *.db
 *.sqlite
+# Backup/snapshot DB locali (non committare; bloat repo). db_snapshots/ è eccezione sotto.
+*.db.backup*
+*.db.bak*
+*.bak
 # Eccezione: gli snapshot in db_snapshots/ sono committati apposta (porting tests).
 !db_snapshots/*.db
 __pycache__/

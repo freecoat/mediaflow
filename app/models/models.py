@@ -1256,9 +1256,15 @@ class Project(Base):
     Un cliente ha N progetti. Un progetto ha N quotazioni e N job.
     """
     __tablename__ = "projects"
+    # v3.5.0-alpha.172.142 — UNIQUE scoped al tenant (era globale `unique=True`
+    # sul code → collisione cross-tenant in multi-tenant beta). DB esistenti:
+    # eseguire scripts/migrate_tenant_unique.py prima della beta multi-tenant.
+    __table_args__ = (
+        UniqueConstraint("tenant_id", "code", name="uq_project_tenant_code"),
+    )
     id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
     tenant_id: Mapped[int] = mapped_column(ForeignKey("tenants.id"), default=1, index=True)
-    code: Mapped[str] = mapped_column(String(50), unique=True, index=True)
+    code: Mapped[str] = mapped_column(String(50), index=True)
     title: Mapped[str] = mapped_column(String(255))
     client_id: Mapped[int] = mapped_column(ForeignKey("clients.id"), index=True)  # Sprint 5.D
 
@@ -1687,14 +1693,16 @@ class WorkingHoursPolicy(Base):
 
 class Quote(Base):
     __tablename__ = "quotes"
+    # v3.5.0-alpha.172.142 — UNIQUE su `number` ora scoped al tenant (era
+    # globale). DB esistenti: scripts/migrate_tenant_unique.py prima della beta.
+    __table_args__ = (
+        UniqueConstraint("tenant_id", "number", name="uq_quote_tenant_number"),
+    )
     id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
     # v3.5.0-alpha.66.15.0 — tenant_id aggiunto in sprint R1 (audit HIGH #1).
     # default=1 per back-compat single-tenant; backfill auto in _auto_migrate.
-    # Il vincolo UNIQUE su `number` resta GLOBALE per ora — sarà migrato a
-    # UniqueConstraint(tenant_id, number) in R1.5 quando arriverà multi-tenant
-    # hard. Memo: per multi-tenant fisico vedi Department/PriceCategory pattern.
     tenant_id: Mapped[int] = mapped_column(ForeignKey("tenants.id"), default=1, index=True)
-    number: Mapped[str] = mapped_column(String(50), unique=True)
+    number: Mapped[str] = mapped_column(String(50), index=True)
     version: Mapped[int] = mapped_column(Integer, default=1)
 
     # Collegamento: Progetto è primario, Cliente viene dal progetto
@@ -1788,8 +1796,8 @@ class Quote(Base):
     # V1 (root) → V2 (parent_quote_id=V1) → V3 (parent_quote_id=V2). `version` è
     # monotono nella catena. Quando una nuova versione viene approvata e prende il
     # posto della precedente, V_old.status=superseded + V_old.superseded_by_id=V_new.
-    parent_quote_id: Mapped[Optional[int]] = mapped_column(ForeignKey("quotes.id"), nullable=True)
-    superseded_by_id: Mapped[Optional[int]] = mapped_column(ForeignKey("quotes.id"), nullable=True)
+    parent_quote_id: Mapped[Optional[int]] = mapped_column(ForeignKey("quotes.id"), nullable=True, index=True)
+    superseded_by_id: Mapped[Optional[int]] = mapped_column(ForeignKey("quotes.id"), nullable=True, index=True)
     # v3.4.52 — Phantom quote: generata in reverse-flow (booking su progetto senza
     # quote). Stessa struttura di una quote normale (status, lines, total) ma mai
     # inviata al cliente. Visualizzata come anomalia in /finance, può essere
@@ -1805,7 +1813,7 @@ class Quote(Base):
     # FK alla quote target di un accorpamento (quando phantom_status=merged_into).
     # NULL per phantom standby/promoted o quote non phantom.
     merged_into_quote_id: Mapped[Optional[int]] = mapped_column(
-        ForeignKey("quotes.id"), nullable=True
+        ForeignKey("quotes.id"), nullable=True, index=True
     )
 
     # v3.5.0-alpha.7 — Soft-delete (cestino).
@@ -1861,7 +1869,7 @@ class QuoteLine(Base):
     # Quando una Quote V2 è creata da V1 (new-version), ogni riga di V2 ha
     # parent_line_id = id della riga sorgente in V1. Permette il re-bind preciso
     # dei JobCostLine durante migrate-job, anche se descrizione/quantity cambiano.
-    parent_line_id: Mapped[Optional[int]] = mapped_column(ForeignKey("quote_lines.id"), nullable=True)
+    parent_line_id: Mapped[Optional[int]] = mapped_column(ForeignKey("quote_lines.id"), nullable=True, index=True)
     # v3.5.0-alpha.27 — Riga "opzionale": il totale è calcolato ma non sommato
     # nel subtotal/cat_bucket della quote. Mostrato come blocco separato.
     is_optional: Mapped[bool] = mapped_column(
@@ -1953,11 +1961,15 @@ class QuoteAdvanceAllocation(Base):
 
 class Job(Base):
     __tablename__ = "jobs"
+    # v3.5.0-alpha.172.142 — UNIQUE su `code` ora scoped al tenant (era
+    # globale). DB esistenti: scripts/migrate_tenant_unique.py prima della beta.
+    __table_args__ = (
+        UniqueConstraint("tenant_id", "code", name="uq_job_tenant_code"),
+    )
     id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
     # v3.5.0-alpha.66.15.0 — tenant_id aggiunto in sprint R1 (audit HIGH #1).
-    # Vedi nota su Quote.tenant_id per la policy UNIQUE su `code`.
     tenant_id: Mapped[int] = mapped_column(ForeignKey("tenants.id"), default=1, index=True)
-    code: Mapped[str] = mapped_column(String(50), unique=True)
+    code: Mapped[str] = mapped_column(String(50), index=True)
     title: Mapped[str] = mapped_column(String(255))
     description: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     
@@ -1995,8 +2007,8 @@ class Job(Base):
 class JobResourceAssignment(Base):
     __tablename__ = "job_resource_assignments"
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
-    job_id: Mapped[int] = mapped_column(ForeignKey("jobs.id"))
-    resource_id: Mapped[int] = mapped_column(ForeignKey("resources.id"))
+    job_id: Mapped[int] = mapped_column(ForeignKey("jobs.id"), index=True)
+    resource_id: Mapped[int] = mapped_column(ForeignKey("resources.id"), index=True)
     planned_days: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
     planned_hours: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
     agreed_daily_rate: Mapped[Optional[float]] = mapped_column(Float, nullable=True)

@@ -139,19 +139,22 @@ def validate_codice_fiscale(cf: Optional[str]) -> bool:
 
 
 def validate_sdi_code(sdi: Optional[str]) -> bool:
-    """Valida codice destinatario SDI.
+    """Valida codice destinatario SDI / Codice Univoco Ufficio.
 
-    - 7 alfanumerici uppercase (società)
-    - `0000000` (consumer/PEC-only)
-    - `999999` (PA, 6 caratteri)
+    - 7 alfanumerici uppercase (società private) — es. ABC1234
+    - `0000000` (consumer/PEC-only, 7 zeri)
     - `XXXXXXX` (estero, 7 caratteri)
+    - 6 alfanumerici (PA: Codice Univoco Ufficio iPA, es. UF0001) + `999999`
+
+    v3.5.0-alpha.172.142 (audit) — prima accettava solo il literal `999999`
+    (6 char) e i 7-char, ma il builder XML emetteva solo i 7-char: i codici PA
+    a 6 caratteri venivano silenziosamente sostituiti con 0000000. Ora la regola
+    è coerente: 6 OR 7 alfanumerici. Il builder (sdi_xml) emette entrambi.
     """
     if not sdi:
         return False
     s = sdi.strip().upper()
-    if s == "999999":
-        return True
-    if len(s) == 7 and s.isalnum():
+    if len(s) in (6, 7) and s.isalnum():
         return True
     return False
 

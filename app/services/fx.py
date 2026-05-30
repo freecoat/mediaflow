@@ -122,8 +122,13 @@ def refresh_fx_rate(db: Session, from_ccy: str, to_ccy: str) -> Optional[float]:
 
 
 def convert(amount: float, from_ccy: str, to_ccy: str, db: Session) -> Optional[float]:
-    """Converte amount via cached rate. None se provider fail e no cache."""
+    """Converte amount via cached rate. None se provider fail e no cache.
+
+    v3.5.0-alpha.172.142 (audit) — arrotonda il risultato a 2 cifre HALF_UP
+    (prima ritornava float grezzo → valori non arrotondati persistiti nei
+    totali Quote)."""
     rate = get_fx_rate(db, from_ccy, to_ccy)
     if rate is None:
         return None
-    return amount * rate
+    from app.services.money import to_decimal, money_round, money_to_float
+    return money_to_float(money_round(to_decimal(amount) * to_decimal(rate)))

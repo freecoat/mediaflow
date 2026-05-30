@@ -92,9 +92,11 @@ def _build_header(root: ET.Element, invoice, tenant, progressivo: str) -> None:
     _e(id_trasm, "IdCodice", _strip_it(tenant.vat_number or ""))
     _e(dt, "ProgressivoInvio", progressivo)
     _e(dt, "FormatoTrasmissione", _FORMATO_TRASMISSIONE)
-    # Codice destinatario: SDI 7-char preferito; fallback 0000000 + PEC
+    # Codice destinatario: 7-char (privati) o 6-char (PA, Codice Univoco
+    # Ufficio iPA). v3.5.0-alpha.172.142 — prima solo 7-char → i codici PA a
+    # 6 char venivano persi (fallback 0000000). Ora emessi entrambi.
     sdi = (invoice.client_sdi_snap or "").strip().upper()
-    if sdi and len(sdi) == 7:
+    if sdi and len(sdi) in (6, 7):
         _e(dt, "CodiceDestinatario", sdi)
     else:
         _e(dt, "CodiceDestinatario", "0000000")

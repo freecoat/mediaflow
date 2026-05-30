@@ -79,3 +79,39 @@ class Settings(BaseSettings):
 
 
 settings = Settings()
+
+
+# v3.5.0-alpha.172.142 — Boot guard fail-closed in produzione.
+# L'audit ha rilevato: secret_key default debole + auth_required=False default
+# (fallback al primo utente attivo = bypass auth). Innocui in dev, voragini se
+# deployati. Questo guard rifiuta l'avvio se app_env=production è insicuro.
+_INSECURE_SECRET_KEYS = {"dev-secret-key-change-in-production", ""}
+
+
+def assert_production_security(s: "Settings" = settings) -> None:
+    """Solleva RuntimeError se app_env=production con config insicura.
+    No-op in development/staging. Chiamato all'avvio (main.lifespan)."""
+    if (s.app_env or "").lower() != "production":
+        return
+    errors = []
+    if not s.auth_required:
+        errors.append(
+            "AUTH_REQUIRED deve essere True in produzione (ora False → "
+            "fallback al primo utente attivo = bypass autenticazione)."
+        )
+    if (s.secret_key in _INSECURE_SECRET_KEYS) or len(s.secret_key or "") < 32:
+        errors.append(
+            "SECRET_KEY debole/di-default. Genera >=32 char "
+            "(python -c \"import secrets;print(secrets.token_urlsafe(48))\") "
+            "e impostala in .env."
+        )
+    if not s.ai_key_encryption_key:
+        errors.append(
+            "AI_KEY_ENCRYPTION_KEY mancante: le API key dei provider non "
+            "sarebbero cifrate. Genera con Fernet.generate_key()."
+        )
+    if errors:
+        raise RuntimeError(
+            "Avvio bloccato — sicurezza non valida per app_env=production:\n  - "
+            + "\n  - ".join(errors)
+        )

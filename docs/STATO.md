@@ -8,7 +8,19 @@
 
 ## Versione corrente
 
-**v3.5.0-alpha.172.141** — 30 maggio 2026 — fix schema AI price_list/unit (confusione copilot)
+**v3.5.0-alpha.172.142** — 30 maggio 2026 — multiaudit fix batch A→E (sicurezza + cross-tenant + finance + test)
+
+### α.172.142 ✅ (multiaudit fix batch A→E)
+Esito audit multi-agent (8 dimensioni, finder+verifier adversarial). Single-tenant alpha → cross-tenant = debito beta, non exploit live; fixati ora perché economici.
+- **A igiene segreti**: cancellato `.env.backup` (key in chiaro) + `.gitignore` pattern backup. ⚠️ **MATTEO: ruota ANTHROPIC + TAVILY key** (erano su disco).
+- **B cross-tenant+gate**: 3 endpoint `cost_report` (weighted-revenue/reconcile-actuals/reconcile-all) → `RequireEditCostLines` + `scoped()`. `projects.create_project` valida `client_id` (fetch_or_404) + tenant_id esplicito. Modelli `Project/Job.code` + `Quote.number` → UNIQUE composito (tenant_id,..). 6 indici FK. `scripts/migrate_tenant_unique.py` (indici SAFE eseguiti; rebuild UNIQUE gated `--rebuild-unique`, prerequisito beta NON eseguito).
+- **C auth**: `config.assert_production_security()` boot-guard fail-closed (prod + auth_required=False/secret debole/no ai_key → RuntimeError). No-op dev. In `main.lifespan`.
+- **D finance**: invoice acconto float→Decimal HALF_UP (×2 path). SDI validator+xml accettano 6-char PA (era droppato a 0000000). `fx.convert` arrotonda. `quotes._resolve_item_unit_price` logga warning su price_list None (non più €0 silenzioso).
+- **E test**: `tests/test_security_audit_fixes.py` 21 test. **124/124 pytest verde** (era 103).
+
+**Debito documentato (post-60%)**: rebuild UNIQUE su DB esistente (beta), `datetime.utcnow()` ×110, gap TPN/DAM P1 (metadata no-auth-check, MFA upload/delete, secure-delete default, watermark non-image, uploaded_by spoof), orphan `delivery_portals.py` (feature roadmap da cablare).
+
+**Prossimo**: test browser Matteo (3 endpoint cost_report con utente non-elevato → 403) + ripresa test estensivi (piano pre-audit).
 
 ### α.172.141 ✅ (fix schema tool AI: price_list non-id + unit enum)
 Copilot si auto-confondeva creando voci listino: "price_list richiede il PK della price list?". Falso (price_list = prezzo numerico livello List, no FK). Root: `propose_price_item`/`propose_new_item_and_line` avevano `price_list` senza description + `unit` enum `["day","hour","flat"]` sbagliato (voci reali: `pc` 85×, `day`, `TB`, `hr`, `min`, `shot`, `allow`, `version`). Fix `ai_tools.py`: description esplicita su price_list + enum rimosso (stringa libera con esempi). Verificato load tools. **Restart server** (schema letto al boot provider).

@@ -18,6 +18,32 @@ from app.context import current_tenant_id
 
 router = APIRouter(prefix="/quotes", tags=["quotes"])
 
+
+def _resolve_item_unit_price(item, price_level) -> float:
+    """Risolve unit_price dal PriceItem per il livello scelto.
+
+    v3.5.0-alpha.172.142 (audit) — il pattern `{...}.get(...) or 0.0` silenziava
+    a €0 le voci con prezzo None (es. voci-bucket deliverable della migrazione
+    α.172.135), nascondendo un dato mancante come "lavoro gratis". Ora logga un
+    warning quando il prezzo del livello è assente; il default 0.0 resta per non
+    bloccare l'import, ma l'evento è tracciato."""
+    chosen = {
+        PriceLevel.list_price: item.price_list,
+        PriceLevel.average: item.price_average,
+        PriceLevel.low: item.price_low,
+    }.get(price_level, item.price_list)
+    if chosen is None:
+        import logging
+        logging.getLogger(__name__).warning(
+            "PriceItem id=%s ('%s') senza prezzo per livello %s → riga a €0 "
+            "(prezzo listino MANCANTE, non zero reale: verifica il listino)",
+            getattr(item, "id", "?"),
+            getattr(item, "name", None) or getattr(item, "description", "?"),
+            getattr(price_level, "value", price_level),
+        )
+        return 0.0
+    return float(chosen)
+
 # v3.5.0-alpha.66.14.5 — Dependency riusabile per i mutator quote.
 # Sostituisce i check inline `if not has_permission(user, "edit_quotes")` e
 # li applica anche agli 11 mutator che ne erano sprovvisti (audit HIGH #4).
@@ -1684,11 +1710,7 @@ async def add_quote_line(
     if price_item_id and unit_price == 0:
         item = db.query(PriceItem).filter(PriceItem.id == price_item_id).first()
         if item:
-            unit_price = {
-                PriceLevel.list_price: item.price_list,
-                PriceLevel.average: item.price_average,
-                PriceLevel.low: item.price_low,
-            }.get(price_level, item.price_list) or 0.0
+            unit_price = _resolve_item_unit_price(item, price_level)
     sort_order = max((l.sort_order for l in q.lines), default=0) + 10
     cat_override_clean = (category_override or "").strip() or None
     section_label_clean = (section_label or "").strip() or None
@@ -1808,11 +1830,7 @@ async def load_from_template(
         if not item:
             skipped_missing += 1
             continue
-        price = {
-            PriceLevel.list_price: item.price_list,
-            PriceLevel.average: item.price_average,
-            PriceLevel.low: item.price_low,
-        }.get(price_level, item.price_list) or 0.0
+        price = _resolve_item_unit_price(item, price_level)
         section = (it.get("section") or "A").strip().upper()[:1]
         section_counters[section] = section_counters.get(section, 0) + 1
         position = f"{section}.{section_counters[section]}"
@@ -1937,11 +1955,7 @@ async def load_from_template_items(
         if not item:
             skipped_invalid += 1
             continue
-        price = {
-            PriceLevel.list_price: item.price_list,
-            PriceLevel.average: item.price_average,
-            PriceLevel.low: item.price_low,
-        }.get(price_level, item.price_list) or 0.0
+        price = _resolve_item_unit_price(item, price_level)
         sect_count += 1
         sort_order += 10
         line = QuoteLine(

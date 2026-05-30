@@ -1658,6 +1658,10 @@ def _auto_bin_prefix_deleted_quotes():
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    # v3.5.0-alpha.172.142 — fail-closed: rifiuta l'avvio se app_env=production
+    # con secret/auth insicuri (no-op in development).
+    from app.config import assert_production_security
+    assert_production_security()
     create_tables()
     # Auto-fix colonne aggiunte di recente (v3.4.27.1) — evita crash se
     # l'utente ha pull-ato senza lanciare la migrazione [K]
@@ -2095,7 +2099,7 @@ async def lifespan(app: FastAPI):
     yield
 
 
-app = FastAPI(title="Claqo", version="3.5.0-alpha.172.141", lifespan=lifespan)
+app = FastAPI(title="Claqo", version="3.5.0-alpha.172.142", lifespan=lifespan)
 
 BASE_DIR = Path(__file__).parent
 app.mount("/static", StaticFiles(directory=BASE_DIR / "static"), name="static")
