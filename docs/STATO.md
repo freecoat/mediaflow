@@ -8,7 +8,12 @@
 
 ## Versione corrente
 
-**v3.5.0-alpha.172.145** — 30 maggio 2026 — fix numerazione quote (base collision) + test estensivo finance
+**v3.5.0-alpha.172.146** — 30 maggio 2026 — fix quote/picker capitolato + hardening copilot (note Matteo)
+
+### α.172.146 ✅ (fix quote/picker capitolato + copilot — note analisi quotazioni Matteo)
+**Picker/quote**: Bug1 detail riga eredita da PriceItem.description · Bug2 `template_bucket_options` detail ricco (specs+nomi+note, era solo note→vuoto) · Bug3a dedup per (voce+capitolato) non più solo price_item_id (voce da capitolato diverso ora aggiunta) · Bug3b `section_label`=broadcaster capitolato (Sky vs NBCU non confondibili). Verificato live su Fremantle/Vision (pid 58 in 2 righe etichettate distinte, 21/21 bucket con detail).
+**Copilot hardening**: truncation max_tokens 2000/4000→8000 (blocchi propose_quote tagliati) · `_coerce_price` robusto + reject id-like + messaggio rinforzato (price_list confuso come PK) · `tavily_search` timeout+depth basic+errore visibile (web_search hang). Schema α.172.141 già ok, qui difesa server-side.
+15 test nuovi → **146/146**. DB ripristinato da snapshot (quote PICKER TEST rimossa).
 
 ### α.172.145 ✅ (fix numerazione quote + test estensivo flusso finance)
 **Bug** (trovato in test estensivo): nuova quote riusava base progressivo già attivo (`008-v1` mentre `008-v2` attivo) perché il contatore `NumberingConfig.current_seq` diverge dal max reale (versioning/snapshot non lo bumpano) + la check guardava solo la stringa esatta `-v1` (libera causa bin). Fix `_next_quote_number_progressive`: rileva collisione sul BASE tra quote attive → fallback scan autoritativo. 3 test → **132/132**.

@@ -14,7 +14,8 @@ def tavily_search(query: str, max_results: int = 5,
                   search_depth: str = "advanced",
                   include_raw_content: bool = False,
                   include_domains: Optional[list] = None,
-                  exclude_domains: Optional[list] = None) -> Optional[dict]:
+                  exclude_domains: Optional[list] = None,
+                  timeout: int = 20) -> Optional[dict]:
     """
     Esegue una ricerca web tramite Tavily.
     Restituisce: {'answer': str, 'results': [{'title', 'url', 'content', 'score'}], 'query': str}
@@ -41,12 +42,20 @@ def tavily_search(query: str, max_results: int = 5,
             max_results=max_results,
             include_answer=True,
             include_raw_content=include_raw_content,
+            # α.172.146 — timeout esplicito: senza, una chiamata lenta/bloccata
+            # appendeva il loop copilot (utente "non ho ricevuto i risultati").
+            timeout=timeout,
         )
         if include_domains:
             kwargs["include_domains"] = include_domains
         if exclude_domains:
             kwargs["exclude_domains"] = exclude_domains
-        resp = client.search(**kwargs)
+        try:
+            resp = client.search(**kwargs)
+        except TypeError:
+            # SDK più vecchio senza kwarg timeout → retry senza.
+            kwargs.pop("timeout", None)
+            resp = client.search(**kwargs)
         return resp
     except Exception as e:
         logger.error(f"Tavily search failed: {e}")

@@ -1707,10 +1707,16 @@ async def add_quote_line(
     ).filter(Quote.id == quote_id).first()
     if not q: raise HTTPException(404)
     _assert_quote_mutable(q, action="aggiunta voce")
-    if price_item_id and unit_price == 0:
+    # v3.5.0-alpha.172.146 — eredita dalla voce di listino sia il prezzo (se 0)
+    # sia il DETTAGLIO (se vuoto): prima il campo detail restava sempre vuoto
+    # aggiungendo una voce dal listino.
+    if price_item_id:
         item = db.query(PriceItem).filter(PriceItem.id == price_item_id).first()
         if item:
-            unit_price = _resolve_item_unit_price(item, price_level)
+            if unit_price == 0:
+                unit_price = _resolve_item_unit_price(item, price_level)
+            if not (detail or "").strip() and (item.description or "").strip():
+                detail = item.description.strip()
     sort_order = max((l.sort_order for l in q.lines), default=0) + 10
     cat_override_clean = (category_override or "").strip() or None
     section_label_clean = (section_label or "").strip() or None
@@ -1933,7 +1939,21 @@ async def load_from_template_items(
     if not options:
         raise HTTPException(400, "Il template non ha voci-bucket derivabili (DeliveryItem non linkati)")
 
-    existing_pi = {l.price_item_id for l in q.lines if l.price_item_id}
+    # v3.5.0-alpha.172.146 — etichetta automatica del capitolato sulle deliveries.
+    # Le consegne di broadcaster diversi (es. Sky vs NBCU) hanno specs diverse
+    # (LUFS, livelli, timeline, ordine loghi): la section_label = broadcaster del
+    # capitolato evita di confonderle. Fallback al nome template.
+    t = db.query(DeliveryTemplate).filter(
+        DeliveryTemplate.id == template_id,
+        DeliveryTemplate.tenant_id == current_tenant_id(),
+    ).first()
+    cap_label = (((t.broadcaster if t and t.broadcaster else (t.name if t else None)) or "").strip()) or None
+
+    # Dedup per (voce + capitolato): la stessa voce-bucket dallo STESSO capitolato
+    # non viene duplicata; ma la stessa voce da un capitolato DIVERSO viene
+    # aggiunta (con la sua etichetta). Prima il dedup era solo su price_item_id →
+    # una voce già nel listino/quote non veniva mai aggiunta da un altro capitolato.
+    existing_keys = {(l.price_item_id, l.section_label) for l in q.lines if l.price_item_id}
     sort_order = max((l.sort_order for l in q.lines), default=0)
     sect = (section or "A").strip().upper()[:1] or "A"
     sect_count = sum(1 for l in q.lines if l.section == sect)
@@ -1944,7 +1964,7 @@ async def load_from_template_items(
         if not opt:
             skipped_invalid += 1
             continue
-        if pid in existing_pi:
+        if (pid, cap_label) in existing_keys:
             skipped_dup += 1
             continue
         item = db.query(PriceItem).filter(
@@ -1975,9 +1995,10 @@ async def load_from_template_items(
             price_item_id=item.id,
             sort_order=sort_order,
             is_optional=False,
+            section_label=cap_label,
         )
         db.add(line)
-        existing_pi.add(item.id)
+        existing_keys.add((item.id, cap_label))
         added += 1
 
     if added == 0:

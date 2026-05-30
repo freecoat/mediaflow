@@ -219,11 +219,24 @@ def template_bucket_options(db: Session, tenant_id: int, template_id: int) -> li
         pi = price_items.get(pid)
         if not pi:  # voce inattiva/cancellata → salta
             continue
-        notes = []
+        # v3.5.0-alpha.172.146 — detail_suggestion ricco: prima conteneva SOLO
+        # le note (spesso vuote → detail vuoto in quote). Ora aggrega le specs
+        # tecniche risolte (label bucket per-item: codec/res/HDR o mix/canali),
+        # i nomi capitolato originali e le note — tutto distinto, ordine stabile.
+        detail_parts: list[str] = []
+
+        def _push(v: Optional[str]):
+            v = (v or "").strip()
+            if v and v not in detail_parts:
+                detail_parts.append(v)
+
         for it in group:
-            n = (it.notes or "").strip()
-            if n and n not in notes:
-                notes.append(n)
+            spec = compute_bucket(db, it)
+            # label specs solo se aggiunge info rispetto al nome bucket (pi.name)
+            if spec.label and spec.label != pi.name:
+                _push(spec.label)
+            _push(it.name)
+            _push(it.notes)
         out.append({
             "price_item_id": pi.id,
             "name": pi.name,
@@ -233,7 +246,7 @@ def template_bucket_options(db: Session, tenant_id: int, template_id: int) -> li
             "price_low": pi.price_low,
             "item_count": len(group),
             "item_names": [it.name for it in group],
-            "detail_suggestion": " · ".join(notes) if notes else None,
+            "detail_suggestion": " · ".join(detail_parts) if detail_parts else None,
         })
     out.sort(key=lambda o: o["name"].lower())
     return out

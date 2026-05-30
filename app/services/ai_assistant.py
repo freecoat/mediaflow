@@ -121,7 +121,9 @@ def chat_with_assistant(db: Session,
                                  quote_id=quote_id, job_id=job_id, page=page)
 
     try:
-        raw_reply = provider.chat(messages, system=system, max_tokens=2000, temperature=0.5) or ""
+        # α.172.146 — era 2000: i blocchi ```action (propose_quote multi-riga)
+        # venivano troncati a metà JSON ("mi sono bloccato a metà del blocco").
+        raw_reply = provider.chat(messages, system=system, max_tokens=8000, temperature=0.5) or ""
     except Exception as e:
         logger.error(f"Assistant chat failed: {e}")
         return {
@@ -175,6 +177,23 @@ def apply_action(db: Session, action: AIAction) -> dict:
 # Handler concreti ────────────────────────────────────────────
 
 @ai_capability("propose_price_item")
+def _coerce_price(v, *, field: str = "price_list", required: bool = False) -> float:
+    """Coerce prezzo da JSON AI in float. Tollera "150", "150,00", "€ 150".
+    Errore CHIARO se non numerico: il modello a volte confonde price_list con
+    un id/PK o ci mette una stringa (α.172.146)."""
+    if v in (None, ""):
+        if required:
+            raise ValueError(f"Manca '{field}' (prezzo unitario, NUMERO es. 150)")
+        return 0.0
+    try:
+        return float(str(v).replace("€", "").replace(",", ".").strip())
+    except (ValueError, TypeError):
+        raise ValueError(
+            f"'{field}' dev'essere un NUMERO (es. 150 = 150€/unità), non '{v}'. "
+            f"Nota: price_list è il prezzo unitario di listino, NON un id/PK."
+        )
+
+
 def _h_propose_price_item(db: Session, data: dict) -> dict:
     name = (data.get("name") or "").strip()
     if not name:
@@ -193,7 +212,7 @@ def _h_propose_price_item(db: Session, data: dict) -> dict:
         d = db.query(Department).filter(Department.name == dept_name).first()
         if d:
             dept_id = d.id
-    price = float(data.get("price_list") or 0)
+    price = _coerce_price(data.get("price_list"))
     item = PriceItem(
         name=name,
         description=data.get("description"),
@@ -209,7 +228,7 @@ def _h_propose_price_item(db: Session, data: dict) -> dict:
     db.add(item); db.flush()
     return {"created": True, "price_item_id": item.id, "name": item.name,
             "category": cat.name, "unit": item.unit, "price_list": item.price_list,
-            "message": f"Voce listino '{item.name}' creata con id={item.id} (categoria {cat.name}, {item.unit}, €{item.price_list})."}
+            "message": f"Voce listino '{item.name}' creata con id={item.id} (categoria {cat.name}, {item.unit}, prezzo €{item.price_list:.2f}/unità)."}
 
 
 @ai_capability("propose_client")
@@ -634,8 +653,7 @@ def _h_propose_new_item_and_line(db: Session, data: dict) -> dict:
     cat_name = (data.get("category_name") or "").strip()
     if not cat_name:
         raise ValueError("Manca 'category_name' (la categoria è obbligatoria)")
-    if data.get("price_list") in (None, ""):
-        raise ValueError("Manca 'price_list' (prezzo listino della voce)")
+    price = _coerce_price(data.get("price_list"), required=True)
 
     # Categoria: trova o crea
     cat = db.query(PriceCategory).filter(PriceCategory.name == cat_name).first()
@@ -651,7 +669,6 @@ def _h_propose_new_item_and_line(db: Session, data: dict) -> dict:
         if d:
             dept_id = d.id
 
-    price = float(data["price_list"])
     unit = data.get("unit") or "day"
 
     pi = PriceItem(
@@ -715,7 +732,12 @@ def _h_web_search(db: Session, data: dict) -> dict:
     query = (data.get("query") or "").strip()
     if not query:
         raise ValueError("Manca 'query'")
-    results = tavily_search(query, max_results=5)
+    # α.172.146 — depth basic (più rapido per copilot) + timeout bound.
+    results = tavily_search(query, max_results=5, search_depth="basic", timeout=15)
+    if results is None:
+        return {"query": query, "results": None,
+                "error": "Ricerca web non disponibile (Tavily non configurato o timeout). "
+                         "Verifica TAVILY_API_KEY in Impostazioni."}
     return {"query": query, "results": results}
 
 

@@ -319,6 +319,8 @@ def advance_loop(db: Session, conv: AIConversation, provider: AIProvider,
             try:
                 resp = provider.chat_with_tools(
                     _sanitize_messages(messages), system, tools,
+                    max_tokens=8000,  # α.172.146 — era default 4000: blocchi
+                    # propose_quote multi-riga venivano troncati a metà JSON.
                     usage_db=db,
                     usage_user_id=conv.user_id,
                     usage_conversation_id=conv.id,
@@ -327,7 +329,7 @@ def advance_loop(db: Session, conv: AIConversation, provider: AIProvider,
             except TypeError:
                 # Provider non-Anthropic (OpenAI/Ollama/Gemini) non ancora
                 # migrato a usage_* kwargs → fallback compat.
-                resp = provider.chat_with_tools(_sanitize_messages(messages), system, tools)
+                resp = provider.chat_with_tools(_sanitize_messages(messages), system, tools, max_tokens=8000)
         except Exception as e:
             logger.exception("chat_with_tools failed")
             # Salva i messages raccolti finora con pending_results vuoto: la

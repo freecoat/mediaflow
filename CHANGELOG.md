@@ -1,5 +1,22 @@
 # MediaFlow — Changelog
 
+## v3.5.0-alpha.172.146 — fix quote/picker capitolato + hardening copilot (note Matteo) (30 mag 2026)
+
+Risolte le note di Matteo dall'analisi quotazioni + dialogo copilot.
+
+**Quote / Picker capitolato:**
+- **Bug 1 — dettaglio riga vuoto**: `add_quote_line` ora eredita il `detail` dalla `PriceItem.description` (oltre al prezzo) quando si aggiunge una voce dal listino. Prima il campo restava sempre vuoto.
+- **Bug 2 — picker senza dettaglio**: `delivery_bucket.template_bucket_options` arricchisce `detail_suggestion` con le specs tecniche risolte (label bucket per-item: codec/risoluzione/HDR o mix/canali) + nomi capitolato originali + note. Prima usava solo le note (spesso vuote → detail vuoto). Verificato live: 21/21 bucket Fremantle con detail.
+- **Bug 3a — voce già a listino non aggiunta**: il picker dedupava per solo `price_item_id` → una voce già presente non veniva mai ri-aggiunta da un altro capitolato. Ora dedup per **(voce + capitolato)**: stessa voce dallo STESSO capitolato = skip; da capitolato DIVERSO = aggiunta. Verificato live (pid 58 da Fremantle + Vision = 2 righe distinte).
+- **Bug 3b — etichetta capitolato mancante**: `load-from-template-items` ora setta `section_label` = broadcaster del capitolato (fallback nome). Consegne di broadcaster diversi (Sky vs NBCU: LUFS/livelli/timeline/loghi diversi) non più confondibili. Verificato (label "Fremantle"/"Vision Distribution").
+
+**Copilot AI (hardening):**
+- **Truncation** ("bloccato a metà del blocco JSON"): `max_tokens` alzato 2000→8000 (path legacy `ai_assistant.chat`) e 4000→8000 (path tool-use `ai_loop.chat_with_tools`). I blocchi `propose_quote` multi-riga venivano tagliati.
+- **price_list confuso come id**: helper `_coerce_price` robusto (tollera "150"/"150,00"/"€ 150", reject garbage con errore esplicito "è un NUMERO non un id/PK") in `propose_price_item` + `propose_new_item_and_line`; messaggio tool_result rinforzato (€/unità). Lo schema α.172.141 era già corretto; questo aggiunge difesa server-side + feedback.
+- **web_search hang**: `tavily_search` ora con `timeout` esplicito (default 20s, 15s per copilot) + `search_depth=basic` per il copilot (più rapido) + errore visibile se Tavily non configurato/timeout (prima restava appeso silenzioso).
+
+15 nuovi test (`tests/test_copilot_picker_fixes.py` + picker live). **146/146 pytest**. Flusso picker verificato E2E via API su capitolati reali.
+
 ## v3.5.0-alpha.172.145 — fix numerazione quote (base collision) da test estensivo (30 mag 2026)
 
 **Bug trovato durante test estensivo del flusso quotazione** (Playwright→pivot API per MCP instabile): creando una nuova quote, il numero generato (`Q-2026-008-v1`) riusava un **base progressivo già occupato** da una quote attiva (`Q-2026-008-v2`, altro progetto).
