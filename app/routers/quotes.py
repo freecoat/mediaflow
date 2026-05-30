@@ -2871,14 +2871,28 @@ def _next_quote_number_progressive(db: Session, project: Optional[Project] = Non
             client_code=(client.name[:8].upper() if client and getattr(client, "name", None) else None),
         )
         full = with_v1_suffix(code)
-        # Verifica uniqueness vs DB esistente (con soft-delete)
+        # v3.5.0-alpha.172.145 — Collision detection robusta. Prima si
+        # controllava solo la stringa ESATTA (con soft-delete): falliva quando
+        # il base progressivo era già usato da una quote ATTIVA in altra
+        # versione. Scenario reale: contatore NumberingConfig.current_seq
+        # disallineato dal max reale (il versioning -vN e gli import snapshot
+        # NON bumpano il contatore) → gen_doc_code riemette un base già usato,
+        # e il bin-rename del -v1 cancellato lasciava libera la stringa esatta.
+        # Ora si controlla anche il BASE tra le quote attive → fallback allo
+        # scan autoritativo (next_year_progressive = max reale + 1).
         from app.models import Quote as _Q
-        exists = (
+        from app.services.numbering import split_version_suffix
+        base_code, _v = split_version_suffix(full)
+        exact = (
             db.query(_Q).execution_options(include_deleted=True)
             .filter(_Q.number == full).first()
         )
-        if exists:
-            # Fallback: incrementa con il vecchio metodo (sicuro su collision)
+        base_clash = (
+            db.query(_Q).filter(_Q.number.like(base_code + "-v%")).first()
+        )
+        if exact or base_clash:
+            # Fallback: scan del max progressivo reale (gestisce -vN, ignora
+            # i binnati ~Bn~ che non matchano il prefisso).
             return with_v1_suffix(next_year_progressive(
                 db, Quote, base="Q", code_field="number", include_deleted=True,
             ))

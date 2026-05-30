@@ -1,5 +1,15 @@
 # MediaFlow — Changelog
 
+## v3.5.0-alpha.172.145 — fix numerazione quote (base collision) da test estensivo (30 mag 2026)
+
+**Bug trovato durante test estensivo del flusso quotazione** (Playwright→pivot API per MCP instabile): creando una nuova quote, il numero generato (`Q-2026-008-v1`) riusava un **base progressivo già occupato** da una quote attiva (`Q-2026-008-v2`, altro progetto).
+
+**Root cause**: `gen_doc_code` usa il contatore memorizzato `NumberingConfig.current_seq`, che diverge dal max reale quando le quote nascono via versioning (`-vN` non bumpa il contatore) o via import snapshot. Inoltre `_next_quote_number_progressive` controllava solo la collisione sulla **stringa esatta** `-v1` — libera perché il `-v1` originale era stato cestinato (bin-rename `~Bn~`). Risultato: due quote di progetti diversi con stesso base 008. (Numero comunque DB-unique → no corruzione, ma incongruenza semantica nel folder-view.)
+
+**Fix** (`quotes.py:_next_quote_number_progressive`): la check ora rileva anche la collisione sul **BASE** tra quote ATTIVE (`number LIKE '{base}-v%'`); se collide → fallback allo scan autoritativo `next_year_progressive` (= max reale + 1, gestisce `-vN`, ignora i binnati). 3 test (`tests/test_quote_numbering.py`): fresh DB → 001, contatore-dietro-max → 009 (non 008), binnati ignorati. **132/132 pytest**.
+
+**Flusso finance verificato E2E** (cliente fiscale → progetto → quote → approva → job → cost report → acconto → fattura → SDI XML), tutti i calcoli corretti: quote imponibile 3350 → IVA 737 → totale 4087; acconto 1005 → IVA 221.10 → totale 1226.10 (Decimal HALF_UP ✓); cost report Quotato 3350; SDI XML FatturaPA v1.2 valido (CodiceDestinatario 7-char, TD01, Imponibile/Imposta/Totale coerenti). Validazione P.IVA invalida → 422.
+
 ## v3.5.0-alpha.172.144 — fix cosmetici da audit UI (30 mag 2026)
 
 Chiusi 3 dei finding P3/cosmesi dell'audit Playwright. Tutti verificati (curl/browser).

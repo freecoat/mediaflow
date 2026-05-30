@@ -8,7 +8,11 @@
 
 ## Versione corrente
 
-**v3.5.0-alpha.172.144** — 30 maggio 2026 — fix cosmetici da audit UI
+**v3.5.0-alpha.172.145** — 30 maggio 2026 — fix numerazione quote (base collision) + test estensivo finance
+
+### α.172.145 ✅ (fix numerazione quote + test estensivo flusso finance)
+**Bug** (trovato in test estensivo): nuova quote riusava base progressivo già attivo (`008-v1` mentre `008-v2` attivo) perché il contatore `NumberingConfig.current_seq` diverge dal max reale (versioning/snapshot non lo bumpano) + la check guardava solo la stringa esatta `-v1` (libera causa bin). Fix `_next_quote_number_progressive`: rileva collisione sul BASE tra quote attive → fallback scan autoritativo. 3 test → **132/132**.
+**Flusso finance verificato E2E via API** (Playwright MCP instabile → pivot curl): A validazione P.IVA 422 + cliente ✓ · B progetto (esercita fix batch-B client_id) ✓ · C quote imponibile 3350→IVA 737→tot 4087 ✓ · D approva→job auto ✓ · E cost report Quotato 3350 ✓ · F acconto 1005→IVA 221.10→tot 1226.10 (Decimal HALF_UP ✓) · G SDI XML FatturaPA valido (SDI 7-char, TD01, importi coerenti) ✓. DB ripristinato da snapshot pre-test (entità TEST-AUDIT rimosse).
 
 ### α.172.144 ✅ (fix cosmetici audit UI)
 3 finding P3 chiusi (verificati curl/browser): `/jobs` nudo → redirect a `/cost-report` (era 404 JSON); titolo tab `/projects/{id}` = `{code} · {title} — Claqo` (era generico); `/favicon.ico` → redirect 301 a icona SVG (era 404 ogni pagina). NON fixati per scelta: casing clienti AI (title-case romperebbe RAI/A24), identità MediaFlow/Claqo (rebrand). 129/129 test.
